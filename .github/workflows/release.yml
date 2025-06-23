@@ -1,0 +1,44 @@
+name: Release
+on:
+  push:
+    tags: [ "v[0-9]+.[0-9]+.[0-9]+" ]   # 仅匹配正式版本
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+      id-token: write    # 如需 sigstore 署名
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # 1. 生成 Go 二进制
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: |
+          CGO_ENABLED=0 go build -o pcas ./cmd/pcas
+          CGO_ENABLED=0 go build -o pcasctl ./cmd/pcasctl
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: pcas,pcasctl
+
+      # 2. 重新 Build & Push Docker image(tag + latest)
+      - name: Build and Push image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            ghcr.io/soaringjerry/pcas:${{ github.ref_name }}
+            ghcr.io/soaringjerry/pcas:latest
+
+      # 3. 部署文档（可选）
+      - name: Deploy Docs
+        uses: peaceiris/actions-gh-pages@v4
+        if: github.repository == 'soaringjerry/pcas'  # 防 fork
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: docs/.docusaurus/build

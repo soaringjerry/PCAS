@@ -1,0 +1,74 @@
+// 指定我们使用 proto3 语法。
+syntax = "proto3";
+
+// 定义包名，用于避免命名冲突，并在生成的代码中使用。
+package pcas.events.v1;
+
+// 导入我们将使用的标准谷歌Protobuf类型。
+import "google/protobuf/any.proto";
+import "google/protobuf/timestamp.proto";
+
+// 为Go语言代码生成指定包路径和别名。
+option go_package = "github.com/soaringjerry/pcas/gen/go/pcas/events/v1;eventsv1";
+
+// PCAS 的核心事件信封 —— 与 CloudEvents v1.0 兼容。
+// 这是流经整个PCAS事件总线的所有事件的统一结构。
+message Event {
+  // ---- CloudEvents 核心属性 (Core Attributes) ----
+
+  // ID: 事件的唯一标识符。
+  // 在运行时必须非空 (MUST be non-empty)。
+  string id = 1;
+
+  // Source: 事件发生的上下文标识。
+  // 通常是一个URI，例如 "/d-app/com.wechat.connector"。
+  string source = 2;
+
+  // SpecVersion: 事件所遵循的CloudEvents规范版本。
+  // 对于此版本，恒为 "1.0"。
+  string specversion = 3;
+
+  // Type: 描述与源事件相关的事件类型。
+  // 采用反向域名表示法，例如 "pcas.dapp.message.received.v1"。
+  string type = 4;
+
+  // DataContentType: "data"属性的内容类型。
+  // 可选字段。例如 "application/json", "application/protobuf"。
+  string datacontenttype = 5;
+
+  // DataSchema: "data"属性所遵循的schema的URI。
+  // 可选字段。
+  string dataschema = 6;
+
+  // Subject: 在事件生产者上下文中，事件主体的描述。
+  // 可选字段。
+  string subject = 7;
+
+  // Time: 事件生成的时间戳。
+  // 强烈建议设置 (SHOULD be set)；如果缺失，事件总线将自动填充为当前时间。
+  google.protobuf.Timestamp time = 8;
+
+  // ---- PCAS 扩展属性 (Extensions) ----
+
+  // TraceID: 用于在整个因果链中追踪事件的相关性ID。
+  string trace_id = 9;
+
+  // UserID: 事件的用户上下文。对未来的多用户系统至关重要。
+  string user_id = 10;
+
+  // SessionID: 用于将一系列相关事件分组的逻辑会话ID。
+  // 可选字段。
+  string session_id = 11;
+
+  // 注意: 核心扩展属性区域为 20-99，载荷从 100 开始。
+  // reserved 12–19 for backward compatibility
+  reserved 12 to 19;
+
+  // ---- 载荷 (Payload) ----
+
+  // Data: 事件的载荷。
+  // `Any` 类型允许我们嵌入任何其他Protobuf消息，
+  // 这使得事件信封具有高度的可扩展性和类型安全性。
+  // 使用100号是为了给未来的核心扩展属性留出充足空间。
+  google.protobuf.Any data = 100;
+}

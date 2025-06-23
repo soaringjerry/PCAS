@@ -1,0 +1,10 @@
+# buf.yaml
+version: v1
+deps:
+  - buf.build/protocolbuffers/wellknownprotos
+breaking:
+  use:
+    - FILE
+lint:
+  use:
+    - DEFAULT

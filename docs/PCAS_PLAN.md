@@ -35,22 +35,30 @@ PCAS 的架构是一个以它为中心的、网状的、事件驱动的协作网
 
 ```mermaid
 graph TD
-    subgraph "外部世界 (D-Apps)"
-        DApp1[D-App: 通信器]
-        DApp2[D-App: 日程表]
-        DAppN[更多D-App...]
+    subgraph External["外部世界 D-Apps"]
+        DApp1["D-App: 通信器"]
+        DApp2["D-App: 日程表"]
+        DAppN["更多D-App..."]
     end
-
-    subgraph "您的私有环境 (Your Private Environment)"
-        PCAS_Core[PCAS 引擎]
+    
+    subgraph Private["您的私有环境"]
+        PCAS_Core["PCAS 引擎"]
     end
-
+    
     %% 通信流
-    DApp1 <--> |事件/指令 (通过安全总线)| PCAS_Core
-    DApp2 <--> |事件/指令 (通过安全总线)| PCAS_Core
-    DAppN <--> |事件/指令 (通过安全总线)| PCAS_Core
-
+    DApp1 <--> PCAS_Core
+    DApp2 <--> PCAS_Core
+    DAppN <--> PCAS_Core
+    
+    %% 添加连接标签
+    DApp1 -.->|"事件/指令<br/>安全总线"| PCAS_Core
+    DApp2 -.->|"事件/指令<br/>安全总线"| PCAS_Core
+    DAppN -.->|"事件/指令<br/>安全总线"| PCAS_Core
+    
+    %% 样式
     style PCAS_Core fill:#cde4ff,stroke:#36c,stroke-width:3px
+    style External fill:#f9f9f9,stroke:#666,stroke-width:2px
+    style Private fill:#e8f5e8,stroke:#4a4,stroke-width:2px
 ```
 
 ### 2.3. 核心记忆模型: 数据熔炉之基石

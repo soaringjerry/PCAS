@@ -59,14 +59,63 @@ func (*PublishResponse) Descriptor() ([]byte, []int) {
 	return file_pcas_bus_v1_bus_proto_rawDescGZIP(), []int{0}
 }
 
+// SubscribeRequest is the request for subscribing to the event stream
+type SubscribeRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Unique identifier for the client subscribing to events
+	ClientId      string `protobuf:"bytes,1,opt,name=client_id,json=clientId,proto3" json:"client_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SubscribeRequest) Reset() {
+	*x = SubscribeRequest{}
+	mi := &file_pcas_bus_v1_bus_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SubscribeRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SubscribeRequest) ProtoMessage() {}
+
+func (x *SubscribeRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_pcas_bus_v1_bus_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SubscribeRequest.ProtoReflect.Descriptor instead.
+func (*SubscribeRequest) Descriptor() ([]byte, []int) {
+	return file_pcas_bus_v1_bus_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *SubscribeRequest) GetClientId() string {
+	if x != nil {
+		return x.ClientId
+	}
+	return ""
+}
+
 var File_pcas_bus_v1_bus_proto protoreflect.FileDescriptor
 
 const file_pcas_bus_v1_bus_proto_rawDesc = "" +
 	"\n" +
 	"\x15pcas/bus/v1/bus.proto\x12\vpcas.bus.v1\x1a\x1apcas/events/v1/event.proto\"\x11\n" +
-	"\x0fPublishResponse2Q\n" +
+	"\x0fPublishResponse\"/\n" +
+	"\x10SubscribeRequest\x12\x1b\n" +
+	"\tclient_id\x18\x01 \x01(\tR\bclientId2\x96\x01\n" +
 	"\x0fEventBusService\x12>\n" +
-	"\aPublish\x12\x15.pcas.events.v1.Event\x1a\x1c.pcas.bus.v1.PublishResponseB\xa0\x01\n" +
+	"\aPublish\x12\x15.pcas.events.v1.Event\x1a\x1c.pcas.bus.v1.PublishResponse\x12C\n" +
+	"\tSubscribe\x12\x1d.pcas.bus.v1.SubscribeRequest\x1a\x15.pcas.events.v1.Event0\x01B\xa0\x01\n" +
 	"\x0fcom.pcas.bus.v1B\bBusProtoP\x01Z5github.com/soaringjerry/pcas/gen/go/pcas/bus/v1;busv1\xa2\x02\x03PBX\xaa\x02\vPcas.Bus.V1\xca\x02\vPcas\\Bus\\V1\xe2\x02\x17Pcas\\Bus\\V1\\GPBMetadata\xea\x02\rPcas::Bus::V1b\x06proto3"
 
 var (
@@ -81,16 +130,19 @@ func file_pcas_bus_v1_bus_proto_rawDescGZIP() []byte {
 	return file_pcas_bus_v1_bus_proto_rawDescData
 }
 
-var file_pcas_bus_v1_bus_proto_msgTypes = make([]protoimpl.MessageInfo, 1)
+var file_pcas_bus_v1_bus_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
 var file_pcas_bus_v1_bus_proto_goTypes = []any{
-	(*PublishResponse)(nil), // 0: pcas.bus.v1.PublishResponse
-	(*v1.Event)(nil),        // 1: pcas.events.v1.Event
+	(*PublishResponse)(nil),  // 0: pcas.bus.v1.PublishResponse
+	(*SubscribeRequest)(nil), // 1: pcas.bus.v1.SubscribeRequest
+	(*v1.Event)(nil),         // 2: pcas.events.v1.Event
 }
 var file_pcas_bus_v1_bus_proto_depIdxs = []int32{
-	1, // 0: pcas.bus.v1.EventBusService.Publish:input_type -> pcas.events.v1.Event
-	0, // 1: pcas.bus.v1.EventBusService.Publish:output_type -> pcas.bus.v1.PublishResponse
-	1, // [1:2] is the sub-list for method output_type
-	0, // [0:1] is the sub-list for method input_type
+	2, // 0: pcas.bus.v1.EventBusService.Publish:input_type -> pcas.events.v1.Event
+	1, // 1: pcas.bus.v1.EventBusService.Subscribe:input_type -> pcas.bus.v1.SubscribeRequest
+	0, // 2: pcas.bus.v1.EventBusService.Publish:output_type -> pcas.bus.v1.PublishResponse
+	2, // 3: pcas.bus.v1.EventBusService.Subscribe:output_type -> pcas.events.v1.Event
+	2, // [2:4] is the sub-list for method output_type
+	0, // [0:2] is the sub-list for method input_type
 	0, // [0:0] is the sub-list for extension type_name
 	0, // [0:0] is the sub-list for extension extendee
 	0, // [0:0] is the sub-list for field type_name
@@ -107,7 +159,7 @@ func file_pcas_bus_v1_bus_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_pcas_bus_v1_bus_proto_rawDesc), len(file_pcas_bus_v1_bus_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   1,
+			NumMessages:   2,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

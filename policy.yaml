@@ -1,0 +1,20 @@
+version: v1
+providers:
+  - name: mock-provider
+    type: mock
+  - name: openai-gpt4
+    type: openai
+    # api_key: ${OPENAI_API_KEY} # 未来支持
+
+rules:
+  - name: "Rule for test events"
+    if:
+      event_type: "pcas.test.v1"
+    then:
+      provider: mock-provider
+
+  - name: "Rule for user prompts"
+    if:
+      event_type: "pcas.user.prompt.v1"
+    then:
+      provider: openai-gpt4

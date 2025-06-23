@@ -10,9 +10,18 @@ option go_package = "github.com/soaringjerry/pcas/gen/go/pcas/bus/v1;busv1";
 service EventBusService {
   // Publish sends an event to the event bus
   rpc Publish(pcas.events.v1.Event) returns (PublishResponse);
+  
+  // Subscribe allows clients to receive a stream of events
+  rpc Subscribe(SubscribeRequest) returns (stream pcas.events.v1.Event);
 }
 
 // PublishResponse is the response from publishing an event
 message PublishResponse {
   // Empty for now, but reserved for future use (e.g., acknowledgment ID, status)
+}
+
+// SubscribeRequest is the request for subscribing to the event stream
+message SubscribeRequest {
+  // Unique identifier for the client subscribing to events
+  string client_id = 1;
 }

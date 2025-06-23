@@ -20,7 +20,8 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	EventBusService_Publish_FullMethodName = "/pcas.bus.v1.EventBusService/Publish"
+	EventBusService_Publish_FullMethodName   = "/pcas.bus.v1.EventBusService/Publish"
+	EventBusService_Subscribe_FullMethodName = "/pcas.bus.v1.EventBusService/Subscribe"
 )
 
 // EventBusServiceClient is the client API for EventBusService service.
@@ -31,6 +32,8 @@ const (
 type EventBusServiceClient interface {
 	// Publish sends an event to the event bus
 	Publish(ctx context.Context, in *v1.Event, opts ...grpc.CallOption) (*PublishResponse, error)
+	// Subscribe allows clients to receive a stream of events
+	Subscribe(ctx context.Context, in *SubscribeRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[v1.Event], error)
 }
 
 type eventBusServiceClient struct {
@@ -51,6 +54,25 @@ func (c *eventBusServiceClient) Publish(ctx context.Context, in *v1.Event, opts 
 	return out, nil
 }
 
+func (c *eventBusServiceClient) Subscribe(ctx context.Context, in *SubscribeRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[v1.Event], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &EventBusService_ServiceDesc.Streams[0], EventBusService_Subscribe_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[SubscribeRequest, v1.Event]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type EventBusService_SubscribeClient = grpc.ServerStreamingClient[v1.Event]
+
 // EventBusServiceServer is the server API for EventBusService service.
 // All implementations must embed UnimplementedEventBusServiceServer
 // for forward compatibility.
@@ -59,6 +81,8 @@ func (c *eventBusServiceClient) Publish(ctx context.Context, in *v1.Event, opts 
 type EventBusServiceServer interface {
 	// Publish sends an event to the event bus
 	Publish(context.Context, *v1.Event) (*PublishResponse, error)
+	// Subscribe allows clients to receive a stream of events
+	Subscribe(*SubscribeRequest, grpc.ServerStreamingServer[v1.Event]) error
 	mustEmbedUnimplementedEventBusServiceServer()
 }
 
@@ -71,6 +95,9 @@ type UnimplementedEventBusServiceServer struct{}
 
 func (UnimplementedEventBusServiceServer) Publish(context.Context, *v1.Event) (*PublishResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Publish not implemented")
+}
+func (UnimplementedEventBusServiceServer) Subscribe(*SubscribeRequest, grpc.ServerStreamingServer[v1.Event]) error {
+	return status.Errorf(codes.Unimplemented, "method Subscribe not implemented")
 }
 func (UnimplementedEventBusServiceServer) mustEmbedUnimplementedEventBusServiceServer() {}
 func (UnimplementedEventBusServiceServer) testEmbeddedByValue()                         {}
@@ -111,6 +138,17 @@ func _EventBusService_Publish_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _EventBusService_Subscribe_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(SubscribeRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(EventBusServiceServer).Subscribe(m, &grpc.GenericServerStream[SubscribeRequest, v1.Event]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type EventBusService_SubscribeServer = grpc.ServerStreamingServer[v1.Event]
+
 // EventBusService_ServiceDesc is the grpc.ServiceDesc for EventBusService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -123,6 +161,12 @@ var EventBusService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _EventBusService_Publish_Handler,
 		},
 	},
-	Streams:  []grpc.StreamDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "Subscribe",
+			Handler:       _EventBusService_Subscribe_Handler,
+			ServerStreams: true,
+		},
+	},
 	Metadata: "pcas/bus/v1/bus.proto",
 }

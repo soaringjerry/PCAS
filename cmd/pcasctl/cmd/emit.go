@@ -25,6 +25,7 @@ var (
 	eventSubject string
 	eventData   string
 	serverPort  string
+	serverAddr  string // Full server address (host:port)
 )
 
 var emitCmd = &cobra.Command{
@@ -39,7 +40,10 @@ engine. Events can trigger actions, update context, or initiate workflows.`,
 
 func emitEvent() error {
 	// Connect to the PCAS server
-	serverAddr := fmt.Sprintf("localhost:%s", serverPort)
+	if serverAddr == "" {
+		serverAddr = fmt.Sprintf("localhost:%s", serverPort)
+	}
+	
 	conn, err := grpc.NewClient(serverAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return fmt.Errorf("failed to connect: %v", err)
@@ -48,6 +52,29 @@ func emitEvent() error {
 	
 	// Create the client
 	client := busv1.NewEventBusServiceClient(conn)
+	
+	// Generate a unique client ID
+	clientID := fmt.Sprintf("pcasctl-%s", uuid.New().String()[:8])
+	
+	// Start subscription in background goroutine
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	
+	// Channel to signal when subscription is ready
+	subReady := make(chan bool)
+	
+	// Start subscriber goroutine
+	go func() {
+		subscribeToEvents(ctx, client, clientID, subReady)
+	}()
+	
+	// Wait for subscription to be ready
+	select {
+	case <-subReady:
+		log.Println("Subscription established, emitting event...")
+	case <-time.After(2 * time.Second):
+		log.Println("Warning: Subscription setup timed out, continuing anyway...")
+	}
 	
 	// Create event with user-provided values
 	event := &eventsv1.Event{
@@ -86,27 +113,84 @@ func emitEvent() error {
 	}
 	
 	// Send the event
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+	pubCtx, pubCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer pubCancel()
 	
-	resp, err := client.Publish(ctx, event)
+	resp, err := client.Publish(pubCtx, event)
 	if err != nil {
 		return fmt.Errorf("failed to publish event: %v", err)
 	}
 	
 	log.Printf("Event published successfully: %+v", resp)
+	
+	// Wait a bit to receive responses
+	log.Println("Waiting for responses...")
+	time.Sleep(3 * time.Second)
+	
 	return nil
+}
+
+// subscribeToEvents handles the subscription stream
+func subscribeToEvents(ctx context.Context, client busv1.EventBusServiceClient, clientID string, ready chan<- bool) {
+	// Create subscription request
+	req := &busv1.SubscribeRequest{
+		ClientId: clientID,
+	}
+	
+	// Start subscription stream
+	stream, err := client.Subscribe(ctx, req)
+	if err != nil {
+		log.Printf("Failed to subscribe: %v", err)
+		close(ready)
+		return
+	}
+	
+	// Signal that subscription is ready
+	close(ready)
+	
+	// Receive events
+	for {
+		event, err := stream.Recv()
+		if err != nil {
+			if ctx.Err() != nil {
+				// Context was cancelled, normal shutdown
+				return
+			}
+			log.Printf("Stream error: %v", err)
+			return
+		}
+		
+		// Print received event
+		log.Printf("\n=== Received Event ===")
+		log.Printf("ID: %s", event.Id)
+		log.Printf("Type: %s", event.Type)
+		log.Printf("Source: %s", event.Source)
+		log.Printf("Subject: %s", event.Subject)
+		
+		// Extract and print data if present
+		if event.Data != nil {
+			value := &structpb.Value{}
+			if event.Data.MessageIs(value) {
+				if err := event.Data.UnmarshalTo(value); err == nil {
+					jsonBytes, _ := json.MarshalIndent(value.AsInterface(), "", "  ")
+					log.Printf("Data: %s", string(jsonBytes))
+				}
+			}
+		}
+		log.Printf("====================\n")
+	}
 }
 
 func init() {
 	rootCmd.AddCommand(emitCmd)
 	
 	// Add flags
-	emitCmd.Flags().StringVar(&eventType, "type", "", "Event type (e.g., pcas.user.login.v1)")
+	emitCmd.Flags().StringVarP(&eventType, "type", "t", "", "Event type (e.g., pcas.user.login.v1)")
 	emitCmd.Flags().StringVar(&eventSource, "source", "pcasctl", "Event source (default: pcasctl)")
 	emitCmd.Flags().StringVar(&eventSubject, "subject", "", "Event subject (optional)")
 	emitCmd.Flags().StringVar(&eventData, "data", "", "Event data as JSON string (optional)")
 	emitCmd.Flags().StringVar(&serverPort, "port", "50051", "PCAS server port")
+	emitCmd.Flags().StringVar(&serverAddr, "server", "", "PCAS server address (overrides --port)")
 	
 	// Mark type as required
 	emitCmd.MarkFlagRequired("type")

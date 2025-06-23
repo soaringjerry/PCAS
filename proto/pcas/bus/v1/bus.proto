@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package pcas.bus.v1;
+
+import "pcas/events/v1/event.proto";
+
+option go_package = "github.com/soaringjerry/pcas/gen/go/pcas/bus/v1;busv1";
+
+// EventBusService provides methods for publishing events to the PCAS event bus
+service EventBusService {
+  // Publish sends an event to the event bus
+  rpc Publish(pcas.events.v1.Event) returns (PublishResponse);
+}
+
+// PublishResponse is the response from publishing an event
+message PublishResponse {
+  // Empty for now, but reserved for future use (e.g., acknowledgment ID, status)
+}

@@ -1,9 +1,14 @@
 # buf.gen.yaml
-version: v1
+version: v2
+managed:
+  enabled: true
+  override:
+    - file_option: go_package_prefix
+      value: github.com/soaringjerry/pcas/gen/go
 plugins:
-  - plugin: buf.build/protocolbuffers/go
+  - remote: buf.build/protocolbuffers/go
     out: gen/go
     opt: paths=source_relative
-  - plugin: buf.build/protocolbuffers/go-grpc
+  - remote: buf.build/grpc/go
     out: gen/go
     opt: paths=source_relative

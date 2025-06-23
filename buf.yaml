@@ -1,5 +1,7 @@
 # buf.yaml
-version: v1
+version: v2
+modules:
+  - path: proto
 deps:
   - buf.build/protocolbuffers/wellknownprotos
 breaking:

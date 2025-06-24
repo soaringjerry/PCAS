@@ -60,9 +60,13 @@ message Event {
   // 可选字段。
   string session_id = 11;
 
+  // CorrelationID: 标识直接的"请求-响应"关系。
+  // 例如，响应事件的 correlation_id 应该等于触发它的原始事件的 id。
+  string correlation_id = 12;
+
   // 注意: 核心扩展属性区域为 20-99，载荷从 100 开始。
-  // reserved 12–19 for backward compatibility
-  reserved 12 to 19;
+  // reserved 13–19 for backward compatibility
+  reserved 13 to 19;
 
   // ---- 载荷 (Payload) ----
 

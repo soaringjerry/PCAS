@@ -62,6 +62,9 @@ type Event struct {
 	// SessionID: 用于将一系列相关事件分组的逻辑会话ID。
 	// 可选字段。
 	SessionId string `protobuf:"bytes,11,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	// CorrelationID: 标识直接的"请求-响应"关系。
+	// 例如，响应事件的 correlation_id 应该等于触发它的原始事件的 id。
+	CorrelationId string `protobuf:"bytes,12,opt,name=correlation_id,json=correlationId,proto3" json:"correlation_id,omitempty"`
 	// Data: 事件的载荷。
 	// `Any` 类型允许我们嵌入任何其他Protobuf消息，
 	// 这使得事件信封具有高度的可扩展性和类型安全性。
@@ -178,6 +181,13 @@ func (x *Event) GetSessionId() string {
 	return ""
 }
 
+func (x *Event) GetCorrelationId() string {
+	if x != nil {
+		return x.CorrelationId
+	}
+	return ""
+}
+
 func (x *Event) GetData() *anypb.Any {
 	if x != nil {
 		return x.Data
@@ -189,7 +199,7 @@ var File_pcas_events_v1_event_proto protoreflect.FileDescriptor
 
 const file_pcas_events_v1_event_proto_rawDesc = "" +
 	"\n" +
-	"\x1apcas/events/v1/event.proto\x12\x0epcas.events.v1\x1a\x19google/protobuf/any.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\xfc\x02\n" +
+	"\x1apcas/events/v1/event.proto\x12\x0epcas.events.v1\x1a\x19google/protobuf/any.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\xa3\x03\n" +
 	"\x05Event\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x16\n" +
 	"\x06source\x18\x02 \x01(\tR\x06source\x12 \n" +
@@ -205,8 +215,9 @@ const file_pcas_events_v1_event_proto_rawDesc = "" +
 	"\auser_id\x18\n" +
 	" \x01(\tR\x06userId\x12\x1d\n" +
 	"\n" +
-	"session_id\x18\v \x01(\tR\tsessionId\x12(\n" +
-	"\x04data\x18d \x01(\v2\x14.google.protobuf.AnyR\x04dataJ\x04\b\f\x10\x14B\xb7\x01\n" +
+	"session_id\x18\v \x01(\tR\tsessionId\x12%\n" +
+	"\x0ecorrelation_id\x18\f \x01(\tR\rcorrelationId\x12(\n" +
+	"\x04data\x18d \x01(\v2\x14.google.protobuf.AnyR\x04dataJ\x04\b\r\x10\x14B\xb7\x01\n" +
 	"\x12com.pcas.events.v1B\n" +
 	"EventProtoP\x01Z;github.com/soaringjerry/pcas/gen/go/pcas/events/v1;eventsv1\xa2\x02\x03PEX\xaa\x02\x0ePcas.Events.V1\xca\x02\x0ePcas\\Events\\V1\xe2\x02\x1aPcas\\Events\\V1\\GPBMetadata\xea\x02\x10Pcas::Events::V1b\x06proto3"
 

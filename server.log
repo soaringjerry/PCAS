@@ -1,0 +1,17 @@
+2025/06/24 17:22:23 Loading policy from policy.yaml...
+2025/06/24 17:22:23 Initialized provider: mock-provider (type: mock)
+2025/06/24 17:22:23 Warning: Skipping provider openai-gpt4 - OPENAI_API_KEY environment variable not set
+2025/06/24 17:22:23 Initializing SQLite storage...
+2025/06/24 17:22:24 SQLite storage initialized successfully
+2025/06/24 17:22:24 PCAS server starting on :9095...
+2025/06/24 17:22:38 Client pcasctl-1ade813f subscribing to events
+2025/06/24 17:22:38 Received event: ID=db3c7144-89f1-4843-8d0f-35901f2045e5, Type=pcas.test.v1, Source=pcasctl
+2025/06/24 17:22:38 Selected provider: mock-provider
+2025/06/24 17:22:38 Provider response: Mock response for request: map[]
+2025/06/24 17:22:38 Broadcasting event d2158470-a31e-4501-bf4a-df90cfbc5903 to 1 subscribers
+2025/06/24 17:22:41 Client pcasctl-1ade813f unsubscribed
+2025/06/24 17:23:17 Failed to store incoming event: failed to store event: UNIQUE constraint failed: events.id
+2025/06/24 17:23:17 Received event: ID=db3c7144-89f1-4843-8d0f-35901f2045e5, Type=pcas.test.v1, Source=pcasctl
+2025/06/24 17:23:17 Selected provider: mock-provider
+2025/06/24 17:23:17 Provider response: Mock response for request: map[]
+2025/06/24 17:23:17 Broadcasting event 8b4f9d2e-a210-4083-b760-37706d83455b to 0 subscribers

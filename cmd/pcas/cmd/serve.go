@@ -14,6 +14,7 @@ import (
 	"github.com/soaringjerry/pcas/internal/providers"
 	"github.com/soaringjerry/pcas/internal/providers/mock"
 	"github.com/soaringjerry/pcas/internal/providers/openai"
+	"github.com/soaringjerry/pcas/internal/storage/sqlite"
 	busv1 "github.com/soaringjerry/pcas/gen/go/pcas/bus/v1"
 )
 
@@ -63,6 +64,15 @@ func runServer() error {
 		}
 	}
 	
+	// Initialize SQLite storage
+	log.Println("Initializing SQLite storage...")
+	sqliteStorage, err := sqlite.NewProvider("pcas.db")
+	if err != nil {
+		return fmt.Errorf("failed to initialize SQLite storage: %w", err)
+	}
+	defer sqliteStorage.Close()
+	log.Println("SQLite storage initialized successfully")
+	
 	// Build the listen address from host and port
 	listenAddr := fmt.Sprintf("%s:%s", serverHost, serverPort)
 	
@@ -75,8 +85,8 @@ func runServer() error {
 	// Create gRPC server
 	grpcServer := grpc.NewServer()
 	
-	// Create and register our bus service with policy engine and providers
-	busServer := bus.NewServer(policyEngine, providerMap)
+	// Create and register our bus service with policy engine, providers and storage
+	busServer := bus.NewServer(policyEngine, providerMap, sqliteStorage)
 	busv1.RegisterEventBusServiceServer(grpcServer, busServer)
 	
 	log.Printf("PCAS server starting on %s...", listenAddr)

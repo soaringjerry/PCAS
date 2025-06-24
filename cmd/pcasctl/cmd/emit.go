@@ -26,6 +26,7 @@ var (
 	eventData   string
 	serverPort  string
 	serverAddr  string // Full server address (host:port)
+	traceID     string // Optional trace ID for correlation
 )
 
 var emitCmd = &cobra.Command{
@@ -83,6 +84,13 @@ func emitEvent() error {
 		Specversion: "1.0",
 		Type:        eventType,
 		Time:        timestamppb.New(time.Now()),
+	}
+	
+	// Set trace ID - use provided one or generate new
+	if traceID != "" {
+		event.TraceId = traceID
+	} else {
+		event.TraceId = uuid.New().String()
 	}
 	
 	// Add subject if provided
@@ -191,6 +199,7 @@ func init() {
 	emitCmd.Flags().StringVar(&eventData, "data", "", "Event data as JSON string (optional)")
 	emitCmd.Flags().StringVar(&serverPort, "port", "50051", "PCAS server port")
 	emitCmd.Flags().StringVar(&serverAddr, "server", "", "PCAS server address (overrides --port)")
+	emitCmd.Flags().StringVar(&traceID, "trace-id", "", "Trace ID for correlation (optional, auto-generated if not provided)")
 	
 	// Mark type as required
 	emitCmd.MarkFlagRequired("type")

@@ -17,6 +17,7 @@ import (
 	eventsv1 "github.com/soaringjerry/pcas/gen/go/pcas/events/v1"
 	"github.com/soaringjerry/pcas/internal/policy"
 	"github.com/soaringjerry/pcas/internal/providers"
+	"github.com/soaringjerry/pcas/internal/storage"
 )
 
 // Server implements the EventBusService gRPC server
@@ -24,6 +25,7 @@ type Server struct {
 	busv1.UnimplementedEventBusServiceServer
 	policyEngine *policy.Engine
 	providers    map[string]providers.ComputeProvider
+	storage      storage.Storage
 	
 	// Subscriber management
 	subscribers map[string]chan *eventsv1.Event
@@ -31,16 +33,23 @@ type Server struct {
 }
 
 // NewServer creates a new bus server instance
-func NewServer(policyEngine *policy.Engine, providerMap map[string]providers.ComputeProvider) *Server {
+func NewServer(policyEngine *policy.Engine, providerMap map[string]providers.ComputeProvider, storage storage.Storage) *Server {
 	return &Server{
 		policyEngine: policyEngine,
 		providers:    providerMap,
+		storage:      storage,
 		subscribers:  make(map[string]chan *eventsv1.Event),
 	}
 }
 
 // Publish handles incoming events from clients
 func (s *Server) Publish(ctx context.Context, event *eventsv1.Event) (*busv1.PublishResponse, error) {
+	// Store the incoming event immediately
+	if err := s.storage.StoreEvent(ctx, event); err != nil {
+		log.Printf("Failed to store incoming event: %v", err)
+		// Continue processing even if storage fails
+	}
+	
 	log.Printf("Received event: ID=%s, Type=%s, Source=%s", event.Id, event.Type, event.Source)
 	
 	if event.Subject != "" {
@@ -100,12 +109,14 @@ func (s *Server) Publish(ctx context.Context, event *eventsv1.Event) (*busv1.Pub
 	
 	// Create a response event
 	responseEvent := &eventsv1.Event{
-		Id:        uuid.New().String(),
-		Type:      "pcas.response.v1",
-		Source:    "pcas-server",
-		Specversion: "1.0",
-		Time:      timestamppb.New(time.Now()),
-		Subject:   fmt.Sprintf("response-to-%s", event.Id),
+		Id:            uuid.New().String(),
+		Type:          "pcas.response.v1",
+		Source:        "pcas-server",
+		Specversion:   "1.0",
+		Time:          timestamppb.New(time.Now()),
+		Subject:       fmt.Sprintf("response-to-%s", event.Id),
+		TraceId:       event.TraceId,        // Pass through the trace ID
+		CorrelationId: event.Id,              // Set correlation to the original event ID
 	}
 	
 	// Add the response data
@@ -120,6 +131,12 @@ func (s *Server) Publish(ctx context.Context, event *eventsv1.Event) (*busv1.Pub
 		log.Printf("Failed to create response data: %v", err)
 	} else {
 		responseEvent.Data, _ = anypb.New(structData)
+	}
+	
+	// Store the response event before broadcasting
+	if err := s.storage.StoreEvent(ctx, responseEvent); err != nil {
+		log.Printf("Failed to store response event: %v", err)
+		// Continue processing even if storage fails
 	}
 	
 	// Broadcast the response event to all subscribers

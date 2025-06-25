@@ -34,21 +34,21 @@ PCAS是D-Apps协作网络中的中央枢纽，该网络是事件驱动的、网�
 
 ```mermaid
 graph TD
-    subgraph "外部世界 (The World)"
-        DApp1[D-App: 通信器]
-        DApp2[D-App: 日程表]
-        DAppN[更多D-App...]
+    subgraph World["外部世界 (The World)"]
+        DApp1["D-App: 通信器"]
+        DApp2["D-App: 日程表"]
+        DAppN["更多D-App..."]
     end
-
-    subgraph "您的私有环境 (Your Private Environment)"
-        PCAS_Core[PCAS 引擎]
+    
+    subgraph Private["您的私有环境 (Your Private Environment)"]
+        PCAS_Core["PCAS 引擎"]
     end
-
+    
     %% 通信流
-    DApp1 <--> |事件/指令 (通过安全总线)| PCAS_Core
-    DApp2 <--> |事件/指令 (通过安全总线)| PCAS_Core
-    DAppN <--> |事件/指令 (通过安全总线)| PCAS_Core
-
+    DApp1 <--> |"事件/指令<br/>(通过安全总线)"| PCAS_Core
+    DApp2 <--> |"事件/指令<br/>(通过安全总线)"| PCAS_Core
+    DAppN <--> |"事件/指令<br/>(通过安全总线)"| PCAS_Core
+    
     style PCAS_Core fill:#cde4ff,stroke:#36c,stroke-width:3px
 ```
 

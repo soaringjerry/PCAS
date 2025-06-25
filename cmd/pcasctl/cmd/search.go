@@ -34,11 +34,18 @@ Examples:
 func init() {
 	rootCmd.AddCommand(searchCmd)
 	searchCmd.Flags().IntVar(&topK, "top-k", 5, "Number of top results to return")
+	searchCmd.Flags().StringVar(&serverPort, "port", "50051", "PCAS server port")
+	searchCmd.Flags().StringVar(&serverAddr, "server", "", "PCAS server address (overrides --port)")
 }
 
 func runSearch(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
 	queryText := args[0]
+
+	// Determine server address
+	if serverAddr == "" {
+		serverAddr = fmt.Sprintf("localhost:%s", serverPort)
+	}
 
 	// Connect to gRPC server
 	conn, err := grpc.Dial(serverAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))

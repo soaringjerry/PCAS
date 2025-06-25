@@ -66,6 +66,11 @@ func runServer() error {
 		}
 	}
 	
+	// Ensure data directory exists
+	if err := os.MkdirAll("data", 0755); err != nil {
+		return fmt.Errorf("failed to create data directory: %w", err)
+	}
+	
 	// Initialize SQLite storage
 	log.Println("Initializing SQLite storage...")
 	sqliteStorage, err := sqlite.NewProvider("data/pcas.db")

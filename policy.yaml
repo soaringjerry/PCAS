@@ -30,3 +30,13 @@ rules:
       event_type: "test.event.v1"
     then:
       provider: mock-provider
+      
+  - name: "Rule for all PCAS domain events to be vectorized"
+    if:
+      any_of:
+        - event_type: "pcas.architect.decision.v1"
+        - event_type: "pcas.schedule.item.v1"
+        - event_type: "pcas.plan.trip.v1"
+        - event_type: "pcas.memory.create.v1" # 也把我们最初测试用的类型加进去
+    then:
+      provider: mock-provider

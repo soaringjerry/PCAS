@@ -60,6 +60,12 @@ func (s *Server) vectorizeEvent(event *eventsv1.Event) {
 
 // extractTextContent extracts meaningful text from event data
 func (s *Server) extractTextContent(event *eventsv1.Event) string {
+	// First priority: Check event.Subject
+	if event.Subject != "" {
+		return event.Subject
+	}
+	
+	// If no subject, try to extract from event.Data
 	if event.Data == nil {
 		return ""
 	}

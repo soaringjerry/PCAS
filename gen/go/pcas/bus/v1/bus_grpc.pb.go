@@ -22,6 +22,7 @@ const _ = grpc.SupportPackageIsVersion9
 const (
 	EventBusService_Publish_FullMethodName   = "/pcas.bus.v1.EventBusService/Publish"
 	EventBusService_Subscribe_FullMethodName = "/pcas.bus.v1.EventBusService/Subscribe"
+	EventBusService_Search_FullMethodName    = "/pcas.bus.v1.EventBusService/Search"
 )
 
 // EventBusServiceClient is the client API for EventBusService service.
@@ -34,6 +35,8 @@ type EventBusServiceClient interface {
 	Publish(ctx context.Context, in *v1.Event, opts ...grpc.CallOption) (*PublishResponse, error)
 	// Subscribe allows clients to receive a stream of events
 	Subscribe(ctx context.Context, in *SubscribeRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[v1.Event], error)
+	// Search performs semantic search on stored events
+	Search(ctx context.Context, in *SearchRequest, opts ...grpc.CallOption) (*SearchResponse, error)
 }
 
 type eventBusServiceClient struct {
@@ -73,6 +76,16 @@ func (c *eventBusServiceClient) Subscribe(ctx context.Context, in *SubscribeRequ
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type EventBusService_SubscribeClient = grpc.ServerStreamingClient[v1.Event]
 
+func (c *eventBusServiceClient) Search(ctx context.Context, in *SearchRequest, opts ...grpc.CallOption) (*SearchResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SearchResponse)
+	err := c.cc.Invoke(ctx, EventBusService_Search_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // EventBusServiceServer is the server API for EventBusService service.
 // All implementations must embed UnimplementedEventBusServiceServer
 // for forward compatibility.
@@ -83,6 +96,8 @@ type EventBusServiceServer interface {
 	Publish(context.Context, *v1.Event) (*PublishResponse, error)
 	// Subscribe allows clients to receive a stream of events
 	Subscribe(*SubscribeRequest, grpc.ServerStreamingServer[v1.Event]) error
+	// Search performs semantic search on stored events
+	Search(context.Context, *SearchRequest) (*SearchResponse, error)
 	mustEmbedUnimplementedEventBusServiceServer()
 }
 
@@ -98,6 +113,9 @@ func (UnimplementedEventBusServiceServer) Publish(context.Context, *v1.Event) (*
 }
 func (UnimplementedEventBusServiceServer) Subscribe(*SubscribeRequest, grpc.ServerStreamingServer[v1.Event]) error {
 	return status.Errorf(codes.Unimplemented, "method Subscribe not implemented")
+}
+func (UnimplementedEventBusServiceServer) Search(context.Context, *SearchRequest) (*SearchResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Search not implemented")
 }
 func (UnimplementedEventBusServiceServer) mustEmbedUnimplementedEventBusServiceServer() {}
 func (UnimplementedEventBusServiceServer) testEmbeddedByValue()                         {}
@@ -149,6 +167,24 @@ func _EventBusService_Subscribe_Handler(srv interface{}, stream grpc.ServerStrea
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type EventBusService_SubscribeServer = grpc.ServerStreamingServer[v1.Event]
 
+func _EventBusService_Search_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SearchRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(EventBusServiceServer).Search(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: EventBusService_Search_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(EventBusServiceServer).Search(ctx, req.(*SearchRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // EventBusService_ServiceDesc is the grpc.ServiceDesc for EventBusService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -159,6 +195,10 @@ var EventBusService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Publish",
 			Handler:    _EventBusService_Publish_Handler,
+		},
+		{
+			MethodName: "Search",
+			Handler:    _EventBusService_Search_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

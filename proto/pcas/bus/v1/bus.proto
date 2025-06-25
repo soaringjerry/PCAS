@@ -13,6 +13,9 @@ service EventBusService {
   
   // Subscribe allows clients to receive a stream of events
   rpc Subscribe(SubscribeRequest) returns (stream pcas.events.v1.Event);
+  
+  // Search performs semantic search on stored events
+  rpc Search(SearchRequest) returns (SearchResponse);
 }
 
 // PublishResponse is the response from publishing an event
@@ -24,4 +27,19 @@ message PublishResponse {
 message SubscribeRequest {
   // Unique identifier for the client subscribing to events
   string client_id = 1;
+}
+
+// SearchRequest is the request for semantic search
+message SearchRequest {
+  // The natural language query text
+  string query_text = 1;
+  
+  // Number of top results to return (default: 5)
+  int32 top_k = 2;
+}
+
+// SearchResponse is the response from semantic search
+message SearchResponse {
+  // The matching events found
+  repeated pcas.events.v1.Event events = 1;
 }

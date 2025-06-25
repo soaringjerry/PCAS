@@ -8,7 +8,9 @@ import (
 	"time"
 	
 	_ "github.com/mattn/go-sqlite3"
+	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/structpb"
+	"google.golang.org/protobuf/types/known/timestamppb"
 	
 	eventsv1 "github.com/soaringjerry/pcas/gen/go/pcas/events/v1"
 	"github.com/soaringjerry/pcas/internal/storage"
@@ -115,6 +117,69 @@ func (p *Provider) StoreEvent(ctx context.Context, event *eventsv1.Event) error 
 	}
 	
 	return nil
+}
+
+// GetEventByID retrieves a single event by its ID
+func (p *Provider) GetEventByID(ctx context.Context, eventID string) (*eventsv1.Event, error) {
+	query := `
+		SELECT id, type, source, subject, specversion, time, data, trace_id, correlation_id
+		FROM events
+		WHERE id = ?
+	`
+	
+	var event eventsv1.Event
+	var eventTime time.Time
+	var dataJSON sql.NullString
+	var traceID sql.NullString
+	var correlationID sql.NullString
+	var subject sql.NullString
+	
+	err := p.db.QueryRowContext(ctx, query, eventID).Scan(
+		&event.Id,
+		&event.Type,
+		&event.Source,
+		&subject,
+		&event.Specversion,
+		&eventTime,
+		&dataJSON,
+		&traceID,
+		&correlationID,
+	)
+	
+	if err == sql.ErrNoRows {
+		return nil, fmt.Errorf("event not found: %s", eventID)
+	} else if err != nil {
+		return nil, fmt.Errorf("failed to retrieve event: %w", err)
+	}
+	
+	// Set optional fields
+	if subject.Valid {
+		event.Subject = subject.String
+	}
+	if traceID.Valid {
+		event.TraceId = traceID.String
+	}
+	if correlationID.Valid {
+		event.CorrelationId = correlationID.String
+	}
+	
+	// Convert time
+	event.Time = timestamppb.New(eventTime)
+	
+	// Parse data if present
+	if dataJSON.Valid && dataJSON.String != "" {
+		var data interface{}
+		if err := json.Unmarshal([]byte(dataJSON.String), &data); err == nil {
+			// Convert to structpb.Value and then to Any
+			if value, err := structpb.NewValue(data); err == nil {
+				if anyData, err := anypb.New(value); err == nil {
+					event.Data = anyData
+				}
+			}
+		}
+	}
+	
+	return &event, nil
 }
 
 // Close closes the database connection

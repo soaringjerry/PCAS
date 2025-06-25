@@ -68,7 +68,7 @@ func runServer() error {
 	
 	// Initialize SQLite storage
 	log.Println("Initializing SQLite storage...")
-	sqliteStorage, err := sqlite.NewProvider("pcas.db")
+	sqliteStorage, err := sqlite.NewProvider("data/pcas.db")
 	if err != nil {
 		return fmt.Errorf("failed to initialize SQLite storage: %w", err)
 	}

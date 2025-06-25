@@ -156,3 +156,51 @@ func (s *Server) Publish(ctx context.Context, event *eventsv1.Event) (*busv1.Pub
 	
 	return &busv1.PublishResponse{}, nil
 }
+
+// Search performs semantic search across stored events
+func (s *Server) Search(ctx context.Context, req *busv1.SearchRequest) (*busv1.SearchResponse, error) {
+	// Validate request
+	if req.QueryText == "" {
+		return nil, fmt.Errorf("query_text cannot be empty")
+	}
+	
+	if req.TopK <= 0 {
+		req.TopK = 5 // Default to 5 results
+	}
+	
+	// Check if vector storage and embedding provider are available
+	if s.vectorStorage == nil || s.embeddingProvider == nil {
+		return nil, fmt.Errorf("vector search is not available: vector storage or embedding provider not configured")
+	}
+	
+	// Create embedding for the query text
+	log.Printf("Creating embedding for search query: %s", req.QueryText)
+	queryEmbedding, err := s.embeddingProvider.CreateEmbedding(ctx, req.QueryText)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create query embedding: %w", err)
+	}
+	
+	// Query similar events from vector storage
+	log.Printf("Searching for top %d similar events", req.TopK)
+	eventIDs, err := s.vectorStorage.QuerySimilar(ctx, queryEmbedding, int(req.TopK))
+	if err != nil {
+		return nil, fmt.Errorf("failed to query similar events: %w", err)
+	}
+	
+	// Retrieve full event details from storage
+	var results []*eventsv1.Event
+	for _, eventID := range eventIDs {
+		event, err := s.storage.GetEventByID(ctx, eventID)
+		if err != nil {
+			log.Printf("Warning: failed to retrieve event %s: %v", eventID, err)
+			continue
+		}
+		results = append(results, event)
+	}
+	
+	log.Printf("Search completed: found %d matching events", len(results))
+	
+	return &busv1.SearchResponse{
+		Events: results,
+	}, nil
+}

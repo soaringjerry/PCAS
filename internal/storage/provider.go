@@ -11,6 +11,9 @@ type Storage interface {
 	// StoreEvent persists an event to the storage backend
 	StoreEvent(ctx context.Context, event *eventsv1.Event) error
 	
+	// GetEventByID retrieves a single event by its ID
+	GetEventByID(ctx context.Context, eventID string) (*eventsv1.Event, error)
+	
 	// Close gracefully shuts down the storage connection
 	Close() error
 }

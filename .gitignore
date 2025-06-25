@@ -1,1 +1,24 @@
+# Build outputs
+bin/
+
+# Runtime data
+data/
+*.db
+
+# Logs
+*.log
+logs/
+
+# Vendor directory
+vendor/
+
+# Generated code
+gen/
+
+# IDE
+.vscode/
+.idea/
 .claude/
+
+# OS
+.DS_Store

@@ -1,9 +1,7 @@
 # buf.yaml
-version: v2
-modules:
-  - path: proto
+version: v1
 deps:
-  - buf.build/protocolbuffers/wellknownprotos
+  - buf.build/googleapis/googleapis
 breaking:
   use:
     - FILE

@@ -1,0 +1,19 @@
+run:
+  modules-download-mode: vendor
+  go: '1.23'
+
+linters:
+  enable:
+    - gofmt
+    - govet
+    - errcheck
+    - staticcheck
+    - gosimple
+    - ineffassign
+    - unused
+  disable:
+    - typecheck  # 暂时禁用，因为有 vendor 相关的问题
+
+linters-settings:
+  gofmt:
+    simplify: true

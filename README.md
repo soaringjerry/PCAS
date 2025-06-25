@@ -52,17 +52,64 @@ graph TD
     style PCAS_Core fill:#cde4ff,stroke:#36c,stroke-width:3px
 ```
 
-## 🚀 Getting Started (Actionable Roadmap)
+## 🚀 Quick Start
 
-The project is in active development based on the following roadmap. Our core principle: **"Run one chain, then go upstairs."**
+This guide will walk you through experiencing PCAS's core "semantic memory" capability - from storing a memory to performing semantic search.
 
-| ETA | Target | Key Deliverables |
-| :--- | :--- | :--- |
-| **+2 Weeks** | **Minimal Event Bus & CLI** | `pcas serve`, `pcas emit` commands; `trace_id`. |
-| **+1 Month** | **Policy v0 + Providers** | `policy.yaml` static rules; `OpenAIProvider` & `MockLocalProvider`. |
-| **+2 Months**| **Explainable AI + Graph Store** | LLM-decide() with decision logs; SQLite persistence. |
-| **+3 Months**| **SDK & Example D-Apps** | Go/TS SDK; Scheduler, Communicator, Knowledge D-Apps. |
-| **+4 Months**| **Preview Release & Community** | GitHub Beta Tag; Docs Site; RFC process. |
+### 1. Prerequisites
+
+Before you begin, ensure you have:
+- An OpenAI API key
+- A running ChromaDB instance (default: `http://localhost:8000`)
+
+### 2. Configuration
+
+PCAS behavior is driven by the `policy.yaml` file. Here's a minimal configuration to get started:
+
+```yaml
+version: v1
+providers:
+  - name: mock-provider
+    type: mock
+  - name: openai-gpt4
+    type: openai
+
+rules:
+  - name: "Rule for PCAS memory events"
+    if:
+      event_type: "pcas.memory.create.v1"
+    then:
+      provider: mock-provider
+```
+
+### 3. Build and Run
+
+Build the project:
+```bash
+make build
+```
+
+In a new terminal, start the PCAS service:
+```bash
+export OPENAI_API_KEY="your-api-key-here"
+export CHROMA_URL="http://localhost:8000"
+./bin/pcas serve
+```
+
+### 4. Interact with PCAS
+
+**Store a memory:**
+```bash
+./bin/pcasctl emit --type pcas.memory.create.v1 \
+  --subject "The project's core principle is 'Absolute Data Sovereignty, Flexible Compute Scheduling.'"
+```
+
+**Search for memories:**
+```bash
+./bin/pcasctl search "What is the foundational philosophy of the project?"
+```
+
+You should see the original memory returned in the search results, demonstrating PCAS's semantic understanding capability.
 
 ## 🤝 Community & Contribution
 

@@ -5,6 +5,9 @@ providers:
   - name: openai-gpt4
     type: openai
     # api_key: ${OPENAI_API_KEY} # 未来支持
+  - name: ollama-llama3
+    type: ollama
+    # host: ${OLLAMA_HOST} # defaults to http://localhost:11434
 
 rules:
   - name: "Rule for test events"
@@ -40,3 +43,15 @@ rules:
         - event_type: "pcas.memory.create.v1" # 也把我们最初测试用的类型加进去
     then:
       provider: mock-provider
+      
+  - name: "Rule for echo events"
+    if:
+      event_type: "pcas.echo.v1"
+    then:
+      provider: mock-provider
+      
+  - name: "Rule for local LLM prompts"
+    if:
+      event_type: "pcas.user.prompt.local.v1"
+    then:
+      provider: ollama-llama3

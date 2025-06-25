@@ -2,7 +2,6 @@ package mock
 
 import (
 	"context"
-	"fmt"
 )
 
 // Provider is a mock implementation of ComputeProvider for testing
@@ -15,6 +14,6 @@ func NewProvider() *Provider {
 
 // Execute implements the ComputeProvider interface
 func (p *Provider) Execute(ctx context.Context, requestData map[string]interface{}) (string, error) {
-	// Return a hardcoded response with the request data
-	return fmt.Sprintf("Mock response for request: %v", requestData), nil
+	// Return a fixed, predictable response
+	return "Mock response from mock-provider", nil
 }

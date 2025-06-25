@@ -1,3 +1,5 @@
+//go:build !no_chroma
+
 package vector
 
 import (

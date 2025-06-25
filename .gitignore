@@ -24,3 +24,11 @@ gen/
 
 # OS
 .DS_Store
+
+# Docker development
+tmp/
+air_errors.log
+
+# Environment files
+.env
+.env.local

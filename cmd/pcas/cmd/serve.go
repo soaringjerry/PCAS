@@ -71,13 +71,13 @@ func runServer() error {
 		return fmt.Errorf("failed to create data directory: %w", err)
 	}
 	
-	// Initialize SQLite storage
+	// Initialize SQLite storage (using pure Go implementation)
 	log.Println("Initializing SQLite storage...")
-	sqliteStorage, err := sqlite.NewProvider("data/pcas.db")
+	localStorage, err := sqlite.NewProvider("data/pcas.db")
 	if err != nil {
 		return fmt.Errorf("failed to initialize SQLite storage: %w", err)
 	}
-	defer sqliteStorage.Close()
+	defer localStorage.Close()
 	log.Println("SQLite storage initialized successfully")
 	
 	// Initialize vector storage if OpenAI API key is available
@@ -121,7 +121,7 @@ func runServer() error {
 	grpcServer := grpc.NewServer()
 	
 	// Create and register our bus service with policy engine, providers and storage
-	busServer := bus.NewServer(policyEngine, providerMap, sqliteStorage)
+	busServer := bus.NewServer(policyEngine, providerMap, localStorage)
 	
 	// Set vector storage and embedding provider if available
 	if vectorStorage != nil && embeddingProvider != nil {

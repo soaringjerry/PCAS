@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  chromadb:
+    image: chromadb/chroma:latest
+    container_name: pcas-chromadb
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data/chroma:/chroma/chroma
+    environment:
+      - IS_PERSISTENT=TRUE
+      - PERSIST_DIRECTORY=/chroma/chroma
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 8000 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  pcas:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: pcas-server
+    ports:
+      - "50051:50051"
+    volumes:
+      - .:/app
+      - /app/vendor  # Prevent vendor directory from being overwritten
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-dummy-key}
+      - CHROMA_URL=http://chromadb:8000
+      - PCAS_ENV=development
+    depends_on:
+      - chromadb
+    command: ["air", "-c", ".air.toml"]
+
+networks:
+  default:
+    name: pcas-network

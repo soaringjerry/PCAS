@@ -1,0 +1,23 @@
+root = "."
+tmp_dir = "tmp"
+
+[build]
+cmd = "CGO_ENABLED=0 go build -mod=vendor -tags 'netgo no_chroma' -buildvcs=false -v -o ./bin/pcas ./cmd/pcas"
+bin = "./bin/pcas"
+full_bin = "./bin/pcas serve"
+include_ext = ["go", "proto", "yaml"]
+exclude_dir = ["assets", "tmp", "vendor", "data", "gen"]
+include_dir = []
+exclude_file = []
+delay = 1000
+stop_on_error = true
+log = "air_errors.log"
+
+[log]
+time = true
+
+[color]
+main = "magenta"
+watcher = "cyan"
+build = "yellow"
+runner = "green"

@@ -99,14 +99,27 @@ graph TD
 
 ---
 
-## 第五部分：下一步落地清单 (The "How to Start")
+## 第五部分：近期执行清单 (Sprint-4)
 
-**核心原则: 跑通一条链，再上楼。**
+**核心原则: 先建好高速公路，再让各种跑车在上面飞驰。**
 
-| 时间 | 目标 | 里程碑交付物 |
-| :--- | :--- | :--- |
-| **+2 周** | **最小事件总线 & CLI** | `pcas serve`, `pcas emit` 命令；带`trace_id`；基于JSON Schema的初步校验。 |
-| **+1 月** | **Policy v0 + Providers** | `policy.yaml`静态规则；`OpenAIProvider` & `MockLocalProvider` 走通；集成Prometheus指标。 |
-| **+2 月** | **可解释决策 + Graph存储** | `LLM-decide()`产出行动计划+决策日志；SQLite两表落库；提供`pcas replay`回放CLI。 |
-| **+3 月** | **SDK & 三个示例D-App** | 发布Go/TS SDK；发布Scheduler, Communicator, Knowledge三个核心D-App。 |
-| **+4 月** | **Preview Release & 社区开启** | 发布GitHub Beta Tag；建立文档站；启动RFC流程，邀请首批贡献者。 |
+本清单由规划师 o3 于 2025-06-25 制定，作为项目完成核心功能验证后，进入下一阶段（代号 S4）的行动纲领。它将取代旧的落地清单，成为我们近期的唯一权威参考。
+
+*（时间线以 2025-07-01 为基准，可根据实际推进调整；❗ = 完成前无法进入下一步）*
+
+| 优先级      | 截止         | 任务                                                                                                                                  | 负责人        | 验收标准                                                    |
+| -------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------- | ---------- | ------------------------------------------------------- |
+| ❗ **P0** | **立即（今天）** | 1. **推送当前代码到 `origin` 并跑 CI**                                                                                                       | Jerry      | `ci.yml` 全绿：`make proto`、`go vet`、单测通过                  |
+| ❗ **P0** | 今日         | 2. **创建 Sprint-4 看板**（GitHub Project）<br> • 列出 3 个 Issue：<br>  · Bus 内存实现<br>  · ComputeProvider 骨架 + MockProvider<br>  · 一键 Dev 脚本 | Jerry         | Issue 写清 *验收条件* & *Owner*                               |
+| ❗ **P0** | +3 天       | 3. **完成 `internal/bus/memory` + 单元测试**                                                                                              | Jerry      | 发布→订阅 p95 延迟＜20 ms；`go test ./internal/bus/...` 100 % 绿 |
+| ❗ **P0** | +5 天       | 4. **实现 `ComputeProvider` 接口 + MockProvider**                                                                                       | Jerry      | `MockProvider.Infer()` 返回固定结果；接口注释齐全                    |
+| P1       | +6 天       | 5. **策略引擎最小版本**：`policy.yaml` 能把 `pcas.echo` 路由到 MockProvider                                                                       | Jerry         | 发送 echo 事件 → 收到 echo 结果                                 |
+| P1       | +7 天       | 6. **一键 Dev 脚本／Compose**：`make dev-up` 拉起 Chroma + PCAS                                                                             | DevOps Lee | 新人从零跑通 Quick-Start ≤ 15 min                             |
+| P1       | +9 天       | 7. **编写 Quick-Start 校验脚本**；CI 中自动跑 demo 流程                                                                                          | Jerry         | GitHub Actions 15 min 内完成 e2e                           |
+| P2       | +10 天      | 8. **撰写 “Hello D-App” 教程草稿**（≤100 行示例代码）                                                                                            | Jerry         | 新人按文档能建 D-App 并打印事件                                     |
+| P2       | +14 天      | 9. **OllamaProvider PoC**（本地 Llama 3-8B 推理）                                                                                         | Jerry      | 512 token 推理耗时 ≤ 3 s                                    |
+| P2       | +14 天      | 10. **发布 tag `v0.0.1`（Pre-MVP Tech Preview）**                                                                                       | Jerry         | Release Notes 声明“API 不稳定”，Docker 镜像 `:0.0.1` 推送成功       |
+
+> **说明**
+> *P0*：不完成无法继续开发；*P1*：MVP 必需；*P2*：增强体验、吸收外部反馈。
+> 完成第 1-7 项时，即可宣布 **“Bus / Provider 骨架就绪”**，进入 D-App 编写阶段；完成第 1-9 项基本满足 **MVP (v0.1.0-beta)**；第 10 项是提前占位、收早期反馈。

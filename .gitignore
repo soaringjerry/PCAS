@@ -1,5 +1,7 @@
 # Build outputs
 bin/
+pcas
+pcasctl
 
 # Runtime data
 data/

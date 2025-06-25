@@ -26,6 +26,8 @@ type Server struct {
 	policyEngine *policy.Engine
 	providers    map[string]providers.ComputeProvider
 	storage      storage.Storage
+	vectorStorage storage.VectorStorage
+	embeddingProvider providers.EmbeddingProvider
 	
 	// Subscriber management
 	subscribers map[string]chan *eventsv1.Event
@@ -48,6 +50,11 @@ func (s *Server) Publish(ctx context.Context, event *eventsv1.Event) (*busv1.Pub
 	if err := s.storage.StoreEvent(ctx, event); err != nil {
 		log.Printf("Failed to store incoming event: %v", err)
 		// Continue processing even if storage fails
+	}
+	
+	// Start vectorization in background if providers are available
+	if s.vectorStorage != nil && s.embeddingProvider != nil {
+		go s.vectorizeEvent(event)
 	}
 	
 	log.Printf("Received event: ID=%s, Type=%s, Source=%s", event.Id, event.Type, event.Source)
@@ -137,6 +144,11 @@ func (s *Server) Publish(ctx context.Context, event *eventsv1.Event) (*busv1.Pub
 	if err := s.storage.StoreEvent(ctx, responseEvent); err != nil {
 		log.Printf("Failed to store response event: %v", err)
 		// Continue processing even if storage fails
+	}
+	
+	// Start vectorization for response event too
+	if s.vectorStorage != nil && s.embeddingProvider != nil {
+		go s.vectorizeEvent(responseEvent)
 	}
 	
 	// Broadcast the response event to all subscribers

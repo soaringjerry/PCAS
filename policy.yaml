@@ -18,3 +18,15 @@ rules:
       event_type: "pcas.user.prompt.v1"
     then:
       provider: openai-gpt4
+      
+  - name: "Rule for D-App events"
+    if:
+      event_type: "dapp.heartbeat.v1"
+    then:
+      provider: mock-provider
+      
+  - name: "Rule for generic test events"
+    if:
+      event_type: "test.event.v1"
+    then:
+      provider: mock-provider

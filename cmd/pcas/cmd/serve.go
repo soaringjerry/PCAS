@@ -14,7 +14,9 @@ import (
 	"github.com/soaringjerry/pcas/internal/providers"
 	"github.com/soaringjerry/pcas/internal/providers/mock"
 	"github.com/soaringjerry/pcas/internal/providers/openai"
+	"github.com/soaringjerry/pcas/internal/storage"
 	"github.com/soaringjerry/pcas/internal/storage/sqlite"
+	"github.com/soaringjerry/pcas/internal/storage/vector"
 	busv1 "github.com/soaringjerry/pcas/gen/go/pcas/bus/v1"
 )
 
@@ -73,6 +75,34 @@ func runServer() error {
 	defer sqliteStorage.Close()
 	log.Println("SQLite storage initialized successfully")
 	
+	// Initialize vector storage if OpenAI API key is available
+	var vectorStorage storage.VectorStorage
+	var embeddingProvider providers.EmbeddingProvider
+	
+	if apiKey := os.Getenv("OPENAI_API_KEY"); apiKey != "" {
+		// Initialize ChromaDB
+		log.Println("Initializing ChromaDB vector storage...")
+		chromaURL := os.Getenv("CHROMA_URL")
+		if chromaURL == "" {
+			chromaURL = "http://localhost:8000"
+		}
+		
+		var err error
+		vectorStorage, err = vector.NewChromaProvider(chromaURL)
+		if err != nil {
+			log.Printf("Warning: Failed to initialize ChromaDB: %v", err)
+			log.Println("Continuing without vector storage")
+		} else {
+			log.Println("ChromaDB vector storage initialized successfully")
+			
+			// Initialize OpenAI embedding provider
+			embeddingProvider = openai.NewEmbeddingProvider(apiKey)
+			log.Println("OpenAI embedding provider initialized")
+		}
+	} else {
+		log.Println("OPENAI_API_KEY not set, skipping vector storage initialization")
+	}
+	
 	// Build the listen address from host and port
 	listenAddr := fmt.Sprintf("%s:%s", serverHost, serverPort)
 	
@@ -87,6 +117,13 @@ func runServer() error {
 	
 	// Create and register our bus service with policy engine, providers and storage
 	busServer := bus.NewServer(policyEngine, providerMap, sqliteStorage)
+	
+	// Set vector storage and embedding provider if available
+	if vectorStorage != nil && embeddingProvider != nil {
+		busServer.SetVectorStorage(vectorStorage)
+		busServer.SetEmbeddingProvider(embeddingProvider)
+	}
+	
 	busv1.RegisterEventBusServiceServer(grpcServer, busServer)
 	
 	log.Printf("PCAS server starting on %s...", listenAddr)

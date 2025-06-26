@@ -3,6 +3,7 @@ run:
   go: '1.23'
 
 linters:
+  disable-all: true  # 禁用所有默认 linter
   enable:
     - gofmt
     - govet
@@ -11,8 +12,7 @@ linters:
     - gosimple
     - ineffassign
     - unused
-  disable:
-    - typecheck  # 暂时禁用，因为有 vendor 相关的问题
+  # typecheck is explicitly not enabled due to vendor issues
 
 linters-settings:
   gofmt:

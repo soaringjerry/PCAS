@@ -21,7 +21,7 @@ This guide explains how to use Docker Compose to quickly set up a development en
    make dev-up
    ```
    This will:
-   - Start ChromaDB on port 8000
+   - Start PostgreSQL with pgvector extension on port 5432
    - Build and start PCAS with hot reload on port 50051
    - Create necessary data directories
 
@@ -47,9 +47,10 @@ This guide explains how to use Docker Compose to quickly set up a development en
 
 ### Services
 
-1. **ChromaDB**: Vector database for semantic search
-   - Runs on port 8000
-   - Data persisted in `./data/chroma`
+1. **PostgreSQL with pgvector**: Vector database for semantic search
+   - Runs on port 5432
+   - Uses the `pgvector/pgvector:pg16` image
+   - Data persisted in Docker named volume `postgres_data`
    - Health checks ensure it's ready before PCAS starts
 
 2. **PCAS**: The main application server
@@ -68,20 +69,19 @@ Will trigger a rebuild and restart.
 
 ### Data Persistence
 
-- ChromaDB data is stored in `./data/chroma`
-- This directory is gitignored
+- PostgreSQL data is stored in Docker named volume `postgres_data`
 - Data persists between container restarts
-- Use `make dev-clean` to remove all data
+- Use `make dev-clean` to remove all data (including the volume)
 
 ## Troubleshooting
 
-1. **Port conflicts**: If ports 8000 or 50051 are already in use, stop the conflicting services or modify `docker-compose.yml`
+1. **Port conflicts**: If ports 5432 or 50051 are already in use, stop the conflicting services or modify `docker-compose.yml`
 
-2. **Build failures**: Ensure you've run `go mod vendor` to populate the vendor directory
+2. **Build failures**: The container handles all dependencies automatically - no need to run `go mod vendor`
 
-3. **ChromaDB connection issues**: Check that ChromaDB is healthy:
+3. **PostgreSQL connection issues**: Check that PostgreSQL is healthy:
    ```bash
-   curl http://localhost:8000/api/v1/heartbeat
+   docker-compose ps postgres
    ```
 
 4. **Hot reload not working**: Check Air logs in the PCAS container output

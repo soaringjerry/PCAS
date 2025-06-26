@@ -16,11 +16,8 @@ COPY go.mod go.sum ./
 # Download dependencies
 RUN go mod download
 
-# Set Go to ignore vendor directory
-ENV GOFLAGS="-mod=mod"
-
 # Disable VCS stamping in development to avoid git ownership issues inside the container
-ENV GOFLAGS="-mod=mod -buildvcs=false"
+ENV GOFLAGS="-buildvcs=false"
 
 # No need to set CGO_ENABLED anymore - pure Go by default
 

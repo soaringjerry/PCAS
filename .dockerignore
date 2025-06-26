@@ -1,0 +1,23 @@
+# Git
+.git
+.gitignore
+
+# Docker
+.dockerignore
+Dockerfile*
+
+# Go
+vendor/
+bin/
+
+# Data and logs
+data/
+*.log
+
+# Node.js
+node_modules/
+
+# IDE/Editor specific
+.vscode/
+.idea/
+*.swp

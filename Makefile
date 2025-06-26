@@ -42,18 +42,18 @@ lint: ## Lint all Go files
 dev-up: ## Start development environment with Docker Compose
 	@echo "--> Starting development environment..."
 	@mkdir -p data/postgres
-	docker-compose --compatibility up --build --force-recreate $(DOCKER_ARGS)
+	docker compose up --build --force-recreate $(DOCKER_ARGS)
 
 dev-down: ## Stop development environment
 	@echo "--> Stopping development environment..."
-	docker-compose down
+	docker compose down
 
 dev-logs: ## Show logs from development environment
-	docker-compose logs -f
+	docker compose logs -f
 
 dev-clean: ## Clean up development environment including volumes
 	@echo "--> Cleaning development environment..."
-	docker-compose down -v
+	docker compose down -v
 	@rm -rf data/
 
 ##@ Housekeeping

@@ -92,7 +92,7 @@ make build
 在新的终端中，启动 PCAS 服务：
 ```bash
 export OPENAI_API_KEY="your-api-key-here"
-export CHROMA_URL="http://localhost:8000"
+export PG_DSN="postgres://pcas:pcas_vector_db@localhost:5432/pcas_vectors?sslmode=disable"
 ./bin/pcas serve
 ```
 

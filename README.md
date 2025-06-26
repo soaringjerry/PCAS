@@ -92,7 +92,7 @@ make build
 In a new terminal, start the PCAS service:
 ```bash
 export OPENAI_API_KEY="your-api-key-here"
-export CHROMA_URL="http://localhost:8000"
+export PG_DSN="postgres://pcas:pcas_vector_db@localhost:5432/pcas_vectors?sslmode=disable"
 ./bin/pcas serve
 ```
 

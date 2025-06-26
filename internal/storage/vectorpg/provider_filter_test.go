@@ -6,8 +6,8 @@ import (
 	"time"
 )
 
-// TestQuerySimilarWithFilters tests the filtering functionality
-func TestQuerySimilarWithFilters(t *testing.T) {
+// TestQuerySimilarWithFiltersUnit tests the filtering functionality
+func TestQuerySimilarWithFiltersUnit(t *testing.T) {
 	// This is a unit test to verify the SQL generation
 	// In a real scenario, you would need a test database
 	

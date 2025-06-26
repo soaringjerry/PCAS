@@ -205,6 +205,38 @@ func (p *Provider) QuerySimilar(ctx context.Context, queryEmbedding []float32, t
 	return results, nil
 }
 
+// UpdateMetadata updates the metadata for an existing vector embedding
+func (p *Provider) UpdateMetadata(ctx context.Context, eventID string, metadata map[string]string) error {
+	// Convert metadata to JSON
+	var metadataJSON []byte
+	var err error
+	if metadata != nil && len(metadata) > 0 {
+		metadataJSON, err = json.Marshal(metadata)
+		if err != nil {
+			return fmt.Errorf("failed to marshal metadata: %w", err)
+		}
+	}
+
+	// Update only the metadata field
+	updateSQL := `
+		UPDATE pcas_vectors 
+		SET metadata = $2
+		WHERE id = $1
+	`
+	
+	result, err := p.pool.Exec(ctx, updateSQL, eventID, metadataJSON)
+	if err != nil {
+		return fmt.Errorf("failed to update metadata: %w", err)
+	}
+
+	// Check if the update affected any rows
+	if result.RowsAffected() == 0 {
+		return fmt.Errorf("no vector found with ID: %s", eventID)
+	}
+
+	return nil
+}
+
 // Close gracefully shuts down the vector storage connection
 func (p *Provider) Close() error {
 	p.pool.Close()

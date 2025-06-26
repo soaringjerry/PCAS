@@ -27,6 +27,8 @@ var (
 	serverPort  string
 	serverAddr  string // Full server address (host:port)
 	traceID     string // Optional trace ID for correlation
+	userID      string // Optional user ID
+	sessionID   string // Optional session ID
 )
 
 var emitCmd = &cobra.Command{
@@ -96,6 +98,16 @@ func emitEvent() error {
 	// Add subject if provided
 	if eventSubject != "" {
 		event.Subject = eventSubject
+	}
+	
+	// Add user ID if provided
+	if userID != "" {
+		event.UserId = userID
+	}
+	
+	// Add session ID if provided
+	if sessionID != "" {
+		event.SessionId = sessionID
 	}
 	
 	// Parse and add data if provided
@@ -200,6 +212,8 @@ func init() {
 	emitCmd.Flags().StringVar(&serverPort, "port", "50051", "PCAS server port")
 	emitCmd.Flags().StringVar(&serverAddr, "server", "", "PCAS server address (overrides --port)")
 	emitCmd.Flags().StringVar(&traceID, "trace-id", "", "Trace ID for correlation (optional, auto-generated if not provided)")
+	emitCmd.Flags().StringVar(&userID, "user-id", "", "User ID for event context (optional)")
+	emitCmd.Flags().StringVar(&sessionID, "session-id", "", "Session ID for event grouping (optional)")
 	
 	// Mark type as required
 	emitCmd.MarkFlagRequired("type")

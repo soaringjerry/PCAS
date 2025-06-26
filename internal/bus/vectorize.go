@@ -3,6 +3,7 @@ package bus
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"strings"
 	"time"
@@ -38,7 +39,22 @@ func (s *Server) vectorizeEvent(event *eventsv1.Event) {
 	metadata := map[string]string{
 		"event_type":   event.Type,
 		"event_source": event.Source,
-		"timestamp":    event.Time.AsTime().Format(time.RFC3339),
+	}
+	
+	// Add timestamp_unix (required for filtering)
+	if event.Time != nil {
+		metadata["timestamp_unix"] = fmt.Sprintf("%d", event.Time.AsTime().Unix())
+		metadata["timestamp"] = event.Time.AsTime().Format(time.RFC3339)
+	}
+	
+	// Add user_id if present
+	if event.UserId != "" {
+		metadata["user_id"] = event.UserId
+	}
+	
+	// Add session_id if present
+	if event.SessionId != "" {
+		metadata["session_id"] = event.SessionId
 	}
 	
 	if event.TraceId != "" {

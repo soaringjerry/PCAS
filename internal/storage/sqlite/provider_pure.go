@@ -1,5 +1,3 @@
-//go:build !cgo || no_cgo
-
 package sqlite
 
 import (
@@ -56,6 +54,8 @@ func (p *Provider) initSchema() error {
 		data TEXT,
 		trace_id TEXT,
 		correlation_id TEXT,
+		user_id TEXT,
+		session_id TEXT,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
 	
@@ -64,6 +64,8 @@ func (p *Provider) initSchema() error {
 	CREATE INDEX IF NOT EXISTS idx_events_source ON events(source);
 	CREATE INDEX IF NOT EXISTS idx_events_trace_id ON events(trace_id);
 	CREATE INDEX IF NOT EXISTS idx_events_correlation_id ON events(correlation_id);
+	CREATE INDEX IF NOT EXISTS idx_events_user_id ON events(user_id);
+	CREATE INDEX IF NOT EXISTS idx_events_session_id ON events(session_id);
 	`
 	
 	_, err := p.db.Exec(schema)
@@ -100,8 +102,8 @@ func (p *Provider) StoreEvent(ctx context.Context, event *eventsv1.Event) error 
 	
 	// Insert the event
 	query := `
-		INSERT INTO events (id, type, source, subject, specversion, time, data, trace_id, correlation_id)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO events (id, type, source, subject, specversion, time, data, trace_id, correlation_id, user_id, session_id)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 	
 	_, err := p.db.ExecContext(ctx, query,
@@ -114,6 +116,8 @@ func (p *Provider) StoreEvent(ctx context.Context, event *eventsv1.Event) error 
 		dataJSON,
 		event.TraceId,
 		event.CorrelationId,
+		event.UserId,
+		event.SessionId,
 	)
 	
 	if err != nil {
@@ -126,7 +130,7 @@ func (p *Provider) StoreEvent(ctx context.Context, event *eventsv1.Event) error 
 // GetEventByID retrieves a single event by its ID
 func (p *Provider) GetEventByID(ctx context.Context, eventID string) (*eventsv1.Event, error) {
 	query := `
-		SELECT id, type, source, subject, specversion, time, data, trace_id, correlation_id
+		SELECT id, type, source, subject, specversion, time, data, trace_id, correlation_id, user_id, session_id
 		FROM events
 		WHERE id = ?
 	`
@@ -137,6 +141,8 @@ func (p *Provider) GetEventByID(ctx context.Context, eventID string) (*eventsv1.
 	var traceID sql.NullString
 	var correlationID sql.NullString
 	var subject sql.NullString
+	var userID sql.NullString
+	var sessionID sql.NullString
 	
 	err := p.db.QueryRowContext(ctx, query, eventID).Scan(
 		&event.Id,
@@ -148,6 +154,8 @@ func (p *Provider) GetEventByID(ctx context.Context, eventID string) (*eventsv1.
 		&dataJSON,
 		&traceID,
 		&correlationID,
+		&userID,
+		&sessionID,
 	)
 	
 	if err == sql.ErrNoRows {
@@ -165,6 +173,12 @@ func (p *Provider) GetEventByID(ctx context.Context, eventID string) (*eventsv1.
 	}
 	if correlationID.Valid {
 		event.CorrelationId = correlationID.String
+	}
+	if userID.Valid {
+		event.UserId = userID.String
+	}
+	if sessionID.Valid {
+		event.SessionId = sessionID.String
 	}
 	
 	// Convert time
@@ -201,7 +215,7 @@ func (p *Provider) BatchGetEvents(ctx context.Context, ids []string) ([]*eventsv
 	}
 	
 	query := fmt.Sprintf(`
-		SELECT id, type, source, subject, specversion, time, data, trace_id, correlation_id
+		SELECT id, type, source, subject, specversion, time, data, trace_id, correlation_id, user_id, session_id
 		FROM events
 		WHERE id IN (%s)
 	`, strings.Join(placeholders, ","))
@@ -221,6 +235,8 @@ func (p *Provider) BatchGetEvents(ctx context.Context, ids []string) ([]*eventsv
 		var traceID sql.NullString
 		var correlationID sql.NullString
 		var subject sql.NullString
+		var userID sql.NullString
+		var sessionID sql.NullString
 		
 		err := rows.Scan(
 			&event.Id,
@@ -232,6 +248,8 @@ func (p *Provider) BatchGetEvents(ctx context.Context, ids []string) ([]*eventsv
 			&dataJSON,
 			&traceID,
 			&correlationID,
+			&userID,
+			&sessionID,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan event: %w", err)
@@ -246,6 +264,99 @@ func (p *Provider) BatchGetEvents(ctx context.Context, ids []string) ([]*eventsv
 		}
 		if correlationID.Valid {
 			event.CorrelationId = correlationID.String
+		}
+		if userID.Valid {
+			event.UserId = userID.String
+		}
+		if sessionID.Valid {
+			event.SessionId = sessionID.String
+		}
+		
+		// Convert time
+		event.Time = timestamppb.New(eventTime)
+		
+		// Parse data if present
+		if dataJSON.Valid && dataJSON.String != "" {
+			var data interface{}
+			if err := json.Unmarshal([]byte(dataJSON.String), &data); err == nil {
+				// Convert to structpb.Value and then to Any
+				if value, err := structpb.NewValue(data); err == nil {
+					if anyData, err := anypb.New(value); err == nil {
+						event.Data = anyData
+					}
+				}
+			}
+		}
+		
+		events = append(events, &event)
+	}
+	
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating rows: %w", err)
+	}
+	
+	return events, nil
+}
+
+// GetAllEvents retrieves all events with pagination support
+func (p *Provider) GetAllEvents(ctx context.Context, offset, limit int) ([]*eventsv1.Event, error) {
+	query := `
+		SELECT id, type, source, subject, specversion, time, data, trace_id, correlation_id, user_id, session_id
+		FROM events
+		ORDER BY time ASC
+		LIMIT ? OFFSET ?
+	`
+	
+	rows, err := p.db.QueryContext(ctx, query, limit, offset)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query events: %w", err)
+	}
+	defer rows.Close()
+	
+	events := make([]*eventsv1.Event, 0, limit)
+	
+	for rows.Next() {
+		var event eventsv1.Event
+		var eventTime time.Time
+		var dataJSON sql.NullString
+		var traceID sql.NullString
+		var correlationID sql.NullString
+		var subject sql.NullString
+		var userID sql.NullString
+		var sessionID sql.NullString
+		
+		err := rows.Scan(
+			&event.Id,
+			&event.Type,
+			&event.Source,
+			&subject,
+			&event.Specversion,
+			&eventTime,
+			&dataJSON,
+			&traceID,
+			&correlationID,
+			&userID,
+			&sessionID,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan event: %w", err)
+		}
+		
+		// Set optional fields
+		if subject.Valid {
+			event.Subject = subject.String
+		}
+		if traceID.Valid {
+			event.TraceId = traceID.String
+		}
+		if correlationID.Valid {
+			event.CorrelationId = correlationID.String
+		}
+		if userID.Valid {
+			event.UserId = userID.String
+		}
+		if sessionID.Valid {
+			event.SessionId = sessionID.String
 		}
 		
 		// Convert time

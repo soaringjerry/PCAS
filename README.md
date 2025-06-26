@@ -54,62 +54,82 @@ graph TD
 
 ## 🚀 Quick Start
 
-This guide will walk you through experiencing PCAS's core "semantic memory" capability - from storing a memory to performing semantic search.
+Get PCAS up and running in minutes with our modern development workflow.
 
-### 1. Prerequisites
+### Prerequisites
 
-Before you begin, ensure you have:
-- An OpenAI API key
-- A running ChromaDB instance (default: `http://localhost:8000`)
+- Go 1.21+
+- Docker and Docker Compose
+- An OpenAI API key (for GPT-4 integration)
 
-### 2. Configuration
+### 1. Clone and Setup
 
-PCAS behavior is driven by the `policy.yaml` file. Here's a minimal configuration to get started:
-
-```yaml
-version: v1
-providers:
-  - name: mock-provider
-    type: mock
-  - name: openai-gpt4
-    type: openai
-
-rules:
-  - name: "Rule for PCAS memory events"
-    if:
-      event_type: "pcas.memory.create.v1"
-    then:
-      provider: mock-provider
-```
-
-### 3. Build and Run
-
-Build the project:
 ```bash
-make build
+git clone https://github.com/soaringjerry/pcas.git
+cd pcas
 ```
 
-In a new terminal, start the PCAS service:
+### 2. Configure Environment
+
+Create a `.env` file in the project root:
 ```bash
-export OPENAI_API_KEY="your-api-key-here"
-export PG_DSN="postgres://pcas:pcas_vector_db@localhost:5432/pcas_vectors?sslmode=disable"
-./bin/pcas serve
+# Required: Your OpenAI API key
+OPENAI_API_KEY=sk-your-api-key-here
+
+# Optional: Customize ports if needed
+PCAS_PORT=50051
+POSTGRES_PORT=5432
 ```
 
-### 4. Interact with PCAS
+### 3. Start Everything
 
-**Store a memory:**
+Use our all-in-one command:
+```bash
+make dev-up
+```
+
+This will:
+- Start PostgreSQL with pgvector extension
+- Initialize the database schema
+- Build the PCAS binaries
+- Start the PCAS server with your configuration
+
+### 4. Try It Out
+
+**Create a memory with user identity:**
 ```bash
 ./bin/pcasctl emit --type pcas.memory.create.v1 \
-  --subject "The project's core principle is 'Absolute Data Sovereignty, Flexible Compute Scheduling.'"
+  --user-id alice \
+  --subject "My favorite programming language is Go"
 ```
 
-**Search for memories:**
+**Ask a question (with RAG-enhanced response):**
 ```bash
-./bin/pcasctl search "What is the foundational philosophy of the project?"
+./bin/pcasctl emit --type pcas.user.prompt.v1 \
+  --user-id alice \
+  --data '{"prompt": "What is my favorite programming language?"}'
 ```
 
-You should see the original memory returned in the search results, demonstrating PCAS's semantic understanding capability.
+**Search memories semantically:**
+```bash
+./bin/pcasctl search "programming preferences"
+```
+
+### 5. Explore Advanced Examples
+
+Check out our Multi-AI Chatbot example to see PCAS's multi-identity capabilities in action:
+```bash
+cd examples/multi-ai-chatbot
+go run main.go --user-id alice
+```
+
+### 🛑 Stopping PCAS
+
+```bash
+make dev-down
+```
+
+This cleanly shuts down all services and preserves your data.
 
 ## 🤝 Community & Contribution
 

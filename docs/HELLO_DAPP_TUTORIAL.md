@@ -216,6 +216,41 @@ Now that you understand the basics, you can:
 2. **Emit Events**: Have your D-App emit its own events back to PCAS
 3. **Add Business Logic**: Process events and trigger actions based on their content
 4. **Build Real Applications**: Create D-Apps for scheduling, automation, monitoring, and more
+5. **Build Multi-Identity Applications**: Create apps that support multiple AI personalities with isolated memories
+
+## Building a Multi-Identity Application
+
+PCAS now supports multi-identity applications through the `user_id` field. This enables you to build applications where different users or AI personalities have their own isolated memories and contexts.
+
+### Example: Multi-AI Chatbot
+
+We've created a comprehensive example that demonstrates this capability. The Multi-AI Chatbot allows you to:
+
+- Chat with different AI identities (e.g., "alice", "bob")
+- Each AI maintains its own memory through PCAS
+- Switch between AIs dynamically during a session
+- Experience how each AI's responses are personalized based on their unique conversation history
+
+Check out the complete example: [`examples/multi-ai-chatbot`](../examples/multi-ai-chatbot/)
+
+### Key Concepts
+
+**User Identity (`user_id`)**: Every event can include a `user_id` field that identifies which user or AI persona the event belongs to. PCAS uses this for:
+- Memory isolation in vector storage
+- User-specific RAG (Retrieval Augmented Generation)
+- Personalized context retrieval
+
+**Usage Example**:
+```go
+event := &eventsv1.Event{
+    Type:    "pcas.user.prompt.v1",
+    UserId:  "alice",  // This event belongs to the "alice" AI
+    Subject: "What's the weather like?",
+    // ... other fields
+}
+```
+
+When PCAS processes this event with RAG enabled, it will only retrieve memories that belong to "alice", ensuring each AI maintains its own unique personality and knowledge.
 
 ## Example: Filtering Events
 

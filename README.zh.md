@@ -54,62 +54,82 @@ graph TD
 
 ## 🚀 快速开始
 
-本指南将带您体验 PCAS 的核心"语义记忆"功能 - 从存储记忆到执行语义搜索的完整流程。
+使用我们的现代化开发工作流，几分钟内就能运行 PCAS。
 
-### 1. 前置要求
+### 前置要求
 
-开始之前，请确保您拥有：
-- 一个 OpenAI API 密钥
-- 一个运行中的 ChromaDB 实例（默认：`http://localhost:8000`）
+- Go 1.21+
+- Docker 和 Docker Compose
+- OpenAI API 密钥（用于 GPT-4 集成）
 
-### 2. 配置
+### 1. 克隆和设置
 
-PCAS 的行为由 `policy.yaml` 文件驱动。以下是一个最小化的入门配置：
-
-```yaml
-version: v1
-providers:
-  - name: mock-provider
-    type: mock
-  - name: openai-gpt4
-    type: openai
-
-rules:
-  - name: "Rule for PCAS memory events"
-    if:
-      event_type: "pcas.memory.create.v1"
-    then:
-      provider: mock-provider
-```
-
-### 3. 构建与运行
-
-构建项目：
 ```bash
-make build
+git clone https://github.com/soaringjerry/pcas.git
+cd pcas
 ```
 
-在新的终端中，启动 PCAS 服务：
+### 2. 配置环境
+
+在项目根目录创建 `.env` 文件：
 ```bash
-export OPENAI_API_KEY="your-api-key-here"
-export PG_DSN="postgres://pcas:pcas_vector_db@localhost:5432/pcas_vectors?sslmode=disable"
-./bin/pcas serve
+# 必需：您的 OpenAI API 密钥
+OPENAI_API_KEY=sk-your-api-key-here
+
+# 可选：如需要可自定义端口
+PCAS_PORT=50051
+POSTGRES_PORT=5432
 ```
 
-### 4. 与 PCAS 交互
+### 3. 启动一切
 
-**存储记忆：**
+使用我们的一键命令：
+```bash
+make dev-up
+```
+
+这将会：
+- 启动带有 pgvector 扩展的 PostgreSQL
+- 初始化数据库模式
+- 构建 PCAS 二进制文件
+- 使用您的配置启动 PCAS 服务器
+
+### 4. 试一试
+
+**创建带有用户身份的记忆：**
 ```bash
 ./bin/pcasctl emit --type pcas.memory.create.v1 \
-  --subject "项目的核心原则是'数据绝对主权，计算灵活调度。'"
+  --user-id alice \
+  --subject "我最喜欢的编程语言是 Go"
 ```
 
-**搜索记忆：**
+**提出问题（带有 RAG 增强的响应）：**
 ```bash
-./bin/pcasctl search "项目的基础理念是什么？"
+./bin/pcasctl emit --type pcas.user.prompt.v1 \
+  --user-id alice \
+  --data '{"prompt": "我最喜欢的编程语言是什么？"}'
 ```
 
-您应该能在搜索结果中看到原始存储的句子，这展示了 PCAS 的语义理解能力。
+**语义搜索记忆：**
+```bash
+./bin/pcasctl search "编程偏好"
+```
+
+### 5. 探索高级示例
+
+查看我们的多 AI 聊天机器人示例，体验 PCAS 的多身份能力：
+```bash
+cd examples/multi-ai-chatbot
+go run main.go --user-id alice
+```
+
+### 🛑 停止 PCAS
+
+```bash
+make dev-down
+```
+
+这将优雅地关闭所有服务并保留您的数据。
 
 ## 🤝 社区与贡献
 

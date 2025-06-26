@@ -17,6 +17,9 @@ type Storage interface {
 	// BatchGetEvents retrieves multiple events by their IDs in a single query
 	BatchGetEvents(ctx context.Context, ids []string) ([]*eventsv1.Event, error)
 	
+	// GetAllEvents retrieves all events with pagination support
+	GetAllEvents(ctx context.Context, offset, limit int) ([]*eventsv1.Event, error)
+	
 	// Close gracefully shuts down the storage connection
 	Close() error
 }
@@ -34,6 +37,9 @@ type VectorStorage interface {
 	
 	// QuerySimilar finds the most similar events based on vector similarity with optional filtering
 	QuerySimilar(ctx context.Context, queryEmbedding []float32, topK int, filters map[string]interface{}) ([]QueryResult, error)
+	
+	// UpdateMetadata updates the metadata for an existing vector embedding
+	UpdateMetadata(ctx context.Context, eventID string, metadata map[string]string) error
 	
 	// Close gracefully shuts down the vector storage connection
 	Close() error

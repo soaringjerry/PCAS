@@ -173,8 +173,16 @@ func (s *Server) applyRAGEnhancement(ctx context.Context, event *eventsv1.Event,
 		s.embeddingCache.Set(cacheKey, queryEmbedding)
 	}
 	
-	// Query similar events (no filters for now)
-	similarResults, err := s.vectorStorage.QuerySimilar(ragCtx, queryEmbedding, ragTopK, nil)
+	// Build filters for user-specific context
+	filters := make(map[string]interface{})
+	if event.UserId != "" {
+		// Filter to only search within the current user's events
+		filters["user_id"] = event.UserId
+		log.Printf("RAG: Applying user filter: %s", event.UserId)
+	}
+	
+	// Query similar events with user filter
+	similarResults, err := s.vectorStorage.QuerySimilar(ragCtx, queryEmbedding, ragTopK, filters)
 	if err != nil {
 		log.Printf("RAG: Failed to query similar events: %v", err)
 		return

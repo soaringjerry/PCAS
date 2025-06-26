@@ -52,7 +52,9 @@ echo
 
 # Step 1: Start the development environment
 echo -e "${YELLOW}Step 1: Starting development environment...${NC}"
-if ! make dev-up -d; then
+echo "Starting services in detached mode..."
+DOCKER_ARGS="-d" make dev-up
+if [ $? -ne 0 ]; then
     echo -e "${RED}Failed to start development environment${NC}"
     exit 1
 fi
@@ -60,8 +62,8 @@ fi
 # Step 2: Wait for services to be healthy
 echo -e "${YELLOW}Step 2: Checking service health...${NC}"
 
-# Check ChromaDB
-if ! check_service_health "ChromaDB" "curl -f http://localhost:8000/api/v1/heartbeat"; then
+# Check PostgreSQL
+if ! check_service_health "PostgreSQL" "docker-compose exec -T postgres pg_isready -U pcas"; then
     exit 1
 fi
 

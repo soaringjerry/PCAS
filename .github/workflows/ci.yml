@@ -62,6 +62,6 @@ jobs:
       - name: Run Quick Start validation
         run: |
           chmod +x ./scripts/validate_quickstart.sh
-          ./scripts/validate_quickstart.sh
+          bash ./scripts/validate_quickstart.sh
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY || 'dummy-key-for-testing' }}

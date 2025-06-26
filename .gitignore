@@ -31,4 +31,4 @@ air_errors.log
 
 # Environment files
 .env
-.env.local
+.env.localdata.bak/

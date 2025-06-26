@@ -18,14 +18,14 @@ sleep 2
 echo "========================================="
 echo "Test 1: Mock provider (should work without API key)"
 echo "========================================="
-./bin/pcasctl emit --event-type pcas.test.v1 --data '{"action": "test", "message": "Testing pub/sub"}' --port 9093
+./bin/pcasctl emit --type pcas.test.v1 --data '{"action": "test", "message": "Testing pub/sub"}' --port 9093
 
 echo ""
 echo "========================================="
 echo "Test 2: OpenAI provider (requires API key)"  
 echo "========================================="
 if [ -n "$OPENAI_API_KEY" ]; then
-    ./bin/pcasctl emit --event-type pcas.user.prompt.v1 --data '{"prompt": "Hello! Reply with a simple greeting in 5 words or less."}' --port 9093
+    ./bin/pcasctl emit --type pcas.user.prompt.v1 --data '{"prompt": "Hello! Reply with a simple greeting in 5 words or less."}' --port 9093
 else
     echo "Skipping OpenAI test (no API key)"
 fi

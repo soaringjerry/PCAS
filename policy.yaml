@@ -55,3 +55,9 @@ rules:
       event_type: "pcas.user.prompt.local.v1"
     then:
       provider: ollama-llama3
+
+  - name: "Rule for user notes"
+    if:
+      event_type: "user.note.v1"
+    then:
+      provider: mock-provider

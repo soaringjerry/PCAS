@@ -1,18 +1,19 @@
 version: '3.8'
 
 services:
-  chromadb:
-    image: chromadb/chroma:latest
-    container_name: pcas-chromadb
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: pcas-postgres
     ports:
-      - "8000:8000"
+      - "5432:5432"
     volumes:
-      - ./data/chroma:/chroma/chroma
+      - postgres_data:/var/lib/postgresql/data
     environment:
-      - IS_PERSISTENT=TRUE
-      - PERSIST_DIRECTORY=/chroma/chroma
+      - POSTGRES_USER=pcas
+      - POSTGRES_PASSWORD=pcas_vector_db
+      - POSTGRES_DB=pcas_vectors
     healthcheck:
-      test: ["CMD-SHELL", "nc -z localhost 8000 || exit 1"]
+      test: ["CMD-SHELL", "pg_isready -U pcas -d pcas_vectors"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -29,11 +30,15 @@ services:
       - /app/vendor  # Prevent vendor directory from being overwritten
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY:-dummy-key}
-      - CHROMA_URL=http://chromadb:8000
+      - PG_DSN=postgres://pcas:pcas_vector_db@postgres:5432/pcas_vectors?sslmode=disable
       - PCAS_ENV=development
     depends_on:
-      - chromadb
+      postgres:
+        condition: service_healthy
     command: ["air", "-c", ".air.toml"]
+
+volumes:
+  postgres_data:
 
 networks:
   default:

@@ -27,7 +27,7 @@ func (p *EmbeddingProvider) CreateEmbedding(ctx context.Context, text string) ([
 	// Create embedding request
 	req := openai.EmbeddingRequest{
 		Input: []string{text},
-		Model: openai.SmallEmbedding3,
+		Model: openai.LargeEmbedding3,
 	}
 
 	// Call OpenAI API

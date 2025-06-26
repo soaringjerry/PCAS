@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net"
@@ -16,7 +17,7 @@ import (
 	"github.com/soaringjerry/pcas/internal/providers/openai"
 	"github.com/soaringjerry/pcas/internal/storage"
 	"github.com/soaringjerry/pcas/internal/storage/sqlite"
-	"github.com/soaringjerry/pcas/internal/storage/vector"
+	"github.com/soaringjerry/pcas/internal/storage/vectorpg"
 	busv1 "github.com/soaringjerry/pcas/gen/go/pcas/bus/v1"
 )
 
@@ -85,24 +86,25 @@ func runServer() error {
 	var embeddingProvider providers.EmbeddingProvider
 	
 	if apiKey := os.Getenv("OPENAI_API_KEY"); apiKey != "" {
-		// Initialize ChromaDB
-		log.Println("Initializing ChromaDB vector storage...")
-		chromaURL := os.Getenv("CHROMA_URL")
-		if chromaURL == "" {
-			chromaURL = "http://localhost:8000"
-		}
-		
-		var err error
-		vectorStorage, err = vector.NewChromaProvider(chromaURL)
-		if err != nil {
-			log.Printf("Warning: Failed to initialize ChromaDB: %v", err)
-			log.Println("Continuing without vector storage")
+		// Initialize PostgreSQL vector storage
+		log.Println("Initializing PostgreSQL vector storage...")
+		pgDSN := os.Getenv("PG_DSN")
+		if pgDSN == "" {
+			log.Println("Warning: PG_DSN not set, skipping vector storage initialization")
 		} else {
-			log.Println("ChromaDB vector storage initialized successfully")
-			
-			// Initialize OpenAI embedding provider
-			embeddingProvider = openai.NewEmbeddingProvider(apiKey)
-			log.Println("OpenAI embedding provider initialized")
+			var err error
+			vectorPgProvider, err := vectorpg.New(context.Background(), pgDSN)
+			if err != nil {
+				log.Printf("Warning: Failed to initialize PostgreSQL vector storage: %v", err)
+				log.Println("Continuing without vector storage")
+			} else {
+				vectorStorage = vectorPgProvider
+				log.Println("PostgreSQL vector storage initialized successfully")
+				
+				// Initialize OpenAI embedding provider
+				embeddingProvider = openai.NewEmbeddingProvider(apiKey)
+				log.Println("OpenAI embedding provider initialized")
+			}
 		}
 	} else {
 		log.Println("OPENAI_API_KEY not set, skipping vector storage initialization")

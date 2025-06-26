@@ -27,12 +27,12 @@ check-buf:
 build: ## Build all binaries
 	@echo "--> Building binaries..."
 	@mkdir -p bin
-	go build -mod=vendor -tags netgo -v -o bin/pcas ./cmd/pcas
-	go build -mod=vendor -tags netgo -v -o bin/pcasctl ./cmd/pcasctl
+	go build -tags netgo -v -o bin/pcas ./cmd/pcas
+	go build -tags netgo -v -o bin/pcasctl ./cmd/pcasctl
 
 test: ## Run all tests
 	@echo "--> Running tests..."
-	go test -mod=vendor -v ./...
+	go test -v ./...
 
 lint: ## Lint all Go files
 	@echo "--> Linting files..."
@@ -41,8 +41,8 @@ lint: ## Lint all Go files
 ##@ Docker Development
 dev-up: ## Start development environment with Docker Compose
 	@echo "--> Starting development environment..."
-	@mkdir -p data/chroma
-	docker-compose up --build $(DOCKER_ARGS)
+	@mkdir -p data/postgres
+	docker-compose --compatibility up --build --force-recreate $(DOCKER_ARGS)
 
 dev-down: ## Stop development environment
 	@echo "--> Stopping development environment..."

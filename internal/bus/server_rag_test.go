@@ -142,7 +142,7 @@ func TestGenerateQueryText(t *testing.T) {
 				Subject: "calculate prime numbers",
 			},
 			requestData: nil,
-			expected:    "type:compute.request calculate prime numbers",
+			expected:    "calculate prime numbers",
 		},
 		{
 			name: "with query in request data",
@@ -152,7 +152,7 @@ func TestGenerateQueryText(t *testing.T) {
 			requestData: map[string]interface{}{
 				"query": "find similar documents",
 			},
-			expected: "type:search.request find similar documents",
+			expected: "find similar documents",
 		},
 		{
 			name: "with prompt in request data",
@@ -162,7 +162,7 @@ func TestGenerateQueryText(t *testing.T) {
 			requestData: map[string]interface{}{
 				"prompt": "explain quantum computing",
 			},
-			expected: "type:llm.request explain quantum computing",
+			expected: "explain quantum computing",
 		},
 		{
 			name: "multiple fields",
@@ -174,7 +174,7 @@ func TestGenerateQueryText(t *testing.T) {
 				"message": "how does RAG work?",
 				"text":    "additional context",
 			},
-			expected: "type:chat.message user question how does RAG work? additional context",
+			expected: "user question how does RAG work? additional context",
 		},
 		{
 			name:        "empty event",
@@ -198,6 +198,8 @@ func TestRenderSingleEventMarkdown(t *testing.T) {
 	
 	// Create test event with data
 	testData := map[string]interface{}{
+		"prompt": "test prompt",
+		"response": "test response",
 		"key1": "value1",
 		"key2": 42,
 	}
@@ -215,14 +217,11 @@ func TestRenderSingleEventMarkdown(t *testing.T) {
 	
 	markdown := s.renderSingleEventMarkdown(event)
 	
-	// Check key components are present
-	assert.Contains(t, markdown, "### Event: test-123")
-	assert.Contains(t, markdown, "**Type**: test.event")
-	assert.Contains(t, markdown, "**Source**: test-source")
-	assert.Contains(t, markdown, "**Subject**: test subject")
-	assert.Contains(t, markdown, "**Time**: 2024-01-01T12:00:00Z")
-	assert.Contains(t, markdown, "**Data**:")
-	assert.Contains(t, markdown, "```json")
+	// Check key components are present in new concise format
+	assert.Contains(t, markdown, "**[2024-01-01 12:00]**")
+	assert.Contains(t, markdown, "test.event: test subject")
+	assert.Contains(t, markdown, "- prompt: test prompt")
+	assert.Contains(t, markdown, "- response: test response")
 }
 
 // Test renderEventsMarkdown with token limit
@@ -245,16 +244,25 @@ func TestRenderEventsMarkdown(t *testing.T) {
 	// Should contain header
 	assert.Contains(t, markdown, "## Relevant Historical Context")
 	
-	// Should contain truncation message
-	assert.Contains(t, markdown, "more relevant events (truncated due to token limit)")
+	// Should contain truncation message (since each event is short, we need more events)
+	// Create many more events to trigger truncation
+	manyEvents := make([]*eventsv1.Event, 100)
+	for i := 0; i < 100; i++ {
+		manyEvents[i] = &eventsv1.Event{
+			Id:     fmt.Sprintf("event-%d", i),
+			Type:   "test.event",
+			Source: "test-source",
+			Subject: fmt.Sprintf("This is a long test subject for event %d that should consume more tokens", i),
+		}
+	}
+	markdownTruncated := s.renderEventsMarkdown(manyEvents, 200)
+	assert.Contains(t, markdownTruncated, "more relevant events (truncated due to token limit)")
 	
 	// Test with large token limit
 	markdown = s.renderEventsMarkdown(events, 50000)
 	
-	// Should contain all events
-	for i := 0; i < 10; i++ {
-		assert.Contains(t, markdown, fmt.Sprintf("event-%d", i))
-	}
+	// Should contain event types (not IDs in the new format)
+	assert.Contains(t, markdown, "test.event")
 }
 
 // Test applyRAGEnhancement with mocks
@@ -289,7 +297,7 @@ func TestApplyRAGEnhancement(t *testing.T) {
 	
 	// Mock embedding creation
 	testEmbedding := []float32{0.1, 0.2, 0.3}
-	mockEmbeddingProvider.On("CreateEmbedding", mock.Anything, "type:compute.request test computation").
+	mockEmbeddingProvider.On("CreateEmbedding", mock.Anything, "test computation").
 		Return(testEmbedding, nil)
 	
 	// Mock vector search
@@ -297,7 +305,7 @@ func TestApplyRAGEnhancement(t *testing.T) {
 		{ID: "event-1", Score: 0.9},
 		{ID: "event-2", Score: 0.8},
 		{ID: "current-event", Score: 1.0}, // Should be filtered out
-		{ID: "event-3", Score: 0.6}, // Below threshold
+		{ID: "event-3", Score: 0.3}, // Below threshold (0.4)
 	}
 	mockVectorStorage.On("QuerySimilar", mock.Anything, testEmbedding, ragTopK).
 		Return(similarResults, nil)
@@ -323,9 +331,23 @@ func TestApplyRAGEnhancement(t *testing.T) {
 	s.applyRAGEnhancement(ctx, event, requestData)
 	
 	// Verify results
-	assert.True(t, requestData["rag_applied"].(bool))
-	assert.Equal(t, 2, requestData["rag_event_count"])
-	assert.NotEmpty(t, requestData["rag_context"])
+	ragApplied, exists := requestData["rag_applied"]
+	assert.True(t, exists, "rag_applied should be set")
+	if exists {
+		assert.True(t, ragApplied.(bool))
+	}
+	
+	ragEventCount, exists := requestData["rag_event_count"]
+	assert.True(t, exists, "rag_event_count should be set") 
+	if exists {
+		assert.Equal(t, 2, ragEventCount)
+	}
+	// In the new implementation, we don't set rag_context, but messages
+	messages, exists := requestData["messages"]
+	assert.True(t, exists, "messages should be set")
+	if exists {
+		assert.NotEmpty(t, messages)
+	}
 	
 	// Verify mocks were called
 	mockEmbeddingProvider.AssertExpectations(t)
@@ -436,12 +458,13 @@ func TestApplyRAGEnhancementCacheHit(t *testing.T) {
 	event := &eventsv1.Event{
 		Id:   "test",
 		Type: "test.event",
+		Subject: "test query",
 	}
 	requestData := make(map[string]interface{})
 	
 	// Pre-populate cache
 	testEmbedding := []float32{0.1, 0.2, 0.3}
-	cacheKey := "rag:type:test.event"
+	cacheKey := "rag:test query"
 	s.embeddingCache.Set(cacheKey, testEmbedding)
 	
 	// Mock vector search (embedding provider should NOT be called due to cache hit)

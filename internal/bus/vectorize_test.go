@@ -50,7 +50,7 @@ func TestExtractTextContent(t *testing.T) {
 					Data:    anyData,
 				}
 			}(),
-			expected: "[test.event.v1] This is from data field",
+			expected: "This is from data field",
 		},
 		{
 			name: "Both Subject and Data have content - Subject takes priority",
@@ -114,7 +114,7 @@ func TestExtractTextContent(t *testing.T) {
 					Data:    anyData,
 				}
 			}(),
-			expected: "[test.event.v1] This is a prompt This is a message",
+			expected: "This is a prompt This is a message",
 		},
 		{
 			name: "Data contains non-text fields",

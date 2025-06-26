@@ -50,6 +50,22 @@ func (m *mockStorage) BatchGetEvents(ctx context.Context, ids []string) ([]*even
 	return events, nil
 }
 
+func (m *mockStorage) GetAllEvents(ctx context.Context, limit int, offset int) ([]*eventsv1.Event, error) {
+	events := make([]*eventsv1.Event, 0)
+	for _, event := range m.events {
+		events = append(events, event)
+	}
+	// Simple pagination
+	if offset >= len(events) {
+		return []*eventsv1.Event{}, nil
+	}
+	end := offset + limit
+	if end > len(events) {
+		end = len(events)
+	}
+	return events[offset:end], nil
+}
+
 func (m *mockStorage) Close() error {
 	return nil
 }

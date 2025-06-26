@@ -1,3 +1,5 @@
+// Package cmd implements the command-line interface for the PCAS server.
+// It provides commands for starting and managing the PCAS service.
 package cmd
 
 import (

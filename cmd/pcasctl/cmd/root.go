@@ -1,3 +1,6 @@
+// Package cmd implements the command-line interface for pcasctl.
+// It provides commands for interacting with a running PCAS instance,
+// including emitting events, searching, and managing data.
 package cmd
 
 import (

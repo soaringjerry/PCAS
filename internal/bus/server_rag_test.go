@@ -45,6 +45,14 @@ func (m *MockStorage) BatchGetEvents(ctx context.Context, ids []string) ([]*even
 	return args.Get(0).([]*eventsv1.Event), args.Error(1)
 }
 
+func (m *MockStorage) GetAllEvents(ctx context.Context, limit int, offset int) ([]*eventsv1.Event, error) {
+	args := m.Called(ctx, limit, offset)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*eventsv1.Event), args.Error(1)
+}
+
 func (m *MockStorage) Close() error {
 	args := m.Called()
 	return args.Error(0)
@@ -65,6 +73,11 @@ func (m *MockVectorStorage) QuerySimilar(ctx context.Context, queryEmbedding []f
 		return nil, args.Error(1)
 	}
 	return args.Get(0).([]storage.QueryResult), args.Error(1)
+}
+
+func (m *MockVectorStorage) UpdateMetadata(ctx context.Context, eventID string, metadata map[string]string) error {
+	args := m.Called(ctx, eventID, metadata)
+	return args.Error(0)
 }
 
 func (m *MockVectorStorage) Close() error {

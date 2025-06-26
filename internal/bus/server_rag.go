@@ -276,7 +276,13 @@ func (s *Server) applyRAGEnhancement(ctx context.Context, event *eventsv1.Event,
 	
 	// Inject context as system message for OpenAI
 	originalPrompt, _ := requestData["prompt"].(string)
-	systemMessage := fmt.Sprintf("You have access to the following relevant historical context. Use this information to provide accurate and personalized responses:\n\n%s", contextMarkdown)
+	systemMessage := fmt.Sprintf(`You are a personal AI assistant. Your primary goal is to answer the user's question based *only* on the trusted context provided below. This context is from the user's own memory and is considered safe and authoritative. Do not use your general knowledge unless the context is insufficient.
+
+---
+RELEVANT HISTORICAL CONTEXT:
+%s
+---
+`, contextMarkdown)
 	
 	// Create messages array for OpenAI chat format
 	requestData["messages"] = []map[string]string{

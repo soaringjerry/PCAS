@@ -41,9 +41,10 @@ func NewProvider(path string) (storage.Storage, error) {
 	return provider, nil
 }
 
-// initSchema creates the events table if it doesn't exist
+// initSchema creates the events table if it doesn't exist and migrates existing tables
 func (p *Provider) initSchema() error {
-	schema := `
+	// First, create the table with the full schema if it doesn't exist
+	createTableSQL := `
 	CREATE TABLE IF NOT EXISTS events (
 		id TEXT PRIMARY KEY,
 		type TEXT NOT NULL,
@@ -58,7 +59,39 @@ func (p *Provider) initSchema() error {
 		session_id TEXT,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
+	`
 	
+	if _, err := p.db.Exec(createTableSQL); err != nil {
+		return fmt.Errorf("failed to create events table: %w", err)
+	}
+	
+	// Check if user_id column exists, and add it if it doesn't
+	var columnExists bool
+	err := p.db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('events') WHERE name='user_id'").Scan(&columnExists)
+	if err != nil {
+		return fmt.Errorf("failed to check user_id column: %w", err)
+	}
+	
+	if !columnExists {
+		if _, err := p.db.Exec("ALTER TABLE events ADD COLUMN user_id TEXT"); err != nil {
+			return fmt.Errorf("failed to add user_id column: %w", err)
+		}
+	}
+	
+	// Check if session_id column exists, and add it if it doesn't
+	err = p.db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('events') WHERE name='session_id'").Scan(&columnExists)
+	if err != nil {
+		return fmt.Errorf("failed to check session_id column: %w", err)
+	}
+	
+	if !columnExists {
+		if _, err := p.db.Exec("ALTER TABLE events ADD COLUMN session_id TEXT"); err != nil {
+			return fmt.Errorf("failed to add session_id column: %w", err)
+		}
+	}
+	
+	// Create indexes
+	indexSQL := `
 	CREATE INDEX IF NOT EXISTS idx_events_type ON events(type);
 	CREATE INDEX IF NOT EXISTS idx_events_time ON events(time);
 	CREATE INDEX IF NOT EXISTS idx_events_source ON events(source);
@@ -68,8 +101,11 @@ func (p *Provider) initSchema() error {
 	CREATE INDEX IF NOT EXISTS idx_events_session_id ON events(session_id);
 	`
 	
-	_, err := p.db.Exec(schema)
-	return err
+	if _, err := p.db.Exec(indexSQL); err != nil {
+		return fmt.Errorf("failed to create indexes: %w", err)
+	}
+	
+	return nil
 }
 
 // StoreEvent persists an event to the SQLite database

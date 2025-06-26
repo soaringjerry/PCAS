@@ -65,7 +65,7 @@ func (s *Server) Publish(ctx context.Context, event *eventsv1.Event) (*busv1.Pub
 	// Start vectorization in background if providers are available
 	// Only vectorize fact events
 	if s.vectorStorage != nil && s.embeddingProvider != nil {
-		if s.isFactEvent(event.Type) {
+		if IsFactEvent(event.Type) {
 			log.Printf("Will vectorize fact event: type=%s, id=%s", event.Type, event.Id)
 			go s.vectorizeEvent(event)
 		} else {
@@ -229,21 +229,3 @@ func (s *Server) Search(ctx context.Context, req *busv1.SearchRequest) (*busv1.S
 }
 
 // isFactEvent determines if an event type represents a "fact" that should be vectorized
-func (s *Server) isFactEvent(eventType string) bool {
-	// Whitelist of event types that represent facts/memories
-	factEventTypes := []string{
-		"pcas.memory.create.v1",
-		"user.note.v1",
-		"user.reminder.v1",
-		"user.task.v1",
-		"user.memory.v1",
-	}
-	
-	for _, factType := range factEventTypes {
-		if eventType == factType {
-			return true
-		}
-	}
-	
-	return false
-}

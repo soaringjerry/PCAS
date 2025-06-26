@@ -79,11 +79,22 @@ fi
 echo "Waiting for PCAS to fully initialize..."
 sleep 5
 
+# Test gRPC connectivity before proceeding
+echo "Testing gRPC connectivity..."
+for i in {1..10}; do
+    if nc -zv 127.0.0.1 50051 2>&1 | grep -q "succeeded"; then
+        echo "gRPC port is open and accepting connections"
+        break
+    fi
+    echo "Waiting for gRPC service... (attempt $i/10)"
+    sleep 2
+done
+
 # Step 3: Emit a test event
 echo -e "${YELLOW}Step 3: Emitting test event...${NC}"
 echo "Event text: \"${TEST_EVENT_TEXT}\""
 
-if ! ./bin/pcasctl emit --type "pcas.memory.create.v1" --subject "${TEST_EVENT_TEXT}"; then
+if ! ./bin/pcasctl emit --server "127.0.0.1:50051" --type "pcas.memory.create.v1" --subject "${TEST_EVENT_TEXT}"; then
     echo -e "${RED}Failed to emit test event${NC}"
     exit 1
 fi
@@ -98,7 +109,7 @@ echo -e "${YELLOW}Step 4: Searching for the event...${NC}"
 echo "Search query: \"${SEARCH_QUERY}\""
 
 # Capture the search output
-SEARCH_OUTPUT=$(./bin/pcasctl search "${SEARCH_QUERY}" 2>&1) || {
+SEARCH_OUTPUT=$(./bin/pcasctl search --server "127.0.0.1:50051" "${SEARCH_QUERY}" 2>&1) || {
     echo -e "${RED}Search command failed${NC}"
     echo "Output: ${SEARCH_OUTPUT}"
     exit 1

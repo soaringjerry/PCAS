@@ -199,9 +199,9 @@ func (s *Server) Search(ctx context.Context, req *busv1.SearchRequest) (*busv1.S
 		return nil, fmt.Errorf("failed to create query embedding: %w", err)
 	}
 	
-	// Query similar events from vector storage
+	// Query similar events from vector storage (no filters for now)
 	log.Printf("Searching for top %d similar events", req.TopK)
-	eventIDs, err := s.vectorStorage.QuerySimilar(ctx, queryEmbedding, int(req.TopK))
+	eventIDs, err := s.vectorStorage.QuerySimilar(ctx, queryEmbedding, int(req.TopK), nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query similar events: %w", err)
 	}

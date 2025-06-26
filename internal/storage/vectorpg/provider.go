@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/pgvector/pgvector-go"
@@ -64,6 +65,36 @@ func (p *Provider) setupSchema(ctx context.Context) error {
 		return fmt.Errorf("failed to create vectors table: %w", err)
 	}
 
+	// Add generated columns for efficient filtering
+	alterTableSQL := `
+		ALTER TABLE pcas_vectors
+		ADD COLUMN IF NOT EXISTS user_id text GENERATED ALWAYS AS (metadata->>'user_id') STORED,
+		ADD COLUMN IF NOT EXISTS session_id text GENERATED ALWAYS AS (metadata->>'session_id') STORED,
+		ADD COLUMN IF NOT EXISTS event_type text GENERATED ALWAYS AS (metadata->>'event_type') STORED,
+		ADD COLUMN IF NOT EXISTS event_ts timestamptz GENERATED ALWAYS AS (to_timestamp((metadata->>'timestamp_unix')::bigint)) STORED
+	`
+	if _, err := p.pool.Exec(ctx, alterTableSQL); err != nil {
+		return fmt.Errorf("failed to add generated columns: %w", err)
+	}
+
+	// Create composite B-tree index for user_id and event_type
+	createCompositeIndexSQL := `
+		CREATE INDEX IF NOT EXISTS idx_pcas_vectors_user_event_type 
+		ON pcas_vectors USING btree (user_id, event_type)
+	`
+	if _, err := p.pool.Exec(ctx, createCompositeIndexSQL); err != nil {
+		return fmt.Errorf("failed to create composite index: %w", err)
+	}
+
+	// Create BRIN index for event_ts (optimized for time-series data)
+	createBrinIndexSQL := `
+		CREATE INDEX IF NOT EXISTS idx_pcas_vectors_event_ts 
+		ON pcas_vectors USING brin (event_ts)
+	`
+	if _, err := p.pool.Exec(ctx, createBrinIndexSQL); err != nil {
+		return fmt.Errorf("failed to create BRIN index: %w", err)
+	}
+
 	return nil
 }
 
@@ -100,22 +131,57 @@ func (p *Provider) StoreEmbedding(ctx context.Context, eventID string, embedding
 	return nil
 }
 
-// QuerySimilar finds the most similar events based on vector similarity
-func (p *Provider) QuerySimilar(ctx context.Context, queryEmbedding []float32, topK int) ([]storage.QueryResult, error) {
+// QuerySimilar finds the most similar events based on vector similarity with optional filtering
+func (p *Provider) QuerySimilar(ctx context.Context, queryEmbedding []float32, topK int, filters map[string]interface{}) ([]storage.QueryResult, error) {
 	// Convert query embedding to pgvector type
 	queryVec := pgvector.NewVector(queryEmbedding)
 
-	// Query for similar vectors using cosine distance
-	// The <=> operator returns cosine distance (0 = identical, 2 = opposite)
-	// We convert it to similarity score (1 = identical, -1 = opposite)
-	querySQL := `
+	// Build the base query
+	baseQuery := `
 		SELECT id, 1 - (embedding <=> $1) AS similarity_score
-		FROM pcas_vectors 
-		ORDER BY embedding <=> $1 
-		LIMIT $2
-	`
+		FROM pcas_vectors`
+	
+	// Build WHERE clause dynamically
+	var whereConditions []string
+	var args []interface{}
+	args = append(args, queryVec) // $1 is the query vector
+	
+	argCounter := 2 // Start from $2 for filter parameters
+	
+	// Process filters
+	if filters != nil && len(filters) > 0 {
+		for key, value := range filters {
+			// Validate that the key is one of our indexed columns
+			switch key {
+			case "user_id", "session_id", "event_type":
+				whereConditions = append(whereConditions, fmt.Sprintf("%s = $%d", key, argCounter))
+				args = append(args, value)
+				argCounter++
+			case "event_ts_after":
+				whereConditions = append(whereConditions, fmt.Sprintf("event_ts >= $%d", argCounter))
+				args = append(args, value)
+				argCounter++
+			case "event_ts_before":
+				whereConditions = append(whereConditions, fmt.Sprintf("event_ts <= $%d", argCounter))
+				args = append(args, value)
+				argCounter++
+			default:
+				// Ignore unsupported filter keys
+				continue
+			}
+		}
+	}
+	
+	// Construct the full query
+	fullQuery := baseQuery
+	if len(whereConditions) > 0 {
+		fullQuery += " WHERE " + strings.Join(whereConditions, " AND ")
+	}
+	fullQuery += " ORDER BY embedding <=> $1 LIMIT $" + fmt.Sprintf("%d", argCounter)
+	args = append(args, topK)
 
-	rows, err := p.pool.Query(ctx, querySQL, queryVec, topK)
+	// Execute the query
+	rows, err := p.pool.Query(ctx, fullQuery, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query similar vectors: %w", err)
 	}

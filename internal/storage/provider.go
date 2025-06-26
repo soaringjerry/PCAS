@@ -32,8 +32,8 @@ type VectorStorage interface {
 	// StoreEmbedding stores a vector embedding for an event
 	StoreEmbedding(ctx context.Context, eventID string, embedding []float32, metadata map[string]string) error
 	
-	// QuerySimilar finds the most similar events based on vector similarity
-	QuerySimilar(ctx context.Context, queryEmbedding []float32, topK int) ([]QueryResult, error)
+	// QuerySimilar finds the most similar events based on vector similarity with optional filtering
+	QuerySimilar(ctx context.Context, queryEmbedding []float32, topK int, filters map[string]interface{}) ([]QueryResult, error)
 	
 	// Close gracefully shuts down the vector storage connection
 	Close() error

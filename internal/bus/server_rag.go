@@ -173,8 +173,8 @@ func (s *Server) applyRAGEnhancement(ctx context.Context, event *eventsv1.Event,
 		s.embeddingCache.Set(cacheKey, queryEmbedding)
 	}
 	
-	// Query similar events
-	similarResults, err := s.vectorStorage.QuerySimilar(ragCtx, queryEmbedding, ragTopK)
+	// Query similar events (no filters for now)
+	similarResults, err := s.vectorStorage.QuerySimilar(ragCtx, queryEmbedding, ragTopK, nil)
 	if err != nil {
 		log.Printf("RAG: Failed to query similar events: %v", err)
 		return

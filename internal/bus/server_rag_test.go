@@ -59,8 +59,8 @@ func (m *MockVectorStorage) StoreEmbedding(ctx context.Context, eventID string, 
 	return args.Error(0)
 }
 
-func (m *MockVectorStorage) QuerySimilar(ctx context.Context, queryEmbedding []float32, topK int) ([]storage.QueryResult, error) {
-	args := m.Called(ctx, queryEmbedding, topK)
+func (m *MockVectorStorage) QuerySimilar(ctx context.Context, queryEmbedding []float32, topK int, filters map[string]interface{}) ([]storage.QueryResult, error) {
+	args := m.Called(ctx, queryEmbedding, topK, filters)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -307,7 +307,7 @@ func TestApplyRAGEnhancement(t *testing.T) {
 		{ID: "current-event", Score: 1.0}, // Should be filtered out
 		{ID: "event-3", Score: 0.3}, // Below threshold (0.4)
 	}
-	mockVectorStorage.On("QuerySimilar", mock.Anything, testEmbedding, ragTopK).
+	mockVectorStorage.On("QuerySimilar", mock.Anything, testEmbedding, ragTopK, mock.Anything).
 		Return(similarResults, nil)
 	
 	// Mock batch get events
@@ -388,7 +388,7 @@ func TestApplyRAGEnhancementDisabled(t *testing.T) {
 	
 	// Verify no mocks were called
 	mockEmbeddingProvider.AssertNotCalled(t, "CreateEmbedding")
-	mockVectorStorage.AssertNotCalled(t, "QuerySimilar")
+	mockVectorStorage.AssertNotCalled(t, "QuerySimilar", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 	mockStorage.AssertNotCalled(t, "BatchGetEvents")
 }
 
@@ -468,7 +468,7 @@ func TestApplyRAGEnhancementCacheHit(t *testing.T) {
 	s.embeddingCache.Set(cacheKey, testEmbedding)
 	
 	// Mock vector search (embedding provider should NOT be called due to cache hit)
-	mockVectorStorage.On("QuerySimilar", mock.Anything, testEmbedding, ragTopK).
+	mockVectorStorage.On("QuerySimilar", mock.Anything, testEmbedding, ragTopK, mock.Anything).
 		Return([]storage.QueryResult{}, nil)
 	
 	// Execute

@@ -36,13 +36,11 @@ jobs:
           curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.61.0
           echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
         
-      - name: Clean Go and Linter Cache
+      - name: Clean Go Cache and Download Modules
         run: |
           go clean -modcache
-          golangci-lint cache clean
-          
-      - name: Sync Go Modules
-        run: go mod tidy
+          go mod download
+          go mod verify
         
       - name: Lint Go files
         run: make lint

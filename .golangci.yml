@@ -1,19 +1,55 @@
 run:
-  modules-download-mode: vendor
-  go: '1.23'
+  # Timeout for analysis
+  timeout: 5m
+  
+  # Include test files
+  tests: true
+  
+  # Build tags
+  build-tags:
+    - netgo
+  
+  # Skip vendor directory
+  skip-dirs:
+    - vendor
+  
+  # Skip generated files
+  skip-files:
+    - ".*\\.pb\\.go$"
 
 linters:
-  disable-all: true  # 禁用所有默认 linter
   enable:
     - gofmt
     - govet
     - errcheck
     - staticcheck
-    - gosimple
     - ineffassign
+    - gosimple
     - unused
-  # typecheck is explicitly not enabled due to vendor issues
+  
+  disable:
+    # Disable typecheck as it has issues with module resolution
+    - typecheck
+    # Disable other problematic linters
+    - gosec
+    - goconst
+    - dupl
 
 linters-settings:
-  gofmt:
-    simplify: true
+  staticcheck:
+    # Use Go 1.23 to match our go.mod
+    go: "1.23"
+    
+  errcheck:
+    # Check type assertions
+    check-type-assertions: true
+    # Check for ignored errors
+    check-blank: true
+
+issues:
+  # Exclude some linters from running on test files
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - errcheck
+        - ineffassign

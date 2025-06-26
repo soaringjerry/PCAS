@@ -36,9 +36,16 @@ jobs:
           curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.61.0
           echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
         
+      - name: Clean Go and Linter Cache
+        run: |
+          go clean -modcache
+          golangci-lint cache clean
+          
+      - name: Sync Go Modules
+        run: go mod tidy
+        
       - name: Lint Go files
         run: make lint
-        continue-on-error: true # Temporarily allow failure due to typecheck issues in vendor mode
         
       - name: Run tests
         run: make test

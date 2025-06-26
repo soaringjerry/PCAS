@@ -1,5 +1,8 @@
 # buf.yaml
 version: v1
+build:
+  roots:
+    - proto
 deps:
   - buf.build/googleapis/googleapis
 breaking:

@@ -90,17 +90,30 @@ for i in {1..10}; do
     sleep 2
 done
 
-# Check PCAS logs to ensure it's fully started
-echo "Checking PCAS service logs..."
-docker-compose logs --no-color pcas | tail -20
+# Wait for PCAS to actually start serving
+echo "Waiting for PCAS server to start..."
+MAX_WAIT=60
+WAITED=0
+while [ $WAITED -lt $MAX_WAIT ]; do
+    if docker-compose logs --no-color pcas 2>&1 | grep -q "PCAS server starting on"; then
+        echo "PCAS server has started!"
+        docker-compose logs --no-color pcas | tail -5
+        break
+    fi
+    echo "Still waiting for PCAS to start... ($WAITED/$MAX_WAIT seconds)"
+    sleep 5
+    WAITED=$((WAITED + 5))
+done
 
-# Check if PCAS is actually listening on the port inside the container
-echo "Checking if PCAS is listening inside container..."
-docker-compose exec -T pcas netstat -tlnp 2>/dev/null | grep 50051 || echo "netstat not available"
+if [ $WAITED -ge $MAX_WAIT ]; then
+    echo "Timeout waiting for PCAS to start. Last logs:"
+    docker-compose logs --no-color pcas | tail -30
+    exit 1
+fi
 
-# Additional wait for service initialization
-echo "Giving PCAS more time to initialize..."
-sleep 10
+# Give it a bit more time to be fully ready
+echo "Giving PCAS additional time to be fully ready..."
+sleep 5
 
 # Step 3: Emit a test event
 echo -e "${YELLOW}Step 3: Emitting test event...${NC}"

@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 	
 	_ "github.com/mattn/go-sqlite3"
@@ -182,6 +183,94 @@ func (p *Provider) GetEventByID(ctx context.Context, eventID string) (*eventsv1.
 	}
 	
 	return &event, nil
+}
+
+// BatchGetEvents retrieves multiple events by their IDs in a single query
+func (p *Provider) BatchGetEvents(ctx context.Context, ids []string) ([]*eventsv1.Event, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	
+	// Build placeholders for SQL IN clause
+	placeholders := make([]string, len(ids))
+	args := make([]interface{}, len(ids))
+	for i, id := range ids {
+		placeholders[i] = "?"
+		args[i] = id
+	}
+	
+	query := fmt.Sprintf(`
+		SELECT id, type, source, subject, specversion, time, data, trace_id, correlation_id
+		FROM events
+		WHERE id IN (%s)
+	`, strings.Join(placeholders, ","))
+	
+	rows, err := p.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query events: %w", err)
+	}
+	defer rows.Close()
+	
+	events := make([]*eventsv1.Event, 0, len(ids))
+	
+	for rows.Next() {
+		var event eventsv1.Event
+		var eventTime time.Time
+		var dataJSON sql.NullString
+		var traceID sql.NullString
+		var correlationID sql.NullString
+		var subject sql.NullString
+		
+		err := rows.Scan(
+			&event.Id,
+			&event.Type,
+			&event.Source,
+			&subject,
+			&event.Specversion,
+			&eventTime,
+			&dataJSON,
+			&traceID,
+			&correlationID,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan event: %w", err)
+		}
+		
+		// Set optional fields
+		if subject.Valid {
+			event.Subject = subject.String
+		}
+		if traceID.Valid {
+			event.TraceId = traceID.String
+		}
+		if correlationID.Valid {
+			event.CorrelationId = correlationID.String
+		}
+		
+		// Convert time
+		event.Time = timestamppb.New(eventTime)
+		
+		// Parse data if present
+		if dataJSON.Valid && dataJSON.String != "" {
+			var data interface{}
+			if err := json.Unmarshal([]byte(dataJSON.String), &data); err == nil {
+				// Convert to structpb.Value and then to Any
+				if value, err := structpb.NewValue(data); err == nil {
+					if anyData, err := anypb.New(value); err == nil {
+						event.Data = anyData
+					}
+				}
+			}
+		}
+		
+		events = append(events, &event)
+	}
+	
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating rows: %w", err)
+	}
+	
+	return events, nil
 }
 
 // Close closes the database connection

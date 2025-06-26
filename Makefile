@@ -36,7 +36,7 @@ test: ## Run all tests
 
 lint: ## Lint all Go files
 	@echo "--> Linting files..."
-	golangci-lint run
+	golangci-lint run --mod=vendor
 
 ##@ Docker Development
 dev-up: ## Start development environment with Docker Compose

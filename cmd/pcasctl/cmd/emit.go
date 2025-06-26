@@ -120,8 +120,8 @@ func emitEvent() error {
 		event.Data = anyData
 	}
 	
-	// Send the event
-	pubCtx, pubCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	// Send the event with extended timeout for RAG-enhanced processing
+	pubCtx, pubCancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer pubCancel()
 	
 	resp, err := client.Publish(pubCtx, event)

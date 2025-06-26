@@ -101,13 +101,15 @@ func (p *Provider) StoreEmbedding(ctx context.Context, eventID string, embedding
 }
 
 // QuerySimilar finds the most similar events based on vector similarity
-func (p *Provider) QuerySimilar(ctx context.Context, queryEmbedding []float32, topK int) ([]string, error) {
+func (p *Provider) QuerySimilar(ctx context.Context, queryEmbedding []float32, topK int) ([]storage.QueryResult, error) {
 	// Convert query embedding to pgvector type
 	queryVec := pgvector.NewVector(queryEmbedding)
 
 	// Query for similar vectors using cosine distance
+	// The <=> operator returns cosine distance (0 = identical, 2 = opposite)
+	// We convert it to similarity score (1 = identical, -1 = opposite)
 	querySQL := `
-		SELECT id 
+		SELECT id, 1 - (embedding <=> $1) AS similarity_score
 		FROM pcas_vectors 
 		ORDER BY embedding <=> $1 
 		LIMIT $2
@@ -120,13 +122,13 @@ func (p *Provider) QuerySimilar(ctx context.Context, queryEmbedding []float32, t
 	defer rows.Close()
 
 	// Collect the results
-	var eventIDs []string
+	var results []storage.QueryResult
 	for rows.Next() {
-		var id string
-		if err := rows.Scan(&id); err != nil {
+		var result storage.QueryResult
+		if err := rows.Scan(&result.ID, &result.Score); err != nil {
 			return nil, fmt.Errorf("failed to scan row: %w", err)
 		}
-		eventIDs = append(eventIDs, id)
+		results = append(results, result)
 	}
 
 	// Check for any errors during iteration
@@ -134,7 +136,7 @@ func (p *Provider) QuerySimilar(ctx context.Context, queryEmbedding []float32, t
 		return nil, fmt.Errorf("error iterating rows: %w", err)
 	}
 
-	return eventIDs, nil
+	return results, nil
 }
 
 // Close gracefully shuts down the vector storage connection

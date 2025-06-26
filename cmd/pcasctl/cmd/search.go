@@ -39,7 +39,9 @@ func init() {
 }
 
 func runSearch(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
+	// Use timeout context for search operations
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 	queryText := args[0]
 
 	// Determine server address
@@ -78,6 +80,10 @@ func runSearch(cmd *cobra.Command, args []string) error {
 	
 	for i, event := range resp.Events {
 		fmt.Printf("%d. Event ID: %s\n", i+1, event.Id)
+		// Display similarity score if available
+		if i < len(resp.Scores) {
+			fmt.Printf("   Similarity Score: %.3f\n", resp.Scores[i])
+		}
 		fmt.Printf("   Type: %s\n", event.Type)
 		fmt.Printf("   Source: %s\n", event.Source)
 		if event.Subject != "" {

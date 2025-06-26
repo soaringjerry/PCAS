@@ -33,6 +33,7 @@ services:
       - PG_DSN=postgres://pcas:pcas_vector_db@postgres:5432/pcas_vectors?sslmode=disable
       - PCAS_ENV=development
       - GOFLAGS=-mod=readonly -buildvcs=false
+      - PCAS_RAG_ENABLED=true
     depends_on:
       postgres:
         condition: service_healthy

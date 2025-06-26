@@ -164,7 +164,9 @@ func (x *SearchRequest) GetTopK() int32 {
 type SearchResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// The matching events found
-	Events        []*v1.Event `protobuf:"bytes,1,rep,name=events,proto3" json:"events,omitempty"`
+	Events []*v1.Event `protobuf:"bytes,1,rep,name=events,proto3" json:"events,omitempty"`
+	// Similarity scores corresponding to each event (0.0 to 1.0)
+	Scores        []float32 `protobuf:"fixed32,2,rep,packed,name=scores,proto3" json:"scores,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -206,6 +208,13 @@ func (x *SearchResponse) GetEvents() []*v1.Event {
 	return nil
 }
 
+func (x *SearchResponse) GetScores() []float32 {
+	if x != nil {
+		return x.Scores
+	}
+	return nil
+}
+
 var File_pcas_bus_v1_bus_proto protoreflect.FileDescriptor
 
 const file_pcas_bus_v1_bus_proto_rawDesc = "" +
@@ -217,9 +226,10 @@ const file_pcas_bus_v1_bus_proto_rawDesc = "" +
 	"\rSearchRequest\x12\x1d\n" +
 	"\n" +
 	"query_text\x18\x01 \x01(\tR\tqueryText\x12\x13\n" +
-	"\x05top_k\x18\x02 \x01(\x05R\x04topK\"?\n" +
+	"\x05top_k\x18\x02 \x01(\x05R\x04topK\"W\n" +
 	"\x0eSearchResponse\x12-\n" +
-	"\x06events\x18\x01 \x03(\v2\x15.pcas.events.v1.EventR\x06events2\xd9\x01\n" +
+	"\x06events\x18\x01 \x03(\v2\x15.pcas.events.v1.EventR\x06events\x12\x16\n" +
+	"\x06scores\x18\x02 \x03(\x02R\x06scores2\xd9\x01\n" +
 	"\x0fEventBusService\x12>\n" +
 	"\aPublish\x12\x15.pcas.events.v1.Event\x1a\x1c.pcas.bus.v1.PublishResponse\x12C\n" +
 	"\tSubscribe\x12\x1d.pcas.bus.v1.SubscribeRequest\x1a\x15.pcas.events.v1.Event0\x01\x12A\n" +

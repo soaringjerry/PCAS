@@ -14,8 +14,17 @@ type Storage interface {
 	// GetEventByID retrieves a single event by its ID
 	GetEventByID(ctx context.Context, eventID string) (*eventsv1.Event, error)
 	
+	// BatchGetEvents retrieves multiple events by their IDs in a single query
+	BatchGetEvents(ctx context.Context, ids []string) ([]*eventsv1.Event, error)
+	
 	// Close gracefully shuts down the storage connection
 	Close() error
+}
+
+// QueryResult represents a single result from a vector similarity query
+type QueryResult struct {
+	ID    string  // Event ID
+	Score float32 // Similarity score (higher is more similar)
 }
 
 // VectorStorage defines the interface for vector storage operations
@@ -24,7 +33,7 @@ type VectorStorage interface {
 	StoreEmbedding(ctx context.Context, eventID string, embedding []float32, metadata map[string]string) error
 	
 	// QuerySimilar finds the most similar events based on vector similarity
-	QuerySimilar(ctx context.Context, queryEmbedding []float32, topK int) ([]string, error)
+	QuerySimilar(ctx context.Context, queryEmbedding []float32, topK int) ([]QueryResult, error)
 	
 	// Close gracefully shuts down the vector storage connection
 	Close() error

@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"golang.org/x/sync/singleflight"
+	"golang.org/x/time/rate"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/structpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -32,6 +34,11 @@ type Server struct {
 	// Subscriber management
 	subscribers map[string]chan *eventsv1.Event
 	subMutex    sync.RWMutex
+	
+	// RAG enhancement fields
+	embeddingCache    *embeddingCache
+	rateLimiter       *rate.Limiter
+	singleFlight      *singleflight.Group
 }
 
 // NewServer creates a new bus server instance
@@ -41,6 +48,9 @@ func NewServer(policyEngine *policy.Engine, providerMap map[string]providers.Com
 		providers:    providerMap,
 		storage:      storage,
 		subscribers:  make(map[string]chan *eventsv1.Event),
+		embeddingCache: newEmbeddingCache(1000), // LRU cache for 1000 embeddings
+		rateLimiter:    rate.NewLimiter(rate.Every(time.Second), 10), // 10 requests per second
+		singleFlight:   &singleflight.Group{},
 	}
 }
 
@@ -53,8 +63,14 @@ func (s *Server) Publish(ctx context.Context, event *eventsv1.Event) (*busv1.Pub
 	}
 	
 	// Start vectorization in background if providers are available
+	// Only vectorize fact events
 	if s.vectorStorage != nil && s.embeddingProvider != nil {
-		go s.vectorizeEvent(event)
+		if s.isFactEvent(event.Type) {
+			log.Printf("Will vectorize fact event: type=%s, id=%s", event.Type, event.Id)
+			go s.vectorizeEvent(event)
+		} else {
+			log.Printf("Skipping vectorization for non-fact event: type=%s, id=%s", event.Type, event.Id)
+		}
 	}
 	
 	log.Printf("Received event: ID=%s, Type=%s, Source=%s", event.Id, event.Type, event.Source)
@@ -106,6 +122,11 @@ func (s *Server) Publish(ctx context.Context, event *eventsv1.Event) (*busv1.Pub
 		return nil, fmt.Errorf("provider not found: %s", providerName)
 	}
 	
+	// Apply RAG enhancement only for LLM providers
+	if providerName == "openai-gpt4" && s.vectorStorage != nil && s.embeddingProvider != nil && s.storage != nil {
+		s.applyRAGEnhancement(ctx, event, requestData)
+	}
+	
 	// Execute the provider
 	result, err := provider.Execute(ctx, requestData)
 	if err != nil {
@@ -146,10 +167,8 @@ func (s *Server) Publish(ctx context.Context, event *eventsv1.Event) (*busv1.Pub
 		// Continue processing even if storage fails
 	}
 	
-	// Start vectorization for response event too
-	if s.vectorStorage != nil && s.embeddingProvider != nil {
-		go s.vectorizeEvent(responseEvent)
-	}
+	// Don't vectorize response events - they don't contain user intent
+	// Only user-generated content should be in vector space
 	
 	// Broadcast the response event to all subscribers
 	s.broadcastEvent(responseEvent)
@@ -189,18 +208,42 @@ func (s *Server) Search(ctx context.Context, req *busv1.SearchRequest) (*busv1.S
 	
 	// Retrieve full event details from storage
 	var results []*eventsv1.Event
-	for _, eventID := range eventIDs {
-		event, err := s.storage.GetEventByID(ctx, eventID)
+	var scores []float32
+	for _, result := range eventIDs {
+		event, err := s.storage.GetEventByID(ctx, result.ID)
 		if err != nil {
-			log.Printf("Warning: failed to retrieve event %s: %v", eventID, err)
+			log.Printf("Warning: failed to retrieve event %s: %v", result.ID, err)
 			continue
 		}
 		results = append(results, event)
+		scores = append(scores, result.Score)
+		log.Printf("Retrieved event %s with similarity score: %.3f", result.ID, result.Score)
 	}
 	
 	log.Printf("Search completed: found %d matching events", len(results))
 	
 	return &busv1.SearchResponse{
 		Events: results,
+		Scores: scores,
 	}, nil
+}
+
+// isFactEvent determines if an event type represents a "fact" that should be vectorized
+func (s *Server) isFactEvent(eventType string) bool {
+	// Whitelist of event types that represent facts/memories
+	factEventTypes := []string{
+		"pcas.memory.create.v1",
+		"user.note.v1",
+		"user.reminder.v1",
+		"user.task.v1",
+		"user.memory.v1",
+	}
+	
+	for _, factType := range factEventTypes {
+		if eventType == factType {
+			return true
+		}
+	}
+	
+	return false
 }

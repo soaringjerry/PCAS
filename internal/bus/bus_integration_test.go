@@ -40,6 +40,16 @@ func (m *mockStorage) GetEventByID(ctx context.Context, eventID string) (*events
 	return event, nil
 }
 
+func (m *mockStorage) BatchGetEvents(ctx context.Context, ids []string) ([]*eventsv1.Event, error) {
+	events := make([]*eventsv1.Event, 0, len(ids))
+	for _, id := range ids {
+		if event, ok := m.events[id]; ok {
+			events = append(events, event)
+		}
+	}
+	return events, nil
+}
+
 func (m *mockStorage) Close() error {
 	return nil
 }

@@ -3,7 +3,6 @@ package bus
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"log"
 	"strings"
 	"time"
@@ -25,6 +24,8 @@ func (s *Server) vectorizeEvent(event *eventsv1.Event) {
 		// No text content to vectorize
 		return
 	}
+	
+	log.Printf("Vectorizing content for event %s (type: %s): \"%s\"", event.Id, event.Type, textContent)
 
 	// Create embedding
 	embedding, err := s.embeddingProvider.CreateEmbedding(ctx, textContent)
@@ -62,6 +63,7 @@ func (s *Server) vectorizeEvent(event *eventsv1.Event) {
 func (s *Server) extractTextContent(event *eventsv1.Event) string {
 	// First priority: Check event.Subject
 	if event.Subject != "" {
+		log.Printf("Extracting text from Subject field: \"%s\"", event.Subject)
 		return event.Subject
 	}
 	
@@ -95,6 +97,7 @@ func (s *Server) extractTextContent(event *eventsv1.Event) string {
 	for _, field := range textFields {
 		if val, exists := data[field]; exists {
 			if strVal, ok := val.(string); ok && strVal != "" {
+				log.Printf("Found text in field '%s': \"%s\"", field, strVal)
 				textParts = append(textParts, strVal)
 			}
 		}
@@ -108,13 +111,8 @@ func (s *Server) extractTextContent(event *eventsv1.Event) string {
 		}
 	}
 
-	// Combine all text parts
+	// Combine all text parts - pure semantic content only
 	combinedText := strings.Join(textParts, " ")
-	
-	// Add event type as context
-	if combinedText != "" {
-		combinedText = fmt.Sprintf("[%s] %s", event.Type, combinedText)
-	}
 
 	return combinedText
 }

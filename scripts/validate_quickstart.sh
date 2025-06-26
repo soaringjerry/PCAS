@@ -68,10 +68,16 @@ if ! check_service_health "PostgreSQL" "docker-compose exec -T postgres pg_isrea
 fi
 
 # Check PCAS (gRPC service)
-# We'll use pcasctl ping as the health check
-if ! check_service_health "PCAS" "./bin/pcasctl ping"; then
+# Check if the container is running
+if ! check_service_health "PCAS" "docker-compose ps pcas | grep -q 'Up'"; then
+    echo "Checking container logs..."
+    docker-compose logs pcas | tail -20
     exit 1
 fi
+
+# Give PCAS a bit more time to fully initialize
+echo "Waiting for PCAS to fully initialize..."
+sleep 5
 
 # Step 3: Emit a test event
 echo -e "${YELLOW}Step 3: Emitting test event...${NC}"

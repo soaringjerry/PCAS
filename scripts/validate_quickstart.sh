@@ -57,7 +57,7 @@ run_sqlite_tests() {
             kill "$PCAS_PID" || true
             wait "$PCAS_PID" 2>/dev/null || true
         fi
-        rm -f "$TEST_DB" "$TEST_HNSW"
+        rm -f "./test.db" "./test.hnsw"
     }
     
     # Set trap to ensure cleanup on exit

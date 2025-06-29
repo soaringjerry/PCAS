@@ -1,5 +1,3 @@
-[简体中文](README.zh.md)
-
 # PCAS (Personal Central AI System)
 
 **PCAS is an open-source, local-first, intelligent decision-making engine designed to power a new generation of personal AI operating systems.**
@@ -14,7 +12,7 @@ PCAS is not a user-facing application. It is a **deployable software engine** th
 
 It connects to various applications and services (we call them D-Apps) through an **Intelligent Event Bus**, allowing you to create powerful, automated workflows while ensuring your data never leaves your control.
 
-> To delve deeper into the philosophy and technicals, please read the **[PCAS Whitepaper](docs/WHITEPAPER.md)** and the **[PCAS Technical Plan](docs/PCAS_PLAN.md)**.
+> To delve deeper into the philosophy and technicals, please read the **[PCAS Whitepaper](docs/architecture/whitepaper.md)** and the **[PCAS Architecture Overview](docs/architecture/pcas-overview.md)**.
 
 ## ✨ Core Features
 
@@ -58,7 +56,7 @@ Get PCAS up and running in minutes with our modern development workflow.
 
 ### Prerequisites
 
-- Go 1.21+
+- Go 1.24+
 - Docker and Docker Compose
 - An OpenAI API key (for GPT-4 integration)
 
@@ -136,7 +134,8 @@ This cleanly shuts down all services and preserves your data.
 PCAS is an open-source project driven by the community. We sincerely invite you to join us.
 
 *   **Join the discussion:** [Discord Link TBD]
-*   **Contribute:** Please read our `CONTRIBUTING.md` (TBD).
+*   **Contribute:** Please read our [Contribution Guide](CONTRIBUTING.md).
+*   **Documentation:** Explore our comprehensive [Documentation Portal](docs/README.md).
 *   **Report issues:** Please use the Issues section.
 
 ## 📄 License

@@ -23,7 +23,7 @@ This guide provides comprehensive information about PCAS, from getting started t
 ## Table of Contents
 
 ### Getting Started
-- [Installation Guide](./getting-started/installation.md) (Placeholder)
+- [Installation Guide](./getting-started/installation.md)
 - [Hello DApp Tutorial](./getting-started/hello-dapp-tutorial.md)
 
 ### Guides
@@ -36,6 +36,9 @@ This guide provides comprehensive information about PCAS, from getting started t
 - [Architecture Decision Records (ADR)](./architecture/adr/)
 - [PCAS Overview](./architecture/pcas-overview.md)
 - [Whitepaper](./architecture/whitepaper.md)
+
+### Development Logs
+- [v0.1.2 Refactoring Plan](./dev-logs/2025-06-29-v0.1.2-refactoring-plan.md)
 
 ---
 

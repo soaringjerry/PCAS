@@ -16,7 +16,7 @@
 
 ---
 
-Welcome to the PCAS (Personalized Context-Aware System) documentation!
+Welcome to the PCAS (Personal Central AI System) documentation!
 
 This guide provides comprehensive information about PCAS, from getting started to advanced architectural details.
 

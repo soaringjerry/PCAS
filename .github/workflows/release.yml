@@ -4,28 +4,96 @@ on:
     tags: [ "v[0-9]+.[0-9]+.[0-9]+" ]   # 仅匹配正式版本
 
 jobs:
-  release:
+  # Create release first
+  create-release:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+    steps:
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+          draft: false
+          prerelease: false
+
+  # Build Linux binaries
+  build-linux:
+    needs: create-release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      
+      - name: Build Linux binaries
+        run: |
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o ./bin/pcas ./cmd/pcas
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o ./bin/pcasctl ./cmd/pcasctl
+      
+      - name: Package Linux binaries
+        run: |
+          tar -czf pcas-linux-amd64.tar.gz -C ./bin pcas pcasctl
+      
+      - name: Upload Linux artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pcas-linux-amd64-artifact
+          path: pcas-linux-amd64.tar.gz
+
+  # Build Windows binaries
+  build-windows:
+    needs: create-release
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      
+      - name: Build Windows binaries
+        run: |
+          $env:CGO_ENABLED=0
+          $env:GOOS="windows"
+          $env:GOARCH="amd64"
+          go build -o ./bin/pcas.exe ./cmd/pcas
+          go build -o ./bin/pcasctl.exe ./cmd/pcasctl
+      
+      - name: Package Windows binaries
+        run: |
+          Compress-Archive -Path ./bin/pcas.exe,./bin/pcasctl.exe -DestinationPath pcas-windows-amd64.zip
+      
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pcas-windows-amd64-artifact
+          path: pcas-windows-amd64.zip
+
+  # Docker image build and push
+  docker-release:
+    needs: create-release
+    runs-on: ubuntu-latest
+    permissions:
       packages: write
       id-token: write    # 如需 sigstore 署名
 
     steps:
       - uses: actions/checkout@v4
 
-      # 1. 生成 Go 二进制
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-      - run: |
-          CGO_ENABLED=0 go build -o pcas ./cmd/pcas
-          CGO_ENABLED=0 go build -o pcasctl ./cmd/pcasctl
-      - uses: softprops/action-gh-release@v2
-        with:
-          files: pcas,pcasctl
-
-      # 2. 登录到 GitHub Container Registry
+      # 登录到 GitHub Container Registry
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
         with:
@@ -33,7 +101,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # 3. 重新 Build & Push Docker image(tag + latest)
+      # Build & Push Docker image (tag + latest)
       - name: Build and Push image
         uses: docker/build-push-action@v5
         with:
@@ -43,10 +111,57 @@ jobs:
             ghcr.io/soaringjerry/pcas:${{ github.ref_name }}
             ghcr.io/soaringjerry/pcas:latest
 
-      # 4. 部署文档（可选）
+  # Deploy documentation
+  deploy-docs:
+    needs: create-release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      
       - name: Deploy Docs
         uses: peaceiris/actions-gh-pages@v4
         if: github.repository == 'soaringjerry/pcas'  # 防 fork
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: docs/.docusaurus/build
+
+  # Upload all artifacts to the release
+  upload-assets:
+    needs: [create-release, build-linux, build-windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download Linux artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: pcas-linux-amd64-artifact
+          path: ./artifacts
+      
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: pcas-windows-amd64-artifact
+          path: ./artifacts
+      
+      - name: Upload Linux release asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: ./artifacts/pcas-linux-amd64.tar.gz
+          asset_name: pcas-linux-amd64.tar.gz
+          asset_content_type: application/gzip
+      
+      - name: Upload Windows release asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: ./artifacts/pcas-windows-amd64.zip
+          asset_name: pcas-windows-amd64.zip
+          asset_content_type: application/zip

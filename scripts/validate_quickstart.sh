@@ -16,6 +16,9 @@ SEARCH_QUERY="Which event is for validation?"
 # Default mode is SQLite
 MODE="sqlite"
 
+# Global variable for PCAS PID (used in cleanup)
+PCAS_PID=""
+
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -43,7 +46,6 @@ echo
 
 # SQLite mode functions
 run_sqlite_tests() {
-    local PCAS_PID=""
     local TEST_DB="./test.db"
     local TEST_HNSW="./test.hnsw"
     

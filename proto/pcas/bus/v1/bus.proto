@@ -36,6 +36,9 @@ message SearchRequest {
   
   // Number of top results to return (default: 5)
   int32 top_k = 2;
+  
+  // Optional user ID to filter results by
+  string user_id = 3;
 }
 
 // SearchResponse is the response from semantic search

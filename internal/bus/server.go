@@ -28,7 +28,6 @@ type Server struct {
 	policyEngine *policy.Engine
 	providers    map[string]providers.ComputeProvider
 	storage      storage.Storage
-	vectorStorage storage.VectorStorage
 	embeddingProvider providers.EmbeddingProvider
 	
 	// Subscriber management
@@ -39,6 +38,9 @@ type Server struct {
 	embeddingCache    *embeddingCache
 	rateLimiter       *rate.Limiter
 	singleFlight      *singleflight.Group
+	
+	// Background task tracking
+	vectorizeWG  sync.WaitGroup
 }
 
 // NewServer creates a new bus server instance
@@ -57,16 +59,17 @@ func NewServer(policyEngine *policy.Engine, providerMap map[string]providers.Com
 // Publish handles incoming events from clients
 func (s *Server) Publish(ctx context.Context, event *eventsv1.Event) (*busv1.PublishResponse, error) {
 	// Store the incoming event immediately
-	if err := s.storage.StoreEvent(ctx, event); err != nil {
+	if err := s.storage.StoreEvent(ctx, event, nil); err != nil {
 		log.Printf("Failed to store incoming event: %v", err)
 		// Continue processing even if storage fails
 	}
 	
 	// Start vectorization in background if providers are available
 	// Only vectorize fact events
-	if s.vectorStorage != nil && s.embeddingProvider != nil {
+	if s.embeddingProvider != nil {
 		if IsFactEvent(event.Type) {
 			log.Printf("Will vectorize fact event: type=%s, id=%s", event.Type, event.Id)
+			s.vectorizeWG.Add(1)  // Increment counter before starting goroutine
 			go s.vectorizeEvent(event)
 		} else {
 			log.Printf("Skipping vectorization for non-fact event: type=%s, id=%s", event.Type, event.Id)
@@ -123,7 +126,7 @@ func (s *Server) Publish(ctx context.Context, event *eventsv1.Event) (*busv1.Pub
 	}
 	
 	// Apply RAG enhancement only for LLM providers
-	if providerName == "openai-gpt4" && s.vectorStorage != nil && s.embeddingProvider != nil && s.storage != nil {
+	if providerName == "openai-gpt4" && s.embeddingProvider != nil && s.storage != nil {
 		s.applyRAGEnhancement(ctx, event, requestData)
 	}
 	
@@ -162,7 +165,7 @@ func (s *Server) Publish(ctx context.Context, event *eventsv1.Event) (*busv1.Pub
 	}
 	
 	// Store the response event before broadcasting
-	if err := s.storage.StoreEvent(ctx, responseEvent); err != nil {
+	if err := s.storage.StoreEvent(ctx, responseEvent, nil); err != nil {
 		log.Printf("Failed to store response event: %v", err)
 		// Continue processing even if storage fails
 	}
@@ -187,9 +190,9 @@ func (s *Server) Search(ctx context.Context, req *busv1.SearchRequest) (*busv1.S
 		req.TopK = 5 // Default to 5 results
 	}
 	
-	// Check if vector storage and embedding provider are available
-	if s.vectorStorage == nil || s.embeddingProvider == nil {
-		return nil, fmt.Errorf("vector search is not available: vector storage or embedding provider not configured")
+	// Check if embedding provider is available
+	if s.embeddingProvider == nil {
+		return nil, fmt.Errorf("vector search is not available on the server. Please ensure the PCAS server was started with the OPENAI_API_KEY environment variable set")
 	}
 	
 	// Create embedding for the query text
@@ -199,9 +202,18 @@ func (s *Server) Search(ctx context.Context, req *busv1.SearchRequest) (*busv1.S
 		return nil, fmt.Errorf("failed to create query embedding: %w", err)
 	}
 	
-	// Query similar events from vector storage (no filters for now)
+	// Build filter if user_id is provided
+	var filter *storage.Filter
+	if req.UserId != "" {
+		filter = &storage.Filter{
+			UserID: &req.UserId,
+		}
+		log.Printf("Applying user filter: %s", req.UserId)
+	}
+	
+	// Query similar events from storage
 	log.Printf("Searching for top %d similar events", req.TopK)
-	eventIDs, err := s.vectorStorage.QuerySimilar(ctx, queryEmbedding, int(req.TopK), nil)
+	eventIDs, err := s.storage.QuerySimilar(ctx, queryEmbedding, int(req.TopK), filter)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query similar events: %w", err)
 	}
@@ -226,6 +238,16 @@ func (s *Server) Search(ctx context.Context, req *busv1.SearchRequest) (*busv1.S
 		Events: results,
 		Scores: scores,
 	}, nil
+}
+
+// SetEmbeddingProvider sets the embedding provider for the server
+func (s *Server) SetEmbeddingProvider(provider providers.EmbeddingProvider) {
+	s.embeddingProvider = provider
+}
+
+// WaitForVectorization waits for all background vectorization tasks to complete
+func (s *Server) WaitForVectorization() {
+	s.vectorizeWG.Wait()
 }
 
 // isFactEvent determines if an event type represents a "fact" that should be vectorized

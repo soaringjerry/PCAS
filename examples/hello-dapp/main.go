@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/soaringjerry/pcas/pkg/sdk"
 	eventsv1 "github.com/soaringjerry/pcas/gen/go/pcas/events/v1"
+	sdk "github.com/soaringjerry/pcas/pkg/sdk/go"
 )
 
 func main() {
@@ -28,7 +28,7 @@ func main() {
 	}()
 
 	// Create PCAS client with default settings (connects to localhost:50051)
-	client, err := sdk.NewClient(ctx)
+	client, err := sdk.NewClient(ctx, "localhost:50051")
 	if err != nil {
 		log.Fatalf("Failed to create PCAS client: %v", err)
 	}
@@ -38,7 +38,7 @@ func main() {
 	log.Println("Listening for events... (Press Ctrl+C to stop)")
 
 	// Subscribe to all events
-	eventStream, err := client.Subscribe(ctx, "hello-dapp-logger")
+	eventStream, err := client.Subscribe(ctx)
 	if err != nil {
 		log.Fatalf("Failed to subscribe to events: %v", err)
 	}
@@ -65,22 +65,22 @@ func printEvent(event *eventsv1.Event) {
 	fmt.Printf("   ID:      %s\n", event.Id)
 	fmt.Printf("   Type:    %s\n", event.Type)
 	fmt.Printf("   Source:  %s\n", event.Source)
-	
+
 	if event.Subject != "" {
 		fmt.Printf("   Subject: %s\n", event.Subject)
 	}
-	
+
 	if event.Time != nil {
 		fmt.Printf("   Time:    %s\n", event.Time.AsTime().Format(time.RFC3339))
 	}
-	
+
 	if event.TraceId != "" {
 		fmt.Printf("   TraceID: %s\n", event.TraceId)
 	}
-	
+
 	if event.CorrelationId != "" {
 		fmt.Printf("   CorrelationID: %s\n", event.CorrelationId)
 	}
-	
+
 	fmt.Println(strings.Repeat("=", 60))
 }

@@ -3,6 +3,8 @@ package bus_test
 import (
 	"context"
 	"testing"
+	
+	"github.com/soaringjerry/pcas/internal/storage"
 	"time"
 
 	"github.com/google/uuid"
@@ -27,7 +29,7 @@ func newMockStorage() *mockStorage {
 	}
 }
 
-func (m *mockStorage) StoreEvent(ctx context.Context, event *eventsv1.Event) error {
+func (m *mockStorage) StoreEvent(ctx context.Context, event *eventsv1.Event, embedding []float32) error {
 	m.events[event.Id] = event
 	return nil
 }
@@ -64,6 +66,16 @@ func (m *mockStorage) GetAllEvents(ctx context.Context, limit int, offset int) (
 		end = len(events)
 	}
 	return events[offset:end], nil
+}
+
+func (m *mockStorage) QuerySimilar(ctx context.Context, embedding []float32, topK int, filter *storage.Filter) ([]storage.QueryResult, error) {
+	// Simple mock implementation - return empty results
+	return []storage.QueryResult{}, nil
+}
+
+func (m *mockStorage) AddEmbeddingToEvent(ctx context.Context, eventID string, embedding []float32) error {
+	// Mock implementation - just return success
+	return nil
 }
 
 func (m *mockStorage) Close() error {

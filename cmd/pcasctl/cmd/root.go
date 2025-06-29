@@ -14,7 +14,7 @@ var rootCmd = &cobra.Command{
 	Use:   "pcasctl",
 	Short: "A CLI for interacting with the PCAS engine",
 	Long: `pcasctl is a command-line interface tool for interacting with the 
-PCAS (Personal Context Aware System) engine. It allows you to emit events, 
+PCAS (Personal Central AI System) engine. It allows you to emit events, 
 query data, and manage your personal context system.`,
 }
 

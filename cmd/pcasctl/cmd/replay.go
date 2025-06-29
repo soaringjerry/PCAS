@@ -8,7 +8,7 @@ import (
 	"log"
 	"time"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "modernc.org/sqlite"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -41,7 +41,7 @@ the causality chain of events.`,
 
 func replayEvent(eventID string) error {
 	// Connect to SQLite database
-	db, err := sql.Open("sqlite3", replayDBPath)
+	db, err := sql.Open("sqlite", replayDBPath)
 	if err != nil {
 		return fmt.Errorf("failed to open database: %v", err)
 	}

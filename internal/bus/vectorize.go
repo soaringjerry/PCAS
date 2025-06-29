@@ -15,6 +15,9 @@ import (
 
 // vectorizeEvent extracts text content from an event and stores its embedding
 func (s *Server) vectorizeEvent(event *eventsv1.Event) {
+	// Ensure we decrement the wait group counter when done
+	defer s.vectorizeWG.Done()
+	
 	// Create a context with timeout for vectorization
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -65,10 +68,11 @@ func (s *Server) vectorizeEvent(event *eventsv1.Event) {
 		metadata["correlation_id"] = event.CorrelationId
 	}
 
-	// Store embedding
-	err = s.vectorStorage.StoreEmbedding(ctx, event.Id, embedding, metadata)
+	// Store the vector as a separate node and link it to the event
+	// Note: The event has already been stored, so we just need to add the embedding
+	err = s.storage.AddEmbeddingToEvent(ctx, event.Id, embedding)
 	if err != nil {
-		log.Printf("Failed to store embedding for event %s: %v", event.Id, err)
+		log.Printf("Failed to add embedding to event %s: %v", event.Id, err)
 		return
 	}
 

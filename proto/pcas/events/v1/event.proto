@@ -76,3 +76,13 @@ message Event {
   // 使用100号是为了给未来的核心扩展属性留出充足空间。
   google.protobuf.Any data = 100;
 }
+
+// EventVectorizedV1 表示一个向量化事件的数据载荷。
+// 当为原始事件生成嵌入向量后，会创建一个新的事件来存储这个向量信息。
+message EventVectorizedV1 {
+  // 原始事件的ID
+  string original_event_id = 1;
+  
+  // 事件的嵌入向量
+  repeated float embedding = 2;
+}

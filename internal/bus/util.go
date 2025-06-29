@@ -6,6 +6,7 @@ func IsFactEvent(eventType string) bool {
 	// Whitelist of event types that represent facts/memories
 	factEventTypes := []string{
 		"pcas.memory.create.v1",
+		"pcas.user.fact.v1",
 		"user.note.v1",
 		"user.reminder.v1",
 		"user.task.v1",

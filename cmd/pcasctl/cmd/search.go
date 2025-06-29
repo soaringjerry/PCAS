@@ -15,6 +15,7 @@ import (
 
 var (
 	topK int
+	searchUserID string
 )
 
 // searchCmd represents the search command
@@ -36,6 +37,7 @@ func init() {
 	searchCmd.Flags().IntVar(&topK, "top-k", 5, "Number of top results to return")
 	searchCmd.Flags().StringVar(&serverPort, "port", "50051", "PCAS server port")
 	searchCmd.Flags().StringVar(&serverAddr, "server", "", "PCAS server address (overrides --port)")
+	searchCmd.Flags().StringVar(&searchUserID, "user-id", "", "User ID to filter results by (optional)")
 }
 
 func runSearch(cmd *cobra.Command, args []string) error {
@@ -62,6 +64,7 @@ func runSearch(cmd *cobra.Command, args []string) error {
 	req := &busv1.SearchRequest{
 		QueryText: queryText,
 		TopK:      int32(topK),
+		UserId:    searchUserID,
 	}
 
 	// Perform search

@@ -12,7 +12,7 @@ import (
 var rootCmd = &cobra.Command{
 	Use:   "pcas",
 	Short: "PCAS a local-first, intelligent decision-making engine",
-	Long: `PCAS (Personal Context Aware System) is a local-first, intelligent 
+	Long: `PCAS (Personal Central AI System) is a local-first, intelligent 
 decision-making engine that processes events and manages personal data 
 with privacy and security at its core.`,
 }

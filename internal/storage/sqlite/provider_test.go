@@ -53,7 +53,7 @@ func TestSQLiteProvider(t *testing.T) {
 
 	// Test StoreEvent
 	ctx := context.Background()
-	err = provider.StoreEvent(ctx, event)
+	err = provider.StoreEvent(ctx, event, nil)
 	if err != nil {
 		t.Fatalf("Failed to store event: %v", err)
 	}

@@ -48,9 +48,40 @@ jobs:
       - name: Run tests
         run: make test
 
-  e2e-test:
+  e2e-test-sqlite:
     runs-on: ubuntu-latest
     needs: lint-test
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          
+      - name: Sync vendor directory
+        run: go mod vendor
+        
+      - name: Build binaries
+        run: make build
+        
+      - name: Install SQLite
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y sqlite3
+          
+      - name: Run Quick Start validation (SQLite mode)
+        run: |
+          chmod +x ./scripts/validate_quickstart.sh
+          bash ./scripts/validate_quickstart.sh --mode sqlite
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY || 'dummy-key-for-testing' }}
+          PCAS_RAG_ENABLED: "true"
+          
+  e2e-test-docker:
+    runs-on: ubuntu-latest
+    needs: lint-test
+    # Only run Docker tests on main branch or when explicitly requested
+    if: github.ref == 'refs/heads/main' || contains(github.event.pull_request.labels.*.name, 'test-docker')
     steps:
       - uses: actions/checkout@v4
 
@@ -69,9 +100,9 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y docker-compose
           
-      - name: Run Quick Start validation
+      - name: Run Quick Start validation (Docker mode)
         run: |
           chmod +x ./scripts/validate_quickstart.sh
-          bash ./scripts/validate_quickstart.sh
+          bash ./scripts/validate_quickstart.sh --mode docker
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY || 'dummy-key-for-testing' }}

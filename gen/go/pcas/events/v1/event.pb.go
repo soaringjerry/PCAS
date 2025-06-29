@@ -195,6 +195,62 @@ func (x *Event) GetData() *anypb.Any {
 	return nil
 }
 
+// EventVectorizedV1 表示一个向量化事件的数据载荷。
+// 当为原始事件生成嵌入向量后，会创建一个新的事件来存储这个向量信息。
+type EventVectorizedV1 struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 原始事件的ID
+	OriginalEventId string `protobuf:"bytes,1,opt,name=original_event_id,json=originalEventId,proto3" json:"original_event_id,omitempty"`
+	// 事件的嵌入向量
+	Embedding     []float32 `protobuf:"fixed32,2,rep,packed,name=embedding,proto3" json:"embedding,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *EventVectorizedV1) Reset() {
+	*x = EventVectorizedV1{}
+	mi := &file_pcas_events_v1_event_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EventVectorizedV1) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EventVectorizedV1) ProtoMessage() {}
+
+func (x *EventVectorizedV1) ProtoReflect() protoreflect.Message {
+	mi := &file_pcas_events_v1_event_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EventVectorizedV1.ProtoReflect.Descriptor instead.
+func (*EventVectorizedV1) Descriptor() ([]byte, []int) {
+	return file_pcas_events_v1_event_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *EventVectorizedV1) GetOriginalEventId() string {
+	if x != nil {
+		return x.OriginalEventId
+	}
+	return ""
+}
+
+func (x *EventVectorizedV1) GetEmbedding() []float32 {
+	if x != nil {
+		return x.Embedding
+	}
+	return nil
+}
+
 var File_pcas_events_v1_event_proto protoreflect.FileDescriptor
 
 const file_pcas_events_v1_event_proto_rawDesc = "" +
@@ -217,7 +273,10 @@ const file_pcas_events_v1_event_proto_rawDesc = "" +
 	"\n" +
 	"session_id\x18\v \x01(\tR\tsessionId\x12%\n" +
 	"\x0ecorrelation_id\x18\f \x01(\tR\rcorrelationId\x12(\n" +
-	"\x04data\x18d \x01(\v2\x14.google.protobuf.AnyR\x04dataJ\x04\b\r\x10\x14B\xb7\x01\n" +
+	"\x04data\x18d \x01(\v2\x14.google.protobuf.AnyR\x04dataJ\x04\b\r\x10\x14\"]\n" +
+	"\x11EventVectorizedV1\x12*\n" +
+	"\x11original_event_id\x18\x01 \x01(\tR\x0foriginalEventId\x12\x1c\n" +
+	"\tembedding\x18\x02 \x03(\x02R\tembeddingB\xb7\x01\n" +
 	"\x12com.pcas.events.v1B\n" +
 	"EventProtoP\x01Z;github.com/soaringjerry/pcas/gen/go/pcas/events/v1;eventsv1\xa2\x02\x03PEX\xaa\x02\x0ePcas.Events.V1\xca\x02\x0ePcas\\Events\\V1\xe2\x02\x1aPcas\\Events\\V1\\GPBMetadata\xea\x02\x10Pcas::Events::V1b\x06proto3"
 
@@ -233,15 +292,16 @@ func file_pcas_events_v1_event_proto_rawDescGZIP() []byte {
 	return file_pcas_events_v1_event_proto_rawDescData
 }
 
-var file_pcas_events_v1_event_proto_msgTypes = make([]protoimpl.MessageInfo, 1)
+var file_pcas_events_v1_event_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
 var file_pcas_events_v1_event_proto_goTypes = []any{
 	(*Event)(nil),                 // 0: pcas.events.v1.Event
-	(*timestamppb.Timestamp)(nil), // 1: google.protobuf.Timestamp
-	(*anypb.Any)(nil),             // 2: google.protobuf.Any
+	(*EventVectorizedV1)(nil),     // 1: pcas.events.v1.EventVectorizedV1
+	(*timestamppb.Timestamp)(nil), // 2: google.protobuf.Timestamp
+	(*anypb.Any)(nil),             // 3: google.protobuf.Any
 }
 var file_pcas_events_v1_event_proto_depIdxs = []int32{
-	1, // 0: pcas.events.v1.Event.time:type_name -> google.protobuf.Timestamp
-	2, // 1: pcas.events.v1.Event.data:type_name -> google.protobuf.Any
+	2, // 0: pcas.events.v1.Event.time:type_name -> google.protobuf.Timestamp
+	3, // 1: pcas.events.v1.Event.data:type_name -> google.protobuf.Any
 	2, // [2:2] is the sub-list for method output_type
 	2, // [2:2] is the sub-list for method input_type
 	2, // [2:2] is the sub-list for extension type_name
@@ -260,7 +320,7 @@ func file_pcas_events_v1_event_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_pcas_events_v1_event_proto_rawDesc), len(file_pcas_events_v1_event_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   1,
+			NumMessages:   2,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

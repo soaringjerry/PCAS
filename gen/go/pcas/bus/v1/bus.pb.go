@@ -111,7 +111,9 @@ type SearchRequest struct {
 	// The natural language query text
 	QueryText string `protobuf:"bytes,1,opt,name=query_text,json=queryText,proto3" json:"query_text,omitempty"`
 	// Number of top results to return (default: 5)
-	TopK          int32 `protobuf:"varint,2,opt,name=top_k,json=topK,proto3" json:"top_k,omitempty"`
+	TopK int32 `protobuf:"varint,2,opt,name=top_k,json=topK,proto3" json:"top_k,omitempty"`
+	// Optional user ID to filter results by
+	UserId        string `protobuf:"bytes,3,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -158,6 +160,13 @@ func (x *SearchRequest) GetTopK() int32 {
 		return x.TopK
 	}
 	return 0
+}
+
+func (x *SearchRequest) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
 }
 
 // SearchResponse is the response from semantic search
@@ -222,11 +231,12 @@ const file_pcas_bus_v1_bus_proto_rawDesc = "" +
 	"\x15pcas/bus/v1/bus.proto\x12\vpcas.bus.v1\x1a\x1apcas/events/v1/event.proto\"\x11\n" +
 	"\x0fPublishResponse\"/\n" +
 	"\x10SubscribeRequest\x12\x1b\n" +
-	"\tclient_id\x18\x01 \x01(\tR\bclientId\"C\n" +
+	"\tclient_id\x18\x01 \x01(\tR\bclientId\"\\\n" +
 	"\rSearchRequest\x12\x1d\n" +
 	"\n" +
 	"query_text\x18\x01 \x01(\tR\tqueryText\x12\x13\n" +
-	"\x05top_k\x18\x02 \x01(\x05R\x04topK\"W\n" +
+	"\x05top_k\x18\x02 \x01(\x05R\x04topK\x12\x17\n" +
+	"\auser_id\x18\x03 \x01(\tR\x06userId\"W\n" +
 	"\x0eSearchResponse\x12-\n" +
 	"\x06events\x18\x01 \x03(\v2\x15.pcas.events.v1.EventR\x06events\x12\x16\n" +
 	"\x06scores\x18\x02 \x03(\x02R\x06scores2\xd9\x01\n" +

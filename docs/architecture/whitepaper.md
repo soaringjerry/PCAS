@@ -1,3 +1,10 @@
+---
+title: "The PCAS Whitepaper: A New Foundation for Personal AI"
+description: "An in-depth whitepaper detailing the philosophy, architecture, risk mitigation, and roadmap of the PCAS project, a local-first intelligent decision-making engine."
+tags: ["whitepaper", "architecture", "vision", "roadmap", "ai"]
+version: "0.1.2"
+---
+
 # The PCAS Whitepaper: A New Foundation for Personal AI
 
 ## Abstract (Executive Summary)

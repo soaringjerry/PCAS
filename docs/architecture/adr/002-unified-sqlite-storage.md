@@ -1,10 +1,19 @@
-# ADR 002: 统一的、零依赖的 SQLite 存储后端 (v4 - Final Locked)
+---
+title: "ADR 002: Unified, Zero-Dependency SQLite Storage Backend"
+description: "Architectural Decision Record for implementing a zero-dependency, pure Go SQLite-based default storage backend for PCAS, including integrated vector search capabilities."
+tags: ["adr", "architecture", "storage", "sqlite", "go"]
+status: "Approved"
+date: "2025-06-28"
+version: "0.1.2"
+---
 
-**状态**: 已批准
-**日期**: 2025-06-28
-**决策者**: Roo (Architect), o3 (Planner)
+# ADR 002: Unified, Zero-Dependency SQLite Storage Backend (v4 - Final Locked)
 
-## 1. 上下文
+**Status**: Approved
+**Date**: 2025-06-28
+**Decision Makers**: Roo (Architect), o3 (Planner)
+
+## 1. Context
 
 为了解决 PCAS 对 Docker 的依赖问题，并统一所有平台的用户体验，我们决定实现一个零依赖的、基于纯 Go SQLite 的默认存储后端。本 ADR v4 版本在采纳了所有评审意见后，形成了最终的工程实施方案。
 

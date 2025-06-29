@@ -1,10 +1,19 @@
-# ADR 001: 混合记忆、个性化与主动智能框架
+---
+title: "ADR 001: Hybrid Memory, Personalization, and Proactive Intelligence Framework"
+description: "Architectural Decision Record for designing and implementing a unified framework for long-term personalization (Persona), short-term context (Session), and proactive intelligence (Proactive Triggers) in PCAS."
+tags: ["adr", "architecture", "memory", "personalization", "ai"]
+status: "Proposed"
+date: "2025-06-26"
+version: "0.1.2"
+---
 
-**状态**: 已提议
-**日期**: 2025-06-26
-**决策者**: Roo (Architect), o3 (Planner)
+# ADR 001: Hybrid Memory, Personalization, and Proactive Intelligence Framework
 
-## 上下文
+**Status**: Proposed
+**Date**: 2025-06-26
+**Decision Makers**: Roo (Architect), o3 (Planner)
+
+## Context
 
 PCAS 当前拥有基于向量的 RAG（检索增强生成）能力，但缺乏利用结构化元数据进行精确过滤的能力。为了支撑更高级的 DApp 场景，如个性化对话和主动提醒，我们需要一个能够结合语义相似度和精确元数据过滤的“混合记忆”系统。
 

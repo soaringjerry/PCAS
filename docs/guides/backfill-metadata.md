@@ -1,3 +1,10 @@
+---
+title: "Metadata Backfill Tool"
+description: "A utility for retroactively adding metadata to existing vector embeddings in the PostgreSQL database."
+tags: ["tool", "metadata", "backfill", "postgresql", "guide"]
+version: "0.1.2"
+---
+
 # Metadata Backfill Tool
 
 ## Overview

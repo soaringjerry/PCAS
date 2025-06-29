@@ -1,6 +1,13 @@
-# PCAS 最终架构蓝图 (v-Ultimate)
+---
+title: "PCAS Architecture Overview"
+description: "The final technical blueprint for the PCAS (Personal Central AI System) project, guiding its future development within the broader DreamHub vision."
+tags: ["architecture", "design", "overview", "roadmap"]
+version: "0.1.2"
+---
 
-**文档说明:** 本文档是 **PCAS (Personal Central AI System)** 项目的最终技术蓝图。它旨在成为指导PCAS引擎及其生态未来多年发展的核心纲领。PCAS是更宏大的 **DreamHub** 愿景的核心技术实现。
+# PCAS Architecture Overview
+
+**Document Note:** This document is the final technical blueprint for the **PCAS (Personal Central AI System)** project. It aims to be the core guideline for the future development of the PCAS engine and its ecosystem for years to come. PCAS is the core technical implementation of the broader **DreamHub** vision.
 
 ---
 

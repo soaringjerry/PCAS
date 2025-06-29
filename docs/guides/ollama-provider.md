@@ -1,3 +1,10 @@
+---
+title: "Ollama Provider Documentation"
+description: "Documentation for the Ollama provider, enabling PCAS to use locally-hosted Large Language Models (LLMs) with complete data privacy."
+tags: ["provider", "ollama", "llm", "guide"]
+version: "0.1.2"
+---
+
 # Ollama Provider Documentation
 
 The Ollama provider enables PCAS to use locally-hosted Large Language Models (LLMs) through the Ollama API, ensuring complete data privacy and eliminating cloud dependencies.

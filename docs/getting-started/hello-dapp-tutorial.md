@@ -1,3 +1,10 @@
+---
+title: "Hello D-App Tutorial"
+description: "Learn how to build your first Decentralized Application (D-App) that connects to PCAS and receives real-time events."
+tags: ["tutorial", "dapp", "getting-started", "go"]
+version: "0.1.2"
+---
+
 # Hello D-App Tutorial
 
 Welcome to the PCAS ecosystem! This tutorial will guide you through building your first D-App (Decentralized Application) that connects to PCAS and receives events in real-time.

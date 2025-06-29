@@ -1,3 +1,10 @@
+---
+title: "End-to-End Testing"
+description: "This document describes the end-to-end (E2E) testing strategy for PCAS, focusing on quick start validation and CI integration."
+tags: ["testing", "e2e", "ci", "guide"]
+version: "0.1.2"
+---
+
 # End-to-End Testing
 
 This document describes the end-to-end (E2E) testing strategy for PCAS.

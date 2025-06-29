@@ -1,3 +1,10 @@
+---
+title: "Docker Development Setup"
+description: "A guide to quickly set up a development environment for PCAS using Docker Compose."
+tags: ["development", "docker", "setup", "guide"]
+version: "0.1.2"
+---
+
 # Docker Development Setup
 
 This guide explains how to use Docker Compose to quickly set up a development environment for PCAS.

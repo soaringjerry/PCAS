@@ -21,6 +21,7 @@ rules:
       event_type: "pcas.user.prompt.v1"
     then:
       provider: openai-gpt4
+      prompt_template: "As a helpful AI assistant integrated with PCAS, please respond to the following user prompt: {{.text}}"
       
   - name: "Rule for D-App events"
     if:
@@ -67,3 +68,34 @@ rules:
       event_type: "pcas.chat.completion.v1"
     then:
       provider: "openai-gpt4"
+  
+  - name: "Rule for translation requests with custom prompt"
+    if:
+      event_type: "pcas.translate.v1"
+    then:
+      provider: openai-gpt4
+      prompt_template: |
+        You are a professional translator. Please translate the following text from {{.source_language}} to {{.target_language}}.
+        Maintain the original tone and style as much as possible.
+        
+        Text to translate: {{.text}}
+  
+  - name: "Rule for code review with specialized prompt"
+    if:
+      event_type: "pcas.code.review.v1"
+    then:
+      provider: openai-gpt4
+      prompt_template: |
+        As an experienced software engineer, please review the following code:
+        
+        Language: {{.language}}
+        Code:
+        ```{{.language}}
+        {{.code}}
+        ```
+        
+        Please provide feedback on:
+        1. Code quality and best practices
+        2. Potential bugs or issues
+        3. Performance considerations
+        4. Suggestions for improvement

@@ -112,7 +112,7 @@ func TestSelectProvider_AnyOf(t *testing.T) {
 	// 执行测试
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			provider := engine.SelectProvider(tc.event)
+			provider, _ := engine.SelectProvider(tc.event)
 			
 			// 检查返回的 provider
 			if tc.expectError && provider != "" {

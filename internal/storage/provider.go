@@ -34,11 +34,12 @@ type Storage interface {
 
 // Filter represents query filter parameters for advanced queries
 type Filter struct {
-	UserID      *string    // Filter by user ID (nil means no filter)
-	SessionID   *string    // Filter by session ID (nil means no filter)
-	EventTypes  []string   // Filter by event types (empty slice means no filter)
-	TimeFrom    *time.Time // Filter events after this time (nil means no filter)
-	TimeTo      *time.Time // Filter events before this time (nil means no filter)
+	UserID           *string           // Filter by user ID (nil means no filter)
+	SessionID        *string           // Filter by session ID (nil means no filter)
+	EventTypes       []string          // Filter by event types (empty slice means no filter)
+	TimeFrom         *time.Time        // Filter events after this time (nil means no filter)
+	TimeTo           *time.Time        // Filter events before this time (nil means no filter)
+	AttributeFilters map[string]string // Filter by event attributes with exact match (AND logic)
 }
 
 // QueryResult represents a single result from a vector similarity query

@@ -214,6 +214,20 @@ func (s *Server) Search(ctx context.Context, req *busv1.SearchRequest) (*busv1.S
 		log.Printf("Applying user filter: %s", req.UserId)
 	}
 	
+	// Add attribute filters if provided
+	if len(req.AttributeFilters) > 0 {
+		// Initialize filter if it's nil
+		if filter == nil {
+			filter = &storage.Filter{}
+		}
+		
+		// Assign attribute filters
+		filter.AttributeFilters = req.AttributeFilters
+		
+		// Log the attribute filters being applied
+		log.Printf("Applying attribute filters: %v", req.AttributeFilters)
+	}
+	
 	// Query similar events from storage
 	log.Printf("Searching for top %d similar events", req.TopK)
 	eventIDs, err := s.storage.QuerySimilar(ctx, queryEmbedding, int(req.TopK), filter)

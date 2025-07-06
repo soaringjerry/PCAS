@@ -8,18 +8,22 @@ permissions:
   packages: write
 
 jobs:
-  pre-build:
-    uses: ./.github/workflows/generate-code.yml
-
   build:
     runs-on: ubuntu-latest
-    needs: pre-build
     steps:
       - uses: actions/checkout@v4
-
+      
+      - uses: bufbuild/buf-setup-action@v1
+      
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+      
+      - name: Install protoc-gen-doc
+        run: go install github.com/pseudomuto/protoc-gen-doc/cmd/protoc-gen-doc@v1.5.1
+      
+      - name: Generate protobuf code
+        run: make proto
       - run: make test
 
       # Docker 镜像（仅 push 到临时 tag SHA）

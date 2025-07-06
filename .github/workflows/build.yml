@@ -13,11 +13,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
-      - uses: bufbuild/buf-setup-action@v1
-      
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+      
+      - uses: bufbuild/buf-setup-action@v1
       
       - name: Install protoc-gen-doc
         run: go install github.com/pseudomuto/protoc-gen-doc/cmd/protoc-gen-doc@v1.5.1

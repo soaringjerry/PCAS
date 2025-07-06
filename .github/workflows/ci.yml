@@ -11,6 +11,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      
       - uses: bufbuild/buf-setup-action@v1
       
       - name: Install protoc-gen-doc
@@ -22,10 +26,6 @@ jobs:
       - name: Check for breaking changes in protobuf
         run: buf breaking --against '.git#branch=main'
         continue-on-error: true # Temporarily allow failure
-
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
           
       - name: Sync vendor directory
         run: go mod vendor

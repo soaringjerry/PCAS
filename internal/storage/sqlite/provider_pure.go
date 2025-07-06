@@ -818,6 +818,17 @@ func (p *Provider) findFilteredEventIDs(ctx context.Context, filter *storage.Fil
 		args = append(args, filter.TimeTo.Format(time.RFC3339))
 	}
 	
+	// Handle attribute filters
+	if len(filter.AttributeFilters) > 0 {
+		for key, value := range filter.AttributeFilters {
+			// Use json_extract to query nested attributes in the content JSON
+			// The key might contain dots for nested attributes (e.g., "course.id")
+			jsonPath := fmt.Sprintf("$.attributes.\"%s\"", key)
+			whereConditions = append(whereConditions, fmt.Sprintf("json_extract(content, '%s') = ?", jsonPath))
+			args = append(args, value)
+		}
+	}
+	
 	// Build query
 	query := "SELECT id FROM nodes WHERE type = 'event'"
 	if len(whereConditions) > 0 {

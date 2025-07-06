@@ -38,7 +38,8 @@ type Condition struct {
 
 // Action represents the action part of a rule
 type Action struct {
-	Provider string `yaml:"provider"`
+	Provider       string `yaml:"provider"`
+	PromptTemplate string `yaml:"prompt_template,omitempty"`
 }
 
 // Engine is the policy evaluation engine
@@ -69,23 +70,47 @@ func LoadPolicy(path string) (*Policy, error) {
 }
 
 // SelectProvider selects a provider based on the event type
-func (e *Engine) SelectProvider(event *eventsv1.Event) string {
+func (e *Engine) SelectProvider(event *eventsv1.Event) (string, string) {
 	for _, rule := range e.policy.Rules {
 		// Step 1: Check direct event_type match (backward compatibility)
 		if rule.If.EventType != "" && rule.If.EventType == event.Type {
-			return rule.Then.Provider
+			return rule.Then.Provider, rule.Then.PromptTemplate
 		}
 		
 		// Step 2: Check any_of conditions
 		if len(rule.If.AnyOf) > 0 {
 			for _, condition := range rule.If.AnyOf {
 				if condition.EventType == event.Type {
-					return rule.Then.Provider
+					return rule.Then.Provider, rule.Then.PromptTemplate
 				}
 			}
 		}
 	}
 	
 	// Return empty string if no matching rule found
-	return ""
+	return "", ""
+}
+
+// SelectProviderForStream selects a provider for streaming based on the event type
+func (e *Engine) SelectProviderForStream(eventType string) (string, string) {
+	// For now, use the same logic as SelectProvider
+	// In the future, we might want to add specific streaming provider configuration
+	for _, rule := range e.policy.Rules {
+		// Step 1: Check direct event_type match (backward compatibility)
+		if rule.If.EventType != "" && rule.If.EventType == eventType {
+			return rule.Then.Provider, rule.Then.PromptTemplate
+		}
+		
+		// Step 2: Check any_of conditions
+		if len(rule.If.AnyOf) > 0 {
+			for _, condition := range rule.If.AnyOf {
+				if condition.EventType == eventType {
+					return rule.Then.Provider, rule.Then.PromptTemplate
+				}
+			}
+		}
+	}
+	
+	// Return empty string if no matching rule found
+	return "", ""
 }

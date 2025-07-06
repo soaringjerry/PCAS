@@ -111,13 +111,16 @@ func (s *Server) Publish(ctx context.Context, event *eventsv1.Event) (*busv1.Pub
 	}
 	
 	// Use policy engine to select provider
-	providerName := s.policyEngine.SelectProvider(event)
+	providerName, promptTemplate := s.policyEngine.SelectProvider(event)
 	if providerName == "" {
 		log.Printf("No provider configured for event type: %s", event.Type)
 		return &busv1.PublishResponse{}, nil
 	}
 	
 	log.Printf("Selected provider: %s", providerName)
+	if promptTemplate != "" {
+		log.Printf("Using prompt template: %s", promptTemplate)
+	}
 	
 	// Get the provider instance
 	provider, exists := s.providers[providerName]

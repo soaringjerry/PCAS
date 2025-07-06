@@ -13,4 +13,4 @@ plugins:
     opt: paths=source_relative
   - name: doc
     out: docs/api-reference
-    opt: markdown,README.md
+    opt: markdown,pcas-api.md

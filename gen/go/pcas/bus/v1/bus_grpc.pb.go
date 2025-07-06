@@ -42,6 +42,18 @@ type EventBusServiceClient interface {
 	// The first request MUST be a StreamConfig message
 	// 提供双向流式通道，用于低延迟实时交互
 	// 首个请求必须是 StreamConfig 消息
+	//
+	// CALLER RESPONSIBILITY: The client (dApp) calling this method is REQUIRED to perform
+	// semantic segmentation of continuous user input into meaningful units (e.g., complete
+	// sentences, questions, or logical chunks) before sending each StreamData message.
+	//
+	// PCAS BEHAVIOR: PCAS will NOT perform sentence segmentation or semantic slicing on
+	// streaming data. Each StreamData message received is treated as an independent,
+	// complete processing unit. The AI provider will process each chunk as a standalone
+	// input without waiting for or combining with subsequent chunks.
+	//
+	// This design ensures predictable latency and allows clients to implement custom
+	// segmentation strategies appropriate for their specific use cases.
 	InteractStream(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[InteractRequest, InteractResponse], error)
 }
 
@@ -121,6 +133,18 @@ type EventBusServiceServer interface {
 	// The first request MUST be a StreamConfig message
 	// 提供双向流式通道，用于低延迟实时交互
 	// 首个请求必须是 StreamConfig 消息
+	//
+	// CALLER RESPONSIBILITY: The client (dApp) calling this method is REQUIRED to perform
+	// semantic segmentation of continuous user input into meaningful units (e.g., complete
+	// sentences, questions, or logical chunks) before sending each StreamData message.
+	//
+	// PCAS BEHAVIOR: PCAS will NOT perform sentence segmentation or semantic slicing on
+	// streaming data. Each StreamData message received is treated as an independent,
+	// complete processing unit. The AI provider will process each chunk as a standalone
+	// input without waiting for or combining with subsequent chunks.
+	//
+	// This design ensures predictable latency and allows clients to implement custom
+	// segmentation strategies appropriate for their specific use cases.
 	InteractStream(grpc.BidiStreamingServer[InteractRequest, InteractResponse]) error
 	mustEmbedUnimplementedEventBusServiceServer()
 }

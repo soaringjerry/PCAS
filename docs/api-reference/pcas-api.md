@@ -1,13 +1,6 @@
 # Protocol Documentation
 <a name="top"></a>
 
-This directory contains the API reference documentation for PCAS protocol buffers.
-
-## Available Documentation
-
-- [Event API](./README.md#pcas_events_v1_event-proto) - Core event structure and CloudEvents compatibility
-- [Bus API](./bus-api.md) - Event bus service including the InteractStream RPC
-
 ## Table of Contents
 
 - [pcas/events/v1/event.proto](#pcas_events_v1_event-proto)

@@ -65,6 +65,11 @@ type Event struct {
 	// CorrelationID: 标识直接的"请求-响应"关系。
 	// 例如，响应事件的 correlation_id 应该等于触发它的原始事件的 id。
 	CorrelationId string `protobuf:"bytes,12,opt,name=correlation_id,json=correlationId,proto3" json:"correlation_id,omitempty"`
+	// Attributes: dApp 附加的自定义上下文键值对。
+	// 记忆和搜索模块可以使用这些属性进行精确检索。
+	// Custom context key-value pairs attached by dApps.
+	// Memory and search modules can use these attributes for precise retrieval.
+	Attributes map[string]string `protobuf:"bytes,13,rep,name=attributes,proto3" json:"attributes,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	// Data: 事件的载荷。
 	// `Any` 类型允许我们嵌入任何其他Protobuf消息，
 	// 这使得事件信封具有高度的可扩展性和类型安全性。
@@ -188,6 +193,13 @@ func (x *Event) GetCorrelationId() string {
 	return ""
 }
 
+func (x *Event) GetAttributes() map[string]string {
+	if x != nil {
+		return x.Attributes
+	}
+	return nil
+}
+
 func (x *Event) GetData() *anypb.Any {
 	if x != nil {
 		return x.Data
@@ -255,7 +267,7 @@ var File_pcas_events_v1_event_proto protoreflect.FileDescriptor
 
 const file_pcas_events_v1_event_proto_rawDesc = "" +
 	"\n" +
-	"\x1apcas/events/v1/event.proto\x12\x0epcas.events.v1\x1a\x19google/protobuf/any.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\xa3\x03\n" +
+	"\x1apcas/events/v1/event.proto\x12\x0epcas.events.v1\x1a\x19google/protobuf/any.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\xa9\x04\n" +
 	"\x05Event\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x16\n" +
 	"\x06source\x18\x02 \x01(\tR\x06source\x12 \n" +
@@ -272,8 +284,14 @@ const file_pcas_events_v1_event_proto_rawDesc = "" +
 	" \x01(\tR\x06userId\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\v \x01(\tR\tsessionId\x12%\n" +
-	"\x0ecorrelation_id\x18\f \x01(\tR\rcorrelationId\x12(\n" +
-	"\x04data\x18d \x01(\v2\x14.google.protobuf.AnyR\x04dataJ\x04\b\r\x10\x14\"]\n" +
+	"\x0ecorrelation_id\x18\f \x01(\tR\rcorrelationId\x12E\n" +
+	"\n" +
+	"attributes\x18\r \x03(\v2%.pcas.events.v1.Event.AttributesEntryR\n" +
+	"attributes\x12(\n" +
+	"\x04data\x18d \x01(\v2\x14.google.protobuf.AnyR\x04data\x1a=\n" +
+	"\x0fAttributesEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01J\x04\b\x0e\x10\x14\"]\n" +
 	"\x11EventVectorizedV1\x12*\n" +
 	"\x11original_event_id\x18\x01 \x01(\tR\x0foriginalEventId\x12\x1c\n" +
 	"\tembedding\x18\x02 \x03(\x02R\tembeddingB\xb7\x01\n" +
@@ -292,21 +310,23 @@ func file_pcas_events_v1_event_proto_rawDescGZIP() []byte {
 	return file_pcas_events_v1_event_proto_rawDescData
 }
 
-var file_pcas_events_v1_event_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
+var file_pcas_events_v1_event_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
 var file_pcas_events_v1_event_proto_goTypes = []any{
 	(*Event)(nil),                 // 0: pcas.events.v1.Event
 	(*EventVectorizedV1)(nil),     // 1: pcas.events.v1.EventVectorizedV1
-	(*timestamppb.Timestamp)(nil), // 2: google.protobuf.Timestamp
-	(*anypb.Any)(nil),             // 3: google.protobuf.Any
+	nil,                           // 2: pcas.events.v1.Event.AttributesEntry
+	(*timestamppb.Timestamp)(nil), // 3: google.protobuf.Timestamp
+	(*anypb.Any)(nil),             // 4: google.protobuf.Any
 }
 var file_pcas_events_v1_event_proto_depIdxs = []int32{
-	2, // 0: pcas.events.v1.Event.time:type_name -> google.protobuf.Timestamp
-	3, // 1: pcas.events.v1.Event.data:type_name -> google.protobuf.Any
-	2, // [2:2] is the sub-list for method output_type
-	2, // [2:2] is the sub-list for method input_type
-	2, // [2:2] is the sub-list for extension type_name
-	2, // [2:2] is the sub-list for extension extendee
-	0, // [0:2] is the sub-list for field type_name
+	3, // 0: pcas.events.v1.Event.time:type_name -> google.protobuf.Timestamp
+	2, // 1: pcas.events.v1.Event.attributes:type_name -> pcas.events.v1.Event.AttributesEntry
+	4, // 2: pcas.events.v1.Event.data:type_name -> google.protobuf.Any
+	3, // [3:3] is the sub-list for method output_type
+	3, // [3:3] is the sub-list for method input_type
+	3, // [3:3] is the sub-list for extension type_name
+	3, // [3:3] is the sub-list for extension extendee
+	0, // [0:3] is the sub-list for field type_name
 }
 
 func init() { file_pcas_events_v1_event_proto_init() }
@@ -320,7 +340,7 @@ func file_pcas_events_v1_event_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_pcas_events_v1_event_proto_rawDesc), len(file_pcas_events_v1_event_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   2,
+			NumMessages:   3,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

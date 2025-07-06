@@ -11,3 +11,6 @@ plugins:
   - plugin: buf.build/grpc/go
     out: gen/go
     opt: paths=source_relative
+  - name: doc
+    out: docs/api-reference
+    opt: markdown,README.md

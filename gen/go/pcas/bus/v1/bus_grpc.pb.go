@@ -20,9 +20,10 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	EventBusService_Publish_FullMethodName   = "/pcas.bus.v1.EventBusService/Publish"
-	EventBusService_Subscribe_FullMethodName = "/pcas.bus.v1.EventBusService/Subscribe"
-	EventBusService_Search_FullMethodName    = "/pcas.bus.v1.EventBusService/Search"
+	EventBusService_Publish_FullMethodName        = "/pcas.bus.v1.EventBusService/Publish"
+	EventBusService_Subscribe_FullMethodName      = "/pcas.bus.v1.EventBusService/Subscribe"
+	EventBusService_Search_FullMethodName         = "/pcas.bus.v1.EventBusService/Search"
+	EventBusService_InteractStream_FullMethodName = "/pcas.bus.v1.EventBusService/InteractStream"
 )
 
 // EventBusServiceClient is the client API for EventBusService service.
@@ -37,6 +38,11 @@ type EventBusServiceClient interface {
 	Subscribe(ctx context.Context, in *SubscribeRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[v1.Event], error)
 	// Search performs semantic search on stored events
 	Search(ctx context.Context, in *SearchRequest, opts ...grpc.CallOption) (*SearchResponse, error)
+	// InteractStream provides bidirectional streaming for low-latency real-time interactions
+	// The first request MUST be a StreamConfig message
+	// 提供双向流式通道，用于低延迟实时交互
+	// 首个请求必须是 StreamConfig 消息
+	InteractStream(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[InteractRequest, InteractResponse], error)
 }
 
 type eventBusServiceClient struct {
@@ -86,6 +92,19 @@ func (c *eventBusServiceClient) Search(ctx context.Context, in *SearchRequest, o
 	return out, nil
 }
 
+func (c *eventBusServiceClient) InteractStream(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[InteractRequest, InteractResponse], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &EventBusService_ServiceDesc.Streams[1], EventBusService_InteractStream_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[InteractRequest, InteractResponse]{ClientStream: stream}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type EventBusService_InteractStreamClient = grpc.BidiStreamingClient[InteractRequest, InteractResponse]
+
 // EventBusServiceServer is the server API for EventBusService service.
 // All implementations must embed UnimplementedEventBusServiceServer
 // for forward compatibility.
@@ -98,6 +117,11 @@ type EventBusServiceServer interface {
 	Subscribe(*SubscribeRequest, grpc.ServerStreamingServer[v1.Event]) error
 	// Search performs semantic search on stored events
 	Search(context.Context, *SearchRequest) (*SearchResponse, error)
+	// InteractStream provides bidirectional streaming for low-latency real-time interactions
+	// The first request MUST be a StreamConfig message
+	// 提供双向流式通道，用于低延迟实时交互
+	// 首个请求必须是 StreamConfig 消息
+	InteractStream(grpc.BidiStreamingServer[InteractRequest, InteractResponse]) error
 	mustEmbedUnimplementedEventBusServiceServer()
 }
 
@@ -116,6 +140,9 @@ func (UnimplementedEventBusServiceServer) Subscribe(*SubscribeRequest, grpc.Serv
 }
 func (UnimplementedEventBusServiceServer) Search(context.Context, *SearchRequest) (*SearchResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Search not implemented")
+}
+func (UnimplementedEventBusServiceServer) InteractStream(grpc.BidiStreamingServer[InteractRequest, InteractResponse]) error {
+	return status.Errorf(codes.Unimplemented, "method InteractStream not implemented")
 }
 func (UnimplementedEventBusServiceServer) mustEmbedUnimplementedEventBusServiceServer() {}
 func (UnimplementedEventBusServiceServer) testEmbeddedByValue()                         {}
@@ -185,6 +212,13 @@ func _EventBusService_Search_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _EventBusService_InteractStream_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(EventBusServiceServer).InteractStream(&grpc.GenericServerStream[InteractRequest, InteractResponse]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type EventBusService_InteractStreamServer = grpc.BidiStreamingServer[InteractRequest, InteractResponse]
+
 // EventBusService_ServiceDesc is the grpc.ServiceDesc for EventBusService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -206,6 +240,12 @@ var EventBusService_ServiceDesc = grpc.ServiceDesc{
 			StreamName:    "Subscribe",
 			Handler:       _EventBusService_Subscribe_Handler,
 			ServerStreams: true,
+		},
+		{
+			StreamName:    "InteractStream",
+			Handler:       _EventBusService_InteractStream_Handler,
+			ServerStreams: true,
+			ClientStreams: true,
 		},
 	},
 	Metadata: "pcas/bus/v1/bus.proto",

@@ -64,9 +64,15 @@ message Event {
   // 例如，响应事件的 correlation_id 应该等于触发它的原始事件的 id。
   string correlation_id = 12;
 
+  // Attributes: dApp 附加的自定义上下文键值对。
+  // 记忆和搜索模块可以使用这些属性进行精确检索。
+  // Custom context key-value pairs attached by dApps. 
+  // Memory and search modules can use these attributes for precise retrieval.
+  map<string, string> attributes = 13;
+
   // 注意: 核心扩展属性区域为 20-99，载荷从 100 开始。
-  // reserved 13–19 for backward compatibility
-  reserved 13 to 19;
+  // reserved 14–19 for backward compatibility
+  reserved 14 to 19; // field 13 used by 'attributes'
 
   // ---- 载荷 (Payload) ----
 

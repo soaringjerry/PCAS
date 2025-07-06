@@ -113,9 +113,12 @@ type SearchRequest struct {
 	// Number of top results to return (default: 5)
 	TopK int32 `protobuf:"varint,2,opt,name=top_k,json=topK,proto3" json:"top_k,omitempty"`
 	// Optional user ID to filter results by
-	UserId        string `protobuf:"bytes,3,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	UserId string `protobuf:"bytes,3,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	// Attribute filters for metadata pre-filtering (AND logic)
+	// 用于元数据预过滤的属性过滤器（AND逻辑）
+	AttributeFilters map[string]string `protobuf:"bytes,4,rep,name=attribute_filters,json=attributeFilters,proto3" json:"attribute_filters,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *SearchRequest) Reset() {
@@ -167,6 +170,13 @@ func (x *SearchRequest) GetUserId() string {
 		return x.UserId
 	}
 	return ""
+}
+
+func (x *SearchRequest) GetAttributeFilters() map[string]string {
+	if x != nil {
+		return x.AttributeFilters
+	}
+	return nil
 }
 
 // SearchResponse is the response from semantic search
@@ -224,6 +234,471 @@ func (x *SearchResponse) GetScores() []float32 {
 	return nil
 }
 
+// InteractRequest represents a client request in the bidirectional stream.
+type InteractRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Types that are valid to be assigned to RequestType:
+	//
+	//	*InteractRequest_Config
+	//	*InteractRequest_Data
+	//	*InteractRequest_ClientEnd
+	RequestType   isInteractRequest_RequestType `protobuf_oneof:"request_type"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *InteractRequest) Reset() {
+	*x = InteractRequest{}
+	mi := &file_pcas_bus_v1_bus_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *InteractRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*InteractRequest) ProtoMessage() {}
+
+func (x *InteractRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_pcas_bus_v1_bus_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use InteractRequest.ProtoReflect.Descriptor instead.
+func (*InteractRequest) Descriptor() ([]byte, []int) {
+	return file_pcas_bus_v1_bus_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *InteractRequest) GetRequestType() isInteractRequest_RequestType {
+	if x != nil {
+		return x.RequestType
+	}
+	return nil
+}
+
+func (x *InteractRequest) GetConfig() *StreamConfig {
+	if x != nil {
+		if x, ok := x.RequestType.(*InteractRequest_Config); ok {
+			return x.Config
+		}
+	}
+	return nil
+}
+
+func (x *InteractRequest) GetData() *StreamData {
+	if x != nil {
+		if x, ok := x.RequestType.(*InteractRequest_Data); ok {
+			return x.Data
+		}
+	}
+	return nil
+}
+
+func (x *InteractRequest) GetClientEnd() *StreamEnd {
+	if x != nil {
+		if x, ok := x.RequestType.(*InteractRequest_ClientEnd); ok {
+			return x.ClientEnd
+		}
+	}
+	return nil
+}
+
+type isInteractRequest_RequestType interface {
+	isInteractRequest_RequestType()
+}
+
+type InteractRequest_Config struct {
+	// The first message sent by the client to configure the stream.
+	Config *StreamConfig `protobuf:"bytes,1,opt,name=config,proto3,oneof"`
+}
+
+type InteractRequest_Data struct {
+	// Subsequent messages containing data chunks.
+	Data *StreamData `protobuf:"bytes,2,opt,name=data,proto3,oneof"`
+}
+
+type InteractRequest_ClientEnd struct {
+	// Explicit end signal from the client, indicating no more data will be sent.
+	ClientEnd *StreamEnd `protobuf:"bytes,3,opt,name=client_end,json=clientEnd,proto3,oneof"`
+}
+
+func (*InteractRequest_Config) isInteractRequest_RequestType() {}
+
+func (*InteractRequest_Data) isInteractRequest_RequestType() {}
+
+func (*InteractRequest_ClientEnd) isInteractRequest_RequestType() {}
+
+// InteractResponse represents a server response in the bidirectional stream.
+type InteractResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Types that are valid to be assigned to ResponseType:
+	//
+	//	*InteractResponse_Ready
+	//	*InteractResponse_Data
+	//	*InteractResponse_Error
+	//	*InteractResponse_ServerEnd
+	ResponseType  isInteractResponse_ResponseType `protobuf_oneof:"response_type"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *InteractResponse) Reset() {
+	*x = InteractResponse{}
+	mi := &file_pcas_bus_v1_bus_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *InteractResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*InteractResponse) ProtoMessage() {}
+
+func (x *InteractResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_pcas_bus_v1_bus_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use InteractResponse.ProtoReflect.Descriptor instead.
+func (*InteractResponse) Descriptor() ([]byte, []int) {
+	return file_pcas_bus_v1_bus_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *InteractResponse) GetResponseType() isInteractResponse_ResponseType {
+	if x != nil {
+		return x.ResponseType
+	}
+	return nil
+}
+
+func (x *InteractResponse) GetReady() *StreamReady {
+	if x != nil {
+		if x, ok := x.ResponseType.(*InteractResponse_Ready); ok {
+			return x.Ready
+		}
+	}
+	return nil
+}
+
+func (x *InteractResponse) GetData() *StreamData {
+	if x != nil {
+		if x, ok := x.ResponseType.(*InteractResponse_Data); ok {
+			return x.Data
+		}
+	}
+	return nil
+}
+
+func (x *InteractResponse) GetError() *StreamError {
+	if x != nil {
+		if x, ok := x.ResponseType.(*InteractResponse_Error); ok {
+			return x.Error
+		}
+	}
+	return nil
+}
+
+func (x *InteractResponse) GetServerEnd() *StreamEnd {
+	if x != nil {
+		if x, ok := x.ResponseType.(*InteractResponse_ServerEnd); ok {
+			return x.ServerEnd
+		}
+	}
+	return nil
+}
+
+type isInteractResponse_ResponseType interface {
+	isInteractResponse_ResponseType()
+}
+
+type InteractResponse_Ready struct {
+	// A message indicating the stream is ready and configured.
+	Ready *StreamReady `protobuf:"bytes,1,opt,name=ready,proto3,oneof"`
+}
+
+type InteractResponse_Data struct {
+	// Subsequent messages containing data chunks.
+	Data *StreamData `protobuf:"bytes,2,opt,name=data,proto3,oneof"`
+}
+
+type InteractResponse_Error struct {
+	// An error message if something goes wrong during the stream.
+	Error *StreamError `protobuf:"bytes,3,opt,name=error,proto3,oneof"`
+}
+
+type InteractResponse_ServerEnd struct {
+	// Explicit end signal from the server, indicating no more data will be sent.
+	ServerEnd *StreamEnd `protobuf:"bytes,4,opt,name=server_end,json=serverEnd,proto3,oneof"`
+}
+
+func (*InteractResponse_Ready) isInteractResponse_ResponseType() {}
+
+func (*InteractResponse_Data) isInteractResponse_ResponseType() {}
+
+func (*InteractResponse_Error) isInteractResponse_ResponseType() {}
+
+func (*InteractResponse_ServerEnd) isInteractResponse_ResponseType() {}
+
+// StreamConfig defines the initial configuration for an interaction stream.
+// Its primary purpose is to declare the intent of the stream via an event type,
+// which is used by the Policy Engine for routing.
+type StreamConfig struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The event type that defines this interaction, e.g., "dapp.aipen.translate.stream.v1".
+	// This is the key for routing the entire stream to the correct provider.
+	EventType string `protobuf:"bytes,1,opt,name=event_type,json=eventType,proto3" json:"event_type,omitempty"`
+	// Optional, additional attributes for the stream's context.
+	Attributes    map[string]string `protobuf:"bytes,2,rep,name=attributes,proto3" json:"attributes,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StreamConfig) Reset() {
+	*x = StreamConfig{}
+	mi := &file_pcas_bus_v1_bus_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StreamConfig) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StreamConfig) ProtoMessage() {}
+
+func (x *StreamConfig) ProtoReflect() protoreflect.Message {
+	mi := &file_pcas_bus_v1_bus_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StreamConfig.ProtoReflect.Descriptor instead.
+func (*StreamConfig) Descriptor() ([]byte, []int) {
+	return file_pcas_bus_v1_bus_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *StreamConfig) GetEventType() string {
+	if x != nil {
+		return x.EventType
+	}
+	return ""
+}
+
+func (x *StreamConfig) GetAttributes() map[string]string {
+	if x != nil {
+		return x.Attributes
+	}
+	return nil
+}
+
+// StreamData carries the actual payload in the stream.
+type StreamData struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The raw data content.
+	Content       []byte `protobuf:"bytes,1,opt,name=content,proto3" json:"content,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StreamData) Reset() {
+	*x = StreamData{}
+	mi := &file_pcas_bus_v1_bus_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StreamData) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StreamData) ProtoMessage() {}
+
+func (x *StreamData) ProtoReflect() protoreflect.Message {
+	mi := &file_pcas_bus_v1_bus_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StreamData.ProtoReflect.Descriptor instead.
+func (*StreamData) Descriptor() ([]byte, []int) {
+	return file_pcas_bus_v1_bus_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *StreamData) GetContent() []byte {
+	if x != nil {
+		return x.Content
+	}
+	return nil
+}
+
+// StreamReady indicates the server has successfully configured the stream
+// and is ready to process data.
+type StreamReady struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// A unique ID assigned by the server to this interaction stream.
+	StreamId      string `protobuf:"bytes,1,opt,name=stream_id,json=streamId,proto3" json:"stream_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StreamReady) Reset() {
+	*x = StreamReady{}
+	mi := &file_pcas_bus_v1_bus_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StreamReady) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StreamReady) ProtoMessage() {}
+
+func (x *StreamReady) ProtoReflect() protoreflect.Message {
+	mi := &file_pcas_bus_v1_bus_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StreamReady.ProtoReflect.Descriptor instead.
+func (*StreamReady) Descriptor() ([]byte, []int) {
+	return file_pcas_bus_v1_bus_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *StreamReady) GetStreamId() string {
+	if x != nil {
+		return x.StreamId
+	}
+	return ""
+}
+
+// StreamError represents a terminal error that occurred during the stream.
+type StreamError struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// A status code for the error.
+	Code int32 `protobuf:"varint,1,opt,name=code,proto3" json:"code,omitempty"`
+	// A human-readable error message.
+	Message       string `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StreamError) Reset() {
+	*x = StreamError{}
+	mi := &file_pcas_bus_v1_bus_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StreamError) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StreamError) ProtoMessage() {}
+
+func (x *StreamError) ProtoReflect() protoreflect.Message {
+	mi := &file_pcas_bus_v1_bus_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StreamError.ProtoReflect.Descriptor instead.
+func (*StreamError) Descriptor() ([]byte, []int) {
+	return file_pcas_bus_v1_bus_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *StreamError) GetCode() int32 {
+	if x != nil {
+		return x.Code
+	}
+	return 0
+}
+
+func (x *StreamError) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
+// StreamEnd is an empty message that signals the graceful end of one
+// direction of the stream.
+type StreamEnd struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StreamEnd) Reset() {
+	*x = StreamEnd{}
+	mi := &file_pcas_bus_v1_bus_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StreamEnd) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StreamEnd) ProtoMessage() {}
+
+func (x *StreamEnd) ProtoReflect() protoreflect.Message {
+	mi := &file_pcas_bus_v1_bus_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StreamEnd.ProtoReflect.Descriptor instead.
+func (*StreamEnd) Descriptor() ([]byte, []int) {
+	return file_pcas_bus_v1_bus_proto_rawDescGZIP(), []int{10}
+}
+
 var File_pcas_bus_v1_bus_proto protoreflect.FileDescriptor
 
 const file_pcas_bus_v1_bus_proto_rawDesc = "" +
@@ -231,19 +706,55 @@ const file_pcas_bus_v1_bus_proto_rawDesc = "" +
 	"\x15pcas/bus/v1/bus.proto\x12\vpcas.bus.v1\x1a\x1apcas/events/v1/event.proto\"\x11\n" +
 	"\x0fPublishResponse\"/\n" +
 	"\x10SubscribeRequest\x12\x1b\n" +
-	"\tclient_id\x18\x01 \x01(\tR\bclientId\"\\\n" +
+	"\tclient_id\x18\x01 \x01(\tR\bclientId\"\x80\x02\n" +
 	"\rSearchRequest\x12\x1d\n" +
 	"\n" +
 	"query_text\x18\x01 \x01(\tR\tqueryText\x12\x13\n" +
 	"\x05top_k\x18\x02 \x01(\x05R\x04topK\x12\x17\n" +
-	"\auser_id\x18\x03 \x01(\tR\x06userId\"W\n" +
+	"\auser_id\x18\x03 \x01(\tR\x06userId\x12]\n" +
+	"\x11attribute_filters\x18\x04 \x03(\v20.pcas.bus.v1.SearchRequest.AttributeFiltersEntryR\x10attributeFilters\x1aC\n" +
+	"\x15AttributeFiltersEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"W\n" +
 	"\x0eSearchResponse\x12-\n" +
 	"\x06events\x18\x01 \x03(\v2\x15.pcas.events.v1.EventR\x06events\x12\x16\n" +
-	"\x06scores\x18\x02 \x03(\x02R\x06scores2\xd9\x01\n" +
+	"\x06scores\x18\x02 \x03(\x02R\x06scores\"\xbe\x01\n" +
+	"\x0fInteractRequest\x123\n" +
+	"\x06config\x18\x01 \x01(\v2\x19.pcas.bus.v1.StreamConfigH\x00R\x06config\x12-\n" +
+	"\x04data\x18\x02 \x01(\v2\x17.pcas.bus.v1.StreamDataH\x00R\x04data\x127\n" +
+	"\n" +
+	"client_end\x18\x03 \x01(\v2\x16.pcas.bus.v1.StreamEndH\x00R\tclientEndB\x0e\n" +
+	"\frequest_type\"\xef\x01\n" +
+	"\x10InteractResponse\x120\n" +
+	"\x05ready\x18\x01 \x01(\v2\x18.pcas.bus.v1.StreamReadyH\x00R\x05ready\x12-\n" +
+	"\x04data\x18\x02 \x01(\v2\x17.pcas.bus.v1.StreamDataH\x00R\x04data\x120\n" +
+	"\x05error\x18\x03 \x01(\v2\x18.pcas.bus.v1.StreamErrorH\x00R\x05error\x127\n" +
+	"\n" +
+	"server_end\x18\x04 \x01(\v2\x16.pcas.bus.v1.StreamEndH\x00R\tserverEndB\x0f\n" +
+	"\rresponse_type\"\xb7\x01\n" +
+	"\fStreamConfig\x12\x1d\n" +
+	"\n" +
+	"event_type\x18\x01 \x01(\tR\teventType\x12I\n" +
+	"\n" +
+	"attributes\x18\x02 \x03(\v2).pcas.bus.v1.StreamConfig.AttributesEntryR\n" +
+	"attributes\x1a=\n" +
+	"\x0fAttributesEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"&\n" +
+	"\n" +
+	"StreamData\x12\x18\n" +
+	"\acontent\x18\x01 \x01(\fR\acontent\"*\n" +
+	"\vStreamReady\x12\x1b\n" +
+	"\tstream_id\x18\x01 \x01(\tR\bstreamId\";\n" +
+	"\vStreamError\x12\x12\n" +
+	"\x04code\x18\x01 \x01(\x05R\x04code\x12\x18\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\"\v\n" +
+	"\tStreamEnd2\xac\x02\n" +
 	"\x0fEventBusService\x12>\n" +
 	"\aPublish\x12\x15.pcas.events.v1.Event\x1a\x1c.pcas.bus.v1.PublishResponse\x12C\n" +
 	"\tSubscribe\x12\x1d.pcas.bus.v1.SubscribeRequest\x1a\x15.pcas.events.v1.Event0\x01\x12A\n" +
-	"\x06Search\x12\x1a.pcas.bus.v1.SearchRequest\x1a\x1b.pcas.bus.v1.SearchResponseB\xa0\x01\n" +
+	"\x06Search\x12\x1a.pcas.bus.v1.SearchRequest\x1a\x1b.pcas.bus.v1.SearchResponse\x12Q\n" +
+	"\x0eInteractStream\x12\x1c.pcas.bus.v1.InteractRequest\x1a\x1d.pcas.bus.v1.InteractResponse(\x010\x01B\xa0\x01\n" +
 	"\x0fcom.pcas.bus.v1B\bBusProtoP\x01Z5github.com/soaringjerry/pcas/gen/go/pcas/bus/v1;busv1\xa2\x02\x03PBX\xaa\x02\vPcas.Bus.V1\xca\x02\vPcas\\Bus\\V1\xe2\x02\x17Pcas\\Bus\\V1\\GPBMetadata\xea\x02\rPcas::Bus::V1b\x06proto3"
 
 var (
@@ -258,27 +769,47 @@ func file_pcas_bus_v1_bus_proto_rawDescGZIP() []byte {
 	return file_pcas_bus_v1_bus_proto_rawDescData
 }
 
-var file_pcas_bus_v1_bus_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
+var file_pcas_bus_v1_bus_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
 var file_pcas_bus_v1_bus_proto_goTypes = []any{
 	(*PublishResponse)(nil),  // 0: pcas.bus.v1.PublishResponse
 	(*SubscribeRequest)(nil), // 1: pcas.bus.v1.SubscribeRequest
 	(*SearchRequest)(nil),    // 2: pcas.bus.v1.SearchRequest
 	(*SearchResponse)(nil),   // 3: pcas.bus.v1.SearchResponse
-	(*v1.Event)(nil),         // 4: pcas.events.v1.Event
+	(*InteractRequest)(nil),  // 4: pcas.bus.v1.InteractRequest
+	(*InteractResponse)(nil), // 5: pcas.bus.v1.InteractResponse
+	(*StreamConfig)(nil),     // 6: pcas.bus.v1.StreamConfig
+	(*StreamData)(nil),       // 7: pcas.bus.v1.StreamData
+	(*StreamReady)(nil),      // 8: pcas.bus.v1.StreamReady
+	(*StreamError)(nil),      // 9: pcas.bus.v1.StreamError
+	(*StreamEnd)(nil),        // 10: pcas.bus.v1.StreamEnd
+	nil,                      // 11: pcas.bus.v1.SearchRequest.AttributeFiltersEntry
+	nil,                      // 12: pcas.bus.v1.StreamConfig.AttributesEntry
+	(*v1.Event)(nil),         // 13: pcas.events.v1.Event
 }
 var file_pcas_bus_v1_bus_proto_depIdxs = []int32{
-	4, // 0: pcas.bus.v1.SearchResponse.events:type_name -> pcas.events.v1.Event
-	4, // 1: pcas.bus.v1.EventBusService.Publish:input_type -> pcas.events.v1.Event
-	1, // 2: pcas.bus.v1.EventBusService.Subscribe:input_type -> pcas.bus.v1.SubscribeRequest
-	2, // 3: pcas.bus.v1.EventBusService.Search:input_type -> pcas.bus.v1.SearchRequest
-	0, // 4: pcas.bus.v1.EventBusService.Publish:output_type -> pcas.bus.v1.PublishResponse
-	4, // 5: pcas.bus.v1.EventBusService.Subscribe:output_type -> pcas.events.v1.Event
-	3, // 6: pcas.bus.v1.EventBusService.Search:output_type -> pcas.bus.v1.SearchResponse
-	4, // [4:7] is the sub-list for method output_type
-	1, // [1:4] is the sub-list for method input_type
-	1, // [1:1] is the sub-list for extension type_name
-	1, // [1:1] is the sub-list for extension extendee
-	0, // [0:1] is the sub-list for field type_name
+	11, // 0: pcas.bus.v1.SearchRequest.attribute_filters:type_name -> pcas.bus.v1.SearchRequest.AttributeFiltersEntry
+	13, // 1: pcas.bus.v1.SearchResponse.events:type_name -> pcas.events.v1.Event
+	6,  // 2: pcas.bus.v1.InteractRequest.config:type_name -> pcas.bus.v1.StreamConfig
+	7,  // 3: pcas.bus.v1.InteractRequest.data:type_name -> pcas.bus.v1.StreamData
+	10, // 4: pcas.bus.v1.InteractRequest.client_end:type_name -> pcas.bus.v1.StreamEnd
+	8,  // 5: pcas.bus.v1.InteractResponse.ready:type_name -> pcas.bus.v1.StreamReady
+	7,  // 6: pcas.bus.v1.InteractResponse.data:type_name -> pcas.bus.v1.StreamData
+	9,  // 7: pcas.bus.v1.InteractResponse.error:type_name -> pcas.bus.v1.StreamError
+	10, // 8: pcas.bus.v1.InteractResponse.server_end:type_name -> pcas.bus.v1.StreamEnd
+	12, // 9: pcas.bus.v1.StreamConfig.attributes:type_name -> pcas.bus.v1.StreamConfig.AttributesEntry
+	13, // 10: pcas.bus.v1.EventBusService.Publish:input_type -> pcas.events.v1.Event
+	1,  // 11: pcas.bus.v1.EventBusService.Subscribe:input_type -> pcas.bus.v1.SubscribeRequest
+	2,  // 12: pcas.bus.v1.EventBusService.Search:input_type -> pcas.bus.v1.SearchRequest
+	4,  // 13: pcas.bus.v1.EventBusService.InteractStream:input_type -> pcas.bus.v1.InteractRequest
+	0,  // 14: pcas.bus.v1.EventBusService.Publish:output_type -> pcas.bus.v1.PublishResponse
+	13, // 15: pcas.bus.v1.EventBusService.Subscribe:output_type -> pcas.events.v1.Event
+	3,  // 16: pcas.bus.v1.EventBusService.Search:output_type -> pcas.bus.v1.SearchResponse
+	5,  // 17: pcas.bus.v1.EventBusService.InteractStream:output_type -> pcas.bus.v1.InteractResponse
+	14, // [14:18] is the sub-list for method output_type
+	10, // [10:14] is the sub-list for method input_type
+	10, // [10:10] is the sub-list for extension type_name
+	10, // [10:10] is the sub-list for extension extendee
+	0,  // [0:10] is the sub-list for field type_name
 }
 
 func init() { file_pcas_bus_v1_bus_proto_init() }
@@ -286,13 +817,24 @@ func file_pcas_bus_v1_bus_proto_init() {
 	if File_pcas_bus_v1_bus_proto != nil {
 		return
 	}
+	file_pcas_bus_v1_bus_proto_msgTypes[4].OneofWrappers = []any{
+		(*InteractRequest_Config)(nil),
+		(*InteractRequest_Data)(nil),
+		(*InteractRequest_ClientEnd)(nil),
+	}
+	file_pcas_bus_v1_bus_proto_msgTypes[5].OneofWrappers = []any{
+		(*InteractResponse_Ready)(nil),
+		(*InteractResponse_Data)(nil),
+		(*InteractResponse_Error)(nil),
+		(*InteractResponse_ServerEnd)(nil),
+	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_pcas_bus_v1_bus_proto_rawDesc), len(file_pcas_bus_v1_bus_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   4,
+			NumMessages:   13,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

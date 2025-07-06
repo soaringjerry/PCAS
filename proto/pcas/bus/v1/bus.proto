@@ -16,6 +16,12 @@ service EventBusService {
   
   // Search performs semantic search on stored events
   rpc Search(SearchRequest) returns (SearchResponse);
+  
+  // InteractStream provides bidirectional streaming for low-latency real-time interactions
+  // The first request MUST be a StreamConfig message
+  // 提供双向流式通道，用于低延迟实时交互
+  // 首个请求必须是 StreamConfig 消息
+  rpc InteractStream(stream InteractRequest) returns (stream InteractResponse);
 }
 
 // PublishResponse is the response from publishing an event
@@ -39,6 +45,10 @@ message SearchRequest {
   
   // Optional user ID to filter results by
   string user_id = 3;
+  
+  // Attribute filters for metadata pre-filtering (AND logic)
+  // 用于元数据预过滤的属性过滤器（AND逻辑）
+  map<string, string> attribute_filters = 4;
 }
 
 // SearchResponse is the response from semantic search
@@ -49,3 +59,65 @@ message SearchResponse {
   // Similarity scores corresponding to each event (0.0 to 1.0)
   repeated float scores = 2;
 }
+
+// InteractRequest represents a client request in the bidirectional stream.
+message InteractRequest {
+  oneof request_type {
+    // The first message sent by the client to configure the stream.
+    StreamConfig config = 1;
+    // Subsequent messages containing data chunks.
+    StreamData data = 2;
+    // Explicit end signal from the client, indicating no more data will be sent.
+    StreamEnd client_end = 3;
+  }
+}
+
+// InteractResponse represents a server response in the bidirectional stream.
+message InteractResponse {
+  oneof response_type {
+    // A message indicating the stream is ready and configured.
+    StreamReady ready = 1;
+    // Subsequent messages containing data chunks.
+    StreamData data = 2;
+    // An error message if something goes wrong during the stream.
+    StreamError error = 3;
+    // Explicit end signal from the server, indicating no more data will be sent.
+    StreamEnd server_end = 4;
+  }
+}
+
+// StreamConfig defines the initial configuration for an interaction stream.
+// Its primary purpose is to declare the intent of the stream via an event type,
+// which is used by the Policy Engine for routing.
+message StreamConfig {
+  // The event type that defines this interaction, e.g., "dapp.aipen.translate.stream.v1".
+  // This is the key for routing the entire stream to the correct provider.
+  string event_type = 1;
+  // Optional, additional attributes for the stream's context.
+  map<string, string> attributes = 2;
+}
+
+// StreamData carries the actual payload in the stream.
+message StreamData {
+  // The raw data content.
+  bytes content = 1;
+}
+
+// StreamReady indicates the server has successfully configured the stream
+// and is ready to process data.
+message StreamReady {
+  // A unique ID assigned by the server to this interaction stream.
+  string stream_id = 1;
+}
+
+// StreamError represents a terminal error that occurred during the stream.
+message StreamError {
+  // A status code for the error.
+  int32 code = 1;
+  // A human-readable error message.
+  string message = 2;
+}
+
+// StreamEnd is an empty message that signals the graceful end of one
+// direction of the stream.
+message StreamEnd {}

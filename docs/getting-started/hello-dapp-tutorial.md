@@ -11,12 +11,13 @@ Welcome to the PCAS ecosystem! This tutorial will guide you through building you
 
 ## What You'll Build
 
-You'll create a simple "Logger D-App" that:
+You'll create an **Intelligent Console D-App** that:
 - Connects to a running PCAS instance
-- Subscribes to all events
-- Prints received events to the console
+- Asks questions to PCAS
+- Receives intelligent answers powered by AI
+- Demonstrates the complete "dApp asks → PCAS thinks → dApp receives answer" flow
 
-This is the perfect starting point for understanding how D-Apps interact with PCAS.
+This is the perfect starting point for understanding how D-Apps leverage PCAS's AI capabilities.
 
 ## Prerequisites
 
@@ -135,10 +136,10 @@ func printEvent(event *eventsv1.Event) {
 }
 ```
 
-This code creates a simple D-App that:
+This code creates an Intelligent Console D-App that:
 1. Connects to PCAS on the default port (50051)
 2. Subscribes to the event stream with a unique client ID
-3. Prints each received event in a readable format
+3. Displays both your questions and PCAS's AI-powered responses
 4. Handles graceful shutdown with Ctrl+C
 
 ## Step 4: Run and Verify
@@ -169,51 +170,89 @@ Connected to PCAS!
 Listening for events... (Press Ctrl+C to stop)
 ```
 
-### 3. Emit a Test Event
+### 3. Understanding Policy Routing
 
-In a third terminal, emit an event using pcasctl:
+Before we ask our first question, let's understand how PCAS routes events to AI providers. Open the `policy.yaml` file in the PCAS directory:
+
+```yaml
+# Look for this rule in policy.yaml
+- name: "Rule for user prompts"
+  if:
+    event_type: "pcas.user.prompt.v1"
+  then:
+    provider: openai-gpt4
+```
+
+This rule tells PCAS: "When you receive an event of type `pcas.user.prompt.v1`, route it to the OpenAI GPT-4 provider for processing." This is how your questions get "thought about" rather than just stored.
+
+### 4. Ask PCAS a Question
+
+Now, let's ask PCAS a question! In a third terminal, emit a prompt event:
 
 ```bash
 # In the PCAS directory
-./bin/pcasctl emit --type "pcas.memory.create.v1" --subject "Hello from my first D-App test!"
+./bin/pcasctl emit --type "pcas.user.prompt.v1" --data '{"text": "What is the capital of France?"}'
 ```
 
-### 4. Observe the Results
+This command sends a question to PCAS, which will:
+1. Receive the event
+2. Route it to the AI provider (according to the policy)
+3. Generate an intelligent response
+4. Send the response back as a new event
+
+### 5. Observe the AI Conversation
 
 Switch back to your D-App terminal. You should see two events:
 
-1. **The original event** you emitted
-2. **A response event** from PCAS after processing
+1. **Your question event** (`pcas.user.prompt.v1`)
+2. **The AI response event** (`pcas.response.v1`) containing the answer
 
 Example output:
 ```
 ============================================================
 🔔 Event Received!
-   ID:      abc123...
-   Type:    pcas.memory.create.v1
+   ID:      prompt-123...
+   Type:    pcas.user.prompt.v1
    Source:  pcasctl
-   Subject: Hello from my first D-App test!
    Time:    2024-06-25T12:00:00Z
 ============================================================
 
 ============================================================
 🔔 Event Received!
-   ID:      def456...
+   ID:      response-456...
    Type:    pcas.response.v1
    Source:  pcas-server
-   Subject: response-to-abc123...
    Time:    2024-06-25T12:00:01Z
-   CorrelationID: abc123...
+   CorrelationID: prompt-123...
 ============================================================
 ```
 
+The response event contains the AI's answer in its data payload. In this case, you would see "Paris" as the answer to your question about France's capital.
+
+## Bonus: Searching Your Memory
+
+All your interactions with PCAS are automatically stored in its memory. You can search through these memories using semantic search. Let's try searching for the conversation we just had:
+
+```bash
+# In the PCAS directory
+./bin/pcasctl search "questions about France"
+```
+
+You should see results that include:
+- Your original question event
+- The AI's response event
+- Relevance scores showing how closely each event matches your search query
+
+This demonstrates PCAS's powerful memory system - every interaction is remembered and can be intelligently retrieved later!
+
 ## Congratulations!
 
-You've successfully built your first D-App! This Logger D-App demonstrates the fundamental pattern for all PCAS D-Apps:
+You've successfully built your first Intelligent Console D-App! This demonstrates the core PCAS pattern:
 
 1. **Connect** to PCAS
-2. **Subscribe** to events
-3. **Process** events as they arrive
+2. **Ask** questions by emitting prompt events
+3. **Receive** AI-powered responses
+4. **Search** through your conversation history
 
 ## Next Steps
 
@@ -283,12 +322,13 @@ eventStream, err := client.Subscribe(ctx, "hello-dapp-logger",
 
 ## Summary
 
-This tutorial introduced you to D-App development with PCAS. You learned how to:
+This tutorial introduced you to intelligent D-App development with PCAS. You learned how to:
 - Set up a new D-App project
 - Connect to PCAS using the SDK
-- Subscribe to and process events
-- Handle graceful shutdown
+- Ask questions and receive AI-powered responses
+- Search through your conversation history
+- Understand how PCAS routes events to AI providers
 
-The Logger D-App pattern you've learned here is the foundation for building more complex D-Apps that can transform how you interact with your personal computing environment.
+The Intelligent Console pattern you've learned here is the foundation for building sophisticated AI-powered applications that leverage PCAS's memory and reasoning capabilities.
 
 Happy coding! 🚀

@@ -6,17 +6,17 @@ on:
     branches: [ "main", "dev" ]
 
 jobs:
+  pre-build:
+    uses: ./.github/workflows/generate-code.yml
+
   lint-test:
     runs-on: ubuntu-latest
+    needs: pre-build
     steps:
       - uses: actions/checkout@v4
-
+      
       - uses: bufbuild/buf-setup-action@v1
       
-      - name: Generate protobuf code
-        run: make proto
-        continue-on-error: true # Temporarily allow failure due to buf version issues
-        
       - name: Check for breaking changes in protobuf
         run: buf breaking --against '.git#branch=main'
         continue-on-error: true # Temporarily allow failure
@@ -50,7 +50,7 @@ jobs:
 
   e2e-test-sqlite:
     runs-on: ubuntu-latest
-    needs: lint-test
+    needs: [pre-build, lint-test]
     steps:
       - uses: actions/checkout@v4
 
@@ -79,7 +79,7 @@ jobs:
           
   e2e-test-docker:
     runs-on: ubuntu-latest
-    needs: lint-test
+    needs: [pre-build, lint-test]
     # Only run Docker tests on main branch or when explicitly requested
     if: github.ref == 'refs/heads/main' || contains(github.event.pull_request.labels.*.name, 'test-docker')
     steps:

@@ -8,12 +8,14 @@ permissions:
   packages: write
 
 jobs:
+  pre-build:
+    uses: ./.github/workflows/generate-code.yml
+
   build:
     runs-on: ubuntu-latest
+    needs: pre-build
     steps:
       - uses: actions/checkout@v4
-      - uses: bufbuild/buf-setup-action@v1
-      - run: make proto
 
       - uses: actions/setup-go@v5
         with:

@@ -3,56 +3,102 @@
 
 ## Table of Contents
 
-- [pcas/events/v1/event.proto](#pcas_events_v1_event-proto)
-    - [Event](#pcas-events-v1-Event)
-    - [Event.AttributesEntry](#pcas-events-v1-Event-AttributesEntry)
-    - [EventVectorizedV1](#pcas-events-v1-EventVectorizedV1)
+- [pcas/bus/v1/bus.proto](#pcas_bus_v1_bus-proto)
+    - [InteractRequest](#pcas-bus-v1-InteractRequest)
+    - [InteractResponse](#pcas-bus-v1-InteractResponse)
+    - [PublishResponse](#pcas-bus-v1-PublishResponse)
+    - [SearchRequest](#pcas-bus-v1-SearchRequest)
+    - [SearchRequest.AttributeFiltersEntry](#pcas-bus-v1-SearchRequest-AttributeFiltersEntry)
+    - [SearchResponse](#pcas-bus-v1-SearchResponse)
+    - [StreamConfig](#pcas-bus-v1-StreamConfig)
+    - [StreamConfig.AttributesEntry](#pcas-bus-v1-StreamConfig-AttributesEntry)
+    - [StreamData](#pcas-bus-v1-StreamData)
+    - [StreamEnd](#pcas-bus-v1-StreamEnd)
+    - [StreamError](#pcas-bus-v1-StreamError)
+    - [StreamReady](#pcas-bus-v1-StreamReady)
+    - [SubscribeRequest](#pcas-bus-v1-SubscribeRequest)
+  
+    - [EventBusService](#pcas-bus-v1-EventBusService)
   
 - [Scalar Value Types](#scalar-value-types)
 
 
 
-<a name="pcas_events_v1_event-proto"></a>
+<a name="pcas_bus_v1_bus-proto"></a>
 <p align="right"><a href="#top">Top</a></p>
 
-## pcas/events/v1/event.proto
-指定我们使用 proto3 语法。
+## pcas/bus/v1/bus.proto
 
 
-<a name="pcas-events-v1-Event"></a>
 
-### Event
-PCAS 的核心事件信封 —— 与 CloudEvents v1.0 兼容。
-这是流经整个PCAS事件总线的所有事件的统一结构。
+<a name="pcas-bus-v1-InteractRequest"></a>
 
----- CloudEvents 核心属性 (Core Attributes) ----
+### InteractRequest
+InteractRequest represents a client request in the bidirectional stream.
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| id | [string](#string) |  | ID: 事件的唯一标识符。 在运行时必须非空 (MUST be non-empty)。 |
-| source | [string](#string) |  | Source: 事件发生的上下文标识。 通常是一个URI，例如 &#34;/d-app/com.wechat.connector&#34;。 |
-| specversion | [string](#string) |  | SpecVersion: 事件所遵循的CloudEvents规范版本。 对于此版本，恒为 &#34;1.0&#34;。 |
-| type | [string](#string) |  | Type: 描述与源事件相关的事件类型。 采用反向域名表示法，例如 &#34;pcas.dapp.message.received.v1&#34;。 |
-| datacontenttype | [string](#string) |  | DataContentType: &#34;data&#34;属性的内容类型。 可选字段。例如 &#34;application/json&#34;, &#34;application/protobuf&#34;。 |
-| dataschema | [string](#string) |  | DataSchema: &#34;data&#34;属性所遵循的schema的URI。 可选字段。 |
-| subject | [string](#string) |  | Subject: 在事件生产者上下文中，事件主体的描述。 可选字段。 |
-| time | [google.protobuf.Timestamp](#google-protobuf-Timestamp) |  | Time: 事件生成的时间戳。 强烈建议设置 (SHOULD be set)；如果缺失，事件总线将自动填充为当前时间。 |
-| trace_id | [string](#string) |  | TraceID: 用于在整个因果链中追踪事件的相关性ID。 |
-| user_id | [string](#string) |  | UserID: 事件的用户上下文。对未来的多用户系统至关重要。 |
-| session_id | [string](#string) |  | SessionID: 用于将一系列相关事件分组的逻辑会话ID。 可选字段。 |
-| correlation_id | [string](#string) |  | CorrelationID: 标识直接的&#34;请求-响应&#34;关系。 例如，响应事件的 correlation_id 应该等于触发它的原始事件的 id。 |
-| attributes | [Event.AttributesEntry](#pcas-events-v1-Event-AttributesEntry) | repeated | Attributes: dApp 附加的自定义上下文键值对。 记忆和搜索模块可以使用这些属性进行精确检索。 Custom context key-value pairs attached by dApps. Memory and search modules can use these attributes for precise retrieval. |
-| data | [google.protobuf.Any](#google-protobuf-Any) |  | Data: 事件的载荷。 `Any` 类型允许我们嵌入任何其他Protobuf消息， 这使得事件信封具有高度的可扩展性和类型安全性。 使用100号是为了给未来的核心扩展属性留出充足空间。 |
+| config | [StreamConfig](#pcas-bus-v1-StreamConfig) |  | The first message sent by the client to configure the stream. |
+| data | [StreamData](#pcas-bus-v1-StreamData) |  | Subsequent messages containing data chunks. |
+| client_end | [StreamEnd](#pcas-bus-v1-StreamEnd) |  | Explicit end signal from the client, indicating no more data will be sent. |
 
 
 
 
 
 
-<a name="pcas-events-v1-Event-AttributesEntry"></a>
+<a name="pcas-bus-v1-InteractResponse"></a>
 
-### Event.AttributesEntry
+### InteractResponse
+InteractResponse represents a server response in the bidirectional stream.
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| ready | [StreamReady](#pcas-bus-v1-StreamReady) |  | A message indicating the stream is ready and configured. |
+| data | [StreamData](#pcas-bus-v1-StreamData) |  | Subsequent messages containing data chunks. |
+| error | [StreamError](#pcas-bus-v1-StreamError) |  | An error message if something goes wrong during the stream. |
+| server_end | [StreamEnd](#pcas-bus-v1-StreamEnd) |  | Explicit end signal from the server, indicating no more data will be sent. |
+
+
+
+
+
+
+<a name="pcas-bus-v1-PublishResponse"></a>
+
+### PublishResponse
+PublishResponse is the response from publishing an event
+
+Empty for now, but reserved for future use (e.g., acknowledgment ID, status)
+
+
+
+
+
+
+<a name="pcas-bus-v1-SearchRequest"></a>
+
+### SearchRequest
+SearchRequest is the request for semantic search
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| query_text | [string](#string) |  | The natural language query text |
+| top_k | [int32](#int32) |  | Number of top results to return (default: 5) |
+| user_id | [string](#string) |  | Optional user ID to filter results by |
+| attribute_filters | [SearchRequest.AttributeFiltersEntry](#pcas-bus-v1-SearchRequest-AttributeFiltersEntry) | repeated | Attribute filters for metadata pre-filtering (AND logic) 用于元数据预过滤的属性过滤器（AND逻辑） |
+
+
+
+
+
+
+<a name="pcas-bus-v1-SearchRequest-AttributeFiltersEntry"></a>
+
+### SearchRequest.AttributeFiltersEntry
 
 
 
@@ -66,17 +112,123 @@ PCAS 的核心事件信封 —— 与 CloudEvents v1.0 兼容。
 
 
 
-<a name="pcas-events-v1-EventVectorizedV1"></a>
+<a name="pcas-bus-v1-SearchResponse"></a>
 
-### EventVectorizedV1
-EventVectorizedV1 表示一个向量化事件的数据载荷。
-当为原始事件生成嵌入向量后，会创建一个新的事件来存储这个向量信息。
+### SearchResponse
+SearchResponse is the response from semantic search
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| original_event_id | [string](#string) |  | 原始事件的ID |
-| embedding | [float](#float) | repeated | 事件的嵌入向量 |
+| events | [pcas.events.v1.Event](#pcas-events-v1-Event) | repeated | The matching events found |
+| scores | [float](#float) | repeated | Similarity scores corresponding to each event (0.0 to 1.0) |
+
+
+
+
+
+
+<a name="pcas-bus-v1-StreamConfig"></a>
+
+### StreamConfig
+StreamConfig defines the initial configuration for an interaction stream.
+Its primary purpose is to declare the intent of the stream via an event type,
+which is used by the Policy Engine for routing.
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| event_type | [string](#string) |  | The event type that defines this interaction, e.g., &#34;dapp.aipen.translate.stream.v1&#34;. This is the key for routing the entire stream to the correct provider. |
+| attributes | [StreamConfig.AttributesEntry](#pcas-bus-v1-StreamConfig-AttributesEntry) | repeated | Optional, additional attributes for the stream&#39;s context. |
+
+
+
+
+
+
+<a name="pcas-bus-v1-StreamConfig-AttributesEntry"></a>
+
+### StreamConfig.AttributesEntry
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| key | [string](#string) |  |  |
+| value | [string](#string) |  |  |
+
+
+
+
+
+
+<a name="pcas-bus-v1-StreamData"></a>
+
+### StreamData
+StreamData carries the actual payload in the stream.
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| content | [bytes](#bytes) |  | The raw data content. |
+
+
+
+
+
+
+<a name="pcas-bus-v1-StreamEnd"></a>
+
+### StreamEnd
+StreamEnd is an empty message that signals the graceful end of one
+direction of the stream.
+
+
+
+
+
+
+<a name="pcas-bus-v1-StreamError"></a>
+
+### StreamError
+StreamError represents a terminal error that occurred during the stream.
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| code | [int32](#int32) |  | A status code for the error. |
+| message | [string](#string) |  | A human-readable error message. |
+
+
+
+
+
+
+<a name="pcas-bus-v1-StreamReady"></a>
+
+### StreamReady
+StreamReady indicates the server has successfully configured the stream
+and is ready to process data.
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| stream_id | [string](#string) |  | A unique ID assigned by the server to this interaction stream. |
+
+
+
+
+
+
+<a name="pcas-bus-v1-SubscribeRequest"></a>
+
+### SubscribeRequest
+SubscribeRequest is the request for subscribing to the event stream
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| client_id | [string](#string) |  | Unique identifier for the client subscribing to events |
 
 
 
@@ -87,6 +239,19 @@ EventVectorizedV1 表示一个向量化事件的数据载荷。
  
 
  
+
+
+<a name="pcas-bus-v1-EventBusService"></a>
+
+### EventBusService
+EventBusService provides methods for publishing events to the PCAS event bus
+
+| Method Name | Request Type | Response Type | Description |
+| ----------- | ------------ | ------------- | ------------|
+| Publish | [.pcas.events.v1.Event](#pcas-events-v1-Event) | [PublishResponse](#pcas-bus-v1-PublishResponse) | Publish sends an event to the event bus |
+| Subscribe | [SubscribeRequest](#pcas-bus-v1-SubscribeRequest) | [.pcas.events.v1.Event](#pcas-events-v1-Event) stream | Subscribe allows clients to receive a stream of events |
+| Search | [SearchRequest](#pcas-bus-v1-SearchRequest) | [SearchResponse](#pcas-bus-v1-SearchResponse) | Search performs semantic search on stored events |
+| InteractStream | [InteractRequest](#pcas-bus-v1-InteractRequest) stream | [InteractResponse](#pcas-bus-v1-InteractResponse) stream | InteractStream provides bidirectional streaming for low-latency real-time interactions The first request MUST be a StreamConfig message 提供双向流式通道，用于低延迟实时交互 首个请求必须是 StreamConfig 消息 |
 
  
 

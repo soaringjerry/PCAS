@@ -1,7 +1,8 @@
 name: Release
 on:
   push:
-    tags: [ "v[0-9]+.[0-9]+.[0-9]+" ]   # 仅匹配正式版本
+    tags: 
+      - 'v*.*.*'
 
 jobs:
   # Create release first
@@ -89,27 +90,38 @@ jobs:
     permissions:
       packages: write
       id-token: write    # 如需 sigstore 署名
+    concurrency:
+      group: docker-release-${{ github.ref }}
+      cancel-in-progress: false
 
     steps:
       - uses: actions/checkout@v4
 
       # 登录到 GitHub Container Registry
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@v2
         with:
           registry: ghcr.io
-          username: ${{ github.actor }}
+          username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Build & Push Docker image (tag + latest)
+      # 提取元数据
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v4
+        with:
+          images: ghcr.io/${{ github.repository }}
+
+      # Build & Push Docker image
       - name: Build and Push image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v4
         with:
           context: .
           push: true
-          tags: |
-            ghcr.io/soaringjerry/pcas:${{ github.ref_name }}
-            ghcr.io/soaringjerry/pcas:latest
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
   # Deploy documentation
   deploy-docs:

@@ -41,6 +41,9 @@ COPY policy.yaml .
 # Change ownership
 RUN chown -R pcas:pcas /app
 
+# Create and set permissions for the data directory
+RUN mkdir /data && chown pcas:pcas /data
+
 # Switch to non-root user
 USER pcas
 

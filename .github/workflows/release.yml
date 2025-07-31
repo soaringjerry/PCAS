@@ -110,6 +110,15 @@ jobs:
         uses: docker/metadata-action@v4
         with:
           images: ghcr.io/${{ github.repository }}
+          tags: |
+            # 当一个新的 Git 标签被推送时，生成 'latest' 标签
+            type=raw,value=latest,enable=true
+            # 从 Git 标签中提取版本号 (例如 v1.2.3 -> 1.2.3)
+            type=semver,pattern={{version}}
+            # 从 Git 标签中提取主版本号 (例如 v1.2.3 -> 1)
+            type=semver,pattern={{major}}
+            # 从 Git 标签中提取主次版本号 (例如 v1.2.3 -> 1.2)
+            type=semver,pattern={{major}}.{{minor}}
 
       # Build & Push Docker image
       - name: Build and Push image

@@ -29,10 +29,11 @@ jobs:
       - name: Generate protobuf code
         run: make proto
 
-      - name: Download and verify modules
+      - name: Download and verify modules (all, incl. test deps)
         run: |
-          go mod download
+          go mod download all
           go mod verify
+          go list -deps -test ./... > /dev/null
 
       - name: Run tests
         run: make test

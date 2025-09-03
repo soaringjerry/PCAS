@@ -31,10 +31,12 @@ jobs:
         run: buf breaking --against '.git#branch=main'
         continue-on-error: true # Temporarily allow failure
       
-      - name: Download and verify modules
+      - name: Download and verify modules (all, incl. test deps)
         run: |
-          go mod download
+          go mod download all
           go mod verify
+          # ensure test deps are resolved and checksummed
+          go list -deps -test ./... > /dev/null
       
       - name: Sync vendor directory
         run: go mod vendor
@@ -66,10 +68,11 @@ jobs:
         with:
           go-version-file: go.mod
       
-      - name: Download and verify modules
+      - name: Download and verify modules (all, incl. test deps)
         run: |
-          go mod download
+          go mod download all
           go mod verify
+          go list -deps -test ./... > /dev/null
 
       - name: Sync vendor directory
         run: go mod vendor
@@ -102,10 +105,11 @@ jobs:
         with:
           go-version-file: go.mod
       
-      - name: Download and verify modules
+      - name: Download and verify modules (all, incl. test deps)
         run: |
-          go mod download
+          go mod download all
           go mod verify
+          go list -deps -test ./... > /dev/null
 
       - name: Sync vendor directory
         run: go mod vendor

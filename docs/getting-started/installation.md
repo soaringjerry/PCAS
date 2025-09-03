@@ -78,3 +78,22 @@ Now that PCAS is installed, you can:
 -   Explore the [Hello DApp Tutorial](./hello-dapp-tutorial.md) to build your first application.
 -   Dive into the [Architecture Overview](../architecture/pcas-overview.md) to understand PCAS's design principles.
 -   Learn about specific integrations in the [Guides](../guides/).
+
+## One-click Deploy (Docker)
+
+Prefer a single command via curl|bash?
+
+```bash
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/soaringjerry/pcas/main/scripts/install-or-update.sh)" -- \
+  --dir /opt/pcas \
+  --name pcas-instance \
+  --port 50051
+```
+
+Options:
+- `--policy PATH` or `--policy-url URL` to provide a policy file
+- `--openai-key sk-...` to enable RAG/search (or export `OPENAI_API_KEY`)
+- `--image` to use a specific image tag (default `ghcr.io/soaringjerry/pcas:latest`)
+
+What it does:
+- Pulls the image (unless `--no-pull`), ensures a data volume, prepares `policy.yaml`, and runs the container with restart policy.

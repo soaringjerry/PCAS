@@ -30,7 +30,12 @@ jobs:
       - name: Check for breaking changes in protobuf
         run: buf breaking --against '.git#branch=main'
         continue-on-error: true # Temporarily allow failure
-          
+      
+      - name: Download and verify modules
+        run: |
+          go mod download
+          go mod verify
+      
       - name: Sync vendor directory
         run: go mod vendor
           
@@ -42,11 +47,8 @@ jobs:
           curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.61.0
           echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
         
-      - name: Clean Go Cache and Download Modules
-        run: |
-          go clean -modcache
-          go mod download
-          go mod verify
+      - name: Clean Go Cache
+        run: go clean -modcache
         
       - name: Lint Go files
         run: make lint
@@ -63,7 +65,12 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-          
+      
+      - name: Download and verify modules
+        run: |
+          go mod download
+          go mod verify
+
       - name: Sync vendor directory
         run: go mod vendor
         
@@ -94,7 +101,12 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-          
+      
+      - name: Download and verify modules
+        run: |
+          go mod download
+          go mod verify
+
       - name: Sync vendor directory
         run: go mod vendor
         

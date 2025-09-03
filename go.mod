@@ -5,6 +5,7 @@ go 1.24.2
 require (
 	github.com/coder/hnsw v0.6.1
 	github.com/google/uuid v1.6.0
+	github.com/joho/godotenv v1.5.1
 	github.com/sashabaranov/go-openai v1.40.2
 	github.com/spf13/cobra v1.9.1
 	github.com/stretchr/testify v1.10.0

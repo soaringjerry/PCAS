@@ -2,14 +2,19 @@
 bin/
 pcas
 pcasctl
+pcas.exe
+pcasctl.exe
 
 # Runtime data
 data/
 *.db
+pcas.db
 
 # Logs
 *.log
 logs/
+server.log
+air_errors.log
 
 # Vendor directory
 vendor/
@@ -24,10 +29,10 @@ gen/
 
 # OS
 .DS_Store
+Thumbs.db
 
 # Docker development
 tmp/
-air_errors.log
 
 # Environment files
 .env

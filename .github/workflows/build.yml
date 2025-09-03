@@ -18,13 +18,24 @@ jobs:
           go-version-file: go.mod
       
       - uses: bufbuild/buf-setup-action@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
       
       - name: Install protoc-gen-doc
-        run: go install github.com/pseudomuto/protoc-gen-doc/cmd/protoc-gen-doc@v1.5.1
+        run: |
+          go install github.com/pseudomuto/protoc-gen-doc/cmd/protoc-gen-doc@v1.5.1
+          echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
       
       - name: Generate protobuf code
         run: make proto
-      - run: make test
+
+      - name: Download and verify modules
+        run: |
+          go mod download
+          go mod verify
+
+      - name: Run tests
+        run: make test
 
       # Docker 镜像（仅 push 到临时 tag SHA）
       - name: Login to GHCR

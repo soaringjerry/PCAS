@@ -120,9 +120,32 @@ confirm() {
 }
 
 CFG_FILE="${DIR}/pcas-installer.env"
+
+save_cfg() {
+  : >"$CFG_FILE"
+  {
+    printf 'DIR=%q\n' "$DIR"
+    printf 'NAME=%q\n' "$NAME"
+    printf 'PORT=%q\n' "$PORT"
+    printf 'IMAGE=%q\n' "$IMAGE"
+    printf 'VOLUME=%q\n' "$VOLUME"
+    printf 'OPENAI_KEY=%q\n' "$OPENAI_KEY"
+    printf 'ADMIN_TOKEN=%q\n' "$ADMIN_TOKEN"
+  } >>"$CFG_FILE"
+  chmod 600 "$CFG_FILE"
+}
+
 if [[ -f "$CFG_FILE" && $RESET_CONFIG -eq 0 ]]; then
+  # Try to load saved config; if it fails, fall back to guided setup
+  set +e
   # shellcheck disable=SC1090
   source "$CFG_FILE"
+  load_rc=$?
+  set -e
+  if [[ $load_rc -ne 0 ]]; then
+    warn "Failed to load saved config ($CFG_FILE); switching to guided setup"
+    RESET_CONFIG=1
+  fi
 fi
 
 # Guided setup (first run or reset), only when interactive
@@ -139,16 +162,7 @@ if is_tty && [[ $NO_PROMPT -eq 0 ]]; then
       ADMIN_TOKEN=$(ask_secret "Enter PCAS_ADMIN_TOKEN")
     fi
     mkdir -p "${DIR}" && chmod 755 "${DIR}"
-    cat >"$CFG_FILE" <<CONF
-DIR=${DIR}
-NAME=${NAME}
-PORT=${PORT}
-IMAGE=${IMAGE}
-VOLUME=${VOLUME}
-OPENAI_KEY=${OPENAI_KEY}
-ADMIN_TOKEN=${ADMIN_TOKEN}
-CONF
-    chmod 600 "$CFG_FILE"
+    save_cfg
     log "Saved installer config to $CFG_FILE"
   else
     echo ""
@@ -166,16 +180,7 @@ CONF
       if confirm "Update admin token?" 0; then
         ADMIN_TOKEN=$(ask_secret "Enter PCAS_ADMIN_TOKEN (leave blank to remove)")
       fi
-      cat >"$CFG_FILE" <<CONF
-DIR=${DIR}
-NAME=${NAME}
-PORT=${PORT}
-IMAGE=${IMAGE}
-VOLUME=${VOLUME}
-OPENAI_KEY=${OPENAI_KEY}
-ADMIN_TOKEN=${ADMIN_TOKEN}
-CONF
-      chmod 600 "$CFG_FILE"
+      save_cfg
       log "Updated installer config"
     fi
   fi

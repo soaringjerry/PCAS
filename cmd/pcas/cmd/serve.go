@@ -70,8 +70,20 @@ func runServer() error {
                 log.Printf("Warning: Skipping provider %s - OPENAI_API_KEY environment variable not set", providerConfig.Name)
                 continue
             }
-            providerMap[providerConfig.Name] = openai.NewProvider(apiKey)
-            log.Printf("Initialized provider: %s (type: %s)", providerConfig.Name, providerConfig.Type)
+            // Optional model from policy provider config
+            var model string
+            if providerConfig.Config != nil {
+                if v, ok := providerConfig.Config["model"]; ok {
+                    model = fmt.Sprintf("%v", v)
+                }
+            }
+            if model != "" {
+                providerMap[providerConfig.Name] = openai.NewProviderWithModel(apiKey, model)
+                log.Printf("Initialized provider: %s (type: %s, model: %s)", providerConfig.Name, providerConfig.Type, model)
+            } else {
+                providerMap[providerConfig.Name] = openai.NewProvider(apiKey)
+                log.Printf("Initialized provider: %s (type: %s, default model)", providerConfig.Name, providerConfig.Type)
+            }
         default:
             log.Printf("Unknown provider type: %s", providerConfig.Type)
         }
@@ -180,4 +192,3 @@ func init() {
     serveCmd.Flags().StringVar(&serverPort, "port", "50051", "Port to bind the server to")
     serveCmd.Flags().StringVar(&dbPath, "db-path", "pcas.db", "Path to the PCAS SQLite database file")
 }
-

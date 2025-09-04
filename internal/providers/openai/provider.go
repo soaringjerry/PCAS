@@ -1,23 +1,35 @@
 package openai
 
 import (
-	"context"
-	"fmt"
+    "context"
+    "fmt"
 
-	"github.com/sashabaranov/go-openai"
+    "github.com/sashabaranov/go-openai"
 )
 
 // Provider is an OpenAI implementation of ComputeProvider
 type Provider struct {
-	client *openai.Client
+    client    *openai.Client
+    modelName string
 }
 
-// NewProvider creates a new OpenAI provider instance
+const defaultChatModel = "gpt-5" // default to GPT-5; can be overridden per provider via policy
+
+// NewProvider creates a new OpenAI provider instance with default model
 func NewProvider(apiKey string) *Provider {
-	client := openai.NewClient(apiKey)
-	return &Provider{
-		client: client,
-	}
+    return NewProviderWithModel(apiKey, defaultChatModel)
+}
+
+// NewProviderWithModel creates a new OpenAI provider with an explicit model name
+func NewProviderWithModel(apiKey, model string) *Provider {
+    client := openai.NewClient(apiKey)
+    if model == "" {
+        model = defaultChatModel
+    }
+    return &Provider{
+        client:    client,
+        modelName: model,
+    }
 }
 
 // Execute implements the ComputeProvider interface
@@ -78,13 +90,21 @@ func (p *Provider) Execute(ctx context.Context, requestData map[string]interface
 		}
 	}
 	
-	// Create chat completion request
-	req := openai.ChatCompletionRequest{
-		Model:       openai.GPT4o,
-		Messages:    messages,
-		Temperature: 0.7,
-		MaxTokens:   2000, // Increased for longer responses with context
-	}
+    // Determine model (allow request override via `model` field; fallback to provider default)
+    model := p.modelName
+    if v, ok := requestData["model"]; ok {
+        if s, ok := v.(string); ok && s != "" {
+            model = s
+        }
+    }
+
+    // Create chat completion request
+    req := openai.ChatCompletionRequest{
+        Model:       model,
+        Messages:    messages,
+        Temperature: 0.7,
+        MaxTokens:   2000, // Increased for longer responses with context
+    }
 	
 	// Call OpenAI API
 	resp, err := p.client.CreateChatCompletion(ctx, req)

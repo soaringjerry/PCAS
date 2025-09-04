@@ -2,9 +2,15 @@ version: v1
 providers:
   - name: mock-provider
     type: mock
+  - name: openai-gpt5
+    type: openai
+    model: gpt-5
+  - name: openai-gpt5-mini
+    type: openai
+    model: gpt-5-mini
+  # Legacy provider kept for backward compatibility (can be removed later)
   - name: openai-gpt4
     type: openai
-    # api_key: ${OPENAI_API_KEY} # 未来支持
   - name: ollama-llama3
     type: ollama
     # host: ${OLLAMA_HOST} # defaults to http://localhost:11434
@@ -20,7 +26,7 @@ rules:
     if:
       event_type: "pcas.user.prompt.v1"
     then:
-      provider: openai-gpt4
+      provider: openai-gpt5
       prompt_template: "As a helpful AI assistant integrated with PCAS, please respond to the following user prompt: {{.text}}"
       
   - name: "Rule for D-App events"
@@ -67,13 +73,13 @@ rules:
     if:
       event_type: "pcas.chat.completion.v1"
     then:
-      provider: "openai-gpt4"
+      provider: "openai-gpt5"
   
   - name: "Rule for translation requests with custom prompt"
     if:
       event_type: "pcas.translate.v1"
     then:
-      provider: openai-gpt4
+      provider: openai-gpt5
       prompt_template: |
         You are a professional translator. Please translate the following text from {{.source_language}} to {{.target_language}}.
         Maintain the original tone and style as much as possible.
@@ -84,7 +90,7 @@ rules:
     if:
       event_type: "pcas.code.review.v1"
     then:
-      provider: openai-gpt4
+      provider: openai-gpt5
       prompt_template: |
         As an experienced software engineer, please review the following code:
         

@@ -104,9 +104,12 @@ ask() {
 }
 
 ask_secret() {
-  local prompt="$1"; local def_masked="${2:-}"; local var
-  read -r -s -p "$prompt: " var || true; echo
-  echo "$var"
+  local prompt="$1"; local var
+  read -r -s -p "$prompt: " var || true
+  # print a newline to the terminal (stderr), not captured by command substitution
+  printf '\n' >&2
+  # output the secret on stdout for capture by callers
+  printf '%s' "$var"
 }
 
 confirm() {

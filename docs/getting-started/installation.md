@@ -94,6 +94,7 @@ Options:
 - `--policy PATH` or `--policy-url URL` to provide a policy file
 - `--openai-key sk-...` to enable RAG/search (or export `OPENAI_API_KEY`)
 - `--image` to use a specific image tag (default `ghcr.io/soaringjerry/pcas:latest`)
+- `--admin-token my-secret` to enable secure admin events for dynamic policy updates
 
 What it does:
 - Pulls the image (unless `--no-pull`), ensures a data volume, prepares `policy.yaml`, and runs the container with restart policy.

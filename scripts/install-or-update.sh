@@ -22,6 +22,7 @@ VOLUME="pcas_data"
 POLICY_PATH=""
 POLICY_URL=""
 OPENAI_KEY="${OPENAI_API_KEY:-}"
+ADMIN_TOKEN=""
 PULL_IMAGE=1
 START_CONTAINER=1
 
@@ -65,6 +66,7 @@ while [[ $# -gt 0 ]]; do
     --policy) POLICY_PATH="$2"; shift 2 ;;
     --policy-url) POLICY_URL="$2"; shift 2 ;;
     --openai-key) OPENAI_KEY="$2"; shift 2 ;;
+    --admin-token) ADMIN_TOKEN="$2"; shift 2 ;;
     --no-pull) PULL_IMAGE=0; shift ;;
     --no-start) START_CONTAINER=0; shift ;;
     --pcas) _pcas_host="$2"; shift 2 ;; # accepted for compatibility, unused
@@ -149,6 +151,10 @@ if [[ -n "${OPENAI_KEY}" ]]; then
   RUN_ARGS+=(-e "OPENAI_API_KEY=${OPENAI_KEY}")
 else
   warn "OPENAI_API_KEY not provided; search/RAG will be disabled (server still runs)"
+fi
+
+if [[ -n "${ADMIN_TOKEN}" ]]; then
+  RUN_ARGS+=(-e "PCAS_ADMIN_TOKEN=${ADMIN_TOKEN}")
 fi
 
 RUN_ARGS+=("${IMAGE}" \

@@ -31,6 +31,7 @@ This guide provides comprehensive information about PCAS, from getting started t
 - [E2E Testing](./guides/e2e-testing.md)
 - [Ollama Provider](./guides/ollama-provider.md)
 - [Backfill Metadata](./guides/backfill-metadata.md)
+- [DApp Registration via Admin Events](./guides/dapp-registration.md)
 
 ### Architecture
 - [Architecture Decision Records (ADR)](./architecture/adr/)

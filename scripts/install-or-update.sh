@@ -38,7 +38,7 @@ warn() { echo -e "${YELLOW}WARN:${NC} $*"; }
 err() { echo -e "${RED}ERROR:${NC} $*" 1>&2; }
 
 usage() {
-  cat <<EOF
+  cat <<'EOF'
 PCAS install-or-update (Docker)
 
 Options:

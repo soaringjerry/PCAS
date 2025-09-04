@@ -1,12 +1,13 @@
 package policy
 
 import (
-	"fmt"
-	"os"
+    "fmt"
+    "os"
+    "sync"
 
-	"gopkg.in/yaml.v3"
-	
-	eventsv1 "github.com/soaringjerry/pcas/gen/go/pcas/events/v1"
+    "gopkg.in/yaml.v3"
+    
+    eventsv1 "github.com/soaringjerry/pcas/gen/go/pcas/events/v1"
 )
 
 // Policy represents the entire policy configuration
@@ -44,38 +45,53 @@ type Action struct {
 
 // Engine is the policy evaluation engine
 type Engine struct {
-	policy *Policy
+    policy *Policy
+    mu     sync.RWMutex
 }
 
 // NewEngine creates a new policy engine with the given policy
 func NewEngine(policy *Policy) *Engine {
-	return &Engine{
-		policy: policy,
-	}
+    return &Engine{
+        policy: policy,
+    }
 }
 
 // LoadPolicy loads a policy from a YAML file
 func LoadPolicy(path string) (*Policy, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read policy file: %w", err)
-	}
+    data, err := os.ReadFile(path)
+    if err != nil {
+        return nil, fmt.Errorf("failed to read policy file: %w", err)
+    }
 
 	var policy Policy
 	if err := yaml.Unmarshal(data, &policy); err != nil {
 		return nil, fmt.Errorf("failed to parse policy file: %w", err)
 	}
 
-	return &policy, nil
+    return &policy, nil
+}
+
+// SavePolicy persists the policy to a YAML file
+func SavePolicy(path string, p *Policy) error {
+    data, err := yaml.Marshal(p)
+    if err != nil {
+        return fmt.Errorf("failed to marshal policy: %w", err)
+    }
+    if err := os.WriteFile(path, data, 0644); err != nil {
+        return fmt.Errorf("failed to write policy file: %w", err)
+    }
+    return nil
 }
 
 // SelectProvider selects a provider based on the event type
 func (e *Engine) SelectProvider(event *eventsv1.Event) (string, string) {
-	for _, rule := range e.policy.Rules {
-		// Step 1: Check direct event_type match (backward compatibility)
-		if rule.If.EventType != "" && rule.If.EventType == event.Type {
-			return rule.Then.Provider, rule.Then.PromptTemplate
-		}
+    e.mu.RLock()
+    defer e.mu.RUnlock()
+    for _, rule := range e.policy.Rules {
+        // Step 1: Check direct event_type match (backward compatibility)
+        if rule.If.EventType != "" && rule.If.EventType == event.Type {
+            return rule.Then.Provider, rule.Then.PromptTemplate
+        }
 		
 		// Step 2: Check any_of conditions
 		if len(rule.If.AnyOf) > 0 {
@@ -88,18 +104,20 @@ func (e *Engine) SelectProvider(event *eventsv1.Event) (string, string) {
 	}
 	
 	// Return empty string if no matching rule found
-	return "", ""
+    return "", ""
 }
 
 // SelectProviderForStream selects a provider for streaming based on the event type
 func (e *Engine) SelectProviderForStream(eventType string) (string, string) {
-	// For now, use the same logic as SelectProvider
-	// In the future, we might want to add specific streaming provider configuration
-	for _, rule := range e.policy.Rules {
-		// Step 1: Check direct event_type match (backward compatibility)
-		if rule.If.EventType != "" && rule.If.EventType == eventType {
-			return rule.Then.Provider, rule.Then.PromptTemplate
-		}
+    // For now, use the same logic as SelectProvider
+    // In the future, we might want to add specific streaming provider configuration
+    e.mu.RLock()
+    defer e.mu.RUnlock()
+    for _, rule := range e.policy.Rules {
+        // Step 1: Check direct event_type match (backward compatibility)
+        if rule.If.EventType != "" && rule.If.EventType == eventType {
+            return rule.Then.Provider, rule.Then.PromptTemplate
+        }
 		
 		// Step 2: Check any_of conditions
 		if len(rule.If.AnyOf) > 0 {
@@ -112,5 +130,19 @@ func (e *Engine) SelectProviderForStream(eventType string) (string, string) {
 	}
 	
 	// Return empty string if no matching rule found
-	return "", ""
+    return "", ""
+}
+
+// AddRule appends a new rule to the in-memory policy (thread-safe)
+func (e *Engine) AddRule(r Rule) {
+    e.mu.Lock()
+    defer e.mu.Unlock()
+    e.policy.Rules = append(e.policy.Rules, r)
+}
+
+// Policy returns a copy of the current policy pointer (read-only usage)
+func (e *Engine) Policy() *Policy {
+    e.mu.RLock()
+    defer e.mu.RUnlock()
+    return e.policy
 }

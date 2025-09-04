@@ -109,7 +109,15 @@ func (s *Server) Publish(ctx context.Context, event *eventsv1.Event) (*busv1.Pub
 			log.Printf("  Data: %s", event.Data.String())
 		}
 	}
-	
+
+	// Handle admin control events (e.g., dynamic policy updates)
+	if handled, adminErr := s.handleAdminEvent(event); handled {
+		if adminErr != nil {
+			return nil, fmt.Errorf("admin request failed: %w", adminErr)
+		}
+		return &busv1.PublishResponse{}, nil
+	}
+
 	// Use policy engine to select provider
 	providerName, promptTemplate := s.policyEngine.SelectProvider(event)
 	if providerName == "" {

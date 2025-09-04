@@ -3,6 +3,9 @@ package openai
 import (
     "context"
     "fmt"
+    "io"
+    "strconv"
+    "strings"
 
     "github.com/sashabaranov/go-openai"
 )
@@ -118,4 +121,86 @@ func (p *Provider) Execute(ctx context.Context, requestData map[string]interface
 	}
 	
 	return resp.Choices[0].Message.Content, nil
+}
+
+// ExecuteStream implements StreamingComputeProvider using OpenAI Chat Completions streaming.
+// It aggregates incoming bytes as a single user prompt, then streams the model output
+// back to the caller via the output channel in incremental chunks.
+func (p *Provider) ExecuteStream(ctx context.Context, attributes map[string]string, input <-chan []byte, output chan<- []byte) error {
+    // Resolve model (attributes override provider default)
+    model := p.modelName
+    if v, ok := attributes["model"]; ok && strings.TrimSpace(v) != "" {
+        model = v
+    }
+
+    // Optional system prompt and temperature
+    systemPrompt := ""
+    if v, ok := attributes["system"]; ok {
+        systemPrompt = v
+    }
+
+    temperature := 0.7
+    if v, ok := attributes["temperature"]; ok {
+        if t, err := strconv.ParseFloat(v, 64); err == nil {
+            temperature = t
+        }
+    }
+
+    // Read all input chunks into a single user prompt
+    var bldr strings.Builder
+    for chunk := range input {
+        bldr.WriteString(string(chunk))
+    }
+    userPrompt := bldr.String()
+
+    // Build messages
+    msgs := []openai.ChatCompletionMessage{}
+    if strings.TrimSpace(systemPrompt) != "" {
+        msgs = append(msgs, openai.ChatCompletionMessage{
+            Role:    openai.ChatMessageRoleSystem,
+            Content: systemPrompt,
+        })
+    }
+    msgs = append(msgs, openai.ChatCompletionMessage{
+        Role:    openai.ChatMessageRoleUser,
+        Content: userPrompt,
+    })
+
+    // Prepare streaming request
+    req := openai.ChatCompletionRequest{
+        Model:       model,
+        Messages:    msgs,
+        Temperature: float32(temperature),
+        Stream:      true,
+        MaxTokens:   2000,
+    }
+
+    stream, err := p.client.CreateChatCompletionStream(ctx, req)
+    if err != nil {
+        return fmt.Errorf("OpenAI stream create error: %w", err)
+    }
+    defer stream.Close()
+
+    for {
+        resp, err := stream.Recv()
+        if err != nil {
+            if err == io.EOF {
+                break
+            }
+            return fmt.Errorf("OpenAI stream recv error: %w", err)
+        }
+        if len(resp.Choices) == 0 {
+            continue
+        }
+        delta := resp.Choices[0].Delta.Content
+        if delta != "" {
+            select {
+            case output <- []byte(delta):
+            case <-ctx.Done():
+                return ctx.Err()
+            }
+        }
+    }
+
+    return nil
 }

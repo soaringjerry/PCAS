@@ -32,6 +32,7 @@ ASSUME_YES=0
 RESET_CONFIG=0
 
 CFG_FILE=""
+CHANNEL="stable" # stable=latest, edge=edge
 
 log() { echo -e "${GREEN}==>${NC} $*"; }
 warn() { echo -e "${YELLOW}WARN:${NC} $*"; }
@@ -51,6 +52,7 @@ Options:
   --policy-url URL     Download policy.yaml from URL to --dir/policy.yaml
   --openai-key KEY     Provide OpenAI API key (or set OPENAI_API_KEY env)
   --admin-token KEY    Set admin token for dynamic policy updates (PCAS_ADMIN_TOKEN)
+  --channel CH         Image channel: stable (latest) or edge (main branch)
   --no-pull            Do not pull image (use local cache)
   --no-start           Do not start/restart container (prepare files only)
   --no-prompt          Unattended mode; reuse saved config or provided flags
@@ -78,6 +80,7 @@ while [[ $# -gt 0 ]]; do
     --policy-url) POLICY_URL="$2"; shift 2 ;;
     --openai-key) OPENAI_KEY="$2"; shift 2 ;;
     --admin-token) ADMIN_TOKEN="$2"; shift 2 ;;
+    --channel) CHANNEL="$2"; shift 2 ;;
     --no-pull) PULL_IMAGE=0; shift ;;
     --no-start) START_CONTAINER=0; shift ;;
     --no-prompt) NO_PROMPT=1; shift ;;
@@ -211,6 +214,7 @@ if [[ ${#ORIG_ARGS[@]} -gt 0 ]]; then
       --policy-url) POLICY_URL="$2"; shift 2 ;;
       --openai-key) OPENAI_KEY=$(sanitize_secret "$2"); shift 2 ;;
       --admin-token) ADMIN_TOKEN=$(sanitize_secret "$2"); shift 2 ;;
+      --channel) CHANNEL="$2"; shift 2 ;;
       --no-pull) PULL_IMAGE=0; shift ;;
       --no-start) START_CONTAINER=0; shift ;;
       --pcas) _pcas_host="$2"; shift 2 ;;
@@ -220,6 +224,22 @@ if [[ ${#ORIG_ARGS[@]} -gt 0 ]]; then
     esac
   done
 fi
+
+# Resolve image by channel if user specified a channel and did not force a custom image
+case "${CHANNEL}" in
+  edge)
+    # If user didn't explicitly set a non-default image via --image, or saved image is default, switch to edge
+    if [[ "${IMAGE}" == ghcr.io/soaringjerry/pcas:latest ]] || [[ -z "${IMAGE}" ]]; then
+      IMAGE="ghcr.io/soaringjerry/pcas:edge"
+    fi
+    ;;
+  stable|"")
+    # keep default/latest
+    ;;
+  *)
+    warn "Unknown channel '${CHANNEL}', falling back to stable (latest)"
+    ;;
+esac
 
 # Check docker
 if ! command -v docker >/dev/null 2>&1; then

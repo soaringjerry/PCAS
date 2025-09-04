@@ -47,9 +47,13 @@ func runServer() error {
         log.Println("Loaded environment from .env")
     }
 
-    // Load policy from file
-    log.Println("Loading policy from policy.yaml...")
-    policyConfig, err := policy.LoadPolicy("policy.yaml")
+    // Load policy: prefer persisted copy in /data if present, else bundled file
+    policyPath := "policy.yaml"
+    if _, err := os.Stat("/data/policy.yaml"); err == nil {
+        policyPath = "/data/policy.yaml"
+    }
+    log.Printf("Loading policy from %s...", policyPath)
+    policyConfig, err := policy.LoadPolicy(policyPath)
     if err != nil {
         return fmt.Errorf("failed to load policy: %w", err)
     }

@@ -78,13 +78,12 @@ func (s *Server) handleAdminPolicyAddRule(event *eventsv1.Event) error {
     }
     s.policyEngine.AddRule(r)
 
-    // Persist to policy.yaml
-    if err := policy.SavePolicy("policy.yaml", s.policyEngine.Policy()); err != nil {
-        log.Printf("[ADMIN] added rule in memory but failed to persist: %v", err)
+    // Persist dynamic policy to data volume so it's writable by the container user
+    if err := policy.SavePolicy("/data/policy.yaml", s.policyEngine.Policy()); err != nil {
+        log.Printf("[ADMIN] added rule in memory but failed to persist to /data/policy.yaml: %v", err)
         return fmt.Errorf("failed to persist policy: %w", err)
     }
 
     log.Printf("[ADMIN] Added policy rule: %s (event_type=%s -> provider=%s)", name, eventType, provider)
     return nil
 }
-

@@ -20,15 +20,16 @@ import (
 )
 
 var (
-	eventType   string
-	eventSource string
-	eventSubject string
-	eventData   string
-	serverPort  string
-	serverAddr  string // Full server address (host:port)
-	traceID     string // Optional trace ID for correlation
-	userID      string // Optional user ID
-	sessionID   string // Optional session ID
+    eventType   string
+    eventSource string
+    eventSubject string
+    eventData   string
+    serverPort  string
+    serverAddr  string // Full server address (host:port)
+    traceID     string // Optional trace ID for correlation
+    userID      string // Optional user ID
+    sessionID   string // Optional session ID
+    attrKVs     []string // Optional attributes key=value (repeatable)
 )
 
 var emitCmd = &cobra.Command{
@@ -105,10 +106,32 @@ func emitEvent() error {
 		event.UserId = userID
 	}
 	
-	// Add session ID if provided
-	if sessionID != "" {
-		event.SessionId = sessionID
-	}
+    // Add session ID if provided
+    if sessionID != "" {
+        event.SessionId = sessionID
+    }
+
+    // Add attributes if provided via --attr key=value
+    if len(attrKVs) > 0 {
+        if event.Attributes == nil {
+            event.Attributes = make(map[string]string)
+        }
+        for _, kv := range attrKVs {
+            // split once
+            var k, v string
+            for i := 0; i < len(kv); i++ {
+                if kv[i] == '=' {
+                    k = kv[:i]
+                    v = kv[i+1:]
+                    break
+                }
+            }
+            if k == "" { // no '=' found, skip
+                continue
+            }
+            event.Attributes[k] = v
+        }
+    }
 	
 	// Parse and add data if provided
 	if eventData != "" {
@@ -202,7 +225,7 @@ func subscribeToEvents(ctx context.Context, client busv1.EventBusServiceClient, 
 }
 
 func init() {
-	rootCmd.AddCommand(emitCmd)
+    rootCmd.AddCommand(emitCmd)
 	
 	// Add flags
 	emitCmd.Flags().StringVarP(&eventType, "type", "t", "", "Event type (e.g., pcas.user.login.v1)")
@@ -213,7 +236,8 @@ func init() {
 	emitCmd.Flags().StringVar(&serverAddr, "server", "", "PCAS server address (overrides --port)")
 	emitCmd.Flags().StringVar(&traceID, "trace-id", "", "Trace ID for correlation (optional, auto-generated if not provided)")
 	emitCmd.Flags().StringVar(&userID, "user-id", "", "User ID for event context (optional)")
-	emitCmd.Flags().StringVar(&sessionID, "session-id", "", "Session ID for event grouping (optional)")
+    emitCmd.Flags().StringVar(&sessionID, "session-id", "", "Session ID for event grouping (optional)")
+    emitCmd.Flags().StringArrayVar(&attrKVs, "attr", nil, "Event attribute key=value (repeatable)")
 	
 	// Mark type as required
 	emitCmd.MarkFlagRequired("type")

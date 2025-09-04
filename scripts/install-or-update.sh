@@ -33,6 +33,8 @@ RESET_CONFIG=0
 
 CFG_FILE=""
 CHANNEL="stable" # stable=latest, edge=edge
+APPLY_POLICY=0       # if set, force replace /data/policy.yaml in container
+RESET_POLICY=0       # if set, delete /data/policy.yaml before applying
 
 log() { echo -e "${GREEN}==>${NC} $*"; }
 warn() { echo -e "${YELLOW}WARN:${NC} $*"; }
@@ -58,6 +60,8 @@ Options:
   --no-prompt          Unattended mode; reuse saved config or provided flags
   -y, --yes            Assume Yes for prompts (where applicable)
   --reset-config       Ignore saved config and re-run guided setup
+  --apply-policy       After start, replace /data/policy.yaml inside container and restart
+  --reset-policy       Remove /data/policy.yaml inside container before applying
   -h, --help           Show this help
 
 Examples:
@@ -88,6 +92,8 @@ while [[ $# -gt 0 ]]; do
     --reset-config) RESET_CONFIG=1; shift ;;
     --pcas) _pcas_host="$2"; shift 2 ;; # accepted for compatibility, unused
     -h|--help) usage; exit 0 ;;
+    --apply-policy) APPLY_POLICY=1; shift ;;
+    --reset-policy) RESET_POLICY=1; shift ;;
     *) err "Unknown option: $1"; usage; exit 1 ;;
   esac
 done
@@ -218,6 +224,8 @@ if [[ ${#ORIG_ARGS[@]} -gt 0 ]]; then
       --no-pull) PULL_IMAGE=0; shift ;;
       --no-start) START_CONTAINER=0; shift ;;
       --pcas) _pcas_host="$2"; shift 2 ;;
+      --apply-policy) APPLY_POLICY=1; shift ;;
+      --reset-policy) RESET_POLICY=1; shift ;;
       --no-prompt|-y|--yes|--reset-config|-h|--help)
         shift ;;
       *) shift ;;
@@ -352,3 +360,24 @@ echo
 
 log "Done. View logs with: docker logs -f ${NAME}"
 echo "Try: ./bin/pcasctl emit --server 127.0.0.1:${PORT} --type pcas.echo.v1 --data '{\"message\":\"hello\"}'"
+
+# Optional: force-apply policy into writable /data then restart to load it
+if [[ ${APPLY_POLICY} -eq 1 ]]; then
+  if ! docker ps --format '{{.Names}}' | grep -qx "${NAME}"; then
+    warn "Container ${NAME} not running; cannot apply policy inside container. Start it first or omit --no-start."
+  else
+    log "Applying policy into container (/data/policy.yaml)"
+    if [[ ${RESET_POLICY} -eq 1 ]]; then
+      docker exec -u 0 "${NAME}" sh -lc 'rm -f /data/policy.yaml' || true
+    fi
+    # copy host-side TARGET_POLICY into container
+    docker cp "${TARGET_POLICY}" "${NAME}:/data/policy.yaml"
+    # fix ownership/permission for non-root pcas user
+    docker exec -u 0 "${NAME}" sh -lc 'chown pcas:pcas /data/policy.yaml && chmod 664 /data/policy.yaml' || {
+      warn "Failed to chown/chmod policy; proceeding but future writes may fail"
+    }
+    log "Restarting container to load updated policy"
+    docker restart "${NAME}" >/dev/null
+    log "Policy applied and container restarted"
+  fi
+fi

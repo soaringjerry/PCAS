@@ -95,10 +95,12 @@ Options:
 - `--openai-key sk-...` to enable RAG/search (or export `OPENAI_API_KEY`)
 - `--image` to use a specific image tag (default `ghcr.io/soaringjerry/pcas:latest`)
 - `--admin-token my-secret` to enable secure admin events for dynamic policy updates
- - `--channel edge` to track the latest main build (`ghcr.io/...:edge`)
+- `--channel edge` to track the latest main build (`ghcr.io/...:edge`)
 - `--no-prompt` for unattended update using saved config
 - `--reset-config` to re-run guided setup and overwrite saved config
 - `-y/--yes` auto-accept prompts (where applicable)
+ - `--apply-policy` replace `/data/policy.yaml` inside the running container and restart
+ - `--reset-policy` remove existing `/data/policy.yaml` before applying (avoids permission/merge issues)
 
 What it does:
 - Pulls the image (unless `--no-pull`), ensures a data volume, prepares `policy.yaml`, and runs the container with restart policy.
@@ -106,3 +108,6 @@ What it does:
 Guided setup behavior:
 - First run (or with `--reset-config`) shows a guided wizard to collect basic settings (port, admin token, OpenAI key), and saves them to `pcas-installer.env` under the install dir.
 - Subsequent runs reuse the saved config and only ask if you want to modify it. Use `--no-prompt` for fully unattended updates.
+
+Policy replacement:
+- By default, PCAS loads policy from `/data/policy.yaml` when present (writable), otherwise falls back to the bundled `/app/policy.yaml` (read‑only). Use `--apply-policy` to copy your host `policy.yaml` into `/data/policy.yaml` with correct ownership and automatically restart the container.

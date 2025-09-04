@@ -135,6 +135,13 @@ save_cfg() {
   chmod 600 "$CFG_FILE"
 }
 
+# Sanitize secrets: strip CR and trailing whitespace/newlines
+sanitize_secret() {
+  # prints sanitized value to stdout
+  # shellcheck disable=SC2005
+  echo "$(printf %s "$1" | tr -d '\r' | sed -e 's/[[:space:]]\+$//')"
+}
+
 if [[ -f "$CFG_FILE" && $RESET_CONFIG -eq 0 ]]; then
   # Try to load saved config; if it fails, fall back to guided setup
   set +e
@@ -156,10 +163,10 @@ if is_tty && [[ $NO_PROMPT -eq 0 ]]; then
     NAME=$(ask "Container name" "${NAME}")
     PORT=$(ask "gRPC port" "${PORT}")
     if confirm "Provide OpenAI API key now?" 0; then
-      OPENAI_KEY=$(ask_secret "Enter OPENAI_API_KEY")
+      OPENAI_KEY=$(sanitize_secret "$(ask_secret "Enter OPENAI_API_KEY")")
     fi
     if confirm "Set admin token (enables secure dynamic policy updates)?" 0; then
-      ADMIN_TOKEN=$(ask_secret "Enter PCAS_ADMIN_TOKEN")
+      ADMIN_TOKEN=$(sanitize_secret "$(ask_secret "Enter PCAS_ADMIN_TOKEN")")
     fi
     mkdir -p "${DIR}" && chmod 755 "${DIR}"
     save_cfg
@@ -175,10 +182,10 @@ if is_tty && [[ $NO_PROMPT -eq 0 ]]; then
       NAME=$(ask "Container name" "${NAME}")
       PORT=$(ask "gRPC port" "${PORT}")
       if confirm "Update OpenAI API key?" 0; then
-        OPENAI_KEY=$(ask_secret "Enter OPENAI_API_KEY (leave blank to remove)")
+        OPENAI_KEY=$(sanitize_secret "$(ask_secret "Enter OPENAI_API_KEY (leave blank to remove)")")
       fi
       if confirm "Update admin token?" 0; then
-        ADMIN_TOKEN=$(ask_secret "Enter PCAS_ADMIN_TOKEN (leave blank to remove)")
+        ADMIN_TOKEN=$(sanitize_secret "$(ask_secret "Enter PCAS_ADMIN_TOKEN (leave blank to remove)")")
       fi
       save_cfg
       log "Updated installer config"
@@ -199,8 +206,8 @@ if [[ ${#ORIG_ARGS[@]} -gt 0 ]]; then
       --volume) VOLUME="$2"; shift 2 ;;
       --policy) POLICY_PATH="$2"; shift 2 ;;
       --policy-url) POLICY_URL="$2"; shift 2 ;;
-      --openai-key) OPENAI_KEY="$2"; shift 2 ;;
-      --admin-token) ADMIN_TOKEN="$2"; shift 2 ;;
+      --openai-key) OPENAI_KEY=$(sanitize_secret "$2"); shift 2 ;;
+      --admin-token) ADMIN_TOKEN=$(sanitize_secret "$2"); shift 2 ;;
       --no-pull) PULL_IMAGE=0; shift ;;
       --no-start) START_CONTAINER=0; shift ;;
       --pcas) _pcas_host="$2"; shift 2 ;;

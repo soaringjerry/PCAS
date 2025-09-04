@@ -186,6 +186,31 @@ if is_tty && [[ $NO_PROMPT -eq 0 ]]; then
   fi
 fi
 
+# Reapply explicit CLI overrides after loading/saving config,
+# so flags take precedence over saved values.
+if [[ ${#ORIG_ARGS[@]} -gt 0 ]]; then
+  set -- "${ORIG_ARGS[@]}"
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --dir) DIR="$2"; shift 2 ;;
+      --name) NAME="$2"; shift 2 ;;
+      --port) PORT="$2"; shift 2 ;;
+      --image) IMAGE="$2"; shift 2 ;;
+      --volume) VOLUME="$2"; shift 2 ;;
+      --policy) POLICY_PATH="$2"; shift 2 ;;
+      --policy-url) POLICY_URL="$2"; shift 2 ;;
+      --openai-key) OPENAI_KEY="$2"; shift 2 ;;
+      --admin-token) ADMIN_TOKEN="$2"; shift 2 ;;
+      --no-pull) PULL_IMAGE=0; shift ;;
+      --no-start) START_CONTAINER=0; shift ;;
+      --pcas) _pcas_host="$2"; shift 2 ;;
+      --no-prompt|-y|--yes|--reset-config|-h|--help)
+        shift ;;
+      *) shift ;;
+    esac
+  done
+fi
+
 # Check docker
 if ! command -v docker >/dev/null 2>&1; then
   err "Docker is required but not found. Please install Docker and re-run."

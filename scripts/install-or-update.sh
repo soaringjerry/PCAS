@@ -14,6 +14,8 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
+ORIG_ARGS=("$@")
+
 DIR="/opt/pcas"
 NAME="pcas-instance"
 PORT="50051"
@@ -25,6 +27,11 @@ OPENAI_KEY="${OPENAI_API_KEY:-}"
 ADMIN_TOKEN=""
 PULL_IMAGE=1
 START_CONTAINER=1
+NO_PROMPT=0
+ASSUME_YES=0
+RESET_CONFIG=0
+
+CFG_FILE=""
 
 log() { echo -e "${GREEN}==>${NC} $*"; }
 warn() { echo -e "${YELLOW}WARN:${NC} $*"; }
@@ -43,8 +50,12 @@ Options:
   --policy PATH        Local policy.yaml to mount
   --policy-url URL     Download policy.yaml from URL to --dir/policy.yaml
   --openai-key KEY     Provide OpenAI API key (or set OPENAI_API_KEY env)
+  --admin-token KEY    Set admin token for dynamic policy updates (PCAS_ADMIN_TOKEN)
   --no-pull            Do not pull image (use local cache)
   --no-start           Do not start/restart container (prepare files only)
+  --no-prompt          Unattended mode; reuse saved config or provided flags
+  -y, --yes            Assume Yes for prompts (where applicable)
+  --reset-config       Ignore saved config and re-run guided setup
   -h, --help           Show this help
 
 Examples:
@@ -69,11 +80,106 @@ while [[ $# -gt 0 ]]; do
     --admin-token) ADMIN_TOKEN="$2"; shift 2 ;;
     --no-pull) PULL_IMAGE=0; shift ;;
     --no-start) START_CONTAINER=0; shift ;;
+    --no-prompt) NO_PROMPT=1; shift ;;
+    -y|--yes) ASSUME_YES=1; shift ;;
+    --reset-config) RESET_CONFIG=1; shift ;;
     --pcas) _pcas_host="$2"; shift 2 ;; # accepted for compatibility, unused
     -h|--help) usage; exit 0 ;;
     *) err "Unknown option: $1"; usage; exit 1 ;;
   esac
 done
+
+# Config helpers
+is_tty() { [[ -t 0 ]] || [[ -t 1 ]]; }
+
+ask() {
+  local prompt="$1"; local def="${2:-}"; local var
+  if [[ -n "$def" ]]; then
+    read -r -p "$prompt [$def]: " var || true
+    echo "${var:-$def}"
+  else
+    read -r -p "$prompt: " var || true
+    echo "$var"
+  fi
+}
+
+ask_secret() {
+  local prompt="$1"; local def_masked="${2:-}"; local var
+  read -r -s -p "$prompt: " var || true; echo
+  echo "$var"
+}
+
+confirm() {
+  local prompt="$1"; local def_yes=${2:-1}; local ans
+  local def_text="Y/n"; [[ $def_yes -eq 0 ]] && def_text="y/N"
+  if [[ $ASSUME_YES -eq 1 ]]; then return 0; fi
+  read -r -p "$prompt [$def_text]: " ans || true
+  ans="${ans:-}"
+  if [[ -z "$ans" ]]; then [[ $def_yes -eq 1 ]] && return 0 || return 1; fi
+  [[ "$ans" =~ ^[Yy]$ ]] && return 0 || return 1
+}
+
+CFG_FILE="${DIR}/pcas-installer.env"
+if [[ -f "$CFG_FILE" && $RESET_CONFIG -eq 0 ]]; then
+  # shellcheck disable=SC1090
+  source "$CFG_FILE"
+fi
+
+# Guided setup (first run or reset), only when interactive
+if is_tty && [[ $NO_PROMPT -eq 0 ]]; then
+  if [[ ! -f "$CFG_FILE" || $RESET_CONFIG -eq 1 ]]; then
+    echo ""
+    echo "PCAS guided setup (first-time configuration)"
+    NAME=$(ask "Container name" "${NAME}")
+    PORT=$(ask "gRPC port" "${PORT}")
+    if confirm "Provide OpenAI API key now?" 0; then
+      OPENAI_KEY=$(ask_secret "Enter OPENAI_API_KEY")
+    fi
+    if confirm "Set admin token (enables secure dynamic policy updates)?" 0; then
+      ADMIN_TOKEN=$(ask_secret "Enter PCAS_ADMIN_TOKEN")
+    fi
+    mkdir -p "${DIR}" && chmod 755 "${DIR}"
+    cat >"$CFG_FILE" <<CONF
+DIR=${DIR}
+NAME=${NAME}
+PORT=${PORT}
+IMAGE=${IMAGE}
+VOLUME=${VOLUME}
+OPENAI_KEY=${OPENAI_KEY}
+ADMIN_TOKEN=${ADMIN_TOKEN}
+CONF
+    chmod 600 "$CFG_FILE"
+    log "Saved installer config to $CFG_FILE"
+  else
+    echo ""
+    echo "Using saved config from $CFG_FILE"
+    echo "  DIR=${DIR}"
+    echo "  NAME=${NAME}  PORT=${PORT}  IMAGE=${IMAGE}  VOLUME=${VOLUME}"
+    if confirm "Use existing config as-is?" 1; then
+      :
+    else
+      NAME=$(ask "Container name" "${NAME}")
+      PORT=$(ask "gRPC port" "${PORT}")
+      if confirm "Update OpenAI API key?" 0; then
+        OPENAI_KEY=$(ask_secret "Enter OPENAI_API_KEY (leave blank to remove)")
+      fi
+      if confirm "Update admin token?" 0; then
+        ADMIN_TOKEN=$(ask_secret "Enter PCAS_ADMIN_TOKEN (leave blank to remove)")
+      fi
+      cat >"$CFG_FILE" <<CONF
+DIR=${DIR}
+NAME=${NAME}
+PORT=${PORT}
+IMAGE=${IMAGE}
+VOLUME=${VOLUME}
+OPENAI_KEY=${OPENAI_KEY}
+ADMIN_TOKEN=${ADMIN_TOKEN}
+CONF
+      chmod 600 "$CFG_FILE"
+      log "Updated installer config"
+    fi
+  fi
+fi
 
 # Check docker
 if ! command -v docker >/dev/null 2>&1; then

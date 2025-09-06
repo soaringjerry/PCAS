@@ -24,6 +24,7 @@ VOLUME="pcas_data"
 POLICY_PATH=""
 POLICY_URL=""
 OPENAI_KEY="${OPENAI_API_KEY:-}"
+OPENAI_BASE_URL="${OPENAI_BASE_URL:-}"
 ADMIN_TOKEN=""
 PULL_IMAGE=1
 START_CONTAINER=1
@@ -54,6 +55,7 @@ Options:
   --policy PATH        Local policy.yaml to mount
   --policy-url URL     Download policy.yaml from URL to --dir/policy.yaml
   --openai-key KEY     Provide OpenAI API key (or set OPENAI_API_KEY env)
+  --openai-base-url URL  Override base URL (e.g., https://openrouter.ai/api/v1)
   --admin-token KEY    Set admin token for dynamic policy updates (PCAS_ADMIN_TOKEN)
   --channel CH         Image channel (default: edge). Use 'stable' for latest release or 'edge' for newest main build
   --update             Force refresh to newest build (edge if available, else latest). Usually unnecessary since default channel=edge
@@ -85,6 +87,7 @@ while [[ $# -gt 0 ]]; do
     --policy) POLICY_PATH="$2"; shift 2 ;;
     --policy-url) POLICY_URL="$2"; shift 2 ;;
     --openai-key) OPENAI_KEY="$2"; shift 2 ;;
+    --openai-base-url) OPENAI_BASE_URL="$2"; shift 2 ;;
     --admin-token) ADMIN_TOKEN="$2"; shift 2 ;;
     --channel) CHANNEL="$2"; shift 2 ;;
     --no-pull) PULL_IMAGE=0; shift ;;
@@ -222,6 +225,7 @@ if [[ ${#ORIG_ARGS[@]} -gt 0 ]]; then
       --policy) POLICY_PATH="$2"; shift 2 ;;
       --policy-url) POLICY_URL="$2"; shift 2 ;;
       --openai-key) OPENAI_KEY=$(sanitize_secret "$2"); shift 2 ;;
+      --openai-base-url) OPENAI_BASE_URL="$2"; shift 2 ;;
       --admin-token) ADMIN_TOKEN=$(sanitize_secret "$2"); shift 2 ;;
       --channel) CHANNEL="$2"; shift 2 ;;
       --no-pull) PULL_IMAGE=0; shift ;;
@@ -342,6 +346,19 @@ if [[ -n "${OPENAI_KEY}" ]]; then
   RUN_ARGS+=(-e "OPENAI_API_KEY=${OPENAI_KEY}")
 else
   warn "OPENAI_API_KEY not provided; search/RAG will be disabled (server still runs)"
+fi
+
+# Optional: custom base URL (e.g., OpenRouter)
+if [[ -n "${OPENAI_BASE_URL}" ]]; then
+  RUN_ARGS+=(-e "OPENAI_BASE_URL=${OPENAI_BASE_URL}")
+fi
+
+# Optional: OpenRouter headers (if provided in env)
+if [[ -n "${OPENROUTER_SITE_URL:-}" ]]; then
+  RUN_ARGS+=(-e "OPENROUTER_SITE_URL=${OPENROUTER_SITE_URL}")
+fi
+if [[ -n "${OPENROUTER_APP_NAME:-}" ]]; then
+  RUN_ARGS+=(-e "OPENROUTER_APP_NAME=${OPENROUTER_APP_NAME}")
 fi
 
 if [[ -n "${ADMIN_TOKEN}" ]]; then

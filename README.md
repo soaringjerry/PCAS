@@ -59,7 +59,7 @@ Get PCAS up and running in minutes with our modern development workflow.
 
 - Go 1.24+
 - Docker and Docker Compose
-- An OpenAI API key (for GPT-4 integration)
+- An OpenAI API key (OpenAI or OpenRouter key)
 
 ### 1. Clone and Setup
 
@@ -139,6 +139,10 @@ Prefer a lightweight, interactive flow without Compose?
 - Start server manually: `pcas serve --host 0.0.0.0 --port 50051`
 - Send a test event: `pcasctl emit --type pcas.test.echo.v1 --data "{\"prompt\":\"hello\"}"`
 - One‑click Docker install/update pulls newest build by default (edge channel). Use `--channel stable` to pin releases.
+
+Using OpenRouter instead of OpenAI:
+- Set env: `OPENAI_BASE_URL=https://openrouter.ai/api/v1` and use an OpenRouter API key in `OPENAI_API_KEY`.
+- Optional headers (recommended by OpenRouter): `OPENROUTER_SITE_URL=https://your.site` and `OPENROUTER_APP_NAME=PCAS`.
 
 ## 🤝 Community & Contribution
 

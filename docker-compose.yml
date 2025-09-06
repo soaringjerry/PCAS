@@ -30,6 +30,9 @@ services:
       - /app/vendor  # Prevent vendor directory from being overwritten
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY:-dummy-key}
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-}
+      - OPENROUTER_SITE_URL=${OPENROUTER_SITE_URL:-}
+      - OPENROUTER_APP_NAME=${OPENROUTER_APP_NAME:-}
       - PG_DSN=postgres://pcas:pcas_vector_db@postgres:5432/pcas_vectors?sslmode=disable
       - PCAS_ENV=development
       - GOFLAGS=-mod=readonly -buildvcs=false

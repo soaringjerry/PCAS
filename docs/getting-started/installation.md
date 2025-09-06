@@ -16,6 +16,7 @@ Before you begin, ensure you have the following installed:
 -   **Go**: Version 1.24 or later. You can download it from [golang.org](https://golang.org/dl/).
 -   **Docker & Docker Compose**: Required for running PCAS with its default PostgreSQL and ChromaDB dependencies. Follow the official Docker installation guide for your operating system.
 -   **Git**: For cloning the PCAS repository.
+ -   Optional: OpenRouter – if you prefer OpenRouter, set `OPENAI_BASE_URL=https://openrouter.ai/api/v1` and provide your OpenRouter API key in `OPENAI_API_KEY`.
 
 ## Step 1: Clone the PCAS Repository
 
@@ -102,6 +103,7 @@ Options:
 - `-y/--yes` auto-accept prompts (where applicable)
 - `--apply-policy` replace `/data/policy.yaml` inside the running container and restart
 - `--reset-policy` remove existing `/data/policy.yaml` before applying (avoids permission/merge issues)
+ - `--openai-base-url URL` override OpenAI base URL (e.g., `https://openrouter.ai/api/v1`)
 
 What it does:
 - Pulls the image (unless `--no-pull`), ensures a data volume, prepares `policy.yaml`, and runs the container with restart policy.

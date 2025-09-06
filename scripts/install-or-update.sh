@@ -32,7 +32,7 @@ ASSUME_YES=0
 RESET_CONFIG=0
 
 CFG_FILE=""
-CHANNEL="stable" # stable=latest, edge=edge
+CHANNEL="edge" # default to newest main build; stable=latest, edge=edge
 APPLY_POLICY=0       # if set, force replace /data/policy.yaml in container
 RESET_POLICY=0       # if set, delete /data/policy.yaml before applying
 UPDATE_FLAG=0        # --update: prefer edge; fallback to latest if edge missing
@@ -55,8 +55,8 @@ Options:
   --policy-url URL     Download policy.yaml from URL to --dir/policy.yaml
   --openai-key KEY     Provide OpenAI API key (or set OPENAI_API_KEY env)
   --admin-token KEY    Set admin token for dynamic policy updates (PCAS_ADMIN_TOKEN)
-  --channel CH         Image channel: stable (latest) or edge (main branch)
-  --update             Update to newest build (edge if available, else latest)
+  --channel CH         Image channel (default: edge). Use 'stable' for latest release or 'edge' for newest main build
+  --update             Force refresh to newest build (edge if available, else latest). Usually unnecessary since default channel=edge
   --no-pull            Do not pull image (use local cache)
   --no-start           Do not start/restart container (prepare files only)
   --no-prompt          Unattended mode; reuse saved config or provided flags

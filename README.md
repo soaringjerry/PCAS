@@ -138,7 +138,7 @@ Prefer a lightweight, interactive flow without Compose?
   - Generates/updates `.env` and `policy.yaml`, and can start the server.
 - Start server manually: `pcas serve --host 0.0.0.0 --port 50051`
 - Send a test event: `pcasctl emit --type pcas.test.echo.v1 --data "{\"prompt\":\"hello\"}"`
-- Update binaries/images: `pcasctl update` (rebuild from source and/or pull Docker image)
+- One‑click Docker install/update pulls newest build by default (edge channel). Use `--channel stable` to pin releases.
 
 ## 🤝 Community & Contribution
 

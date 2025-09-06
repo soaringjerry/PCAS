@@ -93,15 +93,15 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/soaringjerry/pcas/main/s
 Options:
 - `--policy PATH` or `--policy-url URL` to provide a policy file
 - `--openai-key sk-...` to enable RAG/search (or export `OPENAI_API_KEY`)
-- `--image` to use a specific image tag (default `ghcr.io/soaringjerry/pcas:latest`)
+- `--image` to use a specific image tag (default follows `--channel`)
 - `--admin-token my-secret` to enable secure admin events for dynamic policy updates
-- `--channel edge` to track the latest main build (`ghcr.io/...:edge`)
-- `--update` to use newest available build (tries `edge`, falls back to `latest`)
+- `--channel stable|edge` choose image channel (default: `edge` for newest main build; use `stable` to pin latest release)
+- `--update` force refresh to newest build (normally unnecessary because default channel is `edge`)
 - `--no-prompt` for unattended update using saved config
 - `--reset-config` to re-run guided setup and overwrite saved config
 - `-y/--yes` auto-accept prompts (where applicable)
- - `--apply-policy` replace `/data/policy.yaml` inside the running container and restart
- - `--reset-policy` remove existing `/data/policy.yaml` before applying (avoids permission/merge issues)
+- `--apply-policy` replace `/data/policy.yaml` inside the running container and restart
+- `--reset-policy` remove existing `/data/policy.yaml` before applying (avoids permission/merge issues)
 
 What it does:
 - Pulls the image (unless `--no-pull`), ensures a data volume, prepares `policy.yaml`, and runs the container with restart policy.

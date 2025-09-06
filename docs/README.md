@@ -44,4 +44,4 @@ This guide provides comprehensive information about PCAS, from getting started t
 ---
 
 **Need help?**
-If you have any questions or encounter issues, please refer to our [GitHub repository](https://github.com/your-repo/pcas) or open an issue.
+If you have any questions or encounter issues, please refer to our [GitHub repository](https://github.com/soaringjerry/PCAS) or open an issue.

@@ -31,15 +31,17 @@ func NewProviderWithModel(apiKey, model string) *Provider {
     if base := strings.TrimSpace(os.Getenv("OPENAI_BASE_URL")); base != "" {
         cfg.BaseURL = base
     }
-    // If using OpenRouter, attach recommended headers if provided
+    // If using OpenRouter, attach recommended headers via custom transport
     if strings.Contains(strings.ToLower(cfg.BaseURL), "openrouter.ai") {
+        headers := map[string]string{}
         if ref := strings.TrimSpace(os.Getenv("OPENROUTER_SITE_URL")); ref != "" {
-            if cfg.Headers == nil { cfg.Headers = map[string]string{} }
-            cfg.Headers["HTTP-Referer"] = ref
+            headers["HTTP-Referer"] = ref
         }
         if title := strings.TrimSpace(os.Getenv("OPENROUTER_APP_NAME")); title != "" {
-            if cfg.Headers == nil { cfg.Headers = map[string]string{} }
-            cfg.Headers["X-Title"] = title
+            headers["X-Title"] = title
+        }
+        if len(headers) > 0 {
+            cfg.HTTPClient = makeHTTPDoerWithHeaders(headers)
         }
     }
 
@@ -52,6 +54,8 @@ func NewProviderWithModel(apiKey, model string) *Provider {
         modelName: model,
     }
 }
+
+// header helpers moved to httpclient.go
 
 // Execute implements the ComputeProvider interface
 func (p *Provider) Execute(ctx context.Context, requestData map[string]interface{}) (string, error) {

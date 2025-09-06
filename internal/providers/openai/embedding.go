@@ -13,7 +13,7 @@ import (
 
 // EmbeddingProvider is an OpenAI implementation of the EmbeddingProvider interface
 type EmbeddingProvider struct {
-	client *openai.Client
+    client *openai.Client
 }
 
 // NewEmbeddingProvider creates a new OpenAI embedding provider instance
@@ -23,15 +23,17 @@ func NewEmbeddingProvider(apiKey string) providers.EmbeddingProvider {
     if base := strings.TrimSpace(os.Getenv("OPENAI_BASE_URL")); base != "" {
         cfg.BaseURL = base
     }
-    // If using OpenRouter, attach recommended headers if provided
+    // If using OpenRouter, attach recommended headers via custom transport
     if strings.Contains(strings.ToLower(cfg.BaseURL), "openrouter.ai") {
+        headers := map[string]string{}
         if ref := strings.TrimSpace(os.Getenv("OPENROUTER_SITE_URL")); ref != "" {
-            if cfg.Headers == nil { cfg.Headers = map[string]string{} }
-            cfg.Headers["HTTP-Referer"] = ref
+            headers["HTTP-Referer"] = ref
         }
         if title := strings.TrimSpace(os.Getenv("OPENROUTER_APP_NAME")); title != "" {
-            if cfg.Headers == nil { cfg.Headers = map[string]string{} }
-            cfg.Headers["X-Title"] = title
+            headers["X-Title"] = title
+        }
+        if len(headers) > 0 {
+            cfg.HTTPClient = makeHTTPDoerWithHeaders(headers)
         }
     }
     client := openai.NewClientWithConfig(cfg)
@@ -43,15 +45,15 @@ func NewEmbeddingProvider(apiKey string) providers.EmbeddingProvider {
 // CreateEmbedding converts text into a vector embedding using OpenAI's API
 func (p *EmbeddingProvider) CreateEmbedding(ctx context.Context, text string) ([]float32, error) {
     // Choose embedding model (allow override via env for non-OpenAI endpoints)
-    model := openai.LargeEmbedding3
+    modelName := string(openai.LargeEmbedding3)
     if v := strings.TrimSpace(os.Getenv("OPENAI_EMBEDDING_MODEL")); v != "" {
-        model = v
+        modelName = v
     }
 
     // Create embedding request
     req := openai.EmbeddingRequest{
         Input: []string{text},
-        Model: model,
+        Model: openai.EmbeddingModel(modelName),
     }
 
 	// Call OpenAI API

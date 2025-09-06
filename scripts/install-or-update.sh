@@ -35,6 +35,7 @@ CFG_FILE=""
 CHANNEL="stable" # stable=latest, edge=edge
 APPLY_POLICY=0       # if set, force replace /data/policy.yaml in container
 RESET_POLICY=0       # if set, delete /data/policy.yaml before applying
+UPDATE_FLAG=0        # --update: prefer edge; fallback to latest if edge missing
 
 log() { echo -e "${GREEN}==>${NC} $*"; }
 warn() { echo -e "${YELLOW}WARN:${NC} $*"; }
@@ -55,6 +56,7 @@ Options:
   --openai-key KEY     Provide OpenAI API key (or set OPENAI_API_KEY env)
   --admin-token KEY    Set admin token for dynamic policy updates (PCAS_ADMIN_TOKEN)
   --channel CH         Image channel: stable (latest) or edge (main branch)
+  --update             Update to newest build (edge if available, else latest)
   --no-pull            Do not pull image (use local cache)
   --no-start           Do not start/restart container (prepare files only)
   --no-prompt          Unattended mode; reuse saved config or provided flags
@@ -94,6 +96,7 @@ while [[ $# -gt 0 ]]; do
     -h|--help) usage; exit 0 ;;
     --apply-policy) APPLY_POLICY=1; shift ;;
     --reset-policy) RESET_POLICY=1; shift ;;
+    --update) UPDATE_FLAG=1; CHANNEL="edge"; shift ;;
     *) err "Unknown option: $1"; usage; exit 1 ;;
   esac
 done
@@ -226,6 +229,7 @@ if [[ ${#ORIG_ARGS[@]} -gt 0 ]]; then
       --pcas) _pcas_host="$2"; shift 2 ;;
       --apply-policy) APPLY_POLICY=1; shift ;;
       --reset-policy) RESET_POLICY=1; shift ;;
+      --update) UPDATE_FLAG=1; CHANNEL="edge"; shift ;;
       --no-prompt|-y|--yes|--reset-config|-h|--help)
         shift ;;
       *) shift ;;
@@ -300,7 +304,20 @@ docker volume create "${VOLUME}" >/dev/null
 # Optionally pull image
 if [[ "${PULL_IMAGE}" -eq 1 ]]; then
   log "Pulling image: ${IMAGE}"
-  docker pull "${IMAGE}"
+  if ! docker pull "${IMAGE}"; then
+    # If update or edge requested, fallback to stable latest
+    if [[ ${UPDATE_FLAG} -eq 1 || "${CHANNEL}" == "edge" ]]; then
+      warn "Pull ${IMAGE} failed; falling back to ghcr.io/soaringjerry/pcas:latest"
+      IMAGE="ghcr.io/soaringjerry/pcas:latest"
+      if ! docker pull "${IMAGE}"; then
+        err "Failed to pull fallback latest image as well. Aborting."
+        exit 1
+      fi
+    else
+      err "Failed to pull image: ${IMAGE}"
+      exit 1
+    fi
+  fi
 else
   warn "Skipping docker pull (using local image cache)"
 fi

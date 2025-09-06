@@ -96,6 +96,7 @@ Options:
 - `--image` to use a specific image tag (default `ghcr.io/soaringjerry/pcas:latest`)
 - `--admin-token my-secret` to enable secure admin events for dynamic policy updates
 - `--channel edge` to track the latest main build (`ghcr.io/...:edge`)
+- `--update` to use newest available build (tries `edge`, falls back to `latest`)
 - `--no-prompt` for unattended update using saved config
 - `--reset-config` to re-run guided setup and overwrite saved config
 - `-y/--yes` auto-accept prompts (where applicable)

@@ -70,10 +70,16 @@ Options:
 
 Examples:
   bash -c "$(curl -fsSL https://raw.githubusercontent.com/soaringjerry/pcas/main/scripts/install-or-update.sh)" -- \
-    --dir /opt/pcas --name pcas-instance --port 50051
+  --dir /opt/pcas --name pcas-instance --port 50051
 
   OPENAI_API_KEY=sk-... bash -c "$(curl -fsSL https://raw.githubusercontent.com/soaringjerry/pcas/main/scripts/install-or-update.sh)" -- \
     --dir /opt/pcas --policy-url https://raw.githubusercontent.com/soaringjerry/pcas/main/policy.yaml
+
+Notes:
+- When invoking via bash -c, pass script arguments after a standalone "--" separator, e.g.:
+  bash -c "$(curl -fsSL https://raw.githubusercontent.com/soaringjerry/pcas/main/scripts/install-or-update.sh)" -- \
+    --dir /opt/pcas --name pcas-instance --port 50051 --openai-base-url https://openrouter.ai/api/v1
+ - OpenRouter auto-detect: if OPENAI_API_KEY starts with "sk-or-", the base URL defaults to https://openrouter.ai/api/v1 unless overridden by --openai-base-url or OPENAI_BASE_URL.
 EOF
 }
 
@@ -148,6 +154,7 @@ save_cfg() {
     printf 'IMAGE=%q\n' "$IMAGE"
     printf 'VOLUME=%q\n' "$VOLUME"
     printf 'OPENAI_KEY=%q\n' "$OPENAI_KEY"
+    printf 'OPENAI_BASE_URL=%q\n' "$OPENAI_BASE_URL"
     printf 'ADMIN_TOKEN=%q\n' "$ADMIN_TOKEN"
   } >>"$CFG_FILE"
   chmod 600 "$CFG_FILE"
@@ -194,6 +201,9 @@ if is_tty && [[ $NO_PROMPT -eq 0 ]]; then
     echo "Using saved config from $CFG_FILE"
     echo "  DIR=${DIR}"
     echo "  NAME=${NAME}  PORT=${PORT}  IMAGE=${IMAGE}  VOLUME=${VOLUME}"
+    if [[ -n "${OPENAI_BASE_URL}" ]]; then
+      echo "  OPENAI_BASE_URL=${OPENAI_BASE_URL}"
+    fi
     if confirm "Use existing config as-is?" 1; then
       :
     else
@@ -201,6 +211,9 @@ if is_tty && [[ $NO_PROMPT -eq 0 ]]; then
       PORT=$(ask "gRPC port" "${PORT}")
       if confirm "Update OpenAI API key?" 0; then
         OPENAI_KEY=$(sanitize_secret "$(ask_secret "Enter OPENAI_API_KEY (leave blank to remove)")")
+      fi
+      if confirm "Set/Update OpenAI base URL (e.g., https://openrouter.ai/api/v1)?" 0; then
+        OPENAI_BASE_URL=$(ask "Enter OPENAI_BASE_URL" "${OPENAI_BASE_URL}")
       fi
       if confirm "Update admin token?" 0; then
         ADMIN_TOKEN=$(sanitize_secret "$(ask_secret "Enter PCAS_ADMIN_TOKEN (leave blank to remove)")")
@@ -348,10 +361,13 @@ else
   warn "OPENAI_API_KEY not provided; search/RAG will be disabled (server still runs)"
 fi
 
-# Optional: custom base URL (e.g., OpenRouter)
-if [[ -n "${OPENAI_BASE_URL}" ]]; then
-  RUN_ARGS+=(-e "OPENAI_BASE_URL=${OPENAI_BASE_URL}")
+# Optional: custom base URL (e.g., OpenRouter). If not provided, auto-detect by key prefix
+if [[ -z "${OPENAI_BASE_URL}" && -n "${OPENAI_KEY}" ]]; then
+  case "${OPENAI_KEY}" in
+    sk-or-*) OPENAI_BASE_URL="https://openrouter.ai/api/v1" ;;
+  esac
 fi
+if [[ -n "${OPENAI_BASE_URL}" ]]; then RUN_ARGS+=(-e "OPENAI_BASE_URL=${OPENAI_BASE_URL}"); fi
 
 # Optional: OpenRouter headers (if provided in env)
 if [[ -n "${OPENROUTER_SITE_URL:-}" ]]; then

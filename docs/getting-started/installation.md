@@ -18,6 +18,10 @@ Before you begin, ensure you have the following installed:
 -   **Git**: For cloning the PCAS repository.
  -   Optional: OpenRouter – if you prefer OpenRouter, set `OPENAI_BASE_URL=https://openrouter.ai/api/v1` and provide your OpenRouter API key in `OPENAI_API_KEY`.
 
+Note on OpenRouter
+
+If your `OPENAI_API_KEY` starts with `sk-or-`, PCAS will automatically use `https://openrouter.ai/api/v1` as the base URL unless `OPENAI_BASE_URL` is explicitly set. You can also set `OPENAI_BASE_URL` directly to point to a custom-compatible endpoint.
+
 ## Step 1: Clone the PCAS Repository
 
 Open your terminal and clone the PCAS repository:

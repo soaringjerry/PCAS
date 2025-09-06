@@ -143,6 +143,7 @@ Prefer a lightweight, interactive flow without Compose?
 Using OpenRouter instead of OpenAI:
 - Set env: `OPENAI_BASE_URL=https://openrouter.ai/api/v1` and use an OpenRouter API key in `OPENAI_API_KEY`.
 - Optional headers (recommended by OpenRouter): `OPENROUTER_SITE_URL=https://your.site` and `OPENROUTER_APP_NAME=PCAS`.
+- Auto-detect: if your `OPENAI_API_KEY` starts with `sk-or-`, PCAS will default to `https://openrouter.ai/api/v1` unless `OPENAI_BASE_URL` is explicitly set.
 
 ## 🤝 Community & Contribution
 

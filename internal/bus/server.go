@@ -58,11 +58,16 @@ func NewServer(policyEngine *policy.Engine, providerMap map[string]providers.Com
 
 // Publish handles incoming events from clients
 func (s *Server) Publish(ctx context.Context, event *eventsv1.Event) (*busv1.PublishResponse, error) {
-	// Store the incoming event immediately
-	if err := s.storage.StoreEvent(ctx, event, nil); err != nil {
-		log.Printf("Failed to store incoming event: %v", err)
-		// Continue processing even if storage fails
-	}
+    // Store the incoming event immediately
+    if err := s.storage.StoreEvent(ctx, event, nil); err != nil {
+        log.Printf("Failed to store incoming event: %v", err)
+        // Continue processing even if storage fails
+    }
+
+    // Broadcast the incoming event to all subscribers so external D-Apps can react
+    // This enables event-driven providers to consume request events and publish
+    // their own response/callback events with correlation_id.
+    s.broadcastEvent(event)
 	
 	// Start vectorization in background if providers are available
 	// Only vectorize fact events

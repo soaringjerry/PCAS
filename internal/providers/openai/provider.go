@@ -101,12 +101,23 @@ func (p *Provider) Execute(ctx context.Context, requestData map[string]interface
         }
     }
 
-    // Create chat completion request
+    // Create chat completion request (do not force temperature by default)
     req := openai.ChatCompletionRequest{
-        Model:       model,
-        Messages:    messages,
-        Temperature: 0.7,
+        Model:    model,
+        Messages: messages,
         // Note: omit MaxTokens to avoid 400 on Responses-only models (GPT-5/o4 family)
+    }
+
+    // Optional temperature from requestData
+    if v, ok := requestData["temperature"]; ok {
+        if t, ok := parseTemperature(v); ok {
+            if supportsTemperature(model) {
+                req.Temperature = float32(t)
+            } else {
+                // Restricted families accept only default; explicitly set to 1.0
+                req.Temperature = 1.0
+            }
+        }
     }
 	
 	// Call OpenAI API
@@ -139,10 +150,15 @@ func (p *Provider) ExecuteStream(ctx context.Context, attributes map[string]stri
         systemPrompt = v
     }
 
-    temperature := 0.7
+    // Only set temperature if provided; avoid defaulting to non-1 for restricted models
+    var (
+        haveTemp    bool
+        temperature float64
+    )
     if v, ok := attributes["temperature"]; ok {
         if t, err := strconv.ParseFloat(v, 64); err == nil {
             temperature = t
+            haveTemp = true
         }
     }
 
@@ -168,11 +184,18 @@ func (p *Provider) ExecuteStream(ctx context.Context, attributes map[string]stri
 
     // Prepare streaming request
     req := openai.ChatCompletionRequest{
-        Model:       model,
-        Messages:    msgs,
-        Temperature: float32(temperature),
-        Stream:      true,
+        Model:    model,
+        Messages: msgs,
+        Stream:   true,
         // omit MaxTokens; some models require max_completion_tokens via Responses API
+    }
+    if haveTemp {
+        if supportsTemperature(model) {
+            req.Temperature = float32(temperature)
+        } else {
+            // Restricted families accept only default; explicitly set to 1.0
+            req.Temperature = 1.0
+        }
     }
 
     stream, err := p.client.CreateChatCompletionStream(ctx, req)
@@ -203,4 +226,50 @@ func (p *Provider) ExecuteStream(ctx context.Context, attributes map[string]stri
     }
 
     return nil
+}
+
+// supportsTemperature determines whether a model family allows non-default temperature values.
+// Some responses/realtime/transcription families only accept the default (1.0).
+func supportsTemperature(model string) bool {
+    m := strings.ToLower(strings.TrimSpace(model))
+    if m == "" {
+        return true
+    }
+    // Conservative blocklist; expand as needed
+    if strings.HasPrefix(m, "gpt-5") {
+        return false
+    }
+    if strings.HasPrefix(m, "o4") {
+        return false
+    }
+    if strings.Contains(m, "realtime") {
+        return false
+    }
+    if strings.Contains(m, "transcribe") {
+        return false
+    }
+    return true
+}
+
+// parseTemperature accepts number or numeric string and returns a float64.
+func parseTemperature(v interface{}) (float64, bool) {
+    switch t := v.(type) {
+    case float32:
+        return float64(t), true
+    case float64:
+        return t, true
+    case int:
+        return float64(t), true
+    case int32:
+        return float64(t), true
+    case int64:
+        return float64(t), true
+    case string:
+        if s := strings.TrimSpace(t); s != "" {
+            if f, err := strconv.ParseFloat(s, 64); err == nil {
+                return f, true
+            }
+        }
+    }
+    return 0, false
 }

@@ -4,6 +4,7 @@ import (
     "context"
     "fmt"
     "io"
+    "os"
     "strconv"
     "strings"
 
@@ -25,7 +26,24 @@ func NewProvider(apiKey string) *Provider {
 
 // NewProviderWithModel creates a new OpenAI provider with an explicit model name
 func NewProviderWithModel(apiKey, model string) *Provider {
-    client := openai.NewClient(apiKey)
+    // Allow custom base URL via environment variable (e.g., OpenRouter)
+    cfg := openai.DefaultConfig(apiKey)
+    if base := strings.TrimSpace(os.Getenv("OPENAI_BASE_URL")); base != "" {
+        cfg.BaseURL = base
+    }
+    // If using OpenRouter, attach recommended headers if provided
+    if strings.Contains(strings.ToLower(cfg.BaseURL), "openrouter.ai") {
+        if ref := strings.TrimSpace(os.Getenv("OPENROUTER_SITE_URL")); ref != "" {
+            if cfg.Headers == nil { cfg.Headers = map[string]string{} }
+            cfg.Headers["HTTP-Referer"] = ref
+        }
+        if title := strings.TrimSpace(os.Getenv("OPENROUTER_APP_NAME")); title != "" {
+            if cfg.Headers == nil { cfg.Headers = map[string]string{} }
+            cfg.Headers["X-Title"] = title
+        }
+    }
+
+    client := openai.NewClientWithConfig(cfg)
     if model == "" {
         model = defaultChatModel
     }

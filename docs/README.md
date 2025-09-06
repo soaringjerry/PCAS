@@ -32,6 +32,7 @@ This guide provides comprehensive information about PCAS, from getting started t
 - [Ollama Provider](./guides/ollama-provider.md)
 - [Backfill Metadata](./guides/backfill-metadata.md)
 - [DApp Registration via Admin Events](./guides/dapp-registration.md)
+- [Event‑Driven Transcription D‑App](./guides/event-driven-transcription-dapp.md)
 
 ### Architecture
 - [Architecture Decision Records (ADR)](./architecture/adr/)

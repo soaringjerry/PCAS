@@ -106,7 +106,7 @@ func (p *Provider) Execute(ctx context.Context, requestData map[string]interface
         Model:       model,
         Messages:    messages,
         Temperature: 0.7,
-        MaxTokens:   2000, // Increased for longer responses with context
+        // Note: omit MaxTokens to avoid 400 on Responses-only models (GPT-5/o4 family)
     }
 	
 	// Call OpenAI API
@@ -172,7 +172,7 @@ func (p *Provider) ExecuteStream(ctx context.Context, attributes map[string]stri
         Messages:    msgs,
         Temperature: float32(temperature),
         Stream:      true,
-        MaxTokens:   2000,
+        // omit MaxTokens; some models require max_completion_tokens via Responses API
     }
 
     stream, err := p.client.CreateChatCompletionStream(ctx, req)

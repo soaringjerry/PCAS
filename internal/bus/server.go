@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"strings"
 	"sync"
 	"time"
 
@@ -72,7 +73,7 @@ func (s *Server) Publish(ctx context.Context, event *eventsv1.Event) (*busv1.Pub
 	// Start vectorization in background if providers are available
 	// Only vectorize fact events
 	if s.embeddingProvider != nil {
-		if IsFactEvent(event.Type) {
+		if ShouldVectorize(event.Type, event.Attributes) {
 			log.Printf("Will vectorize fact event: type=%s, id=%s", event.Type, event.Id)
 			s.vectorizeWG.Add(1)  // Increment counter before starting goroutine
 			go s.vectorizeEvent(event)
@@ -113,6 +114,11 @@ func (s *Server) Publish(ctx context.Context, event *eventsv1.Event) (*busv1.Pub
 			// Fall back to raw string representation for non-Value types
 			log.Printf("  Data: %s", event.Data.String())
 		}
+	}
+
+	// Auto-chunk text ingest if applicable (after we have requestData)
+	if s.tryAutoChunk(ctx, event, requestData) {
+		log.Printf("Auto-chunking produced segments for event %s", event.Id)
 	}
 
 	// Handle admin control events (e.g., dynamic policy updates)
@@ -277,7 +283,142 @@ func (s *Server) SetEmbeddingProvider(provider providers.EmbeddingProvider) {
 
 // WaitForVectorization waits for all background vectorization tasks to complete
 func (s *Server) WaitForVectorization() {
-	s.vectorizeWG.Wait()
+    s.vectorizeWG.Wait()
 }
 
 // isFactEvent determines if an event type represents a "fact" that should be vectorized
+
+// tryAutoChunk inspects an incoming event and, if it represents a text ingest,
+// splits the text into small segments and emits resource.segment.v1 events marked as indexable.
+func (s *Server) tryAutoChunk(ctx context.Context, event *eventsv1.Event, requestData map[string]interface{}) bool {
+    // Detect trigger types
+    if !(event.Type == "pcas.text.ingest.v1" || event.Type == "resource.ingest.v1") {
+        return false
+    }
+
+    // Extract text
+    var text string
+    if requestData != nil {
+        if v, ok := requestData["text"]; ok {
+            if s, ok2 := v.(string); ok2 {
+                text = s
+            }
+        }
+    }
+    if strings.TrimSpace(text) == "" {
+        return false
+    }
+
+    // Optional source URL for traceability
+    var sourceURL string
+    if requestData != nil {
+        if v, ok := requestData["source_url"].(string); ok && v != "" {
+            sourceURL = v
+        } else if v2, ok2 := requestData["url"].(string); ok2 && v2 != "" {
+            sourceURL = v2
+        }
+    }
+
+    // Chunk text into segments
+    chunks := chunkText(text, 1600, 200) // ~400 tokens per chunk, ~50 token overlap (4 chars/token)
+    if len(chunks) == 0 {
+        return false
+    }
+
+    log.Printf("Auto-chunking text ingest into %d segments (event %s)", len(chunks), event.Id)
+
+    // Inherit attributes and add index flag
+    baseAttrs := map[string]string{}
+    for k, v := range event.Attributes {
+        baseAttrs[k] = v
+    }
+    baseAttrs["index"] = "true"
+    if sourceURL != "" {
+        baseAttrs["source_url"] = sourceURL
+    }
+
+    // Emit segment events
+    for i, seg := range chunks {
+        segEvent := &eventsv1.Event{
+            Id:          uuid.New().String(),
+            Type:        "resource.segment.v1",
+            Source:      "pcas-chunker",
+            Specversion: "1.0",
+            Time:        timestamppb.New(time.Now()),
+            TraceId:     event.TraceId,
+            UserId:      event.UserId,
+            SessionId:   event.SessionId,
+            Attributes:  baseAttrs,
+            Subject:     fmt.Sprintf("segment-%d-of-%s", i+1, event.Id),
+        }
+
+        dataMap := map[string]interface{}{
+            "text": seg,
+        }
+        if sourceURL != "" {
+            dataMap["source_url"] = sourceURL
+        }
+        if val, err := structpb.NewValue(dataMap); err == nil {
+            if anyData, err := anypb.New(val); err == nil {
+                segEvent.Data = anyData
+            }
+        }
+
+        // Store then broadcast
+        if err := s.storage.StoreEvent(ctx, segEvent, nil); err != nil {
+            log.Printf("Failed to store auto-chunk segment: %v", err)
+        }
+        s.broadcastEvent(segEvent)
+
+        // Vectorize if embedding is available
+        if s.embeddingProvider != nil && ShouldVectorize(segEvent.Type, segEvent.Attributes) {
+            s.vectorizeWG.Add(1)
+            go s.vectorizeEvent(segEvent)
+        }
+    }
+    return true
+}
+
+// chunkText splits text by rune length with soft word boundaries.
+func chunkText(text string, sizeChars int, overlapChars int) []string {
+    t := strings.TrimSpace(text)
+    if t == "" || sizeChars <= 0 {
+        return nil
+    }
+    if overlapChars < 0 { overlapChars = 0 }
+
+    var result []string
+    start := 0
+    for start < len(t) {
+        end := start + sizeChars
+        if end >= len(t) {
+            result = append(result, strings.TrimSpace(t[start:]))
+            break
+        }
+        // try to cut at whitespace before end
+        cut := end
+        for i := end; i > start && i > end-200; i-- { // look back up to 200 chars
+            if isSpace(t[i-1]) {
+                cut = i
+                break
+            }
+        }
+        result = append(result, strings.TrimSpace(t[start:cut]))
+        // move with overlap
+        next := cut - overlapChars
+        if next <= start {
+            next = cut
+        }
+        start = next
+    }
+    return result
+}
+
+func isSpace(b byte) bool {
+    switch b {
+    case ' ', '\n', '\t', '\r', '\f', '\v':
+        return true
+    default:
+        return false
+    }
+}

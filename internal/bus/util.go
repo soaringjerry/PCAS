@@ -21,3 +21,19 @@ func IsFactEvent(eventType string) bool {
 	
 	return false
 }
+
+// ShouldVectorize determines if an event should be vectorized.
+// Besides fact events, we also vectorize resource segments explicitly marked as indexable.
+func ShouldVectorize(eventType string, attributes map[string]string) bool {
+    if IsFactEvent(eventType) {
+        return true
+    }
+    if eventType == "resource.segment.v1" {
+        if attributes != nil {
+            if v, ok := attributes["index"]; ok && (v == "true" || v == "1" || v == "yes") {
+                return true
+            }
+        }
+    }
+    return false
+}

@@ -33,6 +33,7 @@ This guide provides comprehensive information about PCAS, from getting started t
 - [Backfill Metadata](./guides/backfill-metadata.md)
 - [DApp Registration via Admin Events](./guides/dapp-registration.md)
 - [Event‑Driven Transcription D‑App](./guides/event-driven-transcription-dapp.md)
+- [OpenAI-Compatible Gateway](./guides/openai-compatible-gateway.md)
 
 ### Architecture
 - [Architecture Decision Records (ADR)](./architecture/adr/)

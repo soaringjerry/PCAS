@@ -1,9 +1,11 @@
-<<<<<<< HEAD
 # PCAS (Personal Central AI System)
 
 **PCAS is an open-source, local-first, intelligent decision-making engine designed to power a new generation of personal AI operating systems.**
 
 It serves as the core technical heart of the **DreamHub Ecosystem**, a broader vision for a user-centric AI future built on the principle of "Absolute Data Sovereignty, Flexible Compute Scheduling."
+
+
+***This project is currently facing some challenges, likely due to considerations regarding product positioning and practicality. Development has been temporarily put on hold until I identify a clear path forward.***
 
 ---
 

@@ -1,14 +1,23 @@
 import { useState } from 'react'
+import { CircleAlert, FileText, Search } from 'lucide-react'
 import { api } from '../store/api'
 import { SideSheet } from './Overlay'
 import { SourceSheet } from './SourceSheet'
-import { Button } from './ui'
+import { Button, Seg, Spinner } from './ui'
 
+type Mode = 'continue' | 'remember' | 'history'
 interface Ref { id: string; version: number; kind: string }
 interface Recall { summary: string; memories: Ref[]; evidence: { id: string; source: Ref }[]; coverage: { complete: boolean; gaps: string[]; next_cursor?: string }; follow_ups: string[] }
+
+const modes: { value: Mode; label: string }[] = [
+  { value: 'continue', label: '续接话题' },
+  { value: 'remember', label: '模糊回忆' },
+  { value: 'history', label: '完整历史' },
+]
+
 export function RecallSheet({ query: initial, onClose }: { query: string; onClose: () => void }) {
   const [query, setQuery] = useState(initial)
-  const [mode, setMode] = useState('remember')
+  const [mode, setMode] = useState<Mode>('remember')
   const [results, setResults] = useState<Recall[]>([])
   const [source, setSource] = useState<Ref | null>(null)
   const [busy, setBusy] = useState(false)
@@ -25,17 +34,28 @@ export function RecallSheet({ query: initial, onClose }: { query: string; onClos
   }
   return <SideSheet title="找回记忆" onClose={onClose}><div className="stack">
     <form className="stack-sm" onSubmit={(e) => { e.preventDefault(); void search() }}>
-      <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="模糊描述、对象或原文关键词" aria-label="回忆线索" />
-      <select value={mode} onChange={(e) => setMode(e.target.value)} aria-label="检索范围"><option value="continue">续接当前话题</option><option value="remember">模糊回忆</option><option value="history">完整历史</option></select>
-      <Button type="submit" disabled={busy} variant="primary">{busy ? '查找中…' : '查找'}</Button>
+      <label className="input-icon">
+        <Search size={16} />
+        <input className="input" autoFocus value={query} onChange={(e) => setQuery(e.target.value)} placeholder="模糊描述、对象或原文关键词" aria-label="回忆线索" />
+      </label>
+      <div className="spread">
+        <Seg label="检索范围" value={mode} onChange={setMode} items={modes} />
+        <Button type="submit" disabled={busy} variant="primary">{busy && <Spinner />}{busy ? '查找中…' : '查找'}</Button>
+      </div>
     </form>
-    {error && <p role="alert">{error}</p>}
-    {results.map((result, i) => <section key={i} className="stack-sm">
-      <pre style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{result.summary || '当前范围没有找到。'}</pre>
-      <div className="row">{[...result.memories.filter((r) => r.kind === 'source'), ...result.evidence.map((e) => e.source)].filter((r, index, all) => all.findIndex((v) => v.id === r.id && v.version === r.version) === index).map((ref) => <Button key={`${ref.id}:${ref.version}`} size="sm" onClick={() => setSource(ref)}>展开来源 · v{ref.version}</Button>)}</div>
-      {result.coverage.gaps.map((gap) => <p key={gap} className="small muted">{gap}</p>)}
-      {result.follow_ups.map((hint) => <p key={hint} className="small muted">{hint}</p>)}
-    </section>)}
+    {error && <p className="form-error" role="alert"><CircleAlert size={14} />{error}</p>}
+    {results.map((result, i) => {
+      const sources = [...result.memories.filter((r) => r.kind === 'source'), ...result.evidence.map((e) => e.source)]
+        .filter((r, index, all) => all.findIndex((v) => v.id === r.id && v.version === r.version) === index)
+      return <section key={i} className="recall-result">
+        <div className={`recall-summary${result.summary ? '' : ' faint'}`}>{result.summary || '当前范围没有找到。'}</div>
+        {sources.length > 0 && <div className="row">{sources.map((ref) => <button type="button" className="chip" key={`${ref.id}:${ref.version}`} onClick={() => setSource(ref)}><FileText size={12} />来源 · v{ref.version}</button>)}</div>}
+        {[...result.coverage.gaps, ...result.follow_ups].length > 0 && <ul className="recall-notes">
+          {result.coverage.gaps.map((gap) => <li key={gap}>{gap}</li>)}
+          {result.follow_ups.map((hint) => <li key={hint}>{hint}</li>)}
+        </ul>}
+      </section>
+    })}
     {results.at(-1)?.coverage.next_cursor && <Button disabled={busy} onClick={() => void search(true)}>继续扩大历史覆盖</Button>}
     {source && <SourceSheet id={source.id} version={source.version} onClose={() => setSource(null)} />}
   </div></SideSheet>

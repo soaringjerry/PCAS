@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { NavLink, useNavigate } from 'react-router'
 import { BookOpen, House, Plus, Search, Settings } from 'lucide-react'
 import { newId } from '../domain/ids'
@@ -5,6 +6,8 @@ import { urgentLine } from '../domain/lines'
 import { isOpenTask } from '../domain/things'
 import { useStore } from '../store/context'
 import { useShell } from '../store/shell'
+import { Modal } from './Overlay'
+import { Button } from './ui'
 
 export function Sidebar({ open }: { open: boolean }) {
   const { state, dispatch } = useStore()
@@ -12,11 +15,16 @@ export function Sidebar({ open }: { open: boolean }) {
   const navigate = useNavigate()
   const urgent = urgentLine(state).length
   const isMac = /Mac|iPhone|iPad/.test(navigator.platform)
+  const [naming, setNaming] = useState(false)
+  const [name, setName] = useState('')
   const item = ({ isActive }: { isActive: boolean }) => `nav-item${isActive ? ' active' : ''}`
 
   return (
     <nav className={`sidebar${open ? ' open' : ''}`} aria-label="导航">
-      <div className="wordmark">PCAS</div>
+      <div className="wordmark">
+        <img src="/favicon.svg" alt="" width={22} height={22} />
+        PCAS
+      </div>
       <button type="button" className="find" onClick={openPalette}>
         <Search size={14} />
         搜索
@@ -44,18 +52,7 @@ export function Sidebar({ open }: { open: boolean }) {
               </NavLink>
             )
           })}
-        <button
-          type="button"
-          className="nav-item add"
-          onClick={() => {
-            const name = window.prompt('新项目的名字')?.trim()
-            if (!name) return
-            const id = newId()
-            dispatch({ type: 'addProject', id, name })
-            closeDrawer()
-            navigate(`/t/${id}`)
-          }}
-        >
+        <button type="button" className="nav-item add" onClick={() => setNaming(true)}>
           <Plus size={15} style={{ color: 'var(--label-3)' }} />
           新项目
         </button>
@@ -71,6 +68,33 @@ export function Sidebar({ open }: { open: boolean }) {
           设置
         </NavLink>
       </div>
+      {naming && (
+        <Modal
+          title="新项目"
+          onClose={() => setNaming(false)}
+          onSubmit={async () => {
+            if (!name.trim()) return
+            const id = newId()
+            if (!(await dispatch({ type: 'addProject', id, name: name.trim() }))) return
+            setNaming(false)
+            setName('')
+            closeDrawer()
+            navigate(`/t/${id}`)
+          }}
+          actions={
+            <>
+              <Button variant="quiet" onClick={() => setNaming(false)}>
+                取消
+              </Button>
+              <Button type="submit" variant="primary" disabled={!name.trim()}>
+                创建
+              </Button>
+            </>
+          }
+        >
+          <input className="input" autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="项目的名字" aria-label="项目的名字" />
+        </Modal>
+      )}
     </nav>
   )
 }

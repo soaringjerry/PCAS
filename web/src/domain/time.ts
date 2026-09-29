@@ -56,14 +56,18 @@ export function isOverdue(iso: string): boolean {
   return new Date(iso).getTime() < Date.now()
 }
 
-/** ISO -> value for <input type="datetime-local"> */
-export function toLocalInput(iso?: string): string {
-  if (!iso) return ''
-  const d = new Date(iso)
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
-}
+const weekdays = ['一', '二', '三', '四', '五', '六', '日']
+const pad = (n: number) => String(n).padStart(2, '0')
 
-export function fromLocalInput(value: string): string | undefined {
-  return value ? new Date(value).toISOString() : undefined
+/** "今天 18:00", "明天 09:00", "10月3日 周六 14:30", "2027年1月2日 周六 09:00" */
+export function formatDateTime(iso: string): string {
+  const d = new Date(iso)
+  const now = new Date()
+  const time = `${pad(d.getHours())}:${pad(d.getMinutes())}`
+  const days = dayOffset(iso)
+  if (days === 0) return `今天 ${time}`
+  if (days === 1) return `明天 ${time}`
+  if (days === -1) return `昨天 ${time}`
+  const year = d.getFullYear() === now.getFullYear() ? '' : `${d.getFullYear()}年`
+  return `${year}${d.getMonth() + 1}月${d.getDate()}日 周${weekdays[(d.getDay() + 6) % 7]} ${time}`
 }

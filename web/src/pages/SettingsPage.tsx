@@ -2,18 +2,27 @@ import { memoriesFor } from '../domain/agent'
 import { memoryKindLabel } from '../domain/labels'
 import { spentToday } from '../domain/lines'
 import type { MemoryKind } from '../domain/types'
+import { Clock } from 'lucide-react'
 import { Button, Sheet, Switch, Tag } from '../components/ui'
+import { Chip, Select, Stepper } from '../components/controls'
+import { useToast } from '../store/toast'
 import { useStore } from '../store/context'
 import { ChatGPTConnection } from '../components/ChatGPTConnection'
 import { api, downloadExport } from '../store/api'
 
 const channelText = { mcp: 'MCP', api: 'API', manual: '手动' } as const
 
+/** Half-hour slots, keeping an off-grid saved value selectable. */
+function reviewTimes(current: string) {
+  const slots = Array.from({ length: 48 }, (_, i) => `${String(Math.floor(i / 2)).padStart(2, '0')}:${i % 2 ? '30' : '00'}`)
+  if (!slots.includes(current)) slots.push(current)
+  return slots.sort().map((t) => ({ value: t, label: t }))
+}
+
 export function SettingsPage() {
   const { state, dispatch } = useStore()
+  const toast = useToast()
   const s = state.settings
-
-
 
   return (
     <main className="page page-narrow">
@@ -57,31 +66,24 @@ export function SettingsPage() {
                 <div className="ink">副手每天最多花</div>
                 <div className="small muted">API 副手、抽取、向量与转录共同受预算约束。今天已用（含预留） ¥{spentToday(state).toFixed(2)}。</div>
               </div>
-              <label className="row-nowrap small">
-                ¥
-                <input
-                  type="number"
-                  min={0}
-                  step={1}
-                  className="inline-select"
-                  style={{ width: 64 }}
-                  value={s.dailyBudget}
-                  onChange={(e) => dispatch({ type: 'updateSettings', patch: { dailyBudget: Math.max(0, Number(e.target.value) || 0) } })}
-                  aria-label="每日额度"
-                />
-              </label>
+              <Stepper
+                label="每日额度"
+                prefix="¥"
+                value={s.dailyBudget}
+                onChange={(v) => dispatch({ type: 'updateSettings', patch: { dailyBudget: v } })}
+              />
             </div>
             <div className="setting">
               <div>
                 <div className="ink">每日整理</div>
                 <div className="small muted">每天汇总待确认线索；新资料到达后即开始整理。</div>
               </div>
-              <input
-                type="time"
-                className="inline-select"
+              <Select
+                label="每日整理时间"
+                icon={<Clock size={13} />}
                 value={s.dailyReviewAt}
-                onChange={(e) => dispatch({ type: 'updateSettings', patch: { dailyReviewAt: e.target.value } })}
-                aria-label="每日整理时间"
+                onChange={(v) => dispatch({ type: 'updateSettings', patch: { dailyReviewAt: v } })}
+                options={reviewTimes(s.dailyReviewAt)}
               />
             </div>
           </Sheet>
@@ -91,7 +93,7 @@ export function SettingsPage() {
           <h2 className="section-title">
             副手
           </h2>
-          <p className="small muted">不同的 AI 用同一份记忆，但只看得到你给的部分。换模型不会丢掉积累。</p>
+          <p className="section-note">不同的 AI 用同一份记忆，但只看得到你给的部分。换模型不会丢掉积累。</p>
           <div className="agent-grid">
             {state.agents.map((agent) => (
               <Sheet
@@ -107,28 +109,29 @@ export function SettingsPage() {
               >
                 <div className="stack-sm" style={{ opacity: agent.enabled ? 1 : 0.5 }}>
                   <p className="small muted">{agent.note}</p>
-                  <div className="row">
-                    <span className="small muted">能看：</span>
-                    {(Object.keys(memoryKindLabel) as MemoryKind[]).map((kind) => {
-                      const on = agent.memoryKinds.includes(kind)
-                      return (
-                        <label key={kind} className="check small">
-                          <input
-                            type="checkbox"
-                            checked={on}
+                  <div className="stack-sm" style={{ gap: 6 }}>
+                    <span className="tiny muted">能看到的记忆</span>
+                    <div className="row" style={{ gap: 6 }}>
+                      {(Object.keys(memoryKindLabel) as MemoryKind[]).map((kind) => {
+                        const on = agent.memoryKinds.includes(kind)
+                        return (
+                          <Chip
+                            key={kind}
+                            on={on}
                             disabled={!agent.enabled}
-                            onChange={() =>
+                            onToggle={() =>
                               dispatch({
                                 type: 'updateAgent',
                                 id: agent.id,
                                 patch: { memoryKinds: on ? agent.memoryKinds.filter((k) => k !== kind) : [...agent.memoryKinds, kind] },
                               })
                             }
-                          />
-                          {memoryKindLabel[kind]}
-                        </label>
-                      )
-                    })}
+                          >
+                            {memoryKindLabel[kind]}
+                          </Chip>
+                        )
+                      })}
+                    </div>
                   </div>
                   <div className="spread">
                     <span className="small">也给没确认的推测</span>
@@ -155,7 +158,7 @@ export function SettingsPage() {
                 <div className="ink">导出全部数据</div>
                 <div className="small muted">事情、记忆、来源和训练数据，一个 JSON 文件。</div>
               </div>
-              <Button size="sm" onClick={() => void downloadExport().catch((e: Error) => window.alert(e.message))}>
+              <Button size="sm" onClick={() => void downloadExport().catch((e: Error) => toast.show(e.message))}>
                 导出
               </Button>
             </div>

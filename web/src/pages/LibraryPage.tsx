@@ -4,9 +4,10 @@ import { ImportSheet } from '../components/ImportSheet'
 import { downloadExport } from '../store/api'
 import { useState } from 'react'
 import { useSearchParams } from 'react-router'
-import { Download, RotateCw, Search, Trash2, Upload } from 'lucide-react'
+import { ChevronRight, Download, History, Info, RotateCw, Search, Trash2, Upload } from 'lucide-react'
+import { Checkbox, Chip } from '../components/controls'
 import { Fade, FromLine, ProjectLink, TrustTag } from '../components/Marks'
-import { Modal, SideSheet } from '../components/Overlay'
+import { ConfirmModal, SideSheet } from '../components/Overlay'
 import { Button, Empty, Progress, Seg, Sheet, Switch, Tag } from '../components/ui'
 import { jobStatusLabel, memoryKindLabel, sampleStateLabel, sourceStatusLabel, triggerLabel } from '../domain/labels'
 import { formatAgo, formatWhen } from '../domain/time'
@@ -43,7 +44,7 @@ function MemorySheet({ memory, onClose }: { memory: Memory; onClose: () => void 
     >
       <div className="stack">
         <div className="stack-sm">
-          <textarea className="lined" style={{ minHeight: 84 }} value={text} onChange={(e) => setText(e.target.value)} aria-label="内容" />
+          <textarea className="textarea" style={{ minHeight: 84 }} value={text} onChange={(e) => setText(e.target.value)} aria-label="内容" />
           {changed && (
             <input className="input" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="为什么改？（会记成一次纠正）" />
           )}
@@ -74,32 +75,31 @@ function MemorySheet({ memory, onClose }: { memory: Memory; onClose: () => void 
         </div>
 
         <div className="stack-sm">
-          <h3 style={{ fontSize: 15 }}>谁能看到</h3>
-          <div className="row">
+          <h3 className="sheet-subtitle">谁能看到</h3>
+          <div className="row" style={{ gap: 6 }}>
             {state.agents.map((agent) => {
               const on = memory.visibleTo.includes(agent.id)
               return (
-                <label key={agent.id} className="check">
-                  <input
-                    type="checkbox"
-                    checked={on}
-                    onChange={() =>
-                      dispatch({
-                        type: 'setMemoryVisibility',
-                        id: memory.id,
-                        agentIds: on ? memory.visibleTo.filter((a) => a !== agent.id) : [...memory.visibleTo, agent.id],
-                      })
-                    }
-                  />
+                <Chip
+                  key={agent.id}
+                  on={on}
+                  onToggle={() =>
+                    dispatch({
+                      type: 'setMemoryVisibility',
+                      id: memory.id,
+                      agentIds: on ? memory.visibleTo.filter((a) => a !== agent.id) : [...memory.visibleTo, agent.id],
+                    })
+                  }
+                >
                   {agent.name}
-                </label>
+                </Chip>
               )
             })}
           </div>
         </div>
 
         <div className="stack-sm">
-          <h3 style={{ fontSize: 15 }}>改过的版本</h3>
+          <h3 className="sheet-subtitle">改过的版本</h3>
           <ol className="timeline">
             {memory.versions.map((v, i) => (
               <li key={`${v.at}-${i}`}>
@@ -120,7 +120,7 @@ function MemorySheet({ memory, onClose }: { memory: Memory; onClose: () => void 
 
         {memory.sources.length > 0 && (
           <div className="stack-sm">
-            <h3 style={{ fontSize: 15 }}>从哪来的</h3>
+            <h3 className="sheet-subtitle">从哪来的</h3>
             {memory.sources.map((s, i) => (
               <FromLine key={i} source={s} />
             ))}
@@ -140,36 +140,26 @@ function MemorySheet({ memory, onClose }: { memory: Memory; onClose: () => void 
       </div>
 
       {deleting && (
-        <Modal
+        <ConfirmModal
           title="删掉这条记忆？"
           onClose={() => setDeleting(false)}
-          actions={
-            <>
-              <Button variant="quiet" onClick={() => setDeleting(false)}>
-                留着
-              </Button>
-              <Button
-                variant="primary"
-                onClick={async () => {
-                  if (!(await dispatch({ type: 'deleteMemory', id: memory.id, includeSources }))) return
-                  onClose()
-                  toast.show('删掉了')
-                }}
-              >
-                删掉
-              </Button>
-            </>
-          }
+          onConfirm={async () => {
+            if (!(await dispatch({ type: 'deleteMemory', id: memory.id, includeSources }))) return
+            onClose()
+            toast.show('删掉了')
+          }}
         >
-          <p>删除这条结构化记忆及其派生内容。保留的原文仍可被检索。</p>
-          <label className="check"><input type="checkbox" checked={includeSources} onChange={(e) => setIncludeSources(e.target.checked)} />同时删除来源原文及从这些来源提取的其他记忆</label>
+          <p className="muted">删除这条结构化记忆及其派生内容。保留的原文仍可被检索。</p>
+          <Checkbox checked={includeSources} onChange={(e) => setIncludeSources(e.target.checked)}>
+            同时删除来源原文及从这些来源提取的其他记忆
+          </Checkbox>
           {(runs.length > 0 || samples.length > 0) && (
             <p className="small muted">
               {runs.length > 0 && `${runs.length} 次相关 AI 结果及由其采纳的副本会删除。`}
               {samples.length > 0 && `${samples.length} 条由它来的训练样本会删除。`}
             </p>
           )}
-        </Modal>
+        </ConfirmModal>
       )}
     </SideSheet>
   )
@@ -193,6 +183,15 @@ function MemoryTab() {
     <>
       {recalling && <RecallSheet query={query} onClose={() => setRecalling(false)} />}
       <div className="toolbar">
+        <label className="search">
+          <Search size={15} />
+          <input placeholder="筛选当前记忆…" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="搜索记忆" />
+        </label>
+        <Button icon={<History size={14} />} onClick={() => setRecalling(true)}>
+          深入查找
+        </Button>
+      </div>
+      <div className="toolbar">
         <Seg
           label="类型"
           value={kind}
@@ -210,14 +209,10 @@ function MemoryTab() {
             { value: 'planned', label: '计划' },
           ]}
         />
-        <label className="search">
-          <Search size={15} />
-          <input placeholder="筛选当前记忆…" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="搜索记忆" />
-        </label>
       </div>
-      <Button size="sm" onClick={() => setRecalling(true)}>深入查找 / 完整历史</Button>
-      <p className="small muted" style={{ marginBottom: 10 }}>
-        波浪下划线是 AI 推测的，还没经过你确认。长期不用的记忆会变淡，但不会消失。
+      <p className="hint-line">
+        <Info size={13} />
+        波浪下划线是 AI 推测的，还没经过你确认。长期不用的记忆会变淡，但不会消失；深入查找会翻完整历史和原文。
       </p>
       <Sheet>
         {shown.length === 0 ? (
@@ -265,7 +260,7 @@ function SourcesTab() {
     <div className="stack">
       <div className="spread">
         <p className="small muted">资料从哪来。各平台能用的导入方式还在逐个验证。</p>
-        <Button size="sm" icon={<Upload size={14} />} onClick={() => setImporting(true)}>
+        <Button variant="primary" icon={<Upload size={14} />} onClick={() => setImporting(true)}>
           导入资料
         </Button>
       </div>
@@ -273,26 +268,25 @@ function SourcesTab() {
       {importing && <ImportSheet onClose={() => setImporting(false)} />}
       <div className="sources-grid">
         {state.sources.map((s) => (
-          <div key={s.id} className="sheet sheet-pad stack-sm">
-            <div className="spread">
-              <div className="row-nowrap">
-                <span className="stamp">{s.name.slice(0, 1)}</span>
-                <div>
-                  <div className="ink" style={{ fontWeight: 600 }}>
-                    {s.name}
-                  </div>
-                  <div className="tiny muted">{s.method}</div>
-                </div>
+          <button key={s.id} type="button" className="source-card" onClick={() => setSourceId(s.id)} aria-label={`查看原文：${s.name}`}>
+            <div className="source-card-head">
+              <span className="stamp">{s.name.slice(0, 1)}</span>
+              <div className="grow">
+                <div className="source-name">{s.name}</div>
+                <div className="tiny muted">{s.method}</div>
               </div>
               <Tag tone={sourceStatusLabel[s.status].tone}>{sourceStatusLabel[s.status].text}</Tag>
             </div>
-            <p className="small">{s.note}</p>
-            <Button size="sm" variant="quiet" onClick={() => setSourceId(s.id)}>查看原文</Button>
-            <div className="meta">
+            {s.note && <p className="source-note">{s.note}</p>}
+            <div className="source-card-foot">
               <span>{s.itemCount} 条</span>
               {s.lastSyncAt && <span>{formatAgo(s.lastSyncAt)}更新</span>}
+              <span className="source-open">
+                查看原文
+                <ChevronRight size={13} />
+              </span>
             </div>
-          </div>
+          </button>
         ))}
       </div>
 
@@ -337,6 +331,7 @@ function exportable(s: TrainingSample, confirmedOnly: boolean) {
 
 function TrainingTab() {
   const { state, dispatch } = useStore()
+  const toast = useToast()
   const [confirmedOnly, setConfirmedOnly] = useState(true)
   const ready = state.samples.filter((s) => exportable(s, confirmedOnly))
   return (
@@ -349,7 +344,7 @@ function TrainingTab() {
           </div>
           <div className="row-nowrap">
             <span className="small muted">{ready.length} 条可以导出</span>
-            <Button variant="primary" size="sm" icon={<Download size={14} />} disabled={!ready.length} onClick={() => void downloadExport(true, confirmedOnly).catch((e: Error) => window.alert(e.message))}>
+            <Button variant="primary" size="sm" icon={<Download size={14} />} disabled={!ready.length} onClick={() => void downloadExport(true, confirmedOnly).catch((e: Error) => toast.show(e.message))}>
               导出 JSONL
             </Button>
           </div>

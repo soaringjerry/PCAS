@@ -3,6 +3,7 @@ import { unsure } from '../domain/lines'
 import { memoryKindLabel } from '../domain/labels'
 import type { Candidate, CandidateKind } from '../domain/types'
 import { useStore } from '../store/context'
+import { Select } from './controls'
 import { SideSheet } from './Overlay'
 import { Button, Empty } from './ui'
 
@@ -19,13 +20,12 @@ function CandidateItem({ c }: { c: Candidate }) {
           <span>来自{c.source.label}</span>
         </div>
         <div className="row" style={{ marginTop: 8 }}>
-          <select className="inline-select" value={kind} onChange={(e) => setKind(e.target.value as CandidateKind)} aria-label="这是">
-            {(Object.keys(kindWords) as CandidateKind[]).map((k) => (
-              <option key={k} value={k}>
-                作为{kindWords[k]}
-              </option>
-            ))}
-          </select>
+          <Select
+            label="这是"
+            value={kind}
+            onChange={setKind}
+            options={(Object.keys(kindWords) as CandidateKind[]).map((k) => ({ value: k, label: `作为${kindWords[k]}` }))}
+          />
           <Button
             size="sm"
             variant="primary"

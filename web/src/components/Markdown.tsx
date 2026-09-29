@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { Check } from 'lucide-react'
 
 // A deliberately small renderer for AI output and docs: headings, lists,
 // checkboxes, bold and inline code. It builds React elements, so no HTML from
@@ -42,7 +43,9 @@ export function Markdown({ text }: { text: string }) {
         items.push(
           task ? (
             <li key={i} className="task-li">
-              <input type="checkbox" checked={task[1] === 'x'} readOnly tabIndex={-1} />
+              <span className={`checkbox-box${task[1] === 'x' ? ' on' : ''}`} role="img" aria-label={task[1] === 'x' ? '已完成' : '未完成'}>
+                <Check size={11} strokeWidth={3.5} />
+              </span>
               {inline(task[2])}
             </li>
           ) : (

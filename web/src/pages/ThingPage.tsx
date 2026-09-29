@@ -1,15 +1,17 @@
 import { useState } from 'react'
 import { Link, useParams } from 'react-router'
-import { ArrowUp, Check, ChevronDown, ChevronLeft, ChevronRight, Copy, Plus, Sparkles, X } from 'lucide-react'
+import { ArrowUp, Check, ChevronDown, ChevronLeft, ChevronRight, Copy, FileText, Folder, Lightbulb, ListPlus, Plus, Sparkles, X } from 'lucide-react'
+import { Checkbox, DateTimePicker, Select } from '../components/controls'
+import { ConfirmModal } from '../components/Overlay'
 import { Markdown } from '../components/Markdown'
 import { LineRow } from '../components/LineRow'
 import { Timeline } from '../components/Marks'
 import { buildBrief, contextFor, parseChecklist, quickActions } from '../domain/agent'
 import { newId } from '../domain/ids'
-import { taskStatusLabel, taskStatusOrder } from '../domain/labels'
+import { projectStatusLabel, taskStatusLabel, taskStatusOrder, type Tone } from '../domain/labels'
 import { estimateCost, ongoingLine, spentToday, urgentLine } from '../domain/lines'
 import { findThing, thingProjectId, thingTitle, timelineFor, type Thing } from '../domain/things'
-import { formatAgo, fromLocalInput, toLocalInput } from '../domain/time'
+import { formatAgo } from '../domain/time'
 import type { Doc, Run, RunKind, Task } from '../domain/types'
 import { useStore } from '../store/context'
 import { useShell } from '../store/shell'
@@ -65,45 +67,31 @@ function ProjectPicker({ thing }: { thing: Thing }) {
   const { state, dispatch } = useStore()
   if (thing.kind === 'project') return null
   return (
-    <label className="meta-ctl">
-      <select value={thing.item.projectId ?? ''} onChange={(e) => dispatch({ type: 'moveThing', id: thing.id, projectId: e.target.value || undefined })} aria-label="项目">
-        <option value="">不属于项目</option>
-        {state.projects.map((p) => (
-          <option key={p.id} value={p.id}>
-            {p.name}
-          </option>
-        ))}
-      </select>
-    </label>
+    <Select
+      variant="chip"
+      label="项目"
+      icon={<Folder size={13} />}
+      value={thing.item.projectId ?? ''}
+      onChange={(v) => dispatch({ type: 'moveThing', id: thing.id, projectId: v || undefined })}
+      options={[{ value: '', label: '不属于项目' }, ...state.projects.map((p) => ({ value: p.id, label: p.name }))]}
+    />
   )
 }
 
 function DueControl({ task }: { task: Task }) {
   const { dispatch } = useStore()
-  const [picking, setPicking] = useState(false)
-  if (!task.due && !picking) {
-    return (
-      <button type="button" className="link-btn meta-ctl" style={{ fontSize: 13 }} onClick={() => setPicking(true)}>
-        没有截止
-      </button>
-    )
-  }
   return (
-    <label className="meta-ctl">
-      <input
-        type="datetime-local"
-        value={toLocalInput(task.due)}
-        aria-label="截止"
-        title="截止时间；清空就是没有截止"
-        autoFocus={picking}
-        onBlur={() => setPicking(false)}
-        onChange={(e) =>
-          dispatch({ type: 'updateTask', id: task.id, patch: { due: fromLocalInput(e.target.value) }, summary: e.target.value ? '改了截止时间' : '去掉截止时间' })
-        }
-      />
-    </label>
+    <DateTimePicker
+      label="截止"
+      placeholder="没有截止"
+      clearLabel="去掉截止"
+      value={task.due}
+      onChange={(due) => dispatch({ type: 'updateTask', id: task.id, patch: { due }, summary: due ? '改了截止时间' : '去掉截止时间' })}
+    />
   )
 }
+
+const dot = (tone: Tone) => <span className={`dot dot-${tone}`} />
 
 function Meta({ thing }: { thing: Thing }) {
   const { dispatch } = useStore()
@@ -112,15 +100,13 @@ function Meta({ thing }: { thing: Thing }) {
     const t = thing.item
     return (
       <div className="meta-line">
-        <label className="meta-ctl">
-          <select value={t.status} onChange={(e) => dispatch({ type: 'setTaskStatus', id: t.id, status: e.target.value as Task['status'] })} aria-label="状态">
-            {taskStatusOrder.map((s) => (
-              <option key={s} value={s}>
-                {taskStatusLabel[s].text}
-              </option>
-            ))}
-          </select>
-        </label>
+        <Select
+          variant="chip"
+          label="状态"
+          value={t.status}
+          onChange={(status) => dispatch({ type: 'setTaskStatus', id: t.id, status })}
+          options={taskStatusOrder.map((s) => ({ value: s, label: taskStatusLabel[s].text, icon: dot(taskStatusLabel[s].tone) }))}
+        />
         <DueControl task={t} />
         <ProjectPicker thing={thing} />
         {t.owedTo && (
@@ -140,13 +126,17 @@ function Meta({ thing }: { thing: Thing }) {
 
   if (thing.kind === 'idea') {
     const i = thing.item
-    const label = { active: '想法', awakened: '想法 · 刚被唤醒', shelved: '想法 · 放着', promoted: '想法 · 已转成待办', dropped: '想法 · 不做了' }[i.status]
+    const label = { active: '想法', awakened: '刚被唤醒', shelved: '放着', promoted: '已转成待办', dropped: '不做了' }[i.status]
     return (
       <div className="meta-line">
-        <span>{label}</span>
+        <span className="meta-text">
+          <Lightbulb size={13} />
+          {label}
+        </span>
         <ProjectPicker thing={thing} />
         {i.status === 'active' && (
-          <button type="button" className="link-btn" onClick={() => dispatch({ type: 'ideaPromote', id: i.id })}>
+          <button type="button" className="select select-chip" onClick={() => dispatch({ type: 'ideaPromote', id: i.id })}>
+            <ListPlus size={13} />
             转成待办
           </button>
         )}
@@ -157,14 +147,14 @@ function Meta({ thing }: { thing: Thing }) {
   const p = thing.item
   return (
     <div className="meta-line">
-      <label className="meta-ctl">
-        <select value={p.status} onChange={(e) => dispatch({ type: 'updateProject', id: p.id, patch: { status: e.target.value as typeof p.status } })} aria-label="项目状态">
-          <option value="active">进行中</option>
-          <option value="paused">暂停</option>
-          <option value="done">完成</option>
-        </select>
-      </label>
-      {p.progress && <span className="ellipsis">{p.progress.split('\n').at(-1)}</span>}
+      <Select
+        variant="chip"
+        label="项目状态"
+        value={p.status}
+        onChange={(status) => dispatch({ type: 'updateProject', id: p.id, patch: { status } })}
+        options={(['active', 'paused', 'done'] as const).map((s) => ({ value: s, label: projectStatusLabel[s].text, icon: dot(projectStatusLabel[s].tone) }))}
+      />
+      {p.progress && <span className="meta-text ellipsis">{p.progress.split('\n').at(-1)}</span>}
     </div>
   )
 }
@@ -173,7 +163,7 @@ function IdeaBanner({ thing }: { thing: Extract<Thing, { kind: 'idea' }> }) {
   const { state, dispatch } = useStore()
   const i = thing.item
   const [cond, setCond] = useState('')
-  const [conditionDue, setConditionDue] = useState('')
+  const [conditionDue, setConditionDue] = useState<string | undefined>()
 
   if (i.status === 'awakened') {
     return (
@@ -227,17 +217,19 @@ function IdeaBanner({ thing }: { thing: Extract<Thing, { kind: 'idea' }> }) {
           onSubmit={async (e) => {
             e.preventDefault()
             if (!cond.trim()) return
-            if (!(await dispatch({ type: 'addCondition', ideaId: i.id, description: cond.trim(), due: conditionDue ? new Date(conditionDue).toISOString() : undefined }))) return
+            if (!(await dispatch({ type: 'addCondition', ideaId: i.id, description: cond.trim(), due: conditionDue }))) return
             setCond('')
-            setConditionDue('')
+            setConditionDue(undefined)
           }}
         >
           <span className="plus">
             <Plus size={16} />
           </span>
           <input className="add" value={cond} onChange={(e) => setCond(e.target.value)} placeholder="再加一个条件" aria-label="再加一个条件" />
-          <input type="datetime-local" className="inline-select" aria-label="条件到期时间（可选）" value={conditionDue} onChange={(e) => setConditionDue(e.target.value)} />
-          <button type="submit" className="btn btn-sm">添加</button>
+          <DateTimePicker label="条件到期时间（可选）" placeholder="到期时间" defaultHour={9} value={conditionDue} onChange={setConditionDue} />
+          <button type="submit" className="btn btn-sm" disabled={!cond.trim()}>
+            添加
+          </button>
         </form>
       </div>
     </section>
@@ -421,7 +413,7 @@ function RunCard({ thing, run }: { thing: Thing; run: Run }) {
               <pre>{run.brief}</pre>
             </div>
           )}
-          <textarea value={pasted} onChange={(e) => setPasted(e.target.value)} placeholder="把它的回答贴在这里" aria-label="贴回回答" style={{ minHeight: 120 }} />
+          <textarea className="textarea" value={pasted} onChange={(e) => setPasted(e.target.value)} placeholder="把它的回答贴在这里" aria-label="贴回回答" style={{ minHeight: 120 }} />
           <div className="row">
             <button type="button" className="btn btn-primary btn-sm" disabled={!pasted.trim() || run.staleContext} onClick={() => dispatch({ type: 'pasteRunResult', id: run.id, output: pasted.trim() })}>
               放回来
@@ -441,7 +433,7 @@ function RunCard({ thing, run }: { thing: Thing; run: Run }) {
         <>
           <div className="card-body">
             {editing ? (
-              <textarea value={text} onChange={(e) => setText(e.target.value)} aria-label="修改结果" autoFocus />
+              <textarea className="textarea" value={text} onChange={(e) => setText(e.target.value)} aria-label="修改结果" autoFocus />
             ) : (
               <div className={expanded ? '' : 'clamp'} onClick={() => setExpanded(true)} style={{ cursor: expanded ? undefined : 'pointer' }}>
                 <Markdown text={run.output} />
@@ -502,10 +494,23 @@ function DocCard({ doc }: { doc: Doc }) {
   const [editing, setEditing] = useState(false)
   const [body, setBody] = useState(doc.body)
   const [expanded, setExpanded] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   return (
     <div className="card">
+      {deleting && (
+        <ConfirmModal
+          title={`删掉文档「${doc.title}」？`}
+          onClose={() => setDeleting(false)}
+          onConfirm={async () => {
+            if (await dispatch({ type: 'deleteDoc', id: doc.id })) setDeleting(false)
+          }}
+        >
+          <p className="muted">文档会从这件事的工作记录里移除。</p>
+        </ConfirmModal>
+      )}
       <div className="card-head">
+        <FileText size={14} className="faint" />
         <span className="grow ellipsis" style={{ color: 'var(--label)', fontWeight: 600, fontSize: 14 }}>
           {doc.title}
         </span>
@@ -516,7 +521,7 @@ function DocCard({ doc }: { doc: Doc }) {
       </div>
       <div className="card-body">
         {editing ? (
-          <textarea value={body} onChange={(e) => setBody(e.target.value)} aria-label="文档内容" autoFocus />
+          <textarea className="textarea" value={body} onChange={(e) => setBody(e.target.value)} aria-label="文档内容" autoFocus />
         ) : (
           <div className={expanded ? '' : 'clamp'} onClick={() => setExpanded(true)} style={{ cursor: expanded ? undefined : 'pointer' }}>
             <Markdown text={withoutTitle(doc) || '（空）'} />
@@ -557,9 +562,7 @@ function DocCard({ doc }: { doc: Doc }) {
           type="button"
           className="btn btn-quiet btn-sm"
           style={{ color: 'var(--label-2)' }}
-          onClick={async () => {
-            if (window.confirm(`删掉文档「${doc.title}」？`)) if (!(await dispatch({ type: 'deleteDoc', id: doc.id }))) return
-          }}
+          onClick={() => setDeleting(true)}
         >
           删除
         </button>
@@ -671,17 +674,15 @@ function Composer({ thing }: { thing: Thing }) {
         <div className="group" style={{ marginBottom: 10, maxHeight: 240, overflowY: 'auto' }}>
           {context.length === 0 && <div className="empty-line">没有相关的记忆</div>}
           {context.map(({ memory, allowed, included: on, kindBlocked, unconfirmed }) => (
-            <label key={memory.id} className="check-row" style={{ cursor: allowed ? 'pointer' : 'default' }}>
-              <input
-                type="checkbox"
+            <div key={memory.id} className="check-row">
+              <Checkbox
+                className="grow"
                 checked={on}
                 disabled={!allowed}
                 onChange={() => dispatch({ type: 'toggleContextMemory', thingId: thing.id, memoryId: memory.id })}
-                aria-label={memory.text}
-              />
-              <span className={`text${allowed ? '' : ' done'}`} style={{ fontSize: 13.5 }}>
-                {memory.text}
-              </span>
+              >
+                <span className={allowed ? undefined : 'faint'}>{memory.text}</span>
+              </Checkbox>
               {kindBlocked && <span className="tiny faint">{agent.name}看不到这类</span>}
               {unconfirmed && (
                 <button
@@ -696,7 +697,7 @@ function Composer({ thing }: { thing: Thing }) {
                   确认后带上
                 </button>
               )}
-            </label>
+            </div>
           ))}
         </div>
       )}
@@ -720,15 +721,13 @@ function Composer({ thing }: { thing: Thing }) {
             }
           }}
         />
-        <select value={agent.id} onChange={(e) => setAgentFor(thing.id, e.target.value)} aria-label="交给谁">
-          {state.agents
-            .filter((a) => a.enabled)
-            .map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.name}
-              </option>
-            ))}
-        </select>
+        <Select
+          variant="ghost"
+          label="交给谁"
+          value={agent.id}
+          onChange={(v) => setAgentFor(thing.id, v)}
+          options={state.agents.filter((a) => a.enabled).map((a) => ({ value: a.id, label: a.name, hint: a.protocol === 'codex' ? '订阅' : a.channel === 'manual' ? '复制粘贴' : undefined }))}
+        />
         <button type="submit" className="send" disabled={!text.trim()} aria-label="发送">
           <ArrowUp size={16} strokeWidth={2.5} />
         </button>

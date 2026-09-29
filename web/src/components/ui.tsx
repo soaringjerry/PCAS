@@ -54,13 +54,19 @@ export function Empty({ children }: { children: ReactNode }) {
   return <div className="empty">{children}</div>
 }
 
-export function Field({ label, children }: { label: string; children: ReactNode }) {
+export function Field({ label, hint, children, as = 'label' }: { label: string; hint?: ReactNode; children: ReactNode; as?: 'label' | 'div' }) {
+  const Tag = as
   return (
-    <label className="field">
-      <span>{label}</span>
+    <Tag className="field">
+      <span className="field-label">{label}</span>
       {children}
-    </label>
+      {hint && <span className="field-hint">{hint}</span>}
+    </Tag>
   )
+}
+
+export function Spinner({ size = 14 }: { size?: number }) {
+  return <span className="spinner" style={{ width: size, height: size }} aria-hidden />
 }
 
 export function Switch({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: string }) {

@@ -1,0 +1,57 @@
+name: pcas
+
+x-memory: &memory
+  build: .
+  image: pcas-memory:local
+  environment: &environment
+    PCAS_DATABASE_URL: postgres://pcas:${PCAS_DB_PASSWORD:?Set PCAS_DB_PASSWORD in .env}@db:5432/pcas?sslmode=disable
+
+services:
+  db:
+    image: pgvector/pgvector:0.8.2-pg16-bookworm
+    environment:
+      POSTGRES_USER: pcas
+      POSTGRES_PASSWORD: ${PCAS_DB_PASSWORD:?Set PCAS_DB_PASSWORD in .env}
+      POSTGRES_DB: pcas
+    ports:
+      - "127.0.0.1:54329:5432"
+    volumes:
+      - memory-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pcas -d pcas"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+  migrate:
+    <<: *memory
+    command: ["migrate"]
+    depends_on:
+      db:
+        condition: service_healthy
+  api:
+    <<: *memory
+    command: ["serve"]
+    environment:
+      <<: *environment
+      PCAS_HTTP_ADDR: 0.0.0.0:8090
+      PCAS_OWNER_ID: ${PCAS_OWNER_ID:?Set PCAS_OWNER_ID in .env}
+      PCAS_API_TOKEN: ${PCAS_API_TOKEN:?Set PCAS_API_TOKEN in .env}
+    ports:
+      - "127.0.0.1:8090:8090"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8090/readyz"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+  worker:
+    <<: *memory
+    command: ["worker"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+volumes:
+  memory-db:

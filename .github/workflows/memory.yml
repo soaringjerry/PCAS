@@ -1,0 +1,33 @@
+name: memory
+
+on:
+  push:
+    branches: [main]
+    paths: ["cmd/**", "internal/**", "go.mod", "go.sum", "Makefile", "Dockerfile", "compose.yml", ".github/workflows/memory.yml"]
+  pull_request:
+    paths: ["cmd/**", "internal/**", "go.mod", "go.sum", "Makefile", "Dockerfile", "compose.yml", ".github/workflows/memory.yml"]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:0.8.2-pg16-bookworm
+        env:
+          POSTGRES_USER: pcas
+          POSTGRES_PASSWORD: pcas-test
+          POSTGRES_DB: pcas_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U pcas -d pcas_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      PCAS_TEST_DATABASE_URL: postgres://pcas:pcas-test@localhost:5432/pcas_test?sslmode=disable
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - run: go mod download
+      - run: make check

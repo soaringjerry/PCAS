@@ -15,7 +15,7 @@ export async function api<T>(path: string, body?: unknown, method?: string): Pro
     body: body === undefined ? undefined : JSON.stringify(body, (_key, value) => value === undefined ? null : value),
   })
   const value = await response.json().catch(() => ({}))
-  if (!response.ok) throw new APIError(response.status, messages[value.error] ?? '服务暂时不可用，操作没有确认保存。')
+  if (!response.ok) throw new APIError(response.status, messages[value.error] ?? (value.error === 'chatgpt_provider_error' ? value.message : undefined) ?? '服务暂时不可用，操作没有确认保存。')
   return value as T
 }
 export async function downloadExport(training = false, confirmedOnly = false) {

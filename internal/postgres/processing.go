@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -84,7 +85,11 @@ func (s *Store) ProcessIndex(ctx context.Context, j worker.Job) error {
 	})
 }
 func (s *Store) ProcessEmbedding(ctx context.Context, j worker.Job) error {
-	if s.models == nil || s.models.Config.Embedding == "" {
+	if s.models == nil || !s.models.Available(s.models.EmbeddingID()) {
+		return memory.ErrUnavailable
+	}
+	provider, ok := s.models.Get(s.models.EmbeddingID())
+	if !ok {
 		return memory.ErrUnavailable
 	}
 	var text string
@@ -126,7 +131,52 @@ func (s *Store) ProcessEmbedding(ctx context.Context, j worker.Job) error {
 			return err
 		}
 	}
-	provider, _ := s.models.Get(s.models.Config.Embedding)
+	// Original ingestion and a model backfill can overlap. Skip vectors already
+	// committed for this model, and embed only missing chunks of a partial job.
+	ids := make([]string, len(refs))
+	for i, ref := range refs {
+		ids[i] = string(ref.ID)
+	}
+	rows, err := s.pool.Query(ctx, "SELECT record_id::text,record_version FROM embeddings WHERE owner_id=$1 AND model=$2 AND record_id=ANY($3::uuid[])", string(j.OwnerID), provider.ID+":"+provider.Model, ids)
+	if err != nil {
+		return err
+	}
+	type vectorRef struct {
+		id      memory.ID
+		version int
+	}
+	existing := map[vectorRef]bool{}
+	for rows.Next() {
+		var id memory.ID
+		var version int
+		if err := rows.Scan(&id, &version); err != nil {
+			rows.Close()
+			return err
+		}
+		existing[vectorRef{id, version}] = true
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return err
+	}
+	missingRefs := refs[:0]
+	missingTexts := texts[:0]
+	for i, ref := range refs {
+		if !existing[vectorRef{ref.ID, ref.Version}] {
+			missingRefs = append(missingRefs, ref)
+			missingTexts = append(missingTexts, texts[i])
+		}
+	}
+	refs, texts = missingRefs, missingTexts
+	if len(texts) == 0 {
+		return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+			if err := lockJob(ctx, tx, j); err != nil {
+				return err
+			}
+			return acknowledge(ctx, tx, j)
+		})
+	}
 	var cost float64
 	for _, text := range texts {
 		cost += float64(len(text)+16) * provider.InputPerMillion / 1e6
@@ -136,7 +186,7 @@ func (s *Store) ProcessEmbedding(ctx context.Context, j worker.Job) error {
 	}
 	vectors := []memory.Embedding{}
 	for start := 0; start < len(texts); start += 32 {
-		v, err := s.models.Embed(ctx, texts[start:min(start+32, len(texts))])
+		v, err := s.models.EmbedProvider(ctx, provider, texts[start:min(start+32, len(texts))])
 		if err != nil {
 			return err
 		}
@@ -194,7 +244,7 @@ func (s *Store) ProcessExtraction(ctx context.Context, j worker.Job) error {
 			return acknowledge(ctx, tx, j)
 		})
 	}
-	if s.models == nil || s.models.Config.Extraction == "" {
+	if s.models == nil || s.models.ExtractionID() == "" {
 		return memory.ErrUnavailable
 	}
 	// Long imports are separate fenced jobs with overlapping context windows.
@@ -223,7 +273,7 @@ func (s *Store) ProcessExtraction(ctx context.Context, j worker.Job) error {
 		}
 		source.Source.Text = string(runes[start:min(start+window, len(runes))])
 	}
-	p, ok := s.models.Get(s.models.Config.Extraction)
+	p, ok := s.models.Get(s.models.ExtractionID())
 	if !ok {
 		return memory.ErrUnavailable
 	}
@@ -244,7 +294,7 @@ func (s *Store) ProcessExtraction(ctx context.Context, j worker.Job) error {
 
 	result, err := s.models.Generate(ctx, p.ID, extractionInstructions, prompt)
 	if err != nil {
-		return memory.ErrUnavailable
+		return fmt.Errorf("%w: %w", memory.ErrUnavailable, err)
 	}
 	text := strings.TrimSpace(result.Text)
 	text = strings.TrimPrefix(text, "```json")

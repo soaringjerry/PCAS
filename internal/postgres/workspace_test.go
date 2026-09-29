@@ -8,9 +8,74 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/ai"
+	"github.com/soaringjerry/PCAS/internal/ai/siwc"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
+
+func TestDirectProviderPreservesExistingSubscriptionPermissions(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	scope := owner()
+	legacy, err := ai.Load("", &ai.Codex{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.SetModels(legacy)
+	state, err := s.Snapshot(ctx, scope)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state, err = s.Execute(ctx, scope, workspace.Command{Type: "capture", Text: "现有记忆", RequestID: string(memory.NewID()), ExpectedRevision: state.Revision})
+	if err != nil {
+		t.Fatal(err)
+	}
+	state, err = s.Execute(ctx, scope, workspace.Command{Type: "acceptCandidate", ID: state.Candidates[0].ID, Kind: "memory", MemoryKind: "fact", Text: "现有记忆", RequestID: string(memory.NewID()), ExpectedRevision: state.Revision})
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := state.Memories[0].ID
+	state, err = s.Execute(ctx, scope, workspace.Command{Type: "setMemoryVisibility", ID: id, AgentIDs: []string{"chatgpt"}, RequestID: string(memory.NewID()), ExpectedRevision: state.Revision})
+	if err != nil {
+		t.Fatal(err)
+	}
+	m, err := siwc.New(t.TempDir(), "127.0.0.1", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer m.Close()
+	current, err := ai.Load("", &ai.Codex{}, m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.SetModels(current)
+	state, err = s.Snapshot(ctx, scope)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !oneOf("chatgpt-direct", state.Memories[0].VisibleTo...) {
+		t.Fatal("existing subscription permission lost")
+	}
+	if oneOf("manual", state.Memories[0].VisibleTo...) {
+		t.Fatal("permission broadened to unrelated channel")
+	}
+	for _, a := range state.Agents {
+		if a.ID == "chatgpt-direct" && (a.Available || a.Default) {
+			t.Fatal("unverified connection became available/default")
+		}
+	}
+	state, err = s.Execute(ctx, scope, workspace.Command{Type: "setMemoryVisibility", ID: id, AgentIDs: []string{"chatgpt"}, RequestID: string(memory.NewID()), ExpectedRevision: state.Revision})
+	if err != nil {
+		t.Fatal(err)
+	}
+	state, err = s.Snapshot(ctx, scope)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if oneOf("chatgpt-direct", state.Memories[0].VisibleTo...) {
+		t.Fatal("snapshot undid explicit grant revocation")
+	}
+}
 
 func TestWorkspaceMemoryLifecycle(t *testing.T) {
 	s := testStore(t)

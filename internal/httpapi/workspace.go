@@ -189,15 +189,17 @@ func (s *Server) workspaceRoutes(mux *http.ServeMux) {
 		}
 		out := []map[string]any{}
 		if s.options.Models != nil {
-			for _, p := range s.options.Models.Config.Providers {
+			for _, p := range s.options.Models.Providers() {
 				out = append(out, map[string]any{"id": p.ID, "name": p.Name, "protocol": p.Protocol, "model": p.Model, "available": s.options.Models.Available(p.ID), "embedding": p.Embedding, "inputPrice": p.InputPerMillion, "outputPrice": p.OutputPerMillion, "maxOutput": p.MaxOutput})
 			}
 		}
-		writeJSON(w, 200, map[string]any{"providers": out, "chatgptEnabled": s.options.Models != nil && s.options.Models.Codex != nil})
+		writeJSON(w, 200, map[string]any{"providers": out, "chatgptEnabled": s.options.Models != nil && s.options.Models.Codex != nil, "chatgptDirectEnabled": s.options.Models != nil && s.options.Models.ChatGPT != nil})
 	}))
 	for _, route := range []string{"GET /v1/chatgpt/account", "POST /v1/chatgpt/login", "POST /v1/chatgpt/logout", "GET /v1/chatgpt/limits", "GET /v1/chatgpt/models"} {
 		mux.HandleFunc(route, s.authorize(s.chatgpt))
 	}
+	s.directChatGPTRoutes(mux)
+	s.modelSettingsRoutes(mux)
 	if s.options.WebDir != "" {
 		mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
 			if strings.HasPrefix(r.URL.Path, "/v1/") {

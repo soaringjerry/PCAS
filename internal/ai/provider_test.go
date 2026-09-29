@@ -11,7 +11,37 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/soaringjerry/PCAS/internal/ai/siwc"
 )
+
+func TestDirectSubscriptionBootsWithoutCodexAndKeepsAPIProviders(t *testing.T) {
+	m, err := siwc.New(t.TempDir(), "127.0.0.1", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer m.Close()
+	path := filepath.Join(t.TempDir(), "models.json")
+	config := `{"providers":[{"id":"api","name":"API Key","protocol":"responses","base_url":"https://api.openai.com/v1","key_env":"PCAS_TEST_DIRECT_KEY","model":"test","input_cny_per_million":1,"output_cny_per_million":2}],"extraction_provider":"chatgpt"}`
+	if err = os.WriteFile(path, []byte(config), 0600); err != nil {
+		t.Fatal(err)
+	}
+	r, err := Load(path, nil, m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.Codex != nil || r.ExtractionID() != "chatgpt" || r.Available("chatgpt-direct") {
+		t.Fatal("direct channel depends on Codex or changed default before verification")
+	}
+	p, ok := r.Get("chatgpt-direct")
+	if !ok || p.Protocol != "siwc" || p.Reserve("input") != 0 {
+		t.Fatal("direct provider missing")
+	}
+	api, ok := r.Get("api")
+	if !ok || api.Protocol != "responses" || api.KeyEnv != "PCAS_TEST_DIRECT_KEY" {
+		t.Fatal("existing API channel changed")
+	}
+}
 
 func TestHTTPProtocolsAndEmbeddingOrder(t *testing.T) {
 	t.Setenv("PCAS_TEST_MODEL_KEY", "secret-test-key")

@@ -8,10 +8,12 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/ai"
+	"github.com/soaringjerry/PCAS/internal/ai/siwc"
 	"github.com/soaringjerry/PCAS/internal/blob"
 	"github.com/soaringjerry/PCAS/internal/config"
 	"github.com/soaringjerry/PCAS/internal/httpapi"
@@ -31,6 +33,9 @@ func main() {
 }
 
 func run(ctx context.Context, args []string, logger *slog.Logger) error {
+	if len(args) > 0 && (args[0] == "chatgpt-login" || args[0] == "chatgpt-import" || args[0] == "chatgpt-verify") {
+		return chatgptCommand(ctx, args)
+	}
 	if len(args) != 1 || (args[0] != "serve" && args[0] != "worker" && args[0] != "migrate") {
 		return fmt.Errorf("usage: pcas {serve|worker|migrate}")
 	}
@@ -68,7 +73,33 @@ func run(ctx context.Context, args []string, logger *slog.Logger) error {
 	if codex != nil {
 		defer codex.Close()
 	}
-	models, err := ai.Load(os.Getenv("PCAS_MODELS_FILE"), codex)
+	directEnabled := false
+	if value := os.Getenv("PCAS_CHATGPT_DIRECT_ENABLED"); value != "" {
+		directEnabled, err = strconv.ParseBool(value)
+		if err != nil {
+			return fmt.Errorf("invalid PCAS_CHATGPT_DIRECT_ENABLED")
+		}
+	}
+	var direct *siwc.Manager
+	if directEnabled {
+		directDir := os.Getenv("PCAS_CHATGPT_DIR")
+		if directDir == "" {
+			directDir = "data/chatgpt"
+		}
+		callbackPort := 1455
+		if value := os.Getenv("PCAS_CHATGPT_CALLBACK_PORT"); value != "" {
+			callbackPort, err = strconv.Atoi(value)
+			if err != nil {
+				return fmt.Errorf("invalid PCAS_CHATGPT_CALLBACK_PORT")
+			}
+		}
+		direct, err = siwc.New(directDir, os.Getenv("PCAS_CHATGPT_CALLBACK_BIND"), callbackPort)
+		if err != nil {
+			return err
+		}
+		defer direct.Close()
+	}
+	models, err := ai.Load(os.Getenv("PCAS_MODELS_FILE"), codex, direct)
 	if err != nil {
 		return err
 	}

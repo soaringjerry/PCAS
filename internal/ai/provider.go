@@ -13,12 +13,16 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/soaringjerry/PCAS/internal/ai/siwc"
 	"github.com/soaringjerry/PCAS/internal/memory"
 )
 
 type Provider struct {
+	apiKey               string
+	managed              bool
 	EmbeddingQueryPrefix string  `json:"embedding_query_prefix,omitempty"`
 	ID                   string  `json:"id"`
 	Name                 string  `json:"name"`
@@ -47,14 +51,20 @@ type Result struct {
 	OutputTokens int
 }
 type Registry struct {
+	SettingsPath       string
+	settingsMu         sync.Mutex
 	ReloadSubscription bool // Sequential background workers reload the shared managed login per job.
 	Config             Configuration
 	HTTP               *http.Client
 	Codex              *Codex
+	ChatGPT            *siwc.Manager
 }
 
-func Load(path string, codex *Codex) (*Registry, error) {
-	r := &Registry{HTTP: &http.Client{Timeout: 3 * time.Minute, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}, Codex: codex}
+func Load(path string, codex *Codex, direct ...*siwc.Manager) (*Registry, error) {
+	r := &Registry{SettingsPath: os.Getenv("PCAS_MODEL_SETTINGS_FILE"), HTTP: &http.Client{Timeout: 3 * time.Minute, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}, Codex: codex}
+	if len(direct) > 0 {
+		r.ChatGPT = direct[0]
+	}
 	if path != "" {
 		file, err := os.Open(path)
 		if err != nil {
@@ -110,10 +120,19 @@ func Load(path string, codex *Codex) (*Registry, error) {
 		}
 	}
 	if codex != nil && !seen["chatgpt"] {
-		r.Config.Providers = append(r.Config.Providers, Provider{ID: "chatgpt", Name: "ChatGPT 订阅", Protocol: "codex", Model: "", MaxOutput: 4096})
+		r.Config.Providers = append(r.Config.Providers, Provider{ID: "chatgpt", Name: "ChatGPT · Codex 登录", Protocol: "codex", Model: "gpt-6.1-sol", MaxOutput: 4096})
+	}
+	if r.ChatGPT != nil {
+		if seen["chatgpt-direct"] {
+			return nil, fmt.Errorf("chatgpt-direct is reserved for Sign in with ChatGPT")
+		}
+		r.Config.Providers = append(r.Config.Providers, Provider{ID: "chatgpt-direct", Name: "ChatGPT · 套餐授权", Protocol: "siwc", MaxOutput: 4096})
 	}
 	for _, id := range []string{r.Config.Extraction, r.Config.Embedding, r.Config.Transcription} {
 		if id != "" {
+			if id == r.Config.Extraction && id == "chatgpt" && codex == nil && r.ChatGPT != nil {
+				continue
+			}
 			if _, ok := r.Get(id); !ok {
 				return nil, fmt.Errorf("unknown provider reference")
 			}
@@ -132,7 +151,7 @@ func Load(path string, codex *Codex) (*Registry, error) {
 }
 func (r *Registry) Get(id string) (Provider, bool) {
 	if r != nil {
-		for _, p := range r.Config.Providers {
+		for _, p := range r.Providers() {
 			if p.ID == id {
 				return p, true
 			}
@@ -142,10 +161,40 @@ func (r *Registry) Get(id string) (Provider, bool) {
 }
 func (r *Registry) Available(id string) bool {
 	p, ok := r.Get(id)
-	return ok && ((p.Protocol == "codex" && r.Codex != nil) || (p.Protocol != "codex" && (p.KeyEnv == "" || os.Getenv(p.KeyEnv) != "")))
+	if !ok {
+		return false
+	}
+	return r.providerAvailable(p)
+}
+
+func (r *Registry) providerAvailable(p Provider) bool {
+	if p.Protocol == "siwc" {
+		return r.ChatGPT != nil && r.ChatGPT.Available()
+	}
+	if p.managed {
+		return p.apiKey != ""
+	}
+	return (p.Protocol == "codex" && r.Codex != nil) || (p.Protocol != "codex" && (p.KeyEnv == "" || os.Getenv(p.KeyEnv) != ""))
+}
+
+// Keep legacy provider IDs intact. Only the implicit subscription default moves
+// after the direct account has passed the complete live lifecycle verification.
+func (r *Registry) ExtractionID() string {
+	if r == nil {
+		return ""
+	}
+	if settings, err := r.readSettings(); err == nil && settings.Text != nil && settings.Text.Default {
+		return "openai-api"
+	}
+	p, exists := r.Get(r.Config.Extraction)
+	subscriptionDefault := r.Config.Extraction == "" || r.Config.Extraction == "chatgpt" && (!exists || p.Protocol == "codex")
+	if subscriptionDefault && r.ChatGPT != nil && r.ChatGPT.DefaultReady() {
+		return "chatgpt-direct"
+	}
+	return r.Config.Extraction
 }
 func (p Provider) Reserve(input string) float64 {
-	if p.Protocol == "codex" {
+	if p.Protocol == "codex" || p.Protocol == "siwc" {
 		return 0
 	}
 	// UTF-8 byte count is a conservative input token bound, with framing margin.
@@ -153,8 +202,12 @@ func (p Provider) Reserve(input string) float64 {
 }
 func (r *Registry) Generate(ctx context.Context, id, system, prompt string) (Result, error) {
 	p, ok := r.Get(id)
-	if !ok || !r.Available(id) || p.Embedding || p.Transcription {
+	if !ok || !r.providerAvailable(p) || p.Embedding || p.Transcription {
 		return Result{}, memory.ErrUnavailable
+	}
+	if p.Protocol == "siwc" {
+		result, err := r.ChatGPT.Generate(ctx, p.Model, system, prompt)
+		return Result{Text: result.Text, InputTokens: result.InputTokens, OutputTokens: result.OutputTokens}, err
 	}
 	if p.Protocol == "codex" {
 		if r.ReloadSubscription {
@@ -225,12 +278,20 @@ func (r *Registry) Generate(ctx context.Context, id, system, prompt string) (Res
 	return out, nil
 }
 func (r *Registry) EmbedQuery(ctx context.Context, query string) ([]memory.Embedding, error) {
-	p, _ := r.Get(r.Config.Embedding)
-	return r.Embed(ctx, []string{p.EmbeddingQueryPrefix + query})
+	p, _ := r.Get(r.EmbeddingID())
+	return r.EmbedProvider(ctx, p, []string{p.EmbeddingQueryPrefix + query})
 }
 func (r *Registry) Embed(ctx context.Context, texts []string) ([]memory.Embedding, error) {
-	p, ok := r.Get(r.Config.Embedding)
-	if !ok || !r.Available(p.ID) {
+	p, ok := r.Get(r.EmbeddingID())
+	if !ok {
+		return nil, memory.ErrUnavailable
+	}
+	return r.EmbedProvider(ctx, p, texts)
+}
+
+// Pin the provider for an entire indexing job while settings may change.
+func (r *Registry) EmbedProvider(ctx context.Context, p Provider, texts []string) ([]memory.Embedding, error) {
+	if !p.Embedding || !r.providerAvailable(p) {
 		return nil, memory.ErrUnavailable
 	}
 	var result struct {
@@ -239,7 +300,7 @@ func (r *Registry) Embed(ctx context.Context, texts []string) ([]memory.Embeddin
 			Vector []float32 `json:"embedding"`
 		} `json:"data"`
 	}
-	if err := r.call(ctx, p, "/embeddings", map[string]any{"model": p.Model, "input": texts}, &result); err != nil {
+	if err := r.call(ctx, p, "/embeddings", map[string]any{"model": p.Model, "input": texts, "encoding_format": "float"}, &result); err != nil {
 		return nil, err
 	}
 	if len(result.Data) != len(texts) {
@@ -276,7 +337,11 @@ func (r *Registry) call(ctx context.Context, p Provider, path string, body, out 
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if key := os.Getenv(p.KeyEnv); key != "" {
+	key := os.Getenv(p.KeyEnv)
+	if p.managed {
+		key = p.apiKey
+	}
+	if key != "" {
 		if p.Protocol == "anthropic" {
 			req.Header.Set("x-api-key", key)
 		} else {

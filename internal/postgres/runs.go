@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/soaringjerry/PCAS/internal/ai/siwc"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
@@ -345,6 +346,11 @@ func (s *Store) runAgentOnce(ctx context.Context) error {
 		if generationErr != nil {
 			current.Status = "failed"
 			current.Error = "模型调用未完成，结果和用量可能未确认；请检查登录、额度与服务配置"
+			var provider *siwc.ProviderError
+			if errors.As(generationErr, &provider) {
+				current.Error = provider.Message()
+				current.ProviderError = asJSON(provider)
+			}
 		} else {
 			current.Cost = result.Cost
 		}

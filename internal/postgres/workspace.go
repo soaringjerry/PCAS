@@ -107,7 +107,7 @@ func (s *Store) ensureOwner(ctx context.Context, tx pgx.Tx, scope memory.Scope) 
 	}
 	agents := []workspace.Agent{{ID: "manual", Name: "手动交接", Channel: "manual", Enabled: true, MemoryKinds: []string{"fact", "preference", "decision", "intention", "plan"}, Note: "复制上下文到任意 AI，再粘贴结果"}}
 	if s.models != nil {
-		for _, p := range s.models.Config.Providers {
+		for _, p := range s.models.Providers() {
 			if p.Embedding || p.Transcription {
 				continue
 			}
@@ -115,12 +115,33 @@ func (s *Store) ensureOwner(ctx context.Context, tx pgx.Tx, scope memory.Scope) 
 			if p.Protocol == "codex" {
 				note = "ChatGPT 订阅 · 在设置中登录"
 			}
+			if p.Protocol == "siwc" {
+				note = "消耗你的 ChatGPT 套餐 · 官方直接授权"
+			}
 			agents = append(agents, workspace.Agent{ID: p.ID, Name: p.Name, Channel: "api", Note: note, Enabled: true, MemoryKinds: []string{"fact", "preference", "decision", "intention", "plan"}})
 		}
 	}
 	for _, a := range agents {
-		if _, err := tx.Exec(ctx, "INSERT INTO workspace_agents(owner_id,id,document) VALUES($1,$2,$3) ON CONFLICT DO NOTHING", string(scope.OwnerID), a.ID, asJSON(a)); err != nil {
+		if a.ID == "chatgpt-direct" {
+			legacy, err := queryDocument[workspace.Agent](ctx, tx, "SELECT document FROM workspace_agents WHERE owner_id=$1 AND id='chatgpt'", string(scope.OwnerID))
+			if err == nil {
+				a.Enabled = legacy.Enabled
+				a.MemoryKinds = legacy.MemoryKinds
+				a.IncludeInferred = legacy.IncludeInferred
+			} else if !errors.Is(err, memory.ErrNotFound) {
+				return err
+			}
+		}
+		tag, err := tx.Exec(ctx, "INSERT INTO workspace_agents(owner_id,id,document) VALUES($1,$2,$3) ON CONFLICT DO NOTHING", string(scope.OwnerID), a.ID, asJSON(a))
+		if err != nil {
 			return err
+		}
+		if a.ID == "chatgpt-direct" && tag.RowsAffected() == 1 {
+			// The new model channel inherits precisely the existing subscription
+			// visibility once. Subsequent explicit grant changes remain authoritative.
+			if _, err := tx.Exec(ctx, "INSERT INTO record_grants(owner_id,record_id,principal_id) SELECT owner_id,record_id,'chatgpt-direct' FROM record_grants WHERE owner_id=$1 AND principal_id='chatgpt' ON CONFLICT DO NOTHING", string(scope.OwnerID)); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -176,11 +197,26 @@ func (s *Store) snapshotTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) (
 			a.Available = true
 		}
 		if p, ok := s.models.Get(a.ID); ok {
+			a.Default = a.ID == s.models.ExtractionID()
 			a.Protocol = p.Protocol
 			a.Available = s.models.Available(a.ID)
 			a.InputPrice = p.InputPerMillion
 			a.OutputPrice = p.OutputPerMillion
 			a.MaxOutput = p.MaxOutput
+			if p.Protocol == "codex" {
+				a.Note = "ChatGPT 订阅 · " + p.Model
+			} else if p.Protocol != "siwc" {
+				a.Note = "通用 API · " + p.Model
+			}
+		}
+	}
+	if s.models != nil && s.models.ChatGPT != nil && s.models.ChatGPT.DefaultReady() {
+		// Preserve per-agent visibility/preferences; only reorder the default.
+		for i, a := range out.Agents {
+			if a.ID == "chatgpt-direct" {
+				out.Agents = append([]workspace.Agent{a}, append(out.Agents[:i], out.Agents[i+1:]...)...)
+				break
+			}
 		}
 	}
 	loc, err := time.LoadLocation(out.Settings.Timezone)

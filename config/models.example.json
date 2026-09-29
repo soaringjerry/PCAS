@@ -1,16 +1,35 @@
 {
   "providers": [
     {
-      "id": "local-embedding",
-      "name": "本地中文语义索引",
+      "id": "chatgpt",
+      "name": "ChatGPT 订阅",
+      "protocol": "codex",
+      "model": "gpt-6.1-sol",
+      "max_output_tokens": 4096
+    },
+    {
+      "id": "openai-api",
+      "name": "OpenAI 兼容 API",
       "protocol": "openai",
-      "base_url": "http://embeddings:8080/v1",
-      "model": "BAAI/bge-small-zh-v1.5",
+      "base_url": "https://api.openai.com/v1",
+      "key_env": "PCAS_MODEL_API_KEY",
+      "model": "gpt-6.1-sol",
+      "max_output_tokens": 4096,
+      "input_cny_per_million": 1,
+      "output_cny_per_million": 4
+    },
+    {
+      "id": "openai-embedding",
+      "name": "OpenAI 向量索引",
+      "protocol": "openai",
+      "base_url": "https://api.openai.com/v1",
+      "key_env": "OPENAI_API_KEY",
+      "model": "text-embedding-3-small",
       "embedding": true,
-      "cost_mode": "free"
+      "input_cny_per_million": 0.2
     }
   ],
   "extraction_provider": "chatgpt",
-  "embedding_provider": "local-embedding",
+  "embedding_provider": "openai-embedding",
   "transcription_provider": ""
 }

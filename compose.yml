@@ -7,10 +7,13 @@ x-memory: &memory
   environment: &environment
     PCAS_DATABASE_URL: postgres://pcas:${PCAS_DB_PASSWORD:?Set PCAS_DB_PASSWORD in .env}@db:5432/pcas?sslmode=disable
     PCAS_MODELS_FILE: /etc/pcas/models.json
+    PCAS_MODEL_SETTINGS_FILE: /var/lib/pcas/model-api.json
     PCAS_BLOB_DIR: /var/lib/pcas/blobs
     PCAS_INBOX_DIR: /var/lib/pcas/inbox
     PCAS_CODEX_HOME: /var/lib/pcas/codex
     PCAS_CODEX_BINARY: /usr/local/bin/codex
+    PCAS_CHATGPT_DIRECT_ENABLED: ${PCAS_CHATGPT_DIRECT_ENABLED:-false}
+    PCAS_CHATGPT_DIR: /var/lib/pcas/chatgpt
     OPENAI_API_KEY: ${OPENAI_API_KEY:-}
     ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     PCAS_MODEL_API_KEY: ${PCAS_MODEL_API_KEY:-}
@@ -20,6 +23,7 @@ x-memory: &memory
 
 services:
   embeddings:
+    profiles: [local-embeddings]
     build: ./services/embeddings
     image: pcas-embeddings:local
     restart: unless-stopped
@@ -68,8 +72,11 @@ services:
       PCAS_OWNER_ID: ${PCAS_OWNER_ID:?Set PCAS_OWNER_ID in .env}
       PCAS_API_TOKEN: ${PCAS_API_TOKEN:?Set PCAS_API_TOKEN in .env}
       PCAS_WEB_DIR: /app/web/dist
+      PCAS_CHATGPT_CALLBACK_BIND: 0.0.0.0
+      PCAS_CHATGPT_CALLBACK_PORT: ${PCAS_CHATGPT_CALLBACK_PORT:-1455}
     ports:
       - "${PCAS_BIND_ADDRESS:-127.0.0.1}:${PCAS_PORT:-12352}:8090"
+      - "127.0.0.1:${PCAS_CHATGPT_CALLBACK_PORT:-1455}:${PCAS_CHATGPT_CALLBACK_PORT:-1455}"
     depends_on:
       migrate:
         condition: service_completed_successfully

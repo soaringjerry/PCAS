@@ -68,7 +68,7 @@ export function Shell() {
       closeDrawer: () => setDrawer(false),
       draft: (id) => saved.drafts[id] ?? '',
       setDraft: (id, text) => setSaved((s) => ({ ...s, drafts: { ...s.drafts, [id]: text } })),
-      agentFor: (id) => state.agents.find((a) => a.id === saved.agents[id] && a.enabled)?.id ?? state.agents.find((a) => a.enabled)?.id ?? 'manual',
+      agentFor: (id) => state.agents.find((a) => a.id === saved.agents[id] && a.enabled)?.id ?? state.agents.find((a) => a.enabled && a.default)?.id ?? state.agents.find((a) => a.enabled && a.available && a.protocol !== 'siwc')?.id ?? 'manual',
       setAgentFor: (id, agentId) => setSaved((s) => ({ ...s, agents: { ...s.agents, [id]: agentId } })),
     }),
     [saved, state.agents],

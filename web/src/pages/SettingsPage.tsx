@@ -10,6 +10,7 @@ import { Chip, Select, Stepper } from '../components/controls'
 import { useToast } from '../store/toast'
 import { useStore } from '../store/context'
 import { ChatGPTConnection } from '../components/ChatGPTConnection'
+import { OpenAIConnection } from '../components/OpenAIConnection'
 import { api, downloadExport } from '../store/api'
 
 const channelText = { mcp: 'MCP', api: 'API', manual: '手动' } as const
@@ -37,6 +38,7 @@ export function SettingsPage() {
 
       <div className="stack">
         <ChatGPTConnection />
+        <OpenAIConnection />
         <ConnectorSettings />
         <MemoryActivitySettings />
         <section className="section">
@@ -105,7 +107,7 @@ export function SettingsPage() {
                 title={
                   <div className="row-nowrap">
                     <h3>{agent.name}</h3>
-                    <Tag tone="info">{agent.protocol === 'codex' ? '订阅' : channelText[agent.channel]}</Tag>
+                    <Tag tone="info">{agent.protocol === 'codex' || agent.protocol === 'siwc' ? '订阅' : channelText[agent.channel]}</Tag>
                   </div>
                 }
                 aside={<Switch label={`启用 ${agent.name}`} checked={agent.enabled} onChange={(v) => dispatch({ type: 'updateAgent', id: agent.id, patch: { enabled: v } })} />}

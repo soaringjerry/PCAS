@@ -88,12 +88,17 @@ func (s *Store) Recall(ctx context.Context, scope memory.Scope, in memory.Recall
 	// Query-time embedding is optional. Missing semantic coverage is explicit.
 	var vector []byte
 	var model string
-	if query != "" && s.models != nil && s.models.Config.Embedding != "" {
-		provider, _ := s.models.Get(s.models.Config.Embedding)
+	if query != "" && s.models != nil && s.models.EmbeddingID() != "" {
+		provider, _ := s.models.Get(s.models.EmbeddingID())
 		var embeddings []memory.Embedding
-		e := s.reserveModelCost(ctx, scope.OwnerID, float64(len(query)+16)*provider.InputPerMillion/1e6, nil)
+		var e error
+		if !s.models.Available(provider.ID) {
+			e = memory.ErrUnavailable
+		} else {
+			e = s.reserveModelCost(ctx, scope.OwnerID, float64(len(query)+16)*provider.InputPerMillion/1e6, nil)
+		}
 		if e == nil {
-			embeddings, e = s.models.EmbedQuery(ctx, query)
+			embeddings, e = s.models.EmbedProvider(ctx, provider, []string{provider.EmbeddingQueryPrefix + query})
 		}
 		if e == nil && len(embeddings) == 1 {
 			vector = asJSON(embeddings[0].Values)

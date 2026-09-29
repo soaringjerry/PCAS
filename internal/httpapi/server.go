@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/soaringjerry/PCAS/internal/ai/siwc"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
@@ -87,8 +88,8 @@ func (s *Server) capabilities(w http.ResponseWriter, r *http.Request, scope memo
 	}
 	extraction, embedding := false, false
 	if s.options.Models != nil {
-		extraction = s.options.Models.Available(s.options.Models.Config.Extraction)
-		embedding = s.options.Models.Available(s.options.Models.Config.Embedding)
+		extraction = s.options.Models.Available(s.options.Models.ExtractionID())
+		embedding = s.options.Models.Available(s.options.Models.EmbeddingID())
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"architecture": "1.0", "stage": "service", "capabilities": map[string]string{
 		"text_ingestion": "available", "source_versions": "available", "source_read": "available", "transactional_queue": "available", "text_chunking": "available",
@@ -195,6 +196,12 @@ func decode(w http.ResponseWriter, r *http.Request, out any) bool {
 }
 
 func (s *Server) fail(w http.ResponseWriter, err error) {
+	var provider *siwc.ProviderError
+	if errors.As(err, &provider) {
+		// Upstream 401 is a model-account problem, not a PCAS login failure.
+		writeJSON(w, http.StatusBadGateway, map[string]any{"error": "chatgpt_provider_error", "message": provider.Message(), "provider": provider, "usage_url": siwc.UsageURL})
+		return
+	}
 	status, code := http.StatusInternalServerError, "internal_error"
 	switch {
 	case errors.Is(err, memory.ErrInvalid):

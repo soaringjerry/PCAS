@@ -184,6 +184,7 @@ export interface Job {
 }
 
 export interface Agent {
+  default?: boolean
   protocol?: string
   available: boolean
   inputPrice: number

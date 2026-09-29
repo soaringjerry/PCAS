@@ -27,13 +27,13 @@ export interface LineItem {
 const DAY = 24 * 60 * 60 * 1000
 /** Matches the server's conservative reservation using configured CNY rates. */
 export function estimateCost(brief: string, agent?: Agent): number {
-  if (!agent || agent.channel === 'manual' || agent.protocol === 'codex') return 0
+  if (!agent || agent.channel === 'manual' || agent.protocol === 'codex' || agent.protocol === 'siwc') return 0
   return ((new TextEncoder().encode(brief).length + 4096) * agent.inputPrice + agent.maxOutput * agent.outputPrice) / 1e6
 }
 export function spentToday(state: State): number { return state.budgetUsage }
 
 function step(state: State, thing: Thing, kind: RunKind, label: string, prompt: string): NextStep {
-  const agent = state.agents.find((a) => a.enabled && a.available) ?? state.agents[0]
+  const agent = state.agents.find((a) => a.enabled && a.default) ?? state.agents.find((a) => a.enabled && a.available && a.protocol !== 'siwc') ?? state.agents[0]
   const memories = contextFor(state, thing, agent).filter((c) => c.included).map((c) => c.memory)
   return { kind, label, prompt, cost: estimateCost(buildBrief(state, thing, prompt, memories), agent) }
 }

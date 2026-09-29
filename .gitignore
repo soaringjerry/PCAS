@@ -12,3 +12,6 @@ data/
 # Build output
 bin/
 dist/
+
+# Dependencies
+node_modules/

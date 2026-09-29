@@ -1,0 +1,110 @@
+:root {
+  --font:
+    Inter, "SF Pro Text", ui-sans-serif, system-ui, -apple-system, "Segoe UI", "PingFang SC",
+    "Hiragino Sans GB", "Noto Sans CJK SC", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+
+  --accent: #3b4bdb;
+  --accent-hover: #2f3dc0;
+  --accent-ink: #2d3aad;
+  --accent-soft: #eef0fd;
+  --accent-wash: #f6f7fe;
+  --on-accent: #ffffff;
+
+  --ink: #10131a;
+  --body: #444c59;
+  --muted: #6f7886;
+  --faint: #9aa2ad;
+  --line: #e4e7ec;
+  --line-strong: #d4d8df;
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --well: #f1f3f6;
+
+  --success: #13795b;
+  --success-soft: #e8f6ef;
+  --warning: #a35a0a;
+  --warning-soft: #fdf3e2;
+  --danger: #b42318;
+  --danger-soft: #fdeeee;
+  --info: #1f6fb2;
+  --info-soft: #e9f2fb;
+
+  --r-sm: 6px;
+  --r: 10px;
+  --r-lg: 14px;
+  --r-pill: 999px;
+
+  --shadow-sm: 0 1px 2px rgb(16 24 40 / 6%);
+  --shadow-md: 0 6px 18px rgb(16 24 40 / 9%);
+  --shadow-lg: 0 18px 48px rgb(16 24 40 / 18%);
+  --focus: 0 0 0 3px rgb(59 75 219 / 28%);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --accent: #7d8bff;
+    --accent-hover: #95a0ff;
+    --accent-ink: #aab3ff;
+    --accent-soft: #232a52;
+    --accent-wash: #1b2040;
+    --on-accent: #0c0f24;
+
+    --ink: #eceef3;
+    --body: #c3c8d2;
+    --muted: #8f97a5;
+    --faint: #6b7381;
+    --line: #2a2f3a;
+    --line-strong: #373d4a;
+    --bg: #111318;
+    --surface: #181b22;
+    --well: #1f232c;
+
+    --success: #4cc79a;
+    --success-soft: #16302a;
+    --warning: #e8a64c;
+    --warning-soft: #33271a;
+    --danger: #f08073;
+    --danger-soft: #3a1f1e;
+    --info: #6cb2ee;
+    --info-soft: #182a3b;
+
+    --shadow-sm: 0 1px 2px rgb(0 0 0 / 30%);
+    --shadow-md: 0 6px 18px rgb(0 0 0 / 35%);
+    --shadow-lg: 0 18px 48px rgb(0 0 0 / 50%);
+    --focus: 0 0 0 3px rgb(125 139 255 / 35%);
+  }
+}
+
+:root[data-theme="dark"] {
+  --accent: #7d8bff;
+  --accent-hover: #95a0ff;
+  --accent-ink: #aab3ff;
+  --accent-soft: #232a52;
+  --accent-wash: #1b2040;
+  --on-accent: #0c0f24;
+
+  --ink: #eceef3;
+  --body: #c3c8d2;
+  --muted: #8f97a5;
+  --faint: #6b7381;
+  --line: #2a2f3a;
+  --line-strong: #373d4a;
+  --bg: #111318;
+  --surface: #181b22;
+  --well: #1f232c;
+
+  --success: #4cc79a;
+  --success-soft: #16302a;
+  --warning: #e8a64c;
+  --warning-soft: #33271a;
+  --danger: #f08073;
+  --danger-soft: #3a1f1e;
+  --info: #6cb2ee;
+  --info-soft: #182a3b;
+
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 30%);
+  --shadow-md: 0 6px 18px rgb(0 0 0 / 35%);
+  --shadow-lg: 0 18px 48px rgb(0 0 0 / 50%);
+  --focus: 0 0 0 3px rgb(125 139 255 / 35%);
+}

@@ -1,0 +1,95 @@
+import type {
+  CandidateKind,
+  Epistemic,
+  HandoffStatus,
+  IdeaStatus,
+  JobStatus,
+  MemoryKind,
+  ProjectStatus,
+  SampleState,
+  SourceStatus,
+  TaskStatus,
+} from './types'
+
+export type Tone = 'neutral' | 'accent' | 'success' | 'warning' | 'danger' | 'info'
+
+interface Label {
+  text: string
+  tone: Tone
+}
+
+export const epistemicLabel: Record<Epistemic, Label> = {
+  confirmed: { text: '已确认', tone: 'success' },
+  inferred: { text: 'AI 推测', tone: 'warning' },
+  planned: { text: '计划', tone: 'info' },
+}
+
+export const taskStatusLabel: Record<TaskStatus, Label> = {
+  doing: { text: '正在做', tone: 'accent' },
+  todo: { text: '待办', tone: 'neutral' },
+  waiting: { text: '等待', tone: 'warning' },
+  done: { text: '完成', tone: 'success' },
+  cancelled: { text: '取消', tone: 'neutral' },
+}
+
+export const taskStatusOrder: TaskStatus[] = ['doing', 'todo', 'waiting', 'done', 'cancelled']
+
+export const ideaStatusLabel: Record<IdeaStatus, Label> = {
+  awakened: { text: '已唤醒', tone: 'accent' },
+  active: { text: '进行中', tone: 'info' },
+  shelved: { text: '搁置', tone: 'neutral' },
+  promoted: { text: '已转任务', tone: 'success' },
+  dropped: { text: '放弃', tone: 'neutral' },
+}
+
+export const projectStatusLabel: Record<ProjectStatus, Label> = {
+  active: { text: '进行中', tone: 'accent' },
+  paused: { text: '暂停', tone: 'neutral' },
+  done: { text: '完成', tone: 'success' },
+}
+
+export const memoryKindLabel: Record<MemoryKind, string> = {
+  fact: '事实',
+  preference: '偏好',
+  decision: '决定',
+}
+
+export const candidateKindLabel: Record<CandidateKind, string> = {
+  task: '待办',
+  idea: 'IDEA',
+  memory: '记忆',
+}
+
+export const sourceStatusLabel: Record<SourceStatus, Label> = {
+  connected: { text: '已连接', tone: 'success' },
+  manual: { text: '手动导入', tone: 'info' },
+  unverified: { text: '待验证', tone: 'warning' },
+  failed: { text: '出错', tone: 'danger' },
+}
+
+export const jobStatusLabel: Record<JobStatus, Label> = {
+  queued: { text: '排队中', tone: 'neutral' },
+  running: { text: '处理中', tone: 'accent' },
+  waiting: { text: '等待', tone: 'warning' },
+  failed: { text: '失败', tone: 'danger' },
+  done: { text: '完成', tone: 'success' },
+}
+
+export const handoffStatusLabel: Record<HandoffStatus, Label> = {
+  draft: { text: '草稿', tone: 'neutral' },
+  sent: { text: '已发出', tone: 'info' },
+  returned: { text: '结果已返回', tone: 'warning' },
+  adopted: { text: '已采纳', tone: 'success' },
+}
+
+export const sampleStateLabel: Record<SampleState, Label> = {
+  candidate: { text: '候选', tone: 'warning' },
+  included: { text: '纳入', tone: 'success' },
+  excluded: { text: '排除', tone: 'neutral' },
+}
+
+export const triggerLabel = {
+  event: '事件驱动',
+  time: '时间驱动',
+  manual: '手动',
+} as const

@@ -5,6 +5,8 @@ PCAS 把待办、想法、项目和 AI 工作放在同一套个人连续记忆�
 - [记忆架构定稿 1.0](docs/memory-architecture.md)
 - [后端接口、配置与验证边界](docs/memory-service.md)
 - [部署与模型接入](docs/deployment.md)
+- [跨应用接入、归档与摘要](docs/connectors.md)
+- [固定场景真实模型验收](docs/evaluations/2026-09-29.md)
 - [产品需求](docs/prd.md)
 - [前端](web/README.md)
 
@@ -20,7 +22,7 @@ docker compose up -d --no-build
 
 默认入口 `http://127.0.0.1:12352`。登录密码是服务端 `PCAS_API_TOKEN`。公网部署设置 `PCAS_BIND_ADDRESS=0.0.0.0` 和精确的 HTTPS `PCAS_PUBLIC_URL`。数据库不发布端口。
 
-设置页支持官方 Codex 的 ChatGPT 设备登录；API 模型从服务端 JSON 配置加载，支持 OpenAI Chat Completions 兼容协议、Responses 和 Anthropic Messages。手动交接无需模型账户。语义向量和音频转录单独配置，未配置时保留原文并展示处理缺口。
+设置页支持官方 Codex 的 ChatGPT 设备登录；API 模型从服务端 JSON 配置加载，支持 OpenAI Chat Completions 兼容协议、Responses 和 Anthropic Messages。手动交接无需模型账户。Compose 默认运行本地中文向量服务，不依赖额外 API 密钥；音频转录仍使用独立的通用模型配置。设置页可管理 Webhook、定时拉取、文件夹同步和 ChatGPT/Claude 归档导入。
 
 ## 检查
 

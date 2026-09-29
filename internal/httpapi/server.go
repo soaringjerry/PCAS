@@ -48,6 +48,7 @@ func New(sources memory.Sources, retriever memory.Retriever, auth Authenticator,
 	mux.HandleFunc("POST /v1/memory/recall", s.authorize(s.recall))
 	mux.HandleFunc("POST /v1/memory/expand", s.authorize(s.expand))
 	s.workspaceRoutes(mux)
+	s.connectorRoutes(mux)
 	return mux
 }
 
@@ -92,7 +93,7 @@ func (s *Server) capabilities(w http.ResponseWriter, r *http.Request, scope memo
 	writeJSON(w, http.StatusOK, map[string]any{"architecture": "1.0", "stage": "service", "capabilities": map[string]string{
 		"text_ingestion": "available", "source_versions": "available", "source_read": "available", "transactional_queue": "available", "text_chunking": "available",
 		"recall": available(s.retriever != nil), "expand": available(s.retriever != nil), "structured_write": available(s.options.Writer != nil), "extraction": available(extraction), "embedding": available(embedding), "tokenization": available(s.retriever != nil), "attachments": available(s.options.Attachments != nil),
-		"correction": available(s.options.Editor != nil), "deletion": available(s.options.Editor != nil), "activity": available(s.options.Activity != nil), "wakeups": available(s.options.Workspace != nil), "agent_credentials": "available",
+		"correction": available(s.options.Editor != nil), "deletion": available(s.options.Editor != nil), "activity": available(s.options.Activity != nil), "connectors": available(s.options.Connectors != nil), "derived_summaries": available(s.options.Continuity != nil), "wakeups": available(s.options.Workspace != nil), "agent_credentials": "available",
 	}})
 }
 

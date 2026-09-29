@@ -111,18 +111,20 @@ type MemoryVersion struct {
 	Reason string `json:"reason,omitempty"`
 }
 type Memory struct {
-	ID         string          `json:"id"`
-	Version    int             `json:"recordVersion"`
-	Kind       string          `json:"kind"`
-	Text       string          `json:"text"`
-	Epistemic  string          `json:"epistemic"`
-	ProjectID  string          `json:"projectId,omitempty"`
-	Sources    []SourceRef     `json:"sources"`
-	Versions   []MemoryVersion `json:"versions"`
-	VisibleTo  []string        `json:"visibleTo"`
-	Exposure   float64         `json:"exposure"`
-	LastUsedAt string          `json:"lastUsedAt"`
-	Pinned     bool            `json:"pinned"`
+	HalfLifeDays       float64         `json:"halfLifeDays"`
+	ReinforcementLimit float64         `json:"reinforcementLimit"`
+	ID                 string          `json:"id"`
+	Version            int             `json:"recordVersion"`
+	Kind               string          `json:"kind"`
+	Text               string          `json:"text"`
+	Epistemic          string          `json:"epistemic"`
+	ProjectID          string          `json:"projectId,omitempty"`
+	Sources            []SourceRef     `json:"sources"`
+	Versions           []MemoryVersion `json:"versions"`
+	VisibleTo          []string        `json:"visibleTo"`
+	Exposure           float64         `json:"exposure"`
+	LastUsedAt         string          `json:"lastUsedAt"`
+	Pinned             bool            `json:"pinned"`
 }
 type Agent struct {
 	Protocol        string   `json:"protocol,omitempty"`

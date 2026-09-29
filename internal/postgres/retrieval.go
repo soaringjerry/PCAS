@@ -93,7 +93,7 @@ func (s *Store) Recall(ctx context.Context, scope memory.Scope, in memory.Recall
 		var embeddings []memory.Embedding
 		e := s.reserveModelCost(ctx, scope.OwnerID, float64(len(query)+16)*provider.InputPerMillion/1e6, nil)
 		if e == nil {
-			embeddings, e = s.models.Embed(ctx, []string{query})
+			embeddings, e = s.models.EmbedQuery(ctx, query)
 		}
 		if e == nil && len(embeddings) == 1 {
 			vector = asJSON(embeddings[0].Values)
@@ -105,22 +105,24 @@ func (s *Store) Recall(ctx context.Context, scope memory.Scope, in memory.Recall
 		out.Coverage.Gaps = append(out.Coverage.Gaps, "未配置语义索引；模糊措辞的覆盖尚不完整")
 	}
 	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-		rows, err := tx.Query(ctx, `SELECT t.id::text,t.version,r.kind,t.body,
+		rows, err := tx.Query(ctx, `WITH linked AS (SELECT m.member_id FROM episode_members m JOIN memory_records e ON(e.owner_id,e.id,e.version)=(m.owner_id,m.episode_id,m.episode_version) JOIN episodes ep ON(ep.owner_id,ep.id,ep.version)=(e.owner_id,e.id,e.version) WHERE m.owner_id=$1 AND e.state='active' AND (m.episode_id=ANY($8::uuid[]) OR ($6='history' AND $4!='' AND position(lower($4) in lower(ep.title))>0)) AND ($2 OR EXISTS(SELECT 1 FROM record_grants g WHERE g.owner_id=e.owner_id AND g.record_id=e.id AND g.principal_id=$3)))
+ SELECT t.id::text,t.version,r.kind,t.body,
 		 (CASE WHEN $4='' THEN 0 WHEN position(lower($4) in lower(t.body))>0 THEN 5 ELSE 0 END
 		 +CASE WHEN $5='' THEN 0 ELSE coalesce(ts_rank_cd(rs.search_vector,to_tsquery('simple',$5)),0) END
 		 +CASE WHEN $11::text IS NULL THEN 0 ELSE coalesce((SELECT max(1-(e.embedding <=> $11::vector)) FROM embeddings e WHERE e.owner_id=t.owner_id AND ((e.record_id,e.record_version)=(t.id,t.version) OR e.record_id IN (SELECT id FROM chunks WHERE owner_id=t.owner_id AND source_id=t.id AND source_version=t.version)) AND e.model=$12 AND e.dimensions=$13),0) END
 		 +CASE WHEN t.id=ANY($8::uuid[]) OR t.id IN (SELECT claim_id FROM claim_revisions WHERE owner_id=$1 AND (subject_id=ANY($8::uuid[]) OR scope->>'project_id'=ANY($8::text[]))) THEN 10 ELSE 0 END
-		 +CASE WHEN $6='continue' THEN coalesce(CASE WHEN a.pinned THEN 1 ELSE exp(-0.693147*greatest(0,extract(epoch from(now()-a.last_effective_use_at)))/(a.half_life_seconds*a.stability)) END,0)*0.2 ELSE 0 END) AS score
+		 +CASE WHEN $6='continue' THEN coalesce(CASE WHEN a.pinned THEN 1 ELSE exp(-0.693147*greatest(0,extract(epoch from(now()-a.last_effective_use_at)))/(a.half_life_seconds*a.stability)) END,0)*0.2 ELSE 0 END) AS score,coalesce(sc.role,''),coalesce(sc.branch,''),coalesce(sc.gaps,'[]')
 		 FROM memory_text t JOIN memory_records r ON (r.owner_id,r.id)=(t.owner_id,t.id)
 		 JOIN record_versions rv ON (rv.owner_id,rv.record_id,rv.version)=(t.owner_id,t.id,t.version)
 		 LEFT JOIN record_search rs ON (rs.owner_id,rs.record_id,rs.record_version)=(t.owner_id,t.id,t.version)
 		 LEFT JOIN activity a ON (a.owner_id,a.record_id)=(t.owner_id,t.id)
+ LEFT JOIN source_contexts sc ON(sc.owner_id,sc.source_id,sc.source_version)=(t.owner_id,t.id,t.version)
 		 WHERE t.owner_id=$1 AND r.state='active' AND rv.state='active' AND ($2 OR EXISTS(SELECT 1 FROM record_grants g WHERE g.owner_id=t.owner_id AND g.record_id=t.id AND g.principal_id=$3))
 		 AND ($6='history' OR (r.kind='claim' AND t.version=(SELECT a.version FROM applicable_claim_versions($1,coalesce($9,now()),coalesce($10,now())) a WHERE a.claim_id=t.id)) OR (r.kind!='claim' AND t.version=(SELECT max(v.version) FROM record_versions v WHERE v.owner_id=t.owner_id AND v.record_id=t.id AND v.recorded_at<=coalesce($10,now()))))
 		 AND ($9::timestamptz IS NULL OR (rv.valid_from IS NULL OR rv.valid_from<=$9) AND (rv.valid_to IS NULL OR rv.valid_to>$9))
 		 AND ($10::timestamptz IS NULL OR rv.recorded_at<=$10)
 		 AND ($4='' OR EXISTS(SELECT 1 FROM unnest($16::text[]) token WHERE length(token)>1 AND position(lower(token) in lower(t.body))>0) OR position(lower($4) in lower(t.body))>0 OR ($5!='' AND (coalesce(rs.search_vector,to_tsvector('simple',$7)) @@ to_tsquery('simple',$5)))
-		 OR t.id=ANY($8::uuid[]) OR t.id IN (SELECT claim_id FROM claim_revisions WHERE owner_id=$1 AND (subject_id=ANY($8::uuid[]) OR scope->>'project_id'=ANY($8::text[])))
+		 OR t.id IN (SELECT member_id FROM linked) OR t.id=ANY($8::uuid[]) OR t.id IN (SELECT claim_id FROM claim_revisions WHERE owner_id=$1 AND (subject_id=ANY($8::uuid[]) OR scope->>'project_id'=ANY($8::text[])))
 		 OR ($11::text IS NOT NULL AND EXISTS(SELECT 1 FROM embeddings e WHERE e.owner_id=t.owner_id AND ((e.record_id,e.record_version)=(t.id,t.version) OR e.record_id IN (SELECT id FROM chunks WHERE owner_id=t.owner_id AND source_id=t.id AND source_version=t.version)) AND e.model=$12 AND CASE WHEN e.dimensions=$13 THEN (e.embedding <=> $11::vector)<0.65 ELSE false END)))
 		 ORDER BY CASE WHEN $6='history' THEN rv.recorded_at END,t.id=ANY($8::uuid[]) DESC,score DESC,t.id,t.version
 		 LIMIT $14 OFFSET $15`, string(scope.OwnerID), scope.IsOwner, scope.PrincipalID, query, fts, string(in.Mode), "", in.Context.Objects, in.Context.ValidAt, in.Context.KnownAt, nullString(string(vector)), model, embeddingDimensions(vector), b.Candidates+1, offset, tokens)
@@ -133,11 +135,17 @@ func (s *Store) Recall(ctx context.Context, scope memory.Scope, in memory.Recall
 			var ref memory.Ref
 			var text string
 			var score float64
-			if err := rows.Scan(&ref.ID, &ref.Version, &ref.Kind, &text, &score); err != nil {
+			var role, branch string
+			var gaps []string
+			if err := rows.Scan(&ref.ID, &ref.Version, &ref.Kind, &text, &score, &role, &branch, &gaps); err != nil {
 				rows.Close()
 				return err
 			}
 			_ = score
+			if role != "" || branch != "" {
+				text = "[原文角色=" + role + "；分支=" + branch + "] " + text
+			}
+			out.Coverage.Gaps = append(out.Coverage.Gaps, gaps...)
 			if consumed >= b.Candidates || summary.Len()+len(text) > b.Tokens*3 && consumed > 0 {
 				out.Coverage.Complete = false
 				out.Coverage.NextCursor = base64.RawURLEncoding.EncodeToString([]byte(fingerprint + ":" + strconv.Itoa(offset+consumed)))

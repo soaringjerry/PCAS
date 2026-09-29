@@ -10,11 +10,14 @@ import (
 	"strings"
 
 	"github.com/soaringjerry/PCAS/internal/ai"
+	"github.com/soaringjerry/PCAS/internal/connectors"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
 type Options struct {
+	Continuity  memory.Continuity
+	Connectors  connectors.API
 	Attachments memory.Attachments
 	Writer      memory.Writer
 	Workspace   workspace.API

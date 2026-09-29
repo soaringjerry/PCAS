@@ -215,7 +215,7 @@ func invalidateTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, id string)
 			return err
 		}
 	}
-	return nil
+	return refreshSummaryJobsTx(ctx, tx, scope.OwnerID, memory.ID(id))
 }
 func (s *Store) RecordUse(ctx context.Context, scope memory.Scope, in memory.UseEvent) error {
 	if err := requireOwner(scope); err != nil {
@@ -242,7 +242,7 @@ func recordUseTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in memory.U
 	if err != nil || tag.RowsAffected() == 0 {
 		return err
 	}
-	_, err = tx.Exec(ctx, `INSERT INTO activity(owner_id,record_id,last_effective_use_at) VALUES($1,$2,$3) ON CONFLICT(owner_id,record_id) DO UPDATE SET last_effective_use_at=greatest(activity.last_effective_use_at,excluded.last_effective_use_at),stability=CASE WHEN activity.last_effective_use_at<excluded.last_effective_use_at-interval '1 day' THEN least(8,activity.stability*1.1) ELSE activity.stability END`, string(scope.OwnerID), string(in.Ref.ID), in.At)
+	_, err = tx.Exec(ctx, `INSERT INTO activity(owner_id,record_id,last_effective_use_at) VALUES($1,$2,$3) ON CONFLICT(owner_id,record_id) DO UPDATE SET last_effective_use_at=greatest(activity.last_effective_use_at,excluded.last_effective_use_at),stability=CASE WHEN activity.last_effective_use_at<excluded.last_effective_use_at-interval '1 day' THEN least(activity.reinforcement_limit,activity.stability*1.1) ELSE activity.stability END`, string(scope.OwnerID), string(in.Ref.ID), in.At)
 	return err
 }
 
@@ -311,7 +311,7 @@ func (s *Store) deleteTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in 
 		}
 	}
 	// Deleting a source also deletes its extracted records, chunks and derived views.
-	rows, err := tx.Query(ctx, `WITH RECURSIVE affected(id) AS (
+	const deletionClosure = `WITH RECURSIVE affected(id) AS (
 		SELECT unnest($2::uuid[]) UNION SELECT links.child FROM affected a JOIN (
 		SELECT source_id AS parent,id AS child FROM chunks WHERE owner_id=$1 UNION SELECT source_id,target_id FROM evidence WHERE owner_id=$1
 		UNION SELECT dependency_id,view_id FROM derived_dependencies WHERE owner_id=$1 UNION SELECT from_id,id FROM relations WHERE owner_id=$1 UNION SELECT to_id,id FROM relations WHERE owner_id=$1
@@ -319,8 +319,10 @@ func (s *Store) deleteTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in 
  UNION SELECT c.id,s.id FROM claims c JOIN sources s ON s.owner_id=c.owner_id AND s.connector IN ('corrections','memory-input') AND s.external_id=c.id::text WHERE c.owner_id=$1
  UNION SELECT d.memory_id,s.id FROM run_dependencies d JOIN adopted_artifacts a ON (a.owner_id,a.run_id)=(d.owner_id,d.run_id) JOIN sources s ON s.owner_id=a.owner_id AND s.connector='actions' AND s.external_id=a.thing_id::text WHERE d.owner_id=$1
  UNION SELECT (disambiguation->>'source_id')::uuid,entity_id FROM entity_versions WHERE owner_id=$1 AND disambiguation ? 'source_id'
+ UNION SELECT archive_id,source_id FROM archive_entries WHERE owner_id=$1
  UNION SELECT derived_from_id,source_id FROM source_versions WHERE owner_id=$1 AND derived_from_id IS NOT NULL
-		) links ON links.parent=a.id) SELECT id::text FROM affected`, string(scope.OwnerID), ids)
+		) links ON links.parent=a.id) SELECT id::text FROM affected`
+	rows, err := tx.Query(ctx, deletionClosure, string(scope.OwnerID), ids)
 	if err != nil {
 		return err
 	}
@@ -336,6 +338,69 @@ func (s *Store) deleteTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in 
 	err = rows.Err()
 	rows.Close()
 	if err != nil {
+		return err
+	}
+	// Automatically organized episodes have no independent factual authority.
+	// Remove those whose complete supporting membership is being erased.
+	orphanRows, err := tx.Query(ctx, `SELECT DISTINCT e.id::text FROM episodes e WHERE e.owner_id=$1 AND EXISTS(SELECT 1 FROM episode_members m WHERE m.owner_id=e.owner_id AND m.episode_id=e.id AND m.member_id=ANY($2::uuid[])) AND NOT EXISTS(SELECT 1 FROM episode_members m WHERE m.owner_id=e.owner_id AND m.episode_id=e.id AND NOT(m.member_id=ANY($2::uuid[])))`, string(scope.OwnerID), ids)
+	if err != nil {
+		return err
+	}
+	orphans := []string{}
+	for orphanRows.Next() {
+		var id string
+		if err := orphanRows.Scan(&id); err != nil {
+			orphanRows.Close()
+			return err
+		}
+		orphans = append(orphans, id)
+	}
+	err = orphanRows.Err()
+	orphanRows.Close()
+	if err != nil {
+		return err
+	}
+	if len(orphans) > 0 {
+		rows, err := tx.Query(ctx, deletionClosure, string(scope.OwnerID), append(ids, orphans...))
+		if err != nil {
+			return err
+		}
+		ids = nil
+		for rows.Next() {
+			var id string
+			if err := rows.Scan(&id); err != nil {
+				rows.Close()
+				return err
+			}
+			ids = append(ids, id)
+		}
+		err = rows.Err()
+		rows.Close()
+		if err != nil {
+			return err
+		}
+	}
+	// An archive may contain several records. Erase its original binary when a
+	// contained source is erased, while keeping unrelated normalized sources.
+	archiveRows, err := tx.Query(ctx, "SELECT DISTINCT archive_id::text FROM archive_entries WHERE owner_id=$1 AND source_id=ANY($2::uuid[])", string(scope.OwnerID), ids)
+	if err != nil {
+		return err
+	}
+	archiveIDs := []string{}
+	for archiveRows.Next() {
+		var id string
+		if err := archiveRows.Scan(&id); err != nil {
+			archiveRows.Close()
+			return err
+		}
+		archiveIDs = append(archiveIDs, id)
+	}
+	err = archiveRows.Err()
+	archiveRows.Close()
+	if err != nil {
+		return err
+	}
+	if err := redactArchivesTx(ctx, tx, scope, archiveIDs); err != nil {
 		return err
 	}
 	// Remove orphan subjects whose only supporting claims are being deleted.

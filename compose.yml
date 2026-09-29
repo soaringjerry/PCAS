@@ -8,6 +8,7 @@ x-memory: &memory
     PCAS_DATABASE_URL: postgres://pcas:${PCAS_DB_PASSWORD:?Set PCAS_DB_PASSWORD in .env}@db:5432/pcas?sslmode=disable
     PCAS_MODELS_FILE: /etc/pcas/models.json
     PCAS_BLOB_DIR: /var/lib/pcas/blobs
+    PCAS_INBOX_DIR: /var/lib/pcas/inbox
     PCAS_CODEX_HOME: /var/lib/pcas/codex
     PCAS_CODEX_BINARY: /usr/local/bin/codex
     OPENAI_API_KEY: ${OPENAI_API_KEY:-}
@@ -18,6 +19,24 @@ x-memory: &memory
     - memory-files:/var/lib/pcas
 
 services:
+  embeddings:
+    build: ./services/embeddings
+    image: pcas-embeddings:local
+    restart: unless-stopped
+    init: true
+    mem_limit: 768m
+    cpus: 2
+    environment:
+      PCAS_EMBEDDING_THREADS: 2
+      HF_HUB_DISABLE_PROGRESS_BARS: 1
+    volumes:
+      - embedding-models:/models
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/healthz',timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 180s
   db:
     image: pgvector/pgvector:0.8.2-pg16-bookworm
     restart: unless-stopped
@@ -70,3 +89,4 @@ services:
 volumes:
   memory-db:
   memory-files:
+  embedding-models:

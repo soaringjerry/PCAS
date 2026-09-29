@@ -1,0 +1,120 @@
+{
+  "answer_checks": [
+    {
+      "answer": "你说的应该是苏州平江路河边、蓝色窗户的旧书店「拾页」。记录是在 **2021 年**，不是 2024 年；你当时想再去翻翻旧地图，尚未定日期。cite9d7443f7-12a6-4c28-b513-cc69bc4551f4@1\n\n后来的记录说它已重新营业，可以恢复此前暂停的到店计划。citebb43a6fb-761c-4dcc-bcc4-b5b2931b0577@1",
+      "end_to_end_ms": 7171,
+      "expected": "苏州平江路拾页旧书店；仅有意向",
+      "generation_ms": 7115,
+      "scenario": "沉睡愿望"
+    },
+    {
+      "answer": "当前使用**第三版**历史作业。老师要求**补上引用页码**；这份作业的小标题用英文，不沿用第一版的中文小标题。citeccba02a0-7fc8-48b0-b2bd-dcc5a26a0714@1\n\n目前上下文没有作业正文和批注原件，继续修改需提供第三版正文及引用资料。",
+      "end_to_end_ms": 6056,
+      "expected": "第三版；补引用页码；英文小标题仅限本次",
+      "generation_ms": 6026,
+      "scenario": "自然续接"
+    },
+    {
+      "answer": "PCAS 已定稿为**上下文、结构化、向量三层**，共用统一记忆服务；结构化事实存 PostgreSQL，向量可由原文重建。[89136360-cbc1-44fc-be0d-4991c698b713@1]\n\n“全部记忆放入向量数据库”只是旧备选，未定稿；专用图数据库及将摘要作为独立事实来源是 AI 建议，不是用户决定。[402799a2-771b-49af-80fa-08e7ff945045@1][09fa4e65-d840-4028-b293-b77191df824d@1]\n\n旧方案原图尚未接入，部分资料尚未完成索引或抽取。",
+      "end_to_end_ms": 8543,
+      "expected": "旧向量方案为备选；三层架构已定稿；图数据库是 AI 补充；原图缺失",
+      "generation_ms": 8524,
+      "scenario": "完整脉络"
+    },
+    {
+      "answer": "你还没报名，只是在考虑，尚未决定。小林已经完成报名，那是他的安排。",
+      "end_to_end_ms": 3350,
+      "expected": "用户仅考虑未报名；小林已报名",
+      "generation_ms": 3327,
+      "scenario": "状态与纠错"
+    },
+    {
+      "answer": "是的，苏州平江路河边那间蓝窗的“拾页”旧书店已重新营业，可以恢复此前暂停的到店计划。不过记录只写了“今天”，没有具体日期。citebb43a6fb-761c-4dcc-bcc4-b5b2931b0577@1",
+      "end_to_end_ms": 5014,
+      "expected": "旧书店重新营业；不能据此认为用户已到店",
+      "generation_ms": 4989,
+      "scenario": "衰减与触发"
+    }
+  ],
+  "assistant_attribution_errors": 0,
+  "correction_propagated": true,
+  "embedding_index_ms": 247,
+  "embedding_model": "BAAI/bge-small-zh-v1.5",
+  "evidence_recall": 1,
+  "extracted_claims": 13,
+  "extraction_ms": {
+    "homework-v3": 10035,
+    "old-bookstore": 10902,
+    "pcas-ai": 7362,
+    "pcas-final": 11482,
+    "state": 8742,
+    "wake": 8153
+  },
+  "fixture_count": 12,
+  "generated_at": "2026-09-29T18:27:13.442121526Z",
+  "generator": "ChatGPT subscription",
+  "scenarios": [
+    {
+      "context_runes": 982,
+      "context_utf8_bytes": 1762,
+      "coverage_gaps": [
+        "部分资料尚未完成索引或抽取；可通过原文继续追溯"
+      ],
+      "expected_sources": 1,
+      "latency_ms": 56,
+      "recalled_sources": 1,
+      "returned_records": 11,
+      "scenario": "沉睡愿望"
+    },
+    {
+      "context_runes": 1077,
+      "context_utf8_bytes": 1925,
+      "coverage_gaps": [
+        "旧方案原图尚未接入",
+        "部分资料尚未完成索引或抽取；可通过原文继续追溯"
+      ],
+      "expected_sources": 1,
+      "latency_ms": 30,
+      "recalled_sources": 1,
+      "returned_records": 12,
+      "scenario": "自然续接"
+    },
+    {
+      "context_runes": 735,
+      "context_utf8_bytes": 1207,
+      "coverage_gaps": [
+        "旧方案原图尚未接入",
+        "部分资料尚未完成索引或抽取；可通过原文继续追溯"
+      ],
+      "expected_sources": 3,
+      "latency_ms": 19,
+      "recalled_sources": 3,
+      "returned_records": 9,
+      "scenario": "完整脉络"
+    },
+    {
+      "context_runes": 779,
+      "context_utf8_bytes": 1391,
+      "coverage_gaps": [
+        "部分资料尚未完成索引或抽取；可通过原文继续追溯"
+      ],
+      "expected_sources": 1,
+      "latency_ms": 22,
+      "recalled_sources": 1,
+      "returned_records": 9,
+      "scenario": "状态与纠错"
+    },
+    {
+      "context_runes": 1077,
+      "context_utf8_bytes": 1913,
+      "coverage_gaps": [
+        "部分资料尚未完成索引或抽取；可通过原文继续追溯"
+      ],
+      "expected_sources": 1,
+      "latency_ms": 24,
+      "recalled_sources": 1,
+      "returned_records": 12,
+      "scenario": "衰减与触发"
+    }
+  ]
+}

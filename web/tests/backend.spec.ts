@@ -27,7 +27,7 @@ test('persisted workspace, memory correction, source tracing and manual assistan
   await page.getByRole('button', { name: '存为新版本' }).click()
   await expect(page.getByText('改好了，旧版本也留着', { exact: true })).toBeVisible()
   await page.getByRole('button', { name: /用户纠正/ }).click()
-  await expect(page.locator('pre').filter({ hasText: `山边旧书店-${suffix}` })).toBeVisible()
+  await expect(page.locator('pre:visible').filter({ hasText: `山边旧书店-${suffix}` })).toBeVisible()
   await page.goto('/')
   await expect(page.getByPlaceholder('记点什么')).toBeVisible()
   await page.keyboard.press('Control+k')

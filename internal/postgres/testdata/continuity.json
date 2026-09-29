@@ -1,0 +1,23 @@
+{
+ "records": [
+  {"id":"old-bookstore","title":"周末愿望","text":"2021 年路过苏州平江路河边那间蓝窗的旧书店，叫拾页。我想哪天再去翻翻旧地图，还没有决定日期。","role":"user","conversation_id":"walk","expressed_at":"2021-03-05T12:00:00Z"},
+  {"id":"same-name","title":"同名资料","text":"深圳商场的拾页是一家新开的咖啡店，朋友小林已去过。","role":"user","conversation_id":"coffee"},
+  {"id":"wrong-date","title":"日历","text":"2024 年的出差安排：上海会展中心开会，没有去书店。","role":"user"},
+  {"id":"homework-v3","title":"作业第三版","text":"这份历史作业现在用第三版。老师批注要补上引用页码；只有这份作业用英文小标题，我平常仍喜欢中文标题。","role":"user","conversation_id":"homework"},
+  {"id":"homework-v1","title":"旧版作业","text":"历史作业第一版还没有收到批注，先使用中文小标题。","role":"user","conversation_id":"homework","branch":"historical"},
+  {"id":"pcas-old","title":"PCAS 旧设想","text":"PCAS 原先考虑把记忆全部放到向量数据库，只是一个备选，没有定稿。","role":"user","episode_key":"PCAS","branch":"historical"},
+  {"id":"pcas-final","title":"PCAS 定稿","text":"PCAS 已定稿为上下文、结构化、向量三层，共用统一记忆服务；结构化事实存 PostgreSQL，向量可由原文重建。","role":"user","episode_key":"PCAS"},
+  {"id":"pcas-ai","title":"PCAS AI 补充","text":"我建议再加一套专门的图数据库，还可以把所有摘要作为独立事实来源。","role":"assistant","episode_key":"PCAS","missing_attachments":["旧方案原图尚未接入"]},
+  {"id":"state","title":"报名状态","text":"我只是在考虑报名陶艺课，还没决定。小林已经完成报名，那是他的安排，不是我的。","role":"user","conversation_id":"pottery"},
+  {"id":"wake","title":"再次营业","text":"河边旧书店今天重新营业了，可以恢复此前暂停的到店计划。","role":"user","conversation_id":"walk"},
+  {"id":"noise-travel","title":"无关旅行","text":"去北京的高铁改到了下周三，酒店还没预订。","role":"user"},
+  {"id":"noise-recipe","title":"食谱","text":"煎蛋先热锅，番茄切块，汤里不放香菜。","role":"user"}
+ ],
+ "scenarios": [
+  {"name":"沉睡愿望","query":"大概 2024 年说过想逛的那家水边卖二手书、蓝色窗户的小店","mode":"remember","expected":["old-bookstore"]},
+  {"name":"自然续接","query":"接着改历史作业，当前版本和老师要求是什么","mode":"continue","expected":["homework-v3"]},
+  {"name":"完整脉络","query":"PCAS","mode":"history","expected":["pcas-old","pcas-final","pcas-ai"]},
+  {"name":"状态与纠错","query":"我报名陶艺课了吗，小林呢","mode":"remember","expected":["state"]},
+  {"name":"衰减与触发","query":"那间停业过的旧书店最近又开门了么","mode":"remember","expected":["wake"]}
+ ]
+}

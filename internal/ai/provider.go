@@ -19,19 +19,20 @@ import (
 )
 
 type Provider struct {
-	ID               string  `json:"id"`
-	Name             string  `json:"name"`
-	Protocol         string  `json:"protocol"` // openai, responses, anthropic, codex
-	BaseURL          string  `json:"base_url,omitempty"`
-	KeyEnv           string  `json:"key_env,omitempty"`
-	Model            string  `json:"model"`
-	InputPerMillion  float64 `json:"input_cny_per_million"`
-	OutputPerMillion float64 `json:"output_cny_per_million"`
-	MaxOutput        int     `json:"max_output_tokens"`
-	Embedding        bool    `json:"embedding,omitempty"`
-	CostMode         string  `json:"cost_mode,omitempty"` // free must be explicitly configured
-	Transcription    bool    `json:"transcription,omitempty"`
-	AudioPerMinute   float64 `json:"audio_cny_per_minute,omitempty"`
+	EmbeddingQueryPrefix string  `json:"embedding_query_prefix,omitempty"`
+	ID                   string  `json:"id"`
+	Name                 string  `json:"name"`
+	Protocol             string  `json:"protocol"` // openai, responses, anthropic, codex
+	BaseURL              string  `json:"base_url,omitempty"`
+	KeyEnv               string  `json:"key_env,omitempty"`
+	Model                string  `json:"model"`
+	InputPerMillion      float64 `json:"input_cny_per_million"`
+	OutputPerMillion     float64 `json:"output_cny_per_million"`
+	MaxOutput            int     `json:"max_output_tokens"`
+	Embedding            bool    `json:"embedding,omitempty"`
+	CostMode             string  `json:"cost_mode,omitempty"` // free must be explicitly configured
+	Transcription        bool    `json:"transcription,omitempty"`
+	AudioPerMinute       float64 `json:"audio_cny_per_minute,omitempty"`
 }
 type Configuration struct {
 	Providers     []Provider `json:"providers"`
@@ -222,6 +223,10 @@ func (r *Registry) Generate(ctx context.Context, id, system, prompt string) (Res
 		out.Cost = p.Reserve(system + prompt)
 	} // unknown billing must not look free
 	return out, nil
+}
+func (r *Registry) EmbedQuery(ctx context.Context, query string) ([]memory.Embedding, error) {
+	p, _ := r.Get(r.Config.Embedding)
+	return r.Embed(ctx, []string{p.EmbeddingQueryPrefix + query})
 }
 func (r *Registry) Embed(ctx context.Context, texts []string) ([]memory.Embedding, error) {
 	p, ok := r.Get(r.Config.Embedding)

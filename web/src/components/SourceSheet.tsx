@@ -1,3 +1,4 @@
+import { MemorySummary } from './MemorySummary'
 import { useEffect, useState } from 'react'
 import { CircleAlert, Download, FileText } from 'lucide-react'
 import { api } from '../store/api'
@@ -29,7 +30,8 @@ export function SourceSheet({ id, version, onClose }: { id: string; version?: nu
         {data.source.has_attachment && !data.source.attachment_missing && <a className="btn btn-sm" href={`/v1/memory/sources/${id}/attachment?version=${data.source.version}`}><Download size={14} />下载原件</a>}
         {data.derived.map((ref) => <button type="button" className="btn btn-sm" key={ref.id} onClick={() => setDerived(ref)}><FileText size={14} />展开解析文本</button>)}
       </div>}
-      <pre className="source-text">{data.source.text}</pre></div>}
+      <MemorySummary id={data.source.id} version={data.source.version} />
+      <details><summary>展开原文</summary><pre className="source-text">{data.source.text}</pre></details></div>}
     {derived && <SourceSheet id={derived.id} version={derived.version} onClose={() => setDerived(null)} />}
   </SideSheet>
 }

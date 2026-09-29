@@ -1,6 +1,16 @@
 {
-  "providers": [],
+  "providers": [
+    {
+      "id": "local-embedding",
+      "name": "本地中文语义索引",
+      "protocol": "openai",
+      "base_url": "http://embeddings:8080/v1",
+      "model": "BAAI/bge-small-zh-v1.5",
+      "embedding": true,
+      "cost_mode": "free"
+    }
+  ],
   "extraction_provider": "chatgpt",
-  "embedding_provider": "",
+  "embedding_provider": "local-embedding",
   "transcription_provider": ""
 }

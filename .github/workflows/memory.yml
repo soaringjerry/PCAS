@@ -3,9 +3,9 @@ name: memory
 on:
   push:
     branches: [main]
-    paths: ["cmd/**", "internal/**", "go.mod", "go.sum", "Makefile", "Dockerfile", "compose.yml", ".github/workflows/memory.yml"]
+    paths: ["cmd/**", "internal/**", "services/**", "config/**", "go.mod", "go.sum", "Makefile", "Dockerfile", "compose.yml", ".github/workflows/memory.yml"]
   pull_request:
-    paths: ["cmd/**", "internal/**", "go.mod", "go.sum", "Makefile", "Dockerfile", "compose.yml", ".github/workflows/memory.yml"]
+    paths: ["cmd/**", "internal/**", "services/**", "config/**", "go.mod", "go.sum", "Makefile", "Dockerfile", "compose.yml", ".github/workflows/memory.yml"]
 
 jobs:
   check:

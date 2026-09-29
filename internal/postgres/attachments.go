@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/soaringjerry/PCAS/internal/connectors"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/worker"
 )
@@ -23,7 +24,7 @@ func (s *Store) IngestAttachment(ctx context.Context, scope memory.Scope, in mem
 	if s.blobs == nil {
 		return result, memory.ErrUnavailable
 	}
-	if !oneOf(in.MediaType, "application/pdf", "image/png", "image/jpeg", "image/webp", "image/tiff", "audio/mpeg", "audio/wav", "audio/mp4") || requireText(in.Title) != nil || len(in.Title) > 2000 || in.Connector == "" || in.ExternalID == "" || in.ExternalVersion == "" {
+	if !oneOf(in.MediaType, "application/x-pcas-archive", "application/pdf", "image/png", "image/jpeg", "image/webp", "image/tiff", "audio/mpeg", "audio/wav", "audio/mp4") || requireText(in.Title) != nil || len(in.Title) > 2000 || in.Connector == "" || in.ExternalID == "" || in.ExternalVersion == "" {
 		return result, memory.ErrInvalid
 	}
 	key, err := s.blobs.Put(ctx, scope, r)
@@ -82,6 +83,52 @@ func (s *Store) ProcessAttachment(ctx context.Context, j worker.Job) error {
 		return err
 	}
 	defer file.Close()
+	if media == "application/x-pcas-archive" {
+		data, err := io.ReadAll(io.LimitReader(file, 20<<20+1))
+		if err != nil || len(data) > 20<<20 {
+			return memory.ErrInvalid
+		}
+		batch, err := connectors.DecodeArchive(title, data)
+		if err != nil {
+			return memory.ErrInvalid
+		}
+		return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+			if err := lockJob(ctx, tx, j); err != nil {
+				return err
+			}
+			var connector string
+			if err := tx.QueryRow(ctx, "SELECT connector FROM sources WHERE owner_id=$1 AND id=$2", string(j.OwnerID), string(j.Record.ID)).Scan(&connector); err != nil {
+				return err
+			}
+			namespace := "archive-records"
+			connectionID := strings.TrimPrefix(connector, "connection-archive:")
+			if strings.HasPrefix(connector, "connection-archive:") && memory.ID(connectionID).Valid() {
+				namespace = "connection:" + connectionID
+			}
+			gaps := batch.Gaps
+			if gaps == nil {
+				gaps = []string{}
+			}
+			if _, err := tx.Exec(ctx, `INSERT INTO source_contexts(owner_id,source_id,source_version,gaps) VALUES($1,$2,$3,$4) ON CONFLICT(owner_id,source_id,source_version) DO UPDATE SET gaps=excluded.gaps`, string(j.OwnerID), string(j.Record.ID), j.Record.Version, asJSON(gaps)); err != nil {
+				return err
+			}
+			result, err := s.importBatchTx(ctx, tx, scope, namespace, batch, &j.Record)
+			if err != nil {
+				return err
+			}
+			if namespace != "archive-records" {
+				if _, err := tx.Exec(ctx, "UPDATE connector_configs SET imported=imported+$3,gaps=$4 WHERE owner_id=$1 AND id=$2", string(j.OwnerID), connectionID, result.Imported, asJSON(result.Gaps)); err != nil {
+					return err
+				}
+			}
+			if result.Blocked > 0 {
+				if err := redactArchivesTx(ctx, tx, scope, []string{string(j.Record.ID)}); err != nil {
+					return err
+				}
+			}
+			return acknowledge(ctx, tx, j)
+		})
+	}
 
 	dir, err := os.MkdirTemp("", "pcas-parse-")
 	if err != nil {

@@ -1,6 +1,6 @@
 # PCAS 部署与模型接入
 
-服务由 `api`、`worker`、一次性 `migrate` 和 PostgreSQL/pgvector 组成。镜像包含前端、Go 程序、官方 Codex CLI 0.159.0、PDF 文本解析、中文/英文 OCR 与音频时长读取工具。服务使用非 root 用户运行。
+服务由 `api`、`worker`、一次性 `migrate` 、PostgreSQL/pgvector 和私网 CPU 向量服务组成。镜像包含前端、Go 程序、官方 Codex CLI 0.159.0、PDF 文本解析、中文/英文 OCR 与音频时长读取工具。服务使用非 root 用户运行。
 
 ## 域名与鉴权
 
@@ -22,7 +22,7 @@ PCAS_PUBLIC_URL=https://pcas.coyumelabs.com
 cp .env.example .env
 # 编辑并生成独立秘密：openssl rand -hex 32；owner：cat /proc/sys/kernel/random/uuid
 chmod 600 .env
-docker compose build api
+docker compose build api embeddings
 docker compose up -d --no-build
 docker compose ps
 ```
@@ -74,6 +74,14 @@ PCAS 使用 [官方 Codex app-server](https://learn.chatgpt.com/docs/app-server)
 文本协议可设 `openai`（`/chat/completions`）、`responses`（`/responses`）或 `anthropic`（`/messages`）。本地 HTTP 服务也可接入。确实免费的服务显式设置 `cost_mode:"free"`。每个副手可以独立设置可见的记忆种类与是否包含推断；服务端再次校验实际授权。
 
 配置更新后重建服务容器，使配置与密钥生效：`docker compose up -d --force-recreate api worker`。模型凭据不会发给前端。API 执行、后台抽取、向量查询/索引、音频转录共同受每日预算约束；订阅按账户限额使用。价格为运营者配置的预算估算，不替代供应商账单。未知用量保留预留额；失败调用不会自动反复付费重试。
+
+## 本地向量服务
+
+默认配置使用 FastEmbed 0.8.1 / ONNX Runtime 和 `BAAI/bge-small-zh-v1.5`（512 维中文模型）。`embeddings` 不映射宿主机端口，仅供 API/worker 内网调用；限制 2 CPU、768 MiB 内存。首次启动需要下载权重，保存在 `embedding-models` 卷中。下载未完成时语义检索标明缺口，原文仍可检索；健康后可在资料库重试先前阻塞的向量任务。
+
+长输入先按重叠窗口编码再归一化聚合，来源仍以原始分段和版本引用进入向量表。提供者可通过 `embedding_query_prefix` 配置查询前缀，正文索引不加前缀。更换模型应重建向量，查询只比较相同提供者、模型和维度。
+
+依据：[FastEmbed](https://qdrant.github.io/fastembed/)、[支持的模型与维度](https://qdrant.github.io/fastembed/examples/Supported_Models/)。通用连接器配置和格式见 [资料接入](connectors.md)。
 
 ## 附件与备份
 

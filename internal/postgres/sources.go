@@ -97,6 +97,11 @@ func (s *Store) ingestTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in 
 		if _, err := tx.Exec(ctx, "UPDATE memory_records SET version=$3,updated_at=now() WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), id, version); err != nil {
 			return err
 		}
+		if version > 1 {
+			if err := invalidateTx(ctx, tx, scope, id); err != nil {
+				return err
+			}
+		}
 		if err := enqueue(ctx, tx, scope.OwnerID, memory.ID(id), version, "source.chunk"); err != nil {
 			return err
 		}
@@ -120,7 +125,7 @@ func (s *Store) GetSource(ctx context.Context, scope memory.Scope, id memory.ID,
 	var sourceID string
 	var blobKey *string
 	err := s.pool.QueryRow(ctx, `SELECT s.id::text,v.version,s.connector,s.external_id,v.external_version,v.title,v.body,v.media_type,
-		rv.valid_from,rv.valid_to,rv.time_precision,rv.expressed_at,rv.recorded_at,rv.state,v.representation,v.blob_key IS NOT NULL,v.blob_key
+		rv.valid_from,rv.valid_to,rv.time_precision,rv.expressed_at,rv.recorded_at,rv.state,v.representation,(v.blob_key IS NOT NULL OR v.attachment_redacted),v.blob_key
 		FROM sources s JOIN memory_records r ON (r.owner_id,r.id)=(s.owner_id,s.id)
 		JOIN source_versions v ON (v.owner_id,v.source_id)=(s.owner_id,s.id) AND v.version=CASE WHEN $3=0 THEN r.version ELSE $3 END
 		JOIN record_versions rv ON (rv.owner_id,rv.record_id,rv.version)=(v.owner_id,v.source_id,v.version)
@@ -135,6 +140,7 @@ func (s *Store) GetSource(ctx context.Context, scope memory.Scope, id memory.ID,
 	if err != nil {
 		return result, err
 	}
+	result.Source.AttachmentMissing = result.Source.HasAttachment && blobKey == nil
 	if blobKey != nil {
 		result.Source.AttachmentMissing = s.blobs == nil
 		if s.blobs != nil {
@@ -145,6 +151,13 @@ func (s *Store) GetSource(ctx context.Context, scope memory.Scope, id memory.ID,
 				file.Close()
 			}
 		}
+	}
+	var sourceContext memory.SourceContext
+	contextErr := s.pool.QueryRow(ctx, "SELECT conversation_key,parent_key,role,branch,gaps FROM source_contexts WHERE owner_id=$1 AND source_id=$2 AND source_version=$3", string(scope.OwnerID), string(id), result.Source.Version).Scan(&sourceContext.Conversation, &sourceContext.Parent, &sourceContext.Role, &sourceContext.Branch, &sourceContext.Gaps)
+	if contextErr == nil {
+		result.Context = &sourceContext
+	} else if !errors.Is(contextErr, pgx.ErrNoRows) {
+		return result, contextErr
 	}
 	result.Source.ID = memory.ID(sourceID)
 	result.Source.Kind = memory.SourceKind
@@ -168,7 +181,7 @@ func (s *Store) GetSource(ctx context.Context, scope memory.Scope, id memory.ID,
 	if err != nil {
 		return result, err
 	}
-	rows, err = s.pool.Query(ctx, "SELECT v.source_id::text,v.version FROM source_versions v JOIN memory_records r ON (r.owner_id,r.id)=(v.owner_id,v.source_id) WHERE v.owner_id=$1 AND v.derived_from_id=$2 AND v.derived_from_version=$3 AND r.state='active' AND ($4 OR EXISTS(SELECT 1 FROM record_grants g WHERE g.owner_id=v.owner_id AND g.record_id=v.source_id AND g.principal_id=$5))", string(scope.OwnerID), string(id), result.Source.Version, scope.IsOwner, scope.PrincipalID)
+	rows, err = s.pool.Query(ctx, "SELECT v.source_id::text,v.version FROM source_versions v JOIN memory_records r ON (r.owner_id,r.id)=(v.owner_id,v.source_id) WHERE v.owner_id=$1 AND ((v.derived_from_id=$2 AND v.derived_from_version=$3) OR EXISTS(SELECT 1 FROM archive_entries ae WHERE ae.owner_id=v.owner_id AND ae.source_id=v.source_id AND ae.source_version=v.version AND ae.archive_id=$2 AND ae.archive_version=$3)) AND r.state='active' AND ($4 OR EXISTS(SELECT 1 FROM record_grants g WHERE g.owner_id=v.owner_id AND g.record_id=v.source_id AND g.principal_id=$5))", string(scope.OwnerID), string(id), result.Source.Version, scope.IsOwner, scope.PrincipalID)
 	if err != nil {
 		return result, err
 	}

@@ -1,3 +1,5 @@
+import { MemoryActivitySettings } from '../components/MemoryActivitySettings'
+import { ConnectorSettings } from '../components/ConnectorSettings'
 import { memoriesFor } from '../domain/agent'
 import { memoryKindLabel } from '../domain/labels'
 import { spentToday } from '../domain/lines'
@@ -35,6 +37,8 @@ export function SettingsPage() {
 
       <div className="stack">
         <ChatGPTConnection />
+        <ConnectorSettings />
+        <MemoryActivitySettings />
         <section className="section">
           <h2 className="section-title">
             后台

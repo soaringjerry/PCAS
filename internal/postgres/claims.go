@@ -166,6 +166,9 @@ func (s *Store) rememberTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, i
 	if err := enqueue(ctx, tx, scope.OwnerID, id, 1, "memory.index"); err != nil {
 		return result, err
 	}
+	if err := refreshSummaryJobsTx(ctx, tx, scope.OwnerID, in.Source.ID); err != nil {
+		return result, err
+	}
 	return memory.Ref{ID: id, Version: 1, Kind: memory.ClaimKind}, nil
 }
 
@@ -191,7 +194,7 @@ func (s *Store) memoriesTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, e
 	result := []workspace.Memory{}
 	currentOnly := len(effective) > 0 && effective[0]
 	rows, err := tx.Query(ctx, `SELECT r.id::text,c.version,c.nature,c.value #>> '{}',c.confirmation,coalesce(c.scope->>'project_id',''),
-		coalesce(a.last_effective_use_at,r.created_at),coalesce(a.stability,1),coalesce(a.half_life_seconds,2592000),coalesce(a.pinned,false)
+		coalesce(a.last_effective_use_at,r.created_at),coalesce(a.stability,1),coalesce(a.half_life_seconds,2592000),coalesce(a.pinned,false),coalesce(a.reinforcement_limit,8)
 		FROM memory_records r JOIN claim_revisions c ON (c.owner_id,c.claim_id)=(r.owner_id,r.id) AND c.version=CASE WHEN $4 THEN (SELECT v.version FROM applicable_claim_versions($1,now(),now()) v WHERE v.claim_id=r.id) ELSE r.version END
 		LEFT JOIN activity a ON (a.owner_id,a.record_id)=(r.owner_id,r.id)
 		WHERE r.owner_id=$1 AND r.state='active' AND ($2 OR EXISTS(SELECT 1 FROM record_grants g WHERE g.owner_id=r.owner_id AND g.record_id=r.id AND g.principal_id=$3))
@@ -204,7 +207,7 @@ func (s *Store) memoriesTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, e
 		var confirmation string
 		var last time.Time
 		var stability, halfLife float64
-		if err := rows.Scan(&m.ID, &m.Version, &m.Kind, &m.Text, &confirmation, &m.ProjectID, &last, &stability, &halfLife, &m.Pinned); err != nil {
+		if err := rows.Scan(&m.ID, &m.Version, &m.Kind, &m.Text, &confirmation, &m.ProjectID, &last, &stability, &halfLife, &m.Pinned, &m.ReinforcementLimit); err != nil {
 			rows.Close()
 			return nil, err
 		}
@@ -212,6 +215,7 @@ func (s *Store) memoriesTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, e
 		if confirmation == "confirmed" {
 			m.Epistemic = "confirmed"
 		}
+		m.HalfLifeDays = halfLife / 86400
 		m.LastUsedAt = last.UTC().Format(time.RFC3339Nano)
 		m.Exposure = math.Exp2(-math.Max(0, time.Since(last).Seconds()) / (halfLife * stability))
 		if m.Pinned {

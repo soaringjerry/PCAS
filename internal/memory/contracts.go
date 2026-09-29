@@ -42,9 +42,10 @@ type IngestResult struct {
 }
 
 type SourceResult struct {
-	Derived    []Ref        `json:"derived"`
-	Source     Source       `json:"source"`
-	Processing []Processing `json:"processing"`
+	Context    *SourceContext `json:"context,omitempty"`
+	Derived    []Ref          `json:"derived"`
+	Source     Source         `json:"source"`
+	Processing []Processing   `json:"processing"`
 }
 
 type Sources interface {

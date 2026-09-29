@@ -122,6 +122,8 @@ export interface MemoryVersion {
 }
 
 export interface Memory {
+  halfLifeDays?: number
+  reinforcementLimit?: number
   recordVersion: number
   pinned: boolean
   id: ID

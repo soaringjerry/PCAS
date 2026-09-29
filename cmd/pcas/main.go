@@ -83,9 +83,14 @@ func run(ctx context.Context, args []string, logger *slog.Logger) error {
 		return err
 	}
 	db.SetBlobs(files)
+	if dir := os.Getenv("PCAS_INBOX_DIR"); dir != "" {
+		if err := os.MkdirAll(dir, 0700); err != nil {
+			return err
+		}
+	}
 	if command == "worker" {
 		logger.Info("memory worker started")
-		return worker.New(db, map[string]worker.Handler{"source.parse": db.ProcessAttachment, "source.chunk": db.ProcessChunks, "source.tokenize": db.ProcessIndex, "memory.index": db.ProcessIndex, "source.extract": db.ProcessExtraction, "source.embed": db.ProcessEmbedding, "memory.embed": db.ProcessEmbedding}, logger).Run(ctx)
+		return worker.New(db, map[string]worker.Handler{"memory.summary": db.ProcessSummary, "source.parse": db.ProcessAttachment, "source.chunk": db.ProcessChunks, "source.tokenize": db.ProcessIndex, "memory.index": db.ProcessIndex, "source.extract": db.ProcessExtraction, "source.embed": db.ProcessEmbedding, "memory.embed": db.ProcessEmbedding}, logger).Run(ctx)
 	}
 	webDir := os.Getenv("PCAS_WEB_DIR")
 	if webDir == "" {
@@ -95,11 +100,12 @@ func run(ctx context.Context, args []string, logger *slog.Logger) error {
 	if err != nil {
 		return err
 	}
-	api := httpapi.New(memory.NewService(db), db, httpapi.NewSessions(credentials, cfg.PublicURL), db.Ping, logger, httpapi.Options{Attachments: db, Writer: db, Workspace: db, Editor: db, Activity: db, Models: models, WebDir: webDir})
+	api := httpapi.New(memory.NewService(db), db, httpapi.NewSessions(credentials, cfg.PublicURL), db.Ping, logger, httpapi.Options{Continuity: db, Connectors: db, Attachments: db, Writer: db, Workspace: db, Editor: db, Activity: db, Models: models, WebDir: webDir})
 	workCtx, stopWorkers := context.WithCancel(ctx)
 	defer stopWorkers()
 	go func() { _ = db.RunAgents(workCtx, logger) }()
 	go func() { _ = db.RunReminders(workCtx, logger) }()
+	go func() { _ = db.RunConnectors(workCtx, logger) }()
 	server := &http.Server{Addr: cfg.HTTPAddress, Handler: api, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16 << 10}
 	stopped := make(chan error, 1)
 	go func() { stopped <- server.ListenAndServe() }()

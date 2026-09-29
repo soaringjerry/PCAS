@@ -1,32 +1,41 @@
 import { useState } from 'react'
 import { Link, useParams } from 'react-router'
-import { AlertTriangle, ArrowLeft, Check, Copy, RefreshCw } from 'lucide-react'
-import { EpistemicBadge } from '../components/bits'
-import { Badge, Button, Card, Field } from '../components/ui'
+import { AlertTriangle, Check, ChevronRight, Copy, RefreshCw } from 'lucide-react'
+import { TrustTag } from '../components/Marks'
+import { Button, Sheet, Tag } from '../components/ui'
 import { draftSections, memoriesFor, renderHandoff, sectionTitles } from '../domain/handoff'
 import { handoffStatusLabel, memoryKindLabel } from '../domain/labels'
+import { findThing, thingTitle } from '../domain/things'
 import { formatAgo } from '../domain/time'
 import type { Handoff, HandoffSections } from '../domain/types'
 import { useStore } from '../store/context'
+import { useToast } from '../store/toast'
 import { NotFound } from './NotFound'
 
-function ResultPanel({ handoff }: { handoff: Handoff }) {
+function StepHead({ n, title, active, hint }: { n: number; title: string; active: boolean; hint?: string }) {
+  return (
+    <div className="row-nowrap" style={{ marginBottom: 10 }}>
+      <span className={`step-no${active ? '' : ' idle'}`}>{n}</span>
+      <h2 style={{ fontSize: 18 }}>{title}</h2>
+      {hint && <span className="small muted">{hint}</span>}
+    </div>
+  )
+}
+
+function Result({ handoff, backTo }: { handoff: Handoff; backTo?: string }) {
   const { dispatch } = useStore()
+  const toast = useToast()
   const [pasted, setPasted] = useState('')
   const [edit, setEdit] = useState(handoff.result?.userEdit ?? handoff.result?.text ?? '')
 
-  if (handoff.status === 'draft') {
-    return <p className="muted small">发出之后，可以把 AI 的回复贴回这里。</p>
-  }
+  if (handoff.status === 'draft') return <p className="small muted">发出去之后，把 AI 的回复贴回这里。</p>
   if (handoff.status === 'sent') {
     return (
       <div className="stack-sm">
-        <Field label="把 AI 的回复贴到这里">
-          <textarea className="textarea" rows={6} value={pasted} onChange={(e) => setPasted(e.target.value)} />
-        </Field>
+        <textarea className="lined" value={pasted} onChange={(e) => setPasted(e.target.value)} placeholder="把 AI 的回复贴在这里…" aria-label="AI 的回复" />
         <div>
           <Button variant="primary" size="sm" disabled={!pasted.trim()} onClick={() => dispatch({ type: 'recordResult', id: handoff.id, text: pasted.trim() })}>
-            记录结果
+            收回结果
           </Button>
         </div>
       </div>
@@ -35,11 +44,19 @@ function ResultPanel({ handoff }: { handoff: Handoff }) {
   if (handoff.status === 'returned') {
     return (
       <div className="stack-sm">
-        <div className="small muted">{handoff.result && `${formatAgo(handoff.result.at)}返回。`}可以先修改再采纳，修改会作为纠正记录。</div>
-        <textarea className="textarea" rows={8} value={edit} onChange={(e) => setEdit(e.target.value)} aria-label="结果" />
+        <p className="small muted">{handoff.result && `${formatAgo(handoff.result.at)}回来的。`}可以先改再采纳，你的修改会记成一次纠正。</p>
+        <textarea className="lined" style={{ minHeight: 168 }} value={edit} onChange={(e) => setEdit(e.target.value)} aria-label="结果" />
         <div>
-          <Button variant="primary" size="sm" icon={<Check size={14} />} onClick={() => dispatch({ type: 'adoptResult', id: handoff.id, userEdit: edit })}>
-            采纳并写回
+          <Button
+            variant="primary"
+            size="sm"
+            icon={<Check size={14} />}
+            onClick={() => {
+              dispatch({ type: 'adoptResult', id: handoff.id, userEdit: edit })
+              toast.show('采纳了，已经写回原来的事情', backTo ? { to: backTo, label: '回去看看' } : undefined)
+            }}
+          >
+            采纳，写回去
           </Button>
         </div>
       </div>
@@ -47,10 +64,12 @@ function ResultPanel({ handoff }: { handoff: Handoff }) {
   }
   return (
     <div className="stack-sm">
-      <div className="code">{handoff.result?.userEdit ?? handoff.result?.text}</div>
+      <div className="letter" style={{ fontFamily: 'var(--hand)', fontSize: 15 }}>
+        {handoff.result?.userEdit ?? handoff.result?.text}
+      </div>
       <p className="small muted">
-        已写回项目进度，记为一条记忆，并生成一条训练候选{handoff.result?.userEdit ? '（包含你的修改）' : ''}。
-        <Link to="/training"> 查看训练数据</Link>
+        已写回{backTo ? <Link to={backTo}>原来的事情</Link> : '项目'}，记成一条记忆，也成了一条训练候选{handoff.result?.userEdit ? '（带着你的修改）' : ''}。
+        <Link to="/library?tab=training"> 看训练数据</Link>
       </p>
     </div>
   )
@@ -69,6 +88,9 @@ export function HandoffPage() {
   const related = state.memories.filter((m) => !handoff.projectId || !m.projectId || m.projectId === handoff.projectId)
   const text = renderHandoff(handoff, allowed)
   const editable = handoff.status === 'draft' || handoff.status === 'sent'
+  const origin = findThing(state, handoff.taskId ?? handoff.ideaId ?? handoff.projectId ?? '')
+  const backTo = origin ? `/t/${origin.id}` : undefined
+  const step = handoff.status === 'draft' ? 1 : handoff.status === 'sent' || handoff.status === 'returned' ? 3 : 4
 
   const setSection = (key: keyof HandoffSections, value: string) =>
     dispatch({ type: 'updateHandoff', id: handoff.id, patch: { sections: { ...handoff.sections, [key]: value } } })
@@ -98,31 +120,28 @@ export function HandoffPage() {
 
   return (
     <main className="page">
-      <Link to="/handoffs" className="chip" style={{ marginBottom: 10 }}>
-        <ArrowLeft size={14} /> 全部交接
-      </Link>
+      <nav className="crumbs" aria-label="位置">
+        {origin ? <Link to={backTo!}>{thingTitle(origin)}</Link> : <Link to="/things">事情</Link>}
+        <ChevronRight size={13} />
+        <span>交接</span>
+      </nav>
+
       <div className="page-head">
-        <div style={{ flex: 1, minWidth: 240 }}>
+        <div className="grow">
           <div className="row" style={{ marginBottom: 6 }}>
-            <Badge tone={handoffStatusLabel[handoff.status].tone}>{handoffStatusLabel[handoff.status].text}</Badge>
-            <span className="chip">{state.projects.find((p) => p.id === handoff.projectId)?.name}</span>
+            <Tag tone={handoffStatusLabel[handoff.status].tone}>{handoffStatusLabel[handoff.status].text}</Tag>
           </div>
           <input
-            className="input"
-            style={{ fontSize: 20, fontWeight: 600, border: 0, padding: 0, background: 'transparent', boxShadow: 'none' }}
+            className="doc-title"
             value={handoff.title}
             disabled={!editable}
             onChange={(e) => dispatch({ type: 'updateHandoff', id: handoff.id, patch: { title: e.target.value } })}
             aria-label="标题"
           />
         </div>
-        <Field label="交给">
-          <select
-            className="select"
-            value={handoff.agentId}
-            disabled={!editable}
-            onChange={(e) => regenerate(e.target.value)}
-          >
+        <div className="row-nowrap">
+          <span className="muted">交给</span>
+          <select className="inline-select" value={handoff.agentId} disabled={!editable} onChange={(e) => regenerate(e.target.value)} aria-label="交给哪个 AI">
             {state.agents
               .filter((a) => a.enabled)
               .map((a) => (
@@ -131,121 +150,115 @@ export function HandoffPage() {
                 </option>
               ))}
           </select>
-        </Field>
+        </div>
       </div>
 
-      <div className="stack">
-        {handoff.stale && editable && (
-          <div className="stale-note">
-            <AlertTriangle size={16} />
-            <div className="grow">用到的记忆在生成后被修改或删除了，内容可能已经过时。</div>
-            <Button size="sm" icon={<RefreshCw size={14} />} onClick={() => regenerate()}>
-              按最新记忆重新生成
-            </Button>
-          </div>
-        )}
+      {handoff.stale && editable && (
+        <div className="note-warn" style={{ marginBottom: 20 }}>
+          <AlertTriangle size={16} />
+          <div className="grow">写好之后，用到的记忆被改过或删掉了，内容可能过时。</div>
+          <Button size="sm" icon={<RefreshCw size={13} />} onClick={() => regenerate()}>
+            按最新的重写
+          </Button>
+        </div>
+      )}
 
-        <div className="grid-2" style={{ alignItems: 'start' }}>
-          <div className="stack">
-            <Card title="内容" hint="自动生成的初稿，发出前可以随意修改" pad>
-              <div className="stack-sm">
-                {sectionTitles.map(([key, title]) => (
-                  <Field key={key} label={title}>
-                    <textarea
-                      className="textarea"
-                      rows={key === 'background' || key === 'progress' ? 4 : 2}
-                      value={handoff.sections[key]}
-                      disabled={!editable}
-                      onChange={(e) => setSection(key, e.target.value)}
+      <div className="steps">
+        <div className="stack">
+          <div>
+            <StepHead n={1} title="要交代的" active={step === 1} hint="系统先起了个草稿" />
+            <Sheet pad>
+              {sectionTitles.map(([key, title]) => (
+                <label key={key} className="section-field">
+                  <span>{title}</span>
+                  <textarea value={handoff.sections[key]} disabled={!editable} onChange={(e) => setSection(key, e.target.value)} rows={1} />
+                </label>
+              ))}
+            </Sheet>
+          </div>
+
+          <Sheet title={<h3>附带的记忆</h3>} aside={<span className="tiny muted">{agent.name} 只看得到你授权的部分</span>}>
+            <div className="list">
+              {related.map((m) => {
+                const permitted = allowedIds.has(m.id)
+                const checked = handoff.memoryIds.includes(m.id)
+                const kindBlocked = !agent.memoryKinds.includes(m.kind)
+                const unconfirmed = !kindBlocked && m.epistemic === 'inferred' && !agent.includeInferred
+                return (
+                  <label key={m.id} className="item check" style={{ opacity: kindBlocked ? 0.5 : 1, alignItems: 'flex-start' }}>
+                    <input
+                      type="checkbox"
+                      style={{ marginTop: 4 }}
+                      checked={permitted && checked}
+                      disabled={!permitted || !editable}
+                      onChange={() =>
+                        dispatch({
+                          type: 'updateHandoff',
+                          id: handoff.id,
+                          patch: { memoryIds: checked ? handoff.memoryIds.filter((x) => x !== m.id) : [...handoff.memoryIds, m.id] },
+                        })
+                      }
                     />
-                  </Field>
-                ))}
-              </div>
-            </Card>
-
-            <Card title="附带的记忆" hint={`${agent.name} 只能看到授权范围内的记忆`}>
-              <div className="list">
-                {related.map((m) => {
-                  const permitted = allowedIds.has(m.id)
-                  const checked = handoff.memoryIds.includes(m.id)
-                  const kindBlocked = !agent.memoryKinds.includes(m.kind)
-                  const unconfirmed = !kindBlocked && m.epistemic === 'inferred' && !agent.includeInferred
-                  return (
-                    <label key={m.id} className="list-item check" style={{ opacity: kindBlocked ? 0.5 : 1, cursor: permitted && editable ? 'pointer' : 'not-allowed' }}>
-                      <input
-                        type="checkbox"
-                        checked={permitted && checked}
-                        disabled={!permitted || !editable}
-                        onChange={() =>
-                          dispatch({
-                            type: 'updateHandoff',
-                            id: handoff.id,
-                            patch: { memoryIds: checked ? handoff.memoryIds.filter((x) => x !== m.id) : [...handoff.memoryIds, m.id] },
-                          })
-                        }
-                      />
-                      <div className="grow">
-                        <div className="ink">{m.text}</div>
-                        <div className="meta">
-                          <EpistemicBadge value={m.epistemic} />
-                          <span>{memoryKindLabel[m.kind]}</span>
-                          {kindBlocked && <span>{agent.name} 无权查看{memoryKindLabel[m.kind]}</span>}
-                          {unconfirmed && <span>未确认，默认不提供给 {agent.name}</span>}
-                        </div>
+                    <div className="grow">
+                      <div className={`ink${m.epistemic === 'inferred' ? ' guess' : ''}`}>{m.text}</div>
+                      <div className="meta">
+                        <span>{memoryKindLabel[m.kind]}</span>
+                        <TrustTag value={m.epistemic} />
+                        {kindBlocked && <span>{agent.name} 不能看{memoryKindLabel[m.kind]}</span>}
+                        {unconfirmed && <span>还没确认，默认不给</span>}
                       </div>
-                      {unconfirmed && editable && (
-                        <Button
-                          size="sm"
-                          onClick={(e) => {
-                            e.preventDefault()
-                            dispatch({ type: 'confirmMemory', id: m.id })
-                            dispatch({ type: 'updateHandoff', id: handoff.id, patch: { memoryIds: [...handoff.memoryIds, m.id] } })
-                          }}
-                        >
-                          确认并附带
-                        </Button>
-                      )}
-                    </label>
-                  )
-                })}
+                    </div>
+                    {unconfirmed && editable && (
+                      <Button
+                        size="sm"
+                        onClick={(e) => {
+                          e.preventDefault()
+                          dispatch({ type: 'confirmMemory', id: m.id })
+                          dispatch({ type: 'updateHandoff', id: handoff.id, patch: { memoryIds: [...handoff.memoryIds, m.id] } })
+                        }}
+                      >
+                        没错，带上
+                      </Button>
+                    )}
+                  </label>
+                )
+              })}
+            </div>
+          </Sheet>
+        </div>
+
+        <div className="stack">
+          <div>
+            <StepHead n={2} title="发出去" active={step === 1} hint={`${agent.name} 收到的就是这些`} />
+            <Sheet pad>
+              <div className="stack-sm">
+                <div className="letter">{text}</div>
+                <div className="row">
+                  {handoff.status === 'draft' && (
+                    <Button variant="primary" onClick={() => dispatch({ type: 'sendHandoff', id: handoff.id })}>
+                      {agent.channel === 'manual' ? '我复制好了' : `发给 ${agent.name}`}
+                    </Button>
+                  )}
+                  <Button
+                    icon={copied ? <Check size={14} /> : <Copy size={14} />}
+                    onClick={() => {
+                      navigator.clipboard?.writeText(text).catch(() => undefined)
+                      setCopied(true)
+                      window.setTimeout(() => setCopied(false), 1500)
+                    }}
+                  >
+                    {copied ? '复制了' : '复制'}
+                  </Button>
+                </div>
               </div>
-            </Card>
+            </Sheet>
           </div>
 
-          <div className="stack">
-            <Card
-              title="预览"
-              hint={`${agent.name} 实际收到的内容`}
-              action={
-                <Button
-                  size="sm"
-                  icon={copied ? <Check size={14} /> : <Copy size={14} />}
-                  onClick={() => {
-                    navigator.clipboard?.writeText(text).catch(() => undefined)
-                    setCopied(true)
-                    window.setTimeout(() => setCopied(false), 1500)
-                  }}
-                >
-                  {copied ? '已复制' : '复制'}
-                </Button>
-              }
-              pad
-            >
-              <div className="stack-sm">
-                <div className="code">{text}</div>
-                {handoff.status === 'draft' && (
-                  <div>
-                    <Button variant="primary" onClick={() => dispatch({ type: 'sendHandoff', id: handoff.id })}>
-                      {agent.channel === 'manual' ? '已复制并发出' : `发给 ${agent.name}`}
-                    </Button>
-                  </div>
-                )}
-              </div>
-            </Card>
-
-            <Card title="返回结果" pad>
-              <ResultPanel key={handoff.status} handoff={handoff} />
-            </Card>
+          <div>
+            <StepHead n={3} title="收回来" active={step === 3} />
+            <Sheet pad>
+              <Result key={handoff.status} handoff={handoff} backTo={backTo} />
+            </Sheet>
           </div>
         </div>
       </div>

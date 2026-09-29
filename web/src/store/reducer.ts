@@ -8,7 +8,9 @@ import type {
   Idea,
   Memory,
   MemoryKind,
+  Project,
   SampleState,
+  Settings,
   SourceRef,
   State,
   Task,
@@ -54,6 +56,16 @@ export type Action =
   | { type: 'setSampleState'; id: string; state: SampleState }
   | { type: 'updateAgent'; id: string; patch: Partial<Agent> }
   | { type: 'retryJob'; id: string }
+  | { type: 'renameThing'; id: string; title: string }
+  | { type: 'setNotes'; id: string; text: string }
+  | { type: 'moveThing'; id: string; projectId?: string }
+  | { type: 'addProject'; id: string; name: string }
+  | { type: 'updateProject'; id: string; patch: Partial<Project> }
+  | { type: 'addIdea'; id: string; title: string; projectId?: string }
+  | { type: 'addCondition'; ideaId: string; description: string }
+  | { type: 'removeCondition'; ideaId: string; conditionId: string }
+  | { type: 'deferTask'; id: string; days: number }
+  | { type: 'updateSettings'; patch: Partial<Settings> }
   | { type: 'demoImport'; step: 'start' | 'extract' | 'finish' }
   | { type: 'reset' }
 
@@ -147,11 +159,12 @@ export function reducer(state: State, action: Action): State {
   switch (action.type) {
     case 'capture': {
       const guess = guessCapture(action.text)
-      return {
+      const id = newId('cd')
+      const next: State = {
         ...state,
         candidates: [
           {
-            id: newId('cd'),
+            id,
             kind: guess.kind,
             memoryKind: guess.memoryKind,
             text: action.text,
@@ -163,6 +176,11 @@ export function reducer(state: State, action: Action): State {
           ...state.candidates,
         ],
       }
+      // Only confident guesses skip the inbox, and only when the user allows it.
+      if (state.settings.autoAccept && guess.confidence >= 0.8) {
+        return reducer(next, { type: 'acceptCandidate', id, kind: guess.kind, text: action.text, memoryKind: guess.memoryKind })
+      }
+      return next
     }
 
     case 'acceptCandidate': {
@@ -485,6 +503,91 @@ export function reducer(state: State, action: Action): State {
         })),
       }
 
+    case 'renameThing':
+      return {
+        ...state,
+        tasks: mapById(state.tasks, action.id, (t) => ({ ...t, title: action.title, updatedAt: at })),
+        ideas: mapById(state.ideas, action.id, (i) => ({ ...i, title: action.title, updatedAt: at })),
+        projects: mapById(state.projects, action.id, (p) => ({ ...p, name: action.title, updatedAt: at })),
+      }
+
+    case 'setNotes':
+      return {
+        ...state,
+        tasks: mapById(state.tasks, action.id, (t) => ({ ...t, notes: action.text, updatedAt: at })),
+        ideas: mapById(state.ideas, action.id, (i) => ({ ...i, body: action.text, updatedAt: at })),
+      }
+
+    case 'moveThing': {
+      const name = state.projects.find((p) => p.id === action.projectId)?.name
+      const summary = name ? `归到「${name}」` : '不再属于项目'
+      return {
+        ...state,
+        tasks: mapById(state.tasks, action.id, (t) => ({
+          ...t,
+          projectId: action.projectId,
+          history: [...t.history, { at, by: 'user', summary }],
+          updatedAt: at,
+        })),
+        ideas: mapById(state.ideas, action.id, (i) => ({
+          ...i,
+          projectId: action.projectId,
+          evolution: [...i.evolution, { at, by: 'user', summary }],
+          updatedAt: at,
+        })),
+      }
+    }
+
+    case 'addProject':
+      return {
+        ...state,
+        projects: [
+          { id: action.id, name: action.name, goal: '', status: 'active', progress: '', nextSteps: [], updatedAt: at },
+          ...state.projects,
+        ],
+      }
+
+    case 'updateProject':
+      return {
+        ...state,
+        projects: mapById(state.projects, action.id, (p) => ({ ...p, ...action.patch, updatedAt: at })),
+      }
+
+    case 'addIdea':
+      return { ...state, ideas: [newIdea(action.title, { id: action.id, projectId: action.projectId }), ...state.ideas] }
+
+    case 'addCondition':
+      return updateIdea(state, action.ideaId, (i) => ({
+        ...i,
+        conditions: [...i.conditions, { id: newId('c'), kind: 'info', description: action.description, met: false }],
+        evolution: [...i.evolution, { at, by: 'user', summary: `加了一个再看的条件：${action.description}` }],
+      }))
+
+    case 'removeCondition':
+      return updateIdea(state, action.ideaId, (i) => ({
+        ...i,
+        conditions: i.conditions.filter((c) => c.id !== action.conditionId),
+      }))
+
+    case 'deferTask':
+      return {
+        ...state,
+        tasks: mapById(state.tasks, action.id, (t) => {
+          const base = t.due ? new Date(t.due) : new Date()
+          const due = new Date(Math.max(base.getTime(), Date.now()) + action.days * 86400000)
+          due.setHours(base.getHours() || 18, base.getMinutes(), 0, 0)
+          return {
+            ...t,
+            due: due.toISOString(),
+            history: [...t.history, { at, by: 'user' as const, summary: `推迟 ${action.days} 天` }],
+            updatedAt: at,
+          }
+        }),
+      }
+
+    case 'updateSettings':
+      return { ...state, settings: { ...state.settings, ...action.patch } }
+
     case 'demoImport':
       return demoImport(state, action.step)
 
@@ -541,16 +644,26 @@ function demoImport(state: State, step: 'start' | 'extract' | 'finish'): State {
     sources: [source],
     versions: [{ at, by: 'ai', text: '本地 Qwen3-4B 做一次记忆提取约 ¥0.004，约为云端的 1/7。' }],
   })
+  const wake = state.settings.wakeIdeas
   const next = updateIdea(state, 'i_small_model', (i) => ({
     ...i,
-    status: 'awakened',
+    status: wake && i.status === 'shelved' ? 'awakened' : i.status,
     conditions: i.conditions.map((c) => (c.id === 'c_cost' ? { ...c, met: true, metAt: at, metBy: source } : c)),
-    wake: {
-      at,
-      reason: '新导入的成本测算显示：本地提取一次约 ¥0.004，是云端（¥0.03）的约 1/7，满足你设定的“低于 1/5”这一条件。',
-      conditionId: 'c_cost',
-    },
-    evolution: [...i.evolution, { at, by: 'system', summary: `条件满足，重新唤醒（来自「${DEMO_FILE}」）` }],
+    wake: wake
+      ? {
+          at,
+          reason: '新导入的成本测算显示：本地提取一次约 ¥0.004，是云端（¥0.03）的约 1/7，满足你设定的“低于 1/5”这一条件。',
+          conditionId: 'c_cost',
+        }
+      : i.wake,
+    evolution: [
+      ...i.evolution,
+      {
+        at,
+        by: 'system',
+        summary: wake ? `条件满足，重新唤醒（来自「${DEMO_FILE}」）` : `条件满足（来自「${DEMO_FILE}」），自动唤醒已关闭`,
+      },
+    ],
   }))
   return {
     ...next,

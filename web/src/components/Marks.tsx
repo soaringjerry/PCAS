@@ -1,0 +1,122 @@
+import { useState } from 'react'
+import { Link } from 'react-router'
+import { ArrowUpRight, Check, CornerDownRight, FileText, Flag, PenLine, Send, Sparkles, X } from 'lucide-react'
+import { kindText, type Thing, type TimelineEvent } from '../domain/things'
+import { taskStatusLabel } from '../domain/labels'
+import { formatAgo } from '../domain/time'
+import type { Epistemic, SourceRef, Task } from '../domain/types'
+import { useStore } from '../store/context'
+import { Tag } from './ui'
+
+/** Confirmed knowledge carries no mark; only guesses and plans are called out. */
+export function TrustTag({ value }: { value: Epistemic }) {
+  if (value === 'inferred') return <Tag tone="warning">推测</Tag>
+  if (value === 'planned') return <Tag tone="info">计划</Tag>
+  return null
+}
+
+export function KindLabel({ kind }: { kind: Thing['kind'] }) {
+  return <span className={`kind kind-${kind}`}>{kindText[kind]}</span>
+}
+
+export function ProjectLink({ id }: { id?: string }) {
+  const { state } = useStore()
+  const project = state.projects.find((p) => p.id === id)
+  if (!project) return null
+  return (
+    <Link to={`/t/${project.id}`} className="from" onClick={(e) => e.stopPropagation()}>
+      {project.name}
+    </Link>
+  )
+}
+
+export function FromLine({ source, quote = true }: { source: SourceRef; quote?: boolean }) {
+  return (
+    <div className="stack-sm" style={{ gap: 4 }}>
+      <span className="from">
+        <CornerDownRight size={12} />
+        {source.label} · {formatAgo(source.at)}
+      </span>
+      {quote && source.excerpt && <div className="quote">“{source.excerpt}”</div>}
+    </div>
+  )
+}
+
+export function TaskBox({ task }: { task: Task }) {
+  const { dispatch } = useStore()
+  const next = task.status === 'done' ? 'todo' : 'done'
+  return (
+    <button
+      type="button"
+      className={`box ${task.status}`}
+      title={taskStatusLabel[task.status].text}
+      aria-label={task.status === 'done' ? '标记为未完成' : '标记为完成'}
+      onClick={(e) => {
+        e.preventDefault()
+        e.stopPropagation()
+        if (task.status !== 'cancelled') dispatch({ type: 'setTaskStatus', id: task.id, status: next })
+      }}
+    >
+      {task.status === 'done' && <Check size={12} strokeWidth={3} />}
+      {task.status === 'cancelled' && <X size={11} strokeWidth={3} />}
+    </button>
+  )
+}
+
+/** Exposure: how present a memory is. Fades with disuse, never deletes. */
+export function Fade({ value }: { value: number }) {
+  const bars = Math.max(1, Math.round(value * 5))
+  return (
+    <span className="fade" title={`曝光度 ${Math.round(value * 100)}%：长期不用会变淡，但不会被删除`}>
+      {[0, 1, 2, 3, 4].map((i) => (
+        <i key={i} className={i < bars ? 'on' : undefined} />
+      ))}
+    </span>
+  )
+}
+
+const tlIcon = {
+  note: <PenLine size={13} />,
+  source: <FileText size={13} />,
+  wake: <Sparkles size={13} />,
+  handoff: <Send size={13} />,
+  done: <Check size={13} />,
+  decision: <Flag size={13} />,
+}
+
+export function Timeline({ events, limit = 8 }: { events: TimelineEvent[]; limit?: number }) {
+  const [all, setAll] = useState(false)
+  const hidden = all ? 0 : Math.max(0, events.length - limit)
+  return (
+    <>
+      {hidden > 0 && (
+        <button type="button" className="btn btn-quiet btn-sm" style={{ marginBottom: 10 }} onClick={() => setAll(true)}>
+          更早的 {hidden} 条
+        </button>
+      )}
+      <ol className="timeline">
+        {events.slice(hidden).map((e, i) => (
+          <li key={`${e.at}-${i}`}>
+            <span className={`tl-dot ${e.kind}`}>{tlIcon[e.kind]}</span>
+            <div className="stack-sm" style={{ gap: 4 }}>
+              <div className="ink">
+                {e.link ? (
+                  <Link to={e.link}>
+                    {e.text} <ArrowUpRight size={12} />
+                  </Link>
+                ) : (
+                  e.text
+                )}
+              </div>
+              {e.source?.excerpt && <div className="quote">“{e.source.excerpt}”</div>}
+              <div className="tl-when">
+                {e.by ? `${e.by} · ` : ''}
+                {formatAgo(e.at)}
+              </div>
+            </div>
+          </li>
+        ))}
+      </ol>
+    </>
+  )
+}

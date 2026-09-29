@@ -230,8 +230,21 @@ export interface TrainingSample {
   createdAt: string
 }
 
+/** How far the system may act on its own (PRD §5 主动但可控). */
+export interface Settings {
+  /** Accept high-confidence captures without asking. */
+  autoAccept: boolean
+  /** Bring shelved ideas back when their conditions are met. */
+  wakeIdeas: boolean
+  /** Run follow-up reminders created from events. */
+  followUps: boolean
+  /** Local time of the daily review, "HH:MM". */
+  dailyReviewAt: string
+}
+
 export interface State {
   version: number
+  settings: Settings
   tasks: Task[]
   ideas: Idea[]
   projects: Project[]

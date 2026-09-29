@@ -1,18 +1,26 @@
 import type { ButtonHTMLAttributes, ReactNode } from 'react'
 import type { Tone } from '../domain/labels'
 
-export function Badge({ tone = 'neutral', children }: { tone?: Tone; children: ReactNode }) {
-  return <span className={`badge badge-${tone}`}>{children}</span>
+export function Tag({ tone = 'neutral', children }: { tone?: Tone; children: ReactNode }) {
+  return <span className={`tag${tone === 'neutral' ? '' : ` tag-${tone}`}`}>{children}</span>
 }
 
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
-  variant?: 'default' | 'primary' | 'ghost' | 'danger'
+  variant?: 'default' | 'primary' | 'quiet' | 'danger'
   size?: 'md' | 'sm'
   icon?: ReactNode
 }
 
 export function Button({ variant = 'default', size = 'md', icon, className = '', children, ...rest }: ButtonProps) {
-  const classes = ['btn', variant !== 'default' && `btn-${variant}`, size === 'sm' && 'btn-sm', !children && 'icon-btn', className]
+  const classes = [
+    'btn',
+    variant === 'primary' && 'btn-primary',
+    (variant === 'quiet' || variant === 'danger') && 'btn-quiet',
+    variant === 'danger' && 'btn-danger',
+    size === 'sm' && 'btn-sm',
+    !children && 'btn-icon',
+    className,
+  ]
     .filter(Boolean)
     .join(' ')
   return (
@@ -23,25 +31,21 @@ export function Button({ variant = 'default', size = 'md', icon, className = '',
   )
 }
 
-export function Card({ title, hint, action, children, pad = false }: {
+export function Sheet({ title, aside, children, pad = false }: {
   title?: ReactNode
-  hint?: ReactNode
-  action?: ReactNode
+  aside?: ReactNode
   children: ReactNode
   pad?: boolean
 }) {
   return (
-    <section className="card">
-      {(title || action) && (
-        <div className="card-head">
-          <div>
-            {title && <h2>{title}</h2>}
-            {hint && <div className="hint">{hint}</div>}
-          </div>
-          {action}
+    <section className="sheet">
+      {(title || aside) && (
+        <div className="sheet-head">
+          {typeof title === 'string' ? <h3>{title}</h3> : title}
+          {aside}
         </div>
       )}
-      {pad ? <div className="card-pad">{children}</div> : children}
+      {pad ? <div className="sheet-pad">{children}</div> : children}
     </section>
   )
 }
@@ -61,37 +65,31 @@ export function Field({ label, children }: { label: string; children: ReactNode 
 
 export function Switch({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: string }) {
   return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      aria-label={label}
-      className="switch"
-      onClick={() => onChange(!checked)}
-    />
+    <button type="button" role="switch" aria-checked={checked} aria-label={label} className="switch" onClick={() => onChange(!checked)} />
   )
 }
 
-export interface TabItem<T extends string> {
+export interface SegItem<T extends string> {
   value: T
   label: string
   count?: number
 }
 
-export function Tabs<T extends string>({ items, value, onChange }: {
-  items: TabItem<T>[]
+export function Seg<T extends string>({ items, value, onChange, label }: {
+  items: SegItem<T>[]
   value: T
   onChange: (v: T) => void
+  label: string
 }) {
   return (
-    <div className="tabs" role="tablist">
+    <div className="seg" role="radiogroup" aria-label={label}>
       {items.map((item) => (
         <button
           key={item.value}
           type="button"
-          role="tab"
-          aria-selected={item.value === value}
-          className={`tab${item.value === value ? ' active' : ''}`}
+          role="radio"
+          aria-checked={item.value === value}
+          className={item.value === value ? 'on' : undefined}
           onClick={() => onChange(item.value)}
         >
           {item.label}

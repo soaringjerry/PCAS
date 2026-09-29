@@ -1,7 +1,7 @@
 import { ago, ahead } from '../domain/time'
 import type { State } from '../domain/types'
 
-export const STATE_VERSION = 1
+export const STATE_VERSION = 2
 
 const chat = (label: string, excerpt?: string, days = 1) => ({
   sourceId: 'src_claude',
@@ -14,6 +14,7 @@ export function createSeed(): State {
   return {
     version: STATE_VERSION,
     demo: { costReportImported: false },
+    settings: { autoAccept: false, wakeIdeas: true, followUps: true, dailyReviewAt: '21:00' },
 
     projects: [
       {

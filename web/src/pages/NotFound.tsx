@@ -1,14 +1,14 @@
 import { Link } from 'react-router'
-import { Card, Empty } from '../components/ui'
+import { Empty, Sheet } from '../components/ui'
 
 export function NotFound() {
   return (
-    <main className="page">
-      <Card pad>
+    <main className="page page-narrow">
+      <Sheet pad>
         <Empty>
-          找不到这个页面。<Link to="/">回到今天</Link>
+          这一页找不到了。<Link to="/">回到现在</Link>
         </Empty>
-      </Card>
+      </Sheet>
     </main>
   )
 }

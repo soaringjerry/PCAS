@@ -12,9 +12,9 @@ function useEscape(onClose: () => void) {
   }, [onClose])
 }
 
-export function Drawer({ title, badges, onClose, children }: {
+export function SideSheet({ title, top, onClose, children }: {
   title: ReactNode
-  badges?: ReactNode
+  top?: ReactNode
   onClose: () => void
   children: ReactNode
 }) {
@@ -23,16 +23,16 @@ export function Drawer({ title, badges, onClose, children }: {
   useEffect(() => panel.current?.focus(), [])
   return (
     <>
-      <div className="overlay" onClick={onClose} />
-      <aside className="drawer" role="dialog" aria-modal="true" tabIndex={-1} ref={panel}>
-        <div className="drawer-head">
+      <div className="scrim" onClick={onClose} />
+      <aside className="side-sheet" role="dialog" aria-modal="true" tabIndex={-1} ref={panel}>
+        <div className="side-sheet-head">
           <div className="grow">
-            {badges && <div className="row" style={{ marginBottom: 6 }}>{badges}</div>}
-            <h2>{title}</h2>
+            {top && <div className="row" style={{ marginBottom: 6 }}>{top}</div>}
+            <h2 style={{ fontSize: 20 }}>{title}</h2>
           </div>
-          <Button variant="ghost" icon={<X size={18} />} onClick={onClose} aria-label="关闭" />
+          <Button variant="quiet" icon={<X size={18} />} onClick={onClose} aria-label="关闭" />
         </div>
-        <div className="drawer-body">{children}</div>
+        <div className="side-sheet-body">{children}</div>
       </aside>
     </>
   )
@@ -47,9 +47,9 @@ export function Modal({ title, onClose, children, actions }: {
   useEscape(onClose)
   return (
     <>
-      <div className="overlay modal-overlay" onClick={onClose} />
+      <div className="scrim modal-scrim" onClick={onClose} />
       <div className="modal" role="dialog" aria-modal="true" aria-label={title}>
-        <h2 style={{ marginBottom: 10 }}>{title}</h2>
+        <h2 style={{ fontSize: 20, marginBottom: 10 }}>{title}</h2>
         <div className="stack-sm">{children}</div>
         <div className="row" style={{ justifyContent: 'flex-end', marginTop: 18 }}>
           {actions}

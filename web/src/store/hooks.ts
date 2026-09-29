@@ -1,38 +1,10 @@
 import { useCallback } from 'react'
-import { useNavigate, useSearchParams } from 'react-router'
+import { useNavigate } from 'react-router'
 import { draftSections, memoriesFor } from '../domain/handoff'
 import { newId } from '../domain/ids'
 import { nowIso } from '../domain/time'
 import type { Handoff } from '../domain/types'
 import { useStore } from './context'
-
-/** Task and idea details open in a drawer addressed by the URL, from any page. */
-export function useDetail() {
-  const [params, setParams] = useSearchParams()
-  const open = useCallback(
-    (key: 'task' | 'idea', id: string) => {
-      const next = new URLSearchParams(params)
-      next.delete('task')
-      next.delete('idea')
-      next.set(key, id)
-      setParams(next)
-    },
-    [params, setParams],
-  )
-  const close = useCallback(() => {
-    const next = new URLSearchParams(params)
-    next.delete('task')
-    next.delete('idea')
-    setParams(next)
-  }, [params, setParams])
-  return {
-    taskId: params.get('task'),
-    ideaId: params.get('idea'),
-    openTask: (id: string) => open('task', id),
-    openIdea: (id: string) => open('idea', id),
-    close,
-  }
-}
 
 interface HandoffTarget {
   projectId?: string
@@ -68,7 +40,7 @@ export function useCreateHandoff() {
         updatedAt: at,
       }
       dispatch({ type: 'createHandoff', handoff })
-      navigate(`/handoffs/${handoff.id}`)
+      navigate(`/handoff/${handoff.id}`)
     },
     [state, dispatch, navigate],
   )

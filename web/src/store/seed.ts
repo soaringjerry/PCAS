@@ -1,7 +1,7 @@
 import { ago, ahead } from '../domain/time'
 import type { State } from '../domain/types'
 
-export const STATE_VERSION = 2
+export const STATE_VERSION = 3
 
 const chat = (label: string, excerpt?: string, days = 1) => ({
   sourceId: 'src_claude',
@@ -56,6 +56,12 @@ export function createSeed(): State {
         projectId: 'p_pcas',
         due: ahead(3, 18),
         dependsOn: ['t_deploy'],
+        checklist: [
+          { id: 'ck_raw', text: '原始资料层：保留原文和附件', done: true },
+          { id: 'ck_item', text: '事项层：任务、想法、项目的状态机', done: true },
+          { id: 'ck_mem', text: '记忆层：版本、可信度、来源', done: false },
+          { id: 'ck_derived', text: '派生层：记录来源和版本，支持删除传播', done: false },
+        ],
         triggers: [],
         sources: [chat('与 Claude 讨论 PCAS 重写', '数据模型要最先定，它决定了其他一切。')],
         history: [{ at: ago(0.2), by: 'user', summary: '开始处理' }],
@@ -70,6 +76,7 @@ export function createSeed(): State {
         projectId: 'p_pcas',
         due: ahead(1, 12),
         dependsOn: [],
+        checklist: [],
         triggers: [
           {
             id: 'tr_deploy',
@@ -91,6 +98,7 @@ export function createSeed(): State {
         projectId: 'p_yufolo',
         waitingFor: 'Speechmatics 商务回复',
         dependsOn: [],
+        checklist: [],
         triggers: [
           {
             id: 'tr_sm',
@@ -124,6 +132,7 @@ export function createSeed(): State {
         projectId: 'p_pcas',
         scheduled: ahead(2, 14),
         dependsOn: [],
+        checklist: [],
         triggers: [],
         sources: [],
         history: [{ at: ago(0.3), by: 'user', summary: '创建' }],
@@ -137,6 +146,7 @@ export function createSeed(): State {
         projectId: 'p_yufolo',
         scheduled: ahead(0, 16),
         dependsOn: [],
+        checklist: [],
         triggers: [
           {
             id: 'tr_edge',
@@ -157,6 +167,7 @@ export function createSeed(): State {
         status: 'todo',
         projectId: 'p_pcas',
         dependsOn: ['t_model'],
+        checklist: [],
         triggers: [],
         sources: [],
         history: [{ at: ago(0.3), by: 'user', summary: '创建' }],
@@ -170,6 +181,7 @@ export function createSeed(): State {
         projectId: 'p_yufolo',
         due: ahead(0, 17),
         dependsOn: [],
+        checklist: [],
         triggers: [],
         sources: [
           {
@@ -189,6 +201,7 @@ export function createSeed(): State {
         status: 'done',
         projectId: 'p_pcas',
         dependsOn: [],
+        checklist: [],
         triggers: [],
         sources: [],
         history: [{ at: ago(0.2), by: 'user', summary: '完成' }],
@@ -202,6 +215,7 @@ export function createSeed(): State {
         status: 'cancelled',
         projectId: 'p_pcas',
         dependsOn: [],
+        checklist: [],
         triggers: [],
         sources: [],
         history: [{ at: ago(0.4), by: 'user', summary: '取消：旧代码不再维护' }],
@@ -603,31 +617,45 @@ export function createSeed(): State {
       { id: 'a_manual', name: '手动交接', channel: 'manual', note: '复制内容粘贴给任意 AI，再把结果贴回来', enabled: true, memoryKinds: ['fact', 'preference', 'decision'], includeInferred: false },
     ],
 
-    handoffs: [
+    docs: [
       {
-        id: 'h_lessons',
-        title: '整理旧版 PCAS 的经验',
-        agentId: 'a_claude',
-        projectId: 'p_pcas',
-        sections: {
-          goal: '从旧版代码中整理出值得保留的经验，写成一页文档。',
-          background: '旧版 PCAS 是事件总线 + 策略路由引擎，已归档到 legacy 分支。',
-          progress: '已完成代码通读和问题清单。',
-          decisions: '- 旧版 PCAS 代码不复用，只作为经验参考。',
-          constraints: '只写经验，不写修复方案；控制在一页。',
-          expectedOutput: '一份 Markdown 文档，按模型接入、存储检索、工程三部分组织。',
-        },
-        memoryIds: ['m_legacy'],
-        status: 'returned',
-        result: {
-          at: ago(0.15),
-          text: '## 模型接入\n- 新一代模型拒绝 max_tokens 和非默认 temperature\n## 存储与检索\n- 先检索再过滤会让召回率塌\n## 工程\n- 从第一天起强制格式化和 lint',
-        },
-        stale: false,
-        createdAt: ago(0.25),
-        updatedAt: ago(0.15),
+        id: 'd_prd',
+        thingId: 'p_pcas',
+        title: '需求简版 0.3',
+        body: '# PCAS 产品需求（简版 0.3）\n\n以个人长期记忆为核心的 AI 工作系统，统一管理分散在不同应用中的资料、想法和待办。\n\n## 核心功能\n- TODO 与日程\n- IDEA 追踪与唤醒\n- 跨应用数据规整\n- 后训练数据导出\n- Prompt 与文档生成\n- 多 AI 接入',
+        by: 'user',
+        createdAt: ago(0.5),
+        updatedAt: ago(0.5),
+      },
+      {
+        id: 'd_layers',
+        thingId: 't_model',
+        title: '数据模型草稿',
+        body: '# 数据模型草稿\n\n## 四层\n1. 原始资料层：导入的原文和附件，只追加\n2. 事项层：任务、想法、项目，各自有状态机\n3. 记忆层：事实、偏好、决定；每条有版本、可信度和来源\n4. 派生层：摘要、交接、训练样本；记录由哪些记忆的哪个版本生成\n\n## 待定\n- 部署形态会影响同步设计',
+        by: 'user',
+        createdAt: ago(0.2),
+        updatedAt: ago(0.1),
       },
     ],
+
+    runs: [
+      {
+        id: 'r_lessons',
+        thingId: 'p_pcas',
+        agentId: 'a_claude',
+        kind: 'draft',
+        prompt: '整理旧版 PCAS 的经验，写成一页文档',
+        brief: '# 任务\n整理旧版 PCAS 的经验，写成一页文档\n\n## 这件事\nPCAS 重写\n\n## 已确定的决定\n- 旧版 PCAS 代码不复用，只作为经验参考。',
+        contextMemoryIds: ['m_legacy'],
+        status: 'done',
+        output: '# 旧版经验\n\n## 模型接入\n- 新一代模型拒绝 max_tokens 和非默认 temperature\n\n## 存储与检索\n- 先检索再过滤会让召回率塌\n\n## 工程\n- 从第一天起强制格式化和 lint',
+        staleContext: false,
+        createdAt: ago(0.25),
+        finishedAt: ago(0.15),
+      },
+    ],
+
+    excludedMemories: {},
 
     samples: [
       {

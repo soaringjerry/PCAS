@@ -1,4 +1,4 @@
-import { memoriesFor } from '../domain/handoff'
+import { memoriesFor } from '../domain/agent'
 import { memoryKindLabel } from '../domain/labels'
 import type { MemoryKind } from '../domain/types'
 import { Button, Sheet, Switch, Tag } from '../components/ui'

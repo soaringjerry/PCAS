@@ -1,7 +1,7 @@
 import type {
   CandidateKind,
   Epistemic,
-  HandoffStatus,
+  RunStatus,
   IdeaStatus,
   JobStatus,
   MemoryKind,
@@ -75,11 +75,11 @@ export const jobStatusLabel: Record<JobStatus, Label> = {
   done: { text: '完成', tone: 'success' },
 }
 
-export const handoffStatusLabel: Record<HandoffStatus, Label> = {
-  draft: { text: '草稿', tone: 'neutral' },
-  sent: { text: '已发出', tone: 'info' },
-  returned: { text: '结果已返回', tone: 'warning' },
-  adopted: { text: '已采纳', tone: 'success' },
+export const runStatusLabel: Record<RunStatus, Label> = {
+  running: { text: '进行中', tone: 'accent' },
+  waiting: { text: '等你贴回结果', tone: 'warning' },
+  done: { text: '完成', tone: 'success' },
+  failed: { text: '失败', tone: 'danger' },
 }
 
 export const sampleStateLabel: Record<SampleState, Label> = {

@@ -20,7 +20,7 @@ function MemorySheet({ memory, onClose }: { memory: Memory; onClose: () => void 
   const [text, setText] = useState(memory.text)
   const [reason, setReason] = useState('')
   const [deleting, setDeleting] = useState(false)
-  const handoffs = state.handoffs.filter((h) => h.memoryIds.includes(memory.id))
+  const runs = state.runs.filter((r) => r.contextMemoryIds.includes(memory.id))
   const samples = state.samples.filter((s) => s.origin.memoryId === memory.id)
   const changed = text.trim() !== memory.text
 
@@ -123,7 +123,7 @@ function MemorySheet({ memory, onClose }: { memory: Memory; onClose: () => void 
 
         <div className="stack-sm">
           <p className="small muted">
-            用在 {handoffs.length} 份交接、{samples.length} 条训练样本里。
+            AI 用过它 {runs.length} 次，{samples.length} 条训练样本来自它。
           </p>
           <div>
             <Button size="sm" variant="danger" icon={<Trash2 size={14} />} onClick={() => setDeleting(true)}>
@@ -156,9 +156,9 @@ function MemorySheet({ memory, onClose }: { memory: Memory; onClose: () => void 
           }
         >
           <p>删掉之后，检索、摘要、交接和导出都不会再用到它。</p>
-          {(handoffs.length > 0 || samples.length > 0) && (
+          {(runs.length > 0 || samples.length > 0) && (
             <p className="small muted">
-              {handoffs.length > 0 && `${handoffs.length} 份用到它的交接会提示你重写。`}
+              {runs.length > 0 && `${runs.length} 次还没采纳的 AI 结果会标成可能过时。`}
               {samples.length > 0 && `${samples.length} 条由它来的训练样本会被排除。`}
             </p>
           )}

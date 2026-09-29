@@ -15,8 +15,12 @@ export function TrustTag({ value }: { value: Epistemic }) {
   return null
 }
 
-export function KindLabel({ kind }: { kind: Thing['kind'] }) {
-  return <span className={`kind kind-${kind}`}>{kindText[kind]}</span>
+export function KindLabel({ kind, bare = false }: { kind: Thing['kind']; bare?: boolean }) {
+  return (
+    <span className={`kind kind-${kind}`} title={kindText[kind]}>
+      {bare ? null : kindText[kind]}
+    </span>
+  )
 }
 
 export function ProjectLink({ id }: { id?: string }) {

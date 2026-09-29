@@ -4,11 +4,12 @@ import { ahead, nowIso } from '../domain/time'
 import type {
   Agent,
   CandidateKind,
-  Handoff,
+  Doc,
   Idea,
   Memory,
   MemoryKind,
   Project,
+  Run,
   SampleState,
   Settings,
   SourceRef,
@@ -16,6 +17,7 @@ import type {
   Task,
   TaskStatus,
 } from '../domain/types'
+import { parseChecklist } from '../domain/agent'
 import { taskStatusLabel } from '../domain/labels'
 import { createSeed } from './seed'
 
@@ -48,11 +50,23 @@ export type Action =
   | { type: 'confirmMemory'; id: string }
   | { type: 'deleteMemory'; id: string }
   | { type: 'setMemoryVisibility'; id: string; agentIds: string[] }
-  | { type: 'createHandoff'; handoff: Handoff }
-  | { type: 'updateHandoff'; id: string; patch: Partial<Handoff> }
-  | { type: 'sendHandoff'; id: string }
-  | { type: 'recordResult'; id: string; text: string }
-  | { type: 'adoptResult'; id: string; userEdit?: string }
+  | { type: 'startRun'; run: Run }
+  | { type: 'finishRun'; id: string; output: string }
+  | { type: 'pasteRunResult'; id: string; output: string }
+  | { type: 'adoptRun'; id: string; as: 'doc' | 'subtasks' | 'progress'; text: string }
+  | { type: 'discardRun'; id: string }
+  | { type: 'createDoc'; doc: Doc }
+  | { type: 'updateDoc'; id: string; patch: Partial<Pick<Doc, 'title' | 'body'>> }
+  | { type: 'deleteDoc'; id: string }
+  | { type: 'addCheck'; taskId: string; text: string }
+  | { type: 'toggleCheck'; taskId: string; itemId: string }
+  | { type: 'removeCheck'; taskId: string; itemId: string }
+  | { type: 'toggleContextMemory'; thingId: string; memoryId: string }
+  | { type: 'bulkStatus'; ids: string[]; status: TaskStatus }
+  | { type: 'bulkDefer'; ids: string[]; days: number }
+  | { type: 'bulkMove'; ids: string[]; projectId?: string }
+  | { type: 'bulkAccept'; ids: string[] }
+  | { type: 'bulkIgnore'; ids: string[] }
   | { type: 'setSampleState'; id: string; state: SampleState }
   | { type: 'updateAgent'; id: string; patch: Partial<Agent> }
   | { type: 'retryJob'; id: string }
@@ -87,6 +101,7 @@ function newTask(title: string, fields: Partial<Task> = {}): Task {
     title,
     status: 'todo',
     dependsOn: [],
+    checklist: [],
     triggers: [],
     sources: [],
     history: [{ at, by: 'user', summary: '创建' }],
@@ -137,21 +152,17 @@ function updateIdea(state: State, id: string, fn: (idea: Idea) => Idea): State {
 function invalidateDerived(state: State, memoryId: string, removed: boolean): State {
   return {
     ...state,
-    handoffs: state.handoffs.map((h) =>
-      h.memoryIds.includes(memoryId)
-        ? {
-            ...h,
-            stale: h.status === 'draft' || h.status === 'sent' ? true : h.stale,
-            memoryIds: removed ? h.memoryIds.filter((id) => id !== memoryId) : h.memoryIds,
-          }
-        : h,
-    ),
+    runs: state.runs.map((r) => (r.contextMemoryIds.includes(memoryId) && !r.adopted ? { ...r, staleContext: true } : r)),
     samples: state.samples.map((s) =>
       s.origin.memoryId === memoryId
         ? { ...s, stale: true, state: removed ? 'excluded' : s.state }
         : s,
     ),
   }
+}
+
+function firstLine(text: string): string {
+  return text.split('\n').map((l) => l.replace(/^[#\-*\s]+/, '').trim()).find(Boolean) ?? ''
 }
 
 export function reducer(state: State, action: Action): State {
@@ -298,7 +309,7 @@ export function reducer(state: State, action: Action): State {
     case 'ideaContinue':
       return updateIdea(state, action.id, (i) => ({
         ...i,
-        // The last wake is kept as context for handoffs; only status decides what shows as awakened.
+        // The last wake is kept as context for AI briefs; only status decides what shows as awakened.
         status: 'active',
         evolution: [...i.evolution, { at, by: 'user', summary: '决定继续推进' }],
       }))
@@ -409,81 +420,160 @@ export function reducer(state: State, action: Action): State {
     case 'setMemoryVisibility':
       return { ...state, memories: mapById(state.memories, action.id, (m) => ({ ...m, visibleTo: action.agentIds })) }
 
-    case 'createHandoff':
-      return { ...state, handoffs: [action.handoff, ...state.handoffs] }
+    case 'startRun':
+      return { ...state, runs: [...state.runs, action.run] }
 
-    case 'updateHandoff':
+    case 'finishRun':
+    case 'pasteRunResult':
       return {
         ...state,
-        handoffs: mapById(state.handoffs, action.id, (h) => ({ ...h, ...action.patch, updatedAt: at })),
+        runs: mapById(state.runs, action.id, (r) => ({ ...r, status: 'done', output: action.output, finishedAt: at })),
       }
 
-    case 'sendHandoff':
-      return {
-        ...state,
-        handoffs: mapById(state.handoffs, action.id, (h) => ({ ...h, status: 'sent', stale: false, updatedAt: at })),
-      }
+    case 'discardRun':
+      return { ...state, runs: state.runs.filter((r) => r.id !== action.id) }
 
-    case 'recordResult':
-      return {
-        ...state,
-        handoffs: mapById(state.handoffs, action.id, (h) => ({
-          ...h,
-          status: 'returned',
-          result: { at, text: action.text },
+    case 'adoptRun': {
+      const run = state.runs.find((r) => r.id === action.id)
+      if (!run?.output) return state
+      const agent = state.agents.find((a) => a.id === run.agentId)?.name ?? 'AI'
+      const edited = action.text.trim() !== run.output.trim()
+      const task = state.tasks.find((t) => t.id === run.thingId)
+      const idea = state.ideas.find((i) => i.id === run.thingId)
+      const project = state.projects.find((p) => p.id === run.thingId)
+      const title = task?.title ?? idea?.title ?? project?.name ?? ''
+      let next: State = state
+      let summary = ''
+
+      if (action.as === 'doc') {
+        const doc: Doc = {
+          id: newId('d'),
+          thingId: run.thingId,
+          title: firstLine(action.text).slice(0, 40) || `${agent} 的草稿`,
+          body: action.text,
+          by: 'ai',
+          runId: run.id,
+          createdAt: at,
           updatedAt: at,
-        })),
+        }
+        next = { ...next, docs: [...next.docs, doc] }
+        summary = `把 ${agent} 的结果存成文档「${doc.title}」`
+      } else if (action.as === 'subtasks') {
+        const items = parseChecklist(action.text)
+        if (task) {
+          next = {
+            ...next,
+            tasks: mapById(next.tasks, task.id, (t) => ({
+              ...t,
+              checklist: [...t.checklist, ...items.map((text) => ({ id: newId('ck'), text, done: false }))],
+            })),
+          }
+        } else {
+          const projectId = project?.id ?? idea?.projectId
+          const created = items.map((text) =>
+            newTask(text, { projectId, ideaId: idea?.id, history: [{ at, by: 'ai', summary: `${agent} 拆出来的，你采纳了` }] }),
+          )
+          next = { ...next, tasks: [...created, ...next.tasks] }
+        }
+        summary = `采纳 ${agent} 拆出的 ${items.length} 个子任务`
+      } else {
+        if (project) {
+          next = { ...next, projects: mapById(next.projects, project.id, (p) => ({ ...p, progress: `${p.progress}\n${firstLine(action.text)}`.trim(), updatedAt: at })) }
+        } else if (task) {
+          next = { ...next, tasks: mapById(next.tasks, task.id, (t) => ({ ...t, notes: `${t.notes ?? ''}\n\n${action.text}`.trim() })) }
+        } else if (idea) {
+          next = { ...next, ideas: mapById(next.ideas, idea.id, (i) => ({ ...i, body: `${i.body}\n\n${action.text}`.trim() })) }
+        }
+        summary = `把 ${agent} 的结果写回进度`
       }
+      if (edited) summary += '（有修改）'
 
-    case 'adoptResult': {
-      const handoff = state.handoffs.find((h) => h.id === action.id)
-      if (!handoff?.result) return state
-      const finalText = action.userEdit?.trim() || handoff.result.text
-      const edited = Boolean(action.userEdit?.trim()) && action.userEdit?.trim() !== handoff.result.text
-      const summary = `采纳交接结果：${handoff.title}${edited ? '（有修改）' : ''}`
-      const memory = newMemory(`「${handoff.title}」的结果已采纳：${finalText.split('\n').find((l) => l.trim())?.replace(/^[#\-\s]+/, '') ?? ''}`, 'fact', {
-        projectId: handoff.projectId,
-        sources: [{ sourceId: 'src_handoff', label: `交接：${handoff.title}`, at }],
-      })
+      // The adoption itself is recorded on the run, in the thing's history and as a
+      // training candidate; it is not written into memory, where it would crowd
+      // the context of later runs.
       return {
-        ...state,
-        handoffs: mapById(state.handoffs, action.id, (h) => ({
-          ...h,
-          status: 'adopted',
-          result: h.result && { ...h.result, userEdit: edited ? finalText : undefined },
-          updatedAt: at,
-        })),
-        projects: handoff.projectId
-          ? mapById(state.projects, handoff.projectId, (p) => ({
-              ...p,
-              progress: `${p.progress}\n${summary}。`,
-              updatedAt: at,
-            }))
-          : state.projects,
-        tasks: handoff.taskId
-          ? mapById(state.tasks, handoff.taskId, (t) => ({ ...t, history: [...t.history, { at, by: 'user', summary }] }))
-          : state.tasks,
-        ideas: handoff.ideaId
-          ? mapById(state.ideas, handoff.ideaId, (i) => ({ ...i, evolution: [...i.evolution, { at, by: 'user', summary }] }))
-          : state.ideas,
-        memories: [memory, ...state.memories],
+        ...next,
+        runs: mapById(next.runs, run.id, (r) => ({ ...r, output: action.text, adopted: { as: action.as, at, edited } })),
+        tasks: task ? mapById(next.tasks, task.id, (t) => ({ ...t, history: [...t.history, { at, by: 'user', summary }], updatedAt: at })) : next.tasks,
+        ideas: idea ? mapById(next.ideas, idea.id, (i) => ({ ...i, evolution: [...i.evolution, { at, by: 'user', summary }], updatedAt: at })) : next.ideas,
         samples: [
           {
             id: newId('s'),
             kind: edited ? 'correction' : 'adopted-result',
-            prompt: handoff.sections.goal,
-            response: finalText,
-            origin: { label: `交接：${handoff.title}`, handoffId: handoff.id },
+            prompt: `${run.prompt}：${title}`,
+            response: action.text,
+            origin: { label: `${agent} · ${title}`, runId: run.id },
             version: 1,
             state: 'candidate',
             epistemic: 'confirmed',
             stale: false,
             createdAt: at,
           },
-          ...state.samples,
+          ...next.samples,
         ],
       }
     }
+
+    case 'createDoc':
+      return { ...state, docs: [...state.docs, action.doc] }
+
+    case 'updateDoc':
+      return { ...state, docs: mapById(state.docs, action.id, (d) => ({ ...d, ...action.patch, updatedAt: at })) }
+
+    case 'deleteDoc':
+      return { ...state, docs: state.docs.filter((d) => d.id !== action.id) }
+
+    case 'addCheck':
+      return {
+        ...state,
+        tasks: mapById(state.tasks, action.taskId, (t) => ({
+          ...t,
+          checklist: [...t.checklist, { id: newId('ck'), text: action.text, done: false }],
+          updatedAt: at,
+        })),
+      }
+
+    case 'toggleCheck':
+      return {
+        ...state,
+        tasks: mapById(state.tasks, action.taskId, (t) => ({
+          ...t,
+          checklist: t.checklist.map((c) => (c.id === action.itemId ? { ...c, done: !c.done } : c)),
+          updatedAt: at,
+        })),
+      }
+
+    case 'removeCheck':
+      return {
+        ...state,
+        tasks: mapById(state.tasks, action.taskId, (t) => ({ ...t, checklist: t.checklist.filter((c) => c.id !== action.itemId) })),
+      }
+
+    case 'toggleContextMemory': {
+      const current = state.excludedMemories[action.thingId] ?? []
+      const nextList = current.includes(action.memoryId) ? current.filter((id) => id !== action.memoryId) : [...current, action.memoryId]
+      return { ...state, excludedMemories: { ...state.excludedMemories, [action.thingId]: nextList } }
+    }
+
+    case 'bulkStatus':
+      return action.ids.reduce((s, id) => reducer(s, { type: 'setTaskStatus', id, status: action.status }), state)
+
+    case 'bulkDefer':
+      return action.ids.reduce((s, id) => reducer(s, { type: 'deferTask', id, days: action.days }), state)
+
+    case 'bulkMove':
+      return action.ids.reduce((s, id) => reducer(s, { type: 'moveThing', id, projectId: action.projectId }), state)
+
+    case 'bulkAccept':
+      return action.ids.reduce((s, id) => {
+        const c = s.candidates.find((x) => x.id === id && x.state === 'pending')
+        return c
+          ? reducer(s, { type: 'acceptCandidate', id, kind: c.kind, text: c.text, memoryKind: c.memoryKind, projectId: c.projectId, due: c.due })
+          : s
+      }, state)
+
+    case 'bulkIgnore':
+      return action.ids.reduce((s, id) => reducer(s, { type: 'ignoreCandidate', id }), state)
 
     case 'setSampleState':
       return { ...state, samples: mapById(state.samples, action.id, (s) => ({ ...s, state: action.state })) }

@@ -71,19 +71,12 @@ export function timelineFor(state: State, thing: Thing): TimelineEvent[] {
   const events: TimelineEvent[] = []
   const agentName = (id: string) => state.agents.find((a) => a.id === id)?.name ?? 'AI'
 
-  const handoffs = state.handoffs.filter((h) =>
-    thing.kind === 'project' ? h.projectId === thing.id : thing.kind === 'task' ? h.taskId === thing.id : h.ideaId === thing.id,
-  )
-  for (const h of handoffs) {
-    events.push({ at: h.createdAt, kind: 'handoff', text: `交给 ${agentName(h.agentId)}：${h.title}`, link: `/handoff/${h.id}` })
-    if (h.result) {
-      events.push({
-        at: h.result.at,
-        kind: 'handoff',
-        text: `${agentName(h.agentId)} 的结果${h.status === 'adopted' ? '已采纳' : '回来了'}`,
-        link: `/handoff/${h.id}`,
-      })
-    }
+  for (const r of state.runs.filter((r) => r.thingId === thing.id)) {
+    events.push({ at: r.createdAt, kind: 'handoff', text: `交给 ${agentName(r.agentId)}：${r.prompt}` })
+    if (r.finishedAt) events.push({ at: r.finishedAt, kind: 'handoff', text: `${agentName(r.agentId)} 的结果${r.adopted ? '已采纳' : '回来了'}` })
+  }
+  for (const d of state.docs.filter((d) => d.thingId === thing.id)) {
+    events.push({ at: d.createdAt, kind: 'note', text: `${d.by === 'ai' ? 'AI 写了' : '新建'}文档「${d.title}」` })
   }
 
   if (thing.kind === 'task') {

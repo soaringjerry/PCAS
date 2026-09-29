@@ -23,6 +23,12 @@ export interface Revision {
   summary: string
 }
 
+export interface ChecklistItem {
+  id: ID
+  text: string
+  done: boolean
+}
+
 export type TaskStatus = 'todo' | 'doing' | 'waiting' | 'done' | 'cancelled'
 
 /** A combined event and time trigger (PRD §4). */
@@ -47,6 +53,7 @@ export interface Task {
   scheduled?: string
   waitingFor?: string
   dependsOn: ID[]
+  checklist: ChecklistItem[]
   triggers: Trigger[]
   sources: SourceRef[]
   history: Revision[]
@@ -181,38 +188,41 @@ export interface Agent {
   includeInferred: boolean
 }
 
-export interface HandoffSections {
-  goal: string
-  background: string
-  progress: string
-  decisions: string
-  constraints: string
-  expectedOutput: string
-}
-
-export type HandoffStatus = 'draft' | 'sent' | 'returned' | 'adopted'
-
-export interface HandoffResult {
-  at: string
-  text: string
-  userEdit?: string
-}
-
-export interface Handoff {
+/** A working document attached to a thing: plans, notes, specs, AI drafts. */
+export interface Doc {
   id: ID
+  thingId: ID
   title: string
-  agentId: ID
-  projectId?: ID
-  taskId?: ID
-  ideaId?: ID
-  sections: HandoffSections
-  memoryIds: ID[]
-  status: HandoffStatus
-  result?: HandoffResult
-  /** Set when a memory it was built from changed or was deleted. */
-  stale: boolean
+  body: string
+  by: 'user' | 'ai'
+  runId?: ID
   createdAt: string
   updatedAt: string
+}
+
+export type RunKind = 'plan' | 'breakdown' | 'summary' | 'draft' | 'ask'
+export type RunStatus = 'running' | 'waiting' | 'done' | 'failed'
+
+/**
+ * One piece of work an AI does on a thing (PRD §3 多 AI 接入). The brief is
+ * exactly what the agent received; results come back onto the same thing.
+ */
+export interface Run {
+  id: ID
+  thingId: ID
+  agentId: ID
+  kind: RunKind
+  prompt: string
+  brief: string
+  contextMemoryIds: ID[]
+  status: RunStatus
+  output?: string
+  /** What the user did with the output. */
+  adopted?: { as: 'doc' | 'subtasks' | 'progress'; at: string; edited: boolean }
+  /** A memory it used changed or was deleted afterwards. */
+  staleContext: boolean
+  createdAt: string
+  finishedAt?: string
 }
 
 export type SampleState = 'candidate' | 'included' | 'excluded'
@@ -222,7 +232,7 @@ export interface TrainingSample {
   kind: 'correction' | 'adopted-result' | 'conversation'
   prompt: string
   response: string
-  origin: { label: string; handoffId?: ID; memoryId?: ID }
+  origin: { label: string; runId?: ID; memoryId?: ID }
   version: number
   state: SampleState
   epistemic: Epistemic
@@ -253,7 +263,10 @@ export interface State {
   sources: Source[]
   jobs: Job[]
   agents: Agent[]
-  handoffs: Handoff[]
+  docs: Doc[]
+  runs: Run[]
+  /** Memories the user left out of a thing's AI context. */
+  excludedMemories: Record<ID, ID[]>
   samples: TrainingSample[]
   /** Guided demo of the PRD §7 scenario. */
   demo: { costReportImported: boolean }

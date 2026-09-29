@@ -1,5 +1,5 @@
 import { dayOffset, isOverdue } from './time'
-import type { Candidate, Handoff, Idea, Job, Memory, State, Task } from './types'
+import type { Candidate, Idea, Job, Memory, Run, State, Task } from './types'
 
 // "需要你看": the few things that want a decision from the user right now.
 // Everything else stays out of the way until it matters.
@@ -7,7 +7,7 @@ import type { Candidate, Handoff, Idea, Job, Memory, State, Task } from './types
 export type Attention =
   | { kind: 'wake'; key: string; idea: Idea }
   | { kind: 'due'; key: string; task: Task }
-  | { kind: 'result'; key: string; handoff: Handoff }
+  | { kind: 'result'; key: string; run: Run }
   | { kind: 'candidate'; key: string; candidate: Candidate }
   | { kind: 'confirm'; key: string; memory: Memory }
   | { kind: 'job'; key: string; job: Job }
@@ -28,8 +28,9 @@ export function attentionFor(state: State): Attention[] {
     }
   }
 
-  for (const handoff of state.handoffs) {
-    if (handoff.status === 'returned') items.push({ kind: 'result', key: `r-${handoff.id}`, handoff })
+  // AI results that came back and have not been looked at yet.
+  for (const run of state.runs) {
+    if (run.status === 'done' && !run.adopted) items.push({ kind: 'result', key: `r-${run.id}`, run })
   }
 
   for (const candidate of state.candidates) {

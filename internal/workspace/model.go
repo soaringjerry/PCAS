@@ -1,0 +1,280 @@
+// Package workspace owns action state and presents memory-backed working views.
+// It never becomes a second canonical store for facts or memory revisions.
+package workspace
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+
+	"github.com/soaringjerry/PCAS/internal/memory"
+)
+
+var ErrBudget = errors.New("daily budget exceeded")
+
+type SourceRef struct {
+	SourceID string `json:"sourceId"`
+	Version  int    `json:"version,omitempty"`
+	Label    string `json:"label"`
+	Excerpt  string `json:"excerpt,omitempty"`
+	At       string `json:"at"`
+}
+type Revision struct {
+	SourceID string `json:"sourceId,omitempty"`
+	At       string `json:"at"`
+	By       string `json:"by"`
+	Summary  string `json:"summary"`
+}
+type Check struct {
+	ID   string `json:"id"`
+	Text string `json:"text"`
+	Done bool   `json:"done"`
+}
+type Trigger struct {
+	ID          string `json:"id"`
+	Kind        string `json:"kind"`
+	Description string `json:"description"`
+	Guard       string `json:"guard,omitempty"`
+	NextAt      string `json:"nextAt,omitempty"`
+	Active      bool   `json:"active"`
+}
+type Condition struct {
+	ID          string     `json:"id"`
+	Kind        string     `json:"kind"`
+	Description string     `json:"description"`
+	DueAt       string     `json:"dueAt,omitempty"`
+	Met         bool       `json:"met"`
+	MetAt       string     `json:"metAt,omitempty"`
+	MetBy       *SourceRef `json:"metBy,omitempty"`
+}
+type Wake struct {
+	At           string `json:"at"`
+	Reason       string `json:"reason"`
+	ConditionID  string `json:"conditionId,omitempty"`
+	SnoozedUntil string `json:"snoozedUntil,omitempty"`
+}
+type Owed struct {
+	Who   string `json:"who"`
+	Since string `json:"since"`
+}
+
+// Item is action-module data. Kind-specific input validation precedes writes;
+// frequently queried fields have explicit SQL columns and constraints.
+type Item struct {
+	ID            string      `json:"id"`
+	Kind          string      `json:"itemKind"`
+	Version       int         `json:"recordVersion"`
+	Title         string      `json:"title"`
+	Name          string      `json:"name"`
+	Status        string      `json:"status"`
+	Notes         string      `json:"notes,omitempty"`
+	Body          string      `json:"body"`
+	Goal          string      `json:"goal"`
+	Progress      string      `json:"progress"`
+	ProjectID     string      `json:"projectId,omitempty"`
+	IdeaID        string      `json:"ideaId,omitempty"`
+	Due           string      `json:"due,omitempty"`
+	Scheduled     string      `json:"scheduled,omitempty"`
+	WaitingFor    string      `json:"waitingFor,omitempty"`
+	OwedTo        *Owed       `json:"owedTo,omitempty"`
+	DependsOn     []string    `json:"dependsOn"`
+	Checklist     []Check     `json:"checklist"`
+	Triggers      []Trigger   `json:"triggers"`
+	Sources       []SourceRef `json:"sources"`
+	History       []Revision  `json:"history"`
+	Evolution     []Revision  `json:"evolution"`
+	Conditions    []Condition `json:"conditions"`
+	RemindersOn   bool        `json:"remindersOn"`
+	ShelvedReason string      `json:"shelvedReason,omitempty"`
+	Wake          *Wake       `json:"wake,omitempty"`
+	NextSteps     []string    `json:"nextSteps"`
+	CreatedAt     string      `json:"createdAt"`
+	UpdatedAt     string      `json:"updatedAt"`
+}
+type Candidate struct {
+	ID           string    `json:"id"`
+	Kind         string    `json:"kind"`
+	Text         string    `json:"text"`
+	MemoryKind   string    `json:"memoryKind,omitempty"`
+	ProjectID    string    `json:"projectId,omitempty"`
+	Due          string    `json:"due,omitempty"`
+	Confidence   float64   `json:"confidence"`
+	Source       SourceRef `json:"source"`
+	State        string    `json:"state"`
+	ResolvedInto string    `json:"resolvedInto,omitempty"`
+	CreatedAt    string    `json:"createdAt"`
+}
+type MemoryVersion struct {
+	At     string `json:"at"`
+	By     string `json:"by"`
+	Text   string `json:"text"`
+	Reason string `json:"reason,omitempty"`
+}
+type Memory struct {
+	ID         string          `json:"id"`
+	Version    int             `json:"recordVersion"`
+	Kind       string          `json:"kind"`
+	Text       string          `json:"text"`
+	Epistemic  string          `json:"epistemic"`
+	ProjectID  string          `json:"projectId,omitempty"`
+	Sources    []SourceRef     `json:"sources"`
+	Versions   []MemoryVersion `json:"versions"`
+	VisibleTo  []string        `json:"visibleTo"`
+	Exposure   float64         `json:"exposure"`
+	LastUsedAt string          `json:"lastUsedAt"`
+	Pinned     bool            `json:"pinned"`
+}
+type Agent struct {
+	Protocol        string   `json:"protocol,omitempty"`
+	Available       bool     `json:"available"`
+	InputPrice      float64  `json:"inputPrice"`
+	OutputPrice     float64  `json:"outputPrice"`
+	MaxOutput       int      `json:"maxOutput"`
+	ID              string   `json:"id"`
+	Name            string   `json:"name"`
+	Channel         string   `json:"channel"`
+	Note            string   `json:"note"`
+	Enabled         bool     `json:"enabled"`
+	MemoryKinds     []string `json:"memoryKinds"`
+	IncludeInferred bool     `json:"includeInferred"`
+}
+type Settings struct {
+	AutoAccept    bool    `json:"autoAccept"`
+	WakeIdeas     bool    `json:"wakeIdeas"`
+	FollowUps     bool    `json:"followUps"`
+	DailyReviewAt string  `json:"dailyReviewAt"`
+	DailyBudget   float64 `json:"dailyBudget"`
+	Timezone      string  `json:"timezone"`
+}
+type Doc struct {
+	ID        string `json:"id"`
+	ThingID   string `json:"thingId"`
+	Title     string `json:"title"`
+	Body      string `json:"body"`
+	By        string `json:"by"`
+	RunID     string `json:"runId,omitempty"`
+	CreatedAt string `json:"createdAt"`
+	UpdatedAt string `json:"updatedAt"`
+}
+type Adoption struct {
+	As     string `json:"as"`
+	At     string `json:"at"`
+	Edited bool   `json:"edited"`
+}
+type Run struct {
+	ID               string       `json:"id"`
+	ThingID          string       `json:"thingId"`
+	AgentID          string       `json:"agentId"`
+	Kind             string       `json:"kind"`
+	Prompt           string       `json:"prompt"`
+	Brief            string       `json:"brief"`
+	ContextMemoryIDs []string     `json:"contextMemoryIds"`
+	ContextVersions  []memory.Ref `json:"contextVersions"`
+	Status           string       `json:"status"`
+	Output           string       `json:"output,omitempty"`
+	Error            string       `json:"error,omitempty"`
+	Adopted          *Adoption    `json:"adopted,omitempty"`
+	StaleContext     bool         `json:"staleContext"`
+	Cost             float64      `json:"cost"`
+	CreatedAt        string       `json:"createdAt"`
+	FinishedAt       string       `json:"finishedAt,omitempty"`
+}
+type Origin struct {
+	Label    string `json:"label"`
+	RunID    string `json:"runId,omitempty"`
+	MemoryID string `json:"memoryId,omitempty"`
+}
+type Sample struct {
+	ID        string `json:"id"`
+	Kind      string `json:"kind"`
+	Prompt    string `json:"prompt"`
+	Response  string `json:"response"`
+	Origin    Origin `json:"origin"`
+	Version   int    `json:"version"`
+	State     string `json:"state"`
+	Epistemic string `json:"epistemic"`
+	Stale     bool   `json:"stale"`
+	CreatedAt string `json:"createdAt"`
+}
+type Source struct {
+	ID         string `json:"id"`
+	Name       string `json:"name"`
+	Method     string `json:"method"`
+	Status     string `json:"status"`
+	Note       string `json:"note"`
+	ItemCount  int    `json:"itemCount"`
+	LastSyncAt string `json:"lastSyncAt,omitempty"`
+}
+type Job struct {
+	ID        string `json:"id"`
+	Title     string `json:"title"`
+	Trigger   string `json:"trigger"`
+	Status    string `json:"status"`
+	Detail    string `json:"detail"`
+	Recovery  string `json:"recovery,omitempty"`
+	CreatedAt string `json:"createdAt"`
+	NextRunAt string `json:"nextRunAt,omitempty"`
+}
+type State struct {
+	BudgetUsage      float64             `json:"budgetUsage"`
+	Version          int                 `json:"version"`
+	Revision         int64               `json:"revision"`
+	Settings         Settings            `json:"settings"`
+	Tasks            []Item              `json:"tasks"`
+	Ideas            []Item              `json:"ideas"`
+	Projects         []Item              `json:"projects"`
+	Memories         []Memory            `json:"memories"`
+	Candidates       []Candidate         `json:"candidates"`
+	Agents           []Agent             `json:"agents"`
+	Docs             []Doc               `json:"docs"`
+	Runs             []Run               `json:"runs"`
+	Samples          []Sample            `json:"samples"`
+	Sources          []Source            `json:"sources"`
+	Jobs             []Job               `json:"jobs"`
+	ExcludedMemories map[string][]string `json:"excludedMemories"`
+}
+
+// Commands are validated on the server; callers never submit an entire state.
+type Command struct {
+	IncludeSources   bool            `json:"includeSources,omitempty"`
+	RequestID        string          `json:"requestId"`
+	ExpectedRevision int64           `json:"expectedRevision"`
+	Type             string          `json:"type"`
+	ID               string          `json:"id,omitempty"`
+	IDs              []string        `json:"ids,omitempty"`
+	Text             string          `json:"text,omitempty"`
+	Title            string          `json:"title,omitempty"`
+	Name             string          `json:"name,omitempty"`
+	Note             string          `json:"note,omitempty"`
+	Kind             string          `json:"kind,omitempty"`
+	MemoryKind       string          `json:"memoryKind,omitempty"`
+	ProjectID        string          `json:"projectId,omitempty"`
+	Due              string          `json:"due,omitempty"`
+	Status           string          `json:"status,omitempty"`
+	State            string          `json:"state,omitempty"`
+	Reason           string          `json:"reason,omitempty"`
+	Summary          string          `json:"summary,omitempty"`
+	TaskID           string          `json:"taskId,omitempty"`
+	IdeaID           string          `json:"ideaId,omitempty"`
+	ThingID          string          `json:"thingId,omitempty"`
+	MemoryID         string          `json:"memoryId,omitempty"`
+	ItemID           string          `json:"itemId,omitempty"`
+	TriggerID        string          `json:"triggerId,omitempty"`
+	ConditionID      string          `json:"conditionId,omitempty"`
+	TargetID         string          `json:"targetId,omitempty"`
+	Condition        string          `json:"condition,omitempty"`
+	Description      string          `json:"description,omitempty"`
+	Days             int             `json:"days,omitempty"`
+	AgentIDs         []string        `json:"agentIds,omitempty"`
+	AgentID          string          `json:"agentId,omitempty"`
+	Prompt           string          `json:"prompt,omitempty"`
+	Output           string          `json:"output,omitempty"`
+	As               string          `json:"as,omitempty"`
+	Patch            json.RawMessage `json:"patch,omitempty"`
+	Doc              *Doc            `json:"doc,omitempty"`
+}
+type API interface {
+	Snapshot(context.Context, memory.Scope) (State, error)
+	Execute(context.Context, memory.Scope, Command) (State, error)
+	Export(context.Context, memory.Scope, bool, bool) ([]byte, error)
+}

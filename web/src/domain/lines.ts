@@ -1,7 +1,7 @@
 import { buildBrief, contextFor } from './agent'
 import { isOpenTask, type Thing } from './things'
 import { dayOffset, formatWhen } from './time'
-import type { Idea, Run, RunKind, State, Task } from './types'
+import type { Agent, Idea, Run, RunKind, State, Task } from './types'
 
 // The two lines on the home screen (docs/design/principles.md):
 // urgent things move by time, ongoing things move by events.
@@ -25,22 +25,17 @@ export interface LineItem {
 }
 
 const DAY = 24 * 60 * 60 * 1000
-const DEFAULT_AGENT = 'a_claude'
-
-/** Rough CNY estimate: about one token per Chinese character plus the answer. */
-export function estimateCost(briefChars: number): number {
-  return Math.max(0.01, Math.round(((briefChars + 1200) / 1000) * 0.02 * 100) / 100)
+/** Matches the server's conservative reservation using configured CNY rates. */
+export function estimateCost(brief: string, agent?: Agent): number {
+  if (!agent || agent.channel === 'manual' || agent.protocol === 'codex') return 0
+  return ((new TextEncoder().encode(brief).length + 4096) * agent.inputPrice + agent.maxOutput * agent.outputPrice) / 1e6
 }
-
-export function spentToday(state: State): number {
-  const today = new Date().toDateString()
-  return state.runs.filter((r) => new Date(r.createdAt).toDateString() === today).reduce((sum, r) => sum + (r.cost ?? 0), 0)
-}
+export function spentToday(state: State): number { return state.budgetUsage }
 
 function step(state: State, thing: Thing, kind: RunKind, label: string, prompt: string): NextStep {
-  const agent = state.agents.find((a) => a.id === DEFAULT_AGENT) ?? state.agents[0]
+  const agent = state.agents.find((a) => a.enabled && a.available) ?? state.agents[0]
   const memories = contextFor(state, thing, agent).filter((c) => c.included).map((c) => c.memory)
-  return { kind, label, prompt, cost: estimateCost(buildBrief(state, thing, prompt, memories).length) }
+  return { kind, label, prompt, cost: estimateCost(buildBrief(state, thing, prompt, memories), agent) }
 }
 
 function taskStep(state: State, task: Task): NextStep {
@@ -90,7 +85,7 @@ function urgency(task: Task): Pick<LineItem, 'reason' | 'tone' | 'rank'> | undef
 }
 
 function latestResult(state: State, thingId: string): Run | undefined {
-  return state.runs.filter((r) => r.thingId === thingId && r.status === 'done' && !r.adopted).at(-1)
+  return state.runs.find((r) => r.thingId === thingId && r.status === 'done' && !r.adopted)
 }
 
 function running(state: State, thingId: string): boolean {
@@ -173,4 +168,11 @@ export function unsure(state: State) {
     candidates: state.candidates.filter((c) => c.state === 'pending'),
     guesses: state.memories.filter((m) => m.epistemic === 'inferred' && Date.now() - new Date(m.versions[0].at).getTime() < 7 * DAY),
   }
+}
+
+export function selectedCost(state: State, thing: Thing, prompt: string, agentId: string): number {
+  const agent = state.agents.find((a) => a.id === agentId)
+  if (!agent) return 0
+  const memories = contextFor(state, thing, agent).filter((c) => c.included).map((c) => c.memory)
+  return estimateCost(buildBrief(state, thing, prompt, memories), agent)
 }

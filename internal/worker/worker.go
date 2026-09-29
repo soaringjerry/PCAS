@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
@@ -43,15 +44,15 @@ func New(queue Queue, handlers map[string]Handler, logger *slog.Logger) *Worker 
 }
 
 func (w *Worker) RunOnce(ctx context.Context) (bool, error) {
-	job, err := w.queue.Claim(ctx, time.Minute)
+	job, err := w.queue.Claim(ctx, 5*time.Minute)
 	if err != nil || job == nil {
 		return false, err
 	}
-	handler, ok := w.handlers[job.Stage]
+	handler, ok := w.handlers[strings.SplitN(job.Stage, ":", 2)[0]]
 	if !ok {
 		return true, ignoreLostLease(w.queue.Block(ctx, *job, "handler_not_configured"))
 	}
-	workCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	workCtx, cancel := context.WithTimeout(ctx, 4*time.Minute)
 	err = handler(workCtx, *job)
 	cancel()
 	if err == nil || errors.Is(err, ErrLeaseLost) {

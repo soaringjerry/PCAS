@@ -6,7 +6,7 @@ import { useStore } from '../store/context'
 import { SideSheet } from './Overlay'
 import { Button, Empty } from './ui'
 
-const kindWords: Record<CandidateKind, string> = { task: '待办', idea: '想法', memory: '记忆' }
+const kindWords: Record<CandidateKind, string> = { unknown: '待分类', task: '待办', idea: '想法', memory: '记忆' }
 
 function CandidateItem({ c }: { c: Candidate }) {
   const { dispatch } = useStore()
@@ -29,6 +29,7 @@ function CandidateItem({ c }: { c: Candidate }) {
           <Button
             size="sm"
             variant="primary"
+            disabled={kind === 'unknown'}
             onClick={() => dispatch({ type: 'acceptCandidate', id: c.id, kind, text: c.text, memoryKind: c.memoryKind, projectId: c.projectId, due: c.due })}
           >
             收下

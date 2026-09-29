@@ -42,6 +42,7 @@ type IngestResult struct {
 }
 
 type SourceResult struct {
+	Derived    []Ref        `json:"derived"`
 	Source     Source       `json:"source"`
 	Processing []Processing `json:"processing"`
 }
@@ -106,6 +107,8 @@ type ExpandRequest struct {
 }
 
 type ExpandResult struct {
+	Entities  []Entity   `json:"entities"`
+	Episodes  []Episode  `json:"episodes"`
 	Sources   []Source   `json:"sources"`
 	Claims    []Claim    `json:"claims"`
 	Relations []Relation `json:"relations"`
@@ -119,7 +122,8 @@ type Retriever interface {
 }
 
 type CorrectRequest struct {
-	Target      Ref    `json:"target"` // expected version; reject concurrent changes
+	ChangeType  string `json:"change_type,omitempty"` // correction (default), change, supplement, evidence
+	Target      Ref    `json:"target"`                // expected version; reject concurrent changes
 	Replacement Claim  `json:"replacement"`
 	Reason      string `json:"reason"`
 	Evidence    []ID   `json:"evidence"`

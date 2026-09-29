@@ -15,3 +15,7 @@ dist/
 
 # Dependencies
 node_modules/
+web/test-results/
+web/playwright-report/
+config/models.json
+config/agent-tokens.json

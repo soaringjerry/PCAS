@@ -1,0 +1,63 @@
+package postgres
+
+import (
+	"context"
+	"math"
+	"time"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/worker"
+	"github.com/soaringjerry/PCAS/internal/workspace"
+)
+
+func (s *Store) reserveBackgroundCost(ctx context.Context, j worker.Job, cost float64) error {
+	return s.reserveModelCost(ctx, j.OwnerID, cost, &j)
+}
+func (s *Store) reserveModelCost(ctx context.Context, owner memory.ID, cost float64, j *worker.Job) error {
+	if cost < 0 || math.IsNaN(cost) || math.IsInf(cost, 0) {
+		return memory.ErrInvalid
+	}
+	scope := memory.Scope{OwnerID: owner, PrincipalID: "worker", IsOwner: true}
+	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		if err := s.ensureOwner(ctx, tx, scope); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(owner)); err != nil {
+			return err
+		}
+		var jobID any
+		if j != nil {
+			jobID = string(j.ID)
+			if err := lockJob(ctx, tx, *j); err != nil {
+				return err
+			}
+			var exists bool
+			if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM background_usage WHERE job_id=$1)", string(j.ID)).Scan(&exists); err != nil {
+				return err
+			}
+			if exists && j.Attempts != 1 {
+				return memory.ErrUnavailable
+			}
+		}
+		settings, err := queryDocument[workspace.Settings](ctx, tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1", string(owner))
+		if err != nil {
+			return err
+		}
+		loc, err := time.LoadLocation(settings.Timezone)
+		if err != nil {
+			return err
+		}
+		now := time.Now().In(loc)
+		start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
+		var spent float64
+		if err := tx.QueryRow(ctx, "SELECT coalesce((SELECT sum(reserved_cost) FROM agent_runs WHERE owner_id=$1 AND created_at>=$2),0)+coalesce((SELECT sum(reserved_cost) FROM background_usage WHERE owner_id=$1 AND created_at>=$2),0)", string(owner), start).Scan(&spent); err != nil {
+			return err
+		}
+		if spent+cost > settings.DailyBudget {
+			return memory.ErrUnavailable
+		}
+		_, err = tx.Exec(ctx, "INSERT INTO background_usage(owner_id,job_id,reserved_cost) VALUES($1,$2,$3)", string(owner), jobID, cost)
+		return err
+	})
+}

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
 type Server struct {
@@ -20,10 +21,14 @@ type Server struct {
 	auth      Authenticator
 	ready     func(context.Context) error
 	logger    *slog.Logger
+	options   Options
 }
 
-func New(sources memory.Sources, retriever memory.Retriever, auth Authenticator, ready func(context.Context) error, logger *slog.Logger) http.Handler {
+func New(sources memory.Sources, retriever memory.Retriever, auth Authenticator, ready func(context.Context) error, logger *slog.Logger, options ...Options) http.Handler {
 	s := &Server{sources: sources, retriever: retriever, auth: auth, ready: ready, logger: logger}
+	if len(options) > 0 {
+		s.options = options[0]
+	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
@@ -42,6 +47,7 @@ func New(sources memory.Sources, retriever memory.Retriever, auth Authenticator,
 	mux.HandleFunc("GET /v1/memory/sources/{id}", s.authorize(s.getSource))
 	mux.HandleFunc("POST /v1/memory/recall", s.authorize(s.recall))
 	mux.HandleFunc("POST /v1/memory/expand", s.authorize(s.expand))
+	s.workspaceRoutes(mux)
 	return mux
 }
 
@@ -57,6 +63,14 @@ func (s *Server) authorize(next endpoint) http.HandlerFunc {
 			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 			return
 		}
+		checkOrigin := sameOrigin
+		if sessions, ok := s.auth.(interface{ SameOrigin(*http.Request) bool }); ok {
+			checkOrigin = sessions.SameOrigin
+		}
+		if r.Method != "GET" && r.Method != "HEAD" && r.Header.Get("Authorization") == "" && !checkOrigin(r) {
+			s.fail(w, memory.ErrForbidden)
+			return
+		}
 		ctx, cancel := context.WithTimeout(r.Context(), 25*time.Second)
 		defer cancel()
 		next(w, r.WithContext(ctx), scope)
@@ -64,21 +78,22 @@ func (s *Server) authorize(next endpoint) http.HandlerFunc {
 }
 
 func (s *Server) capabilities(w http.ResponseWriter, r *http.Request, scope memory.Scope) {
-	retrieval := "not_configured"
-	if s.retriever != nil {
-		retrieval = "available"
+	available := func(on bool) string {
+		if on {
+			return "available"
+		}
+		return "not_configured"
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
-		"architecture": "1.0", "stage": "foundation",
-		"capabilities": map[string]string{
-			"text_ingestion": "available", "source_versions": "available", "source_read": "available",
-			"transactional_queue": "available", "text_chunking": "available",
-			"recall": retrieval, "expand": retrieval, "extraction": "not_configured",
-			"embedding": "not_configured", "tokenization": "not_configured", "attachments": "not_configured",
-			"correction": "not_implemented", "deletion": "not_implemented", "activity": "not_implemented",
-			"wakeups": "not_implemented", "agent_credentials": "not_implemented",
-		},
-	})
+	extraction, embedding := false, false
+	if s.options.Models != nil {
+		extraction = s.options.Models.Available(s.options.Models.Config.Extraction)
+		embedding = s.options.Models.Available(s.options.Models.Config.Embedding)
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"architecture": "1.0", "stage": "service", "capabilities": map[string]string{
+		"text_ingestion": "available", "source_versions": "available", "source_read": "available", "transactional_queue": "available", "text_chunking": "available",
+		"recall": available(s.retriever != nil), "expand": available(s.retriever != nil), "structured_write": available(s.options.Writer != nil), "extraction": available(extraction), "embedding": available(embedding), "tokenization": available(s.retriever != nil), "attachments": available(s.options.Attachments != nil),
+		"correction": available(s.options.Editor != nil), "deletion": available(s.options.Editor != nil), "activity": available(s.options.Activity != nil), "wakeups": available(s.options.Workspace != nil), "agent_credentials": "available",
+	}})
 }
 
 func (s *Server) ingest(w http.ResponseWriter, r *http.Request, scope memory.Scope) {
@@ -193,6 +208,8 @@ func (s *Server) fail(w http.ResponseWriter, err error) {
 		status, code = http.StatusGone, "reimport_blocked"
 	case errors.Is(err, memory.ErrUnavailable):
 		status, code = http.StatusNotImplemented, "capability_not_configured"
+	case errors.Is(err, workspace.ErrBudget):
+		status, code = http.StatusPaymentRequired, "daily_budget_exceeded"
 	default:
 		s.logger.Error("memory request failed") // no source text, token or SQL details
 	}

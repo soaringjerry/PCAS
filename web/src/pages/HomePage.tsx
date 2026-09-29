@@ -9,14 +9,14 @@ import { useShell } from '../store/shell'
 import { useToast } from '../store/toast'
 
 function BackgroundNote() {
-  const { state, runDemoImport } = useStore()
+  const { state } = useStore()
   const today = new Date().toDateString()
   const jobs = state.jobs.filter((j) => new Date(j.createdAt).toDateString() === today)
   const filed = jobs.filter((j) => j.title === '整理新记录').reduce((n, j) => n + Number(j.detail.match(/自动收下 (\d+)/)?.[1] ?? 0), 0)
   const woken = state.ideas.filter((i) => i.wake && new Date(i.wake.at).toDateString() === today).length
   const failed = state.jobs.filter((j) => j.status === 'failed').length
   const parts = [filed && `整理了 ${filed} 条记录`, woken && `唤醒了 ${woken} 个想法`].filter(Boolean)
-  const demoRunning = state.jobs.some((j) => j.id === 'j_demo' && j.status === 'running')
+
 
   return (
     <p className="quiet-foot">
@@ -24,18 +24,10 @@ function BackgroundNote() {
       {failed > 0 && (
         <>
           {' '}
-          <Link to="/library?tab=sources">{failed} 项导入没成功</Link>。
+          <Link to="/library?tab=sources">{failed} 项处理待完成</Link>。
         </>
       )}
-      {!state.demo.costReportImported && (
-        <>
-          {' '}
-          <button type="button" className="link-btn" style={{ fontSize: 'inherit', color: 'var(--blue)' }} onClick={runDemoImport}>
-            试试导入一份成本测算
-          </button>
-        </>
-      )}
-      {demoRunning && ' 正在导入…'}
+      <Link to="/library?tab=sources">导入资料</Link>
     </p>
   )
 }
@@ -73,10 +65,10 @@ export function HomePage() {
 
       <form
         className="capture"
-        onSubmit={(e) => {
+        onSubmit={async (e) => {
           e.preventDefault()
           if (!text.trim()) return
-          dispatch({ type: 'capture', text: text.trim() })
+          if (!await dispatch({ type: 'capture', text: text.trim() })) return
           setText('')
           toast.show('记下了，后台会整理')
         }}
@@ -107,9 +99,10 @@ export function HomePage() {
                   className="ai-btn"
                   disabled={!canAll}
                   title={canAll ? `让副手把 ${ready.length} 件事各推进一步` : '超过今天的额度'}
-                  onClick={() => {
-                    for (const i of ready) runAgent({ thingId: i.thing.id, agentId: agentFor(i.thing.id), kind: i.next!.kind, prompt: i.next!.prompt })
-                    toast.show(`副手开始推进 ${ready.length} 件事`)
+                  onClick={async () => {
+                    let started = 0
+                    for (const i of ready) if (await runAgent({ thingId: i.thing.id, agentId: agentFor(i.thing.id), kind: i.next!.kind, prompt: i.next!.prompt })) started++
+                    toast.show(`已提交 ${started} 件事`)
                   }}
                 >
                   <Sparkles size={12} />

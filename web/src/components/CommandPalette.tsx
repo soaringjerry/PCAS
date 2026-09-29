@@ -2,7 +2,7 @@ import { useMemo, useState, type ReactNode } from 'react'
 import { useMatch, useNavigate } from 'react-router'
 import { BookOpen, FolderPlus, House, Lightbulb, ListPlus, PenLine, Settings, Sparkles } from 'lucide-react'
 import { newId } from '../domain/ids'
-import { ongoingLine, urgentLine } from '../domain/lines'
+import { ongoingLine, urgentLine, selectedCost } from '../domain/lines'
 import { allThings, findThing, thingProjectId, thingTitle } from '../domain/things'
 import { useStore } from '../store/context'
 import { useShell } from '../store/shell'
@@ -32,8 +32,8 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
   const q = query.trim()
 
   const entries = useMemo<Entry[]>(() => {
-    const done = (fn: () => void) => () => {
-      fn()
+    const done = (fn: () => void | Promise<void>) => async () => {
+      await fn()
       onClose()
     }
     const go = (to: string) => done(() => navigate(to))
@@ -55,9 +55,9 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
           icon: <Sparkles size={16} style={{ color: 'var(--purple)' }} />,
           label: `让副手${next.label}`,
           text: next.label,
-          hint: `约 ¥${next.cost.toFixed(2)}`,
-          run: done(() => {
-            if (!runAgent({ thingId: current.id, agentId: agentFor(current.id), kind: next.kind, prompt: next.prompt })) toast.show('今天的额度用完了，可以在设置里调')
+          hint: `约 ¥${selectedCost(state, current, next.prompt, agentFor(current.id)).toFixed(2)}`,
+          run: done(async () => {
+            if (!await runAgent({ thingId: current.id, agentId: agentFor(current.id), kind: next.kind, prompt: next.prompt })) return
           }),
         })
       }
@@ -74,8 +74,8 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
         label: <>记下“{q}”</>,
         text: q,
         hint: '后台会整理',
-        run: done(() => {
-          dispatch({ type: 'capture', text: q })
+        run: done(async () => {
+          if (!await dispatch({ type: 'capture', text: q })) return
           toast.show('记下了')
         }),
       },
@@ -85,8 +85,8 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
         icon: <ListPlus size={16} />,
         label: `待办「${q}」`,
         text: q,
-        run: done(() => {
-          dispatch({ type: 'addTask', title: q, projectId })
+        run: done(async () => {
+          if (!await dispatch({ type: 'addTask', title: q, projectId })) return
           toast.show('加好了')
         }),
       },
@@ -96,9 +96,9 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
         icon: <Lightbulb size={16} />,
         label: `想法「${q}」`,
         text: q,
-        run: done(() => {
-          const id = newId('i')
-          dispatch({ type: 'addIdea', id, title: q, projectId })
+        run: done(async () => {
+          const id = newId()
+          if (!await dispatch({ type: 'addIdea', id, title: q, projectId })) return
           navigate(`/t/${id}`)
         }),
       },
@@ -108,9 +108,9 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
         icon: <FolderPlus size={16} />,
         label: `项目「${q}」`,
         text: q,
-        run: done(() => {
-          const id = newId('p')
-          dispatch({ type: 'addProject', id, name: q })
+        run: done(async () => {
+          const id = newId()
+          if (!await dispatch({ type: 'addProject', id, name: q })) return
           navigate(`/t/${id}`)
         }),
       },

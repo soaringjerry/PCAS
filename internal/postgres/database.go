@@ -11,12 +11,21 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/soaringjerry/PCAS/internal/ai"
+	"github.com/soaringjerry/PCAS/internal/memory"
 )
 
 //go:embed migrations/*.sql
 var migrations embed.FS
 
-type Store struct{ pool *pgxpool.Pool }
+type Store struct {
+	pool   *pgxpool.Pool
+	models *ai.Registry
+	blobs  memory.BlobStore
+}
+
+func (s *Store) SetModels(models *ai.Registry)   { s.models = models }
+func (s *Store) SetBlobs(blobs memory.BlobStore) { s.blobs = blobs }
 
 func Open(ctx context.Context, url string) (*Store, error) {
 	config, err := pgxpool.ParseConfig(url)

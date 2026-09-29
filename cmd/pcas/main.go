@@ -11,6 +11,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/soaringjerry/PCAS/internal/ai"
+	"github.com/soaringjerry/PCAS/internal/blob"
 	"github.com/soaringjerry/PCAS/internal/config"
 	"github.com/soaringjerry/PCAS/internal/httpapi"
 	"github.com/soaringjerry/PCAS/internal/memory"
@@ -59,11 +61,45 @@ func run(ctx context.Context, args []string, logger *slog.Logger) error {
 	if err != nil {
 		return err
 	}
-	if command == "worker" {
-		logger.Info("memory worker started", "handlers", []string{"source.chunk"})
-		return worker.New(db, map[string]worker.Handler{"source.chunk": db.ProcessChunks}, logger).Run(ctx)
+	codex, err := ai.NewCodex(os.Getenv("PCAS_CODEX_BINARY"), os.Getenv("PCAS_CODEX_HOME"))
+	if err != nil {
+		return err
 	}
-	api := httpapi.New(memory.NewService(db), nil, httpapi.NewOwnerToken(cfg.APIToken, cfg.OwnerID), db.Ping, logger)
+	if codex != nil {
+		defer codex.Close()
+	}
+	models, err := ai.Load(os.Getenv("PCAS_MODELS_FILE"), codex)
+	if err != nil {
+		return err
+	}
+	models.ReloadSubscription = command == "worker"
+	db.SetModels(models)
+	blobDir := os.Getenv("PCAS_BLOB_DIR")
+	if blobDir == "" {
+		blobDir = "data/blobs"
+	}
+	files, err := blob.NewFiles(blobDir)
+	if err != nil {
+		return err
+	}
+	db.SetBlobs(files)
+	if command == "worker" {
+		logger.Info("memory worker started")
+		return worker.New(db, map[string]worker.Handler{"source.parse": db.ProcessAttachment, "source.chunk": db.ProcessChunks, "source.tokenize": db.ProcessIndex, "memory.index": db.ProcessIndex, "source.extract": db.ProcessExtraction, "source.embed": db.ProcessEmbedding, "memory.embed": db.ProcessEmbedding}, logger).Run(ctx)
+	}
+	webDir := os.Getenv("PCAS_WEB_DIR")
+	if webDir == "" {
+		webDir = "web/dist"
+	}
+	credentials, err := httpapi.LoadCredentials(cfg.APIToken, cfg.OwnerID, os.Getenv("PCAS_AGENT_TOKENS_FILE"))
+	if err != nil {
+		return err
+	}
+	api := httpapi.New(memory.NewService(db), db, httpapi.NewSessions(credentials, cfg.PublicURL), db.Ping, logger, httpapi.Options{Attachments: db, Writer: db, Workspace: db, Editor: db, Activity: db, Models: models, WebDir: webDir})
+	workCtx, stopWorkers := context.WithCancel(ctx)
+	defer stopWorkers()
+	go func() { _ = db.RunAgents(workCtx, logger) }()
+	go func() { _ = db.RunReminders(workCtx, logger) }()
 	server := &http.Server{Addr: cfg.HTTPAddress, Handler: api, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16 << 10}
 	stopped := make(chan error, 1)
 	go func() { stopped <- server.ListenAndServe() }()

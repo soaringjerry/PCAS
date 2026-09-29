@@ -68,10 +68,10 @@ export function Shell() {
       closeDrawer: () => setDrawer(false),
       draft: (id) => saved.drafts[id] ?? '',
       setDraft: (id, text) => setSaved((s) => ({ ...s, drafts: { ...s.drafts, [id]: text } })),
-      agentFor: (id) => saved.agents[id] ?? 'a_claude',
+      agentFor: (id) => state.agents.find((a) => a.id === saved.agents[id] && a.enabled)?.id ?? state.agents.find((a) => a.enabled)?.id ?? 'manual',
       setAgentFor: (id, agentId) => setSaved((s) => ({ ...s, agents: { ...s.agents, [id]: agentId } })),
     }),
-    [saved],
+    [saved, state.agents],
   )
   const toastApi = useMemo<ToastApi>(() => ({ show: (text, link) => setToast({ text, link, key: Date.now() }) }), [])
   const closePalette = useCallback(() => setPalette(false), [])

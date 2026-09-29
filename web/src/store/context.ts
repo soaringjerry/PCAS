@@ -1,6 +1,6 @@
-import { createContext, useContext, type Dispatch } from 'react'
+import { createContext, useContext } from 'react'
 import type { RunKind, State } from '../domain/types'
-import type { Action } from './reducer'
+import type { Action } from './actions'
 
 export interface RunRequest {
   thingId: string
@@ -11,10 +11,12 @@ export interface RunRequest {
 
 export interface Store {
   state: State
-  dispatch: Dispatch<Action>
-  runDemoImport: () => void
+  dispatch: (action: Action) => Promise<boolean>
+  importText: (title: string, text: string) => Promise<boolean>
+  importAttachment: (file: File) => Promise<boolean>
+  refresh: () => Promise<void>
   /** Start an AI run on a thing; returns the run id. */
-  runAgent: (request: RunRequest) => string | undefined
+  runAgent: (request: RunRequest) => Promise<string | undefined>
 }
 
 export const StoreContext = createContext<Store | null>(null)

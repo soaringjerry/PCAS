@@ -50,7 +50,7 @@ export function Sidebar({ open }: { open: boolean }) {
           onClick={() => {
             const name = window.prompt('新项目的名字')?.trim()
             if (!name) return
-            const id = newId('p')
+            const id = newId()
             dispatch({ type: 'addProject', id, name })
             closeDrawer()
             navigate(`/t/${id}`)

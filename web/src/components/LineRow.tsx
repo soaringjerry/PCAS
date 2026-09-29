@@ -1,6 +1,6 @@
 import { Link } from 'react-router'
 import { Check, Lightbulb, Sparkles } from 'lucide-react'
-import { spentToday, type LineItem } from '../domain/lines'
+import { spentToday, selectedCost, type LineItem } from '../domain/lines'
 import { thingTitle } from '../domain/things'
 import { useStore } from '../store/context'
 import { useShell } from '../store/shell'
@@ -12,7 +12,8 @@ export function LineRow({ item }: { item: LineItem }) {
   const { agentFor } = useShell()
   const toast = useToast()
   const { thing, next } = item
-  const overBudget = next ? spentToday(state) + next.cost > state.settings.dailyBudget : false
+  const cost = next ? selectedCost(state, thing, next.prompt, agentFor(thing.id)) : 0
+  const overBudget = next ? spentToday(state) + cost > state.settings.dailyBudget : false
 
   return (
     <Link to={`/t/${thing.id}`} className="lrow">
@@ -22,10 +23,10 @@ export function LineRow({ item }: { item: LineItem }) {
           className={`circle${thing.item.status === 'doing' ? ' doing' : ''}${thing.item.status === 'waiting' ? ' waiting' : ''}`}
           aria-label="完成"
           title="完成"
-          onClick={(e) => {
+          onClick={async (e) => {
             e.preventDefault()
             e.stopPropagation()
-            dispatch({ type: 'setTaskStatus', id: thing.id, status: 'done' })
+            if (!await dispatch({ type: 'setTaskStatus', id: thing.id, status: 'done' })) return
             toast.show(`完成：${thing.item.title}`)
           }}
         >
@@ -50,17 +51,17 @@ export function LineRow({ item }: { item: LineItem }) {
               className="ai-btn"
               disabled={overBudget}
               title={overBudget ? '今天的额度用完了' : `让副手${next.label}`}
-              onClick={(e) => {
+              onClick={async (e) => {
                 e.preventDefault()
                 e.stopPropagation()
-                if (runAgent({ thingId: thing.id, agentId: agentFor(thing.id), kind: next.kind, prompt: next.prompt })) {
+                if (await runAgent({ thingId: thing.id, agentId: agentFor(thing.id), kind: next.kind, prompt: next.prompt })) {
                   toast.show(`副手开始${next.label}了`)
                 }
               }}
             >
               <Sparkles size={12} />
               {next.label}
-              <span className="cost">¥{next.cost.toFixed(2)}</span>
+              <span className="cost">¥{cost.toFixed(2)}</span>
             </button>
           </span>
         )

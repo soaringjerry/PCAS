@@ -1,3 +1,4 @@
+import { SourceSheet } from './SourceSheet'
 import { useState } from 'react'
 import { Link } from 'react-router'
 import { ArrowUpRight, Check, CornerDownRight, FileText, Flag, PenLine, Send, Sparkles } from 'lucide-react'
@@ -34,12 +35,14 @@ export function ProjectLink({ id }: { id?: string }) {
 }
 
 export function FromLine({ source, quote = true }: { source: SourceRef; quote?: boolean }) {
+  const [open, setOpen] = useState(false)
   return (
     <div className="stack-sm" style={{ gap: 4 }}>
-      <span className="from">
+      <button type="button" className="from link-btn" onClick={() => setOpen(true)}>
         <CornerDownRight size={12} />
         {source.label} · {formatAgo(source.at)}
-      </span>
+      </button>
+      {open && <SourceSheet id={source.sourceId} version={source.version} onClose={() => setOpen(false)} />}
       {quote && source.excerpt && <div className="quote">“{source.excerpt}”</div>}
     </div>
   )

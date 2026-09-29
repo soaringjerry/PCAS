@@ -1,3 +1,7 @@
+import { RecallSheet } from '../components/RecallSheet'
+import { SourceSheet } from '../components/SourceSheet'
+import { ImportSheet } from '../components/ImportSheet'
+import { downloadExport } from '../store/api'
 import { useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { Download, RotateCw, Search, Trash2, Upload } from 'lucide-react'
@@ -20,6 +24,7 @@ function MemorySheet({ memory, onClose }: { memory: Memory; onClose: () => void 
   const [text, setText] = useState(memory.text)
   const [reason, setReason] = useState('')
   const [deleting, setDeleting] = useState(false)
+  const [includeSources, setIncludeSources] = useState(false)
   const runs = state.runs.filter((r) => r.contextMemoryIds.includes(memory.id))
   const samples = state.samples.filter((s) => s.origin.memoryId === memory.id)
   const changed = text.trim() !== memory.text
@@ -47,8 +52,8 @@ function MemorySheet({ memory, onClose }: { memory: Memory; onClose: () => void 
               size="sm"
               variant="primary"
               disabled={!changed || !text.trim()}
-              onClick={() => {
-                dispatch({ type: 'editMemory', id: memory.id, text: text.trim(), reason: reason.trim() })
+              onClick={async () => {
+                if (!(await dispatch({ type: 'editMemory', id: memory.id, text: text.trim(), reason: reason.trim() }))) return
                 setReason('')
                 toast.show('改好了，旧版本也留着')
               }}
@@ -63,6 +68,7 @@ function MemorySheet({ memory, onClose }: { memory: Memory; onClose: () => void 
           </div>
           <div className="row small muted">
             <Fade value={memory.exposure} />
+            <Button size="sm" variant="quiet" onClick={() => dispatch({ type: 'pinMemory', id: memory.id })}>{memory.pinned ? '取消固定保留' : '固定保留'}</Button>
             <span>{memory.exposure < 0.4 ? '很久没用到，已经变淡，但还在' : `最近用到：${formatAgo(memory.lastUsedAt)}`}</span>
           </div>
         </div>
@@ -144,8 +150,8 @@ function MemorySheet({ memory, onClose }: { memory: Memory; onClose: () => void 
               </Button>
               <Button
                 variant="primary"
-                onClick={() => {
-                  dispatch({ type: 'deleteMemory', id: memory.id })
+                onClick={async () => {
+                  if (!(await dispatch({ type: 'deleteMemory', id: memory.id, includeSources }))) return
                   onClose()
                   toast.show('删掉了')
                 }}
@@ -155,11 +161,12 @@ function MemorySheet({ memory, onClose }: { memory: Memory; onClose: () => void 
             </>
           }
         >
-          <p>删掉之后，检索、摘要、交接和导出都不会再用到它。</p>
+          <p>删除这条结构化记忆及其派生内容。保留的原文仍可被检索。</p>
+          <label className="check"><input type="checkbox" checked={includeSources} onChange={(e) => setIncludeSources(e.target.checked)} />同时删除来源原文及从这些来源提取的其他记忆</label>
           {(runs.length > 0 || samples.length > 0) && (
             <p className="small muted">
-              {runs.length > 0 && `${runs.length} 次还没采纳的 AI 结果会标成可能过时。`}
-              {samples.length > 0 && `${samples.length} 条由它来的训练样本会被排除。`}
+              {runs.length > 0 && `${runs.length} 次相关 AI 结果及由其采纳的副本会删除。`}
+              {samples.length > 0 && `${samples.length} 条由它来的训练样本会删除。`}
             </p>
           )}
         </Modal>
@@ -174,6 +181,7 @@ function MemoryTab() {
   const [kind, setKind] = useState<MemoryKind | 'all'>('all')
   const [trust, setTrust] = useState<Epistemic | 'all'>('all')
   const [query, setQuery] = useState('')
+  const [recalling, setRecalling] = useState(false)
   const open = state.memories.find((m) => m.id === params.get('m'))
   const shown = state.memories
     .filter((m) => kind === 'all' || m.kind === kind)
@@ -183,6 +191,7 @@ function MemoryTab() {
 
   return (
     <>
+      {recalling && <RecallSheet query={query} onClose={() => setRecalling(false)} />}
       <div className="toolbar">
         <Seg
           label="类型"
@@ -203,9 +212,10 @@ function MemoryTab() {
         />
         <label className="search">
           <Search size={15} />
-          <input placeholder="搜记忆…" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="搜索记忆" />
+          <input placeholder="筛选当前记忆…" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="搜索记忆" />
         </label>
       </div>
+      <Button size="sm" onClick={() => setRecalling(true)}>深入查找 / 完整历史</Button>
       <p className="small muted" style={{ marginBottom: 10 }}>
         波浪下划线是 AI 推测的，还没经过你确认。长期不用的记忆会变淡，但不会消失。
       </p>
@@ -246,17 +256,21 @@ function MemoryTab() {
 }
 
 function SourcesTab() {
-  const { state, dispatch, runDemoImport } = useStore()
+  const [importing, setImporting] = useState(false)
+  const [sourceId, setSourceId] = useState<string | null>(null)
+  const { state, dispatch } = useStore()
   const rank = { running: 0, failed: 1, waiting: 2, queued: 3, done: 4 }
   const jobs = [...state.jobs].sort((a, b) => rank[a.status] - rank[b.status])
   return (
     <div className="stack">
       <div className="spread">
         <p className="small muted">资料从哪来。各平台能用的导入方式还在逐个验证。</p>
-        <Button size="sm" icon={<Upload size={14} />} disabled={state.demo.costReportImported} onClick={runDemoImport}>
+        <Button size="sm" icon={<Upload size={14} />} onClick={() => setImporting(true)}>
           导入资料
         </Button>
       </div>
+      {sourceId && <SourceSheet id={sourceId} onClose={() => setSourceId(null)} />}
+      {importing && <ImportSheet onClose={() => setImporting(false)} />}
       <div className="sources-grid">
         {state.sources.map((s) => (
           <div key={s.id} className="sheet sheet-pad stack-sm">
@@ -273,6 +287,7 @@ function SourcesTab() {
               <Tag tone={sourceStatusLabel[s.status].tone}>{sourceStatusLabel[s.status].text}</Tag>
             </div>
             <p className="small">{s.note}</p>
+            <Button size="sm" variant="quiet" onClick={() => setSourceId(s.id)}>查看原文</Button>
             <div className="meta">
               <span>{s.itemCount} 条</span>
               {s.lastSyncAt && <span>{formatAgo(s.lastSyncAt)}更新</span>}
@@ -319,23 +334,6 @@ function exportable(s: TrainingSample, confirmedOnly: boolean) {
   return s.state === 'included' && !s.stale && (!confirmedOnly || s.epistemic === 'confirmed')
 }
 
-function download(samples: TrainingSample[]) {
-  const lines = samples.map((s) =>
-    JSON.stringify({
-      messages: [
-        { role: 'user', content: s.prompt },
-        { role: 'assistant', content: s.response },
-      ],
-      metadata: { id: s.id, kind: s.kind, origin: s.origin.label, version: s.version },
-    }),
-  )
-  const url = URL.createObjectURL(new Blob([lines.join('\n') + '\n'], { type: 'application/jsonl' }))
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `pcas-training-${new Date().toISOString().slice(0, 10)}.jsonl`
-  a.click()
-  URL.revokeObjectURL(url)
-}
 
 function TrainingTab() {
   const { state, dispatch } = useStore()
@@ -351,7 +349,7 @@ function TrainingTab() {
           </div>
           <div className="row-nowrap">
             <span className="small muted">{ready.length} 条可以导出</span>
-            <Button variant="primary" size="sm" icon={<Download size={14} />} disabled={!ready.length} onClick={() => download(ready)}>
+            <Button variant="primary" size="sm" icon={<Download size={14} />} disabled={!ready.length} onClick={() => void downloadExport(true, confirmedOnly).catch((e: Error) => window.alert(e.message))}>
               导出 JSONL
             </Button>
           </div>

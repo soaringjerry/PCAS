@@ -1,0 +1,6 @@
+{
+  "providers": [],
+  "extraction_provider": "chatgpt",
+  "embedding_provider": "",
+  "transcription_provider": ""
+}

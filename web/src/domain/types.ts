@@ -11,6 +11,7 @@ export type Actor = 'user' | 'ai' | 'import' | 'system'
 
 /** Points back to the raw material a record came from. */
 export interface SourceRef {
+  version?: number
   sourceId: ID
   label: string
   excerpt?: string
@@ -111,7 +112,7 @@ export interface Project {
   updatedAt: string
 }
 
-export type MemoryKind = 'fact' | 'preference' | 'decision'
+export type MemoryKind = 'fact' | 'preference' | 'decision' | 'intention' | 'plan'
 
 export interface MemoryVersion {
   at: string
@@ -121,6 +122,8 @@ export interface MemoryVersion {
 }
 
 export interface Memory {
+  recordVersion: number
+  pinned: boolean
   id: ID
   kind: MemoryKind
   text: string
@@ -135,7 +138,7 @@ export interface Memory {
   lastUsedAt: string
 }
 
-export type CandidateKind = 'task' | 'idea' | 'memory'
+export type CandidateKind = 'task' | 'idea' | 'memory' | 'unknown'
 export type CandidateState = 'pending' | 'accepted' | 'ignored' | 'merged'
 
 export interface Candidate {
@@ -152,7 +155,7 @@ export interface Candidate {
   createdAt: string
 }
 
-export type SourceStatus = 'connected' | 'manual' | 'unverified' | 'failed'
+export type SourceStatus = 'connected' | 'manual' | 'unverified' | 'failed' | 'syncing'
 
 export interface Source {
   id: ID
@@ -179,6 +182,11 @@ export interface Job {
 }
 
 export interface Agent {
+  protocol?: string
+  available: boolean
+  inputPrice: number
+  outputPrice: number
+  maxOutput: number
   id: ID
   name: string
   channel: 'mcp' | 'api' | 'manual'
@@ -210,6 +218,7 @@ export type RunStatus = 'running' | 'waiting' | 'done' | 'failed'
  * exactly what the agent received; results come back onto the same thing.
  */
 export interface Run {
+  error?: string
   id: ID
   thingId: ID
   agentId: ID
@@ -259,6 +268,8 @@ export interface Settings {
 }
 
 export interface State {
+  budgetUsage: number
+  revision: number
   version: number
   settings: Settings
   tasks: Task[]
@@ -274,6 +285,4 @@ export interface State {
   /** Memories the user left out of a thing's AI context. */
   excludedMemories: Record<ID, ID[]>
   samples: TrainingSample[]
-  /** Guided demo of the PRD §7 scenario. */
-  demo: { costReportImported: boolean }
 }

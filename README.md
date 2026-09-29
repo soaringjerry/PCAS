@@ -1,22 +1,40 @@
 # PCAS
 
-**Personal Central AI System：以个人长期记忆为核心的 AI 工作系统。**
+PCAS 把待办、想法、项目和 AI 工作放在同一套个人连续记忆之上。前端通过 Go 服务读写 PostgreSQL；浏览器只保留未发送的草稿和界面偏好。记忆的原文、陈述、版本、证据与授权由统一服务维护。
 
-PCAS 覆盖工作、生活及临时交流，统一管理分散在不同应用里的资料、想法和待办，让任务、IDEA 和项目独立于聊天持续存在，
-并在授权范围内让不同的 AI 共用同一份记忆。
+- [记忆架构定稿 1.0](docs/memory-architecture.md)
+- [后端接口、配置与验证边界](docs/memory-service.md)
+- [部署与模型接入](docs/deployment.md)
+- [产品需求](docs/prd.md)
+- [前端](web/README.md)
 
-> 项目已重新定位，正在从零重写。完整需求见 [产品需求文档](docs/prd.md)，记忆系统设计见 [记忆架构定稿 1.0](docs/memory-architecture.md)。
+## 运行
 
-## 状态
+需要 Docker Compose。复制 `.env.example` 为 `.env`，设置独立的随机数据库密码、所有者 UUID 和至少 32 字符的随机 `PCAS_API_TOKEN`。不要提交 `.env`。
 
-记忆架构已定稿，首版采用 Go 记忆服务与后台 worker、PostgreSQL 和 pgvector，由统一服务协调上下文、结构化与向量三层记忆。
+```sh
+chmod 600 .env
+docker compose build api
+docker compose up -d --no-build
+```
 
-记忆基础服务骨架已建立：Go API、后台 worker、数据库迁移和事务队列可以运行，支持原文版本化保存、授权读取与后台分块。运行方式、模块边界和完整实现进度见 [记忆服务说明](docs/memory-service.md)。
+默认入口 `http://127.0.0.1:12352`。登录密码是服务端 `PCAS_API_TOKEN`。公网部署设置 `PCAS_BIND_ADDRESS=0.0.0.0` 和精确的 HTTPS `PCAS_PUBLIC_URL`。数据库不发布端口。
 
-前端交互原型位于 [`web/`](web/README.md)，目前仍使用浏览器本地数据，尚未接入记忆服务。抽取、检索、纠正传播、衰减与唤醒等能力将按架构定稿继续实现。
+设置页支持官方 Codex 的 ChatGPT 设备登录；API 模型从服务端 JSON 配置加载，支持 OpenAI Chat Completions 兼容协议、Responses 和 Anthropic Messages。手动交接无需模型账户。语义向量和音频转录单独配置，未配置时保留原文并展示处理缺口。
 
-## 旧版本
+## 检查
 
-旧版 PCAS（事件总线与策略路由引擎）已归档在 [`legacy`](../../tree/legacy) 分支，
-历史版本标签 v0.0.1 到 v0.1.2 保持不变。旧版积累的经验整理在
-[旧版经验记录](docs/legacy-lessons.md)。
+Go 版本由 `go.mod` 指定，前端需要 Node.js 22.12+。
+
+```sh
+make check
+# PostgreSQL 必须支持 vector；测试在独立临时 schema 中执行。
+PCAS_TEST_DATABASE_URL='postgres://user:password@localhost/test?sslmode=disable' make test-integration
+cd web
+npm ci
+npm run lint
+npm run type-check
+npm run build
+```
+
+真实浏览器回放需要一个使用临时数据库的服务，见 [前端测试说明](web/README.md)。验证范围与未完成的架构评测列在 [服务文档](docs/memory-service.md)，不将适配器测试等同于真实账户调用或完整召回率验收。

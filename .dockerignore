@@ -1,7 +1,12 @@
 .git
 .env
 .env.*
-web
+web/node_modules
+web/dist
+web/test-results
+web/playwright-report
+config/models.json
+config/agent-tokens.json
 data
 bin
 docs

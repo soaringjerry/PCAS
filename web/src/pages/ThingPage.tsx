@@ -39,9 +39,9 @@ function Header({ thing }: { thing: Thing }) {
             e.currentTarget.blur()
           }
         }}
-        onBlur={(e) => {
+        onBlur={async (e) => {
           const title = e.target.value.trim()
-          if (title && title !== thingTitle(thing)) dispatch({ type: 'renameThing', id: thing.id, title })
+          if (title && title !== thingTitle(thing)) if (!(await dispatch({ type: 'renameThing', id: thing.id, title }))) return
         }}
       />
       <Meta thing={thing} />
@@ -51,10 +51,10 @@ function Header({ thing }: { thing: Thing }) {
         defaultValue={notes}
         placeholder={thing.kind === 'project' ? '这个项目想做成什么' : '补充点什么'}
         aria-label="说明"
-        onBlur={(e) => {
+        onBlur={async (e) => {
           if (e.target.value === notes) return
-          if (thing.kind === 'project') dispatch({ type: 'updateProject', id: thing.id, patch: { goal: e.target.value } })
-          else dispatch({ type: 'setNotes', id: thing.id, text: e.target.value })
+          if (thing.kind === 'project') if (!(await dispatch({ type: 'updateProject', id: thing.id, patch: { goal: e.target.value } }))) return
+          else if (!(await dispatch({ type: 'setNotes', id: thing.id, text: e.target.value }))) return
         }}
       />
     </>
@@ -173,6 +173,7 @@ function IdeaBanner({ thing }: { thing: Extract<Thing, { kind: 'idea' }> }) {
   const { state, dispatch } = useStore()
   const i = thing.item
   const [cond, setCond] = useState('')
+  const [conditionDue, setConditionDue] = useState('')
 
   if (i.status === 'awakened') {
     return (
@@ -223,17 +224,20 @@ function IdeaBanner({ thing }: { thing: Extract<Thing, { kind: 'idea' }> }) {
         ))}
         <form
           className="check-row"
-          onSubmit={(e) => {
+          onSubmit={async (e) => {
             e.preventDefault()
             if (!cond.trim()) return
-            dispatch({ type: 'addCondition', ideaId: i.id, description: cond.trim() })
+            if (!(await dispatch({ type: 'addCondition', ideaId: i.id, description: cond.trim(), due: conditionDue ? new Date(conditionDue).toISOString() : undefined }))) return
             setCond('')
+            setConditionDue('')
           }}
         >
           <span className="plus">
             <Plus size={16} />
           </span>
           <input className="add" value={cond} onChange={(e) => setCond(e.target.value)} placeholder="再加一个条件" aria-label="再加一个条件" />
+          <input type="datetime-local" className="inline-select" aria-label="条件到期时间（可选）" value={conditionDue} onChange={(e) => setConditionDue(e.target.value)} />
+          <button type="submit" className="btn btn-sm">添加</button>
         </form>
       </div>
     </section>
@@ -269,10 +273,10 @@ function Checklist({ task }: { task: Task }) {
         ))}
         <form
           className="check-row"
-          onSubmit={(e) => {
+          onSubmit={async (e) => {
             e.preventDefault()
             if (!text.trim()) return
-            dispatch({ type: 'addCheck', taskId: task.id, text: text.trim() })
+            if (!(await dispatch({ type: 'addCheck', taskId: task.id, text: text.trim() }))) return
             setText('')
           }}
         >
@@ -317,10 +321,10 @@ function ProjectItems({ projectId }: { projectId: string }) {
         )}
         <form
           className="check-row"
-          onSubmit={(e) => {
+          onSubmit={async (e) => {
             e.preventDefault()
             if (!text.trim()) return
-            dispatch({ type: 'addTask', title: text.trim(), projectId })
+            if (!(await dispatch({ type: 'addTask', title: text.trim(), projectId }))) return
             setText('')
           }}
         >
@@ -391,11 +395,13 @@ function RunCard({ thing, run }: { thing: Thing; run: Run }) {
 
       {run.status === 'waiting' && (
         <div className="card-body stack-sm">
+          {run.staleContext && <p className="small muted">记忆或授权已经变化，请重新生成交接内容。</p>}
           <p className="small muted">这个副手要你手动转交：复制下面的内容发给它，再把回答贴回来。</p>
           <div className="row">
             <button
               type="button"
               className="btn btn-sm"
+              disabled={run.staleContext}
               onClick={() => {
                 void navigator.clipboard?.writeText(run.brief).then(
                   () => toast.show('复制好了'),
@@ -417,7 +423,7 @@ function RunCard({ thing, run }: { thing: Thing; run: Run }) {
           )}
           <textarea value={pasted} onChange={(e) => setPasted(e.target.value)} placeholder="把它的回答贴在这里" aria-label="贴回回答" style={{ minHeight: 120 }} />
           <div className="row">
-            <button type="button" className="btn btn-primary btn-sm" disabled={!pasted.trim()} onClick={() => dispatch({ type: 'pasteRunResult', id: run.id, output: pasted.trim() })}>
+            <button type="button" className="btn btn-primary btn-sm" disabled={!pasted.trim() || run.staleContext} onClick={() => dispatch({ type: 'pasteRunResult', id: run.id, output: pasted.trim() })}>
               放回来
             </button>
             <button type="button" className="btn btn-quiet btn-sm" onClick={() => dispatch({ type: 'discardRun', id: run.id })}>
@@ -428,7 +434,7 @@ function RunCard({ thing, run }: { thing: Thing; run: Run }) {
       )}
 
       {run.status === 'failed' && (
-        <div className="card-body small muted">没做成。{run.output}</div>
+        <div className="card-body small muted">没做成。{run.error ?? run.output}</div>
       )}
 
       {run.status === 'done' && run.output && (
@@ -447,8 +453,9 @@ function RunCard({ thing, run }: { thing: Thing; run: Run }) {
             <button
               type="button"
               className="btn btn-primary btn-sm"
-              onClick={() => {
-                dispatch({ type: 'adoptRun', id: run.id, as: choice.as, text: editing ? text : run.output! })
+              disabled={run.staleContext}
+              onClick={async () => {
+                if (!(await dispatch({ type: 'adoptRun', id: run.id, as: choice.as, text: editing ? text : run.output! }))) return
                 toast.show(`采纳了，${adoptedText[choice.as]}`)
               }}
             >
@@ -522,8 +529,8 @@ function DocCard({ doc }: { doc: Doc }) {
             <button
               type="button"
               className="btn btn-primary btn-sm"
-              onClick={() => {
-                dispatch({ type: 'updateDoc', id: doc.id, patch: { body, title: body.split('\n')[0].replace(/^#+\s*/, '').slice(0, 40) || doc.title } })
+              onClick={async () => {
+                if (!(await dispatch({ type: 'updateDoc', id: doc.id, patch: { body, title: body.split('\n')[0].replace(/^#+\s*/, '').slice(0, 40) || doc.title } }))) return
                 setEditing(false)
               }}
             >
@@ -550,8 +557,8 @@ function DocCard({ doc }: { doc: Doc }) {
           type="button"
           className="btn btn-quiet btn-sm"
           style={{ color: 'var(--label-2)' }}
-          onClick={() => {
-            if (window.confirm(`删掉文档「${doc.title}」？`)) dispatch({ type: 'deleteDoc', id: doc.id })
+          onClick={async () => {
+            if (window.confirm(`删掉文档「${doc.title}」？`)) if (!(await dispatch({ type: 'deleteDoc', id: doc.id }))) return
           }}
         >
           删除
@@ -577,9 +584,9 @@ function Record({ thing }: { thing: Thing }) {
         <button
           type="button"
           className="link-btn"
-          onClick={() => {
+          onClick={async () => {
             const at = new Date().toISOString()
-            dispatch({ type: 'createDoc', doc: { id: newId('d'), thingId: thing.id, title: '新文档', body: '', by: 'user', createdAt: at, updatedAt: at } })
+            if (!(await dispatch({ type: 'createDoc', doc: { id: newId(), thingId: thing.id, title: '新文档', body: '', by: 'user', createdAt: at, updatedAt: at } }))) return
           }}
         >
           写文档
@@ -620,7 +627,6 @@ function History({ thing }: { thing: Thing }) {
 function Composer({ thing }: { thing: Thing }) {
   const { state, dispatch, runAgent } = useStore()
   const { draft, setDraft, agentFor, setAgentFor } = useShell()
-  const toast = useToast()
   const [showContext, setShowContext] = useState(false)
   const agentId = agentFor(thing.id)
   const agent = state.agents.find((a) => a.id === agentId) ?? state.agents[0]
@@ -629,18 +635,17 @@ function Composer({ thing }: { thing: Thing }) {
   const text = draft(thing.id)
   const manual = agent.channel === 'manual'
   const left = state.settings.dailyBudget - spentToday(state)
-  const costOf = (prompt: string) => (manual ? 0 : estimateCost(buildBrief(state, thing, prompt, included.map((c) => c.memory)).length))
+  const costOf = (prompt: string) => (manual ? 0 : estimateCost(buildBrief(state, thing, prompt, included.map((c) => c.memory)), agent))
 
-  const send = (kind: RunKind, prompt: string) => {
-    if (runAgent({ thingId: thing.id, agentId: agent.id, kind, prompt })) return true
-    toast.show('今天的额度用完了，可以在设置里调', { to: '/settings', label: '去设置' })
+  const send = async (kind: RunKind, prompt: string) => {
+    if (await runAgent({ thingId: thing.id, agentId: agent.id, kind, prompt })) return true
     return false
   }
 
-  const submit = () => {
+  const submit = async () => {
     const prompt = text.trim()
     if (!prompt) return
-    if (send('ask', prompt)) setDraft(thing.id, '')
+    if (await send('ask', prompt)) setDraft(thing.id, '')
   }
 
   return (
@@ -656,6 +661,7 @@ function Composer({ thing }: { thing: Thing }) {
             </button>
           )
         })}
+        {agent.protocol === 'codex' && <span className="tiny muted">使用订阅额度</span>}
         <span className="grow" />
         <button type="button" className="link-btn small" style={{ color: 'var(--label-2)' }} onClick={() => setShowContext((v) => !v)} aria-expanded={showContext}>
           带上 {included.length} 条记忆
@@ -682,9 +688,9 @@ function Composer({ thing }: { thing: Thing }) {
                   type="button"
                   className="link-btn tiny"
                   title="这是从资料里推测的；确认后就会带上"
-                  onClick={(e) => {
+                  onClick={async (e) => {
                     e.preventDefault()
-                    dispatch({ type: 'confirmMemory', id: memory.id })
+                    if (!(await dispatch({ type: 'confirmMemory', id: memory.id }))) return
                   }}
                 >
                   确认后带上

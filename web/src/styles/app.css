@@ -1911,3 +1911,7 @@ kbd {
     transition: none !important;
   }
 }
+
+.connection-banner { position: sticky; top: 0; z-index: 100; padding: 12px 20px; background: #fff0d7; color: #594428; display: flex; justify-content: space-between; gap: 16px; }
+.save-status { position: fixed; right: 16px; top: 10px; z-index: 99; color: var(--label-2); font-size: 12px; }
+.device-code { font-size: 26px; letter-spacing: .12em; }

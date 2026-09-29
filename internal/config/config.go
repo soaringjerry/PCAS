@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"strings"
 
@@ -13,10 +14,18 @@ type Config struct {
 	HTTPAddress string
 	APIToken    string
 	OwnerID     memory.ID
+	PublicURL   string
 }
 
 func Load(command string) (Config, error) {
 	c := Config{DatabaseURL: os.Getenv("PCAS_DATABASE_URL"), HTTPAddress: os.Getenv("PCAS_HTTP_ADDR"), APIToken: os.Getenv("PCAS_API_TOKEN"), OwnerID: memory.ID(os.Getenv("PCAS_OWNER_ID"))}
+	c.PublicURL = strings.TrimRight(os.Getenv("PCAS_PUBLIC_URL"), "/")
+	if c.PublicURL != "" {
+		u, err := url.Parse(c.PublicURL)
+		if err != nil || u.Host == "" || u.User != nil || u.Path != "" || u.RawQuery != "" || u.Fragment != "" || (u.Scheme != "http" && u.Scheme != "https") {
+			return c, fmt.Errorf("PCAS_PUBLIC_URL must be an HTTP(S) origin without path")
+		}
+	}
 	if c.DatabaseURL == "" {
 		return c, fmt.Errorf("PCAS_DATABASE_URL is required")
 	}

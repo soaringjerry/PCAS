@@ -52,15 +52,19 @@ export const memoryKindLabel: Record<MemoryKind, string> = {
   fact: '事实',
   preference: '偏好',
   decision: '决定',
+  intention: '意向',
+  plan: '计划',
 }
 
 export const candidateKindLabel: Record<CandidateKind, string> = {
+  unknown: '待分类',
   task: '待办',
   idea: 'IDEA',
   memory: '记忆',
 }
 
 export const sourceStatusLabel: Record<SourceStatus, Label> = {
+  syncing: { text: '处理中', tone: 'info' },
   connected: { text: '已连接', tone: 'success' },
   manual: { text: '手动导入', tone: 'info' },
   unverified: { text: '待验证', tone: 'warning' },

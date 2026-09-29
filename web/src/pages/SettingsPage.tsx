@@ -1,5 +1,6 @@
 import { memoriesFor } from '../domain/agent'
 import { memoryKindLabel } from '../domain/labels'
+import { spentToday } from '../domain/lines'
 import type { MemoryKind } from '../domain/types'
 import { Button, Sheet, Switch, Tag } from '../components/ui'
 import { useStore } from '../store/context'
@@ -26,20 +27,20 @@ export function SettingsPage() {
       <div className="page-head">
         <div>
           <h1>设置</h1>
-          <p>系统能自己做多少、哪个 AI 能看到什么，都由你定。</p>
+          <p>后台自己做多少、副手能花多少、能看到什么，都由你定。</p>
         </div>
       </div>
 
       <div className="stack">
         <section className="section">
           <h2 className="section-title">
-            <span className="squiggle">自己动手的范围</span>
+            后台
           </h2>
           <Sheet>
             <div className="setting">
               <div>
                 <div className="ink">把握很大的记录直接收下</div>
-                <div className="small muted">关掉时，所有记下的东西都先等你确认。</div>
+                <div className="small muted">拿不准的才问你。关掉时，所有记下的东西都先等你确认。</div>
               </div>
               <Switch label="自动收下" checked={s.autoAccept} onChange={(v) => dispatch({ type: 'updateSettings', patch: { autoAccept: v } })} />
             </div>
@@ -59,6 +60,25 @@ export function SettingsPage() {
             </div>
             <div className="setting">
               <div>
+                <div className="ink">副手每天最多花</div>
+                <div className="small muted">点按钮让副手干活才花钱，后台整理不算。今天已用 ¥{spentToday(state).toFixed(2)}。</div>
+              </div>
+              <label className="row-nowrap small">
+                ¥
+                <input
+                  type="number"
+                  min={0}
+                  step={1}
+                  className="inline-select"
+                  style={{ width: 64 }}
+                  value={s.dailyBudget}
+                  onChange={(e) => dispatch({ type: 'updateSettings', patch: { dailyBudget: Math.max(0, Number(e.target.value) || 0) } })}
+                  aria-label="每日额度"
+                />
+              </label>
+            </div>
+            <div className="setting">
+              <div>
                 <div className="ink">每日整理</div>
                 <div className="small muted">每天这个时间整理一次新资料，并检查放下的想法。</div>
               </div>
@@ -75,7 +95,7 @@ export function SettingsPage() {
 
         <section className="section">
           <h2 className="section-title">
-            <span className="squiggle">AI 接入</span>
+            副手
           </h2>
           <p className="small muted">不同的 AI 用同一份记忆，但只看得到你给的部分。换模型不会丢掉积累。</p>
           <div className="agent-grid">
@@ -133,7 +153,7 @@ export function SettingsPage() {
 
         <section className="section">
           <h2 className="section-title">
-            <span className="squiggle">数据</span>
+            数据
           </h2>
           <Sheet>
             <div className="setting">

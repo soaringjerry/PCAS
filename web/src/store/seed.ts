@@ -1,7 +1,7 @@
 import { ago, ahead } from '../domain/time'
 import type { State } from '../domain/types'
 
-export const STATE_VERSION = 3
+export const STATE_VERSION = 4
 
 const chat = (label: string, excerpt?: string, days = 1) => ({
   sourceId: 'src_claude',
@@ -14,7 +14,7 @@ export function createSeed(): State {
   return {
     version: STATE_VERSION,
     demo: { costReportImported: false },
-    settings: { autoAccept: false, wakeIdeas: true, followUps: true, dailyReviewAt: '21:00' },
+    settings: { autoAccept: true, wakeIdeas: true, followUps: true, dailyReviewAt: '21:00', dailyBudget: 5 },
 
     projects: [
       {
@@ -180,6 +180,7 @@ export function createSeed(): State {
         status: 'todo',
         projectId: 'p_yufolo',
         due: ahead(0, 17),
+        owedTo: { who: '合作老师', since: ago(2) },
         dependsOn: [],
         checklist: [],
         triggers: [],
@@ -194,6 +195,21 @@ export function createSeed(): State {
         history: [{ at: ago(2), by: 'import', summary: '从邮件导入' }],
         createdAt: ago(2),
         updatedAt: ago(2),
+      },
+      {
+        id: 't_feedback',
+        title: '看朋友发来的原型反馈',
+        notes: '他试用了第一版原型，写了一页反馈，在等你回应。',
+        status: 'todo',
+        projectId: 'p_pcas',
+        owedTo: { who: '阿哲', since: ago(3) },
+        dependsOn: [],
+        checklist: [],
+        triggers: [],
+        sources: [{ sourceId: 'src_email', label: '邮件：原型试用反馈', excerpt: '整体挺顺的，就是首页东西有点多。', at: ago(3) }],
+        history: [{ at: ago(3), by: 'import', summary: '从邮件导入' }],
+        createdAt: ago(3),
+        updatedAt: ago(3),
       },
       {
         id: 't_archive',
@@ -650,6 +666,7 @@ export function createSeed(): State {
         status: 'done',
         output: '# 旧版经验\n\n## 模型接入\n- 新一代模型拒绝 max_tokens 和非默认 temperature\n\n## 存储与检索\n- 先检索再过滤会让召回率塌\n\n## 工程\n- 从第一天起强制格式化和 lint',
         staleContext: false,
+        cost: 0.03,
         createdAt: ago(0.25),
         finishedAt: ago(0.15),
       },

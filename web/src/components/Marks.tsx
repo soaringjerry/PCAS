@@ -1,10 +1,9 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
-import { ArrowUpRight, Check, CornerDownRight, FileText, Flag, PenLine, Send, Sparkles, X } from 'lucide-react'
+import { ArrowUpRight, Check, CornerDownRight, FileText, Flag, PenLine, Send, Sparkles } from 'lucide-react'
 import { kindText, type Thing, type TimelineEvent } from '../domain/things'
-import { taskStatusLabel } from '../domain/labels'
 import { formatAgo } from '../domain/time'
-import type { Epistemic, SourceRef, Task } from '../domain/types'
+import type { Epistemic, SourceRef } from '../domain/types'
 import { useStore } from '../store/context'
 import { Tag } from './ui'
 
@@ -43,27 +42,6 @@ export function FromLine({ source, quote = true }: { source: SourceRef; quote?: 
       </span>
       {quote && source.excerpt && <div className="quote">“{source.excerpt}”</div>}
     </div>
-  )
-}
-
-export function TaskBox({ task }: { task: Task }) {
-  const { dispatch } = useStore()
-  const next = task.status === 'done' ? 'todo' : 'done'
-  return (
-    <button
-      type="button"
-      className={`box ${task.status}`}
-      title={taskStatusLabel[task.status].text}
-      aria-label={task.status === 'done' ? '标记为未完成' : '标记为完成'}
-      onClick={(e) => {
-        e.preventDefault()
-        e.stopPropagation()
-        if (task.status !== 'cancelled') dispatch({ type: 'setTaskStatus', id: task.id, status: next })
-      }}
-    >
-      {task.status === 'done' && <Check size={12} strokeWidth={3} />}
-      {task.status === 'cancelled' && <X size={11} strokeWidth={3} />}
-    </button>
   )
 }
 

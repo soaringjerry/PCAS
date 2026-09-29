@@ -1,125 +1,110 @@
-/* PCAS workbench tokens: warm neutral greys, one terracotta accent, muted
-   status pigments. Dense by default: this is a place to get work done. */
+/* PCAS tokens. Apple-style: content first, system type, hairline separators,
+   blue for actions, purple for anything the assistant does. */
 
 :root {
   --sans:
-    "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", "PingFang SC", "Hiragino Sans GB",
-    "Noto Sans CJK SC", "Noto Sans SC", "Microsoft YaHei", "WenQuanYi Zen Hei", sans-serif;
-  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue", "PingFang SC",
+    "Hiragino Sans GB", "Noto Sans CJK SC", "Microsoft YaHei", "WenQuanYi Zen Hei", system-ui, sans-serif;
+  --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
 
-  --app: #f3f2ef;
-  --sidebar: #eeece8;
-  --panel: #ffffff;
-  --panel-2: #f8f7f5;
-  --hover: #f1efeb;
-  --selected: #ebe8e3;
+  --bg: #ffffff;
+  --bg-2: #f5f5f7;
+  --sidebar: rgb(246 246 248 / 82%);
+  --elevated: #ffffff;
+  --fill: rgb(120 120 128 / 8%);
+  --fill-2: rgb(120 120 128 / 14%);
+  --sep: rgb(60 60 67 / 12%);
+  --sep-strong: rgb(60 60 67 / 22%);
 
-  --text: #1d1b18;
-  --text-2: #46423c;
-  --muted: #77716a;
-  --faint: #a39d94;
-  --line: #e5e2dd;
-  --line-strong: #d4d0c9;
+  --label: #1d1d1f;
+  --label-2: #6e6e73;
+  --label-3: #aeaeb2;
 
-  --accent: #c2552d;
-  --accent-hover: #a9461f;
-  --accent-ink: #a8431f;
-  --accent-soft: #f7e5db;
-  --on-accent: #ffffff;
-  --cursor: color-mix(in srgb, var(--accent) 9%, var(--panel));
+  --blue: #0071e3;
+  --blue-hover: #0077ed;
+  --blue-soft: rgb(0 113 227 / 10%);
+  --purple: #8e44d6;
+  --purple-soft: rgb(142 68 214 / 10%);
+  --green: #248a3d;
+  --green-soft: rgb(36 138 61 / 12%);
+  --orange: #c45500;
+  --orange-soft: rgb(255 149 0 / 14%);
+  --red: #d70015;
+  --red-soft: rgb(255 59 48 / 11%);
+  --on-blue: #ffffff;
 
-  --green: #3d7a55;
-  --green-soft: #e3efe6;
-  --amber: #a26a10;
-  --amber-soft: #f7ecd4;
-  --blue: #33639d;
-  --blue-soft: #e2eaf4;
-  --red: #b53838;
-  --red-soft: #f7e0de;
-  --highlight: #fbe7a8;
-
-  --r-xs: 4px;
-  --r-sm: 6px;
-  --r: 8px;
-  --r-lg: 10px;
+  --r-sm: 8px;
+  --r: 12px;
+  --r-lg: 16px;
   --r-pill: 999px;
 
-  --shadow-sm: 0 1px 2px rgb(40 30 20 / 6%);
-  --shadow: 0 2px 8px rgb(40 30 20 / 8%);
-  --shadow-lg: 0 18px 50px rgb(30 20 10 / 22%);
-  --focus: 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent);
+  --shadow: 0 1px 3px rgb(0 0 0 / 6%), 0 6px 20px rgb(0 0 0 / 5%);
+  --shadow-lg: 0 20px 60px rgb(0 0 0 / 18%), 0 2px 8px rgb(0 0 0 / 8%);
+  --focus: 0 0 0 3px rgb(0 113 227 / 30%);
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --app: #151413;
-    --sidebar: #181716;
-    --panel: #1d1c1a;
-    --panel-2: #232220;
-    --hover: #272523;
-    --selected: #2e2c29;
+    --bg: #1c1c1e;
+    --bg-2: #000000;
+    --sidebar: rgb(38 38 40 / 78%);
+    --elevated: #2c2c2e;
+    --fill: rgb(120 120 128 / 18%);
+    --fill-2: rgb(120 120 128 / 26%);
+    --sep: rgb(84 84 88 / 50%);
+    --sep-strong: rgb(84 84 88 / 75%);
 
-    --text: #edebe7;
-    --text-2: #cbc7c0;
-    --muted: #8f8981;
-    --faint: #645f58;
-    --line: #2d2b28;
-    --line-strong: #3c3935;
+    --label: #f5f5f7;
+    --label-2: #98989d;
+    --label-3: #636366;
 
-    --accent: #e27a55;
-    --accent-hover: #ee9373;
-    --accent-ink: #f09a78;
-    --accent-soft: #3d261d;
-    --on-accent: #1a110c;
+    --blue: #0a84ff;
+    --blue-hover: #409cff;
+    --blue-soft: rgb(10 132 255 / 18%);
+    --purple: #bf5af2;
+    --purple-soft: rgb(191 90 242 / 18%);
+    --green: #30d158;
+    --green-soft: rgb(48 209 88 / 16%);
+    --orange: #ff9f0a;
+    --orange-soft: rgb(255 159 10 / 16%);
+    --red: #ff453a;
+    --red-soft: rgb(255 69 58 / 16%);
+    --on-blue: #ffffff;
 
-    --green: #86c29b;
-    --green-soft: #1f3127;
-    --amber: #e0b057;
-    --amber-soft: #372c17;
-    --blue: #8fb4e0;
-    --blue-soft: #1d2a3a;
-    --red: #ec8a82;
-    --red-soft: #3b201e;
-    --highlight: #54461b;
-
-    --shadow-sm: 0 1px 2px rgb(0 0 0 / 35%);
-    --shadow: 0 2px 8px rgb(0 0 0 / 40%);
-    --shadow-lg: 0 18px 50px rgb(0 0 0 / 60%);
+    --shadow: 0 1px 3px rgb(0 0 0 / 40%);
+    --shadow-lg: 0 20px 60px rgb(0 0 0 / 60%);
+    --focus: 0 0 0 3px rgb(10 132 255 / 40%);
   }
 }
 
 :root[data-theme="dark"] {
-  --app: #151413;
-  --sidebar: #181716;
-  --panel: #1d1c1a;
-  --panel-2: #232220;
-  --hover: #272523;
-  --selected: #2e2c29;
+  --bg: #1c1c1e;
+  --bg-2: #000000;
+  --sidebar: rgb(38 38 40 / 78%);
+  --elevated: #2c2c2e;
+  --fill: rgb(120 120 128 / 18%);
+  --fill-2: rgb(120 120 128 / 26%);
+  --sep: rgb(84 84 88 / 50%);
+  --sep-strong: rgb(84 84 88 / 75%);
 
-  --text: #edebe7;
-  --text-2: #cbc7c0;
-  --muted: #8f8981;
-  --faint: #645f58;
-  --line: #2d2b28;
-  --line-strong: #3c3935;
+  --label: #f5f5f7;
+  --label-2: #98989d;
+  --label-3: #636366;
 
-  --accent: #e27a55;
-  --accent-hover: #ee9373;
-  --accent-ink: #f09a78;
-  --accent-soft: #3d261d;
-  --on-accent: #1a110c;
+  --blue: #0a84ff;
+  --blue-hover: #409cff;
+  --blue-soft: rgb(10 132 255 / 18%);
+  --purple: #bf5af2;
+  --purple-soft: rgb(191 90 242 / 18%);
+  --green: #30d158;
+  --green-soft: rgb(48 209 88 / 16%);
+  --orange: #ff9f0a;
+  --orange-soft: rgb(255 159 10 / 16%);
+  --red: #ff453a;
+  --red-soft: rgb(255 69 58 / 16%);
+  --on-blue: #ffffff;
 
-  --green: #86c29b;
-  --green-soft: #1f3127;
-  --amber: #e0b057;
-  --amber-soft: #372c17;
-  --blue: #8fb4e0;
-  --blue-soft: #1d2a3a;
-  --red: #ec8a82;
-  --red-soft: #3b201e;
-  --highlight: #54461b;
-
-  --shadow-sm: 0 1px 2px rgb(0 0 0 / 35%);
-  --shadow: 0 2px 8px rgb(0 0 0 / 40%);
-  --shadow-lg: 0 18px 50px rgb(0 0 0 / 60%);
+  --shadow: 0 1px 3px rgb(0 0 0 / 40%);
+  --shadow-lg: 0 20px 60px rgb(0 0 0 / 60%);
+  --focus: 0 0 0 3px rgb(10 132 255 / 40%);
 }

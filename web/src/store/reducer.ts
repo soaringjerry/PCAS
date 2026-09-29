@@ -80,6 +80,7 @@ export type Action =
   | { type: 'removeCondition'; ideaId: string; conditionId: string }
   | { type: 'deferTask'; id: string; days: number }
   | { type: 'updateSettings'; patch: Partial<Settings> }
+  | { type: 'autoTriage' }
   | { type: 'demoImport'; step: 'start' | 'extract' | 'finish' }
   | { type: 'reset' }
 
@@ -201,9 +202,14 @@ export function reducer(state: State, action: Action): State {
       let next: State
       let createdId: string
       if (action.kind === 'task') {
+        // Replying to someone means they are waiting on you.
+        const owedTo = /回复|答复|确认|反馈/.test(action.text) && candidate.source.sourceId !== 'src_capture'
+          ? { who: candidate.source.label.replace(/^[^：]*：/, ''), since: candidate.source.at }
+          : undefined
         const task = newTask(action.text, {
           projectId: action.projectId,
           due: action.due,
+          owedTo,
           sources,
           history: [{ at, by: 'ai', summary: `从「${candidate.source.label}」提取，已由你采纳` }],
         })
@@ -677,6 +683,28 @@ export function reducer(state: State, action: Action): State {
 
     case 'updateSettings':
       return { ...state, settings: { ...state.settings, ...action.patch } }
+
+    case 'autoTriage': {
+      // Background pass: confident extractions are filed without asking.
+      if (!state.settings.autoAccept) return state
+      const sure = state.candidates.filter((c) => c.state === 'pending' && c.confidence >= 0.8)
+      if (!sure.length) return state
+      const next = reducer(state, { type: 'bulkAccept', ids: sure.map((c) => c.id) })
+      return {
+        ...next,
+        jobs: [
+          {
+            id: newId('j'),
+            title: '整理新记录',
+            trigger: 'event',
+            status: 'done',
+            detail: `自动收下 ${sure.length} 条：${sure.map((c) => c.text).join('；')}`,
+            createdAt: at,
+          },
+          ...next.jobs,
+        ],
+      }
+    }
 
     case 'demoImport':
       return demoImport(state, action.step)

@@ -52,6 +52,8 @@ export interface Task {
   due?: string
   scheduled?: string
   waitingFor?: string
+  /** Someone is waiting on you for this; counts as urgent. */
+  owedTo?: { who: string; since: string }
   dependsOn: ID[]
   checklist: ChecklistItem[]
   triggers: Trigger[]
@@ -221,6 +223,8 @@ export interface Run {
   adopted?: { as: 'doc' | 'subtasks' | 'progress'; at: string; edited: boolean }
   /** A memory it used changed or was deleted afterwards. */
   staleContext: boolean
+  /** Estimated cost in CNY, charged against the daily budget. */
+  cost: number
   createdAt: string
   finishedAt?: string
 }
@@ -250,6 +254,8 @@ export interface Settings {
   followUps: boolean
   /** Local time of the daily review, "HH:MM". */
   dailyReviewAt: string
+  /** Daily spend limit for button-triggered AI work, in CNY. */
+  dailyBudget: number
 }
 
 export interface State {

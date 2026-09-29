@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, type ReactNode } from 'react'
 import { buildBrief, contextFor, mockOutput } from '../domain/agent'
+import { estimateCost, spentToday } from '../domain/lines'
 import { newId } from '../domain/ids'
 import { findThing } from '../domain/things'
 import { nowIso } from '../domain/time'
@@ -41,6 +42,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => () => timers.current.forEach((t) => window.clearTimeout(t)), [])
 
+  // Stand-in for the backend's background pass on new records.
+  useEffect(() => {
+    dispatch({ type: 'autoTriage' })
+  }, [state.candidates.length])
+
   const runDemoImport = useCallback(() => {
     dispatch({ type: 'demoImport', step: 'start' })
     timers.current.push(
@@ -59,6 +65,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       .map((c) => c.memory)
     const id = newId('r')
     const manual = agent.channel === 'manual'
+    const brief = buildBrief(current, thing, prompt, memories)
+    const cost = manual ? 0 : estimateCost(brief.length)
+    // Button-triggered work stays inside the daily budget.
+    if (spentToday(current) + cost > current.settings.dailyBudget) return undefined
     dispatch({
       type: 'startRun',
       run: {
@@ -67,10 +77,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         agentId,
         kind,
         prompt,
-        brief: buildBrief(current, thing, prompt, memories),
+        brief,
         contextMemoryIds: memories.map((m) => m.id),
         status: manual ? 'waiting' : 'running',
         staleContext: false,
+        cost,
         createdAt: nowIso(),
       },
     })

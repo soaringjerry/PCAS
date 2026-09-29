@@ -1,39 +1,14 @@
-# Build outputs
-bin/
-pcas
-pcasctl
-pcas.exe
-pcasctl.exe
-
-# Runtime data
-data/
-*.db
-pcas.db
-
-# Logs
-*.log
-logs/
-server.log
-air_errors.log
-
-# Vendor directory
-vendor/
-
-# Generated code
-gen/
-
-# IDE
-.vscode/
-.idea/
-.claude/
-
-# OS
+# OS / editor
 .DS_Store
-Thumbs.db
+.idea/
+.vscode/
 
-# Docker development
-tmp/
-
-# Environment files
+# Local env and data
 .env
-.env.localdata.bak/
+.env.*
+!.env.example
+data/
+
+# Build output
+bin/
+dist/

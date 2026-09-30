@@ -154,8 +154,9 @@ function TurnView({ turn, last, onSend, onEdit }: { turn: DeskTurn; last: boolea
  * The front-desk secretary: one continuous conversation. Say something and
  * it gets done; each result comes back as a one-line receipt with 改 and 撤销.
  * The home page uses <Secretary />; a thing page passes its thing.
+ * `variant="latest"` shows only the latest turn, with the rest one click away.
  */
-export function Secretary({ thingId }: { thingId?: string }) {
+export function Secretary({ thingId, variant = 'full' }: { thingId?: string; variant?: 'full' | 'latest' }) {
   const key = thingId ?? 'desk'
   const { applyState, refresh } = useStore()
   const { draft, setDraft, prefill, onPrefill, agentFor } = useShell()
@@ -164,6 +165,9 @@ export function Secretary({ thingId }: { thingId?: string }) {
   const thread = useRef<HTMLOListElement>(null)
   const [reveal, setReveal] = useState(0)
   const [restored, setRestored] = useState(0)
+  const [expanded, setExpanded] = useState(false)
+  // Scrolled away from the first turn: the top edge fades instead of cutting a line in half.
+  const [scrolled, setScrolled] = useState(false)
   const [lines, setLines] = useState<Line[]>(() =>
     loadConversation(key).unanswered.map((request): Line =>
       inflight.has(request.requestId)
@@ -290,12 +294,16 @@ export function Secretary({ thingId }: { thingId?: string }) {
     updateConversation(key, (c) => ({ ...c, conversationId: null }))
     // Answered turns go; anything still unanswered stays so no words are lost.
     setLines((ls) => ls.filter((l) => l.kind !== 'turn'))
+    setExpanded(false)
     input.current?.focus()
   }
 
   const edit = (title: string) => prefill(key, `改一下：${title}，`)
   const lastTurn = [...lines].reverse().find((l) => l.kind === 'turn')?.key
   const tooLong = text.trim().length > MAX_LENGTH
+  const folded = variant === 'latest' && !expanded
+  // Folded, only the latest line shows, plus any unsent line that still needs the user.
+  const shown = folded ? lines.filter((l, i) => i === lines.length - 1 || l.kind === 'failed') : lines
 
   return (
     <section className={`sec ${thingId ? 'sec-thing' : 'sec-hall'}`} aria-label="秘书">
@@ -304,8 +312,13 @@ export function Secretary({ thingId }: { thingId?: string }) {
           <button type="button" className="sec-close" aria-label="结束这次对话" title="结束这次对话（Esc）" onClick={end}>
             <X size={15} />
           </button>
-          <ol ref={thread} aria-live="polite">
-            {lines.map((line) => (
+          {variant === 'latest' && lines.length > 1 && (
+            <button type="button" className="sec-expand" aria-expanded={expanded} onClick={() => setExpanded((v) => !v)}>
+              {expanded ? '收起' : `展开对话（${lines.length} 轮）`}
+            </button>
+          )}
+          <ol ref={thread} aria-live="polite" className={scrolled ? 'faded' : undefined} onScroll={(e) => setScrolled(e.currentTarget.scrollTop > 2)}>
+            {shown.map((line) => (
               <li key={line.key} className={`sec-turn ${line.kind}`}>
                 <p className="sec-said" title={line.kind === 'turn' ? line.turn.text : line.request.text}>
                   {line.kind === 'turn' ? line.turn.text : line.request.text}

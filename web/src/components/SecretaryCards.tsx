@@ -61,18 +61,28 @@ function Links({ card }: { card: LinksCard }) {
   )
 }
 
-function Timeline({ card }: { card: TimelineCard }) {
+type Quote = SourcesCard['items'][number]
+type Moment = TimelineCard['items'][number] & { source?: Quote }
+
+function Timeline({ title, items }: { title?: string; items: Moment[] }) {
+  const [open, setOpen] = useState<{ id: string; version?: number } | null>(null)
   return (
     <figure className="sec-timeline">
-      {card.title && <figcaption>{card.title}</figcaption>}
+      {open && <SourceSheet id={open.id} version={open.version} onClose={() => setOpen(null)} />}
+      {title && <figcaption>{title}</figcaption>}
       <ol>
-        {card.items.map((item, i) => (
+        {items.map((item, i) => (
           <li key={i} className={item.status}>
             <time>{item.at ? shortDate(item.at) : ''}</time>
             <span className="t-mark" aria-label={item.status === 'done' ? '已完成' : item.status === 'dropped' ? '放弃了' : undefined}>
               {item.status === 'done' && <Check size={9} strokeWidth={3.5} />}
             </span>
-            {item.thingId ? (
+            {item.source?.sourceId ? (
+              // Each moment opens the record it came from.
+              <button type="button" className="t-text t-source" title="看原文" onClick={() => setOpen({ id: item.source!.sourceId!, version: item.source!.sourceVersion ?? undefined })}>
+                {item.text}
+              </button>
+            ) : item.thingId ? (
               <Link className="t-text" to={`/t/${item.thingId}`}>
                 {item.text}
               </Link>
@@ -84,6 +94,25 @@ function Timeline({ card }: { card: TimelineCard }) {
       </ol>
     </figure>
   )
+}
+
+/**
+ * With a timeline, the quotes live on it rather than in a second list: each
+ * moment carries its source, and quotes without a moment join it in time order.
+ */
+function withQuotes(timeline: TimelineCard, sources: SourcesCard | undefined): Moment[] {
+  if (!sources) return timeline.items
+  const byMemory = new Map(sources.items.map((q) => [q.memoryId, q]))
+  const placed = new Set<string>()
+  const moments: Moment[] = timeline.items.map((item) => {
+    const source = item.memoryId ? byMemory.get(item.memoryId) : undefined
+    if (source) placed.add(source.memoryId)
+    return { ...item, source }
+  })
+  const rest = sources.items.filter((q) => !placed.has(q.memoryId)).map((q): Moment => ({ at: q.at, text: q.text, status: 'open', memoryId: q.memoryId, thingId: null, source: q }))
+  // Keep the timeline in time order; moments without a time go last, in the order given.
+  const when = (m: Moment) => (m.at ? new Date(m.at).getTime() : Infinity)
+  return [...moments, ...rest].sort((a, b) => when(a) - when(b))
 }
 
 function Tasks({ card }: { card: TasksCard }) {
@@ -122,16 +151,20 @@ function Tasks({ card }: { card: TasksCard }) {
 
 /** Visual answers: quotes with their source, links, a timeline, a few task rows. Unknown kinds are skipped. */
 export function SecretaryCards({ cards }: { cards: DeskCard[] }) {
+  const known = cards.filter(isKnownCard)
+  const sources = known.find((c): c is SourcesCard => c.kind === 'sources')
+  const timeline = known.some((c) => c.kind === 'timeline')
   return (
     <>
-      {cards.filter(isKnownCard).map((card, i) => {
+      {known.map((card, i) => {
         switch (card.kind) {
           case 'sources':
-            return <Sources key={i} card={card} />
+            // Said once: a timeline already carries these quotes.
+            return timeline ? null : <Sources key={i} card={card} />
           case 'links':
             return <Links key={i} card={card} />
           case 'timeline':
-            return <Timeline key={i} card={card} />
+            return <Timeline key={i} title={card.title} items={withQuotes(card, sources)} />
           case 'tasks':
             return <Tasks key={i} card={card} />
         }

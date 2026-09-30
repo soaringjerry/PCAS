@@ -241,7 +241,11 @@ test('all four cards render, and an unknown kind is skipped quietly', async ({ p
   const backend = await mockBackend(page, () => ({
     reply: '去年去过两次成都。',
     cards: [
-      { kind: 'sources', items: [{ memoryId: 'm1', version: 1, text: '三月和同事去成都出差', sourceId: 'src-1', sourceVersion: 1, at }] },
+      { kind: 'sources', items: [
+        { memoryId: 'm1', version: 1, text: '三月和同事去成都出差', sourceId: 'src-1', sourceVersion: 1, at },
+        { memoryId: 'm9', version: 1, text: '小林说成都的火锅最好吃', sourceId: 'src-1', sourceVersion: 1, at: null },
+        { memoryId: 'm8', version: 1, text: '第一次听说青城山', sourceId: 'src-1', sourceVersion: 1, at: new Date(Date.now() - 800 * 24 * 60 * 60 * 1000).toISOString() },
+      ] },
       { kind: 'links', items: [{ url: 'https://example.com/chengdu', host: 'example.com' }] },
       { kind: 'timeline', title: '去年关于成都', items: [
         { at, text: '订了去成都的票', status: 'done', memoryId: 'm1', thingId: null },
@@ -259,7 +263,8 @@ test('all four cards render, and an unknown kind is skipped quietly', async ({ p
   await page.goto('/')
   await say(page, '我去年去过成都吗')
   await expect(page.getByText('去年去过两次成都。')).toBeVisible()
-  await expect(page.getByRole('list', { name: '依据' })).toContainText('三月和同事去成都出差')
+  // With a timeline the quotes are not listed a second time; they live on the timeline.
+  await expect(page.getByRole('list', { name: '依据' })).toHaveCount(0)
   const link = page.getByRole('link', { name: 'example.com' })
   await expect(link).toHaveAttribute('href', 'https://example.com/chengdu')
   await expect(link).toHaveAttribute('target', '_blank')
@@ -268,8 +273,13 @@ test('all four cards render, and an unknown kind is skipped quietly', async ({ p
   await expect(timeline.locator('li.done')).toContainText('订了去成都的票')
   await expect(timeline.locator('li.dropped')).toContainText('想去青城山')
   await expect(timeline.getByRole('link', { name: '再去一次' })).toHaveAttribute('href', '/t/task')
+  // Quotes the timeline did not place join it in time order, undated ones last, each still opening its source.
+  await expect(timeline.locator('li')).toHaveCount(5)
+  await expect(timeline.locator('li').first()).toContainText('第一次听说青城山')
+  await expect(timeline.locator('li').last()).toContainText('小林说成都的火锅最好吃')
+  await expect(timeline.getByRole('button', { name: '小林说成都的火锅最好吃' })).toBeVisible()
   await expect(page.getByRole('list', { name: '事项' }).getByRole('link', { name: '交房租' })).toBeVisible()
-  await page.getByRole('list', { name: '依据' }).getByRole('button').click()
+  await timeline.getByRole('button', { name: '订了去成都的票' }).click()
   await expect(page.getByRole('dialog')).toContainText('出差记录')
   expect(backend.errors).toEqual([])
 })
@@ -311,4 +321,67 @@ test('on a phone the pinned input sits on a solid dock, so nothing shows through
   for (const [x, y] of probes) {
     expect(await page.evaluate(([x, y]) => !!document.elementFromPoint(x, y)?.closest('.sec-dock'), [x, y])).toBe(true)
   }
+})
+
+test('quotes without a timeline are a list of their own, each opening its source', async ({ page }) => {
+  await mockBackend(page, () => ({ reply: '你说过不吃香菜。', cards: [{ kind: 'sources', items: [{ memoryId: 'm1', version: 1, text: '我不吃香菜', sourceId: 'src-1', sourceVersion: 1, at: null }] }] }))
+  await page.route((url) => url.pathname === '/v1/memory/sources/src-1', (route) =>
+    route.fulfill({ json: { derived: [], source: { id: 'src-1', version: 1, title: '饮食偏好', text: '我不吃香菜', recorded_at: new Date().toISOString(), has_attachment: false, attachment_missing: false, representation: 'original' }, processing: [] } }),
+  )
+  await page.goto('/')
+  await say(page, '我吃香菜吗')
+  await page.getByRole('list', { name: '依据' }).getByRole('button', { name: '我不吃香菜' }).click()
+  await expect(page.getByRole('dialog')).toContainText('饮食偏好')
+})
+
+/** No page picks 'latest' yet (D2 decides where), so flip the component's default in the served bundle. */
+async function preferLatest(page: Page) {
+  let flipped = false
+  await page.route(/\/assets\/index-[^/]*\.js$/, async (route) => {
+    const response = await route.fetch()
+    const body = (await response.text()).replace(/variant:([\w$]+)="full"/, (_m, name) => ((flipped = true), `variant:${name}="latest"`))
+    await route.fulfill({ response, body })
+  })
+  return () => flipped
+}
+
+test("variant 'latest' shows the latest turn and opens the rest on demand", async ({ page }) => {
+  const flipped = await preferLatest(page)
+  const backend = await mockBackend(page, (request, n) => (n === 4 ? 'abort' : { reply: `回：${request.text}` }))
+  await page.goto('/')
+  expect(flipped()).toBe(true)
+  for (const words of ['一', '二', '三']) {
+    await say(page, words)
+    await expect(page.locator('.sec-reply')).toHaveText([`回：${words}`])
+  }
+  const toggle = page.getByRole('button', { name: '展开对话（3 轮）' })
+  await expect(page.locator('.sec-turn')).toHaveCount(1)
+  await toggle.click()
+  await expect(page.locator('.sec-reply')).toHaveText(['回：一', '回：二', '回：三'])
+  await page.getByRole('button', { name: '收起' }).click()
+  await expect(page.locator('.sec-turn')).toHaveCount(1)
+
+  // An unsent line stays in sight while folded, so its words are never hidden.
+  await say(page, '四')
+  await expect(page.getByRole('button', { name: '重试' })).toBeVisible()
+  await say(page, '五')
+  await expect(page.locator('.sec-turn .sec-said')).toHaveText(['四', '五'])
+  await expect(page.getByRole('button', { name: '展开对话（5 轮）' })).toBeVisible()
+  expect(backend.turns).toHaveLength(5)
+})
+
+test('a long conversation fades at its top edge instead of cutting a line in half', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  const at = new Date().toISOString()
+  const id = '22222222-2222-4222-8222-222222222222'
+  const turns = Array.from({ length: 8 }, (_, i) => ({ id: `t${i}`, text: `第 ${i + 1} 句`, reply: '这是一段两三行长的回答，用来把对话撑到需要滚动的高度。'.repeat(3), cards: [], receipts: [], ask: null, agent: '模型', createdAt: at }))
+  await mockBackend(page, () => ({}), undefined, new Map([[id, turns]]))
+  await page.addInitScript((id) => localStorage.setItem('pcas.secretary.desk', JSON.stringify({ conversationId: id, unanswered: [] })), id)
+  await page.goto('/')
+  const list = page.locator('.sec-thread > ol')
+  await expect(page.locator('.sec-turn')).toHaveCount(8)
+  // Restored at the latest turn, the earlier ones fade out upwards.
+  await expect(list).toHaveClass(/faded/)
+  await list.evaluate((el) => el.scrollTo(0, 0))
+  await expect(list).not.toHaveClass(/faded/)
 })

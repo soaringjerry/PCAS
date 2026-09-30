@@ -62,3 +62,44 @@ func TestEditedCopyBesideOriginalRetainsDependencies(t *testing.T) {
 		t.Fatalf("edited copy lost provenance: %+v", blocks)
 	}
 }
+
+func TestCopiedLineDoesNotClaimIndependentParagraph(t *testing.T) {
+	blocks := []TextBlock{{Text: "Private launch plan for client Zephyr.", Runs: []string{"run"}}}
+	next := "Private launch plan for client Zephyr.\nlaunch plan\nMy independent shopping list: bread and milk"
+	blocks = EditBlocks(blocks, next)
+	if BlockText(blocks) != next {
+		t.Fatalf("edit did not reconstruct text: %+v", blocks)
+	}
+	manual := authoredText(blocks)
+	if !strings.Contains(manual, "My independent shopping list: bread and milk") || strings.Contains(manual, "launch plan") {
+		t.Fatalf("copied line changed neighboring authorship: %+v", blocks)
+	}
+}
+
+func TestShortAndPunctuationVariedCopiesStayDerived(t *testing.T) {
+	for _, test := range []struct{ original, copied string }{
+		{"Secret PIN: 8473", "8473"},
+		{"项目密码84739", "84739"},
+		{"Private launch plan for client Zephyr.", "client Zephyr"},
+	} {
+		t.Run(test.copied, func(t *testing.T) {
+			next := test.original + "\n" + test.copied + "\nIndependent groceries: eggs and milk"
+			blocks := EditBlocks([]TextBlock{{Text: test.original, Runs: []string{"run"}}}, next)
+			if BlockText(blocks) != next || strings.Contains(authoredText(blocks), test.copied) {
+				t.Fatalf("copied source fragment lost dependencies: %+v", blocks)
+			}
+			if !strings.Contains(authoredText(blocks), "Independent groceries: eggs and milk") {
+				t.Fatalf("independent paragraph lost ownership: %+v", blocks)
+			}
+		})
+	}
+}
+
+func TestShortUnrelatedInsertionRemainsAuthored(t *testing.T) {
+	blocks := []TextBlock{{Text: "Secret PIN: 8473", Runs: []string{"run"}}}
+	next := "Secret PIN: 8473\nTrip\n8472"
+	blocks = EditBlocks(blocks, next)
+	if BlockText(blocks) != next || !strings.Contains(authoredText(blocks), "Trip\n8472") {
+		t.Fatalf("short fuzzy match claimed independent text: %+v", blocks)
+	}
+}

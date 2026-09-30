@@ -31,26 +31,20 @@ func (s *Store) AnswerDesk(ctx context.Context, scope memory.Scope, agentID, que
 	if question == "" || len(question) > 4000 || len(history) > 6 {
 		return out, memory.ErrInvalid
 	}
-	earlier := ""
 	for _, turn := range history {
 		if len(turn.Question) > 4000 || len(turn.Answer) > 8000 {
 			return out, memory.ErrInvalid
 		}
-		earlier += turn.Question + " "
 	}
 	if s.models == nil || !s.models.Available(agentID) {
 		return out, memory.ErrUnavailable
 	}
-	recall, err := s.Recall(ctx, scope, memory.RecallRequest{Query: tail(earlier+question, 4000), Mode: "remember", Context: memory.WorkingContext{Objects: []memory.ID{}}, Budget: memory.Budget{Candidates: 15, Tokens: 4000, Edges: 15, Hops: 1}})
-	if err != nil {
-		return out, err
-	}
 	var agent workspace.Agent
 	var memories []workspace.Memory
 	var tasks []workspace.Item
-	var dependencies []memory.Ref
+	dependencies := []memory.Ref{}
 	var settings workspace.Settings
-	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		var err error
 		if agent, err = queryDocument[workspace.Agent](ctx, tx, "SELECT document FROM workspace_agents WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), agentID); err != nil {
 			return err
@@ -96,6 +90,16 @@ func (s *Store) AnswerDesk(ctx context.Context, scope memory.Scope, agentID, que
 		settings, err = queryDocument[workspace.Settings](ctx, tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1", string(scope.OwnerID))
 		return err
 	})
+	if err != nil {
+		return out, err
+	}
+	// Retrieval also uses the stored questions, never the browser's claimed
+	// version of an ID-backed turn. Tombstones contain no deleted text.
+	earlier := ""
+	for _, turn := range history {
+		earlier += turn.Question + " "
+	}
+	recall, err := s.Recall(ctx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: agent.ID}, memory.RecallRequest{Query: tail(earlier+question, 4000), Mode: "remember", Context: memory.WorkingContext{Objects: []memory.ID{}}, Budget: memory.Budget{Candidates: 15, Tokens: 4000, Edges: 15, Hops: 1}})
 	if err != nil {
 		return out, err
 	}

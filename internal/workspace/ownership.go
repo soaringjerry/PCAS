@@ -1,6 +1,9 @@
 package workspace
 
-import "strings"
+import (
+	"strings"
+	"unicode"
+)
 
 type TextBlock struct {
 	Text string   `json:"text"`
@@ -75,18 +78,21 @@ func EditBlocks(blocks []TextBlock, text string) []TextBlock {
 		// A pasted/edited copy outside the original block still depends on its
 		// inputs. Compare new edit hunks against current ownership blocks, not
 		// the originally adopted string (which may already have been rewritten).
-		for _, line := range strings.Split(string(next[x:y]), "\n") {
+		// Attribute copied paragraphs separately. One copied line must not
+		// relabel all the independent writing in the same insertion as derived.
+		for _, line := range strings.SplitAfter(string(next[x:y]), "\n") {
+			lineRuns := append([]string{}, runs...)
 			for _, block := range blocks {
 				if len(block.Runs) > 0 && copiedBlock(line, block.Text) {
 					for _, id := range block.Runs {
-						if !hasRun(id, runs) {
-							runs = append(runs, id)
+						if !hasRun(id, lineRuns) {
+							lineRuns = append(lineRuns, id)
 						}
 					}
 				}
 			}
+			appendText([]rune(line), lineRuns)
 		}
-		appendText(next[x:y], runs)
 	}
 	if int64(len(old)+1)*int64(len(next)+1) > 4_000_000 {
 		p := 0
@@ -142,17 +148,29 @@ func EditBlocks(blocks []TextBlock, text string) []TextBlock {
 }
 
 func copiedBlock(added, derived string) bool {
-	a, b := strings.Fields(added), strings.Fields(derived)
+	// Punctuation does not change a copied name or value. In particular,
+	// "client Zephyr" still copies "client Zephyr." and a standalone PIN
+	// still copies that PIN from a longer generated sentence.
+	words := func(text string) []string {
+		return strings.FieldsFunc(strings.ToLower(text), func(r rune) bool {
+			return !unicode.IsLetter(r) && !unicode.IsNumber(r)
+		})
+	}
+	a, b := words(added), words(derived)
 	if len(a) < 2 || len(b) < 2 {
+		left, right := strings.Join(a, ""), strings.Join(b, "")
+		// Short fragments need an exact contiguous match; fuzzy comparison of
+		// a few characters would sweep up unrelated independently authored text.
+		// This is a bounded copy heuristic, not semantic authorship recovery.
+		if min(len([]rune(left)), len([]rune(right))) < 8 {
+			return len([]rune(left)) >= 4 && strings.Contains(right, left)
+		}
 		a, b = []string{}, []string{}
-		for _, r := range []rune(strings.TrimSpace(added)) {
+		for _, r := range []rune(left) {
 			a = append(a, string(r))
 		}
-		for _, r := range []rune(strings.TrimSpace(derived)) {
+		for _, r := range []rune(right) {
 			b = append(b, string(r))
-		}
-		if min(len(a), len(b)) < 8 {
-			return false
 		}
 	}
 	if len(a)*len(b) > 100000 {

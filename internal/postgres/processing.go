@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
@@ -256,21 +258,41 @@ func qualificationContext(source, quote string) string {
 	if at < 0 || quote == "" {
 		return quote
 	}
-	start := at
-	for start > 0 && !strings.ContainsAny(source[start-1:start], "\n") {
-		start--
+	// Inspect the surrounding statement so extraction cannot drop its leading
+	// qualifier, without making an unrelated tentative sentence on the same
+	// line add a confirmation burden to a direct assertion.
+	const boundaries = "\n.!?。！？;；"
+	start := strings.LastIndexAny(source[:at], boundaries)
+	if start < 0 {
+		start = 0
+	} else {
+		// The boundary can be multibyte; only the following statement matters.
+		_, size := utf8.DecodeRuneInString(source[start:])
+		start += size
 	}
 	end := at + len(quote)
-	for end < len(source) && source[end] != '\n' {
-		end++
+	last, _ := utf8.DecodeLastRuneInString(strings.TrimSpace(quote))
+	if strings.ContainsRune(boundaries, last) {
+		return source[start:end]
+	}
+	if boundary := strings.IndexAny(source[end:], boundaries); boundary >= 0 {
+		end += boundary
+	} else {
+		end = len(source)
 	}
 	return source[start:end]
 }
 
 func qualifiedCapture(text string) bool {
 	lower := strings.ToLower(text)
-	for _, marker := range []string{"可能", "也许", "大概", "不确定", "考虑", "假如", "假设", "如果", "据说", "听说", "他说", "她说", "更正", "纠正", "不再", "原以为", "暂时", "试试", "“", "”", "\"", "maybe", "perhaps", "might", "not sure", "i think", "considering", "if ", "said", "correction", "actually", "no longer"} {
+	for _, marker := range []string{"可能", "也许", "大概", "不确定", "考虑", "假如", "假设", "如果", "据说", "听说", "他说", "她说", "更正", "纠正", "不再", "原以为", "暂时", "试试", "“", "”", "\""} {
 		if strings.Contains(lower, marker) {
+			return true
+		}
+	}
+	words := " " + strings.Join(strings.FieldsFunc(lower, func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsNumber(r) }), " ") + " "
+	for _, marker := range []string{"maybe", "perhaps", "probably", "possibly", "likely", "might", "could", "not sure", "i think", "considering", "if", "said", "correction", "actually", "no longer"} {
+		if strings.Contains(words, " "+marker+" ") {
 			return true
 		}
 	}

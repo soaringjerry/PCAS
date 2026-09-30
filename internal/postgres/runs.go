@@ -99,7 +99,7 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 		selected := map[string]bool{}
 		if prepared, ok := ctx.Value(runContextKey{}).(preparedRunContext); ok {
 			for _, turn := range prepared.History {
-				if verifyRunTx(ctx, tx, scope, workspace.Run{AgentID: agent.ID, ContextVersions: turn.Refs}) == nil {
+				if verifyRunTx(ctx, tx, scope, workspace.Run{ThingID: item.ID, AgentID: agent.ID, ContextVersions: turn.Refs}) == nil {
 					fmt.Fprintf(&brief, "\n导办台之前的讨论：\n问：%s\n答：%s\n", turn.Question, turn.Answer)
 					artifactRefs = append(artifactRefs, turn.Refs...)
 				}
@@ -311,12 +311,39 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 	return err
 }
 func verifyRunTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run workspace.Run) error {
+	var item *workspace.Item
+	if run.ThingID != "" {
+		current, err := getItem(ctx, tx, scope, run.ThingID)
+		if err != nil {
+			return err
+		}
+		item = &current
+	}
+	return verifyRunForItemTx(ctx, tx, scope, run, item)
+}
+
+// Derived answers obey the destination item's current context policy too.
+// Checking only the agent grant would let a previous output reintroduce an
+// excluded memory, or a memory from the item's former project.
+func verifyRunForItemTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run workspace.Run, item *workspace.Item) error {
 	agent, err := queryDocument[workspace.Agent](ctx, tx, "SELECT document FROM workspace_agents WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), run.AgentID)
 	if err != nil {
 		return err
 	}
 	if !agent.Enabled {
 		return memory.ErrForbidden
+	}
+	var projectID string
+	var excluded []string
+	if item != nil {
+		projectID = item.ProjectID
+		if item.Kind == "project" {
+			projectID = item.ID
+		}
+		excluded, err = queryDocuments[string](ctx, tx, "SELECT to_jsonb(memory_id::text) FROM context_exclusions WHERE owner_id=$1 AND thing_id=$2", string(scope.OwnerID), item.ID)
+		if err != nil {
+			return err
+		}
 	}
 	for _, ref := range run.ContextVersions {
 		var currentVersion int
@@ -329,6 +356,15 @@ func verifyRunTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run workspa
 		}
 		if claim.Version != ref.Version || !oneOf(claim.Nature, agent.MemoryKinds...) || !agent.IncludeInferred && claim.Confirmation != "confirmed" && !(claim.Confirmation == "adopted" && claim.Acquisition == "direct") {
 			return memory.ErrConflict
+		}
+		if item != nil {
+			var claimProject string
+			if raw, ok := claim.Scope["project_id"]; ok && strictJSON(raw, &claimProject) != nil {
+				return memory.ErrConflict
+			}
+			if oneOf(string(ref.ID), excluded...) || claimProject != "" && claimProject != projectID {
+				return memory.ErrConflict
+			}
 		}
 	}
 	return nil

@@ -21,6 +21,7 @@ type statement struct {
 	Subject      string
 	Predicate    string
 	Confirmation string
+	Acquisition  string
 	Actor        string
 	Quote        string
 	Source       memory.Ref
@@ -53,6 +54,15 @@ func (s *Store) rememberTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, i
 	}
 	if in.Confirmation == "" {
 		in.Confirmation = "confirmed"
+	}
+	if in.Acquisition == "" {
+		in.Acquisition = "direct"
+		if in.Actor == "ai" {
+			in.Acquisition = "inferred"
+		}
+	}
+	if !oneOf(in.Acquisition, "direct", "reported", "inferred", "execution") {
+		return result, memory.ErrInvalid
 	}
 	if !in.Source.ID.Valid() || in.Source.Version < 1 {
 		return result, memory.ErrInvalid
@@ -95,6 +105,22 @@ func (s *Store) rememberTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, i
 		if err := tx.QueryRow(ctx, "SELECT version FROM memory_records WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), prior).Scan(&version); err != nil {
 			return result, err
 		}
+		// A repeated assertion in a newer source version is fresh evidence for
+		// the same claim, not a second claim and not continued reliance on v1.
+		locator := asJSON(map[string]int{"start_rune": start, "end_rune": end})
+		if _, err := tx.Exec(ctx, `INSERT INTO evidence(owner_id,id,source_id,source_version,target_id,target_version,locator,acquisition,stance)
+			SELECT $1,gen_random_uuid(),$2,$3,$4,$5,$6,$7,'supports'
+			WHERE NOT EXISTS(SELECT 1 FROM evidence WHERE owner_id=$1 AND source_id=$2 AND source_version=$3 AND target_id=$4 AND target_version=$5 AND stance='supports')`, string(scope.OwnerID), string(in.Source.ID), in.Source.Version, prior, version, locator, in.Acquisition); err != nil {
+			return result, err
+		}
+		if err := invalidateTx(ctx, tx, scope, prior); err != nil {
+			return result, err
+		}
+		if _, err := tx.Exec(ctx, `INSERT INTO memory_jobs(id,owner_id,record_id,record_version,stage)
+			VALUES(gen_random_uuid(),$1,$2,$3,'memory.index') ON CONFLICT(owner_id,record_id,record_version,stage)
+			DO UPDATE SET state='queued',attempts=0,available_at=now(),error_code='',lease_token=NULL,lease_until=NULL WHERE memory_jobs.state!='leased'`, string(scope.OwnerID), prior, version); err != nil {
+			return result, err
+		}
 		return memory.Ref{ID: memory.ID(prior), Version: version, Kind: memory.ClaimKind}, nil
 	}
 	if !errors.Is(err, pgx.ErrNoRows) {
@@ -133,10 +159,7 @@ func (s *Store) rememberTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, i
 		claimScope["project_id"] = in.ProjectID
 	}
 	scopeJSON, _ := json.Marshal(claimScope)
-	acquisition := "direct"
-	if in.Actor == "ai" {
-		acquisition = "inferred"
-	}
+	acquisition := in.Acquisition
 	if _, err := tx.Exec(ctx, `INSERT INTO claim_revisions(owner_id,claim_id,version,subject_id,predicate,value,scope,nature,acquisition,confirmation,change_type)
 		VALUES($1,$2,1,$3,$4,$5,$6,$7,$8,$9,'initial')`, string(scope.OwnerID), string(id), subject, in.Predicate, value, scopeJSON, in.Nature, acquisition, in.Confirmation); err != nil {
 		return result, err
@@ -193,27 +216,28 @@ func stringHex(value []byte) string {
 func (s *Store) memoriesTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, effective ...bool) ([]workspace.Memory, error) {
 	result := []workspace.Memory{}
 	currentOnly := len(effective) > 0 && effective[0]
-	rows, err := tx.Query(ctx, `SELECT r.id::text,c.version,c.nature,c.value #>> '{}',c.confirmation,coalesce(c.scope->>'project_id',''),
+	rows, err := tx.Query(ctx, `SELECT r.id::text,c.version,c.nature,c.value #>> '{}',c.confirmation,c.acquisition,coalesce(c.scope->>'project_id',''),
 		coalesce(a.last_effective_use_at,r.created_at),coalesce(a.stability,1),coalesce(a.half_life_seconds,2592000),coalesce(a.pinned,false),coalesce(a.reinforcement_limit,8)
 		FROM memory_records r JOIN claim_revisions c ON (c.owner_id,c.claim_id)=(r.owner_id,r.id) AND c.version=CASE WHEN $4 THEN (SELECT v.version FROM applicable_claim_versions($1,now(),now()) v WHERE v.claim_id=r.id) ELSE r.version END
 		LEFT JOIN activity a ON (a.owner_id,a.record_id)=(r.owner_id,r.id)
-		WHERE r.owner_id=$1 AND r.state='active' AND ($2 OR EXISTS(SELECT 1 FROM record_grants g WHERE g.owner_id=r.owner_id AND g.record_id=r.id AND g.principal_id=$3))
+		WHERE r.owner_id=$1 AND r.state='active' AND claim_source_is_current($1,c.claim_id,c.version,now()) AND ($2 OR EXISTS(SELECT 1 FROM record_grants g WHERE g.owner_id=r.owner_id AND g.record_id=r.id AND g.principal_id=$3))
 		ORDER BY r.updated_at DESC,r.id`, string(scope.OwnerID), scope.IsOwner, scope.PrincipalID, currentOnly)
 	if err != nil {
 		return nil, err
 	}
 	for rows.Next() {
 		var m workspace.Memory
-		var confirmation string
 		var last time.Time
 		var stability, halfLife float64
-		if err := rows.Scan(&m.ID, &m.Version, &m.Kind, &m.Text, &confirmation, &m.ProjectID, &last, &stability, &halfLife, &m.Pinned, &m.ReinforcementLimit); err != nil {
+		if err := rows.Scan(&m.ID, &m.Version, &m.Kind, &m.Text, &m.Confirmation, &m.Acquisition, &m.ProjectID, &last, &stability, &halfLife, &m.Pinned, &m.ReinforcementLimit); err != nil {
 			rows.Close()
 			return nil, err
 		}
 		m.Epistemic = "inferred"
-		if confirmation == "confirmed" {
+		if m.Confirmation == "confirmed" {
 			m.Epistemic = "confirmed"
+		} else if m.Confirmation == "adopted" && m.Acquisition == "direct" {
+			m.Epistemic = "sourced"
 		}
 		m.HalfLifeDays = halfLife / 86400
 		m.LastUsedAt = last.UTC().Format(time.RFC3339Nano)

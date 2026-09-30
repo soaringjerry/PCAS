@@ -20,6 +20,7 @@ interface Label {
 
 export const epistemicLabel: Record<Epistemic, Label> = {
   confirmed: { text: '已确认', tone: 'success' },
+  sourced: { text: '原话有据', tone: 'info' },
   inferred: { text: 'AI 推测', tone: 'warning' },
   planned: { text: '计划', tone: 'info' },
 }

@@ -101,6 +101,35 @@ func (s *Store) ingestTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in 
 			if err := invalidateTx(ctx, tx, scope, id); err != nil {
 				return err
 			}
+			// Invalidate outputs that consumed assertions extracted from an older
+			// version. The canonical historical claims are retained, while the
+			// current view requires evidence from the latest source version.
+			rows, err := tx.Query(ctx, `SELECT DISTINCT k.claim_id::text FROM claim_source_keys k
+				JOIN memory_records r ON (r.owner_id,r.id)=(k.owner_id,k.claim_id)
+				JOIN record_versions v ON (v.owner_id,v.record_id,v.version)=(r.owner_id,r.id,r.version)
+				WHERE k.owner_id=$1 AND k.source_id=$2 AND v.actor='ai'`, string(scope.OwnerID), id)
+			if err != nil {
+				return err
+			}
+			claims := []string{}
+			for rows.Next() {
+				var claimID string
+				if err := rows.Scan(&claimID); err != nil {
+					rows.Close()
+					return err
+				}
+				claims = append(claims, claimID)
+			}
+			err = rows.Err()
+			rows.Close()
+			if err != nil {
+				return err
+			}
+			for _, claimID := range claims {
+				if err := invalidateTx(ctx, tx, scope, claimID); err != nil {
+					return err
+				}
+			}
 		}
 		if err := enqueue(ctx, tx, scope.OwnerID, memory.ID(id), version, "source.chunk"); err != nil {
 			return err

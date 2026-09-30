@@ -118,6 +118,8 @@ type Memory struct {
 	Kind               string          `json:"kind"`
 	Text               string          `json:"text"`
 	Epistemic          string          `json:"epistemic"`
+	Confirmation       string          `json:"confirmation"`
+	Acquisition        string          `json:"acquisition"`
 	ProjectID          string          `json:"projectId,omitempty"`
 	Sources            []SourceRef     `json:"sources"`
 	Versions           []MemoryVersion `json:"versions"`

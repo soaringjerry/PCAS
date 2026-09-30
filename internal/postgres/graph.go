@@ -9,7 +9,7 @@ import (
 
 // Graph traversal requires explicit grants on the relationship and both ends.
 // Similarity scores never become persistent semantic relationships.
-func graphTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, seeds []memory.Ref, b memory.Budget, history bool) ([]memory.Relation, []memory.Ref, error) {
+func graphTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, seeds []memory.Ref, b memory.Budget, history bool, temporal memory.WorkingContext) ([]memory.Relation, []memory.Ref, error) {
 	relations := []memory.Relation{}
 	added := []memory.Ref{}
 	frontier := []string{}
@@ -25,10 +25,21 @@ func graphTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, seeds []memory.
 		JOIN record_versions rv ON (rv.owner_id,rv.record_id,rv.version)=(l.owner_id,l.id,l.version)
 		JOIN memory_records a ON (a.owner_id,a.id)=(l.owner_id,l.from_id) JOIN memory_records z ON (z.owner_id,z.id)=(l.owner_id,l.to_id)
 		WHERE l.owner_id=$1 AND r.state='active' AND a.state='active' AND z.state='active'
-		AND ($5 OR a.version=l.from_version AND z.version=l.to_version)
+		AND rv.state='active' AND rv.recorded_at<=coalesce($8,now())
+        AND (rv.valid_from IS NULL OR rv.valid_from<=coalesce($7,now())) AND (rv.valid_to IS NULL OR rv.valid_to>coalesce($7,now()))
+        AND NOT EXISTS (
+          SELECT 1 FROM (VALUES (l.from_id,l.from_version,a.kind),(l.to_id,l.to_version,z.kind)) endpoint(id,version,kind)
+          WHERE NOT EXISTS (
+            SELECT 1 FROM record_versions ev WHERE ev.owner_id=$1 AND ev.record_id=endpoint.id AND ev.version=endpoint.version AND ev.state='active'
+              AND ev.recorded_at<=coalesce($8,now())
+              AND (ev.valid_from IS NULL OR ev.valid_from<=coalesce($7,now())) AND (ev.valid_to IS NULL OR ev.valid_to>coalesce($7,now()))
+              AND ($5 OR (endpoint.kind='claim' AND EXISTS(SELECT 1 FROM applicable_claim_versions($1,coalesce($7,now()),coalesce($8,now())) ac WHERE ac.claim_id=endpoint.id AND ac.version=endpoint.version))
+                OR (endpoint.kind!='claim' AND ev.version=(SELECT max(v.version) FROM record_versions v WHERE v.owner_id=$1 AND v.record_id=endpoint.id AND v.recorded_at<=coalesce($8,now()))))
+          )
+        )
 		AND (l.from_id=ANY($2::uuid[]) OR l.to_id=ANY($2::uuid[]))
 		AND ($3 OR (SELECT count(*) FROM record_grants g WHERE g.owner_id=l.owner_id AND g.principal_id=$4 AND g.record_id=ANY(ARRAY[l.id,l.from_id,l.to_id]))=(SELECT count(DISTINCT id) FROM unnest(ARRAY[l.id,l.from_id,l.to_id]) AS id))
-		ORDER BY l.id LIMIT $6`, string(scope.OwnerID), frontier, scope.IsOwner, scope.PrincipalID, history, b.Edges-len(relations))
+		ORDER BY l.id LIMIT $6`, string(scope.OwnerID), frontier, scope.IsOwner, scope.PrincipalID, history, b.Edges-len(relations), temporal.ValidAt, temporal.KnownAt)
 		if err != nil {
 			return nil, nil, err
 		}

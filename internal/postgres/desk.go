@@ -48,6 +48,7 @@ func (s *Store) AnswerDesk(ctx context.Context, scope memory.Scope, agentID, que
 	var agent workspace.Agent
 	var memories []workspace.Memory
 	var tasks []workspace.Item
+	var dependencies []memory.Ref
 	var settings workspace.Settings
 	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		var err error
@@ -63,6 +64,14 @@ func (s *Store) AnswerDesk(ctx context.Context, scope memory.Scope, agentID, que
 		}
 		if tasks, err = queryDocuments[workspace.Item](ctx, tx, "SELECT document FROM work_items WHERE owner_id=$1 AND kind='task' AND status IN ('todo','doing','waiting') ORDER BY due_at NULLS LAST, updated_at DESC LIMIT 40", string(scope.OwnerID)); err != nil {
 			return err
+		}
+		for i := range tasks {
+			var refs []memory.Ref
+			tasks[i], refs, err = sanitizeItemTx(ctx, tx, scope, agent.ID, tasks[i])
+			if err != nil {
+				return err
+			}
+			dependencies = append(dependencies, refs...)
 		}
 		settings, err = queryDocument[workspace.Settings](ctx, tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1", string(scope.OwnerID))
 		return err
@@ -91,7 +100,9 @@ func (s *Store) AnswerDesk(ctx context.Context, scope memory.Scope, agentID, que
 	if len(history) > 0 {
 		fmt.Fprintln(&prompt, "\n同一张卡片上之前的对话（本次是接着问）：")
 		for _, turn := range history {
-			fmt.Fprintf(&prompt, "问：%s\n答：%s\n", turn.Question, turn.Answer)
+			// Client-held answers have no server-verified provenance. Re-retrieve
+			// permitted evidence instead of replaying possibly revoked text.
+			fmt.Fprintf(&prompt, "问：%s\n", turn.Question)
 		}
 	}
 	fmt.Fprintf(&prompt, "\n问题：%s\n\n检索到的记录（引用 ID）：\n", question)
@@ -103,6 +114,7 @@ func (s *Store) AnswerDesk(ctx context.Context, scope memory.Scope, agentID, que
 		}
 		fmt.Fprintf(&prompt, "[%s / %s] %s\n", m.ID, m.Epistemic, m.Text)
 		sent[m.ID] = memory.Ref{ID: memory.ID(m.ID), Version: m.Version, Kind: memory.ClaimKind}
+		dependencies = append(dependencies, sent[m.ID])
 	}
 	if len(sent) == 0 {
 		fmt.Fprintln(&prompt, "（没有）")
@@ -119,6 +131,32 @@ func (s *Store) AnswerDesk(ctx context.Context, scope memory.Scope, agentID, que
 		fmt.Fprintln(&prompt, "（没有）")
 	}
 	p, _ := s.models.Get(agent.ID)
+	checkContext := func() error {
+		return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+			if err := verifyRunTx(ctx, tx, scope, workspace.Run{AgentID: agent.ID, ContextVersions: dependencies}); err != nil {
+				return err
+			}
+			// Excluding a task's input can change its permitted title without
+			// changing a memory version or its global grant.
+			for _, sentTask := range tasks {
+				current, err := getItem(ctx, tx, scope, sentTask.ID)
+				if err != nil {
+					return memory.ErrConflict
+				}
+				current, _, err = sanitizeItemTx(ctx, tx, scope, agent.ID, current)
+				if err != nil {
+					return err
+				}
+				if current.Title != sentTask.Title || current.Status != sentTask.Status || current.Due != sentTask.Due {
+					return memory.ErrConflict
+				}
+			}
+			return nil
+		})
+	}
+	if err := checkContext(); err != nil {
+		return out, err
+	}
 	if err := s.reserveModelCost(ctx, scope.OwnerID, p.Reserve(deskInstructions+prompt.String()), nil); err != nil {
 		return out, err
 	}
@@ -127,6 +165,9 @@ func (s *Store) AnswerDesk(ctx context.Context, scope memory.Scope, agentID, que
 	result, err := s.models.GenerateWithSearch(workCtx, agent.ID, deskInstructions, prompt.String())
 	if err != nil {
 		return out, fmt.Errorf("%w: %w", memory.ErrUnavailable, err)
+	}
+	if err := checkContext(); err != nil {
+		return out, err
 	}
 	var reply struct {
 		Answer string   `json:"answer"`

@@ -14,7 +14,7 @@ export type Action =
   | { type: 'ignoreCandidate'; id: string }
   | { type: 'restoreCandidate'; id: string }
   | { type: 'mergeCandidate'; id: string; targetId: string }
-  | { type: 'addTask'; id?: string; title: string; projectId?: string }
+  | { type: 'addTask'; id?: string; title: string; projectId?: string; text?: string }
   | { type: 'updateTask'; id: string; patch: Partial<Task>; summary: string }
   | { type: 'setTaskStatus'; id: string; status: TaskStatus }
   | { type: 'toggleTrigger'; taskId: string; triggerId: string }

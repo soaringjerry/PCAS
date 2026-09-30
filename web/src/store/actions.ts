@@ -1,6 +1,7 @@
 import type { Agent, CandidateKind, Doc, MemoryKind, Project, SampleState, Settings, Task, TaskStatus } from '../domain/types'
 
 export type Action =
+  | { type: 'delegateTask'; id: string; title: string; prompt: string; agentId: string }
   | { type: 'capture'; text: string }
   | {
       type: 'acceptCandidate'

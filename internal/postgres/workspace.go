@@ -351,6 +351,44 @@ func (s *Store) Execute(ctx context.Context, scope memory.Scope, in workspace.Co
 		return out, memory.ErrInvalid
 	}
 	hash := sha256.Sum256(asJSON(in))
+	if oneOf(in.Type, "requestRun", "delegateTask") {
+		if requireText(in.Prompt) != nil || in.Type == "delegateTask" && !memory.ID(in.ID).Valid() || in.Type == "requestRun" && !memory.ID(in.ThingID).Valid() {
+			return out, memory.ErrInvalid
+		}
+		// Avoid a second embedding/budget reservation for a completed retry.
+		var prior []byte
+		err := s.pool.QueryRow(ctx, "SELECT request_hash FROM workspace_commands WHERE owner_id=$1 AND request_id=$2", string(scope.OwnerID), in.RequestID).Scan(&prior)
+		if err == nil {
+			if !bytes.Equal(prior, hash[:]) {
+				return out, memory.ErrConflict
+			}
+			return s.Snapshot(ctx, scope)
+		}
+		if !errors.Is(err, pgx.ErrNoRows) {
+			return out, err
+		}
+		var revision int64
+		if err := s.pool.QueryRow(ctx, "SELECT revision FROM workspace_owners WHERE owner_id=$1", string(scope.OwnerID)).Scan(&revision); err != nil {
+			return out, err
+		}
+		if revision != in.ExpectedRevision {
+			return out, memory.ErrConflict
+		}
+		if in.Type == "delegateTask" {
+			var exists bool
+			if err := s.pool.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM work_items WHERE owner_id=$1 AND id=$2)", string(scope.OwnerID), in.ID).Scan(&exists); err != nil {
+				return out, err
+			}
+			if exists {
+				return out, memory.ErrConflict
+			}
+		}
+		var errPrepare error
+		ctx, errPrepare = s.prepareRunContext(ctx, scope, in)
+		if errPrepare != nil {
+			return out, errPrepare
+		}
+	}
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		if err := s.ensureOwner(ctx, tx, scope); err != nil {
 			return err
@@ -452,6 +490,9 @@ func getItem(ctx context.Context, tx pgx.Tx, scope memory.Scope, id string) (wor
 	return queryDocument[workspace.Item](ctx, tx, "SELECT document FROM work_items WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), id)
 }
 func saveItem(ctx context.Context, tx pgx.Tx, scope memory.Scope, item workspace.Item) error {
+	if err := syncArtifactEditsTx(ctx, tx, scope, item); err != nil {
+		return err
+	}
 	if !memory.ID(item.ID).Valid() || requireText(item.Title) != nil || len(item.Title) > 2000 {
 		return memory.ErrInvalid
 	}

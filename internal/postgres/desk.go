@@ -58,6 +58,26 @@ func (s *Store) AnswerDesk(ctx context.Context, scope memory.Scope, agentID, que
 		if !agent.Enabled || agent.Channel == "manual" {
 			return memory.ErrUnavailable
 		}
+		for i := range history {
+			// IDs identify server-owned turns; legacy clients keep questions only.
+			history[i].Answer = ""
+			if history[i].ID == "" {
+				continue
+			}
+			if !memory.ID(history[i].ID).Valid() {
+				return memory.ErrInvalid
+			}
+			var refs []memory.Ref
+			var question, answer string
+			if err := tx.QueryRow(ctx, "SELECT question,answer,dependencies FROM desk_turns WHERE owner_id=$1 AND id=$2 AND agent_id=$3", string(scope.OwnerID), history[i].ID, agent.ID).Scan(&question, &answer, &refs); err != nil {
+				return memory.ErrNotFound
+			}
+			history[i].Question = question
+			if verifyRunTx(ctx, tx, scope, workspace.Run{AgentID: agent.ID, ContextVersions: refs}) == nil {
+				history[i].Answer = answer
+				dependencies = append(dependencies, refs...)
+			}
+		}
 		// The same visibility as a run: only what this assistant has been granted.
 		if memories, err = s.memoriesTx(ctx, tx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: agent.ID}, true); err != nil {
 			return err
@@ -100,9 +120,12 @@ func (s *Store) AnswerDesk(ctx context.Context, scope memory.Scope, agentID, que
 	if len(history) > 0 {
 		fmt.Fprintln(&prompt, "\n同一张卡片上之前的对话（本次是接着问）：")
 		for _, turn := range history {
-			// Client-held answers have no server-verified provenance. Re-retrieve
-			// permitted evidence instead of replaying possibly revoked text.
 			fmt.Fprintf(&prompt, "问：%s\n", turn.Question)
+			if turn.Answer != "" {
+				fmt.Fprintf(&prompt, "答：%s\n", turn.Answer)
+			} else if turn.ID != "" {
+				fmt.Fprintln(&prompt, "（先前回答的依据已变化，请按当前允许的资料重新回答。）")
+			}
 		}
 	}
 	fmt.Fprintf(&prompt, "\n问题：%s\n\n检索到的记录（引用 ID）：\n", question)
@@ -112,7 +135,7 @@ func (s *Store) AnswerDesk(ctx context.Context, scope memory.Scope, agentID, que
 		if !ok || sent[m.ID] != (memory.Ref{}) || len(sent) >= 20 {
 			continue
 		}
-		fmt.Fprintf(&prompt, "[%s / %s] %s\n", m.ID, m.Epistemic, m.Text)
+		fmt.Fprintf(&prompt, "[%s / %s / confirmation=%s / acquisition=%s] %s\n", m.ID, m.Epistemic, m.Confirmation, m.Acquisition, m.Text)
 		sent[m.ID] = memory.Ref{ID: memory.ID(m.ID), Version: m.Version, Kind: memory.ClaimKind}
 		dependencies = append(dependencies, sent[m.ID])
 	}
@@ -197,6 +220,20 @@ func (s *Store) AnswerDesk(ctx context.Context, scope memory.Scope, agentID, que
 			out.Used = append(out.Used, workspace.DeskSource{Ref: ref, Text: visible[id].Text})
 			delete(sent, id)
 		}
+	}
+	out.ID = string(memory.NewID())
+	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(scope.OwnerID)); err != nil {
+			return err
+		}
+		if err := verifyRunTx(ctx, tx, scope, workspace.Run{AgentID: agent.ID, ContextVersions: dependencies}); err != nil {
+			return err
+		}
+		_, err := tx.Exec(ctx, "INSERT INTO desk_turns(owner_id,id,agent_id,question,answer,dependencies) VALUES($1,$2,$3,$4,$5,$6)", string(scope.OwnerID), out.ID, agent.ID, question, out.Answer, asJSON(dependencies))
+		return err
+	})
+	if err != nil {
+		return workspace.DeskAnswer{}, err
 	}
 	return out, nil
 }

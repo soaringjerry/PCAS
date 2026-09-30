@@ -44,6 +44,7 @@ export interface Trigger {
 }
 
 export interface Task {
+  hasRetainedWriting?: boolean
   id: ID
   title: string
   notes?: string
@@ -84,6 +85,7 @@ export interface Wake {
 }
 
 export interface Idea {
+  hasRetainedWriting?: boolean
   id: ID
   title: string
   body: string
@@ -103,6 +105,7 @@ export interface Idea {
 export type ProjectStatus = 'active' | 'paused' | 'done'
 
 export interface Project {
+  hasRetainedWriting?: boolean
   id: ID
   name: string
   goal: string

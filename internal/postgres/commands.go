@@ -14,6 +14,26 @@ import (
 
 func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c workspace.Command) error {
 	switch c.Type {
+	case "delegateTask":
+		// One explicit delegation atomically creates the work and queues its run.
+		// Execute's request receipt fences retries; a stable item ID also fences
+		// replays under a new request ID after a lost response/reload.
+		if !memory.ID(c.ID).Valid() || requireText(c.Prompt) != nil {
+			return memory.ErrInvalid
+		}
+		agent, err := queryDocument[workspace.Agent](ctx, tx, "SELECT document FROM workspace_agents WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), c.AgentID)
+		if err != nil || !agent.Enabled || agent.Channel == "manual" || s.models == nil || !s.models.Available(agent.ID) {
+			return memory.ErrUnavailable
+		}
+		create := c
+		create.Type = "addTask"
+		create.Text = c.Prompt
+		if err := s.commandTx(ctx, tx, scope, create); err != nil {
+			return err
+		}
+		run := c
+		run.Type, run.ID, run.ThingID, run.Kind = "requestRun", "", c.ID, "draft"
+		return s.runCommandTx(ctx, tx, scope, run)
 	case "capture":
 		if err := requireText(c.Text); err != nil {
 			return err

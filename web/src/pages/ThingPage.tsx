@@ -16,6 +16,7 @@ import type { Doc, Run, RunKind, Task } from '../domain/types'
 import { useStore } from '../store/context'
 import { useShell } from '../store/shell'
 import { useToast } from '../store/toast'
+import { api } from '../store/api'
 import { NotFound } from './NotFound'
 
 function Header({ thing }: { thing: Thing }) {
@@ -47,6 +48,7 @@ function Header({ thing }: { thing: Thing }) {
         }}
       />
       <Meta thing={thing} />
+      {thing.item.hasRetainedWriting && <RetainedWriting id={thing.id} />}
       <textarea
         key={`notes-${thing.id}`}
         className="notes"
@@ -61,6 +63,20 @@ function Header({ thing }: { thing: Thing }) {
       />
     </>
   )
+}
+
+function RetainedWriting({ id }: { id: string }) {
+  const [writing, setWriting] = useState<{ field: string; text: string; reason: string }[] | null>(null)
+  const [error, setError] = useState('')
+  return <div>
+    <p>旧版文字的来源无法分开，已保留供你检查。副手不会使用这些文字。</p>
+    <button className="btn btn-quiet" type="button" onClick={async () => {
+      try { setWriting(await api(`/v1/workspace/items/${id}/retained-writing`)); setError('') }
+      catch (e) { setError(e instanceof Error ? e.message : '文字暂时无法读取') }
+    }}>查看保留的文字</button>
+    {error && <p role="alert">{error}</p>}
+    {writing?.map((part) => <div key={part.field}><p>{part.reason}</p><pre style={{ whiteSpace: 'pre-wrap' }}>{part.text}</pre></div>)}
+  </div>
 }
 
 function ProjectPicker({ thing }: { thing: Thing }) {

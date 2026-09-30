@@ -31,6 +31,21 @@ type Options struct {
 }
 
 func (s *Server) workspaceRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("GET /v1/workspace/items/{id}/retained-writing", s.authorize(func(w http.ResponseWriter, r *http.Request, scope memory.Scope) {
+		reader, ok := s.options.Workspace.(interface {
+			RetainedWriting(context.Context, memory.Scope, string) ([]map[string]string, error)
+		})
+		if !ok {
+			s.fail(w, memory.ErrUnavailable)
+			return
+		}
+		out, err := reader.RetainedWriting(r.Context(), scope, r.PathValue("id"))
+		if err != nil {
+			s.fail(w, err)
+			return
+		}
+		writeJSON(w, 200, out)
+	}))
 	if s.options.Attachments != nil {
 		mux.HandleFunc("POST /v1/memory/attachments", s.authorize(func(w http.ResponseWriter, r *http.Request, scope memory.Scope) {
 			if !scope.IsOwner {

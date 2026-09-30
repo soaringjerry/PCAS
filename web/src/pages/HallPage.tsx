@@ -5,6 +5,7 @@ import { RecallSheet } from '../components/RecallSheet'
 import { SourceSheet } from '../components/SourceSheet'
 import { UnsureSheet } from '../components/UnsureSheet'
 import {
+  ambiguousDelegation,
   backgroundFeed,
   decisionQueue,
   ideaNote,
@@ -128,6 +129,7 @@ function TodayWall() {
 /* ---------- Desk ---------- */
 
 interface DeskReply {
+  id: string
   answer: string
   agent: string
   used: { ref: { id: string; version: number }; text: string }[]
@@ -144,9 +146,9 @@ async function route(q: string): Promise<{ intent: Intent; sure: boolean }> {
   try {
     const r = await api<{ intent: Intent; confidence: number }>('/v1/desk/route', { text: q })
     // Starting the assistant spends budget and shares memories with it, so it needs a clearer call.
-    return { intent: r.intent, sure: r.confidence >= (r.intent === 'delegate' ? 0.8 : 0.6) }
+    return { intent: r.intent, sure: r.confidence >= (r.intent === 'delegate' ? 0.8 : 0.6) && (r.intent !== 'delegate' || !ambiguousDelegation(q)) }
   } catch {
-    return { intent: looksLikeRequest(q) ? 'delegate' : looksLikeQuestion(q) ? 'ask' : 'record', sure: false }
+    return { intent: looksLikeRequest(q) ? 'delegate' : looksLikeQuestion(q) ? 'ask' : 'record', sure: looksLikeRequest(q) || looksLikeQuestion(q) }
   }
 }
 
@@ -349,7 +351,7 @@ function Desk() {
   const ask = async (q: string, follow = false) => {
     const ticket = ++asked.current
     const before = follow && thread ? thread : []
-    const history = before.flatMap((t) => (t.reply ? [{ q: t.q, a: '' }] : [])).slice(-6)
+    const history = before.flatMap((t) => (t.reply ? [{ id: t.reply.id, q: t.q, a: '' }] : [])).slice(-6)
     setReceipt(null)
     setThread([...before, { q, busy: true }])
     const done = (turn: Turn) => {
@@ -370,13 +372,18 @@ function Desk() {
     return true
   }
 
-  // Creating an item does not itself authorize a paid model run.
   const delegate = async (q: string, prompt = q) => {
+    const agentId = agentFor('desk')
+    if (agentId === 'manual') {
+      setReceipt({ key: Date.now(), text: '需要先启用一个能直接执行的副手', hint: '在设置里连接模型，然后重新提交这句话。' })
+      setText(q)
+      return false
+    }
     const id = crypto.randomUUID()
     const title = q.length > 60 ? `${q.slice(0, 60)}…` : q
-    if (!(await dispatch({ type: 'addTask', id, title, text: prompt }))) return false
+    if (!(await dispatch({ type: 'delegateTask', id, title, prompt, agentId }))) return false
     close()
-    setReceipt({ key: Date.now(), text: '建好了事项', hint: '打开事项确认副手、上下文和费用后再开始。', to: `/t/${id}` })
+    setReceipt({ key: Date.now(), text: '副手开始做了', hint: '做好后会带着结果回来。', to: `/t/${id}` })
     return true
   }
 
@@ -395,15 +402,16 @@ function Desk() {
     }
     setRouting(true)
     const { intent, sure } = await route(q)
-    setRouting(false)
     setText('')
-    if (!sure || intent === 'delegate') {
+    if (!sure) {
       close()
       setReceipt(null)
       setPick(q)
+      setRouting(false)
       return
     }
     if (!(await go(intent, q))) setText(q)
+    setRouting(false)
   }
 
   return (

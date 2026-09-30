@@ -31,6 +31,10 @@ func testStore(t *testing.T) *Store {
 		t.Fatal(err)
 	}
 	t.Cleanup(admin.Close)
+	var encoding string
+	if err := admin.pool.QueryRow(ctx, "SHOW server_encoding").Scan(&encoding); err != nil || encoding != "UTF8" {
+		t.Fatalf("integration tests require PostgreSQL UTF8, got %q (%v)", encoding, err)
+	}
 	if _, err := admin.pool.Exec(ctx, "CREATE EXTENSION IF NOT EXISTS vector WITH SCHEMA public"); err != nil {
 		t.Fatal(err)
 	}

@@ -9,6 +9,9 @@ import (
 )
 
 func artifactTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, runID, thingID, kind, id, body string) error {
+	if err := adoptBlocksTx(ctx, tx, scope, runID, thingID, kind, body); err != nil {
+		return err
+	}
 	_, err := tx.Exec(ctx, "INSERT INTO adopted_artifacts(owner_id,run_id,thing_id,kind,artifact_id,body) VALUES($1,$2,$3,$4,$5,$6)", string(scope.OwnerID), runID, thingID, kind, id, body)
 	return err
 }
@@ -16,6 +19,9 @@ func artifactTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, runID, thing
 // Promoting an idea copies its body into the task's notes. Keep the same run
 // dependencies on that new field, even if the owner already edited the body.
 func promoteArtifactsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, ideaID, taskID string) error {
+	if _, err := tx.Exec(ctx, `INSERT INTO artifact_fields(owner_id,thing_id,field,blocks) SELECT owner_id,$3,'notes',blocks FROM artifact_fields WHERE owner_id=$1 AND thing_id=$2 AND field='body' ON CONFLICT DO NOTHING`, string(scope.OwnerID), ideaID, taskID); err != nil {
+		return err
+	}
 	_, err := tx.Exec(ctx, `INSERT INTO adopted_artifacts(owner_id,run_id,thing_id,kind,artifact_id,body)
  SELECT owner_id,run_id,$3,'notes',artifact_id,body FROM adopted_artifacts
  WHERE owner_id=$1 AND thing_id=$2 AND kind='body' ON CONFLICT DO NOTHING`, string(scope.OwnerID), ideaID, taskID)
@@ -24,9 +30,8 @@ func promoteArtifactsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, idea
 
 // An adopted result is still derived from its inputs. Excluding an input or
 // revoking its grant must also exclude copies embedded in later work briefs.
-// Free-text fields retain provenance through edits: without structural blocks,
-// the whole field is protected. Matching the old text would lose dependencies
-// after punctuation changes or when an edited copy sits beside the original.
+// New fields carry ownership blocks through edits and promotions. Pre-block
+// fields are conservatively protected until ownership can be reviewed.
 func sanitizeItemTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, principal string, item workspace.Item) (workspace.Item, []memory.Ref, error) {
 	// Older promotions retained ideaId but not artifact links. Repair that
 	// lineage before using their copied notes in a new provider request.
@@ -36,7 +41,19 @@ func sanitizeItemTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, principa
 		}
 	}
 	dependencies := []memory.Ref{}
-	rows, err := tx.Query(ctx, `SELECT a.kind,a.artifact_id, NOT EXISTS(
+	type fieldBlocks struct {
+		Field  string          `json:"field"`
+		Blocks []artifactBlock `json:"blocks"`
+	}
+	fields, err := queryDocuments[fieldBlocks](ctx, tx, "SELECT jsonb_build_object('field',field,'blocks',blocks) FROM artifact_fields WHERE owner_id=$1 AND thing_id=$2", string(scope.OwnerID), item.ID)
+	if err != nil {
+		return item, nil, err
+	}
+	owned := map[string][]artifactBlock{}
+	for _, f := range fields {
+		owned[f.Field] = f.Blocks
+	}
+	rows, err := tx.Query(ctx, `SELECT a.kind,a.artifact_id,a.run_id::text, NOT EXISTS(
         SELECT 1 FROM run_dependencies d LEFT JOIN memory_records r ON (r.owner_id,r.id)=(d.owner_id,d.memory_id)
         WHERE (d.owner_id,d.run_id)=(a.owner_id,a.run_id) AND (r.state IS DISTINCT FROM 'active'
         OR d.memory_version IS DISTINCT FROM (SELECT v.version FROM applicable_claim_versions($1,now(),now()) v WHERE v.claim_id=d.memory_id)
@@ -50,13 +67,32 @@ func sanitizeItemTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, principa
 	}
 	defer rows.Close()
 	for rows.Next() {
-		var kind, id string
+		var kind, id, runID string
 		var allowed bool
 		var refs []memory.Ref
-		if err := rows.Scan(&kind, &id, &allowed, &refs); err != nil {
+		if err := rows.Scan(&kind, &id, &runID, &allowed, &refs); err != nil {
 			return item, nil, err
 		}
 		used := false
+		field := kind
+		if kind == "task" {
+			field = "title"
+		}
+		if blocks, ok := owned[field]; ok {
+			kept := []artifactBlock{}
+			for _, block := range blocks {
+				dependent := oneOf(runID, block.Runs...)
+				used = used || dependent
+				if allowed || !dependent {
+					kept = append(kept, block)
+				}
+			}
+			owned[field] = kept
+			if used && allowed {
+				dependencies = append(dependencies, refs...)
+			}
+			continue
+		}
 		switch kind {
 		case "notes":
 			used = item.Notes != ""
@@ -88,14 +124,18 @@ func sanitizeItemTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, principa
 			used = true
 			if !allowed {
 				item.Title = "事项内容需要重新授权或核验"
-				item.Notes = ""
-				item.Body = ""
-				item.Checklist = []workspace.Check{}
 			}
 		}
 		if used && allowed {
 			dependencies = append(dependencies, refs...)
 		}
+	}
+	for field, blocks := range owned {
+		text := blockText(blocks)
+		if field == "title" && text == "" {
+			text = "事项内容需要重新授权或核验"
+		}
+		setField(&item, field, text)
 	}
 	return item, dependencies, rows.Err()
 }
@@ -108,15 +148,15 @@ func purgeArtifactsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, ids []
  WHERE a.owner_id=$1 AND a.kind='body' AND t.kind='task' ON CONFLICT DO NOTHING`, string(scope.OwnerID)); err != nil {
 		return nil, err
 	}
-	rows, err := tx.Query(ctx, `SELECT thing_id::text,kind,artifact_id FROM adopted_artifacts WHERE owner_id=$1 AND run_id IN (SELECT run_id FROM run_dependencies WHERE owner_id=$1 AND memory_id=ANY($2::uuid[]))`, string(scope.OwnerID), ids)
+	rows, err := tx.Query(ctx, `SELECT thing_id::text,kind,artifact_id,run_id::text,body FROM adopted_artifacts WHERE owner_id=$1 AND run_id IN (SELECT run_id FROM run_dependencies WHERE owner_id=$1 AND memory_id=ANY($2::uuid[]))`, string(scope.OwnerID), ids)
 	if err != nil {
 		return nil, err
 	}
-	type artifact struct{ Thing, Kind, ID string }
+	type artifact struct{ Thing, Kind, ID, Run, Body string }
 	artifacts := []artifact{}
 	for rows.Next() {
 		var a artifact
-		if err := rows.Scan(&a.Thing, &a.Kind, &a.ID); err != nil {
+		if err := rows.Scan(&a.Thing, &a.Kind, &a.ID, &a.Run, &a.Body); err != nil {
 			rows.Close()
 			return nil, err
 		}
@@ -133,22 +173,46 @@ func purgeArtifactsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, ids []
 		if err != nil {
 			return nil, err
 		}
-		switch a.Kind {
-		case "notes":
-			item.Notes = ""
-		case "body":
-			item.Body = ""
-		case "progress":
-			item.Progress = ""
-		case "task":
-			item.Title = "已删除的生成内容"
-			item.Name = item.Title
-			item.Notes = ""
-			item.Body = ""
-			item.Status = "cancelled"
-			item.Checklist = []workspace.Check{}
-			item.History = []workspace.Revision{}
-		case "check":
+		field := a.Kind
+		if field == "task" {
+			field = "title"
+		}
+		var blocks []artifactBlock
+		blockErr := tx.QueryRow(ctx, "SELECT blocks FROM artifact_fields WHERE owner_id=$1 AND thing_id=$2 AND field=$3", string(scope.OwnerID), item.ID, field).Scan(&blocks)
+		if blockErr == nil {
+			kept := []artifactBlock{}
+			for _, block := range blocks {
+				if !oneOf(a.Run, block.Runs...) {
+					kept = append(kept, block)
+				}
+			}
+			text := blockText(kept)
+			if field == "title" && text == "" {
+				text = "已删除的生成内容"
+				kept = []artifactBlock{{Text: text, Runs: []string{}}}
+			}
+			setField(&item, field, text)
+			if err := saveBlocksTx(ctx, tx, scope, item.ID, field, kept); err != nil {
+				return nil, err
+			}
+		} else if blockErr != pgx.ErrNoRows {
+			return nil, blockErr
+		} else if oneOf(field, "notes", "body", "progress", "title") {
+			text := fieldText(item, field)
+			if text != "" && text != a.Body && text != "\n"+a.Body {
+				// Ownership cannot be reconstructed after historical freeform edits.
+				// Quarantine for explicit owner review; never feed it to a model.
+				if _, err := tx.Exec(ctx, "INSERT INTO retained_artifact_writing(owner_id,thing_id,field,body,reason) VALUES($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING", string(scope.OwnerID), item.ID, field, text, "旧版文字混有生成内容，已隔离；请检查并单独保存自己的文字。"); err != nil {
+					return nil, err
+				}
+				item.HasRetainedWriting = true
+			}
+			text = ""
+			if field == "title" {
+				text = "已删除的生成内容"
+			}
+			setField(&item, field, text)
+		} else if a.Kind == "check" {
 			kept := []workspace.Check{}
 			for _, check := range item.Checklist {
 				if check.ID != a.ID {

@@ -480,6 +480,7 @@ func (s *Store) deleteTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in 
 	}
 	for _, sql := range []string{
 		`INSERT INTO blob_cleanup_jobs(owner_id,blob_key) SELECT owner_id,blob_key FROM source_versions WHERE owner_id=$1 AND source_id=ANY($2::uuid[]) AND blob_key IS NOT NULL ON CONFLICT DO NOTHING`,
+		`DELETE FROM desk_turns WHERE owner_id=$1 AND EXISTS(SELECT 1 FROM jsonb_array_elements(dependencies) d WHERE d->>'id'=ANY($2::text[]))`,
 		`DELETE FROM capture_candidates WHERE owner_id=$1 AND document->>'resolvedInto'=ANY($2::text[])`,
 		`DELETE FROM work_documents WHERE owner_id=$1 AND document->>'runId' IN (SELECT run_id::text FROM run_dependencies WHERE owner_id=$1 AND memory_id=ANY($2::uuid[]))`,
 		`DELETE FROM training_samples WHERE owner_id=$1 AND (memory_id=ANY($2::uuid[]) OR run_id IN (SELECT run_id FROM run_dependencies WHERE owner_id=$1 AND memory_id=ANY($2::uuid[])))`,

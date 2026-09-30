@@ -59,3 +59,29 @@ jobs:
           name: browser-regression-failure
           path: web/test-results/
           retention-days: 7
+
+  browser-real-backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci && npm run build && npx playwright install --with-deps chromium
+        working-directory: web
+      # Own tmpfs database, real serve + worker, and deterministic external services.
+      # The runner cleans up only its recorded PIDs and its own container/volumes.
+      - run: bash web/tests/support/real-backend.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: real-backend-acceptance
+          path: web/test-results/
+          retention-days: 7

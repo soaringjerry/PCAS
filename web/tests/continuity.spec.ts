@@ -1,6 +1,7 @@
 import { test, expect, request } from '@playwright/test'
+import { evidence } from './support/real'
 
-test('generic connector persists, scoped webhook cannot read memory, archive upload queues parsing', async ({ page }) => {
+test('generic connector persists, scoped webhook cannot read memory, archive upload queues parsing', async ({ page }, info) => {
   const errors: string[] = []
   page.on('pageerror', e => errors.push(e.message))
   await page.goto('/settings')
@@ -26,4 +27,5 @@ test('generic connector persists, scoped webhook cannot read memory, archive upl
   expect((await archiveResponse).status()).toBe(202)
   await expect(page.getByRole('status').filter({ hasText: '原始归档已保留' })).toBeVisible()
   expect(errors).toEqual([])
+  await evidence(page, info)
 })

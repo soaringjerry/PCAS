@@ -1,0 +1,17 @@
+go vet ./cmd/... ./internal/...
+go test -race ./cmd/... ./internal/...
+?   	github.com/soaringjerry/PCAS/cmd/pcas	[no test files]
+ok  	github.com/soaringjerry/PCAS/internal/ai	1.122s
+ok  	github.com/soaringjerry/PCAS/internal/ai/siwc	(cached)
+ok  	github.com/soaringjerry/PCAS/internal/blob	(cached)
+ok  	github.com/soaringjerry/PCAS/internal/config	(cached)
+ok  	github.com/soaringjerry/PCAS/internal/connectors	(cached)
+ok  	github.com/soaringjerry/PCAS/internal/httpapi	(cached)
+ok  	github.com/soaringjerry/PCAS/internal/memory	(cached)
+ok  	github.com/soaringjerry/PCAS/internal/notify	(cached)
+ok  	github.com/soaringjerry/PCAS/internal/postgres	1.061s
+ok  	github.com/soaringjerry/PCAS/internal/telegram	(cached)
+?   	github.com/soaringjerry/PCAS/internal/testsupport/golden	[no test files]
+?   	github.com/soaringjerry/PCAS/internal/worker	[no test files]
+ok  	github.com/soaringjerry/PCAS/internal/workspace	(cached)
+go build -trimpath -o bin/pcas ./cmd/pcas

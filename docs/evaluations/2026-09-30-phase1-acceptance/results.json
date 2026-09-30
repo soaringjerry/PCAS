@@ -1,0 +1,159 @@
+{
+  "codeCommit": "5ab8c01",
+  "baseCommit": "a3adb4b",
+  "golden": [
+    {
+      "title": "G1 一句话安排：时间、项目、提醒、刷新与撤销",
+      "durationsSeconds": [
+        1.636,
+        1.466,
+        1.376
+      ],
+      "results": [
+        "passed",
+        "passed",
+        "passed"
+      ]
+    },
+    {
+      "title": "G2 边问边记：回复前连续发送，两轮都处理",
+      "durationsSeconds": [
+        3.224,
+        3.136,
+        3.038
+      ],
+      "results": [
+        "passed",
+        "passed",
+        "passed"
+      ]
+    },
+    {
+      "title": "G3 改安排：同一件事改到周一，提醒跟随",
+      "durationsSeconds": [
+        0.88,
+        0.808,
+        0.825
+      ],
+      "results": [
+        "passed",
+        "passed",
+        "passed"
+      ]
+    },
+    {
+      "title": "G4 事项页秘书：自动加入三步、撤销、放回去",
+      "durationsSeconds": [
+        3.902,
+        4.208,
+        3.894
+      ],
+      "results": [
+        "passed",
+        "passed",
+        "passed"
+      ]
+    },
+    {
+      "title": "G5 失败恢复：副手首请求报错，原地重试成功",
+      "durationsSeconds": [
+        7.129,
+        6.84,
+        6.879
+      ],
+      "results": [
+        "passed",
+        "passed",
+        "passed"
+      ]
+    },
+    {
+      "title": "G6 提醒送达：真实等待一分钟、首页、Web Push、Telegram",
+      "durationsSeconds": [
+        85.922,
+        93.957,
+        93.991
+      ],
+      "results": [
+        "passed",
+        "passed",
+        "passed"
+      ]
+    },
+    {
+      "title": "G7 Telegram 对话：入站文字、首页、回执按钮和撤销回调",
+      "durationsSeconds": [
+        6.581,
+        6.646,
+        6.639
+      ],
+      "results": [
+        "passed",
+        "passed",
+        "passed"
+      ]
+    },
+    {
+      "title": "G8 完成即撤销：首页勾选、toast、回到原位",
+      "durationsSeconds": [
+        1.018,
+        1.162,
+        1.158
+      ],
+      "results": [
+        "passed",
+        "passed",
+        "passed"
+      ]
+    },
+    {
+      "title": "G9 不丢话：模型真实超时后收到保存回执并能查原话",
+      "durationsSeconds": [
+        91.263,
+        91.461,
+        91.633
+      ],
+      "results": [
+        "passed",
+        "passed",
+        "passed"
+      ]
+    }
+  ],
+  "legacy": [
+    {
+      "file": "backend.spec.ts",
+      "status": "passed",
+      "durationSeconds": 5.193
+    },
+    {
+      "file": "chatgpt-direct.spec.ts",
+      "status": "passed",
+      "durationSeconds": 0.45
+    },
+    {
+      "file": "continuity.spec.ts",
+      "status": "passed",
+      "durationSeconds": 0.732
+    },
+    {
+      "file": "model-api.spec.ts",
+      "status": "passed",
+      "durationSeconds": 0.892
+    }
+  ],
+  "pushAnnotations": [
+    {
+      "type": "push-permission",
+      "description": "denied"
+    },
+    {
+      "type": "push-permission",
+      "description": "denied"
+    },
+    {
+      "type": "push-permission",
+      "description": "denied"
+    }
+  ]
+}

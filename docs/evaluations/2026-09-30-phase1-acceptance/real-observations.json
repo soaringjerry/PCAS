@@ -1,0 +1,307 @@
+[
+  {
+    "text": "周五下午三点和张三对方案，算在 A 项目里",
+    "durationMs": 4819,
+    "status": 200,
+    "reply": "已安排周五下午三点和张三对方案，归入 A 项目。",
+    "receipts": [
+      {
+        "actionId": "8a1b2b56-a344-49e9-abce-75a9b9cc5b92",
+        "op": "create_task",
+        "text": "已建：明天 15:00 和张三对方案 · A 项目 · 14:30 提醒",
+        "thingId": "7f70b335-746d-4691-b869-c85ba92036c7",
+        "undoable": true,
+        "undone": false,
+        "status": "done"
+      }
+    ],
+    "tasks": [
+      {
+        "id": "7f70b335-746d-4691-b869-c85ba92036c7",
+        "title": "和张三对方案",
+        "due": "2026-10-02T07:00:00Z",
+        "projectId": "394e30f8-b3ec-48aa-bcfa-4a908fc0fcc8",
+        "triggers": [
+          {
+            "offset": "-30m",
+            "id": "due-reminder",
+            "kind": "time",
+            "description": "和张三对方案",
+            "nextAt": "2026-10-02T06:30:00Z",
+            "active": true
+          }
+        ],
+        "history": [
+          {
+            "at": "2026-09-30T21:11:53.441993264Z",
+            "by": "secretary",
+            "summary": "创建"
+          },
+          {
+            "at": "2026-09-30T21:11:53.442262567Z",
+            "by": "secretary",
+            "summary": "创建"
+          },
+          {
+            "at": "2026-09-30T21:11:53.446586749Z",
+            "by": "secretary",
+            "summary": "更新"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "text": "顺便记下明天交电费",
+    "durationMs": 3822,
+    "status": 200,
+    "reply": "记下了，明天交电费。",
+    "receipts": [
+      {
+        "actionId": "83b4afc1-442c-4286-8a2e-220a5d0781cd",
+        "op": "create_task",
+        "text": "已建：明天 交电费 · 09:00 提醒",
+        "thingId": "81b3a95a-13d9-49c3-895a-97100411e823",
+        "undoable": true,
+        "undone": false,
+        "status": "done"
+      }
+    ],
+    "tasks": [
+      {
+        "id": "81b3a95a-13d9-49c3-895a-97100411e823",
+        "title": "交电费",
+        "due": "2026-10-02T15:59:00Z",
+        "projectId": null,
+        "triggers": [
+          {
+            "offset": "09:00",
+            "id": "due-reminder",
+            "kind": "time",
+            "description": "交电费",
+            "nextAt": "2026-10-02T01:00:00Z",
+            "active": true
+          }
+        ],
+        "history": [
+          {
+            "at": "2026-09-30T21:11:57.394548904Z",
+            "by": "secretary",
+            "summary": "创建"
+          },
+          {
+            "at": "2026-09-30T21:11:57.394947458Z",
+            "by": "secretary",
+            "summary": "创建"
+          },
+          {
+            "at": "2026-09-30T21:11:57.399620943Z",
+            "by": "secretary",
+            "summary": "更新"
+          }
+        ]
+      },
+      {
+        "id": "7f70b335-746d-4691-b869-c85ba92036c7",
+        "title": "和张三对方案",
+        "due": "2026-10-02T07:00:00Z",
+        "projectId": "394e30f8-b3ec-48aa-bcfa-4a908fc0fcc8",
+        "triggers": [
+          {
+            "offset": "-30m",
+            "id": "due-reminder",
+            "kind": "time",
+            "description": "和张三对方案",
+            "nextAt": "2026-10-02T06:30:00Z",
+            "active": true
+          }
+        ],
+        "history": [
+          {
+            "at": "2026-09-30T21:11:53.441993264Z",
+            "by": "secretary",
+            "summary": "创建"
+          },
+          {
+            "at": "2026-09-30T21:11:53.442262567Z",
+            "by": "secretary",
+            "summary": "创建"
+          },
+          {
+            "at": "2026-09-30T21:11:53.446586749Z",
+            "by": "secretary",
+            "summary": "更新"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "text": "我今天有什么事？",
+    "durationMs": 5177,
+    "status": 200,
+    "reply": "今天（10月1日）没有已记录的待办事项。",
+    "receipts": [],
+    "tasks": [
+      {
+        "id": "81b3a95a-13d9-49c3-895a-97100411e823",
+        "title": "交电费",
+        "due": "2026-10-02T15:59:00Z",
+        "projectId": null,
+        "triggers": [
+          {
+            "offset": "09:00",
+            "id": "due-reminder",
+            "kind": "time",
+            "description": "交电费",
+            "nextAt": "2026-10-02T01:00:00Z",
+            "active": true
+          }
+        ],
+        "history": [
+          {
+            "at": "2026-09-30T21:11:57.394548904Z",
+            "by": "secretary",
+            "summary": "创建"
+          },
+          {
+            "at": "2026-09-30T21:11:57.394947458Z",
+            "by": "secretary",
+            "summary": "创建"
+          },
+          {
+            "at": "2026-09-30T21:11:57.399620943Z",
+            "by": "secretary",
+            "summary": "更新"
+          }
+        ]
+      },
+      {
+        "id": "7f70b335-746d-4691-b869-c85ba92036c7",
+        "title": "和张三对方案",
+        "due": "2026-10-02T07:00:00Z",
+        "projectId": "394e30f8-b3ec-48aa-bcfa-4a908fc0fcc8",
+        "triggers": [
+          {
+            "offset": "-30m",
+            "id": "due-reminder",
+            "kind": "time",
+            "description": "和张三对方案",
+            "nextAt": "2026-10-02T06:30:00Z",
+            "active": true
+          }
+        ],
+        "history": [
+          {
+            "at": "2026-09-30T21:11:53.441993264Z",
+            "by": "secretary",
+            "summary": "创建"
+          },
+          {
+            "at": "2026-09-30T21:11:53.442262567Z",
+            "by": "secretary",
+            "summary": "创建"
+          },
+          {
+            "at": "2026-09-30T21:11:53.446586749Z",
+            "by": "secretary",
+            "summary": "更新"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "inputAvailableWhileWaiting": true
+  },
+  {
+    "text": "改到下周一上午十点",
+    "durationMs": 6692,
+    "status": 200,
+    "reply": "交电费改到下周一（10月5日）上午十点。",
+    "receipts": [
+      {
+        "actionId": "5a1ebcec-d065-4bd6-ae20-6bce62877c20",
+        "op": "update",
+        "text": "已改：交电费 → 10 月 5 日 10:00",
+        "thingId": "81b3a95a-13d9-49c3-895a-97100411e823",
+        "undoable": true,
+        "undone": false,
+        "status": "done"
+      }
+    ],
+    "tasks": [
+      {
+        "id": "81b3a95a-13d9-49c3-895a-97100411e823",
+        "title": "交电费",
+        "due": "2026-10-05T02:00:00Z",
+        "projectId": null,
+        "triggers": [
+          {
+            "offset": "09:00",
+            "id": "due-reminder",
+            "kind": "time",
+            "description": "交电费",
+            "nextAt": "2026-10-05T01:00:00Z",
+            "active": true
+          }
+        ],
+        "history": [
+          {
+            "at": "2026-09-30T21:11:57.394548904Z",
+            "by": "secretary",
+            "summary": "创建"
+          },
+          {
+            "at": "2026-09-30T21:11:57.394947458Z",
+            "by": "secretary",
+            "summary": "创建"
+          },
+          {
+            "at": "2026-09-30T21:11:57.399620943Z",
+            "by": "secretary",
+            "summary": "更新"
+          },
+          {
+            "at": "2026-09-30T21:12:05.494589504Z",
+            "by": "secretary",
+            "summary": "更新"
+          }
+        ]
+      },
+      {
+        "id": "7f70b335-746d-4691-b869-c85ba92036c7",
+        "title": "和张三对方案",
+        "due": "2026-10-02T07:00:00Z",
+        "projectId": "394e30f8-b3ec-48aa-bcfa-4a908fc0fcc8",
+        "triggers": [
+          {
+            "offset": "-30m",
+            "id": "due-reminder",
+            "kind": "time",
+            "description": "和张三对方案",
+            "nextAt": "2026-10-02T06:30:00Z",
+            "active": true
+          }
+        ],
+        "history": [
+          {
+            "at": "2026-09-30T21:11:53.441993264Z",
+            "by": "secretary",
+            "summary": "创建"
+          },
+          {
+            "at": "2026-09-30T21:11:53.442262567Z",
+            "by": "secretary",
+            "summary": "创建"
+          },
+          {
+            "at": "2026-09-30T21:11:53.446586749Z",
+            "by": "secretary",
+            "summary": "更新"
+          }
+        ]
+      }
+    ]
+  }
+]

@@ -248,7 +248,8 @@ Go 端 `workspace.State` 增加 `Notices []Notice`，JSON 字段名为 `notices`
   - 其他情况：存成文档。
 - 采纳记录为一个 `action_log` 动作，`source = "worker"`。
 - `Adoption` 增加两个字段：`actionId`（string）和 `auto`（bool）。Go 端由 D1 加，前端 `Run.adopted` 的类型由 D2 加。
-- 撤销用 `undoAction { id: run.adopted.actionId }`。撤销后 run 回到「已完成、未采纳」状态，因为 `agent_runs` 的写入也被记录了。
+- 撤销用 `undoAction { id: run.adopted.actionId }`。
+- **训练样本跟着撤销**（2026-09-30 补充）：`training_samples` 也纳入动作记录（迁移 018 给它挂上同一个收集触发器；撤销的白名单加上这张表）。撤销采纳时，删除由这次采纳产生的 `adopted-result` 样本；撤销后再手动采纳，只留一条样本。撤销后 run 回到「已完成、未采纳」状态，因为 `agent_runs` 的写入也被记录了。
 - 采纳时 `Doc.by = "ai"`，`summary` 写成「副手结果：<去向>」。
 
 ---

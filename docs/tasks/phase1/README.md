@@ -72,6 +72,8 @@ flowchart LR
 | `internal/postgres/reminders.go`、`internal/postgres/notify.go`、`internal/notify/`、`internal/httpapi/notify.go`（均为新建或 C1 独有） | C1 |
 | `web/src/main.tsx`（注册 Service Worker）、`web/public/icon-*.png`、`web/public/apple-touch-icon.png` | C1 |
 | `internal/postgres/runs.go`（run 完成后的处理） | D1 |
+| `internal/postgres/artifacts_test.go`、`desk_test.go`、`replay_test.go`、`ux_regressions_test.go`（只加 `undoAutoAdoption` 调用） | D1 |
+| `internal/postgres/migrations/018_*.sql`、`internal/postgres/actions_log.go`（撤销白名单加 `training_samples`） | D1 |
 | `internal/workspace/desk.go`（新建） | B1；`internal/workspace/notify.go`（新建）：C1 |
 | `internal/workspace/model.go` | B1（`Trigger.Offset`、撤销相关 error）、C1（`State.Notices`）、D1（`Adoption.ActionID/Auto`）；各自只加不改 |
 | `internal/httpapi/workspace.go`（注册 desk 路由） | B1 |

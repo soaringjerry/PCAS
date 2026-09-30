@@ -1,23 +1,14 @@
-import { buildBrief, contextFor } from './agent'
 import { isOpenTask, type Thing } from './things'
 import { dayOffset, formatWhen } from './time'
-import type { Agent, Idea, Run, RunKind, State, Task } from './types'
+import type { Run, State, Task } from './types'
 
 // The two lines on the home screen (docs/design/principles.md):
 // urgent things move by time, ongoing things move by events.
-
-export interface NextStep {
-  kind: RunKind
-  label: string
-  prompt: string
-  cost: number
-}
 
 export interface LineItem {
   thing: Thing
   reason: string
   tone: 'late' | 'today' | 'owed' | 'soon' | 'follow' | 'ready' | 'working' | 'wake' | 'doing' | 'waiting' | 'idle' | 'parked'
-  next?: NextStep
   /** An AI result waiting to be looked at. */
   result?: Run
   rank: number
@@ -25,32 +16,7 @@ export interface LineItem {
 }
 
 const DAY = 24 * 60 * 60 * 1000
-/** Matches the server's conservative reservation using configured CNY rates. */
-export function estimateCost(brief: string, agent?: Agent): number {
-  if (!agent || agent.channel === 'manual' || agent.protocol === 'codex' || agent.protocol === 'siwc') return 0
-  return ((new TextEncoder().encode(brief).length + 4096) * agent.inputPrice + agent.maxOutput * agent.outputPrice) / 1e6
-}
 export function spentToday(state: State): number { return state.budgetUsage }
-
-function step(state: State, thing: Thing, kind: RunKind, label: string, prompt: string): NextStep {
-  const agent = state.agents.find((a) => a.enabled && a.default) ?? state.agents.find((a) => a.enabled && a.available && a.protocol !== 'siwc') ?? state.agents[0]
-  const memories = contextFor(state, thing, agent).filter((c) => c.included).map((c) => c.memory)
-  return { kind, label, prompt, cost: estimateCost(buildBrief(state, thing, prompt, memories), agent) }
-}
-
-function taskStep(state: State, task: Task): NextStep {
-  const thing: Thing = { kind: 'task', id: task.id, item: task }
-  if (task.owedTo || /回复|邮件|答复/.test(task.title)) return step(state, thing, 'draft', '起草回复', '起草这件事需要的回复')
-  if (task.checklist.length === 0) return step(state, thing, 'breakdown', '拆步骤', '把这件事拆成具体的子任务')
-  const hasPlan = state.docs.some((d) => d.thingId === task.id && d.by === 'ai')
-  return hasPlan
-    ? step(state, thing, 'summary', '整理进度', '总结这件事目前的进度和卡点')
-    : step(state, thing, 'plan', '写方案', '为这件事写一份可执行的方案')
-}
-
-function ideaStep(state: State, idea: Idea): NextStep {
-  return step(state, { kind: 'idea', id: idea.id, item: idea }, 'plan', '评估一下', '评估这个想法现在是否值得做，给出方案')
-}
 
 function daysSince(iso: string): number {
   return Math.max(1, Math.floor((Date.now() - new Date(iso).getTime()) / DAY))
@@ -102,7 +68,6 @@ export function urgentLine(state: State): LineItem[] {
       thing: { kind: 'task', id: task.id, item: task },
       ...u,
       result,
-      next: result || running(state, task.id) ? undefined : taskStep(state, task),
       at: task.updatedAt,
     })
   }
@@ -133,12 +98,12 @@ export function ongoingLine(state: State): { active: LineItem[]; parked: LineIte
       const at = followUpAt(task)
       active.push(withProgress(thing, { reason: `等${task.waitingFor ?? '对方回复'}${at ? ` · ${formatWhen(at).replace(/ \d\d:\d\d$/, '')}跟进` : ''}`, tone: 'waiting', rank: 4 }, task.updatedAt))
     } else if (task.status === 'doing') {
-      active.push(withProgress(thing, { reason: nextCheck ? `下一步：${nextCheck.text}` : '正在做', tone: 'doing', rank: 2, next: taskStep(state, task) }, task.updatedAt))
+      active.push(withProgress(thing, { reason: nextCheck ? `下一步：${nextCheck.text}` : '正在做', tone: 'doing', rank: 2 }, task.updatedAt))
     } else {
       active.push(
         withProgress(
           thing,
-          { reason: nextCheck ? `下一步：${nextCheck.text}` : task.notes ? short(task.notes) : '还没开始', tone: 'idle', rank: 3, next: taskStep(state, task) },
+          { reason: nextCheck ? `下一步：${nextCheck.text}` : task.notes ? short(task.notes) : '还没开始', tone: 'idle', rank: 3 },
           task.updatedAt,
         ),
       )
@@ -148,9 +113,9 @@ export function ongoingLine(state: State): { active: LineItem[]; parked: LineIte
   for (const idea of state.ideas) {
     const thing: Thing = { kind: 'idea', id: idea.id, item: idea }
     if (idea.status === 'awakened') {
-      active.push(withProgress(thing, { reason: `✦ ${short(idea.wake?.reason ?? '条件满足了', 40)}`, tone: 'wake', rank: 1, next: ideaStep(state, idea) }, idea.updatedAt))
+      active.push(withProgress(thing, { reason: `✦ ${short(idea.wake?.reason ?? '条件满足了', 40)}`, tone: 'wake', rank: 1 }, idea.updatedAt))
     } else if (idea.status === 'active') {
-      active.push(withProgress(thing, { reason: `想法 · ${short(idea.body || '还没展开')}`, tone: 'idle', rank: 3, next: ideaStep(state, idea) }, idea.updatedAt))
+      active.push(withProgress(thing, { reason: `想法 · ${short(idea.body || '还没展开')}`, tone: 'idle', rank: 3 }, idea.updatedAt))
     } else if (idea.status === 'shelved') {
       const waiting = idea.conditions.find((c) => !c.met)
       parked.push({ thing, reason: waiting ? `等：${waiting.description}` : (idea.shelvedReason ?? '放着'), tone: 'parked', rank: 9, at: idea.updatedAt })
@@ -168,11 +133,4 @@ export function unsure(state: State) {
     candidates: state.candidates.filter((c) => c.state === 'pending'),
     guesses: state.memories.filter((m) => m.epistemic === 'inferred' && Date.now() - new Date(m.versions[0].at).getTime() < 7 * DAY),
   }
-}
-
-export function selectedCost(state: State, thing: Thing, prompt: string, agentId: string): number {
-  const agent = state.agents.find((a) => a.id === agentId)
-  if (!agent) return 0
-  const memories = contextFor(state, thing, agent).filter((c) => c.included).map((c) => c.memory)
-  return estimateCost(buildBrief(state, thing, prompt, memories), agent)
 }

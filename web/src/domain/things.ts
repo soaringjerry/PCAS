@@ -1,5 +1,5 @@
 import { ideaStatusLabel, projectStatusLabel, taskStatusLabel } from './labels'
-import type { Idea, Project, SourceRef, State, Task } from './types'
+import type { Actor, Idea, Project, Revision, SourceRef, State, Task } from './types'
 
 // The UI treats projects, ideas and tasks as one thing ("事情") whose kind can
 // change: an idea becomes a task, tasks gather under a project.
@@ -64,7 +64,7 @@ export interface TimelineEvent {
   link?: string
 }
 
-const actor = { user: '你', ai: 'AI', import: '导入', system: '系统' } as const
+const actor = { user: '你', secretary: '秘书', assistant: '副手', ai: 'AI', import: '导入', system: '系统' } as const satisfies Record<Actor | Revision['by'], string>
 
 /** Everything that happened to a thing, oldest first: its 来龙去脉. */
 export function timelineFor(state: State, thing: Thing): TimelineEvent[] {

@@ -20,7 +20,7 @@ export interface SourceRef {
 
 export interface Revision {
   at: string
-  by: Actor
+  by: 'user' | 'secretary' | 'assistant' | 'system'
   summary: string
 }
 

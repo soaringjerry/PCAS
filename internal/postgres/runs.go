@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"regexp"
 	"strings"
 	"time"
 
@@ -212,104 +213,120 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 		run.Error = "已弃用"
 		run.FinishedAt = stamp()
 	case "adoptRun":
-		if run.Status != "done" || run.Adopted != nil || run.StaleContext {
-			return memory.ErrConflict
-		}
-		if requireText(c.Text) != nil || !oneOf(c.As, "doc", "subtasks", "progress") {
-			return memory.ErrInvalid
-		}
-		if err := verifyRunTx(ctx, tx, scope, run); err != nil {
+		if err := s.adoptRunTx(ctx, tx, scope, &run, c.As, c.Text, c.RequestID, false); err != nil {
 			return err
-		}
-		item, err := getItem(ctx, tx, scope, run.ThingID)
-		if err != nil {
-			return err
-		}
-		switch c.As {
-		case "doc":
-			if err := saveDoc(ctx, tx, scope, workspace.Doc{ID: string(memory.NewID()), ThingID: item.ID, Title: item.Title + " · " + run.Kind, Body: c.Text, By: "ai", RunID: run.ID, CreatedAt: stamp(), UpdatedAt: stamp()}); err != nil {
-				return err
-			}
-		case "progress":
-			if item.Kind == "project" {
-				item.Progress = c.Text
-				if err := artifactTx(ctx, tx, scope, run.ID, item.ID, "progress", run.ID, c.Text); err != nil {
-					return err
-				}
-			} else if item.Kind == "task" {
-				item.Notes += "\n" + c.Text
-				if err := artifactTx(ctx, tx, scope, run.ID, item.ID, "notes", run.ID, c.Text); err != nil {
-					return err
-				}
-			} else {
-				item.Body += "\n" + c.Text
-				if err := artifactTx(ctx, tx, scope, run.ID, item.ID, "body", run.ID, c.Text); err != nil {
-					return err
-				}
-			}
-		case "subtasks":
-			lines := strings.Split(c.Text, "\n")
-			count := 0
-			for _, line := range lines {
-				line = strings.TrimSpace(line)
-				if line == "" {
-					continue
-				}
-				if len(line) > 2000 {
-					return memory.ErrInvalid
-				}
-				line = strings.TrimLeft(line, "-*•0123456789.)、 \t")
-				if line == "" {
-					continue
-				}
-				count++
-				if count > 100 {
-					return memory.ErrInvalid
-				}
-				if item.Kind == "task" {
-					check := workspace.Check{ID: string(memory.NewID()), Text: line}
-					item.Checklist = append(item.Checklist, check)
-					if err := artifactTx(ctx, tx, scope, run.ID, item.ID, "check", check.ID, line); err != nil {
-						return err
-					}
-				} else {
-					task := newItem("task", line)
-					if item.Kind == "project" {
-						task.ProjectID = item.ID
-					} else {
-						task.IdeaID = item.ID
-						task.ProjectID = item.ProjectID
-					}
-					if err := saveItem(ctx, tx, scope, task); err != nil {
-						return err
-					}
-					if err := artifactTx(ctx, tx, scope, run.ID, task.ID, "task", task.ID, line); err != nil {
-						return err
-					}
-				}
-			}
-			if count == 0 {
-				return memory.ErrInvalid
-			}
-		}
-		item.Version++
-		item.UpdatedAt = stamp()
-		if err := s.saveAction(ctx, tx, scope, item, "采纳副手结果"); err != nil {
-			return err
-		}
-		run.Adopted = &workspace.Adoption{As: c.As, At: stamp(), Edited: c.Text != run.Output}
-		if err := sampleTx(ctx, tx, scope, workspace.Sample{ID: string(memory.NewID()), Kind: "adopted-result", Prompt: run.Brief, Response: c.Text, Origin: workspace.Origin{Label: item.Title, RunID: run.ID}, Version: 1, State: "candidate", Epistemic: "inferred", CreatedAt: stamp()}); err != nil {
-			return err
-		}
-		for _, ref := range run.ContextVersions {
-			if err := recordUseTx(ctx, tx, scope, memory.UseEvent{Ref: ref, EventID: run.ID + ":" + string(ref.ID), Kind: "adoption", At: time.Now()}); err != nil {
-				return err
-			}
 		}
 	}
 	_, err = tx.Exec(ctx, "UPDATE agent_runs SET status=$3,document=$4 WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), run.ID, run.Status, asJSON(run))
-	return err
+	if err != nil {
+		return err
+	}
+	if c.Type == "pasteRunResult" {
+		return s.autoAdoptRunTx(ctx, tx, scope, &run)
+	}
+	return nil
 }
+
+func (s *Store) adoptRunTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run *workspace.Run, as, text, actionID string, auto bool) error {
+	if run.Status != "done" || run.Adopted != nil || run.StaleContext {
+		return memory.ErrConflict
+	}
+	if requireText(text) != nil || !oneOf(as, "doc", "subtasks", "progress") {
+		return memory.ErrInvalid
+	}
+	if err := verifyRunTx(ctx, tx, scope, *run); err != nil {
+		return err
+	}
+	item, err := getItem(ctx, tx, scope, run.ThingID)
+	if err != nil {
+		return err
+	}
+	// Undo restores the run document but leaves provenance audit rows. Clear
+	// the previous adoption before reusing this run, including progress keys.
+	if _, err := tx.Exec(ctx, "DELETE FROM adopted_artifacts WHERE owner_id=$1 AND run_id=$2", string(scope.OwnerID), run.ID); err != nil {
+		return err
+	}
+	switch as {
+	case "doc":
+		if err := saveDoc(ctx, tx, scope, workspace.Doc{ID: string(memory.NewID()), ThingID: item.ID, Title: item.Title + " · " + run.Kind, Body: text, By: "ai", RunID: run.ID, CreatedAt: stamp(), UpdatedAt: stamp()}); err != nil {
+			return err
+		}
+	case "progress":
+		if item.Kind == "project" {
+			item.Progress = text
+			if err := artifactTx(ctx, tx, scope, run.ID, item.ID, "progress", run.ID, text); err != nil {
+				return err
+			}
+		} else if item.Kind == "task" {
+			item.Notes += "\n" + text
+			if err := artifactTx(ctx, tx, scope, run.ID, item.ID, "notes", run.ID, text); err != nil {
+				return err
+			}
+		} else {
+			item.Body += "\n" + text
+			if err := artifactTx(ctx, tx, scope, run.ID, item.ID, "body", run.ID, text); err != nil {
+				return err
+			}
+		}
+	case "subtasks":
+		lines := adoptionLines(text)
+		count := 0
+		for _, line := range lines {
+			if line == "" {
+				continue
+			}
+			if len(line) > 2000 {
+				return memory.ErrInvalid
+			}
+			count++
+			if count > 100 {
+				return memory.ErrInvalid
+			}
+			if item.Kind == "task" {
+				check := workspace.Check{ID: string(memory.NewID()), Text: line}
+				item.Checklist = append(item.Checklist, check)
+				if err := artifactTx(ctx, tx, scope, run.ID, item.ID, "check", check.ID, line); err != nil {
+					return err
+				}
+			} else {
+				task := newItem("task", line)
+				task.History[0].By = actorFromContext(ctx)
+				task.Evolution[0].By = actorFromContext(ctx)
+				if item.Kind == "project" {
+					task.ProjectID = item.ID
+				} else {
+					task.IdeaID = item.ID
+					task.ProjectID = item.ProjectID
+				}
+				if err := saveItem(ctx, tx, scope, task); err != nil {
+					return err
+				}
+				if err := artifactTx(ctx, tx, scope, run.ID, task.ID, "task", task.ID, line); err != nil {
+					return err
+				}
+			}
+		}
+		if count == 0 {
+			return memory.ErrInvalid
+		}
+	}
+	item.Version++
+	item.UpdatedAt = stamp()
+	if err := s.saveAction(ctx, tx, scope, item, "采纳副手结果"); err != nil {
+		return err
+	}
+	run.Adopted = &workspace.Adoption{As: as, At: stamp(), Edited: !auto && text != run.Output, Auto: auto, ActionID: actionID}
+	if err := sampleTx(ctx, tx, scope, workspace.Sample{ID: string(memory.NewID()), Kind: "adopted-result", Prompt: run.Brief, Response: text, Origin: workspace.Origin{Label: item.Title, RunID: run.ID}, Version: 1, State: "candidate", Epistemic: "inferred", CreatedAt: stamp()}); err != nil {
+		return err
+	}
+	for _, ref := range run.ContextVersions {
+		if err := recordUseTx(ctx, tx, scope, memory.UseEvent{Ref: ref, EventID: run.ID + ":" + string(ref.ID), Kind: "adoption", At: time.Now()}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func verifyRunTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run workspace.Run) error {
 	var item *workspace.Item
 	if run.ThingID != "" {
@@ -464,7 +481,117 @@ func (s *Store) runAgentOnce(ctx context.Context) error {
 		if _, err := tx.Exec(ctx, "UPDATE agent_runs SET status=$4,reserved_cost=$5,document=$6,lease_until=NULL,lease_token=NULL WHERE owner_id=$1 AND id=$2 AND lease_token=$3", string(scope.OwnerID), run.ID, token, current.Status, current.Cost, asJSON(current)); err != nil {
 			return err
 		}
+		if err := s.autoAdoptRunTx(ctx, tx, scope, &current); err != nil {
+			return err
+		}
 		_, err = tx.Exec(ctx, "UPDATE workspace_owners SET revision=revision+1 WHERE owner_id=$1", string(scope.OwnerID))
 		return err
 	})
+}
+
+// Match the frontend parseChecklist, including ECMAScript whitespace and line terminators.
+const checklistSpace = "\\t\\n\\v\\f\\r \u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff"
+
+var checklistLine = regexp.MustCompile("^[" + checklistSpace + "]*- \\[[ x]\\][" + checklistSpace + "]+([^\r\n\u2028\u2029]+)$")
+
+func trimChecklist(text string) string {
+	return strings.TrimFunc(text, func(r rune) bool {
+		return strings.ContainsRune("\t\n\v\f\r \u00a0\u1680\u2028\u2029\u202f\u205f\u3000\ufeff", r) || r >= '\u2000' && r <= '\u200a'
+	})
+}
+
+func parseRunChecklist(output string) []string {
+	lines := []string{}
+	for _, line := range strings.Split(output, "\n") {
+		if match := checklistLine.FindStringSubmatch(line); match != nil {
+			if text := trimChecklist(match[1]); text != "" {
+				lines = append(lines, text)
+			}
+		}
+	}
+	return lines
+}
+
+func adoptionFor(item workspace.Item, run workspace.Run, output string) string {
+	if len(parseRunChecklist(output)) > 0 {
+		return "subtasks"
+	}
+	if run.Kind == "summary" {
+		return "progress"
+	}
+	return "doc"
+}
+
+// Plain lists remain supported by the manual command. Markdown checklists use
+// only their parsed entries, preserving their text and excluding surrounding prose.
+func adoptionLines(text string) []string {
+	if lines := parseRunChecklist(text); len(lines) > 0 {
+		return lines
+	}
+	lines := []string{}
+	for _, line := range strings.Split(text, "\n") {
+		line = strings.TrimLeft(strings.TrimSpace(line), "-*•0123456789.)、 \t")
+		if line != "" {
+			lines = append(lines, line)
+		}
+	}
+	return lines
+}
+
+func (s *Store) autoAdoptRunTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run *workspace.Run) error {
+	if run.Status != "done" || run.StaleContext || run.Adopted != nil || trimChecklist(run.Output) == "" {
+		return nil
+	}
+	// Completion and billing are already saved in the outer transaction. Only
+	// adoption writes may be rolled back, including SQL errors that abort a tx.
+	savepoint, err := tx.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer savepoint.Rollback(ctx)
+	// adoptRunTx sets Adopted before its final writes. Keep that mutation out of
+	// the caller's completed run until the savepoint has successfully committed.
+	adopted := *run
+	if err := s.autoAdoptResultTx(ctx, savepoint, scope, &adopted); err != nil {
+		rollbackErr := savepoint.Rollback(ctx)
+		// SQL/provider error messages can contain private text. Log only IDs and
+		// the error's type, never the output, prompt, or raw error message.
+		slog.WarnContext(ctx, "assistant result auto-adoption failed", "run_id", run.ID, "error_type", fmt.Sprintf("%T", err))
+		// A failed rollback leaves the outer transaction unusable. Ordinary
+		// adoption failures return nil so completion can still commit.
+		return rollbackErr
+	}
+	if err := savepoint.Commit(ctx); err != nil {
+		return err
+	}
+	*run = adopted
+	return nil
+}
+
+func (s *Store) autoAdoptResultTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run *workspace.Run) error {
+	item, err := getItem(ctx, tx, scope, run.ThingID)
+	if err != nil {
+		return err
+	}
+	as := adoptionFor(item, *run, run.Output)
+	summary := "副手结果：存成文档"
+	if as == "progress" {
+		summary = "副手结果：写进进度"
+	}
+	if as == "subtasks" {
+		summary = fmt.Sprintf("副手结果：加了 %d 个子任务", len(parseRunChecklist(run.Output)))
+	}
+	id := string(memory.NewID())
+	ctx = withActor(ctx, "assistant")
+	ctx = withActionLog(ctx, id, "worker", "", summary)
+	if err := beginActionLogTx(ctx, tx); err != nil {
+		return err
+	}
+	if err := s.adoptRunTx(ctx, tx, scope, run, as, run.Output, id, true); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, "UPDATE agent_runs SET document=$3 WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), run.ID, asJSON(run)); err != nil {
+		return err
+	}
+	return flushActionLog(ctx, tx, scope)
 }

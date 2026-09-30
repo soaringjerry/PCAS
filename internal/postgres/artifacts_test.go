@@ -27,6 +27,7 @@ func TestEditedArtifactRetainsFieldProvenance(t *testing.T) {
 				t.Fatal("fixture run did not include the private memory")
 			}
 			workspaceCommand(t, s, scope, workspace.Command{Type: "pasteRunResult", ID: run.ID, Output: "私密事实生成的说明。"})
+			undoAutoAdoption(t, s, scope, run.ID)
 			workspaceCommand(t, s, scope, workspace.Command{Type: "adoptRun", ID: run.ID, As: "progress", Text: "私密事实生成的说明。"})
 			edit := workspace.Command{Type: "setNotes", ID: id, Text: "私密事实生成的说明！"}
 			if kind == "project" {
@@ -78,6 +79,7 @@ func TestPromotedIdeaRetainsArtifactProvenance(t *testing.T) {
 		t.Fatal("fixture run did not include the private memory")
 	}
 	workspaceCommand(t, s, scope, workspace.Command{Type: "pasteRunResult", ID: run.ID, Output: "私密事实生成的说明。"})
+	undoAutoAdoption(t, s, scope, run.ID)
 	workspaceCommand(t, s, scope, workspace.Command{Type: "adoptRun", ID: run.ID, As: "progress", Text: "私密事实生成的说明。"})
 	workspaceCommand(t, s, scope, workspace.Command{Type: "setNotes", ID: idea.ID, Text: "私密事实生成的说明！"})
 	st = workspaceCommand(t, s, scope, workspace.Command{Type: "ideaPromote", ID: idea.ID})

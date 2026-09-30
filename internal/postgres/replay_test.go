@@ -115,6 +115,7 @@ func TestRunGrantRevocationAndArtifactCleanup(t *testing.T) {
 		t.Fatal("fixture run did not include the private memory")
 	}
 	st = workspaceCommand(t, s, scope, workspace.Command{Type: "pasteRunResult", ID: run.ID, Output: "由私密事实推导的结果"})
+	undoAutoAdoption(t, s, scope, run.ID)
 	st = workspaceCommand(t, s, scope, workspace.Command{Type: "adoptRun", ID: run.ID, As: "progress", Text: "由私密事实推导的结果"})
 	st = workspaceCommand(t, s, scope, workspace.Command{Type: "updateTask", ID: task.ID, Patch: asJSON(map[string]any{"notes": st.Tasks[0].Notes + strings.Repeat("n", 31000)})})
 	st = workspaceCommand(t, s, scope, workspace.Command{Type: "requestRun", ThingID: task.ID, AgentID: "manual", Kind: "ask", Prompt: "使用采纳内容"})

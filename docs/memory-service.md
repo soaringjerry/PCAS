@@ -22,7 +22,9 @@
 |---|---|
 | `POST /v1/session` / `DELETE /v1/session` | 登录 / 退出 |
 | `GET /v1/workspace` | 工作台快照、修订号、处理状态与预算 |
-| `POST /v1/workspace/commands` | `requestId` + `expectedRevision` + 明确 action；幂等与并发控制 |
+| `POST /v1/workspace/commands` | `requestId` + `expectedRevision` + 明确 action；幂等；只有切换与批量命令严格校验修订号；`undoAction` 按动作记录撤销 |
+| `POST /v1/desk/turn` / `GET /v1/desk/turns` | 秘书：一句话理解并执行，返回回执与卡片；按对话恢复（见 [接口契约](tasks/phase1/contracts.md) 第 2 节） |
+| `/v1/notify/config`、`/push-subscriptions`、`/telegram`、`/test`、`/notices/{id}/dismiss` | 提醒通道配置与关闭置顶提醒 |
 | `GET /v1/workspace/export` | JSON 资料导出；`training=true&confirmedOnly=true` 筛选 JSONL |
 | `POST /v1/memory/sources` | 版本化文本来源 |
 | `GET /v1/memory/sources/{id}?version=N` | 原文、派生解析版本和处理进度 |

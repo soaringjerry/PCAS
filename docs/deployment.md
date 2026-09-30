@@ -93,9 +93,32 @@ Compose 将设置保存在 `memory-files` 卷的 `/var/lib/pcas/model-api.json`�
 
 本地 FastEmbed / `BAAI/bge-small-zh-v1.5` 服务仍可选：用 `docker compose --profile local-embeddings up -d embeddings` 启动，再将私有模型配置的向量提供者改为该服务。默认部署不再下载本地模型权重。
 
-## 导办台分流（Jev）
+## 秘书（导办台）
 
-导办台每句话先由 TypeSafe 的 [Jev](https://docs.typesafe.ai/introduction) 判断去向：问（检索记忆作答）、记（交给后台整理）、交给副手（确认分流后建事项，在事项页确认副手、上下文与费用再运行）。Jev 只返回选项和置信度，不生成文字；置信度低时由用户点选。在设置页「导办台分流 · Jev」填写密钥即生效，保存时会试分流一次；密钥与模型密钥一起保存在服务端设置文件。也可在 `.env` 设置 `TYPESAFE_API_KEY` 后重建 API 容器，设置页保存的密钥优先。未设置或调用失败时，页面仅用本地规则建议意图，并让用户选择后再执行；不会把降级规则标成高置信度，也不会从大厅自动启动副手。导办台原文会发送给 TypeSafe；密钥只在服务端使用。
+首页和事项页的输入框都是秘书，调用 `POST /v1/desk/turn`：一次模型调用理解整句话，服务端校验后执行建事项、改时间、设提醒、派副手等动作，并返回可撤销的回执。秘书使用工作区的默认 agent（需要可直连的模型；手动交接无法驱动秘书）。模型不可用、超时或超出额度时，原话照常保存为资料，不会丢失。
+
+TypeSafe Jev 分流（`/v1/desk/route`、设置页的 Jev 密钥、`TYPESAFE_API_KEY`）仍然保留，但秘书不再调用它。
+
+## 提醒通道
+
+秘书为带时间的事自动设置提醒（默认提前 30 分钟；只有日期时当天 09:00），需要设置里的「跟进提醒」保持开启。到点后：
+
+- **首页**：「今天」最上方置顶「到点了」。
+- **本设备推送**：设置页打开「在这台设备上接收提醒」。站点必须通过 HTTPS 访问；iPhone 需要先「添加到主屏幕」并从主屏幕打开。VAPID 密钥首次使用时自动生成。
+- **Telegram**：用 BotFather 创建 bot，在设置页填 token，先给 bot 发一句话再保存（自动检测 chat ID），保存时会发一条测试消息。之后直接给 bot 发文字或语音，就等于对秘书说话；回执里的按钮可以撤销。只接受这个私聊的消息。语音需要配置转录模型。
+
+VAPID 密钥、Telegram token、轮询进度保存在与 `model-api.json` 同目录的 `notify.json`（Compose 下为 `/var/lib/pcas/notify.json`，权限 `0600`），可用 `PCAS_NOTIFY_SETTINGS_FILE` 覆盖路径；不返回前端。
+
+## 升级
+
+升级前先备份数据库，再构建并重启；`migrate` 服务会在 api 和 worker 启动前执行新的迁移：
+
+```sh
+docker exec pcas-db-1 pg_dump -U pcas -d pcas -Fc > pcas-$(date -u +%Y%m%dT%H%M%SZ).dump
+docker compose build api
+docker compose up -d
+curl -fsS http://127.0.0.1:${PCAS_PORT:-12352}/readyz
+```
 
 通用连接器配置和格式见 [资料接入](connectors.md)。
 
@@ -103,6 +126,6 @@ Compose 将设置保存在 `memory-files` 卷的 `/var/lib/pcas/model-api.json`�
 
 附件上限 20 MiB。PDF 最多 100 页，优先逐页提取文字，扫描页使用 OCR；图片使用中文/英文 OCR；音频需要已配置的转录服务。原件和解析文本分开保存，通过版本化来源关联。超出限制、缺少模型、解析失败都会保留原件并显示缺口。
 
-`memory-db` 保存数据库，`memory-files` 保存原件和私有 Codex 登录。资料库的 JSON 导出包含规范记录、版本、证据、授权和删除阻断标记，但不包含二进制附件或模型凭据。完整灾难恢复须同时备份数据库、文件卷、私有模型配置、`model-api.json` 和 `.env`，并将备份置于单独的受保护位置。训练导出只包括用户选中的非过期样本，记录对应清单。
+`memory-db` 保存数据库，`memory-files` 保存原件和私有 Codex 登录。资料库的 JSON 导出包含规范记录、版本、证据、授权和删除阻断标记，但不包含二进制附件或模型凭据。完整灾难恢复须同时备份数据库、文件卷、私有模型配置、`model-api.json`、`notify.json` 和 `.env`，并将备份置于单独的受保护位置。训练导出只包括用户选中的非过期样本，记录对应清单。
 
 登录密码轮换：生成新的 `PCAS_API_TOKEN` 后重建 API 容器，旧登录会话失效。不要执行 `docker compose down -v`，除非明确要销毁数据库与附件。

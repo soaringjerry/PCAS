@@ -8,6 +8,8 @@ PCAS 是一支围绕你一个人的自托管 AI 支持团队：秘书、二把�
 - [部署与模型接入](docs/deployment.md)
 - [Sign in with ChatGPT 套餐授权](docs/chatgpt-plan-auth.md)
 - [跨应用接入、归档与摘要](docs/connectors.md)
+- [第 1 阶段任务与接口契约](docs/tasks/phase1/README.md) · [第 1 阶段验收报告](docs/evaluations/2026-09-30-phase1-acceptance.md) · [待办清单](docs/tasks/backlog.md)
+- [研究笔记：Hermes Agent](docs/research/hermes-agent.md)
 - [固定场景真实模型验收](docs/evaluations/2026-09-29.md)
 - [产品需求](docs/prd.md)
 - [前端](web/README.md)

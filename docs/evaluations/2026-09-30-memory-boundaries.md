@@ -46,6 +46,23 @@ to the input, retrying, creating a task and ensuring no automatic run request.
 The dedicated PR workflow runs it against an isolated PostgreSQL/pgvector-backed
 instance with no model account.
 
+### Validation environment correction
+
+The initial local database was accidentally initialized as `SQL_ASCII`, unlike
+the UTF-8 database in CI. That made SQL `length('事')` return 3 rather than 1,
+so the retrieval query's multi-character-token filter admitted a Chinese
+unigram. A generic summary request therefore happened to select the private
+fact locally, while CI correctly did not select it. The privacy replay fixture
+now explicitly retrieves that fact and verifies the original dependency before
+adoption. It also verifies that the later oversized brief excludes the direct
+memory text while retaining the derived dependency. All revocation and deletion
+assertions remain in place; retrieval policy was not relaxed.
+
+Local validation now uses an explicitly UTF-8 disposable database. The corrected
+privacy replay test passes three consecutive runs with the race detector.
+The full `make check` also passes in that environment: formatting, vet, all Go
+tests with the race detector (including PostgreSQL integration tests), and build.
+
 ## Deliberate limits and review points
 
 - Provenance is currently field-level, not block-level. If manual and derived
@@ -60,7 +77,7 @@ instance with no model account.
   current access checks; a client-provided list of citations is not sufficient.
 - No production deployment, authenticated live-model acceptance, broad semantic
   recall benchmark or claim of complete security audit is included.
-- Local validation uses Go 1.26.8, PostgreSQL 17 and pgvector 0.8.0. Repository CI
+- Local validation uses Go 1.26.8, PostgreSQL 17 (UTF-8) and pgvector 0.8.0. Repository CI
   uses PostgreSQL 16/pgvector 0.8.2. The cloud's local Chromium launch is blocked
   by unavailable Unix sockets; browser regression must be verified in CI rather
   than represented as locally passed.

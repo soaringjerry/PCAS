@@ -106,12 +106,21 @@ func TestRunGrantRevocationAndArtifactCleanup(t *testing.T) {
 	mem := st.Memories[0]
 	st = workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "测试事项"})
 	task := st.Tasks[0]
-	st = workspaceCommand(t, s, scope, workspace.Command{Type: "requestRun", ThingID: task.ID, AgentID: "manual", Kind: "summary", Prompt: "总结"})
+	// This fixture needs a genuinely retrieved input before it can test the
+	// adopted output's transitive dependency. A generic summary request does
+	// not select an unrelated fact under ranked retrieval.
+	st = workspaceCommand(t, s, scope, workspace.Command{Type: "requestRun", ThingID: task.ID, AgentID: "manual", Kind: "summary", Prompt: "总结受控的私密事实"})
 	run := st.Runs[0]
+	if !oneOf(mem.ID, run.ContextMemoryIDs...) {
+		t.Fatal("fixture run did not include the private memory")
+	}
 	st = workspaceCommand(t, s, scope, workspace.Command{Type: "pasteRunResult", ID: run.ID, Output: "由私密事实推导的结果"})
 	st = workspaceCommand(t, s, scope, workspace.Command{Type: "adoptRun", ID: run.ID, As: "progress", Text: "由私密事实推导的结果"})
 	st = workspaceCommand(t, s, scope, workspace.Command{Type: "updateTask", ID: task.ID, Patch: asJSON(map[string]any{"notes": st.Tasks[0].Notes + strings.Repeat("n", 31000)})})
 	st = workspaceCommand(t, s, scope, workspace.Command{Type: "requestRun", ThingID: task.ID, AgentID: "manual", Kind: "ask", Prompt: "使用采纳内容"})
+	if strings.Contains(st.Runs[0].Brief, "["+mem.ID+"@") {
+		t.Fatal("fixture must exclude the direct memory text from the oversized brief")
+	}
 	if !oneOf(mem.ID, st.Runs[0].ContextMemoryIDs...) {
 		t.Fatal("derived context lost its transitive dependency")
 	}

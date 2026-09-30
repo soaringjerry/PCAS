@@ -491,7 +491,7 @@
   white-space: pre-wrap;
 }
 
-.hall-answer-body.muted {
+.hall-answer-body.h-muted {
   color: var(--label-2);
 }
 

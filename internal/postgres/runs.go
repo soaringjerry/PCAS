@@ -98,6 +98,12 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 		ordered := []workspace.Memory{}
 		selected := map[string]bool{}
 		if prepared, ok := ctx.Value(runContextKey{}).(preparedRunContext); ok {
+			for _, turn := range prepared.History {
+				if verifyRunTx(ctx, tx, scope, workspace.Run{AgentID: agent.ID, ContextVersions: turn.Refs}) == nil {
+					fmt.Fprintf(&brief, "\n导办台之前的讨论：\n问：%s\n答：%s\n", turn.Question, turn.Answer)
+					artifactRefs = append(artifactRefs, turn.Refs...)
+				}
+			}
 			for _, ref := range prepared.Refs {
 				if m, ok := byID[string(ref.ID)]; ok && m.Version == ref.Version && !selected[m.ID] {
 					ordered = append(ordered, m)

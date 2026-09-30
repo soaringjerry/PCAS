@@ -255,6 +255,7 @@ type State struct {
 
 // Commands are validated on the server; callers never submit an entire state.
 type Command struct {
+	DeskTurnIDs      []string        `json:"deskTurnIds,omitempty"`
 	IncludeSources   bool            `json:"includeSources,omitempty"`
 	RequestID        string          `json:"requestId"`
 	ExpectedRevision int64           `json:"expectedRevision"`

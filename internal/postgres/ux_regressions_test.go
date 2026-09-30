@@ -48,6 +48,10 @@ func TestDeskServerOwnedAskEditReuse(t *testing.T) {
 	if err != nil || !strings.Contains(prompt, "server plan") {
 		t.Fatalf("consecutive reuse lost history: %v %s", err, prompt)
 	}
+	st := workspaceCommand(t, s, scope, workspace.Command{Type: "delegateTask", ID: string(memory.NewID()), Title: "Continue the plan", Prompt: "Continue the plan", AgentID: "model", DeskTurnIDs: []string{first.ID, second.ID}})
+	if len(st.Runs) != 1 || !strings.Contains(st.Runs[0].Brief, "server plan") {
+		t.Fatal("delegation lost server-owned discussion", st.Runs)
+	}
 	if _, err := s.AnswerDesk(ctx, owner(), "model", "Read another owner", []workspace.DeskTurn{{ID: first.ID}}); err == nil {
 		t.Fatal("another owner read stored turn")
 	}

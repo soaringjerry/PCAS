@@ -332,6 +332,7 @@ function Desk() {
   const [pick, setPick] = useState<string | null>(null)
   const [deeper, setDeeper] = useState<string | null>(null)
   const asked = useRef(0)
+  const delegating = useRef(false)
   const input = useRef<HTMLInputElement>(null)
   // While an answer card is open, the next line continues that conversation.
   const following = thread !== null && !thread[thread.length - 1].busy
@@ -372,7 +373,10 @@ function Desk() {
     return true
   }
 
-  const delegate = async (q: string, prompt = q) => {
+  const delegate = async (q: string, prompt = q, deskTurnIds?: string[]) => {
+    if (delegating.current) return false
+    delegating.current = true
+    try {
     const agentId = agentFor('desk')
     if (agentId === 'manual') {
       setReceipt({ key: Date.now(), text: '需要先启用一个能直接执行的副手', hint: '在设置里连接模型，然后重新提交这句话。' })
@@ -381,10 +385,11 @@ function Desk() {
     }
     const id = crypto.randomUUID()
     const title = q.length > 60 ? `${q.slice(0, 60)}…` : q
-    if (!(await dispatch({ type: 'delegateTask', id, title, prompt, agentId }))) return false
+    if (!(await dispatch({ type: 'delegateTask', id, title, prompt, agentId, deskTurnIds }))) return false
     close()
     setReceipt({ key: Date.now(), text: '副手开始做了', hint: '做好后会带着结果回来。', to: `/t/${id}` })
     return true
+    } finally { delegating.current = false }
   }
 
   const go = (intent: Intent, q: string) => {
@@ -472,7 +477,7 @@ function Desk() {
           onClose={close}
           onDeeper={() => setDeeper(thread[0].q)}
           onFile={() => void file(thread[0].q)}
-          onDelegate={() => void delegate(thread[0].q, thread.map((t) => `问：${t.q}`).join('\n'))}
+          onDelegate={() => void delegate(thread[0].q, thread.map((t) => `问：${t.q}`).join('\n'), thread.flatMap(t => t.reply?.id ? [t.reply.id] : []).slice(-6))}
         />
       )}
     </section>

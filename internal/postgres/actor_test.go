@@ -89,8 +89,8 @@ func TestSecretaryHistoryActorAndUserUndo(t *testing.T) {
 	req.ThingID = &id
 	updated := mustTurn(t, s, scope, req)
 	history := updated.State.Tasks[0].History
-	if history[len(history)-1].By != "secretary" || history[len(history)-2].By != "secretary" {
-		t.Fatal("nested secretary commands lost actor", history)
+	if len(history) != len(st.Tasks[0].History)+1 || history[len(history)-1].By != "secretary" || history[len(history)-2].By != "user" {
+		t.Fatal("nested secretary commands must share one revision and preserve earlier actors", history)
 	}
 	st, err := s.Undo(withActor(ctx, "assistant"), scope, *updated.Turn.Receipts[0].ActionID)
 	if err != nil {

@@ -136,6 +136,12 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 		item := newItem(kind, title)
 		item.History[0].By = actorFromContext(ctx)
 		item.Evolution[0].By = actorFromContext(ctx)
+		if ctx.Value(secretaryHistoryKey{}) != nil {
+			// The secretary publishes one creation revision after all fields
+			// and reminders have been applied by its internal commands.
+			item.History = []workspace.Revision{}
+			item.Evolution = []workspace.Revision{}
+		}
 		if kind == "task" && c.Text != "" {
 			if err := requireText(c.Text); err != nil {
 				return err
@@ -523,6 +529,10 @@ func saveDoc(ctx context.Context, tx pgx.Tx, scope memory.Scope, doc workspace.D
 	return err
 }
 func (s *Store) saveAction(ctx context.Context, tx pgx.Tx, scope memory.Scope, item workspace.Item, summary string) error {
+	if history, ok := ctx.Value(secretaryHistoryKey{}).(*secretaryHistory); ok {
+		history.record(item.ID, summary)
+		return saveItem(ctx, tx, scope, item)
+	}
 	revision := workspace.Revision{At: stamp(), By: actorFromContext(ctx), Summary: summary}
 	item.History = append(item.History, revision)
 	if item.Kind == "idea" {

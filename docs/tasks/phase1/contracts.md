@@ -108,7 +108,7 @@ B1 另外导出 `(s *Store) Undo(ctx, scope, actionID string) (workspace.State, 
   "agentId": "model-id" }
 ```
 
-- `conversationId` 为 null 时开启新对话，服务端生成新 ID 并在响应里返回。
+- `conversationId` 由**前端生成**：开启新对话时，前端生成一个新的 UUID 直接使用，这样同一段新对话的几句话可以同时发出，不必排队等服务端返回 ID。服务端遇到还没有记录的 conversationId，就当作新对话处理；查询一律限定在当前 owner 范围内。为兼容起见，传 null 时仍由服务端生成（2026-09-30 修订）。
 - `thingId` 不为空时，表示这是事项页里的秘书，该事项就是默认操作对象。
 - 请求**不带** `expectedRevision`；并发安全由服务端按行的版本保证。
 - `text` 去掉首尾空白后必须非空，长度不超过 4000 字符，否则返回 400 `invalid_input`。
@@ -140,12 +140,14 @@ B1 另外导出 `(s *Store) Undo(ctx, scope, actionID string) (workspace.State, 
   "text": "已建：周五 15:00 给张三回邮件 · A 项目 · 14:30 提醒",
   "thingId": "uuid" | null,
   "undoable": true,
+  "undone": false,
   "status": "done" | "skipped",
   "reason": "跳过原因，status=skipped 时才有" }
 ```
 
 - 回执文案由服务端根据**执行结果**生成，不直接使用模型写的文字。时间一律按用户时区显示。
 - `remember` 和 `capture` 的 `undoable` 为 false，`actionId` 为 null。
+- `undone` 在读取时根据 `action_log.undone_at` 实时计算：刚执行完的响应里为 false，`GET /v1/desk/turns` 和重放时反映当前是否已撤销。前端据此在刷新后直接显示「已撤销」。
 
 **Card**，按 `kind` 区分：
 
@@ -268,8 +270,13 @@ show(text: string, options?: { link?: { to: string; label: string }; undo?: () =
 // 首页用法：<Secretary />；事项页用法：<Secretary thingId={thing.id} />
 // 草稿通过 useShell().draft / setDraft 保存，key 为 thingId，首页用 'desk'
 
+tryUndo(actionId: string): Promise<{ ok: true } | { ok: false; error: string }>
+//   和 undo 相同，但把失败原因返回给调用方，不弹全局提示（B2 已实现，回执行内显示原因用）。
+
 // useShell()（web/src/store/shell.ts）新增：
 prefill(key: string, text: string): void
 //   把 text 写进该 key 的秘书草稿，并聚焦对应的秘书输入框。
 //   D2 用它实现「点事项页的信息行 = 叫秘书改」。
+onPrefill(listener: (key: string, text: string) => void): () => void
+//   秘书输入框用它监听 prefill 并聚焦自己（B2 已实现）。
 ```

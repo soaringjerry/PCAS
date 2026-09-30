@@ -46,6 +46,13 @@ B2 已经把底部换成了 `<Secretary thingId>`。本文件其余部分归你�
   - 没有待办时这一条整个隐藏，不再显示「没有要你拍板的事」。
 - `IdeaWall` 被唤醒的想法：两个按钮改成执行后弹撤销 toast。
 
+## 清理没有调用方的代码
+
+B2 去掉 `Composer` 之后，下面这些代码已经没人调用了，由你删除（删之前先 grep 确认确实没有调用方）：
+- `web/src/domain/agent.ts` 里的 `quickActions`、`contextFor`、`buildBrief`
+- `web/src/domain/lines.ts` 里的 `estimateCost`
+- `web/src/store/actions.ts` 里的 `toggleContextMemory` 动作类型（后端命令保留）
+
 ## 类型 `web/src/domain/types.ts`
 
 - `Trigger` 加 `offset?: string`。

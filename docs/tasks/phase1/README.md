@@ -59,6 +59,8 @@ flowchart LR
 | `web/src/components/NotifySettings.tsx`、`web/public/sw.js`、`web/public/manifest.webmanifest`、`web/index.html` | C1（C2 只在 `NotifySettings.tsx` 加一句说明） |
 | `web/src/pages/SettingsPage.tsx` | C1（只加一行挂载 `NotifySettings`） |
 | `web/tests/desk-routing.spec.ts`、`web/tests/hall-ux.spec.ts` | B2（删除或改写） |
+| `web/tests/fixes.spec.ts` | A 新建；B2 删掉了其中针对旧导办台的 3 个用例 |
+| `web/src/domain/agent.ts`、`web/src/domain/lines.ts`（清理无调用方代码） | D2 |
 | `web/tests/secretary.spec.ts` | B2；`web/tests/notify.spec.ts`：C1；`web/tests/buttons.spec.ts`：D2；`web/tests/golden.spec.ts`：E |
 | `internal/postgres/migrations/016_action_log.sql` | B1 |
 | `internal/postgres/migrations/017_notify.sql` | C1 |

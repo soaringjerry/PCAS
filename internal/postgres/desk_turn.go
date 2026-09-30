@@ -38,6 +38,12 @@ ask 为 null 或 {"question":"…","options":["…"]}。`
 
 var deskUUID = regexp.MustCompile(`(?i)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}`)
 
+// Persist only the exchange. Workspace state is always read at response time.
+type storedSecretaryResponse struct {
+	ConversationID string                  `json:"conversationId"`
+	Turn           workspace.SecretaryTurn `json:"turn"`
+}
+
 type secretaryContext struct {
 	Agent        workspace.Agent
 	Settings     workspace.Settings
@@ -321,7 +327,13 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 			if !bytes.Equal(hash[:], priorHash) {
 				return memory.ErrConflict
 			}
-			return json.Unmarshal(prior, &out)
+			var saved storedSecretaryResponse
+			if err := json.Unmarshal(prior, &saved); err != nil {
+				return err
+			}
+			out.ConversationID, out.Turn = saved.ConversationID, saved.Turn
+			out.State, err = s.snapshotTx(ctx, tx, scope)
+			return err
 		}
 		if !errors.Is(err, pgx.ErrNoRows) {
 			return err
@@ -444,7 +456,7 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 		if err != nil {
 			return err
 		}
-		_, err = tx.Exec(ctx, "INSERT INTO desk_turns(owner_id,id,agent_id,question,answer,dependencies,conversation_id,thing_id,request_id,request_hash,response,created_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)", string(scope.OwnerID), out.Turn.ID, c.Agent.ID, req.Text, out.Turn.Reply, asJSON(dependencies), conversationID, pointerValueOrNull(req.ThingID), req.RequestID, hash[:], asJSON(out), out.Turn.CreatedAt)
+		_, err = tx.Exec(ctx, "INSERT INTO desk_turns(owner_id,id,agent_id,question,answer,dependencies,conversation_id,thing_id,request_id,request_hash,response,created_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)", string(scope.OwnerID), out.Turn.ID, c.Agent.ID, req.Text, out.Turn.Reply, asJSON(dependencies), conversationID, pointerValueOrNull(req.ThingID), req.RequestID, hash[:], asJSON(storedSecretaryResponse{ConversationID: out.ConversationID, Turn: out.Turn}), out.Turn.CreatedAt)
 		return err
 	})
 	return out, err
@@ -473,10 +485,10 @@ func (s *Store) DeskTurns(ctx context.Context, scope memory.Scope, conversationI
 func (s *Store) deskTurnsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, conversationID string, limit int, agentOverride string, thingID *string, dependencies *[]memory.Ref) (workspace.DeskTurnsResponse, error) {
 	out := workspace.DeskTurnsResponse{ConversationID: conversationID, Turns: []workspace.SecretaryTurn{}}
 	type storedTurn struct {
-		Response     workspace.DeskTurnResponse `json:"response"`
-		Dependencies []memory.Ref               `json:"dependencies"`
-		AgentID      string                     `json:"agentId"`
-		Erased       bool                       `json:"erased"`
+		Response     storedSecretaryResponse `json:"response"`
+		Dependencies []memory.Ref            `json:"dependencies"`
+		AgentID      string                  `json:"agentId"`
+		Erased       bool                    `json:"erased"`
 	}
 	turns, err := queryDocuments[storedTurn](ctx, tx, `SELECT jsonb_build_object('response',response,'dependencies',dependencies,'agentId',agent_id,'erased',question='' AND answer='') FROM
  (SELECT response,dependencies,agent_id,question,answer,created_at,id FROM desk_turns WHERE owner_id=$1 AND conversation_id=$2 AND response IS NOT NULL ORDER BY created_at DESC,id DESC LIMIT $3) recent ORDER BY created_at,id`, string(scope.OwnerID), conversationID, limit)

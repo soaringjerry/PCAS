@@ -269,7 +269,26 @@ func (s *Store) Delete(ctx context.Context, scope memory.Scope, in memory.Delete
 		return err
 	})
 }
-func (s *Store) deleteTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in memory.DeleteRequest) error {
+
+// Mark this deletion's work-item/document writes for snapshot expiration.
+// The trigger observes shared purge helpers and cascades as well as local saves.
+func (s *Store) deleteTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in memory.DeleteRequest) (err error) {
+	var previous string
+	if err = tx.QueryRow(ctx, "SELECT coalesce(current_setting('pcas.expire_actions',true),'')").Scan(&previous); err != nil {
+		return err
+	}
+	if _, err = tx.Exec(ctx, "SELECT set_config('pcas.expire_actions',$1,true)", string(scope.OwnerID)); err != nil {
+		return err
+	}
+	defer func() {
+		_, restoreErr := tx.Exec(ctx, "SELECT set_config('pcas.expire_actions',$1,true)", previous)
+		if err == nil {
+			err = restoreErr
+		}
+	}()
+	return s.deleteRecordsTx(ctx, tx, scope, in)
+}
+func (s *Store) deleteRecordsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in memory.DeleteRequest) error {
 	if len(in.Targets) == 0 || len(in.Targets) > 100 {
 		return memory.ErrInvalid
 	}
@@ -482,7 +501,12 @@ func (s *Store) deleteTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in 
 		`INSERT INTO blob_cleanup_jobs(owner_id,blob_key) SELECT owner_id,blob_key FROM source_versions WHERE owner_id=$1 AND source_id=ANY($2::uuid[]) AND blob_key IS NOT NULL ON CONFLICT DO NOTHING`,
 		// Retain only the opaque owner/agent-bound ID as a deletion tombstone.
 		// Open cards can skip this turn without accepting forged history IDs.
-		`UPDATE desk_turns SET question='',answer='',dependencies='[]'::jsonb WHERE owner_id=$1 AND EXISTS(SELECT 1 FROM jsonb_array_elements(coalesce(nullif(dependencies,'null'::jsonb),'[]'::jsonb)) d WHERE d->>'id'=ANY($2::text[]))`,
+		`UPDATE desk_turns SET question='',answer='',dependencies='[]'::jsonb,
+         response=CASE WHEN response IS NULL THEN NULL ELSE jsonb_set(response,'{turn}',
+          (response->'turn') || jsonb_build_object('text','','reply','','cards','[]'::jsonb,'ask',NULL,
+           'receipts',coalesce((SELECT jsonb_agg((r - 'reason') || jsonb_build_object('text','（内容已删除）') ORDER BY ord)
+             FROM jsonb_array_elements(coalesce(response->'turn'->'receipts','[]'::jsonb)) WITH ORDINALITY AS receipt(r,ord)), '[]'::jsonb))) END
+         WHERE owner_id=$1 AND EXISTS(SELECT 1 FROM jsonb_array_elements(coalesce(nullif(dependencies,'null'::jsonb),'[]'::jsonb)) d WHERE d->>'id'=ANY($2::text[]))`,
 		`DELETE FROM capture_candidates WHERE owner_id=$1 AND document->>'resolvedInto'=ANY($2::text[])`,
 		`DELETE FROM work_documents WHERE owner_id=$1 AND document->>'runId' IN (SELECT run_id::text FROM run_dependencies WHERE owner_id=$1 AND memory_id=ANY($2::uuid[]))`,
 		`DELETE FROM training_samples WHERE owner_id=$1 AND (memory_id=ANY($2::uuid[]) OR run_id IN (SELECT run_id FROM run_dependencies WHERE owner_id=$1 AND memory_id=ANY($2::uuid[])))`,

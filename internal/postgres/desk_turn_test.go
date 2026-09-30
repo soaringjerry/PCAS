@@ -484,3 +484,54 @@ func TestSecretaryRejectsStaleRowsAndKeepsOriginalOnCancellation(t *testing.T) {
 		})
 	}
 }
+
+func TestSecretaryReplayUsesCurrentStateAndScrubbedTurn(t *testing.T) {
+	s := testStore(t)
+	scope := owner()
+	ctx := context.Background()
+	var calls atomic.Int32
+	secretaryModel(t, s, func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		secretaryModelReply(w, `{"reply":"私密暗号是蓝色灯塔。","used":["M1"],"actions":[{"op":"create_task","title":"核对蓝色灯塔"}],"ask":{"question":"要核对蓝色灯塔吗？","options":["要"]}}`)
+	})
+	st := workspaceCommand(t, s, scope, workspace.Command{Type: "capture", Text: "私密暗号是蓝色灯塔"})
+	st = workspaceCommand(t, s, scope, workspace.Command{Type: "acceptCandidate", ID: st.Candidates[0].ID, Kind: "memory", MemoryKind: "fact", Text: "私密暗号是蓝色灯塔"})
+	mem := st.Memories[0]
+	req := turnRequest("核对私密暗号蓝色灯塔")
+	first := mustTurn(t, s, scope, req)
+	if len(first.Turn.Cards) == 0 || len(first.Turn.Receipts) != 1 {
+		t.Fatal("fixture lacks used memory or receipt", first.Turn)
+	}
+	var response []byte
+	if err := s.pool.QueryRow(ctx, "SELECT response FROM desk_turns WHERE owner_id=$1 AND request_id=$2", string(scope.OwnerID), req.RequestID).Scan(&response); err != nil {
+		t.Fatal(err)
+	}
+	var stored map[string]json.RawMessage
+	if err := json.Unmarshal(response, &stored); err != nil || len(stored) != 2 || stored["conversationId"] == nil || stored["turn"] == nil || stored["state"] != nil {
+		t.Fatal("persisted full workspace state", err, string(response))
+	}
+	current := workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "后来添加的工作"})
+	replay := mustTurn(t, s, scope, req)
+	if replay.State.Revision != current.Revision || len(replay.State.Tasks) != 2 || replay.Turn.ID != first.Turn.ID || replay.Turn.Reply != first.Turn.Reply || calls.Load() != 1 {
+		t.Fatal("replay is stale or reran actions", replay, calls.Load())
+	}
+	current = workspaceCommand(t, s, scope, workspace.Command{Type: "deleteMemory", ID: mem.ID, IncludeSources: true})
+	replay = mustTurn(t, s, scope, req)
+	if replay.ConversationID != first.ConversationID || replay.Turn.ID != first.Turn.ID || replay.Turn.Text != "" || replay.Turn.Reply != "" || len(replay.Turn.Cards) != 0 || replay.Turn.Ask != nil || len(replay.Turn.Receipts) != 1 || calls.Load() != 1 {
+		t.Fatal("deletion did not scrub replay", replay.Turn, calls.Load())
+	}
+	receipt := replay.Turn.Receipts[0]
+	original := first.Turn.Receipts[0]
+	if receipt.Text != "（内容已删除）" || receipt.ActionID == nil || original.ActionID == nil || *receipt.ActionID != *original.ActionID || receipt.Op != original.Op || receipt.Status != original.Status {
+		t.Fatal("lost audit metadata", receipt, original)
+	}
+	if replay.State.Revision != current.Revision || len(replay.State.Memories) != 0 {
+		t.Fatal("replay resurrected deleted state", replay.State)
+	}
+	if err := s.pool.QueryRow(ctx, "SELECT response FROM desk_turns WHERE owner_id=$1 AND request_id=$2", string(scope.OwnerID), req.RequestID).Scan(&response); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(response), "蓝色灯塔") || strings.Contains(string(response), `"state"`) {
+		t.Fatal("deleted exchange remained in storage", string(response))
+	}
+}

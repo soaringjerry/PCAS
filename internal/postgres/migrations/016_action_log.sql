@@ -7,6 +7,7 @@ CREATE TABLE action_log (
  changes jsonb NOT NULL CHECK (jsonb_typeof(changes)='array'),
  created_at timestamptz NOT NULL DEFAULT now(),
  undone_at timestamptz,
+ expired_at timestamptz,
  PRIMARY KEY(owner_id,id)
 );
 CREATE INDEX action_log_created_idx ON action_log(owner_id,created_at DESC);
@@ -20,6 +21,16 @@ CREATE INDEX desk_turn_conversation_idx ON desk_turns(owner_id,conversation_id,c
 CREATE FUNCTION collect_action_change() RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE buffer jsonb; entry jsonb; row_id text; position integer; old_doc jsonb; new_hash text;
 BEGIN
+ -- Deletion propagation also covers writes inside shared artifact helpers and
+ -- cascading document deletes, without collecting another undoable action.
+ IF TG_TABLE_NAME IN ('work_items','work_documents') AND TG_OP IN ('UPDATE','DELETE') THEN
+  IF current_setting('pcas.expire_actions',true)=OLD.owner_id::text THEN
+   UPDATE action_log SET changes='[]'::jsonb,expired_at=now()
+   WHERE owner_id=OLD.owner_id AND expired_at IS NULL AND EXISTS(
+    SELECT 1 FROM jsonb_array_elements(changes) c
+    WHERE c->>'table'=TG_TABLE_NAME AND c->>'id'=OLD.id::text);
+  END IF;
+ END IF;
  IF nullif(current_setting('pcas.action_changes',true),'') IS NULL THEN RETURN NULL; END IF;
  buffer := current_setting('pcas.action_changes')::jsonb;
  IF TG_OP='DELETE' THEN row_id:=OLD.id::text; ELSE row_id:=NEW.id::text; END IF;

@@ -29,6 +29,11 @@ func beginActionLogTx(ctx context.Context, tx pgx.Tx) error {
 	return err
 }
 func flushActionLog(ctx context.Context, tx pgx.Tx, scope memory.Scope) error {
+	// Retain the audit metadata, including undone_at, after the undo window.
+	// Run even when this transaction collected no new document changes.
+	if _, err := tx.Exec(ctx, "UPDATE action_log SET changes='[]'::jsonb,expired_at=now() WHERE owner_id=$1 AND expired_at IS NULL AND created_at<now()-interval '30 days'", string(scope.OwnerID)); err != nil {
+		return err
+	}
 	log, ok := ctx.Value(actionLogKey{}).(actionLog)
 	if !ok {
 		return nil
@@ -85,13 +90,16 @@ func (s *Store) undoActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 	}
 	var data []byte
 	var summary string
-	var undone *string
-	err := tx.QueryRow(ctx, "SELECT changes,summary,undone_at::text FROM action_log WHERE owner_id=$1 AND id=$2 FOR UPDATE", string(scope.OwnerID), id).Scan(&data, &summary, &undone)
+	var undone, expired *string
+	err := tx.QueryRow(ctx, "SELECT changes,summary,undone_at::text,expired_at::text FROM action_log WHERE owner_id=$1 AND id=$2 FOR UPDATE", string(scope.OwnerID), id).Scan(&data, &summary, &undone, &expired)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return memory.ErrNotFound
 	}
 	if err != nil {
 		return err
+	}
+	if expired != nil {
+		return workspace.ErrChangedSince
 	}
 	if undone != nil {
 		return workspace.ErrAlreadyUndone

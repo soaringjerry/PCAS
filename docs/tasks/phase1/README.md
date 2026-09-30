@@ -65,6 +65,7 @@ flowchart LR
 | `internal/postgres/actions_log.go`、`internal/postgres/desk_turn.go`、`internal/postgres/desk_actions.go` | B1（新建） |
 | `internal/postgres/commands.go`、`internal/postgres/workspace.go` 中的 `saveItem`、`saveDoc`、`Execute` | B1 |
 | `internal/postgres/desk.go`（抽出共用上下文）、`internal/postgres/processing.go`（desk 来源跳过 task/idea） | B1 |
+| `internal/postgres/editing.go`（只加删除传播：desk_turns.response 清理、action_log 快照过期） | B1 |
 | `internal/postgres/workspace.go` 中的 `snapshotTx`（加 notices） | C1 |
 | `internal/postgres/reminders.go`、`internal/postgres/notify.go`、`internal/notify/`、`internal/httpapi/notify.go`（均为新建或 C1 独有） | C1 |
 | `web/src/main.tsx`（注册 Service Worker）、`web/public/icon-*.png`、`web/public/apple-touch-icon.png` | C1 |

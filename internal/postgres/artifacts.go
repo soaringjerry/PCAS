@@ -2,7 +2,6 @@ package postgres
 
 import (
 	"context"
-	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
@@ -14,17 +13,36 @@ func artifactTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, runID, thing
 	return err
 }
 
+// Promoting an idea copies its body into the task's notes. Keep the same run
+// dependencies on that new field, even if the owner already edited the body.
+func promoteArtifactsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, ideaID, taskID string) error {
+	_, err := tx.Exec(ctx, `INSERT INTO adopted_artifacts(owner_id,run_id,thing_id,kind,artifact_id,body)
+ SELECT owner_id,run_id,$3,'notes',artifact_id,body FROM adopted_artifacts
+ WHERE owner_id=$1 AND thing_id=$2 AND kind='body' ON CONFLICT DO NOTHING`, string(scope.OwnerID), ideaID, taskID)
+	return err
+}
+
 // An adopted result is still derived from its inputs. Excluding an input or
 // revoking its grant must also exclude copies embedded in later work briefs.
+// Free-text fields retain provenance through edits: without structural blocks,
+// the whole field is protected. Matching the old text would lose dependencies
+// after punctuation changes or when an edited copy sits beside the original.
 func sanitizeItemTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, principal string, item workspace.Item) (workspace.Item, []memory.Ref, error) {
+	// Older promotions retained ideaId but not artifact links. Repair that
+	// lineage before using their copied notes in a new provider request.
+	if item.Kind == "task" && item.IdeaID != "" {
+		if err := promoteArtifactsTx(ctx, tx, scope, item.IdeaID, item.ID); err != nil {
+			return item, nil, err
+		}
+	}
 	dependencies := []memory.Ref{}
-	rows, err := tx.Query(ctx, `SELECT a.kind,a.artifact_id,a.body, NOT EXISTS(
+	rows, err := tx.Query(ctx, `SELECT a.kind,a.artifact_id, NOT EXISTS(
         SELECT 1 FROM run_dependencies d LEFT JOIN memory_records r ON (r.owner_id,r.id)=(d.owner_id,d.memory_id)
         WHERE (d.owner_id,d.run_id)=(a.owner_id,a.run_id) AND (r.state IS DISTINCT FROM 'active'
         OR d.memory_version IS DISTINCT FROM (SELECT v.version FROM applicable_claim_versions($1,now(),now()) v WHERE v.claim_id=d.memory_id)
         OR NOT EXISTS(SELECT 1 FROM record_grants g WHERE g.owner_id=d.owner_id AND g.record_id=d.memory_id AND g.principal_id=$3)
         OR EXISTS(SELECT 1 FROM context_exclusions x WHERE x.owner_id=d.owner_id AND x.thing_id=$2 AND x.memory_id=d.memory_id)
-        OR NOT EXISTS(SELECT 1 FROM workspace_agents ag JOIN claim_revisions c ON c.owner_id=ag.owner_id WHERE ag.owner_id=$1 AND ag.id=$3 AND c.claim_id=d.memory_id AND c.version=d.memory_version AND ag.document->'memoryKinds' ? c.nature AND (c.confirmation='confirmed' OR (ag.document->>'includeInferred')::boolean))
+        OR NOT EXISTS(SELECT 1 FROM workspace_agents ag JOIN claim_revisions c ON c.owner_id=ag.owner_id WHERE ag.owner_id=$1 AND ag.id=$3 AND c.claim_id=d.memory_id AND c.version=d.memory_version AND ag.document->'memoryKinds' ? c.nature AND (c.confirmation='confirmed' OR (c.confirmation='adopted' AND c.acquisition='direct') OR (ag.document->>'includeInferred')::boolean))
         )),coalesce((SELECT jsonb_agg(jsonb_build_object('id',d.memory_id,'version',d.memory_version,'kind','claim')) FROM run_dependencies d WHERE (d.owner_id,d.run_id)=(a.owner_id,a.run_id)),'[]'::jsonb)
         FROM adopted_artifacts a WHERE a.owner_id=$1 AND a.thing_id=$2`, string(scope.OwnerID), item.ID, principal)
 	if err != nil {
@@ -32,28 +50,28 @@ func sanitizeItemTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, principa
 	}
 	defer rows.Close()
 	for rows.Next() {
-		var kind, id, body string
+		var kind, id string
 		var allowed bool
 		var refs []memory.Ref
-		if err := rows.Scan(&kind, &id, &body, &allowed, &refs); err != nil {
+		if err := rows.Scan(&kind, &id, &allowed, &refs); err != nil {
 			return item, nil, err
 		}
 		used := false
 		switch kind {
 		case "notes":
-			used = body != "" && strings.Contains(item.Notes, body)
+			used = item.Notes != ""
 			if !allowed {
-				item.Notes = strings.ReplaceAll(item.Notes, body, "")
+				item.Notes = ""
 			}
 		case "body":
-			used = body != "" && strings.Contains(item.Body, body)
+			used = item.Body != ""
 			if !allowed {
-				item.Body = strings.ReplaceAll(item.Body, body, "")
+				item.Body = ""
 			}
 		case "progress":
-			used = body != "" && strings.Contains(item.Progress, body)
+			used = item.Progress != ""
 			if !allowed {
-				item.Progress = strings.ReplaceAll(item.Progress, body, "")
+				item.Progress = ""
 			}
 		case "check":
 			checks := []workspace.Check{}
@@ -82,15 +100,23 @@ func sanitizeItemTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, principa
 	return item, dependencies, rows.Err()
 }
 func purgeArtifactsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, ids []string) ([]string, error) {
-	rows, err := tx.Query(ctx, `SELECT thing_id::text,kind,artifact_id,body FROM adopted_artifacts WHERE owner_id=$1 AND run_id IN (SELECT run_id FROM run_dependencies WHERE owner_id=$1 AND memory_id=ANY($2::uuid[]))`, string(scope.OwnerID), ids)
+	// Deletion must also cover pre-fix promotions that have not been used in
+	// a new run (and therefore have not passed through the read repair above).
+	if _, err := tx.Exec(ctx, `INSERT INTO adopted_artifacts(owner_id,run_id,thing_id,kind,artifact_id,body)
+ SELECT a.owner_id,a.run_id,t.id,'notes',a.artifact_id,a.body
+ FROM adopted_artifacts a JOIN work_items t ON t.owner_id=a.owner_id AND t.document->>'ideaId'=a.thing_id::text
+ WHERE a.owner_id=$1 AND a.kind='body' AND t.kind='task' ON CONFLICT DO NOTHING`, string(scope.OwnerID)); err != nil {
+		return nil, err
+	}
+	rows, err := tx.Query(ctx, `SELECT thing_id::text,kind,artifact_id FROM adopted_artifacts WHERE owner_id=$1 AND run_id IN (SELECT run_id FROM run_dependencies WHERE owner_id=$1 AND memory_id=ANY($2::uuid[]))`, string(scope.OwnerID), ids)
 	if err != nil {
 		return nil, err
 	}
-	type artifact struct{ Thing, Kind, ID, Body string }
+	type artifact struct{ Thing, Kind, ID string }
 	artifacts := []artifact{}
 	for rows.Next() {
 		var a artifact
-		if err := rows.Scan(&a.Thing, &a.Kind, &a.ID, &a.Body); err != nil {
+		if err := rows.Scan(&a.Thing, &a.Kind, &a.ID); err != nil {
 			rows.Close()
 			return nil, err
 		}
@@ -109,11 +135,11 @@ func purgeArtifactsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, ids []
 		}
 		switch a.Kind {
 		case "notes":
-			item.Notes = strings.ReplaceAll(item.Notes, a.Body, "")
+			item.Notes = ""
 		case "body":
-			item.Body = strings.ReplaceAll(item.Body, a.Body, "")
+			item.Body = ""
 		case "progress":
-			item.Progress = strings.ReplaceAll(item.Progress, a.Body, "")
+			item.Progress = ""
 		case "task":
 			item.Title = "已删除的生成内容"
 			item.Name = item.Title

@@ -152,7 +152,10 @@ func TestAsyncRunInvalidatesDuringGenerationAndBudget(t *testing.T) {
 	mem := st.Memories[0]
 	st = workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "测试生成"})
 	task := st.Tasks[0]
-	st = workspaceCommand(t, s, scope, workspace.Command{Type: "requestRun", ThingID: task.ID, AgentID: "model", Kind: "ask", Prompt: "回答"})
+	st = workspaceCommand(t, s, scope, workspace.Command{Type: "requestRun", ThingID: task.ID, AgentID: "model", Kind: "ask", Prompt: "根据旧依据回答"})
+	if !strings.Contains(st.Runs[0].Brief, "旧依据") {
+		t.Fatal("relevant dependency missing before generation")
+	}
 	done := make(chan error, 1)
 	go func() { done <- s.runAgentOnce(ctx) }()
 	select {

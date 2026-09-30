@@ -1,0 +1,61 @@
+name: browser regression
+
+on:
+  pull_request:
+    paths: ["cmd/**", "internal/**", "web/**", "go.mod", "go.sum", ".github/workflows/browser-regression.yml"]
+
+permissions:
+  contents: read
+
+jobs:
+  desk-routing:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:0.8.2-pg16-bookworm
+        env:
+          POSTGRES_USER: pcas
+          POSTGRES_PASSWORD: pcas-test
+          POSTGRES_DB: pcas_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U pcas -d pcas_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      PCAS_DATABASE_URL: postgres://pcas:pcas-test@localhost:5432/pcas_test?sslmode=disable
+      PCAS_OWNER_ID: 11111111-1111-4111-8111-111111111111
+      PCAS_API_TOKEN: pcas-browser-check-secret-123456789012
+      PCAS_TEST_API_TOKEN: pcas-browser-check-secret-123456789012
+      PCAS_HTTP_ADDR: 127.0.0.1:18090
+      PCAS_TEST_BASE_URL: http://127.0.0.1:18090
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci && npm run build && npx playwright install --with-deps chromium
+        working-directory: web
+      - run: |
+          go build -o bin/pcas ./cmd/pcas
+          bin/pcas migrate
+          nohup bin/pcas serve > /tmp/pcas-browser.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:18090/ >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/pcas-browser.log
+          exit 1
+      - run: npx playwright test tests/desk-routing.spec.ts
+        working-directory: web
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: browser-regression-failure
+          path: web/test-results/
+          retention-days: 7

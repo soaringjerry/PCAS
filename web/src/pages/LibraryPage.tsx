@@ -205,6 +205,7 @@ function MemoryTab() {
           items={[
             { value: 'all', label: '都看' },
             { value: 'confirmed', label: '已确认' },
+            { value: 'sourced', label: '原话有据' },
             { value: 'inferred', label: '推测' },
             { value: 'planned', label: '计划' },
           ]}
@@ -212,7 +213,7 @@ function MemoryTab() {
       </div>
       <p className="hint-line">
         <Info size={13} />
-        波浪下划线是 AI 推测的，还没经过你确认。长期不用的记忆会变淡，但不会消失；深入查找会翻完整历史和原文。
+        「原话有据」保留你刚记录的直接表达，不代表已经核实；波浪下划线是待确认的 AI 理解。长期不用的记忆会变淡；深入查找可翻历史和原文。
       </p>
       <Sheet>
         {shown.length === 0 ? (

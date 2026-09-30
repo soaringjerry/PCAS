@@ -5,7 +5,7 @@
 export type ID = string
 
 /** How much a piece of knowledge can be trusted (PRD §2). */
-export type Epistemic = 'confirmed' | 'inferred' | 'planned'
+export type Epistemic = 'confirmed' | 'sourced' | 'inferred' | 'planned'
 
 export type Actor = 'user' | 'ai' | 'import' | 'system'
 
@@ -122,6 +122,8 @@ export interface MemoryVersion {
 }
 
 export interface Memory {
+	confirmation?: 'unknown' | 'candidate' | 'adopted' | 'confirmed' | 'disputed'
+	acquisition?: 'direct' | 'reported' | 'inferred' | 'execution'
   halfLifeDays?: number
   reinforcementLimit?: number
   recordVersion: number

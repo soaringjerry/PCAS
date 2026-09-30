@@ -108,6 +108,12 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 			title = c.Name
 		}
 		item := newItem(kind, title)
+		if kind == "task" && c.Text != "" {
+			if err := requireText(c.Text); err != nil {
+				return err
+			}
+			item.Notes = c.Text
+		}
 		item.ProjectID = c.ProjectID
 		id, err := uuidOrNew(c.ID)
 		if err != nil {
@@ -391,6 +397,9 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 		task.IdeaID = item.ID
 		task.Sources = item.Sources
 		if err := saveItem(ctx, tx, scope, task); err != nil {
+			return err
+		}
+		if err := promoteArtifactsTx(ctx, tx, scope, item.ID, task.ID); err != nil {
 			return err
 		}
 		item.Status = "promoted"

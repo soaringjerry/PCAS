@@ -65,17 +65,64 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 			fmt.Fprintf(&brief, "子步骤（完成=%t）：%s\n", check.Done, check.Text)
 		}
 		fmt.Fprintln(&brief, "相关记忆（引用 ID 与版本；长期约束继续适用）：")
+		// Rank through the same scoped retrieval used by Recall instead of
+		// filling the prompt with globally recent memories. No nested model
+		// request is made while the owner's transaction is locked.
+		query := c.Prompt + " " + item.Title
+		if len([]rune(query)) > 1000 {
+			query = string([]rune(query)[:1000])
+		}
+		tokens := memory.SearchTokens(query)
+		if len(tokens) > 120 {
+			tokens = tokens[:120]
+		}
+		terms := []string{}
+		for _, token := range tokens {
+			if len([]rune(token)) > 1 {
+				terms = append(terms, "'"+strings.ReplaceAll(token, "'", "''")+"'")
+			}
+		}
+		recall := memory.RecallResult{Coverage: coverage()}
+		request := memory.RecallRequest{Query: query, Mode: memory.Remember, Context: memory.WorkingContext{Objects: []memory.ID{}}}
+		if projectID != "" {
+			request.Context.Objects = append(request.Context.Objects, memory.ID(projectID))
+		}
+		budget := memory.Budget{Candidates: 100, Tokens: 10000, Edges: 30, Hops: 1}
+		if err := s.recallTx(ctx, tx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: agent.ID}, request, budget, query, strings.Join(terms, " | "), nil, "", 0, "", tokens, &recall); err != nil {
+			return err
+		}
+		byID := map[string]workspace.Memory{}
 		for _, m := range memories {
+			byID[m.ID] = m
+		}
+		ordered := []workspace.Memory{}
+		selected := map[string]bool{}
+		// Explicit long-term constraints must remain applicable even when the
+		// task vocabulary does not repeat them.
+		for _, m := range memories {
+			if m.Kind == "preference" || m.Kind == "decision" {
+				ordered = append(ordered, m)
+				selected[m.ID] = true
+			}
+		}
+		for _, ref := range recall.Memories {
+			if m, ok := byID[string(ref.ID)]; ok && !selected[m.ID] {
+				ordered = append(ordered, m)
+				selected[m.ID] = true
+			}
+		}
+		for _, m := range ordered {
 			if !oneOf(m.Kind, agent.MemoryKinds...) || m.Epistemic == "inferred" && !agent.IncludeInferred || oneOf(m.ID, excluded...) || m.ProjectID != "" && m.ProjectID != projectID {
 				continue
 			}
 			if brief.Len()+len(m.Text) > 30000 {
-				break
+				continue
 			}
 			fmt.Fprintf(&brief, "[%s@%d / %s] %s\n", m.ID, m.Version, m.Epistemic, m.Text)
 			run.ContextMemoryIDs = append(run.ContextMemoryIDs, m.ID)
 			run.ContextVersions = append(run.ContextVersions, memory.Ref{ID: memory.ID(m.ID), Version: m.Version, Kind: memory.ClaimKind})
 		}
+
 		// Derived copies carry input dependencies even when their source memories
 		// fall outside this run's text budget.
 		for _, ref := range artifactRefs {
@@ -262,7 +309,7 @@ func verifyRunTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run workspa
 		if err != nil {
 			return memory.ErrConflict
 		}
-		if claim.Version != ref.Version || !oneOf(claim.Nature, agent.MemoryKinds...) || !agent.IncludeInferred && claim.Confirmation != "confirmed" {
+		if claim.Version != ref.Version || !oneOf(claim.Nature, agent.MemoryKinds...) || !agent.IncludeInferred && claim.Confirmation != "confirmed" && !(claim.Confirmation == "adopted" && claim.Acquisition == "direct") {
 			return memory.ErrConflict
 		}
 	}

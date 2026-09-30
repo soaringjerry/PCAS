@@ -8,8 +8,9 @@ import type { Epistemic, SourceRef } from '../domain/types'
 import { useStore } from '../store/context'
 import { Tag } from './ui'
 
-/** Confirmed knowledge carries no mark; only guesses and plans are called out. */
+/** Source-backed wording is distinct from both user review and AI inference. */
 export function TrustTag({ value }: { value: Epistemic }) {
+  if (value === 'sourced') return <Tag tone="info">原话有据</Tag>
   if (value === 'inferred') return <Tag tone="warning">推测</Tag>
   if (value === 'planned') return <Tag tone="info">计划</Tag>
   return null

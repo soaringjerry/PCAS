@@ -146,7 +146,7 @@ async function route(q: string): Promise<{ intent: Intent; sure: boolean }> {
     // Starting the assistant spends budget and shares memories with it, so it needs a clearer call.
     return { intent: r.intent, sure: r.confidence >= (r.intent === 'delegate' ? 0.8 : 0.6) }
   } catch {
-    return { intent: looksLikeRequest(q) ? 'delegate' : looksLikeQuestion(q) ? 'ask' : 'record', sure: true }
+    return { intent: looksLikeRequest(q) ? 'delegate' : looksLikeQuestion(q) ? 'ask' : 'record', sure: false }
   }
 }
 
@@ -297,7 +297,7 @@ function PickCard({ q, onPick, onCancel }: { q: string; onPick: (intent: Intent)
   return (
     <div className="hall-answer hall-pick" role="group" aria-label="这句要怎么处理">
       <div className="hall-answer-head">
-        <span>拿不准这句要怎么处理：{q}</span>
+        <span>请选择这句话要怎么处理：{q}</span>
         <button type="button" className="hall-icon-btn" aria-label="放回输入框" onClick={onCancel}>
           <X size={16} />
         </button>
@@ -321,7 +321,7 @@ function PickCard({ q, onPick, onCancel }: { q: string; onPick: (intent: Intent)
 }
 
 function Desk() {
-  const { state, dispatch, runAgent } = useStore()
+  const { dispatch } = useStore()
   const { agentFor } = useShell()
   const [text, setText] = useState('')
   const [routing, setRouting] = useState(false)
@@ -349,7 +349,7 @@ function Desk() {
   const ask = async (q: string, follow = false) => {
     const ticket = ++asked.current
     const before = follow && thread ? thread : []
-    const history = before.flatMap((t) => (t.reply ? [{ q: t.q, a: t.reply.answer }] : [])).slice(-6)
+    const history = before.flatMap((t) => (t.reply ? [{ q: t.q, a: '' }] : [])).slice(-6)
     setReceipt(null)
     setThread([...before, { q, busy: true }])
     const done = (turn: Turn) => {
@@ -370,20 +370,13 @@ function Desk() {
     return true
   }
 
-  // A task the assistant starts on right away; its draft lands in the queue above.
+  // Creating an item does not itself authorize a paid model run.
   const delegate = async (q: string, prompt = q) => {
     const id = crypto.randomUUID()
     const title = q.length > 60 ? `${q.slice(0, 60)}…` : q
-    if (!(await dispatch({ type: 'addTask', id, title }))) return false
+    if (!(await dispatch({ type: 'addTask', id, title, text: prompt }))) return false
     close()
-    const agentId = agentFor(id)
-    const agent = state.agents.find((a) => a.id === agentId)
-    const started = agentId !== 'manual' && (await runAgent({ thingId: id, agentId, kind: 'ask', prompt }))
-    setReceipt(
-      started
-        ? { key: Date.now(), text: `交给${agent?.name ?? '副手'}了`, hint: '做好了会出现在上面等你拍板。', to: `/t/${id}` }
-        : { key: Date.now(), text: '建好了事项', hint: '现在没有能直接开工的副手，去事项里选一个。', to: `/t/${id}` },
-    )
+    setReceipt({ key: Date.now(), text: '建好了事项', hint: '打开事项确认副手、上下文和费用后再开始。', to: `/t/${id}` })
     return true
   }
 
@@ -404,7 +397,7 @@ function Desk() {
     const { intent, sure } = await route(q)
     setRouting(false)
     setText('')
-    if (!sure) {
+    if (!sure || intent === 'delegate') {
       close()
       setReceipt(null)
       setPick(q)
@@ -471,7 +464,7 @@ function Desk() {
           onClose={close}
           onDeeper={() => setDeeper(thread[0].q)}
           onFile={() => void file(thread[0].q)}
-          onDelegate={() => void delegate(thread[0].q, thread.map((t) => `问：${t.q}\n答：${t.reply?.answer ?? ''}`).join('\n'))}
+          onDelegate={() => void delegate(thread[0].q, thread.map((t) => `问：${t.q}`).join('\n'))}
         />
       )}
     </section>

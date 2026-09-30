@@ -81,11 +81,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     if (!outcome.ok && outcome.error instanceof APIError && outcome.error.code === 'version_conflict') outcome = await attempt()
     if (outcome.ok) return { ok: true }
     const e = outcome.error
-    return { ok: false, code: e instanceof APIError ? e.code : undefined, message: e instanceof Error ? e.message : '没撤销成功，请重试。' }
+    return { ok: false, error: e instanceof Error ? e.message : '没撤销成功，请重试。', code: e instanceof APIError ? e.code : undefined }
   }, [command])
   const undo = useCallback(async (actionId: string) => {
     const outcome = await tryUndo(actionId)
-    if (!outcome.ok) showToast(outcome.message)
+    if (!outcome.ok) showToast(outcome.error)
     return outcome.ok
   }, [tryUndo, showToast])
   const dispatchUndoable = useCallback(async (action: Action, label: string) => {

@@ -7,8 +7,8 @@ export interface ShellApi {
   setDraft: (thingId: string, text: string) => void
   /** Puts text into that secretary's draft and focuses its input. */
   prefill: (key: string, text: string) => void
-  /** The secretary for `key` listens here to take focus after a prefill. */
-  onPrefill: (key: string, listener: () => void) => () => void
+  /** Secretary inputs listen here to take focus after a prefill of their key. */
+  onPrefill: (listener: (key: string, text: string) => void) => () => void
   agentFor: (thingId: string) => string
   setAgentFor: (thingId: string, agentId: string) => void
 }

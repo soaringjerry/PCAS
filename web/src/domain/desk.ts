@@ -34,6 +34,8 @@ export interface Receipt {
   text: string
   thingId: string | null
   undoable: boolean
+  /** Whether the action has been undone since; filled in when turns are read back. */
+  undone?: boolean
   status: 'done' | 'skipped'
   reason?: string
 }
@@ -56,7 +58,8 @@ export interface DeskTurn {
 
 export interface DeskTurnRequest {
   requestId: string
-  conversationId: string | null
+  /** Made by the client when a conversation starts, so its lines can go out together. */
+  conversationId: string
   thingId: string | null
   text: string
   agentId: string
@@ -75,18 +78,10 @@ export interface DeskTurnsResponse {
 
 /* ---------- What survives a reload ---------- */
 
-/**
- * A line that has not been answered yet. `sent` freezes the body: once the
- * server may have seen it, a retry must repeat it byte for byte.
- */
-export interface Unanswered {
-  request: DeskTurnRequest
-  sent: boolean
-}
-
+/** Lines are stored with their exact request before sending; a retry repeats it byte for byte. */
 export interface Conversation {
   conversationId: string | null
-  unanswered: Unanswered[]
+  unanswered: DeskTurnRequest[]
 }
 
 const storageKey = (key: string) => `pcas.secretary.${key}`
@@ -98,7 +93,7 @@ export function loadConversation(key: string): Conversation {
       const saved = JSON.parse(raw) as Partial<Conversation>
       return {
         conversationId: typeof saved.conversationId === 'string' ? saved.conversationId : null,
-        unanswered: Array.isArray(saved.unanswered) ? saved.unanswered.filter((u) => typeof u?.request?.requestId === 'string' && typeof u.request.text === 'string') : [],
+        unanswered: Array.isArray(saved.unanswered) ? saved.unanswered.filter((r) => typeof r?.requestId === 'string' && typeof r.conversationId === 'string' && typeof r.text === 'string') : [],
       }
     }
   } catch {

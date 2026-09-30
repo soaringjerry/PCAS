@@ -9,7 +9,8 @@ export interface RunRequest {
   prompt: string
 }
 
-export type UndoOutcome = { ok: true } | { ok: false; code?: string; message: string }
+/** `error` is the text to show; `code` is the server's code, e.g. `already_undone`. */
+export type UndoOutcome = { ok: true } | { ok: false; error: string; code?: string }
 
 export interface Store {
   state: State

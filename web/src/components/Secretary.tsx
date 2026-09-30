@@ -25,55 +25,16 @@ const MAX_LENGTH = 4000
 // Requests outlive the component that sent them: leaving the page must not
 // turn an answer into a "retry", and coming back must not send it twice.
 const inflight = new Map<string, Promise<DeskTurnResponse>>()
-// The first line of a new conversation gets its ID from the server; lines
-// sent meanwhile wait for it so they all land in the same conversation.
-const founding = new Map<string, Promise<string>>()
-// Lines whose conversation was ended while they were in flight.
-const abandoned = new Set<string>()
-
-async function transmit(key: string, request: DeskTurnRequest): Promise<DeskTurnResponse> {
-  let body = request
-  const saved = loadConversation(key).unanswered.find((u) => u.request.requestId === request.requestId)
-  if (saved?.sent) {
-    body = saved.request // A retry repeats exactly what the server may have seen.
-  } else {
-    for (;;) {
-      const conversationId = loadConversation(key).conversationId ?? body.conversationId
-      if (conversationId) {
-        body = { ...body, conversationId }
-        break
-      }
-      const pending = founding.get(key)
-      if (!pending) break
-      await pending.catch(() => undefined)
-      if (founding.get(key) === pending) founding.delete(key)
-    }
-  }
-  updateConversation(key, (c) => ({
-    ...c,
-    unanswered: c.unanswered.some((u) => u.request.requestId === body.requestId)
-      ? c.unanswered.map((u) => (u.request.requestId === body.requestId ? { request: body, sent: true } : u))
-      : [...c.unanswered, { request: body, sent: true }],
-  }))
-  const response = api<DeskTurnResponse>('/v1/desk/turn', body)
-  if (!body.conversationId) {
-    const id = response.then((r) => r.conversationId)
-    founding.set(key, id)
-    id.catch(() => undefined).finally(() => founding.get(key) === id && founding.delete(key))
-  }
-  const r = await response
-  const keep = !abandoned.delete(body.requestId)
-  updateConversation(key, (c) => ({
-    conversationId: c.conversationId ?? (keep ? r.conversationId : null),
-    unanswered: c.unanswered.filter((u) => u.request.requestId !== body.requestId),
-  }))
-  return r
-}
 
 function deliver(key: string, request: DeskTurnRequest): Promise<DeskTurnResponse> {
   const existing = inflight.get(request.requestId)
   if (existing) return existing
-  const p = transmit(key, request).finally(() => inflight.delete(request.requestId))
+  const p = api<DeskTurnResponse>('/v1/desk/turn', request)
+    .then((r) => {
+      updateConversation(key, (c) => ({ ...c, unanswered: c.unanswered.filter((u) => u.requestId !== request.requestId) }))
+      return r
+    })
+    .finally(() => inflight.delete(request.requestId))
   inflight.set(request.requestId, p)
   return p
 }
@@ -96,7 +57,7 @@ function failure(e: unknown): { error: string; retry: boolean } {
 
 function ReceiptRow({ receipt, onEdit }: { receipt: Receipt; onEdit: (title: string) => void }) {
   const { state, tryUndo } = useStore()
-  const [undo, setUndo] = useState<{ busy?: boolean; done?: boolean; error?: string }>({})
+  const [undo, setUndo] = useState<{ busy?: boolean; done?: boolean; error?: string }>({ done: receipt.undone })
   const thing = receipt.thingId ? findThing(state, receipt.thingId) : undefined
   const title = thing && thingTitle(thing)
   const skipped = receipt.status === 'skipped'
@@ -143,7 +104,7 @@ function ReceiptRow({ receipt, onEdit }: { receipt: Receipt; onEdit: (title: str
                 setUndo({ busy: true })
                 const outcome = await tryUndo(receipt.actionId!)
                 if (outcome.ok || outcome.code === 'already_undone') setUndo({ done: true })
-                else setUndo({ error: outcome.message })
+                else setUndo({ error: outcome.error })
               }}
             >
               撤销
@@ -200,10 +161,10 @@ export function Secretary({ thingId }: { thingId?: string }) {
   const [reveal, setReveal] = useState(0)
   const [restored, setRestored] = useState(0)
   const [lines, setLines] = useState<Line[]>(() =>
-    loadConversation(key).unanswered.map((u): Line =>
-      inflight.has(u.request.requestId)
-        ? { key: u.request.requestId, kind: 'waiting', request: u.request }
-        : { key: u.request.requestId, kind: 'failed', request: u.request, error: '上次没等到回复，原话还在', retry: true },
+    loadConversation(key).unanswered.map((request): Line =>
+      inflight.has(request.requestId)
+        ? { key: request.requestId, kind: 'waiting', request }
+        : { key: request.requestId, kind: 'failed', request, error: '上次没等到回复，原话还在', retry: true },
     ),
   )
 
@@ -238,9 +199,9 @@ export function Secretary({ thingId }: { thingId?: string }) {
   // Restore: pick up lines still in flight, and the conversation so far.
   useEffect(() => {
     const saved = loadConversation(key)
-    for (const u of saved.unanswered) {
-      const p = inflight.get(u.request.requestId)
-      if (p) follow(u.request.requestId, p, alive)
+    for (const request of saved.unanswered) {
+      const p = inflight.get(request.requestId)
+      if (p) follow(request.requestId, p, alive)
     }
     if (!saved.conversationId) return
     const conversationId = saved.conversationId
@@ -260,7 +221,8 @@ export function Secretary({ thingId }: { thingId?: string }) {
 
   useEffect(
     () =>
-      onPrefill(key, () => {
+      onPrefill((target) => {
+        if (target !== key) return
         // Wait for the prefilled draft to render, then put the caret at its end.
         requestAnimationFrame(() => {
           const el = input.current
@@ -286,15 +248,17 @@ export function Secretary({ thingId }: { thingId?: string }) {
   const send = (said: string) => {
     const words = said.trim()
     if (!words || words.length > MAX_LENGTH) return
+    const saved = loadConversation(key)
     const request: DeskTurnRequest = {
       requestId: crypto.randomUUID(),
-      conversationId: loadConversation(key).conversationId,
+      // A new conversation gets its ID here, so lines sent together share it.
+      conversationId: saved.conversationId ?? crypto.randomUUID(),
       thingId: thingId ?? null,
       text: words,
       agentId: agentFor('desk'),
     }
     // Keep the words before anything goes out, so a lost connection loses nothing.
-    updateConversation(key, (c) => ({ ...c, unanswered: [...c.unanswered, { request, sent: false }] }))
+    updateConversation(key, (c) => ({ conversationId: c.conversationId ?? request.conversationId, unanswered: [...c.unanswered, request] }))
     setLines((ls) => [...ls, { key: request.requestId, kind: 'waiting', request }])
     setReveal((n) => n + 1)
     follow(request.requestId, deliver(key, request), alive)
@@ -313,15 +277,13 @@ export function Secretary({ thingId }: { thingId?: string }) {
 
   /** Takes an unanswered line back into the input to reword it. */
   const reword = (line: Extract<Line, { kind: 'failed' }>) => {
-    updateConversation(key, (c) => ({ ...c, unanswered: c.unanswered.filter((u) => u.request.requestId !== line.key) }))
+    updateConversation(key, (c) => ({ ...c, unanswered: c.unanswered.filter((u) => u.requestId !== line.key) }))
     setLines((ls) => ls.filter((l) => l.key !== line.key))
     prefill(key, line.request.text)
   }
 
   const end = () => {
     updateConversation(key, (c) => ({ ...c, conversationId: null }))
-    founding.delete(key)
-    for (const l of lines) if (l.kind === 'waiting') abandoned.add(l.key)
     // Answered turns go; anything still unanswered stays so no words are lost.
     setLines((ls) => ls.filter((l) => l.kind !== 'turn'))
     input.current?.focus()
@@ -364,38 +326,41 @@ export function Secretary({ thingId }: { thingId?: string }) {
           </ol>
         </div>
       )}
-      <form
-        className="sec-input"
-        onSubmit={(e) => {
-          e.preventDefault()
-          submit()
-        }}
-      >
-        <textarea
-          ref={input}
-          rows={1}
-          value={text}
-          onChange={(e) => setDraft(key, e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing && e.keyCode !== 229) {
-              e.preventDefault()
-              submit()
-            } else if (e.key === 'Escape' && lines.some((l) => l.kind === 'turn')) {
-              e.preventDefault()
-              end()
-            }
+      {/* A solid dock under the input, so pinned at the bottom nothing shows through. */}
+      <div className="sec-dock">
+        <form
+          className="sec-input"
+          onSubmit={(e) => {
+            e.preventDefault()
+            submit()
           }}
-          placeholder={thingId ? '关于这件事，说一句' : '说一句：记事、问事、改安排都行'}
-          aria-label="跟秘书说"
-          aria-invalid={tooLong || undefined}
-          autoComplete="off"
-          enterKeyHint="send"
-        />
-        <button type="submit" className="sec-send" aria-label="发送" disabled={!text.trim() || tooLong}>
-          <ArrowUp size={18} strokeWidth={2.5} />
-        </button>
-      </form>
-      {tooLong && <p className="sec-hint">太长了，一次最多 {MAX_LENGTH} 字</p>}
+        >
+          <textarea
+            ref={input}
+            rows={1}
+            value={text}
+            onChange={(e) => setDraft(key, e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing && e.keyCode !== 229) {
+                e.preventDefault()
+                submit()
+              } else if (e.key === 'Escape' && lines.some((l) => l.kind === 'turn')) {
+                e.preventDefault()
+                end()
+              }
+            }}
+            placeholder={thingId ? '关于这件事，说一句' : '说一句：记事、问事、改安排都行'}
+            aria-label="跟秘书说"
+            aria-invalid={tooLong || undefined}
+            autoComplete="off"
+            enterKeyHint="send"
+          />
+          <button type="submit" className="sec-send" aria-label="发送" disabled={!text.trim() || tooLong}>
+            <ArrowUp size={18} strokeWidth={2.5} />
+          </button>
+        </form>
+        {tooLong && <p className="sec-hint">太长了，一次最多 {MAX_LENGTH} 字</p>}
+      </div>
     </section>
   )
 }

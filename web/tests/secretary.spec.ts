@@ -32,9 +32,15 @@ interface Backend {
   snapshot: State
 }
 
-async function mockBackend(page: Page, reply: (request: DeskTurnRequest, n: number) => Reply, undo?: (command: Command) => { status: number; json: unknown } | undefined): Promise<Backend> {
+const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
+
+async function mockBackend(
+  page: Page,
+  reply: (request: DeskTurnRequest, n: number) => Reply,
+  undo?: (command: Command) => { status: number; json: unknown } | undefined,
+  conversations = new Map<string, DeskTurn[]>(),
+): Promise<Backend> {
   const backend: Backend = { commands: [], turns: [], restores: [], errors: [], snapshot: workspace() }
-  const conversations = new Map<string, DeskTurn[]>()
   page.on('pageerror', (e) => backend.errors.push(e.message))
   await page.route('**/v1/**', (route) => route.fulfill({ status: 500, json: { error: 'unexpected_mock_request' } }))
   await page.route((url) => url.pathname === '/v1/workspace', (route) => route.fulfill({ json: backend.snapshot }))
@@ -52,7 +58,7 @@ async function mockBackend(page: Page, reply: (request: DeskTurnRequest, n: numb
     backend.turns.push(body)
     const answer = await reply(body, backend.turns.length)
     if (answer === 'abort') return route.abort('failed')
-    const conversationId = body.conversationId ?? 'conv-1'
+    const conversationId = body.conversationId
     const turn: DeskTurn = { id: `turn-${body.requestId}`, text: body.text, reply: '', cards: [], receipts: [], ask: null, agent: '模型', createdAt: new Date().toISOString(), ...answer }
     const list = conversations.get(conversationId) ?? []
     // The server deduplicates a repeated requestId.
@@ -88,12 +94,13 @@ test('a sentence comes back as a one-line receipt, and the conversation returns 
   await expect(receipt.getByRole('link', { name: '给张三回邮件' })).toHaveAttribute('href', '/t/task')
   await expect(input(page)).toHaveValue('')
   expect(backend.turns).toHaveLength(1)
-  expect(backend.turns[0]).toMatchObject({ conversationId: null, thingId: null, text: '周五下午三点给张三回邮件，算在 A 项目里', agentId: 'model' })
+  expect(backend.turns[0]).toMatchObject({ thingId: null, text: '周五下午三点给张三回邮件，算在 A 项目里', agentId: 'model' })
+  expect(backend.turns[0].conversationId).toMatch(uuid)
 
   await page.reload()
   await expect(receipt).toBeVisible()
   await expect(page.getByText('好。', { exact: true })).toBeVisible()
-  expect(backend.restores).toEqual(['conv-1'])
+  expect(backend.restores).toEqual([backend.turns[0].conversationId])
   expect(backend.turns).toHaveLength(1)
   await expect(input(page)).toHaveValue('')
 
@@ -107,47 +114,42 @@ test('a sentence comes back as a one-line receipt, and the conversation returns 
   await expect(receipt).toHaveCount(0)
   await say(page, '再记一件')
   await expect.poll(() => backend.turns.length).toBe(2)
-  expect(backend.turns[1].conversationId).toBeNull()
+  expect(backend.turns[1].conversationId).toMatch(uuid)
+  expect(backend.turns[1].conversationId).not.toBe(backend.turns[0].conversationId)
   expect(backend.errors).toEqual([])
 })
 
-test('lines sent while an earlier one is still thinking stay in the same conversation', async ({ page }) => {
+test('lines sent while the first is still thinking go out at once, in the same conversation', async ({ page }) => {
   const held: (() => void)[] = []
-  const backend = await mockBackend(page, (request, n) => {
-    if (n === 1) return { reply: '第一句' }
-    return new Promise((resolve) => held.push(() => resolve({ reply: `回：${request.text}` })))
-  })
+  const backend = await mockBackend(page, (request) => new Promise((resolve) => held.push(() => resolve({ reply: `回：${request.text}` }))))
   await page.goto('/')
-  await say(page, '先说一句')
-  await expect(page.getByText('第一句', { exact: true })).toBeVisible()
-
-  await say(page, '第二句')
+  await say(page, '第一句')
   await expect(page.getByText('正在想…')).toBeVisible()
   await expect(input(page)).toBeEnabled()
+  await say(page, '第二句')
   await say(page, '第三句')
-  await expect(page.getByText('正在想…')).toHaveCount(2)
+  await expect(page.getByText('正在想…')).toHaveCount(3)
+  // Nothing waits for the first answer: all three are with the server together.
   await expect.poll(() => backend.turns.length).toBe(3)
-  expect(backend.turns[1].conversationId).toBe('conv-1')
-  expect(backend.turns[2].conversationId).toBe('conv-1')
-  held.forEach((release) => release())
-  await expect(page.locator('.sec-turn .sec-said')).toHaveText(['先说一句', '第二句', '第三句'])
-  await expect(page.getByText('正在想…')).toHaveCount(0)
+  expect(backend.turns[0].conversationId).toMatch(uuid)
+  expect(backend.turns.map((t) => t.conversationId)).toEqual(Array(3).fill(backend.turns[0].conversationId))
+  held.reverse().forEach((release) => release())
+  await expect(page.locator('.sec-turn .sec-said')).toHaveText(['第一句', '第二句', '第三句'])
+  await expect(page.locator('.sec-reply')).toHaveText(['回：第一句', '回：第二句', '回：第三句'])
 })
 
-test('a brand-new conversation holds a second line until the first has its conversation ID', async ({ page }) => {
-  let release!: () => void
-  const backend = await mockBackend(page, (_request, n) => (n === 1 ? new Promise((resolve) => (release = () => resolve({ reply: '一' }))) : { reply: '二' }))
+test('a receipt undone earlier reads 已撤销 when the conversation is restored', async ({ page }) => {
+  const at = new Date().toISOString()
+  const conversations = new Map([['11111111-1111-4111-8111-111111111111', [
+    { id: 'turn-a', text: '周五给张三回邮件', reply: '', cards: [], ask: null, agent: '模型', createdAt: at, receipts: [{ ...created, undone: true }, { ...created, actionId: 'act-9', text: '已建：交房租', thingId: 'rent', undone: false }] },
+  ]]])
+  await mockBackend(page, () => ({}), undefined, conversations)
+  await page.addInitScript(() => localStorage.setItem('pcas.secretary.desk', JSON.stringify({ conversationId: '11111111-1111-4111-8111-111111111111', unanswered: [] })))
   await page.goto('/')
-  await say(page, '一')
-  await say(page, '二')
-  await expect(page.getByText('正在想…')).toHaveCount(2)
-  await expect(input(page)).toBeEnabled()
-  expect(backend.turns).toHaveLength(1)
-  release()
-  await expect.poll(() => backend.turns.length).toBe(2)
-  expect(backend.turns[0].conversationId).toBeNull()
-  expect(backend.turns[1].conversationId).toBe('conv-1')
-  await expect(page.locator('.sec-reply')).toHaveText(['一', '二'])
+  const undone = page.locator('.sec-receipt').filter({ hasText: created.text })
+  await expect(undone).toContainText('已撤销')
+  await expect(undone.getByRole('button')).toHaveCount(0)
+  await expect(page.locator('.sec-receipt').filter({ hasText: '已建：交房租' }).getByRole('button', { name: '撤销' })).toBeVisible()
 })
 
 test('撤销 on a receipt undoes that action and reports why when it cannot', async ({ page }) => {
@@ -187,7 +189,7 @@ test('an ask option is sent as the next line', async ({ page }) => {
   await expect(page.getByText('张三是指哪一位？')).toBeVisible()
   await page.getByRole('button', { name: '张三（同事）' }).click()
   await expect(page.getByText('好，记在同事张三名下。')).toBeVisible()
-  expect(backend.turns[1]).toMatchObject({ text: '张三（同事）', conversationId: 'conv-1' })
+  expect(backend.turns[1]).toMatchObject({ text: '张三（同事）', conversationId: backend.turns[0].conversationId })
   // The question stays; its options go once it is answered.
   await expect(page.getByRole('button', { name: '张三（房东）' })).toHaveCount(0)
 })
@@ -221,7 +223,7 @@ test('the secretary on a thing page sends that thing along', async ({ page }) =>
   await page.goto('/t/task')
   await say(page, '改到下周一上午十点')
   await expect(page.getByText('已改：给张三回邮件 → 下周一 10:00')).toBeVisible()
-  expect(backend.turns[0]).toMatchObject({ thingId: 'task', conversationId: null })
+  expect(backend.turns[0]).toMatchObject({ thingId: 'task' })
   // Each thing keeps its own conversation; the hall's is separate.
   await page.goto('/')
   await expect(page.getByText('已改：给张三回邮件 → 下周一 10:00')).toHaveCount(0)
@@ -283,4 +285,23 @@ test('a task card is ticked with dispatchUndoable, and its toast undoes that exa
   await expect.poll(() => backend.commands.length).toBe(2)
   expect(backend.commands[1]).toMatchObject({ type: 'undoAction', id: done.requestId })
   await expect(toast).toContainText('撤销了')
+})
+
+test('on a phone the pinned input sits on a solid dock, so nothing shows through around it', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await mockBackend(page, () => ({}))
+  await page.goto('/')
+  await expect(input(page)).toBeVisible()
+  // Scroll so the today panel passes under the input, then probe the gaps around it.
+  await page.locator('.hall-today').scrollIntoViewIfNeeded()
+  await page.evaluate(() => document.querySelector('.main')?.scrollBy(0, 200))
+  const box = (await page.locator('.sec-input').boundingBox())!
+  const probes = [
+    [box.x + box.width / 2, box.y + box.height + 6], // below the input
+    [4, box.y + box.height / 2], // left of it
+    [box.x + box.width / 2, box.y - 4], // just above it
+  ]
+  for (const [x, y] of probes) {
+    expect(await page.evaluate(([x, y]) => !!document.elementFromPoint(x, y)?.closest('.sec-dock'), [x, y])).toBe(true)
+  }
 })

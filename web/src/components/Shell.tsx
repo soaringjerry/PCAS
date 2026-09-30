@@ -32,7 +32,7 @@ export function Shell() {
   const { pathname } = useLocation()
   const [saved, setSaved] = useState<Persisted>(load)
   const [palette, setPalette] = useState(false)
-  const prefillListeners = useRef(new Map<string, Set<() => void>>())
+  const prefillListeners = useRef(new Set<(key: string, text: string) => void>())
 
   useEffect(() => {
     try {
@@ -62,13 +62,11 @@ export function Shell() {
       setDraft: (id, text) => setSaved((s) => ({ ...s, drafts: { ...s.drafts, [id]: text } })),
       prefill: (key, text) => {
         setSaved((s) => ({ ...s, drafts: { ...s.drafts, [key]: text } }))
-        prefillListeners.current.get(key)?.forEach((listener) => listener())
+        prefillListeners.current.forEach((listener) => listener(key, text))
       },
-      onPrefill: (key, listener) => {
-        const listeners = prefillListeners.current
-        if (!listeners.has(key)) listeners.set(key, new Set())
-        listeners.get(key)!.add(listener)
-        return () => void listeners.get(key)?.delete(listener)
+      onPrefill: (listener) => {
+        prefillListeners.current.add(listener)
+        return () => void prefillListeners.current.delete(listener)
       },
       agentFor: (id) => state.agents.find((a) => a.id === saved.agents[id] && a.enabled)?.id ?? state.agents.find((a) => a.enabled && a.default)?.id ?? state.agents.find((a) => a.enabled && a.available && a.protocol !== 'siwc')?.id ?? 'manual',
       setAgentFor: (id, agentId) => setSaved((s) => ({ ...s, agents: { ...s.agents, [id]: agentId } })),

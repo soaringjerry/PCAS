@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/url"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -119,6 +120,9 @@ func (n *Notifier) RemovePushSubscription(ctx context.Context, scope memory.Scop
 	}
 	return n.DeleteSubscription(ctx, string(scope.OwnerID), endpoint)
 }
+
+var telegramTokenPattern = regexp.MustCompile(`^[0-9]+:[A-Za-z0-9_-]+$`)
+
 func (n *Notifier) SaveTelegram(ctx context.Context, scope memory.Scope, in workspace.TelegramConfig) (bool, error) {
 	if err := requireOwner(scope); err != nil {
 		return false, err
@@ -128,21 +132,27 @@ func (n *Notifier) SaveTelegram(ctx context.Context, scope memory.Scope, in work
 		return false, n.Settings.SaveTelegram("", "")
 	}
 	// Keep credential-bearing URLs well-formed; transport errors stay redacted.
-	if len(token) > 256 || strings.ContainsAny(token, "/\r\n?# ") {
-		return false, memory.ErrInvalid
+	if len(token) > 256 || !telegramTokenPattern.MatchString(token) {
+		return false, notify.ErrTelegramTokenInvalid
 	}
 	if chatID == "" {
 		var err error
 		chatID, err = n.Telegram.ResolveChat(ctx, token)
 		if err != nil {
-			return false, memory.ErrInvalid
+			if errors.Is(err, notify.ErrTelegramTokenInvalid) || errors.Is(err, notify.ErrTelegramWebhookActive) || errors.Is(err, notify.ErrTelegramNoChat) {
+				return false, err
+			}
+			return false, notify.ErrTelegramSendFailed
 		}
 	}
 	if _, err := strconv.ParseInt(chatID, 10, 64); err != nil {
-		return false, memory.ErrInvalid
+		return false, notify.ErrTelegramSendFailed
 	}
 	if err := n.Telegram.SendTo(ctx, token, chatID, notify.Message{Title: "PCAS 提醒已连接", Body: time.Now().Format("2006-01-02 15:04 MST"), URL: n.PublicURL + "/settings"}); err != nil {
-		return false, memory.ErrInvalid
+		if errors.Is(err, notify.ErrTelegramTokenInvalid) {
+			return false, err
+		}
+		return false, notify.ErrTelegramSendFailed
 	}
 	if err := n.Settings.SaveTelegram(token, chatID); err != nil {
 		return false, err

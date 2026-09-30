@@ -270,7 +270,7 @@ func TestNotifyHTTPStateDismissTelegramAndOwnerBoundary(t *testing.T) {
 	defer api.Close()
 	n.Telegram.BaseURL = api.URL
 	n.Telegram.Client = api.Client()
-	token := filepath.Base(t.TempDir())
+	token := "123456:" + filepath.Base(t.TempDir())
 	if w := notifyRequest(t, h, "PUT", "/v1/notify/telegram", workspace.TelegramConfig{BotToken: token}); w.Code != 200 {
 		t.Fatal("chat discovery/save failed", w.Code)
 	}
@@ -279,7 +279,7 @@ func TestNotifyHTTPStateDismissTelegramAndOwnerBoundary(t *testing.T) {
 		t.Fatal("not tested before saving")
 	}
 	valid = false
-	if w := notifyRequest(t, h, "PUT", "/v1/notify/telegram", workspace.TelegramConfig{BotToken: filepath.Base(t.TempDir()), ChatID: "456"}); w.Code != 400 {
+	if w := notifyRequest(t, h, "PUT", "/v1/notify/telegram", workspace.TelegramConfig{BotToken: "654321:" + filepath.Base(t.TempDir()), ChatID: "456"}); w.Code != 400 {
 		t.Fatal("invalid token not rejected", w.Code)
 	}
 	after, err := settings.Read()
@@ -292,6 +292,91 @@ func TestNotifyHTTPStateDismissTelegramAndOwnerBoundary(t *testing.T) {
 	}
 	if w := notifyRequest(t, h, "PUT", "/v1/notify/telegram", workspace.TelegramConfig{}); w.Code != 200 || !strings.Contains(w.Body.String(), `false`) {
 		t.Fatal("disconnect failed")
+	}
+}
+
+// Saving Telegram only needs the settings file and transport, so these HTTP
+// regressions also run without an integration database.
+func TestNotifyHTTPTelegramErrors(t *testing.T) {
+	const token = "123456:synthetic_token_for_tests"
+	for _, tt := range []struct {
+		name, token, chatID, method, body, code string
+		status                                  int
+	}{
+		{name: "token/missing separator", token: "invalid-token", code: "telegram_token_invalid"},
+		{name: "token/invalid bot ID", token: "bot:secret", code: "telegram_token_invalid"},
+		{name: "token/URL characters", token: "123:secret?query", code: "telegram_token_invalid"},
+		{name: "token/too long", token: "123:" + strings.Repeat("a", 253), code: "telegram_token_invalid"},
+		{name: "token/HTTP 401", token: token, method: "getUpdates", status: 401, body: `{"ok":false,"error_code":401}`, code: "telegram_token_invalid"},
+		{name: "token/HTTP 404 non JSON", token: token, method: "getUpdates", status: 404, body: "Not Found", code: "telegram_token_invalid"},
+		{name: "token/JSON 404", token: token, method: "getUpdates", status: 200, body: `{"ok":false,"error_code":404}`, code: "telegram_token_invalid"},
+		{name: "token/send HTTP 401", token: token, chatID: "123", method: "sendMessage", status: 401, body: `{"ok":false,"error_code":401}`, code: "telegram_token_invalid"},
+		{name: "webhook/HTTP 409 non JSON", token: token, method: "getUpdates", status: 409, body: "Conflict", code: "telegram_webhook_active"},
+		{name: "webhook/JSON 409", token: token, method: "getUpdates", status: 200, body: `{"ok":false,"error_code":409}`, code: "telegram_webhook_active"},
+		{name: "no chat/empty updates", token: token, method: "getUpdates", status: 200, body: `{"ok":true,"result":[]}`, code: "telegram_no_chat"},
+		{name: "no chat/group only", token: token, method: "getUpdates", status: 200, body: `{"ok":true,"result":[{"message":{"chat":{"id":-123,"type":"group"}}}]}`, code: "telegram_no_chat"},
+		{name: "send/chat not found", token: token, method: "sendMessage", status: 400, body: `{"ok":false,"error_code":400,"description":"Bad Request: chat not found"}`, code: "telegram_send_failed"},
+		{name: "send/bot blocked", token: token, chatID: "123", method: "sendMessage", status: 403, body: `{"ok":false,"error_code":403}`, code: "telegram_send_failed"},
+		{name: "send/invalid chat ID", token: token, chatID: "not-a-number", code: "telegram_send_failed"},
+		{name: "send/getUpdates unavailable", token: token, method: "getUpdates", status: 500, body: "Unavailable", code: "telegram_send_failed"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			calls := []string{}
+			api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				method := filepath.Base(r.URL.Path)
+				calls = append(calls, method)
+				if method != tt.method {
+					if method != "getUpdates" {
+						t.Error("unexpected Telegram method")
+					}
+					_, _ = w.Write([]byte(`{"ok":true,"result":[{"message":{"chat":{"id":123,"type":"private"}}}]}`))
+					return
+				}
+				w.WriteHeader(tt.status)
+				// Even upstream descriptions containing credentials must stay redacted.
+				_, _ = w.Write([]byte(strings.ReplaceAll(tt.body, "chat not found", tt.token)))
+			}))
+			defer api.Close()
+			settings := notify.Settings{Path: filepath.Join(t.TempDir(), "notify.json")}
+			if err := settings.SaveTelegram("987654:previous_test_token", "456"); err != nil {
+				t.Fatal(err)
+			}
+			n := NewNotifier(nil, settings, "https://example.com")
+			n.Telegram.BaseURL, n.Telegram.Client = api.URL, api.Client()
+			in := workspace.TelegramConfig{BotToken: tt.token, ChatID: tt.chatID}
+			// Check both the store's typed error and the externally visible response.
+			_, err := n.SaveTelegram(context.Background(), owner(), in)
+			want := map[string]error{
+				"telegram_token_invalid":  notify.ErrTelegramTokenInvalid,
+				"telegram_webhook_active": notify.ErrTelegramWebhookActive,
+				"telegram_no_chat":        notify.ErrTelegramNoChat,
+				"telegram_send_failed":    notify.ErrTelegramSendFailed,
+			}[tt.code]
+			if !errors.Is(err, want) || strings.Contains(err.Error(), tt.token) {
+				t.Fatal("wrong typed error or credential leak")
+			}
+			calls = nil
+			w := notifyRequest(t, notifyHandler(n, owner()), "PUT", "/v1/notify/telegram", in)
+			var out struct {
+				Error string `json:"error"`
+			}
+			if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil {
+				t.Fatal(err)
+			}
+			if w.Code != http.StatusBadRequest || out.Error != tt.code || strings.Contains(w.Body.String(), tt.token) {
+				t.Fatalf("got %d %s, want 400 %s", w.Code, w.Body.String(), tt.code)
+			}
+			if tt.method == "" && len(calls) != 0 {
+				t.Fatal("invalid input reached Telegram")
+			}
+			if tt.method != "" && (len(calls) == 0 || calls[len(calls)-1] != tt.method) {
+				t.Fatal("expected Telegram failure was not exercised")
+			}
+			after, err := settings.Read()
+			if err != nil || after.TelegramToken != "987654:previous_test_token" || after.TelegramChatID != "456" {
+				t.Fatal("failed validation overwrote working credentials")
+			}
+		})
 	}
 }
 

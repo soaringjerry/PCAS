@@ -80,6 +80,7 @@ flowchart LR
 | `internal/telegram/`（新建） | C2 |
 | `internal/ai/jev.go`、`/v1/desk/route`、`/v1/desk/answer` | **不要删**。第 1 阶段只是前端不再调用它们 |
 | `web/tests/support/`、`internal/testsupport/`、`docs/evaluations/*-phase1-acceptance.md` | E |
+| `.github/workflows/browser-regression.yml` | B2（改为跑 mock 用例）→ D2（加 buttons.spec.ts）→ E（加 golden.spec.ts） |
 | `docs/` | 各任务只改自己在任务文档里被要求改的文档 |
 
 **环境（这台机器）**

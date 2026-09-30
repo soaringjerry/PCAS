@@ -168,8 +168,13 @@ func TestWorkspaceReplayAndConflict(t *testing.T) {
 		t.Fatal("idempotency body mismatch allowed")
 	}
 	c.RequestID = string(memory.NewID())
+	if created, err := s.Execute(ctx, scope, c); err != nil || len(created.Tasks) != 2 || created.Revision != a.Revision+1 {
+		t.Fatal("stale revision blocked a new task", err)
+	}
+	c.RequestID = string(memory.NewID())
+	c.ID = a.Tasks[0].ID
 	if _, err := s.Execute(ctx, scope, c); !errors.Is(err, memory.ErrConflict) {
-		t.Fatal("lost update allowed")
+		t.Fatal("duplicate item ID allowed")
 	}
 	if _, err := s.Execute(ctx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: "agent"}, c); !errors.Is(err, memory.ErrForbidden) {
 		t.Fatal("agent wrote owner state")

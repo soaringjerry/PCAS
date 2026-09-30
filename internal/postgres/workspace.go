@@ -375,13 +375,6 @@ func (s *Store) Execute(ctx context.Context, scope memory.Scope, in workspace.Co
 		if !errors.Is(err, pgx.ErrNoRows) {
 			return out, err
 		}
-		var revision int64
-		if err := s.pool.QueryRow(ctx, "SELECT revision FROM workspace_owners WHERE owner_id=$1", string(scope.OwnerID)).Scan(&revision); err != nil {
-			return out, err
-		}
-		if revision != in.ExpectedRevision {
-			return out, memory.ErrConflict
-		}
 		if in.Type == "delegateTask" {
 			var exists bool
 			if err := s.pool.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM work_items WHERE owner_id=$1 AND id=$2)", string(scope.OwnerID), in.ID).Scan(&exists); err != nil {
@@ -417,7 +410,10 @@ func (s *Store) Execute(ctx context.Context, scope memory.Scope, in workspace.Co
 		if !errors.Is(err, pgx.ErrNoRows) {
 			return err
 		}
-		if revision != in.ExpectedRevision {
+		// Only toggles and bulk operations depend on the observed workspace
+		// state. Unrelated worker commits must not block other commands;
+		// their request IDs and command-specific guards still apply.
+		if (oneOf(in.Type, "toggleCheck", "toggleTrigger", "toggleContextMemory") || strings.HasPrefix(in.Type, "bulk")) && revision != in.ExpectedRevision {
 			return memory.ErrConflict
 		}
 		if undoableCommand(in.Type) {

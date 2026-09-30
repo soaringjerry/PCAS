@@ -72,22 +72,9 @@ func (s *Store) AnswerDesk(ctx context.Context, scope memory.Scope, agentID, que
 				dependencies = append(dependencies, refs...)
 			}
 		}
-		// The same visibility as a run: only what this assistant has been granted.
-		if memories, err = s.memoriesTx(ctx, tx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: agent.ID}, true); err != nil {
-			return err
-		}
-		if tasks, err = queryDocuments[workspace.Item](ctx, tx, "SELECT document FROM work_items WHERE owner_id=$1 AND kind='task' AND status IN ('todo','doing','waiting') ORDER BY due_at NULLS LAST, updated_at DESC LIMIT 40", string(scope.OwnerID)); err != nil {
-			return err
-		}
-		for i := range tasks {
-			var refs []memory.Ref
-			tasks[i], refs, err = sanitizeItemTx(ctx, tx, scope, agent.ID, tasks[i])
-			if err != nil {
-				return err
-			}
-			dependencies = append(dependencies, refs...)
-		}
-		settings, err = queryDocument[workspace.Settings](ctx, tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1", string(scope.OwnerID))
+		var refs []memory.Ref
+		memories, tasks, settings, refs, err = s.deskContextTx(ctx, tx, scope, agent, false)
+		dependencies = append(dependencies, refs...)
 		return err
 	})
 	if err != nil {
@@ -109,13 +96,9 @@ func (s *Store) AnswerDesk(ctx context.Context, scope memory.Scope, agentID, que
 			visible[m.ID] = m
 		}
 	}
-	loc, err := time.LoadLocation(settings.Timezone)
-	if err != nil {
-		loc = time.UTC
-	}
+	loc := deskLocation(settings)
 	var prompt strings.Builder
-	now := time.Now().In(loc)
-	fmt.Fprintf(&prompt, "现在：%s 星期%s（%s）\n", now.Format("2006-01-02 15:04"), []string{"日", "一", "二", "三", "四", "五", "六"}[now.Weekday()], loc)
+	prompt.WriteString(deskNow(loc))
 	if settings.City != "" {
 		fmt.Fprintf(&prompt, "用户所在城市：%s（问天气、附近等没说地点时默认用它）\n", settings.City)
 	} else {
@@ -160,25 +143,7 @@ func (s *Store) AnswerDesk(ctx context.Context, scope memory.Scope, agentID, que
 	p, _ := s.models.Get(agent.ID)
 	checkContext := func() error {
 		return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-			if err := verifyRunTx(ctx, tx, scope, workspace.Run{AgentID: agent.ID, ContextVersions: dependencies}); err != nil {
-				return err
-			}
-			// Excluding a task's input can change its permitted title without
-			// changing a memory version or its global grant.
-			for _, sentTask := range tasks {
-				current, err := getItem(ctx, tx, scope, sentTask.ID)
-				if err != nil {
-					return memory.ErrConflict
-				}
-				current, _, err = sanitizeItemTx(ctx, tx, scope, agent.ID, current)
-				if err != nil {
-					return err
-				}
-				if current.Title != sentTask.Title || current.Status != sentTask.Status || current.Due != sentTask.Due {
-					return memory.ErrConflict
-				}
-			}
-			return nil
+			return s.checkDeskContextTx(ctx, tx, scope, agent.ID, dependencies, tasks, false)
 		})
 	}
 	if err := checkContext(); err != nil {
@@ -252,4 +217,43 @@ func tail(s string, n int) string {
 		i++
 	}
 	return s[i:]
+}
+
+// deskContextTx keeps the legacy answer and secretary on the same visibility
+// and derived-artifact rules. Stable ordering is used by the secretary cache.
+func (s *Store) deskContextTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, agent workspace.Agent, stable bool) ([]workspace.Memory, []workspace.Item, workspace.Settings, []memory.Ref, error) {
+	memories, err := s.memoriesTx(ctx, tx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: agent.ID}, true)
+	if err != nil {
+		return nil, nil, workspace.Settings{}, nil, err
+	}
+	order := "due_at NULLS LAST, updated_at DESC"
+	if stable {
+		order = "created_at,id"
+	}
+	tasks, err := queryDocuments[workspace.Item](ctx, tx, "SELECT document FROM work_items WHERE owner_id=$1 AND kind='task' AND status IN ('todo','doing','waiting') ORDER BY "+order+" LIMIT 40", string(scope.OwnerID))
+	if err != nil {
+		return nil, nil, workspace.Settings{}, nil, err
+	}
+	dependencies := []memory.Ref{}
+	for i := range tasks {
+		var refs []memory.Ref
+		tasks[i], refs, err = sanitizeItemTx(ctx, tx, scope, agent.ID, tasks[i])
+		if err != nil {
+			return nil, nil, workspace.Settings{}, nil, err
+		}
+		dependencies = append(dependencies, refs...)
+	}
+	settings, err := queryDocument[workspace.Settings](ctx, tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1", string(scope.OwnerID))
+	return memories, tasks, settings, dependencies, err
+}
+func deskLocation(settings workspace.Settings) *time.Location {
+	loc, err := time.LoadLocation(settings.Timezone)
+	if err != nil {
+		return time.UTC
+	}
+	return loc
+}
+func deskNow(loc *time.Location) string {
+	now := time.Now().In(loc)
+	return fmt.Sprintf("现在：%s 星期%s（%s）\n", now.Format("2006-01-02 15:04"), []string{"日", "一", "二", "三", "四", "五", "六"}[now.Weekday()], loc)
 }

@@ -35,7 +35,10 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 			return err
 		}
 		run := c
-		run.Type, run.ID, run.ThingID, run.Kind = "requestRun", "", c.ID, "draft"
+		run.Type, run.ID, run.ThingID, run.Kind = "requestRun", "", c.ID, c.Kind
+		if run.Kind == "" {
+			run.Kind = "draft"
+		}
 		return s.runCommandTx(ctx, tx, scope, run)
 	case "capture":
 		if err := requireText(c.Text); err != nil {

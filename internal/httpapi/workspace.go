@@ -243,6 +243,43 @@ func (s *Server) workspaceRoutes(mux *http.ServeMux) {
 		}
 		writeJSON(w, 200, out)
 	}))
+	mux.HandleFunc("POST /v1/desk/turn", s.authorize(func(w http.ResponseWriter, r *http.Request, scope memory.Scope) {
+		desk, ok := s.options.Workspace.(interface {
+			DeskTurn(context.Context, memory.Scope, workspace.DeskTurnRequest) (workspace.DeskTurnResponse, error)
+		})
+		if !ok {
+			s.fail(w, memory.ErrUnavailable)
+			return
+		}
+		var in workspace.DeskTurnRequest
+		if !decode(w, r, &in) {
+			return
+		}
+		_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(2 * time.Minute))
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), 110*time.Second)
+		defer cancel()
+		out, err := desk.DeskTurn(ctx, scope, in)
+		if err != nil {
+			s.fail(w, err)
+			return
+		}
+		writeJSON(w, 200, out)
+	}))
+	mux.HandleFunc("GET /v1/desk/turns", s.authorize(func(w http.ResponseWriter, r *http.Request, scope memory.Scope) {
+		desk, ok := s.options.Workspace.(interface {
+			DeskTurns(context.Context, memory.Scope, string) (workspace.DeskTurnsResponse, error)
+		})
+		if !ok {
+			s.fail(w, memory.ErrUnavailable)
+			return
+		}
+		out, err := desk.DeskTurns(r.Context(), scope, r.URL.Query().Get("conversationId"))
+		if err != nil {
+			s.fail(w, err)
+			return
+		}
+		writeJSON(w, 200, out)
+	}))
 	// Answering can take a model call, longer than the server's default write timeout.
 	mux.HandleFunc("POST /v1/desk/answer", s.authorize(func(w http.ResponseWriter, r *http.Request, scope memory.Scope) {
 		desk, ok := s.options.Workspace.(interface {

@@ -19,7 +19,7 @@ Vite 将 `/v1` 代理到 Go 服务。生产环境由 Go 直接提供 `dist`。�
 - 资料库：记忆确认/纠正/固定保留/授权/删除范围，三种召回模式，原文与附件展开，处理作业、提醒记录和训练数据。
 - 设置：自动处理、预算、AI 可见范围、官方 ChatGPT 订阅登录、导出与退出。
 
-`StoreProvider` 串行发送幂等命令，附带服务端修订号，冲突后刷新；只有服务端成功才反馈保存。`src/domain/agent.ts` 生成的文本是界面预览，实际交接和权限在服务端重新计算。
+`StoreProvider` 串行发送幂等命令，附带 `requestId` 和服务端修订号 `expectedRevision`。只有切换类命令（`toggleCheck`、`toggleTrigger`、`toggleContextMemory`）及 `bulk*` 批量命令要求修订号与当前值一致；后台更新修订号不会阻止其他命令。撤销仍校验动作的 `afterHash`，新建仍检查 ID 是否重复；相同 `requestId` 和请求体的重放不会重复执行，复用 `requestId` 但修改请求体（包括修订号）仍会冲突。遇到冲突时前端刷新状态；只有服务端成功才反馈保存。`src/domain/agent.ts` 生成的文本是界面预览，实际交接和权限在服务端重新计算。
 
 ## 验证
 

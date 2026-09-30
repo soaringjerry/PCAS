@@ -42,3 +42,9 @@ npm run build
 ```
 
 真实浏览器回放需要一个使用临时数据库的服务，见 [前端测试说明](web/README.md)。验证范围与未完成的架构评测列在 [服务文档](docs/memory-service.md)，不将适配器测试等同于真实账户调用或完整召回率验收。
+
+## 许可证
+
+Copyright (C) 2026 soaringjerry
+
+本项目以 [GNU Affero General Public License v3.0](LICENSE) 发布。修改后通过网络向他人提供服务时，须向这些用户提供修改后的完整源码。

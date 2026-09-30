@@ -1,27 +1,9 @@
 import { memoryKindLabel } from './labels'
 import { isOpenTask, thingTitle, type Thing } from './things'
-import type { Agent, Memory, RunKind, State } from './types'
+import type { Agent, Memory, State } from './types'
 
 // Client preview of context. The server independently enforces grants and
 // assembles the authoritative versioned brief at execution time.
-
-export const quickActions: Record<Thing['kind'], { kind: RunKind; label: string; prompt: string }[]> = {
-  task: [
-    { kind: 'plan', label: '写方案', prompt: '为这件事写一份可执行的方案' },
-    { kind: 'breakdown', label: '拆成子任务', prompt: '把这件事拆成具体的子任务' },
-    { kind: 'draft', label: '起草', prompt: '起草这件事需要的文字（邮件、说明或文档）' },
-    { kind: 'summary', label: '总结进度', prompt: '总结这件事目前的进度和卡点' },
-  ],
-  idea: [
-    { kind: 'plan', label: '评估可行性', prompt: '评估这个想法现在是否值得做，给出方案' },
-    { kind: 'breakdown', label: '拆成步骤', prompt: '如果要做，拆成几个待办' },
-  ],
-  project: [
-    { kind: 'summary', label: '总结进度', prompt: '总结项目目前的进度、卡点和下一步' },
-    { kind: 'breakdown', label: '规划下一步', prompt: '根据现状规划接下来要做的几件事' },
-    { kind: 'plan', label: '写方案', prompt: '为项目接下来的阶段写一份方案' },
-  ],
-}
 
 export function memoriesFor(state: State, agent: Agent, projectId?: string): Memory[] {
   return state.memories.filter(

@@ -1,24 +1,105 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Link, useParams } from 'react-router'
-import { Check, ChevronDown, ChevronLeft, ChevronRight, Copy, FileText, Folder, Lightbulb, ListPlus, Plus, Sparkles, X } from 'lucide-react'
-import { DateTimePicker, Select } from '../components/controls'
-import { ConfirmModal } from '../components/Overlay'
+import { Check, ChevronLeft, Copy, Ellipsis, FileText, Lightbulb, Plus, Sparkles, X } from 'lucide-react'
+import { Popover } from '../components/controls'
 import { Markdown } from '../components/Markdown'
 import { Secretary } from '../components/Secretary'
-import { LineRow } from '../components/LineRow'
-import { Timeline } from '../components/Marks'
 import { parseChecklist } from '../domain/agent'
 import { newId } from '../domain/ids'
-import { projectStatusLabel, taskStatusLabel, taskStatusOrder, type Tone } from '../domain/labels'
-import { ongoingLine, urgentLine } from '../domain/lines'
-import { findThing, thingProjectId, thingTitle, timelineFor, type Thing } from '../domain/things'
-import { formatAgo } from '../domain/time'
+import { projectStatusLabel, taskStatusLabel } from '../domain/labels'
+import { ongoingLine, urgentLine, type LineItem } from '../domain/lines'
+import { findThing, isOpenTask, thingProjectId, thingTitle, type Thing } from '../domain/things'
+import { dayOffset, formatAgo } from '../domain/time'
 import type { Doc, Run, Task } from '../domain/types'
 import { useStore } from '../store/context'
 import { useShell } from '../store/shell'
 import { useToast } from '../store/toast'
 import { api } from '../store/api'
 import { NotFound } from './NotFound'
+import '../styles/thing.css'
+
+// A thing page keeps three kinds of buttons (docs/design/principles.md): the
+// done circle, undo / change, and a confirmation before anything leaves or
+// costs money. Everything else is said to the secretary at the bottom.
+
+/* ---------- Header ---------- */
+
+const weekdays = ['日', '一', '二', '三', '四', '五', '六']
+const pad = (n: number) => String(n).padStart(2, '0')
+const clock = (d: Date) => `${pad(d.getHours())}:${pad(d.getMinutes())}`
+
+/** "今天 15:00", "明天 09:00", "周五 15:00" within the week, otherwise "10月12日 15:00". */
+function shortWhen(iso: string): string {
+  const d = new Date(iso)
+  const days = dayOffset(iso)
+  if (days === 0) return `今天 ${clock(d)}`
+  if (days === 1) return `明天 ${clock(d)}`
+  if (days === -1) return `昨天 ${clock(d)}`
+  if (days > 1 && days < 7) return `周${weekdays[d.getDay()]} ${clock(d)}`
+  return `${d.getMonth() + 1}月${d.getDate()}日 ${clock(d)}`
+}
+
+/** When the reminder set by the secretary goes off (contracts §3), if it will. */
+function reminderAt(task: Task): string | undefined {
+  const t = task.triggers.find((t) => t.id === 'due-reminder')
+  return t?.active && t.nextAt ? t.nextAt : undefined
+}
+
+const ideaStatusText = { active: '想法', awakened: '刚被唤醒', shelved: '放着', promoted: '已转成待办', dropped: '不做了' } as const
+
+/** The read-only facts about a thing, in one line; the parts it lacks are left out. */
+function infoParts(state: ReturnType<typeof useStore>['state'], thing: Thing): { text: string; tone?: 'late' | 'owed' }[] {
+  const project = state.projects.find((p) => p.id === thingProjectId(thing))?.name
+  if (thing.kind === 'task') {
+    const t = thing.item
+    const remind = state.settings.followUps ? reminderAt(t) : undefined
+    const late = t.due && isOpenTask(t) && new Date(t.due).getTime() < Date.now()
+    return [
+      { text: t.status === 'waiting' && t.waitingFor ? `在等${t.waitingFor}` : taskStatusLabel[t.status].text },
+      ...(t.due ? [{ text: `${shortWhen(t.due)} 截止`, tone: late ? ('late' as const) : undefined }] : []),
+      ...(project ? [{ text: project }] : []),
+      ...(remind ? [{ text: `${t.due && dayOffset(remind) === dayOffset(t.due) ? clock(new Date(remind)) : shortWhen(remind)} 提醒` }] : []),
+      ...(t.owedTo ? [{ text: `${t.owedTo.who}在等你`, tone: 'owed' as const }] : []),
+    ]
+  }
+  if (thing.kind === 'idea') return [{ text: ideaStatusText[thing.item.status] }, ...(project ? [{ text: project }] : [])]
+  const p = thing.item
+  const open = state.tasks.filter((t) => t.projectId === p.id && isOpenTask(t)).length
+  const last = p.progress.split('\n').filter(Boolean).at(-1)
+  return [{ text: projectStatusLabel[p.status].text }, ...(last ? [{ text: last }] : []), ...(open ? [{ text: `${open} 件没做完` }] : [])]
+}
+
+/** Changing status, due time or project is said to the secretary: clicking the line starts that sentence. */
+function InfoLine({ thing }: { thing: Thing }) {
+  const { state } = useStore()
+  const { prefill } = useShell()
+  const parts = infoParts(state, thing)
+  return (
+    <button type="button" className="info-line" title="要改，跟秘书说一句" onClick={() => prefill(thing.id, '改一下这件事：')}>
+      {parts.map((p, i) => (
+        <span key={i} className={p.tone}>
+          {p.text}
+        </span>
+      ))}
+    </button>
+  )
+}
+
+function DoneCircle({ task }: { task: Task }) {
+  const { dispatchUndoable } = useStore()
+  const done = task.status === 'done'
+  return (
+    <button
+      type="button"
+      className={`circle title-check${done ? ' on' : ''}`}
+      aria-label={done ? '改回没做完' : '做完了'}
+      aria-pressed={done}
+      onClick={() => dispatchUndoable({ type: 'setTaskStatus', id: task.id, status: done ? 'todo' : 'done' }, done ? '改回没做完了' : '做完了')}
+    >
+      {done && <Check size={14} strokeWidth={3} />}
+    </button>
+  )
+}
 
 function Header({ thing }: { thing: Thing }) {
   const { state, dispatch } = useStore()
@@ -31,27 +112,29 @@ function Header({ thing }: { thing: Thing }) {
         <ChevronLeft size={16} />
         {project ? project.name : '大厅'}
       </Link>
-      <textarea
-        key={`title-${thing.id}`}
-        className="doc-title"
-        rows={1}
-        defaultValue={thingTitle(thing)}
-        aria-label="标题"
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
-            e.preventDefault()
-            e.currentTarget.blur()
-          }
-        }}
-        onBlur={async (e) => {
-          const title = e.target.value.trim()
-          if (title && title !== thingTitle(thing)) {
-            if (!(await dispatch({ type: 'renameThing', id: thing.id, title }))) return
-          }
-        }}
-      />
-      <Meta thing={thing} />
-      {thing.item.hasRetainedWriting && <RetainedWriting id={thing.id} />}
+      <div className="title-row">
+        {thing.kind === 'task' && <DoneCircle task={thing.item} />}
+        <textarea
+          key={`title-${thing.id}`}
+          className={`doc-title${thing.kind === 'task' && thing.item.status === 'done' ? ' done' : ''}`}
+          rows={1}
+          defaultValue={thingTitle(thing)}
+          aria-label="标题"
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
+              e.preventDefault()
+              e.currentTarget.blur()
+            }
+          }}
+          onBlur={async (e) => {
+            const title = e.target.value.trim()
+            if (title && title !== thingTitle(thing)) {
+              if (!(await dispatch({ type: 'renameThing', id: thing.id, title }))) return
+            }
+          }}
+        />
+      </div>
+      <InfoLine thing={thing} />
       <textarea
         key={`notes-${thing.id}`}
         className="notes"
@@ -71,121 +154,11 @@ function Header({ thing }: { thing: Thing }) {
   )
 }
 
-function RetainedWriting({ id }: { id: string }) {
-  const [writing, setWriting] = useState<{ field: string; text: string; reason: string }[] | null>(null)
-  const [error, setError] = useState('')
-  return <div>
-    <p>旧版文字的来源无法分开，已保留供你检查。副手不会使用这些文字。</p>
-    <button className="btn btn-quiet" type="button" onClick={async () => {
-      try { setWriting(await api(`/v1/workspace/items/${id}/retained-writing`)); setError('') }
-      catch (e) { setError(e instanceof Error ? e.message : '文字暂时无法读取') }
-    }}>查看保留的文字</button>
-    {error && <p role="alert">{error}</p>}
-    {writing?.map((part) => <div key={part.field}><p>{part.reason}</p><pre style={{ whiteSpace: 'pre-wrap' }}>{part.text}</pre></div>)}
-  </div>
-}
-
-function ProjectPicker({ thing }: { thing: Thing }) {
-  const { state, dispatch } = useStore()
-  if (thing.kind === 'project') return null
-  return (
-    <Select
-      variant="chip"
-      label="项目"
-      icon={<Folder size={13} />}
-      value={thing.item.projectId ?? ''}
-      onChange={(v) => dispatch({ type: 'moveThing', id: thing.id, projectId: v || undefined })}
-      options={[{ value: '', label: '不属于项目' }, ...state.projects.map((p) => ({ value: p.id, label: p.name }))]}
-    />
-  )
-}
-
-function DueControl({ task }: { task: Task }) {
-  const { dispatch } = useStore()
-  return (
-    <DateTimePicker
-      label="截止"
-      placeholder="没有截止"
-      clearLabel="去掉截止"
-      value={task.due}
-      onChange={(due) => dispatch({ type: 'updateTask', id: task.id, patch: { due }, summary: due ? '改了截止时间' : '去掉截止时间' })}
-    />
-  )
-}
-
-const dot = (tone: Tone) => <span className={`dot dot-${tone}`} />
-
-function Meta({ thing }: { thing: Thing }) {
-  const { dispatch } = useStore()
-
-  if (thing.kind === 'task') {
-    const t = thing.item
-    return (
-      <div className="meta-line">
-        <Select
-          variant="chip"
-          label="状态"
-          value={t.status}
-          onChange={(status) => dispatch({ type: 'setTaskStatus', id: t.id, status })}
-          options={taskStatusOrder.map((s) => ({ value: s, label: taskStatusLabel[s].text, icon: dot(taskStatusLabel[s].tone) }))}
-        />
-        <DueControl task={t} />
-        <ProjectPicker thing={thing} />
-        {t.owedTo && (
-          <button
-            type="button"
-            className="link-btn meta-flag"
-            title="对方已经不用等了"
-            onClick={() => dispatch({ type: 'updateTask', id: t.id, patch: { owedTo: undefined }, summary: `${t.owedTo?.who}不用再等了` })}
-          >
-            {t.owedTo.who}在等你 ×
-          </button>
-        )}
-        {t.status === 'waiting' && t.waitingFor && <span>在等{t.waitingFor}</span>}
-      </div>
-    )
-  }
-
-  if (thing.kind === 'idea') {
-    const i = thing.item
-    const label = { active: '想法', awakened: '刚被唤醒', shelved: '放着', promoted: '已转成待办', dropped: '不做了' }[i.status]
-    return (
-      <div className="meta-line">
-        <span className="meta-text">
-          <Lightbulb size={13} />
-          {label}
-        </span>
-        <ProjectPicker thing={thing} />
-        {i.status === 'active' && (
-          <button type="button" className="select select-chip" onClick={() => dispatch({ type: 'ideaPromote', id: i.id })}>
-            <ListPlus size={13} />
-            转成待办
-          </button>
-        )}
-      </div>
-    )
-  }
-
-  const p = thing.item
-  return (
-    <div className="meta-line">
-      <Select
-        variant="chip"
-        label="项目状态"
-        value={p.status}
-        onChange={(status) => dispatch({ type: 'updateProject', id: p.id, patch: { status } })}
-        options={(['active', 'paused', 'done'] as const).map((s) => ({ value: s, label: projectStatusLabel[s].text, icon: dot(projectStatusLabel[s].tone) }))}
-      />
-      {p.progress && <span className="meta-text ellipsis">{p.progress.split('\n').at(-1)}</span>}
-    </div>
-  )
-}
+/* ---------- What the thing holds ---------- */
 
 function IdeaBanner({ thing }: { thing: Extract<Thing, { kind: 'idea' }> }) {
-  const { state, dispatch } = useStore()
+  const { state, dispatchUndoable } = useStore()
   const i = thing.item
-  const [cond, setCond] = useState('')
-  const [conditionDue, setConditionDue] = useState<string | undefined>()
 
   if (i.status === 'awakened') {
     return (
@@ -193,12 +166,12 @@ function IdeaBanner({ thing }: { thing: Extract<Thing, { kind: 'idea' }> }) {
         <Sparkles size={16} />
         <div className="grow">
           <p>{i.wake?.reason ?? '它等的条件满足了。'}</p>
-          <div className="row" style={{ marginTop: 10 }}>
-            <button type="button" className="btn btn-primary btn-sm" onClick={() => dispatch({ type: 'ideaPromote', id: i.id })}>
+          <div className="quick-replies">
+            <button type="button" onClick={() => dispatchUndoable({ type: 'ideaPromote', id: i.id }, '转成待办了')}>
               转成待办
             </button>
-            <button type="button" className="btn btn-quiet btn-sm" onClick={() => dispatch({ type: 'ideaSnooze', id: i.id, days: 7 })}>
-              先放着
+            <button type="button" onClick={() => dispatchUndoable({ type: 'ideaSnooze', id: i.id, days: 7 }, '好，再放一周')}>
+              再放放
             </button>
           </div>
         </div>
@@ -218,48 +191,35 @@ function IdeaBanner({ thing }: { thing: Extract<Thing, { kind: 'idea' }> }) {
     ) : null
   }
 
-  if (i.status !== 'shelved') return null
+  if (i.status !== 'shelved' || i.conditions.length === 0) return null
+  // Conditions are added by saying them to the secretary; here they can only be seen and removed.
   return (
     <section className="section">
       <div className="section-label">满足这些条件时，它会自己回来</div>
       <div className="group">
         {i.conditions.map((c) => (
           <div key={c.id} className="check-row">
-            <span className={`circle${c.met ? ' on' : ''}`} aria-hidden>
-              {c.met && <Check size={12} strokeWidth={3} />}
+            <span className={`cond-mark${c.met ? ' met' : ''}`} aria-hidden>
+              {c.met && <Check size={11} strokeWidth={3} />}
             </span>
             <span className={`text${c.met ? ' done' : ''}`}>{c.description}</span>
-            <button type="button" className="btn btn-quiet btn-icon btn-sm del" aria-label="删掉条件" onClick={() => dispatch({ type: 'removeCondition', ideaId: i.id, conditionId: c.id })}>
+            <button
+              type="button"
+              className="btn btn-quiet btn-icon btn-sm del"
+              aria-label={`删掉条件：${c.description}`}
+              onClick={() => dispatchUndoable({ type: 'removeCondition', ideaId: i.id, conditionId: c.id }, '删掉了这个条件')}
+            >
               <X size={14} />
             </button>
           </div>
         ))}
-        <form
-          className="check-row"
-          onSubmit={async (e) => {
-            e.preventDefault()
-            if (!cond.trim()) return
-            if (!(await dispatch({ type: 'addCondition', ideaId: i.id, description: cond.trim(), due: conditionDue }))) return
-            setCond('')
-            setConditionDue(undefined)
-          }}
-        >
-          <span className="plus">
-            <Plus size={16} />
-          </span>
-          <input className="add" value={cond} onChange={(e) => setCond(e.target.value)} placeholder="再加一个条件" aria-label="再加一个条件" />
-          <DateTimePicker label="条件到期时间（可选）" placeholder="到期时间" defaultHour={9} value={conditionDue} onChange={setConditionDue} />
-          <button type="submit" className="btn btn-sm" disabled={!cond.trim()}>
-            添加
-          </button>
-        </form>
       </div>
     </section>
   )
 }
 
 function Checklist({ task }: { task: Task }) {
-  const { dispatch } = useStore()
+  const { dispatch, dispatchUndoable } = useStore()
   const [text, setText] = useState('')
   const done = task.checklist.filter((c) => c.done).length
 
@@ -280,7 +240,12 @@ function Checklist({ task }: { task: Task }) {
               {c.done && <Check size={12} strokeWidth={3} />}
             </button>
             <span className={`text${c.done ? ' done' : ''}`}>{c.text}</span>
-            <button type="button" className="btn btn-quiet btn-icon btn-sm del" aria-label="删掉" onClick={() => dispatch({ type: 'removeCheck', taskId: task.id, itemId: c.id })}>
+            <button
+              type="button"
+              className="btn btn-quiet btn-icon btn-sm del"
+              aria-label={`删掉：${c.text}`}
+              onClick={() => dispatchUndoable({ type: 'removeCheck', taskId: task.id, itemId: c.id }, '删掉了这一步')}
+            >
               <X size={14} />
             </button>
           </div>
@@ -304,6 +269,32 @@ function Checklist({ task }: { task: Task }) {
   )
 }
 
+/** One thing inside a project: the done circle, and the rest opens it. */
+function ItemRow({ item }: { item: LineItem }) {
+  const { dispatchUndoable } = useStore()
+  const { thing } = item
+  return (
+    <div className="lrow item-row">
+      {thing.kind === 'task' ? (
+        <button
+          type="button"
+          className={`circle${thing.item.status === 'doing' ? ' doing' : ''}${thing.item.status === 'waiting' ? ' waiting' : ''}`}
+          aria-label={`做完了：${thing.item.title}`}
+          onClick={() => dispatchUndoable({ type: 'setTaskStatus', id: thing.id, status: 'done' }, '做完了')}
+        />
+      ) : (
+        <span className="glyph-idea" aria-hidden>
+          <Lightbulb size={17} />
+        </span>
+      )}
+      <Link to={`/t/${thing.id}`} className="body">
+        <span className="title">{thingTitle(thing)}</span>
+        <span className={`reason ${item.tone}`}>{item.reason}</span>
+      </Link>
+    </div>
+  )
+}
+
 function ProjectItems({ projectId }: { projectId: string }) {
   const { state, dispatch } = useStore()
   const [text, setText] = useState('')
@@ -322,15 +313,14 @@ function ProjectItems({ projectId }: { projectId: string }) {
       </div>
       <div className="group">
         {items.map((i) => (
-          <LineRow key={i.thing.id} item={i} />
+          <ItemRow key={i.thing.id} item={i} />
         ))}
         {shelved.length > 0 && (
           <>
             <button type="button" className="disclosure" onClick={() => setShowParked((v) => !v)} aria-expanded={showParked}>
-              {showParked ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-              {shelved.length} 个想法放着
+              {showParked ? '收起放着的想法' : `还有 ${shelved.length} 个想法放着`}
             </button>
-            {showParked && shelved.map((i) => <LineRow key={i.thing.id} item={i} />)}
+            {showParked && shelved.map((i) => <ItemRow key={i.thing.id} item={i} />)}
           </>
         )}
         <form
@@ -352,15 +342,132 @@ function ProjectItems({ projectId }: { projectId: string }) {
   )
 }
 
-/** What adopting a result does, decided from the result itself. */
-function adoptAs(thing: Thing, run: Run, text: string): { as: 'doc' | 'subtasks' | 'progress'; label: string } {
-  const n = parseChecklist(text).length
-  if (n > 0) return { as: 'subtasks', label: thing.kind === 'task' ? `加进子任务（${n}）` : `建成 ${n} 件待办` }
-  if (run.kind === 'summary') return { as: 'progress', label: '写进进度' }
-  return { as: 'doc', label: '存成文档' }
+/* ---------- Documents ---------- */
+
+/** The row already shows the title; drop a leading heading that repeats it. */
+function withoutTitle(doc: Doc): string {
+  const [first, ...rest] = doc.body.split('\n')
+  return first.replace(/^#+\s*/, '').trim() === doc.title.trim() ? rest.join('\n').trimStart() : doc.body
 }
 
-const adoptedText = { doc: '存成了文档', subtasks: '加成了待办', progress: '写进了进度' } as const
+/** A heading on the first line names the document; a fresh one takes its first line. */
+function titleFor(doc: Doc, body: string): string {
+  const first = body.split('\n')[0].trim()
+  if (/^#+\s/.test(first)) return first.replace(/^#+\s*/, '').slice(0, 40) || doc.title
+  if (doc.title === '新文档' && first) return first.slice(0, 40)
+  return doc.title
+}
+
+function DocRow({ doc, fresh }: { doc: Doc; fresh: boolean }) {
+  const { dispatch, dispatchUndoable } = useStore()
+  const [open, setOpen] = useState(fresh)
+  const [editing, setEditing] = useState(fresh)
+  const [menu, setMenu] = useState(false)
+  const more = useRef<HTMLButtonElement>(null)
+
+  const save = async (body: string) => {
+    setEditing(false)
+    if (body === doc.body) return
+    await dispatch({ type: 'updateDoc', id: doc.id, patch: { body, title: titleFor(doc, body) } })
+  }
+
+  return (
+    <div className={`doc-row${open ? ' open' : ''}`}>
+      <div className="doc-head">
+        <button type="button" className="doc-open" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+          <FileText size={15} />
+          <span className="doc-name">{doc.title}</span>
+          <span className="doc-meta">
+            {doc.by === 'ai' ? '副手写的' : '你写的'} · {formatAgo(doc.updatedAt)}
+          </span>
+        </button>
+        <button ref={more} type="button" className="doc-more" aria-label={`文档「${doc.title}」的更多操作`} aria-expanded={menu} onClick={() => setMenu((v) => !v)}>
+          <Ellipsis size={16} />
+        </button>
+        {menu && (
+          <Popover anchor={more} onClose={() => setMenu(false)}>
+            <div className="menu" role="menu">
+              <button
+                type="button"
+                role="menuitem"
+                className="menu-item danger"
+                onClick={() => {
+                  setMenu(false)
+                  void dispatchUndoable({ type: 'deleteDoc', id: doc.id }, `删掉了「${doc.title}」`)
+                }}
+              >
+                删除
+              </button>
+            </div>
+          </Popover>
+        )}
+      </div>
+      {open &&
+        (editing ? (
+          <textarea
+            className="doc-editor"
+            defaultValue={doc.body}
+            aria-label={`${doc.title} 的内容`}
+            placeholder="写点什么…"
+            autoFocus
+            onBlur={(e) => void save(e.target.value)}
+          />
+        ) : (
+          <div className="doc-body" role="textbox" tabIndex={0} aria-label={`${doc.title} 的内容`} onClick={() => setEditing(true)} onFocus={() => setEditing(true)}>
+            <Markdown text={withoutTitle(doc) || '（空）'} />
+          </div>
+        ))}
+    </div>
+  )
+}
+
+/** The documents a thing produced, each one line until opened. Hidden while there are none. */
+function Docs({ thing }: { thing: Thing }) {
+  const { state, dispatch } = useStore()
+  const [fresh, setFresh] = useState<string>()
+  const docs = state.docs.filter((d) => d.thingId === thing.id).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+  if (docs.length === 0) return null
+
+  return (
+    <section className="section">
+      <div className="section-label">文档</div>
+      <div className="group docs">
+        {docs.map((d) => (
+          <DocRow key={d.id} doc={d} fresh={d.id === fresh} />
+        ))}
+        <button
+          type="button"
+          className="doc-new"
+          onClick={async () => {
+            const at = new Date().toISOString()
+            const id = newId()
+            if (await dispatch({ type: 'createDoc', doc: { id, thingId: thing.id, title: '新文档', body: '', by: 'user', createdAt: at, updatedAt: at } })) setFresh(id)
+          }}
+        >
+          写点什么…
+        </button>
+      </div>
+    </section>
+  )
+}
+
+/* ---------- 动态: everything that happened, newest first ---------- */
+
+/** What adopting a result does, decided from the result itself. */
+function adoptAs(thing: Thing, run: Run): { as: 'doc' | 'subtasks' | 'progress'; done: string } {
+  const n = parseChecklist(run.output ?? '').length
+  if (n > 0) return { as: 'subtasks', done: thing.kind === 'task' ? `已加入 ${n} 个子任务` : `建成了 ${n} 件待办` }
+  if (run.kind === 'summary') return { as: 'progress', done: '写进了进度' }
+  return { as: 'doc', done: '存成了文档' }
+}
+
+function adoptedLine(thing: Thing, run: Run): string {
+  if (run.adopted?.as === 'subtasks') {
+    const n = parseChecklist(run.output ?? '').length
+    return n ? (thing.kind === 'task' ? `已加入 ${n} 个子任务` : `建成了 ${n} 件待办`) : '加成了待办'
+  }
+  return run.adopted?.as === 'progress' ? '写进了进度' : '存成了文档'
+}
 
 function failureText(run: Run): string {
   const error = (run.error ?? run.output ?? '').toLowerCase()
@@ -370,302 +477,294 @@ function failureText(run: Run): string {
   return '出了点问题'
 }
 
-function RunCard({ thing, run }: { thing: Thing; run: Run }) {
-  const { state, dispatch, runAgent } = useStore()
-  const { agentFor } = useShell()
+/** Runs a click's work once: the button stays disabled until it settles, so a paid request is never sent twice. */
+function useBusy(): [boolean, (work: () => Promise<unknown>) => Promise<void>] {
+  const [busy, setBusy] = useState(false)
+  const lock = useRef(false)
+  return [
+    busy,
+    async (work) => {
+      if (lock.current) return
+      lock.current = true
+      setBusy(true)
+      try {
+        await work()
+      } finally {
+        lock.current = false
+        setBusy(false)
+      }
+    },
+  ]
+}
+
+function Handoff({ run }: { run: Run }) {
+  const { dispatch } = useStore()
   const toast = useToast()
-  const agent = state.agents.find((a) => a.id === run.agentId)
-  const retryAgent = state.agents.find((a) => a.id === agentFor(thing.id) && a.enabled && a.id !== run.agentId)
-  const [editing, setEditing] = useState(false)
-  const [text, setText] = useState(run.output ?? '')
   const [pasted, setPasted] = useState('')
-  const [expanded, setExpanded] = useState(false)
-  const [basis, setBasis] = useState(false)
-
-  if (run.adopted) {
-    return (
-      <div className="card">
-        <div className="card-head" style={{ paddingBottom: 12 }}>
-          <span className="who">{agent?.name ?? 'AI'}</span>
-          <span className="grow ellipsis">{run.prompt}</span>
-          <span className="faint">
-            已采纳，{adoptedText[run.adopted.as]}
-            {run.adopted.edited ? '（改过）' : ''}
-          </span>
-        </div>
-      </div>
-    )
-  }
-
-  const choice = adoptAs(thing, run, editing ? text : (run.output ?? ''))
-
+  const [brief, setBrief] = useState(false)
+  const [busy, guard] = useBusy()
   return (
-    <div className="card">
-      <div className="card-head">
-        <span className="who">{agent?.name ?? 'AI'}</span>
-        <span className="grow ellipsis">{run.prompt}</span>
-        <span className="faint">{formatAgo(run.createdAt)}</span>
+    <div className="act-detail stack-sm">
+      {run.staleContext && <p className="small muted">记忆或授权已经变化，请重新生成交接内容。</p>}
+      <p className="small muted">这个副手要你手动转交：复制下面的内容发给它，再把回答贴回来。</p>
+      <div className="row">
+        <button
+          type="button"
+          className="btn btn-sm"
+          disabled={run.staleContext}
+          onClick={() => {
+            void navigator.clipboard?.writeText(run.brief).then(
+              () => toast.show('复制好了'),
+              () => toast.show('复制失败，可以展开手动选'),
+            )
+          }}
+        >
+          <Copy size={14} />
+          复制给它的内容
+        </button>
+        <button type="button" className="link-btn" onClick={() => setBrief((v) => !v)}>
+          {brief ? '收起' : '看一眼'}
+        </button>
       </div>
-
-      {run.status === 'running' && (
-        <div className="card-body">
-          <div className="shimmer" aria-label="正在做">
-            <i style={{ width: '82%' }} />
-            <i style={{ width: '64%' }} />
-            <i style={{ width: '71%' }} />
-          </div>
-        </div>
-      )}
-
-      {run.status === 'waiting' && (
-        <div className="card-body stack-sm">
-          {run.staleContext && <p className="small muted">记忆或授权已经变化，请重新生成交接内容。</p>}
-          <p className="small muted">这个副手要你手动转交：复制下面的内容发给它，再把回答贴回来。</p>
-          <div className="row">
-            <button
-              type="button"
-              className="btn btn-sm"
-              disabled={run.staleContext}
-              onClick={() => {
-                void navigator.clipboard?.writeText(run.brief).then(
-                  () => toast.show('复制好了'),
-                  () => toast.show('复制失败，可以展开手动选'),
-                )
-              }}
-            >
-              <Copy size={14} />
-              复制给它的内容
-            </button>
-            <button type="button" className="link-btn" onClick={() => setBasis((v) => !v)}>
-              {basis ? '收起' : '看一眼'}
-            </button>
-          </div>
-          {basis && (
-            <div className="basis" style={{ padding: 0, borderTop: 0 }}>
-              <pre>{run.brief}</pre>
-            </div>
-          )}
-          <textarea className="textarea" value={pasted} onChange={(e) => setPasted(e.target.value)} placeholder="把它的回答贴在这里" aria-label="贴回回答" style={{ minHeight: 120 }} />
-          <div className="row">
-            <button type="button" className="btn btn-primary btn-sm" disabled={!pasted.trim() || run.staleContext} onClick={() => dispatch({ type: 'pasteRunResult', id: run.id, output: pasted.trim() })}>
-              放回来
-            </button>
-            <button type="button" className="btn btn-quiet btn-sm" onClick={() => dispatch({ type: 'discardRun', id: run.id })}>
-              算了
-            </button>
-          </div>
-        </div>
-      )}
-
-      {run.status === 'failed' && (
-        <div className="card-body stack-sm">
-          <p className="small muted" title={run.error ?? run.output}>没做成：{failureText(run)}</p>
-          <div className="row">
-            <button type="button" className="btn btn-sm" onClick={() => runAgent({ thingId: run.thingId, agentId: run.agentId, kind: run.kind, prompt: run.prompt })}>
-              重试
-            </button>
-            {retryAgent && (
-              <button type="button" className="btn btn-quiet btn-sm" onClick={() => runAgent({ thingId: run.thingId, agentId: retryAgent.id, kind: run.kind, prompt: run.prompt })}>
-                换 {retryAgent.name} 重试
-              </button>
-            )}
-          </div>
-        </div>
-      )}
-
-      {run.status === 'done' && run.output && (
-        <>
-          <div className="card-body">
-            {editing ? (
-              <textarea className="textarea" value={text} onChange={(e) => setText(e.target.value)} aria-label="修改结果" autoFocus />
-            ) : (
-              <div className={expanded ? '' : 'clamp'} onClick={() => setExpanded(true)} style={{ cursor: expanded ? undefined : 'pointer' }}>
-                <Markdown text={run.output} />
-              </div>
-            )}
-          </div>
-          {run.staleContext && <p className="card-body small" style={{ paddingTop: 0, color: 'var(--orange)' }}>它用到的记忆后来改过，结果可能过时了。</p>}
-          <div className="card-foot">
-            <button
-              type="button"
-              className="btn btn-primary btn-sm"
-              disabled={run.staleContext}
-              onClick={async () => {
-                if (!(await dispatch({ type: 'adoptRun', id: run.id, as: choice.as, text: editing ? text : run.output! }))) return
-                toast.show(`采纳了，${adoptedText[choice.as]}`)
-              }}
-            >
-              {choice.label}
-            </button>
-            <button
-              type="button"
-              className="btn btn-quiet btn-sm"
-              onClick={() => {
-                setText(run.output ?? '')
-                setEditing((v) => !v)
-              }}
-            >
-              {editing ? '不改了' : '改一下'}
-            </button>
-            <button type="button" className="btn btn-quiet btn-sm" onClick={() => dispatch({ type: 'discardRun', id: run.id })}>
-              不要
-            </button>
-            <span className="grow" />
-            <button type="button" className="link-btn small" style={{ color: 'var(--label-2)' }} onClick={() => setBasis((v) => !v)} aria-expanded={basis}>
-              依据 {run.contextMemoryIds.length} 条记忆
-            </button>
-          </div>
-          {basis && (
-            <div className="basis">
-              副手收到的全部内容：
-              <pre>{run.brief}</pre>
-            </div>
-          )}
-        </>
-      )}
+      {brief && <pre className="act-brief">{run.brief}</pre>}
+      <textarea className="textarea" value={pasted} onChange={(e) => setPasted(e.target.value)} placeholder="把它的回答贴在这里" aria-label="贴回回答" style={{ minHeight: 120 }} />
+      <div className="row">
+        <button
+          type="button"
+          className="btn btn-primary btn-sm"
+          disabled={!pasted.trim() || run.staleContext || busy}
+          onClick={() => guard(() => dispatch({ type: 'pasteRunResult', id: run.id, output: pasted.trim() }))}
+        >
+          放回来
+        </button>
+      </div>
     </div>
   )
 }
 
-/** The card already shows the title; drop a leading heading that repeats it. */
-function withoutTitle(doc: Doc): string {
-  const [first, ...rest] = doc.body.split('\n')
-  return first.replace(/^#+\s*/, '').trim() === doc.title.trim() ? rest.join('\n').trimStart() : doc.body
-}
+function RunRow({ thing, run }: { thing: Thing; run: Run }) {
+  const { state, dispatchUndoable, undo, runAgent } = useStore()
+  const { agentFor } = useShell()
+  const toast = useToast()
+  const [busy, guard] = useBusy()
+  const [shown, setShown] = useState(false)
+  const agent = state.agents.find((a) => a.id === run.agentId)
+  const who = <span className="act-who agent">{agent?.name ?? '副手'}</span>
+  const when = <span className="act-when">{formatAgo(run.finishedAt ?? run.createdAt)}</span>
+  const output = shown && run.output && (
+    <div className="act-detail">
+      <Markdown text={run.output} />
+    </div>
+  )
 
-function DocCard({ doc }: { doc: Doc }) {
-  const { dispatch } = useStore()
-  const [editing, setEditing] = useState(false)
-  const [body, setBody] = useState(doc.body)
-  const [expanded, setExpanded] = useState(false)
-  const [deleting, setDeleting] = useState(false)
+  if (run.adopted) {
+    const actionId = run.adopted.actionId
+    return (
+      <li className="card act-run">
+        <div className="act-line">
+          {who}
+          <span className="act-text">{adoptedLine(thing, run)}</span>
+          {actionId && (
+            <button type="button" className="act-btn" disabled={busy} onClick={() => guard(() => undo(actionId))}>
+              撤销
+            </button>
+          )}
+          {run.output && (
+            <button type="button" className="act-btn" aria-expanded={shown} onClick={() => setShown((v) => !v)}>
+              {shown ? '收起' : '看看'}
+            </button>
+          )}
+          {when}
+        </div>
+        {output}
+      </li>
+    )
+  }
 
+  if (run.status === 'running') {
+    return (
+      <li className="card act-run">
+        <div className="act-line">
+          {who}
+          <span className="act-text working">正在做：{run.prompt}</span>
+          {when}
+        </div>
+      </li>
+    )
+  }
+
+  if (run.status === 'waiting') {
+    return (
+      <li className="card act-run">
+        <div className="act-line">
+          {who}
+          <span className="act-text">等你转交：{run.prompt}</span>
+          <button
+            type="button"
+            className="act-btn icon"
+            aria-label="不转交了"
+            title="不转交了"
+            onClick={() => dispatchUndoable({ type: 'discardRun', id: run.id }, '不转交了')}
+          >
+            <X size={14} />
+          </button>
+          {when}
+        </div>
+        <Handoff run={run} />
+      </li>
+    )
+  }
+
+  if (run.status === 'failed') {
+    const retryAgent = state.agents.find((a) => a.id === agentFor(thing.id) && a.enabled && a.id !== run.agentId)
+    const retry = (agentId: string) => guard(() => runAgent({ thingId: run.thingId, agentId, kind: run.kind, prompt: run.prompt }))
+    return (
+      <li className="card act-run">
+        <div className="act-line">
+          {who}
+          <span className="act-text failed" title={run.error ?? run.output}>
+            没做成：{failureText(run)}
+          </span>
+          <button type="button" className="act-btn" disabled={busy} onClick={() => retry(run.agentId)}>
+            重试
+          </button>
+          {retryAgent && (
+            <button type="button" className="act-btn" disabled={busy} onClick={() => retry(retryAgent.id)}>
+              换 {retryAgent.name} 重试
+            </button>
+          )}
+          {when}
+        </div>
+      </li>
+    )
+  }
+
+  if (run.status !== 'done' || !run.output) return null
+  // Finished but not in place: it was undone, or what it relied on has changed since.
+  const choice = adoptAs(thing, run)
   return (
-    <div className="card">
-      {deleting && (
-        <ConfirmModal
-          title={`删掉文档「${doc.title}」？`}
-          onClose={() => setDeleting(false)}
-          onConfirm={async () => {
-            if (await dispatch({ type: 'deleteDoc', id: doc.id })) setDeleting(false)
-          }}
-        >
-          <p className="muted">文档会从这件事的工作记录里移除。</p>
-        </ConfirmModal>
-      )}
-      <div className="card-head">
-        <FileText size={14} className="faint" />
-        <span className="grow ellipsis" style={{ color: 'var(--label)', fontWeight: 600, fontSize: 14 }}>
-          {doc.title}
-        </span>
-        <span className="faint">
-          {doc.by === 'ai' ? '副手写的 · ' : ''}
-          {formatAgo(doc.updatedAt)}
-        </span>
-      </div>
-      <div className="card-body">
-        {editing ? (
-          <textarea className="textarea" value={body} onChange={(e) => setBody(e.target.value)} aria-label="文档内容" autoFocus />
-        ) : (
-          <div className={expanded ? '' : 'clamp'} onClick={() => setExpanded(true)} style={{ cursor: expanded ? undefined : 'pointer' }}>
-            <Markdown text={withoutTitle(doc) || '（空）'} />
-          </div>
-        )}
-      </div>
-      <div className="card-foot">
-        {editing ? (
+    <li className="card act-run">
+      <div className="act-line">
+        {who}
+        <button type="button" className="act-text act-open" aria-expanded={shown} onClick={() => setShown((v) => !v)}>
+          {run.prompt}
+        </button>
+        {run.staleContext ? (
           <>
+            <span className="act-note">依据变了</span>
             <button
               type="button"
-              className="btn btn-primary btn-sm"
-              onClick={async () => {
-                if (!(await dispatch({ type: 'updateDoc', id: doc.id, patch: { body, title: body.split('\n')[0].replace(/^#+\s*/, '').slice(0, 40) || doc.title } }))) return
-                setEditing(false)
-              }}
+              className="act-btn"
+              disabled={busy}
+              onClick={() =>
+                guard(async () => {
+                  if (await runAgent({ thingId: run.thingId, agentId: run.agentId, kind: run.kind, prompt: run.prompt })) toast.show('让副手重做了')
+                })
+              }
             >
-              存好
-            </button>
-            <button type="button" className="btn btn-quiet btn-sm" onClick={() => setEditing(false)}>
-              取消
+              重做
             </button>
           </>
         ) : (
           <button
             type="button"
-            className="btn btn-quiet btn-sm"
-            onClick={() => {
-              setBody(doc.body)
-              setEditing(true)
-            }}
+            className="act-btn"
+            disabled={busy}
+            onClick={() => guard(() => dispatchUndoable({ type: 'adoptRun', id: run.id, as: choice.as, text: run.output! }, `放回去了，${choice.done}`))}
           >
-            编辑
+            放回去
           </button>
         )}
-        <span className="grow" />
-        <button
-          type="button"
-          className="btn btn-quiet btn-sm"
-          style={{ color: 'var(--label-2)' }}
-          onClick={() => setDeleting(true)}
-        >
-          删除
-        </button>
+        {when}
       </div>
-    </div>
+      {output}
+    </li>
   )
 }
 
-function Record({ thing }: { thing: Thing }) {
-  const { state, dispatch } = useStore()
-  const runs = state.runs.filter((r) => r.thingId === thing.id)
-  const docs = state.docs.filter((d) => d.thingId === thing.id)
-  const entries: ({ at: string; run: Run; doc?: never } | { at: string; doc: Doc; run?: never })[] = [
-    ...runs.map((run) => ({ at: run.createdAt, run })),
-    ...docs.map((doc) => ({ at: doc.createdAt, doc })),
-  ].sort((a, b) => a.at.localeCompare(b.at))
+const actorText: Record<string, string> = { user: '你', secretary: '秘书', assistant: '副手', system: '系统', ai: '副手', import: '导入' }
 
+function RetainedWriting({ id }: { id: string }) {
+  const [writing, setWriting] = useState<{ field: string; text: string; reason: string }[] | null>(null)
+  const [error, setError] = useState('')
   return (
-    <section className="section">
-      <div className="section-label spread">
-        <span>工作记录</span>
-        <button
-          type="button"
-          className="link-btn"
-          onClick={async () => {
-            const at = new Date().toISOString()
-            if (!(await dispatch({ type: 'createDoc', doc: { id: newId(), thingId: thing.id, title: '新文档', body: '', by: 'user', createdAt: at, updatedAt: at } }))) return
-          }}
-        >
-          写文档
-        </button>
+    <li className="act-row retained">
+      <div className="act-line">
+        <span className="act-who">旧版</span>
+        <span className="act-text">旧版文字的来源无法分开，已保留供你检查。副手不会使用这些文字。</span>
+        {!writing && (
+          <button
+            type="button"
+            className="act-btn"
+            onClick={async () => {
+              try {
+                setWriting(await api(`/v1/workspace/items/${id}/retained-writing`))
+                setError('')
+              } catch (e) {
+                setError(e instanceof Error ? e.message : '文字暂时无法读取')
+              }
+            }}
+          >
+            查看
+          </button>
+        )}
       </div>
-      {entries.length === 0 ? (
-        <p className="empty-line" style={{ padding: '4px 4px' }}>
-          还没有记录。让副手做点什么，结果会出现在这里。
-        </p>
-      ) : (
-        <div className="record">{entries.map((e) => (e.run ? <RunCard key={e.run.id} thing={thing} run={e.run} /> : <DocCard key={e.doc.id} doc={e.doc} />))}</div>
-      )}
-    </section>
-  )
-}
-
-/** 来龙去脉: where the thing came from and what happened to it, folded away. */
-function History({ thing }: { thing: Thing }) {
-  const { state } = useStore()
-  const [open, setOpen] = useState(false)
-  const events = timelineFor(state, thing)
-  if (events.length === 0) return null
-  return (
-    <section className="section">
-      <button type="button" className="disclosure" style={{ padding: '0 4px' }} onClick={() => setOpen((v) => !v)} aria-expanded={open}>
-        {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-        来龙去脉 · {events.length} 条
-      </button>
-      {open && (
-        <div style={{ padding: '12px 4px 0' }}>
-          <Timeline events={events} />
+      {error && <p role="alert">{error}</p>}
+      {writing?.map((part) => (
+        <div key={part.field} className="act-detail">
+          <p className="small muted">{part.reason}</p>
+          <pre className="act-brief">{part.text}</pre>
         </div>
+      ))}
+    </li>
+  )
+}
+
+const FOLD = 10
+
+/** The one place that says what happened: edits, the secretary's and assistants' work, and how an idea evolved. */
+function Activity({ thing }: { thing: Thing }) {
+  const { state } = useStore()
+  const [all, setAll] = useState(false)
+  const history = thing.kind === 'task' ? thing.item.history : thing.kind === 'idea' ? thing.item.evolution : []
+  type Entry = { key: string; at: string; run?: Run; by?: string; summary?: string }
+  const entries: Entry[] = [
+    ...state.runs.filter((r) => r.thingId === thing.id).map((run) => ({ key: run.id, at: run.finishedAt ?? run.createdAt, run })),
+    // An assistant's own edits are its adopted result, which the run's line already shows with 【撤销】.
+    ...history.filter((h) => (h.by as string) !== 'assistant').map((h, i) => ({ key: `h-${i}`, at: h.at, by: h.by as string, summary: h.summary })),
+  ].sort((a, b) => b.at.localeCompare(a.at))
+  const hidden = all ? 0 : Math.max(0, entries.length - FOLD)
+  const retained = thing.item.hasRetainedWriting
+
+  return (
+    <section className="section">
+      <div className="section-label">动态</div>
+      {entries.length === 0 && !retained ? (
+        <p className="act-empty">对秘书说一句，结果会出现在这里</p>
+      ) : (
+        <ol className="record activity">
+          {entries.slice(0, entries.length - hidden).map((e) =>
+            e.run ? (
+              <RunRow key={e.key} thing={thing} run={e.run} />
+            ) : (
+              <li key={e.key} className="act-row">
+                <div className="act-line">
+                  <span className="act-who">{actorText[e.by ?? 'user'] ?? '你'}</span>
+                  <span className="act-text">{e.summary}</span>
+                  <span className="act-when">{formatAgo(e.at)}</span>
+                </div>
+              </li>
+            ),
+          )}
+          {hidden > 0 && (
+            <li className="act-row">
+              <button type="button" className="act-more" onClick={() => setAll(true)}>
+                更早的 {hidden} 条
+              </button>
+            </li>
+          )}
+          {retained && (all || hidden === 0) && <RetainedWriting id={thing.id} />}
+        </ol>
       )}
     </section>
   )
@@ -683,9 +782,9 @@ export function ThingPage() {
       {thing.kind === 'idea' && <IdeaBanner thing={thing} />}
       {thing.kind === 'task' && <Checklist task={thing.item} />}
       {thing.kind === 'project' && <ProjectItems projectId={thing.id} />}
-      <Record thing={thing} />
-      <History thing={thing} />
-      <Secretary thingId={thing.id} />
+      <Docs thing={thing} />
+      <Activity thing={thing} />
+      <Secretary thingId={thing.id} variant="latest" />
     </div>
   )
 }

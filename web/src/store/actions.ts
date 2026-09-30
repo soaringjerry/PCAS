@@ -40,7 +40,6 @@ export type Action =
   | { type: 'addCheck'; taskId: string; text: string }
   | { type: 'toggleCheck'; taskId: string; itemId: string }
   | { type: 'removeCheck'; taskId: string; itemId: string }
-  | { type: 'toggleContextMemory'; thingId: string; memoryId: string }
   | { type: 'bulkStatus'; ids: string[]; status: TaskStatus }
   | { type: 'bulkDefer'; ids: string[]; days: number }
   | { type: 'bulkMove'; ids: string[]; projectId?: string }

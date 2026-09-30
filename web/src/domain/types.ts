@@ -41,6 +41,8 @@ export interface Trigger {
   guard?: string
   nextAt?: string
   active: boolean
+  /** For the `due-reminder` trigger: `-30m`, `-2h`, `at` or `HH:MM` relative to the due time. */
+  offset?: string
 }
 
 export interface Task {
@@ -237,7 +239,15 @@ export interface Run {
   status: RunStatus
   output?: string
   /** What the user did with the output. */
-  adopted?: { as: 'doc' | 'subtasks' | 'progress'; at: string; edited: boolean }
+  adopted?: {
+    as: 'doc' | 'subtasks' | 'progress'
+    at: string
+    edited: boolean
+    /** The recorded action behind the adoption; undoing it puts the result back. */
+    actionId?: string
+    /** Adopted by the worker as soon as the run finished, not by the user. */
+    auto?: boolean
+  }
   /** A memory it used changed or was deleted afterwards. */
   staleContext: boolean
   /** Estimated cost in CNY, charged against the daily budget. */

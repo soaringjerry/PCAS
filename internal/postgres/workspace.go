@@ -420,7 +420,16 @@ func (s *Store) Execute(ctx context.Context, scope memory.Scope, in workspace.Co
 		if revision != in.ExpectedRevision {
 			return memory.ErrConflict
 		}
+		if undoableCommand(in.Type) {
+			ctx = withActionLog(ctx, in.RequestID, "command", "", commandSummary(ctx, tx, scope, in))
+			if err := beginActionLogTx(ctx, tx); err != nil {
+				return err
+			}
+		}
 		if err := s.commandTx(ctx, tx, scope, in); err != nil {
+			return err
+		}
+		if err := flushActionLog(ctx, tx, scope); err != nil {
 			return err
 		}
 		if _, err = tx.Exec(ctx, "UPDATE workspace_owners SET revision=revision+1 WHERE owner_id=$1", string(scope.OwnerID)); err != nil {

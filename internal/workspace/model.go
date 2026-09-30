@@ -10,6 +10,10 @@ import (
 	"github.com/soaringjerry/PCAS/internal/memory"
 )
 
+var ErrChangedSince = errors.New("changed since action")
+var ErrWorkStarted = errors.New("work started")
+var ErrAlreadyUndone = errors.New("already undone")
+
 var ErrBudget = errors.New("daily budget exceeded")
 
 type SourceRef struct {
@@ -31,6 +35,7 @@ type Check struct {
 	Done bool   `json:"done"`
 }
 type Trigger struct {
+	Offset      string `json:"offset,omitempty"`
 	ID          string `json:"id"`
 	Kind        string `json:"kind"`
 	Description string `json:"description"`

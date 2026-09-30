@@ -422,6 +422,9 @@ func (s *Store) ProcessExtraction(ctx context.Context, j worker.Job) error {
 		}
 		accepted := 0
 		for _, item := range extraction.Items {
+			if source.Source.Connector == "desk" && oneOf(item.Kind, "task", "idea") {
+				continue
+			}
 			if !oneOf(item.Acquisition, "direct", "reported", "inferred") {
 				item.Acquisition = "inferred"
 			}

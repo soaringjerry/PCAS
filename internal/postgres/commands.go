@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -14,6 +15,8 @@ import (
 
 func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c workspace.Command) error {
 	switch c.Type {
+	case "undoAction":
+		return s.undoActionTx(ctx, tx, scope, c.ID)
 	case "delegateTask":
 		// One explicit delegation atomically creates the work and queues its run.
 		// Execute's request receipt fences retries; a stable item ID also fences
@@ -32,7 +35,10 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 			return err
 		}
 		run := c
-		run.Type, run.ID, run.ThingID, run.Kind = "requestRun", "", c.ID, "draft"
+		run.Type, run.ID, run.ThingID, run.Kind = "requestRun", "", c.ID, c.Kind
+		if run.Kind == "" {
+			run.Kind = "draft"
+		}
 		return s.runCommandTx(ctx, tx, scope, run)
 	case "capture":
 		if err := requireText(c.Text); err != nil {
@@ -332,6 +338,20 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 	case "updateTask":
 		if err := patchAllowed(&item, c.Patch, "title", "notes", "status", "projectId", "due", "scheduled", "waitingFor", "owedTo", "dependsOn"); err != nil {
 			return err
+		}
+		var fields map[string]json.RawMessage
+		if json.Unmarshal(c.Patch, &fields) == nil {
+			if _, changed := fields["due"]; changed {
+				settings, err := queryDocument[workspace.Settings](ctx, tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1", string(scope.OwnerID))
+				if err != nil {
+					return err
+				}
+				loc, err := time.LoadLocation(settings.Timezone)
+				if err != nil {
+					loc = time.UTC
+				}
+				applyDueReminder(&item, "", loc)
+			}
 		}
 	case "updateProject":
 		if item.Kind != "project" {

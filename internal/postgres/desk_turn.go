@@ -25,6 +25,7 @@ const secretaryInstructions = assistantInstructions + `
 项目按名称和意思匹配已有 P*；只有用户明确新建项目时才能用 new:名称。修改刚才安排用 update 引用 R* 或 T*，不要新建。事项页的默认对象是 THIS。
 只有影响结果的真正歧义才填 ask，其他明确动作仍执行。delegate 只在用户明确要求写方案、起草、查资料、拆步骤等产出时使用。用户表达事实、偏好或决定时 remember 为 true。
 reply 简短纯文本，像当面回话，不列 1. 2. 3.；事项清单用 show，依据用 used。只引用服务端提供的短别名，不能使用真实 UUID。记忆引用用 M*，事项用 T*、P*、I*、R*、THIS。
+有 timeline、tasks 等卡片展示时，reply 只写一句结论（40 字以内），不要重复列举卡片内容。
 搜索词会离开对话：只写公开信息关键词，绝不能把资料中的人名、数字、私事放进搜索词。实时信息查不到就说明，不能编造。
 只输出 JSON：{"reply":"简短回答或空字符串","used":["M1"],"links":["https://..."],"show":["T1"],"remember":false,"actions":[...],"ask":null}。
 actions 每轮最多 10 条，格式：
@@ -405,7 +406,7 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 					break
 				}
 				actionID := string(memory.NewID())
-				actionCtx := withActionLog(ctx, actionID, "desk", out.Turn.ID, "秘书："+a.Op)
+				actionCtx := withActionLog(withActor(ctx, "secretary"), actionID, "desk", out.Turn.ID, "秘书："+a.Op)
 				actionTx, err := tx.Begin(ctx)
 				if err != nil {
 					return err
@@ -414,7 +415,7 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 					_ = actionTx.Rollback(ctx)
 					return err
 				}
-				receipt, actionErr := s.executeSecretaryActionTx(actionCtx, actionTx, scope, a, c.Aliases, c.Agent, deskLocation(c.Settings))
+				receipt, actionErr := s.executeSecretaryActionTx(actionCtx, actionTx, scope, a, c.Aliases, c.Agent, deskLocation(c.Settings), pointerValue(req.ThingID))
 				if actionErr != nil || receipt.Status == "skipped" {
 					if err = actionTx.Rollback(ctx); err != nil {
 						return err
@@ -426,7 +427,7 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 					}
 				} else {
 					// The summary and receipt describe the actual persisted result.
-					actionCtx = withActionLog(ctx, actionID, "desk", out.Turn.ID, receipt.Text)
+					actionCtx = withActionLog(actionCtx, actionID, "desk", out.Turn.ID, receipt.Text)
 					if err = flushActionLog(actionCtx, actionTx, scope); err != nil {
 						_ = actionTx.Rollback(ctx)
 						return err

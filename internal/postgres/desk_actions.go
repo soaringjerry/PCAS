@@ -222,7 +222,7 @@ func taskReceiptText(ctx context.Context, tx pgx.Tx, scope memory.Scope, item wo
 	}
 	return "已建：" + strings.Join(parts, " · ")
 }
-func (s *Store) executeSecretaryActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, a secretaryAction, aliases map[string]workspace.Item, agent workspace.Agent, loc *time.Location) (workspace.DeskReceipt, error) {
+func (s *Store) executeSecretaryActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, a secretaryAction, aliases map[string]workspace.Item, agent workspace.Agent, loc *time.Location, currentThingID string) (workspace.DeskReceipt, error) {
 	receipt := workspace.DeskReceipt{Op: a.Op, Status: "done"}
 	call := func(c workspace.Command) error { return s.commandTx(ctx, tx, scope, c) }
 	var id string
@@ -405,10 +405,20 @@ func (s *Store) executeSecretaryActionTx(ctx context.Context, tx pgx.Tx, scope m
 			}
 		}
 		receipt.Text = "已改：" + item.Title
+		if strings.EqualFold(id, currentThingID) {
+			receipt.Text = "已改"
+		}
 		if item.Status == "done" {
 			receipt.Text = "已完成：" + item.Title
+			if strings.EqualFold(id, currentThingID) {
+				receipt.Text = "已完成"
+			}
 		} else if dueChanged && item.Due != "" {
-			receipt.Text += " → " + localDeskDate(item.Due, loc)
+			if strings.EqualFold(id, currentThingID) {
+				receipt.Text += "：→ " + localDeskDate(item.Due, loc)
+			} else {
+				receipt.Text += " → " + localDeskDate(item.Due, loc)
+			}
 		}
 		receipt.Text += note
 	case "add_steps":
@@ -428,6 +438,9 @@ func (s *Store) executeSecretaryActionTx(ctx context.Context, tx pgx.Tx, scope m
 			}
 		}
 		receipt.Text = fmt.Sprintf("给「%s」加了 %d 步", item.Title, len(a.Steps))
+		if strings.EqualFold(id, currentThingID) {
+			receipt.Text = fmt.Sprintf("加了 %d 步", len(a.Steps))
+		}
 	case "delegate":
 		if !oneOf(a.Kind, "plan", "draft", "breakdown", "summary", "ask") || strings.TrimSpace(a.Prompt) == "" {
 			return skippedReceipt(a.Op, "没说清要交给副手做什么"), nil

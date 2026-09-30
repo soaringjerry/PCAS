@@ -251,7 +251,14 @@ func TestAutoAdoptDestinationsAndUndo(t *testing.T) {
 					t.Fatal(err)
 				}
 				recordedRun := false
+				var sampleID string
 				for _, entry := range entries {
+					if entry.Table == "training_samples" {
+						if sampleID != "" || string(entry.Before) != "null" || entry.AfterHash == nil || !memory.ID(entry.ID).Valid() {
+							t.Fatalf("invalid adoption sample snapshot: %+v", entry)
+						}
+						sampleID = entry.ID
+					}
 					if entry.Table == "agent_runs" && entry.ID == runID {
 						var previous workspace.Run
 						if err := json.Unmarshal(entry.Before, &previous); err != nil {
@@ -263,6 +270,9 @@ func TestAutoAdoptDestinationsAndUndo(t *testing.T) {
 						recordedRun = true
 					}
 				}
+				if sampleID == "" {
+					t.Fatal("adoption sample was not recorded by trigger")
+				}
 				if !recordedRun {
 					t.Fatal("completed run was not recorded by trigger")
 				}
@@ -271,6 +281,9 @@ func TestAutoAdoptDestinationsAndUndo(t *testing.T) {
 					t.Fatalf("samples=%d err=%v", samples, err)
 				}
 				st = workspaceCommand(t, s, scope, workspace.Command{Type: "undoAction", ID: run.Adopted.ActionID})
+				if err := s.pool.QueryRow(ctx, "SELECT count(*) FROM training_samples WHERE owner_id=$1 AND run_id=$2", string(scope.OwnerID), runID).Scan(&samples); err != nil || samples != 0 {
+					t.Fatalf("auto adoption sample survived undo: samples=%d err=%v", samples, err)
+				}
 				restored := autoAdoptItem(st, id)
 				if restored.History[len(restored.History)-1].By != "user" {
 					t.Fatalf("undo actor=%+v", restored.History)
@@ -291,6 +304,13 @@ func TestAutoAdoptDestinationsAndUndo(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
+				if err := s.pool.QueryRow(ctx, "SELECT count(*) FROM training_samples WHERE owner_id=$1 AND run_id=$2", string(scope.OwnerID), runID).Scan(&samples); err != nil || samples != 1 {
+					t.Fatalf("readoption duplicated samples: samples=%d err=%v", samples, err)
+				}
+				var readoptedSampleID string
+				if err := s.pool.QueryRow(ctx, "SELECT id::text FROM training_samples WHERE owner_id=$1 AND run_id=$2 AND document->>'kind'='adopted-result'", string(scope.OwnerID), runID).Scan(&readoptedSampleID); err != nil || readoptedSampleID == sampleID {
+					t.Fatalf("readoption reused undone sample: id=%s err=%v", readoptedSampleID, err)
+				}
 				readopted := autoAdoptItem(st, id)
 				if readopted.History[len(readopted.History)-1].By != "user" {
 					t.Fatalf("manual adoption actor=%+v", readopted.History)
@@ -299,6 +319,9 @@ func TestAutoAdoptDestinationsAndUndo(t *testing.T) {
 					t.Fatalf("manual adoption=%+v", got)
 				}
 				workspaceCommand(t, s, scope, workspace.Command{Type: "undoAction", ID: requestID})
+				if err := s.pool.QueryRow(ctx, "SELECT count(*) FROM training_samples WHERE owner_id=$1 AND run_id=$2", string(scope.OwnerID), runID).Scan(&samples); err != nil || samples != 0 {
+					t.Fatalf("manual adoption sample survived undo: samples=%d err=%v", samples, err)
+				}
 			})
 		}
 	}
@@ -373,4 +396,23 @@ func TestAutoAdoptWorkerSkipsStaleFlag(t *testing.T) {
 	if err != nil || st.Runs[0].Status != "done" || !st.Runs[0].StaleContext || st.Runs[0].Adopted != nil || len(st.Docs) != 0 {
 		t.Fatalf("stale flag ignored: %+v %v", st.Runs, err)
 	}
+}
+
+// Preserve legacy tests of manual adoption by undoing the new automatic step.
+func undoAutoAdoption(t *testing.T, s *Store, scope memory.Scope, runID string) {
+	t.Helper()
+	st, err := s.Snapshot(context.Background(), scope)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, run := range st.Runs {
+		if run.ID == runID {
+			if run.Adopted == nil || !run.Adopted.Auto {
+				t.Fatal("expected automatic adoption before legacy manual flow")
+			}
+			workspaceCommand(t, s, scope, workspace.Command{Type: "undoAction", ID: run.Adopted.ActionID})
+			return
+		}
+	}
+	t.Fatal("run missing before legacy manual flow")
 }

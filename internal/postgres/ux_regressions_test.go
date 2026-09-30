@@ -144,6 +144,7 @@ func TestMixedWritingSurvivesArtifactRevocationAndDeletion(t *testing.T) {
 	st = workspaceCommand(t, s, scope, workspace.Command{Type: "requestRun", ThingID: idea.ID, AgentID: "manual", Kind: "summary", Prompt: "Sensitive source 84739"})
 	run := st.Runs[0]
 	workspaceCommand(t, s, scope, workspace.Command{Type: "pasteRunResult", ID: run.ID, Output: "Sensitive generated plan 84739."})
+	undoAutoAdoption(t, s, scope, run.ID)
 	workspaceCommand(t, s, scope, workspace.Command{Type: "adoptRun", ID: run.ID, As: "progress", Text: "Sensitive generated plan 84739."})
 	workspaceCommand(t, s, scope, workspace.Command{Type: "setNotes", ID: idea.ID, Text: "Independent authored introduction\nSensitive generated plan 84739!"})
 	st = workspaceCommand(t, s, scope, workspace.Command{Type: "ideaPromote", ID: idea.ID})
@@ -282,6 +283,7 @@ func TestLegacyMixedWritingIsQuarantinedForOwnerReview(t *testing.T) {
 	st = workspaceCommand(t, s, scope, workspace.Command{Type: "requestRun", ThingID: id, AgentID: "manual", Kind: "summary", Prompt: "legacy sensitive 9873"})
 	run := st.Runs[0]
 	workspaceCommand(t, s, scope, workspace.Command{Type: "pasteRunResult", ID: run.ID, Output: "Sensitive generated 9873"})
+	undoAutoAdoption(t, s, scope, run.ID)
 	workspaceCommand(t, s, scope, workspace.Command{Type: "adoptRun", ID: run.ID, As: "progress", Text: "Sensitive generated 9873"})
 	if _, err := s.pool.Exec(ctx, "DELETE FROM artifact_fields WHERE owner_id=$1 AND thing_id=$2", string(scope.OwnerID), id); err != nil {
 		t.Fatal(err)
@@ -319,6 +321,7 @@ func TestContinuationHonorsCurrentItemScopeBeforeSemanticRetrieval(t *testing.T)
 			}
 			privateRun := st.Runs[0].ID
 			workspaceCommand(t, s, scope, workspace.Command{Type: "pasteRunResult", ID: privateRun, Output: "Derived private result 482910"})
+			undoAutoAdoption(t, s, scope, privateRun)
 			workspaceCommand(t, s, scope, workspace.Command{Type: "adoptRun", ID: privateRun, As: "progress", Text: "Derived private result 482910"})
 			switch change {
 			case "exclude":

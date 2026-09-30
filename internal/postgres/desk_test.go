@@ -105,6 +105,7 @@ func TestDeskAnswerWithholdsRevokedArtifactTitle(t *testing.T) {
 		t.Fatal("fixture run did not include the private memory")
 	}
 	workspaceCommand(t, s, scope, workspace.Command{Type: "pasteRunResult", ID: run.ID, Output: "处理隐私标记 9137"})
+	undoAutoAdoption(t, s, scope, run.ID)
 	workspaceCommand(t, s, scope, workspace.Command{Type: "adoptRun", ID: run.ID, As: "subtasks", Text: "处理隐私标记 9137"})
 	workspaceCommand(t, s, scope, workspace.Command{Type: "setMemoryVisibility", ID: mem.ID, AgentIDs: []string{"manual"}})
 	if _, err := s.AnswerDesk(context.Background(), scope, "model", "今天有哪些待办？", nil); err != nil {

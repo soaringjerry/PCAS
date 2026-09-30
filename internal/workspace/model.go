@@ -170,9 +170,11 @@ type Doc struct {
 	UpdatedAt string `json:"updatedAt"`
 }
 type Adoption struct {
-	As     string `json:"as"`
-	At     string `json:"at"`
-	Edited bool   `json:"edited"`
+	ActionID string `json:"actionId,omitempty"`
+	Auto     bool   `json:"auto,omitempty"`
+	As       string `json:"as"`
+	At       string `json:"at"`
+	Edited   bool   `json:"edited"`
 }
 type Run struct {
 	ID               string          `json:"id"`

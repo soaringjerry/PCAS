@@ -290,6 +290,8 @@ func (s *Store) adoptRunTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, r
 				}
 			} else {
 				task := newItem("task", line)
+				task.History[0].By = actorFromContext(ctx)
+				task.Evolution[0].By = actorFromContext(ctx)
 				if item.Kind == "project" {
 					task.ProjectID = item.ID
 				} else {
@@ -553,6 +555,7 @@ func (s *Store) autoAdoptRunTx(ctx context.Context, tx pgx.Tx, scope memory.Scop
 		summary = fmt.Sprintf("副手结果：加了 %d 个子任务", len(parseRunChecklist(run.Output)))
 	}
 	id := string(memory.NewID())
+	ctx = withActor(ctx, "assistant")
 	ctx = withActionLog(ctx, id, "worker", "", summary)
 	if err := beginActionLogTx(ctx, tx); err != nil {
 		return err

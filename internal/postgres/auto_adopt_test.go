@@ -186,6 +186,12 @@ func TestAutoAdoptDestinationsAndUndo(t *testing.T) {
 					t.Fatalf("revision=%d want %d", st.Revision, revision+1)
 				}
 				item := autoAdoptItem(st, id)
+				if item.History[len(item.History)-1].By != "assistant" {
+					t.Fatalf("auto adoption actor=%+v", item.History)
+				}
+				if tc.itemKind == "idea" && item.Evolution[len(item.Evolution)-1].By != "assistant" {
+					t.Fatalf("idea adoption actor=%+v", item.Evolution)
+				}
 				switch tc.as {
 				case "subtasks":
 					if tc.itemKind == "task" {
@@ -203,6 +209,11 @@ func TestAutoAdoptDestinationsAndUndo(t *testing.T) {
 							t.Fatalf("tasks=%+v", st.Tasks)
 						}
 						for _, task := range st.Tasks {
+							for _, revision := range task.History {
+								if revision.By != "assistant" {
+									t.Fatalf("created task actor=%+v", task.History)
+								}
+							}
 							if task.Status != "todo" || tc.itemKind == "project" && task.ProjectID != id || tc.itemKind == "idea" && task.IdeaID != id {
 								t.Fatalf("task destination=%+v", task)
 							}
@@ -261,6 +272,9 @@ func TestAutoAdoptDestinationsAndUndo(t *testing.T) {
 				}
 				st = workspaceCommand(t, s, scope, workspace.Command{Type: "undoAction", ID: run.Adopted.ActionID})
 				restored := autoAdoptItem(st, id)
+				if restored.History[len(restored.History)-1].By != "user" {
+					t.Fatalf("undo actor=%+v", restored.History)
+				}
 				if !reflect.DeepEqual(restored.Checklist, before.Checklist) || restored.Notes != before.Notes || restored.Body != before.Body || restored.Progress != before.Progress || len(st.Docs) != 0 || len(st.Tasks) != map[bool]int{true: 1, false: 0}[tc.itemKind == "task"] {
 					t.Fatalf("undo did not restore destination: %+v", st)
 				}
@@ -276,6 +290,10 @@ func TestAutoAdoptDestinationsAndUndo(t *testing.T) {
 				st, err := s.Execute(ctx, scope, workspace.Command{Type: "adoptRun", ID: runID, As: tc.as, Text: tc.output, RequestID: requestID, ExpectedRevision: st.Revision})
 				if err != nil {
 					t.Fatal(err)
+				}
+				readopted := autoAdoptItem(st, id)
+				if readopted.History[len(readopted.History)-1].By != "user" {
+					t.Fatalf("manual adoption actor=%+v", readopted.History)
 				}
 				if got := st.Runs[0].Adopted; got == nil || got.Auto || got.Edited || got.ActionID != requestID {
 					t.Fatalf("manual adoption=%+v", got)

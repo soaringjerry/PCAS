@@ -1,18 +1,19 @@
 import { useState } from 'react'
 import { Link, useParams } from 'react-router'
-import { ArrowUp, Check, ChevronDown, ChevronLeft, ChevronRight, Copy, FileText, Folder, Lightbulb, ListPlus, Plus, Sparkles, X } from 'lucide-react'
-import { Checkbox, DateTimePicker, Select } from '../components/controls'
+import { Check, ChevronDown, ChevronLeft, ChevronRight, Copy, FileText, Folder, Lightbulb, ListPlus, Plus, Sparkles, X } from 'lucide-react'
+import { DateTimePicker, Select } from '../components/controls'
 import { ConfirmModal } from '../components/Overlay'
 import { Markdown } from '../components/Markdown'
+import { Secretary } from '../components/Secretary'
 import { LineRow } from '../components/LineRow'
 import { Timeline } from '../components/Marks'
-import { buildBrief, contextFor, parseChecklist, quickActions } from '../domain/agent'
+import { parseChecklist } from '../domain/agent'
 import { newId } from '../domain/ids'
 import { projectStatusLabel, taskStatusLabel, taskStatusOrder, type Tone } from '../domain/labels'
-import { estimateCost, ongoingLine, spentToday, urgentLine } from '../domain/lines'
+import { ongoingLine, urgentLine } from '../domain/lines'
 import { findThing, thingProjectId, thingTitle, timelineFor, type Thing } from '../domain/things'
 import { formatAgo } from '../domain/time'
-import type { Doc, Run, RunKind, Task } from '../domain/types'
+import type { Doc, Run, Task } from '../domain/types'
 import { useStore } from '../store/context'
 import { useShell } from '../store/shell'
 import { useToast } from '../store/toast'
@@ -670,115 +671,6 @@ function History({ thing }: { thing: Thing }) {
   )
 }
 
-function Composer({ thing }: { thing: Thing }) {
-  const { state, dispatch, runAgent } = useStore()
-  const { draft, setDraft, agentFor, setAgentFor } = useShell()
-  const [showContext, setShowContext] = useState(false)
-  const agentId = agentFor(thing.id)
-  const agent = state.agents.find((a) => a.id === agentId) ?? state.agents[0]
-  const context = contextFor(state, thing, agent)
-  const included = context.filter((c) => c.included)
-  const text = draft(thing.id)
-  const manual = agent.channel === 'manual'
-  const left = state.settings.dailyBudget - spentToday(state)
-  const costOf = (prompt: string) => (manual ? 0 : estimateCost(buildBrief(state, thing, prompt, included.map((c) => c.memory)), agent))
-
-  const send = async (kind: RunKind, prompt: string) => {
-    if (await runAgent({ thingId: thing.id, agentId: agent.id, kind, prompt })) return true
-    return false
-  }
-
-  const submit = async () => {
-    const prompt = text.trim()
-    if (!prompt) return
-    if (await send('ask', prompt)) setDraft(thing.id, '')
-  }
-
-  return (
-    <div className="composer-wrap">
-      <div className="suggest">
-        {quickActions[thing.kind].map((a) => {
-          const cost = costOf(a.prompt)
-          return (
-            <button key={a.label} type="button" className="ai-btn" disabled={cost > left} title={cost > left ? '超过今天的额度' : a.prompt} onClick={() => send(a.kind, a.prompt)}>
-              <Sparkles size={12} />
-              {a.label}
-              {cost > 0 && <span className="cost">¥{cost.toFixed(2)}</span>}
-            </button>
-          )
-        })}
-        {agent.protocol === 'codex' && <span className="tiny muted">使用订阅额度</span>}
-        <span className="grow" />
-        <button type="button" className="link-btn small" style={{ color: 'var(--label-2)' }} onClick={() => setShowContext((v) => !v)} aria-expanded={showContext}>
-          带上 {included.length} 条记忆
-        </button>
-      </div>
-      {showContext && (
-        <div className="group" style={{ marginBottom: 10, maxHeight: 240, overflowY: 'auto' }}>
-          {context.length === 0 && <div className="empty-line">没有相关的记忆</div>}
-          {context.map(({ memory, allowed, included: on, kindBlocked, unconfirmed }) => (
-            <div key={memory.id} className="check-row">
-              <Checkbox
-                className="grow"
-                checked={on}
-                disabled={!allowed}
-                onChange={() => dispatch({ type: 'toggleContextMemory', thingId: thing.id, memoryId: memory.id })}
-              >
-                <span className={allowed ? undefined : 'faint'}>{memory.text}</span>
-              </Checkbox>
-              {kindBlocked && <span className="tiny faint">{agent.name}看不到这类</span>}
-              {unconfirmed && (
-                <button
-                  type="button"
-                  className="link-btn tiny"
-                  title="这是从资料里推测的；确认后就会带上"
-                  onClick={async (e) => {
-                    e.preventDefault()
-                    if (!(await dispatch({ type: 'confirmMemory', id: memory.id }))) return
-                  }}
-                >
-                  确认后带上
-                </button>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-      <form
-        className="composer"
-        onSubmit={(e) => {
-          e.preventDefault()
-          submit()
-        }}
-      >
-        <textarea
-          rows={1}
-          value={text}
-          onChange={(e) => setDraft(thing.id, e.target.value)}
-          placeholder={`让${agent.name}做点什么`}
-          aria-label="交给副手"
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
-              e.preventDefault()
-              submit()
-            }
-          }}
-        />
-        <Select
-          variant="ghost"
-          label="交给谁"
-          value={agent.id}
-          onChange={(v) => setAgentFor(thing.id, v)}
-          options={state.agents.filter((a) => a.enabled).map((a) => ({ value: a.id, label: a.name, hint: a.protocol === 'codex' ? '订阅' : a.channel === 'manual' ? '复制粘贴' : undefined }))}
-        />
-        <button type="submit" className="send" disabled={!text.trim()} aria-label="发送">
-          <ArrowUp size={16} strokeWidth={2.5} />
-        </button>
-      </form>
-    </div>
-  )
-}
-
 export function ThingPage() {
   const { id = '' } = useParams()
   const { state } = useStore()
@@ -793,7 +685,7 @@ export function ThingPage() {
       {thing.kind === 'project' && <ProjectItems projectId={thing.id} />}
       <Record thing={thing} />
       <History thing={thing} />
-      <Composer thing={thing} />
+      <Secretary thingId={thing.id} />
     </div>
   )
 }

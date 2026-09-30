@@ -916,70 +916,6 @@ kbd {
   }
 }
 
-.composer-wrap {
-  position: sticky;
-  bottom: 0;
-  margin-top: auto;
-  padding: 24px 0 20px;
-  background: linear-gradient(transparent, var(--bg) 30%);
-}
-
-.suggest {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  margin-bottom: 10px;
-}
-
-.composer {
-  display: flex;
-  align-items: flex-end;
-  gap: 8px;
-  padding: 8px 8px 8px 14px;
-  border-radius: 22px;
-  background: var(--bg);
-  box-shadow: 0 0 0 1px var(--sep-strong), var(--shadow);
-}
-
-.composer textarea {
-  flex: 1;
-  min-width: 0;
-  min-height: 24px;
-  max-height: 160px;
-  padding: 3px 0;
-  border: 0;
-  outline: 0;
-  resize: none;
-  background: transparent;
-  font-size: 15px;
-  line-height: 1.5;
-  field-sizing: content;
-}
-
-.composer textarea:focus-visible {
-  box-shadow: none;
-}
-
-.send {
-  flex: none;
-  display: grid;
-  place-items: center;
-  width: 30px;
-  height: 30px;
-  padding: 0;
-  border: 0;
-  border-radius: 50%;
-  background: var(--blue);
-  color: var(--on-blue);
-  cursor: pointer;
-}
-
-.send:disabled {
-  background: var(--fill-2);
-  color: var(--label-3);
-  cursor: default;
-}
-
 /* Markdown */
 .md {
   color: var(--label);
@@ -1028,7 +964,6 @@ kbd {
   list-style: none;
   margin-left: -20px;
 }
-
 
 /* ================= Shared primitives ================= */
 
@@ -1734,6 +1669,33 @@ kbd {
 .toast a {
   color: var(--bg);
   font-weight: 600;
+}
+
+.toast button {
+  margin: -4px -8px -4px 0;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: none;
+  color: var(--bg);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.toast button:hover {
+  background: color-mix(in srgb, var(--bg) 16%, transparent);
+}
+
+/* Keep clear of a secretary input pinned to the bottom. */
+body:has(.sec-thing) .toast {
+  bottom: 96px;
+}
+
+@media (max-width: 860px) {
+  body:has(.sec-hall) .toast {
+    bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+  }
 }
 
 @keyframes fade {

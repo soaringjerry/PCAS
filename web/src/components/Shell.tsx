@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation } from 'react-router'
 import { BookOpen, Search, Settings } from 'lucide-react'
 import { findThing, thingTitle } from '../domain/things'
 import { useStore } from '../store/context'
 import { ShellContext, type ShellApi } from '../store/shell'
-import { ToastContext, type ToastApi } from '../store/toast'
+import type { ToastOptions } from '../store/toast'
 import { CommandPalette } from './CommandPalette'
 
 const KEY = 'pcas.shell'
@@ -32,7 +32,7 @@ export function Shell() {
   const { pathname } = useLocation()
   const [saved, setSaved] = useState<Persisted>(load)
   const [palette, setPalette] = useState(false)
-  const [toast, setToast] = useState<{ text: string; link?: { to: string; label: string }; key: number } | null>(null)
+  const prefillListeners = useRef(new Map<string, Set<() => void>>())
 
   useEffect(() => {
     try {
@@ -55,23 +55,26 @@ export function Shell() {
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
-  useEffect(() => {
-    if (!toast) return
-    const t = window.setTimeout(() => setToast(null), 2800)
-    return () => window.clearTimeout(t)
-  }, [toast])
-
   const api = useMemo<ShellApi>(
     () => ({
       openPalette: () => setPalette(true),
       draft: (id) => saved.drafts[id] ?? '',
       setDraft: (id, text) => setSaved((s) => ({ ...s, drafts: { ...s.drafts, [id]: text } })),
+      prefill: (key, text) => {
+        setSaved((s) => ({ ...s, drafts: { ...s.drafts, [key]: text } }))
+        prefillListeners.current.get(key)?.forEach((listener) => listener())
+      },
+      onPrefill: (key, listener) => {
+        const listeners = prefillListeners.current
+        if (!listeners.has(key)) listeners.set(key, new Set())
+        listeners.get(key)!.add(listener)
+        return () => void listeners.get(key)?.delete(listener)
+      },
       agentFor: (id) => state.agents.find((a) => a.id === saved.agents[id] && a.enabled)?.id ?? state.agents.find((a) => a.enabled && a.default)?.id ?? state.agents.find((a) => a.enabled && a.available && a.protocol !== 'siwc')?.id ?? 'manual',
       setAgentFor: (id, agentId) => setSaved((s) => ({ ...s, agents: { ...s.agents, [id]: agentId } })),
     }),
     [saved, state.agents],
   )
-  const toastApi = useMemo<ToastApi>(() => ({ show: (text, link) => setToast({ text, link, key: Date.now() }) }), [])
   const closePalette = useCallback(() => setPalette(false), [])
 
   const thingId = pathname.match(/^\/t\/(.+)$/)?.[1]
@@ -82,53 +85,83 @@ export function Shell() {
 
   return (
     <ShellContext.Provider value={api}>
-      <ToastContext.Provider value={toastApi}>
-        <div className="shell">
-          <header className="bar">
-            <Link to="/" className="bar-mark" aria-label="回到大厅">
-              <img src="/favicon.svg" alt="" width={22} height={22} />
-              PCAS
-            </Link>
-            {title && (
-              <>
-                <span className="bar-sep" aria-hidden="true">
-                  /
-                </span>
-                <span className="bar-title">{title}</span>
-              </>
-            )}
-            <nav className="bar-end" aria-label="导航">
-              <button type="button" className="bar-btn bar-search" aria-label="搜索" aria-keyshortcuts={isMac ? 'Meta+K' : 'Control+K'} onClick={() => setPalette(true)}>
-                <Search size={16} />
-                <span className="label">搜索</span>
-                <kbd>{isMac ? '⌘K' : 'Ctrl K'}</kbd>
-              </button>
-              <NavLink to="/library" className={tab} aria-label="资料库">
-                <BookOpen size={16} />
-                <span className="label">资料库</span>
-              </NavLink>
-              <NavLink to="/settings" className={tab} aria-label="设置">
-                <Settings size={16} />
-                <span className="label">设置</span>
-              </NavLink>
-            </nav>
-          </header>
-          <main className="main">
-            <Outlet />
-          </main>
-        </div>
-        {palette && <CommandPalette onClose={closePalette} />}
-        {toast && (
-          <div className="toast" key={toast.key} role="status">
-            {toast.text}
-            {toast.link && (
-              <Link to={toast.link.to} onClick={() => setToast(null)}>
-                {toast.link.label}
-              </Link>
-            )}
-          </div>
-        )}
-      </ToastContext.Provider>
+      <div className="shell">
+        <header className="bar">
+          <Link to="/" className="bar-mark" aria-label="回到大厅">
+            <img src="/favicon.svg" alt="" width={22} height={22} />
+            PCAS
+          </Link>
+          {title && (
+            <>
+              <span className="bar-sep" aria-hidden="true">
+                /
+              </span>
+              <span className="bar-title">{title}</span>
+            </>
+          )}
+          <nav className="bar-end" aria-label="导航">
+            <button type="button" className="bar-btn bar-search" aria-label="搜索" aria-keyshortcuts={isMac ? 'Meta+K' : 'Control+K'} onClick={() => setPalette(true)}>
+              <Search size={16} />
+              <span className="label">搜索</span>
+              <kbd>{isMac ? '⌘K' : 'Ctrl K'}</kbd>
+            </button>
+            <NavLink to="/library" className={tab} aria-label="资料库">
+              <BookOpen size={16} />
+              <span className="label">资料库</span>
+            </NavLink>
+            <NavLink to="/settings" className={tab} aria-label="设置">
+              <Settings size={16} />
+              <span className="label">设置</span>
+            </NavLink>
+          </nav>
+        </header>
+        <main className="main">
+          <Outlet />
+        </main>
+      </div>
+      {palette && <CommandPalette onClose={closePalette} />}
     </ShellContext.Provider>
+  )
+}
+
+export interface ToastEntry extends ToastOptions {
+  text: string
+  key: number
+}
+
+/** A one-line note at the bottom. With 【撤销】 it stays 8 seconds, and pointing at it pauses the clock. */
+export function Toast({ toast, onClose }: { toast: ToastEntry; onClose: () => void }) {
+  const [paused, setPaused] = useState(false)
+  const left = useRef(toast.undo ? 8000 : 2800)
+  useEffect(() => {
+    if (paused) return
+    const started = Date.now()
+    const t = window.setTimeout(onClose, left.current)
+    return () => {
+      window.clearTimeout(t)
+      left.current -= Date.now() - started
+    }
+  }, [paused, onClose])
+
+  return (
+    <div className="toast" role="status" onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)} onFocus={() => setPaused(true)} onBlur={() => setPaused(false)}>
+      {toast.text}
+      {toast.link && (
+        <Link to={toast.link.to} onClick={onClose}>
+          {toast.link.label}
+        </Link>
+      )}
+      {toast.undo && (
+        <button
+          type="button"
+          onClick={() => {
+            onClose()
+            void toast.undo?.()
+          }}
+        >
+          撤销
+        </button>
+      )}
+    </div>
   )
 }

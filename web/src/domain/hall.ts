@@ -193,27 +193,3 @@ export function ideaNote(idea: Idea): string {
   }
   return idea.body.split('\n')[0] || '还没展开'
 }
-
-/**
- * Questions go to recall; everything else is captured and sorted in the
- * background. Deliberately conservative, and the answer card can still file a
- * statement that was mistaken for a question.
- */
-export function looksLikeQuestion(text: string): boolean {
-  const t = text.trim()
-  return /[?？]$|[吗呢]$|(怎么样|是什么|在哪|多少)$/.test(t) || /^(问一下|查一下|找一下|我之前|我上次)/.test(t)
-}
-
-/** Asking the assistant to produce something; the fallback when Jev is not configured. */
-export function ambiguousDelegation(text: string): boolean {
-  return /是否|要不要|应不应该|也许|可能|考虑一下|maybe|whether|should i/i.test(text)
-}
-
-export function looksLikeRequest(text: string): boolean {
-  const t = text.trim()
-  if (ambiguousDelegation(t)) return false
-  return /^(请你?|麻烦你?)?(帮我|帮忙|替我|给我|你来)(写|起草|列|整理|做|总结|规划|拆|生成|修改|翻译|设计)\S/.test(t)
-    || /^(请|麻烦)(写|起草|列|整理|做|总结|规划|拆|生成|修改|翻译|设计)\S/.test(t)
-    || /^(please |can you |could you )(write|draft|make|create|summarize|translate|revise|plan)\s+\S/i.test(t)
-    || /^(把|将).+(整理|改写|翻译|总结|生成|修改)/.test(t)
-}

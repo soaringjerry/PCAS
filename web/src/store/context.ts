@@ -9,9 +9,19 @@ export interface RunRequest {
   prompt: string
 }
 
+export type UndoOutcome = { ok: true } | { ok: false; code?: string; message: string }
+
 export interface Store {
   state: State
   dispatch: (action: Action) => Promise<boolean>
+  /** Dispatches, then shows `label` with 【撤销】 for 8 seconds. */
+  dispatchUndoable: (action: Action, label: string) => Promise<boolean>
+  /** Undoes a recorded action; failures are shown as a toast. */
+  undo: (actionId: string) => Promise<boolean>
+  /** Like `undo`, but hands the reason back instead of showing it. */
+  tryUndo: (actionId: string) => Promise<UndoOutcome>
+  /** Takes a state the server returned elsewhere, unless it is older than ours. */
+  applyState: (state: State) => void
   importText: (title: string, text: string) => Promise<boolean>
   importAttachment: (file: File) => Promise<boolean>
   refresh: () => Promise<void>

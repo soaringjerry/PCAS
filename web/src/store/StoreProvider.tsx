@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { State } from '../domain/types'
-import { StoreContext, type RunRequest } from './context'
+import { StoreContext, type RunRequest, type UndoOutcome } from './context'
 import type { Action } from './actions'
 import { api, APIError } from './api'
+import { ToastContext, type ToastApi, type ToastOptions } from './toast'
 import { CircleAlert, KeyRound, RotateCw } from 'lucide-react'
+import { Toast, type ToastEntry } from '../components/Shell'
 import { Spinner } from '../components/ui'
-import { delegationEnvelope, resetDelegationEnvelope } from './pendingDelegations'
+
+type Outcome = { ok: true } | { ok: false; error: unknown }
 
 function Logo() {
   return <img className="gate-logo" src="/favicon.svg" alt="" width={44} height={44} />
@@ -19,6 +22,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
   const [signingIn, setSigningIn] = useState(false)
+  const [toast, setToast] = useState<ToastEntry | null>(null)
+  const closeToast = useCallback(() => setToast(null), [])
   const stateRef = useRef<State | null>(null)
   const queue = useRef<Promise<unknown>>(Promise.resolve())
   const pending = useRef(0)
@@ -43,13 +48,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return () => { alive.current = false; window.clearInterval(timer) }
   }, [refresh])
 
-  const command = useCallback((action: object): Promise<boolean> => {
+  /** Sends one command in order. `quiet` leaves reporting the failure to the caller. */
+  const command = useCallback((action: object, requestId: string, quiet = false): Promise<Outcome> => {
     pending.current++; setSaving(true)
-    const work = queue.current.then(async () => {
-      if (!stateRef.current) return false
-      const delegation = 'type' in action && action.type === 'delegateTask' ? action as Extract<Action, { type: 'delegateTask' }> : undefined
+    const work = queue.current.then(async (): Promise<Outcome> => {
+      if (!stateRef.current) return { ok: false, error: new Error('还没有连上 PCAS') }
+      const body = { ...action, requestId, expectedRevision: stateRef.current.revision }
       try {
-        const body = delegation ? delegationEnvelope(delegation, stateRef.current.revision) : { ...action, requestId: crypto.randomUUID(), expectedRevision: stateRef.current.revision }
         let next: State
         try { next = await api<State>('/v1/workspace/commands', body) }
         catch (e) {
@@ -57,24 +62,42 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           if (e instanceof APIError) throw e
           next = await api<State>('/v1/workspace/commands', body)
         }
-        accept(next); setError(''); return true
+        accept(next); setError(''); return { ok: true }
       } catch (e) {
-        fail(e)
-        if (delegation || e instanceof APIError && e.status === 409) await refresh()
-        if (delegation && stateRef.current?.tasks.some(task => task.id === delegation.id)) { setError(''); return true }
-        // Only an explicit version conflict permits a new receipt, and the
-        // task identity stays fixed. Unknown/lost responses retain both IDs.
-        if (delegation && e instanceof APIError && e.status === 409) resetDelegationEnvelope(delegation.id)
-        return false
+        if (!quiet || e instanceof APIError && e.status === 401) fail(e)
+        if (e instanceof APIError && e.status === 409) await refresh()
+        return { ok: false, error: e }
       }
     }).finally(() => { pending.current--; if (alive.current) setSaving(pending.current > 0) })
     queue.current = work.catch(() => undefined)
     return work
   }, [accept, fail, refresh])
-  const dispatch = useCallback((action: Action) => command(action), [command])
+  const dispatch = useCallback(async (action: Action) => (await command(action, crypto.randomUUID())).ok, [command])
+  const showToast = useCallback((text: string, options?: ToastOptions) => setToast({ text, ...options, key: Date.now() }), [])
+  const tryUndo = useCallback(async (actionId: string): Promise<UndoOutcome> => {
+    const attempt = () => command({ type: 'undoAction', id: actionId }, crypto.randomUUID(), true)
+    let outcome = await attempt()
+    // A stale revision says nothing about the action itself; the refreshed state makes a second try valid.
+    if (!outcome.ok && outcome.error instanceof APIError && outcome.error.code === 'version_conflict') outcome = await attempt()
+    if (outcome.ok) return { ok: true }
+    const e = outcome.error
+    return { ok: false, code: e instanceof APIError ? e.code : undefined, message: e instanceof Error ? e.message : '没撤销成功，请重试。' }
+  }, [command])
+  const undo = useCallback(async (actionId: string) => {
+    const outcome = await tryUndo(actionId)
+    if (!outcome.ok) showToast(outcome.message)
+    return outcome.ok
+  }, [tryUndo, showToast])
+  const dispatchUndoable = useCallback(async (action: Action, label: string) => {
+    // The command's requestId doubles as its action ID in the server's log.
+    const requestId = crypto.randomUUID()
+    const { ok } = await command(action, requestId)
+    if (ok) showToast(label, { undo: async () => { if (await undo(requestId)) showToast('撤销了') } })
+    return ok
+  }, [command, showToast, undo])
   const runAgent = useCallback(async (request: RunRequest) => {
     const id = crypto.randomUUID()
-    return await command({ type: 'requestRun', id, ...request }) ? id : undefined
+    return (await command({ type: 'requestRun', id, ...request }, crypto.randomUUID())).ok ? id : undefined
   }, [command])
   const importText = useCallback(async (title: string, text: string) => {
     try {
@@ -90,7 +113,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       await refresh(); setError(''); return true
     } catch (e) { fail(e); return false }
   }, [fail, refresh])
-  const value = useMemo(() => state ? ({ state, dispatch, runAgent, importText, importAttachment, refresh }) : null, [state, dispatch, runAgent, importText, importAttachment, refresh])
+  const value = useMemo(() => state ? ({ state, dispatch, dispatchUndoable, undo, tryUndo, applyState: accept, runAgent, importText, importAttachment, refresh }) : null, [state, dispatch, dispatchUndoable, undo, tryUndo, accept, runAgent, importText, importAttachment, refresh])
+  const toastApi = useMemo<ToastApi>(() => ({ show: showToast }), [showToast])
 
   if (loading) return <main className="gate"><div className="gate-card gate-loading" role="status"><Logo /><Spinner size={16} /><span className="muted">正在连接 PCAS…</span></div></main>
   if (login || state === null) return <main className="gate">
@@ -113,8 +137,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     </form>
   </main>
   return <StoreContext.Provider value={value}>
-    {error && <div className="connection-banner" role="alert"><CircleAlert size={16} /><span className="grow">{error}</span><button type="button" className="btn btn-quiet btn-sm" onClick={() => setError('')}>知道了</button></div>}
-    {saving && <div className="save-status" role="status"><Spinner size={12} />正在保存</div>}
-    {children}
+    <ToastContext.Provider value={toastApi}>
+      {error && <div className="connection-banner" role="alert"><CircleAlert size={16} /><span className="grow">{error}</span><button type="button" className="btn btn-quiet btn-sm" onClick={() => setError('')}>知道了</button></div>}
+      {saving && <div className="save-status" role="status"><Spinner size={12} />正在保存</div>}
+      {children}
+      {toast && <Toast key={toast.key} toast={toast} onClose={closeToast} />}
+    </ToastContext.Provider>
   </StoreContext.Provider>
 }

@@ -103,6 +103,22 @@ type secretaryOutput struct {
 	Ask      *workspace.DeskAsk `json:"ask"`
 }
 
+// Internal commands still persist in order for validation and undo collection.
+// Publish history and its memory source only after the whole secretary action,
+// including reminder changes, has reached its final state.
+type secretaryHistoryKey struct{}
+type secretaryHistory struct {
+	ids       []string
+	summaries map[string]string
+}
+
+func (h *secretaryHistory) record(id, summary string) {
+	if _, ok := h.summaries[id]; !ok {
+		h.ids = append(h.ids, id)
+		h.summaries[id] = summary
+	}
+}
+
 func textField(fields map[string]json.RawMessage, key string) (string, bool) {
 	raw, ok := fields[key]
 	if !ok || string(raw) == "null" {
@@ -223,6 +239,9 @@ func taskReceiptText(ctx context.Context, tx pgx.Tx, scope memory.Scope, item wo
 	return "已建：" + strings.Join(parts, " · ")
 }
 func (s *Store) executeSecretaryActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, a secretaryAction, aliases map[string]workspace.Item, agent workspace.Agent, loc *time.Location, currentThingID string) (workspace.DeskReceipt, error) {
+	historyCtx := ctx
+	history := &secretaryHistory{summaries: map[string]string{}}
+	ctx = context.WithValue(ctx, secretaryHistoryKey{}, history)
 	receipt := workspace.DeskReceipt{Op: a.Op, Status: "done"}
 	call := func(c workspace.Command) error { return s.commandTx(ctx, tx, scope, c) }
 	var id string
@@ -400,7 +419,11 @@ func (s *Store) executeSecretaryActionTx(ctx context.Context, tx pgx.Tx, scope m
 				}
 			}
 			applyDueReminder(&item, remind, loc)
-			if err = saveItem(ctx, tx, scope, item); err != nil {
+			if _, recorded := history.summaries[id]; !recorded {
+				item.Version++
+				item.UpdatedAt = stamp()
+			}
+			if err = s.saveAction(ctx, tx, scope, item, "调整提醒"); err != nil {
 				return receipt, err
 			}
 		}
@@ -461,6 +484,31 @@ func (s *Store) executeSecretaryActionTx(ctx context.Context, tx pgx.Tx, scope m
 		receipt.Text = "交给 " + agent.Name + "：" + a.Prompt
 	default:
 		return skippedReceipt(a.Op, "不认识这个动作"), nil
+	}
+	for _, changedID := range history.ids {
+		item, err := getItem(ctx, tx, scope, changedID)
+		if err != nil {
+			return receipt, err
+		}
+		summary := history.summaries[changedID]
+		if summary == "创建" {
+			summary = "新建：" + item.Title
+		}
+		if changedID == id {
+			summary = receipt.Text
+			switch a.Op {
+			case "create_task":
+				summary = "新建：" + strings.TrimPrefix(receipt.Text, "已建：")
+			case "update":
+				summary = "更新：" + strings.TrimPrefix(taskReceiptText(ctx, tx, scope, item, loc), "已建：") + note
+				if item.Status == "done" {
+					summary = "完成：" + item.Title
+				}
+			}
+		}
+		if err = s.saveAction(historyCtx, tx, scope, item, summary); err != nil {
+			return receipt, err
+		}
 	}
 	receipt.ThingID = &id
 	return receipt, nil

@@ -8,6 +8,10 @@ const messages: Record<string, string> = {
   unauthorized: '请先登录 PCAS', version_conflict: '数据已在其他窗口或后台更新。已刷新，请检查后重试。',
   daily_budget_exceeded: '超过每日预算，可在设置中调整。', capability_not_configured: '服务尚未配置或登录，请检查设置。',
   invalid_input: '内容或状态不符合要求，请检查输入。', reimport_blocked: '这份内容已删除并阻止重新导入。',
+  telegram_token_invalid: 'token 不对，请从 BotFather 重新复制',
+  telegram_webhook_active: '这个 bot 设置过 webhook，请换一个 bot 或先删除 webhook',
+  telegram_no_chat: '请先在 Telegram 里给你的 bot 发一句话，再保存',
+  telegram_send_failed: '测试消息没发出去，请检查 chat ID',
   forbidden: '没有此操作的权限。', not_found: '记录已不存在，请刷新后重试。',
   changed_since: '这件事之后又改过，没法直接撤销。', work_started: '副手已经开始做了，没法撤销。', already_undone: '已经撤销过了。',
 }

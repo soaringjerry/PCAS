@@ -4,10 +4,20 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
 	"time"
+)
+
+var (
+	// Invalid credentials remain terminal failures for background delivery.
+	ErrTelegramTokenInvalid  = fmt.Errorf("telegram_token_invalid: %w", ErrGone)
+	ErrTelegramWebhookActive = errors.New("telegram_webhook_active")
+	ErrTelegramNoChat        = errors.New("telegram_no_chat")
+	ErrTelegramSendFailed    = fmt.Errorf("telegram_send_failed: %w", ErrDelivery)
 )
 
 type Telegram struct {
@@ -24,11 +34,11 @@ func (t *Telegram) call(ctx context.Context, token, method string, input, output
 	}
 	payload, err := json.Marshal(input)
 	if err != nil {
-		return ErrDelivery
+		return ErrTelegramSendFailed
 	}
 	req, err := http.NewRequestWithContext(ctx, "POST", base+"/bot"+token+"/"+method, bytes.NewReader(payload))
 	if err != nil {
-		return ErrDelivery
+		return ErrTelegramSendFailed
 	}
 	req.Header.Set("Content-Type", "application/json")
 	client := t.Client
@@ -37,25 +47,38 @@ func (t *Telegram) call(ctx context.Context, token, method string, input, output
 	}
 	response, err := client.Do(req)
 	if err != nil {
-		return ErrDelivery
+		return ErrTelegramSendFailed
 	} // never return an error containing the token-bearing URL
 	defer response.Body.Close()
+	// Classify HTTP failures even when Telegram returns a non-JSON body.
+	if response.StatusCode == 401 || response.StatusCode == 404 {
+		return ErrTelegramTokenInvalid
+	}
+	if method == "getUpdates" && response.StatusCode == 409 {
+		return ErrTelegramWebhookActive
+	}
 	var result struct {
 		OK     bool            `json:"ok"`
 		Result json.RawMessage `json:"result"`
 		Code   int             `json:"error_code"`
 	}
 	if json.NewDecoder(io.LimitReader(response.Body, 1<<20)).Decode(&result) != nil {
-		return ErrDelivery
+		return ErrTelegramSendFailed
 	}
 	if !result.OK || response.StatusCode != 200 {
-		if result.Code == 401 || result.Code == 403 || response.StatusCode == 401 || response.StatusCode == 403 {
-			return ErrGone
+		if result.Code == 401 || result.Code == 404 {
+			return ErrTelegramTokenInvalid
 		}
-		return ErrDelivery
+		if method == "getUpdates" && result.Code == 409 {
+			return ErrTelegramWebhookActive
+		}
+		if result.Code == 403 || response.StatusCode == 403 {
+			return fmt.Errorf("%w: %w", ErrTelegramSendFailed, ErrGone)
+		}
+		return ErrTelegramSendFailed
 	}
 	if output != nil && json.Unmarshal(result.Result, output) != nil {
-		return ErrDelivery
+		return ErrTelegramSendFailed
 	}
 	return nil
 }
@@ -76,7 +99,7 @@ func (t *Telegram) ResolveChat(ctx context.Context, token string) (string, error
 			return string(m.Chat.ID), nil
 		}
 	}
-	return "", ErrUnconfigured
+	return "", ErrTelegramNoChat
 }
 func (t *Telegram) SendTo(ctx context.Context, token, chatID string, m Message) error {
 	if token == "" || chatID == "" {

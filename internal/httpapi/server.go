@@ -13,6 +13,7 @@ import (
 
 	"github.com/soaringjerry/PCAS/internal/ai/siwc"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/notify"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -205,6 +206,14 @@ func (s *Server) fail(w http.ResponseWriter, err error) {
 	}
 	status, code := http.StatusInternalServerError, "internal_error"
 	switch {
+	case errors.Is(err, notify.ErrTelegramTokenInvalid):
+		status, code = http.StatusBadRequest, "telegram_token_invalid"
+	case errors.Is(err, notify.ErrTelegramWebhookActive):
+		status, code = http.StatusBadRequest, "telegram_webhook_active"
+	case errors.Is(err, notify.ErrTelegramNoChat):
+		status, code = http.StatusBadRequest, "telegram_no_chat"
+	case errors.Is(err, notify.ErrTelegramSendFailed):
+		status, code = http.StatusBadRequest, "telegram_send_failed"
 	case errors.Is(err, memory.ErrInvalid):
 		status, code = http.StatusBadRequest, "invalid_input"
 	case errors.Is(err, memory.ErrNotFound):

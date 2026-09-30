@@ -37,6 +37,34 @@ test('Telegram saves the requested body, reports delivery, and disconnects', asy
   expect(requests[1]).toEqual({ botToken: '', chatId: '' })
 })
 
+
+test('Telegram save errors show actionable Chinese prompts', async ({ page }) => {
+  const cases = [
+    ['telegram_token_invalid', 'token 不对，请从 BotFather 重新复制'],
+    ['telegram_webhook_active', '这个 bot 设置过 webhook，请换一个 bot 或先删除 webhook'],
+    ['telegram_no_chat', '请先在 Telegram 里给你的 bot 发一句话，再保存'],
+    ['telegram_send_failed', '测试消息没发出去，请检查 chat ID'],
+  ]
+  let errorCode = cases[0][0]
+  await page.route('**/v1/workspace', route => route.fulfill({ json: emptyState() }))
+  await page.route('**/v1/notify/config', route => route.fulfill({ json: { webPush: { publicKey: '', subscriptions: 0 }, telegram: { configured: false, chatId: '' } } }))
+  await page.route('**/v1/notify/telegram', route => {
+    expect(route.request().method()).toBe('PUT')
+    return route.fulfill({ status: 400, json: { error: errorCode } })
+  })
+  await page.goto('/settings')
+  const section = page.getByRole('region', { name: '通知设置' })
+  const token = '123456:synthetic_test_token'
+  await page.getByLabel('Telegram bot token').fill(token)
+  for (const [code, message] of cases) {
+    errorCode = code
+    await page.getByRole('button', { name: '保存 Telegram', exact: true }).click()
+    await expect(section.getByRole('status')).toHaveText(message)
+    await expect(section.getByText('未连接', { exact: true })).toBeVisible()
+    await expect(page.getByLabel('Telegram bot token')).toHaveValue(token)
+  }
+})
+
 test('device switch registers and removes the current subscription', async ({ page }) => {
   await page.addInitScript(() => {
     let sub: { endpoint: string; toJSON: () => unknown; unsubscribe: () => Promise<boolean> } | null = null

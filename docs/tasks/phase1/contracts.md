@@ -79,6 +79,15 @@ B1 负责在 `internal/httpapi/server.go` 的 `fail()` 里加上这三个映射�
 
 B1 另外导出 `(s *Store) Undo(ctx, scope, actionID string) (workspace.State, error)`，供 C2 等服务端代码直接调用。它不需要 `expectedRevision`，语义和错误都与 `undoAction` 相同。
 
+### 1.4.2 快照的保留与删除传播（2026-09-30 补充）
+
+`changes.before` 保存的是旧文档的完整内容。为了不让撤销变成"删了还能找回来"的后门，并控制存储占用：
+
+- **删除传播**：记忆 / 来源删除流程（`internal/postgres/editing.go`）修改或删除了某些 `work_items` / `work_documents` 行时，凡是 `changes` 涉及这些行的 `action_log` 记录，一律把 `changes` 清成 `[]`，并写入 `expired_at`。之后对这些记录执行撤销，返回 `changed_since`。
+- **保留期**：`before` 快照只保留 30 天。超过 30 天的记录同样把 `changes` 清成 `[]` 并写入 `expired_at`。清理时机：每次 `flushActionLog` 时顺带清理当前 owner 的过期记录，靠 `created_at` 索引，开销很小。
+- `id`、`source`、`turn_id`、`summary`、`created_at`、`undone_at` 永久保留，第 6 阶段用作"撤销 / 保留"的训练信号。
+- 迁移 016 给 `action_log` 加 `expired_at timestamptz` 列。
+
 ### 1.5 训练信号
 
 `action_log` 就是撤销和保留的原始记录，第 1 阶段只需要存下来。转成训练样本是第 6 阶段的事，现在**不要**写入 `training_samples`。
@@ -103,7 +112,9 @@ B1 另外导出 `(s *Store) Undo(ctx, scope, actionID string) (workspace.State, 
 - `thingId` 不为空时，表示这是事项页里的秘书，该事项就是默认操作对象。
 - 请求**不带** `expectedRevision`；并发安全由服务端按行的版本保证。
 - `text` 去掉首尾空白后必须非空，长度不超过 4000 字符，否则返回 400 `invalid_input`。
-- 同一个 `requestId`：请求体相同就返回已保存的响应，不重复执行；请求体不同则返回 409 `version_conflict`。
+- 同一个 `requestId`：请求体相同就返回已保存的 `turn`，加上**当前**的 `state`，不重复执行；请求体不同则返回 409 `version_conflict`。
+- `desk_turns.response` **只保存 `conversationId` 和 `turn`，不保存 `state`**。State 是整个工作区的快照，存下来既占空间，又会让删除的内容留在历史里。
+- **删除传播**：删除流程清空某一轮的 `question/answer` 时，同时清理 `response.turn`：`text` 和 `reply` 置空，`cards` 置为 `[]`，每条回执的 `text` 换成「（内容已删除）」，`actionId`、`op`、`status` 保留。重放这一轮时，返回的就是这个清理后的 turn。
 
 响应 200：
 

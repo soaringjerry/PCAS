@@ -96,6 +96,9 @@ test('the info line is read-only; clicking it starts a sentence to the secretary
   await expect(info).toContainText('张三在等你')
   // No pickers are left for status, due time or project.
   await expect(page.getByRole('button', { name: /^(状态|截止|项目)/ })).toHaveCount(0)
+  // With no documents there is no 文档 heading, only the faint line that starts one.
+  await expect(page.getByRole('button', { name: '写点什么…' })).toBeVisible()
+  await expect(page.locator('.section-label').filter({ hasText: '文档' })).toHaveCount(0)
   await info.click()
   await expect(secretaryInput(page)).toHaveValue('改一下这件事：')
   await expect(secretaryInput(page)).toBeFocused()
@@ -121,19 +124,24 @@ test('the done circle ticks the task with a toast that undoes it', async ({ page
 test('an auto-adopted result is one line with 撤销; undone, it offers 放回去', async ({ page }) => {
   const backend = await mockBackend(page, { ...workspace(), runs: [adoptedRun()] })
   await page.goto('/t/task')
-  const row = page.locator('.activity > li').filter({ hasText: 'GPT' })
+  const row = page.locator('.activity > li').filter({ hasText: '已加入 3 个子任务' })
   await expect(row).toHaveCount(1)
-  await expect(row).toContainText('已加入 3 个子任务')
+  // The assistant reads 副手 like 你 and 秘书; the model's name is only a tooltip.
+  await expect(row.locator('.act-who')).toHaveText('副手')
+  await expect(row.locator('.act-who')).toHaveAttribute('title', 'GPT')
   // 看看 opens the original text in place.
   await row.getByRole('button', { name: '看看' }).click()
   await expect(row.getByText('写正文')).toBeVisible()
   await row.getByRole('button', { name: '撤销' }).click()
   await expect.poll(() => backend.commands.at(-1)).toMatchObject({ type: 'undoAction', id: 'adopt-1' })
-  await expect(row.getByRole('button', { name: '放回去' })).toBeVisible()
-  await expect(row.getByRole('button', { name: '撤销' })).toHaveCount(0)
+  const back = page.locator('.activity > li').filter({ hasText: '把这件事拆成具体的子任务' })
+  await expect(back.getByRole('button', { name: '放回去' })).toBeVisible()
+  await expect(back.getByRole('button', { name: '撤销' })).toHaveCount(0)
+  // 看看 sits next to 放回去 and opens the original text.
+  await expect(back.getByRole('button', { name: /^(看看|收起)$/ })).toBeVisible()
   // The old choices are gone.
   for (const name of ['改一下', '不要', /依据/]) await expect(page.getByRole('button', { name })).toHaveCount(0)
-  await row.getByRole('button', { name: '放回去' }).click()
+  await back.getByRole('button', { name: '放回去' }).click()
   await expect.poll(() => backend.commands.at(-1)).toMatchObject({ type: 'adoptRun', id: 'run', as: 'subtasks' })
   expect(backend.errors).toEqual([])
 })
@@ -161,4 +169,88 @@ test('a document saves itself when it loses focus, with no edit or save buttons'
   await expect(page.locator('.toast')).toContainText('删掉了')
   await expect(page.locator('.toast').getByRole('button', { name: '撤销' })).toBeVisible()
   expect(backend.commands.at(-1)).toMatchObject({ type: 'deleteDoc', id: 'doc' })
+})
+
+test('reminders that rang are pinned on top of 今天, and × closes one', async ({ page }) => {
+  const now = Date.now()
+  const snapshot = workspace()
+  snapshot.notices = [
+    { id: 'n-late', thingId: 'rent', title: '交房租', reason: '交房租', dueAt: new Date(now - 2 * HOUR).toISOString(), createdAt: new Date(now - 2 * HOUR).toISOString() },
+    { id: 'n-early', thingId: 'task', title: '给张三回邮件', reason: '给张三回邮件', dueAt: new Date(now - 3 * HOUR).toISOString(), createdAt: new Date(now - 3 * HOUR).toISOString() },
+    // Closed, or about something already done: neither is pinned.
+    { id: 'n-closed', thingId: 'task', title: '早就关掉的', reason: '', dueAt: new Date(now - 30 * HOUR).toISOString(), createdAt: new Date(now - 30 * HOUR).toISOString(), dismissedAt: new Date(now - 29 * HOUR).toISOString() },
+    { id: 'n-done', thingId: 'paid', title: '已经交了电费', reason: '', dueAt: new Date(now - HOUR).toISOString(), createdAt: new Date(now - HOUR).toISOString() },
+  ]
+  snapshot.tasks.push({ ...snapshot.tasks[1], id: 'paid', title: '已经交了电费', status: 'done' })
+  const backend = await mockBackend(page, snapshot)
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.goto('/')
+  const today = page.locator('.hall-today')
+  const rang = today.locator('.hall-rang-group')
+  await expect(today.locator('.hall-group').first()).toHaveClass(/hall-rang-group/)
+  await expect(rang.locator('.h-title')).toHaveText(['给张三回邮件', '交房租'])
+  // A pinned task is not listed a second time below.
+  await expect(today.getByText('交房租', { exact: true })).toHaveCount(1)
+  await rang.getByRole('button', { name: '关掉提醒：交房租' }).click()
+  await expect.poll(() => backend.dismissed).toEqual(['n-late'])
+  await expect(rang.locator('.h-title')).toHaveText(['给张三回邮件'])
+  expect(backend.commands).toEqual([])
+  expect(backend.errors).toEqual([])
+})
+
+test('the hall has no 拿不准 entry, and the decision strip hides when nothing needs a hand', async ({ page }) => {
+  const at = new Date().toISOString()
+  const snapshot = workspace()
+  // Pending captures and guesses belong to the observatory now.
+  snapshot.candidates = [{ id: 'cand', kind: 'unknown', text: '周三的会', confidence: 0.4, source: { sourceId: 's', label: '邮件', at }, state: 'pending', createdAt: at }]
+  snapshot.runs = [{ ...adoptedRun(), id: 'fresh', adopted: undefined }]
+  await mockBackend(page, snapshot)
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.goto('/')
+  await expect(page.locator('.hall-today')).toBeVisible()
+  await expect(page.getByText('拿不准')).toHaveCount(0)
+  await expect(page.getByRole('button', { name: '逐条确认' })).toHaveCount(0)
+  await expect(page.locator('.hall-queue')).toHaveCount(0)
+  await expect(page.getByText('没有要你拍板的事')).toHaveCount(0)
+
+  // A result whose basis changed does need a hand, and shows up.
+  await page.unrouteAll({ behavior: 'ignoreErrors' })
+  snapshot.runs = [{ ...adoptedRun(), id: 'stale', adopted: undefined, staleContext: true }]
+  await mockBackend(page, snapshot)
+  await page.reload()
+  await expect(page.locator('.hall-queue')).toContainText('1 件要你动手')
+})
+
+test("a task due earlier today stays on today's timeline, greyed before the now line", async ({ page }) => {
+  const snapshot = workspace()
+  const earlier = new Date()
+  earlier.setHours(0, 1, 0, 0)
+  // Only meaningful after the first minute of the day.
+  test.skip(Date.now() - earlier.getTime() < 60_000)
+  snapshot.tasks[1] = { ...snapshot.tasks[1], due: earlier.toISOString() }
+  await mockBackend(page, snapshot)
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.goto('/')
+  const today = page.locator('.hall-today')
+  const row = today.locator('.hall-task.past').filter({ hasText: '交房租' })
+  await expect(row).toBeVisible()
+  await expect(today.getByText('今天没有定了时间的事。')).toHaveCount(0)
+  // It sits before the now line.
+  const [rowBox, nowBox] = [await row.boundingBox(), await today.locator('.hall-now').boundingBox()]
+  expect(rowBox!.y).toBeLessThan(nowBox!.y)
+})
+
+test('on a phone 今天 is short: at most five rows, then 还有 N 件', async ({ page }) => {
+  const snapshot = workspace()
+  const due = new Date(Date.now() - 26 * HOUR).toISOString()
+  for (let i = 0; i < 7; i++) snapshot.tasks.push({ ...snapshot.tasks[1], id: `late-${i}`, title: `晚了的事 ${i}`, due })
+  await mockBackend(page, snapshot)
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto('/')
+  const today = page.locator('.hall-today')
+  await expect(today.locator('.hall-task')).toHaveCount(5)
+  const more = today.getByRole('button', { name: /^还有 \d+ 件$/ })
+  await expect(more).toBeVisible()
+  await more.click()
+  await expect(today.locator('.hall-task')).toHaveCount(8)
 })

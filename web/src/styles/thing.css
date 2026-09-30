@@ -246,6 +246,14 @@
   color: var(--label-2);
 }
 
+.docs-empty {
+  margin-top: 20px;
+}
+
+.docs-empty .doc-new {
+  padding-left: 4px;
+}
+
 .menu-item.danger {
   width: 100%;
   border: 0;
@@ -311,10 +319,6 @@
   font-weight: 600;
 }
 
-.act-who.agent {
-  color: var(--purple);
-}
-
 .act-text {
   flex: 1;
   min-width: 0;
@@ -330,19 +334,6 @@
 
 .act-text.failed {
   color: var(--orange);
-}
-
-.act-open {
-  padding: 0;
-  border: 0;
-  background: none;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-.act-open:hover {
-  color: var(--blue);
 }
 
 .act-note {

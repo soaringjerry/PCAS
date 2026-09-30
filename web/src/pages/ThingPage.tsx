@@ -421,12 +421,26 @@ function DocRow({ doc, fresh }: { doc: Doc; fresh: boolean }) {
   )
 }
 
-/** The documents a thing produced, each one line until opened. Hidden while there are none. */
+/** The documents a thing produced, each one line until opened. */
 function Docs({ thing }: { thing: Thing }) {
   const { state, dispatch } = useStore()
   const [fresh, setFresh] = useState<string>()
   const docs = state.docs.filter((d) => d.thingId === thing.id).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-  if (docs.length === 0) return null
+  const write = (
+    <button
+      type="button"
+      className="doc-new"
+      onClick={async () => {
+        const at = new Date().toISOString()
+        const id = newId()
+        if (await dispatch({ type: 'createDoc', doc: { id, thingId: thing.id, title: '新文档', body: '', by: 'user', createdAt: at, updatedAt: at } })) setFresh(id)
+      }}
+    >
+      写点什么…
+    </button>
+  )
+  // With no documents yet, the block is just the faint line that starts one.
+  if (docs.length === 0) return <div className="docs-empty">{write}</div>
 
   return (
     <section className="section">
@@ -435,17 +449,7 @@ function Docs({ thing }: { thing: Thing }) {
         {docs.map((d) => (
           <DocRow key={d.id} doc={d} fresh={d.id === fresh} />
         ))}
-        <button
-          type="button"
-          className="doc-new"
-          onClick={async () => {
-            const at = new Date().toISOString()
-            const id = newId()
-            if (await dispatch({ type: 'createDoc', doc: { id, thingId: thing.id, title: '新文档', body: '', by: 'user', createdAt: at, updatedAt: at } })) setFresh(id)
-          }}
-        >
-          写点什么…
-        </button>
+        {write}
       </div>
     </section>
   )
@@ -549,8 +553,18 @@ function RunRow({ thing, run }: { thing: Thing; run: Run }) {
   const [busy, guard] = useBusy()
   const [shown, setShown] = useState(false)
   const agent = state.agents.find((a) => a.id === run.agentId)
-  const who = <span className="act-who agent">{agent?.name ?? '副手'}</span>
+  // Which model did it is a detail; it stays in the tooltip.
+  const who = (
+    <span className="act-who" title={agent?.name}>
+      副手
+    </span>
+  )
   const when = <span className="act-when">{formatAgo(run.finishedAt ?? run.createdAt)}</span>
+  const look = run.output && (
+    <button type="button" className="act-btn" aria-expanded={shown} onClick={() => setShown((v) => !v)}>
+      {shown ? '收起' : '看看'}
+    </button>
+  )
   const output = shown && run.output && (
     <div className="act-detail">
       <Markdown text={run.output} />
@@ -569,11 +583,7 @@ function RunRow({ thing, run }: { thing: Thing; run: Run }) {
               撤销
             </button>
           )}
-          {run.output && (
-            <button type="button" className="act-btn" aria-expanded={shown} onClick={() => setShown((v) => !v)}>
-              {shown ? '收起' : '看看'}
-            </button>
-          )}
+          {look}
           {when}
         </div>
         {output}
@@ -646,9 +656,7 @@ function RunRow({ thing, run }: { thing: Thing; run: Run }) {
     <li className="card act-run">
       <div className="act-line">
         {who}
-        <button type="button" className="act-text act-open" aria-expanded={shown} onClick={() => setShown((v) => !v)}>
-          {run.prompt}
-        </button>
+        <span className="act-text">{run.prompt}</span>
         {run.staleContext ? (
           <>
             <span className="act-note">依据变了</span>
@@ -675,6 +683,7 @@ function RunRow({ thing, run }: { thing: Thing; run: Run }) {
             放回去
           </button>
         )}
+        {look}
         {when}
       </div>
       {output}

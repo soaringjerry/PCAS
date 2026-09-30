@@ -45,6 +45,6 @@ npm run build
 
 ## 许可证
 
-Copyright (C) 2026 soaringjerry
+Copyright (C) 2026 CoYume Pty Ltd (Australia)
 
 本项目以 [GNU Affero General Public License v3.0](LICENSE) 发布。修改后通过网络向他人提供服务时，须向这些用户提供修改后的完整源码。

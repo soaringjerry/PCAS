@@ -5,6 +5,7 @@ import type { Action } from './actions'
 import { api, APIError } from './api'
 import { CircleAlert, KeyRound, RotateCw } from 'lucide-react'
 import { Spinner } from '../components/ui'
+import { delegationEnvelope, resetDelegationEnvelope } from './pendingDelegations'
 
 function Logo() {
   return <img className="gate-logo" src="/favicon.svg" alt="" width={44} height={44} />
@@ -46,8 +47,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     pending.current++; setSaving(true)
     const work = queue.current.then(async () => {
       if (!stateRef.current) return false
-      const body = { ...action, requestId: crypto.randomUUID(), expectedRevision: stateRef.current.revision }
+      const delegation = 'type' in action && action.type === 'delegateTask' ? action as Extract<Action, { type: 'delegateTask' }> : undefined
       try {
+        const body = delegation ? delegationEnvelope(delegation, stateRef.current.revision) : { ...action, requestId: crypto.randomUUID(), expectedRevision: stateRef.current.revision }
         let next: State
         try { next = await api<State>('/v1/workspace/commands', body) }
         catch (e) {
@@ -56,7 +58,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           next = await api<State>('/v1/workspace/commands', body)
         }
         accept(next); setError(''); return true
-      } catch (e) { fail(e); if (e instanceof APIError && e.status === 409) await refresh(); return false }
+      } catch (e) {
+        fail(e)
+        if (delegation || e instanceof APIError && e.status === 409) await refresh()
+        if (delegation && stateRef.current?.tasks.some(task => task.id === delegation.id)) { setError(''); return true }
+        // Only an explicit version conflict permits a new receipt, and the
+        // task identity stays fixed. Unknown/lost responses retain both IDs.
+        if (delegation && e instanceof APIError && e.status === 409) resetDelegationEnvelope(delegation.id)
+        return false
+      }
     }).finally(() => { pending.current--; if (alive.current) setSaving(pending.current > 0) })
     queue.current = work.catch(() => undefined)
     return work

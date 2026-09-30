@@ -19,6 +19,7 @@ import {
 import { projectStatusLabel } from '../domain/labels'
 import { formatAgo } from '../domain/time'
 import { api } from '../store/api'
+import { pendingDelegations, rememberDelegation, resolveDelegation, type PendingDelegation } from '../store/pendingDelegations'
 import { useStore } from '../store/context'
 import { useShell } from '../store/shell'
 import { useToast } from '../store/toast'
@@ -323,9 +324,18 @@ function PickCard({ q, onPick, onCancel }: { q: string; onPick: (intent: Intent)
 }
 
 function Desk() {
-  const { dispatch } = useStore()
+  const { state, dispatch } = useStore()
   const { agentFor } = useShell()
-  const [text, setText] = useState('')
+  const [savedPending] = useState(() => {
+    try { return { entries: pendingDelegations(), error: '' } }
+    catch (e) { return { entries: [] as PendingDelegation[], error: e instanceof Error ? e.message : '之前的提交编号无法读取。' } }
+  })
+  const [pending, setPending] = useState(savedPending.entries)
+  const [text, setText] = useState(savedPending.entries.at(-1)?.question ?? '')
+  const [recovering, setRecovering] = useState(savedPending.entries.at(-1)?.action.id)
+  const [draftEdited, setDraftEdited] = useState(false)
+  const edited = useRef(false)
+  const edits = useRef(0)
   const [routing, setRouting] = useState(false)
   const [receipt, setReceipt] = useState<Receipt | null>(null)
   const [thread, setThread] = useState<Turn[] | null>(null)
@@ -334,6 +344,17 @@ function Desk() {
   const asked = useRef(0)
   const delegating = useRef(false)
   const input = useRef<HTMLInputElement>(null)
+  const recovered = pending.find(entry => entry.action.id === recovering && state.tasks.some(task => task.id === entry.action.id))
+  const inputText = recovered && !draftEdited && text === recovered.question ? '' : text
+  useEffect(() => {
+    // Reconcile persisted submissions from the authoritative workspace after
+    // reload/polling. Do not resubmit work, or overwrite an edited draft.
+    for (const entry of pending) {
+      if (state.tasks.some(task => task.id === entry.action.id)) {
+        try { resolveDelegation(entry.action.id) } catch { /* Keeping the ID is safe to reconcile again on reload. */ }
+      }
+    }
+  }, [pending, state.tasks])
   // While an answer card is open, the next line continues that conversation.
   const following = thread !== null && !thread[thread.length - 1].busy
 
@@ -373,23 +394,47 @@ function Desk() {
     return true
   }
 
-  const delegate = async (q: string, prompt = q, deskTurnIds?: string[]) => {
+  const performDelegation = async (entry: PendingDelegation) => {
     if (delegating.current) return false
     delegating.current = true
     try {
+      const exists = state.tasks.some(task => task.id === entry.action.id)
+      if (!exists && !(await dispatch(entry.action))) {
+        setRecovering(entry.action.id)
+        return false
+      }
+      try { resolveDelegation(entry.action.id) } catch { /* Retain the safe retry identity if cleanup fails. */ }
+      setPending(entries => entries.filter(previous => previous.action.id !== entry.action.id))
+      setText(current => !edited.current && current === entry.question ? '' : current)
+      close()
+      setReceipt({ key: Date.now(), text: exists ? '已找到之前提交的事项' : '副手开始做了', hint: '做好后会带着结果回来。', to: `/t/${entry.action.id}` })
+      return true
+    } catch (e) {
+      setReceipt({ key: Date.now(), text: '提交结果待确认', hint: e instanceof Error ? e.message : '请重试这次提交。' })
+      return false
+    } finally { delegating.current = false }
+  }
+
+  const delegate = async (q: string, prompt = q, deskTurnIds?: string[]) => {
     const agentId = agentFor('desk')
     if (agentId === 'manual') {
       setReceipt({ key: Date.now(), text: '需要先启用一个能直接执行的副手', hint: '在设置里连接模型，然后重新提交这句话。' })
-      setText(q)
       return false
     }
-    const id = crypto.randomUUID()
-    const title = q.length > 60 ? `${q.slice(0, 60)}…` : q
-    if (!(await dispatch({ type: 'delegateTask', id, title, prompt, agentId, deskTurnIds }))) return false
-    close()
-    setReceipt({ key: Date.now(), text: '副手开始做了', hint: '做好后会带着结果回来。', to: `/t/${id}` })
-    return true
-    } finally { delegating.current = false }
+    try {
+      if (savedPending.error) throw new Error(savedPending.error)
+      const ids = deskTurnIds ?? []
+      const existing = pendingDelegations().find(entry => entry.question === q && entry.action.prompt === prompt && entry.action.agentId === agentId && JSON.stringify(entry.action.deskTurnIds ?? []) === JSON.stringify(ids) && !state.tasks.some(task => task.id === entry.action.id))
+      const entry = existing ?? { question: q, action: { type: 'delegateTask' as const, id: crypto.randomUUID(), title: q.length > 60 ? `${q.slice(0, 60)}…` : q, prompt, agentId, deskTurnIds: ids } }
+      // Save the task identity before StoreProvider persists the full request
+      // receipt and before either layer submits anything to the server.
+      rememberDelegation(entry)
+      setPending(pendingDelegations())
+      return await performDelegation(entry)
+    } catch (e) {
+      setReceipt({ key: Date.now(), text: '尚未确认执行', hint: e instanceof Error ? e.message : '提交编号无法保存，请重试。' })
+      return false
+    }
   }
 
   const go = (intent: Intent, q: string) => {
@@ -398,7 +443,8 @@ function Desk() {
   }
 
   const submit = async () => {
-    const q = text.trim()
+    const q = inputText.trim()
+    const editTicket = edits.current
     if (!q || routing) return
     if (following) {
       setText('')
@@ -406,8 +452,14 @@ function Desk() {
       return
     }
     setRouting(true)
+    const restored = pending.find(entry => entry.action.id === recovering && entry.question === q)
+    if (restored && !edited.current) {
+      if (!(await performDelegation(restored)) && edits.current === editTicket) setText(current => current || q)
+      setRouting(false)
+      return
+    }
     const { intent, sure } = await route(q)
-    setText('')
+    if (edits.current === editTicket) { setText(''); edited.current = false; setDraftEdited(false) }
     if (!sure) {
       close()
       setReceipt(null)
@@ -415,7 +467,7 @@ function Desk() {
       setRouting(false)
       return
     }
-    if (!(await go(intent, q))) setText(q)
+    if (!(await go(intent, q)) && edits.current === editTicket) setText(current => current || q)
     setRouting(false)
   }
 
@@ -435,8 +487,8 @@ function Desk() {
           <input
             ref={input}
             id="hall-desk-input"
-            value={text}
-            onChange={(e) => setText(e.target.value)}
+            value={inputText}
+            onChange={(e) => { edited.current = true; edits.current++; setDraftEdited(true); setText(e.target.value) }}
             onKeyDown={(e) => {
               if (e.key === 'Escape' && thread) close()
             }}
@@ -444,11 +496,18 @@ function Desk() {
             autoComplete="off"
             enterKeyHint="send"
           />
-          <button type="submit" className="hall-send" aria-label={following ? '接着问' : '交给她'} disabled={!text.trim() || routing || (thread !== null && !following)}>
+          <button type="submit" className="hall-send" aria-label={following ? '接着问' : '交给她'} disabled={!inputText.trim() || routing || (thread !== null && !following)}>
             <ArrowUp size={18} strokeWidth={2.5} />
           </button>
         </div>
       </form>
+      {pending.map(entry => {
+        const exists = state.tasks.some(task => task.id === entry.action.id)
+        return <p key={entry.action.id} className="hall-receipt" role="status">
+          <span>{exists ? '已找到之前提交的事项' : '提交结果待确认'}：{entry.question}</span>
+          {exists ? <Link className="hall-link" to={`/t/${entry.action.id}`}>去看看</Link> : <button type="button" className="hall-link" disabled={routing} onClick={() => void performDelegation(entry)}>重试这次提交</button>}
+        </p>
+      })}
       {pick !== null && (
         <PickCard
           q={pick}

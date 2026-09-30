@@ -1,11 +1,9 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import { useMatch, useNavigate } from 'react-router'
-import { BookOpen, FolderPlus, House, Lightbulb, ListPlus, PenLine, Settings, Sparkles } from 'lucide-react'
+import { BookOpen, FolderPlus, House, Lightbulb, ListPlus, PenLine, Settings } from 'lucide-react'
 import { newId } from '../domain/ids'
-import { ongoingLine, urgentLine, selectedCost } from '../domain/lines'
 import { allThings, findThing, thingProjectId, thingTitle } from '../domain/things'
 import { useStore } from '../store/context'
-import { useShell } from '../store/shell'
 import { useToast } from '../store/toast'
 import { KindLabel } from './Marks'
 
@@ -19,10 +17,9 @@ interface Entry {
   run: () => void
 }
 
-/** One box, Spotlight-style: find, create, go, or let the assistant take the next step. */
+/** One box, Spotlight-style: find, create, or go. */
 export function CommandPalette({ onClose }: { onClose: () => void }) {
-  const { state, dispatch, runAgent } = useStore()
-  const { agentFor } = useShell()
+  const { state, dispatch } = useStore()
   const navigate = useNavigate()
   const toast = useToast()
   const match = useMatch('/t/:id')
@@ -44,26 +41,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
       { key: 'set', group: '前往', icon: <Settings size={16} />, label: '设置', text: '设置 额度 AI', run: go('/settings') },
     ]
 
-    const here: Entry[] = []
-    if (current) {
-      const lines = [...urgentLine(state), ...ongoingLine(state).active]
-      const next = lines.find((l) => l.thing.id === current.id)?.next
-      if (next) {
-        here.push({
-          key: 'next',
-          group: thingTitle(current),
-          icon: <Sparkles size={16} style={{ color: 'var(--purple)' }} />,
-          label: `让副手${next.label}`,
-          text: next.label,
-          hint: `约 ¥${selectedCost(state, current, next.prompt, agentFor(current.id)).toFixed(2)}`,
-          run: done(async () => {
-            if (!await runAgent({ thingId: current.id, agentId: agentFor(current.id), kind: next.kind, prompt: next.prompt })) return
-          }),
-        })
-      }
-    }
-
-    if (!q) return [...here, ...nav]
+    if (!q) return nav
 
     const projectId = current ? (current.kind === 'project' ? current.id : thingProjectId(current)) : undefined
     const create: Entry[] = [
@@ -123,9 +101,9 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
       .filter((m) => m.text.includes(q))
       .slice(0, 3)
       .map((m) => ({ key: m.id, group: '记忆', label: m.text, text: '', run: go(`/library?m=${m.id}`) }))
-    const commands = [...here, ...nav].filter((c) => c.text.toLowerCase().includes(q.toLowerCase()))
+    const commands = nav.filter((c) => c.text.toLowerCase().includes(q.toLowerCase()))
     return [...things, ...commands, ...create, ...memories]
-  }, [q, state, current, dispatch, navigate, onClose, toast, runAgent, agentFor])
+  }, [q, state, current, dispatch, navigate, onClose, toast])
 
   const selected = Math.min(active, entries.length - 1)
 

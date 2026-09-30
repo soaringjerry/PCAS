@@ -28,7 +28,7 @@ func TestRouterAsksJevOneChoice(t *testing.T) {
 		_, _ = w.Write([]byte(`{"model":"jev-1.13.0","answers":{"intent":{"type":"choice","choice":"delegate","confidence":0.91}}}`))
 	}))
 	defer server.Close()
-	r := NewRouter("k")
+	r := NewRouter(func() string { return "k" })
 	r.BaseURL = server.URL
 	got, err := r.Route(context.Background(), "帮我写封请假邮件")
 	if err != nil || got != (Route{Intent: IntentDelegate, Confidence: 0.91}) {
@@ -37,7 +37,7 @@ func TestRouterAsksJevOneChoice(t *testing.T) {
 }
 
 func TestRouterRejectsUnknownChoicesAndErrors(t *testing.T) {
-	if NewRouter("") != nil {
+	if NewRouter(func() string { return "" }).Configured() {
 		t.Fatal("router without a key")
 	}
 	for _, reply := range []string{`{"answers":{"intent":{"choice":"shop","confidence":0.9}}}`, `not json`, ``} {
@@ -48,7 +48,7 @@ func TestRouterRejectsUnknownChoicesAndErrors(t *testing.T) {
 			}
 			_, _ = w.Write([]byte(reply))
 		}))
-		r := NewRouter("k")
+		r := NewRouter(func() string { return "k" })
 		r.BaseURL = server.URL
 		if _, err := r.Route(context.Background(), "x"); err == nil {
 			t.Fatalf("accepted %q", reply)

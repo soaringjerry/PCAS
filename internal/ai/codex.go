@@ -250,12 +250,23 @@ func (c *Codex) Close() {
 	}
 }
 func (c *Codex) Generate(ctx context.Context, model, system, prompt string) (string, error) {
+	text, _, err := c.generate(ctx, model, system, prompt, false)
+	return text, err
+}
+
+// GenerateWithSearch lets this one thread use the hosted web search tool; the
+// process-wide default stays off. It returns the queries the model searched.
+func (c *Codex) GenerateWithSearch(ctx context.Context, model, system, prompt string) (string, []string, error) {
+	return c.generate(ctx, model, system, prompt, true)
+}
+
+func (c *Codex) generate(ctx context.Context, model, system, prompt string, web bool) (string, []string, error) {
 	if err := c.ready(ctx); err != nil {
-		return "", err
+		return "", nil, err
 	}
 	account, err := c.Account(ctx)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	var auth struct {
 		Account *struct {
@@ -263,15 +274,19 @@ func (c *Codex) Generate(ctx context.Context, model, system, prompt string) (str
 		} `json:"account"`
 	}
 	if json.Unmarshal(account, &auth) != nil || auth.Account == nil || auth.Account.Type != "chatgpt" {
-		return "", fmt.Errorf("ChatGPT sign-in required")
+		return "", nil, fmt.Errorf("ChatGPT sign-in required")
 	}
 	params := map[string]any{"cwd": c.scratch, "ephemeral": true, "sandbox": "read-only", "approvalPolicy": "never", "baseInstructions": system, "developerInstructions": "Only answer with text using the provided context. Do not use tools or inspect local files."}
+	if web {
+		params["config"] = map[string]any{"web_search": "live"}
+		params["developerInstructions"] = "Answer with text. You may use web search for public or current information. Search queries leave this conversation: never put names, numbers or other private details from the provided context into them. Do not use other tools or inspect local files."
+	}
 	if model != "" {
 		params["model"] = model
 	}
 	data, err := c.call(ctx, "thread/start", params)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	var thread struct {
 		Thread struct {
@@ -279,7 +294,7 @@ func (c *Codex) Generate(ctx context.Context, model, system, prompt string) (str
 		} `json:"thread"`
 	}
 	if err = json.Unmarshal(data, &thread); err != nil || thread.Thread.ID == "" {
-		return "", fmt.Errorf("invalid Codex thread")
+		return "", nil, fmt.Errorf("invalid Codex thread")
 	}
 	c.mu.Lock()
 	c.sequence++
@@ -298,7 +313,7 @@ func (c *Codex) Generate(ctx context.Context, model, system, prompt string) (str
 	}()
 	turnData, err := c.call(ctx, "turn/start", map[string]any{"threadId": thread.Thread.ID, "input": []any{map[string]string{"type": "text", "text": prompt}}})
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	var turn struct {
 		Turn struct {
@@ -306,27 +321,29 @@ func (c *Codex) Generate(ctx context.Context, model, system, prompt string) (str
 		} `json:"turn"`
 	}
 	if json.Unmarshal(turnData, &turn) != nil || turn.Turn.ID == "" {
-		return "", errors.New("invalid Codex turn")
+		return "", nil, errors.New("invalid Codex turn")
 	}
 	var output strings.Builder
+	var searches []string
 	for {
 		select {
 		case <-ctx.Done():
 			cleanup, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 			_, _ = c.call(cleanup, "turn/interrupt", map[string]string{"threadId": thread.Thread.ID, "turnId": turn.Turn.ID})
 			cancel()
-			return "", ctx.Err()
+			return "", nil, ctx.Err()
 		case <-done:
-			return "", errors.New("Codex connection closed")
+			return "", nil, errors.New("Codex connection closed")
 		case event := <-events:
 			if event.Method == "pcas/overflow" {
-				return "", errors.New("Codex event buffer exceeded")
+				return "", nil, errors.New("Codex event buffer exceeded")
 			}
 			var p struct {
 				ThreadID string `json:"threadId"`
 				Item     struct {
-					Type string `json:"type"`
-					Text string `json:"text"`
+					Type  string `json:"type"`
+					Text  string `json:"text"`
+					Query string `json:"query"`
 				} `json:"item"`
 				Turn struct {
 					Status string `json:"status"`
@@ -335,15 +352,18 @@ func (c *Codex) Generate(ctx context.Context, model, system, prompt string) (str
 			if json.Unmarshal(event.Params, &p) != nil || p.ThreadID != thread.Thread.ID {
 				continue
 			}
+			if event.Method == "item/completed" && p.Item.Type == "webSearch" && p.Item.Query != "" {
+				searches = append(searches, p.Item.Query)
+			}
 			if event.Method == "item/completed" && p.Item.Type == "agentMessage" {
 				output.WriteString(p.Item.Text)
 				output.WriteByte('\n')
 			}
 			if event.Method == "turn/completed" {
 				if p.Turn.Status != "completed" || strings.TrimSpace(output.String()) == "" {
-					return "", errors.New("Codex turn did not complete")
+					return "", nil, errors.New("Codex turn did not complete")
 				}
-				return strings.TrimSpace(output.String()), nil
+				return strings.TrimSpace(output.String()), searches, nil
 			}
 		}
 	}

@@ -24,8 +24,14 @@ type Connection struct {
 }
 
 type connectionFile struct {
-	Text      *Connection `json:"text,omitempty"`
-	Embedding *Connection `json:"embedding,omitempty"`
+	Text      *Connection  `json:"text,omitempty"`
+	Embedding *Connection  `json:"embedding,omitempty"`
+	Decision  *DecisionKey `json:"decision,omitempty"`
+}
+
+// DecisionKey is the Jev key for desk routing, kept beside the model keys.
+type DecisionKey struct {
+	APIKey string `json:"api_key"`
 }
 
 type ConnectionStatus struct {
@@ -172,6 +178,42 @@ func (r *Registry) SaveConnection(role string, c Connection) error {
 	} else {
 		settings.Embedding = &c
 	}
+	return r.writeSettings(settings)
+}
+
+// DecisionKey returns the Jev key saved in Settings, or "" when none is.
+func (r *Registry) DecisionKey() string {
+	settings, err := r.readSettings()
+	if err != nil || settings.Decision == nil {
+		return ""
+	}
+	return settings.Decision.APIKey
+}
+
+// SaveDecisionKey stores the Jev key; an empty key removes it.
+func (r *Registry) SaveDecisionKey(key string) error {
+	if r == nil || r.SettingsPath == "" {
+		return memory.ErrUnavailable
+	}
+	key = strings.TrimSpace(key)
+	if len(key) > 8192 || strings.ContainsAny(key, "\r\n") {
+		return memory.ErrInvalid
+	}
+	r.settingsMu.Lock()
+	defer r.settingsMu.Unlock()
+	settings, err := r.readSettings()
+	if err != nil {
+		return err
+	}
+	settings.Decision = nil
+	if key != "" {
+		settings.Decision = &DecisionKey{APIKey: key}
+	}
+	return r.writeSettings(settings)
+}
+
+// writeSettings replaces the file atomically; callers hold settingsMu.
+func (r *Registry) writeSettings(settings connectionFile) error {
 	if err := os.MkdirAll(filepath.Dir(r.SettingsPath), 0700); err != nil {
 		return err
 	}

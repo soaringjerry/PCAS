@@ -24,7 +24,8 @@ const (
 type Router struct {
 	HTTP    *http.Client
 	BaseURL string
-	Key     string
+	// Key is read on every call so a key saved in Settings applies at once.
+	Key func() string
 }
 
 type Route struct {
@@ -32,15 +33,20 @@ type Route struct {
 	Confidence float64 `json:"confidence"`
 }
 
-// NewRouter returns nil without a key; callers then fall back to the rule.
-func NewRouter(key string) *Router {
-	if key == "" {
-		return nil
-	}
+func NewRouter(key func() string) *Router {
 	return &Router{HTTP: &http.Client{Timeout: 5 * time.Second}, BaseURL: "https://api.typesafe.ai", Key: key}
 }
 
+// Configured is false without a key; callers then fall back to the rule.
+func (r *Router) Configured() bool {
+	return r != nil && r.Key() != ""
+}
+
 func (r *Router) Route(ctx context.Context, text string) (Route, error) {
+	key := r.Key()
+	if key == "" {
+		return Route{}, fmt.Errorf("decision provider not configured")
+	}
 	body, err := json.Marshal(map[string]any{
 		"model": "jev-latest",
 		"state": text,
@@ -64,7 +70,7 @@ func (r *Router) Route(ctx context.Context, text string) (Route, error) {
 		return Route{}, err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+r.Key)
+	req.Header.Set("Authorization", "Bearer "+key)
 	response, err := r.HTTP.Do(req)
 	if err != nil {
 		return Route{}, fmt.Errorf("decision provider unreachable")

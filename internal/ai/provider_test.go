@@ -123,6 +123,7 @@ import sys,json,os
 assert 'PCAS_TEST_SECRET' not in os.environ
 def emit(x):
  print(json.dumps(x),flush=True)
+web=False
 for line in sys.stdin:
  m=json.loads(line)
  if 'id' not in m: continue
@@ -133,11 +134,14 @@ for line in sys.stdin:
   out={'type':'chatgptDeviceCode','loginId':'login','verificationUrl':'https://auth.openai.com/codex/device','userCode':'TEST-123'}
  if method=='thread/start':
   assert p['ephemeral'] and p['sandbox']=='read-only' and p['approvalPolicy']=='never'
+  web=p.get('config')=={'web_search':'live'}
+  assert web or 'config' not in p
   out={'thread':{'id':'thread-1'}}
  if method=='turn/start': out={'turn':{'id':'turn-1'}}
  emit({'id':m['id'],'result':out})
  if method=='turn/start':
   emit({'method':'item/completed','params':{'threadId':'unrelated','item':{'type':'agentMessage','text':'SHOULD_NOT_LEAK'}}})
+  if web: emit({'method':'item/completed','params':{'threadId':'thread-1','item':{'type':'webSearch','id':'s1','query':'上海 天气'}}})
   emit({'method':'item/completed','params':{'threadId':'thread-1','item':{'type':'agentMessage','text':'订阅结果'}}})
   emit({'method':'turn/completed','params':{'threadId':'thread-1','turn':{'status':'completed'}}})
 `
@@ -159,6 +163,16 @@ for line in sys.stdin:
 	result, err := c.Generate(ctx, "", "system", "prompt")
 	if err != nil || result != "订阅结果" {
 		t.Fatal(result, err)
+	}
+	result, searches, err := c.GenerateWithSearch(ctx, "", "system", "prompt")
+	if err != nil || result != "订阅结果" || len(searches) != 1 || searches[0] != "上海 天气" {
+		t.Fatal(result, searches, err)
+	}
+	if result, searches, err = c.GenerateWithSearch(ctx, "", "system", "prompt"); err != nil || len(searches) != 1 {
+		t.Fatal("search results leaked between turns", searches, err)
+	}
+	if result, err = c.Generate(ctx, "", "system", "prompt"); err != nil || result != "订阅结果" {
+		t.Fatal("offline turn after a search turn", result, err)
 	}
 }
 func TestInstalledCodexHandshake(t *testing.T) {

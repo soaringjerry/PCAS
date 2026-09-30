@@ -131,7 +131,14 @@ func run(ctx context.Context, args []string, logger *slog.Logger) error {
 	if err != nil {
 		return err
 	}
-	api := httpapi.New(memory.NewService(db), db, httpapi.NewSessions(credentials, cfg.PublicURL), db.Ping, logger, httpapi.Options{Continuity: db, Connectors: db, Attachments: db, Writer: db, Workspace: db, Editor: db, Activity: db, Models: models, Router: ai.NewRouter(os.Getenv("TYPESAFE_API_KEY")), WebDir: webDir})
+	// A key saved in Settings wins; the environment key is the fallback.
+	router := ai.NewRouter(func() string {
+		if key := models.DecisionKey(); key != "" {
+			return key
+		}
+		return os.Getenv("TYPESAFE_API_KEY")
+	})
+	api := httpapi.New(memory.NewService(db), db, httpapi.NewSessions(credentials, cfg.PublicURL), db.Ping, logger, httpapi.Options{Continuity: db, Connectors: db, Attachments: db, Writer: db, Workspace: db, Editor: db, Activity: db, Models: models, Router: router, WebDir: webDir})
 	workCtx, stopWorkers := context.WithCancel(ctx)
 	defer stopWorkers()
 	go func() { _ = db.RunAgents(workCtx, logger) }()

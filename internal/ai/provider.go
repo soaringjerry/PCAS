@@ -46,6 +46,7 @@ type Configuration struct {
 }
 type Result struct {
 	Text         string
+	Searches     []string
 	Cost         float64
 	InputTokens  int
 	OutputTokens int
@@ -199,6 +200,20 @@ func (p Provider) Reserve(input string) float64 {
 	}
 	// UTF-8 byte count is a conservative input token bound, with framing margin.
 	return (float64(len(input)+4096)*p.InputPerMillion + float64(p.MaxOutput)*p.OutputPerMillion) / 1e6
+}
+
+// GenerateWithSearch is Generate with web search where the provider offers it
+// (the ChatGPT subscription through Codex); other providers answer offline.
+func (r *Registry) GenerateWithSearch(ctx context.Context, id, system, prompt string) (Result, error) {
+	p, ok := r.Get(id)
+	if !ok || p.Protocol != "codex" || !r.providerAvailable(p) {
+		return r.Generate(ctx, id, system, prompt)
+	}
+	if r.ReloadSubscription {
+		defer r.Codex.Close()
+	}
+	text, searches, err := r.Codex.GenerateWithSearch(ctx, p.Model, system, prompt)
+	return Result{Text: text, Searches: searches}, err
 }
 func (r *Registry) Generate(ctx context.Context, id, system, prompt string) (Result, error) {
 	p, ok := r.Get(id)

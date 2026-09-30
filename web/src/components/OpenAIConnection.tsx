@@ -11,7 +11,8 @@ interface Connection {
   default: boolean
   key_configured: boolean
 }
-interface Configuration { editable: boolean; text: Connection; embedding: Connection }
+interface Decision { key_configured: boolean; saved: boolean; working?: boolean }
+interface Configuration { editable: boolean; text: Connection; embedding: Connection; decision: Decision }
 
 function ConnectionForm({ role, value, editable, onSaved }: {
   role: 'text' | 'embedding'; value: Connection; editable: boolean; onSaved: () => Promise<void>
@@ -82,6 +83,48 @@ function ConnectionForm({ role, value, editable, onSaved }: {
   </Sheet>
 }
 
+/** Jev only sorts desk entries; its key lives with the other keys on the server. */
+function DecisionForm({ value, editable, onSaved }: { value: Decision; editable: boolean; onSaved: () => Promise<void> }) {
+  const [key, setKey] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
+  async function save() {
+    setBusy(true); setError(''); setNotice('')
+    try {
+      const saved = await api<Decision>('/v1/models/decision', { api_key: key })
+      setKey('')
+      setNotice(saved.working ? '已保存，试分流成功，导办台现在由 Jev 判断去向。' : '已保存，但试分流没成功：检查密钥是否正确、是否已开通 Jev。导办台暂时按本地规则分流。')
+      await onSaved()
+    } catch (e) { setError(e instanceof Error ? e.message : '保存失败') }
+    finally { setBusy(false) }
+  }
+  async function remove() {
+    setBusy(true); setError(''); setNotice('')
+    try { await api('/v1/models/decision', undefined, 'DELETE'); setNotice('已移除，导办台按本地规则分流。'); await onSaved() }
+    catch (e) { setError(e instanceof Error ? e.message : '移除失败') }
+    finally { setBusy(false) }
+  }
+  return <Sheet pad>
+    <form className="stack-sm" onSubmit={e => { e.preventDefault(); void save() }}>
+      <div className="spread"><h3>导办台分流 · Jev</h3>
+        <Tag tone={value.key_configured ? 'info' : undefined}>{value.saved ? '已配置密钥' : value.key_configured ? '使用服务端环境变量' : '待配置密钥'}</Tag>
+      </div>
+      <p className="small muted">TypeSafe 的 Jev 判断导办台上每句话是要问、要记，还是交给副手。它只返回选择，不生成文字。没有密钥时按本地规则分流。</p>
+      <label className="stack-sm small">Jev API Key
+        <input className="input" aria-label="Jev API Key" value={key} onChange={e => setKey(e.target.value)} type="password" autoComplete="new-password" placeholder={value.saved ? '填写新密钥以替换' : '在 console.typesafe.ai 创建'} required disabled={!editable || busy} />
+      </label>
+      <p className="tiny muted">配置后，导办台上的每句原文都会发给 TypeSafe 判断去向。密钥仅保存在服务端。</p>
+      {error && <p className="form-error" role="alert">{error}</p>}
+      {notice && <p className="callout" role="status">{notice}</p>}
+      <div className="row">
+        <Button type="submit" variant="primary" size="sm" disabled={!editable || busy || !key.trim()}>{busy ? '处理中…' : '保存并试分流'}</Button>
+        {value.saved && <Button type="button" size="sm" disabled={busy} onClick={() => void remove()}>移除密钥</Button>}
+      </div>
+    </form>
+  </Sheet>
+}
+
 export function OpenAIConnection() {
   const [configuration, setConfiguration] = useState<Configuration | null>(null)
   const [error, setError] = useState('')
@@ -98,6 +141,7 @@ export function OpenAIConnection() {
       {configuration && <>
         <ConnectionForm role="text" value={configuration.text} editable={configuration.editable} onSaved={refresh} />
         <ConnectionForm role="embedding" value={configuration.embedding} editable={configuration.editable} onSaved={refresh} />
+        <DecisionForm value={configuration.decision} editable={configuration.editable} onSaved={refresh} />
       </>}
     </div>
   </section>

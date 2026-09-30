@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"io"
 	"mime"
 	"net/http"
@@ -8,6 +9,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/soaringjerry/PCAS/internal/ai"
 	"github.com/soaringjerry/PCAS/internal/connectors"
@@ -214,7 +216,7 @@ func (s *Server) workspaceRoutes(mux *http.ServeMux) {
 			s.fail(w, memory.ErrInvalid)
 			return
 		}
-		if s.options.Router == nil {
+		if !s.options.Router.Configured() {
 			s.fail(w, memory.ErrUnavailable)
 			return
 		}
@@ -222,6 +224,30 @@ func (s *Server) workspaceRoutes(mux *http.ServeMux) {
 		if err != nil {
 			s.logger.Warn("desk routing failed", "error", err.Error())
 			s.fail(w, memory.ErrUnavailable)
+			return
+		}
+		writeJSON(w, 200, out)
+	}))
+	// Answering can take a model call, longer than the server's default write timeout.
+	mux.HandleFunc("POST /v1/desk/answer", s.authorize(func(w http.ResponseWriter, r *http.Request, scope memory.Scope) {
+		desk, ok := s.options.Workspace.(interface {
+			AnswerDesk(context.Context, memory.Scope, string, string) (workspace.DeskAnswer, error)
+		})
+		if !ok {
+			s.fail(w, memory.ErrUnavailable)
+			return
+		}
+		var in struct {
+			Question string `json:"question"`
+			AgentID  string `json:"agentId"`
+		}
+		if !decode(w, r, &in) {
+			return
+		}
+		_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(2 * time.Minute))
+		out, err := desk.AnswerDesk(r.Context(), scope, in.AgentID, in.Question)
+		if err != nil {
+			s.fail(w, err)
 			return
 		}
 		writeJSON(w, 200, out)

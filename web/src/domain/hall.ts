@@ -208,16 +208,3 @@ export function looksLikeQuestion(text: string): boolean {
 export function looksLikeRequest(text: string): boolean {
   return /^(请你?|麻烦你?)?(帮我|帮忙|替我|给我(写|起草|列|整理|做|想|查|总结|规划|拆)|你来)/.test(text.trim())
 }
-
-/**
- * Recall does not write an answer; it returns the matched records joined as
- * "[id@version] text" lines. The desk shows the text only, as excerpts.
- */
-export function recallExcerpts(summary: string, limit = 5): string[] {
-  return summary
-    .split(/(?:^|\n)\[[0-9a-f-]+@\d+\] /)
-    .map((t) => t.replace(/^\[原文角色=[^\]]*\] /, '').trim())
-    // Correction records carry a JSON diff; the corrected memory itself is listed anyway.
-    .filter((t) => t && !/^\{.*\}$/.test(t.split('\n').at(-1)!.trim()))
-    .slice(0, limit)
-}

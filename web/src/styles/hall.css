@@ -524,6 +524,42 @@
   -webkit-line-clamp: 4;
 }
 
+.hall-cite {
+  display: inline;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.hall-cite svg {
+  margin-left: 6px;
+  color: var(--label-3);
+  vertical-align: -1px;
+}
+
+.hall-answer-foot .h-note {
+  color: var(--label-3);
+  font-size: 12px;
+}
+
+.hall-answer-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+}
+
+.hall-answer-links a {
+  color: var(--blue);
+}
+
 .hall-answer-notes {
   margin: 0;
   padding-left: 18px;

@@ -292,3 +292,17 @@ type API interface {
 	Execute(context.Context, memory.Scope, Command) (State, error)
 	Export(context.Context, memory.Scope, bool, bool) ([]byte, error)
 }
+
+// DeskAnswer is the assistant's reply to a desk question, with only the
+// records it says it used.
+type DeskAnswer struct {
+	Answer   string       `json:"answer"`
+	Agent    string       `json:"agent"`
+	Used     []DeskSource `json:"used"`
+	Searches []string     `json:"searches"`
+	Links    []string     `json:"links"`
+}
+type DeskSource struct {
+	Ref  memory.Ref `json:"ref"`
+	Text string     `json:"text"`
+}

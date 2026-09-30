@@ -12,7 +12,6 @@ import {
   looksLikeQuestion,
   looksLikeRequest,
   projectCards,
-  recallExcerpts,
   todayColumn,
   type TodayRow,
 } from '../domain/hall'
@@ -128,19 +127,14 @@ function TodayWall() {
 
 /* ---------- Desk ---------- */
 
-interface Ref {
-  id: string
-  version: number
-  kind: string
+interface DeskReply {
+  answer: string
+  agent: string
+  used: { ref: { id: string; version: number }; text: string }[]
+  searches: string[]
+  links: string[]
 }
-interface Recall {
-  summary: string
-  memories: Ref[]
-  evidence: { id: string; source: Ref }[]
-  coverage: { complete: boolean; gaps: string[]; next_cursor?: string }
-  follow_ups: string[]
-}
-type Answer = { q: string; busy: true } | { q: string; busy: false; result?: Recall; error?: string }
+type Answer = { q: string; busy: true } | { q: string; busy: false; reply?: DeskReply; error?: string }
 type Intent = 'ask' | 'record' | 'delegate'
 type Receipt = { key: number; text: string; hint: string; to?: string }
 
@@ -198,20 +192,14 @@ function DecisionStrip() {
 }
 
 function AnswerCard({ answer, onClose, onDeeper, onFile, onDelegate }: { answer: Answer; onClose: () => void; onDeeper: () => void; onFile: () => void; onDelegate: () => void }) {
-  const [source, setSource] = useState<Ref | null>(null)
+  const { state } = useStore()
+  const [source, setSource] = useState<{ id: string; version?: number } | null>(null)
   const card = useRef<HTMLDivElement>(null)
   // On a phone the desk input sits at the bottom; bring the answer into view.
   useEffect(() => {
     card.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
   }, [answer.q])
-  const result = !answer.busy ? answer.result : undefined
-  const sources = result
-    ? [...result.memories.filter((r) => r.kind === 'source'), ...result.evidence.map((e) => e.source)].filter(
-        (r, i, all) => all.findIndex((v) => v.id === r.id && v.version === r.version) === i,
-      )
-    : []
-  const notes = result ? [...new Set([...result.coverage.gaps, ...result.follow_ups])] : []
-  const excerpts = result ? recallExcerpts(result.summary) : []
+  const reply = !answer.busy ? answer.reply : undefined
 
   return (
     <div className="hall-answer" aria-live="polite" ref={card}>
@@ -223,36 +211,53 @@ function AnswerCard({ answer, onClose, onDeeper, onFile, onDelegate }: { answer:
         </button>
       </div>
       {answer.busy ? (
-        <p className="hall-answer-body h-muted">正在翻记录…</p>
+        <p className="hall-answer-body h-muted">正在翻记录、想怎么回答…</p>
       ) : answer.error ? (
         <p className="hall-answer-body h-muted">{answer.error}</p>
-      ) : excerpts.length === 0 ? (
-        <p className="hall-answer-body">没找到直接相关的记录。可能那个地方还没接进来，或者你是第一次提到它。</p>
       ) : (
+        reply && <p className="hall-answer-body">{reply.answer}</p>
+      )}
+      {reply && reply.used.length > 0 && (
         <>
-          <p className="hall-answer-lead">找到这些相关的记录：</p>
+          <p className="hall-answer-lead">依据</p>
           <ul className="hall-answer-excerpts">
-            {excerpts.map((t, i) => (
-              <li key={i}>{t}</li>
-            ))}
+            {reply.used.map((u) => {
+              // The record behind a memory, when there is one, opens as the source.
+              const origin = state.memories.find((m) => m.id === u.ref.id)?.sources[0]
+              return (
+                <li key={u.ref.id}>
+                  {origin ? (
+                    <button type="button" className="hall-cite" onClick={() => setSource({ id: origin.sourceId, version: origin.version })}>
+                      {u.text}
+                      <FileText size={12} />
+                    </button>
+                  ) : (
+                    u.text
+                  )}
+                </li>
+              )
+            })}
           </ul>
         </>
       )}
-      {notes.length > 0 && (
-        <ul className="hall-answer-notes">
-          {notes.map((n) => (
-            <li key={n}>{n}</li>
+      {reply && reply.links.length > 0 && (
+        <ul className="hall-answer-links">
+          {reply.links.map((link) => (
+            <li key={link}>
+              <a href={link} target="_blank" rel="noopener noreferrer">
+                {new URL(link).hostname}
+              </a>
+            </li>
           ))}
         </ul>
       )}
       {!answer.busy && (
         <div className="hall-answer-foot">
-          {sources.map((ref) => (
-            <button type="button" key={`${ref.id}:${ref.version}`} className="hall-chip" onClick={() => setSource(ref)}>
-              <FileText size={12} />
-              出处 · v{ref.version}
-            </button>
-          ))}
+          {reply && (
+            <span className="h-note">
+              {reply.agent} 回答{reply.searches.length > 0 && ` · 联网查了「${reply.searches.join('」「')}」`}
+            </span>
+          )}
           <span className="grow" />
           <button type="button" className="hall-link" onClick={onFile}>
             不是问题，记下来
@@ -321,16 +326,16 @@ function Desk() {
     const ticket = ++asked.current
     setReceipt(null)
     setAnswer({ q, busy: true })
+    const agentId = agentFor('desk')
+    if (agentId === 'manual') {
+      setAnswer({ q, busy: false, error: '没有能直接回答的副手。去设置里启用一个，或者翻完整历史自己找。' })
+      return true
+    }
     try {
-      const result = await api<Recall>('/v1/memory/recall', {
-        query: q,
-        mode: 'remember',
-        context: { text: '', objects: [] },
-        budget: { candidates: 15, tokens: 4000, edges: 15, hops: 1 },
-      })
-      if (ticket === asked.current) setAnswer({ q, busy: false, result })
+      const reply = await api<DeskReply>('/v1/desk/answer', { question: q, agentId })
+      if (ticket === asked.current) setAnswer({ q, busy: false, reply })
     } catch (e) {
-      if (ticket === asked.current) setAnswer({ q, busy: false, error: e instanceof Error ? e.message : '没查成，请稍后再问一次。' })
+      if (ticket === asked.current) setAnswer({ q, busy: false, error: e instanceof Error ? e.message : '没答上来，请稍后再问一次。' })
     }
     return true
   }

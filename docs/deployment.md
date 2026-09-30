@@ -95,7 +95,7 @@ Compose 将设置保存在 `memory-files` 卷的 `/var/lib/pcas/model-api.json`�
 
 ## 导办台分流（Jev）
 
-导办台每句话先由 TypeSafe 的 [Jev](https://docs.typesafe.ai/introduction) 判断去向：问（检索记忆作答）、记（交给后台整理）、交给副手（建事项并直接开始生成）。Jev 只返回选项和置信度，不生成文字；置信度低时由用户点选。在 `.env` 设置 `TYPESAFE_API_KEY` 后重建 API 容器即生效；未设置或调用失败时，页面退回本地规则：「帮我…」开头的交给副手，问句去检索，其余记下。导办台原文会发送给 TypeSafe；密钥只在服务端使用。
+导办台每句话先由 TypeSafe 的 [Jev](https://docs.typesafe.ai/introduction) 判断去向：问（检索记忆作答）、记（交给后台整理）、交给副手（建事项并直接开始生成）。Jev 只返回选项和置信度，不生成文字；置信度低时由用户点选。在设置页「导办台分流 · Jev」填写密钥即生效，保存时会试分流一次；密钥与模型密钥一起保存在服务端设置文件。也可在 `.env` 设置 `TYPESAFE_API_KEY` 后重建 API 容器，设置页保存的密钥优先。未设置或调用失败时，页面退回本地规则：「帮我…」开头的交给副手，问句去检索，其余记下。导办台原文会发送给 TypeSafe；密钥只在服务端使用。
 
 通用连接器配置和格式见 [资料接入](connectors.md)。
 

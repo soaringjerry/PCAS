@@ -1,6 +1,6 @@
 import { Navigate, Route, Routes } from 'react-router'
 import { Shell } from './components/Shell'
-import { HomePage } from './pages/HomePage'
+import { HallPage } from './pages/HallPage'
 import { LibraryPage } from './pages/LibraryPage'
 import { NotFound } from './pages/NotFound'
 import { SettingsPage } from './pages/SettingsPage'
@@ -13,7 +13,7 @@ export function App() {
   return (
     <Routes>
       <Route element={<Shell />}>
-        <Route index element={<HomePage />} />
+        <Route index element={<HallPage />} />
         <Route path="t/:id" element={<ThingPage />} />
         <Route path="library" element={<LibraryPage />} />
         <Route path="settings" element={<SettingsPage />} />

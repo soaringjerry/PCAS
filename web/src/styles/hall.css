@@ -1,0 +1,889 @@
+/* The home screen as a service hall: today on the left, one desk in the
+   middle, projects and ideas on the right (docs/design/principles.md).
+   Only three things ever move on their own: a new receipt, the "now" line,
+   and the idea wall drifting while nobody is using the desk. */
+
+.hall {
+  display: grid;
+  grid-template-columns: minmax(280px, 340px) minmax(0, 1fr) minmax(300px, 380px);
+  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-areas:
+    "today desk right"
+    "today feed right";
+  gap: 18px 20px;
+  box-sizing: border-box;
+  height: 100%;
+  max-width: 1560px;
+  margin: 0 auto;
+  padding: 24px 28px;
+  background: var(--bg-2);
+}
+
+.main:has(> .hall) {
+  background: var(--bg-2);
+}
+
+.hall-today { grid-area: today; }
+.hall-desk { grid-area: desk; }
+.hall-feed { grid-area: feed; }
+
+.hall-right {
+  grid-area: right;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-height: 0;
+}
+
+.hall-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  box-sizing: border-box;
+  padding: 18px 18px 12px;
+  border: 1px solid var(--sep);
+  border-radius: var(--r-lg);
+  background: var(--elevated);
+}
+
+.hall-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex: none;
+  padding: 0 2px 10px;
+}
+
+.hall-head h1 {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.hall-head h2 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 650;
+}
+
+.hall-head > span,
+.hall-head > a {
+  margin-left: auto;
+  color: var(--label-2);
+  font-size: 13px;
+}
+
+.hall-head h1 + span {
+  margin-left: 0;
+}
+
+.hall-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  margin: 0 -8px;
+  padding: 0 8px;
+  scrollbar-width: thin;
+}
+
+.hall-empty,
+.hall-foot {
+  margin: 6px 2px;
+  color: var(--label-2);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.hall-foot {
+  padding: 8px 0 4px;
+}
+
+/* ---------- Today ---------- */
+
+.hall-group + .hall-group {
+  margin-top: 14px;
+}
+
+.hall-sub {
+  margin: 0;
+  padding: 4px 2px 4px;
+  color: var(--label-2);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.hall-sub.warn {
+  color: var(--orange);
+}
+
+.hall-task {
+  display: flex;
+  align-items: flex-start;
+  border-radius: var(--r-sm);
+}
+
+.hall-task.past {
+  opacity: 0.55;
+}
+
+.hall-task:hover {
+  background: var(--fill);
+}
+
+.hall-time {
+  flex: none;
+  width: 44px;
+  padding: 11px 0 0 6px;
+  color: var(--label-2);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.hall-check {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 38px;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+.hall-check .ring {
+  width: 18px;
+  height: 18px;
+  box-sizing: border-box;
+  border: 1.5px solid var(--label-3);
+  border-radius: 50%;
+  transition: border-color 120ms, background 120ms;
+}
+
+.hall-check:hover .ring {
+  border-color: var(--blue);
+  background: var(--blue-soft);
+}
+
+.hall-group:first-child .hall-sub.warn ~ .hall-task .ring {
+  border-color: var(--orange);
+}
+
+.hall-task-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  padding: 9px 8px 8px 0;
+  color: inherit;
+}
+
+.hall-task-body:hover {
+  text-decoration: none;
+}
+
+.hall-task-body .h-title {
+  color: var(--label);
+  font-size: 15px;
+  line-height: 1.4;
+}
+
+.hall-task-body .h-note {
+  color: var(--label-2);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.hall-sub.warn ~ .hall-task .h-note {
+  color: var(--orange);
+}
+
+.hall-now {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0;
+  padding-left: 6px;
+  color: var(--blue);
+  font-size: 12px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.hall-now i {
+  flex: 1;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--blue);
+}
+
+/* ---------- Desk ---------- */
+
+.hall-desk {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.hall-queue {
+  overflow: hidden;
+  border: 1px solid var(--sep);
+  border-radius: var(--r-lg);
+  background: var(--elevated);
+}
+
+.hall-queue-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 52px;
+  padding: 10px 16px;
+  border: 0;
+  background: none;
+  color: var(--label);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.hall-queue-bar:disabled {
+  cursor: default;
+}
+
+.hall-queue-bar .h-label {
+  font-size: 15px;
+  font-weight: 550;
+}
+
+.hall-queue-bar:disabled .h-label {
+  color: var(--label-2);
+  font-weight: 400;
+}
+
+.hall-queue-bar .h-working {
+  color: var(--purple);
+  font-size: 13px;
+}
+
+.hall-queue-bar .h-toggle {
+  display: flex;
+  margin-left: auto;
+  color: var(--label-2);
+}
+
+.hall-badge {
+  display: grid;
+  place-items: center;
+  min-width: 24px;
+  height: 24px;
+  box-sizing: border-box;
+  padding: 0 7px;
+  border-radius: var(--r-pill);
+  background: var(--fill-2);
+  color: var(--label-2);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.hall-badge.on {
+  background: var(--orange);
+  color: #ffffff;
+}
+
+.hall-queue-list {
+  max-height: 300px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.hall-queue-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--sep);
+}
+
+.hall-queue-list .h-title {
+  font-size: 14px;
+  font-weight: 550;
+}
+
+.hall-queue-list .h-detail {
+  margin-top: 2px;
+  color: var(--label-2);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.hall-tag {
+  flex: none;
+  margin-top: 1px;
+  padding: 2px 7px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.hall-tag.result { background: var(--blue-soft); color: var(--blue); }
+.hall-tag.handoff { background: var(--purple-soft); color: var(--purple); }
+.hall-tag.unsure { background: var(--orange-soft); color: var(--orange); }
+
+.hall-btn {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--sep-strong);
+  border-radius: 10px;
+  background: var(--elevated);
+  color: var(--label);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.hall-btn:hover {
+  background: var(--fill);
+  text-decoration: none;
+}
+
+.hall-btn.solid {
+  border-color: transparent;
+  background: var(--label);
+  color: var(--bg);
+}
+
+.hall-btn.quiet {
+  border-color: transparent;
+  background: none;
+  color: var(--label-2);
+}
+
+.hall-input {
+  padding: 12px 12px 12px 20px;
+  border: 1.5px solid var(--sep-strong);
+  border-radius: 22px;
+  background: var(--elevated);
+  box-shadow: var(--shadow);
+  transition: border-color 120ms, box-shadow 120ms;
+}
+
+.hall-input:focus-within {
+  border-color: var(--blue);
+  box-shadow: var(--shadow), var(--focus);
+}
+
+.hall-input label {
+  display: block;
+  margin-bottom: 2px;
+  color: var(--label-2);
+  font-size: 12px;
+  font-weight: 550;
+}
+
+.hall-input .h-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.hall-input input {
+  flex: 1;
+  min-width: 0;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  outline: none;
+  background: none;
+  color: var(--label);
+  font: inherit;
+  font-size: 19px;
+}
+
+.hall-input input::placeholder {
+  color: var(--label-3);
+}
+
+.hall-send {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--blue);
+  color: var(--on-blue);
+  cursor: pointer;
+}
+
+.hall-send:disabled {
+  background: var(--fill-2);
+  color: var(--label-3);
+  cursor: default;
+}
+
+.hall-receipt {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: var(--green-soft);
+  color: var(--label);
+  font-size: 14px;
+  animation: hall-arrive 420ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.hall-receipt svg {
+  color: var(--green);
+}
+
+.hall-receipt .h-hint {
+  color: var(--label-2);
+  font-size: 13px;
+}
+
+@keyframes hall-arrive {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: none; }
+}
+
+.hall-answer {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 18px;
+  border: 1px solid var(--blue);
+  border-radius: var(--r-lg);
+  background: var(--elevated);
+  animation: hall-arrive 420ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.hall-answer-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  color: var(--label-2);
+  font-size: 13px;
+}
+
+.hall-answer-head span {
+  flex: 1;
+  padding-top: 6px;
+}
+
+.hall-answer-body {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.75;
+  white-space: pre-wrap;
+}
+
+.hall-answer-body.muted {
+  color: var(--label-2);
+}
+
+.hall-answer-notes {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--label-2);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.hall-answer-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.hall-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: var(--fill);
+  color: var(--label);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.hall-chip:hover {
+  background: var(--fill-2);
+}
+
+.hall-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 4px;
+  border: 0;
+  background: none;
+  color: var(--blue);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.hall-icon-btn {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--label-2);
+  cursor: pointer;
+}
+
+.hall-icon-btn:hover {
+  background: var(--fill);
+}
+
+/* ---------- Feed ---------- */
+
+.hall-feed-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.hall-feed-list li + li {
+  border-top: 1px solid var(--sep);
+}
+
+.hall-feed-list li > a,
+.hall-feed-list li > div {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 12px;
+  padding: 10px 4px;
+  color: inherit;
+}
+
+.hall-feed-list li > a:hover {
+  background: var(--fill);
+  text-decoration: none;
+}
+
+.hall-feed-list .h-when {
+  color: var(--label-2);
+  font-size: 13px;
+}
+
+.hall-feed-list .h-text {
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.hall-feed-list .h-text.failed {
+  color: var(--orange);
+}
+
+.hall-feed-list .h-new {
+  align-self: center;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--purple);
+}
+
+/* ---------- Projects ---------- */
+
+.hall-projects {
+  flex: none;
+  padding-right: 0;
+}
+
+.hall-projects .hall-head {
+  padding-right: 18px;
+}
+
+.hall-cards {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  padding: 2px 18px 10px 2px;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: thin;
+}
+
+.hall-card {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 6px;
+  width: 220px;
+  min-height: 164px;
+  box-sizing: border-box;
+  padding: 14px 16px;
+  border: 1px solid var(--sep);
+  border-radius: var(--r);
+  background: var(--bg);
+  color: inherit;
+  scroll-snap-align: start;
+}
+
+.hall-card:hover {
+  border-color: var(--sep-strong);
+  text-decoration: none;
+}
+
+.hall-card .h-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--label);
+  font-size: 16px;
+  font-weight: 650;
+}
+
+.hall-card .h-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--orange);
+}
+
+.hall-card .h-meta {
+  color: var(--label-2);
+  font-size: 12px;
+}
+
+.hall-card .h-last {
+  flex: 1;
+  color: var(--label);
+  font-size: 14px;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+}
+
+.hall-card .h-next {
+  color: var(--label-2);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+/* ---------- Ideas ---------- */
+
+.hall-ideas {
+  flex: 1;
+}
+
+.hall-awake {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+  padding: 12px 14px;
+  border-radius: var(--r);
+  background: var(--orange-soft);
+}
+
+.hall-awake .h-top {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.hall-awake .h-flag {
+  flex: none;
+  color: var(--orange);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.hall-awake .h-top a {
+  color: var(--label);
+  font-size: 15px;
+  font-weight: 550;
+}
+
+.hall-awake p {
+  margin: 0;
+  color: var(--label-2);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.hall-awake .h-row {
+  display: flex;
+  gap: 6px;
+}
+
+.hall-flow {
+  flex: 1;
+  min-height: 120px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.hall-flow.moving {
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 8%, #000 92%, transparent);
+  mask-image: linear-gradient(to bottom, transparent, #000 8%, #000 92%, transparent);
+}
+
+.hall-flow .h-track {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 6px 0;
+  list-style: none;
+}
+
+.hall-flow.moving .h-track {
+  animation: hall-drift var(--flow-duration, 48s) linear infinite;
+}
+
+.hall-flow.moving:hover .h-track,
+.hall-flow.moving:focus-within .h-track,
+.hall:has(.hall-input:focus-within) .hall-flow.moving .h-track {
+  animation-play-state: paused;
+}
+
+@keyframes hall-drift {
+  from { transform: translateY(0); }
+  to { transform: translateY(-50%); }
+}
+
+.hall-flow .h-track a {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px 12px;
+  border: 1px solid var(--sep);
+  border-radius: var(--r-sm);
+  background: var(--bg);
+  color: inherit;
+}
+
+.hall-flow .h-track a:hover {
+  border-color: var(--sep-strong);
+  text-decoration: none;
+}
+
+.hall-flow .h-text {
+  color: var(--label);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.hall-flow .h-note {
+  color: var(--label-2);
+  font-size: 12px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hall-receipt,
+  .hall-answer {
+    animation: none;
+  }
+
+  .hall-flow.moving {
+    overflow-y: auto;
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+
+  .hall-flow.moving .h-track {
+    animation: none;
+  }
+
+  .hall-flow.moving .h-track li[aria-hidden="true"] {
+    display: none;
+  }
+}
+
+/* One column: the desk first, then today, the walls, and the log. */
+@media (max-width: 1180px) {
+  .hall {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+    grid-template-areas:
+      "desk"
+      "today"
+      "right"
+      "feed";
+    height: auto;
+    max-width: 720px;
+  }
+
+  .hall-scroll {
+    overflow: visible;
+  }
+
+  .hall-flow {
+    max-height: 340px;
+  }
+}
+
+/* Phone: the desk input sits at the bottom, under the thumb. */
+@media (max-width: 860px) {
+  .hall {
+    gap: 14px;
+    padding: 12px 12px calc(104px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .hall-input {
+    position: fixed;
+    right: 12px;
+    bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+    left: 12px;
+    z-index: 30;
+    padding: 6px 6px 6px 16px;
+    box-shadow: var(--shadow-lg);
+  }
+
+  .hall-input label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+
+  .hall-input input {
+    font-size: 17px;
+  }
+
+  .hall-head h1 {
+    font-size: 26px;
+  }
+
+  .hall-card {
+    width: 190px;
+    min-height: 140px;
+  }
+}
+
+/* The whole field shows focus; the bare input inside does not need its own ring. */
+.hall-input input:focus-visible {
+  outline: none;
+  box-shadow: none;
+}

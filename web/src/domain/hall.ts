@@ -129,10 +129,9 @@ export interface FeedItem {
 export function backgroundFeed(state: State, since = Date.now() - 2 * DAY): FeedItem[] {
   const items: FeedItem[] = []
   const recent = (iso?: string) => Boolean(iso) && new Date(iso!).getTime() >= since
-  for (const job of state.jobs) {
-    if (!recent(job.createdAt)) continue
-    const failed = job.status === 'failed'
-    items.push({ key: `j-${job.id}`, at: job.createdAt, text: failed ? `${job.title}没做完${job.recovery ? `：${job.recovery}` : ''}` : `${job.title}${job.detail ? `：${job.detail}` : ''}`, to: '/library?tab=sources', failed })
+  // Processing, reminders and daily reviews arrive already folded and worded by the server.
+  for (const a of state.activity ?? []) {
+    if (recent(a.at)) items.push({ key: `a-${a.id}`, at: a.at, text: a.text, to: a.to, failed: a.failed })
   }
   for (const idea of state.ideas) {
     if (idea.wake && recent(idea.wake.at)) items.push({ key: `w-${idea.id}`, at: idea.wake.at, text: `把「${idea.title}」带回来了：${idea.wake.reason}`, to: `/t/${idea.id}` })
@@ -203,4 +202,17 @@ export function ideaNote(idea: Idea): string {
 export function looksLikeQuestion(text: string): boolean {
   const t = text.trim()
   return /[?？]$|[吗呢]$|(怎么样|是什么|在哪|多少)$/.test(t) || /^(问一下|查一下|找一下|我之前|我上次)/.test(t)
+}
+
+/**
+ * Recall does not write an answer; it returns the matched records joined as
+ * "[id@version] text" lines. The desk shows the text only, as excerpts.
+ */
+export function recallExcerpts(summary: string, limit = 5): string[] {
+  return summary
+    .split(/(?:^|\n)\[[0-9a-f-]+@\d+\] /)
+    .map((t) => t.replace(/^\[原文角色=[^\]]*\] /, '').trim())
+    // Correction records carry a JSON diff; the corrected memory itself is listed anyway.
+    .filter((t) => t && !/^\{.*\}$/.test(t.split('\n').at(-1)!.trim()))
+    .slice(0, limit)
 }

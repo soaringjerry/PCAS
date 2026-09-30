@@ -273,22 +273,31 @@ func (s *Store) snapshotTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) (
 	if err != nil {
 		return out, err
 	}
-	rows, err = tx.Query(ctx, `SELECT id::text,stage,state,error_code,created_at,available_at FROM memory_jobs WHERE owner_id=$1 ORDER BY created_at DESC LIMIT 500`, string(scope.OwnerID))
+	rows, err = tx.Query(ctx, `SELECT j.id::text,j.stage,j.state,j.error_code,j.created_at,j.available_at,
+		coalesce((SELECT v.title FROM source_versions v WHERE (v.owner_id,v.source_id,v.version)=(j.owner_id,j.record_id,j.record_version)),'')
+		FROM memory_jobs j WHERE j.owner_id=$1 ORDER BY j.created_at DESC LIMIT 500`, string(scope.OwnerID))
 	if err != nil {
 		return out, err
 	}
 	for rows.Next() {
 		var j workspace.Job
 		var at, next time.Time
-		var stage, state, code string
-		if err = rows.Scan(&j.ID, &stage, &state, &code, &at, &next); err != nil {
+		var stage, state, code, source string
+		if err = rows.Scan(&j.ID, &stage, &state, &code, &at, &next, &source); err != nil {
 			rows.Close()
 			return out, err
 		}
-		j.Title = stage
+		j.Title = jobTitle(stage)
 		j.Trigger = "资料处理"
 		j.Status = map[string]string{"done": "done", "queued": "queued", "leased": "running", "blocked": "failed", "failed": "failed"}[state]
-		j.Detail = code
+		var detail []string
+		if source != "" {
+			detail = append(detail, "「"+source+"」")
+		}
+		if code != "" {
+			detail = append(detail, jobProblem(code))
+		}
+		j.Detail = strings.Join(detail, " · ")
 		j.CreatedAt = at.Format(time.RFC3339Nano)
 		if state == "queued" {
 			j.NextRunAt = next.Format(time.RFC3339Nano)
@@ -308,11 +317,14 @@ func (s *Store) snapshotTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) (
 		return out, err
 	}
 	out.Jobs = append(out.Jobs, notices...)
-	reviews, err := queryDocuments[workspace.Job](ctx, tx, `SELECT jsonb_build_object('id','review:'||due_at::text,'title','每日整理','trigger','定时检查','status','done','detail','待确认线索：'||pending_count::text||' 条；在需要你确认中处理','createdAt',created_at) FROM workspace_reviews WHERE owner_id=$1 ORDER BY created_at DESC LIMIT 30`, string(scope.OwnerID))
+	reviews, err := queryDocuments[workspace.Job](ctx, tx, `SELECT jsonb_build_object('id','review:'||due_at::text,'title','每日整理','trigger','定时检查','status','done','detail','有 '||pending_count::text||' 条拿不准的等你确认','createdAt',created_at) FROM workspace_reviews WHERE owner_id=$1 ORDER BY created_at DESC LIMIT 30`, string(scope.OwnerID))
 	if err != nil {
 		return out, err
 	}
 	out.Jobs = append(out.Jobs, reviews...)
+	if out.Activity, err = activityTx(ctx, tx, scope, out.Settings.Timezone); err != nil {
+		return out, err
+	}
 	rows, err = tx.Query(ctx, "SELECT thing_id::text,memory_id::text FROM context_exclusions WHERE owner_id=$1", string(scope.OwnerID))
 	if err != nil {
 		return out, err
@@ -499,3 +511,138 @@ func uuidOrNew(id string) (string, error) {
 	return id, nil
 }
 func wrapInvalid(field string) error { return fmt.Errorf("%s: %w", field, memory.ErrInvalid) }
+
+// jobTitle and jobProblem put processing stages and error codes into the
+// user's words; the raw names stay in the database and logs.
+func jobTitle(stage string) string {
+	switch strings.SplitN(stage, ":", 2)[0] {
+	case "source.parse":
+		return "读取附件"
+	case "source.chunk":
+		return "切分原文"
+	case "source.extract":
+		return "从资料里读出要点"
+	case "source.embed", "memory.embed":
+		return "建立语义索引"
+	case "source.tokenize", "memory.index":
+		return "建立检索索引"
+	case "memory.summary":
+		return "更新摘要"
+	}
+	return "后台整理"
+}
+
+func jobProblem(code string) string {
+	switch code {
+	case "provider_not_configured", "handler_not_configured":
+		return "还没配置处理它的模型"
+	case "archive_redacted", "source_unavailable":
+		return "原文已经删除"
+	case "attempts_exhausted", "processing_failed":
+		return "试了几次没成功"
+	}
+	return "没做完"
+}
+
+// activityTx is the home screen's "while you were away" log. Processing jobs
+// are folded per day into sources finished and problems by cause, so one
+// import reads as one line rather than a dozen stage names. Idea wakes and
+// finished runs are already on their own records and are added by the client.
+func activityTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, timezone string) ([]workspace.Activity, error) {
+	out := []workspace.Activity{}
+	owner := string(scope.OwnerID)
+	rows, err := tx.Query(ctx, `WITH finished AS (
+		SELECT j.record_id,j.record_version,max(j.updated_at) AS at FROM memory_jobs j
+		JOIN memory_records r ON (r.owner_id,r.id,r.version)=(j.owner_id,j.record_id,j.record_version) AND r.state='active'
+		WHERE j.owner_id=$1 AND j.stage LIKE 'source.%'
+		GROUP BY j.record_id,j.record_version
+		HAVING bool_and(j.state='done') AND max(j.updated_at)>=now()-interval '2 days')
+		SELECT (f.at AT TIME ZONE $2)::date::text,max(f.at),count(*),(array_agg(v.title ORDER BY f.at DESC))[1]
+		FROM finished f JOIN source_versions v ON (v.owner_id,v.source_id,v.version)=($1,f.record_id,f.record_version)
+		GROUP BY 1`, owner, timezone)
+	if err != nil {
+		return nil, err
+	}
+	for rows.Next() {
+		var day, title string
+		var at time.Time
+		var n int
+		if err = rows.Scan(&day, &at, &n, &title); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		text := "整理好了「" + title + "」"
+		if n > 1 {
+			text = fmt.Sprintf("整理好了「%s」等 %d 份资料", title, n)
+		}
+		out = append(out, workspace.Activity{ID: "sources:" + day, At: at.UTC().Format(time.RFC3339Nano), Text: text, To: "/library?tab=sources"})
+	}
+	rows.Close()
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+	rows, err = tx.Query(ctx, `SELECT error_code,count(*),max(updated_at) FROM memory_jobs
+		WHERE owner_id=$1 AND state IN ('failed','blocked') AND updated_at>=now()-interval '2 days' GROUP BY error_code`, owner)
+	if err != nil {
+		return nil, err
+	}
+	// Several codes share one reason, so fold again after translating.
+	latest := map[string]time.Time{}
+	counts := map[string]int{}
+	for rows.Next() {
+		var code string
+		var n int
+		var at time.Time
+		if err = rows.Scan(&code, &n, &at); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		reason := jobProblem(code)
+		counts[reason] += n
+		if at.After(latest[reason]) {
+			latest[reason] = at
+		}
+	}
+	rows.Close()
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+	for reason, at := range latest {
+		out = append(out, workspace.Activity{ID: "problem:" + reason, At: at.UTC().Format(time.RFC3339Nano), Text: fmt.Sprintf("有 %d 项整理没做完：%s", counts[reason], reason), To: "/library?tab=sources", Failed: true})
+	}
+	rows, err = tx.Query(ctx, `SELECT n.thing_id::text,n.trigger_id,n.due_at,w.title,n.reason,n.created_at FROM workspace_notices n
+		JOIN work_items w ON (w.owner_id,w.id)=(n.owner_id,n.thing_id)
+		WHERE n.owner_id=$1 AND w.kind='task' AND n.created_at>=now()-interval '2 days' ORDER BY n.created_at DESC LIMIT 20`, owner)
+	if err != nil {
+		return nil, err
+	}
+	for rows.Next() {
+		var thing, trigger, title, reason string
+		var due, at time.Time
+		if err = rows.Scan(&thing, &trigger, &due, &title, &reason, &at); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		out = append(out, workspace.Activity{ID: "notice:" + thing + ":" + trigger + ":" + due.UTC().Format(time.RFC3339), At: at.UTC().Format(time.RFC3339Nano), Text: "提醒了你「" + title + "」：" + reason, To: "/t/" + thing})
+	}
+	rows.Close()
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+	rows, err = tx.Query(ctx, `SELECT due_at,pending_count,created_at FROM workspace_reviews
+		WHERE owner_id=$1 AND pending_count>0 AND created_at>=now()-interval '2 days' ORDER BY created_at DESC LIMIT 2`, owner)
+	if err != nil {
+		return nil, err
+	}
+	for rows.Next() {
+		var due, at time.Time
+		var n int
+		if err = rows.Scan(&due, &n, &at); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		out = append(out, workspace.Activity{ID: "review:" + due.UTC().Format(time.RFC3339), At: at.UTC().Format(time.RFC3339Nano), Text: fmt.Sprintf("每日整理：有 %d 条拿不准的等你确认", n)})
+	}
+	rows.Close()
+	return out, rows.Err()
+}

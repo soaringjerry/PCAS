@@ -219,6 +219,15 @@ type Job struct {
 	CreatedAt string `json:"createdAt"`
 	NextRunAt string `json:"nextRunAt,omitempty"`
 }
+
+// Activity is one line of "what the background did", already in the user's words.
+type Activity struct {
+	ID     string `json:"id"`
+	At     string `json:"at"`
+	Text   string `json:"text"`
+	To     string `json:"to,omitempty"`
+	Failed bool   `json:"failed,omitempty"`
+}
 type State struct {
 	BudgetUsage      float64             `json:"budgetUsage"`
 	Version          int                 `json:"version"`
@@ -235,6 +244,7 @@ type State struct {
 	Samples          []Sample            `json:"samples"`
 	Sources          []Source            `json:"sources"`
 	Jobs             []Job               `json:"jobs"`
+	Activity         []Activity          `json:"activity"`
 	ExcludedMemories map[string][]string `json:"excludedMemories"`
 }
 

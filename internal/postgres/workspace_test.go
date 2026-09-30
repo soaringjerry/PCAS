@@ -209,3 +209,43 @@ func TestHistoryPaginationAndDeleteSource(t *testing.T) {
 		t.Fatal("deleted text retained in export")
 	}
 }
+
+func TestActivityFoldsProcessingIntoPlainLines(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	scope := owner()
+	if _, err := s.Snapshot(ctx, scope); err != nil {
+		t.Fatal(err)
+	}
+	var refs []memory.Ref
+	for _, title := range []string{"周会纪要", "读书笔记"} {
+		result, err := s.Ingest(ctx, scope, memory.IngestRequest{Connector: "manual", ExternalID: title, ExternalVersion: "1", Title: title, Text: title + "的正文", MediaType: "text/plain"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		refs = append(refs, result.Ref)
+	}
+	if _, err := s.pool.Exec(ctx, "UPDATE memory_jobs SET state='done' WHERE owner_id=$1 AND record_id=$2", string(scope.OwnerID), string(refs[0].ID)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.pool.Exec(ctx, "UPDATE memory_jobs SET state='blocked',error_code='provider_not_configured' WHERE owner_id=$1 AND record_id=$2", string(scope.OwnerID), string(refs[1].ID)); err != nil {
+		t.Fatal(err)
+	}
+	state, err := s.Snapshot(ctx, scope)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var lines []string
+	for _, a := range state.Activity {
+		lines = append(lines, a.Text)
+	}
+	joined := strings.Join(lines, "\n")
+	if !strings.Contains(joined, "整理好了「周会纪要」") || strings.Contains(joined, "读书笔记") || !strings.Contains(joined, "有 1 项整理没做完：还没配置处理它的模型") {
+		t.Fatalf("activity: %q", lines)
+	}
+	for _, j := range state.Jobs {
+		if strings.Contains(j.Title, ".") || strings.Contains(j.Detail, "_") {
+			t.Fatalf("job shows internal names: %+v", j)
+		}
+	}
+}

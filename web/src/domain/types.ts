@@ -270,6 +270,15 @@ export interface Settings {
   dailyBudget: number
 }
 
+/** One line of what the background did, already in the user's words. */
+export interface Activity {
+  id: ID
+  at: string
+  text: string
+  to?: string
+  failed?: boolean
+}
+
 export interface State {
   budgetUsage: number
   revision: number
@@ -282,6 +291,7 @@ export interface State {
   candidates: Candidate[]
   sources: Source[]
   jobs: Job[]
+  activity: Activity[]
   agents: Agent[]
   docs: Doc[]
   runs: Run[]

@@ -1,15 +1,14 @@
-/* The home screen as a service hall: today on the left, one desk in the
-   middle, projects and ideas on the right (docs/design/principles.md).
+/* The home screen as a service hall: today on the left, the secretary's
+   conversation filling the middle, projects and ideas on the right
+   (docs/design/principles.md).
    Only three things ever move on their own: a new receipt, the "now" line,
    and the idea wall drifting while nobody is using the desk. */
 
 .hall {
   display: grid;
   grid-template-columns: minmax(280px, 340px) minmax(0, 1fr) minmax(300px, 380px);
-  grid-template-rows: auto minmax(0, 1fr);
-  grid-template-areas:
-    "today desk right"
-    "today feed right";
+  grid-template-rows: minmax(0, 1fr);
+  grid-template-areas: "today desk right";
   gap: 18px 20px;
   box-sizing: border-box;
   height: 100%;
@@ -25,7 +24,6 @@
 
 .hall-today { grid-area: today; }
 .hall-desk { grid-area: desk; }
-.hall-feed { grid-area: feed; }
 
 .hall-right {
   grid-area: right;
@@ -220,6 +218,67 @@
   background: var(--blue);
 }
 
+/* Reminders that went off: a calm accent, not an alarm. */
+.hall-rang-group {
+  margin: 0 -8px;
+  padding: 6px 8px 4px;
+  border-radius: var(--r);
+  background: var(--blue-soft);
+}
+
+.hall-sub.rang {
+  color: var(--blue);
+}
+
+.hall-rang .ring {
+  border-color: var(--blue);
+}
+
+.hall-rang:hover {
+  background: var(--fill);
+}
+
+.hall-rang .hall-check svg {
+  color: var(--blue);
+}
+
+.hall-dismiss {
+  display: grid;
+  flex: none;
+  place-items: center;
+  align-self: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--label-3);
+  cursor: pointer;
+}
+
+.hall-dismiss:hover {
+  background: var(--fill-2);
+  color: var(--label-2);
+}
+
+.hall-dismiss:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.hall-more {
+  display: block;
+  margin: 6px 0 2px;
+  padding: 6px 2px;
+  border: 0;
+  background: none;
+  color: var(--blue);
+  font: inherit;
+  font-size: 13.5px;
+  cursor: pointer;
+}
+
 /* ---------- Desk ---------- */
 
 .hall-desk {
@@ -227,6 +286,31 @@
   flex-direction: column;
   gap: 12px;
   min-width: 0;
+  min-height: 0;
+}
+
+/* The conversation takes whatever height the column has; the input stays under it. */
+.hall-desk > .sec-hall {
+  flex: 1;
+  min-height: 0;
+}
+
+.hall-desk > .sec-hall > .sec-thread {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.hall-desk > .sec-hall > .sec-thread > ol {
+  flex: 1;
+  min-height: 0;
+  max-height: none;
+}
+
+/* Before anything is said, the input waits in the middle of the column. */
+.hall-desk > .sec-hall:not(:has(.sec-thread)) {
+  justify-content: center;
 }
 
 .hall-queue {
@@ -251,18 +335,9 @@
   cursor: pointer;
 }
 
-.hall-queue-bar:disabled {
-  cursor: default;
-}
-
 .hall-queue-bar .h-label {
   font-size: 15px;
   font-weight: 550;
-}
-
-.hall-queue-bar:disabled .h-label {
-  color: var(--label-2);
-  font-weight: 400;
 }
 
 .hall-queue-bar .h-working {
@@ -332,9 +407,8 @@
   font-weight: 650;
 }
 
-.hall-tag.result { background: var(--blue-soft); color: var(--blue); }
+.hall-tag.redo { background: var(--orange-soft); color: var(--orange); }
 .hall-tag.handoff { background: var(--purple-soft); color: var(--purple); }
-.hall-tag.unsure { background: var(--orange-soft); color: var(--orange); }
 
 .hall-btn {
   display: inline-flex;
@@ -368,7 +442,55 @@
   color: var(--label-2);
 }
 
-/* ---------- Feed ---------- */
+/* ---------- 你不在的时候: one line under the conversation ---------- */
+
+.hall-away {
+  flex: none;
+  overflow: hidden;
+  border: 1px solid var(--sep);
+  border-radius: var(--r-lg);
+  background: var(--elevated);
+}
+
+.hall-away-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 11px 16px;
+  border: 0;
+  background: none;
+  color: var(--label-2);
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.hall-away-bar:hover {
+  color: var(--label);
+}
+
+.hall-away-bar .h-new {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--purple);
+}
+
+.hall-away-bar .h-toggle {
+  display: flex;
+  margin-left: auto;
+  color: var(--label-3);
+}
+
+.hall-away .hall-feed-list {
+  max-height: min(40vh, 360px);
+  overflow-y: auto;
+  padding: 0 12px 6px;
+  border-top: 1px solid var(--sep);
+  scrollbar-width: thin;
+}
 
 .hall-feed-list {
   margin: 0;
@@ -624,16 +746,15 @@
   }
 }
 
-/* One column: the desk first, then today, the walls, and the log. */
+/* One column: today first, then the desk with its latest turn, then projects and ideas. */
 @media (max-width: 1180px) {
   .hall {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: none;
     grid-template-areas:
-      "desk"
       "today"
-      "right"
-      "feed";
+      "desk"
+      "right";
     height: auto;
     max-width: 720px;
   }

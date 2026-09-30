@@ -1,6 +1,6 @@
 import { isOpenTask } from './things'
 import { dayOffset, formatWhen } from './time'
-import type { Idea, Project, Run, State, Task } from './types'
+import type { Idea, Notice, Project, Run, State, Task } from './types'
 
 // The home screen is a service hall (docs/design/principles.md): today on the
 // left, projects and ideas on the right, one desk in the middle. These
@@ -27,10 +27,18 @@ export interface TodayRow {
   past?: boolean
 }
 
+export interface NoticeRow {
+  notice: Notice
+  /** The thing it is about, when that is a task the circle can finish. */
+  task?: Task
+}
+
 export interface TodayColumn {
-  /** Someone is waiting, a follow-up is due, or it is already late. */
+  /** Reminders that went off and have not been closed; pinned on top. */
+  rang: NoticeRow[]
+  /** Someone is waiting, a follow-up is due, or it went late on an earlier day. */
   waiting: TodayRow[]
-  /** Due or scheduled today, in clock order. */
+  /** Due or scheduled today, in clock order; the ones already past are marked. */
   timeline: TodayRow[]
   /** Due within the next three days. Anything later stays out until it is close. */
   soon: TodayRow[]
@@ -40,14 +48,32 @@ function followUpAt(task: Task): string | undefined {
   return task.triggers.find((t) => t.active && t.nextAt)?.nextAt
 }
 
+/** Reminders still ringing: not closed, and about something not yet done or dropped. */
+function ringing(state: State): NoticeRow[] {
+  const rows: NoticeRow[] = []
+  for (const notice of state.notices ?? []) {
+    if (notice.dismissedAt) continue
+    const task = state.tasks.find((t) => t.id === notice.thingId)
+    if (task && !isOpenTask(task)) continue
+    const idea = state.ideas.find((i) => i.id === notice.thingId)
+    if (idea && (idea.status === 'promoted' || idea.status === 'dropped')) continue
+    if (!task && !idea && !state.projects.some((p) => p.id === notice.thingId)) continue
+    rows.push({ notice, task })
+  }
+  return rows.sort((a, b) => a.notice.dueAt.localeCompare(b.notice.dueAt))
+}
+
 export function todayColumn(state: State): TodayColumn {
+  const rang = ringing(state)
+  // A task whose reminder is pinned on top is not listed a second time below.
+  const pinned = new Set(rang.map((r) => r.notice.thingId))
   const waiting: TodayRow[] = []
   const timeline: TodayRow[] = []
   const soon: TodayRow[] = []
   const now = Date.now()
 
   for (const task of state.tasks) {
-    if (!isOpenTask(task)) continue
+    if (!isOpenTask(task) || pinned.has(task.id)) continue
     const due = task.due
     const follow = task.status === 'waiting' ? followUpAt(task) : undefined
 
@@ -56,19 +82,20 @@ export function todayColumn(state: State): TodayColumn {
       continue
     }
     if (task.status === 'waiting') continue
+    // Anything due or scheduled today belongs on today's timeline, even once its time has passed.
+    const at = due && dayOffset(due) === 0 ? due : task.scheduled && dayOffset(task.scheduled) === 0 ? task.scheduled : undefined
+    if (at) {
+      const past = new Date(at).getTime() < now
+      const note = task.owedTo ? `${task.owedTo.who}在等你` : at === due ? (past ? '过了截止时间' : '截止') : task.notes?.split('\n')[0] || '安排在今天'
+      timeline.push({ task, note, time: hhmm(at), at, past })
+      continue
+    }
     if (due && new Date(due).getTime() < now) {
       waiting.push({ task, note: `已过截止 · ${formatWhen(due)}` })
       continue
     }
     if (task.owedTo) {
-      const when = due && dayOffset(due) === 0 ? ` · 今天 ${hhmm(due)} 前` : ''
-      waiting.push({ task, note: `${task.owedTo.who}在等你 · ${daysSince(task.owedTo.since)} 天${when}` })
-      continue
-    }
-    const at = due && dayOffset(due) === 0 ? due : task.scheduled && dayOffset(task.scheduled) === 0 ? task.scheduled : undefined
-    if (at) {
-      const note = at === due ? '截止' : task.notes?.split('\n')[0] || '安排在今天'
-      timeline.push({ task, note, time: hhmm(at), at, past: new Date(at).getTime() < now })
+      waiting.push({ task, note: `${task.owedTo.who}在等你 · ${daysSince(task.owedTo.since)} 天` })
       continue
     }
     if (due && dayOffset(due) <= 3) soon.push({ task, note: `${formatWhen(due).replace(/ \d\d:\d\d$/, '')}截止` })
@@ -76,12 +103,12 @@ export function todayColumn(state: State): TodayColumn {
 
   timeline.sort((a, b) => (a.at ?? '').localeCompare(b.at ?? ''))
   soon.sort((a, b) => (a.task.due ?? '').localeCompare(b.task.due ?? ''))
-  return { waiting, timeline, soon }
+  return { rang, waiting, timeline, soon }
 }
 
 export interface QueueItem {
   key: string
-  kind: 'result' | 'handoff' | 'unsure'
+  kind: 'redo' | 'handoff'
   title: string
   detail: string
   /** Where to act on it. */
@@ -97,21 +124,19 @@ function thingName(state: State, id: string): string {
   )
 }
 
-/** Things only the user can decide: finished drafts, manual handoffs, captures the background could not sort. */
+/**
+ * What only the user can move forward: results whose basis changed and need
+ * redoing, and manual handoffs. Finished results put themselves in place, and
+ * captures the background could not sort go to the observatory, not here.
+ */
 export function decisionQueue(state: State): { items: QueueItem[]; working: number } {
   const items: QueueItem[] = []
   for (const run of state.runs) {
-    if (run.status === 'done' && run.output && !run.adopted) {
-      items.push({ key: run.id, kind: 'result', title: thingName(state, run.thingId), detail: `副手做好了「${run.prompt}」${run.staleContext ? '，但它用到的记忆后来改过' : ''}`, to: `/t/${run.thingId}` })
+    if (run.status === 'done' && run.output && !run.adopted && run.staleContext) {
+      items.push({ key: run.id, kind: 'redo', title: thingName(state, run.thingId), detail: `「${run.prompt}」用到的记忆后来改过，要重做`, to: `/t/${run.thingId}` })
     } else if (run.status === 'waiting') {
       items.push({ key: run.id, kind: 'handoff', title: thingName(state, run.thingId), detail: '要你手动转交给外部 AI，再把回答贴回来', to: `/t/${run.thingId}` })
     }
-  }
-  const candidates = state.candidates.filter((c) => c.state === 'pending').length
-  const guesses = state.memories.filter((m) => m.epistemic === 'inferred' && Date.now() - new Date(m.versions[0].at).getTime() < 7 * DAY).length
-  if (candidates + guesses > 0) {
-    const parts = [candidates && `${candidates} 条记录不知道该放哪`, guesses && `${guesses} 条从资料里读到的内容等你确认`].filter(Boolean)
-    items.push({ key: 'unsure', kind: 'unsure', title: '拿不准的', detail: parts.join('，') })
   }
   const working = state.runs.filter((r) => r.status === 'running').length
   return { items, working }

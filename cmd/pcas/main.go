@@ -18,6 +18,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/config"
 	"github.com/soaringjerry/PCAS/internal/httpapi"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/notify"
 	"github.com/soaringjerry/PCAS/internal/postgres"
 	"github.com/soaringjerry/PCAS/internal/worker"
 )
@@ -138,11 +139,13 @@ func run(ctx context.Context, args []string, logger *slog.Logger) error {
 		}
 		return os.Getenv("TYPESAFE_API_KEY")
 	})
-	api := httpapi.New(memory.NewService(db), db, httpapi.NewSessions(credentials, cfg.PublicURL), db.Ping, logger, httpapi.Options{Continuity: db, Connectors: db, Attachments: db, Writer: db, Workspace: db, Editor: db, Activity: db, Models: models, Router: router, WebDir: webDir})
+	notifier := postgres.NewNotifier(db, notify.Settings{Path: notify.SettingsPath()}, cfg.PublicURL)
+	api := httpapi.New(memory.NewService(db), db, httpapi.NewSessions(credentials, cfg.PublicURL), db.Ping, logger, httpapi.Options{Continuity: db, Connectors: db, Attachments: db, Writer: db, Workspace: notifier, Editor: db, Activity: db, Models: models, Router: router, WebDir: webDir})
 	workCtx, stopWorkers := context.WithCancel(ctx)
 	defer stopWorkers()
 	go func() { _ = db.RunAgents(workCtx, logger) }()
 	go func() { _ = db.RunReminders(workCtx, logger) }()
+	go func() { _ = db.RunNotify(workCtx, logger, notifier.Channels) }()
 	go func() { _ = db.RunConnectors(workCtx, logger) }()
 	server := &http.Server{Addr: cfg.HTTPAddress, Handler: api, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16 << 10}
 	stopped := make(chan error, 1)

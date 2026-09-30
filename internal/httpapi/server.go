@@ -50,6 +50,7 @@ func New(sources memory.Sources, retriever memory.Retriever, auth Authenticator,
 	mux.HandleFunc("POST /v1/memory/expand", s.authorize(s.expand))
 	s.workspaceRoutes(mux)
 	s.connectorRoutes(mux)
+	s.notifyRoutes(mux)
 	return mux
 }
 

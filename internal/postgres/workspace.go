@@ -185,6 +185,14 @@ func (s *Store) snapshotTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) (
 			out.Projects = append(out.Projects, item)
 		}
 	}
+	if out.Notices, err = queryDocuments[workspace.Notice](ctx, tx, `SELECT jsonb_build_object(
+        'id',n.id,'thingId',n.thing_id,'title',w.title,'reason',n.reason,
+        'dueAt',n.due_at,'createdAt',n.created_at) ||
+        CASE WHEN n.dismissed_at IS NULL THEN '{}'::jsonb ELSE jsonb_build_object('dismissedAt',n.dismissed_at) END
+        FROM workspace_notices n JOIN work_items w ON (w.owner_id,w.id)=(n.owner_id,n.thing_id)
+        WHERE n.owner_id=$1 ORDER BY (n.dismissed_at IS NOT NULL),n.created_at DESC,n.id LIMIT 100`, string(scope.OwnerID)); err != nil {
+		return out, err
+	}
 	if out.Memories, err = s.memoriesTx(ctx, tx, scope); err != nil {
 		return out, err
 	}

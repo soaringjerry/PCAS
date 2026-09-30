@@ -542,6 +542,33 @@ func (s *Store) autoAdoptRunTx(ctx context.Context, tx pgx.Tx, scope memory.Scop
 	if run.Status != "done" || run.StaleContext || run.Adopted != nil || trimChecklist(run.Output) == "" {
 		return nil
 	}
+	// Completion and billing are already saved in the outer transaction. Only
+	// adoption writes may be rolled back, including SQL errors that abort a tx.
+	savepoint, err := tx.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer savepoint.Rollback(ctx)
+	// adoptRunTx sets Adopted before its final writes. Keep that mutation out of
+	// the caller's completed run until the savepoint has successfully committed.
+	adopted := *run
+	if err := s.autoAdoptResultTx(ctx, savepoint, scope, &adopted); err != nil {
+		rollbackErr := savepoint.Rollback(ctx)
+		// SQL/provider error messages can contain private text. Log only IDs and
+		// the error's type, never the output, prompt, or raw error message.
+		slog.WarnContext(ctx, "assistant result auto-adoption failed", "run_id", run.ID, "error_type", fmt.Sprintf("%T", err))
+		// A failed rollback leaves the outer transaction unusable. Ordinary
+		// adoption failures return nil so completion can still commit.
+		return rollbackErr
+	}
+	if err := savepoint.Commit(ctx); err != nil {
+		return err
+	}
+	*run = adopted
+	return nil
+}
+
+func (s *Store) autoAdoptResultTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run *workspace.Run) error {
 	item, err := getItem(ctx, tx, scope, run.ThingID)
 	if err != nil {
 		return err

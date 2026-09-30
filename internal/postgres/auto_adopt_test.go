@@ -1,15 +1,18 @@
 package postgres
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"os/exec"
 	"reflect"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/jackc/pgx/v5"
@@ -415,4 +418,113 @@ func undoAutoAdoption(t *testing.T, s *Store, scope memory.Scope, runID string) 
 		}
 	}
 	t.Fatal("run missing before legacy manual flow")
+}
+
+func TestAutoAdoptFailurePreservesCompletedResult(t *testing.T) {
+	for _, path := range []string{"worker", "manual"} {
+		for _, failure := range []string{"invalid-checklist", "action-log-sql"} {
+			t.Run(path+"/"+failure, func(t *testing.T) {
+				s := testStore(t)
+				scope := owner()
+				ctx := context.Background()
+				const privateText = "private-result-729413"
+				output := "- [ ] first step\n- [ ] " + privateText + strings.Repeat("x", 2001)
+				kind := "breakdown"
+				if failure == "action-log-sql" {
+					output, kind = privateText+" draft", "draft"
+					// Fail after doc, item, sample and adopted run writes. A real SQL error
+					// aborts the savepoint and must not poison the completed outer tx.
+					_, err := s.pool.Exec(ctx, `
+CREATE FUNCTION reject_worker_adoption() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN RAISE EXCEPTION 'private-result-729413'; END $$;
+CREATE TRIGGER reject_worker_adoption BEFORE INSERT ON action_log
+FOR EACH ROW WHEN (NEW.source='worker') EXECUTE FUNCTION reject_worker_adoption();`)
+					if err != nil {
+						t.Fatal(err)
+					}
+				}
+				var calls atomic.Int32
+				autoAdoptModel(t, s, output, func() { calls.Add(1) })
+				st := workspaceCommand(t, s, scope, workspace.Command{Type: "addProject", Name: "Project before adoption"})
+				project := st.Projects[0]
+				agent := "auto-model"
+				if path == "manual" {
+					agent = "manual"
+				}
+				st = workspaceCommand(t, s, scope, workspace.Command{Type: "requestRun", ThingID: project.ID, AgentID: agent, Kind: kind, Prompt: "Generate result"})
+				runID, revision := st.Runs[0].ID, st.Revision
+				var warnings bytes.Buffer
+				previousLogger := slog.Default()
+				slog.SetDefault(slog.New(slog.NewJSONHandler(&warnings, nil)))
+				defer slog.SetDefault(previousLogger)
+				if path == "worker" {
+					if err := s.runAgentOnce(ctx); err != nil {
+						t.Fatalf("adoption failure rolled back completion: %v", err)
+					}
+					var err error
+					st, err = s.Snapshot(ctx, scope)
+					if err != nil {
+						t.Fatal(err)
+					}
+				} else {
+					st = workspaceCommand(t, s, scope, workspace.Command{Type: "pasteRunResult", ID: runID, Output: output})
+				}
+				run := st.Runs[0]
+				if run.Status != "done" || run.Adopted != nil || run.Output != output || run.FinishedAt == "" || st.Revision != revision+1 {
+					t.Fatalf("completion lost after adoption failure: run=%+v revision=%d", run, st.Revision)
+				}
+				if !reflect.DeepEqual(st.Projects[0], project) || len(st.Tasks) != 0 || len(st.Docs) != 0 || len(st.Samples) != 0 {
+					t.Fatalf("partial adoption survived rollback: %+v", st)
+				}
+				for _, table := range []string{"adopted_artifacts", "artifact_fields", "training_samples"} {
+					var count int
+					if err := s.pool.QueryRow(ctx, "SELECT count(*) FROM "+table+" WHERE owner_id=$1", string(scope.OwnerID)).Scan(&count); err != nil || count != 0 {
+						t.Fatalf("partial %s survived rollback: count=%d err=%v", table, count, err)
+					}
+				}
+				var workerActions int
+				if err := s.pool.QueryRow(ctx, "SELECT count(*) FROM action_log WHERE owner_id=$1 AND source='worker'", string(scope.OwnerID)).Scan(&workerActions); err != nil || workerActions != 0 {
+					t.Fatalf("failed adoption was recorded: count=%d err=%v", workerActions, err)
+				}
+				log := warnings.String()
+				if strings.Contains(log, privateText) || strings.Contains(log, "Generate result") || strings.Count(log, `"level":"WARN"`) != 1 || !strings.Contains(log, runID) {
+					t.Fatalf("warning missing, duplicated or contains private text: %s", log)
+				}
+				var status string
+				var rowCount int
+				var cost float64
+				var leased bool
+				if err := s.pool.QueryRow(ctx, "SELECT status,reserved_cost,lease_token IS NOT NULL OR lease_until IS NOT NULL FROM agent_runs WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), runID).Scan(&status, &cost, &leased); err != nil || status != "done" || cost != run.Cost || leased {
+					t.Fatalf("completion/billing not committed: status=%s cost=%f leased=%t err=%v", status, cost, leased, err)
+				}
+				expectedCalls := int32(0)
+				if path == "worker" {
+					expectedCalls = 1
+					if cost <= 0 {
+						t.Fatal("fixture did not bill the model")
+					}
+				} else if cost != 0 {
+					t.Fatalf("manual handoff incurred model cost: %f", cost)
+				}
+				// Processing again must not regenerate or attempt adoption of a done run.
+				if err := s.runAgentOnce(ctx); err != nil {
+					t.Fatal(err)
+				}
+				var spent float64
+				if err := s.pool.QueryRow(ctx, "SELECT count(*),coalesce(sum(reserved_cost),0) FROM agent_runs WHERE owner_id=$1", string(scope.OwnerID)).Scan(&rowCount, &spent); err != nil || rowCount != 1 || spent != cost || calls.Load() != expectedCalls || warnings.String() != log {
+					t.Fatalf("result regenerated or rebilled: rows=%d spent=%f calls=%d err=%v", rowCount, spent, calls.Load(), err)
+				}
+				again, err := s.Snapshot(ctx, scope)
+				if err != nil || !reflect.DeepEqual(again.Runs[0], run) || again.Revision != st.Revision {
+					t.Fatalf("idle worker changed completed result: %+v %v", again.Runs, err)
+				}
+				// The original output can still be adopted manually as a document. Only
+				// worker action logs are rejected by the injected SQL failure.
+				st = workspaceCommand(t, s, scope, workspace.Command{Type: "adoptRun", ID: runID, As: "doc", Text: output})
+				if got := st.Runs[0].Adopted; got == nil || got.Auto || got.Edited || got.ActionID == "" || len(st.Docs) != 1 || st.Docs[0].Body != output || len(st.Samples) != 1 || st.Runs[0].Cost != cost {
+					t.Fatalf("manual adoption unavailable after failure: %+v", st)
+				}
+			})
+		}
+	}
 }

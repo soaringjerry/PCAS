@@ -39,7 +39,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
     const go = (to: string) => done(() => navigate(to))
 
     const nav: Entry[] = [
-      { key: 'home', group: '前往', icon: <House size={16} />, label: '首页', text: '首页 home', run: go('/') },
+      { key: 'home', group: '前往', icon: <House size={16} />, label: '大厅', text: '大厅 首页 home', run: go('/') },
       { key: 'lib', group: '前往', icon: <BookOpen size={16} />, label: '资料库', text: '资料库 记忆 来源 训练', run: go('/library') },
       { key: 'set', group: '前往', icon: <Settings size={16} />, label: '设置', text: '设置 额度 AI', run: go('/settings') },
     ]

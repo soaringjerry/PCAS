@@ -9,7 +9,6 @@
 
   --bg: #ffffff;
   --bg-2: #f5f5f7;
-  --sidebar: rgb(246 246 248 / 82%);
   --elevated: #ffffff;
   --fill: rgb(120 120 128 / 8%);
   --fill-2: rgb(120 120 128 / 14%);
@@ -47,7 +46,6 @@
   :root:not([data-theme="light"]) {
     --bg: #1c1c1e;
     --bg-2: #000000;
-    --sidebar: rgb(38 38 40 / 78%);
     --elevated: #2c2c2e;
     --fill: rgb(120 120 128 / 18%);
     --fill-2: rgb(120 120 128 / 26%);
@@ -80,7 +78,6 @@
 :root[data-theme="dark"] {
   --bg: #1c1c1e;
   --bg-2: #000000;
-  --sidebar: rgb(38 38 40 / 78%);
   --elevated: #2c2c2e;
   --fill: rgb(120 120 128 / 18%);
   --fill-2: rgb(120 120 128 / 26%);

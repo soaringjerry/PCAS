@@ -27,7 +27,7 @@ function Header({ thing }: { thing: Thing }) {
     <>
       <Link to={project ? `/t/${project.id}` : '/'} className="back">
         <ChevronLeft size={16} />
-        {project ? project.name : '首页'}
+        {project ? project.name : '大厅'}
       </Link>
       <textarea
         key={`title-${thing.id}`}

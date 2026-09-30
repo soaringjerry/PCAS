@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link, Outlet, useLocation } from 'react-router'
-import { Menu, Search } from 'lucide-react'
+import { Link, NavLink, Outlet, useLocation } from 'react-router'
+import { BookOpen, Search, Settings } from 'lucide-react'
 import { findThing, thingTitle } from '../domain/things'
 import { useStore } from '../store/context'
 import { ShellContext, type ShellApi } from '../store/shell'
 import { ToastContext, type ToastApi } from '../store/toast'
 import { CommandPalette } from './CommandPalette'
-import { Sidebar } from './Sidebar'
 
 const KEY = 'pcas.shell'
 
@@ -25,14 +24,14 @@ function load(): Persisted {
   return { drafts: {}, agents: {} }
 }
 
-const titles: Record<string, string> = { '/': '首页', '/library': '资料库', '/settings': '设置' }
+const titles: Record<string, string> = { '/library': '资料库', '/settings': '设置' }
+const isMac = /Mac|iPhone|iPad/.test(navigator.platform)
 
 export function Shell() {
   const { state } = useStore()
   const { pathname } = useLocation()
   const [saved, setSaved] = useState<Persisted>(load)
   const [palette, setPalette] = useState(false)
-  const [drawer, setDrawer] = useState(false)
   const [toast, setToast] = useState<{ text: string; link?: { to: string; label: string }; key: number } | null>(null)
 
   useEffect(() => {
@@ -65,7 +64,6 @@ export function Shell() {
   const api = useMemo<ShellApi>(
     () => ({
       openPalette: () => setPalette(true),
-      closeDrawer: () => setDrawer(false),
       draft: (id) => saved.drafts[id] ?? '',
       setDraft: (id, text) => setSaved((s) => ({ ...s, drafts: { ...s.drafts, [id]: text } })),
       agentFor: (id) => state.agents.find((a) => a.id === saved.agents[id] && a.enabled)?.id ?? state.agents.find((a) => a.enabled && a.default)?.id ?? state.agents.find((a) => a.enabled && a.available && a.protocol !== 'siwc')?.id ?? 'manual',
@@ -78,27 +76,47 @@ export function Shell() {
 
   const thingId = pathname.match(/^\/t\/(.+)$/)?.[1]
   const thing = thingId ? findThing(state, thingId) : undefined
-  const title = thing ? thingTitle(thing) : (titles[pathname] ?? 'PCAS')
+  // The hall needs no title; everywhere else says where you are.
+  const title = thing ? thingTitle(thing) : titles[pathname]
+  const tab = ({ isActive }: { isActive: boolean }) => `bar-btn${isActive ? ' active' : ''}`
 
   return (
     <ShellContext.Provider value={api}>
       <ToastContext.Provider value={toastApi}>
         <div className="shell">
-          <Sidebar open={drawer} />
+          <header className="bar">
+            <Link to="/" className="bar-mark" aria-label="回到大厅">
+              <img src="/favicon.svg" alt="" width={22} height={22} />
+              PCAS
+            </Link>
+            {title && (
+              <>
+                <span className="bar-sep" aria-hidden="true">
+                  /
+                </span>
+                <span className="bar-title">{title}</span>
+              </>
+            )}
+            <nav className="bar-end" aria-label="导航">
+              <button type="button" className="bar-btn bar-search" aria-label="搜索" aria-keyshortcuts={isMac ? 'Meta+K' : 'Control+K'} onClick={() => setPalette(true)}>
+                <Search size={16} />
+                <span className="label">搜索</span>
+                <kbd>{isMac ? '⌘K' : 'Ctrl K'}</kbd>
+              </button>
+              <NavLink to="/library" className={tab} aria-label="资料库">
+                <BookOpen size={16} />
+                <span className="label">资料库</span>
+              </NavLink>
+              <NavLink to="/settings" className={tab} aria-label="设置">
+                <Settings size={16} />
+                <span className="label">设置</span>
+              </NavLink>
+            </nav>
+          </header>
           <main className="main">
-            <div className="topbar">
-              <button type="button" className="btn btn-quiet btn-icon" aria-label="导航" onClick={() => setDrawer(true)}>
-                <Menu size={20} />
-              </button>
-              <span className="title">{title}</span>
-              <button type="button" className="btn btn-quiet btn-icon" aria-label="搜索" onClick={() => setPalette(true)}>
-                <Search size={18} />
-              </button>
-            </div>
             <Outlet />
           </main>
         </div>
-        {drawer && <div className="scrim" style={{ zIndex: 44 }} onClick={() => setDrawer(false)} />}
         {palette && <CommandPalette onClose={closePalette} />}
         {toast && (
           <div className="toast" key={toast.key} role="status">

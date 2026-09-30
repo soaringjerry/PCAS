@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { NotifySettings } from '../components/NotifySettings'
 import { MemoryActivitySettings } from '../components/MemoryActivitySettings'
 import { ConnectorSettings } from '../components/ConnectorSettings'
 import { memoriesFor } from '../domain/agent'
@@ -64,6 +65,7 @@ export function SettingsPage() {
         <OpenAIConnection />
         <ConnectorSettings />
         <MemoryActivitySettings />
+        <NotifySettings />
         <section className="section">
           <h2 className="section-title">
             后台

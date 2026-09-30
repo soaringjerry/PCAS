@@ -286,7 +286,18 @@ export interface Activity {
   failed?: boolean
 }
 
+export interface Notice {
+  id: ID
+  thingId: ID
+  title: string
+  reason: string
+  dueAt: string
+  createdAt: string
+  dismissedAt?: string
+}
+
 export interface State {
+  notices: Notice[]
   budgetUsage: number
   revision: number
   version: number

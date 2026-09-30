@@ -234,6 +234,7 @@ type Activity struct {
 	Failed bool   `json:"failed,omitempty"`
 }
 type State struct {
+	Notices          []Notice            `json:"notices"`
 	BudgetUsage      float64             `json:"budgetUsage"`
 	Version          int                 `json:"version"`
 	Revision         int64               `json:"revision"`

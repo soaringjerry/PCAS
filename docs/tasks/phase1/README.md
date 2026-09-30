@@ -83,7 +83,8 @@ flowchart LR
 | `internal/notify/settings.go`（只加 telegramOffset、telegramConversation 字段） | C1 → C2 |
 | `internal/postgres/attachments.go`（只在允许的媒体类型里加 `audio/ogg`） | C2 |
 | `internal/ai/jev.go`、`/v1/desk/route`、`/v1/desk/answer` | **不要删**。第 1 阶段只是前端不再调用它们 |
-| `web/tests/support/`、`internal/testsupport/`、`docs/evaluations/*-phase1-acceptance.md` | E |
+| `web/src/components/CommandPalette.tsx`、`web/src/components/LineRow.tsx`、`web/src/domain/things.ts`、`web/src/domain/agent.ts`、`web/src/domain/lines.ts`、`web/src/domain/types.ts`（只做 D2 遗留清理：删「让副手… 约 ¥x」入口和无调用方代码，补 `Revision.by` 类型） | D2-followup |
+| `web/tests/support/`、`internal/testsupport/`、`docs/evaluations/*-phase1-acceptance.md`、`web/tests/backend.spec.ts` 等依赖真实后端的旧用例 | E |
 | `.github/workflows/browser-regression.yml` | B2（改为跑 mock 用例）→ D2（加 buttons.spec.ts）→ E（加 golden.spec.ts） |
 | `docs/` | 各任务只改自己在任务文档里被要求改的文档 |
 

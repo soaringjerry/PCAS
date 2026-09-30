@@ -13,6 +13,7 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/soaringjerry/PCAS/internal/ai"
 	"github.com/soaringjerry/PCAS/internal/httpapi"
@@ -248,6 +249,21 @@ func TestSecretaryMemoryCardsAndRevokedHistory(t *testing.T) {
 	s := testStore(t)
 	scope := owner()
 	secretaryModel(t, s, func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Messages []struct{ Role, Content string }
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Error(err)
+		}
+		found := false
+		for _, message := range body.Messages {
+			if message.Role == "system" {
+				found = strings.Contains(message.Content, "timeline、tasks") && strings.Contains(message.Content, "reply 只写一句结论（40 字以内）") && strings.Contains(message.Content, "不要重复列举卡片内容")
+			}
+		}
+		if !found {
+			t.Error("model did not receive the concise card-reply instruction")
+		}
 		secretaryModelReply(w, `{"reply":"成都的两条记录。","used":["M1","M2","M999"],"show":["T1","nope"],"links":["https://example.com/a","javascript:bad","https://u:p@example.com"],"actions":[]}`)
 	})
 	var ids []string
@@ -268,6 +284,9 @@ func TestSecretaryMemoryCardsAndRevokedHistory(t *testing.T) {
 	}
 	if !kinds["sources"] || !kinds["links"] || !kinds["timeline"] || !kinds["tasks"] {
 		t.Fatal(out.Turn.Cards)
+	}
+	if out.Turn.Reply != "成都的两条记录。" || utf8.RuneCountInString(out.Turn.Reply) > 40 {
+		t.Fatal("card reply is not a concise conclusion", out.Turn.Reply)
 	}
 	for _, card := range out.Turn.Cards {
 		if card.Kind == "sources" {

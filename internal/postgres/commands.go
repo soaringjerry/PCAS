@@ -134,6 +134,8 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 			title = c.Name
 		}
 		item := newItem(kind, title)
+		item.History[0].By = actorFromContext(ctx)
+		item.Evolution[0].By = actorFromContext(ctx)
 		if kind == "task" && c.Text != "" {
 			if err := requireText(c.Text); err != nil {
 				return err
@@ -521,7 +523,7 @@ func saveDoc(ctx context.Context, tx pgx.Tx, scope memory.Scope, doc workspace.D
 	return err
 }
 func (s *Store) saveAction(ctx context.Context, tx pgx.Tx, scope memory.Scope, item workspace.Item, summary string) error {
-	revision := workspace.Revision{At: stamp(), By: "user", Summary: summary}
+	revision := workspace.Revision{At: stamp(), By: actorFromContext(ctx), Summary: summary}
 	item.History = append(item.History, revision)
 	if item.Kind == "idea" {
 		item.Evolution = append(item.Evolution, revision)

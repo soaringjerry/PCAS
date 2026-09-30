@@ -85,6 +85,7 @@ func commandSummary(ctx context.Context, tx pgx.Tx, scope memory.Scope, c worksp
 	return prefix + title
 }
 func (s *Store) undoActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, id string) error {
+	ctx = withActor(ctx, "user")
 	if !memory.ID(id).Valid() {
 		return memory.ErrInvalid
 	}

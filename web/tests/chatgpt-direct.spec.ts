@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test'
+import { evidence } from './support/real'
 
-test('official plan connection explains usage and keeps the Codex channel', async ({ page }) => {
+test('official plan connection explains usage and keeps the Codex channel', async ({ page }, info) => {
   await page.goto('/settings')
   await page.getByLabel('访问令牌').fill(process.env.PCAS_TEST_API_TOKEN ?? 'pcas-browser-check-secret-123456789012')
   await page.getByRole('button', { name: '登录', exact: true }).click()
@@ -14,4 +15,5 @@ test('official plan connection explains usage and keeps the Codex channel', asyn
   expect(await account.json()).toMatchObject({ accounts: [], default_ready: false, pending: false })
   const accountBody = await account.text()
   for (const field of ['access_token', 'refresh_token', 'id_token']) expect(accountBody).not.toContain(field)
+  await evidence(page, info)
 })

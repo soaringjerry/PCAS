@@ -120,10 +120,10 @@ func autoAdoptModel(t *testing.T, s *Store, output string, during func()) {
 		if during != nil {
 			during()
 		}
-		_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": map[string]string{"content": output}}}})
+		_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": map[string]string{"content": output}}}, "usage": map[string]int{"prompt_tokens": 100, "completion_tokens": 20}})
 	}))
 	t.Cleanup(server.Close)
-	s.SetModels(&ai.Registry{HTTP: server.Client(), Config: ai.Configuration{Providers: []ai.Provider{{ID: "auto-model", Name: "Auto model", Protocol: "openai", BaseURL: server.URL, Model: "test", MaxOutput: 200, CostMode: "free"}}}})
+	s.SetModels(&ai.Registry{HTTP: server.Client(), Config: ai.Configuration{Providers: []ai.Provider{{ID: "auto-model", Name: "Auto model", Protocol: "openai", BaseURL: server.URL, Model: "test", MaxOutput: 200, InputPerMillion: 1, OutputPerMillion: 2}}}})
 }
 
 func autoAdoptItem(st workspace.State, id string) workspace.Item {
@@ -218,6 +218,15 @@ func TestAutoAdoptDestinationsAndUndo(t *testing.T) {
 						t.Fatalf("docs=%+v", st.Docs)
 					}
 				}
+				if path == "worker" {
+					if err := s.runAgentOnce(ctx); err != nil {
+						t.Fatal(err)
+					}
+					again, err := s.Snapshot(ctx, scope)
+					if err != nil || again.Revision != st.Revision || again.Runs[0].Adopted.ActionID != run.Adopted.ActionID || run.Cost <= 0 {
+						t.Fatalf("idle worker changed adoption/billing: %+v %v", again.Runs, err)
+					}
+				}
 				var source, summary string
 				var changes []byte
 				if err := s.pool.QueryRow(ctx, "SELECT source,summary,changes FROM action_log WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), run.Adopted.ActionID).Scan(&source, &summary, &changes); err != nil {
@@ -237,7 +246,7 @@ func TestAutoAdoptDestinationsAndUndo(t *testing.T) {
 						if err := json.Unmarshal(entry.Before, &previous); err != nil {
 							t.Fatal(err)
 						}
-						if previous.Status != "done" || previous.Adopted != nil || previous.Output != tc.output || previous.FinishedAt == "" {
+						if previous.Status != "done" || previous.Adopted != nil || previous.Output != tc.output || previous.FinishedAt == "" || previous.Cost != run.Cost {
 							t.Fatalf("undo snapshot=%+v", previous)
 						}
 						recordedRun = true
@@ -255,8 +264,13 @@ func TestAutoAdoptDestinationsAndUndo(t *testing.T) {
 				if !reflect.DeepEqual(restored.Checklist, before.Checklist) || restored.Notes != before.Notes || restored.Body != before.Body || restored.Progress != before.Progress || len(st.Docs) != 0 || len(st.Tasks) != map[bool]int{true: 1, false: 0}[tc.itemKind == "task"] {
 					t.Fatalf("undo did not restore destination: %+v", st)
 				}
-				if restored.Version <= item.Version || st.Runs[0].Status != "done" || st.Runs[0].Adopted != nil || st.Runs[0].Output != tc.output {
+				if restored.Version <= item.Version || st.Runs[0].Status != "done" || st.Runs[0].Adopted != nil || st.Runs[0].Output != tc.output || st.Runs[0].Cost != run.Cost {
 					t.Fatalf("undo did not retain completed result: %+v", st.Runs)
+				}
+				var reserved float64
+				var status string
+				if err := s.pool.QueryRow(ctx, "SELECT reserved_cost,status FROM agent_runs WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), runID).Scan(&reserved, &status); err != nil || reserved != run.Cost || status != "done" {
+					t.Fatalf("undo changed billing: cost=%f status=%s err=%v", reserved, status, err)
 				}
 				requestID := string(memory.NewID())
 				st, err := s.Execute(ctx, scope, workspace.Command{Type: "adoptRun", ID: runID, As: tc.as, Text: tc.output, RequestID: requestID, ExpectedRevision: st.Revision})

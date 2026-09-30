@@ -14,6 +14,8 @@ import (
 
 func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c workspace.Command) error {
 	switch c.Type {
+	case "undoAction":
+		return s.undoActionTx(ctx, tx, scope, c.ID)
 	case "delegateTask":
 		// One explicit delegation atomically creates the work and queues its run.
 		// Execute's request receipt fences retries; a stable item ID also fences

@@ -1,0 +1,2 @@
+go test -race -count=1 ./internal/postgres
+ok  	github.com/soaringjerry/PCAS/internal/postgres	43.035s

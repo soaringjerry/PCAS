@@ -1,0 +1,16 @@
+[
+  {
+    "authorization": true,
+    "bytes": 4096,
+    "encoding": "aes128gcm",
+    "kind": "push"
+  },
+  {
+    "chat_id": "123",
+    "kind": "sendMessage",
+    "link_preview_options": {
+      "is_disabled": true
+    },
+    "text": "⏰ 一分钟后提醒-1790803687490\n2026-10-01 05:29 CST\nhttp://127.0.0.1:18099/t/3fbbae1b-96b1-41a9-ba3d-18cc32ff6b7d"
+  }
+]

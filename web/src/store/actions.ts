@@ -59,3 +59,4 @@ export type Action =
   | { type: 'removeCondition'; ideaId: string; conditionId: string }
   | { type: 'deferTask'; id: string; days: number }
   | { type: 'updateSettings'; patch: Partial<Settings> }
+  | { type: 'undoAction'; id: string }

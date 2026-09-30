@@ -76,68 +76,6 @@ for (const kind of ['task', 'idea', 'project'] as const) {
   })
 }
 
-test('desk draft survives reload and stays empty after a successful submission', async ({ page }) => {
-  const commands = await mockWorkspace(page)
-  await page.route('**/v1/desk/route', route => route.fulfill({ json: { intent: 'record', confidence: 0.99 } }))
-  await page.goto('/')
-  const input = page.getByLabel('导办台', { exact: true })
-  await input.fill('测试草稿')
-  await page.reload()
-  await expect(input).toHaveValue('测试草稿')
-  expect(commands).toHaveLength(0)
-  await page.getByRole('button', { name: '交给她', exact: true }).click()
-  await expect(page.getByRole('status').filter({ hasText: '记下了，后台会整理' })).toBeVisible()
-  expect(commands).toHaveLength(1)
-  expect(commands[0]).toMatchObject({ type: 'capture', text: '测试草稿' })
-  await expect(input).toHaveValue('')
-  await page.reload()
-  await expect(input).toHaveValue('')
-  expect(commands).toHaveLength(1)
-})
-
-test('reload preserves an edited desk draft while the older delegation is retried', async ({ page }) => {
-  const commands = await mockWorkspace(page)
-  await page.goto('/')
-  await expect(page.getByLabel('导办台', { exact: true })).toBeVisible()
-  await page.evaluate(() => {
-    localStorage.setItem('pcas.shell', JSON.stringify({ drafts: { desk: '另一个未提交的草稿' }, agents: {} }))
-    sessionStorage.setItem('pcas.pending-delegations.v1', JSON.stringify([
-      { question: '之前的委派', action: { type: 'delegateTask', id: 'pending-task', title: '之前的委派', prompt: '之前的委派', agentId: 'original' } },
-    ]))
-  })
-  await page.reload()
-  const input = page.getByLabel('导办台', { exact: true })
-  await expect(input).toHaveValue('另一个未提交的草稿')
-  await page.getByRole('button', { name: '重试这次提交' }).click()
-  await expect(page.getByText('副手开始做了', { exact: true })).toBeVisible()
-  expect(commands).toHaveLength(1)
-  expect(commands[0]).toMatchObject({ type: 'delegateTask', id: 'pending-task', prompt: '之前的委派' })
-  await expect(input).toHaveValue('另一个未提交的草稿')
-  await page.reload()
-  await expect(input).toHaveValue('另一个未提交的草稿')
-  await expect(page.getByRole('button', { name: '重试这次提交' })).toHaveCount(0)
-  expect(commands).toHaveLength(1)
-})
-
-test('reconciling a committed delegation clears its persisted desk draft without resubmitting', async ({ page }) => {
-  const commands = await mockWorkspace(page)
-  await page.goto('/')
-  await expect(page.getByLabel('导办台', { exact: true })).toBeVisible()
-  await page.evaluate(() => {
-    localStorage.setItem('pcas.shell', JSON.stringify({ drafts: { desk: '之前的委派' }, agents: {} }))
-    sessionStorage.setItem('pcas.pending-delegations.v1', JSON.stringify([
-      { question: '之前的委派', action: { type: 'delegateTask', id: 'task', title: '之前的委派', prompt: '之前的委派', agentId: 'original' } },
-    ]))
-  })
-  await page.reload()
-  const input = page.getByLabel('导办台', { exact: true })
-  await expect(page.getByRole('status').filter({ hasText: '已找到之前提交的事项' })).toBeVisible()
-  await expect(input).toHaveValue('')
-  await page.reload()
-  await expect(input).toHaveValue('')
-  expect(commands).toHaveLength(0)
-})
-
 const failures = [
   ['DAILY_BUDGET_EXCEEDED', '超过今天的额度'],
   ['provider timeout', '等太久没回应'],

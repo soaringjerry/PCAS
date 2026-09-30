@@ -501,12 +501,17 @@ func (s *Store) deleteRecordsTx(ctx context.Context, tx pgx.Tx, scope memory.Sco
 		`INSERT INTO blob_cleanup_jobs(owner_id,blob_key) SELECT owner_id,blob_key FROM source_versions WHERE owner_id=$1 AND source_id=ANY($2::uuid[]) AND blob_key IS NOT NULL ON CONFLICT DO NOTHING`,
 		// Retain only the opaque owner/agent-bound ID as a deletion tombstone.
 		// Open cards can skip this turn without accepting forged history IDs.
+		// The original desk/capture source is not a recalled dependency. Its
+		// ExternalID links it to the request even when the model was unavailable.
 		`UPDATE desk_turns SET question='',answer='',dependencies='[]'::jsonb,
          response=CASE WHEN response IS NULL THEN NULL ELSE jsonb_set(response,'{turn}',
           (response->'turn') || jsonb_build_object('text','','reply','','cards','[]'::jsonb,'ask',NULL,
            'receipts',coalesce((SELECT jsonb_agg((r - 'reason') || jsonb_build_object('text','（内容已删除）') ORDER BY ord)
              FROM jsonb_array_elements(coalesce(response->'turn'->'receipts','[]'::jsonb)) WITH ORDINALITY AS receipt(r,ord)), '[]'::jsonb))) END
-         WHERE owner_id=$1 AND EXISTS(SELECT 1 FROM jsonb_array_elements(coalesce(nullif(dependencies,'null'::jsonb),'[]'::jsonb)) d WHERE d->>'id'=ANY($2::text[]))`,
+         WHERE owner_id=$1 AND (
+          EXISTS(SELECT 1 FROM jsonb_array_elements(coalesce(nullif(dependencies,'null'::jsonb),'[]'::jsonb)) d WHERE d->>'id'=ANY($2::text[]))
+          OR EXISTS(SELECT 1 FROM sources s WHERE s.owner_id=$1 AND s.id=ANY($2::uuid[])
+            AND s.connector IN ('desk','capture') AND lower(s.external_id)=desk_turns.request_id::text))`,
 		`DELETE FROM capture_candidates WHERE owner_id=$1 AND document->>'resolvedInto'=ANY($2::text[])`,
 		`DELETE FROM work_documents WHERE owner_id=$1 AND document->>'runId' IN (SELECT run_id::text FROM run_dependencies WHERE owner_id=$1 AND memory_id=ANY($2::uuid[]))`,
 		`DELETE FROM training_samples WHERE owner_id=$1 AND (memory_id=ANY($2::uuid[]) OR run_id IN (SELECT run_id FROM run_dependencies WHERE owner_id=$1 AND memory_id=ANY($2::uuid[])))`,

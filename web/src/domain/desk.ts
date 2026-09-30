@@ -26,6 +26,11 @@ export interface TasksCard {
 /** Kinds this build does not know are kept as-is and skipped when drawn. */
 export type DeskCard = SourcesCard | LinksCard | TimelineCard | TasksCard | { kind: string; items?: unknown }
 
+/** A card this build can draw, with something in it. */
+export function isKnownCard(card: DeskCard): card is SourcesCard | LinksCard | TimelineCard | TasksCard {
+  return ['sources', 'links', 'timeline', 'tasks'].includes(card.kind) && Array.isArray(card.items) && card.items.length > 0
+}
+
 export type ReceiptOp = 'create_task' | 'update' | 'create_idea' | 'create_project' | 'add_steps' | 'remember' | 'delegate' | 'capture'
 
 export interface Receipt {

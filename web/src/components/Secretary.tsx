@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { ArrowUp, Check, Minus, Undo2, X } from 'lucide-react'
 import {
+  isKnownCard,
   loadConversation,
   splitTitle,
   updateConversation,
@@ -117,8 +118,11 @@ function ReceiptRow({ receipt, onEdit }: { receipt: Receipt; onEdit: (title: str
 }
 
 function TurnView({ turn, last, onSend, onEdit }: { turn: DeskTurn; last: boolean; onSend: (text: string) => void; onEdit: (title: string) => void }) {
+  // The model may come back with nothing to say or do; the turn must not look blank.
+  const empty = !turn.reply && !turn.receipts?.length && !turn.ask && !(turn.cards ?? []).some(isKnownCard)
   return (
     <>
+      {empty && <p className="sec-status">没听出要做什么，换个说法试试？</p>}
       {turn.reply && <p className="sec-reply">{turn.reply}</p>}
       <SecretaryCards cards={turn.cards ?? []} />
       {turn.receipts?.length > 0 && (

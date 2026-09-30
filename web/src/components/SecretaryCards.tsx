@@ -1,16 +1,10 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
 import { ArrowUpRight, Check } from 'lucide-react'
-import type { DeskCard, LinksCard, SourcesCard, TasksCard, TimelineCard } from '../domain/desk'
+import { isKnownCard, type DeskCard, type LinksCard, type SourcesCard, type TasksCard, type TimelineCard } from '../domain/desk'
 import { dayOffset, formatDateTime, isOverdue } from '../domain/time'
 import { useStore } from '../store/context'
 import { SourceSheet } from './SourceSheet'
-
-type Known = SourcesCard | LinksCard | TimelineCard | TasksCard
-
-function known(card: DeskCard): card is Known {
-  return ['sources', 'links', 'timeline', 'tasks'].includes(card.kind) && Array.isArray(card.items) && card.items.length > 0
-}
 
 /** "今天", "3月12日", "2025年3月" — short enough for a margin. */
 function shortDate(iso: string): string {
@@ -130,7 +124,7 @@ function Tasks({ card }: { card: TasksCard }) {
 export function SecretaryCards({ cards }: { cards: DeskCard[] }) {
   return (
     <>
-      {cards.filter(known).map((card, i) => {
+      {cards.filter(isKnownCard).map((card, i) => {
         switch (card.kind) {
           case 'sources':
             return <Sources key={i} card={card} />

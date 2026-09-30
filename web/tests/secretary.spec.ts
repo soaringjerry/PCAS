@@ -180,6 +180,13 @@ test('撤销 on a receipt undoes that action and reports why when it cannot', as
   await expect(page.locator('.sec-receipt.skipped').getByRole('button')).toHaveCount(0)
 })
 
+test('a turn with nothing to show says so instead of staying blank', async ({ page }) => {
+  await mockBackend(page, () => ({ cards: [{ kind: 'mystery' }] }))
+  await page.goto('/')
+  await say(page, '嗯')
+  await expect(page.locator('.sec-turn').filter({ hasText: '嗯' })).toContainText('没听出要做什么，换个说法试试？')
+})
+
 test('an ask option is sent as the next line', async ({ page }) => {
   const backend = await mockBackend(page, (_request, n) =>
     n === 1 ? { receipts: [created], ask: { question: '张三是指哪一位？', options: ['张三（同事）', '张三（房东）'] } } : { reply: '好，记在同事张三名下。' },

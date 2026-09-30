@@ -205,6 +205,15 @@ export function looksLikeQuestion(text: string): boolean {
 }
 
 /** Asking the assistant to produce something; the fallback when Jev is not configured. */
+export function ambiguousDelegation(text: string): boolean {
+  return /是否|要不要|应不应该|也许|可能|考虑一下|maybe|whether|should i/i.test(text)
+}
+
 export function looksLikeRequest(text: string): boolean {
-  return /^(请你?|麻烦你?)?(帮我|帮忙|替我|给我(写|起草|列|整理|做|想|查|总结|规划|拆)|你来)/.test(text.trim())
+  const t = text.trim()
+  if (ambiguousDelegation(t)) return false
+  return /^(请你?|麻烦你?)?(帮我|帮忙|替我|给我|你来)(写|起草|列|整理|做|总结|规划|拆|生成|修改|翻译|设计)\S/.test(t)
+    || /^(请|麻烦)(写|起草|列|整理|做|总结|规划|拆|生成|修改|翻译|设计)\S/.test(t)
+    || /^(please |can you |could you )(write|draft|make|create|summarize|translate|revise|plan)\s+\S/i.test(t)
+    || /^(把|将).+(整理|改写|翻译|总结|生成|修改)/.test(t)
 }

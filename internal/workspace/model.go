@@ -61,35 +61,36 @@ type Owed struct {
 // Item is action-module data. Kind-specific input validation precedes writes;
 // frequently queried fields have explicit SQL columns and constraints.
 type Item struct {
-	ID            string      `json:"id"`
-	Kind          string      `json:"itemKind"`
-	Version       int         `json:"recordVersion"`
-	Title         string      `json:"title"`
-	Name          string      `json:"name"`
-	Status        string      `json:"status"`
-	Notes         string      `json:"notes,omitempty"`
-	Body          string      `json:"body"`
-	Goal          string      `json:"goal"`
-	Progress      string      `json:"progress"`
-	ProjectID     string      `json:"projectId,omitempty"`
-	IdeaID        string      `json:"ideaId,omitempty"`
-	Due           string      `json:"due,omitempty"`
-	Scheduled     string      `json:"scheduled,omitempty"`
-	WaitingFor    string      `json:"waitingFor,omitempty"`
-	OwedTo        *Owed       `json:"owedTo,omitempty"`
-	DependsOn     []string    `json:"dependsOn"`
-	Checklist     []Check     `json:"checklist"`
-	Triggers      []Trigger   `json:"triggers"`
-	Sources       []SourceRef `json:"sources"`
-	History       []Revision  `json:"history"`
-	Evolution     []Revision  `json:"evolution"`
-	Conditions    []Condition `json:"conditions"`
-	RemindersOn   bool        `json:"remindersOn"`
-	ShelvedReason string      `json:"shelvedReason,omitempty"`
-	Wake          *Wake       `json:"wake,omitempty"`
-	NextSteps     []string    `json:"nextSteps"`
-	CreatedAt     string      `json:"createdAt"`
-	UpdatedAt     string      `json:"updatedAt"`
+	HasRetainedWriting bool        `json:"hasRetainedWriting,omitempty"`
+	ID                 string      `json:"id"`
+	Kind               string      `json:"itemKind"`
+	Version            int         `json:"recordVersion"`
+	Title              string      `json:"title"`
+	Name               string      `json:"name"`
+	Status             string      `json:"status"`
+	Notes              string      `json:"notes,omitempty"`
+	Body               string      `json:"body"`
+	Goal               string      `json:"goal"`
+	Progress           string      `json:"progress"`
+	ProjectID          string      `json:"projectId,omitempty"`
+	IdeaID             string      `json:"ideaId,omitempty"`
+	Due                string      `json:"due,omitempty"`
+	Scheduled          string      `json:"scheduled,omitempty"`
+	WaitingFor         string      `json:"waitingFor,omitempty"`
+	OwedTo             *Owed       `json:"owedTo,omitempty"`
+	DependsOn          []string    `json:"dependsOn"`
+	Checklist          []Check     `json:"checklist"`
+	Triggers           []Trigger   `json:"triggers"`
+	Sources            []SourceRef `json:"sources"`
+	History            []Revision  `json:"history"`
+	Evolution          []Revision  `json:"evolution"`
+	Conditions         []Condition `json:"conditions"`
+	RemindersOn        bool        `json:"remindersOn"`
+	ShelvedReason      string      `json:"shelvedReason,omitempty"`
+	Wake               *Wake       `json:"wake,omitempty"`
+	NextSteps          []string    `json:"nextSteps"`
+	CreatedAt          string      `json:"createdAt"`
+	UpdatedAt          string      `json:"updatedAt"`
 }
 type Candidate struct {
 	ID           string    `json:"id"`
@@ -254,6 +255,7 @@ type State struct {
 
 // Commands are validated on the server; callers never submit an entire state.
 type Command struct {
+	DeskTurnIDs      []string        `json:"deskTurnIds,omitempty"`
 	IncludeSources   bool            `json:"includeSources,omitempty"`
 	RequestID        string          `json:"requestId"`
 	ExpectedRevision int64           `json:"expectedRevision"`
@@ -300,6 +302,7 @@ type API interface {
 // DeskAnswer is the assistant's reply to a desk question, with only the
 // records it says it used.
 type DeskAnswer struct {
+	ID       string       `json:"id"`
 	Answer   string       `json:"answer"`
 	Agent    string       `json:"agent"`
 	Used     []DeskSource `json:"used"`
@@ -309,6 +312,7 @@ type DeskAnswer struct {
 
 // DeskTurn is an earlier exchange on the same answer card.
 type DeskTurn struct {
+	ID       string `json:"id,omitempty"`
 	Question string `json:"q"`
 	Answer   string `json:"a"`
 }

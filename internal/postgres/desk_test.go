@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -43,7 +44,7 @@ func TestDeskAnswerCitesOnlyWhatItWasShown(t *testing.T) {
 	workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "整理发票"})
 
 	used = []string{mem.ID, hidden.ID, "not-sent"}
-	out, err := s.AnswerDesk(ctx, scope, "model", "季度报告什么时候交？")
+	out, err := s.AnswerDesk(ctx, scope, "model", "季度报告什么时候交？", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -53,10 +54,25 @@ func TestDeskAnswerCitesOnlyWhatItWasShown(t *testing.T) {
 	if !strings.Contains(prompt, "季度报告什么时候交") || !strings.Contains(prompt, "整理发票") || strings.Contains(prompt, "hunter2") {
 		t.Fatalf("prompt leaked or missed context: %s", prompt)
 	}
-	if _, err := s.AnswerDesk(ctx, scope, "manual", "x"); err == nil {
+	// A follow-up carries the earlier exchange and the saved city.
+	workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: asJSON(map[string]any{"city": " 上海 "})})
+	if _, err := s.AnswerDesk(ctx, scope, "model", "那明天呢", []workspace.DeskTurn{{Question: "今天天气怎么样", Answer: "上海今天多云。"}}); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(prompt, "用户所在城市：上海") || !strings.Contains(prompt, "上海今天多云") || !strings.Contains(prompt, "那明天呢") {
+		t.Fatalf("follow-up context missing: %s", prompt)
+	}
+	current, err := s.Snapshot(ctx, scope)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Execute(ctx, scope, workspace.Command{Type: "updateSettings", Patch: asJSON(map[string]any{"city": "a\nb"}), RequestID: string(memory.NewID()), ExpectedRevision: current.Revision}); !errors.Is(err, memory.ErrInvalid) {
+		t.Fatal("multi-line city accepted")
+	}
+	if _, err := s.AnswerDesk(ctx, scope, "manual", "x", nil); err == nil {
 		t.Fatal("manual agent answered")
 	}
-	if _, err := s.AnswerDesk(ctx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: "external", IsOwner: false}, "model", "x"); err == nil {
+	if _, err := s.AnswerDesk(ctx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: "external", IsOwner: false}, "model", "x", nil); err == nil {
 		t.Fatal("non-owner answered")
 	}
 }

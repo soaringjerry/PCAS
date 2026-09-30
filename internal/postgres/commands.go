@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
@@ -203,8 +204,12 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 		if err != nil {
 			return err
 		}
-		if err := patchAllowed(&settings, c.Patch, "autoAccept", "wakeIdeas", "followUps", "dailyReviewAt", "dailyBudget", "timezone"); err != nil {
+		if err := patchAllowed(&settings, c.Patch, "autoAccept", "wakeIdeas", "followUps", "dailyReviewAt", "dailyBudget", "timezone", "city"); err != nil {
 			return err
+		}
+		settings.City = strings.TrimSpace(settings.City)
+		if utf8.RuneCountInString(settings.City) > 60 || strings.ContainsAny(settings.City, "\r\n") {
+			return memory.ErrInvalid
 		}
 		if settings.DailyBudget < 0 || settings.DailyBudget > 1e6 {
 			return memory.ErrInvalid

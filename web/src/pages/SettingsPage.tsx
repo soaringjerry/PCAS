@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { MemoryActivitySettings } from '../components/MemoryActivitySettings'
 import { ConnectorSettings } from '../components/ConnectorSettings'
 import { memoriesFor } from '../domain/agent'
@@ -20,6 +21,28 @@ function reviewTimes(current: string) {
   const slots = Array.from({ length: 48 }, (_, i) => `${String(Math.floor(i / 2)).padStart(2, '0')}:${i % 2 ? '30' : '00'}`)
   if (!slots.includes(current)) slots.push(current)
   return slots.sort().map((t) => ({ value: t, label: t }))
+}
+
+function CityInput({ value, onSave }: { value: string; onSave: (city: string) => void }) {
+  const [draft, setDraft] = useState(value)
+  const save = () => {
+    const city = draft.trim()
+    if (city !== value) onSave(city)
+  }
+  return (
+    <input
+      className="input city-input"
+      aria-label="所在城市"
+      placeholder="比如 上海"
+      maxLength={60}
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={save}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') e.currentTarget.blur()
+      }}
+    />
+  )
 }
 
 export function SettingsPage() {
@@ -46,6 +69,13 @@ export function SettingsPage() {
             后台
           </h2>
           <Sheet>
+            <div className="setting">
+              <div>
+                <div className="ink">所在城市</div>
+                <div className="small muted">导办台问天气、附近的地方而没说在哪时，默认按这里查。</div>
+              </div>
+              <CityInput value={s.city ?? ''} onSave={(city) => dispatch({ type: 'updateSettings', patch: { city } })} />
+            </div>
             <div className="setting">
               <div>
                 <div className="ink">明确要求的待办自动收下</div>

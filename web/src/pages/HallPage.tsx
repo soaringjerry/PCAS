@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { Link } from 'react-router'
-import { ArrowUp, Check, ChevronDown, ChevronRight, FileText, Search, Sparkles, X } from 'lucide-react'
+import { ArrowUp, Check, ChevronDown, ChevronRight, FileText, MoreHorizontal, Search, Sparkles, X } from 'lucide-react'
 import { RecallSheet } from '../components/RecallSheet'
 import { SourceSheet } from '../components/SourceSheet'
 import { UnsureSheet } from '../components/UnsureSheet'
@@ -134,7 +134,8 @@ interface DeskReply {
   searches: string[]
   links: string[]
 }
-type Answer = { q: string; busy: true } | { q: string; busy: false; reply?: DeskReply; error?: string }
+/** One exchange on the answer card; follow-ups add turns until the card is closed. */
+type Turn = { q: string; busy?: boolean; reply?: DeskReply; error?: string }
 type Intent = 'ask' | 'record' | 'delegate'
 type Receipt = { key: number; text: string; hint: string; to?: string }
 
@@ -191,56 +192,35 @@ function DecisionStrip() {
   )
 }
 
-function AnswerCard({ answer, onClose, onDeeper, onFile, onDelegate }: { answer: Answer; onClose: () => void; onDeeper: () => void; onFile: () => void; onDelegate: () => void }) {
+function TurnBody({ turn, onSource }: { turn: Turn; onSource: (s: { id: string; version?: number }) => void }) {
   const { state } = useStore()
-  const [source, setSource] = useState<{ id: string; version?: number } | null>(null)
-  const card = useRef<HTMLDivElement>(null)
-  // On a phone the desk input sits at the bottom; bring the answer into view.
-  useEffect(() => {
-    card.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
-  }, [answer.q])
-  const reply = !answer.busy ? answer.reply : undefined
-
+  const reply = turn.reply
+  if (turn.busy) return <p className="hall-answer-body h-muted">正在翻记录、想怎么回答…</p>
+  if (!reply) return <p className="hall-answer-body h-muted">{turn.error}</p>
   return (
-    <div className="hall-answer" aria-live="polite" ref={card}>
-      {source && <SourceSheet id={source.id} version={source.version} onClose={() => setSource(null)} />}
-      <div className="hall-answer-head">
-        <span>你问：{answer.q}</span>
-        <button type="button" className="hall-icon-btn" aria-label="收起回答" onClick={onClose}>
-          <X size={16} />
-        </button>
-      </div>
-      {answer.busy ? (
-        <p className="hall-answer-body h-muted">正在翻记录、想怎么回答…</p>
-      ) : answer.error ? (
-        <p className="hall-answer-body h-muted">{answer.error}</p>
-      ) : (
-        reply && <p className="hall-answer-body">{reply.answer}</p>
+    <>
+      <p className="hall-answer-body">{reply.answer}</p>
+      {reply.used.length > 0 && (
+        <ul className="hall-answer-excerpts">
+          {reply.used.map((u) => {
+            // The record behind a memory, when there is one, opens as the source.
+            const origin = state.memories.find((m) => m.id === u.ref.id)?.sources[0]
+            return (
+              <li key={u.ref.id}>
+                {origin ? (
+                  <button type="button" className="hall-cite" onClick={() => onSource({ id: origin.sourceId, version: origin.version })}>
+                    {u.text}
+                    <FileText size={12} />
+                  </button>
+                ) : (
+                  u.text
+                )}
+              </li>
+            )
+          })}
+        </ul>
       )}
-      {reply && reply.used.length > 0 && (
-        <>
-          <p className="hall-answer-lead">依据</p>
-          <ul className="hall-answer-excerpts">
-            {reply.used.map((u) => {
-              // The record behind a memory, when there is one, opens as the source.
-              const origin = state.memories.find((m) => m.id === u.ref.id)?.sources[0]
-              return (
-                <li key={u.ref.id}>
-                  {origin ? (
-                    <button type="button" className="hall-cite" onClick={() => setSource({ id: origin.sourceId, version: origin.version })}>
-                      {u.text}
-                      <FileText size={12} />
-                    </button>
-                  ) : (
-                    u.text
-                  )}
-                </li>
-              )
-            })}
-          </ul>
-        </>
-      )}
-      {reply && reply.links.length > 0 && (
+      {reply.links.length > 0 && (
         <ul className="hall-answer-links">
           {reply.links.map((link) => (
             <li key={link}>
@@ -251,25 +231,62 @@ function AnswerCard({ answer, onClose, onDeeper, onFile, onDelegate }: { answer:
           ))}
         </ul>
       )}
-      {!answer.busy && (
+    </>
+  )
+}
+
+function AnswerCard({ thread, onClose, onDeeper, onFile, onDelegate }: { thread: Turn[]; onClose: () => void; onDeeper: () => void; onFile: () => void; onDelegate: () => void }) {
+  const [source, setSource] = useState<{ id: string; version?: number } | null>(null)
+  const [more, setMore] = useState(false)
+  const card = useRef<HTMLDivElement>(null)
+  const last = thread[thread.length - 1]
+  // On a phone the desk input sits at the bottom; bring the answer into view.
+  useEffect(() => {
+    card.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+  }, [thread.length, last.busy])
+
+  return (
+    <div className="hall-answer" aria-live="polite" ref={card}>
+      {source && <SourceSheet id={source.id} version={source.version} onClose={() => setSource(null)} />}
+      <div className="hall-answer-head">
+        <span>你问：{thread[0].q}</span>
+        <button type="button" className="hall-icon-btn" aria-label="结束这次问答" onClick={onClose}>
+          <X size={16} />
+        </button>
+      </div>
+      {thread.map((turn, i) => (
+        <div key={i} className="hall-turn">
+          {i > 0 && <p className="hall-turn-q">{turn.q}</p>}
+          <TurnBody turn={turn} onSource={setSource} />
+        </div>
+      ))}
+      {!last.busy && (
         <div className="hall-answer-foot">
-          {reply && (
+          {last.reply && (
             <span className="h-note">
-              {reply.agent} 回答{reply.searches.length > 0 && ` · 联网查了「${reply.searches.join('」「')}」`}
+              {last.reply.agent} 回答{last.reply.searches.length > 0 && ` · 联网查了「${last.reply.searches.join('」「')}」`}
             </span>
           )}
           <span className="grow" />
-          <button type="button" className="hall-link" onClick={onFile}>
-            不是问题，记下来
-          </button>
-          <button type="button" className="hall-link" onClick={onDelegate}>
-            <Sparkles size={13} />
-            交给副手
-          </button>
-          <button type="button" className="hall-link" onClick={onDeeper}>
-            <Search size={13} />
-            翻完整历史
-          </button>
+          {more ? (
+            <>
+              <button type="button" className="hall-link" onClick={onFile}>
+                不是问题，记下来
+              </button>
+              <button type="button" className="hall-link" onClick={onDelegate}>
+                <Sparkles size={13} />
+                交给副手
+              </button>
+              <button type="button" className="hall-link" onClick={onDeeper}>
+                <Search size={13} />
+                翻完整历史
+              </button>
+            </>
+          ) : (
+            <button type="button" className="hall-icon-btn" aria-label="更多操作" onClick={() => setMore(true)}>
+              <MoreHorizontal size={16} />
+            </button>
+          )}
         </div>
       )}
     </div>
@@ -309,47 +326,59 @@ function Desk() {
   const [text, setText] = useState('')
   const [routing, setRouting] = useState(false)
   const [receipt, setReceipt] = useState<Receipt | null>(null)
-  const [answer, setAnswer] = useState<Answer | null>(null)
+  const [thread, setThread] = useState<Turn[] | null>(null)
   const [pick, setPick] = useState<string | null>(null)
   const [deeper, setDeeper] = useState<string | null>(null)
   const asked = useRef(0)
+  const input = useRef<HTMLInputElement>(null)
+  // While an answer card is open, the next line continues that conversation.
+  const following = thread !== null && !thread[thread.length - 1].busy
+
+  const close = () => {
+    asked.current++ // an answer still in flight must not reopen the card
+    setThread(null)
+  }
 
   const file = async (q: string) => {
     if (!(await dispatch({ type: 'capture', text: q }))) return false
-    asked.current++ // a recall still in flight must not cover this receipt
-    setAnswer(null)
+    close()
     setReceipt({ key: Date.now(), text: '记下了，后台会整理', hint: '它会自己放进今天、项目或想法；拿不准的会出现在上面。' })
     return true
   }
 
-  const ask = async (q: string) => {
+  const ask = async (q: string, follow = false) => {
     const ticket = ++asked.current
+    const before = follow && thread ? thread : []
+    const history = before.flatMap((t) => (t.reply ? [{ q: t.q, a: t.reply.answer }] : [])).slice(-6)
     setReceipt(null)
-    setAnswer({ q, busy: true })
+    setThread([...before, { q, busy: true }])
+    const done = (turn: Turn) => {
+      if (ticket !== asked.current) return
+      setThread([...before, turn])
+      input.current?.focus()
+    }
     const agentId = agentFor('desk')
     if (agentId === 'manual') {
-      setAnswer({ q, busy: false, error: '没有能直接回答的副手。去设置里启用一个，或者翻完整历史自己找。' })
+      done({ q, error: '没有能直接回答的副手。去设置里启用一个，或者翻完整历史自己找。' })
       return true
     }
     try {
-      const reply = await api<DeskReply>('/v1/desk/answer', { question: q, agentId })
-      if (ticket === asked.current) setAnswer({ q, busy: false, reply })
+      done({ q, reply: await api<DeskReply>('/v1/desk/answer', { question: q, agentId, history }) })
     } catch (e) {
-      if (ticket === asked.current) setAnswer({ q, busy: false, error: e instanceof Error ? e.message : '没答上来，请稍后再问一次。' })
+      done({ q, error: e instanceof Error ? e.message : '没答上来，请稍后再问一次。' })
     }
     return true
   }
 
   // A task the assistant starts on right away; its draft lands in the queue above.
-  const delegate = async (q: string) => {
+  const delegate = async (q: string, prompt = q) => {
     const id = crypto.randomUUID()
     const title = q.length > 60 ? `${q.slice(0, 60)}…` : q
     if (!(await dispatch({ type: 'addTask', id, title }))) return false
-    asked.current++
+    close()
     const agentId = agentFor(id)
     const agent = state.agents.find((a) => a.id === agentId)
-    const started = agentId !== 'manual' && (await runAgent({ thingId: id, agentId, kind: 'ask', prompt: q }))
-    setAnswer(null)
+    const started = agentId !== 'manual' && (await runAgent({ thingId: id, agentId, kind: 'ask', prompt }))
     setReceipt(
       started
         ? { key: Date.now(), text: `交给${agent?.name ?? '副手'}了`, hint: '做好了会出现在上面等你拍板。', to: `/t/${id}` }
@@ -366,12 +395,17 @@ function Desk() {
   const submit = async () => {
     const q = text.trim()
     if (!q || routing) return
+    if (following) {
+      setText('')
+      await ask(q, true)
+      return
+    }
     setRouting(true)
     const { intent, sure } = await route(q)
     setRouting(false)
     setText('')
     if (!sure) {
-      setAnswer(null)
+      close()
       setReceipt(null)
       setPick(q)
       return
@@ -393,14 +427,18 @@ function Desk() {
         <label htmlFor="hall-desk-input">导办台</label>
         <div className="h-row">
           <input
+            ref={input}
             id="hall-desk-input"
             value={text}
             onChange={(e) => setText(e.target.value)}
-            placeholder="记一件事、问一句话、让副手做点什么，都在这"
+            onKeyDown={(e) => {
+              if (e.key === 'Escape' && thread) close()
+            }}
+            placeholder={following ? '接着问，或按 Esc 结束这次问答' : '记一件事、问一句话、让副手做点什么，都在这'}
             autoComplete="off"
             enterKeyHint="send"
           />
-          <button type="submit" className="hall-send" aria-label="交给她" disabled={!text.trim() || routing}>
+          <button type="submit" className="hall-send" aria-label={following ? '接着问' : '交给她'} disabled={!text.trim() || routing || (thread !== null && !following)}>
             <ArrowUp size={18} strokeWidth={2.5} />
           </button>
         </div>
@@ -415,7 +453,7 @@ function Desk() {
           }}
         />
       )}
-      {receipt && !answer && pick === null && (
+      {receipt && !thread && pick === null && (
         <p key={receipt.key} className="hall-receipt" role="status">
           <Check size={15} strokeWidth={2.6} />
           <span>{receipt.text}</span>
@@ -427,13 +465,13 @@ function Desk() {
           )}
         </p>
       )}
-      {answer && (
+      {thread && (
         <AnswerCard
-          answer={answer}
-          onClose={() => setAnswer(null)}
-          onDeeper={() => setDeeper(answer.q)}
-          onFile={() => void file(answer.q)}
-          onDelegate={() => void delegate(answer.q)}
+          thread={thread}
+          onClose={close}
+          onDeeper={() => setDeeper(thread[0].q)}
+          onFile={() => void file(thread[0].q)}
+          onDelegate={() => void delegate(thread[0].q, thread.map((t) => `问：${t.q}\n答：${t.reply?.answer ?? ''}`).join('\n'))}
         />
       )}
     </section>

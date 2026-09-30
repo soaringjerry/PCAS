@@ -268,6 +268,8 @@ export interface Settings {
   dailyReviewAt: string
   /** Daily spend limit for button-triggered AI work, in CNY. */
   dailyBudget: number
+  /** Where the owner usually is; the desk uses it for weather and "nearby". */
+  city?: string
 }
 
 /** One line of what the background did, already in the user's words. */

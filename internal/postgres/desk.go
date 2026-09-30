@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
@@ -21,19 +22,26 @@ const deskInstructions = assistantInstructions + `
 // AnswerDesk has the chosen assistant answer one desk question from the
 // memories it may see, the open tasks and, where the provider offers it, the web. It is synchronous and short, unlike
 // runs, so it reserves budget up front and never retries.
-func (s *Store) AnswerDesk(ctx context.Context, scope memory.Scope, agentID, question string) (workspace.DeskAnswer, error) {
+func (s *Store) AnswerDesk(ctx context.Context, scope memory.Scope, agentID, question string, history []workspace.DeskTurn) (workspace.DeskAnswer, error) {
 	var out workspace.DeskAnswer
 	question = strings.TrimSpace(question)
 	if !scope.IsOwner {
 		return out, memory.ErrForbidden
 	}
-	if question == "" || len(question) > 4000 {
+	if question == "" || len(question) > 4000 || len(history) > 6 {
 		return out, memory.ErrInvalid
+	}
+	earlier := ""
+	for _, turn := range history {
+		if len(turn.Question) > 4000 || len(turn.Answer) > 8000 {
+			return out, memory.ErrInvalid
+		}
+		earlier += turn.Question + " "
 	}
 	if s.models == nil || !s.models.Available(agentID) {
 		return out, memory.ErrUnavailable
 	}
-	recall, err := s.Recall(ctx, scope, memory.RecallRequest{Query: question, Mode: "remember", Context: memory.WorkingContext{Objects: []memory.ID{}}, Budget: memory.Budget{Candidates: 15, Tokens: 4000, Edges: 15, Hops: 1}})
+	recall, err := s.Recall(ctx, scope, memory.RecallRequest{Query: tail(earlier+question, 4000), Mode: "remember", Context: memory.WorkingContext{Objects: []memory.ID{}}, Budget: memory.Budget{Candidates: 15, Tokens: 4000, Edges: 15, Hops: 1}})
 	if err != nil {
 		return out, err
 	}
@@ -74,7 +82,19 @@ func (s *Store) AnswerDesk(ctx context.Context, scope memory.Scope, agentID, que
 	}
 	var prompt strings.Builder
 	now := time.Now().In(loc)
-	fmt.Fprintf(&prompt, "现在：%s 星期%s（%s）\n问题：%s\n\n检索到的记录（引用 ID）：\n", now.Format("2006-01-02 15:04"), []string{"日", "一", "二", "三", "四", "五", "六"}[now.Weekday()], loc, question)
+	fmt.Fprintf(&prompt, "现在：%s 星期%s（%s）\n", now.Format("2006-01-02 15:04"), []string{"日", "一", "二", "三", "四", "五", "六"}[now.Weekday()], loc)
+	if settings.City != "" {
+		fmt.Fprintf(&prompt, "用户所在城市：%s（问天气、附近等没说地点时默认用它）\n", settings.City)
+	} else {
+		fmt.Fprintln(&prompt, "用户所在城市：未设置（需要地点而用户没说时，可以按时区推断并说明，或请用户说城市）")
+	}
+	if len(history) > 0 {
+		fmt.Fprintln(&prompt, "\n同一张卡片上之前的对话（本次是接着问）：")
+		for _, turn := range history {
+			fmt.Fprintf(&prompt, "问：%s\n答：%s\n", turn.Question, turn.Answer)
+		}
+	}
+	fmt.Fprintf(&prompt, "\n问题：%s\n\n检索到的记录（引用 ID）：\n", question)
 	sent := map[string]memory.Ref{}
 	for _, ref := range recall.Memories {
 		m, ok := visible[string(ref.ID)]
@@ -138,4 +158,16 @@ func (s *Store) AnswerDesk(ctx context.Context, scope memory.Scope, agentID, que
 		}
 	}
 	return out, nil
+}
+
+// tail keeps the last n bytes of s without splitting a character.
+func tail(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	i := len(s) - n
+	for i < len(s) && !utf8.RuneStart(s[i]) {
+		i++
+	}
+	return s[i:]
 }

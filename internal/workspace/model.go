@@ -148,6 +148,8 @@ type Settings struct {
 	DailyReviewAt string  `json:"dailyReviewAt"`
 	DailyBudget   float64 `json:"dailyBudget"`
 	Timezone      string  `json:"timezone"`
+	// City is where the owner usually is, for weather and "nearby" questions.
+	City string `json:"city,omitempty"`
 }
 type Doc struct {
 	ID        string `json:"id"`
@@ -301,6 +303,12 @@ type DeskAnswer struct {
 	Used     []DeskSource `json:"used"`
 	Searches []string     `json:"searches"`
 	Links    []string     `json:"links"`
+}
+
+// DeskTurn is an earlier exchange on the same answer card.
+type DeskTurn struct {
+	Question string `json:"q"`
+	Answer   string `json:"a"`
 }
 type DeskSource struct {
 	Ref  memory.Ref `json:"ref"`

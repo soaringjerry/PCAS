@@ -231,21 +231,22 @@ func (s *Server) workspaceRoutes(mux *http.ServeMux) {
 	// Answering can take a model call, longer than the server's default write timeout.
 	mux.HandleFunc("POST /v1/desk/answer", s.authorize(func(w http.ResponseWriter, r *http.Request, scope memory.Scope) {
 		desk, ok := s.options.Workspace.(interface {
-			AnswerDesk(context.Context, memory.Scope, string, string) (workspace.DeskAnswer, error)
+			AnswerDesk(context.Context, memory.Scope, string, string, []workspace.DeskTurn) (workspace.DeskAnswer, error)
 		})
 		if !ok {
 			s.fail(w, memory.ErrUnavailable)
 			return
 		}
 		var in struct {
-			Question string `json:"question"`
-			AgentID  string `json:"agentId"`
+			Question string               `json:"question"`
+			AgentID  string               `json:"agentId"`
+			History  []workspace.DeskTurn `json:"history"`
 		}
 		if !decode(w, r, &in) {
 			return
 		}
 		_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(2 * time.Minute))
-		out, err := desk.AnswerDesk(r.Context(), scope, in.AgentID, in.Question)
+		out, err := desk.AnswerDesk(r.Context(), scope, in.AgentID, in.Question, in.History)
 		if err != nil {
 			s.fail(w, err)
 			return

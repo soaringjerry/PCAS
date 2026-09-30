@@ -2889,3 +2889,8 @@ a.btn:hover {
 .check-row .checkbox {
   font-size: 13.5px;
 }
+
+.city-input {
+  width: 160px;
+  flex: none;
+}

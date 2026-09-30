@@ -253,6 +253,20 @@ Go 端 `workspace.State` 增加 `Notices []Notice`，JSON 字段名为 `notices`
 
 ---
 
+## 5.1 修改历史里的"谁"（B1 补充实现；D1、D2 使用）
+
+`Item.history[].by`（`workspace.Revision.By`）取值固定为：
+
+| 值 | 含义 |
+|---|---|
+| `user` | 用户通过界面操作，包括撤销 |
+| `secretary` | 秘书执行的动作（desk turn，含 Telegram） |
+| `assistant` | 副手结果的自动采纳（D1） |
+| `system` | 提醒、唤醒等后台规则 |
+
+实现方式：`withActor(ctx, "secretary")` 这类 context 值，由 `saveAction` 读取；不设置时默认为 `user`。
+D2 的「动态」据此显示"你 / 秘书 / 副手"。
+
 ## 6 前端共享接口（B2 实现；D2 使用）
 
 ```ts
@@ -272,6 +286,12 @@ show(text: string, options?: { link?: { to: string; label: string }; undo?: () =
 
 tryUndo(actionId: string): Promise<{ ok: true } | { ok: false; error: string }>
 //   和 undo 相同，但把失败原因返回给调用方，不弹全局提示（B2 已实现，回执行内显示原因用）。
+
+// 秘书组件的显示模式（2026-09-30 补充）
+<Secretary thingId?: string variant?: 'full' | 'latest' />
+//   'full'（默认）：完整对话。
+//   'latest'：只显示最近一轮（回执、追问），上方一行「展开对话（N 轮）」，点开后临时切到完整对话。
+//   D2 用法：事项页用 'latest'；首页手机宽度用 'latest'；首页桌面用 'full'。
 
 // useShell()（web/src/store/shell.ts）新增：
 prefill(key: string, text: string): void

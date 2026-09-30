@@ -86,6 +86,8 @@ flowchart LR
 - 线上 PCAS 就在这台机器上：`pcas-api-1`、`pcas-worker-1`、`pcas-db-1`，对外是 `https://pcas.coyumelabs.com`。
   **不要重启、重建或连接它们**；部署只在用户明确要求时进行。
 - 机器上的其他容器（`dreamtrans-*`、`dt-*`、`glowtype-*`）属于别的项目，不要动。
+- **结束进程只能按你自己记下的 PID**（启动时保存 `$!`，或写进 pid 文件）。禁止使用 `pkill`、`killall`、`kill $(pgrep …)` 这类按名字或模式匹配的命令：线上容器里的进程同样叫 `pcas`，宿主机上能匹配到（2026-09-30 发生过一次误杀）。
+- 磁盘空间有限：测试库用 tmpfs，跑完立即删除容器和卷；不要在 `/tmp` 留下大体积缓存。
 - 测试数据库自己起一个，用完删掉：
   ```sh
   docker run -d --name pcas-test-<任务号> -e POSTGRES_PASSWORD=test -p 127.0.0.1::5432 pgvector/pgvector:0.8.2-pg16-bookworm

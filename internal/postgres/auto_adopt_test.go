@@ -85,10 +85,10 @@ func TestAdoptionMatchesFrontend(t *testing.T) {
 	}
 	script := extract(string(agent), "export function parseChecklist(", "function parseChecklist(output) {")
 	script = strings.ReplaceAll(script, ".filter((l): l is string => Boolean(l))", ".filter((l) => Boolean(l))")
-	script += "\n" + extract(string(page), "function adoptAs(", "function adoptAs(thing, run, text) {")
+	script += "\n" + extract(string(page), "function adoptAs(", "function adoptAs(thing, run) {")
 	script += `
 const cases = JSON.parse(require('fs').readFileSync(0, 'utf8'));
-process.stdout.write(JSON.stringify(cases.map(c => ({lines: parseChecklist(c.output), as: ['task','idea','project'].map(kind => adoptAs({kind}, {kind:c.kind}, c.output).as)}))));`
+process.stdout.write(JSON.stringify(cases.map(c => ({lines: parseChecklist(c.output), as: ['task','idea','project'].map(kind => adoptAs({kind}, {kind:c.kind, output:c.output}).as)}))));`
 	cmd := exec.Command(node, "-e", script)
 	cmd.Stdin = strings.NewReader(string(asJSON(cases)))
 	out, err := cmd.CombinedOutput()

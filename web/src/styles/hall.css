@@ -495,6 +495,35 @@
   color: var(--label-2);
 }
 
+.hall-answer-lead {
+  margin: 0;
+  color: var(--label-2);
+  font-size: 13px;
+}
+
+.hall-answer-excerpts {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.hall-answer-excerpts li {
+  display: -webkit-box;
+  overflow: hidden;
+  padding: 8px 12px;
+  border-left: 3px solid var(--blue-soft);
+  border-radius: 4px;
+  background: var(--fill);
+  font-size: 15px;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+}
+
 .hall-answer-notes {
   margin: 0;
   padding-left: 18px;

@@ -11,6 +11,7 @@ import {
   ideaWall,
   looksLikeQuestion,
   projectCards,
+  recallExcerpts,
   todayColumn,
   type TodayRow,
 } from '../domain/hall'
@@ -194,7 +195,8 @@ function AnswerCard({ answer, onClose, onDeeper, onFile }: { answer: Answer; onC
         (r, i, all) => all.findIndex((v) => v.id === r.id && v.version === r.version) === i,
       )
     : []
-  const notes = result ? [...result.coverage.gaps, ...result.follow_ups] : []
+  const notes = result ? [...new Set([...result.coverage.gaps, ...result.follow_ups])] : []
+  const excerpts = result ? recallExcerpts(result.summary) : []
 
   return (
     <div className="hall-answer" aria-live="polite" ref={card}>
@@ -209,8 +211,17 @@ function AnswerCard({ answer, onClose, onDeeper, onFile }: { answer: Answer; onC
         <p className="hall-answer-body h-muted">正在翻记录…</p>
       ) : answer.error ? (
         <p className="hall-answer-body h-muted">{answer.error}</p>
+      ) : excerpts.length === 0 ? (
+        <p className="hall-answer-body">没找到直接相关的记录。可能那个地方还没接进来，或者你是第一次提到它。</p>
       ) : (
-        <p className="hall-answer-body">{result?.summary || '没找到直接相关的记录。可能那个地方还没接进来，或者你是第一次提到它。'}</p>
+        <>
+          <p className="hall-answer-lead">找到这些相关的记录：</p>
+          <ul className="hall-answer-excerpts">
+            {excerpts.map((t, i) => (
+              <li key={i}>{t}</li>
+            ))}
+          </ul>
+        </>
       )}
       {notes.length > 0 && (
         <ul className="hall-answer-notes">
@@ -281,7 +292,7 @@ function Desk() {
   }
 
   return (
-    <section className="hall-desk" aria-label="导办台">
+    <section className="hall-desk">
       {deeper !== null && <RecallSheet query={deeper} onClose={() => setDeeper(null)} />}
       <DecisionStrip />
       <form

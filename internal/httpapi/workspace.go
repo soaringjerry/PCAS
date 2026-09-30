@@ -24,6 +24,7 @@ type Options struct {
 	Editor      memory.Editor
 	Activity    memory.Activity
 	Models      *ai.Registry
+	Router      *ai.Router
 	WebDir      string
 }
 
@@ -194,6 +195,36 @@ func (s *Server) workspaceRoutes(mux *http.ServeMux) {
 			}
 		}
 		writeJSON(w, 200, map[string]any{"providers": out, "chatgptEnabled": s.options.Models != nil && s.options.Models.Codex != nil, "chatgptDirectEnabled": s.options.Models != nil && s.options.Models.ChatGPT != nil})
+	}))
+	// The desk asks where an entry should go. 501 means no decision model is
+	// configured and the page falls back to its own rule.
+	mux.HandleFunc("POST /v1/desk/route", s.authorize(func(w http.ResponseWriter, r *http.Request, scope memory.Scope) {
+		if !scope.IsOwner {
+			s.fail(w, memory.ErrForbidden)
+			return
+		}
+		var in struct {
+			Text string `json:"text"`
+		}
+		if !decode(w, r, &in) {
+			return
+		}
+		text := strings.TrimSpace(in.Text)
+		if text == "" || len(text) > 8000 {
+			s.fail(w, memory.ErrInvalid)
+			return
+		}
+		if s.options.Router == nil {
+			s.fail(w, memory.ErrUnavailable)
+			return
+		}
+		out, err := s.options.Router.Route(r.Context(), text)
+		if err != nil {
+			s.logger.Warn("desk routing failed", "error", err.Error())
+			s.fail(w, memory.ErrUnavailable)
+			return
+		}
+		writeJSON(w, 200, out)
 	}))
 	for _, route := range []string{"GET /v1/chatgpt/account", "POST /v1/chatgpt/login", "POST /v1/chatgpt/logout", "GET /v1/chatgpt/limits", "GET /v1/chatgpt/models"} {
 		mux.HandleFunc(route, s.authorize(s.chatgpt))

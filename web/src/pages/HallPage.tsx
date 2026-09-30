@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { Link } from 'react-router'
-import { ArrowUp, Check, ChevronDown, ChevronRight, FileText, Search, X } from 'lucide-react'
+import { ArrowUp, Check, ChevronDown, ChevronRight, FileText, Search, Sparkles, X } from 'lucide-react'
 import { RecallSheet } from '../components/RecallSheet'
 import { SourceSheet } from '../components/SourceSheet'
 import { UnsureSheet } from '../components/UnsureSheet'
@@ -10,6 +10,7 @@ import {
   ideaNote,
   ideaWall,
   looksLikeQuestion,
+  looksLikeRequest,
   projectCards,
   recallExcerpts,
   todayColumn,
@@ -19,6 +20,7 @@ import { projectStatusLabel } from '../domain/labels'
 import { formatAgo } from '../domain/time'
 import { api } from '../store/api'
 import { useStore } from '../store/context'
+import { useShell } from '../store/shell'
 import { useToast } from '../store/toast'
 
 const SEEN_KEY = 'pcas.hall.seen'
@@ -139,6 +141,19 @@ interface Recall {
   follow_ups: string[]
 }
 type Answer = { q: string; busy: true } | { q: string; busy: false; result?: Recall; error?: string }
+type Intent = 'ask' | 'record' | 'delegate'
+type Receipt = { key: number; text: string; hint: string; to?: string }
+
+/** Jev decides where an entry goes; without it (or when it fails) a local rule does. */
+async function route(q: string): Promise<{ intent: Intent; sure: boolean }> {
+  try {
+    const r = await api<{ intent: Intent; confidence: number }>('/v1/desk/route', { text: q })
+    // Starting the assistant spends budget and shares memories with it, so it needs a clearer call.
+    return { intent: r.intent, sure: r.confidence >= (r.intent === 'delegate' ? 0.8 : 0.6) }
+  } catch {
+    return { intent: looksLikeRequest(q) ? 'delegate' : looksLikeQuestion(q) ? 'ask' : 'record', sure: true }
+  }
+}
 
 function DecisionStrip() {
   const { state } = useStore()
@@ -182,7 +197,7 @@ function DecisionStrip() {
   )
 }
 
-function AnswerCard({ answer, onClose, onDeeper, onFile }: { answer: Answer; onClose: () => void; onDeeper: () => void; onFile: () => void }) {
+function AnswerCard({ answer, onClose, onDeeper, onFile, onDelegate }: { answer: Answer; onClose: () => void; onDeeper: () => void; onFile: () => void; onDelegate: () => void }) {
   const [source, setSource] = useState<Ref | null>(null)
   const card = useRef<HTMLDivElement>(null)
   // On a phone the desk input sits at the bottom; bring the answer into view.
@@ -242,6 +257,10 @@ function AnswerCard({ answer, onClose, onDeeper, onFile }: { answer: Answer; onC
           <button type="button" className="hall-link" onClick={onFile}>
             不是问题，记下来
           </button>
+          <button type="button" className="hall-link" onClick={onDelegate}>
+            <Sparkles size={13} />
+            交给副手
+          </button>
           <button type="button" className="hall-link" onClick={onDeeper}>
             <Search size={13} />
             翻完整历史
@@ -252,43 +271,107 @@ function AnswerCard({ answer, onClose, onDeeper, onFile }: { answer: Answer; onC
   )
 }
 
+function PickCard({ q, onPick, onCancel }: { q: string; onPick: (intent: Intent) => void; onCancel: () => void }) {
+  return (
+    <div className="hall-answer hall-pick" role="group" aria-label="这句要怎么处理">
+      <div className="hall-answer-head">
+        <span>拿不准这句要怎么处理：{q}</span>
+        <button type="button" className="hall-icon-btn" aria-label="放回输入框" onClick={onCancel}>
+          <X size={16} />
+        </button>
+      </div>
+      <div className="hall-answer-foot">
+        <button type="button" className="hall-chip" onClick={() => onPick('ask')}>
+          <Search size={12} />
+          问一下
+        </button>
+        <button type="button" className="hall-chip" onClick={() => onPick('record')}>
+          <Check size={12} />
+          记下来
+        </button>
+        <button type="button" className="hall-chip" onClick={() => onPick('delegate')}>
+          <Sparkles size={12} />
+          交给副手
+        </button>
+      </div>
+    </div>
+  )
+}
+
 function Desk() {
-  const { dispatch } = useStore()
+  const { state, dispatch, runAgent } = useStore()
+  const { agentFor } = useShell()
   const [text, setText] = useState('')
-  const [receipt, setReceipt] = useState<{ key: number; text: string } | null>(null)
+  const [routing, setRouting] = useState(false)
+  const [receipt, setReceipt] = useState<Receipt | null>(null)
   const [answer, setAnswer] = useState<Answer | null>(null)
+  const [pick, setPick] = useState<string | null>(null)
   const [deeper, setDeeper] = useState<string | null>(null)
   const asked = useRef(0)
 
   const file = async (q: string) => {
     if (!(await dispatch({ type: 'capture', text: q }))) return false
+    asked.current++ // a recall still in flight must not cover this receipt
     setAnswer(null)
-    setReceipt({ key: Date.now(), text: '记下了，后台会整理' })
+    setReceipt({ key: Date.now(), text: '记下了，后台会整理', hint: '它会自己放进今天、项目或想法；拿不准的会出现在上面。' })
     return true
+  }
+
+  const ask = async (q: string) => {
+    const ticket = ++asked.current
+    setReceipt(null)
+    setAnswer({ q, busy: true })
+    try {
+      const result = await api<Recall>('/v1/memory/recall', {
+        query: q,
+        mode: 'remember',
+        context: { text: '', objects: [] },
+        budget: { candidates: 15, tokens: 4000, edges: 15, hops: 1 },
+      })
+      if (ticket === asked.current) setAnswer({ q, busy: false, result })
+    } catch (e) {
+      if (ticket === asked.current) setAnswer({ q, busy: false, error: e instanceof Error ? e.message : '没查成，请稍后再问一次。' })
+    }
+    return true
+  }
+
+  // A task the assistant starts on right away; its draft lands in the queue above.
+  const delegate = async (q: string) => {
+    const id = crypto.randomUUID()
+    const title = q.length > 60 ? `${q.slice(0, 60)}…` : q
+    if (!(await dispatch({ type: 'addTask', id, title }))) return false
+    asked.current++
+    const agentId = agentFor(id)
+    const agent = state.agents.find((a) => a.id === agentId)
+    const started = agentId !== 'manual' && (await runAgent({ thingId: id, agentId, kind: 'ask', prompt: q }))
+    setAnswer(null)
+    setReceipt(
+      started
+        ? { key: Date.now(), text: `交给${agent?.name ?? '副手'}了`, hint: '做好了会出现在上面等你拍板。', to: `/t/${id}` }
+        : { key: Date.now(), text: '建好了事项', hint: '现在没有能直接开工的副手，去事项里选一个。', to: `/t/${id}` },
+    )
+    return true
+  }
+
+  const go = (intent: Intent, q: string) => {
+    setPick(null)
+    return { ask, record: file, delegate }[intent](q)
   }
 
   const submit = async () => {
     const q = text.trim()
-    if (!q) return
-    if (looksLikeQuestion(q)) {
-      const ticket = ++asked.current
-      setText('')
+    if (!q || routing) return
+    setRouting(true)
+    const { intent, sure } = await route(q)
+    setRouting(false)
+    setText('')
+    if (!sure) {
+      setAnswer(null)
       setReceipt(null)
-      setAnswer({ q, busy: true })
-      try {
-        const result = await api<Recall>('/v1/memory/recall', {
-          query: q,
-          mode: 'remember',
-          context: { text: '', objects: [] },
-          budget: { candidates: 15, tokens: 4000, edges: 15, hops: 1 },
-        })
-        if (ticket === asked.current) setAnswer({ q, busy: false, result })
-      } catch (e) {
-        if (ticket === asked.current) setAnswer({ q, busy: false, error: e instanceof Error ? e.message : '没查成，请稍后再问一次。' })
-      }
+      setPick(q)
       return
     }
-    if (await file(q)) setText('')
+    if (!(await go(intent, q))) setText(q)
   }
 
   return (
@@ -308,23 +391,46 @@ function Desk() {
             id="hall-desk-input"
             value={text}
             onChange={(e) => setText(e.target.value)}
-            placeholder="记一件事、问一句话，都在这"
+            placeholder="记一件事、问一句话、让副手做点什么，都在这"
             autoComplete="off"
             enterKeyHint="send"
           />
-          <button type="submit" className="hall-send" aria-label="交给她" disabled={!text.trim()}>
+          <button type="submit" className="hall-send" aria-label="交给她" disabled={!text.trim() || routing}>
             <ArrowUp size={18} strokeWidth={2.5} />
           </button>
         </div>
       </form>
-      {receipt && !answer && (
+      {pick !== null && (
+        <PickCard
+          q={pick}
+          onPick={(intent) => void go(intent, pick)}
+          onCancel={() => {
+            setText(pick)
+            setPick(null)
+          }}
+        />
+      )}
+      {receipt && !answer && pick === null && (
         <p key={receipt.key} className="hall-receipt" role="status">
           <Check size={15} strokeWidth={2.6} />
           <span>{receipt.text}</span>
-          <span className="h-hint">它会自己放进今天、项目或想法；拿不准的会出现在上面。</span>
+          <span className="h-hint">{receipt.hint}</span>
+          {receipt.to && (
+            <Link className="hall-link" to={receipt.to}>
+              去看看
+            </Link>
+          )}
         </p>
       )}
-      {answer && <AnswerCard answer={answer} onClose={() => setAnswer(null)} onDeeper={() => setDeeper(answer.q)} onFile={() => void file(answer.q)} />}
+      {answer && (
+        <AnswerCard
+          answer={answer}
+          onClose={() => setAnswer(null)}
+          onDeeper={() => setDeeper(answer.q)}
+          onFile={() => void file(answer.q)}
+          onDelegate={() => void delegate(answer.q)}
+        />
+      )}
     </section>
   )
 }

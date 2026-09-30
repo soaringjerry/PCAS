@@ -93,6 +93,10 @@ Compose 将设置保存在 `memory-files` 卷的 `/var/lib/pcas/model-api.json`�
 
 本地 FastEmbed / `BAAI/bge-small-zh-v1.5` 服务仍可选：用 `docker compose --profile local-embeddings up -d embeddings` 启动，再将私有模型配置的向量提供者改为该服务。默认部署不再下载本地模型权重。
 
+## 导办台分流（Jev）
+
+导办台每句话先由 TypeSafe 的 [Jev](https://docs.typesafe.ai/introduction) 判断去向：问（检索记忆作答）、记（交给后台整理）、交给副手（建事项并直接开始生成）。Jev 只返回选项和置信度，不生成文字；置信度低时由用户点选。在 `.env` 设置 `TYPESAFE_API_KEY` 后重建 API 容器即生效；未设置或调用失败时，页面退回本地规则：「帮我…」开头的交给副手，问句去检索，其余记下。导办台原文会发送给 TypeSafe；密钥只在服务端使用。
+
 通用连接器配置和格式见 [资料接入](connectors.md)。
 
 ## 附件与备份

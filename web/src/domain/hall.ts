@@ -204,6 +204,11 @@ export function looksLikeQuestion(text: string): boolean {
   return /[?？]$|[吗呢]$|(怎么样|是什么|在哪|多少)$/.test(t) || /^(问一下|查一下|找一下|我之前|我上次)/.test(t)
 }
 
+/** Asking the assistant to produce something; the fallback when Jev is not configured. */
+export function looksLikeRequest(text: string): boolean {
+  return /^(请你?|麻烦你?)?(帮我|帮忙|替我|给我(写|起草|列|整理|做|想|查|总结|规划|拆)|你来)/.test(text.trim())
+}
+
 /**
  * Recall does not write an answer; it returns the matched records joined as
  * "[id@version] text" lines. The desk shows the text only, as excerpts.

@@ -35,6 +35,7 @@ type Check struct {
 	Done bool   `json:"done"`
 }
 type Trigger struct {
+	Offset      string `json:"offset,omitempty"`
 	ID          string `json:"id"`
 	Kind        string `json:"kind"`
 	Description string `json:"description"`

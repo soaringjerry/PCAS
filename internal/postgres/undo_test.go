@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 )
 
 func TestUndoCommands(t *testing.T) {
@@ -155,6 +156,53 @@ func TestUndoQueuedDelegationAndStartedWork(t *testing.T) {
 		var orphan int
 		if err = s.pool.QueryRow(ctx, "SELECT count(*) FROM run_dependencies WHERE owner_id=$1", string(scope.OwnerID)).Scan(&orphan); err != nil || orphan != 0 {
 			t.Fatal(err, orphan)
+		}
+	}
+}
+
+func TestDueReminderTracksCommandDue(t *testing.T) {
+	s := testStore(t)
+	scope := owner()
+	ctx := context.Background()
+	st := workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "回邮件"})
+	id := st.Tasks[0].ID
+	loc, _ := time.LoadLocation("Asia/Shanghai")
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		item, err := getItem(ctx, tx, scope, id)
+		if err != nil {
+			return err
+		}
+		item.Due = "2026-10-02T07:00:00Z"
+		applyDueReminder(&item, "-30m", loc)
+		return saveItem(ctx, tx, scope, item)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	st = workspaceCommand(t, s, scope, workspace.Command{Type: "updateTask", ID: id, Patch: asJSON(map[string]string{"due": "2026-10-05T02:00:00Z"})})
+	if len(st.Tasks[0].Triggers) != 1 || st.Tasks[0].Triggers[0].NextAt != "2026-10-05T01:30:00Z" {
+		t.Fatal(st.Tasks[0].Triggers)
+	}
+	st = workspaceCommand(t, s, scope, workspace.Command{Type: "updateTask", ID: id, Patch: asJSON(map[string]string{"due": ""})})
+	if len(st.Tasks[0].Triggers) != 0 {
+		t.Fatal(st.Tasks[0].Triggers)
+	}
+}
+func TestDueReminderOffsets(t *testing.T) {
+	loc, _ := time.LoadLocation("Asia/Shanghai")
+	for _, tc := range []struct{ offset, next string }{{"-2h", "2026-10-02T05:00:00Z"}, {"at", "2026-10-02T07:00:00Z"}, {"09:00", "2026-10-02T01:00:00Z"}} {
+		item := workspace.Item{Title: "邮件", Due: "2026-10-02T07:00:00Z", Triggers: []workspace.Trigger{{ID: "other"}}}
+		applyDueReminder(&item, tc.offset, loc)
+		if len(item.Triggers) != 2 || item.Triggers[1].NextAt != tc.next || item.Triggers[1].Offset != tc.offset {
+			t.Fatal(item.Triggers)
+		}
+		applyDueReminder(&item, "", loc)
+		if item.Triggers[1].Offset != tc.offset {
+			t.Fatal("lost offset")
+		}
+		applyDueReminder(&item, "none", loc)
+		if len(item.Triggers) != 1 || item.Triggers[0].ID != "other" {
+			t.Fatal(item.Triggers)
 		}
 	}
 }

@@ -252,7 +252,10 @@ kbd {
   color: var(--label-3);
 }
 
+/* Positioned so absolute children (e.g. visually-hidden inputs) stay inside
+   the scroller instead of stretching the document into a second scrollbar. */
 .main {
+  position: relative;
   min-width: 0;
   min-height: 0;
   overflow-y: auto;

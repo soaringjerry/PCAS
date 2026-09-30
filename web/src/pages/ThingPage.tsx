@@ -44,7 +44,9 @@ function Header({ thing }: { thing: Thing }) {
         }}
         onBlur={async (e) => {
           const title = e.target.value.trim()
-          if (title && title !== thingTitle(thing)) if (!(await dispatch({ type: 'renameThing', id: thing.id, title }))) return
+          if (title && title !== thingTitle(thing)) {
+            if (!(await dispatch({ type: 'renameThing', id: thing.id, title }))) return
+          }
         }}
       />
       <Meta thing={thing} />
@@ -57,8 +59,11 @@ function Header({ thing }: { thing: Thing }) {
         aria-label="说明"
         onBlur={async (e) => {
           if (e.target.value === notes) return
-          if (thing.kind === 'project') if (!(await dispatch({ type: 'updateProject', id: thing.id, patch: { goal: e.target.value } }))) return
-          else if (!(await dispatch({ type: 'setNotes', id: thing.id, text: e.target.value }))) return
+          if (thing.kind === 'project') {
+            if (!(await dispatch({ type: 'updateProject', id: thing.id, patch: { goal: e.target.value } }))) return
+          } else {
+            if (!(await dispatch({ type: 'setNotes', id: thing.id, text: e.target.value }))) return
+          }
         }}
       />
     </>
@@ -356,10 +361,20 @@ function adoptAs(thing: Thing, run: Run, text: string): { as: 'doc' | 'subtasks'
 
 const adoptedText = { doc: '存成了文档', subtasks: '加成了待办', progress: '写进了进度' } as const
 
+function failureText(run: Run): string {
+  const error = (run.error ?? run.output ?? '').toLowerCase()
+  if (error.includes('budget')) return '超过今天的额度'
+  if (error.includes('timeout') || error.includes('deadline')) return '等太久没回应'
+  if (error.includes('unavailable') || error.includes('not configured')) return '这个副手现在连不上'
+  return '出了点问题'
+}
+
 function RunCard({ thing, run }: { thing: Thing; run: Run }) {
-  const { state, dispatch } = useStore()
+  const { state, dispatch, runAgent } = useStore()
+  const { agentFor } = useShell()
   const toast = useToast()
   const agent = state.agents.find((a) => a.id === run.agentId)
+  const retryAgent = state.agents.find((a) => a.id === agentFor(thing.id) && a.enabled && a.id !== run.agentId)
   const [editing, setEditing] = useState(false)
   const [text, setText] = useState(run.output ?? '')
   const [pasted, setPasted] = useState('')
@@ -442,7 +457,19 @@ function RunCard({ thing, run }: { thing: Thing; run: Run }) {
       )}
 
       {run.status === 'failed' && (
-        <div className="card-body small muted">没做成。{run.error ?? run.output}</div>
+        <div className="card-body stack-sm">
+          <p className="small muted" title={run.error ?? run.output}>没做成：{failureText(run)}</p>
+          <div className="row">
+            <button type="button" className="btn btn-sm" onClick={() => runAgent({ thingId: run.thingId, agentId: run.agentId, kind: run.kind, prompt: run.prompt })}>
+              重试
+            </button>
+            {retryAgent && (
+              <button type="button" className="btn btn-quiet btn-sm" onClick={() => runAgent({ thingId: run.thingId, agentId: retryAgent.id, kind: run.kind, prompt: run.prompt })}>
+                换 {retryAgent.name} 重试
+              </button>
+            )}
+          </div>
+        </div>
       )}
 
       {run.status === 'done' && run.output && (

@@ -325,16 +325,18 @@ function PickCard({ q, onPick, onCancel }: { q: string; onPick: (intent: Intent)
 
 function Desk() {
   const { state, dispatch } = useStore()
-  const { agentFor } = useShell()
+  const { draft, setDraft, agentFor } = useShell()
   const [savedPending] = useState(() => {
     try { return { entries: pendingDelegations(), error: '' } }
     catch (e) { return { entries: [] as PendingDelegation[], error: e instanceof Error ? e.message : '之前的提交编号无法读取。' } }
   })
   const [pending, setPending] = useState(savedPending.entries)
-  const [text, setText] = useState(savedPending.entries.at(-1)?.question ?? '')
+  const text = draft('desk')
   const [recovering, setRecovering] = useState(savedPending.entries.at(-1)?.action.id)
-  const [draftEdited, setDraftEdited] = useState(false)
-  const edited = useRef(false)
+  const [draftEdited, setDraftEdited] = useState(() => !!text && text !== savedPending.entries.at(-1)?.question)
+  const edited = useRef(draftEdited)
+  const currentText = useRef(text)
+  const draftRestored = useRef(false)
   const edits = useRef(0)
   const [routing, setRouting] = useState(false)
   const [receipt, setReceipt] = useState<Receipt | null>(null)
@@ -346,6 +348,17 @@ function Desk() {
   const input = useRef<HTMLInputElement>(null)
   const recovered = pending.find(entry => entry.action.id === recovering && state.tasks.some(task => task.id === entry.action.id))
   const inputText = recovered && !draftEdited && text === recovered.question ? '' : text
+  // Keep async submission callbacks aware of edits made while awaiting the API.
+  useEffect(() => { currentText.current = text }, [text])
+  useEffect(() => {
+    if (draftRestored.current) return
+    draftRestored.current = true
+    const entry = savedPending.entries.at(-1)
+    if (!text && entry && !state.tasks.some(task => task.id === entry.action.id)) {
+      currentText.current = entry.question
+      setDraft('desk', entry.question)
+    }
+  }, [savedPending, text, state.tasks, setDraft])
   useEffect(() => {
     // Reconcile persisted submissions from the authoritative workspace after
     // reload/polling. Do not resubmit work, or overwrite an edited draft.
@@ -355,6 +368,9 @@ function Desk() {
       }
     }
   }, [pending, state.tasks])
+  useEffect(() => {
+    if (recovered && !draftEdited && text === recovered.question) setDraft('desk', '')
+  }, [recovered, draftEdited, text, setDraft])
   // While an answer card is open, the next line continues that conversation.
   const following = thread !== null && !thread[thread.length - 1].busy
 
@@ -405,7 +421,7 @@ function Desk() {
       }
       try { resolveDelegation(entry.action.id) } catch { /* Retain the safe retry identity if cleanup fails. */ }
       setPending(entries => entries.filter(previous => previous.action.id !== entry.action.id))
-      setText(current => !edited.current && current === entry.question ? '' : current)
+      if (!edited.current && currentText.current === entry.question) setDraft('desk', '')
       close()
       setReceipt({ key: Date.now(), text: exists ? '已找到之前提交的事项' : '副手开始做了', hint: '做好后会带着结果回来。', to: `/t/${entry.action.id}` })
       return true
@@ -447,19 +463,19 @@ function Desk() {
     const editTicket = edits.current
     if (!q || routing) return
     if (following) {
-      setText('')
+      setDraft('desk', '')
       await ask(q, true)
       return
     }
     setRouting(true)
     const restored = pending.find(entry => entry.action.id === recovering && entry.question === q)
     if (restored && !edited.current) {
-      if (!(await performDelegation(restored)) && edits.current === editTicket) setText(current => current || q)
+      if (!(await performDelegation(restored)) && edits.current === editTicket) setDraft('desk', currentText.current || q)
       setRouting(false)
       return
     }
     const { intent, sure } = await route(q)
-    if (edits.current === editTicket) { setText(''); edited.current = false; setDraftEdited(false) }
+    if (edits.current === editTicket) { setDraft('desk', ''); edited.current = false; setDraftEdited(false) }
     if (!sure) {
       close()
       setReceipt(null)
@@ -467,7 +483,7 @@ function Desk() {
       setRouting(false)
       return
     }
-    if (!(await go(intent, q)) && edits.current === editTicket) setText(current => current || q)
+    if (!(await go(intent, q)) && edits.current === editTicket) setDraft('desk', currentText.current || q)
     setRouting(false)
   }
 
@@ -488,7 +504,7 @@ function Desk() {
             ref={input}
             id="hall-desk-input"
             value={inputText}
-            onChange={(e) => { edited.current = true; edits.current++; setDraftEdited(true); setText(e.target.value) }}
+            onChange={(e) => { edited.current = true; edits.current++; setDraftEdited(true); currentText.current = e.target.value; setDraft('desk', e.target.value) }}
             onKeyDown={(e) => {
               if (e.key === 'Escape' && thread) close()
             }}
@@ -513,7 +529,7 @@ function Desk() {
           q={pick}
           onPick={(intent) => void go(intent, pick)}
           onCancel={() => {
-            setText(pick)
+            setDraft('desk', pick)
             setPick(null)
           }}
         />

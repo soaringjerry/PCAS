@@ -3,7 +3,7 @@
 ## 环境与范围
 
 - 日期：2026-09-30（UTC）。浏览器和工作区时区均为 `Asia/Shanghai`，真实模型走查时当地日期已是 10 月 1 日。
-- 分支：`phase1/E-acceptance`。最终验收代码：`5ab8c01`；基线 main：`a3adb4b`（已包含 D2-followup #12）。采用 rebase 更新基线，并重新 build、启动隔离实例、运行三轮黄金路径。
+- 分支：`phase1/E-acceptance`。本地初验代码：`5ab8c01`；初验基线 main：`a3adb4b`（已包含 D2-followup #12）。采用 rebase 更新基线，并重新 build、启动隔离实例、运行三轮黄金路径。报告中的初验提交号保留 rebase 前的值。
 - 数据库：PostgreSQL 16.14 / pgvector 0.8.2，镜像 `pgvector/pgvector:0.8.2-pg16-bookworm`；独立测试容器，数据目录为 1 GiB tmpfs。
 - 浏览器：Playwright 1.63.0 / Chromium 153.0.8010.12，无头真实浏览器，1440×1000；Go 1.26.8、Node 22.23.3。
 - 前端先执行 production build，由真实 `pcas serve` 提供；另起真实 `pcas worker`。所有黄金路径及四个旧文件均访问真实 API，没有 `page.route` 或伪造 workspace 响应。
@@ -58,7 +58,7 @@ G8 验证首页完成按钮、toast 撤销以及同一事项恢复为 `todo`。G
 
 ## 修复与提交
 
-本次没有修改产品代码。黄金路径没有暴露必须跨文件归属修复的功能阻塞；两项旧用例兼容修复分别提交。
+本次没有修改产品代码。本地初验没有暴露必须跨文件归属修复的功能阻塞；两项旧用例兼容修复分别提交。
 
 | 提交 | 暴露问题的用例 / 变更 |
 |---|---|
@@ -70,6 +70,8 @@ G8 验证首页完成按钮、toast 撤销以及同一事项恢复为 `todo`。G
 
 新增的 `browser-real-backend` CI job 用同一 runner 运行黄金路径三轮和四个旧文件；始终上传截图、JSON 结果、失败 trace 与服务日志。原 `browser-mocked` job 保留。
 
+后续 [CI](https://github.com/soaringjerry/PCAS/actions/runs/36780118367/job/110107960824) 的 G4 第三轮在 `beforeEach` 的 `updateSettings` 命令处因后台 worker 推进 revision 而返回 `version_conflict`；该普通命令被全局 revision 校验误拒绝的问题由 [F2 #15](https://github.com/soaringjerry/PCAS/pull/15) 修复。E 已 rebase 到包含 F1/F2 的 main `bafa5a9`；`golden.spec.ts` 的四处命令辅助调用均为普通命令，现有辅助函数读取快照、携带 `expectedRevision` 与独立 `requestId` 的写法兼容新契约，无需调整。
+
 ## 检查与清理
 
 | 检查 | 结果 |
@@ -77,7 +79,7 @@ G8 验证首页完成按钮、toast 撤销以及同一事项恢复为 `todo`。G
 | `make check` | 通过；[日志](2026-09-30-phase1-acceptance/make-check.log) |
 | `make test-integration` | 通过，PostgreSQL 集成测试 43.035 秒；[日志](2026-09-30-phase1-acceptance/integration.log) |
 | 前端 `npm run lint && npm run type-check && npm run build` | 通过 |
-| 最新 main 上的黄金路径 | 27/27，连续三轮约 10.4 分钟，无重试、跳过或预期失败 |
+| 初验基线上的本地黄金路径 | 27/27，连续三轮约 10.4 分钟，无重试、跳过或预期失败 |
 | 四个旧后端文件 | 4/4 |
 | `secretary / fixes / notify / buttons` 原有回归 | 38/38，27.4 秒 |
 | 临时资源清理 | runner 正常退出；全部 E 测试容器及其卷已删除；启动的 serve / worker / httptest 进程均已等待退出；临时配置、测试 CA、真实凭据副本已删除 |
@@ -109,6 +111,6 @@ runner 自建测试库并在退出时删除自己的容器及卷、临时配置�
 
 ## 遗留问题与需要协调
 
-1. **P2 · B1（D2 配合展示）：一次秘书创建暴露多条内部修改历史。** 真实走查中，一次创建电费任务的 `history` 包含两条“创建”和一条“更新”；随后改期又增加一条“更新”。事项页因此显示重复/难以区分的活动行。原始 history 与[事项截图](2026-09-30-phase1-acceptance/real-reminder.png)已保留。建议 B1 检查创建路径的 `saveItem` / `saveAction` 调用，把同一个秘书动作的内部写入合为一次对用户有意义的历史；D2 再验证展示。本次不修改其他任务所属文件。
+1. **已由 [F1 #14](https://github.com/soaringjerry/PCAS/pull/14) 修复 · 原 P2 · B1（D2 配合展示）：一次秘书创建暴露多条内部修改历史。** 真实走查中，一次创建电费任务的 `history` 包含两条“创建”和一条“更新”；随后改期又增加一条“更新”。事项页因此显示重复/难以区分的活动行。原始 history 与[事项截图](2026-09-30-phase1-acceptance/real-reminder.png)保留为初验记录；F1 已将同一个秘书动作合为一条历史，E 通过 rebase 纳入修复。
 2. **P3 · A/D2（错误契约由后端配合）：失败原因分类较粗。** G5 的真实后端将上游错误转换为“模型调用未完成，结果和用量可能未确认；请检查登录、额度与服务配置”，前端 `failureText` 仅匹配英文关键字，最终显示“没做成：出了点问题”，详细原因在 title 中。这符合 A 文档的兜底规则且重试成功，但不能直接区分服务异常/登录/额度。建议后续统一稳定错误码和简短原因，保留避免重复付费请求的行为。
 3. **验证覆盖 · C1：补做实际设备通知验收。** 自动化满足 E 允许的后端推送请求替代断言；真实浏览器 push 服务、系统通知和真实 Telegram 客户端显示仍需有权限的设备验收，不在本次假外部服务证明范围内。

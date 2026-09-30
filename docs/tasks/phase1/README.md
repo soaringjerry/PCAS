@@ -78,6 +78,8 @@ flowchart LR
 | `internal/httpapi/server.go` | B1（`fail()` 里加撤销错误映射）、C1（加一行注册通知路由） |
 | `cmd/pcas/main.go` | C1（加一行启动通知分发循环）→ C2（加一行启动 Telegram 轮询） |
 | `internal/telegram/`（新建） | C2 |
+| `internal/notify/settings.go`（只加 telegramOffset、telegramConversation 字段） | C1 → C2 |
+| `internal/postgres/attachments.go`（只在允许的媒体类型里加 `audio/ogg`） | C2 |
 | `internal/ai/jev.go`、`/v1/desk/route`、`/v1/desk/answer` | **不要删**。第 1 阶段只是前端不再调用它们 |
 | `web/tests/support/`、`internal/testsupport/`、`docs/evaluations/*-phase1-acceptance.md` | E |
 | `.github/workflows/browser-regression.yml` | B2（改为跑 mock 用例）→ D2（加 buttons.spec.ts）→ E（加 golden.spec.ts） |

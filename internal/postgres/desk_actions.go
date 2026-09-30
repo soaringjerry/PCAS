@@ -76,6 +76,7 @@ func applyDueReminder(item *workspace.Item, remind string, loc *time.Location) {
 // Model actions never accept database identifiers. Refs resolve exclusively
 // through the aliases in this turn's server-owned context.
 type secretaryAction struct {
+	parseErr     error
 	Op           string                     `json:"op"`
 	Ref          string                     `json:"ref"`
 	Title        string                     `json:"title"`

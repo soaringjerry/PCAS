@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/url"
 	"regexp"
 	"sort"
@@ -79,8 +80,14 @@ func (s *Store) secretaryContextTx(ctx context.Context, tx pgx.Tx, scope memory.
 	if agentID == "" {
 		agentID = s.models.ExtractionID()
 	}
+	if s.models == nil {
+		return out, memory.ErrUnavailable
+	}
 	var err error
 	out.Agent, err = queryDocument[workspace.Agent](ctx, tx, "SELECT document FROM workspace_agents WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), agentID)
+	if errors.Is(err, memory.ErrNotFound) {
+		return out, memory.ErrUnavailable
+	}
 	if err != nil {
 		return out, err
 	}
@@ -354,6 +361,7 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 			}
 		}
 		c, contextErr := s.secretaryContextTx(ctx, tx, scope, req, conversationID)
+		failureStage := "context"
 		out.Turn.Agent = c.Agent.Name
 		var answer secretaryOutput
 		sent := map[string]workspace.Memory{}
@@ -361,20 +369,35 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 			var prompt string
 			prompt, sent, contextErr = s.secretaryPrompt(ctx, tx, scope, req, &c)
 			if contextErr == nil {
+				failureStage = "verify"
 				contextErr = s.checkDeskContextTx(ctx, tx, scope, c.Agent.ID, c.Dependencies, c.Items, true)
 			}
 			if contextErr == nil {
+				failureStage = "budget"
 				p, _ := s.models.Get(c.Agent.ID)
 				contextErr = s.reserveModelCost(ctx, scope.OwnerID, p.Reserve(secretaryInstructions+prompt), nil)
 			}
 			if contextErr == nil {
+				failureStage = "model"
 				workCtx, cancel := context.WithTimeout(requestCtx, 90*time.Second)
 				result, err := s.models.GenerateWithSearch(workCtx, c.Agent.ID, secretaryInstructions, prompt)
+				// HTTP providers may hide cancellation behind an unreachable error.
+				if err != nil && workCtx.Err() != nil {
+					err = workCtx.Err()
+				}
 				cancel()
 				contextErr = err
 				if contextErr == nil {
-					resultText := strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(strings.TrimPrefix(strings.TrimSpace(result.Text), "```json"), "```"), "```"))
-					contextErr = strictJSON([]byte(resultText), &answer)
+					var parseErr error
+					answer, parseErr = parseSecretaryOutput(result.Text)
+					if parseErr != nil {
+						slog.WarnContext(ctx, "secretary output fallback", "stage", "parse", "error_type", secretaryErrorType("parse", parseErr))
+						// A completed model call still answered. Keep it as text, with
+						// no actions, citations or questions from a partial decode.
+						answer = secretaryOutput{Reply: strings.TrimSpace(result.Text)}
+					} else {
+						slog.InfoContext(ctx, "secretary output parsed", "stage", "parse", "error_type", "none")
+					}
 				}
 			}
 		}
@@ -382,14 +405,16 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 			return err
 		}
 		if contextErr == nil {
+			failureStage = "verify"
 			contextErr = s.checkDeskContextTx(ctx, tx, scope, c.Agent.ID, c.Dependencies, c.Items, true)
 		}
 		dependencies := []memory.Ref{}
 		if contextErr != nil {
+			slog.WarnContext(ctx, "secretary capture fallback", "stage", failureStage, "error_type", secretaryErrorType(failureStage, contextErr))
 			if err := s.commandTx(ctx, tx, scope, workspace.Command{Type: "capture", RequestID: req.RequestID, Text: req.Text}); err != nil {
 				return err
 			}
-			out.Turn.Receipts = append(out.Turn.Receipts, workspace.DeskReceipt{Op: "capture", Text: "已记下原话；模型暂时不可用，稍后会自动整理", Status: "done"})
+			out.Turn.Receipts = append(out.Turn.Receipts, workspace.DeskReceipt{Op: "capture", Text: secretaryCaptureText(failureStage, contextErr), Status: "done"})
 		} else {
 			dependencies = c.Dependencies
 			if _, err := s.ingestTx(ctx, tx, scope, memory.IngestRequest{Connector: "desk", ExternalID: req.RequestID, ExternalVersion: "1", Title: "秘书原话", Text: req.Text, MediaType: "text/plain"}); err != nil {
@@ -404,6 +429,11 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 				if i >= 10 {
 					out.Turn.Receipts = append(out.Turn.Receipts, skippedReceipt(a.Op, "一次太多了，只做了前 10 件"))
 					break
+				}
+				if a.parseErr != nil {
+					slog.WarnContext(ctx, "secretary action skipped", "stage", "parse", "error_type", secretaryErrorType("parse", a.parseErr))
+					out.Turn.Receipts = append(out.Turn.Receipts, skippedReceipt(a.Op, "动作字段没看懂"))
+					continue
 				}
 				actionID := string(memory.NewID())
 				actionCtx := withActionLog(withActor(ctx, "secretary"), actionID, "desk", out.Turn.ID, "秘书："+a.Op)

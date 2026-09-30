@@ -168,7 +168,7 @@ test('G9 不丢话：模型真实超时后收到保存回执并能查原话', as
   await fixture(page, [{ kind: 'secretary', match: text, delay: 95000, content: '{}' }])
   await input(page).fill(text)
   await input(page).press('Enter')
-  await expect(page.getByText('已记下原话；模型暂时不可用，稍后会自动整理', { exact: true })).toBeVisible({ timeout: 105000 })
+  await expect(page.getByText('已记下原话；模型没有响应，稍后会自动整理', { exact: true })).toBeVisible({ timeout: 105000 })
   await evidence(page, test.info(), 'captured')
   const state = await snapshot(page)
   const sourceID = state.candidates.find(c => c.text === text)!.source.sourceId

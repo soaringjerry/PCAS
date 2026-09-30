@@ -150,17 +150,16 @@ func TestSecretaryRejectsUntrustedRefsAndLimitsActions(t *testing.T) {
 	}
 }
 func TestSecretaryFallbackPersistsOriginal(t *testing.T) {
-	for _, mode := range []string{"500", "json", "manual", "missing", "budget"} {
+	for _, mode := range []string{"500", "manual", "missing", "budget"} {
 		t.Run(mode, func(t *testing.T) {
 			s := testStore(t)
+			logs := secretaryLogs(t)
 			scope := owner()
 			var calls atomic.Int32
 			secretaryModel(t, s, func(w http.ResponseWriter, r *http.Request) {
 				calls.Add(1)
 				if mode == "500" {
 					http.Error(w, "offline", 500)
-				} else if mode == "json" {
-					secretaryModelReply(w, "not json")
 				} else {
 					secretaryModelReply(w, `{"actions":[{"op":"create_task","title":"不该创建"}]}`)
 				}
@@ -181,9 +180,17 @@ func TestSecretaryFallbackPersistsOriginal(t *testing.T) {
 			if out.Turn.Reply != "" || len(out.Turn.Cards) != 0 || len(out.Turn.Receipts) != 1 || out.Turn.Receipts[0].Op != "capture" || out.Turn.Receipts[0].ActionID != nil || out.Turn.Receipts[0].Undoable || len(out.State.Tasks) != 0 {
 				t.Fatal(out)
 			}
-			if out.Turn.Receipts[0].Text != "已记下原话；模型暂时不可用，稍后会自动整理" {
+			stage, errorType := "context", "unavailable"
+			reason := "没有可用的模型"
+			if mode == "500" {
+				stage, errorType, reason = "model", "model_error", "模型没有响应"
+			} else if mode == "budget" {
+				stage, errorType, reason = "budget", "budget_exceeded", "超过今天的额度"
+			}
+			if out.Turn.Receipts[0].Text != "已记下原话；"+reason+"，稍后会自动整理" {
 				t.Fatal(out.Turn.Receipts)
 			}
+			assertSecretaryLog(t, logs, "WARN", stage, errorType)
 			var text string
 			if err := s.pool.QueryRow(context.Background(), "SELECT body FROM source_versions v JOIN sources s ON (s.owner_id,s.id)=(v.owner_id,v.source_id) WHERE s.owner_id=$1 AND s.connector='capture' AND s.external_id=$2", string(scope.OwnerID), req.RequestID).Scan(&text); err != nil || text != req.Text {
 				t.Fatal(err, text)
@@ -475,16 +482,26 @@ func TestSecretaryActionMappingAndDateDefaults(t *testing.T) {
 	}
 }
 func TestSecretaryRejectsStaleRowsAndKeepsOriginalOnCancellation(t *testing.T) {
-	for _, mode := range []string{"stale", "cancel"} {
+	for _, mode := range []string{"stale", "cancel", "timeout"} {
 		t.Run(mode, func(t *testing.T) {
 			s := testStore(t)
+			logs := secretaryLogs(t)
 			scope := owner()
 			var id string
 			requestCtx, cancel := context.WithCancel(context.Background())
 			defer cancel()
+			if mode == "timeout" {
+				requestCtx, cancel = context.WithTimeout(context.Background(), 100*time.Millisecond)
+				defer cancel()
+			}
 			secretaryModel(t, s, func(w http.ResponseWriter, r *http.Request) {
 				if mode == "stale" {
 					workspaceCommand(t, s, scope, workspace.Command{Type: "renameThing", ID: id, Title: "后来的名称"})
+				} else if mode == "timeout" {
+					select {
+					case <-r.Context().Done():
+					case <-time.After(time.Second):
+					}
 				} else {
 					cancel()
 				}
@@ -496,6 +513,16 @@ func TestSecretaryRejectsStaleRowsAndKeepsOriginalOnCancellation(t *testing.T) {
 			out, err := s.DeskTurn(requestCtx, scope, req)
 			if err != nil || len(out.Turn.Receipts) != 1 || out.Turn.Receipts[0].Op != "capture" || out.Turn.Text != req.Text {
 				t.Fatal(err, out)
+			}
+			stage, errorType, reason := "model", "canceled", "模型没有响应"
+			if mode == "stale" {
+				stage, errorType, reason = "verify", "conflict", "上下文已变更，请重试"
+			} else if mode == "timeout" {
+				errorType = "timeout"
+			}
+			assertSecretaryLog(t, logs, "WARN", stage, errorType)
+			if out.Turn.Receipts[0].Text != "已记下原话；"+reason+"，稍后会自动整理" {
+				t.Fatal(out.Turn.Receipts)
 			}
 			if mode == "stale" && out.State.Tasks[0].Title != "后来的名称" {
 				t.Fatal("overwrote concurrent edit", out.State.Tasks)

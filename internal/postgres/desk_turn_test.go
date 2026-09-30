@@ -535,3 +535,167 @@ func TestSecretaryReplayUsesCurrentStateAndScrubbedTurn(t *testing.T) {
 		t.Fatal("deleted exchange remained in storage", string(response))
 	}
 }
+
+func TestSecretaryClientConversationIDAndOwnerIsolation(t *testing.T) {
+	s := testStore(t)
+	scope := owner()
+	other := owner()
+	ctx := context.Background()
+	secretaryModel(t, s, func(w http.ResponseWriter, r *http.Request) {
+		secretaryModelReply(w, `{"reply":"安排了","actions":[{"op":"create_task","title":"收到的安排"}]}`)
+	})
+	conversationID := string(memory.NewID())
+	empty, err := s.DeskTurns(ctx, scope, conversationID)
+	if err != nil || empty.ConversationID != conversationID || len(empty.Turns) != 0 {
+		t.Fatal("unknown conversation must be empty", err, empty)
+	}
+	first, second := turnRequest("第一件事"), turnRequest("第二件事")
+	first.ConversationID = &conversationID
+	second.ConversationID = &conversationID
+	type result struct {
+		out workspace.DeskTurnResponse
+		err error
+	}
+	results := make(chan result, 2)
+	var wg sync.WaitGroup
+	for _, req := range []workspace.DeskTurnRequest{first, second} {
+		wg.Add(1)
+		go func(req workspace.DeskTurnRequest) {
+			defer wg.Done()
+			out, err := s.DeskTurn(ctx, scope, req)
+			results <- result{out, err}
+		}(req)
+	}
+	wg.Wait()
+	close(results)
+	ownIDs := map[string]bool{}
+	for res := range results {
+		if res.err != nil || res.out.ConversationID != conversationID || len(res.out.Turn.Receipts) != 1 {
+			t.Fatal("client conversation rejected", res.err, res.out)
+		}
+		ownIDs[res.out.Turn.ID] = true
+	}
+	turns, err := s.DeskTurns(ctx, scope, conversationID)
+	if err != nil || len(turns.Turns) != 2 {
+		t.Fatal(err, turns)
+	}
+	otherEmpty, err := s.DeskTurns(ctx, other, conversationID)
+	if err != nil || len(otherEmpty.Turns) != 0 {
+		t.Fatal("leaked another owner's conversation", err, otherEmpty)
+	}
+	// Even identical conversation and request IDs belong to a different owner.
+	foreign := mustTurn(t, s, other, first)
+	if foreign.ConversationID != conversationID || ownIDs[foreign.Turn.ID] || len(foreign.State.Tasks) != 1 {
+		t.Fatal("cross-owner retry or state", foreign)
+	}
+	own, err := s.DeskTurns(ctx, scope, conversationID)
+	if err != nil || len(own.Turns) != 2 {
+		t.Fatal(err, own)
+	}
+	theirs, err := s.DeskTurns(ctx, other, conversationID)
+	if err != nil || len(theirs.Turns) != 1 || theirs.Turns[0].ID != foreign.Turn.ID {
+		t.Fatal(err, theirs)
+	}
+	legacy := mustTurn(t, s, scope, turnRequest("null 仍开启新对话"))
+	if !memory.ID(legacy.ConversationID).Valid() || legacy.ConversationID == conversationID {
+		t.Fatal("null conversation compatibility", legacy.ConversationID)
+	}
+}
+
+func TestSecretaryReceiptUndoneIsLiveOnHistoryAndReplay(t *testing.T) {
+	s := testStore(t)
+	scope := owner()
+	ctx := context.Background()
+	var calls atomic.Int32
+	secretaryModel(t, s, func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		secretaryModelReply(w, `{"reply":"两件事都安排好了","remember":true,"actions":[{"op":"create_task","title":"第一件"},{"op":"create_task","title":"第二件"},{"op":"update","ref":"T999","set":{"title":"找不到"}}]}`)
+	})
+	req := turnRequest("请安排两件事")
+	initial := mustTurn(t, s, scope, req)
+	if len(initial.Turn.Receipts) != 4 {
+		t.Fatal(initial.Turn)
+	}
+	for _, receipt := range initial.Turn.Receipts {
+		if receipt.Undone {
+			t.Fatal("fresh receipt marked undone", receipt)
+		}
+	}
+	before, err := s.DeskTurns(ctx, scope, initial.ConversationID)
+	if err != nil || len(before.Turns) != 1 {
+		t.Fatal(err, before)
+	}
+	for _, receipt := range before.Turns[0].Receipts {
+		if receipt.Undone {
+			t.Fatal(receipt)
+		}
+	}
+	action := *initial.Turn.Receipts[0].ActionID
+	current, err := s.Undo(ctx, scope, action)
+	if err != nil {
+		t.Fatal(err)
+	}
+	check := func(turn workspace.SecretaryTurn) {
+		t.Helper()
+		if turn.ID != initial.Turn.ID || len(turn.Receipts) != 4 || !turn.Receipts[0].Undone || *turn.Receipts[0].ActionID != action {
+			t.Fatal("undo not reflected", turn)
+		}
+		for _, receipt := range turn.Receipts[1:] {
+			if receipt.Undone {
+				t.Fatal("changed another receipt", receipt)
+			}
+		}
+	}
+	history, err := s.DeskTurns(ctx, scope, initial.ConversationID)
+	if err != nil || len(history.Turns) != 1 {
+		t.Fatal(err, history)
+	}
+	check(history.Turns[0])
+	replay := mustTurn(t, s, scope, req)
+	check(replay.Turn)
+	if replay.State.Revision != current.Revision || len(replay.State.Tasks) != 1 || calls.Load() != 1 {
+		t.Fatal("replay repeated action or returned old State", replay, calls.Load())
+	}
+	// The initial false flag remains in the stored turn. Reads derive true from
+	// action_log without mutating the idempotency record.
+	var stored storedSecretaryResponse
+	if err = s.pool.QueryRow(ctx, "SELECT response FROM desk_turns WHERE owner_id=$1 AND request_id=$2", string(scope.OwnerID), req.RequestID).Scan(&stored); err != nil {
+		t.Fatal(err)
+	}
+	if stored.Turn.Receipts[0].Undone {
+		t.Fatal("stored live workspace state", stored)
+	}
+	token := strings.Repeat("u", 64)
+	api := httpapi.New(s, s, httpapi.NewOwnerToken(token, scope.OwnerID), func(context.Context) error { return nil }, slog.New(slog.NewTextHandler(io.Discard, nil)), httpapi.Options{Workspace: s})
+	for _, endpoint := range []struct {
+		method, path string
+		body         any
+	}{{"GET", "/v1/desk/turns?conversationId=" + initial.ConversationID, nil}, {"POST", "/v1/desk/turn", req}} {
+		request := httptest.NewRequest(endpoint.method, endpoint.path, strings.NewReader(string(asJSON(endpoint.body))))
+		request.Header.Set("Authorization", "Bearer "+token)
+		request.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		api.ServeHTTP(w, request)
+		if w.Code != 200 {
+			t.Fatal(w.Code, w.Body.String())
+		}
+		var response struct {
+			Turn  workspace.SecretaryTurn   `json:"turn"`
+			Turns []workspace.SecretaryTurn `json:"turns"`
+		}
+		if err = json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+			t.Fatal(err)
+		}
+		if endpoint.method == "GET" {
+			if len(response.Turns) != 1 {
+				t.Fatal(response)
+			}
+			check(response.Turns[0])
+		} else {
+			check(response.Turn)
+		}
+		if !strings.Contains(w.Body.String(), `"undone":true`) || !strings.Contains(w.Body.String(), `"undone":false`) {
+			t.Fatal("missing explicit wire flag", w.Body.String())
+		}
+	}
+}

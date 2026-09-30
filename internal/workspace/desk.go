@@ -18,6 +18,7 @@ type DeskReceipt struct {
 	Text     string  `json:"text"`
 	ThingID  *string `json:"thingId"`
 	Undoable bool    `json:"undoable"`
+	Undone   bool    `json:"undone"`
 	Status   string  `json:"status"`
 	Reason   string  `json:"reason,omitempty"`
 }

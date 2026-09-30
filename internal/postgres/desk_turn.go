@@ -231,7 +231,11 @@ func (s *Store) secretaryPrompt(ctx context.Context, tx pgx.Tx, scope memory.Sco
 						continue
 					}
 				}
-				fmt.Fprintln(&prompt, receipt.Text)
+				if receipt.Undone {
+					fmt.Fprintln(&prompt, "（已撤销）"+receipt.Text)
+				} else {
+					fmt.Fprintln(&prompt, receipt.Text)
+				}
 			}
 		}
 	}
@@ -333,7 +337,10 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 			}
 			out.ConversationID, out.Turn = saved.ConversationID, saved.Turn
 			out.State, err = s.snapshotTx(ctx, tx, scope)
-			return err
+			if err != nil {
+				return err
+			}
+			return refreshDeskReceiptUndoTx(ctx, tx, scope, []workspace.SecretaryTurn{out.Turn})
 		}
 		if !errors.Is(err, pgx.ErrNoRows) {
 			return err
@@ -513,7 +520,47 @@ func (s *Store) deskTurnsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, 
 		}
 		out.Turns = append(out.Turns, turn)
 	}
+	if err := refreshDeskReceiptUndoTx(ctx, tx, scope, out.Turns); err != nil {
+		return out, err
+	}
 	return out, nil
+}
+
+// Receipts retain their original action metadata in storage. Undo is a live
+// workspace property, resolved in one owner-scoped query for the whole read.
+func refreshDeskReceiptUndoTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, turns []workspace.SecretaryTurn) error {
+	ids := []string{}
+	seen := map[string]bool{}
+	for _, turn := range turns {
+		for i := range turn.Receipts {
+			receipt := &turn.Receipts[i]
+			receipt.Undone = false
+			if receipt.ActionID != nil && !seen[*receipt.ActionID] {
+				seen[*receipt.ActionID] = true
+				ids = append(ids, *receipt.ActionID)
+			}
+		}
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	undone, err := queryDocuments[string](ctx, tx, "SELECT to_jsonb(id::text) FROM action_log WHERE owner_id=$1 AND id=ANY($2::uuid[]) AND undone_at IS NOT NULL", string(scope.OwnerID), ids)
+	if err != nil {
+		return err
+	}
+	byID := map[string]bool{}
+	for _, id := range undone {
+		byID[id] = true
+	}
+	for _, turn := range turns {
+		for i := range turn.Receipts {
+			receipt := &turn.Receipts[i]
+			if receipt.ActionID != nil {
+				receipt.Undone = byID[*receipt.ActionID]
+			}
+		}
+	}
+	return nil
 }
 func (s *Store) secretaryCardsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, answer secretaryOutput, sent map[string]workspace.Memory, aliases map[string]workspace.Item, loc *time.Location) ([]workspace.DeskCard, error) {
 	cards := []workspace.DeskCard{}

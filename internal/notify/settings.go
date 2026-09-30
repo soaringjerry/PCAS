@@ -12,10 +12,12 @@ import (
 )
 
 type Credentials struct {
-	VAPIDPublic    string `json:"vapidPublic"`
-	VAPIDPrivate   string `json:"vapidPrivate"`
-	TelegramToken  string `json:"telegramToken"`
-	TelegramChatID string `json:"telegramChatId"`
+	VAPIDPublic          string `json:"vapidPublic"`
+	VAPIDPrivate         string `json:"vapidPrivate"`
+	TelegramToken        string `json:"telegramToken"`
+	TelegramChatID       string `json:"telegramChatId"`
+	TelegramOffset       int64  `json:"telegramOffset,omitempty"`
+	TelegramConversation string `json:"telegramConversation,omitempty"`
 }
 
 type Settings struct{ Path string }
@@ -113,7 +115,26 @@ func (s Settings) EnsureVAPID() (Credentials, error) {
 }
 func (s Settings) SaveTelegram(token, chatID string) error {
 	_, err := s.update(func(c *Credentials) error {
+		if c.TelegramToken != token || c.TelegramChatID != chatID {
+			c.TelegramOffset, c.TelegramConversation = 0, ""
+		}
 		c.TelegramToken, c.TelegramChatID = token, chatID
+		return nil
+	})
+	return err
+}
+
+// UpdateTelegramProgress shares the credential writer's lock and atomic replace.
+// A stopped poller cannot overwrite progress for a newly configured bot/chat.
+func (s Settings) UpdateTelegramProgress(token, chatID string, offset int64, conversation string) error {
+	_, err := s.update(func(c *Credentials) error {
+		if token == "" || chatID == "" || c.TelegramToken != token || c.TelegramChatID != chatID {
+			return errors.New("Telegram configuration changed")
+		}
+		if offset > c.TelegramOffset {
+			c.TelegramOffset = offset
+		}
+		c.TelegramConversation = conversation
 		return nil
 	})
 	return err

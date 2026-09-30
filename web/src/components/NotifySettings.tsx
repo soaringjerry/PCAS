@@ -108,6 +108,7 @@ export function NotifySettings() {
         </div>
         <form className="stack-sm" onSubmit={event => { event.preventDefault(); void saveTelegram() }}>
           <div className="spread"><h3>Telegram</h3><span className="small muted">{config ? (config.telegram.configured ? '已连接' : '未连接') : '正在读取…'}</span></div>
+          {config?.telegram.configured && <p className="small muted">现在也可以直接给 bot 发消息或语音，等于在首页对秘书说话；发 /new 开始新对话</p>}
           <label className="field"><span className="field-label">Bot token</span>
             <input className="input" type="password" autoComplete="off" value={token} onChange={event => setToken(event.target.value)} aria-label="Telegram bot token" placeholder="测试 bot 的 token" maxLength={256} />
           </label>

@@ -24,7 +24,7 @@ func (s *Store) IngestAttachment(ctx context.Context, scope memory.Scope, in mem
 	if s.blobs == nil {
 		return result, memory.ErrUnavailable
 	}
-	if !oneOf(in.MediaType, "application/x-pcas-archive", "application/pdf", "image/png", "image/jpeg", "image/webp", "image/tiff", "audio/mpeg", "audio/wav", "audio/mp4") || requireText(in.Title) != nil || len(in.Title) > 2000 || in.Connector == "" || in.ExternalID == "" || in.ExternalVersion == "" {
+	if !oneOf(in.MediaType, "application/x-pcas-archive", "application/pdf", "image/png", "image/jpeg", "image/webp", "image/tiff", "audio/mpeg", "audio/wav", "audio/mp4", "audio/ogg") || requireText(in.Title) != nil || len(in.Title) > 2000 || in.Connector == "" || in.ExternalID == "" || in.ExternalVersion == "" {
 		return result, memory.ErrInvalid
 	}
 	key, err := s.blobs.Put(ctx, scope, r)

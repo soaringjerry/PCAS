@@ -1,8 +1,9 @@
 # PCAS
 
-PCAS 把待办、想法、项目和 AI 工作放在同一套个人连续记忆之上。前端通过 Go 服务读写 PostgreSQL；浏览器只保留未发送的草稿和界面偏好。记忆的原文、陈述、版本、证据与授权由统一服务维护。
+PCAS 是一支围绕你一个人的自托管 AI 支持团队：秘书、二把手、管家与工作室共用一个记忆核心，一句话就能把事办了。前端通过 Go 服务读写 PostgreSQL；浏览器只保留未发送的草稿和界面偏好。记忆的原文、陈述、版本、证据与授权由统一服务维护。
 
-- [记忆架构定稿 1.0](docs/memory-architecture.md)
+- [白皮书 2.0 草案](docs/whitepaper.md)：定位、团队角色、记忆核心与路线图，其他文档以它为准
+- [记忆架构 1.1](docs/memory-architecture.md)
 - [后端接口、配置与验证边界](docs/memory-service.md)
 - [部署与模型接入](docs/deployment.md)
 - [Sign in with ChatGPT 套餐授权](docs/chatgpt-plan-auth.md)

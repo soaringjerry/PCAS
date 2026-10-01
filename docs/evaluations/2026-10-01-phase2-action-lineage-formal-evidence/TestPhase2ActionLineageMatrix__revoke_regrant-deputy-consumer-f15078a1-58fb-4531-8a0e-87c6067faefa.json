@@ -1,0 +1,57 @@
+{
+  "contextTask": {
+    "OwnerID": "21b9673a-c113-4927-82a6-b5fe1195d5c3",
+    "Recipient": {
+      "principal_id": "phase2-model",
+      "role": "deputy",
+      "model": "phase2-synthetic",
+      "provider": "phase2-model",
+      "protocol": "openai",
+      "channel": "api",
+      "route_fingerprint": "a7c80b1153d46d20bfc428201aa118fa744e4c6c96ecb55e332f72e101d3d20c"
+    },
+    "Purpose": "knowledge",
+    "Scope": {
+      "kind": "unscoped",
+      "include_global_constraints": false
+    },
+    "View": {
+      "mode": "continue",
+      "valid_at": "2026-10-01T14:16:20.936623658Z",
+      "known_at": "2026-10-01T14:16:20.936623658Z"
+    },
+    "Now": "2026-10-01T14:16:20.936623658Z",
+    "Timezone": "Asia/Shanghai",
+    "MemoryBudget": {
+      "candidates": 15,
+      "edges": 15,
+      "tokens": 4000,
+      "hops": 1
+    },
+    "TotalInputTokens": 8000
+  },
+  "contextDeskActions": [],
+  "contextIndirectDependencies": [],
+  "contextAttemptId": "fbc9cd46-3678-4a96-9508-50cf63210e4d",
+  "id": "f15078a1-58fb-4531-8a0e-87c6067faefa",
+  "thingId": "944af026-f5d5-4d85-959e-dbab6a3fcb11",
+  "agentId": "phase2-model",
+  "kind": "ask",
+  "prompt": "查看这件普通事项，提供一个建议",
+  "brief": "事项：内容已失效\n当前状态：todo\n说明：\nOWNER independent paragraph cobalt 602\n\n目标：\n进度：\n子步骤（完成=false）：OWNER independent step bronze 697\n\n同一事项上一次的要求：查看普通事项\n上一次的结果：独立合成回答\n\n本次请求：查看这件普通事项，提供一个建议",
+  "contextMemoryIds": [],
+  "contextVersions": [],
+  "status": "done",
+  "output": "独立合成回答",
+  "adopted": {
+    "actionId": "b81c8de1-5043-4f89-8ff0-9c3f80d47a61",
+    "auto": true,
+    "as": "doc",
+    "at": "2026-10-01T14:16:21.609643569Z",
+    "edited": false
+  },
+  "staleContext": false,
+  "cost": 0,
+  "createdAt": "2026-10-01T14:16:20.946490499Z",
+  "finishedAt": "2026-10-01T14:16:21.586321231Z"
+}

@@ -1,0 +1,105 @@
+{
+  "blocks": [
+    {
+      "field": "body",
+      "blocks": [
+        {
+          "runs": [],
+          "text": "OWNER independent paragraph cobalt 602"
+        },
+        {
+          "runs": [],
+          "text": "\nACTION notes amber 842",
+          "deskActions": [
+            "0f58e8b0-3c8c-4caa-b262-9c3b77708e05"
+          ]
+        }
+      ]
+    },
+    {
+      "field": "evolution:3",
+      "blocks": [
+        {
+          "runs": [],
+          "text": "更新：ACTION title scarlet 731",
+          "deskActions": [
+            "0f58e8b0-3c8c-4caa-b262-9c3b77708e05"
+          ]
+        }
+      ]
+    },
+    {
+      "field": "history:3",
+      "blocks": [
+        {
+          "runs": [],
+          "text": "更新：ACTION title scarlet 731",
+          "deskActions": [
+            "0f58e8b0-3c8c-4caa-b262-9c3b77708e05"
+          ]
+        }
+      ]
+    },
+    {
+      "field": "source:1ae35192-5bee-49a8-80ea-d5e81f35a95f:3",
+      "blocks": [
+        {
+          "runs": [],
+          "text": "更新：ACTION title scarlet 731",
+          "deskActions": [
+            "0f58e8b0-3c8c-4caa-b262-9c3b77708e05"
+          ]
+        }
+      ]
+    },
+    {
+      "field": "title",
+      "blocks": [
+        {
+          "runs": [],
+          "text": "ACTION title scarlet 731",
+          "deskActions": [
+            "0f58e8b0-3c8c-4caa-b262-9c3b77708e05"
+          ]
+        }
+      ]
+    }
+  ],
+  "context_stale": false,
+  "context_task": {
+    "Now": "2026-10-01T14:16:10.751968583Z",
+    "View": {
+      "mode": "remember",
+      "known_at": "2026-10-01T14:16:10.751968583Z",
+      "valid_at": "2026-10-01T14:16:10.751968583Z"
+    },
+    "Scope": {
+      "kind": "unscoped",
+      "include_global_constraints": false
+    },
+    "OwnerID": "2063484f-ae80-4ee1-b107-c29f5e270e4e",
+    "Purpose": "knowledge",
+    "Timezone": "Asia/Shanghai",
+    "Recipient": {
+      "role": "secretary",
+      "model": "phase2-synthetic",
+      "channel": "api",
+      "protocol": "openai",
+      "provider": "phase2-model",
+      "principal_id": "phase2-model",
+      "route_fingerprint": "4cc24c63e11e9f91c4d500ec8a7df082c8f4dcee2dea1488ac30c10ce17712e8"
+    },
+    "MemoryBudget": {
+      "hops": 1,
+      "edges": 15,
+      "tokens": 4000,
+      "candidates": 15
+    },
+    "desk_actions": [
+      "6662748b-415d-4d0a-82b8-198074817f9f",
+      "b724286b-b066-4e1b-b001-37c75d640b43"
+    ],
+    "TotalInputTokens": 8000
+  },
+  "exact_source_dependencies": 1
+}

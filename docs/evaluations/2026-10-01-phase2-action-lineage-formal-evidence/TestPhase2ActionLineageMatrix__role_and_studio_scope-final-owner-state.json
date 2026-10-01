@@ -1,0 +1,608 @@
+{
+  "notices": [],
+  "budgetUsage": 0,
+  "version": 1,
+  "revision": 16,
+  "settings": {
+    "autoAccept": false,
+    "wakeIdeas": true,
+    "followUps": true,
+    "dailyReviewAt": "09:00",
+    "dailyBudget": 10,
+    "timezone": "Asia/Shanghai"
+  },
+  "tasks": [
+    {
+      "id": "70426354-152a-47de-9370-75dd1ac1326f",
+      "itemKind": "task",
+      "recordVersion": 3,
+      "title": "普通独立工作事项",
+      "name": "普通独立工作事项",
+      "status": "todo",
+      "notes": "OWNER independent paragraph cobalt 602\nACTION notes amber 842",
+      "body": "",
+      "goal": "",
+      "progress": "",
+      "projectId": "d851b71f-3840-4d4b-b53b-899e9d3eb618",
+      "dependsOn": [],
+      "checklist": [],
+      "triggers": [],
+      "sources": [
+        {
+          "sourceId": "4401198f-6238-45fb-a372-235a4bec6f92",
+          "version": 1,
+          "label": "创建",
+          "at": "2026-10-01T14:16:12.315495648Z"
+        },
+        {
+          "sourceId": "4401198f-6238-45fb-a372-235a4bec6f92",
+          "version": 2,
+          "label": "更新说明",
+          "at": "2026-10-01T14:16:12.331563952Z"
+        },
+        {
+          "sourceId": "4401198f-6238-45fb-a372-235a4bec6f92",
+          "version": 3,
+          "label": "更新：普通独立工作事项 · 普通独立项目 项目",
+          "at": "2026-10-01T14:16:12.438067181Z"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-10-01T14:16:12.315320866Z",
+          "by": "user",
+          "summary": "创建"
+        },
+        {
+          "at": "2026-10-01T14:16:12.315495648Z",
+          "by": "user",
+          "summary": "创建"
+        },
+        {
+          "at": "2026-10-01T14:16:12.331563952Z",
+          "by": "user",
+          "summary": "更新说明"
+        },
+        {
+          "at": "2026-10-01T14:16:12.438067181Z",
+          "by": "secretary",
+          "summary": "更新：普通独立工作事项 · 普通独立项目 项目"
+        }
+      ],
+      "evolution": [
+        {
+          "at": "2026-10-01T14:16:12.315320866Z",
+          "by": "user",
+          "summary": "提出"
+        }
+      ],
+      "conditions": [],
+      "remindersOn": true,
+      "nextSteps": [],
+      "createdAt": "2026-10-01T14:16:12.315320866Z",
+      "updatedAt": "2026-10-01T14:16:12.435303233Z"
+    }
+  ],
+  "ideas": [],
+  "projects": [
+    {
+      "id": "c7091b0f-e556-42c0-a3a7-b9994dee935b",
+      "itemKind": "project",
+      "recordVersion": 2,
+      "title": "普通独立项目",
+      "name": "普通独立项目",
+      "status": "active",
+      "body": "",
+      "goal": "OWNER independent paragraph cobalt 602",
+      "progress": "",
+      "dependsOn": [],
+      "checklist": [],
+      "triggers": [],
+      "sources": [
+        {
+          "sourceId": "ac0c5af2-77c1-4728-8c5a-5c3302da9db1",
+          "version": 1,
+          "label": "创建",
+          "at": "2026-10-01T14:16:12.252307412Z"
+        },
+        {
+          "sourceId": "ac0c5af2-77c1-4728-8c5a-5c3302da9db1",
+          "version": 2,
+          "label": "更新说明",
+          "at": "2026-10-01T14:16:12.267321415Z"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-10-01T14:16:12.25208593Z",
+          "by": "user",
+          "summary": "创建"
+        },
+        {
+          "at": "2026-10-01T14:16:12.252307412Z",
+          "by": "user",
+          "summary": "创建"
+        },
+        {
+          "at": "2026-10-01T14:16:12.267321415Z",
+          "by": "user",
+          "summary": "更新说明"
+        }
+      ],
+      "evolution": [
+        {
+          "at": "2026-10-01T14:16:12.25208593Z",
+          "by": "user",
+          "summary": "提出"
+        }
+      ],
+      "conditions": [],
+      "remindersOn": true,
+      "nextSteps": [],
+      "createdAt": "2026-10-01T14:16:12.25208593Z",
+      "updatedAt": "2026-10-01T14:16:12.267320325Z"
+    },
+    {
+      "id": "d851b71f-3840-4d4b-b53b-899e9d3eb618",
+      "itemKind": "project",
+      "recordVersion": 2,
+      "title": "普通独立项目",
+      "name": "普通独立项目",
+      "status": "active",
+      "body": "",
+      "goal": "OWNER independent paragraph cobalt 602",
+      "progress": "",
+      "dependsOn": [],
+      "checklist": [],
+      "triggers": [],
+      "sources": [
+        {
+          "sourceId": "6ab82c82-9eea-428d-90f4-2020c4042423",
+          "version": 1,
+          "label": "创建",
+          "at": "2026-10-01T14:16:12.19145311Z"
+        },
+        {
+          "sourceId": "6ab82c82-9eea-428d-90f4-2020c4042423",
+          "version": 2,
+          "label": "更新说明",
+          "at": "2026-10-01T14:16:12.217130722Z"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-10-01T14:16:12.191103896Z",
+          "by": "user",
+          "summary": "创建"
+        },
+        {
+          "at": "2026-10-01T14:16:12.19145311Z",
+          "by": "user",
+          "summary": "创建"
+        },
+        {
+          "at": "2026-10-01T14:16:12.217130722Z",
+          "by": "user",
+          "summary": "更新说明"
+        }
+      ],
+      "evolution": [
+        {
+          "at": "2026-10-01T14:16:12.191103896Z",
+          "by": "user",
+          "summary": "提出"
+        }
+      ],
+      "conditions": [],
+      "remindersOn": true,
+      "nextSteps": [],
+      "createdAt": "2026-10-01T14:16:12.191103896Z",
+      "updatedAt": "2026-10-01T14:16:12.217129432Z"
+    }
+  ],
+  "memories": [],
+  "candidates": [],
+  "agents": [
+    {
+      "available": true,
+      "inputPrice": 0,
+      "outputPrice": 0,
+      "maxOutput": 0,
+      "id": "manual",
+      "name": "手动交接",
+      "channel": "manual",
+      "note": "复制上下文到任意 AI，再粘贴结果",
+      "enabled": true,
+      "memoryKinds": [
+        "fact",
+        "preference",
+        "decision",
+        "intention",
+        "plan"
+      ],
+      "includeInferred": false
+    },
+    {
+      "default": true,
+      "protocol": "openai",
+      "available": true,
+      "inputPrice": 0,
+      "outputPrice": 0,
+      "maxOutput": 200,
+      "id": "phase2-model",
+      "name": "phase2 synthetic model",
+      "channel": "api",
+      "note": "通用 API · phase2-synthetic",
+      "enabled": true,
+      "memoryKinds": [
+        "fact",
+        "preference",
+        "decision",
+        "intention",
+        "plan"
+      ],
+      "includeInferred": false
+    }
+  ],
+  "docs": [],
+  "runs": [
+    {
+      "contextTask": {
+        "OwnerID": "8a280508-c4fc-4077-a877-a4d430fce52f",
+        "Recipient": {
+          "principal_id": "manual",
+          "role": "manual",
+          "model": "phase2-synthetic",
+          "provider": "phase2-model",
+          "protocol": "openai",
+          "channel": "manual",
+          "route_fingerprint": "0ddcc5bdeb3572f3752bf14388f255e32540537b16fa31459f161d24ab239127"
+        },
+        "Purpose": "knowledge",
+        "Scope": {
+          "kind": "studio",
+          "studio_id": "d851b71f-3840-4d4b-b53b-899e9d3eb618",
+          "include_global_constraints": true
+        },
+        "View": {
+          "mode": "continue",
+          "valid_at": "2026-10-01T14:16:12.594659451Z",
+          "known_at": "2026-10-01T14:16:12.594659451Z"
+        },
+        "Now": "2026-10-01T14:16:12.594659451Z",
+        "Timezone": "Asia/Shanghai",
+        "MemoryBudget": {
+          "candidates": 15,
+          "edges": 15,
+          "tokens": 4000,
+          "hops": 1
+        },
+        "TotalInputTokens": 8000,
+        "desk_actions": [
+          "50d2f8c8-c8a2-4180-a60b-6f39457e3797"
+        ]
+      },
+      "contextDeskActions": [
+        "50d2f8c8-c8a2-4180-a60b-6f39457e3797"
+      ],
+      "contextIndirectDependencies": [],
+      "contextAttemptId": "b597f4e7-5630-439d-bc0b-04d038d7f308",
+      "manualRecipient": {
+        "principal_id": "",
+        "role": "",
+        "model": "",
+        "provider": "phase2-model",
+        "protocol": "",
+        "channel": "",
+        "route_fingerprint": ""
+      },
+      "id": "d5d40c9d-55b0-4895-8fe7-f866533a03e2",
+      "thingId": "70426354-152a-47de-9370-75dd1ac1326f",
+      "agentId": "manual",
+      "kind": "ask",
+      "prompt": "查看普通事项",
+      "brief": "事项：普通独立工作事项\n当前状态：todo\n说明：OWNER independent paragraph cobalt 602\nACTION notes amber 842\n\n目标：\n进度：\n所属项目：普通独立项目\n项目目标：OWNER independent paragraph cobalt 602\n\n本次请求：查看普通事项",
+      "contextMemoryIds": [],
+      "contextVersions": [],
+      "status": "waiting",
+      "staleContext": false,
+      "cost": 0,
+      "createdAt": "2026-10-01T14:16:12.608756455Z"
+    },
+    {
+      "contextTask": {
+        "OwnerID": "8a280508-c4fc-4077-a877-a4d430fce52f",
+        "Recipient": {
+          "principal_id": "manual",
+          "role": "manual",
+          "model": "phase2-synthetic",
+          "provider": "phase2-model",
+          "protocol": "openai",
+          "channel": "manual",
+          "route_fingerprint": "0ddcc5bdeb3572f3752bf14388f255e32540537b16fa31459f161d24ab239127"
+        },
+        "Purpose": "knowledge",
+        "Scope": {
+          "kind": "studio",
+          "studio_id": "d851b71f-3840-4d4b-b53b-899e9d3eb618",
+          "include_global_constraints": true
+        },
+        "View": {
+          "mode": "continue",
+          "valid_at": "2026-10-01T14:16:12.538655538Z",
+          "known_at": "2026-10-01T14:16:12.538655538Z"
+        },
+        "Now": "2026-10-01T14:16:12.538655538Z",
+        "Timezone": "Asia/Shanghai",
+        "MemoryBudget": {
+          "candidates": 15,
+          "edges": 15,
+          "tokens": 4000,
+          "hops": 1
+        },
+        "TotalInputTokens": 8000,
+        "desk_actions": [
+          "50d2f8c8-c8a2-4180-a60b-6f39457e3797"
+        ]
+      },
+      "contextDeskActions": [
+        "50d2f8c8-c8a2-4180-a60b-6f39457e3797"
+      ],
+      "contextIndirectDependencies": [],
+      "contextAttemptId": "c03fe6af-a5b0-4b8b-b96b-bda97f4892bf",
+      "manualRecipient": {
+        "principal_id": "",
+        "role": "",
+        "model": "",
+        "provider": "phase2-model",
+        "protocol": "",
+        "channel": "",
+        "route_fingerprint": ""
+      },
+      "id": "8454ea36-3559-4374-836a-252d0bbde42f",
+      "thingId": "70426354-152a-47de-9370-75dd1ac1326f",
+      "agentId": "manual",
+      "kind": "ask",
+      "prompt": "查看普通事项",
+      "brief": "事项：普通独立工作事项\n当前状态：todo\n说明：OWNER independent paragraph cobalt 602\nACTION notes amber 842\n\n目标：\n进度：\n所属项目：普通独立项目\n项目目标：OWNER independent paragraph cobalt 602\n\n本次请求：查看普通事项",
+      "contextMemoryIds": [],
+      "contextVersions": [],
+      "status": "waiting",
+      "staleContext": false,
+      "cost": 0,
+      "createdAt": "2026-10-01T14:16:12.553972945Z"
+    },
+    {
+      "contextTask": {
+        "OwnerID": "8a280508-c4fc-4077-a877-a4d430fce52f",
+        "Recipient": {
+          "principal_id": "manual",
+          "role": "manual",
+          "model": "phase2-synthetic",
+          "provider": "phase2-model",
+          "protocol": "openai",
+          "channel": "manual",
+          "route_fingerprint": "0ddcc5bdeb3572f3752bf14388f255e32540537b16fa31459f161d24ab239127"
+        },
+        "Purpose": "knowledge",
+        "Scope": {
+          "kind": "studio",
+          "studio_id": "d851b71f-3840-4d4b-b53b-899e9d3eb618",
+          "include_global_constraints": true
+        },
+        "View": {
+          "mode": "continue",
+          "valid_at": "2026-10-01T14:16:12.476769467Z",
+          "known_at": "2026-10-01T14:16:12.476769467Z"
+        },
+        "Now": "2026-10-01T14:16:12.476769467Z",
+        "Timezone": "Asia/Shanghai",
+        "MemoryBudget": {
+          "candidates": 15,
+          "edges": 15,
+          "tokens": 4000,
+          "hops": 1
+        },
+        "TotalInputTokens": 8000,
+        "desk_actions": [
+          "50d2f8c8-c8a2-4180-a60b-6f39457e3797"
+        ]
+      },
+      "contextDeskActions": [
+        "50d2f8c8-c8a2-4180-a60b-6f39457e3797"
+      ],
+      "contextIndirectDependencies": [],
+      "contextAttemptId": "52a0b30b-99b5-4c46-bf8b-32d5eb300e10",
+      "manualRecipient": {
+        "principal_id": "",
+        "role": "",
+        "model": "",
+        "provider": "phase2-model",
+        "protocol": "",
+        "channel": "",
+        "route_fingerprint": ""
+      },
+      "id": "95cb06c4-cbd6-480c-90c0-ede12bd10fdd",
+      "thingId": "70426354-152a-47de-9370-75dd1ac1326f",
+      "agentId": "manual",
+      "kind": "ask",
+      "prompt": "查看普通事项",
+      "brief": "事项：普通独立工作事项\n当前状态：todo\n说明：OWNER independent paragraph cobalt 602\nACTION notes amber 842\n\n目标：\n进度：\n所属项目：普通独立项目\n项目目标：OWNER independent paragraph cobalt 602\n\n本次请求：查看普通事项",
+      "contextMemoryIds": [],
+      "contextVersions": [],
+      "status": "waiting",
+      "staleContext": false,
+      "cost": 0,
+      "createdAt": "2026-10-01T14:16:12.497119975Z"
+    }
+  ],
+  "samples": [],
+  "sources": [
+    {
+      "id": "4401198f-6238-45fb-a372-235a4bec6f92",
+      "name": "普通独立工作事项",
+      "method": "actions",
+      "status": "syncing",
+      "note": "原文可读，索引处理中",
+      "itemCount": 0,
+      "lastSyncAt": "2026-10-01T14:16:12.429133Z"
+    },
+    {
+      "id": "beaf6401-6940-4f7f-a9c1-fe29495912d4",
+      "name": "秘书原话",
+      "method": "desk",
+      "status": "syncing",
+      "note": "原文可读，索引处理中",
+      "itemCount": 0,
+      "lastSyncAt": "2026-10-01T14:16:12.429133Z"
+    },
+    {
+      "id": "ac0c5af2-77c1-4728-8c5a-5c3302da9db1",
+      "name": "普通独立项目",
+      "method": "actions",
+      "status": "syncing",
+      "note": "原文可读，索引处理中",
+      "itemCount": 0,
+      "lastSyncAt": "2026-10-01T14:16:12.265954Z"
+    },
+    {
+      "id": "6ab82c82-9eea-428d-90f4-2020c4042423",
+      "name": "普通独立项目",
+      "method": "actions",
+      "status": "syncing",
+      "note": "原文可读，索引处理中",
+      "itemCount": 0,
+      "lastSyncAt": "2026-10-01T14:16:12.215373Z"
+    },
+    {
+      "id": "bf93c11b-cd2f-4f15-a10c-fb5272fbc1e5",
+      "name": "合成海棠行动资料",
+      "method": "phase2-action-matrix-synthetic",
+      "status": "syncing",
+      "note": "原文可读，索引处理中",
+      "itemCount": 0,
+      "lastSyncAt": "2026-10-01T14:16:12.176228Z"
+    }
+  ],
+  "jobs": [
+    {
+      "id": "baf3dff5-c3bd-4f2c-9a9c-5682deb1a685",
+      "title": "更新摘要",
+      "trigger": "资料处理",
+      "status": "queued",
+      "detail": "「普通独立工作事项」",
+      "createdAt": "2026-10-01T14:16:12.429133Z",
+      "nextRunAt": "2026-10-01T14:16:12.429133Z"
+    },
+    {
+      "id": "3e66ec2f-3035-4aaf-b87b-c32de9361903",
+      "title": "切分原文",
+      "trigger": "资料处理",
+      "status": "queued",
+      "detail": "「秘书原话」",
+      "createdAt": "2026-10-01T14:16:12.429133Z",
+      "nextRunAt": "2026-10-01T14:16:12.429133Z"
+    },
+    {
+      "id": "c970c3be-76b4-4761-9714-6ee0fd7444f7",
+      "title": "切分原文",
+      "trigger": "资料处理",
+      "status": "queued",
+      "detail": "「普通独立工作事项」",
+      "createdAt": "2026-10-01T14:16:12.429133Z",
+      "nextRunAt": "2026-10-01T14:16:12.429133Z"
+    },
+    {
+      "id": "d911f6c7-7f56-4ca6-befc-5fb2b0a0a824",
+      "title": "更新摘要",
+      "trigger": "资料处理",
+      "status": "queued",
+      "detail": "「普通独立工作事项」",
+      "createdAt": "2026-10-01T14:16:12.330261Z",
+      "nextRunAt": "2026-10-01T14:16:12.330261Z"
+    },
+    {
+      "id": "4d7c5960-eee9-4472-b13f-f575dcd2bce8",
+      "title": "切分原文",
+      "trigger": "资料处理",
+      "status": "queued",
+      "detail": "「普通独立工作事项」",
+      "createdAt": "2026-10-01T14:16:12.330261Z",
+      "nextRunAt": "2026-10-01T14:16:12.330261Z"
+    },
+    {
+      "id": "fa8b5fe4-8ab1-40e9-bb38-3d58f7fa53a5",
+      "title": "切分原文",
+      "trigger": "资料处理",
+      "status": "queued",
+      "detail": "「普通独立工作事项」",
+      "createdAt": "2026-10-01T14:16:12.314481Z",
+      "nextRunAt": "2026-10-01T14:16:12.314481Z"
+    },
+    {
+      "id": "57230e09-9855-465e-9e4c-d4eb52387d9e",
+      "title": "切分原文",
+      "trigger": "资料处理",
+      "status": "queued",
+      "detail": "「普通独立项目」",
+      "createdAt": "2026-10-01T14:16:12.265954Z",
+      "nextRunAt": "2026-10-01T14:16:12.265954Z"
+    },
+    {
+      "id": "8b2225f7-ed14-4652-8d0e-0bf4ac4d0a04",
+      "title": "更新摘要",
+      "trigger": "资料处理",
+      "status": "queued",
+      "detail": "「普通独立项目」",
+      "createdAt": "2026-10-01T14:16:12.265954Z",
+      "nextRunAt": "2026-10-01T14:16:12.265954Z"
+    },
+    {
+      "id": "990c931f-209c-4f45-a83d-055a299a7f31",
+      "title": "切分原文",
+      "trigger": "资料处理",
+      "status": "queued",
+      "detail": "「普通独立项目」",
+      "createdAt": "2026-10-01T14:16:12.250983Z",
+      "nextRunAt": "2026-10-01T14:16:12.250983Z"
+    },
+    {
+      "id": "b8fcc81c-b639-4867-9f7b-6e3ddf9540a9",
+      "title": "切分原文",
+      "trigger": "资料处理",
+      "status": "queued",
+      "detail": "「普通独立项目」",
+      "createdAt": "2026-10-01T14:16:12.215373Z",
+      "nextRunAt": "2026-10-01T14:16:12.215373Z"
+    },
+    {
+      "id": "167ad367-538b-423f-a90a-9a553dec8cfb",
+      "title": "更新摘要",
+      "trigger": "资料处理",
+      "status": "queued",
+      "detail": "「普通独立项目」",
+      "createdAt": "2026-10-01T14:16:12.215373Z",
+      "nextRunAt": "2026-10-01T14:16:12.215373Z"
+    },
+    {
+      "id": "06141666-9c77-4e74-91e0-d8eed8f34745",
+      "title": "切分原文",
+      "trigger": "资料处理",
+      "status": "queued",
+      "detail": "「普通独立项目」",
+      "createdAt": "2026-10-01T14:16:12.189969Z",
+      "nextRunAt": "2026-10-01T14:16:12.189969Z"
+    },
+    {
+      "id": "929051ba-f782-453a-875d-ab2ca56003d9",
+      "title": "切分原文",
+      "trigger": "资料处理",
+      "status": "queued",
+      "detail": "「合成海棠行动资料」",
+      "createdAt": "2026-10-01T14:16:12.176228Z",
+      "nextRunAt": "2026-10-01T14:16:12.176228Z"
+    }
+  ],
+  "activity": [],
+  "excludedMemories": {}
+}

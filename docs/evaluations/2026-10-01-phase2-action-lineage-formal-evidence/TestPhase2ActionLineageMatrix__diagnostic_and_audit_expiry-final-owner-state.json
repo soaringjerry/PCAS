@@ -1,0 +1,609 @@
+{
+  "notices": [],
+  "budgetUsage": 0,
+  "version": 1,
+  "revision": 14,
+  "settings": {
+    "autoAccept": false,
+    "wakeIdeas": true,
+    "followUps": true,
+    "dailyReviewAt": "09:00",
+    "dailyBudget": 10,
+    "timezone": "Asia/Shanghai"
+  },
+  "tasks": [
+    {
+      "id": "cc58ab8a-dc0d-417c-827e-314ca1ea5ade",
+      "itemKind": "task",
+      "recordVersion": 8,
+      "title": "内容已失效",
+      "name": "内容已失效",
+      "status": "todo",
+      "notes": "\nOWNER independent paragraph cobalt 602",
+      "body": "",
+      "goal": "",
+      "progress": "",
+      "dependsOn": [],
+      "checklist": [
+        {
+          "id": "3773adf9-206c-4dfa-a098-3af42004590a",
+          "text": "OWNER independent step bronze 697",
+          "done": false
+        },
+        {
+          "id": "63c0104a-b329-46d3-a270-31d228b5536d",
+          "text": "OWNER audit cleanup trigger",
+          "done": false
+        }
+      ],
+      "triggers": [],
+      "sources": [
+        {
+          "sourceId": "047f0817-caf1-43aa-a5ba-de547a8e6331",
+          "version": 1,
+          "label": "",
+          "at": "2026-10-01T14:16:30.231514877Z"
+        },
+        {
+          "sourceId": "047f0817-caf1-43aa-a5ba-de547a8e6331",
+          "version": 2,
+          "label": "",
+          "at": "2026-10-01T14:16:30.248379919Z"
+        },
+        {
+          "sourceId": "047f0817-caf1-43aa-a5ba-de547a8e6331",
+          "version": 3,
+          "label": "更新说明",
+          "at": "2026-10-01T14:16:30.357813328Z"
+        },
+        {
+          "sourceId": "047f0817-caf1-43aa-a5ba-de547a8e6331",
+          "version": 4,
+          "label": "添加子步骤",
+          "at": "2026-10-01T14:16:30.43627298Z"
+        },
+        {
+          "sourceId": "047f0817-caf1-43aa-a5ba-de547a8e6331",
+          "version": 5,
+          "label": "添加子步骤",
+          "at": "2026-10-01T14:16:30.516050426Z"
+        },
+        {
+          "sourceId": "047f0817-caf1-43aa-a5ba-de547a8e6331",
+          "version": 6,
+          "label": "采纳副手结果",
+          "at": "2026-10-01T14:16:31.983459819Z"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-10-01T14:16:30.231514877Z",
+          "by": "secretary",
+          "summary": ""
+        },
+        {
+          "at": "2026-10-01T14:16:30.248379919Z",
+          "by": "secretary",
+          "summary": ""
+        },
+        {
+          "at": "2026-10-01T14:16:30.357813328Z",
+          "by": "user",
+          "summary": "更新说明"
+        },
+        {
+          "at": "2026-10-01T14:16:30.43627298Z",
+          "by": "user",
+          "summary": "添加子步骤"
+        },
+        {
+          "at": "2026-10-01T14:16:30.516050426Z",
+          "by": "user",
+          "summary": "添加子步骤"
+        },
+        {
+          "at": "2026-10-01T14:16:31.983459819Z",
+          "by": "assistant",
+          "summary": "采纳副手结果"
+        }
+      ],
+      "evolution": [],
+      "conditions": [],
+      "remindersOn": true,
+      "nextSteps": [],
+      "createdAt": "2026-10-01T14:16:30.216083039Z",
+      "updatedAt": "2026-10-01T14:16:31.983458589Z"
+    }
+  ],
+  "ideas": [],
+  "projects": [],
+  "memories": [],
+  "candidates": [],
+  "agents": [
+    {
+      "available": true,
+      "inputPrice": 0,
+      "outputPrice": 0,
+      "maxOutput": 0,
+      "id": "manual",
+      "name": "手动交接",
+      "channel": "manual",
+      "note": "复制上下文到任意 AI，再粘贴结果",
+      "enabled": true,
+      "memoryKinds": [
+        "fact",
+        "preference",
+        "decision",
+        "intention",
+        "plan"
+      ],
+      "includeInferred": false
+    },
+    {
+      "default": true,
+      "protocol": "openai",
+      "available": true,
+      "inputPrice": 0,
+      "outputPrice": 0,
+      "maxOutput": 200,
+      "id": "phase2-model",
+      "name": "phase2 synthetic model",
+      "channel": "api",
+      "note": "通用 API · phase2-synthetic",
+      "enabled": true,
+      "memoryKinds": [
+        "fact",
+        "preference",
+        "decision",
+        "intention",
+        "plan"
+      ],
+      "includeInferred": false
+    }
+  ],
+  "docs": [
+    {
+      "id": "b87f068e-e039-44b0-a701-03fd4cdf1a3c",
+      "thingId": "cc58ab8a-dc0d-417c-827e-314ca1ea5ade",
+      "title": "内容已失效 · ask",
+      "body": "独立合成回答",
+      "by": "ai",
+      "runId": "887e05eb-a32a-4a46-a660-2e59191d2932",
+      "createdAt": "2026-10-01T14:16:31.981858173Z",
+      "updatedAt": "2026-10-01T14:16:31.981859333Z"
+    }
+  ],
+  "runs": [
+    {
+      "contextTask": {
+        "OwnerID": "fdc6ee73-4a4a-4f3d-ae2c-3721ac853bdc",
+        "Recipient": {
+          "principal_id": "manual",
+          "role": "manual",
+          "model": "phase2-synthetic",
+          "provider": "phase2-model",
+          "protocol": "openai",
+          "channel": "manual",
+          "route_fingerprint": "8bd1337d2e51df13b836bc84cd43ff1328c738cdc4c33c3be42fc3ded9b31c59"
+        },
+        "Purpose": "knowledge",
+        "Scope": {
+          "kind": "unscoped",
+          "include_global_constraints": false
+        },
+        "View": {
+          "mode": "continue",
+          "valid_at": "2026-10-01T14:16:32.03443734Z",
+          "known_at": "2026-10-01T14:16:32.03443734Z"
+        },
+        "Now": "2026-10-01T14:16:32.03443734Z",
+        "Timezone": "Asia/Shanghai",
+        "MemoryBudget": {
+          "candidates": 15,
+          "edges": 15,
+          "tokens": 4000,
+          "hops": 1
+        },
+        "TotalInputTokens": 8000
+      },
+      "contextDeskActions": [],
+      "contextIndirectDependencies": [],
+      "contextAttemptId": "7ef8baeb-7648-4ae1-97f5-9ee49b026106",
+      "manualRecipient": {
+        "principal_id": "",
+        "role": "",
+        "model": "",
+        "provider": "phase2-model",
+        "protocol": "",
+        "channel": "",
+        "route_fingerprint": ""
+      },
+      "id": "027de1bd-c900-4734-ae7e-eb21a85ba990",
+      "thingId": "cc58ab8a-dc0d-417c-827e-314ca1ea5ade",
+      "agentId": "manual",
+      "kind": "ask",
+      "prompt": "查看这件普通事项，提供一个建议",
+      "brief": "事项：内容已失效\n当前状态：todo\n说明：\nOWNER independent paragraph cobalt 602\n\n目标：\n进度：\n子步骤（完成=false）：OWNER independent step bronze 697\n子步骤（完成=false）：OWNER audit cleanup trigger\n\n本次请求：查看这件普通事项，提供一个建议",
+      "contextMemoryIds": [],
+      "contextVersions": [],
+      "status": "waiting",
+      "staleContext": false,
+      "cost": 0,
+      "createdAt": "2026-10-01T14:16:32.044235421Z"
+    },
+    {
+      "contextTask": {
+        "OwnerID": "fdc6ee73-4a4a-4f3d-ae2c-3721ac853bdc",
+        "Recipient": {
+          "principal_id": "phase2-model",
+          "role": "deputy",
+          "model": "phase2-synthetic",
+          "provider": "phase2-model",
+          "protocol": "openai",
+          "channel": "api",
+          "route_fingerprint": "8bd1337d2e51df13b836bc84cd43ff1328c738cdc4c33c3be42fc3ded9b31c59"
+        },
+        "Purpose": "knowledge",
+        "Scope": {
+          "kind": "unscoped",
+          "include_global_constraints": false
+        },
+        "View": {
+          "mode": "continue",
+          "valid_at": "2026-10-01T14:16:30.916170666Z",
+          "known_at": "2026-10-01T14:16:30.916170666Z"
+        },
+        "Now": "2026-10-01T14:16:30.916170666Z",
+        "Timezone": "Asia/Shanghai",
+        "MemoryBudget": {
+          "candidates": 15,
+          "edges": 15,
+          "tokens": 4000,
+          "hops": 1
+        },
+        "TotalInputTokens": 8000
+      },
+      "contextDeskActions": [],
+      "contextIndirectDependencies": [],
+      "contextAttemptId": "f1234598-e49e-46d5-8713-dd7d7dbcd612",
+      "id": "887e05eb-a32a-4a46-a660-2e59191d2932",
+      "thingId": "cc58ab8a-dc0d-417c-827e-314ca1ea5ade",
+      "agentId": "phase2-model",
+      "kind": "ask",
+      "prompt": "查看这件普通事项，提供一个建议",
+      "brief": "事项：内容已失效\n当前状态：todo\n说明：\nOWNER independent paragraph cobalt 602\n\n目标：\n进度：\n子步骤（完成=false）：OWNER independent step bronze 697\n子步骤（完成=false）：OWNER audit cleanup trigger\n\n本次请求：查看这件普通事项，提供一个建议",
+      "contextMemoryIds": [],
+      "contextVersions": [],
+      "status": "done",
+      "output": "独立合成回答",
+      "adopted": {
+        "actionId": "005cc3aa-2562-4f3e-8fd9-36e4bcde8499",
+        "auto": true,
+        "as": "doc",
+        "at": "2026-10-01T14:16:32.013297594Z",
+        "edited": false
+      },
+      "staleContext": false,
+      "cost": 0,
+      "createdAt": "2026-10-01T14:16:30.928164819Z",
+      "finishedAt": "2026-10-01T14:16:31.975077144Z"
+    },
+    {
+      "contextTask": {
+        "OwnerID": "fdc6ee73-4a4a-4f3d-ae2c-3721ac853bdc",
+        "Recipient": {
+          "principal_id": "manual",
+          "role": "manual",
+          "model": "phase2-synthetic",
+          "provider": "phase2-model",
+          "protocol": "openai",
+          "channel": "manual",
+          "route_fingerprint": "8bd1337d2e51df13b836bc84cd43ff1328c738cdc4c33c3be42fc3ded9b31c59"
+        },
+        "Purpose": "knowledge",
+        "Scope": {
+          "kind": "unscoped",
+          "include_global_constraints": false
+        },
+        "View": {
+          "mode": "continue",
+          "valid_at": "2026-10-01T14:16:30.59078455Z",
+          "known_at": "2026-10-01T14:16:30.59078455Z"
+        },
+        "Now": "2026-10-01T14:16:30.59078455Z",
+        "Timezone": "Asia/Shanghai",
+        "MemoryBudget": {
+          "candidates": 15,
+          "edges": 15,
+          "tokens": 4000,
+          "hops": 1
+        },
+        "TotalInputTokens": 8000,
+        "desk_actions": [
+          "534ddb82-3922-48f7-b4e1-7f3b2acc92cc",
+          "be96d296-704c-4069-b403-c47728d9d2c3"
+        ]
+      },
+      "contextDependencies": [
+        {
+          "ref": {
+            "id": "f80fad97-09a9-4ee3-8f16-b25926ce94df",
+            "version": 1,
+            "kind": "source"
+          },
+          "purpose": "knowledge",
+          "scope": {
+            "kind": "unscoped",
+            "include_global_constraints": false
+          },
+          "authorization": {
+            "policy_id": "05534026-c0dc-4ec3-aae8-1af4be7d8e02",
+            "revision": 1
+          },
+          "scope_revision": 0
+        }
+      ],
+      "contextDeskActions": [
+        "534ddb82-3922-48f7-b4e1-7f3b2acc92cc",
+        "be96d296-704c-4069-b403-c47728d9d2c3"
+      ],
+      "contextIndirectDependencies": [
+        {
+          "ref": {
+            "id": "f80fad97-09a9-4ee3-8f16-b25926ce94df",
+            "version": 1,
+            "kind": "source"
+          },
+          "purpose": "knowledge",
+          "scope": {
+            "kind": "unscoped",
+            "include_global_constraints": false
+          },
+          "authorization": {
+            "policy_id": "05534026-c0dc-4ec3-aae8-1af4be7d8e02",
+            "revision": 1
+          },
+          "scope_revision": 0
+        }
+      ],
+      "contextCandidates": [
+        {
+          "ref": {
+            "id": "f80fad97-09a9-4ee3-8f16-b25926ce94df",
+            "version": 1,
+            "kind": "source"
+          },
+          "stage": "recall",
+          "disposition": "selected"
+        }
+      ],
+      "contextSourceSpans": [
+        {
+          "source": {
+            "id": "f80fad97-09a9-4ee3-8f16-b25926ce94df",
+            "version": 1,
+            "kind": "source"
+          },
+          "start_rune": 0,
+          "end_rune": 153
+        }
+      ],
+      "contextAttemptId": "4810222d-a35d-4f5a-84cd-981b31f55bc8",
+      "manualRecipient": {
+        "principal_id": "",
+        "role": "",
+        "model": "",
+        "provider": "phase2-model",
+        "protocol": "",
+        "channel": "",
+        "route_fingerprint": ""
+      },
+      "id": "893b3ea0-71fe-40fc-a4f0-b78556df3765",
+      "thingId": "cc58ab8a-dc0d-417c-827e-314ca1ea5ade",
+      "agentId": "manual",
+      "kind": "ask",
+      "prompt": "根据合成海棠行动资料给建议",
+      "brief": "",
+      "contextMemoryIds": [
+        "f80fad97-09a9-4ee3-8f16-b25926ce94df"
+      ],
+      "contextVersions": [
+        {
+          "id": "f80fad97-09a9-4ee3-8f16-b25926ce94df",
+          "version": 1,
+          "kind": "source"
+        }
+      ],
+      "status": "waiting",
+      "error": "资料或接收者已变化，请重新生成",
+      "staleContext": true,
+      "cost": 0,
+      "createdAt": "2026-10-01T14:16:30.703110458Z"
+    }
+  ],
+  "samples": [
+    {
+      "id": "a96080f9-2eba-4816-8bc7-2cfed9fc8203",
+      "kind": "adopted-result",
+      "prompt": "事项：内容已失效\n当前状态：todo\n说明：\nOWNER independent paragraph cobalt 602\n\n目标：\n进度：\n子步骤（完成=false）：OWNER independent step bronze 697\n子步骤（完成=false）：OWNER audit cleanup trigger\n\n本次请求：查看这件普通事项，提供一个建议",
+      "response": "独立合成回答",
+      "origin": {
+        "label": "内容已失效",
+        "runId": "887e05eb-a32a-4a46-a660-2e59191d2932"
+      },
+      "version": 1,
+      "state": "candidate",
+      "epistemic": "inferred",
+      "stale": false,
+      "createdAt": "2026-10-01T14:16:32.013303484Z"
+    }
+  ],
+  "sources": [
+    {
+      "id": "047f0817-caf1-43aa-a5ba-de547a8e6331",
+      "name": "内容已失效",
+      "method": "actions",
+      "status": "syncing",
+      "note": "原文可读，索引处理中",
+      "itemCount": 0,
+      "lastSyncAt": "2026-10-01T14:16:31.974254Z"
+    },
+    {
+      "id": "c7f841dd-869c-44f3-8e04-5c7dc0985789",
+      "name": "秘书原话",
+      "method": "desk",
+      "status": "syncing",
+      "note": "原文可读，索引处理中",
+      "itemCount": 0,
+      "lastSyncAt": "2026-10-01T14:16:30.889888Z"
+    },
+    {
+      "id": "3154f3c7-50ea-4e8d-930d-dd2a4bb9ae1b",
+      "name": "秘书原话",
+      "method": "desk",
+      "status": "syncing",
+      "note": "原文可读，索引处理中",
+      "itemCount": 0,
+      "lastSyncAt": "2026-10-01T14:16:30.207Z"
+    },
+    {
+      "id": "f80fad97-09a9-4ee3-8f16-b25926ce94df",
+      "name": "合成海棠行动资料",
+      "method": "phase2-action-matrix-synthetic",
+      "status": "syncing",
+      "note": "原文可读，索引处理中",
+      "itemCount": 0,
+      "lastSyncAt": "2026-10-01T14:16:30.091192Z"
+    }
+  ],
+  "jobs": [
+    {
+      "id": "ac1bd614-a3cf-411c-a199-cd60f8f42b11",
+      "title": "切分原文",
+      "trigger": "资料处理",
+      "status": "queued",
+      "detail": "「内容已失效」",
+      "createdAt": "2026-10-01T14:16:31.974254Z",
+      "nextRunAt": "2026-10-01T14:16:31.974254Z"
+    },
+    {
+      "id": "1d0aa60d-68d2-488e-b3c4-ac730d483c2d",
+      "title": "更新摘要",
+      "trigger": "资料处理",
+      "status": "queued",
+      "detail": "「内容已失效」",
+      "createdAt": "2026-10-01T14:16:31.974254Z",
+      "nextRunAt": "2026-10-01T14:16:31.974254Z"
+    },
+    {
+      "id": "72303abe-a3fd-4634-8671-56cbe3e7edc9",
+      "title": "切分原文",
+      "trigger": "资料处理",
+      "status": "queued",
+      "detail": "「秘书原话」",
+      "createdAt": "2026-10-01T14:16:30.889888Z",
+      "nextRunAt": "2026-10-01T14:16:30.889888Z"
+    },
+    {
+      "id": "5257ea32-c8dc-4c3f-9735-c0af8f714814",
+      "title": "更新摘要",
+      "trigger": "资料处理",
+      "status": "queued",
+      "detail": "「动作依据已变更」",
+      "createdAt": "2026-10-01T14:16:30.514724Z",
+      "nextRunAt": "2026-10-01T14:16:30.514724Z"
+    },
+    {
+      "id": "51c7c9cf-ee59-41d2-a603-48bd4c1da300",
+      "title": "切分原文",
+      "trigger": "资料处理",
+      "status": "queued",
+      "detail": "「动作依据已变更」",
+      "createdAt": "2026-10-01T14:16:30.514724Z",
+      "nextRunAt": "2026-10-01T14:16:30.514724Z"
+    },
+    {
+      "id": "274e396e-4bf8-4f24-8f6a-24321b639680",
+      "title": "更新摘要",
+      "trigger": "资料处理",
+      "status": "queued",
+      "detail": "「动作依据已变更」",
+      "createdAt": "2026-10-01T14:16:30.434814Z",
+      "nextRunAt": "2026-10-01T14:16:30.434814Z"
+    },
+    {
+      "id": "eeb23686-4aec-4a41-8d48-6bd03aa6b40e",
+      "title": "切分原文",
+      "trigger": "资料处理",
+      "status": "queued",
+      "detail": "「动作依据已变更」",
+      "createdAt": "2026-10-01T14:16:30.434814Z",
+      "nextRunAt": "2026-10-01T14:16:30.434814Z"
+    },
+    {
+      "id": "a9180830-e044-460f-bfac-7f9344078a0b",
+      "title": "更新摘要",
+      "trigger": "资料处理",
+      "status": "queued",
+      "detail": "「动作依据已变更」",
+      "createdAt": "2026-10-01T14:16:30.356424Z",
+      "nextRunAt": "2026-10-01T14:16:30.356424Z"
+    },
+    {
+      "id": "73b1bdd7-eab0-4084-83bd-0bf6b249f254",
+      "title": "切分原文",
+      "trigger": "资料处理",
+      "status": "queued",
+      "detail": "「动作依据已变更」",
+      "createdAt": "2026-10-01T14:16:30.356424Z",
+      "nextRunAt": "2026-10-01T14:16:30.356424Z"
+    },
+    {
+      "id": "9b3e1964-c8e7-447a-a209-3be14eb18414",
+      "title": "更新摘要",
+      "trigger": "资料处理",
+      "status": "queued",
+      "detail": "「动作依据已变更」",
+      "createdAt": "2026-10-01T14:16:30.207Z",
+      "nextRunAt": "2026-10-01T14:16:30.207Z"
+    },
+    {
+      "id": "753d0c50-568d-462f-91ca-2e70bdf57af0",
+      "title": "切分原文",
+      "trigger": "资料处理",
+      "status": "queued",
+      "detail": "「动作依据已变更」",
+      "createdAt": "2026-10-01T14:16:30.207Z",
+      "nextRunAt": "2026-10-01T14:16:30.207Z"
+    },
+    {
+      "id": "7d05a89c-7320-4853-854f-8d4a9d47ebd3",
+      "title": "切分原文",
+      "trigger": "资料处理",
+      "status": "queued",
+      "detail": "「动作依据已变更」",
+      "createdAt": "2026-10-01T14:16:30.207Z",
+      "nextRunAt": "2026-10-01T14:16:30.207Z"
+    },
+    {
+      "id": "2da87115-0a38-4b01-b5f3-94d4b103746a",
+      "title": "切分原文",
+      "trigger": "资料处理",
+      "status": "queued",
+      "detail": "「秘书原话」",
+      "createdAt": "2026-10-01T14:16:30.207Z",
+      "nextRunAt": "2026-10-01T14:16:30.207Z"
+    },
+    {
+      "id": "20c65686-b293-480b-a81b-7ef7b1335b39",
+      "title": "切分原文",
+      "trigger": "资料处理",
+      "status": "queued",
+      "detail": "「合成海棠行动资料」",
+      "createdAt": "2026-10-01T14:16:30.091192Z",
+      "nextRunAt": "2026-10-01T14:16:30.091192Z"
+    }
+  ],
+  "activity": [],
+  "excludedMemories": {}
+}

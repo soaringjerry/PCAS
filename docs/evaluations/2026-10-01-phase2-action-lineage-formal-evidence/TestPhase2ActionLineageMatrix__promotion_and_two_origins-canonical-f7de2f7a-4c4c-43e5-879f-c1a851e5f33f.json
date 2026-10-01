@@ -1,0 +1,67 @@
+{
+  "id": "f7de2f7a-4c4c-43e5-879f-c1a851e5f33f",
+  "body": "",
+  "goal": "",
+  "name": "普通独立工作事项",
+  "notes": "OWNER independent paragraph cobalt 602\n",
+  "title": "普通独立工作事项",
+  "ideaId": "3823daaa-a6cf-4bef-b515-eee484cb8448",
+  "status": "todo",
+  "history": [
+    {
+      "at": "2026-10-01T14:16:29.229767395Z",
+      "by": "user",
+      "summary": "创建"
+    }
+  ],
+  "sources": [
+    {
+      "at": "2026-10-01T14:16:27.473019955Z",
+      "label": "创建",
+      "version": 1,
+      "sourceId": "89049bdc-9bda-4928-8b51-433aabf6de8b"
+    },
+    {
+      "at": "2026-10-01T14:16:27.493949369Z",
+      "label": "更新说明",
+      "version": 2,
+      "sourceId": "89049bdc-9bda-4928-8b51-433aabf6de8b"
+    },
+    {
+      "at": "2026-10-01T14:16:27.637500337Z",
+      "label": "更新：普通独立工作事项",
+      "version": 3,
+      "sourceId": "89049bdc-9bda-4928-8b51-433aabf6de8b"
+    },
+    {
+      "at": "2026-10-01T14:16:29.068222084Z",
+      "label": "撤销：副手结果：存成文档",
+      "version": 5,
+      "sourceId": "89049bdc-9bda-4928-8b51-433aabf6de8b"
+    },
+    {
+      "at": "2026-10-01T14:16:29.163998463Z",
+      "label": "采纳副手结果",
+      "version": 6,
+      "sourceId": "89049bdc-9bda-4928-8b51-433aabf6de8b"
+    }
+  ],
+  "itemKind": "task",
+  "progress": "",
+  "triggers": [],
+  "checklist": [],
+  "createdAt": "2026-10-01T14:16:29.229767395Z",
+  "dependsOn": [],
+  "evolution": [
+    {
+      "at": "2026-10-01T14:16:29.229767395Z",
+      "by": "user",
+      "summary": "提出"
+    }
+  ],
+  "nextSteps": [],
+  "updatedAt": "2026-10-01T14:16:29.308078466Z",
+  "conditions": [],
+  "remindersOn": true,
+  "recordVersion": 3
+}

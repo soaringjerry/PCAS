@@ -1,0 +1,28 @@
+{
+  "authorization": {
+    "id": "4095658a-c688-47e3-895d-e9491c9e464a",
+    "source_id": "1effeab6-5ab7-4097-84d2-1b408fca7332",
+    "recipient": {
+      "principal_id": "manual",
+      "role": "manual",
+      "model": "phase2-synthetic",
+      "provider": "phase2-model",
+      "protocol": "openai",
+      "channel": "manual",
+      "route_fingerprint": "4a4e34c4b3b97d5ce363972d3d0083951cab63c9f22b86892941961d1b7938ed"
+    },
+    "purpose": "knowledge",
+    "scope": {
+      "kind": "unscoped",
+      "include_global_constraints": false
+    },
+    "revision": 1,
+    "revoked": false,
+    "explicit_deny": false,
+    "created_at": "2026-10-01T14:16:21.912601Z",
+    "updated_at": "2026-10-01T14:16:21.912601Z"
+  },
+  "duplicate": false,
+  "action_id": "d5f637a7-beeb-4803-bdc7-64d1d8edb7dd",
+  "undoable": true
+}

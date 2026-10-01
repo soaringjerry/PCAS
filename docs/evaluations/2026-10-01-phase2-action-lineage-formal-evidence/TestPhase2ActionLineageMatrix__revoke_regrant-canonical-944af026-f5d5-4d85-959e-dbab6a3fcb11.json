@@ -1,0 +1,86 @@
+{
+  "id": "944af026-f5d5-4d85-959e-dbab6a3fcb11",
+  "body": "",
+  "goal": "",
+  "name": "内容已失效",
+  "notes": "\nOWNER independent paragraph cobalt 602",
+  "title": "内容已失效",
+  "status": "todo",
+  "history": [
+    {
+      "at": "2026-10-01T14:16:18.267611341Z",
+      "by": "secretary",
+      "summary": ""
+    },
+    {
+      "at": "2026-10-01T14:16:18.289182652Z",
+      "by": "secretary",
+      "summary": ""
+    },
+    {
+      "at": "2026-10-01T14:16:18.422977409Z",
+      "by": "user",
+      "summary": "更新说明"
+    },
+    {
+      "at": "2026-10-01T14:16:18.507985229Z",
+      "by": "user",
+      "summary": "添加子步骤"
+    },
+    {
+      "at": "2026-10-01T14:16:20.762522688Z",
+      "by": "assistant",
+      "summary": "采纳副手结果"
+    }
+  ],
+  "sources": [
+    {
+      "at": "2026-10-01T14:16:18.267611341Z",
+      "label": "",
+      "version": 1,
+      "sourceId": "9d3c849b-f0c0-49d5-8226-0a164831462b"
+    },
+    {
+      "at": "2026-10-01T14:16:18.289182652Z",
+      "label": "",
+      "version": 2,
+      "sourceId": "9d3c849b-f0c0-49d5-8226-0a164831462b"
+    },
+    {
+      "at": "2026-10-01T14:16:18.422977409Z",
+      "label": "更新说明",
+      "version": 3,
+      "sourceId": "9d3c849b-f0c0-49d5-8226-0a164831462b"
+    },
+    {
+      "at": "2026-10-01T14:16:18.507985229Z",
+      "label": "添加子步骤",
+      "version": 4,
+      "sourceId": "9d3c849b-f0c0-49d5-8226-0a164831462b"
+    },
+    {
+      "at": "2026-10-01T14:16:20.762522688Z",
+      "label": "采纳副手结果",
+      "version": 5,
+      "sourceId": "9d3c849b-f0c0-49d5-8226-0a164831462b"
+    }
+  ],
+  "itemKind": "task",
+  "progress": "",
+  "triggers": [],
+  "checklist": [
+    {
+      "id": "9315e31a-807a-491f-ab2c-2ba1d3d9da7e",
+      "done": false,
+      "text": "OWNER independent step bronze 697"
+    }
+  ],
+  "createdAt": "2026-10-01T14:16:18.248469965Z",
+  "dependsOn": [],
+  "evolution": [],
+  "nextSteps": [],
+  "updatedAt": "2026-10-01T14:16:20.844069122Z",
+  "conditions": [],
+  "remindersOn": true,
+  "recordVersion": 7
+}

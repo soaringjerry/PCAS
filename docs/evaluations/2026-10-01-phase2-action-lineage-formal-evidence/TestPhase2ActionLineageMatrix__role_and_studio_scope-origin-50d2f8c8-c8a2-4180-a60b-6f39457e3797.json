@@ -1,0 +1,78 @@
+{
+  "blocks": [
+    {
+      "field": "history:3",
+      "blocks": [
+        {
+          "runs": [],
+          "text": "更新：普通独立工作事项 · 普通独立项目 项目",
+          "deskActions": [
+            "50d2f8c8-c8a2-4180-a60b-6f39457e3797"
+          ]
+        }
+      ]
+    },
+    {
+      "field": "notes",
+      "blocks": [
+        {
+          "runs": [],
+          "text": "OWNER independent paragraph cobalt 602"
+        },
+        {
+          "runs": [],
+          "text": "\nACTION notes amber 842",
+          "deskActions": [
+            "50d2f8c8-c8a2-4180-a60b-6f39457e3797"
+          ]
+        }
+      ]
+    },
+    {
+      "field": "source:4401198f-6238-45fb-a372-235a4bec6f92:3",
+      "blocks": [
+        {
+          "runs": [],
+          "text": "更新：普通独立工作事项 · 普通独立项目 项目",
+          "deskActions": [
+            "50d2f8c8-c8a2-4180-a60b-6f39457e3797"
+          ]
+        }
+      ]
+    }
+  ],
+  "context_stale": false,
+  "context_task": {
+    "Now": "2026-10-01T14:16:12.366475719Z",
+    "View": {
+      "mode": "remember",
+      "known_at": "2026-10-01T14:16:12.366475719Z",
+      "valid_at": "2026-10-01T14:16:12.366475719Z"
+    },
+    "Scope": {
+      "kind": "studio",
+      "studio_id": "d851b71f-3840-4d4b-b53b-899e9d3eb618",
+      "include_global_constraints": true
+    },
+    "OwnerID": "8a280508-c4fc-4077-a877-a4d430fce52f",
+    "Purpose": "knowledge",
+    "Timezone": "Asia/Shanghai",
+    "Recipient": {
+      "role": "secretary",
+      "model": "phase2-synthetic",
+      "channel": "api",
+      "protocol": "openai",
+      "provider": "phase2-model",
+      "principal_id": "phase2-model",
+      "route_fingerprint": "0ddcc5bdeb3572f3752bf14388f255e32540537b16fa31459f161d24ab239127"
+    },
+    "MemoryBudget": {
+      "hops": 1,
+      "edges": 15,
+      "tokens": 4000,
+      "candidates": 15
+    },
+    "TotalInputTokens": 8000
+  },
+  "exact_source_dependencies": 0
+}

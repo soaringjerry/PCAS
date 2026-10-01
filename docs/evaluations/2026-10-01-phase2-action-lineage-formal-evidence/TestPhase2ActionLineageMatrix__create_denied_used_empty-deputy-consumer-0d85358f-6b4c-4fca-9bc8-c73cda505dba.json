@@ -1,0 +1,57 @@
+{
+  "contextTask": {
+    "OwnerID": "2df3a3dc-bedd-45c6-b372-92fce6d17399",
+    "Recipient": {
+      "principal_id": "phase2-model",
+      "role": "deputy",
+      "model": "phase2-synthetic",
+      "provider": "phase2-model",
+      "protocol": "openai",
+      "channel": "api",
+      "route_fingerprint": "0c06f11e6e13762fe48b80e830136d890b656d1039c6ae6c21b2abb5148bfbfd"
+    },
+    "Purpose": "knowledge",
+    "Scope": {
+      "kind": "unscoped",
+      "include_global_constraints": false
+    },
+    "View": {
+      "mode": "continue",
+      "valid_at": "2026-10-01T14:16:03.770739756Z",
+      "known_at": "2026-10-01T14:16:03.770739756Z"
+    },
+    "Now": "2026-10-01T14:16:03.770739756Z",
+    "Timezone": "Asia/Shanghai",
+    "MemoryBudget": {
+      "candidates": 15,
+      "edges": 15,
+      "tokens": 4000,
+      "hops": 1
+    },
+    "TotalInputTokens": 8000
+  },
+  "contextDeskActions": [],
+  "contextIndirectDependencies": [],
+  "contextAttemptId": "b7d9dc2a-0f40-4c3f-8d25-3139d768f485",
+  "id": "0d85358f-6b4c-4fca-9bc8-c73cda505dba",
+  "thingId": "b802a8c8-8a5a-4c5d-93ac-fb669216bb95",
+  "agentId": "phase2-model",
+  "kind": "ask",
+  "prompt": "给这件事一个独立建议",
+  "brief": "事项：事项内容需要重新授权或核验\n当前状态：todo\n说明：\nOWNER independent paragraph cobalt 602\n\n目标：\n进度：\n子步骤（完成=false）：OWNER independent step bronze 697\n\n本次请求：给这件事一个独立建议",
+  "contextMemoryIds": [],
+  "contextVersions": [],
+  "status": "done",
+  "output": "独立合成回答",
+  "adopted": {
+    "actionId": "908550e0-73c8-47b9-a8a3-6771145e9f4e",
+    "auto": true,
+    "as": "doc",
+    "at": "2026-10-01T14:16:05.067886208Z",
+    "edited": false
+  },
+  "staleContext": false,
+  "cost": 0,
+  "createdAt": "2026-10-01T14:16:03.834366657Z",
+  "finishedAt": "2026-10-01T14:16:05.029111592Z"
+}

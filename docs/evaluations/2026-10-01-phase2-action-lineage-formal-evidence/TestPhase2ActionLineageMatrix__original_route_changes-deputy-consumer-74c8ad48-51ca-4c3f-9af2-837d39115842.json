@@ -1,0 +1,131 @@
+{
+  "contextTask": {
+    "OwnerID": "72639b2c-8c20-4323-b0f0-5f3be68cdd81",
+    "Recipient": {
+      "principal_id": "phase2-model",
+      "role": "deputy",
+      "model": "phase2-synthetic",
+      "provider": "phase2-model",
+      "protocol": "openai",
+      "channel": "api",
+      "route_fingerprint": "bedc551fe48ef0b8545ad208471df3fa1cac2a16d1a043843be293d52b3fb466"
+    },
+    "Purpose": "knowledge",
+    "Scope": {
+      "kind": "unscoped",
+      "include_global_constraints": false
+    },
+    "View": {
+      "mode": "continue",
+      "valid_at": "2026-10-01T14:16:13.260304807Z",
+      "known_at": "2026-10-01T14:16:13.260304807Z"
+    },
+    "Now": "2026-10-01T14:16:13.260304807Z",
+    "Timezone": "Asia/Shanghai",
+    "MemoryBudget": {
+      "candidates": 15,
+      "edges": 15,
+      "tokens": 4000,
+      "hops": 1
+    },
+    "TotalInputTokens": 8000,
+    "desk_actions": [
+      "ac737023-0614-43f1-88eb-ee9e30ce3e23",
+      "b5e78fd2-017c-4a86-b9b8-b72b8bb144fe"
+    ]
+  },
+  "contextDependencies": [
+    {
+      "ref": {
+        "id": "445b188b-3389-47cf-a9ee-16d2752382bf",
+        "version": 1,
+        "kind": "source"
+      },
+      "purpose": "knowledge",
+      "scope": {
+        "kind": "unscoped",
+        "include_global_constraints": false
+      },
+      "authorization": {
+        "policy_id": "4b6b203d-50a3-4dcb-8d35-77731dba3509",
+        "revision": 1
+      },
+      "scope_revision": 0
+    }
+  ],
+  "contextDeskActions": [
+    "ac737023-0614-43f1-88eb-ee9e30ce3e23",
+    "b5e78fd2-017c-4a86-b9b8-b72b8bb144fe"
+  ],
+  "contextIndirectDependencies": [
+    {
+      "ref": {
+        "id": "445b188b-3389-47cf-a9ee-16d2752382bf",
+        "version": 1,
+        "kind": "source"
+      },
+      "purpose": "knowledge",
+      "scope": {
+        "kind": "unscoped",
+        "include_global_constraints": false
+      },
+      "authorization": {
+        "policy_id": "4b6b203d-50a3-4dcb-8d35-77731dba3509",
+        "revision": 1
+      },
+      "scope_revision": 0
+    }
+  ],
+  "contextCandidates": [
+    {
+      "ref": {
+        "id": "445b188b-3389-47cf-a9ee-16d2752382bf",
+        "version": 1,
+        "kind": "source"
+      },
+      "stage": "recall",
+      "disposition": "selected"
+    }
+  ],
+  "contextSourceSpans": [
+    {
+      "source": {
+        "id": "445b188b-3389-47cf-a9ee-16d2752382bf",
+        "version": 1,
+        "kind": "source"
+      },
+      "start_rune": 0,
+      "end_rune": 153
+    }
+  ],
+  "contextAttemptId": "304b3b58-f1d8-40f5-939f-bbde6150c2e3",
+  "id": "74c8ad48-51ca-4c3f-9af2-837d39115842",
+  "thingId": "3bbd85ff-b9cb-4304-a2a7-9daca9901542",
+  "agentId": "phase2-model",
+  "kind": "ask",
+  "prompt": "根据合成海棠行动资料给建议",
+  "brief": "事项：ACTION title scarlet 731\n当前状态：todo\n说明：ACTION notes amber 842\nOWNER independent paragraph cobalt 602\n\n目标：\n进度：\n子步骤（完成=false）：ACTION step jade 953\n子步骤（完成=false）：OWNER independent step bronze 697\n\n本次请求：根据合成海棠行动资料给建议",
+  "contextMemoryIds": [
+    "445b188b-3389-47cf-a9ee-16d2752382bf"
+  ],
+  "contextVersions": [
+    {
+      "id": "445b188b-3389-47cf-a9ee-16d2752382bf",
+      "version": 1,
+      "kind": "source"
+    }
+  ],
+  "status": "done",
+  "output": "COMPLETED old route result turquoise 919",
+  "adopted": {
+    "actionId": "c8097bb4-d99c-4373-9d21-7b02971366f2",
+    "auto": true,
+    "as": "doc",
+    "at": "2026-10-01T14:16:14.743225838Z",
+    "edited": false
+  },
+  "staleContext": false,
+  "cost": 0,
+  "createdAt": "2026-10-01T14:16:13.380420895Z",
+  "finishedAt": "2026-10-01T14:16:14.689919923Z"
+}

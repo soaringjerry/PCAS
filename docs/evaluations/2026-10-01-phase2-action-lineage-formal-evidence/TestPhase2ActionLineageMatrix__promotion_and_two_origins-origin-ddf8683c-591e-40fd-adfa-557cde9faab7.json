@@ -1,0 +1,89 @@
+{
+  "blocks": [
+    {
+      "field": "body",
+      "blocks": [
+        {
+          "runs": [],
+          "text": "OWNER independent paragraph cobalt 602"
+        },
+        {
+          "runs": [],
+          "text": "\nACTION notes amber 842",
+          "deskActions": [
+            "ddf8683c-591e-40fd-adfa-557cde9faab7"
+          ]
+        }
+      ]
+    },
+    {
+      "field": "evolution:3",
+      "blocks": [
+        {
+          "runs": [],
+          "text": "更新：普通独立工作事项",
+          "deskActions": [
+            "ddf8683c-591e-40fd-adfa-557cde9faab7"
+          ]
+        }
+      ]
+    },
+    {
+      "field": "history:3",
+      "blocks": [
+        {
+          "runs": [],
+          "text": "更新：普通独立工作事项",
+          "deskActions": [
+            "ddf8683c-591e-40fd-adfa-557cde9faab7"
+          ]
+        }
+      ]
+    },
+    {
+      "field": "source:89049bdc-9bda-4928-8b51-433aabf6de8b:3",
+      "blocks": [
+        {
+          "runs": [],
+          "text": "更新：普通独立工作事项",
+          "deskActions": [
+            "ddf8683c-591e-40fd-adfa-557cde9faab7"
+          ]
+        }
+      ]
+    }
+  ],
+  "context_stale": false,
+  "context_task": {
+    "Now": "2026-10-01T14:16:27.536401873Z",
+    "View": {
+      "mode": "remember",
+      "known_at": "2026-10-01T14:16:27.536401873Z",
+      "valid_at": "2026-10-01T14:16:27.536401873Z"
+    },
+    "Scope": {
+      "kind": "unscoped",
+      "include_global_constraints": false
+    },
+    "OwnerID": "4ffe5f1b-8439-4808-9fa2-cf5cb9ea95bb",
+    "Purpose": "knowledge",
+    "Timezone": "Asia/Shanghai",
+    "Recipient": {
+      "role": "secretary",
+      "model": "phase2-synthetic",
+      "channel": "api",
+      "protocol": "openai",
+      "provider": "phase2-model",
+      "principal_id": "phase2-model",
+      "route_fingerprint": "9c8d7932a83c2913d9af7b1caeaf0360795179e929dbd5a242f01953f1cae70c"
+    },
+    "MemoryBudget": {
+      "hops": 1,
+      "edges": 15,
+      "tokens": 4000,
+      "candidates": 15
+    },
+    "TotalInputTokens": 8000
+  },
+  "exact_source_dependencies": 1
+}

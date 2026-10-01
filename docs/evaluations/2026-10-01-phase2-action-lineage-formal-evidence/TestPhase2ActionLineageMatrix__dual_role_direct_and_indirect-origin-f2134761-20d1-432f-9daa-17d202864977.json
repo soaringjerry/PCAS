@@ -1,0 +1,145 @@
+{
+  "blocks": [
+    {
+      "field": "check:9d4a5649-d9a7-4348-86f1-0764575a13c5",
+      "blocks": [
+        {
+          "runs": [],
+          "text": "ACTION step jade 953",
+          "deskActions": [
+            "f2134761-20d1-432f-9daa-17d202864977"
+          ]
+        }
+      ]
+    },
+    {
+      "field": "history:0",
+      "blocks": [
+        {
+          "runs": [],
+          "text": "新建：ACTION title scarlet 731",
+          "deskActions": [
+            "99f721ed-cb0a-4f0d-a96e-614360effc92"
+          ]
+        }
+      ]
+    },
+    {
+      "field": "history:1",
+      "blocks": [
+        {
+          "runs": [],
+          "text": "给「ACTION title scarlet 731」加了 1 步",
+          "deskActions": [
+            "f2134761-20d1-432f-9daa-17d202864977"
+          ]
+        }
+      ]
+    },
+    {
+      "field": "notes",
+      "blocks": [
+        {
+          "runs": [],
+          "text": "ACTION notes amber 842",
+          "deskActions": [
+            "99f721ed-cb0a-4f0d-a96e-614360effc92"
+          ]
+        }
+      ]
+    },
+    {
+      "field": "owedTo",
+      "blocks": [
+        {
+          "runs": [],
+          "text": "ACTION owed violet 364",
+          "deskActions": [
+            "99f721ed-cb0a-4f0d-a96e-614360effc92"
+          ]
+        }
+      ]
+    },
+    {
+      "field": "source:b12f6286-6aeb-414a-876d-b744cecb7c57:1",
+      "blocks": [
+        {
+          "runs": [],
+          "text": "新建：ACTION title scarlet 731",
+          "deskActions": [
+            "99f721ed-cb0a-4f0d-a96e-614360effc92"
+          ]
+        }
+      ]
+    },
+    {
+      "field": "source:b12f6286-6aeb-414a-876d-b744cecb7c57:2",
+      "blocks": [
+        {
+          "runs": [],
+          "text": "给「ACTION title scarlet 731」加了 1 步",
+          "deskActions": [
+            "f2134761-20d1-432f-9daa-17d202864977"
+          ]
+        }
+      ]
+    },
+    {
+      "field": "title",
+      "blocks": [
+        {
+          "runs": [],
+          "text": "ACTION title scarlet 731",
+          "deskActions": [
+            "99f721ed-cb0a-4f0d-a96e-614360effc92"
+          ]
+        }
+      ]
+    },
+    {
+      "field": "waitingFor",
+      "blocks": [
+        {
+          "runs": [],
+          "text": "ACTION waiting silver 475",
+          "deskActions": [
+            "99f721ed-cb0a-4f0d-a96e-614360effc92"
+          ]
+        }
+      ]
+    }
+  ],
+  "context_stale": false,
+  "context_task": {
+    "Now": "2026-10-01T14:16:05.48473537Z",
+    "View": {
+      "mode": "remember",
+      "known_at": "2026-10-01T14:16:05.48473537Z",
+      "valid_at": "2026-10-01T14:16:05.48473537Z"
+    },
+    "Scope": {
+      "kind": "unscoped",
+      "include_global_constraints": false
+    },
+    "OwnerID": "17c5da78-58c6-4332-98db-17733f86e6fe",
+    "Purpose": "knowledge",
+    "Timezone": "Asia/Shanghai",
+    "Recipient": {
+      "role": "secretary",
+      "model": "phase2-synthetic",
+      "channel": "api",
+      "protocol": "openai",
+      "provider": "phase2-model",
+      "principal_id": "phase2-model",
+      "route_fingerprint": "9aeccd514f9a62bd5813d6afd1887cb5bfa3050fb83e9d80852e275e9035a76f"
+    },
+    "MemoryBudget": {
+      "hops": 1,
+      "edges": 15,
+      "tokens": 4000,
+      "candidates": 15
+    },
+    "TotalInputTokens": 8000
+  },
+  "exact_source_dependencies": 1
+}

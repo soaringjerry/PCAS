@@ -1,0 +1,30 @@
+{
+  "rejected": true,
+  "state": {
+    "notices": null,
+    "budgetUsage": 0,
+    "version": 0,
+    "revision": 0,
+    "settings": {
+      "autoAccept": false,
+      "wakeIdeas": false,
+      "followUps": false,
+      "dailyReviewAt": "",
+      "dailyBudget": 0,
+      "timezone": ""
+    },
+    "tasks": null,
+    "ideas": null,
+    "projects": null,
+    "memories": null,
+    "candidates": null,
+    "agents": null,
+    "docs": null,
+    "runs": null,
+    "samples": null,
+    "sources": null,
+    "jobs": null,
+    "activity": null,
+    "excludedMemories": null
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "head": "c8adbaeb5c02daa9e83f90f74c216d8cf9ee22bf",
+  "command": [
+    "go",
+    "test",
+    "-race",
+    "./internal/postgres",
+    "-count=1",
+    "-json",
+    "-run",
+    "^TestPhase2Runtime(OwnerUndoReceiptAuditNeverRestoresSourceText|RetryPreservesGeneratedPromptOrigins)$/^(RECEIPT-(EMPTY|SOURCE)|RETRY-LIVE|RETRY-SCOPE-DENIED|RETRY-INVALID-DELETE_SOURCE-(ORIGINAL_PROMPT|PUNCTUATION_ONLY))$"
+  ],
+  "exit_code": 0,
+  "elapsed_seconds": 14.269312143325806,
+  "raw_sha256": "b3dd8230a7379ecc87cb12beb129121c6492ed2a60a1c299802d4185d2e7517a"
+}

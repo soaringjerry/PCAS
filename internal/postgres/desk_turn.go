@@ -431,7 +431,7 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 				}
 				out.ConversationID, out.Turn = saved.ConversationID, saved.Turn
 				if _, e := s.deskTurnContextTx(ctx, tx, scope, out.Turn.ID, nil); e != nil {
-					if err := redactDeskTurnContextTx(ctx, tx, scope, &out.Turn); err != nil {
+					if err := s.redactDeskTurnContextTx(ctx, tx, scope, &out.Turn); err != nil {
 						return err
 					}
 				}
@@ -802,7 +802,7 @@ func (s *Store) deskTurnsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, 
 		turn := stored.Response.Turn
 		live, contextErr := s.deskTurnContextTx(ctx, tx, scope, turn.ID, scope.Task)
 		if stored.Erased || contextErr != nil {
-			if err := redactDeskTurnContextTx(ctx, tx, scope, &turn); err != nil {
+			if err := s.redactDeskTurnContextTx(ctx, tx, scope, &turn); err != nil {
 				return out, err
 			}
 			if scope.Task != nil {

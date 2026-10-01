@@ -185,7 +185,7 @@ func (s *Store) deskTurnContextForItemTx(ctx context.Context, tx pgx.Tx, scope m
 
 // Keep a verifiable operation receipt while removing stale derived prose and
 // item links. Action ownership and this exchange's binding are server facts.
-func redactDeskTurnContextTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, turn *workspace.SecretaryTurn) error {
+func (s *Store) redactDeskTurnContextTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, turn *workspace.SecretaryTurn) error {
 	var erased bool
 	var storedResponse []byte
 	if err := tx.QueryRow(ctx, "SELECT question='' AND answer='',response FROM desk_turns WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), turn.ID).Scan(&erased, &storedResponse); err != nil {
@@ -228,8 +228,74 @@ func redactDeskTurnContextTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 		if err != nil {
 			return err
 		}
+		if undone && scope.IsOwner && scope.Task == nil && s.ownerUndoneReceiptOriginTx(ctx, tx, scope, *receipt.ActionID) == nil {
+			// This is only an owner audit identity. The exchange's prose stays
+			// hidden, and the normal origin verifier still rejects undone work.
+			receipt.Undoable, receipt.Undone = false, true
+			kept = append(kept, receipt)
+			continue
+		}
 		kept = append(kept, workspace.DeskReceipt{Op: "action", Text: "这项操作已完成；相关回答内容已隐藏", Status: "done", ActionID: receipt.ActionID, Undoable: !undone, Undone: undone})
 	}
 	turn.Receipts = kept
 	return nil
+}
+
+// A separate audit gate: never use this to authorize history or field supply.
+// Undo may hide an otherwise ordinary exchange without erasing the identity of
+// its completed operation. Any memory dependence keeps the generic receipt.
+func (s *Store) ownerUndoneReceiptOriginTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, actionID string) error {
+	if !scope.Valid() || !scope.IsOwner || scope.Task != nil {
+		return memory.ErrForbidden
+	}
+	visiting, seen, done := map[string]bool{}, map[string]bool{}, map[string]bool{}
+	var inspect func(string, int) error
+	inspect = func(id string, depth int) error {
+		if !memory.ID(id).Valid() {
+			return memory.ErrConflict
+		}
+		if visiting[id] || depth >= 16 {
+			return memory.ErrRecordCapacity
+		}
+		if done[id] {
+			return nil
+		}
+		seen[id] = true
+		if len(seen) > 256 {
+			return memory.ErrRecordCapacity
+		}
+		visiting[id] = true
+		defer delete(visiting, id)
+		var raw []byte
+		var stale bool
+		if err := tx.QueryRow(ctx, "SELECT context_task,context_stale FROM action_log WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), id).Scan(&raw, &stale); err != nil {
+			return typedReadError(err)
+		}
+		var task memory.TrustedTaskContext
+		if stale || len(raw) == 0 || json.Unmarshal(raw, &task) != nil || task.Recipient.Role != "secretary" || !oneOf(string(task.View.Mode), "continue", "remember", "history") {
+			return memory.ErrConflict
+		}
+		deps, err := loadContextArtifactDependenciesTx(ctx, tx, scope, "artifact", id, 1)
+		if err != nil {
+			return err
+		}
+		if len(deps) != 0 {
+			return memory.ErrForbidden
+		}
+		if err := verifyTypedContextTx(ctx, tx, scope, task, nil); err != nil {
+			return err
+		}
+		actual, err := s.contextRecipientModelTx(ctx, tx, scope, task.Recipient.PrincipalID, task.Recipient.Role, nil, task.Recipient.Model)
+		if err != nil || actual != task.Recipient {
+			return memory.ErrConflict
+		}
+		for _, parent := range task.DeskActions {
+			if err := inspect(string(parent), depth+1); err != nil {
+				return err
+			}
+		}
+		done[id] = true
+		return nil
+	}
+	return inspect(actionID, 0)
 }

@@ -37,7 +37,7 @@ func (s *Store) DeskTurnByRequest(ctx context.Context, scope memory.Scope, reque
 		}
 		out.ConversationID, out.Turn = saved.ConversationID, saved.Turn
 		if _, err := s.deskTurnContextTx(ctx, tx, scope, out.Turn.ID, nil); err != nil {
-			if err := redactDeskTurnContextTx(ctx, tx, scope, &out.Turn); err != nil {
+			if err := s.redactDeskTurnContextTx(ctx, tx, scope, &out.Turn); err != nil {
 				return err
 			}
 		}

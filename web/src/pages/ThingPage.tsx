@@ -691,7 +691,10 @@ function ManualRequest({ thingId, initialRun, label = '手动转交' }: { thingI
 }
 
 function originalManualRecipient(run: Run) {
-  return run.manualRecipient ?? run.contextTask?.recipient
+  const recipient = run.contextTask?.recipient
+  if (recipient && (recipient.channel !== 'manual' || recipient.role !== 'manual')) return undefined
+  const provider = run.manualRecipient?.provider ?? recipient?.provider
+  return provider ? { provider } : undefined
 }
 
 function Handoff({ run }: { run: Run }) {

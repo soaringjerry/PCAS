@@ -1,0 +1,124 @@
+{
+  "schema": "pcas.phase2.independent-migration-gold.v1",
+  "frozen_at": "2026-10-01",
+  "authority": "Root approved K0 migration and storage sequence expectations; independent synthetic fixture",
+  "legacy_product_sha": "d8d6fb3efe92f7711c5567440e92af362df7fe77",
+  "legacy_max_migration": "021_desk_turn_order.sql",
+  "cases": [
+    {
+      "id": "M1-FRESH",
+      "required": [
+        "fresh product Migrate and CheckSchema succeed",
+        "restart Migrate retains exactly one applied record per migration",
+        "no source policies inferred and no provider calls"
+      ]
+    },
+    {
+      "id": "M2-LEGACY",
+      "dependency_records": [
+        {
+          "id": "20000000-0000-0000-0000-000000000001",
+          "kind": "source",
+          "version": 2,
+          "body": "K0-SOURCE-current-v2",
+          "historical_body": "K0-SOURCE-history-v1"
+        },
+        {
+          "id": "20000000-0000-0000-0000-000000000003",
+          "kind": "claim",
+          "version": 3,
+          "body": "K0-CLAIM-current-v3"
+        },
+        {
+          "id": "20000000-0000-0000-0000-000000000004",
+          "kind": "summary",
+          "version": 1,
+          "body": "K0-SUMMARY-current-v1"
+        }
+      ],
+      "required": [
+        "before 022 run and derived dependencies lack kind column",
+        "022 joins canonical memory_records kind for source/claim/summary independently",
+        "IDs versions prior columns bodies and legacy source grant stay byte-equivalent as SQL JSON",
+        "zero source authorization inferred from old grant",
+        "repeat migrate does not duplicate or alter data"
+      ]
+    },
+    {
+      "id": "M3-TYPED-DEPS",
+      "accepted_kinds": [
+        "source",
+        "claim",
+        "summary"
+      ],
+      "rejected_kinds": [
+        "chunk",
+        "entity",
+        "episode",
+        "relation",
+        "unknown"
+      ],
+      "rejected_versions": [
+        0,
+        -1
+      ],
+      "required": [
+        "exact ID kind positive version round-trip",
+        "attempt and durable dependency tables both reject unsupported kind"
+      ]
+    },
+    {
+      "id": "M4-BODY-BOUNDARY",
+      "body_limit_bytes": 262144,
+      "required": [
+        "exact retained snapshot at bound accepted",
+        "body or declared input above bound rejected",
+        "snapshot_bytes must equal actual bytea and input_bytes",
+        "nonretained snapshot body absent",
+        "body and metadata expiry ordering enforced"
+      ]
+    },
+    {
+      "id": "M5-METADATA-BOUNDARY",
+      "attempt_metadata_limit_bytes": 65536,
+      "owner_metadata_limit_bytes": 67108864,
+      "required": [
+        "DDL declared metadata_bytes at bound accepted, above bound rejected",
+        "manifest physically above bound rejected",
+        "declared metadata cannot be smaller than manifest plus recipient JSON serialization"
+      ],
+      "limits": [
+        "DDL declaration bound does not prove actual whole metadata measurement or owner atomic quota",
+        "attempt variable fields and dependency side-table byte totals require K1 runtime accounting"
+      ]
+    },
+    {
+      "id": "M6-INDEPENDENT-ATTEMPT",
+      "required": [
+        "write attempt for owner absent from workspace_owners",
+        "write typed dependency for nonexistent business source/claim ID without blocking or FK error",
+        "attempt and diagnostic dep survive deletion of unrelated business identities",
+        "only diagnostic attempt-child FK allowed"
+      ]
+    },
+    {
+      "id": "M7-DURABLE-LINEAGE",
+      "required": [
+        "delete diagnostic attempt cascades its attempt_typed_dependencies",
+        "context_artifact_dependencies for same synthetic parent/ref remains unchanged",
+        "durable ref survives business memory record deletion",
+        "durable lineage has no attempt FK cascade"
+      ]
+    }
+  ],
+  "runtime_pending": [
+    "natural authorization",
+    "raw/API missing-trusted-task gates",
+    "typed verifier fail closed for missing legacy kind",
+    "whole metadata accounting and owner quotas",
+    "retention sweeper",
+    "deny/regrant ABA",
+    "recursive source invalidation and provider fences"
+  ],
+  "failure_policy": "No skip, weakening, product changes, or lucky retries"
+}

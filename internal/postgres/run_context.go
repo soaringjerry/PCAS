@@ -31,11 +31,13 @@ func (s *Store) requestRunTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 		return memory.ErrConflict
 	}
 	task := prepared.Task
+	promptOrigins := []memory.ID{}
 	if _, derived := ctx.Value(secretaryArtifactKey{}).(secretaryArtifactContext); derived {
 		if log, ok := ctx.Value(actionLogKey{}).(actionLog); ok {
 			if err := appendTaskDeskActions(&task, memory.ID(log.id)); err != nil {
 				return err
 			}
+			promptOrigins = append(promptOrigins, memory.ID(log.id))
 		}
 	}
 	role := "deputy"
@@ -109,7 +111,7 @@ func (s *Store) requestRunTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 		return err
 	}
 	entries = boundRunEntries(entries, c.Prompt, task.MemoryBudget)
-	run := workspace.Run{ID: id, ThingID: item.ID, AgentID: agent.ID, Kind: c.Kind, Prompt: c.Prompt, Status: "running", ContextMemoryIDs: []string{}, ContextVersions: []memory.Ref{}, CreatedAt: stamp(), ContextTask: &task, ManualRecipient: c.ManualRecipient}
+	run := workspace.Run{ID: id, ThingID: item.ID, AgentID: agent.ID, Kind: c.Kind, Prompt: c.Prompt, ContextPromptDeskActions: promptOrigins, Status: "running", ContextMemoryIDs: []string{}, ContextVersions: []memory.Ref{}, CreatedAt: stamp(), ContextTask: &task, ManualRecipient: c.ManualRecipient}
 	var brief strings.Builder
 	fmt.Fprintf(&brief, "事项：%s\n当前状态：%s\n说明：%s\n%s\n目标：%s\n进度：%s\n", item.Title, item.Status, item.Notes, item.Body, item.Goal, item.Progress)
 	projectID := item.ProjectID
@@ -538,13 +540,25 @@ func (s *Store) verifyRunTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, 
 
 func (s *Store) verifyRunForItemTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run workspace.Run, item *workspace.Item) error {
 	if run.ContextTask != nil {
+		if len(run.ContextPromptDeskActions) > 256 {
+			return memory.ErrRecordCapacity
+		}
+		for _, origin := range run.ContextPromptDeskActions {
+			found := false
+			for _, parent := range run.ContextDeskActions {
+				found = found || origin == parent
+			}
+			if !origin.Valid() || !found {
+				return memory.ErrConflict
+			}
+		}
 		if !sameDeskActions(run.ContextDeskActions, run.ContextTask.DeskActions) {
 			return memory.ErrConflict
 		}
 		if err := s.verifyTaskDeskActionsTx(ctx, tx, scope, *run.ContextTask); err != nil {
 			return err
 		}
-	} else if len(run.ContextDeskActions) > 0 {
+	} else if len(run.ContextDeskActions) > 0 || len(run.ContextPromptDeskActions) > 0 {
 		return memory.ErrConflict
 	}
 	if run.StaleContext {

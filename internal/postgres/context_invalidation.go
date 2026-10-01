@@ -104,6 +104,13 @@ func invalidateTypedContextTx(ctx context.Context, tx pgx.Tx, scope memory.Scope
  EXISTS(SELECT 1 FROM context_artifact_dependencies d WHERE d.owner_id=r.owner_id AND d.parent_kind IN ('run','manual_package') AND d.parent_id=r.id::text AND d.dependency_id=ANY($2::uuid[]) AND ($3::jsonb IS NULL OR d.recipient=$3)))`, string(scope.OwnerID), ids, recipient); err != nil {
 		return err
 	}
+	// Only model-written prompts have their own durable action origin. A
+	// target's independent policy failure must not relabel owner-authored text.
+	if _, err = tx.Exec(ctx, `UPDATE agent_runs r SET document=document||jsonb_build_object('staleContext',true,'prompt','','brief','','output','')
+ WHERE owner_id=$1 AND EXISTS(SELECT 1 FROM action_log l WHERE l.owner_id=r.owner_id AND l.context_stale
+ AND (r.document->'contextPromptDeskActions') ? l.id::text)`, string(scope.OwnerID)); err != nil {
+		return err
+	}
 	if _, err = tx.Exec(ctx, `UPDATE desk_turns t SET answer='',response=jsonb_set(jsonb_set(jsonb_set(coalesce(response,'{}'::jsonb),'{turn,reply}','"（这条回答依据的记忆已变更）"'::jsonb),'{turn,cards}','[]'::jsonb),'{turn,ask}','null'::jsonb)
  WHERE owner_id=$1 AND (EXISTS(SELECT 1 FROM jsonb_array_elements(CASE WHEN jsonb_typeof(dependencies)='array' THEN dependencies ELSE '[]'::jsonb END) d WHERE d->>'id'=ANY($2::text[])) OR EXISTS(SELECT 1 FROM context_artifact_dependencies d WHERE d.owner_id=t.owner_id AND d.parent_kind='desk_turn' AND d.parent_id=t.id::text AND d.dependency_id=ANY($2::uuid[]) AND ($3::jsonb IS NULL OR d.recipient=$3)))`, string(scope.OwnerID), ids, recipient); err != nil {
 		return err

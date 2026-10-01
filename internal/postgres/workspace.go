@@ -255,6 +255,9 @@ func (s *Store) snapshotTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) (
 		run := &out.Runs[i]
 		allowedRuns[run.ID] = s.verifyRunTx(ctx, tx, scope, *run) == nil
 		if !allowedRuns[run.ID] {
+			if len(run.ContextPromptDeskActions) > 0 {
+				run.Prompt = ""
+			}
 			run.Brief, run.Output, run.ProviderError = "", "", nil
 			run.StaleContext = true
 			run.Error = "资料或接收者已变化，请重新生成"

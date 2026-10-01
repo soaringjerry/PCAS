@@ -184,7 +184,10 @@ type Run struct {
 	ContextTask         *memory.TrustedTaskContext `json:"contextTask,omitempty"`
 	ContextDependencies []memory.TypedDependency   `json:"contextDependencies,omitempty"`
 	// Server-owned derived lineage; may overlap direct ContextVersions/Input.
-	ContextDeskActions          []memory.ID              `json:"contextDeskActions"`
+	ContextDeskActions []memory.ID `json:"contextDeskActions"`
+	// A server-owned subset for the actual model-written Prompt, distinct from
+	// origins inherited through item fields and previous conversations.
+	ContextPromptDeskActions    []memory.ID              `json:"contextPromptDeskActions,omitempty"`
 	ContextIndirectDependencies []memory.TypedDependency `json:"contextIndirectDependencies"`
 	ContextCandidates           []memory.CandidateRecord `json:"contextCandidates,omitempty"`
 	ContextSourceSpans          []memory.SourceSpan      `json:"contextSourceSpans,omitempty"`

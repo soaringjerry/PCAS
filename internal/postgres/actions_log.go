@@ -284,6 +284,11 @@ func (s *Store) undoActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 			case "agent_runs":
 				var run workspace.Run
 				if err = json.Unmarshal(c.Before, &run); err == nil {
+					if len(run.ContextPromptDeskActions) > 0 && s.verifyRunTx(ctx, tx, scope, run) != nil {
+						run.Prompt, run.Brief, run.Output, run.ProviderError = "", "", "", nil
+						run.StaleContext = true
+						c.Before = asJSON(run)
+					}
 					_, err = tx.Exec(ctx, "UPDATE agent_runs SET document=$3,status=$4 WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), c.ID, c.Before, run.Status)
 				}
 			}

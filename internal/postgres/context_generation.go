@@ -107,7 +107,11 @@ func (s *Store) generateContext(ctx context.Context, scope memory.Scope, operati
 	var result ai.Result
 	var generationErr error
 	if len(schema) > 0 {
-		result, generationErr = s.models.GenerateWithSearchSchema(workCtx, task.Recipient.Provider, system, prompt, schema)
+		if task.Recipient.Role == "secretary" {
+			result, generationErr = s.models.GenerateWithSearchSchema(workCtx, task.Recipient.Provider, system, prompt, schema)
+		} else {
+			result, generationErr = s.models.GenerateSchema(workCtx, task.Recipient.Provider, system, prompt, schema)
+		}
 	} else {
 		result, generationErr = s.models.Generate(workCtx, task.Recipient.Provider, system, prompt)
 	}

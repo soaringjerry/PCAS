@@ -183,27 +183,29 @@ type Run struct {
 	// these returned fields; consumers rebuild the current recipient on reads.
 	ContextTask         *memory.TrustedTaskContext `json:"contextTask,omitempty"`
 	ContextDependencies []memory.TypedDependency   `json:"contextDependencies,omitempty"`
-	ContextCandidates   []memory.CandidateRecord   `json:"contextCandidates,omitempty"`
-	ContextSourceSpans  []memory.SourceSpan        `json:"contextSourceSpans,omitempty"`
-	ContextAttemptID    memory.ID                  `json:"contextAttemptId,omitempty"`
-	ManualRecipient     *memory.Recipient          `json:"manualRecipient,omitempty"`
-	ID                  string                     `json:"id"`
-	ThingID             string                     `json:"thingId"`
-	AgentID             string                     `json:"agentId"`
-	Kind                string                     `json:"kind"`
-	Prompt              string                     `json:"prompt"`
-	Brief               string                     `json:"brief"`
-	ContextMemoryIDs    []string                   `json:"contextMemoryIds"`
-	ContextVersions     []memory.Ref               `json:"contextVersions"`
-	Status              string                     `json:"status"`
-	Output              string                     `json:"output,omitempty"`
-	Error               string                     `json:"error,omitempty"`
-	ProviderError       json.RawMessage            `json:"providerError,omitempty"`
-	Adopted             *Adoption                  `json:"adopted,omitempty"`
-	StaleContext        bool                       `json:"staleContext"`
-	Cost                float64                    `json:"cost"`
-	CreatedAt           string                     `json:"createdAt"`
-	FinishedAt          string                     `json:"finishedAt,omitempty"`
+	// Server-owned derived lineage; may overlap direct ContextVersions/Input.
+	ContextIndirectDependencies []memory.TypedDependency `json:"contextIndirectDependencies"`
+	ContextCandidates           []memory.CandidateRecord `json:"contextCandidates,omitempty"`
+	ContextSourceSpans          []memory.SourceSpan      `json:"contextSourceSpans,omitempty"`
+	ContextAttemptID            memory.ID                `json:"contextAttemptId,omitempty"`
+	ManualRecipient             *memory.Recipient        `json:"manualRecipient,omitempty"`
+	ID                          string                   `json:"id"`
+	ThingID                     string                   `json:"thingId"`
+	AgentID                     string                   `json:"agentId"`
+	Kind                        string                   `json:"kind"`
+	Prompt                      string                   `json:"prompt"`
+	Brief                       string                   `json:"brief"`
+	ContextMemoryIDs            []string                 `json:"contextMemoryIds"`
+	ContextVersions             []memory.Ref             `json:"contextVersions"`
+	Status                      string                   `json:"status"`
+	Output                      string                   `json:"output,omitempty"`
+	Error                       string                   `json:"error,omitempty"`
+	ProviderError               json.RawMessage          `json:"providerError,omitempty"`
+	Adopted                     *Adoption                `json:"adopted,omitempty"`
+	StaleContext                bool                     `json:"staleContext"`
+	Cost                        float64                  `json:"cost"`
+	CreatedAt                   string                   `json:"createdAt"`
+	FinishedAt                  string                   `json:"finishedAt,omitempty"`
 }
 type Origin struct {
 	Label    string `json:"label"`

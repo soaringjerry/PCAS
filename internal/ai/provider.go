@@ -227,6 +227,21 @@ func (r *Registry) GenerateWithSearchSchema(ctx context.Context, id, system, pro
 	text, searches, err := r.Codex.GenerateWithSearchSchema(r.generationContext(ctx, p), p.Model, system, prompt, schema)
 	return Result{Text: text, Searches: searches}, err
 }
+
+// GenerateSchema keeps generation offline while constraining Codex output.
+// Other providers retain their existing generation request/instruction format.
+func (r *Registry) GenerateSchema(ctx context.Context, id, system, prompt string, schema json.RawMessage) (Result, error) {
+	p, ok := r.Get(id)
+	if !ok || p.Protocol != "codex" || !r.providerAvailable(p) {
+		return r.Generate(ctx, id, system, prompt)
+	}
+	if r.ReloadSubscription {
+		defer r.Codex.Close()
+	}
+	text, err := r.Codex.GenerateSchema(r.generationContext(ctx, p), p.Model, system, prompt, schema)
+	return Result{Text: text}, err
+}
+
 func (r *Registry) Generate(ctx context.Context, id, system, prompt string) (Result, error) {
 	p, ok := r.Get(id)
 	if !ok || !r.providerAvailable(p) || p.Embedding || p.Transcription {

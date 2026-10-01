@@ -147,8 +147,8 @@ func (s *Store) requestRunTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 	if !cov.Complete && len(artifactRefs) > 0 {
 		return memory.ErrConflict
 	}
-	run.ContextDependencies = mergeRunDependencies(run.ContextDependencies, dependenciesForEntries(indirectEntries))
-	run.ContextDependencies = mergeRunDependencies(run.ContextDependencies, prepared.Indirect)
+	run.ContextIndirectDependencies = mergeRunDependencies(dependenciesForEntries(indirectEntries), prepared.Indirect)
+	run.ContextDependencies = mergeRunDependencies(run.ContextDependencies, run.ContextIndirectDependencies)
 	directSeen := map[memory.Ref]bool{}
 	for _, entry := range entries {
 		if !directSeen[entry.Ref] {
@@ -325,18 +325,10 @@ type runAnswer struct {
 	Used   []memory.Ref `json:"used"`
 }
 
-func indirectRunDependencies(run workspace.Run, entries []memory.EvidenceEntry) []memory.TypedDependency {
-	direct := map[memory.Ref]bool{}
-	for _, entry := range entries {
-		direct[entry.Ref] = true
-	}
-	out := []memory.TypedDependency{}
-	for _, d := range run.ContextDependencies {
-		if !direct[d.Ref] {
-			out = append(out, d)
-		}
-	}
-	return out
+func indirectRunDependencies(run workspace.Run, _ []memory.EvidenceEntry) []memory.TypedDependency {
+	// Derived Brief/history/field lineage is independent of what direct
+	// entries happened to fit this request. A ref may occur in both sets.
+	return run.ContextIndirectDependencies
 }
 
 type preparedRunContext struct {

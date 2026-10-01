@@ -75,6 +75,9 @@ actions 原始 JSON、corrections 原始 JSON、memory-input 不进入 knowledge
 | Used | 输出声称使用的 ref；验证在实际输入、权限和引用支持中的状态；Used 空不代表没收到，存在不证明内部因果 |
 | indirect_dependencies | 本轮派生摘要、历史回答、Brief、产物的依赖，用于失效/删除，不代表其原文逐字进入 input |
 
+Indirect不是Input的集合补集：同一ref同时直接提供原文并支撑派生标题/请求/历史时，两组都保留。Run用服务端 `contextIndirectDependencies` 单独保存派生谱系，与全部 `contextDependencies` 和直接 `contextVersions` 分离；客户端返回的字段不成为可信输入。后续manual/自动装配按该谱系形成Indirect，不能因direct出现而删除因果链。
+
+
 `ContextManifest` v1 关联 attempt、request/turn/run 身份、recipient、固定视图/范围、四集合、coverage、截断、输入 bytes、tokens（actual/estimated/unknown）、观测层。没有计量时 token 指针为空，不能把 bytes×比例写 actual。provider 内部隐含提示/工具结果不可见部分记 unknown。
 
 最后装配点只保存一份精确载荷字节快照（文本消息/角色/顺序/schema/配置；不复制附件 blob）；材料映射可指到多个 input span。超单次上限必须**先裁剪最终载荷并同步映射/缺口，或拒绝调用**；禁止送全文却存一部分声称全文。hash/refs 仅定位，不能替代精确正文证据。普通日志不含正文、文件名、SQL值。

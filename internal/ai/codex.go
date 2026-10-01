@@ -255,6 +255,12 @@ func (c *Codex) Generate(ctx context.Context, model, system, prompt string) (str
 	return text, err
 }
 
+// GenerateSchema constrains the final answer without enabling web search.
+func (c *Codex) GenerateSchema(ctx context.Context, model, system, prompt string, schema json.RawMessage) (string, error) {
+	text, _, err := c.generate(ctx, model, system, prompt, false, schema)
+	return text, err
+}
+
 // GenerateWithSearch lets this one thread use the hosted web search tool; the
 // process-wide default stays off. It returns the queries the model searched.
 func (c *Codex) GenerateWithSearch(ctx context.Context, model, system, prompt string) (string, []string, error) {

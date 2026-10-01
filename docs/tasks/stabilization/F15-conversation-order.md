@@ -18,6 +18,8 @@
 
 ## 文件归属
 
+2026-10-01 root 已审查设计并固定最小实现：数据库仅元数据票据、commit 接受点、队首进入既有 slots 且持执行锁后二次核查；终结同键重试只补存原话并给明确未完成的 capture 回执，不迟到重执行。Q1 独立代码复核确认可同事务撤掉此次新建来源尚未发布的 queued chunk 作业，保留原文与 unknown 候选，避免自动提取旧指令；不要用 blocked 伪装配置故障再给隐含重新执行的“重试”。必须检查 ingest Duplicate 与精确作业范围。正式边界见 [2.1.1 契约](../phase1/contracts.md#211-服务端内部调用)。已授权完整产品实施，无需再次等待用户或 root 确认。
+
 预留 `internal/postgres/desk_turn.go`、新 `internal/postgres/desk_turn_order.go`、自测 `internal/postgres/desk_turn_order_test.go`，必要时 `internal/postgres/database.go` 与迁移 021（路径/编号先按仓库核查），以及 `docs/evaluations/2026-10-01-conversation-order-repair.md`。共享类型/接口、其他测试或生产文件需先报告 root 统一归属。原 Q1 诊断测试和既有 F11 测试不改；可读取作为独立证据，不能降低预期。不得修改前端、Telegram、撤销逻辑、任务文档或 A1 工作区。
 
 ## 验证与交付

@@ -55,7 +55,7 @@
 { "type": "undoAction", "id": "<动作 ID>", "requestId": "...", "expectedRevision": 12 }
 ```
 
-**判定**：对 `changes` 里的每一行，先检查它当前 document 的 sha256 是否等于 `afterHash`（`afterHash` 为 null 的行则要求该行当前不存在）。
+**判定**：先检查动作是否已撤销或已过期，再检查 `changes` 涉及的行是否有尚未撤销的后续动作。有则返回 `newer_action`；没有时，对每一行检查当前 document 的业务指纹是否等于 `afterHash`（`afterHash` 为 null 的行则要求该行当前不存在），不符返回 `changed_since`。已撤销优先返回 `already_undone`，过期按 1.4.2 返回 `expired`。
 
 **全部符合时**，按逆序恢复：
 - `before == null`：删除这一行。
@@ -67,7 +67,7 @@
 
 | code | 含义 | 前端文案（写进 `web/src/store/api.ts` 的 `messages`） |
 |---|---|---|
-| `changed_since` | 之后又被改过 | 这件事之后又改过，没法直接撤销。 |
+| `changed_since` | 没有待撤销的后续动作记录，但业务内容已变化 | 这件事之后又改过，没法直接撤销。 |
 | `work_started` | 副手已经开始做了 | 副手已经开始做了，没法撤销。 |
 | `already_undone` | 已经撤销过 | 已经撤销过了。 |
 
@@ -77,7 +77,7 @@
 - `newer_action`：同一对象后面还有没撤销的动作。提示「后面还有改动，请先撤销它」。
 - `expired`：快照已经作废（超过 30 天，或相关资料已被删除）。提示「超过 30 天或相关资料已删除，无法撤销」。
 
-`changed_since` 只用于"被用户或后台改过"。
+**2026-10-01 用户确认**：同一事项从最后一次修改往回撤销。区分依据是后续动作记录，不是操作者身份：可追溯且尚未撤销的后续动作，无论来自界面、秘书或后台，均为 `newer_action`；未记录的外部业务变化才为 `changed_since`。同一轮的多个动作也必须有确定顺序；不涉及相同行的无关事项互不阻挡。
 
 新增 sentinel error：`workspace.ErrChangedSince`、`workspace.ErrWorkStarted`、`workspace.ErrAlreadyUndone`。
 B1 负责在 `internal/httpapi/server.go` 的 `fail()` 里加上这三个映射。
@@ -90,7 +90,7 @@ B1 另外导出 `(s *Store) Undo(ctx, scope, actionID string) (workspace.State, 
 
 `changes.before` 保存的是旧文档的完整内容。为了不让撤销变成"删了还能找回来"的后门，并控制存储占用：
 
-- **删除传播**：记忆 / 来源删除流程（`internal/postgres/editing.go`）修改或删除了某些 `work_items` / `work_documents` 行时，凡是 `changes` 涉及这些行的 `action_log` 记录，一律把 `changes` 清成 `[]`，并写入 `expired_at`。之后对这些记录执行撤销，返回 `changed_since`。
+- **删除传播**：记忆 / 来源删除流程（`internal/postgres/editing.go`）修改或删除了某些 `work_items` / `work_documents` 行时，凡是 `changes` 涉及这些行的 `action_log` 记录，一律把 `changes` 清成 `[]`，并写入 `expired_at`。之后对这些记录执行撤销，返回 `expired`（与已确认并实现的 F10 规则统一）。
 - **保留期**：`before` 快照只保留 30 天。超过 30 天的记录同样把 `changes` 清成 `[]` 并写入 `expired_at`。清理时机：每次 `flushActionLog` 时顺带清理当前 owner 的过期记录，靠 `created_at` 索引，开销很小。
 - `id`、`source`、`turn_id`、`summary`、`created_at`、`undone_at` 永久保留，第 6 阶段用作"撤销 / 保留"的训练信号。
 - 迁移 016 给 `action_log` 加 `expired_at timestamptz` 列。
@@ -104,6 +104,16 @@ B1 另外导出 `(s *Store) Undo(ctx, scope, actionID string) (workspace.State, 
 ## 2 秘书接口（B1 实现；B2 使用）
 
 ### 2.1 `POST /v1/desk/turn`
+
+**同轮连续操作（2026-10-01 用户确认，F14 实现）**：用户可一句话新建任务并继续给它加步骤。模型 `actions` 按原数组顺序执行；内部引用 `N1` 指第 1 个动作成功创建的事项，`N2` 指第 2 个动作成功创建的事项，以此类推。序号从 1 开始，包含失败和解析错误的位置，不能按成功数量重排。
+
+- 只有更早的 `create_task`、`create_idea`、`create_project` 动作，在子事务提交成功且回执为 `done` 后才绑定该别名。`delegate:new` 或 `project:new:名称` 的附带创建不产生 N 别名。
+- N 别名只存在于本轮的动作引用表，不写入持久状态、不替换模型原始上下文。可用于后续动作的 `ref`、`project`、`set.project`，仍受既有事项类型与权限校验约束；`Used`、`Links`、`Show` 不接受新增的 N 别名。
+- 前向、越界、非创建动作、创建失败的 N 引用均跳过依赖动作并说明原因，不能退回 THIS、旧 R 别名、标题匹配或任意 UUID。执行上限仍为原数组前 10 个动作。
+- 原有 T/P/I/R/THIS 和 `delegate:new` 语义保持；尤其 R1 仍是上下文提供的已有对话事项，不是当前轮的新对象。下一轮重新建立引用表，不能沿用上一轮的 N 别名。
+- 每个成功动作继续拥有独立回执与 action_log。同 requestId 重放返回保存的结果，不再次创建或加步骤；撤销遵循 1.4 的同对象逆序规则。
+
+示例：`[{"op":"create_task","title":"交作业"},{"op":"add_steps","ref":"N1","steps":["查资料","写提纲"]}]`。
 
 请求：
 

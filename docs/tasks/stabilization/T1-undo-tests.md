@@ -1,5 +1,7 @@
 # T1：独立检验撤销与动作序列
 
+**后续状态（2026-10-01）**：用户已确认同一事项逆序撤销及同轮新建后加步骤。U3/U4-user/U5/U10 不再待裁定，转交 [F13](F13-approved-undo.md)、[F14](F14-same-turn-actions.md) 实现及 [T4](T4-approved-rules-acceptance.md) 独立验证；以下为 T1 原始派工记录，历史待裁定说明不再约束新任务。以最新正式契约为准，原报告保留当时证据。
+
 执行者：6.1 Sol / high，`t1_undo_tests`，只写测试。先读 [执行分工](dispatch.md)、[U1–U16](README.md) 与 [撤销契约](../phase1/contracts.md)。基线 F7 / `e63ee5e`，工作区 `/root/PCAS-wt/T1`；分支 `stabilization/T1-undo-tests`，PR base `fix/undo-chain`，明确依赖 #20，合并后须重验 main。先执行明确部分，错误码重叠仍待用户裁定。
 
 ## 前置条件

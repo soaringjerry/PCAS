@@ -745,7 +745,7 @@ func TestPhase2ActionLineageMatrix(t *testing.T) {
 					id := f.newOwner(kind, "")
 					if kind == "project" {
 						f.sourceScope([]memory.SourceScopeAssignment{{Kind: memory.StudioSourceScope, StudioID: memory.ID(id)}})
-						f.hard = memory.HardScope{Kind: memory.StudioContextScope, StudioID: memory.ID(id)}
+						f.hard = memory.HardScope{Kind: memory.StudioContextScope, StudioID: memory.ID(id), IncludeGlobalConstraints: true}
 						f.secretary = f.grant("phase2-model", "secretary", f.hard)
 					}
 					out := f.generation(id, []any{map[string]any{"op": "update", "ref": "THIS", "set": map[string]any{"title": f.derived[0], "notesAppend": f.derived[1]}}}, []string{}, f.derived)
@@ -800,14 +800,14 @@ func TestPhase2ActionLineageMatrix(t *testing.T) {
 			case "role_and_studio_scope":
 				projectA := f.newOwner("project", "")
 				projectB := f.newOwner("project", "")
-				f.hard = memory.HardScope{Kind: memory.StudioContextScope, StudioID: memory.ID(projectA)}
+				f.hard = memory.HardScope{Kind: memory.StudioContextScope, StudioID: memory.ID(projectA), IncludeGlobalConstraints: true}
 				f.sourceScope([]memory.SourceScopeAssignment{{Kind: memory.StudioSourceScope, StudioID: memory.ID(projectA)}})
 				f.secretary = f.grant("phase2-model", "secretary", f.hard)
 				id := f.newOwner("task", projectA)
 				f.generation(id, []any{map[string]any{"op": "update", "ref": "THIS", "set": map[string]any{"notesAppend": f.derived[1]}}}, []string{}, f.derived)
 				f.grant("manual", "deputy", f.hard)
 				f.consume(id, "manual", "查看普通事项", []string{f.derived[1]}, false, nil)
-				f.grant("manual", "manual", memory.HardScope{Kind: memory.StudioContextScope, StudioID: memory.ID(projectB)})
+				f.grant("manual", "manual", memory.HardScope{Kind: memory.StudioContextScope, StudioID: memory.ID(projectB), IncludeGlobalConstraints: true})
 				f.consume(id, "manual", "查看普通事项", []string{f.derived[1]}, false, nil)
 				f.grant("manual", "manual", f.hard)
 				f.consume(id, "manual", "查看普通事项", []string{f.derived[1]}, true, nil)

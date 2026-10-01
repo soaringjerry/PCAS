@@ -248,6 +248,52 @@ func (s *Store) snapshotTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) (
 	if out.Samples, err = queryDocuments[workspace.Sample](ctx, tx, "SELECT document || jsonb_build_object('stale',stale,'state',state) FROM training_samples WHERE owner_id=$1 ORDER BY document->>'createdAt' DESC,id", string(scope.OwnerID)); err != nil {
 		return out, err
 	}
+	// Provider configuration changes have no source mutation hook. Validate
+	// derived views live, without erasing the stored owner audit or authored text.
+	allowedRuns := map[string]bool{}
+	for i := range out.Runs {
+		run := &out.Runs[i]
+		allowedRuns[run.ID] = s.verifyRunTx(ctx, tx, scope, *run) == nil
+		if !allowedRuns[run.ID] {
+			run.Brief, run.Output, run.ProviderError = "", "", nil
+			run.StaleContext = true
+			run.Error = "资料或接收者已变化，请重新生成"
+		}
+	}
+	for i := range out.Docs {
+		doc := &out.Docs[i]
+		if doc.RunID != "" && !allowedRuns[doc.RunID] {
+			doc.Body = ""
+			doc.Title = "文档依据已变化"
+		}
+	}
+	for i := range out.Samples {
+		sample := &out.Samples[i]
+		if sample.Stale || sample.Origin.RunID != "" && !allowedRuns[sample.Origin.RunID] {
+			sample.Prompt, sample.Response = "", ""
+			sample.State, sample.Stale = "excluded", true
+			sample.Origin.Label = "依据已变化"
+		}
+	}
+	itemTitles := map[string]string{}
+	for _, items := range [][]workspace.Item{out.Tasks, out.Ideas, out.Projects} {
+		for i := range items {
+			visible, _, e := s.sanitizeItemTx(ctx, tx, scope, "owner", items[i])
+			if e != nil {
+				return out, e
+			}
+			if visible.Title == "" && items[i].Title != "" {
+				visible.Title = "事项依据已变化"
+			}
+			items[i] = visible
+			itemTitles[visible.ID] = visible.Title
+		}
+	}
+	for i := range out.Notices {
+		if title, ok := itemTitles[out.Notices[i].ThingID]; ok {
+			out.Notices[i].Title = title
+		}
+	}
 	rows, err := tx.Query(ctx, `SELECT s.id::text,v.title,s.connector,r.updated_at,(SELECT count(*) FROM chunks c WHERE c.owner_id=s.owner_id AND c.source_id=s.id AND c.source_version=r.version),
 		EXISTS(SELECT 1 FROM memory_jobs j WHERE j.owner_id=s.owner_id AND j.record_id=s.id AND j.record_version=r.version AND j.state IN ('failed','blocked')),
 		EXISTS(SELECT 1 FROM memory_jobs j WHERE j.owner_id=s.owner_id AND j.record_id=s.id AND j.record_version=r.version AND j.state IN ('queued','leased'))
@@ -475,6 +521,15 @@ func (s *Store) Export(ctx context.Context, scope memory.Scope, training, confir
 		for _, sample := range state.Samples {
 			if sample.State != "included" || sample.Stale || confirmedOnly && sample.Epistemic != "confirmed" {
 				continue
+			}
+			// The snapshot is already a live view. Keep the external training
+			// gate explicit as well, so this export never treats stored inclusion
+			// as authority to replay an invalidated derived result.
+			if sample.Origin.RunID != "" {
+				run, e := queryDocument[workspace.Run](ctx, tx, "SELECT document FROM agent_runs WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), sample.Origin.RunID)
+				if e != nil || s.verifyRunTx(ctx, tx, scope, run) != nil {
+					continue
+				}
 			}
 			if err := json.NewEncoder(&buf).Encode(map[string]any{"messages": []map[string]string{{"role": "user", "content": sample.Prompt}, {"role": "assistant", "content": sample.Response}}, "metadata": sample}); err != nil {
 				return err

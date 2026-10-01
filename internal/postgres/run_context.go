@@ -121,9 +121,9 @@ func (s *Store) requestRunTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 		fmt.Fprintf(&brief, "子步骤（完成=%t）：%s\n", check.Done, check.Text)
 	}
 	for _, turn := range prepared.History {
-		if s.verifyRunForItemTx(ctx, tx, modelScope, workspace.Run{AgentID: agent.ID, ContextVersions: turn.Refs}, &item) == nil {
+		if deps, err := s.deskTurnContextTx(ctx, tx, scope, turn.ID, &task); err == nil {
 			fmt.Fprintf(&brief, "\n导办台之前的讨论：\n问：%s\n答：%s\n", turn.Question, turn.Answer)
-			artifactRefs = append(artifactRefs, turn.Refs...)
+			artifactRefs = append(artifactRefs, refsForDependencies(deps)...)
 		}
 	}
 	if previous := prepared.Previous; previous != nil && previous.ThingID == item.ID && s.verifyRunTx(ctx, tx, modelScope, *previous) == nil {
@@ -345,6 +345,7 @@ type preparedRunContext struct {
 }
 
 type storedDeskContext struct {
+	ID               string
 	Question, Answer string
 	Refs             []memory.Ref
 }
@@ -395,10 +396,12 @@ func (s *Store) prepareRunContext(ctx context.Context, scope memory.Scope, c wor
 				return memory.ErrInvalid
 			}
 			var turn storedDeskContext
+			turn.ID = id
 			if err := tx.QueryRow(ctx, "SELECT question,answer,dependencies FROM desk_turns WHERE owner_id=$1 AND id=$2 AND agent_id=$3", string(scope.OwnerID), id, c.AgentID).Scan(&turn.Question, &turn.Answer, &turn.Refs); err != nil {
 				return memory.ErrNotFound
 			}
-			if turn.Answer != "" && s.verifyRunForItemTx(ctx, tx, modelScope, workspace.Run{AgentID: c.AgentID, ContextVersions: turn.Refs}, &item) == nil {
+			if deps, err := s.deskTurnContextTx(ctx, tx, scope, id, &task); turn.Answer != "" && err == nil {
+				turn.Refs = refsForDependencies(deps)
 				history = append(history, turn)
 			}
 		}
@@ -493,14 +496,28 @@ func (s *Store) verifyRunForItemTx(ctx context.Context, tx pgx.Tx, scope memory.
 		if err := verifyRunForItemTx(ctx, tx, scope, run, item); err != nil {
 			return err
 		}
-		if scope.Task != nil {
-			_, cov, err := hydrateTypedContextTx(ctx, tx, scope, *scope.Task, run.ContextVersions)
+		currentTask := scope.Task
+		if currentTask == nil {
+			agent, err := queryDocument[workspace.Agent](ctx, tx, "SELECT document FROM workspace_agents WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), run.AgentID)
 			if err != nil {
 				return err
 			}
-			if !cov.Complete {
-				return memory.ErrConflict
+			role := "deputy"
+			if agent.Channel == "manual" {
+				role = "manual"
 			}
+			live, err := s.trustedTaskContextTx(ctx, tx, scope, run.AgentID, role, contextScopeForItem(item), run.ManualRecipient)
+			if err != nil {
+				return err
+			}
+			currentTask = &live // A current read view, never a claimed original route.
+		}
+		_, cov, err := hydrateTypedContextTx(ctx, tx, scope, *currentTask, run.ContextVersions)
+		if err != nil {
+			return err
+		}
+		if !cov.Complete {
+			return memory.ErrConflict
 		}
 		return nil
 	}

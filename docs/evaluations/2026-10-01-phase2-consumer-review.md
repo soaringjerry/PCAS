@@ -1,6 +1,6 @@
 # Phase 2.0 消费者批次：审阅入口
 
-产品草稿 [#44](https://github.com/soaringjerry/PCAS/pull/44) 基于来源批次 #43。已推送候选 **`c8adbaeb5c02daa9e83f90f74c216d8cf9ee22bf`**；本地后继 **`cf3015cd67cf112933dfa51badbda8507de30834`** 只修两条模拟浏览器的请求形状断言，产品代码不变，尚待最终同头 CI。本文及原始证据另存仅文档的 `phase2/context-acceptance-results`，不向产品分支追加报告提交。
+产品草稿 [#44](https://github.com/soaringjerry/PCAS/pull/44) 基于来源批次 #43。最终已推送候选 **`cf3015cd67cf112933dfa51badbda8507de30834`**；相比前一候选 `c8adbaeb5c02daa9e83f90f74c216d8cf9ee22bf` 只修两条模拟浏览器的请求形状断言，产品代码不变。web 已通过，完整后端与浏览器同头 CI 正在运行。本文及原始证据另存仅文档的 `phase2/context-acceptance-results`，不向产品分支追加报告提交。
 
 root 只负责协调、研究判断、审阅与集成；实现及测试由分工明确的 Sol 6.1/high 执行者完成，预期由独立验收者制定。原失败、未抵达项和有因修订分别保留。
 
@@ -8,7 +8,8 @@ root 只负责协调、研究判断、审阅与集成；实现及测试由分工
 
 | 范围 | 结论与边界 |
 | --- | --- |
-| `c8adbae` 完整后端 CI | 一次 `make check` 成功。341 顶层：338 通过、3 既有 opt-in 未启用；755 实际叶：752 通过、3 未启用。11 个测试包全部成功、无 `(cached)`，另 4 个包无测试。PG 两个真实模型用例及 AI InstalledCodexHandshake 未启用；完整日志和 checkout 正在归档。 |
+| `cf3015c` 最终 CI | web 实际 lint/type-check/build 已通过；memory 与浏览器正在运行，不能先算全绿。[web 原日志与 tree 核验](2026-10-01-phase2-final-web-ci/README.md)。 |
+| `c8adbae` 完整后端 CI | 一次 `make check` 成功。341 顶层：338 通过、3 既有 opt-in 未启用；755 实际叶：752 通过、3 未启用。11 个测试包全部成功、无 `(cached)`，另 4 个包无测试。PG 两个真实模型用例及 AI InstalledCodexHandshake 未启用；原 23 因果叶同头全 P，最终 build 成功。[完整日志、计数和 checkout](2026-10-01-phase2-final-memory-ci/README.md)。 |
 | `c8adbae` web CI | npm ci、lint、typecheck、build 全通过；GitHub PR 检查合并树等于候选树，不是 main 合并。[原日志](2026-10-01-phase2-final-web-ci/README.md)。 |
 | `c8adbae` 浏览器 CI | mock 127 项全部抵达：125P/2F。两项错误要求客户端发送完整接收者，正确请求为原 provider 和 SourceRunID。真实后端第 1、3 轮成功，第 2 轮仍在安装；总门尚未通过。[原失败与修订依据](2026-10-01-phase2-final-browser-ci/mocked-original-red-brief.md)。 |
 | 后端因果 R1/R2 | `834949f` 一次 race 23 叶 17P/6F；六个夹具或额外预期错误经独立复核、追加 gold，`c8adbae` 只补原六项，一次 6/6 通过。未改产品、未重跑其余 17 项。[原失败](2026-10-01-phase2-retry-causal-r1/README.md)、[六项补验](2026-10-01-phase2-retry-causal-r2/README.md)。 |
@@ -34,7 +35,7 @@ R2/R3/R4 曾重复计入父项：[勘误](2026-10-01-phase2-backend-counting-err
 
 ## 尚未完成的门
 
-- `cf3015c` 最终同头完整 CI 尚未运行；`c8adbae` mock 原红保留。真实模型/账号 opt-in 未启用。
+- `cf3015c` 最终同头完整 CI 尚未结束；`c8adbae` mock 原红保留。真实模型/账号 opt-in 未启用。
 - 浏览器使用真实应用、worker、PostgreSQL 与 Chromium，外部模型是假服务；桌面及窄视口截图不是手机实测。
 - 线上 11 项、真实手机、一天用户试用尚无完成证据。SQL 恢复检查点不替代真实进程崩溃/重启。
 - 2.1 时间线回忆、抽取遗漏补查、已有 ChatGPT ZIP/JSON 导入闭环待下一批；完整私人历史未迁入。

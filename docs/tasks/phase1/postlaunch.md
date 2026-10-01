@@ -45,7 +45,7 @@ F5 和 F6 改的文件不重叠，可以并行。全部合并后统一部署一�
 - **根因**：`internal/postgres/workspace.go` 把默认时区写死为 `Asia/Shanghai`，设置页没有入口；前端按浏览器时区显示。
 - **要求**：
   1. 设置页加「时区」（IANA 时区，可搜索，常用的放前面），保存走 `updateSettings`；后端用 `time.LoadLocation` 校验，失败时返回明确的错误码。
-  2. 新工作区的默认时区取第一次登录时浏览器的 `Intl.DateTimeFormat().resolvedOptions().timeZone`。已有工作区如果设置和浏览器时区不一致，首页显示一条可关闭的提示「你的时区好像是 X，要改成 X 吗？」，点一下就改；关闭后同一浏览器不再提示。
+  2. 新工作区的默认时区取第一次登录时浏览器的 `Intl.DateTimeFormat().resolvedOptions().timeZone`。已有工作区如果设置和浏览器时区不一致，首页显示一条可关闭的时区差异提示，用户点击后切换到设备时区；关闭后同一浏览器不再提示。F6 原提示为「你的时区好像是 X，要改成 X 吗？」；U1 / PR #31 候选精简为「时间按 Y 显示，和这台设备不同」及「改成 X」按钮，Y 为当前工作区时区、X 为设备时区，行为不变。
   3. 首页「今天」的分组和时间线、各处的时间显示，统一按工作区设置的时区计算，和后端回执保持一致。
   4. 测试：时区保存与校验；提示的出现与关闭；同一个任务在设置时区下的「今天」分组正确。
 - **范围**：`internal/postgres/workspace.go`（默认值与校验）、`web/src/pages/SettingsPage.tsx`、`web/src/pages/HallPage.tsx`、`web/src/domain/time.ts`、`web/src/domain/hall.ts`、`web/src/domain/lines.ts` 及对应测试。分支 `fix/timezone`。

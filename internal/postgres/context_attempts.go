@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"strings"
@@ -108,27 +109,28 @@ func controlledContextManifest(task memory.TrustedTaskContext, id memory.ID, pay
 		if entry.Text == "" {
 			continue
 		}
-		literal := []byte(entry.Text)
-		if layer != "manual_package" {
-			encoded, err := json.Marshal(entry.Text)
-			if err != nil {
-				return m, err
-			}
-			literal = encoded[1 : len(encoded)-1]
-		}
-		input := memory.InputRecord{Ref: entry.Ref, SourceSpan: entry.SourceSpan, PayloadSpans: []memory.PayloadSpan{}}
-		for start := 0; start < len(payload); {
-			offset := bytes.Index(payload[start:], literal)
-			if offset < 0 {
-				break
-			}
-			offset += start
-			input.PayloadSpans = append(input.PayloadSpans, memory.PayloadSpan{StartByte: offset, EndByte: offset + len(literal)})
-			start = offset + len(literal)
-		}
-		if len(input.PayloadSpans) == 0 {
+		marker, err := hex.DecodeString(entry.AssemblyMarker)
+		if err != nil || len(marker) != 16 {
 			return m, memory.ErrConflict
 		}
+		begin, end := contextEvidenceDelimiters(entry.AssemblyMarker)
+		encode := func(text string) []byte {
+			if layer == "manual_package" {
+				return []byte(text)
+			}
+			raw, _ := json.Marshal(text)
+			return raw[1 : len(raw)-1]
+		}
+		block := encode(begin + entry.Text + end)
+		literal := encode(entry.Text)
+		prefix := encode(begin)
+		input := memory.InputRecord{Ref: entry.Ref, SourceSpan: entry.SourceSpan, PayloadSpans: []memory.PayloadSpan{}}
+		offset := bytes.Index(payload, block)
+		if offset < 0 || bytes.Index(payload[offset+len(block):], block) >= 0 {
+			return m, memory.ErrConflict
+		}
+		offset += len(prefix)
+		input.PayloadSpans = append(input.PayloadSpans, memory.PayloadSpan{StartByte: offset, EndByte: offset + len(literal)})
 		for _, gap := range entry.Gaps {
 			if gap == "input_truncated" {
 				input.Truncated = true

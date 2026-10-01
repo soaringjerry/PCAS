@@ -200,15 +200,18 @@ func (s SourceSpan) Valid() bool {
 // EvidenceEntry is transient hydrated text. Persist ContextManifest rather than
 // this value in diagnostic metadata, to avoid a second copy of the body.
 type EvidenceEntry struct {
-	Ref          Ref               `json:"ref"`
-	SourceSpan   *SourceSpan       `json:"source_span,omitempty"`
-	Text         string            `json:"text"`
-	Role         string            `json:"role,omitempty"`
-	ExpressedAt  *time.Time        `json:"expressed_at,omitempty"`
-	Historical   bool              `json:"historical"`
-	Changed      bool              `json:"changed"`
-	Dependencies []TypedDependency `json:"dependencies"`
-	Gaps         []string          `json:"gaps"`
+	// Transient assembly provenance. A fresh server marker identifies the
+	// actual evidence insertion; it is not retained as diagnostic metadata.
+	AssemblyMarker string            `json:"-"`
+	Ref            Ref               `json:"ref"`
+	SourceSpan     *SourceSpan       `json:"source_span,omitempty"`
+	Text           string            `json:"text"`
+	Role           string            `json:"role,omitempty"`
+	ExpressedAt    *time.Time        `json:"expressed_at,omitempty"`
+	Historical     bool              `json:"historical"`
+	Changed        bool              `json:"changed"`
+	Dependencies   []TypedDependency `json:"dependencies"`
+	Gaps           []string          `json:"gaps"`
 }
 
 // ContextKindSupported means that phase two promises a verifier for this kind;

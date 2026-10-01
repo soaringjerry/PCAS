@@ -8,7 +8,7 @@
 
 模型分配：Sol 默认承担实现、调查与独立回归，使用 `gpt-6.1-sol`、`high` 思考程度；Opus 仅用于有视觉与交互判断价值的整批界面工作；Astra 用于跨模块疑难和最后一次集成审查。Sol 同一问题两次仍无法推进，提交复现、已排除项和最小问题后才升级 Astra。
 
-当前会话可直接调用 Sol 和 Astra，不能直接调用 Opus。Opus 的任务包照常准备，未启动前不得登记为执行中，也不能把其他模型的工作标成 Opus 完成。当前工具最多同时运行三个执行者。
+协作工具可调用 Sol 和 Astra；Opus 经本机已登录 Claude CLI 执行，启动元数据确认 claude-opus-5-5，界面任务使用 high。各入口按同一份文件归属表协调，同时最多三个执行者，不把其他模型的工作标为 Opus。
 
 ## 已知基线
 
@@ -26,7 +26,7 @@
 | [M0 记忆现状与二阶段方案](M0-memory-readiness.md) | Sol | 实现差距、数据路径、评测方案；不写产品代码 | 立即 |
 | [T1 撤销序列](T1-undo-tests.md) | 独立 Sol | U1–U16 测试，含固定种子随机序列 | F7 合并或协调者明确指定候选基线；先处理本文的契约冲突 |
 | [T3 对话与渠道](T3-secretary-tests.md) | 独立 Sol | S1–S9、T1–T6、D1–D4 的回归与发现 | 空出执行位；基线包含 F7 |
-| [U1 界面打磨](U1-ux-polish.md) | Opus | 首页与事项页的连贯体验、桌面/手机截图 | F8 合并后；等待可用 Opus 执行入口 |
+| [U1 界面打磨](U1-ux-polish.md) | Opus | 首页与事项页的连贯体验、桌面/手机截图 | F8 最终候选交付并停止写入；已通过 CLI 启动 |
 | [F9 提醒边界与日志](F9-reminder-repairs.md) | Sol，非 T2 作者 | 修复 R1/R2/R5/R10，移除对应 finding skip | T2 最终交付；明确含 F7 的基线与测试文件交接 |
 | [F8 完整浏览器补验](F8-ci-followup.md) | Sol | 定位 #23 完整 CI 的项目别名失败，修复测试数据生命周期 | 已启动，接手 F8 工作区 |
 | [F10 撤销有效期](F10-expired-undo.md) | Sol，非 T1 作者 | U12/U13 与 D3 的 expired 判定/映射 | T1 交付；F9 已释放撤销文件 |
@@ -53,7 +53,7 @@
 
 执行者自行创建其尚不存在的 worktree，不改他人目录；若输入出现冲突，停止集成并报告，不能自行改产品解决。候选集成和分支推送均不得改动 main 或生产。
 
-F9 已交付并停止写入：[PR #25](https://github.com/soaringjerry/PCAS/pull/25)，`26dba8672b578cf1baadd71c0ba257f7691d8109`，base 为上述 `64f0f78` 候选。全部 R 及新增边界 21 个顶层用例零 finding skip；最后一次提前量交叉修复后跑相关回归和 fmt/vet/build，完整 make check / DB integration 的已通过证据属于前一实现提交，具体见修复报告。远端 CI 仍待完成。actions_log.go 已移交 F10。
+F9 已交付并停止写入：[PR #25](https://github.com/soaringjerry/PCAS/pull/25)，`26dba8672b578cf1baadd71c0ba257f7691d8109`，base 为上述 `64f0f78` 候选。全部 R 及新增边界 21 个顶层用例零 finding skip；最后一次提前量交叉修复后跑相关回归和 fmt/vet/build，完整 make check / DB integration 的已通过证据属于前一实现提交，具体见修复报告。最终远端 CI 全部通过。actions_log.go 已移交 F10。
 
 T1 已交付 [PR #26](https://github.com/soaringjerry/PCAS/pull/26) / `6d0c27e70ede296cb0247151ffc31f239051de3a`，50 种子 × 20 操作逆序通过；U12/U13 为 3 个 finding 叶用例，U3/U4/U5/U10 为 4 个待裁定叶用例，阶段未通过。T3 已交付 [PR #27](https://github.com/soaringjerry/PCAS/pull/27) / `071e87dc3dd40f08c834797900e68842180d41f9`，19 编号有测试，S1/S8/S9/D1/D3、Telegram T2/T3/T6 合计 8 项 finding skip。两位均停止写入。D3 与 T1-U12 合并归 F10，U10 当前轮新对象引用协议缺口另列，不擅自扩展 JSON。
 
@@ -65,7 +65,11 @@ T1 已交付 [PR #26](https://github.com/soaringjerry/PCAS/pull/26) / `6d0c27e70
 - F10 已交付 [PR #28](https://github.com/soaringjerry/PCAS/pull/28) / `8d2a70df721dd433d45d2232b0405280f0156ca7` 并停止写入；U12/U13 原 3 叶失败均修复，完整 PG、Telegram、前端及 22 个 mock 通过，4 个 pending 叶仍保留。F11 已把它合入最终候选 `7cc48813ffd0906c6b003c4500e5a0cf40b4e322`。
 - F12 / `f12_telegram_repairs` 已接手 `/root/PCAS-wt/F12`，F10 + T3 候选 `stabilization/telegram-candidate` = `e9e5edb0cc1658dfaf04a80d6265a0dd77cbef24`。Telegram 文件、获授权的新只读查询文件与 notify 身份/关联存储归其所有。
 - D1 产品 finding 已在 F11 复核撤回：原夹具未实际授权/引用 claim，改正并加强引用断言后，原删除实现通过；详见 F11 任务与原 T3 报告后续更正。其他 S1/S8/S9、Telegram 三项仍为真实修复范围。
-- Opus U1 和 Astra A1 均未启动。
+- F8 完整 CI 补验最终交付 2e6ebc1：修正项目别名污染后完整 runner 32/32，最终 thingId 选择器专项 1/1。已经停止写入；最终远端完整浏览器仍在运行。
+- F11 已交付 [PR #29](https://github.com/soaringjerry/PCAS/pull/29) / e5841a2abc01319ffe3e06c08953ae20976c8665 并停止写入；18 个 S/D 顶层用例零 finding skip、make check、完整 PG race 通过。并发保证互斥和整轮提交，不保证多个排队请求严格 FIFO，交 A1 评估。
+- F12 已交付 [PR #30](https://github.com/soaringjerry/PCAS/pull/30) / c1a0173629568c4588ed1f942af28e6010dd4f04 并停止写入；Telegram/notify 全包 race、make check、完整 DB integration 通过，三个渠道 finding 正常执行；该分支未含 F11，继承的 5 个 S/D skip 与 4 个待裁定 U 叶不算通过。
+- U1 已于 06:46 UTC 经 Claude CLI 启动，模型 claude-opus-5-5 / high；工作区 /root/PCAS-wt/U1，从 F8 最终 2e6ebc1 开始。预览端口 18142，范围和证据归 U1 任务。
+- Astra A1 接手最终后端候选审查，先做跨模块只读审查，待 U1 交接后在最终候选执行一次完整验收。已知四个 U 待决叶和线上验收不虚报通过。
 
 ## 文件归属与协作规则
 

@@ -1,0 +1,37 @@
+[
+  {
+    "case": "real_target_package_clipboard_submit",
+    "name": "preview",
+    "run_id": "dd7b1f39-05a1-4dc1-ac40-b52512e0f75b",
+    "attempt": "ab07e9f0-c3b4-40d5-97e5-7b00aa70d606",
+    "input_count": 1
+  },
+  {
+    "case": "real_target_package_clipboard_submit",
+    "name": "copied",
+    "run_id": "dd7b1f39-05a1-4dc1-ac40-b52512e0f75b",
+    "attempt": "22efda67-c148-49bb-b528-54f4dc693c06",
+    "input_count": 1
+  },
+  {
+    "case": "real_revoke_clear_refuse_regenerate_submit",
+    "name": "lawful",
+    "run_id": "c87d0bb9-122b-4303-ab30-8d8dccaceb0b",
+    "attempt": "9431dde5-806a-490a-a073-b9d783976899",
+    "input_count": 2
+  },
+  {
+    "case": "real_revoke_clear_refuse_regenerate_submit",
+    "name": "safePreview",
+    "run_id": "3ef63dca-588f-4e8d-a6a5-6e39a6bfddc8",
+    "attempt": "805c26ff-e6cd-4acc-b603-beaf5bb38204",
+    "input_count": 1
+  },
+  {
+    "case": "real_revoke_clear_refuse_regenerate_submit",
+    "name": "safeCopied",
+    "run_id": "3ef63dca-588f-4e8d-a6a5-6e39a6bfddc8",
+    "attempt": "4994c2e8-fdd8-4f6b-88e2-412475e647bf",
+    "input_count": 1
+  }
+]

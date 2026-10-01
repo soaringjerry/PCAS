@@ -1,0 +1,351 @@
+[
+  {
+    "actual_http_bodies": [
+      "eyJtYXhfY29tcGxldGlvbl90b2tlbnMiOjEwMCwibWVzc2FnZXMiOlt7ImNvbnRlbnQiOiLlkIjmiJDlm7rlrpror7TmmI4iLCJyb2xlIjoic3lzdGVtIn0seyJjb250ZW50Ijoi5Lit5paHXG7lvJXlj7dcIuS4juWPjeaWnOe6v1xc5Y+KXHUwMDNjXHUwMDI2XHUwMDNl44CCIiwicm9sZSI6InVzZXIifV0sIm1vZGVsIjoicGhhc2UyLXNlbGVjdGVkIiwic3RyZWFtIjpmYWxzZX0="
+    ],
+    "events": [
+      {
+        "Stage": "prepared",
+        "ProviderID": "phase2-http",
+        "Protocol": "openai",
+        "Model": "phase2-selected",
+        "Endpoint": "http://127.0.0.1:45397/v1",
+        "Payload": "eyJtYXhfY29tcGxldGlvbl90b2tlbnMiOjEwMCwibWVzc2FnZXMiOlt7ImNvbnRlbnQiOiLlkIjmiJDlm7rlrpror7TmmI4iLCJyb2xlIjoic3lzdGVtIn0seyJjb250ZW50Ijoi5Lit5paHXG7lvJXlj7dcIuS4juWPjeaWnOe6v1xc5Y+KXHUwMDNjXHUwMDI2XHUwMDNl44CCIiwicm9sZSI6InVzZXIifV0sIm1vZGVsIjoicGhhc2UyLXNlbGVjdGVkIiwic3RyZWFtIjpmYWxzZX0=",
+        "ObservationLayer": "serialized_request"
+      },
+      {
+        "Stage": "before_dispatch",
+        "ProviderID": "phase2-http",
+        "Protocol": "openai",
+        "Model": "phase2-selected",
+        "Endpoint": "http://127.0.0.1:45397/v1",
+        "Payload": "eyJtYXhfY29tcGxldGlvbl90b2tlbnMiOjEwMCwibWVzc2FnZXMiOlt7ImNvbnRlbnQiOiLlkIjmiJDlm7rlrpror7TmmI4iLCJyb2xlIjoic3lzdGVtIn0seyJjb250ZW50Ijoi5Lit5paHXG7lvJXlj7dcIuS4juWPjeaWnOe6v1xc5Y+KXHUwMDNjXHUwMDI2XHUwMDNl44CCIiwicm9sZSI6InVzZXIifV0sIm1vZGVsIjoicGhhc2UyLXNlbGVjdGVkIiwic3RyZWFtIjpmYWxzZX0=",
+        "ObservationLayer": "serialized_request"
+      },
+      {
+        "Stage": "dispatched",
+        "ProviderID": "phase2-http",
+        "Protocol": "openai",
+        "Model": "phase2-selected",
+        "Endpoint": "http://127.0.0.1:45397/v1",
+        "Payload": "eyJtYXhfY29tcGxldGlvbl90b2tlbnMiOjEwMCwibWVzc2FnZXMiOlt7ImNvbnRlbnQiOiLlkIjmiJDlm7rlrpror7TmmI4iLCJyb2xlIjoic3lzdGVtIn0seyJjb250ZW50Ijoi5Lit5paHXG7lvJXlj7dcIuS4juWPjeaWnOe6v1xc5Y+KXHUwMDNjXHUwMDI2XHUwMDNl44CCIiwicm9sZSI6InVzZXIifV0sIm1vZGVsIjoicGhhc2UyLXNlbGVjdGVkIiwic3RyZWFtIjpmYWxzZX0=",
+        "ObservationLayer": "serialized_request"
+      }
+    ],
+    "protocol": "openai",
+    "refused": false,
+    "test": "TestPhase2ContextHTTPFinalBytesAndBeforeDispatchRefusal/openai/refuse_false",
+    "package": "github.com/soaringjerry/PCAS/internal/ai",
+    "actual_http_sha256": [
+      "46f4eeb43abde011b4e73380b1abf592ceaf9356d03b89cea541288f2ed0cc4d"
+    ]
+  },
+  {
+    "actual_http_bodies": null,
+    "events": [
+      {
+        "Stage": "prepared",
+        "ProviderID": "phase2-http",
+        "Protocol": "openai",
+        "Model": "phase2-selected",
+        "Endpoint": "http://127.0.0.1:46857/v1",
+        "Payload": "eyJtYXhfY29tcGxldGlvbl90b2tlbnMiOjEwMCwibWVzc2FnZXMiOlt7ImNvbnRlbnQiOiLlkIjmiJDlm7rlrpror7TmmI4iLCJyb2xlIjoic3lzdGVtIn0seyJjb250ZW50Ijoi5Lit5paHXG7lvJXlj7dcIuS4juWPjeaWnOe6v1xc5Y+KXHUwMDNjXHUwMDI2XHUwMDNl44CCIiwicm9sZSI6InVzZXIifV0sIm1vZGVsIjoicGhhc2UyLXNlbGVjdGVkIiwic3RyZWFtIjpmYWxzZX0=",
+        "ObservationLayer": "serialized_request"
+      },
+      {
+        "Stage": "before_dispatch",
+        "ProviderID": "phase2-http",
+        "Protocol": "openai",
+        "Model": "phase2-selected",
+        "Endpoint": "http://127.0.0.1:46857/v1",
+        "Payload": "eyJtYXhfY29tcGxldGlvbl90b2tlbnMiOjEwMCwibWVzc2FnZXMiOlt7ImNvbnRlbnQiOiLlkIjmiJDlm7rlrpror7TmmI4iLCJyb2xlIjoic3lzdGVtIn0seyJjb250ZW50Ijoi5Lit5paHXG7lvJXlj7dcIuS4juWPjeaWnOe6v1xc5Y+KXHUwMDNjXHUwMDI2XHUwMDNl44CCIiwicm9sZSI6InVzZXIifV0sIm1vZGVsIjoicGhhc2UyLXNlbGVjdGVkIiwic3RyZWFtIjpmYWxzZX0=",
+        "ObservationLayer": "serialized_request"
+      }
+    ],
+    "protocol": "openai",
+    "refused": true,
+    "test": "TestPhase2ContextHTTPFinalBytesAndBeforeDispatchRefusal/openai/refuse_true",
+    "package": "github.com/soaringjerry/PCAS/internal/ai",
+    "actual_http_sha256": []
+  },
+  {
+    "actual_http_bodies": [
+      "eyJpbnB1dCI6IuS4reaWh1xu5byV5Y+3XCLkuI7lj43mlpznur9cXOWPilx1MDAzY1x1MDAyNlx1MDAzZeOAgiIsImluc3RydWN0aW9ucyI6IuWQiOaIkOWbuuWumuivtOaYjiIsIm1heF9vdXRwdXRfdG9rZW5zIjoxMDAsIm1vZGVsIjoicGhhc2UyLXNlbGVjdGVkIiwic3RvcmUiOmZhbHNlfQ=="
+    ],
+    "events": [
+      {
+        "Stage": "prepared",
+        "ProviderID": "phase2-http",
+        "Protocol": "responses",
+        "Model": "phase2-selected",
+        "Endpoint": "http://127.0.0.1:39755/v1",
+        "Payload": "eyJpbnB1dCI6IuS4reaWh1xu5byV5Y+3XCLkuI7lj43mlpznur9cXOWPilx1MDAzY1x1MDAyNlx1MDAzZeOAgiIsImluc3RydWN0aW9ucyI6IuWQiOaIkOWbuuWumuivtOaYjiIsIm1heF9vdXRwdXRfdG9rZW5zIjoxMDAsIm1vZGVsIjoicGhhc2UyLXNlbGVjdGVkIiwic3RvcmUiOmZhbHNlfQ==",
+        "ObservationLayer": "serialized_request"
+      },
+      {
+        "Stage": "before_dispatch",
+        "ProviderID": "phase2-http",
+        "Protocol": "responses",
+        "Model": "phase2-selected",
+        "Endpoint": "http://127.0.0.1:39755/v1",
+        "Payload": "eyJpbnB1dCI6IuS4reaWh1xu5byV5Y+3XCLkuI7lj43mlpznur9cXOWPilx1MDAzY1x1MDAyNlx1MDAzZeOAgiIsImluc3RydWN0aW9ucyI6IuWQiOaIkOWbuuWumuivtOaYjiIsIm1heF9vdXRwdXRfdG9rZW5zIjoxMDAsIm1vZGVsIjoicGhhc2UyLXNlbGVjdGVkIiwic3RvcmUiOmZhbHNlfQ==",
+        "ObservationLayer": "serialized_request"
+      },
+      {
+        "Stage": "dispatched",
+        "ProviderID": "phase2-http",
+        "Protocol": "responses",
+        "Model": "phase2-selected",
+        "Endpoint": "http://127.0.0.1:39755/v1",
+        "Payload": "eyJpbnB1dCI6IuS4reaWh1xu5byV5Y+3XCLkuI7lj43mlpznur9cXOWPilx1MDAzY1x1MDAyNlx1MDAzZeOAgiIsImluc3RydWN0aW9ucyI6IuWQiOaIkOWbuuWumuivtOaYjiIsIm1heF9vdXRwdXRfdG9rZW5zIjoxMDAsIm1vZGVsIjoicGhhc2UyLXNlbGVjdGVkIiwic3RvcmUiOmZhbHNlfQ==",
+        "ObservationLayer": "serialized_request"
+      }
+    ],
+    "protocol": "responses",
+    "refused": false,
+    "test": "TestPhase2ContextHTTPFinalBytesAndBeforeDispatchRefusal/responses/refuse_false",
+    "package": "github.com/soaringjerry/PCAS/internal/ai",
+    "actual_http_sha256": [
+      "030388b723b412bb67216a38577c124e60b5b7f1675b5f56cedf9f61a8a01717"
+    ]
+  },
+  {
+    "actual_http_bodies": [
+      "eyJpbnB1dCI6W3siY29udGVudCI6IuS4reaWh1xu5byV5Y+3XCLlkozlj43mlpznur9cXOS7peWPilx1MDAzY1x1MDAyNlx1MDAzZeOAgiIsInJvbGUiOiJ1c2VyIn1dLCJpbnN0cnVjdGlvbnMiOiLlkIjmiJDlm7rlrpror7TmmI4iLCJtb2RlbCI6ImZpcnN0Iiwic3RvcmUiOmZhbHNlLCJzdHJlYW0iOnRydWV9"
+    ],
+    "events": [
+      {
+        "Stage": "prepared",
+        "ProviderID": "",
+        "Protocol": "siwc",
+        "Model": "first",
+        "Endpoint": "http://127.0.0.1:40841/v1",
+        "Payload": "eyJpbnB1dCI6W3siY29udGVudCI6IuS4reaWh1xu5byV5Y+3XCLlkozlj43mlpznur9cXOS7peWPilx1MDAzY1x1MDAyNlx1MDAzZeOAgiIsInJvbGUiOiJ1c2VyIn1dLCJpbnN0cnVjdGlvbnMiOiLlkIjmiJDlm7rlrpror7TmmI4iLCJtb2RlbCI6ImZpcnN0Iiwic3RvcmUiOmZhbHNlLCJzdHJlYW0iOnRydWV9",
+        "ObservationLayer": "serialized_request"
+      },
+      {
+        "Stage": "before_dispatch",
+        "ProviderID": "",
+        "Protocol": "siwc",
+        "Model": "first",
+        "Endpoint": "http://127.0.0.1:40841/v1",
+        "Payload": "eyJpbnB1dCI6W3siY29udGVudCI6IuS4reaWh1xu5byV5Y+3XCLlkozlj43mlpznur9cXOS7peWPilx1MDAzY1x1MDAyNlx1MDAzZeOAgiIsInJvbGUiOiJ1c2VyIn1dLCJpbnN0cnVjdGlvbnMiOiLlkIjmiJDlm7rlrpror7TmmI4iLCJtb2RlbCI6ImZpcnN0Iiwic3RvcmUiOmZhbHNlLCJzdHJlYW0iOnRydWV9",
+        "ObservationLayer": "serialized_request"
+      },
+      {
+        "Stage": "dispatched",
+        "ProviderID": "",
+        "Protocol": "siwc",
+        "Model": "first",
+        "Endpoint": "http://127.0.0.1:40841/v1",
+        "Payload": "eyJpbnB1dCI6W3siY29udGVudCI6IuS4reaWh1xu5byV5Y+3XCLlkozlj43mlpznur9cXOS7peWPilx1MDAzY1x1MDAyNlx1MDAzZeOAgiIsInJvbGUiOiJ1c2VyIn1dLCJpbnN0cnVjdGlvbnMiOiLlkIjmiJDlm7rlrpror7TmmI4iLCJtb2RlbCI6ImZpcnN0Iiwic3RvcmUiOmZhbHNlLCJzdHJlYW0iOnRydWV9",
+        "ObservationLayer": "serialized_request"
+      }
+    ],
+    "postgres_secretary_context": "not exercised",
+    "refused": false,
+    "requested_model": "",
+    "selected_model": "first",
+    "test": "TestPhase2ContextSIWCUnselectedModelFinalBytesAndBeforeDispatchRefusal/refuse_false",
+    "package": "github.com/soaringjerry/PCAS/internal/ai/siwc",
+    "actual_http_sha256": [
+      "a836f7e925fe57aaf4b2012a7ed5742d22781cbc04b822985750bdb0977d40bf"
+    ]
+  },
+  {
+    "actual_http_bodies": null,
+    "events": [
+      {
+        "Stage": "prepared",
+        "ProviderID": "phase2-http",
+        "Protocol": "responses",
+        "Model": "phase2-selected",
+        "Endpoint": "http://127.0.0.1:35643/v1",
+        "Payload": "eyJpbnB1dCI6IuS4reaWh1xu5byV5Y+3XCLkuI7lj43mlpznur9cXOWPilx1MDAzY1x1MDAyNlx1MDAzZeOAgiIsImluc3RydWN0aW9ucyI6IuWQiOaIkOWbuuWumuivtOaYjiIsIm1heF9vdXRwdXRfdG9rZW5zIjoxMDAsIm1vZGVsIjoicGhhc2UyLXNlbGVjdGVkIiwic3RvcmUiOmZhbHNlfQ==",
+        "ObservationLayer": "serialized_request"
+      },
+      {
+        "Stage": "before_dispatch",
+        "ProviderID": "phase2-http",
+        "Protocol": "responses",
+        "Model": "phase2-selected",
+        "Endpoint": "http://127.0.0.1:35643/v1",
+        "Payload": "eyJpbnB1dCI6IuS4reaWh1xu5byV5Y+3XCLkuI7lj43mlpznur9cXOWPilx1MDAzY1x1MDAyNlx1MDAzZeOAgiIsImluc3RydWN0aW9ucyI6IuWQiOaIkOWbuuWumuivtOaYjiIsIm1heF9vdXRwdXRfdG9rZW5zIjoxMDAsIm1vZGVsIjoicGhhc2UyLXNlbGVjdGVkIiwic3RvcmUiOmZhbHNlfQ==",
+        "ObservationLayer": "serialized_request"
+      }
+    ],
+    "protocol": "responses",
+    "refused": true,
+    "test": "TestPhase2ContextHTTPFinalBytesAndBeforeDispatchRefusal/responses/refuse_true",
+    "package": "github.com/soaringjerry/PCAS/internal/ai",
+    "actual_http_sha256": []
+  },
+  {
+    "actual_http_bodies": [
+      "eyJtYXhfdG9rZW5zIjoxMDAsIm1lc3NhZ2VzIjpbeyJjb250ZW50Ijoi5Lit5paHXG7lvJXlj7dcIuS4juWPjeaWnOe6v1xc5Y+KXHUwMDNjXHUwMDI2XHUwMDNl44CCIiwicm9sZSI6InVzZXIifV0sIm1vZGVsIjoicGhhc2UyLXNlbGVjdGVkIiwic3lzdGVtIjoi5ZCI5oiQ5Zu65a6a6K+05piOIn0="
+    ],
+    "events": [
+      {
+        "Stage": "prepared",
+        "ProviderID": "phase2-http",
+        "Protocol": "anthropic",
+        "Model": "phase2-selected",
+        "Endpoint": "http://127.0.0.1:38509/v1",
+        "Payload": "eyJtYXhfdG9rZW5zIjoxMDAsIm1lc3NhZ2VzIjpbeyJjb250ZW50Ijoi5Lit5paHXG7lvJXlj7dcIuS4juWPjeaWnOe6v1xc5Y+KXHUwMDNjXHUwMDI2XHUwMDNl44CCIiwicm9sZSI6InVzZXIifV0sIm1vZGVsIjoicGhhc2UyLXNlbGVjdGVkIiwic3lzdGVtIjoi5ZCI5oiQ5Zu65a6a6K+05piOIn0=",
+        "ObservationLayer": "serialized_request"
+      },
+      {
+        "Stage": "before_dispatch",
+        "ProviderID": "phase2-http",
+        "Protocol": "anthropic",
+        "Model": "phase2-selected",
+        "Endpoint": "http://127.0.0.1:38509/v1",
+        "Payload": "eyJtYXhfdG9rZW5zIjoxMDAsIm1lc3NhZ2VzIjpbeyJjb250ZW50Ijoi5Lit5paHXG7lvJXlj7dcIuS4juWPjeaWnOe6v1xc5Y+KXHUwMDNjXHUwMDI2XHUwMDNl44CCIiwicm9sZSI6InVzZXIifV0sIm1vZGVsIjoicGhhc2UyLXNlbGVjdGVkIiwic3lzdGVtIjoi5ZCI5oiQ5Zu65a6a6K+05piOIn0=",
+        "ObservationLayer": "serialized_request"
+      },
+      {
+        "Stage": "dispatched",
+        "ProviderID": "phase2-http",
+        "Protocol": "anthropic",
+        "Model": "phase2-selected",
+        "Endpoint": "http://127.0.0.1:38509/v1",
+        "Payload": "eyJtYXhfdG9rZW5zIjoxMDAsIm1lc3NhZ2VzIjpbeyJjb250ZW50Ijoi5Lit5paHXG7lvJXlj7dcIuS4juWPjeaWnOe6v1xc5Y+KXHUwMDNjXHUwMDI2XHUwMDNl44CCIiwicm9sZSI6InVzZXIifV0sIm1vZGVsIjoicGhhc2UyLXNlbGVjdGVkIiwic3lzdGVtIjoi5ZCI5oiQ5Zu65a6a6K+05piOIn0=",
+        "ObservationLayer": "serialized_request"
+      }
+    ],
+    "protocol": "anthropic",
+    "refused": false,
+    "test": "TestPhase2ContextHTTPFinalBytesAndBeforeDispatchRefusal/anthropic/refuse_false",
+    "package": "github.com/soaringjerry/PCAS/internal/ai",
+    "actual_http_sha256": [
+      "2e58888688d850536cc19be824a2da7bc9c8ac9fad9d549e4b70e10b2f7eb47e"
+    ]
+  },
+  {
+    "actual_http_bodies": null,
+    "events": [
+      {
+        "Stage": "prepared",
+        "ProviderID": "phase2-http",
+        "Protocol": "anthropic",
+        "Model": "phase2-selected",
+        "Endpoint": "http://127.0.0.1:44877/v1",
+        "Payload": "eyJtYXhfdG9rZW5zIjoxMDAsIm1lc3NhZ2VzIjpbeyJjb250ZW50Ijoi5Lit5paHXG7lvJXlj7dcIuS4juWPjeaWnOe6v1xc5Y+KXHUwMDNjXHUwMDI2XHUwMDNl44CCIiwicm9sZSI6InVzZXIifV0sIm1vZGVsIjoicGhhc2UyLXNlbGVjdGVkIiwic3lzdGVtIjoi5ZCI5oiQ5Zu65a6a6K+05piOIn0=",
+        "ObservationLayer": "serialized_request"
+      },
+      {
+        "Stage": "before_dispatch",
+        "ProviderID": "phase2-http",
+        "Protocol": "anthropic",
+        "Model": "phase2-selected",
+        "Endpoint": "http://127.0.0.1:44877/v1",
+        "Payload": "eyJtYXhfdG9rZW5zIjoxMDAsIm1lc3NhZ2VzIjpbeyJjb250ZW50Ijoi5Lit5paHXG7lvJXlj7dcIuS4juWPjeaWnOe6v1xc5Y+KXHUwMDNjXHUwMDI2XHUwMDNl44CCIiwicm9sZSI6InVzZXIifV0sIm1vZGVsIjoicGhhc2UyLXNlbGVjdGVkIiwic3lzdGVtIjoi5ZCI5oiQ5Zu65a6a6K+05piOIn0=",
+        "ObservationLayer": "serialized_request"
+      }
+    ],
+    "protocol": "anthropic",
+    "refused": true,
+    "test": "TestPhase2ContextHTTPFinalBytesAndBeforeDispatchRefusal/anthropic/refuse_true",
+    "package": "github.com/soaringjerry/PCAS/internal/ai",
+    "actual_http_sha256": []
+  },
+  {
+    "actual_app_server_rpc": "{\"id\": 1, \"method\": \"initialize\", \"params\": {\"clientInfo\": {\"name\": \"pcas\", \"title\": \"PCAS\", \"version\": \"1.0.0\"}}}\n{\"id\": 2, \"method\": \"account/read\", \"params\": {\"refreshToken\": false}}\n{\"id\": 3, \"method\": \"thread/start\", \"params\": {\"approvalPolicy\": \"never\", \"baseInstructions\": \"fixed synthetic instructions\", \"cwd\": \"/tmp/TestPhase2ContextCodexActualArgumentsAndBeforeTurnRefusalrefuse2538294800/001/auth/pcas-workspace\", \"developerInstructions\": \"Follow the output format specified in the base instructions. Use the provided context. Do not use tools or inspect local files.\", \"ephemeral\": true, \"model\": \"phase2-selected\", \"sandbox\": \"read-only\"}}\n{\"id\": 5, \"method\": \"turn/start\", \"params\": {\"input\": [{\"text\": \"\\u4e2d\\u6587\\\\\\\"turn-only-controlled-payload\", \"type\": \"text\"}], \"threadId\": \"phase2-thread\"}}\n{\"id\": 6, \"method\": \"thread/archive\", \"params\": {\"threadId\": \"phase2-thread\"}}\n",
+    "actual_turn_calls": 1,
+    "events": [
+      {
+        "Stage": "prepared",
+        "ProviderID": "phase2-codex",
+        "Protocol": "codex",
+        "Model": "phase2-selected",
+        "Endpoint": "",
+        "Payload": "eyJ0aHJlYWRfc3RhcnQiOnsiYXBwcm92YWxQb2xpY3kiOiJuZXZlciIsImJhc2VJbnN0cnVjdGlvbnMiOiJmaXhlZCBzeW50aGV0aWMgaW5zdHJ1Y3Rpb25zIiwiY3dkIjoiL3RtcC9UZXN0UGhhc2UyQ29udGV4dENvZGV4QWN0dWFsQXJndW1lbnRzQW5kQmVmb3JlVHVyblJlZnVzYWxyZWZ1c2UyNTM4Mjk0ODAwLzAwMS9hdXRoL3BjYXMtd29ya3NwYWNlIiwiZGV2ZWxvcGVySW5zdHJ1Y3Rpb25zIjoiRm9sbG93IHRoZSBvdXRwdXQgZm9ybWF0IHNwZWNpZmllZCBpbiB0aGUgYmFzZSBpbnN0cnVjdGlvbnMuIFVzZSB0aGUgcHJvdmlkZWQgY29udGV4dC4gRG8gbm90IHVzZSB0b29scyBvciBpbnNwZWN0IGxvY2FsIGZpbGVzLiIsImVwaGVtZXJhbCI6dHJ1ZSwibW9kZWwiOiJwaGFzZTItc2VsZWN0ZWQiLCJzYW5kYm94IjoicmVhZC1vbmx5In0sInR1cm5fc3RhcnQiOnsiaW5wdXQiOlt7InRleHQiOiLkuK3mlodcXFwidHVybi1vbmx5LWNvbnRyb2xsZWQtcGF5bG9hZCIsInR5cGUiOiJ0ZXh0In1dLCJ0aHJlYWRJZCI6InBoYXNlMi10aHJlYWQifX0=",
+        "ObservationLayer": "adapter_arguments"
+      },
+      {
+        "Stage": "before_dispatch",
+        "ProviderID": "phase2-codex",
+        "Protocol": "codex",
+        "Model": "phase2-selected",
+        "Endpoint": "",
+        "Payload": "eyJ0aHJlYWRfc3RhcnQiOnsiYXBwcm92YWxQb2xpY3kiOiJuZXZlciIsImJhc2VJbnN0cnVjdGlvbnMiOiJmaXhlZCBzeW50aGV0aWMgaW5zdHJ1Y3Rpb25zIiwiY3dkIjoiL3RtcC9UZXN0UGhhc2UyQ29udGV4dENvZGV4QWN0dWFsQXJndW1lbnRzQW5kQmVmb3JlVHVyblJlZnVzYWxyZWZ1c2UyNTM4Mjk0ODAwLzAwMS9hdXRoL3BjYXMtd29ya3NwYWNlIiwiZGV2ZWxvcGVySW5zdHJ1Y3Rpb25zIjoiRm9sbG93IHRoZSBvdXRwdXQgZm9ybWF0IHNwZWNpZmllZCBpbiB0aGUgYmFzZSBpbnN0cnVjdGlvbnMuIFVzZSB0aGUgcHJvdmlkZWQgY29udGV4dC4gRG8gbm90IHVzZSB0b29scyBvciBpbnNwZWN0IGxvY2FsIGZpbGVzLiIsImVwaGVtZXJhbCI6dHJ1ZSwibW9kZWwiOiJwaGFzZTItc2VsZWN0ZWQiLCJzYW5kYm94IjoicmVhZC1vbmx5In0sInR1cm5fc3RhcnQiOnsiaW5wdXQiOlt7InRleHQiOiLkuK3mlodcXFwidHVybi1vbmx5LWNvbnRyb2xsZWQtcGF5bG9hZCIsInR5cGUiOiJ0ZXh0In1dLCJ0aHJlYWRJZCI6InBoYXNlMi10aHJlYWQifX0=",
+        "ObservationLayer": "adapter_arguments"
+      },
+      {
+        "Stage": "dispatched",
+        "ProviderID": "phase2-codex",
+        "Protocol": "codex",
+        "Model": "phase2-selected",
+        "Endpoint": "",
+        "Payload": "eyJ0aHJlYWRfc3RhcnQiOnsiYXBwcm92YWxQb2xpY3kiOiJuZXZlciIsImJhc2VJbnN0cnVjdGlvbnMiOiJmaXhlZCBzeW50aGV0aWMgaW5zdHJ1Y3Rpb25zIiwiY3dkIjoiL3RtcC9UZXN0UGhhc2UyQ29udGV4dENvZGV4QWN0dWFsQXJndW1lbnRzQW5kQmVmb3JlVHVyblJlZnVzYWxyZWZ1c2UyNTM4Mjk0ODAwLzAwMS9hdXRoL3BjYXMtd29ya3NwYWNlIiwiZGV2ZWxvcGVySW5zdHJ1Y3Rpb25zIjoiRm9sbG93IHRoZSBvdXRwdXQgZm9ybWF0IHNwZWNpZmllZCBpbiB0aGUgYmFzZSBpbnN0cnVjdGlvbnMuIFVzZSB0aGUgcHJvdmlkZWQgY29udGV4dC4gRG8gbm90IHVzZSB0b29scyBvciBpbnNwZWN0IGxvY2FsIGZpbGVzLiIsImVwaGVtZXJhbCI6dHJ1ZSwibW9kZWwiOiJwaGFzZTItc2VsZWN0ZWQiLCJzYW5kYm94IjoicmVhZC1vbmx5In0sInR1cm5fc3RhcnQiOnsiaW5wdXQiOlt7InRleHQiOiLkuK3mlodcXFwidHVybi1vbmx5LWNvbnRyb2xsZWQtcGF5bG9hZCIsInR5cGUiOiJ0ZXh0In1dLCJ0aHJlYWRJZCI6InBoYXNlMi10aHJlYWQifX0=",
+        "ObservationLayer": "adapter_arguments"
+      }
+    ],
+    "fixed_instruction_thread_created_before_barrier": true,
+    "refused": false,
+    "remote_network_serialization": "unknown",
+    "test": "TestPhase2ContextCodexActualArgumentsAndBeforeTurnRefusal/refuse_false",
+    "package": "github.com/soaringjerry/PCAS/internal/ai",
+    "actual_http_sha256": []
+  },
+  {
+    "actual_app_server_rpc": "{\"id\": 1, \"method\": \"initialize\", \"params\": {\"clientInfo\": {\"name\": \"pcas\", \"title\": \"PCAS\", \"version\": \"1.0.0\"}}}\n{\"id\": 2, \"method\": \"account/read\", \"params\": {\"refreshToken\": false}}\n{\"id\": 3, \"method\": \"thread/start\", \"params\": {\"approvalPolicy\": \"never\", \"baseInstructions\": \"fixed synthetic instructions\", \"cwd\": \"/tmp/TestPhase2ContextCodexActualArgumentsAndBeforeTurnRefusalrefuse3796433368/001/auth/pcas-workspace\", \"developerInstructions\": \"Follow the output format specified in the base instructions. Use the provided context. Do not use tools or inspect local files.\", \"ephemeral\": true, \"model\": \"phase2-selected\", \"sandbox\": \"read-only\"}}\n{\"id\": 5, \"method\": \"thread/archive\", \"params\": {\"threadId\": \"phase2-thread\"}}\n",
+    "actual_turn_calls": 0,
+    "events": [
+      {
+        "Stage": "prepared",
+        "ProviderID": "phase2-codex",
+        "Protocol": "codex",
+        "Model": "phase2-selected",
+        "Endpoint": "",
+        "Payload": "eyJ0aHJlYWRfc3RhcnQiOnsiYXBwcm92YWxQb2xpY3kiOiJuZXZlciIsImJhc2VJbnN0cnVjdGlvbnMiOiJmaXhlZCBzeW50aGV0aWMgaW5zdHJ1Y3Rpb25zIiwiY3dkIjoiL3RtcC9UZXN0UGhhc2UyQ29udGV4dENvZGV4QWN0dWFsQXJndW1lbnRzQW5kQmVmb3JlVHVyblJlZnVzYWxyZWZ1c2UzNzk2NDMzMzY4LzAwMS9hdXRoL3BjYXMtd29ya3NwYWNlIiwiZGV2ZWxvcGVySW5zdHJ1Y3Rpb25zIjoiRm9sbG93IHRoZSBvdXRwdXQgZm9ybWF0IHNwZWNpZmllZCBpbiB0aGUgYmFzZSBpbnN0cnVjdGlvbnMuIFVzZSB0aGUgcHJvdmlkZWQgY29udGV4dC4gRG8gbm90IHVzZSB0b29scyBvciBpbnNwZWN0IGxvY2FsIGZpbGVzLiIsImVwaGVtZXJhbCI6dHJ1ZSwibW9kZWwiOiJwaGFzZTItc2VsZWN0ZWQiLCJzYW5kYm94IjoicmVhZC1vbmx5In0sInR1cm5fc3RhcnQiOnsiaW5wdXQiOlt7InRleHQiOiLkuK3mlodcXFwidHVybi1vbmx5LWNvbnRyb2xsZWQtcGF5bG9hZCIsInR5cGUiOiJ0ZXh0In1dLCJ0aHJlYWRJZCI6InBoYXNlMi10aHJlYWQifX0=",
+        "ObservationLayer": "adapter_arguments"
+      },
+      {
+        "Stage": "before_dispatch",
+        "ProviderID": "phase2-codex",
+        "Protocol": "codex",
+        "Model": "phase2-selected",
+        "Endpoint": "",
+        "Payload": "eyJ0aHJlYWRfc3RhcnQiOnsiYXBwcm92YWxQb2xpY3kiOiJuZXZlciIsImJhc2VJbnN0cnVjdGlvbnMiOiJmaXhlZCBzeW50aGV0aWMgaW5zdHJ1Y3Rpb25zIiwiY3dkIjoiL3RtcC9UZXN0UGhhc2UyQ29udGV4dENvZGV4QWN0dWFsQXJndW1lbnRzQW5kQmVmb3JlVHVyblJlZnVzYWxyZWZ1c2UzNzk2NDMzMzY4LzAwMS9hdXRoL3BjYXMtd29ya3NwYWNlIiwiZGV2ZWxvcGVySW5zdHJ1Y3Rpb25zIjoiRm9sbG93IHRoZSBvdXRwdXQgZm9ybWF0IHNwZWNpZmllZCBpbiB0aGUgYmFzZSBpbnN0cnVjdGlvbnMuIFVzZSB0aGUgcHJvdmlkZWQgY29udGV4dC4gRG8gbm90IHVzZSB0b29scyBvciBpbnNwZWN0IGxvY2FsIGZpbGVzLiIsImVwaGVtZXJhbCI6dHJ1ZSwibW9kZWwiOiJwaGFzZTItc2VsZWN0ZWQiLCJzYW5kYm94IjoicmVhZC1vbmx5In0sInR1cm5fc3RhcnQiOnsiaW5wdXQiOlt7InRleHQiOiLkuK3mlodcXFwidHVybi1vbmx5LWNvbnRyb2xsZWQtcGF5bG9hZCIsInR5cGUiOiJ0ZXh0In1dLCJ0aHJlYWRJZCI6InBoYXNlMi10aHJlYWQifX0=",
+        "ObservationLayer": "adapter_arguments"
+      }
+    ],
+    "fixed_instruction_thread_created_before_barrier": true,
+    "refused": true,
+    "remote_network_serialization": "unknown",
+    "test": "TestPhase2ContextCodexActualArgumentsAndBeforeTurnRefusal/refuse_true",
+    "package": "github.com/soaringjerry/PCAS/internal/ai",
+    "actual_http_sha256": []
+  },
+  {
+    "actual_http_bodies": null,
+    "events": [
+      {
+        "Stage": "prepared",
+        "ProviderID": "",
+        "Protocol": "siwc",
+        "Model": "first",
+        "Endpoint": "http://127.0.0.1:34025/v1",
+        "Payload": "eyJpbnB1dCI6W3siY29udGVudCI6IuS4reaWh1xu5byV5Y+3XCLlkozlj43mlpznur9cXOS7peWPilx1MDAzY1x1MDAyNlx1MDAzZeOAgiIsInJvbGUiOiJ1c2VyIn1dLCJpbnN0cnVjdGlvbnMiOiLlkIjmiJDlm7rlrpror7TmmI4iLCJtb2RlbCI6ImZpcnN0Iiwic3RvcmUiOmZhbHNlLCJzdHJlYW0iOnRydWV9",
+        "ObservationLayer": "serialized_request"
+      },
+      {
+        "Stage": "before_dispatch",
+        "ProviderID": "",
+        "Protocol": "siwc",
+        "Model": "first",
+        "Endpoint": "http://127.0.0.1:34025/v1",
+        "Payload": "eyJpbnB1dCI6W3siY29udGVudCI6IuS4reaWh1xu5byV5Y+3XCLlkozlj43mlpznur9cXOS7peWPilx1MDAzY1x1MDAyNlx1MDAzZeOAgiIsInJvbGUiOiJ1c2VyIn1dLCJpbnN0cnVjdGlvbnMiOiLlkIjmiJDlm7rlrpror7TmmI4iLCJtb2RlbCI6ImZpcnN0Iiwic3RvcmUiOmZhbHNlLCJzdHJlYW0iOnRydWV9",
+        "ObservationLayer": "serialized_request"
+      }
+    ],
+    "postgres_secretary_context": "not exercised",
+    "refused": true,
+    "requested_model": "",
+    "selected_model": "first",
+    "test": "TestPhase2ContextSIWCUnselectedModelFinalBytesAndBeforeDispatchRefusal/refuse_true",
+    "package": "github.com/soaringjerry/PCAS/internal/ai/siwc",
+    "actual_http_sha256": []
+  }
+]

@@ -1,0 +1,163 @@
+{
+  "run_id": 36887421622,
+  "head": "c8adbaeb5c02daa9e83f90f74c216d8cf9ee22bf",
+  "checkout": "de9906eeece777e5016d50b0d85a1d0b72a68b40",
+  "tree": "e615cd44aa99df110a03592d965afafb06a21c8b",
+  "conclusion": "success",
+  "make_check_exit": 0,
+  "exit_evidence": "Run make check step completed success; final go build command and cmd/pcas output present before successful post steps",
+  "test_packages": 11,
+  "no_test_file_packages": 4,
+  "top_counts": {
+    "pass": 338,
+    "fail": 0,
+    "skip": 3
+  },
+  "true_leaf_counts": {
+    "pass": 752,
+    "fail": 0,
+    "skip": 3
+  },
+  "declared_and_logged_tops": 341,
+  "unreached": [],
+  "unresolved": [],
+  "race_warning": false,
+  "panic_lines": [],
+  "cached_packages": [],
+  "retry_same_head_true_leaves": 23,
+  "retry_same_head_pass": 23,
+  "packages": [
+    {
+      "package": "github.com/soaringjerry/PCAS/internal/ai",
+      "elapsed": "1.316s",
+      "top_counts": {
+        "pass": 12,
+        "skip": 1
+      },
+      "true_leaf_counts": {
+        "pass": 20,
+        "skip": 1
+      },
+      "skips": [
+        "TestInstalledCodexHandshake"
+      ]
+    },
+    {
+      "package": "github.com/soaringjerry/PCAS/internal/ai/siwc",
+      "elapsed": "7.957s",
+      "top_counts": {
+        "pass": 12
+      },
+      "true_leaf_counts": {
+        "pass": 34
+      },
+      "skips": []
+    },
+    {
+      "package": "github.com/soaringjerry/PCAS/internal/blob",
+      "elapsed": "1.018s",
+      "top_counts": {
+        "pass": 1
+      },
+      "true_leaf_counts": {
+        "pass": 1
+      },
+      "skips": []
+    },
+    {
+      "package": "github.com/soaringjerry/PCAS/internal/config",
+      "elapsed": "1.022s",
+      "top_counts": {
+        "pass": 1
+      },
+      "true_leaf_counts": {
+        "pass": 1
+      },
+      "skips": []
+    },
+    {
+      "package": "github.com/soaringjerry/PCAS/internal/connectors",
+      "elapsed": "1.026s",
+      "top_counts": {
+        "pass": 2
+      },
+      "true_leaf_counts": {
+        "pass": 2
+      },
+      "skips": []
+    },
+    {
+      "package": "github.com/soaringjerry/PCAS/internal/httpapi",
+      "elapsed": "1.261s",
+      "top_counts": {
+        "pass": 9
+      },
+      "true_leaf_counts": {
+        "pass": 23
+      },
+      "skips": []
+    },
+    {
+      "package": "github.com/soaringjerry/PCAS/internal/memory",
+      "elapsed": "1.025s",
+      "top_counts": {
+        "pass": 6
+      },
+      "true_leaf_counts": {
+        "pass": 31
+      },
+      "skips": []
+    },
+    {
+      "package": "github.com/soaringjerry/PCAS/internal/notify",
+      "elapsed": "5.903s",
+      "top_counts": {
+        "pass": 10
+      },
+      "true_leaf_counts": {
+        "pass": 10
+      },
+      "skips": []
+    },
+    {
+      "package": "github.com/soaringjerry/PCAS/internal/postgres",
+      "elapsed": "412.532s",
+      "top_counts": {
+        "pass": 241,
+        "skip": 2
+      },
+      "true_leaf_counts": {
+        "pass": 568,
+        "skip": 2
+      },
+      "skips": [
+        "TestLiveCodexSecretaryAndLegacyFormats",
+        "TestLiveContinuityReplay"
+      ]
+    },
+    {
+      "package": "github.com/soaringjerry/PCAS/internal/telegram",
+      "elapsed": "10.562s",
+      "top_counts": {
+        "pass": 36
+      },
+      "true_leaf_counts": {
+        "pass": 52
+      },
+      "skips": []
+    },
+    {
+      "package": "github.com/soaringjerry/PCAS/internal/workspace",
+      "elapsed": "1.049s",
+      "top_counts": {
+        "pass": 8
+      },
+      "true_leaf_counts": {
+        "pass": 10
+      },
+      "skips": []
+    }
+  ],
+  "raw_sha256": "98d3ca69d5232a5eabc4160eefd60245fed5bf8ec441f4a2ad5910f465776746",
+  "evidence_records": 1073
+}

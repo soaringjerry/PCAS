@@ -35,7 +35,7 @@
 原则：
 
 1. owner 是唯一写入者；source Kind、active/current version 和 policy revision 都校验；未知 principal/role/purpose 或 provider 配置缺口拒绝。version 冲突为 409；错误不得默默退化到宽范围。
-2. source policy 不由 claim grant 推出，也不因为新建 agent 自动扩展。现有 claim 授权保持原语义。
+2. source policy 不由 claim grant 推出，也不因为新建 agent 自动扩展。source policy absence 不妨碍独立 claim grant；但 owner 明确“别再用《资料》”产生当前 exact recipient/purpose/hard scope 的显式 deny，优先于该来源证据派生 claim/summary/历史产物的旧 allow。既有 `source_authorizations.revoked` tombstone 复用此含义，不新建另一套库；首次无政策撤回 expected revision=0 时仍写 revision1 tombstone。
 3. policy 跟随同一稳定 source ID 的正常新版本；具体 version 与 source 当前/历史视图在生成前后复核。不同身份的新来源不继承。
 4. model/provider 必须记录实际身份（至少配置 ID、protocol、model 和 endpoint 身份），不能仅记录可被改绑的 agent ID。改绑配置或 role/workspace/purpose 后原政策不匹配，需要明确新授权。
 5. OCR/transcript/归档成员是独立 source：不能从父 source grant 猜测子 source grant。2.0 最小按明确的可读来源授权；若以后推出“这份文件及其派生文本”授权，需要明确集合、identity/version、后续新增成员和撤权闭包。
@@ -43,6 +43,7 @@
 7. policy 变更与 typed invalidation 同事务提交，先取得一致的短锁，不在 provider 网络调用期间持 owner/source 锁。生成前、发出前与生成后/采纳前按已提交顺序复核。
 8. source 工作室 scope 的赋值/变更必须有 owner 入口，校验 source 当前 version、scope/policy revision 与工作室归属；冲突为 409，不让模型或检索对象加权写入。由 global 移入工作室、从 A 移到 B 等变更均递增 scope revision 并失效旧依赖，不修改已发送 attempt 的当时身份记录。授权 policy 的 workspace scope 与 source 实际归属分别验证，不能只修改一个标签便获得跨工作室权限。
 9. 授予/撤回必须附可用的【撤销】或等价受版本保护的还原。撤销只能恢复当前仍等于该动作 after_revision 的政策前像；插入后继 grant/revoke/scope assignment/source deletion 后撤销返回具体冲突/已失效，不覆盖后继用户决定。撤销本身递增 revision、执行 typed invalidation，并记幂等回执；旧授予/旧撤销重放不复活政策。快照只存有限 policy tuple，无原文、凭据或完整 provider 配置。
+10. grant/undo 恢复 grant 必须核验当前接收者路由合法；owner revoke 已存旧 tuple 不要求该 agent 仍 enabled 或路由仍当前，不能要求用户恢复旧配置才能撤权。新 grant/regrant 不复活已经 invalidated 的旧 attempt、Brief、回答或采纳产物。
 
 建议 B 对 A 提供：
 
@@ -50,6 +51,7 @@
 // 名称和类型待 K0 冻结；所有 helper 均不调用模型或网络。
 mutateSourceAuthorizationTx(ctx, tx, ownerScope, request) (result, error)
 sourcePolicyAllowsTx(ctx, tx, trustedTaskContext, exactRef) error
+sourcePolicyDeniedTx(ctx, tx, trustedTaskContext, exactSourceRef) (bool, error)
 resolveSourceAuthorizationIntentTx(ctx, tx, ownerScope, currentUserText, serverTarget) (intent, matched, error)
 ```
 
@@ -79,6 +81,8 @@ root 已接受本批有限明确整句+唯一《标题》入口；“这份资�
 | source 标题重复/缺失；“这份资料”无 server 选择 | ask/具体错误，不猜来源 |
 | 已授权秘书 → 换模型/role/provider/工作室 | 旧 tuple 不匹配，不自动扩大 |
 | claim 获 grant、source 未授权 | claim 可消费，raw 不可消费；owner 可展开不证明模型可读 |
+| claim 独立获 grant → owner 明确“别再用《来源》” | source revoked deny 阻止该接收者继续使用来源证据后代 claim/summary/历史；不能要求用户辨析 raw 与 claim |
+| explicit deny → 新 regrant → 重取旧 attempt/Brief/回答 | 新上下文可按新 revision 构建，旧 invalidated 产物不得复活 |
 | policy 重复请求；source deleted 后重放 | 原回执可识别，不重建授权/source |
 | grant G→revoke R→重放 G；revoke R→新 grant G2→重放 R | 都只返回原幂等结果，当前政策不变，不复活或覆盖新决定 |
 | grant G→撤销 G；grant G→新 revoke R→撤销 G | 前者受 after_revision 校验还原且递增 revision；后者冲突，不覆盖 R |
@@ -101,12 +105,12 @@ root 已接受本批有限明确整句+唯一《标题》入口；“这份资�
 |---|---|---|---|
 | source v1→v2 | v1 可在明确合法历史视图中保留；current 只读 v2；精确 ref 不能换成新正文 | v1 支持的 claim/current derived、summary、desk answer、run/Brief/manual、attempt 结果均复核失效 | B ingest 调统一 helper；A typed current/history verifier与消费者 |
 | claim correction | source 可以独立合法保留，纠正 key/redirect 保留 | 旧 claim/summary/run/desk/artifact/attempt 结果依赖闭包 | B correct；A消费者与递归 typed helper |
-| source policy revoke/narrow | owner 原件保留；不因撤权删除其他主体的独立资料 | 对失效 tuple 停止供给，撤权相关快照正文与旧派生供给失效；summary递归传播；后续 manual取/复制/submit/adopt拒绝 | B policy+editing；A attempt/manual/历史读取/采纳 gate |
+| source policy revoke/narrow | owner 原件保留；不因撤权删除其他主体的独立资料 | 对失效 tuple 停止供给；明确 source revoke 的 deny 沿 source→evidence target claim→summary/历史产物传播，即使 claim 有旧 grant；相关快照正文清除；后续 manual取/复制/submit/adopt拒绝；regrant不复活旧产物 | B policy+editing；A attempt/manual/历史读取/采纳 gate |
 | delete claim, IncludeSources=false | 独立授权 source 仍可正常使用；不得误判 source 泄漏 | claim 及其派生正文删；来源无关内容保留 | B现有closure；A新增副本helper |
 | delete source 或 IncludeSources=true | 来源正文/版本/原blob及派生清除；留无正文阻断标记 | attempt快照、desk question/answer/cards/ask、manual/Brief/run/output、采纳工件/文档/样本、来源preview/correction copies | B删闭包；A purgeArtifacts/attempt清理与正文恢复防护 |
 | 已外发后删除/撤权 | 已发送无法撤回，记录发送时点 | 不再供给/回放/采纳；attempt留有界无正文 skeleton | A attempt；B触发purge |
 
-请 A 给 B 一个新增 typed invalidation/purge helper，接受 owner、变更 refs/IDs、reason 与可选受影响 tuple，同 transaction 完成；至少向 B 交接 helper 名与必要表列。禁止由 B 在 editing.go 编造消费者表的私有布局。
+A 已交接统一 `invalidateTypedContextTx(ctx,tx,ownerScope,memory.ContextInvalidation)`：包含 RecordIDs、reason、可选 Recipient；同 transaction 完成。source删除/替换不能用 Recipient 过滤豁免副本；revoke 可限定当前接收者，沿 source→evidence target claim→summary/产物递归失效。B 的 `sourcePolicyDeniedTx(ctx,tx,task,source)(bool,error)` 供 A claim verifier逐evidence来源检查显式deny；absence返回false，不能要求raw allow才给独立claim。禁止由B在editing.go编造消费者表的私有布局。
 
 现有 `CorrectRequest.Target.Kind`、`DeleteRequest.Targets[].Kind` 未与 SQL 真实 kind 逐一核对；本批 B 将按冻结契约拒绝错误 kind，避免以 source 身份走 claim correction。来源替换走已有 Ingest 稳定身份/新外部版本；若需要交互纠正原文的 expected-version API，由 A 明确共享 request，不能以 claim Correct 伪装。
 

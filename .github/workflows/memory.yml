@@ -33,6 +33,6 @@ jobs:
         with:
           node-version: 22
       - run: go mod download
-      - run: make check
+      - run: bash testdata/phase2/run-go.sh make check
         env:
           GOFLAGS: -v

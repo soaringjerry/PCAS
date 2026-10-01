@@ -92,19 +92,21 @@ func (s *Store) undoActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 	}
 	var data []byte
 	var summary string
-	var undone, expired *string
-	err := tx.QueryRow(ctx, "SELECT changes,summary,undone_at::text,expired_at::text FROM action_log WHERE owner_id=$1 AND id=$2 FOR UPDATE", string(scope.OwnerID), id).Scan(&data, &summary, &undone, &expired)
+	var undone *string
+	var expired bool
+	err := tx.QueryRow(ctx, "SELECT changes,summary,undone_at::text,expired_at IS NOT NULL OR created_at<now()-interval '30 days' FROM action_log WHERE owner_id=$1 AND id=$2 FOR UPDATE", string(scope.OwnerID), id).Scan(&data, &summary, &undone, &expired)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return memory.ErrNotFound
 	}
 	if err != nil {
 		return err
 	}
-	if expired != nil {
-		return workspace.ErrChangedSince
-	}
 	if undone != nil {
 		return workspace.ErrAlreadyUndone
+	}
+	// Enforce the window even before another action flushes old snapshots.
+	if expired {
+		return workspace.ErrExpired
 	}
 	var changes []actionChange
 	if err = json.Unmarshal(data, &changes); err != nil {

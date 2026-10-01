@@ -235,6 +235,8 @@ func (s *Server) fail(w http.ResponseWriter, err error) {
 		status, code = http.StatusConflict, "work_started"
 	case errors.Is(err, workspace.ErrAlreadyUndone):
 		status, code = http.StatusConflict, "already_undone"
+	case errors.Is(err, workspace.ErrExpired):
+		status, code = http.StatusConflict, "expired"
 	case errors.Is(err, workspace.ErrBudget):
 		status, code = http.StatusPaymentRequired, "daily_budget_exceeded"
 	default:

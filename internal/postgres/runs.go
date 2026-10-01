@@ -19,176 +19,7 @@ const assistantInstructions = "你是 PCAS 的个人工作副手。只根据所�
 
 func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c workspace.Command) error {
 	if c.Type == "requestRun" {
-		if !oneOf(c.Kind, "plan", "breakdown", "summary", "draft", "ask") || requireText(c.Prompt) != nil {
-			return memory.ErrInvalid
-		}
-		item, err := getItem(ctx, tx, scope, c.ThingID)
-		if err != nil {
-			return err
-		}
-		agent, err := queryDocument[workspace.Agent](ctx, tx, "SELECT document FROM workspace_agents WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), c.AgentID)
-		if err != nil {
-			return err
-		}
-		if !agent.Enabled {
-			return memory.ErrForbidden
-		}
-		item, artifactRefs, err := sanitizeItemTx(ctx, tx, scope, agent.ID, item)
-		if err != nil {
-			return err
-		}
-		id, err := uuidOrNew(c.ID)
-		if err != nil {
-			return err
-		}
-		memories, err := s.memoriesTx(ctx, tx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: agent.ID}, true)
-		if err != nil {
-			return err
-		}
-		excluded, err := queryDocuments[string](ctx, tx, "SELECT to_jsonb(memory_id::text) FROM context_exclusions WHERE owner_id=$1 AND thing_id=$2", string(scope.OwnerID), item.ID)
-		if err != nil {
-			return err
-		}
-		run := workspace.Run{ID: id, ThingID: item.ID, AgentID: agent.ID, Kind: c.Kind, Prompt: c.Prompt, Status: "running", ContextMemoryIDs: []string{}, ContextVersions: []memory.Ref{}, CreatedAt: stamp()}
-		var brief strings.Builder
-		fmt.Fprintf(&brief, "事项：%s\n当前状态：%s\n说明：%s\n%s\n目标：%s\n进度：%s\n", item.Title, item.Status, item.Notes, item.Body, item.Goal, item.Progress)
-		projectID := item.ProjectID
-		if item.Kind == "project" {
-			projectID = item.ID
-		} else if projectID != "" {
-			project, err := getItem(ctx, tx, scope, projectID)
-			if err != nil {
-				return err
-			}
-			fmt.Fprintf(&brief, "所属项目：%s\n项目目标：%s\n", project.Name, project.Goal)
-		}
-		for _, check := range item.Checklist {
-			fmt.Fprintf(&brief, "子步骤（完成=%t）：%s\n", check.Done, check.Text)
-		}
-		fmt.Fprintln(&brief, "相关记忆（引用 ID 与版本；长期约束继续适用）：")
-		// Rank through the same scoped retrieval used by Recall instead of
-		// filling the prompt with globally recent memories. No nested model
-		// request is made while the owner's transaction is locked.
-		query := c.Prompt + " " + item.Title
-		if len([]rune(query)) > 1000 {
-			query = string([]rune(query)[:1000])
-		}
-		tokens := memory.SearchTokens(query)
-		if len(tokens) > 120 {
-			tokens = tokens[:120]
-		}
-		terms := []string{}
-		for _, token := range tokens {
-			if len([]rune(token)) > 1 {
-				terms = append(terms, "'"+strings.ReplaceAll(token, "'", "''")+"'")
-			}
-		}
-		recall := memory.RecallResult{Coverage: coverage()}
-		request := memory.RecallRequest{Query: query, Mode: memory.Remember, Context: memory.WorkingContext{Objects: []memory.ID{}}}
-		if projectID != "" {
-			request.Context.Objects = append(request.Context.Objects, memory.ID(projectID))
-		}
-		budget := memory.Budget{Candidates: 100, Tokens: 10000, Edges: 30, Hops: 1}
-		if err := s.recallTx(ctx, tx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: agent.ID}, request, budget, query, strings.Join(terms, " | "), nil, "", 0, "", tokens, &recall); err != nil {
-			return err
-		}
-		byID := map[string]workspace.Memory{}
-		for _, m := range memories {
-			byID[m.ID] = m
-		}
-		ordered := []workspace.Memory{}
-		selected := map[string]bool{}
-		if prepared, ok := ctx.Value(runContextKey{}).(preparedRunContext); ok {
-			for _, turn := range prepared.History {
-				if verifyRunTx(ctx, tx, scope, workspace.Run{ThingID: item.ID, AgentID: agent.ID, ContextVersions: turn.Refs}) == nil {
-					fmt.Fprintf(&brief, "\n导办台之前的讨论：\n问：%s\n答：%s\n", turn.Question, turn.Answer)
-					artifactRefs = append(artifactRefs, turn.Refs...)
-				}
-			}
-			for _, ref := range prepared.Refs {
-				if m, ok := byID[string(ref.ID)]; ok && m.Version == ref.Version && !selected[m.ID] {
-					ordered = append(ordered, m)
-					selected[m.ID] = true
-				}
-			}
-			if previous := prepared.Previous; previous != nil && previous.ThingID == item.ID && previous.AgentID == agent.ID && verifyRunTx(ctx, tx, scope, *previous) == nil {
-				fmt.Fprintf(&brief, "\n同一事项上一次的要求：%s\n上一次的结果：%s\n", previous.Prompt, previous.Output)
-				artifactRefs = append(artifactRefs, previous.ContextVersions...)
-			}
-		}
-		// Explicit long-term constraints must remain applicable even when the
-		// task vocabulary does not repeat them.
-		for _, m := range memories {
-			if (m.Kind == "preference" || m.Kind == "decision") && !selected[m.ID] {
-				ordered = append(ordered, m)
-				selected[m.ID] = true
-			}
-		}
-		for _, ref := range recall.Memories {
-			if m, ok := byID[string(ref.ID)]; ok && !selected[m.ID] {
-				ordered = append(ordered, m)
-				selected[m.ID] = true
-			}
-		}
-		for _, m := range ordered {
-			if !oneOf(m.Kind, agent.MemoryKinds...) || m.Epistemic == "inferred" && !agent.IncludeInferred || oneOf(m.ID, excluded...) || m.ProjectID != "" && m.ProjectID != projectID {
-				continue
-			}
-			if brief.Len()+len(m.Text) > 30000 {
-				continue
-			}
-			fmt.Fprintf(&brief, "[%s@%d / %s / confirmation=%s / acquisition=%s] %s\n", m.ID, m.Version, m.Epistemic, m.Confirmation, m.Acquisition, m.Text)
-			run.ContextMemoryIDs = append(run.ContextMemoryIDs, m.ID)
-			run.ContextVersions = append(run.ContextVersions, memory.Ref{ID: memory.ID(m.ID), Version: m.Version, Kind: memory.ClaimKind})
-		}
-
-		// Derived copies carry input dependencies even when their source memories
-		// fall outside this run's text budget.
-		for _, ref := range artifactRefs {
-			if !oneOf(string(ref.ID), run.ContextMemoryIDs...) {
-				run.ContextMemoryIDs = append(run.ContextMemoryIDs, string(ref.ID))
-				run.ContextVersions = append(run.ContextVersions, ref)
-			}
-		}
-		fmt.Fprintf(&brief, "\n本次请求：%s", c.Prompt)
-		run.Brief = brief.String()
-		dbStatus := "queued"
-		if agent.Channel == "manual" {
-			run.Status = "waiting"
-			dbStatus = "waiting"
-		} else {
-			if s.models == nil || !s.models.Available(agent.ID) {
-				return memory.ErrUnavailable
-			}
-			p, _ := s.models.Get(agent.ID)
-			run.Cost = p.Reserve(assistantInstructions + run.Brief)
-			settings, err := queryDocument[workspace.Settings](ctx, tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1", string(scope.OwnerID))
-			if err != nil {
-				return err
-			}
-			loc, err := time.LoadLocation(settings.Timezone)
-			if err != nil {
-				return err
-			}
-			now := time.Now().In(loc)
-			start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
-			var spent float64
-			if err := tx.QueryRow(ctx, "SELECT coalesce((SELECT sum(reserved_cost) FROM agent_runs WHERE owner_id=$1 AND created_at >= $2),0)+coalesce((SELECT sum(reserved_cost) FROM background_usage WHERE owner_id=$1 AND created_at >= $2),0)", string(scope.OwnerID), start).Scan(&spent); err != nil {
-				return err
-			}
-			if spent+run.Cost > settings.DailyBudget {
-				return workspace.ErrBudget
-			}
-		}
-		if _, err := tx.Exec(ctx, "INSERT INTO agent_runs(owner_id,id,thing_id,agent_id,status,reserved_cost,created_at,document) VALUES($1,$2,$3,$4,$5,$6,$7,$8)", string(scope.OwnerID), run.ID, run.ThingID, run.AgentID, dbStatus, run.Cost, run.CreatedAt, asJSON(run)); err != nil {
-			return err
-		}
-		for _, ref := range run.ContextVersions {
-			if _, err := tx.Exec(ctx, "INSERT INTO run_dependencies(owner_id,run_id,memory_id,memory_version) VALUES($1,$2,$3,$4)", string(scope.OwnerID), run.ID, string(ref.ID), ref.Version); err != nil {
-				return err
-			}
-		}
-		return nil
+		return s.requestRunTx(ctx, tx, scope, c)
 	}
 	if !memory.ID(c.ID).Valid() {
 		return memory.ErrInvalid
@@ -201,6 +32,9 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 	case "pasteRunResult":
 		if run.Status != "waiting" || run.StaleContext || requireText(c.Output) != nil {
 			return memory.ErrConflict
+		}
+		if err := s.verifyManualRunSubmissionTx(ctx, tx, scope, run); err != nil {
+			return err
 		}
 		run.Status = "done"
 		run.Output = c.Output
@@ -234,7 +68,7 @@ func (s *Store) adoptRunTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, r
 	if requireText(text) != nil || !oneOf(as, "doc", "subtasks", "progress") {
 		return memory.ErrInvalid
 	}
-	if err := verifyRunTx(ctx, tx, scope, *run); err != nil {
+	if err := s.verifyRunTx(ctx, tx, scope, *run); err != nil {
 		return err
 	}
 	item, err := getItem(ctx, tx, scope, run.ThingID)
@@ -316,8 +150,14 @@ func (s *Store) adoptRunTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, r
 		return err
 	}
 	run.Adopted = &workspace.Adoption{As: as, At: stamp(), Edited: !auto && text != run.Output, Auto: auto, ActionID: actionID}
-	if err := sampleTx(ctx, tx, scope, workspace.Sample{ID: string(memory.NewID()), Kind: "adopted-result", Prompt: run.Brief, Response: text, Origin: workspace.Origin{Label: item.Title, RunID: run.ID}, Version: 1, State: "candidate", Epistemic: "inferred", CreatedAt: stamp()}); err != nil {
+	sample := workspace.Sample{ID: string(memory.NewID()), Kind: "adopted-result", Prompt: run.Brief, Response: text, Origin: workspace.Origin{Label: item.Title, RunID: run.ID}, Version: 1, State: "candidate", Epistemic: "inferred", CreatedAt: stamp()}
+	if err := sampleTx(ctx, tx, scope, sample); err != nil {
 		return err
+	}
+	if run.ContextTask != nil {
+		if err := persistContextArtifactDependenciesTx(ctx, tx, scope, "training_sample", sample.ID, 1, *run.ContextTask, run.ContextDependencies); err != nil {
+			return err
+		}
 	}
 	for _, ref := range run.ContextVersions {
 		if err := recordUseTx(ctx, tx, scope, memory.UseEvent{Ref: ref, EventID: run.ID + ":" + string(ref.ID), Kind: "adoption", At: time.Now()}); err != nil {
@@ -343,6 +183,9 @@ func verifyRunTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run workspa
 // Checking only the agent grant would let a previous output reintroduce an
 // excluded memory, or a memory from the item's former project.
 func verifyRunForItemTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run workspace.Run, item *workspace.Item) error {
+	if run.ContextTask != nil {
+		return memory.ErrForbidden
+	}
 	agent, err := queryDocument[workspace.Agent](ctx, tx, "SELECT document FROM workspace_agents WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), run.AgentID)
 	if err != nil {
 		return err
@@ -363,6 +206,9 @@ func verifyRunForItemTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run 
 		}
 	}
 	for _, ref := range run.ContextVersions {
+		if ref.Kind != memory.ClaimKind {
+			return memory.ErrConflict
+		}
 		var currentVersion int
 		if err := tx.QueryRow(ctx, "SELECT version FROM applicable_claim_versions($1,now(),now()) WHERE claim_id=$2", string(scope.OwnerID), string(ref.ID)).Scan(&currentVersion); err != nil || currentVersion != ref.Version {
 			return memory.ErrConflict
@@ -390,12 +236,21 @@ func verifyRunForItemTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run 
 // RunAgents owns costly jobs: an ambiguous provider timeout/crash is marked
 // failed and is never automatically submitted again (which could double bill).
 func (s *Store) RunAgents(ctx context.Context, logger *slog.Logger) error {
+	if err := s.CleanupContextAttempts(ctx, time.Now().UTC()); err != nil && ctx.Err() == nil {
+		logger.Warn("context cleanup failed", "error_type", fmt.Sprintf("%T", err))
+	}
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
+	cleanupTicker := time.NewTicker(memory.DefaultContextCleanupInterval)
+	defer cleanupTicker.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
+		case now := <-cleanupTicker.C:
+			if err := s.CleanupContextAttempts(ctx, now.UTC()); err != nil && ctx.Err() == nil {
+				logger.Warn("context cleanup failed", "error_type", fmt.Sprintf("%T", err))
+			}
 		case <-ticker.C:
 			if err := s.runAgentOnce(ctx); err != nil && ctx.Err() == nil {
 				logger.Warn("agent job failed", "error_type", fmt.Sprintf("%T", err))
@@ -414,6 +269,7 @@ func (s *Store) runAgentOnce(ctx context.Context) error {
 	var run workspace.Run
 	var scope memory.Scope
 	var token string
+	var entries []memory.EvidenceEntry
 	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		var ownerID, id string
 		var data []byte
@@ -425,11 +281,17 @@ func (s *Store) runAgentOnce(ctx context.Context) error {
 		if err := strictJSON(data, &run); err != nil {
 			return err
 		}
-		if err := verifyRunTx(ctx, tx, scope, run); err != nil {
+		if err := s.verifyRunTx(ctx, tx, scope, run); err != nil {
 			run.Status = "failed"
 			run.Error = "记忆或授权已变化，请重新生成"
 			_, err = tx.Exec(ctx, "UPDATE agent_runs SET status='failed',document=$3 WHERE owner_id=$1 AND id=$2", ownerID, id, asJSON(run))
 			return err
+		}
+		entries, err = s.hydrateRunInputTx(ctx, tx, scope, run)
+		if err != nil {
+			run.Status, run.Error = "failed", "来源或授权已变化，请重新生成"
+			_, e := tx.Exec(ctx, "UPDATE agent_runs SET status='failed',document=$3 WHERE owner_id=$1 AND id=$2", ownerID, id, asJSON(run))
+			return e
 		}
 		token = string(memory.NewID())
 		_, err = tx.Exec(ctx, "UPDATE agent_runs SET status='running',lease_token=$3,lease_until=now()+interval '5 minutes' WHERE owner_id=$1 AND id=$2", ownerID, id, token)
@@ -442,8 +304,18 @@ func (s *Store) runAgentOnce(ctx context.Context) error {
 		return err
 	}
 	workCtx, cancel := context.WithTimeout(ctx, 4*time.Minute)
-	result, generationErr := s.models.Generate(workCtx, run.AgentID, assistantInstructions, run.Brief)
+	candidates := run.ContextCandidates
+	indirect := indirectRunDependencies(run, entries)
+	result, attempt, generationErr := s.generateContext(workCtx, scope, run.ID, *run.ContextTask, run.ContextDependencies, entries, candidates, indirect, assistantInstructions+" 输出严格JSON，output为完整建议或草稿；used只列实际用于结论的资料引用（id/version/kind），未知不得虚构。", renderRunInput(run.Brief, entries), runOutputSchema)
 	cancel()
+	var answer runAnswer
+	if generationErr == nil {
+		if err := strictJSON([]byte(result.Text), &answer); err != nil || requireText(answer.Output) != nil {
+			generationErr = memory.ErrInvalid
+		} else if err := s.recordContextUsed(ctx, scope, attempt.ID, answer.Used); err != nil {
+			generationErr = err
+		}
+	}
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
@@ -460,7 +332,11 @@ func (s *Store) runAgentOnce(ctx context.Context) error {
 		}
 		current.FinishedAt = stamp()
 		current.Status = "done"
-		current.Output = result.Text
+		current.Output = answer.Output
+		current.ContextAttemptID = attempt.ID
+		if attempt.ID.Valid() && current.ContextTask != nil {
+			current.ContextTask.Recipient = attempt.Manifest.Recipient
+		}
 		if generationErr != nil {
 			current.Status = "failed"
 			current.Error = "模型调用未完成，结果和用量可能未确认；请检查登录、额度与服务配置"
@@ -472,11 +348,23 @@ func (s *Store) runAgentOnce(ctx context.Context) error {
 		} else {
 			current.Cost = result.Cost
 		}
-		if verifyRunTx(ctx, tx, scope, current) != nil {
+		verificationErr := s.verifyRunTx(ctx, tx, scope, current)
+		if verificationErr == nil && generationErr == nil {
+			verificationErr = verifyContextAttemptTx(ctx, tx, scope, attempt.ID, *current.ContextTask, current.ContextDependencies)
+		}
+		if verificationErr != nil {
 			current.StaleContext = true
 			current.Output = ""
 			current.Status = "failed"
 			current.Error = "生成期间记忆或授权已变化，请重新生成"
+		}
+		if current.Status == "done" {
+			if _, err := tx.Exec(ctx, "DELETE FROM context_artifact_dependencies WHERE owner_id=$1 AND parent_kind='run' AND parent_id=$2", string(scope.OwnerID), current.ID); err != nil {
+				return err
+			}
+			if err := persistContextArtifactDependenciesTx(ctx, tx, scope, "run", current.ID, 1, *current.ContextTask, current.ContextDependencies); err != nil {
+				return err
+			}
 		}
 		if _, err := tx.Exec(ctx, "UPDATE agent_runs SET status=$4,reserved_cost=$5,document=$6,lease_until=NULL,lease_token=NULL WHERE owner_id=$1 AND id=$2 AND lease_token=$3", string(scope.OwnerID), run.ID, token, current.Status, current.Cost, asJSON(current)); err != nil {
 			return err

@@ -6,10 +6,11 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"os"
 	"path/filepath"
 	"strings"
 	"sync/atomic"
@@ -17,6 +18,7 @@ import (
 	"time"
 
 	webpush "github.com/SherClockHolmes/webpush-go"
+	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/notify"
 	"github.com/soaringjerry/PCAS/internal/workspace"
@@ -63,7 +65,10 @@ func stabilizationTimeSnapshot(t *testing.T, s *Store, scope memory.Scope) works
 	return state
 }
 
-type stabilizationTimeChannel struct{ calls []notify.Message }
+type stabilizationTimeChannel struct {
+	calls []notify.Message
+	err   error
+}
 
 type stabilizationTimeTransport struct {
 	target   *url.URL
@@ -81,7 +86,7 @@ func (tr stabilizationTimeTransport) RoundTrip(request *http.Request) (*http.Res
 func (*stabilizationTimeChannel) Name() string { return "synthetic-mobile" }
 func (c *stabilizationTimeChannel) Send(_ context.Context, m notify.Message) error {
 	c.calls = append(c.calls, m)
-	return nil
+	return c.err
 }
 
 func stabilizationTimeCheck(t *testing.T, s *Store, at time.Time, channels ...notify.Channel) {
@@ -133,9 +138,6 @@ func stabilizationTimeSeedSchedule(t *testing.T, s *Store, scope memory.Scope, t
 }
 
 func TestR1_ElapsedLeadFallsBackAndElapsedDueHasNoReminder(t *testing.T) {
-	if os.Getenv("PCAS_STABILIZATION_REPRO") != "1" {
-		t.Skip("finding R1: elapsed lead/due retains past reminder; set PCAS_STABILIZATION_REPRO=1 to reproduce")
-	}
 	for _, past := range []bool{false, true} {
 		name := "future_due"
 		if past {
@@ -176,9 +178,6 @@ func TestR1_ElapsedLeadFallsBackAndElapsedDueHasNoReminder(t *testing.T) {
 }
 
 func TestR2_DateOnlyCreatedAfterNineFallsBackTo2359(t *testing.T) {
-	if os.Getenv("PCAS_STABILIZATION_REPRO") != "1" {
-		t.Skip("finding R2: date-only reminder retains elapsed 09:00 instead of 23:59; set PCAS_STABILIZATION_REPRO=1 to reproduce")
-	}
 	s := testStore(t)
 	scope := owner()
 	var loc *time.Location
@@ -209,6 +208,11 @@ func TestR2_DateOnlyCreatedAfterNineFallsBackTo2359(t *testing.T) {
 	if len(channel.calls) != 1 || len(stabilizationTimeSnapshot(t, s, scope).Notices) != 1 {
 		t.Fatal("date-only fallback reminder absent")
 	}
+	nextDate := localNow.AddDate(0, 0, 1)
+	nextDue := time.Date(nextDate.Year(), nextDate.Month(), nextDate.Day(), 23, 59, 0, 0, loc)
+	nextReminder := time.Date(nextDate.Year(), nextDate.Month(), nextDate.Day(), 9, 0, 0, 0, loc)
+	out = stabilizationTimeTurn(t, s, scope, map[string]any{"op": "update", "ref": "T1", "set": map[string]any{"due": nextDate.Format("2006-01-02")}})
+	stabilizationTimeReminder(t, stabilizationTimeTask(t, out.State, ""), nextDue.UTC().Format(time.RFC3339), nextReminder.UTC().Format(time.RFC3339), "09:00")
 }
 
 func TestR3_RescheduleRetainsLeadAndRemovingDueDeletesReminder(t *testing.T) {
@@ -254,9 +258,6 @@ func TestR4_CompletedBeforeReminderNeverSends(t *testing.T) {
 }
 
 func TestR5_UndoCompletionAfterOneHourNeverCatchesUp(t *testing.T) {
-	if os.Getenv("PCAS_STABILIZATION_REPRO") != "1" {
-		t.Skip("finding R5: undo completion sends reminder more than one hour late; set PCAS_STABILIZATION_REPRO=1 to reproduce")
-	}
 	s := testStore(t)
 	scope := owner()
 	now := time.Now().UTC().Truncate(time.Second)
@@ -416,30 +417,40 @@ func TestR10_TelegramStopsAfterFiveFailuresAndRecordsCause(t *testing.T) {
 		t.Fatal(err)
 	}
 	telegram := &notify.Telegram{Settings: settings, Client: server.Client(), BaseURL: server.URL}
+	healthy := &stabilizationTimeChannel{}
 	for attempt := range 8 {
-		stabilizationTimeCheck(t, s, now.Add(time.Duration(attempt)*time.Hour), telegram)
+		stabilizationTimeCheck(t, s, now.Add(time.Duration(attempt)*time.Hour), telegram, healthy)
 	}
 	state = stabilizationTimeSnapshot(t, s, scope)
 	t.Run("retry_limit_and_notice", func(t *testing.T) {
-		if calls.Load() != 5 || len(state.Notices) != 1 || state.Notices[0].DismissedAt != "" || stabilizationTimeTask(t, state, task.ID).Status != "todo" {
+		if calls.Load() != 5 || len(healthy.calls) != 1 || len(state.Notices) != 1 || state.Notices[0].DismissedAt != "" || stabilizationTimeTask(t, state, task.ID).Status != "todo" {
 			t.Fatalf("exhaustion/home data: sends=%d notices=%+v", calls.Load(), state.Notices)
 		}
 	})
 	t.Run("failure_log", func(t *testing.T) {
-		if os.Getenv("PCAS_STABILIZATION_REPRO") != "1" {
-			t.Skip("finding R10: Telegram exhaustion has no channel/error-type log; set PCAS_STABILIZATION_REPRO=1 to reproduce")
-		}
 		found := false
+		var retries, stopped int
 		for _, line := range strings.Split(strings.TrimSpace(logs.String()), "\n") {
 			var record map[string]any
 			if json.Unmarshal([]byte(line), &record) == nil && record["channel"] == "telegram" {
 				if category, ok := record["error_type"].(string); ok && category != "" && category != "none" {
 					found = true
+					if record["status"] == "retry" {
+						retries++
+					}
+					if record["status"] == "stopped" && record["attempt"] == float64(5) {
+						stopped++
+					}
 				}
 			}
 		}
-		if !found {
+		if !found || retries != 4 || stopped != 1 {
 			t.Fatalf("missing log with Telegram channel and error type; sends=%d logs=%s", calls.Load(), logs.String())
+		}
+		for _, sensitive := range []string{"synthetic-T2-token", server.URL, "synthetic Telegram outage", task.Title, task.ID} {
+			if strings.Contains(logs.String(), sensitive) {
+				t.Errorf("sensitive notification value in logs: %q", sensitive)
+			}
 		}
 	})
 }
@@ -493,5 +504,289 @@ func TestR11_ExpiredPushDeletedAndTelegramStillDelivers(t *testing.T) {
 	state = stabilizationTimeSnapshot(t, s, scope)
 	if err != nil || len(subs) != 0 || pushCalls.Load() != 1 || telegramCalls.Load() != 1 || len(state.Notices) != 1 {
 		t.Fatalf("expired push interfered with channels: subs=%+v err=%v push=%d telegram=%d notices=%+v", subs, err, pushCalls.Load(), telegramCalls.Load(), state.Notices)
+	}
+}
+
+func TestR1_FallbackRescheduleRestoresOriginalLead(t *testing.T) {
+	s := testStore(t)
+	scope := owner()
+	now := time.Now().UTC().Truncate(time.Second)
+	out := stabilizationTimeTurn(t, s, scope, map[string]any{"op": "create_task", "title": "恢复提前量", "due": now.Add(5 * time.Minute).Format(time.RFC3339)})
+	task := stabilizationTimeTask(t, out.State, "")
+	stabilizationTimeReminder(t, task, now.Add(5*time.Minute).Format(time.RFC3339), now.Add(5*time.Minute).Format(time.RFC3339), "-30m")
+	out = stabilizationTimeTurn(t, s, scope, map[string]any{"op": "update", "ref": "T1", "set": map[string]any{"due": now.Add(2 * time.Hour).Format(time.RFC3339)}})
+	stabilizationTimeReminder(t, stabilizationTimeTask(t, out.State, task.ID), now.Add(2*time.Hour).Format(time.RFC3339), now.Add(90*time.Minute).Format(time.RFC3339), "-30m")
+	out = stabilizationTimeTurn(t, s, scope, map[string]any{"op": "update", "ref": "T1", "set": map[string]any{"due": now.Add(-time.Minute).Format(time.RFC3339)}})
+	if len(stabilizationTimeTask(t, out.State, task.ID).Triggers) != 0 || !strings.Contains(out.Turn.Receipts[0].Text, "时间已过，没有设提醒") {
+		t.Fatalf("elapsed reschedule: task=%+v receipt=%+v", out.State.Tasks, out.Turn.Receipts)
+	}
+}
+
+func TestR2_MorningAfternoonAndRescheduleKeepClockPreference(t *testing.T) {
+	// Explicit expected local/UTC fixtures keep both sides of 09:00 stable.
+	loc, err := time.LoadLocation("Asia/Shanghai")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, fixture := range []struct{ now, next string }{
+		{"2099-01-05T08:00:00+08:00", "2099-01-05T01:00:00Z"},
+		{"2099-01-05T09:00:00+08:00", "2099-01-05T15:59:00Z"},
+		{"2099-01-05T15:00:00+08:00", "2099-01-05T15:59:00Z"},
+	} {
+		t.Run(fixture.now, func(t *testing.T) {
+			now, err := time.Parse(time.RFC3339, fixture.now)
+			if err != nil {
+				t.Fatal(err)
+			}
+			task := workspace.Item{Title: "日期偏好", Due: "2099-01-05T15:59:00Z"}
+			applyDueReminderAt(&task, "09:00", loc, now)
+			stabilizationTimeReminder(t, task, "2099-01-05T15:59:00Z", fixture.next, "09:00")
+			task.Due = "2099-01-06T15:59:00Z"
+			applyDueReminderAt(&task, "", loc, now)
+			stabilizationTimeReminder(t, task, "2099-01-06T15:59:00Z", "2099-01-06T01:00:00Z", "09:00")
+		})
+	}
+}
+
+func stabilizationTimeComplete(t *testing.T, s *Store, scope memory.Scope, taskID string) string {
+	t.Helper()
+	state := stabilizationTimeSnapshot(t, s, scope)
+	id := string(memory.NewID())
+	if _, err := s.Execute(context.Background(), scope, workspace.Command{Type: "setTaskStatus", ID: taskID, Status: "done", RequestID: id, ExpectedRevision: state.Revision}); err != nil {
+		t.Fatal(err)
+	}
+	return id
+}
+
+func TestR5_SuppressionSurvivesRestartAndContinuousUndo(t *testing.T) {
+	s := testStore(t)
+	scope := owner()
+	now := time.Now().UTC().Truncate(time.Second)
+	task := stabilizationTimeTask(t, workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "原标题"}), "")
+	stabilizationTimeSeedSchedule(t, s, scope, task, now.Add(-2*time.Hour), now.Add(-2*time.Hour))
+	state := stabilizationTimeSnapshot(t, s, scope)
+	renameID := string(memory.NewID())
+	if _, err := s.Execute(context.Background(), scope, workspace.Command{Type: "renameThing", ID: task.ID, Title: "改名", RequestID: renameID, ExpectedRevision: state.Revision}); err != nil {
+		t.Fatal(err)
+	}
+	completeID := stabilizationTimeComplete(t, s, scope, task.ID)
+	if _, err := s.Undo(context.Background(), scope, completeID); err != nil {
+		t.Fatal(err)
+	}
+	state, err := s.Undo(context.Background(), scope, renameID)
+	if err != nil || stabilizationTimeTask(t, state, task.ID).Title != "原标题" {
+		t.Fatal("earlier content fingerprint invalidated by reminder suppression", err)
+	}
+	dsn := s.pool.Config().ConnString()
+	s.Close()
+	restarted, err := Open(context.Background(), dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(restarted.Close)
+	channel := &stabilizationTimeChannel{}
+	stabilizationTimeCheck(t, restarted, now.Add(time.Minute), channel)
+	state = stabilizationTimeSnapshot(t, restarted, scope)
+	if len(channel.calls) != 0 || len(state.Notices) != 0 || stabilizationTimeTask(t, state, task.ID).Due != now.Add(-2*time.Hour).Format(time.RFC3339) {
+		t.Fatal("suppression did not survive restart or original due was lost")
+	}
+	for _, job := range state.Jobs {
+		if strings.HasPrefix(job.ID, "notice:") {
+			t.Fatal("suppression appeared as reminder job")
+		}
+	}
+	for _, activity := range state.Activity {
+		if strings.HasPrefix(activity.ID, "notice:") {
+			t.Fatal("suppression appeared as reminder activity")
+		}
+	}
+	out := stabilizationTimeTurn(t, restarted, scope, map[string]any{"op": "update", "ref": "T1", "set": map[string]any{"due": now.Add(2 * time.Hour).Format(time.RFC3339)}})
+	stabilizationTimeReminder(t, stabilizationTimeTask(t, out.State, task.ID), now.Add(2*time.Hour).Format(time.RFC3339), now.Add(2*time.Hour).Format(time.RFC3339), "at")
+	stabilizationTimeCheck(t, restarted, now.Add(2*time.Hour), channel)
+	if len(channel.calls) != 1 || len(stabilizationTimeSnapshot(t, restarted, scope).Notices) != 1 {
+		t.Fatal("future occurrence inherited old suppression")
+	}
+}
+
+func TestR5_FutureAndRecentRemindersRestoreButOrdinaryLateTaskCatchesUp(t *testing.T) {
+	for _, fixture := range []struct {
+		name    string
+		elapsed time.Duration
+		undo    bool
+	}{
+		{"future_undo", -time.Hour, true},
+		{"recent_undo", 30 * time.Minute, true},
+		{"ordinary_late_restart", 2 * time.Hour, false},
+	} {
+		t.Run(fixture.name, func(t *testing.T) {
+			s := testStore(t)
+			scope := owner()
+			now := time.Now().UTC().Truncate(time.Second)
+			at := now.Add(-fixture.elapsed)
+			task := stabilizationTimeTask(t, workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: fixture.name}), "")
+			stabilizationTimeSeedSchedule(t, s, scope, task, at, at)
+			if fixture.undo {
+				if _, err := s.Undo(context.Background(), scope, stabilizationTimeComplete(t, s, scope, task.ID)); err != nil {
+					t.Fatal(err)
+				}
+			}
+			dsn := s.pool.Config().ConnString()
+			s.Close()
+			restarted, err := Open(context.Background(), dsn)
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(restarted.Close)
+			channel := &stabilizationTimeChannel{}
+			if at.After(now) {
+				stabilizationTimeCheck(t, restarted, at.Add(-time.Second), channel)
+				if len(channel.calls) != 0 {
+					t.Fatal("future reminder sent before due")
+				}
+				now = at
+			}
+			stabilizationTimeCheck(t, restarted, now, channel)
+			stabilizationTimeCheck(t, restarted, now.Add(time.Minute), channel)
+			if len(channel.calls) != 1 || len(stabilizationTimeSnapshot(t, restarted, scope).Notices) != 1 {
+				t.Fatalf("eligible reminder not restored once: sends=%d", len(channel.calls))
+			}
+		})
+	}
+}
+
+func TestR5_PreviousDeliveryAndDismissalRemainAuthoritative(t *testing.T) {
+	for _, dismissed := range []bool{false, true} {
+		t.Run(fmt.Sprint(dismissed), func(t *testing.T) {
+			s := testStore(t)
+			scope := owner()
+			now := time.Now().UTC().Truncate(time.Second)
+			at := now.Add(-2 * time.Hour)
+			task := stabilizationTimeTask(t, workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "已真实发送"}), "")
+			stabilizationTimeSeedSchedule(t, s, scope, task, at, at)
+			channel := &stabilizationTimeChannel{}
+			stabilizationTimeCheck(t, s, at, channel)
+			original := stabilizationTimeSnapshot(t, s, scope).Notices[0]
+			if dismissed {
+				notifier := &Notifier{Store: s}
+				if _, err := notifier.DismissNotice(context.Background(), scope, original.ID); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if _, err := s.Undo(context.Background(), scope, stabilizationTimeComplete(t, s, scope, task.ID)); err != nil {
+				t.Fatal(err)
+			}
+			stabilizationTimeCheck(t, s, now, channel)
+			state := stabilizationTimeSnapshot(t, s, scope)
+			if len(channel.calls) != 1 || len(state.Notices) != 1 || state.Notices[0].ID != original.ID || (state.Notices[0].DismissedAt != "") != dismissed {
+				t.Fatal("existing notice or dismissal overwritten")
+			}
+			var delivered string
+			var hidden bool
+			if err := s.pool.QueryRow(context.Background(), `SELECT delivered->>'synthetic-mobile',delivered @> '{"_suppressionOnly":true}'::jsonb FROM workspace_notices WHERE id=$1`, original.ID).Scan(&delivered, &hidden); err != nil || delivered != at.Format(time.RFC3339) || hidden {
+				t.Fatalf("original delivery changed: timestamp=%q hidden=%v err=%v", delivered, hidden, err)
+			}
+		})
+	}
+}
+
+func TestR5_StrictHourBoundaryAndOnlyCompletionRestoration(t *testing.T) {
+	for _, fixture := range []struct {
+		name               string
+		elapsed            time.Duration
+		from, to           string
+		active, suppressed bool
+	}{
+		{"exact_hour", time.Hour, "done", "todo", true, false},
+		{"over_hour", time.Hour + time.Second, "done", "todo", true, true},
+		{"cancelled_restore", 2 * time.Hour, "cancelled", "todo", true, false},
+		{"edit_open", 2 * time.Hour, "todo", "todo", true, false},
+		{"restore_done", 2 * time.Hour, "done", "done", true, false},
+		{"inactive", 2 * time.Hour, "done", "todo", false, false},
+	} {
+		t.Run(fixture.name, func(t *testing.T) {
+			s := testStore(t)
+			scope := owner()
+			now := time.Date(2099, 1, 5, 12, 0, 0, 0, time.UTC)
+			task := stabilizationTimeTask(t, workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: fixture.name}), "")
+			current, restored := task, task
+			current.Status, restored.Status = fixture.from, fixture.to
+			restored.Triggers = []workspace.Trigger{{ID: "due-reminder", NextAt: now.Add(-fixture.elapsed).Format(time.RFC3339), Active: fixture.active}}
+			if err := pgx.BeginFunc(context.Background(), s.pool, func(tx pgx.Tx) error {
+				return suppressRestoredRemindersTx(context.Background(), tx, scope, current, restored, now)
+			}); err != nil {
+				t.Fatal(err)
+			}
+			var count int
+			if err := s.pool.QueryRow(context.Background(), "SELECT count(*) FROM workspace_notices WHERE owner_id=$1", string(scope.OwnerID)).Scan(&count); err != nil {
+				t.Fatal(err)
+			}
+			if (count == 1) != fixture.suppressed {
+				t.Fatalf("suppression rows=%d want suppressed=%v", count, fixture.suppressed)
+			}
+			if fixture.suppressed {
+				// Existing item deletion cascades internal occurrences too.
+				if _, err := s.pool.Exec(context.Background(), "DELETE FROM work_items WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), task.ID); err != nil {
+					t.Fatal(err)
+				}
+				if err := s.pool.QueryRow(context.Background(), "SELECT count(*) FROM workspace_notices WHERE owner_id=$1", string(scope.OwnerID)).Scan(&count); err != nil || count != 0 {
+					t.Fatal("suppression record did not follow item deletion", err)
+				}
+			}
+		})
+	}
+}
+
+func TestR10_UnknownChannelErrorsNeverExposeRawSensitiveText(t *testing.T) {
+	s := testStore(t)
+	scope := owner()
+	logs := secretaryLogs(t)
+	now := time.Now().UTC().Truncate(time.Second)
+	task := stabilizationTimeTask(t, workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "sensitive-body-F9"}), "")
+	stabilizationTimeSeedSchedule(t, s, scope, task, now, now)
+	channel := &stabilizationTimeChannel{err: errors.New("sensitive-body-F9 https://user:secret-F9@invalid/bot-token-F9")}
+	stabilizationTimeCheck(t, s, now, channel)
+	var record map[string]any
+	if err := json.Unmarshal([]byte(strings.TrimSpace(logs.String())), &record); err != nil || record["error_type"] != "channel_failed" || record["channel"] != "synthetic-mobile" || record["status"] != "retry" {
+		t.Fatalf("missing safe failure classification: %s err=%v", logs.String(), err)
+	}
+	for _, sensitive := range []string{"sensitive-body-F9", "secret-F9", "bot-token-F9", "https://", task.ID} {
+		if strings.Contains(logs.String(), sensitive) {
+			t.Errorf("raw notification data exposed: %q", sensitive)
+		}
+	}
+}
+
+func TestR5_PendingFailedOccurrenceStopsWithoutLosingRetryData(t *testing.T) {
+	s := testStore(t)
+	scope := owner()
+	now := time.Now().UTC().Truncate(time.Second)
+	at := now.Add(-2 * time.Hour)
+	task := stabilizationTimeTask(t, workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "历史失败提醒"}), "")
+	stabilizationTimeSeedSchedule(t, s, scope, task, at, at)
+	channel := &stabilizationTimeChannel{err: notify.ErrDelivery}
+	stabilizationTimeCheck(t, s, at, channel)
+	original := stabilizationTimeSnapshot(t, s, scope).Notices[0]
+	if _, err := s.Undo(context.Background(), scope, stabilizationTimeComplete(t, s, scope, task.ID)); err != nil {
+		t.Fatal(err)
+	}
+	stabilizationTimeCheck(t, s, now, channel)
+	state := stabilizationTimeSnapshot(t, s, scope)
+	if len(channel.calls) != 1 || len(state.Notices) != 1 || state.Notices[0].ID != original.ID {
+		t.Fatal("old failed occurrence retried or existing notice lost")
+	}
+	var raw []byte
+	if err := s.pool.QueryRow(context.Background(), "SELECT delivered FROM workspace_notices WHERE id=$1", original.ID).Scan(&raw); err != nil {
+		t.Fatal(err)
+	}
+	var fields map[string]json.RawMessage
+	var delivery deliveryState
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(raw, &delivery); err != nil {
+		t.Fatal(err)
+	}
+	if delivery.Attempts["synthetic-mobile"] != 1 || !delivery.RetryAt["synthetic-mobile"].Equal(at.Add(time.Minute)) || string(fields["_suppressed"]) != "true" || fields["_suppressionOnly"] != nil || fields["synthetic-mobile"] != nil {
+		t.Fatalf("retry metadata overwritten or success fabricated: %s", raw)
 	}
 }

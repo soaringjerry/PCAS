@@ -60,9 +60,15 @@ jobs:
           path: web/test-results/
           retention-days: 7
 
-  browser-real-backend:
+  browser-real-backend-round:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        round: [1, 2, 3]
+    env:
+      PCAS_REAL_BACKEND_ROUND: ${{ matrix.round }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -82,6 +88,22 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: real-backend-acceptance
+          name: real-backend-acceptance-round-${{ matrix.round }}
           path: web/test-results/
+          if-no-files-found: error
           retention-days: 7
+
+  # Keep one stable check; unsuccessful or skipped rounds must fail this gate.
+  browser-real-backend:
+    needs: browser-real-backend-round
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every real-backend round to succeed
+        env:
+          ROUND_RESULT: ${{ needs.browser-real-backend-round.result }}
+        run: |
+          if [[ "$ROUND_RESULT" != success ]]; then
+            echo "Real-backend rounds did not all succeed: $ROUND_RESULT"
+            exit 1
+          fi

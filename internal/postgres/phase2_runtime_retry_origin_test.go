@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/ai"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/workspace"
@@ -283,6 +284,14 @@ func TestPhase2RuntimeRetryPreservesGeneratedPromptOrigins(t *testing.T) {
 	for _, tc := range gold.Cases {
 		t.Run(tc.ID, func(t *testing.T) {
 			f := phase2RTRetrySetup(t, tc.ID == "RETRY-LIVE" || tc.ID == "RETRY-SCOPE-DENIED", tc.ID == "RETRY-OWNER-INDEPENDENT")
+			embedding := phase2RTRetryEmbeddingTrap(t, f)
+			if tc.ID != "RETRY-OWNER-INDEPENDENT" {
+				t.Cleanup(func() {
+					if embedding.count() != 0 {
+						t.Error("generated retry query reached unauthorized embedding recipient", embedding.count())
+					}
+				})
+			}
 			prompt := f.old.Prompt
 			if strings.HasSuffix(tc.ID, "PUNCTUATION_ONLY") || tc.ID == "RETRY-NEW-RECIPIENT" {
 				prompt += "。"
@@ -302,7 +311,11 @@ func TestPhase2RuntimeRetryPreservesGeneratedPromptOrigins(t *testing.T) {
 				workspaceCommand(t, f.s, f.scope, workspace.Command{Type: "addProject", ID: b, Name: "Retry studio B"})
 				hard := f.hard
 				hard.StudioID = memory.ID(b)
-				phase2RTAuthorize(t, f.s, f.scope, f.source.Ref, agent, "deputy", hard)
+				bPolicy, _ := phase2RTAuthorize(t, f.s, f.scope, f.source.Ref, agent, "deputy", hard)
+				assignments, err := f.s.SourceScope(context.Background(), f.scope, f.source.ID)
+				if err != nil || len(assignments.Assignments) != 1 || assignments.Assignments[0].StudioID != memory.ID(f.studio) || bPolicy.Authorization.Revoked || bPolicy.Authorization.Scope != hard {
+					t.Fatal("B denial must isolate actual source assignment from independent canonical B allow", err, assignments, bPolicy)
+				}
 				workspaceCommand(t, f.s, f.scope, workspace.Command{Type: "moveThing", ID: f.old.ThingID, ProjectID: b})
 				f.negative(t, f.scope, f.command(t, f.scope, f.old.ThingID, agent, prompt), memory.ErrForbidden)
 			case "RETRY-OWNER-INDEPENDENT":
@@ -312,6 +325,7 @@ func TestPhase2RuntimeRetryPreservesGeneratedPromptOrigins(t *testing.T) {
 					t.Fatal("owner old general-context stale positive control missing", err, original)
 				}
 				f.success(t, f.command(t, f.scope, f.old.ThingID, agent, prompt), f.deputy, true)
+				phase2RTRetryEmbeddingOnly(t, embedding, prompt)
 			case "RETRY-LOCATOR-CROSS_OWNER", "RETRY-LOCATOR-CROSS_THING":
 				scope := f.scope
 				want := memory.ErrForbidden
@@ -349,6 +363,12 @@ func TestPhase2RuntimeRetryManualAndFinalFence(t *testing.T) {
 	for _, name := range []string{"RETRY-MANUAL-LIVE", "RETRY-MANUAL-REVOKED", "RETRY-FINAL-BARRIER"} {
 		t.Run(name, func(t *testing.T) {
 			f := phase2RTRetrySetup(t, false, false)
+			embedding := phase2RTRetryEmbeddingTrap(t, f)
+			t.Cleanup(func() {
+				if embedding.count() != 0 {
+					t.Error("generated manual/final retry reached embedding recipient", embedding.count())
+				}
+			})
 			if name == "RETRY-FINAL-BARRIER" {
 				phase2RTRetryFinalBarrier(t, f)
 				return
@@ -388,76 +408,272 @@ func TestPhase2RuntimeRetryManualAndFinalFence(t *testing.T) {
 	}
 }
 
+// The original external-embedding barrier design is preserved in the first
+// harness commit/gold. The current contract forbids that generated query from
+// reaching embedding; a real owner-row wait proves prepare->final ordering.
 func phase2RTRetryFinalBarrier(t *testing.T, f *phase2RTRetryFixture) {
 	t.Helper()
-	entered, release := make(chan struct{}), make(chan struct{})
-	var once sync.Once
-	finish := func() { once.Do(func() { close(release) }) }
-	var raw []byte
-	var enteredAt time.Time
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+	defer cancel()
+	locker, err := pgx.ConnectConfig(ctx, f.s.pool.Config().ConnConfig.Copy())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer locker.Close(context.Background())
+	monitor, err := pgx.ConnectConfig(ctx, f.s.pool.Config().ConnConfig.Copy())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer monitor.Close(context.Background())
+	fixture, err := locker.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer fixture.Rollback(context.Background())
+	var revision int64
+	if err := fixture.QueryRow(ctx, "SELECT revision FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(f.scope.OwnerID)).Scan(&revision); err != nil {
+		t.Fatal(err)
+	}
+	lockedAt := time.Now().UTC()
+	lockerPID := int32(locker.PgConn().PID())
+	// The formal policy mutation enters the actual owner gate before retry.
+	type revokeResult struct {
+		receipt memory.SourceAuthorizationResult
+		err     error
+	}
+	revoked := make(chan revokeResult, 1)
+	in := memory.SourceAuthorizationRequest{RequestID: string(memory.NewID()), Source: f.source.Ref, PolicyID: f.secretary.Authorization.ID, ExpectedPolicyRevision: f.secretary.Authorization.Revision, Recipient: f.secretary.Authorization.Recipient, Purpose: f.secretary.Authorization.Purpose, Scope: f.secretary.Authorization.Scope, Revoke: true}
+	go func() {
+		receipt, err := f.s.SetSourceAuthorization(ctx, f.scope, in)
+		revoked <- revokeResult{receipt, err}
+	}()
+	wait := func(blocker int32) phase2RTRetryWait {
+		ticker := time.NewTicker(5 * time.Millisecond)
+		defer ticker.Stop()
+		for {
+			rows, err := monitor.Query(ctx, "SELECT pid,wait_event_type,wait_event,query,pg_blocking_pids(pid) FROM pg_stat_activity WHERE $1=ANY(pg_blocking_pids(pid))", blocker)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var found *phase2RTRetryWait
+			for rows.Next() {
+				var w phase2RTRetryWait
+				if err := rows.Scan(&w.PID, &w.WaitType, &w.WaitEvent, &w.Query, &w.Blockers); err != nil {
+					rows.Close()
+					t.Fatal(err)
+				}
+				if strings.Contains(w.Query, "SELECT revision FROM workspace_owners WHERE owner_id=$1 FOR UPDATE") {
+					w.ObservedAt = time.Now().UTC()
+					found = &w
+				}
+			}
+			err = rows.Err()
+			rows.Close()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if found != nil {
+				return *found
+			}
+			select {
+			case <-ctx.Done():
+				t.Fatal("real owner-row final wait not observed; no assumed prepared state", blocker)
+			case <-ticker.C:
+			}
+		}
+	}
+	revokeWait := wait(lockerPID)
+	command := workspace.Command{Type: "requestRun", ID: string(memory.NewID()), RequestID: string(memory.NewID()), ExpectedRevision: revision, ThingID: f.old.ThingID, AgentID: "phase2-model", Kind: "ask", Prompt: f.old.Prompt + "。", SourceRunID: f.old.ID}
+	type retryResult struct {
+		state workspace.State
+		err   error
+	}
+	retried := make(chan retryResult, 1)
+	go func() { st, err := f.s.Execute(ctx, f.scope, command); retried <- retryResult{st, err} }()
+	retryWait := wait(revokeWait.PID)
+	if retryWait.PID == revokeWait.PID || !retryWait.ObservedAt.After(revokeWait.ObservedAt) {
+		t.Fatal("two true prepare/final and revoke waiters were not independently observed", revokeWait, retryWait)
+	}
+	releasedAt := time.Now().UTC()
+	if err := fixture.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	var mutation revokeResult
+	select {
+	case mutation = <-revoked:
+	case <-ctx.Done():
+		t.Fatal("queued formal revoke did not commit")
+	}
+	returnedAt := time.Now().UTC()
+	if mutation.err != nil || !mutation.receipt.Authorization.Revoked || mutation.receipt.Authorization.Revision != f.secretary.Authorization.Revision+1 {
+		t.Fatal("queued formal source mutation failed", mutation)
+	}
+	policies, err := f.s.SourceAuthorizations(ctx, f.scope, f.source.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	persisted := false
+	for _, policy := range policies {
+		if policy.ID == f.secretary.Authorization.ID {
+			persisted = policy.Revoked && policy.ExplicitDeny && policy.Revision == mutation.receipt.Authorization.Revision
+		}
+	}
+	if !persisted {
+		t.Fatal("formal revoke returned without persistent expected deny")
+	}
+	var result retryResult
+	select {
+	case result = <-retried:
+	case <-ctx.Done():
+		t.Fatal("queued final retry did not return")
+	}
+	if !errors.Is(result.err, memory.ErrConflict) || f.capture.count() != 2 {
+		t.Fatal("actual queued final fence accepted revoked generated Prompt", result.err, f.capture.count())
+	}
+	var count int
+	if err := f.s.pool.QueryRow(ctx, "SELECT count(*) FROM agent_runs WHERE owner_id=$1 AND id=$2", string(f.scope.OwnerID), command.ID).Scan(&count); err != nil || count != 0 {
+		t.Fatal("revoked final retry committed a new Run", err, count)
+	}
+	phase2RTEvidence(t, "retry-final-owner-row-gate", map[string]any{"command": command, "fixture_pid": lockerPID, "locked_at": lockedAt, "revoke_wait": revokeWait, "retry_final_wait": retryWait, "fixture_release_at": releasedAt, "formal_revoke_returned_at": returnedAt, "formal_revoke_receipt": mutation.receipt, "persistent_source_policies": policies, "error": phase2RTRetryError(result.err), "new_runs": count, "new_deputy_http": f.capture.count() - 2})
+}
+
+type phase2RTRetryWait struct {
+	PID                        int32
+	WaitType, WaitEvent, Query string
+	Blockers                   []int32
+	ObservedAt                 time.Time
+}
+
+type phase2RTRetryEmbedding struct {
+	mu       sync.Mutex
+	requests [][]byte
+}
+
+func (e *phase2RTRetryEmbedding) count() int {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return len(e.requests)
+}
+func phase2RTRetryEmbeddingTrap(t *testing.T, f *phase2RTRetryFixture) *phase2RTRetryEmbedding {
+	t.Helper()
+	e := &phase2RTRetryEmbedding{}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var err error
-		raw, err = io.ReadAll(r.Body)
+		raw, err := io.ReadAll(r.Body)
 		if err != nil {
 			t.Error(err)
 		}
-		enteredAt = time.Now().UTC()
-		close(entered)
-		select {
-		case <-release:
-		case <-r.Context().Done():
-			return
-		}
+		e.mu.Lock()
+		e.requests = append(e.requests, append([]byte(nil), raw...))
+		e.mu.Unlock()
+		phase2RTEvidence(t, "retry-embedding-wire-"+string(memory.NewID()), map[string]any{"actual_payload": json.RawMessage(raw)})
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"data":[{"index":0,"embedding":[1,0,0]}],"usage":{"prompt_tokens":1,"total_tokens":1}}`))
 	}))
 	t.Cleanup(server.Close)
-	t.Cleanup(finish)
 	f.capture.Registry.Config.Embedding = "phase2-retry-embedding"
 	f.capture.Registry.Config.Providers = append(f.capture.Registry.Config.Providers, ai.Provider{ID: "phase2-retry-embedding", Protocol: "openai", BaseURL: server.URL, Model: "synthetic-vector", Embedding: true, CostMode: "free"})
-	command := f.command(t, f.scope, f.old.ThingID, "phase2-model", f.old.Prompt+"。")
-	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
-	defer cancel()
-	type result struct {
-		state workspace.State
-		err   error
+	return e
+}
+func phase2RTRetryEmbeddingOnly(t *testing.T, e *phase2RTRetryEmbedding, want string) {
+	t.Helper()
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if len(e.requests) != 1 {
+		t.Fatal("ordinary current owner vector query was disabled or duplicated", len(e.requests))
 	}
-	done := make(chan result, 1)
-	go func() { st, err := f.s.Execute(ctx, f.scope, command); done <- result{st, err} }()
-	select {
-	case <-entered:
-	case r := <-done:
-		t.Fatal("public retry never entered external embedding barrier", r.err)
-	case <-ctx.Done():
-		t.Fatal("public embedding barrier not reached")
+	var payload struct {
+		Input []string `json:"input"`
 	}
-	if !strings.Contains(string(raw), "RETRY-GENERATED-PROMPT-864") || !strings.Contains(string(raw), phase2RTGoldRead(t).Records[0].Atoms[0]) {
-		t.Error("external prepared query positive control lost original generated prompt", string(raw))
+	if err := json.Unmarshal(e.requests[0], &payload); err != nil || len(payload.Input) != 1 || payload.Input[0] != want {
+		t.Fatal("embedding recipient received anything beyond exact current owner text", err, string(e.requests[0]), want)
 	}
-	// Revoke through the real policy API while the external query is suspended.
-	revoked := phase2RTUpdatePolicy(t, f.s, f.scope, f.source.Ref, f.secretary, true)
-	revokedAt := time.Now().UTC()
-	if !revoked.Authorization.Revoked || !revokedAt.After(enteredAt) {
-		t.Fatal("formal source revoke did not commit during external preparation", revoked)
+}
+
+func TestPhase2RuntimeRetryQueryIsolationAndDestinationExclusion(t *testing.T) {
+	for _, name := range []string{"RETRY-TARGET-EXCLUDED", "SECRETARY-EMBED-CURRENT-QUERY-ONLY"} {
+		t.Run(name, func(t *testing.T) {
+			s, scope, capture := phase2RTSetup(t)
+			if name == "SECRETARY-EMBED-CURRENT-QUERY-ONLY" {
+				source := phase2RTSource(t, s, scope)
+				phase2RTAuthorize(t, s, scope, source.Ref, "phase2-model", "secretary", phase2RTUnscoped())
+				capture.mu.Lock()
+				capture.Reply = string(asJSON(map[string]any{"reply": "EMBED-PRIOR-ANSWER-869 " + phase2RTGoldRead(t).Records[0].Atoms[0], "used": []any{}, "links": []any{}, "show": []any{}, "remember": false, "ask": nil, "actions": []any{}}))
+				capture.mu.Unlock()
+				firstRequest := workspace.DeskTurnRequest{RequestID: string(memory.NewID()), AgentID: "phase2-model", Text: phase2RTGoldRead(t).Cases[0].Query}
+				first, err := s.DeskTurn(context.Background(), scope, firstRequest)
+				if err != nil || capture.count() != 1 {
+					t.Fatal("actual prior secretary raw Input missing", err, capture.count())
+				}
+				phase2RTSnapshotForSource(t, s, scope, source.Ref, "secretary", firstRequest.RequestID, capture.request(t, 0))
+				f := &phase2RTRetryFixture{s: s, scope: scope, capture: capture}
+				embedding := phase2RTRetryEmbeddingTrap(t, f)
+				const currentQuery = "请继续给普通建议 EMBED-OWNER-NOW-870"
+				next := workspace.DeskTurnRequest{RequestID: string(memory.NewID()), ConversationID: &first.ConversationID, AgentID: "phase2-model", Text: currentQuery}
+				out, err := s.DeskTurn(context.Background(), scope, next)
+				if err != nil || capture.count() != 2 {
+					t.Fatal("ordinary secretary/vector follow-up failed", err, capture.count())
+				}
+				phase2RTRetryEmbeddingOnly(t, embedding, currentQuery)
+				if !strings.Contains(string(capture.request(t, 1)), "EMBED-PRIOR-ANSWER-869") {
+					t.Error("secretary positive history was lost while restricting embedding")
+				}
+				phase2RTEvidence(t, "secretary-current-only-embedding", map[string]any{"first": first, "current_request": next, "second": out, "actual_model_http": json.RawMessage(capture.request(t, 1)), "embedding_calls": embedding.count()})
+				return
+			}
+			phase2RTRetryFailFirstDeputy(t, capture)
+			_, claim := phase2RTClaimFixture(t, s, scope, "排除边界合成资料：约定代码 EXCLUDED-CLAIM-871。", "排除边界约定代码是 EXCLUDED-CLAIM-871。", "fact")
+			capture.mu.Lock()
+			capture.Reply = string(asJSON(map[string]any{"reply": "EXCLUDED-CLAIM-RECEIPT-872", "used": []any{}, "links": []any{}, "show": []any{}, "remember": false, "ask": nil, "actions": []any{map[string]any{"op": "delegate", "ref": "new", "title": "排除边界安排", "prompt": "整理排除边界约定代码 EXCLUDED-CLAIM-871", "kind": "draft"}}}))
+			capture.mu.Unlock()
+			request := workspace.DeskTurnRequest{RequestID: string(memory.NewID()), AgentID: "phase2-model", Text: "排除边界约定代码是什么，请交副手整理"}
+			original, err := s.DeskTurn(context.Background(), scope, request)
+			if err != nil || capture.count() != 1 {
+				t.Fatal("formal claim-derived delegation missing", err, original)
+			}
+			old := phase2RTDelegatedRun(t, original)
+			phase2RTRequireDelegatePromptOrigin(t, old, original)
+			actual, err := s.ContextAttempts(context.Background(), scope, request.RequestID)
+			if err != nil || len(actual) != 1 {
+				t.Fatal(err, actual)
+			}
+			supplied := false
+			for _, entry := range actual[0].Manifest.Input {
+				supplied = supplied || entry.Ref == claim
+			}
+			if !supplied || !strings.Contains(string(capture.request(t, 0)), "EXCLUDED-CLAIM-871") {
+				t.Fatal("claim must actually be supplied before exclusion", actual)
+			}
+			if err := s.runAgentOnce(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			old = phase2RTWaitRun(t, s, scope, old.ID)
+			if old.Status != "failed" || capture.count() != 2 {
+				t.Fatal("real first failed deputy HTTP missing", old, capture.count())
+			}
+			f := &phase2RTRetryFixture{s: s, scope: scope, capture: capture, old: old, origin: phase2RTPromptOriginIDs(t, old)[0]}
+			embedding := phase2RTRetryEmbeddingTrap(t, f)
+			workspaceCommand(t, s, scope, workspace.Command{Type: "toggleContextMemory", ThingID: old.ThingID, MemoryID: string(claim.ID)})
+			var exists bool
+			if err := s.pool.QueryRow(context.Background(), "SELECT EXISTS(SELECT 1 FROM context_exclusions WHERE owner_id=$1 AND thing_id=$2 AND memory_id=$3)", string(scope.OwnerID), old.ThingID, string(claim.ID)).Scan(&exists); err != nil || !exists {
+				t.Fatal("formal destination exclusion failed to persist", err, exists)
+			}
+			// Exclusion belongs only to this destination; producer/claim permission is
+			// still live in a normal independent formal Recall outside this item.
+			reader := phase2RTTask(t, s, scope, "phase2-model", "secretary", phase2RTUnscoped())
+			recalled := phase2RTRecall(t, s, reader, "排除边界约定代码")
+			present := false
+			for _, ref := range recalled.Memories {
+				present = present || ref == claim
+			}
+			if !present {
+				t.Fatal("claim/producer positive control was revoked instead of item-excluded")
+			}
+			beforeEmbedding := embedding.count()
+			f.negative(t, scope, f.command(t, scope, old.ThingID, "phase2-model", old.Prompt+"。"), memory.ErrConflict)
+			if embedding.count() != beforeEmbedding {
+				t.Error("excluded generated Prompt reached embedding before final rejection")
+			}
+			phase2RTEvidence(t, "retry-formal-exclusion", map[string]any{"claim": claim, "secretary_actual_input": actual[0], "original": original, "excluded_thing": old.ThingID, "independent_claim_recall": recalled, "retry_embedding_delta": embedding.count() - beforeEmbedding})
+		})
 	}
-	select {
-	case r := <-done:
-		t.Fatal("Execute returned before public embedding barrier was released", r.err)
-	default:
-	}
-	finish()
-	var r result
-	select {
-	case r = <-done:
-	case <-ctx.Done():
-		t.Fatal("retry final stage did not return after embedding release")
-	}
-	if !errors.Is(r.err, memory.ErrConflict) || f.capture.count() != 2 {
-		t.Fatal("final retry fence failed to reject source revocation", r.err, f.capture.count())
-	}
-	var count int
-	if err := f.s.pool.QueryRow(context.Background(), "SELECT count(*) FROM agent_runs WHERE owner_id=$1 AND id=$2", string(f.scope.OwnerID), command.ID).Scan(&count); err != nil || count != 0 {
-		t.Fatal("final revoked retry committed a new Run", err, count)
-	}
-	phase2RTEvidence(t, "retry-final-public-embedding-barrier", map[string]any{"command": command, "actual_embedding_request": json.RawMessage(raw), "embedding_entered_at": enteredAt, "formal_revoke_returned_at": revokedAt, "revoked_policy_receipt": revoked, "error": phase2RTRetryError(r.err), "new_runs": count, "deputy_http_delta": f.capture.count() - 2})
 }

@@ -26,3 +26,11 @@
 503通过真实loopback代理返回，内层复用原RT capture的schema协议；每次actual请求/外层status/实际响应单独保留，未SQL造failed。manual实际GET正文/DeliveredAt/unknown/当前接收者及exact源Indirect均核。receipt真实两turn/严格逆Undo/HTTP history/原actionID与实际typed依赖分别核。
 
 原外部embedding barrier设计保留为本基线的诊断方案：会保实际query、到达时刻、正式撤权回执/返回时刻及最终Run0。但新审阅确认派生query不具embedding独立许可，这是**未动态执行的已知设计缺口**，不能把该barrier或compile当新的embedding授权通过。root批准下一追加修订使用真实owner行锁等待观察隔离final竞态，同时generated retry embedding trap0；旧gold/设计原文保留，不通过skip或SQL状态注入处理。
+
+## 查询边界与 final gate 追加修订
+
+root已审 `0964d35` / 独立gold `e8d6495`。generated retry embedding trap必须0；owner origins为空的原正控仍实际调用vector，解码input恰本轮Prompt。新增claim正式destination exclusion与秘书本轮query-only两叶；原18叶不删，变为**20新真叶**，加原continuation3叶是**23因果叶**。原gold与首次外部embedding设计保留在前一提交，未执行、不能称通过。
+
+final gate使用独立fixture/monitor连接，仅对实际workspace_owners行SELECT FOR UPDATE，不修改任何状态。正式SetSourceAuthorization先排队，监测pg_stat_activity/pg_blocking_pids实际PID/query/wait；retry真实prepare/本地Recall后在同owner行排队，观察其被先到撤权PID挡住才放行。保存两PID/依赖链/时刻，分别核正式撤权返回与持久deny、final精确Conflict、Run0/模型0。4秒观察超时直接失败，无SQL prepared注入、任意sleep到达推定或重试。
+
+旧UX三叶仅迁移embedding传输层：实际input恰 `Continue that`；`Ordinary permitted plan`仍须实际GET package包含，482910/package/ContextMemoryIDs/scope原断言不变。**package证明合法历史续作保留，不能单独证明Recall lexical query动态含历史**；完整本地query的组成依契约与prepare静态审阅，当前没有动态query捕获，未虚构该证据。旧gold的“proof local full query still used”由本段精确限定，原文件不改。

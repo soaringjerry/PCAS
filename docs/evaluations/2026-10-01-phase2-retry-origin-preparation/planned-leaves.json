@@ -1,0 +1,32 @@
+{
+  "base_product": "3f30ad4cc5d3d38dca4e59f6a95645c264816fc2",
+  "selected_top": 5,
+  "planned_true_leaves": 23,
+  "expected_live_opt_in_selected": 0,
+  "leaf_names": [
+    "TestPhase2RuntimeRetryPreservesGeneratedPromptOrigins/RETRY-LIVE",
+    "TestPhase2RuntimeRetryPreservesGeneratedPromptOrigins/RETRY-NEW-RECIPIENT",
+    "TestPhase2RuntimeRetryPreservesGeneratedPromptOrigins/RETRY-INVALID-REVOKE_SECRETARY_ONLY-ORIGINAL_PROMPT",
+    "TestPhase2RuntimeRetryPreservesGeneratedPromptOrigins/RETRY-INVALID-REVOKE_SECRETARY_ONLY-PUNCTUATION_ONLY",
+    "TestPhase2RuntimeRetryPreservesGeneratedPromptOrigins/RETRY-INVALID-CORRECT_SOURCE_TO_V2-ORIGINAL_PROMPT",
+    "TestPhase2RuntimeRetryPreservesGeneratedPromptOrigins/RETRY-INVALID-CORRECT_SOURCE_TO_V2-PUNCTUATION_ONLY",
+    "TestPhase2RuntimeRetryPreservesGeneratedPromptOrigins/RETRY-INVALID-DELETE_SOURCE-ORIGINAL_PROMPT",
+    "TestPhase2RuntimeRetryPreservesGeneratedPromptOrigins/RETRY-INVALID-DELETE_SOURCE-PUNCTUATION_ONLY",
+    "TestPhase2RuntimeRetryPreservesGeneratedPromptOrigins/RETRY-TARGET-DENIED",
+    "TestPhase2RuntimeRetryPreservesGeneratedPromptOrigins/RETRY-SCOPE-DENIED",
+    "TestPhase2RuntimeRetryPreservesGeneratedPromptOrigins/RETRY-OWNER-INDEPENDENT",
+    "TestPhase2RuntimeRetryPreservesGeneratedPromptOrigins/RETRY-LOCATOR-CROSS_OWNER",
+    "TestPhase2RuntimeRetryPreservesGeneratedPromptOrigins/RETRY-LOCATOR-CROSS_THING",
+    "TestPhase2RuntimeRetryManualAndFinalFence/RETRY-MANUAL-LIVE",
+    "TestPhase2RuntimeRetryManualAndFinalFence/RETRY-MANUAL-REVOKED",
+    "TestPhase2RuntimeRetryManualAndFinalFence/RETRY-FINAL-BARRIER",
+    "TestPhase2RuntimeOwnerUndoReceiptAuditNeverRestoresSourceText/RECEIPT-EMPTY",
+    "TestPhase2RuntimeOwnerUndoReceiptAuditNeverRestoresSourceText/RECEIPT-SOURCE",
+    "TestPhase2RuntimeRetryQueryIsolationAndDestinationExclusion/RETRY-TARGET-EXCLUDED",
+    "TestPhase2RuntimeRetryQueryIsolationAndDestinationExclusion/SECRETARY-EMBED-CURRENT-QUERY-ONLY",
+    "TestContinuationHonorsCurrentItemScopeBeforeSemanticRetrieval/exclude",
+    "TestContinuationHonorsCurrentItemScopeBeforeSemanticRetrieval/move-project",
+    "TestContinuationHonorsCurrentItemScopeBeforeSemanticRetrieval/revoke"
+  ],
+  "dynamic_completed": false
+}

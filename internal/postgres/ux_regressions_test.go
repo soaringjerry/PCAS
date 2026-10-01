@@ -363,8 +363,11 @@ func TestContinuationHonorsCurrentItemScopeBeforeSemanticRetrieval(t *testing.T)
 			}
 			s.SetModels(&ai.Registry{HTTP: server.Client(), Config: ai.Configuration{Embedding: "vector", Providers: []ai.Provider{{ID: "vector", Name: "Vector", Protocol: "openai", BaseURL: server.URL, Model: "test", Embedding: true, CostMode: "free"}, manualDestination}}})
 			st = workspaceCommand(t, s, scope, workspace.Command{Type: "requestRun", ThingID: item.ID, AgentID: "manual", ManualRecipient: &memory.Recipient{Provider: phase2ManualProvider}, Kind: "draft", Prompt: "Continue that"})
-			if embeddingInput == "" || strings.Contains(embeddingInput, "482910") || !strings.Contains(embeddingInput, "Ordinary permitted plan") {
-				t.Fatalf("semantic query lost permitted history or leaked denied result: %s", embeddingInput)
+			var embeddingWire struct {
+				Input []string `json:"input"`
+			}
+			if err := json.Unmarshal([]byte(embeddingInput), &embeddingWire); err != nil || len(embeddingWire.Input) != 1 || embeddingWire.Input[0] != "Continue that" || strings.Contains(embeddingInput, "482910") {
+				t.Fatalf("embedding query must contain only current independent Prompt; denied content remains absent: %s (%v)", embeddingInput, err)
 			}
 			pkg := phase2RTGetPackage(t, s, scope, st.Runs[0])
 			if strings.Contains(pkg.Text, "482910") || !strings.Contains(pkg.Text, "Ordinary permitted plan") || oneOf(m.ID, st.Runs[0].ContextMemoryIDs...) {

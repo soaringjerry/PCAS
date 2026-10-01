@@ -126,6 +126,8 @@ func (s *Store) AnswerDesk(ctx context.Context, scope memory.Scope, agentID, que
 		sent[m.ID] = memory.Ref{ID: memory.ID(m.ID), Version: m.Version, Kind: memory.ClaimKind}
 		dependencies = append(dependencies, sent[m.ID])
 	}
+	// History turns repeat their own dependencies; keep the stored list a set.
+	dependencies = uniqueRefs(dependencies)
 	if len(sent) == 0 {
 		fmt.Fprintln(&prompt, "（没有）")
 	}

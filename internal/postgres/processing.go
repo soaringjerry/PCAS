@@ -3,7 +3,6 @@ package postgres
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strconv"
 	"strings"
 	"unicode"
@@ -387,9 +386,16 @@ func (s *Store) ProcessExtraction(ctx context.Context, j worker.Job) error {
 		return err
 	}
 
+	// A subscription call reserves no per-request cost, so a failed or unusable
+	// one is retried with the queue's bounded backoff. A metered provider keeps
+	// waiting for an explicit retry: its request may already have been billed.
+	free := p.Reserve(extractionInstructions+prompt) == 0
 	result, err := s.models.Generate(ctx, p.ID, extractionInstructions, prompt)
+	if errors.Is(err, memory.ErrUnavailable) {
+		return err // no usable provider: retrying cannot help until it is configured
+	}
 	if err != nil {
-		return fmt.Errorf("%w: %w", memory.ErrUnavailable, err)
+		return &worker.JobError{Code: "model_call_failed", Retry: free}
 	}
 	text := strings.TrimSpace(result.Text)
 	text = strings.TrimPrefix(text, "```json")
@@ -397,7 +403,7 @@ func (s *Store) ProcessExtraction(ctx context.Context, j worker.Job) error {
 	text = strings.TrimSuffix(text, "```")
 	var extraction extracted
 	if strictJSON([]byte(strings.TrimSpace(text)), &extraction) != nil || len(extraction.Items) > 30 {
-		return memory.ErrUnavailable
+		return &worker.JobError{Code: "model_output_invalid", Retry: free}
 	}
 	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(j.OwnerID)); err != nil {

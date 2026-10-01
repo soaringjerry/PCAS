@@ -312,6 +312,9 @@ func (s *Store) snapshotTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) (
 		}
 		if state == "blocked" {
 			j.Recovery = "配置对应模型或处理器后重试"
+			if oneOf(code, "model_call_failed", "model_output_invalid") {
+				j.Recovery = "可以直接重试"
+			}
 		}
 		out.Jobs = append(out.Jobs, j)
 	}
@@ -594,6 +597,10 @@ func jobProblem(code string) string {
 		return "原文已经删除"
 	case "attempts_exhausted", "processing_failed":
 		return "试了几次没成功"
+	case "model_call_failed":
+		return "模型调用没成功"
+	case "model_output_invalid":
+		return "模型的输出没看懂"
 	}
 	return "没做完"
 }

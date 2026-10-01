@@ -277,6 +277,9 @@ func (s *Store) secretaryPrompt(ctx context.Context, tx pgx.Tx, scope memory.Sco
 		fmt.Fprintf(&prompt, "[%s / %s / confirmation=%s / acquisition=%s] %s\n", alias, m.Epistemic, m.Confirmation, m.Acquisition, m.Text)
 		c.Dependencies = append(c.Dependencies, memory.Ref{ID: memory.ID(m.ID), Version: m.Version, Kind: memory.ClaimKind})
 	}
+	// Each of the last turns already carries its own history. Without this the
+	// stored list doubles every turn of a conversation.
+	c.Dependencies = uniqueRefs(c.Dependencies)
 	if len(sent) == 0 {
 		fmt.Fprintln(&prompt, "（没有）")
 	}

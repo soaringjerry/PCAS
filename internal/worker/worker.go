@@ -14,6 +14,17 @@ import (
 
 var ErrLeaseLost = errors.New("job lease lost")
 
+// JobError lets a handler record a fixed failure category instead of the
+// generic ones below. Code is stored and logged, so it must never contain
+// source text, provider responses or credentials. Retry asks for the queue's
+// bounded backoff; otherwise the job waits for an explicit retry.
+type JobError struct {
+	Code  string
+	Retry bool
+}
+
+func (e *JobError) Error() string { return e.Code }
+
 type Job struct {
 	ID         memory.ID
 	OwnerID    memory.ID
@@ -61,11 +72,18 @@ func (w *Worker) RunOnce(ctx context.Context) (bool, error) {
 	if ctx.Err() != nil {
 		return true, ctx.Err()
 	} // lease recovery handles shutdown
-	w.logger.Warn("memory job failed", "job_id", job.ID, "stage", job.Stage, "attempt", job.Attempts)
-	if errors.Is(err, memory.ErrUnavailable) {
-		return true, ignoreLostLease(w.queue.Block(ctx, *job, "provider_not_configured"))
+	code, retry := "processing_failed", true
+	var failure *JobError
+	if errors.As(err, &failure) {
+		code, retry = failure.Code, failure.Retry
+	} else if errors.Is(err, memory.ErrUnavailable) {
+		code, retry = "provider_not_configured", false
 	}
-	return true, ignoreLostLease(w.queue.Retry(ctx, *job, "processing_failed"))
+	w.logger.Warn("memory job failed", "job_id", job.ID, "stage", job.Stage, "attempt", job.Attempts, "error_type", code)
+	if retry {
+		return true, ignoreLostLease(w.queue.Retry(ctx, *job, code))
+	}
+	return true, ignoreLostLease(w.queue.Block(ctx, *job, code))
 }
 
 func ignoreLostLease(err error) error {

@@ -67,9 +67,35 @@ env -u PCAS_TEST_CODEX_BINARY -u PCAS_LIVE_CODEX_HOME \
 
 F13 迁移前 `action_order=NULL` 的历史并列，只在回执唯一且能证明先后时重建顺序；未知并列保守 `changed_since`。这项已写入正式契约与作者报告，不能把新链全部通过推广为任意旧链可自动恢复。A1 原报告的三轮执行顺序风险、多行草稿/键盘边界仍保留为历史与后续 UX 验证输入。
 
+## 并行 UX 独立专项：冻结构建，不是最终候选
+
+用户要求继续并行后，T4 只新增 `web/tests/usability-acceptance.spec.ts` 和获分配的 mock CI 列表；未读 U2 作者新测试来照抄 oracle，没有改产品。CI 保留原五文件并追加 `settings-things-ux.spec.ts` 与独立 `usability-acceptance.spec.ts`；真实 runner、超时与业务断言未改。
+
+按协调者授权，只读复制 U2 尚未提交的第一版 `web/dist` 至 `/tmp/pcas-test-T4/ux-checkpoint-dist`，复制前/后/副本的九文件 asset 清单与 SHA256 完全一致。checkpoint 指纹 **`05e3270ea93cd5f54832729cabb3738478d95a07c2bab4585ac69216765f2478`**，复制时间 `2026-10-01T08:16:48 UTC`，index 构建 `08:15:18 UTC`。唯一晚于构建的源文件为 `thing.css`（08:16:21 UTC），因此这里只评价冻结的第一版构建，不能推广为当前源或最终候选。清单与时间在 `ux-checkpoint-manifest.json`。
+
+独立 18 场景覆盖：三设置开关只 patch 各自字段，预算/模型默认/记忆权限不被静默修改；每模型 enabled/includeInferred 显式修改仅写对应字段；连接、接入与记忆范围折叠用键盘可开合且不发写入；1440/390 的保存拒绝/重试、等待期间快速点击只发一次、说明草稿与原目标保留、焦点及横向溢出；真实 Library 待确认入口；task/idea/memory 精确命令与 memoryKind；unknown 在没有明确选择时零写入，点具体去向按钮才提交对应有效 kind；忽略使用 ignoreCandidate、不删除来源、不提供假撤销；接受后仅服务端 resolvedInto 与事项匹配时有正确入口，无可靠目标不猜 ID 导航。直接结果按钮是有效选择，不机械要求旧下拉/disabled 流程，也不固定作者的同义词偏好。
+
+测试开发的差异已分类并保留日志：首轮 16 场景 12 pass/4 fail，失败是不可用订阅 fixture 不应要求 ChatGPT heading，以及先验文案句子并非契约要求；按可见公开定位校准后，字段/来源/无假撤销断言保持。扩展 18 场景运行为 17 pass/1 fail，最后一项因 fixture 把模型设为停用、权限控件合法 disabled；显式权限修改改用已启用模型后，仅该变动例重跑 1/1 pass。停用模型原默认仍由其他保存/折叠用例验证。**这是分轮专项覆盖，不声称单次 18/18 或最终候选全绿；没有确认产品缺陷。**
+
+```sh
+# A1/web，自有静态冻结预览 18156，所有 v1 请求均由独立 mock 拦截。
+PCAS_TEST_BASE_URL=http://127.0.0.1:18156 \
+ PLAYWRIGHT_JSON_OUTPUT_NAME=/tmp/pcas-test-T4/ux-checkpoint-18.json \
+ npx playwright test tests/usability-acceptance.spec.ts \
+ --output=test-results/T4-ux-checkpoint-18 --reporter=list,json
+# 同一冻结构建，fixture 修正仅重跑 explicit includeInferred。
+npx eslint tests/usability-acceptance.spec.ts
+npx tsc --noEmit --target ES2023 --module ESNext --moduleResolution Bundler \
+ --skipLibCheck tests/usability-acceptance.spec.ts
+```
+
+独立 spec eslint/TypeScript 检查退出 0；浏览器原始日志 `ux-checkpoint-16.log`、`ux-checkpoint-18.log/json`、`ux-checkpoint-permission.log/json` 保留，trace 在 A1/web/test-results。预览使用自有持续进程、记录 PID 后精确停止，18156/18157 无监听。桌面 Chromium 的 390 宽与键盘焦点测试不等于真实手机软键盘验收。
+
+只读审查 U2 当前四个既有真实 spec：chatgpt-direct 加两个连接展开；continuity 加接入展开；model-api 初次/重载各加 API 展开；golden 三处按钮名定位更新。现有权限、数据、secret redaction、错误、状态、撤销断言均保留，未改 skip/retry/timeout/runner。最终提交仍须核对完整 diff。
+
 ## 后续验证与资源
 
-用户追加设置页/事项页 UX 工作后，协调者要求完整前端检查、mock 与默认真实后端 browser 留待 U2 最终输入，避免重复验证同一前端候选。因此当前没有推中间候选或更新 #32；待整体最终检查后一次推送并更新现有 Draft PR。若后端产品树未变，不重复已完成的 Go 全量检查。
+用户追加设置页/事项页 UX 工作后，协调者要求完整前端检查、mock 与默认真实后端 browser 留待 U2 最终输入，避免重复验证同一前端候选。因此当前没有推中间候选或更新 #32；待整体最终检查后一次推送并更新现有 Draft PR。Q1 后续确认三轮执行顺序问题，F15 正在独立修复并将改变后端；最终合入后会合理重跑完整 Go 隔离验收，210144a 的既有绿色只属于该早期后端组合。
 
 线上 11 项、真机和一天试用未完成。没有生产、秘密、真实账号、外发、main 合并或部署。
 

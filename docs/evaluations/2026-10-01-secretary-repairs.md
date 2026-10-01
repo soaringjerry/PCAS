@@ -71,3 +71,23 @@ PCAS_TEST_DATABASE_URL='postgres://postgres:test@127.0.0.1:33255/postgres?sslmod
 S/D 的 finding skip 已全部移除。F10/T1 仍保留 4 个契约 pending（U3/U4/U5/U10），Telegram T3 的独立 findings 归 F12，本任务全量命令的绿色结果不代表这些尚未裁定或未修部分通过。默认真实 Codex、生产 Telegram/通知/手机、线上 11 项及一天试用未验收。
 
 `pcas-test-F11-secretary` 已执行 stop 后 `docker rm -v`，确认不存在；测试进程均退出，httptest 服务和临时 schema 由测试 cleanup 释放，无持久后台进程。少量 `/tmp/pcas-test-F11-*.log` 留作当前机器证据，诊断临时脚本已删除。最终提交与 PR 由交付消息提供；两个候选与修复分支均已推送，不改 main。
+
+## PR #29 真实后端 CI 补验
+
+初次交付 HEAD `e5841a2abc01319ffe3e06c08953ae20976c8665` 的 [CI run 36826114049](https://github.com/soaringjerry/PCAS/actions/runs/36826114049/job/110252063536) 真实后端任务失败。下载该 run 的 `real-backend-acceptance` artifact 并复核：golden 33 通过、3 失败（G9 三轮），legacy/backend 4 通过，timezone-backend 1 通过；没有 skip/flaky。此前漏同步 G9 对旧超时文案的精确浏览器断言，这属于 F11 的回归同步遗漏。
+
+三份失败 trace 的页面快照均显示「已记下原话；模型响应超时，稍后会自动整理」，HTTP 200 的 turn receipts 均为 capture；每轮 response.state 中都有与本轮精确原话一致的候选和独立 sourceId。原 G9 locator 仍在等待「模型没有响应」，因此在 105 秒断言窗口内失败；不是模型超时产品路径再次失败。
+
+协调者在任务文档“最终 CI 补验”仅追加授权 `web/tests/golden.spec.ts` 的 G9 精确超时文案和本报告。本次代码只将该行「模型没有响应」改为「模型响应超时」；95 秒假模型延迟、105 秒等待窗口、三次重复、原话与来源查找和来源展开后的原文精确断言全部保留。没有修改其他 golden 行为、前端产品、共享 runner/helper 或 U1 文件。
+
+自有真实后端专项使用 API `127.0.0.1:18146`、隔离的 ChatGPT 回调配置 18147、自有 tmpfs PG（1GiB，WAL 128/32MB，随机 localhost 33258）、本地 golden 假模型/通知，独立构建 PCAS serve/worker 和 Web dist。为遵守资源与端口归属，临时 runner 仅复制既有启动流程并适配自有容器名/端口/WAL/清理，不修改仓库共享 runner。专项命令：
+
+```sh
+npx playwright test tests/golden.spec.ts --grep 'G8|G9|F7 连续撤销' \
+  --repeat-each=3 --output=/tmp/pcas-test-F11-browser-results/golden \
+  --reporter=list,json --trace=on
+```
+
+G8、G9、相邻 F7 连续撤销各三轮，9/9 通过，零 skip/失败/flaky，总计 285.983s；G9 三轮分别 91.510s、91.485s、91.431s，全部执行完原有资料库来源展开及正文精确比对。另对首轮执行只读 SQL，确认 `capture` 来源 `source_versions.body` 已持久保存精确原话。`npm ci` / `npm run build` 已通过。专项日志 `/tmp/pcas-test-F11-browser-targeted.log`，JSON、trace、截图和服务日志 `/tmp/pcas-test-F11-browser-results/`。
+
+自有容器 `pcas-test-F11-browser-3963739` 已由 runner stop 后 rm -v，确认不存在；记录的 fixture/API/worker PID 均退出，18146/18147 无监听，临时私有配置、CA、二进制和 PG 数据已清理。下载的 CI artifact 副本和临时 runner 脚本已删除，保留少量专项证据供协调者审查。G9 单行已定稿，已向协调者明确释放 golden.spec.ts 写入权；F12 的 G7 变更由其独立工作区处理。未重跑完整候选 runner，按分派由 A1 纳入 U1 后一次执行；此前的 Go/S/D 全量证据属于前面的实现验收，本次没有改 Go 产品。不会把局部补验写成完整组合或生产验收。

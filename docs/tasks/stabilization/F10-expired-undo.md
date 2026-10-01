@@ -16,6 +16,8 @@
 
 在 `/root/PCAS-wt/F10` 从 F9 `26dba8672b578cf1baadd71c0ba257f7691d8109` 与 T1 `6d0c27e70ede296cb0247151ffc31f239051de3a` 无冲突集成 `stabilization/expiry-candidate`，记录并推候选 SHA，再建立 `stabilization/F10-expired-undo`。PR base 为该候选，明确依赖 #20/#24/#25/#26；main 未合并。冲突时报告，不自行改产品解决。
 
+前端验证临时预览已登记 `127.0.0.1:18140`，由本任务独占并在结束时关闭；F8 保留 18138/18139。
+
 预留 `internal/postgres/actions_log.go`、`internal/workspace/model.go`、`internal/httpapi/server.go` 的错误类型及 HTTP 映射、`web/src/store/api.ts` 的错误文案；`internal/telegram/poller.go` 仅 `expired` 文案分支，启动前必须与 Telegram 修复的文件归属排期。可以移除 `internal/postgres/stabilization_undo_test.go` 的 U12/U13 finding skip，保留独立断言。
 
 旧测试只有确实把「过期」误记为内容冲突的断言可随正式规则修正，逐项列出原因；不能全局替换 `changed_since`。其他文件、迁移和共用 helpers 先报告协调者。唯一报告 `docs/evaluations/2026-10-01-expired-undo.md`。

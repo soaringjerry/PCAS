@@ -18,3 +18,11 @@
 此批专注 failed automatic run 的正式重试。manual initialRun 预填改字、final prepare→commit 竞态以及 UI 携带 sourceRunId 仍是明确后续入口证据，不能由这13叶冒称通过。任意无locator新owner文字不属于该 locator 可信继承契约，也不靠测试端 mint origin授信。
 
 下一边界：root 审gold后指定新组合，C先净harness/compile，再按明确SHA单次动态；不先跑未合消费者。本次没有新测试通过结论。
+
+## 净 harness 边界
+
+基线 `3f30ad4cc5d3d38dca4e59f6a95645c264816fc2` + 既有独立gold。两个新测试文件形成3顶层/18人工叶（retry13、manual/final3、receipt2）；[compile.txt](compile.txt)为 `go test ./internal/postgres -run '^$' -count=1` 退出0，[list.txt](list.txt)是实际三个顶层list。**无动态结果**。
+
+503通过真实loopback代理返回，内层复用原RT capture的schema协议；每次actual请求/外层status/实际响应单独保留，未SQL造failed。manual实际GET正文/DeliveredAt/unknown/当前接收者及exact源Indirect均核。receipt真实两turn/严格逆Undo/HTTP history/原actionID与实际typed依赖分别核。
+
+原外部embedding barrier设计保留为本基线的诊断方案：会保实际query、到达时刻、正式撤权回执/返回时刻及最终Run0。但新审阅确认派生query不具embedding独立许可，这是**未动态执行的已知设计缺口**，不能把该barrier或compile当新的embedding授权通过。root批准下一追加修订使用真实owner行锁等待观察隔离final竞态，同时generated retry embedding trap0；旧gold/设计原文保留，不通过skip或SQL状态注入处理。

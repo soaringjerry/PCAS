@@ -7,6 +7,7 @@ export interface RunRequest {
   agentId: string
   kind: RunKind
   prompt: string
+  sourceRunId?: string
   manualRecipient?: ManualRecipientSelection
 }
 

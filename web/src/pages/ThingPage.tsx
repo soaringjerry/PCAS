@@ -672,7 +672,7 @@ function ManualRequest({ thingId, initialRun, label = '手动转交' }: { thingI
       e.preventDefault()
       if (!manual || !selected || !prompt.trim()) return
       void guard(async () => {
-        if (await runAgent({ thingId, agentId: manual.id, kind, prompt: prompt.trim(), manualRecipient: { provider: selected.id } })) {
+        if (await runAgent({ thingId, agentId: manual.id, kind, prompt: prompt.trim(), sourceRunId: initialRun?.id, manualRecipient: { provider: selected.id } })) {
           setOpen(false)
           toast.show('已建立新的转交请求，请预览或复制交接内容')
         }
@@ -750,7 +750,7 @@ function Handoff({ run }: { run: Run }) {
     {preview && preview.revision === state.revision && !run.staleContext && <pre className="act-brief">{preview.text}</pre>}
     {notice && <p className="small muted" role={failed ? 'alert' : 'status'}>{notice}</p>}
     {(failed || run.staleContext) && recipient && <button type="button" className="link-btn" disabled={busy} onClick={() => guard(async () => {
-      if (await runAgent({ thingId: run.thingId, agentId: run.agentId, kind: run.kind, prompt: run.prompt, manualRecipient: recipient })) toast.show('已建立同一接收者的新请求')
+      if (await runAgent({ thingId: run.thingId, agentId: run.agentId, kind: run.kind, prompt: run.prompt, sourceRunId: run.id, manualRecipient: recipient })) toast.show('已建立同一接收者的新请求')
     })}>向原接收者重新生成</button>}
     <ManualRequest thingId={run.thingId} initialRun={run} label={recipient ? '换接收者，建立新请求' : '选择接收者，建立新请求'} />
     <textarea className="textarea" value={pasted} onChange={(e) => setPasted(e.target.value)} placeholder="把它的回答贴在这里" aria-label="贴回回答" style={{ minHeight: 120 }} />
@@ -845,7 +845,7 @@ function RunRow({ thing, run }: { thing: Thing; run: Run }) {
 
   if (run.status === 'failed') {
     const retryAgent = state.agents.find((a) => a.id === agentFor(thing.id) && a.enabled && a.id !== run.agentId)
-    const retry = (agentId: string) => guard(() => runAgent({ thingId: run.thingId, agentId, kind: run.kind, prompt: run.prompt, manualRecipient: agentId === run.agentId ? originalManualRecipient(run) : undefined }))
+    const retry = (agentId: string) => guard(() => runAgent({ thingId: run.thingId, agentId, kind: run.kind, prompt: run.prompt, sourceRunId: run.id, manualRecipient: agentId === run.agentId ? originalManualRecipient(run) : undefined }))
     return (
       <li className="card act-run">
         <div className="act-line">
@@ -870,7 +870,7 @@ function RunRow({ thing, run }: { thing: Thing; run: Run }) {
 
   if (run.staleContext && run.status === 'done' && !run.output) return <li className="card act-run">
     <div className="act-line">{who}<span className="act-text">依据或接收者已变化，旧结果不能继续使用</span>{when}</div>
-    <div className="act-detail"><button type="button" className="link-btn" disabled={busy || agent?.channel === 'manual' && !originalManualRecipient(run)} onClick={() => guard(() => runAgent({ thingId: run.thingId, agentId: run.agentId, kind: run.kind, prompt: run.prompt, manualRecipient: originalManualRecipient(run) }))}>重新生成</button></div>
+    <div className="act-detail"><button type="button" className="link-btn" disabled={busy || agent?.channel === 'manual' && !originalManualRecipient(run)} onClick={() => guard(() => runAgent({ thingId: run.thingId, agentId: run.agentId, kind: run.kind, prompt: run.prompt, sourceRunId: run.id, manualRecipient: originalManualRecipient(run) }))}>重新生成</button></div>
   </li>
   if (run.status !== 'done' || !run.output) return null
   // Finished but not in the thing: it was undone, or what it relied on has changed since.
@@ -889,7 +889,7 @@ function RunRow({ thing, run }: { thing: Thing; run: Run }) {
               disabled={busy}
               onClick={() =>
                 guard(async () => {
-                  if (await runAgent({ thingId: run.thingId, agentId: run.agentId, kind: run.kind, prompt: run.prompt, manualRecipient: originalManualRecipient(run) })) toast.show('已让副手重新生成')
+                  if (await runAgent({ thingId: run.thingId, agentId: run.agentId, kind: run.kind, prompt: run.prompt, sourceRunId: run.id, manualRecipient: originalManualRecipient(run) })) toast.show('已让副手重新生成')
                 })
               }
             >

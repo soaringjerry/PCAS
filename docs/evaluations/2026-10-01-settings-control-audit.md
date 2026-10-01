@@ -11,6 +11,7 @@
 5. **启用副手≠启用所有后台模型调用。** 每模型 `enabled` 拦秘书/副手执行和旧结果重用；`ProcessExtraction` 直接取 `Registry.ExtractionID()`，不读取该 agent 开关或记忆分类。不要把「关闭这个副手」解释成彻底停止此模型的后台资料处理，也不要承诺其筛选控制原文整理授权。
 6. **「记忆曝光」是排名参数。** 控制继续交流检索的衰减加分，不删除或定时隐藏记忆。应放低频高级设置；没有“X天以后就忘掉”的保证。
 7. **密钥已配置≠接入已验证。** 文本/向量保存只校验输入并写文件；可用状态检测主要是密钥存在。不要把「已配置密钥」改成未经验证的「已连接成功」。
+8. **待确认候选在当前路由没有管理入口。** `UnsureSheet` 是保留组件，当前没有import/挂载；其「收下/不要/对/不对」并非当前候选可点击流程。pending Candidate仍会由导入/抽取/capture产生，每日汇总也会数它，但Hall、Library、Shell、CommandPalette与当前秘书均无候选接受/忽略入口。报告原附录只查按钮→命令，漏查可达性，此处明确更正。推测记忆在资料库仍能确认/编辑/删除，不应误判所有确认功能都不可达。
 
 建议优先呈现时区/城市、通知设备状态、模型连接和费用；把资料同步协议、凭据环境变量、向量补建、曝光公式放有明确入口的高级配置。每模型记忆授权可以分组收起，但需保留当前权限概览与显式选择，不能自动增加记忆分类、推测可见性或外发范围。以下文案为事实说明建议，不替用户决定默认值。
 
@@ -130,7 +131,7 @@ SettingsPage 中所有 `updateSettings`/`updateAgent` 都经服务端命令持�
 
 ## 补充：用户提到的「收下」及事项结果术语
 
-「收下」实际出现在 `UnsureSheet`（需要你确认），不是当前ThingPage字面按钮；用户要解决的是同一条事项使用流程，不能要求用户先区分内部页面。以下只核实实际动作，文案由U2设计。
+「收下」字面出现在 `UnsureSheet`（需要你确认），不是当前ThingPage字面按钮。**该Sheet是保留组件，基线59e25da的当前路由不可达；它没有任何import或挂载。** 下表前七行是保留组件的按钮→后端命令事实，不代表用户当前能点击；从「事项动态」起为当前可达ThingPage流程。用户要解决的是事项使用体验，不能要求其辨认内部页面。原报告未先核对Sheet可达性，此次纠正；按钮含义可供U2理解历史，但不能仅修改死组件就声称改善当前体验。
 
 | 现有按钮/选择 | 实际命令与结果 | 费用/撤销/容易误解的边界 |
 | --- | --- | --- |
@@ -151,6 +152,23 @@ SettingsPage 中所有 `updateSettings`/`updateAgent` 都经服务端命令持�
 | 想法：再放放 | `ideaSnooze(days=7)`仅设置现有wake.snoozedUntil | 无模型费用，当前dispatchUndoable；源码没有在此命令把status改回shelved，所以不能在纯前端文案承诺“一周后一定重新唤醒/自动从眼前消失”。存在这项语义边界，U2勿借改文案修后台业务 |
 
 补充证据：[待确认Sheet](../../web/src/components/UnsureSheet.tsx)，[事项页](../../web/src/pages/ThingPage.tsx)，[候选命令](../../internal/postgres/commands.go)，[记忆确认/删除](../../internal/postgres/editing.go)，[记忆默认确认](../../internal/postgres/claims.go)，[结果采用与自动采用](../../internal/postgres/runs.go)，[可撤销命令及边界](../../internal/postgres/actions_log.go)，[当前秘书](../../web/src/components/Secretary.tsx)。不建议仅把「收下」换成同样含糊的「确认」；按钮应直接描述选择类型带来的结果。
+
+### 当前候选可达性补查
+
+| 已核查位置 | 基线实际入口与限制 |
+| --- | --- |
+| App路由 | 仅Hall、Thing、Library、Settings；旧`/inbox`、today/upcoming/ideas/things均重定向Hall，没有候选页或Sheet路由 |
+| Shell | 导航只有搜索、资料库、设置；只挂载CommandPalette，没有UnsureSheet/待确认计数入口 |
+| CommandPalette | 搜索现有事项/记忆；可`capture`快速记下并让后台整理，或直接新建任务/想法/项目。不搜索/展示state.candidates，不能accept/ignore已有候选 |
+| Hall + domain/hall | DecisionStrip的decisionQueue仅涵盖依据变化重做和手动交接；AwayLine可显示后台每日整理数量，但没有候选明细或管理链接。源码注释说captures去observatory，当前路由/资料库未实现此候选入口，不能把注释当可达证据 |
+| Library | 仅memory/sources/training三tab；来源tab有后台job重试/每日汇总记录，但无capture_candidates列表。memory tab筛选「推测」后可打开MemorySheet，用「没错」confirmMemory、编辑、删除，因此推测记忆管理仍可达，与pending Candidate是不同记录类型 |
+| Secretary/Telegram | 都直接DeskTurn；后端schema/actions有create/update/add_steps/delegate/remember等，没有接受/忽略候选命令；上下文也不提供候选列表。让秘书新建类似事项不等于把已有候选标accepted，不能将自然语言输入当现有候选收件箱 |
+
+全量 `rg`：`UnsureSheet` 在 `web/src` 仅其定义；`state.candidates` 仅未挂载Sheet使用的 `unsure()` 辅助函数；`acceptCandidate/ignoreCandidate` 调用仅保留Sheet，其他匹配为类型定义，`bulkAccept/bulkIgnore/restoreCandidate`只有Action类型。结论为源码可达性审计，未进行运行时浏览器验收。
+
+体验影响：用户通过导入/快速记录生成低把握候选后，当前UI不能查看逐条内容、转为任务/想法/记忆或忽略；每日整理可提示「N条等你确认」却不给完成这件事的入口。`autoAccept`默认false，只开它也不能处理想法/未知/低置信度待办；不能让用户切开关来绕过缺入口。需要由协调者审定最小的现有页面入口，U2处理，不在本调查实施新顶级面板或后端能力。
+
+可达性证据：[App](../../web/src/App.tsx)，[Shell](../../web/src/components/Shell.tsx)，[CommandPalette](../../web/src/components/CommandPalette.tsx)，[Hall](../../web/src/pages/HallPage.tsx)，[队列/后台feed](../../web/src/domain/hall.ts)，[Library](../../web/src/pages/LibraryPage.tsx)，[候选筛选辅助](../../web/src/domain/lines.ts)，[秘书动作schema](../../internal/postgres/desk_schema.go)，[秘书动作执行](../../internal/postgres/desk_actions.go)。
 
 ## 交付范围与未验证项
 

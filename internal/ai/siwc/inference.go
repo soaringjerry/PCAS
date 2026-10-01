@@ -12,6 +12,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/soaringjerry/PCAS/internal/ai/contextwire"
 	"github.com/soaringjerry/PCAS/internal/memory"
 )
 
@@ -83,7 +84,7 @@ func (m *Manager) Generate(ctx context.Context, model, instructions, prompt stri
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "text/event-stream")
 	req.Header.Set("Authorization", "Bearer "+a.AccessToken)
-	resp, err := m.http.Do(req)
+	resp, err := contextwire.Do(m.http, req, memory.ContextRequestEvent{Protocol: "siwc", Model: model, Endpoint: m.api, Payload: body, ObservationLayer: "serialized_request"})
 	if err != nil {
 		return Result{}, fmt.Errorf("ChatGPT response interrupted")
 	}

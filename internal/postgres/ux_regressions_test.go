@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -133,6 +134,7 @@ func TestDelegationQueuesExactlyOnceAndRollsBackMissingSetup(t *testing.T) {
 
 func TestMixedWritingSurvivesArtifactRevocationAndDeletion(t *testing.T) {
 	s := testStore(t)
+	phase2ManualDestination(t, s)
 	scope := owner()
 	ctx := context.Background()
 	st := workspaceCommand(t, s, scope, workspace.Command{Type: "capture", Text: "Sensitive source 84739"})
@@ -141,8 +143,9 @@ func TestMixedWritingSurvivesArtifactRevocationAndDeletion(t *testing.T) {
 	st = workspaceCommand(t, s, scope, workspace.Command{Type: "addIdea", Title: "Independent idea"})
 	idea := st.Ideas[0]
 	workspaceCommand(t, s, scope, workspace.Command{Type: "setNotes", ID: idea.ID, Text: "Independent authored introduction"})
-	st = workspaceCommand(t, s, scope, workspace.Command{Type: "requestRun", ThingID: idea.ID, AgentID: "manual", Kind: "summary", Prompt: "Sensitive source 84739"})
+	st = workspaceCommand(t, s, scope, workspace.Command{Type: "requestRun", ThingID: idea.ID, AgentID: "manual", ManualRecipient: &memory.Recipient{Provider: phase2ManualProvider}, Kind: "summary", Prompt: "Sensitive source 84739"})
 	run := st.Runs[0]
+	phase2RTGetPackage(t, s, scope, run)
 	workspaceCommand(t, s, scope, workspace.Command{Type: "pasteRunResult", ID: run.ID, Output: "Sensitive generated plan 84739."})
 	undoAutoAdoption(t, s, scope, run.ID)
 	workspaceCommand(t, s, scope, workspace.Command{Type: "adoptRun", ID: run.ID, As: "progress", Text: "Sensitive generated plan 84739."})
@@ -219,19 +222,22 @@ func TestUncertainAndCorrectedCaptureRemainsQualified(t *testing.T) {
 
 func TestContinueThatKeepsCurrentItemResult(t *testing.T) {
 	s := testStore(t)
+	phase2ManualDestination(t, s)
 	scope := owner()
 	st := workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "Active writing"})
 	id := st.Tasks[0].ID
-	st = workspaceCommand(t, s, scope, workspace.Command{Type: "requestRun", ThingID: id, AgentID: "manual", Kind: "draft", Prompt: "Write a plan"})
+	st = workspaceCommand(t, s, scope, workspace.Command{Type: "requestRun", ThingID: id, AgentID: "manual", ManualRecipient: &memory.Recipient{Provider: phase2ManualProvider}, Kind: "draft", Prompt: "Write a plan"})
 	run := st.Runs[0]
+	phase2RTGetPackage(t, s, scope, run)
 	workspaceCommand(t, s, scope, workspace.Command{Type: "pasteRunResult", ID: run.ID, Output: "First: inspect. Second: revise paragraph two."})
 	st = workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "Other project secret"})
 	other := st.Tasks[0].ID
-	st = workspaceCommand(t, s, scope, workspace.Command{Type: "requestRun", ThingID: other, AgentID: "manual", Kind: "draft", Prompt: "Other project"})
+	st = workspaceCommand(t, s, scope, workspace.Command{Type: "requestRun", ThingID: other, AgentID: "manual", ManualRecipient: &memory.Recipient{Provider: phase2ManualProvider}, Kind: "draft", Prompt: "Other project"})
 	otherRun := st.Runs[0]
+	phase2RTGetPackage(t, s, scope, otherRun)
 	workspaceCommand(t, s, scope, workspace.Command{Type: "pasteRunResult", ID: otherRun.ID, Output: "Unrelated private result"})
-	st = workspaceCommand(t, s, scope, workspace.Command{Type: "requestRun", ThingID: id, AgentID: "manual", Kind: "draft", Prompt: "Continue that"})
-	brief := st.Runs[0].Brief
+	st = workspaceCommand(t, s, scope, workspace.Command{Type: "requestRun", ThingID: id, AgentID: "manual", ManualRecipient: &memory.Recipient{Provider: phase2ManualProvider}, Kind: "draft", Prompt: "Continue that"})
+	brief := phase2RTGetPackage(t, s, scope, st.Runs[0]).Text
 	if !strings.Contains(brief, "revise paragraph two") || strings.Contains(brief, "Unrelated private result") {
 		t.Fatalf("current-item reference lost or crossed scope: %s", brief)
 	}
@@ -239,6 +245,7 @@ func TestContinueThatKeepsCurrentItemResult(t *testing.T) {
 
 func TestRunSemanticRetrievalDoesNotHoldOwnerLock(t *testing.T) {
 	s := testStore(t)
+	phase2ManualDestination(t, s)
 	scope := owner()
 	ctx := context.Background()
 	st := workspaceCommand(t, s, scope, workspace.Command{Type: "capture", Text: "Archive appointment at the riverside bookshop"})
@@ -261,18 +268,24 @@ func TestRunSemanticRetrievalDoesNotHoldOwnerLock(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(map[string]any{"data": []any{map[string]any{"index": 0, "embedding": []float32{1, 0, 0}}}})
 	}))
 	defer server.Close()
-	s.SetModels(&ai.Registry{HTTP: server.Client(), Config: ai.Configuration{Embedding: "vector", Providers: []ai.Provider{{ID: "vector", Name: "Vector", Protocol: "openai", BaseURL: server.URL, Model: "test", Embedding: true, CostMode: "free"}}}})
+	manualDestination, ok := s.models.Get(phase2ManualProvider)
+	if !ok {
+		t.Fatal("configured manual destination lost")
+	}
+	s.SetModels(&ai.Registry{HTTP: server.Client(), Config: ai.Configuration{Embedding: "vector", Providers: []ai.Provider{{ID: "vector", Name: "Vector", Protocol: "openai", BaseURL: server.URL, Model: "test", Embedding: true, CostMode: "free"}, manualDestination}}})
 	if _, err := s.pool.Exec(ctx, "INSERT INTO embeddings(owner_id,record_id,record_version,model,dimensions,embedding) VALUES($1,$2,$3,'vector:test',3,'[1,0,0]'::vector)", string(scope.OwnerID), m.ID, m.Version); err != nil {
 		t.Fatal(err)
 	}
-	st = workspaceCommand(t, s, scope, workspace.Command{Type: "requestRun", ThingID: id, AgentID: "manual", Kind: "plan", Prompt: "Suggest a peaceful afternoon"})
-	if !strings.Contains(st.Runs[0].Brief, "riverside bookshop") {
-		t.Fatal("semantic-only memory missing from run context", st.Runs[0].Brief)
+	st = workspaceCommand(t, s, scope, workspace.Command{Type: "requestRun", ThingID: id, AgentID: "manual", ManualRecipient: &memory.Recipient{Provider: phase2ManualProvider}, Kind: "plan", Prompt: "Suggest a peaceful afternoon"})
+	pkg := phase2RTGetPackage(t, s, scope, st.Runs[0])
+	if !strings.Contains(pkg.Text, "riverside bookshop") {
+		t.Fatal("semantic-only memory missing from run context", pkg.Text)
 	}
 }
 
 func TestLegacyMixedWritingIsQuarantinedForOwnerReview(t *testing.T) {
 	s := testStore(t)
+	phase2ManualDestination(t, s)
 	scope := owner()
 	ctx := context.Background()
 	st := workspaceCommand(t, s, scope, workspace.Command{Type: "capture", Text: "legacy sensitive 9873"})
@@ -280,8 +293,9 @@ func TestLegacyMixedWritingIsQuarantinedForOwnerReview(t *testing.T) {
 	m := st.Memories[0]
 	st = workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "Legacy task", Text: "My preexisting writing"})
 	id := st.Tasks[0].ID
-	st = workspaceCommand(t, s, scope, workspace.Command{Type: "requestRun", ThingID: id, AgentID: "manual", Kind: "summary", Prompt: "legacy sensitive 9873"})
+	st = workspaceCommand(t, s, scope, workspace.Command{Type: "requestRun", ThingID: id, AgentID: "manual", ManualRecipient: &memory.Recipient{Provider: phase2ManualProvider}, Kind: "summary", Prompt: "legacy sensitive 9873"})
 	run := st.Runs[0]
+	phase2RTGetPackage(t, s, scope, run)
 	workspaceCommand(t, s, scope, workspace.Command{Type: "pasteRunResult", ID: run.ID, Output: "Sensitive generated 9873"})
 	undoAutoAdoption(t, s, scope, run.ID)
 	workspaceCommand(t, s, scope, workspace.Command{Type: "adoptRun", ID: run.ID, As: "progress", Text: "Sensitive generated 9873"})
@@ -305,21 +319,24 @@ func TestContinuationHonorsCurrentItemScopeBeforeSemanticRetrieval(t *testing.T)
 	for _, change := range []string{"exclude", "move-project", "revoke"} {
 		t.Run(change, func(t *testing.T) {
 			s := testStore(t)
+			phase2ManualDestination(t, s)
 			scope := owner()
 			project := string(memory.NewID())
 			workspaceCommand(t, s, scope, workspace.Command{Type: "addProject", ID: project, Name: "Original project"})
 			st := workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "Writing", ProjectID: project})
 			item := st.Tasks[0]
-			st = workspaceCommand(t, s, scope, workspace.Command{Type: "requestRun", ThingID: item.ID, AgentID: "manual", Kind: "draft", Prompt: "Write an ordinary plan"})
+			st = workspaceCommand(t, s, scope, workspace.Command{Type: "requestRun", ThingID: item.ID, AgentID: "manual", ManualRecipient: &memory.Recipient{Provider: phase2ManualProvider}, Kind: "draft", Prompt: "Write an ordinary plan"})
+			phase2RTGetPackage(t, s, scope, st.Runs[0])
 			workspaceCommand(t, s, scope, workspace.Command{Type: "pasteRunResult", ID: st.Runs[0].ID, Output: "Ordinary permitted plan"})
 			st = workspaceCommand(t, s, scope, workspace.Command{Type: "capture", Text: "Private launch code 482910"})
 			st = workspaceCommand(t, s, scope, workspace.Command{Type: "acceptCandidate", ID: st.Candidates[0].ID, Kind: "memory", MemoryKind: "fact", Text: "Private launch code 482910", ProjectID: project})
 			m := st.Memories[0]
-			st = workspaceCommand(t, s, scope, workspace.Command{Type: "requestRun", ThingID: item.ID, AgentID: "manual", Kind: "draft", Prompt: "Use private launch code 482910"})
+			st = workspaceCommand(t, s, scope, workspace.Command{Type: "requestRun", ThingID: item.ID, AgentID: "manual", ManualRecipient: &memory.Recipient{Provider: phase2ManualProvider}, Kind: "draft", Prompt: "Use private launch code 482910"})
 			if !oneOf(m.ID, st.Runs[0].ContextMemoryIDs...) {
 				t.Fatal("fixture did not include private memory")
 			}
 			privateRun := st.Runs[0].ID
+			phase2RTGetPackage(t, s, scope, st.Runs[0])
 			workspaceCommand(t, s, scope, workspace.Command{Type: "pasteRunResult", ID: privateRun, Output: "Derived private result 482910"})
 			undoAutoAdoption(t, s, scope, privateRun)
 			workspaceCommand(t, s, scope, workspace.Command{Type: "adoptRun", ID: privateRun, As: "progress", Text: "Derived private result 482910"})
@@ -340,12 +357,20 @@ func TestContinuationHonorsCurrentItemScopeBeforeSemanticRetrieval(t *testing.T)
 				_ = json.NewEncoder(w).Encode(map[string]any{"data": []any{map[string]any{"index": 0, "embedding": []float32{1, 0, 0}}}})
 			}))
 			defer server.Close()
-			s.SetModels(&ai.Registry{HTTP: server.Client(), Config: ai.Configuration{Embedding: "vector", Providers: []ai.Provider{{ID: "vector", Name: "Vector", Protocol: "openai", BaseURL: server.URL, Model: "test", Embedding: true, CostMode: "free"}}}})
-			st = workspaceCommand(t, s, scope, workspace.Command{Type: "requestRun", ThingID: item.ID, AgentID: "manual", Kind: "draft", Prompt: "Continue that"})
-			if embeddingInput == "" || strings.Contains(embeddingInput, "482910") || !strings.Contains(embeddingInput, "Ordinary permitted plan") {
-				t.Fatalf("semantic query lost permitted history or leaked denied result: %s", embeddingInput)
+			manualDestination, ok := s.models.Get(phase2ManualProvider)
+			if !ok {
+				t.Fatal("configured manual destination lost")
 			}
-			if strings.Contains(st.Runs[0].Brief, "482910") || !strings.Contains(st.Runs[0].Brief, "Ordinary permitted plan") || oneOf(m.ID, st.Runs[0].ContextMemoryIDs...) {
+			s.SetModels(&ai.Registry{HTTP: server.Client(), Config: ai.Configuration{Embedding: "vector", Providers: []ai.Provider{{ID: "vector", Name: "Vector", Protocol: "openai", BaseURL: server.URL, Model: "test", Embedding: true, CostMode: "free"}, manualDestination}}})
+			st = workspaceCommand(t, s, scope, workspace.Command{Type: "requestRun", ThingID: item.ID, AgentID: "manual", ManualRecipient: &memory.Recipient{Provider: phase2ManualProvider}, Kind: "draft", Prompt: "Continue that"})
+			var embeddingWire struct {
+				Input []string `json:"input"`
+			}
+			if err := json.Unmarshal([]byte(embeddingInput), &embeddingWire); err != nil || len(embeddingWire.Input) != 1 || embeddingWire.Input[0] != "Continue that" || strings.Contains(embeddingInput, "482910") {
+				t.Fatalf("embedding query must contain only current independent Prompt; denied content remains absent: %s (%v)", embeddingInput, err)
+			}
+			pkg := phase2RTGetPackage(t, s, scope, st.Runs[0])
+			if strings.Contains(pkg.Text, "482910") || !strings.Contains(pkg.Text, "Ordinary permitted plan") || oneOf(m.ID, st.Runs[0].ContextMemoryIDs...) {
 				t.Fatalf("continuation bypassed current scope or lost ordinary context: %+v", st.Runs[0])
 			}
 		})
@@ -358,30 +383,102 @@ func TestDeskHistoryCannotBypassDestinationItemScope(t *testing.T) {
 			s := testStore(t)
 			scope := owner()
 			ctx := context.Background()
+			var received [][]byte
+			var receivedMu sync.Mutex
+			receivedSnapshot := func() [][]byte {
+				receivedMu.Lock()
+				defer receivedMu.Unlock()
+				return append([][]byte(nil), received...)
+			}
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": map[string]string{"content": `{"answer":"Private derived answer 519823","used":[],"links":[]}`}}}})
+				body, err := io.ReadAll(r.Body)
+				if err != nil {
+					t.Error(err)
+				}
+				receivedMu.Lock()
+				received = append(received, append([]byte(nil), body...))
+				receivedMu.Unlock()
+				var request struct {
+					Messages []struct{ Role, Content string } `json:"messages"`
+				}
+				if err := json.Unmarshal(body, &request); err != nil {
+					t.Error(err)
+				}
+				deputy := false
+				for _, message := range request.Messages {
+					deputy = deputy || message.Role == "system" && strings.Contains(message.Content, "output为完整建议或草稿")
+				}
+				value := map[string]any{"reply": "Private derived answer 519823", "used": []any{}, "links": []any{}, "show": []any{}, "actions": []any{}, "remember": false, "ask": nil}
+				if deputy {
+					value = map[string]any{"output": "Ordinary destination result", "used": []any{}}
+				}
+				_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": map[string]string{"content": string(asJSON(value))}}}})
 			}))
 			defer server.Close()
 			s.SetModels(&ai.Registry{HTTP: server.Client(), Config: ai.Configuration{Providers: []ai.Provider{{ID: "model", Name: "Model", Protocol: "openai", BaseURL: server.URL, Model: "test", MaxOutput: 100, CostMode: "free"}}}})
 			project := string(memory.NewID())
 			workspaceCommand(t, s, scope, workspace.Command{Type: "addProject", ID: project, Name: "Private project"})
-			st := workspaceCommand(t, s, scope, workspace.Command{Type: "capture", Text: "Private reference 519823"})
+			st := workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "Scoped discussion", ProjectID: project})
+			discussion := st.Tasks[0].ID
+			st = workspaceCommand(t, s, scope, workspace.Command{Type: "capture", Text: "Private reference 519823"})
 			st = workspaceCommand(t, s, scope, workspace.Command{Type: "acceptCandidate", ID: st.Candidates[0].ID, Kind: "memory", MemoryKind: "fact", Text: "Private reference 519823", ProjectID: project})
 			m := st.Memories[0]
-			answer, err := s.AnswerDesk(ctx, scope, "model", "Private reference 519823", nil)
+			claim := memory.Ref{ID: memory.ID(m.ID), Kind: memory.ClaimKind, Version: m.Version}
+			// The question is not itself the private atom. The real scoped
+			// secretary must receive the exact authorized claim as evidence.
+			req := workspace.DeskTurnRequest{RequestID: string(memory.NewID()), AgentID: "model", ThingID: &discussion, Text: "Private reference 的安排是什么？"}
+			answer, err := s.DeskTurn(ctx, scope, req)
+			bodies := receivedSnapshot()
+			if err != nil || answer.Turn.Reply != "Private derived answer 519823" || len(bodies) != 1 || !strings.Contains(string(bodies[0]), "519823") {
+				t.Fatal("scoped secretary actual supply positive control absent", err, answer.Turn)
+			}
+			attempts, err := s.ContextAttempts(ctx, scope, req.RequestID)
 			if err != nil {
 				t.Fatal(err)
 			}
-			var refs []memory.Ref
-			if err := s.pool.QueryRow(ctx, "SELECT dependencies FROM desk_turns WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), answer.ID).Scan(&refs); err != nil || len(refs) == 0 {
-				t.Fatal("fixture desk answer lacks private dependency", err)
+			input := false
+			for _, attempt := range attempts {
+				for _, record := range attempt.Manifest.Input {
+					if record.Ref != claim {
+						continue
+					}
+					var mapped strings.Builder
+					for _, span := range record.PayloadSpans {
+						if span.StartByte < 0 || span.EndByte <= span.StartByte || span.EndByte > len(bodies[0]) {
+							t.Fatal("scoped claim has invalid actual payload byte span", span)
+						}
+						mapped.Write(bodies[0][span.StartByte:span.EndByte])
+					}
+					input = input || strings.Contains(mapped.String(), "519823")
+				}
 			}
+			if !input {
+				t.Fatal("scoped secretary input has no exact private claim evidence")
+			}
+			phase2RTEvidence(t, "scoped-secretary-positive", map[string]any{"request": req, "claim": claim, "payload": json.RawMessage(bodies[0]), "attempts": attempts, "turn": answer.Turn})
+
+			// First prove server-owned Desk history really reaches a lawful
+			// same-studio deputy. This rules out an absent history fixture.
+			st = workspaceCommand(t, s, scope, workspace.Command{Type: "requestRun", ThingID: discussion, AgentID: "model", Kind: "draft", Prompt: "Continue the discussion", DeskTurnIDs: []string{answer.Turn.ID}})
+			positiveID := st.Runs[0].ID
+			if err := s.runAgentOnce(ctx); err != nil {
+				t.Fatal(err)
+			}
+			positive := phase2RTWaitRun(t, s, scope, positiveID)
+			bodies = receivedSnapshot()
+			if positive.Status != "done" || len(bodies) != 2 || !strings.Contains(string(bodies[1]), "Private derived answer 519823") || !oneOf(m.ID, positive.ContextMemoryIDs...) {
+				t.Fatal("same-studio actual deputy history positive control absent", positive, len(bodies))
+			}
+			phase2RTEvidence(t, "scoped-deputy-positive", map[string]any{"run": positive, "payload": json.RawMessage(bodies[1])})
+
 			destination := project
-			if change != "exclude" {
-				destination = ""
+			if change == "other-project" {
+				destination = string(memory.NewID())
+				workspaceCommand(t, s, scope, workspace.Command{Type: "addProject", ID: destination, Name: "Other project"})
 			}
-			command := workspace.Command{Type: "requestRun", AgentID: "model", Kind: "draft", Prompt: "Continue the discussion", DeskTurnIDs: []string{answer.ID}}
+			command := workspace.Command{Type: "requestRun", AgentID: "model", Kind: "draft", Prompt: "Continue the discussion", DeskTurnIDs: []string{answer.Turn.ID}}
 			if change == "delegate-other-project" {
+				// A new unscoped task cannot inherit another studio's claim.
 				command.Type, command.ID, command.Title = "delegateTask", string(memory.NewID()), "New work"
 			} else {
 				st = workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "Destination", ProjectID: destination})
@@ -391,9 +488,19 @@ func TestDeskHistoryCannotBypassDestinationItemScope(t *testing.T) {
 				}
 			}
 			st = workspaceCommand(t, s, scope, command)
-			if strings.Contains(st.Runs[0].Brief, "519823") || oneOf(m.ID, st.Runs[0].ContextMemoryIDs...) {
-				t.Fatalf("desk history bypassed destination scope: %+v", st.Runs[0])
+			run := st.Runs[0]
+			if oneOf(m.ID, run.ContextMemoryIDs...) {
+				t.Fatal("destination history retained excluded or out-of-studio exact claim", run)
 			}
+			if err := s.runAgentOnce(ctx); err != nil {
+				t.Fatal(err)
+			}
+			finished := phase2RTWaitRun(t, s, scope, run.ID)
+			bodies = receivedSnapshot()
+			if finished.Status != "done" || len(bodies) != 3 || strings.Contains(string(bodies[2]), "519823") || strings.Contains(finished.Output, "519823") {
+				t.Fatal("actual destination supply bypassed scope or lost ordinary lawful work", finished, len(bodies))
+			}
+			phase2RTEvidence(t, "scoped-destination-negative", map[string]any{"change": change, "claim": claim, "run": finished, "payload": json.RawMessage(bodies[2])})
 		})
 	}
 }

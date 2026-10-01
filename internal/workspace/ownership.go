@@ -8,6 +8,8 @@ import (
 type TextBlock struct {
 	Text string   `json:"text"`
 	Runs []string `json:"runs"`
+	// DeskActions are server-written action identities, separate from agent Runs.
+	DeskActions []string `json:"deskActions,omitempty"`
 }
 
 func BlockText(blocks []TextBlock) string {
@@ -39,7 +41,7 @@ func EditBlocks(blocks []TextBlock, text string) []TextBlock {
 	labels := make([][]string, 0, len(old))
 	for _, b := range blocks {
 		for range []rune(b.Text) {
-			labels = append(labels, b.Runs)
+			labels = append(labels, ownershipLabels(b))
 		}
 	}
 	union := func(start, end int) []string {
@@ -58,11 +60,19 @@ func EditBlocks(blocks []TextBlock, text string) []TextBlock {
 		if len(chars) == 0 {
 			return
 		}
-		if len(out) > 0 && strings.Join(out[len(out)-1].Runs, ",") == strings.Join(runs, ",") {
+		if len(out) > 0 && strings.Join(ownershipLabels(out[len(out)-1]), ",") == strings.Join(runs, ",") {
 			out[len(out)-1].Text += string(chars)
 			return
 		}
-		out = append(out, TextBlock{Text: string(chars), Runs: append([]string{}, runs...)})
+		block := TextBlock{Text: string(chars), Runs: []string{}}
+		for _, id := range runs {
+			if strings.HasPrefix(id, "desk:") {
+				block.DeskActions = append(block.DeskActions, strings.TrimPrefix(id, "desk:"))
+			} else {
+				block.Runs = append(block.Runs, id)
+			}
+		}
+		out = append(out, block)
 	}
 	replace := func(a, b, x, y int) {
 		runs := union(a, b)
@@ -83,8 +93,8 @@ func EditBlocks(blocks []TextBlock, text string) []TextBlock {
 		for _, line := range strings.SplitAfter(string(next[x:y]), "\n") {
 			lineRuns := append([]string{}, runs...)
 			for _, block := range blocks {
-				if len(block.Runs) > 0 && copiedBlock(line, block.Text) {
-					for _, id := range block.Runs {
+				if len(ownershipLabels(block)) > 0 && copiedBlock(line, block.Text) {
+					for _, id := range ownershipLabels(block) {
 						if !hasRun(id, lineRuns) {
 							lineRuns = append(lineRuns, id)
 						}
@@ -193,4 +203,121 @@ func copiedBlock(added, derived string) bool {
 		}
 	}
 	return row[len(b)]*100 >= min(len(a), len(b))*80
+}
+
+// Prefixes exist only in the edit algorithm's labels, never in persisted Runs.
+func ownershipLabels(block TextBlock) []string {
+	out := append([]string{}, block.Runs...)
+	for _, id := range block.DeskActions {
+		out = append(out, "desk:"+id)
+	}
+	return out
+}
+
+// RenameBlocks is for a server-confirmed owner whole-field rename. It keeps
+// reused derived text, but does not inherit a wholly replaced name's labels
+// merely because a few edit hunks occupied its old positions. This bounded,
+// conservative text heuristic is not proof of semantic authorship.
+func RenameBlocks(text string, sources []TextBlock) []TextBlock {
+	out := TextBlock{Text: text, Runs: []string{}}
+	bytesLeft, comparisonsLeft := 64<<10, 100000
+	words := func(text string) []string {
+		return strings.FieldsFunc(strings.ToLower(text), func(r rune) bool {
+			return !unicode.IsLetter(r) && !unicode.IsNumber(r)
+		})
+	}
+	nextWords := []string{}
+	if len(text) <= 2000 { // The canonical name limit; oversized writes later reject.
+		nextWords = words(text)
+	}
+	tokens := map[string]bool{}
+	for _, word := range nextWords {
+		if len([]rune(word)) >= 2 {
+			tokens[word] = true
+		}
+	}
+	next := strings.Join(nextWords, "")
+	nextRunes := []rune(next)
+	fragments := map[string]bool{}
+	for i := 0; i+3 <= len(nextRunes); i++ {
+		fragments[string(nextRunes[i:i+3])] = true
+	}
+	for _, source := range sources {
+		if len(source.Runs) == 0 && len(source.DeskActions) == 0 {
+			continue
+		}
+		reused := next == "" || len(source.Text) > bytesLeft
+		if !reused {
+			bytesLeft -= len(source.Text)
+			oldWords := words(source.Text)
+			old := strings.Join(oldWords, "")
+			oldRunes := []rune(old)
+			reused = old == "" || strings.Contains(old, next) || strings.Contains(next, old)
+			for _, word := range oldWords {
+				reused = reused || tokens[word]
+			}
+			for i := 0; !reused && i+3 <= len(oldRunes); i++ {
+				reused = fragments[string(oldRunes[i:i+3])]
+			}
+			if !reused {
+				// Upper-bound both existing fuzzy comparisons by normalized runes.
+				cost := 2 * len(nextRunes) * len(oldRunes)
+				if cost > comparisonsLeft {
+					reused = true
+				} else {
+					comparisonsLeft -= cost
+					reused = copiedBlock(text, source.Text) || copiedBlock(source.Text, text)
+				}
+			}
+		}
+		if !reused {
+			continue
+		}
+		for _, id := range source.Runs {
+			if !hasRun(id, out.Runs) {
+				out.Runs = append(out.Runs, id)
+			}
+		}
+		for _, id := range source.DeskActions {
+			if !hasRun(id, out.DeskActions) {
+				out.DeskActions = append(out.DeskActions, id)
+			}
+		}
+	}
+	return []TextBlock{out}
+}
+
+// CopyOrigins carries provenance to copied paragraphs in another tracked
+// field. Independent paragraphs retain their existing labels.
+func CopyOrigins(blocks, sources []TextBlock) []TextBlock {
+	out := []TextBlock{}
+	for _, block := range blocks {
+		for _, line := range strings.SplitAfter(block.Text, "\n") {
+			if line == "" {
+				continue
+			}
+			next := TextBlock{Text: line, Runs: append([]string{}, block.Runs...), DeskActions: append([]string{}, block.DeskActions...)}
+			for _, source := range sources {
+				if (len(source.Runs) == 0 && len(source.DeskActions) == 0) || !copiedBlock(line, source.Text) {
+					continue
+				}
+				for _, id := range source.Runs {
+					if !hasRun(id, next.Runs) {
+						next.Runs = append(next.Runs, id)
+					}
+				}
+				for _, id := range source.DeskActions {
+					if !hasRun(id, next.DeskActions) {
+						next.DeskActions = append(next.DeskActions, id)
+					}
+				}
+			}
+			if len(out) > 0 && strings.Join(ownershipLabels(out[len(out)-1]), ",") == strings.Join(ownershipLabels(next), ",") {
+				out[len(out)-1].Text += next.Text
+			} else {
+				out = append(out, next)
+			}
+		}
+	}
+	return out
 }

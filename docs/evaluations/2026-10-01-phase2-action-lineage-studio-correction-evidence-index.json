@@ -1,0 +1,228 @@
+{
+  "purpose": "Byte-preserving evidence archive; no test, assertion, result, or original log content changed.",
+  "archive": "2026-10-01-phase2-action-lineage-studio-correction-evidence.tar.gz",
+  "archive_sha256": "d11d8402be506f9ea5c51235d6d7cdd0936eef13b3971a723dd3c13afd04d978",
+  "files": [
+    {
+      "path": "2026-10-01-phase2-action-lineage-studio-correction-evidence/TestPhase2ActionLineageMatrix__mixed_update_and_stable_ids-canonical-8298cbde-683d-4b5e-96bc-032d785310f0.json",
+      "bytes": 1287,
+      "sha256": "8be670e6422367a3961cc31ad584a82010df16e97ca3445f51e2ce4e864224bb"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-studio-correction-evidence/TestPhase2ActionLineageMatrix__mixed_update_and_stable_ids-final-owner-state.json",
+      "bytes": 29254,
+      "sha256": "2340ca2a7e2e5ec64bf5c07eee8c3f9c3d8ba8441ef5f04aaa44be141faee482"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-studio-correction-evidence/TestPhase2ActionLineageMatrix__mixed_update_and_stable_ids-generation-636743b8-6ae4-438d-896d-c6cab82c074c.json",
+      "bytes": 19616,
+      "sha256": "f4e5df3beb72a92b6d790fa1dbb5330bc05b6713d26f5d4aa4e74f9f3d75685f"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-studio-correction-evidence/TestPhase2ActionLineageMatrix__mixed_update_and_stable_ids-generation-a8c79ea1-e707-4bca-b501-4da361e31753.json",
+      "bytes": 15882,
+      "sha256": "2d47a8904a5d37b76ceb6a84fcd0a4e259bb97ca1082987cf1e209b4d97b18fd"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-studio-correction-evidence/TestPhase2ActionLineageMatrix__mixed_update_and_stable_ids-generation-a948cd5b-d73c-43e3-9e2f-a9a60c2acc2e.json",
+      "bytes": 38837,
+      "sha256": "55e6a58d0cea8bc367ea7795200b465e30cbdaf2bf80d2ebac5a5e804bd26b14"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-studio-correction-evidence/TestPhase2ActionLineageMatrix__mixed_update_and_stable_ids-generation-c703f053-3e8d-414a-a26b-f2645614f9ae.json",
+      "bytes": 33963,
+      "sha256": "d2b768b768d0cec7ec389ec8638abbd4ce8b8dc11d988f24f61ab97f2e2063e3"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-studio-correction-evidence/TestPhase2ActionLineageMatrix__mixed_update_and_stable_ids-generation-d2bb932d-04af-4f86-9961-f4ac489fa109.json",
+      "bytes": 27992,
+      "sha256": "7723a858287e19d9fd80a776b39c9ef46f30c5ce016d37c0690d41da46058f62"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-studio-correction-evidence/TestPhase2ActionLineageMatrix__mixed_update_and_stable_ids-grant-secretary-ae244eb6-0bd9-4a80-9fce-8f5a560fb4b1.json",
+      "bytes": 823,
+      "sha256": "8e7fcba26f7c36557221e54f5346f7755c13ce0144c995f880a1be15a5654800"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-studio-correction-evidence/TestPhase2ActionLineageMatrix__mixed_update_and_stable_ids-grant-secretary-ec09106c-08fe-4aec-bacc-44b2047a681d.json",
+      "bytes": 823,
+      "sha256": "b1107df45d5f155091f26712680927ffe42186b23ceb0c735b65cb021235f3d6"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-studio-correction-evidence/TestPhase2ActionLineageMatrix__mixed_update_and_stable_ids-grant-secretary-ef116b75-9820-4dfb-834a-ba4104e5897f.json",
+      "bytes": 879,
+      "sha256": "527ebc7d330c00457650e0395b8997f0dc602cdc96eee29831f23bae31c239ad"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-studio-correction-evidence/TestPhase2ActionLineageMatrix__mixed_update_and_stable_ids-manual-consumer-618b2f33-311c-474e-9737-3575b841a02b.json",
+      "bytes": 2529,
+      "sha256": "376db7bbb5064cf3af0b16bdf19731c97f1d677e57a5fa5fb70907409d8c541e"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-studio-correction-evidence/TestPhase2ActionLineageMatrix__mixed_update_and_stable_ids-manual-consumer-6c510252-55ae-4879-bc1d-49fd6a61e6f5.json",
+      "bytes": 2589,
+      "sha256": "5e7e88da53c3ccfec88b22fab665569f74fae6d76bdebd94ed8db10c76716ee3"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-studio-correction-evidence/TestPhase2ActionLineageMatrix__mixed_update_and_stable_ids-manual-consumer-83b38072-7aac-4d5d-9075-00204490eb54.json",
+      "bytes": 2504,
+      "sha256": "5ee1dba3a448c83a98dc0997c2be174fd04158926856a3da5ad1a37fd6fc8b64"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-studio-correction-evidence/TestPhase2ActionLineageMatrix__mixed_update_and_stable_ids-manual-consumer-fe0ac42b-af4c-4916-94a6-e6d7580e17f1.json",
+      "bytes": 2531,
+      "sha256": "9e6188d1eb4730f08a183dd061d3be2e89e4c0320f828c832e61affe9da99f4e"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-studio-correction-evidence/TestPhase2ActionLineageMatrix__mixed_update_and_stable_ids-manual-final-618b2f33-311c-474e-9737-3575b841a02b.json",
+      "bytes": 1968,
+      "sha256": "dcb196c1dea444944a9eee3efcc19d498f71c1c7e65de97853db70b718ca5b85"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-studio-correction-evidence/TestPhase2ActionLineageMatrix__mixed_update_and_stable_ids-manual-final-6c510252-55ae-4879-bc1d-49fd6a61e6f5.json",
+      "bytes": 2026,
+      "sha256": "b949a8c075cde7e821d37fc30fdbfb41e906cf9d6d832938783b4ec8fa5c96aa"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-studio-correction-evidence/TestPhase2ActionLineageMatrix__mixed_update_and_stable_ids-manual-final-83b38072-7aac-4d5d-9075-00204490eb54.json",
+      "bytes": 1946,
+      "sha256": "bc2d60c35c3b537ee94aad918989ce55111de09c076fd7c596cc4c61fc037350"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-studio-correction-evidence/TestPhase2ActionLineageMatrix__mixed_update_and_stable_ids-manual-final-fe0ac42b-af4c-4916-94a6-e6d7580e17f1.json",
+      "bytes": 1970,
+      "sha256": "cea1c07612684044210144055c1c3aadc4c73b2eb28c7c956e24ca99e680e9fe"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-studio-correction-evidence/TestPhase2ActionLineageMatrix__mixed_update_and_stable_ids-origin-65103e4a-2e28-409a-9c8b-33c4ffa5bf8d.json",
+      "bytes": 2135,
+      "sha256": "b71d8703561c1977d6cdeb3b910addb7dd057e4045f5d94e0fc024694464cdc7"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-studio-correction-evidence/TestPhase2ActionLineageMatrix__mixed_update_and_stable_ids-origin-7d2dd410-f58f-4542-b110-acb9bac0a177.json",
+      "bytes": 2930,
+      "sha256": "5209b675a5409210d1389937228192ccfd8cf2e513cd15c76743f4e32473e53a"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-studio-correction-evidence/TestPhase2ActionLineageMatrix__mixed_update_and_stable_ids-origin-8ec67326-fb22-4ba0-80bc-151179aa726a.json",
+      "bytes": 2080,
+      "sha256": "a2a143b6079bf4ece896a643c93a6bcf183a6a9a9b4ac6d189e88cb1bfdc12bd"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-studio-correction-evidence/TestPhase2ActionLineageMatrix__mixed_update_and_stable_ids-origin-eb6c2cb0-8479-448c-a4fd-cb0d32642248.json",
+      "bytes": 2455,
+      "sha256": "eba4e8eba833eb72d70e818a832d25136d451777ff13e808b4c06796c49131fc"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-studio-correction-evidence/TestPhase2ActionLineageMatrix__mixed_update_and_stable_ids-origin-ed1d0cc1-556c-455d-9052-b8190d755f98.json",
+      "bytes": 2361,
+      "sha256": "0a1dd7430783eda5ac5fd326fdfdf0266bc7c30501ce0d75d749804e42a8fe88"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-studio-correction-evidence/TestPhase2ActionLineageMatrix__mixed_update_and_stable_ids-revoke-secretary.json",
+      "bytes": 821,
+      "sha256": "9a7d1f9a942044cf40b046049a8d26dae9995519b1907c2baa922f16f25a3454"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-studio-correction-evidence/TestPhase2ActionLineageMatrix__mixed_update_and_stable_ids-scope-4f0031bb-d1ae-4be5-b115-aa9d57aa210a.json",
+      "bytes": 343,
+      "sha256": "dc2f79687c2102d21d32bbea36bf59c14122392812b5f77a6ea11f7a99b53ba3"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-studio-correction-evidence/TestPhase2ActionLineageMatrix__mixed_update_and_stable_ids-scope-ad662f7a-213c-4124-9000-7b3688012115.json",
+      "bytes": 286,
+      "sha256": "448814fb4b9f008aaa69ef1c10aeade96ad76a4f7e28f429626406a1eefa761e"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-studio-correction-evidence/TestPhase2ActionLineageMatrix__mixed_update_and_stable_ids-secretary-audit.json",
+      "bytes": 7092,
+      "sha256": "d5d7626504cd88882c6db0b4633b2e91c1df3ff9d5a1cd1d775c504d83c211db"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-studio-correction-evidence/TestPhase2ActionLineageMatrix__mixed_update_and_stable_ids-stable-check.json",
+      "bytes": 136,
+      "sha256": "316a838a2633cf96d794f552a464506b09e62f494cccff20db12e3faa0f15bcb"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-studio-correction-evidence/TestPhase2ActionLineageMatrix__mixed_update_and_stable_ids-stable-condition.json",
+      "bytes": 142,
+      "sha256": "875befde2b3b45e8d2e201ba7870bb0507cb2b55b0c7c46bba68796d8001883a"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-studio-correction-evidence/TestPhase2ActionLineageMatrix__role_and_studio_scope-final-owner-state.json",
+      "bytes": 20031,
+      "sha256": "66beab48d6c4c76fba5a87d555801fe57976d5dc0dd4e69e358e488b86ec00ec"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-studio-correction-evidence/TestPhase2ActionLineageMatrix__role_and_studio_scope-generation-179b75ce-e614-495e-af20-66e45de675dc.json",
+      "bytes": 22302,
+      "sha256": "5f4d72bced887cf038f1b54207ab027f4b4585b72061018e56c03d08c33cd2a7"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-studio-correction-evidence/TestPhase2ActionLineageMatrix__role_and_studio_scope-grant-deputy-ef843514-4aad-4a52-a981-bce40b78cbf5.json",
+      "bytes": 873,
+      "sha256": "67ab4df5d530dcc14bc9ec5293a5161465eeb56ff565822fcb6a3391ca17f512"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-studio-correction-evidence/TestPhase2ActionLineageMatrix__role_and_studio_scope-grant-manual-723685a9-eb43-41ea-884d-9000f56d400c.json",
+      "bytes": 873,
+      "sha256": "eb11dd23c42670973990a460833ca6c98bebc4df7a8a298e231150c429697ede"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-studio-correction-evidence/TestPhase2ActionLineageMatrix__role_and_studio_scope-grant-manual-8c612fe8-b9c2-40b9-a588-bc31e91ba2d3.json",
+      "bytes": 873,
+      "sha256": "26e5f1ae0e498bee202db135d2a0d549e3fe5100855c42fb79655edd8f5064b6"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-studio-correction-evidence/TestPhase2ActionLineageMatrix__role_and_studio_scope-grant-secretary-d8bcb070-6d45-4dca-9368-e5e0cda28e5e.json",
+      "bytes": 879,
+      "sha256": "7d39d95c4c2050ed727f4c66629e7f4183d9393e0169f11c607e4c401fb6a68f"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-studio-correction-evidence/TestPhase2ActionLineageMatrix__role_and_studio_scope-manual-consumer-91a097d1-34e0-4011-adff-337548cc3cfc.json",
+      "bytes": 2662,
+      "sha256": "6e8dbd1ed92a2600b18f7fc8b85720691b978add9badf8bfaad0973de8069fcb"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-studio-correction-evidence/TestPhase2ActionLineageMatrix__role_and_studio_scope-manual-consumer-a784330f-b675-4411-b3d6-e00b9a290f58.json",
+      "bytes": 4653,
+      "sha256": "62a2297e2f9e26437ccbfe05e261610cdafe1f8a963168891c032f34b119bde6"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-studio-correction-evidence/TestPhase2ActionLineageMatrix__role_and_studio_scope-manual-consumer-c98a0445-d4fa-4211-bd3d-d9990bc2fa17.json",
+      "bytes": 2662,
+      "sha256": "c50d4e7e7a446ccf554a17cffd8d0980d52f31f2cd431c4b934e1c7885fd82ea"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-studio-correction-evidence/TestPhase2ActionLineageMatrix__role_and_studio_scope-manual-final-91a097d1-34e0-4011-adff-337548cc3cfc.json",
+      "bytes": 2099,
+      "sha256": "158cb6f276f556100d3db1a75805112d7d67baf072447f35751cadaf98f7580e"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-studio-correction-evidence/TestPhase2ActionLineageMatrix__role_and_studio_scope-manual-final-a784330f-b675-4411-b3d6-e00b9a290f58.json",
+      "bytes": 3978,
+      "sha256": "13242c5769e3047f224d16fd4e848051221e88a95affa6fa4538d9cac166ab91"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-studio-correction-evidence/TestPhase2ActionLineageMatrix__role_and_studio_scope-manual-final-c98a0445-d4fa-4211-bd3d-d9990bc2fa17.json",
+      "bytes": 2099,
+      "sha256": "f11421739ba8a6919c33f0581af7e834874c819bdd6063eb990500b93e4596df"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-studio-correction-evidence/TestPhase2ActionLineageMatrix__role_and_studio_scope-origin-0461f9ce-67d8-4f94-a147-d4a020fd7268.json",
+      "bytes": 1953,
+      "sha256": "d03c6980996a15a7a4e3c6d36a3788a0d89cd28674006ba8944c7216813444e5"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-studio-correction-evidence/TestPhase2ActionLineageMatrix__role_and_studio_scope-scope-650baa38-6e63-4448-9364-cf18740820fb.json",
+      "bytes": 343,
+      "sha256": "713780dcda82e83916253bc5b922eecd6020db0366ba163a733a2a94c61c7913"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-studio-correction-run1-original.log",
+      "bytes": 417041,
+      "sha256": "4cefe2cdc752514b8e9c06006f14bed5d726768d6970e04539b32c372b353c7c"
+    }
+  ],
+  "restore_from_repository_root": "tar -xzf docs/evaluations/2026-10-01-phase2-action-lineage-studio-correction-evidence.tar.gz -C docs/evaluations"
+}

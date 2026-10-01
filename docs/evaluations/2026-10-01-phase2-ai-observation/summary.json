@@ -1,0 +1,40 @@
+{
+  "product_sha": "eeab123cc8649838a3bd72b28e19a1e842673489",
+  "harness_sha": "6f498263e3f70b960beb82aba07c7dbde4a520cf",
+  "exit_code": 0,
+  "top": {
+    "pass": 3,
+    "fail": 0,
+    "skip": 0
+  },
+  "leaf": {
+    "pass": 10,
+    "fail": 0,
+    "skip": 0
+  },
+  "events": 80,
+  "observations": 10,
+  "raw_jsonl_sha256": "0cacb66de680fad1fa1842c964da4d04373009f90efbffa266bbb04b771b3877",
+  "leaf_actions": {
+    "github.com/soaringjerry/PCAS/internal/ai/TestPhase2ContextHTTPFinalBytesAndBeforeDispatchRefusal/openai/refuse_false": "pass",
+    "github.com/soaringjerry/PCAS/internal/ai/TestPhase2ContextHTTPFinalBytesAndBeforeDispatchRefusal/openai/refuse_true": "pass",
+    "github.com/soaringjerry/PCAS/internal/ai/TestPhase2ContextHTTPFinalBytesAndBeforeDispatchRefusal/responses/refuse_false": "pass",
+    "github.com/soaringjerry/PCAS/internal/ai/TestPhase2ContextHTTPFinalBytesAndBeforeDispatchRefusal/responses/refuse_true": "pass",
+    "github.com/soaringjerry/PCAS/internal/ai/TestPhase2ContextHTTPFinalBytesAndBeforeDispatchRefusal/anthropic/refuse_false": "pass",
+    "github.com/soaringjerry/PCAS/internal/ai/TestPhase2ContextHTTPFinalBytesAndBeforeDispatchRefusal/anthropic/refuse_true": "pass",
+    "github.com/soaringjerry/PCAS/internal/ai/TestPhase2ContextCodexActualArgumentsAndBeforeTurnRefusal/refuse_false": "pass",
+    "github.com/soaringjerry/PCAS/internal/ai/TestPhase2ContextCodexActualArgumentsAndBeforeTurnRefusal/refuse_true": "pass",
+    "github.com/soaringjerry/PCAS/internal/ai/siwc/TestPhase2ContextSIWCUnselectedModelFinalBytesAndBeforeDispatchRefusal/refuse_false": "pass",
+    "github.com/soaringjerry/PCAS/internal/ai/siwc/TestPhase2ContextSIWCUnselectedModelFinalBytesAndBeforeDispatchRefusal/refuse_true": "pass"
+  },
+  "files": {
+    "acceptance.jsonl.gz": {
+      "bytes": 3512,
+      "sha256": "bae7bb9baab541b4c852bd2820541355e1623e3915d88c72ab015a306dce1dae"
+    },
+    "observations.json": {
+      "bytes": 21569,
+      "sha256": "0b7c5835e831059929a4e04e3897e475ebfd261be14617a26d9ab292624f39aa"
+    }
+  }
+}

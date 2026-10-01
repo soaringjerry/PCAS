@@ -125,16 +125,7 @@ func TestUndoQueuedDelegationAndStartedWork(t *testing.T) {
 	for _, started := range []bool{false, true} {
 		id := string(memory.NewID())
 		action := string(memory.NewID())
-		err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-			logged := withActionLog(ctx, action, "desk", "", "写方案")
-			if err := beginActionLogTx(logged, tx); err != nil {
-				return err
-			}
-			if err := s.commandTx(logged, tx, scope, workspace.Command{Type: "delegateTask", ID: id, Title: "写方案", Prompt: "写方案", AgentID: "model"}); err != nil {
-				return err
-			}
-			return flushActionLog(logged, tx, scope)
-		})
+		_, err := s.Execute(ctx, scope, workspace.Command{Type: "delegateTask", ID: id, Title: "写方案", Prompt: "写方案", AgentID: "model", RequestID: action})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -209,6 +200,7 @@ func TestDueReminderOffsets(t *testing.T) {
 
 func TestDeletionExpiresItemAndDocumentSnapshots(t *testing.T) {
 	s := testStore(t)
+	phase2ManualDestination(t, s)
 	scope := owner()
 	ctx := context.Background()
 	st := workspaceCommand(t, s, scope, workspace.Command{Type: "capture", Text: "要删除的私密资料"})
@@ -237,8 +229,9 @@ func TestDeletionExpiresItemAndDocumentSnapshots(t *testing.T) {
 	}
 	// A run-backed document is purged when its input memory is erased. Creating
 	// this fixture directly avoids invoking model generation or adoption samples.
-	st = workspaceCommand(t, s, scope, workspace.Command{Type: "requestRun", ThingID: itemID, AgentID: "manual", Kind: "draft", Prompt: "整理要删除的私密资料"})
+	st = workspaceCommand(t, s, scope, workspace.Command{Type: "requestRun", ThingID: itemID, AgentID: "manual", ManualRecipient: &memory.Recipient{Provider: phase2ManualProvider}, Kind: "draft", Prompt: "整理要删除的私密资料"})
 	run := st.Runs[0]
+	phase2RTGetPackage(t, s, scope, run)
 	if !hasArtifactDependency(run.ContextVersions, mem.ID) {
 		t.Fatal("run fixture has no dependency", run)
 	}

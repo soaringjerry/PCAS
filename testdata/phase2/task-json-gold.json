@@ -1,0 +1,26 @@
+{
+  "schema": "pcas.phase2.independent-trusted-task-wire-gold.v1",
+  "frozen_at": "2026-10-01",
+  "authority": "root approved public Run.contextTask lowerCamel wire and old uppercase Task read compatibility",
+  "new_task_keys": ["ownerId", "recipient", "purpose", "scope", "view", "now", "timezone", "memoryBudget", "totalInputTokens", "desk_actions"],
+  "required": [
+    "real workspace.Run Marshal contextTask exposes lowercase recipient with exact full route tuple, not uppercase Recipient",
+    "all explicit new Task keys use the frozen exact spelling; nested Recipient/Scope/View/Budget JSON contracts remain unchanged",
+    "fixed legacy uppercase Task fixture decodes all owner/recipient/purpose/scope/version view/timezone/time/budget/DeskActions semantics exactly",
+    "new Marshal of the decoded legacy Task then Unmarshal preserves all exact values and pointed version-view timestamps"
+  ],
+  "legacy_task": {
+    "OwnerID": "11111111-1111-4111-8111-111111111111",
+    "Recipient": {"principal_id": "synthetic-deputy", "role": "deputy", "model": "synthetic-model", "provider": "local-synthetic", "protocol": "openai", "channel": "api", "route_fingerprint": "abababababababababababababababababababababababababababababababab"},
+    "Purpose": "knowledge",
+    "Scope": {"kind": "studio", "studio_id": "22222222-2222-4222-8222-222222222222", "include_global_constraints": true},
+    "View": {"mode": "history", "valid_at": "2026-09-30T09:08:07Z", "known_at": "2026-10-01T01:00:00Z"},
+    "Now": "2026-10-01T01:02:03.123456789Z",
+    "Timezone": "Australia/Melbourne",
+    "MemoryBudget": {"candidates": 37, "edges": 9, "tokens": 777, "hops": 2},
+    "TotalInputTokens": 9999,
+    "desk_actions": ["33333333-3333-4333-8333-333333333333", "44444444-4444-4444-8444-444444444444"]
+  },
+  "limits": "Independent public JSON and persisted legacy compatibility unit tests only, no UI mock or claim that real serve UI has passed.",
+  "failure_policy": "Compile before root exact final combined head; no dynamic on obsolete wire or missing capabilities."
+}

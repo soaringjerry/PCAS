@@ -13,12 +13,14 @@ import (
 type actionLogKey struct{}
 type actionLog struct{ id, source, turnID, summary string }
 type actionChange struct {
-	Table         string          `json:"table"`
-	ID            string          `json:"id"`
-	Before        json.RawMessage `json:"before"`
-	AfterHash     *string         `json:"afterHash"`
-	SourceVersion int             `json:"sourceVersion,omitempty"`
-	ScopeRevision int             `json:"scopeRevision,omitempty"`
+	Table           string                     `json:"table"`
+	ID              string                     `json:"id"`
+	Before          json.RawMessage            `json:"before"`
+	AfterHash       *string                    `json:"afterHash"`
+	SourceVersion   int                        `json:"sourceVersion,omitempty"`
+	ScopeRevision   int                        `json:"scopeRevision,omitempty"`
+	BeforeBlocks    map[string][]artifactBlock `json:"beforeBlocks"`
+	AfterBlocksHash *string                    `json:"afterBlocksHash,omitempty"`
 }
 
 func withActionLog(ctx context.Context, id, source, turnID, summary string) context.Context {
@@ -49,17 +51,38 @@ func flushActionLog(ctx context.Context, tx pgx.Tx, scope memory.Scope) error {
 	if err := json.Unmarshal(changes, &entries); err != nil {
 		return err
 	}
+	for i := range entries {
+		if entries[i].Table == "work_items" && entries[i].BeforeBlocks != nil {
+			hash, err := itemBlocksHashTx(ctx, tx, scope, entries[i].ID)
+			if err != nil {
+				return err
+			}
+			entries[i].AfterBlocksHash = &hash
+		}
+	}
+	changes = asJSON(entries)
 	if _, err := tx.Exec(ctx, "SELECT set_config('pcas.action_changes','',true)"); err != nil {
 		return err
 	}
 	if len(entries) == 0 {
 		return nil
 	}
-	_, err := tx.Exec(ctx, "INSERT INTO action_log(owner_id,id,source,turn_id,summary,changes) VALUES($1,$2,$3,$4,$5,$6)", string(scope.OwnerID), log.id, log.source, nullString(log.turnID), log.summary, changes)
-	return err
+	var taskJSON any
+	provenance, derived := ctx.Value(secretaryArtifactKey{}).(secretaryArtifactContext)
+	if derived {
+		taskJSON = asJSON(provenance.Task)
+	}
+	_, err := tx.Exec(ctx, "INSERT INTO action_log(owner_id,id,source,turn_id,summary,changes,context_task) VALUES($1,$2,$3,$4,$5,$6,$7)", string(scope.OwnerID), log.id, log.source, nullString(log.turnID), log.summary, changes, taskJSON)
+	if err != nil {
+		return err
+	}
+	if derived {
+		return persistContextArtifactDependenciesTx(ctx, tx, scope, "artifact", log.id, 1, provenance.Task, provenance.Dependencies)
+	}
+	return nil
 }
 func undoableCommand(t string) bool {
-	return oneOf(t, "addTask", "addIdea", "addProject", "updateTask", "updateProject", "setTaskStatus", "renameThing", "setNotes", "moveThing", "deferTask", "addCheck", "toggleCheck", "removeCheck", "ideaPromote", "ideaSnooze", "ideaShelve", "ideaDrop", "ideaContinue", "addCondition", "removeCondition", "adoptRun", "discardRun", "createDoc", "updateDoc", "deleteDoc", "bulkStatus", "bulkDefer", "bulkMove")
+	return oneOf(t, "addTask", "addIdea", "addProject", "updateTask", "updateProject", "setTaskStatus", "renameThing", "setNotes", "moveThing", "deferTask", "addCheck", "toggleCheck", "removeCheck", "ideaPromote", "ideaSnooze", "ideaShelve", "ideaDrop", "ideaContinue", "addCondition", "removeCondition", "delegateTask", "adoptRun", "discardRun", "createDoc", "updateDoc", "deleteDoc", "bulkStatus", "bulkDefer", "bulkMove")
 }
 func commandSummary(ctx context.Context, tx pgx.Tx, scope memory.Scope, c workspace.Command) string {
 	title := c.Title
@@ -100,7 +123,8 @@ func (s *Store) undoActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 	var order *int64
 	var source string
 	var turnID *string
-	err := tx.QueryRow(ctx, "SELECT changes,summary,undone_at::text,expired_at IS NOT NULL OR created_at<now()-interval '30 days',created_at,action_order,source,turn_id::text FROM action_log WHERE owner_id=$1 AND id=$2 FOR UPDATE", string(scope.OwnerID), id).Scan(&data, &summary, &undone, &expired, &created, &order, &source, &turnID)
+	var derived bool
+	err := tx.QueryRow(ctx, "SELECT changes,summary,undone_at::text,expired_at IS NOT NULL OR created_at<now()-interval '30 days',created_at,action_order,source,turn_id::text,context_task IS NOT NULL FROM action_log WHERE owner_id=$1 AND id=$2 FOR UPDATE", string(scope.OwnerID), id).Scan(&data, &summary, &undone, &expired, &created, &order, &source, &turnID, &derived)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return memory.ErrNotFound
 	}
@@ -113,6 +137,16 @@ func (s *Store) undoActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 	// Enforce the window even before another action flushes old snapshots.
 	if expired {
 		return workspace.ErrExpired
+	}
+	if derived {
+		review := scope
+		review.Task = nil
+		if _, e := s.secretaryArtifactOriginTx(ctx, tx, review, id, nil); e != nil {
+			if !isSecretaryOriginGap(e) {
+				return e
+			}
+			summary = "事项修改"
+		}
 	}
 	var changes []actionChange
 	if err = json.Unmarshal(data, &changes); err != nil {
@@ -169,6 +203,16 @@ func (s *Store) undoActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 				return workspace.ErrWorkStarted
 			}
 		}
+		if c.Table == "work_items" && c.AfterBlocksHash != nil {
+			hash, e := itemBlocksHashTx(ctx, tx, scope, c.ID)
+			if e != nil {
+				return e
+			}
+			if hash != *c.AfterBlocksHash {
+				return workspace.ErrChangedSince
+			}
+		}
+
 		// Use the trigger's content fingerprint; retain full-document matching for
 		// actions collected before migration 019, whose after snapshots are absent.
 		var hash, legacyHash string
@@ -220,9 +264,28 @@ func (s *Store) undoActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 				if err = suppressRestoredRemindersTx(ctx, tx, scope, current, item, time.Now()); err != nil {
 					return err
 				}
+				saveCtx := ctx
+				if c.BeforeBlocks != nil {
+					scrubbed, e := s.restoreActionBlocksTx(ctx, tx, scope, &item, c.BeforeBlocks)
+					if e != nil {
+						return e
+					}
+					if scrubbed {
+						summary = "事项修改"
+					}
+					// Legacy rows without a block fingerprint still restore normally,
+					// but cannot claim the double-fenced precise-restore shortcut.
+					if c.AfterBlocksHash != nil {
+						restored, e := loadItemBlocksTx(ctx, tx, scope, item.ID)
+						if e != nil {
+							return e
+						}
+						saveCtx = context.WithValue(ctx, restoredArtifactKey{}, restoredArtifactFields{ThingID: item.ID, Fields: restored})
+					}
+				}
 				item.Version = current.Version + 1
 				item.UpdatedAt = stamp()
-				err = s.saveAction(ctx, tx, scope, item, "撤销："+summary)
+				err = s.saveAction(saveCtx, tx, scope, item, "撤销："+summary)
 			case "work_documents":
 				var doc workspace.Doc
 				if err = json.Unmarshal(c.Before, &doc); err == nil {
@@ -231,6 +294,11 @@ func (s *Store) undoActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 			case "agent_runs":
 				var run workspace.Run
 				if err = json.Unmarshal(c.Before, &run); err == nil {
+					if len(run.ContextPromptDeskActions) > 0 && s.verifyRunTx(ctx, tx, scope, run) != nil {
+						run.Prompt, run.Brief, run.Output, run.ProviderError = "", "", "", nil
+						run.StaleContext = true
+						c.Before = asJSON(run)
+					}
 					_, err = tx.Exec(ctx, "UPDATE agent_runs SET document=$3,status=$4 WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), c.ID, c.Before, run.Status)
 				}
 			}

@@ -134,7 +134,7 @@ func autoAdoptModel(t *testing.T, s *Store, output string, during func()) {
 		if during != nil {
 			during()
 		}
-		_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": map[string]string{"content": output}}}, "usage": map[string]int{"prompt_tokens": 100, "completion_tokens": 20}})
+		_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": map[string]string{"content": string(asJSON(map[string]any{"output": output, "used": []any{}}))}}}, "usage": map[string]int{"prompt_tokens": 100, "completion_tokens": 20}})
 	}))
 	t.Cleanup(server.Close)
 	s.SetModels(&ai.Registry{HTTP: server.Client(), Config: ai.Configuration{Providers: []ai.Provider{{ID: "auto-model", Name: "Auto model", Protocol: "openai", BaseURL: server.URL, Model: "test", MaxOutput: 200, InputPerMillion: 1, OutputPerMillion: 2}}}})
@@ -177,10 +177,15 @@ func TestAutoAdoptDestinationsAndUndo(t *testing.T) {
 				if path == "manual" {
 					agent = "manual"
 				}
-				st = workspaceCommand(t, s, scope, workspace.Command{Type: "requestRun", ThingID: id, AgentID: agent, Kind: tc.runKind, Prompt: "处理事项"})
+				command := workspace.Command{Type: "requestRun", ThingID: id, AgentID: agent, Kind: tc.runKind, Prompt: "处理事项"}
+				if path == "manual" {
+					command.ManualRecipient = &memory.Recipient{Provider: "auto-model"}
+				}
+				st = workspaceCommand(t, s, scope, command)
 				runID := st.Runs[0].ID
 				revision := st.Revision
 				if path == "manual" {
+					phase2RTGetPackage(t, s, scope, st.Runs[0])
 					st = workspaceCommand(t, s, scope, workspace.Command{Type: "pasteRunResult", ID: runID, Output: tc.output})
 				} else {
 					if err := s.runAgentOnce(ctx); err != nil {
@@ -355,6 +360,9 @@ func TestAutoAdoptChangedSince(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if len(st.Runs) != 1 || st.Runs[0].Status != "done" || st.Runs[0].Adopted == nil {
+		t.Fatal("completed automatically adopted positive control absent", st.Runs)
+	}
 	actionID := st.Runs[0].Adopted.ActionID
 	st = workspaceCommand(t, s, scope, workspace.Command{Type: "setNotes", ID: id, Text: "后来修改"})
 	_, err = s.Execute(context.Background(), scope, workspace.Command{Type: "undoAction", ID: actionID, RequestID: string(memory.NewID()), ExpectedRevision: st.Revision})
@@ -370,10 +378,12 @@ func TestAutoAdoptSkipsStaleAndEmpty(t *testing.T) {
 	}{{"stale", "有效的结果", true}, {"empty", "", false}, {"blank", "\n \t", false}} {
 		t.Run(tc.name, func(t *testing.T) {
 			s := testStore(t)
+			phase2ManualDestination(t, s)
 			scope := owner()
 			st := workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "事项"})
-			st = workspaceCommand(t, s, scope, workspace.Command{Type: "requestRun", ThingID: st.Tasks[0].ID, AgentID: "manual", Kind: "draft", Prompt: "写文档"})
+			st = workspaceCommand(t, s, scope, workspace.Command{Type: "requestRun", ThingID: st.Tasks[0].ID, AgentID: "manual", ManualRecipient: &memory.Recipient{Provider: phase2ManualProvider}, Kind: "draft", Prompt: "写文档"})
 			run := st.Runs[0]
+			phase2RTGetPackage(t, s, scope, run)
 			run.Status, run.Output, run.StaleContext = "done", tc.output, tc.stale
 			err := pgx.BeginFunc(context.Background(), s.pool, func(tx pgx.Tx) error {
 				ctx := context.Background()
@@ -396,7 +406,9 @@ func TestAutoAdoptSkipsStaleAndEmpty(t *testing.T) {
 func TestAutoAdoptWorkerSkipsStaleFlag(t *testing.T) {
 	s := testStore(t)
 	scope := owner()
+	var calls atomic.Int32
 	autoAdoptModel(t, s, "结果仍然存在", func() {
+		calls.Add(1)
 		if _, err := s.pool.Exec(context.Background(), "UPDATE agent_runs SET document=document||'{\"staleContext\":true}'::jsonb WHERE owner_id=$1", string(scope.OwnerID)); err != nil {
 			t.Error(err)
 		}
@@ -407,8 +419,18 @@ func TestAutoAdoptWorkerSkipsStaleFlag(t *testing.T) {
 		t.Fatal(err)
 	}
 	st, err := s.Snapshot(context.Background(), scope)
-	if err != nil || st.Runs[0].Status != "done" || !st.Runs[0].StaleContext || st.Runs[0].Adopted != nil || len(st.Docs) != 0 {
+	if err != nil || st.Runs[0].Status != "failed" || !st.Runs[0].StaleContext || st.Runs[0].Adopted != nil || len(st.Docs) != 0 || st.Runs[0].Output != "" || st.Runs[0].Brief != "" {
 		t.Fatalf("stale flag ignored: %+v %v", st.Runs, err)
+	}
+	// Real HTTP already happened: privacy invalidation cannot erase incurred
+	// usage. The fixture returns 100 input + 20 output at 1/2 per million.
+	if calls.Load() != 1 || st.Runs[0].Cost != (100.0+20.0*2)/1_000_000 {
+		t.Fatal("stale final fence lost actual completed model usage", calls.Load(), st.Runs[0].Cost)
+	}
+	var reserved float64
+	var status string
+	if err := s.pool.QueryRow(context.Background(), "SELECT reserved_cost,status FROM agent_runs WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), st.Runs[0].ID).Scan(&reserved, &status); err != nil || status != "failed" || reserved != st.Runs[0].Cost {
+		t.Fatal("stale final fence released already incurred cost or kept done status", err, reserved, status)
 	}
 }
 
@@ -462,7 +484,11 @@ FOR EACH ROW WHEN (NEW.source='worker') EXECUTE FUNCTION reject_worker_adoption(
 				if path == "manual" {
 					agent = "manual"
 				}
-				st = workspaceCommand(t, s, scope, workspace.Command{Type: "requestRun", ThingID: project.ID, AgentID: agent, Kind: kind, Prompt: "Generate result"})
+				command := workspace.Command{Type: "requestRun", ThingID: project.ID, AgentID: agent, Kind: kind, Prompt: "Generate result"}
+				if path == "manual" {
+					command.ManualRecipient = &memory.Recipient{Provider: "auto-model"}
+				}
+				st = workspaceCommand(t, s, scope, command)
 				runID, revision := st.Runs[0].ID, st.Revision
 				var warnings bytes.Buffer
 				previousLogger := slog.Default()
@@ -478,6 +504,7 @@ FOR EACH ROW WHEN (NEW.source='worker') EXECUTE FUNCTION reject_worker_adoption(
 						t.Fatal(err)
 					}
 				} else {
+					phase2RTGetPackage(t, s, scope, st.Runs[0])
 					st = workspaceCommand(t, s, scope, workspace.Command{Type: "pasteRunResult", ID: runID, Output: output})
 				}
 				run := st.Runs[0]

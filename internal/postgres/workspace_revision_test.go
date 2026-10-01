@@ -74,6 +74,7 @@ func TestWorkspaceStaleRevisionCommandsAndReplay(t *testing.T) {
 			case "requestRun":
 				command.ID, command.ThingID = "", created.ID
 				command.AgentID, command.Kind, command.Prompt = "manual", "plan", "帮我规划"
+				command.ManualRecipient = &memory.Recipient{Provider: "model"}
 			case "delegateTask":
 				command.ID, command.Title = string(memory.NewID()), "写方案"
 				command.AgentID, command.Kind, command.Prompt = "model", "plan", "帮我规划"

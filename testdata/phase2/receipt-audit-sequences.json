@@ -1,0 +1,39 @@
+{
+  "schema": "pcas.phase2.independent-receipt-audit-gold.v1",
+  "authority": "root approved F7 source-empty/source-typed real HTTP history pair",
+  "cases": [
+    {
+      "id": "RECEIPT-EMPTY",
+      "source_input": false,
+      "sequence": [
+        "true secretary turn1 create_task title RECEIPT-AUDIT-EMPTY-866",
+        "separate same-conversation turn2 update due for same task/title",
+        "strict Undo update then strict Undo create, actual item removed",
+        "real owner HTTP GET desk turns after both Undo"
+      ],
+      "required": [
+        "two actual turns/real committed distinct action IDs still exist",
+        "both receipts Undone true and same original title/ThingID retained",
+        "whole action DAG typed dependencies proven empty",
+        "no re-execution/model call on history"
+      ]
+    },
+    {
+      "id": "RECEIPT-SOURCE",
+      "source_input": true,
+      "sequence": [
+        "actual secretary Input original gold raw source; separate turn1 create/task title includes gold source atom",
+        "turn2 update same task, real source Input/source exact typed stamps",
+        "strict Undo update then strict Undo create",
+        "real owner HTTP GET desk turns"
+      ],
+      "required": [
+        "two actual actions+Undone identities retained, but generic audit display may hide source title",
+        "no original atom/source-derived title in actual HTTP response after undo",
+        "source typed dependencies positively proven on real action origins; no SQL dependency injection",
+        "Reply/Cards/model history not revived by owner audit exception"
+      ]
+    }
+  ],
+  "limits": "owner-only local receipt exception; not permission to reconstruct invalid generated fields or re-send model context"
+}

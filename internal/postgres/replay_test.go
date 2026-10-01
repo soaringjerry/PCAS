@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -98,64 +99,154 @@ func TestExtractionEvidenceSignalAndReminderDeletion(t *testing.T) {
 	}
 }
 func TestRunGrantRevocationAndArtifactCleanup(t *testing.T) {
-	s := testStore(t)
-	scope := owner()
-	ctx := context.Background()
-	st := workspaceCommand(t, s, scope, workspace.Command{Type: "capture", Text: "受控的私密事实"})
-	st = workspaceCommand(t, s, scope, workspace.Command{Type: "acceptCandidate", ID: st.Candidates[0].ID, Kind: "memory", MemoryKind: "fact", Text: "受控的私密事实"})
-	mem := st.Memories[0]
-	st = workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "测试事项"})
-	task := st.Tasks[0]
-	// This fixture needs a genuinely retrieved input before it can test the
-	// adopted output's transitive dependency. A generic summary request does
-	// not select an unrelated fact under ranked retrieval.
-	st = workspaceCommand(t, s, scope, workspace.Command{Type: "requestRun", ThingID: task.ID, AgentID: "manual", Kind: "summary", Prompt: "总结受控的私密事实"})
-	run := st.Runs[0]
-	if !oneOf(mem.ID, run.ContextMemoryIDs...) {
-		t.Fatal("fixture run did not include the private memory")
+	setup := func(t *testing.T) (*Store, memory.Scope, workspace.Memory, workspace.Item) {
+		t.Helper()
+		s := testStore(t)
+		phase2ManualDestination(t, s)
+		scope := owner()
+		st := workspaceCommand(t, s, scope, workspace.Command{Type: "capture", Text: "受控的私密事实"})
+		st = workspaceCommand(t, s, scope, workspace.Command{Type: "acceptCandidate", ID: st.Candidates[0].ID, Kind: "memory", MemoryKind: "fact", Text: "受控的私密事实"})
+		mem := st.Memories[0]
+		st = workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "测试事项"})
+		task := st.Tasks[0]
+		// Establish actual retrieved claim input and adopted transitive lineage.
+		st = workspaceCommand(t, s, scope, workspace.Command{Type: "requestRun", ThingID: task.ID, AgentID: "manual", ManualRecipient: &memory.Recipient{Provider: phase2ManualProvider}, Kind: "summary", Prompt: "总结受控的私密事实"})
+		run := st.Runs[0]
+		if !oneOf(mem.ID, run.ContextMemoryIDs...) {
+			t.Fatal("fixture run did not include the private memory")
+		}
+		phase2RTGetPackage(t, s, scope, run)
+		workspaceCommand(t, s, scope, workspace.Command{Type: "pasteRunResult", ID: run.ID, Output: "由私密事实推导的结果"})
+		undoAutoAdoption(t, s, scope, run.ID)
+		workspaceCommand(t, s, scope, workspace.Command{Type: "adoptRun", ID: run.ID, As: "progress", Text: "由私密事实推导的结果"})
+		return s, scope, mem, task
 	}
-	st = workspaceCommand(t, s, scope, workspace.Command{Type: "pasteRunResult", ID: run.ID, Output: "由私密事实推导的结果"})
-	undoAutoAdoption(t, s, scope, run.ID)
-	st = workspaceCommand(t, s, scope, workspace.Command{Type: "adoptRun", ID: run.ID, As: "progress", Text: "由私密事实推导的结果"})
-	st = workspaceCommand(t, s, scope, workspace.Command{Type: "updateTask", ID: task.ID, Patch: asJSON(map[string]any{"notes": st.Tasks[0].Notes + strings.Repeat("n", 31000)})})
-	st = workspaceCommand(t, s, scope, workspace.Command{Type: "requestRun", ThingID: task.ID, AgentID: "manual", Kind: "ask", Prompt: "使用采纳内容"})
-	if strings.Contains(st.Runs[0].Brief, "["+mem.ID+"@") {
-		t.Fatal("fixture must exclude the direct memory text from the oversized brief")
-	}
-	if !oneOf(mem.ID, st.Runs[0].ContextMemoryIDs...) {
-		t.Fatal("derived context lost its transitive dependency")
-	}
-	st = workspaceCommand(t, s, scope, workspace.Command{Type: "updateAgent", ID: "manual", Patch: asJSON(map[string]any{"memoryKinds": []string{"preference"}})})
-	st = workspaceCommand(t, s, scope, workspace.Command{Type: "requestRun", ThingID: task.ID, AgentID: "manual", Kind: "ask", Prompt: "只看偏好"})
-	if strings.Contains(st.Runs[0].Brief, "私密事实") {
-		t.Fatal("copied result bypassed kind policy")
-	}
-	st = workspaceCommand(t, s, scope, workspace.Command{Type: "setMemoryVisibility", ID: mem.ID, AgentIDs: []string{}})
-	st = workspaceCommand(t, s, scope, workspace.Command{Type: "requestRun", ThingID: task.ID, AgentID: "manual", Kind: "ask", Prompt: "重新总结"})
-	if strings.Contains(st.Runs[0].Brief, "私密事实") {
-		t.Fatal("adopted copy bypassed revocation")
-	}
-	st = workspaceCommand(t, s, scope, workspace.Command{Type: "deleteMemory", ID: mem.ID, IncludeSources: true})
-	data, err := s.Export(ctx, scope, false, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if strings.Contains(string(data), "私密事实") {
-		t.Fatal("deleted derived content survived in export")
-	}
+	t.Run("oversized_31k_refuses_delivery", func(t *testing.T) {
+		s, scope, mem, task := setup(t)
+		st, err := s.Snapshot(context.Background(), scope)
+		if err != nil {
+			t.Fatal(err)
+		}
+		notes := st.Tasks[0].Notes + strings.Repeat("n", 31000)
+		workspaceCommand(t, s, scope, workspace.Command{Type: "updateTask", ID: task.ID, Patch: asJSON(map[string]any{"notes": notes})})
+		st = workspaceCommand(t, s, scope, workspace.Command{Type: "requestRun", ThingID: task.ID, AgentID: "manual", ManualRecipient: &memory.Recipient{Provider: phase2ManualProvider}, Kind: "ask", Prompt: "使用采纳内容"})
+		run := st.Runs[0]
+		if !oneOf(mem.ID, run.ContextMemoryIDs...) {
+			t.Fatal("derived context lost its transitive dependency")
+		}
+		w := phase2RTHTTP(t, s, scope, http.MethodGet, "/v1/workspace/runs/"+run.ID+"/package", nil)
+		var rejected struct {
+			Error string `json:"error"`
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &rejected); err != nil || w.Code != http.StatusInsufficientStorage || rejected.Error != "record_capacity" {
+			t.Fatalf("31k handoff must reject with exact capacity: %d %s", w.Code, w.Body.String())
+		}
+		attempts, err := s.ContextAttempts(context.Background(), scope, run.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, attempt := range attempts {
+			if attempt.DeliveredAt != nil || attempt.DispatchedAt != nil {
+				t.Fatal("oversized package fabricated delivery/dispatch", attempt)
+			}
+		}
+		st, err = s.Snapshot(context.Background(), scope)
+		if err != nil || st.Tasks[0].Notes != notes {
+			t.Fatal("capacity rejection changed original 31k owner writing", err)
+		}
+		phase2RTEvidence(t, "oversized-indirect", map[string]any{"run": run, "attempts": attempts, "owner_notes_bytes": len(notes), "owner_padding_bytes": 31000, "response_status": w.Code, "response": json.RawMessage(w.Body.Bytes()), "target_http_requests": 0})
+	})
+	t.Run("normal_indirect_then_kind_revoke_delete", func(t *testing.T) {
+		s, scope, mem, task := setup(t)
+		ctx := context.Background()
+		st, err := s.Snapshot(ctx, scope)
+		if err != nil {
+			t.Fatal(err)
+		}
+		// A normal-sized owner continuation separates the old derived field from
+		// the latest question. No policy, exclusion, budget or dependency is forged.
+		workspaceCommand(t, s, scope, workspace.Command{Type: "updateTask", ID: task.ID, Patch: asJSON(map[string]any{"notes": st.Tasks[0].Notes + strings.Repeat("n", 5000)})})
+		st = workspaceCommand(t, s, scope, workspace.Command{Type: "requestRun", ThingID: task.ID, AgentID: "manual", ManualRecipient: &memory.Recipient{Provider: phase2ManualProvider}, Kind: "ask", Prompt: "继续完成普通检查"})
+		phase2RTGetPackage(t, s, scope, st.Runs[0])
+		workspaceCommand(t, s, scope, workspace.Command{Type: "pasteRunResult", ID: st.Runs[0].ID, Output: "普通后续结果"})
+		st = workspaceCommand(t, s, scope, workspace.Command{Type: "requestRun", ThingID: task.ID, AgentID: "manual", ManualRecipient: &memory.Recipient{Provider: phase2ManualProvider}, Kind: "ask", Prompt: "继续完成普通检查"})
+		run := st.Runs[0]
+		pkg := phase2RTGetPackage(t, s, scope, run)
+		ref := memory.Ref{ID: memory.ID(mem.ID), Version: mem.Version, Kind: memory.ClaimKind}
+		for _, input := range pkg.Manifest.Input {
+			if input.Ref == ref {
+				t.Fatal("indirect-only control unexpectedly directly supplied exact claim", input)
+			}
+		}
+		indirect := false
+		for _, dep := range pkg.Manifest.IndirectDependencies {
+			if dep.Ref == ref {
+				indirect = true
+			}
+		}
+		if !indirect || !oneOf(mem.ID, run.ContextMemoryIDs...) {
+			t.Fatal("derived context lost exact transitive claim dependency", pkg.Manifest)
+		}
+		if !strings.Contains(pkg.Text, "由私密事实推导的结果") {
+			t.Fatal("lawful indirect derived text positive control absent")
+		}
+		phase2RTEvidence(t, "normal-indirect", map[string]any{"run": run, "package": pkg, "exact_claim": ref, "query": "继续完成普通检查", "original_claim": "受控的私密事实", "derived": "由私密事实推导的结果", "owner_padding_bytes": 5000})
+		var kinds []string
+		for _, agent := range st.Agents {
+			if agent.ID == "manual" {
+				kinds = append([]string(nil), agent.MemoryKinds...)
+			}
+		}
+		workspaceCommand(t, s, scope, workspace.Command{Type: "updateAgent", ID: "manual", Patch: asJSON(map[string]any{"memoryKinds": []string{"preference"}})})
+		st = workspaceCommand(t, s, scope, workspace.Command{Type: "requestRun", ThingID: task.ID, AgentID: "manual", ManualRecipient: &memory.Recipient{Provider: phase2ManualProvider}, Kind: "ask", Prompt: "只看偏好"})
+		pkg = phase2RTGetPackage(t, s, scope, st.Runs[0])
+		if strings.Contains(pkg.Text, "私密事实") {
+			t.Fatal("copied result bypassed kind policy")
+		}
+		// Restore the original kind filter so revocation is the isolated cause.
+		workspaceCommand(t, s, scope, workspace.Command{Type: "updateAgent", ID: "manual", Patch: asJSON(map[string]any{"memoryKinds": kinds})})
+		workspaceCommand(t, s, scope, workspace.Command{Type: "setMemoryVisibility", ID: mem.ID, AgentIDs: []string{}})
+		st = workspaceCommand(t, s, scope, workspace.Command{Type: "requestRun", ThingID: task.ID, AgentID: "manual", ManualRecipient: &memory.Recipient{Provider: phase2ManualProvider}, Kind: "ask", Prompt: "重新总结"})
+		pkg = phase2RTGetPackage(t, s, scope, st.Runs[0])
+		if strings.Contains(pkg.Text, "私密事实") {
+			t.Fatal("adopted copy bypassed revocation")
+		}
+		workspaceCommand(t, s, scope, workspace.Command{Type: "deleteMemory", ID: mem.ID, IncludeSources: true})
+		data, err := s.Export(ctx, scope, false, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(data), "私密事实") {
+			t.Fatal("deleted derived content survived in export")
+		}
+	})
 }
+
 func TestAsyncRunInvalidatesDuringGenerationAndBudget(t *testing.T) {
 	s := testStore(t)
 	scope := owner()
 	ctx := context.Background()
 	started := make(chan struct{})
 	release := make(chan struct{})
+	var actual []byte
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Error(err)
+		}
+		actual = append([]byte(nil), body...)
 		close(started)
 		<-release
-		_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": map[string]string{"content": "旧依据生成的结果"}}}, "usage": map[string]int{"prompt_tokens": 100, "completion_tokens": 10}})
+		_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": map[string]string{"content": string(asJSON(map[string]any{"output": "旧依据生成的结果", "used": []any{}}))}}}, "usage": map[string]int{"prompt_tokens": 100, "completion_tokens": 10}})
 	}))
 	defer server.Close()
+	defer func() {
+		select {
+		case <-release:
+		default:
+			close(release)
+		}
+	}()
 	s.SetModels(&ai.Registry{HTTP: server.Client(), Config: ai.Configuration{Providers: []ai.Provider{{ID: "model", Name: "模型", Protocol: "openai", BaseURL: server.URL, Model: "test", MaxOutput: 100, InputPerMillion: 1, OutputPerMillion: 2}}}})
 	st := workspaceCommand(t, s, scope, workspace.Command{Type: "capture", Text: "旧依据"})
 	st = workspaceCommand(t, s, scope, workspace.Command{Type: "acceptCandidate", ID: st.Candidates[0].ID, Kind: "memory", MemoryKind: "fact", Text: "旧依据"})
@@ -163,9 +254,7 @@ func TestAsyncRunInvalidatesDuringGenerationAndBudget(t *testing.T) {
 	st = workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "测试生成"})
 	task := st.Tasks[0]
 	st = workspaceCommand(t, s, scope, workspace.Command{Type: "requestRun", ThingID: task.ID, AgentID: "model", Kind: "ask", Prompt: "根据旧依据回答"})
-	if !strings.Contains(st.Runs[0].Brief, "旧依据") {
-		t.Fatal("relevant dependency missing before generation")
-	}
+	run := st.Runs[0]
 	done := make(chan error, 1)
 	go func() { done <- s.runAgentOnce(ctx) }()
 	select {
@@ -174,12 +263,35 @@ func TestAsyncRunInvalidatesDuringGenerationAndBudget(t *testing.T) {
 		close(release)
 		t.Fatal("provider did not start")
 	}
+	attempts, err := s.ContextAttempts(ctx, scope, run.ID)
+	if err != nil || len(attempts) != 1 {
+		t.Fatal("actual sent attempt absent", err, attempts)
+	}
+	ref := memory.Ref{ID: memory.ID(mem.ID), Version: mem.Version, Kind: memory.ClaimKind}
+	mapped := false
+	for _, input := range attempts[0].Manifest.Input {
+		if input.Ref != ref {
+			continue
+		}
+		for _, span := range input.PayloadSpans {
+			if span.StartByte < 0 || span.EndByte > len(actual) || span.EndByte <= span.StartByte {
+				t.Fatal("invalid actual claim input span", span)
+			}
+			if strings.Contains(string(actual[span.StartByte:span.EndByte]), "旧依据") {
+				mapped = true
+			}
+		}
+	}
+	if !mapped {
+		t.Fatal("relevant exact claim was not actually supplied to held HTTP request")
+	}
+	phase2RTEvidence(t, "async-actual-input", map[string]any{"actual_http_body": actual, "attempt": attempts[0], "exact_claim": ref})
 	st = workspaceCommand(t, s, scope, workspace.Command{Type: "editMemory", ID: mem.ID, Text: "纠正后的依据", Reason: "原先记错"})
 	close(release)
 	if err := <-done; err != nil {
 		t.Fatal(err)
 	}
-	st, err := s.Snapshot(ctx, scope)
+	st, err = s.Snapshot(ctx, scope)
 	if err != nil {
 		t.Fatal(err)
 	}

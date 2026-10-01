@@ -1,0 +1,1068 @@
+{
+  "purpose": "Byte-preserving evidence archive; no test, assertion, result, or original log content changed.",
+  "archive": "2026-10-01-phase2-action-lineage-formal-evidence.tar.gz",
+  "archive_sha256": "8f7b07ade973195a5e607c1dc8d1bdc3c5b31e17d24c5087253861b4714af2bc",
+  "files": [
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__create_denied_used_empty-deputy-consumer-0d85358f-6b4c-4fca-9bc8-c73cda505dba.json",
+      "bytes": 1880,
+      "sha256": "e62183a582f3d226accc8aa4eb438a01ef5a0434e3d831e313aec2379f1fe5c6"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__create_denied_used_empty-deputy-final-0d85358f-6b4c-4fca-9bc8-c73cda505dba.json",
+      "bytes": 2373,
+      "sha256": "309b44de94830a5c9dcbdfee760b99a33ee0a0587cb3b9d33dc31bbed7091637"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__create_denied_used_empty-final-owner-state.json",
+      "bytes": 13706,
+      "sha256": "f35a1e65f01a80284f8374171cf377a4efbb251255ad8d60b6d9790ecc6bb12f"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__create_denied_used_empty-generation-271f785b-1e54-4ab4-8482-2b8599a34fde.json",
+      "bytes": 15100,
+      "sha256": "e7429cc206fc88da204cdbfd58d8c9c39e9748606bec66b49e83de393dea9a50"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__create_denied_used_empty-grant-secretary-2a295093-2e86-4e9f-9779-df3f3dfd6471.json",
+      "bytes": 821,
+      "sha256": "f071de3da62edd25fe7c37f9a7b0b8b8449a98b1fe37c4c9142e1b314595ba1f"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__create_denied_used_empty-manual-consumer-bec49789-e106-426a-91fe-802cdf0f5202.json",
+      "bytes": 2606,
+      "sha256": "186e195f2ba2f05d1393edced5f69bcd12aa6831f876f2d154ed2ef2c6945c31"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__create_denied_used_empty-manual-final-bec49789-e106-426a-91fe-802cdf0f5202.json",
+      "bytes": 2045,
+      "sha256": "0c9cd1f5b9d201c309044e69110256c10e42d6432e931e3edae7169b1e43278e"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__create_denied_used_empty-origin-16e2c911-a909-4851-95ce-463fb915dcc6.json",
+      "bytes": 3305,
+      "sha256": "ea528d2875c2daa65f52f746e1e8394cec582adf45190df93162ed56e74516eb"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__create_denied_used_empty-origin-d7f0ffd1-5247-4aaf-9c42-dabe04fab9bf.json",
+      "bytes": 3305,
+      "sha256": "ea528d2875c2daa65f52f746e1e8394cec582adf45190df93162ed56e74516eb"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__diagnostic_and_audit_expiry-canonical-cc58ab8a-dc0d-417c-827e-314ca1ea5ade.json",
+      "bytes": 2178,
+      "sha256": "87eee33af50540128972de72f8085648e4f168e864d197ff64a322852f85f897"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__diagnostic_and_audit_expiry-deputy-consumer-887e05eb-a32a-4a46-a660-2e59191d2932.json",
+      "bytes": 1945,
+      "sha256": "1c52a68755a9471d78a1a088db51d3a9c6fcaf9c1dffb8e5b3cbe510d9e1a01d"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__diagnostic_and_audit_expiry-deputy-final-887e05eb-a32a-4a46-a660-2e59191d2932.json",
+      "bytes": 2424,
+      "sha256": "3a69e2a76ed393a4066507f25153078f99f880d369435b8cd9ca4d3c7ae0ebd4"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__diagnostic_and_audit_expiry-final-owner-state.json",
+      "bytes": 18716,
+      "sha256": "97623101993427daad7c64bac1df8d23c112841c61770b8f4571dd8ac4b29ef0"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__diagnostic_and_audit_expiry-generation-0b123ced-8008-4109-9c76-1b59cc5602d3.json",
+      "bytes": 15074,
+      "sha256": "c4564e95dd7c8bf448c76c1ef4f10419c7f9aac4ca37d59edbdf1659ec87df3a"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__diagnostic_and_audit_expiry-grant-deputy-f015da04-3747-4806-86a2-779680466f24.json",
+      "bytes": 820,
+      "sha256": "875d8830835c9d18c3b4025624426b09f6069ec399890361ed5c46a9aced3f1f"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__diagnostic_and_audit_expiry-grant-manual-93ad842f-3e94-4df9-bbb3-95d4c49f2fa5.json",
+      "bytes": 817,
+      "sha256": "5aed25dff83d6662da93e3291f09e1d7e3b9cb0b3a658d4ea575aec703569711"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__diagnostic_and_audit_expiry-grant-secretary-4124a0ee-6260-4a8c-a244-1bb3ed8adbea.json",
+      "bytes": 823,
+      "sha256": "5d9ee0851d877f7fec539313823fc6959c0f92b2b190ed5c4bfca945de0494b8"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__diagnostic_and_audit_expiry-manual-consumer-027de1bd-c900-4734-ae7e-eb21a85ba990.json",
+      "bytes": 2656,
+      "sha256": "664fd03e881c9d4a0dc747b34b146d04f27f4f9a1535c5f214ab12b8fbe4c9b1"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__diagnostic_and_audit_expiry-manual-consumer-893b3ea0-71fe-40fc-a4f0-b78556df3765.json",
+      "bytes": 4686,
+      "sha256": "3c4ebcd5ce01e1b61381eae0ce745ed5d9f7f9583202ba6da5e16b267ee1b218"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__diagnostic_and_audit_expiry-manual-final-027de1bd-c900-4734-ae7e-eb21a85ba990.json",
+      "bytes": 2095,
+      "sha256": "4bde58c256765653f7ccb5caa600b423acf9426a57fdddf24283f43853b9350d"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__diagnostic_and_audit_expiry-manual-final-893b3ea0-71fe-40fc-a4f0-b78556df3765.json",
+      "bytes": 4013,
+      "sha256": "7970238c58482a462919b9182e577628445cd6fbf05fa2233dddd020389bfcfc"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__diagnostic_and_audit_expiry-origin-534ddb82-3922-48f7-b4e1-7f3b2acc92cc.json",
+      "bytes": 3305,
+      "sha256": "4e9f3bc2a4c1b7e5f4edb8fa3cc4f7faf172d7beda897f44985e9f0384bc55ae"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__diagnostic_and_audit_expiry-origin-be96d296-704c-4069-b403-c47728d9d2c3.json",
+      "bytes": 3305,
+      "sha256": "4e9f3bc2a4c1b7e5f4edb8fa3cc4f7faf172d7beda897f44985e9f0384bc55ae"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__diagnostic_and_audit_expiry-revoke-secretary.json",
+      "bytes": 821,
+      "sha256": "016a345aa575a53f9f4f97a6bdf3f1973ce849cffceaf406d8cfb68dfc334c9f"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__diagnostic_and_audit_expiry-secretary-audit.json",
+      "bytes": 2731,
+      "sha256": "fc74ada7ec61b52807dea1809848aec347ac3cc5421bb13c7f99ddc9e4e2faf9"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__diagnostic_and_audit_expiry-secretary-consumer-7fbf53a3-9b68-4cd2-984c-1c0060293066.json",
+      "bytes": 13668,
+      "sha256": "1a532cd8fe3a23310cba22465a5df89abea2347dbcf1e2c1b2ffc8d8b9a650e4"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__diagnostic_and_audit_expiry-secretary-final-7fbf53a3-9b68-4cd2-984c-1c0060293066.json",
+      "bytes": 6231,
+      "sha256": "a8bad96b5b0cc3629f566485cbd28f61419827598cd55f69171674b7bb85df5a"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__dual_role_check_only_indirect-deputy-consumer-2ffd2f5b-e09d-459f-894f-a0096a47b67b.json",
+      "bytes": 2861,
+      "sha256": "2917b29f023e203274475b3a0cd57fef7c0ced1c51c42852efcf30842cb35b6e"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__dual_role_check_only_indirect-deputy-final-2ffd2f5b-e09d-459f-894f-a0096a47b67b.json",
+      "bytes": 2860,
+      "sha256": "6f08d852839e3f9b6b78d4112d22b7b278b32205b8d165f99b095ece8e257133"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__dual_role_check_only_indirect-final-owner-state.json",
+      "bytes": 14837,
+      "sha256": "99ee93a26fc646f8d95f72c61901e02ff3211d3f16619ddf1b56b79d059699ef"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__dual_role_check_only_indirect-generation-fb19de34-f034-4404-8e3a-5f12902eaccf.json",
+      "bytes": 15994,
+      "sha256": "14490df177fb9a94af11eb469056f9bb3f4ed046cd5abee0ac616d110e38ec5f"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__dual_role_check_only_indirect-grant-deputy-4169539c-5b67-44d7-bb5e-6817795540b5.json",
+      "bytes": 820,
+      "sha256": "aa509501515a0590ffcda90bce78310ae5f290c26e04424b71f79862f425baea"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__dual_role_check_only_indirect-grant-manual-89300a7e-53bf-48b9-9fe6-a3655d36d8b5.json",
+      "bytes": 817,
+      "sha256": "a5f32032721fe644dd3e5b1a1c670defdd3067bd7b97edc86a276e0d164bacd9"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__dual_role_check_only_indirect-grant-secretary-bb1889cf-2a3e-4bd1-b703-ce38f23853b4.json",
+      "bytes": 823,
+      "sha256": "543c6a1a727a1ca55e26f23da2ce6b34bf74128daa9c22c0288aba629c0bb795"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__dual_role_check_only_indirect-manual-consumer-b5fda11e-017e-4a2b-8532-fb0f5840126d.json",
+      "bytes": 3138,
+      "sha256": "3cd72812623a74dc2a3a5b0b1a7ff9bb74239411ba900945c4b8aa2bb233cb2a"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__dual_role_check_only_indirect-manual-final-b5fda11e-017e-4a2b-8532-fb0f5840126d.json",
+      "bytes": 2535,
+      "sha256": "7c0c34aceced17b35807859f026a26e03c1d44dde2c3414ad43055374c9b721d"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__dual_role_check_only_indirect-origin-0522687a-68c5-42fc-ae72-d25a783ace1d.json",
+      "bytes": 1725,
+      "sha256": "22d473a7fa51bcec4dd7d0d714ef613a1200f50e4de10672044aaed4e67957e6"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__dual_role_direct_and_indirect-deputy-consumer-4635be63-b1c8-49b3-a223-3f9e5d3f2823.json",
+      "bytes": 3614,
+      "sha256": "f8ba41386ba2093332676162a0037d0a0bfe77f07e4c38f14329c35ae6b9119e"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__dual_role_direct_and_indirect-deputy-final-4635be63-b1c8-49b3-a223-3f9e5d3f2823.json",
+      "bytes": 4288,
+      "sha256": "ccf66430fd0e13cde6c80bef5c15646490f0a4d7be6f71d69afb79b3ffb07f9d"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__dual_role_direct_and_indirect-final-owner-state.json",
+      "bytes": 17837,
+      "sha256": "77ddbab1a1807e80b8c8c3935937e1306dabe19dc252fb575f150b7e80bc3c83"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__dual_role_direct_and_indirect-generation-ecc7073c-7cc1-488d-b404-66756a3d2f90.json",
+      "bytes": 15853,
+      "sha256": "05b69c5779d170fa988d2ec18cb32851d309c14f6e259bf57f94728021d6a82a"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__dual_role_direct_and_indirect-grant-deputy-a8d63a15-669e-4cff-bee6-acc3d8593c7b.json",
+      "bytes": 818,
+      "sha256": "4b934c6ff17cd5e19fc0530db800d395a842033eb1faea9ea495860a3174b16f"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__dual_role_direct_and_indirect-grant-manual-ec4290c2-2c14-450d-ae2b-0a3340463b09.json",
+      "bytes": 817,
+      "sha256": "28e1ec821356f998056f41796e4f706f8789b7d9534066b943e8265174ec6939"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__dual_role_direct_and_indirect-grant-secretary-a48d4a87-db3f-4d7e-8985-f0ff04e8f4ee.json",
+      "bytes": 823,
+      "sha256": "a3893e0a7cc57a2ae3958440569c6cac2886016ca2d2d84fbc26c65d0e36320b"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__dual_role_direct_and_indirect-manual-consumer-8fa56654-ed28-48d1-9394-8382c097c42e.json",
+      "bytes": 4629,
+      "sha256": "2b3c3766c93edc06d635d6d78b339141d652367843c54ffc0482dc0f998ccda6"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__dual_role_direct_and_indirect-manual-final-8fa56654-ed28-48d1-9394-8382c097c42e.json",
+      "bytes": 3956,
+      "sha256": "ac5c1f732edaddd55d169e2e01232b3a6dd27ca4fd66385b4a380822a28df510"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__dual_role_direct_and_indirect-origin-99f721ed-cb0a-4f0d-a96e-614360effc92.json",
+      "bytes": 3302,
+      "sha256": "c08876f2423fa54e415ebe72c96d570765974f208ea60566458845bf1e3f3977"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__dual_role_direct_and_indirect-origin-f2134761-20d1-432f-9daa-17d202864977.json",
+      "bytes": 3302,
+      "sha256": "c08876f2423fa54e415ebe72c96d570765974f208ea60566458845bf1e3f3977"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__mixed_update_and_stable_ids-canonical-aba7bfa7-cdc9-43a2-947a-c8c79d8c2790.json",
+      "bytes": 1284,
+      "sha256": "09f0597866be7f28dfcc7f5b76b3cff197a5d472bc08f83a403041bc8f3b0dc8"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__mixed_update_and_stable_ids-final-owner-state.json",
+      "bytes": 29506,
+      "sha256": "636a9dc6ac8f1fafb79f2127e2637c59805abf4cbb864e2e6dbccbde9b3f4469"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__mixed_update_and_stable_ids-generation-397afe94-ed94-4957-bb61-3072ed554af1.json",
+      "bytes": 32756,
+      "sha256": "0e393c3fec1ddfb1d9b7ce06a38be5906ccbcb68dbe6b3560f0953f7f1993f4a"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__mixed_update_and_stable_ids-generation-bd3671ab-04e3-4806-a8d9-2ed938c42ab9.json",
+      "bytes": 39201,
+      "sha256": "363a4830af019ab98869c8f87e1674d89bd55fa36d7036b392fafafd8af414ec"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__mixed_update_and_stable_ids-generation-c1a3a445-be4f-4dc4-bfe8-96e5b130eb8d.json",
+      "bytes": 15879,
+      "sha256": "f72d72bdc520e400f254b680be62115d741667cc46780759a06e946b31b73471"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__mixed_update_and_stable_ids-generation-e2b6a436-036b-4c06-88d1-29aae0715a39.json",
+      "bytes": 19611,
+      "sha256": "3f40a68f844fb5d4a9a0f769bc43af318a2be6729f14919407d0b3291e32d345"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__mixed_update_and_stable_ids-generation-e9e23ce6-d889-4043-a6fa-49f13723d69a.json",
+      "bytes": 27988,
+      "sha256": "71b48dc89834c8239f5f36e1cfefabaaff73aadcb661d81f7ef3c27a77361c1e"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__mixed_update_and_stable_ids-grant-secretary-7d6323ca-76f9-42f8-ad66-a614f514e32a.json",
+      "bytes": 880,
+      "sha256": "db7e0180cb807652283c7102a25c5406b2de940a785b71b9e353840c57b48980"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__mixed_update_and_stable_ids-grant-secretary-8348de0b-a2a5-4a89-881a-30bb99553442.json",
+      "bytes": 823,
+      "sha256": "6cf7a222d90da61e48f0fe3bbdb97dab7ecd723baa22c45b078958650f9118e7"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__mixed_update_and_stable_ids-grant-secretary-c1c56bea-46f3-4bae-a4f6-fe36b2dea234.json",
+      "bytes": 823,
+      "sha256": "8c6beb03cf07727a7fd995bf086cf9ed3b8c3da4c018d8de095d85f43d140909"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__mixed_update_and_stable_ids-manual-consumer-a61bdf15-b99f-499b-8a9b-83821d6c7e6d.json",
+      "bytes": 2678,
+      "sha256": "0b4de33b3ea5f054c084a3c5f5d888933a5df3a439c20577326abddd319a2d0e"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__mixed_update_and_stable_ids-manual-consumer-a97f959f-e6bb-450a-9674-f29aaf355330.json",
+      "bytes": 2507,
+      "sha256": "36e241dd43249088267cb1de8f38909ac5651f7dcf9366469e504d2187bfe335"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__mixed_update_and_stable_ids-manual-consumer-eb6b4c34-dabe-4b25-b24a-3338f0ab9dc2.json",
+      "bytes": 2531,
+      "sha256": "8e9a25671ce8b2e1aad56b2fc52adb6f79acecbee8c5c9f3b377512312c5c8d5"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__mixed_update_and_stable_ids-manual-consumer-f58f110e-f468-4020-9d65-ab3c4f43302a.json",
+      "bytes": 2529,
+      "sha256": "678b74edbefc249a372eeeb1b6d9ce569f4a65d5957908609f87c85e5c440cfc"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__mixed_update_and_stable_ids-manual-final-a61bdf15-b99f-499b-8a9b-83821d6c7e6d.json",
+      "bytes": 2109,
+      "sha256": "80f095e79aa59ffbf9f4ca35a7403b1ab55bf97b5e8d848a93d0184d4530f46d"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__mixed_update_and_stable_ids-manual-final-a97f959f-e6bb-450a-9674-f29aaf355330.json",
+      "bytes": 1946,
+      "sha256": "b69ccc95df4bf90ce4dad40f90c4e40fc430153e04473ad3fd3981de4248fc1f"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__mixed_update_and_stable_ids-manual-final-eb6b4c34-dabe-4b25-b24a-3338f0ab9dc2.json",
+      "bytes": 1970,
+      "sha256": "a1441212e0f99efd129b421919acf513ae834f1822332ee36f5b24712d1e193a"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__mixed_update_and_stable_ids-manual-final-f58f110e-f468-4020-9d65-ab3c4f43302a.json",
+      "bytes": 1968,
+      "sha256": "1421a3f49894c9fc43f861af727970fb5b4bff5db8bc7b0649f802a19fac6f98"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__mixed_update_and_stable_ids-origin-0f58e8b0-3c8c-4caa-b262-9c3b77708e05.json",
+      "bytes": 2455,
+      "sha256": "fc2abad231e21ec984422b48ea5b0b366793b54663572a7956c58126b8f40fa2"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__mixed_update_and_stable_ids-origin-543a76b8-a8ff-47c3-9924-f61973d25e43.json",
+      "bytes": 2135,
+      "sha256": "5c9b881d55291f5062851c07a231c22cfb45687f1006421ac6a8615946619cc3"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__mixed_update_and_stable_ids-origin-6662748b-415d-4d0a-82b8-198074817f9f.json",
+      "bytes": 2080,
+      "sha256": "53f6524a7f6be1ac87bf00eb54d8e0c62d9842865d871687600a564d38bb988b"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__mixed_update_and_stable_ids-origin-a1c84cdd-bc9b-4e85-80e2-733ec853af4b.json",
+      "bytes": 2435,
+      "sha256": "84ebd13a677ebcd0baced639b6e3da615af38585de4824a87c865144962892a8"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__mixed_update_and_stable_ids-origin-b724286b-b066-4e1b-b001-37c75d640b43.json",
+      "bytes": 2930,
+      "sha256": "3f8f963604c58dad2718c47ce6c033ede518e8e58fe2dd070e5db02a7b179904"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__mixed_update_and_stable_ids-revoke-secretary.json",
+      "bytes": 821,
+      "sha256": "89b96bf6af1d9971d7fc072ac854f14acc6cb98bbf1b2f0d7a55773b3b27da12"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__mixed_update_and_stable_ids-scope-5d5d728b-57ee-47b9-aed8-285f27aec730.json",
+      "bytes": 286,
+      "sha256": "a22de3e1c01ba38124e9742a313ca88594344688a4d4f7bbbe0e6a03b0bd96f7"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__mixed_update_and_stable_ids-scope-a13aff21-09c5-46d1-9f76-83b14647766f.json",
+      "bytes": 343,
+      "sha256": "680a698d9d1d02a405414b9f3e7c78ac582b1ed60c07c1607634b7efba810cdf"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__mixed_update_and_stable_ids-secretary-audit.json",
+      "bytes": 9210,
+      "sha256": "bc4733c56b0f9a8d32b8b2da4e43f7c02cc4f9b250e41b766bc05fefea6810b7"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__mixed_update_and_stable_ids-stable-check.json",
+      "bytes": 136,
+      "sha256": "087d94db8e64220fd6533ca604b007fda2241b6b3f1e693e1b9ef7d163ca4fab"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__mixed_update_and_stable_ids-stable-condition.json",
+      "bytes": 142,
+      "sha256": "c9f4ca44d5c09805b1c10801c26c2ec5fd793031af0adcc9532fc4fc8e014f2b"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__original_route_changes-automatic-adoption-after-undo-74c8ad48-51ca-4c3f-9af2-837d39115842.json",
+      "bytes": 3461,
+      "sha256": "4523d29718810a808a51c9311009b1b3c1be1c4a152f411a2609c11764eb7261"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__original_route_changes-automatic-adoption-before-undo-74c8ad48-51ca-4c3f-9af2-837d39115842.json",
+      "bytes": 3636,
+      "sha256": "b53422e88b8863b1b4ab033667b634dce337c873186964eee54afefe97fe96e5"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__original_route_changes-completed-result-adoption-after-origin-route.json",
+      "bytes": 4307,
+      "sha256": "315b35523ae975dd4a6083d996c3b062100ca3d2a93c97af601c185a373ffd10"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__original_route_changes-deputy-consumer-2f6996e0-5382-44f6-bec5-7d4a93568ec3.json",
+      "bytes": 1910,
+      "sha256": "6536bcc38f5f9897e97ee10fd4da8ed09f30ea4bd04e1e466fee9f328686f979"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__original_route_changes-deputy-consumer-74c8ad48-51ca-4c3f-9af2-837d39115842.json",
+      "bytes": 3636,
+      "sha256": "b53422e88b8863b1b4ab033667b634dce337c873186964eee54afefe97fe96e5"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__original_route_changes-deputy-final-2f6996e0-5382-44f6-bec5-7d4a93568ec3.json",
+      "bytes": 2388,
+      "sha256": "02c0e0d676ff0c03094c6819a19cc363ae41328791871d4152c1ffbe15da1839"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__original_route_changes-deputy-final-74c8ad48-51ca-4c3f-9af2-837d39115842.json",
+      "bytes": 4288,
+      "sha256": "9b670cf80b31abcd11f4eac91f5833145999232d2a13efaecc78d3b536d54301"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__original_route_changes-final-owner-state.json",
+      "bytes": 26897,
+      "sha256": "c3d3f88f3a36d7fbf6fec9ea2234216c8ca2e0b6b3b3f459a97f3e43b1d99c96"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__original_route_changes-generation-b827afa0-8ccf-43d8-9711-913f74fce246.json",
+      "bytes": 15692,
+      "sha256": "a0288a1e09d590a6fab9d276d39edec0e95ff0d66c5b403a9824be4824cf2c03"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__original_route_changes-grant-deputy-abe8e0b7-6106-4dc8-af9f-4e76e95b9b45.json",
+      "bytes": 820,
+      "sha256": "de74ff077579d323d930f45e6c48548f3015f30e0c0f8e49a763a445fe11ebb4"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__original_route_changes-grant-manual-dc0ea884-7d64-4fbb-abd9-bed6225a2af7.json",
+      "bytes": 817,
+      "sha256": "d67cee11d529a6aaa756fe57adcb9fafc2c80ffb15694ff83380a482501ede8c"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__original_route_changes-grant-secretary-98e779c5-8e02-41a9-ac0d-e5d11268d4d7.json",
+      "bytes": 845,
+      "sha256": "0354991830a349bcf654b7138466027dda8aeb1ec9f75e6e7affd16bae0a9d6c"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__original_route_changes-grant-secretary-acfb14a0-69ea-4572-9f36-99badd420595.json",
+      "bytes": 835,
+      "sha256": "c3f7778589f67d5aa788845763604404c6b7b1da53edd44f9152bee99ea9cab1"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__original_route_changes-manual-consumer-6e2559b2-267c-4d4d-b530-f0b991c88887.json",
+      "bytes": 2623,
+      "sha256": "e02e13c29e011a025b67addd9149eb6ed702274e72ded000b2e3ced20c3af31d"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__original_route_changes-manual-final-6e2559b2-267c-4d4d-b530-f0b991c88887.json",
+      "bytes": 2062,
+      "sha256": "4d4a6c93a1c806b7e0939966f094486f54feca616b4409523a28acdb1f18c2b8"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__original_route_changes-old-deputy-adoption-after-origin-route.json",
+      "bytes": 570,
+      "sha256": "84aa6d58eedcd2d38583790b03c417d9a3c524511af36de3f7101f25555c956a"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__original_route_changes-old-deputy-after-origin-route.json",
+      "bytes": 3027,
+      "sha256": "723729c0f50cf0a666391b88ee502907aa0c5f3cbe1258fb3ffa7a6b192a3ae2"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__original_route_changes-old-lawful-manual-package.json",
+      "bytes": 4629,
+      "sha256": "7c97cd511c0ef698db211ee119e7658217ac6804a8cfc50929a8a2c98b869964"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__original_route_changes-old-manual-reget-after-origin-route.json",
+      "bytes": 42,
+      "sha256": "5591358761a2ee922d4d99890e9fdb35fe789a123631fde81c1b0d22879c9da4"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__original_route_changes-old-prepared-deputy.json",
+      "bytes": 3434,
+      "sha256": "0f5305493bd20a0fa2470038ac58a0d73042e955a8b96b40c4e78ab048b16073"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__original_route_changes-old-prepared-manual.json",
+      "bytes": 3471,
+      "sha256": "81030db46cf176096ac8cc8ec31524ea1e2a858983f9312479f2b5181fed1c4d"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__original_route_changes-origin-ac737023-0614-43f1-88eb-ee9e30ce3e23.json",
+      "bytes": 3317,
+      "sha256": "6dd4d94383dff278f66bddff8996be4b8d0b3704fac2923badd94f248b041c0a"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__original_route_changes-origin-b5e78fd2-017c-4a86-b9b8-b72b8bb144fe.json",
+      "bytes": 3317,
+      "sha256": "6dd4d94383dff278f66bddff8996be4b8d0b3704fac2923badd94f248b041c0a"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__original_route_changes-secretary-consumer-bc1df65b-1229-45fa-a15c-fbeec93cd29f.json",
+      "bytes": 22473,
+      "sha256": "47de5ea64128a92b642c1dc7c70e6c78a337f949399b43c180d98eb678d80318"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__original_route_changes-secretary-final-bc1df65b-1229-45fa-a15c-fbeec93cd29f.json",
+      "bytes": 6283,
+      "sha256": "a912544d421b0e41eb3776c75737024475ce5181d5d802cd12d5be305e9e1897"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__promotion_and_two_origins-automatic-adoption-after-undo-8ea26c8b-ff67-46a5-9bb6-7f7f32b54d72.json",
+      "bytes": 3243,
+      "sha256": "a599825363da1d7568b00c1988075afde96469001e7f44321a24bf6fe527e164"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__promotion_and_two_origins-automatic-adoption-before-undo-8ea26c8b-ff67-46a5-9bb6-7f7f32b54d72.json",
+      "bytes": 3418,
+      "sha256": "11139309286fcc3375b0039f29831c20ec23f17d14070f190f1eb8b24e913af7"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__promotion_and_two_origins-canonical-3823daaa-a6cf-4bef-b515-eee484cb8448.json",
+      "bytes": 3129,
+      "sha256": "76b15afac476af367dd5e3fa571445d97525147502ea711275b3216dbc96ad42"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__promotion_and_two_origins-canonical-f7de2f7a-4c4c-43e5-879f-c1a851e5f33f.json",
+      "bytes": 1710,
+      "sha256": "a82176e2a3ae6e4276c9cd4e7f9d4d21a492720134f61dbaede459b2152d67d5"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__promotion_and_two_origins-deputy-consumer-1f232a5a-eea8-48bf-a0da-660262c399c1.json",
+      "bytes": 1830,
+      "sha256": "b58f0571dc15286b066bb4df2d53a960c3dd56a8bd2851c4810c9c1aabd6e564"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__promotion_and_two_origins-deputy-consumer-8ea26c8b-ff67-46a5-9bb6-7f7f32b54d72.json",
+      "bytes": 3418,
+      "sha256": "11139309286fcc3375b0039f29831c20ec23f17d14070f190f1eb8b24e913af7"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__promotion_and_two_origins-deputy-final-1f232a5a-eea8-48bf-a0da-660262c399c1.json",
+      "bytes": 2307,
+      "sha256": "6e436f8b35f54505bd64554b03affa76357223818e02567d8b9d5108d70d5860"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__promotion_and_two_origins-deputy-final-8ea26c8b-ff67-46a5-9bb6-7f7f32b54d72.json",
+      "bytes": 4128,
+      "sha256": "99cdd36dd05d3e2ba52749331048c59af53882b6590934f6e4d7d00b1490fed6"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__promotion_and_two_origins-final-owner-state.json",
+      "bytes": 23047,
+      "sha256": "18eb92ee4a4800fe878439e0df7dccbf8099c88a7ba783e46a79f2d43afee917"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__promotion_and_two_origins-generation-7a72c387-5e21-4ea9-9c28-42a3b976f380.json",
+      "bytes": 16319,
+      "sha256": "173b0957058b12754af117f6747e5d7e449906d6da3fd06a7d0c0ad368b80b1e"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__promotion_and_two_origins-grant-deputy-a1b00ecb-af58-402a-94da-3f83803ad45a.json",
+      "bytes": 820,
+      "sha256": "c1f58711bdc5e967d1415794493c1e33a407afe20f28bbe07995555a735ebfbd"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__promotion_and_two_origins-grant-manual-182d5ca8-37b8-4f4c-9106-76a4413f8f27.json",
+      "bytes": 815,
+      "sha256": "288f8ab755e5d05db66355b683c61e308206063c8deebd670d2061e0ba0143ae"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__promotion_and_two_origins-grant-secretary-bc94a12d-97f7-44c7-9c48-59c10f53dee4.json",
+      "bytes": 823,
+      "sha256": "5f41791ece5b4c5011921bd6f2d418400ae88187342c460931c5c53341fa32db"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__promotion_and_two_origins-manual-consumer-fb25b2f4-01db-4362-bbd1-978f3fe3a1bb.json",
+      "bytes": 2539,
+      "sha256": "772126ade4fd06c8183a3a4474dc24f5b0edb62a5137826bb959cde0bf6e0f42"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__promotion_and_two_origins-manual-final-fb25b2f4-01db-4362-bbd1-978f3fe3a1bb.json",
+      "bytes": 1978,
+      "sha256": "f284b94061f121825f15e62487b3d1e229144a9e3c7842ef7a706bd2bc96d357"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__promotion_and_two_origins-manual-progress-adoption-after-auto-undo.json",
+      "bytes": 137,
+      "sha256": "7c8f5add56a209d418e21f86852ab333077b77fc368b1b0890d3dc8eb069e786"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__promotion_and_two_origins-origin-ddf8683c-591e-40fd-adfa-557cde9faab7.json",
+      "bytes": 2094,
+      "sha256": "91971c4a57f8f72aab3e9fdde71e65643ece18c9075721a26eb807d808c6d718"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__promotion_and_two_origins-promotion-two-origins.json",
+      "bytes": 371,
+      "sha256": "6cb8292fa020b7e0a1f9ed4f975e24d52a17028603a577034342891d37f1e55e"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__promotion_and_two_origins-revoke-secretary.json",
+      "bytes": 821,
+      "sha256": "d05c69f9b5d054c0f9309e5f2ba25a24668a4879bf71593030e047c0743591b6"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__promotion_and_two_origins-secretary-audit.json",
+      "bytes": 1367,
+      "sha256": "c7473283d837c844308734610789c172113b1bdf6addbf88f2e3614a92d6327d"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__promotion_and_two_origins-secretary-consumer-121541fc-c8a5-4795-bf2f-7705565a5a31.json",
+      "bytes": 18642,
+      "sha256": "beb94d8cbae73c8e28915d31cb3d2d4816301c6e9d9ccea25aab3c0a785fb55b"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__promotion_and_two_origins-secretary-final-121541fc-c8a5-4795-bf2f-7705565a5a31.json",
+      "bytes": 6162,
+      "sha256": "522a78b263ad00c670ac97290f87dc6f63bb21b1a5d23ed8e074885d2891f877"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__revoke_regrant-canonical-944af026-f5d5-4d85-959e-dbab6a3fcb11.json",
+      "bytes": 2061,
+      "sha256": "4ed58ee4cae6cee8aa20d391210d3b1bc32e070839896ce2444f2e689542f5c2"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__revoke_regrant-deputy-consumer-c4f8db22-253c-445c-864b-76b6ce44c086.json",
+      "bytes": 1856,
+      "sha256": "f79dc6bb6767ba10068341a677ed0aeeab2c741e47125a0791dc4be5dbbb01b6"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__revoke_regrant-deputy-consumer-f15078a1-58fb-4531-8a0e-87c6067faefa.json",
+      "bytes": 1982,
+      "sha256": "bc502f629b232220e47515522dd9253167d2910d51771394c28b2dd35fe4ffc9"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__revoke_regrant-deputy-final-c4f8db22-253c-445c-864b-76b6ce44c086.json",
+      "bytes": 2361,
+      "sha256": "c7f1f6f4a54f6dd4b64c740c0b1488460e6a07fdd6d735a148c73d7657a784f6"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__revoke_regrant-deputy-final-f15078a1-58fb-4531-8a0e-87c6067faefa.json",
+      "bytes": 2463,
+      "sha256": "8a8658580eeb1ae340016c0de59a7c80965a9171cd64b3d9365f377c3b414c27"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__revoke_regrant-final-owner-state.json",
+      "bytes": 22319,
+      "sha256": "5992042829ef5e623112d747774d309e1bf0356d415d19371ffaf045b4342251"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__revoke_regrant-generation-b76899f3-6cd3-4505-a3e9-4b5f0a2b53a7.json",
+      "bytes": 15100,
+      "sha256": "6a9989eef2368056e2ce83fc6af42bf21dea2475508bfe66b9d1c521c659c87e"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__revoke_regrant-grant-deputy-935a1e8c-8f77-4218-b50c-a4a31f936d8a.json",
+      "bytes": 820,
+      "sha256": "248da48a3efdfa6efc8448afacd7acf0ea6269570699cbeae4e41c3974607f10"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__revoke_regrant-grant-manual-249c3d0e-0ca8-4675-a09f-8d3ee95dd30e.json",
+      "bytes": 817,
+      "sha256": "47cb1b90a2f5a8bdb3d50f7fbf9e002640c9c3e542615315efbd7ddb2794fbcc"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__revoke_regrant-grant-secretary-888d8a4e-09cf-457c-83a1-ca516230bfc6.json",
+      "bytes": 823,
+      "sha256": "cb268e8e8df9cd5be4386182e16c06024c5056e7f233b6bf7620930604836f6c"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__revoke_regrant-grant-secretary-b965a7e0-31bb-4030-bacd-5b46c9889491.json",
+      "bytes": 823,
+      "sha256": "df8ac8d371d9ab1bafac1eb033ef4b84d6b8345ba3e8192a80615f62db6fe3b2"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__revoke_regrant-manual-consumer-1a766f7e-ef3b-4ec9-a795-6712245862a5.json",
+      "bytes": 2599,
+      "sha256": "a938e2d6e4bfe2be580d1699c4b3a6d01194fd6d417db4e02fd5b3d8587a6bf3"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__revoke_regrant-manual-consumer-fcd947b0-84d2-46b4-8fed-551180eadbde.json",
+      "bytes": 4608,
+      "sha256": "6c45f0ed634fe60b322a36e7e5c73f76fda0e570be831452dbd2c87f124a94a8"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__revoke_regrant-manual-final-1a766f7e-ef3b-4ec9-a795-6712245862a5.json",
+      "bytes": 2038,
+      "sha256": "4180f580c23271d59768cd32fe8f36dea7e25f7458631560c02e1ed4f66c0bb5"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__revoke_regrant-manual-final-fcd947b0-84d2-46b4-8fed-551180eadbde.json",
+      "bytes": 3935,
+      "sha256": "21bc68e72636904800eb3428a34993dace2716bed415d228415c2c48f7df9841"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__revoke_regrant-origin-2b786599-0dc5-4c64-a498-8117fb48850d.json",
+      "bytes": 3305,
+      "sha256": "4e7fb3329e174a7ce264e375ab2cc3f2e899a3795237ba70ef942ec3eed467eb"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__revoke_regrant-origin-81dafbce-4ca5-4f4e-ac8b-0b17e43dba42.json",
+      "bytes": 3305,
+      "sha256": "4e7fb3329e174a7ce264e375ab2cc3f2e899a3795237ba70ef942ec3eed467eb"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__revoke_regrant-revoke-deputy.json",
+      "bytes": 817,
+      "sha256": "81fefa2e27e731371e002b04d641f54d74fc9763ca766c8c66d63113ad080921"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__revoke_regrant-revoke-secretary.json",
+      "bytes": 821,
+      "sha256": "6451f68c2cea5495b2e9d9759c743cd2afaedd6da39dd906dab8939965c74cee"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__revoke_regrant-secretary-audit.json",
+      "bytes": 2731,
+      "sha256": "101caa0f7252f6a19a40239b6308cead197ce4370aefa7745c54405af50a0336"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__revoke_regrant-secretary-consumer-4ff59646-fe9f-467b-bf72-a1f8d3ca749a.json",
+      "bytes": 17451,
+      "sha256": "e823d5ed1f8fdbfe4f5f796366d3c98f2a511e93a426e5bd719230ff0f47bb76"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__revoke_regrant-secretary-consumer-6944d261-26dd-4d47-806b-6a716e288767.json",
+      "bytes": 9010,
+      "sha256": "9ae6dc216a10b64dae0d86df3983c9c2b8b0e16a56ae8c7e58013bfceca066ca"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__revoke_regrant-secretary-final-4ff59646-fe9f-467b-bf72-a1f8d3ca749a.json",
+      "bytes": 6173,
+      "sha256": "c9e4f6deda3825611558f21494dbd6f6a29731ea4eb9b8e068f4152fb5072c6f"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__revoke_regrant-secretary-final-6944d261-26dd-4d47-806b-6a716e288767.json",
+      "bytes": 6806,
+      "sha256": "c8e248c56091d25c5a0813c419f2f575b36b34e7b22d6cba26b8f58a6310bd0d"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__role_and_studio_scope-final-owner-state.json",
+      "bytes": 18519,
+      "sha256": "b949bb6164154a5db8b33b0b87ece4049307b01403d88dc96e3139ecac0b8956"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__role_and_studio_scope-generation-cf4ed097-51b5-4323-a183-dee53f4f85d4.json",
+      "bytes": 21097,
+      "sha256": "40041ce7643e596f914cca86233174c1dac4708758e49d1d49a2ca9037e0f51c"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__role_and_studio_scope-grant-deputy-19917947-b9c2-44fd-b069-e78ce366f7c6.json",
+      "bytes": 874,
+      "sha256": "40762a72727694c54d0720eb4c7893e9b7f523eb5b40263eeff9764a53fc9c73"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__role_and_studio_scope-grant-manual-299b4f4f-f8e1-489f-bc38-977d36d44ab0.json",
+      "bytes": 874,
+      "sha256": "2055542f9e536f5d89ebf0f36ed48edaefbd9781db2a2e96ac207115e12cccb4"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__role_and_studio_scope-grant-manual-e68f68f6-bec5-4d04-9a41-3db567da510a.json",
+      "bytes": 874,
+      "sha256": "0cda7b040a58975febc1283b4cae4aeb4dfec29cfb4f822d2fde0ec5cd1cf0d0"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__role_and_studio_scope-grant-secretary-88c10b9b-45d4-422c-b9d3-7b833b7ceab3.json",
+      "bytes": 880,
+      "sha256": "55ac0b239521706499486aef5544c7db8703d9685f8a734cd3ec94597808128f"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__role_and_studio_scope-manual-consumer-8454ea36-3559-4374-836a-252d0bbde42f.json",
+      "bytes": 2766,
+      "sha256": "d40df48a842ad8fa7de21f3fe1e34430f20e80b6aeacd6c98ab7f0db860e9c06"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__role_and_studio_scope-manual-consumer-95cb06c4-cbd6-480c-90c0-ede12bd10fdd.json",
+      "bytes": 2763,
+      "sha256": "6e74ed36a0faea3e3e84428704684d96d03d75733595aabeb1becf1e3749020e"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__role_and_studio_scope-manual-consumer-d5d40c9d-55b0-4895-8fe7-f866533a03e2.json",
+      "bytes": 2766,
+      "sha256": "3290a75f4ca9908034c186bc2ccaba5cfd8f86b1994b46baa7acbab99a907451"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__role_and_studio_scope-manual-final-8454ea36-3559-4374-836a-252d0bbde42f.json",
+      "bytes": 2197,
+      "sha256": "c9fc4bfeadc36f0867f70ae4e9cd2862243f9daa8a63f648c08b54aca3a707b2"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__role_and_studio_scope-manual-final-95cb06c4-cbd6-480c-90c0-ede12bd10fdd.json",
+      "bytes": 2197,
+      "sha256": "9e8235374ed12e08a142f30332b8fe6c70e48affb89a9161c102f9c53903df29"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__role_and_studio_scope-manual-final-d5d40c9d-55b0-4895-8fe7-f866533a03e2.json",
+      "bytes": 2197,
+      "sha256": "0ec7e7bbced97d1840d39889ab874c7f782366a804fc3bbe33e9848042b0930e"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__role_and_studio_scope-origin-50d2f8c8-c8a2-4180-a60b-6f39457e3797.json",
+      "bytes": 1953,
+      "sha256": "9b5df9261a0fedbf96d8ffb177224d0231af7c7e36819a6b3a8dace820893b84"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__role_and_studio_scope-scope-3900f898-1e76-4e52-9c8a-b726109f11ee.json",
+      "bytes": 343,
+      "sha256": "19731215d0d1e2fb7152ffce86ef134d23ab8d68cd3630330f11ebe09dfea654"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__source_correction-canonical-56ee6dbe-26ce-4748-a540-89ff18a979cd.json",
+      "bytes": 1766,
+      "sha256": "cb85ef1983317ec603837257bd3cb3beeba6dba314a6335830690bcffbeceb44"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__source_correction-corrected-source.json",
+      "bytes": 109,
+      "sha256": "0a7c75c194c9306f71f19f3427b19a1f629d4feab3bf48f7218b1eb38a87aea9"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__source_correction-deputy-consumer-3b6e28d3-4465-4ff5-88a2-37bbee8d8d8a.json",
+      "bytes": 1886,
+      "sha256": "706da1ad8489c11a59fc9e8181ab883cab441c25c4385476c23989f2b9524f4b"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__source_correction-deputy-final-3b6e28d3-4465-4ff5-88a2-37bbee8d8d8a.json",
+      "bytes": 2364,
+      "sha256": "861edd65364f64c97c78beab9a434211af17bda26f1bec31fd4a9c5f3d19f50b"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__source_correction-final-owner-state.json",
+      "bytes": 14301,
+      "sha256": "46ca31375fdbc0281f15f175d83367975bb30407c5bf094552acef90f2836a52"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__source_correction-generation-0dce00a8-eec8-4c79-a32b-66e1b7655c86.json",
+      "bytes": 15102,
+      "sha256": "12783c8687878241dde37d030bd3ee98675414f99eb9a91fcb7f4b78dc791c56"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__source_correction-grant-deputy-44a38066-0c69-43b0-bbf5-c23b15946d7c.json",
+      "bytes": 820,
+      "sha256": "ae80c1b40927a7c327eb5ac2b438295ecbed3b53742a204e1ff1e9ccc9368bed"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__source_correction-grant-manual-96182487-42fc-4b6a-acd5-467bdf6913cd.json",
+      "bytes": 817,
+      "sha256": "ddfde472b9afb5b12c97ac51c863b0297a218206ec7d9f45cda9df3d2dd1ac24"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__source_correction-grant-secretary-e52299ca-49d5-47af-9fa9-fb6d147dae71.json",
+      "bytes": 823,
+      "sha256": "c382078c004ac8e8b288556785d8aac247c698db0d08fe8167b32092f3f28745"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__source_correction-manual-consumer-3751c4b7-2edb-4359-8a46-0aa6b407b740.json",
+      "bytes": 2596,
+      "sha256": "f431a8bae397cee7c8a9e6b49b1386635d9123d7b67f6bf4c4cee7fd10c37890"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__source_correction-manual-final-3751c4b7-2edb-4359-8a46-0aa6b407b740.json",
+      "bytes": 2038,
+      "sha256": "c016fbe3512352e3d5d9461abad4b2e8d9f41cbb0c945b205ab153053038d95f"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__source_correction-origin-d2a74e2d-4fb6-4719-aeec-b8430ba37eae.json",
+      "bytes": 3302,
+      "sha256": "d23aadde0c4667b31de3d6874707f59126e440a83d2ce6e2e85bb9295c236321"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__source_correction-origin-ecaee3e7-e311-4b19-afc8-19e3e098bbb3.json",
+      "bytes": 3302,
+      "sha256": "d23aadde0c4667b31de3d6874707f59126e440a83d2ce6e2e85bb9295c236321"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__source_correction-secretary-audit.json",
+      "bytes": 2725,
+      "sha256": "65042ad0fea6132282b215f2e17358d74687e65eab9b9dee3885cc3d1d7138aa"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__source_correction-secretary-consumer-f7665cd7-8260-4557-8003-c9e80d5b28f3.json",
+      "bytes": 9127,
+      "sha256": "b7d9886c225518341438b7f88e48600ff3fbc61ff251607d09d51edfcce5a737"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__source_correction-secretary-final-f7665cd7-8260-4557-8003-c9e80d5b28f3.json",
+      "bytes": 6173,
+      "sha256": "586dd0882afd2495f54d93e866556ae919c9f402726dc8c599d39883a68e42c4"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__source_delete-canonical-15f9d07f-c034-4416-9c93-86deaca6f2ce.json",
+      "bytes": 1764,
+      "sha256": "23b7494a65bd37fb15c9136a2d1cd567fe45b7f370f3de58743f8e65e6199c45"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__source_delete-deputy-consumer-67199cd4-deed-4cd4-bce6-132681d9f272.json",
+      "bytes": 1886,
+      "sha256": "bd819515051262aed68270b5d21bb167af0cecf8b634cdd8f5fd4c198fb9ed7c"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__source_delete-deputy-final-67199cd4-deed-4cd4-bce6-132681d9f272.json",
+      "bytes": 2364,
+      "sha256": "252e3f6be6ea6061fae8b66d1658e400d8ca87816cfa3130ba812e865c62417e"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__source_delete-final-owner-state.json",
+      "bytes": 13086,
+      "sha256": "aa0130cab1908e90d6ad9899e8957daeb435ebebc7dbfbb83e01ab5c07281ce9"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__source_delete-generation-28fe821a-4606-4b23-a649-92ce6d223274.json",
+      "bytes": 15102,
+      "sha256": "1388a5c1f80eb897a20ad67210b0fcacd3f69408265425cb01e462b2e5bf1db5"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__source_delete-grant-deputy-284ffdf6-ac1e-4e91-ba09-c13c080141ae.json",
+      "bytes": 820,
+      "sha256": "055e22bdc9a02c27c298518eced995d01c82f217ec027de24e21322253b52a9a"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__source_delete-grant-manual-9d5de346-32d8-4255-839f-18643d0ee6c4.json",
+      "bytes": 815,
+      "sha256": "bbd4edc04d2d272a196e237d179f78bef9a8581e37c6c5212b50263ea740b1da"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__source_delete-grant-secretary-075c61c7-680b-4e64-8d68-e0572a857f40.json",
+      "bytes": 823,
+      "sha256": "710b06f279422a4d57d36acdb6cfb15bd5a9b69cff227e9ee00eef98d49713c1"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__source_delete-manual-consumer-d5e8464f-6511-4a94-9d3e-8d499e56c3e5.json",
+      "bytes": 2599,
+      "sha256": "967e57ae38755a2ca5f520bdad95ce6a8ef9d3eca5fcea86051955458368c281"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__source_delete-manual-final-d5e8464f-6511-4a94-9d3e-8d499e56c3e5.json",
+      "bytes": 2038,
+      "sha256": "3c17f43a33ed235df7f93228a1ed4972ab995e81d40e022327fc517fa1999252"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__source_delete-origin-1830490f-1d6d-4d41-b8d7-0868d4cd1f63.json",
+      "bytes": 3305,
+      "sha256": "d13d443883e9bc1e12da802baf082bf9c18a7e4b3af74d5840f07ec0f6154e16"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__source_delete-origin-c654c086-7189-436d-af6a-e2b46cf00fee.json",
+      "bytes": 3305,
+      "sha256": "d13d443883e9bc1e12da802baf082bf9c18a7e4b3af74d5840f07ec0f6154e16"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__source_delete-secretary-audit.json",
+      "bytes": 2731,
+      "sha256": "fb48f376469917997dbfec1a0376d9e8f58d003bb30a8729e79bc90f7b82f844"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__source_delete-secretary-consumer-bab13a3d-69a9-4adb-bf31-7759bcbf8aaa.json",
+      "bytes": 7842,
+      "sha256": "c2f8d92448b9eac02ab4a871e391fd8235900ffb257d46673c052f9184f20efc"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__source_delete-secretary-final-bab13a3d-69a9-4adb-bf31-7759bcbf8aaa.json",
+      "bytes": 6171,
+      "sha256": "474646365587f453b64ec5f0d64cb5ee9706e4da7ffbf6beef22a7c9471a27e6"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__undo_before_blocks-actual-undo.json",
+      "bytes": 9160,
+      "sha256": "6472d6bb1b2a584ddfc750571cf1d072ab1bc10e8bb9ed4064df05dd1fe6a151"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__undo_before_blocks-canonical-33c5fbd8-75fb-4beb-9e37-54e469b891a9.json",
+      "bytes": 2059,
+      "sha256": "ae3185e0fca0d634d6b7052f5eb256d711ccb3f6a683ae1a1b64fa1a73fd93ab"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__undo_before_blocks-deputy-consumer-8b3c7982-39e6-4b60-bd8c-48415bdda8bd.json",
+      "bytes": 1886,
+      "sha256": "879b36ac7aab2e8020ee0333a77ed6591a9e2ff0ee5cc060e26a633b6cd2b9bc"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__undo_before_blocks-deputy-final-8b3c7982-39e6-4b60-bd8c-48415bdda8bd.json",
+      "bytes": 2364,
+      "sha256": "d426ce6c3693f3435d67fa93c9f86a70e5ab94c58f0876f56f1c1e60449bddb8"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__undo_before_blocks-final-owner-state.json",
+      "bytes": 15225,
+      "sha256": "e254084838985cffb50aba4749d5593180c023699678eaf5d197c563d118b609"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__undo_before_blocks-generation-9dfff9d6-cd2b-4dcf-8c24-4442a3ee622f.json",
+      "bytes": 15102,
+      "sha256": "74d7dc85e613e90a9f3f1fc1fec36050e3606299a1776b2e9afa62ee144f37ba"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__undo_before_blocks-grant-deputy-a265f505-f3a0-43ab-9570-4b2f05e656c9.json",
+      "bytes": 820,
+      "sha256": "f8b3ab95621941719f15da5eb527fb18703a7352f64e83026dfb4cacd536d05c"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__undo_before_blocks-grant-manual-df97b498-b61d-4cba-82ba-50089287f418.json",
+      "bytes": 817,
+      "sha256": "75ade4ad2dec92c242908c3126cc120ed269051c6faa87e2eb11e616b9bb9ace"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__undo_before_blocks-grant-secretary-a20da4ae-0d14-444d-8563-de6a036f1c18.json",
+      "bytes": 823,
+      "sha256": "242e8455004dc643aa180d6cc6dec3a7580b66ae9336c6193395a8d28b76431b"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__undo_before_blocks-manual-consumer-5bc35855-8010-4786-a9e2-8d45dd198b98.json",
+      "bytes": 2593,
+      "sha256": "68d7087719cce0c5bf477bc37d33e76cde6d4864195a8371b985d9821db1001d"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__undo_before_blocks-manual-final-5bc35855-8010-4786-a9e2-8d45dd198b98.json",
+      "bytes": 2038,
+      "sha256": "86145bb0717919968dc924f32bc3e3ef97d0d55d2ed4c6772c9d3aa899285747"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__undo_before_blocks-origin-200a8218-da6e-44e3-a462-b6a0d8672451.json",
+      "bytes": 3305,
+      "sha256": "51d790d8e5f23a3d5fed53d616fa81229f6e02809efca71528ead2a1bc06f612"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__undo_before_blocks-origin-92103ad4-b348-4feb-adce-aecf9f7954aa.json",
+      "bytes": 3305,
+      "sha256": "51d790d8e5f23a3d5fed53d616fa81229f6e02809efca71528ead2a1bc06f612"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__undo_before_blocks-revoke-secretary.json",
+      "bytes": 821,
+      "sha256": "99dae65c207215d827df73f169adefd24d65153dcace9acea1c19e69c71dcf20"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__undo_before_blocks-secretary-audit.json",
+      "bytes": 2731,
+      "sha256": "af81f0afbe719355366177d9142491d2089b587b3667d6cb3e8be0685621c141"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__undo_before_blocks-secretary-consumer-6cf5b4cd-004b-4833-be07-2222eace5a36.json",
+      "bytes": 10102,
+      "sha256": "0d1af2d6337ce852ffff9f6cb32fddd4ab44c0831a94e319c8321afa94a6624e"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/TestPhase2ActionLineageMatrix__undo_before_blocks-secretary-final-6cf5b4cd-004b-4833-be07-2222eace5a36.json",
+      "bytes": 6173,
+      "sha256": "eb930d61c916325fbe7eec2fa1dc97b573b2093ddb41be07e1dc7efed003fc0e"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-evidence/minimal-repro.json",
+      "bytes": 22627,
+      "sha256": "f491f8d5392360afb8d395210c417d8810f227337fab662a9071ff2122bb859e"
+    },
+    {
+      "path": "2026-10-01-phase2-action-lineage-formal-run1-original.log",
+      "bytes": 1753426,
+      "sha256": "907918b0f8f0bc1ca09ecd39f238c30b601243855d7fbe7e07a80c7533598238"
+    }
+  ],
+  "restore_from_repository_root": "tar -xzf docs/evaluations/2026-10-01-phase2-action-lineage-formal-evidence.tar.gz -C docs/evaluations"
+}

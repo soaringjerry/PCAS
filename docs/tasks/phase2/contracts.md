@@ -18,6 +18,8 @@ K0 冻结类型、公开授权和生命周期接口、必要兼容迁移。K1/K2
 
 硬范围为 `studio`（精确 studio ID）、`owner_global`（当前用户明确全局请求/已批准可信策略）、`unscoped`（没有工作室的独立任务）。工作室默认仅本工作室成员及**单独标记且经授权、适用于任务的 global_constraint**。`WorkingContext.Objects` 仍是软相关线索；不能替代范围。无 source scope tag 的旧原文是 unscoped；studio 不得自动读取。owner_global 可在 owner 明确范围下检索授权资料，但不改变其权限。跨工作室扩展必须重新绑定可信请求，不能由 planner 放宽。
 
+同一真实事项由 owner 移动工作室后，其已完成且所有记忆、typed/indirect/source span、DeskActions 来源列表均为空的普通 Run 结果可随事项继续使用。原 Task 的 owner/purpose/HardScope、原接收者启用与实际 route、stale 状态仍校验；当前 consumer 的 Task 必须符合当前事项范围。原 Task 不重写、不重打 stamp；任何依赖存在仍严格核原范围及权限。此兼容不适用于跨事项复制、queued/waiting 请求、旧 manual 包交付或旧输出提交。
+
 source 范围以 `source_scope_assignments` 关联同一来源：`studio` 指定一个或多个 studio ID；`global_constraint` 需 owner 明确标记；`unscoped` 是缺少关联时的分类。global_constraint 不是所有全局原文，仍需匹配用途与必要性。自动抽取只可建议关联，不能授予/扩大范围。
 
 ## 3 来源授权：公开与自然入口
@@ -75,6 +77,9 @@ actions 原始 JSON、corrections 原始 JSON、memory-input 不进入 knowledge
 | Used | 输出声称使用的 ref；验证在实际输入、权限和引用支持中的状态；Used 空不代表没收到，存在不证明内部因果 |
 | indirect_dependencies | 本轮派生摘要、历史回答、Brief、产物的依赖，用于失效/删除，不代表其原文逐字进入 input |
 
+Indirect不是Input的集合补集：同一ref同时直接提供原文并支撑派生标题/请求/历史时，两组都保留。Run用服务端 `contextIndirectDependencies` 单独保存派生谱系，与全部 `contextDependencies` 和直接 `contextVersions` 分离；客户端返回的字段不成为可信输入。后续manual/自动装配按该谱系形成Indirect，不能因direct出现而删除因果链。
+
+
 `ContextManifest` v1 关联 attempt、request/turn/run 身份、recipient、固定视图/范围、四集合、coverage、截断、输入 bytes、tokens（actual/estimated/unknown）、观测层。没有计量时 token 指针为空，不能把 bytes×比例写 actual。provider 内部隐含提示/工具结果不可见部分记 unknown。
 
 最后装配点只保存一份精确载荷字节快照（文本消息/角色/顺序/schema/配置；不复制附件 blob）；材料映射可指到多个 input span。超单次上限必须**先裁剪最终载荷并同步映射/缺口，或拒绝调用**；禁止送全文却存一部分声称全文。hash/refs 仅定位，不能替代精确正文证据。普通日志不含正文、文件名、SQL值。
@@ -95,7 +100,7 @@ attempt 状态 `prepared/dispatched/completed/failed/outcome_unknown/invalidated
 
 ## 7 保留、容量与删除闭包
 
-本批工程初值（经协调选择，**非测量/非产品性能承诺**）：正文7天、每owner64MiB、每attempt256KiB；无正文骨架30天、每owner10000条及metadata总64MiB并取严、每attempt全部逻辑诊断metadata64KiB（manifest、recipient、attempt依赖旁表及其余可变字段均计入）。metadata先裁剪可省候选诊断并标coverage，不能去掉核心input映射或typed deps后继续称完整；核心装不下即拒绝外发。期限保存为明确 `body_expires_at/metadata_expires_at`，清理按显式服务端时间执行，测试无需真实sleep。预算参考候选15/边15/一跳/记忆4000与总输入8000 token仍待测，不冒充精确计量。
+本批工程初值（经协调选择，**非测量/非产品性能承诺**）：正文7天、每owner64MiB、每attempt256KiB；无正文骨架30天、每owner10000条及metadata总64MiB并取严、每attempt全部逻辑诊断metadata64KiB（manifest、recipient、attempt依赖旁表及其余可变字段均计入）。metadata先裁剪可省候选诊断并标coverage，不能去掉核心input映射或typed deps后继续称完整；核心装不下即拒绝外发。期限保存为明确 `body_expires_at/metadata_expires_at`，清理按显式服务端时间执行，测试无需真实sleep。候选15/边15/一跳/记忆4000作为soft裁剪初值。总输入8000按最终可观测payload UTF-8字节数 `ceil(bytes/3)` 统一估算并拒绝超限：manifest记录 `input_tokens.method=estimated` 及估算值，非实际tokenizer计数或provider隐藏上下文承诺，2.2再按实际usage校准。服务端Task总预算<=0拒绝外发；每attempt256KiB是另一个诊断正文硬限。
 
 新 attempt 先在诊断 gate 下清到期记录/正文，再回收最早诊断正文以腾出字节，保留候选 refs/映射并标 `capacity_omitted`；超单次载荷通过最终裁剪或拒绝解决。正文保留状态 `retained/expired/deleted/revoked/capacity_omitted` 与传输状态独立。骨架容量不足则拒绝外发（record_capacity），不能默默跳过 attempt；保留失败给清楚恢复提示。并发 quota 检查与写入原子，删除/到期同步释放计量。
 
@@ -139,3 +144,50 @@ K1实际接收者共同helper（A实现、B复用）：`Store.contextRecipientTx
 第二波已移交 B：runs.go、run_context.go、manual package helper/HTTP handler、context_policy_undo.go；A 保留 attempt/typed/Recall/Expand/summary/秘书和 actions_log 的 policy undo 分支。
 
 K1 定位补齐：`RecallResult.SourceSpans` 仅为已授权返回 source 候选的真实检索窗口；source exact version、rune 半开区间。无实际窗口命中时不伪造首段 locator。统一顺序是 hydrate exact → `applyRecallSpans(entries, spans)` 逐字核对并保留同 source 多窗口 → `selectContextExcerpt` 预算裁剪；最终输入 byte 映射另由 attempt 装配生成。该定位字段不声称候选已实际发送。
+
+K1 attempt 底座接口：`generateContext` 必须在业务事务外调用；自动 adapter prepared 事件提交全量最终 payload 和必需 typed deps，observer 的 before_dispatch barrier 返回后再次 fence。HTTP 的 dispatched 是真实 RoundTrip 入口的发送尝试，Codex 是 turn/start adapter 调用入口，均不代表远端收到。Codex thread/start 的前置 baseInstructions 在当前消费者仅为固定系统词；受控资料首次在 turn/start input 供给。HTTP 自动重定向改变接收者时拒绝，不带旧许可跟随。
+
+owner 只读诊断入口为 `Store.ContextAttempts(ctx,scope,operationID)` 与 `Store.ContextAttemptSnapshot(ctx,scope,id)`；`Store.CleanupContextAttempts(ctx,now)` 使用显式时间供恢复/周期清理和独立验收。logical metadata 按 PostgreSQL row JSON（除唯一 snapshot 与计数字段本身）加每条 attempt typed dependency JSON 实测，包含 payload hash、recipient、可变状态/时间/manifest。新记录另预留 512 字节受控状态变化空间，并计入 owner quota。写入/失效/过期/Used 更新均重新计量；旧骨架若超上限可删除诊断骨架，不能阻止来源删改撤权或删除 durable 依赖。容量裁剪只丢 optional candidates，保留核心输入映射/间接依赖，否则拒绝操作。
+
+Run 的 ContextTask/ContextDependencies/ContextSourceSpans/ContextAttemptID/ManualRecipient 均仅由 server 写入；请求 JSON 回传不能成为可信任务。worker/重取按当前 server route 重建 recipient 并重新 hydrate。run/产物采纳使用 durable deps 和失效标记，不要求仍存在诊断 attempt。manual 新 run 从 Command.ManualRecipient 绑定明确选择，GET package 逐次复核同接收者；更换选择创建新 run。
+
+TrustedTaskContext 的稳定 JSON 字段为 `ownerId/recipient/purpose/scope/view/now/timezone/memoryBudget/totalInputTokens`，carried origins 保持既定 `desk_actions`。Recipient、HardScope、VersionView 和 Budget 的嵌套键沿各自既定 tags。旧 server 持久 JSON 的 `OwnerID/Recipient/Purpose/Scope/View/Now/Timezone/MemoryBudget/TotalInputTokens` 与新键仅大小写不同，标准 encoding/json 不区分大小写回读，无需迁移或双写；这不授权客户端传回 Task 成为可信输入。
+
+输入映射进一步限定为 final assembly 的当前随机 `EvidenceEntry.AssemblyMarker`（仅 transient，json:-）。所有消费者调用统一 `appendContextEvidence`，完整唯一 begin+literal+end 证据块存在时，才在其块内记录正文 byte 区间。query/system/schema 同句不形成 source Input；证据块缺失、被裁剪或重复均拒发。中文与 JSON 转义使用实际最终序列化，候选 locator 仍为原文 rune 区间。
+
+024 给 automatic attempt 增加固定五分钟 execution_expires_at，沿既有副手四分钟调用/五分钟 lease 上限，dispatch/return/final fence 拒绝过期执行。`Store.RecoverContextAttempts(ctx,startupCutoff,now)` 仅把固定启动 cutoff 以前且执行 lease 已过期的未完成 prepared/dispatched automatic attempt 标为 outcome_unknown（原 dispatched_at 保留空/非空事实），never resend；启动和后续周期复用同 cutoff，活跃合法调用未过期不改。manual_package 没有 automatic execution lease，不参与自动崩溃恢复；其 mark-delivered 最后短事务重新读取 server manifest/deps、owner gate、current manual canonical recipient、typed/attempt fence 后才记 PCAS delivery，外部 receipt 仍 unknown。
+
+## 9 秘书动作字段的持久派生谱系（A2-action）
+
+1. `TextBlock` 在现有 `Runs` 外增加服务端 `DeskActions`，引用真实秘书 action ID，不创建假 agent Run。秘书 create/update/add_steps/delegate:new 实际改写的自然语言字段（title/name、notes/body/goal/progress、owedTo/waitingFor、check:<server ID>、condition:<server ID>）标记本轮全部 typed input 与 indirect 依赖；`notesAppend` 只标新段，原 owner 独立块保留。改写/复制继承所有 origin；同轮成功 N* 与 promotion 保持谱系。模型 `used` 空不能清除已收到材料的依赖。
+2. 025 仅给既有 `action_log` 增无正文的 server `context_task` 与 `context_stale`。成功动作以 `artifact/actionID/version1` 保存现有 `context_artifact_dependencies`。原 Task、固定 view、精确原 stamp 与 durable deps 的寿命跟随仍存活字段，独立于 attempt、undo 正文快照/审计窗口；审计过期不得把存活字段变成永不可读。旧行没有新 origin，既有 undo 含义保留，不虚构旧来源。客户端传回块/origin/Task 不产生信任。
+3. 每次供给先验原秘书 route、Task 与 exact stamp，再按当前可信 recipient/purpose/scope hydrate；不能把秘书授权继承给副手/manual。字段依赖加入真正 Indirect，即使相同 ref 已在 Input。无权限只遮派生块，保留 owner 独立段；owner 本地查看也要求原 origin 仍合法，不外发。
+4. 纠正/撤权/删除通过同一 typed invalidation 找所有 DeskActions 引用及 promotion 副本，清派生块和 canonical 字段，title/name 用通用占位，清 summary/history/source label 与 actions 原始副本。origin 永久 stale，regrant 不复活；owner 原件和独立文字保留。动态 check/condition 按稳定服务端 ID 定位，不把数组位置当身份。
+5. undo 保存并校验修改前块，after fence 同时保护块；恢复前复验原 origin，失效旧段不得从 document/beforeBlocks 快照复活。失效时清除相关 undo 正文而保留稳定动作审计 ID。promotion 复制 origin 和引用，durable deps 不依赖 attempt 仍存活。
+6. 当前 `remember` 只记录回执，实际入库来源仍是当前用户 `req.Text`；模型 reply/action 文案不作为 owner 原话创建 claim。actions/corrections/memory-input 不自动抽取知识。此批不新增 AI 生成 claim 入口，不关闭有记忆的合法动作，也不把既有独立 claim grant 改成原文 grant。
+
+契约不代表实现或验收已完成。A 只写产品/build，C/D 独立维护动作派生安全、迁移/undo、同轮委派和原回归断言。
+
+A2-action 共用 lineage 补充：`TrustedTaskContext.desk_actions`、`ContextManifest.desk_actions` 和 Run 的 `contextDeskActions` 均为服务端构造的 origin action ID 数组；不是新的 memory kind 或客户端权限。装配时冻结去重副本，不随 collector 后续原地漂移。每轮最多 256 distinct origin IDs、递归最多 16 层（工程初值，非实测效果阈值），DAG visited 去重；循环/超限受控拒绝，不截断 IDs 后发送。原 action 的原 Task/route/stamp/stale/undone 与父 Task 的 origins 递归检查，再验证当前 consumer 自己的授权。准备、adapter 前、返回后、manual 最后交付、采纳和历史复用共用该门；manifest origins 计入 whole metadata。原无 origins 历史与合法 unknown model 路径沿现有边界，不因新增字段拒绝。025 仍仅两列，父 origins 放在其 server Task JSON，元数据寿命跟随产物。
+
+撤权带具体 recipient 时仅选该原 recipient 的 action durable deps 失效；纠正/删除的 nil recipient 全闭包。owner 撤销快照仅擦除受影响派生块；仅在 purge 前文档与块双 hash 均匹配、服务端因果明确时可更新该 owner action 的 after fence，保独立 owner 修改可撤销。既有后继编辑仍冲突，不按文字相似度重基准。
+
+canonical `title` 与 `name` 分别使用既有 artifact_fields 块追踪、恢复和失效清理。task/idea 的 owner 改 Title 不表示改掉此前 Name 的来源；项目正式改名同时改两字段时两者分别保存实际来源。undo 保持原 before document 的独立 Name，不把恢复 Title 当作新 Name 编辑。promotion 以 idea 的 Title 创建 task 时，Title 与 Name 都继承实际复制的 title 块；Run 新建子任务同理。撤权/删除仍逐字段清除派生内容，不以当前 Title 已经 owner 改写为由留下旧生成 Name。
+
+正式 owner `renameThing` 的整字段改名与一般保守编辑区分：服务端 command/user 身份、真实 item ID 和实际目标文字共同产生私有 rename marker，仅适用 Title（project 同时 Name）。无可复核旧派生文字复用的完整新名保存独立 owner 块；原 copiedBlock 复制/相似规则、任一方向包含、相同长度至少二字符的词片段、归一化至少三连续字符重用任一成立仍保对应来源（保守工程初值，不是实测效果阈值）。copy sources 包括保留的 Name 等既有派生字段，不能由改 Title 洗去旧 Name 权限。一般 notes/字段更新、秘书动作、undo 恢复继续原 EditBlocks，原 beforeBlocks/newer_action/双 hash 保护不变。
+
+该改名识别仅是文本复用启发式，可能保守误判，并非语义作者证明。新标题按既有 2000-byte 硬限，累计检查旧正文最多 64KiB、双向模糊比较累计最多 100000 rune-pair 成本（工程初值）；空归一化内容或达到计算上限的来源保留全部原 labels，不截断后默许解绑。词片段/连续片段用集合线性扫描，普通编辑算法不变。
+
+undo 仅在原 after 文档与块双 hash 校验、原 origin 当前合法筛选和实际块恢复成功后产生私有恢复 marker，绑定真实 item 与恢复完成的精确 field/text/blocks。saveAction 同步时只保留仍逐字逐块匹配的已恢复字段，不从其旧审计摘要再次归因而改变前一动作的 after fence；新撤销 history/source 回执、未恢复或发生变化的字段沿正常同步。此 marker 不来自客户端、不用于一般改写或提前绕过新版/后继保护。
+
+owner 本地已撤销操作回执有一个更窄的审计读规则：仅 `scope.IsOwner && scope.Task == nil`，且 action 的 owner、turn、真实 action ID 与 undone 状态均已核验，才可保留原 receipt 操作说明、事项标题/ID 和 Undone。整条 origin DAG 必须原 Task/route 有效、`context_stale=false`，并且每个 origin 的 typed dependencies 严格为空；缺失 Task、任何依赖、原路由变化、循环或超过 256 distinct IDs/16 层均继续返回通用回执。已删除 exchange 的审计骨架不走此规则。不恢复 Reply、Cards、模型历史或字段，不改变原供给 verifier 对 undone origin 的拒绝；这是本地操作身份回读，不是生成内容重新授权。
+
+重试、重新生成和已有 Run 的预填手动转交均通过 `requestRun.sourceRunId` 定位原服务端 Run。此公开字段只是不可信定位，不能提供 origin/Task 或授权；owner 和同一真实事项必须匹配。预填后改字仍携带定位，保守继承原 `ContextPromptDeskActions` 子集，标点修改不把模型生成 Prompt 变成 owner 独立内容；只有无 initialRun 的既有自然新请求沿普通路径。prepare 在外部 Recall/embedding 前读取并冻结原持久 Prompt 与 origin 子集；final owner 短事务再次读取二者须完全一致，同时重验每个原 producer DAG 的 route/stale/undone/精确 typed stamps，以及实际新接收者/硬范围对所有依赖的独立权限。新 Run 保留 Prompt 子集、general origins 和当前 typed durable deps，不复用旧 Task、原授权、attempt 或交付事实。任何旧 generated Prompt 来源失效，改字或换目标仍在新外发前拒绝；原 owner 独立 Prompt 子集为空时，可在旧一般上下文失效后重新装配。普通无 sourceRunId 新请求不变，不增加绕过继承的界面开关。
+
+### 检索 query 的外发边界
+
+embedding provider 是独立实际接收者，秘书/副手/manual 的授权不授予 embedding 外发许可。当前没有向该接收者独立授权并记录派生 query 的协议，因此消费者将完整本地 lexical/graph query 与 embedding query 分开，使用服务端私有 context override，不新增公开 JSON 参数。Run prepare 的完整 query 继续保留已合法过滤的事项字段、旧讨论和旧结果，但 embedding 只用本轮已确认 owner 独立 `c.Prompt`；存在秘书生成 provenance、derived 输入或非空 SourceRun Prompt origins 时，此 Prompt 也只做本地检索，并给明确 coverage gap。是否拼入 item/previous 不靠 `Task.DeskActions` 或零依赖猜测；这些拼入文字一律不进入 embedding query。DeskTurn 同类 Recall 保留 `earlier + req.Text` 本地 query，仅外发本轮 owner `req.Text`；AnswerDesk 对应仅外发本轮 `question`。这两处 earlier 实际只拼历史用户问题，不将此收敛描述成已发现旧 Reply 外发。普通独立 owner Recall 和现有向量存储继续可用，不整体禁 Recall，也不在 owner 锁内调用 provider。
+
+prepare 在 Recall 前按实际 destination item 检查 Prompt 的 indirect dependencies 与 `context_exclusions`，排除命中即拒绝；final 原 item/route/origin/typed 门仍保留。原 prepare→final 的并发验收可使用真实本地检索 read/事务阻塞证明快照重验，不虚构 prepared attempt。旧 ordinary continuation 正控仍必须进入本地 query 与最终 Brief/package；未经独立 embedding 授权的旧回答不再要求进入 embedding HTTP payload。此边界只改变实际传输层，不取消其合法后续使用。
+
+Run 的服务端 `contextPromptDeskActions` 是真实成功 delegate action ID 子集，仅在该动作实际写入生成 Prompt 时绑定，沿用同一 origin DAG，不预测 ID、不由客户端填写。它与继承事项/previous/history 的 `contextDeskActions` 区分：后者非空不表示 owner 亲写 Prompt 为模型生成。原 action Task/typed deps 的元数据寿命跟随 Prompt，独立于 audit changes/attempt 到期；两列表均受既有 256 origins 上限。失效 hook 及 Snapshot/导出等当前读门以实际 Prompt origin 验证和清除生成 Prompt；来源撤回/route失效/undo 不复活，owner 独立 Prompt 保留，旧无标记行不猜测模型来源。

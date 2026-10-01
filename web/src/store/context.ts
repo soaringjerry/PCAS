@@ -1,5 +1,5 @@
 import { createContext, useContext } from 'react'
-import type { RunKind, State } from '../domain/types'
+import type { ManualRecipientSelection, ManualRunPackage, RunKind, State } from '../domain/types'
 import type { Action } from './actions'
 
 export interface RunRequest {
@@ -7,6 +7,8 @@ export interface RunRequest {
   agentId: string
   kind: RunKind
   prompt: string
+  sourceRunId?: string
+  manualRecipient?: ManualRecipientSelection
 }
 
 /** `error` is the text to show; `code` is the server's code, e.g. `already_undone`. */
@@ -28,6 +30,8 @@ export interface Store {
   refresh: () => Promise<void>
   /** Start an AI run on a thing; returns the run id. */
   runAgent: (request: RunRequest) => Promise<string | undefined>
+  /** Fresh delivery only; never stored in workspace state or browser storage. */
+  manualPackage: (runId: string) => Promise<ManualRunPackage>
 }
 
 export const StoreContext = createContext<Store | null>(null)

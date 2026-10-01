@@ -274,16 +274,7 @@ func TestApprovedUndoProtectionPriority(t *testing.T) {
 		t.Fatal(err)
 	}
 	action, id := string(memory.NewID()), string(memory.NewID())
-	if err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-		logged := withActionLog(ctx, action, "desk", "", "delegation")
-		if err := beginActionLogTx(logged, tx); err != nil {
-			return err
-		}
-		if err := s.commandTx(logged, tx, scope, workspace.Command{Type: "delegateTask", ID: id, Title: "original", Prompt: "fixture", AgentID: "model"}); err != nil {
-			return err
-		}
-		return flushActionLog(logged, tx, scope)
-	}); err != nil {
+	if _, err := s.Execute(ctx, scope, workspace.Command{Type: "delegateTask", ID: id, Title: "original", Prompt: "fixture", AgentID: "model", RequestID: action}); err != nil {
 		t.Fatal(err)
 	}
 	_, later := approvedUndoCommand(t, s, scope, workspace.Command{Type: "renameThing", ID: id, Title: "later"})

@@ -179,23 +179,37 @@ type Adoption struct {
 	Edited   bool   `json:"edited"`
 }
 type Run struct {
-	ID               string          `json:"id"`
-	ThingID          string          `json:"thingId"`
-	AgentID          string          `json:"agentId"`
-	Kind             string          `json:"kind"`
-	Prompt           string          `json:"prompt"`
-	Brief            string          `json:"brief"`
-	ContextMemoryIDs []string        `json:"contextMemoryIds"`
-	ContextVersions  []memory.Ref    `json:"contextVersions"`
-	Status           string          `json:"status"`
-	Output           string          `json:"output,omitempty"`
-	Error            string          `json:"error,omitempty"`
-	ProviderError    json.RawMessage `json:"providerError,omitempty"`
-	Adopted          *Adoption       `json:"adopted,omitempty"`
-	StaleContext     bool            `json:"staleContext"`
-	Cost             float64         `json:"cost"`
-	CreatedAt        string          `json:"createdAt"`
-	FinishedAt       string          `json:"finishedAt,omitempty"`
+	// Server-created provenance. Requests cannot supply a trusted task through
+	// these returned fields; consumers rebuild the current recipient on reads.
+	ContextTask         *memory.TrustedTaskContext `json:"contextTask,omitempty"`
+	ContextDependencies []memory.TypedDependency   `json:"contextDependencies,omitempty"`
+	// Server-owned derived lineage; may overlap direct ContextVersions/Input.
+	ContextDeskActions []memory.ID `json:"contextDeskActions"`
+	// A server-owned subset for the actual model-written Prompt, distinct from
+	// origins inherited through item fields and previous conversations.
+	ContextPromptDeskActions    []memory.ID              `json:"contextPromptDeskActions,omitempty"`
+	ContextIndirectDependencies []memory.TypedDependency `json:"contextIndirectDependencies"`
+	ContextCandidates           []memory.CandidateRecord `json:"contextCandidates,omitempty"`
+	ContextSourceSpans          []memory.SourceSpan      `json:"contextSourceSpans,omitempty"`
+	ContextAttemptID            memory.ID                `json:"contextAttemptId,omitempty"`
+	ManualRecipient             *memory.Recipient        `json:"manualRecipient,omitempty"`
+	ID                          string                   `json:"id"`
+	ThingID                     string                   `json:"thingId"`
+	AgentID                     string                   `json:"agentId"`
+	Kind                        string                   `json:"kind"`
+	Prompt                      string                   `json:"prompt"`
+	Brief                       string                   `json:"brief"`
+	ContextMemoryIDs            []string                 `json:"contextMemoryIds"`
+	ContextVersions             []memory.Ref             `json:"contextVersions"`
+	Status                      string                   `json:"status"`
+	Output                      string                   `json:"output,omitempty"`
+	Error                       string                   `json:"error,omitempty"`
+	ProviderError               json.RawMessage          `json:"providerError,omitempty"`
+	Adopted                     *Adoption                `json:"adopted,omitempty"`
+	StaleContext                bool                     `json:"staleContext"`
+	Cost                        float64                  `json:"cost"`
+	CreatedAt                   string                   `json:"createdAt"`
+	FinishedAt                  string                   `json:"finishedAt,omitempty"`
 }
 type Origin struct {
 	Label    string `json:"label"`
@@ -265,6 +279,9 @@ type State struct {
 
 // Commands are validated on the server; callers never submit an entire state.
 type Command struct {
+	// SourceRunID is an untrusted locator for retry/handoff prompt lineage.
+	// The server reads and verifies the original Run; clients supply no origins.
+	SourceRunID string `json:"sourceRunId,omitempty"`
 	// ManualRecipient is an explicit owner selection. Consumers must validate
 	// it against the configured external destination before binding trusted Task.
 	ManualRecipient     *memory.Recipient                  `json:"manualRecipient,omitempty"`

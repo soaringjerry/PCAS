@@ -288,7 +288,8 @@ func TestStabilizationUndoU7_DeleteAfterNotificationDelivered(t *testing.T) {
 }
 func stabilizationUndoCompletedRun(t *testing.T, s *Store, scope memory.Scope, thing, output string) (workspace.State, string, string) {
 	t.Helper()
-	stabilizationUndoCommand(t, s, scope, workspace.Command{Type: "requestRun", ThingID: thing, AgentID: "manual", Kind: "breakdown", Prompt: "T1 fixture"})
+	phase2ManualDestination(t, s)
+	stabilizationUndoCommand(t, s, scope, workspace.Command{Type: "requestRun", ThingID: thing, AgentID: "manual", ManualRecipient: &memory.Recipient{Provider: phase2ManualProvider}, Kind: "breakdown", Prompt: "T1 fixture"})
 	st := stabilizationUndoSnapshot(t, s, scope)
 	runID := st.Runs[len(st.Runs)-1].ID
 	// Locate the newest queued fixture without relying on snapshot ordering.
@@ -297,6 +298,7 @@ func stabilizationUndoCompletedRun(t *testing.T, s *Store, scope memory.Scope, t
 			runID = run.ID
 		}
 	}
+	phase2RTGetPackage(t, s, scope, workspace.Run{ID: runID})
 	st, _ = stabilizationUndoCommand(t, s, scope, workspace.Command{Type: "pasteRunResult", ID: runID, Output: output})
 	var action string
 	for _, run := range st.Runs {

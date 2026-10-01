@@ -148,6 +148,63 @@
         "claim global supply does not require or imply raw source authorization",
         "explicit source deny still blocks global source-derived claim"
       ]
+    },
+    {
+      "id": "R14",
+      "sequence": "parent absence and independent child allow; parent allow without child allow; exact derived_from/archive parent explicit deny; regrant",
+      "required": [
+        "parent absence does not block independently granted child",
+        "parent allow never automatically grants child raw permission",
+        "same receiver/purpose/scope explicit parent deny follows known exact derived_from/archive ancestors to child and its evidence-derived claims",
+        "old child prepared snapshots invalidate and clear body",
+        "parent regrant permits fresh child context only, never revives old invalidated attempt"
+      ]
+    },
+    {
+      "id": "R15",
+      "sequence": "source text also appears in user question/system boilerplate; source evidence selected separately; Chinese quote/backslash/newline serialized payload",
+      "required": [
+        "source span remains exact rune half-open interval of independently authorized source version",
+        "payload spans identify actual supplied source evidence block, never identical user/system text",
+        "duplicate phrase does not prove source supplied when policy absent or evidence omitted",
+        "mapped final bytes decode to true evidence across Chinese JSON quote/backslash/newline escaping",
+        "exact request bytes and containing JSON message positions retained as evidence"
+      ]
+    },
+    {
+      "id": "R16",
+      "sequence": "uncompleted prepared/reserved/dispatched durable rows → actual process recovery entry → inspect attempts and provider count",
+      "required": [
+        "recovery handles stale prepared, reservation without observed dispatch, and observed dispatch without completion distinctly",
+        "unresolved attempts become outcome_unknown or explicit controlled terminal invalidation; never successful completion",
+        "no automatic paid request replay or old reservation reuse",
+        "observed dispatched_at survives recovery; reservation alone is not fabricated as observed network send",
+        "canceled request or expiry Cleanup is not evidence of process recovery"
+      ]
+    },
+    {
+      "id": "R17",
+      "sequence": "actual source-derived run/brief/output → registry route change or agent disable without source mutation → State/Export and derived docs/samples reads; legitimate legacy pure-claim control",
+      "required": [
+        "route-only change/disable denies obsolete source-derived body in run/brief/output and known derived docs/training views",
+        "owner source audit/export remains readable and is not misclassified as derived replay",
+        "ContextTask=nil legacy only-known-claim dependencies still pass strict legacy plus server current trusted task typed/explicit-deny validation when lawful",
+        "missing/unknown kinds, unclear raw provenance, obsolete explicit recipient, or permission mismatch fail closed without invented historical route",
+        "source explicit deny blocks evidence-derived legacy claim results",
+        "already-cleared body is never reconstructed after regrant or route restore",
+        "unrelated owner original docs and valid unrelated samples remain compatible"
+      ]
+    },
+    {
+      "id": "R18",
+      "sequence": "final observable UTF8 payload bytes at estimated total input boundary → generate through common production observer and actual fakeHTTP",
+      "required": [
+        "InputTokens is ceil(final UTF8 bytes/3), method estimated, actual model identity retained",
+        "default total input budget8000 allows23999 and24000bytes and rejects24001bytes before target external HTTP",
+        "independent actual encoding calibration is explicitly separate from one target bounded generation; not a lucky retry",
+        "perattempt256KiB diagnostic hard ceiling still applies separately",
+        "this estimate is not actual tokenizer/hidden context/provider billing; old exactbytes and dependency mappings remain strict"
+      ]
     }
   ],
   "reuse_required": [
@@ -176,5 +233,40 @@
       "claim": "未标记决定内容是 UNSCOPED-DECISION-682。",
       "atom": "UNSCOPED-DECISION-682"
     }
+  },
+  "ancestry_control": {
+    "parent_text": "合成父资料 PARENT-ANCESTRY-285。",
+    "child_text": "合成子资料：独立内容是 CHILD-INDEPENDENT-404。",
+    "child_claim": "合成子资料独立内容是 CHILD-INDEPENDENT-404。",
+    "child_atom": "CHILD-INDEPENDENT-404"
+  },
+  "request_mapping_controls": {
+    "source_text": "开门时间是早上九点。入口暗号是「晴天\\入口」。\n中文引号“测试”及英文引号\"映射”。",
+    "duplicate_short_phrase": "开门时间是早上九点。",
+    "question_with_duplicate": "我已经在问题里写了：开门时间是早上九点。请仅据被授权来源说明入口暗号。",
+    "system_duplicate": "合成系统模板：开门时间是早上九点。",
+    "scope": "synthetic mapping fixture; no existing raw gold changed"
+  },
+  "input_budget_control": {
+    "total_input_tokens": 8000,
+    "method": "estimated",
+    "cases": [
+      {
+        "payload_bytes": 23999,
+        "estimated_tokens": 8000,
+        "allowed": true
+      },
+      {
+        "payload_bytes": 24000,
+        "estimated_tokens": 8000,
+        "allowed": true
+      },
+      {
+        "payload_bytes": 24001,
+        "estimated_tokens": 8001,
+        "allowed": false
+      }
+    ],
+    "calibration": "one unbounded fake-adapter request with identical fixed Unicode/escaping prefix; pad ASCII to independent final byte boundary"
   }
 }

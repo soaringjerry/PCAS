@@ -1,0 +1,26 @@
+{
+  "base_product_head": "207bd7062f02cf95d4d29ebaba1391d25a7972f1",
+  "command": [
+    "go",
+    "test",
+    "./internal/postgres",
+    "-run",
+    "^$",
+    "-count=1"
+  ],
+  "dynamic_tests_executed": 0,
+  "first_compile": {
+    "exit": 1,
+    "reason": "C harness passed memory.ID/[]memory.ID to existing string-only oneOf; fixed by explicit typed equality loop"
+  },
+  "corrected_compile": {
+    "exit": 0,
+    "output": "ok github.com/soaringjerry/PCAS/internal/postgres 0.005s [no tests to run]"
+  },
+  "sha256": {
+    "internal/postgres/phase2_runtime_name_origin_test.go": "4a39819d5901e19a0353aee26ee865e832cde8ed0c9223ddcc324fb5666996ae",
+    "internal/postgres/phase2_runtime_delegation_test.go": "4882edf181f7b6b591b831d0405a9575526944756c4b6dfcd8763a0f53c65027",
+    "testdata/phase2/name-origin-sequences.json": "f23ab4df55a69065acf2546f27ccbc12f4244076c0081b73bc3f2f75971306f1",
+    "testdata/phase2/delegation-origin-supplement.json": "8d5618131807b2bcfd748cac16de6f604dae1ce2de0b8dc5b4bdbf768906e3c9"
+  }
+}

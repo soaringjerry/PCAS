@@ -1,0 +1,73 @@
+{
+  "schema": "pcas.phase2.independent-retry-query-isolation-gold.v1",
+  "authority": "root approved contract0964d35; original13/manual/receipt gold unchanged",
+  "revises_execution_of": "RETRY-FINAL-BARRIER",
+  "old_embedding_design": "retained in retry-origin-supplement.json and first harness as not-executed diagnostic; no dynamic result claimed",
+  "final_fence_sequence": [
+    "begin fixture transaction, SELECT actual workspace_owners row FOR UPDATE without mutations",
+    "launch formal source revoke first; observe its backend PID waiting on fixture PID at the actual owner gate",
+    "launch formal SourceRunID retry; real prepare/local Recall must complete and final backend PID must wait behind revoke at same actual row",
+    "record pg_stat_activity query/wait_event/pg_blocking_pids with monotonic arrival timestamps; only then release fixture",
+    "formal revoke returns success and persistent current policy revoked=true with next revision",
+    "retry final fails exact controlled context conflict; new Run0, deputy HTTP0, manual delivery0"
+  ],
+  "barrier_failure_policy": "Bound actual wait observation within source mutation lock_timeout; inability to observe either real wait is a test failure, never assumed sleep, SQL prepared injection or retry",
+  "strengthens_original_retry_cases": [
+    "configure independent embedding trap after original true failed-run setup",
+    "generated Prompt SourceRunID retries never send any query to embedding, including edited punctuation and new actual destination",
+    "owner-independent origins-empty retry still makes a normal vector query but only the current owner Prompt"
+  ],
+  "new_cases": [
+    {
+      "id": "RETRY-TARGET-EXCLUDED",
+      "input": "separate confirmed synthetic claim via public capture/accept; same lawful agent grant; actual secretary Input exact claim positive control, actual delegate receipt and true503 failed run",
+      "sequence": [
+        "formal owner toggleContextMemory on actual destination item for that exact claim",
+        "formal SourceRunID retry, generated Prompt reused",
+        "observe embedding and deputy fake HTTP"
+      ],
+      "required": [
+        "actual producer still live and original exact claim is lawful independent of destination exclusion",
+        "prepare rejects current item exclusion before embedding/Run commit; embedding0/deputy0/Run0",
+        "no SQL fabricated exclusion or durable origin"
+      ]
+    },
+    {
+      "id": "OWNER-EMBED-CURRENT-PROMPT-ONLY",
+      "input": "reuse owner-independent Prompt case with old general context source-stale and origin subset empty",
+      "required": [
+        "actual embedding still called once",
+        "decoded embedding input equals this current owner Prompt only; no item/previous/source atom",
+        "actual deputy Run success preserves ordinary owner work"
+      ]
+    },
+    {
+      "id": "SECRETARY-EMBED-CURRENT-QUERY-ONLY",
+      "input": "first real secretary raw source Input positive control; same conversation second owner request contains no source atom",
+      "required": [
+        "embedding called for only the second current owner query, decoded input equal current req.Text",
+        "no previous user query/source/derived atom in embedding HTTP payload",
+        "secretary actual final model call still happens, source authorization is not replaced by global disabling of vector/model calls",
+        "do not claim prior secretary Reply was formerly embedded; earlier local query consists of previous user questions"
+      ]
+    }
+  ],
+  "legacy_fixture_migration": {
+    "test": "TestContinuationHonorsCurrentItemScopeBeforeSemanticRetrieval",
+    "leaves": [
+      "exclude",
+      "move-project",
+      "revoke"
+    ],
+    "previous_embedding_positive": "Ordinary permitted plan in embedding HTTP",
+    "new_embedding_positive": "decoded input exactly Continue that",
+    "unchanged_positive": "Ordinary permitted plan in real final manual package/local continuation, proof local full query still used",
+    "unchanged_negative": [
+      "482910 absent embedding/package",
+      "exact excluded memory absent ContextMemoryIDs",
+      "scope/revoke/exclude real mutation controls unchanged"
+    ]
+  },
+  "expected_additional_new_leaves": 2,
+  "note": "owner embedding positive is integrated into original OWNER-INDEPENDENT leaf, thus new retry leaf count16+2=18, receipt2=20; existing continuation3 yields23 planned causal leaves"
+}

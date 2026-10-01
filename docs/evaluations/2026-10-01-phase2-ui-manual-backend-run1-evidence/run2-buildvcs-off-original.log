@@ -1,0 +1,68 @@
+
+Running 2 tests using 1 worker
+
+(node:1070913) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✘  1 tests/phase2_manual_backend.spec.ts:167:1 › real_target_package_clipboard_submit (722ms)
+(node:1071006) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✘  2 tests/phase2_manual_backend.spec.ts:185:1 › real_revoke_clear_refuse_regenerate_submit (526ms)
+
+
+  1) tests/phase2_manual_backend.spec.ts:167:1 › real_target_package_clipboard_submit ──────────────
+
+    Error: expect(received).toBe(expected) // Object.is equality
+
+    Expected: 200
+    Received: 501
+
+      74 |   await command(page, { type: 'setNotes', id: task.id, text: ownerText })
+      75 |   const grantResponse = await page.request.post(`/v1/memory/sources/${source.id}/authorization`, { data: { request_id: crypto.randomUUID(), source, expected_policy_revision: 0, recipient: { principal_id: 'manual', role: 'manual', provider: target.id }, purpose: 'knowledge', scope: { kind: 'unscoped', include_global_constraints: false } } })
+    > 76 |   expect(grantResponse.status()).toBe(200)
+         |                                  ^
+      77 |   const grant = await grantResponse.json() as { authorization: Policy }
+      78 |   expect(grant.authorization).toMatchObject({ revision: 1, revoked: false, recipient: { principal_id: 'manual', role: 'manual', provider: target.id, model: 'golden', protocol: 'openai', channel: 'manual' } })
+      79 |   expect(grant.authorization.recipient.route_fingerprint).toMatch(/^[a-f0-9]{64}$/)
+        at setup (/tmp/pcas-phase2-manual-browser-real/web/tests/phase2_manual_backend.spec.ts:76:34)
+        at /tmp/pcas-phase2-manual-browser-real/web/tests/phase2_manual_backend.spec.ts:170:18
+
+    Error Context: test-results/phase2-manual-backend/phase2_manual_backend-real-target-package-clipboard-submit/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/phase2-manual-backend/phase2_manual_backend-real-target-package-clipboard-submit/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/phase2-manual-backend/phase2_manual_backend-real-target-package-clipboard-submit/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) tests/phase2_manual_backend.spec.ts:185:1 › real_revoke_clear_refuse_regenerate_submit ────────
+
+    Error: expect(received).toBe(expected) // Object.is equality
+
+    Expected: 200
+    Received: 501
+
+      74 |   await command(page, { type: 'setNotes', id: task.id, text: ownerText })
+      75 |   const grantResponse = await page.request.post(`/v1/memory/sources/${source.id}/authorization`, { data: { request_id: crypto.randomUUID(), source, expected_policy_revision: 0, recipient: { principal_id: 'manual', role: 'manual', provider: target.id }, purpose: 'knowledge', scope: { kind: 'unscoped', include_global_constraints: false } } })
+    > 76 |   expect(grantResponse.status()).toBe(200)
+         |                                  ^
+      77 |   const grant = await grantResponse.json() as { authorization: Policy }
+      78 |   expect(grant.authorization).toMatchObject({ revision: 1, revoked: false, recipient: { principal_id: 'manual', role: 'manual', provider: target.id, model: 'golden', protocol: 'openai', channel: 'manual' } })
+      79 |   expect(grant.authorization.recipient.route_fingerprint).toMatch(/^[a-f0-9]{64}$/)
+        at setup (/tmp/pcas-phase2-manual-browser-real/web/tests/phase2_manual_backend.spec.ts:76:34)
+        at /tmp/pcas-phase2-manual-browser-real/web/tests/phase2_manual_backend.spec.ts:188:18
+
+    Error Context: test-results/phase2-manual-backend/phase2_manual_backend-real-6f7c4-ar-refuse-regenerate-submit/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/phase2-manual-backend/phase2_manual_backend-real-6f7c4-ar-refuse-regenerate-submit/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/phase2-manual-backend/phase2_manual_backend-real-6f7c4-ar-refuse-regenerate-submit/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2 failed
+    tests/phase2_manual_backend.spec.ts:167:1 › real_target_package_clipboard_submit ───────────────
+    tests/phase2_manual_backend.spec.ts:185:1 › real_revoke_clear_refuse_regenerate_submit ─────────

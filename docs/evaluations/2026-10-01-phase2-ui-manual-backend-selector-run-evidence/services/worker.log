@@ -1,0 +1,7 @@
+{"time":"2026-10-01T14:36:42.624928532Z","level":"INFO","msg":"memory worker started"}
+{"time":"2026-10-01T14:36:45.677996362Z","level":"WARN","msg":"memory job failed","job_id":"123ca27e-a9fb-4b94-b6aa-9376c0fd608d","stage":"source.embed","attempt":1}
+{"time":"2026-10-01T14:36:45.685551549Z","level":"WARN","msg":"memory job failed","job_id":"e8e66484-7178-40cc-a028-b041404be20e","stage":"source.embed","attempt":1}
+{"time":"2026-10-01T14:36:45.691926994Z","level":"WARN","msg":"memory job failed","job_id":"911cfd8f-c0f3-4783-b752-339a431186cc","stage":"source.embed","attempt":1}
+{"time":"2026-10-01T14:36:47.743155831Z","level":"WARN","msg":"memory job failed","job_id":"395eb180-a734-46bc-beb6-fde3e8b6f1ab","stage":"source.embed","attempt":1}
+{"time":"2026-10-01T14:36:47.749382965Z","level":"WARN","msg":"memory job failed","job_id":"c6089876-d4c4-40b4-883d-98d7af38e157","stage":"source.embed","attempt":1}
+{"time":"2026-10-01T14:36:47.756012182Z","level":"WARN","msg":"memory job failed","job_id":"be695124-6de2-44b1-b6ae-85d993785197","stage":"source.embed","attempt":1}

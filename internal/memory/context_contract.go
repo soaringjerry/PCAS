@@ -80,17 +80,20 @@ type VersionView struct {
 }
 
 // TrustedTaskContext is built from authentication, the current owner intent,
-// server task records and the final provider route. Never decode it from JSON.
+// server task records and the final provider route. Request-decoded JSON is
+// never trusted. Tags also retain case-insensitive reads of old server records.
 type TrustedTaskContext struct {
-	OwnerID          ID
-	Recipient        Recipient
-	Purpose          ContextPurpose
-	Scope            HardScope
-	View             VersionView
-	Now              time.Time
-	Timezone         string
-	MemoryBudget     Budget
-	TotalInputTokens int
+	OwnerID          ID             `json:"ownerId"`
+	Recipient        Recipient      `json:"recipient"`
+	Purpose          ContextPurpose `json:"purpose"`
+	Scope            HardScope      `json:"scope"`
+	View             VersionView    `json:"view"`
+	Now              time.Time      `json:"now"`
+	Timezone         string         `json:"timezone"`
+	MemoryBudget     Budget         `json:"memoryBudget"`
+	TotalInputTokens int            `json:"totalInputTokens"`
+	// Server-only carried origins; bounded and frozen before assembly.
+	DeskActions []ID `json:"desk_actions,omitempty"`
 }
 
 type SourceScopeKind string
@@ -200,11 +203,19 @@ func (s SourceSpan) Valid() bool {
 // EvidenceEntry is transient hydrated text. Persist ContextManifest rather than
 // this value in diagnostic metadata, to avoid a second copy of the body.
 type EvidenceEntry struct {
-	Ref          Ref               `json:"ref"`
-	SourceSpan   *SourceSpan       `json:"source_span,omitempty"`
-	Text         string            `json:"text"`
-	Role         string            `json:"role,omitempty"`
-	ExpressedAt  *time.Time        `json:"expressed_at,omitempty"`
+	// Transient assembly provenance. A fresh server marker identifies the
+	// actual evidence insertion; it is not retained as diagnostic metadata.
+	AssemblyMarker string      `json:"-"`
+	Ref            Ref         `json:"ref"`
+	SourceSpan     *SourceSpan `json:"source_span,omitempty"`
+	Text           string      `json:"text"`
+	Role           string      `json:"role,omitempty"`
+	ExpressedAt    *time.Time  `json:"expressed_at,omitempty"`
+	// Claim status labels reuse claim revision semantics. They are transient
+	// model context, never an independent authorization or a body copy.
+	Epistemic    string            `json:"epistemic,omitempty"`
+	Confirmation string            `json:"confirmation,omitempty"`
+	Acquisition  string            `json:"acquisition,omitempty"`
 	Historical   bool              `json:"historical"`
 	Changed      bool              `json:"changed"`
 	Dependencies []TypedDependency `json:"dependencies"`
@@ -266,6 +277,7 @@ type ContextManifest struct {
 	Truncated            bool              `json:"truncated"`
 	InputBytes           int               `json:"input_bytes"`
 	InputTokens          TokenCount        `json:"input_tokens"`
+	DeskActions          []ID              `json:"desk_actions,omitempty"`
 	ObservationLayer     string            `json:"observation_layer"` // adapter_arguments, serialized_request, manual_package
 }
 
@@ -306,6 +318,7 @@ type ContextAttempt struct {
 	InvalidationReason string          `json:"invalidation_reason,omitempty"`
 	BodyExpiresAt      time.Time       `json:"body_expires_at"`
 	MetadataExpiresAt  time.Time       `json:"metadata_expires_at"`
+	ExecutionExpiresAt *time.Time      `json:"execution_expires_at,omitempty"`
 }
 
 type ContextInvalidationReason string

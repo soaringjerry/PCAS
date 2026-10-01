@@ -125,6 +125,9 @@ func hydrateTypedOneTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, task 
 		if err != nil {
 			return out, typedReadError(err)
 		}
+		if !oneOf(out.Role, "user", "assistant", "system", "tool") {
+			out.Role = "unknown"
+		}
 		if oneOf(connector, "actions", "corrections", "memory-input") || out.Text == "" || !strings.HasPrefix(media, "text/") && !strings.Contains(media, "json") {
 			return out, memory.ErrForbidden
 		}
@@ -215,6 +218,21 @@ func hydrateTypedOneTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, task 
 			out.Text = string(claim.Value)
 		}
 		out.ExpressedAt = claim.ExpressedAt
+		out.Confirmation = claim.Confirmation
+		if !oneOf(out.Confirmation, "unknown", "candidate", "adopted", "confirmed", "disputed") {
+			out.Confirmation = "unknown"
+		}
+		out.Acquisition = claim.Acquisition
+		if !oneOf(out.Acquisition, "direct", "reported", "inferred", "execution") {
+			out.Acquisition = "unknown"
+		}
+		// Preserve the existing workspace memory interpretation exactly.
+		out.Epistemic = "inferred"
+		if out.Confirmation == "confirmed" {
+			out.Epistemic = "confirmed"
+		} else if out.Confirmation == "adopted" && out.Acquisition == "direct" {
+			out.Epistemic = "sourced"
+		}
 	case memory.SummaryKind:
 		var allowed bool
 		err = tx.QueryRow(ctx, `SELECT v.body,NOT v.stale AND EXISTS(SELECT 1 FROM record_grants g WHERE g.owner_id=v.owner_id AND g.record_id=v.id AND g.principal_id=$4) FROM derived_views v WHERE v.owner_id=$1 AND v.id=$2 AND v.version=$3`, string(scope.OwnerID), string(ref.ID), ref.Version, task.Recipient.PrincipalID).Scan(&out.Text, &allowed)

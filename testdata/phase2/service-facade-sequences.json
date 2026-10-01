@@ -1,0 +1,14 @@
+{
+  "schema": "pcas.phase2.independent-memory-service-facade-gold.v1",
+  "frozen_at": "2026-10-01",
+  "authority": "root-approved independent optional capability facade tests after real serve sources=NewService(db) returned 501",
+  "expected": [
+    "NewService(repo) exposes SourceAuthorizer and SourceScopeEditor optional ports without replacing existing validated Ingest behavior",
+    "each of authorization list/set and scope get/set forwards the exact context, owner Scope, source ID or complete typed request to the supporting repository exactly once",
+    "each method returns the exact successful result or the same repository error without converting it into success or changing payload/stamps/action IDs",
+    "nonowner or invalid owner Scope gets exact ErrForbidden before any repository call on all four methods",
+    "Sources-only legacy repository gets exact ErrUnavailable and zero result through all four optional methods, with no Ingest/GetSource call or panic"
+  ],
+  "limits": "Unit facade contract only. D independently verifies real serve HTTP authorization, scope and UI; this does not claim those runtime gates passed.",
+  "failure_policy": "Compile-only until root exact combination. Missing public optional capability is Fatal, never skip; old service tests remain unchanged."
+}

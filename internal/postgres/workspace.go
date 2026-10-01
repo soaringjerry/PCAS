@@ -248,6 +248,55 @@ func (s *Store) snapshotTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) (
 	if out.Samples, err = queryDocuments[workspace.Sample](ctx, tx, "SELECT document || jsonb_build_object('stale',stale,'state',state) FROM training_samples WHERE owner_id=$1 ORDER BY document->>'createdAt' DESC,id", string(scope.OwnerID)); err != nil {
 		return out, err
 	}
+	// Provider configuration changes have no source mutation hook. Validate
+	// derived views live, without erasing the stored owner audit or authored text.
+	allowedRuns := map[string]bool{}
+	for i := range out.Runs {
+		run := &out.Runs[i]
+		allowedRuns[run.ID] = s.verifyRunTx(ctx, tx, scope, *run) == nil
+		if !allowedRuns[run.ID] {
+			if len(run.ContextPromptDeskActions) > 0 {
+				run.Prompt = ""
+			}
+			run.Brief, run.Output, run.ProviderError = "", "", nil
+			run.StaleContext = true
+			run.Error = "资料或接收者已变化，请重新生成"
+		}
+	}
+	for i := range out.Docs {
+		doc := &out.Docs[i]
+		if doc.RunID != "" && !allowedRuns[doc.RunID] {
+			doc.Body = ""
+			doc.Title = "文档依据已变化"
+		}
+	}
+	for i := range out.Samples {
+		sample := &out.Samples[i]
+		if sample.Stale || sample.Origin.RunID != "" && !allowedRuns[sample.Origin.RunID] {
+			sample.Prompt, sample.Response = "", ""
+			sample.State, sample.Stale = "excluded", true
+			sample.Origin.Label = "依据已变化"
+		}
+	}
+	itemTitles := map[string]string{}
+	for _, items := range [][]workspace.Item{out.Tasks, out.Ideas, out.Projects} {
+		for i := range items {
+			visible, _, e := s.sanitizeItemTx(ctx, tx, scope, "owner", items[i])
+			if e != nil {
+				return out, e
+			}
+			if visible.Title == "" && items[i].Title != "" {
+				visible.Title = "事项依据已变化"
+			}
+			items[i] = visible
+			itemTitles[visible.ID] = visible.Title
+		}
+	}
+	for i := range out.Notices {
+		if title, ok := itemTitles[out.Notices[i].ThingID]; ok {
+			out.Notices[i].Title = title
+		}
+	}
 	rows, err := tx.Query(ctx, `SELECT s.id::text,v.title,s.connector,r.updated_at,(SELECT count(*) FROM chunks c WHERE c.owner_id=s.owner_id AND c.source_id=s.id AND c.source_version=r.version),
 		EXISTS(SELECT 1 FROM memory_jobs j WHERE j.owner_id=s.owner_id AND j.record_id=s.id AND j.record_version=r.version AND j.state IN ('failed','blocked')),
 		EXISTS(SELECT 1 FROM memory_jobs j WHERE j.owner_id=s.owner_id AND j.record_id=s.id AND j.record_version=r.version AND j.state IN ('queued','leased'))
@@ -356,6 +405,9 @@ func (s *Store) Execute(ctx context.Context, scope memory.Scope, in workspace.Co
 		return out, err
 	}
 	if !memory.ID(in.RequestID).Valid() || in.ExpectedRevision < 0 {
+		return out, memory.ErrInvalid
+	}
+	if in.SourceRunID != "" && (in.Type != "requestRun" || !memory.ID(in.SourceRunID).Valid()) {
 		return out, memory.ErrInvalid
 	}
 	hash := sha256.Sum256(asJSON(in))
@@ -476,6 +528,15 @@ func (s *Store) Export(ctx context.Context, scope memory.Scope, training, confir
 			if sample.State != "included" || sample.Stale || confirmedOnly && sample.Epistemic != "confirmed" {
 				continue
 			}
+			// The snapshot is already a live view. Keep the external training
+			// gate explicit as well, so this export never treats stored inclusion
+			// as authority to replay an invalidated derived result.
+			if sample.Origin.RunID != "" {
+				run, e := queryDocument[workspace.Run](ctx, tx, "SELECT document FROM agent_runs WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), sample.Origin.RunID)
+				if e != nil || s.verifyRunTx(ctx, tx, scope, run) != nil {
+					continue
+				}
+			}
 			if err := json.NewEncoder(&buf).Encode(map[string]any{"messages": []map[string]string{{"role": "user", "content": sample.Prompt}, {"role": "assistant", "content": sample.Response}}, "metadata": sample}); err != nil {
 				return err
 			}
@@ -503,6 +564,17 @@ func getItem(ctx context.Context, tx pgx.Tx, scope memory.Scope, id string) (wor
 	return queryDocument[workspace.Item](ctx, tx, "SELECT document FROM work_items WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), id)
 }
 func saveItem(ctx context.Context, tx pgx.Tx, scope memory.Scope, item workspace.Item) error {
+	if err := recordActionBlocksBeforeTx(ctx, tx, scope, item.ID); err != nil {
+		return err
+	}
+	var previous *workspace.Item
+	if _, derived := ctx.Value(secretaryArtifactKey{}).(secretaryArtifactContext); derived {
+		before, err := getItem(ctx, tx, scope, item.ID)
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) && !errors.Is(err, memory.ErrNotFound) {
+			return err
+		}
+		previous = &before
+	}
 	if err := syncArtifactEditsTx(ctx, tx, scope, item); err != nil {
 		return err
 	}
@@ -542,7 +614,15 @@ func saveItem(ctx context.Context, tx pgx.Tx, scope memory.Scope, item workspace
 	}
 	_, err := tx.Exec(ctx, `INSERT INTO work_items(owner_id,id,kind,title,status,project_id,due_at,scheduled_at,version,document,created_at,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
 		ON CONFLICT(owner_id,id) DO UPDATE SET title=excluded.title,status=excluded.status,project_id=excluded.project_id,due_at=excluded.due_at,scheduled_at=excluded.scheduled_at,version=excluded.version,document=excluded.document,updated_at=excluded.updated_at`, string(scope.OwnerID), item.ID, item.Kind, item.Title, item.Status, nullString(item.ProjectID), nullString(item.Due), nullString(item.Scheduled), item.Version, asJSON(item), item.CreatedAt, item.UpdatedAt)
-	return err
+	if err != nil {
+		return err
+	}
+	// A new item's FK must exist before writing its provenance blocks. Both
+	// writes remain atomic inside the caller's transaction/savepoint.
+	if previous != nil {
+		return syncSecretaryArtifactEditsTx(ctx, tx, scope, item, *previous)
+	}
+	return nil
 }
 func strictJSON(data []byte, v any) error {
 	d := json.NewDecoder(bytes.NewReader(data))

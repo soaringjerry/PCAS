@@ -1,0 +1,16 @@
+[
+  {
+    "case": "phase2_manual_backend-real-6f7c4-ar-refuse-regenerate-submit",
+    "original_trace": "/tmp/pcas-phase2-manual-browser-selector-evidence/case-1-original-trace.zip",
+    "sha256": "28edf4c131f29157c8753ca6dc98d20fdec2cfbaea0e6595fa1dc8bba3604448",
+    "network_records": 13,
+    "screenshot": "/tmp/pcas-phase2-manual-browser-correction/docs/evaluations/2026-10-01-phase2-ui-manual-backend-selector-run-evidence/case-1-crash.jpeg"
+  },
+  {
+    "case": "phase2_manual_backend-real-target-package-clipboard-submit",
+    "original_trace": "/tmp/pcas-phase2-manual-browser-selector-evidence/case-2-original-trace.zip",
+    "sha256": "a3a793068def6094a8f2dd490d01cd2adfd82851274d9d1e0443a26f3cb7b6e3",
+    "network_records": 14,
+    "screenshot": "/tmp/pcas-phase2-manual-browser-correction/docs/evaluations/2026-10-01-phase2-ui-manual-backend-selector-run-evidence/case-2-crash.jpeg"
+  }
+]

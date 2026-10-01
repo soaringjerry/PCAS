@@ -1,0 +1,195 @@
+{
+  "schema": "pcas.phase2.independent-retry-origin-gold.v1",
+  "frozen_at": "2026-10-01",
+  "authority": "root approved SourceRunID contract 2fd719c, frozen before reading backend implementation be761f5",
+  "contract_sha": "2fd719c",
+  "preparation_base": "13d36decbbcec33f5d989be1a531e28403b4219e",
+  "extends": [
+    "gold.json",
+    "delegation-origin-sequences.json",
+    "delegation-origin-supplement.json"
+  ],
+  "original_input": {
+    "source": "gold.records[0]",
+    "exact_version": 1,
+    "claim_count": 0,
+    "atom": "Q7-LANTERN-482",
+    "owner_query_contains_atom": false,
+    "secretary_fake_used": [],
+    "deputy_fake_used": [],
+    "generated_prompt_marker": "RETRY-GENERATED-PROMPT-864",
+    "owner_prompt_marker": "RETRY-OWNER-INDEPENDENT-865"
+  },
+  "common_sequence": [
+    "ingest synthetic exact original source; no SQL source grants",
+    "formal separate secretary/deputy authorization and current recipient helpers",
+    "actual DeskTurn supplies original raw atom, fake secretary commits delegate:new with generated Prompt containing atom",
+    "record exact real successful delegate receipt ID and server Run Prompt origin subset; inspect secretary actual Input and source typed dependencies",
+    "first true deputy HTTP returns deliberate 503, so retry starts from actual failed Run; record original HTTP and sourceInput without fabricating failed state",
+    "formal requestRun with sourceRunId and actual current expectedRevision/RequestID, then true worker/provider or manual delivery as applicable"
+  ],
+  "cases": [
+    {
+      "id": "RETRY-LIVE",
+      "control": "same configured deputy; source explicitly assigned studio A; secretary and deputy separate actual source grants for A",
+      "mutation": "none",
+      "retry_prompt": "original server generated Prompt",
+      "required": [
+        "real new Run/new attempt/new current Task, not old Task/policy/attempt/delivery copied",
+        "new Prompt origins exactly the original successful delegate receipt ID; general origins cover that ID",
+        "actual deputy HTTP contains the frozen source atom and new manifest IndirectDependencies retains exact original source kind/id/version/current authorization stamp",
+        "fake Run output schema keeps Used=[]; Used empty does not remove actual source/action lineage",
+        "real new result completes, rather than only prepare/queued success"
+      ]
+    },
+    {
+      "id": "RETRY-NEW-RECIPIENT",
+      "control": "second enabled configured deputy gets its own current canonical source allow in A; original target remains enabled",
+      "mutation": "change actual recipient only",
+      "retry_prompt": "original Prompt plus punctuation",
+      "required": [
+        "real new Run/new attempt/new current Task, not old Task/policy/attempt/delivery copied",
+        "new Prompt origins exactly the original successful delegate receipt ID; general origins cover that ID",
+        "actual deputy HTTP contains the frozen source atom and new manifest IndirectDependencies retains exact original source kind/id/version/current authorization stamp",
+        "fake Run output schema keeps Used=[]; Used empty does not remove actual source/action lineage",
+        "real new result completes, rather than only prepare/queued success",
+        "new manifest recipient equals the independently authorized new actual destination, not original recipient"
+      ]
+    },
+    {
+      "id": "RETRY-INVALID-REVOKE_SECRETARY_ONLY-ORIGINAL_PROMPT",
+      "control": "real secretary Input/committed delegate/failed deputy run before mutation; deputy own policy unchanged when meaningful",
+      "mutation": "revoke_secretary_only",
+      "retry_prompt": "original_prompt",
+      "required": [
+        "formal requestRun carries sourceRunId of the original server Run",
+        "controlled failure before any new provider dispatch; exact provider HTTP delta zero; no new delivered package/successful result/adoption",
+        "old Prompt origins never silently dropped when Prompt rewritten; if a rejected run exists its generated body is not newly supplied",
+        "original failures and zero-dispatch evidence retained; no fake absence or malformed output substitute"
+      ]
+    },
+    {
+      "id": "RETRY-INVALID-REVOKE_SECRETARY_ONLY-PUNCTUATION_ONLY",
+      "control": "real secretary Input/committed delegate/failed deputy run before mutation; deputy own policy unchanged when meaningful",
+      "mutation": "revoke_secretary_only",
+      "retry_prompt": "punctuation_only",
+      "required": [
+        "formal requestRun carries sourceRunId of the original server Run",
+        "controlled failure before any new provider dispatch; exact provider HTTP delta zero; no new delivered package/successful result/adoption",
+        "old Prompt origins never silently dropped when Prompt rewritten; if a rejected run exists its generated body is not newly supplied",
+        "original failures and zero-dispatch evidence retained; no fake absence or malformed output substitute"
+      ]
+    },
+    {
+      "id": "RETRY-INVALID-CORRECT_SOURCE_TO_V2-ORIGINAL_PROMPT",
+      "control": "real secretary Input/committed delegate/failed deputy run before mutation; deputy own policy unchanged when meaningful",
+      "mutation": "correct_source_to_v2",
+      "retry_prompt": "original_prompt",
+      "required": [
+        "formal requestRun carries sourceRunId of the original server Run",
+        "controlled failure before any new provider dispatch; exact provider HTTP delta zero; no new delivered package/successful result/adoption",
+        "old Prompt origins never silently dropped when Prompt rewritten; if a rejected run exists its generated body is not newly supplied",
+        "original failures and zero-dispatch evidence retained; no fake absence or malformed output substitute"
+      ]
+    },
+    {
+      "id": "RETRY-INVALID-CORRECT_SOURCE_TO_V2-PUNCTUATION_ONLY",
+      "control": "real secretary Input/committed delegate/failed deputy run before mutation; deputy own policy unchanged when meaningful",
+      "mutation": "correct_source_to_v2",
+      "retry_prompt": "punctuation_only",
+      "required": [
+        "formal requestRun carries sourceRunId of the original server Run",
+        "controlled failure before any new provider dispatch; exact provider HTTP delta zero; no new delivered package/successful result/adoption",
+        "old Prompt origins never silently dropped when Prompt rewritten; if a rejected run exists its generated body is not newly supplied",
+        "original failures and zero-dispatch evidence retained; no fake absence or malformed output substitute"
+      ]
+    },
+    {
+      "id": "RETRY-INVALID-DELETE_SOURCE-ORIGINAL_PROMPT",
+      "control": "real secretary Input/committed delegate/failed deputy run before mutation; deputy own policy unchanged when meaningful",
+      "mutation": "delete_source",
+      "retry_prompt": "original_prompt",
+      "required": [
+        "formal requestRun carries sourceRunId of the original server Run",
+        "controlled failure before any new provider dispatch; exact provider HTTP delta zero; no new delivered package/successful result/adoption",
+        "old Prompt origins never silently dropped when Prompt rewritten; if a rejected run exists its generated body is not newly supplied",
+        "original failures and zero-dispatch evidence retained; no fake absence or malformed output substitute"
+      ]
+    },
+    {
+      "id": "RETRY-INVALID-DELETE_SOURCE-PUNCTUATION_ONLY",
+      "control": "real secretary Input/committed delegate/failed deputy run before mutation; deputy own policy unchanged when meaningful",
+      "mutation": "delete_source",
+      "retry_prompt": "punctuation_only",
+      "required": [
+        "formal requestRun carries sourceRunId of the original server Run",
+        "controlled failure before any new provider dispatch; exact provider HTTP delta zero; no new delivered package/successful result/adoption",
+        "old Prompt origins never silently dropped when Prompt rewritten; if a rejected run exists its generated body is not newly supplied",
+        "original failures and zero-dispatch evidence retained; no fake absence or malformed output substitute"
+      ]
+    },
+    {
+      "id": "RETRY-TARGET-DENIED",
+      "control": "producer source/route/stamps still live; second actual target configured but not source-authorized; original deputy source allow remains valid",
+      "mutation": "only new destination missing its own grant",
+      "retry_prompt": "original server Prompt",
+      "required": [
+        "original producer remains demonstrably live",
+        "new target refuses before provider HTTP delta zero; old receiver permission cannot authorize new receiver"
+      ]
+    },
+    {
+      "id": "RETRY-SCOPE-DENIED",
+      "control": "source assignment studio A and legally authorized original producer/target A; real owner moves same item to B",
+      "mutation": "new target hard scope B, independent canonical B policy allow but source remains assigned only A",
+      "retry_prompt": "original server Prompt",
+      "required": [
+        "scope failure isolated from absent target policy: actual B canonical allow exists",
+        "no cross-studio laundering and no new provider HTTP; old task scope A never reused"
+      ]
+    },
+    {
+      "id": "RETRY-OWNER-INDEPENDENT",
+      "control": "source-derived item fields give old general context actual action origins; owner writes unique independent Prompt without source atom and Prompt origins empty",
+      "mutation": "revoke original secretary source grant, retaining deputy own current lawful configuration",
+      "retry_prompt": "owner independently written Prompt with sourceRunId",
+      "required": [
+        "old general ContextTask is stale, actual old Prompt origins empty",
+        "formal new requestRun succeeds with a new current Task and actual ordinary deputy HTTP/result",
+        "new Prompt origins stay empty; ordinary owner Prompt is not rejected solely for old general context invalidity",
+        "old invalid generated field/source fragments are not carried as request Prompt"
+      ]
+    },
+    {
+      "id": "RETRY-LOCATOR-CROSS_OWNER",
+      "control": "real original server Run; actual existing alternative owner/item gives valid negative locator",
+      "mutation": "sourceRunId bound to cross_owner",
+      "retry_prompt": "original server Prompt",
+      "required": [
+        "controlled requestRun rejection and actual HTTP delta zero",
+        "no cross-owner/Thing Run disclosure or lineage borrowing",
+        "same-owner/same-Thing live case supplies positive lookup control"
+      ]
+    },
+    {
+      "id": "RETRY-LOCATOR-CROSS_THING",
+      "control": "real original server Run; actual existing alternative owner/item gives valid negative locator",
+      "mutation": "sourceRunId bound to cross_thing",
+      "retry_prompt": "original server Prompt",
+      "required": [
+        "controlled requestRun rejection and actual HTTP delta zero",
+        "no cross-owner/Thing Run disclosure or lineage borrowing",
+        "same-owner/same-Thing live case supplies positive lookup control"
+      ]
+    }
+  ],
+  "expected_leaf_count": 13,
+  "failure_policy": "No new skip, weaker expected error, SQL fabricated origin, phrase search until green, or retry. Root supplies exact combined SHA for dynamic execution. Failed first provider call is a controlled setup; any fixture protocol mismatch remains a real failed test.",
+  "limits": [
+    "HTTP synthetic fake provider only; UI sourceRunId forwarding separately belongs to D",
+    "these requestRun cases do not prove arbitrary non-UI clients unable to submit atom as wholly new owner text without sourceRunId",
+    "no real model/production/private data",
+    "first 13 leaves focus automatic failed-run retry; manual initialRun edited handoff is a follow-up explicit entry gap until separately tested",
+    "final snapshot race barrier is a separate gap unless later independently added"
+  ]
+}

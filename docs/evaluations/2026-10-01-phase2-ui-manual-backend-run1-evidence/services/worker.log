@@ -1,0 +1,4 @@
+{"time":"2026-10-01T14:29:21.559997175Z","level":"INFO","msg":"memory worker started"}
+{"time":"2026-10-01T14:29:25.635962189Z","level":"WARN","msg":"memory job failed","job_id":"cf474b36-96a9-41cd-8178-c905b6cb2949","stage":"source.embed","attempt":1}
+{"time":"2026-10-01T14:29:25.644520716Z","level":"WARN","msg":"memory job failed","job_id":"6eec7aef-4daa-43d0-8a7b-91f8812076d6","stage":"source.embed","attempt":1}
+{"time":"2026-10-01T14:29:25.651120984Z","level":"WARN","msg":"memory job failed","job_id":"576179e2-de12-4307-85b8-5cf4c0a44514","stage":"source.embed","attempt":1}

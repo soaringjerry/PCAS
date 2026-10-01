@@ -100,7 +100,7 @@ async function pendingEntry(page: Page) {
   await entry.click()
   await expect(page.getByRole('heading', { name: /待确认/ })).toBeVisible()
 }
-const candidateAction = (page: Page, kind: 'task' | 'idea' | 'memory') => page.getByRole('button', { name: { task: /加[入进].*待办/, idea: /记成.*想法/, memory: /记[入进].*记忆/ }[kind] })
+const candidateAction = (page: Page, kind: 'task' | 'idea' | 'memory') => page.getByRole('button', { name: { task: /创建待办/, idea: /保存为想法/, memory: /保存为记忆/ }[kind] })
 
 for (const choice of [
   { name: /事项提醒/, field: 'followUps', before: true },

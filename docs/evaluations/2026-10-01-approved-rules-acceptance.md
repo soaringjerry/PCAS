@@ -93,13 +93,17 @@ npx tsc --noEmit --target ES2023 --module ESNext --moduleResolution Bundler \
 
 只读审查 U2 当前四个既有真实 spec：chatgpt-direct 加两个连接展开；continuity 加接入展开；model-api 初次/重载各加 API 展开；golden 三处按钮名定位更新。现有权限、数据、secret redaction、错误、状态、撤销断言均保留，未改 skip/retry/timeout/runner。最终提交仍须核对完整 diff。
 
-### 后续专项确认：挂载编辑框仍显示旧值（既有问题，待修复）
+### 后续专项确认：挂载编辑框旧值问题与冻结修复复验
 
 协调者根据实际代码提出挂载状态核查后，T4 使用同一冻结 checkpoint 新增两项公开页面测试，不读取作者测试、不改产品。先人工编辑保存标题/说明，真实页面分别发 renameThing（revision 7）和 setNotes（revision 8）并成功；再在该事项秘书输入「改标题和说明」，假模型 HTTP 返回新 state 与可见成功回执。服务端状态已是「秘书更新后的标题/说明」，但已挂载 textarea 的真实 `.value` 仍是「人工保存标题/说明」。两个精确断言失败；随后整页 reload 后都正确，验证状态/目标/fixture 没有失配。
 
 第二项模拟保存拒绝后仍有未保存说明草稿，再由秘书 state refresh 返回其他已保存说明，草稿仍保留，测试通过。专项真实结果 **1 fail/1 pass，12.7s**，因此不得把前述 18 场景的阶段覆盖混成 20 全通过。这是原编辑行为的既有缺陷，本轮独立复现，不能称 U2 新增回归；作者已收到证据并获准修复，最终保留确定断言等待复验。
 
 证据：`/tmp/pcas-test-T4/ux-checkpoint-mounted.log/json`、`ux-mounted-request-state.json`，截图/trace 位于 A1 `web/test-results/T4-ux-checkpoint-mounted/usability-acceptance-mount-dd5e1-es-while-full-reload-agrees/`（`mounted-after-secretary.png`）。自有 18156 预览复启后按新记录 PID 精确停止，当前无监听。独立 spec 现在有 20 场景；没有 skip 或降要求，不重复完整 mock/default runner，待新构建仅局部复验本项。
+
+协调者交付作者新一轮构建后，T4 再只读复制九文件且核对前/后/副本 manifest 完全一致。新 checkpoint 指纹 **`8edc4b512e51774214074534560cd1ca17d0db4bca18550310a0447310dfb766`**，build `2026-10-01T08:25:27 UTC`，copy `08:30:20 UTC`，没有更晚的 web/src。仅对发生修复的两项局部重跑，**2/2 pass，零 fail/skip/flaky，1.9s**；未重新执行其他 18 项。新证据 `ux-checkpoint2-manifest.json`、`ux-checkpoint2-mounted.log/json`，截图及状态附件在 A1 `web/test-results/T4-ux-checkpoint2-mounted/`。
+
+因此既有挂载问题在此新冻结构建关闭：人工保存后、未继续编辑的标题和说明会随秘书 state 更新显示新值；失败草稿在更新时保留。此结论仍不是最终完整候选的 20 场景通过声明，最终提交还需全套运行。候选三个按钮已按作者公开新名称「创建待办/保存为想法/保存为记忆」更新本任务 spec 定位，请求类型、目标 ID、字段、失败/来源/无假撤销断言均未减。新自有 preview 按记录 PID 精确停止，18156/18157 无监听。
 
 ## 后续验证与资源
 

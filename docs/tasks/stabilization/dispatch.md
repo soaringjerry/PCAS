@@ -6,7 +6,7 @@
 
 用户要求同时打磨稳定性、使用体验与记忆体验，然后进入第二阶段；协调者不写产品实现或测试，只负责任务、契约协调、审查和验收安排。执行者承担实现、测试和技术调查。
 
-模型分配：Sol 默认承担实现、调查与独立回归；Opus 仅用于有视觉与交互判断价值的整批界面工作；Astra 用于跨模块疑难和最后一次集成审查。Sol 同一问题两次仍无法推进，提交复现、已排除项和最小问题后才升级 Astra。
+模型分配：Sol 默认承担实现、调查与独立回归，使用 `gpt-6.1-sol`、`high` 思考程度；Opus 仅用于有视觉与交互判断价值的整批界面工作；Astra 用于跨模块疑难和最后一次集成审查。Sol 同一问题两次仍无法推进，提交复现、已排除项和最小问题后才升级 Astra。
 
 当前会话可直接调用 Sol 和 Astra，不能直接调用 Opus。Opus 的任务包照常准备，未启动前不得登记为执行中，也不能把其他模型的工作标成 Opus 完成。当前工具最多同时运行三个执行者。
 
@@ -33,9 +33,21 @@
 
 第一批只启动 F8、T2、M0。这样一个修界面、一个独立测时间行为、一个调查记忆，文件互不重叠。
 
-本会话已启动的执行者：`f8_timezone_displays`（`/root/PCAS`）、`t2_time_tests`（`/root/PCAS-wt/T2`）、`m0_memory_readiness`（`/root/PCAS-wt/M0`），均为 6.1 Sol。其余任务尚未启动。
+第一批已交付，执行者均停止写入：
 
-M0 已完成静态调查与方案，交付 [PR #22](https://github.com/soaringjerry/PCAS/pull/22)，提交 `21faec7`。它是待审方案，不代表二阶段实现或评测完成。T2 已复现 R1/R2/R5 的时间边界和 R10 的日志缺口，最终检查完成后按 F9 派给其他执行者。
+| 任务 / 执行者 | 工作区 | 交付与实际状态 |
+|---|---|---|
+| F8 / `f8_timezone_displays` | `/root/PCAS` | [PR #23](https://github.com/soaringjerry/PCAS/pull/23)，`bddc14b`；前端时区 18/18、相关 mock 39/39、真实后端专项 1/1；外部服务为假服务；远端 CI 待完成 |
+| T2 / `t2_time_tests` | `/root/PCAS-wt/T2` | [PR #24](https://github.com/soaringjerry/PCAS/pull/24)，`a113988`；R1/R2/R5 与 R10 日志失败后暂存 skip，阶段未通过；测试写入权已交 F9 |
+| M0 / `m0_memory_readiness` | `/root/PCAS-wt/M0` | [PR #22](https://github.com/soaringjerry/PCAS/pull/22)，`21faec7`；静态调查与待审方案，不代表二阶段实现或评测完成 |
+
+第二批分派 F9、T3、T1，仍使用 Sol / high：
+
+- F9 / `f9_reminder_repairs`：`/root/PCAS-wt/F9`。候选基线由 main `c94b496`、F7 `e63ee5e` 与 T2 `a113988` 组成；执行者在自己的隔离目录合并这两个已知输入，建立 `stabilization/reminder-candidate`（实际集成 SHA `64f0f7826830364635b20ad9ef9e6221e709897e`），再从其创建修复分支。PR 以该候选分支为 base，标题/正文说明依赖 #20、#24。这不是向 main 合并，依赖合并后须重新对 main 验收与调整 PR base。
+- T3 / `t3_secretary_tests`：`/root/PCAS-wt/T3`，基线 F7 `e63ee5e`（已含 main `c94b496`）；PR 以 `fix/undo-chain` 为 base，明确依赖 #20。只读 F9 预留产品文件，发现交回协调者。
+- T1 / `t1_undo_tests`：`/root/PCAS-wt/T1`，同 T3 基线与 PR base；先测契约明确部分，U3/U4/U5 的错误码重叠保持待裁定，不擅自选定新语义。该状态是待裁定，不能写成产品失败或通过。
+
+执行者自行创建其尚不存在的 worktree，不改他人目录；若输入出现冲突，停止集成并报告，不能自行改产品解决。候选集成和分支推送均不得改动 main 或生产。
 
 ## 文件归属与协作规则
 

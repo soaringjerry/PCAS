@@ -19,6 +19,7 @@
 | `changes` | jsonb | 见 1.2 |
 | `created_at` | timestamptz | |
 | `undone_at` | timestamptz，可空 | |
+| `action_order` | bigint，可空 | 迁移 020 新增；新动作由 sequence 生成持久顺序，旧记录保留 NULL，不伪造回填 |
 
 主键 `(owner_id, id)`。
 
@@ -78,6 +79,8 @@
 - `expired`：快照已经作废（超过 30 天，或相关资料已被删除）。提示「超过 30 天或相关资料已删除，无法撤销」。
 
 **2026-10-01 用户确认**：同一事项从最后一次修改往回撤销。区分依据是后续动作记录，不是操作者身份：可追溯且尚未撤销的后续动作，无论来自界面、秘书或后台，均为 `newer_action`；未记录的外部业务变化才为 `changed_since`。同一轮的多个动作也必须有确定顺序；不涉及相同行的无关事项互不阻挡。
+
+**顺序与历史兼容（F13）**：新记录使用 `action_order`，即使同事务 `created_at` 相同，或业务内容被后续动作改回原值，也不能跳过后续动作。迁移前的记录保留 NULL：不同时间依 created_at；同轮同时间仅在已保存回执 actionId 唯一且能证明位置时依回执顺序。新记录晚于迁移前记录。无法重建的历史并列不猜 UUID/ctid 顺序，保守返回 `changed_since`，报告注明不能自动恢复该旧链；如果另有可证明的后续动作，仍优先返回 `newer_action`。已撤销记录不阻挡。
 
 新增 sentinel error：`workspace.ErrChangedSince`、`workspace.ErrWorkStarted`、`workspace.ErrAlreadyUndone`。
 B1 负责在 `internal/httpapi/server.go` 的 `fail()` 里加上这三个映射。

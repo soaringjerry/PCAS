@@ -1,3 +1,5 @@
+import { useStore } from '../store/context'
+import { formatTimestamp } from '../domain/time'
 import { Select, Stepper, FileDrop } from './controls'
 import { useEffect, useState } from 'react'
 import { api } from '../store/api'
@@ -5,6 +7,7 @@ import { Button, Sheet, Tag } from './ui'
 
 type Connection = { id: string; name: string; kind: 'webhook' | 'poll' | 'folder'; url?: string; token_env?: string; enabled: boolean; version: number; interval_seconds: number; status: string; imported: number; error?: string; gaps: string[]; folder?: string; last_sync?: string }
 export function ConnectorSettings() {
+  const { state } = useStore()
   const [connections, setConnections] = useState<Connection[]>([])
   const [name, setName] = useState('')
   const [kind, setKind] = useState<Connection['kind']>('webhook')
@@ -31,6 +34,6 @@ export function ConnectorSettings() {
     </form>
     {credential && <div className="stack-sm callout"><p>此密钥只显示一次，用于向这个接入发送资料。请保存到发送应用。</p><code style={{ overflowWrap: 'anywhere' }}>{window.location.origin}/v1/connectors/{credential.id}/records</code><code style={{ overflowWrap: 'anywhere' }}>Bearer {credential.token}</code><Button size="sm" onClick={() => setCredential(null)}>已保存，隐藏密钥</Button></div>}
     {error && <p role="alert" className="form-error">{error}</p>}{message && <p role="status" className="small">{message}</p>}
-    {connections.map(c => <div className="stack-sm" key={c.id}><div className="spread"><strong>{c.name}</strong><Tag tone={c.error ? 'danger' : 'neutral'}>{c.enabled ? ({ idle: '等待同步', syncing: '同步中', queued: '待同步', error: '同步失败' }[c.status] ?? c.status) : '已暂停'}</Tag></div><p className="small muted">已导入 {c.imported} 条{c.last_sync ? ` · 最近同步 ${new Date(c.last_sync).toLocaleString()}` : ''}</p>{c.folder && <p className="small">收件目录：<code style={{ overflowWrap: 'anywhere' }}>PCAS_INBOX_DIR/{c.folder}</code></p>}{c.error && <p className="small" role="alert">{c.error === 'access_denied' ? '数据源凭据不可用，请检查服务器配置。' : c.error === 'source_version_conflict' ? '同一来源版本出现不同内容，请在数据源更新版本号。' : '同步未完成，请检查来源格式、连接状态和服务器配置。'}</p>}{c.gaps.map((g, i) => <p className="tiny muted" key={i}>{g}</p>)}<div className="row"><Button size="sm" disabled={busy} onClick={() => void toggle(c)}>{c.enabled ? '暂停接入' : '恢复接入'}</Button>{c.kind !== 'webhook' && c.enabled && <Button size="sm" disabled={busy} onClick={() => void run(async () => { await api(`/v1/connectors/${c.id}/sync`, { expected_version: c.version }) })}>立即同步</Button>}</div></div>)}
+    {connections.map(c => <div className="stack-sm" key={c.id}><div className="spread"><strong>{c.name}</strong><Tag tone={c.error ? 'danger' : 'neutral'}>{c.enabled ? ({ idle: '等待同步', syncing: '同步中', queued: '待同步', error: '同步失败' }[c.status] ?? c.status) : '已暂停'}</Tag></div><p className="small muted">已导入 {c.imported} 条{c.last_sync ? ` · 最近同步 ${formatTimestamp(c.last_sync, state.settings.timezone ?? 'UTC')}` : ''}</p>{c.folder && <p className="small">收件目录：<code style={{ overflowWrap: 'anywhere' }}>PCAS_INBOX_DIR/{c.folder}</code></p>}{c.error && <p className="small" role="alert">{c.error === 'access_denied' ? '数据源凭据不可用，请检查服务器配置。' : c.error === 'source_version_conflict' ? '同一来源版本出现不同内容，请在数据源更新版本号。' : '同步未完成，请检查来源格式、连接状态和服务器配置。'}</p>}{c.gaps.map((g, i) => <p className="tiny muted" key={i}>{g}</p>)}<div className="row"><Button size="sm" disabled={busy} onClick={() => void toggle(c)}>{c.enabled ? '暂停接入' : '恢复接入'}</Button>{c.kind !== 'webhook' && c.enabled && <Button size="sm" disabled={busy} onClick={() => void run(async () => { await api(`/v1/connectors/${c.id}/sync`, { expected_version: c.version }) })}>立即同步</Button>}</div></div>)}
   </div></Sheet></section>
 }

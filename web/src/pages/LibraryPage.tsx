@@ -70,7 +70,7 @@ function MemorySheet({ memory, onClose }: { memory: Memory; onClose: () => void 
           <div className="row small muted">
             <Fade value={memory.exposure} />
             <Button size="sm" variant="quiet" onClick={() => dispatch({ type: 'pinMemory', id: memory.id })}>{memory.pinned ? '取消固定保留' : '固定保留'}</Button>
-            <span>{memory.exposure < 0.4 ? '很久没用到，已经变淡，但还在' : `最近用到：${formatAgo(memory.lastUsedAt)}`}</span>
+            <span>{memory.exposure < 0.4 ? '很久没用到，已经变淡，但还在' : `最近用到：${formatAgo(memory.lastUsedAt, state.settings.timezone ?? 'UTC')}`}</span>
           </div>
         </div>
 
@@ -109,7 +109,7 @@ function MemorySheet({ memory, onClose }: { memory: Memory; onClose: () => void 
                     {v.text}
                   </div>
                   <div className="tl-when">
-                    {actor[v.by]} · {formatAgo(v.at)}
+                    {actor[v.by]} · {formatAgo(v.at, state.settings.timezone ?? 'UTC')}
                     {v.reason && ` · “${v.reason}”`}
                   </div>
                 </div>
@@ -281,7 +281,7 @@ function SourcesTab() {
             {s.note && <p className="source-note">{s.note}</p>}
             <div className="source-card-foot">
               <span>{s.itemCount} 条</span>
-              {s.lastSyncAt && <span>{formatAgo(s.lastSyncAt)}更新</span>}
+              {s.lastSyncAt && <span>{formatAgo(s.lastSyncAt, state.settings.timezone ?? 'UTC')}更新</span>}
               <span className="source-open">
                 查看原文
                 <ChevronRight size={13} />
@@ -303,7 +303,7 @@ function SourcesTab() {
                 <div className="meta" style={{ marginTop: 0 }}>
                   <span>{triggerLabel[job.trigger]}</span>
                   <span>{job.detail}</span>
-                  {job.nextRunAt && job.status !== 'done' && <span>下次：{formatWhen(job.nextRunAt)}</span>}
+                  {job.nextRunAt && job.status !== 'done' && <span>下次：{formatWhen(job.nextRunAt, state.settings.timezone ?? 'UTC')}</span>}
                 </div>
                 {job.status === 'running' && job.progress !== undefined && <Progress value={job.progress} />}
                 {job.status === 'failed' && (
@@ -370,7 +370,7 @@ function TrainingTab() {
                   <div className="meta" style={{ marginTop: 0 }}>
                     <span>{s.origin.label}</span>
                     <span>第 {s.version} 版</span>
-                    <span>{formatAgo(s.createdAt)}</span>
+                    <span>{formatAgo(s.createdAt, state.settings.timezone ?? 'UTC')}</span>
                   </div>
                 </div>
                 <div className="stack-sm" style={{ flex: 'none' }}>

@@ -27,12 +27,15 @@
 | [T1 撤销序列](T1-undo-tests.md) | 独立 Sol | U1–U16 测试，含固定种子随机序列 | F7 合并或协调者明确指定候选基线；先处理本文的契约冲突 |
 | [T3 对话与渠道](T3-secretary-tests.md) | 独立 Sol | S1–S9、T1–T6、D1–D4 的回归与发现 | 空出执行位；基线包含 F7 |
 | [U1 界面打磨](U1-ux-polish.md) | Opus | 首页与事项页的连贯体验、桌面/手机截图 | F8 合并后；等待可用 Opus 执行入口 |
+| [F9 提醒边界与日志](F9-reminder-repairs.md) | Sol，非 T2 作者 | 修复 R1/R2/R5/R10，移除对应 finding skip | T2 最终交付；明确含 F7 的基线与测试文件交接 |
 | 修复发现项 | Sol | 按发现编号拆独立 PR | 先审查发现及预期，再分配产品文件 |
 | [A1 集成审查](A1-acceptance.md) | Astra | 一次完整的集成检查和证据审查 | 实现与序列修复完成 |
 
 第一批只启动 F8、T2、M0。这样一个修界面、一个独立测时间行为、一个调查记忆，文件互不重叠。
 
 本会话已启动的执行者：`f8_timezone_displays`（`/root/PCAS`）、`t2_time_tests`（`/root/PCAS-wt/T2`）、`m0_memory_readiness`（`/root/PCAS-wt/M0`），均为 6.1 Sol。其余任务尚未启动。
+
+M0 已完成静态调查与方案，交付 [PR #22](https://github.com/soaringjerry/PCAS/pull/22)，提交 `21faec7`。它是待审方案，不代表二阶段实现或评测完成。T2 已复现 R1/R2/R5 的时间边界和 R10 的日志缺口，最终检查完成后按 F9 派给其他执行者。
 
 ## 文件归属与协作规则
 

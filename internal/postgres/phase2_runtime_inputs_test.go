@@ -92,9 +92,17 @@ func phase2RTGetPackage(t *testing.T, s *Store, scope memory.Scope, run workspac
 	if w.Code != http.StatusOK {
 		t.Fatalf("lawful manual package failed: %d %s", w.Code, w.Body.String())
 	}
-	var out phase2RTPackage
-	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil {
+	var wire struct {
+		RunID   string                `json:"run_id"`
+		Package string                `json:"package"`
+		Attempt memory.ContextAttempt `json:"attempt"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &wire); err != nil {
 		t.Fatal(err)
+	}
+	out := phase2RTPackage{RunID: wire.RunID, AttemptID: wire.Attempt.ID, Text: wire.Package, Manifest: wire.Attempt.Manifest, ExternalReceipt: wire.Attempt.ExternalReceipt}
+	if wire.Attempt.DeliveredAt == nil || wire.Attempt.DispatchedAt != nil {
+		t.Error("actual manual package response lacks PCAS delivery or fabricates network dispatch")
 	}
 	if out.RunID != run.ID || out.AttemptID == "" || out.Text == "" || out.ExternalReceipt != "unknown" {
 		t.Error("manual package identity/payload/unknown receipt incorrect")

@@ -125,6 +125,30 @@ func phase2RTSetup(t *testing.T) (*Store, memory.Scope, *phase2RTCapture) {
 			}
 		}
 		w.Header().Set("Content-Type", "application/json")
+		// The fake answers the actual requested response schema. A secretary
+		// reply and a deputy output carry the same frozen synthetic answer/Used[].
+		var request struct {
+			Format struct {
+				JSONSchema struct {
+					Schema struct {
+						Properties map[string]json.RawMessage `json:"properties"`
+					} `json:"schema"`
+				} `json:"json_schema"`
+			} `json:"response_format"`
+		}
+		if err := json.Unmarshal(body, &request); err != nil {
+			t.Error(err)
+		}
+		if _, deputy := request.Format.JSONSchema.Schema.Properties["output"]; deputy {
+			var answer struct {
+				Reply string `json:"reply"`
+				Used  []any  `json:"used"`
+			}
+			if err := json.Unmarshal([]byte(reply), &answer); err != nil {
+				t.Error(err)
+			}
+			reply = string(asJSON(map[string]any{"output": answer.Reply, "used": answer.Used}))
+		}
 		_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": map[string]string{"content": reply}}}, "usage": map[string]int{"prompt_tokens": 120, "completion_tokens": 20}})
 	}))
 	t.Cleanup(server.Close)

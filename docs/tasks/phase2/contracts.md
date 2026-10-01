@@ -174,4 +174,6 @@ A2-action 共用 lineage 补充：`TrustedTaskContext.desk_actions`、`ContextMa
 
 canonical `title` 与 `name` 分别使用既有 artifact_fields 块追踪、恢复和失效清理。task/idea 的 owner 改 Title 不表示改掉此前 Name 的来源；项目正式改名同时改两字段时两者分别保存实际来源。undo 保持原 before document 的独立 Name，不把恢复 Title 当作新 Name 编辑。promotion 以 idea 的 Title 创建 task 时，Title 与 Name 都继承实际复制的 title 块；Run 新建子任务同理。撤权/删除仍逐字段清除派生内容，不以当前 Title 已经 owner 改写为由留下旧生成 Name。
 
+正式 owner `renameThing` 的整字段改名与一般保守编辑区分：服务端 command/user 身份、真实 item ID 和实际目标文字共同产生私有 rename marker，仅适用 Title（project 同时 Name）。无可复核旧派生文字复用的完整新名保存独立 owner 块；原 copiedBlock 复制/相似规则、任一方向包含、相同长度至少二字符的词片段、归一化至少三连续字符重用任一成立仍保对应来源（保守工程初值，不是实测效果阈值）。copy sources 包括保留的 Name 等既有派生字段，不能由改 Title 洗去旧 Name 权限。一般 notes/字段更新、秘书动作、undo 恢复继续原 EditBlocks，原 beforeBlocks/newer_action/双 hash 保护不变。
+
 Run 的服务端 `contextPromptDeskActions` 是真实成功 delegate action ID 子集，仅在该动作实际写入生成 Prompt 时绑定，沿用同一 origin DAG，不预测 ID、不由客户端填写。它与继承事项/previous/history 的 `contextDeskActions` 区分：后者非空不表示 owner 亲写 Prompt 为模型生成。原 action Task/typed deps 的元数据寿命跟随 Prompt，独立于 audit changes/attempt 到期；两列表均受既有 256 origins 上限。失效 hook 及 Snapshot/导出等当前读门以实际 Prompt origin 验证和清除生成 Prompt；来源撤回/route失效/undo 不复活，owner 独立 Prompt 保留，旧无标记行不猜测模型来源。

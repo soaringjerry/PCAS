@@ -17,7 +17,7 @@
 | E | #13（[验收报告](../../evaluations/2026-09-30-phase1-acceptance.md)） |
 | 修复 | #14（秘书动作历史去重）、#15（后台修订号不再误拒命令） |
 
-未完成和后续事项见 [待办清单](../backlog.md)。
+未完成和后续事项见 [待办清单](../backlog.md)。上线后发现的问题与修复见 [上线后问题复盘](../../evaluations/2026-10-01-phase1-postlaunch.md) 和 [上线后修复任务](postlaunch.md)。
 
 ## 目标
 

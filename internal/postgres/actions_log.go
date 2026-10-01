@@ -226,7 +226,66 @@ func (s *Store) undoActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 		}
 	}
 	_, err = tx.Exec(ctx, "UPDATE action_log SET undone_at=now() WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), id)
-	return err
+	if err != nil {
+		return err
+	}
+	if source != "desk" || turnID == nil {
+		return nil
+	}
+	return s.deleteUndoneTurnMemoriesTx(ctx, tx, scope, *turnID)
+}
+
+func (s *Store) deleteUndoneTurnMemoriesTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, turnID string) error {
+	var requestID string
+	err := tx.QueryRow(ctx, "SELECT request_id::text FROM desk_turns WHERE owner_id=$1 AND id=$2 AND request_id IS NOT NULL", string(scope.OwnerID), turnID).Scan(&requestID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	undone, err := deskTurnFullyUndoneTx(ctx, tx, scope.OwnerID, requestID)
+	if err != nil || !undone {
+		return err
+	}
+	remembered, err := deskTurnRememberedTx(ctx, tx, scope.OwnerID, requestID)
+	if err != nil {
+		return err
+	}
+	rows, err := tx.Query(ctx, `SELECT r.id::text,r.version FROM memory_records r
+	 JOIN claim_revisions c ON (c.owner_id,c.claim_id,c.version)=(r.owner_id,r.id,r.version)
+	 WHERE r.owner_id=$1 AND r.kind='claim' AND c.confirmation<>'confirmed'
+	 AND (c.nature IN ('plan','intention') OR NOT $3::boolean)
+	 AND EXISTS(SELECT 1 FROM evidence e JOIN sources s ON (s.owner_id,s.id)=(e.owner_id,e.source_id)
+	  WHERE e.owner_id=r.owner_id AND e.target_id=r.id AND s.connector='desk' AND lower(s.external_id)=lower($2))
+	 AND NOT EXISTS(SELECT 1 FROM evidence e JOIN sources s ON (s.owner_id,s.id)=(e.owner_id,e.source_id)
+	  WHERE e.owner_id=r.owner_id AND e.target_id=r.id AND (s.connector<>'desk' OR lower(s.external_id)<>lower($2)))
+	 ORDER BY r.id`, string(scope.OwnerID), requestID, remembered)
+	if err != nil {
+		return err
+	}
+	var targets []memory.Ref
+	for rows.Next() {
+		ref := memory.Ref{Kind: memory.ClaimKind}
+		if err := rows.Scan(&ref.ID, &ref.Version); err != nil {
+			rows.Close()
+			return err
+		}
+		targets = append(targets, ref)
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return err
+	}
+	// The existing deletion entry point applies artifact propagation and snapshot
+	// expiration. Keep sources and allow reimport; its request limit is 100.
+	for start := 0; start < len(targets); start += 100 {
+		if err := s.deleteTx(ctx, tx, scope, memory.DeleteRequest{Targets: targets[start:min(start+100, len(targets))]}); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // New actions have a durable insertion order; historical rows deliberately do

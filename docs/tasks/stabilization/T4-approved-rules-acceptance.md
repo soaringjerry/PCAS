@@ -28,3 +28,11 @@
 独占 `.github/workflows/browser-regression.yml` 的 mock 用例列表，最终追加 U2 `settings-things-ux.spec.ts` 与 T4 `usability-acceptance.spec.ts`，保留既有5文件、runner、超时和业务断言。新专项开发/定位可以局部运行，全套mock和默认真实后端41例仍只在最终组合执行一次。自己的 mock 预览仍用18156；必要进程记录/清理。
 
 U2获准三个真实后端spec的纯展开导航，以及golden对应结果按钮新名称的纯定位更新，T4要独立核对没有弱化服务端/授权/数据/错误断言。最终合入S1报告分支 `review/S1-settings-audit`（最终6ab5c6f，含df285fb）及最新协调docs；都不会改变后端产品。后端210144a的Go验证在后端未变时保留，不重复全量。
+
+## 最终集成的等价测试加载适配
+
+组合 `4aa2746` 的 make check 与完整Go/PG发现 `TestAdoptionMatchesFrontend` 的 Node oracle 报 `summaryInto is not defined`：U2 的实际 adoptAs 引用了真实页面文件内的 summaryInto 常量，旧 harness 只取两个函数体，没有装载新依赖。39个固定业务叶预期不能删或改，不能用测试内重写文案/逻辑代替真实前端代码。
+
+2026-10-01 root授权T4独占 `internal/postgres/auto_adopt_test.go` 该函数的最小加载适配：从实际 ThingPage.tsx 取 summaryInto 声明、只擦除 TypeScript 语法，缺失/边界不符明确失败；把它和实际函数一起交Node执行。产品文件、其他测试和既有断言保持。原作者均已停止，无写入冲突。保留首轮失败与其余全量结果，适配后提交并跑 make check/真实Node等价专项；不为这一个测试加载修改重复已通过的整个PG套件，最终远端CI会执行完整新候选。真实后端浏览器继续执行。
+
+同一最终真实runner的golden F7「正常command改名后撤销更早创建」仍预期旧changed_since与旧文案；实际409 newer_action符合用户已批准的正式契约。Opus已停止，root追加授权T4独占 `web/tests/golden.spec.ts` 该唯一场景的错误码/对应准确文案预期，保留HTTP409、原title不变与所有数据断言，不把正常command替换成未记录外部改动。当前首轮继续保留三次旧预期失败证据，结束后更新并在同样真实fixture补跑该场景三轮；不因局部旧预期修正重跑已通过的其他长等待场景，最终远端CI仍完整执行新候选。

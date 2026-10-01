@@ -113,7 +113,7 @@ func TestPhase2RuntimeSourcePublicAuthorizationExactVersion(t *testing.T) {
 		t.Error("old source ref was hydrated with current body/version")
 	}
 	var knownAt time.Time
-	if err := s.pool.QueryRow(context.Background(), "SELECT known_from FROM record_versions WHERE owner_id=$1 AND record_id=$2 AND version=$3", string(ownerScope.OwnerID), string(source.ID), source.Version).Scan(&knownAt); err != nil {
+	if err := s.pool.QueryRow(context.Background(), "SELECT recorded_at FROM record_versions WHERE owner_id=$1 AND record_id=$2 AND version=$3", string(ownerScope.OwnerID), string(source.ID), source.Version).Scan(&knownAt); err != nil {
 		t.Fatal(err)
 	}
 	reader.Task.View.KnownAt = &knownAt

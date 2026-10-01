@@ -214,6 +214,79 @@ func ownershipLabels(block TextBlock) []string {
 	return out
 }
 
+// RenameBlocks is for a server-confirmed owner whole-field rename. It keeps
+// reused derived text, but does not inherit a wholly replaced name's labels
+// merely because a few edit hunks occupied its old positions. This bounded,
+// conservative text heuristic is not proof of semantic authorship.
+func RenameBlocks(text string, sources []TextBlock) []TextBlock {
+	out := TextBlock{Text: text, Runs: []string{}}
+	bytesLeft, comparisonsLeft := 64<<10, 100000
+	words := func(text string) []string {
+		return strings.FieldsFunc(strings.ToLower(text), func(r rune) bool {
+			return !unicode.IsLetter(r) && !unicode.IsNumber(r)
+		})
+	}
+	nextWords := []string{}
+	if len(text) <= 2000 { // The canonical name limit; oversized writes later reject.
+		nextWords = words(text)
+	}
+	tokens := map[string]bool{}
+	for _, word := range nextWords {
+		if len([]rune(word)) >= 2 {
+			tokens[word] = true
+		}
+	}
+	next := strings.Join(nextWords, "")
+	nextRunes := []rune(next)
+	fragments := map[string]bool{}
+	for i := 0; i+3 <= len(nextRunes); i++ {
+		fragments[string(nextRunes[i:i+3])] = true
+	}
+	for _, source := range sources {
+		if len(source.Runs) == 0 && len(source.DeskActions) == 0 {
+			continue
+		}
+		reused := next == "" || len(source.Text) > bytesLeft
+		if !reused {
+			bytesLeft -= len(source.Text)
+			oldWords := words(source.Text)
+			old := strings.Join(oldWords, "")
+			oldRunes := []rune(old)
+			reused = old == "" || strings.Contains(old, next) || strings.Contains(next, old)
+			for _, word := range oldWords {
+				reused = reused || tokens[word]
+			}
+			for i := 0; !reused && i+3 <= len(oldRunes); i++ {
+				reused = fragments[string(oldRunes[i:i+3])]
+			}
+			if !reused {
+				// Upper-bound both existing fuzzy comparisons by normalized runes.
+				cost := 2 * len(nextRunes) * len(oldRunes)
+				if cost > comparisonsLeft {
+					reused = true
+				} else {
+					comparisonsLeft -= cost
+					reused = copiedBlock(text, source.Text) || copiedBlock(source.Text, text)
+				}
+			}
+		}
+		if !reused {
+			continue
+		}
+		for _, id := range source.Runs {
+			if !hasRun(id, out.Runs) {
+				out.Runs = append(out.Runs, id)
+			}
+		}
+		for _, id := range source.DeskActions {
+			if !hasRun(id, out.DeskActions) {
+				out.DeskActions = append(out.DeskActions, id)
+			}
+		}
+	}
+	return []TextBlock{out}
+}
+
 // CopyOrigins carries provenance to copied paragraphs in another tracked
 // field. Independent paragraphs retain their existing labels.
 func CopyOrigins(blocks, sources []TextBlock) []TextBlock {

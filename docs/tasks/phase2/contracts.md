@@ -176,4 +176,6 @@ canonical `title` 与 `name` 分别使用既有 artifact_fields 块追踪、恢�
 
 正式 owner `renameThing` 的整字段改名与一般保守编辑区分：服务端 command/user 身份、真实 item ID 和实际目标文字共同产生私有 rename marker，仅适用 Title（project 同时 Name）。无可复核旧派生文字复用的完整新名保存独立 owner 块；原 copiedBlock 复制/相似规则、任一方向包含、相同长度至少二字符的词片段、归一化至少三连续字符重用任一成立仍保对应来源（保守工程初值，不是实测效果阈值）。copy sources 包括保留的 Name 等既有派生字段，不能由改 Title 洗去旧 Name 权限。一般 notes/字段更新、秘书动作、undo 恢复继续原 EditBlocks，原 beforeBlocks/newer_action/双 hash 保护不变。
 
+该改名识别仅是文本复用启发式，可能保守误判，并非语义作者证明。新标题按既有 2000-byte 硬限，累计检查旧正文最多 64KiB、双向模糊比较累计最多 100000 rune-pair 成本（工程初值）；空归一化内容或达到计算上限的来源保留全部原 labels，不截断后默许解绑。词片段/连续片段用集合线性扫描，普通编辑算法不变。
+
 Run 的服务端 `contextPromptDeskActions` 是真实成功 delegate action ID 子集，仅在该动作实际写入生成 Prompt 时绑定，沿用同一 origin DAG，不预测 ID、不由客户端填写。它与继承事项/previous/history 的 `contextDeskActions` 区分：后者非空不表示 owner 亲写 Prompt 为模型生成。原 action Task/typed deps 的元数据寿命跟随 Prompt，独立于 audit changes/attempt 到期；两列表均受既有 256 origins 上限。失效 hook 及 Snapshot/导出等当前读门以实际 Prompt origin 验证和清除生成 Prompt；来源撤回/route失效/undo 不复活，owner 独立 Prompt 保留，旧无标记行不猜测模型来源。

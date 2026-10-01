@@ -14,6 +14,18 @@ import (
 
 type artifactBlock = workspace.TextBlock
 
+type ownerRenameKey struct{}
+type ownerRename struct{ ThingID, Title string }
+
+func withOwnerRename(ctx context.Context, scope memory.Scope, item workspace.Item, title string) context.Context {
+	log, logged := ctx.Value(actionLogKey{}).(actionLog)
+	_, derived := ctx.Value(secretaryArtifactKey{}).(secretaryArtifactContext)
+	if scope.IsOwner && scope.Valid() && actorFromContext(ctx) == "user" && logged && log.source == "command" && !derived {
+		return context.WithValue(ctx, ownerRenameKey{}, ownerRename{ThingID: item.ID, Title: title})
+	}
+	return ctx
+}
+
 func blockText(blocks []artifactBlock) string { return workspace.BlockText(blocks) }
 func editBlocks(blocks []artifactBlock, text string) []artifactBlock {
 	return workspace.EditBlocks(blocks, text)
@@ -128,7 +140,7 @@ func syncArtifactEditsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, ite
 		Field  string          `json:"field"`
 		Blocks []artifactBlock `json:"blocks"`
 	}
-	fields, err := queryDocuments[fieldBlocks](ctx, tx, "SELECT jsonb_build_object('field',field,'blocks',blocks) FROM artifact_fields WHERE owner_id=$1 AND thing_id=$2", string(scope.OwnerID), item.ID)
+	fields, err := queryDocuments[fieldBlocks](ctx, tx, "SELECT jsonb_build_object('field',field,'blocks',blocks) FROM artifact_fields WHERE owner_id=$1 AND thing_id=$2 ORDER BY field", string(scope.OwnerID), item.ID)
 	if err != nil {
 		return err
 	}
@@ -140,12 +152,18 @@ func syncArtifactEditsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, ite
 	}
 	for field, text := range itemArtifactText(item) {
 		blocks, exists := byField[field]
-		if exists {
+		rename, explicit := ctx.Value(ownerRenameKey{}).(ownerRename)
+		renamed := explicit && rename.ThingID == item.ID && rename.Title == text && (field == "title" || field == "name" && item.Kind == "project")
+		if renamed {
+			blocks = workspace.RenameBlocks(text, sources)
+		} else if exists {
 			blocks = editBlocks(blocks, text)
 		} else {
 			blocks = []artifactBlock{{Text: text, Runs: []string{}}}
 		}
-		blocks = workspace.CopyOrigins(blocks, sources)
+		if !renamed {
+			blocks = workspace.CopyOrigins(blocks, sources)
+		}
 		derived := false
 		for _, block := range blocks {
 			derived = derived || len(block.Runs) > 0 || len(block.DeskActions) > 0

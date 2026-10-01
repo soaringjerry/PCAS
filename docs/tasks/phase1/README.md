@@ -124,6 +124,10 @@ flowchart LR
   然后按 `web/README.md` 跑 Playwright，同时设置 `PCAS_TEST_BASE_URL` 和 `PCAS_TEST_API_TOKEN`。
 - 需要模型时，用 httptest 假服务器（写法见 `internal/postgres/desk_test.go`）。不要调用真实模型账号。
 
+**验收与部署（2026-10-01 补充）**
+- 用真实模型做验收时，必须走用户的**默认通道**（目前是 ChatGPT 订阅 / Codex），不能只测 API 通道。
+- 每次部署后，在线上用默认通道对秘书说三句话（一个问题、一句带时间的安排、一句修改），回执和事项都正确，才算部署完成。
+
 **完成标准（每个任务）**
 - `make check` 通过；涉及数据库的改动，`make test-integration` 在自己的测试库上通过。
 - 前端改动：`npm run lint && npm run type-check && npm run build` 通过，本任务的 Playwright 用例通过。

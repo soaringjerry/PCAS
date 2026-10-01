@@ -45,7 +45,20 @@ Node 使用 `/root/.nvm/versions/node/v22.23.3/bin`，没有改变系统默认�
 
 ## 证据与资源
 
-本机证据保留在 `/tmp/pcas-f8`：
+远端可审阅的[精简验证记录](2026-10-01-timezone-displays/verification.txt)与截图：
+
+| 视口 | 上海工作区 | 墨尔本工作区 |
+|---|---|---|
+| 桌面 1440 | [上海截图](2026-10-01-timezone-displays/desktop-shanghai.png) | [墨尔本截图](2026-10-01-timezone-displays/desktop-melbourne.png) |
+| 手机 390 | [上海截图](2026-10-01-timezone-displays/mobile-shanghai.png) | [墨尔本截图](2026-10-01-timezone-displays/mobile-melbourne.png) |
+
+手机切换前后：
+
+![上海工作区手机显示](2026-10-01-timezone-displays/mobile-shanghai.png)
+
+![墨尔本工作区手机显示](2026-10-01-timezone-displays/mobile-melbourne.png)
+
+原始日志和真实后端截图保留在本机 `/tmp/pcas-f8`：
 
 - `before-expanded.log`：修复前独立失败。
 - `mock-final.log`、`timezone-final.log`、`real-final.log`、`make-check.log`：通过日志。

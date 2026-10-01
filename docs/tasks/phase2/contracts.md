@@ -184,4 +184,10 @@ owner 本地已撤销操作回执有一个更窄的审计读规则：仅 `scope.
 
 重试、重新生成和已有 Run 的预填手动转交均通过 `requestRun.sourceRunId` 定位原服务端 Run。此公开字段只是不可信定位，不能提供 origin/Task 或授权；owner 和同一真实事项必须匹配。预填后改字仍携带定位，保守继承原 `ContextPromptDeskActions` 子集，标点修改不把模型生成 Prompt 变成 owner 独立内容；只有无 initialRun 的既有自然新请求沿普通路径。prepare 在外部 Recall/embedding 前读取并冻结原持久 Prompt 与 origin 子集；final owner 短事务再次读取二者须完全一致，同时重验每个原 producer DAG 的 route/stale/undone/精确 typed stamps，以及实际新接收者/硬范围对所有依赖的独立权限。新 Run 保留 Prompt 子集、general origins 和当前 typed durable deps，不复用旧 Task、原授权、attempt 或交付事实。任何旧 generated Prompt 来源失效，改字或换目标仍在新外发前拒绝；原 owner 独立 Prompt 子集为空时，可在旧一般上下文失效后重新装配。普通无 sourceRunId 新请求不变，不增加绕过继承的界面开关。
 
+### 检索 query 的外发边界
+
+embedding provider 是独立实际接收者，秘书/副手/manual 的授权不授予 embedding 外发许可。当前没有向该接收者独立授权并记录派生 query 的协议，因此消费者将完整本地 lexical/graph query 与 embedding query 分开，使用服务端私有 context override，不新增公开 JSON 参数。Run prepare 的完整 query 继续保留已合法过滤的事项字段、旧讨论和旧结果，但 embedding 只用本轮已确认 owner 独立 `c.Prompt`；存在秘书生成 provenance、derived 输入或非空 SourceRun Prompt origins 时，此 Prompt 也只做本地检索，并给明确 coverage gap。是否拼入 item/previous 不靠 `Task.DeskActions` 或零依赖猜测；这些拼入文字一律不进入 embedding query。秘书同类 Recall 保留 `earlier + req.Text` 本地 query，仅外发本轮 owner `req.Text`。普通独立 owner Recall 和现有向量存储继续可用，不整体禁 Recall，也不在 owner 锁内调用 provider。
+
+prepare 在 Recall 前按实际 destination item 检查 Prompt 的 indirect dependencies 与 `context_exclusions`，排除命中即拒绝；final 原 item/route/origin/typed 门仍保留。原 prepare→final 的并发验收可使用真实本地检索 read/事务阻塞证明快照重验，不虚构 prepared attempt。旧 ordinary continuation 正控仍必须进入本地 query 与最终 Brief/package；未经独立 embedding 授权的旧回答不再要求进入 embedding HTTP payload。此边界只改变实际传输层，不取消其合法后续使用。
+
 Run 的服务端 `contextPromptDeskActions` 是真实成功 delegate action ID 子集，仅在该动作实际写入生成 Prompt 时绑定，沿用同一 origin DAG，不预测 ID、不由客户端填写。它与继承事项/previous/history 的 `contextDeskActions` 区分：后者非空不表示 owner 亲写 Prompt 为模型生成。原 action Task/typed deps 的元数据寿命跟随 Prompt，独立于 audit changes/attempt 到期；两列表均受既有 256 origins 上限。失效 hook 及 Snapshot/导出等当前读门以实际 Prompt origin 验证和清除生成 Prompt；来源撤回/route失效/undo 不复活，owner 独立 Prompt 保留，旧无标记行不猜测模型来源。

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/workspace"
@@ -111,6 +112,14 @@ func TestPhase2RuntimeSourcePublicAuthorizationExactVersion(t *testing.T) {
 	if history.Source.Ref != source.Ref || history.Source.Text != phase2RTGoldRead(t).Records[0].Text {
 		t.Error("old source ref was hydrated with current body/version")
 	}
+	var knownAt time.Time
+	if err := s.pool.QueryRow(context.Background(), "SELECT known_from FROM record_versions WHERE owner_id=$1 AND record_id=$2 AND version=$3", string(ownerScope.OwnerID), string(source.ID), source.Version).Scan(&knownAt); err != nil {
+		t.Fatal(err)
+	}
+	reader.Task.View.KnownAt = &knownAt
+	if _, err := s.GetSource(context.Background(), reader, next.ID, next.Version); err == nil {
+		t.Error("exact version newer than trusted KnownAt was supplied")
+	}
 }
 
 func TestPhase2RuntimeNonownerRawAPIsRequireTrustedTask(t *testing.T) {
@@ -166,7 +175,23 @@ func TestPhase2RuntimeSourcePolicyReplayRouteAndDisabledRevoke(t *testing.T) {
 		t.Error("old request replay revived revoked policy")
 	}
 	allowed := phase2RTUpdatePolicy(t, s, scope, source.Ref, revoked, false)
+	// This independent policy has no successor revision. Its replay isolates
+	// actual route binding from the original policy's revoke/regrant conflict.
+	routeSource := mustIngest(t, s, scope, memory.IngestRequest{Connector: "phase2-runtime-synthetic", ExternalID: "route-only-control", ExternalVersion: "v1", Title: "独立路由资料", Text: phase2RTGoldRead(t).Records[0].Text, MediaType: "text/plain"})
+	routeGrant, routeOriginal := phase2RTAuthorize(t, s, scope, routeSource.Ref, "phase2-model", "secretary", phase2RTUnscoped())
 	capture.Registry.Config.Providers[0].Model = "phase2-new-route-model"
+	routeReplay := phase2RTHTTP(t, s, scope, http.MethodPost, "/v1/memory/sources/"+string(routeSource.ID)+"/authorization", routeOriginal)
+	if routeReplay.Code != http.StatusConflict {
+		t.Errorf("route-only replay without successor status=%d want409", routeReplay.Code)
+	}
+	var routePolicies, routeRevision int
+	var routeModel string
+	if err := s.pool.QueryRow(context.Background(), "SELECT count(*),max(revision),max(model) FROM source_authorizations WHERE owner_id=$1 AND source_id=$2", string(scope.OwnerID), string(routeSource.ID)).Scan(&routePolicies, &routeRevision, &routeModel); err != nil {
+		t.Fatal(err)
+	}
+	if routePolicies != 1 || routeRevision != routeGrant.Authorization.Revision || routeModel != routeGrant.Authorization.Recipient.Model {
+		t.Error("route-only replay changed canonical original permission")
+	}
 	w = phase2RTHTTP(t, s, scope, http.MethodPost, "/v1/memory/sources/"+string(source.ID)+"/authorization", original)
 	if w.Code != http.StatusConflict {
 		t.Errorf("old partial-recipient replay on new route status=%d want409", w.Code)
@@ -196,6 +221,9 @@ func TestPhase2RuntimeSourceScopeHardBoundary(t *testing.T) {
 	hardB := hardA
 	hardB.StudioID = b
 	phase2RTAuthorize(t, s, scope, source.Ref, "phase2-model", "secretary", hardA)
+	// B has an independent legitimate receiver policy; source membership alone
+	// must still reject B and cannot be widened by Objects hints.
+	phase2RTAuthorize(t, s, scope, source.Ref, "phase2-model", "secretary", hardB)
 	readerA := phase2RTTask(t, s, scope, "phase2-model", "secretary", hardA)
 	if _, err := s.GetSource(context.Background(), readerA, source.ID, source.Version); err != nil {
 		t.Fatal("lawful studio A read", err)

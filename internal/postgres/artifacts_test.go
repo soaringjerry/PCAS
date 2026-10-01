@@ -17,11 +17,15 @@ func TestEditedArtifactRetainsFieldProvenance(t *testing.T) {
 			phase2ManualDestination(t, s)
 			scope := owner()
 			ctx := context.Background()
-			st := workspaceCommand(t, s, scope, workspace.Command{Type: "capture", Text: "私密事实"})
-			st = workspaceCommand(t, s, scope, workspace.Command{Type: "acceptCandidate", ID: st.Candidates[0].ID, Kind: "memory", MemoryKind: "fact", Text: "私密事实"})
-			mem := st.Memories[0]
 			id := string(memory.NewID())
 			workspaceCommand(t, s, scope, workspace.Command{Type: map[string]string{"task": "addTask", "idea": "addIdea", "project": "addProject"}[kind], ID: id, Title: "普通事项", Name: "普通项目"})
+			projectID := ""
+			if kind == "project" {
+				projectID = id
+			}
+			st := workspaceCommand(t, s, scope, workspace.Command{Type: "capture", Text: "私密事实"})
+			st = workspaceCommand(t, s, scope, workspace.Command{Type: "acceptCandidate", ID: st.Candidates[0].ID, Kind: "memory", MemoryKind: "fact", Text: "私密事实", ProjectID: projectID})
+			mem := st.Memories[0]
 			st = workspaceCommand(t, s, scope, workspace.Command{Type: "requestRun", ThingID: id, AgentID: "manual", ManualRecipient: &memory.Recipient{Provider: phase2ManualProvider}, Kind: "summary", Prompt: "总结私密事实"})
 			run := st.Runs[0]
 			if !hasArtifactDependency(run.ContextVersions, mem.ID) {
@@ -43,7 +47,12 @@ func TestEditedArtifactRetainsFieldProvenance(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				_, refs, err := sanitizeItemTx(ctx, tx, scope, "manual", item)
+				task, err := s.trustedTaskContextTx(ctx, tx, scope, "manual", "manual", contextScopeForItem(&item), run.ManualRecipient)
+				if err != nil {
+					return err
+				}
+				reader := memory.Scope{OwnerID: scope.OwnerID, PrincipalID: "manual", Task: &task}
+				_, refs, err := s.sanitizeItemTx(ctx, tx, reader, "manual", item)
 				if err == nil && !hasArtifactDependency(refs, mem.ID) {
 					t.Error("editing inside the field lost its dependency")
 				}

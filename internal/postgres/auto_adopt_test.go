@@ -134,7 +134,7 @@ func autoAdoptModel(t *testing.T, s *Store, output string, during func()) {
 		if during != nil {
 			during()
 		}
-		_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": map[string]string{"content": output}}}, "usage": map[string]int{"prompt_tokens": 100, "completion_tokens": 20}})
+		_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": map[string]string{"content": string(asJSON(map[string]any{"output": output, "used": []any{}}))}}}, "usage": map[string]int{"prompt_tokens": 100, "completion_tokens": 20}})
 	}))
 	t.Cleanup(server.Close)
 	s.SetModels(&ai.Registry{HTTP: server.Client(), Config: ai.Configuration{Providers: []ai.Provider{{ID: "auto-model", Name: "Auto model", Protocol: "openai", BaseURL: server.URL, Model: "test", MaxOutput: 200, InputPerMillion: 1, OutputPerMillion: 2}}}})
@@ -177,10 +177,15 @@ func TestAutoAdoptDestinationsAndUndo(t *testing.T) {
 				if path == "manual" {
 					agent = "manual"
 				}
-				st = workspaceCommand(t, s, scope, workspace.Command{Type: "requestRun", ThingID: id, AgentID: agent, Kind: tc.runKind, Prompt: "处理事项"})
+				command := workspace.Command{Type: "requestRun", ThingID: id, AgentID: agent, Kind: tc.runKind, Prompt: "处理事项"}
+				if path == "manual" {
+					command.ManualRecipient = &memory.Recipient{Provider: "auto-model"}
+				}
+				st = workspaceCommand(t, s, scope, command)
 				runID := st.Runs[0].ID
 				revision := st.Revision
 				if path == "manual" {
+					phase2RTGetPackage(t, s, scope, st.Runs[0])
 					st = workspaceCommand(t, s, scope, workspace.Command{Type: "pasteRunResult", ID: runID, Output: tc.output})
 				} else {
 					if err := s.runAgentOnce(ctx); err != nil {
@@ -354,6 +359,9 @@ func TestAutoAdoptChangedSince(t *testing.T) {
 	st, err := s.Snapshot(context.Background(), scope)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if len(st.Runs) != 1 || st.Runs[0].Status != "done" || st.Runs[0].Adopted == nil {
+		t.Fatal("completed automatically adopted positive control absent", st.Runs)
 	}
 	actionID := st.Runs[0].Adopted.ActionID
 	st = workspaceCommand(t, s, scope, workspace.Command{Type: "setNotes", ID: id, Text: "后来修改"})

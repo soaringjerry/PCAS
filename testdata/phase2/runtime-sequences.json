@@ -159,6 +159,28 @@
         "old child prepared snapshots invalidate and clear body",
         "parent regrant permits fresh child context only, never revives old invalidated attempt"
       ]
+    },
+    {
+      "id": "R15",
+      "sequence": "source text also appears in user question/system boilerplate; source evidence selected separately; Chinese quote/backslash/newline serialized payload",
+      "required": [
+        "source span remains exact rune half-open interval of independently authorized source version",
+        "payload spans identify actual supplied source evidence block, never identical user/system text",
+        "duplicate phrase does not prove source supplied when policy absent or evidence omitted",
+        "mapped final bytes decode to true evidence across Chinese JSON quote/backslash/newline escaping",
+        "exact request bytes and containing JSON message positions retained as evidence"
+      ]
+    },
+    {
+      "id": "R16",
+      "sequence": "uncompleted prepared/reserved/dispatched durable rows → actual process recovery entry → inspect attempts and provider count",
+      "required": [
+        "recovery handles stale prepared, reservation without observed dispatch, and observed dispatch without completion distinctly",
+        "unresolved attempts become outcome_unknown or explicit controlled terminal invalidation; never successful completion",
+        "no automatic paid request replay or old reservation reuse",
+        "observed dispatched_at survives recovery; reservation alone is not fabricated as observed network send",
+        "canceled request or expiry Cleanup is not evidence of process recovery"
+      ]
     }
   ],
   "reuse_required": [
@@ -193,5 +215,12 @@
     "child_text": "合成子资料：独立内容是 CHILD-INDEPENDENT-404。",
     "child_claim": "合成子资料独立内容是 CHILD-INDEPENDENT-404。",
     "child_atom": "CHILD-INDEPENDENT-404"
+  },
+  "request_mapping_controls": {
+    "source_text": "开门时间是早上九点。入口暗号是「晴天\\入口」。\n中文引号“测试”及英文引号\"映射”。",
+    "duplicate_short_phrase": "开门时间是早上九点。",
+    "question_with_duplicate": "我已经在问题里写了：开门时间是早上九点。请仅据被授权来源说明入口暗号。",
+    "system_duplicate": "合成系统模板：开门时间是早上九点。",
+    "scope": "synthetic mapping fixture; no existing raw gold changed"
   }
 }

@@ -82,7 +82,7 @@ func flushActionLog(ctx context.Context, tx pgx.Tx, scope memory.Scope) error {
 	return nil
 }
 func undoableCommand(t string) bool {
-	return oneOf(t, "addTask", "addIdea", "addProject", "updateTask", "updateProject", "setTaskStatus", "renameThing", "setNotes", "moveThing", "deferTask", "addCheck", "toggleCheck", "removeCheck", "ideaPromote", "ideaSnooze", "ideaShelve", "ideaDrop", "ideaContinue", "addCondition", "removeCondition", "adoptRun", "discardRun", "createDoc", "updateDoc", "deleteDoc", "bulkStatus", "bulkDefer", "bulkMove")
+	return oneOf(t, "addTask", "addIdea", "addProject", "updateTask", "updateProject", "setTaskStatus", "renameThing", "setNotes", "moveThing", "deferTask", "addCheck", "toggleCheck", "removeCheck", "ideaPromote", "ideaSnooze", "ideaShelve", "ideaDrop", "ideaContinue", "addCondition", "removeCondition", "delegateTask", "adoptRun", "discardRun", "createDoc", "updateDoc", "deleteDoc", "bulkStatus", "bulkDefer", "bulkMove")
 }
 func commandSummary(ctx context.Context, tx pgx.Tx, scope memory.Scope, c workspace.Command) string {
 	title := c.Title

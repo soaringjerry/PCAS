@@ -369,6 +369,8 @@ func (p *poller) callback(ctx context.Context, c notify.Credentials, st *state, 
 			text = "副手已经开始做了，没法撤销。"
 		case errors.Is(err, workspace.ErrAlreadyUndone):
 			text = "已经撤销过了。"
+		case errors.Is(err, workspace.ErrExpired):
+			text = "超过 30 天或相关资料已删除，无法撤销"
 		case errors.Is(err, memory.ErrNotFound):
 			text = "这条回执已失效。"
 		case err != nil:

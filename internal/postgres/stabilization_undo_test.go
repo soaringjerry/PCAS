@@ -11,12 +11,12 @@ import (
 	"math/rand"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/httpapi"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/notify"
@@ -433,7 +433,6 @@ func TestStabilizationUndoU12_DeletedSourceExpiresSnapshot(t *testing.T) {
 		t.Fatal("expired snapshot accepted", status, body)
 	}
 	stabilizationUndoEqual(t, s, scope, before, false)
-	stabilizationUndoFinding(t, "T1-U12")
 	if !strings.Contains(body, `"error":"expired"`) {
 		t.Fatalf("U12 requires HTTP 409 expired; got %d %s", status, body)
 	}
@@ -441,7 +440,6 @@ func TestStabilizationUndoU12_DeletedSourceExpiresSnapshot(t *testing.T) {
 func TestStabilizationUndoU13_ThirtyDayExpiry(t *testing.T) {
 	for _, flush := range []bool{false, true} {
 		t.Run(fmt.Sprintf("cleanup=%v", flush), func(t *testing.T) {
-			stabilizationUndoFinding(t, "T1-U13")
 			s := testStore(t)
 			scope := owner()
 			_, action := stabilizationUndoCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "old"})
@@ -461,6 +459,88 @@ func TestStabilizationUndoU13_ThirtyDayExpiry(t *testing.T) {
 		})
 	}
 }
+func TestStabilizationUndoU13_ExactThirtyDayBoundary(t *testing.T) {
+	for _, tc := range []struct {
+		name, age string
+		expired   bool
+	}{
+		{"just_inside", "30 days -1 microsecond", false},
+		{"exactly_thirty_days", "30 days", false},
+		{"just_outside", "30 days 1 microsecond", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := testStore(t)
+			scope := owner()
+			_, action := stabilizationUndoCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "boundary"})
+			before := stabilizationUndoBusiness(t, s, scope, false)
+			// A single transaction fixes the database clock for both the age
+			// fixture and the undo entry, without sleeps or a production clock hook.
+			err := pgx.BeginFunc(context.Background(), s.pool, func(tx pgx.Tx) error {
+				if _, err := tx.Exec(context.Background(), "UPDATE action_log SET created_at=now()-$3::interval WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), action, tc.age); err != nil {
+					return err
+				}
+				return s.undoActionTx(context.Background(), tx, scope, action)
+			})
+			if tc.expired {
+				if !errors.Is(err, workspace.ErrExpired) {
+					t.Fatalf("older than 30 days must expire: %v", err)
+				}
+				stabilizationUndoEqual(t, s, scope, before, false)
+			} else if err != nil || len(stabilizationUndoSnapshot(t, s, scope).Tasks) != 0 {
+				t.Fatalf("action within 30 days must undo: %v", err)
+			}
+		})
+	}
+}
+
+func TestStabilizationUndoU11_AlreadyUndoneAfterExpiryKeepsReplay(t *testing.T) {
+	for _, flush := range []bool{false, true} {
+		t.Run(fmt.Sprintf("cleanup=%v", flush), func(t *testing.T) {
+			s := testStore(t)
+			scope := owner()
+			_, action := stabilizationUndoCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "already undone"})
+			cmd := workspace.Command{Type: "undoAction", ID: action, RequestID: string(memory.NewID()), ExpectedRevision: stabilizationUndoSnapshot(t, s, scope).Revision}
+			first, err := s.Execute(context.Background(), scope, cmd)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := s.pool.Exec(context.Background(), "UPDATE action_log SET created_at=now()-interval '31 days' WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), action); err != nil {
+				t.Fatal(err)
+			}
+			if flush {
+				// Clear snapshots without changing the workspace; replay's State
+				// follows the current workspace, as the existing command API does.
+				if err := pgx.BeginFunc(context.Background(), s.pool, func(tx pgx.Tx) error {
+					return flushActionLog(context.Background(), tx, scope)
+				}); err != nil {
+					t.Fatal(err)
+				}
+				var cleared bool
+				if err := s.pool.QueryRow(context.Background(), "SELECT changes='[]'::jsonb AND expired_at IS NOT NULL AND undone_at IS NOT NULL FROM action_log WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), action).Scan(&cleared); err != nil || !cleared {
+					t.Fatal("already-undone snapshot not cleared", err)
+				}
+			}
+			before := stabilizationUndoBusiness(t, s, scope, false)
+			state := stabilizationUndoSnapshot(t, s, scope)
+			replay, err := s.Execute(context.Background(), scope, cmd)
+			if err != nil || !reflect.DeepEqual(first, replay) {
+				t.Fatal("original undo replay changed after expiry", err)
+			}
+			status, body := stabilizationUndoHTTP(t, s, scope, workspace.Command{Type: "undoAction", ID: action})
+			if status != 409 || !strings.Contains(body, `"error":"already_undone"`) {
+				t.Fatal("already-undone must precede expired", status, body)
+			}
+			if _, err := s.Undo(context.Background(), scope, action); !errors.Is(err, workspace.ErrAlreadyUndone) {
+				t.Fatal("direct undo changed priority", err)
+			}
+			stabilizationUndoEqual(t, s, scope, before, false)
+			if got := stabilizationUndoSnapshot(t, s, scope); !reflect.DeepEqual(state, got) {
+				t.Fatal("refusal or replay changed workspace state")
+			}
+		})
+	}
+}
+
 func TestStabilizationUndoU14_QueuedAndStartedDelegation(t *testing.T) {
 	for _, started := range []bool{false, true} {
 		t.Run(fmt.Sprintf("started=%v", started), func(t *testing.T) {
@@ -631,14 +711,5 @@ func TestStabilizationUndoLegacyActionLogCompatibility(t *testing.T) {
 			stabilizationUndoEqual(t, s, scope, before, false)
 			t.Logf("observed legacy %s refusal: %v", mode, err)
 		})
-	}
-}
-
-// Reserved for confirmed findings after an actual failing run, with strict
-// assertions retained below each call. Set this env to reproduce all findings.
-func stabilizationUndoFinding(t *testing.T, id string) {
-	t.Helper()
-	if os.Getenv("PCAS_STABILIZATION_UNDO_RECHECK") != "1" {
-		t.Skip("finding " + id + ": see docs/evaluations/2026-10-01-stabilization-undo.md; PCAS_STABILIZATION_UNDO_RECHECK=1 reruns strict assertions")
 	}
 }

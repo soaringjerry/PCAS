@@ -219,7 +219,7 @@ func TestUndoCallbacks(t *testing.T) {
 		err  error
 		text string
 	}{
-		{nil, "已撤销"}, {workspace.ErrChangedSince, "这件事之后又改过，没法直接撤销。"}, {workspace.ErrWorkStarted, "副手已经开始做了，没法撤销。"}, {workspace.ErrAlreadyUndone, "已经撤销过了。"}, {memory.ErrNotFound, "这条回执已失效。"},
+		{nil, "已撤销"}, {workspace.ErrChangedSince, "这件事之后又改过，没法直接撤销。"}, {workspace.ErrWorkStarted, "副手已经开始做了，没法撤销。"}, {workspace.ErrAlreadyUndone, "已经撤销过了。"}, {workspace.ErrExpired, "超过 30 天或相关资料已删除，无法撤销"}, {memory.ErrNotFound, "这条回执已失效。"},
 	} {
 		t.Run(test.text, func(t *testing.T) {
 			p, s, b := fixture(t)

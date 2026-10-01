@@ -15,6 +15,7 @@ const messages: Record<string, string> = {
   telegram_send_failed: '测试消息没发出去，请检查 chat ID',
   forbidden: '没有此操作的权限。', not_found: '记录已不存在，请刷新后重试。',
   changed_since: '这件事之后又改过，没法直接撤销。', work_started: '副手已经开始做了，没法撤销。', already_undone: '已经撤销过了。',
+  expired: '超过 30 天或相关资料已删除，无法撤销',
 }
 export async function api<T>(path: string, body?: unknown, method?: string): Promise<T> {
   const response = await fetch(path, {

@@ -1,0 +1,31 @@
+{
+  "schema": "pcas.phase2.independent-gold.v1",
+  "frozen_at": "2026-10-01",
+  "product_sha": "d8d6fb3efe92f7711c5567440e92af362df7fe77",
+  "authority": "User instructions and dispatch operation sequences; manually authored before reading consumer implementation",
+  "timezone": "Asia/Shanghai",
+  "scope": "Synthetic owner and dedicated enabled agent; no production data or model",
+  "records": [
+    {"id": "phase2-raw", "external_version": "v1", "speaker": "user", "text": "成都预约资料：预约码是 Q7-LANTERN-482；周六上午九点在东门蓝色雨棚集合。", "atoms": ["Q7-LANTERN-482", "周六上午九点", "东门蓝色雨棚"]},
+    {"id": "phase2-claim", "external_version": "v1", "speaker": "user", "text": "成都正对照资料：约定口令是 JADE-CONTROL-619。", "claim": "成都正对照约定口令是 JADE-CONTROL-619。", "atoms": ["JADE-CONTROL-619"]},
+    {"id": "phase2-indirect", "external_version": "v1", "speaker": "user", "text": "旧来源底层证据 INDIRECT-ORIGINAL-927。", "claim": "旧资料基底是 INDIRECT-ORIGINAL-927。", "derived_output": "已形成不含底层原话的工作结果 DERIVED-OUTPUT-338。", "atoms": ["INDIRECT-ORIGINAL-927"]}
+  ],
+  "cases": [
+    {"id": "E1", "label": "zero_claim_raw", "query": "成都预约资料的预约码、集合时间和地点是什么？", "entrances": ["DeskTurn", "Execute(requestRun)->RunAgents->provider", "manual Brief"], "preconditions": ["source committed and readable", "zero claims", "extraction pending", "explicit source authorization"], "required": ["Q7-LANTERN-482", "周六上午九点", "东门蓝色雨棚"], "forbidden": ["ungranted source text", "another workspace source"], "evidence": "Actual captured provider request or returned persisted manual Brief, plus exact source/version/span; Recall only diagnostic"},
+    {"id": "E1-NATURAL", "label": "natural_source_authorization", "sequence": ["normal source ingest", "owner says allow secretary/deputy to use this source", "run E1"], "required": ["explicit scoped source authorization available through a real product entry", "source text supplied"], "forbidden": ["SQL grants counted as natural authorization", "claim grant silently authorizes source"]},
+    {"id": "E2", "label": "claim_positive_control_used_empty", "query": "成都正对照资料的约定口令是什么？", "entrances": ["DeskTurn", "Execute(requestRun)->RunAgents->provider", "manual Brief"], "preconditions": ["confirmed claim with enabled-agent grant", "provider answer Used=[]"], "required": ["JADE-CONTROL-619"], "forbidden": ["Used=[] interpreted as no actual memory input"]},
+    {"id": "E3", "label": "indirect_dependencies_are_not_supplied", "sequence": ["produce prior run with source-backed claim dependency", "prior output only contains DERIVED-OUTPUT-338", "make followup context without matching current evidence"], "required": ["DERIVED-OUTPUT-338 in current input", "retained typed prior dependency"], "forbidden": ["recording INDIRECT-ORIGINAL-927 as supplied unless present in captured bytes", "untyped dependency treated as source or claim automatically"]}
+  ],
+  "later_sequences": [
+    {"id": "L1", "steps": ["v1 authorized", "v2 correction committed", "current query", "authorized historical v1 query"], "required": ["current uses v2", "historical v1 explicitly marked corrected/history"], "forbidden": ["old reference hydrated with v2 body", "v1 presented as current"]},
+    {"id": "L2", "steps": ["pre-generation validation", "fake provider barrier reached", "correct/delete/revoke committed", "release barrier", "adopt result"], "required": ["attempt records actual sending time", "invalid output cannot be adopted", "mutation finishes without waiting indefinitely on model"], "forbidden": ["preparation labeled received", "invalid old answer accepted"]},
+    {"id": "L3", "steps": ["existing answer/summary/Brief", "correct/delete/revoke", "same conversation next turn", "new conversation next turn"], "required": ["recursive typed dependency revalidation"], "forbidden": ["invalid historical answer replay", "invalid derived text newly supplied"]},
+    {"id": "L4", "steps": ["manual prepare", "revoke/delete", "refetch/copy", "submit result"], "required": ["invalid package refetch and adoption rejected", "prepared and PCAS delivery separately observable", "external receipt unknown without acknowledgement"], "forbidden": ["preparation claimed external receipt", "invalid package re-supplied"]},
+    {"id": "L5", "steps": ["delete claim with IncludeSources=false", "query independently granted source", "delete source with IncludeSources=true", "query again"], "required": ["source remains lawful after claim-only deletion", "source deletion clears body and derived/attempt copies"], "forbidden": ["claim-only deletion called source leak", "source-deleted atom newly supplied"]},
+    {"id": "L6", "steps": ["unknown dependency kind", "hydrate/consume/replay/adopt"], "required": ["reject unsupported kind"], "forbidden": ["unknown kind coerced to claim", "unsupported evidence consumed"]},
+    {"id": "L7", "steps": ["truncate budget", "capacity exhausted", "retention boundary", "delete"], "required": ["observable layer and truncation/unknown recorded", "body expires and deletes", "body-free attempt skeleton allowed"], "forbidden": ["hash claimed full-text proof", "permanent duplicated source body"]},
+    {"id": "L8", "steps": ["import synthetic old ChatGPT active user plan and assistant advice", "AutoAccept/WakeIdeas enabled", "reimport", "correct/delete and reimport"], "required": ["stable identity/role/branch/expression time", "memory-only default", "same-identity deletion/correction not resurrected"], "forbidden": ["old plan creates today's action/reminder/wakeup", "assistant suggestion becomes owner decision"]}
+  ],
+  "failure_policy": "All new failing assertions remain real failures. No skip, weaker assertions, implementation-generated expected output, or lucky reruns.",
+  "evidence_limits": ["fake provider cannot validate model reasoning", "SQL grant diagnosis is not natural authorization acceptance", "new d8 dynamic results separated from historical 101/41 and prior M1", "online 11/11, actual device, one-day user trial require separate evidence"]
+}

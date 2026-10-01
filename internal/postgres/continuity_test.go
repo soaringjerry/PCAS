@@ -350,7 +350,7 @@ func TestConcurrentSummaryAndGrantRevocation(t *testing.T) {
 	}
 	agent := phase2RTTask(t, s, scope, "phase2-model", "secretary", phase2RTUnscoped())
 	for _, id := range []memory.ID{src.ID, claim.ID} {
-		if _, err := s.pool.Exec(ctx, "INSERT INTO record_grants(owner_id,record_id,principal_id) VALUES($1,$2,$3)", string(scope.OwnerID), string(id), agent.PrincipalID); err != nil {
+		if _, err := s.pool.Exec(ctx, "INSERT INTO record_grants(owner_id,record_id,principal_id) VALUES($1,$2,$3) ON CONFLICT DO NOTHING", string(scope.OwnerID), string(id), agent.PrincipalID); err != nil {
 			t.Fatal(err)
 		}
 	}

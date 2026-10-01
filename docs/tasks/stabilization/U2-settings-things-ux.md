@@ -22,6 +22,10 @@
 
 事项页是第二优先：看清事项是什么、截止/提醒/归属、下一步、步骤/材料/副手结果；标题/说明的编辑入口与保存反馈可发现，完成、修改、撤销就地可用。保留统一秘书，但简单动作不必被不可发现的点击区或含糊图标阻挡。可调整入口、分组、简短标签与必要的直接编辑控件；无需为常规界面改进重复请求用户许可。若触及时间解析、后端命令或持久业务语义，先向协调者报告最小方案。
 
+用户后续特别指出事项页「那个什么收下什么的」：必须处理结果操作的模糊名称与不可见后果。按真实命令核查结果去向，把收下/采纳/放回等动作说成具体结果，点击后能看到新增步骤/文档等变化；保持采纳、撤销、费用的业务语义，不增加审核弹窗。
+
+已定位字面「收下」在 `UnsureSheet.tsx` 的候选确认流程，纳入本次范围：按 task/idea/memory 给主动作明确去向，解释 unknown 时需要先分类；同页忽略候选、确认/删除记忆的文案不得隐瞒真实效果或虚构可撤销性。ThingPage 的放回去/放回来/看看也按实际用途整理。用户不需要辨别内部页面/组件名称。
+
 用户要求优先于 U1 过去的「只做 3–5 小改动」限制；本任务允许有依据地重组这两个页面。遵循白皮书与设计原则的少长文、可视化、自然交互方向；不要仅因原则中的按钮分类机械地保留难用流程。
 
 ## 文件归属
@@ -29,12 +33,16 @@
 允许修改实际需要的文件：
 - `web/src/pages/SettingsPage.tsx`、`ThingPage.tsx`。
 - 设置组件 `ChatGPTConnection.tsx`、`OpenAIConnection.tsx`、`ConnectorSettings.tsx`、`MemoryActivitySettings.tsx`、`NotifySettings.tsx`、`TimezoneSettings.tsx`。
+- `web/src/components/UnsureSheet.tsx` 的候选确认操作及必要的局部样式；入口关联文字涉及 Shell.tsx 时先提交具体点位供协调者分配。
+- S1 证实当前候选管理完全不可达后，追加 `web/src/pages/LibraryPage.tsx` 的最小连接：现有资料库提供待确认入口/数量，复用候选组件，设置相关说明可链接过去。保留资料库现有推测记忆编辑/确认/删除路径，避免重复管理入口；不新建顶级页面、常驻审批面板，不重做整个资料库。
 - `web/src/components/ui.tsx`、`controls.tsx` 的必要、兼容扩展；`Secretary.tsx` 仅针对事项页编辑/手机遮挡的确证问题。
 - 新增 `web/src/styles/settings.css`；现有 `thing.css`、`app.css`、`secretary.css` 仅相关选择器，避免全站样式漂移。
 - 新增 `web/tests/settings-things-ux.spec.ts`；如文案/入口改变影响既有 mock 浏览器测试，可更新这些测试的定位/导航，必须保留真实功能断言，报告列出调整理由。不得改真实后端 golden/backend 测试或共享夹具来掩盖产品失败，额外文件先报协调者。
 - 自有报告 `docs/evaluations/2026-10-01-settings-things-ux.md` 和截图目录 `docs/evaluations/2026-10-01-settings-things-ux/`。
 
 不改 StoreProvider、领域类型、API、日期算法、后端、迁移或他人报告/任务文档。F13 的 web/store/api.ts 不属于 U2。源码较小可拆只用于这两页的新组件，先在进度文件声明路径，协调者核对后再实施。
+
+阶段1走查后已追加批准：`chatgpt-direct.spec.ts`、`continuity.spec.ts`、`model-api.spec.ts` 增加按新布局展开对应表单的导航，保留原服务端/权限/状态/错误/数据断言；`golden.spec.ts` 的三处「放回去」及同组文案相关定位可改为新的明确动作名，业务断言保持。不改runner、共享fixture、超时/重试或skip。采用资料库的候选入口，设置只链接过去，不在设置里执行候选事务。Fold/SaveMark与可选disabled兼容prop可在已授权ui.tsx内实现。API状态只宣称已配置，不能把密钥存在冒称连通验证。
 
 ## 验收与资源
 

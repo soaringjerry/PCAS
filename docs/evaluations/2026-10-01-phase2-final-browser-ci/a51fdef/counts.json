@@ -1,0 +1,401 @@
+{
+  "head": "a51fdef8670fb6152ac8ca290e69390f496edf33",
+  "actual_checkout": "ac62139ee0dc99f11ee4ae31365b8bf091b3150d",
+  "tree": "e647f4fe63b12d1e0d81efad13bee87801e5ff12",
+  "run_id": 36890371142,
+  "mocked": {
+    "executed": 127,
+    "passed": 127,
+    "failed": 0,
+    "skipped": 0,
+    "retries": 0
+  },
+  "reports": {
+    "round1-golden": {
+      "stats": {
+        "startTime": "2026-10-01T16:15:50.064Z",
+        "duration": 203066.472,
+        "expected": 12,
+        "skipped": 0,
+        "unexpected": 0,
+        "flaky": 0
+      },
+      "results": [
+        {
+          "title": "G1 一句话安排：时间、项目、提醒、刷新与撤销",
+          "file": "golden.spec.ts",
+          "status": "passed",
+          "retry": 0,
+          "duration_ms": 1338
+        },
+        {
+          "title": "G2 边问边记：回复前连续发送，两轮都处理",
+          "file": "golden.spec.ts",
+          "status": "passed",
+          "retry": 0,
+          "duration_ms": 3122
+        },
+        {
+          "title": "G3 改安排：同一件事改到周一，提醒跟随",
+          "file": "golden.spec.ts",
+          "status": "passed",
+          "retry": 0,
+          "duration_ms": 851
+        },
+        {
+          "title": "G4 事项页秘书：自动加入三步、撤销、放回去",
+          "file": "golden.spec.ts",
+          "status": "passed",
+          "retry": 0,
+          "duration_ms": 4029
+        },
+        {
+          "title": "G5 失败恢复：副手首请求报错，原地重试成功",
+          "file": "golden.spec.ts",
+          "status": "passed",
+          "retry": 0,
+          "duration_ms": 6638
+        },
+        {
+          "title": "G6 提醒送达：真实等待一分钟、首页、Web Push、Telegram",
+          "file": "golden.spec.ts",
+          "status": "passed",
+          "retry": 0,
+          "duration_ms": 76348
+        },
+        {
+          "title": "G7 Telegram 对话：入站文字、首页、回执按钮和撤销回调",
+          "file": "golden.spec.ts",
+          "status": "passed",
+          "retry": 0,
+          "duration_ms": 6727
+        },
+        {
+          "title": "G8 完成即撤销：首页勾选、toast、回到原位",
+          "file": "golden.spec.ts",
+          "status": "passed",
+          "retry": 0,
+          "duration_ms": 1558
+        },
+        {
+          "title": "G9 不丢话：模型真实超时后收到保存回执并能查原话",
+          "file": "golden.spec.ts",
+          "status": "passed",
+          "retry": 0,
+          "duration_ms": 91915
+        },
+        {
+          "title": "F7 连续撤销：改期、新建依次撤销，刷新保持已撤销",
+          "file": "golden.spec.ts",
+          "status": "passed",
+          "retry": 0,
+          "duration_ms": 2362
+        },
+        {
+          "title": "F7 顺序冲突：改标题后撤销新建返回 newer_action",
+          "file": "golden.spec.ts",
+          "status": "passed",
+          "retry": 0,
+          "duration_ms": 1487
+        },
+        {
+          "title": "F7 采纳链：撤销副手采纳后可以撤销更早的改标题",
+          "file": "golden.spec.ts",
+          "status": "passed",
+          "retry": 0,
+          "duration_ms": 5700
+        }
+      ],
+      "retries": 0,
+      "repeatEach": 1,
+      "global_errors": []
+    },
+    "round1-legacy": {
+      "stats": {
+        "startTime": "2026-10-01T16:19:13.799Z",
+        "duration": 19396.936999999998,
+        "expected": 6,
+        "skipped": 0,
+        "unexpected": 0,
+        "flaky": 0
+      },
+      "results": [
+        {
+          "title": "login, persisted memory, confirmation, correction, source tracing and export",
+          "file": "backend.spec.ts",
+          "status": "passed",
+          "retry": 0,
+          "duration_ms": 2932
+        },
+        {
+          "title": "official plan connection explains usage and keeps the Codex channel",
+          "file": "chatgpt-direct.spec.ts",
+          "status": "passed",
+          "retry": 0,
+          "duration_ms": 591
+        },
+        {
+          "title": "generic connector persists, scoped webhook cannot read memory, archive upload queues parsing",
+          "file": "continuity.spec.ts",
+          "status": "passed",
+          "retry": 0,
+          "duration_ms": 881
+        },
+        {
+          "title": "real API settings persist separate keys, redact secrets and queue vector backfill",
+          "file": "model-api.spec.ts",
+          "status": "passed",
+          "retry": 0,
+          "duration_ms": 1082
+        },
+        {
+          "title": "real_target_package_clipboard_submit",
+          "file": "phase2_manual_backend.spec.ts",
+          "status": "passed",
+          "retry": 0,
+          "duration_ms": 5565
+        },
+        {
+          "title": "real_revoke_clear_refuse_regenerate_submit",
+          "file": "phase2_manual_backend.spec.ts",
+          "status": "passed",
+          "retry": 0,
+          "duration_ms": 7440
+        }
+      ],
+      "retries": 0,
+      "repeatEach": 1,
+      "global_errors": []
+    },
+    "round1-timezone": {
+      "stats": {
+        "startTime": "2026-10-01T16:15:39.180Z",
+        "duration": 10201.173,
+        "expected": 1,
+        "skipped": 0,
+        "unexpected": 0,
+        "flaky": 0
+      },
+      "results": [
+        {
+          "title": "F6 first login defaults to the browser; settings, validation, hint and today agree with real receipts",
+          "file": "timezone-backend.spec.ts",
+          "status": "passed",
+          "retry": 0,
+          "duration_ms": 3063
+        }
+      ],
+      "retries": 0,
+      "repeatEach": 1,
+      "global_errors": []
+    },
+    "round2-golden": {
+      "stats": {
+        "startTime": "2026-10-01T16:19:40.758Z",
+        "duration": 217201.077,
+        "expected": 12,
+        "skipped": 0,
+        "unexpected": 0,
+        "flaky": 0
+      },
+      "results": [
+        {
+          "title": "G1 一句话安排：时间、项目、提醒、刷新与撤销",
+          "file": "golden.spec.ts",
+          "status": "passed",
+          "retry": 0,
+          "duration_ms": 1452
+        },
+        {
+          "title": "G2 边问边记：回复前连续发送，两轮都处理",
+          "file": "golden.spec.ts",
+          "status": "passed",
+          "retry": 0,
+          "duration_ms": 3178
+        },
+        {
+          "title": "G3 改安排：同一件事改到周一，提醒跟随",
+          "file": "golden.spec.ts",
+          "status": "passed",
+          "retry": 0,
+          "duration_ms": 1030
+        },
+        {
+          "title": "G4 事项页秘书：自动加入三步、撤销、放回去",
+          "file": "golden.spec.ts",
+          "status": "passed",
+          "retry": 0,
+          "duration_ms": 4112
+        },
+        {
+          "title": "G5 失败恢复：副手首请求报错，原地重试成功",
+          "file": "golden.spec.ts",
+          "status": "passed",
+          "retry": 0,
+          "duration_ms": 6817
+        },
+        {
+          "title": "G6 提醒送达：真实等待一分钟、首页、Web Push、Telegram",
+          "file": "golden.spec.ts",
+          "status": "passed",
+          "retry": 0,
+          "duration_ms": 85667
+        },
+        {
+          "title": "G7 Telegram 对话：入站文字、首页、回执按钮和撤销回调",
+          "file": "golden.spec.ts",
+          "status": "passed",
+          "retry": 0,
+          "duration_ms": 6403
+        },
+        {
+          "title": "G8 完成即撤销：首页勾选、toast、回到原位",
+          "file": "golden.spec.ts",
+          "status": "passed",
+          "retry": 0,
+          "duration_ms": 1988
+        },
+        {
+          "title": "G9 不丢话：模型真实超时后收到保存回执并能查原话",
+          "file": "golden.spec.ts",
+          "status": "passed",
+          "retry": 0,
+          "duration_ms": 92142
+        },
+        {
+          "title": "F7 连续撤销：改期、新建依次撤销，刷新保持已撤销",
+          "file": "golden.spec.ts",
+          "status": "passed",
+          "retry": 0,
+          "duration_ms": 3932
+        },
+        {
+          "title": "F7 顺序冲突：改标题后撤销新建返回 newer_action",
+          "file": "golden.spec.ts",
+          "status": "passed",
+          "retry": 0,
+          "duration_ms": 2067
+        },
+        {
+          "title": "F7 采纳链：撤销副手采纳后可以撤销更早的改标题",
+          "file": "golden.spec.ts",
+          "status": "passed",
+          "retry": 0,
+          "duration_ms": 6252
+        }
+      ],
+      "retries": 0,
+      "repeatEach": 1,
+      "global_errors": []
+    },
+    "round3-golden": {
+      "stats": {
+        "startTime": "2026-10-01T16:14:56.791Z",
+        "duration": 214065.875,
+        "expected": 12,
+        "skipped": 0,
+        "unexpected": 0,
+        "flaky": 0
+      },
+      "results": [
+        {
+          "title": "G1 一句话安排：时间、项目、提醒、刷新与撤销",
+          "file": "golden.spec.ts",
+          "status": "passed",
+          "retry": 0,
+          "duration_ms": 1257
+        },
+        {
+          "title": "G2 边问边记：回复前连续发送，两轮都处理",
+          "file": "golden.spec.ts",
+          "status": "passed",
+          "retry": 0,
+          "duration_ms": 3059
+        },
+        {
+          "title": "G3 改安排：同一件事改到周一，提醒跟随",
+          "file": "golden.spec.ts",
+          "status": "passed",
+          "retry": 0,
+          "duration_ms": 752
+        },
+        {
+          "title": "G4 事项页秘书：自动加入三步、撤销、放回去",
+          "file": "golden.spec.ts",
+          "status": "passed",
+          "retry": 0,
+          "duration_ms": 3891
+        },
+        {
+          "title": "G5 失败恢复：副手首请求报错，原地重试成功",
+          "file": "golden.spec.ts",
+          "status": "passed",
+          "retry": 0,
+          "duration_ms": 7049
+        },
+        {
+          "title": "G6 提醒送达：真实等待一分钟、首页、Web Push、Telegram",
+          "file": "golden.spec.ts",
+          "status": "passed",
+          "retry": 0,
+          "duration_ms": 87222
+        },
+        {
+          "title": "G7 Telegram 对话：入站文字、首页、回执按钮和撤销回调",
+          "file": "golden.spec.ts",
+          "status": "passed",
+          "retry": 0,
+          "duration_ms": 6656
+        },
+        {
+          "title": "G8 完成即撤销：首页勾选、toast、回到原位",
+          "file": "golden.spec.ts",
+          "status": "passed",
+          "retry": 0,
+          "duration_ms": 1483
+        },
+        {
+          "title": "G9 不丢话：模型真实超时后收到保存回执并能查原话",
+          "file": "golden.spec.ts",
+          "status": "passed",
+          "retry": 0,
+          "duration_ms": 91701
+        },
+        {
+          "title": "F7 连续撤销：改期、新建依次撤销，刷新保持已撤销",
+          "file": "golden.spec.ts",
+          "status": "passed",
+          "retry": 0,
+          "duration_ms": 2389
+        },
+        {
+          "title": "F7 顺序冲突：改标题后撤销新建返回 newer_action",
+          "file": "golden.spec.ts",
+          "status": "passed",
+          "retry": 0,
+          "duration_ms": 1587
+        },
+        {
+          "title": "F7 采纳链：撤销副手采纳后可以撤销更早的改标题",
+          "file": "golden.spec.ts",
+          "status": "passed",
+          "retry": 0,
+          "duration_ms": 5803
+        }
+      ],
+      "retries": 0,
+      "repeatEach": 1,
+      "global_errors": []
+    }
+  },
+  "actual_total": {
+    "executed": 170,
+    "passed": 170,
+    "failed": 0,
+    "skipped": 0,
+    "retries": 0,
+    "flaky": 0
+  },
+  "unreached": [],
+  "model_boundary": "real PCAS serve/worker/PG and Chromium; external model/OIDC/notification synthetic fake only"
+}

@@ -44,3 +44,15 @@ PCAS_TEST_BASE_URL=http://127.0.0.1:18110 node node_modules/@playwright/test/cli
 全部内容、请求、账号/路由标识为合成。所有`/v1/**`在浏览器中截获，真实服务仅提供静态资产；clipboard使用测试stub，证明向clipboard API提交正确fresh文本及不提交晚包，不证明系统剪贴板权限或操作系统集成。竞态通过真实UI轮询接收合成新state；authorization场景为workspace中接收者enabled撤销和revision更新，不覆盖真实登录失效。
 
 本报告只证明前端行为。已有独立后端manual矩阵不与本报告拼成真实端到端证据；现有真实后端浏览器套件缺手动交接路径，详见[只读盘点](2026-10-01-phase2-ui-legacy-inventory.md)。CI仅把新spec追加到browser-mocked原7文件清单，旧测试、三轮real-backend和所有gate保持原样。
+
+## 有因补验：390px按钮可达性
+
+协调者查看首次selection截图，发现主按钮靠底边，要求保留原26PASS并新增滚动/遮挡/实际click断言。产品仍为8221d2c，静态资产未变；未重跑26例矩阵。
+
+- 增强harness SHA `1c1da74f5333d564242112aa133112b6d85aacc1`：保留原末用例全部断言，追加scrollIntoViewIfNeeded、完整bbox处于390×1000视口、hit-test不被固定栏遮挡、普通click后新run命令和原prompt/target保留。
+- 此增强用例第一次退出1（1 failed，0 passed，0 skipped/retries），原日志[保留](2026-10-01-phase2-ui-button-risk-original.log)，[原trace](2026-10-01-phase2-ui-evidence/button-risk-initial-trace.zip)。完整bbox断言通过；hit-test失败。只读trace/CSS检查发现测试取点为bbox下两角内缩2px，产品按钮为`border-radius:var(--r-pill)`，这些点落在胶囊绘制区域外，因此父元素命中是测试几何错误。未把此失败当产品遮挡证据。
+- 修正harness SHA `f023585c1a11989f119b4f2dfc1c5aaf72777760`：取按钮中心及四边中点内缩2px，共5个实际绘制内部点；所有bbox/overflow/原请求保护/普通click断言保留。协调者审阅并认可修正依据。
+- 仅末用例执行一次有因补验：1 passed，0 failed，0 skipped，0 retries，退出0，2.1s。普通click产生一个新requestRun（new id、other provider、draft、原prompt），旧run完整recipient和原owner文案保留。[补验原日志](2026-10-01-phase2-ui-button-risk-geometry-fixed-original.log)。
+- [390px可操作按钮截图](2026-10-01-phase2-ui-evidence/phase2-manual-selection-390px-operable.png)。此截图在滚动后、普通click前记录当前视口；bbox与5点hit-test已证明该按钮完整可见且没有固定秘书栏拦截。它仍是浏览器窄视口截图，不是真机。
+
+运行命令与首次相同，但增加`--grep 'desktop and 390px browser views'`，分别使用独立output目录button-risk和button-risk-geometry-fixed。首次26例证据与补验、harness错误日志均保留，没有skip、force click、削弱既有业务断言或无因重跑。

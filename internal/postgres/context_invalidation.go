@@ -28,6 +28,7 @@ func invalidateTypedContextTx(ctx context.Context, tx pgx.Tx, scope memory.Scope
   SELECT source_id parent,target_id child FROM evidence WHERE owner_id=$1
   UNION SELECT dependency_id,view_id FROM derived_dependencies WHERE owner_id=$1
   UNION SELECT derived_from_id,source_id FROM source_versions WHERE owner_id=$1 AND derived_from_id IS NOT NULL
+  UNION SELECT archive_id,source_id FROM archive_entries WHERE owner_id=$1
  ) edge ON edge.parent=a.id
 ) SELECT id::text FROM affected`, string(scope.OwnerID), ids)
 	if err != nil {

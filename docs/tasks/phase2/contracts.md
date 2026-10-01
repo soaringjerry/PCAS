@@ -26,6 +26,8 @@ source 范围以 `source_scope_assignments` 关联同一来源：`studio` 指定
 
 `policy_id`可选：新建空ID+expected0；更新/缩权用已有PolicyID+expected revision，在同事务核source匹配、route合法和tuple唯一后**替换旧tuple并增加同一policy revision**，不得新建窄tuple而留下宽allow。目标tuple已被别的policy占有返回conflict，不默默合并。DELETE可按policyID定位（必须source匹配，提供tuple时亦核一致）或exact tuple定位；缺行的明确撤权可创建deny revision1。新建tuple已存在（包括revoked tombstone）时不能用expected0覆盖，须GET现revision。自然改范围映射同原子更新，不是两次HTTP。undo对PolicyID+after revision恢复旧tuple/语义并生成新revision。
 
+正式 POST 接受 owner 的最小选择 `recipient.principal_id` 与 `role`（manual 另需选择已配置 `provider`），服务端经唯一 `contextRecipientTx` 重建完整实际 tuple。客户端非空 model/provider/protocol/channel/fingerprint 必须与重建值一致；回执返回完整 tuple 供精确撤权。同键旧 partial 请求不能在路由改绑后授权新目标。owner 可通过 `Store.ContextRecipient(ctx, scope, agentID, role, manual)` 读取同一解析结果，不自行计算 fingerprint。
+
 接收者 tuple 使用已注册 agent.ID、实际 model/provider/protocol/channel 与 route fingerprint，精确匹配；fingerprint 由服务端对规范化 endpoint/配置身份计算，不存密钥，不把可改绑的 provider 名称当身份。无通配默认、新 agent 不回补、新 model/provider/实际路由切换不继承。manual 必须绑定独立 channel/外部接收者，不能用自动通道政策授权。无明确接收者的 manual 包拒绝准备，提示一个必要选择。来源按稳定 source ID 授权，版本升级可沿用相同政策；保存授权时 expected source version 防错对象，生成时必须验证具体 ref.Version。
 
 `record_grants` 继续承担记录粗粒度访问；授权 source 政策可同步增加该来源 grant，多个 active 政策保留 grant 至最后一个撤回。**消费原文同时要求 source grant 和精确 source policy**；单独 claim grant、owner 原话卡片可读、旧 SQL source grant 均不替代 provider 外发许可。claim 正文仍可凭独立claim grant消费，不要求附带原文许可；出处标题/角色/quote/span再验source权限。所有非owner raw出口（GetSource/Recall/Expand/summary/消费者）必须有服务端绑定 `Scope.Task`，缺失即 fail closed（missing_trusted_task），客户端JSON不能提供；owner原件审计展开不代表模型外发。旧无政策资料拒绝供给并报可公开缺口，不迁成全角色可读，候选/coverage不泄漏不可见名称或计数。
@@ -133,3 +135,7 @@ helper不能自行取得长期provider锁；caller遵守owner gate→diagnostic 
 K1实际接收者共同helper（A实现、B复用）：`Store.contextRecipientTx(ctx,tx,scope,agentID,role,manual)`与`Store.trustedTaskContextTx(ctx,tx,scope,agentID,role,hardScope,manual)`。role为secretary/deputy/manual；自动读取server registry实际model/protocol/endpoint，manual用owner选择的已配置Provider重建并核对其字段，不信任client fingerprint。subscription读取本地选定model/account身份，不在锁内联网选model；未能确定实际model拒绝原文权限绑定。`sourcePolicyRevokeIsExplicit(ctx)`仅undo内部absence恢复返回false。`recordSourcePolicyActionTx(ctx,tx,scope,before *SourceAuthorization,after SourceAuthorization)`、`recordSourceScopeActionTx(ctx,tx,scope,before,after SourceScopeResult)`由B mutation调用，记录到已开始的既有action buffer，A undo校验after revision和后继。
 
 协调已扩A所有权到workspace.Command/model、commands.go、desk_actions.go、desk_schema.go、actions_log.go（限policy undo）、相关prompt；A写新的manual handler，B只在server.go注册route。首批自然入口使用deterministic helper，无需模型动作作为必要路径。K0只增加共享Command payload，不在消费者接入；K1开工前给冻结提交。任何契约调整先通知协调与C，不能为通过既有gold缩减安全断言。
+
+第二波已移交 B：runs.go、run_context.go、manual package helper/HTTP handler、context_policy_undo.go；A 保留 attempt/typed/Recall/Expand/summary/秘书和 actions_log 的 policy undo 分支。
+
+K1 定位补齐：`RecallResult.SourceSpans` 仅为已授权返回 source 候选的真实检索窗口；source exact version、rune 半开区间。无实际窗口命中时不伪造首段 locator。统一顺序是 hydrate exact → `applyRecallSpans(entries, spans)` 逐字核对并保留同 source 多窗口 → `selectContextExcerpt` 预算裁剪；最终输入 byte 映射另由 attempt 装配生成。该定位字段不声称候选已实际发送。

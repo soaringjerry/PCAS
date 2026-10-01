@@ -96,12 +96,13 @@ type Coverage struct {
 }
 
 type RecallResult struct {
-	Summary    string     `json:"summary"`
-	Memories   []Ref      `json:"memories"`
-	Evidence   []Evidence `json:"evidence"`
-	Unresolved []string   `json:"unresolved"`
-	Coverage   Coverage   `json:"coverage"`
-	FollowUps  []string   `json:"follow_ups"`
+	SourceSpans []SourceSpan `json:"source_spans,omitempty"`
+	Summary     string       `json:"summary"`
+	Memories    []Ref        `json:"memories"`
+	Evidence    []Evidence   `json:"evidence"`
+	Unresolved  []string     `json:"unresolved"`
+	Coverage    Coverage     `json:"coverage"`
+	FollowUps   []string     `json:"follow_ups"`
 }
 
 type ExpandRequest struct {

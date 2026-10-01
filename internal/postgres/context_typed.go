@@ -45,8 +45,13 @@ func hydrateTypedContextTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, t
 		return out, cov, memory.ErrRecordCapacity
 	}
 	for _, ref := range refs {
+		if !memory.ContextKindSupported(ref.Kind) && ref.Kind != memory.ChunkKind {
+			cov.Complete = false
+			cov.Gaps = append(cov.Gaps, "unsupported_kind")
+			continue
+		}
 		entry, err := hydrateTypedOneTx(ctx, tx, scope, task, ref, map[memory.Ref]bool{}, 0)
-		if errors.Is(err, memory.ErrForbidden) || errors.Is(err, memory.ErrConflict) || errors.Is(err, memory.ErrNotFound) || errors.Is(err, memory.ErrInvalid) {
+		if errors.Is(err, memory.ErrForbidden) || errors.Is(err, memory.ErrConflict) || errors.Is(err, memory.ErrNotFound) || errors.Is(err, memory.ErrInvalid) || errors.Is(err, memory.ErrUnavailable) {
 			cov.Complete = false
 			cov.Gaps = append(cov.Gaps, "unavailable_evidence")
 			continue
@@ -93,7 +98,6 @@ func hydrateTypedOneTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, task 
 	var kind memory.Kind
 	var current int
 	var state string
-	var expressed *string
 	// Row protection is limited to this short hydration/fence transaction.
 	err := tx.QueryRow(ctx, `SELECT r.kind,r.version,r.state FROM memory_records r JOIN record_versions v ON(v.owner_id,v.record_id)=(r.owner_id,r.id) WHERE r.owner_id=$1 AND r.id=$2 AND v.version=$3 AND v.state='active' AND v.recorded_at<=coalesce($4,now()) FOR SHARE OF r`, string(scope.OwnerID), string(ref.ID), ref.Version, task.View.KnownAt).Scan(&kind, &current, &state)
 	if err != nil {
@@ -110,6 +114,9 @@ func hydrateTypedOneTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, task 
 	dep := memory.TypedDependency{Ref: ref, Purpose: task.Purpose, Scope: task.Scope}
 	switch ref.Kind {
 	case memory.SourceKind:
+		if task.Recipient.Model == "unknown" {
+			return out, memory.ErrForbidden
+		}
 		if err := sourcePolicyAllowsTx(ctx, tx, task, ref); err != nil {
 			return out, err
 		}
@@ -162,8 +169,17 @@ func hydrateTypedOneTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, task 
 		if raw, ok := claim.Scope["project_id"]; ok && json.Unmarshal(raw, &project) != nil {
 			return out, memory.ErrInvalid
 		}
-		if task.Scope.Kind == memory.StudioContextScope && project != string(task.Scope.StudioID) && !(project == "" && task.Scope.IncludeGlobalConstraints && oneOf(claim.Nature, "preference", "decision")) {
-			return out, memory.ErrForbidden
+		if task.Scope.Kind == memory.StudioContextScope && project != string(task.Scope.StudioID) {
+			var global bool
+			if project == "" && task.Scope.IncludeGlobalConstraints {
+				err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM evidence e JOIN source_scope_assignments a ON(a.owner_id,a.source_id)=(e.owner_id,e.source_id) WHERE e.owner_id=$1 AND e.target_id=$2 AND e.target_version=$3 AND a.scope_kind='global_constraint')`, string(scope.OwnerID), string(ref.ID), ref.Version).Scan(&global)
+				if err != nil {
+					return out, err
+				}
+			}
+			if !global {
+				return out, memory.ErrForbidden
+			}
 		}
 		if task.Scope.Kind == memory.UnscopedContextScope && project != "" {
 			return out, memory.ErrForbidden
@@ -241,7 +257,6 @@ func hydrateTypedOneTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, task 
 			out.Dependencies = append(out.Dependencies, entry.Dependencies...)
 		}
 	}
-	_ = expressed
 	out.Dependencies = append([]memory.TypedDependency{dep}, out.Dependencies...)
 	return out, nil
 }
@@ -285,8 +300,7 @@ func selectContextExcerpt(entry memory.EvidenceEntry, query string, maxRunes int
 		return entry
 	}
 	text := matchedExcerpt(entry.Text, query, memory.SearchTokens(query), maxRunes)
-	// matchedExcerpt has display ellipses; locate its literal source window.
-	text = strings.TrimPrefix(strings.TrimSuffix(text, "…"), "…")
+	// matchedExcerpt returns a literal window, including any original ellipses.
 	start := strings.Index(entry.Text, text)
 	if start < 0 {
 		entry.Gaps = append(entry.Gaps, "excerpt_unavailable")
@@ -306,4 +320,38 @@ func selectContextExcerpt(entry memory.EvidenceEntry, query string, maxRunes int
 
 func contextRefKey(ref memory.Ref) string {
 	return fmt.Sprintf("%s:%s:%d", ref.Kind, ref.ID, ref.Version)
+}
+
+// Recall owns these locators. Hydration has already loaded the exact source;
+// apply each returned window before any token/byte budget clipping.
+func applyRecallSpans(entries []memory.EvidenceEntry, spans []memory.SourceSpan) ([]memory.EvidenceEntry, error) {
+	out := []memory.EvidenceEntry{}
+	for _, entry := range entries {
+		matched := false
+		if entry.SourceSpan != nil {
+			for _, span := range spans {
+				if span.Source != entry.SourceSpan.Source {
+					continue
+				}
+				if !span.Valid() {
+					return nil, memory.ErrInvalid
+				}
+				start, end := span.StartRune-entry.SourceSpan.StartRune, span.EndRune-entry.SourceSpan.StartRune
+				text := []rune(entry.Text)
+				if start < 0 || end <= start || end > len(text) {
+					return nil, memory.ErrConflict
+				}
+				window := entry
+				window.Text = string(text[start:end])
+				copySpan := span
+				window.SourceSpan = &copySpan
+				out = append(out, window)
+				matched = true
+			}
+		}
+		if !matched {
+			out = append(out, entry)
+		}
+	}
+	return out, nil
 }

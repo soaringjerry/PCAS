@@ -124,6 +124,12 @@ func (s *Store) undoActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 	// Lock all rows first. The owner lock serializes commands and undo; run locks
 	// fence the worker, which does not take the owner lock when claiming work.
 	for _, c := range changes {
+		if oneOf(c.Table, "source_authorizations", "source_scope_revisions") {
+			if err = verifyContextPolicyUndoTx(ctx, tx, scope, c); err != nil {
+				return err
+			}
+			continue
+		}
 		if !oneOf(c.Table, "work_items", "work_documents", "agent_runs", "training_samples") {
 			return memory.ErrInvalid
 		}
@@ -177,6 +183,12 @@ func (s *Store) undoActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 	}
 	for i := len(changes) - 1; i >= 0; i-- {
 		c := changes[i]
+		if oneOf(c.Table, "source_authorizations", "source_scope_revisions") {
+			if err = s.undoContextPolicyChangeTx(ctx, tx, scope, c); err != nil {
+				return err
+			}
+			continue
+		}
 		if string(c.Before) == "null" {
 			if c.Table == "work_items" {
 				var referenced bool

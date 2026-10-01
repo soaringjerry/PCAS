@@ -17,6 +17,12 @@ import (
 // fingerprinted nor returned. Manual selection must identify a configured
 // destination; its client-provided model/route fields never grant authority.
 func (s *Store) contextRecipientTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, agentID, role string, manual *memory.Recipient) (memory.Recipient, error) {
+	return s.contextRecipientModelTx(ctx, tx, scope, agentID, role, manual, "")
+}
+
+// actualModel is supplied only by the final adapter after its dynamic model
+// selection. Public authorization never calls this override.
+func (s *Store) contextRecipientModelTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, agentID, role string, manual *memory.Recipient, actualModel string) (memory.Recipient, error) {
 	var out memory.Recipient
 	if !oneOf(role, "secretary", "deputy", "manual") {
 		return out, memory.ErrInvalid
@@ -56,7 +62,11 @@ func (s *Store) contextRecipientTx(ctx context.Context, tx pgx.Tx, scope memory.
 	// A subscription's unspecified, dynamically selected model cannot authorize
 	// raw personal content as though its eventual recipient were known.
 	if model == "" {
-		return out, memory.ErrUnavailable
+		if p.Protocol == "siwc" && actualModel != "" {
+			model = actualModel
+		} else {
+			return out, memory.ErrUnavailable
+		}
 	}
 	endpoint := strings.TrimRight(p.BaseURL, "/")
 	if endpoint != "" {
@@ -84,6 +94,15 @@ func (s *Store) trustedTaskContextTx(ctx context.Context, tx pgx.Tx, scope memor
 	}
 	var err error
 	out.Recipient, err = s.contextRecipientTx(ctx, tx, scope, agentID, role, manual)
+	// Keep ordinary claim-only conversations working when a subscription's
+	// eventual dynamic model is unknown. Raw hydration rejects this sentinel;
+	// the actual adapter event must bind the resolved model before dispatch.
+	if err == memory.ErrUnavailable && manual == nil {
+		if p, ok := s.models.Get(agentID); ok && p.Protocol == "siwc" && p.Model == "" {
+			out.Recipient = memory.Recipient{PrincipalID: agentID, Role: role, Model: "unknown", Provider: p.ID, Protocol: p.Protocol, Channel: "api", RouteFingerprint: fmt.Sprintf("%x", sha256.Sum256(asJSON([]string{p.ID, p.Protocol, "unknown"})))}
+			err = nil
+		}
+	}
 	if err != nil {
 		return out, err
 	}
@@ -93,6 +112,19 @@ func (s *Store) trustedTaskContextTx(ctx context.Context, tx pgx.Tx, scope memor
 	}
 	out.Timezone = deskLocation(settings).String()
 	return out, nil
+}
+
+func (s *Store) ContextRecipient(ctx context.Context, scope memory.Scope, agentID, role string, manual *memory.Recipient) (memory.Recipient, error) {
+	var out memory.Recipient
+	if err := requireOwner(scope); err != nil {
+		return out, err
+	}
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		var err error
+		out, err = s.contextRecipientTx(ctx, tx, scope, agentID, role, manual)
+		return err
+	})
+	return out, err
 }
 
 func contextScopeForItem(item *workspace.Item) memory.HardScope {

@@ -95,7 +95,7 @@ attempt 状态 `prepared/dispatched/completed/failed/outcome_unknown/invalidated
 
 ## 7 保留、容量与删除闭包
 
-本批工程初值（经协调选择，**非测量/非产品性能承诺**）：正文7天、每owner64MiB、每attempt256KiB；无正文骨架30天、每owner10000条及metadata总64MiB并取严、每attempt全部逻辑诊断metadata64KiB（manifest、recipient、attempt依赖旁表及其余可变字段均计入）。metadata先裁剪可省候选诊断并标coverage，不能去掉核心input映射或typed deps后继续称完整；核心装不下即拒绝外发。期限保存为明确 `body_expires_at/metadata_expires_at`，清理按显式服务端时间执行，测试无需真实sleep。预算参考候选15/边15/一跳/记忆4000与总输入8000 token仍待测，不冒充精确计量。
+本批工程初值（经协调选择，**非测量/非产品性能承诺**）：正文7天、每owner64MiB、每attempt256KiB；无正文骨架30天、每owner10000条及metadata总64MiB并取严、每attempt全部逻辑诊断metadata64KiB（manifest、recipient、attempt依赖旁表及其余可变字段均计入）。metadata先裁剪可省候选诊断并标coverage，不能去掉核心input映射或typed deps后继续称完整；核心装不下即拒绝外发。期限保存为明确 `body_expires_at/metadata_expires_at`，清理按显式服务端时间执行，测试无需真实sleep。候选15/边15/一跳/记忆4000作为soft裁剪初值。总输入8000按最终可观测payload UTF-8字节数 `ceil(bytes/3)` 统一估算并拒绝超限：manifest记录 `input_tokens.method=estimated` 及估算值，非实际tokenizer计数或provider隐藏上下文承诺，2.2再按实际usage校准。服务端Task总预算<=0拒绝外发；每attempt256KiB是另一个诊断正文硬限。
 
 新 attempt 先在诊断 gate 下清到期记录/正文，再回收最早诊断正文以腾出字节，保留候选 refs/映射并标 `capacity_omitted`；超单次载荷通过最终裁剪或拒绝解决。正文保留状态 `retained/expired/deleted/revoked/capacity_omitted` 与传输状态独立。骨架容量不足则拒绝外发（record_capacity），不能默默跳过 attempt；保留失败给清楚恢复提示。并发 quota 检查与写入原子，删除/到期同步释放计量。
 

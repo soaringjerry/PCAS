@@ -113,7 +113,13 @@ func sanitizeItemWithStoreTx(store *Store, ctx context.Context, tx pgx.Tx, scope
 				run.AgentID = principal
 			}
 			refs = run.ContextVersions
-			allowed = allowed && verifyRunForItemTx(ctx, tx, scope, run, &item) == nil
+			if store != nil {
+				allowed = allowed && store.verifyRunForItemTx(ctx, tx, scope, run, &item) == nil
+			} else {
+				// A legacy free wrapper has no trusted route registry. It cannot
+				// license delivery to a model from a coarse grant alone.
+				allowed = allowed && scope.Task == nil && verifyRunForItemTx(ctx, tx, scope, run, &item) == nil
+			}
 		}
 
 		used := false

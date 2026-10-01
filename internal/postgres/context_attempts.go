@@ -159,7 +159,8 @@ func loadAttemptDependenciesTx(ctx context.Context, tx pgx.Tx, scope memory.Scop
 }
 
 func controlledContextManifest(task memory.TrustedTaskContext, id memory.ID, payload []byte, layer string, entries []memory.EvidenceEntry, candidates []memory.CandidateRecord, indirect []memory.TypedDependency) (memory.ContextManifest, error) {
-	m := memory.ContextManifest{Version: 1, AttemptID: id, Recipient: task.Recipient, Purpose: task.Purpose, Scope: task.Scope, View: task.View, Candidates: []memory.CandidateRecord{}, Input: []memory.InputRecord{}, Used: []memory.UsedRecord{}, IndirectDependencies: indirect, Coverage: coverage(), InputBytes: len(payload), InputTokens: memory.TokenCount{Method: "unknown", Model: task.Recipient.Model}, ObservationLayer: layer}
+	estimatedTokens := (len(payload) + 2) / 3
+	m := memory.ContextManifest{Version: 1, AttemptID: id, Recipient: task.Recipient, Purpose: task.Purpose, Scope: task.Scope, View: task.View, Candidates: []memory.CandidateRecord{}, Input: []memory.InputRecord{}, Used: []memory.UsedRecord{}, IndirectDependencies: indirect, Coverage: coverage(), InputBytes: len(payload), InputTokens: memory.TokenCount{Value: &estimatedTokens, Method: "estimated", Model: task.Recipient.Model}, ObservationLayer: layer}
 	for _, candidate := range candidates {
 		if !candidate.Ref.ID.Valid() || candidate.Ref.Version < 1 {
 			continue
@@ -218,6 +219,11 @@ func (s *Store) prepareContextAttempt(ctx context.Context, scope memory.Scope, o
 		return out, memory.ErrForbidden
 	}
 	if operationID == "" || len(operationID) > 128 || len(payload) > memory.DefaultContextAttemptBodyBytes || !oneOf(layer, "serialized_request", "adapter_arguments", "manual_package") || len(deps) > 256 {
+		return out, memory.ErrRecordCapacity
+	}
+	// A shared engineering estimate over the final observable UTF-8 payload.
+	// This is not a tokenizer count or a claim about provider hidden context.
+	if task.TotalInputTokens <= 0 || (len(payload)+2)/3 > task.TotalInputTokens {
 		return out, memory.ErrRecordCapacity
 	}
 	for _, value := range []string{task.Recipient.PrincipalID, task.Recipient.Role, task.Recipient.Model, task.Recipient.Provider, task.Recipient.Protocol, task.Recipient.Channel} {

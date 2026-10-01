@@ -311,9 +311,23 @@ func TestPhase2B1_N12_RandomTwentyActionsInTwentySeededGroups(t *testing.T) {
 				req := turnRequest(text)
 				req.ThingID = &target
 				out := mustTurn(t, s, scope, req)
-				available = nil
-				for _, item := range out.State.Tasks {
-					available = append(available, item.ID)
+				// Preserve creation order, independent of random UUID ordering in
+				// Snapshot. A seed reproduces the operation/target sequence.
+				for _, action := range actions {
+					if action["op"] != "create_task" {
+						continue
+					}
+					found := false
+					for _, item := range out.State.Tasks {
+						if item.Title == action["title"] {
+							available = append(available, item.ID)
+							found = true
+							break
+						}
+					}
+					if !found {
+						t.Fatalf("seed=%d created target missing", seed)
+					}
 				}
 				source := b1TurnSource(t, s, scope, req.RequestID)
 				claim := b1MemoryRef(t, b1Extract(t, s, scope, f, source, b1ExtractItem(text, "plan")), text)

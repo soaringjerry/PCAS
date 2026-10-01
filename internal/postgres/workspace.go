@@ -407,6 +407,9 @@ func (s *Store) Execute(ctx context.Context, scope memory.Scope, in workspace.Co
 	if !memory.ID(in.RequestID).Valid() || in.ExpectedRevision < 0 {
 		return out, memory.ErrInvalid
 	}
+	if in.SourceRunID != "" && (in.Type != "requestRun" || !memory.ID(in.SourceRunID).Valid()) {
+		return out, memory.ErrInvalid
+	}
 	hash := sha256.Sum256(asJSON(in))
 	if oneOf(in.Type, "requestRun", "delegateTask") {
 		if requireText(in.Prompt) != nil || in.Type == "delegateTask" && !memory.ID(in.ID).Valid() || in.Type == "requestRun" && !memory.ID(in.ThingID).Valid() {

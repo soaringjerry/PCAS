@@ -279,6 +279,9 @@ type State struct {
 
 // Commands are validated on the server; callers never submit an entire state.
 type Command struct {
+	// SourceRunID is an untrusted locator for retry/handoff prompt lineage.
+	// The server reads and verifies the original Run; clients supply no origins.
+	SourceRunID string `json:"sourceRunId,omitempty"`
 	// ManualRecipient is an explicit owner selection. Consumers must validate
 	// it against the configured external destination before binding trusted Task.
 	ManualRecipient     *memory.Recipient                  `json:"manualRecipient,omitempty"`

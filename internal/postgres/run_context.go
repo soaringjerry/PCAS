@@ -32,6 +32,24 @@ func (s *Store) requestRunTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 	}
 	task := prepared.Task
 	promptOrigins := []memory.ID{}
+	if c.SourceRunID != "" {
+		if prepared.SourceRun == nil || prepared.SourceRun.ID != c.SourceRunID {
+			return memory.ErrConflict
+		}
+		source, err := loadRunPromptSourceTx(ctx, tx, scope, c.SourceRunID, item.ID)
+		if err != nil {
+			return err
+		}
+		if source.Prompt != prepared.SourceRun.Prompt || !sameDeskActions(source.PromptOrigins, prepared.SourceRun.PromptOrigins) {
+			return memory.ErrConflict
+		}
+		if _, err := s.verifyRunPromptSourceTx(ctx, tx, scope, &task, source); err != nil {
+			return err
+		}
+		promptOrigins = append(promptOrigins, source.PromptOrigins...)
+	} else if prepared.SourceRun != nil {
+		return memory.ErrConflict
+	}
 	if _, derived := ctx.Value(secretaryArtifactKey{}).(secretaryArtifactContext); derived {
 		if log, ok := ctx.Value(actionLogKey{}).(actionLog); ok {
 			if err := appendTaskDeskActions(&task, memory.ID(log.id)); err != nil {
@@ -352,6 +370,56 @@ type preparedRunContext struct {
 	Previous   *workspace.Run
 	History    []storedDeskContext
 	Indirect   []memory.TypedDependency
+	SourceRun  *preparedRunPromptSource
+}
+
+// Transient, server-read snapshot; it is not a returned copy of prompt text.
+type preparedRunPromptSource struct {
+	ID            string
+	Prompt        string
+	PromptOrigins []memory.ID
+}
+
+func loadRunPromptSourceTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, id, thingID string) (*preparedRunPromptSource, error) {
+	if !scope.IsOwner || !memory.ID(id).Valid() {
+		return nil, memory.ErrForbidden
+	}
+	run, err := queryDocument[workspace.Run](ctx, tx, "SELECT document FROM agent_runs WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), id)
+	if err != nil {
+		return nil, err
+	}
+	if run.ID != id || run.ThingID != thingID {
+		return nil, memory.ErrForbidden
+	}
+	if len(run.ContextPromptDeskActions) > 256 {
+		return nil, memory.ErrRecordCapacity
+	}
+	for _, origin := range run.ContextPromptDeskActions {
+		found := false
+		for _, parent := range run.ContextDeskActions {
+			found = found || origin == parent
+		}
+		if !origin.Valid() || !found || run.ContextTask == nil {
+			return nil, memory.ErrConflict
+		}
+	}
+	return &preparedRunPromptSource{ID: id, Prompt: run.Prompt, PromptOrigins: append([]memory.ID{}, run.ContextPromptDeskActions...)}, nil
+}
+
+func (s *Store) verifyRunPromptSourceTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, task *memory.TrustedTaskContext, source *preparedRunPromptSource) ([]memory.TypedDependency, error) {
+	graph := newSecretaryOriginGraph()
+	deps := []memory.TypedDependency{}
+	for _, origin := range source.PromptOrigins {
+		current, err := s.secretaryArtifactOriginGraphTx(ctx, tx, scope, string(origin), task, graph, 0)
+		if err != nil {
+			return nil, err
+		}
+		deps = mergeRunDependencies(deps, current)
+	}
+	if err := appendTaskDeskActions(task, source.PromptOrigins...); err != nil {
+		return nil, err
+	}
+	return deps, nil
 }
 
 type storedDeskContext struct {
@@ -379,6 +447,7 @@ func (s *Store) prepareRunContextForItem(ctx context.Context, scope memory.Scope
 	var previous *workspace.Run
 	var task memory.TrustedTaskContext
 	var indirect []memory.TypedDependency
+	var sourceRun *preparedRunPromptSource
 	if err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		agent, err := queryDocument[workspace.Agent](ctx, tx, "SELECT document FROM workspace_agents WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), c.AgentID)
 		if err != nil {
@@ -423,6 +492,20 @@ func (s *Store) prepareRunContextForItem(ctx context.Context, scope memory.Scope
 		}
 		task.View.Mode = memory.Continue
 		task.View.KnownAt, task.View.ValidAt = &task.Now, &task.Now
+		if c.SourceRunID != "" {
+			if c.Type != "requestRun" {
+				return memory.ErrInvalid
+			}
+			sourceRun, err = loadRunPromptSourceTx(ctx, tx, scope, c.SourceRunID, item.ID)
+			if err != nil {
+				return err
+			}
+			promptDeps, err := s.verifyRunPromptSourceTx(ctx, tx, scope, &task, sourceRun)
+			if err != nil {
+				return err
+			}
+			indirect = mergeRunDependencies(indirect, promptDeps)
+		}
 		modelScope := memory.Scope{OwnerID: scope.OwnerID, PrincipalID: c.AgentID, Task: &task}
 		// Generated prompt/title may contain any input the secretary saw.
 		// Require the destination's independent permission before its text can
@@ -436,7 +519,7 @@ func (s *Store) prepareRunContextForItem(ctx context.Context, scope memory.Scope
 			if !cov.Complete || len(entries) != len(refs) {
 				return memory.ErrForbidden
 			}
-			indirect = dependenciesForEntries(entries)
+			indirect = mergeRunDependencies(indirect, dependenciesForEntries(entries))
 		}
 		for _, id := range c.DeskTurnIDs {
 			if !memory.ID(id).Valid() {
@@ -501,7 +584,7 @@ func (s *Store) prepareRunContextForItem(ctx context.Context, scope memory.Scope
 			candidates = append(candidates, memory.CandidateRecord{Ref: ref, Stage: "recall", Disposition: "candidate"})
 		}
 	}
-	return context.WithValue(ctx, runContextKey{}, preparedRunContext{Refs: result.Memories, Task: task, Spans: result.SourceSpans, Candidates: candidates, Previous: previous, History: history, Indirect: indirect}), nil
+	return context.WithValue(ctx, runContextKey{}, preparedRunContext{Refs: result.Memories, Task: task, Spans: result.SourceSpans, Candidates: candidates, Previous: previous, History: history, Indirect: indirect, SourceRun: sourceRun}), nil
 }
 
 func (s *Store) mostRecentPermittedRunTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, item workspace.Item, agent string) (*workspace.Run, error) {

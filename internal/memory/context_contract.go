@@ -80,17 +80,18 @@ type VersionView struct {
 }
 
 // TrustedTaskContext is built from authentication, the current owner intent,
-// server task records and the final provider route. Never decode it from JSON.
+// server task records and the final provider route. Request-decoded JSON is
+// never trusted. Tags also retain case-insensitive reads of old server records.
 type TrustedTaskContext struct {
-	OwnerID          ID
-	Recipient        Recipient
-	Purpose          ContextPurpose
-	Scope            HardScope
-	View             VersionView
-	Now              time.Time
-	Timezone         string
-	MemoryBudget     Budget
-	TotalInputTokens int
+	OwnerID          ID             `json:"ownerId"`
+	Recipient        Recipient      `json:"recipient"`
+	Purpose          ContextPurpose `json:"purpose"`
+	Scope            HardScope      `json:"scope"`
+	View             VersionView    `json:"view"`
+	Now              time.Time      `json:"now"`
+	Timezone         string         `json:"timezone"`
+	MemoryBudget     Budget         `json:"memoryBudget"`
+	TotalInputTokens int            `json:"totalInputTokens"`
 	// Server-only carried origins; bounded and frozen before assembly.
 	DeskActions []ID `json:"desk_actions,omitempty"`
 }

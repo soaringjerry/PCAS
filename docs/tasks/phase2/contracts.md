@@ -151,6 +151,8 @@ owner 只读诊断入口为 `Store.ContextAttempts(ctx,scope,operationID)` 与 `
 
 Run 的 ContextTask/ContextDependencies/ContextSourceSpans/ContextAttemptID/ManualRecipient 均仅由 server 写入；请求 JSON 回传不能成为可信任务。worker/重取按当前 server route 重建 recipient 并重新 hydrate。run/产物采纳使用 durable deps 和失效标记，不要求仍存在诊断 attempt。manual 新 run 从 Command.ManualRecipient 绑定明确选择，GET package 逐次复核同接收者；更换选择创建新 run。
 
+TrustedTaskContext 的稳定 JSON 字段为 `ownerId/recipient/purpose/scope/view/now/timezone/memoryBudget/totalInputTokens`，carried origins 保持既定 `desk_actions`。Recipient、HardScope、VersionView 和 Budget 的嵌套键沿各自既定 tags。旧 server 持久 JSON 的 `OwnerID/Recipient/Purpose/Scope/View/Now/Timezone/MemoryBudget/TotalInputTokens` 与新键仅大小写不同，标准 encoding/json 不区分大小写回读，无需迁移或双写；这不授权客户端传回 Task 成为可信输入。
+
 输入映射进一步限定为 final assembly 的当前随机 `EvidenceEntry.AssemblyMarker`（仅 transient，json:-）。所有消费者调用统一 `appendContextEvidence`，完整唯一 begin+literal+end 证据块存在时，才在其块内记录正文 byte 区间。query/system/schema 同句不形成 source Input；证据块缺失、被裁剪或重复均拒发。中文与 JSON 转义使用实际最终序列化，候选 locator 仍为原文 rune 区间。
 
 024 给 automatic attempt 增加固定五分钟 execution_expires_at，沿既有副手四分钟调用/五分钟 lease 上限，dispatch/return/final fence 拒绝过期执行。`Store.RecoverContextAttempts(ctx,startupCutoff,now)` 仅把固定启动 cutoff 以前且执行 lease 已过期的未完成 prepared/dispatched automatic attempt 标为 outcome_unknown（原 dispatched_at 保留空/非空事实），never resend；启动和后续周期复用同 cutoff，活跃合法调用未过期不改。manual_package 没有 automatic execution lease，不参与自动崩溃恢复；其 mark-delivered 最后短事务重新读取 server manifest/deps、owner gate、current manual canonical recipient、typed/attempt fence 后才记 PCAS delivery，外部 receipt 仍 unknown。

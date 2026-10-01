@@ -1,0 +1,180 @@
+{
+  "schema": "pcas.phase2.independent-runtime-gold.v1",
+  "frozen_at": "2026-10-01",
+  "authority": "Approved contracts, original independent gold and root operation-sequence/recipient/undo clarifications; expected outcomes precede combined runtime implementation",
+  "extends": [
+    "gold.json",
+    "k0-sequences.json",
+    "lifecycle-supplement.json",
+    "authorization-undo-gold.json"
+  ],
+  "replacement": {
+    "external_version": "v2",
+    "text": "成都预约资料：预约码是 Q8-DUSK-593；周日上午十点在西门红色帐篷集合。",
+    "atoms": [
+      "Q8-DUSK-593",
+      "周日上午十点",
+      "西门红色帐篷"
+    ]
+  },
+  "derived_reply": "RUNTIME-DERIVED-OUTPUT-720",
+  "cases": [
+    {
+      "id": "R1",
+      "sequence": "natural full owner sentence and public partial-recipient authorization → zero-claim E1 DeskTurn/RunAgents/manual",
+      "required": [
+        "original three gold atoms in actual final input",
+        "source exact version/rune span and payload byte mapping",
+        "actual canonical receiver returned by server, manual channel separate",
+        "pending/zero-claim conditions persisted",
+        "provider snapshot byte-exact at observable serialized layer; manual snapshot exact supplied text",
+        "Used empty separately recorded; external manual receipt unknown"
+      ]
+    },
+    {
+      "id": "R2",
+      "sequence": "authorized source → nonowner GetSource/Recall/Expand/Summarize without Scope.Task; JSON Task injection",
+      "required": [
+        "raw APIs fail closed",
+        "owner audit still reads",
+        "client JSON cannot bind trusted Task",
+        "no invisible source names/atoms leaked"
+      ]
+    },
+    {
+      "id": "R3",
+      "sequence": "absence + independently granted evidence-backed claim → grant → undo; explicit source deny → new claim/summary/history query; undo revoke/regrant → old result adoption",
+      "required": [
+        "original claim control survives absence/undo-first-grant",
+        "explicit deny blocks source-backed claim and recursive derived content",
+        "new allow permits only freshly assembled context",
+        "old result/attempt never resurrects through ABA",
+        "policy revisions monotonic"
+      ]
+    },
+    {
+      "id": "R4",
+      "sequence": "studio assignment A and exact allow → ask studio A, ask studio B with soft Objects=A → scope shrink → reuse prior package/artifact",
+      "required": [
+        "hard scope prevents studio B/other route access",
+        "scope shrink invalidates prior typed descendants",
+        "same source identity, no copied memory store"
+      ]
+    },
+    {
+      "id": "R5",
+      "sequence": "provider receive barrier → correct/delete/revoke committed → provider returned → adoption/next turn",
+      "required": [
+        "mutation commits within finite deadline while actual provider stays held",
+        "old result invalidated and adoption rejected",
+        "already sent request separately recorded",
+        "delete/revoke clear related diagnostic bodies",
+        "same/new conversation cannot replay invalid derived output"
+      ]
+    },
+    {
+      "id": "R6",
+      "sequence": "manual package prepared/read → revoke/delete → package reread/state/export/paste/adopt; regrant",
+      "required": [
+        "invalid package cannot be resupplied through any raw Brief bypass",
+        "paste/adoption rejects stale result",
+        "prepared vs PCAS delivered observable; external receipt unknown",
+        "ABA does not restore old package"
+      ]
+    },
+    {
+      "id": "R7",
+      "sequence": "fake provider received → business transaction fails/cancels → attempt inspection",
+      "required": [
+        "actual send attempt survives rollback/fallback",
+        "dispatched or outcome_unknown separately observable",
+        "no fake successful business artifact created",
+        "next retry does not silently reuse old send reservation"
+      ]
+    },
+    {
+      "id": "R8",
+      "sequence": "exact snapshot → body expiry → metadata expiry → revoke still-living derived result",
+      "required": [
+        "read checks expiry and explicit-clock cleanup works",
+        "body-free skeleton marks reason",
+        "durable dependencies survive diagnostic expiry and later invalidation still works"
+      ]
+    },
+    {
+      "id": "R9",
+      "sequence": "stored diagnostic quota fixture at body/metadata/count boundary → real generation",
+      "required": [
+        "body quota reclaims oldest diagnostic bodies, without dropping durable dependencies",
+        "metadata/count quota unable to retain mandatory skeleton rejects before external send",
+        "attempt whole metadata measurement includes recipient/variable fields/dependency rows",
+        "no body/title hidden in long-lived reason/gaps",
+        "exact final dispatch snapshot never truncated after send"
+      ]
+    },
+    {
+      "id": "R10",
+      "sequence": "first partial-recipient grant → route/model changes → same partial request replay; stored tuple recipient disabled → revoke",
+      "required": [
+        "replay cannot authorize the new receiver route",
+        "old tuple still revocable after disable/rebind",
+        "public supplied mismatching route fields rejected"
+      ]
+    },
+    {
+      "id": "R11",
+      "sequence": "subscription model unspecified → reject raw authorization → unrelated self-contained secretary prompt",
+      "required": [
+        "simple generation still reaches existing dynamic model selection",
+        "background raw guard does not degrade ordinary secretary to capture",
+        "no real account/model used"
+      ]
+    },
+    {
+      "id": "R12",
+      "sequence": "prepared reservation → observer before actual adapter send → delete/revoke commits → release",
+      "required": [
+        "final fence cancels real external request",
+        "not labeled dispatched/received",
+        "old reservation not reusable"
+      ]
+    },
+    {
+      "id": "R13",
+      "sequence": "unscoped independently granted preference/decision claim → studio query → owner explicitly marks evidence source global_constraint → studio query",
+      "required": [
+        "nature alone never grants global scope",
+        "explicit global marking plus claim grant may supply lawful applicable claim",
+        "claim global supply does not require or imply raw source authorization",
+        "explicit source deny still blocks global source-derived claim"
+      ]
+    }
+  ],
+  "reuse_required": [
+    "TestConversationOrderAcceptance_ five existing groups, unchanged assertions including backend termination and late output fencing"
+  ],
+  "engineering_defaults": {
+    "body_days": 7,
+    "metadata_days": 30,
+    "attempt_body_bytes": 262144,
+    "owner_body_bytes": 67108864,
+    "attempt_metadata_bytes": 65536,
+    "owner_metadata_bytes": 67108864,
+    "owner_skeleton_count": 10000
+  },
+  "failure_policy": "Run only after exact combined baseline is assigned; genuine failures remain failures, no skip or weaker gold, no product implementation/stubs",
+  "scope_controls": {
+    "preference": {
+      "label": "未标记偏好",
+      "text": "未标记偏好内容是 UNSCOPED-PREFERENCE-471。",
+      "claim": "未标记偏好内容是 UNSCOPED-PREFERENCE-471。",
+      "atom": "UNSCOPED-PREFERENCE-471"
+    },
+    "decision": {
+      "label": "未标记决定",
+      "text": "未标记决定内容是 UNSCOPED-DECISION-682。",
+      "claim": "未标记决定内容是 UNSCOPED-DECISION-682。",
+      "atom": "UNSCOPED-DECISION-682"
+    }
+  }
+}

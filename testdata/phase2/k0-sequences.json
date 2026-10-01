@@ -1,0 +1,16 @@
+{
+  "schema": "pcas.phase2.independent-sequences.v1",
+  "frozen_at": "2026-10-01",
+  "authority": "Root approved K0 engineering defaults and supplementary operation sequences, 2026-10-01; manually authored expected outcomes",
+  "extends": "gold.json without changing any original atom or failure policy",
+  "sequences": [
+    {"id": "K0-FENCE", "steps": ["authorized exact typed material assembled", "attempt prepared/reserved committed", "barrier before actual adapter call", "source revocation/delete committed", "release pre-adapter barrier"], "required": ["final adapter fence observes mutation", "no external request is sent", "attempt remains observable as invalidated/not dispatched"], "forbidden": ["old reservation reused as permission", "reservation labeled sent or received"]},
+    {"id": "K0-REPLAY", "steps": ["source authorization request accepted", "revoke same policy", "replay original authorization request_id/body"], "required": ["old idempotent result remains read-only history", "current policy stays revoked"], "forbidden": ["replay resurrects revoked authorization"]},
+    {"id": "K0-SCOPE", "steps": ["owner assigns source to studio A", "authorize exact agent/model/provider/purpose/studio A", "consume studio A", "attempt studio B/other model/provider", "owner shrinks source scope", "continue prior artifact"], "required": ["explicit scoped owner assignment", "same-record identity throughout", "scope shrink invalidates typed descendants"], "forbidden": ["soft Objects hint widens scope", "claim grant substitutes source policy", "studio B sees studio A source"]},
+    {"id": "K0-MIGRATE", "steps": ["fresh isolated database migrate", "d8 database with legitimate claim dependencies migrate", "migrate again"], "required": ["fresh tables/checks/indexes created", "existing legitimate legacy claim dependencies receive accurate kind", "unresolvable or unknown kinds fail closed", "repeat migration is idempotent"], "forbidden": ["model calls during migration", "source permission inferred from legacy grant", "unknown kind coerced without record lookup"]},
+    {"id": "K0-RETENTION", "steps": ["store exact attempt", "reach 7-day body boundary", "reach 30-day skeleton boundary", "continue saved output"], "required": ["body expiry cleans exact snapshot", "body-free metadata marks expiry", "durable artifact dependency remains enforceable after diagnostic expiry"], "forbidden": ["diagnostic expiry grants revoked historical answer", "hash claimed available full input"]},
+    {"id": "K0-CAPACITY", "steps": ["owner diagnostic bodies approach 64MiB", "new attempt <=256KiB", "owner skeleton count reaches 10000", "new external generation"], "required": ["oldest diagnostic bodies reclaimed and marked capacity_omitted", "exact snapshot size bounded by actual dispatch crop or rejection", "lack of skeleton space explicitly rejects before external send"], "forbidden": ["larger request sent than recorded as complete", "permission widened to save space", "external call without durable attempt skeleton"]}
+  ],
+  "engineering_defaults": {"body_days": 7, "owner_body_bytes": 67108864, "attempt_snapshot_bytes": 262144, "skeleton_days": 30, "owner_skeleton_count": 10000},
+  "threshold_status": "Approved engineering starting values, not measured capacity/cost/performance guarantees"
+}

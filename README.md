@@ -2,18 +2,11 @@
 
 PCAS 是一支围绕你一个人的自托管 AI 支持团队：秘书、二把手、管家与工作室共用一个记忆核心，一句话就能把事办了。前端通过 Go 服务读写 PostgreSQL；浏览器只保留未发送的草稿和界面偏好。记忆的原文、陈述、版本、证据与授权由统一服务维护。
 
-- [白皮书 2.0 草案](docs/whitepaper.md)：定位、团队角色、记忆核心与路线图，其他文档以它为准
-- [记忆架构 1.1](docs/memory-architecture.md)
-- [后端接口、配置与验证边界](docs/memory-service.md)
-- [部署与模型接入](docs/deployment.md)
-- [Sign in with ChatGPT 套餐授权](docs/chatgpt-plan-auth.md)
-- [跨应用接入、归档与摘要](docs/connectors.md)
-- [第 1 阶段任务与接口契约](docs/tasks/phase1/README.md) · [第 1 阶段验收报告](docs/evaluations/2026-09-30-phase1-acceptance.md) · [待办清单](docs/tasks/backlog.md)
-- [任务流程规则](docs/tasks/process.md) · [稳定化计划](docs/tasks/stabilization/README.md) · [上线后问题复盘](docs/evaluations/2026-10-01-phase1-postlaunch.md)
-- [研究笔记：Hermes Agent](docs/research/hermes-agent.md)
-- [固定场景真实模型验收](docs/evaluations/2026-09-29.md)
-- [产品需求](docs/prd.md)
-- [前端](web/README.md)
+文档从 [文档总入口](docs/README.md) 找：现在做到哪了、每个阶段的入口、部署和接入说明、每次验收的记录都在那里登记。最常用的三个：
+
+- [白皮书](docs/whitepaper.md)：定位、团队角色、记忆核心与路线图，其他文档以它为准
+- [第 2 阶段任务入口](docs/tasks/phase2/README.md)：下一步要做的事（未开工）
+- [待办清单](docs/tasks/backlog.md)：已知但还没处理的问题
 
 ## 运行
 

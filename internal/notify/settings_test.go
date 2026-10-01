@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"sync"
 	"testing"
+	"time"
 )
 
 func TestSettingsAtomicPrivateAndStable(t *testing.T) {
@@ -148,5 +149,74 @@ func TestDamagedSettingsDoNotReplaceKeys(t *testing.T) {
 	}
 	if _, err := (Settings{Path: path}).EnsureVAPID(); err == nil {
 		t.Fatal("damaged settings silently replaced")
+	}
+}
+
+func TestTelegramReceiptIdentityGuardAndThirtyDayRetention(t *testing.T) {
+	s := Settings{Path: filepath.Join(t.TempDir(), "notify.json")}
+	if err := s.SaveTelegram("old-fixture", "123"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.ConfirmTelegramIdentity("old-fixture", "123", "7001"); err != nil {
+		t.Fatal(err)
+	}
+	for i := int64(1); i <= 400; i++ {
+		r := TelegramReceipt{MessageID: i, RequestID: "00000000-0000-4000-8000-000000000001", ConversationID: "00000000-0000-4000-8000-000000000002", TurnID: "00000000-0000-4000-8000-000000000003"}
+		if err := s.RecordTelegramReceipt("old-fixture", "123", "7001", r); err != nil {
+			t.Fatal(err)
+		}
+	}
+	c, err := s.Read()
+	if err != nil || len(c.TelegramReceipts) != 400 {
+		t.Fatal("retained bindings were capped or unreadable", len(c.TelegramReceipts), err)
+	}
+	data, err := os.ReadFile(s.Path)
+	if err != nil || len(data) <= 64<<10 {
+		t.Fatal("fixture did not exercise association file above old read limit", len(data), err)
+	}
+	if err := s.SaveTelegram("rotated-fixture", "123"); err != nil {
+		t.Fatal(err)
+	}
+	r := c.TelegramReceipts[0]
+	if err := s.RecordTelegramReceipt("old-fixture", "123", "7001", r); err == nil {
+		t.Fatal("old credential attached a receipt")
+	}
+	if _, err := s.ConfirmTelegramIdentity("old-fixture", "123", "7001"); err == nil {
+		t.Fatal("old credential confirmed an identity")
+	}
+	if err := s.RecordTelegramReceipt("rotated-fixture", "123", "7001", r); err == nil {
+		t.Fatal("unconfirmed rotation attached receipt")
+	}
+	if _, err := s.ConfirmTelegramIdentity("rotated-fixture", "123", "7001"); err != nil {
+		t.Fatal(err)
+	}
+	c, _ = s.Read()
+	if len(c.TelegramReceipts) != 400 {
+		t.Fatal("same bot rotation discarded live bindings")
+	}
+	_, err = s.update(func(c *Credentials) error {
+		c.TelegramReceipts[0].SentAt = time.Now().Add(-31 * 24 * time.Hour).Unix()
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, err = s.ConfirmTelegramIdentity("rotated-fixture", "123", "7001")
+	if err != nil || len(c.TelegramReceipts) != 399 {
+		t.Fatal("expired bindings not pruned", err)
+	}
+	if err := s.SaveTelegram("second-fixture", "123"); err != nil {
+		t.Fatal(err)
+	}
+	c, err = s.ConfirmTelegramIdentity("second-fixture", "123", "7002")
+	if err != nil || len(c.TelegramReceipts) != 0 || c.TelegramLegacyConversation != "" {
+		t.Fatal("new bot borrowed old bindings", err)
+	}
+	if err := s.SaveTelegram("", ""); err != nil {
+		t.Fatal(err)
+	}
+	c, _ = s.Read()
+	if c.TelegramBotID != "" || c.TelegramTokenHash != "" || len(c.TelegramReceipts) != 0 {
+		t.Fatal("removed bot kept association identity")
 	}
 }

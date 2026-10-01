@@ -40,13 +40,6 @@ func stabilizationSecretarySnapshot(t *testing.T, s *postgres.Store, p *poller, 
 	return st
 }
 
-func stabilizationSecretaryFinding(t *testing.T, finding string) {
-	t.Helper()
-	if os.Getenv("PCAS_STABILIZATION_RUN_FINDINGS") != "1" {
-		t.Skip("finding " + finding + "; see docs/evaluations/2026-10-01-stabilization-secretary.md; set PCAS_STABILIZATION_RUN_FINDINGS=1 to reproduce")
-	}
-}
-
 func TestStabilizationTelegramT1_DuplicateUpdateExecutesOnce(t *testing.T) {
 	s := integrationStore(t)
 	p, _, b := fixture(t)
@@ -137,9 +130,6 @@ func TestStabilizationS6_TelegramOptionContinuesSameObject(t *testing.T) {
 func TestStabilizationTelegramT2_NewBotResetsProgressAndConversation(t *testing.T) {
 	for _, oldID := range []int64{100, 1} {
 		t.Run(map[int64]string{100: "lower_update_id", 1: "colliding_message_id"}[oldID], func(t *testing.T) {
-			if oldID == 1 {
-				stabilizationSecretaryFinding(t, "T3-T2: different bots reuse the same chat/message idempotency key")
-			}
 			s := integrationStore(t)
 			p, _, b := fixture(t)
 			p.store = s
@@ -182,9 +172,6 @@ func TestStabilizationTelegramT2_NewBotResetsProgressAndConversation(t *testing.
 func TestStabilizationTelegramT3_UnauthorizedAndForgedCallbacksHaveNoEffects(t *testing.T) {
 	for _, mode := range []string{"other_chat", "group", "spoofed_sender", "malformed_callback", "forged_receipt"} {
 		t.Run(mode, func(t *testing.T) {
-			if mode == "forged_receipt" {
-				stabilizationSecretaryFinding(t, "T3-T3: an undelivered message can carry a valid action and undo it")
-			}
 			s := integrationStore(t)
 			p, _, b := fixture(t)
 			p.store = s
@@ -304,9 +291,6 @@ func TestStabilizationTelegramT5_UnconfiguredTranscriptionPreservesAudio(t *test
 func TestStabilizationTelegramT6_RestartAfterCommittedTurnBeforeDelivery(t *testing.T) {
 	for _, mode := range []string{"text", "voice"} {
 		t.Run(mode, func(t *testing.T) {
-			if mode == "voice" {
-				stabilizationSecretaryFinding(t, "T3-T6: restart retranscribes committed voice and loses its stored receipt")
-			}
 			s := integrationStore(t)
 			p, _, b := fixture(t)
 			p.store = s
@@ -348,5 +332,258 @@ func TestStabilizationTelegramT6_RestartAfterCommittedTurnBeforeDelivery(t *test
 			step(t, &fresh)
 			stabilizationSecretarySnapshot(t, s, &fresh, 2)
 		})
+	}
+}
+
+// Rotation changes a credential, not the bot's identity. Returning to an older
+// bot must also recover its own receipt rather than execute that input again.
+func TestTelegramBotIdentitySurvivesRotationAndReturn(t *testing.T) {
+	s := integrationStore(t)
+	p, _, b := fixture(t)
+	p.store = s
+	calls := stabilizationSecretaryModel(t, s)
+	b.enqueue(textUpdate(1, "身份一的安排"))
+	step(t, p)
+	for _, token := range []string{"rotated-fixture", "second-fixture", "fixture"} {
+		if err := p.settings.SaveTelegram(token, "123"); err != nil {
+			t.Fatal(err)
+		}
+		fresh := *p
+		fresh.state = state{}
+		text := "身份一的安排"
+		if token == "second-fixture" {
+			text = "身份二的安排"
+		}
+		b.enqueue(textUpdate(1, text))
+		if err := fresh.step(context.Background(), token, "123"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	stabilizationSecretarySnapshot(t, s, p, 2)
+	if calls.Load() != 2 {
+		t.Fatal("credential rotation or returning bot repeated action", calls.Load())
+	}
+}
+
+func TestTelegramUndoBindingSurvivesRestartAndRejectsAnotherTurn(t *testing.T) {
+	s := integrationStore(t)
+	p, _, b := fixture(t)
+	p.store = s
+	calls := stabilizationSecretaryModel(t, s)
+	b.enqueue(textUpdate(1, "第一项"), textUpdate(2, "第二项"))
+	step(t, p)
+	sent := b.of("sendMessage")
+	first := decode[keyboard](sent[0].body["reply_markup"]).Rows[0][0].Data
+	second := decode[keyboard](sent[1].body["reply_markup"]).Rows[0][0].Data
+	fresh := *p
+	fresh.state = state{}
+	b.enqueue(callbackUpdate(3, second, 101))
+	step(t, &fresh)
+	stabilizationSecretarySnapshot(t, s, p, 2)
+	b.enqueue(callbackUpdate(4, first, 101))
+	step(t, &fresh)
+	stabilizationSecretarySnapshot(t, s, p, 1)
+	if calls.Load() != 2 {
+		t.Fatal("callback generated a model turn")
+	}
+}
+
+func TestTelegramForgedOptionCannotRecoverFromCopiedText(t *testing.T) {
+	p, s, b := fixture(t)
+	s.ask = &workspace.DeskAsk{Question: "选地点", Options: []string{"办公室"}}
+	b.enqueue(textUpdate(1, "安排会议"))
+	step(t, p)
+	q := callbackUpdate(2, "a:0", 999)
+	q.Callback.Message.Text = decode[string](b.of("sendMessage")[0].body["text"])
+	fresh := *p
+	fresh.state = state{}
+	b.enqueue(q)
+	step(t, &fresh)
+	if len(s.requests) != 1 {
+		t.Fatal("copied text recovered an unsent option message")
+	}
+}
+
+func TestTelegramLegacyRecoveryRequiresUnchangedConversationAnchor(t *testing.T) {
+	for _, mode := range []string{"text", "voice", "different_conversation", "changed_bot"} {
+		t.Run(mode, func(t *testing.T) {
+			s := integrationStore(t)
+			p, _, b := fixture(t)
+			p.store = s
+			calls := stabilizationSecretaryModel(t, s)
+			conversation := string(memory.NewID())
+			if err := p.settings.UpdateTelegramProgress("fixture", "123", 0, conversation); err != nil {
+				t.Fatal(err)
+			}
+			legacyConversation := conversation
+			if mode == "different_conversation" {
+				legacyConversation = string(memory.NewID())
+			}
+			legacyID := requestID("123", "message:10")
+			original, err := s.DeskTurn(context.Background(), p.scope, workspace.DeskTurnRequest{RequestID: legacyID, ConversationID: &legacyConversation, Text: "升级前已提交的安排"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			token := "fixture"
+			if mode == "changed_bot" {
+				token = "second-fixture"
+				if err := p.settings.SaveTelegram(token, "123"); err != nil {
+					t.Fatal(err)
+				}
+			}
+			u := textUpdate(10, "升级前已提交的安排")
+			transcript := &changingTranscriber{}
+			if mode == "voice" {
+				u.Message.Text = ""
+				u.Message.Voice = &file{ID: "voice"}
+				p.models = transcript
+			}
+			b.enqueue(u)
+			if err = p.step(context.Background(), token, "123"); err != nil {
+				t.Fatal(err)
+			}
+			want := 1
+			if mode == "different_conversation" || mode == "changed_bot" {
+				want = 2
+			}
+			stabilizationSecretarySnapshot(t, s, p, want)
+			if calls.Load() != int32(want) || transcript.calls != 0 {
+				t.Fatal("unsafe migration or repeated voice processing", calls.Load(), transcript.calls)
+			}
+			c, err := p.settings.Read()
+			if err != nil || len(c.TelegramReceipts) != 1 {
+				t.Fatal("migration missing sent association", err)
+			}
+			if want == 1 && (c.TelegramReceipts[0].RequestID != legacyID || c.TelegramReceipts[0].TurnID != original.Turn.ID) {
+				t.Fatal("legacy receipt was replaced")
+			}
+			if want == 2 && c.TelegramReceipts[0].RequestID == legacyID {
+				t.Fatal("foreign legacy request acquired binding")
+			}
+		})
+	}
+}
+
+func TestTelegramCommittedVoiceRecoveryRespectsDeletionAndOwner(t *testing.T) {
+	s := integrationStore(t)
+	p, _, b := fixture(t)
+	p.store = s
+	calls := stabilizationSecretaryModel(t, s)
+	p.models = &changingTranscriber{}
+	u := textUpdate(10, "")
+	u.Message.Voice = &file{ID: "voice"}
+	b.enqueue(u)
+	b.failSend = true
+	if err := p.step(context.Background(), "fixture", "123"); err == nil {
+		t.Fatal("delivery failure hidden")
+	}
+	c, _ := p.settings.Read()
+	id := requestID(botChat(c), "message:10")
+	if _, err := s.DeskTurnByRequest(context.Background(), memory.Scope{OwnerID: p.scope.OwnerID}, id); err == nil {
+		t.Fatal("non-owner could recover turn")
+	}
+	if _, err := s.DeskTurnByRequest(context.Background(), memory.Scope{OwnerID: memory.NewID(), PrincipalID: "telegram", IsOwner: true}, id); err != memory.ErrNotFound {
+		t.Fatal("foreign owner read request", err)
+	}
+	stabilizationSecretarySnapshot(t, s, p, 1)
+	// Resolve the already-ingested source through its public idempotent input.
+	source, err := s.Ingest(context.Background(), p.scope, memory.IngestRequest{Connector: "desk", ExternalID: id, ExternalVersion: "1", Title: "秘书原话", Text: "明天下午三点开会", MediaType: "text/plain"})
+	if err != nil || !source.Duplicate {
+		t.Fatal("original source not idempotently resolvable", err)
+	}
+	if err := s.Delete(context.Background(), p.scope, memory.DeleteRequest{Targets: []memory.Ref{source.Ref}, BlockReimport: true}); err != nil {
+		t.Fatal(err)
+	}
+	recovered, err := s.DeskTurnByRequest(context.Background(), p.scope, id)
+	if err != nil || recovered.Turn.Text != "" || len(recovered.Turn.Cards) != 0 {
+		t.Fatal("lookup restored deleted content", err)
+	}
+	fresh := *p
+	fresh.state = state{}
+	b.failSend = false
+	step(t, &fresh)
+	sent := b.of("sendMessage")
+	last := decode[string](sent[len(sent)-1].body["text"])
+	if strings.Contains(last, "明天下午三点开会") || strings.Contains(last, "🎤 听到") || strings.Contains(last, "已建：Telegram事项") {
+		t.Fatal("deleted content redelivered", last)
+	}
+	if p.models.(*changingTranscriber).calls != 1 || calls.Load() != 1 {
+		t.Fatal("deleted input regenerated")
+	}
+}
+
+func TestTelegramSelectedTurnRecoveryAfterDeliveryFailure(t *testing.T) {
+	p, s, b := fixture(t)
+	s.ask = &workspace.DeskAsk{Question: "选地点", Options: []string{"办公室", "线上"}}
+	b.enqueue(textUpdate(1, "安排会议"))
+	step(t, p)
+	s.ask = nil
+	b.enqueue(callbackUpdate(2, "a:0", 101))
+	b.failSend = true
+	if err := p.step(context.Background(), "fixture", "123"); err == nil {
+		t.Fatal("selected-turn delivery failure hidden")
+	}
+	if len(s.requests) != 2 {
+		t.Fatal("selection did not commit")
+	}
+	fresh := *p
+	fresh.state = state{}
+	b.failSend = false
+	step(t, &fresh)
+	if len(s.requests) != 2 {
+		t.Fatal("committed selection executed again")
+	}
+	sent := b.of("sendMessage")
+	if !strings.Contains(decode[string](sent[len(sent)-1].body["text"]), "已建：开会") {
+		t.Fatal("selection result not recovered")
+	}
+	b.enqueue(callbackUpdate(3, "a:1", 101))
+	step(t, &fresh)
+	if len(s.requests) != 2 || len(b.of("sendMessage")) != len(sent) {
+		t.Fatal("delivered selection reused")
+	}
+}
+
+func TestTelegramSameBotRotationKeepsSentUndoBinding(t *testing.T) {
+	s := integrationStore(t)
+	p, _, b := fixture(t)
+	p.store = s
+	calls := stabilizationSecretaryModel(t, s)
+	b.enqueue(textUpdate(1, "轮换凭据前的安排"))
+	step(t, p)
+	data := decode[keyboard](b.of("sendMessage")[0].body["reply_markup"]).Rows[0][0].Data
+	if err := p.settings.SaveTelegram("rotated-fixture", "123"); err != nil {
+		t.Fatal(err)
+	}
+	fresh := *p
+	fresh.state = state{}
+	b.enqueue(callbackUpdate(2, data, 101))
+	if err := fresh.step(context.Background(), "rotated-fixture", "123"); err != nil {
+		t.Fatal(err)
+	}
+	stabilizationSecretarySnapshot(t, s, p, 0)
+	if calls.Load() != 1 || decode[string](b.of("answerCallbackQuery")[0].body["text"]) != "已撤销" {
+		t.Fatal("rotation lost a genuine receipt")
+	}
+}
+
+func TestTelegramUnconfirmedIdentityDoesNotProcessInput(t *testing.T) {
+	p, s, b := fixture(t)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/getMe") {
+			_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "result": map[string]any{"id": 7001, "is_bot": false}})
+			return
+		}
+		b.serve(w, r)
+	}))
+	defer server.Close()
+	p.api = botAPI{baseURL: server.URL, client: server.Client()}
+	b.enqueue(textUpdate(1, "身份未确认"))
+	if err := p.step(context.Background(), "fixture", "123"); err == nil {
+		t.Fatal("invalid getMe response accepted")
+	}
+	c, err := p.settings.Read()
+	if err != nil || c.TelegramOffset != 0 || c.TelegramBotID != "" || len(s.requests) != 0 || len(b.of("getUpdates")) != 0 {
+		t.Fatal("input processed without confirmed bot identity", err)
 	}
 }

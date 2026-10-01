@@ -59,6 +59,22 @@ func (a botAPI) call(ctx context.Context, token, method string, input, output an
 	return nil
 }
 
+// identity asks Telegram for the stable bot user ID; credentials never become
+// part of a request ID or a user-visible identifier.
+func (a botAPI) identity(ctx context.Context, token string) (int64, error) {
+	var user struct {
+		ID  int64 `json:"id"`
+		Bot bool  `json:"is_bot"`
+	}
+	if err := a.call(ctx, token, "getMe", map[string]any{}, &user); err != nil {
+		return 0, err
+	}
+	if user.ID <= 0 || !user.Bot {
+		return 0, errAPI
+	}
+	return user.ID, nil
+}
+
 func (a botAPI) download(ctx context.Context, token string, f file) ([]byte, string, error) {
 	if f.Size > maxFileSize {
 		return nil, "", errFile

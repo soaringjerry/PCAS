@@ -1,44 +1,45 @@
-# Phase 2.0 消费者批次：审阅入口
+# Phase 2.0 消费者批次：最终审阅入口
 
-产品草稿 [#44](https://github.com/soaringjerry/PCAS/pull/44) 基于来源批次 #43。当前已推送候选 **`a51fdef8670fb6152ac8ca290e69390f496edf33`**；相比 `cf3015c` 只修 G1 合成样本日期（`golden.spec.ts` 6+/5-），产品代码不变。同头完整 CI 正在启动。本文及原始证据另存仅文档草稿 [#45](https://github.com/soaringjerry/PCAS/pull/45)，不向产品分支追加报告提交。
+产品草稿 [#44](https://github.com/soaringjerry/PCAS/pull/44) 固定 **`a51fdef8670fb6152ac8ca290e69390f496edf33`**，基于来源批次 #43。同头 web、完整 memory、mocked、三轮真实后端浏览器及汇总门全部通过。本文及原始证据另存纯文档草稿 [#45](https://github.com/soaringjerry/PCAS/pull/45)，不向产品分支追加报告提交。未合并、未部署。
 
-root 只负责协调、研究判断、审阅与集成；实现及测试由分工明确的 Sol 6.1/high 执行者完成，预期由独立验收者制定。原失败、未抵达项和有因修订分别保留。
+root 只协调、研究判断、审阅和集成；实现及测试由明确分工的 Sol 6.1/high 执行者完成，gold 和测试由独立验收者制定。没有调用 Opus/Astra。原失败、未抵达项和有因修订分别保留。
 
-## 当前结果
+## 当前同头技术结果
 
-| 范围 | 结论与边界 |
+| 范围 | 实际结果与原证据 |
 | --- | --- |
-| `a51fdef` 当前 CI | 同头完整检查正在启动；新头只迁移 G1 日期样本，不修改产品或断言。[原三轮 G1 原因、业务门与修订依据](2026-10-01-phase2-final-browser-ci/cf3015cd/G1-calendar-gold-proposal.md)。 |
-| `cf3015c` 完整 CI | web、完整 memory、127 项 mock 通过。memory 755 真叶 752P/3 既有 opt-in，11 测试包均实际执行、无缓存。三轮真实后端各 12 项抵达、11P/1F，唯一 G1 将七天后任务恒要求在三天窗口首页可见；第 1 轮附时区 1P/辅助 6P。原红与未抵达 reload/undo 保留，不能称完整门通过。 |
-| `c8adbae` 完整后端 CI | 一次 `make check` 成功。341 顶层：338 通过、3 既有 opt-in 未启用；755 实际叶：752 通过、3 未启用。11 个测试包全部成功、无 `(cached)`，另 4 个包无测试。PG 两个真实模型用例及 AI InstalledCodexHandshake 未启用；原 23 因果叶同头全 P，最终 build 成功。[完整日志、计数和 checkout](2026-10-01-phase2-final-memory-ci/README.md)。 |
-| `c8adbae` web CI | npm ci、lint、typecheck、build 全通过；GitHub PR 检查合并树等于候选树，不是 main 合并。[原日志](2026-10-01-phase2-final-web-ci/README.md)。 |
-| `c8adbae` 浏览器 CI | mock 127 项全部抵达：125P/2F。两项错误要求客户端发送完整接收者，正确请求为原 provider 和 SourceRunID。真实后端第 1、3 轮各 12P，第 1 轮附时区 1P/辅助 6P；第 2 轮安装后自然 cancelled，未开始测试，原终止原因正在归档。总门没有通过。[原失败与修订依据](2026-10-01-phase2-final-browser-ci/mocked-original-red-brief.md)。 |
-| 后端因果 R1/R2 | `834949f` 一次 race 23 叶 17P/6F；六个夹具或额外预期错误经独立复核、追加 gold，`c8adbae` 只补原六项，一次 6/6 通过。未改产品、未重跑其余 17 项。[原失败](2026-10-01-phase2-retry-causal-r1/README.md)、[六项补验](2026-10-01-phase2-retry-causal-r2/README.md)。 |
-| 浏览器因果 | `80bcd46` 一次 G5、F7、普通 manual 通过；恢复例混比请求与响应对象失败。保留原红并按 provider-only 契约修正；`03e5eee` 单恢复例一次通过，409、清预览、新包、真实剪贴板与贴回全部抵达。[四例原结果](2026-10-01-phase2-ci-browser-r1-causal-result.md)、[恢复补验](2026-10-01-phase2-ci-browser-r1-manual-recovery-result.md)。 |
-| SIWC 夹具补验 | 全新数据库一次跨包 race，3 顶层、5 叶全通过；各夹具用同一 advisory lock 自足初始化 vector 扩展。[原失败及补验](2026-10-01-phase2-siwc-ci-fixture/README.md)。 |
-| 独立静态审阅 | owner 改名、双指纹撤销保护及 embedding 外发隔离已审阅。外发只用本轮 owner 独立输入，生成 Prompt、事项及旧结果保留本地检索。静态不替代动态。[改名/撤销](2026-10-01-phase2-owner-rename-review.md)、[外发边界](2026-10-01-phase2-ci-browser-r1-embedding-review.md)。 |
+| 完整后端 | `make check` 的 fmt/vet/race/build 全通过。341 顶层：338P、3 既有 opt-in 未启用；755 真叶：752P、3 未启用。11 测试包全实际执行，无测试缓存命中，零失败/未抵达/race/panic。原 23 因果叶同头全 P。最后 build 命令成功，不声称编译缓存未使用。[完整证据](2026-10-01-phase2-final-memory-ci/a51fdef/README.md)。 |
+| 浏览器 | mock 127P；三轮 golden 各 12P；第 1 轮另有 aux 6P（含 manual 两例）和 timezone 1P。合计 170 次执行全部通过，0 skip/retry/flaky/未抵达；汇总门成功。三轮是原矩阵的独立合成环境，不称 170 个不重复场景。[完整证据](2026-10-01-phase2-final-browser-ci/a51fdef/README.md)。 |
+| web | npm ci、lint、type-check、build 全通过；npm 下载缓存不等于跳过执行。[完整日志](2026-10-01-phase2-final-web-ci/README.md)。 |
+| 精确版本 | CI 实际 checkout GitHub PR 检查合成提交 `ac62139ee0dc99f11ee4ae31365b8bf091b3150d`；其 tree 与最终候选完全相同：`e647f4fe63b12d1e0d81efad13bee87801e5ff12`。这不是 main 合并。各报告分别保存 head、checkout、tree 和 SHA。 |
+
+PG 两个真实模型 opt-in 和 AI InstalledCodexHandshake 未启用，共三项既有跳过，没有新增 skip。真实后端浏览器使用实际 PCAS serve/worker/PostgreSQL/Chromium，外部模型、OIDC、通知是假服务；不证明真实模型效果或外部收件。root 核看本轮 G1 日程及 manual recovered 原 1440×1000 桌面截图，不算手机实测。
 
 ## 本批实现及边界
 
-- 三入口供给获授权原文，共用原件、结构化记忆和向量的身份、版本与证据；工作室仍是范围。
-- 持久 typed 依赖及当前权限、路由、范围复核覆盖生成途中、下一轮、历史与派生读取。区分候选、实际输入、回答 Used 与间接依赖；诊断到期不删除存活产物来源。
-- 重试及手动预填改字携旧 Run 定位符；服务端重读原 Prompt 和实际 delegate 来源，分别复核原生成者及当前接收者。owner 独立 Prompt 不继承无关的一般上下文失效。
-- 手动每次预览/复制有新交付记录；撤权拒绝旧包和贴回，重新生成仍绑定明确接收者。DeliveredAt 只证明 PCAS 交付，外部接收仍为 unknown。
-- 窄的 owner 已撤销回执规则只保审计身份，不授权模型历史。来源仍合法的历史和来源失效后的泛化回执分开校验；Undoable 能力与 Undone 状态不同。
-- 独立改名与严格逆序撤销保持受限恢复条件；复制、标点改写和原子片段不能借改名清来源。
-- 输入估算上限 8000、正文 7 天、元数据 30 天及容量限制是工程初值，不是 tokenizer、真实费用或连续任务效果保证；详见共享契约与 #44。
+- 秘书、副手、手动交接供给获授权原文，共用原件、结构化记忆和向量的身份、版本与证据；工作室仍是范围。
+- 持久 typed 依赖及当前权限、路由、范围复核覆盖生成途中、下一轮、历史和派生读取。分别记录检索候选、实际输入、回答 Used 与间接依赖；诊断到期不删除存活产物来源。
+- 重试与手动预填改字携旧 Run 定位符；服务器重读原 Prompt 和实际 delegate 来源，分别校验原生成者与当前接收者。owner 独立 Prompt 不继承无关的一般上下文失效。
+- 手动每次预览/复制重新交付并记录新 attempt；撤权拒绝旧包及贴回，新请求仍绑定明确接收者。DeliveredAt 只表示 PCAS 交付，外部是否收到仍为 unknown。
+- 已撤销回执的窄 owner 审计规则不授权模型历史；独立改名和严格逆序撤销保持受限恢复条件，复制/标点/原子片段不能借改名清来源。
+- 本地完整检索与 embedding 外发输入分开；只外发本轮 owner 独立输入，生成 Prompt、事项和旧结果留在本地检索。整理后台的进一步用途与接收者契约列入 2.1。
+- 8000 的最终输入估算上限、正文 7 天、元数据 30 天及各容量限制是已采用的工程初值，不是 tokenizer、真实费用或连续任务收益保证；详见共享契约与 #44。
 
-## 历史证据不能改称当前通过
+## 原失败与修订链
 
-`0032883` 的[完整后端 R5](2026-10-01-phase2-backend-r5/README.md)一次 581 实际叶 579P/2 既有 live 未启用；同头原 CI 三轮浏览器各 10P/2F，SIWC 三叶在 vector 前置失败。后续修复及新 CI 分开记录。
+| 原版本 | 保留的原结论及后续依据 |
+| --- | --- |
+| `0032883` | [完整后端 R5](2026-10-01-phase2-backend-r5/README.md)581 叶 579P/2 旧 live；原 CI 三轮浏览器各 10P/2F，SIWC 三叶在 vector 前置失败。后来修复与此原红分开。 |
+| 后端因果 R1/R2 | `834949f` 一次 race 23 叶 17P/6F；六项夹具或额外预期错误经独立复核、追加 gold，`c8adbae` 仅补原六项一次 6/6P。未改产品迎合预期；当前完整 CI 又实际覆盖全部 23 叶。[R1](2026-10-01-phase2-retry-causal-r1/README.md)、[R2](2026-10-01-phase2-retry-causal-r2/README.md)。 |
+| 浏览器因果 | `80bcd46` 四例 3P/1F，恢复请求/响应对象混比失败；按原 provider-only 契约修正后 `03e5eee` 单恢复例通过，409/新包/剪贴板/贴回全抵达。[原结果](2026-10-01-phase2-ci-browser-r1-causal-result.md)、[补验](2026-10-01-phase2-ci-browser-r1-manual-recovery-result.md)。 |
+| `c8adbae` | 完整后端和 web P；mock125P/2F。real1/3各12P，real1附7P；real2在 apt 依赖安装超过20分钟自然 cancelled，产品测试0抵达、12计划项未执行，非团队取消。汇总门 F。[浏览器原档案](2026-10-01-phase2-final-browser-ci/README.md)、[后端](2026-10-01-phase2-final-memory-ci/README.md)。 |
+| `cf3015c` | 两条 mock 修订后127P，完整后端/web P；三轮 real各11P/1F，唯一 G1 在上海跨日后把7天后事项要求在3天窗口首页可见。真实保存/日期/项目/提醒正确，原刷新/撤销未抵达。先冻结补充gold，再仅迁移G1样本为明天，保全部断言、G3默认周五、原白皮书示例及真实星期理解门。[三轮原红与依据](2026-10-01-phase2-final-browser-ci/cf3015cd/README.md)、[后端](2026-10-01-phase2-final-memory-ci/cf3015c/README.md)。 |
 
-R2/R3/R4 曾重复计入父项：[勘误](2026-10-01-phase2-backend-counting-erratum/README.md)和[另一验收者复核 17 份原日志](2026-10-01-phase2-test-count-audit.md)只修计数，原日志、失败和退出保留。被补修取代的 `e6fd9b1` memory/browser CI 由协调者明确取消，不能算通过。不同版本局部绿色不能拼成同头完整结果。
+[SIWC 自足夹具补验](2026-10-01-phase2-siwc-ci-fixture/README.md)、[改名/撤销审阅](2026-10-01-phase2-owner-rename-review.md)、[外发边界审阅](2026-10-01-phase2-ci-browser-r1-embedding-review.md)分别保留静态与动态边界。R2/R3/R4 曾重复计入父项；[勘误](2026-10-01-phase2-backend-counting-erratum/README.md)及[另一验收者复核17份原日志](2026-10-01-phase2-test-count-audit.md)只修计数，原日志、失败和退出不变。更早被补修取代的 `e6fd9b1` memory/browser 曾由协调者明确取消，不能算通过。
 
 ## 尚未完成的门
 
-- `a51fdef` 最终同头完整 CI 尚未结束；`c8adbae` mock 和 `cf3015c` G1 原红保留。真实模型/账号 opt-in 未启用。
-- 浏览器使用真实应用、worker、PostgreSQL 与 Chromium，外部模型是假服务；桌面及窄视口截图不是手机实测。
-- 线上 11 项、真实手机、一天用户试用尚无完成证据。SQL 恢复检查点不替代真实进程崩溃/重启。
-- 2.1 时间线回忆、抽取遗漏补查、已有 ChatGPT ZIP/JSON 导入闭环待下一批；[只读拆分提案](../tasks/phase2/next-batch-2.1.md)已整理，未作为本批实现或批准的新预算。完整私人历史未迁入。
-- 2.2 同模型、同预算、简单混合检索基线的连续收益及导入/维护/调用/存储成本尚待实测。
-- 未合并、未部署；旧 checkout、生产配置与部署快照未动。
+- 线上11项、真实模型/账号、手机真机、一天用户试用尚无本批通过证据。SQL恢复检查点不替代真实进程崩溃/重启。
+- 2.1 时间线回忆、抽取遗漏补查和既有 ChatGPT ZIP/JSON 导入闭环待下一批；[只读拆分提案](../tasks/phase2/next-batch-2.1.md)已整理，不是已实现或已批准的新预算。完整私人历史未迁入。
+- 2.2 同模型、同预算、简单混合检索基线的连续任务收益及导入/维护/调用/存储成本仍待实测。
+- main 仍为 `d8d6fb3efe92f7711c5567440e92af362df7fe77`；旧 checkout、生产配置和部署快照未动。PR均保留draft，合并与部署等待用户另行明确指令。

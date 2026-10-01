@@ -8,7 +8,7 @@ PCAS 的所有文档都从这一页找。新增或移动文档时，同时改这
 |---|---|---|
 | 第 1 阶段：秘书前台 | 已上线（2026-10-01） | [任务总览](tasks/phase1/README.md) |
 | 第 1.5 阶段：稳定化 | 修复已合并；线上实测 11 项和试用一天还没做 | [稳定化计划](tasks/stabilization/README.md) |
-| 第 2 阶段：记忆核心 | 方向已定，**未开工**。第一次尝试（2.0）已回滚 | [任务入口](tasks/phase2/README.md) · [方向稿](tasks/phase2/direction.md) |
+| 第 2 阶段：记忆核心 | 分四批。**第 1 批已派工**。第一次尝试（2.0）已回滚 | [任务入口](tasks/phase2/README.md) · [方向稿](tasks/phase2/direction.md) · [第 1 批](tasks/phase2/batch1/README.md) |
 | 第 3 阶段及以后 | 未开始 | [白皮书 §16 路线图](whitepaper.md) |
 
 还没处理的问题统一记在 [待办清单](tasks/backlog.md)。
@@ -121,6 +121,15 @@ PCAS 的所有文档都从这一页找。新增或移动文档时，同时改这
 | [方向稿](tasks/phase2/direction.md) | 分四批怎么做、每批上线后能感受到什么。用户已确认 |
 | [2.0 回滚记录](evaluations/2026-10-01-phase2-0-rollback.md) | 第一次尝试做了什么、为什么回滚、回滚后的状态 |
 | [记忆核心调查](tasks/phase2/readiness.md) | 2.0 之前的代码现状调查。方案部分未批准 |
+
+第 1 批：原话直达。入口：[任务总览与契约](tasks/phase2/batch1/README.md)
+
+| 任务包 | 说明 | 执行者 |
+|---|---|---|
+| [A](tasks/phase2/batch1/A-raw-text.md) | 原话供给、依赖校验、依据标记、依据卡片（后端） | 6.1 Sol |
+| [B](tasks/phase2/batch1/B-undo-memory.md) | 撤销连带记忆、抽取跳过、清理 2.0 遗留 | 6.1 Sol |
+| [C](tasks/phase2/batch1/C-frontend.md) | 依据卡片里的原话、「依据已更新」标记（前端） | Opus 5.5 |
+| [T](tasks/phase2/batch1/T-acceptance.md) | 独立验收 | 6.1 Sol（另一个执行者） |
 
 2.0 的代码和研究稿不在 `docs/` 里，归档为 git 标签 `archive/phase2-0/*`，位置和用法见任务入口第 6 节。
 

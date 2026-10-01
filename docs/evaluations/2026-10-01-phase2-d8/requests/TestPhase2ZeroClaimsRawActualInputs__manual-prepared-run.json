@@ -1,0 +1,14 @@
+{
+  "id": "b6932633-0bdf-4af7-b4a0-8b3062a0fadf",
+  "thingId": "7abbcdbc-91ad-4ff6-a0b3-2b2268fd38e7",
+  "agentId": "manual",
+  "kind": "ask",
+  "prompt": "成都预约资料的预约码、集合时间和地点是什么？",
+  "brief": "事项：独立验收任务\n当前状态：todo\n说明：\n\n目标：\n进度：\n相关记忆（引用 ID 与版本；长期约束继续适用）：\n\n本次请求：成都预约资料的预约码、集合时间和地点是什么？",
+  "contextMemoryIds": [],
+  "contextVersions": [],
+  "status": "waiting",
+  "staleContext": false,
+  "cost": 0,
+  "createdAt": "2026-10-01T12:09:30.599261119Z"
+}

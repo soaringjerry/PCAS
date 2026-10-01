@@ -1,0 +1,142 @@
+[
+  {
+    "file": "TestPhase2ClaimControlUsedEmptyActualInputs__DeskTurn-dependencies.json",
+    "bytes": 100,
+    "sha256": "3885772d30ac852773663cfb01d927274f6b33ce9b3c0efefcc6fae38db0a079"
+  },
+  {
+    "file": "TestPhase2ClaimControlUsedEmptyActualInputs__DeskTurn-desk-response-used-empty.json",
+    "bytes": 280,
+    "sha256": "3f932a46581980147b2e4a06549b3b297aac8ee7e835bb5000b35c8c4667fca5"
+  },
+  {
+    "file": "TestPhase2ClaimControlUsedEmptyActualInputs__DeskTurn-provider-request.json",
+    "bytes": 4765,
+    "sha256": "7d7e3ecd469e3559aa704b9c359f8841830bfa7f4e7c9af1d8baa3b3f287918c"
+  },
+  {
+    "file": "TestPhase2ClaimControlUsedEmptyActualInputs__RunAgents-dependencies.json",
+    "bytes": 100,
+    "sha256": "d2a153ecebff8e20616ab0f658c3534557032a5d601ca71a94f09ce6148dea78"
+  },
+  {
+    "file": "TestPhase2ClaimControlUsedEmptyActualInputs__RunAgents-finished-run.json",
+    "bytes": 1271,
+    "sha256": "2eb0ee16a5749828c8bcbb2f8ed643e10a52a7558163cfbdb8abc77a02774b00"
+  },
+  {
+    "file": "TestPhase2ClaimControlUsedEmptyActualInputs__RunAgents-prepared-run.json",
+    "bytes": 915,
+    "sha256": "949898f45a2a37c6770e21274cd073b2ea8a17641776c19d85e683e0a9f29d7f"
+  },
+  {
+    "file": "TestPhase2ClaimControlUsedEmptyActualInputs__RunAgents-provider-request.json",
+    "bytes": 1361,
+    "sha256": "294bf28c8cbfd776d58cad41eb0007771ea9fb50b080990ae2e8fb9367bf2a25"
+  },
+  {
+    "file": "TestPhase2ClaimControlUsedEmptyActualInputs__manual-dependencies.json",
+    "bytes": 100,
+    "sha256": "be29e8852f7e2bcf267964bc34323ceeba0a1f240d1f122a950910e3ce9c8773"
+  },
+  {
+    "file": "TestPhase2ClaimControlUsedEmptyActualInputs__manual-prepared-run.json",
+    "bytes": 909,
+    "sha256": "366f29fb845e3717a65f8b07c21b491bd288183e38e2e58704d18f5cddea646f"
+  },
+  {
+    "file": "TestPhase2ClaimGrantDoesNotAuthorizeSource-claim-only-source-read-manual.json",
+    "bytes": 290,
+    "sha256": "9f899a813e56159317129153ad08cf7a8641dc1e6d96ef2b2232492077aab481"
+  },
+  {
+    "file": "TestPhase2ClaimGrantDoesNotAuthorizeSource-claim-only-source-read-phase2-model.json",
+    "bytes": 296,
+    "sha256": "d104332a2c819937d2d39b14b069c5e094768810a776b0b852a10729cc9074af"
+  },
+  {
+    "file": "TestPhase2IndirectDependenciesNotActualInput-four-set-diagnostic.json",
+    "bytes": 351,
+    "sha256": "cc7679dd8cd849cc4daa0d25d499c5218a83e297ab0e5135b00e4c50d7df1100"
+  },
+  {
+    "file": "TestPhase2IndirectDependenciesNotActualInput-indirect-run.json",
+    "bytes": 84861,
+    "sha256": "973b14988e61062a2dfd364eecf0201cd18337561272bf9cc2fc0254e4a1a9dd"
+  },
+  {
+    "file": "TestPhase2NaturalSourceAuthorizationEntry-natural-authorization-read.json",
+    "bytes": 622,
+    "sha256": "abe5c2484a694c7318d5098be41cfb2986bf13b8031d268f06f125ad663d60ed"
+  },
+  {
+    "file": "TestPhase2NaturalSourceAuthorizationEntry-natural-authorization-response.json",
+    "bytes": 271,
+    "sha256": "012503eb49c351554816a0712fd9d0c48f0063be93034feaf571d12495e9addd"
+  },
+  {
+    "file": "TestPhase2NaturalSourceAuthorizationEntry-provider-request.json",
+    "bytes": 4675,
+    "sha256": "1189e4e208039c5820f2f3362d316a291a3f9ef5eb76bd68a5d0d9f9d3e1b1a4"
+  },
+  {
+    "file": "TestPhase2ZeroClaimsRawActualInputs__DeskTurn-dependencies.json",
+    "bytes": 3,
+    "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+  },
+  {
+    "file": "TestPhase2ZeroClaimsRawActualInputs__DeskTurn-desk-response.json",
+    "bytes": 298,
+    "sha256": "4276c9206fd986d8a389645daf7643d55ebd0c86ed98d9799b4ec082c20f19e8"
+  },
+  {
+    "file": "TestPhase2ZeroClaimsRawActualInputs__DeskTurn-provider-request.json",
+    "bytes": 4702,
+    "sha256": "8ec93140155d62df9657e2e1770ff41bcedffaf80af79823714a1b68755c3330"
+  },
+  {
+    "file": "TestPhase2ZeroClaimsRawActualInputs__DeskTurn-recall-diagnostic.json",
+    "bytes": 654,
+    "sha256": "e14abfd77678550260f12314a8b711d05a4484842d105fd654552c1b72741a08"
+  },
+  {
+    "file": "TestPhase2ZeroClaimsRawActualInputs__RunAgents-dependencies.json",
+    "bytes": 3,
+    "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+  },
+  {
+    "file": "TestPhase2ZeroClaimsRawActualInputs__RunAgents-finished-run.json",
+    "bytes": 1000,
+    "sha256": "3a7a0bfbceb52a62335ef54248fb69c12bdc9f48ddd8603191368309ac029ef5"
+  },
+  {
+    "file": "TestPhase2ZeroClaimsRawActualInputs__RunAgents-prepared-run.json",
+    "bytes": 644,
+    "sha256": "ca8832774bc316afce21e2e6e1655da04ba1c85d5eaac0487b5fe409d6071900"
+  },
+  {
+    "file": "TestPhase2ZeroClaimsRawActualInputs__RunAgents-provider-request.json",
+    "bytes": 1228,
+    "sha256": "e28f9fa8991ade16d6091875a470091c8bc2c9acdccbb3d66cb2adcb57636431"
+  },
+  {
+    "file": "TestPhase2ZeroClaimsRawActualInputs__RunAgents-recall-diagnostic.json",
+    "bytes": 654,
+    "sha256": "10288c254df62d4adfa08cc49dd6b708eeef6831ac4edb0805e694b71b98b30b"
+  },
+  {
+    "file": "TestPhase2ZeroClaimsRawActualInputs__manual-dependencies.json",
+    "bytes": 3,
+    "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+  },
+  {
+    "file": "TestPhase2ZeroClaimsRawActualInputs__manual-prepared-run.json",
+    "bytes": 639,
+    "sha256": "da31003b3de4271720e446fb67a50413922f5ddb5b9b984464018074c2c8c65c"
+  },
+  {
+    "file": "TestPhase2ZeroClaimsRawActualInputs__manual-recall-diagnostic.json",
+    "bytes": 654,
+    "sha256": "d0cb665a2c6a459f176eead427743d9963518149afb314fb467382b47791d9de"
+  }
+]

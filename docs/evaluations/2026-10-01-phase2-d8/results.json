@@ -1,0 +1,92 @@
+{
+  "product_sha": "d8d6fb3efe92f7711c5567440e92af362df7fe77",
+  "harness_sha": "8dfabc4e36229b76ae9ce992bce0e2e18a48820a",
+  "exit_code": 1,
+  "top_level": {
+    "total": 5,
+    "pass": 3,
+    "fail": 2,
+    "skip": 0
+  },
+  "leaf_cases": {
+    "total": 9,
+    "pass": 5,
+    "fail": 4,
+    "skip": 0
+  },
+  "captured_provider_requests": 5,
+  "captured_artifacts": 28,
+  "events": [
+    {
+      "Action": "fail",
+      "Test": "TestPhase2ZeroClaimsRawActualInputs/DeskTurn",
+      "Package": "github.com/soaringjerry/PCAS/internal/postgres",
+      "Elapsed": 0.3
+    },
+    {
+      "Action": "fail",
+      "Test": "TestPhase2ZeroClaimsRawActualInputs/RunAgents",
+      "Package": "github.com/soaringjerry/PCAS/internal/postgres",
+      "Elapsed": 1.3
+    },
+    {
+      "Action": "fail",
+      "Test": "TestPhase2ZeroClaimsRawActualInputs/manual",
+      "Package": "github.com/soaringjerry/PCAS/internal/postgres",
+      "Elapsed": 0.26
+    },
+    {
+      "Action": "fail",
+      "Test": "TestPhase2ZeroClaimsRawActualInputs",
+      "Package": "github.com/soaringjerry/PCAS/internal/postgres",
+      "Elapsed": 1.86
+    },
+    {
+      "Action": "pass",
+      "Test": "TestPhase2ClaimControlUsedEmptyActualInputs/DeskTurn",
+      "Package": "github.com/soaringjerry/PCAS/internal/postgres",
+      "Elapsed": 0.24
+    },
+    {
+      "Action": "pass",
+      "Test": "TestPhase2ClaimControlUsedEmptyActualInputs/RunAgents",
+      "Package": "github.com/soaringjerry/PCAS/internal/postgres",
+      "Elapsed": 1.3
+    },
+    {
+      "Action": "pass",
+      "Test": "TestPhase2ClaimControlUsedEmptyActualInputs/manual",
+      "Package": "github.com/soaringjerry/PCAS/internal/postgres",
+      "Elapsed": 0.26
+    },
+    {
+      "Action": "pass",
+      "Test": "TestPhase2ClaimControlUsedEmptyActualInputs",
+      "Package": "github.com/soaringjerry/PCAS/internal/postgres",
+      "Elapsed": 1.81
+    },
+    {
+      "Action": "fail",
+      "Test": "TestPhase2NaturalSourceAuthorizationEntry",
+      "Package": "github.com/soaringjerry/PCAS/internal/postgres",
+      "Elapsed": 0.22
+    },
+    {
+      "Action": "pass",
+      "Test": "TestPhase2ClaimGrantDoesNotAuthorizeSource",
+      "Package": "github.com/soaringjerry/PCAS/internal/postgres",
+      "Elapsed": 0.22
+    },
+    {
+      "Action": "pass",
+      "Test": "TestPhase2IndirectDependenciesNotActualInput",
+      "Package": "github.com/soaringjerry/PCAS/internal/postgres",
+      "Elapsed": 0.36
+    },
+    {
+      "Action": "fail",
+      "Package": "github.com/soaringjerry/PCAS/internal/postgres",
+      "Elapsed": 4.483
+    }
+  ]
+}

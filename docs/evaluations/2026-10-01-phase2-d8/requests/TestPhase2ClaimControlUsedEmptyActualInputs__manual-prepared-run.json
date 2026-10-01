@@ -1,0 +1,22 @@
+{
+  "id": "de1526df-af5e-4faf-b72f-9b543295e66f",
+  "thingId": "e783ebeb-c69a-4525-ae48-2a6baa6896b4",
+  "agentId": "manual",
+  "kind": "ask",
+  "prompt": "成都正对照资料的约定口令是什么？",
+  "brief": "事项：独立验收任务\n当前状态：todo\n说明：\n\n目标：\n进度：\n相关记忆（引用 ID 与版本；长期约束继续适用）：\n[6710849d-01ef-451d-8867-dce98490b766@1 / confirmed / confirmation=confirmed / acquisition=direct] 成都正对照约定口令是 JADE-CONTROL-619。\n\n本次请求：成都正对照资料的约定口令是什么？",
+  "contextMemoryIds": [
+    "6710849d-01ef-451d-8867-dce98490b766"
+  ],
+  "contextVersions": [
+    {
+      "id": "6710849d-01ef-451d-8867-dce98490b766",
+      "version": 1,
+      "kind": "claim"
+    }
+  ],
+  "status": "waiting",
+  "staleContext": false,
+  "cost": 0,
+  "createdAt": "2026-10-01T12:09:32.428860075Z"
+}

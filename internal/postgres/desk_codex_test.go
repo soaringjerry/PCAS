@@ -55,8 +55,12 @@ for line in sys.stdin:
    assert web and 'outputSchema' not in p
    value={'answer':'没有相关记录。','used':[],'links':[]}
   else:
-   assert not web and 'outputSchema' not in p
-   value={'draft':'邮件草稿'} if 'JSON' in prompt else '邮件草稿：您好。'
+   assert not web
+   schema=p['outputSchema']; props=schema['properties']
+   assert set(props)=={'output','used'}
+   assert set(schema['required'])==set(props) and schema['additionalProperties']==False
+   draft=json.dumps({'draft':'邮件草稿'},ensure_ascii=False) if 'JSON 对象，包含 draft' in prompt else '邮件草稿：您好。'
+   value={'output':draft,'used':[]}
   text=value if isinstance(value,str) else json.dumps(value,ensure_ascii=False)
   out={'turn':{'id':'turn'}}
  emit({'id':m['id'],'result':out})

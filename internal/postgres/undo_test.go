@@ -125,16 +125,7 @@ func TestUndoQueuedDelegationAndStartedWork(t *testing.T) {
 	for _, started := range []bool{false, true} {
 		id := string(memory.NewID())
 		action := string(memory.NewID())
-		err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-			logged := withActionLog(ctx, action, "desk", "", "写方案")
-			if err := beginActionLogTx(logged, tx); err != nil {
-				return err
-			}
-			if err := s.commandTx(logged, tx, scope, workspace.Command{Type: "delegateTask", ID: id, Title: "写方案", Prompt: "写方案", AgentID: "model"}); err != nil {
-				return err
-			}
-			return flushActionLog(logged, tx, scope)
-		})
+		_, err := s.Execute(ctx, scope, workspace.Command{Type: "delegateTask", ID: id, Title: "写方案", Prompt: "写方案", AgentID: "model", RequestID: action})
 		if err != nil {
 			t.Fatal(err)
 		}

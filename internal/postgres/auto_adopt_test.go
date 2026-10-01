@@ -472,7 +472,11 @@ FOR EACH ROW WHEN (NEW.source='worker') EXECUTE FUNCTION reject_worker_adoption(
 				if path == "manual" {
 					agent = "manual"
 				}
-				st = workspaceCommand(t, s, scope, workspace.Command{Type: "requestRun", ThingID: project.ID, AgentID: agent, Kind: kind, Prompt: "Generate result"})
+				command := workspace.Command{Type: "requestRun", ThingID: project.ID, AgentID: agent, Kind: kind, Prompt: "Generate result"}
+				if path == "manual" {
+					command.ManualRecipient = &memory.Recipient{Provider: "auto-model"}
+				}
+				st = workspaceCommand(t, s, scope, command)
 				runID, revision := st.Runs[0].ID, st.Revision
 				var warnings bytes.Buffer
 				previousLogger := slog.Default()
@@ -488,6 +492,7 @@ FOR EACH ROW WHEN (NEW.source='worker') EXECUTE FUNCTION reject_worker_adoption(
 						t.Fatal(err)
 					}
 				} else {
+					phase2RTGetPackage(t, s, scope, st.Runs[0])
 					st = workspaceCommand(t, s, scope, workspace.Command{Type: "pasteRunResult", ID: runID, Output: output})
 				}
 				run := st.Runs[0]

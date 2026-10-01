@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -224,12 +225,25 @@ func TestAsyncRunInvalidatesDuringGenerationAndBudget(t *testing.T) {
 	ctx := context.Background()
 	started := make(chan struct{})
 	release := make(chan struct{})
+	var actual []byte
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Error(err)
+		}
+		actual = append([]byte(nil), body...)
 		close(started)
 		<-release
-		_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": map[string]string{"content": "旧依据生成的结果"}}}, "usage": map[string]int{"prompt_tokens": 100, "completion_tokens": 10}})
+		_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": map[string]string{"content": string(asJSON(map[string]any{"output": "旧依据生成的结果", "used": []any{}}))}}}, "usage": map[string]int{"prompt_tokens": 100, "completion_tokens": 10}})
 	}))
 	defer server.Close()
+	defer func() {
+		select {
+		case <-release:
+		default:
+			close(release)
+		}
+	}()
 	s.SetModels(&ai.Registry{HTTP: server.Client(), Config: ai.Configuration{Providers: []ai.Provider{{ID: "model", Name: "模型", Protocol: "openai", BaseURL: server.URL, Model: "test", MaxOutput: 100, InputPerMillion: 1, OutputPerMillion: 2}}}})
 	st := workspaceCommand(t, s, scope, workspace.Command{Type: "capture", Text: "旧依据"})
 	st = workspaceCommand(t, s, scope, workspace.Command{Type: "acceptCandidate", ID: st.Candidates[0].ID, Kind: "memory", MemoryKind: "fact", Text: "旧依据"})
@@ -237,9 +251,7 @@ func TestAsyncRunInvalidatesDuringGenerationAndBudget(t *testing.T) {
 	st = workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "测试生成"})
 	task := st.Tasks[0]
 	st = workspaceCommand(t, s, scope, workspace.Command{Type: "requestRun", ThingID: task.ID, AgentID: "model", Kind: "ask", Prompt: "根据旧依据回答"})
-	if !strings.Contains(st.Runs[0].Brief, "旧依据") {
-		t.Fatal("relevant dependency missing before generation")
-	}
+	run := st.Runs[0]
 	done := make(chan error, 1)
 	go func() { done <- s.runAgentOnce(ctx) }()
 	select {
@@ -248,12 +260,35 @@ func TestAsyncRunInvalidatesDuringGenerationAndBudget(t *testing.T) {
 		close(release)
 		t.Fatal("provider did not start")
 	}
+	attempts, err := s.ContextAttempts(ctx, scope, run.ID)
+	if err != nil || len(attempts) != 1 {
+		t.Fatal("actual sent attempt absent", err, attempts)
+	}
+	ref := memory.Ref{ID: memory.ID(mem.ID), Version: mem.Version, Kind: memory.ClaimKind}
+	mapped := false
+	for _, input := range attempts[0].Manifest.Input {
+		if input.Ref != ref {
+			continue
+		}
+		for _, span := range input.PayloadSpans {
+			if span.StartByte < 0 || span.EndByte > len(actual) || span.EndByte <= span.StartByte {
+				t.Fatal("invalid actual claim input span", span)
+			}
+			if strings.Contains(string(actual[span.StartByte:span.EndByte]), "旧依据") {
+				mapped = true
+			}
+		}
+	}
+	if !mapped {
+		t.Fatal("relevant exact claim was not actually supplied to held HTTP request")
+	}
+	phase2RTEvidence(t, "async-actual-input", map[string]any{"actual_http_body": actual, "attempt": attempts[0], "exact_claim": ref})
 	st = workspaceCommand(t, s, scope, workspace.Command{Type: "editMemory", ID: mem.ID, Text: "纠正后的依据", Reason: "原先记错"})
 	close(release)
 	if err := <-done; err != nil {
 		t.Fatal(err)
 	}
-	st, err := s.Snapshot(ctx, scope)
+	st, err = s.Snapshot(ctx, scope)
 	if err != nil {
 		t.Fatal(err)
 	}

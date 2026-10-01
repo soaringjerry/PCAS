@@ -1,0 +1,80 @@
+{
+  "originalFailedRun": {
+    "contextTask": {
+      "ownerId": "ce7f9f82-ddd4-4610-87bb-9f8635846a81",
+      "recipient": {
+        "principal_id": "golden",
+        "role": "deputy",
+        "model": "golden",
+        "provider": "golden",
+        "protocol": "openai",
+        "channel": "api",
+        "route_fingerprint": "4546e0543af1ab0fc3a5c9f6518f453036888d67c3c8899e844556ef1cd2a341"
+      },
+      "purpose": "knowledge",
+      "scope": {
+        "kind": "unscoped",
+        "include_global_constraints": false
+      },
+      "view": {
+        "mode": "continue",
+        "valid_at": "2026-10-01T15:53:49.380470861Z",
+        "known_at": "2026-10-01T15:53:49.380470861Z"
+      },
+      "now": "2026-10-01T15:53:49.380470861Z",
+      "timezone": "Asia/Shanghai",
+      "memoryBudget": {
+        "candidates": 15,
+        "edges": 15,
+        "tokens": 4000,
+        "hops": 1
+      },
+      "totalInputTokens": 8000,
+      "desk_actions": [
+        "5b2b051b-770d-4a33-bb79-f24501ea918d",
+        "5d55f646-0459-45d5-b28f-86a033e0d3c2",
+        "79aca52a-2995-425b-97dc-6699c1c2656b",
+        "cb035f3e-e055-4b4a-9df2-edd72f5803e2",
+        "ebdade89-4bca-49a7-ab73-b7bb5c70a3df"
+      ]
+    },
+    "contextDeskActions": [
+      "5b2b051b-770d-4a33-bb79-f24501ea918d",
+      "5d55f646-0459-45d5-b28f-86a033e0d3c2",
+      "79aca52a-2995-425b-97dc-6699c1c2656b",
+      "cb035f3e-e055-4b4a-9df2-edd72f5803e2",
+      "ebdade89-4bca-49a7-ab73-b7bb5c70a3df"
+    ],
+    "contextPromptDeskActions": [
+      "cb035f3e-e055-4b4a-9df2-edd72f5803e2"
+    ],
+    "contextIndirectDependencies": [],
+    "contextAttemptId": "b8f4c53e-d3ab-4b87-8a80-ed95a40e7177",
+    "id": "26c796c3-4c57-484c-aa49-bfbe63fa8867",
+    "thingId": "483e0c58-b067-4f03-baf2-01d4e01d290a",
+    "agentId": "golden",
+    "kind": "breakdown",
+    "prompt": "拆成三步",
+    "brief": "事项：失败恢复-1790870029104\n当前状态：todo\n说明：\n\n目标：\n进度：\n\n本次请求：拆成三步",
+    "contextMemoryIds": [],
+    "contextVersions": [],
+    "status": "failed",
+    "error": "模型调用未完成，结果和用量可能未确认；请检查登录、额度与服务配置",
+    "staleContext": false,
+    "cost": 0,
+    "createdAt": "2026-10-01T15:53:49.409777599Z",
+    "finishedAt": "2026-10-01T15:53:50.241713313Z"
+  },
+  "actualRequest": {
+    "type": "requestRun",
+    "id": "0fa863ca-dacf-4e51-8cf7-dc7486c7a032",
+    "thingId": "483e0c58-b067-4f03-baf2-01d4e01d290a",
+    "agentId": "golden",
+    "kind": "breakdown",
+    "prompt": "拆成三步",
+    "sourceRunId": "26c796c3-4c57-484c-aa49-bfbe63fa8867",
+    "requestId": "6b41b28c-6e80-4409-979a-25905884ea75",
+    "expectedRevision": 42
+  },
+  "responseStatus": 200
+}

@@ -1,0 +1,273 @@
+{
+  "head": "c8adbaeb5c02daa9e83f90f74c216d8cf9ee22bf",
+  "run_id": 36887421678,
+  "files": [
+    {
+      "file": "README.md",
+      "bytes": 5731,
+      "sha256": "a0e8624f5b9b25c67a70f5296812fcc06a319e2a71b5b82484a29ed543c6bd7a"
+    },
+    {
+      "file": "actual-merge-commit.json",
+      "bytes": 2596,
+      "sha256": "a9f7ddf6eabd78134802d94cf9c5c7dd402708d64747a447950d676e83d47781"
+    },
+    {
+      "file": "aggregate-gate-job-original.log.gz",
+      "bytes": 940,
+      "sha256": "4ce04edd5ea09e9ad6ff67dddef3431837c81f073b845948214324f9f0dc0d58",
+      "encoding": "gzip",
+      "restored_bytes": 2449,
+      "restored_sha256": "b0071e9889b56315aa6941b447621d48e18126bbb79d3b16d64bb16c7c2b8ac5"
+    },
+    {
+      "file": "artifact-index.json",
+      "bytes": 27747,
+      "sha256": "88dc9c62216c7993ece599e12b4331dbadf1a65fde16e17a61aa7094546dff97"
+    },
+    {
+      "file": "artifacts-final.json",
+      "bytes": 2170,
+      "sha256": "6cb463cdcefa07ba7d8eeda87a8ab8504d8247a5b86a4745376ee0ec6b49c2d2"
+    },
+    {
+      "file": "counts.json",
+      "bytes": 1016,
+      "sha256": "1bbbdd7ced7cf9d08ef31fdc1c6ba9670faa088535c2f9a375f2da14dec0d263"
+    },
+    {
+      "file": "jobs-final.json",
+      "bytes": 13324,
+      "sha256": "2be34a8bc59e4e5aa0a8089c8bd10be172211cf9059dc4a322e8fcc9381bb707"
+    },
+    {
+      "file": "local-source-preflight.json",
+      "bytes": 1044,
+      "sha256": "54553a110a2393fc881cc9a3183ad1f671500e5746064096ac1e1ddd55de9d4e"
+    },
+    {
+      "file": "mocked-individual-terminals.json",
+      "bytes": 49771,
+      "sha256": "83b7e38465e3c2ec3184d262e8e6338c35ef6ee8504ad9bccd6c609d61c007f1"
+    },
+    {
+      "file": "mocked-job-final.json",
+      "bytes": 3471,
+      "sha256": "19d8305456d549fd3062adfd47d5a1e968483c7634019fac895d017285dd0ffe"
+    },
+    {
+      "file": "mocked-job-original.log.gz",
+      "bytes": 149364,
+      "sha256": "093fcd4679ef8ad16e8f1517cd0c43386c600bf628365a667451e149e56ec180",
+      "encoding": "gzip",
+      "restored_bytes": 2182199,
+      "restored_sha256": "3b4918059dbaa1130d0230672868a85b32cefdab8e67f53b212ad1db5b41567b"
+    },
+    {
+      "file": "mocked-original-red-brief.md",
+      "bytes": 1814,
+      "sha256": "1798f0ec713302744391d40166a15bb66e0277d068addd1ff132e335c681f4b0"
+    },
+    {
+      "file": "mocked-shape-proposal.md",
+      "bytes": 2203,
+      "sha256": "4229de51e06347abebf29ef4bbbdfd8f0e3b0683f052b0b4706ee224c5e4b49d"
+    },
+    {
+      "file": "mocked-two-actual-requests.json",
+      "bytes": 13572,
+      "sha256": "11dd31241b0e345de943b8b76fc080e703f216ff1fb89ddababb47dfd32b5148"
+    },
+    {
+      "file": "round2-job-final.json",
+      "bytes": 2809,
+      "sha256": "b9be94b4ba49af196661d54795e0649fc4b2ac166d85ddc8f54a706a74a603d6"
+    },
+    {
+      "file": "round2-job-original.log.gz",
+      "bytes": 135286,
+      "sha256": "f0458cbae843561ff5182b53e0a0a71cfd1c8f793b908ed2f9b185edfb629262",
+      "encoding": "gzip",
+      "restored_bytes": 2112154,
+      "restored_sha256": "7d65a607995ec07a60768efb1dd3319135d3ab582488323dd7eee14eb0f8c66c"
+    },
+    {
+      "file": "round2-original-annotations.json",
+      "bytes": 2332,
+      "sha256": "bb69f2844aaa280d8bd7cc2b6e712b969b5af228a258c3458a0666b1bc718fe1"
+    },
+    {
+      "file": "run-final.json",
+      "bytes": 12561,
+      "sha256": "e3aabae85b05aeb0916da62d0160a0374e69aeec2280406d0185b69747d7e371"
+    },
+    {
+      "file": "selected-evidence/mocked-failed-retry-error-context-original.md.gz",
+      "bytes": 4703,
+      "sha256": "d1a8e0f880f80c5214696326c1fb3e7d4514ec6d93dfa8905fae62aa35beb4d7",
+      "encoding": "gzip",
+      "restored_bytes": 15988,
+      "restored_sha256": "2da72298e9a5e6a5aba93c86ff345d50122ef125e0dde3273cf7d8deb8698f8f"
+    },
+    {
+      "file": "selected-evidence/mocked-package-failure-error-context-original.md.gz",
+      "bytes": 5274,
+      "sha256": "f44a9d82063f1875ec78d130dd1151d234500b52b24604ce21f3be153e15e746",
+      "encoding": "gzip",
+      "restored_bytes": 18744,
+      "restored_sha256": "b1e9b6b6e60e311e5795b40e37bda58d1aaf50dc6999570e2253e4dddcb1c0de"
+    },
+    {
+      "file": "selected-evidence/round1-G5-G5-real-retry-request.json",
+      "bytes": 2729,
+      "sha256": "252fae3b525e882111d306d961632fda65467c6c4e74a0cf0796d3ba78ba0679"
+    },
+    {
+      "file": "selected-evidence/round1-golden.json.gz",
+      "bytes": 5589,
+      "sha256": "22920a31a2d9c2f9005e38c7af95048ef046cb2b24cb1eb29f44e84aaf105178",
+      "encoding": "gzip",
+      "restored_bytes": 26895,
+      "restored_sha256": "ac7060f2d9ec78bbb1065fa96a19ada712e8c0f73d2cd80544a7e495b054943b"
+    },
+    {
+      "file": "selected-evidence/round1-job-original.log.gz",
+      "bytes": 141391,
+      "sha256": "36a058e492fcbf166fb24badafb94e47c9117f6b475d39297e8cd872427621ff",
+      "encoding": "gzip",
+      "restored_bytes": 2148412,
+      "restored_sha256": "5b7caf550c35268d7556d402b605750de83762b167b10c13eb48e1c6373193d8"
+    },
+    {
+      "file": "selected-evidence/round1-legacy.json.gz",
+      "bytes": 420421,
+      "sha256": "cf466809b29d9d4cc5002fa2749817b5cac168ad73f4cb79431ff67d6e84c8bb",
+      "encoding": "gzip",
+      "restored_bytes": 2800128,
+      "restored_sha256": "6f6f88556b9938fedba1b005ab9daa1f033c55588836064a972b3e696685e0b1"
+    },
+    {
+      "file": "selected-evidence/round1-manual-normal-manual-real-completed.png",
+      "bytes": 96007,
+      "sha256": "88df0ac385219c034371b5898354dae39bb5ad87ed9fdf69eaa677638ab4e0cb"
+    },
+    {
+      "file": "selected-evidence/round1-manual-normal-real-http.json",
+      "bytes": 698082,
+      "sha256": "7ece10a9506fc72fbe69615f144bba4e39dd827318dffd9a1ed04dee798b529c"
+    },
+    {
+      "file": "selected-evidence/round1-manual-normal-two-real-packages.json",
+      "bytes": 16103,
+      "sha256": "d737b211999d3981fdb6edc3931756923314f762ddaf6592f3ede86370994965"
+    },
+    {
+      "file": "selected-evidence/round1-manual-recovery-manual-real-recovered.png",
+      "bytes": 123034,
+      "sha256": "789b225e4139215507af0d81b4a9355a649e688b64d45e42e038b0948711c500"
+    },
+    {
+      "file": "selected-evidence/round1-manual-recovery-real-http.json",
+      "bytes": 1166377,
+      "sha256": "1ea47ce626f51e6a533203972e0602b2120da4e561a12642cdaad1f56a03a3ee"
+    },
+    {
+      "file": "selected-evidence/round1-manual-recovery-revoke-refuse-recover.json",
+      "bytes": 208762,
+      "sha256": "15d9d9e25c5c99bd1fd6a40b5cb70b80089b45230e4422bddb8540b7a3f8d21d"
+    },
+    {
+      "file": "selected-evidence/round1-service-fixture.log.gz",
+      "bytes": 69,
+      "sha256": "736a1c61042a7ddc68ed06aca34e96247c03d7e7c8326a8391dd525e346793e0",
+      "encoding": "gzip",
+      "restored_bytes": 49,
+      "restored_sha256": "d4e60a564e5420d48d95ec073588a42499930b22ceb6a6584af4da6a58c5bb8c"
+    },
+    {
+      "file": "selected-evidence/round1-service-migrate.log.gz",
+      "bytes": 101,
+      "sha256": "7174d693b265b85c1bc2af06f2799299d4c355e316a7e47cf3497ccd4cfa2acd",
+      "encoding": "gzip",
+      "restored_bytes": 85,
+      "restored_sha256": "81ce12b7d5553d5c3daa1190d2e8b97b36d3e6a8b123864414558f84275c586f"
+    },
+    {
+      "file": "selected-evidence/round1-service-serve.log.gz",
+      "bytes": 418,
+      "sha256": "e622c95ab452625d34aba34cd04322714d1b1c2b6d37242bfb3864071d0855c7",
+      "encoding": "gzip",
+      "restored_bytes": 2735,
+      "restored_sha256": "f26fccdbac9a55050bba39826e06d8c2fdb695601d88d1c2df5ea5cb383532cc"
+    },
+    {
+      "file": "selected-evidence/round1-service-worker.log.gz",
+      "bytes": 3991,
+      "sha256": "02e2693490ee72b61fa9fb25398401503d573ed113dd273a54edce3fdec19590",
+      "encoding": "gzip",
+      "restored_bytes": 29750,
+      "restored_sha256": "58890b5d5840c3c0f735b17dcfea89ed5c77a046f1c9a24c5629af4baf31b953"
+    },
+    {
+      "file": "selected-evidence/round1-timezone.json.gz",
+      "bytes": 1651,
+      "sha256": "5ebee866ecb08073561b2f13ed801231e477f24df15aad6608c8e9115a0171e3",
+      "encoding": "gzip",
+      "restored_bytes": 6122,
+      "restored_sha256": "ab77de366e9a64f66dc45cc5d91fdf6d2a4eb6d129ccc563d902a065df29e193"
+    },
+    {
+      "file": "selected-evidence/round3-G5-G5-real-retry-request.json",
+      "bytes": 2726,
+      "sha256": "04ee1eeb0da9a062037ecdf6f0e2a0b08ac199afaa36cecb1ea38d0893170391"
+    },
+    {
+      "file": "selected-evidence/round3-golden.json.gz",
+      "bytes": 5636,
+      "sha256": "cad344a9ecab6ab4707b13d9b7d2180aa9aa2796eb4dee8105346e5abf57f136",
+      "encoding": "gzip",
+      "restored_bytes": 26892,
+      "restored_sha256": "b2f10d16132794fe9898d6b7825812c2316c4fcffb5f903a5ff070e1ee8dd6e2"
+    },
+    {
+      "file": "selected-evidence/round3-job-original.log.gz",
+      "bytes": 142453,
+      "sha256": "c0950bb7e73f5111d73d921fc467e8d6670ff243e0aab1e442c460b0131d2dbe",
+      "encoding": "gzip",
+      "restored_bytes": 2144680,
+      "restored_sha256": "9066fc34c940dbd85d5b777d4cd561813eceaadbfcd2b8ca4b60d18fa016e6ee"
+    },
+    {
+      "file": "selected-evidence/round3-service-fixture.log.gz",
+      "bytes": 69,
+      "sha256": "736a1c61042a7ddc68ed06aca34e96247c03d7e7c8326a8391dd525e346793e0",
+      "encoding": "gzip",
+      "restored_bytes": 49,
+      "restored_sha256": "d4e60a564e5420d48d95ec073588a42499930b22ceb6a6584af4da6a58c5bb8c"
+    },
+    {
+      "file": "selected-evidence/round3-service-migrate.log.gz",
+      "bytes": 101,
+      "sha256": "1c6d5acb1cf55bda4306d04f495e2fd3a27fabd67333b3ce3f000023851e799c",
+      "encoding": "gzip",
+      "restored_bytes": 85,
+      "restored_sha256": "a49c204cee4fce51d716cc46e082b27bcdb6bb9d358462023dda289ad31b4ff5"
+    },
+    {
+      "file": "selected-evidence/round3-service-serve.log.gz",
+      "bytes": 255,
+      "sha256": "615f1ca1393720ec17d7500008dcd764db6c4e6fcbc50969f0bcc39e4b10fbf7",
+      "encoding": "gzip",
+      "restored_bytes": 1273,
+      "restored_sha256": "05be186f51ff5b8133923a8275f32c168170eabad7d729e162974c524f3c7c45"
+    },
+    {
+      "file": "selected-evidence/round3-service-worker.log.gz",
+      "bytes": 1476,
+      "sha256": "39d274c9b423b51e9f0ab9405de46251c8545833556610ac3b8baf84c8c41f33",
+      "encoding": "gzip",
+      "restored_bytes": 6891,
+      "restored_sha256": "d22c4dc294e3dac9184098bcb6988677d138b02dc588f659765871d98666e853"
+    }
+  ]
+}

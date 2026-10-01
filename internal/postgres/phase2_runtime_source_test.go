@@ -98,6 +98,9 @@ func TestPhase2RuntimeSourcePublicAuthorizationExactVersion(t *testing.T) {
 	if next.ID != source.ID || next.Version != source.Version+1 {
 		t.Fatal("source update changed stable identity or exact version")
 	}
+	// The current-v2 question is a new owner request with a new fixed view.
+	// A previous turn's Task.Now must not be reused across the source update.
+	reader = phase2RTTask(t, s, ownerScope, "phase2-model", "secretary", phase2RTUnscoped())
 	current, err := s.GetSource(context.Background(), reader, next.ID, next.Version)
 	if err != nil {
 		t.Fatal(err)

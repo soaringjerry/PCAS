@@ -13,6 +13,8 @@
 
 独占 `internal/postgres/actions_log.go` 及新增 `internal/postgres/approved_undo_test.go`、`docs/evaluations/2026-10-01-approved-undo.md`。静态核查确认基线缺少 newer_action 实现/映射后，协调者追加归属：`internal/workspace/model.go`、`internal/httpapi/server.go`、`internal/telegram/poller.go`、`web/src/store/api.ts` 的错误映射与既定提示；`internal/postgres/actions_log_test.go` 仅调整已记录后续动作对应的旧错误断言；新增 `internal/postgres/migrations/020_action_order.sql` 提供同事务的确定动作顺序。HTTP/Telegram 新回归可用各包独立 `approved_undo_test.go`。不得改 `stabilization_undo_test.go`（归 T4）、秘书产品文件（归 F14）、共享夹具或其他报告。
 
+全包复核后追加：`internal/postgres/auto_adopt_test.go` 中「自动采纳后正常 setNotes」对应的一个旧错误断言改为 ErrNewerAction，业务数据断言保持；新增 `internal/telegram/approved_undo_test.go` 验证回调文案。其他旧断言若冲突逐项报告，不批量替换。
+
 迁移不得用 UUID、ctid 或无序回填假称已知历史先后。历史 created_at、同轮已保存回执顺序是可用证据，确实不可重建的旧并列须保守处理并披露边界；新增事务必须具备精确顺序。先提交兼容设计供协调者审查，再固定迁移细节。既有动作/回执 ID 与幂等语义保持。
 
 兼容设计已审定：新增 nullable action_order，既有行保留 NULL，新行由 sequence 生成，不改 created_at。历史按时间及完整唯一的同轮回执证实顺序；未知旧并列为 changed_since，不把两边都提示成「先撤销另一个」。有可证后续动作时优先 newer_action。补验内容 first→second→first 后仍不能跳撤，保留原候选错误放行的实证。

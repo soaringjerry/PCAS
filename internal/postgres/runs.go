@@ -236,6 +236,10 @@ func verifyRunForItemTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run 
 // RunAgents owns costly jobs: an ambiguous provider timeout/crash is marked
 // failed and is never automatically submitted again (which could double bill).
 func (s *Store) RunAgents(ctx context.Context, logger *slog.Logger) error {
+	startupCutoff := time.Now().UTC()
+	if err := s.RecoverContextAttempts(ctx, startupCutoff, startupCutoff); err != nil && ctx.Err() == nil {
+		logger.Warn("context recovery failed", "error_type", fmt.Sprintf("%T", err))
+	}
 	if err := s.CleanupContextAttempts(ctx, time.Now().UTC()); err != nil && ctx.Err() == nil {
 		logger.Warn("context cleanup failed", "error_type", fmt.Sprintf("%T", err))
 	}
@@ -248,6 +252,9 @@ func (s *Store) RunAgents(ctx context.Context, logger *slog.Logger) error {
 		case <-ctx.Done():
 			return nil
 		case now := <-cleanupTicker.C:
+			if err := s.RecoverContextAttempts(ctx, startupCutoff, now.UTC()); err != nil && ctx.Err() == nil {
+				logger.Warn("context recovery failed", "error_type", fmt.Sprintf("%T", err))
+			}
 			if err := s.CleanupContextAttempts(ctx, now.UTC()); err != nil && ctx.Err() == nil {
 				logger.Warn("context cleanup failed", "error_type", fmt.Sprintf("%T", err))
 			}
@@ -317,9 +324,12 @@ func (s *Store) runAgentOnce(ctx context.Context) error {
 		}
 	}
 	if ctx.Err() != nil {
-		return ctx.Err()
+		generationErr = ctx.Err()
 	}
-	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	finalCtx, finalCancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer finalCancel()
+	return pgx.BeginFunc(finalCtx, s.pool, func(tx pgx.Tx) error {
+		ctx := finalCtx
 		if _, err := tx.Exec(ctx, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(scope.OwnerID)); err != nil {
 			return err
 		}

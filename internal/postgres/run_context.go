@@ -46,7 +46,8 @@ func (s *Store) requestRunTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 	if recipient != task.Recipient || task.Scope != contextScopeForItem(&item) {
 		return memory.ErrConflict
 	}
-	item, artifactRefs, err := sanitizeItemTx(ctx, tx, scope, agent.ID, item)
+	modelScope := memory.Scope{OwnerID: scope.OwnerID, PrincipalID: agent.ID, Task: &task}
+	item, artifactRefs, err := s.sanitizeItemTx(ctx, tx, modelScope, agent.ID, item)
 	if err != nil {
 		return err
 	}
@@ -54,7 +55,6 @@ func (s *Store) requestRunTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 	if err != nil {
 		return err
 	}
-	modelScope := memory.Scope{OwnerID: scope.OwnerID, PrincipalID: agent.ID, Task: &task}
 	excluded, err := queryDocuments[string](ctx, tx, "SELECT to_jsonb(memory_id::text) FROM context_exclusions WHERE owner_id=$1 AND thing_id=$2", string(scope.OwnerID), item.ID)
 	if err != nil {
 		return err
@@ -110,7 +110,7 @@ func (s *Store) requestRunTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 		if err != nil {
 			return err
 		}
-		project, refs, err := sanitizeItemTx(ctx, tx, scope, agent.ID, project)
+		project, refs, err := s.sanitizeItemTx(ctx, tx, modelScope, agent.ID, project)
 		if err != nil {
 			return err
 		}
@@ -121,12 +121,12 @@ func (s *Store) requestRunTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 		fmt.Fprintf(&brief, "子步骤（完成=%t）：%s\n", check.Done, check.Text)
 	}
 	for _, turn := range prepared.History {
-		if s.verifyRunForItemTx(ctx, tx, scope, workspace.Run{AgentID: agent.ID, ContextVersions: turn.Refs}, &item) == nil {
+		if s.verifyRunForItemTx(ctx, tx, modelScope, workspace.Run{AgentID: agent.ID, ContextVersions: turn.Refs}, &item) == nil {
 			fmt.Fprintf(&brief, "\n导办台之前的讨论：\n问：%s\n答：%s\n", turn.Question, turn.Answer)
 			artifactRefs = append(artifactRefs, turn.Refs...)
 		}
 	}
-	if previous := prepared.Previous; previous != nil && previous.ThingID == item.ID && s.verifyRunTx(ctx, tx, scope, *previous) == nil {
+	if previous := prepared.Previous; previous != nil && previous.ThingID == item.ID && s.verifyRunTx(ctx, tx, modelScope, *previous) == nil {
 		fmt.Fprintf(&brief, "\n同一事项上一次的要求：%s\n上一次的结果：%s\n", previous.Prompt, previous.Output)
 		if previous.ContextTask != nil {
 			artifactRefs = append(artifactRefs, refsForDependencies(previous.ContextDependencies)...)
@@ -365,6 +365,7 @@ func (s *Store) prepareRunContext(ctx context.Context, scope memory.Scope, c wor
 		}
 		task.View.Mode = memory.Continue
 		task.View.KnownAt, task.View.ValidAt = &task.Now, &task.Now
+		modelScope := memory.Scope{OwnerID: scope.OwnerID, PrincipalID: c.AgentID, Task: &task}
 		for _, id := range c.DeskTurnIDs {
 			if !memory.ID(id).Valid() {
 				return memory.ErrInvalid
@@ -373,12 +374,12 @@ func (s *Store) prepareRunContext(ctx context.Context, scope memory.Scope, c wor
 			if err := tx.QueryRow(ctx, "SELECT question,answer,dependencies FROM desk_turns WHERE owner_id=$1 AND id=$2 AND agent_id=$3", string(scope.OwnerID), id, c.AgentID).Scan(&turn.Question, &turn.Answer, &turn.Refs); err != nil {
 				return memory.ErrNotFound
 			}
-			if turn.Answer != "" && s.verifyRunForItemTx(ctx, tx, scope, workspace.Run{AgentID: c.AgentID, ContextVersions: turn.Refs}, &item) == nil {
+			if turn.Answer != "" && s.verifyRunForItemTx(ctx, tx, modelScope, workspace.Run{AgentID: c.AgentID, ContextVersions: turn.Refs}, &item) == nil {
 				history = append(history, turn)
 			}
 		}
 		if c.Type == "requestRun" {
-			item, _, err = sanitizeItemTx(ctx, tx, scope, c.AgentID, item)
+			item, _, err = s.sanitizeItemTx(ctx, tx, modelScope, c.AgentID, item)
 			if err != nil {
 				return err
 			}
@@ -387,7 +388,7 @@ func (s *Store) prepareRunContext(ctx context.Context, scope memory.Scope, c wor
 				projectID = item.ID
 			}
 			query += " " + item.Title + " " + item.Notes + " " + item.Body + " " + item.Goal + " " + item.Progress
-			previous, err = s.mostRecentPermittedRunTx(ctx, tx, scope, item, c.AgentID)
+			previous, err = s.mostRecentPermittedRunTx(ctx, tx, modelScope, item, c.AgentID)
 			if err != nil {
 				return err
 			}
@@ -465,13 +466,29 @@ func (s *Store) verifyRunForItemTx(ctx context.Context, tx pgx.Tx, scope memory.
 		return memory.ErrConflict
 	}
 	if run.ContextTask == nil {
-		return verifyRunForItemTx(ctx, tx, scope, run, item)
+		if err := verifyRunForItemTx(ctx, tx, scope, run, item); err != nil {
+			return err
+		}
+		if scope.Task != nil {
+			_, cov, err := hydrateTypedContextTx(ctx, tx, scope, *scope.Task, run.ContextVersions)
+			if err != nil {
+				return err
+			}
+			if !cov.Complete {
+				return memory.ErrConflict
+			}
+		}
+		return nil
 	}
 	task := *run.ContextTask
 	if task.OwnerID != scope.OwnerID || task.Recipient.PrincipalID != run.AgentID || task.Scope != contextScopeForItem(item) {
 		return memory.ErrConflict
 	}
 	recipient, err := s.contextRecipientModelTx(ctx, tx, scope, run.AgentID, task.Recipient.Role, run.ManualRecipient, task.Recipient.Model)
+	if task.Recipient.Model == "unknown" && run.ManualRecipient == nil {
+		live, e := s.trustedTaskContextTx(ctx, tx, scope, run.AgentID, task.Recipient.Role, task.Scope, nil)
+		recipient, err = live.Recipient, e
+	}
 	if err != nil || recipient != task.Recipient {
 		return memory.ErrConflict
 	}

@@ -233,10 +233,11 @@ test('desktop and 390px browser views preserve content without horizontal overfl
   expect(box!.y).toBeGreaterThanOrEqual(0)
   expect(box!.x + box!.width).toBeLessThanOrEqual(viewport.width)
   expect(box!.y + box!.height).toBeLessThanOrEqual(viewport.height)
-  // Check center and both lower corners against the actual painted hit target.
+  // Check the center and four edge midpoints inside the pill-shaped button.
   const uncovered = await submit.evaluate(button => {
     const rect = button.getBoundingClientRect()
-    return [[rect.x + rect.width / 2, rect.y + rect.height / 2], [rect.x + 2, rect.bottom - 2], [rect.right - 2, rect.bottom - 2]]
+    const cx = rect.x + rect.width / 2, cy = rect.y + rect.height / 2
+    return [[cx, cy], [cx, rect.y + 2], [cx, rect.bottom - 2], [rect.x + 2, cy], [rect.right - 2, cy]]
       .every(([x, y]) => { const hit = document.elementFromPoint(x, y); return hit !== null && (hit === button || button.contains(hit)) })
   })
   expect(uncovered).toBe(true)

@@ -1,0 +1,87 @@
+{
+  "schema": "pcas.phase2.independent-delegation-gold.v1",
+  "frozen_at": "2026-10-01",
+  "authority": "root approved source-derived delegate role isolation; independent expectations before A shared action preparation delivery",
+  "extends": [
+    "gold.json",
+    "runtime-sequences.json"
+  ],
+  "original_input": {
+    "source_record": "gold.records[0]",
+    "version": 1,
+    "claim_count": 0,
+    "atom": "gold.records[0].atoms[0]",
+    "owner_query": "请让副手整理这份资料的安排",
+    "query_contains_atom": false
+  },
+  "cases": [
+    {
+      "id": "D1",
+      "sequence": [
+        "public exact source authorization only secretary role",
+        "actual DeskTurn secretary HTTP includes frozen source atoms",
+        "fake secretary emits delegate:new title/prompt containing first source atom and Used=[]",
+        "execute/run deputy without own source authorization"
+      ],
+      "required": [
+        "secretary actual input positive control before role-boundary denial",
+        "title/prompt synthetic model output cannot turn raw source atoms into unrestricted user request text",
+        "deputy actual HTTP count zero",
+        "no successful derived run result/adoption",
+        "no raw title/prompt replay or generated current view exposure to unauthorized receiver"
+      ],
+      "not_substitutes": [
+        "coarse record_grants",
+        "claim from source",
+        "fake role-empty recipient",
+        "absent source candidate",
+        "malformed fake output",
+        "background missing-model setup"
+      ]
+    },
+    {
+      "id": "D2",
+      "sequence": [
+        "same exact source public grants separately secretary and deputy roles for same provider/principal/purpose/hard scope",
+        "actual DeskTurn emits same delegate title/prompt from supplied source",
+        "actual Execute/shared preparation → RunAgents deputy HTTP",
+        "inspect real run attempt and durable dependencies"
+      ],
+      "required": [
+        "exact source atom in actual deputy serialized request",
+        "real complete structured output same frozen synthetic answer Used=[]",
+        "manifest IndirectDependencies contains original exact source kind/id/version for action-derived title/prompt",
+        "current deputy recipient and source authorization stamp valid independently of secretary policy",
+        "source causal dependency retained even if deputy direct retrieval also supplies same exact source",
+        "no source claim minted solely to make delegate work"
+      ],
+      "boundary": "indirect lineage is a separate fact from actual input; direct and indirect provenance may overlap for the same exact ref"
+    },
+    {
+      "id": "D3",
+      "sequence": [
+        "D2 true successful deputy result and real adoption positive control",
+        "revoke deputy exact source policy while secretary policy still allows",
+        "read/replay/regenerate/adopt old source-derived run",
+        "regrant deputy; request new work"
+      ],
+      "required": [
+        "secretary still independently lawful raw reader",
+        "old deputy derived body cannot be supplied or adopted",
+        "old attempt/result never revived by ABA",
+        "new lawful work may reconstruct from current exact source context",
+        "durable dependencies remain independent of attempt retention"
+      ]
+    }
+  ],
+  "unchanged_legacy": [
+    "TestApprovedRules_InvalidAliasesNeverFallBackToTHIS/delegate-new",
+    "TestSameTurnDelegateTargetsCommittedCreation (create_task then delegate N1)",
+    "all original alias/order/undo successful assertions"
+  ],
+  "separate_open_boundaries": [
+    "source-derived create/update title/notes/progress provenance",
+    "other alias delegates THIS/R/T/P and prospective N*",
+    "full action chain is not accepted by testing delegate alone"
+  ]
+}

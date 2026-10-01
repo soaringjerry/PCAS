@@ -10,7 +10,7 @@
 
 ## 你独占的文件
 
-`internal/memory/contracts.go`（只加 Scope 的内部标记）、`internal/postgres/retrieval.go`、`desk_turn.go`、`run_context.go`、`runs.go`、`telegram_turn.go`、`internal/workspace/desk.go`；R7 需要时可以动 `internal/telegram/`。
+`internal/memory/contracts.go`（只加 Scope 的内部标记）、`internal/postgres/retrieval.go`、`desk_turn.go`、`run_context.go`、`runs.go`、`telegram_turn.go`、`artifacts.go`（只改 `sanitizeItemTx` 里校验运行依赖的那条查询）、`internal/workspace/desk.go`；R7 需要时可以动 `internal/telegram/`。
 
 不要动：`actions_log.go`、`processing.go`、`undone_turns.go`、迁移文件（B 的）；`web/`（C 的）；任何测试文件（T 的）。
 
@@ -40,6 +40,8 @@
 `verifyRunForItemTx`（`runs.go`）现在把每个依赖都当陈述查。改成按 `kind` 分开：陈述走原逻辑；原话检查记录还在且当前版本等于记下的版本。`kind` 为空的旧依赖按陈述处理（历史数据都是陈述）。
 
 删除传播不用新写：现有的删除语句按依赖里的 id 匹配，原话的 id 一样会被匹配到。请确认 `run_dependencies` 对原话 id 也能正常写入和匹配。
+
+`artifacts.go` 的 `sanitizeItemTx` 里有一条查询，把一次运行的所有依赖都当陈述来校验，并把返回的 `kind` 写死成 `claim`。原话依赖进来之后，用到原话的副手结果会被误判为无效。**允许你改这一条查询，范围只到这里**：原话依赖只看记录还在、版本没变，不要求授权，不套用陈述的类别和项目规则，事项上的排除项照常生效；返回实际的 `kind`；陈述的判断保持原样。`artifacts.go` 的其他部分不要动。
 
 ### 5 依据变了只标记（R7）
 

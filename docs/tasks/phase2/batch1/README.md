@@ -67,6 +67,7 @@
 - 陈述：规则不变；
 - 原话：记录还在、当前版本等于记下的版本，就有效；版本变了算「依据变了」（R7）；
 - 被删除的记录：沿用现有的删除传播。删除一份原话，用到它的对话轮被清空、用到它的副手结果及其文档被删除，和今天删除一条陈述时一样。
+- 副手结果被采纳进事项之后，再把这件事交给模型时会检查那次运行的依赖还有没有效（`artifacts.go` 的 `sanitizeItemTx`）。这里同样按类别分开：依赖是原话的，只看「记录还在、版本没变」，不要求授权，也不套用陈述的类别和项目规则；事项上的排除项照常生效。返回的依赖带实际的 `kind`。陈述的判断一个字不改。
 
 ### 依据变了只标记
 
@@ -141,6 +142,7 @@
 | P10 | 副手被设置成看不到「偏好」类记忆 | 偏好类陈述照旧不给；相关原话照样给 |
 | P11 | 原话有两个版本 | 只给当前版本的内容 |
 | P12 | 图片、音频这类没有可读文本的资料 | 不给；有转录或 OCR 文本的，给那份文本 |
+| P13 | 副手用到一份原话，结果被采纳进事项 → 再让秘书或另一个副手处理这件事 | 采纳进来的内容照常交给模型，不因为依赖是原话而被去掉；这份原话出了新版本之后再处理，这段内容不再交给模型（和陈述被纠正时一样），用户自己看到的事项内容不变 |
 
 ### 依据变了只标记
 
@@ -170,6 +172,7 @@
 | N9 | 同一个撤销请求重放 | 结果相同，不重复删除，不报错 |
 | N10 | 界面上手动建的事项被撤销 | 不触发 |
 | N11 | 第一轮「周五三点开会」新建，第二轮「改到四点」修改 → 先撤销修改，再撤销新建 | 第一轮那句话的记忆在撤销新建之后才删除；只撤销修改时不删 |
+| N12 | **随机序列**：分布在多轮里的 20 个秘书动作（新建、修改、加步骤），每轮的原话都抽出一条计划记忆 → 按逆序逐个撤销 | 每一步撤销都成功；每撤完一轮的最后一个动作，那一轮的计划记忆被删除，其他轮的还在；全部撤完后事项和开始时一致，原话资料和对话记录都在。固定种子跑 20 组，失败时输出种子 |
 
 ### 清理迁移
 
@@ -208,7 +211,7 @@ Astra 这一批不用，留作疑难时的后备。四个任务各由一个执�
 
 | 写入者 | 文件 |
 |---|---|
-| A | `internal/memory/contracts.go`（只加 Scope 的内部标记）、`internal/postgres/retrieval.go`、`desk_turn.go`、`run_context.go`、`runs.go`、`telegram_turn.go`、`internal/workspace/desk.go`、`internal/telegram/`（只在 R7 需要时） |
+| A | `internal/memory/contracts.go`（只加 Scope 的内部标记）、`internal/postgres/retrieval.go`、`desk_turn.go`、`run_context.go`、`runs.go`、`telegram_turn.go`、`artifacts.go`（只改 `sanitizeItemTx` 里校验运行依赖的那条查询，见 R6）、`internal/workspace/desk.go`、`internal/telegram/`（只在 R7 需要时） |
 | B | `internal/postgres/undone_turns.go`（新）、`actions_log.go`、`processing.go`、`internal/postgres/migrations/026_drop_phase2_0_leftovers.sql`（新） |
 | C | `web/src/domain/desk.ts`、`web/src/components/SecretaryCards.tsx`、`web/src/components/Secretary.tsx`、`web/src/styles/secretary.css` |
 | T | `internal/postgres/phase2_b1_*_test.go`（新）、`testdata/phase2/`（新）、`web/tests/phase2-batch1*.spec.ts`（新）、`web/tests/support/` 里为新用例必须的改动、CI 工作流里把新用例加进去的那一行、`docs/evaluations/` 里本批的验收报告 |

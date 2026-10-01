@@ -14,6 +14,31 @@ binaries. It serves `web/dist`; there is no browser API interception. It runs
 times without retries, then the four older backend specs once. Set
 `PCAS_GOLDEN_PORT` to change the default localhost port 18097.
 
+CI runs the three golden repetitions on separate GitHub-hosted runners, each
+with one Playwright worker and its own database, owner, settings and provider
+fixtures. `PCAS_REAL_BACKEND_ROUND=1` selects timezone, one golden repetition and
+the four legacy tests (17 executions); `2` or `3` selects one golden repetition
+only (12 each). Together the jobs retain all 41 executions. All rounds finish
+independently after a failure and upload separately named artifacts; the stable
+`browser-real-backend` check requires every round to succeed.
+
+The selector controls only the default suite, not an explicit custom command.
+An unset or empty selector keeps the full local suite and its shared database
+across three repetitions. Every CI repetition instead starts with a fresh
+database, so it does not cover cross-repetition state accumulation. Golden
+scenarios create their own records and fixtures and do not require a preceding
+repetition. Any other nonempty selector exits with status 2 before allocating
+resources, including when a custom command was supplied.
+
+To run a CI round locally, after installing and building as above:
+
+```sh
+PCAS_REAL_BACKEND_ROUND=1 bash web/tests/support/real-backend.sh
+```
+
+Run local rounds sequentially. They use the same fixed callback/API ports and
+result directories; separate GitHub-hosted runners provide CI isolation.
+
 To select a smaller run:
 
 ```sh

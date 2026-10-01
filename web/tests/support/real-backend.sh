@@ -3,6 +3,14 @@
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/../../.."
 root=$PWD
+# Validate before allocating resources, including for custom-command runs.
+round=${PCAS_REAL_BACKEND_ROUND:-}
+case "$round" in
+  '') golden_repeats=3; run_auxiliary=true ;;
+  1) golden_repeats=1; run_auxiliary=true ;;
+  2|3) golden_repeats=1; run_auxiliary=false ;;
+  *) echo "PCAS_REAL_BACKEND_ROUND must be 1, 2, or 3 (or unset)" >&2; exit 2 ;;
+esac
 mkdir -p "$root/data"
 run_dir=$(mktemp -d "$root/data/golden-XXXXXX")
 container="pcas-test-E-$$"
@@ -69,13 +77,18 @@ if (($#)); then
   "$@"
 else
   status=0
-  # The first-login default requires the runner's fresh workspace.
-  PLAYWRIGHT_JSON_OUTPUT_NAME=test-results/timezone.json npx playwright test tests/timezone-backend.spec.ts \
-    --output=test-results/timezone --reporter=list,json || status=1
+  # Round 1 owns auxiliary coverage; no selector retains the full local suite.
+  if "$run_auxiliary"; then
+    # The first-login default requires the runner's fresh workspace.
+    PLAYWRIGHT_JSON_OUTPUT_NAME=test-results/timezone.json npx playwright test tests/timezone-backend.spec.ts \
+      --output=test-results/timezone --reporter=list,json || status=1
+  fi
   PLAYWRIGHT_JSON_OUTPUT_NAME=test-results/golden.json npx playwright test tests/golden.spec.ts \
-    --repeat-each=3 --output=test-results/golden --reporter=list,json || status=1
-  PLAYWRIGHT_JSON_OUTPUT_NAME=test-results/legacy.json npx playwright test tests/backend.spec.ts \
-    tests/continuity.spec.ts tests/chatgpt-direct.spec.ts tests/model-api.spec.ts \
-    --output=test-results/legacy --reporter=list,json || status=1
+    --repeat-each="$golden_repeats" --output=test-results/golden --reporter=list,json || status=1
+  if "$run_auxiliary"; then
+    PLAYWRIGHT_JSON_OUTPUT_NAME=test-results/legacy.json npx playwright test tests/backend.spec.ts \
+      tests/continuity.spec.ts tests/chatgpt-direct.spec.ts tests/model-api.spec.ts \
+      --output=test-results/legacy --reporter=list,json || status=1
+  fi
   exit "$status"
 fi

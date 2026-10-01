@@ -65,3 +65,28 @@ PCAS_TEST_DATABASE_URL='postgres://postgres:test@127.0.0.1:33256/postgres?sslmod
 ## 清理
 
 自有测试容器在验证结束后执行 `docker rm -f -v pcas-test-F12-telegram` 并确认不存在；HTTP fake 服务、临时通知和 blob 目录由测试 cleanup 释放。没有持久后台进程、没有按进程名终止、没有清理其他任务或生产资源。小型 `/tmp/pcas-test-F12-*.log` 留供协调者检查。交付后停止写入。
+
+## 远端完整浏览器 CI 补验
+
+首次交付 `c1a0173629568c4588ed1f942af28e6010dd4f04` 后，PR #30 的 [browser regression run36826478748](https://github.com/soaringjerry/PCAS/actions/runs/36826478748) 在 G7 三轮均失败于入站任务可见断言（行 138）。其原始服务日志持续出现 `Telegram polling will retry`，三份 G7 trace 显示 Telegram 配置 PUT 和入站 fixture/control POST 均返回 200，但随后没有任务。下载远端 artifact 核对日志/trace，并直接运行原 golden fixture：`getMe` 的实际响应是 `{"ok":true,"result":true}`，与新身份协议要求的 User 对象不符；证据 `/tmp/pcas-test-F12-getMe-before.json`、协调者保存的 `/tmp/pcas-pr30-ci-failed.log`。
+
+协调者授权 `internal/testsupport/golden/main.go` 补协议，随后在 F11 明确释放 `web/tests/golden.spec.ts` 后，仅授权修改 G7 回调 hunk。先只补 getMe 保持旧 101 回调，本地 G7 真实失败于撤销后任务消失断言（行 146），而入站、首页展示、回执文字、Undo 按钮断言均已通过。trace 的 sendMessage 事件记录真实 `messageId=102`；旧测试携带的却是 `message_id=101`，不能命中持久回执关联。证据 `/tmp/pcas-test-F12-G7-before-callback.log`、`/tmp/pcas-test-F12-G7-before-callback-evidence.jsonl`，失败 trace 在本工作区 `web/test-results/F12-g7-before/`。
+
+补丁只涉及 golden fixture、G7 回调和本报告，不修改真实身份校验、持久绑定或秘书产品逻辑：
+
+- getMe 返回固定 acceptance bot 的稳定 `id=123456`、`is_bot=true` 及 User 基本字段，不随事件重置或请求顺序变化；不再让该方法落入返回布尔值的通用分支。
+- 在既有 sendMessage 事件中增加 `messageId: number`，值严格等于该次 API 响应的 `message_id`；沿用原发送 ID 生成方式，不把它固定成 101，不新增另一套 fixture 状态。
+- G7 从已找到的真实发送事件读取该 ID，验证安全正整数后构造 callback。回执正文/Undo 按钮、首页任务消失、snapshot 无该任务、answerCallbackQuery 等断言全部保留。F11 的 G9 文案 hunk 不在此分支改动，最终候选由 A1 合并两者后验收。
+
+补验使用自有依赖、`18148` API / `18149` callback 端口；在 `/tmp/pcas-test-F12-browser-run.sh` 临时复制既有真实后端 runner，只调整工作区、自有 `pcas-test-F12-golden-*` 容器命名、端口及 WAL 128/32MB，未修改跟踪的 runner。容器为 1GiB tmpfs PostgreSQL，localhost 随机端口；实际 API/worker 配合本地假模型、Telegram、Push。以下结果只覆盖 G6/G7 专项，不替代 A1 的整体浏览器验收或真实 Telegram。
+
+```sh
+PATH=/root/.nvm/versions/node/v22.23.3/bin:$PATH PCAS_GOLDEN_PORT=18148 \
+  bash /tmp/pcas-test-F12-browser-run.sh \
+  npx playwright test tests/golden.spec.ts --grep 'G[67] ' --repeat-each=3 \
+  --output=test-results/F12-g67-final --reporter=list
+```
+
+最终专项 **6/6 通过、零 skip**：G6 三轮（真实一分钟等待、首页提醒、Web Push 加密投递及 Telegram）和 G7 三轮（入站任务、回执及合法绑定撤销）。完整日志 `/tmp/pcas-test-F12-G67-final.log`；本次 fixture 变更后的 `make check` 也通过，日志 `/tmp/pcas-test-F12-browser-makecheck.log`。前端自有依赖安装及 build 通过；没有重跑或宣称整个 golden/full-browser suite 已通过，最终完整 runner 等 A1 整合 F11、F12、U1 后执行。
+
+两次自有真实后端 runner 的 cleanup 均完成：只终止其记录的 fixture/API/worker PID 并等待退出，只删除自己的 `pcas-test-F12-golden-*` 容器和卷，临时运行目录已删除，18148/18149 无监听。单独协议复现 fixture PID 已正常终止；已清理下载的远端 artifact、临时复现 binary/fixture 目录，保留小型证明日志/JSON和本工作区浏览器证据。没有连接生产、没有真实通道调用、没有部署或合并 main。本轮补提交到原 PR #30 后再次停止写入。

@@ -23,6 +23,7 @@ function candidate(kind: Candidate['kind'], id = `candidate-${kind}`): Candidate
 async function mock(page: Page, initial = workspace()) {
   const backend = {
     state: structuredClone(initial), commands: [] as Command[], writes: [] as { path: string; method: string }[], errors: [] as string[],
+    deskCalls: [] as { thingId?: string; text: string }[], turnUpdate: undefined as { title?: string; notes?: string } | undefined,
     resolutionId: 'server-result-a73', resolutionMissing: false, rejectNext: false, waitNext: undefined as Promise<void> | undefined,
     holdNext() {
       let release!: () => void
@@ -36,6 +37,16 @@ async function mock(page: Page, initial = workspace()) {
     if (method !== 'GET') backend.writes.push({ path, method })
     if (path === '/v1/workspace' && method === 'GET') return route.fulfill({ json: backend.state })
     if (path === '/v1/desk/turns' && method === 'GET') return route.fulfill({ json: { turns: [] } })
+    if (path === '/v1/desk/turn' && method === 'POST') {
+      const body = request.postDataJSON()
+      backend.deskCalls.push(body)
+      expect(body.thingId).toBe('task-original')
+      backend.state = { ...backend.state, revision: backend.state.revision + 1, tasks: backend.state.tasks.map(task => task.id === body.thingId ? { ...task, ...backend.turnUpdate } : task) }
+      return route.fulfill({ json: { conversationId: body.conversationId, state: backend.state, turn: {
+        id: 'server-turn', text: body.text, reply: '改好了', agent: '独立验收模型', createdAt: at, ask: null, cards: [],
+        receipts: [{ actionId: 'server-update-action', op: 'update', text: '已更新标题和说明', thingId: body.thingId, status: 'done', undoable: true }],
+      } } })
+    }
     if (path === '/v1/connectors' && method === 'GET') return route.fulfill({ json: [] })
     if (path === '/v1/notify/config' && method === 'GET') return route.fulfill({ json: { webPush: { publicKey: '', subscriptions: 0 }, telegram: { configured: false, chatId: '' } } })
     if (path === '/v1/models/openai' && method === 'GET') return route.fulfill({ json: { editable: true, text: { base_url: '', model: '', input_cny_per_million: 3, output_cny_per_million: 7, default: false, key_configured: false }, embedding: { base_url: '', model: '', input_cny_per_million: 0.2, output_cny_per_million: 0, default: false, key_configured: false }, decision: { key_configured: false, saved: false } } })
@@ -312,3 +323,58 @@ for (const permission of [
   expect(backend.errors).toEqual([])
  })
 }
+
+
+test('mounted saved title and notes show secretary updates while full reload agrees', async ({ page },info) => {
+ const initial=workspace();initial.agents[0].enabled=true
+ const backend=await mock(page,initial)
+ await page.goto('/t/task-original')
+ const title=page.getByRole('textbox',{name:'标题',exact:true})
+ const notes=page.getByRole('textbox',{name:'说明',exact:true})
+ await title.fill('人工保存标题')
+ await title.press('Tab')
+ await expect.poll(()=>backend.commands.length).toBe(1)
+ expect(backend.state.tasks[0].title).toBe('人工保存标题')
+ await notes.fill('人工保存说明')
+ await title.click()
+ await expect.poll(()=>backend.commands.length).toBe(2)
+ expect(backend.state.tasks[0].notes).toBe('人工保存说明')
+ backend.turnUpdate={title:'秘书更新后的标题',notes:'秘书更新后的说明'}
+ const input=page.getByRole('textbox',{name:'跟秘书说'})
+ await input.fill('改标题和说明')
+ await input.press('Enter')
+ await expect.poll(()=>backend.deskCalls.length).toBe(1)
+ await expect(page.getByText('已更新标题和说明',{exact:true})).toBeVisible()
+ expect(backend.state.tasks[0]).toMatchObject(backend.turnUpdate)
+ await info.attach('server-state-and-mounted-inputs.json',{body:JSON.stringify({commands:backend.commands,deskCalls:backend.deskCalls,saved:backend.state.tasks[0],mounted:{title:await title.inputValue(),notes:await notes.inputValue()}},null,2),contentType:'application/json'})
+ await page.screenshot({path:info.outputPath('mounted-after-secretary.png'),fullPage:true})
+ await expect.soft(title).toHaveValue('秘书更新后的标题')
+ await expect.soft(notes).toHaveValue('秘书更新后的说明')
+ await page.reload()
+ await expect(title).toHaveValue('秘书更新后的标题')
+ await expect(notes).toHaveValue('秘书更新后的说明')
+ expect(backend.commands).toHaveLength(2)
+ expect(backend.deskCalls).toHaveLength(1)
+ expect(backend.errors).toEqual([])
+})
+
+test('a rejected unsaved notes draft survives a secretary state refresh',async({page})=>{
+ const initial=workspace();initial.agents[0].enabled=true
+ const backend=await mock(page,initial)
+ backend.rejectNext=true
+ await page.goto('/t/task-original')
+ const notes=page.getByRole('textbox',{name:'说明',exact:true})
+ await notes.fill('保存失败的草稿，不能被静默覆盖')
+ await notes.press('Tab')
+ await expect(page.getByText(/没保存上/)).toBeVisible()
+ backend.turnUpdate={notes:'服务端更新的已保存说明'}
+ const input=page.getByRole('textbox',{name:'跟秘书说'})
+ await input.fill('更新已保存说明')
+ await input.press('Enter')
+ await expect(page.getByText('已更新标题和说明',{exact:true})).toBeVisible()
+ expect(backend.state.tasks[0].notes).toBe('服务端更新的已保存说明')
+ await expect(notes).toHaveValue('保存失败的草稿，不能被静默覆盖')
+ expect(backend.commands).toHaveLength(1)
+ expect(backend.deskCalls).toHaveLength(1)
+ expect(backend.errors).toEqual([])
+})

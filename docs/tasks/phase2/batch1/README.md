@@ -87,7 +87,9 @@
   "sourceId": "<同一个 id>", "sourceVersion": 3, "at": "<表达时间，没有则为记录时间>" }
 ```
 
-陈述条目加 `"kind": "claim"`，其他字段不变。没有 `kind` 的旧条目按陈述处理。原话条目这一批不进时间轴卡片。
+陈述条目加 `"kind": "claim"`，其他字段不变。没有 `kind` 的旧条目按陈述处理。原话条目这一批不进时间轴卡片：后端不为原话生成时间轴条目；前端在同时有时间轴时，记忆照旧并进时间轴，原话留在单独的依据列表里。
+
+**R8a**（2026-10-02 补充，任务 C2）从依据卡片点开一条原话，面板里直接看到原文，不用再点；能在原文里找到卡片上那段摘录时，定位到那一段并标出来。面板上不出现版本号、处理状态和摘要。资料库等其他入口打开的面板不变。
 
 ### 撤销连带记忆
 
@@ -201,9 +203,10 @@
 | [A](A-raw-text.md) | 原话供给、依赖校验、依据标记、依据卡片（后端） | 6.1 Sol | B 的第一个提交 |
 | [B](B-undo-memory.md) | 「整轮都被撤销」判断、撤销连带记忆、抽取跳过、清理迁移 | 6.1 Sol | 无 |
 | [C](C-frontend.md) | 依据卡片里的原话条目、「依据已更新」标记（前端） | Opus 5.5 | 无，按第 3、5 节的形状做 |
-| [T](T-acceptance.md) | 独立验收：按第 4 节写测试，不看实现 | 6.1 Sol（另一个执行者） | 先按本页写；A、B、C 合进集成分支后跑 |
+| [C2](C2-source-sheet.md) | 从依据卡片点开，直接看到当时那句话（前端，R8a） | Opus 5.5（做 C 的同一个执行者） | C 已合入 |
+| [T](T-acceptance.md) | 独立验收：按第 4 节写测试，不看实现 | 6.1 Sol（另一个执行者） | 先按本页写；A、B、C、C2 合进集成分支后跑 |
 
-Astra 这一批不用，留作疑难时的后备。四个任务各由一个执行者做，**A、B、T 必须是三个不同的执行者**。
+Astra 这一批不用，留作疑难时的后备。A、B、C、T 各由一个执行者做，C2 交给做 C 的执行者，**A、B、T 必须是三个不同的执行者**。
 
 ## 7 文件归属
 
@@ -213,7 +216,8 @@ Astra 这一批不用，留作疑难时的后备。四个任务各由一个执�
 |---|---|
 | A | `internal/memory/contracts.go`（只加 Scope 的内部标记，以及 `RecallResult` 上不对外输出的摘录列表，标 `json:"-"`）、`internal/postgres/retrieval.go`、`desk_turn.go`、`run_context.go`、`runs.go`、`telegram_turn.go`、`artifacts.go`（只改 `sanitizeItemTx` 里校验运行依赖的那条查询，见 R6）、`internal/workspace/desk.go`、`internal/telegram/`（只在 R7 需要时） |
 | B | `internal/postgres/undone_turns.go`（新）、`actions_log.go`、`processing.go`、`internal/postgres/migrations/026_drop_phase2_0_leftovers.sql`（新） |
-| C | `web/src/domain/desk.ts`、`web/src/components/SecretaryCards.tsx`、`web/src/components/Secretary.tsx`、`web/src/styles/secretary.css` |
+| C | `web/src/domain/desk.ts`、`web/src/components/SecretaryCards.tsx`、`web/src/components/Secretary.tsx`、`web/src/styles/secretary.css`（已合入） |
+| C2 | `web/src/components/SourceSheet.tsx`、`web/src/components/SecretaryCards.tsx`（只改打开面板的调用）、`web/src/styles/app.css`（只动 `.source-*` 这一组样式） |
 | T | `internal/postgres/phase2_b1_*_test.go`（新）、`testdata/phase2/`（新）、`web/tests/phase2-batch1*.spec.ts`（新）、`web/tests/support/` 里为新用例必须的改动、CI 工作流里把新用例加进去的那一行、`docs/evaluations/` 里本批的验收报告 |
 | 协调者 | `docs/` 其余部分、集成分支、合并、部署 |
 
@@ -222,7 +226,7 @@ A、B、C 不写新的测试文件，也不改已有测试的预期。已有测�
 ## 8 分支、环境、交付
 
 - **基线**：`origin/main`。**集成分支**：`phase2/batch1`，由协调者从 main 建，协调者合并。
-- **各自的分支**：`phase2/b1-A-raw-text`、`phase2/b1-B-undo-memory`、`phase2/b1-C-frontend`、`phase2/b1-T-acceptance`，都从 `phase2/batch1` 建。**工作区**：`/root/PCAS-wt/b1-A`、`b1-B`、`b1-C`、`b1-T`。不在 `/root/PCAS` 里干活。
+- **各自的分支**：`phase2/b1-A-raw-text`、`phase2/b1-B-undo-memory`、`phase2/b1-C-frontend`、`phase2/b1-C2-source-sheet`、`phase2/b1-T-acceptance`，都从 `phase2/batch1` 建。另有 `phase2/b1-C-frontend-screenshots`，只放 PR 说明里引用的模拟数据截图，本批进 main 后删除。**工作区**：`/root/PCAS-wt/b1-A`、`b1-B`、`b1-C`、`b1-C2`、`b1-T`。不在 `/root/PCAS` 里干活。
 - **PR**：Draft，base 是 `phase2/batch1`。不合 main，不部署。
 - **测试环境**：自己起临时的 PostgreSQL（`pgvector/pgvector:0.8.2-pg16-bookworm`，tmpfs，随机本机端口），用假模型服务。不连线上库，不读 `/root/PCAS/.env` 和 `config/`，不调真实模型，不发真实通知。
 - **本机规矩**：线上实例跑在同一台机器上。不按名字杀进程（`pkill`、`killall`）；自己起的进程记下 pid、自己起的容器记下 id，只清理自己的。

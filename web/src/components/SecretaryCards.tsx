@@ -6,27 +6,45 @@ import { formatShortDate, formatDateTime, isOverdue } from '../domain/time'
 import { useStore } from '../store/context'
 import { SourceSheet } from './SourceSheet'
 
-function Sources({ card }: { card: SourcesCard }) {
+type Quote = SourcesCard['items'][number]
+
+/** A line kept as it was said, rather than a memory drawn from one. */
+const isSaid = (item: Quote) => item.kind === 'source'
+
+function Sources({ items }: { items: Quote[] }) {
   const { state } = useStore()
   const [open, setOpen] = useState<{ id: string; version?: number } | null>(null)
   return (
     <ul className="sec-sources" aria-label="依据">
       {open && <SourceSheet id={open.id} version={open.version} onClose={() => setOpen(null)} />}
-      {card.items.map((item) => {
-        const body = (
+      {items.map((item) => {
+        const said = isSaid(item)
+        const when = item.at ? formatShortDate(item.at, state.settings.timezone ?? 'UTC') : ''
+        // The user's own words come in quotation marks and are named as such; a memory stays a plain line.
+        const body = said ? (
+          <>
+            <q className="s-text">{item.text}</q>
+            <span className="s-when">
+              原话
+              {when && ' · '}
+              {when && <time>{when}</time>}
+            </span>
+          </>
+        ) : (
           <>
             <span className="s-text">{item.text}</span>
-            {item.at && <time className="s-when">{formatShortDate(item.at, state.settings.timezone ?? 'UTC')}</time>}
+            {item.at && <time className="s-when">{when}</time>}
           </>
         )
         return (
-          <li key={`${item.memoryId}-${item.version}`}>
+          <li key={`${item.memoryId}-${item.version}`} className={said ? 'said' : undefined}>
             {item.sourceId ? (
-              <button type="button" title={item.text} onClick={() => setOpen({ id: item.sourceId!, version: item.sourceVersion ?? undefined })}>
+              // An excerpt can run long; the row shows its start and the sheet has all of it.
+              <button type="button" title={said ? '看原文' : item.text} onClick={() => setOpen({ id: item.sourceId!, version: item.sourceVersion ?? undefined })}>
                 {body}
               </button>
             ) : (
-              <div title={item.text}>{body}</div>
+              <div title={said ? undefined : item.text}>{body}</div>
             )}
           </li>
         )
@@ -50,7 +68,6 @@ function Links({ card }: { card: LinksCard }) {
   )
 }
 
-type Quote = SourcesCard['items'][number]
 type Moment = TimelineCard['items'][number] & { source?: Quote }
 
 function Timeline({ title, items }: { title?: string; items: Moment[] }) {
@@ -89,17 +106,19 @@ function Timeline({ title, items }: { title?: string; items: Moment[] }) {
 /**
  * With a timeline, the quotes live on it rather than in a second list: each
  * moment carries its source, and quotes without a moment join it in time order.
+ * Lines as they were said are not moments; they keep their own list.
  */
 function withQuotes(timeline: TimelineCard, sources: SourcesCard | undefined): Moment[] {
-  if (!sources) return timeline.items
-  const byMemory = new Map(sources.items.map((q) => [q.memoryId, q]))
+  const quotes = sources?.items.filter((q) => !isSaid(q)) ?? []
+  if (!quotes.length) return timeline.items
+  const byMemory = new Map(quotes.map((q) => [q.memoryId, q]))
   const placed = new Set<string>()
   const moments: Moment[] = timeline.items.map((item) => {
     const source = item.memoryId ? byMemory.get(item.memoryId) : undefined
     if (source) placed.add(source.memoryId)
     return { ...item, source }
   })
-  const rest = sources.items.filter((q) => !placed.has(q.memoryId)).map((q): Moment => ({ at: q.at, text: q.text, status: 'open', memoryId: q.memoryId, thingId: null, source: q }))
+  const rest = quotes.filter((q) => !placed.has(q.memoryId)).map((q): Moment => ({ at: q.at, text: q.text, status: 'open', memoryId: q.memoryId, thingId: null, source: q }))
   // Keep the timeline in time order; moments without a time go last, in the order given.
   const when = (m: Moment) => (m.at ? new Date(m.at).getTime() : Infinity)
   return [...moments, ...rest].sort((a, b) => when(a) - when(b))
@@ -148,9 +167,11 @@ export function SecretaryCards({ cards }: { cards: DeskCard[] }) {
     <>
       {known.map((card, i) => {
         switch (card.kind) {
-          case 'sources':
-            // Said once: a timeline already carries these quotes.
-            return timeline ? null : <Sources key={i} card={card} />
+          case 'sources': {
+            // Said once: a timeline already carries the memories, so only the lines as they were said are left to list.
+            const items = timeline ? card.items.filter(isSaid) : card.items
+            return items.length > 0 ? <Sources key={i} items={items} /> : null
+          }
           case 'links':
             return <Links key={i} card={card} />
           case 'timeline':

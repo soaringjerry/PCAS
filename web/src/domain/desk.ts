@@ -4,7 +4,8 @@ import type { State, TaskStatus } from './types'
 
 export interface SourcesCard {
   kind: 'sources'
-  items: { memoryId: string; version: number; text: string; sourceId?: string | null; sourceVersion?: number | null; at?: string | null }[]
+  /** `source` is a line as it was said, with `memoryId` naming that record; `claim`, or no kind, is a memory. */
+  items: { kind?: 'claim' | 'source'; memoryId: string; version: number; text: string; sourceId?: string | null; sourceVersion?: number | null; at?: string | null }[]
 }
 
 export interface LinksCard {
@@ -59,6 +60,8 @@ export interface DeskTurn {
   ask: DeskAsk | null
   agent: string
   createdAt: string
+  /** What this answer drew on has been changed since; the turn itself is shown as it was. */
+  outdated?: boolean
 }
 
 export interface DeskTurnRequest {

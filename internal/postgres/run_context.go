@@ -46,6 +46,9 @@ func (s *Store) requestRunTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 	if recipient != task.Recipient || task.Scope != contextScopeForItem(&item) {
 		return memory.ErrConflict
 	}
+	if err := verifyTypedContextTx(ctx, tx, scope, task, prepared.Indirect); err != nil {
+		return err
+	}
 	modelScope := memory.Scope{OwnerID: scope.OwnerID, PrincipalID: agent.ID, Task: &task}
 	item, artifactRefs, err := s.sanitizeItemTx(ctx, tx, modelScope, agent.ID, item)
 	if err != nil {
@@ -145,6 +148,7 @@ func (s *Store) requestRunTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 		return memory.ErrConflict
 	}
 	run.ContextDependencies = mergeRunDependencies(run.ContextDependencies, dependenciesForEntries(indirectEntries))
+	run.ContextDependencies = mergeRunDependencies(run.ContextDependencies, prepared.Indirect)
 	directSeen := map[memory.Ref]bool{}
 	for _, entry := range entries {
 		if !directSeen[entry.Ref] {
@@ -342,6 +346,7 @@ type preparedRunContext struct {
 	Candidates []memory.CandidateRecord
 	Previous   *workspace.Run
 	History    []storedDeskContext
+	Indirect   []memory.TypedDependency
 }
 
 type storedDeskContext struct {
@@ -354,6 +359,12 @@ type storedDeskContext struct {
 // owner lock. All selected versions and previous outputs are rechecked inside
 // the transaction; this snapshot never grants access by itself.
 func (s *Store) prepareRunContext(ctx context.Context, scope memory.Scope, c workspace.Command) (context.Context, error) {
+	return s.prepareRunContextForItem(ctx, scope, c, nil, nil)
+}
+
+// prospective and derived are server-owned secretary action context, never
+// decoded from a public command. Retrieval remains outside the commit lock.
+func (s *Store) prepareRunContextForItem(ctx context.Context, scope memory.Scope, c workspace.Command, prospective *workspace.Item, derived []memory.TypedDependency) (context.Context, error) {
 	if len(c.DeskTurnIDs) > 6 {
 		return ctx, memory.ErrInvalid
 	}
@@ -362,6 +373,7 @@ func (s *Store) prepareRunContext(ctx context.Context, scope memory.Scope, c wor
 	projectID := c.ProjectID
 	var previous *workspace.Run
 	var task memory.TrustedTaskContext
+	var indirect []memory.TypedDependency
 	if err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		agent, err := queryDocument[workspace.Agent](ctx, tx, "SELECT document FROM workspace_agents WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), c.AgentID)
 		if err != nil {
@@ -374,7 +386,9 @@ func (s *Store) prepareRunContext(ctx context.Context, scope memory.Scope, c wor
 			return memory.ErrUnavailable
 		}
 		item := workspace.Item{ID: c.ID, Kind: "task", ProjectID: c.ProjectID}
-		if c.Type == "requestRun" {
+		if prospective != nil {
+			item = *prospective
+		} else if c.Type == "requestRun" {
 			item, err = getItem(ctx, tx, scope, c.ThingID)
 			if err != nil {
 				return err
@@ -391,6 +405,20 @@ func (s *Store) prepareRunContext(ctx context.Context, scope memory.Scope, c wor
 		task.View.Mode = memory.Continue
 		task.View.KnownAt, task.View.ValidAt = &task.Now, &task.Now
 		modelScope := memory.Scope{OwnerID: scope.OwnerID, PrincipalID: c.AgentID, Task: &task}
+		// Generated prompt/title may contain any input the secretary saw.
+		// Require the destination's independent permission before its text can
+		// even become an external embedding query or queued Run outline.
+		if len(derived) > 0 {
+			refs := refsForDependencies(derived)
+			entries, cov, err := hydrateTypedContextTx(ctx, tx, scope, task, refs)
+			if err != nil {
+				return err
+			}
+			if !cov.Complete || len(entries) != len(refs) {
+				return memory.ErrForbidden
+			}
+			indirect = dependenciesForEntries(entries)
+		}
 		for _, id := range c.DeskTurnIDs {
 			if !memory.ID(id).Valid() {
 				return memory.ErrInvalid
@@ -451,7 +479,7 @@ func (s *Store) prepareRunContext(ctx context.Context, scope memory.Scope, c wor
 			candidates = append(candidates, memory.CandidateRecord{Ref: ref, Stage: "recall", Disposition: "candidate"})
 		}
 	}
-	return context.WithValue(ctx, runContextKey{}, preparedRunContext{Refs: result.Memories, Task: task, Spans: result.SourceSpans, Candidates: candidates, Previous: previous, History: history}), nil
+	return context.WithValue(ctx, runContextKey{}, preparedRunContext{Refs: result.Memories, Task: task, Spans: result.SourceSpans, Candidates: candidates, Previous: previous, History: history, Indirect: indirect}), nil
 }
 
 func (s *Store) mostRecentPermittedRunTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, item workspace.Item, agent string) (*workspace.Run, error) {

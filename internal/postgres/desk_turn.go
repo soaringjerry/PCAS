@@ -525,6 +525,11 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 			failureStage = "verify"
 			contextErr = s.recordContextUsed(ctx, scope, attempt.ID, used)
 		}
+		var actionPlans []secretaryActionPlan
+		if contextErr == nil && !recognizedAuthorization {
+			actionPlans, contextErr = s.planSecretaryActions(ctx, scope, c, answer.Actions)
+			failureStage = "context"
+		}
 		return pgx.BeginFunc(ctx, conn, func(tx pgx.Tx) error {
 			if err := finishSecretaryTicketTx(ctx, tx, string(scope.OwnerID), req.RequestID, ticket, captureOnly); err != nil {
 				return err
@@ -614,6 +619,9 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 					}
 					actionID := string(memory.NewID())
 					actionCtx := withActionLog(withActor(ctx, "secretary"), actionID, "desk", out.Turn.ID, "秘书："+a.Op)
+					if i < len(actionPlans) {
+						actionCtx = context.WithValue(actionCtx, secretaryActionPlanKey{}, actionPlans[i])
+					}
 					actionTx, err := tx.Begin(ctx)
 					if err != nil {
 						return err

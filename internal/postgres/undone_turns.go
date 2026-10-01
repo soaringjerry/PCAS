@@ -15,7 +15,7 @@ func deskTurnFullyUndoneTx(ctx context.Context, tx pgx.Tx, ownerID memory.ID, re
 	err := tx.QueryRow(ctx, `SELECT EXISTS(
 	 SELECT 1 FROM desk_turns t
 	 JOIN action_log a ON (a.owner_id,a.turn_id)=(t.owner_id,t.id)
-	 WHERE t.owner_id=$1 AND lower(t.request_id)=lower($2) AND a.source='desk'
+	 WHERE t.owner_id=$1 AND lower(t.request_id::text)=lower($2) AND a.source='desk'
 	 GROUP BY t.id HAVING bool_and(a.undone_at IS NOT NULL)
 	)`, string(ownerID), requestID).Scan(&undone)
 	return undone, err

@@ -152,3 +152,14 @@ Run 的 ContextTask/ContextDependencies/ContextSourceSpans/ContextAttemptID/Manu
 输入映射进一步限定为 final assembly 的当前随机 `EvidenceEntry.AssemblyMarker`（仅 transient，json:-）。所有消费者调用统一 `appendContextEvidence`，完整唯一 begin+literal+end 证据块存在时，才在其块内记录正文 byte 区间。query/system/schema 同句不形成 source Input；证据块缺失、被裁剪或重复均拒发。中文与 JSON 转义使用实际最终序列化，候选 locator 仍为原文 rune 区间。
 
 024 给 automatic attempt 增加固定五分钟 execution_expires_at，沿既有副手四分钟调用/五分钟 lease 上限，dispatch/return/final fence 拒绝过期执行。`Store.RecoverContextAttempts(ctx,startupCutoff,now)` 仅把固定启动 cutoff 以前且执行 lease 已过期的未完成 prepared/dispatched automatic attempt 标为 outcome_unknown（原 dispatched_at 保留空/非空事实），never resend；启动和后续周期复用同 cutoff，活跃合法调用未过期不改。manual_package 没有 automatic execution lease，不参与自动崩溃恢复；其 mark-delivered 最后短事务重新读取 server manifest/deps、owner gate、current manual canonical recipient、typed/attempt fence 后才记 PCAS delivery，外部 receipt 仍 unknown。
+
+## 9 秘书动作字段的持久派生谱系（A2-action）
+
+1. `TextBlock` 在现有 `Runs` 外增加服务端 `DeskActions`，引用真实秘书 action ID，不创建假 agent Run。秘书 create/update/add_steps/delegate:new 实际改写的自然语言字段（title/name、notes/body/goal/progress、owedTo/waitingFor、check:<server ID>、condition:<server ID>）标记本轮全部 typed input 与 indirect 依赖；`notesAppend` 只标新段，原 owner 独立块保留。改写/复制继承所有 origin；同轮成功 N* 与 promotion 保持谱系。模型 `used` 空不能清除已收到材料的依赖。
+2. 025 仅给既有 `action_log` 增无正文的 server `context_task` 与 `context_stale`。成功动作以 `artifact/actionID/version1` 保存现有 `context_artifact_dependencies`。原 Task、固定 view、精确原 stamp 与 durable deps 的寿命跟随仍存活字段，独立于 attempt、undo 正文快照/审计窗口；审计过期不得把存活字段变成永不可读。旧行没有新 origin，既有 undo 含义保留，不虚构旧来源。客户端传回块/origin/Task 不产生信任。
+3. 每次供给先验原秘书 route、Task 与 exact stamp，再按当前可信 recipient/purpose/scope hydrate；不能把秘书授权继承给副手/manual。字段依赖加入真正 Indirect，即使相同 ref 已在 Input。无权限只遮派生块，保留 owner 独立段；owner 本地查看也要求原 origin 仍合法，不外发。
+4. 纠正/撤权/删除通过同一 typed invalidation 找所有 DeskActions 引用及 promotion 副本，清派生块和 canonical 字段，title/name 用通用占位，清 summary/history/source label 与 actions 原始副本。origin 永久 stale，regrant 不复活；owner 原件和独立文字保留。动态 check/condition 按稳定服务端 ID 定位，不把数组位置当身份。
+5. undo 保存并校验修改前块，after fence 同时保护块；恢复前复验原 origin，失效旧段不得从 document/beforeBlocks 快照复活。失效时清除相关 undo 正文而保留稳定动作审计 ID。promotion 复制 origin 和引用，durable deps 不依赖 attempt 仍存活。
+6. 当前 `remember` 只记录回执，实际入库来源仍是当前用户 `req.Text`；模型 reply/action 文案不作为 owner 原话创建 claim。actions/corrections/memory-input 不自动抽取知识。此批不新增 AI 生成 claim 入口，不关闭有记忆的合法动作，也不把既有独立 claim grant 改成原文 grant。
+
+契约不代表实现或验收已完成。A 只写产品/build，C/D 独立维护动作派生安全、迁移/undo、同轮委派和原回归断言。

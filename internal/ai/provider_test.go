@@ -134,10 +134,20 @@ for line in sys.stdin:
   out={'type':'chatgptDeviceCode','loginId':'login','verificationUrl':'https://auth.openai.com/codex/device','userCode':'TEST-123'}
  if method=='thread/start':
   assert p['ephemeral'] and p['sandbox']=='read-only' and p['approvalPolicy']=='never'
+  assert p['baseInstructions']=='system'
+  instructions=p['developerInstructions']
+  assert 'Follow the output format specified in the base instructions.' in instructions
+  assert 'answer with text' not in instructions.lower()
+  assert 'Do not use' in instructions and 'inspect local files' in instructions
   web=p.get('config')=={'web_search':'live'}
   assert web or 'config' not in p
+  if web: assert 'never put names, numbers or other private details' in instructions
   out={'thread':{'id':'thread-1'}}
- if method=='turn/start': out={'turn':{'id':'turn-1'}}
+ if method=='turn/start':
+  if p['input'][0]['text']=='structured':
+   assert p['outputSchema']=={'type':'object','properties':{'reply':{'type':'string'}},'required':['reply'],'additionalProperties':False}
+  else: assert 'outputSchema' not in p
+  out={'turn':{'id':'turn-1'}}
  emit({'id':m['id'],'result':out})
  if method=='turn/start':
   emit({'method':'item/completed','params':{'threadId':'unrelated','item':{'type':'agentMessage','text':'SHOULD_NOT_LEAK'}}})
@@ -173,6 +183,14 @@ for line in sys.stdin:
 	}
 	if result, err = c.Generate(ctx, "", "system", "prompt"); err != nil || result != "订阅结果" {
 		t.Fatal("offline turn after a search turn", result, err)
+	}
+	r := &Registry{Codex: c, Config: Configuration{Providers: []Provider{{ID: "codex", Protocol: "codex"}}}}
+	schema := json.RawMessage(`{"type":"object","properties":{"reply":{"type":"string"}},"required":["reply"],"additionalProperties":false}`)
+	if out, err := r.GenerateWithSearchSchema(ctx, "codex", "system", "structured", schema); err != nil || out.Text != "订阅结果" {
+		t.Fatal("registry did not forward the schema", out, err)
+	}
+	if out, err := r.GenerateWithSearch(ctx, "codex", "system", "prompt"); err != nil || out.Text != "订阅结果" {
+		t.Fatal("schema leaked into a later legacy turn", out, err)
 	}
 }
 func TestInstalledCodexHandshake(t *testing.T) {

@@ -287,6 +287,7 @@ func (s *Store) secretaryPrompt(ctx context.Context, tx pgx.Tx, scope memory.Sco
 	}
 	prompt.WriteString("\n" + deskNow(loc))
 	fmt.Fprintf(&prompt, "这句话：%s\n", req.Text)
+	fmt.Fprintln(&prompt, "只输出 JSON 对象。")
 	return deskUUID.ReplaceAllString(prompt.String(), "（标识已隐藏）"), sent, nil
 }
 func itemNotes(item workspace.Item) string {
@@ -380,7 +381,7 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 			if contextErr == nil {
 				failureStage = "model"
 				workCtx, cancel := context.WithTimeout(requestCtx, 90*time.Second)
-				result, err := s.models.GenerateWithSearch(workCtx, c.Agent.ID, secretaryInstructions, prompt)
+				result, err := s.models.GenerateWithSearchSchema(workCtx, c.Agent.ID, secretaryInstructions, prompt, secretaryOutputSchema)
 				// HTTP providers may hide cancellation behind an unreachable error.
 				if err != nil && workCtx.Err() != nil {
 					err = workCtx.Err()

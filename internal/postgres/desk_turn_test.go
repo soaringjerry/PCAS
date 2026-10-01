@@ -247,6 +247,9 @@ func TestSecretaryStablePrefixAndVisibility(t *testing.T) {
 		t.Fatal("unstable cache prefix", prompts)
 	}
 	for _, p := range prompts {
+		if !strings.HasSuffix(p, "\n只输出 JSON 对象。\n") {
+			t.Fatal("format reminder must follow the utterance at the end")
+		}
 		if strings.Contains(p, "hunter2") || deskUUID.MatchString(p) || !strings.Contains(p, "整理发票") {
 			t.Fatal("prompt leaked or missing context", p)
 		}

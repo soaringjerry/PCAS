@@ -15,7 +15,10 @@ func contextReadAllowsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, ref
 		if scope.IsOwner {
 			return true, nil
 		}
-		return ref.Kind != memory.SourceKind && ref.Kind != memory.SummaryKind && ref.Kind != memory.ChunkKind, nil
+		if ref.Kind == memory.SourceKind || ref.Kind == memory.SummaryKind || ref.Kind == memory.ChunkKind {
+			return false, memory.ErrForbidden
+		}
+		return true, nil
 	}
 	if scope.Task.OwnerID != scope.OwnerID || (!scope.IsOwner && scope.Task.Recipient.PrincipalID != scope.PrincipalID) {
 		return false, memory.ErrForbidden

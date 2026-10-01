@@ -377,7 +377,7 @@ func (s *Store) Expand(ctx context.Context, scope memory.Scope, in memory.Expand
 	returnOutErr := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		refs := []memory.Ref{}
 		for _, ref := range in.Refs {
-			if !ref.ID.Valid() || ref.Version < 0 {
+			if !ref.ID.Valid() || ref.Version < 0 || ref.Kind == "" {
 				return memory.ErrInvalid
 			}
 			rows, err := tx.Query(ctx, `SELECT r.kind,rv.version FROM memory_records r JOIN record_versions rv ON (rv.owner_id,rv.record_id)=(r.owner_id,r.id) WHERE r.owner_id=$1 AND r.id=$2 AND r.state='active' AND rv.state='active' AND ($3 OR EXISTS(SELECT 1 FROM record_grants g WHERE g.owner_id=r.owner_id AND g.record_id=r.id AND g.principal_id=$4)) AND ($5 OR rv.version=CASE WHEN $6=0 THEN r.version ELSE $6 END) ORDER BY rv.version`, string(scope.OwnerID), string(ref.ID), scope.IsOwner, scope.PrincipalID, in.History, ref.Version)
@@ -390,6 +390,10 @@ func (s *Store) Expand(ctx context.Context, scope memory.Scope, in memory.Expand
 				if err := rows.Scan(&r.Kind, &r.Version); err != nil {
 					rows.Close()
 					return err
+				}
+				if ref.Kind != r.Kind {
+					rows.Close()
+					return memory.ErrInvalid
 				}
 				refs = append(refs, r)
 			}

@@ -52,7 +52,10 @@ for line in sys.stdin:
    assert {v['properties']['op']['enum'][0] for v in variants}=={'create_task','update','create_idea','create_project','add_steps','delegate'}
    value={'reply':'安排好了。','used':[],'links':[],'show':[],'remember':False,'actions':[{'op':'create_task','title':'给张三回邮件','due':'2026-10-02T15:00','remind':None,'project':None,'notes':None,'owedTo':None,'waitingFor':None}],'ask':None}
   elif '导办台' in system:
-   assert web and 'outputSchema' not in p
+   assert web
+   schema=p['outputSchema']; props=schema['properties']
+   assert set(props)=={'answer','used','links'}
+   assert set(schema['required'])==set(props) and schema['additionalProperties']==False
    value={'answer':'没有相关记录。','used':[],'links':[]}
   else:
    assert not web

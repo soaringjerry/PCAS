@@ -311,7 +311,7 @@ func TestSecretaryMemoryCardsAndRevokedHistory(t *testing.T) {
 	}
 	workspaceCommand(t, s, scope, workspace.Command{Type: "deleteMemory", ID: ids[0]})
 	turns, err := s.DeskTurns(context.Background(), scope, out.ConversationID)
-	if err != nil || len(turns.Turns) != 1 || turns.Turns[0].Reply != "（这条回答依据的记忆已变更）" || len(turns.Turns[0].Cards) != 0 {
+	if err != nil || len(turns.Turns) != 1 || turns.Turns[0].ID != out.Turn.ID || turns.Turns[0].Text != "" || turns.Turns[0].Reply != "" || len(turns.Turns[0].Cards) != 0 {
 		t.Fatal(err, turns)
 	}
 	other, err := s.DeskTurns(context.Background(), owner(), out.ConversationID)

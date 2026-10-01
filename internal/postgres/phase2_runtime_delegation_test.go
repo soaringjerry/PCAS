@@ -195,7 +195,7 @@ func TestPhase2RuntimeSourceDerivedDelegationRoleIsolationAndABA(t *testing.T) {
 					if old.ID == attempt.ID {
 						invalid = old.State == memory.AttemptInvalidated
 						body, err := s.ContextAttemptSnapshot(context.Background(), scope, old.ID)
-						if err != nil || len(body) != 0 {
+						if !errors.Is(err, memory.ErrUnavailable) || len(body) != 0 {
 							t.Error("revoked delegated diagnostic body remains readable", err)
 						}
 					}

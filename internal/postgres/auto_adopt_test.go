@@ -406,7 +406,9 @@ func TestAutoAdoptSkipsStaleAndEmpty(t *testing.T) {
 func TestAutoAdoptWorkerSkipsStaleFlag(t *testing.T) {
 	s := testStore(t)
 	scope := owner()
+	var calls atomic.Int32
 	autoAdoptModel(t, s, "结果仍然存在", func() {
+		calls.Add(1)
 		if _, err := s.pool.Exec(context.Background(), "UPDATE agent_runs SET document=document||'{\"staleContext\":true}'::jsonb WHERE owner_id=$1", string(scope.OwnerID)); err != nil {
 			t.Error(err)
 		}
@@ -417,8 +419,18 @@ func TestAutoAdoptWorkerSkipsStaleFlag(t *testing.T) {
 		t.Fatal(err)
 	}
 	st, err := s.Snapshot(context.Background(), scope)
-	if err != nil || st.Runs[0].Status != "done" || !st.Runs[0].StaleContext || st.Runs[0].Adopted != nil || len(st.Docs) != 0 {
+	if err != nil || st.Runs[0].Status != "failed" || !st.Runs[0].StaleContext || st.Runs[0].Adopted != nil || len(st.Docs) != 0 || st.Runs[0].Output != "" || st.Runs[0].Brief != "" {
 		t.Fatalf("stale flag ignored: %+v %v", st.Runs, err)
+	}
+	// Real HTTP already happened: privacy invalidation cannot erase incurred
+	// usage. The fixture returns 100 input + 20 output at 1/2 per million.
+	if calls.Load() != 1 || st.Runs[0].Cost != (100.0+20.0*2)/1_000_000 {
+		t.Fatal("stale final fence lost actual completed model usage", calls.Load(), st.Runs[0].Cost)
+	}
+	var reserved float64
+	var status string
+	if err := s.pool.QueryRow(context.Background(), "SELECT reserved_cost,status FROM agent_runs WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), st.Runs[0].ID).Scan(&reserved, &status); err != nil || status != "failed" || reserved != st.Runs[0].Cost {
+		t.Fatal("stale final fence released already incurred cost or kept done status", err, reserved, status)
 	}
 }
 

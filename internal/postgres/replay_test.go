@@ -135,7 +135,10 @@ func TestRunGrantRevocationAndArtifactCleanup(t *testing.T) {
 			t.Fatal("derived context lost its transitive dependency")
 		}
 		w := phase2RTHTTP(t, s, scope, http.MethodGet, "/v1/workspace/runs/"+run.ID+"/package", nil)
-		if w.Code != http.StatusInsufficientStorage || !strings.Contains(w.Body.String(), `"code":"record_capacity"`) {
+		var rejected struct {
+			Error string `json:"error"`
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &rejected); err != nil || w.Code != http.StatusInsufficientStorage || rejected.Error != "record_capacity" {
 			t.Fatalf("31k handoff must reject with exact capacity: %d %s", w.Code, w.Body.String())
 		}
 		attempts, err := s.ContextAttempts(context.Background(), scope, run.ID)

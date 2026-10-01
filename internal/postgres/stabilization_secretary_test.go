@@ -254,7 +254,7 @@ func TestStabilizationS7_ItemPageUsesOnlyCurrentThing(t *testing.T) {
 }
 
 func TestStabilizationS8_FailureCategoriesKeepOriginalAndPrivateLogs(t *testing.T) {
-	for _, mode := range []string{"budget", "timeout", "500", "plain"} {
+	for _, mode := range []string{"budget", "timeout", "invalid-userinfo", "500", "plain"} {
 		t.Run(mode, func(t *testing.T) {
 			s, scope := testStore(t), owner()
 			logs := secretaryLogs(t)
@@ -278,6 +278,11 @@ func TestStabilizationS8_FailureCategoriesKeepOriginalAndPrivateLogs(t *testing.
 			t.Setenv("PCAS_STABILIZATION_T3_KEY", "key-secret-T3")
 			provider := ai.Provider{ID: "model", Name: "测试秘书", Protocol: "openai", BaseURL: server.URL, Model: "test", MaxOutput: 100, CostMode: "free", KeyEnv: "PCAS_STABILIZATION_T3_KEY"}
 			if mode == "timeout" {
+				// A legal recipient must reach the actual timeout. Keep a private
+				// path so error/log privacy is still exercised by the real URL.
+				provider.BaseURL = server.URL + "/path-secret-T3"
+			}
+			if mode == "invalid-userinfo" {
 				provider.BaseURL = strings.Replace(server.URL, "http://", "http://url-secret-T3:password-secret-T3@", 1) + "/path-secret-T3"
 			}
 			if mode == "budget" {
@@ -288,7 +293,7 @@ func TestStabilizationS8_FailureCategoriesKeepOriginalAndPrivateLogs(t *testing.
 			s.SetModels(&ai.Registry{HTTP: client, Config: ai.Configuration{Providers: []ai.Provider{provider}}})
 			req := turnRequest("原话-private-T3")
 			out := mustTurn(t, s, scope, req)
-			if rendered := string(asJSON(out.Turn)); strings.Contains(rendered, "key-secret-T3") || strings.Contains(rendered, "model-secret-T3") {
+			if rendered := string(asJSON(out.Turn)); strings.Contains(rendered, "secret-T3") {
 				t.Fatal("model credential or raw provider error entered response")
 			}
 			stage, errorType, connector := "model", "model_error", "capture"
@@ -300,6 +305,14 @@ func TestStabilizationS8_FailureCategoriesKeepOriginalAndPrivateLogs(t *testing.
 				}
 			case "timeout":
 				errorType = "timeout"
+				if calls.Load() != 1 {
+					t.Fatal("legal timeout fixture did not reach exactly one real HTTP request", calls.Load())
+				}
+			case "invalid-userinfo":
+				stage, errorType = "context", "invalid_input"
+				if calls.Load() != 0 {
+					t.Fatal("recipient with sensitive userinfo dispatched HTTP", calls.Load())
+				}
 			case "plain":
 				stage, errorType, connector = "parse", "no_json_object", "desk"
 			}
@@ -333,6 +346,9 @@ func TestStabilizationS8_FailureCategoriesKeepOriginalAndPrivateLogs(t *testing.
 				}
 				if mode == "timeout" {
 					want = "超时"
+				}
+				if mode == "invalid-userinfo" {
+					want = "暂时无法读取上下文"
 				}
 				if !strings.Contains(out.Turn.Receipts[0].Text, want) {
 					t.Error("wrong failure advice", out.Turn.Receipts)

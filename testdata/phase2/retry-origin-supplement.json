@@ -1,0 +1,55 @@
+{
+  "schema": "pcas.phase2.independent-retry-origin-supplement.v1",
+  "frozen_at": "2026-10-01",
+  "authority": "root approved three extra entry/final controls; original13 immutable",
+  "extends": "retry-origin-sequences.json",
+  "original_gold_sha256": "6f34d7604e09339237c74153ff39e6d880f40f9d7c912237606f4807b6228860",
+  "cases": [
+    {
+      "id": "RETRY-MANUAL-LIVE",
+      "sequence": [
+        "real source-backed secretary delegate and true failed deputy HTTP",
+        "formal independently authorized configured manual destination for current same scope",
+        "formal requestRun carries original sourceRunId, edited Prompt differs only in punctuation",
+        "real GET package"
+      ],
+      "required": [
+        "actual package contains original source atom",
+        "new Run Prompt origins exactly original delegate action ID",
+        "actual package manifest IndirectDependencies contains exact source dependency with current manual stamp",
+        "DeliveredAt nonempty and external_receipt unknown",
+        "no old Task/attempt/delivery reused"
+      ]
+    },
+    {
+      "id": "RETRY-MANUAL-REVOKED",
+      "sequence": [
+        "same positive source-backed delegate +failed deputy",
+        "manual destination canonical own allow exists and still current",
+        "revoke only secretary producer source policy",
+        "formal edited manual requestRun+GET when a run exists"
+      ],
+      "required": [
+        "no actual package delivery or DeliveredAt",
+        "no source atom newly supplied",
+        "provider HTTP0; negative not caused by absent manual grant"
+      ]
+    },
+    {
+      "id": "RETRY-FINAL-BARRIER",
+      "sequence": [
+        "source/producer/new destination demonstrably live",
+        "formal SourceRunID retry enters actual external Recall embedding preparation barrier",
+        "revoke original secretary policy through formal authorization API while external prepare hangs",
+        "release barrier and observe final Execute result"
+      ],
+      "required": [
+        "revocation commits while external query is waiting",
+        "no new Run committed/no deputy provider dispatch/no manual delivery",
+        "final stage rechecks original server Prompt origins+producer and current target",
+        "no SQL fabricated prepared snapshot or private context injection"
+      ],
+      "tool_gap_policy": "If supported public embedding fixture cannot isolate precommit pause, report capability gap and leave this leaf as unmet; do not skip or substitute SQL state"
+    }
+  ]
+}

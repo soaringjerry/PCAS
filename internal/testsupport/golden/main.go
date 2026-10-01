@@ -78,7 +78,11 @@ func (f *fixture) serve(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewDecoder(r.Body).Decode(&in)
 		f.Lock()
 		var result any = true
-		if method == "getUpdates" {
+		if method == "getMe" {
+			// Stable identity for the acceptance bot, independent of request
+			// ordering and event resets. Match the Bot API User response.
+			result = map[string]any{"id": 123456, "is_bot": true, "first_name": "Acceptance fixture", "username": "pcas_acceptance_fixture_bot"}
+		} else if method == "getUpdates" {
 			updates := []map[string]any{}
 			offset, _ := in["offset"].(float64)
 			for _, u := range f.Updates {
@@ -91,7 +95,11 @@ func (f *fixture) serve(w http.ResponseWriter, r *http.Request) {
 			in["kind"] = method
 			f.Events = append(f.Events, in)
 			if method == "sendMessage" {
-				result = map[string]any{"message_id": len(f.Events) + 100, "chat": map[string]any{"id": 123, "type": "private"}}
+				id := len(f.Events) + 100
+				// Expose the actual response ID to callback-driving tests.
+				// Event position is not a Telegram message ID.
+				in["messageId"] = id
+				result = map[string]any{"message_id": id, "chat": map[string]any{"id": 123, "type": "private"}}
 			}
 		}
 		f.Unlock()

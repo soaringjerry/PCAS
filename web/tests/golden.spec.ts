@@ -142,7 +142,10 @@ test('G7 Telegram 对话：入站文字、首页、回执按钮和撤销回调',
   const markup = sent.reply_markup as { inline_keyboard: { text: string; callback_data: string }[][] }
   const undo = markup.inline_keyboard.flat().find(b => b.text.includes('撤销'))!
   expect(undo).toBeTruthy()
-  await fixture(page, [], [{ update_id: id + 1, callback_query: { id: `undo-${id}`, from: { id: 123 }, message: { message_id: 101, chat: { id: 123, type: 'private' } }, data: undo.callback_data } }])
+  const messageId = Number(sent.messageId)
+  expect(Number.isSafeInteger(messageId)).toBeTruthy()
+  expect(messageId).toBeGreaterThan(0)
+  await fixture(page, [], [{ update_id: id + 1, callback_query: { id: `undo-${id}`, from: { id: 123 }, message: { message_id: messageId, chat: { id: 123, type: 'private' } }, data: undo.callback_data } }])
   await expect(page.locator('.hall-task').filter({ hasText: title })).toHaveCount(0, { timeout: 15000 })
   expect((await snapshot(page)).tasks.some(t => t.title === title)).toBeFalsy()
   await expect.poll(async () => (await events(page)).some(e => e.kind === 'answerCallbackQuery')).toBeTruthy()

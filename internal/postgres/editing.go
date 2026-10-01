@@ -321,7 +321,7 @@ func (s *Store) deleteRecordsTx(ctx context.Context, tx pgx.Tx, scope memory.Sco
 		if ref.Version > 0 && ref.Version != version {
 			return memory.ErrConflict
 		}
-		if ref.Kind != kind {
+		if ref.Kind != "" && ref.Kind != kind {
 			return memory.ErrInvalid
 		}
 		ids = append(ids, string(ref.ID))

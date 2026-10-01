@@ -108,16 +108,12 @@ func TestDirectCaptureEntersDefaultRunAsSourceBacked(t *testing.T) {
 		}
 	}
 	st = workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "查询月光列车"})
-	st = workspaceCommand(t, s, scope, workspace.Command{Type: "requestRun", ThingID: st.Tasks[0].ID, AgentID: "manual", Kind: "ask", Prompt: "月光列车的交付暗号是什么", ManualRecipient: &memory.Recipient{Provider: "model"}})
+	st = workspaceCommand(t, s, scope, workspace.Command{Type: "requestRun", ThingID: st.Tasks[0].ID, AgentID: "manual", Kind: "ask", Prompt: "月光列车的交付暗号是什么"})
 	run := st.Runs[0]
-	if strings.Contains(run.Brief, text) {
-		t.Fatal("state Brief bypassed actual manual package delivery", run.Brief)
+	if !strings.Contains(run.Brief, text) || !oneOf(m.ID, run.ContextMemoryIDs...) {
+		t.Fatal("current direct capture missing from default assistant context", run.Brief)
 	}
-	pkg := phase2RTGetPackage(t, s, scope, run)
-	if !strings.Contains(pkg.Text, text) || !oneOf(m.ID, run.ContextMemoryIDs...) {
-		t.Fatal("current direct capture missing from default assistant context", pkg.Text)
-	}
-	if err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error { return s.verifyRunTx(ctx, tx, scope, run) }); err != nil {
+	if err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error { return verifyRunTx(ctx, tx, scope, run) }); err != nil {
 		t.Fatal("source-backed run rejected during validation", err)
 	}
 	if calls.Load() != 1 {

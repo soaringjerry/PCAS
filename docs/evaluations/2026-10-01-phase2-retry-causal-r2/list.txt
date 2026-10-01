@@ -1,3 +1,0 @@
-TestPhase2RuntimeOwnerUndoReceiptAuditNeverRestoresSourceText
-TestPhase2RuntimeRetryPreservesGeneratedPromptOrigins
-ok  	github.com/soaringjerry/PCAS/internal/postgres	0.005s

@@ -16,7 +16,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
@@ -41,8 +40,6 @@ actions 每轮最多 10 条，格式：
 {"op":"delegate","ref":"T3|THIS|R1|N1|new","title":"ref 为 new 必填","kind":"plan|draft|breakdown|summary|ask","prompt":"…"}
 ask 为 null 或 {"question":"…","options":["…"]}。`
 
-var unresolvedSourceAuthorization = regexp.MustCompile(`^(让秘书能用|允许这个副手读取|不再让秘书读取|别再用)这份资料[。！!]?\s*$`)
-
 var deskUUID = regexp.MustCompile(`(?i)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}`)
 
 // Persist only the exchange. Workspace state is always read at response time.
@@ -52,23 +49,18 @@ type storedSecretaryResponse struct {
 }
 
 type secretaryContext struct {
-	Task              memory.TrustedTaskContext
-	TypedDependencies []memory.TypedDependency
-	Entries           []memory.EvidenceEntry
-	Candidates        []memory.CandidateRecord
-	Indirect          []memory.TypedDependency
-	Agent             workspace.Agent
-	Settings          workspace.Settings
-	Aliases           map[string]workspace.Item
-	Items             []workspace.Item
-	Memories          map[string]workspace.Memory
-	Dependencies      []memory.Ref
-	History           []workspace.SecretaryTurn
-	Projects          []workspace.Item
-	Tasks             []workspace.Item
-	Ideas             []workspace.Item
-	Recent            []workspace.Item
-	Counts            map[string]int
+	Agent        workspace.Agent
+	Settings     workspace.Settings
+	Aliases      map[string]workspace.Item
+	Items        []workspace.Item
+	Memories     map[string]workspace.Memory
+	Dependencies []memory.Ref
+	History      []workspace.SecretaryTurn
+	Projects     []workspace.Item
+	Tasks        []workspace.Item
+	Ideas        []workspace.Item
+	Recent       []workspace.Item
+	Counts       map[string]int
 }
 
 func stringPointer(v string) *string {
@@ -87,11 +79,11 @@ func pointerValue(v *string) string {
 func (s *Store) secretaryContextTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, req workspace.DeskTurnRequest, conversationID string) (secretaryContext, error) {
 	out := secretaryContext{Aliases: map[string]workspace.Item{}, Memories: map[string]workspace.Memory{}, Counts: map[string]int{}}
 	agentID := req.AgentID
-	if s.models == nil {
-		return out, memory.ErrUnavailable
-	}
 	if agentID == "" {
 		agentID = s.models.ExtractionID()
+	}
+	if s.models == nil {
+		return out, memory.ErrUnavailable
 	}
 	var err error
 	out.Agent, err = queryDocument[workspace.Agent](ctx, tx, "SELECT document FROM workspace_agents WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), agentID)
@@ -104,21 +96,6 @@ func (s *Store) secretaryContextTx(ctx context.Context, tx pgx.Tx, scope memory.
 	if !out.Agent.Enabled || out.Agent.Channel == "manual" || !s.models.Available(out.Agent.ID) {
 		return out, memory.ErrUnavailable
 	}
-	var taskItem *workspace.Item
-	if req.ThingID != nil {
-		item, err := getItem(ctx, tx, scope, *req.ThingID)
-		if err != nil {
-			return out, err
-		}
-		taskItem = &item
-	}
-	out.Task, err = s.trustedTaskContextTx(ctx, tx, scope, out.Agent.ID, "secretary", contextScopeForItem(taskItem), nil)
-	if err != nil {
-		return out, err
-	}
-	out.Task.View.ValidAt = &out.Task.Now
-	out.Task.View.KnownAt = &out.Task.Now
-	scope.Task = &out.Task
 	memories, tasks, settings, deps, err := s.deskContextTx(ctx, tx, scope, out.Agent, true)
 	if err != nil {
 		return out, err
@@ -149,7 +126,7 @@ func (s *Store) secretaryContextTx(ctx context.Context, tx pgx.Tx, scope memory.
 		for i := range *group.items {
 			item := (*group.items)[i]
 			var refs []memory.Ref
-			item, refs, err = s.sanitizeItemTx(ctx, tx, scope, out.Agent.ID, item)
+			item, refs, err = sanitizeItemTx(ctx, tx, scope, out.Agent.ID, item)
 			if err != nil {
 				return out, err
 			}
@@ -164,7 +141,7 @@ func (s *Store) secretaryContextTx(ctx context.Context, tx pgx.Tx, scope memory.
 		if err != nil {
 			return out, err
 		}
-		item, refs, err := s.sanitizeItemTx(ctx, tx, scope, out.Agent.ID, item)
+		item, refs, err := sanitizeItemTx(ctx, tx, scope, out.Agent.ID, item)
 		if err != nil {
 			return out, err
 		}
@@ -202,15 +179,7 @@ func (s *Store) secretaryContextTx(ctx context.Context, tx pgx.Tx, scope memory.
 	return out, nil
 }
 func (s *Store) checkDeskContextTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, agent string, dependencies []memory.Ref, items []workspace.Item, full bool) error {
-	if scope.Task != nil {
-		entries, cov, err := hydrateTypedContextTx(ctx, tx, scope, *scope.Task, dependencies)
-		if err != nil {
-			return err
-		}
-		if !cov.Complete || len(entries) != len(dependencies) {
-			return memory.ErrConflict
-		}
-	} else if err := s.verifyRunTx(ctx, tx, scope, workspace.Run{AgentID: agent, ContextVersions: dependencies}); err != nil {
+	if err := verifyRunTx(ctx, tx, scope, workspace.Run{AgentID: agent, ContextVersions: dependencies}); err != nil {
 		return err
 	}
 	for _, sent := range items {
@@ -218,7 +187,7 @@ func (s *Store) checkDeskContextTx(ctx context.Context, tx pgx.Tx, scope memory.
 		if err != nil {
 			return memory.ErrConflict
 		}
-		current, _, err = s.sanitizeItemTx(ctx, tx, scope, agent, current)
+		current, _, err = sanitizeItemTx(ctx, tx, scope, agent, current)
 		if err != nil {
 			return err
 		}
@@ -233,7 +202,6 @@ func (s *Store) checkDeskContextTx(ctx context.Context, tx pgx.Tx, scope memory.
 	return nil
 }
 func (s *Store) secretaryPrompt(ctx context.Context, tx pgx.Tx, scope memory.Scope, req workspace.DeskTurnRequest, c *secretaryContext) (string, map[string]workspace.Memory, error) {
-	scope.Task = &c.Task
 	var prompt strings.Builder
 	loc := deskLocation(c.Settings)
 	fmt.Fprintf(&prompt, "用户所在城市：%s\n时区：%s\n\n项目列表：\n", c.Settings.City, loc)
@@ -264,7 +232,7 @@ func (s *Store) secretaryPrompt(ctx context.Context, tx pgx.Tx, scope memory.Sco
 					if err != nil {
 						continue
 					}
-					permitted, _, err := s.sanitizeItemTx(ctx, tx, scope, c.Agent.ID, item)
+					permitted, _, err := sanitizeItemTx(ctx, tx, scope, c.Agent.ID, item)
 					if err != nil {
 						return "", nil, err
 					}
@@ -285,67 +253,30 @@ func (s *Store) secretaryPrompt(ctx context.Context, tx pgx.Tx, scope memory.Sco
 	for i, t := range c.Recent {
 		fmt.Fprintf(&prompt, "R%d：%s（%s；截止 %s）\n", i+1, t.Title, t.Status, t.Due)
 	}
-	if err := s.verifyTaskDeskActionsTx(ctx, tx, scope, c.Task); err != nil {
-		return "", nil, err
-	}
-	recall, err := s.Recall(withRecallEmbeddingQuery(ctx, req.Text), memory.Scope{OwnerID: scope.OwnerID, PrincipalID: c.Agent.ID, Task: &c.Task}, memory.RecallRequest{Query: tail(earlier+req.Text, 4000), Mode: "remember", Context: memory.WorkingContext{Objects: []memory.ID{}, ValidAt: c.Task.View.ValidAt, KnownAt: c.Task.View.KnownAt}, Budget: c.Task.MemoryBudget})
+	recall, err := s.Recall(ctx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: c.Agent.ID}, memory.RecallRequest{Query: tail(earlier+req.Text, 4000), Mode: "remember", Context: memory.WorkingContext{Objects: []memory.ID{}}, Budget: memory.Budget{Candidates: 15, Tokens: 4000, Edges: 15, Hops: 1}})
 	if err != nil {
 		return "", nil, err
 	}
 	fmt.Fprintln(&prompt, "\n召回的记忆（引用短别名）：")
 	sent := map[string]workspace.Memory{}
-	entries, _, err := hydrateTypedContextTx(ctx, tx, scope, c.Task, recall.Memories)
-	if err != nil {
-		return "", nil, err
-	}
-	entries, err = applyRecallSpans(entries, recall.SourceSpans)
-	if err != nil {
-		return "", nil, err
-	}
-	remaining := c.Task.MemoryBudget.Tokens
-	for _, entry := range entries {
-		if remaining <= 0 || len(c.Entries) >= c.Task.MemoryBudget.Candidates {
-			break
-		}
-		entry = selectContextExcerpt(entry, req.Text, min(remaining, 1200))
-		if entry.Text == "" {
+	seen := map[string]bool{}
+	for _, ref := range recall.Memories {
+		m, ok := c.Memories[string(ref.ID)]
+		if !ok || seen[m.ID] || len(sent) >= 20 {
 			continue
 		}
-		remaining -= utf8.RuneCountInString(entry.Text)
-		alias := fmt.Sprintf("M%d", len(sent)+1)
-		m := workspace.Memory{ID: string(entry.Ref.ID), Version: entry.Ref.Version, Kind: string(entry.Ref.Kind), Text: entry.Text}
-		if old, ok := c.Memories[m.ID]; ok && entry.Ref.Kind == memory.ClaimKind {
-			m = old
-			m.Text = entry.Text
-		}
-		if entry.Ref.Kind == memory.SourceKind {
-			m.Sources = []workspace.SourceRef{{SourceID: string(entry.Ref.ID), Version: entry.Ref.Version}}
-		}
-		sent[alias] = m
-		appendContextEvidence(&prompt, alias, &entry)
-		c.Entries = append(c.Entries, entry)
-	}
-	for _, ref := range recall.Memories {
-		disposition := "rejected"
-		for _, entry := range c.Entries {
-			if entry.Ref == ref {
-				disposition = "selected"
-				break
+		if req.ThingID != nil {
+			ref := memory.Ref{ID: memory.ID(m.ID), Version: m.Version, Kind: memory.ClaimKind}
+			if verifyRunTx(ctx, tx, scope, workspace.Run{ThingID: *req.ThingID, AgentID: c.Agent.ID, ContextVersions: []memory.Ref{ref}}) != nil {
+				continue
 			}
 		}
-		c.Candidates = append(c.Candidates, memory.CandidateRecord{Ref: ref, Stage: "retrieved", Disposition: disposition})
+		seen[m.ID] = true
+		alias := fmt.Sprintf("M%d", len(sent)+1)
+		sent[alias] = m
+		fmt.Fprintf(&prompt, "[%s / %s / confirmation=%s / acquisition=%s] %s\n", alias, m.Epistemic, m.Confirmation, m.Acquisition, m.Text)
+		c.Dependencies = append(c.Dependencies, memory.Ref{ID: memory.ID(m.ID), Version: m.Version, Kind: memory.ClaimKind})
 	}
-	indirectEntries, cov, err := hydrateTypedContextTx(ctx, tx, scope, c.Task, c.Dependencies)
-	if err != nil {
-		return "", nil, err
-	}
-	if !cov.Complete || len(indirectEntries) != len(c.Dependencies) {
-		return "", nil, memory.ErrConflict
-	}
-	c.Indirect = dependenciesForEntries(indirectEntries)
-	all := append(append([]memory.EvidenceEntry{}, c.Entries...), indirectEntries...)
-	c.TypedDependencies = dependenciesForEntries(all)
-	c.Dependencies = refsForDependencies(c.TypedDependencies)
 	if len(sent) == 0 {
 		fmt.Fprintln(&prompt, "（没有）")
 	}
@@ -359,7 +290,7 @@ func (s *Store) secretaryPrompt(ctx context.Context, tx pgx.Tx, scope memory.Sco
 	prompt.WriteString("\n" + deskNow(loc))
 	fmt.Fprintf(&prompt, "这句话：%s\n", req.Text)
 	fmt.Fprintln(&prompt, "只输出 JSON 对象。")
-	return prompt.String(), sent, nil
+	return deskUUID.ReplaceAllString(prompt.String(), "（标识已隐藏）"), sent, nil
 }
 func itemNotes(item workspace.Item) string {
 	switch item.Kind {
@@ -407,105 +338,72 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 		return out, err
 	}
 	conversationID = ticket.conversation
-	err = s.withOrderedSecretaryTurn(ctx, requestCtx, string(scope.OwnerID), req.RequestID, ticket, func(conn *pgxpool.Conn, captureOnly bool) error {
-		var c secretaryContext
-		var contextErr error
-		failureStage := "context"
-		var answer secretaryOutput
-		sent := map[string]workspace.Memory{}
-		var prompt string
-		var attempt memory.ContextAttempt
-		var natural *memory.SourceAuthorizationRequest
-		recognizedAuthorization := sourceAuthorizationIntent.MatchString(text) || unresolvedSourceAuthorization.MatchString(text)
-		replayed := false
-		prepErr := pgx.BeginFunc(ctx, conn, func(tx pgx.Tx) error {
-			var priorHash, prior []byte
-			err := tx.QueryRow(ctx, "SELECT request_hash,response FROM desk_turns WHERE owner_id=$1 AND request_id=$2", string(scope.OwnerID), req.RequestID).Scan(&priorHash, &prior)
-			if err == nil {
-				if !bytes.Equal(hash[:], priorHash) {
-					return memory.ErrConflict
-				}
-				var saved storedSecretaryResponse
-				if err := json.Unmarshal(prior, &saved); err != nil {
-					return err
-				}
-				out.ConversationID, out.Turn = saved.ConversationID, saved.Turn
-				if _, e := s.deskTurnContextTx(ctx, tx, scope, out.Turn.ID, nil); e != nil {
-					if err := s.redactDeskTurnContextTx(ctx, tx, scope, &out.Turn); err != nil {
-						return err
-					}
-				}
-				replayed = true
-				out.State, err = s.snapshotTx(ctx, tx, scope)
-				if err != nil {
-					return err
-				}
-				return refreshDeskReceiptUndoTx(ctx, tx, scope, []workspace.SecretaryTurn{out.Turn})
+	err = s.withOrderedSecretaryTurn(ctx, requestCtx, string(scope.OwnerID), req.RequestID, ticket, func(tx pgx.Tx, captureOnly bool) error {
+		var priorHash, prior []byte
+		err := tx.QueryRow(ctx, "SELECT request_hash,response FROM desk_turns WHERE owner_id=$1 AND request_id=$2", string(scope.OwnerID), req.RequestID).Scan(&priorHash, &prior)
+		if err == nil {
+			if !bytes.Equal(hash[:], priorHash) {
+				return memory.ErrConflict
 			}
-			if !errors.Is(err, pgx.ErrNoRows) {
+			var saved storedSecretaryResponse
+			if err := json.Unmarshal(prior, &saved); err != nil {
 				return err
 			}
-			out.ConversationID = conversationID
-			out.Turn = workspace.SecretaryTurn{ID: string(memory.NewID()), Text: req.Text, Cards: []workspace.DeskCard{}, Receipts: []workspace.DeskReceipt{}, CreatedAt: stamp()}
-			if req.ThingID != nil && !captureOnly {
-				if _, err := getItem(ctx, tx, scope, *req.ThingID); err != nil {
-					return err
-				}
+			out.ConversationID, out.Turn = saved.ConversationID, saved.Turn
+			out.State, err = s.snapshotTx(ctx, tx, scope)
+			if err != nil {
+				return err
 			}
-			c, contextErr = s.secretaryContextTx(ctx, tx, scope, req, conversationID)
-			if captureOnly {
-				contextErr = errors.New("secretary turn incomplete")
-				failureStage = "order"
-			}
-			out.Turn.Agent = c.Agent.Name
-			if contextErr == nil && !captureOnly && recognizedAuthorization {
-				intent, matched, e := s.resolveSourceAuthorizationIntentTx(ctx, tx, scope, req.Text, c.Task)
-				if e != nil {
-					contextErr = e
-				} else if matched {
-					intent.RequestID = req.RequestID
-					natural = &intent
-				}
-			}
-			if contextErr == nil && !recognizedAuthorization {
-				prompt, sent, contextErr = s.secretaryPrompt(ctx, tx, scope, req, &c)
-				if contextErr == nil {
-					scoped := scope
-					scoped.Task = &c.Task
-					failureStage = "verify"
-					contextErr = s.checkDeskContextTx(ctx, tx, scoped, c.Agent.ID, c.Dependencies, c.Items, true)
-				}
-			}
-			return nil
-		})
-		if prepErr != nil {
-			return prepErr
+			return refreshDeskReceiptUndoTx(ctx, tx, scope, []workspace.SecretaryTurn{out.Turn})
 		}
-		if replayed {
-			return nil
+		if !errors.Is(err, pgx.ErrNoRows) {
+			return err
 		}
-		if contextErr == nil && !recognizedAuthorization {
-			failureStage = "budget"
-			p, _ := s.models.Get(c.Agent.ID)
-			contextErr = s.reserveModelCost(ctx, scope.OwnerID, p.Reserve(secretaryInstructions+prompt), nil)
+		out.ConversationID = conversationID
+		out.Turn = workspace.SecretaryTurn{ID: string(memory.NewID()), Text: req.Text, Cards: []workspace.DeskCard{}, Receipts: []workspace.DeskReceipt{}, CreatedAt: stamp()}
+		if req.ThingID != nil && !captureOnly {
+			if _, err := getItem(ctx, tx, scope, *req.ThingID); err != nil {
+				return err
+			}
+		}
+		c, contextErr := s.secretaryContextTx(ctx, tx, scope, req, conversationID)
+		failureStage := "context"
+		if captureOnly {
+			contextErr = errors.New("secretary turn incomplete")
+			failureStage = "order"
+		}
+		out.Turn.Agent = c.Agent.Name
+		var answer secretaryOutput
+		sent := map[string]workspace.Memory{}
+		if contextErr == nil {
+			var prompt string
+			prompt, sent, contextErr = s.secretaryPrompt(ctx, tx, scope, req, &c)
+			if contextErr == nil {
+				failureStage = "verify"
+				contextErr = s.checkDeskContextTx(ctx, tx, scope, c.Agent.ID, c.Dependencies, c.Items, true)
+			}
+			if contextErr == nil {
+				failureStage = "budget"
+				p, _ := s.models.Get(c.Agent.ID)
+				contextErr = s.reserveModelCost(ctx, scope.OwnerID, p.Reserve(secretaryInstructions+prompt), nil)
+			}
 			if contextErr == nil {
 				failureStage = "model"
 				workCtx, cancel := context.WithTimeout(requestCtx, 90*time.Second)
-				result, captured, e := s.generateContext(workCtx, scope, req.RequestID, c.Task, c.TypedDependencies, c.Entries, c.Candidates, c.Indirect, secretaryInstructions, prompt, secretaryOutputSchema)
-				if e != nil && workCtx.Err() != nil {
-					e = workCtx.Err()
+				result, err := s.models.GenerateWithSearchSchema(workCtx, c.Agent.ID, secretaryInstructions, prompt, secretaryOutputSchema)
+				// HTTP providers may hide cancellation behind an unreachable error.
+				if err != nil && workCtx.Err() != nil {
+					err = workCtx.Err()
 				}
 				cancel()
-				contextErr = e
-				attempt = captured
-				if attempt.ID.Valid() {
-					c.Task.Recipient = attempt.Manifest.Recipient
-				}
+				contextErr = err
 				if contextErr == nil {
 					var parseErr error
 					answer, parseErr = parseSecretaryOutput(result.Text)
 					if parseErr != nil {
 						slog.WarnContext(ctx, "secretary output fallback", "stage", "parse", "error_type", secretaryErrorType("parse", parseErr))
+						// A completed model call still answered. Keep it as text, with
+						// no actions, citations or questions from a partial decode.
 						answer = secretaryOutput{Reply: strings.TrimSpace(result.Text)}
 					} else {
 						slog.InfoContext(ctx, "secretary output parsed", "stage", "parse", "error_type", "none")
@@ -513,247 +411,122 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 				}
 			}
 		}
-		if contextErr == nil && !recognizedAuthorization {
-			used := make([]memory.Ref, 0, len(answer.Used))
-			for _, alias := range answer.Used {
-				ref := memory.Ref{}
-				if m, ok := sent[alias]; ok {
-					for _, entry := range c.Entries {
-						if string(entry.Ref.ID) == m.ID && entry.Ref.Version == m.Version {
-							ref = entry.Ref
-							break
-						}
-					}
-				}
-				used = append(used, ref)
-			}
+		if _, err := tx.Exec(ctx, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(scope.OwnerID)); err != nil {
+			return err
+		}
+		if contextErr == nil {
 			failureStage = "verify"
-			contextErr = s.recordContextUsed(ctx, scope, attempt.ID, used)
+			contextErr = s.checkDeskContextTx(ctx, tx, scope, c.Agent.ID, c.Dependencies, c.Items, true)
 		}
-		var actionPlans []secretaryActionPlan
-		if contextErr == nil && !recognizedAuthorization {
-			actionPlans, contextErr = s.planSecretaryActions(ctx, scope, c, answer.Actions)
-			failureStage = "context"
-		}
-		return pgx.BeginFunc(ctx, conn, func(tx pgx.Tx) error {
-			if err := finishSecretaryTicketTx(ctx, tx, string(scope.OwnerID), req.RequestID, ticket, captureOnly); err != nil {
-				return err
-			}
-			if c.Task.OwnerID.Valid() {
-				scope.Task = &c.Task
-			}
-
-			if _, err := tx.Exec(ctx, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(scope.OwnerID)); err != nil {
-				return err
-			}
-			if contextErr == nil && !recognizedAuthorization {
-				failureStage = "verify"
-				contextErr = s.checkDeskContextTx(ctx, tx, scope, c.Agent.ID, c.Dependencies, c.Items, true)
-			}
-			if contextErr == nil && !recognizedAuthorization {
-				for _, prior := range c.History {
-					if prior.Reply == "（这条回答依据的记忆已变更）" {
-						continue
-					}
-					if _, err := s.deskTurnContextTx(ctx, tx, scope, prior.ID, &c.Task); err != nil {
-						contextErr = err
-						break
-					}
-				}
-			}
-			if contextErr == nil && !recognizedAuthorization {
-				contextErr = s.verifyContextAttemptTx(ctx, tx, scope, attempt.ID, c.Task, c.TypedDependencies)
-			}
-
-			dependencies := []memory.Ref{}
-			if recognizedAuthorization && !captureOnly {
-				if contextErr != nil {
-					out.Turn.Reply = "这个接收目标暂时无法确认权限，请稍后重试"
-					out.Turn.Receipts = append(out.Turn.Receipts, skippedReceipt("source_authorization", "授权没有修改"))
-				} else if natural == nil {
-					out.Turn.Ask = &workspace.DeskAsk{Question: "请选定唯一一份资料，或提供《完整资料标题》", Options: []string{}}
-				} else {
-					receipt, e := s.executeSourceAuthorizationIntentTx(ctx, tx, scope, *natural, out.Turn.ID)
-					if e != nil {
-						return e
-					}
-					out.Turn.Receipts = append(out.Turn.Receipts, receipt)
-					out.Turn.Reply = receipt.Text
-				}
-			} else if contextErr != nil {
-				slog.WarnContext(ctx, "secretary capture fallback", "stage", failureStage, "error_type", secretaryErrorType(failureStage, contextErr))
-				receiptText := secretaryCaptureText(failureStage, contextErr)
-				if captureOnly {
-					if err := s.captureIncompleteSecretaryTurn(ctx, tx, scope, req.RequestID, req.Text); err != nil {
-						return err
-					}
-					receiptText = "已记下原话；这轮操作未完成，为避免覆盖后续改动，请重新说明要做的事"
-				} else if err := s.commandTx(ctx, tx, scope, workspace.Command{Type: "capture", RequestID: req.RequestID, Text: req.Text}); err != nil {
+		dependencies := []memory.Ref{}
+		if contextErr != nil {
+			slog.WarnContext(ctx, "secretary capture fallback", "stage", failureStage, "error_type", secretaryErrorType(failureStage, contextErr))
+			receiptText := secretaryCaptureText(failureStage, contextErr)
+			if captureOnly {
+				if err := s.captureIncompleteSecretaryTurn(ctx, tx, scope, req.RequestID, req.Text); err != nil {
 					return err
 				}
-				receipt := workspace.DeskReceipt{Op: "capture", Text: receiptText, Status: "done"}
-				if errors.Is(contextErr, memory.ErrRecordCapacity) {
-					receipt.Code = secretaryErrorType(failureStage, contextErr)
+				receiptText = "已记下原话；这轮操作未完成，为避免覆盖后续改动，请重新说明要做的事"
+			} else if err := s.commandTx(ctx, tx, scope, workspace.Command{Type: "capture", RequestID: req.RequestID, Text: req.Text}); err != nil {
+				return err
+			}
+			out.Turn.Receipts = append(out.Turn.Receipts, workspace.DeskReceipt{Op: "capture", Text: receiptText, Status: "done"})
+		} else {
+			dependencies = c.Dependencies
+			if _, err := s.ingestTx(ctx, tx, scope, memory.IngestRequest{Connector: "desk", ExternalID: req.RequestID, ExternalVersion: "1", Title: "秘书原话", Text: req.Text, MediaType: "text/plain"}); err != nil {
+				return err
+			}
+			out.Turn.Reply = secretaryReply(answer.Reply)
+			out.Turn.Ask = answer.Ask
+			if out.Turn.Ask != nil && out.Turn.Ask.Options == nil {
+				out.Turn.Ask.Options = []string{}
+			}
+			// Keep execution-only N aliases out of the model's original context
+			// and cards. Array positions include skipped and malformed actions.
+			actionAliases := make(map[string]workspace.Item, len(c.Aliases)+10)
+			for alias, item := range c.Aliases {
+				actionAliases[alias] = item
+			}
+			for i, a := range answer.Actions {
+				if i >= 10 {
+					out.Turn.Receipts = append(out.Turn.Receipts, skippedReceipt(a.Op, "一次太多了，只做了前 10 件"))
+					break
 				}
-				out.Turn.Receipts = append(out.Turn.Receipts, receipt)
-			} else {
-				dependencies = c.Dependencies
-				if _, err := s.ingestTx(ctx, tx, scope, memory.IngestRequest{Connector: "desk", ExternalID: req.RequestID, ExternalVersion: "1", Title: "秘书原话", Text: req.Text, MediaType: "text/plain"}); err != nil {
-					return err
+				if a.parseErr != nil {
+					slog.WarnContext(ctx, "secretary action skipped", "stage", "parse", "error_type", secretaryErrorType("parse", a.parseErr))
+					out.Turn.Receipts = append(out.Turn.Receipts, skippedReceipt(a.Op, "动作字段没看懂"))
+					continue
 				}
-				out.Turn.Reply = secretaryReply(answer.Reply)
-				out.Turn.Ask = answer.Ask
-				if out.Turn.Ask != nil && out.Turn.Ask.Options == nil {
-					out.Turn.Ask.Options = []string{}
-				}
-				// Keep execution-only N aliases out of the model's original context
-				// and cards. Array positions include skipped and malformed actions.
-				actionAliases := make(map[string]workspace.Item, len(c.Aliases)+10)
-				for alias, item := range c.Aliases {
-					actionAliases[alias] = item
-				}
-				for i, a := range answer.Actions {
-					if i >= 10 {
-						out.Turn.Receipts = append(out.Turn.Receipts, skippedReceipt(a.Op, "一次太多了，只做了前 10 件"))
-						break
-					}
-					if a.parseErr != nil {
-						slog.WarnContext(ctx, "secretary action skipped", "stage", "parse", "error_type", secretaryErrorType("parse", a.parseErr))
-						out.Turn.Receipts = append(out.Turn.Receipts, skippedReceipt(a.Op, "动作字段没看懂"))
-						continue
-					}
-					actionID := string(memory.NewID())
-					actionCtx := withActionLog(withActor(ctx, "secretary"), actionID, "desk", out.Turn.ID, "秘书："+a.Op)
-					actionCtx = context.WithValue(actionCtx, secretaryArtifactKey{}, secretaryArtifactContext{Task: c.Task, Dependencies: c.TypedDependencies})
-					if i < len(actionPlans) {
-						actionCtx = context.WithValue(actionCtx, secretaryActionPlanKey{}, actionPlans[i])
-					}
-					actionTx, err := tx.Begin(ctx)
-					if err != nil {
-						return err
-					}
-					if err = beginActionLogTx(actionCtx, actionTx); err != nil {
-						_ = actionTx.Rollback(ctx)
-						return err
-					}
-					receipt, actionErr := s.executeSecretaryActionTx(actionCtx, actionTx, scope, a, actionAliases, c.Agent, deskLocation(c.Settings), pointerValue(req.ThingID))
-					if actionErr != nil || receipt.Status == "skipped" {
-						if err = actionTx.Rollback(ctx); err != nil {
-							return err
-						}
-						if errors.Is(actionErr, workspace.ErrBudget) {
-							receipt = skippedReceipt(a.Op, "超过今天的额度")
-						} else if actionErr != nil && receipt.Reason == "" {
-							receipt = skippedReceipt(a.Op, "这件事暂时办不了")
-						}
-					} else {
-						// The summary and receipt describe the actual persisted result.
-						actionCtx = withActionLog(actionCtx, actionID, "desk", out.Turn.ID, receipt.Text)
-						if err = flushActionLog(actionCtx, actionTx, scope); err != nil {
-							_ = actionTx.Rollback(ctx)
-							return err
-						}
-						var logged bool
-						if err = actionTx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM action_log WHERE owner_id=$1 AND id=$2)", string(scope.OwnerID), actionID).Scan(&logged); err != nil {
-							_ = actionTx.Rollback(ctx)
-							return err
-						}
-						if logged {
-							receipt.ActionID = &actionID
-							receipt.Undoable = true
-						} else {
-							receipt = skippedReceipt(a.Op, "没有可执行的修改")
-						}
-						if err = actionTx.Commit(ctx); err != nil {
-							return err
-						}
-						if receipt.Status == "done" && receipt.ThingID != nil && oneOf(a.Op, "create_task", "create_idea", "create_project") {
-							item, err := getItem(ctx, tx, scope, *receipt.ThingID)
-							if err != nil {
-								return err
-							}
-							actionAliases[fmt.Sprintf("N%d", i+1)] = item
-						}
-					}
-					out.Turn.Receipts = append(out.Turn.Receipts, receipt)
-				}
-				if answer.Remember {
-					out.Turn.Receipts = append(out.Turn.Receipts, workspace.DeskReceipt{Op: "remember", Text: "记下了，会整理进记忆", Status: "done"})
-				}
-				out.Turn.Cards, err = s.secretaryCardsTx(ctx, tx, scope, answer, sent, c.Aliases, deskLocation(c.Settings))
+				actionID := string(memory.NewID())
+				actionCtx := withActionLog(withActor(ctx, "secretary"), actionID, "desk", out.Turn.ID, "秘书："+a.Op)
+				actionTx, err := tx.Begin(ctx)
 				if err != nil {
 					return err
 				}
-			}
-			if _, err := tx.Exec(ctx, "UPDATE workspace_owners SET revision=revision+1 WHERE owner_id=$1", string(scope.OwnerID)); err != nil {
-				return err
-			}
-			ownerView := scope
-			ownerView.Task = nil // local response view is not supply to the model
-			out.State, err = s.snapshotTx(ctx, tx, ownerView)
-			if err != nil {
-				return err
-			}
-			var taskJSON any
-			if contextErr == nil && !recognizedAuthorization {
-				taskJSON = asJSON(c.Task)
-			}
-			_, err = tx.Exec(ctx, "INSERT INTO desk_turns(owner_id,id,agent_id,question,answer,dependencies,conversation_id,thing_id,request_id,request_hash,response,created_at,context_task) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)", string(scope.OwnerID), out.Turn.ID, c.Agent.ID, req.Text, out.Turn.Reply, asJSON(dependencies), conversationID, pointerValueOrNull(req.ThingID), req.RequestID, hash[:], asJSON(storedSecretaryResponse{ConversationID: out.ConversationID, Turn: out.Turn}), out.Turn.CreatedAt, taskJSON)
-			if err != nil {
-				return err
-			}
-			if taskJSON != nil {
-				if err = persistContextArtifactDependenciesTx(ctx, tx, scope, "desk_turn", out.Turn.ID, 1, c.Task, c.TypedDependencies); err != nil {
+				if err = beginActionLogTx(actionCtx, actionTx); err != nil {
+					_ = actionTx.Rollback(ctx)
 					return err
 				}
+				receipt, actionErr := s.executeSecretaryActionTx(actionCtx, actionTx, scope, a, actionAliases, c.Agent, deskLocation(c.Settings), pointerValue(req.ThingID))
+				if actionErr != nil || receipt.Status == "skipped" {
+					if err = actionTx.Rollback(ctx); err != nil {
+						return err
+					}
+					if errors.Is(actionErr, workspace.ErrBudget) {
+						receipt = skippedReceipt(a.Op, "超过今天的额度")
+					} else if actionErr != nil && receipt.Reason == "" {
+						receipt = skippedReceipt(a.Op, "这件事暂时办不了")
+					}
+				} else {
+					// The summary and receipt describe the actual persisted result.
+					actionCtx = withActionLog(actionCtx, actionID, "desk", out.Turn.ID, receipt.Text)
+					if err = flushActionLog(actionCtx, actionTx, scope); err != nil {
+						_ = actionTx.Rollback(ctx)
+						return err
+					}
+					var logged bool
+					if err = actionTx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM action_log WHERE owner_id=$1 AND id=$2)", string(scope.OwnerID), actionID).Scan(&logged); err != nil {
+						_ = actionTx.Rollback(ctx)
+						return err
+					}
+					if logged {
+						receipt.ActionID = &actionID
+						receipt.Undoable = true
+					} else {
+						receipt = skippedReceipt(a.Op, "没有可执行的修改")
+					}
+					if err = actionTx.Commit(ctx); err != nil {
+						return err
+					}
+					if receipt.Status == "done" && receipt.ThingID != nil && oneOf(a.Op, "create_task", "create_idea", "create_project") {
+						item, err := getItem(ctx, tx, scope, *receipt.ThingID)
+						if err != nil {
+							return err
+						}
+						actionAliases[fmt.Sprintf("N%d", i+1)] = item
+					}
+				}
+				out.Turn.Receipts = append(out.Turn.Receipts, receipt)
 			}
-			return nil
-		})
+			if answer.Remember {
+				out.Turn.Receipts = append(out.Turn.Receipts, workspace.DeskReceipt{Op: "remember", Text: "记下了，会整理进记忆", Status: "done"})
+			}
+			out.Turn.Cards, err = s.secretaryCardsTx(ctx, tx, scope, answer, sent, c.Aliases, deskLocation(c.Settings))
+			if err != nil {
+				return err
+			}
+		}
+		if _, err := tx.Exec(ctx, "UPDATE workspace_owners SET revision=revision+1 WHERE owner_id=$1", string(scope.OwnerID)); err != nil {
+			return err
+		}
+		out.State, err = s.snapshotTx(ctx, tx, scope)
+		if err != nil {
+			return err
+		}
+		_, err = tx.Exec(ctx, "INSERT INTO desk_turns(owner_id,id,agent_id,question,answer,dependencies,conversation_id,thing_id,request_id,request_hash,response,created_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)", string(scope.OwnerID), out.Turn.ID, c.Agent.ID, req.Text, out.Turn.Reply, asJSON(dependencies), conversationID, pointerValueOrNull(req.ThingID), req.RequestID, hash[:], asJSON(storedSecretaryResponse{ConversationID: out.ConversationID, Turn: out.Turn}), out.Turn.CreatedAt)
+		return err
 	})
 	return out, err
-}
-
-// Natural policy changes are resolved solely from the current owner request.
-// A savepoint keeps a concurrent version change from aborting the exchange.
-func (s *Store) executeSourceAuthorizationIntentTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in memory.SourceAuthorizationRequest, turnID string) (workspace.DeskReceipt, error) {
-	op, text := "set_source_authorization", "已允许这个接收者使用这份资料"
-	if in.Revoke {
-		op, text = "revoke_source_authorization", "已停止这个接收者使用这份资料及其派生内容"
-	}
-	actionID := string(memory.NewID())
-	actionCtx := withActionLog(withActor(ctx, "secretary"), actionID, "desk", turnID, text)
-	actionTx, err := tx.Begin(ctx)
-	if err != nil {
-		return workspace.DeskReceipt{}, err
-	}
-	if err = beginActionLogTx(actionCtx, actionTx); err != nil {
-		_ = actionTx.Rollback(ctx)
-		return workspace.DeskReceipt{}, err
-	}
-	_, err = s.mutateSourceAuthorizationTx(actionCtx, actionTx, scope, in)
-	if err != nil {
-		if rollbackErr := actionTx.Rollback(ctx); rollbackErr != nil {
-			return workspace.DeskReceipt{}, rollbackErr
-		}
-		return skippedReceipt(op, "资料或授权已变更，请重新确认"), nil
-	}
-	if err = flushActionLog(actionCtx, actionTx, scope); err != nil {
-		_ = actionTx.Rollback(ctx)
-		return workspace.DeskReceipt{}, err
-	}
-	var logged bool
-	if err = actionTx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM action_log WHERE owner_id=$1 AND id=$2)", string(scope.OwnerID), actionID).Scan(&logged); err != nil {
-		_ = actionTx.Rollback(ctx)
-		return workspace.DeskReceipt{}, err
-	}
-	if !logged {
-		_ = actionTx.Rollback(ctx)
-		return skippedReceipt(op, "没有可执行的修改"), nil
-	}
-	if err = actionTx.Commit(ctx); err != nil {
-		return workspace.DeskReceipt{}, err
-	}
-	return workspace.DeskReceipt{Op: op, Text: text, Status: "done", ActionID: &actionID, Undoable: true}, nil
 }
 
 func secretaryReply(reply string) string {
@@ -800,16 +573,19 @@ func (s *Store) deskTurnsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, 
 	}
 	for _, stored := range turns {
 		turn := stored.Response.Turn
-		live, contextErr := s.deskTurnContextTx(ctx, tx, scope, turn.ID, scope.Task)
-		if stored.Erased || contextErr != nil {
-			if err := s.redactDeskTurnContextTx(ctx, tx, scope, &turn); err != nil {
-				return out, err
-			}
-			if scope.Task != nil {
-				turn.Text = ""
-			}
+		agent := stored.AgentID
+		if agentOverride != "" {
+			agent = agentOverride
+		}
+		run := workspace.Run{AgentID: agent, ContextVersions: stored.Dependencies}
+		if thingID != nil {
+			run.ThingID = *thingID
+		}
+		if stored.Erased || len(stored.Dependencies) > 0 && verifyRunTx(ctx, tx, scope, run) != nil {
+			turn.Reply = "（这条回答依据的记忆已变更）"
+			turn.Cards = []workspace.DeskCard{}
 		} else if dependencies != nil {
-			*dependencies = append(*dependencies, refsForDependencies(live)...)
+			*dependencies = append(*dependencies, stored.Dependencies...)
 		}
 		out.Turns = append(out.Turns, turn)
 	}

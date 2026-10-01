@@ -1,8 +1,0 @@
-Listing tests:
-  backend.spec.ts:5:1 › login, persisted memory, confirmation, correction, source tracing and export
-  chatgpt-direct.spec.ts:4:1 › official plan connection explains usage and keeps the Codex channel
-  continuity.spec.ts:4:1 › generic connector persists, scoped webhook cannot read memory, archive upload queues parsing
-  model-api.spec.ts:4:1 › real API settings persist separate keys, redact secrets and queue vector backfill
-  phase2_manual_backend.spec.ts:167:1 › real_target_package_clipboard_submit
-  phase2_manual_backend.spec.ts:185:1 › real_revoke_clear_refuse_regenerate_submit
-Total: 6 tests in 5 files

@@ -22,19 +22,7 @@ func sourceKey(connector, externalID string) []byte {
 
 func (s *Store) Ingest(ctx context.Context, scope memory.Scope, in memory.IngestRequest) (memory.IngestResult, error) {
 	var result memory.IngestResult
-	if err := requireOwner(scope); err != nil {
-		return result, err
-	}
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-		if _, err := tx.Exec(ctx, "SET LOCAL lock_timeout = '5s'"); err != nil {
-			return err
-		}
-		if err := s.ensureOwner(ctx, tx, scope); err != nil {
-			return err
-		}
-		if _, err := tx.Exec(ctx, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(scope.OwnerID)); err != nil {
-			return err
-		}
 		var err error
 		result, err = s.ingestTx(ctx, tx, scope, in)
 		return err
@@ -110,9 +98,6 @@ func (s *Store) ingestTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in 
 			return err
 		}
 		if version > 1 {
-			if err := invalidateTypedContextTx(ctx, tx, scope, memory.ContextInvalidation{RecordIDs: []memory.ID{memory.ID(id)}, Reason: memory.ContextReplaced}); err != nil {
-				return err
-			}
 			if err := invalidateTx(ctx, tx, scope, id); err != nil {
 				return err
 			}
@@ -162,60 +147,19 @@ func enqueue(ctx context.Context, tx pgx.Tx, ownerID, id memory.ID, version int,
 }
 
 func (s *Store) GetSource(ctx context.Context, scope memory.Scope, id memory.ID, version int) (memory.SourceResult, error) {
-	var result memory.SourceResult
-	if !scope.Valid() || !scope.IsOwner && (scope.Task == nil || scope.Task.OwnerID != scope.OwnerID || scope.Task.Recipient.PrincipalID != scope.PrincipalID) {
-		return result, memory.ErrForbidden
-	}
-	if !id.Valid() || version < 0 {
-		return result, memory.ErrInvalid
-	}
-	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-		if _, err := tx.Exec(ctx, "SET LOCAL lock_timeout = '5s'"); err != nil {
-			return err
-		}
-		var err error
-		result, err = s.getSourceTx(ctx, tx, scope, id, version)
-		return err
-	})
-	if err != nil {
-		return memory.SourceResult{}, err
-	}
-	return result, nil
-}
-
-func (s *Store) getSourceTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, id memory.ID, version int) (memory.SourceResult, error) {
 	result := memory.SourceResult{Processing: make([]memory.Processing, 0), Derived: []memory.Ref{}}
 	if !scope.Valid() {
 		return result, memory.ErrForbidden
 	}
-	if !scope.IsOwner || scope.Task != nil {
-		if scope.Task == nil || scope.Task.OwnerID != scope.OwnerID {
-			return result, memory.ErrForbidden
-		}
-		exact := memory.Ref{ID: id, Kind: memory.SourceKind, Version: version}
-		if exact.Version == 0 {
-			err := tx.QueryRow(ctx, "SELECT version FROM memory_records WHERE owner_id=$1 AND id=$2 AND kind='source' AND state='active'", string(scope.OwnerID), string(id)).Scan(&exact.Version)
-			if errors.Is(err, pgx.ErrNoRows) {
-				return result, memory.ErrNotFound
-			}
-			if err != nil {
-				return result, err
-			}
-		}
-		if err := sourcePolicyAllowsTx(ctx, tx, *scope.Task, exact); err != nil {
-			return result, err
-		}
-		version = exact.Version
-	}
 	var sourceID string
 	var blobKey *string
-	err := tx.QueryRow(ctx, `SELECT s.id::text,v.version,s.connector,s.external_id,v.external_version,v.title,v.body,v.media_type,
+	err := s.pool.QueryRow(ctx, `SELECT s.id::text,v.version,s.connector,s.external_id,v.external_version,v.title,v.body,v.media_type,
 		rv.valid_from,rv.valid_to,rv.time_precision,rv.expressed_at,rv.recorded_at,rv.state,v.representation,(v.blob_key IS NOT NULL OR v.attachment_redacted),v.blob_key
 		FROM sources s JOIN memory_records r ON (r.owner_id,r.id)=(s.owner_id,s.id)
 		JOIN source_versions v ON (v.owner_id,v.source_id)=(s.owner_id,s.id) AND v.version=CASE WHEN $3=0 THEN r.version ELSE $3 END
 		JOIN record_versions rv ON (rv.owner_id,rv.record_id,rv.version)=(v.owner_id,v.source_id,v.version)
 		WHERE s.owner_id=$1 AND s.id=$2 AND r.state='active' AND rv.state='active'
-		AND ($4 OR EXISTS(SELECT 1 FROM record_grants g WHERE g.owner_id=s.owner_id AND g.record_id=s.id AND g.principal_id=$5)) FOR SHARE OF r,rv`,
+		AND ($4 OR EXISTS(SELECT 1 FROM record_grants g WHERE g.owner_id=s.owner_id AND g.record_id=s.id AND g.principal_id=$5))`,
 		string(scope.OwnerID), string(id), version, scope.IsOwner, scope.PrincipalID).Scan(&sourceID, &result.Source.Version,
 		&result.Source.Connector, &result.Source.ExternalID, &result.Source.ExternalVersion, &result.Source.Title, &result.Source.Text, &result.Source.MediaType,
 		&result.Source.ValidTime.From, &result.Source.ValidTime.To, &result.Source.ValidTime.Precision, &result.Source.ExpressedAt, &result.Source.RecordedAt, &result.Source.State, &result.Source.Representation, &result.Source.HasAttachment, &blobKey)
@@ -238,7 +182,7 @@ func (s *Store) getSourceTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, 
 		}
 	}
 	var sourceContext memory.SourceContext
-	contextErr := tx.QueryRow(ctx, "SELECT conversation_key,parent_key,role,branch,gaps FROM source_contexts WHERE owner_id=$1 AND source_id=$2 AND source_version=$3", string(scope.OwnerID), string(id), result.Source.Version).Scan(&sourceContext.Conversation, &sourceContext.Parent, &sourceContext.Role, &sourceContext.Branch, &sourceContext.Gaps)
+	contextErr := s.pool.QueryRow(ctx, "SELECT conversation_key,parent_key,role,branch,gaps FROM source_contexts WHERE owner_id=$1 AND source_id=$2 AND source_version=$3", string(scope.OwnerID), string(id), result.Source.Version).Scan(&sourceContext.Conversation, &sourceContext.Parent, &sourceContext.Role, &sourceContext.Branch, &sourceContext.Gaps)
 	if contextErr == nil {
 		result.Context = &sourceContext
 	} else if !errors.Is(contextErr, pgx.ErrNoRows) {
@@ -246,7 +190,7 @@ func (s *Store) getSourceTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, 
 	}
 	result.Source.ID = memory.ID(sourceID)
 	result.Source.Kind = memory.SourceKind
-	rows, err := tx.Query(ctx, `SELECT id::text,stage,state,attempts,error_code FROM memory_jobs
+	rows, err := s.pool.Query(ctx, `SELECT id::text,stage,state,attempts,error_code FROM memory_jobs
 		WHERE owner_id=$1 AND record_id=$2 AND record_version=$3 ORDER BY created_at,stage`, string(scope.OwnerID), string(id), result.Source.Version)
 	if err != nil {
 		return result, err
@@ -266,7 +210,7 @@ func (s *Store) getSourceTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, 
 	if err != nil {
 		return result, err
 	}
-	rows, err = tx.Query(ctx, "SELECT v.source_id::text,v.version FROM source_versions v JOIN memory_records r ON (r.owner_id,r.id)=(v.owner_id,v.source_id) WHERE v.owner_id=$1 AND ((v.derived_from_id=$2 AND v.derived_from_version=$3) OR EXISTS(SELECT 1 FROM archive_entries ae WHERE ae.owner_id=v.owner_id AND ae.source_id=v.source_id AND ae.source_version=v.version AND ae.archive_id=$2 AND ae.archive_version=$3)) AND r.state='active' AND ($4 OR EXISTS(SELECT 1 FROM record_grants g WHERE g.owner_id=v.owner_id AND g.record_id=v.source_id AND g.principal_id=$5))", string(scope.OwnerID), string(id), result.Source.Version, scope.IsOwner, scope.PrincipalID)
+	rows, err = s.pool.Query(ctx, "SELECT v.source_id::text,v.version FROM source_versions v JOIN memory_records r ON (r.owner_id,r.id)=(v.owner_id,v.source_id) WHERE v.owner_id=$1 AND ((v.derived_from_id=$2 AND v.derived_from_version=$3) OR EXISTS(SELECT 1 FROM archive_entries ae WHERE ae.owner_id=v.owner_id AND ae.source_id=v.source_id AND ae.source_version=v.version AND ae.archive_id=$2 AND ae.archive_version=$3)) AND r.state='active' AND ($4 OR EXISTS(SELECT 1 FROM record_grants g WHERE g.owner_id=v.owner_id AND g.record_id=v.source_id AND g.principal_id=$5))", string(scope.OwnerID), string(id), result.Source.Version, scope.IsOwner, scope.PrincipalID)
 	if err != nil {
 		return result, err
 	}
@@ -278,21 +222,5 @@ func (s *Store) getSourceTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, 
 		}
 		result.Derived = append(result.Derived, ref)
 	}
-	err = rows.Err()
-	rows.Close()
-	if err != nil {
-		return result, err
-	}
-	if !scope.IsOwner || scope.Task != nil {
-		permitted := []memory.Ref{}
-		for _, ref := range result.Derived {
-			if err := sourcePolicyAllowsTx(ctx, tx, *scope.Task, ref); err == nil {
-				permitted = append(permitted, ref)
-			} else if !errors.Is(err, memory.ErrForbidden) && !errors.Is(err, memory.ErrNotFound) && !errors.Is(err, memory.ErrConflict) && !errors.Is(err, memory.ErrUnavailable) {
-				return result, err
-			}
-		}
-		result.Derived = permitted
-	}
-	return result, nil
+	return result, rows.Err()
 }

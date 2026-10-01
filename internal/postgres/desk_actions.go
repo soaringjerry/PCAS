@@ -194,11 +194,6 @@ func (s *Store) secretaryProjectTx(ctx context.Context, tx pgx.Tx, scope memory.
 			return "", err
 		}
 		id = string(memory.NewID())
-		if plan, ok := ctx.Value(secretaryActionPlanKey{}).(secretaryActionPlan); ok {
-			if planned := plan.Projects[strings.ToLower(name)]; memory.ID(planned).Valid() {
-				id = planned
-			}
-		}
 		err = s.commandTx(ctx, tx, scope, workspace.Command{Type: "addProject", ID: id, Name: name})
 		return id, err
 	}
@@ -284,10 +279,7 @@ func (s *Store) executeSecretaryActionTx(ctx context.Context, tx pgx.Tx, scope m
 		if !validDeskTitle(title) {
 			return skippedReceipt(a.Op, "标题为空或太长"), nil
 		}
-		id = secretaryPlannedItemID(ctx)
-		if !memory.ID(id).Valid() {
-			id = string(memory.NewID())
-		}
+		id = string(memory.NewID())
 		project := ""
 		var err error
 		if a.Project != nil {
@@ -503,25 +495,11 @@ func (s *Store) executeSecretaryActionTx(ctx context.Context, tx pgx.Tx, scope m
 			if !validDeskTitle(a.Title) {
 				return skippedReceipt(a.Op, "标题为空或太长"), nil
 			}
-			id = secretaryPlannedItemID(ctx)
-			if !memory.ID(id).Valid() {
-				return receipt, memory.ErrConflict
-			}
+			id = string(memory.NewID())
 			c.Type = "delegateTask"
 			c.ID = id
 			c.Title = strings.TrimSpace(a.Title)
 		}
-		plan, ok := ctx.Value(secretaryActionPlanKey{}).(secretaryActionPlan)
-		if !ok || plan.TargetID != id || plan.Prepared == nil {
-			if errors.Is(plan.Error, memory.ErrForbidden) {
-				return skippedReceipt(a.Op, "这个副手目前不能使用这轮资料，请确认授权后再试"), nil
-			}
-			if plan.Error != nil {
-				return receipt, plan.Error
-			}
-			return receipt, memory.ErrConflict
-		}
-		ctx = context.WithValue(ctx, runContextKey{}, *plan.Prepared)
 		if err := call(c); err != nil {
 			return receipt, err
 		}

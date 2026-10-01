@@ -179,37 +179,23 @@ type Adoption struct {
 	Edited   bool   `json:"edited"`
 }
 type Run struct {
-	// Server-created provenance. Requests cannot supply a trusted task through
-	// these returned fields; consumers rebuild the current recipient on reads.
-	ContextTask         *memory.TrustedTaskContext `json:"contextTask,omitempty"`
-	ContextDependencies []memory.TypedDependency   `json:"contextDependencies,omitempty"`
-	// Server-owned derived lineage; may overlap direct ContextVersions/Input.
-	ContextDeskActions []memory.ID `json:"contextDeskActions"`
-	// A server-owned subset for the actual model-written Prompt, distinct from
-	// origins inherited through item fields and previous conversations.
-	ContextPromptDeskActions    []memory.ID              `json:"contextPromptDeskActions,omitempty"`
-	ContextIndirectDependencies []memory.TypedDependency `json:"contextIndirectDependencies"`
-	ContextCandidates           []memory.CandidateRecord `json:"contextCandidates,omitempty"`
-	ContextSourceSpans          []memory.SourceSpan      `json:"contextSourceSpans,omitempty"`
-	ContextAttemptID            memory.ID                `json:"contextAttemptId,omitempty"`
-	ManualRecipient             *memory.Recipient        `json:"manualRecipient,omitempty"`
-	ID                          string                   `json:"id"`
-	ThingID                     string                   `json:"thingId"`
-	AgentID                     string                   `json:"agentId"`
-	Kind                        string                   `json:"kind"`
-	Prompt                      string                   `json:"prompt"`
-	Brief                       string                   `json:"brief"`
-	ContextMemoryIDs            []string                 `json:"contextMemoryIds"`
-	ContextVersions             []memory.Ref             `json:"contextVersions"`
-	Status                      string                   `json:"status"`
-	Output                      string                   `json:"output,omitempty"`
-	Error                       string                   `json:"error,omitempty"`
-	ProviderError               json.RawMessage          `json:"providerError,omitempty"`
-	Adopted                     *Adoption                `json:"adopted,omitempty"`
-	StaleContext                bool                     `json:"staleContext"`
-	Cost                        float64                  `json:"cost"`
-	CreatedAt                   string                   `json:"createdAt"`
-	FinishedAt                  string                   `json:"finishedAt,omitempty"`
+	ID               string          `json:"id"`
+	ThingID          string          `json:"thingId"`
+	AgentID          string          `json:"agentId"`
+	Kind             string          `json:"kind"`
+	Prompt           string          `json:"prompt"`
+	Brief            string          `json:"brief"`
+	ContextMemoryIDs []string        `json:"contextMemoryIds"`
+	ContextVersions  []memory.Ref    `json:"contextVersions"`
+	Status           string          `json:"status"`
+	Output           string          `json:"output,omitempty"`
+	Error            string          `json:"error,omitempty"`
+	ProviderError    json.RawMessage `json:"providerError,omitempty"`
+	Adopted          *Adoption       `json:"adopted,omitempty"`
+	StaleContext     bool            `json:"staleContext"`
+	Cost             float64         `json:"cost"`
+	CreatedAt        string          `json:"createdAt"`
+	FinishedAt       string          `json:"finishedAt,omitempty"`
 }
 type Origin struct {
 	Label    string `json:"label"`
@@ -279,51 +265,43 @@ type State struct {
 
 // Commands are validated on the server; callers never submit an entire state.
 type Command struct {
-	// SourceRunID is an untrusted locator for retry/handoff prompt lineage.
-	// The server reads and verifies the original Run; clients supply no origins.
-	SourceRunID string `json:"sourceRunId,omitempty"`
-	// ManualRecipient is an explicit owner selection. Consumers must validate
-	// it against the configured external destination before binding trusted Task.
-	ManualRecipient     *memory.Recipient                  `json:"manualRecipient,omitempty"`
-	SourceAuthorization *memory.SourceAuthorizationRequest `json:"sourceAuthorization,omitempty"`
-	SourceScope         *memory.SourceScopeRequest         `json:"sourceScope,omitempty"`
-	DeskTurnIDs         []string                           `json:"deskTurnIds,omitempty"`
-	IncludeSources      bool                               `json:"includeSources,omitempty"`
-	RequestID           string                             `json:"requestId"`
-	ExpectedRevision    int64                              `json:"expectedRevision"`
-	Type                string                             `json:"type"`
-	ID                  string                             `json:"id,omitempty"`
-	IDs                 []string                           `json:"ids,omitempty"`
-	Text                string                             `json:"text,omitempty"`
-	Title               string                             `json:"title,omitempty"`
-	Name                string                             `json:"name,omitempty"`
-	Note                string                             `json:"note,omitempty"`
-	Kind                string                             `json:"kind,omitempty"`
-	MemoryKind          string                             `json:"memoryKind,omitempty"`
-	ProjectID           string                             `json:"projectId,omitempty"`
-	Due                 string                             `json:"due,omitempty"`
-	Status              string                             `json:"status,omitempty"`
-	State               string                             `json:"state,omitempty"`
-	Reason              string                             `json:"reason,omitempty"`
-	Summary             string                             `json:"summary,omitempty"`
-	TaskID              string                             `json:"taskId,omitempty"`
-	IdeaID              string                             `json:"ideaId,omitempty"`
-	ThingID             string                             `json:"thingId,omitempty"`
-	MemoryID            string                             `json:"memoryId,omitempty"`
-	ItemID              string                             `json:"itemId,omitempty"`
-	TriggerID           string                             `json:"triggerId,omitempty"`
-	ConditionID         string                             `json:"conditionId,omitempty"`
-	TargetID            string                             `json:"targetId,omitempty"`
-	Condition           string                             `json:"condition,omitempty"`
-	Description         string                             `json:"description,omitempty"`
-	Days                int                                `json:"days,omitempty"`
-	AgentIDs            []string                           `json:"agentIds,omitempty"`
-	AgentID             string                             `json:"agentId,omitempty"`
-	Prompt              string                             `json:"prompt,omitempty"`
-	Output              string                             `json:"output,omitempty"`
-	As                  string                             `json:"as,omitempty"`
-	Patch               json.RawMessage                    `json:"patch,omitempty"`
-	Doc                 *Doc                               `json:"doc,omitempty"`
+	DeskTurnIDs      []string        `json:"deskTurnIds,omitempty"`
+	IncludeSources   bool            `json:"includeSources,omitempty"`
+	RequestID        string          `json:"requestId"`
+	ExpectedRevision int64           `json:"expectedRevision"`
+	Type             string          `json:"type"`
+	ID               string          `json:"id,omitempty"`
+	IDs              []string        `json:"ids,omitempty"`
+	Text             string          `json:"text,omitempty"`
+	Title            string          `json:"title,omitempty"`
+	Name             string          `json:"name,omitempty"`
+	Note             string          `json:"note,omitempty"`
+	Kind             string          `json:"kind,omitempty"`
+	MemoryKind       string          `json:"memoryKind,omitempty"`
+	ProjectID        string          `json:"projectId,omitempty"`
+	Due              string          `json:"due,omitempty"`
+	Status           string          `json:"status,omitempty"`
+	State            string          `json:"state,omitempty"`
+	Reason           string          `json:"reason,omitempty"`
+	Summary          string          `json:"summary,omitempty"`
+	TaskID           string          `json:"taskId,omitempty"`
+	IdeaID           string          `json:"ideaId,omitempty"`
+	ThingID          string          `json:"thingId,omitempty"`
+	MemoryID         string          `json:"memoryId,omitempty"`
+	ItemID           string          `json:"itemId,omitempty"`
+	TriggerID        string          `json:"triggerId,omitempty"`
+	ConditionID      string          `json:"conditionId,omitempty"`
+	TargetID         string          `json:"targetId,omitempty"`
+	Condition        string          `json:"condition,omitempty"`
+	Description      string          `json:"description,omitempty"`
+	Days             int             `json:"days,omitempty"`
+	AgentIDs         []string        `json:"agentIds,omitempty"`
+	AgentID          string          `json:"agentId,omitempty"`
+	Prompt           string          `json:"prompt,omitempty"`
+	Output           string          `json:"output,omitempty"`
+	As               string          `json:"as,omitempty"`
+	Patch            json.RawMessage `json:"patch,omitempty"`
+	Doc              *Doc            `json:"doc,omitempty"`
 }
 type API interface {
 	Snapshot(context.Context, memory.Scope) (State, error)

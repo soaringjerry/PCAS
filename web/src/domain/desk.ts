@@ -31,10 +31,9 @@ export function isKnownCard(card: DeskCard): card is SourcesCard | LinksCard | T
   return ['sources', 'links', 'timeline', 'tasks'].includes(card.kind) && Array.isArray(card.items) && card.items.length > 0
 }
 
-export type ReceiptOp = 'create_task' | 'update' | 'create_idea' | 'create_project' | 'add_steps' | 'remember' | 'delegate' | 'capture' | 'set_source_authorization' | 'revoke_source_authorization' | 'source_authorization' | 'action'
+export type ReceiptOp = 'create_task' | 'update' | 'create_idea' | 'create_project' | 'add_steps' | 'remember' | 'delegate' | 'capture'
 
 export interface Receipt {
-  code?: string
   actionId: string | null
   op: ReceiptOp
   text: string

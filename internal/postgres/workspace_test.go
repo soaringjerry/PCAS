@@ -103,7 +103,6 @@ func TestWorkspaceMemoryLifecycle(t *testing.T) {
 			t.Fatalf("%s: %v", c.Type, err)
 		}
 	}
-	phase2ManualDestination(t, s)
 	projectID := string(memory.NewID())
 	command(workspace.Command{Type: "addProject", ID: projectID, Name: "PCAS"})
 	command(workspace.Command{Type: "addTask", Title: "接入记忆系统", ProjectID: projectID})
@@ -117,10 +116,9 @@ func TestWorkspaceMemoryLifecycle(t *testing.T) {
 	if err != nil || !strings.Contains(result.Summary, "旧书店") {
 		t.Fatalf("immediate recall: %+v %v", result, err)
 	}
-	command(workspace.Command{Type: "requestRun", ThingID: taskID, AgentID: "manual", ManualRecipient: &memory.Recipient{Provider: phase2ManualProvider}, Kind: "plan", Prompt: "帮我规划"})
+	command(workspace.Command{Type: "requestRun", ThingID: taskID, AgentID: "manual", Kind: "plan", Prompt: "帮我规划"})
 	run := state.Runs[0]
-	pkg := phase2RTGetPackage(t, s, scope, run)
-	if !strings.Contains(pkg.Text, candidate.Text) {
+	if !strings.Contains(run.Brief, candidate.Text) {
 		t.Fatal("missing allowed memory")
 	}
 	command(workspace.Command{Type: "pasteRunResult", ID: run.ID, Output: "安排一次走访"})
@@ -133,9 +131,8 @@ func TestWorkspaceMemoryLifecycle(t *testing.T) {
 		t.Fatalf("stale adoption allowed: %v", err)
 	}
 	command(workspace.Command{Type: "setMemoryVisibility", ID: mem.ID, AgentIDs: []string{}})
-	command(workspace.Command{Type: "requestRun", ThingID: taskID, AgentID: "manual", ManualRecipient: &memory.Recipient{Provider: phase2ManualProvider}, Kind: "ask", Prompt: "现在有什么背景"})
-	pkg = phase2RTGetPackage(t, s, scope, state.Runs[0])
-	if strings.Contains(pkg.Text, "书店") {
+	command(workspace.Command{Type: "requestRun", ThingID: taskID, AgentID: "manual", Kind: "ask", Prompt: "现在有什么背景"})
+	if strings.Contains(state.Runs[0].Brief, "书店") {
 		t.Fatal("revoked memory leaked")
 	}
 	command(workspace.Command{Type: "deleteMemory", ID: mem.ID})

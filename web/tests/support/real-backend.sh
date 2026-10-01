@@ -87,7 +87,7 @@ else
     --repeat-each="$golden_repeats" --output=test-results/golden --reporter=list,json || status=1
   if "$run_auxiliary"; then
     PLAYWRIGHT_JSON_OUTPUT_NAME=test-results/legacy.json npx playwright test tests/backend.spec.ts \
-      tests/continuity.spec.ts tests/chatgpt-direct.spec.ts tests/model-api.spec.ts tests/phase2_manual_backend.spec.ts \
+      tests/continuity.spec.ts tests/chatgpt-direct.spec.ts tests/model-api.spec.ts \
       --output=test-results/legacy --reporter=list,json || status=1
   fi
   exit "$status"

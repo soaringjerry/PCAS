@@ -1,5 +1,0 @@
-TestPhase2RuntimeCanonicalNameOriginSurvivesOwnerTitleRewrite
-TestPhase2RuntimeOwnerPromptDoesNotInheritGeneratedPromptOrigins
-TestPhase2RuntimeOwnerRenameCannotLaunderKnownSourceText
-TestSameTurnOriginalTenActionLimit
-ok  	github.com/soaringjerry/PCAS/internal/postgres	0.006s

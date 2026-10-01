@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
@@ -150,7 +149,7 @@ func (s *Store) secretaryTicketReady(ctx context.Context, owner, request string,
 // Only the head competes for a generation slot. Other tickets release their
 // short-query connections before waiting; neither slots nor owner locks are
 // held by the queue. The transaction rechecks eligibility after both locks.
-func (s *Store) withOrderedSecretaryTurn(ctx, callerCtx context.Context, owner, request string, ticket secretaryTicket, work func(*pgxpool.Conn, bool) error) (err error) {
+func (s *Store) withOrderedSecretaryTurn(ctx, callerCtx context.Context, owner, request string, ticket secretaryTicket, work func(pgx.Tx, bool) error) (err error) {
 	defer func() {
 		if err == nil || !ticket.own || ticket.legacy {
 			return
@@ -185,70 +184,47 @@ func (s *Store) withOrderedSecretaryTurn(ctx, callerCtx context.Context, owner, 
 		case <-ctx.Done():
 			return ctx.Err()
 		}
-		err = func() error {
-			conn, err := s.pool.Acquire(ctx)
-			if err != nil {
-				return err
-			}
-			keys := []string{owner + ":" + request, secretaryConversationKey(owner, ticket.conversation)}
-			locked := []string{}
-			defer func() {
-				cleanupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-				defer cancel()
-				for i := len(locked) - 1; i >= 0; i-- {
-					var unlocked bool
-					if e := conn.QueryRow(cleanupCtx, "SELECT pg_advisory_unlock(hashtextextended($1,0))", strings.ToLower(locked[i])).Scan(&unlocked); e != nil || !unlocked {
-						_ = conn.Conn().Close(cleanupCtx)
-						break
-					}
-				}
-				conn.Release()
-			}()
-			for _, key := range keys {
-				var acquired bool
-				if err := conn.QueryRow(ctx, "SELECT pg_try_advisory_lock(hashtextextended($1,0))", strings.ToLower(key)).Scan(&acquired); err != nil {
+		err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+			for _, key := range []string{owner + ":" + request, secretaryConversationKey(owner, ticket.conversation)} {
+				if err := secretaryTryLock(ctx, tx, key); err != nil {
 					return err
 				}
-				if !acquired {
-					return errSecretaryBusy
-				}
-				locked = append(locked, key)
 			}
 			captureOnly := false
-			err = pgx.BeginFunc(ctx, conn, func(tx pgx.Tx) error {
-
-				if !ticket.legacy {
-					var status string
-					var head, expired bool
-					if err := tx.QueryRow(ctx, `SELECT status,expires_at<=clock_timestamp(),NOT EXISTS(
+			if !ticket.legacy {
+				var status string
+				var head, expired bool
+				if err := tx.QueryRow(ctx, `SELECT status,expires_at<=clock_timestamp(),NOT EXISTS(
  SELECT 1 FROM desk_turn_order earlier WHERE earlier.owner_id=t.owner_id AND earlier.conversation_id=t.conversation_id AND earlier.status='pending' AND earlier.admission_order<t.admission_order)
  FROM desk_turn_order t WHERE owner_id=$1 AND request_id=$2 FOR UPDATE`, owner, request).Scan(&status, &expired, &head); err != nil {
-						return err
-					}
-					if status == "pending" {
-						if !ticket.own || !head {
-							return errSecretaryBusy
-						}
-						if expired {
-							if _, err := tx.Exec(ctx, "UPDATE desk_turn_order SET status='expired' WHERE owner_id=$1 AND request_id=$2", owner, request); err != nil {
-								return err
-							}
-							captureOnly = true
-						}
-					} else {
-						captureOnly = status != "done"
-					}
+					return err
 				}
-				return nil
-			})
-			if err != nil {
-				return err
+				if status == "pending" {
+					if !ticket.own || !head {
+						return errSecretaryBusy
+					}
+					if expired {
+						if _, err := tx.Exec(ctx, "UPDATE desk_turn_order SET status='expired' WHERE owner_id=$1 AND request_id=$2", owner, request); err != nil {
+							return err
+						}
+						captureOnly = true
+					}
+				} else {
+					captureOnly = status != "done"
+				}
 			}
 			if err := callerCtx.Err(); err != nil {
 				return err
 			}
-			return work(conn, captureOnly)
-		}()
+			if err := work(tx, captureOnly); err != nil {
+				return err
+			}
+			if ticket.legacy {
+				return nil
+			}
+			_, err := tx.Exec(ctx, "UPDATE desk_turn_order SET status='done' WHERE owner_id=$1 AND request_id=$2", owner, request)
+			return err
+		})
 		<-s.secretarySlots
 		if !errors.Is(err, errSecretaryBusy) {
 			return err
@@ -257,28 +233,6 @@ func (s *Store) withOrderedSecretaryTurn(ctx, callerCtx context.Context, owner, 
 			return err
 		}
 	}
-}
-
-// Called on the same connection that holds both session advisory locks, in
-// the short transaction that commits the exchange. A killed connection cannot
-// later commit through a different pooled connection.
-func finishSecretaryTicketTx(ctx context.Context, tx pgx.Tx, owner, request string, ticket secretaryTicket, captureOnly bool) error {
-	if ticket.legacy {
-		return nil
-	}
-	var creator, status string
-	var head, expired bool
-	if err := tx.QueryRow(ctx, `SELECT creator_id::text,status,expires_at<=clock_timestamp(),NOT EXISTS(SELECT 1 FROM desk_turn_order earlier WHERE earlier.owner_id=t.owner_id AND earlier.conversation_id=t.conversation_id AND earlier.status='pending' AND earlier.admission_order<t.admission_order) FROM desk_turn_order t WHERE owner_id=$1 AND request_id=$2 FOR UPDATE`, owner, request).Scan(&creator, &status, &expired, &head); err != nil {
-		return err
-	}
-	if !captureOnly && (creator != ticket.creator || !ticket.own || status != "pending" || expired || !head) {
-		return memory.ErrConflict
-	}
-	if captureOnly && status == "pending" {
-		return memory.ErrConflict
-	}
-	_, err := tx.Exec(ctx, "UPDATE desk_turn_order SET status='done' WHERE owner_id=$1 AND request_id=$2", owner, request)
-	return err
 }
 
 // Retired input must remain available without later extraction reviving old

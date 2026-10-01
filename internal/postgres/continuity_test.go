@@ -3,7 +3,6 @@ package postgres
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/blob"
 	"github.com/soaringjerry/PCAS/internal/connectors"
@@ -330,8 +329,9 @@ func TestDecayRecallAndSnoozeStayIndependent(t *testing.T) {
 }
 
 func TestConcurrentSummaryAndGrantRevocation(t *testing.T) {
-	s, scope, _ := phase2RTSetup(t)
+	s := testStore(t)
 	ctx := context.Background()
+	scope := owner()
 	in := input()
 	in.Text = "小林说以后想去旧书店"
 	src := mustIngest(t, s, scope, in)
@@ -348,16 +348,12 @@ func TestConcurrentSummaryAndGrantRevocation(t *testing.T) {
 			t.Fatal("concurrent summary", err)
 		}
 	}
-	agent := phase2RTTask(t, s, scope, "phase2-model", "secretary", phase2RTUnscoped())
+	agent := memory.Scope{OwnerID: scope.OwnerID, PrincipalID: "viewer"}
 	for _, id := range []memory.ID{src.ID, claim.ID} {
-		if _, err := s.pool.Exec(ctx, "INSERT INTO record_grants(owner_id,record_id,principal_id) VALUES($1,$2,$3) ON CONFLICT DO NOTHING", string(scope.OwnerID), string(id), agent.PrincipalID); err != nil {
+		if _, err := s.pool.Exec(ctx, "INSERT INTO record_grants(owner_id,record_id,principal_id) VALUES($1,$2,$3)", string(scope.OwnerID), string(id), agent.PrincipalID); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if _, err := s.Summarize(ctx, agent, memory.SummaryRequest{ID: src.ID}); !errors.Is(err, memory.ErrForbidden) {
-		t.Fatal("coarse grant alone permitted raw-root summary", err)
-	}
-	policy, _ := phase2RTAuthorize(t, s, scope, src.Ref, "phase2-model", "secretary", phase2RTUnscoped())
 	before, err := s.Summarize(ctx, agent, memory.SummaryRequest{ID: src.ID})
 	if err != nil {
 		t.Fatal(err)
@@ -373,14 +369,5 @@ func TestConcurrentSummaryAndGrantRevocation(t *testing.T) {
 		if dep.ID == claim.ID {
 			t.Fatal("revoked claim retained")
 		}
-	}
-	phase2RTUpdatePolicy(t, s, scope, src.Ref, policy, true)
-	// Isolate explicit source deny from the coarse grant removed by revoke.
-	// Restoring this legacy grant must never restore the actual receiver policy.
-	if _, err := s.pool.Exec(ctx, "INSERT INTO record_grants(owner_id,record_id,principal_id) VALUES($1,$2,$3) ON CONFLICT DO NOTHING", string(scope.OwnerID), string(src.ID), agent.PrincipalID); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := s.Summarize(ctx, agent, memory.SummaryRequest{ID: src.ID}); !errors.Is(err, memory.ErrForbidden) {
-		t.Fatal("explicit source revoke permitted cached raw-root summary", err)
 	}
 }

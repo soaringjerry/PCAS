@@ -17,12 +17,10 @@ const messages: Record<string, string> = {
   newer_action: '后面还有改动，请先撤销它',
   changed_since: '这件事之后又改过，没法直接撤销。', work_started: '副手已经开始做了，没法撤销。', already_undone: '已经撤销过了。',
   expired: '超过 30 天或相关资料已删除，无法撤销',
-  record_capacity: '本次资料量或记录容量已达上限，请稍后重新生成或缩小本次请求。',
-  context_changed: '资料、授权或接收者已变化，请重新生成。',
 }
-export async function api<T>(path: string, body?: unknown, method?: string, cache?: RequestCache): Promise<T> {
+export async function api<T>(path: string, body?: unknown, method?: string): Promise<T> {
   const response = await fetch(path, {
-    cache, method: method ?? (body === undefined ? 'GET' : 'POST'), credentials: 'same-origin',
+    method: method ?? (body === undefined ? 'GET' : 'POST'), credentials: 'same-origin',
     headers: { ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
       ...(path === '/v1/workspace' ? { 'X-PCAS-Timezone': Intl.DateTimeFormat().resolvedOptions().timeZone } : {}) },
     body: body === undefined ? undefined : JSON.stringify(body, (_key, value) => value === undefined ? null : value),

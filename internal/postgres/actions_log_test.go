@@ -105,7 +105,6 @@ func TestUndoAdoptionThenEarlierEdit(t *testing.T) {
 	for _, kind := range []string{"breakdown", "summary", "draft"} {
 		t.Run(kind, func(t *testing.T) {
 			s := testStore(t)
-			phase2ManualDestination(t, s)
 			scope := owner()
 			ctx := context.Background()
 			st := workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "原来的标题"})
@@ -115,12 +114,11 @@ func TestUndoAdoptionThenEarlierEdit(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			st = workspaceCommand(t, s, scope, workspace.Command{Type: "requestRun", ThingID: id, AgentID: "manual", ManualRecipient: &memory.Recipient{Provider: phase2ManualProvider}, Kind: kind, Prompt: "处理"})
+			st = workspaceCommand(t, s, scope, workspace.Command{Type: "requestRun", ThingID: id, AgentID: "manual", Kind: kind, Prompt: "处理"})
 			output := "一段成果"
 			if kind == "breakdown" {
 				output = "- [ ] 第一步\n- [ ] 第二步"
 			}
-			phase2RTGetPackage(t, s, scope, st.Runs[0])
 			st = workspaceCommand(t, s, scope, workspace.Command{Type: "pasteRunResult", ID: st.Runs[0].ID, Output: output})
 			if st.Runs[0].Adopted == nil || !st.Runs[0].Adopted.Auto {
 				t.Fatal("fixture did not auto-adopt", st.Runs)

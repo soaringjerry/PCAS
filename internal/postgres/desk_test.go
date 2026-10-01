@@ -99,12 +99,11 @@ func TestDeskAnswerWithholdsRevokedArtifactTitle(t *testing.T) {
 	st = workspaceCommand(t, s, scope, workspace.Command{Type: "acceptCandidate", ID: st.Candidates[0].ID, Kind: "memory", MemoryKind: "fact", Text: "隐私标记 9137"})
 	mem := st.Memories[0]
 	st = workspaceCommand(t, s, scope, workspace.Command{Type: "addIdea", Title: "普通想法"})
-	st = workspaceCommand(t, s, scope, workspace.Command{Type: "requestRun", ThingID: st.Ideas[0].ID, AgentID: "manual", ManualRecipient: &memory.Recipient{Provider: "model"}, Kind: "breakdown", Prompt: "按隐私标记 9137 拆步骤"})
+	st = workspaceCommand(t, s, scope, workspace.Command{Type: "requestRun", ThingID: st.Ideas[0].ID, AgentID: "manual", Kind: "breakdown", Prompt: "按隐私标记 9137 拆步骤"})
 	run := st.Runs[0]
 	if !hasArtifactDependency(run.ContextVersions, mem.ID) {
 		t.Fatal("fixture run did not include the private memory")
 	}
-	phase2RTGetPackage(t, s, scope, run)
 	workspaceCommand(t, s, scope, workspace.Command{Type: "pasteRunResult", ID: run.ID, Output: "处理隐私标记 9137"})
 	undoAutoAdoption(t, s, scope, run.ID)
 	workspaceCommand(t, s, scope, workspace.Command{Type: "adoptRun", ID: run.ID, As: "subtasks", Text: "处理隐私标记 9137"})

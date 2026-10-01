@@ -382,7 +382,6 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 		item.Status = c.Status
 		summary = "状态改为 " + c.Status
 	case "renameThing":
-		ctx = withOwnerRename(ctx, scope, item, c.Title)
 		item.Title = c.Title
 		if item.Kind == "project" {
 			item.Name = c.Title

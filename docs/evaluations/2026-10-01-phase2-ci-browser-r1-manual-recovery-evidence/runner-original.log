@@ -1,8 +1,0 @@
-
-Running 1 test using 1 worker
-
-(node:1257386) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
-(Use `node --trace-warnings ...` to show where the warning was created)
-  ✓  1 tests/phase2_manual_backend.spec.ts:186:1 › real_revoke_clear_refuse_regenerate_submit (4.5s)
-
-  1 passed (5.2s)

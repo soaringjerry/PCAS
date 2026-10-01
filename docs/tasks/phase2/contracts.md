@@ -163,3 +163,7 @@ Run 的 ContextTask/ContextDependencies/ContextSourceSpans/ContextAttemptID/Manu
 6. 当前 `remember` 只记录回执，实际入库来源仍是当前用户 `req.Text`；模型 reply/action 文案不作为 owner 原话创建 claim。actions/corrections/memory-input 不自动抽取知识。此批不新增 AI 生成 claim 入口，不关闭有记忆的合法动作，也不把既有独立 claim grant 改成原文 grant。
 
 契约不代表实现或验收已完成。A 只写产品/build，C/D 独立维护动作派生安全、迁移/undo、同轮委派和原回归断言。
+
+A2-action 共用 lineage 补充：`TrustedTaskContext.desk_actions`、`ContextManifest.desk_actions` 和 Run 的 `contextDeskActions` 均为服务端构造的 origin action ID 数组；不是新的 memory kind 或客户端权限。装配时冻结去重副本，不随 collector 后续原地漂移。每轮最多 256 distinct origin IDs、递归最多 16 层（工程初值，非实测效果阈值），DAG visited 去重；循环/超限受控拒绝，不截断 IDs 后发送。原 action 的原 Task/route/stamp/stale/undone 与父 Task 的 origins 递归检查，再验证当前 consumer 自己的授权。准备、adapter 前、返回后、manual 最后交付、采纳和历史复用共用该门；manifest origins 计入 whole metadata。原无 origins 历史与合法 unknown model 路径沿现有边界，不因新增字段拒绝。025 仍仅两列，父 origins 放在其 server Task JSON，元数据寿命跟随产物。
+
+撤权带具体 recipient 时仅选该原 recipient 的 action durable deps 失效；纠正/删除的 nil recipient 全闭包。owner 撤销快照仅擦除受影响派生块；仅在 purge 前文档与块双 hash 均匹配、服务端因果明确时可更新该 owner action 的 after fence，保独立 owner 修改可撤销。既有后继编辑仍冲突，不按文字相似度重基准。

@@ -15,3 +15,9 @@ D4仍保持R3两个旧生成Prompt红断言；另核生成Prompt subset恰本次
 新增 `phase2_runtime_name_origin_test.go` 两个顶层共三叶，D4原两叶新增Prompt subset、审计before副本、fresh旧marker缺席及空origins断言。全部业务正文仅来自正式DeskTurn/Execute/API；SQL只读取canonical、真实action记录及其原before快照。D4使用真实自动采纳action ID，先证明before快照确含source atom与旧完成marker，再撤权后核整个owner action_log.changes清除二者，且该真实undone worker审计行仍存在。
 
 [编译记录与独立gold/harness SHA](compile.json)：第一次C新增harness编译发现memory.ID与string helper类型不合，修为直接类型相等比较后，`go test ./internal/postgres -run '^$' -count=1`退出0、无测试运行。此编译在原207bd706产品上完成，不表示新字段或Name契约已动态通过。原D4/context snapshot/HTTP/Undo严断言保持。
+
+## 正式owner改名不能洗已知复用来源
+
+R4 Name红项与完整证据保留，另按3cc9004契约冻结4文字×task/idea的8新叶（gold提交bb302fd）：完整复制、只改标点、保完整PIN、只保LANTERN-482片段。正式renameThing成功后以真实create actionID检查title块仍有原来源，真实owner command action审计成立；只撤secretary后canonical/Snapshot/Export、真实manual包及真实deputy HTTP均检查实际LANTERN-482片段缺席，且普通工作完成。未复制内部匹配算法或阈值。
+
+所有原Name gold键值保持一致（新增reuse字段），原独立ownerTitle两叶/strict Undo/实际下游及owner独立Prompt叶未变。[新增harness编译和SHA](rename-reuse-compile.json)在原4c6c929产品上退出0、无测试运行；这8叶尚未动态，等待root精确有因组合。原TenAction全部10逆序成功断言未改。

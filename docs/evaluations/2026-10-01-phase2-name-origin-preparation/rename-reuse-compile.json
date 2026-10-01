@@ -1,0 +1,22 @@
+{
+  "base_product_head": "4c6c929ace4b4d6b7b6561dea28861011af84217",
+  "contract": "3cc9004a8bb5521c829b3b6b55107e0aa662d9af",
+  "gold_commit": "bb302fd",
+  "command": [
+    "go",
+    "test",
+    "./internal/postgres",
+    "-run",
+    "^$",
+    "-count=1"
+  ],
+  "exit": 0,
+  "output": "ok github.com/soaringjerry/PCAS/internal/postgres 0.005s [no tests to run]",
+  "new_planned_leaves": 8,
+  "dynamic_new_leaves_executed": 0,
+  "prior_gold_values_unchanged": true,
+  "sha256": {
+    "testdata/phase2/name-origin-sequences.json": "4101c09ad0e0238b0ffdd24bcf813ae4fa5a115fcc2cea596df1597188546bf3",
+    "internal/postgres/phase2_runtime_name_origin_test.go": "4b20122f604eb7e6e394d5c5f5af7d250b5be93759693ad27647cb0e7cd8658e"
+  }
+}

@@ -276,3 +276,64 @@ func TestPhase2RuntimeOwnerPromptDoesNotInheritGeneratedPromptOrigins(t *testing
 	}
 	phase2RTEvidence(t, "name-independent-owner-prompt", map[string]any{"create_action_id": createID, "before": queued, "canonical_after": current, "snapshot": state, "export": exported, "target_policy_still_allow": deputy.Authorization})
 }
+
+// Formal owner rename is independent only when the actual new title does not
+// reuse known derived content. These fixed copying examples inspect durable
+// origins and real delivery, not a second implementation of text matching.
+func TestPhase2RuntimeOwnerRenameCannotLaunderKnownSourceText(t *testing.T) {
+	var gold struct {
+		Cases []struct{ Kind string }
+		Reuse []struct {
+			ID        string
+			Title     string `json:"new_title"`
+			Forbidden string `json:"forbidden_fragment"`
+		} `json:"rename_reuse_cases"`
+	}
+	phase2RTReadJSON(t, "name-origin-sequences.json", &gold)
+	if len(gold.Cases) != 2 || len(gold.Reuse) != 4 {
+		t.Fatal("independent two-kind/four-target rename reuse gold missing")
+	}
+	for _, kind := range gold.Cases {
+		for _, reuse := range gold.Reuse {
+			t.Run(kind.Kind+"/"+reuse.ID, func(t *testing.T) {
+				s, scope, capture := phase2RTSetup(t)
+				ctx := context.Background()
+				source := phase2RTSource(t, s, scope)
+				secretary, _ := phase2RTAuthorize(t, s, scope, source.Ref, "phase2-model", "secretary", phase2RTUnscoped())
+				item, createID := phase2RTNameCreate(t, s, scope, capture, source.Ref, kind.Kind)
+				if reuse.Forbidden != "LANTERN-482" || !strings.Contains(item.Title, reuse.Forbidden) || !strings.Contains(reuse.Title, reuse.Forbidden) {
+					t.Fatal("fixed actual source fragment reuse positive control missing", item.Title, reuse)
+				}
+				_, renameID := approvedUndoCommand(t, s, scope, workspace.Command{Type: "renameThing", ID: item.ID, Title: reuse.Title})
+				renamed := phase2RTNameCanonical(t, s, scope, item.ID)
+				if renamed.Title != reuse.Title || renamed.Name != item.Name {
+					t.Fatal("actual owner rename target did not persist or independently changed Name", renamed, reuse.Title)
+				}
+				var auditSource string
+				var changes []byte
+				if err := s.pool.QueryRow(ctx, "SELECT source,changes FROM action_log WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), renameID).Scan(&auditSource, &changes); err != nil || auditSource != "command" || len(changes) == 0 {
+					t.Fatal("owner reuse rename lacks real formal command action audit", err, auditSource, renameID)
+				}
+				var blocks []artifactBlock
+				if err := s.pool.QueryRow(ctx, "SELECT blocks FROM artifact_fields WHERE owner_id=$1 AND thing_id=$2 AND field='title'", string(scope.OwnerID), item.ID).Scan(&blocks); err != nil {
+					t.Fatal(err)
+				}
+				knownOrigin := false
+				for _, block := range blocks {
+					for _, origin := range block.DeskActions {
+						knownOrigin = knownOrigin || origin == string(createID)
+					}
+				}
+				if !knownOrigin {
+					t.Error("formal owner rename washed known derived title origin despite actual source text reuse", reuse.ID, createID, blocks)
+				}
+				phase2RTEvidence(t, "name-reuse-actual-owner-rename", map[string]any{"case": reuse, "create_action_id": createID, "owner_action_id": renameID, "canonical": renamed, "actual_title_blocks": blocks, "changes": json.RawMessage(changes)})
+				phase2RTUpdatePolicy(t, s, scope, source.Ref, secretary, true)
+				// Partial-PIN tests check the actual LANTERN-482 fragment in
+				// every view/body; checking only the whole PIN could miss it.
+				phase2RTNameCleared(t, s, scope, item.ID, reuse.Forbidden, "")
+				phase2RTNameDeliverOrdinary(t, s, scope, capture, item.ID, reuse.Forbidden)
+			})
+		}
+	}
+}

@@ -102,6 +102,10 @@ func secretaryCaptureText(stage string, err error) string {
 		} else {
 			reason = "暂时无法检查额度"
 		}
+	case "model":
+		if errors.Is(err, context.DeadlineExceeded) {
+			reason = "模型响应超时"
+		}
 	case "verify":
 		reason = "上下文已变更，请重试"
 	}

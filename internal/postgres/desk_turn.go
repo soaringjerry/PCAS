@@ -301,8 +301,9 @@ func itemNotes(item workspace.Item) string {
 	}
 }
 
-// DeskTurn holds only a request-specific transaction lock across generation.
-// The workspace owner and affected rows are checked/locked after generation.
+// DeskTurn holds request and conversation advisory locks across generation.
+// Owner row locks are acquired only for the short budget/commit transactions.
+// Contended callers release their connection before waiting to retry.
 func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.DeskTurnRequest) (workspace.DeskTurnResponse, error) {
 	var out workspace.DeskTurnResponse
 	if err := requireOwner(scope); err != nil {
@@ -330,10 +331,7 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 	if conversationID == "" {
 		conversationID = string(memory.NewID())
 	}
-	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-		if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended($1,0))", string(scope.OwnerID)+":"+req.RequestID); err != nil {
-			return err
-		}
+	err := s.withSecretaryLocks(ctx, requestCtx, string(scope.OwnerID), req.RequestID, conversationID, func(tx pgx.Tx) error {
 		var priorHash, prior []byte
 		err := tx.QueryRow(ctx, "SELECT request_hash,response FROM desk_turns WHERE owner_id=$1 AND request_id=$2", string(scope.OwnerID), req.RequestID).Scan(&priorHash, &prior)
 		if err == nil {
@@ -421,7 +419,7 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 			if _, err := s.ingestTx(ctx, tx, scope, memory.IngestRequest{Connector: "desk", ExternalID: req.RequestID, ExternalVersion: "1", Title: "秘书原话", Text: req.Text, MediaType: "text/plain"}); err != nil {
 				return err
 			}
-			out.Turn.Reply = strings.TrimSpace(answer.Reply)
+			out.Turn.Reply = secretaryReply(answer.Reply)
 			out.Turn.Ask = answer.Ask
 			if out.Turn.Ask != nil && out.Turn.Ask.Options == nil {
 				out.Turn.Ask.Options = []string{}
@@ -500,6 +498,59 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 	})
 	return out, err
 }
+
+// Retry only before reading context or executing any work. Transaction locks
+// disappear on commit, rollback or connection loss, including process death.
+func (s *Store) withSecretaryLocks(ctx, callerCtx context.Context, owner, request, conversation string, work func(pgx.Tx) error) error {
+	busy := errors.New("secretary turn busy")
+	for {
+		if err := callerCtx.Err(); err != nil {
+			return err
+		}
+		select {
+		case s.secretarySlots <- struct{}{}:
+		case <-callerCtx.Done():
+			return callerCtx.Err()
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+		err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+			for _, key := range []string{owner + ":" + request, "secretary-conversation:" + owner + ":" + conversation} {
+				var locked bool
+				if err := tx.QueryRow(ctx, "SELECT pg_try_advisory_xact_lock(hashtextextended($1,0))", key).Scan(&locked); err != nil {
+					return err
+				}
+				if !locked {
+					return busy
+				}
+			}
+			return work(tx)
+		})
+		<-s.secretarySlots
+		if !errors.Is(err, busy) {
+			return err
+		}
+		timer := time.NewTimer(25 * time.Millisecond)
+		select {
+		case <-timer.C:
+		case <-callerCtx.Done():
+			timer.Stop()
+			return callerCtx.Err()
+		case <-ctx.Done():
+			timer.Stop()
+			return ctx.Err()
+		}
+	}
+}
+
+func secretaryReply(reply string) string {
+	reply = strings.TrimSpace(reply)
+	if utf8.RuneCountInString(reply) > 2000 {
+		return string([]rune(reply)[:2000]) + "\n回答太长，已截断"
+	}
+	return reply
+}
+
 func pointerValueOrNull(v *string) any {
 	if v == nil {
 		return nil

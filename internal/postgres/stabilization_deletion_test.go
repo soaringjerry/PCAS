@@ -8,8 +8,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/soaringjerry/PCAS/internal/httpapi"
 	"github.com/soaringjerry/PCAS/internal/memory"
@@ -36,25 +38,47 @@ func stabilizationDeletionAssertScrubbed(t *testing.T, s *Store, scope memory.Sc
 }
 
 func TestStabilizationD1_ReferencedMemoryDeletionClearsWholeTurn(t *testing.T) {
-	stabilizationSecretaryFinding(t, "T3-D1: deleting the cited claim without sources leaves question, answer and cached turn")
 	s, scope := testStore(t), owner()
 	logs := secretaryLogs(t)
-	st := workspaceCommand(t, s, scope, workspace.Command{Type: "capture", Text: "D1引用暗号银色森林"})
-	st = workspaceCommand(t, s, scope, workspace.Command{Type: "acceptCandidate", ID: st.Candidates[0].ID, Kind: "memory", MemoryKind: "fact", Text: "D1引用暗号银色森林"})
-	id := st.Memories[0].ID
 	secretaryModel(t, s, func(w http.ResponseWriter, r *http.Request) {
 		secretaryModelReply(w, `{"reply":"D1引用暗号银色森林","used":["M1"],"links":["https://example.com"],"actions":[{"op":"create_task","title":"D1普通事项"}],"ask":{"question":"银色森林在哪里？","options":["秘密地点"]}}`)
 	})
+	st := workspaceCommand(t, s, scope, workspace.Command{Type: "capture", Text: "D1引用暗号银色森林"})
+	originalSource := st.Candidates[0].Source
+	st = workspaceCommand(t, s, scope, workspace.Command{Type: "acceptCandidate", ID: st.Candidates[0].ID, Kind: "memory", MemoryKind: "fact", Text: "D1引用暗号银色森林"})
+	id := st.Memories[0].ID
+
 	req := turnRequest("D1原话也提到银色森林")
 	first := mustTurn(t, s, scope, req)
 	if len(first.Turn.Cards) == 0 || len(first.Turn.Receipts) != 1 {
 		t.Fatal("fixture did not cite memory")
+	}
+	var dependencies []memory.Ref
+	var rawDependencies []byte
+	if err := s.pool.QueryRow(context.Background(), "SELECT dependencies FROM desk_turns WHERE owner_id=$1 AND request_id=$2", string(scope.OwnerID), req.RequestID).Scan(&rawDependencies); err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(rawDependencies, &dependencies); err != nil {
+		t.Fatal(err)
+	}
+	cited := false
+	for _, card := range first.Turn.Cards {
+		if card.Kind == "sources" && strings.Contains(string(asJSON(card.Items)), id) {
+			cited = true
+		}
+	}
+	if !cited || !hasArtifactDependency(dependencies, id) {
+		t.Fatal("fixture did not cite the authorized claim or persist its dependency")
 	}
 	st = workspaceCommand(t, s, scope, workspace.Command{Type: "deleteMemory", ID: id})
 	for _, m := range st.Memories {
 		if m.ID == id {
 			t.Fatal("claim was not deleted")
 		}
+	}
+	var retainedSource string
+	if err := s.pool.QueryRow(context.Background(), "SELECT body FROM source_versions WHERE owner_id=$1 AND source_id=$2 AND version=$3", string(scope.OwnerID), originalSource.SourceID, originalSource.Version).Scan(&retainedSource); err != nil || !strings.Contains(retainedSource, "银色森林") {
+		t.Fatal("claim deletion removed independent source without authorization", err)
 	}
 	stabilizationDeletionAssertScrubbed(t, s, scope, req.RequestID, "银色森林")
 	replay := mustTurn(t, s, scope, req)
@@ -183,5 +207,65 @@ func TestStabilizationD4_ReplayCannotRestoreDeletedOriginal(t *testing.T) {
 			stabilizationDeletionAssertScrubbed(t, s, scope, req.RequestID, "紫色山谷")
 			stabilizationSecretaryTasks(t, s, scope, wantTasks)
 		})
+	}
+}
+
+func TestStabilizationD1_DeletionDuringGenerationCannotCommitDerivedText(t *testing.T) {
+	s, scope := testStore(t), owner()
+	entered, release := make(chan bool, 1), make(chan struct{})
+	var once sync.Once
+	unblock := func() { once.Do(func() { close(release) }) }
+	t.Cleanup(unblock)
+	var calls atomic.Int32
+	secretaryModel(t, s, func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		calls.Add(1)
+		entered <- strings.Contains(string(body), "私密红色地平线")
+		<-release
+		secretaryModelReply(w, `{"reply":"私密红色地平线","used":["M1"],"actions":[{"op":"create_task","title":"私密红色地平线"}]}`)
+	})
+	st := workspaceCommand(t, s, scope, workspace.Command{Type: "capture", Text: "F11删除测试 私密红色地平线"})
+	st = workspaceCommand(t, s, scope, workspace.Command{Type: "acceptCandidate", ID: st.Candidates[0].ID, Kind: "memory", MemoryKind: "fact", Text: "F11删除测试 私密红色地平线"})
+	id := st.Memories[0].ID
+	req := turnRequest("F11删除测试")
+	type result struct {
+		out workspace.DeskTurnResponse
+		err error
+	}
+	done := make(chan result, 1)
+	go func() { out, err := s.DeskTurn(context.Background(), scope, req); done <- result{out, err} }()
+	select {
+	case shown := <-entered:
+		if !shown {
+			unblock()
+			t.Fatal("model did not receive deletion target")
+		}
+	case <-time.After(5 * time.Second):
+		unblock()
+		t.Fatal("model did not enter")
+	}
+	workspaceCommand(t, s, scope, workspace.Command{Type: "deleteMemory", ID: id})
+	unblock()
+	var out workspace.DeskTurnResponse
+	select {
+	case got := <-done:
+		if got.err != nil {
+			t.Fatal(got.err)
+		}
+		out = got.out
+	case <-time.After(5 * time.Second):
+		t.Fatal("deletion blocked generation completion")
+	}
+	if len(out.Turn.Receipts) != 1 || out.Turn.Receipts[0].Op != "capture" || !strings.Contains(out.Turn.Receipts[0].Text, "上下文已变更") || strings.Contains(string(asJSON(out.Turn)), "私密红色地平线") {
+		t.Fatal("deleted model context committed", out.Turn)
+	}
+	stabilizationSecretaryTasks(t, s, scope, 0)
+	replay := mustTurn(t, s, scope, req)
+	if calls.Load() != 1 || strings.Contains(string(asJSON(replay.Turn)), "私密红色地平线") {
+		t.Fatal("replay regenerated deleted content")
+	}
+	var cache []byte
+	if err := s.pool.QueryRow(context.Background(), "SELECT response FROM desk_turns WHERE owner_id=$1 AND request_id=$2", string(scope.OwnerID), req.RequestID).Scan(&cache); err != nil || strings.Contains(string(cache), "私密红色地平线") {
+		t.Fatal("derived text persisted after concurrent deletion", err)
 	}
 }

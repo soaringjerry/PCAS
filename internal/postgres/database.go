@@ -19,9 +19,11 @@ import (
 var migrations embed.FS
 
 type Store struct {
-	pool   *pgxpool.Pool
-	models *ai.Registry
-	blobs  memory.BlobStore
+	pool *pgxpool.Pool
+	// DeskTurn also borrows a connection for Recall and budget reservation.
+	secretarySlots chan struct{}
+	models         *ai.Registry
+	blobs          memory.BlobStore
 }
 
 func (s *Store) SetModels(models *ai.Registry)   { s.models = models }
@@ -42,7 +44,7 @@ func Open(ctx context.Context, url string) (*Store, error) {
 		pool.Close()
 		return nil, fmt.Errorf("database unavailable")
 	}
-	return &Store{pool: pool}, nil
+	return &Store{pool: pool, secretarySlots: make(chan struct{}, config.MaxConns-1)}, nil
 }
 
 func (s *Store) Close()                         { s.pool.Close() }

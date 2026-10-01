@@ -22,6 +22,8 @@
 
 预留 `internal/postgres/desk_turn.go`、新 `internal/postgres/desk_turn_order.go`、自测 `internal/postgres/desk_turn_order_test.go`，必要时 `internal/postgres/database.go` 与迁移 021（路径/编号先按仓库核查），以及 `docs/evaluations/2026-10-01-conversation-order-repair.md`。共享类型/接口、其他测试或生产文件需先报告 root 统一归属。原 Q1 诊断测试和既有 F11 测试不改；可读取作为独立证据，不能降低预期。不得修改前端、Telegram、撤销逻辑、任务文档或 A1 工作区。
 
+故障补存使用专属 `desk-incomplete` connector，隔离普通 capture 的来源 identity，异常 Duplicate 且无已保存 turn 时真实冲突，不抑制别人的已发布作业。已授权 `internal/postgres/editing.go` 原 `('desk','capture')` 白名单加入该 connector 及紧邻注释，确保删除原话传播到 turn/response/回执；必须专项验证重放不复活。除这个单点外不调整删除机制。
+
 ## 验证与交付
 
 自有 tmpfs PostgreSQL，端口可用 33270，loopback 假模型可 httptest 随机端口，HTTP 固定需要时 18160/18161（Q1 已释放）。全为合成数据，不用生产/真实账号/真实模型/通知，只清理自己的进程容器。

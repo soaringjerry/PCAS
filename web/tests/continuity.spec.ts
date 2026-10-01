@@ -7,6 +7,8 @@ test('generic connector persists, scoped webhook cannot read memory, archive upl
   await page.goto('/settings')
   await page.getByLabel('访问令牌').fill(process.env.PCAS_TEST_API_TOKEN ?? 'pcas-browser-check-secret-123456789012')
   await page.getByRole('button', { name: '登录', exact: true }).click()
+  // The form for connecting another app opens from its row.
+  await page.getByRole('button', { name: /^接入其他应用/ }).click()
   await expect(page.getByRole('heading', { name: '资料接入' })).toBeVisible()
   const name = `聊天连接-${Date.now()}`
   await page.getByLabel('接入名称').fill(name)

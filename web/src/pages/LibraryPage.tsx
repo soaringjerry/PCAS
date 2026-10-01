@@ -8,6 +8,7 @@ import { ChevronRight, Download, History, Info, RotateCw, Search, Trash2, Upload
 import { Checkbox, Chip } from '../components/controls'
 import { Fade, FromLine, ProjectLink, TrustTag } from '../components/Marks'
 import { ConfirmModal, SideSheet } from '../components/Overlay'
+import { UnsureSheet } from '../components/UnsureSheet'
 import { Button, Empty, Progress, Seg, Sheet, Switch, Tag } from '../components/ui'
 import { jobStatusLabel, memoryKindLabel, sampleStateLabel, sourceStatusLabel, triggerLabel } from '../domain/labels'
 import { formatAgo, formatWhen } from '../domain/time'
@@ -399,6 +400,16 @@ export function LibraryPage() {
   const [params, setParams] = useSearchParams()
   const tab = (params.get('tab') as Tab) || 'memory'
   const failed = state.jobs.filter((j) => j.status === 'failed').length
+  const pending = state.candidates.filter((c) => c.state === 'pending').length
+  // The sheet's open state lives in the URL, so the settings page can link straight to it.
+  const sorting = params.has('pending')
+  const setSorting = (on: boolean) =>
+    setParams((current) => {
+      const next = new URLSearchParams(current)
+      if (on) next.set('pending', '1')
+      else next.delete('pending')
+      return next
+    }, { replace: true })
 
   return (
     <main className="page page-narrow">
@@ -408,6 +419,19 @@ export function LibraryPage() {
           <p>系统记住的东西、资料的来处，和攒下的训练数据。都归你，可以看、改、删、导出。</p>
         </div>
       </div>
+      {pending > 0 && (
+        <div className="sheet" style={{ marginBottom: 18 }}>
+          <div className="setting">
+            <div>
+              <div className="ink">待确认内容 · {pending} 条</div>
+              <div className="small muted">从资料里读到，但拿不准是待办、想法还是记忆。</div>
+            </div>
+            <Button size="sm" variant="primary" onClick={() => setSorting(true)}>
+              逐条处理
+            </Button>
+          </div>
+        </div>
+      )}
       <div style={{ marginBottom: 18 }}>
         <Seg
           label="资料库"
@@ -423,6 +447,7 @@ export function LibraryPage() {
       {tab === 'memory' && <MemoryTab />}
       {tab === 'sources' && <SourcesTab />}
       {tab === 'training' && <TrainingTab />}
+      {sorting && <UnsureSheet onClose={() => setSorting(false)} />}
     </main>
   )
 }

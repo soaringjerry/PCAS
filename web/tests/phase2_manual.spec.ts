@@ -23,7 +23,7 @@ const providers = [
   { id: 'writer' }, { id: 'other', protocol: 'responses' }, { id: 'disabled' }, { id: 'unavailable' }, { id: 'embed', embedding: true }, { id: 'transcribe', transcription: true }, { id: 'unsupported', protocol: 'synthetic-unsupported' }, { id: 'empty-model', model: '' }, { id: 'catalog-only' }, { id: 'catalog-unavailable', available: false },
 ].map(p => ({ name: `友好接收者 ${p.id}`, protocol: 'openai', model: 'synthetic-model', available: true, ...p }))
 
-type Command = { type: string; id: string; thingId?: string; agentId?: string; kind?: string; prompt?: string; manualRecipient?: object; expectedRevision: number; requestId: string; output?: string }
+type Command = { type: string; id: string; thingId?: string; agentId?: string; kind?: string; prompt?: string; manualRecipient?: object; sourceRunId?: string; expectedRevision: number; requestId: string; output?: string }
 async function mock(page: Page, initial = workspace()) {
   const backend = {
     state: structuredClone(initial), commands: [] as Command[], packages: [] as string[], errors: [] as string[], unexpected: [] as string[], workspaceReads: 0,
@@ -175,7 +175,10 @@ test('package failure clears old preview and regenerates with the complete origi
   await expect(shownPackage(page)).toHaveCount(0)
   await page.getByRole('button', { name: '向原接收者重新生成' }).click()
   await expect.poll(() => backend.commands.length).toBe(1)
-  expect(backend.commands[0]).toMatchObject({ type: 'requestRun', prompt, kind: 'draft', manualRecipient: recipient })
+  expect(backend.commands[0]).toMatchObject({ type: 'requestRun', prompt, kind: 'draft' })
+  expect(recipient.provider).toBe('writer')
+  expect(backend.commands[0].manualRecipient).toEqual({ provider: recipient.provider })
+  expect(backend.commands[0].sourceRunId).toBe(runId)
   expect(backend.commands[0].id).not.toBe(runId); expect(await copied(page)).toEqual([])
   await assertClean(page, backend)
 })
@@ -197,7 +200,10 @@ test('failed manual run retries with complete original recipient and unchanged p
   const backend = await mock(page, state); await page.goto(`/t/${thingId}`)
   await page.getByRole('button', { name: '重试', exact: true }).click()
   await expect.poll(() => backend.commands.length).toBe(1)
-  expect(backend.commands[0]).toMatchObject({ type: 'requestRun', agentId: 'manual', prompt, kind: 'draft', manualRecipient: recipient })
+  expect(backend.commands[0]).toMatchObject({ type: 'requestRun', agentId: 'manual', prompt, kind: 'draft' })
+  expect(recipient.provider).toBe('writer')
+  expect(backend.commands[0].manualRecipient).toEqual({ provider: recipient.provider })
+  expect(backend.commands[0].sourceRunId).toBe(runId)
   expect(backend.commands[0].id).not.toBe(runId); await assertClean(page, backend)
 })
 

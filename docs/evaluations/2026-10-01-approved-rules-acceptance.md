@@ -1,6 +1,6 @@
 # 已批准规则的独立验收
 
-2026-10-01，T4，Sol/high。用户确认同一事项逆序撤销，以及一句话新建任务后继续加步骤。**四个已批准 U 待决项已在集成后端候选实际通过，原候选真实失败仍保留。完整 Go 隔离 race 通过；整体候选的 UX 新提交与前端浏览器验证仍待完成，真实线上/真机/一天试用没有本次证据。**
+2026-10-01，T4，Sol/high。用户确认同一事项逆序撤销，以及一句话新建任务后继续加步骤。**四个已批准 U 待决项已通过，原候选真实失败仍保留。最终组合的本地检查已完成：必要的定位、源码依赖加载与旧契约预期适配均专项通过，不将首轮失败写成单轮全绿；线上/真机/一天试用没有本次证据。**
 
 ## 独立预期与原候选证据
 
@@ -105,10 +105,57 @@ npx tsc --noEmit --target ES2023 --module ESNext --moduleResolution Bundler \
 
 因此既有挂载问题在此新冻结构建关闭：人工保存后、未继续编辑的标题和说明会随秘书 state 更新显示新值；失败草稿在更新时保留。此结论仍不是最终完整候选的 20 场景通过声明，最终提交还需全套运行。候选三个按钮已按作者公开新名称「创建待办/保存为想法/保存为记忆」更新本任务 spec 定位，请求类型、目标 ID、字段、失败/来源/无假撤销断言均未减。新自有 preview 按记录 PID 精确停止，18156/18157 无监听。
 
+## 最终代码组合与必要补跑
+
+早期 `210144a` 后继续按明确交接合入 F15 `9b177007c63d87cf289ecadb90a5b21238890c4b`、S1 报告 `6ab5c6ff632bee3b62686e552e137ed0eda4d49b`、完整协调分支 `2498507f79e08c318d8903d1367df74ab58b4a25`，成为干净 `8b6b9da07ce007cdbe01d1e0637834ac33c4b5ea`；再合入 U2 最终 `56f1e3c3f9ef8a1f97a07b8540d2907ce1b6eb7f` 成为 `25894a597b059d3aae6e5583e68ed7b822ae176e`。Q2 只 cherry-pick 独立测试/报告提交 `69bbdc64c7a6083d835c43a293e982dd5ce47e67`，未合入旧 Q1 诊断；连同独立定位修正后最终代码输入组合为 **`4aa2746fb6372962387a85700ee88d494a0511fa`**。合入均无冲突，没有改产品。
+
+U2 最终既有真实 spec 的 diff 再次核对：四文件仅加必要展开导航或更新动作按钮定位；全部数据、权限、secret redaction、错误、状态、撤销业务断言保留。设置页最终默认可见输入框 15→2（城市、每日额度）、开关 11→7，来源为最终 U2 报告，不沿用中间截图数字。
+
+| 最终检查 | 精确本地结果 |
+|---|---|
+| 前端 eslint、TypeScript、生产 build | 三命令均退出 0，实际 U2 最终源构建 |
+| 七文件 mock 全套 | 首轮 100 pass/1 fail，0 skip/flaky，74.798s；唯一失败是本任务沿用旧开关名「资料里的明确待办直接加入」 |
+| mock 最小定位修正后 | 仅改为最终可访问名称「资料里的明确待办直接创建」；该例单独补跑 1 pass/0 fail/skip/flaky，1.5s。所有 payload、默认预算及权限断言保留；不宣称单次 101/101 |
+| 最终全包原生 Go JSON race | 首轮退出 1；652 pass、1 fail、3 live skip 测试事件；PG 144.042s，其他 10 个有测试包通过。唯一失败是 `TestAdoptionMatchesFrontend` 的 Node harness 漏掉新增源依赖 `summaryInto` |
+| 全 PG 的业务覆盖 | U3/U4-user/U5/U10、U9 两路径、THIS、新 N/动作顺序测试与原 U16 全 50 种子 × 20 操作均实际通过；新增 FIFO 及 Q2 独立测试亦执行，没有业务失败 |
+| Node harness 最小修正后 | 提交 `6aaab575b0ee8828361957088d93774826714d8d`；`make check` 退出 0；带 DB、`-race -count=1 -json` 的等价专项 40 pass 事件（39 固定子例与父测试）、0 fail/skip，1.070s |
+| 默认真实后端 41 | 首轮退出 1，38 pass/3 fail、0 skip/flaky；timezone 1 pass（5.093s）、golden 33 pass/3 fail（625.322s）、后续 backend/continuity/chatgpt-direct/model-api 4 pass（8.458s） |
+| 真实后端契约预期修正后 | 仅改正常接口改名后撤销更早创建的旧错误码/提示预期；该唯一场景原三轮补跑 3 pass/0 fail/skip/flaky，5.289s，退出 0。不宣称单次 41/41 |
+
+Node 适配经协调者明确授权：从实际 `ThingPage.tsx` 的唯一 `summaryInto` 声明抽取，仅擦除 `as const`；缺失、歧义或边界不匹配明确 Fatal，没有复制常量值。13 组 × 3 事项的固定业务预期、实际 parseChecklist/adoptAs 函数体及 JS 等价结果比较完整保留。原首轮失败仍在原生日志中，未删除检查或跳过 Node。协调者要求仅针对这项 harness 适配补验，未无理由重跑已通过的全 PG。
+
+真实 runner 的三次失败准确相同：通过正常 `command(renameThing)` 记录用户改名，再撤销更早新建，HTTP 409 实际 `newer_action` 与正式 §1.4 契约一致，旧用例期待 `changed_since`。协调者追加唯一场景归属后，提交 **`a92bd8c4bfd1b98a35d443da90151565bdf386e4`**，仅更新测试名称、精确错误码与既有公开提示「后面还有改动，请先撤销它」。HTTP 409、原用户改名不变、正常接口和全部业务断言保留，不将夹具换成无日志外部写入。原完整 41 首轮继续到底并执行后续四例，再用同样真实 fixture 只补该例 × 3，未重跑其他分钟级等待。三次原失败 trace/JSON 保留。
+
+前端 `web/src` 树在 `25894a`、`4aa2746`、`6aaab57` 与 `a92bd8c` 均为 `c8a8739fd8b8d64a9d99debebe72bf8b21219e1c`；`4aa2746..a92bd8c` 仅改 `internal/postgres/auto_adopt_test.go`、`web/tests/golden.spec.ts`。产品未改变，因此已通过的产品全量结果保持有效，原失败及补跑分别计数。三项 live skip 仍为原准确三名称，开关显式 unset。
+
+最终日志在 `/tmp/pcas-test-T4/final-web-lint.log`、`final-web-types.log`、`final-web-build.log`、`final-mock.log/json`、`final-mock-autoaccept.log/json`、`final-make-check.log`（首轮失败）、`final-go-race.jsonl/stderr`（原生首轮）、`final-make-check-corrected.log`、`final-adoption-oracle-corrected.jsonl/stderr`、`final-real-backend.log`、`final-real-order-corrected.log/json`、结构化 `final-results.json`。完整真实 JSON 在 A1 `web/test-results/timezone.json`、`golden.json`、`legacy.json`；首轮服务日志保留 `final-real-first-services`，补跑服务日志在 `web/test-results/services`。浏览器 trace 和截图在 A1 `web/test-results` 各对应目录。事件统计含父/子测试，不能当作独立场景数量。
+
+```sh
+# A1/web，Node 22.23.3；最终源实际构建并以自有18156静态预览测试。
+npm run lint
+npm run type-check
+npm run build
+PCAS_TEST_BASE_URL=http://127.0.0.1:18156 \
+ npx playwright test tests/secretary.spec.ts tests/fixes.spec.ts tests/notify.spec.ts \
+ tests/buttons.spec.ts tests/timezone.spec.ts tests/settings-things-ux.spec.ts \
+ tests/usability-acceptance.spec.ts --reporter=list,json
+# A1，禁live开关；隔离DB端口33270，原生全包命令与前述相同。
+go test -race -count=1 -json ./cmd/... ./internal/...
+# 最小加载适配后，仍有Node、保留真实frontend oracle，带相同隔离DB。
+make check
+go test -race -count=1 -json ./internal/postgres -run '^TestAdoptionMatchesFrontend$'
+# 默认runner副本只改工作目录、自有容器名、callback18156；默认41顺序原样。
+PCAS_GOLDEN_PORT=18157 bash /tmp/pcas-test-T4/real-backend.sh
+# 首轮结束后，同样真实fixture只补唯一契约例三轮。
+PCAS_GOLDEN_PORT=18157 bash /tmp/pcas-test-T4/real-backend.sh \
+ npx playwright test tests/golden.spec.ts --grep 'F7 顺序冲突' --repeat-each=3 \
+ --output=test-results/T4-final-real-order-corrected --reporter=list,json
+```
+
 ## 后续验证与资源
 
-用户追加设置页/事项页 UX 工作后，协调者要求完整前端检查、mock 与默认真实后端 browser 留待 U2 最终输入，避免重复验证同一前端候选。因此当前没有推中间候选或更新 #32；待整体最终检查后一次推送并更新现有 Draft PR。Q1 后续确认三轮执行顺序问题，F15 正在独立修复并将改变后端；最终合入后会合理重跑完整 Go 隔离验收，210144a 的既有绿色只属于该早期后端组合。
+用户追加设置页/事项页 UX 工作后，完整前端检查、mock 与默认真实后端 browser 按要求留至 U2 最终输入才执行，避免重复验证中间产品。Q1 确认的三轮顺序问题已由 F15 修复，最终全 Go/PG 独立验证包含 F15 与 Q2；保证的是正式已提交 admission 顺序，不将网络发送先后或 goroutine 到达先后冒充跨客户端执行保证。210144a 的既有绿色仅属于早期后端组合。当前整体本地检查已完成，等待最后协调状态文档合入再一次推送候选和更新现有 Draft #32，没有推中间候选。
 
 线上 11 项、真机和一天试用未完成。没有生产、秘密、真实账号、外发、main 合并或部署。
 
-本任务自建 `pcas-test-T4-integration`，pgvector PostgreSQL16，1GiB tmpfs，Docker 动态 localhost 33268；全部后端测试完成后按记录先 stop 再 rm -v，已删除，只清理自有资源。每个集成测试仍使用共享 helper 的独立随机 schema。HTTP 18156/18157 尚未启动固定服务，浏览器 runner 的自有 tmpfs/HTTP 资源在最终整体检查后补记清理证据。
+本任务早期自建 `pcas-test-T4-integration` 动态33268，最终自建 `pcas-test-T4-final-integration` 动态33270，均为 pgvector PostgreSQL16、1GiB tmpfs；各阶段完成后按记录先 stop 再 rm -v，已删除。每个集成测试仍使用共享 helper 的独立随机 schema。mock自有18156预览记录PID后精确停止；完整真实runner与补跑各自创建不同 `pcas-test-T4-browser-*`、临时data目录与服务PID，并经原trap回收。最终 `docker ps -a --filter name=pcas-test-T4` 空，`ss`核对18156/18157/33270/33271均无监听；没有清理别人的进程/数据库。Docker数据仅在tmpfs，未复用生产或真实账户。

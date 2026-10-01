@@ -34,3 +34,19 @@ Node24.18.0；复用既有依赖及此前独立临时Node类型入口 `/tmp/pcas
 具体静态阻塞已交root/A：`api.ts`全局JSON stringify replacer将undefined转null。11e2083虽在helper对API返回undefined，callsite仍写manualRecipient键；普通新请求同理sourceRunId键，实际会序列化null而不是字段缺席。冻结缺席断言不放宽，root已授权作者仅局部条件组装键，保全局replacer。本文只记录11e2083当时的发现，等待净修复与精确组合头后补静态审；compile/list通过不证明产品已满足该边界。
 
 生成Prompt失效后的自动按钮禁用属于作者后续产品范围；现有owner独立非空Prompt的manual恢复不能因该门被禁用。本批没有新增动态叶来冒充这条全部分支已实测。C独立backend gold承担生成来源撤/纠/删及修改标点不洗来源；最终四例实测需root授权的新精确头。
+
+## 35e8f03净补的独立静态复审
+
+净产品 `35e8f038023b80a6035efe8fdf746135c7844857` 接11e2083，只变ThingPage；本次只读复审，没有checkout该产品运行测试。API helper/replacer与原StoreProvider没有泛改。运行时API recipient被helper拒返回后，`manualSelection`为无键对象，三个RunRow retry/regenerate实际spread该对象，故不再产生manualRecipient:null；manual selection有值时仅provider。普通ManualRequest只在initialRun存在时spread sourceRunId，普通新请求确无该键；預填变字/trim/换target都不改变initialRun.id。
+
+| 净补发送入口 | 原Run定位 | manual选项 |
+| --- | --- | --- |
+| ManualRequest预填及其修改 | initialRun存在才加入其id | 显式选择provider |
+| Handoff原目标重新生成 | run.id | 已核manual选择provider |
+| RunRow原agent/换API重试 | run.id | 原manual agent才带manualSelection，换API不带 |
+| stale done清空output后重新生成 | run.id | API无键；manual仅provider |
+| done output普通重新生成 | run.id | API无键；manual仅provider |
+
+失效已清空Prompt时，各自动retry/regenerate通过 `!run.prompt.trim()` 禁用，已有Run预填入口收起并提示回秘书重新描述；无来源定位开关。独立owner非空Prompt即使stale，hasPrompt仍true，Handoff原目标重建不因stale被禁用，现两manual恢复例原流程可继续。这个判断是静态控制流结论，未冒称空Prompt分支或编辑/换目标已动态测试。
+
+因此11e2083的undefined→null具体阻塞在35e8f03局部请求组装修正中已静态闭合；最终组合的四例实际body仍按已冻结原断言验，尚未动态执行。

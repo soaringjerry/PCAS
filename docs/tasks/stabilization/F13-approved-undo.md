@@ -15,6 +15,8 @@
 
 全包复核后追加：`internal/postgres/auto_adopt_test.go` 中「自动采纳后正常 setNotes」对应的一个旧错误断言改为 ErrNewerAction，业务数据断言保持；新增 `internal/telegram/approved_undo_test.go` 验证回调文案。其他旧断言若冲突逐项报告，不批量替换。
 
+再次复核追加：`internal/postgres/workspace_revision_test.go` 的 TestWorkspaceStaleUndoStillChecksAfterHash 中，公开 setNotes 已产生后续动作，只更新该错误码为 newer_action，原 revision 与业务保护断言保持。
+
 迁移不得用 UUID、ctid 或无序回填假称已知历史先后。历史 created_at、同轮已保存回执顺序是可用证据，确实不可重建的旧并列须保守处理并披露边界；新增事务必须具备精确顺序。先提交兼容设计供协调者审查，再固定迁移细节。既有动作/回执 ID 与幂等语义保持。
 
 兼容设计已审定：新增 nullable action_order，既有行保留 NULL，新行由 sequence 生成，不改 created_at。历史按时间及完整唯一的同轮回执证实顺序；未知旧并列为 changed_since，不把两边都提示成「先撤销另一个」。有可证后续动作时优先 newer_action。补验内容 first→second→first 后仍不能跳撤，保留原候选错误放行的实证。

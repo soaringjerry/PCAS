@@ -1,0 +1,182 @@
+[
+  {
+    "file": "TestPhase2K0AttemptIndependentOfBusinessRows-independent.json",
+    "bytes": 146,
+    "sha256": "c9200c65257f7d8bf74117dc1d4b2d69c340263f5ff10617de7e33aeac01faad"
+  },
+  {
+    "file": "TestPhase2K0DurableDependencySurvivesAttemptAndSourceDeletion-durable.json",
+    "bytes": 1098,
+    "sha256": "d091dd1be2b8de37b8e42f4ce891b182d0756060470e3f5e844a91408dc9ab41"
+  },
+  {
+    "file": "TestPhase2K0ExactTypedDependencyConstraints__durable_false_kind_chunk-constraint.json",
+    "bytes": 114,
+    "sha256": "6cfb090f5fa08c241a9f7a325d4011c04422a587777407c630b666fbea6d55dd"
+  },
+  {
+    "file": "TestPhase2K0ExactTypedDependencyConstraints__durable_false_kind_claim-constraint.json",
+    "bytes": 111,
+    "sha256": "7dcc7e8d59074332695c6cdba50f7da11c96dc98f3e485e1bb2ee88113df5326"
+  },
+  {
+    "file": "TestPhase2K0ExactTypedDependencyConstraints__durable_false_kind_entity-constraint.json",
+    "bytes": 115,
+    "sha256": "589ab8862014b12effa2339123420734a38dbda4d661751a478f0ede94e4688f"
+  },
+  {
+    "file": "TestPhase2K0ExactTypedDependencyConstraints__durable_false_kind_episode-constraint.json",
+    "bytes": 116,
+    "sha256": "1501ce3da30de7ee9d55e634c0bfec6b129559074ae3ba4736938f032884c4bc"
+  },
+  {
+    "file": "TestPhase2K0ExactTypedDependencyConstraints__durable_false_kind_relation-constraint.json",
+    "bytes": 117,
+    "sha256": "20e7c68bfab458a2d1e325c9fd559d4af7253451a69aac8eec71bffbff4025ac"
+  },
+  {
+    "file": "TestPhase2K0ExactTypedDependencyConstraints__durable_false_kind_source-constraint.json",
+    "bytes": 112,
+    "sha256": "50cdf7a6ee0f0c95a58ac5dbf37e72652fa4b39a2d3542e3e73641380df604e5"
+  },
+  {
+    "file": "TestPhase2K0ExactTypedDependencyConstraints__durable_false_kind_summary-constraint.json",
+    "bytes": 113,
+    "sha256": "833e85c5129c453bb7d633cb40794255e75612ce5e10770ea0050b910f1de131"
+  },
+  {
+    "file": "TestPhase2K0ExactTypedDependencyConstraints__durable_false_kind_unknown-constraint.json",
+    "bytes": 116,
+    "sha256": "1ab41501ae5a4ba5519d735d4c3158c89958497be9c61680818ff1a1234a8417"
+  },
+  {
+    "file": "TestPhase2K0ExactTypedDependencyConstraints__durable_false_version_-1-constraint.json",
+    "bytes": 109,
+    "sha256": "5f9220bdc1a34fc27f9463efdb25ad6f20e4c7a3d9854bfd2b93fafb010142fa"
+  },
+  {
+    "file": "TestPhase2K0ExactTypedDependencyConstraints__durable_false_version_0-constraint.json",
+    "bytes": 109,
+    "sha256": "5f9220bdc1a34fc27f9463efdb25ad6f20e4c7a3d9854bfd2b93fafb010142fa"
+  },
+  {
+    "file": "TestPhase2K0ExactTypedDependencyConstraints__durable_true_kind_chunk-constraint.json",
+    "bytes": 113,
+    "sha256": "c4eeecf2d3553a1128ccd2d09261afb9ba82848a548677e7202c5835a4c90e77"
+  },
+  {
+    "file": "TestPhase2K0ExactTypedDependencyConstraints__durable_true_kind_claim-constraint.json",
+    "bytes": 110,
+    "sha256": "8deeab6281f759ac721b0b17ddcc436f4978ee865f5515caf9c735917550efa2"
+  },
+  {
+    "file": "TestPhase2K0ExactTypedDependencyConstraints__durable_true_kind_entity-constraint.json",
+    "bytes": 114,
+    "sha256": "86c64091c8471f23c7778eb34cc7dc1e685df16870a5a47458157b8d9b5548ec"
+  },
+  {
+    "file": "TestPhase2K0ExactTypedDependencyConstraints__durable_true_kind_episode-constraint.json",
+    "bytes": 115,
+    "sha256": "08b28d2c370c46ddc99c454c4f2849ce2f6ff974534f2d82eea6cbf304f880de"
+  },
+  {
+    "file": "TestPhase2K0ExactTypedDependencyConstraints__durable_true_kind_relation-constraint.json",
+    "bytes": 116,
+    "sha256": "f96708734109bd78fb2fe5a3f2db8782051cb1e420e22c5a49f61fb6a06c36fd"
+  },
+  {
+    "file": "TestPhase2K0ExactTypedDependencyConstraints__durable_true_kind_source-constraint.json",
+    "bytes": 111,
+    "sha256": "5a7117940ba3e749f0e39adf0a3c023de8408a4358b3359987f35b565b1e4d7e"
+  },
+  {
+    "file": "TestPhase2K0ExactTypedDependencyConstraints__durable_true_kind_summary-constraint.json",
+    "bytes": 112,
+    "sha256": "f8ee51ccc20d9a5decfafd36fbcc4d9e10c98124a0a2eddb63e7b980782e1c58"
+  },
+  {
+    "file": "TestPhase2K0ExactTypedDependencyConstraints__durable_true_kind_unknown-constraint.json",
+    "bytes": 115,
+    "sha256": "ef8140cc20d6f623b46dc8e7e4f12646102f1a0d694665e8ba5ad677852cba00"
+  },
+  {
+    "file": "TestPhase2K0ExactTypedDependencyConstraints__durable_true_version_-1-constraint.json",
+    "bytes": 109,
+    "sha256": "5f9220bdc1a34fc27f9463efdb25ad6f20e4c7a3d9854bfd2b93fafb010142fa"
+  },
+  {
+    "file": "TestPhase2K0ExactTypedDependencyConstraints__durable_true_version_0-constraint.json",
+    "bytes": 109,
+    "sha256": "5f9220bdc1a34fc27f9463efdb25ad6f20e4c7a3d9854bfd2b93fafb010142fa"
+  },
+  {
+    "file": "TestPhase2K0FreshMigrationAndRestart-fresh.json",
+    "bytes": 4334,
+    "sha256": "609251aefbe8e7b5a6ef8f86297f23577612a532c798175ec624541a3cf2ac82"
+  },
+  {
+    "file": "TestPhase2K0LegacyKindsAndContentPreserved-legacy.json",
+    "bytes": 17841,
+    "sha256": "220f5db8575d4c4dab20b888ccd253386193c5c760ac89db224f4d749a39cad4"
+  },
+  {
+    "file": "TestPhase2K0MetadataDeclarationBoundaries-runtime-limit.json",
+    "bytes": 261,
+    "sha256": "e186657257abb3de469122c9f473aced03fdd9d0a30e8bc037fbb0be87e64fb4"
+  },
+  {
+    "file": "TestPhase2K0MetadataDeclarationBoundaries__declared_above_bound-constraint.json",
+    "bytes": 110,
+    "sha256": "9fe3461ac7e341e666d09af363636359e509b484211ad0ed5dfd1103a1042186"
+  },
+  {
+    "file": "TestPhase2K0MetadataDeclarationBoundaries__declared_exact_bound-constraint.json",
+    "bytes": 107,
+    "sha256": "5a7d4bcac83e7f655a92cdbeadf811a8461df19096ea7420e9081f8d19caf658"
+  },
+  {
+    "file": "TestPhase2K0MetadataDeclarationBoundaries__manifest_above_bound-constraint.json",
+    "bytes": 110,
+    "sha256": "ebea8cf0481846e6a45bbea16fbc33007aa3d5b381a39ef46134a0fafbf5f70d"
+  },
+  {
+    "file": "TestPhase2K0MetadataDeclarationBoundaries__metadata_undercount-constraint.json",
+    "bytes": 109,
+    "sha256": "bf86a392e9d9e882237ffc3b8b3fbf6ddfeff26aa0222773422cb412da1964ca"
+  },
+  {
+    "file": "TestPhase2K0SnapshotBoundaries__above_bound-constraint.json",
+    "bytes": 101,
+    "sha256": "9547882f0bd4a314d9daa98060e1cee37bef094f5de5679a92be34a06f8e4610"
+  },
+  {
+    "file": "TestPhase2K0SnapshotBoundaries__exact_bound-constraint.json",
+    "bytes": 98,
+    "sha256": "c6366f9615030f2c6e18997395a3893b1ceff5e893d4a094b2064a88ea24fd1d"
+  },
+  {
+    "file": "TestPhase2K0SnapshotBoundaries__expiry_reversed-constraint.json",
+    "bytes": 105,
+    "sha256": "a44c384eb98db75f8e26ca250233034a976191f61164efbdbe2a26b634b4ab9e"
+  },
+  {
+    "file": "TestPhase2K0SnapshotBoundaries__input_bytes_mismatch-constraint.json",
+    "bytes": 110,
+    "sha256": "13102d7f056ef6aae98624e18f173443b4b752a17d725cf1fc8205c5962b492e"
+  },
+  {
+    "file": "TestPhase2K0SnapshotBoundaries__nonretained_body-constraint.json",
+    "bytes": 106,
+    "sha256": "b1ff020c178055b8c07622330ff84764a557d3a52216f00337b5841fa28cec15"
+  },
+  {
+    "file": "TestPhase2K0SnapshotBoundaries__retained_missing_body-constraint.json",
+    "bytes": 111,
+    "sha256": "b16be1c2f7bce725e675784f5923078bb7f0bfce6a0d4468b3775dc509030aca"
+  },
+  {
+    "file": "TestPhase2K0SnapshotBoundaries__snapshot_bytes_mismatch-constraint.json",
+    "bytes": 113,
+    "sha256": "f32140cec3504271b7075c49e8dbe1e7ed5fd3dab22e4893a799111870a91762"
+  }
+]

@@ -1,0 +1,253 @@
+{
+  "product_sha": "97c7081db6b30b6f04ad55c4155a7b5b12f4ae8a",
+  "harness_sha": "13fff52d60c589fa879e40a9a5b2dc0eff872fb4",
+  "exit_code": 0,
+  "top_level": {
+    "total": 7,
+    "pass": 7,
+    "fail": 0,
+    "skip": 0
+  },
+  "leaf_cases": {
+    "total": 35,
+    "pass": 35,
+    "fail": 0,
+    "skip": 0
+  },
+  "captured_artifacts": 36,
+  "events": [
+    {
+      "Action": "pass",
+      "Test": "TestPhase2K0FreshMigrationAndRestart",
+      "Package": "github.com/soaringjerry/PCAS/internal/postgres",
+      "Elapsed": 0.18
+    },
+    {
+      "Action": "pass",
+      "Test": "TestPhase2K0LegacyKindsAndContentPreserved",
+      "Package": "github.com/soaringjerry/PCAS/internal/postgres",
+      "Elapsed": 0.21
+    },
+    {
+      "Action": "pass",
+      "Test": "TestPhase2K0ExactTypedDependencyConstraints/durable_false_kind_source",
+      "Package": "github.com/soaringjerry/PCAS/internal/postgres",
+      "Elapsed": 0
+    },
+    {
+      "Action": "pass",
+      "Test": "TestPhase2K0ExactTypedDependencyConstraints/durable_false_kind_claim",
+      "Package": "github.com/soaringjerry/PCAS/internal/postgres",
+      "Elapsed": 0
+    },
+    {
+      "Action": "pass",
+      "Test": "TestPhase2K0ExactTypedDependencyConstraints/durable_false_kind_summary",
+      "Package": "github.com/soaringjerry/PCAS/internal/postgres",
+      "Elapsed": 0
+    },
+    {
+      "Action": "pass",
+      "Test": "TestPhase2K0ExactTypedDependencyConstraints/durable_false_kind_chunk",
+      "Package": "github.com/soaringjerry/PCAS/internal/postgres",
+      "Elapsed": 0
+    },
+    {
+      "Action": "pass",
+      "Test": "TestPhase2K0ExactTypedDependencyConstraints/durable_false_kind_entity",
+      "Package": "github.com/soaringjerry/PCAS/internal/postgres",
+      "Elapsed": 0
+    },
+    {
+      "Action": "pass",
+      "Test": "TestPhase2K0ExactTypedDependencyConstraints/durable_false_kind_episode",
+      "Package": "github.com/soaringjerry/PCAS/internal/postgres",
+      "Elapsed": 0
+    },
+    {
+      "Action": "pass",
+      "Test": "TestPhase2K0ExactTypedDependencyConstraints/durable_false_kind_relation",
+      "Package": "github.com/soaringjerry/PCAS/internal/postgres",
+      "Elapsed": 0
+    },
+    {
+      "Action": "pass",
+      "Test": "TestPhase2K0ExactTypedDependencyConstraints/durable_false_kind_unknown",
+      "Package": "github.com/soaringjerry/PCAS/internal/postgres",
+      "Elapsed": 0
+    },
+    {
+      "Action": "pass",
+      "Test": "TestPhase2K0ExactTypedDependencyConstraints/durable_false_version_0",
+      "Package": "github.com/soaringjerry/PCAS/internal/postgres",
+      "Elapsed": 0
+    },
+    {
+      "Action": "pass",
+      "Test": "TestPhase2K0ExactTypedDependencyConstraints/durable_false_version_-1",
+      "Package": "github.com/soaringjerry/PCAS/internal/postgres",
+      "Elapsed": 0
+    },
+    {
+      "Action": "pass",
+      "Test": "TestPhase2K0ExactTypedDependencyConstraints/durable_true_kind_source",
+      "Package": "github.com/soaringjerry/PCAS/internal/postgres",
+      "Elapsed": 0
+    },
+    {
+      "Action": "pass",
+      "Test": "TestPhase2K0ExactTypedDependencyConstraints/durable_true_kind_claim",
+      "Package": "github.com/soaringjerry/PCAS/internal/postgres",
+      "Elapsed": 0
+    },
+    {
+      "Action": "pass",
+      "Test": "TestPhase2K0ExactTypedDependencyConstraints/durable_true_kind_summary",
+      "Package": "github.com/soaringjerry/PCAS/internal/postgres",
+      "Elapsed": 0
+    },
+    {
+      "Action": "pass",
+      "Test": "TestPhase2K0ExactTypedDependencyConstraints/durable_true_kind_chunk",
+      "Package": "github.com/soaringjerry/PCAS/internal/postgres",
+      "Elapsed": 0
+    },
+    {
+      "Action": "pass",
+      "Test": "TestPhase2K0ExactTypedDependencyConstraints/durable_true_kind_entity",
+      "Package": "github.com/soaringjerry/PCAS/internal/postgres",
+      "Elapsed": 0
+    },
+    {
+      "Action": "pass",
+      "Test": "TestPhase2K0ExactTypedDependencyConstraints/durable_true_kind_episode",
+      "Package": "github.com/soaringjerry/PCAS/internal/postgres",
+      "Elapsed": 0
+    },
+    {
+      "Action": "pass",
+      "Test": "TestPhase2K0ExactTypedDependencyConstraints/durable_true_kind_relation",
+      "Package": "github.com/soaringjerry/PCAS/internal/postgres",
+      "Elapsed": 0
+    },
+    {
+      "Action": "pass",
+      "Test": "TestPhase2K0ExactTypedDependencyConstraints/durable_true_kind_unknown",
+      "Package": "github.com/soaringjerry/PCAS/internal/postgres",
+      "Elapsed": 0
+    },
+    {
+      "Action": "pass",
+      "Test": "TestPhase2K0ExactTypedDependencyConstraints/durable_true_version_0",
+      "Package": "github.com/soaringjerry/PCAS/internal/postgres",
+      "Elapsed": 0
+    },
+    {
+      "Action": "pass",
+      "Test": "TestPhase2K0ExactTypedDependencyConstraints/durable_true_version_-1",
+      "Package": "github.com/soaringjerry/PCAS/internal/postgres",
+      "Elapsed": 0
+    },
+    {
+      "Action": "pass",
+      "Test": "TestPhase2K0ExactTypedDependencyConstraints",
+      "Package": "github.com/soaringjerry/PCAS/internal/postgres",
+      "Elapsed": 0.19
+    },
+    {
+      "Action": "pass",
+      "Test": "TestPhase2K0SnapshotBoundaries/exact_bound",
+      "Package": "github.com/soaringjerry/PCAS/internal/postgres",
+      "Elapsed": 0.01
+    },
+    {
+      "Action": "pass",
+      "Test": "TestPhase2K0SnapshotBoundaries/above_bound",
+      "Package": "github.com/soaringjerry/PCAS/internal/postgres",
+      "Elapsed": 0.01
+    },
+    {
+      "Action": "pass",
+      "Test": "TestPhase2K0SnapshotBoundaries/snapshot_bytes_mismatch",
+      "Package": "github.com/soaringjerry/PCAS/internal/postgres",
+      "Elapsed": 0
+    },
+    {
+      "Action": "pass",
+      "Test": "TestPhase2K0SnapshotBoundaries/input_bytes_mismatch",
+      "Package": "github.com/soaringjerry/PCAS/internal/postgres",
+      "Elapsed": 0
+    },
+    {
+      "Action": "pass",
+      "Test": "TestPhase2K0SnapshotBoundaries/nonretained_body",
+      "Package": "github.com/soaringjerry/PCAS/internal/postgres",
+      "Elapsed": 0
+    },
+    {
+      "Action": "pass",
+      "Test": "TestPhase2K0SnapshotBoundaries/retained_missing_body",
+      "Package": "github.com/soaringjerry/PCAS/internal/postgres",
+      "Elapsed": 0
+    },
+    {
+      "Action": "pass",
+      "Test": "TestPhase2K0SnapshotBoundaries/expiry_reversed",
+      "Package": "github.com/soaringjerry/PCAS/internal/postgres",
+      "Elapsed": 0
+    },
+    {
+      "Action": "pass",
+      "Test": "TestPhase2K0SnapshotBoundaries",
+      "Package": "github.com/soaringjerry/PCAS/internal/postgres",
+      "Elapsed": 0.19
+    },
+    {
+      "Action": "pass",
+      "Test": "TestPhase2K0MetadataDeclarationBoundaries/declared_exact_bound",
+      "Package": "github.com/soaringjerry/PCAS/internal/postgres",
+      "Elapsed": 0
+    },
+    {
+      "Action": "pass",
+      "Test": "TestPhase2K0MetadataDeclarationBoundaries/declared_above_bound",
+      "Package": "github.com/soaringjerry/PCAS/internal/postgres",
+      "Elapsed": 0
+    },
+    {
+      "Action": "pass",
+      "Test": "TestPhase2K0MetadataDeclarationBoundaries/manifest_above_bound",
+      "Package": "github.com/soaringjerry/PCAS/internal/postgres",
+      "Elapsed": 0
+    },
+    {
+      "Action": "pass",
+      "Test": "TestPhase2K0MetadataDeclarationBoundaries/metadata_undercount",
+      "Package": "github.com/soaringjerry/PCAS/internal/postgres",
+      "Elapsed": 0
+    },
+    {
+      "Action": "pass",
+      "Test": "TestPhase2K0MetadataDeclarationBoundaries",
+      "Package": "github.com/soaringjerry/PCAS/internal/postgres",
+      "Elapsed": 0.16
+    },
+    {
+      "Action": "pass",
+      "Test": "TestPhase2K0AttemptIndependentOfBusinessRows",
+      "Package": "github.com/soaringjerry/PCAS/internal/postgres",
+      "Elapsed": 0.15
+    },
+    {
+      "Action": "pass",
+      "Test": "TestPhase2K0DurableDependencySurvivesAttemptAndSourceDeletion",
+      "Package": "github.com/soaringjerry/PCAS/internal/postgres",
+      "Elapsed": 0.17
+    },
+    {
+      "Action": "pass",
+      "Package": "github.com/soaringjerry/PCAS/internal/postgres",
+      "Elapsed": 1.264
+    }
+  ]
+}

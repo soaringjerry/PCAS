@@ -814,3 +814,10 @@
   .hall:has(> .timezone-hint) .hall-desk { grid-row: 3; }
   .hall:has(> .timezone-hint) .hall-right { grid-row: 4; }
 }
+/* Phone: two short rows, the setting above the one-tap change, × at the top right. */
+@media (max-width: 860px) {
+  .timezone-hint { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0 8px; padding: 6px 6px 6px 12px; }
+  .timezone-hint > span { grid-area: 1 / 1; overflow-wrap: anywhere; }
+  .timezone-hint > .btn { grid-area: 2 / 1; justify-self: start; margin-left: -11px; }
+  .timezone-hint > .btn-icon { grid-area: 1 / 2; margin-left: 0; }
+}

@@ -105,7 +105,7 @@ const candidateAction = (page: Page, kind: 'task' | 'idea' | 'memory') => page.g
 for (const choice of [
   { name: /事项提醒/, field: 'followUps', before: true },
   { name: /带回搁置的想法/, field: 'wakeIdeas', before: true },
-  { name: /资料里的明确待办直接加入/, field: 'autoAccept', before: false },
+  { name: /资料里的明确待办直接创建/, field: 'autoAccept', before: false },
 ] as const) {
   test(`only ${choice.field} is saved without changing budget or memory permissions`, async ({ page }) => {
     const backend = await mock(page)

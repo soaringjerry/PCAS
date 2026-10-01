@@ -91,7 +91,7 @@ func secretaryErrorType(stage string, err error) string {
 
 func secretaryCaptureText(stage string, err error) string {
 	if errors.Is(err, memory.ErrRecordCapacity) {
-		return "已记下原话；上下文或诊断记录已达容量上限，请缩短输入或稍后重试"
+		return "已记下原话；这轮暂时无法发送，请缩短问题或稍后再试"
 	}
 	reason := "模型没有响应"
 	switch stage {

@@ -440,6 +440,7 @@ func TestSecretaryConcurrentRetryAndHTTPContract(t *testing.T) {
 func TestSecretaryActionMappingAndDateDefaults(t *testing.T) {
 	s := testStore(t)
 	scope := owner()
+	workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: asJSON(map[string]string{"timezone": "Asia/Shanghai"})})
 	var payload string
 	secretaryModel(t, s, func(w http.ResponseWriter, r *http.Request) { secretaryModelReply(w, payload) })
 	st := workspaceCommand(t, s, scope, workspace.Command{Type: "addProject", Name: "A"})

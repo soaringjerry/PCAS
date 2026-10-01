@@ -101,7 +101,7 @@ func patchAllowed(dst any, patch json.RawMessage, keys ...string) error {
 	return nil
 }
 func (s *Store) ensureOwner(ctx context.Context, tx pgx.Tx, scope memory.Scope) error {
-	settings := workspace.Settings{WakeIdeas: true, FollowUps: true, DailyReviewAt: "09:00", DailyBudget: 10, Timezone: "Asia/Shanghai"}
+	settings := workspace.Settings{WakeIdeas: true, FollowUps: true, DailyReviewAt: "09:00", DailyBudget: 10, Timezone: workspace.InitialTimezone(ctx)}
 	if _, err := tx.Exec(ctx, "INSERT INTO workspace_owners(owner_id,settings) VALUES($1,$2) ON CONFLICT DO NOTHING", string(scope.OwnerID), asJSON(settings)); err != nil {
 		return err
 	}

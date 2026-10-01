@@ -206,6 +206,9 @@ func (s *Server) fail(w http.ResponseWriter, err error) {
 	}
 	status, code := http.StatusInternalServerError, "internal_error"
 	switch {
+	case errors.Is(err, workspace.ErrTimezone):
+		status, code = http.StatusBadRequest, "invalid_timezone"
+		s.logger.Warn("workspace timezone validation failed", "stage", "workspace_settings", "error_type", code)
 	case errors.Is(err, notify.ErrTelegramTokenInvalid):
 		status, code = http.StatusBadRequest, "telegram_token_invalid"
 	case errors.Is(err, notify.ErrTelegramWebhookActive):

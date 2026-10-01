@@ -1,10 +1,11 @@
 import { useEffect, useState, type CSSProperties } from 'react'
 import { Link } from 'react-router'
 import { BellRing, ChevronDown, ChevronRight, X } from 'lucide-react'
+import { TimezoneHint } from '../components/TimezoneHint'
 import { Secretary } from '../components/Secretary'
 import { backgroundFeed, decisionQueue, ideaNote, ideaWall, projectCards, todayColumn, type NoticeRow as NoticeRowData, type TodayRow } from '../domain/hall'
 import { projectStatusLabel } from '../domain/labels'
-import { formatAgo, formatWhen } from '../domain/time'
+import { clockTime, formatAgo, formatWhen } from '../domain/time'
 import type { State } from '../domain/types'
 import { api } from '../store/api'
 import { useStore } from '../store/context'
@@ -18,10 +19,6 @@ function readSeen(): number {
   } catch {
     return Date.now() - 24 * 60 * 60 * 1000
   }
-}
-
-function clock(iso: string): string {
-  return new Date(iso).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })
 }
 
 /* ---------- Today ---------- */
@@ -49,11 +46,11 @@ function TaskRow({ row, withTime }: { row: TodayRow; withTime?: boolean }) {
 
 /** A reminder that went off: finish it with the circle, or close it with ×. */
 function NoticeRow({ row }: { row: NoticeRowData }) {
-  const { dispatchUndoable, applyState } = useStore()
+  const { state, dispatchUndoable, applyState } = useStore()
   const toast = useToast()
   const [busy, setBusy] = useState(false)
   const { notice, task } = row
-  const note = [notice.reason && notice.reason !== notice.title ? notice.reason : '', `${formatWhen(notice.dueAt)} 到点`].filter(Boolean).join(' · ')
+  const note = [notice.reason && notice.reason !== notice.title ? notice.reason : '', `${formatWhen(notice.dueAt, state.settings.timezone ?? 'UTC')} 到点`].filter(Boolean).join(' · ')
   return (
     <div className="hall-task hall-rang">
       {task ? (
@@ -98,17 +95,17 @@ function NoticeRow({ row }: { row: NoticeRowData }) {
   )
 }
 
-function NowLine() {
+function NowLine({ timezone }: { timezone: string }) {
   const [now, setNow] = useState(() => new Date().toISOString())
   useEffect(() => {
     const t = window.setInterval(() => setNow(new Date().toISOString()), 60_000)
     return () => window.clearInterval(t)
   }, [])
   return (
-    <div className="hall-now" role="separator" aria-label={`现在 ${clock(now)}`}>
+    <div className="hall-now" role="separator" aria-label={`现在 ${clockTime(now, timezone)}`}>
       <span>现在</span>
       <i />
-      <span>{clock(now)}</span>
+      <span>{clockTime(now, timezone)}</span>
     </div>
   )
 }
@@ -121,10 +118,11 @@ const COMPACT_ROWS = 5
  */
 function TodayWall({ compact }: { compact: boolean }) {
   const { state } = useStore()
+  const timezone = state.settings.timezone ?? 'UTC'
   const full = todayColumn(state)
   const [all, setAll] = useState(false)
   const short = compact && !all
-  const date = new Date().toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'long' })
+  const date = new Date().toLocaleDateString('zh-CN', { timeZone: timezone, month: 'long', day: 'numeric', weekday: 'long' })
 
   // Short, rows are kept in this order: what rang, who waits, what is still ahead today, then what already passed.
   const cap = short ? COMPACT_ROWS : Infinity
@@ -165,7 +163,7 @@ function TodayWall({ compact }: { compact: boolean }) {
             {passed.map((r) => (
               <TaskRow key={r.task.id} row={r} withTime />
             ))}
-            <NowLine />
+            <NowLine timezone={timezone} />
             {ahead.map((r) => (
               <TaskRow key={r.task.id} row={r} withTime />
             ))}
@@ -389,6 +387,7 @@ export function HallPage() {
   const stacked = useStacked()
   return (
     <div className="hall">
+      <TimezoneHint />
       <TodayWall compact={stacked} />
       <Desk compact={stacked} />
       <div className="hall-right">

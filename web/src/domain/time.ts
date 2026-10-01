@@ -16,27 +16,29 @@ export function ahead(days: number, hour = 9): string {
   return d.toISOString()
 }
 
-function startOfDay(d: Date): number {
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
+// Map zoned calendar dates onto UTC day numbers; DST days may be 23 or 25 hours.
+function calendarDay(d: Date, timeZone?: string): number {
+  const parts = new Intl.DateTimeFormat('en', { timeZone, year: 'numeric', month: 'numeric', day: 'numeric' }).formatToParts(d)
+  const n = (type: string) => Number(parts.find((p) => p.type === type)!.value)
+  return Date.UTC(n('year'), n('month') - 1, n('day')) / DAY
 }
 
-/** Whole calendar days from today; negative is in the past. */
-export function dayOffset(iso: string): number {
-  return Math.round((startOfDay(new Date(iso)) - startOfDay(new Date())) / DAY)
+/** Whole calendar days from today in the given zone; negative is in the past. */
+export function dayOffset(iso: string, timeZone?: string): number {
+  return calendarDay(new Date(iso), timeZone) - calendarDay(new Date(), timeZone)
 }
 
-function hhmm(d: Date): string {
-  return d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })
+export function clockTime(iso: string, timeZone?: string): string {
+  return new Date(iso).toLocaleTimeString('zh-CN', { timeZone, hour: '2-digit', minute: '2-digit', hour12: false })
 }
 
 /** "今天 09:00", "明天 14:00", "10月3日" */
-export function formatWhen(iso: string): string {
-  const d = new Date(iso)
-  const offset = dayOffset(iso)
-  if (offset === 0) return `今天 ${hhmm(d)}`
-  if (offset === 1) return `明天 ${hhmm(d)}`
-  if (offset === -1) return `昨天 ${hhmm(d)}`
-  return `${d.getMonth() + 1}月${d.getDate()}日`
+export function formatWhen(iso: string, timeZone?: string): string {
+  const offset = dayOffset(iso, timeZone)
+  if (offset === 0) return `今天 ${clockTime(iso, timeZone)}`
+  if (offset === 1) return `明天 ${clockTime(iso, timeZone)}`
+  if (offset === -1) return `昨天 ${clockTime(iso, timeZone)}`
+  return new Date(iso).toLocaleDateString('zh-CN', { timeZone, month: 'long', day: 'numeric' })
 }
 
 /** "刚刚", "3 小时前", "2 天前" */

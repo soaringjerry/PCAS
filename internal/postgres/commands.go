@@ -240,6 +240,15 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 		doc.UpdatedAt = stamp()
 		return saveDoc(ctx, tx, scope, doc)
 	case "updateSettings":
+		var fields map[string]json.RawMessage
+		if json.Unmarshal(c.Patch, &fields) == nil {
+			if raw, present := fields["timezone"]; present {
+				var zone string
+				if json.Unmarshal(raw, &zone) != nil || workspace.ValidateTimezone(zone) != nil {
+					return workspace.ErrTimezone
+				}
+			}
+		}
 		settings, err := queryDocument[workspace.Settings](ctx, tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1", string(scope.OwnerID))
 		if err != nil {
 			return err
@@ -257,8 +266,8 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 		if _, err := time.Parse("15:04", settings.DailyReviewAt); err != nil {
 			return memory.ErrInvalid
 		}
-		if _, err := time.LoadLocation(settings.Timezone); err != nil {
-			return memory.ErrInvalid
+		if err := workspace.ValidateTimezone(settings.Timezone); err != nil {
+			return err
 		}
 		_, err = tx.Exec(ctx, "UPDATE workspace_owners SET settings=$2 WHERE owner_id=$1", string(scope.OwnerID), asJSON(settings))
 		return err

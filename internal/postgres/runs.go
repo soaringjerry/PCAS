@@ -151,6 +151,11 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 			}
 		}
 		fmt.Fprintf(&brief, "\n本次请求：%s", c.Prompt)
+		if c.Kind == "breakdown" {
+			// Automatic adoption turns "- [ ]" lines into subtasks. Real models
+			// otherwise answer with a numbered list, which is filed as a document.
+			brief.WriteString("\n输出格式：每个步骤单独一行，写成「- [ ] 步骤」；不要编号，不要加粗，步骤之外不写别的内容。")
+		}
 		run.Brief = brief.String()
 		dbStatus := "queued"
 		if agent.Channel == "manual" {

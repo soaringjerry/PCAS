@@ -568,9 +568,13 @@ func (s *Store) deskTurnsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, 
 		Dependencies []memory.Ref            `json:"dependencies"`
 		AgentID      string                  `json:"agentId"`
 		Erased       bool                    `json:"erased"`
+		// The exchange's own original was deleted, as opposed to a memory it used.
+		OriginalDeleted bool `json:"originalDeleted"`
 	}
-	turns, err := queryDocuments[storedTurn](ctx, tx, `SELECT jsonb_build_object('response',response,'dependencies',dependencies,'agentId',agent_id,'erased',question='' AND answer='') FROM
- (SELECT response,dependencies,agent_id,question,answer,created_at,id FROM desk_turns WHERE owner_id=$1 AND conversation_id=$2 AND response IS NOT NULL ORDER BY created_at DESC,id DESC LIMIT $3) recent ORDER BY created_at,id`, string(scope.OwnerID), conversationID, limit)
+	turns, err := queryDocuments[storedTurn](ctx, tx, `SELECT jsonb_build_object('response',response,'dependencies',dependencies,'agentId',agent_id,'erased',question='' AND answer='','originalDeleted',original_deleted) FROM
+ (SELECT response,dependencies,agent_id,question,answer,created_at,id,
+   request_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM sources s WHERE s.owner_id=t.owner_id AND s.connector IN ('desk','capture','desk-incomplete') AND lower(s.external_id)=t.request_id::text) AS original_deleted
+  FROM desk_turns t WHERE owner_id=$1 AND conversation_id=$2 AND response IS NOT NULL ORDER BY created_at DESC,id DESC LIMIT $3) recent ORDER BY created_at,id`, string(scope.OwnerID), conversationID, limit)
 	if err != nil {
 		return out, err
 	}
@@ -586,6 +590,9 @@ func (s *Store) deskTurnsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, 
 		}
 		if stored.Erased || len(stored.Dependencies) > 0 && verifyRunTx(ctx, tx, scope, run) != nil {
 			turn.Reply = "（这条回答依据的记忆已变更）"
+			if stored.Erased && stored.OriginalDeleted {
+				turn.Reply = "（内容已删除）"
+			}
 			turn.Cards = []workspace.DeskCard{}
 		} else if dependencies != nil {
 			*dependencies = append(*dependencies, stored.Dependencies...)

@@ -172,13 +172,13 @@ func TestStabilizationUndoU2_ReverseCreationAndEdit(t *testing.T) {
 	stabilizationUndoApply(t, s, scope, created)
 	stabilizationUndoEqual(t, s, scope, before, true)
 }
-func stabilizationUndoPendingRefusal(t *testing.T, s *Store, scope memory.Scope, action string) {
+func stabilizationUndoRefusal(t *testing.T, s *Store, scope memory.Scope, action, code string) {
 	t.Helper()
 	before := stabilizationUndoBusiness(t, s, scope, false)
 	revision := stabilizationUndoSnapshot(t, s, scope).Revision
 	status, body := stabilizationUndoHTTP(t, s, scope, workspace.Command{Type: "undoAction", ID: action})
-	if status != 409 {
-		t.Fatalf("expected refusal, got %d %s", status, body)
+	if status != 409 || !strings.Contains(body, `"error":"`+code+`"`) {
+		t.Fatalf("expected HTTP 409 %s, got %d %s", code, status, body)
 	}
 	stabilizationUndoEqual(t, s, scope, before, false)
 	if stabilizationUndoSnapshot(t, s, scope).Revision != revision {
@@ -190,50 +190,61 @@ func stabilizationUndoPendingRefusal(t *testing.T, s *Store, scope memory.Scope,
 	}
 	t.Logf("safety verified; observed HTTP %d %s", status, body)
 }
-func TestStabilizationUndoU3_SkipLaterEditPendingCode(t *testing.T) {
+func TestStabilizationUndoU3_SkipLaterEditRequiresReverseOrder(t *testing.T) {
 	s := testStore(t)
 	scope := owner()
+	stabilizationUndoSnapshot(t, s, scope)
+	before := stabilizationUndoBusiness(t, s, scope, true)
 	st, created := stabilizationUndoCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "first"})
-	stabilizationUndoCommand(t, s, scope, workspace.Command{Type: "renameThing", ID: st.Tasks[0].ID, Title: "later"})
-	stabilizationUndoPendingRefusal(t, s, scope, created)
-	t.Skip("pending U3: newer_action versus changed_since requires user ruling; safety passed, sequence not accepted")
+	middle := stabilizationUndoBusiness(t, s, scope, true)
+	_, later := stabilizationUndoCommand(t, s, scope, workspace.Command{Type: "renameThing", ID: st.Tasks[0].ID, Title: "later"})
+	stabilizationUndoRefusal(t, s, scope, created, "newer_action")
+	stabilizationUndoApply(t, s, scope, later)
+	stabilizationUndoEqual(t, s, scope, middle, true)
+	stabilizationUndoApply(t, s, scope, created)
+	stabilizationUndoEqual(t, s, scope, before, true)
 }
-func TestStabilizationUndoU4_UserAndBackendEditPendingCode(t *testing.T) {
+func TestStabilizationUndoU4_UserAndBackendEdit(t *testing.T) {
 	for _, mode := range []string{"user-command", "unlogged-backend"} {
 		t.Run(mode, func(t *testing.T) {
 			s := testStore(t)
 			scope := owner()
 			st, created := stabilizationUndoCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "first"})
 			id := st.Tasks[0].ID
+			middle := stabilizationUndoBusiness(t, s, scope, true)
 			if mode == "user-command" {
-				stabilizationUndoCommand(t, s, scope, workspace.Command{Type: "renameThing", ID: id, Title: "manual change"})
+				_, later := stabilizationUndoCommand(t, s, scope, workspace.Command{Type: "renameThing", ID: id, Title: "manual change"})
+				stabilizationUndoRefusal(t, s, scope, created, "newer_action")
+				stabilizationUndoApply(t, s, scope, later)
+				stabilizationUndoEqual(t, s, scope, middle, true)
+				stabilizationUndoApply(t, s, scope, created)
+				if len(stabilizationUndoSnapshot(t, s, scope).Tasks) != 0 {
+					t.Fatal("task survived reverse undo")
+				}
 			} else {
 				_, err := s.pool.Exec(context.Background(), "UPDATE work_items SET title='background change',document=jsonb_set(document,'{title}','\"background change\"') WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), id)
 				if err != nil {
 					t.Fatal(err)
 				}
+				stabilizationUndoRefusal(t, s, scope, created, "changed_since")
 			}
-			stabilizationUndoPendingRefusal(t, s, scope, created)
-			if mode == "unlogged-backend" {
-				status, body := stabilizationUndoHTTP(t, s, scope, workspace.Command{Type: "undoAction", ID: created})
-				if status != 409 || !strings.Contains(body, `"error":"changed_since"`) {
-					t.Fatal(status, body)
-				}
-				return
-			}
-			t.Skip("pending U4: logged user edit overlaps newer_action/changed_since; safety passed")
 		})
 	}
 }
-func TestStabilizationUndoU5_TwoEditsPendingCode(t *testing.T) {
+func TestStabilizationUndoU5_TwoEditsRequireReverseOrder(t *testing.T) {
 	s := testStore(t)
 	scope := owner()
 	st, _ := stabilizationUndoCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "base"})
 	id := st.Tasks[0].ID
+	before := stabilizationUndoBusiness(t, s, scope, true)
 	_, a := stabilizationUndoCommand(t, s, scope, workspace.Command{Type: "renameThing", ID: id, Title: "A"})
-	stabilizationUndoCommand(t, s, scope, workspace.Command{Type: "renameThing", ID: id, Title: "B"})
-	stabilizationUndoPendingRefusal(t, s, scope, a)
-	t.Skip("pending U5: newer_action versus changed_since requires user ruling; safety passed")
+	middle := stabilizationUndoBusiness(t, s, scope, true)
+	_, b := stabilizationUndoCommand(t, s, scope, workspace.Command{Type: "renameThing", ID: id, Title: "B"})
+	stabilizationUndoRefusal(t, s, scope, a, "newer_action")
+	stabilizationUndoApply(t, s, scope, b)
+	stabilizationUndoEqual(t, s, scope, middle, true)
+	stabilizationUndoApply(t, s, scope, a)
+	stabilizationUndoEqual(t, s, scope, before, true)
 }
 func TestStabilizationUndoU6_CompleteRestoreFutureReminder(t *testing.T) {
 	s := testStore(t)
@@ -343,20 +354,35 @@ func TestStabilizationUndoU8_AutoAdoptUndoReadoptUndo(t *testing.T) {
 	}
 }
 func TestStabilizationUndoU9_CheckChangeBlocksAdoptionUndo(t *testing.T) {
-	s := testStore(t)
-	scope := owner()
-	st, _ := stabilizationUndoCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "base"})
-	id := st.Tasks[0].ID
-	st, _, action := stabilizationUndoCompletedRun(t, s, scope, id, "- [ ] alpha")
-	stabilizationUndoCommand(t, s, scope, workspace.Command{Type: "toggleCheck", ID: id, ItemID: st.Tasks[0].Checklist[0].ID})
-	before := stabilizationUndoBusiness(t, s, scope, false)
-	status, body := stabilizationUndoHTTP(t, s, scope, workspace.Command{Type: "undoAction", ID: action})
-	if status != 409 || !strings.Contains(body, `"error":"changed_since"`) {
-		t.Fatal(status, body)
+	for _, mode := range []string{"logged-check-command", "unlogged-check-change"} {
+		t.Run(mode, func(t *testing.T) {
+			s := testStore(t)
+			scope := owner()
+			st, _ := stabilizationUndoCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "base"})
+			id := st.Tasks[0].ID
+			st, _, action := stabilizationUndoCompletedRun(t, s, scope, id, "- [ ] alpha")
+			adopted := stabilizationUndoBusiness(t, s, scope, true)
+			if mode == "logged-check-command" {
+				_, check := stabilizationUndoCommand(t, s, scope, workspace.Command{Type: "toggleCheck", ID: id, ItemID: st.Tasks[0].Checklist[0].ID})
+				stabilizationUndoRefusal(t, s, scope, action, "newer_action")
+				stabilizationUndoApply(t, s, scope, check)
+				stabilizationUndoEqual(t, s, scope, adopted, true)
+				stabilizationUndoApply(t, s, scope, action)
+				st = stabilizationUndoSnapshot(t, s, scope)
+				if len(st.Tasks[0].Checklist) != 0 || st.Runs[0].Adopted != nil || len(st.Samples) != 0 {
+					t.Fatal(st.Tasks, st.Runs, st.Samples)
+				}
+			} else {
+				_, err := s.pool.Exec(context.Background(), "UPDATE work_items SET document=jsonb_set(document,'{checklist,0,done}','true') WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), id)
+				if err != nil {
+					t.Fatal(err)
+				}
+				stabilizationUndoRefusal(t, s, scope, action, "changed_since")
+			}
+		})
 	}
-	stabilizationUndoEqual(t, s, scope, before, false)
 }
-func TestStabilizationUndoU10_ExistingItemSameTurnPartialCoverage(t *testing.T) {
+func TestStabilizationUndoExistingTHIS_SameTurnRegression(t *testing.T) {
 	s := testStore(t)
 	scope := owner()
 	st, _ := stabilizationUndoCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "before turn"})
@@ -371,14 +397,49 @@ func TestStabilizationUndoU10_ExistingItemSameTurnPartialCoverage(t *testing.T) 
 		t.Fatal("existing THIS fixture failed", out.Turn.Receipts)
 	}
 	updated, steps := stabilizationUndoAction(t, out, 0), stabilizationUndoAction(t, out, 1)
-	stabilizationUndoPendingRefusal(t, s, scope, updated)
+	stabilizationUndoRefusal(t, s, scope, updated, "newer_action")
 	st = stabilizationUndoApply(t, s, scope, steps)
 	if st.Tasks[0].Title != "same turn update" || len(st.Tasks[0].Checklist) != 0 {
 		t.Fatal(st.Tasks)
 	}
 	stabilizationUndoApply(t, s, scope, updated)
 	stabilizationUndoEqual(t, s, scope, before, true)
-	t.Skip("pending U10: existing THIS update/add_steps reverse sequence passed; create/add_steps has no contracted current-turn reference; skip-order code depends on U3 ruling")
+}
+func TestStabilizationUndoU10_CreateAndAddStepsSameTurn(t *testing.T) {
+	s := testStore(t)
+	scope := owner()
+	stabilizationUndoSnapshot(t, s, scope)
+	before := stabilizationUndoBusiness(t, s, scope, true)
+	payload := `{"actions":[{"op":"create_task","title":"交作业"},{"op":"add_steps","ref":"N1","steps":["查资料","写提纲"]}]}`
+	stabilizationUndoModel(t, s, &payload)
+	out := stabilizationUndoTurn(t, s, scope, "建交作业任务，再给它加查资料、写提纲两个步骤")
+	if len(out.Turn.Receipts) != 2 || len(out.State.Tasks) != 1 {
+		t.Fatal(out.Turn.Receipts, out.State.Tasks)
+	}
+	task := out.State.Tasks[0]
+	if task.Title != "交作业" || len(task.Checklist) != 2 || task.Checklist[0].Text != "查资料" || task.Checklist[1].Text != "写提纲" {
+		t.Fatal(task)
+	}
+	for _, r := range out.Turn.Receipts {
+		if r.Status != "done" || r.ThingID == nil || *r.ThingID != task.ID {
+			t.Fatal("actions did not share newly created task", out.Turn.Receipts)
+		}
+	}
+	created, steps := stabilizationUndoAction(t, out, 0), stabilizationUndoAction(t, out, 1)
+	if created == steps {
+		t.Fatal("actions share log ID")
+	}
+	var logs int
+	if err := s.pool.QueryRow(context.Background(), "SELECT count(*) FROM action_log WHERE owner_id=$1 AND turn_id=$2 AND source='desk'", string(scope.OwnerID), out.Turn.ID).Scan(&logs); err != nil || logs != 2 {
+		t.Fatal(logs, err)
+	}
+	stabilizationUndoRefusal(t, s, scope, created, "newer_action")
+	st := stabilizationUndoApply(t, s, scope, steps)
+	if len(st.Tasks) != 1 || st.Tasks[0].Title != "交作业" || len(st.Tasks[0].Checklist) != 0 {
+		t.Fatal(st.Tasks)
+	}
+	stabilizationUndoApply(t, s, scope, created)
+	stabilizationUndoEqual(t, s, scope, before, true)
 }
 func TestStabilizationUndoU11_RequestReplayAndNewRequest(t *testing.T) {
 	s := testStore(t)

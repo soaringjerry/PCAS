@@ -8,12 +8,13 @@ import (
 )
 
 var (
-	ErrInvalid     = errors.New("invalid input")
-	ErrNotFound    = errors.New("not found")
-	ErrConflict    = errors.New("version conflict")
-	ErrForbidden   = errors.New("forbidden")
-	ErrBlocked     = errors.New("reimport blocked")
-	ErrUnavailable = errors.New("capability not configured")
+	ErrInvalid        = errors.New("invalid input")
+	ErrNotFound       = errors.New("not found")
+	ErrConflict       = errors.New("version conflict")
+	ErrForbidden      = errors.New("forbidden")
+	ErrBlocked        = errors.New("reimport blocked")
+	ErrUnavailable    = errors.New("capability not configured")
+	ErrRecordCapacity = errors.New("context record capacity exhausted")
 )
 
 // Scope is bound by trusted authentication, not decoded from request JSON.
@@ -22,6 +23,10 @@ type Scope struct {
 	OwnerID     ID
 	PrincipalID string
 	IsOwner     bool
+	// Task is bound by the consumer's trusted server route, never request JSON.
+	// A non-owner source read without this context must fail closed once the
+	// phase-two policy consumer is installed. Owner audit reads stay separate.
+	Task *TrustedTaskContext `json:"-"`
 }
 
 func (s Scope) Valid() bool { return s.OwnerID.Valid() && s.PrincipalID != "" }

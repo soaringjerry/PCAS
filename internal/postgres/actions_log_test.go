@@ -60,7 +60,7 @@ func TestUndoRejectsContentChanges(t *testing.T) {
 			}
 			edit.ID = id
 			workspaceCommand(t, s, scope, edit)
-			if _, err := s.Undo(ctx, scope, request); !errors.Is(err, workspace.ErrChangedSince) {
+			if _, err := s.Undo(ctx, scope, request); !errors.Is(err, workspace.ErrNewerAction) {
 				t.Fatal("content edit must block undo", err)
 			}
 			var undone bool
@@ -92,7 +92,7 @@ func TestUndoLegacyFingerprint(t *testing.T) {
 		}
 		st, err := s.Undo(ctx, scope, request)
 		if changed {
-			if !errors.Is(err, workspace.ErrChangedSince) {
+			if !errors.Is(err, workspace.ErrNewerAction) {
 				t.Fatal("legacy fingerprint accepted content change", err)
 			}
 		} else if err != nil || len(st.Tasks) != 0 {

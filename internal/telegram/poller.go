@@ -436,6 +436,8 @@ func (p *poller) callback(ctx context.Context, c notify.Credentials, st *state, 
 		_, err := p.store.Undo(ctx, p.scope, id)
 		text := "已撤销"
 		switch {
+		case errors.Is(err, workspace.ErrNewerAction):
+			text = "后面还有改动，请先撤销它"
 		case errors.Is(err, workspace.ErrChangedSince):
 			text = "这件事之后又改过，没法直接撤销。"
 		case errors.Is(err, workspace.ErrWorkStarted):

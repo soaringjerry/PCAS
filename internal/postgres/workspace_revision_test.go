@@ -159,5 +159,5 @@ func TestWorkspaceStaleUndoStillChecksAfterHash(t *testing.T) {
 	state := send(created, http.StatusOK, "")
 	workspaceCommand(t, s, scope, workspace.Command{Type: "setNotes", ID: state.Tasks[0].ID, Text: "保留后续修改"})
 	bumpBackgroundRevision(t, s, scope)
-	send(workspace.Command{Type: "undoAction", ID: created.RequestID, RequestID: string(memory.NewID()), ExpectedRevision: state.Revision}, http.StatusConflict, "changed_since")
+	send(workspace.Command{Type: "undoAction", ID: created.RequestID, RequestID: string(memory.NewID()), ExpectedRevision: state.Revision}, http.StatusConflict, "newer_action")
 }

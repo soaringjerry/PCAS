@@ -347,7 +347,7 @@ func TestAutoAdoptChangedSince(t *testing.T) {
 	actionID := st.Runs[0].Adopted.ActionID
 	st = workspaceCommand(t, s, scope, workspace.Command{Type: "setNotes", ID: id, Text: "后来修改"})
 	_, err = s.Execute(context.Background(), scope, workspace.Command{Type: "undoAction", ID: actionID, RequestID: string(memory.NewID()), ExpectedRevision: st.Revision})
-	if !errors.Is(err, workspace.ErrChangedSince) {
+	if !errors.Is(err, workspace.ErrNewerAction) {
 		t.Fatalf("undo error=%v", err)
 	}
 }

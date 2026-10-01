@@ -94,7 +94,11 @@ func (s *Store) undoActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 	var summary string
 	var undone *string
 	var expired bool
-	err := tx.QueryRow(ctx, "SELECT changes,summary,undone_at::text,expired_at IS NOT NULL OR created_at<now()-interval '30 days' FROM action_log WHERE owner_id=$1 AND id=$2 FOR UPDATE", string(scope.OwnerID), id).Scan(&data, &summary, &undone, &expired)
+	var created time.Time
+	var order *int64
+	var source string
+	var turnID *string
+	err := tx.QueryRow(ctx, "SELECT changes,summary,undone_at::text,expired_at IS NOT NULL OR created_at<now()-interval '30 days',created_at,action_order,source,turn_id::text FROM action_log WHERE owner_id=$1 AND id=$2 FOR UPDATE", string(scope.OwnerID), id).Scan(&data, &summary, &undone, &expired, &created, &order, &source, &turnID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return memory.ErrNotFound
 	}
@@ -110,6 +114,11 @@ func (s *Store) undoActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 	}
 	var changes []actionChange
 	if err = json.Unmarshal(data, &changes); err != nil {
+		return err
+	}
+	// Recorded successors take precedence over external fingerprint changes and
+	// work-start checks. The owner lock serializes all logged document writers.
+	if err = checkActionSuccessors(ctx, tx, scope, id, data, created, order, source, turnID); err != nil {
 		return err
 	}
 	// Lock all rows first. The owner lock serializes commands and undo; run locks
@@ -219,6 +228,125 @@ func (s *Store) undoActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 	_, err = tx.Exec(ctx, "UPDATE action_log SET undone_at=now() WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), id)
 	return err
 }
+
+// New actions have a durable insertion order; historical rows deliberately do
+// not invent one. At a historical time tie, only complete unique desk receipts
+// can prove order. An unresolved tie refuses safely as changed_since.
+func checkActionSuccessors(ctx context.Context, tx pgx.Tx, scope memory.Scope, id string, changes []byte, created time.Time, order *int64, source string, turnID *string) error {
+	rows, err := tx.Query(ctx, `SELECT later.id::text,later.created_at,later.action_order,later.source,later.turn_id::text
+	 FROM action_log later WHERE later.owner_id=$1 AND later.id<>$2 AND later.undone_at IS NULL
+	 AND (($3::bigint IS NOT NULL AND later.action_order>$3)
+	   OR ($3::bigint IS NULL AND (later.action_order IS NOT NULL OR later.created_at>=$4)))
+	 AND EXISTS(SELECT 1 FROM jsonb_array_elements(later.changes) l
+	   JOIN jsonb_array_elements($5::jsonb) c ON l->>'table'=c->>'table' AND l->>'id'=c->>'id')`, string(scope.OwnerID), id, order, created, changes)
+	if err != nil {
+		return err
+	}
+	type successor struct {
+		id, source string
+		created    time.Time
+		order      *int64
+		turnID     *string
+	}
+	var candidates []successor
+	for rows.Next() {
+		var next successor
+		if err = rows.Scan(&next.id, &next.created, &next.order, &next.source, &next.turnID); err != nil {
+			rows.Close()
+			return err
+		}
+		candidates = append(candidates, next)
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return err
+	}
+	ambiguous := false
+	var positions map[string]int
+	loaded := false
+	for _, next := range candidates {
+		if order != nil || next.order != nil || next.created.After(created) {
+			return workspace.ErrNewerAction
+		}
+		if source == "desk" && next.source == "desk" && turnID != nil && next.turnID != nil && *turnID == *next.turnID {
+			if !loaded {
+				positions, err = historicalActionPositions(ctx, tx, scope, *turnID)
+				if err != nil {
+					return err
+				}
+				loaded = true
+			}
+			currentPosition, currentKnown := positions[id]
+			nextPosition, nextKnown := positions[next.id]
+			if currentKnown && nextKnown {
+				if nextPosition > currentPosition {
+					return workspace.ErrNewerAction
+				}
+				continue
+			}
+		}
+		ambiguous = true
+	}
+	if ambiguous {
+		return workspace.ErrChangedSince
+	}
+	return nil
+}
+
+func historicalActionPositions(ctx context.Context, tx pgx.Tx, scope memory.Scope, turnID string) (map[string]int, error) {
+	var response []byte
+	err := tx.QueryRow(ctx, "SELECT response FROM desk_turns WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), turnID).Scan(&response)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var saved struct {
+		Turn struct {
+			Receipts []struct {
+				ActionID *string `json:"actionId"`
+			} `json:"receipts"`
+		} `json:"turn"`
+	}
+	if err = json.Unmarshal(response, &saved); err != nil {
+		return nil, nil
+	}
+	positions := map[string]int{}
+	for i, receipt := range saved.Turn.Receipts {
+		if receipt.ActionID == nil {
+			continue
+		}
+		if _, duplicate := positions[*receipt.ActionID]; duplicate {
+			return nil, nil
+		}
+		positions[*receipt.ActionID] = i
+	}
+	rows, err := tx.Query(ctx, "SELECT id::text FROM action_log WHERE owner_id=$1 AND turn_id=$2", string(scope.OwnerID), turnID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	complete := true
+	for rows.Next() {
+		var actionID string
+		if err = rows.Scan(&actionID); err != nil {
+			return nil, err
+		}
+		if _, ok := positions[actionID]; !ok {
+			complete = false
+		}
+	}
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+	if !complete {
+		return nil, nil
+	}
+	return positions, nil
+}
+
 func (s *Store) Undo(ctx context.Context, scope memory.Scope, actionID string) (workspace.State, error) {
 	var out workspace.State
 	if err := requireOwner(scope); err != nil {

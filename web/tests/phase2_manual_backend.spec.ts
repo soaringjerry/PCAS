@@ -220,7 +220,8 @@ test('real_revoke_clear_refuse_regenerate_submit', async ({ page }, info) => {
     const regenerated = await regeneratePromise
     expect(regenerated.status()).toBe(200)
     const regenerationBody = regenerated.request().postDataJSON() as { id: string; manualRecipient: unknown; prompt: string; sourceRunId: string }
-    expect(regenerationBody.manualRecipient).toEqual(run.manualRecipient)
+    expect(run.manualRecipient!.provider).toBe(target.id)
+    expect(regenerationBody.manualRecipient).toEqual({ provider: run.manualRecipient!.provider })
     expect(regenerationBody.prompt).toBe(run.prompt)
     expect(regenerationBody.id).not.toBe(run.id)
     expect(regenerationBody.sourceRunId).toBe(run.id)

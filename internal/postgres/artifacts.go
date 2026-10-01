@@ -17,10 +17,16 @@ func artifactTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, runID, thing
 	return err
 }
 
-// Promoting an idea copies its body into the task's notes. Keep the same run
-// dependencies on that new field, even if the owner already edited the body.
+// Promotion copies the body's notes and the title into both new canonical
+// title/name fields. Each copy retains its actual source block dependencies.
 func promoteArtifactsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, ideaID, taskID string) error {
 	if _, err := tx.Exec(ctx, `INSERT INTO artifact_fields(owner_id,thing_id,field,blocks) SELECT owner_id,$3,'notes',blocks FROM artifact_fields WHERE owner_id=$1 AND thing_id=$2 AND field='body' ON CONFLICT DO NOTHING`, string(scope.OwnerID), ideaID, taskID); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `INSERT INTO artifact_fields(owner_id,thing_id,field,blocks)
+ SELECT f.owner_id,$3,target.field,f.blocks FROM artifact_fields f
+ CROSS JOIN (VALUES('title'),('name')) AS target(field)
+ WHERE f.owner_id=$1 AND f.thing_id=$2 AND f.field='title' ON CONFLICT DO NOTHING`, string(scope.OwnerID), ideaID, taskID); err != nil {
 		return err
 	}
 	_, err := tx.Exec(ctx, `INSERT INTO adopted_artifacts(owner_id,run_id,thing_id,kind,artifact_id,body)
@@ -60,18 +66,18 @@ func sanitizeItemWithStoreTx(store *Store, ctx context.Context, tx pgx.Tx, scope
 	for _, f := range fields {
 		owned[f.Field] = f.Blocks
 	}
-	rows, err := tx.Query(ctx, `SELECT a.kind,a.artifact_id,a.run_id::text,r.document FROM adopted_artifacts a LEFT JOIN agent_runs r ON(r.owner_id,r.id)=(a.owner_id,a.run_id) WHERE a.owner_id=$1 AND a.thing_id=$2`, string(scope.OwnerID), item.ID)
+	rows, err := tx.Query(ctx, `SELECT a.kind,a.artifact_id,a.run_id::text,r.document,a.body FROM adopted_artifacts a LEFT JOIN agent_runs r ON(r.owner_id,r.id)=(a.owner_id,a.run_id) WHERE a.owner_id=$1 AND a.thing_id=$2`, string(scope.OwnerID), item.ID)
 	if err != nil {
 		return item, nil, err
 	}
 	type artifact struct {
-		kind, id, runID string
-		run             []byte
+		kind, id, runID, body string
+		run                   []byte
 	}
 	artifacts := []artifact{}
 	for rows.Next() {
 		var a artifact
-		if err = rows.Scan(&a.kind, &a.id, &a.runID, &a.run); err != nil {
+		if err = rows.Scan(&a.kind, &a.id, &a.runID, &a.run, &a.body); err != nil {
 			rows.Close()
 			return item, nil, err
 		}
@@ -123,6 +129,24 @@ func sanitizeItemWithStoreTx(store *Store, ctx context.Context, tx pgx.Tx, scope
 		}
 
 		used := false
+		if kind == "task" && !allowed {
+			if _, tracked := owned["name"]; !tracked && item.Name == a.body {
+				item.Name = "事项内容需要重新授权或核验"
+			}
+		}
+		// Copies can occupy name or another tracked field without sharing the
+		// legacy adoption kind. Filter every exact Run-labelled copy.
+		for field, blocks := range owned {
+			kept := []artifactBlock{}
+			for _, block := range blocks {
+				dependent := oneOf(runID, block.Runs...)
+				used = used || dependent
+				if allowed || !dependent {
+					kept = append(kept, block)
+				}
+			}
+			owned[field] = kept
+		}
 		field := kind
 		if kind == "task" {
 			field = "title"
@@ -177,6 +201,9 @@ func sanitizeItemWithStoreTx(store *Store, ctx context.Context, tx pgx.Tx, scope
 		case "task":
 			used = true
 			if !allowed {
+				if _, tracked := owned["name"]; !tracked && item.Name == item.Title {
+					item.Name = "事项内容需要重新授权或核验"
+				}
 				item.Title = "事项内容需要重新授权或核验"
 			}
 		}
@@ -207,7 +234,7 @@ func sanitizeItemWithStoreTx(store *Store, ctx context.Context, tx pgx.Tx, scope
 			blocks = kept
 		}
 		text := blockText(blocks)
-		if field == "title" && text == "" {
+		if oneOf(field, "title", "name") && text == "" {
 			text = "事项内容需要重新授权或核验"
 		}
 		setField(&item, field, text)
@@ -247,6 +274,38 @@ func purgeArtifactsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, ids []
 		item, err := getItem(ctx, tx, scope, a.Thing)
 		if err != nil {
 			return nil, err
+		}
+		fields, err := loadItemBlocksTx(ctx, tx, scope, item.ID)
+		if err != nil {
+			return nil, err
+		}
+		if a.Kind == "task" {
+			if _, tracked := fields["name"]; !tracked && item.Name == a.Body {
+				item.Name = "内容已失效"
+			}
+		}
+		for field, blocks := range fields {
+			kept := []artifactBlock{}
+			changed := false
+			for _, block := range blocks {
+				if oneOf(a.Run, block.Runs...) {
+					changed = true
+				} else {
+					kept = append(kept, block)
+				}
+			}
+			if !changed {
+				continue
+			}
+			text := blockText(kept)
+			if oneOf(field, "title", "name") && text == "" {
+				text = "内容已失效"
+				kept = []artifactBlock{{Text: text, Runs: []string{}}}
+			}
+			setField(&item, field, text)
+			if err := saveBlocksTx(ctx, tx, scope, item.ID, field, kept); err != nil {
+				return nil, err
+			}
 		}
 		field := a.Kind
 		if field == "task" {

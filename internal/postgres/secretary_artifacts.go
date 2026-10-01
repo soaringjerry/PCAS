@@ -363,7 +363,7 @@ func (s *Store) restoreActionBlocksTx(ctx context.Context, tx pgx.Tx, scope memo
 			scrubbed = true
 		}
 		text := blockText(live)
-		if field == "title" && text == "" {
+		if oneOf(field, "title", "name") && text == "" {
 			text = "内容已失效"
 			live = []artifactBlock{{Text: text, Runs: []string{}}}
 		}
@@ -430,7 +430,7 @@ func purgeSecretaryArtifactsTx(ctx context.Context, tx pgx.Tx, scope memory.Scop
 				continue
 			}
 			text := blockText(kept)
-			if field == "title" && text == "" {
+			if oneOf(field, "title", "name") && text == "" {
 				text = "内容已失效"
 				kept = []artifactBlock{{Text: text, Runs: []string{}}}
 			}
@@ -519,7 +519,7 @@ func sanitizeActionSnapshotsTx(ctx context.Context, tx pgx.Tx, scope memory.Scop
 					continue
 				}
 				text := blockText(kept)
-				if field == "title" && text == "" {
+				if oneOf(field, "title", "name") && text == "" {
 					text = "内容已失效"
 					kept = []artifactBlock{{Text: text, Runs: []string{}}}
 				}

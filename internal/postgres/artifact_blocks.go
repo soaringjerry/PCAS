@@ -22,7 +22,7 @@ func editBlocks(blocks []artifactBlock, text string) []artifactBlock {
 // Dynamic fields use stable server IDs for checks/conditions/source versions.
 // Append-only revision indexes are local to the owning item.
 func itemArtifactText(item workspace.Item) map[string]string {
-	out := map[string]string{"title": item.Title, "notes": item.Notes, "body": item.Body, "goal": item.Goal, "progress": item.Progress, "waitingFor": item.WaitingFor}
+	out := map[string]string{"title": item.Title, "name": item.Name, "notes": item.Notes, "body": item.Body, "goal": item.Goal, "progress": item.Progress, "waitingFor": item.WaitingFor}
 	if item.OwedTo != nil {
 		out["owedTo"] = item.OwedTo.Who
 	}
@@ -55,7 +55,9 @@ func setField(item *workspace.Item, field, text string) {
 	case "progress":
 		item.Progress = text
 	case "title":
-		item.Title, item.Name = text, text
+		item.Title = text
+	case "name":
+		item.Name = text
 	case "waitingFor":
 		item.WaitingFor = text
 	case "owedTo":
@@ -196,7 +198,14 @@ func adoptBlocksTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run, thin
 		blocks = append(blocks, artifactBlock{Text: "\n", Runs: []string{}})
 	}
 	blocks = append(blocks, artifactBlock{Text: body, Runs: []string{run}})
-	return saveBlocksTx(ctx, tx, scope, thing, field, blocks)
+	if err := saveBlocksTx(ctx, tx, scope, thing, field, blocks); err != nil {
+		return err
+	}
+	if kind == "task" {
+		// newItem initialized both canonical fields from this Run's line.
+		return saveBlocksTx(ctx, tx, scope, thing, "name", blocks)
+	}
+	return nil
 }
 
 // Owner-only recovery for ambiguous pre-block fields. These are deliberately

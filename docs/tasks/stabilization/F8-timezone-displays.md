@@ -21,6 +21,7 @@
 - `web/src/components/SecretaryCards.tsx`、`Marks.tsx`、`SourceSheet.tsx`、`ConnectorSettings.tsx`、`ChatGPTConnection.tsx`：仅日期/时间显示调用。
 - `web/tests/timezone.spec.ts`、`web/tests/timezone-backend.spec.ts`。
 - 报告 `docs/evaluations/2026-10-01-timezone-displays.md`。
+- 报告附件 `docs/evaluations/2026-10-01-timezone-displays/`：仅必要截图和不含秘密的简短验证记录，不提交缓存或大体积日志。
 
 其他文件只读。若有活跃入口必须改上述列表外文件，先报告协调者。未使用的 DateTimePicker 不在本次范围，不顺带重构。
 

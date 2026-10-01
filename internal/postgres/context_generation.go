@@ -15,6 +15,8 @@ import (
 // generateContext runs outside all business transactions. Adapter observation
 // independently commits the exact final request before a provider barrier.
 func (s *Store) generateContext(ctx context.Context, scope memory.Scope, operationID string, task memory.TrustedTaskContext, deps []memory.TypedDependency, entries []memory.EvidenceEntry, candidates []memory.CandidateRecord, indirect []memory.TypedDependency, system, prompt string, schema json.RawMessage) (ai.Result, memory.ContextAttempt, error) {
+	ctx, generationCancel := context.WithTimeout(ctx, 5*time.Minute)
+	defer generationCancel()
 	var attempt memory.ContextAttempt
 	var payloadHash [32]byte
 	var observerErr error
@@ -196,7 +198,8 @@ func (s *Store) recordContextUsed(ctx context.Context, scope memory.Scope, id me
 		m.Used = []memory.UsedRecord{}
 		for _, ref := range refs {
 			if !ref.ID.Valid() || ref.Version < 1 || !memory.ContextKindSupported(ref.Kind) {
-				return memory.ErrInvalid
+				m.Used = append(m.Used, memory.UsedRecord{Validation: "unknown"})
+				continue
 			}
 			validation := "absent_from_input"
 			for _, input := range m.Input {

@@ -90,6 +90,74 @@ func (s *Store) CleanupContextAttempts(ctx context.Context, now time.Time) error
 	return nil
 }
 
+// The fixed process-start cutoff excludes new executions. A live automatic
+// call has the same five-minute upper bound as the existing worker lease;
+// recovery cannot touch it until that bound expires. Manual delivery has a
+// separate state machine and is deliberately excluded. Nothing is resent.
+func (s *Store) RecoverContextAttempts(ctx context.Context, startupCutoff, now time.Time) error {
+	if startupCutoff.IsZero() || now.IsZero() {
+		return memory.ErrInvalid
+	}
+	rows, err := s.pool.Query(ctx, `SELECT DISTINCT owner_id::text FROM context_attempts WHERE observation_layer<>'manual_package' AND state IN('prepared','dispatched') AND created_at<=$1 AND execution_expires_at<=$2`, startupCutoff, now)
+	if err != nil {
+		return err
+	}
+	owners := []memory.ID{}
+	for rows.Next() {
+		var owner memory.ID
+		if err = rows.Scan(&owner); err != nil {
+			rows.Close()
+			return err
+		}
+		owners = append(owners, owner)
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return err
+	}
+	for _, owner := range owners {
+		if err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+			if err := lockContextDiagnosticsTx(ctx, tx, owner); err != nil {
+				return err
+			}
+			if _, err := tx.Exec(ctx, `UPDATE context_attempts SET state='outcome_unknown',error_code='execution_recovered_unknown',completed_at=$3 WHERE owner_id=$1 AND observation_layer<>'manual_package' AND state IN('prepared','dispatched') AND created_at<=$2 AND execution_expires_at<=$3`, string(owner), startupCutoff, now); err != nil {
+				return err
+			}
+			return recountContextMetadataTx(ctx, tx, owner)
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func loadAttemptDependenciesTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, id memory.ID) ([]memory.TypedDependency, error) {
+	rows, err := tx.Query(ctx, "SELECT dependency_id::text,dependency_version,dependency_kind,purpose,hard_scope,policy_id::text,policy_revision,scope_revision FROM attempt_typed_dependencies WHERE owner_id=$1 AND attempt_id=$2", string(scope.OwnerID), string(id))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []memory.TypedDependency{}
+	for rows.Next() {
+		var d memory.TypedDependency
+		var hard []byte
+		var policy *string
+		var revision *int
+		if err := rows.Scan(&d.Ref.ID, &d.Ref.Version, &d.Ref.Kind, &d.Purpose, &hard, &policy, &revision, &d.ScopeRevision); err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal(hard, &d.Scope); err != nil {
+			return nil, err
+		}
+		if policy != nil && revision != nil {
+			d.Authorization = &memory.AuthorizationStamp{PolicyID: memory.ID(*policy), Revision: *revision}
+		}
+		out = append(out, d)
+	}
+	return out, rows.Err()
+}
+
 func controlledContextManifest(task memory.TrustedTaskContext, id memory.ID, payload []byte, layer string, entries []memory.EvidenceEntry, candidates []memory.CandidateRecord, indirect []memory.TypedDependency) (memory.ContextManifest, error) {
 	m := memory.ContextManifest{Version: 1, AttemptID: id, Recipient: task.Recipient, Purpose: task.Purpose, Scope: task.Scope, View: task.View, Candidates: []memory.CandidateRecord{}, Input: []memory.InputRecord{}, Used: []memory.UsedRecord{}, IndirectDependencies: indirect, Coverage: coverage(), InputBytes: len(payload), InputTokens: memory.TokenCount{Method: "unknown", Model: task.Recipient.Model}, ObservationLayer: layer}
 	for _, candidate := range candidates {
@@ -170,6 +238,10 @@ func (s *Store) prepareContextAttempt(ctx context.Context, scope memory.Scope, o
 	out.CreatedAt = time.Now().UTC()
 	out.BodyExpiresAt = out.CreatedAt.Add(memory.DefaultContextBodyRetention)
 	out.MetadataExpiresAt = out.CreatedAt.Add(memory.DefaultContextMetadataRetention)
+	if layer != "manual_package" {
+		deadline := out.CreatedAt.Add(5 * time.Minute)
+		out.ExecutionExpiresAt = &deadline
+	}
 	if err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		if err := s.ensureOwner(ctx, tx, scope); err != nil {
 			return err
@@ -245,7 +317,7 @@ func (s *Store) prepareContextAttempt(ctx context.Context, scope memory.Scope, o
 		if initialBytes > memory.DefaultContextAttemptMetadataBytes-contextControlReserve {
 			return memory.ErrRecordCapacity
 		}
-		if _, err := tx.Exec(ctx, `INSERT INTO context_attempts(owner_id,id,operation_id,ordinal,state,recipient,purpose,manifest,metadata_bytes,snapshot,snapshot_state,snapshot_bytes,input_bytes,payload_hash,observation_layer,created_at,body_expires_at,metadata_expires_at) VALUES($1,$2,$3,$4,'prepared',$5,$6,$7,$8,$9,'retained',$10,$10,$11,$12,$13,$14,$15)`, string(scope.OwnerID), string(out.ID), operationID, out.Ordinal, asJSON(task.Recipient), string(task.Purpose), manifest, initialBytes, payload, len(payload), hash[:], layer, out.CreatedAt, out.BodyExpiresAt, out.MetadataExpiresAt); err != nil {
+		if _, err := tx.Exec(ctx, `INSERT INTO context_attempts(owner_id,id,operation_id,ordinal,state,recipient,purpose,manifest,metadata_bytes,snapshot,snapshot_state,snapshot_bytes,input_bytes,payload_hash,observation_layer,created_at,body_expires_at,metadata_expires_at,execution_expires_at) VALUES($1,$2,$3,$4,'prepared',$5,$6,$7,$8,$9,'retained',$10,$10,$11,$12,$13,$14,$15,$16)`, string(scope.OwnerID), string(out.ID), operationID, out.Ordinal, asJSON(task.Recipient), string(task.Purpose), manifest, initialBytes, payload, len(payload), hash[:], layer, out.CreatedAt, out.BodyExpiresAt, out.MetadataExpiresAt, out.ExecutionExpiresAt); err != nil {
 			return err
 		}
 		for _, dep := range deps {
@@ -351,7 +423,7 @@ func verifyContextAttemptTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, 
 	var state string
 	var recipient, manifest []byte
 	var expired bool
-	err := tx.QueryRow(ctx, `SELECT state,recipient,manifest,metadata_expires_at<=now() FROM context_attempts WHERE owner_id=$1 AND id=$2 FOR UPDATE`, string(scope.OwnerID), string(id)).Scan(&state, &recipient, &manifest, &expired)
+	err := tx.QueryRow(ctx, `SELECT state,recipient,manifest,metadata_expires_at<=now() OR coalesce(execution_expires_at<=clock_timestamp(),false) FROM context_attempts WHERE owner_id=$1 AND id=$2 FOR UPDATE`, string(scope.OwnerID), string(id)).Scan(&state, &recipient, &manifest, &expired)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return memory.ErrConflict
 	}
@@ -362,7 +434,7 @@ func verifyContextAttemptTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, 
 	if err = json.Unmarshal(recipient, &bound); err != nil {
 		return err
 	}
-	if expired || state == "invalidated" || bound != task.Recipient {
+	if expired || !oneOf(state, "prepared", "dispatched", "completed") || bound != task.Recipient {
 		return memory.ErrConflict
 	}
 	var m memory.ContextManifest
@@ -372,31 +444,7 @@ func verifyContextAttemptTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, 
 	if m.Scope != task.Scope || m.Purpose != task.Purpose {
 		return memory.ErrConflict
 	}
-	rows, err := tx.Query(ctx, "SELECT dependency_id::text,dependency_version,dependency_kind,purpose,hard_scope,policy_id::text,policy_revision,scope_revision FROM attempt_typed_dependencies WHERE owner_id=$1 AND attempt_id=$2", string(scope.OwnerID), string(id))
-	if err != nil {
-		return err
-	}
-	stored := []memory.TypedDependency{}
-	for rows.Next() {
-		var d memory.TypedDependency
-		var hard []byte
-		var policy *string
-		var revision *int
-		if err = rows.Scan(&d.Ref.ID, &d.Ref.Version, &d.Ref.Kind, &d.Purpose, &hard, &policy, &revision, &d.ScopeRevision); err != nil {
-			rows.Close()
-			return err
-		}
-		if err = json.Unmarshal(hard, &d.Scope); err != nil {
-			rows.Close()
-			return err
-		}
-		if policy != nil && revision != nil {
-			d.Authorization = &memory.AuthorizationStamp{PolicyID: memory.ID(*policy), Revision: *revision}
-		}
-		stored = append(stored, d)
-	}
-	err = rows.Err()
-	rows.Close()
+	stored, err := loadAttemptDependenciesTx(ctx, tx, scope, id)
 	if err != nil {
 		return err
 	}
@@ -441,14 +489,14 @@ func persistContextArtifactDependenciesTx(ctx context.Context, tx pgx.Tx, scope 
 func scanContextAttempt(row pgx.Row) (memory.ContextAttempt, error) {
 	var out memory.ContextAttempt
 	var manifest []byte
-	err := row.Scan(&out.ID, &out.OperationID, &out.Ordinal, &out.State, &out.SnapshotState, &manifest, &out.CreatedAt, &out.DispatchReservedAt, &out.DispatchedAt, &out.DeliveredAt, &out.CompletedAt, &out.ExternalReceipt, &out.InvalidationReason, &out.BodyExpiresAt, &out.MetadataExpiresAt)
+	err := row.Scan(&out.ID, &out.OperationID, &out.Ordinal, &out.State, &out.SnapshotState, &manifest, &out.CreatedAt, &out.DispatchReservedAt, &out.DispatchedAt, &out.DeliveredAt, &out.CompletedAt, &out.ExternalReceipt, &out.InvalidationReason, &out.BodyExpiresAt, &out.MetadataExpiresAt, &out.ExecutionExpiresAt)
 	if err == nil {
 		err = json.Unmarshal(manifest, &out.Manifest)
 	}
 	return out, err
 }
 
-const contextAttemptColumns = `id::text,operation_id,ordinal,state,snapshot_state,manifest,created_at,dispatch_reserved_at,dispatched_at,delivered_at,completed_at,external_receipt,invalidation_reason,body_expires_at,metadata_expires_at`
+const contextAttemptColumns = `id::text,operation_id,ordinal,state,snapshot_state,manifest,created_at,dispatch_reserved_at,dispatched_at,delivered_at,completed_at,external_receipt,invalidation_reason,body_expires_at,metadata_expires_at,execution_expires_at`
 
 func (s *Store) ContextAttempts(ctx context.Context, scope memory.Scope, operationID string) ([]memory.ContextAttempt, error) {
 	out := []memory.ContextAttempt{}
@@ -515,8 +563,39 @@ func (s *Store) ContextAttemptSnapshot(ctx context.Context, scope memory.Scope, 
 }
 
 func (s *Store) markContextAttemptDelivered(ctx context.Context, scope memory.Scope, id memory.ID) error {
+	if err := requireOwner(scope); err != nil {
+		return err
+	}
 	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-		if err := lockContextDiagnosticsTx(ctx, tx, scope.OwnerID); err != nil {
+		if _, err := tx.Exec(ctx, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(scope.OwnerID)); err != nil {
+			return err
+		}
+		var raw []byte
+		var created time.Time
+		var layer string
+		if err := tx.QueryRow(ctx, "SELECT manifest,created_at,observation_layer FROM context_attempts WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), string(id)).Scan(&raw, &created, &layer); err != nil {
+			return err
+		}
+		var m memory.ContextManifest
+		if err := json.Unmarshal(raw, &m); err != nil {
+			return err
+		}
+		if layer != "manual_package" || m.Recipient.Role != "manual" {
+			return memory.ErrInvalid
+		}
+		live, err := s.contextRecipientTx(ctx, tx, scope, m.Recipient.PrincipalID, "manual", &m.Recipient)
+		if err != nil {
+			return err
+		}
+		if live != m.Recipient {
+			return memory.ErrConflict
+		}
+		deps, err := loadAttemptDependenciesTx(ctx, tx, scope, id)
+		if err != nil {
+			return err
+		}
+		task := memory.TrustedTaskContext{OwnerID: scope.OwnerID, Recipient: live, Purpose: m.Purpose, Scope: m.Scope, View: m.View, Now: created}
+		if err := verifyContextAttemptTx(ctx, tx, scope, id, task, deps); err != nil {
 			return err
 		}
 		tag, err := tx.Exec(ctx, "UPDATE context_attempts SET delivered_at=now() WHERE owner_id=$1 AND id=$2 AND state='prepared' AND snapshot IS NOT NULL AND body_expires_at>now()", string(scope.OwnerID), string(id))

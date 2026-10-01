@@ -309,6 +309,7 @@ type ContextAttempt struct {
 	InvalidationReason string          `json:"invalidation_reason,omitempty"`
 	BodyExpiresAt      time.Time       `json:"body_expires_at"`
 	MetadataExpiresAt  time.Time       `json:"metadata_expires_at"`
+	ExecutionExpiresAt *time.Time      `json:"execution_expires_at,omitempty"`
 }
 
 type ContextInvalidationReason string

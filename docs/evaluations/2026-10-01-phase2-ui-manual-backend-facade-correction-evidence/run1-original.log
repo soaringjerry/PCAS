@@ -1,0 +1,72 @@
+
+Running 2 tests using 1 worker
+
+(node:1080807) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✘  1 tests/phase2_manual_backend.spec.ts:167:1 › real_target_package_clipboard_submit (30.1s)
+(node:1081892) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✘  2 tests/phase2_manual_backend.spec.ts:185:1 › real_revoke_clear_refuse_regenerate_submit (30.2s)
+
+
+  1) tests/phase2_manual_backend.spec.ts:167:1 › real_target_package_clipboard_submit ──────────────
+
+    Test timeout of 30000ms exceeded.
+
+    Error: locator.click: Test timeout of 30000ms exceeded.
+    Call log:
+      - waiting for locator('form').filter({ has: getByRole('textbox', { name: '本次转交请求' }) }).getByRole('button', { name: '转交接收者', exact: true })
+
+
+      104 |   const model = (await catalog.json() as { providers: { id: string; name: string; available: boolean }[] }).providers.find(provider => provider.id === target.id)
+      105 |   expect(model).toMatchObject({ id: target.id, name: target.name, available: true })
+    > 106 |   await form.getByRole('button', { name: '转交接收者', exact: true }).click()
+          |                                                                  ^
+      107 |   await page.getByRole('option', { name: new RegExp(target.name) }).click()
+      108 |   const responsePromise = page.waitForResponse(response => new URL(response.url()).pathname === '/v1/workspace/commands' && response.request().postDataJSON()?.type === 'requestRun')
+      109 |   await form.getByRole('button', { name: '建立转交请求', exact: true }).click()
+        at createThroughUI (/tmp/pcas-phase2-manual-browser-correction/web/tests/phase2_manual_backend.spec.ts:106:66)
+        at /tmp/pcas-phase2-manual-browser-correction/web/tests/phase2_manual_backend.spec.ts:171:17
+
+    Error Context: test-results/phase2-manual-backend/phase2_manual_backend-real-target-package-clipboard-submit/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/phase2-manual-backend/phase2_manual_backend-real-target-package-clipboard-submit/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/phase2-manual-backend/phase2_manual_backend-real-target-package-clipboard-submit/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) tests/phase2_manual_backend.spec.ts:185:1 › real_revoke_clear_refuse_regenerate_submit ────────
+
+    Test timeout of 30000ms exceeded.
+
+    Error: locator.click: Test timeout of 30000ms exceeded.
+    Call log:
+      - waiting for locator('form').filter({ has: getByRole('textbox', { name: '本次转交请求' }) }).getByRole('button', { name: '转交接收者', exact: true })
+
+
+      104 |   const model = (await catalog.json() as { providers: { id: string; name: string; available: boolean }[] }).providers.find(provider => provider.id === target.id)
+      105 |   expect(model).toMatchObject({ id: target.id, name: target.name, available: true })
+    > 106 |   await form.getByRole('button', { name: '转交接收者', exact: true }).click()
+          |                                                                  ^
+      107 |   await page.getByRole('option', { name: new RegExp(target.name) }).click()
+      108 |   const responsePromise = page.waitForResponse(response => new URL(response.url()).pathname === '/v1/workspace/commands' && response.request().postDataJSON()?.type === 'requestRun')
+      109 |   await form.getByRole('button', { name: '建立转交请求', exact: true }).click()
+        at createThroughUI (/tmp/pcas-phase2-manual-browser-correction/web/tests/phase2_manual_backend.spec.ts:106:66)
+        at /tmp/pcas-phase2-manual-browser-correction/web/tests/phase2_manual_backend.spec.ts:189:17
+
+    Error Context: test-results/phase2-manual-backend/phase2_manual_backend-real-6f7c4-ar-refuse-regenerate-submit/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/phase2-manual-backend/phase2_manual_backend-real-6f7c4-ar-refuse-regenerate-submit/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/phase2-manual-backend/phase2_manual_backend-real-6f7c4-ar-refuse-regenerate-submit/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2 failed
+    tests/phase2_manual_backend.spec.ts:167:1 › real_target_package_clipboard_submit ───────────────
+    tests/phase2_manual_backend.spec.ts:185:1 › real_revoke_clear_refuse_regenerate_submit ─────────

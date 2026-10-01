@@ -1,4 +1,14 @@
-# 消费者候选 web CI
+# 消费者 web CI：两个候选分别记录
+
+## 最终候选 cf3015c
+
+`cf3015cd67cf112933dfa51badbda8507de30834` 的 [web 检查](https://github.com/soaringjerry/PCAS/actions/runs/36888959215) 于 2026-10-01 16:03:03 UTC 成功，job `110459379396`。npm ci、lint、type-check、build 实际执行成功；npm 下载缓存命中不等于跳过这些命令。日志报告 0 vulnerabilities，Vite 输出仍为 `index-KRxlz-XR.js` / `index-Bn5qMKG9.css`。
+
+实际 checkout `ba946b860dea2ef81b83c2c1ec3eb5c63f4d1562` 是 GitHub PR 检查合成提交，父项 `6fd9d173a738cddf1ee9f4ed7e8bcb7b07ed1973`、`cf3015cd67cf112933dfa51badbda8507de30834`；其 tree 与本地最终候选均为 `52b5a793517add9741df26a08ca64950aa05f034`。root 只读 GitHub 对象和完整日志，不在本地运行产品或测试，未合并 main。
+
+[完整日志](cf3015c-original.log.gz) 解压 SHA256 `dd87dfb416d4e9a8fd4d70aecb41e1e5e6ef7ac86f39a7642ee8ed7ed9d13ae2`。只证明本版本 web 工程门；不替代浏览器、后端、真实模型或用户验收。
+
+## 前一候选 c8adbae
 
 `c8adbaeb5c02daa9e83f90f74c216d8cf9ee22bf` 的 [web 检查](https://github.com/soaringjerry/PCAS/actions/runs/36887421660)于 2026-10-01 15:51:21 UTC 成功；job `110454170789`，15:50:44 UTC 开始。npm ci、lint、type-check、build 均成功。本报告只表示 web 工程检查，不代表浏览器、真实模型或用户验收。
 

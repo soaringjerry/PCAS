@@ -54,6 +54,7 @@ func New(sources memory.Sources, retriever memory.Retriever, auth Authenticator,
 	mux.HandleFunc("PUT /v1/memory/sources/{id}/scope", s.authorize(s.setSourceScope))
 	mux.HandleFunc("POST /v1/memory/recall", s.authorize(s.recall))
 	mux.HandleFunc("POST /v1/memory/expand", s.authorize(s.expand))
+	mux.HandleFunc("GET /v1/workspace/runs/{id}/package", s.authorize(s.manualRunPackage))
 	s.workspaceRoutes(mux)
 	s.connectorRoutes(mux)
 	s.notifyRoutes(mux)

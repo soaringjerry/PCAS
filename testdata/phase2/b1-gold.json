@@ -17,7 +17,8 @@
         "快速记录"
       ],
       "template": "成都旅行备忘第{n}份：在地点{n}吃特色菜{n}，联系朋友{n}",
-      "claims": []
+      "claims": [],
+      "query_anchor_template": "b1needle{n:02d}"
     },
     "long_sources": {
       "count": 20,
@@ -588,5 +589,33 @@
     "seed_base": 20261001,
     "seed_step": 1,
     "failure_reports_seed": true
+  },
+  "additional_rule_checks": {
+    "P6_matched_tail": {
+      "rule": "R3",
+      "must": [
+        "命中尾部摘录中的 成都交付暗号青色灯塔7319",
+        "秘书/副手/manual 三个入口均给命中段",
+        "分段前后的资料均可召回"
+      ],
+      "must_not": [
+        "只给无关头部",
+        "长资料全文"
+      ]
+    },
+    "P10_filters": {
+      "rule": "R1/R2",
+      "must": [
+        "当前项目事实",
+        "跨项目原话",
+        "排除项只影响陈述"
+      ],
+      "must_not": [
+        "偏好陈述",
+        "不包含推测时的推测陈述",
+        "事项排除陈述",
+        "其他项目陈述"
+      ]
+    }
   }
 }

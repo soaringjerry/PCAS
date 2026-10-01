@@ -4,8 +4,8 @@
   "files": [
     {
       "file": "README.md",
-      "bytes": 5731,
-      "sha256": "a0e8624f5b9b25c67a70f5296812fcc06a319e2a71b5b82484a29ed543c6bd7a"
+      "bytes": 6411,
+      "sha256": "564f074f1680522a37de9e23461b2faf34295c2b73ab159bdbf69709ec3c9b95"
     },
     {
       "file": "actual-merge-commit.json",
@@ -152,9 +152,12 @@
       "sha256": "88df0ac385219c034371b5898354dae39bb5ad87ed9fdf69eaa677638ab4e0cb"
     },
     {
-      "file": "selected-evidence/round1-manual-normal-real-http.json",
-      "bytes": 698082,
-      "sha256": "7ece10a9506fc72fbe69615f144bba4e39dd827318dffd9a1ed04dee798b529c"
+      "file": "selected-evidence/round1-manual-normal-real-http.json.gz",
+      "bytes": 82350,
+      "sha256": "57765c0f32640a6dfa683b9a17eedb20b8c2b8232a60a36e6bcccdd27e58307f",
+      "encoding": "gzip",
+      "restored_bytes": 698082,
+      "restored_sha256": "7ece10a9506fc72fbe69615f144bba4e39dd827318dffd9a1ed04dee798b529c"
     },
     {
       "file": "selected-evidence/round1-manual-normal-two-real-packages.json",
@@ -167,14 +170,20 @@
       "sha256": "789b225e4139215507af0d81b4a9355a649e688b64d45e42e038b0948711c500"
     },
     {
-      "file": "selected-evidence/round1-manual-recovery-real-http.json",
-      "bytes": 1166377,
-      "sha256": "1ea47ce626f51e6a533203972e0602b2120da4e561a12642cdaad1f56a03a3ee"
+      "file": "selected-evidence/round1-manual-recovery-real-http.json.gz",
+      "bytes": 135508,
+      "sha256": "af7bb5cb160e96b901fbcfd165f375872ebd5dbca1410c072da8c134c2e637a8",
+      "encoding": "gzip",
+      "restored_bytes": 1166377,
+      "restored_sha256": "1ea47ce626f51e6a533203972e0602b2120da4e561a12642cdaad1f56a03a3ee"
     },
     {
-      "file": "selected-evidence/round1-manual-recovery-revoke-refuse-recover.json",
-      "bytes": 208762,
-      "sha256": "15d9d9e25c5c99bd1fd6a40b5cb70b80089b45230e4422bddb8540b7a3f8d21d"
+      "file": "selected-evidence/round1-manual-recovery-revoke-refuse-recover.json.gz",
+      "bytes": 27136,
+      "sha256": "6323d2238681a4aa96cb6d460440727714fb770feda5a257af1baad315857733",
+      "encoding": "gzip",
+      "restored_bytes": 208762,
+      "restored_sha256": "15d9d9e25c5c99bd1fd6a40b5cb70b80089b45230e4422bddb8540b7a3f8d21d"
     },
     {
       "file": "selected-evidence/round1-service-fixture.log.gz",

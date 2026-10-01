@@ -35,3 +35,11 @@ round1的manual normal/recovery在原aux shared workspace、backend/chatgpt-dire
 ## 原证据还原
 
 [artifact-index.json](artifact-index.json)包含3个原ZIP的GitHub ID/digest与实算SHA、完整97个成员文件SHA/字节、原runtimeZIP路径；ZIP完整保留 `/tmp/pcas-phase2-final-browser-ci-original`。mock两trace包含在原ZIP，原失败上下文逐字gzip留存。原全job日志/全部实际report/服务log与关键附件已归档，manifest逐文件SHA及gzip原字节SHA；`gzip -dc file.gz`还原原字节。新cf/a51档案分别独立子目录，不用后续绿覆盖本批红/0抵达/两轮绿。
+
+### 大附件无损压缩补记
+
+原6f7a5d1提交中的较大manual HTTP JSON现仅转换为gzip原字节归档；原净提交仍保历史可审。正文/计数/预期未变。对应包/clipboard附件来源仍可在原完整report及artifact member索引定位：
+
+- [round1-manual-normal-real-http.json](selected-evidence/round1-manual-normal-real-http.json.gz)；`gzip -dc`恢复原JSON。
+- [round1-manual-recovery-real-http.json](selected-evidence/round1-manual-recovery-real-http.json.gz)；`gzip -dc`恢复原JSON。
+- [round1-manual-recovery-revoke-refuse-recover.json](selected-evidence/round1-manual-recovery-revoke-refuse-recover.json.gz)；`gzip -dc`恢复原JSON。

@@ -183,6 +183,7 @@ type Run struct {
 	// these returned fields; consumers rebuild the current recipient on reads.
 	ContextTask         *memory.TrustedTaskContext `json:"contextTask,omitempty"`
 	ContextDependencies []memory.TypedDependency   `json:"contextDependencies,omitempty"`
+	ContextCandidates   []memory.CandidateRecord   `json:"contextCandidates,omitempty"`
 	ContextSourceSpans  []memory.SourceSpan        `json:"contextSourceSpans,omitempty"`
 	ContextAttemptID    memory.ID                  `json:"contextAttemptId,omitempty"`
 	ManualRecipient     *memory.Recipient          `json:"manualRecipient,omitempty"`

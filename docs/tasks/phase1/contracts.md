@@ -73,6 +73,12 @@
 
 动作 ID 不存在时返回 404 `not_found`。
 
+**2026-10-01 补充（稳定化 §3）**：再细分两种情况，都返回 409：
+- `newer_action`：同一对象后面还有没撤销的动作。提示「后面还有改动，请先撤销它」。
+- `expired`：快照已经作废（超过 30 天，或相关资料已被删除）。提示「超过 30 天或相关资料已删除，无法撤销」。
+
+`changed_since` 只用于"被用户或后台改过"。
+
 新增 sentinel error：`workspace.ErrChangedSince`、`workspace.ErrWorkStarted`、`workspace.ErrAlreadyUndone`。
 B1 负责在 `internal/httpapi/server.go` 的 `fail()` 里加上这三个映射。
 
@@ -176,6 +182,8 @@ B1 另外导出 `(s *Store) Undo(ctx, scope, actionID string) (workspace.State, 
 
 HTTP 处理函数背后是 `(s *Store) DeskTurn(ctx, scope, workspace.DeskTurnRequest) (workspace.DeskTurnResponse, error)`，C2 直接调用它。两个类型与 2.1 的 JSON 一一对应。`agentId` 为空时，使用工作区的默认 agent。
 
+**串行与长度**（2026-10-01 补充）：同一个 `conversationId` 的轮次在服务端串行处理，后一轮能看到前一轮的结果（R* 别名）。`reply` 超过 2000 字时截断，并附上「回答太长，已截断」。
+
 ### 2.2 `GET /v1/desk/turns?conversationId=<uuid>`
 
 返回 `{ "conversationId": "...", "turns": [ turn, ... ] }`，按时间排列，最多 50 轮，用于刷新后恢复对话。
@@ -201,6 +209,8 @@ HTTP 处理函数背后是 `(s *Store) DeskTurn(ctx, scope, workspace.DeskTurnRe
   - `at`：到截止时间提醒；
   - `HH:MM`：只有日期、没有具体时间时，在截止当天的这个时刻提醒。
 - 截止时间改变时，B1 按 `offset` 重算 `nextAt`；截止时间被去掉时，删除这个触发器。
+- **提醒时间已经过去**（2026-10-01 补充）：按提前量算出的提醒时间已经过去、但截止时间还没到时，在截止时间提醒；截止时间也过去了，就不设提醒，回执里写明。完成后被撤销的事项，提醒时间已经过去超过 1 小时的，不补发。
+- **夏令时**：本地时间不存在时（例如墨尔本夏令时开始那天的 02:30），顺延到切换后的同一时刻（03:30）。
 - 提醒只在设置项 `followUps` 为 true 时触发。新 owner 的默认值已经是 true（`workspace.go` 里的默认设置），不做迁移，也不改用户已有的设置。
 
 ---

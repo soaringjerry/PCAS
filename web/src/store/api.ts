@@ -8,6 +8,7 @@ const messages: Record<string, string> = {
   unauthorized: '请先登录 PCAS', version_conflict: '数据已在其他窗口或后台更新。已刷新，请检查后重试。',
   daily_budget_exceeded: '超过每日预算，可在设置中调整。', capability_not_configured: '服务尚未配置或登录，请检查设置。',
   invalid_input: '内容或状态不符合要求，请检查输入。', reimport_blocked: '这份内容已删除并阻止重新导入。',
+  invalid_timezone: '时区无法识别，请选择有效的 IANA 时区（例如 Australia/Melbourne）。',
   telegram_token_invalid: 'token 不对，请从 BotFather 重新复制',
   telegram_webhook_active: '这个 bot 设置过 webhook，请换一个 bot 或先删除 webhook',
   telegram_no_chat: '请先在 Telegram 里给你的 bot 发一句话，再保存',
@@ -18,7 +19,8 @@ const messages: Record<string, string> = {
 export async function api<T>(path: string, body?: unknown, method?: string): Promise<T> {
   const response = await fetch(path, {
     method: method ?? (body === undefined ? 'GET' : 'POST'), credentials: 'same-origin',
-    headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
+    headers: { ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
+      ...(path === '/v1/workspace' ? { 'X-PCAS-Timezone': Intl.DateTimeFormat().resolvedOptions().timeZone } : {}) },
     body: body === undefined ? undefined : JSON.stringify(body, (_key, value) => value === undefined ? null : value),
   })
   const value = await response.json().catch(() => ({}))

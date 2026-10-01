@@ -69,6 +69,9 @@ if (($#)); then
   "$@"
 else
   status=0
+  # The first-login default requires the runner's fresh workspace.
+  PLAYWRIGHT_JSON_OUTPUT_NAME=test-results/timezone.json npx playwright test tests/timezone-backend.spec.ts \
+    --output=test-results/timezone --reporter=list,json || status=1
   PLAYWRIGHT_JSON_OUTPUT_NAME=test-results/golden.json npx playwright test tests/golden.spec.ts \
     --repeat-each=3 --output=test-results/golden --reporter=list,json || status=1
   PLAYWRIGHT_JSON_OUTPUT_NAME=test-results/legacy.json npx playwright test tests/backend.spec.ts \

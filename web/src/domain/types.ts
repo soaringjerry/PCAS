@@ -273,6 +273,8 @@ export interface TrainingSample {
 
 /** How far the system may act on its own (PRD §5 主动但可控). */
 export interface Settings {
+  /** IANA zone shared by the secretary, reminders and the hall. */
+  timezone?: string
   /** Accept high-confidence captures without asking. */
   autoAccept: boolean
   /** Bring shelved ideas back when their conditions are met. */

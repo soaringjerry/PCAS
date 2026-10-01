@@ -75,6 +75,7 @@ func deliveredFor(t *testing.T, s *Store, id string) map[string]json.RawMessage 
 func TestNotifyDeliveryAndRecheck(t *testing.T) {
 	s := testStore(t)
 	scope := owner()
+	workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: asJSON(map[string]string{"timezone": "Australia/Melbourne"})})
 	now := time.Now().Add(time.Second)
 	t.Setenv("PCAS_PUBLIC_URL", "https://example.com")
 	notice := dueNotice(t, s, scope, now)
@@ -88,7 +89,15 @@ func TestNotifyDeliveryAndRecheck(t *testing.T) {
 		t.Fatal("duplicate delivery or missing receipt")
 	}
 	m := channel.calls[0]
-	if m.NoticeID != notice.ID || m.Title != notice.Title || m.URL != "https://example.com/t/"+notice.ThingID || !strings.Contains(m.Body, "CST · 截止前提醒") {
+	loc, err := time.LoadLocation("Australia/Melbourne")
+	if err != nil {
+		t.Fatal(err)
+	}
+	due, err := time.Parse(time.RFC3339, notice.DueAt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m.NoticeID != notice.ID || m.Title != notice.Title || m.URL != "https://example.com/t/"+notice.ThingID || !strings.Contains(m.Body, due.In(loc).Format("2006-01-02 15:04 MST")+" · 截止前提醒") {
 		t.Fatalf("wrong reminder message: %+v", m)
 	}
 	// Another channel completes the item after enumeration and the first send.

@@ -785,3 +785,32 @@
   }
 }
 
+
+/* The timezone prompt takes one row only when it is visible. */
+.hall:has(> .timezone-hint) { grid-template-rows: auto minmax(0, 1fr); }
+.timezone-hint {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--sep);
+  border-radius: var(--r-lg);
+  background: var(--elevated);
+  font-size: 13px;
+}
+.timezone-hint > span { flex: 1; }
+.hall:has(> .timezone-hint) .hall-today,
+.hall:has(> .timezone-hint) .hall-desk,
+.hall:has(> .timezone-hint) .hall-right { grid-row: 2; }
+.timezone-picker { width: min(360px, calc(100vw - 32px)); padding: 8px; }
+.timezone-options { max-height: 260px; overflow: auto; display: flex; flex-direction: column; margin-top: 6px; }
+.timezone-options > button { justify-content: flex-start; flex-shrink: 0; text-align: left; }
+@media (max-width: 1180px) {
+  .hall:has(> .timezone-hint) { grid-template-rows: none; grid-template-areas: "hint" "today" "desk" "right"; }
+  .timezone-hint { grid-area: hint; }
+  .hall:has(> .timezone-hint) .hall-today { grid-row: 2; }
+  .hall:has(> .timezone-hint) .hall-desk { grid-row: 3; }
+  .hall:has(> .timezone-hint) .hall-right { grid-row: 4; }
+}

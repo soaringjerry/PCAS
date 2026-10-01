@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { NotifySettings } from '../components/NotifySettings'
+import { TimezoneSettings } from '../components/TimezoneSettings'
 import { MemoryActivitySettings } from '../components/MemoryActivitySettings'
 import { ConnectorSettings } from '../components/ConnectorSettings'
 import { memoriesFor } from '../domain/agent'
@@ -71,6 +72,7 @@ export function SettingsPage() {
             后台
           </h2>
           <Sheet>
+            <TimezoneSettings />
             <div className="setting">
               <div>
                 <div className="ink">所在城市</div>

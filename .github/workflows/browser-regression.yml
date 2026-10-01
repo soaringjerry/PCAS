@@ -51,7 +51,7 @@ jobs:
           done
           cat /tmp/pcas-browser.log
           exit 1
-      - run: npx playwright test tests/secretary.spec.ts tests/fixes.spec.ts tests/notify.spec.ts tests/buttons.spec.ts
+      - run: npx playwright test tests/secretary.spec.ts tests/fixes.spec.ts tests/notify.spec.ts tests/buttons.spec.ts tests/timezone.spec.ts
         working-directory: web
       - uses: actions/upload-artifact@v4
         if: failure()

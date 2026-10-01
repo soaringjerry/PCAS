@@ -10,8 +10,9 @@ bash web/tests/support/real-backend.sh
 The runner starts its own pgvector/PostgreSQL 16 container with a 1 GiB tmpfs data
 mount, migrates it, and starts the production `pcas serve` and `pcas worker`
 binaries. It serves `web/dist`; there is no browser API interception. It runs
-`golden.spec.ts` three times without retries, then the four older backend specs
-once. Set `PCAS_GOLDEN_PORT` to change the default localhost port 18097.
+`timezone-backend.spec.ts` first on the fresh workspace, `golden.spec.ts` three
+times without retries, then the four older backend specs once. Set
+`PCAS_GOLDEN_PORT` to change the default localhost port 18097.
 
 To select a smaller run:
 

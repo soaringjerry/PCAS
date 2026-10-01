@@ -1,5 +1,5 @@
 import { isOpenTask } from './things'
-import { dayOffset, formatWhen } from './time'
+import { clockTime, dayOffset, formatWhen } from './time'
 import type { Idea, Notice, Project, Run, State, Task } from './types'
 
 // The home screen is a service hall (docs/design/principles.md): today on the
@@ -8,10 +8,6 @@ import type { Idea, Notice, Project, Run, State, Task } from './types'
 
 const HOUR = 60 * 60 * 1000
 const DAY = 24 * HOUR
-
-function hhmm(iso: string): string {
-  return new Date(iso).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })
-}
 
 function daysSince(iso: string): number {
   return Math.max(1, Math.floor((Date.now() - new Date(iso).getTime()) / DAY))
@@ -71,34 +67,35 @@ export function todayColumn(state: State): TodayColumn {
   const timeline: TodayRow[] = []
   const soon: TodayRow[] = []
   const now = Date.now()
+  const timezone = state.settings.timezone ?? 'UTC'
 
   for (const task of state.tasks) {
     if (!isOpenTask(task) || pinned.has(task.id)) continue
     const due = task.due
     const follow = task.status === 'waiting' ? followUpAt(task) : undefined
 
-    if (follow && dayOffset(follow) <= 0) {
+    if (follow && dayOffset(follow, timezone) <= 0) {
       waiting.push({ task, note: `该跟进了：${task.waitingFor ?? '对方还没回'}` })
       continue
     }
     if (task.status === 'waiting') continue
     // Anything due or scheduled today belongs on today's timeline, even once its time has passed.
-    const at = due && dayOffset(due) === 0 ? due : task.scheduled && dayOffset(task.scheduled) === 0 ? task.scheduled : undefined
+    const at = due && dayOffset(due, timezone) === 0 ? due : task.scheduled && dayOffset(task.scheduled, timezone) === 0 ? task.scheduled : undefined
     if (at) {
       const past = new Date(at).getTime() < now
       const note = task.owedTo ? `${task.owedTo.who}在等你` : at === due ? (past ? '过了截止时间' : '截止') : task.notes?.split('\n')[0] || '安排在今天'
-      timeline.push({ task, note, time: hhmm(at), at, past })
+      timeline.push({ task, note, time: clockTime(at, timezone), at, past })
       continue
     }
     if (due && new Date(due).getTime() < now) {
-      waiting.push({ task, note: `已过截止 · ${formatWhen(due)}` })
+      waiting.push({ task, note: `已过截止 · ${formatWhen(due, timezone)}` })
       continue
     }
     if (task.owedTo) {
       waiting.push({ task, note: `${task.owedTo.who}在等你 · ${daysSince(task.owedTo.since)} 天` })
       continue
     }
-    if (due && dayOffset(due) <= 3) soon.push({ task, note: `${formatWhen(due).replace(/ \d\d:\d\d$/, '')}截止` })
+    if (due && dayOffset(due, timezone) <= 3) soon.push({ task, note: `${formatWhen(due, timezone).replace(/ \d\d:\d\d$/, '')}截止` })
   }
 
   timeline.sort((a, b) => (a.at ?? '').localeCompare(b.at ?? ''))

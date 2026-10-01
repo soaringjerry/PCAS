@@ -126,7 +126,16 @@ func (s *Server) workspaceRoutes(mux *http.ServeMux) {
 	}
 	if s.options.Workspace != nil {
 		mux.HandleFunc("GET /v1/workspace", s.authorize(func(w http.ResponseWriter, r *http.Request, scope memory.Scope) {
-			out, err := s.options.Workspace.Snapshot(r.Context(), scope)
+			ctx := r.Context()
+			if zone := r.Header.Get("X-PCAS-Timezone"); zone != "" {
+				var err error
+				ctx, err = workspace.WithInitialTimezone(ctx, zone)
+				if err != nil {
+					s.fail(w, err)
+					return
+				}
+			}
+			out, err := s.options.Workspace.Snapshot(ctx, scope)
 			if err != nil {
 				s.fail(w, err)
 				return

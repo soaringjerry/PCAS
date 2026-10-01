@@ -72,6 +72,34 @@ func phase2RTDeskActionIDs(t *testing.T, run workspace.Run) []memory.ID {
 	return wire.Actions
 }
 
+func phase2RTPromptOriginIDs(t *testing.T, run workspace.Run) []memory.ID {
+	t.Helper()
+	var wire struct {
+		Actions []memory.ID `json:"contextPromptDeskActions"`
+	}
+	if err := json.Unmarshal(asJSON(run), &wire); err != nil {
+		t.Fatal(err)
+	}
+	return wire.Actions
+}
+
+func phase2RTRequireDelegatePromptOrigin(t *testing.T, run workspace.Run, out workspace.DeskTurnResponse) {
+	t.Helper()
+	var delegate memory.ID
+	for _, receipt := range out.Turn.Receipts {
+		if receipt.Op == "delegate" && receipt.Status == "done" && receipt.ActionID != nil {
+			if delegate != "" {
+				t.Fatal("ambiguous successful delegate receipts")
+			}
+			delegate = memory.ID(*receipt.ActionID)
+		}
+	}
+	ids := phase2RTPromptOriginIDs(t, run)
+	if !delegate.Valid() || len(ids) != 1 || ids[0] != delegate {
+		t.Fatal("generated Prompt origins must be exactly its real successful delegate, without create/inherited IDs", ids, delegate)
+	}
+}
+
 func phase2RTOriginDeskTurn(t *testing.T, s *Store, scope memory.Scope, capture *phase2RTCapture, source memory.Ref, path string) workspace.DeskTurnResponse {
 	t.Helper()
 	gold := phase2RTGoldRead(t)
@@ -175,12 +203,19 @@ func TestPhase2RuntimeQueuedDelegationRequiresOriginalSecretaryActions(t *testin
 			firstIDs := phase2RTOriginReceipts(t, s, scope, first, source.Ref, secretary, path)
 			complete := phase2RTDelegatedRun(t, first)
 			origins := phase2RTRequireActualOrigins(t, complete, firstIDs, nil)
+			phase2RTRequireDelegatePromptOrigin(t, complete, first)
 			if err := s.runAgentOnce(ctx); err != nil {
 				t.Fatal(err)
 			}
 			finished := phase2RTWaitRun(t, s, scope, complete.ID)
 			if finished.Status != "done" || finished.Adopted == nil || finished.Output != "D4-DERIVED-RESULT-729 "+gold.Records[0].Atoms[0] {
 				t.Fatal("D4 real completed result/adoption positive control absent", finished)
+			}
+			phase2RTRequireDelegatePromptOrigin(t, finished, first)
+			autoActionID := finished.Adopted.ActionID
+			var beforeAudit []byte
+			if err := s.pool.QueryRow(ctx, "SELECT changes FROM action_log WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), autoActionID).Scan(&beforeAudit); err != nil || !strings.Contains(string(beforeAudit), gold.Records[0].Atoms[0]) || !strings.Contains(string(beforeAudit), "D4-DERIVED-RESULT-729") {
+				t.Fatal("real autoAdopt audit before-copy positive control missing", err, string(beforeAudit))
 			}
 			attempt := phase2RTSnapshotForSource(t, s, scope, source.Ref, "deputy", complete.ID, capture.request(t, 1))
 			phase2RTDelegationLineage(t, attempt, source.Ref, deputy)
@@ -200,6 +235,7 @@ func TestPhase2RuntimeQueuedDelegationRequiresOriginalSecretaryActions(t *testin
 			secondIDs := phase2RTOriginReceipts(t, s, scope, second, source.Ref, secretary, path)
 			queued := phase2RTDelegatedRun(t, second)
 			queueOrigins := phase2RTRequireActualOrigins(t, queued, secondIDs, firstIDs)
+			phase2RTRequireDelegatePromptOrigin(t, queued, second)
 			var status string
 			if err := s.pool.QueryRow(ctx, "SELECT status FROM agent_runs WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), queued.ID).Scan(&status); err != nil || status != "queued" || capture.count() != 3 {
 				t.Fatal("D4 work was not truly queued before mutation", err, status, capture.count())
@@ -249,6 +285,21 @@ func TestPhase2RuntimeQueuedDelegationRequiresOriginalSecretaryActions(t *testin
 			if !errors.Is(err, memory.ErrConflict) && !errors.Is(err, memory.ErrForbidden) {
 				t.Fatal("completed old-origin result could be adopted or returned uncontrolled error", err)
 			}
+			var auditSource string
+			var wasUndone bool
+			var afterAudit, allAudit []byte
+			if err := s.pool.QueryRow(ctx, "SELECT source,undone_at IS NOT NULL,changes FROM action_log WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), autoActionID).Scan(&auditSource, &wasUndone, &afterAudit); err != nil || auditSource != "worker" || !wasUndone {
+				t.Fatal("scrub removed/rewrote real undone autoAdopt audit identity", err, auditSource, wasUndone, autoActionID)
+			}
+			if err := s.pool.QueryRow(ctx, "SELECT coalesce(jsonb_agg(jsonb_build_object('id',id,'changes',changes)),'[]'::jsonb) FROM action_log WHERE owner_id=$1", string(scope.OwnerID)).Scan(&allAudit); err != nil {
+				t.Fatal(err)
+			}
+			for _, atom := range []string{gold.Records[0].Atoms[0], "D4-DERIVED-RESULT-729"} {
+				if strings.Contains(string(allAudit), atom) {
+					t.Error("secretary-only revoke left derived body reachable in real undo audit copies", atom)
+				}
+			}
+			phase2RTEvidence(t, "D4-real-audit-copy-scrub", map[string]any{"auto_adopt_action_id": autoActionID, "source": auditSource, "undone": wasUndone, "before": json.RawMessage(beforeAudit), "after": json.RawMessage(afterAudit), "all_current_changes": json.RawMessage(allAudit)})
 			phase2RTEvidence(t, "D4-secretary-only-revoke", map[string]any{"path": path, "completed_run": complete.ID, "queued_run": queued.ID, "completed_origins": origins, "queued_origins": queueOrigins, "deputy_policy_still_allow": deputy.Authorization, "state": state, "queued_http_requests": capture.count() - 3})
 			capture.mu.Lock()
 			capture.Reply = string(asJSON(map[string]any{"reply": "D4-NEW-INDEPENDENT-RESULT-730", "used": []any{}}))
@@ -263,7 +314,23 @@ func TestPhase2RuntimeQueuedDelegationRequiresOriginalSecretaryActions(t *testin
 			}
 			payload := capture.request(t, 3)
 			phase2RTAtoms(t, payload, gold.Cases[0].Required, true)
-			phase2RTSnapshotForSource(t, s, scope, source.Ref, "deputy", fresh.ID, payload)
+			if strings.Contains(string(payload), "D4-DERIVED-RESULT-729") {
+				t.Error("fresh independent source question inherited old completed result marker")
+			}
+			freshAttempt := phase2RTSnapshotForSource(t, s, scope, source.Ref, "deputy", fresh.ID, payload)
+			var freshTask, freshManifest phase2RTDeskActionWire
+			if newResult.ContextTask == nil {
+				t.Fatal("fresh independent deputy lost actual trusted Task")
+			}
+			if err := json.Unmarshal(asJSON(newResult.ContextTask), &freshTask); err != nil {
+				t.Fatal(err)
+			}
+			if err := json.Unmarshal(asJSON(freshAttempt.Manifest), &freshManifest); err != nil {
+				t.Fatal(err)
+			}
+			if len(freshTask.DeskActions) != 0 || len(freshManifest.DeskActions) != 0 || len(newResult.ContextDeskActions) != 0 || len(phase2RTPromptOriginIDs(t, newResult)) != 0 {
+				t.Error("fresh independent deputy borrowed old action origins", freshTask, freshManifest, newResult.ContextDeskActions)
+			}
 		})
 	}
 }

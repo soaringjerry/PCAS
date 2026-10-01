@@ -1,0 +1,341 @@
+{
+  "create_turn": {
+    "time": "2026-10-01T15:02:23.898Z",
+    "method": "POST",
+    "path": "/v1/desk/turn",
+    "status": 200,
+    "request": {
+      "requestId": "0bb8a170-2ab9-4afd-91aa-cb3264a8981f",
+      "conversationId": "1ab11bab-cd79-405f-8868-cdb1da7f6e0f",
+      "thingId": null,
+      "text": "周五下午三点和张三对方案，算在 A 项目里",
+      "agentId": "golden"
+    },
+    "request_body_sha256": "8a7819002877c90327c16b84224056f8a1609be6a01c1f637574d7431744e6ba",
+    "response_body_sha256": "f220381198bf25dd69ea2f702696edd568fa21931bd387e553093425d4d5535d",
+    "state": {
+      "revision": 61,
+      "item_present": true,
+      "item": {
+        "id": "5b4c7bd1-f275-4994-9d3b-9eaae1d5becc",
+        "itemKind": "task",
+        "recordVersion": 2,
+        "title": "连续撤销-1790866943817",
+        "name": "连续撤销-1790866943817",
+        "status": "todo",
+        "body": "",
+        "goal": "",
+        "progress": "",
+        "projectId": "b3d8bf9e-547b-4b25-af99-ff777bd5b1fb",
+        "due": "2026-10-02T07:00:00Z",
+        "dependsOn": [],
+        "checklist": [],
+        "triggers": [
+          {
+            "offset": "-30m",
+            "id": "due-reminder",
+            "kind": "time",
+            "description": "连续撤销-1790866943817",
+            "nextAt": "2026-10-02T06:30:00Z",
+            "active": true
+          }
+        ],
+        "sources": [
+          {
+            "sourceId": "d9eaef91-78d0-42ab-ac91-c6b415abbeb5",
+            "version": 1,
+            "label": "新建：明天 15:00 连续撤销-1790866943817 · A 项目 · 14:30 提醒",
+            "at": "2026-10-01T15:02:24.182013144Z"
+          }
+        ],
+        "history": [
+          {
+            "at": "2026-10-01T15:02:24.182013144Z",
+            "by": "secretary",
+            "summary": "新建：明天 15:00 连续撤销-1790866943817 · A 项目 · 14:30 提醒"
+          }
+        ],
+        "evolution": [],
+        "conditions": [],
+        "remindersOn": true,
+        "nextSteps": [],
+        "createdAt": "2026-10-01T15:02:24.173854135Z",
+        "updatedAt": "2026-10-01T15:02:24.177368113Z"
+      },
+      "runs": []
+    },
+    "turn": {
+      "id": "27d4de1c-1994-4d31-9167-580ee2688ac7",
+      "text": "周五下午三点和张三对方案，算在 A 项目里",
+      "reply": "安排好了。",
+      "cards": [],
+      "receipts": [
+        {
+          "actionId": "9ea8bc67-d8c4-420f-8f6d-b7d1f899412c",
+          "op": "create_task",
+          "text": "已建：明天 15:00 连续撤销-1790866943817 · A 项目 · 14:30 提醒",
+          "thingId": "5b4c7bd1-f275-4994-9d3b-9eaae1d5becc",
+          "undoable": true,
+          "undone": false,
+          "status": "done"
+        }
+      ],
+      "ask": null,
+      "agent": "验收假模型",
+      "createdAt": "2026-10-01T15:02:23.967407352Z"
+    }
+  },
+  "update_turn": {
+    "time": "2026-10-01T15:02:24.319Z",
+    "method": "POST",
+    "path": "/v1/desk/turn",
+    "status": 200,
+    "request": {
+      "requestId": "c33970b5-c77c-47c5-befa-7e34c1261819",
+      "conversationId": "1ab11bab-cd79-405f-8868-cdb1da7f6e0f",
+      "thingId": null,
+      "text": "改到下周一四点",
+      "agentId": "golden"
+    },
+    "request_body_sha256": "5b2f308a01a06e664bb93c0fedb8bc4c40980472406f3e37874660dc6db4a040",
+    "response_body_sha256": "aff52d1b23c190ade26483880cd2c2f70a72ad3fc80d37a7030827a4fb00db4a",
+    "state": {
+      "revision": 63,
+      "item_present": true,
+      "item": {
+        "id": "5b4c7bd1-f275-4994-9d3b-9eaae1d5becc",
+        "itemKind": "task",
+        "recordVersion": 3,
+        "title": "连续撤销-1790866943817",
+        "name": "连续撤销-1790866943817",
+        "status": "todo",
+        "body": "",
+        "goal": "",
+        "progress": "",
+        "projectId": "b3d8bf9e-547b-4b25-af99-ff777bd5b1fb",
+        "due": "2026-10-05T08:00:00Z",
+        "dependsOn": [],
+        "checklist": [],
+        "triggers": [
+          {
+            "offset": "-30m",
+            "id": "due-reminder",
+            "kind": "time",
+            "description": "连续撤销-1790866943817",
+            "nextAt": "2026-10-05T07:30:00Z",
+            "active": true
+          }
+        ],
+        "sources": [
+          {
+            "sourceId": "d9eaef91-78d0-42ab-ac91-c6b415abbeb5",
+            "version": 1,
+            "label": "新建：明天 15:00 连续撤销-1790866943817 · A 项目 · 14:30 提醒",
+            "at": "2026-10-01T15:02:24.182013144Z"
+          },
+          {
+            "sourceId": "d9eaef91-78d0-42ab-ac91-c6b415abbeb5",
+            "version": 2,
+            "label": "更新：10 月 5 日 16:00 连续撤销-1790866943817 · A 项目 · 15:30 提醒",
+            "at": "2026-10-01T15:02:24.743557107Z"
+          }
+        ],
+        "history": [
+          {
+            "at": "2026-10-01T15:02:24.182013144Z",
+            "by": "secretary",
+            "summary": "新建：明天 15:00 连续撤销-1790866943817 · A 项目 · 14:30 提醒"
+          },
+          {
+            "at": "2026-10-01T15:02:24.743557107Z",
+            "by": "secretary",
+            "summary": "更新：10 月 5 日 16:00 连续撤销-1790866943817 · A 项目 · 15:30 提醒"
+          }
+        ],
+        "evolution": [],
+        "conditions": [],
+        "remindersOn": true,
+        "nextSteps": [],
+        "createdAt": "2026-10-01T15:02:24.173854135Z",
+        "updatedAt": "2026-10-01T15:02:24.736218168Z"
+      },
+      "runs": []
+    },
+    "turn": {
+      "id": "fe56ad13-c31a-4db2-83da-e671f52e5df7",
+      "text": "改到下周一四点",
+      "reply": "安排好了。",
+      "cards": [],
+      "receipts": [
+        {
+          "actionId": "07207f97-2fd2-49e3-9ab1-006ac3fa0d03",
+          "op": "update",
+          "text": "已改：连续撤销-1790866943817 → 10 月 5 日 16:00",
+          "thingId": "5b4c7bd1-f275-4994-9d3b-9eaae1d5becc",
+          "undoable": true,
+          "undone": false,
+          "status": "done"
+        }
+      ],
+      "ask": null,
+      "agent": "验收假模型",
+      "createdAt": "2026-10-01T15:02:24.397510673Z"
+    }
+  },
+  "undo_update": {
+    "time": "2026-10-01T15:02:25.239Z",
+    "method": "POST",
+    "path": "/v1/workspace/commands",
+    "status": 200,
+    "request": {
+      "type": "undoAction",
+      "id": "07207f97-2fd2-49e3-9ab1-006ac3fa0d03",
+      "requestId": "8b36a9f7-796d-4dce-b4be-dc725917a51e",
+      "expectedRevision": 63
+    },
+    "request_body_sha256": "543b7d2802b369396fe5af00dcbcbe53ad9430de162144b17cb2a306520f024a",
+    "response_body_sha256": "3ca595f1b9a2874741a0164f112a2b63f286eaf83bda22163381af4e6bb92d1d",
+    "state": {
+      "revision": 64,
+      "item_present": true,
+      "item": {
+        "id": "5b4c7bd1-f275-4994-9d3b-9eaae1d5becc",
+        "itemKind": "task",
+        "recordVersion": 4,
+        "title": "连续撤销-1790866943817",
+        "name": "连续撤销-1790866943817",
+        "status": "todo",
+        "body": "",
+        "goal": "",
+        "progress": "",
+        "projectId": "b3d8bf9e-547b-4b25-af99-ff777bd5b1fb",
+        "due": "2026-10-02T07:00:00Z",
+        "dependsOn": [],
+        "checklist": [],
+        "triggers": [
+          {
+            "offset": "-30m",
+            "id": "due-reminder",
+            "kind": "time",
+            "description": "连续撤销-1790866943817",
+            "nextAt": "2026-10-02T06:30:00Z",
+            "active": true
+          }
+        ],
+        "sources": [
+          {
+            "sourceId": "d9eaef91-78d0-42ab-ac91-c6b415abbeb5",
+            "version": 1,
+            "label": "新建：明天 15:00 连续撤销-1790866943817 · A 项目 · 14:30 提醒",
+            "at": "2026-10-01T15:02:24.182013144Z"
+          },
+          {
+            "sourceId": "d9eaef91-78d0-42ab-ac91-c6b415abbeb5",
+            "version": 3,
+            "label": "撤销：已改：连续撤销-1790866943817 → 10 月 5 日 16:00",
+            "at": "2026-10-01T15:02:25.26672069Z"
+          }
+        ],
+        "history": [
+          {
+            "at": "2026-10-01T15:02:24.182013144Z",
+            "by": "secretary",
+            "summary": "新建：明天 15:00 连续撤销-1790866943817 · A 项目 · 14:30 提醒"
+          },
+          {
+            "at": "2026-10-01T15:02:25.26672069Z",
+            "by": "user",
+            "summary": "撤销：已改：连续撤销-1790866943817 → 10 月 5 日 16:00"
+          }
+        ],
+        "evolution": [],
+        "conditions": [],
+        "remindersOn": true,
+        "nextSteps": [],
+        "createdAt": "2026-10-01T15:02:24.173854135Z",
+        "updatedAt": "2026-10-01T15:02:25.266718667Z"
+      },
+      "runs": []
+    }
+  },
+  "undo_create": {
+    "time": "2026-10-01T15:02:25.530Z",
+    "method": "POST",
+    "path": "/v1/workspace/commands",
+    "status": 200,
+    "request": {
+      "type": "undoAction",
+      "id": "9ea8bc67-d8c4-420f-8f6d-b7d1f899412c",
+      "requestId": "f9795496-d84e-4d5b-bf45-ff20002b11a1",
+      "expectedRevision": 64
+    },
+    "request_body_sha256": "49a3d920a6056645554b5fbcc8f286cc521f2997d36796bf372aa77a63c4939b",
+    "response_body_sha256": "696dec63dcd51c0b49cdb6662a4ea3345f0aac8b030e9044d0fd4709b9fc27bf",
+    "state": {
+      "revision": 65,
+      "item_present": false,
+      "item": null,
+      "runs": []
+    }
+  },
+  "reloaded_history": {
+    "time": "2026-10-01T15:02:25.836Z",
+    "method": "GET",
+    "path": "/v1/desk/turns",
+    "status": 200,
+    "request": null,
+    "request_body_sha256": null,
+    "response": {
+      "conversationId": "1ab11bab-cd79-405f-8868-cdb1da7f6e0f",
+      "turns": [
+        {
+          "id": "27d4de1c-1994-4d31-9167-580ee2688ac7",
+          "text": "周五下午三点和张三对方案，算在 A 项目里",
+          "reply": "安排好了。",
+          "cards": [],
+          "receipts": [
+            {
+              "actionId": "9ea8bc67-d8c4-420f-8f6d-b7d1f899412c",
+              "op": "create_task",
+              "text": "已建：明天 15:00 连续撤销-1790866943817 · A 项目 · 14:30 提醒",
+              "thingId": "5b4c7bd1-f275-4994-9d3b-9eaae1d5becc",
+              "undoable": true,
+              "undone": true,
+              "status": "done"
+            }
+          ],
+          "ask": null,
+          "agent": "验收假模型",
+          "createdAt": "2026-10-01T15:02:23.967407352Z"
+        },
+        {
+          "id": "fe56ad13-c31a-4db2-83da-e671f52e5df7",
+          "text": "改到下周一四点",
+          "reply": "（这条回答依据的记忆已变更）",
+          "cards": [],
+          "receipts": [
+            {
+              "actionId": "07207f97-2fd2-49e3-9ab1-006ac3fa0d03",
+              "op": "action",
+              "text": "这项操作已完成；相关回答内容已隐藏",
+              "thingId": null,
+              "undoable": false,
+              "undone": true,
+              "status": "done"
+            }
+          ],
+          "ask": null,
+          "agent": "验收假模型",
+          "createdAt": "2026-10-01T15:02:24.397510673Z"
+        }
+      ]
+    },
+    "response_body_sha256": "d0287f0ce7b9bd903d5ac57b0fa1f74ecc1ab7dc10f682c751e7dd29f34b7d7c"
+  },
+  "clipboard": {
+    "observed": false,
+    "reason": "F7 has no clipboard action"
+  },
+  "source_trace_sha256": "8c6e4a57b0da7f4a839c81fae64a25b66815239ab8dccd25b9e7cb24c2cdf7ca",
+  "product_asset_observations": []
+}

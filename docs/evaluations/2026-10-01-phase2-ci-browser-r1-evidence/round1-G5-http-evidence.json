@@ -1,0 +1,473 @@
+{
+  "first_call_fixture_control": {
+    "time": "2026-10-01T14:58:46.227Z",
+    "method": "POST",
+    "path": "/control",
+    "status": 200,
+    "request": {
+      "rules": [
+        {
+          "kind": "secretary",
+          "match": "拆成三步",
+          "content": "{\"reply\":\"安排好了。\",\"actions\":[{\"op\":\"delegate\",\"ref\":\"THIS\",\"kind\":\"breakdown\",\"prompt\":\"拆成三步\"}]}"
+        },
+        {
+          "kind": "assistant",
+          "match": "",
+          "status": 503,
+          "once": true
+        }
+      ],
+      "updates": []
+    },
+    "request_body_sha256": "2b09c61dd2326a3abbf54343401b4a6f5ea470f352a9e275316deb651b364b5a",
+    "response": {
+      "events": null
+    },
+    "response_body_sha256": "43c8420544d64bf34ffc0e72d605bd850da9c0222cc5c43e443394c164fc2524"
+  },
+  "desk_turn": {
+    "time": "2026-10-01T14:58:46.308Z",
+    "method": "POST",
+    "path": "/v1/desk/turn",
+    "status": 200,
+    "request": {
+      "requestId": "e7246e7c-eab9-44df-b438-01408e72983d",
+      "conversationId": "e37690d2-421b-4665-94ee-7f2ab263da60",
+      "thingId": "0f318934-8abd-4379-9b84-56893f7362bd",
+      "text": "拆成三步",
+      "agentId": "golden"
+    },
+    "request_body_sha256": "0c19fc27f611eaf1bbac794f5dd4fcf2cbcc58d0969744c9410cd838a02ad965",
+    "response_body_sha256": "3586f7adc6dd3b3801652a9db945190852ad04fb74c4903f13e47b6635fdb61a",
+    "state": {
+      "revision": 40,
+      "item_present": true,
+      "item": {
+        "id": "0f318934-8abd-4379-9b84-56893f7362bd",
+        "itemKind": "task",
+        "recordVersion": 1,
+        "title": "失败恢复-1790866726070",
+        "name": "失败恢复-1790866726070",
+        "status": "todo",
+        "body": "",
+        "goal": "",
+        "progress": "",
+        "dependsOn": [],
+        "checklist": [],
+        "triggers": [],
+        "sources": [
+          {
+            "sourceId": "f12eaf6f-e49f-474f-aaaf-25ec6d7719d6",
+            "version": 1,
+            "label": "创建",
+            "at": "2026-10-01T14:58:46.112314057Z"
+          }
+        ],
+        "history": [
+          {
+            "at": "2026-10-01T14:58:46.111901437Z",
+            "by": "user",
+            "summary": "创建"
+          },
+          {
+            "at": "2026-10-01T14:58:46.112314057Z",
+            "by": "user",
+            "summary": "创建"
+          }
+        ],
+        "evolution": [
+          {
+            "at": "2026-10-01T14:58:46.111901437Z",
+            "by": "user",
+            "summary": "提出"
+          }
+        ],
+        "conditions": [],
+        "remindersOn": true,
+        "nextSteps": [],
+        "createdAt": "2026-10-01T14:58:46.111901437Z",
+        "updatedAt": "2026-10-01T14:58:46.111901437Z"
+      },
+      "runs": [
+        {
+          "contextTask": {
+            "ownerId": "65fa7749-7b33-40bc-a5b1-970bcf8eb8c6",
+            "recipient": {
+              "principal_id": "golden",
+              "role": "deputy",
+              "model": "golden",
+              "provider": "golden",
+              "protocol": "openai",
+              "channel": "api",
+              "route_fingerprint": "fc68c88e0464c3356a6953b59e2c67e94eb0d55397c7749c2f1e862ab0b8d758"
+            },
+            "purpose": "knowledge",
+            "scope": {
+              "kind": "unscoped",
+              "include_global_constraints": false
+            },
+            "view": {
+              "mode": "continue",
+              "valid_at": "2026-10-01T14:58:46.483478677Z",
+              "known_at": "2026-10-01T14:58:46.483478677Z"
+            },
+            "now": "2026-10-01T14:58:46.483478677Z",
+            "timezone": "Asia/Shanghai",
+            "memoryBudget": {
+              "candidates": 15,
+              "edges": 15,
+              "tokens": 4000,
+              "hops": 1
+            },
+            "totalInputTokens": 8000,
+            "desk_actions": [
+              "301f3863-20a2-4a1c-8778-e20098e972e8",
+              "39448c8f-6127-42d1-ae41-773913dc2733",
+              "4082f889-6ffb-4969-947d-7be89a086081",
+              "734ebcd6-b974-4563-b549-13b19ef5129b",
+              "8bdfb564-9db0-4d25-9acd-0f9d6fac244d"
+            ]
+          },
+          "contextDeskActions": [
+            "301f3863-20a2-4a1c-8778-e20098e972e8",
+            "39448c8f-6127-42d1-ae41-773913dc2733",
+            "4082f889-6ffb-4969-947d-7be89a086081",
+            "734ebcd6-b974-4563-b549-13b19ef5129b",
+            "8bdfb564-9db0-4d25-9acd-0f9d6fac244d"
+          ],
+          "contextPromptDeskActions": [
+            "301f3863-20a2-4a1c-8778-e20098e972e8"
+          ],
+          "contextIndirectDependencies": [],
+          "id": "7a611551-78e1-4432-adfa-da43fe218118",
+          "thingId": "0f318934-8abd-4379-9b84-56893f7362bd",
+          "agentId": "golden",
+          "kind": "breakdown",
+          "prompt": "拆成三步",
+          "brief": "事项：失败恢复-1790866726070\n当前状态：todo\n说明：\n\n目标：\n进度：\n\n本次请求：拆成三步",
+          "contextMemoryIds": [],
+          "contextVersions": [],
+          "status": "running",
+          "staleContext": false,
+          "cost": 0,
+          "createdAt": "2026-10-01T14:58:46.530471353Z"
+        }
+      ]
+    },
+    "turn": {
+      "id": "357c88a8-b2b1-4020-80f2-a9c228f56b7d",
+      "text": "拆成三步",
+      "reply": "安排好了。",
+      "cards": [],
+      "receipts": [
+        {
+          "actionId": "301f3863-20a2-4a1c-8778-e20098e972e8",
+          "op": "delegate",
+          "text": "交给 验收假模型：拆成三步",
+          "thingId": "0f318934-8abd-4379-9b84-56893f7362bd",
+          "undoable": true,
+          "undone": false,
+          "status": "done"
+        }
+      ],
+      "ask": null,
+      "agent": "验收假模型",
+      "createdAt": "2026-10-01T14:58:46.358742363Z"
+    }
+  },
+  "first_failed_state": {
+    "time": "2026-10-01T14:58:49.213Z",
+    "method": "GET",
+    "path": "/v1/workspace",
+    "status": 200,
+    "request": null,
+    "request_body_sha256": null,
+    "response_body_sha256": "3a15223af22a7e87e71285c1c02690dbf9ba56b268ca1bf2d9193670c8f4e784",
+    "state": {
+      "revision": 42,
+      "item_present": true,
+      "item": {
+        "id": "0f318934-8abd-4379-9b84-56893f7362bd",
+        "itemKind": "task",
+        "recordVersion": 1,
+        "title": "失败恢复-1790866726070",
+        "name": "失败恢复-1790866726070",
+        "status": "todo",
+        "body": "",
+        "goal": "",
+        "progress": "",
+        "dependsOn": [],
+        "checklist": [],
+        "triggers": [],
+        "sources": [
+          {
+            "sourceId": "f12eaf6f-e49f-474f-aaaf-25ec6d7719d6",
+            "version": 1,
+            "label": "创建",
+            "at": "2026-10-01T14:58:46.112314057Z"
+          }
+        ],
+        "history": [
+          {
+            "at": "2026-10-01T14:58:46.111901437Z",
+            "by": "user",
+            "summary": "创建"
+          },
+          {
+            "at": "2026-10-01T14:58:46.112314057Z",
+            "by": "user",
+            "summary": "创建"
+          }
+        ],
+        "evolution": [
+          {
+            "at": "2026-10-01T14:58:46.111901437Z",
+            "by": "user",
+            "summary": "提出"
+          }
+        ],
+        "conditions": [],
+        "remindersOn": true,
+        "nextSteps": [],
+        "createdAt": "2026-10-01T14:58:46.111901437Z",
+        "updatedAt": "2026-10-01T14:58:46.111901437Z"
+      },
+      "runs": [
+        {
+          "contextTask": {
+            "ownerId": "65fa7749-7b33-40bc-a5b1-970bcf8eb8c6",
+            "recipient": {
+              "principal_id": "golden",
+              "role": "deputy",
+              "model": "golden",
+              "provider": "golden",
+              "protocol": "openai",
+              "channel": "api",
+              "route_fingerprint": "fc68c88e0464c3356a6953b59e2c67e94eb0d55397c7749c2f1e862ab0b8d758"
+            },
+            "purpose": "knowledge",
+            "scope": {
+              "kind": "unscoped",
+              "include_global_constraints": false
+            },
+            "view": {
+              "mode": "continue",
+              "valid_at": "2026-10-01T14:58:46.483478677Z",
+              "known_at": "2026-10-01T14:58:46.483478677Z"
+            },
+            "now": "2026-10-01T14:58:46.483478677Z",
+            "timezone": "Asia/Shanghai",
+            "memoryBudget": {
+              "candidates": 15,
+              "edges": 15,
+              "tokens": 4000,
+              "hops": 1
+            },
+            "totalInputTokens": 8000,
+            "desk_actions": [
+              "301f3863-20a2-4a1c-8778-e20098e972e8",
+              "39448c8f-6127-42d1-ae41-773913dc2733",
+              "4082f889-6ffb-4969-947d-7be89a086081",
+              "734ebcd6-b974-4563-b549-13b19ef5129b",
+              "8bdfb564-9db0-4d25-9acd-0f9d6fac244d"
+            ]
+          },
+          "contextDeskActions": [
+            "301f3863-20a2-4a1c-8778-e20098e972e8",
+            "39448c8f-6127-42d1-ae41-773913dc2733",
+            "4082f889-6ffb-4969-947d-7be89a086081",
+            "734ebcd6-b974-4563-b549-13b19ef5129b",
+            "8bdfb564-9db0-4d25-9acd-0f9d6fac244d"
+          ],
+          "contextPromptDeskActions": [
+            "301f3863-20a2-4a1c-8778-e20098e972e8"
+          ],
+          "contextIndirectDependencies": [],
+          "contextAttemptId": "955c583e-1025-4ac2-a1eb-7cbaac8f6565",
+          "id": "7a611551-78e1-4432-adfa-da43fe218118",
+          "thingId": "0f318934-8abd-4379-9b84-56893f7362bd",
+          "agentId": "golden",
+          "kind": "breakdown",
+          "prompt": "拆成三步",
+          "brief": "事项：失败恢复-1790866726070\n当前状态：todo\n说明：\n\n目标：\n进度：\n\n本次请求：拆成三步",
+          "contextMemoryIds": [],
+          "contextVersions": [],
+          "status": "failed",
+          "error": "模型调用未完成，结果和用量可能未确认；请检查登录、额度与服务配置",
+          "staleContext": false,
+          "cost": 0,
+          "createdAt": "2026-10-01T14:58:46.530471353Z",
+          "finishedAt": "2026-10-01T14:58:47.465259638Z"
+        }
+      ]
+    }
+  },
+  "actual_retry": {
+    "time": "2026-10-01T14:58:49.457Z",
+    "method": "POST",
+    "path": "/v1/workspace/commands",
+    "status": 400,
+    "request": {
+      "type": "requestRun",
+      "id": "4606689c-ab49-4543-b802-b87d53b502f1",
+      "thingId": "0f318934-8abd-4379-9b84-56893f7362bd",
+      "agentId": "golden",
+      "kind": "breakdown",
+      "prompt": "拆成三步",
+      "manualRecipient": {
+        "principal_id": "golden",
+        "role": "deputy",
+        "model": "golden",
+        "provider": "golden",
+        "protocol": "openai",
+        "channel": "api",
+        "route_fingerprint": "fc68c88e0464c3356a6953b59e2c67e94eb0d55397c7749c2f1e862ab0b8d758"
+      },
+      "requestId": "c23ed021-4495-4e61-822c-531224557c70",
+      "expectedRevision": 42
+    },
+    "request_body_sha256": "b7a14befd667d9eeaf832e57b0a9ac69be3847e4f179522c8838836c6e5a387c",
+    "response_body_sha256": "521ae7ef95afcb2f14e65d170d3f30a8ead6fe8e3b2445544ed3fef0efc5cf2b",
+    "response": {
+      "error": "invalid_input"
+    }
+  },
+  "last_state": {
+    "time": "2026-10-01T14:59:07.213Z",
+    "method": "GET",
+    "path": "/v1/workspace",
+    "status": 200,
+    "request": null,
+    "request_body_sha256": null,
+    "response_body_sha256": "9871c28a0b3b9009725e26842ed6eea51c0e585e41a08b0963cc67319793f2be",
+    "state": {
+      "revision": 43,
+      "item_present": true,
+      "item": {
+        "id": "0f318934-8abd-4379-9b84-56893f7362bd",
+        "itemKind": "task",
+        "recordVersion": 1,
+        "title": "失败恢复-1790866726070",
+        "name": "失败恢复-1790866726070",
+        "status": "todo",
+        "body": "",
+        "goal": "",
+        "progress": "",
+        "dependsOn": [],
+        "checklist": [],
+        "triggers": [],
+        "sources": [
+          {
+            "sourceId": "f12eaf6f-e49f-474f-aaaf-25ec6d7719d6",
+            "version": 1,
+            "label": "创建",
+            "at": "2026-10-01T14:58:46.112314057Z"
+          }
+        ],
+        "history": [
+          {
+            "at": "2026-10-01T14:58:46.111901437Z",
+            "by": "user",
+            "summary": "创建"
+          },
+          {
+            "at": "2026-10-01T14:58:46.112314057Z",
+            "by": "user",
+            "summary": "创建"
+          }
+        ],
+        "evolution": [
+          {
+            "at": "2026-10-01T14:58:46.111901437Z",
+            "by": "user",
+            "summary": "提出"
+          }
+        ],
+        "conditions": [],
+        "remindersOn": true,
+        "nextSteps": [],
+        "createdAt": "2026-10-01T14:58:46.111901437Z",
+        "updatedAt": "2026-10-01T14:58:46.111901437Z"
+      },
+      "runs": [
+        {
+          "contextTask": {
+            "ownerId": "65fa7749-7b33-40bc-a5b1-970bcf8eb8c6",
+            "recipient": {
+              "principal_id": "golden",
+              "role": "deputy",
+              "model": "golden",
+              "provider": "golden",
+              "protocol": "openai",
+              "channel": "api",
+              "route_fingerprint": "fc68c88e0464c3356a6953b59e2c67e94eb0d55397c7749c2f1e862ab0b8d758"
+            },
+            "purpose": "knowledge",
+            "scope": {
+              "kind": "unscoped",
+              "include_global_constraints": false
+            },
+            "view": {
+              "mode": "continue",
+              "valid_at": "2026-10-01T14:58:46.483478677Z",
+              "known_at": "2026-10-01T14:58:46.483478677Z"
+            },
+            "now": "2026-10-01T14:58:46.483478677Z",
+            "timezone": "Asia/Shanghai",
+            "memoryBudget": {
+              "candidates": 15,
+              "edges": 15,
+              "tokens": 4000,
+              "hops": 1
+            },
+            "totalInputTokens": 8000,
+            "desk_actions": [
+              "301f3863-20a2-4a1c-8778-e20098e972e8",
+              "39448c8f-6127-42d1-ae41-773913dc2733",
+              "4082f889-6ffb-4969-947d-7be89a086081",
+              "734ebcd6-b974-4563-b549-13b19ef5129b",
+              "8bdfb564-9db0-4d25-9acd-0f9d6fac244d"
+            ]
+          },
+          "contextDeskActions": [
+            "301f3863-20a2-4a1c-8778-e20098e972e8",
+            "39448c8f-6127-42d1-ae41-773913dc2733",
+            "4082f889-6ffb-4969-947d-7be89a086081",
+            "734ebcd6-b974-4563-b549-13b19ef5129b",
+            "8bdfb564-9db0-4d25-9acd-0f9d6fac244d"
+          ],
+          "contextPromptDeskActions": [
+            "301f3863-20a2-4a1c-8778-e20098e972e8"
+          ],
+          "contextIndirectDependencies": [],
+          "contextAttemptId": "955c583e-1025-4ac2-a1eb-7cbaac8f6565",
+          "id": "7a611551-78e1-4432-adfa-da43fe218118",
+          "thingId": "0f318934-8abd-4379-9b84-56893f7362bd",
+          "agentId": "golden",
+          "kind": "breakdown",
+          "prompt": "拆成三步",
+          "brief": "事项：失败恢复-1790866726070\n当前状态：todo\n说明：\n\n目标：\n进度：\n\n本次请求：拆成三步",
+          "contextMemoryIds": [],
+          "contextVersions": [],
+          "status": "failed",
+          "error": "模型调用未完成，结果和用量可能未确认；请检查登录、额度与服务配置",
+          "staleContext": false,
+          "cost": 0,
+          "createdAt": "2026-10-01T14:58:46.530471353Z",
+          "finishedAt": "2026-10-01T14:58:47.465259638Z"
+        }
+      ]
+    }
+  },
+  "model_event_count": {
+    "observed": null,
+    "reason": "original test fails before events() count assertion; artifact does not include later /control GET events"
+  },
+  "clipboard": {
+    "observed": false,
+    "reason": "G5 has no clipboard action"
+  },
+  "source_trace_sha256": "f955fdef754b8b3cff848ffe6c3e2634f0dc47b1a914ed3b08cd359f9d52cd85",
+  "product_asset_observations": []
+}

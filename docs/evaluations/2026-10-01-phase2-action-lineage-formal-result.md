@@ -46,3 +46,5 @@ exit 1; package time 29.652s
 这是本两顶层真实 Store/合成 HTTP 测试的证据，不代表真实第三方模型内部上下文、外部 manual 接收或手机结果。
 
 原完整日志 `2026-10-01-phase2-action-lineage-formal-run1-original.log` 与 `2026-10-01-phase2-action-lineage-formal-evidence/` 中完整生成/HTTP/Task/manifest、包、ownerstate、origin/audit JSON一并保留。model是本地fake，材料均合成，未记录真实账号凭证，未触碰旧 checkout/部署。
+
+为缩小 PR 文本差异，上述原日志与全部 JSON 现按原路径打入[完整证据压缩包](2026-10-01-phase2-action-lineage-formal-evidence.tar.gz)。归档前后逐文件字节、SHA256 均核对相同；[文件清单、压缩包校验值及还原命令](2026-10-01-phase2-action-lineage-formal-evidence-index.json)随包保存。原失败计数、内容、预期和门槛未变；解压可恢复上述全部路径。

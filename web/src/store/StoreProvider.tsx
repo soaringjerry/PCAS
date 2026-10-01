@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import type { State } from '../domain/types'
+import type { ManualRunPackage, State } from '../domain/types'
 import { StoreContext, type RunRequest, type UndoOutcome } from './context'
 import type { Action } from './actions'
 import { api, APIError } from './api'
@@ -99,6 +99,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const id = crypto.randomUUID()
     return (await command({ type: 'requestRun', id, ...request }, crypto.randomUUID())).ok ? id : undefined
   }, [command])
+  const manualPackage = useCallback(async (runId: string) => {
+    const revision = stateRef.current?.revision
+    const original = stateRef.current?.runs.find((r) => r.id === runId)
+    const binding = JSON.stringify([original?.manualRecipient, original?.contextTask])
+    const result = await api<ManualRunPackage>(`/v1/workspace/runs/${encodeURIComponent(runId)}/package`, undefined, 'GET', 'no-store')
+    const current = stateRef.current
+    const run = current?.runs.find((r) => r.id === runId)
+    if (current?.revision !== revision || !run || run.staleContext || run.status !== 'waiting' || JSON.stringify([run.manualRecipient, run.contextTask]) !== binding || result.run_id !== runId || !result.attempt.delivered_at) {
+      throw new Error('资料或状态已变化，请重新生成交接内容。')
+    }
+    return result
+  }, [])
   const importText = useCallback(async (title: string, text: string) => {
     try {
       await api('/v1/memory/sources', { connector: 'file-import', external_id: crypto.randomUUID(), external_version: '1', title, text, media_type: 'text/plain' })
@@ -113,7 +125,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       await refresh(); setError(''); return true
     } catch (e) { fail(e); return false }
   }, [fail, refresh])
-  const value = useMemo(() => state ? ({ state, dispatch, dispatchUndoable, undo, tryUndo, applyState: accept, runAgent, importText, importAttachment, refresh }) : null, [state, dispatch, dispatchUndoable, undo, tryUndo, accept, runAgent, importText, importAttachment, refresh])
+  const value = useMemo(() => state ? ({ state, dispatch, dispatchUndoable, undo, tryUndo, applyState: accept, runAgent, manualPackage, importText, importAttachment, refresh }) : null, [state, dispatch, dispatchUndoable, undo, tryUndo, accept, runAgent, manualPackage, importText, importAttachment, refresh])
   const toastApi = useMemo<ToastApi>(() => ({ show: showToast }), [showToast])
 
   if (loading) return <main className="gate"><div className="gate-card gate-loading" role="status"><Logo /><Spinner size={16} /><span className="muted">正在连接 PCAS…</span></div></main>

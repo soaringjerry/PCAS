@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { Check, ChevronLeft, Copy, Ellipsis, FileText, Lightbulb, Pencil, Plus, Sparkles, X } from 'lucide-react'
-import { Popover } from '../components/controls'
+import { Popover, Select } from '../components/controls'
 import { SaveMark, type SaveState } from '../components/ui'
 import { Markdown } from '../components/Markdown'
 import { Secretary } from '../components/Secretary'
@@ -612,6 +612,8 @@ function adoptedLine(thing: Thing, run: Run): string {
 
 function failureText(run: Run): string {
   const error = (run.error ?? run.output ?? '').toLowerCase()
+  if (run.providerError?.code === 'record_capacity') return '这次资料量或记录容量已达上限'
+  if (run.providerError?.code === 'context_changed') return '资料、授权或接收者已变化'
   if (error.includes('budget')) return '超过今天的额度'
   if (error.includes('timeout') || error.includes('deadline')) return '等太久没回应'
   if (error.includes('unavailable') || error.includes('not configured')) return '这个副手现在连不上'
@@ -638,49 +640,130 @@ function useBusy(): [boolean, (work: () => Promise<unknown>) => Promise<void>] {
   ]
 }
 
+/** A different destination creates a new run; the server constructs its route. */
+function ManualRequest({ thingId, initialRun, label = '手动转交' }: { thingId: string; initialRun?: Run; label?: string }) {
+  const { state, runAgent } = useStore()
+  const toast = useToast()
+  const [open, setOpen] = useState(false)
+  const [providers, setProviders] = useState<{ id: string; name: string; protocol: string; model: string; available: boolean; embedding?: boolean; transcription?: boolean }[]>([])
+  const [error, setError] = useState('')
+  const [provider, setProvider] = useState('')
+  const [prompt, setPrompt] = useState(initialRun?.prompt ?? '')
+  const [kind, setKind] = useState<Run['kind']>(initialRun?.kind ?? 'ask')
+  const [busy, guard] = useBusy()
+  useEffect(() => {
+    if (!open) return
+    let alive = true
+    void api<{ providers: typeof providers }>('/v1/models', undefined, 'GET', 'no-store').then(
+      (result) => { if (alive) { setProviders(result.providers); setError('') } },
+      (e) => { if (alive) setError(e instanceof Error ? e.message : '接收者暂时无法读取，请重新打开重试。') },
+    )
+    return () => { alive = false }
+  }, [open])
+  const manual = state.agents.find((a) => a.enabled && a.channel === 'manual')
+  // Workspace agents exclude embedding and transcription configurations too.
+  const targets = providers.filter((p) => p.available && p.model?.trim() && !p.embedding && !p.transcription &&
+    ['openai', 'responses', 'anthropic', 'codex', 'siwc'].includes(p.protocol) &&
+    state.agents.some((a) => a.id === p.id && a.channel !== 'manual' && a.enabled && a.available))
+  const selected = targets.find((p) => p.id === provider)
+  return <div className="stack-sm">
+    <button type="button" className="link-btn" aria-expanded={open} onClick={() => setOpen((v) => !v)}>{open ? '收起转交请求' : label}</button>
+    {open && <form className="card stack-sm" onSubmit={(e) => {
+      e.preventDefault()
+      if (!manual || !selected || !prompt.trim()) return
+      void guard(async () => {
+        if (await runAgent({ thingId, agentId: manual.id, kind, prompt: prompt.trim(), manualRecipient: { provider: selected.id } })) {
+          setOpen(false)
+          toast.show('已建立新的转交请求，请预览或复制交接内容')
+        }
+      })
+    }}>
+      <p className="small muted">选择你要转交给谁，再说这次想让它做什么。更换接收者会建立新的请求。</p>
+      <Select value={provider} label="转交接收者" placeholder="选择接收者" disabled={busy || !manual || targets.length === 0}
+        options={targets.map((p) => ({ value: p.id, label: p.name || state.agents.find((a) => a.id === p.id)?.name || '已配置的接收者', hint: p.model }))} onChange={setProvider} />
+      <Select value={kind} label="回答用途" disabled={busy} onChange={setKind} options={[
+        { value: 'ask', label: '回答问题' }, { value: 'draft', label: '写一份草稿' }, { value: 'plan', label: '做个计划' },
+        { value: 'breakdown', label: '拆成步骤' }, { value: 'summary', label: '总结一下' },
+      ]} />
+      <textarea className="textarea" aria-label="本次转交请求" placeholder="这次想让它做什么？" value={prompt} onChange={(e) => setPrompt(e.target.value)} rows={3} disabled={busy} />
+      {error && <p className="small" role="alert">{error}</p>}
+      {!manual && <p className="small muted">请先在<Link to="/settings">设置</Link>中启用手动交接。</p>}
+      {manual && !error && targets.length === 0 && <p className="small muted">暂无可用的文字生成接收者，请检查<Link to="/settings">模型配置</Link>。</p>}
+      <div className="row"><button type="submit" className="btn btn-primary btn-sm" disabled={busy || !manual || !selected || !prompt.trim()}>{busy ? '正在建立…' : '建立转交请求'}</button></div>
+    </form>}
+  </div>
+}
+
+function originalManualRecipient(run: Run) {
+  return run.manualRecipient ?? run.contextTask?.recipient
+}
+
 function Handoff({ run }: { run: Run }) {
-  const { dispatch } = useStore()
+  const { state, dispatch, manualPackage, runAgent } = useStore()
   const toast = useToast()
   const [pasted, setPasted] = useState('')
-  const [brief, setBrief] = useState(false)
+  const [preview, setPreview] = useState<{ text: string; revision: number }>()
+  const [notice, setNotice] = useState('')
+  const [failed, setFailed] = useState(false)
   const [busy, guard] = useBusy()
-  return (
-    <div className="act-detail stack-sm">
-      {run.staleContext && <p className="small muted">记忆或授权已经变化，请重新生成交接内容。</p>}
-      <p className="small muted">这个副手要你手动转交：复制下面的内容发给它，再把回答贴回来。保存后，回答会自动放进这件事（子任务、文档或说明）。</p>
-      <div className="row">
-        <button
-          type="button"
-          className="btn btn-sm"
-          disabled={run.staleContext}
-          onClick={() => {
-            void navigator.clipboard?.writeText(run.brief).then(
-              () => toast.show('复制好了'),
-              () => toast.show('复制失败，可以展开手动选'),
-            )
-          }}
-        >
-          <Copy size={14} />
-          复制给它的内容
-        </button>
-        <button type="button" className="link-btn" onClick={() => setBrief((v) => !v)}>
-          {brief ? '收起' : '看一眼'}
-        </button>
-      </div>
-      {brief && <pre className="act-brief">{run.brief}</pre>}
-      <textarea className="textarea" value={pasted} onChange={(e) => setPasted(e.target.value)} placeholder="把它的回答贴在这里" aria-label="贴回回答" style={{ minHeight: 120 }} />
-      <div className="row">
-        <button
-          type="button"
-          className="btn btn-primary btn-sm"
-          disabled={!pasted.trim() || run.staleContext || busy}
-          onClick={() => guard(() => dispatch({ type: 'pasteRunResult', id: run.id, output: pasted.trim() }))}
-        >
-          保存并加入这件事
-        </button>
-      </div>
+  const generation = useRef(0)
+  useEffect(() => {
+    const epoch = ++generation.current
+    // Release transient content even when hidden after a workspace change.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setPreview(undefined)
+    setNotice('')
+    return () => { generation.current = epoch + 1 }
+  }, [state.revision, run.staleContext, run.status, run.manualRecipient?.provider, run.contextTask?.recipient.route_fingerprint])
+  const recipient = originalManualRecipient(run)
+  const target = state.agents.find((a) => a.id === recipient?.provider)?.name ?? '原先选择的接收者'
+  const obtain = (copy: boolean) => guard(async () => {
+    const mine = generation.current
+    setPreview(undefined)
+    setNotice('')
+    try {
+      const result = await manualPackage(run.id)
+      if (mine !== generation.current) return
+      if (copy) {
+        if (!navigator.clipboard) throw new Error('浏览器无法复制，请预览后手动选择内容。')
+        await navigator.clipboard.writeText(result.package)
+        if (mine !== generation.current) return
+        setNotice('已复制；PCAS 已交付交接内容，外部接收仍未知。')
+        toast.show('已复制，尚无外部接收回执')
+      } else {
+        setPreview({ text: result.package, revision: state.revision })
+        setNotice('PCAS 已交付本次交接内容；外部接收仍未知。')
+      }
+      setFailed(false)
+    } catch (e) {
+      if (mine !== generation.current) return
+      setFailed(true)
+      setNotice(`${e instanceof Error ? e.message : '交接内容暂时无法取得。'} 请重新生成后再转交。`)
+    }
+  })
+  return <div className="act-detail stack-sm">
+    <p className="small muted">转交给：{target}。复制交接内容发给它，再把回答贴回来；保存后会加入这件事。PCAS 无法确认外部是否收到。</p>
+    {run.staleContext && <p className="small muted" role="alert">资料、授权或接收者已经变化，请重新生成交接内容。</p>}
+    <div className="row">
+      <button type="button" className="btn btn-sm" disabled={run.staleContext || busy} onClick={() => obtain(true)}><Copy size={14} />复制给它的内容</button>
+      <button type="button" className="link-btn" aria-expanded={!!preview && preview.revision === state.revision} disabled={run.staleContext || busy}
+        onClick={() => preview ? setPreview(undefined) : void obtain(false)}>{preview ? '收起' : '预览交接内容'}</button>
     </div>
-  )
+    {preview && preview.revision === state.revision && !run.staleContext && <pre className="act-brief">{preview.text}</pre>}
+    {notice && <p className="small muted" role={failed ? 'alert' : 'status'}>{notice}</p>}
+    {(failed || run.staleContext) && recipient && <button type="button" className="link-btn" disabled={busy} onClick={() => guard(async () => {
+      if (await runAgent({ thingId: run.thingId, agentId: run.agentId, kind: run.kind, prompt: run.prompt, manualRecipient: recipient })) toast.show('已建立同一接收者的新请求')
+    })}>向原接收者重新生成</button>}
+    <ManualRequest thingId={run.thingId} initialRun={run} label={recipient ? '换接收者，建立新请求' : '选择接收者，建立新请求'} />
+    <textarea className="textarea" value={pasted} onChange={(e) => setPasted(e.target.value)} placeholder="把它的回答贴在这里" aria-label="贴回回答" style={{ minHeight: 120 }} />
+    <div className="row"><button type="button" className="btn btn-primary btn-sm" disabled={!pasted.trim() || run.staleContext || busy} onClick={() => guard(async () => {
+      if (!await dispatch({ type: 'pasteRunResult', id: run.id, output: pasted.trim() })) {
+        setPreview(undefined)
+        setFailed(true)
+        setNotice('回答没有保存或加入这件事。请重新生成交接内容，再转交并贴回新回答。')
+      }
+    })}>保存并加入这件事</button></div>
+  </div>
 }
 
 function RunRow({ thing, run }: { thing: Thing; run: Run }) {
@@ -697,12 +780,12 @@ function RunRow({ thing, run }: { thing: Thing; run: Run }) {
     </span>
   )
   const when = <span className="act-when">{formatAgo(run.finishedAt ?? run.createdAt, state.settings.timezone ?? 'UTC')}</span>
-  const look = run.output && (
+  const look = !run.staleContext && run.output && (
     <button type="button" className="act-btn" aria-expanded={shown} onClick={() => setShown((v) => !v)}>
       {shown ? '收起' : '看结果'}
     </button>
   )
-  const output = shown && run.output && (
+  const output = shown && !run.staleContext && run.output && (
     <div className="act-detail">
       <Markdown text={run.output} />
     </div>
@@ -714,7 +797,7 @@ function RunRow({ thing, run }: { thing: Thing; run: Run }) {
       <li className="card act-run">
         <div className="act-line">
           {who}
-          <span className="act-text">{adoptedLine(thing, run)}</span>
+          <span className="act-text">{run.staleContext ? '以前已保存；依据或接收者已变化' : adoptedLine(thing, run)}</span>
           {actionId && (
             <button type="button" className="act-btn" disabled={busy} onClick={() => guard(() => undo(actionId))}>
               撤销
@@ -764,7 +847,7 @@ function RunRow({ thing, run }: { thing: Thing; run: Run }) {
 
   if (run.status === 'failed') {
     const retryAgent = state.agents.find((a) => a.id === agentFor(thing.id) && a.enabled && a.id !== run.agentId)
-    const retry = (agentId: string) => guard(() => runAgent({ thingId: run.thingId, agentId, kind: run.kind, prompt: run.prompt }))
+    const retry = (agentId: string) => guard(() => runAgent({ thingId: run.thingId, agentId, kind: run.kind, prompt: run.prompt, manualRecipient: agentId === run.agentId ? originalManualRecipient(run) : undefined }))
     return (
       <li className="card act-run">
         <div className="act-line">
@@ -772,20 +855,25 @@ function RunRow({ thing, run }: { thing: Thing; run: Run }) {
           <span className="act-text failed" title={run.error ?? run.output}>
             没做成：{failureText(run)}
           </span>
-          <button type="button" className="act-btn" disabled={busy} onClick={() => retry(run.agentId)}>
+          <button type="button" className="act-btn" disabled={busy || agent?.channel === 'manual' && !originalManualRecipient(run)} onClick={() => retry(run.agentId)}>
             重试
           </button>
-          {retryAgent && (
+          {retryAgent && retryAgent.channel !== 'manual' && (
             <button type="button" className="act-btn" disabled={busy} onClick={() => retry(retryAgent.id)}>
               换 {retryAgent.name} 重试
             </button>
           )}
           {when}
         </div>
+        {agent?.channel === 'manual' && <div className="act-detail"><ManualRequest thingId={run.thingId} initialRun={run} label="选择接收者，建立新请求" /></div>}
       </li>
     )
   }
 
+  if (run.staleContext && run.status === 'done' && !run.output) return <li className="card act-run">
+    <div className="act-line">{who}<span className="act-text">依据或接收者已变化，旧结果不能继续使用</span>{when}</div>
+    <div className="act-detail"><button type="button" className="link-btn" disabled={busy || agent?.channel === 'manual' && !originalManualRecipient(run)} onClick={() => guard(() => runAgent({ thingId: run.thingId, agentId: run.agentId, kind: run.kind, prompt: run.prompt, manualRecipient: originalManualRecipient(run) }))}>重新生成</button></div>
+  </li>
   if (run.status !== 'done' || !run.output) return null
   // Finished but not in the thing: it was undone, or what it relied on has changed since.
   const choice = adoptAs(thing, run)
@@ -803,7 +891,7 @@ function RunRow({ thing, run }: { thing: Thing; run: Run }) {
               disabled={busy}
               onClick={() =>
                 guard(async () => {
-                  if (await runAgent({ thingId: run.thingId, agentId: run.agentId, kind: run.kind, prompt: run.prompt })) toast.show('已让副手重新生成')
+                  if (await runAgent({ thingId: run.thingId, agentId: run.agentId, kind: run.kind, prompt: run.prompt, manualRecipient: originalManualRecipient(run) })) toast.show('已让副手重新生成')
                 })
               }
             >
@@ -885,6 +973,7 @@ function Activity({ thing }: { thing: Thing }) {
   return (
     <section className="section">
       <div className="section-label">动态</div>
+      <ManualRequest thingId={thing.id} />
       {entries.length === 0 && !retained ? (
         <p className="act-empty">对秘书说一句，结果会出现在这里</p>
       ) : (

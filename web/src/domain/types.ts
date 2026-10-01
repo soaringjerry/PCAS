@@ -223,11 +223,37 @@ export interface Doc {
 export type RunKind = 'plan' | 'breakdown' | 'summary' | 'draft' | 'ask'
 export type RunStatus = 'running' | 'waiting' | 'done' | 'failed'
 
-/**
- * One piece of work an AI does on a thing (PRD §3 多 AI 接入). The brief is
- * exactly what the agent received; results come back onto the same thing.
- */
+/** The owner selects a configured destination; the server binds its actual route. */
+export interface ManualRecipientSelection { provider: string }
+
+export interface ContextRecipient extends ManualRecipientSelection {
+  principal_id: string
+  role: string
+  model: string
+  protocol: string
+  channel: string
+  route_fingerprint: string
+}
+
+/** A fresh, verified package delivered by PCAS; external receipt remains unknown. */
+export interface ManualRunPackage {
+  run_id: string
+  package: string
+  attempt: {
+    id: string
+    delivered_at?: string
+    external_receipt: string
+    manifest: { recipient: ContextRecipient }
+  }
+}
+
+/** One piece of work. Brief is a request outline, not proof of model receipt.
+ * Manual content is retrieved afresh from the verified package endpoint. */
 export interface Run {
+  manualRecipient?: ManualRecipientSelection
+  contextTask?: { recipient: ContextRecipient }
+  contextAttemptId?: string
+  providerError?: { code?: string; message?: string }
   error?: string
   id: ID
   thingId: ID

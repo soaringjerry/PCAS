@@ -34,6 +34,7 @@
 ```
 
 - `before` 为 `null` 表示这一行是本次新建的；`afterHash` 为 `null` 表示这一行被本次删除。
+- **指纹算法**（2026-10-01 修订，F7）：`afterHash` 和撤销时的比对，都基于去掉 `recordVersion`、`updatedAt`、`history`、`evolution`、`sources` 之后的文档计算，这样连续撤销不会因为簿记字段的变化而误判。
 - 记录方式：由 B1 在 `saveItem`、`saveDoc`、删除文档，以及写入 `agent_runs` document 的位置统一挂钩，**自动收集**同一事务里的全部写入。调用方只需在事务开始时开启收集（例如 `ctx = withActionLog(ctx, ...)`），不需要逐个命令手写 before 快照。
 
 ### 1.3 哪些命令会被记录

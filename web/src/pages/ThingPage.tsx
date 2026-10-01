@@ -672,7 +672,7 @@ function ManualRequest({ thingId, initialRun, label = '手动转交' }: { thingI
       e.preventDefault()
       if (!manual || !selected || !prompt.trim()) return
       void guard(async () => {
-        if (await runAgent({ thingId, agentId: manual.id, kind, prompt: prompt.trim(), sourceRunId: initialRun?.id, manualRecipient: { provider: selected.id } })) {
+        if (await runAgent({ thingId, agentId: manual.id, kind, prompt: prompt.trim(), ...(initialRun ? { sourceRunId: initialRun.id } : {}), manualRecipient: { provider: selected.id } })) {
           setOpen(false)
           toast.show('已建立新的转交请求，请预览或复制交接内容')
         }
@@ -715,6 +715,7 @@ function Handoff({ run }: { run: Run }) {
     return () => { generation.current = epoch + 1 }
   }, [state.revision, run.staleContext, run.status, run.manualRecipient?.provider, run.contextTask?.recipient.route_fingerprint])
   const recipient = originalManualRecipient(run)
+  const hasPrompt = !!run.prompt.trim()
   const target = state.agents.find((a) => a.id === recipient?.provider)?.name ?? '原先选择的接收者'
   const obtain = (copy: boolean) => guard(async () => {
     const mine = generation.current
@@ -741,7 +742,7 @@ function Handoff({ run }: { run: Run }) {
   })
   return <div className="act-detail stack-sm">
     <p className="small muted">把内容复制给{target}，再将回答贴回。PCAS 无法确认对方是否收到。</p>
-    {run.staleContext && <p className="small muted" role="alert">资料、授权或接收者已经变化，请重新生成交接内容。</p>}
+    {run.staleContext && hasPrompt && <p className="small muted" role="alert">资料、授权或接收者已经变化，请重新生成交接内容。</p>}
     <div className="row">
       <button type="button" className="btn btn-sm" disabled={run.staleContext || busy} onClick={() => obtain(true)}><Copy size={14} />复制给它的内容</button>
       <button type="button" className="link-btn" aria-expanded={!!preview && preview.revision === state.revision} disabled={run.staleContext || busy}
@@ -749,10 +750,10 @@ function Handoff({ run }: { run: Run }) {
     </div>
     {preview && preview.revision === state.revision && !run.staleContext && <pre className="act-brief">{preview.text}</pre>}
     {notice && <p className="small muted" role={failed ? 'alert' : 'status'}>{notice}</p>}
-    {(failed || run.staleContext) && recipient && <button type="button" className="link-btn" disabled={busy} onClick={() => guard(async () => {
+    {(failed || run.staleContext) && recipient && <button type="button" className="link-btn" disabled={busy || !hasPrompt} onClick={() => guard(async () => {
       if (await runAgent({ thingId: run.thingId, agentId: run.agentId, kind: run.kind, prompt: run.prompt, sourceRunId: run.id, manualRecipient: recipient })) toast.show('已建立同一接收者的新请求')
     })}>向原接收者重新生成</button>}
-    <ManualRequest thingId={run.thingId} initialRun={run} label={recipient ? '换接收者，建立新请求' : '选择接收者，建立新请求'} />
+    {hasPrompt ? <ManualRequest thingId={run.thingId} initialRun={run} label={recipient ? '换接收者，建立新请求' : '选择接收者，建立新请求'} /> : <p className="small muted">原请求已失效，请回到秘书重新描述。</p>}
     <textarea className="textarea" value={pasted} onChange={(e) => setPasted(e.target.value)} placeholder="把它的回答贴在这里" aria-label="贴回回答" style={{ minHeight: 120 }} />
     <div className="row"><button type="button" className="btn btn-primary btn-sm" disabled={!pasted.trim() || run.staleContext || busy} onClick={() => guard(async () => {
       if (!await dispatch({ type: 'pasteRunResult', id: run.id, output: pasted.trim() })) {
@@ -771,6 +772,10 @@ function RunRow({ thing, run }: { thing: Thing; run: Run }) {
   const [busy, guard] = useBusy()
   const [shown, setShown] = useState(false)
   const agent = state.agents.find((a) => a.id === run.agentId)
+  const manualRecipient = originalManualRecipient(run)
+  const manualSelection = manualRecipient ? { manualRecipient } : {}
+  const hasPrompt = !!run.prompt.trim()
+  const retryHint = !hasPrompt && <p className="act-detail small muted">原请求已失效，请回到秘书重新描述。</p>
   // Which model did it is a detail; it stays in the tooltip.
   const who = (
     <span className="act-who" title={agent?.name}>
@@ -845,7 +850,7 @@ function RunRow({ thing, run }: { thing: Thing; run: Run }) {
 
   if (run.status === 'failed') {
     const retryAgent = state.agents.find((a) => a.id === agentFor(thing.id) && a.enabled && a.id !== run.agentId)
-    const retry = (agentId: string) => guard(() => runAgent({ thingId: run.thingId, agentId, kind: run.kind, prompt: run.prompt, sourceRunId: run.id, manualRecipient: agentId === run.agentId ? originalManualRecipient(run) : undefined }))
+    const retry = (agentId: string) => guard(() => runAgent({ thingId: run.thingId, agentId, kind: run.kind, prompt: run.prompt, sourceRunId: run.id, ...(agentId === run.agentId ? manualSelection : {}) }))
     return (
       <li className="card act-run">
         <div className="act-line">
@@ -853,24 +858,26 @@ function RunRow({ thing, run }: { thing: Thing; run: Run }) {
           <span className="act-text failed" title={run.error ?? run.output}>
             没做成：{failureText(run)}
           </span>
-          <button type="button" className="act-btn" disabled={busy || agent?.channel === 'manual' && !originalManualRecipient(run)} onClick={() => retry(run.agentId)}>
+          <button type="button" className="act-btn" disabled={busy || !hasPrompt || agent?.channel === 'manual' && !manualRecipient} onClick={() => retry(run.agentId)}>
             重试
           </button>
           {retryAgent && retryAgent.channel !== 'manual' && (
-            <button type="button" className="act-btn" disabled={busy} onClick={() => retry(retryAgent.id)}>
+            <button type="button" className="act-btn" disabled={busy || !hasPrompt} onClick={() => retry(retryAgent.id)}>
               换 {retryAgent.name} 重试
             </button>
           )}
           {when}
         </div>
-        {agent?.channel === 'manual' && <div className="act-detail"><ManualRequest thingId={run.thingId} initialRun={run} label="选择接收者，建立新请求" /></div>}
+        {retryHint}
+        {hasPrompt && agent?.channel === 'manual' && <div className="act-detail"><ManualRequest thingId={run.thingId} initialRun={run} label="选择接收者，建立新请求" /></div>}
       </li>
     )
   }
 
   if (run.staleContext && run.status === 'done' && !run.output) return <li className="card act-run">
     <div className="act-line">{who}<span className="act-text">依据或接收者已变化，旧结果不能继续使用</span>{when}</div>
-    <div className="act-detail"><button type="button" className="link-btn" disabled={busy || agent?.channel === 'manual' && !originalManualRecipient(run)} onClick={() => guard(() => runAgent({ thingId: run.thingId, agentId: run.agentId, kind: run.kind, prompt: run.prompt, sourceRunId: run.id, manualRecipient: originalManualRecipient(run) }))}>重新生成</button></div>
+    <div className="act-detail"><button type="button" className="link-btn" disabled={busy || !hasPrompt || agent?.channel === 'manual' && !manualRecipient} onClick={() => guard(() => runAgent({ thingId: run.thingId, agentId: run.agentId, kind: run.kind, prompt: run.prompt, sourceRunId: run.id, ...manualSelection }))}>重新生成</button></div>
+    {retryHint}
   </li>
   if (run.status !== 'done' || !run.output) return null
   // Finished but not in the thing: it was undone, or what it relied on has changed since.
@@ -886,10 +893,10 @@ function RunRow({ thing, run }: { thing: Thing; run: Run }) {
             <button
               type="button"
               className="act-btn"
-              disabled={busy}
+              disabled={busy || !hasPrompt || agent?.channel === 'manual' && !manualRecipient}
               onClick={() =>
                 guard(async () => {
-                  if (await runAgent({ thingId: run.thingId, agentId: run.agentId, kind: run.kind, prompt: run.prompt, sourceRunId: run.id, manualRecipient: originalManualRecipient(run) })) toast.show('已让副手重新生成')
+                  if (await runAgent({ thingId: run.thingId, agentId: run.agentId, kind: run.kind, prompt: run.prompt, sourceRunId: run.id, ...manualSelection })) toast.show('已让副手重新生成')
                 })
               }
             >
@@ -909,6 +916,7 @@ function RunRow({ thing, run }: { thing: Thing; run: Run }) {
         {look}
         {when}
       </div>
+      {run.staleContext && retryHint}
       {output}
     </li>
   )

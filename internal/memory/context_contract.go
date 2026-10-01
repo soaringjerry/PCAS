@@ -202,16 +202,21 @@ func (s SourceSpan) Valid() bool {
 type EvidenceEntry struct {
 	// Transient assembly provenance. A fresh server marker identifies the
 	// actual evidence insertion; it is not retained as diagnostic metadata.
-	AssemblyMarker string            `json:"-"`
-	Ref            Ref               `json:"ref"`
-	SourceSpan     *SourceSpan       `json:"source_span,omitempty"`
-	Text           string            `json:"text"`
-	Role           string            `json:"role,omitempty"`
-	ExpressedAt    *time.Time        `json:"expressed_at,omitempty"`
-	Historical     bool              `json:"historical"`
-	Changed        bool              `json:"changed"`
-	Dependencies   []TypedDependency `json:"dependencies"`
-	Gaps           []string          `json:"gaps"`
+	AssemblyMarker string      `json:"-"`
+	Ref            Ref         `json:"ref"`
+	SourceSpan     *SourceSpan `json:"source_span,omitempty"`
+	Text           string      `json:"text"`
+	Role           string      `json:"role,omitempty"`
+	ExpressedAt    *time.Time  `json:"expressed_at,omitempty"`
+	// Claim status labels reuse claim revision semantics. They are transient
+	// model context, never an independent authorization or a body copy.
+	Epistemic    string            `json:"epistemic,omitempty"`
+	Confirmation string            `json:"confirmation,omitempty"`
+	Acquisition  string            `json:"acquisition,omitempty"`
+	Historical   bool              `json:"historical"`
+	Changed      bool              `json:"changed"`
+	Dependencies []TypedDependency `json:"dependencies"`
+	Gaps         []string          `json:"gaps"`
 }
 
 // ContextKindSupported means that phase two promises a verifier for this kind;

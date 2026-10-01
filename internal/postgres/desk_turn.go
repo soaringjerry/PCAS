@@ -507,6 +507,8 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 					if parseErr != nil {
 						slog.WarnContext(ctx, "secretary output fallback", "stage", "parse", "error_type", secretaryErrorType("parse", parseErr))
 						answer = secretaryOutput{Reply: strings.TrimSpace(result.Text)}
+					} else {
+						slog.InfoContext(ctx, "secretary output parsed", "stage", "parse", "error_type", "none")
 					}
 				}
 			}

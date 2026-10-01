@@ -1,0 +1,18 @@
+{
+  "head": "1b539590cf611e5197cb9980d7882cc9dfd8e2df",
+  "command": [
+    "go",
+    "test",
+    "-race",
+    "./internal/ai/siwc",
+    "./internal/postgres",
+    "-count=1",
+    "-json",
+    "-run",
+    "^(TestPhase2SIWCUnknownModelRealStore|TestPostgresMigrations|TestPhase2Runtime023PreservesOldPolicyMeaningAndVersions)$"
+  ],
+  "elapsed_seconds": 8.82399606704712,
+  "exit_code": 0,
+  "database": "phase2_c_fixture_20261001",
+  "raw_sha256": "9f323b1f20befdb2768c84602f684d599d33fff3e5e6651dfaf1899ebe8eb8d0"
+}

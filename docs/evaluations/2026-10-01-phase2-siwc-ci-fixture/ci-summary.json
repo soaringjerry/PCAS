@@ -1,0 +1,21 @@
+{
+  "product_head": "0032883950d7dc72b1bdb160c1a98e3da17eded9",
+  "source_log": "/tmp/pcas-phase2-ci-0032883-memory-failed.log",
+  "original_log_sha256": "3df2473072632bc23c8df709bed0e416af0dd14c142e1438ecbce9e5cfebef39",
+  "source": "root supplied complete actual memory CI make check log; C read-only preservation, not C rerun",
+  "command": "make check => go test -race ./cmd/... ./internal/...",
+  "failed_terminal_lines": [
+    "check\tRun make check\t2026-10-01T14:57:49.0254154Z --- FAIL: TestPhase2SIWCUnknownModelRealStore (0.07s)",
+    "check\tRun make check\t2026-10-01T14:57:49.0255062Z     --- FAIL: TestPhase2SIWCUnknownModelRealStore/ordinary_question (0.02s)",
+    "check\tRun make check\t2026-10-01T14:57:49.0256027Z     --- FAIL: TestPhase2SIWCUnknownModelRealStore/independent_claim (0.02s)",
+    "check\tRun make check\t2026-10-01T14:57:49.0256976Z     --- FAIL: TestPhase2SIWCUnknownModelRealStore/raw_source_refused (0.03s)"
+  ],
+  "postgres_package_terminal_lines": [
+    "check\tRun make check\t2026-10-01T15:04:28.9220927Z ok  \tgithub.com/soaringjerry/PCAS/internal/postgres\t388.474s"
+  ],
+  "failing_top": 1,
+  "failing_leaves": 3,
+  "cause": "SIWC fixture assumes public vector already exists; all leaves fail before model/DeskTurn assertions when SIWC package initializes earlier than postgres under make check cross-package parallelism",
+  "standalone_product_test_or_expectation_changed": false,
+  "browser_gate": "G5/F7 failures are independent actual browser gate and are not explained or resolved by this fixture fix"
+}

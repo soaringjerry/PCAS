@@ -388,6 +388,9 @@ func purgeSecretaryArtifactsTx(ctx context.Context, tx pgx.Tx, scope memory.Scop
 	if _, err = tx.Exec(ctx, `UPDATE action_log SET context_stale=true,summary='动作依据已变更',changes='[]'::jsonb,expired_at=coalesce(expired_at,now()) WHERE owner_id=$1 AND id=ANY($2::uuid[])`, string(scope.OwnerID), actionIDs); err != nil {
 		return nil, err
 	}
+	if err = sanitizeRunPromptSnapshotsTx(ctx, tx, scope, actionIDs); err != nil {
+		return nil, err
+	}
 	things, err := queryDocuments[string](ctx, tx, `SELECT DISTINCT to_jsonb(thing_id::text) FROM artifact_fields f WHERE owner_id=$1 AND EXISTS(SELECT 1 FROM jsonb_array_elements(CASE WHEN jsonb_typeof(blocks)='array' THEN blocks ELSE '[]'::jsonb END) b WHERE (b->'deskActions') ?| $2::text[])`, string(scope.OwnerID), actionIDs)
 	if err != nil {
 		return nil, err
@@ -464,6 +467,54 @@ func purgeSecretaryArtifactsTx(ctx context.Context, tx pgx.Tx, scope memory.Scop
 		}
 	}
 	return sourceIDs, nil
+}
+
+// Run triggers also retain generated prompts in owner undo snapshots. Clear
+// those exact copies when their producer becomes invalid, without weakening
+// an after fingerprint or dropping unrelated owner changes in the same log.
+func sanitizeRunPromptSnapshotsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, invalid []string) error {
+	type loggedChanges struct {
+		ID      string         `json:"id"`
+		Changes []actionChange `json:"changes"`
+	}
+	logs, err := queryDocuments[loggedChanges](ctx, tx, `SELECT jsonb_build_object('id',id,'changes',changes) FROM action_log
+ WHERE owner_id=$1 AND EXISTS(SELECT 1 FROM jsonb_array_elements(CASE WHEN jsonb_typeof(changes)='array' THEN changes ELSE '[]'::jsonb END) c
+ WHERE c->>'table'='agent_runs' AND EXISTS(SELECT 1 FROM unnest($2::text[]) AS origin(id)
+ WHERE (c->'before'->'contextPromptDeskActions') ? origin.id))`, string(scope.OwnerID), invalid)
+	if err != nil {
+		return err
+	}
+	for _, log := range logs {
+		changed := false
+		for i := range log.Changes {
+			change := &log.Changes[i]
+			if change.Table != "agent_runs" || string(change.Before) == "null" {
+				continue
+			}
+			var before workspace.Run
+			if err := json.Unmarshal(change.Before, &before); err != nil {
+				return err
+			}
+			affected := false
+			for _, id := range before.ContextPromptDeskActions {
+				affected = affected || oneOf(string(id), invalid...)
+			}
+			if !affected {
+				continue
+			}
+			before.Prompt, before.Brief, before.Output, before.ProviderError = "", "", "", nil
+			before.Error = "资料或接收者已变化，请重新生成"
+			before.StaleContext = true
+			change.Before = asJSON(before)
+			changed = true
+		}
+		if changed {
+			if _, err := tx.Exec(ctx, "UPDATE action_log SET changes=$3 WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), log.ID, asJSON(log.Changes)); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func sanitizeActionSnapshotsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, thing string, invalid []string, oldHash, oldBlocksHash string) error {

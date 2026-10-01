@@ -112,8 +112,12 @@ func phase2RTRetrySetup(t *testing.T, studio, ownerPrompt bool) *phase2RTRetryFi
 			t.Fatal("owner Prompt control must have inherited general origins but no Prompt origins", f.old)
 		}
 	} else {
+		actions := []any{map[string]any{"op": "delegate", "ref": "new", "title": "Retry source task " + gold.Records[0].Atoms[0], "prompt": "RETRY-GENERATED-PROMPT-864 整理成都预约资料，预约码 " + gold.Records[0].Atoms[0], "kind": "draft"}}
+		if studio {
+			actions = []any{map[string]any{"op": "create_task", "project": "THIS", "title": "Retry source task " + gold.Records[0].Atoms[0]}, map[string]any{"op": "delegate", "ref": "N1", "prompt": "RETRY-GENERATED-PROMPT-864 整理成都预约资料，预约码 " + gold.Records[0].Atoms[0], "kind": "draft"}}
+		}
 		c.mu.Lock()
-		c.Reply = string(asJSON(map[string]any{"reply": "RETRY-SECRETARY-863", "used": []any{}, "links": []any{}, "show": []any{}, "remember": false, "ask": nil, "actions": []any{map[string]any{"op": "delegate", "ref": "new", "title": "Retry source task " + gold.Records[0].Atoms[0], "prompt": "RETRY-GENERATED-PROMPT-864 整理成都预约资料，预约码 " + gold.Records[0].Atoms[0], "kind": "draft"}}}))
+		c.Reply = string(asJSON(map[string]any{"reply": "RETRY-SECRETARY-863", "used": []any{}, "links": []any{}, "show": []any{}, "remember": false, "ask": nil, "actions": actions}))
 		c.mu.Unlock()
 		request := workspace.DeskTurnRequest{RequestID: string(memory.NewID()), AgentID: "phase2-model", Text: gold.Cases[0].Query + "请让副手整理资料"}
 		if studio {
@@ -123,10 +127,44 @@ func phase2RTRetrySetup(t *testing.T, studio, ownerPrompt bool) *phase2RTRetryFi
 		if err != nil || c.count() != 1 {
 			t.Fatal("retry real secretary/delegation positive control missing", err, c.count(), out)
 		}
+		phase2RTEvidence(t, "retry-real-secretary-proposal", map[string]any{"request": request, "actual_http": json.RawMessage(c.request(t, 0)), "proposal": actions, "response": out})
 		f.old = phase2RTDelegatedRun(t, out)
+		if studio {
+			var wire struct {
+				Messages []struct {
+					Content string `json:"content"`
+				} `json:"messages"`
+			}
+			if err := json.Unmarshal(c.request(t, 0), &wire); err != nil {
+				t.Fatal(err)
+			}
+			actualAlias := false
+			for _, m := range wire.Messages {
+				actualAlias = actualAlias || strings.Contains(m.Content, "THIS：\nRetry studio A")
+			}
+			if !actualAlias || request.ThingID == nil || *request.ThingID != f.studio {
+				t.Fatal("studio THIS alias was not actually supplied from the real project", wire)
+			}
+			if len(out.Turn.Receipts) != 2 || out.Turn.Receipts[0].Op != "create_task" || out.Turn.Receipts[0].Status != "done" || out.Turn.Receipts[0].ActionID == nil || out.Turn.Receipts[0].ThingID == nil || out.Turn.Receipts[1].Op != "delegate" || out.Turn.Receipts[1].Status != "done" || out.Turn.Receipts[1].ActionID == nil {
+				t.Fatal("studio actual two-action positive control missing", out.Turn.Receipts)
+			}
+			task := phase2RTNameItem(t, out.State, *out.Turn.Receipts[0].ThingID)
+			if task.Kind != "task" || task.ProjectID != f.studio || f.old.ThingID != task.ID {
+				t.Fatal("N1 must be the real task in A, not project itself", task, f.old)
+			}
+			createID := memory.ID(*out.Turn.Receipts[0].ActionID)
+			delegateID := memory.ID(*out.Turn.Receipts[1].ActionID)
+			origins := phase2RTDeskActionIDs(t, f.old)
+			if len(origins) != 2 || !phase2RTRetryContainsOrigin(origins, createID) || !phase2RTRetryContainsOrigin(origins, delegateID) {
+				t.Fatal("studio general closure lost true create/delegate identities", origins, out.Turn.Receipts)
+			}
+		}
 		phase2RTRequireDelegatePromptOrigin(t, f.old, out)
 		f.origin = phase2RTPromptOriginIDs(t, f.old)[0]
-		phase2RTSnapshotForSource(t, s, scope, f.source.Ref, "secretary", request.RequestID, c.request(t, 0))
+		secretaryAttempt := phase2RTSnapshotForSource(t, s, scope, f.source.Ref, "secretary", request.RequestID, c.request(t, 0))
+		if secretaryAttempt.Manifest.Scope != f.hard {
+			t.Fatal("actual secretary scope differs from studio policy", secretaryAttempt.Manifest.Scope, f.hard)
+		}
 	}
 	if f.old.ContextTask == nil || f.old.ContextTask.Scope != f.hard {
 		t.Fatal("retry original current scope missing", f.old.ContextTask, f.hard)
@@ -201,6 +239,11 @@ func (f *phase2RTRetryFixture) negative(t *testing.T, scope memory.Scope, c work
 	if err := f.s.pool.QueryRow(context.Background(), "SELECT count(*) FROM agent_runs WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), c.ID).Scan(&committed); err != nil || committed != 0 {
 		t.Fatal("rejected retry committed a new Run", err, committed)
 	}
+	attempts, err := f.s.ContextAttempts(context.Background(), scope, c.ID)
+	if err != nil || len(attempts) != 0 {
+		t.Fatal("rejected retry created/delivered/reused a context attempt", err, attempts)
+	}
+	phase2RTEvidence(t, "retry-no-new-run-or-attempt", map[string]any{"new_run_id": c.ID, "new_run_rows": committed, "context_attempts": attempts, "http_delta": f.capture.count() - before})
 }
 func phase2RTRetryError(err error) string {
 	if err == nil {
@@ -261,8 +304,27 @@ func (f *phase2RTRetryFixture) success(t *testing.T, c workspace.Command, grant 
 	}
 	if !independent {
 		phase2RTDelegationLineage(t, attempt, f.source.Ref, grant)
-		if len(attempt.Manifest.DeskActions) != 1 || attempt.Manifest.DeskActions[0] != f.origin {
-			t.Error("new attempt lacks original delegate action")
+		expectedOrigins := map[memory.ID]bool{}
+		for _, id := range f.old.ContextDeskActions {
+			if expectedOrigins[id] {
+				t.Fatal("original general action control has duplicate origins", id)
+			}
+			expectedOrigins[id] = true
+		}
+		actualOrigins := map[memory.ID]bool{}
+		if len(attempt.Manifest.DeskActions) != len(f.old.ContextDeskActions) {
+			t.Error("new manifest general origins are not the exact original actual set", attempt.Manifest.DeskActions, f.old.ContextDeskActions)
+		}
+		for _, id := range attempt.Manifest.DeskActions {
+			if actualOrigins[id] || !expectedOrigins[id] {
+				t.Error("new manifest contains duplicate or extra general action origin", id)
+			}
+			actualOrigins[id] = true
+		}
+		for id := range expectedOrigins {
+			if !actualOrigins[id] {
+				t.Error("new manifest lost actual original general action origin", id)
+			}
 		}
 	}
 	if len(attempt.Manifest.Used) != 0 {
@@ -347,13 +409,15 @@ func TestPhase2RuntimeRetryPreservesGeneratedPromptOrigins(t *testing.T) {
 						t.Fatal(err)
 					}
 				case strings.Contains(tc.ID, "DELETE_SOURCE"):
-					if err := f.s.Delete(context.Background(), f.scope, memory.DeleteRequest{Targets: []memory.Ref{f.source.Ref}, IncludeSources: true, BlockReimport: true}); err != nil {
-						t.Fatal(err)
-					}
+					phase2RTRetryDeleteLocator(t, f)
 				default:
 					t.Fatal("unknown frozen retry case", tc.ID)
 				}
-				f.negative(t, f.scope, f.command(t, f.scope, f.old.ThingID, agent, prompt), memory.ErrConflict)
+				want := memory.ErrConflict
+				if strings.Contains(tc.ID, "DELETE_SOURCE") {
+					want = memory.ErrNotFound
+				}
+				f.negative(t, f.scope, f.command(t, f.scope, f.old.ThingID, agent, prompt), want)
 			}
 		})
 	}
@@ -676,4 +740,50 @@ func TestPhase2RuntimeRetryQueryIsolationAndDestinationExclusion(t *testing.T) {
 			phase2RTEvidence(t, "retry-formal-exclusion", map[string]any{"claim": claim, "secretary_actual_input": actual[0], "original": original, "excluded_thing": old.ThingID, "independent_claim_recall": recalled, "retry_embedding_delta": embedding.count() - beforeEmbedding})
 		})
 	}
+}
+
+func phase2RTRetryContainsOrigin(ids []memory.ID, want memory.ID) bool {
+	for _, id := range ids {
+		if id == want {
+			return true
+		}
+	}
+	return false
+}
+func phase2RTRetryDeleteLocator(t *testing.T, f *phase2RTRetryFixture) {
+	t.Helper()
+	ctx := context.Background()
+	var oldRows, tombstonesBefore int
+	if err := f.s.pool.QueryRow(ctx, "SELECT count(*) FROM agent_runs WHERE owner_id=$1 AND id=$2", string(f.scope.OwnerID), f.old.ID).Scan(&oldRows); err != nil || oldRows != 1 {
+		t.Fatal("deleted locator original Run positive control missing", err, oldRows)
+	}
+	if err := f.s.pool.QueryRow(ctx, "SELECT count(*) FROM record_reimport_blocks WHERE owner_id=$1", string(f.scope.OwnerID)).Scan(&tombstonesBefore); err != nil || tombstonesBefore != 0 {
+		t.Fatal("unexpected prior deletion tombstones", err, tombstonesBefore)
+	}
+	oldAttempt := f.old.ContextAttemptID
+	if !oldAttempt.Valid() {
+		t.Fatal("original failed run has no true diagnostic attempt")
+	}
+	if err := f.s.Delete(ctx, f.scope, memory.DeleteRequest{Targets: []memory.Ref{f.source.Ref}, IncludeSources: true, BlockReimport: true}); err != nil {
+		t.Fatal(err)
+	}
+	var runs, sources, versions, records, tombstones int
+	if err := f.s.pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM agent_runs WHERE owner_id=$1 AND id=$2),(SELECT count(*) FROM sources WHERE owner_id=$1 AND id=$3),(SELECT count(*) FROM source_versions WHERE owner_id=$1 AND source_id=$3),(SELECT count(*) FROM memory_records WHERE owner_id=$1 AND id=$3),(SELECT count(*) FROM record_reimport_blocks WHERE owner_id=$1)`, string(f.scope.OwnerID), f.old.ID, string(f.source.ID)).Scan(&runs, &sources, &versions, &records, &tombstones); err != nil || runs != 0 || sources != 0 || versions != 0 || records != 0 || tombstones <= tombstonesBefore {
+		t.Fatal("source deletion/gone locator/opaque tombstone not proven", err, runs, sources, versions, records, tombstones)
+	}
+	gold := phase2RTGoldRead(t)
+	reimport, err := memory.NewService(f.s).Ingest(ctx, f.scope, memory.IngestRequest{Connector: "phase2-runtime-synthetic", ExternalID: gold.Records[0].ID, ExternalVersion: "v1", Title: "成都预约资料", Text: gold.Records[0].Text, MediaType: "text/plain"})
+	if !errors.Is(err, memory.ErrBlocked) {
+		t.Fatal("exact original source reimport was not controlled blocked", err, reimport)
+	}
+	blockedError := phase2RTRetryError(err)
+	body, err := f.s.ContextAttemptSnapshot(ctx, f.scope, oldAttempt)
+	if !errors.Is(err, memory.ErrUnavailable) || len(body) != 0 {
+		t.Fatal("deleted source original attempt body was available or uncontrolled", err, len(body))
+	}
+	attempts, err := f.s.ContextAttempts(ctx, f.scope, f.old.ID)
+	if err != nil || len(attempts) != 1 || attempts[0].ID != oldAttempt || attempts[0].State != memory.AttemptInvalidated || attempts[0].SnapshotState != memory.SnapshotDeleted {
+		t.Fatal("old deleted attempt skeleton is not exactly invalidated/deleted", err, attempts)
+	}
+	phase2RTEvidence(t, "retry-deleted-locator-and-source-tombstone", map[string]any{"old_run_id": f.old.ID, "old_run_rows": runs, "source_rows": sources, "source_versions": versions, "memory_records": records, "opaque_tombstones_before": tombstonesBefore, "opaque_tombstones_after": tombstones, "reimport_error": blockedError, "original_attempt": attempts[0], "snapshot_bytes": len(body)})
 }

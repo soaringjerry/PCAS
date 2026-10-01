@@ -18,9 +18,10 @@ func TestPhase2RuntimeOwnerUndoReceiptAuditNeverRestoresSourceText(t *testing.T)
 			ctx := context.Background()
 			title := "RECEIPT-AUDIT-EMPTY-866"
 			var source memory.Ref
+			var sourcePolicy phase2RTAuthResult
 			if name == "RECEIPT-SOURCE" {
 				source = phase2RTSource(t, s, scope).Ref
-				phase2RTAuthorize(t, s, scope, source, "phase2-model", "secretary", phase2RTUnscoped())
+				sourcePolicy, _ = phase2RTAuthorize(t, s, scope, source, "phase2-model", "secretary", phase2RTUnscoped())
 				title = "RECEIPT-AUDIT-SOURCE " + phase2RTGoldRead(t).Records[0].Atoms[0]
 			}
 			setReply := func(actions []any) {
@@ -83,6 +84,11 @@ func TestPhase2RuntimeOwnerUndoReceiptAuditNeverRestoresSourceText(t *testing.T)
 					t.Fatal("whole source-free DAG is not actually empty", err, all)
 				}
 			}
+			var originRows []byte
+			if err := s.pool.QueryRow(ctx, `SELECT coalesce(jsonb_agg(jsonb_build_object('id',l.id,'turn_id',l.turn_id,'context_task',l.context_task,'context_stale',l.context_stale,'typed_dependencies',coalesce((SELECT jsonb_agg(to_jsonb(d)) FROM context_artifact_dependencies d WHERE d.owner_id=l.owner_id AND d.parent_kind='artifact' AND d.parent_id=l.id::text),'[]'::jsonb))),'[]'::jsonb) FROM action_log l WHERE l.owner_id=$1 AND l.id=ANY($2::uuid[])`, string(scope.OwnerID), []string{*initial.ActionID, *updated.ActionID}).Scan(&originRows); err != nil {
+				t.Fatal(err)
+			}
+			phase2RTEvidence(t, "receipt-real-origin-before-undo", map[string]any{"first": first, "second": second, "typed_dependency_counts": counts, "actual_action_rows": json.RawMessage(originRows)})
 			if _, err := s.Undo(ctx, scope, *updated.ActionID); err != nil {
 				t.Fatal("strict reverse Undo update failed", err)
 			}
@@ -114,7 +120,7 @@ func TestPhase2RuntimeOwnerUndoReceiptAuditNeverRestoresSourceText(t *testing.T)
 					t.Fatal("history changed actual turn identities or receipt counts", turn)
 				}
 				receipt := turn.Receipts[0]
-				if receipt.ActionID == nil || *receipt.ActionID != id || !receipt.Undone || receipt.Undoable {
+				if receipt.ActionID == nil || *receipt.ActionID != id || !receipt.Undone {
 					t.Fatal("history lost stable actual undone identity", receipt)
 				}
 				if name == "RECEIPT-EMPTY" {
@@ -128,8 +134,37 @@ func TestPhase2RuntimeOwnerUndoReceiptAuditNeverRestoresSourceText(t *testing.T)
 			if name == "RECEIPT-EMPTY" && sameTitle != 2 {
 				t.Error("both independent turns must retain the same original title after task deletion", sameTitle)
 			}
-			if name == "RECEIPT-SOURCE" && (strings.Contains(response.Body.String(), title) || strings.Contains(response.Body.String(), phase2RTGoldRead(t).Records[0].Atoms[0])) {
-				t.Error("source-dependent owner Undo audit restored invalid source title/atom", response.Body.String())
+			if name == "RECEIPT-SOURCE" {
+				for _, turn := range history.Turns {
+					receipt := turn.Receipts[0]
+					if turn.ID == first.Turn.ID {
+						if !strings.Contains(receipt.Text, title) || turn.Reply != first.Turn.Reply {
+							t.Error("still-lawful first source history was erased solely by unrelated action Undo", turn)
+						}
+					} else if turn.ID == second.Turn.ID {
+						if receipt.Op != "action" || receipt.ThingID != nil || receipt.Text != "这项操作已完成；相关回答内容已隐藏" || strings.Contains(string(asJSON(turn)), phase2RTGoldRead(t).Records[0].Atoms[0]) || turn.Reply == second.Turn.Reply || len(turn.Cards) != 0 {
+							t.Error("second history illegally revived its undone action ancestor", turn)
+						}
+					}
+				}
+				// Action Undo leaves the raw-source policy live. Explicitly revoke it to
+				// test that the local audit exception cannot recover any typed source.
+				phase2RTUpdatePolicy(t, s, scope, source, sourcePolicy, true)
+				revokedResponse := phase2RTHTTP(t, s, scope, http.MethodGet, "/v1/desk/turns?conversationId="+first.ConversationID, nil)
+				if revokedResponse.Code != http.StatusOK || strings.Contains(revokedResponse.Body.String(), title) || strings.Contains(revokedResponse.Body.String(), phase2RTGoldRead(t).Records[0].Atoms[0]) {
+					t.Fatal("formal source revoke left generated source title/atom in actual history", revokedResponse.Code, revokedResponse.Body.String())
+				}
+				var revokedHistory workspace.DeskTurnsResponse
+				if err := json.Unmarshal(revokedResponse.Body.Bytes(), &revokedHistory); err != nil || len(revokedHistory.Turns) != 2 {
+					t.Fatal("source revoke lost actual audit turn identities", err, revokedHistory)
+				}
+				for _, turn := range revokedHistory.Turns {
+					id, ok := expected[turn.ID]
+					if !ok || len(turn.Receipts) != 1 || turn.Receipts[0].ActionID == nil || *turn.Receipts[0].ActionID != id || !turn.Receipts[0].Undone || turn.Receipts[0].ThingID != nil || turn.Receipts[0].Op != "action" || turn.Receipts[0].Text != "这项操作已完成；相关回答内容已隐藏" || len(turn.Cards) != 0 || turn.Reply == first.Turn.Reply {
+						t.Error("typed-source audit exception revived content or erased identity", turn)
+					}
+				}
+				phase2RTEvidence(t, "receipt-formal-source-revoke-history", map[string]any{"source": source, "original_policy": sourcePolicy, "actual_http": json.RawMessage(revokedResponse.Body.Bytes()), "before_revoke_history": json.RawMessage(response.Body.Bytes())})
 			}
 			for _, receipt := range []workspace.DeskReceipt{initial, updated} {
 				var undone bool

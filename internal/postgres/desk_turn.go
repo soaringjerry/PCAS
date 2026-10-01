@@ -671,7 +671,9 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 			if _, err := tx.Exec(ctx, "UPDATE workspace_owners SET revision=revision+1 WHERE owner_id=$1", string(scope.OwnerID)); err != nil {
 				return err
 			}
-			out.State, err = s.snapshotTx(ctx, tx, scope)
+			ownerView := scope
+			ownerView.Task = nil // local response view is not supply to the model
+			out.State, err = s.snapshotTx(ctx, tx, ownerView)
 			if err != nil {
 				return err
 			}

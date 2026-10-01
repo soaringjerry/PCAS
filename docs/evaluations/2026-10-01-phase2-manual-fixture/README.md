@@ -1,6 +1,6 @@
 # 既有 manual claim 正对照入口迁移
 
-产品 `eeab123cc8649838a3bd72b28e19a1e842673489`，运行 harness HEAD `c1adcc3`，具体 fixture `1043173`。2026-10-01 UTC，专属合成数据库唯一 schema，一次 `go test ./internal/postgres -run '^TestDirectCaptureEntersDefaultRunAsSourceBacked$' -count=1 -json`：**exit0，1 PASS，0 FAIL，0 SKIP**。
+产品 `eeab123cc8649838a3bd72b28e19a1e842673489`，运行 harness HEAD `c1adcc328dbe403ea4af9bea5560c6cabbd07114`，具体 fixture `1043173`。2026-10-01 UTC，专属合成数据库唯一 schema，一次 `go test ./internal/postgres -run '^TestDirectCaptureEntersDefaultRunAsSourceBacked$' -count=1 -json`：**exit0，1 PASS，0 FAIL，0 SKIP**。
 
 root明确授权C只修改 extraction_lifecycle 指定用例。旧→新映射如下，产品未改，人工正文不变：
 

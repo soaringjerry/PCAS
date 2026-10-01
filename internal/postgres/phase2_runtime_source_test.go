@@ -210,9 +210,9 @@ func TestPhase2RuntimeSourcePolicyReplayRouteAndDisabledRevoke(t *testing.T) {
 func TestPhase2RuntimeSourceScopeHardBoundary(t *testing.T) {
 	s, scope, _ := phase2RTSetup(t)
 	source := phase2RTSource(t, s, scope)
-	st := workspaceCommand(t, s, scope, workspace.Command{Type: "addProject", Title: "Studio A"})
+	st := workspaceCommand(t, s, scope, workspace.Command{Type: "addProject", Name: "Studio A"})
 	a := memory.ID(st.Projects[0].ID)
-	st = workspaceCommand(t, s, scope, workspace.Command{Type: "addProject", Title: "Studio B"})
+	st = workspaceCommand(t, s, scope, workspace.Command{Type: "addProject", Name: "Studio B"})
 	var b memory.ID
 	for _, p := range st.Projects {
 		if p.Title == "Studio B" {
@@ -259,7 +259,7 @@ func TestPhase2RuntimeClaimNatureDoesNotGrantGlobalScope(t *testing.T) {
 				t.Fatal("independent scope control gold missing")
 			}
 			source, _ := phase2RTClaimFixture(t, s, scope, gold.Text, gold.Claim, kind)
-			st := workspaceCommand(t, s, scope, workspace.Command{Type: "addProject", Title: "isolated studio"})
+			st := workspaceCommand(t, s, scope, workspace.Command{Type: "addProject", Name: "isolated studio"})
 			studio := memory.ID(st.Projects[0].ID)
 			hard := memory.HardScope{Kind: memory.StudioContextScope, StudioID: studio, IncludeGlobalConstraints: true}
 			reader := phase2RTTask(t, s, scope, "phase2-model", "secretary", hard)

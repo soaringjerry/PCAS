@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"net"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -39,8 +41,15 @@ func phase2ActionEvidence(t *testing.T, name string, value any) {
 // This is an independently frozen public DeskTurn -> public requestRun ->
 // fresh ManualRunPackage scenario. It does not call the delegate action.
 func TestPhase2ActionLineageSecretaryOnlyFieldsDoNotReachManual(t *testing.T) {
-	if os.Getenv("PCAS_TEST_DATABASE_URL") != "postgres://phase2_c:phase2-synthetic-only@127.0.0.1:33273/phase2_c?sslmode=disable" {
-		t.Fatal("minimal repro requires the prescribed disposable loopback phase2_c database; no skip")
+	dsn := os.Getenv("PCAS_TEST_DATABASE_URL")
+	u, parseErr := url.Parse(dsn)
+	if dsn == "" || parseErr != nil || (u.Scheme != "postgres" && u.Scheme != "postgresql") {
+		t.Fatal("requires explicitly configured synthetic PCAS_TEST_DATABASE_URL; no skip")
+	}
+	host, database := u.Hostname(), strings.TrimPrefix(u.Path, "/")
+	ip := net.ParseIP(host)
+	if (host != "localhost" && (ip == nil || !ip.IsLoopback())) || strings.Contains(database, "/") || !(strings.HasSuffix(database, "_test") || strings.HasPrefix(database, "phase2_")) {
+		t.Fatal("test database must use loopback and an explicit _test suffix or phase2_ prefix")
 	}
 	ctx := context.Background()
 	store, scope, capture := phase2RTSetup(t)

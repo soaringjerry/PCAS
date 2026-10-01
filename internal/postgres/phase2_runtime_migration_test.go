@@ -136,3 +136,51 @@ func TestPhase2Runtime023PreservesOldPolicyMeaningAndVersions(t *testing.T) {
 	}
 	phase2RTEvidence(t, "023-upgrade", map[string]any{"legacy_migrations": 22, "policy_rows": count, "meaning_mismatches": mismatch, "original_policy_rows": before, "source_ref": source.Ref, "external_send": "none; actual old schema policy SQL fixture"})
 }
+
+func phase2RTApplyLegacy023(t *testing.T, s *Store) {
+	t.Helper()
+	name := "023_context_policy_undo.sql"
+	body, err := migrations.ReadFile("migrations/" + name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := pgx.BeginFunc(context.Background(), s.pool, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(context.Background(), string(body)); err != nil {
+			return err
+		}
+		_, err := tx.Exec(context.Background(), "INSERT INTO schema_migrations(name,checksum) VALUES($1,$2)", name, fmt.Sprintf("%x", sha256.Sum256(body)))
+		return err
+	}); err != nil {
+		t.Fatal("actual legacy 023 schema fixture", err)
+	}
+}
+
+func TestPhase2RuntimeFreshMigrationRestartKeepsLedgerAndNoPolicy(t *testing.T) {
+	s, scope, capture := phase2RTSetup(t)
+	ctx := context.Background()
+	ledger := func() string {
+		var text string
+		if err := s.pool.QueryRow(ctx, "SELECT jsonb_agg(to_jsonb(m) ORDER BY name)::text FROM schema_migrations m").Scan(&text); err != nil {
+			t.Fatal(err)
+		}
+		return text
+	}
+	before := ledger()
+	var policyRows, total, explicitDenyMigration, leaseMigration int
+	if err := s.pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM source_authorizations),(SELECT count(*) FROM schema_migrations),(SELECT count(*) FROM schema_migrations WHERE name='023_context_policy_undo.sql'),(SELECT count(*) FROM schema_migrations WHERE name LIKE '024_%')`).Scan(&policyRows, &total, &explicitDenyMigration, &leaseMigration); err != nil {
+		t.Fatal(err)
+	}
+	if policyRows != 0 || total < 24 || explicitDenyMigration != 1 || leaseMigration != 1 {
+		t.Errorf("fresh applied=%d deny migration=%d lease migration=%d implicit policies=%d", total, explicitDenyMigration, leaseMigration, policyRows)
+	}
+	if err := s.CheckSchema(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Migrate(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if ledger() != before || capture.count() != 0 {
+		t.Error("fresh repeat startup changed migration ledger or called provider")
+	}
+	phase2RTEvidence(t, "fresh-runtime-migration", map[string]any{"owner": scope.OwnerID, "applied_migrations": total, "explicit_deny_migration_count": explicitDenyMigration, "execution_lease_migration_count": leaseMigration, "implicit_policies": policyRows, "provider_requests": capture.count(), "ledger": before})
+}

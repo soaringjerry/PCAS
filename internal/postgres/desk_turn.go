@@ -428,10 +428,9 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 				}
 				out.ConversationID, out.Turn = saved.ConversationID, saved.Turn
 				if _, e := s.deskTurnContextTx(ctx, tx, scope, out.Turn.ID, nil); e != nil {
-					out.Turn.Reply = "（这条回答依据的记忆已变更）"
-					out.Turn.Cards = []workspace.DeskCard{}
-					out.Turn.Ask = nil
-					out.Turn.Receipts = []workspace.DeskReceipt{}
+					if err := redactDeskTurnContextTx(ctx, tx, scope, &out.Turn); err != nil {
+						return err
+					}
 				}
 				replayed = true
 				out.State, err = s.snapshotTx(ctx, tx, scope)
@@ -785,10 +784,9 @@ func (s *Store) deskTurnsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, 
 		turn := stored.Response.Turn
 		live, contextErr := s.deskTurnContextTx(ctx, tx, scope, turn.ID, scope.Task)
 		if stored.Erased || contextErr != nil {
-			turn.Reply = "（这条回答依据的记忆已变更）"
-			turn.Cards = []workspace.DeskCard{}
-			turn.Ask = nil
-			turn.Receipts = []workspace.DeskReceipt{}
+			if err := redactDeskTurnContextTx(ctx, tx, scope, &turn); err != nil {
+				return out, err
+			}
 			if scope.Task != nil {
 				turn.Text = ""
 			}

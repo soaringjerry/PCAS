@@ -68,6 +68,11 @@ func (s *Store) deskTurnContextTx(ctx context.Context, tx pgx.Tx, scope memory.S
 			return nil, memory.ErrConflict
 		}
 	}
+	// Capture and deterministic owner policy operations did not dispatch to a
+	// model. With no dependencies there is no historical recipient to verify.
+	if stored == nil && len(legacy) == 0 {
+		return []memory.TypedDependency{}, nil
+	}
 	var item *workspace.Item
 	if thing != nil {
 		value, err := getItem(ctx, tx, scope, *thing)
@@ -140,4 +145,29 @@ func (s *Store) deskTurnContextTx(ctx context.Context, tx pgx.Tx, scope memory.S
 		return nil, memory.ErrConflict
 	}
 	return dependenciesForEntries(entries), nil
+}
+
+// Keep a verifiable operation receipt while removing stale derived prose and
+// item links. Action ownership and this exchange's binding are server facts.
+func redactDeskTurnContextTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, turn *workspace.SecretaryTurn) error {
+	turn.Reply = "（这条回答依据的记忆已变更）"
+	turn.Cards = []workspace.DeskCard{}
+	turn.Ask = nil
+	kept := []workspace.DeskReceipt{}
+	for _, receipt := range turn.Receipts {
+		if receipt.ActionID == nil || !memory.ID(*receipt.ActionID).Valid() {
+			continue
+		}
+		var undone bool
+		err := tx.QueryRow(ctx, "SELECT undone_at IS NOT NULL FROM action_log WHERE owner_id=$1 AND id=$2 AND turn_id=$3", string(scope.OwnerID), *receipt.ActionID, turn.ID).Scan(&undone)
+		if errors.Is(err, pgx.ErrNoRows) {
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		kept = append(kept, workspace.DeskReceipt{Op: "action", Text: "这项操作已完成；相关回答内容已隐藏", Status: "done", ActionID: receipt.ActionID, Undoable: !undone, Undone: undone})
+	}
+	turn.Receipts = kept
+	return nil
 }

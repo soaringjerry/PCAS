@@ -38,7 +38,7 @@ func TestPhase2RuntimeRetentionKeepsDurableInvalidation(t *testing.T) {
 	if finished.Status != "done" || !strings.Contains(string(asJSON(finished)), derived) {
 		t.Fatal("real source-derived run did not create the positive-control business result")
 	}
-	attempt := phase2RTSnapshotForSource(t, s, scope, source.Ref, "deputy", capture.request(t, 0))
+	attempt := phase2RTSnapshotForSource(t, s, scope, source.Ref, "deputy", run.ID, capture.request(t, 0))
 	diagnostics, ok := any(s).(phase2RTDiagnostics)
 	if !ok {
 		t.Fatal("actual diagnostics read/cleanup API missing")

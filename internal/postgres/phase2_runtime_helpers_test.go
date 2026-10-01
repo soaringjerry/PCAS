@@ -128,6 +128,10 @@ func phase2RTSetup(t *testing.T) (*Store, memory.Scope, *phase2RTCapture) {
 		// The fake answers the actual requested response schema. A secretary
 		// reply and a deputy output carry the same frozen synthetic answer/Used[].
 		var request struct {
+			Messages []struct {
+				Role    string `json:"role"`
+				Content string `json:"content"`
+			} `json:"messages"`
 			Format struct {
 				JSONSchema struct {
 					Schema struct {
@@ -139,7 +143,13 @@ func phase2RTSetup(t *testing.T) (*Store, memory.Scope, *phase2RTCapture) {
 		if err := json.Unmarshal(body, &request); err != nil {
 			t.Error(err)
 		}
-		if _, deputy := request.Format.JSONSchema.Schema.Properties["output"]; deputy {
+		_, deputy := request.Format.JSONSchema.Schema.Properties["output"]
+		for _, message := range request.Messages {
+			if message.Role == "system" && strings.Contains(message.Content, "output为完整建议或草稿") {
+				deputy = true
+			}
+		}
+		if deputy {
 			var answer struct {
 				Reply string `json:"reply"`
 				Used  []any  `json:"used"`

@@ -110,13 +110,13 @@ func phase2RTGetPackage(t *testing.T, s *Store, scope memory.Scope, run workspac
 	return out
 }
 
-func phase2RTSnapshotForSource(t *testing.T, s *Store, scope memory.Scope, source memory.Ref, role string, payload []byte) memory.ContextAttempt {
+func phase2RTSnapshotForSource(t *testing.T, s *Store, scope memory.Scope, source memory.Ref, role, operationID string, payload []byte) memory.ContextAttempt {
 	t.Helper()
 	diagnostics, ok := any(s).(phase2RTDiagnostics)
 	if !ok {
 		t.Fatal("actual diagnostic read/cleanup API missing")
 	}
-	attempts, err := diagnostics.ContextAttempts(context.Background(), scope, "")
+	attempts, err := diagnostics.ContextAttempts(context.Background(), scope, operationID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -256,8 +256,9 @@ func TestPhase2RuntimeZeroClaimNaturalAndPublicActualInputs(t *testing.T) {
 			}
 			before := capture.count()
 			var payload []byte
+			operationID := string(memory.NewID())
 			if strings.HasSuffix(entry, "DeskTurn") {
-				out, err := s.DeskTurn(context.Background(), scope, workspace.DeskTurnRequest{RequestID: string(memory.NewID()), AgentID: agent, Text: gold.Cases[0].Query})
+				out, err := s.DeskTurn(context.Background(), scope, workspace.DeskTurnRequest{RequestID: operationID, AgentID: agent, Text: gold.Cases[0].Query})
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -268,6 +269,7 @@ func TestPhase2RuntimeZeroClaimNaturalAndPublicActualInputs(t *testing.T) {
 				payload = capture.request(t, before)
 			} else {
 				run := phase2RTPrepareRun(t, s, scope, agent, gold.Cases[0].Query)
+				operationID = run.ID
 				if agent == "manual" {
 					pkg := phase2RTGetPackage(t, s, scope, run)
 					payload = []byte(pkg.Text)
@@ -285,7 +287,7 @@ func TestPhase2RuntimeZeroClaimNaturalAndPublicActualInputs(t *testing.T) {
 				}
 			}
 			phase2RTAtoms(t, payload, gold.Cases[0].Required, true)
-			phase2RTSnapshotForSource(t, s, scope, source.Ref, role, payload)
+			phase2RTSnapshotForSource(t, s, scope, source.Ref, role, operationID, payload)
 		})
 	}
 }
@@ -299,7 +301,7 @@ func TestPhase2RuntimeManualPackageInvalidationAndRegrantABA(t *testing.T) {
 			run := phase2RTPrepareRun(t, s, scope, "manual", phase2RTGoldRead(t).Cases[0].Query)
 			pkg := phase2RTGetPackage(t, s, scope, run)
 			phase2RTAtoms(t, []byte(pkg.Text), phase2RTGoldRead(t).Cases[0].Required, true)
-			phase2RTSnapshotForSource(t, s, scope, source.Ref, "manual", []byte(pkg.Text))
+			phase2RTSnapshotForSource(t, s, scope, source.Ref, "manual", run.ID, []byte(pkg.Text))
 			var revoked phase2RTAuthResult
 			if mutation == "revoke" {
 				revoked = phase2RTUpdatePolicy(t, s, scope, source.Ref, grant, true)

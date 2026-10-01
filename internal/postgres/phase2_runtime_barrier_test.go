@@ -105,13 +105,15 @@ func TestPhase2RuntimeProviderBarrierMutationCommitsAndOldResultRejected(t *test
 				}
 				deskDone := make(chan deskResult, 1)
 				var run workspace.Run
+				operationID := string(memory.NewID())
 				if entry == "DeskTurn" {
 					go func() {
-						out, err := s.DeskTurn(ctx, scope, workspace.DeskTurnRequest{RequestID: string(memory.NewID()), AgentID: "phase2-model", Text: phase2RTGoldRead(t).Cases[0].Query})
+						out, err := s.DeskTurn(ctx, scope, workspace.DeskTurnRequest{RequestID: operationID, AgentID: "phase2-model", Text: phase2RTGoldRead(t).Cases[0].Query})
 						deskDone <- deskResult{out, err}
 					}()
 				} else {
 					run = phase2RTPrepareRun(t, s, scope, "phase2-model", phase2RTGoldRead(t).Cases[0].Query)
+					operationID = run.ID
 					phase2RTStartRunner(t, s)
 				}
 				select {
@@ -159,7 +161,7 @@ func TestPhase2RuntimeProviderBarrierMutationCommitsAndOldResultRejected(t *test
 				if !ok {
 					t.Fatal("actual ContextAttempts missing")
 				}
-				attempts, err := diagnostics.ContextAttempts(context.Background(), scope, "")
+				attempts, err := diagnostics.ContextAttempts(context.Background(), scope, operationID)
 				if err != nil {
 					t.Fatal(err)
 				}

@@ -48,13 +48,15 @@ func TestPhase2RuntimeBeforeDispatchFencePreventsKnownInvalidationSend(t *testin
 				})
 				done := make(chan error, 1)
 				var run workspace.Run
+				operationID := string(memory.NewID())
 				if entry == "DeskTurn" {
 					go func() {
-						_, err := s.DeskTurn(context.Background(), scope, workspace.DeskTurnRequest{RequestID: string(memory.NewID()), AgentID: "phase2-model", Text: phase2RTGoldRead(t).Cases[0].Query})
+						_, err := s.DeskTurn(context.Background(), scope, workspace.DeskTurnRequest{RequestID: operationID, AgentID: "phase2-model", Text: phase2RTGoldRead(t).Cases[0].Query})
 						done <- err
 					}()
 				} else {
 					run = phase2RTPrepareRun(t, s, scope, "phase2-model", phase2RTGoldRead(t).Cases[0].Query)
+					operationID = run.ID
 					phase2RTStartRunner(t, s)
 				}
 				var event memory.ContextRequestEvent
@@ -71,7 +73,7 @@ func TestPhase2RuntimeBeforeDispatchFencePreventsKnownInvalidationSend(t *testin
 				if !ok {
 					t.Fatal("actual diagnostic API missing")
 				}
-				attempts, err := diagnostics.ContextAttempts(context.Background(), scope, "")
+				attempts, err := diagnostics.ContextAttempts(context.Background(), scope, operationID)
 				if err != nil || len(attempts) != 1 {
 					t.Fatalf("prepared independent diagnostic not retained before send: rows=%d error=%v", len(attempts), err)
 				}

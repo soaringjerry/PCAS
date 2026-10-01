@@ -43,14 +43,15 @@ func TestPhase2RuntimeOwnerBodyQuotaReclaimsOldestBeforeExactSend(t *testing.T) 
 	if err := s.pool.QueryRow(context.Background(), "SELECT sum(snapshot_bytes) FROM context_attempts WHERE owner_id=$1", string(scope.OwnerID)).Scan(&before); err != nil || before != 67108864 {
 		t.Fatalf("64MiB exact synthetic body boundary absent: bytes=%d error=%v", before, err)
 	}
-	_, err := s.DeskTurn(context.Background(), scope, workspace.DeskTurnRequest{RequestID: string(memory.NewID()), AgentID: "phase2-model", Text: phase2RTGoldRead(t).Cases[0].Query})
+	operationID := string(memory.NewID())
+	_, err := s.DeskTurn(context.Background(), scope, workspace.DeskTurnRequest{RequestID: operationID, AgentID: "phase2-model", Text: phase2RTGoldRead(t).Cases[0].Query})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if capture.count() != 1 {
 		t.Fatalf("body reclaim must permit one actual provider request; count=%d", capture.count())
 	}
-	attempt := phase2RTSnapshotForSource(t, s, scope, source.Ref, "secretary", capture.request(t, 0))
+	attempt := phase2RTSnapshotForSource(t, s, scope, source.Ref, "secretary", operationID, capture.request(t, 0))
 	phase2RTMeasuredMetadata(t, s, scope, attempt.ID)
 	var after int64
 	var oldestState string

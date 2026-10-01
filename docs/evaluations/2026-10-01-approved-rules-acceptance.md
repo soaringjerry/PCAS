@@ -1,6 +1,6 @@
 # 已批准规则的独立验收
 
-2026-10-01，T4，Sol/high。用户确认同一事项逆序撤销，以及一句话新建任务后继续加步骤。**本提交是独立测试交接，原候选真实失败已保留；F13/F14 最终候选尚待指定与集成，不能把移除 pending 解释成验收通过。**
+2026-10-01，T4，Sol/high。用户确认同一事项逆序撤销，以及一句话新建任务后继续加步骤。**四个已批准 U 待决项已在集成后端候选实际通过，原候选真实失败仍保留。完整 Go 隔离 race 通过；整体候选的 UX 新提交与前端浏览器验证仍待完成，真实线上/真机/一天试用没有本次证据。**
 
 ## 独立预期与原候选证据
 
@@ -35,10 +35,42 @@ make check
 
 测试分支 `make check` 退出 0，fmt/vet/全包无 DB 的 race/build 通过；没有设置数据库的此条命令会跳过 PG 集成，不能代替上述实际数据库复现或最终完整集成。非法 N/THIS 隔离的七个子例在原候选通过，含附带项目与 delegate:new。
 
-## 最终候选验收待补
+## 已集成后端的独立验收
 
-尚未接管 A1，尚未集成 F13/F14，完整隔离 Go race、前端检查、62 mock 浏览器与默认真实后端 runner 留待协调者指定最终输入后执行。上述新测试均为确定断言，没有四个 U pending 的 skip；是否关闭四项需最终产品候选实际通过。
+协调者于 2026-10-01 明确移交 A1。确认 `/root/PCAS-wt/A1` / `stabilization/acceptance-candidate` 为干净 `59e25da` 后，依次 `merge --no-ff` F13 `f771e2cd8d559c023d25733a877d8f0a435ad5a6`、F14 `32724b3ee90c982d08a8ac0f5364b187169fd291`、T4 独立测试 `877eed3ee2b26f07ba85451e9b0bc689f6b788e3` 和完整协调分支 `docs/stabilization-dispatch` / `ecc7f2a4125ee952bbdee0db1e1db0170ab7c394`。全部无冲突，后端组合 SHA **`210144a93753bed736d2d5561a454f8d07185eb0`**。没有自行改产品。
 
-三项可选 live 继续未运行：`TestInstalledCodexHandshake`、`TestLiveCodexSecretaryAndLegacyFormats`、`TestLiveContinuityReplay`。线上 11 项、真机和一天试用没有因这些假模型测试而完成。没有生产、秘密、真实账号、外发、main 合并或部署。
+本组合实际执行：
 
-本任务自建 `pcas-test-T4-integration`，pgvector PostgreSQL16，1GiB tmpfs，Docker 动态 localhost 33268。每个集成测试仍使用共享 helper 的独立随机 schema；只清理自有容器/进程。HTTP 18156/18157 仅为本任务预留，目前未启动固定端口服务。最终资源清理与准确 SHA 在整套验收后补记。
+```sh
+env -u PCAS_TEST_CODEX_BINARY -u PCAS_LIVE_CODEX_HOME \
+ -u PCAS_LIVE_EMBEDDING_URL -u PCAS_LIVE_CODEX_BINARY \
+ -u PCAS_TEST_DATABASE_URL make check
+
+env -u PCAS_TEST_CODEX_BINARY -u PCAS_LIVE_CODEX_HOME \
+ -u PCAS_LIVE_EMBEDDING_URL -u PCAS_LIVE_CODEX_BINARY \
+ PCAS_TEST_DATABASE_URL='postgres://postgres:test@127.0.0.1:33268/postgres?sslmode=disable' \
+ go test -race -count=1 -json ./cmd/... ./internal/...
+```
+
+| 检查 | 本组合结果 |
+|---|---|
+| `make check` | 退出 0，fmt/vet/无 DB 全包 race/build 通过 |
+| 带隔离 DB、禁缓存的全包 Go race | 退出 0；11 个有测试包全部通过；PG 139.387s，Telegram 7.620s，notify 5.308s |
+| U3/U4-user/U5/U10 | 全部通过，四个 pending 归零；精确 `newer_action`、拒绝时全业务/revision/log 不变与逆序成功均执行 |
+| U9 两条路径与原 THIS 同轮回归 | 全部通过，正常后续 action 为 `newer_action`，无记录外部变化为 `changed_since` |
+| 新独立 N/动作顺序测试 | 8 个顶层全部通过，包含内容改回原值仍不得跳撤、两种事务路径及 R/N 隔离 |
+| U16 | 原 50 种子 × 20 操作全部通过，业务预期未改 |
+| Go Test 事件口径 | 637 pass、0 fail、3 skip；包含父测试/子测试，不能当 637 个独立场景；无测试的包级 skip 未计入 |
+| 新 UX 与前端全套 | 等待 U2 最终交接；尚未启动 mock/default browser，无新前端通过声明 |
+
+准确的三项 skip 为 `TestInstalledCodexHandshake`、`TestLiveCodexSecretaryAndLegacyFormats`、`TestLiveContinuityReplay`。live 环境开关显式清空，三项未授权而未运行，没有用 fake 来宣称其通过。日志 `/tmp/pcas-test-T4/backend-make-check.log`、`backend-go-race.jsonl`、`backend-go-race.stderr` 和结构化 `backend-results.json` 保留。撤销四项的关闭依据是实际集成后端运行，不是删 skip。
+
+F13 迁移前 `action_order=NULL` 的历史并列，只在回执唯一且能证明先后时重建顺序；未知并列保守 `changed_since`。这项已写入正式契约与作者报告，不能把新链全部通过推广为任意旧链可自动恢复。A1 原报告的三轮执行顺序风险、多行草稿/键盘边界仍保留为历史与后续 UX 验证输入。
+
+## 后续验证与资源
+
+用户追加设置页/事项页 UX 工作后，协调者要求完整前端检查、mock 与默认真实后端 browser 留待 U2 最终输入，避免重复验证同一前端候选。因此当前没有推中间候选或更新 #32；待整体最终检查后一次推送并更新现有 Draft PR。若后端产品树未变，不重复已完成的 Go 全量检查。
+
+线上 11 项、真机和一天试用未完成。没有生产、秘密、真实账号、外发、main 合并或部署。
+
+本任务自建 `pcas-test-T4-integration`，pgvector PostgreSQL16，1GiB tmpfs，Docker 动态 localhost 33268；全部后端测试完成后按记录先 stop 再 rm -v，已删除，只清理自有资源。每个集成测试仍使用共享 helper 的独立随机 schema。HTTP 18156/18157 尚未启动固定服务，浏览器 runner 的自有 tmpfs/HTTP 资源在最终整体检查后补记清理证据。

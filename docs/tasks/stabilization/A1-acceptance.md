@@ -1,10 +1,10 @@
 # A1：稳定化集成审查与进入二阶段的判定
 
-执行者：Astra / high。后端修复已交付，先审查明确提交的跨模块行为；等待 U1 最终交接后做一次完整候选验收。四个待裁定 U 叶不因此获准实现或宣称通过。
+执行者：Astra / high。后端修复已交付，先审查明确提交的跨模块行为；U1 已完成交接，执行一次完整候选验收。四个待裁定 U 叶不因此获准实现或宣称通过。
 
 ## 本轮精确候选与工作区
 
-使用 /root/PCAS-wt/A1，新分支 stabilization/acceptance-candidate。从 F11 e5841a2abc01319ffe3e06c08953ae20976c8665 开始，仅集成 F12 c1a0173629568c4588ed1f942af28e6010dd4f04、F8 2e6ebc1abe4fde92a7ceabdc41b7704ba56ac5de 和 M0 文档 21faec7ff2019b2722e660751231ae7af92ba832。F11/F12 已含 F7、F9、F10 和 T1/T2/T3，不重复 cherry-pick。U1 完成后协调者提供最终 SHA，再整合。允许创建/推候选分支和 draft PR（base main），不合并任何 PR/main。冲突先报告，不自行改产品解决。协调任务文档仅在协调工作区只读，不合入其分支。
+使用 /root/PCAS-wt/A1，新分支 stabilization/acceptance-candidate。从 F11 d38a0b4f375d0e2acc951de124554320ec1a9f45 开始，仅集成 F12 ae9f69b3611e0600e7fce97a404e8f043f569958、F8 2e6ebc1abe4fde92a7ceabdc41b7704ba56ac5de 和 M0 文档 21faec7ff2019b2722e660751231ae7af92ba832。F11/F12 已含 F7、F9、F10 和 T1/T2/T3，不重复 cherry-pick。U1 已交付 b0386f9b8186b6a87e5b19cb7c5a710b640626f3 并停止执行，整合该 SHA；当前完整产品候选为 7aae834d34b3749bdceaf0a2b704b79e837a391e。允许创建/推候选分支和 draft PR（base main），不合并任何 PR/main。冲突先报告，不自行改产品解决。协调任务文档仅在协调工作区只读，不合入其分支。
 
 报告可在该分支提交，产品和共享测试只读。独立预览/后端端口 18144/18145；自建 tmpfs PostgreSQL、动态 localhost DB 端口、自有 node_modules，按 PID 清理。完整检查之前等待 U1，先读关键 diff 和报告形成审查问题，不新建测试体系。
 

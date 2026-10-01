@@ -1,0 +1,83 @@
+{
+  "product_sha": "eeab123cc8649838a3bd72b28e19a1e842673489",
+  "harness_sha": "56af5b4f98aa279420759dd76f977568a478f8c5",
+  "exit_code": 0,
+  "top": {
+    "pass": 4,
+    "fail": 0,
+    "skip": 0
+  },
+  "leaf": {
+    "pass": 13,
+    "fail": 0,
+    "skip": 0
+  },
+  "events": 239,
+  "artifacts": 21,
+  "actions": {
+    "TestPhase2Runtime023PreservesOldPolicyMeaningAndVersions": "pass",
+    "TestPhase2RuntimeFreshMigrationRestartKeepsLedgerAndNoPolicy": "pass",
+    "TestPhase2Runtime024RecoveryUsesExecutionLeaseAndFixedStartupCutoff/prepared_no_send_fact": "pass",
+    "TestPhase2Runtime024RecoveryUsesExecutionLeaseAndFixedStartupCutoff/reserved_without_observed_dispatch": "pass",
+    "TestPhase2Runtime024RecoveryUsesExecutionLeaseAndFixedStartupCutoff/observed_dispatch_uncompleted": "pass",
+    "TestPhase2Runtime024RecoveryUsesExecutionLeaseAndFixedStartupCutoff/unexpired_active_execution": "pass",
+    "TestPhase2Runtime024RecoveryUsesExecutionLeaseAndFixedStartupCutoff/created_after_fixed_startup_cutoff": "pass",
+    "TestPhase2Runtime024RecoveryUsesExecutionLeaseAndFixedStartupCutoff/manual_prepared_no_automatic_lease": "pass",
+    "TestPhase2Runtime024RecoveryUsesExecutionLeaseAndFixedStartupCutoff/completed_not_recovered": "pass",
+    "TestPhase2Runtime024RecoveryUsesExecutionLeaseAndFixedStartupCutoff/invalidated_not_resurrected": "pass",
+    "TestPhase2Runtime024RecoveryUsesExecutionLeaseAndFixedStartupCutoff": "pass",
+    "TestPhase2Runtime024BackfillsOnlyAutomaticExecutionLease/adapter_arguments": "pass",
+    "TestPhase2Runtime024BackfillsOnlyAutomaticExecutionLease/manual_package": "pass",
+    "TestPhase2Runtime024BackfillsOnlyAutomaticExecutionLease/serialized_request": "pass",
+    "TestPhase2Runtime024BackfillsOnlyAutomaticExecutionLease": "pass"
+  },
+  "leaf_tests": {
+    "TestPhase2Runtime023PreservesOldPolicyMeaningAndVersions": "pass",
+    "TestPhase2RuntimeFreshMigrationRestartKeepsLedgerAndNoPolicy": "pass",
+    "TestPhase2Runtime024RecoveryUsesExecutionLeaseAndFixedStartupCutoff/prepared_no_send_fact": "pass",
+    "TestPhase2Runtime024RecoveryUsesExecutionLeaseAndFixedStartupCutoff/reserved_without_observed_dispatch": "pass",
+    "TestPhase2Runtime024RecoveryUsesExecutionLeaseAndFixedStartupCutoff/observed_dispatch_uncompleted": "pass",
+    "TestPhase2Runtime024RecoveryUsesExecutionLeaseAndFixedStartupCutoff/unexpired_active_execution": "pass",
+    "TestPhase2Runtime024RecoveryUsesExecutionLeaseAndFixedStartupCutoff/created_after_fixed_startup_cutoff": "pass",
+    "TestPhase2Runtime024RecoveryUsesExecutionLeaseAndFixedStartupCutoff/manual_prepared_no_automatic_lease": "pass",
+    "TestPhase2Runtime024RecoveryUsesExecutionLeaseAndFixedStartupCutoff/completed_not_recovered": "pass",
+    "TestPhase2Runtime024RecoveryUsesExecutionLeaseAndFixedStartupCutoff/invalidated_not_resurrected": "pass",
+    "TestPhase2Runtime024BackfillsOnlyAutomaticExecutionLease/adapter_arguments": "pass",
+    "TestPhase2Runtime024BackfillsOnlyAutomaticExecutionLease/manual_package": "pass",
+    "TestPhase2Runtime024BackfillsOnlyAutomaticExecutionLease/serialized_request": "pass"
+  },
+  "raw_jsonl_sha256": "c84e2ce0d18c4c04dff67fb508e783f673a483aea6ee623a6a89cee6e90806fc",
+  "files": {
+    "acceptance.jsonl.gz": {
+      "bytes": 5770,
+      "sha256": "ffc4d33adf986903638ad489e69e005924e0b88c6a4f54807bff728037a5867b"
+    },
+    "synthetic-evidence.tar.gz": {
+      "bytes": 4034,
+      "sha256": "e57f5f6f196d4293879dd01eb2dd47c6123ea78275f748e17ea2e45851995c1e"
+    }
+  },
+  "raw_artifacts": {
+    "TestPhase2Runtime023PreservesOldPolicyMeaningAndVersions-023-upgrade.json": "a36369604bf11a29c28c26fa985c29ce1a1cae01243fb02a62e38faa1fab2473",
+    "TestPhase2Runtime024BackfillsOnlyAutomaticExecutionLease__adapter_arguments-024-upgrade.json": "23223b755b8e3f1a81d24f4bbe9cce3744b07967c59cf58cdd9d8f53ccae619d",
+    "TestPhase2Runtime024BackfillsOnlyAutomaticExecutionLease__manual_package-024-upgrade.json": "8509f39dbedde729c80d23a8184a80f2458f046f9dda3ae64aee6b57b0877f18",
+    "TestPhase2Runtime024BackfillsOnlyAutomaticExecutionLease__serialized_request-024-upgrade.json": "078a22c84f5856975af1bf35fe2edd1fd633110052970be10050526e7630d463",
+    "TestPhase2Runtime024RecoveryUsesExecutionLeaseAndFixedStartupCutoff__completed_not_recovered-recovery-state.json": "7655b7939bcceb7eee31f3d0da269e59bafc379e7096a77abfe24ff0ba61f083",
+    "TestPhase2Runtime024RecoveryUsesExecutionLeaseAndFixedStartupCutoff__completed_not_recovered-whole-metadata.json": "34008331388cdbfab6ba57071dbef87878febb11c7585113958cdeadbafa8359",
+    "TestPhase2Runtime024RecoveryUsesExecutionLeaseAndFixedStartupCutoff__created_after_fixed_startup_cutoff-recovery-state.json": "9fc372951815687b6172d33f193df8d272352f8e79f618f59ca8075eabf27533",
+    "TestPhase2Runtime024RecoveryUsesExecutionLeaseAndFixedStartupCutoff__created_after_fixed_startup_cutoff-whole-metadata.json": "1a3a2ef931acd4f583b6f3863273dfc4b6eec94e818082ae174f3063d0db0ff4",
+    "TestPhase2Runtime024RecoveryUsesExecutionLeaseAndFixedStartupCutoff__invalidated_not_resurrected-recovery-state.json": "9c3ea495647c6e32f7a0baa4d9fce2989eed6697e0155d7a3dbf2fda783b61ea",
+    "TestPhase2Runtime024RecoveryUsesExecutionLeaseAndFixedStartupCutoff__invalidated_not_resurrected-whole-metadata.json": "475f4a666f26661334100db5bb99fffc099b4ddd29ec9b373893e27c78dc1b14",
+    "TestPhase2Runtime024RecoveryUsesExecutionLeaseAndFixedStartupCutoff__manual_prepared_no_automatic_lease-recovery-state.json": "be50d6a05b3b8f7d4e98db67219490dc6af1bb70075ad42d0a01af7886b43cfa",
+    "TestPhase2Runtime024RecoveryUsesExecutionLeaseAndFixedStartupCutoff__manual_prepared_no_automatic_lease-whole-metadata.json": "0887a3de1e3c8cb4a0a751dff84874cb812a1000a4c5f69f6239ce37a5cf8630",
+    "TestPhase2Runtime024RecoveryUsesExecutionLeaseAndFixedStartupCutoff__observed_dispatch_uncompleted-recovery-state.json": "13848a47996bc19d3e4d01ebe9f523438e9f22bda00ec2aa493b36fcafafe021",
+    "TestPhase2Runtime024RecoveryUsesExecutionLeaseAndFixedStartupCutoff__observed_dispatch_uncompleted-whole-metadata.json": "6c371b3d75f54fd45003f14d9e7ab40717acfa8a423165fb4e1b5b7a7e7f58c3",
+    "TestPhase2Runtime024RecoveryUsesExecutionLeaseAndFixedStartupCutoff__prepared_no_send_fact-recovery-state.json": "7fdbe874c6dd0ed78722c8bef27f9ae64e128bd9363741e089addfa568f081a2",
+    "TestPhase2Runtime024RecoveryUsesExecutionLeaseAndFixedStartupCutoff__prepared_no_send_fact-whole-metadata.json": "bbede22ed794f17101001ebc943d2d6820854b5e3293adf222f5f69c9c238245",
+    "TestPhase2Runtime024RecoveryUsesExecutionLeaseAndFixedStartupCutoff__reserved_without_observed_dispatch-recovery-state.json": "b288d15e147602202c25e3a9bd25cddb6886e09ba75c0ff2bd2a69a2c469e781",
+    "TestPhase2Runtime024RecoveryUsesExecutionLeaseAndFixedStartupCutoff__reserved_without_observed_dispatch-whole-metadata.json": "0344306f1d24ccfed1b4aa52f868e163767b066e9553dc525af5f7ffc40c6552",
+    "TestPhase2Runtime024RecoveryUsesExecutionLeaseAndFixedStartupCutoff__unexpired_active_execution-recovery-state.json": "a2f8d1fa6e49eafa7a992279db921b5a2d77df2ee99001fffac1989c2bcf70e2",
+    "TestPhase2Runtime024RecoveryUsesExecutionLeaseAndFixedStartupCutoff__unexpired_active_execution-whole-metadata.json": "0df93b6f6fcce582f6b5f567eced0be92aed8b41693cf8befde88555a13d8712",
+    "TestPhase2RuntimeFreshMigrationRestartKeepsLedgerAndNoPolicy-fresh-runtime-migration.json": "1b551ff9468e0bf91a2d45e52b39e29394bb299f4903ae50eeffcbeaa342e12a"
+  }
+}

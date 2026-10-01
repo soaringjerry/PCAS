@@ -149,15 +149,17 @@ func (s *Store) undoActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 				return workspace.ErrWorkStarted
 			}
 		}
-		var hash string
-		err = tx.QueryRow(ctx, "SELECT encode(sha256(convert_to(document::text,'UTF8')),'hex') FROM "+c.Table+" WHERE owner_id=$1 AND id=$2 FOR UPDATE", string(scope.OwnerID), c.ID).Scan(&hash)
+		// Use the trigger's content fingerprint; retain full-document matching for
+		// actions collected before migration 019, whose after snapshots are absent.
+		var hash, legacyHash string
+		err = tx.QueryRow(ctx, "SELECT action_document_hash(document),encode(sha256(convert_to(document::text,'UTF8')),'hex') FROM "+c.Table+" WHERE owner_id=$1 AND id=$2 FOR UPDATE", string(scope.OwnerID), c.ID).Scan(&hash, &legacyHash)
 		if errors.Is(err, pgx.ErrNoRows) {
 			if c.AfterHash != nil {
 				return workspace.ErrChangedSince
 			}
 		} else if err != nil {
 			return err
-		} else if c.AfterHash == nil || hash != *c.AfterHash {
+		} else if c.AfterHash == nil || (hash != *c.AfterHash && legacyHash != *c.AfterHash) {
 			return workspace.ErrChangedSince
 		}
 	}

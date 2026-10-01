@@ -40,8 +40,8 @@ func TestUndoCommands(t *testing.T) {
 	if _, err = s.Undo(ctx, scope, doneRequest); !errors.Is(err, workspace.ErrAlreadyUndone) {
 		t.Fatal(err)
 	}
-	if _, err = s.Undo(ctx, scope, request); !errors.Is(err, workspace.ErrChangedSince) {
-		t.Fatal(err)
+	if st, err = s.Undo(ctx, scope, request); err != nil || len(st.Tasks) != 0 {
+		t.Fatal("undo creation after undoing status", err, st.Tasks)
 	}
 	newRequest := string(memory.NewID())
 	st, err = s.Execute(ctx, scope, workspace.Command{Type: "addIdea", Title: "工具", RequestID: newRequest, ExpectedRevision: st.Revision})

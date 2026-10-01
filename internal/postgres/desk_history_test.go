@@ -66,8 +66,8 @@ func TestSecretaryHistoryOneEntryPerAction(t *testing.T) {
 			}
 			if change.ID == task.ID {
 				var hash string
-				if err := s.pool.QueryRow(ctx, "SELECT encode(sha256(convert_to(document::text,'UTF8')),'hex') FROM work_items WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), task.ID).Scan(&hash); err != nil || hash != *change.AfterHash {
-					t.Fatal("action log must hash the final document", hash, err)
+				if err := s.pool.QueryRow(ctx, "SELECT action_document_hash(document) FROM work_items WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), task.ID).Scan(&hash); err != nil || hash != *change.AfterHash {
+					t.Fatal("action log must hash the final content", hash, err)
 				}
 				if before == nil {
 					if string(change.Before) != "null" {
@@ -107,6 +107,10 @@ func TestSecretaryHistoryOneEntryPerAction(t *testing.T) {
 	got := restored.Tasks[0]
 	if got.Due != task.Due || !reflect.DeepEqual(got.Triggers, task.Triggers) || got.Version <= changed.Version || len(got.History) != 2 || got.History[1].By != "user" || !strings.HasPrefix(got.History[1].Summary, "撤销：") {
 		t.Fatal("undo semantics changed", got)
+	}
+	removed, err := s.Undo(ctx, scope, *created.Turn.Receipts[0].ActionID)
+	if err != nil || len(removed.Tasks) != 0 || len(removed.Projects) != 0 {
+		t.Fatal("undo creation after reschedule undo must remove task and implicit project", err, removed.Tasks, removed.Projects)
 	}
 }
 

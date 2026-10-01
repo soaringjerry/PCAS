@@ -96,7 +96,9 @@ func sanitizeItemWithStoreTx(store *Store, ctx context.Context, tx pgx.Tx, scope
 			// A prior destination's permission cannot license this consumer. The
 			// originating revision fence and the current task both have to pass.
 			if allowed {
-				if scope.Task == nil || scope.Task.Recipient.PrincipalID != principal {
+				if scope.Task == nil {
+					allowed = scope.IsOwner // local owner review, never model supply
+				} else if scope.Task.Recipient.PrincipalID != principal {
 					allowed = false
 				} else {
 					entries, cov, e := hydrateTypedContextTx(ctx, tx, scope, *scope.Task, refs)
@@ -107,7 +109,9 @@ func sanitizeItemWithStoreTx(store *Store, ctx context.Context, tx pgx.Tx, scope
 				}
 			}
 		} else {
-			run.AgentID = principal
+			if !(scope.IsOwner && scope.Task == nil) {
+				run.AgentID = principal
+			}
 			refs = run.ContextVersions
 			allowed = allowed && verifyRunForItemTx(ctx, tx, scope, run, &item) == nil
 		}

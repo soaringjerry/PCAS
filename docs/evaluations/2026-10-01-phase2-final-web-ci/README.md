@@ -1,6 +1,14 @@
-# 消费者 web CI：两个候选分别记录
+# 消费者 web CI：候选版本分别记录
 
-## 最终候选 cf3015c
+## 当前候选 a51fdef
+
+`a51fdef8670fb6152ac8ca290e69390f496edf33` 的 [web 检查](https://github.com/soaringjerry/PCAS/actions/runs/36890371146) 于 2026-10-01 16:13:33–16:14:12 UTC 成功，job `110464171373`。npm ci、lint、type-check、build 均实际执行成功；npm 下载缓存不等于测试结果缓存。Vite 输出与前两版相同。
+
+日志实际 checkout `ac62139ee0dc99f11ee4ae31365b8bf091b3150d` 为 PR 检查合成提交；父项 `6fd9d173a738cddf1ee9f4ed7e8bcb7b07ed1973` 和 `a51fdef8670fb6152ac8ca290e69390f496edf33`。GitHub Git 对象和本地候选完整 tree 均为 `e647f4fe63b12d1e0d81efad13bee87801e5ff12`，未合并 main。
+
+[完整日志](a51fdef-original.log.gz) 解压 SHA256 `22b2c338ae8d0cb7f7edc427c9db04c6b2da20d9445cdba014455ee3ee13d666`。协调者只读核验，没有本地构建或测试；本报告只表示 web 工程门。
+
+## 前一候选 cf3015c
 
 `cf3015cd67cf112933dfa51badbda8507de30834` 的 [web 检查](https://github.com/soaringjerry/PCAS/actions/runs/36888959215) 于 2026-10-01 16:03:03 UTC 成功，job `110459379396`。npm ci、lint、type-check、build 实际执行成功；npm 下载缓存命中不等于跳过这些命令。日志报告 0 vulnerabilities，Vite 输出仍为 `index-KRxlz-XR.js` / `index-Bn5qMKG9.css`。
 

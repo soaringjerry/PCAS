@@ -39,3 +39,5 @@ T2/T3/T6 原始失败正常执行并移除对应 skip；非授权 chat、群聊�
 PR #30 c1a0173 的 run36826478748 在 G7 三轮均未看到入站任务，其他失败尚未报告。原 F12 执行者接手调查，先确认内部 golden 假 Bot API 是否遗漏新增 getMe 协议；当前该 fixture 仅显式实现 getUpdates/sendMessage。唯一新增文件归属 internal/testsupport/golden/main.go 及自己的 F12 报告。真实身份检查不可放宽，不能为通过测试绕过 getMe 或回调绑定。若确为夹具缺口，补上符合官方协议的稳定 bot ID/is_bot 响应，保留当前回调/业务断言；若另有产品问题先报告最小范围。
 
 web/tests/golden.spec.ts 当前由 F11 修正 G9 文案，F12 只读该文件；若 G7 确需改动，先报告，待 F11 释放后再由一个执行者接手。自有端口 18148/18149、tmpfs PG，针对 G7 三轮与相邻通知回归；完整最终验收由 A1 执行。修复在原 F12 分支补提交、更新报告/PR、清理自身资源、交最终 SHA，不合并部署。
+
+07:01 UTC：F11 已明确释放 golden.spec.ts 写入权，仅继续只读执行已定稿 G9。现将该文件 G7 回调构造交给 F12，其他区段只读。fixture 的 sendMessage 实际消息 ID 取决于事件数，G7 硬编码 101 无法满足真实消息关联；先留 getMe 修复后原回调失败证据，再用 fixture 已记录/返回的实际 message ID 构造回调，不把 fake ID 强制定为 101。保留原 Undo、首页消失、snapshot 无事项、answerCallbackQuery 全部断言。不同工作区最终合并时保留 F11 的 G9 文案单行。

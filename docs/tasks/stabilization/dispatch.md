@@ -53,9 +53,16 @@
 
 执行者自行创建其尚不存在的 worktree，不改他人目录；若输入出现冲突，停止集成并报告，不能自行改产品解决。候选集成和分支推送均不得改动 main 或生产。
 
-F9 已交付并停止写入：[PR #25](https://github.com/soaringjerry/PCAS/pull/25)，`26dba8672b578cf1baadd71c0ba257f7691d8109`，base 为上述 `64f0f78` 候选。全部 R 及新增边界 21 个顶层用例零 finding skip；最后一次提前量交叉修复后跑相关回归和 fmt/vet/build，完整 make check / DB integration 的已通过证据属于前一实现提交，具体见修复报告。远端 CI 仍待完成。F10 尚未开始写产品，可在 T1 交付后接手 actions_log.go。
+F9 已交付并停止写入：[PR #25](https://github.com/soaringjerry/PCAS/pull/25)，`26dba8672b578cf1baadd71c0ba257f7691d8109`，base 为上述 `64f0f78` 候选。全部 R 及新增边界 21 个顶层用例零 finding skip；最后一次提前量交叉修复后跑相关回归和 fmt/vet/build，完整 make check / DB integration 的已通过证据属于前一实现提交，具体见修复报告。远端 CI 仍待完成。actions_log.go 已移交 F10。
 
-T1 当前确认 U12/U13（删除及超过 30 天后的 expired 判定），T3 同一 D3 合并归 F10。T3 另有 S1/S8/S9/D1 与 Telegram T2/T3/T6 的复核证据，等待最终报告；分拆 F11/F12，产品归属互斥。U10 当前轮新对象引用协议缺口另列在 T1 文档，不擅自扩展 JSON。
+T1 已交付 [PR #26](https://github.com/soaringjerry/PCAS/pull/26) / `6d0c27e70ede296cb0247151ffc31f239051de3a`，50 种子 × 20 操作逆序通过；U12/U13 为 3 个 finding 叶用例，U3/U4/U5/U10 为 4 个待裁定叶用例，阶段未通过。T3 已交付 [PR #27](https://github.com/soaringjerry/PCAS/pull/27) / `071e87dc3dd40f08c834797900e68842180d41f9`，19 编号有测试，S1/S8/S9/D1/D3、Telegram T2/T3/T6 合计 8 项 finding skip。两位均停止写入。D3 与 T1-U12 合并归 F10，U10 当前轮新对象引用协议缺口另列，不擅自扩展 JSON。
+
+第三批已启动：
+
+- `f8_ci_followup` 接手 F8 工作区，已复现测试项目占用 P1 导致后续 golden 6 项失败，修复仅在测试数据收尾，正在完整 runner 补验。
+- `f10_expired_undo` 使用 `/root/PCAS-wt/F10`，F9 + T1 候选 `stabilization/expiry-candidate` = `912ffad5189d73dd75fc09555d080c1b8d3609eb`，独占 F10 文档所列撤销错误/映射文件与已移交的 U12/U13 测试。
+- `f11_secretary_repairs` 使用 `/root/PCAS-wt/F11`，先以 F9 + T3 候选实现 S1/S8/S9/D1；F10 最终提交并入候选后再验证同源 D3。独占两份 T3 PostgreSQL 测试及秘书/删除/provider 文件，不能与 F10 交叉修改。
+- F12 仍排队，等待 F10 交付并释放 Telegram poller。Opus U1 和 Astra A1 均未启动。
 
 ## 文件归属与协作规则
 

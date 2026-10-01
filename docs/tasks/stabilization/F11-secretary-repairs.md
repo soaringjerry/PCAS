@@ -1,6 +1,8 @@
 # F11：对话串行、删除传播与失败说明
 
-执行者：6.1 Sol / high，必须不是 T3 测试作者。尚未启动；以 T3 最终报告、提交及协调者指定候选基线为准。实现已有正式契约，不新建记忆系统或另写聊天状态库。
+执行者：6.1 Sol / high，`f11_secretary_repairs`，不是 T3 测试作者。T3 已交付 #27 / `071e87d` 并停止写入，可以启动。实现已有正式契约，不新建记忆系统或另写聊天状态库。
+
+工作区 `/root/PCAS-wt/F11`。初始候选 `stabilization/secretary-candidate` 由 F9 `26dba8672b578cf1baadd71c0ba257f7691d8109` 与 T3 `071e87dc3dd40f08c834797900e68842180d41f9` 无冲突集成；记录初始 SHA，从其创建 `stabilization/F11-secretary-repairs`。F10 完成后，将其最终提交合入候选并记录最终 SHA，把本任务自己的提交 rebase 到最终候选（冲突先报告），再验证 D3。PR base 为最终候选，正文列明这些依赖；不合并 main。
 
 ## 已发现的序列与要求
 

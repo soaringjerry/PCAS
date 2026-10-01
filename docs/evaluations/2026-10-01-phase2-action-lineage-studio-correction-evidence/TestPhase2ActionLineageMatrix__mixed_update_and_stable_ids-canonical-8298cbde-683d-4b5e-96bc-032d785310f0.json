@@ -1,0 +1,57 @@
+{
+  "id": "8298cbde-683d-4b5e-96bc-032d785310f0",
+  "body": "OWNER independent paragraph cobalt 602",
+  "goal": "",
+  "name": "内容已失效",
+  "title": "内容已失效",
+  "status": "active",
+  "history": [
+    {
+      "at": "2026-10-01T14:20:10.653836379Z",
+      "by": "secretary",
+      "summary": ""
+    },
+    {
+      "at": "2026-10-01T14:20:10.706500067Z",
+      "by": "user",
+      "summary": "更新说明"
+    }
+  ],
+  "sources": [
+    {
+      "at": "2026-10-01T14:20:10.653836379Z",
+      "label": "",
+      "version": 1,
+      "sourceId": "7529752b-94f0-4aa6-87b9-1909bbe788e4"
+    },
+    {
+      "at": "2026-10-01T14:20:10.706500067Z",
+      "label": "更新说明",
+      "version": 2,
+      "sourceId": "7529752b-94f0-4aa6-87b9-1909bbe788e4"
+    }
+  ],
+  "itemKind": "idea",
+  "progress": "",
+  "triggers": [],
+  "checklist": [],
+  "createdAt": "2026-10-01T14:20:10.647592865Z",
+  "dependsOn": [],
+  "evolution": [
+    {
+      "at": "2026-10-01T14:20:10.653836379Z",
+      "by": "secretary",
+      "summary": ""
+    },
+    {
+      "at": "2026-10-01T14:20:10.706500067Z",
+      "by": "user",
+      "summary": "更新说明"
+    }
+  ],
+  "nextSteps": [],
+  "updatedAt": "2026-10-01T14:20:10.760357987Z",
+  "conditions": [],
+  "remindersOn": true,
+  "recordVersion": 4
+}

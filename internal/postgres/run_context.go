@@ -580,7 +580,11 @@ func (s *Store) verifyRunForItemTx(ctx context.Context, tx pgx.Tx, scope memory.
 		return nil
 	}
 	task := *run.ContextTask
-	if task.OwnerID != scope.OwnerID || task.Recipient.PrincipalID != run.AgentID || task.Scope != contextScopeForItem(item) {
+	currentScope := contextScopeForItem(item)
+	if task.OwnerID != scope.OwnerID || task.Recipient.PrincipalID != run.AgentID {
+		return memory.ErrConflict
+	}
+	if task.Scope != currentScope && !ordinaryRunFollowsItem(run, item, scope.Task, currentScope) {
 		return memory.ErrConflict
 	}
 	recipient, err := s.contextRecipientModelTx(ctx, tx, scope, run.AgentID, task.Recipient.Role, run.ManualRecipient, task.Recipient.Model)
@@ -614,6 +618,22 @@ func (s *Store) verifyRunForItemTx(ctx context.Context, tx pgx.Tx, scope memory.
 		}
 	}
 	return verifyRunForItemTx(ctx, tx, scope, claims, item)
+}
+
+// Moving an existing item carries its completed ordinary work with it. This
+// exception concerns that item's own result, never remembered material or a
+// copied result from another item. Original recipient and task checks above
+// still run; the old fixed task is neither rewritten nor reauthorized.
+func ordinaryRunFollowsItem(run workspace.Run, item *workspace.Item, target *memory.TrustedTaskContext, currentScope memory.HardScope) bool {
+	if item == nil || run.ThingID == "" || run.ThingID != item.ID || run.Status != "done" || run.ContextTask == nil {
+		return false
+	}
+	if target != nil && target.Scope != currentScope {
+		return false
+	}
+	return len(run.ContextDependencies) == 0 && len(run.ContextIndirectDependencies) == 0 &&
+		len(run.ContextVersions) == 0 && len(run.ContextMemoryIDs) == 0 && len(run.ContextSourceSpans) == 0 &&
+		len(run.ContextDeskActions) == 0 && len(run.ContextTask.DeskActions) == 0
 }
 
 func (s *Store) verifyManualRunSubmissionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run workspace.Run) error {

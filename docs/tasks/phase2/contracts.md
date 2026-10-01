@@ -18,6 +18,8 @@ K0 冻结类型、公开授权和生命周期接口、必要兼容迁移。K1/K2
 
 硬范围为 `studio`（精确 studio ID）、`owner_global`（当前用户明确全局请求/已批准可信策略）、`unscoped`（没有工作室的独立任务）。工作室默认仅本工作室成员及**单独标记且经授权、适用于任务的 global_constraint**。`WorkingContext.Objects` 仍是软相关线索；不能替代范围。无 source scope tag 的旧原文是 unscoped；studio 不得自动读取。owner_global 可在 owner 明确范围下检索授权资料，但不改变其权限。跨工作室扩展必须重新绑定可信请求，不能由 planner 放宽。
 
+同一真实事项由 owner 移动工作室后，其已完成且所有记忆、typed/indirect/source span、DeskActions 来源列表均为空的普通 Run 结果可随事项继续使用。原 Task 的 owner/purpose/HardScope、原接收者启用与实际 route、stale 状态仍校验；当前 consumer 的 Task 必须符合当前事项范围。原 Task 不重写、不重打 stamp；任何依赖存在仍严格核原范围及权限。此兼容不适用于跨事项复制、queued/waiting 请求、旧 manual 包交付或旧输出提交。
+
 source 范围以 `source_scope_assignments` 关联同一来源：`studio` 指定一个或多个 studio ID；`global_constraint` 需 owner 明确标记；`unscoped` 是缺少关联时的分类。global_constraint 不是所有全局原文，仍需匹配用途与必要性。自动抽取只可建议关联，不能授予/扩大范围。
 
 ## 3 来源授权：公开与自然入口

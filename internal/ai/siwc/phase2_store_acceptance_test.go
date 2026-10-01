@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"net"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -23,7 +24,6 @@ import (
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
-const phase2StoreSyntheticDSN = "postgres://phase2_c:phase2-synthetic-only@127.0.0.1:33273/phase2_c?sslmode=disable"
 const phase2StoreProvider = "chatgpt-direct"
 const phase2StoreRawMarker = "SYNTHETIC_RAW_SIWC_NEVER_SUPPLY_826"
 const phase2StoreClaim = "独立确认的海棠邀请偏好：措辞亲切且简短"
@@ -31,8 +31,14 @@ const phase2StoreClaim = "独立确认的海棠邀请偏好：措辞亲切且简
 func phase2StoreDatabase(t *testing.T) (*postgres.Store, memory.Scope) {
 	t.Helper()
 	dsn := os.Getenv("PCAS_TEST_DATABASE_URL")
-	if dsn != phase2StoreSyntheticDSN {
-		t.Fatal("requires the prescribed dedicated loopback phase2_c synthetic database; no skip")
+	u, err := url.Parse(dsn)
+	if dsn == "" || err != nil || (u.Scheme != "postgres" && u.Scheme != "postgresql") {
+		t.Fatal("requires an explicitly configured synthetic PCAS_TEST_DATABASE_URL; no skip")
+	}
+	host, database := u.Hostname(), strings.TrimPrefix(u.Path, "/")
+	ip := net.ParseIP(host)
+	if (host != "localhost" && (ip == nil || !ip.IsLoopback())) || strings.Contains(database, "/") || !(strings.HasSuffix(database, "_test") || strings.HasPrefix(database, "phase2_")) {
+		t.Fatal("test database must use loopback and an explicit _test suffix or phase2_ prefix")
 	}
 	ctx := context.Background()
 	admin, err := pgx.Connect(ctx, dsn)
@@ -62,10 +68,6 @@ func phase2StoreDatabase(t *testing.T) (*postgres.Store, memory.Scope) {
 			t.Error(err)
 		}
 	})
-	u, err := url.Parse(dsn)
-	if err != nil {
-		t.Fatal(err)
-	}
 	q := u.Query()
 	q.Set("search_path", schema+",public")
 	u.RawQuery = q.Encode()
@@ -77,7 +79,7 @@ func phase2StoreDatabase(t *testing.T) (*postgres.Store, memory.Scope) {
 	if err := store.Migrate(ctx); err != nil {
 		t.Fatal(err)
 	}
-	t.Logf("synthetic_database=phase2_c schema=%s", schema)
+	t.Logf("synthetic_database=%s schema=%s", database, schema)
 	return store, memory.Scope{OwnerID: memory.NewID(), PrincipalID: "owner", IsOwner: true}
 }
 

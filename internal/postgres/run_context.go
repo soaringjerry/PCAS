@@ -133,7 +133,7 @@ func (s *Store) requestRunTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 		fmt.Fprintf(&brief, "子步骤（完成=%t）：%s\n", check.Done, check.Text)
 	}
 	for _, turn := range prepared.History {
-		if deps, err := s.deskTurnContextTx(ctx, tx, scope, turn.ID, &task); err == nil {
+		if deps, err := s.deskTurnContextForItemTx(ctx, tx, scope, turn.ID, &task, &item); err == nil {
 			fmt.Fprintf(&brief, "\n导办台之前的讨论：\n问：%s\n答：%s\n", turn.Question, turn.Answer)
 			artifactRefs = append(artifactRefs, refsForDependencies(deps)...)
 		}
@@ -447,7 +447,7 @@ func (s *Store) prepareRunContextForItem(ctx context.Context, scope memory.Scope
 			if err := tx.QueryRow(ctx, "SELECT question,answer,dependencies FROM desk_turns WHERE owner_id=$1 AND id=$2 AND agent_id=$3", string(scope.OwnerID), id, c.AgentID).Scan(&turn.Question, &turn.Answer, &turn.Refs); err != nil {
 				return memory.ErrNotFound
 			}
-			if deps, err := s.deskTurnContextTx(ctx, tx, scope, id, &task); turn.Answer != "" && err == nil {
+			if deps, err := s.deskTurnContextForItemTx(ctx, tx, scope, id, &task, &item); turn.Answer != "" && err == nil {
 				turn.Refs = refsForDependencies(deps)
 				history = append(history, turn)
 			}

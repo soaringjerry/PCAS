@@ -156,6 +156,33 @@ func (s *Store) deskTurnContextTx(ctx context.Context, tx pgx.Tx, scope memory.S
 	return dependenciesForEntries(entries), nil
 }
 
+// Prepare history for an actual destination item without changing the caller's
+// origin collector until both authorization and item exclusions succeed.
+func (s *Store) deskTurnContextForItemTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, turnID string, target *memory.TrustedTaskContext, item *workspace.Item) ([]memory.TypedDependency, error) {
+	if target == nil || item == nil || target.Scope != contextScopeForItem(item) {
+		return nil, memory.ErrForbidden
+	}
+	candidate := *target
+	candidate.DeskActions = append([]memory.ID{}, target.DeskActions...)
+	deps, err := s.deskTurnContextTx(ctx, tx, scope, turnID, &candidate)
+	if err != nil {
+		return nil, err
+	}
+	excluded, err := queryDocuments[string](ctx, tx, "SELECT to_jsonb(memory_id::text) FROM context_exclusions WHERE owner_id=$1 AND thing_id=$2", string(scope.OwnerID), item.ID)
+	if err != nil {
+		return nil, err
+	}
+	for _, dep := range deps {
+		if oneOf(string(dep.Ref.ID), excluded...) {
+			return nil, memory.ErrConflict
+		}
+	}
+	if err := appendTaskDeskActions(target, candidate.DeskActions...); err != nil {
+		return nil, err
+	}
+	return deps, nil
+}
+
 // Keep a verifiable operation receipt while removing stale derived prose and
 // item links. Action ownership and this exchange's binding are server facts.
 func redactDeskTurnContextTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, turn *workspace.SecretaryTurn) error {

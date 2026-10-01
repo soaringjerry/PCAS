@@ -54,9 +54,17 @@ func phase2StoreDatabase(t *testing.T) (*postgres.Store, memory.Scope) {
 	if err := admin.QueryRow(ctx, "SHOW server_encoding").Scan(&encoding); err != nil || encoding != "UTF8" {
 		t.Fatalf("synthetic database must be UTF8: %q %v", encoding, err)
 	}
-	var vector bool
-	if err := admin.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM pg_extension WHERE extname='vector')").Scan(&vector); err != nil || !vector {
-		t.Fatalf("dedicated database requires existing vector extension: %t %v", vector, err)
+	// Packages start independently under make check. Initialize the shared
+	// extension under the same database-wide lock as Migrate, then release it
+	// before the isolated schema's Migrate acquires that lock again.
+	if err := pgx.BeginFunc(ctx, admin, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(734826190)"); err != nil {
+			return err
+		}
+		_, err := tx.Exec(ctx, "CREATE EXTENSION IF NOT EXISTS vector WITH SCHEMA public")
+		return err
+	}); err != nil {
+		t.Fatal(err)
 	}
 	schema := "phase2_siwc_store_" + strings.ReplaceAll(string(memory.NewID()), "-", "")
 	quoted := pgx.Identifier{schema}.Sanitize()

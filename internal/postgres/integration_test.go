@@ -35,7 +35,13 @@ func testStore(t *testing.T) *Store {
 	if err := admin.pool.QueryRow(ctx, "SHOW server_encoding").Scan(&encoding); err != nil || encoding != "UTF8" {
 		t.Fatalf("integration tests require PostgreSQL UTF8, got %q (%v)", encoding, err)
 	}
-	if _, err := admin.pool.Exec(ctx, "CREATE EXTENSION IF NOT EXISTS vector WITH SCHEMA public"); err != nil {
+	if err := pgx.BeginFunc(ctx, admin.pool, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(734826190)"); err != nil {
+			return err
+		}
+		_, err := tx.Exec(ctx, "CREATE EXTENSION IF NOT EXISTS vector WITH SCHEMA public")
+		return err
+	}); err != nil {
 		t.Fatal(err)
 	}
 	schema := "pcas_test_" + strings.ReplaceAll(string(memory.NewID()), "-", "")

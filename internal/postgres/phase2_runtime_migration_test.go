@@ -25,7 +25,13 @@ func phase2RTLegacy022Store(t *testing.T) *Store {
 		t.Fatal(err)
 	}
 	t.Cleanup(admin.Close)
-	if _, err := admin.pool.Exec(ctx, "CREATE EXTENSION IF NOT EXISTS vector WITH SCHEMA public"); err != nil {
+	if err := pgx.BeginFunc(ctx, admin.pool, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(734826190)"); err != nil {
+			return err
+		}
+		_, err := tx.Exec(ctx, "CREATE EXTENSION IF NOT EXISTS vector WITH SCHEMA public")
+		return err
+	}); err != nil {
 		t.Fatal(err)
 	}
 	schema := pgx.Identifier{"pcas_phase2_c_023_" + strings.ReplaceAll(string(memory.NewID()), "-", "")}.Sanitize()

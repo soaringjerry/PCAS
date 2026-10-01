@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"strings"
 	"time"
 
@@ -11,6 +12,15 @@ import (
 	"github.com/soaringjerry/PCAS/internal/ai"
 	"github.com/soaringjerry/PCAS/internal/memory"
 )
+
+// A missing or forbidden dependency at a fence means the previously assembled
+// context changed. Provider/network errors are never passed through this gate.
+func contextFenceError(err error) error {
+	if errors.Is(err, memory.ErrNotFound) || errors.Is(err, memory.ErrForbidden) {
+		return memory.ErrConflict
+	}
+	return err
+}
 
 // generateContext runs outside all business transactions. Adapter observation
 // independently commits the exact final request before a provider barrier.
@@ -102,7 +112,7 @@ func (s *Store) generateContext(ctx context.Context, scope memory.Scope, operati
 		return err
 	}
 	workCtx := memory.WithContextRequestObserver(ctx, memory.ContextRequestObserverFunc(func(ctx context.Context, event memory.ContextRequestEvent) error {
-		err := bind(ctx, event)
+		err := contextFenceError(bind(ctx, event))
 		if err != nil {
 			observerErr = err
 		}
@@ -178,7 +188,7 @@ func (s *Store) generateContext(ctx context.Context, scope memory.Scope, operati
 		})
 		attempt.State = memory.AttemptInvalidated
 		attempt.SnapshotState = memory.SnapshotRevoked
-		return ai.Result{}, attempt, finishErr
+		return ai.Result{}, attempt, contextFenceError(finishErr)
 	}
 	attempt.State = state
 	now := time.Now().UTC()

@@ -289,9 +289,9 @@ func (s *Store) verifyContextAttemptTx(ctx context.Context, tx pgx.Tx, scope mem
 		return err
 	}
 	if err := s.verifyTaskDeskActionsTx(ctx, tx, scope, task); err != nil {
-		return err
+		return contextFenceError(err)
 	}
-	return verifyContextAttemptTx(context.WithValue(ctx, verifiedDeskOriginsKey{}, true), tx, scope, id, task, deps)
+	return contextFenceError(verifyContextAttemptTx(context.WithValue(ctx, verifiedDeskOriginsKey{}, true), tx, scope, id, task, deps))
 }
 
 func (s *Store) filterSecretaryBlocksTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, blocks []artifactBlock) ([]artifactBlock, []memory.Ref, error) {

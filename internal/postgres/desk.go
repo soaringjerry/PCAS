@@ -225,7 +225,7 @@ func (s *Store) answerDeskTyped(ctx context.Context, scope memory.Scope, agentID
 			return memory.ErrConflict
 		}
 		if err := verifyTypedContextTx(ctx, tx, scope, task, deps); err != nil {
-			return err
+			return contextFenceError(err)
 		}
 		for _, item := range tasks {
 			current, err := getItem(ctx, tx, scope, item.ID)

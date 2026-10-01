@@ -93,6 +93,9 @@ func secretaryCaptureText(stage string, err error) string {
 	if errors.Is(err, memory.ErrRecordCapacity) {
 		return "已记下原话；这轮暂时无法发送，请缩短问题或稍后再试"
 	}
+	if errors.Is(err, memory.ErrConflict) {
+		return "已记下原话；上下文已变更，请重试"
+	}
 	reason := "模型没有响应"
 	switch stage {
 	case "context":

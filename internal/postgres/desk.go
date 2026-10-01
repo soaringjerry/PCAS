@@ -102,7 +102,7 @@ func (s *Store) answerDeskTyped(ctx context.Context, scope memory.Scope, agentID
 	}
 	query := tail(earlier+question, 4000)
 	modelScope := memory.Scope{OwnerID: scope.OwnerID, PrincipalID: agent.ID, Task: &task}
-	recall, err := s.Recall(ctx, modelScope, memory.RecallRequest{Query: query, Mode: task.View.Mode, Context: memory.WorkingContext{Objects: []memory.ID{}, KnownAt: task.View.KnownAt, ValidAt: task.View.ValidAt}, Budget: task.MemoryBudget})
+	recall, err := s.Recall(withRecallEmbeddingQuery(ctx, question), modelScope, memory.RecallRequest{Query: query, Mode: task.View.Mode, Context: memory.WorkingContext{Objects: []memory.ID{}, KnownAt: task.View.KnownAt, ValidAt: task.View.ValidAt}, Budget: task.MemoryBudget})
 	if err != nil {
 		return out, err
 	}

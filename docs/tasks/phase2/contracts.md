@@ -186,7 +186,7 @@ owner 本地已撤销操作回执有一个更窄的审计读规则：仅 `scope.
 
 ### 检索 query 的外发边界
 
-embedding provider 是独立实际接收者，秘书/副手/manual 的授权不授予 embedding 外发许可。当前没有向该接收者独立授权并记录派生 query 的协议，因此消费者将完整本地 lexical/graph query 与 embedding query 分开，使用服务端私有 context override，不新增公开 JSON 参数。Run prepare 的完整 query 继续保留已合法过滤的事项字段、旧讨论和旧结果，但 embedding 只用本轮已确认 owner 独立 `c.Prompt`；存在秘书生成 provenance、derived 输入或非空 SourceRun Prompt origins 时，此 Prompt 也只做本地检索，并给明确 coverage gap。是否拼入 item/previous 不靠 `Task.DeskActions` 或零依赖猜测；这些拼入文字一律不进入 embedding query。秘书同类 Recall 保留 `earlier + req.Text` 本地 query，仅外发本轮 owner `req.Text`。普通独立 owner Recall 和现有向量存储继续可用，不整体禁 Recall，也不在 owner 锁内调用 provider。
+embedding provider 是独立实际接收者，秘书/副手/manual 的授权不授予 embedding 外发许可。当前没有向该接收者独立授权并记录派生 query 的协议，因此消费者将完整本地 lexical/graph query 与 embedding query 分开，使用服务端私有 context override，不新增公开 JSON 参数。Run prepare 的完整 query 继续保留已合法过滤的事项字段、旧讨论和旧结果，但 embedding 只用本轮已确认 owner 独立 `c.Prompt`；存在秘书生成 provenance、derived 输入或非空 SourceRun Prompt origins 时，此 Prompt 也只做本地检索，并给明确 coverage gap。是否拼入 item/previous 不靠 `Task.DeskActions` 或零依赖猜测；这些拼入文字一律不进入 embedding query。DeskTurn 同类 Recall 保留 `earlier + req.Text` 本地 query，仅外发本轮 owner `req.Text`；AnswerDesk 对应仅外发本轮 `question`。这两处 earlier 实际只拼历史用户问题，不将此收敛描述成已发现旧 Reply 外发。普通独立 owner Recall 和现有向量存储继续可用，不整体禁 Recall，也不在 owner 锁内调用 provider。
 
 prepare 在 Recall 前按实际 destination item 检查 Prompt 的 indirect dependencies 与 `context_exclusions`，排除命中即拒绝；final 原 item/route/origin/typed 门仍保留。原 prepare→final 的并发验收可使用真实本地检索 read/事务阻塞证明快照重验，不虚构 prepared attempt。旧 ordinary continuation 正控仍必须进入本地 query 与最终 Brief/package；未经独立 embedding 授权的旧回答不再要求进入 embedding HTTP payload。此边界只改变实际传输层，不取消其合法后续使用。
 

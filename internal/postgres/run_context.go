@@ -443,6 +443,11 @@ func (s *Store) prepareRunContextForItem(ctx context.Context, scope memory.Scope
 	}
 	history := []storedDeskContext{}
 	query := c.Prompt
+	embeddingQuery := c.Prompt
+	_, secretaryDerived := ctx.Value(secretaryArtifactKey{}).(secretaryArtifactContext)
+	if secretaryDerived || len(derived) > 0 {
+		embeddingQuery = ""
+	}
 	projectID := c.ProjectID
 	var previous *workspace.Run
 	var task memory.TrustedTaskContext
@@ -505,11 +510,14 @@ func (s *Store) prepareRunContextForItem(ctx context.Context, scope memory.Scope
 				return err
 			}
 			indirect = mergeRunDependencies(indirect, promptDeps)
+			if len(sourceRun.PromptOrigins) > 0 {
+				embeddingQuery = ""
+			}
 		}
 		modelScope := memory.Scope{OwnerID: scope.OwnerID, PrincipalID: c.AgentID, Task: &task}
 		// Generated prompt/title may contain any input the secretary saw.
-		// Require the destination's independent permission before its text can
-		// even become an external embedding query or queued Run outline.
+		// Require the destination's independent permission before local retrieval
+		// or queueing. These derived requests are never embedded externally.
 		if len(derived) > 0 {
 			refs := refsForDependencies(derived)
 			entries, cov, err := hydrateTypedContextTx(ctx, tx, scope, task, refs)
@@ -520,6 +528,17 @@ func (s *Store) prepareRunContextForItem(ctx context.Context, scope memory.Scope
 				return memory.ErrForbidden
 			}
 			indirect = mergeRunDependencies(indirect, dependenciesForEntries(entries))
+		}
+		if len(indirect) > 0 {
+			excluded, err := queryDocuments[string](ctx, tx, "SELECT to_jsonb(memory_id::text) FROM context_exclusions WHERE owner_id=$1 AND thing_id=$2", string(scope.OwnerID), item.ID)
+			if err != nil {
+				return err
+			}
+			for _, dep := range indirect {
+				if oneOf(string(dep.Ref.ID), excluded...) {
+					return memory.ErrConflict
+				}
+			}
 		}
 		for _, id := range c.DeskTurnIDs {
 			if !memory.ID(id).Valid() {
@@ -566,7 +585,7 @@ func (s *Store) prepareRunContextForItem(ctx context.Context, scope memory.Scope
 	}
 	request.Budget = task.MemoryBudget
 	request.Context.KnownAt, request.Context.ValidAt = task.View.KnownAt, task.View.ValidAt
-	result, err := s.Recall(ctx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: c.AgentID, Task: &task}, request)
+	result, err := s.Recall(withRecallEmbeddingQuery(ctx, embeddingQuery), memory.Scope{OwnerID: scope.OwnerID, PrincipalID: c.AgentID, Task: &task}, request)
 	if err != nil {
 		return ctx, err
 	}

@@ -288,7 +288,7 @@ func (s *Store) secretaryPrompt(ctx context.Context, tx pgx.Tx, scope memory.Sco
 	if err := s.verifyTaskDeskActionsTx(ctx, tx, scope, c.Task); err != nil {
 		return "", nil, err
 	}
-	recall, err := s.Recall(ctx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: c.Agent.ID, Task: &c.Task}, memory.RecallRequest{Query: tail(earlier+req.Text, 4000), Mode: "remember", Context: memory.WorkingContext{Objects: []memory.ID{}, ValidAt: c.Task.View.ValidAt, KnownAt: c.Task.View.KnownAt}, Budget: c.Task.MemoryBudget})
+	recall, err := s.Recall(withRecallEmbeddingQuery(ctx, req.Text), memory.Scope{OwnerID: scope.OwnerID, PrincipalID: c.Agent.ID, Task: &c.Task}, memory.RecallRequest{Query: tail(earlier+req.Text, 4000), Mode: "remember", Context: memory.WorkingContext{Objects: []memory.ID{}, ValidAt: c.Task.View.ValidAt, KnownAt: c.Task.View.KnownAt}, Budget: c.Task.MemoryBudget})
 	if err != nil {
 		return "", nil, err
 	}

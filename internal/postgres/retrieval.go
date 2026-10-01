@@ -35,6 +35,15 @@ func normalizedBudget(b memory.Budget) (memory.Budget, error) {
 func coverage() memory.Coverage {
 	return memory.Coverage{Complete: true, Gaps: []string{}, PendingSources: []memory.ID{}}
 }
+
+type recallEmbeddingQueryKey struct{}
+
+// Only server assembly can select this independent query. An empty override
+// keeps derived context local; it is never a client authorization parameter.
+func withRecallEmbeddingQuery(ctx context.Context, query string) context.Context {
+	return context.WithValue(ctx, recallEmbeddingQueryKey{}, tail(strings.TrimSpace(query), 4000))
+}
+
 func (s *Store) Recall(ctx context.Context, scope memory.Scope, in memory.RecallRequest) (memory.RecallResult, error) {
 	out := memory.RecallResult{Memories: []memory.Ref{}, Evidence: []memory.Evidence{}, Unresolved: []string{}, Coverage: coverage(), FollowUps: []string{}}
 	if !scope.Valid() {
@@ -74,6 +83,11 @@ func (s *Store) Recall(ctx context.Context, scope memory.Scope, in memory.Recall
 	if query == "" {
 		query = strings.TrimSpace(in.Context.Text)
 	}
+	embeddingQuery := query
+	override, restricted := ctx.Value(recallEmbeddingQueryKey{}).(string)
+	if restricted {
+		embeddingQuery = override
+	}
 	tokens := memory.SearchTokens(query)
 	if len(tokens) > 120 {
 		tokens = tokens[:120]
@@ -88,17 +102,19 @@ func (s *Store) Recall(ctx context.Context, scope memory.Scope, in memory.Recall
 	// Query-time embedding is optional. Missing semantic coverage is explicit.
 	var vector []byte
 	var model string
-	if query != "" && s.models != nil && s.models.EmbeddingID() != "" {
+	if restricted && embeddingQuery == "" && query != "" {
+		out.Coverage.Gaps = append(out.Coverage.Gaps, "派生检索内容仅在本地检索，未发送到语义索引")
+	} else if embeddingQuery != "" && s.models != nil && s.models.EmbeddingID() != "" {
 		provider, _ := s.models.Get(s.models.EmbeddingID())
 		var embeddings []memory.Embedding
 		var e error
 		if !s.models.Available(provider.ID) {
 			e = memory.ErrUnavailable
 		} else {
-			e = s.reserveModelCost(ctx, scope.OwnerID, float64(len(query)+16)*provider.InputPerMillion/1e6, nil)
+			e = s.reserveModelCost(ctx, scope.OwnerID, float64(len(embeddingQuery)+16)*provider.InputPerMillion/1e6, nil)
 		}
 		if e == nil {
-			embeddings, e = s.models.EmbedProvider(ctx, provider, []string{provider.EmbeddingQueryPrefix + query})
+			embeddings, e = s.models.EmbedProvider(ctx, provider, []string{provider.EmbeddingQueryPrefix + embeddingQuery})
 		}
 		if e == nil && len(embeddings) == 1 {
 			vector = asJSON(embeddings[0].Values)

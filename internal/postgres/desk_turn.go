@@ -333,7 +333,12 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 	if conversationID == "" {
 		conversationID = string(memory.NewID())
 	}
-	err := s.withSecretaryLocks(ctx, requestCtx, string(scope.OwnerID), req.RequestID, conversationID, func(tx pgx.Tx) error {
+	ticket, err := s.admitSecretaryTurn(ctx, requestCtx, string(scope.OwnerID), req.RequestID, conversationID, hash[:])
+	if err != nil {
+		return out, err
+	}
+	conversationID = ticket.conversation
+	err = s.withOrderedSecretaryTurn(ctx, requestCtx, string(scope.OwnerID), req.RequestID, ticket, func(tx pgx.Tx, captureOnly bool) error {
 		var priorHash, prior []byte
 		err := tx.QueryRow(ctx, "SELECT request_hash,response FROM desk_turns WHERE owner_id=$1 AND request_id=$2", string(scope.OwnerID), req.RequestID).Scan(&priorHash, &prior)
 		if err == nil {
@@ -356,13 +361,17 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 		}
 		out.ConversationID = conversationID
 		out.Turn = workspace.SecretaryTurn{ID: string(memory.NewID()), Text: req.Text, Cards: []workspace.DeskCard{}, Receipts: []workspace.DeskReceipt{}, CreatedAt: stamp()}
-		if req.ThingID != nil {
+		if req.ThingID != nil && !captureOnly {
 			if _, err := getItem(ctx, tx, scope, *req.ThingID); err != nil {
 				return err
 			}
 		}
 		c, contextErr := s.secretaryContextTx(ctx, tx, scope, req, conversationID)
 		failureStage := "context"
+		if captureOnly {
+			contextErr = errors.New("secretary turn incomplete")
+			failureStage = "order"
+		}
 		out.Turn.Agent = c.Agent.Name
 		var answer secretaryOutput
 		sent := map[string]workspace.Memory{}
@@ -412,10 +421,16 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 		dependencies := []memory.Ref{}
 		if contextErr != nil {
 			slog.WarnContext(ctx, "secretary capture fallback", "stage", failureStage, "error_type", secretaryErrorType(failureStage, contextErr))
-			if err := s.commandTx(ctx, tx, scope, workspace.Command{Type: "capture", RequestID: req.RequestID, Text: req.Text}); err != nil {
+			receiptText := secretaryCaptureText(failureStage, contextErr)
+			if captureOnly {
+				if err := s.captureIncompleteSecretaryTurn(ctx, tx, scope, req.RequestID, req.Text); err != nil {
+					return err
+				}
+				receiptText = "已记下原话；这轮操作未完成，为避免覆盖后续改动，请重新说明要做的事"
+			} else if err := s.commandTx(ctx, tx, scope, workspace.Command{Type: "capture", RequestID: req.RequestID, Text: req.Text}); err != nil {
 				return err
 			}
-			out.Turn.Receipts = append(out.Turn.Receipts, workspace.DeskReceipt{Op: "capture", Text: secretaryCaptureText(failureStage, contextErr), Status: "done"})
+			out.Turn.Receipts = append(out.Turn.Receipts, workspace.DeskReceipt{Op: "capture", Text: receiptText, Status: "done"})
 		} else {
 			dependencies = c.Dependencies
 			if _, err := s.ingestTx(ctx, tx, scope, memory.IngestRequest{Connector: "desk", ExternalID: req.RequestID, ExternalVersion: "1", Title: "秘书原话", Text: req.Text, MediaType: "text/plain"}); err != nil {
@@ -512,50 +527,6 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 		return err
 	})
 	return out, err
-}
-
-// Retry only before reading context or executing any work. Transaction locks
-// disappear on commit, rollback or connection loss, including process death.
-func (s *Store) withSecretaryLocks(ctx, callerCtx context.Context, owner, request, conversation string, work func(pgx.Tx) error) error {
-	busy := errors.New("secretary turn busy")
-	for {
-		if err := callerCtx.Err(); err != nil {
-			return err
-		}
-		select {
-		case s.secretarySlots <- struct{}{}:
-		case <-callerCtx.Done():
-			return callerCtx.Err()
-		case <-ctx.Done():
-			return ctx.Err()
-		}
-		err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-			for _, key := range []string{strings.ToLower(owner + ":" + request), strings.ToLower("secretary-conversation:" + owner + ":" + conversation)} {
-				var locked bool
-				if err := tx.QueryRow(ctx, "SELECT pg_try_advisory_xact_lock(hashtextextended($1,0))", key).Scan(&locked); err != nil {
-					return err
-				}
-				if !locked {
-					return busy
-				}
-			}
-			return work(tx)
-		})
-		<-s.secretarySlots
-		if !errors.Is(err, busy) {
-			return err
-		}
-		timer := time.NewTimer(25 * time.Millisecond)
-		select {
-		case <-timer.C:
-		case <-callerCtx.Done():
-			timer.Stop()
-			return callerCtx.Err()
-		case <-ctx.Done():
-			timer.Stop()
-			return ctx.Err()
-		}
-	}
 }
 
 func secretaryReply(reply string) string {

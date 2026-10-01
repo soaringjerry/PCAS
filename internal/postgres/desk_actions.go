@@ -87,7 +87,7 @@ func applyDueReminderAt(item *workspace.Item, remind string, loc *time.Location,
 }
 
 // Model actions never accept database identifiers. Refs resolve exclusively
-// through the aliases in this turn's server-owned context.
+// through server-owned context aliases and earlier committed N creation aliases.
 type secretaryAction struct {
 	parseErr     error
 	Op           string                     `json:"op"`

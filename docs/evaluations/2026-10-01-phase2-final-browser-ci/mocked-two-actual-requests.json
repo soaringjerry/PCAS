@@ -1,0 +1,499 @@
+[
+  {
+    "test_artifact": "phase2_manual-failed-manua-b7945-ipient-and-unchanged-prompt",
+    "trace_sha256": "0b1e30b3ec39e8016633fa637bc8520e90e0aeba1ae793238e3493bd9d87c803",
+    "method": "POST",
+    "path": "/v1/workspace/commands",
+    "request": {
+      "type": "requestRun",
+      "id": "40921cfe-2981-4d5c-8c8a-9df78c98e2db",
+      "thingId": "phase2-synthetic-thing",
+      "agentId": "manual",
+      "kind": "draft",
+      "prompt": "原用户请求：请写一份自然的合成邀请",
+      "sourceRunId": "phase2-synthetic-run",
+      "manualRecipient": {
+        "provider": "writer"
+      },
+      "requestId": "ea6a9483-a076-40de-be53-0546ce43b60a",
+      "expectedRevision": 10
+    },
+    "status": 200,
+    "response": {
+      "version": 1,
+      "revision": 11,
+      "budgetUsage": 0,
+      "settings": {
+        "timezone": "UTC",
+        "dailyBudget": 10,
+        "autoAccept": false,
+        "wakeIdeas": true,
+        "followUps": true,
+        "dailyReviewAt": "09:00"
+      },
+      "tasks": [
+        {
+          "id": "phase2-synthetic-thing",
+          "title": "合成读书会验收",
+          "notes": "原事项说明：合成读书会，只用于验收",
+          "status": "todo",
+          "dependsOn": [],
+          "checklist": [],
+          "triggers": [],
+          "sources": [],
+          "history": [],
+          "createdAt": "2026-10-01T08:00:00Z",
+          "updatedAt": "2026-10-01T08:00:00Z"
+        }
+      ],
+      "agents": [
+        {
+          "id": "writer",
+          "name": "友好接收者 writer",
+          "channel": "api",
+          "enabled": true,
+          "available": true,
+          "note": "",
+          "memoryKinds": [
+            "fact"
+          ],
+          "includeInferred": false,
+          "inputPrice": 0,
+          "outputPrice": 0,
+          "maxOutput": 100
+        },
+        {
+          "id": "other",
+          "name": "友好接收者 other",
+          "channel": "api",
+          "enabled": true,
+          "available": true,
+          "note": "",
+          "memoryKinds": [
+            "fact"
+          ],
+          "includeInferred": false,
+          "inputPrice": 0,
+          "outputPrice": 0,
+          "maxOutput": 100
+        },
+        {
+          "id": "disabled",
+          "name": "友好接收者 disabled",
+          "channel": "api",
+          "enabled": false,
+          "available": true,
+          "note": "",
+          "memoryKinds": [
+            "fact"
+          ],
+          "includeInferred": false,
+          "inputPrice": 0,
+          "outputPrice": 0,
+          "maxOutput": 100
+        },
+        {
+          "id": "unavailable",
+          "name": "友好接收者 unavailable",
+          "channel": "api",
+          "enabled": true,
+          "available": false,
+          "note": "",
+          "memoryKinds": [
+            "fact"
+          ],
+          "includeInferred": false,
+          "inputPrice": 0,
+          "outputPrice": 0,
+          "maxOutput": 100
+        },
+        {
+          "id": "embed",
+          "name": "友好接收者 embed",
+          "channel": "api",
+          "enabled": true,
+          "available": true,
+          "note": "",
+          "memoryKinds": [
+            "fact"
+          ],
+          "includeInferred": false,
+          "inputPrice": 0,
+          "outputPrice": 0,
+          "maxOutput": 100
+        },
+        {
+          "id": "transcribe",
+          "name": "友好接收者 transcribe",
+          "channel": "api",
+          "enabled": true,
+          "available": true,
+          "note": "",
+          "memoryKinds": [
+            "fact"
+          ],
+          "includeInferred": false,
+          "inputPrice": 0,
+          "outputPrice": 0,
+          "maxOutput": 100
+        },
+        {
+          "id": "unsupported",
+          "name": "友好接收者 unsupported",
+          "channel": "api",
+          "enabled": true,
+          "available": true,
+          "note": "",
+          "memoryKinds": [
+            "fact"
+          ],
+          "includeInferred": false,
+          "inputPrice": 0,
+          "outputPrice": 0,
+          "maxOutput": 100
+        },
+        {
+          "id": "empty-model",
+          "name": "友好接收者 empty-model",
+          "channel": "api",
+          "enabled": true,
+          "available": true,
+          "note": "",
+          "memoryKinds": [
+            "fact"
+          ],
+          "includeInferred": false,
+          "inputPrice": 0,
+          "outputPrice": 0,
+          "maxOutput": 100
+        },
+        {
+          "id": "catalog-unavailable",
+          "name": "友好接收者 catalog-unavailable",
+          "channel": "api",
+          "enabled": true,
+          "available": true,
+          "note": "",
+          "memoryKinds": [
+            "fact"
+          ],
+          "includeInferred": false,
+          "inputPrice": 0,
+          "outputPrice": 0,
+          "maxOutput": 100
+        },
+        {
+          "id": "manual",
+          "name": "手动交接",
+          "channel": "manual",
+          "enabled": true,
+          "available": true,
+          "note": "",
+          "memoryKinds": [
+            "fact"
+          ],
+          "includeInferred": false,
+          "inputPrice": 0,
+          "outputPrice": 0,
+          "maxOutput": 100
+        }
+      ],
+      "runs": [
+        {
+          "id": "phase2-synthetic-run",
+          "thingId": "phase2-synthetic-thing",
+          "agentId": "manual",
+          "kind": "draft",
+          "prompt": "原用户请求：请写一份自然的合成邀请",
+          "brief": "BRIEF_MUST_NEVER_BECOME_HANDOFF",
+          "contextMemoryIds": [],
+          "manualRecipient": {
+            "provider": "writer",
+            "principal_id": "manual",
+            "role": "manual",
+            "channel": "manual",
+            "protocol": "openai",
+            "model": "synthetic-model",
+            "route_fingerprint": "synthetic-route-A"
+          },
+          "contextTask": {
+            "recipient": {
+              "provider": "writer",
+              "principal_id": "manual",
+              "role": "manual",
+              "channel": "manual",
+              "protocol": "openai",
+              "model": "synthetic-model",
+              "route_fingerprint": "synthetic-route-A"
+            }
+          },
+          "status": "failed",
+          "staleContext": false,
+          "cost": 0,
+          "createdAt": "2026-10-01T08:00:00Z",
+          "error": "synthetic-failure"
+        }
+      ],
+      "ideas": [],
+      "projects": [],
+      "memories": [],
+      "candidates": [],
+      "sources": [],
+      "jobs": [],
+      "activity": [],
+      "docs": [],
+      "samples": [],
+      "notices": [],
+      "excludedMemories": {}
+    },
+    "request_resource": "resources/608e69683bd0ab2aa30a7ffdaa60cbb28b95b363.json"
+  },
+  {
+    "test_artifact": "phase2_manual-package-fail-4af2b-complete-original-recipient",
+    "trace_sha256": "836dfed049a850bc9086c79ba47c7690ef3178d2308b8526e9a96bc3506a0510",
+    "method": "POST",
+    "path": "/v1/workspace/commands",
+    "request": {
+      "type": "requestRun",
+      "id": "191e8c73-a3a9-467a-8368-6cf7e120e6e1",
+      "thingId": "phase2-synthetic-thing",
+      "agentId": "manual",
+      "kind": "draft",
+      "prompt": "原用户请求：请写一份自然的合成邀请",
+      "sourceRunId": "phase2-synthetic-run",
+      "manualRecipient": {
+        "provider": "writer"
+      },
+      "requestId": "485a0f54-a4f6-4c22-a2f4-3b58914a47c4",
+      "expectedRevision": 10
+    },
+    "status": 200,
+    "response": {
+      "version": 1,
+      "revision": 11,
+      "budgetUsage": 0,
+      "settings": {
+        "timezone": "UTC",
+        "dailyBudget": 10,
+        "autoAccept": false,
+        "wakeIdeas": true,
+        "followUps": true,
+        "dailyReviewAt": "09:00"
+      },
+      "tasks": [
+        {
+          "id": "phase2-synthetic-thing",
+          "title": "合成读书会验收",
+          "notes": "原事项说明：合成读书会，只用于验收",
+          "status": "todo",
+          "dependsOn": [],
+          "checklist": [],
+          "triggers": [],
+          "sources": [],
+          "history": [],
+          "createdAt": "2026-10-01T08:00:00Z",
+          "updatedAt": "2026-10-01T08:00:00Z"
+        }
+      ],
+      "agents": [
+        {
+          "id": "writer",
+          "name": "友好接收者 writer",
+          "channel": "api",
+          "enabled": true,
+          "available": true,
+          "note": "",
+          "memoryKinds": [
+            "fact"
+          ],
+          "includeInferred": false,
+          "inputPrice": 0,
+          "outputPrice": 0,
+          "maxOutput": 100
+        },
+        {
+          "id": "other",
+          "name": "友好接收者 other",
+          "channel": "api",
+          "enabled": true,
+          "available": true,
+          "note": "",
+          "memoryKinds": [
+            "fact"
+          ],
+          "includeInferred": false,
+          "inputPrice": 0,
+          "outputPrice": 0,
+          "maxOutput": 100
+        },
+        {
+          "id": "disabled",
+          "name": "友好接收者 disabled",
+          "channel": "api",
+          "enabled": false,
+          "available": true,
+          "note": "",
+          "memoryKinds": [
+            "fact"
+          ],
+          "includeInferred": false,
+          "inputPrice": 0,
+          "outputPrice": 0,
+          "maxOutput": 100
+        },
+        {
+          "id": "unavailable",
+          "name": "友好接收者 unavailable",
+          "channel": "api",
+          "enabled": true,
+          "available": false,
+          "note": "",
+          "memoryKinds": [
+            "fact"
+          ],
+          "includeInferred": false,
+          "inputPrice": 0,
+          "outputPrice": 0,
+          "maxOutput": 100
+        },
+        {
+          "id": "embed",
+          "name": "友好接收者 embed",
+          "channel": "api",
+          "enabled": true,
+          "available": true,
+          "note": "",
+          "memoryKinds": [
+            "fact"
+          ],
+          "includeInferred": false,
+          "inputPrice": 0,
+          "outputPrice": 0,
+          "maxOutput": 100
+        },
+        {
+          "id": "transcribe",
+          "name": "友好接收者 transcribe",
+          "channel": "api",
+          "enabled": true,
+          "available": true,
+          "note": "",
+          "memoryKinds": [
+            "fact"
+          ],
+          "includeInferred": false,
+          "inputPrice": 0,
+          "outputPrice": 0,
+          "maxOutput": 100
+        },
+        {
+          "id": "unsupported",
+          "name": "友好接收者 unsupported",
+          "channel": "api",
+          "enabled": true,
+          "available": true,
+          "note": "",
+          "memoryKinds": [
+            "fact"
+          ],
+          "includeInferred": false,
+          "inputPrice": 0,
+          "outputPrice": 0,
+          "maxOutput": 100
+        },
+        {
+          "id": "empty-model",
+          "name": "友好接收者 empty-model",
+          "channel": "api",
+          "enabled": true,
+          "available": true,
+          "note": "",
+          "memoryKinds": [
+            "fact"
+          ],
+          "includeInferred": false,
+          "inputPrice": 0,
+          "outputPrice": 0,
+          "maxOutput": 100
+        },
+        {
+          "id": "catalog-unavailable",
+          "name": "友好接收者 catalog-unavailable",
+          "channel": "api",
+          "enabled": true,
+          "available": true,
+          "note": "",
+          "memoryKinds": [
+            "fact"
+          ],
+          "includeInferred": false,
+          "inputPrice": 0,
+          "outputPrice": 0,
+          "maxOutput": 100
+        },
+        {
+          "id": "manual",
+          "name": "手动交接",
+          "channel": "manual",
+          "enabled": true,
+          "available": true,
+          "note": "",
+          "memoryKinds": [
+            "fact"
+          ],
+          "includeInferred": false,
+          "inputPrice": 0,
+          "outputPrice": 0,
+          "maxOutput": 100
+        }
+      ],
+      "runs": [
+        {
+          "id": "phase2-synthetic-run",
+          "thingId": "phase2-synthetic-thing",
+          "agentId": "manual",
+          "kind": "draft",
+          "prompt": "原用户请求：请写一份自然的合成邀请",
+          "brief": "BRIEF_MUST_NEVER_BECOME_HANDOFF",
+          "contextMemoryIds": [],
+          "manualRecipient": {
+            "provider": "writer",
+            "principal_id": "manual",
+            "role": "manual",
+            "channel": "manual",
+            "protocol": "openai",
+            "model": "synthetic-model",
+            "route_fingerprint": "synthetic-route-A"
+          },
+          "contextTask": {
+            "recipient": {
+              "provider": "writer",
+              "principal_id": "manual",
+              "role": "manual",
+              "channel": "manual",
+              "protocol": "openai",
+              "model": "synthetic-model",
+              "route_fingerprint": "synthetic-route-A"
+            }
+          },
+          "status": "waiting",
+          "staleContext": false,
+          "cost": 0,
+          "createdAt": "2026-10-01T08:00:00Z"
+        }
+      ],
+      "ideas": [],
+      "projects": [],
+      "memories": [],
+      "candidates": [],
+      "sources": [],
+      "jobs": [],
+      "activity": [],
+      "docs": [],
+      "samples": [],
+      "notices": [],
+      "excludedMemories": {}
+    },
+    "request_resource": "resources/f89485af0d95d8646e328735cda5b57359ba6a74.json"
+  }
+]

@@ -1,0 +1,14 @@
+{
+  "schema": "pcas.phase2.independent-delegation-origin-supplement.v1",
+  "frozen_at": "2026-10-01",
+  "authority": "root-approved post-R3 D4 control strengthening and contextPromptDeskActions distinction",
+  "extends": "delegation-origin-sequences.json",
+  "unchanged": "D1-D3 and original D4 gold remain byte-for-byte unchanged; R3 red observations remain failures",
+  "required": [
+    "each real D4 queued/completed Run contextPromptDeskActions equals exactly its own actual successful delegate receipt action ID, not the create ID or inherited prior action IDs",
+    "Run/Task general contextDeskActions continues to contain complete actual create/delegate closure and actual Manifest freezes it",
+    "after secretary-only revoke, fresh independent deputy real HTTP includes original lawful source atom but excludes completed marker D4-DERIVED-RESULT-729",
+    "fresh independent Task and Manifest desk_actions are empty; new independent source permission is not borrowed from old action origins"
+  ],
+  "failure_policy": "Compile-only before precise combination; actual bytes/lineage remain mandatory, no broad error acceptance or retry."
+}

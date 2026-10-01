@@ -1,0 +1,31 @@
+{
+  "schema": "pcas.phase2.independent-name-origin-gold.v1",
+  "frozen_at": "2026-10-01",
+  "authority": "root-approved independent task/idea canonical Name risk; strict eligible owner Undo success; expectations frozen before dynamics",
+  "extends": ["gold.json", "delegation-origin-sequences.json"],
+  "source": "gold.records[0] exact source v1 with zero claims; first atom absent from owner question and independent owner text",
+  "cases": [
+    {"id": "N1_task", "kind": "task", "action": "create_task", "owner_title": "OWNER-INDEPENDENT-TASK-TITLE-681"},
+    {"id": "N2_idea", "kind": "idea", "action": "create_idea", "owner_title": "OWNER-INDEPENDENT-IDEA-TITLE-682"}
+  ],
+  "sequence": [
+    "formal secretary-only exact source authorization, real secretary HTTP and exact Input mapping; fake Used=[]",
+    "real successful create receipt/action ID; canonical SQL document and owner Snapshot contain source atom in both Title and Name",
+    "formal owner renameThing sets independent Title; retain real command action ID and independently inspect its before document Name",
+    "formal revoke original secretary policy with no route/source/version mutation",
+    "canonical SQL document, Snapshot and Export contain no old atom in Name or other current item fields; independent owner Title remains exact",
+    "formal Undo of the only owner rename succeeds under the precise eligible causal invalidation scene; restored Title/Name cannot revive old source atom",
+    "new manual request with explicit destination actually delivers a package and new deputy request actually dispatches/completes ordinary work; both actual bodies exclude old atom"
+  ],
+  "owner_prompt_case": {
+    "id": "N3_owner_independent_prompt",
+    "setup": "real source-derived task and independent deputy exact source allow; owner writes unique OWNER-INDEPENDENT-PROMPT-683 through formal requestRun",
+    "required": "Run general contextDeskActions and Task desk_actions contain genuine create action; contextPromptDeskActions empty because no delegate wrote Prompt",
+    "mutation": "revoke only secretary original policy; deputy policy remains same canonical allow revision",
+    "expected": "Snapshot/Export and canonical agent_run preserve exact independent owner Prompt even though inherited action fields or queued context invalidate",
+    "isolation": "separate schema/leaf, no queued run or owner command can create newer_action ambiguity in N1/N2 Undo"
+  },
+  "not_substitutes": ["checking Title without Name", "source atom present in owner query/prompt", "SQL fabricated origins/grants", "silent empty package", "pre-dispatch Conflict as a supply pass", "accepting arbitrary Undo errors", "target role denied in the owner Prompt distinction"],
+  "limits": "Two canonical task/idea leaves plus the distinct owner Prompt control; does not replace promotion, all item kinds, D field matrix, or existing strict reverse-order regression gates.",
+  "failure_policy": "Only compile before root precise combination. One authorized dynamic run later; preserve real failures without weakening or retries."
+}

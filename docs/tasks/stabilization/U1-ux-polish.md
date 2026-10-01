@@ -19,6 +19,8 @@
 
 先提交按影响排序的发现清单和截图，再只实现确有复现证据的界面缺陷。不要以“打磨”为由重做导航、工作室、观测台，或添加模式选择与管理按钮。
 
+已有走查线索：F8 的 [390px 上海工作区截图](https://github.com/soaringjerry/PCAS/blob/bddc14b849330e3c6ead9e0c461ea7172eaac6ee/docs/evaluations/2026-10-01-timezone-displays/mobile-shanghai.png) 中，时区提示因重复长时区名称占据多行。当前文字来自 F6 已规定的文案，不能直接当成本次 F8 回归。U1 可提出更紧凑、区分当前设置与检测位置的呈现方案；若改变约定文案，先交协调者核对 F6 要求，避免测试按旧文字与新设计冲突。
+
 ## 文件归属
 
 启动时协调者锁定最终范围。预留 `web/src/pages/HallPage.tsx`、`ThingPage.tsx`，`web/src/components/Secretary.tsx`、`SecretaryCards.tsx`、`SourceSheet.tsx`，`web/src/styles/hall.css`、`thing.css`、`secretary.css`，及对应 `web/tests/secretary.spec.ts`、`buttons.spec.ts`。

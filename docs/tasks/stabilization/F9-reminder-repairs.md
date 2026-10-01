@@ -25,7 +25,9 @@ T2 默认已通过的重试次数、首页保留、DST、UTC 不变、重启去�
 
 ## 文件归属与交接
 
-预留产品文件：`internal/postgres/desk_actions.go`、`internal/postgres/reminders.go`、`internal/postgres/notify.go`。必须改 `actions_log.go`、`desk_turn.go`、公共类型或其他文件时先报告协调者，特别是避免和 F7/T3 后续修复重叠。
+预留产品文件：`internal/postgres/desk_actions.go`、`internal/postgres/reminders.go`、`internal/postgres/notify.go`。协调者已追加授权：`actions_log.go` 仅撤销恢复时的 R5 调用点；`workspace.go` 仅 Notice、Job、Activity 对内部抑制记录的读取过滤。`desk_turn.go`、公共类型、迁移或其他文件仍须先报告协调者，特别是避免和 F7/T3 后续修复重叠。
+
+R5 实现约束：完成 → 开放状态的撤销可在同一事务中，利用既有 `workspace_notices` 的 occurrence 唯一键持久记录该次旧提醒已抑制，不改事项内容指纹、快照或排除字段。内部记录不能伪装成功投递、覆盖已有投递/关闭记录、进入用户 Notice/Job/Activity；投递重读同样须忽略它。不同 due 的未来 occurrence、普通服务重启补发均不受影响，删除事项沿用现有清理。补充验证抑制后重启、连续撤销、未来提醒恢复和已有发送记录保留。新增表或公开语义变化仍须另行协调。
 
 T2 交付后，将 `internal/postgres/stabilization_time_test.go`、`internal/notify/stabilization_time_test.go` 的“移除已修发现 skip 与新增必要边界”写入权交给 F9；T2 作者此时停止修改同一文件。已有断言改动须逐条在 PR 解释，并由协调者审查，不因通过而自动接受。
 

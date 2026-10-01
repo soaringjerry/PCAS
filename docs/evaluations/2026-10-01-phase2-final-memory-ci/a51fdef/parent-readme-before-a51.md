@@ -52,7 +52,3 @@ PR #44 head `c8adbaeb5c02daa9e83f90f74c216d8cf9ee22bf`；runner 实际 checkout 
 ## 后续独立 head：cf3015c
 
 [cf3015c 完整报告](cf3015c/README.md)：run 36888958920 自然 success，实际 checkout ba946b860dea2ef81b83c2c1ec3eb5c63f4d1562；与 head 完整 tree 相等。仅 web spec 两条 shape 迁移，Go / gold 不变。755 真叶 752 PASS / 3 旧 SKIP，341 顶层，所有包真实执行、缓存 0，PG 467.368s，原 23 因果叶同头全 P，最后 build 成功。c8 证据不覆盖；原 README 与其 SHA 可用 cf3015c/c8-readme-original.md 复核。
-
-## 后续独立 head：a51fdef
-
-[a51fdef 完整报告](a51fdef/README.md)：run 36890371161 自然 success，actual checkout ac62139ee0dc99f11ee4ae31365b8bf091b3150d，完整 tree 与 head 相等。仅 golden 日期 fixture 迁移，Go / gold 不变。755 真叶 752 PASS / 3 旧 SKIP、341 顶层，11 测试包真实执行、cache 0，PG 414.544s；原 23 叶同头全 P。最后 build 命令后 make step 成功，不据此声称全新编译。c8 / cf 原证据保留；父 README 追加前版本见 a51fdef/parent-readme-before-a51.md，可复核 cf manifest 原父 README SHA。

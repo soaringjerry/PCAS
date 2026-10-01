@@ -1,0 +1,21 @@
+{
+  "run_id": 36890371161,
+  "job_id": 110464172035,
+  "head_sha": "a51fdef8670fb6152ac8ca290e69390f496edf33",
+  "actual_checkout_merge_sha": "ac62139ee0dc99f11ee4ae31365b8bf091b3150d",
+  "merge_tree_sha": "e647f4fe63b12d1e0d81efad13bee87801e5ff12",
+  "local_head_tree_sha": "e647f4fe63b12d1e0d81efad13bee87801e5ff12",
+  "merge_parents": [
+    "6fd9d173a738cddf1ee9f4ed7e8bcb7b07ed1973",
+    "a51fdef8670fb6152ac8ca290e69390f496edf33"
+  ],
+  "checkout_log_lines": [
+    238,
+    240,
+    241
+  ],
+  "build_log_line": 112376,
+  "build_evidence": "Final command followed directly by successful post steps; no additional package compilation output. Not proof of fresh compilation.",
+  "collection": "Read-only gh run view --log after completed success; no dispatch/cancel/local test/list",
+  "parent_readme_before_append_sha256": "6bd456f6b4e75e405d42fb2413336cd068aa7647e9ba8c2d1d8c072d7ae04c6f"
+}

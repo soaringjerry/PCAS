@@ -2,7 +2,6 @@ package postgres
 
 import (
 	"context"
-	"encoding/json"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
@@ -17,16 +16,10 @@ func artifactTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, runID, thing
 	return err
 }
 
-// Promotion copies the body's notes and the title into both new canonical
-// title/name fields. Each copy retains its actual source block dependencies.
+// Promoting an idea copies its body into the task's notes. Keep the same run
+// dependencies on that new field, even if the owner already edited the body.
 func promoteArtifactsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, ideaID, taskID string) error {
 	if _, err := tx.Exec(ctx, `INSERT INTO artifact_fields(owner_id,thing_id,field,blocks) SELECT owner_id,$3,'notes',blocks FROM artifact_fields WHERE owner_id=$1 AND thing_id=$2 AND field='body' ON CONFLICT DO NOTHING`, string(scope.OwnerID), ideaID, taskID); err != nil {
-		return err
-	}
-	if _, err := tx.Exec(ctx, `INSERT INTO artifact_fields(owner_id,thing_id,field,blocks)
- SELECT f.owner_id,$3,target.field,f.blocks FROM artifact_fields f
- CROSS JOIN (VALUES('title'),('name')) AS target(field)
- WHERE f.owner_id=$1 AND f.thing_id=$2 AND f.field='title' ON CONFLICT DO NOTHING`, string(scope.OwnerID), ideaID, taskID); err != nil {
 		return err
 	}
 	_, err := tx.Exec(ctx, `INSERT INTO adopted_artifacts(owner_id,run_id,thing_id,kind,artifact_id,body)
@@ -40,12 +33,6 @@ func promoteArtifactsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, idea
 // New fields carry ownership blocks through edits and promotions. Pre-block
 // fields are conservatively protected until ownership can be reviewed.
 func sanitizeItemTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, principal string, item workspace.Item) (workspace.Item, []memory.Ref, error) {
-	return sanitizeItemWithStoreTx(nil, ctx, tx, scope, principal, item)
-}
-func (s *Store) sanitizeItemTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, principal string, item workspace.Item) (workspace.Item, []memory.Ref, error) {
-	return sanitizeItemWithStoreTx(s, ctx, tx, scope, principal, item)
-}
-func sanitizeItemWithStoreTx(store *Store, ctx context.Context, tx pgx.Tx, scope memory.Scope, principal string, item workspace.Item) (workspace.Item, []memory.Ref, error) {
 	// Older promotions retained ideaId but not artifact links. Repair that
 	// lineage before using their copied notes in a new provider request.
 	if item.Kind == "task" && item.IdeaID != "" {
@@ -66,87 +53,31 @@ func sanitizeItemWithStoreTx(store *Store, ctx context.Context, tx pgx.Tx, scope
 	for _, f := range fields {
 		owned[f.Field] = f.Blocks
 	}
-	rows, err := tx.Query(ctx, `SELECT a.kind,a.artifact_id,a.run_id::text,r.document,a.body FROM adopted_artifacts a LEFT JOIN agent_runs r ON(r.owner_id,r.id)=(a.owner_id,a.run_id) WHERE a.owner_id=$1 AND a.thing_id=$2`, string(scope.OwnerID), item.ID)
+	projectID := item.ProjectID
+	if item.Kind == "project" {
+		projectID = item.ID
+	}
+	rows, err := tx.Query(ctx, `SELECT a.kind,a.artifact_id,a.run_id::text, NOT EXISTS(
+        SELECT 1 FROM run_dependencies d LEFT JOIN memory_records r ON (r.owner_id,r.id)=(d.owner_id,d.memory_id)
+        WHERE (d.owner_id,d.run_id)=(a.owner_id,a.run_id) AND (r.state IS DISTINCT FROM 'active'
+        OR d.memory_version IS DISTINCT FROM (SELECT v.version FROM applicable_claim_versions($1,now(),now()) v WHERE v.claim_id=d.memory_id)
+        OR NOT EXISTS(SELECT 1 FROM record_grants g WHERE g.owner_id=d.owner_id AND g.record_id=d.memory_id AND g.principal_id=$3)
+        OR EXISTS(SELECT 1 FROM context_exclusions x WHERE x.owner_id=d.owner_id AND x.thing_id=$2 AND x.memory_id=d.memory_id)
+        OR NOT EXISTS(SELECT 1 FROM workspace_agents ag JOIN claim_revisions c ON c.owner_id=ag.owner_id WHERE ag.owner_id=$1 AND ag.id=$3 AND c.claim_id=d.memory_id AND c.version=d.memory_version AND ag.document->'memoryKinds' ? c.nature AND (coalesce(c.scope->>'project_id','')='' OR c.scope->>'project_id'=$4) AND (c.confirmation='confirmed' OR (c.confirmation='adopted' AND c.acquisition='direct') OR (ag.document->>'includeInferred')::boolean))
+        )),coalesce((SELECT jsonb_agg(jsonb_build_object('id',d.memory_id,'version',d.memory_version,'kind','claim')) FROM run_dependencies d WHERE (d.owner_id,d.run_id)=(a.owner_id,a.run_id)),'[]'::jsonb)
+        FROM adopted_artifacts a WHERE a.owner_id=$1 AND a.thing_id=$2`, string(scope.OwnerID), item.ID, principal, projectID)
 	if err != nil {
 		return item, nil, err
 	}
-	type artifact struct {
-		kind, id, runID, body string
-		run                   []byte
-	}
-	artifacts := []artifact{}
+	defer rows.Close()
 	for rows.Next() {
-		var a artifact
-		if err = rows.Scan(&a.kind, &a.id, &a.runID, &a.run, &a.body); err != nil {
-			rows.Close()
+		var kind, id, runID string
+		var allowed bool
+		var refs []memory.Ref
+		if err := rows.Scan(&kind, &id, &runID, &allowed, &refs); err != nil {
 			return item, nil, err
 		}
-		artifacts = append(artifacts, a)
-	}
-	err = rows.Err()
-	rows.Close()
-	if err != nil {
-		return item, nil, err
-	}
-	for _, a := range artifacts {
-		kind, id, runID := a.kind, a.id, a.runID
-		var run workspace.Run
-		allowed := json.Unmarshal(a.run, &run) == nil && !run.StaleContext
-		refs := []memory.Ref{}
-		if run.ContextTask != nil {
-			allowed = allowed && store != nil
-			if allowed {
-				allowed = store.verifyRunForItemTx(ctx, tx, scope, run, &item) == nil
-			}
-			refs = refsForDependencies(run.ContextDependencies)
-			// A prior destination's permission cannot license this consumer. The
-			// originating revision fence and the current task both have to pass.
-			if allowed {
-				if scope.Task == nil {
-					allowed = scope.IsOwner // local owner review, never model supply
-				} else if scope.Task.Recipient.PrincipalID != principal {
-					allowed = false
-				} else {
-					entries, cov, e := hydrateTypedContextTx(ctx, tx, scope, *scope.Task, refs)
-					if e != nil {
-						return item, nil, e
-					}
-					allowed = cov.Complete && len(entries) == len(refs)
-				}
-			}
-		} else {
-			if !(scope.IsOwner && scope.Task == nil) {
-				run.AgentID = principal
-			}
-			refs = run.ContextVersions
-			if store != nil {
-				allowed = allowed && store.verifyRunForItemTx(ctx, tx, scope, run, &item) == nil
-			} else {
-				// A legacy free wrapper has no trusted route registry. It cannot
-				// license delivery to a model from a coarse grant alone.
-				allowed = allowed && scope.Task == nil && verifyRunForItemTx(ctx, tx, scope, run, &item) == nil
-			}
-		}
-
 		used := false
-		if kind == "task" && !allowed {
-			if _, tracked := owned["name"]; !tracked && item.Name == a.body {
-				item.Name = "事项内容需要重新授权或核验"
-			}
-		}
-		// Copies can occupy name or another tracked field without sharing the
-		// legacy adoption kind. Filter every exact Run-labelled copy.
-		for field, blocks := range owned {
-			kept := []artifactBlock{}
-			for _, block := range blocks {
-				dependent := oneOf(runID, block.Runs...)
-				used = used || dependent
-				if allowed || !dependent {
-					kept = append(kept, block)
-				}
-			}
-			owned[field] = kept
-		}
 		field := kind
 		if kind == "task" {
 			field = "title"
@@ -162,28 +93,23 @@ func sanitizeItemWithStoreTx(store *Store, ctx context.Context, tx pgx.Tx, scope
 			}
 			owned[field] = kept
 			if used && allowed {
-				if scope.Task != nil {
-					if err := appendTaskDeskActions(scope.Task, run.ContextDeskActions...); err != nil {
-						return item, nil, err
-					}
-				}
 				dependencies = append(dependencies, refs...)
 			}
 			continue
 		}
 		switch kind {
 		case "notes":
-			used = used || item.Notes != ""
+			used = item.Notes != ""
 			if !allowed {
 				item.Notes = ""
 			}
 		case "body":
-			used = used || item.Body != ""
+			used = item.Body != ""
 			if !allowed {
 				item.Body = ""
 			}
 		case "progress":
-			used = used || item.Progress != ""
+			used = item.Progress != ""
 			if !allowed {
 				item.Progress = ""
 			}
@@ -201,45 +127,21 @@ func sanitizeItemWithStoreTx(store *Store, ctx context.Context, tx pgx.Tx, scope
 		case "task":
 			used = true
 			if !allowed {
-				if _, tracked := owned["name"]; !tracked && item.Name == item.Title {
-					item.Name = "事项内容需要重新授权或核验"
-				}
 				item.Title = "事项内容需要重新授权或核验"
 			}
 		}
 		if used && allowed {
-			if scope.Task != nil {
-				if err := appendTaskDeskActions(scope.Task, run.ContextDeskActions...); err != nil {
-					return item, nil, err
-				}
-			}
 			dependencies = append(dependencies, refs...)
 		}
 	}
 	for field, blocks := range owned {
-		if store != nil {
-			kept, refs, err := store.filterSecretaryBlocksTx(ctx, tx, scope, blocks)
-			if err != nil {
-				return item, nil, err
-			}
-			blocks = kept
-			dependencies = append(dependencies, refs...)
-		} else {
-			kept := []artifactBlock{}
-			for _, block := range blocks {
-				if len(block.DeskActions) == 0 {
-					kept = append(kept, block)
-				}
-			}
-			blocks = kept
-		}
 		text := blockText(blocks)
-		if oneOf(field, "title", "name") && text == "" {
+		if field == "title" && text == "" {
 			text = "事项内容需要重新授权或核验"
 		}
 		setField(&item, field, text)
 	}
-	return item, dependencies, nil
+	return item, dependencies, rows.Err()
 }
 func purgeArtifactsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, ids []string) ([]string, error) {
 	// Deletion must also cover pre-fix promotions that have not been used in
@@ -250,7 +152,7 @@ func purgeArtifactsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, ids []
  WHERE a.owner_id=$1 AND a.kind='body' AND t.kind='task' ON CONFLICT DO NOTHING`, string(scope.OwnerID)); err != nil {
 		return nil, err
 	}
-	rows, err := tx.Query(ctx, `SELECT thing_id::text,kind,artifact_id,run_id::text,body FROM adopted_artifacts a WHERE owner_id=$1 AND (run_id IN (SELECT run_id FROM run_dependencies WHERE owner_id=$1 AND memory_id=ANY($2::uuid[])) OR EXISTS(SELECT 1 FROM context_artifact_dependencies d WHERE d.owner_id=a.owner_id AND d.dependency_id=ANY($2::uuid[]) AND ((d.parent_kind IN('run','manual_package') AND d.parent_id=a.run_id::text) OR (d.parent_kind='artifact' AND d.parent_id=a.artifact_id))))`, string(scope.OwnerID), ids)
+	rows, err := tx.Query(ctx, `SELECT thing_id::text,kind,artifact_id,run_id::text,body FROM adopted_artifacts WHERE owner_id=$1 AND run_id IN (SELECT run_id FROM run_dependencies WHERE owner_id=$1 AND memory_id=ANY($2::uuid[]))`, string(scope.OwnerID), ids)
 	if err != nil {
 		return nil, err
 	}
@@ -274,38 +176,6 @@ func purgeArtifactsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, ids []
 		item, err := getItem(ctx, tx, scope, a.Thing)
 		if err != nil {
 			return nil, err
-		}
-		fields, err := loadItemBlocksTx(ctx, tx, scope, item.ID)
-		if err != nil {
-			return nil, err
-		}
-		if a.Kind == "task" {
-			if _, tracked := fields["name"]; !tracked && item.Name == a.Body {
-				item.Name = "内容已失效"
-			}
-		}
-		for field, blocks := range fields {
-			kept := []artifactBlock{}
-			changed := false
-			for _, block := range blocks {
-				if oneOf(a.Run, block.Runs...) {
-					changed = true
-				} else {
-					kept = append(kept, block)
-				}
-			}
-			if !changed {
-				continue
-			}
-			text := blockText(kept)
-			if oneOf(field, "title", "name") && text == "" {
-				text = "内容已失效"
-				kept = []artifactBlock{{Text: text, Runs: []string{}}}
-			}
-			setField(&item, field, text)
-			if err := saveBlocksTx(ctx, tx, scope, item.ID, field, kept); err != nil {
-				return nil, err
-			}
 		}
 		field := a.Kind
 		if field == "task" {

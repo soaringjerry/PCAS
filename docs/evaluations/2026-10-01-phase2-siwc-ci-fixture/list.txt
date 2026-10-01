@@ -1,5 +1,0 @@
-TestPhase2SIWCUnknownModelRealStore
-ok  	github.com/soaringjerry/PCAS/internal/ai/siwc	0.005s
-TestPostgresMigrations
-TestPhase2Runtime023PreservesOldPolicyMeaningAndVersions
-ok  	github.com/soaringjerry/PCAS/internal/postgres	0.006s

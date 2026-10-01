@@ -174,12 +174,6 @@ func (f *fixture) serve(w http.ResponseWriter, r *http.Request) {
 			respond(w, map[string]any{"error": map[string]string{"message": "fixture upstream timeout", "code": "fixture_error"}})
 			return
 		}
-		// RunAgents now asks for output/used JSON. Keep the original fixture
-		// text and error/call sequencing, wrapping only this deputy protocol.
-		if kind == "assistant" && strings.Contains(system, "output为完整建议或草稿") {
-			body, _ := json.Marshal(map[string]any{"output": selected.Content, "used": []any{}})
-			selected.Content = string(body)
-		}
 		respond(w, map[string]any{"choices": []any{map[string]any{"message": map[string]string{"content": selected.Content}}}, "usage": map[string]int{"prompt_tokens": 100, "completion_tokens": 20}})
 		return
 	}

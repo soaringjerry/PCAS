@@ -35,15 +35,6 @@ func normalizedBudget(b memory.Budget) (memory.Budget, error) {
 func coverage() memory.Coverage {
 	return memory.Coverage{Complete: true, Gaps: []string{}, PendingSources: []memory.ID{}}
 }
-
-type recallEmbeddingQueryKey struct{}
-
-// Only server assembly can select this independent query. An empty override
-// keeps derived context local; it is never a client authorization parameter.
-func withRecallEmbeddingQuery(ctx context.Context, query string) context.Context {
-	return context.WithValue(ctx, recallEmbeddingQueryKey{}, tail(strings.TrimSpace(query), 4000))
-}
-
 func (s *Store) Recall(ctx context.Context, scope memory.Scope, in memory.RecallRequest) (memory.RecallResult, error) {
 	out := memory.RecallResult{Memories: []memory.Ref{}, Evidence: []memory.Evidence{}, Unresolved: []string{}, Coverage: coverage(), FollowUps: []string{}}
 	if !scope.Valid() {
@@ -83,11 +74,6 @@ func (s *Store) Recall(ctx context.Context, scope memory.Scope, in memory.Recall
 	if query == "" {
 		query = strings.TrimSpace(in.Context.Text)
 	}
-	embeddingQuery := query
-	override, restricted := ctx.Value(recallEmbeddingQueryKey{}).(string)
-	if restricted {
-		embeddingQuery = override
-	}
 	tokens := memory.SearchTokens(query)
 	if len(tokens) > 120 {
 		tokens = tokens[:120]
@@ -102,19 +88,17 @@ func (s *Store) Recall(ctx context.Context, scope memory.Scope, in memory.Recall
 	// Query-time embedding is optional. Missing semantic coverage is explicit.
 	var vector []byte
 	var model string
-	if restricted && embeddingQuery == "" && query != "" {
-		out.Coverage.Gaps = append(out.Coverage.Gaps, "派生检索内容仅在本地检索，未发送到语义索引")
-	} else if embeddingQuery != "" && s.models != nil && s.models.EmbeddingID() != "" {
+	if query != "" && s.models != nil && s.models.EmbeddingID() != "" {
 		provider, _ := s.models.Get(s.models.EmbeddingID())
 		var embeddings []memory.Embedding
 		var e error
 		if !s.models.Available(provider.ID) {
 			e = memory.ErrUnavailable
 		} else {
-			e = s.reserveModelCost(ctx, scope.OwnerID, float64(len(embeddingQuery)+16)*provider.InputPerMillion/1e6, nil)
+			e = s.reserveModelCost(ctx, scope.OwnerID, float64(len(query)+16)*provider.InputPerMillion/1e6, nil)
 		}
 		if e == nil {
-			embeddings, e = s.models.EmbedProvider(ctx, provider, []string{provider.EmbeddingQueryPrefix + embeddingQuery})
+			embeddings, e = s.models.EmbedProvider(ctx, provider, []string{provider.EmbeddingQueryPrefix + query})
 		}
 		if e == nil && len(embeddings) == 1 {
 			vector = asJSON(embeddings[0].Values)
@@ -151,21 +135,17 @@ func (s *Store) recallTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in 
          +(SELECT count(*) FROM unnest($16::text[]) token WHERE length(token)>1 AND position(lower(token) in lower(t.body))>0)::float
 		 +CASE WHEN $11::text IS NULL THEN 0 ELSE coalesce((SELECT max(1-(e.embedding <=> $11::vector)) FROM embeddings e WHERE e.owner_id=t.owner_id AND ((e.record_id,e.record_version)=(t.id,t.version) OR e.record_id IN (SELECT id FROM chunks WHERE owner_id=t.owner_id AND source_id=t.id AND source_version=t.version)) AND e.model=$12 AND e.dimensions=$13),0) END
 		 +CASE WHEN t.id=ANY($8::uuid[]) OR t.id IN (SELECT claim_id FROM claim_revisions WHERE owner_id=$1 AND (subject_id=ANY($8::uuid[]) OR scope->>'project_id'=ANY($8::text[]))) THEN 10 ELSE 0 END
-		 +CASE WHEN $6='continue' THEN coalesce(CASE WHEN a.pinned THEN 1 ELSE exp(-0.693147*greatest(0,extract(epoch from(now()-a.last_effective_use_at)))/(a.half_life_seconds*a.stability)) END,0)*0.2 ELSE 0 END) AS score,coalesce(sc.role,''),coalesce(sc.branch,''),coalesce(sc.gaps,'[]'),hit.start_rune,hit.end_rune
+		 +CASE WHEN $6='continue' THEN coalesce(CASE WHEN a.pinned THEN 1 ELSE exp(-0.693147*greatest(0,extract(epoch from(now()-a.last_effective_use_at)))/(a.half_life_seconds*a.stability)) END,0)*0.2 ELSE 0 END) AS score,coalesce(sc.role,''),coalesce(sc.branch,''),coalesce(sc.gaps,'[]')
 		 FROM memory_text t JOIN memory_records r ON (r.owner_id,r.id)=(t.owner_id,t.id)
 		 JOIN record_versions rv ON (rv.owner_id,rv.record_id,rv.version)=(t.owner_id,t.id,t.version)
 		 LEFT JOIN record_search rs ON (rs.owner_id,rs.record_id,rs.record_version)=(t.owner_id,t.id,t.version)
 
         LEFT JOIN LATERAL (
-          SELECT '[片段 ' || c.ordinal::text || '；字符 ' || c.start_rune::text || '-' || c.end_rune::text || '] ' || c.body AS body,c.start_rune,c.end_rune
+          SELECT '[片段 ' || c.ordinal::text || '；字符 ' || c.start_rune::text || '-' || c.end_rune::text || '] ' || c.body AS body
           FROM chunks c JOIN record_versions cv ON (cv.owner_id,cv.record_id,cv.version)=(c.owner_id,c.id,c.version)
           JOIN memory_records cr ON (cr.owner_id,cr.id)=(c.owner_id,c.id)
           WHERE r.kind='source' AND c.owner_id=t.owner_id AND c.source_id=t.id AND c.source_version=t.version
             AND cv.state='active' AND cr.state='active'
-            AND (($4!='' AND position(lower($4) in lower(c.body))>0)
-              OR EXISTS(SELECT 1 FROM unnest($16::text[]) token WHERE length(token)>1 AND position(lower(token) in lower(c.body))>0)
-              OR ($5!='' AND c.search_vector @@ to_tsquery('simple',$5))
-              OR ($11::text IS NOT NULL AND EXISTS(SELECT 1 FROM embeddings e WHERE (e.owner_id,e.record_id,e.record_version)=(c.owner_id,c.id,c.version) AND e.model=$12 AND CASE WHEN e.dimensions=$13 THEN (e.embedding <=> $11::vector)<0.65 ELSE false END)))
           ORDER BY
             (CASE WHEN $4!='' AND position(lower($4) in lower(c.body))>0 THEN 5 ELSE 0 END
              +CASE WHEN $5='' THEN 0 ELSE ts_rank_cd(c.search_vector,to_tsquery('simple',$5)) END
@@ -188,42 +168,19 @@ func (s *Store) recallTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in 
 	if err != nil {
 		return err
 	}
-	type candidate struct {
-		ref          memory.Ref
-		text         string
-		role, branch string
-		gaps         []string
-		start, end   *int
-	}
-	candidates := []candidate{}
+	var summary strings.Builder
+	consumed := 0
 	for rows.Next() {
-		var c candidate
+		var ref memory.Ref
+		var text string
 		var score float64
-		if err := rows.Scan(&c.ref.ID, &c.ref.Version, &c.ref.Kind, &c.text, &score, &c.role, &c.branch, &c.gaps, &c.start, &c.end); err != nil {
+		var role, branch string
+		var gaps []string
+		if err := rows.Scan(&ref.ID, &ref.Version, &ref.Kind, &text, &score, &role, &branch, &gaps); err != nil {
 			rows.Close()
 			return err
 		}
-		candidates = append(candidates, c)
-	}
-	err = rows.Err()
-	rows.Close()
-	if err != nil {
-		return err
-	}
-	var summary strings.Builder
-	consumed := 0
-	for _, c := range candidates {
-		ref, text, role, branch, gaps := c.ref, c.text, c.role, c.branch, c.gaps
-		allowed, err := contextReadAllowsTx(ctx, tx, scope, ref)
-		if err != nil {
-			return err
-		}
-		if !allowed {
-			out.Coverage.Complete = false
-			out.Coverage.Gaps = append(out.Coverage.Gaps, "unavailable_evidence")
-			continue
-		}
-
+		_ = score
 		if role != "" || branch != "" {
 			text = "[原文角色=" + role + "；分支=" + branch + "] " + text
 		}
@@ -239,10 +196,12 @@ func (s *Store) recallTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in 
 		}
 		fmt.Fprintf(&summary, "[%s@%d] %s\n", ref.ID, ref.Version, text)
 		out.Memories = append(out.Memories, ref)
-		if ref.Kind == memory.SourceKind && c.start != nil && c.end != nil {
-			out.SourceSpans = append(out.SourceSpans, memory.SourceSpan{Source: ref, StartRune: *c.start, EndRune: *c.end})
-		}
 		consumed++
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return err
 	}
 	out.Summary = summary.String()
 	relations, related, err := graphTx(ctx, tx, scope, out.Memories, b, in.Mode == memory.History, in.Context)
@@ -250,17 +209,6 @@ func (s *Store) recallTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in 
 		return err
 	}
 	for _, relation := range relations {
-		fromOK, e := contextReadAllowsTx(ctx, tx, scope, relation.From)
-		if e != nil {
-			return e
-		}
-		toOK, e := contextReadAllowsTx(ctx, tx, scope, relation.To)
-		if e != nil {
-			return e
-		}
-		if !fromOK || !toOK {
-			continue
-		}
 		ev, err := evidenceTx(ctx, tx, scope, relation.Ref)
 		if err != nil {
 			return err
@@ -268,13 +216,6 @@ func (s *Store) recallTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in 
 		out.Evidence = append(out.Evidence, ev...)
 	}
 	for _, ref := range related {
-		allowed, e := contextReadAllowsTx(ctx, tx, scope, ref)
-		if e != nil {
-			return e
-		}
-		if !allowed {
-			continue
-		}
 		if len(out.Memories) >= b.Candidates {
 			out.Coverage.Gaps = append(out.Coverage.Gaps, "关系展开达到候选预算，可继续展开相关对象")
 			break
@@ -304,36 +245,17 @@ func (s *Store) recallTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in 
 	if err != nil {
 		return err
 	}
-	pendingIDs := []memory.ID{}
 	for pending.Next() {
 		var id memory.ID
 		if err := pending.Scan(&id); err != nil {
 			pending.Close()
 			return err
 		}
-		pendingIDs = append(pendingIDs, id)
+		out.Coverage.PendingSources = append(out.Coverage.PendingSources, id)
 	}
 	err = pending.Err()
 	pending.Close()
-	if err != nil {
-		return err
-	}
-	for _, id := range pendingIDs {
-		var version int
-		if err = tx.QueryRow(ctx, "SELECT version FROM memory_records WHERE owner_id=$1 AND id=$2 AND state='active'", string(scope.OwnerID), string(id)).Scan(&version); errors.Is(err, pgx.ErrNoRows) {
-			continue
-		} else if err != nil {
-			return err
-		}
-		allowed, e := contextEvidenceAllowsTx(ctx, tx, scope, memory.Ref{ID: id, Kind: memory.SourceKind, Version: version})
-		if e != nil {
-			return e
-		}
-		if allowed {
-			out.Coverage.PendingSources = append(out.Coverage.PendingSources, id)
-		}
-	}
-	return nil
+	return err
 }
 
 func embeddingDimensions(vector []byte) int {
@@ -348,30 +270,15 @@ func evidenceTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, ref memory.R
 	if err != nil {
 		return nil, err
 	}
+	defer rows.Close()
 	for rows.Next() {
 		e := memory.Evidence{Source: memory.Ref{Kind: memory.SourceKind}, Target: ref}
 		if err := rows.Scan(&e.ID, &e.Source.ID, &e.Source.Version, &e.Locator, &e.Acquisition, &e.Stance); err != nil {
-			rows.Close()
 			return nil, err
 		}
 		result = append(result, e)
 	}
-	err = rows.Err()
-	rows.Close()
-	if err != nil {
-		return nil, err
-	}
-	filtered := []memory.Evidence{}
-	for _, e := range result {
-		allowed, err := contextEvidenceAllowsTx(ctx, tx, scope, e.Source)
-		if err != nil {
-			return nil, err
-		}
-		if allowed {
-			filtered = append(filtered, e)
-		}
-	}
-	return filtered, nil
+	return result, rows.Err()
 }
 func (s *Store) Expand(ctx context.Context, scope memory.Scope, in memory.ExpandRequest) (memory.ExpandResult, error) {
 	out := memory.ExpandResult{Entities: []memory.Entity{}, Episodes: []memory.Episode{}, Sources: []memory.Source{}, Claims: []memory.Claim{}, Relations: []memory.Relation{}, Evidence: []memory.Evidence{}, Coverage: coverage()}
@@ -393,7 +300,7 @@ func (s *Store) Expand(ctx context.Context, scope memory.Scope, in memory.Expand
 	returnOutErr := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		refs := []memory.Ref{}
 		for _, ref := range in.Refs {
-			if !ref.ID.Valid() || ref.Version < 0 || ref.Kind == "" {
+			if !ref.ID.Valid() || ref.Version < 0 {
 				return memory.ErrInvalid
 			}
 			rows, err := tx.Query(ctx, `SELECT r.kind,rv.version FROM memory_records r JOIN record_versions rv ON (rv.owner_id,rv.record_id)=(r.owner_id,r.id) WHERE r.owner_id=$1 AND r.id=$2 AND r.state='active' AND rv.state='active' AND ($3 OR EXISTS(SELECT 1 FROM record_grants g WHERE g.owner_id=r.owner_id AND g.record_id=r.id AND g.principal_id=$4)) AND ($5 OR rv.version=CASE WHEN $6=0 THEN r.version ELSE $6 END) ORDER BY rv.version`, string(scope.OwnerID), string(ref.ID), scope.IsOwner, scope.PrincipalID, in.History, ref.Version)
@@ -406,10 +313,6 @@ func (s *Store) Expand(ctx context.Context, scope memory.Scope, in memory.Expand
 				if err := rows.Scan(&r.Kind, &r.Version); err != nil {
 					rows.Close()
 					return err
-				}
-				if ref.Kind != r.Kind {
-					rows.Close()
-					return memory.ErrInvalid
 				}
 				refs = append(refs, r)
 			}
@@ -431,15 +334,6 @@ func (s *Store) Expand(ctx context.Context, scope memory.Scope, in memory.Expand
 			out.Coverage.NextCursor = strconv.Itoa(end)
 		}
 		for _, ref := range refs[offset:end] {
-			allowed, err := contextReadAllowsTx(ctx, tx, scope, ref)
-			if err != nil {
-				return err
-			}
-			if !allowed {
-				out.Coverage.Complete = false
-				out.Coverage.Gaps = append(out.Coverage.Gaps, "unavailable_evidence")
-				continue
-			}
 			switch ref.Kind {
 			case memory.ClaimKind:
 				c, err := readClaim(ctx, tx, scope, ref.ID, ref.Version)
@@ -482,19 +376,7 @@ func (s *Store) Expand(ctx context.Context, scope memory.Scope, in memory.Expand
 		if err != nil {
 			return err
 		}
-		for _, r := range relations {
-			a, e := contextReadAllowsTx(ctx, tx, scope, r.From)
-			if e != nil {
-				return e
-			}
-			z, e := contextReadAllowsTx(ctx, tx, scope, r.To)
-			if e != nil {
-				return e
-			}
-			if a && z {
-				out.Relations = append(out.Relations, r)
-			}
-		}
+		out.Relations = relations
 		if len(out.Coverage.Gaps) > 0 {
 			out.Coverage.Complete = false
 		}

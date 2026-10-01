@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import type { ContextRecipient, ManualRunPackage, State } from '../domain/types'
+import type { State } from '../domain/types'
 import { StoreContext, type RunRequest, type UndoOutcome } from './context'
 import type { Action } from './actions'
 import { api, APIError } from './api'
@@ -9,13 +9,6 @@ import { Toast, type ToastEntry } from '../components/Shell'
 import { Spinner } from '../components/ui'
 
 type Outcome = { ok: true } | { ok: false; error: unknown }
-
-/** Compare the canonical route fields, independent of JSON property order. */
-function sameRecipient(left: ContextRecipient | undefined, right: ContextRecipient | undefined): boolean {
-  if (!left || !right) return false
-  const fields: (keyof ContextRecipient)[] = ['principal_id', 'role', 'model', 'provider', 'protocol', 'channel', 'route_fingerprint']
-  return fields.every((field) => typeof left[field] === 'string' && left[field].length > 0 && left[field] === right[field])
-}
 
 function Logo() {
   return <img className="gate-logo" src="/favicon.svg" alt="" width={44} height={44} />
@@ -106,22 +99,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const id = crypto.randomUUID()
     return (await command({ type: 'requestRun', id, ...request }, crypto.randomUUID())).ok ? id : undefined
   }, [command])
-  const manualPackage = useCallback(async (runId: string) => {
-    const revision = stateRef.current?.revision
-    const original = stateRef.current?.runs.find((r) => r.id === runId)
-    const recipient = original?.contextTask?.recipient
-    const provider = original?.manualRecipient?.provider
-    if (!original || original.staleContext || original.status !== 'waiting' || !provider || !sameRecipient(recipient, recipient) || recipient?.provider !== provider) {
-      throw new Error('资料或状态已变化，请重新生成交接内容。')
-    }
-    const result = await api<ManualRunPackage>(`/v1/workspace/runs/${encodeURIComponent(runId)}/package`, undefined, 'GET', 'no-store')
-    const current = stateRef.current
-    const run = current?.runs.find((r) => r.id === runId)
-    if (current?.revision !== revision || !run || run.staleContext || run.status !== 'waiting' || run.manualRecipient?.provider !== provider || !sameRecipient(run.contextTask?.recipient, recipient) || result.run_id !== runId || !result.attempt?.delivered_at || result.attempt.external_receipt !== 'unknown' || !sameRecipient(result.attempt.manifest?.recipient, recipient)) {
-      throw new Error('资料或状态已变化，请重新生成交接内容。')
-    }
-    return result
-  }, [])
   const importText = useCallback(async (title: string, text: string) => {
     try {
       await api('/v1/memory/sources', { connector: 'file-import', external_id: crypto.randomUUID(), external_version: '1', title, text, media_type: 'text/plain' })
@@ -136,7 +113,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       await refresh(); setError(''); return true
     } catch (e) { fail(e); return false }
   }, [fail, refresh])
-  const value = useMemo(() => state ? ({ state, dispatch, dispatchUndoable, undo, tryUndo, applyState: accept, runAgent, manualPackage, importText, importAttachment, refresh }) : null, [state, dispatch, dispatchUndoable, undo, tryUndo, accept, runAgent, manualPackage, importText, importAttachment, refresh])
+  const value = useMemo(() => state ? ({ state, dispatch, dispatchUndoable, undo, tryUndo, applyState: accept, runAgent, importText, importAttachment, refresh }) : null, [state, dispatch, dispatchUndoable, undo, tryUndo, accept, runAgent, importText, importAttachment, refresh])
   const toastApi = useMemo<ToastApi>(() => ({ show: showToast }), [showToast])
 
   if (loading) return <main className="gate"><div className="gate-card gate-loading" role="status"><Logo /><Spinner size={16} /><span className="muted">正在连接 PCAS…</span></div></main>

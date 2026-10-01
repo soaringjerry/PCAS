@@ -47,14 +47,8 @@ func New(sources memory.Sources, retriever memory.Retriever, auth Authenticator,
 	mux.HandleFunc("GET /v1/memory/capabilities", s.authorize(s.capabilities))
 	mux.HandleFunc("POST /v1/memory/sources", s.authorize(s.ingest))
 	mux.HandleFunc("GET /v1/memory/sources/{id}", s.authorize(s.getSource))
-	mux.HandleFunc("GET /v1/memory/sources/{id}/authorization", s.authorize(s.getSourceAuthorizations))
-	mux.HandleFunc("POST /v1/memory/sources/{id}/authorization", s.authorize(s.setSourceAuthorization))
-	mux.HandleFunc("DELETE /v1/memory/sources/{id}/authorization", s.authorize(s.setSourceAuthorization))
-	mux.HandleFunc("GET /v1/memory/sources/{id}/scope", s.authorize(s.getSourceScope))
-	mux.HandleFunc("PUT /v1/memory/sources/{id}/scope", s.authorize(s.setSourceScope))
 	mux.HandleFunc("POST /v1/memory/recall", s.authorize(s.recall))
 	mux.HandleFunc("POST /v1/memory/expand", s.authorize(s.expand))
-	mux.HandleFunc("GET /v1/workspace/runs/{id}/package", s.authorize(s.manualRunPackage))
 	s.workspaceRoutes(mux)
 	s.connectorRoutes(mux)
 	s.notifyRoutes(mux)
@@ -229,8 +223,6 @@ func (s *Server) fail(w http.ResponseWriter, err error) {
 		status, code = http.StatusNotFound, "not_found"
 	case errors.Is(err, memory.ErrConflict):
 		status, code = http.StatusConflict, "version_conflict"
-	case errors.Is(err, memory.ErrRecordCapacity):
-		status, code = http.StatusInsufficientStorage, "record_capacity"
 	case errors.Is(err, memory.ErrForbidden):
 		status, code = http.StatusForbidden, "forbidden"
 	case errors.Is(err, memory.ErrBlocked):

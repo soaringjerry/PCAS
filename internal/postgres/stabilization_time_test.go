@@ -154,7 +154,7 @@ func TestR1_ElapsedLeadFallsBackAndElapsedDueHasNoReminder(t *testing.T) {
 			out := stabilizationTimeTurn(t, s, scope, map[string]any{"op": "create_task", "title": "喝水", "due": due.Format(time.RFC3339)})
 			task := stabilizationTimeTask(t, out.State, "")
 			if past {
-				if task.Due != due.Format(time.RFC3339) || len(task.Triggers) != 0 || len(out.Turn.Receipts) != 1 || !strings.Contains(out.Turn.Receipts[0].Text, "时间已过，没有设提醒") {
+				if task.Due != due.Format(time.RFC3339) || len(task.Triggers) != 1 || task.Triggers[0].ID != "due-reminder" || task.Triggers[0].Active || task.Triggers[0].NextAt != "" || task.Triggers[0].Offset != "-30m" || len(out.Turn.Receipts) != 1 || !strings.Contains(out.Turn.Receipts[0].Text, "时间已过，没有设提醒") {
 					t.Fatalf("elapsed due: due=%q triggers=%+v receipts=%+v", task.Due, task.Triggers, out.Turn.Receipts)
 				}
 			} else {
@@ -517,7 +517,8 @@ func TestR1_FallbackRescheduleRestoresOriginalLead(t *testing.T) {
 	out = stabilizationTimeTurn(t, s, scope, map[string]any{"op": "update", "ref": "T1", "set": map[string]any{"due": now.Add(2 * time.Hour).Format(time.RFC3339)}})
 	stabilizationTimeReminder(t, stabilizationTimeTask(t, out.State, task.ID), now.Add(2*time.Hour).Format(time.RFC3339), now.Add(90*time.Minute).Format(time.RFC3339), "-30m")
 	out = stabilizationTimeTurn(t, s, scope, map[string]any{"op": "update", "ref": "T1", "set": map[string]any{"due": now.Add(-time.Minute).Format(time.RFC3339)}})
-	if len(stabilizationTimeTask(t, out.State, task.ID).Triggers) != 0 || !strings.Contains(out.Turn.Receipts[0].Text, "时间已过，没有设提醒") {
+	task = stabilizationTimeTask(t, out.State, task.ID)
+	if len(task.Triggers) != 1 || task.Triggers[0].ID != "due-reminder" || task.Triggers[0].Active || task.Triggers[0].NextAt != "" || task.Triggers[0].Offset != "-30m" || !strings.Contains(out.Turn.Receipts[0].Text, "时间已过，没有设提醒") {
 		t.Fatalf("elapsed reschedule: task=%+v receipt=%+v", out.State.Tasks, out.Turn.Receipts)
 	}
 }
@@ -789,4 +790,29 @@ func TestR5_PendingFailedOccurrenceStopsWithoutLosingRetryData(t *testing.T) {
 	if delivery.Attempts["synthetic-mobile"] != 1 || !delivery.RetryAt["synthetic-mobile"].Equal(at.Add(time.Minute)) || string(fields["_suppressed"]) != "true" || fields["_suppressionOnly"] != nil || fields["synthetic-mobile"] != nil {
 		t.Fatalf("retry metadata overwritten or success fabricated: %s", raw)
 	}
+}
+
+func TestR1_ElapsedRescheduleRetainsOriginalCustomPreference(t *testing.T) {
+	s := testStore(t)
+	scope := owner()
+	now := time.Now().UTC().Truncate(time.Second)
+	out := stabilizationTimeTurn(t, s, scope, map[string]any{"op": "create_task", "title": "保留自定义偏好", "due": now.Add(4 * time.Hour).Format(time.RFC3339), "remind": "-2h"})
+	task := stabilizationTimeTask(t, out.State, "")
+	stabilizationTimeReminder(t, task, now.Add(4*time.Hour).Format(time.RFC3339), now.Add(2*time.Hour).Format(time.RFC3339), "-2h")
+	out = stabilizationTimeTurn(t, s, scope, map[string]any{"op": "update", "ref": "T1", "set": map[string]any{"due": now.Add(-time.Minute).Format(time.RFC3339)}})
+	for _, trigger := range stabilizationTimeTask(t, out.State, task.ID).Triggers {
+		if trigger.ID == "due-reminder" && trigger.Active && trigger.NextAt != "" {
+			t.Fatal("elapsed due retained effective reminder")
+		}
+	}
+	if !strings.Contains(out.Turn.Receipts[0].Text, "时间已过，没有设提醒") {
+		t.Fatal("elapsed due receipt omitted explanation")
+	}
+	channel := &stabilizationTimeChannel{}
+	stabilizationTimeCheck(t, s, now, channel)
+	if len(channel.calls) != 0 {
+		t.Fatal("elapsed due reschedule sent")
+	}
+	out = stabilizationTimeTurn(t, s, scope, map[string]any{"op": "update", "ref": "T1", "set": map[string]any{"due": now.Add(4 * time.Hour).Format(time.RFC3339)}})
+	stabilizationTimeReminder(t, stabilizationTimeTask(t, out.State, task.ID), now.Add(4*time.Hour).Format(time.RFC3339), now.Add(2*time.Hour).Format(time.RFC3339), "-2h")
 }

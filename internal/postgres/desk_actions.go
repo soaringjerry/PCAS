@@ -69,14 +69,16 @@ func applyDueReminderAt(item *workspace.Item, remind string, loc *time.Location,
 		d := due.In(loc)
 		next = time.Date(d.Year(), d.Month(), d.Day(), clock.Hour(), clock.Minute(), 0, 0, loc)
 	}
-	if !due.After(now) {
-		remove()
-		return
+	trigger := workspace.Trigger{ID: "due-reminder", Kind: "time", Description: item.Title, Offset: remind}
+	if due.After(now) {
+		if !next.After(now) {
+			next = due
+		}
+		trigger.Active = true
+		trigger.NextAt = next.UTC().Format(time.RFC3339)
 	}
-	if !next.After(now) {
-		next = due
-	}
-	trigger := workspace.Trigger{ID: "due-reminder", Kind: "time", Description: item.Title, NextAt: next.UTC().Format(time.RFC3339), Active: true, Offset: remind}
+	// An elapsed due has no effective reminder, but retains its preference so
+	// a later reschedule can reactivate the same offset. Clearing due removes it.
 	if existing < 0 {
 		item.Triggers = append(item.Triggers, trigger)
 	} else {
@@ -242,7 +244,7 @@ func taskReceiptText(ctx context.Context, tx pgx.Tx, scope memory.Scope, item wo
 		}
 	}
 	for _, trigger := range item.Triggers {
-		if trigger.ID == "due-reminder" {
+		if trigger.ID == "due-reminder" && trigger.Active {
 			if at, err := time.Parse(time.RFC3339, trigger.NextAt); err == nil {
 				parts = append(parts, at.In(loc).Format("15:04")+" 提醒")
 			}

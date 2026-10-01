@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
@@ -33,6 +34,12 @@ func promoteArtifactsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, idea
 // New fields carry ownership blocks through edits and promotions. Pre-block
 // fields are conservatively protected until ownership can be reviewed.
 func sanitizeItemTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, principal string, item workspace.Item) (workspace.Item, []memory.Ref, error) {
+	return sanitizeItemWithStoreTx(nil, ctx, tx, scope, principal, item)
+}
+func (s *Store) sanitizeItemTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, principal string, item workspace.Item) (workspace.Item, []memory.Ref, error) {
+	return sanitizeItemWithStoreTx(s, ctx, tx, scope, principal, item)
+}
+func sanitizeItemWithStoreTx(store *Store, ctx context.Context, tx pgx.Tx, scope memory.Scope, principal string, item workspace.Item) (workspace.Item, []memory.Ref, error) {
 	// Older promotions retained ideaId but not artifact links. Repair that
 	// lineage before using their copied notes in a new provider request.
 	if item.Kind == "task" && item.IdeaID != "" {
@@ -53,30 +60,58 @@ func sanitizeItemTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, principa
 	for _, f := range fields {
 		owned[f.Field] = f.Blocks
 	}
-	projectID := item.ProjectID
-	if item.Kind == "project" {
-		projectID = item.ID
-	}
-	rows, err := tx.Query(ctx, `SELECT a.kind,a.artifact_id,a.run_id::text, NOT EXISTS(
-        SELECT 1 FROM run_dependencies d LEFT JOIN memory_records r ON (r.owner_id,r.id)=(d.owner_id,d.memory_id)
-        WHERE (d.owner_id,d.run_id)=(a.owner_id,a.run_id) AND (r.state IS DISTINCT FROM 'active'
-        OR d.memory_version IS DISTINCT FROM (SELECT v.version FROM applicable_claim_versions($1,now(),now()) v WHERE v.claim_id=d.memory_id)
-        OR NOT EXISTS(SELECT 1 FROM record_grants g WHERE g.owner_id=d.owner_id AND g.record_id=d.memory_id AND g.principal_id=$3)
-        OR EXISTS(SELECT 1 FROM context_exclusions x WHERE x.owner_id=d.owner_id AND x.thing_id=$2 AND x.memory_id=d.memory_id)
-        OR NOT EXISTS(SELECT 1 FROM workspace_agents ag JOIN claim_revisions c ON c.owner_id=ag.owner_id WHERE ag.owner_id=$1 AND ag.id=$3 AND c.claim_id=d.memory_id AND c.version=d.memory_version AND ag.document->'memoryKinds' ? c.nature AND (coalesce(c.scope->>'project_id','')='' OR c.scope->>'project_id'=$4) AND (c.confirmation='confirmed' OR (c.confirmation='adopted' AND c.acquisition='direct') OR (ag.document->>'includeInferred')::boolean))
-        )),coalesce((SELECT jsonb_agg(jsonb_build_object('id',d.memory_id,'version',d.memory_version,'kind','claim')) FROM run_dependencies d WHERE (d.owner_id,d.run_id)=(a.owner_id,a.run_id)),'[]'::jsonb)
-        FROM adopted_artifacts a WHERE a.owner_id=$1 AND a.thing_id=$2`, string(scope.OwnerID), item.ID, principal, projectID)
+	rows, err := tx.Query(ctx, `SELECT a.kind,a.artifact_id,a.run_id::text,r.document FROM adopted_artifacts a LEFT JOIN agent_runs r ON(r.owner_id,r.id)=(a.owner_id,a.run_id) WHERE a.owner_id=$1 AND a.thing_id=$2`, string(scope.OwnerID), item.ID)
 	if err != nil {
 		return item, nil, err
 	}
-	defer rows.Close()
+	type artifact struct {
+		kind, id, runID string
+		run             []byte
+	}
+	artifacts := []artifact{}
 	for rows.Next() {
-		var kind, id, runID string
-		var allowed bool
-		var refs []memory.Ref
-		if err := rows.Scan(&kind, &id, &runID, &allowed, &refs); err != nil {
+		var a artifact
+		if err = rows.Scan(&a.kind, &a.id, &a.runID, &a.run); err != nil {
+			rows.Close()
 			return item, nil, err
 		}
+		artifacts = append(artifacts, a)
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return item, nil, err
+	}
+	for _, a := range artifacts {
+		kind, id, runID := a.kind, a.id, a.runID
+		var run workspace.Run
+		allowed := json.Unmarshal(a.run, &run) == nil && !run.StaleContext
+		refs := []memory.Ref{}
+		if run.ContextTask != nil {
+			allowed = allowed && store != nil
+			if allowed {
+				allowed = store.verifyRunForItemTx(ctx, tx, scope, run, &item) == nil
+			}
+			refs = refsForDependencies(run.ContextDependencies)
+			// A prior destination's permission cannot license this consumer. The
+			// originating revision fence and the current task both have to pass.
+			if allowed {
+				if scope.Task == nil || scope.Task.Recipient.PrincipalID != principal {
+					allowed = false
+				} else {
+					entries, cov, e := hydrateTypedContextTx(ctx, tx, scope, *scope.Task, refs)
+					if e != nil {
+						return item, nil, e
+					}
+					allowed = cov.Complete && len(entries) == len(refs)
+				}
+			}
+		} else {
+			run.AgentID = principal
+			refs = run.ContextVersions
+			allowed = allowed && verifyRunForItemTx(ctx, tx, scope, run, &item) == nil
+		}
+
 		used := false
 		field := kind
 		if kind == "task" {
@@ -141,7 +176,7 @@ func sanitizeItemTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, principa
 		}
 		setField(&item, field, text)
 	}
-	return item, dependencies, rows.Err()
+	return item, dependencies, nil
 }
 func purgeArtifactsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, ids []string) ([]string, error) {
 	// Deletion must also cover pre-fix promotions that have not been used in

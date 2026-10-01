@@ -43,7 +43,7 @@ func (s *Store) DeskTurnByRequest(ctx context.Context, scope memory.Scope, reque
 			return err
 		}
 		out.ConversationID, out.Turn = saved.ConversationID, saved.Turn
-		if erased || len(refs) > 0 && verifyRunTx(ctx, tx, scope, workspace.Run{AgentID: agent, ContextVersions: refs}) != nil {
+		if erased || len(refs) > 0 && s.verifyRunTx(ctx, tx, scope, workspace.Run{AgentID: agent, ContextVersions: refs}) != nil {
 			out.Turn.Reply = "（这条回答依据的记忆已变更）"
 			out.Turn.Cards = []workspace.DeskCard{}
 		}

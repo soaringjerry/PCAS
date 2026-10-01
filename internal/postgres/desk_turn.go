@@ -515,7 +515,7 @@ func (s *Store) withSecretaryLocks(ctx, callerCtx context.Context, owner, reques
 			return ctx.Err()
 		}
 		err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-			for _, key := range []string{owner + ":" + request, "secretary-conversation:" + owner + ":" + conversation} {
+			for _, key := range []string{strings.ToLower(owner + ":" + request), strings.ToLower("secretary-conversation:" + owner + ":" + conversation)} {
 				var locked bool
 				if err := tx.QueryRow(ctx, "SELECT pg_try_advisory_xact_lock(hashtextextended($1,0))", key).Scan(&locked); err != nil {
 					return err

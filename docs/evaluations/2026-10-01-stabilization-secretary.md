@@ -92,3 +92,7 @@ make test-integration
 - 自有 `pcas-test-T3-secretary` 已执行 `docker rm -f -v`，确认容器不存在；所有 httptest 服务和临时通知/blob 文件由测试 cleanup 释放，没有持久后台进程。没有清理或停止其他任务/生产资源。少量 `/tmp/pcas-test-T3-*.log` 留作当前协调者查看失败证据，不是大体积缓存。
 
 真实 Telegram/手机语音、默认 Codex 账户、生产配置、真机通知、网页交互、线上 11 项与一天试用均未验收。没有部署、没有合并、没有 main 推送。
+
+## 2026-10-01 F11 D1 erratum
+
+F11 复核发现原 D1 模型注册晚于 claim 创建，模型未获该 claim 授权，实际 `dependencies=[]`、cards 仅 links，不能证明引用。经协调者授权修正夹具并增加 sources 卡/依赖强断言后，已有删除实现的整轮清理、回执骨架、history/replay 断言全部通过，D1 产品 finding 撤回；原失败记录保留。具体证据及独立来源/生成期间删除边界见 [F11 修复与更正报告](2026-10-01-secretary-repairs.md#d1-更正证据)。

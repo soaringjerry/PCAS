@@ -142,7 +142,6 @@ func TestStabilizationD3_DeletedSourceExpiresRelatedUndoSnapshot(t *testing.T) {
 		t.Fatal("deleted snapshot retained", err, expired)
 	}
 	t.Run("expired_code", func(t *testing.T) {
-		stabilizationSecretaryFinding(t, "T3-D3/T1-U12: erased snapshot returns changed_since instead of expired; propagation passes")
 		// Propagation assertions above are independent of T1-U12's undo-state
 		// coverage. Only the public error-code check overlaps that finding.
 		st, err := s.Snapshot(context.Background(), scope)

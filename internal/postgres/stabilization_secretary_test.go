@@ -7,7 +7,6 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -27,15 +26,6 @@ func stabilizationSecretaryTasks(t *testing.T, s *Store, scope memory.Scope, wan
 	var count int
 	if err := s.pool.QueryRow(context.Background(), "SELECT count(*) FROM work_items WHERE owner_id=$1 AND kind='task'", string(scope.OwnerID)).Scan(&count); err != nil || count != want {
 		t.Fatalf("persisted task count: got %d, want %d, error %v", count, want, err)
-	}
-}
-
-// Diagnostic opt-in reruns the unchanged failing assertions. A normal green
-// run with these skips is explicitly not stabilization acceptance.
-func stabilizationSecretaryFinding(t *testing.T, finding string) {
-	t.Helper()
-	if os.Getenv("PCAS_STABILIZATION_RUN_FINDINGS") != "1" {
-		t.Skip("finding " + finding + "; see docs/evaluations/2026-10-01-stabilization-secretary.md; set PCAS_STABILIZATION_RUN_FINDINGS=1 to reproduce")
 	}
 }
 
@@ -434,7 +424,11 @@ func TestStabilizationS1_CrossInstanceQueueAllowsOtherConversations(t *testing.T
 		}
 		go func(store *Store) {
 			req := turnRequest("queued")
-			req.ConversationID = &conversation
+			conversationSpelling := conversation
+			if store == peer {
+				conversationSpelling = strings.ToUpper(conversation)
+			}
+			req.ConversationID = &conversationSpelling
 			_, err := store.DeskTurn(context.Background(), scope, req)
 			done <- err
 		}(target)
@@ -590,4 +584,60 @@ func TestStabilizationS1_CancelFailureAndIdempotentRetryReleaseLocks(t *testing.
 			}
 		})
 	}
+}
+
+func TestStabilizationS1_ConcurrentRetryAcrossInstancesExecutesOnce(t *testing.T) {
+	s, scope := testStore(t), owner()
+	peer, err := Open(context.Background(), s.pool.Config().ConnString())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(peer.Close)
+	entered, release := make(chan struct{}), make(chan struct{})
+	var once sync.Once
+	unblock := func() { once.Do(func() { close(release) }) }
+	t.Cleanup(unblock)
+	var calls atomic.Int32
+	secretaryModel(t, s, func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.Copy(io.Discard, r.Body)
+		if calls.Add(1) == 1 {
+			close(entered)
+			<-release
+		}
+		secretaryModelReply(w, `{"actions":[{"op":"create_task","title":"once"}]}`)
+	})
+	peer.SetModels(s.models)
+	req := turnRequest("once")
+	conversation := string(memory.NewID())
+	req.ConversationID = &conversation
+	type result struct {
+		out workspace.DeskTurnResponse
+		err error
+	}
+	done := make(chan result, 2)
+	go func() { out, err := s.DeskTurn(context.Background(), scope, req); done <- result{out, err} }()
+	select {
+	case <-entered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("first generation did not enter")
+	}
+	go func() { out, err := peer.DeskTurn(context.Background(), scope, req); done <- result{out, err} }()
+	unblock()
+	a, b := <-done, <-done
+	if a.err != nil || b.err != nil || a.out.Turn.ID != b.out.Turn.ID || calls.Load() != 1 {
+		t.Fatal("concurrent retry executed twice", a.err, b.err, calls.Load())
+	}
+	stabilizationSecretaryTasks(t, s, scope, 1)
+	// A valid UUID for an absent default object fails inside the locked transaction.
+	missing := string(memory.NewID())
+	invalid := turnRequest("missing")
+	invalid.ConversationID = &conversation
+	invalid.ThingID = &missing
+	if _, err := s.DeskTurn(context.Background(), scope, invalid); !errors.Is(err, memory.ErrNotFound) {
+		t.Fatal("missing object did not abort turn", err)
+	}
+	next := turnRequest("after rollback")
+	next.ConversationID = &conversation
+	mustTurn(t, peer, scope, next)
+	stabilizationSecretaryTasks(t, s, scope, 2)
 }

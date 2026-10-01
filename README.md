@@ -10,6 +10,7 @@ PCAS 是一支围绕你一个人的自托管 AI 支持团队：秘书、二把�
 - [跨应用接入、归档与摘要](docs/connectors.md)
 - [第 1 阶段任务与接口契约](docs/tasks/phase1/README.md) · [第 1 阶段验收报告](docs/evaluations/2026-09-30-phase1-acceptance.md) · [待办清单](docs/tasks/backlog.md)
 - [任务流程规则](docs/tasks/process.md) · [稳定化计划](docs/tasks/stabilization/README.md) · [上线后问题复盘](docs/evaluations/2026-10-01-phase1-postlaunch.md)
+- [第 2 阶段任务入口](docs/tasks/phase2/README.md)（未开工）· [2.0 回滚记录](docs/evaluations/2026-10-01-phase2-0-rollback.md)
 - [研究笔记：Hermes Agent](docs/research/hermes-agent.md)
 - [固定场景真实模型验收](docs/evaluations/2026-09-29.md)
 - [产品需求](docs/prd.md)

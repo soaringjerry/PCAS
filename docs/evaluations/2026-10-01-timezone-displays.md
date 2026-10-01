@@ -43,6 +43,20 @@ Node 使用 `/root/.nvm/versions/node/v22.23.3/bin`，没有改变系统默认�
 
 真实后端覆盖首次登录时区、保存/校验、提示、秘书创建与读取真实卡片、四页面切换、刷新、UTC 字段和历史回执；外部模型及通知服务为本地假服务。mock 覆盖两种视口、夏令时/跨年/提醒跨日、项目跟进、来源及设置附属时间入口，并通过具体文案与错误计数断言。此次没有真实模型账户、设备推送、Telegram 或生产渠道验收，也未替代 T2/A1。
 
+## 完整真实后端 CI 补验
+
+原提交 `bddc14b` 的[完整真实后端 CI](https://github.com/soaringjerry/PCAS/actions/runs/36823487398/job/110243927563) 实际失败：timezone 1/1、其余 backend 4/4 通过；golden 21/27 通过，G1/G3 各重复三次都在项目 ID 断言失败。此前的专项 1/1 证据没有覆盖这一共享数据问题。
+
+在独有 `pcas-test-F8-CI-*` tmpfs PostgreSQL、HTTP 18139、真实 API/worker 上，先连跑未修测试的 timezone 与 G1/G3 三重复：timezone 1/1 通过，G1/G3 6/6 失败。真实 workspace 中 F8 项目 `2be7aa4a-761b-4977-9797-d40d57064f83` 仍为 active，A 项目是 `d40daedc-baa1-4c05-ada0-db6ab4d20cd2`；六个 golden 事项的实际 projectId 全部是前者。秘书按 `created_at,id` 顺序为 active 项目分配别名，先创建的 F8 项目占据 P1，而 golden 假模型使用固定 P1 并要求对应 A。根因是本用例遗漏项目收尾；不是时区产品显示回归或共同环境故障。
+
+只修改 F8 用例的数据生命周期：项目使用本用例生成的 UUID，从本次创建回执的 thingId 记录事项 ID，按 ID 从回执对应 state 取事项并验证标题；在 `finally` 中仅将这些事项和项目置为 done，并恢复 followUps。原有时区、UTC 数据、四页面和历史回执断言全部保留，增加项目归属与收尾状态断言。这里是结束测试项目使其退出 active 别名集合，不是物理删除。golden、共享 fixture、runner 和产品代码没有此次改动。
+
+修复后的真实 workspace 确认 F8 项目和两事项为 done；直接只读查询秘书使用的同序 active 项目集合，P1 已对应 A（`327a1947-07f5-454d-896b-7cc1b1687bd5`）。使用既有 `real-backend.sh` 的临时隔离副本执行完整默认序列：timezone **1/1**、golden 三重复 **27/27**、其余 backend **4/4**，共 **32/32** 通过；三个 JSON 报告均为 skipped / unexpected / flaky = 0。golden 耗时 618.4 秒，涵盖真实提醒等待和模型超时保存。运行副本只调整工作目录、F8 容器名、HTTP 18139 和独立回调端口，并在阶段间加只读证据输出；测试列表、三重复和断言未改。
+
+完整运行加载的是 `finally` 收尾修复版本，事项仍按原固定标题在本轮 state 中定位。随后审查将两处定位改为本次创建回执的 thingId，并保留标题的精确断言；最终版本在另一个新鲜 tmpfs 工作区专项 **1/1** 通过，零 skip / unexpected / flaky。最终 lint / type-check 通过；此前正式构建通过，最后的小改只涉及测试选择器。没有宣称对最终选择器小改重跑本地完整套件；最新推送提交的远端 CI 另行查询。
+
+[补验精简证据](2026-10-01-timezone-displays/ci-followup.txt) 保留一条原始失败断言、项目 ID/别名变化、完整 32 次通过记录和最终专项。完整 JSON/截图在本机 `/tmp/pcas-f8-ci/full-results`，原始日志在同目录。三个自建 `pcas-test-F8-CI-*` 容器和九个记录的服务 PID 均已退出/删除；记录的运行目录已删除，18138/18139 无监听。runner 用 `docker rm -fv` 清理自身容器/卷，仅停止自己记录的 PID。保留日志和截图供审查；本次外部模型和通知仍使用本地假服务，未合并或部署。
+
 ## 证据与资源
 
 远端可审阅的[精简验证记录](2026-10-01-timezone-displays/verification.txt)与截图：

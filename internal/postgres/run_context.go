@@ -158,9 +158,15 @@ func (s *Store) requestRunTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 	for _, candidate := range prepared.Candidates {
 		candidate.Disposition = "rejected"
 		candidate.Reason = "context_filtered"
-		if directSeen[candidate.Ref] {
-			candidate.Disposition = "selected"
-			candidate.Reason = ""
+		for _, entry := range entries {
+			if !runCandidateContainsEntry(candidate, entry) {
+				continue
+			}
+			candidate.Disposition, candidate.Reason = "selected", ""
+			if oneOf("input_truncated", entry.Gaps...) {
+				candidate.Reason = "input_truncated"
+			}
+			break
 		}
 		run.ContextCandidates = append(run.ContextCandidates, candidate)
 	}
@@ -285,7 +291,25 @@ func (s *Store) hydrateRunInputTx(ctx context.Context, tx pgx.Tx, scope memory.S
 	if err != nil {
 		return nil, err
 	}
+	for i := range entries {
+		for _, candidate := range run.ContextCandidates {
+			if candidate.Disposition == "selected" && candidate.Reason == "input_truncated" && runCandidateContainsEntry(candidate, entries[i]) {
+				entries[i].Gaps = append(entries[i].Gaps, "input_truncated")
+				break
+			}
+		}
+	}
 	return boundRunEntries(entries, run.Prompt, run.ContextTask.MemoryBudget), nil
+}
+
+func runCandidateContainsEntry(candidate memory.CandidateRecord, entry memory.EvidenceEntry) bool {
+	if candidate.Ref != entry.Ref {
+		return false
+	}
+	if candidate.SourceSpan == nil {
+		return true
+	}
+	return entry.SourceSpan != nil && candidate.SourceSpan.Source == entry.SourceSpan.Source && candidate.SourceSpan.StartRune <= entry.SourceSpan.StartRune && candidate.SourceSpan.EndRune >= entry.SourceSpan.EndRune
 }
 
 type runContextKey struct{}

@@ -46,7 +46,10 @@ func (s *Store) memoryCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Sco
 				return err
 			}
 		}
-		return invalidateTx(ctx, tx, scope, c.ID)
+		if err := invalidateTx(ctx, tx, scope, c.ID); err != nil {
+			return err
+		}
+		return invalidateTypedContextTx(ctx, tx, scope, memory.ContextInvalidation{RecordIDs: []memory.ID{memory.ID(c.ID)}, Reason: memory.ContextRevoked})
 	}
 	claim, err := readClaim(ctx, tx, scope, memory.ID(c.ID), 0)
 	if err != nil {
@@ -113,7 +116,7 @@ func (s *Store) Correct(ctx context.Context, scope memory.Scope, in memory.Corre
 }
 func (s *Store) correctTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in memory.CorrectRequest) (memory.Ref, error) {
 	var out memory.Ref
-	if !in.Target.ID.Valid() || in.Target.Version < 1 {
+	if !in.Target.ID.Valid() || in.Target.Version < 1 || in.Target.Kind != memory.ClaimKind {
 		return out, memory.ErrInvalid
 	}
 	var version int
@@ -202,6 +205,9 @@ func (s *Store) correctTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in
 	if err := invalidateTx(ctx, tx, scope, string(out.ID)); err != nil {
 		return out, err
 	}
+	if err := invalidateTypedContextTx(ctx, tx, scope, memory.ContextInvalidation{RecordIDs: []memory.ID{out.ID}, Reason: memory.ContextCorrected}); err != nil {
+		return out, err
+	}
 	return out, enqueue(ctx, tx, scope.OwnerID, out.ID, out.Version, "memory.index")
 }
 func invalidateTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, id string) error {
@@ -215,7 +221,13 @@ func invalidateTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, id string)
 			return err
 		}
 	}
-	return refreshSummaryJobsTx(ctx, tx, scope.OwnerID, memory.ID(id))
+	if err := refreshSummaryJobsTx(ctx, tx, scope.OwnerID, memory.ID(id)); err != nil {
+		return err
+	}
+	// This common path also serves refreshed claim evidence and connector
+	// episode revisions. Keep their new typed copies in the same closure;
+	// callers with a more specific reason apply that reason afterwards.
+	return invalidateTypedContextTx(ctx, tx, scope, memory.ContextInvalidation{RecordIDs: []memory.ID{memory.ID(id)}, Reason: memory.ContextReplaced})
 }
 func (s *Store) RecordUse(ctx context.Context, scope memory.Scope, in memory.UseEvent) error {
 	if err := requireOwner(scope); err != nil {
@@ -298,7 +310,8 @@ func (s *Store) deleteRecordsTx(ctx context.Context, tx pgx.Tx, scope memory.Sco
 			return memory.ErrInvalid
 		}
 		var version int
-		err := tx.QueryRow(ctx, "SELECT version FROM memory_records WHERE owner_id=$1 AND id=$2 FOR UPDATE", string(scope.OwnerID), string(ref.ID)).Scan(&version)
+		var kind memory.Kind
+		err := tx.QueryRow(ctx, "SELECT version,kind FROM memory_records WHERE owner_id=$1 AND id=$2 FOR UPDATE", string(scope.OwnerID), string(ref.ID)).Scan(&version, &kind)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return memory.ErrNotFound
 		}
@@ -307,6 +320,9 @@ func (s *Store) deleteRecordsTx(ctx context.Context, tx pgx.Tx, scope memory.Sco
 		}
 		if ref.Version > 0 && ref.Version != version {
 			return memory.ErrConflict
+		}
+		if ref.Kind != "" && ref.Kind != kind {
+			return memory.ErrInvalid
 		}
 		ids = append(ids, string(ref.ID))
 	}
@@ -438,6 +454,15 @@ func (s *Store) deleteRecordsTx(ctx context.Context, tx pgx.Tx, scope memory.Sco
 	err = subjects.Err()
 	subjects.Close()
 	if err != nil {
+		return err
+	}
+	// Resolve typed reverse lineage before evidence or source versions are
+	// erased. The shared hook owns all new attempt/run/desk/manual copies.
+	typedIDs := make([]memory.ID, 0, len(ids))
+	for _, id := range ids {
+		typedIDs = append(typedIDs, memory.ID(id))
+	}
+	if err := invalidateTypedContextTx(ctx, tx, scope, memory.ContextInvalidation{RecordIDs: typedIDs, Reason: memory.ContextDeleted}); err != nil {
 		return err
 	}
 	ids, err = purgeArtifactsTx(ctx, tx, scope, ids)

@@ -1,0 +1,80 @@
+{
+  "product_and_run_harness_sha": "643c26c885b856bac35c39e47af3a7ed325fd420",
+  "exit_code": 1,
+  "events": 698,
+  "artifacts": 23,
+  "top": {
+    "pass": 3,
+    "fail": 4,
+    "skip": 0
+  },
+  "leaf": {
+    "pass": 6,
+    "fail": 5,
+    "skip": 0
+  },
+  "test_actions": {
+    "TestPhase2RuntimeSourcePublicAuthorizationExactVersion": "fail",
+    "TestPhase2RuntimeNonownerRawAPIsRequireTrustedTask/GetSource": "pass",
+    "TestPhase2RuntimeNonownerRawAPIsRequireTrustedTask/Recall": "pass",
+    "TestPhase2RuntimeNonownerRawAPIsRequireTrustedTask/Expand": "pass",
+    "TestPhase2RuntimeNonownerRawAPIsRequireTrustedTask/Summarize": "pass",
+    "TestPhase2RuntimeNonownerRawAPIsRequireTrustedTask": "pass",
+    "TestPhase2RuntimeSourcePolicyReplayRouteAndDisabledRevoke": "pass",
+    "TestPhase2RuntimeSourceScopeHardBoundary": "fail",
+    "TestPhase2RuntimeClaimNatureDoesNotGrantGlobalScope/preference": "fail",
+    "TestPhase2RuntimeClaimNatureDoesNotGrantGlobalScope/decision": "fail",
+    "TestPhase2RuntimeClaimNatureDoesNotGrantGlobalScope": "fail",
+    "TestPhase2RuntimeExplicitDenyAndUndoFirstGrant": "fail",
+    "TestPhase2RuntimePublicRecipientMismatchIsRejected": "pass"
+  },
+  "leaf_tests": {
+    "TestPhase2RuntimeSourcePublicAuthorizationExactVersion": "fail",
+    "TestPhase2RuntimeNonownerRawAPIsRequireTrustedTask/GetSource": "pass",
+    "TestPhase2RuntimeNonownerRawAPIsRequireTrustedTask/Recall": "pass",
+    "TestPhase2RuntimeNonownerRawAPIsRequireTrustedTask/Expand": "pass",
+    "TestPhase2RuntimeNonownerRawAPIsRequireTrustedTask/Summarize": "pass",
+    "TestPhase2RuntimeSourcePolicyReplayRouteAndDisabledRevoke": "pass",
+    "TestPhase2RuntimeSourceScopeHardBoundary": "fail",
+    "TestPhase2RuntimeClaimNatureDoesNotGrantGlobalScope/preference": "fail",
+    "TestPhase2RuntimeClaimNatureDoesNotGrantGlobalScope/decision": "fail",
+    "TestPhase2RuntimeExplicitDenyAndUndoFirstGrant": "fail",
+    "TestPhase2RuntimePublicRecipientMismatchIsRejected": "pass"
+  },
+  "raw_jsonl_sha256": "a17748f6782b1bc6ec3e0142152d23b4264f3cd427909ee5e5399fbb3ef8e692",
+  "files": {
+    "acceptance.jsonl.gz": {
+      "bytes": 13462,
+      "sha256": "f10161b14c5ebb6486f50c7ceb865d72f1ae6274c853a2e44e873c10cc4ef215"
+    },
+    "synthetic-evidence.tar.gz": {
+      "bytes": 6571,
+      "sha256": "0d0fe509ad668b7720414e7497a9239a8689b7c49d744f43ae99588d5140cfc4"
+    }
+  },
+  "raw_artifacts": {
+    "TestPhase2RuntimeExplicitDenyAndUndoFirstGrant-deny.json": "57adcbec7af4aa6785909495a7b3df6d002de3bd18e95001d377c9693538e5fd",
+    "TestPhase2RuntimeExplicitDenyAndUndoFirstGrant-http-0a9140cc-733f-46db-9f0b-576a94078c8a.json": "8dd5f2c84851c899df3d3506ec25d3a31424d169f8231bc2de3a2fc5ba94e661",
+    "TestPhase2RuntimeExplicitDenyAndUndoFirstGrant-http-22e6d3c3-6111-48a4-a0ce-1be1c9fbee50.json": "76bd22b67ba8c8d4ba9808c48040190a8877a98bfc8a01e4c8955fcba091bb06",
+    "TestPhase2RuntimeExplicitDenyAndUndoFirstGrant-http-3c681df5-392c-4627-b95d-96e654087898.json": "7037e0b4c948f86c924c9c19269ec8644761792dae8aae6d2d47694f88bfdaf3",
+    "TestPhase2RuntimeExplicitDenyAndUndoFirstGrant-recall-131ec55c-9836-4d7a-a69c-0b9672357b8a.json": "f05c875a4799a1053bb139dfe99b28abd4496dfc54f3e4013598fe018a56bfd6",
+    "TestPhase2RuntimeExplicitDenyAndUndoFirstGrant-recall-6a5fef4f-75e1-4bdb-8099-8087a09121c1.json": "84285012752d8651785e31d654bb5f7d1e58e806ef0b605616a35b81b50f7693",
+    "TestPhase2RuntimeExplicitDenyAndUndoFirstGrant-recall-cd627e80-1953-4c30-8c6d-840f9d096b74.json": "84285012752d8651785e31d654bb5f7d1e58e806ef0b605616a35b81b50f7693",
+    "TestPhase2RuntimeNonownerRawAPIsRequireTrustedTask-http-109fd6fe-d142-4931-9dda-9019d2ebff71.json": "05d0c3fe606d3f6f7d0dc885e7c10a0fcacab9be5f89df196eb39e910401c3a5",
+    "TestPhase2RuntimeNonownerRawAPIsRequireTrustedTask-http-9767b804-048c-4480-8f2c-707fd4a926e2.json": "0fcc43a7f83780668168b87ad363fc46ab2b42c81ed9e7dc1605434a5c008292",
+    "TestPhase2RuntimeNonownerRawAPIsRequireTrustedTask__Expand-missing-task.json": "8db9873667a46b4e0acbc4ff0c0216e17c958ed4e0a84308959ef8a1e7388e41",
+    "TestPhase2RuntimeNonownerRawAPIsRequireTrustedTask__GetSource-missing-task.json": "26d3f8ac41051998c359a63c40a46d96c97366c0e4df2f3c7628aace8f5e4b85",
+    "TestPhase2RuntimeNonownerRawAPIsRequireTrustedTask__Recall-missing-task.json": "e56ef8030157b1bdc5fdca36b4c93871b01fdc5da67b40144e3755598726fefb",
+    "TestPhase2RuntimeNonownerRawAPIsRequireTrustedTask__Summarize-missing-task.json": "41895ed9ced1545aedc359889b718196ba6acb6a0a1ad9b386a7fdc8a85de01f",
+    "TestPhase2RuntimePublicRecipientMismatchIsRejected-http-c957c217-216c-4033-963c-0ec109d1b5d0.json": "f94ba4014bc326181666a9d484e673d9f25434d3ec382bc6956f127d7f085bc5",
+    "TestPhase2RuntimeSourcePolicyReplayRouteAndDisabledRevoke-http-28891257-b409-4281-b067-6578664749d4.json": "576a7a421048e61afdd71bfa876fe819c76e1c45a5a272aa4c5ce7ee93fed0a2",
+    "TestPhase2RuntimeSourcePolicyReplayRouteAndDisabledRevoke-http-4a364561-6823-4fe9-a74c-f354045ce7e7.json": "f7f378be1bdeeea830aa66e2e2ab6fb03a9e5424c65066d9616df9b5c1b6460c",
+    "TestPhase2RuntimeSourcePolicyReplayRouteAndDisabledRevoke-http-6259d92e-1af2-4225-8d40-fa962d7564c6.json": "b65c64426c57152516fb5aca9b86e811e14614a91d8d0e6be25d3f620d433054",
+    "TestPhase2RuntimeSourcePolicyReplayRouteAndDisabledRevoke-http-7e5740f3-9935-4ca6-8d54-4f66e33d0b58.json": "1d221cacf8a41fc093e5787daec7120e4eff48dd075293e3f640b8ba7d6b4b36",
+    "TestPhase2RuntimeSourcePolicyReplayRouteAndDisabledRevoke-http-9263c6b3-269e-4453-9580-d23b889ec900.json": "8fd24992b2063efa20df367bc7be759be8d1084725b1c9dd589f65d5e00f0723",
+    "TestPhase2RuntimeSourcePolicyReplayRouteAndDisabledRevoke-http-b095ff31-0409-44c4-96e5-a2848ebddb8d.json": "1cde30c9db3fbe9922cf170ec32094b98b20f72ce69323abbc5ba6a9a57444fd",
+    "TestPhase2RuntimeSourcePolicyReplayRouteAndDisabledRevoke-http-c1a44737-863e-4637-b01f-add3b058d501.json": "1c93e038afaef4d52febadcb12d03106cc072a9e57f1ccb99812e13af9d25dd7",
+    "TestPhase2RuntimeSourcePolicyReplayRouteAndDisabledRevoke-http-d7cd7ec9-c8e2-4b75-831d-13414dff7927.json": "576a7a421048e61afdd71bfa876fe819c76e1c45a5a272aa4c5ce7ee93fed0a2",
+    "TestPhase2RuntimeSourcePublicAuthorizationExactVersion-http-8edb26e8-b2a4-4fa4-8914-fef8ae2699ae.json": "eee8721a4a95d6273cba68dc649fa75c801dc3322db9bfed8d6b22dac270a031"
+  }
+}

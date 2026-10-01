@@ -39,6 +39,13 @@ func (s *Store) summarizeTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, 
 	if in.Version != 0 && in.Version != out.Root.Version {
 		return out, memory.ErrConflict
 	}
+	allowed, err := contextReadAllowsTx(ctx, tx, scope, out.Root)
+	if err != nil {
+		return out, err
+	}
+	if !allowed {
+		return out, memory.ErrForbidden
+	}
 	principal := scope.PrincipalID
 	if scope.IsOwner {
 		principal = "owner"
@@ -99,7 +106,14 @@ func (s *Store) summarizeTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, 
 	var text strings.Builder
 	remaining := in.Tokens * 2
 	for _, e := range entries {
-		out.Dependencies = append(out.Dependencies, e.Ref)
+		allowed, err := contextReadAllowsTx(ctx, tx, scope, e.Ref)
+		if err != nil {
+			return out, err
+		}
+		if !allowed {
+			out.Coverage.Gaps = append(out.Coverage.Gaps, "unavailable_evidence")
+			continue
+		}
 		out.Coverage.Gaps = append(out.Coverage.Gaps, e.Gaps...)
 		label := string(e.Ref.Kind)
 		if e.Ref.Kind == memory.SourceKind {
@@ -120,6 +134,7 @@ func (s *Store) summarizeTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, 
 			out.Coverage.Gaps = append(out.Coverage.Gaps, "摘要受上下文预算限制，展开来源可查看全文")
 			continue
 		}
+		out.Dependencies = append(out.Dependencies, e.Ref)
 		text.WriteString(line)
 		remaining -= len(runes)
 	}
@@ -165,7 +180,7 @@ func (s *Store) summarizeTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, 
 	}
 	deps := append([]memory.Ref{out.Root}, out.Dependencies...)
 	for _, d := range deps {
-		if _, err = tx.Exec(ctx, `INSERT INTO derived_dependencies(owner_id,view_id,view_version,dependency_id,dependency_version) VALUES($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING`, string(scope.OwnerID), summaryID, version, string(d.ID), d.Version); err != nil {
+		if _, err = tx.Exec(ctx, `INSERT INTO derived_dependencies(owner_id,view_id,view_version,dependency_id,dependency_version,dependency_kind) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT DO NOTHING`, string(scope.OwnerID), summaryID, version, string(d.ID), d.Version, string(d.Kind)); err != nil {
 			return out, err
 		}
 	}

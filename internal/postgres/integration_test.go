@@ -169,9 +169,9 @@ func TestPostgresConcurrentIngestAndVersions(t *testing.T) {
 }
 
 func TestPostgresScopeAndReimportBlock(t *testing.T) {
-	s := testStore(t)
+	s, a, _ := phase2RTSetup(t)
 	ctx := context.Background()
-	a, b := owner(), owner()
+	b := owner()
 	in := input()
 	x := mustIngest(t, s, a, in)
 	y := mustIngest(t, s, b, in)
@@ -181,13 +181,18 @@ func TestPostgresScopeAndReimportBlock(t *testing.T) {
 	if _, err := s.GetSource(ctx, b, x.ID, 0); !errors.Is(err, memory.ErrNotFound) {
 		t.Fatal("cross-owner read", err)
 	}
-	agent := memory.Scope{OwnerID: a.OwnerID, PrincipalID: "agent:one"}
-	if _, err := s.GetSource(ctx, agent, x.ID, 0); !errors.Is(err, memory.ErrNotFound) {
+	agent := memory.Scope{OwnerID: a.OwnerID, PrincipalID: "phase2-model"}
+	if _, err := s.GetSource(ctx, agent, x.ID, 0); !errors.Is(err, memory.ErrForbidden) {
 		t.Fatal("ungranted read", err)
 	}
 	if _, err := s.pool.Exec(ctx, "INSERT INTO record_grants(owner_id,record_id,principal_id) VALUES($1,$2,$3)", string(a.OwnerID), string(x.ID), agent.PrincipalID); err != nil {
 		t.Fatal(err)
 	}
+	agent = phase2RTTask(t, s, a, "phase2-model", "secretary", phase2RTUnscoped())
+	if _, err := s.GetSource(ctx, agent, x.ID, 0); !errors.Is(err, memory.ErrForbidden) {
+		t.Fatal("coarse grant alone permitted raw source read", err)
+	}
+	phase2RTAuthorize(t, s, a, x.Ref, "phase2-model", "secretary", phase2RTUnscoped())
 	if _, err := s.GetSource(ctx, agent, x.ID, 0); err != nil {
 		t.Fatal("grant did not permit read", err)
 	}
@@ -197,7 +202,7 @@ func TestPostgresScopeAndReimportBlock(t *testing.T) {
 	if _, err := s.pool.Exec(ctx, "DELETE FROM record_grants WHERE owner_id=$1", string(a.OwnerID)); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.GetSource(ctx, agent, x.ID, 0); !errors.Is(err, memory.ErrNotFound) {
+	if _, err := s.GetSource(ctx, agent, x.ID, 0); !errors.Is(err, memory.ErrForbidden) {
 		t.Fatal("grant revocation ineffective", err)
 	}
 	if _, err := s.pool.Exec(ctx, "INSERT INTO record_grants(owner_id,record_id,principal_id) VALUES($1,$2,'agent')", string(b.OwnerID), string(x.ID)); err == nil {

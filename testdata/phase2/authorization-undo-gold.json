@@ -1,0 +1,66 @@
+{
+  "schema": "pcas.phase2.independent-authorization-undo.v1",
+  "frozen_at": "2026-10-01",
+  "authority": "Root approved semantic restoration clarification for forthcoming 023/ExplicitDeny; no changes to tested 022 K0 baseline or original deny expectations",
+  "sequences": [
+    {
+      "id": "UNDO-FIRST-GRANT",
+      "steps": [
+        "source has no policy; evidence-backed independent claim is authorized",
+        "owner grants source to current exact receiver/purpose/scope",
+        "owner undoes this first grant",
+        "ask raw and independent claim",
+        "try adopting old source-backed result"
+      ],
+      "required": [
+        "undo restores original semantic state: raw denied, independent claim still allowed",
+        "tombstone remains revoked with ExplicitDeny=false, retaining monotonic policy revision",
+        "older source-backed attempts/results remain invalidated and cannot be adopted"
+      ],
+      "forbidden": [
+        "undo first grant treated as explicit source deny",
+        "removing tombstone resets expected revision to zero",
+        "undo resurrects old attempt or result"
+      ]
+    },
+    {
+      "id": "UNDO-REVOKE",
+      "steps": [
+        "source granted to exact receiver",
+        "generate source-backed attempt/result",
+        "owner explicitly revokes source",
+        "owner undoes revoke",
+        "generate new context",
+        "try old result adoption"
+      ],
+      "required": [
+        "undo restores active allow under new monotonic revision after current route/source/scope validation",
+        "new legal context may use permitted source",
+        "old invalidated attempt/result remains invalidated"
+      ],
+      "forbidden": [
+        "permission ABA restores prior attempt validity",
+        "undo restores an obsolete or rebound receiver route"
+      ]
+    },
+    {
+      "id": "EXPLICIT-DENY-MIGRATION",
+      "steps": [
+        "022 row is revoked=true",
+        "apply 023 adding ExplicitDeny",
+        "repeat migration"
+      ],
+      "required": [
+        "legacy revoked policies preserve explicit source deny meaning",
+        "active allow rows remain allow",
+        "no old attempt/result validity restored",
+        "migration is idempotent and does not reset policy revision"
+      ],
+      "forbidden": [
+        "023 changes legacy revoked deny to non-deny and permits its claim-derived content"
+      ]
+    }
+  ],
+  "runtime_pending": "Validate against exact frozen combined 023/K1/K2 SHA when provided; current 97c7081/022 tests do not consume these semantics",
+  "failure_policy": "Keep original explicit deny safety assertions and original d8 controls unchanged"
+}

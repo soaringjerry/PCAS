@@ -34,6 +34,7 @@
 - `web/src/pages/SettingsPage.tsx`、`ThingPage.tsx`。
 - 设置组件 `ChatGPTConnection.tsx`、`OpenAIConnection.tsx`、`ConnectorSettings.tsx`、`MemoryActivitySettings.tsx`、`NotifySettings.tsx`、`TimezoneSettings.tsx`。
 - `web/src/components/UnsureSheet.tsx` 的候选确认操作及必要的局部样式；入口关联文字涉及 Shell.tsx 时先提交具体点位供协调者分配。
+- S1 证实当前候选管理完全不可达后，追加 `web/src/pages/LibraryPage.tsx` 的最小连接：现有资料库提供待确认入口/数量，复用候选组件，设置相关说明可链接过去。保留资料库现有推测记忆编辑/确认/删除路径，避免重复管理入口；不新建顶级页面、常驻审批面板，不重做整个资料库。
 - `web/src/components/ui.tsx`、`controls.tsx` 的必要、兼容扩展；`Secretary.tsx` 仅针对事项页编辑/手机遮挡的确证问题。
 - 新增 `web/src/styles/settings.css`；现有 `thing.css`、`app.css`、`secretary.css` 仅相关选择器，避免全站样式漂移。
 - 新增 `web/tests/settings-things-ux.spec.ts`；如文案/入口改变影响既有 mock 浏览器测试，可更新这些测试的定位/导航，必须保留真实功能断言，报告列出调整理由。不得改真实后端 golden/backend 测试或共享夹具来掩盖产品失败，额外文件先报协调者。

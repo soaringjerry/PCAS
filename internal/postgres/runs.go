@@ -349,9 +349,20 @@ func (s *Store) runAgentOnce(ctx context.Context) error {
 		}
 		if generationErr != nil {
 			current.Status = "failed"
+			current.Output = ""
 			current.Error = "模型调用未完成，结果和用量可能未确认；请检查登录、额度与服务配置"
 			var provider *siwc.ProviderError
-			if errors.As(generationErr, &provider) {
+			if errors.Is(generationErr, memory.ErrRecordCapacity) {
+				current.Error = "本次输入记录容量不足，请缩小问题范围或稍后重新生成"
+				if attempt.DispatchedAt == nil {
+					current.Error = "本次输入记录容量不足，未发送；请缩小问题范围或稍后重新生成"
+				}
+				current.ProviderError = asJSON(map[string]string{"code": "record_capacity"})
+			} else if errors.Is(generationErr, memory.ErrConflict) || errors.Is(generationErr, memory.ErrForbidden) || errors.Is(generationErr, memory.ErrNotFound) {
+				current.Error = "资料或接收者已变化，请重新生成"
+				current.StaleContext = true
+				current.ProviderError = asJSON(map[string]string{"code": "context_changed"})
+			} else if errors.As(generationErr, &provider) {
 				current.Error = provider.Message()
 				current.ProviderError = asJSON(provider)
 			}
@@ -367,6 +378,7 @@ func (s *Store) runAgentOnce(ctx context.Context) error {
 			current.Output = ""
 			current.Status = "failed"
 			current.Error = "生成期间记忆或授权已变化，请重新生成"
+			current.ProviderError = asJSON(map[string]string{"code": "context_changed"})
 		}
 		if current.Status == "done" {
 			if _, err := tx.Exec(ctx, "DELETE FROM context_artifact_dependencies WHERE owner_id=$1 AND parent_kind='run' AND parent_id=$2", string(scope.OwnerID), current.ID); err != nil {

@@ -153,6 +153,32 @@ func (s *Store) deskTurnContextTx(ctx context.Context, tx pgx.Tx, scope memory.S
 // Keep a verifiable operation receipt while removing stale derived prose and
 // item links. Action ownership and this exchange's binding are server facts.
 func redactDeskTurnContextTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, turn *workspace.SecretaryTurn) error {
+	var erased bool
+	var storedResponse []byte
+	if err := tx.QueryRow(ctx, "SELECT question='' AND answer='',response FROM desk_turns WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), turn.ID).Scan(&erased, &storedResponse); err != nil {
+		return err
+	}
+	if erased {
+		// Deletion already stored a scrubbed audit skeleton. Keep its empty
+		// reply and original operation identity instead of relabeling it as a
+		// source revision change or dropping capture receipts without actions.
+		if len(storedResponse) > 0 {
+			var saved storedSecretaryResponse
+			if err := json.Unmarshal(storedResponse, &saved); err != nil {
+				return err
+			}
+			*turn = saved.Turn
+			turn.Text, turn.Reply = "", ""
+			turn.Cards, turn.Ask = []workspace.DeskCard{}, nil
+			for i := range turn.Receipts {
+				turn.Receipts[i].Text, turn.Receipts[i].Reason = "（内容已删除）", ""
+			}
+		} else {
+			turn.Text, turn.Reply = "", ""
+			turn.Cards, turn.Receipts, turn.Ask = []workspace.DeskCard{}, []workspace.DeskReceipt{}, nil
+		}
+		return nil
+	}
 	turn.Reply = "（这条回答依据的记忆已变更）"
 	turn.Cards = []workspace.DeskCard{}
 	turn.Ask = nil

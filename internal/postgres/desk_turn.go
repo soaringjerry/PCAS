@@ -581,7 +581,11 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 				} else if err := s.commandTx(ctx, tx, scope, workspace.Command{Type: "capture", RequestID: req.RequestID, Text: req.Text}); err != nil {
 					return err
 				}
-				out.Turn.Receipts = append(out.Turn.Receipts, workspace.DeskReceipt{Op: "capture", Text: receiptText, Status: "done"})
+				receipt := workspace.DeskReceipt{Op: "capture", Text: receiptText, Status: "done"}
+				if errors.Is(contextErr, memory.ErrRecordCapacity) {
+					receipt.Code = secretaryErrorType(failureStage, contextErr)
+				}
+				out.Turn.Receipts = append(out.Turn.Receipts, receipt)
 			} else {
 				dependencies = c.Dependencies
 				if _, err := s.ingestTx(ctx, tx, scope, memory.IngestRequest{Connector: "desk", ExternalID: req.RequestID, ExternalVersion: "1", Title: "秘书原话", Text: req.Text, MediaType: "text/plain"}); err != nil {

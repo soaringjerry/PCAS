@@ -21,6 +21,7 @@ type DeskReceipt struct {
 	Undone   bool    `json:"undone"`
 	Status   string  `json:"status"`
 	Reason   string  `json:"reason,omitempty"`
+	Code     string  `json:"code,omitempty"` // controlled recovery category; no provider or user text
 }
 type DeskCard struct {
 	Kind  string `json:"kind"`

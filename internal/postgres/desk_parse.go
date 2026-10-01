@@ -70,6 +70,8 @@ func secretaryErrorType(stage string, err error) string {
 		return "canceled"
 	case errors.Is(err, workspace.ErrBudget), stage == "budget" && errors.Is(err, memory.ErrUnavailable):
 		return "budget_exceeded"
+	case errors.Is(err, memory.ErrRecordCapacity):
+		return "record_capacity"
 	case errors.Is(err, memory.ErrUnavailable):
 		return "unavailable"
 	case errors.Is(err, memory.ErrConflict):
@@ -88,6 +90,9 @@ func secretaryErrorType(stage string, err error) string {
 }
 
 func secretaryCaptureText(stage string, err error) string {
+	if errors.Is(err, memory.ErrRecordCapacity) {
+		return "已记下原话；上下文或诊断记录已达容量上限，请缩短输入或稍后重试"
+	}
 	reason := "模型没有响应"
 	switch stage {
 	case "context":

@@ -46,7 +46,10 @@ func (s *Store) memoryCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Sco
 				return err
 			}
 		}
-		return invalidateTx(ctx, tx, scope, c.ID)
+		if err := invalidateTx(ctx, tx, scope, c.ID); err != nil {
+			return err
+		}
+		return invalidateTypedContextTx(ctx, tx, scope, memory.ContextInvalidation{RecordIDs: []memory.ID{memory.ID(c.ID)}, Reason: memory.ContextRevoked})
 	}
 	claim, err := readClaim(ctx, tx, scope, memory.ID(c.ID), 0)
 	if err != nil {
@@ -218,7 +221,13 @@ func invalidateTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, id string)
 			return err
 		}
 	}
-	return refreshSummaryJobsTx(ctx, tx, scope.OwnerID, memory.ID(id))
+	if err := refreshSummaryJobsTx(ctx, tx, scope.OwnerID, memory.ID(id)); err != nil {
+		return err
+	}
+	// This common path also serves refreshed claim evidence and connector
+	// episode revisions. Keep their new typed copies in the same closure;
+	// callers with a more specific reason apply that reason afterwards.
+	return invalidateTypedContextTx(ctx, tx, scope, memory.ContextInvalidation{RecordIDs: []memory.ID{memory.ID(id)}, Reason: memory.ContextReplaced})
 }
 func (s *Store) RecordUse(ctx context.Context, scope memory.Scope, in memory.UseEvent) error {
 	if err := requireOwner(scope); err != nil {

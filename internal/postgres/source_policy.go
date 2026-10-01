@@ -100,7 +100,7 @@ func sourcePolicyAllowsTx(ctx context.Context, tx pgx.Tx, task memory.TrustedTas
 	 FROM sources s JOIN memory_records r ON (r.owner_id,r.id)=(s.owner_id,s.id)
 	 JOIN source_versions v ON (v.owner_id,v.source_id)=(s.owner_id,s.id) AND v.version=$3
 	 JOIN record_versions rv ON (rv.owner_id,rv.record_id,rv.version)=(v.owner_id,v.source_id,v.version)
-	 WHERE s.owner_id=$1 AND s.id=$2 AND r.kind='source' AND r.state='active' AND rv.state='active' FOR SHARE OF r,rv`, string(task.OwnerID), string(source.ID), source.Version, task.Recipient.PrincipalID).Scan(&current, &connector, &media, &representation, &granted)
+	 WHERE s.owner_id=$1 AND s.id=$2 AND r.kind='source' AND r.state='active' AND rv.state='active' AND rv.recorded_at<=coalesce($5,$6) FOR SHARE OF r,rv`, string(task.OwnerID), string(source.ID), source.Version, task.Recipient.PrincipalID, task.View.KnownAt, task.Now).Scan(&current, &connector, &media, &representation, &granted)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return memory.ErrNotFound
 	}
@@ -231,10 +231,13 @@ func (s *Store) mutateSourceAuthorizationTx(ctx context.Context, tx pgx.Tx, scop
 		if err != nil {
 			return out, err
 		}
-		if stored.SourceID != in.Source.ID || stored.Revision != in.ExpectedPolicyRevision || !recipientSelectionMatches(in.Recipient, stored.Recipient) || in.Purpose != "" && stored.Purpose != in.Purpose || in.Scope != (memory.HardScope{}) && stored.Scope != in.Scope {
+		restoring, _ := ctx.Value(sourcePolicyRestoreKey{}).(bool)
+		if stored.SourceID != in.Source.ID || stored.Revision != in.ExpectedPolicyRevision || !restoring && (!recipientSelectionMatches(in.Recipient, stored.Recipient) || in.Purpose != "" && stored.Purpose != in.Purpose || in.Scope != (memory.HardScope{}) && stored.Scope != in.Scope) {
 			return out, memory.ErrConflict
 		}
-		in.Recipient, in.Purpose, in.Scope = stored.Recipient, stored.Purpose, stored.Scope
+		if !restoring {
+			in.Recipient, in.Purpose, in.Scope = stored.Recipient, stored.Purpose, stored.Scope
+		}
 	}
 	if !validSourcePurpose(in.Purpose) || !in.Scope.Valid() {
 		return out, memory.ErrInvalid
@@ -279,7 +282,8 @@ func (s *Store) mutateSourceAuthorizationTx(ctx context.Context, tx pgx.Tx, scop
 		}
 		// ID-based DELETE must name the original tuple. It must not silently
 		// convert an old permission into a denial for a different destination.
-		if in.Revoke && (prior.Recipient != in.Recipient || prior.Purpose != in.Purpose || prior.Scope != in.Scope) {
+		restoring, _ := ctx.Value(sourcePolicyRestoreKey{}).(bool)
+		if in.Revoke && !restoring && (prior.Recipient != in.Recipient || prior.Purpose != in.Purpose || prior.Scope != in.Scope) {
 			return out, memory.ErrConflict
 		}
 	} else {
@@ -446,17 +450,21 @@ func (s *Store) resolveSourceAuthorizationIntentTx(ctx context.Context, tx pgx.T
 		return out, false, memory.ErrForbidden
 	}
 	role := serverTarget.Recipient.Role
+	principal := serverTarget.Recipient.PrincipalID
 	if match[1] == "让秘书能用" || match[1] == "不再让秘书读取" {
 		role = "secretary"
+		if serverTarget.Recipient.Role != "secretary" {
+			principal = s.models.ExtractionID() // a deputy cannot become the secretary by relabeling
+		}
 	} else if match[1] == "允许这个副手读取" {
 		role = "deputy"
 	}
-	if role != serverTarget.Recipient.Role {
+	if role != serverTarget.Recipient.Role || principal != serverTarget.Recipient.PrincipalID {
 		var manual *memory.Recipient
-		if serverTarget.Recipient.Channel == "manual" {
+		if serverTarget.Recipient.Channel == "manual" && principal == serverTarget.Recipient.PrincipalID {
 			manual = &serverTarget.Recipient
 		}
-		actual, err := s.contextRecipientTx(ctx, tx, ownerScope, serverTarget.Recipient.PrincipalID, role, manual)
+		actual, err := s.contextRecipientTx(ctx, tx, ownerScope, principal, role, manual)
 		if err != nil {
 			return out, false, err
 		}

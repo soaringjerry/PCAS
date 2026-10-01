@@ -173,17 +173,17 @@ func sanitizeItemWithStoreTx(store *Store, ctx context.Context, tx pgx.Tx, scope
 		}
 		switch kind {
 		case "notes":
-			used = item.Notes != ""
+			used = used || item.Notes != ""
 			if !allowed {
 				item.Notes = ""
 			}
 		case "body":
-			used = item.Body != ""
+			used = used || item.Body != ""
 			if !allowed {
 				item.Body = ""
 			}
 		case "progress":
-			used = item.Progress != ""
+			used = used || item.Progress != ""
 			if !allowed {
 				item.Progress = ""
 			}

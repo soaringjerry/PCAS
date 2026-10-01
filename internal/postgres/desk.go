@@ -19,19 +19,18 @@ const deskInstructions = assistantInstructions + `
 搜索词会离开这次对话：只写公开信息需要的关键词，绝不能把记录或事项里的人名、数字、私事放进搜索词。
 回答简短直接，像当面回话，用纯文本，不要 Markdown，网址不要写进回答而是放进 links。只输出 JSON：{"answer":"回答","used":["记录ID"],"links":["网址"]}。used 只列回答里真正用到的记录 ID；links 只列回答用到的网页，最多 3 个；没有就给空数组。`
 
-// AnswerDesk has the chosen assistant answer one desk question from the
-// memories it may see, the open tasks and, where the provider offers it, the web. It is synchronous and short, unlike
-// runs, so it reserves budget up front and never retries.
-func (s *Store) AnswerDesk(ctx context.Context, scope memory.Scope, agentID, question string, history []workspace.DeskTurn) (workspace.DeskAnswer, error) {
+var answerDeskSchema = []byte(`{"type":"object","additionalProperties":false,"required":["answer","used","links"],"properties":{"answer":{"type":"string"},"used":{"type":"array","maxItems":256,"items":{"type":"string"}},"links":{"type":"array","maxItems":3,"items":{"type":"string"}}}}`)
+
+func (s *Store) answerDeskTyped(ctx context.Context, scope memory.Scope, agentID, question string, suppliedHistory []workspace.DeskTurn) (workspace.DeskAnswer, error) {
 	var out workspace.DeskAnswer
 	question = strings.TrimSpace(question)
-	if !scope.IsOwner {
-		return out, memory.ErrForbidden
+	if err := requireOwner(scope); err != nil {
+		return out, err
 	}
-	if question == "" || len(question) > 4000 || len(history) > 6 {
+	if question == "" || len(question) > 4000 || len(suppliedHistory) > 6 {
 		return out, memory.ErrInvalid
 	}
-	for _, turn := range history {
+	for _, turn := range suppliedHistory {
 		if len(turn.Question) > 4000 || len(turn.Answer) > 8000 {
 			return out, memory.ErrInvalid
 		}
@@ -39,54 +38,71 @@ func (s *Store) AnswerDesk(ctx context.Context, scope memory.Scope, agentID, que
 	if s.models == nil || !s.models.Available(agentID) {
 		return out, memory.ErrUnavailable
 	}
+	history := append([]workspace.DeskTurn{}, suppliedHistory...)
 	var agent workspace.Agent
+	var task memory.TrustedTaskContext
 	var memories []workspace.Memory
 	var tasks []workspace.Item
-	dependencies := []memory.Ref{}
 	var settings workspace.Settings
+	indirect := []memory.TypedDependency{}
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		var err error
-		if agent, err = queryDocument[workspace.Agent](ctx, tx, "SELECT document FROM workspace_agents WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), agentID); err != nil {
+		agent, err = queryDocument[workspace.Agent](ctx, tx, "SELECT document FROM workspace_agents WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), agentID)
+		if err != nil {
 			return err
 		}
 		if !agent.Enabled || agent.Channel == "manual" {
 			return memory.ErrUnavailable
 		}
+		task, err = s.trustedTaskContextTx(ctx, tx, scope, agent.ID, "secretary", memory.HardScope{Kind: memory.UnscopedContextScope}, nil)
+		if err != nil {
+			return err
+		}
+		task.View.KnownAt, task.View.ValidAt = &task.Now, &task.Now
+		modelScope := memory.Scope{OwnerID: scope.OwnerID, PrincipalID: agent.ID, Task: &task}
 		for i := range history {
-			// IDs identify server-owned turns; legacy clients keep questions only.
-			history[i].Answer = ""
+			history[i].Answer = "" // The browser's claimed answer is never a source.
 			if history[i].ID == "" {
 				continue
 			}
 			if !memory.ID(history[i].ID).Valid() {
 				return memory.ErrInvalid
 			}
-			var refs []memory.Ref
-			var question, answer string
-			if err := tx.QueryRow(ctx, "SELECT question,answer,dependencies FROM desk_turns WHERE owner_id=$1 AND id=$2 AND agent_id=$3", string(scope.OwnerID), history[i].ID, agent.ID).Scan(&question, &answer, &refs); err != nil {
+			if err := tx.QueryRow(ctx, "SELECT question,answer FROM desk_turns WHERE owner_id=$1 AND id=$2 AND agent_id=$3", string(scope.OwnerID), history[i].ID, agent.ID).Scan(&history[i].Question, &history[i].Answer); err != nil {
 				return memory.ErrNotFound
 			}
-			history[i].Question = question
-			if verifyRunTx(ctx, tx, scope, workspace.Run{AgentID: agent.ID, ContextVersions: refs}) == nil {
-				history[i].Answer = answer
-				dependencies = append(dependencies, refs...)
+			deps, err := s.deskTurnContextTx(ctx, tx, scope, history[i].ID, &task)
+			if err != nil {
+				history[i].Answer = ""
+				continue
 			}
+			indirect = mergeRunDependencies(indirect, deps)
 		}
 		var refs []memory.Ref
-		memories, tasks, settings, refs, err = s.deskContextTx(ctx, tx, scope, agent, false)
-		dependencies = append(dependencies, refs...)
-		return err
+		memories, tasks, settings, refs, err = s.deskContextTx(ctx, tx, modelScope, agent, false)
+		if err != nil {
+			return err
+		}
+		entries, cov, err := hydrateTypedContextTx(ctx, tx, scope, task, refs)
+		if err != nil {
+			return err
+		}
+		if !cov.Complete {
+			return memory.ErrConflict
+		}
+		indirect = mergeRunDependencies(indirect, dependenciesForEntries(entries))
+		return nil
 	})
 	if err != nil {
 		return out, err
 	}
-	// Retrieval also uses the stored questions, never the browser's claimed
-	// version of an ID-backed turn. Tombstones contain no deleted text.
 	earlier := ""
 	for _, turn := range history {
 		earlier += turn.Question + " "
 	}
-	recall, err := s.Recall(ctx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: agent.ID}, memory.RecallRequest{Query: tail(earlier+question, 4000), Mode: "remember", Context: memory.WorkingContext{Objects: []memory.ID{}}, Budget: memory.Budget{Candidates: 15, Tokens: 4000, Edges: 15, Hops: 1}})
+	query := tail(earlier+question, 4000)
+	modelScope := memory.Scope{OwnerID: scope.OwnerID, PrincipalID: agent.ID, Task: &task}
+	recall, err := s.Recall(ctx, modelScope, memory.RecallRequest{Query: query, Mode: task.View.Mode, Context: memory.WorkingContext{Objects: []memory.ID{}, KnownAt: task.View.KnownAt, ValidAt: task.View.ValidAt}, Budget: task.MemoryBudget})
 	if err != nil {
 		return out, err
 	}
@@ -96,71 +112,158 @@ func (s *Store) AnswerDesk(ctx context.Context, scope memory.Scope, agentID, que
 			visible[m.ID] = m
 		}
 	}
-	loc := deskLocation(settings)
+	refs := []memory.Ref{}
+	candidates := []memory.CandidateRecord{}
+	for _, ref := range recall.Memories {
+		candidate := memory.CandidateRecord{Ref: ref, Stage: "recall", Disposition: "candidate"}
+		if ref.Kind == memory.ClaimKind {
+			if _, ok := visible[string(ref.ID)]; !ok {
+				candidate.Disposition, candidate.Reason = "rejected", "context_filtered"
+				candidates = append(candidates, candidate)
+				continue
+			}
+		}
+		refs = append(refs, ref)
+		withSpan := false
+		for _, span := range recall.SourceSpans {
+			if span.Source == ref {
+				copySpan := span
+				candidate.SourceSpan = &copySpan
+				candidates = append(candidates, candidate)
+				withSpan = true
+			}
+		}
+		if !withSpan {
+			candidate.SourceSpan = nil
+			candidates = append(candidates, candidate)
+		}
+	}
+	var entries []memory.EvidenceEntry
+	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		var cov memory.Coverage
+		var err error
+		entries, cov, err = hydrateTypedContextTx(ctx, tx, scope, task, refs)
+		if err != nil {
+			return err
+		}
+		if !cov.Complete {
+			return memory.ErrConflict
+		}
+		entries, err = applyRecallSpans(entries, recall.SourceSpans)
+		if err != nil {
+			return err
+		}
+		entries = boundRunEntries(entries, query, task.MemoryBudget)
+		return nil
+	})
+	if err != nil {
+		return out, err
+	}
+	for i := range candidates {
+		candidates[i].Disposition, candidates[i].Reason = "rejected", "context_filtered"
+		for _, entry := range entries {
+			if runCandidateContainsEntry(candidates[i], entry) {
+				candidates[i].Disposition, candidates[i].Reason = "selected", ""
+				break
+			}
+		}
+	}
+	deps := mergeRunDependencies(dependenciesForEntries(entries), indirect)
 	var prompt strings.Builder
-	prompt.WriteString(deskNow(loc))
+	prompt.WriteString(deskNow(deskLocation(settings)))
 	if settings.City != "" {
-		fmt.Fprintf(&prompt, "用户所在城市：%s（问天气、附近等没说地点时默认用它）\n", settings.City)
-	} else {
-		fmt.Fprintln(&prompt, "用户所在城市：未设置（需要地点而用户没说时，可以按时区推断并说明，或请用户说城市）")
+		fmt.Fprintf(&prompt, "用户所在城市：%s\n", settings.City)
 	}
 	if len(history) > 0 {
-		fmt.Fprintln(&prompt, "\n同一张卡片上之前的对话（本次是接着问）：")
+		prompt.WriteString("\n同一张卡片上之前的对话：\n")
 		for _, turn := range history {
 			fmt.Fprintf(&prompt, "问：%s\n", turn.Question)
 			if turn.Answer != "" {
 				fmt.Fprintf(&prompt, "答：%s\n", turn.Answer)
 			} else if turn.ID != "" {
-				fmt.Fprintln(&prompt, "（先前回答的依据已变化，请按当前允许的资料重新回答。）")
+				prompt.WriteString("（先前回答的依据已变化，请按当前允许的资料重新回答。）\n")
 			}
 		}
 	}
 	fmt.Fprintf(&prompt, "\n问题：%s\n\n检索到的记录（引用 ID）：\n", question)
-	sent := map[string]memory.Ref{}
-	for _, ref := range recall.Memories {
-		m, ok := visible[string(ref.ID)]
-		if !ok || sent[m.ID] != (memory.Ref{}) || len(sent) >= 20 {
-			continue
+	sent := map[string]memory.EvidenceEntry{}
+	for i := range entries {
+		entry := &entries[i]
+		expressed := "unknown"
+		if entry.ExpressedAt != nil {
+			expressed = entry.ExpressedAt.Format(time.RFC3339)
 		}
-		fmt.Fprintf(&prompt, "[%s / %s / confirmation=%s / acquisition=%s] %s\n", m.ID, m.Epistemic, m.Confirmation, m.Acquisition, m.Text)
-		sent[m.ID] = memory.Ref{ID: memory.ID(m.ID), Version: m.Version, Kind: memory.ClaimKind}
-		dependencies = append(dependencies, sent[m.ID])
-	}
-	if len(sent) == 0 {
-		fmt.Fprintln(&prompt, "（没有）")
-	}
-	fmt.Fprintln(&prompt, "\n未完成的事项：")
-	for _, t := range tasks {
-		fmt.Fprintf(&prompt, "- %s（%s", t.Title, t.Status)
-		if t.Due != "" {
-			fmt.Fprintf(&prompt, "，截止 %s", t.Due)
+		fmt.Fprintf(&prompt, "[%s / kind=%s / version=%d role=%s expressed_at=%s historical=%t changed=%t]\n", entry.Ref.ID, entry.Ref.Kind, entry.Ref.Version, entry.Role, expressed, entry.Historical, entry.Changed)
+		if m, ok := visible[string(entry.Ref.ID)]; ok && entry.Ref.Kind == memory.ClaimKind {
+			fmt.Fprintf(&prompt, "epistemic=%s confirmation=%s acquisition=%s\n", m.Epistemic, m.Confirmation, m.Acquisition)
 		}
-		fmt.Fprintln(&prompt, "）")
+		appendContextEvidence(&prompt, string(entry.Ref.ID), entry)
+		if prior, ok := sent[string(entry.Ref.ID)]; ok {
+			prior.Text += "\n" + entry.Text
+			sent[string(entry.Ref.ID)] = prior
+		} else {
+			sent[string(entry.Ref.ID)] = *entry
+		}
+	}
+	if len(entries) == 0 {
+		prompt.WriteString("（没有）\n")
+	}
+	prompt.WriteString("\n未完成的事项：\n")
+	for _, item := range tasks {
+		fmt.Fprintf(&prompt, "- %s（%s；截止 %s）\n", item.Title, item.Status, item.Due)
 	}
 	if len(tasks) == 0 {
-		fmt.Fprintln(&prompt, "（没有）")
+		prompt.WriteString("（没有）\n")
 	}
-	p, _ := s.models.Get(agent.ID)
-	checkContext := func() error {
-		return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-			return s.checkDeskContextTx(ctx, tx, scope, agent.ID, dependencies, tasks, false)
-		})
+	check := func(ctx context.Context, tx pgx.Tx) error {
+		live, err := s.contextRecipientModelTx(ctx, tx, scope, agent.ID, task.Recipient.Role, nil, task.Recipient.Model)
+		if task.Recipient.Model == "unknown" {
+			current, e := s.trustedTaskContextTx(ctx, tx, scope, agent.ID, task.Recipient.Role, task.Scope, nil)
+			live, err = current.Recipient, e
+		}
+		if err != nil || live != task.Recipient {
+			return memory.ErrConflict
+		}
+		if err := verifyTypedContextTx(ctx, tx, scope, task, deps); err != nil {
+			return err
+		}
+		for _, item := range tasks {
+			current, err := getItem(ctx, tx, scope, item.ID)
+			if err != nil {
+				return memory.ErrConflict
+			}
+			current, _, err = s.sanitizeItemTx(ctx, tx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: agent.ID, Task: &task}, agent.ID, current)
+			if err != nil {
+				return err
+			}
+			if current.Title != item.Title || current.Status != item.Status || current.Due != item.Due {
+				return memory.ErrConflict
+			}
+		}
+		for _, turn := range history {
+			if turn.ID != "" && turn.Answer != "" {
+				if _, err := s.deskTurnContextTx(ctx, tx, scope, turn.ID, &task); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
 	}
-	if err := checkContext(); err != nil {
+	if err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error { return check(ctx, tx) }); err != nil {
 		return out, err
 	}
+	p, _ := s.models.Get(agent.ID)
 	if err := s.reserveModelCost(ctx, scope.OwnerID, p.Reserve(deskInstructions+prompt.String()), nil); err != nil {
 		return out, err
 	}
+	out.ID = string(memory.NewID())
 	workCtx, cancel := context.WithTimeout(ctx, 90*time.Second)
-	defer cancel()
-	result, err := s.models.GenerateWithSearch(workCtx, agent.ID, deskInstructions, prompt.String())
+	result, attempt, err := s.generateContext(workCtx, scope, out.ID, task, deps, entries, candidates, indirect, deskInstructions, prompt.String(), answerDeskSchema)
+	cancel()
 	if err != nil {
-		return out, fmt.Errorf("%w: %w", memory.ErrUnavailable, err)
+		return workspace.DeskAnswer{}, err
 	}
-	if err := checkContext(); err != nil {
-		return out, err
-	}
+	task.Recipient = attempt.Manifest.Recipient
 	var reply struct {
 		Answer string   `json:"answer"`
 		Used   []string `json:"used"`
@@ -169,14 +272,31 @@ func (s *Store) AnswerDesk(ctx context.Context, scope memory.Scope, agentID, que
 	text := strings.TrimSpace(result.Text)
 	text = strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(strings.TrimPrefix(text, "```json"), "```"), "```"))
 	if strictJSON([]byte(text), &reply) != nil || strings.TrimSpace(reply.Answer) == "" {
-		// A model that ignored the format still answered; show it without sources.
 		reply.Answer, reply.Used, reply.Links = strings.TrimSpace(result.Text), nil, nil
 	}
-	out = workspace.DeskAnswer{Answer: strings.TrimSpace(reply.Answer), Agent: agent.Name, Used: []workspace.DeskSource{}, Searches: []string{}, Links: []string{}}
+	claimed := []memory.Ref{}
+	for _, id := range reply.Used {
+		ref := memory.Ref{ID: memory.ID(id)}
+		if entry, ok := sent[id]; ok {
+			ref = entry.Ref
+		} else {
+			for _, candidate := range candidates {
+				if string(candidate.Ref.ID) == id {
+					ref = candidate.Ref
+					break
+				}
+			}
+		}
+		claimed = append(claimed, ref)
+	}
+	if err := s.recordContextUsed(ctx, scope, attempt.ID, claimed); err != nil {
+		return workspace.DeskAnswer{}, err
+	}
+	out.Answer, out.Agent = strings.TrimSpace(reply.Answer), agent.Name
+	out.Used, out.Searches, out.Links = []workspace.DeskSource{}, []string{}, []string{}
 	if len(result.Searches) > 0 {
 		out.Searches = result.Searches[:min(len(result.Searches), 5)]
 	}
-	// Links become anchors on the page: web addresses only, a few, short.
 	for _, link := range reply.Links {
 		u, err := url.Parse(link)
 		if err == nil && (u.Scheme == "https" || u.Scheme == "http") && u.Host != "" && u.User == nil && len(link) <= 500 && len(out.Links) < 3 {
@@ -184,27 +304,37 @@ func (s *Store) AnswerDesk(ctx context.Context, scope memory.Scope, agentID, que
 		}
 	}
 	for _, id := range reply.Used {
-		// Only records that were actually sent can be cited.
-		if ref, ok := sent[id]; ok {
-			out.Used = append(out.Used, workspace.DeskSource{Ref: ref, Text: visible[id].Text})
+		if entry, ok := sent[id]; ok {
+			out.Used = append(out.Used, workspace.DeskSource{Ref: entry.Ref, Text: entry.Text})
 			delete(sent, id)
 		}
 	}
-	out.ID = string(memory.NewID())
 	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(scope.OwnerID)); err != nil {
 			return err
 		}
-		if err := verifyRunTx(ctx, tx, scope, workspace.Run{AgentID: agent.ID, ContextVersions: dependencies}); err != nil {
+		if err := check(ctx, tx); err != nil {
 			return err
 		}
-		_, err := tx.Exec(ctx, "INSERT INTO desk_turns(owner_id,id,agent_id,question,answer,dependencies) VALUES($1,$2,$3,$4,$5,$6)", string(scope.OwnerID), out.ID, agent.ID, question, out.Answer, asJSON(dependencies))
-		return err
+		if err := verifyContextAttemptTx(ctx, tx, scope, attempt.ID, task, deps); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, "INSERT INTO desk_turns(owner_id,id,agent_id,question,answer,dependencies,context_task) VALUES($1,$2,$3,$4,$5,$6,$7)", string(scope.OwnerID), out.ID, agent.ID, question, out.Answer, asJSON(refsForDependencies(deps)), asJSON(task)); err != nil {
+			return err
+		}
+		return persistContextArtifactDependenciesTx(ctx, tx, scope, "desk_turn", out.ID, 1, task, deps)
 	})
 	if err != nil {
 		return workspace.DeskAnswer{}, err
 	}
 	return out, nil
+}
+
+// AnswerDesk has the chosen assistant answer one desk question from the
+// memories it may see, the open tasks and, where the provider offers it, the web. It is synchronous and short, unlike
+// runs, so it reserves budget up front and never retries.
+func (s *Store) AnswerDesk(ctx context.Context, scope memory.Scope, agentID, question string, history []workspace.DeskTurn) (workspace.DeskAnswer, error) {
+	return s.answerDeskTyped(ctx, scope, agentID, question, history)
 }
 
 // tail keeps the last n bytes of s without splitting a character.
@@ -222,7 +352,11 @@ func tail(s string, n int) string {
 // deskContextTx keeps the legacy answer and secretary on the same visibility
 // and derived-artifact rules. Stable ordering is used by the secretary cache.
 func (s *Store) deskContextTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, agent workspace.Agent, stable bool) ([]workspace.Memory, []workspace.Item, workspace.Settings, []memory.Ref, error) {
-	memories, err := s.memoriesTx(ctx, tx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: agent.ID}, true)
+	if scope.Task == nil || scope.Task.OwnerID != scope.OwnerID || scope.Task.Recipient.PrincipalID != agent.ID {
+		return nil, nil, workspace.Settings{}, nil, memory.ErrForbidden
+	}
+	modelScope := memory.Scope{OwnerID: scope.OwnerID, PrincipalID: agent.ID, Task: scope.Task}
+	memories, err := s.memoriesTx(ctx, tx, modelScope, true)
 	if err != nil {
 		return nil, nil, workspace.Settings{}, nil, err
 	}
@@ -237,7 +371,7 @@ func (s *Store) deskContextTx(ctx context.Context, tx pgx.Tx, scope memory.Scope
 	dependencies := []memory.Ref{}
 	for i := range tasks {
 		var refs []memory.Ref
-		tasks[i], refs, err = sanitizeItemTx(ctx, tx, scope, agent.ID, tasks[i])
+		tasks[i], refs, err = s.sanitizeItemTx(ctx, tx, modelScope, agent.ID, tasks[i])
 		if err != nil {
 			return nil, nil, workspace.Settings{}, nil, err
 		}

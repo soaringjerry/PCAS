@@ -9,7 +9,7 @@ import { newId } from '../domain/ids'
 import { projectStatusLabel, taskStatusLabel } from '../domain/labels'
 import { ongoingLine, urgentLine, type LineItem } from '../domain/lines'
 import { findThing, isOpenTask, thingProjectId, thingTitle, type Thing } from '../domain/things'
-import { dayOffset, formatAgo } from '../domain/time'
+import { clockTime, dayOffset, formatAgo, formatShortWhen } from '../domain/time'
 import type { Doc, Run, Task } from '../domain/types'
 import { useStore } from '../store/context'
 import { useShell } from '../store/shell'
@@ -24,21 +24,6 @@ import '../styles/thing.css'
 
 /* ---------- Header ---------- */
 
-const weekdays = ['日', '一', '二', '三', '四', '五', '六']
-const pad = (n: number) => String(n).padStart(2, '0')
-const clock = (d: Date) => `${pad(d.getHours())}:${pad(d.getMinutes())}`
-
-/** "今天 15:00", "明天 09:00", "周五 15:00" within the week, otherwise "10月12日 15:00". */
-function shortWhen(iso: string): string {
-  const d = new Date(iso)
-  const days = dayOffset(iso)
-  if (days === 0) return `今天 ${clock(d)}`
-  if (days === 1) return `明天 ${clock(d)}`
-  if (days === -1) return `昨天 ${clock(d)}`
-  if (days > 1 && days < 7) return `周${weekdays[d.getDay()]} ${clock(d)}`
-  return `${d.getMonth() + 1}月${d.getDate()}日 ${clock(d)}`
-}
-
 /** When the reminder set by the secretary goes off (contracts §3), if it will. */
 function reminderAt(task: Task): string | undefined {
   const t = task.triggers.find((t) => t.id === 'due-reminder')
@@ -49,6 +34,7 @@ const ideaStatusText = { active: '想法', awakened: '刚被唤醒', shelved: '�
 
 /** The read-only facts about a thing, in one line; the parts it lacks are left out. */
 function infoParts(state: ReturnType<typeof useStore>['state'], thing: Thing): { text: string; tone?: 'late' | 'owed' }[] {
+  const timezone = state.settings.timezone ?? 'UTC'
   const project = state.projects.find((p) => p.id === thingProjectId(thing))?.name
   if (thing.kind === 'task') {
     const t = thing.item
@@ -56,9 +42,9 @@ function infoParts(state: ReturnType<typeof useStore>['state'], thing: Thing): {
     const late = t.due && isOpenTask(t) && new Date(t.due).getTime() < Date.now()
     return [
       { text: t.status === 'waiting' && t.waitingFor ? `在等${t.waitingFor}` : taskStatusLabel[t.status].text },
-      ...(t.due ? [{ text: `${shortWhen(t.due)} 截止`, tone: late ? ('late' as const) : undefined }] : []),
+      ...(t.due ? [{ text: `${formatShortWhen(t.due, timezone)} 截止`, tone: late ? ('late' as const) : undefined }] : []),
       ...(project ? [{ text: project }] : []),
-      ...(remind ? [{ text: `${t.due && dayOffset(remind) === dayOffset(t.due) ? clock(new Date(remind)) : shortWhen(remind)} 提醒` }] : []),
+      ...(remind ? [{ text: `${t.due && dayOffset(remind, timezone) === dayOffset(t.due, timezone) ? clockTime(remind, timezone) : formatShortWhen(remind, timezone)} 提醒` }] : []),
       ...(t.owedTo ? [{ text: `${t.owedTo.who}在等你`, tone: 'owed' as const }] : []),
     ]
   }
@@ -359,7 +345,7 @@ function titleFor(doc: Doc, body: string): string {
 }
 
 function DocRow({ doc, fresh }: { doc: Doc; fresh: boolean }) {
-  const { dispatch, dispatchUndoable } = useStore()
+  const { state, dispatch, dispatchUndoable } = useStore()
   const [open, setOpen] = useState(fresh)
   const [editing, setEditing] = useState(fresh)
   const [menu, setMenu] = useState(false)
@@ -378,7 +364,7 @@ function DocRow({ doc, fresh }: { doc: Doc; fresh: boolean }) {
           <FileText size={15} />
           <span className="doc-name">{doc.title}</span>
           <span className="doc-meta">
-            {doc.by === 'ai' ? '副手写的' : '你写的'} · {formatAgo(doc.updatedAt)}
+            {doc.by === 'ai' ? '副手写的' : '你写的'} · {formatAgo(doc.updatedAt, state.settings.timezone ?? 'UTC')}
           </span>
         </button>
         <button ref={more} type="button" className="doc-more" aria-label={`文档「${doc.title}」的更多操作`} aria-expanded={menu} onClick={() => setMenu((v) => !v)}>
@@ -559,7 +545,7 @@ function RunRow({ thing, run }: { thing: Thing; run: Run }) {
       副手
     </span>
   )
-  const when = <span className="act-when">{formatAgo(run.finishedAt ?? run.createdAt)}</span>
+  const when = <span className="act-when">{formatAgo(run.finishedAt ?? run.createdAt, state.settings.timezone ?? 'UTC')}</span>
   const look = run.output && (
     <button type="button" className="act-btn" aria-expanded={shown} onClick={() => setShown((v) => !v)}>
       {shown ? '收起' : '看看'}
@@ -760,7 +746,7 @@ function Activity({ thing }: { thing: Thing }) {
                 <div className="act-line">
                   <span className="act-who">{actorText[e.by ?? 'user'] ?? '你'}</span>
                   <span className="act-text">{e.summary}</span>
-                  <span className="act-when">{formatAgo(e.at)}</span>
+                  <span className="act-when">{formatAgo(e.at, state.settings.timezone ?? 'UTC')}</span>
                 </div>
               </li>
             ),

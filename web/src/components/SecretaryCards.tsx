@@ -2,23 +2,12 @@ import { useState } from 'react'
 import { Link } from 'react-router'
 import { ArrowUpRight, Check } from 'lucide-react'
 import { isKnownCard, type DeskCard, type LinksCard, type SourcesCard, type TasksCard, type TimelineCard } from '../domain/desk'
-import { dayOffset, formatDateTime, isOverdue } from '../domain/time'
+import { formatShortDate, formatDateTime, isOverdue } from '../domain/time'
 import { useStore } from '../store/context'
 import { SourceSheet } from './SourceSheet'
 
-/** "今天", "3月12日", "2025年3月" — short enough for a margin. */
-function shortDate(iso: string): string {
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return ''
-  const days = dayOffset(iso)
-  if (days === 0) return '今天'
-  if (days === -1) return '昨天'
-  if (days === 1) return '明天'
-  if (d.getFullYear() === new Date().getFullYear()) return `${d.getMonth() + 1}月${d.getDate()}日`
-  return `${d.getFullYear()}年${d.getMonth() + 1}月`
-}
-
 function Sources({ card }: { card: SourcesCard }) {
+  const { state } = useStore()
   const [open, setOpen] = useState<{ id: string; version?: number } | null>(null)
   return (
     <ul className="sec-sources" aria-label="依据">
@@ -27,7 +16,7 @@ function Sources({ card }: { card: SourcesCard }) {
         const body = (
           <>
             <span className="s-text">{item.text}</span>
-            {item.at && <time className="s-when">{shortDate(item.at)}</time>}
+            {item.at && <time className="s-when">{formatShortDate(item.at, state.settings.timezone ?? 'UTC')}</time>}
           </>
         )
         return (
@@ -65,6 +54,7 @@ type Quote = SourcesCard['items'][number]
 type Moment = TimelineCard['items'][number] & { source?: Quote }
 
 function Timeline({ title, items }: { title?: string; items: Moment[] }) {
+  const { state } = useStore()
   const [open, setOpen] = useState<{ id: string; version?: number } | null>(null)
   return (
     <figure className="sec-timeline">
@@ -73,7 +63,7 @@ function Timeline({ title, items }: { title?: string; items: Moment[] }) {
       <ol>
         {items.map((item, i) => (
           <li key={i} className={item.status}>
-            <time>{item.at ? shortDate(item.at) : ''}</time>
+            <time>{item.at ? formatShortDate(item.at, state.settings.timezone ?? 'UTC') : ''}</time>
             <span className="t-mark" aria-label={item.status === 'done' ? '已完成' : item.status === 'dropped' ? '放弃了' : undefined}>
               {item.status === 'done' && <Check size={9} strokeWidth={3.5} />}
             </span>
@@ -125,7 +115,7 @@ function Tasks({ card }: { card: TasksCard }) {
         const status = live?.status ?? item.status
         const due = live ? live.due : item.due
         const done = status === 'done' || status === 'cancelled'
-        const meta = [due && formatDateTime(due), item.project].filter(Boolean).join(' · ')
+        const meta = [due && formatDateTime(due, state.settings.timezone ?? 'UTC'), item.project].filter(Boolean).join(' · ')
         return (
           <li key={item.thingId} className={done ? 'done' : undefined}>
             <button

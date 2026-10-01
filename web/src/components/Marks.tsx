@@ -36,12 +36,13 @@ export function ProjectLink({ id }: { id?: string }) {
 }
 
 export function FromLine({ source, quote = true }: { source: SourceRef; quote?: boolean }) {
+  const { state } = useStore()
   const [open, setOpen] = useState(false)
   return (
     <div className="stack-sm" style={{ gap: 4 }}>
       <button type="button" className="from link-btn" onClick={() => setOpen(true)}>
         <CornerDownRight size={12} />
-        {source.label} · {formatAgo(source.at)}
+        {source.label} · {formatAgo(source.at, state.settings.timezone ?? 'UTC')}
       </button>
       {open && <SourceSheet id={source.sourceId} version={source.version} onClose={() => setOpen(false)} />}
       {quote && source.excerpt && <div className="quote">“{source.excerpt}”</div>}
@@ -71,6 +72,7 @@ const tlIcon = {
 }
 
 export function Timeline({ events, limit = 8 }: { events: TimelineEvent[]; limit?: number }) {
+  const { state } = useStore()
   const [all, setAll] = useState(false)
   const hidden = all ? 0 : Math.max(0, events.length - limit)
   return (
@@ -97,7 +99,7 @@ export function Timeline({ events, limit = 8 }: { events: TimelineEvent[]; limit
               {e.source?.excerpt && <div className="quote">“{e.source.excerpt}”</div>}
               <div className="tl-when">
                 {e.by ? `${e.by} · ` : ''}
-                {formatAgo(e.at)}
+                {formatAgo(e.at, state.settings.timezone ?? 'UTC')}
               </div>
             </div>
           </li>

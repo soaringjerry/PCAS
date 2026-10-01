@@ -1,3 +1,4 @@
+import { formatTimestamp } from '../domain/time'
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '../store/api'
 import { CircleAlert, Copy, ExternalLink, RotateCw } from 'lucide-react'
@@ -10,6 +11,7 @@ interface Login { verificationUrl: string; userCode: string; loginId: string }
 interface Limits { rateLimits: { primary?: { usedPercent: number; resetsAt: number }; secondary?: { usedPercent: number; resetsAt: number } } }
 
 function CodexConnection() {
+  const { state } = useStore()
   const [enabled, setEnabled] = useState(false)
   const [account, setAccount] = useState<Account['account']>(null)
   const [login, setLogin] = useState<Login | null>(null)
@@ -62,7 +64,7 @@ function CodexConnection() {
       {limits?.rateLimits.primary && <div className="stack-sm" style={{ gap: 6 }}>
         <div className="spread small"><span className="muted">当前额度窗口</span><span>已用 {limits.rateLimits.primary.usedPercent}%</span></div>
         <Progress value={limits.rateLimits.primary.usedPercent / 100} />
-        <span className="tiny muted">预计 {new Date(limits.rateLimits.primary.resetsAt * 1000).toLocaleString()} 重置</span>
+        <span className="tiny muted">预计 {formatTimestamp(new Date(limits.rateLimits.primary.resetsAt * 1000).toISOString(), state.settings.timezone ?? 'UTC')} 重置</span>
       </div>}
       {limits?.rateLimits.secondary && <div className="stack-sm" style={{ gap: 6 }}>
         <div className="spread small"><span className="muted">较长额度窗口</span><span>已用 {limits.rateLimits.secondary.usedPercent}%</span></div>

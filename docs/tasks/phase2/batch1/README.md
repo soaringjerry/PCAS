@@ -211,7 +211,7 @@ Astra 这一批不用，留作疑难时的后备。四个任务各由一个执�
 
 | 写入者 | 文件 |
 |---|---|
-| A | `internal/memory/contracts.go`（只加 Scope 的内部标记）、`internal/postgres/retrieval.go`、`desk_turn.go`、`run_context.go`、`runs.go`、`telegram_turn.go`、`artifacts.go`（只改 `sanitizeItemTx` 里校验运行依赖的那条查询，见 R6）、`internal/workspace/desk.go`、`internal/telegram/`（只在 R7 需要时） |
+| A | `internal/memory/contracts.go`（只加 Scope 的内部标记，以及 `RecallResult` 上不对外输出的摘录列表，标 `json:"-"`）、`internal/postgres/retrieval.go`、`desk_turn.go`、`run_context.go`、`runs.go`、`telegram_turn.go`、`artifacts.go`（只改 `sanitizeItemTx` 里校验运行依赖的那条查询，见 R6）、`internal/workspace/desk.go`、`internal/telegram/`（只在 R7 需要时） |
 | B | `internal/postgres/undone_turns.go`（新）、`actions_log.go`、`processing.go`、`internal/postgres/migrations/026_drop_phase2_0_leftovers.sql`（新） |
 | C | `web/src/domain/desk.ts`、`web/src/components/SecretaryCards.tsx`、`web/src/components/Secretary.tsx`、`web/src/styles/secretary.css` |
 | T | `internal/postgres/phase2_b1_*_test.go`（新）、`testdata/phase2/`（新）、`web/tests/phase2-batch1*.spec.ts`（新）、`web/tests/support/` 里为新用例必须的改动、CI 工作流里把新用例加进去的那一行、`docs/evaluations/` 里本批的验收报告 |

@@ -100,7 +100,7 @@ func sourcePolicyAllowsTx(ctx context.Context, tx pgx.Tx, task memory.TrustedTas
 	 FROM sources s JOIN memory_records r ON (r.owner_id,r.id)=(s.owner_id,s.id)
 	 JOIN source_versions v ON (v.owner_id,v.source_id)=(s.owner_id,s.id) AND v.version=$3
 	 JOIN record_versions rv ON (rv.owner_id,rv.record_id,rv.version)=(v.owner_id,v.source_id,v.version)
-	 WHERE s.owner_id=$1 AND s.id=$2 AND r.kind='source' AND r.state='active' AND rv.state='active' AND rv.recorded_at<=coalesce($5,$6) FOR SHARE OF r,rv`, string(task.OwnerID), string(source.ID), source.Version, task.Recipient.PrincipalID, task.View.KnownAt, task.Now).Scan(&current, &connector, &media, &representation, &granted)
+	 WHERE s.owner_id=$1 AND s.id=$2 AND r.kind='source' AND r.state='active' AND rv.state='active' AND rv.recorded_at<=coalesce($5::timestamptz,$6::timestamptz) FOR SHARE OF r,rv`, string(task.OwnerID), string(source.ID), source.Version, task.Recipient.PrincipalID, task.View.KnownAt, task.Now).Scan(&current, &connector, &media, &representation, &granted)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return memory.ErrNotFound
 	}

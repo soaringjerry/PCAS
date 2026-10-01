@@ -5,6 +5,8 @@ test('real API settings persist separate keys, redact secrets and queue vector b
   const errors: string[] = []
   page.on('pageerror', e => errors.push(e.message))
   await login(page, '/settings')
+  // The API forms open from their row on the settings page.
+  await page.getByRole('button', { name: /^按量计费接口/ }).click()
   await expect(page.getByRole('heading', { name: 'API 与向量接入' })).toBeVisible()
   const before = await (await page.request.get('/v1/models/openai')).json()
   await page.getByLabel('文本 API Base URL', { exact: true }).fill(`${fixtureURL}/v1`)
@@ -18,6 +20,7 @@ test('real API settings persist separate keys, redact secrets and queue vector b
   await page.getByRole('button', { name: '保存向量接入', exact: true }).click()
   await expect(page.getByText('向量接入已保存，可补建现有资料的向量。')).toBeVisible()
   await page.reload()
+  await page.getByRole('button', { name: /^按量计费接口/ }).click()
   await expect(page.getByLabel('文本 API Base URL', { exact: true })).toHaveValue(`${fixtureURL}/v1`)
   await expect(page.getByLabel('向量 Base URL', { exact: true })).toHaveValue(`${fixtureURL}/v1`)
   const configResponse = await page.request.get('/v1/models/openai')

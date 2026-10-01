@@ -2,7 +2,7 @@ import { formatTimestamp } from '../domain/time'
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '../store/api'
 import { CircleAlert, Copy, ExternalLink, RotateCw } from 'lucide-react'
-import { Button, Progress, Sheet, Tag } from './ui'
+import { Button, Fold, Progress, Tag } from './ui'
 import { Select } from './controls'
 import { useStore } from '../store/context'
 
@@ -12,7 +12,8 @@ interface Limits { rateLimits: { primary?: { usedPercent: number; resetsAt: numb
 
 function CodexConnection() {
   const { state } = useStore()
-  const [enabled, setEnabled] = useState(false)
+  /** null until the server has said whether this channel is set up at all. */
+  const [enabled, setEnabled] = useState<boolean | null>(null)
   const [account, setAccount] = useState<Account['account']>(null)
   const [login, setLogin] = useState<Login | null>(null)
   const [limits, setLimits] = useState<Limits | null>(null)
@@ -39,8 +40,12 @@ function CodexConnection() {
     return () => window.clearInterval(timer)
   }, [login, refresh])
   const connected = account?.type === 'chatgpt'
-  return <section className="section"><h2 className="section-title">Codex App Server</h2><Sheet pad>
+  const used = limits?.rateLimits.primary?.usedPercent
+  const summary = connected ? `已登录 ${account.email ?? 'ChatGPT'}${used === undefined ? '' : ` · 额度已用 ${used}%`}`
+    : error ? '读取失败' : login ? '等你输入验证码' : enabled === null ? '正在读取…' : enabled ? '未登录' : '这台服务器没开通'
+  return <Fold title="ChatGPT 订阅（Codex 登录）" summary={summary} tone={connected ? 'ok' : error ? 'danger' : undefined}>
     <div className="stack-sm">
+      <h3 className="fold-name">Codex App Server</h3>
       <div className="spread">
         <div className="row-nowrap">
           <span className={`status-dot${connected ? ' on' : ''}`} aria-hidden />
@@ -60,7 +65,7 @@ function CodexConnection() {
         </div>
       </div>
       {!connected && <p className="small muted">使用 ChatGPT 订阅额度运行副手。通过官方 Codex 登录。</p>}
-      {!enabled && <p className="callout">服务端尚未启用订阅入口。按部署文档配置 Codex 后，此处即可登录。</p>}
+      {enabled === false && <p className="callout">服务端尚未启用订阅入口。按部署文档配置 Codex 后，此处即可登录。</p>}
       {limits?.rateLimits.primary && <div className="stack-sm" style={{ gap: 6 }}>
         <div className="spread small"><span className="muted">当前额度窗口</span><span>已用 {limits.rateLimits.primary.usedPercent}%</span></div>
         <Progress value={limits.rateLimits.primary.usedPercent / 100} />
@@ -80,9 +85,9 @@ function CodexConnection() {
         <p className="tiny muted">验证完成后这里会自动更新。若无法使用设备登录，请先在 ChatGPT 安全设置中启用。</p>
       </div>}
       {error && <p className="form-error" role="alert"><CircleAlert size={14} />{error}</p>}
-      <p className="tiny muted">订阅额度与 API 费用分别计算，具体可用模型和限额以账户为准。语义索引使用单独配置的向量服务。</p>
+      <p className="tiny muted">订阅额度以你的账户为准，不算进每日花费。按意思搜索资料另需「按量计费接口」里的向量模型。</p>
     </div>
-  </Sheet></section>
+  </Fold>
 }
 
 interface DirectAccount { client_id: string; email?: string; connected: boolean; plan_enabled: boolean; verified: boolean; paused: boolean; model?: string }
@@ -141,7 +146,12 @@ function DirectConnection() {
     })
   }
   if (!enabled) return null
-  return <section className="section"><h2 className="section-title">ChatGPT 订阅</h2><Sheet pad><div className="stack-sm">
+  const failed = error || status?.error
+  const summary = active?.connected
+    ? `已连接 ${active.email ?? active.client_id}${!active.plan_enabled ? ' · 还没允许使用套餐' : active.paused ? ' · 套餐请求已暂停' : ''}`
+    : failed ? '读取失败' : status?.pending ? '等你在浏览器里完成授权' : status ? '未连接' : '正在读取…'
+  return <Fold title="ChatGPT 订阅（官方授权）" summary={summary} tone={active?.connected ? (active.plan_enabled && !active.paused ? 'ok' : 'warn') : failed ? 'danger' : undefined}><div className="stack-sm">
+    <h3 className="fold-name">ChatGPT 订阅</h3>
     <div className="spread">
       <div className="row-nowrap">
         <span className={`status-dot${active?.connected ? ' on' : ''}`} aria-hidden />
@@ -173,11 +183,11 @@ function DirectConnection() {
     </div>
     {authorization && status?.pending && <p role="status">请在本机浏览器完成授权。<a href={authorization} target="_blank" rel="noreferrer">打开授权页面</a></p>}
     <p className="tiny muted">本机 Docker 可直接登录；个人远程 Docker／VM 请在浏览器所在本机授权，再通过 SSH 转移受保护凭据，按部署文档操作。</p>
-    {(error || status?.error) && <p className="form-error" role="alert"><CircleAlert size={14} />{error || status?.error}</p>}
+    {failed && <p className="form-error" role="alert"><CircleAlert size={14} />{failed}</p>}
     {notice && <p className="callout" role="status">{notice}</p>}
-  </div></Sheet></section>
+  </div></Fold>
 }
 
 export function ChatGPTConnection() {
-  return <><CodexConnection /><DirectConnection /></>
+  return <><DirectConnection /><CodexConnection /></>
 }

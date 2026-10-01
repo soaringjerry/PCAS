@@ -285,6 +285,7 @@ test('source records, background jobs and settings timestamps follow workspace c
     await expect(page.getByText('记录于', { exact: false })).toContainText(`${day}, ${clock}`)
     await page.goto('/settings')
     await expect(page.getByText('最近同步', { exact: false })).toContainText(`${day}, ${clock}`)
+    await page.getByRole('button', { name: /^ChatGPT 订阅（Codex 登录）/ }).click()
     await expect(page.getByText('预计', { exact: false })).toContainText(`${day}, ${clock}`)
     if (zone === 'Asia/Shanghai') {
       await page.getByRole('button', { name: '时区', exact: true }).click()

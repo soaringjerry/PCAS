@@ -1,4 +1,4 @@
-/* A thing page: title with its done circle, one read-only info line, notes,
+/* A thing page: title with its done circle, the facts under it, notes,
    what it holds, its documents, and one activity list (动态). Changes are said
    to the secretary pinned at the bottom (docs/design/principles.md). */
 
@@ -19,44 +19,173 @@
   color: var(--label-2);
 }
 
-/* ---------- The info line: tap it to tell the secretary what to change ---------- */
+/* ---------- Editing in place: the title and notes show they can be changed, and whether they saved ---------- */
+
+.head-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 22px;
+  margin-bottom: 16px;
+}
+
+.head-row .back {
+  margin-bottom: 0;
+}
+
+.doc-title.editable,
+.notes.editable {
+  border-radius: var(--r-sm);
+  cursor: text;
+  transition: background 120ms, box-shadow 120ms;
+}
+
+.doc-title.editable {
+  flex: 1;
+  min-width: 0;
+  margin: -4px 0 -4px -8px;
+  padding: 4px 8px;
+}
+
+.notes.editable {
+  width: calc(100% + 16px);
+  margin: 10px -8px 0;
+  padding: 6px 8px;
+}
+
+.doc-title.editable:hover,
+.notes.editable:hover,
+.doc-title.editable:focus,
+.notes.editable:focus {
+  background: var(--fill);
+}
+
+.doc-title.editable:focus,
+.notes.editable:focus {
+  box-shadow: inset 0 0 0 1.5px var(--blue);
+}
+
+.doc-title.editable.unsaved-field,
+.notes.editable.unsaved-field {
+  background: var(--red-soft);
+  box-shadow: inset 0 0 0 1.5px var(--red);
+}
+
+.edit-hint {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  margin-top: 4px;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  color: var(--label-3);
+  cursor: pointer;
+}
+
+.title-row:hover .edit-hint,
+.edit-hint:hover {
+  color: var(--label-2);
+}
+
+/* Without a pointer to hover, the notes look like the field they are. */
+@media (hover: none) {
+  .notes.editable {
+    background: var(--fill);
+  }
+}
+
+.unsaved {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  margin: 8px 0 0;
+  color: var(--red);
+  font-size: 13px;
+}
+
+/* ---------- The facts under the title: each one starts the sentence that changes it ---------- */
 
 .info-line {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  align-self: flex-start;
+  gap: 6px;
+  margin: 12px 0 2px;
+  color: var(--label-2);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.fact {
+  display: inline-flex;
+  align-items: center;
   max-width: 100%;
-  margin: 8px 0 2px -8px;
-  padding: 4px 8px;
+  min-height: 26px;
+  padding: 2px 10px;
   border: 0;
-  border-radius: var(--r-sm);
-  background: none;
+  border-radius: var(--r-pill);
+  background: var(--fill);
   color: var(--label-2);
   font: inherit;
-  font-size: 13.5px;
-  line-height: 1.5;
   text-align: left;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+button.fact {
   cursor: pointer;
+  transition: background 120ms, color 120ms;
 }
 
-.info-line:hover {
-  background: var(--fill);
+button.fact:hover {
+  background: var(--fill-2);
+  color: var(--label);
 }
 
-/* The dot trails its part, so a wrapped line never starts with one. */
-.info-line > span:not(:last-child)::after {
-  margin: 0 7px;
-  color: var(--label-3);
-  content: "·";
+.fact.plain {
+  padding: 2px 4px;
+  background: none;
 }
 
-.info-line .late {
+/* Something the thing does not have yet. */
+.fact.add {
+  background: none;
+  box-shadow: inset 0 0 0 1px var(--sep-strong);
+  color: var(--label-2);
+}
+
+button.fact.add:hover {
+  background: var(--blue-soft);
+  box-shadow: none;
+  color: var(--blue);
+}
+
+.fact.late {
+  background: var(--red-soft);
   color: var(--red);
 }
 
-.info-line .owed {
+.fact.owed {
   color: var(--orange);
+}
+
+.fact.off {
+  background: none;
+  color: var(--orange);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+@media (hover: none) {
+  .fact {
+    min-height: 30px;
+  }
 }
 
 /* ---------- Quick replies under an awakened idea ---------- */
@@ -230,20 +359,22 @@
 }
 
 .doc-new {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 6px;
   width: 100%;
   padding: 11px 14px 11px 39px;
   border: 0;
   background: none;
-  color: var(--label-3);
+  color: var(--label-2);
   font: inherit;
   font-size: 14px;
   text-align: left;
-  cursor: text;
+  cursor: pointer;
 }
 
 .doc-new:hover {
-  color: var(--label-2);
+  color: var(--blue);
 }
 
 .docs-empty {
@@ -426,6 +557,17 @@
     gap: 8px;
   }
 
+  /* A result keeps enough of its line to say what it is; its actions drop below when they do not fit. */
+  .act-run .act-line {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    row-gap: 2px;
+  }
+
+  .act-run .act-text {
+    flex: 1 1 11em;
+  }
+
   .act-detail {
     margin-left: 0;
   }
@@ -434,5 +576,16 @@
   .doc-editor,
   .doc-new {
     padding-left: 14px;
+  }
+}
+
+/* The × that removes a subtask is reachable by keyboard and on touch screens, not only on hover. */
+.check-row .del:focus-visible {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .check-row .del.del {
+    opacity: 0.7;
   }
 }

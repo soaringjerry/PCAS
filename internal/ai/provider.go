@@ -205,6 +205,12 @@ func (p Provider) Reserve(input string) float64 {
 // GenerateWithSearch is Generate with web search where the provider offers it
 // (the ChatGPT subscription through Codex); other providers answer offline.
 func (r *Registry) GenerateWithSearch(ctx context.Context, id, system, prompt string) (Result, error) {
+	return r.GenerateWithSearchSchema(ctx, id, system, prompt, nil)
+}
+
+// GenerateWithSearchSchema uses Codex's turn-scoped structured output. Other
+// providers retain their existing generation request and instruction format.
+func (r *Registry) GenerateWithSearchSchema(ctx context.Context, id, system, prompt string, schema json.RawMessage) (Result, error) {
 	p, ok := r.Get(id)
 	if !ok || p.Protocol != "codex" || !r.providerAvailable(p) {
 		return r.Generate(ctx, id, system, prompt)
@@ -212,7 +218,7 @@ func (r *Registry) GenerateWithSearch(ctx context.Context, id, system, prompt st
 	if r.ReloadSubscription {
 		defer r.Codex.Close()
 	}
-	text, searches, err := r.Codex.GenerateWithSearch(ctx, p.Model, system, prompt)
+	text, searches, err := r.Codex.GenerateWithSearchSchema(ctx, p.Model, system, prompt, schema)
 	return Result{Text: text, Searches: searches}, err
 }
 func (r *Registry) Generate(ctx context.Context, id, system, prompt string) (Result, error) {

@@ -250,17 +250,23 @@ func (c *Codex) Close() {
 	}
 }
 func (c *Codex) Generate(ctx context.Context, model, system, prompt string) (string, error) {
-	text, _, err := c.generate(ctx, model, system, prompt, false)
+	text, _, err := c.generate(ctx, model, system, prompt, false, nil)
 	return text, err
 }
 
 // GenerateWithSearch lets this one thread use the hosted web search tool; the
 // process-wide default stays off. It returns the queries the model searched.
 func (c *Codex) GenerateWithSearch(ctx context.Context, model, system, prompt string) (string, []string, error) {
-	return c.generate(ctx, model, system, prompt, true)
+	return c.GenerateWithSearchSchema(ctx, model, system, prompt, nil)
 }
 
-func (c *Codex) generate(ctx context.Context, model, system, prompt string, web bool) (string, []string, error) {
+// GenerateWithSearchSchema constrains only this turn's final message. Callers
+// that need plain text or another JSON shape keep using GenerateWithSearch.
+func (c *Codex) GenerateWithSearchSchema(ctx context.Context, model, system, prompt string, schema json.RawMessage) (string, []string, error) {
+	return c.generate(ctx, model, system, prompt, true, schema)
+}
+
+func (c *Codex) generate(ctx context.Context, model, system, prompt string, web bool, schema json.RawMessage) (string, []string, error) {
 	if err := c.ready(ctx); err != nil {
 		return "", nil, err
 	}
@@ -276,10 +282,10 @@ func (c *Codex) generate(ctx context.Context, model, system, prompt string, web 
 	if json.Unmarshal(account, &auth) != nil || auth.Account == nil || auth.Account.Type != "chatgpt" {
 		return "", nil, fmt.Errorf("ChatGPT sign-in required")
 	}
-	params := map[string]any{"cwd": c.scratch, "ephemeral": true, "sandbox": "read-only", "approvalPolicy": "never", "baseInstructions": system, "developerInstructions": "Only answer with text using the provided context. Do not use tools or inspect local files."}
+	params := map[string]any{"cwd": c.scratch, "ephemeral": true, "sandbox": "read-only", "approvalPolicy": "never", "baseInstructions": system, "developerInstructions": "Follow the output format specified in the base instructions. Use the provided context. Do not use tools or inspect local files."}
 	if web {
 		params["config"] = map[string]any{"web_search": "live"}
-		params["developerInstructions"] = "Answer with text. You may use web search for public or current information. Search queries leave this conversation: never put names, numbers or other private details from the provided context into them. Do not use other tools or inspect local files."
+		params["developerInstructions"] = "Follow the output format specified in the base instructions. You may use web search for public or current information. Search queries leave this conversation: never put names, numbers or other private details from the provided context into them. Do not use other tools or inspect local files."
 	}
 	if model != "" {
 		params["model"] = model
@@ -311,7 +317,11 @@ func (c *Codex) generate(ctx context.Context, model, system, prompt string, web 
 		defer cancel()
 		_, _ = c.call(cleanup, "thread/archive", map[string]string{"threadId": thread.Thread.ID})
 	}()
-	turnData, err := c.call(ctx, "turn/start", map[string]any{"threadId": thread.Thread.ID, "input": []any{map[string]string{"type": "text", "text": prompt}}})
+	turnParams := map[string]any{"threadId": thread.Thread.ID, "input": []any{map[string]string{"type": "text", "text": prompt}}}
+	if len(schema) > 0 {
+		turnParams["outputSchema"] = schema
+	}
+	turnData, err := c.call(ctx, "turn/start", turnParams)
 	if err != nil {
 		return "", nil, err
 	}

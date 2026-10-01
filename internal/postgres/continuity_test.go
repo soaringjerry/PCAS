@@ -375,6 +375,11 @@ func TestConcurrentSummaryAndGrantRevocation(t *testing.T) {
 		}
 	}
 	phase2RTUpdatePolicy(t, s, scope, src.Ref, policy, true)
+	// Isolate explicit source deny from the coarse grant removed by revoke.
+	// Restoring this legacy grant must never restore the actual receiver policy.
+	if _, err := s.pool.Exec(ctx, "INSERT INTO record_grants(owner_id,record_id,principal_id) VALUES($1,$2,$3) ON CONFLICT DO NOTHING", string(scope.OwnerID), string(src.ID), agent.PrincipalID); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := s.Summarize(ctx, agent, memory.SummaryRequest{ID: src.ID}); !errors.Is(err, memory.ErrForbidden) {
 		t.Fatal("explicit source revoke permitted cached raw-root summary", err)
 	}

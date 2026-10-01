@@ -51,6 +51,20 @@ export function nextWeekday(day: number, hour: number) {
   const today = new Date(Date.now() + 8 * 3600_000).getUTCDay()
   return localTime((day - today + 7) % 7 || 7, hour)
 }
+// A bare weekday such as "周五" said on that very day still means today while
+// the time is ahead, which is how the real secretary reads it; nextWeekday is
+// for "下周一", which is never today. One hour of margin keeps a "-30m"
+// reminder in the future for the length of a test.
+export function upcomingWeekday(day: number, hour: number) {
+  const now = new Date(Date.now() + 8 * 3600_000)
+  const days = (day - now.getUTCDay() + 7) % 7
+  return localTime(days === 0 && now.getUTCHours() >= hour - 1 ? 7 : days, hour)
+}
+// Calendar days from today to an instant, in the configured Shanghai zone.
+export function daysFromToday(iso: string) {
+  const day = (ms: number) => Math.floor((ms + 8 * 3600_000) / 86_400_000)
+  return day(new Date(iso).getTime()) - day(Date.now())
+}
 export const utc = (local: string) => new Date(`${local}+08:00`).toISOString().replace('.000Z', 'Z')
 export async function evidence(page: Page, info: TestInfo, name = 'browser') {
   const path = info.outputPath(`${name}.png`)

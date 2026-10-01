@@ -362,7 +362,7 @@ func verifyRunForItemTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run 
 			return err
 		}
 	}
-	for _, ref := range run.ContextVersions {
+	for _, ref := range uniqueRefs(run.ContextVersions) {
 		var currentVersion int
 		if err := tx.QueryRow(ctx, "SELECT version FROM applicable_claim_versions($1,now(),now()) WHERE claim_id=$2", string(scope.OwnerID), string(ref.ID)).Scan(&currentVersion); err != nil || currentVersion != ref.Version {
 			return memory.ErrConflict
@@ -385,6 +385,20 @@ func verifyRunForItemTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run 
 		}
 	}
 	return nil
+}
+
+// uniqueRefs keeps the first occurrence of each exact reference. Dependency
+// lists are sets: history and recall can name the same memory many times.
+func uniqueRefs(refs []memory.Ref) []memory.Ref {
+	seen := make(map[memory.Ref]bool, len(refs))
+	out := make([]memory.Ref, 0, len(refs))
+	for _, ref := range refs {
+		if !seen[ref] {
+			seen[ref] = true
+			out = append(out, ref)
+		}
+	}
+	return out
 }
 
 // RunAgents owns costly jobs: an ambiguous provider timeout/crash is marked

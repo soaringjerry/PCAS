@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test'
 import { createECDH, randomBytes } from 'node:crypto'
-import { command, events, evidence, fixture, input, localTime, login, nextWeekday, reply, say, snapshot, utc } from './support/real'
+import { command, daysFromToday, events, evidence, fixture, input, localTime, login, nextWeekday, reply, say, snapshot, upcomingWeekday, utc } from './support/real'
 
 test.use({ timezoneId: 'Asia/Shanghai', viewport: { width: 1440, height: 1000 } })
 test.beforeEach(async ({ page }) => {
@@ -13,7 +13,7 @@ const schedule = '周五下午三点和张三对方案，算在 A 项目里'
 async function arrange(page: Parameters<typeof say>[0], title: string) {
   let state = await snapshot(page)
   if (!state.projects.some(p => p.name === 'A')) state = await command(page, { type: 'addProject', name: 'A' })
-  const due = nextWeekday(5, 15)
+  const due = upcomingWeekday(5, 15)
   await fixture(page, [reply(schedule, [{ op: 'create_task', title, due, project: 'P1', remind: null }])])
   const response = await say(page, schedule)
   const task = response.state.tasks.find((t: { id: string }) => t.id === response.turn.receipts[0].thingId)
@@ -28,15 +28,20 @@ test('G1 一句话安排：时间、项目、提醒、刷新与撤销', async ({
   await expect(receipt).toContainText('15:00')
   await expect(receipt).toContainText('A 项目')
   await expect(receipt).toContainText('14:30 提醒')
-  await expect(page.locator('.hall-task').filter({ hasText: task.title })).toBeVisible()
+  // The hall lists what is due within three days; a Friday further away than
+  // that waits in its project, so the wall is checked only when it applies.
+  const hallTask = page.locator('.hall-task').filter({ hasText: task.title })
+  const onHall = daysFromToday(task.due) <= 3
+  if (onHall) await expect(hallTask).toBeVisible()
   await evidence(page, test.info(), 'arranged')
   await page.reload()
   await expect(receipt).toBeVisible()
-  await expect(page.locator('.hall-task').filter({ hasText: task.title })).toBeVisible()
+  expect((await snapshot(page)).tasks.find(t => t.id === task.id)).toMatchObject({ due: task.due, projectId: task.projectId })
+  if (onHall) await expect(hallTask).toBeVisible()
   await receipt.getByRole('button', { name: '撤销', exact: true }).click()
   await expect(receipt).toContainText('已撤销')
   expect((await snapshot(page)).tasks.some(t => t.id === task.id)).toBeFalsy()
-  await expect(page.locator('.hall-task').filter({ hasText: task.title })).toHaveCount(0)
+  await expect(hallTask).toHaveCount(0)
 })
 
 test('G2 边问边记：回复前连续发送，两轮都处理', async ({ page }) => {

@@ -98,8 +98,12 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 		}
 		ordered := []workspace.Memory{}
 		selected := map[string]bool{}
+		excerpts := recall.Excerpts
+		historyRequests := []string{}
 		if prepared, ok := ctx.Value(runContextKey{}).(preparedRunContext); ok {
+			excerpts = append(append([]memory.RecallExcerpt{}, prepared.Excerpts...), excerpts...)
 			for _, turn := range prepared.History {
+				historyRequests = append(historyRequests, turn.RequestID)
 				answer := turn.Answer
 				if turn.Outdated || verifyRunTx(ctx, tx, scope, workspace.Run{ThingID: item.ID, AgentID: agent.ID, ContextVersions: turn.Refs}) != nil {
 					answer = outdatedDeskAnswer
@@ -143,6 +147,22 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 			fmt.Fprintf(&brief, "[%s@%d / %s / confirmation=%s / acquisition=%s] %s\n", m.ID, m.Version, m.Epistemic, m.Confirmation, m.Acquisition, m.Text)
 			run.ContextMemoryIDs = append(run.ContextMemoryIDs, m.ID)
 			run.ContextVersions = append(run.ContextVersions, memory.Ref{ID: memory.ID(m.ID), Version: m.Version, Kind: memory.ClaimKind})
+		}
+
+		fmt.Fprintln(&brief, "\n相关原话：")
+		sources, err := teamSourceExcerptsTx(ctx, tx, scope, excerpts, historyRequests, 8, 4000)
+		if err != nil {
+			return err
+		}
+		for _, source := range sources {
+			at, label := sourceExcerptTime(source)
+			line := fmt.Sprintf("[source:%s@%d / %s / %s %s] %s\n", source.ID, source.Version, source.Title, label, at.Format("2006-01-02"), source.Text)
+			if brief.Len()+len(line) > 30000 {
+				continue
+			}
+			brief.WriteString(line)
+			run.ContextMemoryIDs = append(run.ContextMemoryIDs, string(source.ID))
+			run.ContextVersions = append(run.ContextVersions, source.Ref)
 		}
 
 		// Derived copies carry input dependencies even when their source memories

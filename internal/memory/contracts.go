@@ -17,7 +17,7 @@ var (
 )
 
 // Scope is bound by trusted authentication, not decoded from request JSON.
-// Non-owner principals require explicit grants on memory records.
+// Non-owner principals require explicit grants, except team retrieval of sources.
 type Scope struct {
 	Team        bool `json:"-"`
 	OwnerID     ID
@@ -91,13 +91,27 @@ type Coverage struct {
 	NextCursor     string   `json:"next_cursor,omitempty"`
 }
 
+// RecallExcerpt is prompt input metadata. RecallResult keeps it off the wire.
+type RecallExcerpt struct {
+	Ref
+	Text        string
+	Title       string
+	Connector   string
+	ExternalID  string
+	ExpressedAt *time.Time
+	RecordedAt  time.Time
+	Role        string
+	Readable    bool
+}
+
 type RecallResult struct {
-	Summary    string     `json:"summary"`
-	Memories   []Ref      `json:"memories"`
-	Evidence   []Evidence `json:"evidence"`
-	Unresolved []string   `json:"unresolved"`
-	Coverage   Coverage   `json:"coverage"`
-	FollowUps  []string   `json:"follow_ups"`
+	Excerpts   []RecallExcerpt `json:"-"`
+	Summary    string          `json:"summary"`
+	Memories   []Ref           `json:"memories"`
+	Evidence   []Evidence      `json:"evidence"`
+	Unresolved []string        `json:"unresolved"`
+	Coverage   Coverage        `json:"coverage"`
+	FollowUps  []string        `json:"follow_ups"`
 }
 
 type ExpandRequest struct {

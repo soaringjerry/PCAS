@@ -7,6 +7,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/workspace"
+	"time"
 )
 
 type actionLogKey struct{}
@@ -190,6 +191,9 @@ func (s *Store) undoActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 				current, e := getItem(ctx, tx, scope, c.ID)
 				if e != nil {
 					return e
+				}
+				if err = suppressRestoredRemindersTx(ctx, tx, scope, current, item, time.Now()); err != nil {
+					return err
 				}
 				item.Version = current.Version + 1
 				item.UpdatedAt = stamp()

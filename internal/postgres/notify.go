@@ -233,7 +233,7 @@ type deliveryState struct {
 // DispatchNotices uses a transaction advisory lock per notice to keep concurrent
 // dispatchers from sending it twice. READ COMMITTED rechecks state per channel.
 func (s *Store) DispatchNotices(ctx context.Context, now time.Time, channels []notify.Channel) error {
-	rows, err := s.pool.Query(ctx, `SELECT id::text FROM workspace_notices WHERE created_at>=$1 AND created_at<=$2 AND dismissed_at IS NULL ORDER BY created_at,id`, now.Add(-24*time.Hour), now)
+	rows, err := s.pool.Query(ctx, `SELECT id::text FROM workspace_notices WHERE created_at>=$1 AND created_at<=$2 AND dismissed_at IS NULL AND NOT (delivered @> '{"_suppressed":true}'::jsonb) ORDER BY created_at,id`, now.Add(-24*time.Hour), now)
 	if err != nil {
 		return err
 	}
@@ -268,7 +268,7 @@ func (s *Store) DispatchNotices(ctx context.Context, now time.Time, channels []n
 				err := tx.QueryRow(ctx, `SELECT n.owner_id::text,n.thing_id::text,w.title,n.reason,n.due_at,o.settings->>'timezone',n.delivered
       FROM workspace_notices n JOIN work_items w ON (w.owner_id,w.id)=(n.owner_id,n.thing_id)
       JOIN workspace_owners o ON o.owner_id=n.owner_id
-      WHERE n.id=$1 AND n.dismissed_at IS NULL AND w.status NOT IN ('done','cancelled','dropped','promoted')
+      WHERE n.id=$1 AND n.dismissed_at IS NULL AND NOT (n.delivered @> '{"_suppressed":true}'::jsonb) AND w.status NOT IN ('done','cancelled','dropped','promoted')
       AND o.settings->>'followUps'='true'`, id).Scan(&owner, &thing, &title, &reason, &due, &timezone, &raw)
 				if errors.Is(err, pgx.ErrNoRows) {
 					return nil
@@ -330,6 +330,11 @@ func (s *Store) DispatchNotices(ctx context.Context, now time.Time, channels []n
 					delivery.RetryAt[name] = now.Add(delay)
 					patch["attempts"] = delivery.Attempts
 					patch["retryAt"] = delivery.RetryAt
+					status := "retry"
+					if attempts >= 5 {
+						status = "stopped"
+					}
+					slog.WarnContext(ctx, "notification delivery failed", "channel", name, "error_type", notificationErrorType(err), "attempt", attempts, "status", status)
 				}
 				if _, err := tx.Exec(ctx, "UPDATE workspace_notices SET delivered=delivered || $2::jsonb WHERE id=$1", id, asJSON(patch)); err != nil {
 					return err
@@ -341,4 +346,23 @@ func (s *Store) DispatchNotices(ctx context.Context, now time.Time, channels []n
 		}
 	}
 	return nil
+}
+
+// Return only known categories: transport errors may include credential URLs,
+// and channel errors may include message content. Never log their raw text.
+func notificationErrorType(err error) string {
+	switch {
+	case errors.Is(err, notify.ErrTelegramTokenInvalid):
+		return "telegram_token_invalid"
+	case errors.Is(err, notify.ErrGone):
+		return "target_gone"
+	case errors.Is(err, notify.ErrTelegramSendFailed):
+		return "telegram_send_failed"
+	case errors.Is(err, context.DeadlineExceeded):
+		return "timeout"
+	case errors.Is(err, notify.ErrDelivery):
+		return "delivery_failed"
+	default:
+		return "channel_failed"
+	}
 }

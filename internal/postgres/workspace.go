@@ -190,7 +190,7 @@ func (s *Store) snapshotTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) (
         'dueAt',n.due_at,'createdAt',n.created_at) ||
         CASE WHEN n.dismissed_at IS NULL THEN '{}'::jsonb ELSE jsonb_build_object('dismissedAt',n.dismissed_at) END
         FROM workspace_notices n JOIN work_items w ON (w.owner_id,w.id)=(n.owner_id,n.thing_id)
-        WHERE n.owner_id=$1 ORDER BY (n.dismissed_at IS NOT NULL),n.created_at DESC,n.id LIMIT 100`, string(scope.OwnerID)); err != nil {
+        WHERE n.owner_id=$1 AND NOT (n.delivered @> '{"_suppressionOnly":true}'::jsonb) ORDER BY (n.dismissed_at IS NOT NULL),n.created_at DESC,n.id LIMIT 100`, string(scope.OwnerID)); err != nil {
 		return out, err
 	}
 	if out.Memories, err = s.memoriesTx(ctx, tx, scope); err != nil {
@@ -320,7 +320,7 @@ func (s *Store) snapshotTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) (
 	if err != nil {
 		return out, err
 	}
-	notices, err := queryDocuments[workspace.Job](ctx, tx, `SELECT jsonb_build_object('id','notice:'||thing_id::text||':'||trigger_id||':'||due_at::text,'title','事项提醒','trigger','条件与时间','status','done','detail',reason,'createdAt',created_at) FROM workspace_notices WHERE owner_id=$1 ORDER BY created_at DESC LIMIT 100`, string(scope.OwnerID))
+	notices, err := queryDocuments[workspace.Job](ctx, tx, `SELECT jsonb_build_object('id','notice:'||thing_id::text||':'||trigger_id||':'||due_at::text,'title','事项提醒','trigger','条件与时间','status','done','detail',reason,'createdAt',created_at) FROM workspace_notices WHERE owner_id=$1 AND NOT (delivered @> '{"_suppressionOnly":true}'::jsonb) ORDER BY created_at DESC LIMIT 100`, string(scope.OwnerID))
 	if err != nil {
 		return out, err
 	}
@@ -666,7 +666,7 @@ func activityTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, timezone str
 	}
 	rows, err = tx.Query(ctx, `SELECT n.thing_id::text,n.trigger_id,n.due_at,w.title,n.reason,n.created_at FROM workspace_notices n
 		JOIN work_items w ON (w.owner_id,w.id)=(n.owner_id,n.thing_id)
-		WHERE n.owner_id=$1 AND w.kind='task' AND n.created_at>=now()-interval '2 days' ORDER BY n.created_at DESC LIMIT 20`, owner)
+		WHERE n.owner_id=$1 AND NOT (n.delivered @> '{"_suppressionOnly":true}'::jsonb) AND w.kind='task' AND n.created_at>=now()-interval '2 days' ORDER BY n.created_at DESC LIMIT 20`, owner)
 	if err != nil {
 		return nil, err
 	}

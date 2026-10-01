@@ -285,6 +285,9 @@ func (s *Store) secretaryPrompt(ctx context.Context, tx pgx.Tx, scope memory.Sco
 	for i, t := range c.Recent {
 		fmt.Fprintf(&prompt, "R%d：%s（%s；截止 %s）\n", i+1, t.Title, t.Status, t.Due)
 	}
+	if err := s.verifyTaskDeskActionsTx(ctx, tx, scope, c.Task); err != nil {
+		return "", nil, err
+	}
 	recall, err := s.Recall(ctx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: c.Agent.ID, Task: &c.Task}, memory.RecallRequest{Query: tail(earlier+req.Text, 4000), Mode: "remember", Context: memory.WorkingContext{Objects: []memory.ID{}, ValidAt: c.Task.View.ValidAt, KnownAt: c.Task.View.KnownAt}, Budget: c.Task.MemoryBudget})
 	if err != nil {
 		return "", nil, err
@@ -557,7 +560,7 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 				}
 			}
 			if contextErr == nil && !recognizedAuthorization {
-				contextErr = verifyContextAttemptTx(ctx, tx, scope, attempt.ID, c.Task, c.TypedDependencies)
+				contextErr = s.verifyContextAttemptTx(ctx, tx, scope, attempt.ID, c.Task, c.TypedDependencies)
 			}
 
 			dependencies := []memory.Ref{}
@@ -619,6 +622,7 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 					}
 					actionID := string(memory.NewID())
 					actionCtx := withActionLog(withActor(ctx, "secretary"), actionID, "desk", out.Turn.ID, "秘书："+a.Op)
+					actionCtx = context.WithValue(actionCtx, secretaryArtifactKey{}, secretaryArtifactContext{Task: c.Task, Dependencies: c.TypedDependencies})
 					if i < len(actionPlans) {
 						actionCtx = context.WithValue(actionCtx, secretaryActionPlanKey{}, actionPlans[i])
 					}

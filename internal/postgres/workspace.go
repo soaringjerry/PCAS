@@ -558,6 +558,17 @@ func getItem(ctx context.Context, tx pgx.Tx, scope memory.Scope, id string) (wor
 	return queryDocument[workspace.Item](ctx, tx, "SELECT document FROM work_items WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), id)
 }
 func saveItem(ctx context.Context, tx pgx.Tx, scope memory.Scope, item workspace.Item) error {
+	if err := recordActionBlocksBeforeTx(ctx, tx, scope, item.ID); err != nil {
+		return err
+	}
+	var previous *workspace.Item
+	if _, derived := ctx.Value(secretaryArtifactKey{}).(secretaryArtifactContext); derived {
+		before, err := getItem(ctx, tx, scope, item.ID)
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) && !errors.Is(err, memory.ErrNotFound) {
+			return err
+		}
+		previous = &before
+	}
 	if err := syncArtifactEditsTx(ctx, tx, scope, item); err != nil {
 		return err
 	}
@@ -597,7 +608,15 @@ func saveItem(ctx context.Context, tx pgx.Tx, scope memory.Scope, item workspace
 	}
 	_, err := tx.Exec(ctx, `INSERT INTO work_items(owner_id,id,kind,title,status,project_id,due_at,scheduled_at,version,document,created_at,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
 		ON CONFLICT(owner_id,id) DO UPDATE SET title=excluded.title,status=excluded.status,project_id=excluded.project_id,due_at=excluded.due_at,scheduled_at=excluded.scheduled_at,version=excluded.version,document=excluded.document,updated_at=excluded.updated_at`, string(scope.OwnerID), item.ID, item.Kind, item.Title, item.Status, nullString(item.ProjectID), nullString(item.Due), nullString(item.Scheduled), item.Version, asJSON(item), item.CreatedAt, item.UpdatedAt)
-	return err
+	if err != nil {
+		return err
+	}
+	// A new item's FK must exist before writing its provenance blocks. Both
+	// writes remain atomic inside the caller's transaction/savepoint.
+	if previous != nil {
+		return syncSecretaryArtifactEditsTx(ctx, tx, scope, item, *previous)
+	}
+	return nil
 }
 func strictJSON(data []byte, v any) error {
 	d := json.NewDecoder(bytes.NewReader(data))

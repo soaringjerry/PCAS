@@ -228,7 +228,7 @@ func (r *Registry) GenerateWithSearchSchema(ctx context.Context, id, system, pro
 	return Result{Text: text, Searches: searches}, err
 }
 
-// GenerateSchema keeps generation offline while constraining Codex output.
+// GenerateSchema constrains Codex output without enabling web search.
 // Other providers retain their existing generation request/instruction format.
 func (r *Registry) GenerateSchema(ctx context.Context, id, system, prompt string, schema json.RawMessage) (Result, error) {
 	p, ok := r.Get(id)

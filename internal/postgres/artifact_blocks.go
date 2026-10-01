@@ -3,6 +3,9 @@ package postgres
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strconv"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
@@ -15,33 +18,105 @@ func blockText(blocks []artifactBlock) string { return workspace.BlockText(block
 func editBlocks(blocks []artifactBlock, text string) []artifactBlock {
 	return workspace.EditBlocks(blocks, text)
 }
-func fieldText(item workspace.Item, field string) string {
-	switch field {
-	case "notes":
-		return item.Notes
-	case "body":
-		return item.Body
-	case "progress":
-		return item.Progress
-	case "title":
-		return item.Title
+
+// Dynamic fields use stable server IDs for checks/conditions/source versions.
+// Append-only revision indexes are local to the owning item.
+func itemArtifactText(item workspace.Item) map[string]string {
+	out := map[string]string{"title": item.Title, "notes": item.Notes, "body": item.Body, "goal": item.Goal, "progress": item.Progress, "waitingFor": item.WaitingFor}
+	if item.OwedTo != nil {
+		out["owedTo"] = item.OwedTo.Who
 	}
-	return ""
+	for _, check := range item.Checklist {
+		out["check:"+check.ID] = check.Text
+	}
+	for _, condition := range item.Conditions {
+		out["condition:"+condition.ID] = condition.Description
+	}
+	for i, revision := range item.History {
+		out[fmt.Sprintf("history:%d", i)] = revision.Summary
+	}
+	for i, revision := range item.Evolution {
+		out[fmt.Sprintf("evolution:%d", i)] = revision.Summary
+	}
+	for _, source := range item.Sources {
+		out[fmt.Sprintf("source:%s:%d", source.SourceID, source.Version)] = source.Label
+	}
+	return out
 }
+func fieldText(item workspace.Item, field string) string { return itemArtifactText(item)[field] }
 func setField(item *workspace.Item, field, text string) {
 	switch field {
 	case "notes":
 		item.Notes = text
 	case "body":
 		item.Body = text
+	case "goal":
+		item.Goal = text
 	case "progress":
 		item.Progress = text
 	case "title":
-		item.Title = text
-		item.Name = text
+		item.Title, item.Name = text, text
+	case "waitingFor":
+		item.WaitingFor = text
+	case "owedTo":
+		if item.OwedTo != nil {
+			item.OwedTo.Who = text
+			if text == "" {
+				item.OwedTo = nil
+			}
+		}
+	default:
+		if strings.HasPrefix(field, "check:") {
+			id := strings.TrimPrefix(field, "check:")
+			kept := []workspace.Check{}
+			for _, check := range item.Checklist {
+				if check.ID == id {
+					if text == "" {
+						continue
+					}
+					check.Text = text
+				}
+				kept = append(kept, check)
+			}
+			item.Checklist = kept
+		} else if strings.HasPrefix(field, "condition:") {
+			id := strings.TrimPrefix(field, "condition:")
+			kept := []workspace.Condition{}
+			for _, condition := range item.Conditions {
+				if condition.ID == id {
+					if text == "" {
+						continue
+					}
+					condition.Description = text
+				}
+				kept = append(kept, condition)
+			}
+			item.Conditions = kept
+		} else if strings.HasPrefix(field, "history:") || strings.HasPrefix(field, "evolution:") {
+			pieces := strings.SplitN(field, ":", 2)
+			i, err := strconv.Atoi(pieces[1])
+			if err != nil || i < 0 {
+				return
+			}
+			if pieces[0] == "history" && i < len(item.History) {
+				item.History[i].Summary = text
+			}
+			if pieces[0] == "evolution" && i < len(item.Evolution) {
+				item.Evolution[i].Summary = text
+			}
+		} else if strings.HasPrefix(field, "source:") {
+			for i, source := range item.Sources {
+				if fmt.Sprintf("source:%s:%d", source.SourceID, source.Version) == field {
+					item.Sources[i].Label = text
+				}
+			}
+		}
 	}
 }
 func saveBlocksTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, thing, field string, blocks []artifactBlock) error {
+	if err := recordActionBlocksBeforeTx(ctx, tx, scope, thing); err != nil {
+		return err
+	}
 	_, err := tx.Exec(ctx, "INSERT INTO artifact_fields(owner_id,thing_id,field,blocks) VALUES($1,$2,$3,$4) ON CONFLICT(owner_id,thing_id,field) DO UPDATE SET blocks=excluded.blocks", string(scope.OwnerID), thing, field, asJSON(blocks))
 	return err
 }
@@ -55,9 +130,37 @@ func syncArtifactEditsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, ite
 	if err != nil {
 		return err
 	}
+	sources := []artifactBlock{}
+	byField := map[string][]artifactBlock{}
 	for _, f := range fields {
-		if err := saveBlocksTx(ctx, tx, scope, item.ID, f.Field, editBlocks(f.Blocks, fieldText(item, f.Field))); err != nil {
-			return err
+		sources = append(sources, f.Blocks...)
+		byField[f.Field] = f.Blocks
+	}
+	for field, text := range itemArtifactText(item) {
+		blocks, exists := byField[field]
+		if exists {
+			blocks = editBlocks(blocks, text)
+		} else {
+			blocks = []artifactBlock{{Text: text, Runs: []string{}}}
+		}
+		blocks = workspace.CopyOrigins(blocks, sources)
+		derived := false
+		for _, block := range blocks {
+			derived = derived || len(block.Runs) > 0 || len(block.DeskActions) > 0
+		}
+		if exists || derived {
+			if err := saveBlocksTx(ctx, tx, scope, item.ID, field, blocks); err != nil {
+				return err
+			}
+		}
+	}
+	// Removed dynamic fields keep empty blocks, so an undo can preserve their
+	// original identities without projecting old text into a reused array slot.
+	for _, f := range fields {
+		if _, exists := itemArtifactText(item)[f.Field]; !exists {
+			if err := saveBlocksTx(ctx, tx, scope, item.ID, f.Field, []artifactBlock{}); err != nil {
+				return err
+			}
 		}
 	}
 	return nil

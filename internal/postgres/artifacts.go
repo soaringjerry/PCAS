@@ -138,6 +138,11 @@ func sanitizeItemWithStoreTx(store *Store, ctx context.Context, tx pgx.Tx, scope
 			}
 			owned[field] = kept
 			if used && allowed {
+				if scope.Task != nil {
+					if err := appendTaskDeskActions(scope.Task, run.ContextDeskActions...); err != nil {
+						return item, nil, err
+					}
+				}
 				dependencies = append(dependencies, refs...)
 			}
 			continue
@@ -176,10 +181,31 @@ func sanitizeItemWithStoreTx(store *Store, ctx context.Context, tx pgx.Tx, scope
 			}
 		}
 		if used && allowed {
+			if scope.Task != nil {
+				if err := appendTaskDeskActions(scope.Task, run.ContextDeskActions...); err != nil {
+					return item, nil, err
+				}
+			}
 			dependencies = append(dependencies, refs...)
 		}
 	}
 	for field, blocks := range owned {
+		if store != nil {
+			kept, refs, err := store.filterSecretaryBlocksTx(ctx, tx, scope, blocks)
+			if err != nil {
+				return item, nil, err
+			}
+			blocks = kept
+			dependencies = append(dependencies, refs...)
+		} else {
+			kept := []artifactBlock{}
+			for _, block := range blocks {
+				if len(block.DeskActions) == 0 {
+					kept = append(kept, block)
+				}
+			}
+			blocks = kept
+		}
 		text := blockText(blocks)
 		if field == "title" && text == "" {
 			text = "事项内容需要重新授权或核验"

@@ -160,7 +160,7 @@ func loadAttemptDependenciesTx(ctx context.Context, tx pgx.Tx, scope memory.Scop
 
 func controlledContextManifest(task memory.TrustedTaskContext, id memory.ID, payload []byte, layer string, entries []memory.EvidenceEntry, candidates []memory.CandidateRecord, indirect []memory.TypedDependency) (memory.ContextManifest, error) {
 	estimatedTokens := (len(payload) + 2) / 3
-	m := memory.ContextManifest{Version: 1, AttemptID: id, Recipient: task.Recipient, Purpose: task.Purpose, Scope: task.Scope, View: task.View, Candidates: []memory.CandidateRecord{}, Input: []memory.InputRecord{}, Used: []memory.UsedRecord{}, IndirectDependencies: indirect, Coverage: coverage(), InputBytes: len(payload), InputTokens: memory.TokenCount{Value: &estimatedTokens, Method: "estimated", Model: task.Recipient.Model}, ObservationLayer: layer}
+	m := memory.ContextManifest{Version: 1, AttemptID: id, Recipient: task.Recipient, Purpose: task.Purpose, Scope: task.Scope, View: task.View, Candidates: []memory.CandidateRecord{}, Input: []memory.InputRecord{}, Used: []memory.UsedRecord{}, IndirectDependencies: indirect, DeskActions: append([]memory.ID{}, task.DeskActions...), Coverage: coverage(), InputBytes: len(payload), InputTokens: memory.TokenCount{Value: &estimatedTokens, Method: "estimated", Model: task.Recipient.Model}, ObservationLayer: layer}
 	for _, candidate := range candidates {
 		if !candidate.Ref.ID.Valid() || candidate.Ref.Version < 1 {
 			continue
@@ -253,6 +253,9 @@ func (s *Store) prepareContextAttempt(ctx context.Context, scope memory.Scope, o
 			return err
 		}
 		if _, err := tx.Exec(ctx, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(scope.OwnerID)); err != nil {
+			return err
+		}
+		if err := s.verifyTaskDeskActionsTx(ctx, tx, scope, task); err != nil {
 			return err
 		}
 		if err := verifyTypedContextTx(ctx, tx, scope, task, deps); err != nil {
@@ -414,6 +417,11 @@ func (s *Store) prepareContextAttempt(ctx context.Context, scope memory.Scope, o
 }
 
 func verifyContextAttemptTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, id memory.ID, task memory.TrustedTaskContext, deps []memory.TypedDependency) error {
+	if len(task.DeskActions) > 0 {
+		if verified, _ := ctx.Value(verifiedDeskOriginsKey{}).(bool); !verified {
+			return memory.ErrForbidden
+		}
+	}
 	if !id.Valid() {
 		return memory.ErrInvalid
 	}
@@ -447,7 +455,7 @@ func verifyContextAttemptTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, 
 	if err = json.Unmarshal(manifest, &m); err != nil {
 		return err
 	}
-	if m.Scope != task.Scope || m.Purpose != task.Purpose {
+	if m.Scope != task.Scope || m.Purpose != task.Purpose || !sameDeskActions(m.DeskActions, task.DeskActions) {
 		return memory.ErrConflict
 	}
 	stored, err := loadAttemptDependenciesTx(ctx, tx, scope, id)
@@ -600,8 +608,8 @@ func (s *Store) markContextAttemptDelivered(ctx context.Context, scope memory.Sc
 		if err != nil {
 			return err
 		}
-		task := memory.TrustedTaskContext{OwnerID: scope.OwnerID, Recipient: live, Purpose: m.Purpose, Scope: m.Scope, View: m.View, Now: created}
-		if err := verifyContextAttemptTx(ctx, tx, scope, id, task, deps); err != nil {
+		task := memory.TrustedTaskContext{OwnerID: scope.OwnerID, Recipient: live, Purpose: m.Purpose, Scope: m.Scope, View: m.View, Now: created, DeskActions: append([]memory.ID{}, m.DeskActions...)}
+		if err := s.verifyContextAttemptTx(ctx, tx, scope, id, task, deps); err != nil {
 			return err
 		}
 		tag, err := tx.Exec(ctx, "UPDATE context_attempts SET delivered_at=now() WHERE owner_id=$1 AND id=$2 AND state='prepared' AND snapshot IS NOT NULL AND body_expires_at>now()", string(scope.OwnerID), string(id))

@@ -131,6 +131,14 @@ func (s *Store) deskTurnContextTx(ctx context.Context, tx pgx.Tx, scope memory.S
 	if len(legacy) > 0 && len(deps) == 0 {
 		return nil, memory.ErrConflict
 	}
+	if err = s.verifyTaskDeskActionsTx(ctx, tx, scope, *stored); err != nil {
+		return nil, err
+	}
+	if target != nil {
+		if err := appendTaskDeskActions(target, stored.DeskActions...); err != nil {
+			return nil, err
+		}
+	}
 	if err = verifyTypedContextTx(ctx, tx, scope, *stored, deps); err != nil {
 		return nil, err
 	}

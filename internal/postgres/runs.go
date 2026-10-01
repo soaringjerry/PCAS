@@ -371,7 +371,7 @@ func (s *Store) runAgentOnce(ctx context.Context) error {
 		}
 		verificationErr := s.verifyRunTx(ctx, tx, scope, current)
 		if verificationErr == nil && generationErr == nil {
-			verificationErr = verifyContextAttemptTx(ctx, tx, scope, attempt.ID, *current.ContextTask, current.ContextDependencies)
+			verificationErr = s.verifyContextAttemptTx(ctx, tx, scope, attempt.ID, *current.ContextTask, current.ContextDependencies)
 		}
 		if verificationErr != nil {
 			current.StaleContext = true

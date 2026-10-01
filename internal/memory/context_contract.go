@@ -91,6 +91,8 @@ type TrustedTaskContext struct {
 	Timezone         string
 	MemoryBudget     Budget
 	TotalInputTokens int
+	// Server-only carried origins; bounded and frozen before assembly.
+	DeskActions []ID `json:"desk_actions,omitempty"`
 }
 
 type SourceScopeKind string
@@ -274,6 +276,7 @@ type ContextManifest struct {
 	Truncated            bool              `json:"truncated"`
 	InputBytes           int               `json:"input_bytes"`
 	InputTokens          TokenCount        `json:"input_tokens"`
+	DeskActions          []ID              `json:"desk_actions,omitempty"`
 	ObservationLayer     string            `json:"observation_layer"` // adapter_arguments, serialized_request, manual_package
 }
 

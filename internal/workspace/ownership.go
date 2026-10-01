@@ -8,6 +8,8 @@ import (
 type TextBlock struct {
 	Text string   `json:"text"`
 	Runs []string `json:"runs"`
+	// DeskActions are server-written action identities, separate from agent Runs.
+	DeskActions []string `json:"deskActions,omitempty"`
 }
 
 func BlockText(blocks []TextBlock) string {
@@ -39,7 +41,7 @@ func EditBlocks(blocks []TextBlock, text string) []TextBlock {
 	labels := make([][]string, 0, len(old))
 	for _, b := range blocks {
 		for range []rune(b.Text) {
-			labels = append(labels, b.Runs)
+			labels = append(labels, ownershipLabels(b))
 		}
 	}
 	union := func(start, end int) []string {
@@ -58,11 +60,19 @@ func EditBlocks(blocks []TextBlock, text string) []TextBlock {
 		if len(chars) == 0 {
 			return
 		}
-		if len(out) > 0 && strings.Join(out[len(out)-1].Runs, ",") == strings.Join(runs, ",") {
+		if len(out) > 0 && strings.Join(ownershipLabels(out[len(out)-1]), ",") == strings.Join(runs, ",") {
 			out[len(out)-1].Text += string(chars)
 			return
 		}
-		out = append(out, TextBlock{Text: string(chars), Runs: append([]string{}, runs...)})
+		block := TextBlock{Text: string(chars), Runs: []string{}}
+		for _, id := range runs {
+			if strings.HasPrefix(id, "desk:") {
+				block.DeskActions = append(block.DeskActions, strings.TrimPrefix(id, "desk:"))
+			} else {
+				block.Runs = append(block.Runs, id)
+			}
+		}
+		out = append(out, block)
 	}
 	replace := func(a, b, x, y int) {
 		runs := union(a, b)
@@ -83,8 +93,8 @@ func EditBlocks(blocks []TextBlock, text string) []TextBlock {
 		for _, line := range strings.SplitAfter(string(next[x:y]), "\n") {
 			lineRuns := append([]string{}, runs...)
 			for _, block := range blocks {
-				if len(block.Runs) > 0 && copiedBlock(line, block.Text) {
-					for _, id := range block.Runs {
+				if len(ownershipLabels(block)) > 0 && copiedBlock(line, block.Text) {
+					for _, id := range ownershipLabels(block) {
 						if !hasRun(id, lineRuns) {
 							lineRuns = append(lineRuns, id)
 						}
@@ -193,4 +203,48 @@ func copiedBlock(added, derived string) bool {
 		}
 	}
 	return row[len(b)]*100 >= min(len(a), len(b))*80
+}
+
+// Prefixes exist only in the edit algorithm's labels, never in persisted Runs.
+func ownershipLabels(block TextBlock) []string {
+	out := append([]string{}, block.Runs...)
+	for _, id := range block.DeskActions {
+		out = append(out, "desk:"+id)
+	}
+	return out
+}
+
+// CopyOrigins carries provenance to copied paragraphs in another tracked
+// field. Independent paragraphs retain their existing labels.
+func CopyOrigins(blocks, sources []TextBlock) []TextBlock {
+	out := []TextBlock{}
+	for _, block := range blocks {
+		for _, line := range strings.SplitAfter(block.Text, "\n") {
+			if line == "" {
+				continue
+			}
+			next := TextBlock{Text: line, Runs: append([]string{}, block.Runs...), DeskActions: append([]string{}, block.DeskActions...)}
+			for _, source := range sources {
+				if (len(source.Runs) == 0 && len(source.DeskActions) == 0) || !copiedBlock(line, source.Text) {
+					continue
+				}
+				for _, id := range source.Runs {
+					if !hasRun(id, next.Runs) {
+						next.Runs = append(next.Runs, id)
+					}
+				}
+				for _, id := range source.DeskActions {
+					if !hasRun(id, next.DeskActions) {
+						next.DeskActions = append(next.DeskActions, id)
+					}
+				}
+			}
+			if len(out) > 0 && strings.Join(ownershipLabels(out[len(out)-1]), ",") == strings.Join(ownershipLabels(next), ",") {
+				out[len(out)-1].Text += next.Text
+			} else {
+				out = append(out, next)
+			}
+		}
+	}
+	return out
 }

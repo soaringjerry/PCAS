@@ -91,7 +91,7 @@ func (s *Store) answerDeskTyped(ctx context.Context, scope memory.Scope, agentID
 			return memory.ErrConflict
 		}
 		indirect = mergeRunDependencies(indirect, dependenciesForEntries(entries))
-		return nil
+		return s.verifyTaskDeskActionsTx(ctx, tx, scope, task)
 	})
 	if err != nil {
 		return out, err
@@ -316,7 +316,7 @@ func (s *Store) answerDeskTyped(ctx context.Context, scope memory.Scope, agentID
 		if err := check(ctx, tx); err != nil {
 			return err
 		}
-		if err := verifyContextAttemptTx(ctx, tx, scope, attempt.ID, task, deps); err != nil {
+		if err := s.verifyContextAttemptTx(ctx, tx, scope, attempt.ID, task, deps); err != nil {
 			return err
 		}
 		if _, err := tx.Exec(ctx, "INSERT INTO desk_turns(owner_id,id,agent_id,question,answer,dependencies,context_task) VALUES($1,$2,$3,$4,$5,$6,$7)", string(scope.OwnerID), out.ID, agent.ID, question, out.Answer, asJSON(refsForDependencies(deps)), asJSON(task)); err != nil {

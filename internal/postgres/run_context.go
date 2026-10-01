@@ -31,6 +31,13 @@ func (s *Store) requestRunTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 		return memory.ErrConflict
 	}
 	task := prepared.Task
+	if _, derived := ctx.Value(secretaryArtifactKey{}).(secretaryArtifactContext); derived {
+		if log, ok := ctx.Value(actionLogKey{}).(actionLog); ok {
+			if err := appendTaskDeskActions(&task, memory.ID(log.id)); err != nil {
+				return err
+			}
+		}
+	}
 	role := "deputy"
 	if agent.Channel == "manual" {
 		role = "manual"
@@ -130,6 +137,9 @@ func (s *Store) requestRunTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 		}
 	}
 	if previous := prepared.Previous; previous != nil && previous.ThingID == item.ID && s.verifyRunTx(ctx, tx, modelScope, *previous) == nil {
+		if err := appendTaskDeskActions(&task, previous.ContextDeskActions...); err != nil {
+			return err
+		}
 		fmt.Fprintf(&brief, "\n同一事项上一次的要求：%s\n上一次的结果：%s\n", previous.Prompt, previous.Output)
 		if previous.ContextTask != nil {
 			artifactRefs = append(artifactRefs, refsForDependencies(previous.ContextDependencies)...)
@@ -189,6 +199,7 @@ func (s *Store) requestRunTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 	for _, dep := range run.ContextDependencies {
 		run.ContextMemoryIDs = append(run.ContextMemoryIDs, string(dep.Ref.ID))
 	}
+	run.ContextDeskActions = append([]memory.ID{}, task.DeskActions...)
 	if err := s.verifyRunForItemTx(ctx, tx, scope, run, &item); err != nil {
 		return err
 	}
@@ -394,6 +405,20 @@ func (s *Store) prepareRunContextForItem(ctx context.Context, scope memory.Scope
 		if err != nil {
 			return err
 		}
+		if provenance, ok := ctx.Value(secretaryArtifactKey{}).(secretaryArtifactContext); ok {
+			if err := verifyTypedContextTx(ctx, tx, scope, provenance.Task, provenance.Dependencies); err != nil {
+				return err
+			}
+			if err := s.verifyTaskDeskActionsTx(ctx, tx, scope, provenance.Task); err != nil {
+				return err
+			}
+			if err := appendTaskDeskActions(&task, provenance.Task.DeskActions...); err != nil {
+				return err
+			}
+			if err := s.verifyTaskDeskActionsTx(ctx, tx, scope, task); err != nil {
+				return err
+			}
+		}
 		task.View.Mode = memory.Continue
 		task.View.KnownAt, task.View.ValidAt = &task.Now, &task.Now
 		modelScope := memory.Scope{OwnerID: scope.OwnerID, PrincipalID: c.AgentID, Task: &task}
@@ -440,10 +465,13 @@ func (s *Store) prepareRunContextForItem(ctx context.Context, scope memory.Scope
 				return err
 			}
 			if previous != nil {
+				if err := appendTaskDeskActions(&task, previous.ContextDeskActions...); err != nil {
+					return err
+				}
 				query += " " + previous.Prompt + " " + previous.Output
 			}
 		}
-		return nil
+		return s.verifyTaskDeskActionsTx(ctx, tx, scope, task)
 	}); err != nil {
 		return ctx, err
 	}
@@ -509,6 +537,16 @@ func (s *Store) verifyRunTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, 
 }
 
 func (s *Store) verifyRunForItemTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run workspace.Run, item *workspace.Item) error {
+	if run.ContextTask != nil {
+		if !sameDeskActions(run.ContextDeskActions, run.ContextTask.DeskActions) {
+			return memory.ErrConflict
+		}
+		if err := s.verifyTaskDeskActionsTx(ctx, tx, scope, *run.ContextTask); err != nil {
+			return err
+		}
+	} else if len(run.ContextDeskActions) > 0 {
+		return memory.ErrConflict
+	}
 	if run.StaleContext {
 		return memory.ErrConflict
 	}
@@ -585,7 +623,7 @@ func (s *Store) verifyManualRunSubmissionTx(ctx context.Context, tx pgx.Tx, scop
 	if err := s.verifyRunTx(ctx, tx, scope, run); err != nil {
 		return err
 	}
-	if err := verifyContextAttemptTx(ctx, tx, scope, run.ContextAttemptID, *run.ContextTask, run.ContextDependencies); err != nil {
+	if err := s.verifyContextAttemptTx(ctx, tx, scope, run.ContextAttemptID, *run.ContextTask, run.ContextDependencies); err != nil {
 		return err
 	}
 	var delivered bool

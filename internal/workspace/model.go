@@ -184,6 +184,7 @@ type Run struct {
 	ContextTask         *memory.TrustedTaskContext `json:"contextTask,omitempty"`
 	ContextDependencies []memory.TypedDependency   `json:"contextDependencies,omitempty"`
 	// Server-owned derived lineage; may overlap direct ContextVersions/Input.
+	ContextDeskActions          []memory.ID              `json:"contextDeskActions"`
 	ContextIndirectDependencies []memory.TypedDependency `json:"contextIndirectDependencies"`
 	ContextCandidates           []memory.CandidateRecord `json:"contextCandidates,omitempty"`
 	ContextSourceSpans          []memory.SourceSpan      `json:"contextSourceSpans,omitempty"`

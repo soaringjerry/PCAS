@@ -10,7 +10,7 @@ import (
 // This transaction hook uses typed reverse lineage, including source evidence
 // into independently granted claims. The retained owner source is not erased by
 // permission revocation. Existing owner/source gates are held by the caller.
-func invalidateTypedContextTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in memory.ContextInvalidation) error {
+func invalidateTypedContextTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in memory.ContextInvalidation) (resultErr error) {
 	if len(in.RecordIDs) == 0 {
 		return nil
 	}
@@ -51,12 +51,32 @@ func invalidateTypedContextTx(ctx context.Context, tx pgx.Tx, scope memory.Scope
 	if _, err = tx.Exec(ctx, "SET LOCAL lock_timeout='5s'"); err != nil {
 		return err
 	}
-	if _, err = tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended($1,0))", "context-diagnostics:"+string(scope.OwnerID)); err != nil {
+	// Invalidation side effects are not undoable document edits. Keep the
+	// caller's policy mutation buffer while excluding erased generated prose.
+	var actionBuffer string
+	if err = tx.QueryRow(ctx, "SELECT coalesce(current_setting('pcas.action_changes',true),'')").Scan(&actionBuffer); err != nil {
 		return err
 	}
+	if _, err = tx.Exec(ctx, "SELECT set_config('pcas.action_changes','',true)"); err != nil {
+		return err
+	}
+	defer func() {
+		_, e := tx.Exec(ctx, "SELECT set_config('pcas.action_changes',$1,true)", actionBuffer)
+		if resultErr == nil {
+			resultErr = e
+		}
+	}()
 	var recipient any
 	if in.Recipient != nil {
 		recipient = asJSON(in.Recipient)
+	}
+	additional, err := purgeSecretaryArtifactsTx(ctx, tx, scope, ids, recipient)
+	if err != nil {
+		return err
+	}
+	ids = append(ids, additional...)
+	if _, err = tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended($1,0))", "context-diagnostics:"+string(scope.OwnerID)); err != nil {
+		return err
 	}
 	state := "revoked"
 	if in.Reason == memory.ContextDeleted {
@@ -66,7 +86,8 @@ func invalidateTypedContextTx(ctx context.Context, tx pgx.Tx, scope memory.Scope
 	// controlled references and codes and survives with an explicit loss reason.
 	_, err = tx.Exec(ctx, `UPDATE context_attempts a SET snapshot=NULL,snapshot_bytes=0,snapshot_state=$4,state='invalidated',invalidation_reason=$5
  WHERE owner_id=$1 AND ($3::jsonb IS NULL OR recipient=$3)
- AND EXISTS(SELECT 1 FROM attempt_typed_dependencies d WHERE d.owner_id=a.owner_id AND d.attempt_id=a.id AND d.dependency_id=ANY($2::uuid[]))`, string(scope.OwnerID), ids, recipient, state, string(in.Reason))
+ AND EXISTS(SELECT 1 FROM attempt_typed_dependencies d WHERE d.owner_id=a.owner_id AND d.attempt_id=a.id AND d.dependency_id=ANY($2::uuid[]))
+ OR (owner_id=$1 AND EXISTS(SELECT 1 FROM action_log l WHERE l.owner_id=a.owner_id AND l.context_stale AND (a.manifest->'desk_actions') ? l.id::text))`, string(scope.OwnerID), ids, recipient, state, string(in.Reason))
 	if err != nil {
 		return err
 	}

@@ -15,6 +15,10 @@ import (
 // generateContext runs outside all business transactions. Adapter observation
 // independently commits the exact final request before a provider barrier.
 func (s *Store) generateContext(ctx context.Context, scope memory.Scope, operationID string, task memory.TrustedTaskContext, deps []memory.TypedDependency, entries []memory.EvidenceEntry, candidates []memory.CandidateRecord, indirect []memory.TypedDependency, system, prompt string, schema json.RawMessage) (ai.Result, memory.ContextAttempt, error) {
+	// Freeze the assembled origin IDs before adapters/observers can yield.
+	if err := appendTaskDeskActions(&task); err != nil {
+		return ai.Result{}, memory.ContextAttempt{}, err
+	}
 	ctx, generationCancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer generationCancel()
 	var attempt memory.ContextAttempt
@@ -66,7 +70,7 @@ func (s *Store) generateContext(ctx context.Context, scope memory.Scope, operati
 			return memory.ErrInvalid
 		}
 		err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-			if err := verifyContextAttemptTx(ctx, tx, scope, attempt.ID, task, deps); err != nil {
+			if err := s.verifyContextAttemptTx(ctx, tx, scope, attempt.ID, task, deps); err != nil {
 				return err
 			}
 			var tagErr error
@@ -145,7 +149,7 @@ func (s *Store) generateContext(ctx context.Context, scope memory.Scope, operati
 			if live != task.Recipient {
 				return memory.ErrConflict
 			}
-			if e = verifyContextAttemptTx(finishCtx, tx, scope, attempt.ID, task, deps); e != nil {
+			if e = s.verifyContextAttemptTx(finishCtx, tx, scope, attempt.ID, task, deps); e != nil {
 				return e
 			}
 		} else if e := lockContextDiagnosticsTx(finishCtx, tx, scope.OwnerID); e != nil {

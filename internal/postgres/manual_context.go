@@ -55,7 +55,7 @@ func (s *Store) ManualRunPackage(ctx context.Context, scope memory.Scope, id str
 		if err := s.verifyRunTx(ctx, tx, scope, current); err != nil {
 			return err
 		}
-		if err := verifyContextAttemptTx(ctx, tx, scope, attempt.ID, *current.ContextTask, current.ContextDependencies); err != nil {
+		if err := s.verifyContextAttemptTx(ctx, tx, scope, attempt.ID, *current.ContextTask, current.ContextDependencies); err != nil {
 			return err
 		}
 		if err := persistContextArtifactDependenciesTx(ctx, tx, scope, "manual_package", id, 1, *current.ContextTask, current.ContextDependencies); err != nil {

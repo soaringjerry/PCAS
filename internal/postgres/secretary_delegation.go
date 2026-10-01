@@ -143,7 +143,8 @@ func (s *Store) planSecretaryActions(ctx context.Context, scope memory.Scope, c 
 		if a.Ref == "new" {
 			command.Type, command.ID, command.Title = "delegateTask", item.ID, item.Title
 		}
-		preparedCtx, err := s.prepareRunContextForItem(ctx, scope, command, &item, c.TypedDependencies)
+		prepCtx := context.WithValue(ctx, secretaryArtifactKey{}, secretaryArtifactContext{Task: c.Task, Dependencies: c.TypedDependencies})
+		preparedCtx, err := s.prepareRunContextForItem(prepCtx, scope, command, &item, c.TypedDependencies)
 		plans[i].Error = err
 		if err == nil {
 			prepared, ok := preparedCtx.Value(runContextKey{}).(preparedRunContext)

@@ -10,12 +10,13 @@ test.beforeEach(async ({ page }) => {
 test.afterEach(async ({ page }, info) => { await evidence(page, info) })
 
 const schedule = '周五下午三点和张三对方案，算在 A 项目里'
-async function arrange(page: Parameters<typeof say>[0], title: string) {
+async function arrange(page: Parameters<typeof say>[0], title: string, sample: { text?: string; due?: string } = {}) {
   let state = await snapshot(page)
   if (!state.projects.some(p => p.name === 'A')) state = await command(page, { type: 'addProject', name: 'A' })
-  const due = nextWeekday(5, 15)
-  await fixture(page, [reply(schedule, [{ op: 'create_task', title, due, project: 'P1', remind: null }])])
-  const response = await say(page, schedule)
+  const due = sample.due ?? nextWeekday(5, 15)
+  const text = sample.text ?? schedule
+  await fixture(page, [reply(text, [{ op: 'create_task', title, due, project: 'P1', remind: null }])])
+  const response = await say(page, text)
   const task = response.state.tasks.find((t: { id: string }) => t.id === response.turn.receipts[0].thingId)
   expect(task).toMatchObject({ due: utc(due), projectId: state.projects.find(p => p.name === 'A')!.id })
   expect(task.triggers[0]).toMatchObject({ offset: '-30m', nextAt: utc(due.replace('15:00', '14:30')) })
@@ -23,7 +24,7 @@ async function arrange(page: Parameters<typeof say>[0], title: string) {
 }
 
 test('G1 一句话安排：时间、项目、提醒、刷新与撤销', async ({ page }) => {
-  const task = await arrange(page, `和张三对方案-${Date.now()}`)
+  const task = await arrange(page, `和张三对方案-${Date.now()}`, { text: '明天下午三点和张三对方案，算在 A 项目里', due: localTime(1, 15) })
   const receipt = page.locator('.sec-receipt').filter({ hasText: task.title })
   await expect(receipt).toContainText('15:00')
   await expect(receipt).toContainText('A 项目')

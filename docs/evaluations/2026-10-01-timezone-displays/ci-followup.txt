@@ -1,0 +1,184 @@
+F8 complete real-backend CI follow-up, 2026-10-01
+Input: bddc14b849330e3c6ead9e0c461ea7172eaac6ee
+Original failed CI: https://github.com/soaringjerry/PCAS/actions/runs/36823487398/job/110243927563
+Original CI result: timezone 1 passed; golden 6 failed / 21 passed; legacy 4 passed.
+
+Pre-fix isolated reproduction:
+PATH=/root/.nvm/versions/node/v22.23.3/bin:$PATH PCAS_GOLDEN_PORT=18139 bash /tmp/pcas-f8-ci/real-backend.sh bash /tmp/pcas-f8-ci/reproduce.sh
+reproduce.sh runs the original timezone spec, then G1/G3 with --repeat-each=3, with read-only workspace snapshots between/after tests.
+Result: timezone 1 passed; G1/G3 6 failed, all at original projectId assertion.
+F8 project 2be7aa4a-761b-4977-9797-d40d57064f83: active
+A project d40daedc-baa1-4c05-ada0-db6ab4d20cd2: active
+All six created golden tasks have projectId=2be7aa4a-761b-4977-9797-d40d57064f83.
+The secretary selects active projects ORDER BY created_at,id and assigns P1..Pn.
+The older F8 project therefore occupies P1; golden expects the A project.
+
+One preserved raw assertion (the other five have the same project IDs):
+  1) tests/golden.spec.ts:25:1 › G1 一句话安排：时间、项目、提醒、刷新与撤销 ───────────────────────────────────────────
+
+    Error: expect(received).toMatchObject(expected)
+
+    - Expected  - 1
+    + Received  + 1
+
+      Object {
+        "due": "2026-10-02T07:00:00Z",
+    -   "projectId": "d40daedc-baa1-4c05-ada0-db6ab4d20cd2",
+    +   "projectId": "2be7aa4a-761b-4977-9797-d40d57064f83",
+      }
+
+      18 |   const response = await say(page, schedule)
+      19 |   const task = response.state.tasks.find((t: { id: string }) => t.id === response.turn.receipts[0].thingId)
+    > 20 |   expect(task).toMatchObject({ due: utc(due), projectId: state.projects.find(p => p.name === 'A')!.id })
+         |                ^
+      21 |   expect(task.triggers[0]).toMatchObject({ offset: '-30m', nextAt: utc(due.replace('15:00', '14:30')) })
+      22 |   return task
+      23 | }
+        at arrange (/root/PCAS/web/tests/golden.spec.ts:20:16)
+        at /root/PCAS/web/tests/golden.spec.ts:26:16
+
+    attachment #1: browser (image/png) ─────────────────────────────────────────────────────────────
+    ../../../tmp/pcas-f8-ci/before-golden/golden-G1-一句话安排：时间、项目、提醒、刷新与撤销/attachments/browser-94200cc0f4561080e416053f39325c61ad9950d3.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../tmp/pcas-f8-ci/before-golden/golden-G1-一句话安排：时间、项目、提醒、刷新与撤销/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../tmp/pcas-f8-ci/before-golden/golden-G1-一句话安排：时间、项目、提醒、刷新与撤销/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../tmp/pcas-f8-ci/before-golden/golden-G1-一句话安排：时间、项目、提醒、刷新与撤销/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+Fix:
+In timezone-backend.spec.ts, finally finishes only the tracked created task IDs and the generated project ID; followUps is restored. Assertions are preserved; project ownership and completion assertions are added.
+This ends the test project so it leaves the active alias set; no physical deletion.
+No repository golden/shared fixture/runner/product changes.
+
+Post-fix read-only evidence:
+F8 project b04d571a-30d6-4ed2-90b4-daba2e51716a: done
+Tasks d41dda4a-c5e8-418b-a25f-d91b0c16f0e3, ee6a49e1-4e4c-4aed-b33b-e6f118768011: done
+Active secretary project aliases (same ordered rows as secretaryContextTx):
+P1|327a1947-07f5-454d-896b-7cc1b1687bd5|A|active
+
+
+Frontend checks:
+cd web; npm run lint; npm run type-check; npm run build
+Node v22.23.3; all passed.
+
+Complete default runner:
+PATH=/root/.nvm/versions/node/v22.23.3/bin:$PATH PCAS_GOLDEN_PORT=18139 bash /tmp/pcas-f8-ci/real-backend.sh
+Temporary copy changes: working directory, owned F8-CI container prefix, HTTP18139, dynamic callback port and read-only stage evidence. Default suite list and repeat counts are preserved.
+Exit 0; timezone 1/1, golden 27/27, legacy 4/4; total 32/32.
+Each JSON stats: skipped=0, unexpected=0, flaky=0. Golden duration=618362ms.
+Version boundary: the full run loaded the finally cleanup version with the prior title selectors. Review then changed both task selectors to this turn's receipt thingId (plus exact title assertions). The final selectors received the fresh-database specialty below; the full local runner was not rerun for that last selector-only change.
+
+Preserved complete passing result lines:
+  ✓  1 tests/timezone-backend.spec.ts:7:1 › F6 first login defaults to the browser; settings, validation, hint and today agree with real receipts (3.6s)
+  1 passed (4.8s)
+  ✓   1 tests/golden.spec.ts:25:1 › G1 一句话安排：时间、项目、提醒、刷新与撤销 (1.3s)
+  ✓   2 tests/golden.spec.ts:42:1 › G2 边问边记：回复前连续发送，两轮都处理 (3.0s)
+  ✓   3 tests/golden.spec.ts:59:1 › G3 改安排：同一件事改到周一，提醒跟随 (684ms)
+  ✓   4 tests/golden.spec.ts:82:1 › G4 事项页秘书：自动加入三步、撤销、放回去 (4.2s)
+  ✓   5 tests/golden.spec.ts:97:1 › G5 失败恢复：副手首请求报错，原地重试成功 (6.9s)
+  ✓   6 tests/golden.spec.ts:109:1 › G6 提醒送达：真实等待一分钟、首页、Web Push、Telegram (1.4m)
+  ✓   7 tests/golden.spec.ts:132:1 › G7 Telegram 对话：入站文字、首页、回执按钮和撤销回调 (6.4s)
+  ✓   8 tests/golden.spec.ts:151:1 › G8 完成即撤销：首页勾选、toast、回到原位 (1.4s)
+  ✓   9 tests/golden.spec.ts:165:1 › G9 不丢话：模型真实超时后收到保存回执并能查原话 (1.5m)
+  ✓  10 tests/golden.spec.ts:25:1 › G1 一句话安排：时间、项目、提醒、刷新与撤销 (1.8s)
+  ✓  11 tests/golden.spec.ts:42:1 › G2 边问边记：回复前连续发送，两轮都处理 (3.3s)
+  ✓  12 tests/golden.spec.ts:59:1 › G3 改安排：同一件事改到周一，提醒跟随 (1.2s)
+  ✓  13 tests/golden.spec.ts:82:1 › G4 事项页秘书：自动加入三步、撤销、放回去 (4.0s)
+  ✓  14 tests/golden.spec.ts:97:1 › G5 失败恢复：副手首请求报错，原地重试成功 (7.1s)
+  ✓  15 tests/golden.spec.ts:109:1 › G6 提醒送达：真实等待一分钟、首页、Web Push、Telegram (1.5m)
+  ✓  16 tests/golden.spec.ts:132:1 › G7 Telegram 对话：入站文字、首页、回执按钮和撤销回调 (6.8s)
+  ✓  17 tests/golden.spec.ts:151:1 › G8 完成即撤销：首页勾选、toast、回到原位 (1.5s)
+  ✓  18 tests/golden.spec.ts:165:1 › G9 不丢话：模型真实超时后收到保存回执并能查原话 (1.5m)
+  ✓  19 tests/golden.spec.ts:25:1 › G1 一句话安排：时间、项目、提醒、刷新与撤销 (1.4s)
+  ✓  20 tests/golden.spec.ts:42:1 › G2 边问边记：回复前连续发送，两轮都处理 (3.4s)
+  ✓  21 tests/golden.spec.ts:59:1 › G3 改安排：同一件事改到周一，提醒跟随 (1.9s)
+  ✓  22 tests/golden.spec.ts:82:1 › G4 事项页秘书：自动加入三步、撤销、放回去 (5.3s)
+  ✓  23 tests/golden.spec.ts:97:1 › G5 失败恢复：副手首请求报错，原地重试成功 (7.3s)
+  ✓  24 tests/golden.spec.ts:109:1 › G6 提醒送达：真实等待一分钟、首页、Web Push、Telegram (1.5m)
+  ✓  25 tests/golden.spec.ts:132:1 › G7 Telegram 对话：入站文字、首页、回执按钮和撤销回调 (6.8s)
+  ✓  26 tests/golden.spec.ts:151:1 › G8 完成即撤销：首页勾选、toast、回到原位 (1.4s)
+  ✓  27 tests/golden.spec.ts:165:1 › G9 不丢话：模型真实超时后收到保存回执并能查原话 (1.5m)
+  27 passed (10.3m)
+  ✓  1 tests/backend.spec.ts:5:1 › login, persisted memory, confirmation, correction, source tracing and export (5.7s)
+  ✓  2 tests/chatgpt-direct.spec.ts:4:1 › official plan connection explains usage and keeps the Codex channel (539ms)
+  ✓  3 tests/continuity.spec.ts:4:1 › generic connector persists, scoped webhook cannot read memory, archive upload queues parsing (1.0s)
+  ✓  4 tests/model-api.spec.ts:4:1 › real API settings persist separate keys, redact secrets and queue vector backfill (1.3s)
+  4 passed (9.5s)
+
+Final receipt-ID selector specialty:
+PATH=/root/.nvm/versions/node/v22.23.3/bin:$PATH PCAS_GOLDEN_PORT=18139 bash /tmp/pcas-f8-ci/real-backend.sh bash /tmp/pcas-f8-ci/final-specialty.sh
+
+Running 1 test using 1 worker
+
+(node:3915718) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 tests/timezone-backend.spec.ts:7:1 › F6 first login defaults to the browser; settings, validation, hint and today agree with real receipts (3.9s)
+
+  1 passed (4.6s)
+{
+  "projects": [
+    {
+      "id": "a46d60bd-6faa-424d-9e6b-b6649efcf91f",
+      "name": "F8 跨页项目",
+      "status": "done"
+    }
+  ],
+  "tasks": [
+    {
+      "id": "2725c477-88c9-4929-b837-51751dfa47de",
+      "title": "F6 墨尔本回信",
+      "status": "done"
+    },
+    {
+      "id": "ae7534db-c90a-42d0-8bf1-124c1ff7595a",
+      "title": "F6 跨日回信",
+      "projectId": "a46d60bd-6faa-424d-9e6b-b6649efcf91f",
+      "status": "done"
+    }
+  ]
+}
+Active secretary project aliases (same ordered rows as secretaryContextTx):
+
+
+Final lint/type-check passed; production build passed before the test-selector-only refinement.
+Fresh-database final specialty JSON: expected=1, skipped=0, unexpected=0, flaky=0.
+Latest pushed commit's remote CI is queried separately from these local results.
+
+Resource cleanup (only owned resources):
+{
+  "owned_containers": [
+    "pcas-test-F8-CI-3860931",
+    "pcas-test-F8-CI-3865156",
+    "pcas-test-F8-CI-3915098"
+  ],
+  "recorded_pids": [
+    "3861362",
+    "3861381",
+    "3861382",
+    "3865602",
+    "3865622",
+    "3865623",
+    "3915543",
+    "3915565",
+    "3915566"
+  ],
+  "recorded_run_dirs": [
+    "/root/PCAS/data/golden-RJdmMG",
+    "/root/PCAS/data/golden-W7U9Pk"
+  ],
+  "remaining_containers": [],
+  "remaining_pids": [],
+  "remaining_run_dirs": []
+}
+
+HTTP18138/18139: no listening socket after cleanup.
+Runner removes its own container/volumes with docker rm -fv and stops only recorded fixture/API/worker PIDs.
+Logs/screenshots intentionally retained under /tmp/pcas-f8-ci; full JSON/screenshots in full-results/.
+No merge, deployment, production connection, real model account or real notification device.

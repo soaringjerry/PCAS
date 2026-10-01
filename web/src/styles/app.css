@@ -1307,6 +1307,140 @@ kbd {
   transform: translateX(16px);
 }
 
+.switch:disabled {
+  cursor: progress;
+  opacity: 0.6;
+}
+
+/* Saved / failed, shown beside the control that made the change. */
+
+.save-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--label-2);
+  font-size: 12px;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.save-mark.saved {
+  color: var(--green);
+}
+
+.save-mark.failed {
+  color: var(--red);
+  white-space: normal;
+}
+
+/* A fold row says its state while closed and opens in place. */
+
+.fold-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 48px;
+  padding: 10px 16px;
+  border: 0;
+  border-top: 1px solid var(--sep);
+  background: none;
+  color: var(--label);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.fold-head:hover {
+  background: var(--fill);
+}
+
+.fold-title {
+  flex: none;
+  max-width: 60%;
+}
+
+.fold-summary {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--label-2);
+  font-size: 13px;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fold-summary.ok {
+  color: var(--green);
+}
+
+.fold-summary.warn {
+  color: var(--orange);
+}
+
+.fold-summary.danger {
+  color: var(--red);
+}
+
+.fold-chevron {
+  flex: none;
+  color: var(--label-3);
+  transition: transform 160ms;
+}
+
+.fold.open > .fold-head .fold-chevron {
+  transform: rotate(180deg);
+}
+
+.fold-body {
+  padding: 4px 16px 16px;
+}
+
+/* The technical name of what the row opened, for whoever is following a deployment guide. */
+.fold-name {
+  color: var(--label-3);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+.fold-body .fold {
+  margin: 4px -16px -16px;
+}
+
+.conn-form {
+  padding: 12px 0 4px;
+}
+
+.conn-form + .conn-form {
+  border-top: 1px solid var(--sep);
+}
+
+.conn-form h4 {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+@media (max-width: 560px) {
+  .fold-head {
+    flex-wrap: wrap;
+    gap: 2px 12px;
+  }
+
+  .fold-title {
+    flex: 1;
+    max-width: none;
+  }
+
+  .fold-summary {
+    order: 3;
+    flex-basis: 100%;
+    text-align: left;
+    white-space: normal;
+  }
+}
+
 .progress {
   height: 4px;
   border-radius: var(--r-pill);

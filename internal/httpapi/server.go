@@ -229,12 +229,16 @@ func (s *Server) fail(w http.ResponseWriter, err error) {
 		status, code = http.StatusGone, "reimport_blocked"
 	case errors.Is(err, memory.ErrUnavailable):
 		status, code = http.StatusNotImplemented, "capability_not_configured"
+	case errors.Is(err, workspace.ErrNewerAction):
+		status, code = http.StatusConflict, "newer_action"
 	case errors.Is(err, workspace.ErrChangedSince):
 		status, code = http.StatusConflict, "changed_since"
 	case errors.Is(err, workspace.ErrWorkStarted):
 		status, code = http.StatusConflict, "work_started"
 	case errors.Is(err, workspace.ErrAlreadyUndone):
 		status, code = http.StatusConflict, "already_undone"
+	case errors.Is(err, workspace.ErrExpired):
+		status, code = http.StatusConflict, "expired"
 	case errors.Is(err, workspace.ErrBudget):
 		status, code = http.StatusPaymentRequired, "daily_budget_exceeded"
 	default:

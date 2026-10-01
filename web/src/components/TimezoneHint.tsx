@@ -12,9 +12,11 @@ export function TimezoneHint() {
   })
   const [busy, setBusy] = useState(false)
   const zone = browserTimezone()
-  if (dismissed || sameTimezone(state.settings.timezone ?? 'UTC', zone)) return null
+  const current = state.settings.timezone ?? 'UTC'
+  if (dismissed || sameTimezone(current, zone)) return null
+  // Each zone is named once: the one in use here, the device's on the button.
   return <div className="timezone-hint" role="status">
-    <span>你的时区好像是 {zone}，要改成 {zone} 吗？</span>
+    <span>时间按 {current} 显示，和这台设备不同</span>
     <button type="button" className="btn btn-quiet btn-sm" disabled={busy} onClick={async () => {
       setBusy(true)
       await dispatch({ type: 'updateSettings', patch: { timezone: zone } })

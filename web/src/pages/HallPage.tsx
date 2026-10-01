@@ -258,7 +258,7 @@ function AwayLine() {
           {items.map((f) => {
             const body = (
               <>
-                <span className="h-when">{formatAgo(f.at)}</span>
+                <span className="h-when">{formatAgo(f.at, state.settings.timezone ?? 'UTC')}</span>
                 <span className={`h-text${f.failed ? ' failed' : ''}`}>{f.text}</span>
                 {new Date(f.at).getTime() > seen && <span className="h-new" aria-label="新的" />}
               </>
@@ -357,7 +357,7 @@ function IdeaWall() {
                 <Link to={`/t/${idea.id}`} tabIndex={i >= drifting.length ? -1 : undefined}>
                   <span className="h-text">{idea.title}</span>
                   <span className="h-note">
-                    {ideaNote(idea)} · {formatAgo(idea.updatedAt)}
+                    {ideaNote(idea)} · {formatAgo(idea.updatedAt, state.settings.timezone ?? 'UTC')}
                   </span>
                 </Link>
               </li>

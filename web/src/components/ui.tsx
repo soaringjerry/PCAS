@@ -1,4 +1,5 @@
-import type { ButtonHTMLAttributes, ReactNode } from 'react'
+import { useId, useState, type ButtonHTMLAttributes, type ReactNode } from 'react'
+import { Check, ChevronDown, CircleAlert } from 'lucide-react'
 import type { Tone } from '../domain/labels'
 
 export function Tag({ tone = 'neutral', children }: { tone?: Tone; children: ReactNode }) {
@@ -69,9 +70,57 @@ export function Spinner({ size = 14 }: { size?: number }) {
   return <span className="spinner" style={{ width: size, height: size }} aria-hidden />
 }
 
-export function Switch({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: string }) {
+export function Switch({ checked, onChange, label, disabled }: { checked: boolean; onChange: (v: boolean) => void; label: string; disabled?: boolean }) {
   return (
-    <button type="button" role="switch" aria-checked={checked} aria-label={label} className="switch" onClick={() => onChange(!checked)} />
+    <button type="button" role="switch" aria-checked={checked} aria-label={label} className="switch" disabled={disabled} onClick={() => onChange(!checked)} />
+  )
+}
+
+/** A row that says its current state while closed and opens in place for the details. */
+export function Fold({ title, summary, tone, defaultOpen = false, children }: {
+  title: ReactNode
+  /** Shown while closed too, so a failure or a missing step is never hidden. */
+  summary?: ReactNode
+  tone?: 'ok' | 'warn' | 'danger'
+  defaultOpen?: boolean
+  children: ReactNode
+}) {
+  const [open, setOpen] = useState(defaultOpen)
+  const id = useId()
+  return (
+    <div className={`fold${open ? ' open' : ''}`}>
+      <button type="button" className="fold-head" aria-expanded={open} aria-controls={id} onClick={() => setOpen((v) => !v)}>
+        <span className="fold-title">{title}</span>
+        {summary && <span className={`fold-summary${tone ? ` ${tone}` : ''}`}>{summary}</span>}
+        <ChevronDown size={16} className="fold-chevron" aria-hidden />
+      </button>
+      {open && (
+        <div className="fold-body" id={id}>
+          {children}
+        </div>
+      )}
+    </div>
+  )
+}
+
+export type SaveState = 'idle' | 'saving' | 'saved' | 'failed'
+
+/** What happened to the change just made, shown beside the control that made it. */
+export function SaveMark({ state, failed = '没保存上，还是原来的设置' }: { state: SaveState; failed?: string }) {
+  if (state === 'idle') return null
+  if (state === 'failed') {
+    return (
+      <span className="save-mark failed" role="alert">
+        <CircleAlert size={12} />
+        {failed}
+      </span>
+    )
+  }
+  return (
+    <span className={`save-mark ${state}`} role="status">
+      {state === 'saving' ? <Spinner size={11} /> : <Check size={12} strokeWidth={3} />}
+      {state === 'saving' ? '正在保存' : '已保存'}
+    </span>
   )
 }
 

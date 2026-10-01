@@ -1,0 +1,332 @@
+/* The settings page: a status strip, then groups named after what someone comes
+   here to do. Technical forms live in fold rows that say their state while closed. */
+
+.settings .page-head {
+  margin-bottom: 14px;
+}
+
+.settings .section-title {
+  color: var(--label);
+  font-size: 17px;
+  font-weight: 600;
+  scroll-margin-top: 16px;
+}
+
+.settings .section-title:focus-visible {
+  box-shadow: none;
+}
+
+.settings .stack {
+  gap: 30px;
+}
+
+.settings .section {
+  scroll-margin-top: 16px;
+}
+
+/* ---------- Status strip ---------- */
+
+.set-overview {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 30px;
+}
+
+.set-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  min-height: 86px;
+  padding: 12px 14px;
+  border: 0;
+  border-radius: var(--r);
+  background: var(--bg-2);
+  color: var(--label);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 120ms;
+}
+
+.set-tile:hover {
+  background: var(--fill-2);
+}
+
+.set-tile .k {
+  color: var(--label-2);
+  font-size: 12px;
+}
+
+.set-tile .v {
+  overflow: hidden;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.set-tile .v .of {
+  color: var(--label-2);
+  font-weight: 400;
+}
+
+.set-tile .d {
+  overflow: hidden;
+  color: var(--label-2);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.set-tile .progress {
+  margin-top: auto;
+  margin-bottom: 4px;
+}
+
+.set-tile.warn {
+  background: var(--orange-soft);
+}
+
+.set-tile.warn .v,
+.set-tile.warn .d {
+  color: var(--orange);
+}
+
+.set-tile.warn .progress > div {
+  background: var(--orange);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .set-tile:not(.warn) {
+    background: var(--elevated);
+  }
+}
+
+:root[data-theme="dark"] .set-tile:not(.warn) {
+  background: var(--elevated);
+}
+
+@media (max-width: 760px) {
+  .set-overview {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    margin-bottom: 24px;
+  }
+
+  .set-tile {
+    min-height: 78px;
+    padding: 10px 12px;
+  }
+
+  .set-tile .v {
+    font-size: 15px;
+  }
+}
+
+/* ---------- Rows ---------- */
+
+.setting-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.setting-text > .ink {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 8px;
+}
+
+.setting-text h3 {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.settings .setting > .switch,
+.settings .setting > .stepper,
+.settings .setting > .btn {
+  flex: none;
+}
+
+.warn-text {
+  color: var(--orange);
+}
+
+/* A remark that trails a label on the same line. */
+.aside {
+  margin-left: 10px;
+  font-weight: 400;
+}
+
+.set-sub {
+  margin: 8px 4px -2px;
+  color: var(--label-2);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.set-sub .warn-text {
+  font-weight: 400;
+}
+
+.set-next {
+  margin: 0;
+  padding: 10px 16px;
+  background: var(--orange-soft);
+  color: var(--orange);
+  font-size: 13px;
+}
+
+.sheet > .set-next + * {
+  border-top: 0;
+}
+
+/* A row that stacks its content instead of putting a control on the right. */
+.setting.set-block {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.setting.set-test {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+}
+
+/* The first child of a sheet has no hairline, whatever kind of row it is. */
+.sheet > .fold:first-child > .fold-head,
+.sheet > .agent-row:first-child > .setting {
+  border-top: 0;
+}
+
+/* ---------- Models ---------- */
+
+.budget > .setting {
+  padding-bottom: 8px;
+}
+
+.budget > .progress {
+  height: 6px;
+  margin: 0 16px;
+}
+
+.budget > p {
+  margin: 0;
+  padding: 8px 16px 12px;
+}
+
+.agent-row + .agent-row,
+.set-next + .agent-row {
+  border-top: 1px solid var(--sep);
+}
+
+.agent-row > .setting {
+  padding-bottom: 4px;
+  border-top: 0;
+}
+
+.agent-row.off h3 {
+  color: var(--label-2);
+}
+
+.scope-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 4px 16px 12px;
+  border: 0;
+  background: none;
+  color: var(--blue);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.scope-toggle .muted {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scope-toggle svg {
+  flex: none;
+  color: var(--label-3);
+  transition: transform 160ms;
+}
+
+.scope-toggle[aria-expanded="true"] svg {
+  transform: rotate(180deg);
+}
+
+.scope-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 0 16px 14px;
+}
+
+/* ---------- Narrow screens: text above, control below ---------- */
+
+@media (max-width: 560px) {
+  .settings .setting:not(.set-block, .set-test) {
+    flex-wrap: wrap;
+    gap: 8px 12px;
+  }
+
+  .settings .setting-text {
+    flex-basis: calc(100% - 60px);
+  }
+
+  .settings .setting > .input,
+  .settings .setting > .stepper,
+  .settings .setting > .select {
+    flex-basis: 100%;
+  }
+}
+
+/* ---------- The sheet for things read but not decided ---------- */
+
+.unsure-actions {
+  margin-top: 10px;
+  gap: 6px;
+}
+
+.unsure-done {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--green-soft);
+  font-size: 13px;
+}
+
+.unsure-done p {
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+}
+
+.unsure-done .said {
+  flex: none;
+  color: var(--green);
+  font-weight: 500;
+}
+
+.unsure-done .what {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--label-2);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

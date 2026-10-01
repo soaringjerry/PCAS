@@ -6,11 +6,12 @@
 
 | 任务 | 内容 | 执行者 | 状态 |
 |---|---|---|---|
-| F7 | 连续撤销：先撤销修改、再撤销新建会失败（见下） | 6.1 Sol | 待开始 |
+| F7 | 连续撤销：先撤销修改、再撤销新建会失败（见下） | 6.1 Sol | PR #20 已开，四项 CI 通过；待合并，未确认部署 |
 | F3 | Telegram 保存失败时区分四种错误码，给出中文提示；补上 `mobile-web-app-capable` meta | 6.1 Sol | ✅ #16 已部署 |
 | F4 | 秘书解析放宽、纯文字作为回复显示、失败按阶段给出准确文案并写日志 | 6.1 Sol | ✅ #17 已部署 |
 | F5 | Codex 通道输出 JSON（见下） | 6.1 Sol | ✅ #18 已合并并部署（2026-10-01 00:37 UTC），冒烟测试 3/3 通过 |
-| F6 | 时区可设置，自动检测，前后端统一（见下） | 6.1 Sol | 进行中 |
+| F6 | 时区可设置，自动检测，前后端统一（见下） | 6.1 Sol | #19 已于 2026-10-01 00:53 UTC 合并；部署待核实，显示漏项由 F8 收尾 |
+| F8 | 事项详情、秘书卡片及项目列表等动态时间统一使用工作区时区 | 6.1 Sol | [任务包](../stabilization/F8-timezone-displays.md)已准备 |
 | C-1 | 线上时区改为 `Australia/Melbourne` | 协调者 | 待用户确认 |
 | C-2 | 配置语音转写（OpenAI `gpt-4o-transcribe`） | 协调者 | 待用户确认 |
 
@@ -44,7 +45,7 @@ F5 和 F6 改的文件不重叠，可以并行。全部合并后统一部署一�
 - **根因**：`internal/postgres/workspace.go` 把默认时区写死为 `Asia/Shanghai`，设置页没有入口；前端按浏览器时区显示。
 - **要求**：
   1. 设置页加「时区」（IANA 时区，可搜索，常用的放前面），保存走 `updateSettings`；后端用 `time.LoadLocation` 校验，失败时返回明确的错误码。
-  2. 新工作区的默认时区取第一次登录时浏览器的 `Intl.DateTimeFormat().resolvedOptions().timeZone`。已有工作区如果设置和浏览器时区不一致，首页显示一条可关闭的提示「你的时区好像是 X，要改成 X 吗？」，点一下就改；关闭后同一浏览器不再提示。
+  2. 新工作区的默认时区取第一次登录时浏览器的 `Intl.DateTimeFormat().resolvedOptions().timeZone`。已有工作区如果设置和浏览器时区不一致，首页显示一条可关闭的时区差异提示，用户点击后切换到设备时区；关闭后同一浏览器不再提示。F6 原提示为「你的时区好像是 X，要改成 X 吗？」；U1 / PR #31 候选精简为「时间按 Y 显示，和这台设备不同」及「改成 X」按钮，Y 为当前工作区时区、X 为设备时区，行为不变。
   3. 首页「今天」的分组和时间线、各处的时间显示，统一按工作区设置的时区计算，和后端回执保持一致。
   4. 测试：时区保存与校验；提示的出现与关闭；同一个任务在设置时区下的「今天」分组正确。
 - **范围**：`internal/postgres/workspace.go`（默认值与校验）、`web/src/pages/SettingsPage.tsx`、`web/src/pages/HallPage.tsx`、`web/src/domain/time.ts`、`web/src/domain/hall.ts`、`web/src/domain/lines.ts` 及对应测试。分支 `fix/timezone`。

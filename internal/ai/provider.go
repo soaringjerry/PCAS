@@ -6,9 +6,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -374,6 +376,13 @@ func (r *Registry) call(ctx context.Context, p Provider, path string, body, out 
 	}
 	response, err := r.HTTP.Do(req)
 	if err != nil {
+		var networkErr net.Error
+		if errors.Is(err, context.DeadlineExceeded) || errors.As(err, &networkErr) && networkErr.Timeout() {
+			return context.DeadlineExceeded
+		}
+		if errors.Is(err, context.Canceled) {
+			return context.Canceled
+		}
 		return fmt.Errorf("model provider unreachable")
 	}
 	defer response.Body.Close()

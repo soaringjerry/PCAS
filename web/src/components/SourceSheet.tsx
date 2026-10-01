@@ -1,3 +1,5 @@
+import { useStore } from '../store/context'
+import { formatTimestamp } from '../domain/time'
 import { MemorySummary } from './MemorySummary'
 import { useEffect, useState } from 'react'
 import { CircleAlert, Download, FileText } from 'lucide-react'
@@ -7,6 +9,7 @@ import { Spinner, Tag } from './ui'
 
 interface SourceResult { derived: { id: string; version: number }[]; source: { id: string; version: number; title: string; text: string; recorded_at: string; has_attachment: boolean; attachment_missing: boolean; representation: string }; processing: { id: string; stage: string; state: string; error_code?: string }[] }
 export function SourceSheet({ id, version, onClose }: { id: string; version?: number; onClose: () => void }) {
+  const { state } = useStore()
   const [data, setData] = useState<SourceResult | null>(null)
   const [error, setError] = useState('')
   const [derived, setDerived] = useState<{ id: string; version: number } | null>(null)
@@ -17,7 +20,7 @@ export function SourceSheet({ id, version, onClose }: { id: string; version?: nu
     return () => { alive = false }
   }, [id, version])
   const pending = data?.processing.filter((job) => job.state !== 'done') ?? []
-  return <SideSheet title={data?.source.title ?? '来源原文'} onClose={onClose} top={data && <><Tag>第 {data.source.version} 版</Tag><span className="tiny muted">记录于 {new Date(data.source.recorded_at).toLocaleString()}</span></>}>
+  return <SideSheet title={data?.source.title ?? '来源原文'} onClose={onClose} top={data && <><Tag>第 {data.source.version} 版</Tag><span className="tiny muted">记录于 {formatTimestamp(data.source.recorded_at, state.settings.timezone ?? 'UTC')}</span></>}>
     {error && <p className="form-error" role="alert"><CircleAlert size={14} />{error}</p>}
     {!data && !error && <p className="row muted"><Spinner />读取中…</p>}
     {data && <div className="stack">

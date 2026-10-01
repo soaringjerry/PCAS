@@ -1,0 +1,28 @@
+U2 verification, 2026-10-01, branch stabilization/U2-settings-things-ux on 59e25da.
+Node v22.23.3. Built bundle served by a static server on 127.0.0.1:18159 (baseline on 18158);
+every /v1 request answered in the browser with synthetic data, never proxied.
+
+npm run lint          pass
+npm run type-check    pass
+npm run build         pass
+
+Mocked browser regression (Playwright, Chromium) on the after build:
+  tests/settings-things-ux.spec.ts  19 passed   (new)
+  tests/buttons.spec.ts             passed
+  tests/fixes.spec.ts               passed
+  tests/notify.spec.ts              passed
+  tests/secretary.spec.ts           passed
+  tests/timezone.spec.ts            passed
+  total                             81 passed, 0 failed, 0 skipped (62 existing + 19 new)
+
+The new tests on the baseline build (18 at the time): all failed, because the new entries, names and
+feedback they rely on do not exist there. That alone does not make each of them a defect of the old build.
+
+Walkthrough (desktop 1440x900 and phone 390x844 touch), after build:
+  settings page height, connected:  desktop 4215 -> 2370 px, phone 5056 -> 2893 px
+  inputs shown before any row is opened: 15 -> 2
+  switch saved:   mark at y=457, switch at y=463 (desktop)
+  switch refused: inline alert at y=523, switch at y=529, value unchanged on screen and in state
+  page errors: none; unmocked requests: none; sideways scroll: none
+
+Not run here: real-backend Playwright suite, Go tests, make check, real devices.

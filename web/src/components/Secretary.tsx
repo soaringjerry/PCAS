@@ -302,8 +302,8 @@ export function Secretary({ thingId, variant = 'full' }: { thingId?: string; var
   const lastTurn = [...lines].reverse().find((l) => l.kind === 'turn')?.key
   const tooLong = text.trim().length > MAX_LENGTH
   const folded = variant === 'latest' && !expanded
-  // Folded, only the latest line shows, plus any unsent line that still needs the user.
-  const shown = folded ? lines.filter((l, i) => i === lines.length - 1 || l.kind === 'failed') : lines
+  // Folded, only the latest line shows, plus any line without an answer yet: still thinking, or unsent and needing the user.
+  const shown = folded ? lines.filter((l, i) => i === lines.length - 1 || l.kind !== 'turn') : lines
 
   return (
     <section className={`sec ${thingId ? 'sec-thing' : 'sec-hall'}`} aria-label="秘书">

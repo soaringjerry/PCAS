@@ -150,3 +150,32 @@ func (s *Store) CheckReminders(ctx context.Context, now time.Time) error {
 	}
 	return nil
 }
+
+// Undo records suppression for this occurrence, rather than changing restored
+// business content (which would invalidate earlier actions' content hashes).
+// Reusing the existing occurrence key preserves restart and deletion behavior.
+func suppressRestoredRemindersTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, current, restored workspace.Item, now time.Time) error {
+	if current.Kind != "task" || current.Status != "done" || !oneOf(restored.Status, "todo", "doing", "waiting") {
+		return nil
+	}
+	for _, trigger := range restored.Triggers {
+		if !trigger.Active || trigger.NextAt == "" {
+			continue
+		}
+		at, err := time.Parse(time.RFC3339, trigger.NextAt)
+		if err != nil || !at.Before(now.Add(-time.Hour)) {
+			continue
+		}
+		// Preserve an existing real notice and every delivery/dismissal field.
+		// Only a newly inserted suppression placeholder is hidden from views.
+		_, err = tx.Exec(ctx, `INSERT INTO workspace_notices(owner_id,thing_id,trigger_id,due_at,reason,delivered)
+			VALUES($1,$2,$3,$4,$5,'{"_suppressed":true,"_suppressionOnly":true}'::jsonb)
+			ON CONFLICT(owner_id,thing_id,trigger_id,due_at) DO UPDATE
+			SET delivered=workspace_notices.delivered || '{"_suppressed":true}'::jsonb
+			WHERE workspace_notices.dismissed_at IS NULL`, string(scope.OwnerID), restored.ID, trigger.ID, at, trigger.Description)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}

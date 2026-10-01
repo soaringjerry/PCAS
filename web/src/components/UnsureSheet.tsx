@@ -1,96 +1,131 @@
-import { useState } from 'react'
-import { unsure } from '../domain/lines'
-import { memoryKindLabel } from '../domain/labels'
-import type { Candidate, CandidateKind } from '../domain/types'
+import { useRef, useState } from 'react'
+import { Link } from 'react-router'
+import { findThing } from '../domain/things'
+import type { Candidate } from '../domain/types'
+import type { Action } from '../store/actions'
 import { useStore } from '../store/context'
-import { Select } from './controls'
 import { SideSheet } from './Overlay'
 import { Button, Empty } from './ui'
+import '../styles/settings.css'
 
-const kindWords: Record<CandidateKind, string> = { unknown: '待分类', task: '待办', idea: '想法', memory: '记忆' }
+// Each button names what it leaves behind. None of these can be undone from
+// here, so nothing on this sheet says it can.
 
-function CandidateItem({ c }: { c: Candidate }) {
+/** What taking a candidate in creates, by the kind chosen. */
+const outcomes = [
+  { kind: 'task', label: '创建待办', done: '已创建待办', guess: '看起来是一件待办' },
+  { kind: 'idea', label: '保存为想法', done: '已保存为想法', guess: '看起来是一个想法' },
+  { kind: 'memory', label: '保存为记忆', done: '已保存为记忆', guess: '看起来是一条关于你的记忆' },
+] as const
+
+type Handled = { id: string; text: string; said: string; memory?: boolean }
+
+/** Sends one action once; a refusal leaves the item where it was and says so. */
+function useAct(onDone: (said: string) => void) {
   const { dispatch } = useStore()
-  const [kind, setKind] = useState<CandidateKind>(c.kind)
+  const [busy, setBusy] = useState(false)
+  const [failed, setFailed] = useState(false)
+  const lock = useRef(false)
+  const act = async (said: string, action: Action) => {
+    if (lock.current) return
+    lock.current = true
+    setBusy(true)
+    setFailed(false)
+    const ok = await dispatch(action)
+    lock.current = false
+    setBusy(false)
+    if (ok) onDone(said)
+    else setFailed(true)
+  }
+  return { busy, failed, act }
+}
+
+function CandidateItem({ c, onDone }: { c: Candidate; onDone: (h: Handled) => void }) {
+  const { busy, failed, act } = useAct((said) => onDone({ id: c.id, text: c.text, said, memory: said === '已保存为记忆' }))
+  const guess = outcomes.find((o) => o.kind === c.kind)
   return (
     <div className="item">
       <div className="grow">
         <div className="item-title">{c.text}</div>
         <div className="meta">
           <span>来自{c.source.label}</span>
+          <span>{guess ? guess.guess : '没看出这是什么，你来定'}</span>
         </div>
-        <div className="row" style={{ marginTop: 8 }}>
-          <Select
-            label="这是"
-            value={kind}
-            onChange={setKind}
-            options={(Object.keys(kindWords) as CandidateKind[]).map((k) => ({ value: k, label: `作为${kindWords[k]}` }))}
-          />
-          <Button
-            size="sm"
-            variant="primary"
-            disabled={kind === 'unknown'}
-            onClick={() => dispatch({ type: 'acceptCandidate', id: c.id, kind, text: c.text, memoryKind: c.memoryKind, projectId: c.projectId, due: c.due })}
-          >
-            收下
-          </Button>
-          <Button size="sm" variant="quiet" onClick={() => dispatch({ type: 'ignoreCandidate', id: c.id })}>
-            不要
+        <div className="row unsure-actions">
+          {outcomes.map((o) => (
+            <Button
+              key={o.kind}
+              size="sm"
+              variant={o.kind === c.kind ? 'primary' : 'default'}
+              disabled={busy}
+              onClick={() => void act(o.done, { type: 'acceptCandidate', id: c.id, kind: o.kind, text: c.text, memoryKind: c.memoryKind, projectId: c.projectId, due: c.due })}
+            >
+              {o.label}
+            </Button>
+          ))}
+          <Button size="sm" variant="quiet" disabled={busy} onClick={() => void act('已忽略，原资料还在', { type: 'ignoreCandidate', id: c.id })}>
+            忽略这条
           </Button>
         </div>
+        {failed && (
+          <p className="small warn-text" role="alert">
+            没保存上，这条还在这里。
+          </p>
+        )}
       </div>
     </div>
   )
 }
 
-/** The few things the background could not decide on its own. */
+/** Things read from material that the background could not place on its own. Guessed memories are handled in the library's memory list. */
 export function UnsureSheet({ onClose }: { onClose: () => void }) {
-  const { state, dispatch } = useStore()
-  const { candidates, guesses } = unsure(state)
+  const { state } = useStore()
+  const candidates = state.candidates.filter((c) => c.state === 'pending')
+  const [handled, setHandled] = useState<Handled[]>([])
+  const done = (h: Handled) => setHandled((list) => [h, ...list].slice(0, 3))
+  /** The task or idea a candidate became, by the id the server recorded for it. */
+  const made = (id: string) => {
+    const into = state.candidates.find((c) => c.id === id)?.resolvedInto
+    return into && findThing(state, into) ? into : undefined
+  }
   return (
-    <SideSheet title="需要你确认" onClose={onClose}>
+    <SideSheet title="待确认内容" onClose={onClose}>
       <p className="small muted" style={{ marginBottom: 14 }}>
-        把握大的，后台已经自己整理好了。下面这些它拿不准。
+        从你的资料里读到、但拿不准该怎么放的。处理一条，它就离开这里；这里的操作不能撤销。
       </p>
-      {candidates.length + guesses.length === 0 && <Empty>都确认完了。</Empty>}
+      {handled.length > 0 && (
+        <div className="unsure-done" role="status">
+          {handled.map((h) => {
+            const to = made(h.id)
+            return (
+              <p key={h.id}>
+                <span className="said">{h.said}</span>
+                <span className="what">{h.text}</span>
+                {to && (
+                  <Link to={`/t/${to}`} onClick={onClose}>
+                    打开
+                  </Link>
+                )}
+                {/* A memory has no id to open here, so the link goes to where memories are listed. */}
+                {h.memory && (
+                  <Link to="/library" onClick={onClose}>
+                    去记忆列表查看
+                  </Link>
+                )}
+              </p>
+            )
+          })}
+        </div>
+      )}
+      {candidates.length === 0 && <Empty>都处理完了。</Empty>}
       {candidates.length > 0 && (
-        <div className="sheet" style={{ marginBottom: 16 }}>
+        <div className="sheet">
           <div className="list">
             {candidates.map((c) => (
-              <CandidateItem key={c.id} c={c} />
+              <CandidateItem key={c.id} c={c} onDone={done} />
             ))}
           </div>
         </div>
-      )}
-      {guesses.length > 0 && (
-        <>
-          <div className="section-title" style={{ marginBottom: 6 }}>
-            从资料里读到的，对吗？
-          </div>
-          <div className="sheet">
-            <div className="list">
-              {guesses.map((m) => (
-                <div key={m.id} className="item">
-                  <div className="grow">
-                    <div className="item-title">{m.text}</div>
-                    <div className="meta">
-                      <span>{memoryKindLabel[m.kind]}</span>
-                      {m.sources[0] && <span>来自{m.sources[0].label}</span>}
-                    </div>
-                    <div className="row" style={{ marginTop: 8 }}>
-                      <Button size="sm" variant="primary" onClick={() => dispatch({ type: 'confirmMemory', id: m.id })}>
-                        对
-                      </Button>
-                      <Button size="sm" variant="quiet" onClick={() => dispatch({ type: 'deleteMemory', id: m.id })}>
-                        不对
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </>
       )}
     </SideSheet>
   )

@@ -85,7 +85,7 @@ async function mockBackend(page: Page, snapshot = workspace()): Promise<Backend>
 
 const secretaryInput = (page: Page) => page.getByRole('textbox', { name: '跟秘书说' })
 
-test('the info line is read-only; clicking it starts a sentence to the secretary', async ({ page }) => {
+test('the facts under the title are not pickers; clicking one starts its sentence to the secretary', async ({ page }) => {
   const backend = await mockBackend(page)
   await page.goto('/t/task')
   const info = page.locator('.info-line')
@@ -96,11 +96,11 @@ test('the info line is read-only; clicking it starts a sentence to the secretary
   await expect(info).toContainText('张三在等你')
   // No pickers are left for status, due time or project.
   await expect(page.getByRole('button', { name: /^(状态|截止|项目)/ })).toHaveCount(0)
-  // With no documents there is no 文档 heading, only the faint line that starts one.
-  await expect(page.getByRole('button', { name: '写点什么…' })).toBeVisible()
+  // With no documents there is no 文档 heading, only the line that starts one.
+  await expect(page.getByRole('button', { name: '新建文档' })).toBeVisible()
   await expect(page.locator('.section-label').filter({ hasText: '文档' })).toHaveCount(0)
-  await info.click()
-  await expect(secretaryInput(page)).toHaveValue('改一下这件事：')
+  await info.getByRole('button', { name: /截止$/ }).click()
+  await expect(secretaryInput(page)).toHaveValue('把截止时间改到：')
   await expect(secretaryInput(page)).toBeFocused()
   expect(backend.commands).toEqual([])
   expect(backend.errors).toEqual([])
@@ -121,7 +121,7 @@ test('the done circle ticks the task with a toast that undoes it', async ({ page
   await expect(page.getByRole('button', { name: '做完了', exact: true })).toHaveAttribute('aria-pressed', 'false')
 })
 
-test('an auto-adopted result is one line with 撤销; undone, it offers 放回去', async ({ page }) => {
+test('an auto-adopted result is one line with 撤销; undone, it offers to put it back by name', async ({ page }) => {
   const backend = await mockBackend(page, { ...workspace(), runs: [adoptedRun()] })
   await page.goto('/t/task')
   const row = page.locator('.activity > li').filter({ hasText: '已加入 3 个子任务' })
@@ -129,20 +129,39 @@ test('an auto-adopted result is one line with 撤销; undone, it offers 放回�
   // The assistant reads 副手 like 你 and 秘书; the model's name is only a tooltip.
   await expect(row.locator('.act-who')).toHaveText('副手')
   await expect(row.locator('.act-who')).toHaveAttribute('title', 'GPT')
-  // 看看 opens the original text in place.
-  await row.getByRole('button', { name: '看看' }).click()
+  // 看结果 opens the original text in place.
+  await row.getByRole('button', { name: '看结果' }).click()
   await expect(row.getByText('写正文')).toBeVisible()
   await row.getByRole('button', { name: '撤销' }).click()
   await expect.poll(() => backend.commands.at(-1)).toMatchObject({ type: 'undoAction', id: 'adopt-1' })
   const back = page.locator('.activity > li').filter({ hasText: '把这件事拆成具体的子任务' })
-  await expect(back.getByRole('button', { name: '放回去' })).toBeVisible()
+  await expect(back.getByRole('button', { name: '加入 3 个子任务', exact: true })).toBeVisible()
   await expect(back.getByRole('button', { name: '撤销' })).toHaveCount(0)
-  // 看看 sits next to 放回去 and opens the original text.
-  await expect(back.getByRole('button', { name: /^(看看|收起)$/ })).toBeVisible()
+  // 看结果 sits next to it and opens the original text.
+  await expect(back.getByRole('button', { name: /^(看结果|收起)$/ })).toBeVisible()
   // The old choices are gone.
   for (const name of ['改一下', '不要', /依据/]) await expect(page.getByRole('button', { name })).toHaveCount(0)
-  await back.getByRole('button', { name: '放回去' }).click()
+  await back.getByRole('button', { name: '加入 3 个子任务', exact: true }).click()
   await expect.poll(() => backend.commands.at(-1)).toMatchObject({ type: 'adoptRun', id: 'run', as: 'subtasks' })
+  expect(backend.errors).toEqual([])
+})
+
+test('on a phone a change in 动态 wraps instead of cutting what changed', async ({ page }) => {
+  const snapshot = workspace()
+  const summary = '截止时间从周五 15:00 改到今天 15:30，并把提醒从提前 2 小时改成提前 30 分钟'
+  snapshot.tasks[0].history = [{ at: new Date(Date.now() - HOUR).toISOString(), by: 'secretary', summary }, ...snapshot.tasks[0].history]
+  const backend = await mockBackend(page, { ...snapshot, runs: [adoptedRun()] })
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto('/t/task')
+  const text = page.locator('.activity .act-row').filter({ hasText: summary }).locator('.act-text')
+  await expect(text).toHaveText(summary)
+  expect(await text.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true)
+  // It takes more than one line, and stays inside the page.
+  const box = (await text.boundingBox())!
+  expect(box.height).toBeGreaterThan(30)
+  expect(box.x + box.width).toBeLessThanOrEqual(390)
+  // A result line keeps its buttons on one line.
+  await expect(page.locator('.activity > li').filter({ hasText: '已加入 3 个子任务' }).getByRole('button', { name: '撤销' })).toBeVisible()
   expect(backend.errors).toEqual([])
 })
 

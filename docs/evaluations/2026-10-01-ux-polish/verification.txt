@@ -1,0 +1,81 @@
+U1 local verification, 2026-10-01
+Baseline: 2e6ebc1abe4fde92a7ceabdc41b7704ba56ac5de. Node v22.23.3. Playwright 1.63.0, Chromium headless.
+Served build: vite preview on 127.0.0.1:18142. Every /v1 request answered inside the browser with synthetic data.
+
+== Walkthrough measurements, unmodified baseline build (/tmp/pcas-u1-opus/before-walk.log) ==
+desktop hint box: {"x":28,"y":76,"w":1384,"h":44}
+desktop hint text: 你的时区好像是 Australia/Melbourne，要改成 Australia/Melbourne 吗？
+desktop today y: 138
+desktop receipt text clip: [{"text":"已建：今天 15:30 给张三回邮件确认下周三在","clipped":true,"shown":485,"full":876},{"text":"已改：交房租 → 今天 18:30","clipped":false,"shown":175,"full":175},{"text":"记下了：张三偏好周三上午开会","clipped":false,"shown":195,"full":195},{"text":"没改：牙医预约 · 有两件事都叫「预约牙医」，不","clipped":false,"shown":388,"full":388}]
+desktop receipt error clip: [{"text":"这件事之后又改过，没法直接撤销。","clipped":false,"shown":207,"full":207}]
+desktop lines shown: ["sec-turn waiting | 周五我有什么安排正在想…","sec-turn failed | 顺便记一下：护照放在书房第二个抽屉网络断了，没发出去重试改","sec-turn failed | 把牙医改到下周内容或状态不符合要求，请检查输入。改"]
+desktop expand: (none)
+desktop act-text clip: [{"text":"截止时间从周五 15:00 改到今天 15:30","clipped":false,"shown":576,"full":576},{"text":"没做成：超过今天的额度","clipped":false,"shown":535,"full":535},{"text":"已加入 2 个子任务","clipped":false,"shown":494,"full":494},{"text":"新建：给张三回邮件","clipped":false,"shown":587,"full":587}]
+desktop thing receipt vs dock: {"receiptTop":866,"receiptBottom":896,"dockTop":824,"undoReachable":false}
+desktop source gone text: 来源原文
+mobile hint box: {"x":12,"y":60,"w":366,"h":116}
+mobile hint text: 你的时区好像是 Australia/Melbourne，要改成 Australia/Melbourne 吗？
+mobile today y: 190
+mobile receipt text clip: [{"text":"已建：今天 15:30 给张三回邮件确认下周三在","clipped":true,"shown":243,"full":876},{"text":"已改：交房租 → 今天 18:30","clipped":true,"shown":108,"full":175},{"text":"记下了：张三偏好周三上午开会","clipped":false,"shown":195,"full":195},{"text":"没改：牙医预约 · 有两件事都叫「预约牙医」，不","clipped":true,"shown":310,"full":388}]
+mobile receipt error clip: [{"text":"这件事之后又改过，没法直接撤销。","clipped":true,"shown":127,"full":207}]
+mobile lines shown: ["sec-turn failed | 顺便记一下：护照放在书房第二个抽屉网络断了，没发出去重试改","sec-turn failed | 把牙医改到下周内容或状态不符合要求，请检查输入。改"]
+mobile expand: 展开对话（3 轮）
+mobile act-text clip: [{"text":"截止时间从周五 15:00 改到今天 15:30","clipped":true,"shown":258,"full":505},{"text":"没做成：超过今天的额度","clipped":false,"shown":219,"full":219},{"text":"已加入 2 个子任务","clipped":false,"shown":180,"full":180},{"text":"新建：给张三回邮件","clipped":false,"shown":269,"full":269}]
+mobile thing receipt vs dock: {"receiptTop":809,"receiptBottom":839,"dockTop":768,"undoReachable":false}
+mobile source gone text: 来源原文
+
+== Same script, fixed build (/tmp/pcas-u1-opus/after-walk.log) ==
+desktop hint box: {"x":28,"y":76,"w":1384,"h":44}
+desktop hint text: 时间按 Asia/Shanghai 显示，和这台设备不同
+desktop today y: 138
+desktop receipt text clip: [{"text":"已建：今天 15:30 给张三回邮件确认下周三在","clipped":true,"shown":485,"full":876},{"text":"已改：交房租 → 今天 18:30","clipped":false,"shown":175,"full":175},{"text":"记下了：张三偏好周三上午开会","clipped":false,"shown":195,"full":195},{"text":"没改：牙医预约 · 有两件事都叫「预约牙医」，不","clipped":false,"shown":388,"full":388}]
+desktop receipt error clip: [{"text":"这件事之后又改过，没法直接撤销。","clipped":false,"shown":207,"full":207}]
+desktop lines shown: ["sec-turn waiting | 周五我有什么安排正在想…","sec-turn failed | 顺便记一下：护照放在书房第二个抽屉网络断了，没发出去重试改","sec-turn failed | 把牙医改到下周内容或状态不符合要求，请检查输入。改"]
+desktop expand: (none)
+desktop act-text clip: [{"text":"截止时间从周五 15:00 改到今天 15:30","clipped":false,"shown":576,"full":576},{"text":"没做成：超过今天的额度","clipped":false,"shown":535,"full":535},{"text":"已加入 2 个子任务","clipped":false,"shown":494,"full":494},{"text":"新建：给张三回邮件","clipped":false,"shown":587,"full":587}]
+desktop thing receipt vs dock: {"receiptTop":771,"receiptBottom":801,"dockTop":824,"undoReachable":true}
+mobile hint box: {"x":12,"y":60,"w":366,"h":66}
+mobile hint text: 时间按 Asia/Shanghai 显示，和这台设备不同
+mobile today y: 140
+mobile receipt text clip: [{"text":"已建：今天 15:30 给张三回邮件确认下周三在","clipped":false,"shown":243,"full":243},{"text":"已改：交房租 → 今天 18:30","clipped":false,"shown":243,"full":243},{"text":"记下了：张三偏好周三上午开会","clipped":false,"shown":302,"full":302},{"text":"没改：牙医预约 · 有两件事都叫「预约牙医」，不","clipped":false,"shown":310,"full":310}]
+mobile receipt error clip: [{"text":"这件事之后又改过，没法直接撤销。","clipped":false,"shown":336,"full":336}]
+mobile lines shown: ["sec-turn waiting | 周五我有什么安排正在想…","sec-turn failed | 顺便记一下：护照放在书房第二个抽屉网络断了，没发出去重试改","sec-turn failed | 把牙医改到下周内容或状态不符合要求，请检查输入。改"]
+mobile expand: 展开对话（3 轮）
+mobile act-text clip: [{"text":"截止时间从周五 15:00 改到今天 15:30","clipped":false,"shown":258,"full":258},{"text":"没做成：超过今天的额度","clipped":false,"shown":219,"full":219},{"text":"已加入 2 个子任务","clipped":false,"shown":180,"full":180},{"text":"新建：给张三回邮件","clipped":false,"shown":269,"full":269}]
+mobile thing receipt vs dock: {"receiptTop":655,"receiptBottom":747,"dockTop":768,"undoReachable":true}
+
+== pageerror arrays, both runs ==
+      2 desktop 01 errors: []
+      2 desktop 02 errors: []
+      2 desktop 03 errors: []
+      2 desktop 04 errors: []
+      2 desktop 05 errors: []
+      2 desktop 06 errors: []
+      2 desktop 07 errors: []
+      2 mobile 01 errors: []
+      2 mobile 02 errors: []
+      2 mobile 03 errors: []
+      2 mobile 04 errors: []
+      2 mobile 05 errors: []
+      2 mobile 06 errors: []
+      2 mobile 07 errors: []
+
+== Mocked suites on the unmodified baseline build, original tests (/tmp/pcas-u1-opus/baseline-tests.log) ==
+  57 passed (39.0s)
+
+== Updated secretary/buttons/timezone specs on the unmodified baseline build (/tmp/pcas-u1-opus/new-tests-on-baseline.log) ==
+  ✘   4 tests/buttons.spec.ts:149:1 › on a phone a change in 动态 wraps instead of cutting what changed (290ms)
+  ✘  22 tests/secretary.spec.ts:338:3 › on a long thing page the receipt lands above the pinned input, where 撤销 can be reached, at 1440px (5.3s)
+  ✘  23 tests/secretary.spec.ts:338:3 › on a long thing page the receipt lands above the pinned input, where 撤销 can be reached, at 390px (5.4s)
+  ✘  24 tests/secretary.spec.ts:358:1 › on a phone a receipt wraps, so what changed and why an undo failed can be read in full (1.3s)
+  ✘  26 tests/secretary.spec.ts:419:1 › folded, a line still being thought about stays in sight when another is sent (5.3s)
+  ✘  30 tests/timezone.spec.ts:71:1 › a mismatch prompt is at the top and changes the workspace in one click (5.2s)
+  ✘  31 tests/timezone.spec.ts:87:1 › closing a mismatch persists in this browser across reload and navigation, including mobile (357ms)
+  7 failed
+  38 passed (59.9s)
+
+== Mocked suites on the fixed build: secretary, fixes, notify, buttons, timezone (/tmp/pcas-u1-opus/final-tests.log) ==
+  62 passed (41.1s)
+
+== New scroll- and timing-dependent secretary tests, --repeat-each 5 on the fixed build ==
+  25 passed (16.1s)

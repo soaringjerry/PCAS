@@ -10,9 +10,11 @@ import (
 	"github.com/soaringjerry/PCAS/internal/memory"
 )
 
+var ErrNewerAction = errors.New("newer action")
 var ErrChangedSince = errors.New("changed since action")
 var ErrWorkStarted = errors.New("work started")
 var ErrAlreadyUndone = errors.New("already undone")
+var ErrExpired = errors.New("action expired")
 
 var ErrBudget = errors.New("daily budget exceeded")
 

@@ -19,6 +19,7 @@
 | `changes` | jsonb | 见 1.2 |
 | `created_at` | timestamptz | |
 | `undone_at` | timestamptz，可空 | |
+| `action_order` | bigint，可空 | 迁移 020 新增；新动作由 sequence 生成持久顺序，旧记录保留 NULL，不伪造回填 |
 
 主键 `(owner_id, id)`。
 
@@ -55,7 +56,7 @@
 { "type": "undoAction", "id": "<动作 ID>", "requestId": "...", "expectedRevision": 12 }
 ```
 
-**判定**：对 `changes` 里的每一行，先检查它当前 document 的 sha256 是否等于 `afterHash`（`afterHash` 为 null 的行则要求该行当前不存在）。
+**判定**：先检查动作是否已撤销或已过期，再检查 `changes` 涉及的行是否有尚未撤销的后续动作。有则返回 `newer_action`；没有时，对每一行检查当前 document 的业务指纹是否等于 `afterHash`（`afterHash` 为 null 的行则要求该行当前不存在），不符返回 `changed_since`。已撤销优先返回 `already_undone`，过期按 1.4.2 返回 `expired`。
 
 **全部符合时**，按逆序恢复：
 - `before == null`：删除这一行。
@@ -67,7 +68,7 @@
 
 | code | 含义 | 前端文案（写进 `web/src/store/api.ts` 的 `messages`） |
 |---|---|---|
-| `changed_since` | 之后又被改过 | 这件事之后又改过，没法直接撤销。 |
+| `changed_since` | 没有待撤销的后续动作记录，但业务内容已变化 | 这件事之后又改过，没法直接撤销。 |
 | `work_started` | 副手已经开始做了 | 副手已经开始做了，没法撤销。 |
 | `already_undone` | 已经撤销过 | 已经撤销过了。 |
 
@@ -77,7 +78,9 @@
 - `newer_action`：同一对象后面还有没撤销的动作。提示「后面还有改动，请先撤销它」。
 - `expired`：快照已经作废（超过 30 天，或相关资料已被删除）。提示「超过 30 天或相关资料已删除，无法撤销」。
 
-`changed_since` 只用于"被用户或后台改过"。
+**2026-10-01 用户确认**：同一事项从最后一次修改往回撤销。区分依据是后续动作记录，不是操作者身份：可追溯且尚未撤销的后续动作，无论来自界面、秘书或后台，均为 `newer_action`；未记录的外部业务变化才为 `changed_since`。同一轮的多个动作也必须有确定顺序；不涉及相同行的无关事项互不阻挡。
+
+**顺序与历史兼容（F13）**：新记录使用 `action_order`，即使同事务 `created_at` 相同，或业务内容被后续动作改回原值，也不能跳过后续动作。迁移前的记录保留 NULL：不同时间依 created_at；同轮同时间仅在已保存回执 actionId 唯一且能证明位置时依回执顺序。新记录晚于迁移前记录。无法重建的历史并列不猜 UUID/ctid 顺序，保守返回 `changed_since`，报告注明不能自动恢复该旧链；如果另有可证明的后续动作，仍优先返回 `newer_action`。已撤销记录不阻挡。
 
 新增 sentinel error：`workspace.ErrChangedSince`、`workspace.ErrWorkStarted`、`workspace.ErrAlreadyUndone`。
 B1 负责在 `internal/httpapi/server.go` 的 `fail()` 里加上这三个映射。
@@ -90,7 +93,7 @@ B1 另外导出 `(s *Store) Undo(ctx, scope, actionID string) (workspace.State, 
 
 `changes.before` 保存的是旧文档的完整内容。为了不让撤销变成"删了还能找回来"的后门，并控制存储占用：
 
-- **删除传播**：记忆 / 来源删除流程（`internal/postgres/editing.go`）修改或删除了某些 `work_items` / `work_documents` 行时，凡是 `changes` 涉及这些行的 `action_log` 记录，一律把 `changes` 清成 `[]`，并写入 `expired_at`。之后对这些记录执行撤销，返回 `changed_since`。
+- **删除传播**：记忆 / 来源删除流程（`internal/postgres/editing.go`）修改或删除了某些 `work_items` / `work_documents` 行时，凡是 `changes` 涉及这些行的 `action_log` 记录，一律把 `changes` 清成 `[]`，并写入 `expired_at`。之后对这些记录执行撤销，返回 `expired`（与已确认并实现的 F10 规则统一）。
 - **保留期**：`before` 快照只保留 30 天。超过 30 天的记录同样把 `changes` 清成 `[]` 并写入 `expired_at`。清理时机：每次 `flushActionLog` 时顺带清理当前 owner 的过期记录，靠 `created_at` 索引，开销很小。
 - `id`、`source`、`turn_id`、`summary`、`created_at`、`undone_at` 永久保留，第 6 阶段用作"撤销 / 保留"的训练信号。
 - 迁移 016 给 `action_log` 加 `expired_at timestamptz` 列。
@@ -104,6 +107,16 @@ B1 另外导出 `(s *Store) Undo(ctx, scope, actionID string) (workspace.State, 
 ## 2 秘书接口（B1 实现；B2 使用）
 
 ### 2.1 `POST /v1/desk/turn`
+
+**同轮连续操作（2026-10-01 用户确认，F14 实现）**：用户可一句话新建任务并继续给它加步骤。模型 `actions` 按原数组顺序执行；内部引用 `N1` 指第 1 个动作成功创建的事项，`N2` 指第 2 个动作成功创建的事项，以此类推。序号从 1 开始，包含失败和解析错误的位置，不能按成功数量重排。
+
+- 只有更早的 `create_task`、`create_idea`、`create_project` 动作，在子事务提交成功且回执为 `done` 后才绑定该别名。`delegate:new` 或 `project:new:名称` 的附带创建不产生 N 别名。
+- N 别名只存在于本轮的动作引用表，不写入持久状态、不替换模型原始上下文。可用于后续动作的 `ref`、`project`、`set.project`，仍受既有事项类型与权限校验约束；`Used`、`Links`、`Show` 不接受新增的 N 别名。
+- 前向、越界、非创建动作、创建失败的 N 引用均跳过依赖动作并说明原因，不能退回 THIS、旧 R 别名、标题匹配或任意 UUID。执行上限仍为原数组前 10 个动作。
+- 原有 T/P/I/R/THIS 和 `delegate:new` 语义保持；尤其 R1 仍是上下文提供的已有对话事项，不是当前轮的新对象。下一轮重新建立引用表，不能沿用上一轮的 N 别名。
+- 每个成功动作继续拥有独立回执与 action_log。同 requestId 重放返回保存的结果，不再次创建或加步骤；撤销遵循 1.4 的同对象逆序规则。
+
+示例：`[{"op":"create_task","title":"交作业"},{"op":"add_steps","ref":"N1","steps":["查资料","写提纲"]}]`。
 
 请求：
 
@@ -183,6 +196,12 @@ B1 另外导出 `(s *Store) Undo(ctx, scope, actionID string) (workspace.State, 
 HTTP 处理函数背后是 `(s *Store) DeskTurn(ctx, scope, workspace.DeskTurnRequest) (workspace.DeskTurnResponse, error)`，C2 直接调用它。两个类型与 2.1 的 JSON 一一对应。`agentId` 为空时，使用工作区的默认 agent。
 
 **串行与长度**（2026-10-01 补充）：同一个 `conversationId` 的轮次在服务端串行处理，后一轮能看到前一轮的结果（R* 别名）。`reply` 超过 2000 字时截断，并附上「回答太长，已截断」。
+
+**连续输入顺序**（2026-10-01 Q1 实证后固定，F15 实施）：同 owner / 规范化 conversation 的有效请求，按数据库短事务提交的接受票据顺序构造上下文、调用模型和提交结果。该共同接受点可跨 Store 核查，不承诺尚未登记的 HTTP 网络到达全序。同 requestId / hash 复用原票据与 conversation，正文冲突拒绝；已完成轮次仍返回当前状态与经删除清理的历史内容。只有队首进入既有有界生成事务，其余等待释放数据库连接和生成名额；不同会话能继续。
+
+取消和故障不伪称原任务完成。登记前取消不接受，排队 creator 取消终结原票据，重复等待者取消不影响 creator；执行中取消继续沿用保存原话的既有 fallback。固定两分钟持久化期限不因重试延长，过期推进必须取得 conversation 执行锁，不能越过仍运行的事务。实例死亡只提供有界失败推进，不承诺没有正文的票据自动恢复执行。
+
+故障终结票据的同键重试不得晚于后轮重新调用模型或执行业务动作；仅可在原 request / conversation 事务锁下补存原话、生成明确「原动作未完成」的 capture 回执，并原子终结为 done，后续正常重放。补存不复制第二份正文，也不重新自动整理旧指令：同事务仅撤掉此次新建来源、尚未发布的 `source.chunk` queued 作业，保留原始来源和待用户处理的 unknown 候选；必须验证新建、精确限定 owner/source/version，不能删除此前正常导入已发布的作业。原文可查看、导出，未提取不能显示成已提取成功。普通 capture 与模型失败 fallback 的既有自动整理保持。已删除的 done 历史优先按原清理结果重放，不能据票据恢复来源。
 
 ### 2.2 `GET /v1/desk/turns?conversationId=<uuid>`
 

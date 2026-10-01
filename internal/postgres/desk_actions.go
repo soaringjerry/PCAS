@@ -16,6 +16,10 @@ import (
 // applyDueReminder maintains the one fixed reminder independently of other triggers.
 // An empty remind preserves the existing offset; the secretary supplies defaults.
 func applyDueReminder(item *workspace.Item, remind string, loc *time.Location) {
+	applyDueReminderAt(item, remind, loc, time.Now())
+}
+
+func applyDueReminderAt(item *workspace.Item, remind string, loc *time.Location, now time.Time) {
 	if loc == nil {
 		loc = time.UTC
 	}
@@ -65,7 +69,16 @@ func applyDueReminder(item *workspace.Item, remind string, loc *time.Location) {
 		d := due.In(loc)
 		next = time.Date(d.Year(), d.Month(), d.Day(), clock.Hour(), clock.Minute(), 0, 0, loc)
 	}
-	trigger := workspace.Trigger{ID: "due-reminder", Kind: "time", Description: item.Title, NextAt: next.UTC().Format(time.RFC3339), Active: true, Offset: remind}
+	trigger := workspace.Trigger{ID: "due-reminder", Kind: "time", Description: item.Title, Offset: remind}
+	if due.After(now) {
+		if !next.After(now) {
+			next = due
+		}
+		trigger.Active = true
+		trigger.NextAt = next.UTC().Format(time.RFC3339)
+	}
+	// An elapsed due has no effective reminder, but retains its preference so
+	// a later reschedule can reactivate the same offset. Clearing due removes it.
 	if existing < 0 {
 		item.Triggers = append(item.Triggers, trigger)
 	} else {
@@ -74,7 +87,7 @@ func applyDueReminder(item *workspace.Item, remind string, loc *time.Location) {
 }
 
 // Model actions never accept database identifiers. Refs resolve exclusively
-// through the aliases in this turn's server-owned context.
+// through server-owned context aliases and earlier committed N creation aliases.
 type secretaryAction struct {
 	parseErr     error
 	Op           string                     `json:"op"`
@@ -231,11 +244,14 @@ func taskReceiptText(ctx context.Context, tx pgx.Tx, scope memory.Scope, item wo
 		}
 	}
 	for _, trigger := range item.Triggers {
-		if trigger.ID == "due-reminder" {
+		if trigger.ID == "due-reminder" && trigger.Active {
 			if at, err := time.Parse(time.RFC3339, trigger.NextAt); err == nil {
 				parts = append(parts, at.In(loc).Format("15:04")+" 提醒")
 			}
 		}
+	}
+	if due, err := time.Parse(time.RFC3339, item.Due); err == nil && !due.After(time.Now()) {
+		parts = append(parts, "时间已过，没有设提醒")
 	}
 	return "已建：" + strings.Join(parts, " · ")
 }
@@ -442,6 +458,11 @@ func (s *Store) executeSecretaryActionTx(ctx context.Context, tx pgx.Tx, scope m
 				receipt.Text += "：→ " + localDeskDate(item.Due, loc)
 			} else {
 				receipt.Text += " → " + localDeskDate(item.Due, loc)
+			}
+		}
+		if item.Kind == "task" && (dueChanged || hasRemind) {
+			if due, err := time.Parse(time.RFC3339, item.Due); err == nil && !due.After(time.Now()) {
+				receipt.Text += " · 时间已过，没有设提醒"
 			}
 		}
 		receipt.Text += note

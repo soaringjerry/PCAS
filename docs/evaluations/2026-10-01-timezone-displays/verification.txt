@@ -1,0 +1,53 @@
+F8 local regression evidence, 2026-10-01
+Baseline product code: c94b496
+Browser: Australia/Melbourne; workspace: Asia/Shanghai
+
+Selected raw failure assertions from /tmp/pcas-f8/before-expanded.log:
+    Expected substring: "今天 23:00"
+    Received string:    "今天 01:00 · 出行项目"
+    Expected: "今天"
+    Received: "昨天"
+    Expected substring: "今天 23:00 截止"
+    Received string:    "待办今天 01:00 截止出行项目00:45 提醒"
+    Expected substring: "22:45 提醒"
+    Received string:    "待办今天 01:00 截止出行项目00:45 提醒"
+    Expected: "今天 23:00 截止"
+    Received: "今天 01:00 截止"
+    Expected substring: "今天 23:00"
+    Received string:    "今天 01:00 · 出行项目"
+    Expected: "今天"
+    Received: "昨天"
+    Expected substring: "今天 23:00 截止"
+    Received string:    "待办今天 01:00 截止出行项目00:45 提醒"
+    Expected substring: "22:45 提醒"
+    Received string:    "待办今天 01:00 截止出行项目00:45 提醒"
+    Expected: "今天 23:00 截止"
+    Received: "今天 01:00 截止"
+    - Expected  - 1
+    + Received  + 1
+    Expected: "等对方回复 · 明天跟进"
+    Received: "该跟进了：对方还没回"
+    Expected: "明天截止"
+    Received: "今天 23:30 截止"
+  4 failed
+  4 passed (1.2m)
+
+Raw completion lines from /tmp/pcas-f8/mock-final.log:
+  ✓  54 tests/timezone.spec.ts:254:1 › source records, background jobs and settings timestamps follow workspace changes (1.4s)
+
+  54 passed (1.0m)
+
+Raw completion lines from /tmp/pcas-f8/timezone-final.log:
+  ✓  18 tests/timezone.spec.ts:294:3 › reminder date and DST clock use UTC fallback (222ms)
+
+  18 passed (10.7s)
+
+Raw completion lines from /tmp/pcas-f8/real-final.log:
+  ✓  1 tests/timezone-backend.spec.ts:7:1 › F6 first login defaults to the browser; settings, validation, hint and today agree with real receipts (3.4s)
+
+  1 passed (4.1s)
+
+Raw completion lines from /tmp/pcas-f8/make-check.log:
+?   	github.com/soaringjerry/PCAS/internal/worker	[no test files]
+ok  	github.com/soaringjerry/PCAS/internal/workspace	1.371s
+go build -trimpath -o bin/pcas ./cmd/pcas

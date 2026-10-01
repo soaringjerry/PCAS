@@ -8,6 +8,7 @@ import { ChevronRight, Download, History, Info, RotateCw, Search, Trash2, Upload
 import { Checkbox, Chip } from '../components/controls'
 import { Fade, FromLine, ProjectLink, TrustTag } from '../components/Marks'
 import { ConfirmModal, SideSheet } from '../components/Overlay'
+import { UnsureSheet } from '../components/UnsureSheet'
 import { Button, Empty, Progress, Seg, Sheet, Switch, Tag } from '../components/ui'
 import { jobStatusLabel, memoryKindLabel, sampleStateLabel, sourceStatusLabel, triggerLabel } from '../domain/labels'
 import { formatAgo, formatWhen } from '../domain/time'
@@ -70,7 +71,7 @@ function MemorySheet({ memory, onClose }: { memory: Memory; onClose: () => void 
           <div className="row small muted">
             <Fade value={memory.exposure} />
             <Button size="sm" variant="quiet" onClick={() => dispatch({ type: 'pinMemory', id: memory.id })}>{memory.pinned ? '取消固定保留' : '固定保留'}</Button>
-            <span>{memory.exposure < 0.4 ? '很久没用到，已经变淡，但还在' : `最近用到：${formatAgo(memory.lastUsedAt)}`}</span>
+            <span>{memory.exposure < 0.4 ? '很久没用到，已经变淡，但还在' : `最近用到：${formatAgo(memory.lastUsedAt, state.settings.timezone ?? 'UTC')}`}</span>
           </div>
         </div>
 
@@ -109,7 +110,7 @@ function MemorySheet({ memory, onClose }: { memory: Memory; onClose: () => void 
                     {v.text}
                   </div>
                   <div className="tl-when">
-                    {actor[v.by]} · {formatAgo(v.at)}
+                    {actor[v.by]} · {formatAgo(v.at, state.settings.timezone ?? 'UTC')}
                     {v.reason && ` · “${v.reason}”`}
                   </div>
                 </div>
@@ -281,7 +282,7 @@ function SourcesTab() {
             {s.note && <p className="source-note">{s.note}</p>}
             <div className="source-card-foot">
               <span>{s.itemCount} 条</span>
-              {s.lastSyncAt && <span>{formatAgo(s.lastSyncAt)}更新</span>}
+              {s.lastSyncAt && <span>{formatAgo(s.lastSyncAt, state.settings.timezone ?? 'UTC')}更新</span>}
               <span className="source-open">
                 查看原文
                 <ChevronRight size={13} />
@@ -303,7 +304,7 @@ function SourcesTab() {
                 <div className="meta" style={{ marginTop: 0 }}>
                   <span>{triggerLabel[job.trigger]}</span>
                   <span>{job.detail}</span>
-                  {job.nextRunAt && job.status !== 'done' && <span>下次：{formatWhen(job.nextRunAt)}</span>}
+                  {job.nextRunAt && job.status !== 'done' && <span>下次：{formatWhen(job.nextRunAt, state.settings.timezone ?? 'UTC')}</span>}
                 </div>
                 {job.status === 'running' && job.progress !== undefined && <Progress value={job.progress} />}
                 {job.status === 'failed' && (
@@ -370,7 +371,7 @@ function TrainingTab() {
                   <div className="meta" style={{ marginTop: 0 }}>
                     <span>{s.origin.label}</span>
                     <span>第 {s.version} 版</span>
-                    <span>{formatAgo(s.createdAt)}</span>
+                    <span>{formatAgo(s.createdAt, state.settings.timezone ?? 'UTC')}</span>
                   </div>
                 </div>
                 <div className="stack-sm" style={{ flex: 'none' }}>
@@ -399,6 +400,16 @@ export function LibraryPage() {
   const [params, setParams] = useSearchParams()
   const tab = (params.get('tab') as Tab) || 'memory'
   const failed = state.jobs.filter((j) => j.status === 'failed').length
+  const pending = state.candidates.filter((c) => c.state === 'pending').length
+  // The sheet's open state lives in the URL, so the settings page can link straight to it.
+  const sorting = params.has('pending')
+  const setSorting = (on: boolean) =>
+    setParams((current) => {
+      const next = new URLSearchParams(current)
+      if (on) next.set('pending', '1')
+      else next.delete('pending')
+      return next
+    }, { replace: true })
 
   return (
     <main className="page page-narrow">
@@ -408,6 +419,19 @@ export function LibraryPage() {
           <p>系统记住的东西、资料的来处，和攒下的训练数据。都归你，可以看、改、删、导出。</p>
         </div>
       </div>
+      {pending > 0 && (
+        <div className="sheet" style={{ marginBottom: 18 }}>
+          <div className="setting">
+            <div>
+              <div className="ink">待确认内容 · {pending} 条</div>
+              <div className="small muted">从资料里读到，但拿不准是待办、想法还是记忆。</div>
+            </div>
+            <Button size="sm" variant="primary" onClick={() => setSorting(true)}>
+              逐条处理
+            </Button>
+          </div>
+        </div>
+      )}
       <div style={{ marginBottom: 18 }}>
         <Seg
           label="资料库"
@@ -423,6 +447,7 @@ export function LibraryPage() {
       {tab === 'memory' && <MemoryTab />}
       {tab === 'sources' && <SourcesTab />}
       {tab === 'training' && <TrainingTab />}
+      {sorting && <UnsureSheet onClose={() => setSorting(false)} />}
     </main>
   )
 }

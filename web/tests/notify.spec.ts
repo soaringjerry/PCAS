@@ -23,6 +23,7 @@ test('Telegram saves the requested body, reports delivery, and disconnects', asy
   const section = page.getByRole('region', { name: '通知设置' })
   await expect(section).toBeVisible()
   await expect(section.getByText('未连接', { exact: true })).toBeVisible()
+  await section.getByRole('button', { name: /^Telegram/ }).click()
   await expect(page.getByLabel('Telegram bot token')).toHaveAttribute('type', 'password')
   await page.getByLabel('Telegram bot token').fill(fakeToken)
   await page.getByLabel('Telegram chat ID').fill('123')
@@ -55,11 +56,12 @@ test('Telegram save errors show actionable Chinese prompts', async ({ page }) =>
   await page.goto('/settings')
   const section = page.getByRole('region', { name: '通知设置' })
   const token = '123456:synthetic_test_token'
+  await section.getByRole('button', { name: /^Telegram/ }).click()
   await page.getByLabel('Telegram bot token').fill(token)
   for (const [code, message] of cases) {
     errorCode = code
     await page.getByRole('button', { name: '保存 Telegram', exact: true }).click()
-    await expect(section.getByRole('status')).toHaveText(message)
+    await expect(section.getByRole('alert')).toHaveText(message)
     await expect(section.getByText('未连接', { exact: true })).toBeVisible()
     await expect(page.getByLabel('Telegram bot token')).toHaveValue(token)
   }
@@ -107,7 +109,7 @@ test('unsupported browser explains the limitation and empty delivery result', as
   await expect(page.getByRole('switch', { name: '在这台设备上接收提醒' })).toBeDisabled()
   await expect(page.getByText('此浏览器不支持推送提醒。')).toBeVisible()
   await page.getByRole('button', { name: '发一条测试提醒' }).click()
-  await expect(page.getByRole('status').filter({ hasText: '测试提醒没有送达' })).toBeVisible()
+  await expect(page.getByRole('alert').filter({ hasText: '测试提醒没有送达' })).toBeVisible()
 })
 
 test('service worker displays notifications and navigates existing or new windows', async () => {

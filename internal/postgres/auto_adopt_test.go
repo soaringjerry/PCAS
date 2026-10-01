@@ -55,7 +55,7 @@ func TestAdoptionMatchesFrontend(t *testing.T) {
 			})
 		}
 	}
-	// Execute the actual frontend function bodies. Only erase TypeScript signatures;
+	// Execute the actual frontend function bodies and their source dependency. Only erase TypeScript syntax;
 	// do not maintain a second copy of the frontend routing or regex in this test.
 	node, err := exec.LookPath("node")
 	if err != nil {
@@ -85,6 +85,17 @@ func TestAdoptionMatchesFrontend(t *testing.T) {
 	}
 	script := extract(string(agent), "export function parseChecklist(", "function parseChecklist(output) {")
 	script = strings.ReplaceAll(script, ".filter((l): l is string => Boolean(l))", ".filter((l) => Boolean(l))")
+	const declarationMarker = "\nconst summaryInto = "
+	pageSource := string(page)
+	if strings.Count(pageSource, declarationMarker) != 1 {
+		t.Fatal("frontend summaryInto declaration missing or ambiguous")
+	}
+	declaration := pageSource[strings.Index(pageSource, declarationMarker)+1:]
+	end := strings.Index(declaration, "\n")
+	if end < 0 || !strings.HasSuffix(declaration[:end], " as const") {
+		t.Fatal("cannot extract frontend summaryInto declaration")
+	}
+	script += "\n" + strings.TrimSuffix(declaration[:end], " as const")
 	script += "\n" + extract(string(page), "function adoptAs(", "function adoptAs(thing, run) {")
 	script += `
 const cases = JSON.parse(require('fs').readFileSync(0, 'utf8'));
@@ -347,7 +358,7 @@ func TestAutoAdoptChangedSince(t *testing.T) {
 	actionID := st.Runs[0].Adopted.ActionID
 	st = workspaceCommand(t, s, scope, workspace.Command{Type: "setNotes", ID: id, Text: "后来修改"})
 	_, err = s.Execute(context.Background(), scope, workspace.Command{Type: "undoAction", ID: actionID, RequestID: string(memory.NewID()), ExpectedRevision: st.Revision})
-	if !errors.Is(err, workspace.ErrChangedSince) {
+	if !errors.Is(err, workspace.ErrNewerAction) {
 		t.Fatalf("undo error=%v", err)
 	}
 }

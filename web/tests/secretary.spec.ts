@@ -334,6 +334,55 @@ test('quotes without a timeline are a list of their own, each opening its source
   await expect(page.getByRole('dialog')).toContainText('饮食偏好')
 })
 
+for (const [width, height] of [[1440, 900], [390, 844]]) {
+  test(`on a long thing page the receipt lands above the pinned input, where 撤销 can be reached, at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height })
+    const backend = await mockBackend(page, () => ({ receipts: [{ ...created, op: 'update', text: '已改：给张三回邮件 → 下周一 10:00' }] }))
+    // Enough steps that the page scrolls under the pinned input.
+    backend.snapshot.tasks[0].checklist = Array.from({ length: 12 }, (_, i) => ({ id: `step-${i}`, text: `第 ${i + 1} 步`, done: false }))
+    await page.goto('/t/task')
+    await say(page, '改到下周一上午十点')
+    const undo = page.locator('.sec-receipt').getByRole('button', { name: '撤销' })
+    await expect(undo).toBeVisible()
+    // The point a finger would press is the button itself, not the dock over it.
+    await expect.poll(() => undo.evaluate((el) => {
+      const box = el.getBoundingClientRect()
+      return document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2) === el
+    })).toBe(true)
+    // Once the scroll settles the whole receipt is clear of the dock.
+    await expect.poll(async () => {
+      const [receipt, dock] = [await page.locator('.sec-receipt').boundingBox(), await page.locator('.sec-dock').boundingBox()]
+      return receipt!.y + receipt!.height <= dock!.y
+    }).toBe(true)
+    expect(backend.errors).toEqual([])
+  })
+}
+
+test('on a phone a receipt wraps, so what changed and why an undo failed can be read in full', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  const long: Receipt = { ...created, text: '已建：周五 15:00 给张三回邮件确认下周三的季度复盘会议议程和参会名单 · A 项目 · 14:30 提醒' }
+  const second: Receipt = { ...created, actionId: 'act-2', text: '已改：交房租 → 明天 09:00', thingId: 'rent' }
+  const skipped: Receipt = { actionId: null, op: 'update', text: '没改：牙医预约', thingId: null, undoable: false, status: 'skipped', reason: '有两件事都叫「预约牙医」，不确定是哪一件' }
+  const backend = await mockBackend(page, () => ({ receipts: [long, second, skipped] }), (command) =>
+    command.id === 'act-2' ? { status: 409, json: { error: 'changed_since' } } : undefined,
+  )
+  await page.goto('/')
+  await say(page, '周五给张三回邮件，房租改到明天，牙医也改一下')
+  const failing = page.locator('.sec-receipt').filter({ hasText: second.text })
+  await failing.getByRole('button', { name: '撤销' }).click()
+  await expect(failing.getByRole('alert')).toHaveText('这件事之后又改过，没法直接撤销。')
+  await expect(page.locator('.sec-receipt .r-text')).toHaveCount(3)
+  // Nothing is cut off behind an ellipsis.
+  const cut = (selector: string) => page.locator(selector).evaluateAll((els) => els.filter((el) => el.scrollWidth > el.clientWidth + 1).length)
+  expect(await cut('.sec-receipt .r-text')).toBe(0)
+  expect(await cut('.sec-receipt .r-error')).toBe(0)
+  // The reason sits under its receipt, and 改 / 撤销 stay on the receipt's first line.
+  const [text, reason, actions] = [await failing.locator('.r-text').boundingBox(), await failing.getByRole('alert').boundingBox(), await failing.locator('.r-actions').boundingBox()]
+  expect(reason!.y).toBeGreaterThanOrEqual(text!.y + text!.height - 1)
+  expect(actions!.y).toBeLessThan(reason!.y)
+  expect(backend.errors).toEqual([])
+})
+
 /** No page picks 'latest' yet (D2 decides where), so flip the component's default in the served bundle. */
 async function preferLatest(page: Page) {
   let flipped = false
@@ -368,6 +417,24 @@ test("variant 'latest' shows the latest turn and opens the rest on demand", asyn
   await expect(page.locator('.sec-turn .sec-said')).toHaveText(['四', '五'])
   await expect(page.getByRole('button', { name: '展开对话（5 轮）' })).toBeVisible()
   expect(backend.turns).toHaveLength(5)
+})
+
+test('folded, a line still being thought about stays in sight when another is sent', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  const held: (() => void)[] = []
+  await mockBackend(page, (request, n) => (n === 1 ? new Promise((resolve) => held.push(() => resolve({ reply: `回：${request.text}` }))) : { reply: `回：${request.text}` }))
+  await page.goto('/')
+  await say(page, '第一句')
+  await say(page, '第二句')
+  await expect(page.locator('.sec-reply')).toHaveText(['回：第二句'])
+  // The first line has no answer yet: it is neither dropped nor hidden behind 展开.
+  await expect(page.locator('.sec-turn .sec-said')).toHaveText(['第一句', '第二句'])
+  await expect(page.locator('.sec-turn.waiting')).toContainText('正在想…')
+  // Once answered it folds away like any earlier turn, one tap from 展开.
+  held.forEach((release) => release())
+  await expect(page.locator('.sec-turn .sec-said')).toHaveText(['第二句'])
+  await page.getByRole('button', { name: '展开对话（2 轮）' }).click()
+  await expect(page.locator('.sec-reply')).toHaveText(['回：第一句', '回：第二句'])
 })
 
 test('a long conversation fades at its top edge instead of cutting a line in half', async ({ page }) => {

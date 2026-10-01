@@ -22,6 +22,7 @@ import (
 )
 
 type fakeStore struct {
+	requestTurn map[string]int
 	requests    []workspace.DeskTurnRequest
 	turns       []workspace.SecretaryTurn
 	undoIDs     []string
@@ -47,8 +48,26 @@ func (s *fakeStore) DeskTurn(_ context.Context, scope memory.Scope, in workspace
 	}
 	id := string(memory.NewID())
 	turn := workspace.SecretaryTurn{ID: string(memory.NewID()), Text: in.Text, Reply: "安排好了", Receipts: []workspace.DeskReceipt{{ActionID: &id, Text: "已建：开会", Status: "done", Undoable: true}}, Ask: s.ask}
+	if s.requestTurn == nil {
+		s.requestTurn = make(map[string]int)
+	}
+	s.requestTurn[in.RequestID] = len(s.turns)
 	s.turns = append(s.turns, turn)
 	return workspace.DeskTurnResponse{ConversationID: *in.ConversationID, Turn: turn}, nil
+}
+func (s *fakeStore) DeskTurnByRequest(_ context.Context, _ memory.Scope, id string) (workspace.DeskTurnResponse, error) {
+	index, ok := s.requestTurn[id]
+	if !ok {
+		return workspace.DeskTurnResponse{}, memory.ErrNotFound
+	}
+	conversation := ""
+	for _, r := range s.requests {
+		if r.RequestID == id {
+			conversation = *r.ConversationID
+			break
+		}
+	}
+	return workspace.DeskTurnResponse{ConversationID: conversation, Turn: s.turns[index]}, nil
 }
 func (s *fakeStore) DeskTurns(context.Context, memory.Scope, string) (workspace.DeskTurnsResponse, error) {
 	return workspace.DeskTurnsResponse{Turns: s.turns}, nil
@@ -94,6 +113,12 @@ func (b *botFixture) serve(w http.ResponseWriter, r *http.Request) {
 	b.calls = append(b.calls, botCall{method: method, body: body})
 	var result any = true
 	switch method {
+	case "getMe":
+		id := int64(7001)
+		if strings.Contains(r.URL.Path, "second-fixture") || strings.Contains(r.URL.Path, "next-fixture") {
+			id = 7002
+		}
+		result = map[string]any{"id": id, "is_bot": true}
 	case "getUpdates":
 		result = b.updates
 	case "getFile":
@@ -162,7 +187,7 @@ func TestTextDuplicateAndRestart(t *testing.T) {
 	p, s, b := fixture(t)
 	b.enqueue(textUpdate(10, "周五下午三点开会"), textUpdate(10, "周五下午三点开会"))
 	step(t, p)
-	if len(s.requests) != 1 || !memory.ID(s.requests[0].RequestID).Valid() || s.requests[0].RequestID != requestID("123", "message:10") {
+	if len(s.requests) != 1 || !memory.ID(s.requests[0].RequestID).Valid() || s.requests[0].RequestID != requestID("bot:7001:chat:123", "message:10") {
 		t.Fatal(s.requests)
 	}
 	if got := decode[string](b.of("sendMessage")[0].body["text"]); !strings.Contains(got, "✓ 已建：开会") {
@@ -219,13 +244,15 @@ func TestUndoCallbacks(t *testing.T) {
 		err  error
 		text string
 	}{
-		{nil, "已撤销"}, {workspace.ErrChangedSince, "这件事之后又改过，没法直接撤销。"}, {workspace.ErrWorkStarted, "副手已经开始做了，没法撤销。"}, {workspace.ErrAlreadyUndone, "已经撤销过了。"}, {memory.ErrNotFound, "这条回执已失效。"},
+		{nil, "已撤销"}, {workspace.ErrChangedSince, "这件事之后又改过，没法直接撤销。"}, {workspace.ErrWorkStarted, "副手已经开始做了，没法撤销。"}, {workspace.ErrAlreadyUndone, "已经撤销过了。"}, {workspace.ErrExpired, "超过 30 天或相关资料已删除，无法撤销"}, {memory.ErrNotFound, "这条回执已失效。"},
 	} {
 		t.Run(test.text, func(t *testing.T) {
 			p, s, b := fixture(t)
 			s.undoErr = test.err
-			id := string(memory.NewID())
-			b.enqueue(callbackUpdate(1, "u:"+id, 101))
+			b.enqueue(textUpdate(1, "可撤销事项"))
+			step(t, p)
+			id := *s.turns[0].Receipts[0].ActionID
+			b.enqueue(callbackUpdate(2, "u:"+id, 101))
 			step(t, p)
 			if len(s.undoIDs) != 1 || s.undoIDs[0] != id || decode[string](b.of("answerCallbackQuery")[0].body["text"]) != test.text {
 				t.Fatal("wrong undo response")
@@ -283,7 +310,7 @@ func TestDeletedPromptIsNotReplayed(t *testing.T) {
 	}
 }
 
-func TestAskRecoversAfterRestartWithoutExtraSettings(t *testing.T) {
+func TestAskRecoversAfterRestartWithIdentifierAssociations(t *testing.T) {
 	p, s, b := fixture(t)
 	s.ask = &workspace.DeskAsk{Question: "哪位张三？", Options: []string{"同事", "房东"}}
 	b.enqueue(textUpdate(1, "给张三回邮件"))
@@ -311,8 +338,11 @@ func TestAskRecoversAfterRestartWithoutExtraSettings(t *testing.T) {
 	if err := json.Unmarshal(data, &raw); err != nil {
 		t.Fatal(err)
 	}
-	if len(raw) != 6 {
-		t.Fatal("added extra settings fields")
+	if strings.Contains(string(data), "给张三回邮件") || strings.Contains(string(data), "同事") || strings.Contains(string(data), "房东") {
+		t.Fatal("persisted prompt or response text")
+	}
+	if _, ok := raw["telegramReceipts"]; !ok {
+		t.Fatal("missing durable identifier associations")
 	}
 }
 
@@ -422,26 +452,34 @@ func TestVoiceReplyRetryKeepsOriginalRequest(t *testing.T) {
 	}
 	b.failSend = false
 	step(t, p)
-	if model.calls != 1 || len(s.requests) != 2 || s.requests[1].Text != s.requests[0].Text || s.requests[1].RequestID != s.requests[0].RequestID || *s.requests[1].ConversationID != *s.requests[0].ConversationID {
+	if model.calls != 1 || len(s.requests) != 1 || s.requests[0].Text != "明天下午三点开会" {
 		t.Fatal("retry changed voice request")
+	}
+	sent := b.of("sendMessage")
+	if !strings.Contains(decode[string](sent[len(sent)-1].body["text"]), "🎤 听到：明天下午三点开会") {
+		t.Fatal("retry lost original transcription prefix")
 	}
 	if p.state.Pending != nil {
 		t.Fatal("acknowledged voice retained in transient cache")
 	}
 }
 
-func TestChangedRetranscriptionDoesNotBlockLaterMessages(t *testing.T) {
+func TestUncommittedConflictDoesNotAcknowledgeInput(t *testing.T) {
 	p, s, b := fixture(t)
 	s.turnErr = memory.ErrConflict
-	b.enqueue(textUpdate(1, "已经处理过的消息"))
-	step(t, p)
-	if !strings.Contains(decode[string](b.of("sendMessage")[0].body["text"]), "已经处理过") {
-		t.Fatal("idempotency conflict not reported")
+	b.enqueue(textUpdate(1, "尚未提交的消息"))
+	if err := p.step(context.Background(), "fixture", "123"); !errors.Is(err, memory.ErrConflict) {
+		t.Fatal("uncommitted conflict hidden", err)
+	}
+	c, err := p.settings.Read()
+	if err != nil || c.TelegramOffset != 0 || len(b.of("sendMessage")) != 0 {
+		t.Fatal("uncommitted input was acknowledged", err)
 	}
 	s.turnErr = nil
+	step(t, p)
 	b.enqueue(textUpdate(2, "下一句"))
 	step(t, p)
-	if len(s.requests) != 2 || s.requests[1].Text != "下一句" {
+	if len(s.requests) != 3 || s.requests[2].Text != "下一句" {
 		t.Fatal("later updates stalled")
 	}
 }
@@ -495,9 +533,13 @@ func TestAPIErrorDoesNotExposeCredentials(t *testing.T) {
 }
 
 func TestConfigurationRequiresChatAndRestartsOnTokenChange(t *testing.T) {
-	p, _, _ := fixture(t)
+	p, _, b := fixture(t)
 	oldStarted, newStarted, oldCanceled := make(chan struct{}), make(chan struct{}), make(chan struct{})
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if filepath.Base(r.URL.Path) != "getUpdates" {
+			b.serve(w, r)
+			return
+		}
 		_, _ = io.Copy(io.Discard, r.Body)
 		if strings.HasPrefix(r.URL.Path, "/botfixture/") {
 			close(oldStarted)

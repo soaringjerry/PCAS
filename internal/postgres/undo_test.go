@@ -40,8 +40,8 @@ func TestUndoCommands(t *testing.T) {
 	if _, err = s.Undo(ctx, scope, doneRequest); !errors.Is(err, workspace.ErrAlreadyUndone) {
 		t.Fatal(err)
 	}
-	if _, err = s.Undo(ctx, scope, request); !errors.Is(err, workspace.ErrChangedSince) {
-		t.Fatal(err)
+	if st, err = s.Undo(ctx, scope, request); err != nil || len(st.Tasks) != 0 {
+		t.Fatal("undo creation after undoing status", err, st.Tasks)
 	}
 	newRequest := string(memory.NewID())
 	st, err = s.Execute(ctx, scope, workspace.Command{Type: "addIdea", Title: "工具", RequestID: newRequest, ExpectedRevision: st.Revision})
@@ -273,7 +273,7 @@ func TestDeletionExpiresItemAndDocumentSnapshots(t *testing.T) {
 		if err = s.pool.QueryRow(ctx, "SELECT changes::text,summary,expired_at IS NOT NULL FROM action_log WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), id).Scan(&changes, &summary, &expired); err != nil || changes != "[]" || !expired || summary == "" {
 			t.Fatal("snapshot was retained", err, id, changes, summary, expired)
 		}
-		if _, err = s.Undo(ctx, scope, id); !errors.Is(err, workspace.ErrChangedSince) {
+		if _, err = s.Undo(ctx, scope, id); !errors.Is(err, workspace.ErrExpired) {
 			t.Fatal("expired action was undoable", id, err)
 		}
 	}
@@ -349,7 +349,11 @@ func TestActionSnapshotRetentionKeepsAuditMetadata(t *testing.T) {
 		if err = s.pool.QueryRow(ctx, "SELECT (to_jsonb(l)-'changes'-'expired_at')::text,changes::text,expired_at IS NOT NULL FROM action_log l WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), id).Scan(&metadata, &changes, &expired); err != nil || metadata != audit[id] || changes != "[]" || !expired {
 			t.Fatal("lost audit metadata or kept snapshot", id, err, metadata, changes, expired)
 		}
-		if _, err = s.Undo(ctx, scope, id); !errors.Is(err, workspace.ErrChangedSince) {
+		want := workspace.ErrExpired
+		if id == edited {
+			want = workspace.ErrAlreadyUndone
+		}
+		if _, err = s.Undo(ctx, scope, id); !errors.Is(err, want) {
 			t.Fatal(err)
 		}
 	}

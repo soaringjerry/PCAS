@@ -25,6 +25,7 @@ type store interface {
 	Snapshot(context.Context, memory.Scope) (workspace.State, error)
 	DeskTurn(context.Context, memory.Scope, workspace.DeskTurnRequest) (workspace.DeskTurnResponse, error)
 	DeskTurns(context.Context, memory.Scope, string) (workspace.DeskTurnsResponse, error)
+	DeskTurnByRequest(context.Context, memory.Scope, string) (workspace.DeskTurnResponse, error)
 	Undo(context.Context, memory.Scope, string) (workspace.State, error)
 	IngestAttachment(context.Context, memory.Scope, memory.IngestRequest, io.Reader) (memory.IngestResult, error)
 }
@@ -32,17 +33,8 @@ type transcriber interface {
 	Transcribe(context.Context, io.Reader, string) (string, error)
 }
 
-type turnRef struct {
-	Conversation string `json:"conversation"`
-	Turn         string `json:"turn"`
-}
-
-// Prompt associations contain only identifiers. Answers/options stay in
-// DeskTurns and are re-read when clicked.
-type state struct {
-	Messages map[string]turnRef
-	Pending  *preparedTurn
-}
+// Pending input is transient only; committed turns are recovered from DeskTurns.
+type state struct{ Pending *preparedTurn }
 
 type preparedTurn struct {
 	Request workspace.DeskTurnRequest
@@ -105,7 +97,7 @@ func (p *poller) start(ctx context.Context, token, chatID string) context.Cancel
 	// DeskTurn can finish an accepted turn after cancellation. A separate
 	// session owns its transient state so new credentials take effect promptly.
 	sessionPoller := *p
-	sessionPoller.state = state{Messages: make(map[string]turnRef)}
+	sessionPoller.state = state{}
 	go func() { defer cancel(); sessionPoller.poll(session, token, chatID) }()
 	return cancel
 }
@@ -144,6 +136,16 @@ func (p *poller) step(ctx context.Context, token, chatID string) error {
 	if c.TelegramToken != token || c.TelegramChatID != chatID || token == "" || chatID == "" {
 		return context.Canceled
 	}
+	if c.TelegramBotID == "" || c.TelegramTokenHash != notify.TelegramCredentialHash(token) {
+		botID, identityErr := p.api.identity(ctx, token)
+		if identityErr != nil {
+			return identityErr
+		}
+		c, err = p.settings.ConfirmTelegramIdentity(token, chatID, strconv.FormatInt(botID, 10))
+		if err != nil {
+			return err
+		}
+	}
 	var updates []update
 	if err = p.api.call(ctx, token, "getUpdates", map[string]any{"offset": c.TelegramOffset, "timeout": 30, "limit": 100, "allowed_updates": []string{"message", "callback_query"}}, &updates); err != nil {
 		return err
@@ -159,9 +161,6 @@ func (p *poller) step(ctx context.Context, token, chatID string) error {
 		}
 		if u.ID < c.TelegramOffset {
 			continue
-		}
-		if p.state.Messages == nil {
-			p.state.Messages = make(map[string]turnRef)
 		}
 		if err = p.handle(ctx, c, &p.state, u); err != nil {
 			return err
@@ -193,6 +192,31 @@ func requestID(chatID, event string) string {
 	return fmt.Sprintf("%x-%x-%x-%x-%x", b[:4], b[4:6], b[6:8], b[8:10], b[10:16])
 }
 
+func botChat(c notify.Credentials) string {
+	return "bot:" + c.TelegramBotID + ":chat:" + c.TelegramChatID
+}
+
+// Lookup never resubmits text. Legacy keys are usable only under the migration
+// anchor saved before the first identity confirmation for unchanged settings.
+func (p *poller) savedTurn(ctx context.Context, c notify.Credentials, event string) (workspace.DeskTurnResponse, string, error) {
+	id := requestID(botChat(c), event)
+	out, err := p.store.DeskTurnByRequest(ctx, p.scope, id)
+	if !errors.Is(err, memory.ErrNotFound) {
+		return out, id, err
+	}
+	if c.TelegramLegacyConversation != "" {
+		legacy := requestID(c.TelegramChatID, event)
+		out, err = p.store.DeskTurnByRequest(ctx, p.scope, legacy)
+		if err == nil && out.ConversationID == c.TelegramLegacyConversation {
+			return out, legacy, nil
+		}
+		if err != nil && !errors.Is(err, memory.ErrNotFound) {
+			return out, id, err
+		}
+	}
+	return workspace.DeskTurnResponse{}, id, memory.ErrNotFound
+}
+
 func (p *poller) say(ctx context.Context, c notify.Credentials, text string) error {
 	_, err := p.api.send(ctx, c.TelegramToken, c.TelegramChatID, text, nil)
 	return err
@@ -219,7 +243,7 @@ func (p *poller) handle(ctx context.Context, c notify.Credentials, st *state, u 
 		return nil
 	}
 	if strings.TrimSpace(m.Text) == "/new" {
-		c.TelegramConversation = requestID(c.TelegramChatID, fmt.Sprintf("new:%d", m.ID))
+		c.TelegramConversation = requestID(botChat(c), fmt.Sprintf("new:%d", m.ID))
 		if err := p.settings.UpdateTelegramProgress(c.TelegramToken, c.TelegramChatID, c.TelegramOffset, c.TelegramConversation); err != nil {
 			return err
 		}
@@ -229,6 +253,20 @@ func (p *poller) handle(ctx context.Context, c notify.Credentials, st *state, u 
 		return err
 	}
 	event := fmt.Sprintf("message:%d", m.ID)
+	saved, savedID, lookupErr := p.savedTurn(ctx, c, event)
+	if lookupErr == nil {
+		prefix := ""
+		if m.Voice != nil || m.Audio != nil {
+			prefix = "🎤 听到：" + saved.Turn.Text
+		}
+		if m.Document != nil || len(m.Photo) > 0 {
+			prefix = "收到，已存进资料"
+		}
+		return p.deliver(ctx, c, savedID, saved, prefix)
+	}
+	if !errors.Is(lookupErr, memory.ErrNotFound) {
+		return lookupErr
+	}
 	text, prefix := strings.TrimSpace(m.Text), ""
 	var f *file
 	audio := false
@@ -242,7 +280,7 @@ func (p *poller) handle(ctx context.Context, c notify.Credentials, st *state, u 
 	case len(m.Photo) > 0:
 		f = &m.Photo[len(m.Photo)-1]
 	}
-	if audio && st.Pending != nil && st.Pending.Request.RequestID == requestID(c.TelegramChatID, event) {
+	if audio && st.Pending != nil && st.Pending.Request.RequestID == requestID(botChat(c), event) {
 		return p.turn(ctx, c, st, event, c.TelegramConversation, st.Pending.Request.Text, st.Pending.Prefix)
 	}
 	if f != nil {
@@ -307,12 +345,19 @@ func (p *poller) ingest(ctx context.Context, c notify.Credentials, m *message, f
 	if m.Voice != nil {
 		media = "audio/ogg"
 	}
-	_, err := p.store.IngestAttachment(ctx, p.scope, memory.IngestRequest{Connector: "telegram", ExternalID: c.TelegramChatID + ":" + strconv.FormatInt(m.ID, 10), ExternalVersion: "1", Title: clip(name, 200), MediaType: media}, bytes.NewReader(data))
+	_, err := p.store.IngestAttachment(ctx, p.scope, memory.IngestRequest{Connector: "telegram", ExternalID: botChat(c) + ":" + strconv.FormatInt(m.ID, 10), ExternalVersion: "1", Title: clip(name, 200), MediaType: media}, bytes.NewReader(data))
 	return err
 }
 
 func (p *poller) turn(ctx context.Context, c notify.Credentials, st *state, event, conversation, text, prefix string) error {
-	request := workspace.DeskTurnRequest{RequestID: requestID(c.TelegramChatID, event), ConversationID: &conversation, Text: text}
+	saved, savedID, lookupErr := p.savedTurn(ctx, c, event)
+	if lookupErr == nil {
+		return p.deliver(ctx, c, savedID, saved, prefix)
+	}
+	if !errors.Is(lookupErr, memory.ErrNotFound) {
+		return lookupErr
+	}
+	request := workspace.DeskTurnRequest{RequestID: requestID(botChat(c), event), ConversationID: &conversation, Text: text}
 	if st.Pending != nil && st.Pending.Request.RequestID == request.RequestID {
 		request, prefix = st.Pending.Request, st.Pending.Prefix
 		text = request.Text
@@ -323,12 +368,25 @@ func (p *poller) turn(ctx context.Context, c notify.Credentials, st *state, even
 	st.Pending = &preparedTurn{Request: request, Prefix: prefix}
 	out, err := p.store.DeskTurn(ctx, p.scope, request)
 	if errors.Is(err, memory.ErrConflict) {
-		// A restart may retranscribe an accepted voice differently. B1 rejects
-		// the changed body; acknowledge it rather than blocking every later update.
-		return p.say(ctx, c, "这条消息已经处理过，请在首页查看回执。")
+		// Another accepted turn may have committed between lookup and execution.
+		// Recover its real result; an uncommitted conflict must remain retryable.
+		saved, savedID, lookupErr := p.savedTurn(ctx, c, event)
+		if lookupErr == nil {
+			return p.deliver(ctx, c, savedID, saved, prefix)
+		}
+		if !errors.Is(lookupErr, memory.ErrNotFound) {
+			return lookupErr
+		}
 	}
 	if err != nil {
 		return err
+	}
+	return p.deliver(ctx, c, request.RequestID, out, prefix)
+}
+
+func (p *poller) deliver(ctx context.Context, c notify.Credentials, request string, out workspace.DeskTurnResponse, prefix string) error {
+	if strings.HasPrefix(prefix, "🎤 听到：") {
+		prefix = "🎤 听到：" + out.Turn.Text
 	}
 	if out.Turn.Text == "" {
 		prefix = ""
@@ -338,37 +396,56 @@ func (p *poller) turn(ctx context.Context, c notify.Credentials, st *state, even
 	if err != nil {
 		return err
 	}
-	if out.Turn.Ask != nil {
-		st.Messages[strconv.FormatInt(id, 10)] = turnRef{Conversation: out.ConversationID, Turn: out.Turn.ID}
-		// Bound transient prompt associations to the last 100 messages.
-		if len(st.Messages) > 100 {
-			var oldest int64 = 1<<63 - 1
-			for key := range st.Messages {
-				if n, _ := strconv.ParseInt(key, 10, 64); n < oldest {
-					oldest = n
-				}
-			}
-			delete(st.Messages, strconv.FormatInt(oldest, 10))
-		}
-	}
-	return nil
+	return p.settings.RecordTelegramReceipt(c.TelegramToken, c.TelegramChatID, c.TelegramBotID, notify.TelegramReceipt{MessageID: id, RequestID: request, ConversationID: out.ConversationID, TurnID: out.Turn.ID})
 }
 
 func (p *poller) callback(ctx context.Context, c notify.Credentials, st *state, q *callback) error {
+	var binding *notify.TelegramReceipt
+	for i := range c.TelegramReceipts {
+		r := &c.TelegramReceipts[i]
+		if r.MessageID == q.Message.ID && r.SentAt > time.Now().Add(-30*24*time.Hour).Unix() {
+			binding = r
+			break
+		}
+	}
+	if binding == nil {
+		return p.api.answer(ctx, c.TelegramToken, q.ID, "这条回执已失效。")
+	}
+	out, err := p.store.DeskTurnByRequest(ctx, p.scope, binding.RequestID)
+	if errors.Is(err, memory.ErrNotFound) {
+		return p.api.answer(ctx, c.TelegramToken, q.ID, "这条回执已失效。")
+	}
+	if err != nil {
+		return err
+	}
+	if out.ConversationID != binding.ConversationID || out.Turn.ID != binding.TurnID {
+		return p.api.answer(ctx, c.TelegramToken, q.ID, "这条回执已失效。")
+	}
 	if strings.HasPrefix(q.Data, "u:") {
 		id := strings.TrimPrefix(q.Data, "u:")
-		if !memory.ID(id).Valid() {
+		valid := false
+		for _, receipt := range out.Turn.Receipts {
+			if receipt.Undoable && receipt.ActionID != nil && *receipt.ActionID == id {
+				valid = true
+				break
+			}
+		}
+		if !memory.ID(id).Valid() || !valid {
 			return p.api.answer(ctx, c.TelegramToken, q.ID, "这条回执已失效。")
 		}
 		_, err := p.store.Undo(ctx, p.scope, id)
 		text := "已撤销"
 		switch {
+		case errors.Is(err, workspace.ErrNewerAction):
+			text = "后面还有改动，请先撤销它"
 		case errors.Is(err, workspace.ErrChangedSince):
 			text = "这件事之后又改过，没法直接撤销。"
 		case errors.Is(err, workspace.ErrWorkStarted):
 			text = "副手已经开始做了，没法撤销。"
 		case errors.Is(err, workspace.ErrAlreadyUndone):
 			text = "已经撤销过了。"
+		case errors.Is(err, workspace.ErrExpired):
+			text = "超过 30 天或相关资料已删除，无法撤销"
 		case errors.Is(err, memory.ErrNotFound):
 			text = "这条回执已失效。"
 		case err != nil:
@@ -378,76 +455,40 @@ func (p *poller) callback(ctx context.Context, c notify.Credentials, st *state, 
 	}
 	if strings.HasPrefix(q.Data, "a:") {
 		index, err := strconv.Atoi(strings.TrimPrefix(q.Data, "a:"))
-		ref, ok := st.Messages[strconv.FormatInt(q.Message.ID, 10)]
-		if err != nil || index < 0 || c.TelegramConversation == "" {
+		turn := out.Turn
+		if err != nil || index < 0 || turn.Ask == nil || turn.Text == "" || index >= len(turn.Ask.Options) || binding.ConversationID != c.TelegramConversation {
 			return p.api.answer(ctx, c.TelegramToken, q.ID, "这个选项已失效，请再说一句。")
 		}
-		if !ok {
-			// Telegram returns the original bot message with the callback. After
-			// restart, recover only a unique, still-current prompt matching that
-			// message; no extra persisted settings or copied answer text is needed.
-			ref, err = p.recoverPrompt(ctx, c, q.Message.Text)
-			if err != nil {
-				return err
-			}
-		}
-		if ref.Conversation != c.TelegramConversation {
-			return p.api.answer(ctx, c.TelegramToken, q.ID, "这个选项已失效，请再说一句。")
-		}
-		turns, err := p.store.DeskTurns(ctx, p.scope, ref.Conversation)
+		turns, err := p.store.DeskTurns(ctx, p.scope, binding.ConversationID)
 		if err != nil {
 			return err
 		}
-		for _, turn := range turns.Turns {
-			if turn.ID != ref.Turn || turn.Ask == nil || turn.Text == "" || index >= len(turn.Ask.Options) {
-				continue
+		if len(turns.Turns) == 0 || turns.Turns[len(turns.Turns)-1].ID != turn.ID {
+			// A selected turn may have committed before its reply was sent.
+			// Restore that result, but never reuse a prompt already delivered.
+			saved, savedID, lookupErr := p.savedTurn(ctx, c, "answer:"+turn.ID)
+			if lookupErr != nil && !errors.Is(lookupErr, memory.ErrNotFound) {
+				return lookupErr
 			}
-			if err = p.api.answer(ctx, c.TelegramToken, q.ID, "收到"); err != nil {
-				return err
+			delivered := false
+			for _, receipt := range c.TelegramReceipts {
+				if receipt.RequestID == savedID {
+					delivered = true
+					break
+				}
 			}
-			// One selection per prompt is idempotent even on a second button click.
-			if err = p.turn(ctx, c, st, "answer:"+ref.Turn, ref.Conversation, turn.Ask.Options[index], ""); err != nil {
-				return err
+			if lookupErr == nil && !delivered {
+				if err = p.api.answer(ctx, c.TelegramToken, q.ID, "收到"); err != nil {
+					return err
+				}
+				return p.deliver(ctx, c, savedID, saved, "")
 			}
-			delete(st.Messages, strconv.FormatInt(q.Message.ID, 10))
-			return nil
+			return p.api.answer(ctx, c.TelegramToken, q.ID, "这个选项已失效，请再说一句。")
 		}
-		return p.api.answer(ctx, c.TelegramToken, q.ID, "这个选项已失效，请再说一句。")
+		if err = p.api.answer(ctx, c.TelegramToken, q.ID, "收到"); err != nil {
+			return err
+		}
+		return p.turn(ctx, c, st, "answer:"+turn.ID, binding.ConversationID, turn.Ask.Options[index], "")
 	}
 	return p.api.answer(ctx, c.TelegramToken, q.ID, "这个按钮已失效。")
-}
-
-func (p *poller) recoverPrompt(ctx context.Context, c notify.Credentials, original string) (turnRef, error) {
-	if original == "" {
-		return turnRef{}, nil
-	}
-	turns, err := p.store.DeskTurns(ctx, p.scope, c.TelegramConversation)
-	if err != nil {
-		return turnRef{}, err
-	}
-	current, err := p.store.Snapshot(ctx, p.scope)
-	if err != nil {
-		return turnRef{}, err
-	}
-	prefix := ""
-	first, _, _ := strings.Cut(original, "\n")
-	if strings.HasPrefix(first, "🎤 听到：") || first == "收到，已存进资料" {
-		prefix = first
-	}
-	var ref turnRef
-	matches := 0
-	for _, turn := range turns.Turns {
-		if turn.Ask == nil || turn.Text == "" {
-			continue
-		}
-		text, _ := format(turn, prefix, current.Settings.Timezone)
-		if text == original {
-			ref = turnRef{Conversation: c.TelegramConversation, Turn: turn.ID}
-			matches++
-		}
-	}
-	if matches != 1 || len(turns.Turns) == 0 || turns.Turns[len(turns.Turns)-1].ID != ref.Turn {
-		return turnRef{}, nil
-	}
-	return ref, nil
 }

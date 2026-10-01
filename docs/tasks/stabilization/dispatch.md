@@ -32,6 +32,8 @@
 
 第一批只启动 F8、T2、M0。这样一个修界面、一个独立测时间行为、一个调查记忆，文件互不重叠。
 
+本会话已启动的执行者：`f8_timezone_displays`（`/root/PCAS`）、`t2_time_tests`（`/root/PCAS-wt/T2`）、`m0_memory_readiness`（`/root/PCAS-wt/M0`），均为 6.1 Sol。其余任务尚未启动。
+
 ## 文件归属与协作规则
 
 - 每个任务一个 worktree 和分支；不得在他人的工作目录切分支、清理、格式化或提交。F8 接手 `/root/PCAS` 的 `fix/timezone-displays`，那里只有协调者在用户明确分工前留下的一处未验证测试草稿。

@@ -649,7 +649,7 @@ function ManualRequest({ thingId, initialRun, label = '手动转交' }: { thingI
   const [error, setError] = useState('')
   const [provider, setProvider] = useState('')
   const [prompt, setPrompt] = useState(initialRun?.prompt ?? '')
-  const [kind, setKind] = useState<Run['kind']>(initialRun?.kind ?? 'ask')
+  const kind = initialRun?.kind ?? 'ask'
   const [busy, guard] = useBusy()
   useEffect(() => {
     if (!open) return
@@ -681,10 +681,6 @@ function ManualRequest({ thingId, initialRun, label = '手动转交' }: { thingI
       <p className="small muted">选择你要转交给谁，再说这次想让它做什么。更换接收者会建立新的请求。</p>
       <Select value={provider} label="转交接收者" placeholder="选择接收者" disabled={busy || !manual || targets.length === 0}
         options={targets.map((p) => ({ value: p.id, label: p.name || state.agents.find((a) => a.id === p.id)?.name || '已配置的接收者', hint: p.model }))} onChange={setProvider} />
-      <Select value={kind} label="回答用途" disabled={busy} onChange={setKind} options={[
-        { value: 'ask', label: '回答问题' }, { value: 'draft', label: '写一份草稿' }, { value: 'plan', label: '做个计划' },
-        { value: 'breakdown', label: '拆成步骤' }, { value: 'summary', label: '总结一下' },
-      ]} />
       <textarea className="textarea" aria-label="本次转交请求" placeholder="这次想让它做什么？" value={prompt} onChange={(e) => setPrompt(e.target.value)} rows={3} disabled={busy} />
       {error && <p className="small" role="alert">{error}</p>}
       {!manual && <p className="small muted">请先在<Link to="/settings">设置</Link>中启用手动交接。</p>}
@@ -728,11 +724,10 @@ function Handoff({ run }: { run: Run }) {
         if (!navigator.clipboard) throw new Error('浏览器无法复制，请预览后手动选择内容。')
         await navigator.clipboard.writeText(result.package)
         if (mine !== generation.current) return
-        setNotice('已复制；PCAS 已交付交接内容，外部接收仍未知。')
-        toast.show('已复制，尚无外部接收回执')
+        setNotice(`已复制，可以粘贴给${target}`)
       } else {
         setPreview({ text: result.package, revision: state.revision })
-        setNotice('PCAS 已交付本次交接内容；外部接收仍未知。')
+        setNotice('交接内容已更新')
       }
       setFailed(false)
     } catch (e) {
@@ -742,7 +737,7 @@ function Handoff({ run }: { run: Run }) {
     }
   })
   return <div className="act-detail stack-sm">
-    <p className="small muted">转交给：{target}。复制交接内容发给它，再把回答贴回来；保存后会加入这件事。PCAS 无法确认外部是否收到。</p>
+    <p className="small muted">把内容复制给{target}，再将回答贴回。PCAS 无法确认对方是否收到。</p>
     {run.staleContext && <p className="small muted" role="alert">资料、授权或接收者已经变化，请重新生成交接内容。</p>}
     <div className="row">
       <button type="button" className="btn btn-sm" disabled={run.staleContext || busy} onClick={() => obtain(true)}><Copy size={14} />复制给它的内容</button>

@@ -28,6 +28,10 @@
 | [T3 对话与渠道](T3-secretary-tests.md) | 独立 Sol | S1–S9、T1–T6、D1–D4 的回归与发现 | 空出执行位；基线包含 F7 |
 | [U1 界面打磨](U1-ux-polish.md) | Opus | 首页与事项页的连贯体验、桌面/手机截图 | F8 合并后；等待可用 Opus 执行入口 |
 | [F9 提醒边界与日志](F9-reminder-repairs.md) | Sol，非 T2 作者 | 修复 R1/R2/R5/R10，移除对应 finding skip | T2 最终交付；明确含 F7 的基线与测试文件交接 |
+| [F8 完整浏览器补验](F8-ci-followup.md) | Sol | 定位 #23 完整 CI 的项目别名失败，修复测试数据生命周期 | 已启动，接手 F8 工作区 |
+| [F10 撤销有效期](F10-expired-undo.md) | Sol，非 T1 作者 | U12/U13 与 D3 的 expired 判定/映射 | T1 交付；F9 已释放撤销文件 |
+| [F11 对话与记忆删除](F11-secretary-repairs.md) | Sol，非 T3 作者 | S1/S8/S9/D1 的最小修复 | T3 最终证据和测试文件交接 |
+| [F12 Telegram](F12-telegram-repairs.md) | Sol，非 T3 作者 | T2/T3/T6 的 bot 身份、回调与恢复修复 | T3 交付；F10 释放 poller.go |
 | 修复发现项 | Sol | 按发现编号拆独立 PR | 先审查发现及预期，再分配产品文件 |
 | [A1 集成审查](A1-acceptance.md) | Astra | 一次完整的集成检查和证据审查 | 实现与序列修复完成 |
 
@@ -37,8 +41,8 @@
 
 | 任务 / 执行者 | 工作区 | 交付与实际状态 |
 |---|---|---|
-| F8 / `f8_timezone_displays` | `/root/PCAS` | [PR #23](https://github.com/soaringjerry/PCAS/pull/23)，`bddc14b`；前端时区 18/18、相关 mock 39/39、真实后端专项 1/1；外部服务为假服务；远端 CI 待完成 |
-| T2 / `t2_time_tests` | `/root/PCAS-wt/T2` | [PR #24](https://github.com/soaringjerry/PCAS/pull/24)，`a113988`；R1/R2/R5 与 R10 日志失败后暂存 skip，阶段未通过；测试写入权已交 F9 |
+| F8 / `f8_timezone_displays` | `/root/PCAS` | [PR #23](https://github.com/soaringjerry/PCAS/pull/23)，`bddc14b`；前端时区 18/18、相关 mock 39/39、真实后端专项 1/1；完整远端 CI 的 golden 6/27 失败，由 `f8_ci_followup` 接手，未整体验收 |
+| T2 / `t2_time_tests` | `/root/PCAS-wt/T2` | [PR #24](https://github.com/soaringjerry/PCAS/pull/24)，`a113988`；远端 CI 通过，但 R1/R2/R5 与 R10 日志为明确 finding skip，阶段未通过；测试写入权已交 F9 |
 | M0 / `m0_memory_readiness` | `/root/PCAS-wt/M0` | [PR #22](https://github.com/soaringjerry/PCAS/pull/22)，`21faec7`；静态调查与待审方案，不代表二阶段实现或评测完成 |
 
 第二批分派 F9、T3、T1，仍使用 Sol / high：
@@ -48,6 +52,10 @@
 - T1 / `t1_undo_tests`：`/root/PCAS-wt/T1`，同 T3 基线与 PR base；先测契约明确部分，U3/U4/U5 的错误码重叠保持待裁定，不擅自选定新语义。该状态是待裁定，不能写成产品失败或通过。
 
 执行者自行创建其尚不存在的 worktree，不改他人目录；若输入出现冲突，停止集成并报告，不能自行改产品解决。候选集成和分支推送均不得改动 main 或生产。
+
+F9 已交付并停止写入：[PR #25](https://github.com/soaringjerry/PCAS/pull/25)，`26dba8672b578cf1baadd71c0ba257f7691d8109`，base 为上述 `64f0f78` 候选。全部 R 及新增边界 21 个顶层用例零 finding skip；最后一次提前量交叉修复后跑相关回归和 fmt/vet/build，完整 make check / DB integration 的已通过证据属于前一实现提交，具体见修复报告。远端 CI 仍待完成。F10 尚未开始写产品，可在 T1 交付后接手 actions_log.go。
+
+T1 当前确认 U12/U13（删除及超过 30 天后的 expired 判定），T3 同一 D3 合并归 F10。T3 另有 S1/S8/S9/D1 与 Telegram T2/T3/T6 的复核证据，等待最终报告；分拆 F11/F12，产品归属互斥。U10 当前轮新对象引用协议缺口另列在 T1 文档，不擅自扩展 JSON。
 
 ## 文件归属与协作规则
 

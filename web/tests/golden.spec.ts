@@ -206,7 +206,7 @@ test('F7 连续撤销：改期、新建依次撤销，刷新保持已撤销', as
   await expect(receipts.nth(1)).toContainText('已撤销')
 })
 
-test('F7 内容冲突：改标题后撤销新建返回 changed_since', async ({ page }) => {
+test('F7 顺序冲突：改标题后撤销新建返回 newer_action', async ({ page }) => {
   const task = await arrange(page, `撤销冲突-${Date.now()}`)
   await command(page, { type: 'renameThing', id: task.id, title: `${task.title}-用户修改` })
   const receipt = page.locator('.sec-receipt').filter({ hasText: task.title })
@@ -214,8 +214,8 @@ test('F7 内容冲突：改标题后撤销新建返回 changed_since', async ({ 
   await receipt.getByRole('button', { name: '撤销', exact: true }).click()
   const conflict = await response
   expect(conflict.status()).toBe(409)
-  expect(await conflict.json()).toEqual({ error: 'changed_since' })
-  await expect(receipt).toContainText('这件事之后又改过，没法直接撤销。')
+  expect(await conflict.json()).toEqual({ error: 'newer_action' })
+  await expect(receipt).toContainText('后面还有改动，请先撤销它')
   expect((await snapshot(page)).tasks.find(t => t.id === task.id)?.title).toBe(`${task.title}-用户修改`)
 })
 

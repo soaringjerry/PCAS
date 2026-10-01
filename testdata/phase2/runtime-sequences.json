@@ -194,6 +194,17 @@
         "already-cleared body is never reconstructed after regrant or route restore",
         "unrelated owner original docs and valid unrelated samples remain compatible"
       ]
+    },
+    {
+      "id": "R18",
+      "sequence": "final observable UTF8 payload bytes at estimated total input boundary → generate through common production observer and actual fakeHTTP",
+      "required": [
+        "InputTokens is ceil(final UTF8 bytes/3), method estimated, actual model identity retained",
+        "default total input budget8000 allows23999 and24000bytes and rejects24001bytes before target external HTTP",
+        "independent actual encoding calibration is explicitly separate from one target bounded generation; not a lucky retry",
+        "perattempt256KiB diagnostic hard ceiling still applies separately",
+        "this estimate is not actual tokenizer/hidden context/provider billing; old exactbytes and dependency mappings remain strict"
+      ]
     }
   ],
   "reuse_required": [
@@ -235,5 +246,27 @@
     "question_with_duplicate": "我已经在问题里写了：开门时间是早上九点。请仅据被授权来源说明入口暗号。",
     "system_duplicate": "合成系统模板：开门时间是早上九点。",
     "scope": "synthetic mapping fixture; no existing raw gold changed"
+  },
+  "input_budget_control": {
+    "total_input_tokens": 8000,
+    "method": "estimated",
+    "cases": [
+      {
+        "payload_bytes": 23999,
+        "estimated_tokens": 8000,
+        "allowed": true
+      },
+      {
+        "payload_bytes": 24000,
+        "estimated_tokens": 8000,
+        "allowed": true
+      },
+      {
+        "payload_bytes": 24001,
+        "estimated_tokens": 8001,
+        "allowed": false
+      }
+    ],
+    "calibration": "one unbounded fake-adapter request with identical fixed Unicode/escaping prefix; pad ASCII to independent final byte boundary"
   }
 }

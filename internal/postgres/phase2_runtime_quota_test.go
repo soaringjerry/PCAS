@@ -18,8 +18,8 @@ func phase2RTQuotaFixture(t *testing.T, s *Store, scope memory.Scope, recipient 
 		state = "capacity_omitted"
 	}
 	hash := sha256.Sum256(snapshot)
-	_, err := s.pool.Exec(context.Background(), `INSERT INTO context_attempts(owner_id,id,operation_id,ordinal,state,recipient,purpose,manifest,metadata_bytes,snapshot,snapshot_state,snapshot_bytes,input_bytes,payload_hash,observation_layer,created_at,body_expires_at,metadata_expires_at)
-	 SELECT $1,md5('phase2-quota-'||g)::uuid,'synthetic-old-'||g||repeat('x',$8),1,'completed',$2,'knowledge',$3,65536,$4,$5,$6,$6,$7,'serialized_request',now()-interval '1 hour'+g*interval '1 microsecond',now()+interval '6 days',now()+interval '29 days' FROM generate_series(1,$9::integer)g`, string(scope.OwnerID), asJSON(recipient), manifest, snapshot, state, len(snapshot), hash[:], operationPadding, count)
+	_, err := s.pool.Exec(context.Background(), `INSERT INTO context_attempts(owner_id,id,operation_id,ordinal,state,recipient,purpose,manifest,metadata_bytes,snapshot,snapshot_state,snapshot_bytes,input_bytes,payload_hash,observation_layer,created_at,body_expires_at,metadata_expires_at,execution_expires_at)
+	 SELECT $1,md5('phase2-quota-'||g)::uuid,'synthetic-old-'||g||repeat('x',$8),1,'completed',$2,'knowledge',$3,65536,$4,$5,$6,$6,$7,'serialized_request',now()-interval '1 hour'+g*interval '1 microsecond',now()+interval '6 days',now()+interval '29 days',now()+interval '5 minutes' FROM generate_series(1,$9::integer)g`, string(scope.OwnerID), asJSON(recipient), manifest, snapshot, state, len(snapshot), hash[:], operationPadding, count)
 	if err != nil {
 		t.Fatal("bounded synthetic quota fixture", err)
 	}
@@ -98,7 +98,7 @@ func TestPhase2RuntimeMetadataAndCountCapacityRejectBeforeExternalSend(t *testin
 						want -= 3000
 					}
 					id := string(memory.NewID())
-					_, err := s.pool.Exec(context.Background(), `INSERT INTO context_attempts SELECT owner_id,$2::uuid,$2::text||repeat('x',$3),ordinal,state,recipient,purpose,manifest,metadata_bytes,snapshot,snapshot_state,snapshot_bytes,input_bytes,payload_hash,observation_layer,external_receipt,dispatch_reserved_at,dispatched_at,delivered_at,completed_at,invalidation_reason,error_code,created_at,body_expires_at,metadata_expires_at FROM context_attempts WHERE owner_id=$1 LIMIT 1`, string(scope.OwnerID), id, 0)
+					_, err := s.pool.Exec(context.Background(), `INSERT INTO context_attempts SELECT owner_id,$2::uuid,$2::text||repeat('x',$3),ordinal,state,recipient,purpose,manifest,metadata_bytes,snapshot,snapshot_state,snapshot_bytes,input_bytes,payload_hash,observation_layer,external_receipt,dispatch_reserved_at,dispatched_at,delivered_at,completed_at,invalidation_reason,error_code,created_at,body_expires_at,metadata_expires_at,execution_expires_at FROM context_attempts WHERE owner_id=$1 LIMIT 1`, string(scope.OwnerID), id, 0)
 					if err != nil {
 						t.Fatal(err)
 					}

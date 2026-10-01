@@ -10,7 +10,7 @@
 
 ## 你独占的文件
 
-`internal/memory/contracts.go`（只加 Scope 的内部标记）、`internal/postgres/retrieval.go`、`desk_turn.go`、`run_context.go`、`runs.go`、`telegram_turn.go`、`artifacts.go`（只改 `sanitizeItemTx` 里校验运行依赖的那条查询）、`internal/workspace/desk.go`；R7 需要时可以动 `internal/telegram/`。
+`internal/memory/contracts.go`（只加 Scope 的内部标记，以及 `RecallResult` 上不对外输出的摘录列表，标 `json:"-"`）、`internal/postgres/retrieval.go`、`desk_turn.go`、`run_context.go`、`runs.go`、`telegram_turn.go`、`artifacts.go`（只改 `sanitizeItemTx` 里校验运行依赖的那条查询）、`internal/workspace/desk.go`；R7 需要时可以动 `internal/telegram/`。
 
 不要动：`actions_log.go`、`processing.go`、`undone_turns.go`、迁移文件（B 的）；`web/`（C 的）；任何测试文件（T 的）。
 
@@ -25,7 +25,7 @@
 
 ### 2 取摘录（R3）
 
-`Recall` 现在把每条命中的文本拼进 `Summary` 一个大字符串，调用方拿不到「哪条记录对应哪段文字」。给 `RecallResult` 加一个按记录给出的摘录列表（建议 `Excerpts []RecallExcerpt`，含记录引用、摘录文本、标题、来源类型、表达时间、记录时间、角色），在 `recallTx` 里组装 `Summary` 的同一个循环里填。不要让调用方去解析 `Summary`，也不要为每条命中再查一遍库取全文。
+`Recall` 现在把每条命中的文本拼进 `Summary` 一个大字符串，调用方拿不到「哪条记录对应哪段文字」。给 `RecallResult` 加一个按记录给出的摘录列表（建议 `Excerpts []RecallExcerpt`，含记录引用、摘录文本、标题、来源类型、表达时间、记录时间、角色），在 `recallTx` 里组装 `Summary` 的同一个循环里填。这个字段只给仓库内部的调用方用，标 `json:"-"`：`/v1/memory/recall` 的返回内容和现在逐字节一致，网页端不用跟着改。不要让调用方去解析 `Summary`，也不要为每条命中再查一遍库取全文。
 
 截断规则按 R3。字符数按 Unicode 字符算（`[]rune`），不按字节。
 

@@ -1,23 +1,40 @@
 package notify
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 
 	webpush "github.com/SherClockHolmes/webpush-go"
 )
 
+// TelegramReceipt is a delivery association, never a copy of a desk response.
+// Bot/chat are the confirmed active identity in Credentials.
+type TelegramReceipt struct {
+	MessageID      int64  `json:"messageId"`
+	RequestID      string `json:"requestId"`
+	ConversationID string `json:"conversationId"`
+	TurnID         string `json:"turnId"`
+	SentAt         int64  `json:"sentAt"`
+}
+
 type Credentials struct {
-	VAPIDPublic          string `json:"vapidPublic"`
-	VAPIDPrivate         string `json:"vapidPrivate"`
-	TelegramToken        string `json:"telegramToken"`
-	TelegramChatID       string `json:"telegramChatId"`
-	TelegramOffset       int64  `json:"telegramOffset,omitempty"`
-	TelegramConversation string `json:"telegramConversation,omitempty"`
+	VAPIDPublic                string            `json:"vapidPublic"`
+	VAPIDPrivate               string            `json:"vapidPrivate"`
+	TelegramToken              string            `json:"telegramToken"`
+	TelegramChatID             string            `json:"telegramChatId"`
+	TelegramOffset             int64             `json:"telegramOffset,omitempty"`
+	TelegramConversation       string            `json:"telegramConversation,omitempty"`
+	TelegramBotID              string            `json:"telegramBotId,omitempty"`
+	TelegramTokenHash          string            `json:"telegramTokenHash,omitempty"`
+	TelegramLegacyConversation string            `json:"telegramLegacyConversation,omitempty"`
+	TelegramReceipts           []TelegramReceipt `json:"telegramReceipts,omitempty"`
 }
 
 type Settings struct{ Path string }
@@ -52,7 +69,7 @@ func (s Settings) read() (Credentials, error) {
 	if err := f.Chmod(0600); err != nil {
 		return c, err
 	}
-	d := json.NewDecoder(io.LimitReader(f, 64<<10))
+	d := json.NewDecoder(f)
 	d.DisallowUnknownFields()
 	if err := d.Decode(&c); err != nil {
 		return c, err
@@ -117,6 +134,10 @@ func (s Settings) SaveTelegram(token, chatID string) error {
 	_, err := s.update(func(c *Credentials) error {
 		if c.TelegramToken != token || c.TelegramChatID != chatID {
 			c.TelegramOffset, c.TelegramConversation = 0, ""
+			c.TelegramTokenHash, c.TelegramLegacyConversation = "", ""
+			if token == "" || c.TelegramChatID != chatID {
+				c.TelegramBotID, c.TelegramReceipts = "", nil
+			}
 		}
 		c.TelegramToken, c.TelegramChatID = token, chatID
 		return nil
@@ -135,6 +156,71 @@ func (s Settings) UpdateTelegramProgress(token, chatID string, offset int64, con
 			c.TelegramOffset = offset
 		}
 		c.TelegramConversation = conversation
+		return nil
+	})
+	return err
+}
+
+// TelegramCredentialHash fences an identity resolved for a particular token.
+// It is never the bot identity used to derive business request IDs.
+func TelegramCredentialHash(token string) string {
+	return fmt.Sprintf("%x", sha256.Sum256([]byte(token)))
+}
+
+func telegramConfigured(c *Credentials, token, chatID string) bool {
+	return token != "" && chatID != "" && c.TelegramToken == token && c.TelegramChatID == chatID
+}
+
+// ConfirmTelegramIdentity follows getMe. Preserve associations across credential
+// rotation for the same bot, but never lend them to a different bot or chat.
+func (s Settings) ConfirmTelegramIdentity(token, chatID, botID string) (Credentials, error) {
+	return s.update(func(c *Credentials) error {
+		if !telegramConfigured(c, token, chatID) || botID == "" {
+			return errors.New("Telegram configuration changed")
+		}
+		if c.TelegramBotID == "" {
+			c.TelegramLegacyConversation = c.TelegramConversation
+		} else if c.TelegramBotID != botID {
+			c.TelegramReceipts = nil
+			c.TelegramLegacyConversation = ""
+		}
+		c.TelegramBotID = botID
+		c.TelegramTokenHash = TelegramCredentialHash(token)
+		pruneTelegramReceipts(c, time.Now())
+		return nil
+	})
+}
+
+func pruneTelegramReceipts(c *Credentials, now time.Time) {
+	cutoff := now.Add(-30 * 24 * time.Hour).Unix()
+	kept := make([]TelegramReceipt, 0, len(c.TelegramReceipts))
+	for _, r := range c.TelegramReceipts {
+		if r.SentAt > cutoff {
+			kept = append(kept, r)
+		}
+	}
+	c.TelegramReceipts = kept
+}
+
+// RecordTelegramReceipt is called only after sendMessage returned a real ID.
+// A canceled session cannot attach its delivery to newly configured credentials.
+func (s Settings) RecordTelegramReceipt(token, chatID, botID string, receipt TelegramReceipt) error {
+	_, err := s.update(func(c *Credentials) error {
+		if !telegramConfigured(c, token, chatID) || c.TelegramBotID != botID || c.TelegramTokenHash != TelegramCredentialHash(token) {
+			return errors.New("Telegram configuration changed")
+		}
+		if receipt.MessageID <= 0 || receipt.RequestID == "" || receipt.ConversationID == "" || receipt.TurnID == "" {
+			return errors.New("invalid Telegram receipt association")
+		}
+		pruneTelegramReceipts(c, time.Now())
+		receipt.SentAt = time.Now().Unix()
+		for i, old := range c.TelegramReceipts {
+			if old.MessageID == receipt.MessageID {
+				c.TelegramReceipts[i] = receipt
+				return nil
+			}
+		}
+		c.TelegramReceipts = append(c.TelegramReceipts, receipt)
 		return nil
 	})
 	return err

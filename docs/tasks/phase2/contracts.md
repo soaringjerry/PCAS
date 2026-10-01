@@ -169,3 +169,5 @@ Run 的 ContextTask/ContextDependencies/ContextSourceSpans/ContextAttemptID/Manu
 A2-action 共用 lineage 补充：`TrustedTaskContext.desk_actions`、`ContextManifest.desk_actions` 和 Run 的 `contextDeskActions` 均为服务端构造的 origin action ID 数组；不是新的 memory kind 或客户端权限。装配时冻结去重副本，不随 collector 后续原地漂移。每轮最多 256 distinct origin IDs、递归最多 16 层（工程初值，非实测效果阈值），DAG visited 去重；循环/超限受控拒绝，不截断 IDs 后发送。原 action 的原 Task/route/stamp/stale/undone 与父 Task 的 origins 递归检查，再验证当前 consumer 自己的授权。准备、adapter 前、返回后、manual 最后交付、采纳和历史复用共用该门；manifest origins 计入 whole metadata。原无 origins 历史与合法 unknown model 路径沿现有边界，不因新增字段拒绝。025 仍仅两列，父 origins 放在其 server Task JSON，元数据寿命跟随产物。
 
 撤权带具体 recipient 时仅选该原 recipient 的 action durable deps 失效；纠正/删除的 nil recipient 全闭包。owner 撤销快照仅擦除受影响派生块；仅在 purge 前文档与块双 hash 均匹配、服务端因果明确时可更新该 owner action 的 after fence，保独立 owner 修改可撤销。既有后继编辑仍冲突，不按文字相似度重基准。
+
+canonical `title` 与 `name` 分别使用既有 artifact_fields 块追踪、恢复和失效清理。task/idea 的 owner 改 Title 不表示改掉此前 Name 的来源；项目正式改名同时改两字段时两者分别保存实际来源。undo 保持原 before document 的独立 Name，不把恢复 Title 当作新 Name 编辑。promotion 以 idea 的 Title 创建 task 时，Title 与 Name 都继承实际复制的 title 块；Run 新建子任务同理。撤权/删除仍逐字段清除派生内容，不以当前 Title 已经 owner 改写为由留下旧生成 Name。

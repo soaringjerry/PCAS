@@ -13,10 +13,10 @@ const isSaid = (item: Quote) => item.kind === 'source'
 
 function Sources({ items }: { items: Quote[] }) {
   const { state } = useStore()
-  const [open, setOpen] = useState<{ id: string; version?: number } | null>(null)
+  const [open, setOpen] = useState<{ id: string; version?: number; excerpt?: string } | null>(null)
   return (
     <ul className="sec-sources" aria-label="依据">
-      {open && <SourceSheet id={open.id} version={open.version} onClose={() => setOpen(null)} />}
+      {open && <SourceSheet id={open.id} version={open.version} conversation={{ excerpt: open.excerpt }} onClose={() => setOpen(null)} />}
       {items.map((item) => {
         const said = isSaid(item)
         const when = item.at ? formatShortDate(item.at, state.settings.timezone ?? 'UTC') : ''
@@ -39,8 +39,8 @@ function Sources({ items }: { items: Quote[] }) {
         return (
           <li key={`${item.memoryId}-${item.version}`} className={said ? 'said' : undefined}>
             {item.sourceId ? (
-              // An excerpt can run long; the row shows its start and the sheet has all of it.
-              <button type="button" title={said ? '看原文' : item.text} onClick={() => setOpen({ id: item.sourceId!, version: item.sourceVersion ?? undefined })}>
+              // An excerpt can run long; the row shows its start, and the sheet opens the whole text at that passage.
+              <button type="button" title={said ? '看原文' : item.text} onClick={() => setOpen({ id: item.sourceId!, version: item.sourceVersion ?? undefined, excerpt: said ? item.text : undefined })}>
                 {body}
               </button>
             ) : (
@@ -75,7 +75,7 @@ function Timeline({ title, items }: { title?: string; items: Moment[] }) {
   const [open, setOpen] = useState<{ id: string; version?: number } | null>(null)
   return (
     <figure className="sec-timeline">
-      {open && <SourceSheet id={open.id} version={open.version} onClose={() => setOpen(null)} />}
+      {open && <SourceSheet id={open.id} version={open.version} conversation={{}} onClose={() => setOpen(null)} />}
       {title && <figcaption>{title}</figcaption>}
       <ol>
         {items.map((item, i) => (

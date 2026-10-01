@@ -2947,6 +2947,36 @@ a.btn:hover {
   background: var(--elevated);
 }
 
+/* Opened from a conversation: the words come first and scroll inside the sheet. */
+.source-read {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  height: 100%;
+}
+
+.source-read > * {
+  flex: none;
+}
+
+.source-read > .source-words {
+  flex: 0 1 auto;
+  min-height: 52px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+
+/* The passage the card quoted: tinted, nothing that moves. */
+.source-words mark {
+  padding: 2px 0;
+  border-radius: 3px;
+  background: var(--blue-soft);
+  color: inherit;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+
 /* Recall */
 .recall-result {
   display: flex;

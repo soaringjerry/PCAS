@@ -588,6 +588,30 @@ func (f *phase2ActionMatrix) stopRunner() {
 	f.runner = false
 }
 
+func (f *phase2ActionMatrix) undoAutomaticAdoption(run workspace.Run) workspace.Run {
+	f.t.Helper()
+	if run.Status != "done" || run.Adopted == nil || !run.Adopted.Auto || !memory.ID(run.Adopted.ActionID).Valid() {
+		f.t.Fatalf("real automatic adoption positive control missing: %+v", run)
+	}
+	f.evidence("automatic-adoption-before-undo-"+run.ID, run)
+	undoAutoAdoption(f.t, f.s, f.scope, run.ID)
+	state, err := f.s.Snapshot(context.Background(), f.scope)
+	if err != nil {
+		f.t.Fatal(err)
+	}
+	for _, current := range state.Runs {
+		if current.ID == run.ID {
+			if current.Adopted != nil || current.Status != "done" || current.Output != run.Output {
+				f.t.Fatalf("actual undo must preserve completed output and clear Adopted: %+v", current)
+			}
+			f.evidence("automatic-adoption-after-undo-"+run.ID, current)
+			return current
+		}
+	}
+	f.t.Fatal("completed run disappeared after automatic adoption undo")
+	return workspace.Run{}
+}
+
 func (f *phase2ActionMatrix) prepare(id, role string) workspace.Run {
 	f.t.Helper()
 	agent := "phase2-model"
@@ -807,6 +831,7 @@ func TestPhase2ActionLineageMatrix(t *testing.T) {
 				}
 				f.output = ""
 				f.stopRunner()
+				completed = f.undoAutomaticAdoption(completed)
 				oldManual := f.prepare(id, "manual")
 				oldDeputy := f.prepare(id, "deputy")
 				if oldManual.ContextTask == nil || oldDeputy.ContextTask == nil {
@@ -974,7 +999,22 @@ func TestPhase2ActionLineageMatrix(t *testing.T) {
 				if run.Output != f.output {
 					t.Fatal("actual deputy output fixture absent")
 				}
-				f.cmd(workspace.Command{Type: "adoptRun", ID: run.ID, As: "progress", Text: run.Output})
+				run = f.undoAutomaticAdoption(run)
+				beforeAdoption := f.item(id)
+				if !strings.Contains(beforeAdoption.Body, f.owner) || !strings.Contains(beforeAdoption.Body, f.derived[1]) {
+					t.Fatal("undo of automatic adoption lost independent owner or secretary action body")
+				}
+				adoptedState := f.cmd(workspace.Command{Type: "adoptRun", ID: run.ID, As: "progress", Text: run.Output})
+				var manualAdoption *workspace.Adoption
+				for _, candidate := range adoptedState.Runs {
+					if candidate.ID == run.ID {
+						manualAdoption = candidate.Adopted
+					}
+				}
+				if manualAdoption == nil || manualAdoption.Auto || manualAdoption.As != "progress" {
+					t.Fatalf("actual manual progress adoption missing after undo: %+v", manualAdoption)
+				}
+				f.evidence("manual-progress-adoption-after-auto-undo", manualAdoption)
 				f.output = ""
 				state := f.cmd(workspace.Command{Type: "ideaPromote", ID: id})
 				taskID := ""

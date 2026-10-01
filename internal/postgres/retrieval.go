@@ -128,7 +128,7 @@ func (s *Store) Recall(ctx context.Context, scope memory.Scope, in memory.Recall
 // already holding the owner transaction must not open another transaction or
 // reserve model cost; they use lexical/graph retrieval when no vector is supplied.
 func (s *Store) recallTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in memory.RecallRequest, b memory.Budget, query, fts string, vector []byte, model string, offset int, fingerprint string, tokens []string, out *memory.RecallResult) error {
-	rows, err := tx.Query(ctx, `WITH linked AS (SELECT m.member_id FROM episode_members m JOIN memory_records e ON(e.owner_id,e.id,e.version)=(m.owner_id,m.episode_id,m.episode_version) JOIN episodes ep ON(ep.owner_id,ep.id,ep.version)=(e.owner_id,e.id,e.version) WHERE m.owner_id=$1 AND e.state='active' AND (m.episode_id=ANY($8::uuid[]) OR ($6='history' AND $4!='' AND position(lower($4) in lower(ep.title))>0)) AND ($2 OR EXISTS(SELECT 1 FROM record_grants g WHERE g.owner_id=e.owner_id AND g.record_id=e.id AND g.principal_id=$3)))
+	rows, err := tx.Query(ctx, `WITH linked AS (SELECT m.member_id FROM episode_members m JOIN memory_records e ON(e.owner_id,e.id,e.version)=(m.owner_id,m.episode_id,m.episode_version) JOIN episodes ep ON(ep.owner_id,ep.id,ep.version)=(e.owner_id,e.id,e.version) WHERE m.owner_id=$1 AND e.state='active' AND (m.episode_id=ANY($8::uuid[]) OR ($6='history' AND $4!='' AND position(lower($4) in lower(ep.title))>0)) AND ($2 OR ($17 AND e.kind='source') OR EXISTS(SELECT 1 FROM record_grants g WHERE g.owner_id=e.owner_id AND g.record_id=e.id AND g.principal_id=$3)))
  SELECT t.id::text,t.version,r.kind,coalesce(hit.body,t.body),
 		 (CASE WHEN $4='' THEN 0 WHEN position(lower($4) in lower(t.body))>0 THEN 5 ELSE 0 END
 		 +CASE WHEN $5='' THEN 0 ELSE coalesce(ts_rank_cd(rs.search_vector,to_tsquery('simple',$5)),0) END
@@ -156,7 +156,7 @@ func (s *Store) recallTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in 
         ) hit ON true
 		 LEFT JOIN activity a ON (a.owner_id,a.record_id)=(t.owner_id,t.id)
  LEFT JOIN source_contexts sc ON(sc.owner_id,sc.source_id,sc.source_version)=(t.owner_id,t.id,t.version)
-		 WHERE t.owner_id=$1 AND r.state='active' AND rv.state='active' AND ($2 OR EXISTS(SELECT 1 FROM record_grants g WHERE g.owner_id=t.owner_id AND g.record_id=t.id AND g.principal_id=$3))
+		 WHERE t.owner_id=$1 AND r.state='active' AND rv.state='active' AND ($2 OR ($17 AND r.kind='source') OR EXISTS(SELECT 1 FROM record_grants g WHERE g.owner_id=t.owner_id AND g.record_id=t.id AND g.principal_id=$3))
 		 AND ($6='history' OR (r.kind='claim' AND t.version=(SELECT a.version FROM applicable_claim_versions($1,coalesce($9,now()),coalesce($10,now())) a WHERE a.claim_id=t.id)) OR (r.kind!='claim' AND t.version=(SELECT max(v.version) FROM record_versions v WHERE v.owner_id=t.owner_id AND v.record_id=t.id AND v.recorded_at<=coalesce($10,now()))))
 		 AND ($9::timestamptz IS NULL OR (rv.valid_from IS NULL OR rv.valid_from<=$9) AND (rv.valid_to IS NULL OR rv.valid_to>$9))
 		 AND ($10::timestamptz IS NULL OR rv.recorded_at<=$10)
@@ -164,7 +164,7 @@ func (s *Store) recallTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in 
 		 OR t.id IN (SELECT member_id FROM linked) OR t.id=ANY($8::uuid[]) OR t.id IN (SELECT claim_id FROM claim_revisions WHERE owner_id=$1 AND (subject_id=ANY($8::uuid[]) OR scope->>'project_id'=ANY($8::text[])))
 		 OR ($11::text IS NOT NULL AND EXISTS(SELECT 1 FROM embeddings e WHERE e.owner_id=t.owner_id AND ((e.record_id,e.record_version)=(t.id,t.version) OR e.record_id IN (SELECT id FROM chunks WHERE owner_id=t.owner_id AND source_id=t.id AND source_version=t.version)) AND e.model=$12 AND CASE WHEN e.dimensions=$13 THEN (e.embedding <=> $11::vector)<0.65 ELSE false END)))
 		 ORDER BY CASE WHEN $6='history' THEN rv.recorded_at END,t.id=ANY($8::uuid[]) DESC,score DESC,t.id,t.version
-		 LIMIT $14 OFFSET $15`, string(scope.OwnerID), scope.IsOwner, scope.PrincipalID, query, fts, string(in.Mode), "", in.Context.Objects, in.Context.ValidAt, in.Context.KnownAt, nullString(string(vector)), model, embeddingDimensions(vector), b.Candidates+1, offset, tokens)
+		 LIMIT $14 OFFSET $15`, string(scope.OwnerID), scope.IsOwner, scope.PrincipalID, query, fts, string(in.Mode), "", in.Context.Objects, in.Context.ValidAt, in.Context.KnownAt, nullString(string(vector)), model, embeddingDimensions(vector), b.Candidates+1, offset, tokens, scope.Team)
 	if err != nil {
 		return err
 	}
@@ -241,7 +241,7 @@ func (s *Store) recallTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in 
 		}
 		out.Evidence = append(out.Evidence, evidence...)
 	}
-	pending, err := tx.Query(ctx, `SELECT DISTINCT j.record_id::text FROM memory_jobs j WHERE j.owner_id=$1 AND j.state!='done' AND ($2 OR EXISTS(SELECT 1 FROM record_grants g WHERE g.owner_id=j.owner_id AND g.record_id=j.record_id AND g.principal_id=$3)) LIMIT 100`, string(scope.OwnerID), scope.IsOwner, scope.PrincipalID)
+	pending, err := tx.Query(ctx, `SELECT DISTINCT j.record_id::text FROM memory_jobs j WHERE j.owner_id=$1 AND j.state!='done' AND ($2 OR ($4 AND EXISTS(SELECT 1 FROM memory_records r WHERE (r.owner_id,r.id)=(j.owner_id,j.record_id) AND r.kind='source')) OR EXISTS(SELECT 1 FROM record_grants g WHERE g.owner_id=j.owner_id AND g.record_id=j.record_id AND g.principal_id=$3)) LIMIT 100`, string(scope.OwnerID), scope.IsOwner, scope.PrincipalID, scope.Team)
 	if err != nil {
 		return err
 	}
@@ -266,7 +266,7 @@ func embeddingDimensions(vector []byte) int {
 func evidenceTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, ref memory.Ref) ([]memory.Evidence, error) {
 	result := []memory.Evidence{}
 	rows, err := tx.Query(ctx, `SELECT e.id::text,e.source_id::text,e.source_version,e.locator,e.acquisition,e.stance FROM evidence e JOIN memory_records r ON (r.owner_id,r.id)=(e.owner_id,e.source_id)
-		WHERE e.owner_id=$1 AND e.target_id=$2 AND e.target_version=$3 AND r.state='active' AND ($4 OR EXISTS(SELECT 1 FROM record_grants g WHERE g.owner_id=e.owner_id AND g.record_id=e.source_id AND g.principal_id=$5)) ORDER BY e.id`, string(scope.OwnerID), string(ref.ID), ref.Version, scope.IsOwner, scope.PrincipalID)
+		WHERE e.owner_id=$1 AND e.target_id=$2 AND e.target_version=$3 AND r.state='active' AND ($4 OR ($6 AND r.kind='source') OR EXISTS(SELECT 1 FROM record_grants g WHERE g.owner_id=e.owner_id AND g.record_id=e.source_id AND g.principal_id=$5)) ORDER BY e.id`, string(scope.OwnerID), string(ref.ID), ref.Version, scope.IsOwner, scope.PrincipalID, scope.Team)
 	if err != nil {
 		return nil, err
 	}
@@ -420,4 +420,12 @@ func matchedExcerpt(text, query string, tokens []string, limit int) string {
 		start = len(runes) - limit
 	}
 	return string(runes[start : start+limit])
+}
+
+// Leave room for the truncation mark within the per-excerpt rune budget.
+func sourceExcerpt(text, query string, tokens []string, limit int) string {
+	if len([]rune(text)) <= limit {
+		return text
+	}
+	return matchedExcerpt(text, query, tokens, limit-1) + "…"
 }

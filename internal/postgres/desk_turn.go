@@ -223,9 +223,13 @@ func (s *Store) secretaryPrompt(ctx context.Context, tx pgx.Tx, scope memory.Sco
 	fmt.Fprintln(&prompt, "\n本对话历史：")
 	earlier := ""
 	for _, t := range c.History {
-		fmt.Fprintf(&prompt, "问：%s\n答：%s\n", t.Text, t.Reply)
+		reply := t.Reply
+		if t.Outdated {
+			reply = outdatedDeskAnswer
+		}
+		fmt.Fprintf(&prompt, "问：%s\n答：%s\n", t.Text, reply)
 		earlier += t.Text + " "
-		if t.Reply != "（这条回答依据的记忆已变更）" {
+		if !t.Outdated && t.Text != "" {
 			for _, receipt := range t.Receipts {
 				if receipt.ThingID != nil {
 					item, err := getItem(ctx, tx, scope, *receipt.ThingID)
@@ -253,7 +257,7 @@ func (s *Store) secretaryPrompt(ctx context.Context, tx pgx.Tx, scope memory.Sco
 	for i, t := range c.Recent {
 		fmt.Fprintf(&prompt, "R%d：%s（%s；截止 %s）\n", i+1, t.Title, t.Status, t.Due)
 	}
-	recall, err := s.Recall(ctx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: c.Agent.ID}, memory.RecallRequest{Query: tail(earlier+req.Text, 4000), Mode: "remember", Context: memory.WorkingContext{Objects: []memory.ID{}}, Budget: memory.Budget{Candidates: 15, Tokens: 4000, Edges: 15, Hops: 1}})
+	recall, err := s.Recall(ctx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: c.Agent.ID, Team: true}, memory.RecallRequest{Query: tail(earlier+req.Text, 4000), Mode: "remember", Context: memory.WorkingContext{Objects: []memory.ID{}}, Budget: memory.Budget{Candidates: 15, Tokens: 4000, Edges: 15, Hops: 1}})
 	if err != nil {
 		return "", nil, err
 	}
@@ -343,7 +347,10 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 	conversationID = ticket.conversation
 	err = s.withOrderedSecretaryTurn(ctx, requestCtx, string(scope.OwnerID), req.RequestID, ticket, func(tx pgx.Tx, captureOnly bool) error {
 		var priorHash, prior []byte
-		err := tx.QueryRow(ctx, "SELECT request_hash,response FROM desk_turns WHERE owner_id=$1 AND request_id=$2", string(scope.OwnerID), req.RequestID).Scan(&priorHash, &prior)
+		var refs []memory.Ref
+		var priorAgent string
+		var erased bool
+		err := tx.QueryRow(ctx, "SELECT request_hash,response,dependencies,agent_id,question='' AND answer='' FROM desk_turns WHERE owner_id=$1 AND request_id=$2", string(scope.OwnerID), req.RequestID).Scan(&priorHash, &prior, &refs, &priorAgent, &erased)
 		if err == nil {
 			if !bytes.Equal(hash[:], priorHash) {
 				return memory.ErrConflict
@@ -353,6 +360,10 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 				return err
 			}
 			out.ConversationID, out.Turn = saved.ConversationID, saved.Turn
+			// Deleted request replays retain the already scrubbed response.
+			if !erased {
+				refreshDeskTurnTx(ctx, tx, scope, &out.Turn, workspace.Run{AgentID: priorAgent, ContextVersions: refs}, false, false)
+			}
 			out.State, err = s.snapshotTx(ctx, tx, scope)
 			if err != nil {
 				return err
@@ -588,13 +599,8 @@ func (s *Store) deskTurnsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, 
 		if thingID != nil {
 			run.ThingID = *thingID
 		}
-		if stored.Erased || len(stored.Dependencies) > 0 && verifyRunTx(ctx, tx, scope, run) != nil {
-			turn.Reply = "（这条回答依据的记忆已变更）"
-			if stored.Erased && stored.OriginalDeleted {
-				turn.Reply = "（内容已删除）"
-			}
-			turn.Cards = []workspace.DeskCard{}
-		} else if dependencies != nil {
+		refreshDeskTurnTx(ctx, tx, scope, &turn, run, stored.Erased, stored.OriginalDeleted)
+		if !stored.Erased && !turn.Outdated && dependencies != nil {
 			*dependencies = append(*dependencies, stored.Dependencies...)
 		}
 		out.Turns = append(out.Turns, turn)
@@ -603,6 +609,23 @@ func (s *Store) deskTurnsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, 
 		return out, err
 	}
 	return out, nil
+}
+
+const outdatedDeskAnswer = "（先前回答的依据已更新，请按现在的资料回答）"
+
+// Erasure keeps its existing placeholders; changed dependencies preserve the
+// owner's exchange and are replaced only when assembling model history.
+func refreshDeskTurnTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, turn *workspace.SecretaryTurn, run workspace.Run, erased, originalDeleted bool) {
+	turn.Outdated = false
+	if erased {
+		turn.Reply = "（这条回答依据的记忆已变更）"
+		if originalDeleted {
+			turn.Reply = "（内容已删除）"
+		}
+		turn.Cards = []workspace.DeskCard{}
+		return
+	}
+	turn.Outdated = len(run.ContextVersions) > 0 && verifyRunTx(ctx, tx, scope, run) != nil
 }
 
 // Receipts retain their original action metadata in storage. Undo is a live
@@ -664,7 +687,7 @@ func (s *Store) secretaryCardsTx(ctx context.Context, tx pgx.Tx, scope memory.Sc
 			}
 			m.Sources = provenance
 		}
-		source := workspace.DeskSourceItem{MemoryID: m.ID, Version: m.Version, Text: m.Text}
+		source := workspace.DeskSourceItem{Kind: "claim", MemoryID: m.ID, Version: m.Version, Text: m.Text}
 		if len(m.Sources) > 0 {
 			source.SourceID = m.Sources[0].SourceID
 			source.SourceVersion = m.Sources[0].Version

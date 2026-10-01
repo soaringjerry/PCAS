@@ -19,6 +19,7 @@ type preparedRunContext struct {
 type storedDeskContext struct {
 	Question, Answer string
 	Refs             []memory.Ref
+	Outdated         bool
 }
 
 // Resolve references and perform semantic retrieval before Execute takes the
@@ -58,7 +59,8 @@ func (s *Store) prepareRunContext(ctx context.Context, scope memory.Scope, c wor
 			if err := tx.QueryRow(ctx, "SELECT question,answer,dependencies FROM desk_turns WHERE owner_id=$1 AND id=$2 AND agent_id=$3", string(scope.OwnerID), id, c.AgentID).Scan(&turn.Question, &turn.Answer, &turn.Refs); err != nil {
 				return memory.ErrNotFound
 			}
-			if turn.Answer != "" && verifyRunForItemTx(ctx, tx, scope, workspace.Run{AgentID: c.AgentID, ContextVersions: turn.Refs}, &item) == nil {
+			if turn.Question != "" || turn.Answer != "" {
+				turn.Outdated = verifyRunForItemTx(ctx, tx, scope, workspace.Run{AgentID: c.AgentID, ContextVersions: turn.Refs}, &item) != nil
 				history = append(history, turn)
 			}
 		}
@@ -88,7 +90,7 @@ func (s *Store) prepareRunContext(ctx context.Context, scope memory.Scope, c wor
 	if projectID != "" {
 		request.Context.Objects = []memory.ID{memory.ID(projectID)}
 	}
-	result, err := s.Recall(ctx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: c.AgentID}, request)
+	result, err := s.Recall(ctx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: c.AgentID, Team: true}, request)
 	if err != nil {
 		return ctx, err
 	}

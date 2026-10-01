@@ -19,6 +19,7 @@ var (
 // Scope is bound by trusted authentication, not decoded from request JSON.
 // Non-owner principals require explicit grants on memory records.
 type Scope struct {
+	Team        bool `json:"-"`
 	OwnerID     ID
 	PrincipalID string
 	IsOwner     bool

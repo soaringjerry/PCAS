@@ -181,6 +181,19 @@
         "observed dispatched_at survives recovery; reservation alone is not fabricated as observed network send",
         "canceled request or expiry Cleanup is not evidence of process recovery"
       ]
+    },
+    {
+      "id": "R17",
+      "sequence": "actual source-derived run/brief/output → registry route change or agent disable without source mutation → State/Export and derived docs/samples reads; legitimate legacy pure-claim control",
+      "required": [
+        "route-only change/disable denies obsolete source-derived body in run/brief/output and known derived docs/training views",
+        "owner source audit/export remains readable and is not misclassified as derived replay",
+        "ContextTask=nil legacy only-known-claim dependencies still pass strict legacy plus server current trusted task typed/explicit-deny validation when lawful",
+        "missing/unknown kinds, unclear raw provenance, obsolete explicit recipient, or permission mismatch fail closed without invented historical route",
+        "source explicit deny blocks evidence-derived legacy claim results",
+        "already-cleared body is never reconstructed after regrant or route restore",
+        "unrelated owner original docs and valid unrelated samples remain compatible"
+      ]
     }
   ],
   "reuse_required": [

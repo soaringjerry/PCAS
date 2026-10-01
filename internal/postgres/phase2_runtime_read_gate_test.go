@@ -43,7 +43,13 @@ func TestPhase2RuntimeStateExportAndDerivedBlocksRecheckCurrentRecipient(t *test
 			if finished.Status != "done" || !strings.Contains(finished.Output, derived) {
 				t.Fatal("positive source-derived real result absent")
 			}
-			state := workspaceCommand(t, s, scope, workspace.Command{Type: "adoptRun", ID: run.ID, As: "doc", Text: finished.Output})
+			if finished.Adopted == nil || !finished.Adopted.Auto || finished.Adopted.As != "doc" {
+				t.Fatal("real completed run did not automatically adopt a document")
+			}
+			state, err := s.Snapshot(context.Background(), scope)
+			if err != nil {
+				t.Fatal(err)
+			}
 			var docID string
 			for _, doc := range state.Docs {
 				if doc.RunID == run.ID && strings.Contains(doc.Body, derived) {

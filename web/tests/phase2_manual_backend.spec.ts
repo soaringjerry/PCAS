@@ -103,7 +103,7 @@ async function createThroughUI(page: Page, taskId: string, prompt: string) {
   expect(catalog.status()).toBe(200)
   const model = (await catalog.json() as { providers: { id: string; name: string; available: boolean }[] }).providers.find(provider => provider.id === target.id)
   expect(model).toMatchObject({ id: target.id, name: target.name, available: true })
-  await form.getByRole('button', { name: '转交接收者', exact: true }).click()
+  await form.getByRole('button', { name: '转交接收者：选择接收者', exact: true }).click()
   await page.getByRole('option', { name: new RegExp(target.name) }).click()
   const responsePromise = page.waitForResponse(response => new URL(response.url()).pathname === '/v1/workspace/commands' && response.request().postDataJSON()?.type === 'requestRun')
   await form.getByRole('button', { name: '建立转交请求', exact: true }).click()

@@ -1,0 +1,87 @@
+{
+  "top_counts": {
+    "fail": 2,
+    "pass": 3
+  },
+  "true_leaf_counts": {
+    "fail": 6,
+    "pass": 17
+  },
+  "selected_top": 5,
+  "reached_top": 5,
+  "selected_leaf_plan": 23,
+  "reached_true_leaves": 23,
+  "not_reached": [],
+  "all_leaf_terminals": {
+    "TestPhase2RuntimeOwnerUndoReceiptAuditNeverRestoresSourceText/RECEIPT-EMPTY": "fail",
+    "TestPhase2RuntimeOwnerUndoReceiptAuditNeverRestoresSourceText/RECEIPT-SOURCE": "fail",
+    "TestPhase2RuntimeRetryPreservesGeneratedPromptOrigins/RETRY-LIVE": "fail",
+    "TestPhase2RuntimeRetryPreservesGeneratedPromptOrigins/RETRY-NEW-RECIPIENT": "pass",
+    "TestPhase2RuntimeRetryPreservesGeneratedPromptOrigins/RETRY-INVALID-REVOKE_SECRETARY_ONLY-ORIGINAL_PROMPT": "pass",
+    "TestPhase2RuntimeRetryPreservesGeneratedPromptOrigins/RETRY-INVALID-REVOKE_SECRETARY_ONLY-PUNCTUATION_ONLY": "pass",
+    "TestPhase2RuntimeRetryPreservesGeneratedPromptOrigins/RETRY-INVALID-CORRECT_SOURCE_TO_V2-ORIGINAL_PROMPT": "pass",
+    "TestPhase2RuntimeRetryPreservesGeneratedPromptOrigins/RETRY-INVALID-CORRECT_SOURCE_TO_V2-PUNCTUATION_ONLY": "pass",
+    "TestPhase2RuntimeRetryPreservesGeneratedPromptOrigins/RETRY-INVALID-DELETE_SOURCE-ORIGINAL_PROMPT": "fail",
+    "TestPhase2RuntimeRetryPreservesGeneratedPromptOrigins/RETRY-INVALID-DELETE_SOURCE-PUNCTUATION_ONLY": "fail",
+    "TestPhase2RuntimeRetryPreservesGeneratedPromptOrigins/RETRY-TARGET-DENIED": "pass",
+    "TestPhase2RuntimeRetryPreservesGeneratedPromptOrigins/RETRY-SCOPE-DENIED": "fail",
+    "TestPhase2RuntimeRetryPreservesGeneratedPromptOrigins/RETRY-OWNER-INDEPENDENT": "pass",
+    "TestPhase2RuntimeRetryPreservesGeneratedPromptOrigins/RETRY-LOCATOR-CROSS_OWNER": "pass",
+    "TestPhase2RuntimeRetryPreservesGeneratedPromptOrigins/RETRY-LOCATOR-CROSS_THING": "pass",
+    "TestPhase2RuntimeRetryManualAndFinalFence/RETRY-MANUAL-LIVE": "pass",
+    "TestPhase2RuntimeRetryManualAndFinalFence/RETRY-MANUAL-REVOKED": "pass",
+    "TestPhase2RuntimeRetryManualAndFinalFence/RETRY-FINAL-BARRIER": "pass",
+    "TestPhase2RuntimeRetryQueryIsolationAndDestinationExclusion/RETRY-TARGET-EXCLUDED": "pass",
+    "TestPhase2RuntimeRetryQueryIsolationAndDestinationExclusion/SECRETARY-EMBED-CURRENT-QUERY-ONLY": "pass",
+    "TestContinuationHonorsCurrentItemScopeBeforeSemanticRetrieval/exclude": "pass",
+    "TestContinuationHonorsCurrentItemScopeBeforeSemanticRetrieval/move-project": "pass",
+    "TestContinuationHonorsCurrentItemScopeBeforeSemanticRetrieval/revoke": "pass"
+  },
+  "failures": [
+    {
+      "test": "TestPhase2RuntimeOwnerUndoReceiptAuditNeverRestoresSourceText/RECEIPT-EMPTY",
+      "action": "fail",
+      "original_failure_output": [
+        "    phase2_runtime_receipt_audit_test.go:118: history lost stable actual undone identity {0xc0004ca720 create_task 已建：RECEIPT-AUDIT-EMPTY-866 0xc0004ca730 true true done  }\n"
+      ]
+    },
+    {
+      "test": "TestPhase2RuntimeOwnerUndoReceiptAuditNeverRestoresSourceText/RECEIPT-SOURCE",
+      "action": "fail",
+      "original_failure_output": [
+        "    phase2_runtime_receipt_audit_test.go:118: history lost stable actual undone identity {0xc000268970 create_task 已建：RECEIPT-AUDIT-SOURCE Q7-LANTERN-482 0xc000268980 true true done  }\n"
+      ]
+    },
+    {
+      "test": "TestPhase2RuntimeRetryPreservesGeneratedPromptOrigins/RETRY-LIVE",
+      "action": "fail",
+      "original_failure_output": [
+        "    phase2_runtime_retry_origin_test.go:286: lawful delegation did not commit a real target: [{ActionID:<nil> Op:delegate Text:这个副手目前不能使用这轮资料，请确认授权后再试 ThingID:<nil> Undoable:false Undone:false Status:skipped Reason:这个副手目前不能使用这轮资料，请确认授权后再试 Code:}]\n"
+      ]
+    },
+    {
+      "test": "TestPhase2RuntimeRetryPreservesGeneratedPromptOrigins/RETRY-INVALID-DELETE_SOURCE-ORIGINAL_PROMPT",
+      "action": "fail",
+      "original_failure_output": [
+        "    phase2_runtime_retry_origin_test.go:356: retry expected exact controlled version conflict, got not found\n"
+      ]
+    },
+    {
+      "test": "TestPhase2RuntimeRetryPreservesGeneratedPromptOrigins/RETRY-INVALID-DELETE_SOURCE-PUNCTUATION_ONLY",
+      "action": "fail",
+      "original_failure_output": [
+        "    phase2_runtime_retry_origin_test.go:356: retry expected exact controlled version conflict, got not found\n"
+      ]
+    },
+    {
+      "test": "TestPhase2RuntimeRetryPreservesGeneratedPromptOrigins/RETRY-SCOPE-DENIED",
+      "action": "fail",
+      "original_failure_output": [
+        "    phase2_runtime_retry_origin_test.go:286: lawful delegation did not commit a real target: [{ActionID:<nil> Op:delegate Text:这个副手目前不能使用这轮资料，请确认授权后再试 ThingID:<nil> Undoable:false Undone:false Status:skipped Reason:这个副手目前不能使用这轮资料，请确认授权后再试 Code:}]\n"
+      ]
+    }
+  ],
+  "raw_event_count": 15729,
+  "race_warning": false,
+  "panic": false
+}

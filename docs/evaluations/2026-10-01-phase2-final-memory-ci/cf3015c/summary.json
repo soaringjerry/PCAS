@@ -1,0 +1,193 @@
+{
+  "run_id": 36888958920,
+  "head": "cf3015cd67cf112933dfa51badbda8507de30834",
+  "checkout": "ba946b860dea2ef81b83c2c1ec3eb5c63f4d1562",
+  "tree": "52b5a793517add9741df26a08ca64950aa05f034",
+  "conclusion": "success",
+  "make_check_exit": 0,
+  "exit_evidence": "Run make check completed success, final go build command/cmd output present before successful post steps",
+  "test_packages": 11,
+  "no_test_file_packages": 4,
+  "logged_top_counts": {
+    "pass": 338,
+    "fail": 0,
+    "skip": 3
+  },
+  "logged_true_leaf_counts": {
+    "pass": 752,
+    "fail": 0,
+    "skip": 3
+  },
+  "fresh_top_counts": {
+    "pass": 338,
+    "fail": 0,
+    "skip": 3
+  },
+  "fresh_true_leaf_counts": {
+    "pass": 752,
+    "fail": 0,
+    "skip": 3
+  },
+  "cached_top_counts": {
+    "pass": 0,
+    "fail": 0,
+    "skip": 0
+  },
+  "cached_true_leaf_counts": {
+    "pass": 0,
+    "fail": 0,
+    "skip": 0
+  },
+  "cached_packages": [],
+  "unreached": {},
+  "unresolved": {},
+  "race_warning": false,
+  "panic_lines": [],
+  "retry_same_head_true_leaves": 23,
+  "retry_same_head_pass": 23,
+  "packages": [
+    {
+      "package": "github.com/soaringjerry/PCAS/internal/ai",
+      "elapsed": "1.289s",
+      "cached": false,
+      "top_counts": {
+        "pass": 12,
+        "skip": 1
+      },
+      "true_leaf_counts": {
+        "pass": 20,
+        "skip": 1
+      },
+      "skips": [
+        "TestInstalledCodexHandshake"
+      ]
+    },
+    {
+      "package": "github.com/soaringjerry/PCAS/internal/ai/siwc",
+      "elapsed": "8.918s",
+      "cached": false,
+      "top_counts": {
+        "pass": 12
+      },
+      "true_leaf_counts": {
+        "pass": 34
+      },
+      "skips": []
+    },
+    {
+      "package": "github.com/soaringjerry/PCAS/internal/blob",
+      "elapsed": "1.017s",
+      "cached": false,
+      "top_counts": {
+        "pass": 1
+      },
+      "true_leaf_counts": {
+        "pass": 1
+      },
+      "skips": []
+    },
+    {
+      "package": "github.com/soaringjerry/PCAS/internal/config",
+      "elapsed": "1.010s",
+      "cached": false,
+      "top_counts": {
+        "pass": 1
+      },
+      "true_leaf_counts": {
+        "pass": 1
+      },
+      "skips": []
+    },
+    {
+      "package": "github.com/soaringjerry/PCAS/internal/connectors",
+      "elapsed": "1.024s",
+      "cached": false,
+      "top_counts": {
+        "pass": 2
+      },
+      "true_leaf_counts": {
+        "pass": 2
+      },
+      "skips": []
+    },
+    {
+      "package": "github.com/soaringjerry/PCAS/internal/httpapi",
+      "elapsed": "1.243s",
+      "cached": false,
+      "top_counts": {
+        "pass": 9
+      },
+      "true_leaf_counts": {
+        "pass": 23
+      },
+      "skips": []
+    },
+    {
+      "package": "github.com/soaringjerry/PCAS/internal/memory",
+      "elapsed": "1.026s",
+      "cached": false,
+      "top_counts": {
+        "pass": 6
+      },
+      "true_leaf_counts": {
+        "pass": 31
+      },
+      "skips": []
+    },
+    {
+      "package": "github.com/soaringjerry/PCAS/internal/notify",
+      "elapsed": "5.514s",
+      "cached": false,
+      "top_counts": {
+        "pass": 10
+      },
+      "true_leaf_counts": {
+        "pass": 10
+      },
+      "skips": []
+    },
+    {
+      "package": "github.com/soaringjerry/PCAS/internal/postgres",
+      "elapsed": "467.368s",
+      "cached": false,
+      "top_counts": {
+        "pass": 241,
+        "skip": 2
+      },
+      "true_leaf_counts": {
+        "pass": 568,
+        "skip": 2
+      },
+      "skips": [
+        "TestLiveCodexSecretaryAndLegacyFormats",
+        "TestLiveContinuityReplay"
+      ]
+    },
+    {
+      "package": "github.com/soaringjerry/PCAS/internal/telegram",
+      "elapsed": "11.492s",
+      "cached": false,
+      "top_counts": {
+        "pass": 36
+      },
+      "true_leaf_counts": {
+        "pass": 52
+      },
+      "skips": []
+    },
+    {
+      "package": "github.com/soaringjerry/PCAS/internal/workspace",
+      "elapsed": "1.069s",
+      "cached": false,
+      "top_counts": {
+        "pass": 8
+      },
+      "true_leaf_counts": {
+        "pass": 10
+      },
+      "skips": []
+    }
+  ],
+  "raw_sha256": "56d494eec29a5a7d8162967f656df1b15ef9e2e19d0d7ed443de49737ea772fe",
+  "evidence_records": 1074
+}

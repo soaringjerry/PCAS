@@ -1,0 +1,24 @@
+{
+  "product_and_harness_head": "80bcd46d6863d5ed6b6283d28ece9b4d066a81fc",
+  "command_argv": [
+    "bash",
+    "web/tests/support/real-backend.sh",
+    "npx",
+    "playwright",
+    "test",
+    "tests/golden.spec.ts",
+    "tests/phase2_manual_backend.spec.ts",
+    "--grep",
+    "G5 |F7 连续撤销|real_target_package_clipboard_submit|real_revoke_clear_refuse_regenerate_submit",
+    "--retries=0",
+    "--output=test-results/phase2-ci-causal",
+    "--reporter=list,json"
+  ],
+  "GOFLAGS": "-buildvcs=false",
+  "started_at": "2026-10-01T15:22:30.812794+00:00",
+  "finished_at": "2026-10-01T15:22:55.966485+00:00",
+  "elapsed_seconds": 25.154,
+  "exit": 1,
+  "retries": 0,
+  "execution_count": 1
+}

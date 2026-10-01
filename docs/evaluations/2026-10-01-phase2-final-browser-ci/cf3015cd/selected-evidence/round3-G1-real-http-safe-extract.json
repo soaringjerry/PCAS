@@ -1,0 +1,1294 @@
+[
+  {
+    "method": "GET",
+    "path": "v1/workspace",
+    "request": null,
+    "status": 401,
+    "response": {
+      "error": "unauthorized"
+    }
+  },
+  {
+    "method": "GET",
+    "path": "v1/workspace",
+    "request": null,
+    "status": 200,
+    "response": {
+      "notices": [],
+      "budgetUsage": 0,
+      "version": 1,
+      "revision": 0,
+      "settings": {
+        "autoAccept": false,
+        "wakeIdeas": true,
+        "followUps": true,
+        "dailyReviewAt": "09:00",
+        "dailyBudget": 10,
+        "timezone": "Asia/Shanghai"
+      },
+      "tasks": [],
+      "ideas": [],
+      "projects": [],
+      "memories": [],
+      "candidates": [],
+      "agents": [
+        {
+          "protocol": "siwc",
+          "available": false,
+          "inputPrice": 0,
+          "outputPrice": 0,
+          "maxOutput": 4096,
+          "id": "chatgpt-direct",
+          "name": "ChatGPT · 套餐授权",
+          "channel": "api",
+          "note": "消耗你的 ChatGPT 套餐 · 官方直接授权",
+          "enabled": true,
+          "memoryKinds": [
+            "fact",
+            "preference",
+            "decision",
+            "intention",
+            "plan"
+          ],
+          "includeInferred": false
+        },
+        {
+          "default": true,
+          "protocol": "openai",
+          "available": true,
+          "inputPrice": 0,
+          "outputPrice": 0,
+          "maxOutput": 2000,
+          "id": "golden",
+          "name": "验收假模型",
+          "channel": "api",
+          "note": "通用 API · golden",
+          "enabled": true,
+          "memoryKinds": [
+            "fact",
+            "preference",
+            "decision",
+            "intention",
+            "plan"
+          ],
+          "includeInferred": false
+        },
+        {
+          "available": true,
+          "inputPrice": 0,
+          "outputPrice": 0,
+          "maxOutput": 0,
+          "id": "manual",
+          "name": "手动交接",
+          "channel": "manual",
+          "note": "复制上下文到任意 AI，再粘贴结果",
+          "enabled": true,
+          "memoryKinds": [
+            "fact",
+            "preference",
+            "decision",
+            "intention",
+            "plan"
+          ],
+          "includeInferred": false
+        }
+      ],
+      "docs": [],
+      "runs": [],
+      "samples": [],
+      "sources": [],
+      "jobs": [],
+      "activity": [],
+      "excludedMemories": {}
+    }
+  },
+  {
+    "method": "POST",
+    "path": "v1/desk/turn",
+    "request": {
+      "requestId": "10926403-3e14-4e6c-aa52-d619130f39ea",
+      "conversationId": "83f0394b-96d8-4e9b-bb2f-de273ebdf6ba",
+      "thingId": null,
+      "text": "周五下午三点和张三对方案，算在 A 项目里",
+      "agentId": "golden"
+    },
+    "status": 200,
+    "response": {
+      "conversationId": "83f0394b-96d8-4e9b-bb2f-de273ebdf6ba",
+      "turn": {
+        "id": "bbe10c40-dc92-4ff4-87eb-ec93b1f2f62f",
+        "text": "周五下午三点和张三对方案，算在 A 项目里",
+        "reply": "安排好了。",
+        "cards": [],
+        "receipts": [
+          {
+            "actionId": "500bf3d2-b9bc-473d-8f17-6992d534f555",
+            "op": "create_task",
+            "text": "已建：10 月 9 日 15:00 和张三对方案-1790870655320 · A 项目 · 14:30 提醒",
+            "thingId": "66f68427-8029-418d-8252-1d42fd39002f",
+            "undoable": true,
+            "undone": false,
+            "status": "done"
+          }
+        ],
+        "ask": null,
+        "agent": "验收假模型",
+        "createdAt": "2026-10-01T16:04:15.42484889Z"
+      },
+      "state": {
+        "notices": [],
+        "budgetUsage": 0,
+        "version": 1,
+        "revision": 3,
+        "settings": {
+          "autoAccept": false,
+          "wakeIdeas": true,
+          "followUps": true,
+          "dailyReviewAt": "09:00",
+          "dailyBudget": 10,
+          "timezone": "Asia/Shanghai"
+        },
+        "tasks": [
+          {
+            "id": "66f68427-8029-418d-8252-1d42fd39002f",
+            "itemKind": "task",
+            "recordVersion": 2,
+            "title": "和张三对方案-1790870655320",
+            "name": "和张三对方案-1790870655320",
+            "status": "todo",
+            "body": "",
+            "goal": "",
+            "progress": "",
+            "projectId": "4ccd1562-37fe-4437-9acd-7c05c72e6b80",
+            "due": "2026-10-09T07:00:00Z",
+            "dependsOn": [],
+            "checklist": [],
+            "triggers": [
+              {
+                "offset": "-30m",
+                "id": "due-reminder",
+                "kind": "time",
+                "description": "和张三对方案-1790870655320",
+                "nextAt": "2026-10-09T06:30:00Z",
+                "active": true
+              }
+            ],
+            "sources": [
+              {
+                "sourceId": "4b3891e9-0c19-47b8-ba63-e9fd96636ddf",
+                "version": 1,
+                "label": "新建：10 月 9 日 15:00 和张三对方案-1790870655320 · A 项目 · 14:30 提醒",
+                "at": "2026-10-01T16:04:15.50982187Z"
+              }
+            ],
+            "history": [
+              {
+                "at": "2026-10-01T16:04:15.50982187Z",
+                "by": "secretary",
+                "summary": "新建：10 月 9 日 15:00 和张三对方案-1790870655320 · A 项目 · 14:30 提醒"
+              }
+            ],
+            "evolution": [],
+            "conditions": [],
+            "remindersOn": true,
+            "nextSteps": [],
+            "createdAt": "2026-10-01T16:04:15.499399108Z",
+            "updatedAt": "2026-10-01T16:04:15.504099784Z"
+          }
+        ],
+        "ideas": [],
+        "projects": [
+          {
+            "id": "4ccd1562-37fe-4437-9acd-7c05c72e6b80",
+            "itemKind": "project",
+            "recordVersion": 1,
+            "title": "A",
+            "name": "A",
+            "status": "active",
+            "body": "",
+            "goal": "",
+            "progress": "",
+            "dependsOn": [],
+            "checklist": [],
+            "triggers": [],
+            "sources": [
+              {
+                "sourceId": "97830b54-5f53-4050-a77c-8b3000dfd679",
+                "version": 1,
+                "label": "创建",
+                "at": "2026-10-01T16:04:15.347489522Z"
+              }
+            ],
+            "history": [
+              {
+                "at": "2026-10-01T16:04:15.347075028Z",
+                "by": "user",
+                "summary": "创建"
+              },
+              {
+                "at": "2026-10-01T16:04:15.347489522Z",
+                "by": "user",
+                "summary": "创建"
+              }
+            ],
+            "evolution": [
+              {
+                "at": "2026-10-01T16:04:15.347075028Z",
+                "by": "user",
+                "summary": "提出"
+              }
+            ],
+            "conditions": [],
+            "remindersOn": true,
+            "nextSteps": [],
+            "createdAt": "2026-10-01T16:04:15.347075028Z",
+            "updatedAt": "2026-10-01T16:04:15.347075028Z"
+          }
+        ],
+        "memories": [],
+        "candidates": [],
+        "agents": [
+          {
+            "protocol": "siwc",
+            "available": false,
+            "inputPrice": 0,
+            "outputPrice": 0,
+            "maxOutput": 4096,
+            "id": "chatgpt-direct",
+            "name": "ChatGPT · 套餐授权",
+            "channel": "api",
+            "note": "消耗你的 ChatGPT 套餐 · 官方直接授权",
+            "enabled": true,
+            "memoryKinds": [
+              "fact",
+              "preference",
+              "decision",
+              "intention",
+              "plan"
+            ],
+            "includeInferred": false
+          },
+          {
+            "default": true,
+            "protocol": "openai",
+            "available": true,
+            "inputPrice": 0,
+            "outputPrice": 0,
+            "maxOutput": 2000,
+            "id": "golden",
+            "name": "验收假模型",
+            "channel": "api",
+            "note": "通用 API · golden",
+            "enabled": true,
+            "memoryKinds": [
+              "fact",
+              "preference",
+              "decision",
+              "intention",
+              "plan"
+            ],
+            "includeInferred": false
+          },
+          {
+            "available": true,
+            "inputPrice": 0,
+            "outputPrice": 0,
+            "maxOutput": 0,
+            "id": "manual",
+            "name": "手动交接",
+            "channel": "manual",
+            "note": "复制上下文到任意 AI，再粘贴结果",
+            "enabled": true,
+            "memoryKinds": [
+              "fact",
+              "preference",
+              "decision",
+              "intention",
+              "plan"
+            ],
+            "includeInferred": false
+          }
+        ],
+        "docs": [],
+        "runs": [],
+        "samples": [],
+        "sources": [
+          {
+            "id": "4b3891e9-0c19-47b8-ba63-e9fd96636ddf",
+            "name": "和张三对方案-1790870655320",
+            "method": "actions",
+            "status": "syncing",
+            "note": "原文可读，索引处理中",
+            "itemCount": 0,
+            "lastSyncAt": "2026-10-01T16:04:15.49028Z"
+          },
+          {
+            "id": "84340fe6-32eb-4eaf-8245-6505c98b7af9",
+            "name": "秘书原话",
+            "method": "desk",
+            "status": "syncing",
+            "note": "原文可读，索引处理中",
+            "itemCount": 0,
+            "lastSyncAt": "2026-10-01T16:04:15.49028Z"
+          },
+          {
+            "id": "97830b54-5f53-4050-a77c-8b3000dfd679",
+            "name": "A",
+            "method": "actions",
+            "status": "syncing",
+            "note": "原文可读，索引处理中",
+            "itemCount": 0,
+            "lastSyncAt": "2026-10-01T16:04:15.345279Z"
+          }
+        ],
+        "jobs": [
+          {
+            "id": "c201195b-13d1-4515-8058-a1fc3b49b4db",
+            "title": "切分原文",
+            "trigger": "资料处理",
+            "status": "queued",
+            "detail": "「秘书原话」",
+            "createdAt": "2026-10-01T16:04:15.49028Z",
+            "nextRunAt": "2026-10-01T16:04:15.49028Z"
+          },
+          {
+            "id": "9b98497b-6abc-48f7-a9d9-788ef9228dab",
+            "title": "切分原文",
+            "trigger": "资料处理",
+            "status": "queued",
+            "detail": "「和张三对方案-1790870655320」",
+            "createdAt": "2026-10-01T16:04:15.49028Z",
+            "nextRunAt": "2026-10-01T16:04:15.49028Z"
+          },
+          {
+            "id": "de30cea0-5969-4831-992a-3e6e4b5afd1a",
+            "title": "切分原文",
+            "trigger": "资料处理",
+            "status": "queued",
+            "detail": "「A」",
+            "createdAt": "2026-10-01T16:04:15.345279Z",
+            "nextRunAt": "2026-10-01T16:04:15.345279Z"
+          }
+        ],
+        "activity": [],
+        "excludedMemories": {}
+      }
+    }
+  },
+  {
+    "method": "GET",
+    "path": "v1/workspace",
+    "request": null,
+    "status": 200,
+    "response": {
+      "notices": [],
+      "budgetUsage": 0,
+      "version": 1,
+      "revision": 4,
+      "settings": {
+        "autoAccept": false,
+        "wakeIdeas": true,
+        "followUps": true,
+        "dailyReviewAt": "09:00",
+        "dailyBudget": 10,
+        "timezone": "Asia/Shanghai"
+      },
+      "tasks": [
+        {
+          "id": "66f68427-8029-418d-8252-1d42fd39002f",
+          "itemKind": "task",
+          "recordVersion": 2,
+          "title": "和张三对方案-1790870655320",
+          "name": "和张三对方案-1790870655320",
+          "status": "todo",
+          "body": "",
+          "goal": "",
+          "progress": "",
+          "projectId": "4ccd1562-37fe-4437-9acd-7c05c72e6b80",
+          "due": "2026-10-09T07:00:00Z",
+          "dependsOn": [],
+          "checklist": [],
+          "triggers": [
+            {
+              "offset": "-30m",
+              "id": "due-reminder",
+              "kind": "time",
+              "description": "和张三对方案-1790870655320",
+              "nextAt": "2026-10-09T06:30:00Z",
+              "active": true
+            }
+          ],
+          "sources": [
+            {
+              "sourceId": "4b3891e9-0c19-47b8-ba63-e9fd96636ddf",
+              "version": 1,
+              "label": "新建：10 月 9 日 15:00 和张三对方案-1790870655320 · A 项目 · 14:30 提醒",
+              "at": "2026-10-01T16:04:15.50982187Z"
+            }
+          ],
+          "history": [
+            {
+              "at": "2026-10-01T16:04:15.50982187Z",
+              "by": "secretary",
+              "summary": "新建：10 月 9 日 15:00 和张三对方案-1790870655320 · A 项目 · 14:30 提醒"
+            }
+          ],
+          "evolution": [],
+          "conditions": [],
+          "remindersOn": true,
+          "nextSteps": [],
+          "createdAt": "2026-10-01T16:04:15.499399108Z",
+          "updatedAt": "2026-10-01T16:04:15.504099784Z"
+        }
+      ],
+      "ideas": [],
+      "projects": [
+        {
+          "id": "4ccd1562-37fe-4437-9acd-7c05c72e6b80",
+          "itemKind": "project",
+          "recordVersion": 1,
+          "title": "A",
+          "name": "A",
+          "status": "active",
+          "body": "",
+          "goal": "",
+          "progress": "",
+          "dependsOn": [],
+          "checklist": [],
+          "triggers": [],
+          "sources": [
+            {
+              "sourceId": "97830b54-5f53-4050-a77c-8b3000dfd679",
+              "version": 1,
+              "label": "创建",
+              "at": "2026-10-01T16:04:15.347489522Z"
+            }
+          ],
+          "history": [
+            {
+              "at": "2026-10-01T16:04:15.347075028Z",
+              "by": "user",
+              "summary": "创建"
+            },
+            {
+              "at": "2026-10-01T16:04:15.347489522Z",
+              "by": "user",
+              "summary": "创建"
+            }
+          ],
+          "evolution": [
+            {
+              "at": "2026-10-01T16:04:15.347075028Z",
+              "by": "user",
+              "summary": "提出"
+            }
+          ],
+          "conditions": [],
+          "remindersOn": true,
+          "nextSteps": [],
+          "createdAt": "2026-10-01T16:04:15.347075028Z",
+          "updatedAt": "2026-10-01T16:04:15.347075028Z"
+        }
+      ],
+      "memories": [],
+      "candidates": [],
+      "agents": [
+        {
+          "protocol": "siwc",
+          "available": false,
+          "inputPrice": 0,
+          "outputPrice": 0,
+          "maxOutput": 4096,
+          "id": "chatgpt-direct",
+          "name": "ChatGPT · 套餐授权",
+          "channel": "api",
+          "note": "消耗你的 ChatGPT 套餐 · 官方直接授权",
+          "enabled": true,
+          "memoryKinds": [
+            "fact",
+            "preference",
+            "decision",
+            "intention",
+            "plan"
+          ],
+          "includeInferred": false
+        },
+        {
+          "default": true,
+          "protocol": "openai",
+          "available": true,
+          "inputPrice": 0,
+          "outputPrice": 0,
+          "maxOutput": 2000,
+          "id": "golden",
+          "name": "验收假模型",
+          "channel": "api",
+          "note": "通用 API · golden",
+          "enabled": true,
+          "memoryKinds": [
+            "fact",
+            "preference",
+            "decision",
+            "intention",
+            "plan"
+          ],
+          "includeInferred": false
+        },
+        {
+          "available": true,
+          "inputPrice": 0,
+          "outputPrice": 0,
+          "maxOutput": 0,
+          "id": "manual",
+          "name": "手动交接",
+          "channel": "manual",
+          "note": "复制上下文到任意 AI，再粘贴结果",
+          "enabled": true,
+          "memoryKinds": [
+            "fact",
+            "preference",
+            "decision",
+            "intention",
+            "plan"
+          ],
+          "includeInferred": false
+        }
+      ],
+      "docs": [],
+      "runs": [],
+      "samples": [],
+      "sources": [
+        {
+          "id": "4b3891e9-0c19-47b8-ba63-e9fd96636ddf",
+          "name": "和张三对方案-1790870655320",
+          "method": "actions",
+          "status": "failed",
+          "note": "原文可读，部分处理未完成；展开后台任务查看缺口",
+          "itemCount": 1,
+          "lastSyncAt": "2026-10-01T16:04:15.49028Z"
+        },
+        {
+          "id": "84340fe6-32eb-4eaf-8245-6505c98b7af9",
+          "name": "秘书原话",
+          "method": "desk",
+          "status": "failed",
+          "note": "原文可读，部分处理未完成；展开后台任务查看缺口",
+          "itemCount": 1,
+          "lastSyncAt": "2026-10-01T16:04:15.49028Z"
+        },
+        {
+          "id": "97830b54-5f53-4050-a77c-8b3000dfd679",
+          "name": "A",
+          "method": "actions",
+          "status": "failed",
+          "note": "原文可读，部分处理未完成；展开后台任务查看缺口",
+          "itemCount": 1,
+          "lastSyncAt": "2026-10-01T16:04:15.345279Z"
+        }
+      ],
+      "jobs": [
+        {
+          "id": "98cdd78b-1a54-46ec-8b75-e7927ef38f7d",
+          "title": "更新摘要",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「和张三对方案-1790870655320」",
+          "createdAt": "2026-10-01T16:04:16.032737Z"
+        },
+        {
+          "id": "5f2bc1af-36af-4979-be01-85f5d866af87",
+          "title": "更新摘要",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「秘书原话」",
+          "createdAt": "2026-10-01T16:04:16.025235Z"
+        },
+        {
+          "id": "f4f4117e-cc51-46bf-a607-32024bc94144",
+          "title": "更新摘要",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「A」",
+          "createdAt": "2026-10-01T16:04:16.007695Z"
+        },
+        {
+          "id": "39499108-7d1e-49f0-846d-0d99e331bbca",
+          "title": "从资料里读出要点",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「和张三对方案-1790870655320」",
+          "createdAt": "2026-10-01T16:04:15.996499Z"
+        },
+        {
+          "id": "117cc73d-a9e6-4a47-9b78-fb2ad69a752e",
+          "title": "建立检索索引",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「和张三对方案-1790870655320」",
+          "createdAt": "2026-10-01T16:04:15.996499Z"
+        },
+        {
+          "id": "5e24f2fa-3259-421e-90b2-e415fca63aa9",
+          "title": "建立语义索引",
+          "trigger": "资料处理",
+          "status": "failed",
+          "detail": "「和张三对方案-1790870655320」 · 还没配置处理它的模型",
+          "recovery": "配置对应模型或处理器后重试",
+          "createdAt": "2026-10-01T16:04:15.996499Z"
+        },
+        {
+          "id": "e92b2d41-da45-4f0f-b04f-796108af9506",
+          "title": "建立语义索引",
+          "trigger": "资料处理",
+          "status": "failed",
+          "detail": "「秘书原话」 · 还没配置处理它的模型",
+          "recovery": "配置对应模型或处理器后重试",
+          "createdAt": "2026-10-01T16:04:15.992789Z"
+        },
+        {
+          "id": "ae755f65-e863-4070-a181-5e52c580cc76",
+          "title": "从资料里读出要点",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「秘书原话」",
+          "createdAt": "2026-10-01T16:04:15.992789Z"
+        },
+        {
+          "id": "b21cf962-415b-41cc-9319-c2a90ca5b32c",
+          "title": "建立检索索引",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「秘书原话」",
+          "createdAt": "2026-10-01T16:04:15.992789Z"
+        },
+        {
+          "id": "0ec14201-fad1-422a-8e3e-a63d6b179e72",
+          "title": "建立检索索引",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「A」",
+          "createdAt": "2026-10-01T16:04:15.985984Z"
+        },
+        {
+          "id": "ee26c171-5477-40fe-aa49-1e8bc548fa9f",
+          "title": "建立语义索引",
+          "trigger": "资料处理",
+          "status": "failed",
+          "detail": "「A」 · 还没配置处理它的模型",
+          "recovery": "配置对应模型或处理器后重试",
+          "createdAt": "2026-10-01T16:04:15.985984Z"
+        },
+        {
+          "id": "00b44903-8d16-4db8-8f00-82aaaad50cd4",
+          "title": "从资料里读出要点",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「A」",
+          "createdAt": "2026-10-01T16:04:15.985984Z"
+        },
+        {
+          "id": "9b98497b-6abc-48f7-a9d9-788ef9228dab",
+          "title": "切分原文",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「和张三对方案-1790870655320」",
+          "createdAt": "2026-10-01T16:04:15.49028Z"
+        },
+        {
+          "id": "c201195b-13d1-4515-8058-a1fc3b49b4db",
+          "title": "切分原文",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「秘书原话」",
+          "createdAt": "2026-10-01T16:04:15.49028Z"
+        },
+        {
+          "id": "de30cea0-5969-4831-992a-3e6e4b5afd1a",
+          "title": "切分原文",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「A」",
+          "createdAt": "2026-10-01T16:04:15.345279Z"
+        }
+      ],
+      "activity": [
+        {
+          "id": "problem:还没配置处理它的模型",
+          "at": "2026-10-01T16:04:16.031953Z",
+          "text": "有 3 项整理没做完：还没配置处理它的模型",
+          "to": "/library?tab=sources",
+          "failed": true
+        }
+      ],
+      "excludedMemories": {}
+    }
+  },
+  {
+    "method": "GET",
+    "path": "v1/workspace",
+    "request": null,
+    "status": 200,
+    "response": {
+      "notices": [],
+      "budgetUsage": 0,
+      "version": 1,
+      "revision": 0,
+      "settings": {
+        "autoAccept": false,
+        "wakeIdeas": true,
+        "followUps": true,
+        "dailyReviewAt": "09:00",
+        "dailyBudget": 10,
+        "timezone": "Asia/Shanghai"
+      },
+      "tasks": [],
+      "ideas": [],
+      "projects": [],
+      "memories": [],
+      "candidates": [],
+      "agents": [
+        {
+          "protocol": "siwc",
+          "available": false,
+          "inputPrice": 0,
+          "outputPrice": 0,
+          "maxOutput": 4096,
+          "id": "chatgpt-direct",
+          "name": "ChatGPT · 套餐授权",
+          "channel": "api",
+          "note": "消耗你的 ChatGPT 套餐 · 官方直接授权",
+          "enabled": true,
+          "memoryKinds": [
+            "fact",
+            "preference",
+            "decision",
+            "intention",
+            "plan"
+          ],
+          "includeInferred": false
+        },
+        {
+          "default": true,
+          "protocol": "openai",
+          "available": true,
+          "inputPrice": 0,
+          "outputPrice": 0,
+          "maxOutput": 2000,
+          "id": "golden",
+          "name": "验收假模型",
+          "channel": "api",
+          "note": "通用 API · golden",
+          "enabled": true,
+          "memoryKinds": [
+            "fact",
+            "preference",
+            "decision",
+            "intention",
+            "plan"
+          ],
+          "includeInferred": false
+        },
+        {
+          "available": true,
+          "inputPrice": 0,
+          "outputPrice": 0,
+          "maxOutput": 0,
+          "id": "manual",
+          "name": "手动交接",
+          "channel": "manual",
+          "note": "复制上下文到任意 AI，再粘贴结果",
+          "enabled": true,
+          "memoryKinds": [
+            "fact",
+            "preference",
+            "decision",
+            "intention",
+            "plan"
+          ],
+          "includeInferred": false
+        }
+      ],
+      "docs": [],
+      "runs": [],
+      "samples": [],
+      "sources": [],
+      "jobs": [],
+      "activity": [],
+      "excludedMemories": {}
+    }
+  },
+  {
+    "method": "POST",
+    "path": "v1/workspace/commands",
+    "request": {
+      "type": "updateSettings",
+      "patch": {
+        "timezone": "Asia/Shanghai",
+        "followUps": true
+      },
+      "requestId": "7557ff1d-60ea-4ac1-9191-b2407f21284b",
+      "expectedRevision": 0
+    },
+    "status": 200,
+    "response": {
+      "notices": [],
+      "budgetUsage": 0,
+      "version": 1,
+      "revision": 1,
+      "settings": {
+        "autoAccept": false,
+        "wakeIdeas": true,
+        "followUps": true,
+        "dailyReviewAt": "09:00",
+        "dailyBudget": 10,
+        "timezone": "Asia/Shanghai"
+      },
+      "tasks": [],
+      "ideas": [],
+      "projects": [],
+      "memories": [],
+      "candidates": [],
+      "agents": [
+        {
+          "protocol": "siwc",
+          "available": false,
+          "inputPrice": 0,
+          "outputPrice": 0,
+          "maxOutput": 4096,
+          "id": "chatgpt-direct",
+          "name": "ChatGPT · 套餐授权",
+          "channel": "api",
+          "note": "消耗你的 ChatGPT 套餐 · 官方直接授权",
+          "enabled": true,
+          "memoryKinds": [
+            "fact",
+            "preference",
+            "decision",
+            "intention",
+            "plan"
+          ],
+          "includeInferred": false
+        },
+        {
+          "default": true,
+          "protocol": "openai",
+          "available": true,
+          "inputPrice": 0,
+          "outputPrice": 0,
+          "maxOutput": 2000,
+          "id": "golden",
+          "name": "验收假模型",
+          "channel": "api",
+          "note": "通用 API · golden",
+          "enabled": true,
+          "memoryKinds": [
+            "fact",
+            "preference",
+            "decision",
+            "intention",
+            "plan"
+          ],
+          "includeInferred": false
+        },
+        {
+          "available": true,
+          "inputPrice": 0,
+          "outputPrice": 0,
+          "maxOutput": 0,
+          "id": "manual",
+          "name": "手动交接",
+          "channel": "manual",
+          "note": "复制上下文到任意 AI，再粘贴结果",
+          "enabled": true,
+          "memoryKinds": [
+            "fact",
+            "preference",
+            "decision",
+            "intention",
+            "plan"
+          ],
+          "includeInferred": false
+        }
+      ],
+      "docs": [],
+      "runs": [],
+      "samples": [],
+      "sources": [],
+      "jobs": [],
+      "activity": [],
+      "excludedMemories": {}
+    }
+  },
+  {
+    "method": "GET",
+    "path": "v1/workspace",
+    "request": null,
+    "status": 200,
+    "response": {
+      "notices": [],
+      "budgetUsage": 0,
+      "version": 1,
+      "revision": 1,
+      "settings": {
+        "autoAccept": false,
+        "wakeIdeas": true,
+        "followUps": true,
+        "dailyReviewAt": "09:00",
+        "dailyBudget": 10,
+        "timezone": "Asia/Shanghai"
+      },
+      "tasks": [],
+      "ideas": [],
+      "projects": [],
+      "memories": [],
+      "candidates": [],
+      "agents": [
+        {
+          "protocol": "siwc",
+          "available": false,
+          "inputPrice": 0,
+          "outputPrice": 0,
+          "maxOutput": 4096,
+          "id": "chatgpt-direct",
+          "name": "ChatGPT · 套餐授权",
+          "channel": "api",
+          "note": "消耗你的 ChatGPT 套餐 · 官方直接授权",
+          "enabled": true,
+          "memoryKinds": [
+            "fact",
+            "preference",
+            "decision",
+            "intention",
+            "plan"
+          ],
+          "includeInferred": false
+        },
+        {
+          "default": true,
+          "protocol": "openai",
+          "available": true,
+          "inputPrice": 0,
+          "outputPrice": 0,
+          "maxOutput": 2000,
+          "id": "golden",
+          "name": "验收假模型",
+          "channel": "api",
+          "note": "通用 API · golden",
+          "enabled": true,
+          "memoryKinds": [
+            "fact",
+            "preference",
+            "decision",
+            "intention",
+            "plan"
+          ],
+          "includeInferred": false
+        },
+        {
+          "available": true,
+          "inputPrice": 0,
+          "outputPrice": 0,
+          "maxOutput": 0,
+          "id": "manual",
+          "name": "手动交接",
+          "channel": "manual",
+          "note": "复制上下文到任意 AI，再粘贴结果",
+          "enabled": true,
+          "memoryKinds": [
+            "fact",
+            "preference",
+            "decision",
+            "intention",
+            "plan"
+          ],
+          "includeInferred": false
+        }
+      ],
+      "docs": [],
+      "runs": [],
+      "samples": [],
+      "sources": [],
+      "jobs": [],
+      "activity": [],
+      "excludedMemories": {}
+    }
+  },
+  {
+    "method": "GET",
+    "path": "v1/workspace",
+    "request": null,
+    "status": 200,
+    "response": {
+      "notices": [],
+      "budgetUsage": 0,
+      "version": 1,
+      "revision": 1,
+      "settings": {
+        "autoAccept": false,
+        "wakeIdeas": true,
+        "followUps": true,
+        "dailyReviewAt": "09:00",
+        "dailyBudget": 10,
+        "timezone": "Asia/Shanghai"
+      },
+      "tasks": [],
+      "ideas": [],
+      "projects": [],
+      "memories": [],
+      "candidates": [],
+      "agents": [
+        {
+          "protocol": "siwc",
+          "available": false,
+          "inputPrice": 0,
+          "outputPrice": 0,
+          "maxOutput": 4096,
+          "id": "chatgpt-direct",
+          "name": "ChatGPT · 套餐授权",
+          "channel": "api",
+          "note": "消耗你的 ChatGPT 套餐 · 官方直接授权",
+          "enabled": true,
+          "memoryKinds": [
+            "fact",
+            "preference",
+            "decision",
+            "intention",
+            "plan"
+          ],
+          "includeInferred": false
+        },
+        {
+          "default": true,
+          "protocol": "openai",
+          "available": true,
+          "inputPrice": 0,
+          "outputPrice": 0,
+          "maxOutput": 2000,
+          "id": "golden",
+          "name": "验收假模型",
+          "channel": "api",
+          "note": "通用 API · golden",
+          "enabled": true,
+          "memoryKinds": [
+            "fact",
+            "preference",
+            "decision",
+            "intention",
+            "plan"
+          ],
+          "includeInferred": false
+        },
+        {
+          "available": true,
+          "inputPrice": 0,
+          "outputPrice": 0,
+          "maxOutput": 0,
+          "id": "manual",
+          "name": "手动交接",
+          "channel": "manual",
+          "note": "复制上下文到任意 AI，再粘贴结果",
+          "enabled": true,
+          "memoryKinds": [
+            "fact",
+            "preference",
+            "decision",
+            "intention",
+            "plan"
+          ],
+          "includeInferred": false
+        }
+      ],
+      "docs": [],
+      "runs": [],
+      "samples": [],
+      "sources": [],
+      "jobs": [],
+      "activity": [],
+      "excludedMemories": {}
+    }
+  },
+  {
+    "method": "POST",
+    "path": "v1/workspace/commands",
+    "request": {
+      "type": "addProject",
+      "name": "A",
+      "requestId": "299f2021-7e70-487b-a32c-712c5a0fc798",
+      "expectedRevision": 1
+    },
+    "status": 200,
+    "response": {
+      "notices": [],
+      "budgetUsage": 0,
+      "version": 1,
+      "revision": 2,
+      "settings": {
+        "autoAccept": false,
+        "wakeIdeas": true,
+        "followUps": true,
+        "dailyReviewAt": "09:00",
+        "dailyBudget": 10,
+        "timezone": "Asia/Shanghai"
+      },
+      "tasks": [],
+      "ideas": [],
+      "projects": [
+        {
+          "id": "4ccd1562-37fe-4437-9acd-7c05c72e6b80",
+          "itemKind": "project",
+          "recordVersion": 1,
+          "title": "A",
+          "name": "A",
+          "status": "active",
+          "body": "",
+          "goal": "",
+          "progress": "",
+          "dependsOn": [],
+          "checklist": [],
+          "triggers": [],
+          "sources": [
+            {
+              "sourceId": "97830b54-5f53-4050-a77c-8b3000dfd679",
+              "version": 1,
+              "label": "创建",
+              "at": "2026-10-01T16:04:15.347489522Z"
+            }
+          ],
+          "history": [
+            {
+              "at": "2026-10-01T16:04:15.347075028Z",
+              "by": "user",
+              "summary": "创建"
+            },
+            {
+              "at": "2026-10-01T16:04:15.347489522Z",
+              "by": "user",
+              "summary": "创建"
+            }
+          ],
+          "evolution": [
+            {
+              "at": "2026-10-01T16:04:15.347075028Z",
+              "by": "user",
+              "summary": "提出"
+            }
+          ],
+          "conditions": [],
+          "remindersOn": true,
+          "nextSteps": [],
+          "createdAt": "2026-10-01T16:04:15.347075028Z",
+          "updatedAt": "2026-10-01T16:04:15.347075028Z"
+        }
+      ],
+      "memories": [],
+      "candidates": [],
+      "agents": [
+        {
+          "protocol": "siwc",
+          "available": false,
+          "inputPrice": 0,
+          "outputPrice": 0,
+          "maxOutput": 4096,
+          "id": "chatgpt-direct",
+          "name": "ChatGPT · 套餐授权",
+          "channel": "api",
+          "note": "消耗你的 ChatGPT 套餐 · 官方直接授权",
+          "enabled": true,
+          "memoryKinds": [
+            "fact",
+            "preference",
+            "decision",
+            "intention",
+            "plan"
+          ],
+          "includeInferred": false
+        },
+        {
+          "default": true,
+          "protocol": "openai",
+          "available": true,
+          "inputPrice": 0,
+          "outputPrice": 0,
+          "maxOutput": 2000,
+          "id": "golden",
+          "name": "验收假模型",
+          "channel": "api",
+          "note": "通用 API · golden",
+          "enabled": true,
+          "memoryKinds": [
+            "fact",
+            "preference",
+            "decision",
+            "intention",
+            "plan"
+          ],
+          "includeInferred": false
+        },
+        {
+          "available": true,
+          "inputPrice": 0,
+          "outputPrice": 0,
+          "maxOutput": 0,
+          "id": "manual",
+          "name": "手动交接",
+          "channel": "manual",
+          "note": "复制上下文到任意 AI，再粘贴结果",
+          "enabled": true,
+          "memoryKinds": [
+            "fact",
+            "preference",
+            "decision",
+            "intention",
+            "plan"
+          ],
+          "includeInferred": false
+        }
+      ],
+      "docs": [],
+      "runs": [],
+      "samples": [],
+      "sources": [
+        {
+          "id": "97830b54-5f53-4050-a77c-8b3000dfd679",
+          "name": "A",
+          "method": "actions",
+          "status": "syncing",
+          "note": "原文可读，索引处理中",
+          "itemCount": 0,
+          "lastSyncAt": "2026-10-01T16:04:15.345279Z"
+        }
+      ],
+      "jobs": [
+        {
+          "id": "de30cea0-5969-4831-992a-3e6e4b5afd1a",
+          "title": "切分原文",
+          "trigger": "资料处理",
+          "status": "queued",
+          "detail": "「A」",
+          "createdAt": "2026-10-01T16:04:15.345279Z",
+          "nextRunAt": "2026-10-01T16:04:15.345279Z"
+        }
+      ],
+      "activity": [],
+      "excludedMemories": {}
+    }
+  },
+  {
+    "method": "POST",
+    "path": "control",
+    "request": {
+      "rules": [
+        {
+          "kind": "secretary",
+          "match": "周五下午三点和张三对方案，算在 A 项目里",
+          "content": "{\"reply\":\"安排好了。\",\"actions\":[{\"op\":\"create_task\",\"title\":\"和张三对方案-1790870655320\",\"due\":\"2026-10-09T15:00\",\"project\":\"P1\",\"remind\":null}]}"
+        }
+      ],
+      "updates": []
+    },
+    "status": 200,
+    "response": {
+      "events": null
+    }
+  }
+]

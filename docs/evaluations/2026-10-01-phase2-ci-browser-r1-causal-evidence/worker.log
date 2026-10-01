@@ -1,0 +1,17 @@
+{"time":"2026-10-01T15:22:35.299474542Z","level":"INFO","msg":"memory worker started"}
+{"time":"2026-10-01T15:22:38.330173283Z","level":"WARN","msg":"memory job failed","job_id":"896cdc44-c63c-4d41-a419-0aeedae5a7bc","stage":"source.embed","attempt":1}
+{"time":"2026-10-01T15:22:39.367417972Z","level":"WARN","msg":"memory job failed","job_id":"6cf03ce0-83c9-4e19-a800-9c1bbc86de7f","stage":"source.embed","attempt":1}
+{"time":"2026-10-01T15:22:42.398991924Z","level":"WARN","msg":"memory job failed","job_id":"011036c7-42be-4f74-b4d5-b8972f58f2dd","stage":"source.embed","attempt":1}
+{"time":"2026-10-01T15:22:45.44708348Z","level":"WARN","msg":"memory job failed","job_id":"2dd335a2-e6cc-470a-ac15-039a2e91cd66","stage":"source.embed","attempt":1}
+{"time":"2026-10-01T15:22:45.473323372Z","level":"WARN","msg":"memory job failed","job_id":"64bc2788-4635-49e9-a45f-217078c25d57","stage":"source.embed","attempt":1}
+{"time":"2026-10-01T15:22:45.488508766Z","level":"WARN","msg":"memory job failed","job_id":"af3e44c4-4e21-47d0-8043-4ca435f6ee4b","stage":"source.embed","attempt":1}
+{"time":"2026-10-01T15:22:46.626540951Z","level":"WARN","msg":"memory job failed","job_id":"0dac856c-15be-4970-871b-f7ad3e2dfc43","stage":"source.embed","attempt":1}
+{"time":"2026-10-01T15:22:46.639918405Z","level":"WARN","msg":"memory job failed","job_id":"ad3bb6ea-e7c5-45fc-972d-0ee4e86809b9","stage":"source.embed","attempt":1}
+{"time":"2026-10-01T15:22:46.649486748Z","level":"WARN","msg":"memory job failed","job_id":"6a03773b-0a66-4bd5-bb92-a2b3bd1ba3a7","stage":"source.embed","attempt":1}
+{"time":"2026-10-01T15:22:47.681732171Z","level":"WARN","msg":"memory job failed","job_id":"319fe634-1b88-4ad2-8486-f2e334438ad0","stage":"source.embed","attempt":1}
+{"time":"2026-10-01T15:22:47.687727436Z","level":"WARN","msg":"memory job failed","job_id":"e275e7be-06e0-4d9a-bdd7-d72a9554a695","stage":"source.embed","attempt":1}
+{"time":"2026-10-01T15:22:47.693970373Z","level":"WARN","msg":"memory job failed","job_id":"d235ceb1-2139-45ee-b382-7acc528ff523","stage":"source.embed","attempt":1}
+{"time":"2026-10-01T15:22:50.734397975Z","level":"WARN","msg":"memory job failed","job_id":"d003886c-18b7-4b4f-a69a-c7f1e79c0261","stage":"source.embed","attempt":1}
+{"time":"2026-10-01T15:22:51.760356032Z","level":"WARN","msg":"memory job failed","job_id":"1a0a791d-3165-4ba8-837b-48c33633d3d4","stage":"source.embed","attempt":1}
+{"time":"2026-10-01T15:22:51.765055233Z","level":"WARN","msg":"memory job failed","job_id":"353c0333-db01-441f-943f-a0588071df31","stage":"source.embed","attempt":1}
+{"time":"2026-10-01T15:22:51.770072526Z","level":"WARN","msg":"memory job failed","job_id":"9eb7b322-63be-4ed4-91bb-d4ba4e0c8905","stage":"source.embed","attempt":1}

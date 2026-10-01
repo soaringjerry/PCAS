@@ -1,0 +1,201 @@
+[
+  {
+    "id": "6275b9be-adcd-4e33-a3fe-54d82a3bb3cb",
+    "operation_id": "2e7bf880-477a-4e31-b46c-0bf5b433744b",
+    "ordinal": 1,
+    "state": "completed",
+    "snapshot_state": "retained",
+    "manifest": {
+      "version": 1,
+      "attempt_id": "6275b9be-adcd-4e33-a3fe-54d82a3bb3cb",
+      "recipient": {
+        "principal_id": "phase2-model",
+        "role": "secretary",
+        "model": "phase2-synthetic",
+        "provider": "phase2-model",
+        "protocol": "openai",
+        "channel": "api",
+        "route_fingerprint": "972d61f2642f156279bdf3567f13be4f12515bd9cb4199d4babef3661b903f30"
+      },
+      "purpose": "knowledge",
+      "scope": {
+        "kind": "unscoped",
+        "include_global_constraints": false
+      },
+      "view": {
+        "mode": "remember",
+        "valid_at": "2026-10-01T15:34:10.040479263Z",
+        "known_at": "2026-10-01T15:34:10.040479263Z"
+      },
+      "candidates": [
+        {
+          "ref": {
+            "id": "b595005a-de2f-4ae5-a7b6-2a55936d2bfb",
+            "version": 1,
+            "kind": "source"
+          },
+          "stage": "retrieved",
+          "disposition": "selected"
+        }
+      ],
+      "input": [
+        {
+          "ref": {
+            "id": "b595005a-de2f-4ae5-a7b6-2a55936d2bfb",
+            "version": 1,
+            "kind": "source"
+          },
+          "source_span": {
+            "source": {
+              "id": "b595005a-de2f-4ae5-a7b6-2a55936d2bfb",
+              "version": 1,
+              "kind": "source"
+            },
+            "start_rune": 0,
+            "end_rune": 43
+          },
+          "payload_spans": [
+            {
+              "start_byte": 4370,
+              "end_byte": 4469
+            }
+          ],
+          "truncated": false
+        }
+      ],
+      "used": [],
+      "indirect_dependencies": [],
+      "coverage": {
+        "complete": true,
+        "gaps": [],
+        "pending_sources": []
+      },
+      "truncated": false,
+      "input_bytes": 4782,
+      "input_tokens": {
+        "value": 1594,
+        "method": "estimated",
+        "model": "phase2-synthetic"
+      },
+      "observation_layer": "serialized_request"
+    },
+    "created_at": "2026-10-01T15:34:10.100857Z",
+    "dispatch_reserved_at": "2026-10-01T15:34:10.117908Z",
+    "dispatched_at": "2026-10-01T15:34:10.125195Z",
+    "completed_at": "2026-10-01T15:34:10.133063Z",
+    "external_receipt": "unknown",
+    "body_expires_at": "2026-10-08T15:34:10.100857Z",
+    "metadata_expires_at": "2026-10-31T15:34:10.100857Z",
+    "execution_expires_at": "2026-10-01T15:39:10.100857Z"
+  },
+  {
+    "id": "a40663d6-80ea-4d77-96df-987d6012ca68",
+    "operation_id": "803f3549-050f-47c9-9a0f-90a5666ec92e",
+    "ordinal": 1,
+    "state": "completed",
+    "snapshot_state": "retained",
+    "manifest": {
+      "version": 1,
+      "attempt_id": "a40663d6-80ea-4d77-96df-987d6012ca68",
+      "recipient": {
+        "principal_id": "phase2-model",
+        "role": "secretary",
+        "model": "phase2-synthetic",
+        "provider": "phase2-model",
+        "protocol": "openai",
+        "channel": "api",
+        "route_fingerprint": "972d61f2642f156279bdf3567f13be4f12515bd9cb4199d4babef3661b903f30"
+      },
+      "purpose": "knowledge",
+      "scope": {
+        "kind": "unscoped",
+        "include_global_constraints": false
+      },
+      "view": {
+        "mode": "remember",
+        "valid_at": "2026-10-01T15:34:10.233113585Z",
+        "known_at": "2026-10-01T15:34:10.233113585Z"
+      },
+      "candidates": [
+        {
+          "ref": {
+            "id": "b595005a-de2f-4ae5-a7b6-2a55936d2bfb",
+            "version": 1,
+            "kind": "source"
+          },
+          "stage": "retrieved",
+          "disposition": "selected"
+        }
+      ],
+      "input": [
+        {
+          "ref": {
+            "id": "b595005a-de2f-4ae5-a7b6-2a55936d2bfb",
+            "version": 1,
+            "kind": "source"
+          },
+          "source_span": {
+            "source": {
+              "id": "b595005a-de2f-4ae5-a7b6-2a55936d2bfb",
+              "version": 1,
+              "kind": "source"
+            },
+            "start_rune": 0,
+            "end_rune": 43
+          },
+          "payload_spans": [
+            {
+              "start_byte": 4677,
+              "end_byte": 4776
+            }
+          ],
+          "truncated": false
+        }
+      ],
+      "used": [],
+      "indirect_dependencies": [
+        {
+          "ref": {
+            "id": "b595005a-de2f-4ae5-a7b6-2a55936d2bfb",
+            "version": 1,
+            "kind": "source"
+          },
+          "purpose": "knowledge",
+          "scope": {
+            "kind": "unscoped",
+            "include_global_constraints": false
+          },
+          "authorization": {
+            "policy_id": "67ab3853-7b07-46ba-9c67-ac756ed24891",
+            "revision": 1
+          },
+          "scope_revision": 0
+        }
+      ],
+      "coverage": {
+        "complete": true,
+        "gaps": [],
+        "pending_sources": []
+      },
+      "truncated": false,
+      "input_bytes": 5107,
+      "input_tokens": {
+        "value": 1703,
+        "method": "estimated",
+        "model": "phase2-synthetic"
+      },
+      "desk_actions": [
+        "df7a2708-4101-46bc-a186-b3ccfe254133"
+      ],
+      "observation_layer": "serialized_request"
+    },
+    "created_at": "2026-10-01T15:34:10.399325Z",
+    "dispatch_reserved_at": "2026-10-01T15:34:10.41596Z",
+    "dispatched_at": "2026-10-01T15:34:10.426853Z",
+    "completed_at": "2026-10-01T15:34:10.438019Z",
+    "external_receipt": "unknown",
+    "body_expires_at": "2026-10-08T15:34:10.399325Z",
+    "metadata_expires_at": "2026-10-31T15:34:10.399325Z",
+    "execution_expires_at": "2026-10-01T15:39:10.399325Z"
+  }
+]

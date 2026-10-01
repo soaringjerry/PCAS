@@ -1,0 +1,72 @@
+{
+  "originalFailedRun": {
+    "contextTask": {
+      "ownerId": "64b9686c-98b6-4414-b277-65db8771cf45",
+      "recipient": {
+        "principal_id": "golden",
+        "role": "deputy",
+        "model": "golden",
+        "provider": "golden",
+        "protocol": "openai",
+        "channel": "api",
+        "route_fingerprint": "f8796900bfc4d0637ffe9c38f7bd5a083576d3b5b4bbc9978d72a3f8ba8ab142"
+      },
+      "purpose": "knowledge",
+      "scope": {
+        "kind": "unscoped",
+        "include_global_constraints": false
+      },
+      "view": {
+        "mode": "continue",
+        "valid_at": "2026-10-01T15:22:38.368819919Z",
+        "known_at": "2026-10-01T15:22:38.368819919Z"
+      },
+      "now": "2026-10-01T15:22:38.368819919Z",
+      "timezone": "Asia/Shanghai",
+      "memoryBudget": {
+        "candidates": 15,
+        "edges": 15,
+        "tokens": 4000,
+        "hops": 1
+      },
+      "totalInputTokens": 8000,
+      "desk_actions": [
+        "76d372a8-5660-4792-82b7-f5ecfcb45968"
+      ]
+    },
+    "contextDeskActions": [
+      "76d372a8-5660-4792-82b7-f5ecfcb45968"
+    ],
+    "contextPromptDeskActions": [
+      "76d372a8-5660-4792-82b7-f5ecfcb45968"
+    ],
+    "contextIndirectDependencies": [],
+    "contextAttemptId": "e22548ac-d409-47b6-9ffd-07bd244a4eeb",
+    "id": "2498be3c-c291-4d27-b6e7-8b0d6ee2a8e3",
+    "thingId": "349e815e-be2d-4c88-86af-4360cb51b1bb",
+    "agentId": "golden",
+    "kind": "breakdown",
+    "prompt": "拆成三步",
+    "brief": "事项：失败恢复-1790868158102\n当前状态：todo\n说明：\n\n目标：\n进度：\n\n本次请求：拆成三步",
+    "contextMemoryIds": [],
+    "contextVersions": [],
+    "status": "failed",
+    "error": "模型调用未完成，结果和用量可能未确认；请检查登录、额度与服务配置",
+    "staleContext": false,
+    "cost": 0,
+    "createdAt": "2026-10-01T15:22:38.387026116Z",
+    "finishedAt": "2026-10-01T15:22:39.344389614Z"
+  },
+  "actualRequest": {
+    "type": "requestRun",
+    "id": "78925aff-4b81-4904-a83b-5f5fd0f3924d",
+    "thingId": "349e815e-be2d-4c88-86af-4360cb51b1bb",
+    "agentId": "golden",
+    "kind": "breakdown",
+    "prompt": "拆成三步",
+    "sourceRunId": "2498be3c-c291-4d27-b6e7-8b0d6ee2a8e3",
+    "requestId": "2c913a4f-d0a6-4744-9eb5-21ca9f998a85",
+    "expectedRevision": 5
+  },
+  "responseStatus": 200
+}

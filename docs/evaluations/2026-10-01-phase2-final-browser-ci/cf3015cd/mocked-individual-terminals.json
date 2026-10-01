@@ -1,0 +1,1031 @@
+{
+  "source_head": "cf3015cd67cf112933dfa51badbda8507de30834",
+  "run_id": 36888959192,
+  "job_id": 110459379926,
+  "actual_checkout": "ba946b860dea2ef81b83c2c1ec3eb5c63f4d1562",
+  "total": 127,
+  "passed": 127,
+  "failed": 0,
+  "skipped": 0,
+  "configured_retries": 0,
+  "observed_retries": 0,
+  "flaky": 0,
+  "rows": [
+    {
+      "status": "passed",
+      "index": 1,
+      "file": "buttons.spec.ts",
+      "title": "the facts under the title are not pickers; clicking one starts its sentence to the secretary",
+      "duration": "422ms",
+      "raw_line": "2026-10-01T16:04:37.9505769Z   ✓    1 tests/buttons.spec.ts:88:1 › the facts under the title are not pickers; clicking one starts its sentence to the secretary (422ms)"
+    },
+    {
+      "status": "passed",
+      "index": 2,
+      "file": "buttons.spec.ts",
+      "title": "the done circle ticks the task with a toast that undoes it",
+      "duration": "586ms",
+      "raw_line": "2026-10-01T16:04:38.5506588Z   ✓    2 tests/buttons.spec.ts:109:1 › the done circle ticks the task with a toast that undoes it (586ms)"
+    },
+    {
+      "status": "passed",
+      "index": 3,
+      "file": "buttons.spec.ts",
+      "title": "an auto-adopted result is one line with 撤销; undone, it offers to put it back by name",
+      "duration": "447ms",
+      "raw_line": "2026-10-01T16:04:39.0086968Z   ✓    3 tests/buttons.spec.ts:124:1 › an auto-adopted result is one line with 撤销; undone, it offers to put it back by name (447ms)"
+    },
+    {
+      "status": "passed",
+      "index": 4,
+      "file": "buttons.spec.ts",
+      "title": "on a phone a change in 动态 wraps instead of cutting what changed",
+      "duration": "278ms",
+      "raw_line": "2026-10-01T16:04:39.2999664Z   ✓    4 tests/buttons.spec.ts:149:1 › on a phone a change in 动态 wraps instead of cutting what changed (278ms)"
+    },
+    {
+      "status": "passed",
+      "index": 5,
+      "file": "buttons.spec.ts",
+      "title": "a document saves itself when it loses focus, with no edit or save buttons",
+      "duration": "717ms",
+      "raw_line": "2026-10-01T16:04:40.0318451Z   ✓    5 tests/buttons.spec.ts:168:1 › a document saves itself when it loses focus, with no edit or save buttons (717ms)"
+    },
+    {
+      "status": "passed",
+      "index": 6,
+      "file": "buttons.spec.ts",
+      "title": "reminders that rang are pinned on top of 今天, and × closes one",
+      "duration": "300ms",
+      "raw_line": "2026-10-01T16:04:40.3451185Z   ✓    6 tests/buttons.spec.ts:193:1 › reminders that rang are pinned on top of 今天, and × closes one (300ms)"
+    },
+    {
+      "status": "passed",
+      "index": 7,
+      "file": "buttons.spec.ts",
+      "title": "the hall has no 拿不准 entry, and the decision strip hides when nothing needs a hand",
+      "duration": "371ms",
+      "raw_line": "2026-10-01T16:04:40.7321036Z   ✓    7 tests/buttons.spec.ts:220:1 › the hall has no 拿不准 entry, and the decision strip hides when nothing needs a hand (371ms)"
+    },
+    {
+      "status": "passed",
+      "index": 8,
+      "file": "buttons.spec.ts",
+      "title": "a task due earlier today stays on today's timeline, greyed before the now line",
+      "duration": "285ms",
+      "raw_line": "2026-10-01T16:04:41.0279909Z   ✓    8 tests/buttons.spec.ts:243:1 › a task due earlier today stays on today's timeline, greyed before the now line (285ms)"
+    },
+    {
+      "status": "passed",
+      "index": 9,
+      "file": "buttons.spec.ts",
+      "title": "on a phone 今天 is short: at most five rows, then 还有 N 件",
+      "duration": "277ms",
+      "raw_line": "2026-10-01T16:04:41.3212795Z   ✓    9 tests/buttons.spec.ts:262:1 › on a phone 今天 is short: at most five rows, then 还有 N 件 (277ms)"
+    },
+    {
+      "status": "passed",
+      "index": 10,
+      "file": "fixes.spec.ts",
+      "title": "task notes save on blur and survive reload",
+      "duration": "424ms",
+      "raw_line": "2026-10-01T16:04:41.7651299Z   ✓   10 tests/fixes.spec.ts:63:3 › task notes save on blur and survive reload (424ms)"
+    },
+    {
+      "status": "passed",
+      "index": 11,
+      "file": "fixes.spec.ts",
+      "title": "idea notes save on blur and survive reload",
+      "duration": "378ms",
+      "raw_line": "2026-10-01T16:04:42.1585505Z   ✓   11 tests/fixes.spec.ts:63:3 › idea notes save on blur and survive reload (378ms)"
+    },
+    {
+      "status": "passed",
+      "index": 12,
+      "file": "fixes.spec.ts",
+      "title": "project notes save on blur and survive reload",
+      "duration": "385ms",
+      "raw_line": "2026-10-01T16:04:42.5584761Z   ✓   12 tests/fixes.spec.ts:63:3 › project notes save on blur and survive reload (385ms)"
+    },
+    {
+      "status": "passed",
+      "index": 13,
+      "file": "fixes.spec.ts",
+      "title": "failed run explains DAILY_BUDGET_EXCEEDED and retries the original instruction",
+      "duration": "407ms",
+      "raw_line": "2026-10-01T16:04:42.9787183Z   ✓   13 tests/fixes.spec.ts:89:3 › failed run explains DAILY_BUDGET_EXCEEDED and retries the original instruction (407ms)"
+    },
+    {
+      "status": "passed",
+      "index": 14,
+      "file": "fixes.spec.ts",
+      "title": "failed run explains provider timeout and retries the original instruction",
+      "duration": "438ms",
+      "raw_line": "2026-10-01T16:04:43.4294962Z   ✓   14 tests/fixes.spec.ts:89:3 › failed run explains provider timeout and retries the original instruction (438ms)"
+    },
+    {
+      "status": "passed",
+      "index": 15,
+      "file": "fixes.spec.ts",
+      "title": "failed run explains context deadline exceeded and retries the original instruction",
+      "duration": "406ms",
+      "raw_line": "2026-10-01T16:04:43.8476651Z   ✓   15 tests/fixes.spec.ts:89:3 › failed run explains context deadline exceeded and retries the original instruction (406ms)"
+    },
+    {
+      "status": "passed",
+      "index": 16,
+      "file": "fixes.spec.ts",
+      "title": "failed run explains model unavailable and retries the original instruction",
+      "duration": "416ms",
+      "raw_line": "2026-10-01T16:04:44.2795601Z   ✓   16 tests/fixes.spec.ts:89:3 › failed run explains model unavailable and retries the original instruction (416ms)"
+    },
+    {
+      "status": "passed",
+      "index": 17,
+      "file": "fixes.spec.ts",
+      "title": "failed run explains provider not configured and retries the original instruction",
+      "duration": "400ms",
+      "raw_line": "2026-10-01T16:04:44.6952363Z   ✓   17 tests/fixes.spec.ts:89:3 › failed run explains provider not configured and retries the original instruction (400ms)"
+    },
+    {
+      "status": "passed",
+      "index": 18,
+      "file": "fixes.spec.ts",
+      "title": "failed run explains unexpected provider error and retries the original instruction",
+      "duration": "416ms",
+      "raw_line": "2026-10-01T16:04:45.1239504Z   ✓   18 tests/fixes.spec.ts:89:3 › failed run explains unexpected provider error and retries the original instruction (416ms)"
+    },
+    {
+      "status": "passed",
+      "index": 19,
+      "file": "fixes.spec.ts",
+      "title": "failed run falls back to the output error and a generic reason when none is available",
+      "duration": "222ms",
+      "raw_line": "2026-10-01T16:04:45.3609621Z   ✓   19 tests/fixes.spec.ts:112:1 › failed run falls back to the output error and a generic reason when none is available (222ms)"
+    },
+    {
+      "status": "passed",
+      "index": 20,
+      "file": "fixes.spec.ts",
+      "title": "retry can switch to the enabled assistant selected for this thing",
+      "duration": "273ms",
+      "raw_line": "2026-10-01T16:04:45.6445505Z   ✓   20 tests/fixes.spec.ts:121:1 › retry can switch to the enabled assistant selected for this thing (273ms)"
+    },
+    {
+      "status": "passed",
+      "index": 21,
+      "file": "fixes.spec.ts",
+      "title": "a disabled alternative assistant does not get a retry button",
+      "duration": "231ms",
+      "raw_line": "2026-10-01T16:04:45.8901558Z   ✓   21 tests/fixes.spec.ts:137:1 › a disabled alternative assistant does not get a retry button (231ms)"
+    },
+    {
+      "status": "passed",
+      "index": 22,
+      "file": "notify.spec.ts",
+      "title": "Telegram saves the requested body, reports delivery, and disconnects",
+      "duration": "582ms",
+      "raw_line": "2026-10-01T16:04:46.4899329Z   ✓   22 tests/notify.spec.ts:9:1 › Telegram saves the requested body, reports delivery, and disconnects (582ms)"
+    },
+    {
+      "status": "passed",
+      "index": 23,
+      "file": "notify.spec.ts",
+      "title": "Telegram save errors show actionable Chinese prompts",
+      "duration": "661ms",
+      "raw_line": "2026-10-01T16:04:47.1650319Z   ✓   23 tests/notify.spec.ts:42:1 › Telegram save errors show actionable Chinese prompts (661ms)"
+    },
+    {
+      "status": "passed",
+      "index": 24,
+      "file": "notify.spec.ts",
+      "title": "device switch registers and removes the current subscription",
+      "duration": "403ms",
+      "raw_line": "2026-10-01T16:04:47.5823167Z   ✓   24 tests/notify.spec.ts:70:1 › device switch registers and removes the current subscription (403ms)"
+    },
+    {
+      "status": "passed",
+      "index": 25,
+      "file": "notify.spec.ts",
+      "title": "unsupported browser explains the limitation and empty delivery result",
+      "duration": "361ms",
+      "raw_line": "2026-10-01T16:04:47.9580758Z   ✓   25 tests/notify.spec.ts:103:1 › unsupported browser explains the limitation and empty delivery result (361ms)"
+    },
+    {
+      "status": "passed",
+      "index": 26,
+      "file": "notify.spec.ts",
+      "title": "service worker displays notifications and navigates existing or new windows",
+      "duration": "5ms",
+      "raw_line": "2026-10-01T16:04:47.9722862Z   ✓   26 tests/notify.spec.ts:115:1 › service worker displays notifications and navigates existing or new windows (5ms)"
+    },
+    {
+      "status": "passed",
+      "index": 27,
+      "file": "phase2_manual.spec.ts",
+      "title": "filters recipients and sends only provider with a new natural request",
+      "duration": "614ms",
+      "raw_line": "2026-10-01T16:04:48.6080251Z   ✓   27 tests/phase2_manual.spec.ts:89:1 › filters recipients and sends only provider with a new natural request (614ms)"
+    },
+    {
+      "status": "passed",
+      "index": 28,
+      "file": "phase2_manual.spec.ts",
+      "title": "every preview and copy obtains a fresh no-store GET; external receipt stays unknown",
+      "duration": "765ms",
+      "raw_line": "2026-10-01T16:04:49.3872032Z   ✓   28 tests/phase2_manual.spec.ts:109:1 › every preview and copy obtains a fresh no-store GET; external receipt stays unknown (765ms)"
+    },
+    {
+      "status": "passed",
+      "index": 29,
+      "file": "phase2_manual.spec.ts",
+      "title": "existing preview clears after revision changes",
+      "duration": "3.6s",
+      "raw_line": "2026-10-01T16:04:53.0291766Z   ✓   29 tests/phase2_manual.spec.ts:137:3 › existing preview clears after revision changes (3.6s)"
+    },
+    {
+      "status": "passed",
+      "index": 30,
+      "file": "phase2_manual.spec.ts",
+      "title": "late preview package is rejected after revision changes",
+      "duration": "3.7s",
+      "raw_line": "2026-10-01T16:04:56.7729722Z   ✓   30 tests/phase2_manual.spec.ts:143:57 › late preview package is rejected after revision changes (3.7s)"
+    },
+    {
+      "status": "passed",
+      "index": 31,
+      "file": "phase2_manual.spec.ts",
+      "title": "late copy package is rejected after revision changes",
+      "duration": "4.0s",
+      "raw_line": "2026-10-01T16:05:00.7360761Z   ✓   31 tests/phase2_manual.spec.ts:143:57 › late copy package is rejected after revision changes (4.0s)"
+    },
+    {
+      "status": "passed",
+      "index": 32,
+      "file": "phase2_manual.spec.ts",
+      "title": "existing preview clears after stale changes",
+      "duration": "3.6s",
+      "raw_line": "2026-10-01T16:05:04.3972555Z   ✓   32 tests/phase2_manual.spec.ts:137:3 › existing preview clears after stale changes (3.6s)"
+    },
+    {
+      "status": "passed",
+      "index": 33,
+      "file": "phase2_manual.spec.ts",
+      "title": "late preview package is rejected after stale changes",
+      "duration": "3.6s",
+      "raw_line": "2026-10-01T16:05:08.0489298Z   ✓   33 tests/phase2_manual.spec.ts:143:57 › late preview package is rejected after stale changes (3.6s)"
+    },
+    {
+      "status": "passed",
+      "index": 34,
+      "file": "phase2_manual.spec.ts",
+      "title": "late copy package is rejected after stale changes",
+      "duration": "3.6s",
+      "raw_line": "2026-10-01T16:05:11.6951314Z   ✓   34 tests/phase2_manual.spec.ts:143:57 › late copy package is rejected after stale changes (3.6s)"
+    },
+    {
+      "status": "passed",
+      "index": 35,
+      "file": "phase2_manual.spec.ts",
+      "title": "existing preview clears after route changes",
+      "duration": "3.6s",
+      "raw_line": "2026-10-01T16:05:15.3480002Z   ✓   35 tests/phase2_manual.spec.ts:137:3 › existing preview clears after route changes (3.6s)"
+    },
+    {
+      "status": "passed",
+      "index": 36,
+      "file": "phase2_manual.spec.ts",
+      "title": "late preview package is rejected after route changes",
+      "duration": "3.6s",
+      "raw_line": "2026-10-01T16:05:18.9901907Z   ✓   36 tests/phase2_manual.spec.ts:143:57 › late preview package is rejected after route changes (3.6s)"
+    },
+    {
+      "status": "passed",
+      "index": 37,
+      "file": "phase2_manual.spec.ts",
+      "title": "late copy package is rejected after route changes",
+      "duration": "3.6s",
+      "raw_line": "2026-10-01T16:05:22.6375275Z   ✓   37 tests/phase2_manual.spec.ts:143:57 › late copy package is rejected after route changes (3.6s)"
+    },
+    {
+      "status": "passed",
+      "index": 38,
+      "file": "phase2_manual.spec.ts",
+      "title": "existing preview clears after status changes",
+      "duration": "3.6s",
+      "raw_line": "2026-10-01T16:05:26.2645986Z   ✓   38 tests/phase2_manual.spec.ts:137:3 › existing preview clears after status changes (3.6s)"
+    },
+    {
+      "status": "passed",
+      "index": 39,
+      "file": "phase2_manual.spec.ts",
+      "title": "late preview package is rejected after status changes",
+      "duration": "3.6s",
+      "raw_line": "2026-10-01T16:05:29.8741240Z   ✓   39 tests/phase2_manual.spec.ts:143:57 › late preview package is rejected after status changes (3.6s)"
+    },
+    {
+      "status": "passed",
+      "index": 40,
+      "file": "phase2_manual.spec.ts",
+      "title": "late copy package is rejected after status changes",
+      "duration": "3.6s",
+      "raw_line": "2026-10-01T16:05:33.5144892Z   ✓   40 tests/phase2_manual.spec.ts:143:57 › late copy package is rejected after status changes (3.6s)"
+    },
+    {
+      "status": "passed",
+      "index": 41,
+      "file": "phase2_manual.spec.ts",
+      "title": "existing preview clears after authorization changes",
+      "duration": "3.6s",
+      "raw_line": "2026-10-01T16:05:37.1377784Z   ✓   41 tests/phase2_manual.spec.ts:137:3 › existing preview clears after authorization changes (3.6s)"
+    },
+    {
+      "status": "passed",
+      "index": 42,
+      "file": "phase2_manual.spec.ts",
+      "title": "late preview package is rejected after authorization changes",
+      "duration": "3.7s",
+      "raw_line": "2026-10-01T16:05:40.8155242Z   ✓   42 tests/phase2_manual.spec.ts:143:57 › late preview package is rejected after authorization changes (3.7s)"
+    },
+    {
+      "status": "passed",
+      "index": 43,
+      "file": "phase2_manual.spec.ts",
+      "title": "late copy package is rejected after authorization changes",
+      "duration": "3.7s",
+      "raw_line": "2026-10-01T16:05:44.4835020Z   ✓   43 tests/phase2_manual.spec.ts:143:57 › late copy package is rejected after authorization changes (3.7s)"
+    },
+    {
+      "status": "passed",
+      "index": 44,
+      "file": "phase2_manual.spec.ts",
+      "title": "rejects wrong run package",
+      "duration": "340ms",
+      "raw_line": "2026-10-01T16:05:44.8349362Z   ✓   44 tests/phase2_manual.spec.ts:158:115 › rejects wrong run package (340ms)"
+    },
+    {
+      "status": "passed",
+      "index": 45,
+      "file": "phase2_manual.spec.ts",
+      "title": "rejects undelivered package",
+      "duration": "333ms",
+      "raw_line": "2026-10-01T16:05:45.1807439Z   ✓   45 tests/phase2_manual.spec.ts:158:115 › rejects undelivered package (333ms)"
+    },
+    {
+      "status": "passed",
+      "index": 46,
+      "file": "phase2_manual.spec.ts",
+      "title": "rejects wrong manifest provider package",
+      "duration": "341ms",
+      "raw_line": "2026-10-01T16:05:45.5327264Z   ✓   46 tests/phase2_manual.spec.ts:158:115 › rejects wrong manifest provider package (341ms)"
+    },
+    {
+      "status": "passed",
+      "index": 47,
+      "file": "phase2_manual.spec.ts",
+      "title": "rejects wrong manifest route package",
+      "duration": "335ms",
+      "raw_line": "2026-10-01T16:05:45.8847053Z   ✓   47 tests/phase2_manual.spec.ts:158:115 › rejects wrong manifest route package (335ms)"
+    },
+    {
+      "status": "passed",
+      "index": 48,
+      "file": "phase2_manual.spec.ts",
+      "title": "package failure clears old preview and regenerates with the complete original recipient",
+      "duration": "440ms",
+      "raw_line": "2026-10-01T16:05:46.3409728Z   ✓   48 tests/phase2_manual.spec.ts:172:1 › package failure clears old preview and regenerates with the complete original recipient (440ms)"
+    },
+    {
+      "status": "passed",
+      "index": 49,
+      "file": "phase2_manual.spec.ts",
+      "title": "paste rejection clears preview and offers regeneration without claiming save",
+      "duration": "446ms",
+      "raw_line": "2026-10-01T16:05:46.8013428Z   ✓   49 tests/phase2_manual.spec.ts:186:1 › paste rejection clears preview and offers regeneration without claiming save (446ms)"
+    },
+    {
+      "status": "passed",
+      "index": 50,
+      "file": "phase2_manual.spec.ts",
+      "title": "failed manual run retries with complete original recipient and unchanged prompt",
+      "duration": "296ms",
+      "raw_line": "2026-10-01T16:05:47.1110831Z   ✓   50 tests/phase2_manual.spec.ts:198:1 › failed manual run retries with complete original recipient and unchanged prompt (296ms)"
+    },
+    {
+      "status": "passed",
+      "index": 51,
+      "file": "phase2_manual.spec.ts",
+      "title": "changing recipient creates a new run and preserves the old run and owner input",
+      "duration": "655ms",
+      "raw_line": "2026-10-01T16:05:47.7789680Z   ✓   51 tests/phase2_manual.spec.ts:210:1 › changing recipient creates a new run and preserves the old run and owner input (655ms)"
+    },
+    {
+      "status": "passed",
+      "index": 52,
+      "file": "phase2_manual.spec.ts",
+      "title": "desktop and 390px browser views preserve content without horizontal overflow",
+      "duration": "1.1s",
+      "raw_line": "2026-10-01T16:05:48.8426210Z   ✓   52 tests/phase2_manual.spec.ts:220:1 › desktop and 390px browser views preserve content without horizontal overflow (1.1s)"
+    },
+    {
+      "status": "passed",
+      "index": 53,
+      "file": "secretary.spec.ts",
+      "title": "a sentence comes back as a one-line receipt, and the conversation returns after a reload",
+      "duration": "1.1s",
+      "raw_line": "2026-10-01T16:05:49.9458346Z   ✓   53 tests/secretary.spec.ts:84:1 › a sentence comes back as a one-line receipt, and the conversation returns after a reload (1.1s)"
+    },
+    {
+      "status": "passed",
+      "index": 54,
+      "file": "secretary.spec.ts",
+      "title": "lines sent while the first is still thinking go out at once, in the same conversation",
+      "duration": "376ms",
+      "raw_line": "2026-10-01T16:05:50.3379797Z   ✓   54 tests/secretary.spec.ts:122:1 › lines sent while the first is still thinking go out at once, in the same conversation (376ms)"
+    },
+    {
+      "status": "passed",
+      "index": 55,
+      "file": "secretary.spec.ts",
+      "title": "a receipt undone earlier reads 已撤销 when the conversation is restored",
+      "duration": "259ms",
+      "raw_line": "2026-10-01T16:05:50.6099553Z   ✓   55 tests/secretary.spec.ts:141:1 › a receipt undone earlier reads 已撤销 when the conversation is restored (259ms)"
+    },
+    {
+      "status": "passed",
+      "index": 56,
+      "file": "secretary.spec.ts",
+      "title": "撤销 on a receipt undoes that action and reports why when it cannot",
+      "duration": "1.3s",
+      "raw_line": "2026-10-01T16:05:51.9335697Z   ✓   56 tests/secretary.spec.ts:155:1 › 撤销 on a receipt undoes that action and reports why when it cannot (1.3s)"
+    },
+    {
+      "status": "passed",
+      "index": 57,
+      "file": "secretary.spec.ts",
+      "title": "a turn with nothing to show says so instead of staying blank",
+      "duration": "277ms",
+      "raw_line": "2026-10-01T16:05:52.2231799Z   ✓   57 tests/secretary.spec.ts:183:1 › a turn with nothing to show says so instead of staying blank (277ms)"
+    },
+    {
+      "status": "passed",
+      "index": 58,
+      "file": "secretary.spec.ts",
+      "title": "an ask option is sent as the next line",
+      "duration": "1.2s",
+      "raw_line": "2026-10-01T16:05:53.4747787Z   ✓   58 tests/secretary.spec.ts:190:1 › an ask option is sent as the next line (1.2s)"
+    },
+    {
+      "status": "passed",
+      "index": 59,
+      "file": "secretary.spec.ts",
+      "title": "a lost connection keeps the words and retries with the same requestId, even after a reload",
+      "duration": "936ms",
+      "raw_line": "2026-10-01T16:05:54.4238718Z   ✓   59 tests/secretary.spec.ts:204:1 › a lost connection keeps the words and retries with the same requestId, even after a reload (936ms)"
+    },
+    {
+      "status": "passed",
+      "index": 60,
+      "file": "secretary.spec.ts",
+      "title": "the secretary on a thing page sends that thing along",
+      "duration": "426ms",
+      "raw_line": "2026-10-01T16:05:54.8649864Z   ✓   60 tests/secretary.spec.ts:228:1 › the secretary on a thing page sends that thing along (426ms)"
+    },
+    {
+      "status": "passed",
+      "index": 61,
+      "file": "secretary.spec.ts",
+      "title": "all four cards render, and an unknown kind is skipped quietly",
+      "duration": "759ms",
+      "raw_line": "2026-10-01T16:05:55.6373774Z   ✓   61 tests/secretary.spec.ts:239:1 › all four cards render, and an unknown kind is skipped quietly (759ms)"
+    },
+    {
+      "status": "passed",
+      "index": 62,
+      "file": "secretary.spec.ts",
+      "title": "a task card is ticked with dispatchUndoable, and its toast undoes that exact command",
+      "duration": "9.2s",
+      "raw_line": "2026-10-01T16:06:04.8297418Z   ✓   62 tests/secretary.spec.ts:287:1 › a task card is ticked with dispatchUndoable, and its toast undoes that exact command (9.2s)"
+    },
+    {
+      "status": "passed",
+      "index": 63,
+      "file": "secretary.spec.ts",
+      "title": "on a phone the pinned input sits on a solid dock, so nothing shows through around it",
+      "duration": "268ms",
+      "raw_line": "2026-10-01T16:06:05.1131386Z   ✓   63 tests/secretary.spec.ts:307:1 › on a phone the pinned input sits on a solid dock, so nothing shows through around it (268ms)"
+    },
+    {
+      "status": "passed",
+      "index": 64,
+      "file": "secretary.spec.ts",
+      "title": "quotes without a timeline are a list of their own, each opening its source",
+      "duration": "1.2s",
+      "raw_line": "2026-10-01T16:06:06.3436202Z   ✓   64 tests/secretary.spec.ts:326:1 › quotes without a timeline are a list of their own, each opening its source (1.2s)"
+    },
+    {
+      "status": "passed",
+      "index": 65,
+      "file": "secretary.spec.ts",
+      "title": "on a long thing page the receipt lands above the pinned input, where 撤销 can be reached, at 1440px",
+      "duration": "386ms",
+      "raw_line": "2026-10-01T16:06:06.7431957Z   ✓   65 tests/secretary.spec.ts:338:3 › on a long thing page the receipt lands above the pinned input, where 撤销 can be reached, at 1440px (386ms)"
+    },
+    {
+      "status": "passed",
+      "index": 66,
+      "file": "secretary.spec.ts",
+      "title": "on a long thing page the receipt lands above the pinned input, where 撤销 can be reached, at 390px",
+      "duration": "445ms",
+      "raw_line": "2026-10-01T16:06:07.2012577Z   ✓   66 tests/secretary.spec.ts:338:3 › on a long thing page the receipt lands above the pinned input, where 撤销 can be reached, at 390px (445ms)"
+    },
+    {
+      "status": "passed",
+      "index": 67,
+      "file": "secretary.spec.ts",
+      "title": "on a phone a receipt wraps, so what changed and why an undo failed can be read in full",
+      "duration": "778ms",
+      "raw_line": "2026-10-01T16:06:07.9928446Z   ✓   67 tests/secretary.spec.ts:361:1 › on a phone a receipt wraps, so what changed and why an undo failed can be read in full (778ms)"
+    },
+    {
+      "status": "passed",
+      "index": 68,
+      "file": "secretary.spec.ts",
+      "title": "variant 'latest' shows the latest turn and opens the rest on demand",
+      "duration": "631ms",
+      "raw_line": "2026-10-01T16:06:08.6351682Z   ✓   68 tests/secretary.spec.ts:397:1 › variant 'latest' shows the latest turn and opens the rest on demand (631ms)"
+    },
+    {
+      "status": "passed",
+      "index": 69,
+      "file": "secretary.spec.ts",
+      "title": "folded, a line still being thought about stays in sight when another is sent",
+      "duration": "359ms",
+      "raw_line": "2026-10-01T16:06:09.0094047Z   ✓   69 tests/secretary.spec.ts:422:1 › folded, a line still being thought about stays in sight when another is sent (359ms)"
+    },
+    {
+      "status": "passed",
+      "index": 70,
+      "file": "secretary.spec.ts",
+      "title": "a long conversation fades at its top edge instead of cutting a line in half",
+      "duration": "302ms",
+      "raw_line": "2026-10-01T16:06:09.3252634Z   ✓   70 tests/secretary.spec.ts:440:1 › a long conversation fades at its top edge instead of cutting a line in half (302ms)"
+    },
+    {
+      "status": "passed",
+      "index": 71,
+      "file": "settings-things-ux.spec.ts",
+      "title": "settings open with the current state and the everyday groups, and keep keys and URLs folded away",
+      "duration": "371ms",
+      "raw_line": "2026-10-01T16:06:09.7216173Z   ✓   71 tests/settings-things-ux.spec.ts:113:1 › settings open with the current state and the everyday groups, and keep keys and URLs folded away (371ms)"
+    },
+    {
+      "status": "passed",
+      "index": 72,
+      "file": "settings-things-ux.spec.ts",
+      "title": "first use says what is missing and takes you there",
+      "duration": "496ms",
+      "raw_line": "2026-10-01T16:06:10.2351342Z   ✓   72 tests/settings-things-ux.spec.ts:136:1 › first use says what is missing and takes you there (496ms)"
+    },
+    {
+      "status": "passed",
+      "index": 73,
+      "file": "settings-things-ux.spec.ts",
+      "title": "each switch says what it does now, saves only its own field, and shows the save beside it",
+      "duration": "1.5s",
+      "raw_line": "2026-10-01T16:06:11.7082177Z   ✓   73 tests/settings-things-ux.spec.ts:151:1 › each switch says what it does now, saves only its own field, and shows the save beside it (1.5s)"
+    },
+    {
+      "status": "passed",
+      "index": 74,
+      "file": "settings-things-ux.spec.ts",
+      "title": "a refused setting stays as it was and says so beside the switch",
+      "duration": "428ms",
+      "raw_line": "2026-10-01T16:06:12.1510124Z   ✓   74 tests/settings-things-ux.spec.ts:184:1 › a refused setting stays as it was and says so beside the switch (428ms)"
+    },
+    {
+      "status": "passed",
+      "index": 75,
+      "file": "settings-things-ux.spec.ts",
+      "title": "the budget and the daily count save where they are changed",
+      "duration": "675ms",
+      "raw_line": "2026-10-01T16:06:12.8356564Z   ✓   75 tests/settings-things-ux.spec.ts:206:1 › the budget and the daily count save where they are changed (675ms)"
+    },
+    {
+      "status": "passed",
+      "index": 76,
+      "file": "settings-things-ux.spec.ts",
+      "title": "a model row keeps its switch in sight and opens its memory scope without changing it",
+      "duration": "497ms",
+      "raw_line": "2026-10-01T16:06:13.3486425Z   ✓   76 tests/settings-things-ux.spec.ts:221:1 › a model row keeps its switch in sight and opens its memory scope without changing it (497ms)"
+    },
+    {
+      "status": "passed",
+      "index": 77,
+      "file": "settings-things-ux.spec.ts",
+      "title": "the pay-per-use API opens from its row, saves what was typed, and no longer promises the old routing",
+      "duration": "563ms",
+      "raw_line": "2026-10-01T16:06:13.9222333Z   ✓   77 tests/settings-things-ux.spec.ts:251:1 › the pay-per-use API opens from its row, saves what was typed, and no longer promises the old routing (563ms)"
+    },
+    {
+      "status": "passed",
+      "index": 78,
+      "file": "settings-things-ux.spec.ts",
+      "title": "connecting another app and the ChatGPT rows open in place, as the real-backend specs use them",
+      "duration": "696ms",
+      "raw_line": "2026-10-01T16:06:14.6320263Z   ✓   78 tests/settings-things-ux.spec.ts:278:1 › connecting another app and the ChatGPT rows open in place, as the real-backend specs use them (696ms)"
+    },
+    {
+      "status": "passed",
+      "index": 79,
+      "file": "settings-things-ux.spec.ts",
+      "title": "on a phone the settings fit the screen and the rows still open",
+      "duration": "411ms",
+      "raw_line": "2026-10-01T16:06:15.0555509Z   ✓   79 tests/settings-things-ux.spec.ts:305:1 › on a phone the settings fit the screen and the rows still open (411ms)"
+    },
+    {
+      "status": "passed",
+      "index": 80,
+      "file": "settings-things-ux.spec.ts",
+      "title": "pending content is reached from settings, and each button does the one thing it names",
+      "duration": "1.2s",
+      "raw_line": "2026-10-01T16:06:16.3068892Z   ✓   80 tests/settings-things-ux.spec.ts:326:1 › pending content is reached from settings, and each button does the one thing it names (1.2s)"
+    },
+    {
+      "status": "passed",
+      "index": 81,
+      "file": "settings-things-ux.spec.ts",
+      "title": "the library shows the pending count only when there is some, and closing the sheet clears the address",
+      "duration": "973ms",
+      "raw_line": "2026-10-01T16:06:17.2915956Z   ✓   81 tests/settings-things-ux.spec.ts:381:1 › the library shows the pending count only when there is some, and closing the sheet clears the address (973ms)"
+    },
+    {
+      "status": "passed",
+      "index": 82,
+      "file": "settings-things-ux.spec.ts",
+      "title": "the title saves when left and says so; a refused save keeps the draft with a way back",
+      "duration": "450ms",
+      "raw_line": "2026-10-01T16:06:17.7563172Z   ✓   82 tests/settings-things-ux.spec.ts:404:1 › the title saves when left and says so; a refused save keeps the draft with a way back (450ms)"
+    },
+    {
+      "status": "passed",
+      "index": 83,
+      "file": "settings-things-ux.spec.ts",
+      "title": "refused notes can be put back, and a draft never follows you to another thing",
+      "duration": "717ms",
+      "raw_line": "2026-10-01T16:06:18.4828642Z   ✓   83 tests/settings-things-ux.spec.ts:445:1 › refused notes can be put back, and a draft never follows you to another thing (717ms)"
+    },
+    {
+      "status": "passed",
+      "index": 84,
+      "file": "settings-things-ux.spec.ts",
+      "title": "a change made by the secretary shows in the title and notes, but never over a draft that failed to save",
+      "duration": "802ms",
+      "raw_line": "2026-10-01T16:06:19.2988669Z   ✓   84 tests/settings-things-ux.spec.ts:481:1 › a change made by the secretary shows in the title and notes, but never over a draft that failed to save (802ms)"
+    },
+    {
+      "status": "passed",
+      "index": 85,
+      "file": "settings-things-ux.spec.ts",
+      "title": "entering a field and leaving it untouched never writes an old value over a change made elsewhere",
+      "duration": "3.7s",
+      "raw_line": "2026-10-01T16:06:23.0338407Z   ✓   85 tests/settings-things-ux.spec.ts:516:1 › entering a field and leaving it untouched never writes an old value over a change made elsewhere (3.7s)"
+    },
+    {
+      "status": "passed",
+      "index": 86,
+      "file": "settings-things-ux.spec.ts",
+      "title": "editing again while a save is on its way ends on the newer text, and an old answer cannot call it saved",
+      "duration": "1.2s",
+      "raw_line": "2026-10-01T16:06:24.2472931Z   ✓   86 tests/settings-things-ux.spec.ts:542:1 › editing again while a save is on its way ends on the newer text, and an old answer cannot call it saved (1.2s)"
+    },
+    {
+      "status": "passed",
+      "index": 87,
+      "file": "settings-things-ux.spec.ts",
+      "title": "a task with nothing set offers what can be set, and each fact starts its own sentence",
+      "duration": "760ms",
+      "raw_line": "2026-10-01T16:06:25.0207122Z   ✓   87 tests/settings-things-ux.spec.ts:577:1 › a task with nothing set offers what can be set, and each fact starts its own sentence (760ms)"
+    },
+    {
+      "status": "passed",
+      "index": 88,
+      "file": "settings-things-ux.spec.ts",
+      "title": "a result waiting to be used is offered by where it will go",
+      "duration": "540ms",
+      "raw_line": "2026-10-01T16:06:25.5706828Z   ✓   88 tests/settings-things-ux.spec.ts:609:1 › a result waiting to be used is offered by where it will go (540ms)"
+    },
+    {
+      "status": "passed",
+      "index": 89,
+      "file": "settings-things-ux.spec.ts",
+      "title": "a long title and long notes stay readable and editable on a phone",
+      "duration": "477ms",
+      "raw_line": "2026-10-01T16:06:26.0593431Z   ✓   89 tests/settings-things-ux.spec.ts:647:1 › a long title and long notes stay readable and editable on a phone (477ms)"
+    },
+    {
+      "status": "passed",
+      "index": 90,
+      "file": "timezone.spec.ts",
+      "title": "settings searches IANA zones, puts common cities first, and persists through updateSettings",
+      "duration": "782ms",
+      "raw_line": "2026-10-01T16:06:26.8678078Z   ✓   90 tests/timezone.spec.ts:40:1 › settings searches IANA zones, puts common cities first, and persists through updateSettings (782ms)"
+    },
+    {
+      "status": "passed",
+      "index": 91,
+      "file": "timezone.spec.ts",
+      "title": "a timezone save failure explains the fix and keeps the saved zone",
+      "duration": "570ms",
+      "raw_line": "2026-10-01T16:06:27.4514842Z   ✓   91 tests/timezone.spec.ts:60:1 › a timezone save failure explains the fix and keeps the saved zone (570ms)"
+    },
+    {
+      "status": "passed",
+      "index": 92,
+      "file": "timezone.spec.ts",
+      "title": "a mismatch prompt is at the top and changes the workspace in one click",
+      "duration": "461ms",
+      "raw_line": "2026-10-01T16:06:27.9269791Z   ✓   92 tests/timezone.spec.ts:71:1 › a mismatch prompt is at the top and changes the workspace in one click (461ms)"
+    },
+    {
+      "status": "passed",
+      "index": 93,
+      "file": "timezone.spec.ts",
+      "title": "closing a mismatch persists in this browser across reload and navigation, including mobile",
+      "duration": "590ms",
+      "raw_line": "2026-10-01T16:06:28.5271691Z   ✓   93 tests/timezone.spec.ts:87:1 › closing a mismatch persists in this browser across reload and navigation, including mobile (590ms)"
+    },
+    {
+      "status": "passed",
+      "index": 94,
+      "file": "timezone.spec.ts",
+      "title": "matching timezone and IANA aliases do not prompt",
+      "duration": "242ms",
+      "raw_line": "2026-10-01T16:06:28.7826049Z   ✓   94 tests/timezone.spec.ts:111:1 › matching timezone and IANA aliases do not prompt (242ms)"
+    },
+    {
+      "status": "passed",
+      "index": 95,
+      "file": "timezone.spec.ts",
+      "title": "the same due/scheduled/follow-up tasks group by workspace date, including a DST day",
+      "duration": "408ms",
+      "raw_line": "2026-10-01T16:06:29.2003799Z   ✓   95 tests/timezone.spec.ts:118:1 › the same due/scheduled/follow-up tasks group by workspace date, including a DST day (408ms)"
+    },
+    {
+      "status": "passed",
+      "index": 96,
+      "file": "timezone.spec.ts",
+      "title": "workspace timezone follows a task across hall, cards, details and project at 1440px",
+      "duration": "1.3s",
+      "raw_line": "2026-10-01T16:06:30.5065900Z   ✓   96 tests/timezone.spec.ts:146:3 › workspace timezone follows a task across hall, cards, details and project at 1440px (1.3s)"
+    },
+    {
+      "status": "passed",
+      "index": 97,
+      "file": "timezone.spec.ts",
+      "title": "workspace timezone follows a task across hall, cards, details and project at 390px",
+      "duration": "1.1s",
+      "raw_line": "2026-10-01T16:06:31.6240170Z   ✓   97 tests/timezone.spec.ts:146:3 › workspace timezone follows a task across hall, cards, details and project at 390px (1.1s)"
+    },
+    {
+      "status": "passed",
+      "index": 98,
+      "file": "timezone.spec.ts",
+      "title": "zoned calendar formatting handles spring DST",
+      "duration": "336ms",
+      "raw_line": "2026-10-01T16:06:31.9738270Z   ✓   98 tests/timezone.spec.ts:222:3 › zoned calendar formatting handles spring DST (336ms)"
+    },
+    {
+      "status": "passed",
+      "index": 99,
+      "file": "timezone.spec.ts",
+      "title": "zoned calendar formatting handles autumn DST",
+      "duration": "316ms",
+      "raw_line": "2026-10-01T16:06:32.3049603Z   ✓   99 tests/timezone.spec.ts:222:3 › zoned calendar formatting handles autumn DST (316ms)"
+    },
+    {
+      "status": "passed",
+      "index": 100,
+      "file": "timezone.spec.ts",
+      "title": "zoned calendar formatting handles Shanghai year boundary",
+      "duration": "336ms",
+      "raw_line": "2026-10-01T16:06:32.6561762Z   ✓  100 tests/timezone.spec.ts:222:3 › zoned calendar formatting handles Shanghai year boundary (336ms)"
+    },
+    {
+      "status": "passed",
+      "index": 101,
+      "file": "timezone.spec.ts",
+      "title": "zoned calendar formatting handles Melbourne year boundary",
+      "duration": "324ms",
+      "raw_line": "2026-10-01T16:06:32.9912732Z   ✓  101 tests/timezone.spec.ts:222:3 › zoned calendar formatting handles Melbourne year boundary (324ms)"
+    },
+    {
+      "status": "passed",
+      "index": 102,
+      "file": "timezone.spec.ts",
+      "title": "zoned calendar formatting handles past date in previous year",
+      "duration": "347ms",
+      "raw_line": "2026-10-01T16:06:33.3519515Z   ✓  102 tests/timezone.spec.ts:222:3 › zoned calendar formatting handles past date in previous year (347ms)"
+    },
+    {
+      "status": "passed",
+      "index": 103,
+      "file": "timezone.spec.ts",
+      "title": "project follow-up and upcoming groups use the same calendar as the hall",
+      "duration": "596ms",
+      "raw_line": "2026-10-01T16:06:33.9611438Z   ✓  103 tests/timezone.spec.ts:239:1 › project follow-up and upcoming groups use the same calendar as the hall (596ms)"
+    },
+    {
+      "status": "passed",
+      "index": 104,
+      "file": "timezone.spec.ts",
+      "title": "source records, background jobs and settings timestamps follow workspace changes",
+      "duration": "1.3s",
+      "raw_line": "2026-10-01T16:06:35.2543534Z   ✓  104 tests/timezone.spec.ts:264:1 › source records, background jobs and settings timestamps follow workspace changes (1.3s)"
+    },
+    {
+      "status": "passed",
+      "index": 105,
+      "file": "timezone.spec.ts",
+      "title": "reminder date and DST clock use Asia/Shanghai",
+      "duration": "250ms",
+      "raw_line": "2026-10-01T16:06:35.5167087Z   ✓  105 tests/timezone.spec.ts:305:3 › reminder date and DST clock use Asia/Shanghai (250ms)"
+    },
+    {
+      "status": "passed",
+      "index": 106,
+      "file": "timezone.spec.ts",
+      "title": "reminder date and DST clock use Australia/Melbourne",
+      "duration": "241ms",
+      "raw_line": "2026-10-01T16:06:35.7692299Z   ✓  106 tests/timezone.spec.ts:305:3 › reminder date and DST clock use Australia/Melbourne (241ms)"
+    },
+    {
+      "status": "passed",
+      "index": 107,
+      "file": "timezone.spec.ts",
+      "title": "reminder date and DST clock use UTC fallback",
+      "duration": "248ms",
+      "raw_line": "2026-10-01T16:06:36.0288552Z   ✓  107 tests/timezone.spec.ts:305:3 › reminder date and DST clock use UTC fallback (248ms)"
+    },
+    {
+      "status": "passed",
+      "index": 108,
+      "file": "usability-acceptance.spec.ts",
+      "title": "only followUps is saved without changing budget or memory permissions",
+      "duration": "466ms",
+      "raw_line": "2026-10-01T16:06:36.5229771Z   ✓  108 tests/usability-acceptance.spec.ts:110:3 › only followUps is saved without changing budget or memory permissions (466ms)"
+    },
+    {
+      "status": "passed",
+      "index": 109,
+      "file": "usability-acceptance.spec.ts",
+      "title": "only wakeIdeas is saved without changing budget or memory permissions",
+      "duration": "468ms",
+      "raw_line": "2026-10-01T16:06:37.0016026Z   ✓  109 tests/usability-acceptance.spec.ts:110:3 › only wakeIdeas is saved without changing budget or memory permissions (468ms)"
+    },
+    {
+      "status": "passed",
+      "index": 110,
+      "file": "usability-acceptance.spec.ts",
+      "title": "only autoAccept is saved without changing budget or memory permissions",
+      "duration": "451ms",
+      "raw_line": "2026-10-01T16:06:37.4668612Z   ✓  110 tests/usability-acceptance.spec.ts:110:3 › only autoAccept is saved without changing budget or memory permissions (451ms)"
+    },
+    {
+      "status": "passed",
+      "index": 111,
+      "file": "usability-acceptance.spec.ts",
+      "title": "folding settings is read-only and permission defaults survive at 1440px",
+      "duration": "704ms",
+      "raw_line": "2026-10-01T16:06:38.1841715Z   ✓  111 tests/usability-acceptance.spec.ts:134:3 › folding settings is read-only and permission defaults survive at 1440px (704ms)"
+    },
+    {
+      "status": "passed",
+      "index": 112,
+      "file": "usability-acceptance.spec.ts",
+      "title": "rejected switch saves can retry and rapid pending clicks send once at 1440px",
+      "duration": "539ms",
+      "raw_line": "2026-10-01T16:06:38.7420537Z   ✓  112 tests/usability-acceptance.spec.ts:160:3 › rejected switch saves can retry and rapid pending clicks send once at 1440px (539ms)"
+    },
+    {
+      "status": "passed",
+      "index": 113,
+      "file": "usability-acceptance.spec.ts",
+      "title": "task notes keep the draft after rejection and retry the same target at 1440px",
+      "duration": "466ms",
+      "raw_line": "2026-10-01T16:06:39.2197823Z   ✓  113 tests/usability-acceptance.spec.ts:188:3 › task notes keep the draft after rejection and retry the same target at 1440px (466ms)"
+    },
+    {
+      "status": "passed",
+      "index": 114,
+      "file": "usability-acceptance.spec.ts",
+      "title": "unknown stays unsubmitted without an explicit target and ignore keeps source data at 1440px",
+      "duration": "588ms",
+      "raw_line": "2026-10-01T16:06:39.8204354Z   ✓  114 tests/usability-acceptance.spec.ts:214:3 › unknown stays unsubmitted without an explicit target and ignore keeps source data at 1440px (588ms)"
+    },
+    {
+      "status": "passed",
+      "index": 115,
+      "file": "usability-acceptance.spec.ts",
+      "title": "folding settings is read-only and permission defaults survive at 390px",
+      "duration": "658ms",
+      "raw_line": "2026-10-01T16:06:40.4903996Z   ✓  115 tests/usability-acceptance.spec.ts:134:3 › folding settings is read-only and permission defaults survive at 390px (658ms)"
+    },
+    {
+      "status": "passed",
+      "index": 116,
+      "file": "usability-acceptance.spec.ts",
+      "title": "rejected switch saves can retry and rapid pending clicks send once at 390px",
+      "duration": "478ms",
+      "raw_line": "2026-10-01T16:06:40.9817361Z   ✓  116 tests/usability-acceptance.spec.ts:160:3 › rejected switch saves can retry and rapid pending clicks send once at 390px (478ms)"
+    },
+    {
+      "status": "passed",
+      "index": 117,
+      "file": "usability-acceptance.spec.ts",
+      "title": "task notes keep the draft after rejection and retry the same target at 390px",
+      "duration": "465ms",
+      "raw_line": "2026-10-01T16:06:41.4614073Z   ✓  117 tests/usability-acceptance.spec.ts:188:3 › task notes keep the draft after rejection and retry the same target at 390px (465ms)"
+    },
+    {
+      "status": "passed",
+      "index": 118,
+      "file": "usability-acceptance.spec.ts",
+      "title": "unknown stays unsubmitted without an explicit target and ignore keeps source data at 390px",
+      "duration": "582ms",
+      "raw_line": "2026-10-01T16:06:42.0533309Z   ✓  118 tests/usability-acceptance.spec.ts:214:3 › unknown stays unsubmitted without an explicit target and ignore keeps source data at 390px (582ms)"
+    },
+    {
+      "status": "passed",
+      "index": 119,
+      "file": "usability-acceptance.spec.ts",
+      "title": "Library pending entry submits the task target and offers no fake undo",
+      "duration": "564ms",
+      "raw_line": "2026-10-01T16:06:42.6306981Z   ✓  119 tests/usability-acceptance.spec.ts:241:3 › Library pending entry submits the task target and offers no fake undo (564ms)"
+    },
+    {
+      "status": "passed",
+      "index": 120,
+      "file": "usability-acceptance.spec.ts",
+      "title": "Library pending entry submits the idea target and offers no fake undo",
+      "duration": "563ms",
+      "raw_line": "2026-10-01T16:06:43.2096936Z   ✓  120 tests/usability-acceptance.spec.ts:241:3 › Library pending entry submits the idea target and offers no fake undo (563ms)"
+    },
+    {
+      "status": "passed",
+      "index": 121,
+      "file": "usability-acceptance.spec.ts",
+      "title": "Library pending entry submits the memory target and offers no fake undo",
+      "duration": "594ms",
+      "raw_line": "2026-10-01T16:06:43.8185138Z   ✓  121 tests/usability-acceptance.spec.ts:241:3 › Library pending entry submits the memory target and offers no fake undo (594ms)"
+    },
+    {
+      "status": "passed",
+      "index": 122,
+      "file": "usability-acceptance.spec.ts",
+      "title": "unknown explicit idea target survives rejection and retry without a duplicate request",
+      "duration": "686ms",
+      "raw_line": "2026-10-01T16:06:44.5212703Z   ✓  122 tests/usability-acceptance.spec.ts:259:1 › unknown explicit idea target survives rejection and retry without a duplicate request (686ms)"
+    },
+    {
+      "status": "passed",
+      "index": 123,
+      "file": "usability-acceptance.spec.ts",
+      "title": "accepted candidate without a matching server target cannot navigate to a guessed item",
+      "duration": "569ms",
+      "raw_line": "2026-10-01T16:06:45.1030327Z   ✓  123 tests/usability-acceptance.spec.ts:284:1 › accepted candidate without a matching server target cannot navigate to a guessed item (569ms)"
+    },
+    {
+      "status": "passed",
+      "index": 124,
+      "file": "usability-acceptance.spec.ts",
+      "title": "explicit enabled changes only that model field",
+      "duration": "317ms",
+      "raw_line": "2026-10-01T16:06:45.4333908Z   ✓  124 tests/usability-acceptance.spec.ts:303:2 › explicit enabled changes only that model field (317ms)"
+    },
+    {
+      "status": "passed",
+      "index": 125,
+      "file": "usability-acceptance.spec.ts",
+      "title": "explicit includeInferred changes only that model field",
+      "duration": "357ms",
+      "raw_line": "2026-10-01T16:06:45.8030696Z   ✓  125 tests/usability-acceptance.spec.ts:303:2 › explicit includeInferred changes only that model field (357ms)"
+    },
+    {
+      "status": "passed",
+      "index": 126,
+      "file": "usability-acceptance.spec.ts",
+      "title": "mounted saved title and notes show secretary updates while full reload agrees",
+      "duration": "583ms",
+      "raw_line": "2026-10-01T16:06:46.3996746Z   ✓  126 tests/usability-acceptance.spec.ts:328:1 › mounted saved title and notes show secretary updates while full reload agrees (583ms)"
+    },
+    {
+      "status": "passed",
+      "index": 127,
+      "file": "usability-acceptance.spec.ts",
+      "title": "a rejected unsaved notes draft survives a secretary state refresh",
+      "duration": "356ms",
+      "raw_line": "2026-10-01T16:06:46.7665166Z   ✓  127 tests/usability-acceptance.spec.ts:361:1 › a rejected unsaved notes draft survives a secretary state refresh (356ms)"
+    }
+  ]
+}

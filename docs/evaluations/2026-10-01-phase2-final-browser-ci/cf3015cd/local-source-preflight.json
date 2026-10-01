@@ -1,0 +1,18 @@
+{
+  "head": "cf3015cd67cf112933dfa51badbda8507de30834",
+  "git_tree": "52b5a793517add9741df26a08ca64950aa05f034",
+  "read_only_review_before_docs_clean": true,
+  "utc": "2026-10-01T16:03:29.887864+00:00",
+  "files": {
+    "web/tests/phase2_manual.spec.ts": "6c64d7dd5930239bc28b99c94020a48314e3877fc47df2ffe47c159b85efc8f8",
+    "web/tests/phase2_manual_backend.spec.ts": "37c3670823a7908ded8ca34846da9b9efb66156b7f1a864a3e61345453c8245f",
+    "web/tests/golden.spec.ts": "b2e9e83d7d575d079f077394f10768935d1a6634cc6a10bfaa90ec38f7331ada",
+    "web/tests/support/real-backend.sh": "a13f42b48307547464ab1ed509367062108026f27044b5de826338b0a93840a8",
+    "web/playwright.config.ts": "3121f29046eccf990006b5c5dc303f7e13db3a72f1e4ad8ae1bc35005573ddd9",
+    ".github/workflows/browser-regression.yml": "4a1e67638281ffb7e87329e609fb5b11e2167d66ef598e098038710b116c0cd3",
+    "web/src/pages/ThingPage.tsx": "ba066884e803c53b27c8cb274fd3b1a2946df1196cb2ce921cc5f17065e21ceb",
+    "docs/tasks/phase2/contracts.md": "6ce05637ad07125dbbf6484a849fe556769dbe26f2e7000a141c8110d588fa70"
+  },
+  "diff_from_c8": " web/tests/phase2_manual.spec.ts | 12 +++++++++---\n 1 file changed, 9 insertions(+), 3 deletions(-)\n",
+  "local_product_test_executions": 0
+}

@@ -1,0 +1,6 @@
+{
+  "extracted_complete_json_records": 1074,
+  "unfinished_record": null,
+  "source": "source-stamped phase2*.go evidence in full.log; source log line bounds retained; full raw authoritative",
+  "raw_sha256": "56d494eec29a5a7d8162967f656df1b15ef9e2e19d0d7ed443de49737ea772fe"
+}

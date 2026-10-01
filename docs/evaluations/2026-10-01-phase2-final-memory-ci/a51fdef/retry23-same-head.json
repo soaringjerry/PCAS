@@ -1,0 +1,117 @@
+[
+  {
+    "test": "TestPhase2RuntimeOwnerUndoReceiptAuditNeverRestoresSourceText/RECEIPT-EMPTY",
+    "status": "pass",
+    "duration": "0.65s"
+  },
+  {
+    "test": "TestPhase2RuntimeOwnerUndoReceiptAuditNeverRestoresSourceText/RECEIPT-SOURCE",
+    "status": "pass",
+    "duration": "1.04s"
+  },
+  {
+    "test": "TestPhase2RuntimeRetryPreservesGeneratedPromptOrigins/RETRY-LIVE",
+    "status": "pass",
+    "duration": "1.22s"
+  },
+  {
+    "test": "TestPhase2RuntimeRetryPreservesGeneratedPromptOrigins/RETRY-NEW-RECIPIENT",
+    "status": "pass",
+    "duration": "1.12s"
+  },
+  {
+    "test": "TestPhase2RuntimeRetryPreservesGeneratedPromptOrigins/RETRY-INVALID-REVOKE_SECRETARY_ONLY-ORIGINAL_PROMPT",
+    "status": "pass",
+    "duration": "0.78s"
+  },
+  {
+    "test": "TestPhase2RuntimeRetryPreservesGeneratedPromptOrigins/RETRY-INVALID-REVOKE_SECRETARY_ONLY-PUNCTUATION_ONLY",
+    "status": "pass",
+    "duration": "0.76s"
+  },
+  {
+    "test": "TestPhase2RuntimeRetryPreservesGeneratedPromptOrigins/RETRY-INVALID-CORRECT_SOURCE_TO_V2-ORIGINAL_PROMPT",
+    "status": "pass",
+    "duration": "0.79s"
+  },
+  {
+    "test": "TestPhase2RuntimeRetryPreservesGeneratedPromptOrigins/RETRY-INVALID-CORRECT_SOURCE_TO_V2-PUNCTUATION_ONLY",
+    "status": "pass",
+    "duration": "0.85s"
+  },
+  {
+    "test": "TestPhase2RuntimeRetryPreservesGeneratedPromptOrigins/RETRY-INVALID-DELETE_SOURCE-ORIGINAL_PROMPT",
+    "status": "pass",
+    "duration": "0.78s"
+  },
+  {
+    "test": "TestPhase2RuntimeRetryPreservesGeneratedPromptOrigins/RETRY-INVALID-DELETE_SOURCE-PUNCTUATION_ONLY",
+    "status": "pass",
+    "duration": "0.79s"
+  },
+  {
+    "test": "TestPhase2RuntimeRetryPreservesGeneratedPromptOrigins/RETRY-TARGET-DENIED",
+    "status": "pass",
+    "duration": "0.79s"
+  },
+  {
+    "test": "TestPhase2RuntimeRetryPreservesGeneratedPromptOrigins/RETRY-SCOPE-DENIED",
+    "status": "pass",
+    "duration": "1.02s"
+  },
+  {
+    "test": "TestPhase2RuntimeRetryPreservesGeneratedPromptOrigins/RETRY-OWNER-INDEPENDENT",
+    "status": "pass",
+    "duration": "0.94s"
+  },
+  {
+    "test": "TestPhase2RuntimeRetryPreservesGeneratedPromptOrigins/RETRY-LOCATOR-CROSS_OWNER",
+    "status": "pass",
+    "duration": "0.85s"
+  },
+  {
+    "test": "TestPhase2RuntimeRetryPreservesGeneratedPromptOrigins/RETRY-LOCATOR-CROSS_THING",
+    "status": "pass",
+    "duration": "0.82s"
+  },
+  {
+    "test": "TestPhase2RuntimeRetryManualAndFinalFence/RETRY-MANUAL-LIVE",
+    "status": "pass",
+    "duration": "0.98s"
+  },
+  {
+    "test": "TestPhase2RuntimeRetryManualAndFinalFence/RETRY-MANUAL-REVOKED",
+    "status": "pass",
+    "duration": "0.79s"
+  },
+  {
+    "test": "TestPhase2RuntimeRetryManualAndFinalFence/RETRY-FINAL-BARRIER",
+    "status": "pass",
+    "duration": "0.84s"
+  },
+  {
+    "test": "TestPhase2RuntimeRetryQueryIsolationAndDestinationExclusion/RETRY-TARGET-EXCLUDED",
+    "status": "pass",
+    "duration": "0.90s"
+  },
+  {
+    "test": "TestPhase2RuntimeRetryQueryIsolationAndDestinationExclusion/SECRETARY-EMBED-CURRENT-QUERY-ONLY",
+    "status": "pass",
+    "duration": "0.60s"
+  },
+  {
+    "test": "TestContinuationHonorsCurrentItemScopeBeforeSemanticRetrieval/exclude",
+    "status": "pass",
+    "duration": "0.95s"
+  },
+  {
+    "test": "TestContinuationHonorsCurrentItemScopeBeforeSemanticRetrieval/move-project",
+    "status": "pass",
+    "duration": "0.97s"
+  },
+  {
+    "test": "TestContinuationHonorsCurrentItemScopeBeforeSemanticRetrieval/revoke",
+    "status": "pass",
+    "duration": "0.92s"
+  }
+]

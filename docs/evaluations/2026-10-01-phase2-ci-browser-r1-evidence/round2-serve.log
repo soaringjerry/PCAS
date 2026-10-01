@@ -1,0 +1,16 @@
+{"time":"2026-10-01T14:57:59.061417734Z","level":"INFO","msg":"memory API started","address":"127.0.0.1:18097"}
+2026/10/01 14:58:01 INFO secretary output parsed stage=parse error_type=none
+2026/10/01 14:58:05 INFO secretary output parsed stage=parse error_type=none
+2026/10/01 14:58:05 INFO secretary output parsed stage=parse error_type=none
+2026/10/01 14:58:05 INFO secretary output parsed stage=parse error_type=none
+2026/10/01 14:58:05 INFO secretary output parsed stage=parse error_type=none
+2026/10/01 14:58:06 INFO secretary output parsed stage=parse error_type=none
+2026/10/01 14:58:10 INFO secretary output parsed stage=parse error_type=none
+2026/10/01 14:58:34 INFO secretary output parsed stage=parse error_type=none
+2026/10/01 15:00:14 INFO secretary output parsed stage=parse error_type=none
+2026/10/01 15:01:52 WARN secretary capture fallback stage=model error_type=timeout
+2026/10/01 15:01:53 INFO secretary output parsed stage=parse error_type=none
+2026/10/01 15:01:54 INFO secretary output parsed stage=parse error_type=none
+2026/10/01 15:02:01 INFO secretary output parsed stage=parse error_type=none
+2026/10/01 15:02:02 INFO secretary output parsed stage=parse error_type=none
+2026/10/01 15:02:02 INFO secretary output parsed stage=parse error_type=none

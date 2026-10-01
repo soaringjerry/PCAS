@@ -114,6 +114,7 @@ async function createThroughUI(page: Page, taskId: string, prompt: string) {
   expect(Object.keys(body.manualRecipient)).toEqual(['provider'])
   expect(body).not.toHaveProperty('scope')
   expect(body).not.toHaveProperty('fingerprint')
+  expect(body).not.toHaveProperty('sourceRunId')
   const state = await response.json() as State
   const run = state.runs.find(candidate => candidate.id === body.id)!
   expect(run).toMatchObject({ status: 'waiting', staleContext: false, prompt, contextTask: { recipient: { role: 'manual', provider: target.id } } })
@@ -218,10 +219,11 @@ test('real_revoke_clear_refuse_regenerate_submit', async ({ page }, info) => {
     await oldRow.getByRole('button', { name: '向原接收者重新生成', exact: true }).click()
     const regenerated = await regeneratePromise
     expect(regenerated.status()).toBe(200)
-    const regenerationBody = regenerated.request().postDataJSON() as { id: string; manualRecipient: unknown; prompt: string }
+    const regenerationBody = regenerated.request().postDataJSON() as { id: string; manualRecipient: unknown; prompt: string; sourceRunId: string }
     expect(regenerationBody.manualRecipient).toEqual(run.manualRecipient)
     expect(regenerationBody.prompt).toBe(run.prompt)
     expect(regenerationBody.id).not.toBe(run.id)
+    expect(regenerationBody.sourceRunId).toBe(run.id)
     const state = await regenerated.json() as State
     const next = state.runs.find(candidate => candidate.id === regenerationBody.id)!
     expect(next).toMatchObject({ status: 'waiting', staleContext: false, prompt: run.prompt })

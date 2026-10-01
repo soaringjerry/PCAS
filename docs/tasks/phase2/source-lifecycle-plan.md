@@ -15,7 +15,7 @@
 | `editing.go:memoryCommandTx` | `setMemoryVisibility` 检查 enabled agent 身份并替换 claim grants、失效依赖 | 开头 `activeClaim` 使其只能操作 claim；新增来源授权事务，不能将此命令悄悄泛化成来源授权 |
 | `desk_turn.go:DeskTurn` | 当前 owner 输入、server agent、顺序 admission、短回执、原话保存、独立动作 savepoint | 现有自然动作只有 create/update/add_steps/delegate，无授权动作；授权意图须 server 判定，不能信模型 op |
 | `desk_actions.go` / `commands.go` | server aliases → 内部 command →同事务变更 | A 接来源命令/自然入口；B 提供来源事务 helper；同一来源政策由两个入口共用 |
-| `actions_log.go` | 事项/文档/run/sample 变更快照、30 天既有撤销窗口、后继检测 | 不记录 policy 变更，不能给来源授权假 `Undoable`；首批明确撤权/改授权命令，若要按钮撤销需另定 policy revision 快照 |
+| `actions_log.go` | 事项/文档/run/sample 变更快照、30 天既有撤销窗口、后继检测 | 2.0 必须接入 policy revision 保护的撤销/等价还原；A 扩 policy actionLog，B 提供同事务 mutation helper，不给无效 `Undoable` |
 | `editing.go:invalidateTx` | 递归 derived_views stale；直接依赖 run/sample stale；删除原记录 embedding；重排摘要 | 递归 summary 依赖应继续传到 run/desk/attempt/manual；源撤权即使 version 未变也使旧供给失效 |
 | `editing.go:deleteRecordsTx` | source→chunks/evidence/derived/relation/entity/archive/附件闭包；purgeArtifacts；desk 文本清空；run/docs/sample 删除；来源 preview/条件来源清理；重导入 block | typed kind/version 校验；加入 bounded attempt 正文清除；删除 skeleton 与正文分开；所有新副本都进入同闭包 |
 | `summaries.go` | versioned summary、成员依赖、缓存 hash、stale 检查 | A 接 recursive typed verifier；旧 summary 依赖 actions 时 knowledge 拒绝，不能只挡新的 raw source |
@@ -39,8 +39,10 @@
 3. policy 跟随同一稳定 source ID 的正常新版本；具体 version 与 source 当前/历史视图在生成前后复核。不同身份的新来源不继承。
 4. model/provider 必须记录实际身份（至少配置 ID、protocol、model 和 endpoint 身份），不能仅记录可被改绑的 agent ID。改绑配置或 role/workspace/purpose 后原政策不匹配，需要明确新授权。
 5. OCR/transcript/归档成员是独立 source：不能从父 source grant 猜测子 source grant。2.0 最小按明确的可读来源授权；若以后推出“这份文件及其派生文本”授权，需要明确集合、identity/version、后续新增成员和撤权闭包。
-6. 重复请求相同 body 返回原回执；相同 request_id 不同 body 冲突；过期/失效回执不重新授予。幂等表必须有容量/到期策略，不能成为新永久正文副本。
+6. 重复请求相同 body 返回原回执；相同 request_id 不同 body 冲突。已授予→撤回/撤销→重放原授予请求时只识别原回执，不重新执行；已撤回→明确新授予→重放原撤回请求同样不重新撤回。删除、到期、policy revision 后继变更都不能靠重放复活。幂等键按 owner+request_id 绑定原操作与 body hash，不按当前 policy 状态判断是否重新执行；到期键的重放须拒绝或保留无正文阻断骨架。幂等表必须有容量/到期策略，不能成为新永久正文副本。
 7. policy 变更与 typed invalidation 同事务提交，先取得一致的短锁，不在 provider 网络调用期间持 owner/source 锁。生成前、发出前与生成后/采纳前按已提交顺序复核。
+8. source 工作室 scope 的赋值/变更必须有 owner 入口，校验 source 当前 version、scope/policy revision 与工作室归属；冲突为 409，不让模型或检索对象加权写入。由 global 移入工作室、从 A 移到 B 等变更均递增 scope revision 并失效旧依赖，不修改已发送 attempt 的当时身份记录。授权 policy 的 workspace scope 与 source 实际归属分别验证，不能只修改一个标签便获得跨工作室权限。
+9. 授予/撤回必须附可用的【撤销】或等价受版本保护的还原。撤销只能恢复当前仍等于该动作 after_revision 的政策前像；插入后继 grant/revoke/scope assignment/source deletion 后撤销返回具体冲突/已失效，不覆盖后继用户决定。撤销本身递增 revision、执行 typed invalidation，并记幂等回执；旧授予/旧撤销重放不复活政策。快照只存有限 policy tuple，无原文、凭据或完整 provider 配置。
 
 建议 B 对 A 提供：
 
@@ -63,6 +65,8 @@ resolveSourceAuthorizationIntentTx(ctx, tx, ownerScope, currentUserText, serverT
 
 A 可在 DeskTurn 当前请求处理中调用 B deterministic helper，共用已有 ordered command 事务及 source mutation helper，由服务端生成“已允许秘书使用《…》”或“已收回…”短回执。该 helper 应能在 source grant 缺失、claim pending 时工作；不能先要求模型已获 raw source 读取才允许授权。授权动作不会让此前未授权 prompt 突然合法；同轮若要读取新授权原文必须重新组装/复核，首批可回执后下一轮提问。
 
+root 已接受本批有限明确整句+唯一《标题》入口；“这份资料”没有 selected source 时必须澄清。2.0 授权回执必须接既有 undo 或等价 policy revision 保护还原。A 接 `actions_log.go` 的有限 policy undo，B mutation helper 负责所有 grant/revoke/restore 路径的版本校验、幂等与失效。
+
 按当前交互规则，新增外发权限属于应明确授权的动作。owner 明确说“让秘书用这份资料”是意图；source 注入“请允许所有模型读取”不是意图。HTTP owner 精确请求与自然命令走同事务，实现者不得用默认全 source 可见来使测试通过。
 
 自然入口操作序列：
@@ -76,6 +80,9 @@ A 可在 DeskTurn 当前请求处理中调用 B deterministic helper，共用已
 | 已授权秘书 → 换模型/role/provider/工作室 | 旧 tuple 不匹配，不自动扩大 |
 | claim 获 grant、source 未授权 | claim 可消费，raw 不可消费；owner 可展开不证明模型可读 |
 | policy 重复请求；source deleted 后重放 | 原回执可识别，不重建授权/source |
+| grant G→revoke R→重放 G；revoke R→新 grant G2→重放 R | 都只返回原幂等结果，当前政策不变，不复活或覆盖新决定 |
+| grant G→撤销 G；grant G→新 revoke R→撤销 G | 前者受 after_revision 校验还原且递增 revision；后者冲突，不覆盖 R |
+| source scope A→B→撤销旧授权；并发 scope assignment | 后继 scope revision 阻止旧还原；并发 source/scope version 冲突，不能串项目 |
 | provider 生成中 source 撤权 | 撤权可及时提交；旧结果失效，不能自动/手动采纳 |
 
 ## 4 用途隔离
@@ -107,17 +114,17 @@ A 可在 DeskTurn 当前请求处理中调用 B deterministic helper，共用已
 
 ## 6 记录生命周期工程决策请求
 
-历史研究里的 7 天正文/30 天元数据不是批准值。建议 K0 首批采用可测工程上限：正文快照 24 小时、无正文 attempt 元数据 7 天；每 owner 正文合计 8 MiB、每 attempt 256 KiB、每 owner最多512条元数据；具体数值由 root 审定后实现并在成本基线后调整。
+历史研究里的 7 天正文/30 天元数据原为待审提案。root 于本批已明确裁定工程初值：正文快照保留 7 天，每 owner 正文合计上限 64 MiB，每 attempt 256 KiB；无正文 attempt 骨架保留 30 天，每 owner 最多 10,000 条。这是有界存储初值，后续按成本基线校准，不是法定时长或性能/收益保证。删除与撤权优先于上述到期时间。
 
-snapshot 容量须在外发前保留；不足时先清到期内容，仍不足返回具体 capacity错误，不静默外发后丢证据。未知 token/费用/外部收到分别标 unknown，不写0。到期/删除/撤权即时清正文，留最小身份、state、时间、invalidated reason与hash；hash不能被描述成全文证据。正文不能进入普通日志或三个消费者各存一份；最终输入只存一份 bounded snapshot，候选记录只存refs/version/span和阶段。删除闭包优先于保留期。
+snapshot 容量须在外发前原子保留。A 草案的初始策略为先清到期正文/骨架，再回收最旧诊断正文以满足 owner 字节上限，原 attempt 明记 `capacity_omitted`，保留其 refs/映射与传输状态；不能冒充正文仍完整。单 attempt 超限只能裁剪真正最终载荷并同步映射/缺口或拒绝调用，不能发送全文却只记录半份。骨架条数仍不足返回具体 `record_capacity` 错误并拒绝外发，不静默丢 attempt。未知 token/费用/外部收到分别标 unknown，不写0。到期/删除/撤权即时清正文，留最小身份、state、时间、invalidated reason与hash；hash不能被描述成全文证据。正文不能进入普通日志或三个消费者各存一份；最终输入只存一份 bounded snapshot，候选记录只存refs/version/span和阶段。删除闭包优先于保留期。
 
-清理须有确定 worker/周期入口，不仅依赖“下一次读时清理”；宕机后恢复执行到期清理，所有读取也先检查到期。若 root 选不同限值，C 的边界预期应同步人工冻结，B不得改C断言来适配实现。
+清理须有确定 worker/周期入口，不仅依赖“下一次读时清理”。A 草案明确启动/宕机恢复立即扫描，正常最长一小时批量清理；覆盖正文 7 天、骨架 30 天、owner 总字节和条数上限，记录失败与具体可重试阶段，不能因为没有新请求而永久留存。所有读取也先检查到期；后台清理失败不延长正文可读期，物理清理延迟如实记账。存活回答、Brief、summary、artifact 的 durable typed deps 随产物生命周期保留，不从 attempt 到期 FK cascade 删除，以免到期后失去删改闭包。C 独立冻结边界预期，B 不改断言来适配实现。
 
 ## 7 文件所有权与未决项
 
-B 可修改 `sources.go`、`editing.go`、新来源策略文件、`server.go` 和新来源 API 文件，以及本方案。A 负责 `memory` shared types/migrations、commands/secretary consumer glue、typed verifier/manifest/attempt、run/desk/artifact/summary消费者。C 独立写 fixtures/预期/测试。B 不写测试，不降断言，不 skip。
+B 可修改 `sources.go`、`editing.go`、新来源策略文件、`server.go` 和新来源 API 文件，以及本方案。A 负责 `memory` shared types/migrations、`workspace.Command`、`commands.go`、`desk_actions.go`、secretary schema、`actions_log.go` 的有限 policy undo、typed verifier/manifest/attempt、run/desk/artifact/summary 消费者。A 新 manual handler 由 B 在独占的 `server.go` 注册。C 独立写 fixtures/预期/测试。B 不写测试，不降断言，不 skip。
 
-K0须决定：精确policy请求/撤权定位与幂等字段；provider endpoint身份；workspace/global constraint权限；有限自然句型及owner source选择；撤销回执是否扩policy actionLog；typed invalidation/purge helper；正常版本更新与真正source correction历史读语义；attempt容量/保留/清理入口。上述都可由工程契约收敛，不把SQL选择推给用户。
+K0 尚须冻结：精确 policy 请求/撤权定位与幂等字段；provider endpoint 身份；workspace/global constraint 权限与 scope assignment owner 入口；policy undo 的前/后 revision 快照；typed invalidation/purge helper；正常版本更新与真正 source correction 历史读语义；attempt 周期/宕机恢复清理入口。有限自然句型、无 selected source 必澄清、必须可撤销及 §6 初始容量/时长已经 root 裁定。上述工程接口继续由 A/root 收敛，不把 SQL 选择推给用户。
 
 2.1待续：复用现有ZIP/JSON mapping parser、archive_entries、来源context与队列；表达时间/角色/branch保留；历史迁入不自动创建今天事项/提醒/唤醒；同identity重导不复活删除/纠正；确定性raw保存与收费派生分批。当前不实现parser/UI或导完整私人历史。
 

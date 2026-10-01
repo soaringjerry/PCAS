@@ -328,6 +328,13 @@
   white-space: nowrap;
 }
 
+/* A plain record has nothing to open, so it wraps instead of cutting what changed. */
+.act-row .act-text {
+  overflow: visible;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
 .act-text.working {
   color: var(--label-2);
 }

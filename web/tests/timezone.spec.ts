@@ -72,7 +72,9 @@ test('a mismatch prompt is at the top and changes the workspace in one click', a
   const backend = await mock(page)
   await page.goto('/')
   const hint = page.locator('.timezone-hint')
-  await expect(hint).toContainText('你的时区好像是 Australia/Melbourne，要改成 Australia/Melbourne 吗？')
+  // It says which zone is in use, and names the device's zone once, on the button that switches to it.
+  await expect(hint.locator('span')).toHaveText('时间按 Asia/Shanghai 显示，和这台设备不同')
+  expect((await hint.innerText()).split('Australia/Melbourne')).toHaveLength(2)
   expect((await hint.boundingBox())!.y).toBeLessThan((await page.locator('.hall-today').boundingBox())!.y)
   await hint.getByRole('button', { name: '改成 Australia/Melbourne' }).click()
   await expect(hint).toHaveCount(0)
@@ -87,6 +89,14 @@ test('closing a mismatch persists in this browser across reload and navigation, 
   await page.setViewportSize({ width: 390, height: 844 })
   await page.goto('/')
   await expect(page.locator('.timezone-hint')).toBeVisible()
+  // On a phone the change sits on its own row under the sentence, and × stays beside the sentence.
+  const [words, change, close] = await Promise.all([
+    page.locator('.timezone-hint > span').boundingBox(),
+    page.getByRole('button', { name: '改成 Australia/Melbourne' }).boundingBox(),
+    page.getByRole('button', { name: '关闭时区提示' }).boundingBox(),
+  ])
+  expect(change!.y).toBeGreaterThanOrEqual(words!.y + words!.height - 1)
+  expect(close!.y).toBeLessThan(change!.y)
   await page.getByRole('button', { name: '关闭时区提示' }).click()
   await expect(page.locator('.timezone-hint')).toHaveCount(0)
   await page.reload()

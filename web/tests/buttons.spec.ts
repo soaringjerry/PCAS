@@ -146,6 +146,25 @@ test('an auto-adopted result is one line with 撤销; undone, it offers 放回�
   expect(backend.errors).toEqual([])
 })
 
+test('on a phone a change in 动态 wraps instead of cutting what changed', async ({ page }) => {
+  const snapshot = workspace()
+  const summary = '截止时间从周五 15:00 改到今天 15:30，并把提醒从提前 2 小时改成提前 30 分钟'
+  snapshot.tasks[0].history = [{ at: new Date(Date.now() - HOUR).toISOString(), by: 'secretary', summary }, ...snapshot.tasks[0].history]
+  const backend = await mockBackend(page, { ...snapshot, runs: [adoptedRun()] })
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto('/t/task')
+  const text = page.locator('.activity .act-row').filter({ hasText: summary }).locator('.act-text')
+  await expect(text).toHaveText(summary)
+  expect(await text.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true)
+  // It takes more than one line, and stays inside the page.
+  const box = (await text.boundingBox())!
+  expect(box.height).toBeGreaterThan(30)
+  expect(box.x + box.width).toBeLessThanOrEqual(390)
+  // A result line keeps its buttons on one line.
+  await expect(page.locator('.activity > li').filter({ hasText: '已加入 3 个子任务' }).getByRole('button', { name: '撤销' })).toBeVisible()
+  expect(backend.errors).toEqual([])
+})
+
 test('a document saves itself when it loses focus, with no edit or save buttons', async ({ page }) => {
   const at = new Date().toISOString()
   const backend = await mockBackend(page, { ...workspace(), docs: [{ id: 'doc', thingId: 'task', title: '回信草稿', body: '# 回信草稿\n\n张三你好', by: 'ai', createdAt: at, updatedAt: at }] })

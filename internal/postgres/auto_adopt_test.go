@@ -370,10 +370,12 @@ func TestAutoAdoptSkipsStaleAndEmpty(t *testing.T) {
 	}{{"stale", "有效的结果", true}, {"empty", "", false}, {"blank", "\n \t", false}} {
 		t.Run(tc.name, func(t *testing.T) {
 			s := testStore(t)
+			phase2ManualDestination(t, s)
 			scope := owner()
 			st := workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "事项"})
-			st = workspaceCommand(t, s, scope, workspace.Command{Type: "requestRun", ThingID: st.Tasks[0].ID, AgentID: "manual", Kind: "draft", Prompt: "写文档"})
+			st = workspaceCommand(t, s, scope, workspace.Command{Type: "requestRun", ThingID: st.Tasks[0].ID, AgentID: "manual", ManualRecipient: &memory.Recipient{Provider: phase2ManualProvider}, Kind: "draft", Prompt: "写文档"})
 			run := st.Runs[0]
+			phase2RTGetPackage(t, s, scope, run)
 			run.Status, run.Output, run.StaleContext = "done", tc.output, tc.stale
 			err := pgx.BeginFunc(context.Background(), s.pool, func(tx pgx.Tx) error {
 				ctx := context.Background()

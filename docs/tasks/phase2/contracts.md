@@ -32,6 +32,8 @@ source 范围以 `source_scope_assignments` 关联同一来源：`studio` 指定
 
 **显式deny优先**：当前owner明确“别再用《唯一资料标题》”或撤回来源使用，默认含该接收者/purpose/hard scope的来源及其证据派生claim/summary/历史产物。`source_authorizations.revoked` tombstone表达拒绝；未曾授权也可首次撤回创建revision1 deny。没有policy行不阻断独立claim授权的正对照；有匹配deny时，claim verifier检查每条evidence来源而不要求来源allow，任一受禁来源使该条派生内容拒绝（不擅自剥去证据继续供给）。raw仍要求allow。regrant增加revision，仅允许新生成，不恢复已invalidated尝试/产物，不让用户辨析raw/claim。来源owner原件不删除，其他接收者独立授权不扩大。
 
+K1必要小修（协调批准）：023增加explicit_deny，现revoked回填true且deny⇒revoked。普通撤权revoked=true/explicit_deny=true；**撤销首次grant**恢复此前absence语义，保留revoked=true/explicit_deny=false的单调revision骨架，避免把原来独立claim可读变成用户从未表达的deny。sourcePolicyDeniedTx只认revoked且explicit_deny；raw仍要求!revoked，旧attempt/产物仍invalidated不复活。这只恢复原授权语义，不放宽显式deny。该内部恢复只能由undo可信context产生，不能由客户端request字段提交。Result新增action_id/undoable供真实action日志回执。
+
 自然入口首批用有限完整句：“让秘书能用《唯一资料标题》”“允许这个副手读取《唯一资料标题》”“不再让秘书读取《唯一资料标题》”“别再用《唯一资料标题》”（当前选中接收者）。沿用秘书当前请求与动作事务。deterministic helper只解析当前owner req.Text，精确唯一标题映射owner当前source；秘书/这个副手映射服务端selected agent，命名副手须唯一。问句、假设、引号整句、转述、否定授权不自动匹配；来源正文、历史对话、模型输出、导入元数据不参加解析。缺少明确source selection的“这份资料”返回一个必要选择，不猜最近source。若未来接模型动作，只接受当前owner可见S*/A*别名且仍须当前请求独立意图守门；本批不依赖模型op授权。服务端绑定tuple/范围、检查version/revision/路由，直接短回执；同轮不偷用此前未授权原文，下一轮重新装配。2.0必须真实policy undo接入，接入前不得声称Undoable。
 
 `SourceAuthorizer` 是可选新interface，不扩现有Sources/stub。定义SourceAuthorizations和SetSourceAuthorization；撤回用同请求Revoke=true，HTTP DELETE映射此入口。请求带request_id；相同ID/相同body返回已有回执，相同ID不同body冲突；重放复核source/policy及原expected revision+1，已有后继/撤权返回conflict，不重授资料。沿用既有workspace_commands幂等账本；即使账本以后清理，持续单调policy/scope revision仍阻止旧expected=0重授。B提供mutateSourceAuthorizationTx、sourcePolicyAllowsTx、sourcePolicyDeniedTx及resolveSourceAuthorizationIntentTx；A入口调用同helper。父文件/归档/OCR派生是独立source，不从父授权外推子授权。
@@ -127,5 +129,7 @@ func invalidateTypedContextTx(ctx context.Context, tx pgx.Tx, scope memory.Scope
 ```
 
 helper不能自行取得长期provider锁；caller遵守owner gate→diagnostic gate。mutation在已有事务中由caller负责request幂等、action log begin/flush及workspace revision，公开wrapper复用该协议。policy/范围undo必须与typed失效同事务，旧路由禁用不妨碍撤回，但恢复grant要验当前route。
+
+K1实际接收者共同helper（A实现、B复用）：`Store.contextRecipientTx(ctx,tx,scope,agentID,role,manual)`与`Store.trustedTaskContextTx(ctx,tx,scope,agentID,role,hardScope,manual)`。role为secretary/deputy/manual；自动读取server registry实际model/protocol/endpoint，manual用owner选择的已配置Provider重建并核对其字段，不信任client fingerprint。subscription读取本地选定model/account身份，不在锁内联网选model；未能确定实际model拒绝原文权限绑定。`sourcePolicyRevokeIsExplicit(ctx)`仅undo内部absence恢复返回false。`recordSourcePolicyActionTx(ctx,tx,scope,before *SourceAuthorization,after SourceAuthorization)`、`recordSourceScopeActionTx(ctx,tx,scope,before,after SourceScopeResult)`由B mutation调用，记录到已开始的既有action buffer，A undo校验after revision和后继。
 
 协调已扩A所有权到workspace.Command/model、commands.go、desk_actions.go、desk_schema.go、actions_log.go（限policy undo）、相关prompt；A写新的manual handler，B只在server.go注册route。首批自然入口使用deterministic helper，无需模型动作作为必要路径。K0只增加共享Command payload，不在消费者接入；K1开工前给冻结提交。任何契约调整先通知协调与C，不能为通过既有gold缩减安全断言。

@@ -111,6 +111,8 @@ type SourceScopeResult struct {
 	Revision    int                     `json:"revision"`
 	Assignments []SourceScopeAssignment `json:"assignments"`
 	Duplicate   bool                    `json:"duplicate"`
+	ActionID    string                  `json:"action_id,omitempty"`
+	Undoable    bool                    `json:"undoable"`
 }
 
 type SourceScopeRequest struct {
@@ -130,15 +132,16 @@ type SourceScopeEditor interface {
 // evidence-derived content; absence never denies independently granted claims.
 // Revision increases on grant, revoke, narrow and undo.
 type SourceAuthorization struct {
-	ID        ID             `json:"id"`
-	SourceID  ID             `json:"source_id"`
-	Recipient Recipient      `json:"recipient"`
-	Purpose   ContextPurpose `json:"purpose"`
-	Scope     HardScope      `json:"scope"`
-	Revision  int            `json:"revision"`
-	Revoked   bool           `json:"revoked"`
-	CreatedAt time.Time      `json:"created_at"`
-	UpdatedAt time.Time      `json:"updated_at"`
+	ID           ID             `json:"id"`
+	SourceID     ID             `json:"source_id"`
+	Recipient    Recipient      `json:"recipient"`
+	Purpose      ContextPurpose `json:"purpose"`
+	Scope        HardScope      `json:"scope"`
+	Revision     int            `json:"revision"`
+	Revoked      bool           `json:"revoked"`
+	ExplicitDeny bool           `json:"explicit_deny"`
+	CreatedAt    time.Time      `json:"created_at"`
+	UpdatedAt    time.Time      `json:"updated_at"`
 }
 
 type SourceAuthorizationRequest struct {
@@ -157,6 +160,8 @@ type SourceAuthorizationRequest struct {
 type SourceAuthorizationResult struct {
 	Authorization SourceAuthorization `json:"authorization"`
 	Duplicate     bool                `json:"duplicate"`
+	ActionID      string              `json:"action_id,omitempty"`
+	Undoable      bool                `json:"undoable"`
 }
 
 // Optional ports keep legacy Sources/API implementations and stubs compatible.

@@ -82,6 +82,16 @@ func (s *Store) deskTurnContextTx(ctx context.Context, tx pgx.Tx, scope memory.S
 		item = &value
 	}
 	if stored == nil {
+		// Legacy Desk producers are secretaries. Build this current read
+		// context before the common Run verifier, whose legacy default is a
+		// deputy; never persist or invent a historical recipient binding.
+		if target == nil {
+			task, err := s.trustedTaskContextTx(ctx, tx, scope, agent, "secretary", contextScopeForItem(item), nil)
+			if err != nil {
+				return nil, err
+			}
+			target = &task
+		}
 		modelScope := scope
 		if target != nil {
 			modelScope.Task = target
@@ -97,13 +107,6 @@ func (s *Store) deskTurnContextTx(ctx context.Context, tx pgx.Tx, scope memory.S
 		}
 		if len(legacy) == 0 {
 			return []memory.TypedDependency{}, nil
-		}
-		if target == nil {
-			task, err := s.trustedTaskContextTx(ctx, tx, scope, agent, "secretary", contextScopeForItem(item), nil)
-			if err != nil {
-				return nil, err
-			}
-			target = &task
 		}
 		entries, cov, err := hydrateTypedContextTx(ctx, tx, scope, *target, legacy)
 		if err != nil {

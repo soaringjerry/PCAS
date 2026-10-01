@@ -29,6 +29,8 @@ T3 的 D3 / T1 的 U12 是同一个 expired 错误码问题，归 F10；此处�
 
 T3 停止写入后，接手 `internal/postgres/stabilization_secretary_test.go` 与 `internal/postgres/stabilization_deletion_test.go`，仅移除自己已修 finding skip 和补充必要边界。D3 skip 由 F10 的类型/实现修复后，在集成候选上验证并移除；不改其错误码预期。
 
+额外批准 `internal/postgres/desk_turn_test.go` 中 `TestSecretaryRejectsStaleRowsAndKeepsOriginalOnCancellation/timeout` 的用户文案从旧「模型没有响应」改为正式 S8 所需「模型响应超时」；该分支原日志已期待 timeout。其余断言不变，报告逐项登记。
+
 唯一报告 `docs/evaluations/2026-10-01-secretary-repairs.md`。不改任务文档、前端、动作撤销、Telegram 文件和其他报告。
 
 D1 夹具复核结论：T3 原先在创建 claim 后才注册模型，原 `cards>0` 被 links 卡满足，不能证明真的引用了 claim。已批准把模型注册提前，并增加 sources 卡及真实 claim 依赖断言；正确夹具在未改 editing.go 的实现上已通过清理、历史/重放及回执骨架断言，原 D1 产品 finding 撤回。保留补强夹具和生成期间删除的边界验证，不为旧夹具修改产品。额外允许仅在原 T3 报告 D1 节追加更正及证据链接，保留原记录。

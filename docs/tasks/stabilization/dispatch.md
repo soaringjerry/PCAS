@@ -62,7 +62,10 @@ T1 已交付 [PR #26](https://github.com/soaringjerry/PCAS/pull/26) / `6d0c27e70
 - `f8_ci_followup` 接手 F8 工作区，已复现测试项目占用 P1 导致后续 golden 6 项失败，修复仅在测试数据收尾，正在完整 runner 补验。
 - `f10_expired_undo` 使用 `/root/PCAS-wt/F10`，F9 + T1 候选 `stabilization/expiry-candidate` = `912ffad5189d73dd75fc09555d080c1b8d3609eb`，独占 F10 文档所列撤销错误/映射文件与已移交的 U12/U13 测试。
 - `f11_secretary_repairs` 使用 `/root/PCAS-wt/F11`，先以 F9 + T3 候选实现 S1/S8/S9/D1；F10 最终提交并入候选后再验证同源 D3。独占两份 T3 PostgreSQL 测试及秘书/删除/provider 文件，不能与 F10 交叉修改。
-- F12 仍排队，等待 F10 交付并释放 Telegram poller。Opus U1 和 Astra A1 均未启动。
+- F10 已交付 [PR #28](https://github.com/soaringjerry/PCAS/pull/28) / `8d2a70df721dd433d45d2232b0405280f0156ca7` 并停止写入；U12/U13 原 3 叶失败均修复，完整 PG、Telegram、前端及 22 个 mock 通过，4 个 pending 叶仍保留。F11 已把它合入最终候选 `7cc48813ffd0906c6b003c4500e5a0cf40b4e322`。
+- F12 / `f12_telegram_repairs` 已接手 `/root/PCAS-wt/F12`，F10 + T3 候选 `stabilization/telegram-candidate` = `e9e5edb0cc1658dfaf04a80d6265a0dd77cbef24`。Telegram 文件、获授权的新只读查询文件与 notify 身份/关联存储归其所有。
+- D1 产品 finding 已在 F11 复核撤回：原夹具未实际授权/引用 claim，改正并加强引用断言后，原删除实现通过；详见 F11 任务与原 T3 报告后续更正。其他 S1/S8/S9、Telegram 三项仍为真实修复范围。
+- Opus U1 和 Astra A1 均未启动。
 
 ## 文件归属与协作规则
 

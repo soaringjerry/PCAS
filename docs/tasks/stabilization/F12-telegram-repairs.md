@@ -1,6 +1,8 @@
 # F12：Telegram 身份隔离、按钮绑定与语音重试
 
-执行者：6.1 Sol / high，必须不是 T3 作者。尚未启动；等待 T3 最终报告/测试交接及 F10 释放 `poller.go`。协调者给出含这些输入的候选 SHA 和 PR base。
+执行者：6.1 Sol / high，`f12_telegram_repairs`，不是 T3 作者。T3 与 F10 均已停止写入，F10 已释放 `poller.go` / `poller_test.go`，可以启动。
+
+在 `/root/PCAS-wt/F12` 从 F10 / #28 `8d2a70df721dd433d45d2232b0405280f0156ca7` 与 T3 / #27 `071e87dc3dd40f08c834797900e68842180d41f9` 无冲突集成 `stabilization/telegram-candidate`，记录并推 SHA，再创建 `stabilization/F12-telegram-repairs`，PR base 为该候选。冲突先报告；F11 在独立候选修 PostgreSQL/AI 模块，之后再做整合验收，不混写。
 
 ## 已发现的序列与要求
 
@@ -15,6 +17,10 @@
 独占 `internal/telegram/poller.go` 及 T3 移交的 `internal/telegram/stabilization_secretary_test.go`；必要的 `internal/telegram/api.go` / 私有类型也可修改，须在开工说明列出。`internal/telegram/poller_test.go` 只允许必要的新边界或旧断言与正式规则一致化，不能删除原覆盖。
 
 需要数据库、notify 凭据存储或 workspace 公共接口时先向协调者提出具体数据与生命周期；不把转录正文或整轮 response 写进新的持久 JSON。优先复用既有 desk 结果和不含正文的关联标识，保持删除传播；不能复制建立第二套会话/记忆库。
+
+已批准的最小扩权：新增 `internal/postgres/telegram_turn.go`，按 owner/requestId 读取既有 desk 结果，应用与历史/重放相同的授权、依赖版本和删除检查，刷新撤销及当前 State；不增加 HTTP 接口或 workspace 公共类型。`internal/notify/settings.go` 及相关测试可保存 getMe 确认的稳定 bot ID、凭据 guard、无正文发送关联和 legacyConversation 迁移锚点。关联包含 bot/chat/message/request/conversation/turn 标识与 SentAt，按 30 天裁剪；不使用 100 条硬上限让有效期内按钮失效。既有 64KiB 读取上限若不适用，只调整本机服务写入的 0600 凭据文件解码，不扩展网络输入限制。
+
+旧 chat-only requestId 只在首次身份确认、原配置和会话未变、结果会话匹配迁移锚点时复用；无可信锚点不猜 bot 归属。真正换 bot 清关联，同 bot 换 token 确认身份后保留且旧 token 受写入 guard 限制。回调同时核验发送绑定与 action 归属，旧无可信绑定的按钮明确失效。发送已成功但关联未落盘即崩溃的窗口需要如实报告，不宣称外部消息恰好投递一次。
 
 幂等必须绑定正确的 bot 身份与 chat，不能把明文 token 作为日志、外部 ID 或用户可见字段。说明同一 bot 换 token 时的兼容边界，不能只改一个测试常量。重启恢复和旧消息关联兼容要有明确策略，不依赖仅内存的 map。
 

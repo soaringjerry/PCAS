@@ -10,7 +10,7 @@
 
 U9 正常 `toggleCheck` 会写 action_log，因此按已确认规则要求 `newer_action`；保留原业务场景并扩展逆序成功验证。另一个直接 SQL 修改 checklist 的子例模拟未记录外部业务更改，仍要求 `changed_since`。这不是把正常接口夹具改成外部写入来回避新规则。
 
-新独立覆盖还包括多个新对象隔离、`project`/`set.project`、新想法引用、解析失败/提交失败后保持原位置、前向/越界/零/非创建别名、附带项目与 `delegate:new` 不绑定 N、类型错误与 THIS 隔离、同 requestId 重放、下一轮 N 清空及 R1 保持既有语义、Used/Links/Show 不接受 N、原数组前十动作上限。三次公开命令及同轮三动作的 first→second→first 场景，要求内容恢复原值时仍不能跳过后续动作。
+新独立覆盖还包括多个新对象隔离、`project`/`set.project`、新想法引用、解析失败/提交失败后保持原位置、前向/越界/零/非创建别名、附带项目与 `delegate:new` 不绑定 N、类型错误与 THIS 隔离、同 requestId 重放、同轮 R1/N1 分别绑定旧/新事项、下一轮 N 清空及 R1 保持既有语义、Used/Links/Show 不接受 N、原数组前十动作上限。三次公开命令及同轮三动作的 first→second→first 场景，要求内容恢复原值时仍不能跳过后续动作。
 
 | 原候选检查 | 真实结果 |
 |---|---|
@@ -21,7 +21,7 @@ U9 正常 `toggleCheck` 会写 action_log，因此按已确认规则要求 `newe
 | 三公开命令 first→second→first 后跳撤创建 | 应 HTTP 409 `newer_action`，实得 HTTP 200，任务被删除 |
 | 多对象、原位置解析/提交失败、N 重放和动作上限 | 合法 N 依赖动作被跳过，独立契约断言失败；不放宽预期 |
 
-失败已交 F13/F14 作者；没有修改实现。原候选日志保留于 `/tmp/pcas-test-T4/original-failures.jsonl`、`original-new-rules.jsonl`、`original-returned-content.jsonl`、`original-invalid-aliases.jsonl`，相应 `.stderr` 同目录。第一轮 U/THIS 选择运行 2 个 pass、8 个 fail 测试事件；新增 N 选择运行 7 个 pass、5 个 fail；返回原内容选择运行 3 个 fail。事件包含父测试和子测试，不能当作独立场景总数。
+失败已交 F13/F14 作者；没有修改实现。原候选日志保留于 `/tmp/pcas-test-T4/original-failures.jsonl`、`original-new-rules.jsonl`、`original-returned-content.jsonl`、`original-invalid-aliases.jsonl`、`original-r-n-isolation.jsonl`，相应 `.stderr` 同目录。第一轮 U/THIS 选择运行 2 个 pass、8 个 fail 测试事件；新增 N 选择运行 7 个 pass、5 个 fail；返回原内容选择运行 3 个 fail。事件包含父测试和子测试，不能当作独立场景总数。
 
 命令：
 

@@ -249,3 +249,29 @@ func TestApprovedRules_ReturnToSameContentStillRequiresReverseOrder(t *testing.T
 		})
 	}
 }
+
+func TestApprovedRules_SameTurnR1AndN1RemainSeparate(t *testing.T) {
+	s, scope := testStore(t), owner()
+	payload := `{"actions":[{"op":"create_task","title":"上轮旧任务"}]}`
+	stabilizationUndoModel(t, s, &payload)
+	first := mustTurn(t, s, scope, turnRequest("建旧任务"))
+	oldID := *approvedRulesReceipt(t, first, 0, "done").ThingID
+	payload = `{"actions":[{"op":"create_task","title":"本轮新任务"},{"op":"add_steps","ref":"R1","steps":["只给旧任务"]},{"op":"add_steps","ref":"N1","steps":["只给新任务"]}]}`
+	req := turnRequest("新旧对象分别操作")
+	req.ConversationID = &first.ConversationID
+	out := mustTurn(t, s, scope, req)
+	if len(out.Turn.Receipts) != 3 || len(out.State.Tasks) != 2 {
+		t.Fatal(out.Turn.Receipts, out.State.Tasks)
+	}
+	created := approvedRulesReceipt(t, out, 0, "done")
+	oldChange, newChange := approvedRulesReceipt(t, out, 1, "done"), approvedRulesReceipt(t, out, 2, "done")
+	if *created.ThingID == oldID || *oldChange.ThingID != oldID || *newChange.ThingID != *created.ThingID {
+		t.Fatal("R/N aliases collided", out.Turn.Receipts)
+	}
+	for id, text := range map[string]string{oldID: "只给旧任务", *created.ThingID: "只给新任务"} {
+		task := approvedRulesTask(t, out.State, id)
+		if len(task.Checklist) != 1 || task.Checklist[0].Text != text {
+			t.Fatal(task)
+		}
+	}
+}

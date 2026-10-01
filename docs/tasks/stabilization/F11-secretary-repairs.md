@@ -25,13 +25,13 @@ T3 的 D3 / T1 的 U12 是同一个 expired 错误码问题，归 F10；此处�
 
 ## 文件归属
 
-预留 `internal/postgres/desk_turn.go`、`internal/postgres/editing.go`、`internal/ai/provider.go`；已追加授权 `internal/postgres/desk_parse.go` 仅 secretaryCaptureText 的超时文案分支。如需 Store 字段、迁移、共享类型或其他文件，先给出最小变更理由由协调者授予。
+预留 `internal/postgres/desk_turn.go`、`internal/postgres/editing.go`、`internal/ai/provider.go`；已追加授权 `internal/postgres/desk_parse.go` 仅 secretaryCaptureText 的超时文案分支，以及 `database.go` 初始化 Store 的有界 secretarySlots。当前 pool 固定 10 连接，DeskTurn 最多占 9 个，给既有 Recall/额度短事务保留余量；锁冲突时先回滚归还连接和 slot 再等待，取消/失败/提交均释放。跨 Store 的同会话串行仍依 PostgreSQL 锁，不能用仅本地 channel 代替。需要其他 Store 字段、迁移、共享类型或文件仍先请求归属。
 
 T3 停止写入后，接手 `internal/postgres/stabilization_secretary_test.go` 与 `internal/postgres/stabilization_deletion_test.go`，仅移除自己已修 finding skip 和补充必要边界。D3 skip 由 F10 的类型/实现修复后，在集成候选上验证并移除；不改其错误码预期。
 
 唯一报告 `docs/evaluations/2026-10-01-secretary-repairs.md`。不改任务文档、前端、动作撤销、Telegram 文件和其他报告。
 
-复核中的 D1 夹具例外：T3 原先在创建 claim 后才注册模型，原 `cards>0` 被 links 卡满足，不能证明真的引用了 claim。已批准把模型注册提前，并增加 sources 卡及真实 claim 依赖断言，再对未修的产品运行；清理、历史/重放及回执骨架预期均不降低。若正确夹具通过，应撤回该产品 finding，不为了旧夹具改产品。额外允许仅在原 T3 报告 D1 节追加更正及证据链接，保留原记录。
+D1 夹具复核结论：T3 原先在创建 claim 后才注册模型，原 `cards>0` 被 links 卡满足，不能证明真的引用了 claim。已批准把模型注册提前，并增加 sources 卡及真实 claim 依赖断言；正确夹具在未改 editing.go 的实现上已通过清理、历史/重放及回执骨架断言，原 D1 产品 finding 撤回。保留补强夹具和生成期间删除的边界验证，不为旧夹具修改产品。额外允许仅在原 T3 报告 D1 节追加更正及证据链接，保留原记录。
 
 ## 验收与交付
 

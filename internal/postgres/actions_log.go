@@ -13,10 +13,12 @@ import (
 type actionLogKey struct{}
 type actionLog struct{ id, source, turnID, summary string }
 type actionChange struct {
-	Table     string          `json:"table"`
-	ID        string          `json:"id"`
-	Before    json.RawMessage `json:"before"`
-	AfterHash *string         `json:"afterHash"`
+	Table         string          `json:"table"`
+	ID            string          `json:"id"`
+	Before        json.RawMessage `json:"before"`
+	AfterHash     *string         `json:"afterHash"`
+	SourceVersion int             `json:"sourceVersion,omitempty"`
+	ScopeRevision int             `json:"scopeRevision,omitempty"`
 }
 
 func withActionLog(ctx context.Context, id, source, turnID, summary string) context.Context {

@@ -48,7 +48,3 @@ PR #44 head `c8adbaeb5c02daa9e83f90f74c216d8cf9ee22bf`；runner 实际 checkout 
 - `artifact-sha256.json`：归档各文件 SHA；原 evidence JSON 解压 SHA 另列。
 
 本报告证明上述固定 tree 的完整 Go race / vet / fmt / build 技术门；不替代独立浏览器结果、线上 11 题、真实模型 / 真机、一天用户试用或实际进程崩溃恢复门。
-
-## 后续独立 head：cf3015c
-
-[cf3015c 完整报告](cf3015c/README.md)：run 36888958920 自然 success，实际 checkout ba946b860dea2ef81b83c2c1ec3eb5c63f4d1562；与 head 完整 tree 相等。仅 web spec 两条 shape 迁移，Go / gold 不变。755 真叶 752 PASS / 3 旧 SKIP，341 顶层，所有包真实执行、缓存 0，PG 467.368s，原 23 因果叶同头全 P，最后 build 成功。c8 证据不覆盖；原 README 与其 SHA 可用 cf3015c/c8-readme-original.md 复核。

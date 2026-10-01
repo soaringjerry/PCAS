@@ -1,0 +1,21 @@
+{
+  "run_id": 36888958920,
+  "job_id": 110459377955,
+  "head_sha": "cf3015cd67cf112933dfa51badbda8507de30834",
+  "actual_checkout_merge_sha": "ba946b860dea2ef81b83c2c1ec3eb5c63f4d1562",
+  "merge_tree_sha": "52b5a793517add9741df26a08ca64950aa05f034",
+  "local_head_tree_sha": "52b5a793517add9741df26a08ca64950aa05f034",
+  "merge_parents": [
+    "6fd9d173a738cddf1ee9f4ed7e8bcb7b07ed1973",
+    "cf3015cd67cf112933dfa51badbda8507de30834"
+  ],
+  "checkout_log_lines": [
+    241,
+    243,
+    244
+  ],
+  "build_log_line": 112366,
+  "collection": "Read-only gh run view --log after completed success; no dispatch/cancel/local tests",
+  "baseline_c8_readme_copy": "cf3015c/c8-readme-original.md",
+  "baseline_c8_readme_sha256": "602a9862bdc57e7e5478e20732b91868a49b555d4a194362d83a93dc66056eae"
+}

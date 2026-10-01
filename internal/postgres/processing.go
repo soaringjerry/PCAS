@@ -426,6 +426,13 @@ func (s *Store) ProcessExtraction(ctx context.Context, j worker.Job) error {
 		if err != nil {
 			return err
 		}
+		// An uploaded archive is a history migration. What it says becomes memory
+		// and reviewable candidates, never a present-day task or a woken idea:
+		// "明天" in a 2025 conversation is not tomorrow.
+		var imported bool
+		if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM archive_entries WHERE owner_id=$1 AND source_id=$2 AND source_version=$3)", string(j.OwnerID), string(j.Record.ID), j.Record.Version).Scan(&imported); err != nil {
+			return err
+		}
 		accepted := 0
 		for _, item := range extraction.Items {
 			if source.Source.Connector == "desk" && oneOf(item.Kind, "task", "idea") {
@@ -472,14 +479,14 @@ func (s *Store) ProcessExtraction(ctx context.Context, j worker.Job) error {
 				return err
 			}
 			accepted++
-			if settings.AutoAccept && item.Kind == "task" && item.Explicit && item.Confidence >= 0.98 {
+			if settings.AutoAccept && !imported && item.Kind == "task" && item.Explicit && item.Confidence >= 0.98 {
 				if err := s.commandTx(ctx, tx, scope, workspace.Command{Type: "acceptCandidate", ID: v.ID, Kind: "task", Text: v.Text}); err != nil {
 					return err
 				}
 			}
 		}
 		if settings.WakeIdeas {
-			if source.Context != nil && (source.Context.Role != "user" || source.Context.Branch == "historical") {
+			if imported || source.Context != nil && (source.Context.Role != "user" || source.Context.Branch == "historical") {
 				extraction.Signals = nil
 			}
 			if err := s.applySignalsTx(ctx, tx, scope, source.Source, extraction.Signals); err != nil {

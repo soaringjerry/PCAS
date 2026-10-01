@@ -1,0 +1,65 @@
+{
+  "schema": "pcas.phase2.independent-retry-causal-fixture-erratum.v1",
+  "authority": "root approved four specific premise corrections after834949f one-shot race, independently corroborated by D; product unchanged",
+  "preserves": [
+    "retry-origin-sequences.json",
+    "retry-origin-supplement.json",
+    "receipt-audit-sequences.json",
+    "retry-query-isolation-sequences.json",
+    "23leaf R1 raw17PASS6FAIL"
+  ],
+  "changes": [
+    {
+      "tests": [
+        "RECEIPT-EMPTY",
+        "RECEIPT-SOURCE"
+      ],
+      "old_extra_harness_condition": "Undoable=false after Undo",
+      "corrected": "Undoable is historical action capability, not current eligibility; strict Undone=true/actionID/actual two successfulUndo remain; UI behavior unchanged"
+    },
+    {
+      "test": "RECEIPT-SOURCE",
+      "old_missing_prerequisite": "whole HTTP no source atom after undoing actions but without revoking/deleting source",
+      "sequence": [
+        "preserve first create turn legitimate source-live history fact: first ModelTask carries no own future action; original source policy still allow",
+        "second turn actually inherits create action now undone: strict generic receipt/noThingID/no atom/Reply and Cards hidden, realactionID+Undone preserved",
+        "formal source revoke using same originally granted policy",
+        "realGEThistory for sameconversation now bothturns entire response atom/title absent, two realactionIDs/Undone persist"
+      ],
+      "stronger_evidence": [
+        "actualsource Input and each actualaction typed dependency/Task beforeUndo captured",
+        "no rawpolicy revoked only by implication of actionUndo"
+      ]
+    },
+    {
+      "tests": [
+        "RETRY-LIVE",
+        "RETRY-SCOPE-DENIED"
+      ],
+      "old_missing_prerequisite": "delegate:new target task is unscoped; req.ThingID project is not implicit project inheritance",
+      "corrected_sequence": [
+        "real secretary requestThingID points to real projectA",
+        "actual serialized secretary input proves THIS identifies real projectA",
+        "two actions create_task with project=THIS then delegate ref=N1",
+        "both true committed receipts; createdTask ProjectID A; secretary+deputy actualTask.scope A; prompt origins exactly actualdelegate receiptID",
+        "general Run/Task/manifest closure includes actualcreate+delegate IDs; no fake project field on delegate",
+        "B rejection still sameTask movedB/only sourceassignmentA/true canonical targetallowB"
+      ]
+    },
+    {
+      "tests": [
+        "RETRY-INVALID-DELETE_SOURCE-ORIGINAL_PROMPT",
+        "RETRY-INVALID-DELETE_SOURCE-PUNCTUATION_ONLY"
+      ],
+      "old_extra_harness_condition": "exactConflict afteroldRun rowgone",
+      "corrected": "public sourceDelete removes source-dependent agent_runs so locator is missing; only these two exactNotFound; otherrevoke/correct keep exactConflict",
+      "required": [
+        "before deletion oldactualRun exists with realtyped/source dependencies and actual503positive",
+        "afterdeletion oldRun0/source+versions0/owneropaque tombstone persisted",
+        "sameoriginalsource formalIngest returns exactcontrolled reimport block",
+        "no newHTTP/embedding/Run/delivery; olddiagnosticattempt snapshot cleared/unavailable rather than reused"
+      ]
+    }
+  ],
+  "failure_policy": "No originalred overwrite or retry; root selects only six previouslyfailed leaves for once causal recheck, with complete evidence. Original17passed are notrerun locally."
+}

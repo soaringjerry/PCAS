@@ -1,6 +1,7 @@
 package postgres
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -16,6 +17,12 @@ type artifactBlock = workspace.TextBlock
 
 type ownerRenameKey struct{}
 type ownerRename struct{ ThingID, Title string }
+
+type restoredArtifactKey struct{}
+type restoredArtifactFields struct {
+	ThingID string
+	Fields  map[string][]artifactBlock
+}
 
 func withOwnerRename(ctx context.Context, scope memory.Scope, item workspace.Item, title string) context.Context {
 	log, logged := ctx.Value(actionLogKey{}).(actionLog)
@@ -152,16 +159,21 @@ func syncArtifactEditsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, ite
 	}
 	for field, text := range itemArtifactText(item) {
 		blocks, exists := byField[field]
+		restore, restoring := ctx.Value(restoredArtifactKey{}).(restoredArtifactFields)
+		exact := restoring && restore.ThingID == item.ID && exists && text == blockText(blocks) && bytes.Equal(asJSON(blocks), asJSON(restore.Fields[field]))
 		rename, explicit := ctx.Value(ownerRenameKey{}).(ownerRename)
 		renamed := explicit && rename.ThingID == item.ID && rename.Title == text && (field == "title" || field == "name" && item.Kind == "project")
-		if renamed {
+		if exact {
+			// The already-fenced, live-filtered restore is authoritative. An old
+			// audit label must not add another origin to the restored block.
+		} else if renamed {
 			blocks = workspace.RenameBlocks(text, sources)
 		} else if exists {
 			blocks = editBlocks(blocks, text)
 		} else {
 			blocks = []artifactBlock{{Text: text, Runs: []string{}}}
 		}
-		if !renamed {
+		if !renamed && !exact {
 			blocks = workspace.CopyOrigins(blocks, sources)
 		}
 		derived := false

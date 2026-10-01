@@ -264,6 +264,7 @@ func (s *Store) undoActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 				if err = suppressRestoredRemindersTx(ctx, tx, scope, current, item, time.Now()); err != nil {
 					return err
 				}
+				saveCtx := ctx
 				if c.BeforeBlocks != nil {
 					scrubbed, e := s.restoreActionBlocksTx(ctx, tx, scope, &item, c.BeforeBlocks)
 					if e != nil {
@@ -272,10 +273,17 @@ func (s *Store) undoActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 					if scrubbed {
 						summary = "事项修改"
 					}
+					// Set only after both after fingerprints and the actual restored
+					// origins have passed. New audit fields are not in this snapshot.
+					restored, e := loadItemBlocksTx(ctx, tx, scope, item.ID)
+					if e != nil {
+						return e
+					}
+					saveCtx = context.WithValue(ctx, restoredArtifactKey{}, restoredArtifactFields{ThingID: item.ID, Fields: restored})
 				}
 				item.Version = current.Version + 1
 				item.UpdatedAt = stamp()
-				err = s.saveAction(ctx, tx, scope, item, "撤销："+summary)
+				err = s.saveAction(saveCtx, tx, scope, item, "撤销："+summary)
 			case "work_documents":
 				var doc workspace.Doc
 				if err = json.Unmarshal(c.Before, &doc); err == nil {

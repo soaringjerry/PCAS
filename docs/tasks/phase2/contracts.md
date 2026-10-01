@@ -178,4 +178,6 @@ canonical `title` 与 `name` 分别使用既有 artifact_fields 块追踪、恢�
 
 该改名识别仅是文本复用启发式，可能保守误判，并非语义作者证明。新标题按既有 2000-byte 硬限，累计检查旧正文最多 64KiB、双向模糊比较累计最多 100000 rune-pair 成本（工程初值）；空归一化内容或达到计算上限的来源保留全部原 labels，不截断后默许解绑。词片段/连续片段用集合线性扫描，普通编辑算法不变。
 
+undo 仅在原 after 文档与块双 hash 校验、原 origin 当前合法筛选和实际块恢复成功后产生私有恢复 marker，绑定真实 item 与恢复完成的精确 field/text/blocks。saveAction 同步时只保留仍逐字逐块匹配的已恢复字段，不从其旧审计摘要再次归因而改变前一动作的 after fence；新撤销 history/source 回执、未恢复或发生变化的字段沿正常同步。此 marker 不来自客户端、不用于一般改写或提前绕过新版/后继保护。
+
 Run 的服务端 `contextPromptDeskActions` 是真实成功 delegate action ID 子集，仅在该动作实际写入生成 Prompt 时绑定，沿用同一 origin DAG，不预测 ID、不由客户端填写。它与继承事项/previous/history 的 `contextDeskActions` 区分：后者非空不表示 owner 亲写 Prompt 为模型生成。原 action Task/typed deps 的元数据寿命跟随 Prompt，独立于 audit changes/attempt 到期；两列表均受既有 256 origins 上限。失效 hook 及 Snapshot/导出等当前读门以实际 Prompt origin 验证和清除生成 Prompt；来源撤回/route失效/undo 不复活，owner 独立 Prompt 保留，旧无标记行不猜测模型来源。

@@ -180,4 +180,6 @@ canonical `title` 与 `name` 分别使用既有 artifact_fields 块追踪、恢�
 
 undo 仅在原 after 文档与块双 hash 校验、原 origin 当前合法筛选和实际块恢复成功后产生私有恢复 marker，绑定真实 item 与恢复完成的精确 field/text/blocks。saveAction 同步时只保留仍逐字逐块匹配的已恢复字段，不从其旧审计摘要再次归因而改变前一动作的 after fence；新撤销 history/source 回执、未恢复或发生变化的字段沿正常同步。此 marker 不来自客户端、不用于一般改写或提前绕过新版/后继保护。
 
+owner 本地已撤销操作回执有一个更窄的审计读规则：仅 `scope.IsOwner && scope.Task == nil`，且 action 的 owner、turn、真实 action ID 与 undone 状态均已核验，才可保留原 receipt 操作说明、事项标题/ID 和 Undone。整条 origin DAG 必须原 Task/route 有效、`context_stale=false`，并且每个 origin 的 typed dependencies 严格为空；缺失 Task、任何依赖、原路由变化、循环或超过 256 distinct IDs/16 层均继续返回通用回执。已删除 exchange 的审计骨架不走此规则。不恢复 Reply、Cards、模型历史或字段，不改变原供给 verifier 对 undone origin 的拒绝；这是本地操作身份回读，不是生成内容重新授权。
+
 Run 的服务端 `contextPromptDeskActions` 是真实成功 delegate action ID 子集，仅在该动作实际写入生成 Prompt 时绑定，沿用同一 origin DAG，不预测 ID、不由客户端填写。它与继承事项/previous/history 的 `contextDeskActions` 区分：后者非空不表示 owner 亲写 Prompt 为模型生成。原 action Task/typed deps 的元数据寿命跟随 Prompt，独立于 audit changes/attempt 到期；两列表均受既有 256 origins 上限。失效 hook 及 Snapshot/导出等当前读门以实际 Prompt origin 验证和清除生成 Prompt；来源撤回/route失效/undo 不复活，owner 独立 Prompt 保留，旧无标记行不猜测模型来源。

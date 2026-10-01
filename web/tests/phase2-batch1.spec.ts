@@ -5,20 +5,22 @@ import type { State } from '../src/domain/types'
 const gold = JSON.parse(readFileSync(new URL('../../testdata/phase2/b1-gold.json', import.meta.url), 'utf8'))
 const text: string = gold.fixtures.trip.text
 const at = '2026-09-12T09:00:00Z'
+const supplement = gold.supplement_2026_10_02.fixture
+const fullText = `${String(supplement.prefix).repeat(80)}\n${text}\n${String(supplement.suffix).repeat(40)}`
 const sourceId = '11111111-1111-4111-8111-111111111111'
 
-async function backend(page: Page, outdated: boolean, withTimeline = false) {
+async function backend(page: Page, outdated: boolean, withTimeline = false, excerpt = text) {
   const state: State = {
     version: 1, revision: 1, budgetUsage: 0,
     settings: { dailyBudget: 10, autoAccept: false, wakeIdeas: false, followUps: false, dailyReviewAt: '09:00', timezone: 'Asia/Shanghai' },
     tasks: [{ id: 'task', title: '检查旅行安排', notes: '', status: 'todo', dependsOn: [], checklist: [], triggers: [], sources: [], history: [], createdAt: at, updatedAt: at }],
-    ideas: [], projects: [], memories: [], candidates: [], docs: [], runs: [], samples: [], sources: [], jobs: [], activity: [], excludedMemories: {},
+    ideas: [], projects: [], memories: [], candidates: [], docs: [], runs: [], samples: [], sources: [{ id: sourceId, name: '秘书原话', method: '手动导入', status: 'manual', note: '合成资料', itemCount: 0 }], jobs: [], activity: [], excludedMemories: {},
     agents: [{ id: 'model', name: '验收假模型', enabled: true, available: true, default: true, channel: 'api', note: '', inputPrice: 0, outputPrice: 0, maxOutput: 100, memoryKinds: ['fact'], includeInferred: false }],
   }
   const turn = {
     id: 'b1-turn', text: '我去成都想吃什么', reply: '春熙路火锅，见老王。',
     cards: [
-      { kind: 'sources', items: [{ kind: 'source', memoryId: sourceId, version: 1, sourceId, sourceVersion: 1, text, at }] },
+      { kind: 'sources', items: [{ kind: 'source', memoryId: sourceId, version: 1, sourceId, sourceVersion: 1, text: excerpt, at }] },
       ...(withTimeline ? [{ kind: 'timeline', items: [{ at, text: '此前陈述记录', status: 'open', memoryId: 'claim', thingId: null }] }] : []),
     ],
     receipts: [{ actionId: 'b1-action', op: 'create_task', text: '已建：检查旅行安排', thingId: 'task', undoable: true, undone: false, status: 'done' }],
@@ -47,7 +49,7 @@ async function backend(page: Page, outdated: boolean, withTimeline = false) {
   })
   await page.route(url => url.pathname === `/v1/memory/sources/${sourceId}`, route => {
     opened.push(route.request().url())
-    return route.fulfill({ json: { source: { id: sourceId, version: 1, title: '秘书原话', text, recorded_at: at, representation: 'original', has_attachment: false, attachment_missing: false }, derived: [], processing: [] } })
+    return route.fulfill({ json: { source: { id: sourceId, version: 1, title: '秘书原话', text: fullText, recorded_at: at, representation: 'original', has_attachment: false, attachment_missing: false }, derived: [], processing: [{ id: 'job', stage: 'source.extract', state: 'queued' }] } })
   })
   await page.route(url => url.pathname === '/v1/memory/summary', route => route.fulfill({ json: { text: '合成资料摘要', coverage: { gaps: [] }, dependencies: [{ id: sourceId, version: 1 }] } }))
   return { turn, commands, opened, errors }
@@ -60,15 +62,22 @@ async function say(page: Page) {
   await expect(page.locator('.sec-reply')).toHaveText('春熙路火锅，见老王。')
 }
 
-test('P1/R8 原话依据可见并能打开正确版本原文', async ({ page }) => {
+test('P1/R8a 单击依据直接看到全文、定位标记，面板无版本状态摘要', async ({ page }) => {
   const mock = await backend(page, false)
   await say(page)
   const source = page.getByRole('list', { name: '依据' }).getByRole('button', { name: text })
   await expect(source).toBeVisible()
   await source.click()
   await expect(page.getByRole('dialog')).toBeVisible()
-  await page.getByText('展开原文', { exact: true }).click()
-  await expect(page.getByRole('dialog').locator('pre').filter({ hasText: text })).toBeVisible()
+  const dialog = page.getByRole('dialog')
+  const original = dialog.locator('pre').filter({ hasText: text })
+  await expect(original).toBeVisible()
+  await expect(original).toHaveText(fullText)
+  const highlight = dialog.locator('mark').filter({ hasText: text })
+  await expect(highlight).toHaveText(text)
+  await expect(highlight).toBeInViewport()
+  await expect(dialog).not.toContainText(/第\s*\d+\s*版|摘要|source\.extract|queued/)
+  await expect(dialog.getByText('展开原文', { exact: true })).toHaveCount(0)
   expect(mock.opened).toHaveLength(1)
   expect(new URL(mock.opened[0]).searchParams.get('version')).toBe('1')
   expect(mock.errors).toEqual([])
@@ -104,7 +113,40 @@ test('M8/P1 正常轮无更新标记，原话不混入时间轴，390px不溢出
   await expect(page.locator('.sec-timeline')).not.toContainText(text)
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy()
   await page.getByRole('list', { name: '依据' }).getByRole('button', { name: text }).click()
-  await page.getByText('展开原文', { exact: true }).click()
+  await expect(page.getByRole('dialog').locator('pre').filter({ hasText: text })).toBeVisible()
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy()
+  expect(mock.errors).toEqual([])
+})
+
+
+test('P1/R8a 摘录不在原文时全文仍自动可见，没有伪标记', async ({ page }) => {
+  const missing: string = supplement.missing_excerpt
+  const mock = await backend(page, false, false, missing)
+  await say(page)
+  await page.getByRole('list', { name: '依据' }).getByRole('button', { name: missing }).click()
+  const dialog = page.getByRole('dialog')
+  const original = dialog.locator('pre').filter({ hasText: text })
+  await expect(original).toBeVisible()
+  await expect(original).toHaveText(fullText)
+  await expect(dialog.locator('mark')).toHaveCount(0)
+  await expect(dialog).not.toContainText(/第\s*\d+\s*版|摘要|source\.extract|queued/)
+  expect(mock.errors).toEqual([])
+})
+
+test('P1/R8a 资料库打开同一原话保留版本、处理状态、摘要及展开原文', async ({ page }) => {
+  const mock = await backend(page, false)
+  await page.goto('/library?tab=sources')
+  await page.getByRole('button', { name: '查看原文：秘书原话', exact: true }).click()
+  const dialog = page.getByRole('dialog')
+  await expect(dialog).toContainText('第 1 版')
+  await expect(dialog).toContainText('source.extract：queued')
+  await expect(dialog).toContainText('合成资料摘要')
+  const original = dialog.locator('pre').filter({ hasText: text })
+  await expect(original).not.toBeVisible()
+  await dialog.getByText('展开原文', { exact: true }).click()
+  await expect(original).toBeVisible()
+  await expect(original).toHaveText(fullText)
+  await expect(dialog.locator('mark')).toHaveCount(0)
+  expect(mock.opened).toHaveLength(1)
   expect(mock.errors).toEqual([])
 })

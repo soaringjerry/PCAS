@@ -17,6 +17,8 @@
 
 一次执行 `go test ./internal/postgres -run '^TestPhase2K0' -count=1 -json`，使用独立 DSN 和 `/tmp/pcas-phase2-c-k0-evidence`；包执行 1.264 秒，退出 0。没有 skip、调低断言、产品修改或碰运气重跑。
 
+运行后协调审查要求修正测试环境适配：移除本机 hostname/database name 限制，沿用仓库既有 `PCAS_TEST_DATABASE_URL` 信任和唯一 schema 隔离，变量为空仍直接失败、没有 skip。该修正使 harness 可用于 CI 的 `localhost/pcas_test` 配置，未改 gold 或业务断言；上述冻结运行的输入、SHA 和计数仍保留原记录，未重复整批。
+
 | 计数口径 | total | pass | fail | skip |
 |---|---:|---:|---:|---:|
 | 顶层 | 7 | 7 | 0 | 0 |

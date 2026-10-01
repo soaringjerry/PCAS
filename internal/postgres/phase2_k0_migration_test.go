@@ -82,9 +82,12 @@ func phase2K0Evidence(t *testing.T, name string, value any) {
 func phase2K0Store(t *testing.T, legacy bool) *Store {
 	t.Helper()
 	dsn := os.Getenv("PCAS_TEST_DATABASE_URL")
+	if dsn == "" {
+		t.Fatal("K0 acceptance requires a dedicated disposable PCAS_TEST_DATABASE_URL; no skip")
+	}
 	u, err := url.Parse(dsn)
-	if err != nil || dsn == "" || u.Hostname() != "127.0.0.1" || u.Path != "/phase2_c" {
-		t.Fatal("K0 acceptance requires the dedicated loopback phase2_c database; no skip")
+	if err != nil {
+		t.Fatal("invalid dedicated test database URL")
 	}
 	ctx := context.Background()
 	admin, err := Open(ctx, dsn)

@@ -1,0 +1,5145 @@
+[
+  {
+    "method": "GET",
+    "path": "/v1/workspace",
+    "status": 401,
+    "response": {
+      "error": "unauthorized"
+    }
+  },
+  {
+    "method": "GET",
+    "path": "/v1/workspace",
+    "status": 200,
+    "response": {
+      "notices": [],
+      "budgetUsage": 0,
+      "version": 1,
+      "revision": 5,
+      "settings": {
+        "autoAccept": false,
+        "wakeIdeas": true,
+        "followUps": true,
+        "dailyReviewAt": "09:00",
+        "dailyBudget": 10,
+        "timezone": "Asia/Shanghai"
+      },
+      "tasks": [
+        {
+          "id": "b93a16ce-b24f-4824-9979-40a4f0c82fa3",
+          "itemKind": "task",
+          "recordVersion": 2,
+          "title": "独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea",
+          "name": "独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea",
+          "status": "todo",
+          "notes": "OWNER 合成独立说明 cobalt-602，继续保留这段原文。",
+          "body": "",
+          "goal": "",
+          "progress": "",
+          "dependsOn": [],
+          "checklist": [],
+          "triggers": [],
+          "sources": [
+            {
+              "sourceId": "5dd951ea-5a0c-40fd-8dbd-8f13c9927c3a",
+              "version": 1,
+              "label": "创建",
+              "at": "2026-10-01T14:36:45.394006371Z"
+            },
+            {
+              "sourceId": "5dd951ea-5a0c-40fd-8dbd-8f13c9927c3a",
+              "version": 2,
+              "label": "更新说明",
+              "at": "2026-10-01T14:36:45.437327784Z"
+            }
+          ],
+          "history": [
+            {
+              "at": "2026-10-01T14:36:45.393615987Z",
+              "by": "user",
+              "summary": "创建"
+            },
+            {
+              "at": "2026-10-01T14:36:45.394006371Z",
+              "by": "user",
+              "summary": "创建"
+            },
+            {
+              "at": "2026-10-01T14:36:45.437327784Z",
+              "by": "user",
+              "summary": "更新说明"
+            }
+          ],
+          "evolution": [
+            {
+              "at": "2026-10-01T14:36:45.393615987Z",
+              "by": "user",
+              "summary": "提出"
+            }
+          ],
+          "conditions": [],
+          "remindersOn": true,
+          "nextSteps": [],
+          "createdAt": "2026-10-01T14:36:45.393615987Z",
+          "updatedAt": "2026-10-01T14:36:45.437325834Z"
+        }
+      ],
+      "ideas": [],
+      "projects": [],
+      "memories": [],
+      "candidates": [],
+      "agents": [
+        {
+          "protocol": "siwc",
+          "available": false,
+          "inputPrice": 0,
+          "outputPrice": 0,
+          "maxOutput": 4096,
+          "id": "chatgpt-direct",
+          "name": "ChatGPT · 套餐授权",
+          "channel": "api",
+          "note": "消耗你的 ChatGPT 套餐 · 官方直接授权",
+          "enabled": true,
+          "memoryKinds": [
+            "fact",
+            "preference",
+            "decision",
+            "intention",
+            "plan"
+          ],
+          "includeInferred": false
+        },
+        {
+          "default": true,
+          "protocol": "openai",
+          "available": true,
+          "inputPrice": 0,
+          "outputPrice": 0,
+          "maxOutput": 2000,
+          "id": "golden",
+          "name": "验收假模型",
+          "channel": "api",
+          "note": "通用 API · golden",
+          "enabled": true,
+          "memoryKinds": [
+            "fact",
+            "preference",
+            "decision",
+            "intention",
+            "plan"
+          ],
+          "includeInferred": false
+        },
+        {
+          "available": true,
+          "inputPrice": 0,
+          "outputPrice": 0,
+          "maxOutput": 0,
+          "id": "manual",
+          "name": "手动交接",
+          "channel": "manual",
+          "note": "复制上下文到任意 AI，再粘贴结果",
+          "enabled": true,
+          "memoryKinds": [
+            "fact",
+            "preference",
+            "decision",
+            "intention",
+            "plan"
+          ],
+          "includeInferred": false
+        }
+      ],
+      "docs": [],
+      "runs": [
+        {
+          "contextTask": {
+            "OwnerID": "cc6eae2e-9b70-40f3-9b3d-4b764727c398",
+            "Recipient": {
+              "principal_id": "manual",
+              "role": "manual",
+              "model": "golden",
+              "provider": "golden",
+              "protocol": "openai",
+              "channel": "manual",
+              "route_fingerprint": "5297ab0a4176f71b12aa21e8d126d86bc7a13987008afba0269e17bfa8cfc38a"
+            },
+            "Purpose": "knowledge",
+            "Scope": {
+              "kind": "unscoped",
+              "include_global_constraints": false
+            },
+            "View": {
+              "mode": "continue",
+              "valid_at": "2026-10-01T14:36:46.399715662Z",
+              "known_at": "2026-10-01T14:36:46.399715662Z"
+            },
+            "Now": "2026-10-01T14:36:46.399715662Z",
+            "Timezone": "Asia/Shanghai",
+            "MemoryBudget": {
+              "candidates": 15,
+              "edges": 15,
+              "tokens": 4000,
+              "hops": 1
+            },
+            "TotalInputTokens": 8000
+          },
+          "contextDependencies": [
+            {
+              "ref": {
+                "id": "0a30f89b-8c9e-4045-bedd-e55416fdd455",
+                "version": 1,
+                "kind": "source"
+              },
+              "purpose": "knowledge",
+              "scope": {
+                "kind": "unscoped",
+                "include_global_constraints": false
+              },
+              "authorization": {
+                "policy_id": "a035e7b6-8e8c-4839-ba60-311dcad966a8",
+                "revision": 1
+              },
+              "scope_revision": 0
+            }
+          ],
+          "contextDeskActions": [],
+          "contextIndirectDependencies": [],
+          "contextCandidates": [
+            {
+              "ref": {
+                "id": "0a30f89b-8c9e-4045-bedd-e55416fdd455",
+                "version": 1,
+                "kind": "source"
+              },
+              "source_span": {
+                "source": {
+                  "id": "0a30f89b-8c9e-4045-bedd-e55416fdd455",
+                  "version": 1,
+                  "kind": "source"
+                },
+                "start_rune": 0,
+                "end_rune": 113
+              },
+              "stage": "recall",
+              "disposition": "selected"
+            }
+          ],
+          "contextSourceSpans": [
+            {
+              "source": {
+                "id": "0a30f89b-8c9e-4045-bedd-e55416fdd455",
+                "version": 1,
+                "kind": "source"
+              },
+              "start_rune": 0,
+              "end_rune": 113
+            }
+          ],
+          "manualRecipient": {
+            "principal_id": "",
+            "role": "",
+            "model": "",
+            "provider": "golden",
+            "protocol": "",
+            "channel": "",
+            "route_fingerprint": ""
+          },
+          "id": "4e7ca5ae-a945-404a-85a4-aef55f36c79d",
+          "thingId": "b93a16ce-b24f-4824-9979-40a4f0c82fa3",
+          "agentId": "manual",
+          "kind": "ask",
+          "prompt": "根据合成海棠交接资料-3ba7f87c-0b92-4392-97ff-8e0771fab2ea和这件事的独立说明，给出一段建议。",
+          "brief": "事项：独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea\n当前状态：todo\n说明：OWNER 合成独立说明 cobalt-602，继续保留这段原文。\n\n目标：\n进度：\n\n本次请求：根据合成海棠交接资料-3ba7f87c-0b92-4392-97ff-8e0771fab2ea和这件事的独立说明，给出一段建议。",
+          "contextMemoryIds": [
+            "0a30f89b-8c9e-4045-bedd-e55416fdd455"
+          ],
+          "contextVersions": [
+            {
+              "id": "0a30f89b-8c9e-4045-bedd-e55416fdd455",
+              "version": 1,
+              "kind": "source"
+            }
+          ],
+          "status": "waiting",
+          "staleContext": false,
+          "cost": 0,
+          "createdAt": "2026-10-01T14:36:46.436252795Z"
+        }
+      ],
+      "samples": [],
+      "sources": [
+        {
+          "id": "5dd951ea-5a0c-40fd-8dbd-8f13c9927c3a",
+          "name": "独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea",
+          "method": "actions",
+          "status": "failed",
+          "note": "原文可读，部分处理未完成；展开后台任务查看缺口",
+          "itemCount": 1,
+          "lastSyncAt": "2026-10-01T14:36:45.435071Z"
+        },
+        {
+          "id": "0a30f89b-8c9e-4045-bedd-e55416fdd455",
+          "name": "合成海棠交接资料-3ba7f87c-0b92-4392-97ff-8e0771fab2ea",
+          "method": "phase2-browser-synthetic",
+          "status": "failed",
+          "note": "原文可读，部分处理未完成；展开后台任务查看缺口",
+          "itemCount": 1,
+          "lastSyncAt": "2026-10-01T14:36:45.362702Z"
+        }
+      ],
+      "jobs": [
+        {
+          "id": "8a478630-f271-42ea-bac2-4eb91be62804",
+          "title": "更新摘要",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.686274Z"
+        },
+        {
+          "id": "7b42de3a-74e9-47bf-92d0-07e609524820",
+          "title": "更新摘要",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「合成海棠交接资料-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.678936Z"
+        },
+        {
+          "id": "8e2034d6-c7ae-4105-82d7-7e9fb1caf71f",
+          "title": "从资料里读出要点",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.660531Z"
+        },
+        {
+          "id": "d0af9371-ae27-49ac-bdcc-86ec595cedb6",
+          "title": "建立检索索引",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.660531Z"
+        },
+        {
+          "id": "911cfd8f-c0f3-4783-b752-339a431186cc",
+          "title": "建立语义索引",
+          "trigger": "资料处理",
+          "status": "failed",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」 · 还没配置处理它的模型",
+          "recovery": "配置对应模型或处理器后重试",
+          "createdAt": "2026-10-01T14:36:45.660531Z"
+        },
+        {
+          "id": "50638a4b-ad14-419c-9555-d4a4ea7a9c88",
+          "title": "从资料里读出要点",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.64147Z"
+        },
+        {
+          "id": "e8e66484-7178-40cc-a028-b041404be20e",
+          "title": "建立语义索引",
+          "trigger": "资料处理",
+          "status": "failed",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」 · 还没配置处理它的模型",
+          "recovery": "配置对应模型或处理器后重试",
+          "createdAt": "2026-10-01T14:36:45.64147Z"
+        },
+        {
+          "id": "7d24d058-4035-4c72-8fd8-30071314c2e4",
+          "title": "建立检索索引",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.64147Z"
+        },
+        {
+          "id": "e3d3ab74-2280-4e79-9e5a-d2f996be37cd",
+          "title": "从资料里读出要点",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「合成海棠交接资料-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.634603Z"
+        },
+        {
+          "id": "123ca27e-a9fb-4b94-b6aa-9376c0fd608d",
+          "title": "建立语义索引",
+          "trigger": "资料处理",
+          "status": "failed",
+          "detail": "「合成海棠交接资料-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」 · 还没配置处理它的模型",
+          "recovery": "配置对应模型或处理器后重试",
+          "createdAt": "2026-10-01T14:36:45.634603Z"
+        },
+        {
+          "id": "87f68293-e609-4d04-8e2c-bc46e6cc1f51",
+          "title": "建立检索索引",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「合成海棠交接资料-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.634603Z"
+        },
+        {
+          "id": "91379d40-d1ef-45a6-b77f-7f8fb981cd42",
+          "title": "更新摘要",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.435071Z"
+        },
+        {
+          "id": "24731ee1-f003-46c5-96a0-4f359ba32fb8",
+          "title": "切分原文",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.435071Z"
+        },
+        {
+          "id": "d48dbde2-295c-44fa-939c-fd8b12c84c33",
+          "title": "切分原文",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.391149Z"
+        },
+        {
+          "id": "984e3ac0-b6da-43d6-badd-11c6499d3b5d",
+          "title": "切分原文",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「合成海棠交接资料-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.362702Z"
+        }
+      ],
+      "activity": [
+        {
+          "id": "problem:还没配置处理它的模型",
+          "at": "2026-10-01T14:36:45.692006Z",
+          "text": "有 3 项整理没做完：还没配置处理它的模型",
+          "to": "/library?tab=sources",
+          "failed": true
+        }
+      ],
+      "excludedMemories": {}
+    }
+  },
+  {
+    "method": "GET",
+    "path": "/v1/workspace",
+    "status": 200,
+    "response": {
+      "notices": [],
+      "budgetUsage": 0,
+      "version": 1,
+      "revision": 9,
+      "settings": {
+        "autoAccept": false,
+        "wakeIdeas": true,
+        "followUps": true,
+        "dailyReviewAt": "09:00",
+        "dailyBudget": 10,
+        "timezone": "Asia/Shanghai"
+      },
+      "tasks": [
+        {
+          "id": "0214d897-5ad4-4647-8e27-80866ca3f624",
+          "itemKind": "task",
+          "recordVersion": 2,
+          "title": "独立手动交接-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc",
+          "name": "独立手动交接-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc",
+          "status": "todo",
+          "notes": "OWNER 合成独立说明 cobalt-602，继续保留这段原文。",
+          "body": "",
+          "goal": "",
+          "progress": "",
+          "dependsOn": [],
+          "checklist": [],
+          "triggers": [],
+          "sources": [
+            {
+              "sourceId": "aa42e176-4217-49a2-a6c2-b96593a93659",
+              "version": 1,
+              "label": "创建",
+              "at": "2026-10-01T14:36:47.650834608Z"
+            },
+            {
+              "sourceId": "aa42e176-4217-49a2-a6c2-b96593a93659",
+              "version": 2,
+              "label": "更新说明",
+              "at": "2026-10-01T14:36:47.686904727Z"
+            }
+          ],
+          "history": [
+            {
+              "at": "2026-10-01T14:36:47.650598356Z",
+              "by": "user",
+              "summary": "创建"
+            },
+            {
+              "at": "2026-10-01T14:36:47.650834608Z",
+              "by": "user",
+              "summary": "创建"
+            },
+            {
+              "at": "2026-10-01T14:36:47.686904727Z",
+              "by": "user",
+              "summary": "更新说明"
+            }
+          ],
+          "evolution": [
+            {
+              "at": "2026-10-01T14:36:47.650598356Z",
+              "by": "user",
+              "summary": "提出"
+            }
+          ],
+          "conditions": [],
+          "remindersOn": true,
+          "nextSteps": [],
+          "createdAt": "2026-10-01T14:36:47.650598356Z",
+          "updatedAt": "2026-10-01T14:36:47.686903027Z"
+        },
+        {
+          "id": "b93a16ce-b24f-4824-9979-40a4f0c82fa3",
+          "itemKind": "task",
+          "recordVersion": 2,
+          "title": "独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea",
+          "name": "独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea",
+          "status": "todo",
+          "notes": "OWNER 合成独立说明 cobalt-602，继续保留这段原文。",
+          "body": "",
+          "goal": "",
+          "progress": "",
+          "dependsOn": [],
+          "checklist": [],
+          "triggers": [],
+          "sources": [
+            {
+              "sourceId": "5dd951ea-5a0c-40fd-8dbd-8f13c9927c3a",
+              "version": 1,
+              "label": "创建",
+              "at": "2026-10-01T14:36:45.394006371Z"
+            },
+            {
+              "sourceId": "5dd951ea-5a0c-40fd-8dbd-8f13c9927c3a",
+              "version": 2,
+              "label": "更新说明",
+              "at": "2026-10-01T14:36:45.437327784Z"
+            }
+          ],
+          "history": [
+            {
+              "at": "2026-10-01T14:36:45.393615987Z",
+              "by": "user",
+              "summary": "创建"
+            },
+            {
+              "at": "2026-10-01T14:36:45.394006371Z",
+              "by": "user",
+              "summary": "创建"
+            },
+            {
+              "at": "2026-10-01T14:36:45.437327784Z",
+              "by": "user",
+              "summary": "更新说明"
+            }
+          ],
+          "evolution": [
+            {
+              "at": "2026-10-01T14:36:45.393615987Z",
+              "by": "user",
+              "summary": "提出"
+            }
+          ],
+          "conditions": [],
+          "remindersOn": true,
+          "nextSteps": [],
+          "createdAt": "2026-10-01T14:36:45.393615987Z",
+          "updatedAt": "2026-10-01T14:36:45.437325834Z"
+        }
+      ],
+      "ideas": [],
+      "projects": [],
+      "memories": [],
+      "candidates": [],
+      "agents": [
+        {
+          "protocol": "siwc",
+          "available": false,
+          "inputPrice": 0,
+          "outputPrice": 0,
+          "maxOutput": 4096,
+          "id": "chatgpt-direct",
+          "name": "ChatGPT · 套餐授权",
+          "channel": "api",
+          "note": "消耗你的 ChatGPT 套餐 · 官方直接授权",
+          "enabled": true,
+          "memoryKinds": [
+            "fact",
+            "preference",
+            "decision",
+            "intention",
+            "plan"
+          ],
+          "includeInferred": false
+        },
+        {
+          "default": true,
+          "protocol": "openai",
+          "available": true,
+          "inputPrice": 0,
+          "outputPrice": 0,
+          "maxOutput": 2000,
+          "id": "golden",
+          "name": "验收假模型",
+          "channel": "api",
+          "note": "通用 API · golden",
+          "enabled": true,
+          "memoryKinds": [
+            "fact",
+            "preference",
+            "decision",
+            "intention",
+            "plan"
+          ],
+          "includeInferred": false
+        },
+        {
+          "available": true,
+          "inputPrice": 0,
+          "outputPrice": 0,
+          "maxOutput": 0,
+          "id": "manual",
+          "name": "手动交接",
+          "channel": "manual",
+          "note": "复制上下文到任意 AI，再粘贴结果",
+          "enabled": true,
+          "memoryKinds": [
+            "fact",
+            "preference",
+            "decision",
+            "intention",
+            "plan"
+          ],
+          "includeInferred": false
+        }
+      ],
+      "docs": [],
+      "runs": [
+        {
+          "contextTask": {
+            "OwnerID": "cc6eae2e-9b70-40f3-9b3d-4b764727c398",
+            "Recipient": {
+              "principal_id": "manual",
+              "role": "manual",
+              "model": "golden",
+              "provider": "golden",
+              "protocol": "openai",
+              "channel": "manual",
+              "route_fingerprint": "5297ab0a4176f71b12aa21e8d126d86bc7a13987008afba0269e17bfa8cfc38a"
+            },
+            "Purpose": "knowledge",
+            "Scope": {
+              "kind": "unscoped",
+              "include_global_constraints": false
+            },
+            "View": {
+              "mode": "continue",
+              "valid_at": "2026-10-01T14:36:46.399715662Z",
+              "known_at": "2026-10-01T14:36:46.399715662Z"
+            },
+            "Now": "2026-10-01T14:36:46.399715662Z",
+            "Timezone": "Asia/Shanghai",
+            "MemoryBudget": {
+              "candidates": 15,
+              "edges": 15,
+              "tokens": 4000,
+              "hops": 1
+            },
+            "TotalInputTokens": 8000
+          },
+          "contextDependencies": [
+            {
+              "ref": {
+                "id": "0a30f89b-8c9e-4045-bedd-e55416fdd455",
+                "version": 1,
+                "kind": "source"
+              },
+              "purpose": "knowledge",
+              "scope": {
+                "kind": "unscoped",
+                "include_global_constraints": false
+              },
+              "authorization": {
+                "policy_id": "a035e7b6-8e8c-4839-ba60-311dcad966a8",
+                "revision": 1
+              },
+              "scope_revision": 0
+            }
+          ],
+          "contextDeskActions": [],
+          "contextIndirectDependencies": [],
+          "contextCandidates": [
+            {
+              "ref": {
+                "id": "0a30f89b-8c9e-4045-bedd-e55416fdd455",
+                "version": 1,
+                "kind": "source"
+              },
+              "source_span": {
+                "source": {
+                  "id": "0a30f89b-8c9e-4045-bedd-e55416fdd455",
+                  "version": 1,
+                  "kind": "source"
+                },
+                "start_rune": 0,
+                "end_rune": 113
+              },
+              "stage": "recall",
+              "disposition": "selected"
+            }
+          ],
+          "contextSourceSpans": [
+            {
+              "source": {
+                "id": "0a30f89b-8c9e-4045-bedd-e55416fdd455",
+                "version": 1,
+                "kind": "source"
+              },
+              "start_rune": 0,
+              "end_rune": 113
+            }
+          ],
+          "manualRecipient": {
+            "principal_id": "",
+            "role": "",
+            "model": "",
+            "provider": "golden",
+            "protocol": "",
+            "channel": "",
+            "route_fingerprint": ""
+          },
+          "id": "4e7ca5ae-a945-404a-85a4-aef55f36c79d",
+          "thingId": "b93a16ce-b24f-4824-9979-40a4f0c82fa3",
+          "agentId": "manual",
+          "kind": "ask",
+          "prompt": "根据合成海棠交接资料-3ba7f87c-0b92-4392-97ff-8e0771fab2ea和这件事的独立说明，给出一段建议。",
+          "brief": "事项：独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea\n当前状态：todo\n说明：OWNER 合成独立说明 cobalt-602，继续保留这段原文。\n\n目标：\n进度：\n\n本次请求：根据合成海棠交接资料-3ba7f87c-0b92-4392-97ff-8e0771fab2ea和这件事的独立说明，给出一段建议。",
+          "contextMemoryIds": [
+            "0a30f89b-8c9e-4045-bedd-e55416fdd455"
+          ],
+          "contextVersions": [
+            {
+              "id": "0a30f89b-8c9e-4045-bedd-e55416fdd455",
+              "version": 1,
+              "kind": "source"
+            }
+          ],
+          "status": "waiting",
+          "staleContext": false,
+          "cost": 0,
+          "createdAt": "2026-10-01T14:36:46.436252795Z"
+        }
+      ],
+      "samples": [],
+      "sources": [
+        {
+          "id": "aa42e176-4217-49a2-a6c2-b96593a93659",
+          "name": "独立手动交接-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc",
+          "method": "actions",
+          "status": "failed",
+          "note": "原文可读，部分处理未完成；展开后台任务查看缺口",
+          "itemCount": 1,
+          "lastSyncAt": "2026-10-01T14:36:47.68475Z"
+        },
+        {
+          "id": "f5db9490-7ddd-4f75-babb-c457eafbce87",
+          "name": "合成海棠交接资料-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc",
+          "method": "phase2-browser-synthetic",
+          "status": "failed",
+          "note": "原文可读，部分处理未完成；展开后台任务查看缺口",
+          "itemCount": 1,
+          "lastSyncAt": "2026-10-01T14:36:47.622301Z"
+        },
+        {
+          "id": "5dd951ea-5a0c-40fd-8dbd-8f13c9927c3a",
+          "name": "独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea",
+          "method": "actions",
+          "status": "failed",
+          "note": "原文可读，部分处理未完成；展开后台任务查看缺口",
+          "itemCount": 1,
+          "lastSyncAt": "2026-10-01T14:36:45.435071Z"
+        },
+        {
+          "id": "0a30f89b-8c9e-4045-bedd-e55416fdd455",
+          "name": "合成海棠交接资料-3ba7f87c-0b92-4392-97ff-8e0771fab2ea",
+          "method": "phase2-browser-synthetic",
+          "status": "failed",
+          "note": "原文可读，部分处理未完成；展开后台任务查看缺口",
+          "itemCount": 1,
+          "lastSyncAt": "2026-10-01T14:36:45.362702Z"
+        }
+      ],
+      "jobs": [
+        {
+          "id": "dfe341a0-a707-454e-8363-8d49779c217c",
+          "title": "更新摘要",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc」",
+          "createdAt": "2026-10-01T14:36:47.75019Z"
+        },
+        {
+          "id": "b80adf5f-d6a8-4fd5-bdd3-d4cde074bbdf",
+          "title": "更新摘要",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「合成海棠交接资料-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc」",
+          "createdAt": "2026-10-01T14:36:47.744159Z"
+        },
+        {
+          "id": "baed69ce-225c-46bd-9526-745a851c99ac",
+          "title": "从资料里读出要点",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc」",
+          "createdAt": "2026-10-01T14:36:47.729217Z"
+        },
+        {
+          "id": "4ec1e404-7b39-4cbb-a83c-72dcdd89c4a8",
+          "title": "建立检索索引",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc」",
+          "createdAt": "2026-10-01T14:36:47.729217Z"
+        },
+        {
+          "id": "be695124-6de2-44b1-b6ae-85d993785197",
+          "title": "建立语义索引",
+          "trigger": "资料处理",
+          "status": "failed",
+          "detail": "「独立手动交接-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc」 · 还没配置处理它的模型",
+          "recovery": "配置对应模型或处理器后重试",
+          "createdAt": "2026-10-01T14:36:47.729217Z"
+        },
+        {
+          "id": "c6089876-d4c4-40b4-883d-98d7af38e157",
+          "title": "建立语义索引",
+          "trigger": "资料处理",
+          "status": "failed",
+          "detail": "「独立手动交接-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc」 · 还没配置处理它的模型",
+          "recovery": "配置对应模型或处理器后重试",
+          "createdAt": "2026-10-01T14:36:47.716826Z"
+        },
+        {
+          "id": "979d9533-d14c-43ea-acd5-009e34d1799e",
+          "title": "建立检索索引",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc」",
+          "createdAt": "2026-10-01T14:36:47.716826Z"
+        },
+        {
+          "id": "b7d2f67a-4e6d-4bb7-bfd4-9203aacdd2d5",
+          "title": "从资料里读出要点",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc」",
+          "createdAt": "2026-10-01T14:36:47.716826Z"
+        },
+        {
+          "id": "395eb180-a734-46bc-beb6-fde3e8b6f1ab",
+          "title": "建立语义索引",
+          "trigger": "资料处理",
+          "status": "failed",
+          "detail": "「合成海棠交接资料-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc」 · 还没配置处理它的模型",
+          "recovery": "配置对应模型或处理器后重试",
+          "createdAt": "2026-10-01T14:36:47.712038Z"
+        },
+        {
+          "id": "cb692d0d-9273-4bc3-88e3-13d50ccf2ee2",
+          "title": "建立检索索引",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「合成海棠交接资料-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc」",
+          "createdAt": "2026-10-01T14:36:47.712038Z"
+        },
+        {
+          "id": "e5f1e06b-12dd-4826-97cd-3106c10131d0",
+          "title": "从资料里读出要点",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「合成海棠交接资料-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc」",
+          "createdAt": "2026-10-01T14:36:47.712038Z"
+        },
+        {
+          "id": "b4507306-eb6e-4b2a-9a6e-d780759027b4",
+          "title": "更新摘要",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc」",
+          "createdAt": "2026-10-01T14:36:47.68475Z"
+        },
+        {
+          "id": "c315b72e-70fd-43b6-941f-16c286dcf57c",
+          "title": "切分原文",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc」",
+          "createdAt": "2026-10-01T14:36:47.68475Z"
+        },
+        {
+          "id": "89a03519-84de-4090-90ab-24add943fa5e",
+          "title": "切分原文",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc」",
+          "createdAt": "2026-10-01T14:36:47.649138Z"
+        },
+        {
+          "id": "e4311e17-02fd-4eb5-a039-6273f6498655",
+          "title": "切分原文",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「合成海棠交接资料-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc」",
+          "createdAt": "2026-10-01T14:36:47.622301Z"
+        },
+        {
+          "id": "8a478630-f271-42ea-bac2-4eb91be62804",
+          "title": "更新摘要",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.686274Z"
+        },
+        {
+          "id": "7b42de3a-74e9-47bf-92d0-07e609524820",
+          "title": "更新摘要",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「合成海棠交接资料-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.678936Z"
+        },
+        {
+          "id": "8e2034d6-c7ae-4105-82d7-7e9fb1caf71f",
+          "title": "从资料里读出要点",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.660531Z"
+        },
+        {
+          "id": "d0af9371-ae27-49ac-bdcc-86ec595cedb6",
+          "title": "建立检索索引",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.660531Z"
+        },
+        {
+          "id": "911cfd8f-c0f3-4783-b752-339a431186cc",
+          "title": "建立语义索引",
+          "trigger": "资料处理",
+          "status": "failed",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」 · 还没配置处理它的模型",
+          "recovery": "配置对应模型或处理器后重试",
+          "createdAt": "2026-10-01T14:36:45.660531Z"
+        },
+        {
+          "id": "e8e66484-7178-40cc-a028-b041404be20e",
+          "title": "建立语义索引",
+          "trigger": "资料处理",
+          "status": "failed",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」 · 还没配置处理它的模型",
+          "recovery": "配置对应模型或处理器后重试",
+          "createdAt": "2026-10-01T14:36:45.64147Z"
+        },
+        {
+          "id": "7d24d058-4035-4c72-8fd8-30071314c2e4",
+          "title": "建立检索索引",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.64147Z"
+        },
+        {
+          "id": "50638a4b-ad14-419c-9555-d4a4ea7a9c88",
+          "title": "从资料里读出要点",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.64147Z"
+        },
+        {
+          "id": "123ca27e-a9fb-4b94-b6aa-9376c0fd608d",
+          "title": "建立语义索引",
+          "trigger": "资料处理",
+          "status": "failed",
+          "detail": "「合成海棠交接资料-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」 · 还没配置处理它的模型",
+          "recovery": "配置对应模型或处理器后重试",
+          "createdAt": "2026-10-01T14:36:45.634603Z"
+        },
+        {
+          "id": "87f68293-e609-4d04-8e2c-bc46e6cc1f51",
+          "title": "建立检索索引",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「合成海棠交接资料-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.634603Z"
+        },
+        {
+          "id": "e3d3ab74-2280-4e79-9e5a-d2f996be37cd",
+          "title": "从资料里读出要点",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「合成海棠交接资料-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.634603Z"
+        },
+        {
+          "id": "24731ee1-f003-46c5-96a0-4f359ba32fb8",
+          "title": "切分原文",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.435071Z"
+        },
+        {
+          "id": "91379d40-d1ef-45a6-b77f-7f8fb981cd42",
+          "title": "更新摘要",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.435071Z"
+        },
+        {
+          "id": "d48dbde2-295c-44fa-939c-fd8b12c84c33",
+          "title": "切分原文",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.391149Z"
+        },
+        {
+          "id": "984e3ac0-b6da-43d6-badd-11c6499d3b5d",
+          "title": "切分原文",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「合成海棠交接资料-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.362702Z"
+        }
+      ],
+      "activity": [
+        {
+          "id": "problem:还没配置处理它的模型",
+          "at": "2026-10-01T14:36:47.756109Z",
+          "text": "有 6 项整理没做完：还没配置处理它的模型",
+          "to": "/library?tab=sources",
+          "failed": true
+        }
+      ],
+      "excludedMemories": {}
+    }
+  },
+  {
+    "method": "GET",
+    "path": "/v1/models",
+    "status": 200,
+    "response": {
+      "chatgptDirectEnabled": true,
+      "chatgptEnabled": false,
+      "providers": [
+        {
+          "available": true,
+          "embedding": false,
+          "id": "golden",
+          "inputPrice": 0,
+          "maxOutput": 2000,
+          "model": "golden",
+          "name": "验收假模型",
+          "outputPrice": 0,
+          "protocol": "openai"
+        },
+        {
+          "available": false,
+          "embedding": false,
+          "id": "chatgpt-direct",
+          "inputPrice": 0,
+          "maxOutput": 4096,
+          "model": "",
+          "name": "ChatGPT · 套餐授权",
+          "outputPrice": 0,
+          "protocol": "siwc"
+        }
+      ]
+    }
+  },
+  {
+    "method": "POST",
+    "path": "/v1/workspace/commands",
+    "status": 200,
+    "request": {
+      "type": "requestRun",
+      "id": "a58f9d95-6445-49d6-854f-d0a4db7fba15",
+      "thingId": "0214d897-5ad4-4647-8e27-80866ca3f624",
+      "agentId": "manual",
+      "kind": "ask",
+      "prompt": "根据合成海棠交接资料-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc和这件事的独立说明，给出一段建议。",
+      "manualRecipient": {
+        "provider": "golden"
+      },
+      "requestId": "aabbcb17-30b6-4622-9427-cde515f6f6dc",
+      "expectedRevision": 9
+    },
+    "response": {
+      "notices": [],
+      "budgetUsage": 0,
+      "version": 1,
+      "revision": 10,
+      "settings": {
+        "autoAccept": false,
+        "wakeIdeas": true,
+        "followUps": true,
+        "dailyReviewAt": "09:00",
+        "dailyBudget": 10,
+        "timezone": "Asia/Shanghai"
+      },
+      "tasks": [
+        {
+          "id": "0214d897-5ad4-4647-8e27-80866ca3f624",
+          "itemKind": "task",
+          "recordVersion": 2,
+          "title": "独立手动交接-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc",
+          "name": "独立手动交接-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc",
+          "status": "todo",
+          "notes": "OWNER 合成独立说明 cobalt-602，继续保留这段原文。",
+          "body": "",
+          "goal": "",
+          "progress": "",
+          "dependsOn": [],
+          "checklist": [],
+          "triggers": [],
+          "sources": [
+            {
+              "sourceId": "aa42e176-4217-49a2-a6c2-b96593a93659",
+              "version": 1,
+              "label": "创建",
+              "at": "2026-10-01T14:36:47.650834608Z"
+            },
+            {
+              "sourceId": "aa42e176-4217-49a2-a6c2-b96593a93659",
+              "version": 2,
+              "label": "更新说明",
+              "at": "2026-10-01T14:36:47.686904727Z"
+            }
+          ],
+          "history": [
+            {
+              "at": "2026-10-01T14:36:47.650598356Z",
+              "by": "user",
+              "summary": "创建"
+            },
+            {
+              "at": "2026-10-01T14:36:47.650834608Z",
+              "by": "user",
+              "summary": "创建"
+            },
+            {
+              "at": "2026-10-01T14:36:47.686904727Z",
+              "by": "user",
+              "summary": "更新说明"
+            }
+          ],
+          "evolution": [
+            {
+              "at": "2026-10-01T14:36:47.650598356Z",
+              "by": "user",
+              "summary": "提出"
+            }
+          ],
+          "conditions": [],
+          "remindersOn": true,
+          "nextSteps": [],
+          "createdAt": "2026-10-01T14:36:47.650598356Z",
+          "updatedAt": "2026-10-01T14:36:47.686903027Z"
+        },
+        {
+          "id": "b93a16ce-b24f-4824-9979-40a4f0c82fa3",
+          "itemKind": "task",
+          "recordVersion": 2,
+          "title": "独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea",
+          "name": "独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea",
+          "status": "todo",
+          "notes": "OWNER 合成独立说明 cobalt-602，继续保留这段原文。",
+          "body": "",
+          "goal": "",
+          "progress": "",
+          "dependsOn": [],
+          "checklist": [],
+          "triggers": [],
+          "sources": [
+            {
+              "sourceId": "5dd951ea-5a0c-40fd-8dbd-8f13c9927c3a",
+              "version": 1,
+              "label": "创建",
+              "at": "2026-10-01T14:36:45.394006371Z"
+            },
+            {
+              "sourceId": "5dd951ea-5a0c-40fd-8dbd-8f13c9927c3a",
+              "version": 2,
+              "label": "更新说明",
+              "at": "2026-10-01T14:36:45.437327784Z"
+            }
+          ],
+          "history": [
+            {
+              "at": "2026-10-01T14:36:45.393615987Z",
+              "by": "user",
+              "summary": "创建"
+            },
+            {
+              "at": "2026-10-01T14:36:45.394006371Z",
+              "by": "user",
+              "summary": "创建"
+            },
+            {
+              "at": "2026-10-01T14:36:45.437327784Z",
+              "by": "user",
+              "summary": "更新说明"
+            }
+          ],
+          "evolution": [
+            {
+              "at": "2026-10-01T14:36:45.393615987Z",
+              "by": "user",
+              "summary": "提出"
+            }
+          ],
+          "conditions": [],
+          "remindersOn": true,
+          "nextSteps": [],
+          "createdAt": "2026-10-01T14:36:45.393615987Z",
+          "updatedAt": "2026-10-01T14:36:45.437325834Z"
+        }
+      ],
+      "ideas": [],
+      "projects": [],
+      "memories": [],
+      "candidates": [],
+      "agents": [
+        {
+          "protocol": "siwc",
+          "available": false,
+          "inputPrice": 0,
+          "outputPrice": 0,
+          "maxOutput": 4096,
+          "id": "chatgpt-direct",
+          "name": "ChatGPT · 套餐授权",
+          "channel": "api",
+          "note": "消耗你的 ChatGPT 套餐 · 官方直接授权",
+          "enabled": true,
+          "memoryKinds": [
+            "fact",
+            "preference",
+            "decision",
+            "intention",
+            "plan"
+          ],
+          "includeInferred": false
+        },
+        {
+          "default": true,
+          "protocol": "openai",
+          "available": true,
+          "inputPrice": 0,
+          "outputPrice": 0,
+          "maxOutput": 2000,
+          "id": "golden",
+          "name": "验收假模型",
+          "channel": "api",
+          "note": "通用 API · golden",
+          "enabled": true,
+          "memoryKinds": [
+            "fact",
+            "preference",
+            "decision",
+            "intention",
+            "plan"
+          ],
+          "includeInferred": false
+        },
+        {
+          "available": true,
+          "inputPrice": 0,
+          "outputPrice": 0,
+          "maxOutput": 0,
+          "id": "manual",
+          "name": "手动交接",
+          "channel": "manual",
+          "note": "复制上下文到任意 AI，再粘贴结果",
+          "enabled": true,
+          "memoryKinds": [
+            "fact",
+            "preference",
+            "decision",
+            "intention",
+            "plan"
+          ],
+          "includeInferred": false
+        }
+      ],
+      "docs": [],
+      "runs": [
+        {
+          "contextTask": {
+            "OwnerID": "cc6eae2e-9b70-40f3-9b3d-4b764727c398",
+            "Recipient": {
+              "principal_id": "manual",
+              "role": "manual",
+              "model": "golden",
+              "provider": "golden",
+              "protocol": "openai",
+              "channel": "manual",
+              "route_fingerprint": "5297ab0a4176f71b12aa21e8d126d86bc7a13987008afba0269e17bfa8cfc38a"
+            },
+            "Purpose": "knowledge",
+            "Scope": {
+              "kind": "unscoped",
+              "include_global_constraints": false
+            },
+            "View": {
+              "mode": "continue",
+              "valid_at": "2026-10-01T14:36:48.407350514Z",
+              "known_at": "2026-10-01T14:36:48.407350514Z"
+            },
+            "Now": "2026-10-01T14:36:48.407350514Z",
+            "Timezone": "Asia/Shanghai",
+            "MemoryBudget": {
+              "candidates": 15,
+              "edges": 15,
+              "tokens": 4000,
+              "hops": 1
+            },
+            "TotalInputTokens": 8000
+          },
+          "contextDependencies": [
+            {
+              "ref": {
+                "id": "f5db9490-7ddd-4f75-babb-c457eafbce87",
+                "version": 1,
+                "kind": "source"
+              },
+              "purpose": "knowledge",
+              "scope": {
+                "kind": "unscoped",
+                "include_global_constraints": false
+              },
+              "authorization": {
+                "policy_id": "bd80a590-54b6-414c-b8a3-9b01f01a5e70",
+                "revision": 1
+              },
+              "scope_revision": 0
+            },
+            {
+              "ref": {
+                "id": "0a30f89b-8c9e-4045-bedd-e55416fdd455",
+                "version": 1,
+                "kind": "source"
+              },
+              "purpose": "knowledge",
+              "scope": {
+                "kind": "unscoped",
+                "include_global_constraints": false
+              },
+              "authorization": {
+                "policy_id": "a035e7b6-8e8c-4839-ba60-311dcad966a8",
+                "revision": 1
+              },
+              "scope_revision": 0
+            }
+          ],
+          "contextDeskActions": [],
+          "contextIndirectDependencies": [],
+          "contextCandidates": [
+            {
+              "ref": {
+                "id": "f5db9490-7ddd-4f75-babb-c457eafbce87",
+                "version": 1,
+                "kind": "source"
+              },
+              "source_span": {
+                "source": {
+                  "id": "f5db9490-7ddd-4f75-babb-c457eafbce87",
+                  "version": 1,
+                  "kind": "source"
+                },
+                "start_rune": 0,
+                "end_rune": 113
+              },
+              "stage": "recall",
+              "disposition": "selected"
+            },
+            {
+              "ref": {
+                "id": "0a30f89b-8c9e-4045-bedd-e55416fdd455",
+                "version": 1,
+                "kind": "source"
+              },
+              "source_span": {
+                "source": {
+                  "id": "0a30f89b-8c9e-4045-bedd-e55416fdd455",
+                  "version": 1,
+                  "kind": "source"
+                },
+                "start_rune": 0,
+                "end_rune": 113
+              },
+              "stage": "recall",
+              "disposition": "selected"
+            }
+          ],
+          "contextSourceSpans": [
+            {
+              "source": {
+                "id": "f5db9490-7ddd-4f75-babb-c457eafbce87",
+                "version": 1,
+                "kind": "source"
+              },
+              "start_rune": 0,
+              "end_rune": 113
+            },
+            {
+              "source": {
+                "id": "0a30f89b-8c9e-4045-bedd-e55416fdd455",
+                "version": 1,
+                "kind": "source"
+              },
+              "start_rune": 0,
+              "end_rune": 113
+            }
+          ],
+          "manualRecipient": {
+            "principal_id": "",
+            "role": "",
+            "model": "",
+            "provider": "golden",
+            "protocol": "",
+            "channel": "",
+            "route_fingerprint": ""
+          },
+          "id": "a58f9d95-6445-49d6-854f-d0a4db7fba15",
+          "thingId": "0214d897-5ad4-4647-8e27-80866ca3f624",
+          "agentId": "manual",
+          "kind": "ask",
+          "prompt": "根据合成海棠交接资料-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc和这件事的独立说明，给出一段建议。",
+          "brief": "事项：独立手动交接-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc\n当前状态：todo\n说明：OWNER 合成独立说明 cobalt-602，继续保留这段原文。\n\n目标：\n进度：\n\n本次请求：根据合成海棠交接资料-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc和这件事的独立说明，给出一段建议。",
+          "contextMemoryIds": [
+            "f5db9490-7ddd-4f75-babb-c457eafbce87",
+            "0a30f89b-8c9e-4045-bedd-e55416fdd455"
+          ],
+          "contextVersions": [
+            {
+              "id": "f5db9490-7ddd-4f75-babb-c457eafbce87",
+              "version": 1,
+              "kind": "source"
+            },
+            {
+              "id": "0a30f89b-8c9e-4045-bedd-e55416fdd455",
+              "version": 1,
+              "kind": "source"
+            }
+          ],
+          "status": "waiting",
+          "staleContext": false,
+          "cost": 0,
+          "createdAt": "2026-10-01T14:36:48.436805305Z"
+        },
+        {
+          "contextTask": {
+            "OwnerID": "cc6eae2e-9b70-40f3-9b3d-4b764727c398",
+            "Recipient": {
+              "principal_id": "manual",
+              "role": "manual",
+              "model": "golden",
+              "provider": "golden",
+              "protocol": "openai",
+              "channel": "manual",
+              "route_fingerprint": "5297ab0a4176f71b12aa21e8d126d86bc7a13987008afba0269e17bfa8cfc38a"
+            },
+            "Purpose": "knowledge",
+            "Scope": {
+              "kind": "unscoped",
+              "include_global_constraints": false
+            },
+            "View": {
+              "mode": "continue",
+              "valid_at": "2026-10-01T14:36:46.399715662Z",
+              "known_at": "2026-10-01T14:36:46.399715662Z"
+            },
+            "Now": "2026-10-01T14:36:46.399715662Z",
+            "Timezone": "Asia/Shanghai",
+            "MemoryBudget": {
+              "candidates": 15,
+              "edges": 15,
+              "tokens": 4000,
+              "hops": 1
+            },
+            "TotalInputTokens": 8000
+          },
+          "contextDependencies": [
+            {
+              "ref": {
+                "id": "0a30f89b-8c9e-4045-bedd-e55416fdd455",
+                "version": 1,
+                "kind": "source"
+              },
+              "purpose": "knowledge",
+              "scope": {
+                "kind": "unscoped",
+                "include_global_constraints": false
+              },
+              "authorization": {
+                "policy_id": "a035e7b6-8e8c-4839-ba60-311dcad966a8",
+                "revision": 1
+              },
+              "scope_revision": 0
+            }
+          ],
+          "contextDeskActions": [],
+          "contextIndirectDependencies": [],
+          "contextCandidates": [
+            {
+              "ref": {
+                "id": "0a30f89b-8c9e-4045-bedd-e55416fdd455",
+                "version": 1,
+                "kind": "source"
+              },
+              "source_span": {
+                "source": {
+                  "id": "0a30f89b-8c9e-4045-bedd-e55416fdd455",
+                  "version": 1,
+                  "kind": "source"
+                },
+                "start_rune": 0,
+                "end_rune": 113
+              },
+              "stage": "recall",
+              "disposition": "selected"
+            }
+          ],
+          "contextSourceSpans": [
+            {
+              "source": {
+                "id": "0a30f89b-8c9e-4045-bedd-e55416fdd455",
+                "version": 1,
+                "kind": "source"
+              },
+              "start_rune": 0,
+              "end_rune": 113
+            }
+          ],
+          "manualRecipient": {
+            "principal_id": "",
+            "role": "",
+            "model": "",
+            "provider": "golden",
+            "protocol": "",
+            "channel": "",
+            "route_fingerprint": ""
+          },
+          "id": "4e7ca5ae-a945-404a-85a4-aef55f36c79d",
+          "thingId": "b93a16ce-b24f-4824-9979-40a4f0c82fa3",
+          "agentId": "manual",
+          "kind": "ask",
+          "prompt": "根据合成海棠交接资料-3ba7f87c-0b92-4392-97ff-8e0771fab2ea和这件事的独立说明，给出一段建议。",
+          "brief": "事项：独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea\n当前状态：todo\n说明：OWNER 合成独立说明 cobalt-602，继续保留这段原文。\n\n目标：\n进度：\n\n本次请求：根据合成海棠交接资料-3ba7f87c-0b92-4392-97ff-8e0771fab2ea和这件事的独立说明，给出一段建议。",
+          "contextMemoryIds": [
+            "0a30f89b-8c9e-4045-bedd-e55416fdd455"
+          ],
+          "contextVersions": [
+            {
+              "id": "0a30f89b-8c9e-4045-bedd-e55416fdd455",
+              "version": 1,
+              "kind": "source"
+            }
+          ],
+          "status": "waiting",
+          "staleContext": false,
+          "cost": 0,
+          "createdAt": "2026-10-01T14:36:46.436252795Z"
+        }
+      ],
+      "samples": [],
+      "sources": [
+        {
+          "id": "aa42e176-4217-49a2-a6c2-b96593a93659",
+          "name": "独立手动交接-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc",
+          "method": "actions",
+          "status": "failed",
+          "note": "原文可读，部分处理未完成；展开后台任务查看缺口",
+          "itemCount": 1,
+          "lastSyncAt": "2026-10-01T14:36:47.68475Z"
+        },
+        {
+          "id": "f5db9490-7ddd-4f75-babb-c457eafbce87",
+          "name": "合成海棠交接资料-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc",
+          "method": "phase2-browser-synthetic",
+          "status": "failed",
+          "note": "原文可读，部分处理未完成；展开后台任务查看缺口",
+          "itemCount": 1,
+          "lastSyncAt": "2026-10-01T14:36:47.622301Z"
+        },
+        {
+          "id": "5dd951ea-5a0c-40fd-8dbd-8f13c9927c3a",
+          "name": "独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea",
+          "method": "actions",
+          "status": "failed",
+          "note": "原文可读，部分处理未完成；展开后台任务查看缺口",
+          "itemCount": 1,
+          "lastSyncAt": "2026-10-01T14:36:45.435071Z"
+        },
+        {
+          "id": "0a30f89b-8c9e-4045-bedd-e55416fdd455",
+          "name": "合成海棠交接资料-3ba7f87c-0b92-4392-97ff-8e0771fab2ea",
+          "method": "phase2-browser-synthetic",
+          "status": "failed",
+          "note": "原文可读，部分处理未完成；展开后台任务查看缺口",
+          "itemCount": 1,
+          "lastSyncAt": "2026-10-01T14:36:45.362702Z"
+        }
+      ],
+      "jobs": [
+        {
+          "id": "dfe341a0-a707-454e-8363-8d49779c217c",
+          "title": "更新摘要",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc」",
+          "createdAt": "2026-10-01T14:36:47.75019Z"
+        },
+        {
+          "id": "b80adf5f-d6a8-4fd5-bdd3-d4cde074bbdf",
+          "title": "更新摘要",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「合成海棠交接资料-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc」",
+          "createdAt": "2026-10-01T14:36:47.744159Z"
+        },
+        {
+          "id": "baed69ce-225c-46bd-9526-745a851c99ac",
+          "title": "从资料里读出要点",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc」",
+          "createdAt": "2026-10-01T14:36:47.729217Z"
+        },
+        {
+          "id": "4ec1e404-7b39-4cbb-a83c-72dcdd89c4a8",
+          "title": "建立检索索引",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc」",
+          "createdAt": "2026-10-01T14:36:47.729217Z"
+        },
+        {
+          "id": "be695124-6de2-44b1-b6ae-85d993785197",
+          "title": "建立语义索引",
+          "trigger": "资料处理",
+          "status": "failed",
+          "detail": "「独立手动交接-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc」 · 还没配置处理它的模型",
+          "recovery": "配置对应模型或处理器后重试",
+          "createdAt": "2026-10-01T14:36:47.729217Z"
+        },
+        {
+          "id": "c6089876-d4c4-40b4-883d-98d7af38e157",
+          "title": "建立语义索引",
+          "trigger": "资料处理",
+          "status": "failed",
+          "detail": "「独立手动交接-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc」 · 还没配置处理它的模型",
+          "recovery": "配置对应模型或处理器后重试",
+          "createdAt": "2026-10-01T14:36:47.716826Z"
+        },
+        {
+          "id": "979d9533-d14c-43ea-acd5-009e34d1799e",
+          "title": "建立检索索引",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc」",
+          "createdAt": "2026-10-01T14:36:47.716826Z"
+        },
+        {
+          "id": "b7d2f67a-4e6d-4bb7-bfd4-9203aacdd2d5",
+          "title": "从资料里读出要点",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc」",
+          "createdAt": "2026-10-01T14:36:47.716826Z"
+        },
+        {
+          "id": "395eb180-a734-46bc-beb6-fde3e8b6f1ab",
+          "title": "建立语义索引",
+          "trigger": "资料处理",
+          "status": "failed",
+          "detail": "「合成海棠交接资料-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc」 · 还没配置处理它的模型",
+          "recovery": "配置对应模型或处理器后重试",
+          "createdAt": "2026-10-01T14:36:47.712038Z"
+        },
+        {
+          "id": "cb692d0d-9273-4bc3-88e3-13d50ccf2ee2",
+          "title": "建立检索索引",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「合成海棠交接资料-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc」",
+          "createdAt": "2026-10-01T14:36:47.712038Z"
+        },
+        {
+          "id": "e5f1e06b-12dd-4826-97cd-3106c10131d0",
+          "title": "从资料里读出要点",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「合成海棠交接资料-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc」",
+          "createdAt": "2026-10-01T14:36:47.712038Z"
+        },
+        {
+          "id": "b4507306-eb6e-4b2a-9a6e-d780759027b4",
+          "title": "更新摘要",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc」",
+          "createdAt": "2026-10-01T14:36:47.68475Z"
+        },
+        {
+          "id": "c315b72e-70fd-43b6-941f-16c286dcf57c",
+          "title": "切分原文",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc」",
+          "createdAt": "2026-10-01T14:36:47.68475Z"
+        },
+        {
+          "id": "89a03519-84de-4090-90ab-24add943fa5e",
+          "title": "切分原文",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc」",
+          "createdAt": "2026-10-01T14:36:47.649138Z"
+        },
+        {
+          "id": "e4311e17-02fd-4eb5-a039-6273f6498655",
+          "title": "切分原文",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「合成海棠交接资料-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc」",
+          "createdAt": "2026-10-01T14:36:47.622301Z"
+        },
+        {
+          "id": "8a478630-f271-42ea-bac2-4eb91be62804",
+          "title": "更新摘要",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.686274Z"
+        },
+        {
+          "id": "7b42de3a-74e9-47bf-92d0-07e609524820",
+          "title": "更新摘要",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「合成海棠交接资料-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.678936Z"
+        },
+        {
+          "id": "8e2034d6-c7ae-4105-82d7-7e9fb1caf71f",
+          "title": "从资料里读出要点",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.660531Z"
+        },
+        {
+          "id": "d0af9371-ae27-49ac-bdcc-86ec595cedb6",
+          "title": "建立检索索引",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.660531Z"
+        },
+        {
+          "id": "911cfd8f-c0f3-4783-b752-339a431186cc",
+          "title": "建立语义索引",
+          "trigger": "资料处理",
+          "status": "failed",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」 · 还没配置处理它的模型",
+          "recovery": "配置对应模型或处理器后重试",
+          "createdAt": "2026-10-01T14:36:45.660531Z"
+        },
+        {
+          "id": "e8e66484-7178-40cc-a028-b041404be20e",
+          "title": "建立语义索引",
+          "trigger": "资料处理",
+          "status": "failed",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」 · 还没配置处理它的模型",
+          "recovery": "配置对应模型或处理器后重试",
+          "createdAt": "2026-10-01T14:36:45.64147Z"
+        },
+        {
+          "id": "7d24d058-4035-4c72-8fd8-30071314c2e4",
+          "title": "建立检索索引",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.64147Z"
+        },
+        {
+          "id": "50638a4b-ad14-419c-9555-d4a4ea7a9c88",
+          "title": "从资料里读出要点",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.64147Z"
+        },
+        {
+          "id": "123ca27e-a9fb-4b94-b6aa-9376c0fd608d",
+          "title": "建立语义索引",
+          "trigger": "资料处理",
+          "status": "failed",
+          "detail": "「合成海棠交接资料-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」 · 还没配置处理它的模型",
+          "recovery": "配置对应模型或处理器后重试",
+          "createdAt": "2026-10-01T14:36:45.634603Z"
+        },
+        {
+          "id": "87f68293-e609-4d04-8e2c-bc46e6cc1f51",
+          "title": "建立检索索引",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「合成海棠交接资料-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.634603Z"
+        },
+        {
+          "id": "e3d3ab74-2280-4e79-9e5a-d2f996be37cd",
+          "title": "从资料里读出要点",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「合成海棠交接资料-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.634603Z"
+        },
+        {
+          "id": "24731ee1-f003-46c5-96a0-4f359ba32fb8",
+          "title": "切分原文",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.435071Z"
+        },
+        {
+          "id": "91379d40-d1ef-45a6-b77f-7f8fb981cd42",
+          "title": "更新摘要",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.435071Z"
+        },
+        {
+          "id": "d48dbde2-295c-44fa-939c-fd8b12c84c33",
+          "title": "切分原文",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.391149Z"
+        },
+        {
+          "id": "984e3ac0-b6da-43d6-badd-11c6499d3b5d",
+          "title": "切分原文",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「合成海棠交接资料-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.362702Z"
+        }
+      ],
+      "activity": [
+        {
+          "id": "problem:还没配置处理它的模型",
+          "at": "2026-10-01T14:36:47.756109Z",
+          "text": "有 6 项整理没做完：还没配置处理它的模型",
+          "to": "/library?tab=sources",
+          "failed": true
+        }
+      ],
+      "excludedMemories": {}
+    }
+  },
+  {
+    "method": "POST",
+    "path": "/v1/memory/sources",
+    "status": 201,
+    "request": {
+      "connector": "phase2-browser-synthetic",
+      "external_id": "e953e2b6-dbcd-4da7-bd5a-1bfc386683fc",
+      "external_version": "v1",
+      "title": "合成海棠交接资料-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc",
+      "text": "合成海棠交接资料-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc：合成来源 atom RAW_BACKEND_HANDOFF_e953e2b6-dbcd-4da7-bd5a-1bfc386683fc。",
+      "media_type": "text/plain"
+    },
+    "response": {
+      "id": "f5db9490-7ddd-4f75-babb-c457eafbce87",
+      "version": 1,
+      "kind": "source",
+      "duplicate": false
+    }
+  },
+  {
+    "method": "GET",
+    "path": "/v1/workspace",
+    "status": 200,
+    "response": {
+      "notices": [],
+      "budgetUsage": 0,
+      "version": 1,
+      "revision": 5,
+      "settings": {
+        "autoAccept": false,
+        "wakeIdeas": true,
+        "followUps": true,
+        "dailyReviewAt": "09:00",
+        "dailyBudget": 10,
+        "timezone": "Asia/Shanghai"
+      },
+      "tasks": [
+        {
+          "id": "b93a16ce-b24f-4824-9979-40a4f0c82fa3",
+          "itemKind": "task",
+          "recordVersion": 2,
+          "title": "独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea",
+          "name": "独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea",
+          "status": "todo",
+          "notes": "OWNER 合成独立说明 cobalt-602，继续保留这段原文。",
+          "body": "",
+          "goal": "",
+          "progress": "",
+          "dependsOn": [],
+          "checklist": [],
+          "triggers": [],
+          "sources": [
+            {
+              "sourceId": "5dd951ea-5a0c-40fd-8dbd-8f13c9927c3a",
+              "version": 1,
+              "label": "创建",
+              "at": "2026-10-01T14:36:45.394006371Z"
+            },
+            {
+              "sourceId": "5dd951ea-5a0c-40fd-8dbd-8f13c9927c3a",
+              "version": 2,
+              "label": "更新说明",
+              "at": "2026-10-01T14:36:45.437327784Z"
+            }
+          ],
+          "history": [
+            {
+              "at": "2026-10-01T14:36:45.393615987Z",
+              "by": "user",
+              "summary": "创建"
+            },
+            {
+              "at": "2026-10-01T14:36:45.394006371Z",
+              "by": "user",
+              "summary": "创建"
+            },
+            {
+              "at": "2026-10-01T14:36:45.437327784Z",
+              "by": "user",
+              "summary": "更新说明"
+            }
+          ],
+          "evolution": [
+            {
+              "at": "2026-10-01T14:36:45.393615987Z",
+              "by": "user",
+              "summary": "提出"
+            }
+          ],
+          "conditions": [],
+          "remindersOn": true,
+          "nextSteps": [],
+          "createdAt": "2026-10-01T14:36:45.393615987Z",
+          "updatedAt": "2026-10-01T14:36:45.437325834Z"
+        }
+      ],
+      "ideas": [],
+      "projects": [],
+      "memories": [],
+      "candidates": [],
+      "agents": [
+        {
+          "protocol": "siwc",
+          "available": false,
+          "inputPrice": 0,
+          "outputPrice": 0,
+          "maxOutput": 4096,
+          "id": "chatgpt-direct",
+          "name": "ChatGPT · 套餐授权",
+          "channel": "api",
+          "note": "消耗你的 ChatGPT 套餐 · 官方直接授权",
+          "enabled": true,
+          "memoryKinds": [
+            "fact",
+            "preference",
+            "decision",
+            "intention",
+            "plan"
+          ],
+          "includeInferred": false
+        },
+        {
+          "default": true,
+          "protocol": "openai",
+          "available": true,
+          "inputPrice": 0,
+          "outputPrice": 0,
+          "maxOutput": 2000,
+          "id": "golden",
+          "name": "验收假模型",
+          "channel": "api",
+          "note": "通用 API · golden",
+          "enabled": true,
+          "memoryKinds": [
+            "fact",
+            "preference",
+            "decision",
+            "intention",
+            "plan"
+          ],
+          "includeInferred": false
+        },
+        {
+          "available": true,
+          "inputPrice": 0,
+          "outputPrice": 0,
+          "maxOutput": 0,
+          "id": "manual",
+          "name": "手动交接",
+          "channel": "manual",
+          "note": "复制上下文到任意 AI，再粘贴结果",
+          "enabled": true,
+          "memoryKinds": [
+            "fact",
+            "preference",
+            "decision",
+            "intention",
+            "plan"
+          ],
+          "includeInferred": false
+        }
+      ],
+      "docs": [],
+      "runs": [
+        {
+          "contextTask": {
+            "OwnerID": "cc6eae2e-9b70-40f3-9b3d-4b764727c398",
+            "Recipient": {
+              "principal_id": "manual",
+              "role": "manual",
+              "model": "golden",
+              "provider": "golden",
+              "protocol": "openai",
+              "channel": "manual",
+              "route_fingerprint": "5297ab0a4176f71b12aa21e8d126d86bc7a13987008afba0269e17bfa8cfc38a"
+            },
+            "Purpose": "knowledge",
+            "Scope": {
+              "kind": "unscoped",
+              "include_global_constraints": false
+            },
+            "View": {
+              "mode": "continue",
+              "valid_at": "2026-10-01T14:36:46.399715662Z",
+              "known_at": "2026-10-01T14:36:46.399715662Z"
+            },
+            "Now": "2026-10-01T14:36:46.399715662Z",
+            "Timezone": "Asia/Shanghai",
+            "MemoryBudget": {
+              "candidates": 15,
+              "edges": 15,
+              "tokens": 4000,
+              "hops": 1
+            },
+            "TotalInputTokens": 8000
+          },
+          "contextDependencies": [
+            {
+              "ref": {
+                "id": "0a30f89b-8c9e-4045-bedd-e55416fdd455",
+                "version": 1,
+                "kind": "source"
+              },
+              "purpose": "knowledge",
+              "scope": {
+                "kind": "unscoped",
+                "include_global_constraints": false
+              },
+              "authorization": {
+                "policy_id": "a035e7b6-8e8c-4839-ba60-311dcad966a8",
+                "revision": 1
+              },
+              "scope_revision": 0
+            }
+          ],
+          "contextDeskActions": [],
+          "contextIndirectDependencies": [],
+          "contextCandidates": [
+            {
+              "ref": {
+                "id": "0a30f89b-8c9e-4045-bedd-e55416fdd455",
+                "version": 1,
+                "kind": "source"
+              },
+              "source_span": {
+                "source": {
+                  "id": "0a30f89b-8c9e-4045-bedd-e55416fdd455",
+                  "version": 1,
+                  "kind": "source"
+                },
+                "start_rune": 0,
+                "end_rune": 113
+              },
+              "stage": "recall",
+              "disposition": "selected"
+            }
+          ],
+          "contextSourceSpans": [
+            {
+              "source": {
+                "id": "0a30f89b-8c9e-4045-bedd-e55416fdd455",
+                "version": 1,
+                "kind": "source"
+              },
+              "start_rune": 0,
+              "end_rune": 113
+            }
+          ],
+          "manualRecipient": {
+            "principal_id": "",
+            "role": "",
+            "model": "",
+            "provider": "golden",
+            "protocol": "",
+            "channel": "",
+            "route_fingerprint": ""
+          },
+          "id": "4e7ca5ae-a945-404a-85a4-aef55f36c79d",
+          "thingId": "b93a16ce-b24f-4824-9979-40a4f0c82fa3",
+          "agentId": "manual",
+          "kind": "ask",
+          "prompt": "根据合成海棠交接资料-3ba7f87c-0b92-4392-97ff-8e0771fab2ea和这件事的独立说明，给出一段建议。",
+          "brief": "事项：独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea\n当前状态：todo\n说明：OWNER 合成独立说明 cobalt-602，继续保留这段原文。\n\n目标：\n进度：\n\n本次请求：根据合成海棠交接资料-3ba7f87c-0b92-4392-97ff-8e0771fab2ea和这件事的独立说明，给出一段建议。",
+          "contextMemoryIds": [
+            "0a30f89b-8c9e-4045-bedd-e55416fdd455"
+          ],
+          "contextVersions": [
+            {
+              "id": "0a30f89b-8c9e-4045-bedd-e55416fdd455",
+              "version": 1,
+              "kind": "source"
+            }
+          ],
+          "status": "waiting",
+          "staleContext": false,
+          "cost": 0,
+          "createdAt": "2026-10-01T14:36:46.436252795Z"
+        }
+      ],
+      "samples": [],
+      "sources": [
+        {
+          "id": "f5db9490-7ddd-4f75-babb-c457eafbce87",
+          "name": "合成海棠交接资料-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc",
+          "method": "phase2-browser-synthetic",
+          "status": "syncing",
+          "note": "原文可读，索引处理中",
+          "itemCount": 0,
+          "lastSyncAt": "2026-10-01T14:36:47.622301Z"
+        },
+        {
+          "id": "5dd951ea-5a0c-40fd-8dbd-8f13c9927c3a",
+          "name": "独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea",
+          "method": "actions",
+          "status": "failed",
+          "note": "原文可读，部分处理未完成；展开后台任务查看缺口",
+          "itemCount": 1,
+          "lastSyncAt": "2026-10-01T14:36:45.435071Z"
+        },
+        {
+          "id": "0a30f89b-8c9e-4045-bedd-e55416fdd455",
+          "name": "合成海棠交接资料-3ba7f87c-0b92-4392-97ff-8e0771fab2ea",
+          "method": "phase2-browser-synthetic",
+          "status": "failed",
+          "note": "原文可读，部分处理未完成；展开后台任务查看缺口",
+          "itemCount": 1,
+          "lastSyncAt": "2026-10-01T14:36:45.362702Z"
+        }
+      ],
+      "jobs": [
+        {
+          "id": "e4311e17-02fd-4eb5-a039-6273f6498655",
+          "title": "切分原文",
+          "trigger": "资料处理",
+          "status": "queued",
+          "detail": "「合成海棠交接资料-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc」",
+          "createdAt": "2026-10-01T14:36:47.622301Z",
+          "nextRunAt": "2026-10-01T14:36:47.622301Z"
+        },
+        {
+          "id": "8a478630-f271-42ea-bac2-4eb91be62804",
+          "title": "更新摘要",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.686274Z"
+        },
+        {
+          "id": "7b42de3a-74e9-47bf-92d0-07e609524820",
+          "title": "更新摘要",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「合成海棠交接资料-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.678936Z"
+        },
+        {
+          "id": "8e2034d6-c7ae-4105-82d7-7e9fb1caf71f",
+          "title": "从资料里读出要点",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.660531Z"
+        },
+        {
+          "id": "d0af9371-ae27-49ac-bdcc-86ec595cedb6",
+          "title": "建立检索索引",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.660531Z"
+        },
+        {
+          "id": "911cfd8f-c0f3-4783-b752-339a431186cc",
+          "title": "建立语义索引",
+          "trigger": "资料处理",
+          "status": "failed",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」 · 还没配置处理它的模型",
+          "recovery": "配置对应模型或处理器后重试",
+          "createdAt": "2026-10-01T14:36:45.660531Z"
+        },
+        {
+          "id": "e8e66484-7178-40cc-a028-b041404be20e",
+          "title": "建立语义索引",
+          "trigger": "资料处理",
+          "status": "failed",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」 · 还没配置处理它的模型",
+          "recovery": "配置对应模型或处理器后重试",
+          "createdAt": "2026-10-01T14:36:45.64147Z"
+        },
+        {
+          "id": "50638a4b-ad14-419c-9555-d4a4ea7a9c88",
+          "title": "从资料里读出要点",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.64147Z"
+        },
+        {
+          "id": "7d24d058-4035-4c72-8fd8-30071314c2e4",
+          "title": "建立检索索引",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.64147Z"
+        },
+        {
+          "id": "e3d3ab74-2280-4e79-9e5a-d2f996be37cd",
+          "title": "从资料里读出要点",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「合成海棠交接资料-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.634603Z"
+        },
+        {
+          "id": "87f68293-e609-4d04-8e2c-bc46e6cc1f51",
+          "title": "建立检索索引",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「合成海棠交接资料-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.634603Z"
+        },
+        {
+          "id": "123ca27e-a9fb-4b94-b6aa-9376c0fd608d",
+          "title": "建立语义索引",
+          "trigger": "资料处理",
+          "status": "failed",
+          "detail": "「合成海棠交接资料-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」 · 还没配置处理它的模型",
+          "recovery": "配置对应模型或处理器后重试",
+          "createdAt": "2026-10-01T14:36:45.634603Z"
+        },
+        {
+          "id": "24731ee1-f003-46c5-96a0-4f359ba32fb8",
+          "title": "切分原文",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.435071Z"
+        },
+        {
+          "id": "91379d40-d1ef-45a6-b77f-7f8fb981cd42",
+          "title": "更新摘要",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.435071Z"
+        },
+        {
+          "id": "d48dbde2-295c-44fa-939c-fd8b12c84c33",
+          "title": "切分原文",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.391149Z"
+        },
+        {
+          "id": "984e3ac0-b6da-43d6-badd-11c6499d3b5d",
+          "title": "切分原文",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「合成海棠交接资料-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.362702Z"
+        }
+      ],
+      "activity": [
+        {
+          "id": "problem:还没配置处理它的模型",
+          "at": "2026-10-01T14:36:45.692006Z",
+          "text": "有 3 项整理没做完：还没配置处理它的模型",
+          "to": "/library?tab=sources",
+          "failed": true
+        }
+      ],
+      "excludedMemories": {}
+    }
+  },
+  {
+    "method": "POST",
+    "path": "/v1/workspace/commands",
+    "status": 200,
+    "request": {
+      "type": "addTask",
+      "title": "独立手动交接-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc",
+      "requestId": "08d4f16c-ff25-48cf-97e5-df1c51b2cd08",
+      "expectedRevision": 5
+    },
+    "response": {
+      "notices": [],
+      "budgetUsage": 0,
+      "version": 1,
+      "revision": 6,
+      "settings": {
+        "autoAccept": false,
+        "wakeIdeas": true,
+        "followUps": true,
+        "dailyReviewAt": "09:00",
+        "dailyBudget": 10,
+        "timezone": "Asia/Shanghai"
+      },
+      "tasks": [
+        {
+          "id": "0214d897-5ad4-4647-8e27-80866ca3f624",
+          "itemKind": "task",
+          "recordVersion": 1,
+          "title": "独立手动交接-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc",
+          "name": "独立手动交接-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc",
+          "status": "todo",
+          "body": "",
+          "goal": "",
+          "progress": "",
+          "dependsOn": [],
+          "checklist": [],
+          "triggers": [],
+          "sources": [
+            {
+              "sourceId": "aa42e176-4217-49a2-a6c2-b96593a93659",
+              "version": 1,
+              "label": "创建",
+              "at": "2026-10-01T14:36:47.650834608Z"
+            }
+          ],
+          "history": [
+            {
+              "at": "2026-10-01T14:36:47.650598356Z",
+              "by": "user",
+              "summary": "创建"
+            },
+            {
+              "at": "2026-10-01T14:36:47.650834608Z",
+              "by": "user",
+              "summary": "创建"
+            }
+          ],
+          "evolution": [
+            {
+              "at": "2026-10-01T14:36:47.650598356Z",
+              "by": "user",
+              "summary": "提出"
+            }
+          ],
+          "conditions": [],
+          "remindersOn": true,
+          "nextSteps": [],
+          "createdAt": "2026-10-01T14:36:47.650598356Z",
+          "updatedAt": "2026-10-01T14:36:47.650598356Z"
+        },
+        {
+          "id": "b93a16ce-b24f-4824-9979-40a4f0c82fa3",
+          "itemKind": "task",
+          "recordVersion": 2,
+          "title": "独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea",
+          "name": "独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea",
+          "status": "todo",
+          "notes": "OWNER 合成独立说明 cobalt-602，继续保留这段原文。",
+          "body": "",
+          "goal": "",
+          "progress": "",
+          "dependsOn": [],
+          "checklist": [],
+          "triggers": [],
+          "sources": [
+            {
+              "sourceId": "5dd951ea-5a0c-40fd-8dbd-8f13c9927c3a",
+              "version": 1,
+              "label": "创建",
+              "at": "2026-10-01T14:36:45.394006371Z"
+            },
+            {
+              "sourceId": "5dd951ea-5a0c-40fd-8dbd-8f13c9927c3a",
+              "version": 2,
+              "label": "更新说明",
+              "at": "2026-10-01T14:36:45.437327784Z"
+            }
+          ],
+          "history": [
+            {
+              "at": "2026-10-01T14:36:45.393615987Z",
+              "by": "user",
+              "summary": "创建"
+            },
+            {
+              "at": "2026-10-01T14:36:45.394006371Z",
+              "by": "user",
+              "summary": "创建"
+            },
+            {
+              "at": "2026-10-01T14:36:45.437327784Z",
+              "by": "user",
+              "summary": "更新说明"
+            }
+          ],
+          "evolution": [
+            {
+              "at": "2026-10-01T14:36:45.393615987Z",
+              "by": "user",
+              "summary": "提出"
+            }
+          ],
+          "conditions": [],
+          "remindersOn": true,
+          "nextSteps": [],
+          "createdAt": "2026-10-01T14:36:45.393615987Z",
+          "updatedAt": "2026-10-01T14:36:45.437325834Z"
+        }
+      ],
+      "ideas": [],
+      "projects": [],
+      "memories": [],
+      "candidates": [],
+      "agents": [
+        {
+          "protocol": "siwc",
+          "available": false,
+          "inputPrice": 0,
+          "outputPrice": 0,
+          "maxOutput": 4096,
+          "id": "chatgpt-direct",
+          "name": "ChatGPT · 套餐授权",
+          "channel": "api",
+          "note": "消耗你的 ChatGPT 套餐 · 官方直接授权",
+          "enabled": true,
+          "memoryKinds": [
+            "fact",
+            "preference",
+            "decision",
+            "intention",
+            "plan"
+          ],
+          "includeInferred": false
+        },
+        {
+          "default": true,
+          "protocol": "openai",
+          "available": true,
+          "inputPrice": 0,
+          "outputPrice": 0,
+          "maxOutput": 2000,
+          "id": "golden",
+          "name": "验收假模型",
+          "channel": "api",
+          "note": "通用 API · golden",
+          "enabled": true,
+          "memoryKinds": [
+            "fact",
+            "preference",
+            "decision",
+            "intention",
+            "plan"
+          ],
+          "includeInferred": false
+        },
+        {
+          "available": true,
+          "inputPrice": 0,
+          "outputPrice": 0,
+          "maxOutput": 0,
+          "id": "manual",
+          "name": "手动交接",
+          "channel": "manual",
+          "note": "复制上下文到任意 AI，再粘贴结果",
+          "enabled": true,
+          "memoryKinds": [
+            "fact",
+            "preference",
+            "decision",
+            "intention",
+            "plan"
+          ],
+          "includeInferred": false
+        }
+      ],
+      "docs": [],
+      "runs": [
+        {
+          "contextTask": {
+            "OwnerID": "cc6eae2e-9b70-40f3-9b3d-4b764727c398",
+            "Recipient": {
+              "principal_id": "manual",
+              "role": "manual",
+              "model": "golden",
+              "provider": "golden",
+              "protocol": "openai",
+              "channel": "manual",
+              "route_fingerprint": "5297ab0a4176f71b12aa21e8d126d86bc7a13987008afba0269e17bfa8cfc38a"
+            },
+            "Purpose": "knowledge",
+            "Scope": {
+              "kind": "unscoped",
+              "include_global_constraints": false
+            },
+            "View": {
+              "mode": "continue",
+              "valid_at": "2026-10-01T14:36:46.399715662Z",
+              "known_at": "2026-10-01T14:36:46.399715662Z"
+            },
+            "Now": "2026-10-01T14:36:46.399715662Z",
+            "Timezone": "Asia/Shanghai",
+            "MemoryBudget": {
+              "candidates": 15,
+              "edges": 15,
+              "tokens": 4000,
+              "hops": 1
+            },
+            "TotalInputTokens": 8000
+          },
+          "contextDependencies": [
+            {
+              "ref": {
+                "id": "0a30f89b-8c9e-4045-bedd-e55416fdd455",
+                "version": 1,
+                "kind": "source"
+              },
+              "purpose": "knowledge",
+              "scope": {
+                "kind": "unscoped",
+                "include_global_constraints": false
+              },
+              "authorization": {
+                "policy_id": "a035e7b6-8e8c-4839-ba60-311dcad966a8",
+                "revision": 1
+              },
+              "scope_revision": 0
+            }
+          ],
+          "contextDeskActions": [],
+          "contextIndirectDependencies": [],
+          "contextCandidates": [
+            {
+              "ref": {
+                "id": "0a30f89b-8c9e-4045-bedd-e55416fdd455",
+                "version": 1,
+                "kind": "source"
+              },
+              "source_span": {
+                "source": {
+                  "id": "0a30f89b-8c9e-4045-bedd-e55416fdd455",
+                  "version": 1,
+                  "kind": "source"
+                },
+                "start_rune": 0,
+                "end_rune": 113
+              },
+              "stage": "recall",
+              "disposition": "selected"
+            }
+          ],
+          "contextSourceSpans": [
+            {
+              "source": {
+                "id": "0a30f89b-8c9e-4045-bedd-e55416fdd455",
+                "version": 1,
+                "kind": "source"
+              },
+              "start_rune": 0,
+              "end_rune": 113
+            }
+          ],
+          "manualRecipient": {
+            "principal_id": "",
+            "role": "",
+            "model": "",
+            "provider": "golden",
+            "protocol": "",
+            "channel": "",
+            "route_fingerprint": ""
+          },
+          "id": "4e7ca5ae-a945-404a-85a4-aef55f36c79d",
+          "thingId": "b93a16ce-b24f-4824-9979-40a4f0c82fa3",
+          "agentId": "manual",
+          "kind": "ask",
+          "prompt": "根据合成海棠交接资料-3ba7f87c-0b92-4392-97ff-8e0771fab2ea和这件事的独立说明，给出一段建议。",
+          "brief": "事项：独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea\n当前状态：todo\n说明：OWNER 合成独立说明 cobalt-602，继续保留这段原文。\n\n目标：\n进度：\n\n本次请求：根据合成海棠交接资料-3ba7f87c-0b92-4392-97ff-8e0771fab2ea和这件事的独立说明，给出一段建议。",
+          "contextMemoryIds": [
+            "0a30f89b-8c9e-4045-bedd-e55416fdd455"
+          ],
+          "contextVersions": [
+            {
+              "id": "0a30f89b-8c9e-4045-bedd-e55416fdd455",
+              "version": 1,
+              "kind": "source"
+            }
+          ],
+          "status": "waiting",
+          "staleContext": false,
+          "cost": 0,
+          "createdAt": "2026-10-01T14:36:46.436252795Z"
+        }
+      ],
+      "samples": [],
+      "sources": [
+        {
+          "id": "aa42e176-4217-49a2-a6c2-b96593a93659",
+          "name": "独立手动交接-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc",
+          "method": "actions",
+          "status": "syncing",
+          "note": "原文可读，索引处理中",
+          "itemCount": 0,
+          "lastSyncAt": "2026-10-01T14:36:47.649138Z"
+        },
+        {
+          "id": "f5db9490-7ddd-4f75-babb-c457eafbce87",
+          "name": "合成海棠交接资料-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc",
+          "method": "phase2-browser-synthetic",
+          "status": "syncing",
+          "note": "原文可读，索引处理中",
+          "itemCount": 0,
+          "lastSyncAt": "2026-10-01T14:36:47.622301Z"
+        },
+        {
+          "id": "5dd951ea-5a0c-40fd-8dbd-8f13c9927c3a",
+          "name": "独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea",
+          "method": "actions",
+          "status": "failed",
+          "note": "原文可读，部分处理未完成；展开后台任务查看缺口",
+          "itemCount": 1,
+          "lastSyncAt": "2026-10-01T14:36:45.435071Z"
+        },
+        {
+          "id": "0a30f89b-8c9e-4045-bedd-e55416fdd455",
+          "name": "合成海棠交接资料-3ba7f87c-0b92-4392-97ff-8e0771fab2ea",
+          "method": "phase2-browser-synthetic",
+          "status": "failed",
+          "note": "原文可读，部分处理未完成；展开后台任务查看缺口",
+          "itemCount": 1,
+          "lastSyncAt": "2026-10-01T14:36:45.362702Z"
+        }
+      ],
+      "jobs": [
+        {
+          "id": "89a03519-84de-4090-90ab-24add943fa5e",
+          "title": "切分原文",
+          "trigger": "资料处理",
+          "status": "queued",
+          "detail": "「独立手动交接-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc」",
+          "createdAt": "2026-10-01T14:36:47.649138Z",
+          "nextRunAt": "2026-10-01T14:36:47.649138Z"
+        },
+        {
+          "id": "e4311e17-02fd-4eb5-a039-6273f6498655",
+          "title": "切分原文",
+          "trigger": "资料处理",
+          "status": "queued",
+          "detail": "「合成海棠交接资料-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc」",
+          "createdAt": "2026-10-01T14:36:47.622301Z",
+          "nextRunAt": "2026-10-01T14:36:47.622301Z"
+        },
+        {
+          "id": "8a478630-f271-42ea-bac2-4eb91be62804",
+          "title": "更新摘要",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.686274Z"
+        },
+        {
+          "id": "7b42de3a-74e9-47bf-92d0-07e609524820",
+          "title": "更新摘要",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「合成海棠交接资料-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.678936Z"
+        },
+        {
+          "id": "8e2034d6-c7ae-4105-82d7-7e9fb1caf71f",
+          "title": "从资料里读出要点",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.660531Z"
+        },
+        {
+          "id": "d0af9371-ae27-49ac-bdcc-86ec595cedb6",
+          "title": "建立检索索引",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.660531Z"
+        },
+        {
+          "id": "911cfd8f-c0f3-4783-b752-339a431186cc",
+          "title": "建立语义索引",
+          "trigger": "资料处理",
+          "status": "failed",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」 · 还没配置处理它的模型",
+          "recovery": "配置对应模型或处理器后重试",
+          "createdAt": "2026-10-01T14:36:45.660531Z"
+        },
+        {
+          "id": "e8e66484-7178-40cc-a028-b041404be20e",
+          "title": "建立语义索引",
+          "trigger": "资料处理",
+          "status": "failed",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」 · 还没配置处理它的模型",
+          "recovery": "配置对应模型或处理器后重试",
+          "createdAt": "2026-10-01T14:36:45.64147Z"
+        },
+        {
+          "id": "50638a4b-ad14-419c-9555-d4a4ea7a9c88",
+          "title": "从资料里读出要点",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.64147Z"
+        },
+        {
+          "id": "7d24d058-4035-4c72-8fd8-30071314c2e4",
+          "title": "建立检索索引",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.64147Z"
+        },
+        {
+          "id": "e3d3ab74-2280-4e79-9e5a-d2f996be37cd",
+          "title": "从资料里读出要点",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「合成海棠交接资料-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.634603Z"
+        },
+        {
+          "id": "87f68293-e609-4d04-8e2c-bc46e6cc1f51",
+          "title": "建立检索索引",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「合成海棠交接资料-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.634603Z"
+        },
+        {
+          "id": "123ca27e-a9fb-4b94-b6aa-9376c0fd608d",
+          "title": "建立语义索引",
+          "trigger": "资料处理",
+          "status": "failed",
+          "detail": "「合成海棠交接资料-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」 · 还没配置处理它的模型",
+          "recovery": "配置对应模型或处理器后重试",
+          "createdAt": "2026-10-01T14:36:45.634603Z"
+        },
+        {
+          "id": "24731ee1-f003-46c5-96a0-4f359ba32fb8",
+          "title": "切分原文",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.435071Z"
+        },
+        {
+          "id": "91379d40-d1ef-45a6-b77f-7f8fb981cd42",
+          "title": "更新摘要",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.435071Z"
+        },
+        {
+          "id": "d48dbde2-295c-44fa-939c-fd8b12c84c33",
+          "title": "切分原文",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.391149Z"
+        },
+        {
+          "id": "984e3ac0-b6da-43d6-badd-11c6499d3b5d",
+          "title": "切分原文",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「合成海棠交接资料-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.362702Z"
+        }
+      ],
+      "activity": [
+        {
+          "id": "problem:还没配置处理它的模型",
+          "at": "2026-10-01T14:36:45.692006Z",
+          "text": "有 3 项整理没做完：还没配置处理它的模型",
+          "to": "/library?tab=sources",
+          "failed": true
+        }
+      ],
+      "excludedMemories": {}
+    }
+  },
+  {
+    "method": "GET",
+    "path": "/v1/workspace",
+    "status": 200,
+    "response": {
+      "notices": [],
+      "budgetUsage": 0,
+      "version": 1,
+      "revision": 6,
+      "settings": {
+        "autoAccept": false,
+        "wakeIdeas": true,
+        "followUps": true,
+        "dailyReviewAt": "09:00",
+        "dailyBudget": 10,
+        "timezone": "Asia/Shanghai"
+      },
+      "tasks": [
+        {
+          "id": "0214d897-5ad4-4647-8e27-80866ca3f624",
+          "itemKind": "task",
+          "recordVersion": 1,
+          "title": "独立手动交接-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc",
+          "name": "独立手动交接-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc",
+          "status": "todo",
+          "body": "",
+          "goal": "",
+          "progress": "",
+          "dependsOn": [],
+          "checklist": [],
+          "triggers": [],
+          "sources": [
+            {
+              "sourceId": "aa42e176-4217-49a2-a6c2-b96593a93659",
+              "version": 1,
+              "label": "创建",
+              "at": "2026-10-01T14:36:47.650834608Z"
+            }
+          ],
+          "history": [
+            {
+              "at": "2026-10-01T14:36:47.650598356Z",
+              "by": "user",
+              "summary": "创建"
+            },
+            {
+              "at": "2026-10-01T14:36:47.650834608Z",
+              "by": "user",
+              "summary": "创建"
+            }
+          ],
+          "evolution": [
+            {
+              "at": "2026-10-01T14:36:47.650598356Z",
+              "by": "user",
+              "summary": "提出"
+            }
+          ],
+          "conditions": [],
+          "remindersOn": true,
+          "nextSteps": [],
+          "createdAt": "2026-10-01T14:36:47.650598356Z",
+          "updatedAt": "2026-10-01T14:36:47.650598356Z"
+        },
+        {
+          "id": "b93a16ce-b24f-4824-9979-40a4f0c82fa3",
+          "itemKind": "task",
+          "recordVersion": 2,
+          "title": "独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea",
+          "name": "独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea",
+          "status": "todo",
+          "notes": "OWNER 合成独立说明 cobalt-602，继续保留这段原文。",
+          "body": "",
+          "goal": "",
+          "progress": "",
+          "dependsOn": [],
+          "checklist": [],
+          "triggers": [],
+          "sources": [
+            {
+              "sourceId": "5dd951ea-5a0c-40fd-8dbd-8f13c9927c3a",
+              "version": 1,
+              "label": "创建",
+              "at": "2026-10-01T14:36:45.394006371Z"
+            },
+            {
+              "sourceId": "5dd951ea-5a0c-40fd-8dbd-8f13c9927c3a",
+              "version": 2,
+              "label": "更新说明",
+              "at": "2026-10-01T14:36:45.437327784Z"
+            }
+          ],
+          "history": [
+            {
+              "at": "2026-10-01T14:36:45.393615987Z",
+              "by": "user",
+              "summary": "创建"
+            },
+            {
+              "at": "2026-10-01T14:36:45.394006371Z",
+              "by": "user",
+              "summary": "创建"
+            },
+            {
+              "at": "2026-10-01T14:36:45.437327784Z",
+              "by": "user",
+              "summary": "更新说明"
+            }
+          ],
+          "evolution": [
+            {
+              "at": "2026-10-01T14:36:45.393615987Z",
+              "by": "user",
+              "summary": "提出"
+            }
+          ],
+          "conditions": [],
+          "remindersOn": true,
+          "nextSteps": [],
+          "createdAt": "2026-10-01T14:36:45.393615987Z",
+          "updatedAt": "2026-10-01T14:36:45.437325834Z"
+        }
+      ],
+      "ideas": [],
+      "projects": [],
+      "memories": [],
+      "candidates": [],
+      "agents": [
+        {
+          "protocol": "siwc",
+          "available": false,
+          "inputPrice": 0,
+          "outputPrice": 0,
+          "maxOutput": 4096,
+          "id": "chatgpt-direct",
+          "name": "ChatGPT · 套餐授权",
+          "channel": "api",
+          "note": "消耗你的 ChatGPT 套餐 · 官方直接授权",
+          "enabled": true,
+          "memoryKinds": [
+            "fact",
+            "preference",
+            "decision",
+            "intention",
+            "plan"
+          ],
+          "includeInferred": false
+        },
+        {
+          "default": true,
+          "protocol": "openai",
+          "available": true,
+          "inputPrice": 0,
+          "outputPrice": 0,
+          "maxOutput": 2000,
+          "id": "golden",
+          "name": "验收假模型",
+          "channel": "api",
+          "note": "通用 API · golden",
+          "enabled": true,
+          "memoryKinds": [
+            "fact",
+            "preference",
+            "decision",
+            "intention",
+            "plan"
+          ],
+          "includeInferred": false
+        },
+        {
+          "available": true,
+          "inputPrice": 0,
+          "outputPrice": 0,
+          "maxOutput": 0,
+          "id": "manual",
+          "name": "手动交接",
+          "channel": "manual",
+          "note": "复制上下文到任意 AI，再粘贴结果",
+          "enabled": true,
+          "memoryKinds": [
+            "fact",
+            "preference",
+            "decision",
+            "intention",
+            "plan"
+          ],
+          "includeInferred": false
+        }
+      ],
+      "docs": [],
+      "runs": [
+        {
+          "contextTask": {
+            "OwnerID": "cc6eae2e-9b70-40f3-9b3d-4b764727c398",
+            "Recipient": {
+              "principal_id": "manual",
+              "role": "manual",
+              "model": "golden",
+              "provider": "golden",
+              "protocol": "openai",
+              "channel": "manual",
+              "route_fingerprint": "5297ab0a4176f71b12aa21e8d126d86bc7a13987008afba0269e17bfa8cfc38a"
+            },
+            "Purpose": "knowledge",
+            "Scope": {
+              "kind": "unscoped",
+              "include_global_constraints": false
+            },
+            "View": {
+              "mode": "continue",
+              "valid_at": "2026-10-01T14:36:46.399715662Z",
+              "known_at": "2026-10-01T14:36:46.399715662Z"
+            },
+            "Now": "2026-10-01T14:36:46.399715662Z",
+            "Timezone": "Asia/Shanghai",
+            "MemoryBudget": {
+              "candidates": 15,
+              "edges": 15,
+              "tokens": 4000,
+              "hops": 1
+            },
+            "TotalInputTokens": 8000
+          },
+          "contextDependencies": [
+            {
+              "ref": {
+                "id": "0a30f89b-8c9e-4045-bedd-e55416fdd455",
+                "version": 1,
+                "kind": "source"
+              },
+              "purpose": "knowledge",
+              "scope": {
+                "kind": "unscoped",
+                "include_global_constraints": false
+              },
+              "authorization": {
+                "policy_id": "a035e7b6-8e8c-4839-ba60-311dcad966a8",
+                "revision": 1
+              },
+              "scope_revision": 0
+            }
+          ],
+          "contextDeskActions": [],
+          "contextIndirectDependencies": [],
+          "contextCandidates": [
+            {
+              "ref": {
+                "id": "0a30f89b-8c9e-4045-bedd-e55416fdd455",
+                "version": 1,
+                "kind": "source"
+              },
+              "source_span": {
+                "source": {
+                  "id": "0a30f89b-8c9e-4045-bedd-e55416fdd455",
+                  "version": 1,
+                  "kind": "source"
+                },
+                "start_rune": 0,
+                "end_rune": 113
+              },
+              "stage": "recall",
+              "disposition": "selected"
+            }
+          ],
+          "contextSourceSpans": [
+            {
+              "source": {
+                "id": "0a30f89b-8c9e-4045-bedd-e55416fdd455",
+                "version": 1,
+                "kind": "source"
+              },
+              "start_rune": 0,
+              "end_rune": 113
+            }
+          ],
+          "manualRecipient": {
+            "principal_id": "",
+            "role": "",
+            "model": "",
+            "provider": "golden",
+            "protocol": "",
+            "channel": "",
+            "route_fingerprint": ""
+          },
+          "id": "4e7ca5ae-a945-404a-85a4-aef55f36c79d",
+          "thingId": "b93a16ce-b24f-4824-9979-40a4f0c82fa3",
+          "agentId": "manual",
+          "kind": "ask",
+          "prompt": "根据合成海棠交接资料-3ba7f87c-0b92-4392-97ff-8e0771fab2ea和这件事的独立说明，给出一段建议。",
+          "brief": "事项：独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea\n当前状态：todo\n说明：OWNER 合成独立说明 cobalt-602，继续保留这段原文。\n\n目标：\n进度：\n\n本次请求：根据合成海棠交接资料-3ba7f87c-0b92-4392-97ff-8e0771fab2ea和这件事的独立说明，给出一段建议。",
+          "contextMemoryIds": [
+            "0a30f89b-8c9e-4045-bedd-e55416fdd455"
+          ],
+          "contextVersions": [
+            {
+              "id": "0a30f89b-8c9e-4045-bedd-e55416fdd455",
+              "version": 1,
+              "kind": "source"
+            }
+          ],
+          "status": "waiting",
+          "staleContext": false,
+          "cost": 0,
+          "createdAt": "2026-10-01T14:36:46.436252795Z"
+        }
+      ],
+      "samples": [],
+      "sources": [
+        {
+          "id": "aa42e176-4217-49a2-a6c2-b96593a93659",
+          "name": "独立手动交接-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc",
+          "method": "actions",
+          "status": "syncing",
+          "note": "原文可读，索引处理中",
+          "itemCount": 0,
+          "lastSyncAt": "2026-10-01T14:36:47.649138Z"
+        },
+        {
+          "id": "f5db9490-7ddd-4f75-babb-c457eafbce87",
+          "name": "合成海棠交接资料-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc",
+          "method": "phase2-browser-synthetic",
+          "status": "syncing",
+          "note": "原文可读，索引处理中",
+          "itemCount": 0,
+          "lastSyncAt": "2026-10-01T14:36:47.622301Z"
+        },
+        {
+          "id": "5dd951ea-5a0c-40fd-8dbd-8f13c9927c3a",
+          "name": "独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea",
+          "method": "actions",
+          "status": "failed",
+          "note": "原文可读，部分处理未完成；展开后台任务查看缺口",
+          "itemCount": 1,
+          "lastSyncAt": "2026-10-01T14:36:45.435071Z"
+        },
+        {
+          "id": "0a30f89b-8c9e-4045-bedd-e55416fdd455",
+          "name": "合成海棠交接资料-3ba7f87c-0b92-4392-97ff-8e0771fab2ea",
+          "method": "phase2-browser-synthetic",
+          "status": "failed",
+          "note": "原文可读，部分处理未完成；展开后台任务查看缺口",
+          "itemCount": 1,
+          "lastSyncAt": "2026-10-01T14:36:45.362702Z"
+        }
+      ],
+      "jobs": [
+        {
+          "id": "89a03519-84de-4090-90ab-24add943fa5e",
+          "title": "切分原文",
+          "trigger": "资料处理",
+          "status": "queued",
+          "detail": "「独立手动交接-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc」",
+          "createdAt": "2026-10-01T14:36:47.649138Z",
+          "nextRunAt": "2026-10-01T14:36:47.649138Z"
+        },
+        {
+          "id": "e4311e17-02fd-4eb5-a039-6273f6498655",
+          "title": "切分原文",
+          "trigger": "资料处理",
+          "status": "queued",
+          "detail": "「合成海棠交接资料-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc」",
+          "createdAt": "2026-10-01T14:36:47.622301Z",
+          "nextRunAt": "2026-10-01T14:36:47.622301Z"
+        },
+        {
+          "id": "8a478630-f271-42ea-bac2-4eb91be62804",
+          "title": "更新摘要",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.686274Z"
+        },
+        {
+          "id": "7b42de3a-74e9-47bf-92d0-07e609524820",
+          "title": "更新摘要",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「合成海棠交接资料-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.678936Z"
+        },
+        {
+          "id": "8e2034d6-c7ae-4105-82d7-7e9fb1caf71f",
+          "title": "从资料里读出要点",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.660531Z"
+        },
+        {
+          "id": "d0af9371-ae27-49ac-bdcc-86ec595cedb6",
+          "title": "建立检索索引",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.660531Z"
+        },
+        {
+          "id": "911cfd8f-c0f3-4783-b752-339a431186cc",
+          "title": "建立语义索引",
+          "trigger": "资料处理",
+          "status": "failed",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」 · 还没配置处理它的模型",
+          "recovery": "配置对应模型或处理器后重试",
+          "createdAt": "2026-10-01T14:36:45.660531Z"
+        },
+        {
+          "id": "e8e66484-7178-40cc-a028-b041404be20e",
+          "title": "建立语义索引",
+          "trigger": "资料处理",
+          "status": "failed",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」 · 还没配置处理它的模型",
+          "recovery": "配置对应模型或处理器后重试",
+          "createdAt": "2026-10-01T14:36:45.64147Z"
+        },
+        {
+          "id": "50638a4b-ad14-419c-9555-d4a4ea7a9c88",
+          "title": "从资料里读出要点",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.64147Z"
+        },
+        {
+          "id": "7d24d058-4035-4c72-8fd8-30071314c2e4",
+          "title": "建立检索索引",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.64147Z"
+        },
+        {
+          "id": "e3d3ab74-2280-4e79-9e5a-d2f996be37cd",
+          "title": "从资料里读出要点",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「合成海棠交接资料-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.634603Z"
+        },
+        {
+          "id": "87f68293-e609-4d04-8e2c-bc46e6cc1f51",
+          "title": "建立检索索引",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「合成海棠交接资料-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.634603Z"
+        },
+        {
+          "id": "123ca27e-a9fb-4b94-b6aa-9376c0fd608d",
+          "title": "建立语义索引",
+          "trigger": "资料处理",
+          "status": "failed",
+          "detail": "「合成海棠交接资料-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」 · 还没配置处理它的模型",
+          "recovery": "配置对应模型或处理器后重试",
+          "createdAt": "2026-10-01T14:36:45.634603Z"
+        },
+        {
+          "id": "24731ee1-f003-46c5-96a0-4f359ba32fb8",
+          "title": "切分原文",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.435071Z"
+        },
+        {
+          "id": "91379d40-d1ef-45a6-b77f-7f8fb981cd42",
+          "title": "更新摘要",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.435071Z"
+        },
+        {
+          "id": "d48dbde2-295c-44fa-939c-fd8b12c84c33",
+          "title": "切分原文",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.391149Z"
+        },
+        {
+          "id": "984e3ac0-b6da-43d6-badd-11c6499d3b5d",
+          "title": "切分原文",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「合成海棠交接资料-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.362702Z"
+        }
+      ],
+      "activity": [
+        {
+          "id": "problem:还没配置处理它的模型",
+          "at": "2026-10-01T14:36:45.692006Z",
+          "text": "有 3 项整理没做完：还没配置处理它的模型",
+          "to": "/library?tab=sources",
+          "failed": true
+        }
+      ],
+      "excludedMemories": {}
+    }
+  },
+  {
+    "method": "POST",
+    "path": "/v1/workspace/commands",
+    "status": 200,
+    "request": {
+      "type": "setNotes",
+      "id": "0214d897-5ad4-4647-8e27-80866ca3f624",
+      "text": "OWNER 合成独立说明 cobalt-602，继续保留这段原文。",
+      "requestId": "4234a75b-fad8-4283-8f8f-0c5cc94a679d",
+      "expectedRevision": 6
+    },
+    "response": {
+      "notices": [],
+      "budgetUsage": 0,
+      "version": 1,
+      "revision": 7,
+      "settings": {
+        "autoAccept": false,
+        "wakeIdeas": true,
+        "followUps": true,
+        "dailyReviewAt": "09:00",
+        "dailyBudget": 10,
+        "timezone": "Asia/Shanghai"
+      },
+      "tasks": [
+        {
+          "id": "0214d897-5ad4-4647-8e27-80866ca3f624",
+          "itemKind": "task",
+          "recordVersion": 2,
+          "title": "独立手动交接-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc",
+          "name": "独立手动交接-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc",
+          "status": "todo",
+          "notes": "OWNER 合成独立说明 cobalt-602，继续保留这段原文。",
+          "body": "",
+          "goal": "",
+          "progress": "",
+          "dependsOn": [],
+          "checklist": [],
+          "triggers": [],
+          "sources": [
+            {
+              "sourceId": "aa42e176-4217-49a2-a6c2-b96593a93659",
+              "version": 1,
+              "label": "创建",
+              "at": "2026-10-01T14:36:47.650834608Z"
+            },
+            {
+              "sourceId": "aa42e176-4217-49a2-a6c2-b96593a93659",
+              "version": 2,
+              "label": "更新说明",
+              "at": "2026-10-01T14:36:47.686904727Z"
+            }
+          ],
+          "history": [
+            {
+              "at": "2026-10-01T14:36:47.650598356Z",
+              "by": "user",
+              "summary": "创建"
+            },
+            {
+              "at": "2026-10-01T14:36:47.650834608Z",
+              "by": "user",
+              "summary": "创建"
+            },
+            {
+              "at": "2026-10-01T14:36:47.686904727Z",
+              "by": "user",
+              "summary": "更新说明"
+            }
+          ],
+          "evolution": [
+            {
+              "at": "2026-10-01T14:36:47.650598356Z",
+              "by": "user",
+              "summary": "提出"
+            }
+          ],
+          "conditions": [],
+          "remindersOn": true,
+          "nextSteps": [],
+          "createdAt": "2026-10-01T14:36:47.650598356Z",
+          "updatedAt": "2026-10-01T14:36:47.686903027Z"
+        },
+        {
+          "id": "b93a16ce-b24f-4824-9979-40a4f0c82fa3",
+          "itemKind": "task",
+          "recordVersion": 2,
+          "title": "独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea",
+          "name": "独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea",
+          "status": "todo",
+          "notes": "OWNER 合成独立说明 cobalt-602，继续保留这段原文。",
+          "body": "",
+          "goal": "",
+          "progress": "",
+          "dependsOn": [],
+          "checklist": [],
+          "triggers": [],
+          "sources": [
+            {
+              "sourceId": "5dd951ea-5a0c-40fd-8dbd-8f13c9927c3a",
+              "version": 1,
+              "label": "创建",
+              "at": "2026-10-01T14:36:45.394006371Z"
+            },
+            {
+              "sourceId": "5dd951ea-5a0c-40fd-8dbd-8f13c9927c3a",
+              "version": 2,
+              "label": "更新说明",
+              "at": "2026-10-01T14:36:45.437327784Z"
+            }
+          ],
+          "history": [
+            {
+              "at": "2026-10-01T14:36:45.393615987Z",
+              "by": "user",
+              "summary": "创建"
+            },
+            {
+              "at": "2026-10-01T14:36:45.394006371Z",
+              "by": "user",
+              "summary": "创建"
+            },
+            {
+              "at": "2026-10-01T14:36:45.437327784Z",
+              "by": "user",
+              "summary": "更新说明"
+            }
+          ],
+          "evolution": [
+            {
+              "at": "2026-10-01T14:36:45.393615987Z",
+              "by": "user",
+              "summary": "提出"
+            }
+          ],
+          "conditions": [],
+          "remindersOn": true,
+          "nextSteps": [],
+          "createdAt": "2026-10-01T14:36:45.393615987Z",
+          "updatedAt": "2026-10-01T14:36:45.437325834Z"
+        }
+      ],
+      "ideas": [],
+      "projects": [],
+      "memories": [],
+      "candidates": [],
+      "agents": [
+        {
+          "protocol": "siwc",
+          "available": false,
+          "inputPrice": 0,
+          "outputPrice": 0,
+          "maxOutput": 4096,
+          "id": "chatgpt-direct",
+          "name": "ChatGPT · 套餐授权",
+          "channel": "api",
+          "note": "消耗你的 ChatGPT 套餐 · 官方直接授权",
+          "enabled": true,
+          "memoryKinds": [
+            "fact",
+            "preference",
+            "decision",
+            "intention",
+            "plan"
+          ],
+          "includeInferred": false
+        },
+        {
+          "default": true,
+          "protocol": "openai",
+          "available": true,
+          "inputPrice": 0,
+          "outputPrice": 0,
+          "maxOutput": 2000,
+          "id": "golden",
+          "name": "验收假模型",
+          "channel": "api",
+          "note": "通用 API · golden",
+          "enabled": true,
+          "memoryKinds": [
+            "fact",
+            "preference",
+            "decision",
+            "intention",
+            "plan"
+          ],
+          "includeInferred": false
+        },
+        {
+          "available": true,
+          "inputPrice": 0,
+          "outputPrice": 0,
+          "maxOutput": 0,
+          "id": "manual",
+          "name": "手动交接",
+          "channel": "manual",
+          "note": "复制上下文到任意 AI，再粘贴结果",
+          "enabled": true,
+          "memoryKinds": [
+            "fact",
+            "preference",
+            "decision",
+            "intention",
+            "plan"
+          ],
+          "includeInferred": false
+        }
+      ],
+      "docs": [],
+      "runs": [
+        {
+          "contextTask": {
+            "OwnerID": "cc6eae2e-9b70-40f3-9b3d-4b764727c398",
+            "Recipient": {
+              "principal_id": "manual",
+              "role": "manual",
+              "model": "golden",
+              "provider": "golden",
+              "protocol": "openai",
+              "channel": "manual",
+              "route_fingerprint": "5297ab0a4176f71b12aa21e8d126d86bc7a13987008afba0269e17bfa8cfc38a"
+            },
+            "Purpose": "knowledge",
+            "Scope": {
+              "kind": "unscoped",
+              "include_global_constraints": false
+            },
+            "View": {
+              "mode": "continue",
+              "valid_at": "2026-10-01T14:36:46.399715662Z",
+              "known_at": "2026-10-01T14:36:46.399715662Z"
+            },
+            "Now": "2026-10-01T14:36:46.399715662Z",
+            "Timezone": "Asia/Shanghai",
+            "MemoryBudget": {
+              "candidates": 15,
+              "edges": 15,
+              "tokens": 4000,
+              "hops": 1
+            },
+            "TotalInputTokens": 8000
+          },
+          "contextDependencies": [
+            {
+              "ref": {
+                "id": "0a30f89b-8c9e-4045-bedd-e55416fdd455",
+                "version": 1,
+                "kind": "source"
+              },
+              "purpose": "knowledge",
+              "scope": {
+                "kind": "unscoped",
+                "include_global_constraints": false
+              },
+              "authorization": {
+                "policy_id": "a035e7b6-8e8c-4839-ba60-311dcad966a8",
+                "revision": 1
+              },
+              "scope_revision": 0
+            }
+          ],
+          "contextDeskActions": [],
+          "contextIndirectDependencies": [],
+          "contextCandidates": [
+            {
+              "ref": {
+                "id": "0a30f89b-8c9e-4045-bedd-e55416fdd455",
+                "version": 1,
+                "kind": "source"
+              },
+              "source_span": {
+                "source": {
+                  "id": "0a30f89b-8c9e-4045-bedd-e55416fdd455",
+                  "version": 1,
+                  "kind": "source"
+                },
+                "start_rune": 0,
+                "end_rune": 113
+              },
+              "stage": "recall",
+              "disposition": "selected"
+            }
+          ],
+          "contextSourceSpans": [
+            {
+              "source": {
+                "id": "0a30f89b-8c9e-4045-bedd-e55416fdd455",
+                "version": 1,
+                "kind": "source"
+              },
+              "start_rune": 0,
+              "end_rune": 113
+            }
+          ],
+          "manualRecipient": {
+            "principal_id": "",
+            "role": "",
+            "model": "",
+            "provider": "golden",
+            "protocol": "",
+            "channel": "",
+            "route_fingerprint": ""
+          },
+          "id": "4e7ca5ae-a945-404a-85a4-aef55f36c79d",
+          "thingId": "b93a16ce-b24f-4824-9979-40a4f0c82fa3",
+          "agentId": "manual",
+          "kind": "ask",
+          "prompt": "根据合成海棠交接资料-3ba7f87c-0b92-4392-97ff-8e0771fab2ea和这件事的独立说明，给出一段建议。",
+          "brief": "事项：独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea\n当前状态：todo\n说明：OWNER 合成独立说明 cobalt-602，继续保留这段原文。\n\n目标：\n进度：\n\n本次请求：根据合成海棠交接资料-3ba7f87c-0b92-4392-97ff-8e0771fab2ea和这件事的独立说明，给出一段建议。",
+          "contextMemoryIds": [
+            "0a30f89b-8c9e-4045-bedd-e55416fdd455"
+          ],
+          "contextVersions": [
+            {
+              "id": "0a30f89b-8c9e-4045-bedd-e55416fdd455",
+              "version": 1,
+              "kind": "source"
+            }
+          ],
+          "status": "waiting",
+          "staleContext": false,
+          "cost": 0,
+          "createdAt": "2026-10-01T14:36:46.436252795Z"
+        }
+      ],
+      "samples": [],
+      "sources": [
+        {
+          "id": "aa42e176-4217-49a2-a6c2-b96593a93659",
+          "name": "独立手动交接-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc",
+          "method": "actions",
+          "status": "syncing",
+          "note": "原文可读，索引处理中",
+          "itemCount": 0,
+          "lastSyncAt": "2026-10-01T14:36:47.68475Z"
+        },
+        {
+          "id": "f5db9490-7ddd-4f75-babb-c457eafbce87",
+          "name": "合成海棠交接资料-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc",
+          "method": "phase2-browser-synthetic",
+          "status": "syncing",
+          "note": "原文可读，索引处理中",
+          "itemCount": 0,
+          "lastSyncAt": "2026-10-01T14:36:47.622301Z"
+        },
+        {
+          "id": "5dd951ea-5a0c-40fd-8dbd-8f13c9927c3a",
+          "name": "独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea",
+          "method": "actions",
+          "status": "failed",
+          "note": "原文可读，部分处理未完成；展开后台任务查看缺口",
+          "itemCount": 1,
+          "lastSyncAt": "2026-10-01T14:36:45.435071Z"
+        },
+        {
+          "id": "0a30f89b-8c9e-4045-bedd-e55416fdd455",
+          "name": "合成海棠交接资料-3ba7f87c-0b92-4392-97ff-8e0771fab2ea",
+          "method": "phase2-browser-synthetic",
+          "status": "failed",
+          "note": "原文可读，部分处理未完成；展开后台任务查看缺口",
+          "itemCount": 1,
+          "lastSyncAt": "2026-10-01T14:36:45.362702Z"
+        }
+      ],
+      "jobs": [
+        {
+          "id": "b4507306-eb6e-4b2a-9a6e-d780759027b4",
+          "title": "更新摘要",
+          "trigger": "资料处理",
+          "status": "queued",
+          "detail": "「独立手动交接-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc」",
+          "createdAt": "2026-10-01T14:36:47.68475Z",
+          "nextRunAt": "2026-10-01T14:36:47.68475Z"
+        },
+        {
+          "id": "c315b72e-70fd-43b6-941f-16c286dcf57c",
+          "title": "切分原文",
+          "trigger": "资料处理",
+          "status": "queued",
+          "detail": "「独立手动交接-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc」",
+          "createdAt": "2026-10-01T14:36:47.68475Z",
+          "nextRunAt": "2026-10-01T14:36:47.68475Z"
+        },
+        {
+          "id": "89a03519-84de-4090-90ab-24add943fa5e",
+          "title": "切分原文",
+          "trigger": "资料处理",
+          "status": "queued",
+          "detail": "「独立手动交接-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc」",
+          "createdAt": "2026-10-01T14:36:47.649138Z",
+          "nextRunAt": "2026-10-01T14:36:47.649138Z"
+        },
+        {
+          "id": "e4311e17-02fd-4eb5-a039-6273f6498655",
+          "title": "切分原文",
+          "trigger": "资料处理",
+          "status": "queued",
+          "detail": "「合成海棠交接资料-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc」",
+          "createdAt": "2026-10-01T14:36:47.622301Z",
+          "nextRunAt": "2026-10-01T14:36:47.622301Z"
+        },
+        {
+          "id": "8a478630-f271-42ea-bac2-4eb91be62804",
+          "title": "更新摘要",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.686274Z"
+        },
+        {
+          "id": "7b42de3a-74e9-47bf-92d0-07e609524820",
+          "title": "更新摘要",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「合成海棠交接资料-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.678936Z"
+        },
+        {
+          "id": "d0af9371-ae27-49ac-bdcc-86ec595cedb6",
+          "title": "建立检索索引",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.660531Z"
+        },
+        {
+          "id": "911cfd8f-c0f3-4783-b752-339a431186cc",
+          "title": "建立语义索引",
+          "trigger": "资料处理",
+          "status": "failed",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」 · 还没配置处理它的模型",
+          "recovery": "配置对应模型或处理器后重试",
+          "createdAt": "2026-10-01T14:36:45.660531Z"
+        },
+        {
+          "id": "8e2034d6-c7ae-4105-82d7-7e9fb1caf71f",
+          "title": "从资料里读出要点",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.660531Z"
+        },
+        {
+          "id": "7d24d058-4035-4c72-8fd8-30071314c2e4",
+          "title": "建立检索索引",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.64147Z"
+        },
+        {
+          "id": "50638a4b-ad14-419c-9555-d4a4ea7a9c88",
+          "title": "从资料里读出要点",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.64147Z"
+        },
+        {
+          "id": "e8e66484-7178-40cc-a028-b041404be20e",
+          "title": "建立语义索引",
+          "trigger": "资料处理",
+          "status": "failed",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」 · 还没配置处理它的模型",
+          "recovery": "配置对应模型或处理器后重试",
+          "createdAt": "2026-10-01T14:36:45.64147Z"
+        },
+        {
+          "id": "e3d3ab74-2280-4e79-9e5a-d2f996be37cd",
+          "title": "从资料里读出要点",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「合成海棠交接资料-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.634603Z"
+        },
+        {
+          "id": "87f68293-e609-4d04-8e2c-bc46e6cc1f51",
+          "title": "建立检索索引",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「合成海棠交接资料-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.634603Z"
+        },
+        {
+          "id": "123ca27e-a9fb-4b94-b6aa-9376c0fd608d",
+          "title": "建立语义索引",
+          "trigger": "资料处理",
+          "status": "failed",
+          "detail": "「合成海棠交接资料-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」 · 还没配置处理它的模型",
+          "recovery": "配置对应模型或处理器后重试",
+          "createdAt": "2026-10-01T14:36:45.634603Z"
+        },
+        {
+          "id": "24731ee1-f003-46c5-96a0-4f359ba32fb8",
+          "title": "切分原文",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.435071Z"
+        },
+        {
+          "id": "91379d40-d1ef-45a6-b77f-7f8fb981cd42",
+          "title": "更新摘要",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.435071Z"
+        },
+        {
+          "id": "d48dbde2-295c-44fa-939c-fd8b12c84c33",
+          "title": "切分原文",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.391149Z"
+        },
+        {
+          "id": "984e3ac0-b6da-43d6-badd-11c6499d3b5d",
+          "title": "切分原文",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「合成海棠交接资料-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.362702Z"
+        }
+      ],
+      "activity": [
+        {
+          "id": "problem:还没配置处理它的模型",
+          "at": "2026-10-01T14:36:45.692006Z",
+          "text": "有 3 项整理没做完：还没配置处理它的模型",
+          "to": "/library?tab=sources",
+          "failed": true
+        }
+      ],
+      "excludedMemories": {}
+    }
+  },
+  {
+    "method": "POST",
+    "path": "/v1/memory/sources/f5db9490-7ddd-4f75-babb-c457eafbce87/authorization",
+    "status": 200,
+    "request": {
+      "request_id": "a5f7d22e-4757-4e01-9f2e-c33e40e1de22",
+      "source": {
+        "id": "f5db9490-7ddd-4f75-babb-c457eafbce87",
+        "version": 1,
+        "kind": "source"
+      },
+      "expected_policy_revision": 0,
+      "recipient": {
+        "principal_id": "manual",
+        "role": "manual",
+        "provider": "golden"
+      },
+      "purpose": "knowledge",
+      "scope": {
+        "kind": "unscoped",
+        "include_global_constraints": false
+      }
+    },
+    "response": {
+      "authorization": {
+        "id": "bd80a590-54b6-414c-b8a3-9b01f01a5e70",
+        "source_id": "f5db9490-7ddd-4f75-babb-c457eafbce87",
+        "recipient": {
+          "principal_id": "manual",
+          "role": "manual",
+          "model": "golden",
+          "provider": "golden",
+          "protocol": "openai",
+          "channel": "manual",
+          "route_fingerprint": "5297ab0a4176f71b12aa21e8d126d86bc7a13987008afba0269e17bfa8cfc38a"
+        },
+        "purpose": "knowledge",
+        "scope": {
+          "kind": "unscoped",
+          "include_global_constraints": false
+        },
+        "revision": 1,
+        "revoked": false,
+        "explicit_deny": false,
+        "created_at": "2026-10-01T14:36:47.715532Z",
+        "updated_at": "2026-10-01T14:36:47.715532Z"
+      },
+      "duplicate": false,
+      "action_id": "a5f7d22e-4757-4e01-9f2e-c33e40e1de22",
+      "undoable": true
+    }
+  },
+  {
+    "method": "GET",
+    "path": "/v1/workspace",
+    "status": 200,
+    "response": {
+      "notices": [],
+      "budgetUsage": 0,
+      "version": 1,
+      "revision": 8,
+      "settings": {
+        "autoAccept": false,
+        "wakeIdeas": true,
+        "followUps": true,
+        "dailyReviewAt": "09:00",
+        "dailyBudget": 10,
+        "timezone": "Asia/Shanghai"
+      },
+      "tasks": [
+        {
+          "id": "0214d897-5ad4-4647-8e27-80866ca3f624",
+          "itemKind": "task",
+          "recordVersion": 2,
+          "title": "独立手动交接-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc",
+          "name": "独立手动交接-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc",
+          "status": "todo",
+          "notes": "OWNER 合成独立说明 cobalt-602，继续保留这段原文。",
+          "body": "",
+          "goal": "",
+          "progress": "",
+          "dependsOn": [],
+          "checklist": [],
+          "triggers": [],
+          "sources": [
+            {
+              "sourceId": "aa42e176-4217-49a2-a6c2-b96593a93659",
+              "version": 1,
+              "label": "创建",
+              "at": "2026-10-01T14:36:47.650834608Z"
+            },
+            {
+              "sourceId": "aa42e176-4217-49a2-a6c2-b96593a93659",
+              "version": 2,
+              "label": "更新说明",
+              "at": "2026-10-01T14:36:47.686904727Z"
+            }
+          ],
+          "history": [
+            {
+              "at": "2026-10-01T14:36:47.650598356Z",
+              "by": "user",
+              "summary": "创建"
+            },
+            {
+              "at": "2026-10-01T14:36:47.650834608Z",
+              "by": "user",
+              "summary": "创建"
+            },
+            {
+              "at": "2026-10-01T14:36:47.686904727Z",
+              "by": "user",
+              "summary": "更新说明"
+            }
+          ],
+          "evolution": [
+            {
+              "at": "2026-10-01T14:36:47.650598356Z",
+              "by": "user",
+              "summary": "提出"
+            }
+          ],
+          "conditions": [],
+          "remindersOn": true,
+          "nextSteps": [],
+          "createdAt": "2026-10-01T14:36:47.650598356Z",
+          "updatedAt": "2026-10-01T14:36:47.686903027Z"
+        },
+        {
+          "id": "b93a16ce-b24f-4824-9979-40a4f0c82fa3",
+          "itemKind": "task",
+          "recordVersion": 2,
+          "title": "独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea",
+          "name": "独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea",
+          "status": "todo",
+          "notes": "OWNER 合成独立说明 cobalt-602，继续保留这段原文。",
+          "body": "",
+          "goal": "",
+          "progress": "",
+          "dependsOn": [],
+          "checklist": [],
+          "triggers": [],
+          "sources": [
+            {
+              "sourceId": "5dd951ea-5a0c-40fd-8dbd-8f13c9927c3a",
+              "version": 1,
+              "label": "创建",
+              "at": "2026-10-01T14:36:45.394006371Z"
+            },
+            {
+              "sourceId": "5dd951ea-5a0c-40fd-8dbd-8f13c9927c3a",
+              "version": 2,
+              "label": "更新说明",
+              "at": "2026-10-01T14:36:45.437327784Z"
+            }
+          ],
+          "history": [
+            {
+              "at": "2026-10-01T14:36:45.393615987Z",
+              "by": "user",
+              "summary": "创建"
+            },
+            {
+              "at": "2026-10-01T14:36:45.394006371Z",
+              "by": "user",
+              "summary": "创建"
+            },
+            {
+              "at": "2026-10-01T14:36:45.437327784Z",
+              "by": "user",
+              "summary": "更新说明"
+            }
+          ],
+          "evolution": [
+            {
+              "at": "2026-10-01T14:36:45.393615987Z",
+              "by": "user",
+              "summary": "提出"
+            }
+          ],
+          "conditions": [],
+          "remindersOn": true,
+          "nextSteps": [],
+          "createdAt": "2026-10-01T14:36:45.393615987Z",
+          "updatedAt": "2026-10-01T14:36:45.437325834Z"
+        }
+      ],
+      "ideas": [],
+      "projects": [],
+      "memories": [],
+      "candidates": [],
+      "agents": [
+        {
+          "protocol": "siwc",
+          "available": false,
+          "inputPrice": 0,
+          "outputPrice": 0,
+          "maxOutput": 4096,
+          "id": "chatgpt-direct",
+          "name": "ChatGPT · 套餐授权",
+          "channel": "api",
+          "note": "消耗你的 ChatGPT 套餐 · 官方直接授权",
+          "enabled": true,
+          "memoryKinds": [
+            "fact",
+            "preference",
+            "decision",
+            "intention",
+            "plan"
+          ],
+          "includeInferred": false
+        },
+        {
+          "default": true,
+          "protocol": "openai",
+          "available": true,
+          "inputPrice": 0,
+          "outputPrice": 0,
+          "maxOutput": 2000,
+          "id": "golden",
+          "name": "验收假模型",
+          "channel": "api",
+          "note": "通用 API · golden",
+          "enabled": true,
+          "memoryKinds": [
+            "fact",
+            "preference",
+            "decision",
+            "intention",
+            "plan"
+          ],
+          "includeInferred": false
+        },
+        {
+          "available": true,
+          "inputPrice": 0,
+          "outputPrice": 0,
+          "maxOutput": 0,
+          "id": "manual",
+          "name": "手动交接",
+          "channel": "manual",
+          "note": "复制上下文到任意 AI，再粘贴结果",
+          "enabled": true,
+          "memoryKinds": [
+            "fact",
+            "preference",
+            "decision",
+            "intention",
+            "plan"
+          ],
+          "includeInferred": false
+        }
+      ],
+      "docs": [],
+      "runs": [
+        {
+          "contextTask": {
+            "OwnerID": "cc6eae2e-9b70-40f3-9b3d-4b764727c398",
+            "Recipient": {
+              "principal_id": "manual",
+              "role": "manual",
+              "model": "golden",
+              "provider": "golden",
+              "protocol": "openai",
+              "channel": "manual",
+              "route_fingerprint": "5297ab0a4176f71b12aa21e8d126d86bc7a13987008afba0269e17bfa8cfc38a"
+            },
+            "Purpose": "knowledge",
+            "Scope": {
+              "kind": "unscoped",
+              "include_global_constraints": false
+            },
+            "View": {
+              "mode": "continue",
+              "valid_at": "2026-10-01T14:36:46.399715662Z",
+              "known_at": "2026-10-01T14:36:46.399715662Z"
+            },
+            "Now": "2026-10-01T14:36:46.399715662Z",
+            "Timezone": "Asia/Shanghai",
+            "MemoryBudget": {
+              "candidates": 15,
+              "edges": 15,
+              "tokens": 4000,
+              "hops": 1
+            },
+            "TotalInputTokens": 8000
+          },
+          "contextDependencies": [
+            {
+              "ref": {
+                "id": "0a30f89b-8c9e-4045-bedd-e55416fdd455",
+                "version": 1,
+                "kind": "source"
+              },
+              "purpose": "knowledge",
+              "scope": {
+                "kind": "unscoped",
+                "include_global_constraints": false
+              },
+              "authorization": {
+                "policy_id": "a035e7b6-8e8c-4839-ba60-311dcad966a8",
+                "revision": 1
+              },
+              "scope_revision": 0
+            }
+          ],
+          "contextDeskActions": [],
+          "contextIndirectDependencies": [],
+          "contextCandidates": [
+            {
+              "ref": {
+                "id": "0a30f89b-8c9e-4045-bedd-e55416fdd455",
+                "version": 1,
+                "kind": "source"
+              },
+              "source_span": {
+                "source": {
+                  "id": "0a30f89b-8c9e-4045-bedd-e55416fdd455",
+                  "version": 1,
+                  "kind": "source"
+                },
+                "start_rune": 0,
+                "end_rune": 113
+              },
+              "stage": "recall",
+              "disposition": "selected"
+            }
+          ],
+          "contextSourceSpans": [
+            {
+              "source": {
+                "id": "0a30f89b-8c9e-4045-bedd-e55416fdd455",
+                "version": 1,
+                "kind": "source"
+              },
+              "start_rune": 0,
+              "end_rune": 113
+            }
+          ],
+          "manualRecipient": {
+            "principal_id": "",
+            "role": "",
+            "model": "",
+            "provider": "golden",
+            "protocol": "",
+            "channel": "",
+            "route_fingerprint": ""
+          },
+          "id": "4e7ca5ae-a945-404a-85a4-aef55f36c79d",
+          "thingId": "b93a16ce-b24f-4824-9979-40a4f0c82fa3",
+          "agentId": "manual",
+          "kind": "ask",
+          "prompt": "根据合成海棠交接资料-3ba7f87c-0b92-4392-97ff-8e0771fab2ea和这件事的独立说明，给出一段建议。",
+          "brief": "事项：独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea\n当前状态：todo\n说明：OWNER 合成独立说明 cobalt-602，继续保留这段原文。\n\n目标：\n进度：\n\n本次请求：根据合成海棠交接资料-3ba7f87c-0b92-4392-97ff-8e0771fab2ea和这件事的独立说明，给出一段建议。",
+          "contextMemoryIds": [
+            "0a30f89b-8c9e-4045-bedd-e55416fdd455"
+          ],
+          "contextVersions": [
+            {
+              "id": "0a30f89b-8c9e-4045-bedd-e55416fdd455",
+              "version": 1,
+              "kind": "source"
+            }
+          ],
+          "status": "waiting",
+          "staleContext": false,
+          "cost": 0,
+          "createdAt": "2026-10-01T14:36:46.436252795Z"
+        }
+      ],
+      "samples": [],
+      "sources": [
+        {
+          "id": "aa42e176-4217-49a2-a6c2-b96593a93659",
+          "name": "独立手动交接-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc",
+          "method": "actions",
+          "status": "syncing",
+          "note": "原文可读，索引处理中",
+          "itemCount": 1,
+          "lastSyncAt": "2026-10-01T14:36:47.68475Z"
+        },
+        {
+          "id": "f5db9490-7ddd-4f75-babb-c457eafbce87",
+          "name": "合成海棠交接资料-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc",
+          "method": "phase2-browser-synthetic",
+          "status": "syncing",
+          "note": "原文可读，索引处理中",
+          "itemCount": 1,
+          "lastSyncAt": "2026-10-01T14:36:47.622301Z"
+        },
+        {
+          "id": "5dd951ea-5a0c-40fd-8dbd-8f13c9927c3a",
+          "name": "独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea",
+          "method": "actions",
+          "status": "failed",
+          "note": "原文可读，部分处理未完成；展开后台任务查看缺口",
+          "itemCount": 1,
+          "lastSyncAt": "2026-10-01T14:36:45.435071Z"
+        },
+        {
+          "id": "0a30f89b-8c9e-4045-bedd-e55416fdd455",
+          "name": "合成海棠交接资料-3ba7f87c-0b92-4392-97ff-8e0771fab2ea",
+          "method": "phase2-browser-synthetic",
+          "status": "failed",
+          "note": "原文可读，部分处理未完成；展开后台任务查看缺口",
+          "itemCount": 1,
+          "lastSyncAt": "2026-10-01T14:36:45.362702Z"
+        }
+      ],
+      "jobs": [
+        {
+          "id": "4ec1e404-7b39-4cbb-a83c-72dcdd89c4a8",
+          "title": "建立检索索引",
+          "trigger": "资料处理",
+          "status": "queued",
+          "detail": "「独立手动交接-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc」",
+          "createdAt": "2026-10-01T14:36:47.729217Z",
+          "nextRunAt": "2026-10-01T14:36:47.729217Z"
+        },
+        {
+          "id": "be695124-6de2-44b1-b6ae-85d993785197",
+          "title": "建立语义索引",
+          "trigger": "资料处理",
+          "status": "queued",
+          "detail": "「独立手动交接-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc」",
+          "createdAt": "2026-10-01T14:36:47.729217Z",
+          "nextRunAt": "2026-10-01T14:36:47.729217Z"
+        },
+        {
+          "id": "baed69ce-225c-46bd-9526-745a851c99ac",
+          "title": "从资料里读出要点",
+          "trigger": "资料处理",
+          "status": "queued",
+          "detail": "「独立手动交接-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc」",
+          "createdAt": "2026-10-01T14:36:47.729217Z",
+          "nextRunAt": "2026-10-01T14:36:47.729217Z"
+        },
+        {
+          "id": "c6089876-d4c4-40b4-883d-98d7af38e157",
+          "title": "建立语义索引",
+          "trigger": "资料处理",
+          "status": "queued",
+          "detail": "「独立手动交接-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc」",
+          "createdAt": "2026-10-01T14:36:47.716826Z",
+          "nextRunAt": "2026-10-01T14:36:47.716826Z"
+        },
+        {
+          "id": "979d9533-d14c-43ea-acd5-009e34d1799e",
+          "title": "建立检索索引",
+          "trigger": "资料处理",
+          "status": "queued",
+          "detail": "「独立手动交接-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc」",
+          "createdAt": "2026-10-01T14:36:47.716826Z",
+          "nextRunAt": "2026-10-01T14:36:47.716826Z"
+        },
+        {
+          "id": "b7d2f67a-4e6d-4bb7-bfd4-9203aacdd2d5",
+          "title": "从资料里读出要点",
+          "trigger": "资料处理",
+          "status": "queued",
+          "detail": "「独立手动交接-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc」",
+          "createdAt": "2026-10-01T14:36:47.716826Z",
+          "nextRunAt": "2026-10-01T14:36:47.716826Z"
+        },
+        {
+          "id": "395eb180-a734-46bc-beb6-fde3e8b6f1ab",
+          "title": "建立语义索引",
+          "trigger": "资料处理",
+          "status": "queued",
+          "detail": "「合成海棠交接资料-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc」",
+          "createdAt": "2026-10-01T14:36:47.712038Z",
+          "nextRunAt": "2026-10-01T14:36:47.712038Z"
+        },
+        {
+          "id": "e5f1e06b-12dd-4826-97cd-3106c10131d0",
+          "title": "从资料里读出要点",
+          "trigger": "资料处理",
+          "status": "running",
+          "detail": "「合成海棠交接资料-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc」",
+          "createdAt": "2026-10-01T14:36:47.712038Z"
+        },
+        {
+          "id": "cb692d0d-9273-4bc3-88e3-13d50ccf2ee2",
+          "title": "建立检索索引",
+          "trigger": "资料处理",
+          "status": "queued",
+          "detail": "「合成海棠交接资料-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc」",
+          "createdAt": "2026-10-01T14:36:47.712038Z",
+          "nextRunAt": "2026-10-01T14:36:47.712038Z"
+        },
+        {
+          "id": "b4507306-eb6e-4b2a-9a6e-d780759027b4",
+          "title": "更新摘要",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc」",
+          "createdAt": "2026-10-01T14:36:47.68475Z"
+        },
+        {
+          "id": "c315b72e-70fd-43b6-941f-16c286dcf57c",
+          "title": "切分原文",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc」",
+          "createdAt": "2026-10-01T14:36:47.68475Z"
+        },
+        {
+          "id": "89a03519-84de-4090-90ab-24add943fa5e",
+          "title": "切分原文",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc」",
+          "createdAt": "2026-10-01T14:36:47.649138Z"
+        },
+        {
+          "id": "e4311e17-02fd-4eb5-a039-6273f6498655",
+          "title": "切分原文",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「合成海棠交接资料-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc」",
+          "createdAt": "2026-10-01T14:36:47.622301Z"
+        },
+        {
+          "id": "8a478630-f271-42ea-bac2-4eb91be62804",
+          "title": "更新摘要",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.686274Z"
+        },
+        {
+          "id": "7b42de3a-74e9-47bf-92d0-07e609524820",
+          "title": "更新摘要",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「合成海棠交接资料-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.678936Z"
+        },
+        {
+          "id": "d0af9371-ae27-49ac-bdcc-86ec595cedb6",
+          "title": "建立检索索引",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.660531Z"
+        },
+        {
+          "id": "911cfd8f-c0f3-4783-b752-339a431186cc",
+          "title": "建立语义索引",
+          "trigger": "资料处理",
+          "status": "failed",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」 · 还没配置处理它的模型",
+          "recovery": "配置对应模型或处理器后重试",
+          "createdAt": "2026-10-01T14:36:45.660531Z"
+        },
+        {
+          "id": "8e2034d6-c7ae-4105-82d7-7e9fb1caf71f",
+          "title": "从资料里读出要点",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.660531Z"
+        },
+        {
+          "id": "e8e66484-7178-40cc-a028-b041404be20e",
+          "title": "建立语义索引",
+          "trigger": "资料处理",
+          "status": "failed",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」 · 还没配置处理它的模型",
+          "recovery": "配置对应模型或处理器后重试",
+          "createdAt": "2026-10-01T14:36:45.64147Z"
+        },
+        {
+          "id": "7d24d058-4035-4c72-8fd8-30071314c2e4",
+          "title": "建立检索索引",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.64147Z"
+        },
+        {
+          "id": "50638a4b-ad14-419c-9555-d4a4ea7a9c88",
+          "title": "从资料里读出要点",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.64147Z"
+        },
+        {
+          "id": "123ca27e-a9fb-4b94-b6aa-9376c0fd608d",
+          "title": "建立语义索引",
+          "trigger": "资料处理",
+          "status": "failed",
+          "detail": "「合成海棠交接资料-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」 · 还没配置处理它的模型",
+          "recovery": "配置对应模型或处理器后重试",
+          "createdAt": "2026-10-01T14:36:45.634603Z"
+        },
+        {
+          "id": "87f68293-e609-4d04-8e2c-bc46e6cc1f51",
+          "title": "建立检索索引",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「合成海棠交接资料-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.634603Z"
+        },
+        {
+          "id": "e3d3ab74-2280-4e79-9e5a-d2f996be37cd",
+          "title": "从资料里读出要点",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「合成海棠交接资料-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.634603Z"
+        },
+        {
+          "id": "24731ee1-f003-46c5-96a0-4f359ba32fb8",
+          "title": "切分原文",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.435071Z"
+        },
+        {
+          "id": "91379d40-d1ef-45a6-b77f-7f8fb981cd42",
+          "title": "更新摘要",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.435071Z"
+        },
+        {
+          "id": "d48dbde2-295c-44fa-939c-fd8b12c84c33",
+          "title": "切分原文",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.391149Z"
+        },
+        {
+          "id": "984e3ac0-b6da-43d6-badd-11c6499d3b5d",
+          "title": "切分原文",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「合成海棠交接资料-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.362702Z"
+        }
+      ],
+      "activity": [
+        {
+          "id": "problem:还没配置处理它的模型",
+          "at": "2026-10-01T14:36:45.692006Z",
+          "text": "有 3 项整理没做完：还没配置处理它的模型",
+          "to": "/library?tab=sources",
+          "failed": true
+        }
+      ],
+      "excludedMemories": {}
+    }
+  },
+  {
+    "method": "GET",
+    "path": "/v1/workspace",
+    "status": 200,
+    "response": {
+      "notices": [],
+      "budgetUsage": 0,
+      "version": 1,
+      "revision": 9,
+      "settings": {
+        "autoAccept": false,
+        "wakeIdeas": true,
+        "followUps": true,
+        "dailyReviewAt": "09:00",
+        "dailyBudget": 10,
+        "timezone": "Asia/Shanghai"
+      },
+      "tasks": [
+        {
+          "id": "0214d897-5ad4-4647-8e27-80866ca3f624",
+          "itemKind": "task",
+          "recordVersion": 2,
+          "title": "独立手动交接-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc",
+          "name": "独立手动交接-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc",
+          "status": "todo",
+          "notes": "OWNER 合成独立说明 cobalt-602，继续保留这段原文。",
+          "body": "",
+          "goal": "",
+          "progress": "",
+          "dependsOn": [],
+          "checklist": [],
+          "triggers": [],
+          "sources": [
+            {
+              "sourceId": "aa42e176-4217-49a2-a6c2-b96593a93659",
+              "version": 1,
+              "label": "创建",
+              "at": "2026-10-01T14:36:47.650834608Z"
+            },
+            {
+              "sourceId": "aa42e176-4217-49a2-a6c2-b96593a93659",
+              "version": 2,
+              "label": "更新说明",
+              "at": "2026-10-01T14:36:47.686904727Z"
+            }
+          ],
+          "history": [
+            {
+              "at": "2026-10-01T14:36:47.650598356Z",
+              "by": "user",
+              "summary": "创建"
+            },
+            {
+              "at": "2026-10-01T14:36:47.650834608Z",
+              "by": "user",
+              "summary": "创建"
+            },
+            {
+              "at": "2026-10-01T14:36:47.686904727Z",
+              "by": "user",
+              "summary": "更新说明"
+            }
+          ],
+          "evolution": [
+            {
+              "at": "2026-10-01T14:36:47.650598356Z",
+              "by": "user",
+              "summary": "提出"
+            }
+          ],
+          "conditions": [],
+          "remindersOn": true,
+          "nextSteps": [],
+          "createdAt": "2026-10-01T14:36:47.650598356Z",
+          "updatedAt": "2026-10-01T14:36:47.686903027Z"
+        },
+        {
+          "id": "b93a16ce-b24f-4824-9979-40a4f0c82fa3",
+          "itemKind": "task",
+          "recordVersion": 2,
+          "title": "独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea",
+          "name": "独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea",
+          "status": "todo",
+          "notes": "OWNER 合成独立说明 cobalt-602，继续保留这段原文。",
+          "body": "",
+          "goal": "",
+          "progress": "",
+          "dependsOn": [],
+          "checklist": [],
+          "triggers": [],
+          "sources": [
+            {
+              "sourceId": "5dd951ea-5a0c-40fd-8dbd-8f13c9927c3a",
+              "version": 1,
+              "label": "创建",
+              "at": "2026-10-01T14:36:45.394006371Z"
+            },
+            {
+              "sourceId": "5dd951ea-5a0c-40fd-8dbd-8f13c9927c3a",
+              "version": 2,
+              "label": "更新说明",
+              "at": "2026-10-01T14:36:45.437327784Z"
+            }
+          ],
+          "history": [
+            {
+              "at": "2026-10-01T14:36:45.393615987Z",
+              "by": "user",
+              "summary": "创建"
+            },
+            {
+              "at": "2026-10-01T14:36:45.394006371Z",
+              "by": "user",
+              "summary": "创建"
+            },
+            {
+              "at": "2026-10-01T14:36:45.437327784Z",
+              "by": "user",
+              "summary": "更新说明"
+            }
+          ],
+          "evolution": [
+            {
+              "at": "2026-10-01T14:36:45.393615987Z",
+              "by": "user",
+              "summary": "提出"
+            }
+          ],
+          "conditions": [],
+          "remindersOn": true,
+          "nextSteps": [],
+          "createdAt": "2026-10-01T14:36:45.393615987Z",
+          "updatedAt": "2026-10-01T14:36:45.437325834Z"
+        }
+      ],
+      "ideas": [],
+      "projects": [],
+      "memories": [],
+      "candidates": [],
+      "agents": [
+        {
+          "protocol": "siwc",
+          "available": false,
+          "inputPrice": 0,
+          "outputPrice": 0,
+          "maxOutput": 4096,
+          "id": "chatgpt-direct",
+          "name": "ChatGPT · 套餐授权",
+          "channel": "api",
+          "note": "消耗你的 ChatGPT 套餐 · 官方直接授权",
+          "enabled": true,
+          "memoryKinds": [
+            "fact",
+            "preference",
+            "decision",
+            "intention",
+            "plan"
+          ],
+          "includeInferred": false
+        },
+        {
+          "default": true,
+          "protocol": "openai",
+          "available": true,
+          "inputPrice": 0,
+          "outputPrice": 0,
+          "maxOutput": 2000,
+          "id": "golden",
+          "name": "验收假模型",
+          "channel": "api",
+          "note": "通用 API · golden",
+          "enabled": true,
+          "memoryKinds": [
+            "fact",
+            "preference",
+            "decision",
+            "intention",
+            "plan"
+          ],
+          "includeInferred": false
+        },
+        {
+          "available": true,
+          "inputPrice": 0,
+          "outputPrice": 0,
+          "maxOutput": 0,
+          "id": "manual",
+          "name": "手动交接",
+          "channel": "manual",
+          "note": "复制上下文到任意 AI，再粘贴结果",
+          "enabled": true,
+          "memoryKinds": [
+            "fact",
+            "preference",
+            "decision",
+            "intention",
+            "plan"
+          ],
+          "includeInferred": false
+        }
+      ],
+      "docs": [],
+      "runs": [
+        {
+          "contextTask": {
+            "OwnerID": "cc6eae2e-9b70-40f3-9b3d-4b764727c398",
+            "Recipient": {
+              "principal_id": "manual",
+              "role": "manual",
+              "model": "golden",
+              "provider": "golden",
+              "protocol": "openai",
+              "channel": "manual",
+              "route_fingerprint": "5297ab0a4176f71b12aa21e8d126d86bc7a13987008afba0269e17bfa8cfc38a"
+            },
+            "Purpose": "knowledge",
+            "Scope": {
+              "kind": "unscoped",
+              "include_global_constraints": false
+            },
+            "View": {
+              "mode": "continue",
+              "valid_at": "2026-10-01T14:36:46.399715662Z",
+              "known_at": "2026-10-01T14:36:46.399715662Z"
+            },
+            "Now": "2026-10-01T14:36:46.399715662Z",
+            "Timezone": "Asia/Shanghai",
+            "MemoryBudget": {
+              "candidates": 15,
+              "edges": 15,
+              "tokens": 4000,
+              "hops": 1
+            },
+            "TotalInputTokens": 8000
+          },
+          "contextDependencies": [
+            {
+              "ref": {
+                "id": "0a30f89b-8c9e-4045-bedd-e55416fdd455",
+                "version": 1,
+                "kind": "source"
+              },
+              "purpose": "knowledge",
+              "scope": {
+                "kind": "unscoped",
+                "include_global_constraints": false
+              },
+              "authorization": {
+                "policy_id": "a035e7b6-8e8c-4839-ba60-311dcad966a8",
+                "revision": 1
+              },
+              "scope_revision": 0
+            }
+          ],
+          "contextDeskActions": [],
+          "contextIndirectDependencies": [],
+          "contextCandidates": [
+            {
+              "ref": {
+                "id": "0a30f89b-8c9e-4045-bedd-e55416fdd455",
+                "version": 1,
+                "kind": "source"
+              },
+              "source_span": {
+                "source": {
+                  "id": "0a30f89b-8c9e-4045-bedd-e55416fdd455",
+                  "version": 1,
+                  "kind": "source"
+                },
+                "start_rune": 0,
+                "end_rune": 113
+              },
+              "stage": "recall",
+              "disposition": "selected"
+            }
+          ],
+          "contextSourceSpans": [
+            {
+              "source": {
+                "id": "0a30f89b-8c9e-4045-bedd-e55416fdd455",
+                "version": 1,
+                "kind": "source"
+              },
+              "start_rune": 0,
+              "end_rune": 113
+            }
+          ],
+          "manualRecipient": {
+            "principal_id": "",
+            "role": "",
+            "model": "",
+            "provider": "golden",
+            "protocol": "",
+            "channel": "",
+            "route_fingerprint": ""
+          },
+          "id": "4e7ca5ae-a945-404a-85a4-aef55f36c79d",
+          "thingId": "b93a16ce-b24f-4824-9979-40a4f0c82fa3",
+          "agentId": "manual",
+          "kind": "ask",
+          "prompt": "根据合成海棠交接资料-3ba7f87c-0b92-4392-97ff-8e0771fab2ea和这件事的独立说明，给出一段建议。",
+          "brief": "事项：独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea\n当前状态：todo\n说明：OWNER 合成独立说明 cobalt-602，继续保留这段原文。\n\n目标：\n进度：\n\n本次请求：根据合成海棠交接资料-3ba7f87c-0b92-4392-97ff-8e0771fab2ea和这件事的独立说明，给出一段建议。",
+          "contextMemoryIds": [
+            "0a30f89b-8c9e-4045-bedd-e55416fdd455"
+          ],
+          "contextVersions": [
+            {
+              "id": "0a30f89b-8c9e-4045-bedd-e55416fdd455",
+              "version": 1,
+              "kind": "source"
+            }
+          ],
+          "status": "waiting",
+          "staleContext": false,
+          "cost": 0,
+          "createdAt": "2026-10-01T14:36:46.436252795Z"
+        }
+      ],
+      "samples": [],
+      "sources": [
+        {
+          "id": "aa42e176-4217-49a2-a6c2-b96593a93659",
+          "name": "独立手动交接-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc",
+          "method": "actions",
+          "status": "failed",
+          "note": "原文可读，部分处理未完成；展开后台任务查看缺口",
+          "itemCount": 1,
+          "lastSyncAt": "2026-10-01T14:36:47.68475Z"
+        },
+        {
+          "id": "f5db9490-7ddd-4f75-babb-c457eafbce87",
+          "name": "合成海棠交接资料-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc",
+          "method": "phase2-browser-synthetic",
+          "status": "failed",
+          "note": "原文可读，部分处理未完成；展开后台任务查看缺口",
+          "itemCount": 1,
+          "lastSyncAt": "2026-10-01T14:36:47.622301Z"
+        },
+        {
+          "id": "5dd951ea-5a0c-40fd-8dbd-8f13c9927c3a",
+          "name": "独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea",
+          "method": "actions",
+          "status": "failed",
+          "note": "原文可读，部分处理未完成；展开后台任务查看缺口",
+          "itemCount": 1,
+          "lastSyncAt": "2026-10-01T14:36:45.435071Z"
+        },
+        {
+          "id": "0a30f89b-8c9e-4045-bedd-e55416fdd455",
+          "name": "合成海棠交接资料-3ba7f87c-0b92-4392-97ff-8e0771fab2ea",
+          "method": "phase2-browser-synthetic",
+          "status": "failed",
+          "note": "原文可读，部分处理未完成；展开后台任务查看缺口",
+          "itemCount": 1,
+          "lastSyncAt": "2026-10-01T14:36:45.362702Z"
+        }
+      ],
+      "jobs": [
+        {
+          "id": "dfe341a0-a707-454e-8363-8d49779c217c",
+          "title": "更新摘要",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc」",
+          "createdAt": "2026-10-01T14:36:47.75019Z"
+        },
+        {
+          "id": "b80adf5f-d6a8-4fd5-bdd3-d4cde074bbdf",
+          "title": "更新摘要",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「合成海棠交接资料-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc」",
+          "createdAt": "2026-10-01T14:36:47.744159Z"
+        },
+        {
+          "id": "baed69ce-225c-46bd-9526-745a851c99ac",
+          "title": "从资料里读出要点",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc」",
+          "createdAt": "2026-10-01T14:36:47.729217Z"
+        },
+        {
+          "id": "4ec1e404-7b39-4cbb-a83c-72dcdd89c4a8",
+          "title": "建立检索索引",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc」",
+          "createdAt": "2026-10-01T14:36:47.729217Z"
+        },
+        {
+          "id": "be695124-6de2-44b1-b6ae-85d993785197",
+          "title": "建立语义索引",
+          "trigger": "资料处理",
+          "status": "failed",
+          "detail": "「独立手动交接-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc」 · 还没配置处理它的模型",
+          "recovery": "配置对应模型或处理器后重试",
+          "createdAt": "2026-10-01T14:36:47.729217Z"
+        },
+        {
+          "id": "c6089876-d4c4-40b4-883d-98d7af38e157",
+          "title": "建立语义索引",
+          "trigger": "资料处理",
+          "status": "failed",
+          "detail": "「独立手动交接-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc」 · 还没配置处理它的模型",
+          "recovery": "配置对应模型或处理器后重试",
+          "createdAt": "2026-10-01T14:36:47.716826Z"
+        },
+        {
+          "id": "979d9533-d14c-43ea-acd5-009e34d1799e",
+          "title": "建立检索索引",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc」",
+          "createdAt": "2026-10-01T14:36:47.716826Z"
+        },
+        {
+          "id": "b7d2f67a-4e6d-4bb7-bfd4-9203aacdd2d5",
+          "title": "从资料里读出要点",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc」",
+          "createdAt": "2026-10-01T14:36:47.716826Z"
+        },
+        {
+          "id": "395eb180-a734-46bc-beb6-fde3e8b6f1ab",
+          "title": "建立语义索引",
+          "trigger": "资料处理",
+          "status": "failed",
+          "detail": "「合成海棠交接资料-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc」 · 还没配置处理它的模型",
+          "recovery": "配置对应模型或处理器后重试",
+          "createdAt": "2026-10-01T14:36:47.712038Z"
+        },
+        {
+          "id": "cb692d0d-9273-4bc3-88e3-13d50ccf2ee2",
+          "title": "建立检索索引",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「合成海棠交接资料-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc」",
+          "createdAt": "2026-10-01T14:36:47.712038Z"
+        },
+        {
+          "id": "e5f1e06b-12dd-4826-97cd-3106c10131d0",
+          "title": "从资料里读出要点",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「合成海棠交接资料-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc」",
+          "createdAt": "2026-10-01T14:36:47.712038Z"
+        },
+        {
+          "id": "b4507306-eb6e-4b2a-9a6e-d780759027b4",
+          "title": "更新摘要",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc」",
+          "createdAt": "2026-10-01T14:36:47.68475Z"
+        },
+        {
+          "id": "c315b72e-70fd-43b6-941f-16c286dcf57c",
+          "title": "切分原文",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc」",
+          "createdAt": "2026-10-01T14:36:47.68475Z"
+        },
+        {
+          "id": "89a03519-84de-4090-90ab-24add943fa5e",
+          "title": "切分原文",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc」",
+          "createdAt": "2026-10-01T14:36:47.649138Z"
+        },
+        {
+          "id": "e4311e17-02fd-4eb5-a039-6273f6498655",
+          "title": "切分原文",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「合成海棠交接资料-e953e2b6-dbcd-4da7-bd5a-1bfc386683fc」",
+          "createdAt": "2026-10-01T14:36:47.622301Z"
+        },
+        {
+          "id": "8a478630-f271-42ea-bac2-4eb91be62804",
+          "title": "更新摘要",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.686274Z"
+        },
+        {
+          "id": "7b42de3a-74e9-47bf-92d0-07e609524820",
+          "title": "更新摘要",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「合成海棠交接资料-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.678936Z"
+        },
+        {
+          "id": "8e2034d6-c7ae-4105-82d7-7e9fb1caf71f",
+          "title": "从资料里读出要点",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.660531Z"
+        },
+        {
+          "id": "d0af9371-ae27-49ac-bdcc-86ec595cedb6",
+          "title": "建立检索索引",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.660531Z"
+        },
+        {
+          "id": "911cfd8f-c0f3-4783-b752-339a431186cc",
+          "title": "建立语义索引",
+          "trigger": "资料处理",
+          "status": "failed",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」 · 还没配置处理它的模型",
+          "recovery": "配置对应模型或处理器后重试",
+          "createdAt": "2026-10-01T14:36:45.660531Z"
+        },
+        {
+          "id": "e8e66484-7178-40cc-a028-b041404be20e",
+          "title": "建立语义索引",
+          "trigger": "资料处理",
+          "status": "failed",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」 · 还没配置处理它的模型",
+          "recovery": "配置对应模型或处理器后重试",
+          "createdAt": "2026-10-01T14:36:45.64147Z"
+        },
+        {
+          "id": "7d24d058-4035-4c72-8fd8-30071314c2e4",
+          "title": "建立检索索引",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.64147Z"
+        },
+        {
+          "id": "50638a4b-ad14-419c-9555-d4a4ea7a9c88",
+          "title": "从资料里读出要点",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.64147Z"
+        },
+        {
+          "id": "123ca27e-a9fb-4b94-b6aa-9376c0fd608d",
+          "title": "建立语义索引",
+          "trigger": "资料处理",
+          "status": "failed",
+          "detail": "「合成海棠交接资料-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」 · 还没配置处理它的模型",
+          "recovery": "配置对应模型或处理器后重试",
+          "createdAt": "2026-10-01T14:36:45.634603Z"
+        },
+        {
+          "id": "87f68293-e609-4d04-8e2c-bc46e6cc1f51",
+          "title": "建立检索索引",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「合成海棠交接资料-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.634603Z"
+        },
+        {
+          "id": "e3d3ab74-2280-4e79-9e5a-d2f996be37cd",
+          "title": "从资料里读出要点",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「合成海棠交接资料-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.634603Z"
+        },
+        {
+          "id": "24731ee1-f003-46c5-96a0-4f359ba32fb8",
+          "title": "切分原文",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.435071Z"
+        },
+        {
+          "id": "91379d40-d1ef-45a6-b77f-7f8fb981cd42",
+          "title": "更新摘要",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.435071Z"
+        },
+        {
+          "id": "d48dbde2-295c-44fa-939c-fd8b12c84c33",
+          "title": "切分原文",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「独立手动交接-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.391149Z"
+        },
+        {
+          "id": "984e3ac0-b6da-43d6-badd-11c6499d3b5d",
+          "title": "切分原文",
+          "trigger": "资料处理",
+          "status": "done",
+          "detail": "「合成海棠交接资料-3ba7f87c-0b92-4392-97ff-8e0771fab2ea」",
+          "createdAt": "2026-10-01T14:36:45.362702Z"
+        }
+      ],
+      "activity": [
+        {
+          "id": "problem:还没配置处理它的模型",
+          "at": "2026-10-01T14:36:47.756109Z",
+          "text": "有 6 项整理没做完：还没配置处理它的模型",
+          "to": "/library?tab=sources",
+          "failed": true
+        }
+      ],
+      "excludedMemories": {}
+    }
+  }
+]

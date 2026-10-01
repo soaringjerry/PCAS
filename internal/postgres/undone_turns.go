@@ -20,3 +20,12 @@ func deskTurnFullyUndoneTx(ctx context.Context, tx pgx.Tx, ownerID memory.ID, re
 	)`, string(ownerID), requestID).Scan(&undone)
 	return undone, err
 }
+
+func deskTurnRememberedTx(ctx context.Context, tx pgx.Tx, ownerID memory.ID, requestID string) (bool, error) {
+	var remembered bool
+	err := tx.QueryRow(ctx, `SELECT EXISTS(
+	 SELECT 1 FROM desk_turns WHERE owner_id=$1 AND lower(request_id::text)=lower($2)
+	 AND response->'turn'->'receipts' @> '[{"op":"remember"}]'::jsonb
+	)`, string(ownerID), requestID).Scan(&remembered)
+	return remembered, err
+}

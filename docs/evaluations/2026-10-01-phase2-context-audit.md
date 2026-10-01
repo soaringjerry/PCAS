@@ -72,6 +72,27 @@ docker rm -v pcas-m1-context-audit-20261001
 
 定稿测试观察模式退出 0，总计 1.580s，两个子用例通过；日志 `/tmp/m1-context-audit-observation.log`。未来原文要求退出 1，1.342s，明确失败 `future expectation: authorized raw Recall hit was dropped before DeskTurn provider request`；日志 `/tmp/m1-context-audit-required-raw.log`。观察模式 PASS 仅说明采证和已实现的正对照断言完成，**不等于原文贯通已通过或二阶段验收通过**；默认不启用该审计时的 skip 不作为验收证据。未重跑完整产品回归，完整候选验收归 A1。
 
+### 同一 conversationId 的追加判别补验
+
+初版证据提交 `497c99d180e130bf733844ac117a831408a528e9` 保留。协调者要求再检查日常同段对话，追加一个子用例 `confirmed_claim_same_conversation_correction_delete`，继续使用同一 testStore/agent/provider 夹具和公开 DeskTurn/capture/acceptCandidate/editMemory/deleteMemory 入口。fake 首轮、第二轮回复刻意分别含旧、新 claim marker，不能靠固定无 marker 回复避开历史污染。
+
+| 同一 conversationId 三轮 | 实际 provider 完整 HTTP 请求 | fake 实际回复及依赖 |
+|---|---|---|
+| 第一轮 | 当前 M1 中确有 `conversationBeforeM1` | 回复为 `交付暗号是 conversationBeforeM1`；Used=[]，持久 dependencies 明确含目标 claim@1 |
+| 公开纠正后第二轮 | 旧 marker=false，新 marker=true；历史区为 `问：auditconversation 交付暗号是什么\n答：（这条回答依据的记忆已变更）`；当前 M1 为 `auditconversation 的交付暗号是 conversationAfterM1。` | 回复为 `纠正后的交付暗号是 conversationAfterM1`，主动给下一轮历史留下新 marker |
+| includeSources 删除后第三轮 | 旧 marker=false，新 marker=false；历史两个答均为 `（这条回答依据的记忆已变更）`，问题已清空；当前召回区为 `（没有）` | 回复为 `资料已经删除` |
+
+检查针对解码后全部 messages 文字，故 marker 未出现在当前记忆与历史回复任一区域。现有 [desk_turn.go](../../internal/postgres/desk_turn.go) 598–603 在读取历史时复核 claim dependencies，陈旧回复改为占位；删除清理也已沿依赖传播。本次确认的是 **confirmed claim 及已有依赖的同会话纠正/连来源删除下一轮供给**；没有证明原文、历史 source/version/关系/摘要的新 typed 证据包闭包，也不外推无依赖的任意模型输出。
+
+```sh
+PCAS_TEST_DATABASE_URL='<disposable DSN>' PCAS_PHASE2_CONTEXT_AUDIT=1 \
+  go test ./internal/postgres \
+  -run '^TestPhase2ContextAudit/confirmed_claim_same_conversation_correction_delete$' \
+  -count=1 -v
+```
+
+追加判别补验退出 0，0.368s；日志 `/tmp/m1-context-audit-same-conversation.log` 留三轮 marker/完整请求。只运行此新子用例，不重跑整包；初版两个子用例与显式原文要求的结果属于前述初版运行。追加实例仍为同名自有 tmpfs PG 容器，随机 localhost DB 端口 `33265`、启动 PID `4043901`，假模型18150；资源随补验清理。
+
 ## 4 供给、引用与依赖不能混用
 
 | 集合 | 当前能证明什么 | 当前记录/缺口 |
@@ -95,7 +116,7 @@ docker rm -v pcas-m1-context-audit-20261001
 
 source 授权静态全搜：产品中 record_grants 写入仅见 claims.go 183（创建 claim 授予已注册 enabled agents）、editing.go 31–46（先 activeClaim，仅陈述可见性）、workspace.go 142（复制既有 chatgpt grants 到新 direct channel）。Ingest/ImportBatch/Commit 没有新 source grant；HTTP sources 只有摄入/读取，没有公开 source grant 写入口。已有模型配置迁移只能复制已有授权，不能凭空授予原文。owner 原文可见、worker owner scope 能抽取、claim grant 与模型原文授权是不同事实。此为静态入口/传播缺口，应裁定明确 source 授权方式；不能靠开启 IncludeInferred、默认全量 source 可见修掉。
 
-删除/撤权/在途：本次只新增 confirmed claim 下一轮纠正与连来源删除实证。复用 [F11 D1 更正证据](2026-10-01-secretary-repairs.md#d1-更正证据)：先确认真实模型收到授权 claim，再 barrier 内删除，旧结果/动作不提交、回执留骨架，已有实现通过。F11 的旧未授权夹具 finding 已撤回。desk.go/runs.go 的现有撤权/在途测试、summary 并发撤权测试可复用，但本次未重跑；typed 原文历史包、source/关系撤权和计划状态在途组合仍须新增对应验收，不能由 claim-only D1 外推。
+删除/撤权/在途：本次新增 confirmed claim 新会话及同 conversationId 下一轮纠正与连来源删除实证，同会话还确认先前实际回复中的旧/新 marker 被历史占位屏蔽。复用 [F11 D1 更正证据](2026-10-01-secretary-repairs.md#d1-更正证据)：先确认真实模型收到授权 claim，再 barrier 内删除，旧结果/动作不提交、回执留骨架，已有实现通过。F11 的旧未授权夹具 finding 已撤回。desk.go/runs.go 的现有撤权/在途测试、summary 并发撤权测试可复用，但本次未重跑；typed 原文历史包、source/关系撤权和计划状态在途组合仍须新增对应验收，不能由 claim-only D1 外推。
 
 ## 6 最小建议顺序与未覆盖边界
 

@@ -31,6 +31,7 @@ func TestPhase2ContextAudit(t *testing.T) {
 	scope := owner()
 	var mu sync.Mutex
 	requests := []string{}
+	fakeReply := "审计响应"
 	server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
@@ -48,8 +49,9 @@ func TestPhase2ContextAudit(t *testing.T) {
 		}
 		mu.Lock()
 		requests = append(requests, strings.Join(parts, "\n"))
+		reply := fakeReply
 		mu.Unlock()
-		secretaryModelReply(w, `{"reply":"审计响应","answer":"审计响应","used":[],"links":[],"actions":[],"remember":false,"ask":null}`)
+		secretaryModelReply(w, map[string]any{"reply": reply, "answer": reply, "used": []string{}, "links": []string{}, "actions": []any{}, "remember": false, "ask": nil})
 	}))
 	server.Listener.Close()
 	listener, err := net.Listen("tcp", "127.0.0.1:18150")
@@ -193,5 +195,47 @@ func TestPhase2ContextAudit(t *testing.T) {
 			t.Fatal("deleted text supplied to next actual model request")
 		}
 		t.Log("confirmed claim next turn: deleteMemory(includeSources=true) excludes both claim markers")
+	})
+	t.Run("confirmed_claim_same_conversation_correction_delete", func(t *testing.T) {
+		const query = "auditconversation 交付暗号是什么"
+		const oldMarker, newMarker = "conversationBeforeM1", "conversationAfterM1"
+		state := workspaceCommand(t, s, scope, workspace.Command{Type: "capture", Text: "auditconversation 的交付暗号是 " + oldMarker + "。"})
+		state = workspaceCommand(t, s, scope, workspace.Command{Type: "acceptCandidate", ID: state.Candidates[0].ID, Kind: "memory", MemoryKind: "fact", Text: "auditconversation 的交付暗号是 " + oldMarker + "。"})
+		claimID := state.Memories[0].ID
+		setReply := func(reply string) {
+			mu.Lock()
+			fakeReply = reply
+			mu.Unlock()
+		}
+		setReply("交付暗号是 " + oldMarker)
+		first := mustTurn(t, s, scope, turnRequest(query))
+		if !strings.Contains(lastRequest(), oldMarker) || !strings.Contains(first.Turn.Reply, oldMarker) {
+			t.Fatal("same-conversation fixture must supply old claim to provider and retain marker in model reply")
+		}
+		var refs []memory.Ref
+		if err := s.pool.QueryRow(ctx, "SELECT dependencies FROM desk_turns WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), first.Turn.ID).Scan(&refs); err != nil || len(refs) != 1 || string(refs[0].ID) != claimID {
+			t.Fatalf("same-conversation fixture missing claim dependency: %+v %v", refs, err)
+		}
+		t.Logf("same conversation first reply=%q dependencies=%+v", first.Turn.Reply, refs)
+		workspaceCommand(t, s, scope, workspace.Command{Type: "editMemory", ID: claimID, Text: "auditconversation 的交付暗号是 " + newMarker + "。", Reason: "同会话审计纠正"})
+		setReply("纠正后的交付暗号是 " + newMarker)
+		followup := turnRequest(query)
+		followup.ConversationID = &first.ConversationID
+		second := mustTurn(t, s, scope, followup)
+		correctedPrompt := lastRequest()
+		t.Logf("same conversation after correction: old_marker_present=%t new_marker_present=%t full_request=%q", strings.Contains(correctedPrompt, oldMarker), strings.Contains(correctedPrompt, newMarker), correctedPrompt)
+		if strings.Contains(correctedPrompt, oldMarker) || !strings.Contains(correctedPrompt, newMarker) || !strings.Contains(second.Turn.Reply, newMarker) {
+			t.Fatal("same-conversation next request must exclude old marker from current memories and prior replies, while supplying corrected claim")
+		}
+		workspaceCommand(t, s, scope, workspace.Command{Type: "deleteMemory", ID: claimID, IncludeSources: true})
+		setReply("资料已经删除")
+		third := turnRequest(query)
+		third.ConversationID = &first.ConversationID
+		mustTurn(t, s, scope, third)
+		deletedPrompt := lastRequest()
+		t.Logf("same conversation after includeSources deletion: old_marker_present=%t new_marker_present=%t full_request=%q", strings.Contains(deletedPrompt, oldMarker), strings.Contains(deletedPrompt, newMarker), deletedPrompt)
+		if strings.Contains(deletedPrompt, oldMarker) || strings.Contains(deletedPrompt, newMarker) {
+			t.Fatal("same-conversation next request supplied deleted markers through current memories or prior replies")
+		}
 	})
 }

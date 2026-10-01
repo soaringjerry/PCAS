@@ -139,3 +139,9 @@ K1实际接收者共同helper（A实现、B复用）：`Store.contextRecipientTx
 第二波已移交 B：runs.go、run_context.go、manual package helper/HTTP handler、context_policy_undo.go；A 保留 attempt/typed/Recall/Expand/summary/秘书和 actions_log 的 policy undo 分支。
 
 K1 定位补齐：`RecallResult.SourceSpans` 仅为已授权返回 source 候选的真实检索窗口；source exact version、rune 半开区间。无实际窗口命中时不伪造首段 locator。统一顺序是 hydrate exact → `applyRecallSpans(entries, spans)` 逐字核对并保留同 source 多窗口 → `selectContextExcerpt` 预算裁剪；最终输入 byte 映射另由 attempt 装配生成。该定位字段不声称候选已实际发送。
+
+K1 attempt 底座接口：`generateContext` 必须在业务事务外调用；自动 adapter prepared 事件提交全量最终 payload 和必需 typed deps，observer 的 before_dispatch barrier 返回后再次 fence。HTTP 的 dispatched 是真实 RoundTrip 入口的发送尝试，Codex 是 turn/start adapter 调用入口，均不代表远端收到。Codex thread/start 的前置 baseInstructions 在当前消费者仅为固定系统词；受控资料首次在 turn/start input 供给。HTTP 自动重定向改变接收者时拒绝，不带旧许可跟随。
+
+owner 只读诊断入口为 `Store.ContextAttempts(ctx,scope,operationID)` 与 `Store.ContextAttemptSnapshot(ctx,scope,id)`；`Store.CleanupContextAttempts(ctx,now)` 使用显式时间供恢复/周期清理和独立验收。logical metadata 按 PostgreSQL row JSON（除唯一 snapshot 与计数字段本身）加每条 attempt typed dependency JSON 实测，包含 payload hash、recipient、可变状态/时间/manifest。新记录另预留 512 字节受控状态变化空间，并计入 owner quota。写入/失效/过期/Used 更新均重新计量；旧骨架若超上限可删除诊断骨架，不能阻止来源删改撤权或删除 durable 依赖。容量裁剪只丢 optional candidates，保留核心输入映射/间接依赖，否则拒绝操作。
+
+Run 的 ContextTask/ContextDependencies/ContextSourceSpans/ContextAttemptID/ManualRecipient 均仅由 server 写入；请求 JSON 回传不能成为可信任务。worker/重取按当前 server route 重建 recipient 并重新 hydrate。run/产物采纳使用 durable deps 和失效标记，不要求仍存在诊断 attempt。manual 新 run 从 Command.ManualRecipient 绑定明确选择，GET package 逐次复核同接收者；更换选择创建新 run。

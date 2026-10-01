@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/soaringjerry/PCAS/internal/memory"
 	"io"
 	"os"
 	"os/exec"
@@ -320,6 +321,16 @@ func (c *Codex) generate(ctx context.Context, model, system, prompt string, web 
 	turnParams := map[string]any{"threadId": thread.Thread.ID, "input": []any{map[string]string{"type": "text", "text": prompt}}}
 	if len(schema) > 0 {
 		turnParams["outputSchema"] = schema
+	}
+	// Both assembled calls determine PCAS's input. Record their exact parameters;
+	// the app-server's own network serialization and hidden history are unknown.
+	// thread/start above carries only the fixed system instructions in PCAS
+	// context consumers. Controlled material first enters turn/start below.
+	payload, _ := json.Marshal(map[string]any{"thread_start": params, "turn_start": turnParams})
+	for _, stage := range []string{"prepared", "before_dispatch", "dispatched"} {
+		if err := memory.ObserveContextRequest(ctx, memory.ContextRequestEvent{Stage: stage, Protocol: "codex", Model: model, Payload: payload, ObservationLayer: "adapter_arguments"}); err != nil {
+			return "", nil, err
+		}
 	}
 	turnData, err := c.call(ctx, "turn/start", turnParams)
 	if err != nil {

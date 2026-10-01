@@ -152,7 +152,7 @@ func purgeArtifactsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, ids []
  WHERE a.owner_id=$1 AND a.kind='body' AND t.kind='task' ON CONFLICT DO NOTHING`, string(scope.OwnerID)); err != nil {
 		return nil, err
 	}
-	rows, err := tx.Query(ctx, `SELECT thing_id::text,kind,artifact_id,run_id::text,body FROM adopted_artifacts WHERE owner_id=$1 AND run_id IN (SELECT run_id FROM run_dependencies WHERE owner_id=$1 AND memory_id=ANY($2::uuid[]))`, string(scope.OwnerID), ids)
+	rows, err := tx.Query(ctx, `SELECT thing_id::text,kind,artifact_id,run_id::text,body FROM adopted_artifacts a WHERE owner_id=$1 AND (run_id IN (SELECT run_id FROM run_dependencies WHERE owner_id=$1 AND memory_id=ANY($2::uuid[])) OR EXISTS(SELECT 1 FROM context_artifact_dependencies d WHERE d.owner_id=a.owner_id AND d.dependency_id=ANY($2::uuid[]) AND ((d.parent_kind IN('run','manual_package') AND d.parent_id=a.run_id::text) OR (d.parent_kind='artifact' AND d.parent_id=a.artifact_id))))`, string(scope.OwnerID), ids)
 	if err != nil {
 		return nil, err
 	}

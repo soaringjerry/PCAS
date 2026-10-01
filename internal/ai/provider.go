@@ -18,6 +18,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/soaringjerry/PCAS/internal/ai/contextwire"
 	"github.com/soaringjerry/PCAS/internal/ai/siwc"
 	"github.com/soaringjerry/PCAS/internal/memory"
 )
@@ -54,6 +55,9 @@ type Result struct {
 	OutputTokens int
 }
 type Registry struct {
+	// The same assembly events serve bounded persistence and independent
+	// capture/barriers. Returning an error cancels before external dispatch.
+	ContextObserver    memory.ContextRequestObserver
 	SettingsPath       string
 	settingsMu         sync.Mutex
 	ReloadSubscription bool // Sequential background workers reload the shared managed login per job.
@@ -220,7 +224,7 @@ func (r *Registry) GenerateWithSearchSchema(ctx context.Context, id, system, pro
 	if r.ReloadSubscription {
 		defer r.Codex.Close()
 	}
-	text, searches, err := r.Codex.GenerateWithSearchSchema(ctx, p.Model, system, prompt, schema)
+	text, searches, err := r.Codex.GenerateWithSearchSchema(r.generationContext(ctx, p), p.Model, system, prompt, schema)
 	return Result{Text: text, Searches: searches}, err
 }
 func (r *Registry) Generate(ctx context.Context, id, system, prompt string) (Result, error) {
@@ -228,6 +232,7 @@ func (r *Registry) Generate(ctx context.Context, id, system, prompt string) (Res
 	if !ok || !r.providerAvailable(p) || p.Embedding || p.Transcription {
 		return Result{}, memory.ErrUnavailable
 	}
+	ctx = r.generationContext(ctx, p)
 	if p.Protocol == "siwc" {
 		result, err := r.ChatGPT.Generate(ctx, p.Model, system, prompt)
 		return Result{Text: result.Text, InputTokens: result.InputTokens, OutputTokens: result.OutputTokens}, err
@@ -374,7 +379,7 @@ func (r *Registry) call(ctx context.Context, p Provider, path string, body, out 
 	if p.Protocol == "anthropic" {
 		req.Header.Set("anthropic-version", "2023-06-01")
 	}
-	response, err := r.HTTP.Do(req)
+	response, err := contextwire.Do(r.HTTP, req, memory.ContextRequestEvent{ProviderID: p.ID, Protocol: p.Protocol, Model: p.Model, Endpoint: p.BaseURL, Payload: data, ObservationLayer: "serialized_request"})
 	if err != nil {
 		var networkErr net.Error
 		if errors.Is(err, context.DeadlineExceeded) || errors.As(err, &networkErr) && networkErr.Timeout() {

@@ -72,6 +72,9 @@ func invalidateTypedContextTx(ctx context.Context, tx pgx.Tx, scope memory.Scope
 	}
 	// Legacy consumers had no destination/view lineage. Invalidate their copies
 	// conservatively too; current callers with separate authorization regenerate.
+	if err = recountContextMetadataTx(ctx, tx, scope.OwnerID); err != nil {
+		return err
+	}
 	if _, err = tx.Exec(ctx, `UPDATE derived_views SET stale=true WHERE owner_id=$1 AND id=ANY($2::uuid[])`, string(scope.OwnerID), ids); err != nil {
 		return err
 	}
@@ -84,7 +87,7 @@ func invalidateTypedContextTx(ctx context.Context, tx pgx.Tx, scope memory.Scope
  WHERE owner_id=$1 AND (EXISTS(SELECT 1 FROM jsonb_array_elements(CASE WHEN jsonb_typeof(dependencies)='array' THEN dependencies ELSE '[]'::jsonb END) d WHERE d->>'id'=ANY($2::text[])) OR EXISTS(SELECT 1 FROM context_artifact_dependencies d WHERE d.owner_id=t.owner_id AND d.parent_kind='desk_turn' AND d.parent_id=t.id::text AND d.dependency_id=ANY($2::uuid[]) AND ($3::jsonb IS NULL OR d.recipient=$3)))`, string(scope.OwnerID), ids, recipient); err != nil {
 		return err
 	}
-	if _, err = tx.Exec(ctx, `UPDATE training_samples SET stale=true,state='excluded',document=document||jsonb_build_object('stale',true,'state','excluded','prompt','','response','') WHERE owner_id=$1 AND (memory_id=ANY($2::uuid[]) OR run_id IN(SELECT run_id FROM run_dependencies WHERE owner_id=$1 AND memory_id=ANY($2::uuid[])))`, string(scope.OwnerID), ids); err != nil {
+	if _, err = tx.Exec(ctx, `UPDATE training_samples t SET stale=true,state='excluded',document=document||jsonb_build_object('stale',true,'state','excluded','prompt','','response','') WHERE owner_id=$1 AND (memory_id=ANY($2::uuid[]) OR run_id IN(SELECT run_id FROM run_dependencies WHERE owner_id=$1 AND memory_id=ANY($2::uuid[])) OR EXISTS(SELECT 1 FROM context_artifact_dependencies d WHERE d.owner_id=t.owner_id AND d.dependency_id=ANY($2::uuid[]) AND ((d.parent_kind='training_sample' AND d.parent_id=t.id::text) OR (d.parent_kind IN('run','manual_package') AND d.parent_id=t.run_id::text))))`, string(scope.OwnerID), ids); err != nil {
 		return err
 	}
 	// Clear generated writing using the existing block ownership repair. It
@@ -92,6 +95,6 @@ func invalidateTypedContextTx(ctx context.Context, tx pgx.Tx, scope memory.Scope
 	if _, err = purgeArtifactsTx(ctx, tx, scope, ids); err != nil {
 		return err
 	}
-	_, err = tx.Exec(ctx, `UPDATE adopted_artifacts SET body='' WHERE owner_id=$1 AND run_id IN(SELECT run_id FROM run_dependencies WHERE owner_id=$1 AND memory_id=ANY($2::uuid[]))`, string(scope.OwnerID), ids)
+	_, err = tx.Exec(ctx, `UPDATE adopted_artifacts a SET body='' WHERE owner_id=$1 AND (run_id IN(SELECT run_id FROM run_dependencies WHERE owner_id=$1 AND memory_id=ANY($2::uuid[])) OR EXISTS(SELECT 1 FROM context_artifact_dependencies d WHERE d.owner_id=a.owner_id AND d.dependency_id=ANY($2::uuid[]) AND ((d.parent_kind IN('run','manual_package') AND d.parent_id=a.run_id::text) OR (d.parent_kind='artifact' AND d.parent_id=a.artifact_id))))`, string(scope.OwnerID), ids)
 	return err
 }

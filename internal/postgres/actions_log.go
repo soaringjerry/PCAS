@@ -273,13 +273,15 @@ func (s *Store) undoActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 					if scrubbed {
 						summary = "事项修改"
 					}
-					// Set only after both after fingerprints and the actual restored
-					// origins have passed. New audit fields are not in this snapshot.
-					restored, e := loadItemBlocksTx(ctx, tx, scope, item.ID)
-					if e != nil {
-						return e
+					// Legacy rows without a block fingerprint still restore normally,
+					// but cannot claim the double-fenced precise-restore shortcut.
+					if c.AfterBlocksHash != nil {
+						restored, e := loadItemBlocksTx(ctx, tx, scope, item.ID)
+						if e != nil {
+							return e
+						}
+						saveCtx = context.WithValue(ctx, restoredArtifactKey{}, restoredArtifactFields{ThingID: item.ID, Fields: restored})
 					}
-					saveCtx = context.WithValue(ctx, restoredArtifactKey{}, restoredArtifactFields{ThingID: item.ID, Fields: restored})
 				}
 				item.Version = current.Version + 1
 				item.UpdatedAt = stamp()

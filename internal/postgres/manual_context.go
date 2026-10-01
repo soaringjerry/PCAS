@@ -2,7 +2,6 @@ package postgres
 
 import (
 	"context"
-	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
@@ -74,7 +73,12 @@ func (s *Store) ManualRunPackage(ctx context.Context, scope memory.Scope, id str
 	if err = s.markContextAttemptDelivered(ctx, scope, attempt.ID); err != nil {
 		return nil, err
 	}
-	now := time.Now().UTC()
-	attempt.DeliveredAt = &now
+	attempt, err = scanContextAttempt(s.pool.QueryRow(ctx, "SELECT "+contextAttemptColumns+" FROM context_attempts WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), string(attempt.ID)))
+	if err != nil {
+		return nil, err
+	}
+	if attempt.State == memory.AttemptInvalidated || attempt.DeliveredAt == nil {
+		return nil, memory.ErrConflict
+	}
 	return map[string]any{"run_id": id, "package": body, "attempt": attempt}, nil
 }

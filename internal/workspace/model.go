@@ -157,19 +157,20 @@ func (m Memory) MarshalJSON() ([]byte, error) {
 }
 
 type Agent struct {
-	Default         bool     `json:"default,omitempty"`
-	Protocol        string   `json:"protocol,omitempty"`
-	Available       bool     `json:"available"`
-	InputPrice      float64  `json:"inputPrice"`
-	OutputPrice     float64  `json:"outputPrice"`
-	MaxOutput       int      `json:"maxOutput"`
-	ID              string   `json:"id"`
-	Name            string   `json:"name"`
-	Channel         string   `json:"channel"`
-	Note            string   `json:"note"`
-	Enabled         bool     `json:"enabled"`
-	MemoryKinds     []string `json:"memoryKinds"`
-	IncludeInferred bool     `json:"includeInferred"`
+	MemoryInitialized bool     `json:"memoryInitialized,omitempty"`
+	Default           bool     `json:"default,omitempty"`
+	Protocol          string   `json:"protocol,omitempty"`
+	Available         bool     `json:"available"`
+	InputPrice        float64  `json:"inputPrice"`
+	OutputPrice       float64  `json:"outputPrice"`
+	MaxOutput         int      `json:"maxOutput"`
+	ID                string   `json:"id"`
+	Name              string   `json:"name"`
+	Channel           string   `json:"channel"`
+	Note              string   `json:"note"`
+	Enabled           bool     `json:"enabled"`
+	MemoryKinds       []string `json:"memoryKinds"`
+	IncludeInferred   bool     `json:"includeInferred"`
 }
 type Settings struct {
 	AutoAccept    bool    `json:"autoAccept"`
@@ -199,6 +200,7 @@ type Adoption struct {
 	Edited   bool   `json:"edited"`
 }
 type Run struct {
+	Outdated         bool            `json:"outdated,omitempty"`
 	ID               string          `json:"id"`
 	ThingID          string          `json:"thingId"`
 	AgentID          string          `json:"agentId"`
@@ -350,4 +352,32 @@ type DeskTurn struct {
 type DeskSource struct {
 	Ref  memory.Ref `json:"ref"`
 	Text string     `json:"text"`
+}
+
+// MemoryQuery combines list filters; cursors keep a stable insertion boundary.
+type MemoryQuery struct {
+	Q         string
+	Entity    string
+	Nature    string
+	From      string
+	To        string
+	Project   string
+	Epistemic string
+	Agent     string
+	Cursor    string
+	Limit     int
+}
+type MemoryPage struct {
+	Items []Memory `json:"items"`
+	Next  string   `json:"next"`
+	Total int      `json:"total"`
+}
+type MemoryFacet struct {
+	EntityID string `json:"entityId"`
+	Name     string `json:"name"`
+	Count    int    `json:"count"`
+}
+type MemoryFacets struct {
+	People []MemoryFacet `json:"people"`
+	Places []MemoryFacet `json:"places"`
 }

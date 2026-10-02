@@ -19,8 +19,10 @@ var ErrLeaseLost = errors.New("job lease lost")
 // source text, provider responses or credentials. Retry asks for the queue's
 // bounded backoff; otherwise the job waits for an explicit retry.
 type JobError struct {
-	Code  string
-	Retry bool
+	Code      string
+	Retry     bool
+	Until     time.Time
+	NoAttempt bool
 }
 
 func (e *JobError) Error() string { return e.Code }
@@ -38,6 +40,10 @@ type Queue interface {
 	Claim(context.Context, time.Duration) (*Job, error)
 	Block(context.Context, Job, string) error
 	Retry(context.Context, Job, string) error
+}
+
+type deferredQueue interface {
+	Defer(context.Context, Job, string, time.Time, bool) error
 }
 
 // A handler commits its output and job acknowledgement in the same fenced
@@ -76,8 +82,24 @@ func (w *Worker) RunOnce(ctx context.Context) (bool, error) {
 	var failure *JobError
 	if errors.As(err, &failure) {
 		code, retry = failure.Code, failure.Retry
+		if !failure.Until.IsZero() {
+			queue, ok := w.queue.(deferredQueue)
+			if !ok {
+				return true, errors.New("queue does not support deferred jobs")
+			}
+			return true, ignoreLostLease(queue.Defer(ctx, *job, code, failure.Until, failure.NoAttempt))
+		}
+		if code == "provider_unavailable" {
+			retry = true
+		}
+		if code == "provider_not_configured" {
+			retry = false
+		}
 	} else if errors.Is(err, memory.ErrUnavailable) {
 		code, retry = "provider_not_configured", false
+		if strings.SplitN(job.Stage, ":", 2)[0] != "source.extract" {
+			code, retry = "provider_unavailable", true
+		}
 	}
 	w.logger.Warn("memory job failed", "job_id", job.ID, "stage", job.Stage, "attempt", job.Attempts, "error_type", code)
 	if retry {

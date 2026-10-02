@@ -31,6 +31,59 @@ type Options struct {
 }
 
 func (s *Server) workspaceRoutes(mux *http.ServeMux) {
+	if reader, ok := s.options.Workspace.(interface {
+		ListMemories(context.Context, memory.Scope, workspace.MemoryQuery) (workspace.MemoryPage, error)
+		GetMemory(context.Context, memory.Scope, string) (workspace.Memory, error)
+		MemoryFacets(context.Context, memory.Scope) (workspace.MemoryFacets, error)
+	}); ok {
+		mux.HandleFunc("GET /v1/workspace/memories", s.authorize(func(w http.ResponseWriter, r *http.Request, scope memory.Scope) {
+			if !scope.IsOwner {
+				s.fail(w, memory.ErrForbidden)
+				return
+			}
+			values := r.URL.Query()
+			q := workspace.MemoryQuery{Q: values.Get("q"), Entity: values.Get("entity"), Nature: values.Get("nature"), From: values.Get("from"), To: values.Get("to"), Project: values.Get("project"), Epistemic: values.Get("epistemic"), Agent: values.Get("agent"), Cursor: values.Get("cursor")}
+			if raw := values.Get("limit"); raw != "" {
+				n, err := strconv.Atoi(raw)
+				if err != nil || n < 1 {
+					s.fail(w, memory.ErrInvalid)
+					return
+				}
+				q.Limit = n
+			}
+			out, err := reader.ListMemories(r.Context(), scope, q)
+			if err != nil {
+				s.fail(w, err)
+				return
+			}
+			writeJSON(w, 200, out)
+		}))
+		mux.HandleFunc("GET /v1/workspace/memories/{id}", s.authorize(func(w http.ResponseWriter, r *http.Request, scope memory.Scope) {
+			if !scope.IsOwner {
+				s.fail(w, memory.ErrForbidden)
+				return
+			}
+			out, err := reader.GetMemory(r.Context(), scope, r.PathValue("id"))
+			if err != nil {
+				s.fail(w, err)
+				return
+			}
+			writeJSON(w, 200, out)
+		}))
+		mux.HandleFunc("GET /v1/workspace/memory-facets", s.authorize(func(w http.ResponseWriter, r *http.Request, scope memory.Scope) {
+			if !scope.IsOwner {
+				s.fail(w, memory.ErrForbidden)
+				return
+			}
+			out, err := reader.MemoryFacets(r.Context(), scope)
+			if err != nil {
+				s.fail(w, err)
+				return
+			}
+			writeJSON(w, 200, out)
+		}))
+	}
+
 	mux.HandleFunc("GET /v1/workspace/items/{id}/retained-writing", s.authorize(func(w http.ResponseWriter, r *http.Request, scope memory.Scope) {
 		reader, ok := s.options.Workspace.(interface {
 			RetainedWriting(context.Context, memory.Scope, string) ([]map[string]string, error)

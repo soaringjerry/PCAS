@@ -4,7 +4,7 @@
 
 执行者 T3；工作区 `/root/PCAS-wt/b3-T3`，分支 `phase2/b3-T3-acceptance`。只按契约编写测试，未阅读 Q1/Q2/K 的实现，未修改产品代码、已有测试或它们的预期。
 
-正式验收 **待协调者通知**；本报告没有将测试已写或静态检查通过记为验收通过。集成分支的被测提交号、统一 `make check` 和浏览器运行结果届时填写。当前未运行 P/S/K/V 验收。首轮交付变基到 `origin/phase2/batch3` 的 `1cec28b`（当时 Q1 尚未合入），随后按通知变基到 `b7340fe`。本次 K5/K9/K10/K11 补充已变基到最新集成提交 `de59215`。
+正式验收 **待协调者通知**；本报告没有将测试已写或静态检查通过记为验收通过。集成分支的被测提交号、统一 `make check` 和浏览器运行结果届时填写。当前未运行 P/S/K/V 验收。首轮交付变基到 `origin/phase2/batch3` 的 `1cec28b`（当时 Q1 尚未合入），随后按通知变基到 `b7340fe`。K5/K9/K10/K11 补充当时变基到集成提交 `de59215`；本次 R12a 补充已变基到 `origin/phase2/batch3` 的 `41960e9`。
 
 初始基线 `66b1a43`；按用户裁定 fetch 了契约提交 `586541120729befc81cb7e15aac7706fd0124516`。在该提交的产品代码上，用自建 `pgvector/pgvector:0.8.2-pg16-bookworm` tmpfs 容器、随机本机端口及 `testStore` 的独立 schema 采集 S6/S10 改动前基准。只使用本机假模型，未读取 `/root/PCAS/.env` 或 `config/`，未调用真实模型、线上库或真实通知。临时采集程序及容器已清理。两组 S6 分别使用新 schema，避免第一次采集自己产生的原话污染第二组输入。
 
@@ -28,9 +28,10 @@
 | S3 | 同上 | `S3_RelaxTimeOnlyWhenEntityMatches`：错年放宽与 R8 原句；正常年份和只有时间时不加说明 |
 | S4 | 同上 | `S4_TimeOnlyNaturePriorityAndSaidAxis`：保留「我上周说了什么计划」，我不构成实体条件；性质、said/either、半开事件边界 |
 | S5 | 同上 | `S5_EntityOnlyAcrossYears`：跨年的实体命中先于词法补漏 |
-| S6 | `internal/postgres/phase2_b3_compatibility_test.go` | `S6_NoConditionsPreserveBaselineBytesAndOnlyAppendMetadata`：旧字段组逐字相同；新字段组剥去精确的行尾 R12 追加后逐字相同 |
+| S6 | `internal/postgres/phase2_b3_compatibility_test.go` | `S6_NoConditionsPreserveBaselineBytesAndOnlyAppendMetadata`：旧字段组逐字相同；新字段组剥去精确的行尾 R12 追加后逐字相同；另见新增预算边界测试 |
 | S7 | `internal/postgres/phase2_b3_retrieval_test.go` | `S7_AllExistingFiltersApplyToStructuredHits`：类别、推测、事项排除、项目及可见性；允许项正例和受限原话负例 |
-| S8 | 同上 | `S8_SixtyHitsKeepTopTwentyAndExcerptBudget`：60 条留排序最前 20 条；实际摘录不超过 6 段/2400 字符，完成请求 |
+| S8 | 同上 | `S8_SixtyHitsKeepTopTwentyAndExcerptBudget`：60 条留排序最前 20 条；实际摘录不超过 6 段/2400 字符，完成请求；另见新增长元数据测试 |
+| S6/S8 补充 | `internal/postgres/phase2_b3_metadata_budget_test.go` | `S6_MetadataDoesNotConsumeDeputyOrManualByteBudget`：副手/手动、旧字段/新字段四组；剥去精确追加后完整交接内容与旧基准逐字相同，依赖相同，追加后可超过 30000 字节。`S8_LargeMetadataStillKeepsTheSameTopTwenty`：60 条带完整长元数据的命中仍保留前 20 条，后 40 条和依赖排除，正常完成 |
 | S9 | 同上 | `S9_SecretaryDeputyManualShareStructuredPrefix`：秘书实际 HTTP 请求、副手实际 HTTP 请求、手动转交 brief 及依赖。手动通道没有模型调用，不能声称抓到它的模型请求 |
 | S10 | `internal/postgres/phase2_b3_compatibility_test.go` | `S10_PublicRecallFifteenRequestsByteIdentical`：15 组 HTTP 状态和完整响应逐字节比较，无 JSON/ID 归一化 |
 | S11 | `internal/postgres/phase2_b3_retrieval_test.go` | `S11_StructuredDependencyCorrectionMarksTurnOutdated`：真实依赖和更正后的 outdated，保留原回答卡片回执 |
@@ -53,7 +54,7 @@
 
 ## 规则位置和检查
 
-R1–R4：P 序列；R5：S9/S10/S13；R6：S4/S5/S12；R7：S1/S4/S5；R8：S3；R9：S2/S6；R10：S2/S7；R11：S8；R12：S1/S6/V3；R13：S2/S7/S8/S9/S11；R14：K1/K5/K7/K11；R15：K2/K3/K6/K8/K9/K10；R16：K4；R17：V1–V3。
+R1–R4：P 序列；R5：S9/S10/S13；R6：S4/S5/S12；R7：S1/S4/S5；R8：S3；R9：S2/S6；R10：S2/S7；R11：S8；R12：S1/S6/V3；R12a：S6/S8 的 metadata_budget 补充；R13：S2/S7/S8/S9/S11；R14：K1/K5/K7/K11；R15：K2/K3/K6/K8/K9/K10；R16：K4；R17：V1–V3。
 
 - PostgreSQL 测试的 `go test ./internal/postgres -run '^$'` 编译检查通过；没有运行验收函数。
 - 首轮 P 序列的同类编译检查报 `undefined: PlanQuery`：当时基线上 Q1 尚未合入。没有添加产品 stub、构建标签或 Skip 来绕过；Q1 合入后再检查。
@@ -80,3 +81,13 @@ K10 当场真实撤销秘书创建事项，断言原事项数据库行已消失�
 K11 用真实秘书入口产生原话，再直接设置其表达时间为空、记录时间为相对今天 45 天前；旧记忆自身表达时间为空，与有自己说话日期的 40 天前记忆一起引用。断言原话记录时间成为 `at`，正确排在后者前面，覆盖悉尼和上海。
 
 本轮只做 PostgreSQL 测试编译（`go test ./internal/postgres -run '^$'`）、gofmt、`git diff --check`、冻结预期只增不改及 31 个 P/S/K 编号覆盖审计；没有运行任何验收函数，继续等待协调者通知。
+
+## 2e2b8f9 / R12a 的测试补充（待正式运行）
+
+S6、S8 已有预期保持不变。本轮先在第 3 批之前的 `586541120729befc81cb7e15aac7706fd0124516` 上补采 S6 的交接字节边界基准，仍使用自建 tmpfs pgvector 容器、随机本机端口、独立 schema 和本机假模型。只采集旧字段组；副手与手动的交接内容逐字相同，都是 29830 字节，保留两条记忆和一段原话。冻结模板只用占位符无损表示 29200 个固定 notes 字节，展开后另用观测 SHA-256 校验；被测内容不做 ID、空白或其他字节归一化。采集工作区、临时程序和容器已清理。
+
+在 `metadataBudgetRuling` 中先追加并提交冻结预期，再写补充测试。S6 记忆带 R12 时间、地点、人后，应为 32352 字节；大于原 30000 字节上限是允许的。四组使用各自新 schema；模型组从真实 HTTP 请求中检查完整交接内容，手动组检查 Brief 且不得调用模型。仅剥去两条记忆行的精确 R12 后缀后，完整内容须与旧基准逐字相同，包括原话行和顺序；ContextVersions 和实际 run_dependencies 保留原三条依赖。
+
+S8 补充用 60 条独立结构化命中，按说话时间构造前 20 条的顺序。每条增加时间、事件月份、长地点和人名；实际交给模型的记忆行累计超过 30000 字节，仍须完整保留前 20 条及其元数据，排除后 40 条，记录 20 条记忆依赖并正常回复。原有 S8 的原话 6 段/2400 字符检查保留。
+
+本轮 `go test ./internal/postgres ./internal/memory -run '^$'` 编译通过，未运行验收函数；冻结文件只增不改审计、gofmt 和 `git diff --check` 通过。继续等待协调者通知正式验收。

@@ -477,7 +477,7 @@ func sourceExcerpt(text, query string, tokens []string, limit int) string {
 	if len(runes) <= limit {
 		return text
 	}
-	start, end := matchedExcerptRange(text, query, tokens, limit-2)
+	start, end := sourceExcerptRange(text, query, tokens, limit-2)
 	excerpt := string(runes[start:end])
 	if start > 0 {
 		excerpt = "…" + excerpt
@@ -488,9 +488,101 @@ func sourceExcerpt(text, query string, tokens []string, limit int) string {
 	return excerpt
 }
 
+// Score windows anchored before each hit by distinct query words. Merge each word's
+// matching window intervals so repeated occurrences only contribute one vote.
+func sourceExcerptRange(text, query string, tokens []string, limit int) (int, int) {
+	lower := strings.ToLower(text)
+	if query != "" && strings.Contains(lower, strings.ToLower(query)) {
+		return matchedExcerptRange(text, query, tokens, limit)
+	}
+	length := len([]rune(text))
+	if length <= limit {
+		return 0, length
+	}
+	// Substring searches use bytes; all window bounds use Unicode characters.
+	positions := make([]int, len(lower)+1)
+	character := 0
+	for byteIndex := range lower {
+		positions[byteIndex] = character
+		character++
+	}
+	positions[len(lower)] = character
+	lastStart := length - limit
+	votes := make([]int, lastStart+2)
+	candidates := make([]bool, lastStart+1)
+	prefix := min(200, limit/4)
+	seen := map[string]bool{}
+	matches := 0
+	for _, token := range tokens {
+		token = strings.ToLower(token)
+		width := len([]rune(token))
+		if width <= 1 || seen[token] {
+			continue
+		}
+		seen[token] = true
+		left, right := -1, -1
+		for offset := 0; offset < len(lower); {
+			found := strings.Index(lower[offset:], token)
+			if found < 0 {
+				break
+			}
+			at := offset + found
+			offset = at + 1
+			matches++
+			candidates[min(max(0, positions[at]-prefix), lastStart)] = true
+			first := max(0, positions[at]+width-limit)
+			last := min(positions[at], lastStart)
+			if first > last {
+				continue
+			}
+			if left < 0 {
+				left, right = first, last
+			} else if first <= right+1 {
+				right = max(right, last)
+			} else {
+				votes[left]++
+				votes[right+1]--
+				left, right = first, last
+			}
+		}
+		if left >= 0 {
+			votes[left]++
+			votes[right+1]--
+		}
+	}
+	// Keep the existing amount of preceding context for a single hit.
+	if matches == 1 {
+		return matchedExcerptRange(text, query, tokens, limit)
+	}
+	start, best, score := 0, -1, 0
+	for candidate := 0; candidate <= lastStart; candidate++ {
+		score += votes[candidate]
+		if candidates[candidate] && score > best {
+			start, best = candidate, score
+		}
+	}
+	return start, start + limit
+}
+
+// teamSourceVisibleSQL follows explicit visibility and item exclusions on any
+// currently applicable claim evidenced by the source. Its arguments are trusted
+// SQL expressions, never request values; category and project filters do not apply.
+func teamSourceVisibleSQL(ownerID, sourceID, principalID, thingID string) string {
+	return fmt.Sprintf(`NOT EXISTS (
+ SELECT 1 FROM evidence source_evidence
+ JOIN applicable_claim_versions(%[1]s,now(),now()) source_claim
+ ON (source_claim.claim_id,source_claim.version)=(source_evidence.target_id,source_evidence.target_version)
+ WHERE source_evidence.owner_id=%[1]s AND source_evidence.source_id=%[2]s
+ AND (NOT EXISTS (SELECT 1 FROM record_grants source_grant
+  WHERE source_grant.owner_id=source_evidence.owner_id AND source_grant.record_id=source_evidence.target_id AND source_grant.principal_id=%[3]s)
+ OR EXISTS (SELECT 1 FROM context_exclusions source_exclusion
+  WHERE source_exclusion.owner_id=source_evidence.owner_id AND source_exclusion.memory_id=source_evidence.target_id AND source_exclusion.thing_id=%[4]s::uuid))
+)`, ownerID, sourceID, principalID, thingID)
+}
+
 // Pick one current, readable excerpt per source, preserving retrieval rank.
 // Recheck only record metadata here: the matched text is already in Recall.
-func teamSourceExcerptsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, excerpts []memory.RecallExcerpt, historyRequests []string, maxSegments, maxCharacters int) ([]memory.RecallExcerpt, error) {
+func teamSourceExcerptsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, principal string, thingID *string, excerpts []memory.RecallExcerpt, historyRequests []string, maxSegments, maxCharacters int) ([]memory.RecallExcerpt, error) {
 	ids := []memory.ID{}
 	for _, excerpt := range excerpts {
 		if excerpt.Kind == memory.SourceKind {
@@ -503,7 +595,8 @@ func teamSourceExcerptsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, ex
 	}
 	rows, err := tx.Query(ctx, `SELECT r.id::text,r.version FROM memory_records r
  JOIN record_versions v ON (v.owner_id,v.record_id,v.version)=(r.owner_id,r.id,r.version)
- WHERE r.owner_id=$1 AND r.id=ANY($2::uuid[]) AND r.kind='source' AND r.state='active' AND v.state='active'`, string(scope.OwnerID), ids)
+ WHERE r.owner_id=$1 AND r.id=ANY($2::uuid[]) AND r.kind='source' AND r.state='active' AND v.state='active'
+ AND `+teamSourceVisibleSQL("$1", "r.id", "$3", "$4"), string(scope.OwnerID), ids, principal, thingID)
 	if err != nil {
 		return nil, err
 	}

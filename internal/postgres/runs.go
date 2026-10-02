@@ -155,7 +155,7 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 		}
 		loc := deskLocation(settings)
 		fmt.Fprintln(&brief, "\n相关原话：")
-		sources, err := teamSourceExcerptsTx(ctx, tx, scope, excerpts, historyRequests, 8, 4000)
+		sources, err := teamSourceExcerptsTx(ctx, tx, scope, agent.ID, &item.ID, excerpts, historyRequests, 8, 4000)
 		if err != nil {
 			return err
 		}
@@ -394,8 +394,12 @@ func verifyRunForItemTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run 
 	}
 	for _, ref := range uniqueRefs(run.ContextVersions) {
 		if ref.Kind == memory.SourceKind {
+			var thingID *string
+			if item != nil && item.ID != "" {
+				thingID = &item.ID
+			}
 			var currentVersion int
-			if err := tx.QueryRow(ctx, "SELECT r.version FROM memory_records r JOIN record_versions v ON (v.owner_id,v.record_id,v.version)=(r.owner_id,r.id,r.version) WHERE r.owner_id=$1 AND r.id=$2 AND r.kind='source' AND r.state='active' AND v.state='active'", string(scope.OwnerID), string(ref.ID)).Scan(&currentVersion); err != nil || currentVersion != ref.Version {
+			if err := tx.QueryRow(ctx, "SELECT r.version FROM memory_records r JOIN record_versions v ON (v.owner_id,v.record_id,v.version)=(r.owner_id,r.id,r.version) WHERE r.owner_id=$1 AND r.id=$2 AND r.kind='source' AND r.state='active' AND v.state='active' AND "+teamSourceVisibleSQL("$1", "r.id", "$3", "$4"), string(scope.OwnerID), string(ref.ID), run.AgentID, thingID).Scan(&currentVersion); err != nil || currentVersion != ref.Version {
 				return memory.ErrConflict
 			}
 			continue

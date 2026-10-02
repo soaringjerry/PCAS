@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -18,6 +19,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/ai"
 	"github.com/soaringjerry/PCAS/internal/httpapi"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/testsupport"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -27,7 +29,7 @@ func TestCodexSecretaryAndLegacyFormats(t *testing.T) {
 	}
 	dir := t.TempDir()
 	binary := filepath.Join(dir, "fake-codex")
-	script := `#!/usr/bin/env python3
+	script := fmt.Sprintf(`#!/usr/bin/env python3
 import sys,json
 system=''
 web=False
@@ -50,7 +52,7 @@ for line in sys.stdin:
    assert set(schema['required'])==set(props) and schema['additionalProperties']==False
    variants=props['actions']['items']['anyOf']
    assert {v['properties']['op']['enum'][0] for v in variants}=={'create_task','update','create_idea','create_project','add_steps','delegate'}
-   value={'reply':'安排好了。','used':[],'links':[],'show':[],'remember':False,'actions':[{'op':'create_task','title':'给张三回邮件','due':'2026-10-02T15:00','remind':None,'project':None,'notes':None,'owedTo':None,'waitingFor':None}],'ask':None}
+   value={'reply':'安排好了。','used':[],'links':[],'show':[],'remember':False,'actions':[{'op':'create_task','title':'给张三回邮件','due':'%s','remind':None,'project':None,'notes':None,'owedTo':None,'waitingFor':None}],'ask':None}
   elif '导办台' in system:
    assert web and 'outputSchema' not in p
    value={'answer':'没有相关记录。','used':[],'links':[]}
@@ -63,7 +65,7 @@ for line in sys.stdin:
  if method=='turn/start':
   emit({'method':'item/completed','params':{'threadId':'thread','item':{'type':'agentMessage','text':text}}})
   emit({'method':'turn/completed','params':{'threadId':'thread','turn':{'status':'completed'}}})
-`
+`, testsupport.DateFromToday(t, "Asia/Shanghai", 1, 15, 0).Format("2006-01-02T15:04"))
 	if err := os.WriteFile(binary, []byte(script), 0700); err != nil {
 		t.Fatal(err)
 	}
@@ -100,11 +102,8 @@ func exerciseCodexFormats(t *testing.T, binary, home string, live bool) {
 	workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: asJSON(map[string]string{"timezone": "Asia/Shanghai", "city": "上海"})})
 	req := turnRequest("明天下午三点给张三回邮件")
 	req.AgentID = "chatgpt"
-	loc, _ := time.LoadLocation("Asia/Shanghai")
-	expected := time.Date(2026, 10, 2, 15, 0, 0, 0, loc)
+	expected := testsupport.DateFromToday(t, "Asia/Shanghai", 1, 15, 0)
 	if live {
-		expected = time.Now().In(loc).AddDate(0, 0, 1)
-		expected = time.Date(expected.Year(), expected.Month(), expected.Day(), 15, 0, 0, 0, loc)
 		var prompt string
 		err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 			context, err := s.secretaryContextTx(ctx, tx, scope, req, string(memory.NewID()))

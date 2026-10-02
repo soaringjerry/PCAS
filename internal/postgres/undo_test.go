@@ -6,6 +6,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/ai"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/testsupport"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 	"net/http"
 	"net/http/httptest"
@@ -172,15 +173,15 @@ func TestDueReminderTracksCommandDue(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		item.Due = "2026-10-02T07:00:00Z"
+		item.Due = testsupport.DateFromToday(t, "Asia/Shanghai", 1, 15, 0).UTC().Format(time.RFC3339)
 		applyDueReminder(&item, "-30m", loc)
 		return saveItem(ctx, tx, scope, item)
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	st = workspaceCommand(t, s, scope, workspace.Command{Type: "updateTask", ID: id, Patch: asJSON(map[string]string{"due": "2026-10-05T02:00:00Z"})})
-	if len(st.Tasks[0].Triggers) != 1 || st.Tasks[0].Triggers[0].NextAt != "2026-10-05T01:30:00Z" {
+	st = workspaceCommand(t, s, scope, workspace.Command{Type: "updateTask", ID: id, Patch: asJSON(map[string]string{"due": testsupport.DateFromToday(t, "Asia/Shanghai", 4, 10, 0).UTC().Format(time.RFC3339)})})
+	if len(st.Tasks[0].Triggers) != 1 || st.Tasks[0].Triggers[0].NextAt != testsupport.DateFromToday(t, "Asia/Shanghai", 4, 10, 0).Add(-30*time.Minute).UTC().Format(time.RFC3339) {
 		t.Fatal(st.Tasks[0].Triggers)
 	}
 	st = workspaceCommand(t, s, scope, workspace.Command{Type: "updateTask", ID: id, Patch: asJSON(map[string]string{"due": ""})})
@@ -190,8 +191,8 @@ func TestDueReminderTracksCommandDue(t *testing.T) {
 }
 func TestDueReminderOffsets(t *testing.T) {
 	loc, _ := time.LoadLocation("Asia/Shanghai")
-	for _, tc := range []struct{ offset, next string }{{"-2h", "2026-10-02T05:00:00Z"}, {"at", "2026-10-02T07:00:00Z"}, {"09:00", "2026-10-02T01:00:00Z"}} {
-		item := workspace.Item{Title: "邮件", Due: "2026-10-02T07:00:00Z", Triggers: []workspace.Trigger{{ID: "other"}}}
+	for _, tc := range []struct{ offset, next string }{{"-2h", testsupport.DateFromToday(t, "Asia/Shanghai", 1, 15, 0).Add(-2 * time.Hour).UTC().Format(time.RFC3339)}, {"at", testsupport.DateFromToday(t, "Asia/Shanghai", 1, 15, 0).UTC().Format(time.RFC3339)}, {"09:00", testsupport.DateFromToday(t, "Asia/Shanghai", 1, 9, 0).UTC().Format(time.RFC3339)}} {
+		item := workspace.Item{Title: "邮件", Due: testsupport.DateFromToday(t, "Asia/Shanghai", 1, 15, 0).UTC().Format(time.RFC3339), Triggers: []workspace.Trigger{{ID: "other"}}}
 		applyDueReminder(&item, tc.offset, loc)
 		if len(item.Triggers) != 2 || item.Triggers[1].NextAt != tc.next || item.Triggers[1].Offset != tc.offset {
 			t.Fatal(item.Triggers)

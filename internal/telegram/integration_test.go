@@ -3,6 +3,7 @@ package telegram
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -16,6 +17,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/blob"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres"
+	"github.com/soaringjerry/PCAS/internal/testsupport"
 )
 
 // These tests use only the disposable database explicitly supplied by the runner.
@@ -50,7 +52,7 @@ func TestIntegrationDeskTurnReplayAndUndo(t *testing.T) {
 	var calls atomic.Int32
 	model := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
-		content := `{"reply":"安排好了","actions":[{"op":"create_task","title":"开会","due":"2026-10-02T15:00"}]}`
+		content := fmt.Sprintf(`{"reply":"安排好了","actions":[{"op":"create_task","title":"开会","due":"%s"}]}`, testsupport.DateFromToday(t, "Asia/Shanghai", 1, 15, 0).Format("2006-01-02T15:04"))
 		_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": map[string]string{"content": content}}}})
 	}))
 	defer model.Close()

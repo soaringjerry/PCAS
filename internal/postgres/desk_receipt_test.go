@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/soaringjerry/PCAS/internal/testsupport"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -31,7 +32,7 @@ func TestSecretaryReceiptsOmitOnlyCurrentThingTitle(t *testing.T) {
 			secretaryModel(t, s, func(w http.ResponseWriter, r *http.Request) {
 				secretaryModelReply(w, secretaryOutput{Actions: []secretaryAction{
 					{Op: "add_steps", Ref: tc.ref, Steps: []string{"核对", "准备", "发送"}},
-					{Op: "update", Ref: tc.ref, Set: map[string]json.RawMessage{"due": asJSON("2026-10-05T10:00")}},
+					{Op: "update", Ref: tc.ref, Set: map[string]json.RawMessage{"due": asJSON(testsupport.DateFromToday(t, "Asia/Shanghai", 4, 10, 0).Format("2006-01-02T15:04"))}},
 					{Op: "update", Ref: tc.ref, Set: map[string]json.RawMessage{"status": asJSON("done")}},
 				}})
 			})
@@ -44,7 +45,7 @@ func TestSecretaryReceiptsOmitOnlyCurrentThingTitle(t *testing.T) {
 			if tc.ref == "T2" {
 				title = "另一件安排"
 			}
-			date := localDeskDate("2026-10-05T02:00:00Z", loc)
+			date := localDeskDate(testsupport.DateFromToday(t, "Asia/Shanghai", 4, 10, 0).UTC().Format(time.RFC3339), loc)
 			want := []string{"给「" + title + "」加了 3 步", "已改：" + title + " → " + date, "已完成：" + title}
 			if tc.short {
 				want = []string{"加了 3 步", "已改：→ " + date, "已完成"}

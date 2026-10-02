@@ -496,10 +496,6 @@ func TestSecretaryRejectsStaleRowsAndKeepsOriginalOnCancellation(t *testing.T) {
 			var id string
 			requestCtx, cancel := context.WithCancel(context.Background())
 			defer cancel()
-			if mode == "timeout" {
-				requestCtx, cancel = context.WithTimeout(context.Background(), 100*time.Millisecond)
-				defer cancel()
-			}
 			secretaryModel(t, s, func(w http.ResponseWriter, r *http.Request) {
 				if mode == "stale" {
 					workspaceCommand(t, s, scope, workspace.Command{Type: "renameThing", ID: id, Title: "后来的名称"})
@@ -516,6 +512,10 @@ func TestSecretaryRejectsStaleRowsAndKeepsOriginalOnCancellation(t *testing.T) {
 			st := workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "原名称"})
 			id = st.Tasks[0].ID
 			req := turnRequest("  帮我改名称  ")
+			if mode == "timeout" {
+				requestCtx, cancel = context.WithTimeout(context.Background(), 100*time.Millisecond)
+				defer cancel()
+			}
 			out, err := s.DeskTurn(requestCtx, scope, req)
 			if err != nil || len(out.Turn.Receipts) != 1 || out.Turn.Receipts[0].Op != "capture" || out.Turn.Text != req.Text {
 				t.Fatal(err, out)

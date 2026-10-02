@@ -570,7 +570,7 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 			if answer.Remember {
 				out.Turn.Receipts = append(out.Turn.Receipts, workspace.DeskReceipt{Op: "remember", Text: "记下了，会整理进记忆", Status: "done"})
 			}
-			out.Turn.Cards, err = s.secretaryCardsTx(ctx, tx, scope, answer, sent, c.Sources, c.Aliases, deskLocation(c.Settings))
+			out.Turn.Cards, err = s.secretaryCardsTx(ctx, tx, scope, answer, sent, c.Sources, c.Aliases, deskLocation(c.Settings), false)
 			if err != nil {
 				return err
 			}

@@ -31,7 +31,7 @@ test('W4 真实后端：历史导入、暂停、继续至完成，在资料库�
   await page.locator('input[type="file"]').last().setInputFiles({ name: `${prefix}.json`, mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(conversations)) })
   const preview = await previewResponse
   expect(preview.ok(), await preview.text()).toBeTruthy()
-  expect(await preview.json()).toMatchObject({ conversations: count, messages: count, fromUser: count, alreadyImported: 0, leftOut: 0 })
+  expect(await preview.json()).toMatchObject({ conversations: count, messages: count, fromUser: count, alreadyImported: 0, leftOut: 0, blocked: 0 })
   await expect(page.getByText(/2[,]?000/).first()).toBeVisible()
   const importResponse = page.waitForResponse(r => new URL(r.url()).pathname === '/v1/connectors/archive' && r.request().method() === 'POST')
   await page.getByRole('button', { name: /确认导入|开始导入|^确认$/ }).click()

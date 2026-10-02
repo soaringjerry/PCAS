@@ -208,6 +208,28 @@ type b4Fake struct {
 	requests []b1Request
 	reply    string
 	status   int
+	gate     *b4ModelGate
+}
+
+type b4ModelGate struct {
+	started      chan b1Request
+	release      chan struct{}
+	returned     chan struct{}
+	unblockOnce  sync.Once
+	returnedOnce sync.Once
+}
+
+func (g *b4ModelGate) unblock() { g.unblockOnce.Do(func() { close(g.release) }) }
+func b4HoldModel(t *testing.T, f *b4Fake) *b4ModelGate {
+	t.Helper()
+	g := &b4ModelGate{started: make(chan b1Request, 1), release: make(chan struct{}), returned: make(chan struct{})}
+	f.mu.Lock()
+	f.gate = g
+	f.mu.Unlock()
+	// Registered after the fake server cleanup, so a failing assertion cannot
+	// leave its HTTP handler blocked while httptest waits for it to stop.
+	t.Cleanup(g.unblock)
+	return g
 }
 
 func b4Model(t *testing.T, s *Store) *b4Fake {
@@ -239,8 +261,19 @@ func b4Model(t *testing.T, s *Store) *b4Fake {
 		}
 		f.mu.Lock()
 		f.requests = append(f.requests, req)
-		status, reply := f.status, f.reply
+		status, reply, gate := f.status, f.reply, f.gate
 		f.mu.Unlock()
+		if gate != nil {
+			select {
+			case gate.started <- req:
+			default:
+			}
+			select {
+			case <-gate.release:
+			case <-r.Context().Done():
+				return
+			}
+		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(status)
 		if status != 200 {
@@ -248,6 +281,9 @@ func b4Model(t *testing.T, s *Store) *b4Fake {
 			return
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{"model": usage.Model, "choices": []any{map[string]any{"message": map[string]string{"content": reply}}}, "usage": map[string]int{"prompt_tokens": usage.InputTokens, "completion_tokens": usage.OutputTokens}})
+		if gate != nil {
+			gate.returnedOnce.Do(func() { close(gate.returned) })
+		}
 	}))
 	t.Cleanup(server.Close)
 	s.SetModels(&ai.Registry{HTTP: server.Client(), Config: ai.Configuration{Extraction: "model", Providers: []ai.Provider{{ID: "model", Name: "验收假模型", Protocol: "openai", BaseURL: server.URL, Model: usage.Model, MaxOutput: 4096, CostMode: "token", InputPerMillion: usage.InputPrice, OutputPerMillion: usage.OutputPrice}}}})
@@ -394,6 +430,7 @@ func b4RoleAndTime(t *testing.T, s *Store, scope memory.Scope, ref memory.Ref, r
 type b4Preview struct {
 	Name                                                        string
 	Conversations, Messages, FromUser, AlreadyImported, LeftOut int
+	Blocked                                                     int
 	Earliest, Latest                                            string
 	Gaps                                                        []string
 }
@@ -402,6 +439,11 @@ func b4PreviewFile(t *testing.T, s *Store, scope memory.Scope, filename string, 
 	t.Helper()
 	response := b4Upload(t, b4API(s, scope, true), "/v1/connectors/archive/preview", filename, data)
 	b4OK(t, response)
+	var fields map[string]json.RawMessage
+	b4JSON(t, response.Body.Bytes(), &fields)
+	if _, ok := fields["blocked"]; !ok {
+		t.Error("preview is missing the frozen blocked field")
+	}
 	var preview b4Preview
 	b4JSON(t, response.Body.Bytes(), &preview)
 	return preview

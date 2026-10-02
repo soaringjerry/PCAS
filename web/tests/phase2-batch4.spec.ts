@@ -18,7 +18,7 @@ function batch(state: Batch['state']): Batch {
     organized: state === 'done' ? 300 : 25, leftOut: 2, earliest: preview.earliest, latest: preview.latest,
     errorCode: state === 'failed' ? 'invalid_json' : '', error: state === 'failed' ? '聊天文件没有读完，请继续导入。' : '', createdAt: at, updatedAt: at }
 }
-async function mock(page: Page, initial: Batch[] = [], failure?: { error: string; message: string; status: number }) {
+async function mock(page: Page, initial: Batch[] = [], failure?: { error: string; message: string; status: number }, importPreview = { ...preview, blocked: 0 }) {
   const state: State = {
     version: 1, revision: 1, budgetUsage: 0, notices: [],
     settings: { dailyBudget: 10, autoAccept: false, wakeIdeas: false, followUps: false, dailyReviewAt: '09:00', timezone: 'Asia/Shanghai' },
@@ -46,10 +46,10 @@ async function mock(page: Page, initial: Batch[] = [], failure?: { error: string
     }
     if (path === '/v1/connectors/archive/preview' && method === 'POST') {
       if (failure) return route.fulfill({ status: failure.status, json: { error: failure.error, message: failure.message } })
-      return route.fulfill({ json: preview })
+      return route.fulfill({ json: importPreview })
     }
     if (path === '/v1/connectors/archive' && method === 'POST') {
-      items.unshift({ ...batch('importing'), total: preview.messages - preview.leftOut, stored: 0, organized: 0 })
+      items.unshift({ ...batch('importing'), total: importPreview.messages - importPreview.alreadyImported - importPreview.leftOut - importPreview.blocked, stored: 0, organized: 0 })
       return route.fulfill({ status: 202, json: { batchId: items[0].id, imported: 0, refs: [], gaps: preview.gaps } })
     }
     const action = path.match(/^\/v1\/connectors\/imports\/([^/]+)\/(pause|resume)$/)
@@ -84,6 +84,23 @@ async function noInternals(page: Page) {
 test.use({ viewport: { width: 390, height: 844 }, timezoneId: 'Asia/Shanghai' })
 test.afterEach(async ({ page }, info) => {
   await info.attach('b4-ui', { body: await page.screenshot({ fullPage: true, animations: 'disabled' }), contentType: 'image/png' })
+})
+
+test('W1 被禁止重新导入的消息单列，显示这次实际导入数量', async ({ page }) => {
+  const supplement = gold.coordinator_amendment_2e2b8f9
+  const p = supplement.blockedPreview
+  const m = await mock(page, [], undefined, p)
+  await open(page)
+  await choose(page)
+  await expect.poll(() => m.requests.filter(r => r.path === '/v1/connectors/archive/preview' && r.method === 'POST').length).toBe(1)
+  const body = page.locator('body')
+  await expect(body).toContainText(/不再导入|禁止.*导入|禁止.*重新|跳过|已删除/)
+  await expect(page.getByText(/(?:本次|这次|将|可).*8.*(?:条|消息)|(?:本次|这次|将|可).*导入.*8/).first()).toBeVisible()
+  expect(p.messages - p.alreadyImported - p.leftOut - p.blocked).toBe(supplement.blockedWillImport)
+  expect(m.requests.filter(r => r.path === '/v1/connectors/archive' && r.method === 'POST')).toHaveLength(0)
+  await noOverflow(page)
+  await noInternals(page)
+  expect(m.errors).toEqual([])
 })
 
 test('W1 文件选择先预览：数量、时间、已导过和放不下；确认前无导入', async ({ page }) => {

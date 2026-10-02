@@ -12,12 +12,229 @@ import (
 	"os"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/worker"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
+
+func b4SecondUsageAmendment(t *testing.T) map[string]string {
+	t.Helper()
+	raw, err := os.ReadFile("../../testdata/phase2/b4-gold.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var gold struct {
+		Amendment struct{ Fixtures map[string]string } `json:"coordinator_amendment_2e2b8f9"`
+	}
+	b4JSON(t, raw, &gold)
+	return gold.Amendment.Fixtures
+}
+
+func TestPhase2B4_L8_CorrectedMemoryDuringDeputyGenerationKeepsReturnedUsage(t *testing.T) {
+	s, scope := b4Store(t), owner()
+	f := b4Model(t, s)
+	gold := b4FixtureFor(t, "usage")
+	fixtures := b4SecondUsageAmendment(t)
+	source := b1Source(t, s, scope, "青玉罗盘资料", gold.PrivateSource, "manual")
+	claim := b1Claim(t, s, scope, gold.PrivateMemory, "fact", "adopted", source)
+	f.set(fixtures["deputyReturnedText"], 200)
+	st := workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "整理青玉罗盘"})
+	st = workspaceCommand(t, s, scope, workspace.Command{Type: "requestRun", ThingID: st.Tasks[0].ID, AgentID: "model", Kind: "breakdown", Prompt: "根据青玉罗盘5591的记忆列出走路步骤"})
+	run := st.Runs[0]
+	b1HasRef(t, run.ContextVersions, claim, true)
+	g := b4HoldModel(t, f)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	t.Cleanup(cancel)
+	done := make(chan error, 1)
+	go func() { done <- s.runAgentOnce(ctx) }()
+	finished := false
+	t.Cleanup(func() {
+		cancel()
+		g.unblock()
+		if !finished {
+			select {
+			case <-done:
+			case <-time.After(5 * time.Second):
+				t.Error("owned deputy runner did not stop")
+			}
+		}
+	})
+	select {
+	case actual := <-g.started:
+		b1Contains(t, actual.Prompt, gold.PrivateMemory)
+	case <-time.After(10 * time.Second):
+		t.Fatal("deputy did not reach actual fake-model request")
+	}
+	// Correction occurs while the HTTP model response is genuinely withheld.
+	b1Correct(t, s, scope, claim, fixtures["deputyCorrection"])
+	g.unblock()
+	select {
+	case <-g.returned:
+	case <-time.After(10 * time.Second):
+		t.Fatal("fake model did not return the deputy result")
+	}
+	select {
+	case err := <-done:
+		finished = true
+		if err != nil {
+			t.Fatal("deputy runner", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("deputy runner did not finish")
+	}
+	if len(f.all()) != 1 {
+		t.Fatalf("rejected deputy result must come from exactly one returned call; got %d", len(f.all()))
+	}
+	st, err := s.Snapshot(context.Background(), scope)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var failed *workspace.Run
+	for i := range st.Runs {
+		if st.Runs[i].ID == run.ID {
+			failed = &st.Runs[i]
+		}
+	}
+	if failed == nil {
+		t.Fatal("rejected deputy run disappeared")
+	}
+	if failed.Status != "failed" || !strings.Contains(failed.Error, "生成期间记忆或授权已变化") || failed.Adopted != nil {
+		t.Errorf("changed-context result was not rejected as contracted: %+v", failed)
+	}
+	if len(st.Docs) != 0 || len(st.Tasks) != 1 || len(st.Tasks[0].Checklist) != 0 {
+		t.Errorf("rejected deputy output was adopted into workspace: tasks=%+v docs=%+v", st.Tasks, st.Docs)
+	}
+	rows := b4Usage(t, s, scope)
+	if len(rows) != 1 {
+		t.Fatalf("rejected returned deputy call must record one usage row; got %d", len(rows))
+	}
+	row := rows[0]
+	b4UsageNumbers(t, row)
+	if row.Purpose != "deputy" || row.AgentID != "model" || row.RunID == nil || *row.RunID != run.ID {
+		t.Errorf("rejected deputy usage correlation: %+v", row)
+	}
+	b1HasRef(t, row.MemoryRefs, claim, true)
+	b4NoProse(t, s, scope, gold.PrivateMemory, gold.PrivateSource, fixtures["deputyReturnedText"], fixtures["deputyCorrection"])
+}
+
+func TestPhase2B4_L8_UsageIsVisibleBeforeResultTransactionAndSurvivesRollback(t *testing.T) {
+	for _, mode := range []string{"rollback", "cancel"} {
+		t.Run(mode, func(t *testing.T) {
+			s, scope := b4Store(t), owner()
+			f := b4Model(t, s)
+			reply := b4SecondUsageAmendment(t)["rollbackReply"]
+			f.set(string(asJSON(map[string]any{"reply": reply, "used": []string{}, "actions": []any{}})), 200)
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			lockKey := "b4-owned-result-gate-" + string(memory.NewID())
+			conn, err := s.pool.Acquire(ctx)
+			if err != nil {
+				cancel()
+				t.Fatal(err)
+			}
+			var pid int
+			if err := conn.QueryRow(ctx, `SELECT pg_backend_pid()`).Scan(&pid); err != nil {
+				conn.Release()
+				cancel()
+				t.Fatal(err)
+			}
+			if _, err := conn.Exec(ctx, `SELECT pg_advisory_lock(hashtextextended($1,0))`, lockKey); err != nil {
+				conn.Release()
+				cancel()
+				t.Fatal(err)
+			}
+			var releaseOnce sync.Once
+			release := func() {
+				releaseOnce.Do(func() {
+					cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 5*time.Second)
+					defer cleanupCancel()
+					if _, err := conn.Exec(cleanupCtx, `SELECT pg_advisory_unlock(hashtextextended($1,0))`, lockKey); err != nil {
+						t.Error("owned advisory lock cleanup", err)
+					}
+					conn.Release()
+				})
+			}
+			// Cancel the owned result writer before releasing the gate on failure.
+			t.Cleanup(func() { cancel(); release() })
+			// This test-owned trigger waits only in the result-writing transaction,
+			// then raises a real SQL error. model_usage has no trigger or test stub.
+			sql := fmt.Sprintf(`CREATE FUNCTION b4_gate_and_reject_result() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN PERFORM pg_advisory_xact_lock(hashtextextended('%s',0)); RAISE EXCEPTION 'b4 injected result rollback'; END $$; CREATE TRIGGER b4_gate_and_reject_result AFTER INSERT OR UPDATE ON desk_turns FOR EACH ROW WHEN (NEW.answer='%s') EXECUTE FUNCTION b4_gate_and_reject_result()`, strings.ReplaceAll(lockKey, "'", "''"), strings.ReplaceAll(reply, "'", "''"))
+			if _, err := s.pool.Exec(ctx, sql); err != nil {
+				t.Fatal(err)
+			}
+			req := turnRequest("合成L8独立事务样例 " + mode)
+			done := make(chan error, 1)
+			go func() { _, err := s.DeskTurn(ctx, scope, req); done <- err }()
+			finished := false
+			t.Cleanup(func() {
+				cancel()
+				release()
+				if !finished {
+					select {
+					case <-done:
+					case <-time.After(5 * time.Second):
+						t.Error("owned result writer did not stop")
+					}
+				}
+			})
+			// Locate a waiter on OUR pinned connection's advisory lock. A waiter
+			// proves content returned and the actual result transaction is blocked.
+			b4Wait(t, "owned result transaction waiting on SQL gate", func() bool {
+				select {
+				case err := <-done:
+					finished = true
+					t.Fatalf("result writer stopped before SQL gate: %v", err)
+				default:
+				}
+				var waiting bool
+				err := s.pool.QueryRow(context.Background(), `SELECT EXISTS(SELECT 1 FROM pg_locks waiting JOIN pg_locks held USING(locktype,database,classid,objid,objsubid) WHERE held.pid=$1 AND held.locktype='advisory' AND held.granted AND NOT waiting.granted)`, pid).Scan(&waiting)
+				if err != nil {
+					t.Fatal(err)
+				}
+				return waiting
+			})
+			if len(f.all()) != 1 {
+				t.Fatalf("result gate expected one actual returned model call; got %d", len(f.all()))
+			}
+			before := b4Usage(t, s, scope)
+			if len(before) != 1 {
+				t.Fatalf("usage must be committed and visible on another connection before result commit; got %d", len(before))
+			}
+			b4UsageNumbers(t, before[0])
+			if before[0].Purpose != "secretary" {
+				t.Errorf("usage purpose=%q", before[0].Purpose)
+			}
+			if mode == "cancel" {
+				cancel()
+			} else {
+				release()
+			}
+			select {
+			case err := <-done:
+				finished = true
+				if err == nil {
+					t.Error("test gate did not reject or cancel the result transaction")
+				}
+			case <-time.After(10 * time.Second):
+				t.Fatal("owned result transaction did not roll back")
+			}
+			release()
+			if !reflect.DeepEqual(before, b4Usage(t, s, scope)) {
+				t.Error("result failure/cancellation removed or changed independently committed usage")
+			}
+			var accepted bool
+			if err := s.pool.QueryRow(context.Background(), `SELECT EXISTS(SELECT 1 FROM desk_turns WHERE owner_id=$1 AND request_id=$2 AND answer=$3)`, string(scope.OwnerID), req.RequestID, reply).Scan(&accepted); err != nil {
+				t.Fatal(err)
+			}
+			if accepted {
+				t.Error("rolled-back model answer persisted")
+			}
+		})
+	}
+}
 
 // Read the independently frozen invalid content, never a product serializer.
 func b4UsageAmendment(t *testing.T) map[string]string {

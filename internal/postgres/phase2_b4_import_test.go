@@ -24,7 +24,7 @@ func TestPhase2B4_I1_ZipPreviewCountsMediaGapsAndNeverWrites(t *testing.T) {
 	data := b4Zip(t, b4Export(conversations), true)
 	before := b1DatabaseRows(t, s, false)
 	preview := b4PreviewFile(t, s, scope, "chatgpt-export.zip", data)
-	if preview.Name != "chatgpt-export.zip" || preview.Conversations != 3 || preview.Messages != 6 || preview.FromUser != 3 || preview.AlreadyImported != 0 || preview.LeftOut != 0 {
+	if preview.Name != "chatgpt-export.zip" || preview.Conversations != 3 || preview.Messages != 6 || preview.FromUser != 3 || preview.AlreadyImported != 0 || preview.LeftOut != 0 || preview.Blocked != 0 {
 		t.Errorf("preview counts: %+v", preview)
 	}
 	first, last := conversations[0].Messages[0].At, conversations[2].Messages[1].At
@@ -40,6 +40,65 @@ func TestPhase2B4_I1_ZipPreviewCountsMediaGapsAndNeverWrites(t *testing.T) {
 	}
 	if !reflect.DeepEqual(before, b1DatabaseRows(t, s, false)) {
 		t.Error("read-only preview mutated database")
+	}
+}
+
+func TestPhase2B4_I4_BlockedMessageIsReportedAndSkippedWithoutFailingImport(t *testing.T) {
+	s, scope := b4Store(t), owner()
+	original := b4Conversations(t, "blocked-original", 2)
+	id, archive := b4ImportFile(t, s, scope, "before-ban.zip", b4Zip(t, b4Export(original), false))
+	b4Complete(t, s, scope, id, archive)
+	bannedText := original[0].Messages[0].Text
+	banned := b4SourceByText(t, s, scope, bannedText)
+	w := b4HTTP(t, s, scope, "POST", "/v1/memory/delete", memory.DeleteRequest{Targets: []memory.Ref{banned}, BlockReimport: true})
+	b4OK(t, w)
+	var blocks int
+	if err := s.pool.QueryRow(context.Background(), `SELECT count(*) FROM reimport_blocks WHERE owner_id=$1`, string(scope.OwnerID)).Scan(&blocks); err != nil || blocks == 0 {
+		t.Fatalf("ban fixture did not create a reimport block: %d %v", blocks, err)
+	}
+	newConversations := b4Conversations(t, "blocked-new", 1)
+	extended := append(append([]b4Conversation{}, original...), newConversations...)
+	data := b4Zip(t, b4Export(extended), false)
+	before := b1DatabaseRows(t, s, false)
+	preview := b4PreviewFile(t, s, scope, "after-ban.zip", data)
+	if preview.Messages != 3 || preview.AlreadyImported != 1 || preview.LeftOut != 0 || preview.Blocked != 1 {
+		t.Errorf("blocked must be a separate preview classification: %+v", preview)
+	}
+	if preview.Messages-preview.AlreadyImported-preview.LeftOut-preview.Blocked != 1 {
+		t.Error("wrong actual import count")
+	}
+	if strings.TrimSpace(strings.Join(preview.Gaps, " ")) == "" {
+		t.Error("blocked preview lacks a human explanation in gaps")
+	}
+	if !reflect.DeepEqual(before, b1DatabaseRows(t, s, false)) {
+		t.Error("blocked preview wrote data")
+	}
+	// Upload the new export through the real HTTP entry. Its original may be
+	// made unavailable to honor the existing privacy/reimport-block contract.
+	w = b4Upload(t, b4API(s, scope, true), "/v1/connectors/archive", "after-ban.zip", data)
+	b4OK(t, w)
+	var uploaded struct{ BatchID string }
+	b4JSON(t, w.Body.Bytes(), &uploaded)
+	if uploaded.BatchID == "" {
+		t.Fatal("blocked-containing upload omitted batchId")
+	}
+	item := b4ImportItemFor(t, s, scope, uploaded.BatchID)
+	ref := memory.Ref{ID: memory.ID(item.ArchiveID), Version: item.ArchiveVersion, Kind: memory.SourceKind}
+	done := b4Complete(t, s, scope, uploaded.BatchID, ref)
+	if done.Total != 1 || done.Stored != 1 || done.State != "done" || done.ErrorCode != "" || done.Error != "" {
+		t.Errorf("blocked/existing messages must not count or fail the batch: %+v", done)
+	}
+	var restored bool
+	if err := s.pool.QueryRow(context.Background(), `SELECT EXISTS(SELECT 1 FROM source_versions WHERE owner_id=$1 AND body=$2)`, string(scope.OwnerID), bannedText).Scan(&restored); err != nil {
+		t.Fatal(err)
+	}
+	if restored {
+		t.Error("message banned from reimport was restored")
+	}
+	b1Active(t, s, scope, banned, false)
+	b4MessagesExactlyOnce(t, s, scope, append(original[1:], newConversations...))
+	if err := s.pool.QueryRow(context.Background(), `SELECT count(*) FROM reimport_blocks WHERE owner_id=$1`, string(scope.OwnerID)).Scan(&blocks); err != nil || blocks == 0 {
+		t.Errorf("successful import removed the user's ban: %d %v", blocks, err)
 	}
 }
 

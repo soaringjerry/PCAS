@@ -435,6 +435,42 @@ type b4Preview struct {
 	Gaps                                                        []string
 }
 
+type b4CountExpectation struct {
+	Messages, LeftOut, AlreadyImported, Blocked, New, Total, Stored, Cap int
+}
+
+func b4CountOracle(t *testing.T, name string) b4CountExpectation {
+	t.Helper()
+	raw, err := os.ReadFile("../../testdata/phase2/b4-gold.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var gold struct {
+		Counts map[string]json.RawMessage `json:"coordinator_amendment_96c6cb1"`
+	}
+	b4JSON(t, raw, &gold)
+	var expected b4CountExpectation
+	b4JSON(t, gold.Counts[name], &expected)
+	return expected
+}
+
+func b4CheckPreviewCounts(t *testing.T, preview b4Preview, expected b4CountExpectation) {
+	t.Helper()
+	if preview.Messages != expected.Messages || preview.LeftOut != expected.LeftOut || preview.AlreadyImported != expected.AlreadyImported || preview.Blocked != expected.Blocked {
+		t.Errorf("preview categories must be disjoint: got %+v; want %+v", preview, expected)
+	}
+	if preview.Messages-preview.LeftOut-preview.AlreadyImported-preview.Blocked != expected.New {
+		t.Errorf("messages must equal leftOut + alreadyImported + blocked + new: got %+v; new=%d", preview, expected.New)
+	}
+}
+
+func b4CheckCompletedCounts(t *testing.T, batch b4ImportItem, expected b4CountExpectation) {
+	t.Helper()
+	if batch.Total != expected.Total || batch.Stored != expected.Stored || batch.LeftOut != expected.LeftOut || batch.State != "done" || batch.ErrorCode != "" || batch.Error != "" {
+		t.Errorf("retained existing messages count as stored; blocked/excluded do not: got %+v; want %+v", batch, expected)
+	}
+}
+
 func b4PreviewFile(t *testing.T, s *Store, scope memory.Scope, filename string, data []byte) b4Preview {
 	t.Helper()
 	response := b4Upload(t, b4API(s, scope, true), "/v1/connectors/archive/preview", filename, data)

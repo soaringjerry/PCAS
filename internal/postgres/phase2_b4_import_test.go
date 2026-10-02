@@ -61,12 +61,8 @@ func TestPhase2B4_I4_BlockedMessageIsReportedAndSkippedWithoutFailingImport(t *t
 	data := b4Zip(t, b4Export(extended), false)
 	before := b1DatabaseRows(t, s, false)
 	preview := b4PreviewFile(t, s, scope, "after-ban.zip", data)
-	if preview.Messages != 3 || preview.AlreadyImported != 1 || preview.LeftOut != 0 || preview.Blocked != 1 {
-		t.Errorf("blocked must be a separate preview classification: %+v", preview)
-	}
-	if preview.Messages-preview.AlreadyImported-preview.LeftOut-preview.Blocked != 1 {
-		t.Error("wrong actual import count")
-	}
+	expected := b4CountOracle(t, "blockedExtension")
+	b4CheckPreviewCounts(t, preview, expected)
 	if strings.TrimSpace(strings.Join(preview.Gaps, " ")) == "" {
 		t.Error("blocked preview lacks a human explanation in gaps")
 	}
@@ -85,9 +81,7 @@ func TestPhase2B4_I4_BlockedMessageIsReportedAndSkippedWithoutFailingImport(t *t
 	item := b4ImportItemFor(t, s, scope, uploaded.BatchID)
 	ref := memory.Ref{ID: memory.ID(item.ArchiveID), Version: item.ArchiveVersion, Kind: memory.SourceKind}
 	done := b4Complete(t, s, scope, uploaded.BatchID, ref)
-	if done.Total != 1 || done.Stored != 1 || done.State != "done" || done.ErrorCode != "" || done.Error != "" {
-		t.Errorf("blocked/existing messages must not count or fail the batch: %+v", done)
-	}
+	b4CheckCompletedCounts(t, done, expected)
 	var restored bool
 	if err := s.pool.QueryRow(context.Background(), `SELECT EXISTS(SELECT 1 FROM source_versions WHERE owner_id=$1 AND body=$2)`, string(scope.OwnerID), bannedText).Scan(&restored); err != nil {
 		t.Fatal(err)
@@ -197,13 +191,13 @@ func TestPhase2B4_I4_ReimportAndExtendedExportOnlyAddUnseenMessages(t *testing.T
 	b4Complete(t, s, scope, id, archive)
 	before := b4SourceCount(t, s, scope)
 	preview := b4PreviewFile(t, s, scope, "repeat.zip", data)
-	if preview.Messages != 4 || preview.AlreadyImported != 4 {
-		t.Errorf("duplicate preview %+v", preview)
-	}
+	b4CheckPreviewCounts(t, preview, b4CountOracle(t, "duplicateOnly"))
 	id2, archive2 := b4ImportFile(t, s, scope, "repeat.zip", data)
-	if b4ImportItemFor(t, s, scope, id2).State != "done" {
-		b4Complete(t, s, scope, id2, archive2)
+	done := b4ImportItemFor(t, s, scope, id2)
+	if done.State != "done" {
+		done = b4Complete(t, s, scope, id2, archive2)
 	}
+	b4CheckCompletedCounts(t, done, b4CountOracle(t, "duplicateOnly"))
 	if after := b4SourceCount(t, s, scope); after != before {
 		t.Errorf("identical file added sources: %d -> %d", before, after)
 	}
@@ -211,11 +205,10 @@ func TestPhase2B4_I4_ReimportAndExtendedExportOnlyAddUnseenMessages(t *testing.T
 	all := append(append([]b4Conversation{}, conversations...), newConversations...)
 	extended := b4Zip(t, b4Export(all), false)
 	preview = b4PreviewFile(t, s, scope, "extended.zip", extended)
-	if preview.Messages != 7 || preview.AlreadyImported != 4 {
-		t.Errorf("extended preview %+v", preview)
-	}
+	b4CheckPreviewCounts(t, preview, b4CountOracle(t, "extended"))
 	id3, archive3 := b4ImportFile(t, s, scope, "extended.zip", extended)
-	b4Complete(t, s, scope, id3, archive3)
+	done = b4Complete(t, s, scope, id3, archive3)
+	b4CheckCompletedCounts(t, done, b4CountOracle(t, "extended"))
 	b4MessagesExactlyOnce(t, s, scope, all)
 	if after := b4SourceCount(t, s, scope); after != before+4 {
 		t.Errorf("extended export should add 3 messages plus its original archive: %d -> %d", before, after)
@@ -594,7 +587,7 @@ func TestPhase2B4_I8_RecordCapKeepsNewestAndReportsLeftOut(t *testing.T) {
 	input := []b4Conversation{conversations[3], conversations[6], conversations[0], conversations[5], conversations[1], conversations[4], conversations[2]}
 	data := b4Zip(t, b4Export(input), false)
 	preview := b4PreviewFile(t, s, scope, "cap.zip", data)
-	if preview.Messages != 7 || preview.LeftOut != 4 {
+	if preview.Messages != 7 || preview.LeftOut != 4 || preview.AlreadyImported != 0 || preview.Blocked != 0 {
 		t.Errorf("cap preview %+v", preview)
 	}
 	id, archive := b4ImportFile(t, s, scope, "cap.zip", data)
@@ -615,5 +608,71 @@ func TestPhase2B4_I8_RecordCapKeepsNewestAndReportsLeftOut(t *testing.T) {
 		if exists {
 			t.Errorf("older excluded message stored: %s", conv.ID)
 		}
+	}
+}
+
+func TestPhase2B4_I8_CapPrecedesDisjointDuplicateBlockedAndNewCounts(t *testing.T) {
+	s, scope := b4Store(t), owner()
+	expected := b4CountOracle(t, "cappedMixed")
+	conversations := b4Conversations(t, "mixed-cap", 8)
+	seed := []b4Conversation{conversations[0], conversations[1], conversations[3], conversations[4], conversations[6]}
+	id, archive := b4ImportFile(t, s, scope, "mixed-seed.zip", b4Zip(t, b4Export(seed), false))
+	b4Complete(t, s, scope, id, archive)
+	// One banned message is older than the cap, the other remains inside it.
+	for _, index := range []int{1, 4} {
+		ref := b4SourceByText(t, s, scope, conversations[index].Messages[0].Text)
+		b4OK(t, b4HTTP(t, s, scope, "POST", "/v1/memory/delete", memory.DeleteRequest{Targets: []memory.Ref{ref}, BlockReimport: true}))
+		b1Active(t, s, scope, ref, false)
+	}
+	var bansBefore int
+	if err := s.pool.QueryRow(context.Background(), `SELECT count(*) FROM reimport_blocks WHERE owner_id=$1`, string(scope.OwnerID)).Scan(&bansBefore); err != nil || bansBefore == 0 {
+		t.Fatalf("missing ban fixture: count=%d error=%v", bansBefore, err)
+	}
+	old := connectors.MaxArchiveRecords
+	connectors.MaxArchiveRecords = expected.Cap
+	t.Cleanup(func() { connectors.MaxArchiveRecords = old })
+	// Input order cannot serve as a substitute for timestamps when capping.
+	input := []b4Conversation{conversations[4], conversations[0], conversations[7], conversations[2], conversations[6], conversations[1], conversations[5], conversations[3]}
+	data := b4Zip(t, b4Export(input), false)
+	before := b1DatabaseRows(t, s, false)
+	preview := b4PreviewFile(t, s, scope, "mixed-cap.zip", data)
+	b4CheckPreviewCounts(t, preview, expected)
+	b4NonemptyText(t, strings.Join(preview.Gaps, " "))
+	if !reflect.DeepEqual(before, b1DatabaseRows(t, s, false)) {
+		t.Error("mixed preview wrote data")
+	}
+	// As in I4, use the real upload but do not require an original attachment
+	// containing banned text to remain available under the privacy contract.
+	w := b4Upload(t, b4API(s, scope, true), "/v1/connectors/archive", "mixed-cap.zip", data)
+	b4OK(t, w)
+	var uploaded struct{ BatchID string }
+	b4JSON(t, w.Body.Bytes(), &uploaded)
+	if uploaded.BatchID == "" {
+		t.Fatal("mixed upload omitted batchId")
+	}
+	item := b4ImportItemFor(t, s, scope, uploaded.BatchID)
+	ref := memory.Ref{ID: memory.ID(item.ArchiveID), Version: item.ArchiveVersion, Kind: memory.SourceKind}
+	done := b4Complete(t, s, scope, uploaded.BatchID, ref)
+	b4CheckCompletedCounts(t, done, expected)
+	var leftOut int
+	if err := s.pool.QueryRow(context.Background(), `SELECT left_out FROM import_batches WHERE owner_id=$1 AND id=$2`, string(scope.OwnerID), uploaded.BatchID).Scan(&leftOut); err != nil || leftOut != expected.LeftOut {
+		t.Errorf("persisted mixed left_out=%d error=%v", leftOut, err)
+	}
+	// Index 0 remains in the database but contributes only to leftOut here.
+	// Retained duplicates (3,6) and newly stored messages (5,7) appear once.
+	kept := []b4Conversation{conversations[0], conversations[3], conversations[5], conversations[6], conversations[7]}
+	b4MessagesExactlyOnce(t, s, scope, kept)
+	for _, index := range []int{1, 2, 4} {
+		var exists bool
+		if err := s.pool.QueryRow(context.Background(), `SELECT EXISTS(SELECT 1 FROM source_versions WHERE owner_id=$1 AND body=$2)`, string(scope.OwnerID), conversations[index].Messages[0].Text).Scan(&exists); err != nil {
+			t.Fatal(err)
+		}
+		if exists {
+			t.Errorf("excluded unseen or banned message %d was stored/restored", index)
+		}
+	}
+	var bansAfter int
+	if err := s.pool.QueryRow(context.Background(), `SELECT count(*) FROM reimport_blocks WHERE owner_id=$1`, string(scope.OwnerID)).Scan(&bansAfter); err != nil || bansAfter != bansBefore {
+		t.Errorf("mixed import changed bans: before=%d after=%d error=%v", bansBefore, bansAfter, err)
 	}
 }

@@ -6,7 +6,7 @@
 
 被测集成提交：**尚未指定**。收到实现合入通知后，在同一个明确提交上统一跑全量；届时追加实际结果、发现及修复归属。
 
-依据：`parallel.md`、第 4 批契约和 T4 任务包；补充接缝依据协调者确认的 `5865411`、`1cec28b` 第 6 节，以及 `b9d26f0` 的 R12、L8/L9 和 `2e2b8f9` 第 7 节。未读取 I/L/U4 的新实现，也未修改产品代码或已有测试预期。
+依据：`parallel.md`、第 4 批契约和 T4 任务包；补充接缝依据协调者确认的 `5865411`、`1cec28b` 第 6 节，以及 `b9d26f0` 的 R12、L8/L9 和 `2e2b8f9` 第 7 节、`96c6cb1` 第 8 节。未读取 I/L/U4 的新实现，也未修改产品代码或已有测试预期。
 
 下文冻结提交号是变基前已推送的原始提交，用于记录预期在测试之前冻结的顺序；变基重放未改变原条目。
 
@@ -21,11 +21,11 @@
 | I1 | [TestPhase2B4_I1_ZipPreviewCountsMediaGapsAndNeverWrites](../../internal/postgres/phase2_b4_import_test.go) | 待运行 |
 | I2 | [TestPhase2B4_I2_PartialImportOriginalReachesNewSecretaryConversation](../../internal/postgres/phase2_b4_import_test.go) | 待运行 |
 | I3 | [TestPhase2B4_I3_PauseStopsStorageAndExtractionButNotOrdinarySource](../../internal/postgres/phase2_b4_import_test.go)<br>[TestPhase2B4_I3_ImportStateErrorsHaveFrozenCode](../../internal/postgres/phase2_b4_import_test.go) | 待运行 |
-| I4 | [TestPhase2B4_I4_ReimportAndExtendedExportOnlyAddUnseenMessages](../../internal/postgres/phase2_b4_import_test.go) | 待运行 |
+| I4 | [TestPhase2B4_I4_ReimportAndExtendedExportOnlyAddUnseenMessages](../../internal/postgres/phase2_b4_import_test.go)<br>[TestPhase2B4_I4_BlockedMessageIsReportedAndSkippedWithoutFailingImport](../../internal/postgres/phase2_b4_import_test.go) | 待运行 |
 | I5 | [TestPhase2B4_I5_HistoricalPlanRemainsCandidateWithoutPresentActions](../../internal/postgres/phase2_b4_import_test.go) | 待运行 |
 | I6 | [TestPhase2B4_I6_SecretaryOriginalExtractionPrecedes500ImportedMessages](../../internal/postgres/phase2_b4_import_test.go) | 待运行 |
 | I7 | [TestPhase2B4_I7_UnsupportedAndDecompressedLimitAreAtomic](../../internal/postgres/phase2_b4_import_test.go)<br>[TestPhase2B4_I7_FourUploadErrorsAreDistinctAndAtomic](../../internal/postgres/phase2_b4_import_test.go) | 待运行 |
-| I8 | [TestPhase2B4_I8_RecordCapKeepsNewestAndReportsLeftOut](../../internal/postgres/phase2_b4_import_test.go) | 待运行 |
+| I8 | [TestPhase2B4_I8_RecordCapKeepsNewestAndReportsLeftOut](../../internal/postgres/phase2_b4_import_test.go)<br>[TestPhase2B4_I8_CapPrecedesDisjointDuplicateBlockedAndNewCounts](../../internal/postgres/phase2_b4_import_test.go) | 待运行 |
 | I9 | [TestPhase2B4_I9_CancelAtHalfCommitThenRecoverExpiredLease](../../internal/postgres/phase2_b4_import_test.go) | 待运行 |
 | I10 | [TestPhase2B4_I10_DeleteArchiveChildrenClaimsBatchAndRecallControl](../../internal/postgres/phase2_b4_import_test.go) | 待运行 |
 | I11 | [TestPhase2B4_I11_RegeneratedAnswerPreservesHistoricalBranch](../../internal/postgres/phase2_b4_import_test.go) | 待运行 |
@@ -57,8 +57,9 @@
 - I3/I6 使用生产队列 `worker.New` 与处理函数；暂停批次不交给抽取模型，普通新资料仍完成；导入队列不抢秘书新原话的抽取顺序。仅清理自有 context/goroutine，不操作线上进程。
 - L8 的副手用通道门闩真实扣住假模型 HTTP 响应，确认请求正文含那条记忆后才纠正；结果失败、不采用，花费及旧版本引用仍保留。
 - 独立花费事务用例在结果写入触发器中等待自有 advisory lock；另一个连接在结果提交前读到花费，随后注入真实 SQL 回滚或取消处理，记录前后完全相同。只操作临时 schema 的触发器和自有锁，清理自有 goroutine/连接。
-- `blocked` 新序列 [TestPhase2B4_I4_BlockedMessageIsReportedAndSkippedWithoutFailingImport](../../internal/postgres/phase2_b4_import_test.go)：先导入两条，HTTP 删除一条并禁止再导入，再预览和导入含这两条及一条新消息的归档。`messages=3`、`alreadyImported=1`、`blocked=1`、`leftOut=0`；这次 `total=stored=1`、状态 done，旧的禁止项不恢复，原来保留的消息不重复。预览只读且 gaps 有说明。
-- W1 追加冻结模拟预览 `messages=17`、`alreadyImported=4`、`leftOut=2`、`blocked=3`，检查界面显示实际导入 8 条；W4 正常归档预览明确检查 `blocked=0`。
+- `blocked` 新序列 [TestPhase2B4_I4_BlockedMessageIsReportedAndSkippedWithoutFailingImport](../../internal/postgres/phase2_b4_import_test.go)：先导入两条，HTTP 删除一条并禁止再导入，再预览和导入含这两条及一条新消息的归档。`messages=3`、`alreadyImported=1`、`blocked=1`、`leftOut=0`；本次新存 1 条，但已在库里的 1 条也算存好，所以 `total=stored=2`（第 8 节）、状态 done，旧的禁止项不恢复，原来保留的消息不重复。预览只读且 gaps 有说明。
+- W1 追加冻结模拟预览 `messages=17`、`alreadyImported=4`、`leftOut=2`、`blocked=3`，检查界面显示实际新存 8 条；图例不要求给禁止项单列一行，显示冻结的 gaps 说明。模拟批次的 `total=12`，已在库里的 4 条算作已存好；W4 正常归档预览明确检查 `blocked=0`。
+- 第 8 节计数补充先在 `664affc` 追加冻结。I4 的重复导入完成为 `4/4`，扩展归档为 `7/7`；I8 混合序列包含超限范围内的已导入/禁止/未见消息，以及保留范围内的已导入/禁止/新消息。预览 `8=3 leftOut+2 alreadyImported+1 blocked+2 新存`，完成 `total=stored=4`；旧的已导入资料保留，禁止项不恢复，超限未见消息不新增，保留消息恰好一份。
 - L5 通过 `to_jsonb(u)` 扫描 `model_usage` 每一列，包括 `memory_refs` 和 `plan`；另测 80 个 Unicode 字符的截断、读取当前文本、删除后无正文的标记。
 - 悉尼/上海跨日和悉尼夏令时开始、结束使用冻结的历史时间；没有依赖“必须在未来”的日期或今天星期几。
 - [browser-regression.yml](../../.github/workflows/browser-regression.yml) 的模拟浏览器列表加入 W1–W3；真实后端 round 1 增加独立 W4 命令，`PCAS_IMPORT_CHUNK_SIZE=1`，`--retries=0`。不改变既有测试预期，不修改共享 runner。

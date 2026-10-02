@@ -19,3 +19,28 @@
 时间档的 8 个问法是同一「上周本人计划」完整集合的不同措辞，共用 8 项证据，不能当作 8 个独立事实事件。全档共有 96 个必需证据计数（该集合按题重复计）。报告同时按类型输出，避免该重复集合掩盖其他类型。
 
 CI 在完整 2728 份压力资料上运行每类前 2 个问法（共 10 题）；只减少问法，不减少竞争资料或标准集合。全量 40 题由协调者手动跑。压力基线独立记在 `baseline.json`，初始 0 等待审核；基础档仍用上一级的基线。
+
+四种竞争模板各 640 份，共 2560 份；其中 640 份 AI 原话没有标准记忆。加上标准资料和无关资料，装载 2728 份原话、2088 条标准记忆。基础档和压力档分别装入新的临时 schema，不混合两个题库。
+
+从仓库根目录运行，`EVAL_TEMP_DSN` 必须指向空的本机临时 PostgreSQL。固定基准日用于复现实验；平时省略 `-anchor`，按用户时区的当天生成：
+
+```bash
+# 压力档全量 40 题：捕获真实秘书收到的内容，不调用真实模型。
+go run ./cmd/pcas-eval -fake -tier hard -mode retrieval \
+  -database-url "$EVAL_TEMP_DSN" -anchor 2026-10-03 \
+  -revision "$(git rev-parse HEAD)" -output /tmp/hard-full
+# 和 CI 相同的 10 题；仍装载全部资料。
+go run ./cmd/pcas-eval -fake -tier hard -mode retrieval -ci-subset \
+  -database-url "$EVAL_TEMP_DSN" -output /tmp/hard-ci
+# 仅有原话的诊断对照，独立重建题库。
+go run ./cmd/pcas-eval -fake -tier hard -mode retrieval -raw-only \
+  -database-url "$EVAL_TEMP_DSN" -output /tmp/hard-raw
+# 基础档全量 36 题，使用原来的独立基线。
+go run ./cmd/pcas-eval -fake -tier basic -mode retrieval \
+  -database-url "$EVAL_TEMP_DSN" -output /tmp/basic-full
+# 同时运行两档的全量检索集成测试（默认 CI 只缩减压力档问法）。
+PCAS_TEST_DATABASE_URL="$EVAL_TEMP_DSN" PCAS_EVAL_FULL=1 \
+  go test -count=1 -v -run '^TestPhase2EvalRetrieval$' ./internal/postgres
+```
+
+默认 `-mode comparison` 保留三种做法的回答与全资料抽取比较，可搭配 `-tier hard` 或 `-ci-subset`；子集只减回答问法，抽取仍覆盖全部资料。真实模型由协调者使用原有通道环境变量运行。Markdown/JSON 均含档位、种子、基准日、渲染后数据摘要、被测提交、按类型计数和逐题送达数量；不输出生成资料正文。干扰率按标注的干扰—证据对计算，证据和干扰都未送达时分子为 0，因此需和召回率一起看。

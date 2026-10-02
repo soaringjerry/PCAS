@@ -1,0 +1,5 @@
+{
+  "minimum_recall": 0,
+  "status": "awaiting_coordinator",
+  "reason": "第一次由协调者根据检索评测结果定线；以后只升不降。"
+}

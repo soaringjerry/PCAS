@@ -564,6 +564,37 @@
         "过时采纳内容继续给模型",
         "用户可见内容被擦除"
       ]
+    },
+    {
+      "id": "P14",
+      "sequence": "速记并采纳记忆，关闭秘书可见性，再开另一副手处理同资料，最后重新打开秘书",
+      "must": [
+        "关闭前秘书实际请求含原话和记忆",
+        "关闭后秘书实际请求既无原话也无记忆",
+        "仍开着的副手实际请求照常含原话和记忆",
+        "重新打开后秘书再次实际收到原话和记忆",
+        "受限原话依赖不带入新轮"
+      ],
+      "must_not": [
+        "用同名或另一条可见记忆绕过隐藏",
+        "以类别、推测、项目过滤误挡仍可见原话"
+      ]
+    },
+    {
+      "id": "P15",
+      "sequence": "同一句原话抽出记忆，在事项甲排除，再分别处理甲乙及恢复排除",
+      "must": [
+        "事项乙副手实际请求和manual Brief含原话",
+        "事项甲副手实际请求、manual Brief、事项页秘书请求均无原话和被排除记忆",
+        "大厅秘书没有具体事项时不套用甲的排除",
+        "去掉排除后事项甲再次得到原话",
+        "R2a阻断后原回答和回执保留，模型历史用替换语",
+        "原话依赖采纳内容在受限上下文不供给模型，用户事项原样保留"
+      ],
+      "must_not": [
+        "把事项甲的排除套在事项乙",
+        "只挡新检索却继续使用旧原话依赖或采纳副本"
+      ]
     }
   ],
   "browser": {
@@ -714,5 +745,43 @@
         "原文与摘录的换行差异导致没有标记"
       ]
     }
+  },
+  "R2a_supplement_2026_10_02": {
+    "contract_commit": "6ba44aa",
+    "decision": "用户亲手隐藏或排除任一有效证据陈述时，整份原话跟着收紧；类别、推测、项目设置不影响原话；无陈述资料不受影响。",
+    "supersedes_historical_pending": "integration_supplement_2026_10_02.R2_pending / approved_legacy 的旧待定状态，仅保留历史原值，本补充记录已定规则。",
+    "fixtures": {
+      "P14": {
+        "title": "快速记录",
+        "query": "b1visibilityneedle7319",
+        "raw": "b1visibilityneedle7319 原话细节：成都茶馆约老周，带上橙色便签。",
+        "claim": "b1visibilityneedle7319 采纳记忆标记：茶馆计划白鹭。"
+      },
+      "P15": {
+        "title": "秘书原话",
+        "query": "b1exclusionneedle8420",
+        "raw": "b1exclusionneedle8420 原话细节：成都锦江桥东侧交接青色资料袋。",
+        "claim": "b1exclusionneedle8420 记忆标记：锦江桥交接事项。",
+        "other_claim": "b1exclusionneedle8420 第二条记忆标记：青色资料袋。",
+        "adopted": "R2a 副手采纳标记海棠9531"
+      }
+    },
+    "multi_claim_control": {
+      "must": [
+        "同原话两条记忆中一条被隐藏或排除时整份原话不可用",
+        "所有陈述重新可见且未排除时原话恢复",
+        "已删除的陈述不再导致原话阻断",
+        "纯类别限制、推测限制、跨项目不阻断原话",
+        "依赖有效时采纳内容照常给模型，收紧后不再给，用户内容不变"
+      ]
+    },
+    "approved_legacy_additions": {
+      "TestDeskHistoryCannotBypassDestinationItemScope": [
+        "exclude 的相关原话节不含那条陈述的原话",
+        "other-project 和 delegate-other-project 的相关原话节含该原话"
+      ],
+      "TestSecretaryStablePrefixAndVisibility": "原样保留，R2a 合入后应当通过"
+    },
+    "dates": "四组旧固定日期失败单列为任务 D，不算本批发现；T 不写死必须未来的日期。"
   }
 }

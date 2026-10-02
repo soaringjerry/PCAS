@@ -416,5 +416,21 @@
     },
     "history_replacement": "（先前回答的依据已更新，请按现在的资料回答）",
     "notes": "Original fixtures.outdated_replacement was a draft description, not the literal R7 replacement; use this additive exact contract fixture."
+  },
+  "supplement_32ccb70": {
+    "approval": "R9/X14 clarified in coordinator-authored docs commit 32ccb70 (merged e2175b0).",
+    "X14": {
+      "segment_characters": 12000,
+      "step_characters": 11000,
+      "overlap_characters": 1000,
+      "key_start_character": 11500,
+      "source_characters": 18000,
+      "requests": 2,
+      "unique_total": 3,
+      "items": 3,
+      "key_memories": 1,
+      "first_only": "我偏好每天清晨整理资料。",
+      "second_only": "我决定晚上检查旅行清单。"
+    }
   }
 }

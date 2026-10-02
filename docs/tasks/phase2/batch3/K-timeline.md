@@ -2,7 +2,7 @@
 
 执行者 6.1 Sol。分支 `phase2/b3-K-timeline`，从 `origin/phase2/batch3` 建；工作区 `/root/PCAS-wt/b3-K`；Draft PR 的 base 是 `phase2/batch3`。
 
-先读 [并行方案与数据约定](../parallel.md) 第 3.4 节和 [第 3 批契约](README.md) 的 R14–R16 和序列 K1–K8。
+先读 [并行方案与数据约定](../parallel.md) 第 3.4 节和 [第 3 批契约](README.md) 的 R14–R16 和序列 K1–K10。
 
 ## 现在的代码
 
@@ -16,7 +16,7 @@
 
 ### 2 状态（R15）
 
-- 关联事项通过动作记录找：这条记忆的证据出自哪份秘书原话 → 那份原话对应哪一轮对话（`desk_turns.request_id` 等于资料的 `external_id`）→ 那一轮的动作记录建了哪些事项。
+- 关联事项这样找：这条记忆的证据出自哪份秘书原话 → 那份原话对应哪一轮对话（`desk_turns.request_id` 等于资料的 `external_id`）→ 那一轮建了哪些事项。「建了哪些事项」以这一轮保存的创建回执（`response.turn.receipts` 里新建待办、想法、项目的那几条，带 `thingId`）为准，它们长期保留；`action_log.changes` 30 天后清空，只能用来辅助校验，不能作为唯一依据（K9）。
 - 事项已经不存在的（被撤销删掉了）不算关联事项。
 - `changed` 看这条记忆有没有「改变」或「纠正」类的新版本。
 - 读这些不要对每个条目各查一遍库。

@@ -64,6 +64,7 @@ CREATE TABLE import_batches (
     state text NOT NULL CHECK (state IN ('importing','paused','done','failed')),
     total integer NOT NULL,
     stored integer NOT NULL,
+    left_out integer NOT NULL DEFAULT 0,
     earliest timestamptz,
     latest timestamptz,
     error_code text NOT NULL DEFAULT '',

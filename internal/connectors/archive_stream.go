@@ -261,7 +261,7 @@ func (a *Archive) add(batch Batch) error {
 		}
 	}
 	for _, r := range batch.Records {
-		data, err := json.Marshal(archiveSpoolRecord{Record: r, ConversationAt: conversationAt})
+		data, err := json.Marshal(r)
 		if err != nil {
 			return err
 		}
@@ -517,13 +517,6 @@ func DecodeArchive(name string, data []byte) (Batch, error) {
 	return Normalize(Batch{Records: records, Gaps: a.Preview.Gaps})
 }
 
-// The timestamp used for conversation ordering is spool metadata, not part of
-// the stable external record/version identity.
-type archiveSpoolRecord struct {
-	Record
-	ConversationAt time.Time `json:"_conversationAt"`
-}
-
 type ArchiveIdentity struct {
 	ID      string `json:"id"`
 	Version string `json:"version"`
@@ -564,14 +557,32 @@ func (a *Archive) noteBlocked() {
 	}
 }
 
-// Select applies batched identity policy checks before the newest-message cap.
-// Blocked identities consume neither the selected count nor LeftOut. Only
-// identity/offset metadata is retained while scanning the private record spool.
+// Select applies identity policy checks only to the messages already retained
+// by the newest-message cap. Blocked messages never refill from LeftOut.
 func (a *Archive) Select(ctx context.Context, allowed func([]ArchiveIdentity) ([]bool, error)) error {
-	a.entries = a.entries[:0]
 	a.Preview.Blocked = 0
+	err := a.Filter(ctx, func(ids []ArchiveIdentity) ([]bool, error) {
+		keep, err := allowed(ids)
+		if err == nil {
+			for _, ok := range keep {
+				if !ok {
+					a.Preview.Blocked++
+				}
+			}
+		}
+		return keep, err
+	})
+	a.noteBlocked()
+	return err
+}
+
+// Filter retains selected identities in their existing order without changing
+// preview categories. A worker uses it to omit messages already linked to this
+// archive, reconstructing durable progress without using Stored as an offset.
+func (a *Archive) Filter(ctx context.Context, allowed func([]ArchiveIdentity) ([]bool, error)) error {
 	identities := make([]ArchiveIdentity, 0, 500)
 	entries := make([]archiveEntry, 0, 500)
+	write := 0
 	flush := func() error {
 		if len(identities) == 0 {
 			return nil
@@ -585,37 +596,30 @@ func (a *Archive) Select(ctx context.Context, allowed func([]ArchiveIdentity) ([
 		}
 		for i, e := range entries {
 			if keep[i] {
-				a.keep(e)
-			} else {
-				a.Preview.Blocked++
+				a.entries[write] = e
+				write++
 			}
 		}
 		identities = identities[:0]
 		entries = entries[:0]
 		return nil
 	}
-	d := json.NewDecoder(io.NewSectionReader(a.spool, 0, a.offset))
-	for {
+	for _, e := range a.entries {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		offset := d.InputOffset()
-		var row archiveSpoolRecord
-		err := d.Decode(&row)
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
+		data := make([]byte, e.size)
+		if _, err := a.spool.ReadAt(data, e.offset); err != nil {
 			return err
 		}
-		e := archiveEntry{offset: offset, size: int(d.InputOffset() - offset), id: row.ID, conversationAt: row.ConversationAt}
-		if row.ExpressedAt != nil {
-			e.at = *row.ExpressedAt
+		var r Record
+		if err := json.Unmarshal(data, &r); err != nil {
+			return err
 		}
 		entries = append(entries, e)
-		identities = append(identities, ArchiveIdentity{ID: row.ID, Version: row.Version})
+		identities = append(identities, ArchiveIdentity{ID: r.ID, Version: r.Version})
 		if len(identities) == cap(identities) {
-			if err = flush(); err != nil {
+			if err := flush(); err != nil {
 				return err
 			}
 		}
@@ -623,14 +627,12 @@ func (a *Archive) Select(ctx context.Context, allowed func([]ArchiveIdentity) ([
 	if err := flush(); err != nil {
 		return err
 	}
-	a.Preview.LeftOut = a.Preview.Messages - a.Preview.Blocked - len(a.entries)
-	a.noteBlocked()
-	a.sortEntries()
+	a.entries = a.entries[:write]
 	return nil
 }
 
 // Drop accounts for identities blocked after the initial policy snapshot. The
-// remaining selected sequence continues to use Stored as its durable position.
+// retained-message cap and LeftOut are unchanged.
 func (a *Archive) Drop(start int, allowed []bool) error {
 	if start < 0 || start+len(allowed) > len(a.entries) {
 		return archiveError("invalid_record_count")

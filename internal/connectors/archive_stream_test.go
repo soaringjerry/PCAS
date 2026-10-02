@@ -164,54 +164,72 @@ func TestStreamArchiveBlockedSelectionAndDrop(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer a.Close()
+	seen := 0
 	err = a.Select(context.Background(), func(ids []ArchiveIdentity) ([]bool, error) {
 		allowed := make([]bool, len(ids))
 		for i, r := range ids {
-			allowed[i] = r.ID != "chatgpt/new/m1" && r.ID != "chatgpt/new/m2"
+			seen++
+			if !strings.HasPrefix(r.ID, "chatgpt/new/") {
+				t.Fatal("identity policy ran before the cap", r.ID)
+			}
+			allowed[i] = r.ID == "chatgpt/new/m0"
 		}
 		return allowed, nil
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if a.Preview.Messages != 6 || a.Preview.Blocked != 2 || a.Preview.LeftOut != 1 || a.Len() != 3 {
-		t.Fatal(a.Preview, a.Len())
+	if seen != 3 || a.Preview.Messages != 6 || a.Preview.Blocked != 2 || a.Preview.LeftOut != 3 || a.Len() != 1 {
+		t.Fatal(a.Preview, a.Len(), seen)
 	}
 	records, err := a.Records(0, 3)
+	if err != nil || len(records) != 1 || records[0].ID != "chatgpt/new/m0" {
+		t.Fatal("blocked messages refilled from leftOut", records, err)
+	}
+	if err = a.Drop(0, []bool{false}); err != nil {
+		t.Fatal(err)
+	}
+	if a.Len() != 0 || a.Preview.Blocked != 3 || a.Preview.LeftOut != 3 {
+		t.Fatal(a.Preview)
+	}
+	if len(a.Preview.Gaps) != 1 {
+		t.Fatal("blocked explanation missing", a.Preview.Gaps)
+	}
+}
+
+func TestStreamArchiveFilterPreservesOrderAcrossIdentityChunks(t *testing.T) {
+	previous := MaxArchiveRecords
+	MaxArchiveRecords = 1001
+	t.Cleanup(func() { MaxArchiveRecords = previous })
+	times := make([]int, 1400)
+	for i := range times {
+		times[i] = i + 1
+	}
+	a, err := OpenArchive(context.Background(), "conversations.json", strings.NewReader("["+syntheticConversation("c", times...)+"]"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if records[0].ID != "chatgpt/new/m0" || records[1].ID != "chatgpt/old/m2" || records[2].ID != "chatgpt/old/m1" {
-		t.Fatal("cap did not refill with unblocked messages", records)
-	}
-	if err = a.Drop(1, []bool{false, true}); err != nil {
-		t.Fatal(err)
-	}
-	records, err = a.Records(0, 3)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if a.Len() != 2 || a.Preview.Blocked != 3 || len(records) != 2 || records[1].ID != "chatgpt/old/m1" {
-		t.Fatal("dropped index corrupted", a.Preview, records)
-	}
-	// A new process builds exactly the same eligible prefix, independently of
-	// the original unfiltered offset and the previous process's temporary files.
-	again, err := OpenArchive(context.Background(), "conversations.json", strings.NewReader(input))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer again.Close()
-	err = again.Select(context.Background(), func(ids []ArchiveIdentity) ([]bool, error) {
-		allowed := make([]bool, len(ids))
-		for i, r := range ids {
-			allowed[i] = strings.HasSuffix(r.ID, "/m0")
+	defer a.Close()
+	seen, chunks := 0, 0
+	err = a.Filter(context.Background(), func(ids []ArchiveIdentity) ([]bool, error) {
+		chunks++
+		keep := make([]bool, len(ids))
+		for i := range ids {
+			keep[i] = seen%2 == 0
+			seen++
 		}
-		return allowed, nil
+		return keep, nil
 	})
-	if err != nil || again.Preview.Blocked != 4 || again.Preview.LeftOut != 0 || again.Len() != 2 {
-		t.Fatal(again.Preview, err)
+	if err != nil || seen != 1001 || chunks != 3 || a.Len() != 501 || a.Preview.LeftOut != 399 || a.Preview.Blocked != 0 {
+		t.Fatal(a.Preview, seen, chunks, a.Len(), err)
 	}
-	if len(again.Preview.Gaps) != 1 {
-		t.Fatal("blocked explanation missing", again.Preview.Gaps)
+	records, err := a.Records(0, a.Len())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, r := range records {
+		if r.ExpressedAt.Unix() != int64(1400-2*i) {
+			t.Fatal("filter changed selection order", i, r)
+		}
 	}
 }

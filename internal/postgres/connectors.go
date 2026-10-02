@@ -175,7 +175,7 @@ func (s *Store) importBatchTx(ctx context.Context, tx pgx.Tx, scope memory.Scope
 	}
 	episodes := map[string]*episodeBatch{}
 	for _, r := range batch.Records {
-		result, err := s.ingestTx(ctx, tx, scope, memory.IngestRequest{Connector: namespace, ExternalID: r.ID, ExternalVersion: r.Version, Title: r.Title, Text: r.Text, MediaType: r.MediaType, ExpressedAt: r.ExpressedAt})
+		result, err := s.ingestTx(ctx, tx, scope, archiveIngestRequest(namespace, r))
 		if errors.Is(err, memory.ErrBlocked) {
 			out.Blocked++
 			continue
@@ -256,6 +256,11 @@ func (s *Store) importBatchTx(ctx context.Context, tx pgx.Tx, scope memory.Scope
 	}
 	return out, nil
 }
+
+func archiveIngestRequest(namespace string, r connectors.Record) memory.IngestRequest {
+	return memory.IngestRequest{Connector: namespace, ExternalID: r.ID, ExternalVersion: r.Version, Title: r.Title, Text: r.Text, MediaType: r.MediaType, ExpressedAt: r.ExpressedAt}
+}
+
 func (s *Store) linkEpisodeTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, key, title string, refs []memory.Ref) error {
 	if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended($1,0))", string(scope.OwnerID)+":episode:"+key); err != nil {
 		return err

@@ -2,7 +2,9 @@ package postgres
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -97,6 +99,9 @@ func (s *Store) importArchiveReader(ctx context.Context, scope memory.Scope, nam
 		if err := s.ensureOwner(ctx, tx, scope); err != nil {
 			return err
 		}
+		if _, err := tx.Exec(ctx, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(scope.OwnerID)); err != nil {
+			return err
+		}
 		// Serialize the file identity before rechecking. Concurrent uploads
 		// of the same bytes may have different names, but share one archive.
 		if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended($1,0))", fmt.Sprintf("%s:%x", scope.OwnerID, sourceKey(namespace, archive.Hash))); err != nil {
@@ -135,8 +140,14 @@ func (s *Store) importArchiveReader(ctx context.Context, scope memory.Scope, nam
 			return err
 		}
 		out.BatchID = memory.NewID()
+		// Existing messages are already stored, but must belong to this archive
+		// for progress, pause and deletion to use the same durable ledger.
+		stored, err := linkImportedArchiveTx(ctx, tx, scope, recordNamespace, result.Ref, archive)
+		if err != nil {
+			return err
+		}
 		_, err = tx.Exec(ctx, `INSERT INTO import_batches(owner_id,id,archive_id,name,state,total,stored,left_out,earliest,latest)
-   VALUES($1,$2,$3,$4,'importing',$5,0,$6,$7,$8)`, string(scope.OwnerID), string(out.BatchID), string(result.ID), name, archive.Len(), archive.Preview.LeftOut, archive.Preview.Earliest, archive.Preview.Latest)
+   VALUES($1,$2,$3,$4,'importing',$5,$9,$6,$7,$8)`, string(scope.OwnerID), string(out.BatchID), string(result.ID), name, archive.Len(), archive.Preview.LeftOut, archive.Preview.Earliest, archive.Preview.Latest, stored)
 		if err != nil {
 			return err
 		}
@@ -274,6 +285,12 @@ func (s *Store) processArchiveImport(ctx context.Context, j worker.Job, title st
 	if err = s.selectArchive(ctx, scope, namespace, archive); err != nil {
 		return err
 	}
+	total := archive.Len()
+	if err = s.pendingArchive(ctx, scope, namespace, j.Record, archive); err != nil {
+		return err
+	}
+	completed := total - archive.Len()
+	next := 0
 	for {
 		if err = ctx.Err(); err != nil {
 			return err
@@ -315,11 +332,12 @@ func (s *Store) processArchiveImport(ctx context.Context, j worker.Job, title st
 				_, err = tx.Exec(ctx, `UPDATE memory_jobs SET state='blocked',error_code='import_paused',lease_token=NULL,lease_until=NULL,updated_at=now() WHERE id=$1 AND lease_token=$2`, string(j.ID), string(j.LeaseToken))
 				return err
 			}
-			// Blocking can change after upload or while paused. Rebuilds of
-			// the eligible sequence determine the current work count; consumed
-			// messages remain the same prefix unless their archive was deleted.
-			total = archive.Len()
-			records, err := archive.Records(stored, min(max(1, ImportChunkSize), max(0, total-stored)))
+			// Stored includes pre-existing messages at arbitrary positions. The
+			// archive membership ledger, rather than Stored as a file offset,
+			// reconstructs the remaining sequence after a restart.
+			stored = completed + next
+			total = completed + archive.Len()
+			records, err := archive.Records(next, max(1, ImportChunkSize))
 			if err != nil {
 				return err
 			}
@@ -336,7 +354,7 @@ func (s *Store) processArchiveImport(ctx context.Context, j worker.Job, title st
 				if err != nil {
 					return err
 				}
-				if err = archive.Drop(stored, allowed); err != nil {
+				if err = archive.Drop(next, allowed); err != nil {
 					return err
 				}
 				total -= result.Blocked
@@ -347,6 +365,7 @@ func (s *Store) processArchiveImport(ctx context.Context, j worker.Job, title st
 				}
 			}
 			stored += len(records) - result.Blocked
+			next += len(records) - result.Blocked
 			state = "importing"
 			if stored >= total {
 				state = "done"
@@ -479,4 +498,132 @@ func classifyArchiveTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, names
 		}
 	}
 	return allowed, imported, rows.Err()
+}
+
+// Pre-existing messages count as stored immediately. Link their source versions
+// without rewriting their text or enqueuing work, preserving ingestTx's content
+// and context conflict checks. The caller holds the owner lock against deletion.
+func linkImportedArchiveTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, namespace string, ref memory.Ref, archive *connectors.Archive) (int, error) {
+	type key struct {
+		ID           string   `json:"id"`
+		Version      string   `json:"version"`
+		ContentHash  string   `json:"content_hash"`
+		Conversation string   `json:"conversation"`
+		Parent       string   `json:"parent"`
+		Role         string   `json:"role"`
+		Branch       string   `json:"branch"`
+		Gaps         []string `json:"gaps"`
+	}
+	stored := 0
+	for start := 0; start < archive.Len(); {
+		if err := ctx.Err(); err != nil {
+			return 0, err
+		}
+		records, err := archive.Records(start, 500)
+		if err != nil {
+			return 0, err
+		}
+		identities := make([]connectors.ArchiveIdentity, len(records))
+		for i, r := range records {
+			identities[i] = connectors.ArchiveIdentity{ID: r.ID, Version: r.Version}
+		}
+		allowed, imported, err := classifyArchiveTx(ctx, tx, scope, namespace, identities)
+		if err != nil {
+			return 0, err
+		}
+		if err = archive.Drop(start, allowed); err != nil {
+			return 0, err
+		}
+		keys := make([]key, 0, len(records))
+		kept := 0
+		for i, r := range records {
+			if !allowed[i] {
+				continue
+			}
+			kept++
+			if imported == 0 {
+				continue
+			}
+			body, err := json.Marshal(archiveIngestRequest(namespace, r))
+			if err != nil {
+				return 0, err
+			}
+			hash := sha256.Sum256(body)
+			conversation := ""
+			if r.ConversationID != "" {
+				conversation = namespace + ":" + r.ConversationID
+			}
+			gaps := r.MissingAttachments
+			if gaps == nil {
+				gaps = []string{}
+			}
+			keys = append(keys, key{r.ID, r.Version, hex.EncodeToString(hash[:]), conversation, r.ParentID, r.Role, r.Branch, gaps})
+		}
+		if imported > 0 {
+			var matched, inserted int
+			var conflict bool
+			err = tx.QueryRow(ctx, `WITH existing AS (
+  SELECT s.id,v.version,
+   v.content_hash=decode(k.content_hash,'hex') AND
+   (c.source_id IS NULL OR (c.conversation_key=k.conversation AND c.parent_key=k.parent
+     AND c.role=k.role AND c.branch=k.branch AND c.gaps=k.gaps)) AS matches
+  FROM jsonb_to_recordset($5::jsonb) AS k(id text,version text,content_hash text,conversation text,parent text,role text,branch text,gaps jsonb)
+  JOIN sources s ON s.owner_id=$1 AND s.connector=$2 AND s.external_id=k.id
+  JOIN source_versions v ON v.owner_id=s.owner_id AND v.source_id=s.id AND v.external_version=k.version
+  JOIN memory_records r ON r.owner_id=s.owner_id AND r.id=s.id AND r.state='active'
+  JOIN record_versions rv ON (rv.owner_id,rv.record_id,rv.version)=(v.owner_id,v.source_id,v.version) AND rv.state='active'
+  LEFT JOIN source_contexts c ON (c.owner_id,c.source_id,c.source_version)=(v.owner_id,v.source_id,v.version)
+ ), inserted AS (
+  INSERT INTO archive_entries(owner_id,archive_id,archive_version,source_id,source_version)
+  SELECT $1,$3,$4,id,version FROM existing WHERE matches ON CONFLICT DO NOTHING RETURNING 1
+ ) SELECT count(*)::integer,coalesce(bool_or(NOT matches),false),(SELECT count(*)::integer FROM inserted)
+ FROM existing`, string(scope.OwnerID), namespace, string(ref.ID), ref.Version, asJSON(keys)).Scan(&matched, &conflict, &inserted)
+			if err != nil {
+				return 0, err
+			}
+			if conflict {
+				return 0, memory.ErrConflict
+			}
+			stored += matched
+		}
+		start += kept
+	}
+	archive.Preview.AlreadyImported = stored
+	return stored, nil
+}
+
+func (s *Store) pendingArchive(ctx context.Context, scope memory.Scope, namespace string, ref memory.Ref, archive *connectors.Archive) error {
+	return pgx.BeginTxFunc(ctx, s.pool, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
+		return archive.Filter(ctx, func(identities []connectors.ArchiveIdentity) ([]bool, error) {
+			type key struct {
+				Index   int    `json:"idx"`
+				ID      string `json:"id"`
+				Version string `json:"version"`
+			}
+			keys := make([]key, len(identities))
+			keep := make([]bool, len(identities))
+			for i, r := range identities {
+				keys[i] = key{i, r.ID, r.Version}
+			}
+			rows, err := tx.Query(ctx, `SELECT k.idx,NOT EXISTS(
+   SELECT 1 FROM sources s JOIN source_versions v ON v.owner_id=s.owner_id AND v.source_id=s.id
+   JOIN archive_entries e ON (e.owner_id,e.source_id,e.source_version)=(v.owner_id,v.source_id,v.version)
+   WHERE s.owner_id=$1 AND s.connector=$2 AND s.external_id=k.id AND v.external_version=k.version
+    AND e.archive_id=$3 AND e.archive_version=$4)
+  FROM jsonb_to_recordset($5::jsonb) AS k(idx integer,id text,version text) ORDER BY k.idx`, string(scope.OwnerID), namespace, string(ref.ID), ref.Version, asJSON(keys))
+			if err != nil {
+				return nil, err
+			}
+			defer rows.Close()
+			for rows.Next() {
+				var index int
+				var pending bool
+				if err = rows.Scan(&index, &pending); err != nil {
+					return nil, err
+				}
+				keep[index] = pending
+			}
+			return keep, rows.Err()
+		})
+	})
 }

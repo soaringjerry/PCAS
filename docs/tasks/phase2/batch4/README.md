@@ -211,3 +211,13 @@ T4 按这张表写测试，测试名带编号（`TestPhase2B4_I1_…`）。导�
 - **原始归档的大小。** 保存原始归档用的存储函数（`internal/blob/files.go`）现在写死 20 MB。批准任务 I 改这个文件，范围只有一处：让保存原始归档时可以用 `connectors.MaxUploadBytes` 作为上限；普通附件仍然是 20 MB，一个字节都不放宽。
 - **被用户禁止重新导入的消息。** 用户以前删过某条消息并选了「以后不要再导入」，再导入包含它的文件时：这条消息跳过，不算出错，批次照常做完。它既不计入 `total` 也不计入 `stored`（`total` 的意思是「这次要存的条数」），所以做完时两者仍然相等。预览里多一个字段 `blocked`（这样的消息有几条），它不算在 `alreadyImported` 和 `leftOut` 里；`gaps` 里用一句话说明。界面上「这次会导入多少」是 `messages − alreadyImported − leftOut − blocked`。已有测试 `TestArchiveDeletionErasesOriginalCopies` 的预期不变。
 - **批次里的 `error`** 是给用户看的那句话，可以直接显示；`errorCode` 是错误类型。
+
+## 8 第三轮补充（2026-10-02）
+
+**预览里几个数怎么分**（任务 I 的问题）。按这个顺序算，四类互不重叠：
+
+1. 文件里一共 `messages` 条。超过条数上限时，只保留最新的那些，其余全部计入 `leftOut`，不管它们以前导没导过。
+2. 保留下来的里面：已经在库里的计入 `alreadyImported`；被用户禁止重新导入的计入 `blocked`；剩下的是这次真正要新存的。
+3. 批次的 `total` 是「保留下来的 − `blocked`」。已经在库里的消息算作已经存好，直接计入 `stored`，所以做完时 `stored` 等于 `total`。
+
+所以恒有 `messages = leftOut + alreadyImported + blocked + 新存的`。界面上图例不为 `blocked` 单列一行，由 `gaps` 里那句话说明，保持现状。

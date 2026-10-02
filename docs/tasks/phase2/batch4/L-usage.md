@@ -2,7 +2,7 @@
 
 执行者 6.1 Sol。分支 `phase2/b4-L-usage`，从 `origin/phase2/batch4` 建；工作区 `/root/PCAS-wt/b4-L`；Draft PR 的 base 是 `phase2/batch4`。
 
-先读 [并行方案与数据约定](../parallel.md) 第 3.1、3.5 节和 [第 4 批契约](README.md) 的 R12–R15 和序列 L1–L7。这是一个小任务。
+先读 [并行方案与数据约定](../parallel.md) 第 3.1、3.5 节和 [第 4 批契约](README.md) 的 R12–R15 和序列 L1–L9。这是一个小任务。
 
 ## 现在的代码
 

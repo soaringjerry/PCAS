@@ -51,7 +51,7 @@ jobs:
           done
           cat /tmp/pcas-browser.log
           exit 1
-      - run: npx playwright test tests/secretary.spec.ts tests/fixes.spec.ts tests/notify.spec.ts tests/buttons.spec.ts tests/timezone.spec.ts tests/settings-things-ux.spec.ts tests/usability-acceptance.spec.ts tests/phase2-batch1.spec.ts
+      - run: npx playwright test tests/secretary.spec.ts tests/fixes.spec.ts tests/notify.spec.ts tests/buttons.spec.ts tests/timezone.spec.ts tests/settings-things-ux.spec.ts tests/usability-acceptance.spec.ts tests/phase2-batch1.spec.ts tests/phase2-batch2.spec.ts
         working-directory: web
       - uses: actions/upload-artifact@v4
         if: failure()
@@ -85,6 +85,7 @@ jobs:
       # Own tmpfs database, real serve + worker, and deterministic external services.
       # The runner cleans up only its recorded PIDs and its own container/volumes.
       - run: bash web/tests/support/real-backend.sh
+      - run: bash web/tests/support/real-backend.sh npx playwright test tests/phase2-batch2-backend.spec.ts --output=test-results/phase2-batch2
       - uses: actions/upload-artifact@v4
         if: always()
         with:

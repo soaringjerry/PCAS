@@ -134,7 +134,9 @@
     "W1": "file selection shows preview counts/date range/duplicates/leftOut before confirmation with no internal terminology",
     "W2": "importing/paused/done/failed have appropriate progress/actions and no horizontal overflow at width 390",
     "W3": "four import errors have four different human explanations",
-    "W4": "browser talks to real temporary backend, uploads synthetic export, pauses/resumes and sees completed progress plus messages in library"
+    "W4": "browser talks to real temporary backend, uploads synthetic export, pauses/resumes and sees completed progress plus messages in library",
+    "L8": "a model returns nonempty content with malformed output in extraction, secretary and deputy; each actual returned call adds exactly one usage row with its tokens and cost despite output rejection",
+    "L9": "repeat the identical legacy AnswerDesk request twice; it performs two actual model calls and writes two distinct usage rows, one per returned call"
   },
   "browser": {
     "preview": {
@@ -239,6 +241,16 @@
       "target": "batch.archiveId + batch.archiveVersion + kind=source",
       "include_sources": true,
       "closure": "archive, all its messages and derived claims; import_batches cascades with archive"
+    }
+  },
+  "coordinator_amendment_b9d26f0": {
+    "authority": "batch4/README.md R12, sequences L8/L9 and coordinator instruction",
+    "returnedButRejected": "returning model content is billed and logged even if subsequent format validation rejects it",
+    "replayProtection": "secretary request ID and deputy run only; legacy answer has no request ID and is billed per call",
+    "fixtures": {
+      "invalidExtractionContent": "{\"items\":[",
+      "invalidSecretaryContent": "{\"reply\":",
+      "legacyQuestion": "合成L9旧导办台相同问话：青玉罗盘今天怎样安排"
     }
   }
 }

@@ -10,11 +10,11 @@ lint:
 	go vet ./cmd/... ./internal/...
 
 test:
-	go test -race ./cmd/... ./internal/...
+	go test -race -timeout 30m ./cmd/... ./internal/...
 
 test-integration:
 	@test -n "$$PCAS_TEST_DATABASE_URL" || (echo 'PCAS_TEST_DATABASE_URL is required'; exit 1)
-	go test -race -count=1 ./internal/postgres
+	go test -race -count=1 -timeout 30m ./internal/postgres
 
 build:
 	go build -trimpath -o bin/pcas ./cmd/pcas

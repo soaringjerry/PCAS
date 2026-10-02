@@ -87,12 +87,15 @@ func (s *Store) ProcessIndex(ctx context.Context, j worker.Job) error {
 	})
 }
 func (s *Store) ProcessEmbedding(ctx context.Context, j worker.Job) error {
-	if s.models == nil || !s.models.Available(s.models.EmbeddingID()) {
-		return memory.ErrUnavailable
+	if s.models == nil || s.models.EmbeddingID() == "" {
+		return &worker.JobError{Code: "provider_not_configured"}
 	}
 	provider, ok := s.models.Get(s.models.EmbeddingID())
 	if !ok {
-		return memory.ErrUnavailable
+		return &worker.JobError{Code: "provider_not_configured"}
+	}
+	if !s.models.Available(provider.ID) {
+		return &worker.JobError{Code: "provider_unavailable", Retry: true}
 	}
 	var text string
 	err := s.pool.QueryRow(ctx, `SELECT t.body FROM memory_text t JOIN memory_records r ON (r.owner_id,r.id,r.version)=(t.owner_id,t.id,t.version) WHERE t.owner_id=$1 AND t.id=$2 AND t.version=$3 AND r.state='active'`, string(j.OwnerID), string(j.Record.ID), j.Record.Version).Scan(&text)
@@ -189,8 +192,14 @@ func (s *Store) ProcessEmbedding(ctx context.Context, j worker.Job) error {
 	vectors := []memory.Embedding{}
 	for start := 0; start < len(texts); start += 32 {
 		v, err := s.models.EmbedProvider(ctx, provider, texts[start:min(start+32, len(texts))])
+		if errors.Is(err, memory.ErrUnavailable) && start == 0 {
+			if err := s.releaseUnavailableReservation(ctx, j); err != nil {
+				return err
+			}
+			return &worker.JobError{Code: "provider_unavailable", Retry: true}
+		}
 		if err != nil {
-			return err
+			return &worker.JobError{Code: "model_call_failed", Retry: cost == 0}
 		}
 		vectors = append(vectors, v...)
 	}
@@ -471,6 +480,9 @@ func (s *Store) ProcessExtraction(ctx context.Context, j worker.Job) (err error)
 	free := p.Reserve(structuredExtractionInstructions+prompt) == 0
 	result, err := s.models.Generate(ctx, p.ID, structuredExtractionInstructions, prompt)
 	if errors.Is(err, memory.ErrUnavailable) {
+		if err := s.releaseUnavailableReservation(ctx, j); err != nil {
+			return err
+		}
 		return &worker.JobError{Code: "provider_unavailable", Retry: true}
 	}
 	if err != nil {
@@ -635,6 +647,18 @@ func (s *Store) ProcessExtraction(ctx context.Context, j worker.Job) (err error)
 			return err
 		}
 		return completeExtractionTx(ctx, tx, j, "")
+	})
+}
+
+// ErrUnavailable means no request was sent. Release its reservation under the
+// job fence so a metered retry cannot be mistaken for an ambiguous paid call.
+func (s *Store) releaseUnavailableReservation(ctx context.Context, j worker.Job) error {
+	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		if err := lockJob(ctx, tx, j); err != nil {
+			return err
+		}
+		_, err := tx.Exec(ctx, "DELETE FROM background_usage WHERE job_id=$1", string(j.ID))
+		return err
 	})
 }
 

@@ -3,7 +3,10 @@ import { formatTimestamp } from '../domain/time'
 import { Select, Stepper, FileDrop } from './controls'
 import { useEffect, useState, type ReactNode } from 'react'
 import { api } from '../store/api'
-import { Button, Fold, Tag } from './ui'
+import { ChatImportFlow, ImportList } from './ChatImport'
+import { SideSheet } from './Overlay'
+import { Button, Fold, Progress, Tag } from './ui'
+import { isChatExport, upload, useImports } from './useImports'
 
 type Connection = { id: string; name: string; kind: 'webhook' | 'poll' | 'folder'; url?: string; token_env?: string; enabled: boolean; version: number; interval_seconds: number; status: string; imported: number; error?: string; gaps: string[]; folder?: string; last_sync?: string }
 const statusText: Record<string, string> = { idle: '等待同步', syncing: '同步中', queued: '待同步', error: '同步失败' }
@@ -21,6 +24,12 @@ export function ConnectorSettings({ children }: { children?: ReactNode }) {
   const [message, setMessage] = useState('')
   const [credential, setCredential] = useState<{ id: string; token: string } | null>(null)
   const [busy, setBusy] = useState(false)
+  // A chat export is read first and shown before anything is stored; other files go straight in, as before.
+  const [chat, setChat] = useState<File | null>(null)
+  const [sent, setSent] = useState<number | null>(null)
+  // The picker is remade after each file, so choosing the same file again is still a choice.
+  const [picked, setPicked] = useState(0)
+  const imports = useImports()
   const refresh = () => api<Connection[]>('/v1/connectors').then(setConnections)
   useEffect(() => { let alive = true; const load = () => { void api<Connection[]>('/v1/connectors').then(v => { if (alive) setConnections(v) }).catch((e: Error) => { if (alive) setError(e.message) }) }; load(); const timer = setInterval(load, 5000); return () => { alive = false; clearInterval(timer) } }, [])
   const run = async (work: () => Promise<void>) => { setBusy(true); setError(''); setMessage(''); try { await work(); await refresh() } catch (e) { setError((e as Error).message) } finally { setBusy(false) } }
@@ -28,7 +37,23 @@ export function ConnectorSettings({ children }: { children?: ReactNode }) {
   const failing = connections.filter(c => c.error).length
   return <>
     <div className="setting set-block">
-      <label className="field"><span className="ink">导入聊天记录</span><FileDrop file={null} accept=".zip,.json,.jsonl,.txt,.md" hint="ChatGPT、Claude 或通用聊天归档 · ZIP、JSON、JSONL、TXT、Markdown · 20 MB" onClear={() => {}} onFile={file => { if (busy) return; void run(async () => { const form = new FormData(); form.append('file', file); const response = await fetch('/v1/connectors/archive', { method: 'POST', credentials: 'same-origin', body: form }); if (!response.ok) throw new Error('归档导入失败。支持 ZIP、JSON、JSONL、文本，文件最多 20 MB。'); const result = await response.json() as { gaps: string[] }; setMessage(result.gaps.join('；') || '已收到，原文已保存。') }) }} /><span className="tiny muted">原文先原样存下再整理；归档里的图片和附件会标出没解析的部分。</span></label>
+      <label className="field"><span className="ink">导入聊天记录</span><FileDrop key={picked} file={null} accept=".zip,.json,.jsonl,.txt,.md" hint="ChatGPT 导出的 zip，或其他聊天记录 · ZIP、JSON、JSONL、TXT、Markdown" onClear={() => {}} onFile={file => {
+        if (busy) return
+        setPicked(n => n + 1)
+        if (isChatExport(file)) { setError(''); setMessage(''); setChat(file); return }
+        void run(async () => {
+          try {
+            const result = await upload<{ gaps?: string[] }>('/v1/connectors/archive', file, '导入', (done, total) => setSent(total ? done / total : null))
+            setMessage(result.gaps?.join('；') || '已收到，原文已保存。')
+            imports.reload()
+          } finally { setSent(null) }
+        })
+      }} /><span className="tiny muted">ChatGPT 的导出会先让你看看里面有多少，确认了才导入。原文先原样存下再整理；图片和附件会标出没解析的部分。</span></label>
+      {sent !== null && <Progress value={sent} />}
+      {chat && <SideSheet title="导入聊天记录" onClose={() => setChat(null)}>
+        <ChatImportFlow file={chat} onCancel={() => setChat(null)} onStarted={() => { setChat(null); imports.reload() }} />
+      </SideSheet>}
+      <ImportList imports={imports} />
       {error && <p role="alert" className="form-error">{error}</p>}{message && <p role="status" className="small">{message}</p>}
     </div>
     {children}

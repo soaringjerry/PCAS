@@ -1,0 +1,107 @@
+package postgres
+
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"strings"
+	"testing"
+
+	"github.com/soaringjerry/PCAS/internal/memory"
+)
+
+type b3BaselineGold struct {
+	Commit string
+	S6     struct{ Plain, Structured, MetadataSuffix string }
+	S10    []struct {
+		Request  memory.RecallRequest
+		External bool
+		Status   int
+		Body     string
+	}
+}
+
+func b3BaselineOracle(t *testing.T) b3BaselineGold {
+	t.Helper()
+	var g b3BaselineGold
+	if err := json.Unmarshal(b3Gold(t)["preBatch3Baseline"], &g); err != nil {
+		t.Fatal(err)
+	}
+	if g.Commit == "" || len(g.S10) != 15 || g.S6.Plain == "" || g.S6.Structured == "" {
+		t.Fatal("missing pre-implementation frozen observations")
+	}
+	return g
+}
+func b3ModelMemoryContent(t *testing.T, prompt string) string {
+	t.Helper()
+	start := strings.Index(prompt, "召回的记忆（引用短别名）：")
+	if start < 0 {
+		t.Fatal("actual model request lacks the baseline memory heading")
+	}
+	end := strings.Index(prompt[start:], "\nTHIS：")
+	if end < 0 {
+		t.Fatal("actual model request lacks the baseline section boundary")
+	}
+	return prompt[start : start+end]
+}
+
+func TestPhase2B3_S6_NoConditionsPreserveBaselineBytesAndOnlyAppendMetadata(t *testing.T) {
+	gold := b3BaselineOracle(t)
+	for _, structured := range []bool{false, true} {
+		t.Run(fmt.Sprintf("structured_%v", structured), func(t *testing.T) {
+			s := b1Store(t)
+			scope := memory.Scope{OwnerID: b3FixedID(999), PrincipalID: "owner", IsOwner: true}
+			f := b1Model(t, s, b3Used())
+			b3BaselineData(t, s, scope)
+			if structured {
+				b3BaselineStructured(t, s, scope)
+			}
+			mustTurn(t, s, scope, turnRequest("neutralneedle"))
+			content := b3ModelMemoryContent(t, f.last(t).Prompt)
+			want := gold.S6.Plain
+			if structured {
+				want = gold.S6.Structured
+				lines := strings.Split(content, "\n")
+				seen := 0
+				for i, line := range lines {
+					if strings.HasPrefix(line, "[M") {
+						if !strings.HasSuffix(line, gold.S6.MetadataSuffix) {
+							t.Errorf("memory line lacks exactly the R12 suffix: %q", line)
+						} else {
+							lines[i] = strings.TrimSuffix(line, gold.S6.MetadataSuffix)
+						}
+						seen++
+					}
+				}
+				if seen != 2 {
+					t.Errorf("structured baseline memory lines=%d want 2", seen)
+				}
+				content = strings.Join(lines, "\n")
+			}
+			if content != want {
+				t.Errorf("actual memory/original bytes differ from baseline %s:\nwant:\n%s\ngot:\n%s", gold.Commit, want, content)
+			}
+		})
+	}
+}
+
+func TestPhase2B3_S10_PublicRecallFifteenRequestsByteIdentical(t *testing.T) {
+	s := b1Store(t)
+	scope := memory.Scope{OwnerID: b3FixedID(999), PrincipalID: "owner", IsOwner: true}
+	b1Model(t, s, b3Used())
+	b3BaselineData(t, s, scope)
+	gold := b3BaselineOracle(t)
+	for i, c := range gold.S10 {
+		t.Run(fmt.Sprintf("request_%02d", i+1), func(t *testing.T) {
+			who := scope
+			if c.External {
+				who.IsOwner = false
+				who.PrincipalID = "baseline-external"
+			}
+			w := b1HTTP(t, s, who, "POST", "/v1/memory/recall", c.Request)
+			if w.Code != c.Status || !bytes.Equal(w.Body.Bytes(), []byte(c.Body)) {
+				t.Errorf("public recall changed from %s: status=%d want %d\nwant bytes=%s\ngot bytes=%s", gold.Commit, w.Code, c.Status, c.Body, w.Body.String())
+			}
+		})
+	}
+}

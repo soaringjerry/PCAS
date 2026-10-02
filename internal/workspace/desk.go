@@ -1,5 +1,7 @@
 package workspace
 
+import "encoding/json"
+
 // DeskTurnRequest is also the server-side entry point used by connectors.
 type DeskTurnRequest struct {
 	RequestID      string  `json:"requestId"`
@@ -61,12 +63,26 @@ type DeskLinkItem struct {
 	Host string `json:"host"`
 }
 type DeskTimelineItem struct {
-	At       *string `json:"at"`
-	Text     string  `json:"text"`
-	Status   string  `json:"status"`
-	MemoryID *string `json:"memoryId"`
-	ThingID  *string `json:"thingId"`
+	EventFrom      string          `json:"eventFrom,omitempty"`
+	EventTo        string          `json:"eventTo,omitempty"`
+	EventPrecision string          `json:"eventPrecision,omitempty"`
+	Mentions       []MemoryMention `json:"mentions"`
+	At             *string         `json:"at"`
+	Text           string          `json:"text"`
+	Status         string          `json:"status"`
+	MemoryID       *string         `json:"memoryId"`
+	ThingID        *string         `json:"thingId"`
 }
+
+// MarshalJSON keeps absent mentions an empty array in stored and new cards.
+func (item DeskTimelineItem) MarshalJSON() ([]byte, error) {
+	type wire DeskTimelineItem
+	if item.Mentions == nil {
+		item.Mentions = []MemoryMention{}
+	}
+	return json.Marshal(wire(item))
+}
+
 type DeskTaskItem struct {
 	ThingID string  `json:"thingId"`
 	Title   string  `json:"title"`

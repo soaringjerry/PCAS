@@ -126,7 +126,20 @@ export interface MemoryVersion {
   reason?: string
 }
 
+export type EventPrecision = 'unknown' | 'day' | 'month' | 'year' | 'range'
+
+export interface MemoryMention {
+  entityId: ID
+  name: string
+  role: 'person' | 'place' | 'organization' | 'thing'
+}
+
 export interface Memory {
+  expressedAt?: string
+  eventFrom?: string
+  eventTo?: string
+  eventPrecision?: EventPrecision
+  mentions?: MemoryMention[]
 	confirmation?: 'unknown' | 'candidate' | 'adopted' | 'confirmed' | 'disputed'
 	acquisition?: 'direct' | 'reported' | 'inferred' | 'execution'
   halfLifeDays?: number
@@ -309,6 +322,7 @@ export interface Notice {
 }
 
 export interface State {
+  memoryTotal?: number
   notices: Notice[]
   budgetUsage: number
   revision: number

@@ -645,5 +645,62 @@
       "missing_excerpt": "完全不在原文里的摘录（合成）",
       "processing_status": "source.extract：queued"
     }
+  },
+  "integration_supplement_2026_10_02": {
+    "rules": [
+      "R7 history scope/receipt supplements",
+      "R8a real backend long multiline text"
+    ],
+    "R2_pending": "用户明确隐藏或事项排除的陈述对应原话是否供给尚未决定；不新增这方面断言，保留 TestSecretaryStablePrefixAndVisibility 失败。",
+    "R7": {
+      "must": [
+        "当前场合陈述不可用时，用户轮次内容和回执保留并带 outdated:true",
+        "模型历史保留提问，以替换语取代旧回答，旧陈述依赖不带入",
+        "outdated 模型历史仍保留动作回执行"
+      ],
+      "must_not": [
+        "整轮历史被省略",
+        "旧模型回答或不可用陈述依赖继续带入",
+        "因 outdated 丢失动作回执行"
+      ]
+    },
+    "long_browser": {
+      "title": "快速记录",
+      "prefix_line": "合成长资料前言：成都出差的普通记录，不含关键交付答案。",
+      "middle_lines": [
+        "成都资料中段：交付暗号是青色灯塔7319。",
+        "见面地点是锦江桥东侧，带上蓝色档案袋。"
+      ],
+      "suffix_line": "合成长资料后记：这些是与暗号无关的日常安排。",
+      "prefix_repetitions": 30,
+      "suffix_repetitions": 30,
+      "question": "成都长资料中段的交付暗号是什么",
+      "reply": "交付暗号是青色灯塔7319。",
+      "must": [
+        "原文超过600字符且含换行",
+        "实际模型请求包含中段交付暗号",
+        "依据点击一次直接展示完整原文",
+        "卡片摘录在原文中一字不差找到",
+        "mark 存在并在面板可见区域内"
+      ],
+      "must_not": [
+        "换行被改写成空格导致摘录无法精确匹配",
+        "标记缺失或在可见区域外",
+        "只展示600字摘录或需二次展开"
+      ]
+    },
+    "approved_legacy": {
+      "TestSecretaryConversationDependenciesStayASet": [
+        "明确陈述与原话两条依赖，各一条且kind正确",
+        "对话变长、600项旧结构均不放大新依赖集合"
+      ],
+      "TestDeskHistoryCannotBypassDestinationItemScope": [
+        "提问、陈述、回答三种独立合成标记",
+        "旧回答替换，提问保留",
+        "记忆节无不可用陈述，ContextMemoryIDs无该id",
+        "exclude 子用例不判断相关原话是否包含其原话"
+      ],
+      "TestSecretaryStablePrefixAndVisibility": "先不改，保持失败并报告"
+    }
   }
 }

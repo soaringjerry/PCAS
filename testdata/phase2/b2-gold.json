@@ -588,5 +588,15 @@
       "event_bounds_present": true,
       "model_prompt_after_batch3": "Deferred to phase3 integration; batch2 checks memoriesTx under deputy identity."
     }
+  },
+  "supplement_02e7a27": {
+    "U5": {
+      "status": "cancelled",
+      "authority": "batch2/README.md section 10; coordinator final-round instruction",
+      "reason": "Project timeline was removed and domain/things.ts decision reader has no callers."
+    },
+    "U2b": {
+      "project_timeline_requirement": "cancelled; section 8 table first row excluded"
+    }
   }
 }

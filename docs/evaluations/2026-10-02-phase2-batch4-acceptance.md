@@ -2,11 +2,13 @@
 
 当前状态：**测试已编写，验收未运行**。没有 `make check` 或浏览器结果，不能据此宣布第 4 批通过。
 
-任务：T4。分支 `phase2/b4-T4-acceptance`，工作区 `/root/PCAS-wt/b4-T4`。最初基于 `origin/main` 的 `66b1a43`；当时 `origin/phase2/batch4` 尚不存在。待协调者创建集成分支后变基，Draft PR 的 base 必须是 `phase2/batch4`，不合 main、不部署。
+任务：T4。分支 `phase2/b4-T4-acceptance`，工作区 `/root/PCAS-wt/b4-T4`。最初基于 `origin/main` 的 `66b1a43`；当时 `origin/phase2/batch4` 尚不存在；现已按任务要求变基到该集成分支的 `1cec28b`。Draft PR 的 base 为 `phase2/batch4`，不合 main、不部署。
 
 被测集成提交：**尚未指定**。收到实现合入通知后，在同一个明确提交上统一跑全量；届时追加实际结果、发现及修复归属。
 
 依据：`parallel.md`、第 4 批契约和 T4 任务包；补充接缝依据协调者确认的 `5865411`、`1cec28b` 第 6 节。未读取 I/L/U4 的新实现，也未修改产品代码或已有测试预期。
+
+下文冻结提交号是变基前已推送的原始提交，用于记录预期在测试之前冻结的顺序；变基重放未改变原条目。
 
 冻结预期：[b4-gold.json](../../testdata/phase2/b4-gold.json)。`01fc058` 在测试文件创建前提交全部语义预期；`213c4af` 只追加协调者确认的接缝和 I9 修订，原条目不改。`4540d30` 在接上批次里的归档目标之前追加冻结 `message` 和 `archiveId/archiveVersion` 的第二次确认。I9 以补充契约的“取消正在处理的小批、租约过期后重新领取”为准，无需杀进程。
 
@@ -71,7 +73,7 @@
 
 ## 待协调者确认/配合
 
-1. 创建 `phase2/batch4` 并通知变基；测试直接使用第 6 节的可调变量，合入 I 后才能编译。
+1. 集成分支现已创建且 T4 已变基。测试直接使用第 6 节的可调变量，合入 I 后才能编译；Draft PR 自动 CI 当前可能因此失败，不等同于已进行人工统一验收。
 2. 指定实现全部合入后的被测提交，通知 T4 运行统一全量。运行临时 pgvector 16、tmpfs、随机本机端口，设 `PCAS_TEST_DATABASE_URL`，不读线上 `.env` 或 `config/`，不调真实模型，不发真实通知。
 3. 两处接缝均由协调者确认并写入 `1cec28b`：错误说明使用 `message`，只断言非空且四类互不相同；I10 从批次接口读取 `archiveId/archiveVersion`，沿用 `POST /v1/memory/delete` 和 `include_sources: true`。没有待定规则。
 

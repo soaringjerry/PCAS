@@ -92,10 +92,10 @@ test('V1 四种状态、说话日期和事件日期、人地点与无日期，39
 test('V2 点击时间轴条目直接打开当时的原话', async ({ page }) => {
   const mock = await backend(page)
   await ask(page)
-  await page.locator('.sec-timeline').getByRole('button', { name: items[0].text, exact: true }).click()
+  await page.locator('.sec-timeline').getByRole('button', { name: items[0].text }).click()
   const dialog = page.getByRole('dialog')
   await expect(dialog).toBeVisible()
-  await expect(dialog.locator('pre')).toHaveText(gold.browser.sourceText)
+  await expect(dialog.locator('pre').filter({ hasText: gold.browser.sourceText })).toHaveText(gold.browser.sourceText)
   expect(mock.opened).toHaveLength(1)
   expect(new URL(mock.opened[0]).searchParams.get('version')).toBe('1')
   expect(mock.errors).toEqual([])

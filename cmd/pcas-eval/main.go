@@ -23,6 +23,14 @@ import (
 )
 
 type Report struct {
+	Tier                      string                    `json:"tier"`
+	Mode                      string                    `json:"mode"`
+	Documents                 int                       `json:"documents"`
+	Questions                 int                       `json:"questions"`
+	SelectedQuestions         int                       `json:"selected_questions"`
+	GoldStructured            bool                      `json:"gold_structured"`
+	Seed                      uint64                    `json:"seed,omitempty"`
+	Retrieval                 []fixture.RetrievalTotals `json:"retrieval"`
 	EmbeddingPrecomputeTokens int                       `json:"embedding_precompute_tokens"`
 	EmbeddingPrecomputeCost   float64                   `json:"embedding_precompute_cost_cny"`
 	SchemaVersion             int                       `json:"schema_version"`
@@ -65,6 +73,10 @@ func envFloat(key string) (float64, error) {
 	return n, nil
 }
 func run() error {
+	tier := flag.String("tier", "basic", "basic or hard, reported separately")
+	mode := flag.String("mode", "comparison", "comparison (answers+extraction) or retrieval (secretary only)")
+	rawOnly := flag.Bool("raw-only", false, "load source-only data for retrieval diagnostic")
+	ciSubset := flag.Bool("ci-subset", false, "fixed hard query subset on the full pressure corpus")
 	dsn := flag.String("database-url", "", "empty local disposable PostgreSQL DSN (mandatory)")
 	dir := flag.String("fixtures", "testdata/phase2/eval", "synthetic corpus directory")
 	output := flag.String("output", "/tmp/pcas-eval", "output file prefix (.md and .json)")
@@ -80,6 +92,15 @@ func run() error {
 	}
 	if *top < 1 {
 		return fmt.Errorf("top-k must be positive")
+	}
+	if *mode != "comparison" && *mode != "retrieval" {
+		return fmt.Errorf("mode must be comparison or retrieval")
+	}
+	if *rawOnly && *mode != "retrieval" {
+		return fmt.Errorf("raw-only is a retrieval diagnostic")
+	}
+	if *mode == "retrieval" && !*fake {
+		return fmt.Errorf("eval retrieval capture requires -fake; use comparison for real model answers")
 	}
 	// Parse corpus timezone before expanding date placeholders.
 	raw, err := os.ReadFile(filepath.Join(*dir, "corpus.json"))
@@ -102,7 +123,7 @@ func run() error {
 			return err
 		}
 	}
-	c, baseline, err := fixture.Load(*dir, anchor)
+	c, baseline, err := fixture.LoadTier(*dir, *tier, anchor)
 	if err != nil {
 		return err
 	}
@@ -183,7 +204,7 @@ func run() error {
 	}
 	defer cleanup()
 	store.SetModels(models)
-	seeded, err := fixture.Seed(ctx, store, pool, c, anchor, "eval", true)
+	seeded, err := fixture.Seed(ctx, store, pool, c, anchor, "eval", !*rawOnly)
 	if err != nil {
 		return err
 	}
@@ -200,7 +221,27 @@ func run() error {
 	if vectorMode == "keyword-fallback" {
 		report.Notes = append(report.Notes, "No embedding model configured: vector-only is explicitly replaced with keyword overlap ranking.")
 	}
+	report.Tier = *tier
+	report.Mode = *mode
+	report.GoldStructured = !*rawOnly
 	docs := c.Documents()
+	report.Documents = len(docs)
+	report.Questions = len(c.Queries())
+	queries := c.Queries()
+	if *tier == "hard" {
+		cfg, err := fixture.LoadHardConfig(*dir)
+		if err != nil {
+			return err
+		}
+		report.Seed = cfg.Seed
+		if *ciSubset {
+			queries = fixture.CIQueries(c, cfg.CICasesPerType)
+		}
+	}
+	report.SelectedQuestions = len(queries)
+	rendered := encoded(c)
+	report.CorpusSHA256 = fmt.Sprintf("%x", sha256.Sum256(rendered))
+	var retrievalScores []fixture.RetrievalScore
 	var vectors []memory.Embedding
 	if vectorMode == "cosine-vector" {
 		// Precompute both pure vector documents and canonical product vectors using
@@ -249,8 +290,8 @@ func run() error {
 		report.EmbeddingPrecomputeTokens += v.InputTokens
 	}
 	report.EmbeddingPrecomputeCost = float64(report.EmbeddingPrecomputeTokens) * vectorPrice / 1e6
-	for n, q := range c.Queries() {
-		fmt.Fprintf(os.Stderr, "question %d/%d %s\n", n+1, len(c.Queries()), q.ID)
+	for n, q := range queries {
+		fmt.Fprintf(os.Stderr, "question %d/%d %s\n", n+1, len(queries), q.ID)
 		beforeVector := len(observed.Embeddings())
 		before := len(observed.Calls())
 		start := time.Now()
@@ -277,7 +318,11 @@ func run() error {
 		}
 		score := fixture.ScoreRetrievalIdentified(c, q, fixture.ContextSections(call.Prompt), received)
 		r.Retrieval = &score
+		retrievalScores = append(retrievalScores, score)
 		report.Answers = append(report.Answers, r)
+		if *mode == "retrieval" {
+			continue
+		}
 		for _, method := range []string{"all-context", "vector-only"} {
 			start := time.Now()
 			beforeVector := len(observed.Embeddings())
@@ -320,37 +365,50 @@ func run() error {
 			report.Answers = append(report.Answers, r)
 		}
 	}
-	// Independent schema-constrained extraction. Role-excluded messages are
-	// evaluated as empty without sending them to the model, as contract R10 says.
-	for n, d := range docs {
-		fmt.Fprintf(os.Stderr, "extraction %d/%d %s\n", n+1, len(docs), d.ID)
-		var pred fixture.Extraction
-		if d.Role == "user" {
-			prompt := string(encoded(map[string]any{"source": d.Text, "expressed_at": anchor.AddDate(0, 0, d.ExpressedDays).Add(9 * time.Hour).Format(time.RFC3339), "recorded_at": anchor.AddDate(0, 0, d.RecordedDays).Format(time.RFC3339), "timezone": c.Timezone, "role": d.Role}))
-			start := time.Now()
-			result, err := models.Generate(ctx, "eval", extractionSystem, prompt)
-			if err != nil {
-				return fmt.Errorf("%s extraction: model call failed", d.ID)
+	if *mode == "comparison" {
+		// Independent schema-constrained extraction. Role-excluded messages are
+		// evaluated as empty without sending them to the model, as contract R10 says.
+		for n, d := range docs {
+			fmt.Fprintf(os.Stderr, "extraction %d/%d %s\n", n+1, len(docs), d.ID)
+			var pred fixture.Extraction
+			if d.Role == "user" {
+				prompt := string(encoded(map[string]any{"source": d.Text, "expressed_at": anchor.AddDate(0, 0, d.ExpressedDays).Add(9 * time.Hour).Format(time.RFC3339), "recorded_at": anchor.AddDate(0, 0, d.RecordedDays).Format(time.RFC3339), "timezone": c.Timezone, "role": d.Role}))
+				start := time.Now()
+				result, err := models.Generate(ctx, "eval", extractionSystem, prompt)
+				if err != nil {
+					return fmt.Errorf("%s extraction: model call failed", d.ID)
+				}
+				report.ExtractionMilliseconds += float64(time.Since(start)) / float64(time.Millisecond)
+				report.ExtractionInputTokens += result.InputTokens
+				report.ExtractionCost += result.Cost
+				value := strings.TrimSpace(result.Text)
+				value = strings.TrimPrefix(value, "```json")
+				value = strings.TrimPrefix(value, "```")
+				value = strings.TrimSuffix(value, "```")
+				if err := json.Unmarshal([]byte(strings.TrimSpace(value)), &pred); err != nil {
+					return fmt.Errorf("%s eval_extraction_invalid: expected items JSON", d.ID)
+				}
 			}
-			report.ExtractionMilliseconds += float64(time.Since(start)) / float64(time.Millisecond)
-			report.ExtractionInputTokens += result.InputTokens
-			report.ExtractionCost += result.Cost
-			value := strings.TrimSpace(result.Text)
-			value = strings.TrimPrefix(value, "```json")
-			value = strings.TrimPrefix(value, "```")
-			value = strings.TrimSuffix(value, "```")
-			if err := json.Unmarshal([]byte(strings.TrimSpace(value)), &pred); err != nil {
-				return fmt.Errorf("%s eval_extraction_invalid: expected items JSON", d.ID)
-			}
+			score := fixture.CompareExtraction(d, pred.Items)
+			report.Extraction = append(report.Extraction, score)
+			addCounts(&report.ExtractionTotals.People, score.People)
+			addCounts(&report.ExtractionTotals.Places, score.Places)
+			addCounts(&report.ExtractionTotals.Time, score.Time)
+			addCounts(&report.ExtractionTotals.Nature, score.Nature)
 		}
-		score := fixture.CompareExtraction(d, pred.Items)
-		report.Extraction = append(report.Extraction, score)
-		addCounts(&report.ExtractionTotals.People, score.People)
-		addCounts(&report.ExtractionTotals.Places, score.Places)
-		addCounts(&report.ExtractionTotals.Time, score.Time)
-		addCounts(&report.ExtractionTotals.Nature, score.Nature)
 	}
+	report.Retrieval = fixture.AggregateRetrieval(*tier, c, retrievalScores)
 	report.Summaries = summarize(report.Answers)
+	if *mode == "retrieval" {
+		report.Summaries = report.Summaries[2:]
+		report.Notes = []string{
+			"Retrieval-only: one real secretary entry per question, with an HTTP fake model capturing the actual supplied context. No answer comparison or extraction is run.",
+			"Gold is independently generated from source templates; complete evidence text and persisted source/item identity must both be delivered.",
+			"Recall and interference are micro-averages of evidence counts and annotated distractor/evidence pairs. Missing evidence ranks after delivered distractors.",
+			"Memories/sources sent count M/S aliases in the actual memory and source sections, excluding query/history. Hard time-only paraphrases share the same eight-evidence weekly set.",
+			"Fake tokens/cost/latency are local plumbing measurements. They are not real-model answer quality.",
+		}
+	}
 	if err := writeReport(*output, report); err != nil {
 		return err
 	}
@@ -371,22 +429,37 @@ func writeReport(prefix string, r Report) error {
 		return err
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "# PCAS synthetic recall evaluation\n\nRevision `%s`; anchor %s; model `%s`; fake=%t; corpus SHA256 `%s`.\n\nVector baseline: **%s**. Native structured schema: %t. Baseline %.4f (%s).\n\n%s; input allowance %d.\n\n| Method | Fact hits | Fact rate | Input tokens | Cost CNY | Total ms | Truncated queries |\n|---|---:|---:|---:|---:|---:|---:|\n", r.Revision, r.Anchor, r.Model, r.Fake, r.CorpusSHA256, r.VectorMode, r.NativeStructuredSchema, r.Baseline.MinimumRecall, r.Baseline.Status, r.TokenBound, r.MaxInputTokens)
-	for _, s := range r.Summaries {
-		fmt.Fprintf(&b, "| %s | %d/%d | %.4f | %d | %.6f | %.2f | %d |\n", s.Method, s.FactsHit, s.FactsTotal, s.FactRate, s.InputTokens, s.Cost, s.Milliseconds, s.TruncatedQueries)
+	fmt.Fprintf(&b, "# PCAS synthetic recall evaluation\n\nRevision `%s`; anchor %s; model `%s`; fake=%t; rendered corpus SHA256 `%s`.\n\nNative structured schema: %t. Baseline %.4f (%s).\n\n", r.Revision, r.Anchor, r.Model, r.Fake, r.CorpusSHA256, r.NativeStructuredSchema, r.Baseline.MinimumRecall, r.Baseline.Status)
+	fmt.Fprintf(&b, "Tier **%s**, mode %s, %d documents, %d/%d questions, gold=%t, seed=%d.\n\n", r.Tier, r.Mode, r.Documents, r.SelectedQuestions, r.Questions, r.GoldStructured, r.Seed)
+	fmt.Fprintf(&b, "| Query type | Questions | Evidence | Recall | Inversions | Interference |\n|---|---:|---:|---:|---:|---:|\n")
+	for _, g := range r.Retrieval {
+		fmt.Fprintf(&b, "| %s | %d | %d/%d | %.6f | %d/%d | %.6f |\n", g.Type, g.Queries, g.Delivered, g.Required, g.Recall, g.Inversions, g.Pairs, g.Interference)
 	}
-	fmt.Fprintf(&b, "\nShared embedding precompute: %d input tokens, CNY %.6f. Answer costs include query embeddings.\n", r.EmbeddingPrecomputeTokens, r.EmbeddingPrecomputeCost)
-	e := r.ExtractionTotals
-	fmt.Fprintf(&b, "\n| Extraction dimension | Correct/total | Accuracy |\n|---|---:|---:|\n")
-	for _, d := range []struct {
-		name string
-		c    fixture.Counts
-	}{{"People (micro-F1)", e.People}, {"Places (micro-F1)", e.Places}, {"Time", e.Time}, {"Nature", e.Nature}} {
-		fmt.Fprintf(&b, "| %s | %d/%d | %.4f |\n", d.name, d.c.Correct, d.c.Total, d.c.Accuracy())
+	b.WriteString("\n")
+	if r.Mode == "comparison" {
+		fmt.Fprintf(&b, "Vector baseline: **%s**. %s; input allowance %d.\n\n| Method | Fact hits | Fact rate | Input tokens | Cost CNY | Total ms | Truncated queries |\n|---|---:|---:|---:|---:|---:|---:|\n", r.VectorMode, r.TokenBound, r.MaxInputTokens)
+		for _, s := range r.Summaries {
+			fmt.Fprintf(&b, "| %s | %d/%d | %.4f | %d | %.6f | %.2f | %d |\n", s.Method, s.FactsHit, s.FactsTotal, s.FactRate, s.InputTokens, s.Cost, s.Milliseconds, s.TruncatedQueries)
+		}
+		fmt.Fprintf(&b, "\nShared embedding precompute: %d input tokens, CNY %.6f. Answer costs include query embeddings.\n", r.EmbeddingPrecomputeTokens, r.EmbeddingPrecomputeCost)
+		e := r.ExtractionTotals
+		fmt.Fprintf(&b, "\n| Extraction dimension | Correct/total | Accuracy |\n|---|---:|---:|\n")
+		for _, d := range []struct {
+			name string
+			c    fixture.Counts
+		}{{"People (micro-F1)", e.People}, {"Places (micro-F1)", e.Places}, {"Time", e.Time}, {"Nature", e.Nature}} {
+			fmt.Fprintf(&b, "| %s | %d/%d | %.4f |\n", d.name, d.c.Correct, d.c.Total, d.c.Accuracy())
+		}
+		fmt.Fprintf(&b, "\nExtraction input tokens %d; cost CNY %.6f; total ms %.2f.\n\n| Question | Method | Fact rate | Input tokens | Cost CNY | ms | Truncated |\n|---|---|---:|---:|---:|---:|---|\n", r.ExtractionInputTokens, r.ExtractionCost, r.ExtractionMilliseconds)
+		for _, row := range r.Answers {
+			fmt.Fprintf(&b, "| %s | %s | %.4f | %d | %.6f | %.2f | %t |\n", row.Query, row.Method, row.FactRate, row.InputTokens, row.Cost, row.Milliseconds, row.Truncated)
+		}
 	}
-	fmt.Fprintf(&b, "\nExtraction input tokens %d; cost CNY %.6f; total ms %.2f.\n\n| Question | Method | Fact rate | Input tokens | Cost CNY | ms | Truncated |\n|---|---|---:|---:|---:|---:|---|\n", r.ExtractionInputTokens, r.ExtractionCost, r.ExtractionMilliseconds)
+	b.WriteString("\n| Question | Evidence | Recall | Inversions | Interference | Memories sent | Sources sent |\n|---|---:|---:|---:|---:|---:|---:|\n")
 	for _, row := range r.Answers {
-		fmt.Fprintf(&b, "| %s | %s | %.4f | %d | %.6f | %.2f | %t |\n", row.Query, row.Method, row.FactRate, row.InputTokens, row.Cost, row.Milliseconds, row.Truncated)
+		if s := row.Retrieval; s != nil {
+			fmt.Fprintf(&b, "| %s | %d/%d | %.6f | %d/%d | %.6f | %d | %d |\n", s.Query, s.Delivered, s.Required, s.Recall, s.Inversions, s.Pairs, s.Interference, s.MemoriesSent, s.SourcesSent)
+		}
 	}
 	b.WriteString("\nNotes:\n\n")
 	for _, note := range r.Notes {

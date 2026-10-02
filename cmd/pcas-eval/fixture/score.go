@@ -3,6 +3,7 @@ package fixture
 import (
 	"fmt"
 	"math"
+	"regexp"
 	"strings"
 )
 
@@ -14,7 +15,11 @@ type RetrievalScore struct {
 	Pairs        int     `json:"pairs"`
 	Recall       float64 `json:"recall"`
 	Interference float64 `json:"interference"`
+	MemoriesSent int     `json:"memories_sent"`
+	SourcesSent  int     `json:"sources_sent"`
 }
+
+var sentAlias = regexp.MustCompile(`(?m)^\[(M|S)[0-9]+ / `)
 
 // ContextSections excludes the question/history. Markers are product section
 // headings, not injected gold labels. Fail closed if formatting changes.
@@ -47,6 +52,13 @@ func ScoreRetrieval(c Corpus, q Query, context string) RetrievalScore {
 func ScoreRetrievalIdentified(c Corpus, q Query, context string, received map[string]bool) RetrievalScore {
 	docs := c.ByID()
 	s := RetrievalScore{Query: q.ID, Required: len(q.Evidence), Pairs: len(q.Evidence) * len(q.Distractors)}
+	for _, alias := range sentAlias.FindAllStringSubmatch(context, -1) {
+		if alias[1] == "M" {
+			s.MemoriesSent++
+		} else {
+			s.SourcesSent++
+		}
+	}
 	for _, e := range q.Evidence {
 		item := docs[e.Source].Gold.Items[e.Item]
 		ep := position(context, item.Text, item.Quote)
@@ -182,4 +194,52 @@ func CompareExtraction(d Document, pred []Item) ExtractionScore {
 		s.Nature.Total++
 	}
 	return s
+}
+
+// RetrievalTotals uses raw counts for micro-averages. Coverage reports keep
+// query types separate so eight paraphrases of one set cannot hide failures.
+type RetrievalTotals struct {
+	Tier         string  `json:"tier"`
+	Type         string  `json:"type"`
+	Queries      int     `json:"queries"`
+	Delivered    int     `json:"delivered"`
+	Required     int     `json:"required"`
+	Inversions   int     `json:"inversions"`
+	Pairs        int     `json:"pairs"`
+	Recall       float64 `json:"recall"`
+	Interference float64 `json:"interference"`
+}
+
+func AggregateRetrieval(tier string, c Corpus, scores []RetrievalScore) []RetrievalTotals {
+	byID := map[string]Query{}
+	for _, q := range c.Queries() {
+		byID[q.ID] = q
+	}
+	groups := map[string]*RetrievalTotals{}
+	for _, typ := range append(append([]string{}, QueryTypes...), "all") {
+		groups[typ] = &RetrievalTotals{Tier: tier, Type: typ}
+	}
+	for _, s := range scores {
+		typ := QueryType(c, byID[s.Query])
+		for _, key := range []string{typ, "all"} {
+			g := groups[key]
+			g.Queries++
+			g.Delivered += s.Delivered
+			g.Required += s.Required
+			g.Inversions += s.Inversions
+			g.Pairs += s.Pairs
+		}
+	}
+	var out []RetrievalTotals
+	for _, typ := range append(append([]string{}, QueryTypes...), "all") {
+		g := groups[typ]
+		if g.Required > 0 {
+			g.Recall = float64(g.Delivered) / float64(g.Required)
+		}
+		if g.Pairs > 0 {
+			g.Interference = float64(g.Inversions) / float64(g.Pairs)
+		}
+		out = append(out, *g)
+	}
+	return out
 }

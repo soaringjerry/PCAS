@@ -138,7 +138,7 @@ T4 按这张表写测试，测试名带编号（`TestPhase2B4_I1_…`）。导�
 - `GET /v1/connectors/imports`：`{ "items": [ … ] }`，新的在前，不分页。每一项：
 
 ```json
-{ "id": "…", "name": "chatgpt-export.zip", "state": "importing", "total": 23110, "stored": 4000, "organized": 120,
+{ "id": "…", "archiveId": "…", "archiveVersion": 1, "name": "chatgpt-export.zip", "state": "importing", "total": 23110, "stored": 4000, "organized": 120,
   "leftOut": 0, "earliest": "2023-02-11T08:02:00Z", "latest": "2026-09-30T12:40:00Z",
   "errorCode": "", "error": "", "createdAt": "…", "updatedAt": "…" }
 ```
@@ -153,7 +153,15 @@ T4 按这张表写测试，测试名带编号（`TestPhase2B4_I1_…`）。导�
 | JSON 被截断或不合法 | `invalid_json` | 400 |
 | 超过上传上限或解压上限 | `archive_too_large` | 413 |
 
-每种错误的返回里带一句给用户看的说明，四句各不相同。
+出错时的返回沿用现有接口的写法，再加一个 `message`：
+
+```json
+{ "error": "invalid_zip", "message": "这个文件打不开，它可能不是 zip，或者下载时损坏了。" }
+```
+
+`error` 是错误类型，`message` 是给用户看的那句话，各种错误的 `message` 互不相同。T4 断言 `error` 的值，以及 `message` 非空且各不相同，不断言具体措辞。
+
+**删除一次导入（R11、I10）不新增接口**：用现有的 `POST /v1/memory/delete`，目标是这次导入的原始归档资料，即 `{ "id": <archiveId>, "version": <archiveVersion>, "kind": "source" }`，`include_sources` 为真。现有的删除闭包会顺着归档找到它的全部消息和从消息抽出的记忆；批次记录随归档资料的删除级联消失。
 
 - 上限和小批大小做成包级变量，测试里可以调小、用完改回去：
 

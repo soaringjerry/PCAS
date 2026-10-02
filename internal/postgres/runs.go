@@ -156,14 +156,19 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 				selected[m.ID] = true
 			}
 		}
+		// R12a: select against the brief without annotations. Keep their byte
+		// count separate so they cannot displace later memories or raw excerpts.
+		annotationBytes := 0
 		for _, m := range ordered {
 			if !oneOf(m.Kind, agent.MemoryKinds...) || m.Epistemic == "inferred" && !agent.IncludeInferred || oneOf(m.ID, excluded...) || m.ProjectID != "" && m.ProjectID != projectID {
 				continue
 			}
-			if brief.Len()+len(m.Text)+len(memoryPromptSuffix(m, loc)) > 30000 {
+			if brief.Len()-annotationBytes+len(m.Text) > 30000 {
 				continue
 			}
-			fmt.Fprintf(&brief, "[%s@%d / %s / confirmation=%s / acquisition=%s] %s\n", m.ID, m.Version, m.Epistemic, m.Confirmation, m.Acquisition, m.Text+memoryPromptSuffix(m, loc))
+			suffix := memoryPromptSuffix(m, loc)
+			fmt.Fprintf(&brief, "[%s@%d / %s / confirmation=%s / acquisition=%s] %s%s\n", m.ID, m.Version, m.Epistemic, m.Confirmation, m.Acquisition, m.Text, suffix)
+			annotationBytes += len(suffix)
 			run.ContextMemoryIDs = append(run.ContextMemoryIDs, m.ID)
 			run.ContextVersions = append(run.ContextVersions, memory.Ref{ID: memory.ID(m.ID), Version: m.Version, Kind: memory.ClaimKind})
 		}
@@ -177,7 +182,7 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 		for _, source := range sources {
 			at, label := sourceExcerptTime(source)
 			line := fmt.Sprintf("[source:%s@%d / %s / %s %s] %s\n", source.ID, source.Version, source.Title, label, at.In(loc).Format("2006-01-02"), source.Text)
-			if brief.Len()+len(line) > 30000 {
+			if brief.Len()-annotationBytes+len(line) > 30000 {
 				continue
 			}
 			brief.WriteString(line)

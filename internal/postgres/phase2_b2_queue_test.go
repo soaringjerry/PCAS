@@ -168,12 +168,21 @@ func TestPhase2B2_F3_NotConfiguredStopsAndManualRetrySucceeds(t *testing.T) {
 	st := b2Job(t, s, scope, src)
 	b2Equal(t, st.State, b2Want[string](t, "F3", "state"))
 	b2Equal(t, st.Code, b2Want[string](t, "F3", "error"))
+	var attemptsSpec struct {
+		Attempts  int `json:"attempts"`
+		Unchanged int `json:"after_no_automatic_reclaim_attempts"`
+		Manual    int `json:"manual_retry_attempts"`
+	}
+	b2SupplementFrom(t, "supplement_dda8ef5", "legacy_not_configured", &attemptsSpec)
+	b2Equal(t, st.Attempts, attemptsSpec.Attempts)
 	b2RunOnce(t, w, false)
+	b2Equal(t, b2Job(t, s, scope, src).Attempts, attemptsSpec.Unchanged)
 	b1Model(t, s, map[string]any{"items": []any{b2Item(text, text, "preference")}})
 	id := b2SQLIDs(t, s, `SELECT id::text FROM memory_jobs WHERE owner_id=$1 AND record_id=$2 AND stage='source.extract'`, string(scope.OwnerID), string(src.ID))[0]
 	workspaceCommand(t, s, scope, workspace.Command{Type: "retryJob", ID: id})
 	b2RunOnce(t, w, true)
 	b2Equal(t, b2Job(t, s, scope, src).State, b2Want[string](t, "F3", "manual_retry"))
+	b2Equal(t, b2Job(t, s, scope, src).Attempts, attemptsSpec.Manual)
 	b2Equal(t, len(b2Snapshot(t, s, scope).Memories), 1)
 }
 func TestPhase2B2_F4_BudgetDefersWithoutAttemptAndCalendarHandlesDST(t *testing.T) {

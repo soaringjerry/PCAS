@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/ai"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/workspace"
@@ -735,4 +736,41 @@ func TestPhase2B2_M13_DetailIsDirectMemoryAndMissingIsNotFound(t *testing.T) {
 	b1Delete(t, s, scope, g.Refs[0])
 	deleted := b1HTTP(t, s, scope, "GET", "/v1/workspace/memories/"+id, nil)
 	b2Equal(t, deleted.Code, spec.Deleted)
+}
+
+func TestPhase2B2_M14_ModelFacingMemoryCarriesTimePeoplePlaces(t *testing.T) {
+	s, scope := testStore(t), owner()
+	b1Model(t, s, nil)
+	var spec struct {
+		Count     int      `json:"fixture_count"`
+		Visible   int      `json:"visible_index"`
+		Hidden    int      `json:"hidden_index"`
+		Deputy    string   `json:"deputy"`
+		Returned  int      `json:"returned_memories"`
+		People    []string `json:"people"`
+		Places    []string `json:"places"`
+		Precision string   `json:"event_precision"`
+	}
+	b2SupplementFrom(t, "supplement_dda8ef5", "M14", &spec)
+	g := b2Library(t, s, scope, spec.Count)
+	workspaceCommand(t, s, scope, workspace.Command{Type: "setMemoryVisibility", ID: string(g.Refs[spec.Hidden].ID), AgentIDs: []string{"model"}})
+	deputy := scope
+	deputy.IsOwner = false
+	deputy.PrincipalID = spec.Deputy
+	var memories []workspace.Memory
+	err := pgx.BeginFunc(context.Background(), s.pool, func(tx pgx.Tx) error {
+		var err error
+		memories, err = s.memoriesTx(context.Background(), tx, deputy, true)
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	b2Equal(t, len(memories), spec.Returned)
+	m := b2One(t, memories)
+	b2Equal(t, m.ID, string(g.Refs[spec.Visible].ID))
+	b2Time(t, m, "expressedAt", &g.Expressions[spec.Visible])
+	b2Event(t, m, &g.From, &g.To, spec.Precision)
+	b2Names(t, m, "person", spec.People)
+	b2Names(t, m, "place", spec.Places)
 }

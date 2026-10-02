@@ -40,7 +40,7 @@
 ### 5 重复导入（R6）和删除（R11）
 
 - 重复靠现有的「连接器 + 外部 id + 外部版本」去重。预览里的 `alreadyImported` 要按同一个规则算。
-- 删除沿用现有的删除闭包；批次记录靠外键级联。确认一遍：删完之后 `import_batches`、`archive_entries`、消息资料、抽出的记忆都没有残留。
+- 删除沿用现有的 `POST /v1/memory/delete`，目标是原始归档资料（契约第 6 节），不新增删除接口；批次记录靠外键级联。批次列表的每一项要带 `archiveId`、`archiveVersion`，前端和测试靠它们发起删除。确认一遍：删完之后 `import_batches`、`archive_entries`、消息资料、抽出的记忆都没有残留。
 
 ### 6 固定的形状
 

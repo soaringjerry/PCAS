@@ -354,10 +354,33 @@ func TestPhase2B1_N12_RandomTwentyActionsInTwentySeededGroups(t *testing.T) {
 			if err != nil {
 				t.Fatalf("seed=%d: %v", seed, err)
 			}
-			// Audit revisions/timestamps intentionally record undo. Compare all business
-			// fields (including notes/checklist/status/sources), excluding audit metadata
-			// and the monotonically increasing revision used to record the undo itself.
+			// The coordinator excludes action/undo source records, not genuine
+			// attached originals. Identify operational sources by their connector.
+			rows, err := s.pool.Query(context.Background(), "SELECT id::text FROM sources WHERE owner_id=$1 AND connector='actions'", string(scope.OwnerID))
+			if err != nil {
+				t.Fatal(err)
+			}
+			operational := []string{}
+			for rows.Next() {
+				var id string
+				if err := rows.Scan(&id); err != nil {
+					rows.Close()
+					t.Fatal(err)
+				}
+				operational = append(operational, id)
+			}
+			rows.Close()
+			if err := rows.Err(); err != nil {
+				t.Fatal(err)
+			}
 			business := func(item workspace.Item) map[string]any {
+				retained := []workspace.SourceRef{}
+				for _, source := range item.Sources {
+					if !oneOf(source.SourceID, operational...) {
+						retained = append(retained, source)
+					}
+				}
+				item.Sources = retained
 				m := b1Map(t, item)
 				for _, key := range []string{"history", "evolution", "updatedAt", "recordVersion"} {
 					delete(m, key)

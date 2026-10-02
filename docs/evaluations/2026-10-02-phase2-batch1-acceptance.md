@@ -1,5 +1,7 @@
 # 第 2 阶段第 1 批：8a4ac50 集成复验（待后续最终一轮）
 
+本页保留 8a4ac50 的历史测量。协调者在 `079151e` 已裁定部分预期，见文末“裁定后的测试交付”；原失败数不能当成新契约下的结果。当前等待 R2a/摘录窗口和 D 合入后的统一最终一轮。
+
 本轮**未通过验收**。36 条序列按编号汇总为 **34 通过、2 失败（M2、N12）**；39 个 Go 主测试汇总为 36 通过、3 失败。新浏览器 8 个逻辑用例：6 通过、2 失败。现有浏览器回归 118 个全部通过。`make check` 失败仍保留，不能据此上线。
 
 这是协调者要求的当前一轮，不是甲的后续 PR 合入后的最终结果。最终一轮收到通知后再 fetch、变基、完整复验。
@@ -86,7 +88,10 @@ M2 的秘书实际请求保留提问并使用替换语，旧陈述依赖不再�
 | I-C2-1 | 短原话本身就是完整摘录时，全文直接显示但没有 mark。R8a 当前没有全文等于摘录的例外 | C2 / 协调者 |
 | I-A3 | 宽泛中段提问与前言共享词语时，摘录选在前言，中段细节没有进模型；唯一词对照通过 | A / 协调者：判断检索选段质量的处理范围 |
 | I-PENDING | `TestSecretaryStablePrefixAndVisibility` 的旧隐藏断言失败，当前原话仍供给 | R2 待用户决定；按协调者指示保持失败 |
-| I-OLD-DATE | 四组既有测试失败：`TestCodexSecretaryAndLegacyFormats`、`TestSecretaryHistoryOneEntryPerAction`、`TestSecretarySchedulesAndUpdatesRecentTask`、`TestDueReminderOffsets`。夹具固定 2026-10-02 15:00 上海（或该时刻的提醒）；执行时已约 17:48，提醒被视为过去，导致提醒/历史预期失败 | 协调者：日期夹具修复另行授权，本轮未改 |
+
+## 单列：主干固定日期问题（任务 D，不计本批发现）
+
+四组旧夹具失败：`TestCodexSecretaryAndLegacyFormats`、`TestSecretaryHistoryOneEntryPerAction`、`TestSecretarySchedulesAndUpdatesRecentTask`、`TestDueReminderOffsets`。固定的 2026-10-02 15:00 上海及提醒时间在本轮执行时已过去。协调者已派 D 从 main 修复；T 不改这四组。它们保留为本轮检查失败的独立原因，不计本批缺陷。
 
 ## 获批的既有测试变更
 
@@ -134,3 +139,30 @@ M2 的秘书实际请求保留提问并使用替换语，旧陈述依赖不再�
 本轮未加入 Brief 跨 UTC 日期边界的时区对照；现有原话日期样本在两时区是同一天，因此不能据本轮通过判断甲后续时区修复正确。最终一轮应补齐该边界（预期须继续来自契约）。R2 隐藏/排除陈述对应原话的决定待用户；不据本轮实现自行定预期。
 
 当前报告的代码并非一次统一全量测量；最终必须在甲后续及协调者处理本轮发现后重新变基运行全量。没有合并、部署或线上操作。
+
+## 裁定后的测试交付（079151e；尚未运行最终全量）
+
+已 fetch 并变基到 `079151e`，当前契约为 38 条序列。补充测试编译检查通过；本节没有宣称新规则的运行结果。冻结 P14/P15 先于新增测试，跨日时区预期也先提交，再接线。产品实现没有改动。
+
+| 历史发现 | 协调者裁定及本次测试调整 |
+|---|---|
+| I-A1 | 秘书历史仍断言回执行；#68 已合入，但本轮尚未复验新提交。副手交接不要求回执行，按批准去掉相关断言 |
+| I-A2 | 秘书 delegate 讨论历史不属本批；删除该预期。M2 的副手历史改为显式 requestRun + deskTurnIds，仍检查问答替换、旧依赖排除和实际请求 |
+| I-N1 | 动作/撤销来源是操作记录；N12 依据 sources.connector=actions 过滤操作条目，排除其版本。历史、更新时间、事项版本同样不比较，其他真实来源及所有业务字段继续严格比较 |
+| I-C2-1 | 摘录等于全文时无标记；真实短资料改为全文可见且 mark 数量为零，部分摘录的长资料标记及定位断言不变 |
+| I-A3 | 确认为缺陷；宽泛问题、资料、内容断言全部保留，等待 A 修查询词命中最多的窗口 |
+| R2 待定 | 用户已决定 R2a，原待定结束。TestSecretaryStablePrefixAndVisibility 不改，R2a 合入后应原样通过 |
+
+预期修改的授权是任务包“协调者对 8a4ac50 一轮发现的裁定”和用户本轮明确指令。gold 中仅修正三个已批准的旧字符串：R7 的两个回执行描述收窄到秘书历史；R8a 的描述加入全文例外。`coordinator_adjudication_079151e.authorized_corrections` 逐项保存路径、前值、新值及授权编号。其余冻结值均保留。
+
+新增编号测试（合计 44 个 Go 主测试，覆盖 38 条序列）：
+
+- `TestPhase2B1_P14_CapturedMemoryVisibilityClosesAndReopensOriginal`：真实速记、采纳、关闭秘书、历史替换和新对话、仍可见副手实际请求、重新打开。
+- `TestPhase2B1_P14_OneRestrictedActiveClaimClosesWholeSource`：同原话两条陈述，任一隐藏阻断整份，重新打开恢复；已删除陈述不再阻断原件。
+- `TestPhase2B1_P15_ItemExclusionAffectsOnlyThatItemAcrossAllEntrances`：同一句话两条抽取记忆，只排除其中一条；事项甲乙的副手实际 HTTP、manual Brief、事项页秘书及无事项大厅对照，其他可见陈述继续给，原话整份收紧；解除排除恢复。
+- `TestPhase2B1_P15_SourceDependentAdoptionObeysVisibilityAndItemExclusion`：采纳时只有 source 依赖，之后抽取记忆再隐藏或排除；秘书和副手不再得到采纳内容，用户的事项内容保留，解除限制恢复。
+- `TestPhase2B1_P3_BriefDateUsesWorkspaceTimezoneAcrossUTCDayBoundary`：表达时间/记录时间两种来源，`2026-09-12T17:30Z` 在上海是 9 月 13 日、UTC 是 9 月 12 日；manual 和真实副手请求均检查正确日期并排除错误日期。此时间仅为历史资料元数据，不是未来事项。
+
+获批旧测试 `TestDeskHistoryCannotBypassDestinationItemScope` 已按 R2a 补齐相关原话节：exclude 不含原话，两个仅项目不同的子用例含原话。第三组旧测试一个字未动。T 的 N11 原未来时间已改为从上海今天起七天后的 15/16 时，不依赖星期；未改任何被冻结的正文或撤销期望。
+
+最终一轮须等 A 的 R2a+摘录窗口及 D 合入后，以同一个提交统一执行全部用例一次，不拼接此前定向结果；届时重写 38 条逐条结果、浏览器、当前发现及覆盖边界。本轮只交付上述测试调整和静态验证。

@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 	"unicode/utf8"
 
 	"github.com/soaringjerry/PCAS/internal/blob"
@@ -677,9 +678,14 @@ func TestPhase2B1_P15_ItemExclusionAffectsOnlyThatItemAcrossAllEntrances(t *test
 	f := b1Model(t, s, `{"reply":"准备资料","actions":[]}`)
 	source := b1Source(t, s, scope, fixture["title"], fixture["raw"], "manual")
 	item := b1ExtractItem(fixture["claim"], "fact")
-	item["quote"] = fixture["raw"]
-	claim := b1MemoryRef(t, b1Extract(t, s, scope, f, source, item), fixture["claim"])
+	item["quote"], item["predicate"] = fixture["raw"], "交接位置"
+	otherItem := b1ExtractItem(fixture["other_claim"], "fact")
+	otherItem["quote"], otherItem["predicate"] = fixture["raw"], "携带物品"
+	memories := b1Extract(t, s, scope, f, source, item, otherItem)
+	claim := b1MemoryRef(t, memories, fixture["claim"])
+	otherClaim := b1MemoryRef(t, memories, fixture["other_claim"])
 	b1R2aVisibility(t, s, scope, claim, "model", "manual")
+	b1R2aVisibility(t, s, scope, otherClaim, "model", "manual")
 	st := workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "R2a 事项甲"})
 	a := st.Tasks[0].ID
 	st = workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "R2a 事项乙"})
@@ -700,8 +706,11 @@ func TestPhase2B1_P15_ItemExclusionAffectsOnlyThatItemAcrossAllEntrances(t *test
 		for _, agent := range []string{"model", "manual"} {
 			run := b1R2aRun(t, s, scope, f, target.id, agent, fixture["query"], "R2a 副手固定回答")
 			b1R2aSupply(t, run.Brief, run.ContextVersions, fixture, source, claim, target.want)
+			b1Contains(t, run.Brief, fixture["other_claim"])
+			b1HasRef(t, run.ContextVersions, otherClaim, true)
 			if agent != "manual" {
 				b1R2aSupply(t, f.last(t).Prompt, run.ContextVersions, fixture, source, claim, target.want)
+				b1Contains(t, f.last(t).Prompt, fixture["other_claim"])
 			}
 		}
 		f.set(`{"reply":"事项页固定回答","actions":[]}`)
@@ -709,6 +718,8 @@ func TestPhase2B1_P15_ItemExclusionAffectsOnlyThatItemAcrossAllEntrances(t *test
 		req.ThingID = &target.id
 		mustTurn(t, s, scope, req)
 		b1R2aSupply(t, f.last(t).Prompt, b1Refs(t, s, scope, req.RequestID), fixture, source, claim, target.want)
+		b1Contains(t, f.last(t).Prompt, fixture["other_claim"])
+		b1HasRef(t, b1Refs(t, s, scope, req.RequestID), otherClaim, true)
 	}
 	// No concrete item: another item's exclusion must not become global.
 	f.set(`{"reply":"大厅固定回答","actions":[]}`)
@@ -728,6 +739,7 @@ func TestPhase2B1_P14_OneRestrictedActiveClaimClosesWholeSource(t *testing.T) {
 	first := b1ExtractItem(fixture["claim"], "fact")
 	second := b1ExtractItem(fixture["other_claim"], "fact")
 	first["quote"], second["quote"] = fixture["raw"], fixture["raw"]
+	first["predicate"], second["predicate"] = "交接位置", "携带物品"
 	memories := b1Extract(t, s, scope, f, source, first, second)
 	allowed := b1MemoryRef(t, memories, fixture["claim"])
 	restricted := b1MemoryRef(t, memories, fixture["other_claim"])
@@ -820,6 +832,53 @@ func TestPhase2B1_P15_SourceDependentAdoptionObeysVisibilityAndItemExclusion(t *
 				workspaceCommand(t, s, scope, workspace.Command{Type: "toggleContextMemory", ThingID: task, MemoryID: string(claim.ID)})
 			}
 			secretary(true)
+		})
+	}
+}
+
+func TestPhase2B1_P3_BriefDateUsesWorkspaceTimezoneAcrossUTCDayBoundary(t *testing.T) {
+	for _, expressed := range []bool{true, false} {
+		t.Run(fmt.Sprintf("expressed_%v", expressed), func(t *testing.T) {
+			s, scope := b1Store(t), owner()
+			f := b1Model(t, s, "日期边界固定回答")
+			at, err := time.Parse(time.RFC3339, b1Text(t, "brief_date_boundary", "at"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			in := memory.IngestRequest{Connector: "manual", ExternalID: string(memory.NewID()), ExternalVersion: "1", Title: b1Text(t, "brief_date_boundary", "title"), Text: b1Text(t, "brief_date_boundary", "text"), MediaType: "text/plain"}
+			label := "记录于"
+			if expressed {
+				in.ExpressedAt = &at
+				label = "说于"
+			}
+			source := mustIngest(t, s, scope, in).Ref
+			if !expressed {
+				// Recorded time is synthetic past metadata, never a future reminder.
+				if _, err := s.pool.Exec(context.Background(), "UPDATE record_versions SET recorded_at=$1 WHERE owner_id=$2 AND record_id=$3 AND version=$4", at, string(scope.OwnerID), string(source.ID), source.Version); err != nil {
+					t.Fatal(err)
+				}
+			}
+			for _, zone := range []string{"Asia/Shanghai", "UTC"} {
+				workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: asJSON(map[string]string{"timezone": zone})})
+				want := b1Text(t, "brief_date_boundary", zone)
+				other := b1Text(t, "brief_date_boundary", "UTC")
+				if zone == "UTC" {
+					other = b1Text(t, "brief_date_boundary", "Asia/Shanghai")
+				}
+				line := func(date string) string {
+					return fmt.Sprintf("[source:%s@%d / %s / %s %s]", source.ID, source.Version, in.Title, label, date)
+				}
+				for _, agent := range []string{"model", "manual"} {
+					run := b1Run(t, s, scope, agent, "b1dateneedle")
+					b1Contains(t, run.Brief, line(want), in.Text)
+					b1Absent(t, run.Brief, line(other))
+					b1HasRef(t, run.ContextVersions, source, true)
+					if agent != "manual" {
+						b1Contains(t, f.last(t).Prompt, line(want), in.Text)
+						b1Absent(t, f.last(t).Prompt, line(other))
+					}
+				}
+			}
 		})
 	}
 }

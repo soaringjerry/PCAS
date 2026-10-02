@@ -54,7 +54,9 @@ test('P1/P8 页面原话→新对话→真实请求与来源卡片，删除后�
   await expect(source).toBeVisible()
   await source.click()
   await expect(page.getByRole('dialog').locator('pre').filter({ hasText: text })).toBeVisible()
-  await expect(page.getByRole('dialog').locator('mark').filter({ hasText: text })).toHaveText(text)
+  await expect(page.getByRole('dialog').locator('pre')).toHaveText(text)
+  // Approved R8a exception: when the excerpt is the entire original, no mark.
+  await expect(page.getByRole('dialog').locator('mark')).toHaveCount(0)
   await expect(page.getByRole('dialog')).not.toContainText(/第\s*\d+\s*版|摘要|source\.extract|queued/)
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy()
   const deleted = await page.request.post('/v1/memory/delete', { data: { targets: [{ id: sources[0].sourceId, version: sources[0].sourceVersion, kind: 'source' }] } })

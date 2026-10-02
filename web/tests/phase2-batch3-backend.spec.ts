@@ -44,14 +44,14 @@ func main(){
  x("INSERT INTO entity_versions(owner_id,entity_id,version,entity_type,name) VALUES($1,$2,1,$3,$4)",f.Owner,e.ID,e.Kind,e.Name)
  x("INSERT INTO aliases(owner_id,entity_id,entity_version,alias) VALUES($1,$2,1,$3)",f.Owner,e.ID,e.Name)
  }
- x("INSERT INTO sources(owner_id,id,connector,external_id) VALUES($1,$2,'manual',$2::text)",f.Owner,f.Source)
+ x("INSERT INTO sources(owner_id,id,connector,external_id) VALUES($1,$2,'manual',$3)",f.Owner,f.Source,f.Source)
  x("INSERT INTO source_versions(owner_id,source_id,version,external_version,content_hash,title,body,media_type) VALUES($1,$2,1,'1',decode(repeat('22',32),'hex'),'当时的对话',$3,'text/plain')",f.Owner,f.Source,f.Raw)
  x("INSERT INTO chunks(owner_id,id,version,source_id,source_version,ordinal,start_rune,end_rune,body,search_text) VALUES($1,$2,1,$3,1,0,0,$4,$5,'成都 老王 计划')",f.Owner,f.Chunk,f.Source,len([]rune(f.Raw)),f.Raw)
  x("INSERT INTO claims(owner_id,id) VALUES($1,$2)",f.Owner,f.Claim)
  value,_:=json.Marshal(f.Text)
  x("INSERT INTO claim_revisions(owner_id,claim_id,version,subject_id,predicate,value,nature,acquisition,confirmation,change_type,event_from,event_to,event_precision) VALUES($1,$2,1,$3,'验收安排',$4::jsonb,'plan','direct','adopted','initial',$5::timestamptz,$6::timestamptz,'month')",f.Owner,f.Claim,f.Self,string(value),f.EventFrom,f.EventTo)
  x("INSERT INTO claim_mentions(owner_id,claim_id,claim_version,entity_id,role) VALUES($1,$2,1,$3,'place'),($1,$2,1,$4,'person')",f.Owner,f.Claim,f.Place,f.Wang)
- x("INSERT INTO evidence(owner_id,id,source_id,source_version,target_id,target_version,acquisition,stance) VALUES($1,gen_random_uuid(),$2,1,$3,1,'direct','supports')",f.Owner,f.Source,f.Claim)
+ x("INSERT INTO evidence(owner_id,id,source_id,source_version,target_id,target_version,locator,acquisition,stance) VALUES($1,gen_random_uuid(),$2,1,$3,1,'{}','direct','supports')",f.Owner,f.Source,f.Claim)
  if err=tx.Commit(ctx);err!=nil{panic(err)}
 }`
 

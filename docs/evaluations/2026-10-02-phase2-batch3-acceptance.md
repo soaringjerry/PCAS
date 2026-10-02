@@ -1,10 +1,14 @@
-# 第 3 批独立验收：测试先行交付
+# 第 3 批独立验收：首轮预跑及测试交付
 
 ## 状态和基线
 
-执行者 T3；工作区 `/root/PCAS-wt/b3-T3`，分支 `phase2/b3-T3-acceptance`。只按契约编写测试，未阅读 Q1/Q2/K 的实现，未修改产品代码、已有测试或它们的预期。
+执行者 T3；工作区 `/root/PCAS-wt/b3-T3`，分支 `phase2/b3-T3-acceptance`。只按契约编写测试，未阅读 Q1/Q2/K 的实现，未修改产品代码、其他任务的测试或冻结预期。
 
-正式验收 **待协调者通知**；本报告没有将测试已写或静态检查通过记为验收通过。集成分支的被测提交号、统一 `make check` 和浏览器运行结果届时填写。当前未运行 P/S/K/V 验收。首轮交付变基到 `origin/phase2/batch3` 的 `1cec28b`（当时 Q1 尚未合入），随后按通知变基到 `b7340fe`。K5/K9/K10/K11 补充当时变基到集成提交 `de59215`；本次 R12a 补充已变基到 `origin/phase2/batch3` 的 `41960e9`。
+最终验收 **待协调者通知**。本轮按协调者授权预跑，集成分支为 `cd5815e`，带 T3 测试的被测提交为 `d98a527cf8a3a5dd0c4d1f41039b21ca93397e00`。在同一提交上运行一次全量 `make check` 和一次 V1–V3（浏览器重试为零）。本轮没有全绿：T3 的 34 个 Go 顶层用例中 13 通过、21 失败、0 跳过；浏览器 V2 通过，V1/V3 失败。S6 新字段组属于 M2 的已知缺口，多数其余 S/K 在公共夹具准备阶段失败，不能据此判断 Q2/K 的产品行为。逐项结果及发现见末节。
+
+P1–P7、S10 的 15 组 HTTP 响应字节对照、K2/K6/K8/K9/K10 通过。全量中的两条既有第 2 批测试失败也保留报告，不修改其预期。失败后只修正 T3 公共夹具和 V3 造数程序，单独验证造数及编译；未重跑失败的验收函数。V1 日期匹配器等待协调者裁定。
+
+首轮测试先行交付先后变基到 `1cec28b`、`b7340fe`、`de59215`、`41960e9`；本轮按通知变基到 `origin/phase2/batch3` 的 `cd5815e`。
 
 初始基线 `66b1a43`；按用户裁定 fetch 了契约提交 `586541120729befc81cb7e15aac7706fd0124516`。在该提交的产品代码上，用自建 `pgvector/pgvector:0.8.2-pg16-bookworm` tmpfs 容器、随机本机端口及 `testStore` 的独立 schema 采集 S6/S10 改动前基准。只使用本机假模型，未读取 `/root/PCAS/.env` 或 `config/`，未调用真实模型、线上库或真实通知。临时采集程序及容器已清理。两组 S6 分别使用新 schema，避免第一次采集自己产生的原话污染第二组输入。
 
@@ -12,7 +16,7 @@
 
 ## 契约序列到测试的映射
 
-以下全部 **待运行**。测试名统一以 `TestPhase2B3_` 开头，表内列完整后缀。
+下表保留测试映射，本轮逐项结果见末节。测试名统一以 `TestPhase2B3_` 开头，表内列完整后缀。
 
 | 序列 | 文件 | 测试后缀及断言 |
 |---|---|---|
@@ -68,7 +72,7 @@ R1–R4：P 序列；R5：S9/S10/S13；R6：S4/S5/S12；R7：S1/S4/S5；R8：S3�
 
 正式运行前由协调者通知集成提交，在同一提交上统一运行全量与浏览器。失败不跳过、不放宽、不重复碰运气，按归属派回 Q1/Q2/K/U3。
 
-当前验收发现清单为空，因为正式验收尚未执行。range 显示问题由协调者在 `0f8e759` 裁定：显示到实际覆盖的最后一天。已按裁定追加冻结预期，V1 及 S1 检查显示 06-14、不显示排除端点 06-15。[Draft PR #86](https://github.com/soaringjerry/PCAS/pull/86)，base 为 `phase2/batch3`。
+测试先行交付时发现清单为空；本轮预跑发现已列在末节。range 显示问题由协调者在 `0f8e759` 裁定：显示到实际覆盖的最后一天。已按裁定追加冻结预期，V1 及 S1 检查显示 06-14、不显示排除端点 06-15。[Draft PR #86](https://github.com/soaringjerry/PCAS/pull/86)，base 为 `phase2/batch3`。
 
 ## b9d26f0 / 5beb42c 的测试补充（待正式运行）
 
@@ -91,3 +95,75 @@ S6、S8 已有预期保持不变。本轮先在第 3 批之前的 `586541120729b
 S8 补充用 60 条独立结构化命中，按说话时间构造前 20 条的顺序。每条增加时间、事件月份、长地点和人名；实际交给模型的记忆行累计超过 30000 字节，仍须完整保留前 20 条及其元数据，排除后 40 条，记录 20 条记忆依赖并正常回复。原有 S8 的原话 6 段/2400 字符检查保留。
 
 本轮 `go test ./internal/postgres ./internal/memory -run '^$'` 编译通过，未运行验收函数；冻结文件只增不改审计、gofmt 和 `git diff --check` 通过。继续等待协调者通知正式验收。
+
+## cd5815e 首轮预跑（最终验收未开始）
+
+本轮运行的产品基线和测试提交均已记录：集成 `cd5815e`，被测 `d98a527cf8a3a5dd0c4d1f41039b21ca93397e00`。不读 Q1/Q2/K 实现；只用契约、数据约定、schema、已有测试以及本轮实际输出分类。造数修正发生在预跑结束之后，下表仍保留修正前的实际失败结果。
+
+全量命令是 `PCAS_TEST_DATABASE_URL=<自建临时库> GOFLAGS='-v' make check`，执行 Go race 测试，PostgreSQL 包耗时 374.869 秒。fmt-check、go vet 通过；test 失败导致 make 退出 2，build 目标未执行；随后在同一产品提交上单独执行 `go build -trimpath`，通过。全部 Go 顶层用例计 371 通过、23 失败、3 跳过；23 个失败包括 T3 的 21 个以及第 2 批的 2 个。3 个跳过均是既有显式真实模型用例（`TestInstalledCodexHandshake`、`TestLiveCodexSecretaryAndLegacyFormats`、`TestLiveContinuityReplay`），本轮未接入真实模型；T3 没有跳过。
+
+前端使用 Node 22.23.3，`npm ci && npm run lint && npm run type-check && npm run build` 通过。浏览器用现有 `real-backend.sh` 的临时后端、独立 tmpfs 数据库、本机假模型运行 `tests/phase2-batch3.spec.ts` 与 `tests/phase2-batch3-backend.spec.ts`，`--retries=0 --reporter=list,json`；三条各运行一次，无重复。
+
+### T3 各序列实际结果
+
+测试后缀均补上统一前缀 `TestPhase2B3_`，文件位置在前面的映射表。
+
+| 序列 | 测试后缀 | 本轮实际结果 |
+|---|---|---|
+| P1 | `P1_ChengduRecall` | 通过 |
+| P2 | `P2_EveryTimePhrase` | 通过 |
+| P3 | `P3_LocalCalendarBoundaries` | 通过 |
+| P4 | `P4_NoTimeAndMeaningIndependent` | 通过 |
+| P5 | `P5_MostRecentMonthAndDay` | 通过 |
+| P6 | `P6_NaturesAndRecallWords` | 通过 |
+| P7 | `P7_AxisAndFirstPhrase` | 通过 |
+| S6 | `S6_NoConditionsPreserveBaselineBytesAndOnlyAppendMetadata` | 失败：新字段组缺少 R12 后缀（M2 已知缺口）；旧字段组通过 |
+| S10 | `S10_PublicRecallFifteenRequestsByteIdentical` | 通过 |
+| S6 | `S6_MetadataDoesNotConsumeDeputyOrManualByteBudget` | 失败：新字段组缺少 R12 后缀（M2 已知缺口）；旧字段组通过 |
+| S8 | `S8_LargeMetadataStillKeepsTheSameTopTwenty` | 失败：公共夹具 Commit 报 invalid input，产品断言未到达 |
+| S1 | `S1_StructuredHitsFirstWithLocalMetadata` | 失败：公共夹具 Commit 报 invalid input，产品断言未到达 |
+| S2 | `S2_VisibilityAndExcerptTimePriority` | 失败：公共夹具 Commit 报 invalid input，产品断言未到达 |
+| S3 | `S3_RelaxTimeOnlyWhenEntityMatches` | 失败：公共夹具 Commit 报 invalid input，产品断言未到达 |
+| S4 | `S4_TimeOnlyNaturePriorityAndSaidAxis` | 失败：公共夹具 Commit 报 invalid input，产品断言未到达 |
+| S5 | `S5_EntityOnlyAcrossYears` | 失败：公共夹具 Commit 报 invalid input，产品断言未到达 |
+| S7 | `S7_AllExistingFiltersApplyToStructuredHits` | 失败：公共夹具 Commit 报 invalid input，产品断言未到达 |
+| S8 | `S8_SixtyHitsKeepTopTwentyAndExcerptBudget` | 失败：公共夹具 Commit 报 invalid input，产品断言未到达 |
+| S9 | `S9_SecretaryDeputyManualShareStructuredPrefix` | 失败：公共夹具 Commit 报 invalid input，产品断言未到达 |
+| S11 | `S11_StructuredDependencyCorrectionMarksTurnOutdated` | 失败：公共夹具 Commit 报 invalid input，产品断言未到达 |
+| S12 | `S12_AliasLengthSubstringCaseAndDeletedEntity` | 失败：公共夹具 Commit 报 invalid input，产品断言未到达 |
+| S13 | `S13_OnlyCurrentUtterancePlansEntities` | 失败：公共夹具 Commit 报 invalid input，产品断言未到达 |
+| S1 | `S1_EventPrecisionAndInclusiveRangeDisplay` | 失败：公共夹具 Commit 报 invalid input，产品断言未到达 |
+| K9 | `K9_OldCreationReceiptSurvivesPurgedActionDetails` | 通过 |
+| K10 | `K10_UndoneCreationLeavesNoAssociatedItems` | 通过 |
+| K1 | `K1_SaidChronologyEventAndMentions` | 失败：公共夹具 setMemoryVisibility 报 invalid input，产品断言未到达 |
+| K2 | `K2_CompletedAndCancelledTurnItems` | 通过 |
+| K3 | `K3_CorrectionAndChangeUseCurrentText` | 失败：公共夹具 Commit 报 invalid input，产品断言未到达 |
+| K4 | `K4_SingleRecallGetsTimelineOnlyWithSaidDate` | 失败：公共夹具 Commit 报 invalid input，产品断言未到达 |
+| K5 | `K5_UnknownSaidTimeLastAndEmpty` | 失败：公共夹具 setMemoryVisibility 报 invalid input，产品断言未到达 |
+| K6 | `K6_AllItemsDetermineStatus` | 通过 |
+| K7 | `K7_RawOriginalStaysInEvidenceList` | 失败：公共夹具 setMemoryVisibility 报 invalid input，产品断言未到达 |
+| K8 | `K8_UnrelatedItemFromSameOriginalDoesNotChangeStatus` | 通过 |
+| K11 | `K11_LegacySecretaryMemoryUsesOriginalRecordedTime` | 失败：公共夹具 Commit 报 invalid input，产品断言未到达 |
+
+| V1 | `V1 四种状态、说话日期和事件日期、人地点与无日期，390px不溢出` | 失败：日期为“2月3日2025年”，匹配器只接受年在前；其余断言未完整执行 |
+| V2 | `V2 点击时间轴条目直接打开当时的原话` | 通过：全文自动可见、原话 ID 与版本正确、无页面异常 |
+| V3 | `V3 真实结构化记忆→秘书实际请求→去年的时间轴→当时原话` | 失败：seeder 的 SQL 参数类型冲突；产品断言尚未执行 |
+
+### 发现、归属和已做的夹具修正
+
+| 编号 | 现象和契约预期 | 归属及处理 |
+|---|---|---|
+| B3-M2-01 | S6 秘书和副手/手动的新字段组没有 R12 行尾内容。旧字段组逐字通过；有新字段应追加后缀，字节边界组应从 29830 增至 32352，但实际仍为 29830。条目和依赖检查没有失败 | 第 2 批 M2 已知缺口，本轮仍如实记失败。待 M2 合入后由协调者通知最终一轮 |
+| B3-T3-01 | 多数 S/K 通过公共 `b3Claim` 的 Commit 准备普通记忆时报 invalid input；K1/K5/K7 在后续 setMemoryVisibility 时报同样错误，均未到达产品断言。T3 契约要求独立按数据约定造数，不依赖第 2 批抽取 | T3 夹具修正：普通记忆、版本、项目、证据、活动和结构化字段全部在同一事务直接插入；仍通过真实可见性命令、秘书/副手、Correct、Undo 验收。已有冻结预期不改 |
+| B3-T3-02 | V3 在 sources 的 INSERT 中同一个 `$2` 同时用于 uuid 与 text，SQLSTATE 42P08。读 schema 还发现 evidence.locator 无默认值但 seeder 未给值 | T3 夹具修正：ID 和外部编号使用独立参数，补 `locator='{}'`；完整 seeder 已在新 schema 中单独执行成功，未重跑 V3 |
+| B3-T3-03 | V1 实际显示“2月3日2025年”，日期值与冻结值 2025-02-03 一致，但匹配器强制年在前。R17 未规定年月日的排版顺序 | 等协调者裁定是否允许修匹配器；当前未修改该断言，也未修改日期预期。V3 的说话日期匹配也有同样的年在前假设，下一轮前需一并确认 |
+| B2-OBS-01 | 既有 `TestExtractionWithoutModelStaysNotConfigured` 在 extraction_failure_test.go:72 报 provider_not_configured | 第 2 批 E1/T2，由协调者确认接口行为和测试预期；T3 未修改 |
+| B2-OBS-02 | 既有 `TestExtractionConfirmationRequiresCurrentVerbatimCapture` 的 unresolved_subject、unresolved_predicate、paraphrased_assertion 三个子用例，实际 confirmation=adopted，原断言 candidate | 第 2 批 E1/T2，由协调者确认最新契约及既有测试；T3 未修改 |
+
+修正后只运行临时 `TestB3FixturePreflightOnly`：上海/悉尼的完整公共数据集，以及 V3 seeder 在完整新 schema 上造数成功，没有模型调用，也没有运行任何验收函数。临时检查文件已移出仓库；正式测试文件做 Go 编译、单独 TypeScript 检查和 diff 检查。冻结 JSON 与被测提交逐项、逐值完全相同。
+
+### 运行边界和未覆盖部分
+
+S6 新字段组是已知 M2 未完成的实际失败；S1 的排序/元数据、其他失败 S/K 的检索与时间轴行为由于造数失败仍未验证，不能算已知缺口通过或产品失败。V1 在第一个日期匹配处停止，后续四状态、事件区间和 390px 检查未完整执行；V3 在 seeder 阶段停止，真实秘书请求、时间轴和点开原话未验证。等待最终运行指令后，在新的同一提交重新统一全量和浏览器。
+
+全量和造数预检均只使用 T3 自建 `pgvector/pgvector:0.8.2-pg16-bookworm` tmpfs 容器、随机 loopback 端口和每测试独立 schema；浏览器 runner 管理自己的容器和 PID。未读取线上配置、未使用真实模型、线上库或真实通知。所有本轮临时服务和数据库已清理。原始日志、浏览器 JSON/trace、manifest 和造数预检记录保存在本地 `/tmp/pcas-b3-t3-round1-d98a527/`。

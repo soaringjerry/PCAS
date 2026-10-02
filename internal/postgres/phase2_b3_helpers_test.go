@@ -100,8 +100,9 @@ type b3ClaimSpec struct {
 	Agents                             []string
 }
 
-// Commit only establishes ordinary pre-existing evidence. Structured metadata
-// is inserted explicitly by the independent acceptance fixture, never extracted.
+// Claims, ordinary evidence and structured metadata are all synthetic records.
+// Direct inserts keep Q2/K acceptance independent of batch2 extraction and
+// Commit validation. Real DeskTurn/requestRun/Correct/Undo remain under test.
 func b3Claim(t *testing.T, s *Store, scope memory.Scope, spec b3ClaimSpec) memory.Ref {
 	t.Helper()
 	if spec.Nature == "" {
@@ -110,32 +111,47 @@ func b3Claim(t *testing.T, s *Store, scope memory.Scope, spec b3ClaimSpec) memor
 	if spec.Acquisition == "" {
 		spec.Acquisition = "direct"
 	}
-	c := memory.Claim{Revision: memory.Revision{Ref: memory.Ref{ID: memory.NewID(), Version: 1, Kind: memory.ClaimKind}}, SubjectID: spec.Subject, Predicate: "验收事项", Value: asJSON(spec.Text), Nature: spec.Nature, Acquisition: spec.Acquisition, Confirmation: "adopted"}
-	if spec.Project != "" {
-		c.Scope = map[string]json.RawMessage{"project_id": asJSON(spec.Project)}
-	}
-	in := memory.CommitRequest{RequestID: memory.NewID(), Claims: []memory.Claim{c}}
-	if spec.Source.ID != "" {
-		in.Evidence = []memory.Evidence{{Source: spec.Source, Target: c.Ref, Acquisition: spec.Acquisition, Stance: "supports"}}
-	}
-	if _, err := s.Commit(context.Background(), scope, in); err != nil {
-		t.Fatal(err)
-	}
-	b3Exec(t, s, `UPDATE record_versions SET expressed_at=$3 WHERE owner_id=$1 AND record_id=$2 AND version=1`, scope.OwnerID, c.ID, spec.Said)
 	precision := spec.Precision
 	if precision == "" {
 		precision = "unknown"
 	}
-	b3Exec(t, s, `UPDATE claim_revisions SET event_from=$3,event_to=$4,event_precision=$5 WHERE owner_id=$1 AND claim_id=$2 AND version=1`, scope.OwnerID, c.ID, spec.EventFrom, spec.EventTo, precision)
+	id := memory.NewID()
+	claimScope := map[string]string{}
+	if spec.Project != "" {
+		claimScope["project_id"] = spec.Project
+	}
+	tx, err := s.pool.Begin(t.Context())
+	if err != nil {
+		t.Fatal("begin b3 claim fixture:", err)
+	}
+	defer tx.Rollback(t.Context())
+	exec := func(q string, args ...any) {
+		t.Helper()
+		if _, err := tx.Exec(t.Context(), q, args...); err != nil {
+			t.Fatal("insert b3 claim fixture:", err)
+		}
+	}
+	exec(`INSERT INTO memory_records(owner_id,id,kind,version) VALUES($1,$2,'claim',1)`, scope.OwnerID, id)
+	exec(`INSERT INTO record_versions(owner_id,record_id,version,expressed_at) VALUES($1,$2,1,$3)`, scope.OwnerID, id, spec.Said)
+	exec(`INSERT INTO claims(owner_id,id) VALUES($1,$2)`, scope.OwnerID, id)
+	exec(`INSERT INTO claim_revisions(owner_id,claim_id,version,subject_id,predicate,value,scope,nature,acquisition,confirmation,change_type,event_from,event_to,event_precision) VALUES($1,$2,1,$3,'验收事项',$4::jsonb,$5::jsonb,$6,$7,'adopted','initial',$8,$9,$10)`, scope.OwnerID, id, spec.Subject, string(asJSON(spec.Text)), string(asJSON(claimScope)), spec.Nature, spec.Acquisition, spec.EventFrom, spec.EventTo, precision)
+	exec(`INSERT INTO record_grants(owner_id,record_id,principal_id) VALUES($1,$2,$3)`, scope.OwnerID, id, scope.PrincipalID)
+	exec(`INSERT INTO activity(owner_id,record_id,last_effective_use_at) VALUES($1,$2,now())`, scope.OwnerID, id)
+	if spec.Source.ID != "" {
+		exec(`INSERT INTO evidence(owner_id,id,source_id,source_version,target_id,target_version,locator,acquisition,stance) VALUES($1,$2,$3,$4,$5,1,'{}',$6,'supports')`, scope.OwnerID, memory.NewID(), spec.Source.ID, spec.Source.Version, id, spec.Acquisition)
+	}
 	for _, m := range spec.Mentions {
-		b3Exec(t, s, `INSERT INTO claim_mentions(owner_id,claim_id,claim_version,entity_id,role) VALUES($1,$2,1,$3,$4)`, scope.OwnerID, c.ID, m.ID, m.Role)
+		exec(`INSERT INTO claim_mentions(owner_id,claim_id,claim_version,entity_id,role) VALUES($1,$2,1,$3,$4)`, scope.OwnerID, id, m.ID, m.Role)
+	}
+	if err := tx.Commit(t.Context()); err != nil {
+		t.Fatal("commit b3 claim fixture:", err)
 	}
 	agents := spec.Agents
 	if agents == nil {
 		agents = []string{"model", "manual"}
 	}
-	workspaceCommand(t, s, scope, workspace.Command{Type: "setMemoryVisibility", ID: string(c.ID), AgentIDs: agents})
-	return c.Ref
+	workspaceCommand(t, s, scope, workspace.Command{Type: "setMemoryVisibility", ID: string(id), AgentIDs: agents})
+	return memory.Ref{ID: id, Version: 1, Kind: memory.ClaimKind}
 }
 func b3Source(t *testing.T, s *Store, scope memory.Scope, text string, said time.Time) memory.Ref {
 	t.Helper()

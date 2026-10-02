@@ -108,6 +108,7 @@ func TestExtractionEventWholeCalendarIntervals(t *testing.T) {
 	for _, when := range []*extractedWhen{
 		{From: "not a date", To: "2026-01-01", Precision: "day", Quote: "2026"},
 		{From: "2026-01-02", To: "2026-01-01", Precision: "range", Quote: "2026"},
+		{From: "2026-01-01", To: "2026-01-01", Precision: "range", Quote: "2026"},
 		{From: "2026-01-01", To: "2046-01-01", Precision: "range", Quote: "2026"},
 		{From: "2026-01-01", To: "2026-01-02", Precision: "day", Quote: "杜撰"},
 	} {

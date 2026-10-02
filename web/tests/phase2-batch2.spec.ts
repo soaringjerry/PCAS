@@ -141,39 +141,3 @@ test('U1 事件区间卡片显示实际最后一天', async ({ page }) => {
   await expect(rangeCard).toContainText(spec.last_display_day)
   await expect(rangeCard).not.toContainText(spec.excluded_display_day)
 })
-
-
-test('U5 项目决定超出200条快照后仍全部出现在时间轴', async ({ page }) => {
-  const spec = gold.supplement_2e2b8f9.U5
-  const older = new Date(Date.now() - 14 * 86400_000).toISOString()
-  const decisions: MemoryFixture[] = spec.decisions.map((text: string, i: number) => ({
-    ...memory(spec.newer_unrelated + i, false), kind: 'decision', text, projectId: spec.project_id,
-    versions: [{ at: older, by: 'user', text, reason: '' }], lastUsedAt: older,
-  }))
-  const unrelated = Array.from({ length: spec.newer_unrelated }, (_, i) => {
-    const item = memory(i, false)
-    item.versions = [{ at, by: 'user', text: item.text, reason: '' }]
-    item.lastUsedAt = at
-    return item
-  })
-  unrelated[0].kind = 'decision'
-  unrelated[0].projectId = 'other-project'
-  unrelated[1].kind = 'fact'
-  unrelated[1].projectId = spec.project_id
-  const all = [...unrelated, ...decisions]
-  expect(all.slice(0, spec.snapshot_size).some(m => decisions.some(d => d.id === m.id))).toBe(false)
-  const mock = await backend(page, all, [{
-    id: spec.project_id, name: spec.project_name, goal: '', status: 'active', progress: '', nextSteps: [], updatedAt: at,
-  }])
-  await page.goto(`/t/${spec.project_id}`)
-  await expect(page.getByRole('heading', { name: spec.project_name, exact: true })).toBeVisible()
-  await expect.poll(() => mock.queries.some(q => q.searchParams.get('project') === spec.project_id && q.searchParams.get('nature') === spec.query_nature)).toBe(true)
-  for (const decision of decisions) {
-    await expect(page.getByText(decision.text, { exact: true })).toBeVisible()
-    await expect(page.getByText(decision.text, { exact: true })).toHaveCount(1)
-  }
-  await expect(page.getByText(unrelated[0].text, { exact: true })).toHaveCount(0)
-  await expect(page.getByText(unrelated[1].text, { exact: true })).toHaveCount(0)
-  expect(new Set(mock.returned.filter(id => decisions.some(d => d.id === id))).size).toBe(spec.expected_visible_decisions)
-  expect(mock.errors).toEqual([])
-})

@@ -37,6 +37,8 @@
 
 原话不按项目过滤：团队共用全部资料。
 
+**待定（2026-10-02，等用户决定）**：用户在资料库里把某条记忆对某个副手隐藏，或在某件事上排除了某条记忆之后，这条记忆出自的那句原话还给不给这个副手、这件事。现在的实现是照给。定了之后写成 R2a。
+
 **R3 给多少。** 每条原话给一段摘录，不给全文：
 
 - 摘录取检索命中的那一段（已有的分段命中或 `matchedExcerpt`）；
@@ -76,6 +78,8 @@
 - **给用户看的地方**（`GET /v1/desk/turns`、同一请求重放的返回、Telegram 重复投递时重发）：回答、卡片、回执原样保留，这一轮带上 `outdated: true`。
 - **给模型看的地方**（秘书提示词里的「本对话历史」、副手交接内容里的「导办台之前的讨论」）：这一轮的提问保留，回答换成「（先前回答的依据已更新，请按现在的资料回答）」，它的旧依赖不再带入新一轮。
 - 被删除清空的轮次不变：原话被删显示「（内容已删除）」，用到的记忆被删显示「（这条回答依据的记忆已变更）」。
+- （2026-10-02 补充）依据没有改、但在当前场合不可用的轮次（那条陈述在这件事上被排除、属于别的项目、对这个副手不可见）按同样的方式处理：给用户看的地方原样保留并带 `outdated: true`；给模型看的地方提问保留、回答换成替换语、旧依赖不带入。以前这种轮次是整轮不给模型。提问是用户自己的话，按 R1 团队本来就能读。
+- 回执是动作记录，不是从记忆推出来的回答：`outdated` 的轮次在给模型的历史里仍然带上它的回执行。
 - 副手结果不变：依据变了的结果已经是保留内容并标「依据变了，结果可能过时」。
 
 ### 依据卡片
@@ -215,6 +219,7 @@ Astra 这一批不用，留作疑难时的后备。A、B、C、T 各由一个执
 | 写入者 | 文件 |
 |---|---|
 | A | `internal/memory/contracts.go`（只加 Scope 的内部标记，以及 `RecallResult` 上不对外输出的摘录列表，标 `json:"-"`）、`internal/postgres/retrieval.go`、`desk_turn.go`、`run_context.go`、`runs.go`、`telegram_turn.go`、`artifacts.go`（只改 `sanitizeItemTx` 里校验运行依赖的那条查询，见 R6）、`internal/workspace/desk.go`、`internal/telegram/`（只在 R7 需要时） |
+| A（后续修改） | `internal/postgres/desk_turn.go`、`runs.go`、`retrieval.go`，范围见 [任务 A](A-raw-text.md) 末尾 |
 | B | `internal/postgres/undone_turns.go`（新）、`actions_log.go`、`processing.go`、`internal/postgres/migrations/026_drop_phase2_0_leftovers.sql`（新） |
 | C | `web/src/domain/desk.ts`、`web/src/components/SecretaryCards.tsx`、`web/src/components/Secretary.tsx`、`web/src/styles/secretary.css`（已合入） |
 | C2 | `web/src/components/SourceSheet.tsx`、`web/src/components/SecretaryCards.tsx`（只改打开面板的调用）、`web/src/styles/app.css`（只动 `.source-*` 这一组样式） |

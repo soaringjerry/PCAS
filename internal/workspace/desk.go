@@ -67,9 +67,9 @@ type DeskTimelineItem struct {
 	EventTo        string          `json:"eventTo,omitempty"`
 	EventPrecision string          `json:"eventPrecision,omitempty"`
 	Mentions       []MemoryMention `json:"mentions"`
-	At             *string         `json:"at"`
+	At             *string         `json:"at"` // When the memory was expressed; nil when unknown.
 	Text           string          `json:"text"`
-	Status         string          `json:"status"`
+	Status         string          `json:"status"` // open, done, dropped or changed.
 	MemoryID       *string         `json:"memoryId"`
 	ThingID        *string         `json:"thingId"`
 }

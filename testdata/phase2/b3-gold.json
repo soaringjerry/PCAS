@@ -1,0 +1,1614 @@
+{
+  "schema": 1,
+  "baselineCommit": "66b1a43",
+  "calendarMethod": "独立按公历和 IANA 时区写入；不调用 PlanQuery。相对今天的数据库夹具通过 DateFromToday 造。",
+  "planner": [
+    {
+      "group": "P2",
+      "name": "今天",
+      "text": "今天",
+      "zone": "Australia/Sydney",
+      "now": "2026-10-02T12:00:00+10:00",
+      "time": {
+        "to": "2026-10-03T00:00:00+10:00",
+        "precision": "day",
+        "axis": "either",
+        "phrase": "今天",
+        "from": "2026-10-02T00:00:00+10:00"
+      },
+      "natures": [],
+      "recall": false
+    },
+    {
+      "group": "P2",
+      "name": "昨天",
+      "text": "昨天",
+      "zone": "Australia/Sydney",
+      "now": "2026-10-02T12:00:00+10:00",
+      "time": {
+        "to": "2026-10-02T00:00:00+10:00",
+        "precision": "day",
+        "axis": "either",
+        "phrase": "昨天",
+        "from": "2026-10-01T00:00:00+10:00"
+      },
+      "natures": [],
+      "recall": false
+    },
+    {
+      "group": "P2",
+      "name": "前天",
+      "text": "前天",
+      "zone": "Australia/Sydney",
+      "now": "2026-10-02T12:00:00+10:00",
+      "time": {
+        "to": "2026-10-01T00:00:00+10:00",
+        "precision": "day",
+        "axis": "either",
+        "phrase": "前天",
+        "from": "2026-09-30T00:00:00+10:00"
+      },
+      "natures": [],
+      "recall": false
+    },
+    {
+      "group": "P2",
+      "name": "明天",
+      "text": "明天",
+      "zone": "Australia/Sydney",
+      "now": "2026-10-02T12:00:00+10:00",
+      "time": {
+        "to": "2026-10-04T00:00:00+10:00",
+        "precision": "day",
+        "axis": "either",
+        "phrase": "明天",
+        "from": "2026-10-03T00:00:00+10:00"
+      },
+      "natures": [],
+      "recall": false
+    },
+    {
+      "group": "P2",
+      "name": "后天",
+      "text": "后天",
+      "zone": "Australia/Sydney",
+      "now": "2026-10-02T12:00:00+10:00",
+      "time": {
+        "to": "2026-10-05T00:00:00+11:00",
+        "precision": "day",
+        "axis": "either",
+        "phrase": "后天",
+        "from": "2026-10-04T00:00:00+10:00"
+      },
+      "natures": [],
+      "recall": false
+    },
+    {
+      "group": "P2",
+      "name": "这周",
+      "text": "这周",
+      "zone": "Australia/Sydney",
+      "now": "2026-10-02T12:00:00+10:00",
+      "time": {
+        "to": "2026-10-05T00:00:00+11:00",
+        "precision": "week",
+        "axis": "either",
+        "phrase": "这周",
+        "from": "2026-09-28T00:00:00+10:00"
+      },
+      "natures": [],
+      "recall": false
+    },
+    {
+      "group": "P2",
+      "name": "上周",
+      "text": "上周",
+      "zone": "Australia/Sydney",
+      "now": "2026-10-02T12:00:00+10:00",
+      "time": {
+        "to": "2026-09-28T00:00:00+10:00",
+        "precision": "week",
+        "axis": "either",
+        "phrase": "上周",
+        "from": "2026-09-21T00:00:00+10:00"
+      },
+      "natures": [],
+      "recall": false
+    },
+    {
+      "group": "P2",
+      "name": "下周",
+      "text": "下周",
+      "zone": "Australia/Sydney",
+      "now": "2026-10-02T12:00:00+10:00",
+      "time": {
+        "to": "2026-10-12T00:00:00+11:00",
+        "precision": "week",
+        "axis": "either",
+        "phrase": "下周",
+        "from": "2026-10-05T00:00:00+11:00"
+      },
+      "natures": [],
+      "recall": false
+    },
+    {
+      "group": "P2",
+      "name": "上周五",
+      "text": "上周五",
+      "zone": "Australia/Sydney",
+      "now": "2026-10-02T12:00:00+10:00",
+      "time": {
+        "to": "2026-09-26T00:00:00+10:00",
+        "precision": "day",
+        "axis": "either",
+        "phrase": "上周五",
+        "from": "2026-09-25T00:00:00+10:00"
+      },
+      "natures": [],
+      "recall": false
+    },
+    {
+      "group": "P2",
+      "name": "这个月",
+      "text": "这个月",
+      "zone": "Australia/Sydney",
+      "now": "2026-10-02T12:00:00+10:00",
+      "time": {
+        "to": "2026-11-01T00:00:00+11:00",
+        "precision": "month",
+        "axis": "either",
+        "phrase": "这个月",
+        "from": "2026-10-01T00:00:00+10:00"
+      },
+      "natures": [],
+      "recall": false
+    },
+    {
+      "group": "P2",
+      "name": "上个月",
+      "text": "上个月",
+      "zone": "Australia/Sydney",
+      "now": "2026-10-02T12:00:00+10:00",
+      "time": {
+        "to": "2026-10-01T00:00:00+10:00",
+        "precision": "month",
+        "axis": "either",
+        "phrase": "上个月",
+        "from": "2026-09-01T00:00:00+10:00"
+      },
+      "natures": [],
+      "recall": false
+    },
+    {
+      "group": "P2",
+      "name": "下个月",
+      "text": "下个月",
+      "zone": "Australia/Sydney",
+      "now": "2026-10-02T12:00:00+10:00",
+      "time": {
+        "to": "2026-12-01T00:00:00+11:00",
+        "precision": "month",
+        "axis": "either",
+        "phrase": "下个月",
+        "from": "2026-11-01T00:00:00+11:00"
+      },
+      "natures": [],
+      "recall": false
+    },
+    {
+      "group": "P2",
+      "name": "今年",
+      "text": "今年",
+      "zone": "Australia/Sydney",
+      "now": "2026-10-02T12:00:00+10:00",
+      "time": {
+        "to": "2027-01-01T00:00:00+11:00",
+        "precision": "year",
+        "axis": "either",
+        "phrase": "今年",
+        "from": "2026-01-01T00:00:00+11:00"
+      },
+      "natures": [],
+      "recall": false
+    },
+    {
+      "group": "P2",
+      "name": "去年",
+      "text": "去年",
+      "zone": "Australia/Sydney",
+      "now": "2026-10-02T12:00:00+10:00",
+      "time": {
+        "to": "2026-01-01T00:00:00+11:00",
+        "precision": "year",
+        "axis": "either",
+        "phrase": "去年",
+        "from": "2025-01-01T00:00:00+11:00"
+      },
+      "natures": [],
+      "recall": false
+    },
+    {
+      "group": "P2",
+      "name": "前年",
+      "text": "前年",
+      "zone": "Australia/Sydney",
+      "now": "2026-10-02T12:00:00+10:00",
+      "time": {
+        "to": "2025-01-01T00:00:00+11:00",
+        "precision": "year",
+        "axis": "either",
+        "phrase": "前年",
+        "from": "2024-01-01T00:00:00+11:00"
+      },
+      "natures": [],
+      "recall": false
+    },
+    {
+      "group": "P2",
+      "name": "明年",
+      "text": "明年",
+      "zone": "Australia/Sydney",
+      "now": "2026-10-02T12:00:00+10:00",
+      "time": {
+        "to": "2028-01-01T00:00:00+11:00",
+        "precision": "year",
+        "axis": "either",
+        "phrase": "明年",
+        "from": "2027-01-01T00:00:00+11:00"
+      },
+      "natures": [],
+      "recall": false
+    },
+    {
+      "group": "P2",
+      "name": "2025 年",
+      "text": "2025 年",
+      "zone": "Australia/Sydney",
+      "now": "2026-10-02T12:00:00+10:00",
+      "time": {
+        "to": "2026-01-01T00:00:00+11:00",
+        "precision": "year",
+        "axis": "either",
+        "phrase": "2025 年",
+        "from": "2025-01-01T00:00:00+11:00"
+      },
+      "natures": [],
+      "recall": false
+    },
+    {
+      "group": "P2",
+      "name": "2025 年 3 月",
+      "text": "2025 年 3 月",
+      "zone": "Australia/Sydney",
+      "now": "2026-10-02T12:00:00+10:00",
+      "time": {
+        "to": "2025-04-01T00:00:00+11:00",
+        "precision": "month",
+        "axis": "either",
+        "phrase": "2025 年 3 月",
+        "from": "2025-03-01T00:00:00+11:00"
+      },
+      "natures": [],
+      "recall": false
+    },
+    {
+      "group": "P2",
+      "name": "3 月 12 日",
+      "text": "3 月 12 日",
+      "zone": "Australia/Sydney",
+      "now": "2026-10-02T12:00:00+10:00",
+      "time": {
+        "to": "2026-03-13T00:00:00+11:00",
+        "precision": "day",
+        "axis": "either",
+        "phrase": "3 月 12 日",
+        "from": "2026-03-12T00:00:00+11:00"
+      },
+      "natures": [],
+      "recall": false
+    },
+    {
+      "group": "P2",
+      "name": "3 月",
+      "text": "3 月",
+      "zone": "Australia/Sydney",
+      "now": "2026-10-02T12:00:00+10:00",
+      "time": {
+        "to": "2026-04-01T00:00:00+11:00",
+        "precision": "month",
+        "axis": "either",
+        "phrase": "3 月",
+        "from": "2026-03-01T00:00:00+11:00"
+      },
+      "natures": [],
+      "recall": false
+    },
+    {
+      "group": "P3",
+      "name": "Australia/Sydney_monday_这周",
+      "text": "这周",
+      "zone": "Australia/Sydney",
+      "now": "2026-03-30T00:10:00+11:00",
+      "time": {
+        "to": "2026-04-06T00:00:00+10:00",
+        "precision": "week",
+        "axis": "either",
+        "phrase": "这周",
+        "from": "2026-03-30T00:00:00+11:00"
+      },
+      "natures": [],
+      "recall": false
+    },
+    {
+      "group": "P3",
+      "name": "Australia/Sydney_monday_上周",
+      "text": "上周",
+      "zone": "Australia/Sydney",
+      "now": "2026-03-30T00:10:00+11:00",
+      "time": {
+        "to": "2026-03-30T00:00:00+11:00",
+        "precision": "week",
+        "axis": "either",
+        "phrase": "上周",
+        "from": "2026-03-23T00:00:00+11:00"
+      },
+      "natures": [],
+      "recall": false
+    },
+    {
+      "group": "P3",
+      "name": "Australia/Sydney_monday_昨天",
+      "text": "昨天",
+      "zone": "Australia/Sydney",
+      "now": "2026-03-30T00:10:00+11:00",
+      "time": {
+        "to": "2026-03-30T00:00:00+11:00",
+        "precision": "day",
+        "axis": "either",
+        "phrase": "昨天",
+        "from": "2026-03-29T00:00:00+11:00"
+      },
+      "natures": [],
+      "recall": false
+    },
+    {
+      "group": "P3",
+      "name": "Australia/Sydney_monday_去年",
+      "text": "去年",
+      "zone": "Australia/Sydney",
+      "now": "2026-03-30T00:10:00+11:00",
+      "time": {
+        "to": "2026-01-01T00:00:00+11:00",
+        "precision": "year",
+        "axis": "either",
+        "phrase": "去年",
+        "from": "2025-01-01T00:00:00+11:00"
+      },
+      "natures": [],
+      "recall": false
+    },
+    {
+      "group": "P3",
+      "name": "Australia/Sydney_sunday_这周",
+      "text": "这周",
+      "zone": "Australia/Sydney",
+      "now": "2026-03-29T23:50:00+11:00",
+      "time": {
+        "to": "2026-03-30T00:00:00+11:00",
+        "precision": "week",
+        "axis": "either",
+        "phrase": "这周",
+        "from": "2026-03-23T00:00:00+11:00"
+      },
+      "natures": [],
+      "recall": false
+    },
+    {
+      "group": "P3",
+      "name": "Australia/Sydney_sunday_上周",
+      "text": "上周",
+      "zone": "Australia/Sydney",
+      "now": "2026-03-29T23:50:00+11:00",
+      "time": {
+        "to": "2026-03-23T00:00:00+11:00",
+        "precision": "week",
+        "axis": "either",
+        "phrase": "上周",
+        "from": "2026-03-16T00:00:00+11:00"
+      },
+      "natures": [],
+      "recall": false
+    },
+    {
+      "group": "P3",
+      "name": "Australia/Sydney_sunday_昨天",
+      "text": "昨天",
+      "zone": "Australia/Sydney",
+      "now": "2026-03-29T23:50:00+11:00",
+      "time": {
+        "to": "2026-03-29T00:00:00+11:00",
+        "precision": "day",
+        "axis": "either",
+        "phrase": "昨天",
+        "from": "2026-03-28T00:00:00+11:00"
+      },
+      "natures": [],
+      "recall": false
+    },
+    {
+      "group": "P3",
+      "name": "Australia/Sydney_sunday_去年",
+      "text": "去年",
+      "zone": "Australia/Sydney",
+      "now": "2026-03-29T23:50:00+11:00",
+      "time": {
+        "to": "2026-01-01T00:00:00+11:00",
+        "precision": "year",
+        "axis": "either",
+        "phrase": "去年",
+        "from": "2025-01-01T00:00:00+11:00"
+      },
+      "natures": [],
+      "recall": false
+    },
+    {
+      "group": "P3",
+      "name": "Australia/Sydney_new_year_这周",
+      "text": "这周",
+      "zone": "Australia/Sydney",
+      "now": "2026-01-01T00:10:00+11:00",
+      "time": {
+        "to": "2026-01-05T00:00:00+11:00",
+        "precision": "week",
+        "axis": "either",
+        "phrase": "这周",
+        "from": "2025-12-29T00:00:00+11:00"
+      },
+      "natures": [],
+      "recall": false
+    },
+    {
+      "group": "P3",
+      "name": "Australia/Sydney_new_year_上周",
+      "text": "上周",
+      "zone": "Australia/Sydney",
+      "now": "2026-01-01T00:10:00+11:00",
+      "time": {
+        "to": "2025-12-29T00:00:00+11:00",
+        "precision": "week",
+        "axis": "either",
+        "phrase": "上周",
+        "from": "2025-12-22T00:00:00+11:00"
+      },
+      "natures": [],
+      "recall": false
+    },
+    {
+      "group": "P3",
+      "name": "Australia/Sydney_new_year_昨天",
+      "text": "昨天",
+      "zone": "Australia/Sydney",
+      "now": "2026-01-01T00:10:00+11:00",
+      "time": {
+        "to": "2026-01-01T00:00:00+11:00",
+        "precision": "day",
+        "axis": "either",
+        "phrase": "昨天",
+        "from": "2025-12-31T00:00:00+11:00"
+      },
+      "natures": [],
+      "recall": false
+    },
+    {
+      "group": "P3",
+      "name": "Australia/Sydney_new_year_去年",
+      "text": "去年",
+      "zone": "Australia/Sydney",
+      "now": "2026-01-01T00:10:00+11:00",
+      "time": {
+        "to": "2026-01-01T00:00:00+11:00",
+        "precision": "year",
+        "axis": "either",
+        "phrase": "去年",
+        "from": "2025-01-01T00:00:00+11:00"
+      },
+      "natures": [],
+      "recall": false
+    },
+    {
+      "group": "P3",
+      "name": "Australia/Sydney_dst_这周",
+      "text": "这周",
+      "zone": "Australia/Sydney",
+      "now": "2026-10-05T00:10:00+11:00",
+      "time": {
+        "to": "2026-10-12T00:00:00+11:00",
+        "precision": "week",
+        "axis": "either",
+        "phrase": "这周",
+        "from": "2026-10-05T00:00:00+11:00"
+      },
+      "natures": [],
+      "recall": false
+    },
+    {
+      "group": "P3",
+      "name": "Australia/Sydney_dst_上周",
+      "text": "上周",
+      "zone": "Australia/Sydney",
+      "now": "2026-10-05T00:10:00+11:00",
+      "time": {
+        "to": "2026-10-05T00:00:00+11:00",
+        "precision": "week",
+        "axis": "either",
+        "phrase": "上周",
+        "from": "2026-09-28T00:00:00+10:00"
+      },
+      "natures": [],
+      "recall": false
+    },
+    {
+      "group": "P3",
+      "name": "Australia/Sydney_dst_昨天",
+      "text": "昨天",
+      "zone": "Australia/Sydney",
+      "now": "2026-10-05T00:10:00+11:00",
+      "time": {
+        "to": "2026-10-05T00:00:00+11:00",
+        "precision": "day",
+        "axis": "either",
+        "phrase": "昨天",
+        "from": "2026-10-04T00:00:00+10:00"
+      },
+      "natures": [],
+      "recall": false
+    },
+    {
+      "group": "P3",
+      "name": "Australia/Sydney_dst_去年",
+      "text": "去年",
+      "zone": "Australia/Sydney",
+      "now": "2026-10-05T00:10:00+11:00",
+      "time": {
+        "to": "2026-01-01T00:00:00+11:00",
+        "precision": "year",
+        "axis": "either",
+        "phrase": "去年",
+        "from": "2025-01-01T00:00:00+11:00"
+      },
+      "natures": [],
+      "recall": false
+    },
+    {
+      "group": "P3",
+      "name": "Asia/Shanghai_monday_这周",
+      "text": "这周",
+      "zone": "Asia/Shanghai",
+      "now": "2026-03-30T00:10:00+08:00",
+      "time": {
+        "to": "2026-04-06T00:00:00+08:00",
+        "precision": "week",
+        "axis": "either",
+        "phrase": "这周",
+        "from": "2026-03-30T00:00:00+08:00"
+      },
+      "natures": [],
+      "recall": false
+    },
+    {
+      "group": "P3",
+      "name": "Asia/Shanghai_monday_上周",
+      "text": "上周",
+      "zone": "Asia/Shanghai",
+      "now": "2026-03-30T00:10:00+08:00",
+      "time": {
+        "to": "2026-03-30T00:00:00+08:00",
+        "precision": "week",
+        "axis": "either",
+        "phrase": "上周",
+        "from": "2026-03-23T00:00:00+08:00"
+      },
+      "natures": [],
+      "recall": false
+    },
+    {
+      "group": "P3",
+      "name": "Asia/Shanghai_monday_昨天",
+      "text": "昨天",
+      "zone": "Asia/Shanghai",
+      "now": "2026-03-30T00:10:00+08:00",
+      "time": {
+        "to": "2026-03-30T00:00:00+08:00",
+        "precision": "day",
+        "axis": "either",
+        "phrase": "昨天",
+        "from": "2026-03-29T00:00:00+08:00"
+      },
+      "natures": [],
+      "recall": false
+    },
+    {
+      "group": "P3",
+      "name": "Asia/Shanghai_monday_去年",
+      "text": "去年",
+      "zone": "Asia/Shanghai",
+      "now": "2026-03-30T00:10:00+08:00",
+      "time": {
+        "to": "2026-01-01T00:00:00+08:00",
+        "precision": "year",
+        "axis": "either",
+        "phrase": "去年",
+        "from": "2025-01-01T00:00:00+08:00"
+      },
+      "natures": [],
+      "recall": false
+    },
+    {
+      "group": "P3",
+      "name": "Asia/Shanghai_sunday_这周",
+      "text": "这周",
+      "zone": "Asia/Shanghai",
+      "now": "2026-03-29T23:50:00+08:00",
+      "time": {
+        "to": "2026-03-30T00:00:00+08:00",
+        "precision": "week",
+        "axis": "either",
+        "phrase": "这周",
+        "from": "2026-03-23T00:00:00+08:00"
+      },
+      "natures": [],
+      "recall": false
+    },
+    {
+      "group": "P3",
+      "name": "Asia/Shanghai_sunday_上周",
+      "text": "上周",
+      "zone": "Asia/Shanghai",
+      "now": "2026-03-29T23:50:00+08:00",
+      "time": {
+        "to": "2026-03-23T00:00:00+08:00",
+        "precision": "week",
+        "axis": "either",
+        "phrase": "上周",
+        "from": "2026-03-16T00:00:00+08:00"
+      },
+      "natures": [],
+      "recall": false
+    },
+    {
+      "group": "P3",
+      "name": "Asia/Shanghai_sunday_昨天",
+      "text": "昨天",
+      "zone": "Asia/Shanghai",
+      "now": "2026-03-29T23:50:00+08:00",
+      "time": {
+        "to": "2026-03-29T00:00:00+08:00",
+        "precision": "day",
+        "axis": "either",
+        "phrase": "昨天",
+        "from": "2026-03-28T00:00:00+08:00"
+      },
+      "natures": [],
+      "recall": false
+    },
+    {
+      "group": "P3",
+      "name": "Asia/Shanghai_sunday_去年",
+      "text": "去年",
+      "zone": "Asia/Shanghai",
+      "now": "2026-03-29T23:50:00+08:00",
+      "time": {
+        "to": "2026-01-01T00:00:00+08:00",
+        "precision": "year",
+        "axis": "either",
+        "phrase": "去年",
+        "from": "2025-01-01T00:00:00+08:00"
+      },
+      "natures": [],
+      "recall": false
+    },
+    {
+      "group": "P3",
+      "name": "Asia/Shanghai_new_year_这周",
+      "text": "这周",
+      "zone": "Asia/Shanghai",
+      "now": "2026-01-01T00:10:00+08:00",
+      "time": {
+        "to": "2026-01-05T00:00:00+08:00",
+        "precision": "week",
+        "axis": "either",
+        "phrase": "这周",
+        "from": "2025-12-29T00:00:00+08:00"
+      },
+      "natures": [],
+      "recall": false
+    },
+    {
+      "group": "P3",
+      "name": "Asia/Shanghai_new_year_上周",
+      "text": "上周",
+      "zone": "Asia/Shanghai",
+      "now": "2026-01-01T00:10:00+08:00",
+      "time": {
+        "to": "2025-12-29T00:00:00+08:00",
+        "precision": "week",
+        "axis": "either",
+        "phrase": "上周",
+        "from": "2025-12-22T00:00:00+08:00"
+      },
+      "natures": [],
+      "recall": false
+    },
+    {
+      "group": "P3",
+      "name": "Asia/Shanghai_new_year_昨天",
+      "text": "昨天",
+      "zone": "Asia/Shanghai",
+      "now": "2026-01-01T00:10:00+08:00",
+      "time": {
+        "to": "2026-01-01T00:00:00+08:00",
+        "precision": "day",
+        "axis": "either",
+        "phrase": "昨天",
+        "from": "2025-12-31T00:00:00+08:00"
+      },
+      "natures": [],
+      "recall": false
+    },
+    {
+      "group": "P3",
+      "name": "Asia/Shanghai_new_year_去年",
+      "text": "去年",
+      "zone": "Asia/Shanghai",
+      "now": "2026-01-01T00:10:00+08:00",
+      "time": {
+        "to": "2026-01-01T00:00:00+08:00",
+        "precision": "year",
+        "axis": "either",
+        "phrase": "去年",
+        "from": "2025-01-01T00:00:00+08:00"
+      },
+      "natures": [],
+      "recall": false
+    },
+    {
+      "group": "P3",
+      "name": "Asia/Shanghai_dst_这周",
+      "text": "这周",
+      "zone": "Asia/Shanghai",
+      "now": "2026-10-05T00:10:00+08:00",
+      "time": {
+        "to": "2026-10-12T00:00:00+08:00",
+        "precision": "week",
+        "axis": "either",
+        "phrase": "这周",
+        "from": "2026-10-05T00:00:00+08:00"
+      },
+      "natures": [],
+      "recall": false
+    },
+    {
+      "group": "P3",
+      "name": "Asia/Shanghai_dst_上周",
+      "text": "上周",
+      "zone": "Asia/Shanghai",
+      "now": "2026-10-05T00:10:00+08:00",
+      "time": {
+        "to": "2026-10-05T00:00:00+08:00",
+        "precision": "week",
+        "axis": "either",
+        "phrase": "上周",
+        "from": "2026-09-28T00:00:00+08:00"
+      },
+      "natures": [],
+      "recall": false
+    },
+    {
+      "group": "P3",
+      "name": "Asia/Shanghai_dst_昨天",
+      "text": "昨天",
+      "zone": "Asia/Shanghai",
+      "now": "2026-10-05T00:10:00+08:00",
+      "time": {
+        "to": "2026-10-05T00:00:00+08:00",
+        "precision": "day",
+        "axis": "either",
+        "phrase": "昨天",
+        "from": "2026-10-04T00:00:00+08:00"
+      },
+      "natures": [],
+      "recall": false
+    },
+    {
+      "group": "P3",
+      "name": "Asia/Shanghai_dst_去年",
+      "text": "去年",
+      "zone": "Asia/Shanghai",
+      "now": "2026-10-05T00:10:00+08:00",
+      "time": {
+        "to": "2026-01-01T00:00:00+08:00",
+        "precision": "year",
+        "axis": "either",
+        "phrase": "去年",
+        "from": "2025-01-01T00:00:00+08:00"
+      },
+      "natures": [],
+      "recall": false
+    },
+    {
+      "group": "P3",
+      "name": "UTC_monday_这周",
+      "text": "这周",
+      "zone": "UTC",
+      "now": "2026-03-30T00:10:00+00:00",
+      "time": {
+        "to": "2026-04-06T00:00:00+00:00",
+        "precision": "week",
+        "axis": "either",
+        "phrase": "这周",
+        "from": "2026-03-30T00:00:00+00:00"
+      },
+      "natures": [],
+      "recall": false
+    },
+    {
+      "group": "P3",
+      "name": "UTC_monday_上周",
+      "text": "上周",
+      "zone": "UTC",
+      "now": "2026-03-30T00:10:00+00:00",
+      "time": {
+        "to": "2026-03-30T00:00:00+00:00",
+        "precision": "week",
+        "axis": "either",
+        "phrase": "上周",
+        "from": "2026-03-23T00:00:00+00:00"
+      },
+      "natures": [],
+      "recall": false
+    },
+    {
+      "group": "P3",
+      "name": "UTC_monday_昨天",
+      "text": "昨天",
+      "zone": "UTC",
+      "now": "2026-03-30T00:10:00+00:00",
+      "time": {
+        "to": "2026-03-30T00:00:00+00:00",
+        "precision": "day",
+        "axis": "either",
+        "phrase": "昨天",
+        "from": "2026-03-29T00:00:00+00:00"
+      },
+      "natures": [],
+      "recall": false
+    },
+    {
+      "group": "P3",
+      "name": "UTC_monday_去年",
+      "text": "去年",
+      "zone": "UTC",
+      "now": "2026-03-30T00:10:00+00:00",
+      "time": {
+        "to": "2026-01-01T00:00:00+00:00",
+        "precision": "year",
+        "axis": "either",
+        "phrase": "去年",
+        "from": "2025-01-01T00:00:00+00:00"
+      },
+      "natures": [],
+      "recall": false
+    },
+    {
+      "group": "P3",
+      "name": "UTC_sunday_这周",
+      "text": "这周",
+      "zone": "UTC",
+      "now": "2026-03-29T23:50:00+00:00",
+      "time": {
+        "to": "2026-03-30T00:00:00+00:00",
+        "precision": "week",
+        "axis": "either",
+        "phrase": "这周",
+        "from": "2026-03-23T00:00:00+00:00"
+      },
+      "natures": [],
+      "recall": false
+    },
+    {
+      "group": "P3",
+      "name": "UTC_sunday_上周",
+      "text": "上周",
+      "zone": "UTC",
+      "now": "2026-03-29T23:50:00+00:00",
+      "time": {
+        "to": "2026-03-23T00:00:00+00:00",
+        "precision": "week",
+        "axis": "either",
+        "phrase": "上周",
+        "from": "2026-03-16T00:00:00+00:00"
+      },
+      "natures": [],
+      "recall": false
+    },
+    {
+      "group": "P3",
+      "name": "UTC_sunday_昨天",
+      "text": "昨天",
+      "zone": "UTC",
+      "now": "2026-03-29T23:50:00+00:00",
+      "time": {
+        "to": "2026-03-29T00:00:00+00:00",
+        "precision": "day",
+        "axis": "either",
+        "phrase": "昨天",
+        "from": "2026-03-28T00:00:00+00:00"
+      },
+      "natures": [],
+      "recall": false
+    },
+    {
+      "group": "P3",
+      "name": "UTC_sunday_去年",
+      "text": "去年",
+      "zone": "UTC",
+      "now": "2026-03-29T23:50:00+00:00",
+      "time": {
+        "to": "2026-01-01T00:00:00+00:00",
+        "precision": "year",
+        "axis": "either",
+        "phrase": "去年",
+        "from": "2025-01-01T00:00:00+00:00"
+      },
+      "natures": [],
+      "recall": false
+    },
+    {
+      "group": "P3",
+      "name": "UTC_new_year_这周",
+      "text": "这周",
+      "zone": "UTC",
+      "now": "2026-01-01T00:10:00+00:00",
+      "time": {
+        "to": "2026-01-05T00:00:00+00:00",
+        "precision": "week",
+        "axis": "either",
+        "phrase": "这周",
+        "from": "2025-12-29T00:00:00+00:00"
+      },
+      "natures": [],
+      "recall": false
+    },
+    {
+      "group": "P3",
+      "name": "UTC_new_year_上周",
+      "text": "上周",
+      "zone": "UTC",
+      "now": "2026-01-01T00:10:00+00:00",
+      "time": {
+        "to": "2025-12-29T00:00:00+00:00",
+        "precision": "week",
+        "axis": "either",
+        "phrase": "上周",
+        "from": "2025-12-22T00:00:00+00:00"
+      },
+      "natures": [],
+      "recall": false
+    },
+    {
+      "group": "P3",
+      "name": "UTC_new_year_昨天",
+      "text": "昨天",
+      "zone": "UTC",
+      "now": "2026-01-01T00:10:00+00:00",
+      "time": {
+        "to": "2026-01-01T00:00:00+00:00",
+        "precision": "day",
+        "axis": "either",
+        "phrase": "昨天",
+        "from": "2025-12-31T00:00:00+00:00"
+      },
+      "natures": [],
+      "recall": false
+    },
+    {
+      "group": "P3",
+      "name": "UTC_new_year_去年",
+      "text": "去年",
+      "zone": "UTC",
+      "now": "2026-01-01T00:10:00+00:00",
+      "time": {
+        "to": "2026-01-01T00:00:00+00:00",
+        "precision": "year",
+        "axis": "either",
+        "phrase": "去年",
+        "from": "2025-01-01T00:00:00+00:00"
+      },
+      "natures": [],
+      "recall": false
+    },
+    {
+      "group": "P3",
+      "name": "UTC_dst_这周",
+      "text": "这周",
+      "zone": "UTC",
+      "now": "2026-10-05T00:10:00+00:00",
+      "time": {
+        "to": "2026-10-12T00:00:00+00:00",
+        "precision": "week",
+        "axis": "either",
+        "phrase": "这周",
+        "from": "2026-10-05T00:00:00+00:00"
+      },
+      "natures": [],
+      "recall": false
+    },
+    {
+      "group": "P3",
+      "name": "UTC_dst_上周",
+      "text": "上周",
+      "zone": "UTC",
+      "now": "2026-10-05T00:10:00+00:00",
+      "time": {
+        "to": "2026-10-05T00:00:00+00:00",
+        "precision": "week",
+        "axis": "either",
+        "phrase": "上周",
+        "from": "2026-09-28T00:00:00+00:00"
+      },
+      "natures": [],
+      "recall": false
+    },
+    {
+      "group": "P3",
+      "name": "UTC_dst_昨天",
+      "text": "昨天",
+      "zone": "UTC",
+      "now": "2026-10-05T00:10:00+00:00",
+      "time": {
+        "to": "2026-10-05T00:00:00+00:00",
+        "precision": "day",
+        "axis": "either",
+        "phrase": "昨天",
+        "from": "2026-10-04T00:00:00+00:00"
+      },
+      "natures": [],
+      "recall": false
+    },
+    {
+      "group": "P3",
+      "name": "UTC_dst_去年",
+      "text": "去年",
+      "zone": "UTC",
+      "now": "2026-10-05T00:10:00+00:00",
+      "time": {
+        "to": "2026-01-01T00:00:00+00:00",
+        "precision": "year",
+        "axis": "either",
+        "phrase": "去年",
+        "from": "2025-01-01T00:00:00+00:00"
+      },
+      "natures": [],
+      "recall": false
+    },
+    {
+      "group": "P3",
+      "name": "sydney_dst_day",
+      "text": "今天",
+      "zone": "Australia/Sydney",
+      "now": "2026-10-04T12:00:00+11:00",
+      "time": {
+        "to": "2026-10-05T00:00:00+11:00",
+        "precision": "day",
+        "axis": "either",
+        "phrase": "今天",
+        "from": "2026-10-04T00:00:00+10:00"
+      },
+      "natures": [],
+      "recall": false
+    },
+    {
+      "group": "P3",
+      "name": "sydney_dst_fall",
+      "text": "今天",
+      "zone": "Australia/Sydney",
+      "now": "2026-04-05T12:00:00+10:00",
+      "time": {
+        "to": "2026-04-06T00:00:00+10:00",
+        "precision": "day",
+        "axis": "either",
+        "phrase": "今天",
+        "from": "2026-04-05T00:00:00+11:00"
+      },
+      "natures": [],
+      "recall": false
+    },
+    {
+      "group": "P4",
+      "name": "no_time",
+      "text": "随便聊聊",
+      "zone": "Australia/Sydney",
+      "now": "2026-10-02T12:00:00+10:00",
+      "time": null,
+      "natures": [],
+      "recall": false
+    },
+    {
+      "group": "P4",
+      "name": "unrecognized",
+      "text": "很久以前",
+      "zone": "Australia/Sydney",
+      "now": "2026-10-02T12:00:00+10:00",
+      "time": null,
+      "natures": [],
+      "recall": false
+    },
+    {
+      "group": "P4",
+      "name": "future",
+      "text": "明年会更好吗",
+      "zone": "Australia/Sydney",
+      "now": "2026-10-02T12:00:00+10:00",
+      "time": {
+        "to": "2028-01-01T00:00:00+11:00",
+        "precision": "year",
+        "axis": "either",
+        "phrase": "明年",
+        "from": "2027-01-01T00:00:00+11:00"
+      },
+      "natures": [],
+      "recall": false
+    },
+    {
+      "group": "P4",
+      "name": "weather",
+      "text": "今天天气",
+      "zone": "Australia/Sydney",
+      "now": "2026-10-02T12:00:00+10:00",
+      "time": {
+        "to": "2026-10-03T00:00:00+10:00",
+        "precision": "day",
+        "axis": "either",
+        "phrase": "今天",
+        "from": "2026-10-02T00:00:00+10:00"
+      },
+      "natures": [],
+      "recall": false
+    },
+    {
+      "group": "P5",
+      "name": "before_march",
+      "text": "3 月",
+      "zone": "Australia/Sydney",
+      "now": "2026-02-15T12:00:00+11:00",
+      "time": {
+        "to": "2025-04-01T00:00:00+11:00",
+        "precision": "month",
+        "axis": "either",
+        "phrase": "3 月",
+        "from": "2025-03-01T00:00:00+11:00"
+      },
+      "natures": [],
+      "recall": false
+    },
+    {
+      "group": "P5",
+      "name": "after_march",
+      "text": "3 月",
+      "zone": "Australia/Sydney",
+      "now": "2026-05-15T12:00:00+10:00",
+      "time": {
+        "to": "2026-04-01T00:00:00+11:00",
+        "precision": "month",
+        "axis": "either",
+        "phrase": "3 月",
+        "from": "2026-03-01T00:00:00+11:00"
+      },
+      "natures": [],
+      "recall": false
+    },
+    {
+      "group": "P5",
+      "name": "before_day",
+      "text": "3 月 12 日",
+      "zone": "Australia/Sydney",
+      "now": "2026-03-01T12:00:00+11:00",
+      "time": {
+        "to": "2025-03-13T00:00:00+11:00",
+        "precision": "day",
+        "axis": "either",
+        "phrase": "3 月 12 日",
+        "from": "2025-03-12T00:00:00+11:00"
+      },
+      "natures": [],
+      "recall": false
+    },
+    {
+      "group": "P6",
+      "name": "想",
+      "text": "想事项",
+      "zone": "Australia/Sydney",
+      "now": "2026-10-02T12:00:00+10:00",
+      "time": null,
+      "natures": [
+        "intention",
+        "plan"
+      ],
+      "recall": false
+    },
+    {
+      "group": "P6",
+      "name": "打算",
+      "text": "打算事项",
+      "zone": "Australia/Sydney",
+      "now": "2026-10-02T12:00:00+10:00",
+      "time": null,
+      "natures": [
+        "intention",
+        "plan"
+      ],
+      "recall": false
+    },
+    {
+      "group": "P6",
+      "name": "计划",
+      "text": "计划事项",
+      "zone": "Australia/Sydney",
+      "now": "2026-10-02T12:00:00+10:00",
+      "time": null,
+      "natures": [
+        "intention",
+        "plan"
+      ],
+      "recall": false
+    },
+    {
+      "group": "P6",
+      "name": "准备",
+      "text": "准备事项",
+      "zone": "Australia/Sydney",
+      "now": "2026-10-02T12:00:00+10:00",
+      "time": null,
+      "natures": [
+        "intention",
+        "plan"
+      ],
+      "recall": false
+    },
+    {
+      "group": "P6",
+      "name": "要去",
+      "text": "要去事项",
+      "zone": "Australia/Sydney",
+      "now": "2026-10-02T12:00:00+10:00",
+      "time": null,
+      "natures": [
+        "intention",
+        "plan"
+      ],
+      "recall": false
+    },
+    {
+      "group": "P6",
+      "name": "要做",
+      "text": "要做事项",
+      "zone": "Australia/Sydney",
+      "now": "2026-10-02T12:00:00+10:00",
+      "time": null,
+      "natures": [
+        "intention",
+        "plan"
+      ],
+      "recall": false
+    },
+    {
+      "group": "P6",
+      "name": "喜欢",
+      "text": "喜欢蔬菜",
+      "zone": "Australia/Sydney",
+      "now": "2026-10-02T12:00:00+10:00",
+      "time": null,
+      "natures": [
+        "preference"
+      ],
+      "recall": false
+    },
+    {
+      "group": "P6",
+      "name": "爱吃",
+      "text": "爱吃蔬菜",
+      "zone": "Australia/Sydney",
+      "now": "2026-10-02T12:00:00+10:00",
+      "time": null,
+      "natures": [
+        "preference"
+      ],
+      "recall": false
+    },
+    {
+      "group": "P6",
+      "name": "不吃",
+      "text": "不吃蔬菜",
+      "zone": "Australia/Sydney",
+      "now": "2026-10-02T12:00:00+10:00",
+      "time": null,
+      "natures": [
+        "preference"
+      ],
+      "recall": false
+    },
+    {
+      "group": "P6",
+      "name": "讨厌",
+      "text": "讨厌蔬菜",
+      "zone": "Australia/Sydney",
+      "now": "2026-10-02T12:00:00+10:00",
+      "time": null,
+      "natures": [
+        "preference"
+      ],
+      "recall": false
+    },
+    {
+      "group": "P6",
+      "name": "习惯",
+      "text": "习惯蔬菜",
+      "zone": "Australia/Sydney",
+      "now": "2026-10-02T12:00:00+10:00",
+      "time": null,
+      "natures": [
+        "preference"
+      ],
+      "recall": false
+    },
+    {
+      "group": "P6",
+      "name": "决定",
+      "text": "决定出发",
+      "zone": "Australia/Sydney",
+      "now": "2026-10-02T12:00:00+10:00",
+      "time": null,
+      "natures": [
+        "decision"
+      ],
+      "recall": false
+    },
+    {
+      "group": "P6",
+      "name": "定了",
+      "text": "定了出发",
+      "zone": "Australia/Sydney",
+      "now": "2026-10-02T12:00:00+10:00",
+      "time": null,
+      "natures": [
+        "decision"
+      ],
+      "recall": false
+    },
+    {
+      "group": "P6",
+      "name": "说过",
+      "text": "说过事项",
+      "zone": "Australia/Sydney",
+      "now": "2026-10-02T12:00:00+10:00",
+      "time": null,
+      "natures": [],
+      "recall": true
+    },
+    {
+      "group": "P6",
+      "name": "提过",
+      "text": "提过事项",
+      "zone": "Australia/Sydney",
+      "now": "2026-10-02T12:00:00+10:00",
+      "time": null,
+      "natures": [],
+      "recall": true
+    },
+    {
+      "group": "P6",
+      "name": "来着",
+      "text": "来着事项",
+      "zone": "Australia/Sydney",
+      "now": "2026-10-02T12:00:00+10:00",
+      "time": null,
+      "natures": [],
+      "recall": true
+    },
+    {
+      "group": "P6",
+      "name": "之前",
+      "text": "之前事项",
+      "zone": "Australia/Sydney",
+      "now": "2026-10-02T12:00:00+10:00",
+      "time": null,
+      "natures": [],
+      "recall": true
+    },
+    {
+      "group": "P6",
+      "name": "上次",
+      "text": "上次事项",
+      "zone": "Australia/Sydney",
+      "now": "2026-10-02T12:00:00+10:00",
+      "time": null,
+      "natures": [],
+      "recall": true
+    },
+    {
+      "group": "P6",
+      "name": "记得",
+      "text": "记得事项",
+      "zone": "Australia/Sydney",
+      "now": "2026-10-02T12:00:00+10:00",
+      "time": null,
+      "natures": [],
+      "recall": true
+    },
+    {
+      "group": "P6",
+      "name": "当时",
+      "text": "当时事项",
+      "zone": "Australia/Sydney",
+      "now": "2026-10-02T12:00:00+10:00",
+      "time": null,
+      "natures": [],
+      "recall": true
+    },
+    {
+      "group": "P6",
+      "name": "none",
+      "text": "随便聊聊",
+      "zone": "Australia/Sydney",
+      "now": "2026-10-02T12:00:00+10:00",
+      "time": null,
+      "natures": [],
+      "recall": false
+    },
+    {
+      "group": "P7",
+      "name": "上周提过",
+      "text": "上周提过",
+      "zone": "Australia/Sydney",
+      "now": "2026-10-02T12:00:00+10:00",
+      "time": {
+        "to": "2026-09-28T00:00:00+10:00",
+        "precision": "week",
+        "axis": "said",
+        "phrase": "上周",
+        "from": "2026-09-21T00:00:00+10:00"
+      },
+      "natures": [],
+      "recall": true
+    },
+    {
+      "group": "P7",
+      "name": "上周去了",
+      "text": "上周去了",
+      "zone": "Australia/Sydney",
+      "now": "2026-10-02T12:00:00+10:00",
+      "time": {
+        "to": "2026-09-28T00:00:00+10:00",
+        "precision": "week",
+        "axis": "either",
+        "phrase": "上周",
+        "from": "2026-09-21T00:00:00+10:00"
+      },
+      "natures": [],
+      "recall": false
+    },
+    {
+      "group": "P7",
+      "name": "上周",
+      "text": "上周",
+      "zone": "Australia/Sydney",
+      "now": "2026-10-02T12:00:00+10:00",
+      "time": {
+        "to": "2026-09-28T00:00:00+10:00",
+        "precision": "week",
+        "axis": "either",
+        "phrase": "上周",
+        "from": "2026-09-21T00:00:00+10:00"
+      },
+      "natures": [],
+      "recall": false
+    },
+    {
+      "group": "P7",
+      "name": "first_phrase",
+      "text": "昨天聊过去年",
+      "zone": "Australia/Sydney",
+      "now": "2026-10-02T12:00:00+10:00",
+      "time": {
+        "to": "2026-10-02T00:00:00+10:00",
+        "precision": "day",
+        "axis": "said",
+        "phrase": "昨天",
+        "from": "2026-10-01T00:00:00+10:00"
+      },
+      "natures": [],
+      "recall": false
+    }
+  ],
+  "fixtures": {
+    "query": "我去年说去成都要干什么来着",
+    "self_old_a": "甲档案：准备吃火锅和看展",
+    "self_old_b": "乙档案：打算见朋友",
+    "self_current": "今年档案：准备看球",
+    "dali": "大理档案：计划访茶园",
+    "wang": "老王档案：打算参加展会",
+    "hidden": "关闭档案：准备看演出",
+    "raw_old": "成都原话旧年暗号：想散步。",
+    "raw_current": "成都原话今年暗号：想骑车。",
+    "fallback": "前年档案：打算去书店",
+    "relaxed": "按这个时间没有找到，下面是其他时间说的，回答时说明实际日期"
+  },
+  "limits": {
+    "memories": 20,
+    "excerpts": 6,
+    "excerptRunes": 2400
+  },
+  "timeline": {
+    "statuses": {
+      "done": "done",
+      "cancelled": "dropped",
+      "changed": "changed",
+      "mixed": "open"
+    },
+    "reply": "验收时间轴固定回答",
+    "changedText": "更改后的打算：改去音乐厅"
+  },
+  "browser": {
+    "reply": "去年想吃火锅、见老王。",
+    "sourceText": "当时的原话：我准备去成都吃火锅，和老王见面。",
+    "items": [
+      {
+        "id": "11111111-1111-4111-8111-111111111111",
+        "at": "2025-02-03T15:30:00Z",
+        "eventFrom": "2025-03-01T00:00:00+08:00",
+        "eventTo": "2025-04-01T00:00:00+08:00",
+        "eventPrecision": "month",
+        "text": "准备去成都吃火锅",
+        "status": "open",
+        "saidLabel": "2025-02-03",
+        "eventLabel": "2025-03"
+      },
+      {
+        "id": "22222222-2222-4222-8222-222222222222",
+        "at": "2025-04-05T15:30:00Z",
+        "eventFrom": "2025-04-12T00:00:00+08:00",
+        "eventTo": "2025-04-13T00:00:00+08:00",
+        "eventPrecision": "day",
+        "text": "和老王见面",
+        "status": "done",
+        "saidLabel": "2025-04-05",
+        "eventLabel": "2025-04-12",
+        "statusLabel": "已完成"
+      },
+      {
+        "id": "33333333-3333-4333-8333-333333333333",
+        "at": "2025-06-07T15:30:00Z",
+        "eventFrom": "2025-06-12T00:00:00+08:00",
+        "eventTo": "2025-06-15T00:00:00+08:00",
+        "eventPrecision": "range",
+        "text": "一起走三天",
+        "status": "dropped",
+        "saidLabel": "2025-06-07",
+        "eventLabel": "2025-06-12",
+        "statusLabel": "已取消"
+      },
+      {
+        "id": "44444444-4444-4444-8444-444444444444",
+        "at": null,
+        "eventFrom": "2025-01-01T00:00:00+08:00",
+        "eventTo": "2026-01-01T00:00:00+08:00",
+        "eventPrecision": "year",
+        "text": "改去音乐厅",
+        "status": "changed",
+        "saidLabel": "时间不详",
+        "eventLabel": "2025",
+        "statusLabel": "后来改过"
+      }
+    ]
+  }
+}

@@ -260,10 +260,23 @@ func b1Outdated(t *testing.T, turn workspace.SecretaryTurn, want bool) {
 		t.Errorf("outdated wire field=%v present=%v, want=%v", v, ok, want)
 	}
 }
+
+// JSONB and HTTP round-trips may reorder object keys; every value is compared.
+func b1SameJSON(t *testing.T, a, b any) bool {
+	t.Helper()
+	var left, right any
+	if err := json.Unmarshal(asJSON(a), &left); err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(asJSON(b), &right); err != nil {
+		t.Fatal(err)
+	}
+	return reflect.DeepEqual(left, right)
+}
 func b1Preserved(t *testing.T, before, after workspace.SecretaryTurn) {
 	t.Helper()
-	if before.Reply != after.Reply || string(asJSON(before.Cards)) != string(asJSON(after.Cards)) || string(asJSON(before.Receipts)) != string(asJSON(after.Receipts)) {
-		t.Error("outdated erased or changed user-visible reply/cards/receipts")
+	if before.Reply != after.Reply || !b1SameJSON(t, before.Cards, after.Cards) || !b1SameJSON(t, before.Receipts, after.Receipts) {
+		t.Errorf("outdated erased or changed user-visible reply/cards/receipts: before=%s after=%s", asJSON(before), asJSON(after))
 	}
 	b1Outdated(t, after, true)
 }

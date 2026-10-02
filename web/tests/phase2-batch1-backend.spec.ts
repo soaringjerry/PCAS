@@ -112,7 +112,9 @@ test(`P6/R8a 带换行的长资料${exactQuery ? '唯一中段查询对照' : ''
   expect(source.source.text).toBe(fullText)
   // Keep the exact backend text, including whitespace, to diagnose matching.
   await info.attach('long-source-excerpt', { body: JSON.stringify({ excerpt: sources[0].text, original: source.source.text, exactMatch: fullText.includes(sources[0].text), whitespaceCollapsedMatch: fullText.replace(/\s+/g, ' ').includes(sources[0].text.replace(/…$/, '')) }, null, 2), contentType: 'application/json' })
-  await page.getByRole('list', { name: '依据' }).getByRole('button', { name: sources[0].text, exact: true }).click()
+  const quoted = page.getByRole('list', { name: '依据' }).getByRole('button')
+  await expect(quoted).toHaveCount(1)
+  await quoted.click()
   const dialog = page.getByRole('dialog')
   const original = dialog.locator('pre')
   await expect(original).toBeVisible()

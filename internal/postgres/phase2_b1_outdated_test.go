@@ -130,7 +130,7 @@ func TestPhase2B1_M5_OutdatedReceiptCanUndoAndSurvivesReload(t *testing.T) {
 	b1Preserved(t, out.Turn, before)
 	b1Undo(t, s, scope, b1ReceiptAction(t, before, 0))
 	after := b1History(t, s, scope, out.ConversationID)
-	if after.Reply != out.Turn.Reply || string(asJSON(after.Cards)) != string(asJSON(out.Turn.Cards)) || !after.Receipts[0].Undone {
+	if after.Reply != out.Turn.Reply || !b1SameJSON(t, after.Cards, out.Turn.Cards) || !after.Receipts[0].Undone {
 		t.Error("undo after outdated not retained", after)
 	}
 	b1Outdated(t, after, true)
@@ -263,8 +263,8 @@ func TestPhase2B1_M2_CurrentDestinationUnavailablePreservesQuestionAndReceipt(t 
 				b1Contains(t, f.last(t).Prompt, receipt.Text)
 			}
 			visible := b1History(t, s, scope, out.ConversationID)
-			if visible.Reply != out.Turn.Reply || string(asJSON(visible.Cards)) != string(asJSON(out.Turn.Cards)) || string(asJSON(visible.Receipts)) != string(asJSON(out.Turn.Receipts)) {
-				t.Error("current destination scope erased user-visible exchange")
+			if visible.Reply != out.Turn.Reply || !b1SameJSON(t, visible.Cards, out.Turn.Cards) || !b1SameJSON(t, visible.Receipts, out.Turn.Receipts) {
+				t.Errorf("current destination scope erased user-visible exchange: before=%s after=%s", asJSON(out.Turn), asJSON(visible))
 			}
 		})
 	}

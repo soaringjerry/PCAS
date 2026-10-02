@@ -23,10 +23,11 @@ func TestSecretaryConversationDependenciesStayASet(t *testing.T) {
 	})
 	text := "去年关于成都的计划"
 	st := workspaceCommand(t, s, scope, workspace.Command{Type: "capture", Text: text})
+	rawSource := st.Candidates[0].Source
 	st = workspaceCommand(t, s, scope, workspace.Command{Type: "acceptCandidate", ID: st.Candidates[0].ID, Kind: "memory", MemoryKind: "fact", Text: text})
 
 	claim := memory.Ref{ID: memory.ID(st.Memories[0].ID), Version: st.Memories[0].Version, Kind: memory.ClaimKind}
-	source := memory.Ref{ID: memory.ID(st.Memories[0].Sources[0].SourceID), Version: st.Memories[0].Sources[0].Version, Kind: memory.SourceKind}
+	source := memory.Ref{ID: memory.ID(rawSource.SourceID), Version: rawSource.Version, Kind: memory.SourceKind}
 	assertSet := func(turnID string) {
 		t.Helper()
 		var refs []memory.Ref

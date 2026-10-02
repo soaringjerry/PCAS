@@ -361,7 +361,7 @@ func TestPhase2B1_N12_RandomTwentyActionsInTwentySeededGroups(t *testing.T) {
 			if len(final.Tasks) != len(initial.Tasks) {
 				t.Errorf("seed=%d tasks not restored", seed)
 			} else if string(asJSON(business(final.Tasks[0]))) != string(asJSON(business(initial.Tasks[0]))) {
-				t.Errorf("seed=%d initial task business content not restored", seed)
+				t.Errorf("seed=%d initial task business content not restored: before=%s after=%s", seed, asJSON(business(initial.Tasks[0])), asJSON(business(final.Tasks[0])))
 			}
 			if len(final.Ideas) != len(initial.Ideas) || len(final.Projects) != len(initial.Projects) {
 				t.Errorf("seed=%d non-task objects changed", seed)

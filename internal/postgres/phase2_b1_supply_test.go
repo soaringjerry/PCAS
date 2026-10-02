@@ -22,6 +22,11 @@ func TestPhase2B1_P1_DeskTurnRawSourceAndDeletionControl(t *testing.T) {
 	originalReq := turnRequest(b1Text(t, "trip", "text"))
 	original := mustTurn(t, s, scope, originalReq)
 	source := b1TurnSource(t, s, scope, originalReq.RequestID)
+	// The frozen trip fixture has a known expression time; DeskTurn accepts no
+	// timestamp field, so attach this synthetic metadata before the recall step.
+	if _, err := s.pool.Exec(context.Background(), "UPDATE source_versions SET expressed_at=$1::timestamptz WHERE owner_id=$2 AND id=$3 AND version=$4", b1Text(t, "trip", "expressed_at"), string(scope.OwnerID), string(source.ID), source.Version); err != nil {
+		t.Fatal(err)
+	}
 	b1ZeroClaims(t, s, scope)
 	f.set(`{"reply":"春熙路火锅，见老王。","used":["S1","S1","S999"],"actions":[]}`)
 	req := turnRequest("我去成都想吃什么")

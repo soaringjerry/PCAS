@@ -44,6 +44,12 @@
 - 预算不变（R11）。依赖照记（R13）。
 - 规划不调模型，不增加任何模型调用。
 
+### 6 模型返回了就记用量（第 4 批契约 R12 的补充）
+
+S0 在秘书、旧的导办台问答、副手三处「成功提交」的事务里放了 `recordUsageTx` 调用。模型返回了内容、但输出不合格或没通过后面的校验时，这几处现在走不到它，而这次调用同样花了钱。请在 `desk_turn.go`、`desk.go`、`runs.go` 的这些失败分支上各补一次调用（用模型返回的 token 数和花费），然后照旧按失败处理。调用本身出错、没有返回内容的不记；同一次模型调用不要记两行；重放（同一个请求 id 再发一次、没有再调模型）不记。旧的导办台问答不加重放保护。
+
+这件事单独一个小 PR，放在 K 和 Q2 之间或之后都行。
+
 ## 你独占的文件
 
 `internal/postgres/retrieval.go`、`graph.go`、`expand.go`、`desk_turn.go`、`desk.go`、`run_context.go`、`runs.go`、`telegram_turn.go`、`internal/memory/contracts.go`。

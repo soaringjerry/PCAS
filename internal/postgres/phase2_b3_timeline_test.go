@@ -13,6 +13,7 @@ import (
 
 func TestPhase2B3_K1_SaidChronologyEventAndMentions(t *testing.T) {
 	s, scope := b1Store(t), owner()
+	f := b1Model(t, s, b3Used())
 	now := b3Zone(t, s, scope, "Asia/Shanghai")
 	self := b3Entity(t, s, scope, "self", "本人")
 	place := b3Entity(t, s, scope, "place", "成都", "成都")
@@ -27,7 +28,7 @@ func TestPhase2B3_K1_SaidChronologyEventAndMentions(t *testing.T) {
 		src := b3Source(t, s, scope, fmt.Sprintf("成都原始记录%d", i), now)
 		refs = append(refs, b3Claim(t, s, scope, b3ClaimSpec{Text: fmt.Sprintf("时间轴计划%d", i), Subject: self, Said: &at, Source: src, EventFrom: &from, EventTo: &to, Precision: "month", Mentions: []b3Mention{{place, "place"}, {wang, "person"}}}))
 	}
-	b1Model(t, s, b3Used(refs...))
+	f.set(b3Used(refs...))
 	out := mustTurn(t, s, scope, turnRequest("去年说去成都要干什么来着"))
 	items := b3Timeline(t, out)
 	if len(items) != 2 {
@@ -106,6 +107,7 @@ func TestPhase2B3_K3_CorrectionAndChangeUseCurrentText(t *testing.T) {
 	for _, change := range []string{"correction", "change"} {
 		t.Run(change, func(t *testing.T) {
 			s, scope := b1Store(t), owner()
+			f := b1Model(t, s, b3Used())
 			now := b3Zone(t, s, scope, "Asia/Shanghai")
 			self := b3Entity(t, s, scope, "self", "本人")
 			place := b3Entity(t, s, scope, "place", "成都", "成都")
@@ -120,7 +122,7 @@ func TestPhase2B3_K3_CorrectionAndChangeUseCurrentText(t *testing.T) {
 			// Structured columns are fixtures for the replacement version as well.
 			b3Exec(t, s, `UPDATE record_versions SET expressed_at=$3 WHERE owner_id=$1 AND record_id=$2 AND version=$4`, scope.OwnerID, updated.ID, at, updated.Version)
 			b3Exec(t, s, `INSERT INTO claim_mentions(owner_id,claim_id,claim_version,entity_id,role) VALUES($1,$2,$3,$4,'place') ON CONFLICT DO NOTHING`, scope.OwnerID, updated.ID, updated.Version, place)
-			b1Model(t, s, b3Used(updated))
+			f.set(b3Used(updated))
 			out := mustTurn(t, s, scope, turnRequest("去年说去成都有什么计划来着"))
 			item := b3TimelineText(t, out, text)
 			if item["status"] != "changed" {
@@ -138,12 +140,13 @@ func TestPhase2B3_K3_CorrectionAndChangeUseCurrentText(t *testing.T) {
 
 func TestPhase2B3_K4_SingleRecallGetsTimelineOnlyWithSaidDate(t *testing.T) {
 	s, scope := b1Store(t), owner()
+	f := b1Model(t, s, b3Used())
 	now := b3Zone(t, s, scope, "Australia/Sydney")
 	self := b3Entity(t, s, scope, "self", "本人")
 	place := b3Entity(t, s, scope, "place", "成都", "成都")
 	at := b3Year(now, -1, time.March, 1)
 	ref := b3Claim(t, s, scope, b3ClaimSpec{Text: "单条回忆计划", Subject: self, Said: &at, Mentions: []b3Mention{{place, "place"}}})
-	b1Model(t, s, b3Used(ref))
+	f.set(b3Used(ref))
 	recall := mustTurn(t, s, scope, turnRequest("成都的计划来着"))
 	if len(b3Timeline(t, recall)) != 1 {
 		t.Error("one dated recalled memory must emit timeline")
@@ -161,6 +164,7 @@ func TestPhase2B3_K4_SingleRecallGetsTimelineOnlyWithSaidDate(t *testing.T) {
 
 func TestPhase2B3_K5_UnknownSaidTimeLastAndEmpty(t *testing.T) {
 	s, scope := b1Store(t), owner()
+	f := b1Model(t, s, b3Used())
 	now := b3Zone(t, s, scope, "Asia/Shanghai")
 	self := b3Entity(t, s, scope, "self", "本人")
 	place := b3Entity(t, s, scope, "place", "成都", "成都")
@@ -189,7 +193,7 @@ func TestPhase2B3_K5_UnknownSaidTimeLastAndEmpty(t *testing.T) {
 		}
 		refs = append(refs, b3Claim(t, s, scope, spec))
 	}
-	b1Model(t, s, b3Used(refs...))
+	f.set(b3Used(refs...))
 	out := mustTurn(t, s, scope, turnRequest("成都的计划来着"))
 	items := b3Timeline(t, out)
 	if len(items) != 3 {
@@ -235,6 +239,7 @@ func TestPhase2B3_K6_AllItemsDetermineStatus(t *testing.T) {
 
 func TestPhase2B3_K7_RawOriginalStaysInEvidenceList(t *testing.T) {
 	s, scope := b1Store(t), owner()
+	f := b1Model(t, s, `{"reply":"有一条打算和原话。","used":["M1","S1"],"actions":[]}`)
 	now := b3Zone(t, s, scope, "Asia/Shanghai")
 	self := b3Entity(t, s, scope, "self", "本人")
 	place := b3Entity(t, s, scope, "place", "成都", "成都")
@@ -242,7 +247,6 @@ func TestPhase2B3_K7_RawOriginalStaysInEvidenceList(t *testing.T) {
 	text := "成都原话独立暗号：当时想去天府广场。"
 	source := b3Source(t, s, scope, text, at)
 	ref := b3Claim(t, s, scope, b3ClaimSpec{Text: "时间轴的打算", Subject: self, Said: &at, Source: source, Mentions: []b3Mention{{place, "place"}}})
-	f := b1Model(t, s, `{"reply":"有一条打算和原话。","used":["M1","S1"],"actions":[]}`)
 	out := mustTurn(t, s, scope, turnRequest("成都的计划来着"))
 	b1Contains(t, f.last(t).Prompt, text)
 	items := b3Timeline(t, out)

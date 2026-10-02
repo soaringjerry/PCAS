@@ -280,8 +280,9 @@ func TestPhase2B3_S9_SecretaryDeputyManualShareStructuredPrefix(t *testing.T) {
 
 func TestPhase2B3_S11_StructuredDependencyCorrectionMarksTurnOutdated(t *testing.T) {
 	s, scope := b1Store(t), owner()
+	f := b1Model(t, s, b3Used())
 	d := b3FixtureData(t, s, scope, "Asia/Shanghai")
-	f := b1Model(t, s, b3Used(d.Refs["self_old_a"]))
+	f.set(b3Used(d.Refs["self_old_a"]))
 	req := turnRequest(b3Text(t, "query"))
 	out := mustTurn(t, s, scope, req)
 	b1Contains(t, f.last(t).Prompt, b3Text(t, "self_old_a"))

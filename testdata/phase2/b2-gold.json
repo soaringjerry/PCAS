@@ -559,5 +559,34 @@
     "U1": {
       "forbidden_scope": "new memory cards, filters and facets only"
     }
+  },
+  "supplement_dda8ef5": {
+    "approval": "Coordinator user message and README section 9, integration dda8ef5, 2026-10-02.",
+    "legacy_not_configured": {
+      "attempts": 1,
+      "after_no_automatic_reclaim_attempts": 1,
+      "manual_retry_attempts": 1,
+      "state": "blocked",
+      "retry": false,
+      "code": "provider_not_configured",
+      "note": "Overrides only attempts=0 in supplement_2e2b8f9; first claim is one attempt, no second automatic claim. Manual retry resets counting."
+    },
+    "M14": {
+      "fixture_count": 2,
+      "visible_index": 0,
+      "hidden_index": 1,
+      "deputy": "manual",
+      "returned_memories": 1,
+      "people": [
+        "老王"
+      ],
+      "places": [
+        "成都"
+      ],
+      "event_precision": "range",
+      "expressed_at_present": true,
+      "event_bounds_present": true,
+      "model_prompt_after_batch3": "Deferred to phase3 integration; batch2 checks memoriesTx under deputy identity."
+    }
   }
 }

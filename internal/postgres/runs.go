@@ -149,6 +149,11 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 			run.ContextVersions = append(run.ContextVersions, memory.Ref{ID: memory.ID(m.ID), Version: m.Version, Kind: memory.ClaimKind})
 		}
 
+		settings, err := queryDocument[workspace.Settings](ctx, tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1", string(scope.OwnerID))
+		if err != nil {
+			return err
+		}
+		loc := deskLocation(settings)
 		fmt.Fprintln(&brief, "\n相关原话：")
 		sources, err := teamSourceExcerptsTx(ctx, tx, scope, excerpts, historyRequests, 8, 4000)
 		if err != nil {
@@ -156,7 +161,7 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 		}
 		for _, source := range sources {
 			at, label := sourceExcerptTime(source)
-			line := fmt.Sprintf("[source:%s@%d / %s / %s %s] %s\n", source.ID, source.Version, source.Title, label, at.Format("2006-01-02"), source.Text)
+			line := fmt.Sprintf("[source:%s@%d / %s / %s %s] %s\n", source.ID, source.Version, source.Title, label, at.In(loc).Format("2006-01-02"), source.Text)
 			if brief.Len()+len(line) > 30000 {
 				continue
 			}
@@ -191,10 +196,6 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 			}
 			p, _ := s.models.Get(agent.ID)
 			run.Cost = p.Reserve(assistantInstructions + run.Brief)
-			settings, err := queryDocument[workspace.Settings](ctx, tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1", string(scope.OwnerID))
-			if err != nil {
-				return err
-			}
 			loc, err := time.LoadLocation(settings.Timezone)
 			if err != nil {
 				return err

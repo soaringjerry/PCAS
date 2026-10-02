@@ -231,7 +231,7 @@ func (s *Store) secretaryPrompt(ctx context.Context, tx pgx.Tx, scope memory.Sco
 		}
 		fmt.Fprintf(&prompt, "问：%s\n答：%s\n", t.Text, reply)
 		earlier += t.Text + " "
-		if !t.Outdated && t.Text != "" {
+		if t.Text != "" {
 			for _, receipt := range t.Receipts {
 				if receipt.ThingID != nil {
 					item, err := getItem(ctx, tx, scope, *receipt.ThingID)

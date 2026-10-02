@@ -1,14 +1,17 @@
-# 第 2 阶段第 1 批：12abe94 统一全量验收
+# 第 2 阶段第 1 批：38a8956 裁定后统一全量验收
 
-**本轮未达到全绿，不能签署验收通过。** 按编号下任一主测试失败即失败汇总，38 条序列为 **36 通过、2 失败（P14、P15）**；44 个编号 Go 主测试为 **42 通过、2 失败**。另外一组获批修改的旧测试失败，`make check` 退出码为 2。全部浏览器 **126/126 通过**，包括本批 8 个用例及 I-A3 长资料用例。
+**本轮按契约验收通过。** 38 条序列全部通过，44 个编号 Go 主测试全部通过；全部浏览器 **126/126 通过**（118 个既有 + 本批 8 个）。`make check` 通过，未出现 DATA RACE。稳定前缀、四项日期测试、I-A3 长资料、N12 的 20 个固定种子以及 Brief 跨日时区对照均通过。
 
-失败证据集中在 T 的夹具对照：两项新增测试期待 manual 抽取的候选陈述被供给；旧测试期待与当前查询无相关词的资料进入跨项目交接。原话本身的 R2a 隐藏、事项排除、恢复断言均通过。静态定位提示夹具前提不完整，详见发现清单；本轮没有将这些失败认定为已证实产品缺陷，也没有删断言、改预期或重跑。
+协调者已裁定上一轮 F-T1/F-T2 为夹具前提不完整。本轮仅按批准补齐候选采纳和查询相关性；全部既有断言、冻结文件及产品代码保持原样，未开启「包含推测」。结果来自补齐后同一个提交的一次统一全量，没有拼接上一轮结果、定向复跑或浏览器重试。
+
+上一轮红色结果保留在 [12abe94 报告历史版本](https://github.com/soaringjerry/PCAS/blob/65c68660fd086cdbab3e5093625744ef6a3f3645/docs/evaluations/2026-10-02-phase2-batch1-acceptance.md)，当前报告仅列本轮实际结果。
 
 ## 被测提交与运行边界
 
-- 集成分支提交：`12abe94e7541713d164e476a4dffecfc85a27992`（12abe94；含 A #60/#68/#72、B #58、C #59、C2 #65、D #74）。
-- 含 T 验收测试的实际被测提交：`60bde6d25466a2ac4997bae5e422c0385d3b432e`（60bde6d）。Go、全部浏览器、前端静态检查和构建都来自此提交；运行期间工作树保持干净。报告更新后没有修改测试或产品代码。
-- 证据元数据记录区间：`2026-10-02T10:48:41.180406+00:00` 至 `2026-10-02T10:55:19.915484+00:00`。这是一次统一全量，未拼接 8a4ac50 或此前定向结果。已清除 Go 测试缓存；浏览器每个用例只执行一次、`--retries=0`，黄金路径没有 repeat-each。
+- 集成分支提交：`38a8956da2f9dbd02f53344a69bd09a18630e6ec`（38a8956；含 A #60/#68/#72、B #58、C #59、C2 #65、D #74）。
+- 集成 38a8956 相对 12abe94 只多裁定和待办文档，产品代码无变化。
+- 含 T 验收测试的实际被测提交：`d283a8064dda811b86817431a729a021fddf582d`（d283a80）。Go、全部浏览器、前端静态检查和构建都来自此提交；运行期间工作树保持干净。报告更新后没有修改测试或产品代码。
+- 证据元数据记录区间：`2026-10-02T12:32:15.771630+00:00` 至 `2026-10-02T12:39:01.600965+00:00`。这是一次统一全量，未拼接 12abe94、8a4ac50 或此前定向结果。已清除 Go 测试缓存；浏览器每个用例只执行一次、`--retries=0`，黄金路径没有 repeat-each。
 - 冻结文件 [b1-gold.json](../../testdata/phase2/b1-gold.json) 与前次交付 254b0c0 逐字一致，SHA256：`cbddbb479212d7a0dd48850c708262497732167ef7aef5ae6ee21ef8e6fa67ec`。
 - Draft PR：[T 独立验收 #64](https://github.com/soaringjerry/PCAS/pull/64)，base 为 `phase2/batch1`。
 
@@ -31,8 +34,8 @@
 | P11 | 通过 | `TestPhase2B1_P11_CurrentVersionOnly`（通过） |  |
 | P12 | 通过 | `TestPhase2B1_P12_MediaRequiresReadableTranscriptOrOCR`（通过） |  |
 | P13 | 通过 | `TestPhase2B1_P13_AdoptedSourceContentSurvivesForUserButExpiresForModels`（通过） |  |
-| P14 | 失败 | `TestPhase2B1_P14_CapturedMemoryVisibilityClosesAndReopensOriginal`（通过）<br>`TestPhase2B1_P14_OneRestrictedActiveClaimClosesWholeSource`（失败） | 速记采纳主路径通过；多陈述原话控制因陈述供给断言失败，见 F-T1。 |
-| P15 | 失败 | `TestPhase2B1_P15_ItemExclusionAffectsOnlyThatItemAcrossAllEntrances`（失败）<br>`TestPhase2B1_P15_SourceDependentAdoptionObeysVisibilityAndItemExclusion`（通过） | 原话事项隔离和 source 依赖采纳控制通过；多陈述供给断言失败，见 F-T1。 |
+| P14 | 通过 | `TestPhase2B1_P14_CapturedMemoryVisibilityClosesAndReopensOriginal`（通过）<br>`TestPhase2B1_P14_OneRestrictedActiveClaimClosesWholeSource`（通过） | 速记采纳及多陈述原话关闭、重新打开、删除受限陈述对照全部通过。 |
+| P15 | 通过 | `TestPhase2B1_P15_ItemExclusionAffectsOnlyThatItemAcrossAllEntrances`（通过）<br>`TestPhase2B1_P15_SourceDependentAdoptionObeysVisibilityAndItemExclusion`（通过） | 多陈述原话事项隔离、三入口、source 依赖采纳和恢复全部通过。 |
 | M1 | 通过 | `TestPhase2B1_M1_ClaimCorrectionKeepsVisibleExchange`（通过） |  |
 | M2 | 通过 | `TestPhase2B1_M2_ModelHistoryReplacesOnlyOldAnswer`（通过）<br>`TestPhase2B1_M2_CurrentDestinationUnavailablePreservesQuestionAndReceipt`（通过） | 秘书历史回执行及显式 deskTurnIds 副手历史对照通过。 |
 | M3 | 通过 | `TestPhase2B1_M3_SourceVersionMarksOutdatedWithoutErasure`（通过） |  |
@@ -96,14 +99,16 @@ N12 的种子为 20261001–20261020，共 400 个秘书动作及 400 次逆序�
 
 首次登录时区测试先在空工作区执行，其余 125 个用例在同一套临时真实后端执行；模拟文件使用自己的浏览器路由夹具。Playwright JSON 显示全部用例只有一个 `passed` 结果，没有重试或 flaky 结果。
 
-## 发现清单
+## 发现清单与上一轮裁定闭环
 
-| 编号 | 现象与冻结预期 | 定位及建议归属 |
+本轮没有未解决的本批发现，所有原断言均通过。上一轮两项已裁定为夹具问题，闭环如下：
+
+| 编号 | 批准的夹具补齐 | 本轮结果 |
 |---|---|---|
-| F-T1 | `P15_ItemExclusionAffectsOnlyThatItemAcrossAllEntrances` 和 `P14_OneRestrictedActiveClaimClosesWholeSource` 期待未受限的两条陈述出现在 Brief/实际模型正文及依赖中；实际没有陈述，相关 claim 依赖计数为 0。原话隐藏、排除、恢复及 source 依赖检查没有失败。 | **T 的夹具前提问题，交协调者核定。** 夹具从 manual 来源抽取，正文与 quote 分别使用记忆标记和原话；未执行采纳/确认，也未开启副手包含推测。静态定位：`processing.go::extractionConfirmation` 对此返回 candidate；`claims.go::memoriesTx` 将其映射为 inferred；秘书/副手的现有过滤排除 inferred。R1/R2a 明确保留陈述过滤规则。可补齐符合原冻结供给前提的夹具状态，断言和原话标记保持；本轮未调整、未复跑。不能据这两项认定 R2a 产品缺陷。 |
-| F-T2 | 获批旧测试 `TestDeskHistoryCannotBypassDestinationItemScope` 的 other-project、delegate-other-project 两子用例期待「相关原话」含原件；实际原话节为空。exclude 子用例、提问保留、旧回答替换和陈述排除均通过。 | **T 的检索对照夹具问题，交协调者核定。** 新增断言的资料为 `Scope claim marker C-8420`，交接请求为 `Continue the discussion`，事项为 Destination/New work，假服务未配置 embedding。静态定位：`prepareRunContext`/`requestRun` 检索以当前请求和事项为查询，不把历史提问加入查询；本对照缺相关词，不能区分「按项目过滤」与「没有检索命中」。建议补齐相关查询的对照前提；本轮保留失败，不改断言、不重跑。 |
+| F-T1 | P14/P15 的两条记忆先从同一 manual 原话抽为待审候选，再逐条使用真实 `workspaceCommand(acceptCandidate, kind=memory)` 采纳。来源关联保留，两条记忆引用从采纳后快照取；不调整 agent 的 IncludeInferred，不修改任何原供给、依赖、关闭、恢复或删除断言。 | `TestPhase2B1_P14_OneRestrictedActiveClaimClosesWholeSource`、`TestPhase2B1_P15_ItemExclusionAffectsOnlyThatItemAcrossAllEntrances` 全部通过；同一原话多条记忆及未受限陈述的正向供给现已完整验证。 |
+| F-T2 | 三个子用例共享同一个交接请求 `Continue the discussion about C-8420`，其中 C-8420 来自资料，检索前提一致。仅项目/排除状态不同。请求不包含完整陈述标记，避免本次请求正文干扰原话节的否定断言。 | `TestDeskHistoryCannotBypassDestinationItemScope` 的 exclude、other-project、delegate-other-project 全部通过；前者原话不在，后两者原话在，旧回答/陈述隔离、提问和替换语断言全部通过。 |
 
-以上定位发生在冻结预期、统一运行之后，只用于解释失败，没有据产品实现改写预期。失败仍计入本轮结果；这是一份红色验收报告，不把静态解释当作通过证据。未发现其他已证实的本批产品缺陷。
+授权来源为集成 38a8956 的 T-acceptance.md「协调者对 12abe94 统一全量一轮的裁定」及用户本轮指令。补齐先提交，再变基到 38a8956，之后固定 d283a80 统一执行。对两份改动文件做了字节归一比对：去掉新增的采纳夹具 helper、还原两个 helper 调用及一个请求字符串后，与上一交付 65c6866 完全一致，原断言一个字未动。
 
 ## 用户指定复验项与历史裁定
 
@@ -128,24 +133,24 @@ N12 的种子为 20261001–20261020，共 400 个秘书动作及 400 次逆序�
 这些变更均在本轮运行前交付，本轮没有改动任何断言或 gold 值：
 
 1. `desk_dependency_growth_test.go::TestSecretaryConversationDependenciesStayASet`：批准把依赖改为供给陈述 + 原话的精确去重集合，保留对话增长和旧结构读取保护；本轮通过。
-2. `ux_regressions_test.go::TestDeskHistoryCannotBypassDestinationItemScope`：批准把提问/陈述/旧回答拆为不同标记，检查记忆部分与 ContextMemoryIDs，保留问题和替换语；按 R2a 增加 exclude 原话关闭、两个仅项目不同的原话开放对照。本轮 exclude 通过，另两子用例失败，见 F-T2。
+2. `ux_regressions_test.go::TestDeskHistoryCannotBypassDestinationItemScope`：批准把提问/陈述/旧回答拆为不同标记，检查记忆部分与 ContextMemoryIDs，保留问题和替换语；按 R2a 增加 exclude 原话关闭、两个仅项目不同的原话开放对照。本轮三子用例全部通过；本轮按裁定补齐同一个相关查询词，断言未动，见 F-T2 闭环。
 3. `TestSecretaryStablePrefixAndVisibility`：从未修改，本轮通过。
 4. 协调者在 079151e 批准的三个 gold 旧字符串修正：R7 两条回执行描述收窄到秘书；R8a 增加全文例外。`coordinator_adjudication_079151e.authorized_corrections` 保存路径、前值、新值和授权。其他旧值保留；P14/P15、跨日日期预期均先冻结提交，再写测试。
 
 ## 检查命令与证据
 
-- `GOFLAGS=-v bash testdata/phase2/run-go.sh make check`：**失败，退出 2**。fmt-check 和 go vet 通过；`go test -race ./cmd/... ./internal/...` 有三个主测试失败（F-T1 两个、F-T2 一个），其余完成，未出现 DATA RACE。原有 build 目标因 test 失败未执行；浏览器 runner 从同一提交成功构建真实后端二进制，不把它等同于 make check 通过。
-- Go 主测试日志汇总：339 通过、3 失败、3 个既有真实服务 opt-in 未执行。44 个 T 主测试全部执行、零 skip；38 个编号都存在。
+- `GOFLAGS=-v bash testdata/phase2/run-go.sh make check`：**通过，退出 0**。fmt-check、go vet、`go test -race ./cmd/... ./internal/...`、`go build -trimpath -o bin/pcas ./cmd/pcas` 全部完成。未出现 DATA RACE。
+- Go 主测试日志汇总：342 通过、0 失败、3 个既有真实服务 opt-in 未执行。44 个 T 主测试全部执行、零 skip；38 个编号都存在。
 - 前端 `npm run lint && npm run type-check && npm run build`：全部通过（Node 22.23.3）。
-- `bash web/tests/support/real-backend.sh bash /tmp/pcas-b1-T-final-12abe94-browser.sh`：通过，先 timezone-backend，再其他全部文件，`--retries=0`，一次运行。
+- `bash web/tests/support/real-backend.sh bash /tmp/pcas-b1-T-final-38a8956-browser.sh`：通过，先 timezone-backend，再其他全部文件，`--retries=0`，一次运行。
 - 冻结文件字节比对、测试编号集合和 git diff whitespace 检查通过；本轮结束时仅验收报告有后续编辑，没有产品或测试代码修改。
 
 本地证据路径只含合成资料；不提交大日志或临时 token：
 
-- `/tmp/pcas-b1-T-final-12abe94-meta.json`：统一提交、冻结 SHA256、运行区间、自己起的资源与清理确认。
-- `/tmp/pcas-b1-T-final-12abe94-go.log`、`...-go-results.json`：完整 make check 输出及主测试结果。
-- `/tmp/pcas-b1-T-final-12abe94-browser.log`、`...-timezone.json`、`...-browser.json`、`...-browser-results.json`：浏览器输出、原始 JSON 及逐例状态。
-- `/tmp/pcas-b1-T-final-12abe94-browser/`、`...-timezone/`：截图及长资料摘录附件；`...-services/`：本轮临时服务日志。
+- `/tmp/pcas-b1-T-final-38a8956-meta.json`：统一提交、冻结 SHA256、运行区间、自己起的资源与清理确认。
+- `/tmp/pcas-b1-T-final-38a8956-go.log`、`...-go-results.json`：完整 make check 输出及主测试结果；`...-frontend-build.log`：前端构建输出，lint/type-check 输出也在本轮工具记录中。
+- `/tmp/pcas-b1-T-final-38a8956-browser.log`、`...-timezone.json`、`...-browser.json`、`...-browser-results.json`：浏览器输出、原始 JSON 及逐例状态。
+- `/tmp/pcas-b1-T-final-38a8956-browser/`、`...-timezone/`：截图及长资料摘录附件；`...-services/`：本轮临时服务日志。
 
 既有三个真实服务 opt-in：`TestInstalledCodexHandshake`、`TestLiveCodexSecretaryAndLegacyFormats`、`TestLiveContinuityReplay`，按原有机制未执行。runner 清除了真实服务 opt-in 配置；T 没有新增 skip，也不把这三项算作真实模型验收通过。
 
@@ -164,6 +169,6 @@ N12 的种子为 20261001–20261020，共 400 个秘书动作及 400 次逆序�
 
 ## 未覆盖
 
-本轮两个多陈述夹具的陈述供给正向对照未通过，不能据本轮签署这些对照通过；旧跨项目原话开放对照也未通过。它们的原话关闭/恢复结果与其他通过测试仍分别列出，不抵销失败。
+38 条序列、两组浏览器和全部既有回归在本轮均已执行；这是契约限定范围内的通过，外部真实能力仍有下列边界。
 
 假模型证明系统实际把哪些内容交给模型，以及处理固定引用/动作的行为；不能证明真实模型会如何作答。没有验证真实向量语义质量、真实 OCR/转录准确率、大规模性能、线上默认 Codex 通道、真实提醒到手机、部署或线上冒烟。浏览器通知权限为 denied 时黄金用例走既有合成订阅回退，只证明临时后端向假端点投递。未合并、部署或操作线上实例。

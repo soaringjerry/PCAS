@@ -222,7 +222,7 @@ Astra 这一批不用，留作疑难时的后备。A、B、C、T 各由一个执
 | A（后续修改） | `internal/postgres/desk_turn.go`、`runs.go`、`retrieval.go`，范围见 [任务 A](A-raw-text.md) 末尾 |
 | B | `internal/postgres/undone_turns.go`（新）、`actions_log.go`、`processing.go`、`internal/postgres/migrations/026_drop_phase2_0_leftovers.sql`（新） |
 | C | `web/src/domain/desk.ts`、`web/src/components/SecretaryCards.tsx`、`web/src/components/Secretary.tsx`、`web/src/styles/secretary.css`（已合入） |
-| C2 | `web/src/components/SourceSheet.tsx`、`web/src/components/SecretaryCards.tsx`（只改打开面板的调用）、`web/src/styles/app.css`（只动 `.source-*` 这一组样式） |
+| C2 | `web/src/components/SourceSheet.tsx`、`web/src/components/SecretaryCards.tsx`（只改打开面板的调用）、`web/src/styles/app.css`（只动 `.source-*` 这一组样式）（已合入） |
 | T | `internal/postgres/phase2_b1_*_test.go`（新）、`testdata/phase2/`（新）、`web/tests/phase2-batch1*.spec.ts`（新）、`web/tests/support/` 里为新用例必须的改动、CI 工作流里把新用例加进去的那一行、`docs/evaluations/` 里本批的验收报告 |
 | 协调者 | `docs/` 其余部分、集成分支、合并、部署 |
 

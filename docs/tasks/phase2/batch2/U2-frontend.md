@@ -46,3 +46,15 @@
 ## 交付
 
 Draft PR；`npm run lint && npm run type-check && npm run build` 通过；桌面 1440 和手机 390 各三张截图（模拟数据）：带人、地点、时间的记忆列表；按一个人筛选之后；一条记忆的详情。说明里写清你对卡片排版的选择和理由，以及第 3 点的清单。
+
+## 跟进任务 U2b（2026-10-02，协调者审查 PR #99 之后）
+
+PR #99 做得很好，等后端 M 合入后变基重跑、通过了就合。你提的几点已经定了，见契约第 8 节。跟进的活另开分支 `phase2/b2-U2b-frontend`（从 `origin/phase2/batch2` 建，Draft PR 的 base 是 `phase2/batch2`），等 M 的接口合入后做：
+
+- 批准你动这三个原本不归你的文件：`web/src/domain/things.ts`、`web/src/components/CommandPalette.tsx`、`web/src/domain/agent.ts`，各自只改契约第 8 节表里写的那一处。
+- 资料库恢复「可信度」筛选，用接口的 `epistemic` 参数。
+- `domain/lines.ts` 和 `MemoryActivitySettings.tsx` 不动。
+- 资料库页面原有的内部说法不动。
+- 事件时间的格式化现在有两份（`Marks.tsx` 和 `desk.ts`），等两批都进了 main 再并成一份，这次不动。
+- `app.css` 末尾两段在合并时都保留，由协调者处理冲突。
+- 截图分支 `phase2/U-frontend-screenshots` 保留到这三批都进 main。

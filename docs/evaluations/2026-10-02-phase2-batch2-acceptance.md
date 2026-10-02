@@ -1,4 +1,136 @@
-# 第 2 批独立验收：准备与首次预跑报告
+# 第 2 批独立验收：最终统一轮报告
+
+2026-10-02。任务 T2。**本轮未通过：后端第 2 批 43/43 个入口通过，浏览器第 2 批 0/5 通过。** 浏览器失败均定位为 T2 测试使用了错误的资料库标签参数；本轮不修改导航或断言，不重跑。
+
+## 最终轮基线与范围
+
+- 被测集成分支提交：`02e7a2773031926a70419bccd68954d4096093b7`（02e7a27，E1 / E2 / M / M2 / U2 / U2b 全部已合入）。
+- 全部执行固定在验收分支提交：`96f6fd434327312c1c029ea8101266f02b1c8c79`（96f6fd4）。后端、前端检查和全部浏览器用例运行期间，HEAD 和所有受版本控制的文件保持不变；结果写完后只提交本报告。
+- 第 10 节批准取消 U5 和第 8 节表中项目时间轴那一行。先以 e61394c 追加冻结取消记录，后以 96f6fd4 删除 U5 用例；原 gold 保留。本轮 U5 是取消范围，不计为通过或跳过。
+- 其余断言没有调整；没有修改产品代码、第 1 批测试或已有断言。对照变基后的原验收提交 756dbcf，浏览器 spec 只删除 U5 尾段，gold 只新增 supplement_02e7a27。
+- Go 1.26.8、Node 22.23.3；独立临时 PostgreSQL 16 / pgvector 0.8.2、UTF8，合成数据与本地假模型。真实后端浏览器启动实际 serve 与 worker，不拦截 PCAS API。不使用线上配置、数据库、真实模型和通知通道。
+
+## 统一运行结果
+
+| 检查 | 结果 |
+|---|---|
+| `make check` | 通过，退出码 0，总计 469.81 秒；fmt-check / lint / test / build 按原 Makefile 执行 |
+| 全部 Go 后端序列（含上述 check） | 12 个有测试的包通过，3 个包无测试；PostgreSQL 包 455.35 秒；第 2 批 40 条序列、43 个入口 43 通过 / 0 失败 |
+| M6，第 1 批全部 P/M/N/G 原样执行 | 通过，含 N12 的 20 组固定种子；N12 独立执行也通过 |
+| M14，副手身份下记忆的时间 / 人 / 地点 | 通过；首次预跑的字段缺口在 M2 合入后已消失 |
+| 前端 `npm run lint`、`npm run type-check`、`npm run build` | 均通过 |
+| 模拟后端浏览器，CI 的 9 个 spec 文件 | 106 通过 / 4 失败；4 个失败均为第 2 批，现有 106 个回归用例全部通过 |
+| 第 2 批真实后端浏览器 U4 | 0 通过 / 1 失败 |
+| 现有真实后端浏览器（timezone / golden / legacy） | 20 通过 / 0 失败；PCAS_REAL_BACKEND_ROUND=1，每条仅一次 |
+| 全部浏览器汇总，仓库 17 个 spec 文件 | 126 通过 / 5 失败；没有重试、flaky 或跳过 |
+
+`make check` 的 Go test 阶段即为本轮完整后端运行，没有另跑一份相同后端。仓库外临时 go 包装器只给 `go test` 加 `-json -count=1`，保留 Makefile 的 `-race -timeout 30m`；其他 go 命令直接转发，Makefile 未修改。JSON 用于逐条取结果，count=1 避免缓存冒充本次运行。所有 Go 顶层用例为 393 通过、0 失败、3 个原有真实模型 guard 跳过；没有 DATA RACE 报告。原有离线 guard 跳过的真实模型用例：`TestInstalledCodexHandshake`, `TestLiveCodexSecretaryAndLegacyFormats`, `TestLiveContinuityReplay`；第 2 批后端没有跳过。
+
+两个显式浏览器命令指定 `--retries=0`，现有 runner 默认也是 0，golden 套件只选 round=1，没有 repeat-each 重复。模拟用例由构建后的静态站点加测试路由供给；真实后端用既有隔离 runner。
+
+主要执行命令（数据库、服务地址及证据目录通过临时环境传入）：
+
+```sh
+make check
+npm run lint
+npm run type-check
+npm run build
+npx playwright test tests/secretary.spec.ts tests/fixes.spec.ts tests/notify.spec.ts tests/buttons.spec.ts tests/timezone.spec.ts tests/settings-things-ux.spec.ts tests/usability-acceptance.spec.ts tests/phase2-batch1.spec.ts tests/phase2-batch2.spec.ts --retries=0 --reporter=list,json
+bash web/tests/support/real-backend.sh npx playwright test tests/phase2-batch2-backend.spec.ts --retries=0 --reporter=list,json
+PCAS_REAL_BACKEND_ROUND=1 bash web/tests/support/real-backend.sh
+```
+
+## 本轮逐序列结果
+
+| 序列 | 测试名 | 文件 | 结果 | 耗时 |
+|---|---|---|---|---|
+| X1 | `TestPhase2B2_X1_SelfMentionsExpressionAndEvent` | `internal/postgres/phase2_b2_extraction_test.go` | 通过 | 0.73 秒 |
+| X1 | `TestPhase2B2_X1_ExpressionFallbackIsLimitedToHandEnteredSources` | `internal/postgres/phase2_b2_extraction_test.go` | 通过 | 1.56 秒 |
+| X2 | `TestPhase2B2_X2_EntitiesSharedAcrossSourcesAndOwnersIsolated` | `internal/postgres/phase2_b2_extraction_test.go` | 通过 | 0.44 秒 |
+| X3 | `TestPhase2B2_X3_ExactAliasTrimCaseAndType` | `internal/postgres/phase2_b2_extraction_test.go` | 通过 | 0.41 秒 |
+| X4 | `TestPhase2B2_X4_HallucinatedNameDroppedWithoutDroppingMemory` | `internal/postgres/phase2_b2_extraction_test.go` | 通过 | 0.25 秒 |
+| X5 | `TestPhase2B2_X5_UnknownExpressionDoesNotResolveRelativeDate` | `internal/postgres/phase2_b2_extraction_test.go` | 通过 | 0.58 秒 |
+| X6 | `TestPhase2B2_X6_InvalidWhenKeepsClaim` | `internal/postgres/phase2_b2_extraction_test.go` | 通过 | 1.04 秒 |
+| X7 | `TestPhase2B2_X7_ConfirmationBoundary` | `internal/postgres/phase2_b2_extraction_test.go` | 通过 | 1.88 秒 |
+| X8 | `TestPhase2B2_X8_QuestionAndOperationProduceNoMemory` | `internal/postgres/phase2_b2_extraction_test.go` | 通过 | 0.50 秒 |
+| X9 | `TestPhase2B2_X9_SecretaryTaskAlsoRetainsPlan` | `internal/postgres/phase2_b2_extraction_test.go` | 通过 | 0.45 秒 |
+| X10 | `TestPhase2B2_X10_ReprocessingEnrichesWithoutRevisionOrOutdated` | `internal/postgres/phase2_b2_extraction_test.go` | 通过 | 0.43 秒 |
+| X11 | `TestPhase2B2_X11_UserEditedOrConfirmedMemoryNotEnriched` | `internal/postgres/phase2_b2_extraction_test.go` | 通过 | 0.72 秒 |
+| X12 | `TestPhase2B2_X12_FullUndoBlocksPlanPartialUndoDoesNot` | `internal/postgres/phase2_b2_extraction_test.go` | 通过 | 1.03 秒 |
+| X13 | `TestPhase2B2_X13_ImportedHistoricalTimeAndNoTodayTask` | `internal/postgres/phase2_b2_extraction_test.go` | 通过 | 0.31 秒 |
+| X14 | `TestPhase2B2_X14_AllLongSourceSegmentsAndOverlapDeduplicated` | `internal/postgres/phase2_b2_extraction_test.go` | 通过 | 0.33 秒 |
+| X15 | `TestPhase2B2_X15_EmptyExtractionStillSuppliesRawText` | `internal/postgres/phase2_b2_extraction_test.go` | 通过 | 0.33 秒 |
+| X16 | `TestPhase2B2_X16_DeleteOrReplaceDuringActualModelCall` | `internal/postgres/phase2_b2_extraction_test.go` | 通过 | 0.51 秒 |
+| X17 | `TestPhase2B2_X17_MentionLimitsRetainFirstEightValid` | `internal/postgres/phase2_b2_extraction_test.go` | 通过 | 0.29 秒 |
+| X18 | `TestPhase2B2_X18_ArchiveAssistantSkippedButAvailableAsNeighborAndRaw` | `internal/postgres/phase2_b2_extraction_test.go` | 通过 | 0.38 秒 |
+| F1 | `TestPhase2B2_F1_NewJobsPrecedeBackfill` | `internal/postgres/phase2_b2_queue_test.go` | 通过 | 0.22 秒 |
+| F2 | `TestPhase2B2_F2_SubscriptionRetriesUnavailableAndStopsAtFive` | `internal/postgres/phase2_b2_queue_test.go` | 通过 | 0.63 秒 |
+| F3 | `TestPhase2B2_F3_NotConfiguredStopsAndManualRetrySucceeds` | `internal/postgres/phase2_b2_queue_test.go` | 通过 | 0.32 秒 |
+| F4 | `TestPhase2B2_F4_BudgetDefersWithoutAttemptAndCalendarHandlesDST` | `internal/postgres/phase2_b2_queue_test.go` | 通过 | 0.65 秒 |
+| F5 | `TestPhase2B2_F5_ConcurrentBackfillCapAndHourlyRecovery` | `internal/postgres/phase2_b2_queue_test.go` | 通过 | 1.45 秒 |
+| F6 | `TestPhase2B2_F6_PausedArchiveSkippedOrdinaryProcessedResumeWorks` | `internal/postgres/phase2_b2_queue_test.go` | 通过 | 0.27 秒 |
+| F7 | `TestPhase2B2_F7_KilledWorkerRecoversLeaseAndFencesOldCommit` | `internal/postgres/phase2_b2_queue_test.go` | 通过 | 0.32 秒 |
+| F8 | `TestPhase2B2_F8_MeteredCallFailureDoesNotRetry` | `internal/postgres/phase2_b2_queue_test.go` | 通过 | 0.23 秒 |
+| M1 | `TestPhase2B2_M1_FiltersCursorIsolationAndOwnership` | `internal/postgres/phase2_b2_memory_test.go` | 通过 | 10.80 秒 |
+| M1 | `TestPhase2B2_M1_ReadBatchQueryCountDoesNotGrowWithRows` | `internal/postgres/phase2_b2_read_count_test.go` | 通过 | 10.05 秒 |
+| M2 | `TestPhase2B2_M2_SnapshotCapDoesNotCapSecretaryOrDeputy` | `internal/postgres/phase2_b2_memory_test.go` | 通过 | 26.54 秒 |
+| M3 | `TestPhase2B2_M3_FacetCountsDeletionAndFiftyLimit` | `internal/postgres/phase2_b2_memory_test.go` | 通过 | 0.41 秒 |
+| M3 | `TestPhase2B2_M3_FacetsTakeFiftyMostFrequentPerRole` | `internal/postgres/phase2_b2_memory_test.go` | 通过 | 9.37 秒 |
+| M4 | `TestPhase2B2_M4_UndoPreservesAnswerAndDeputyReplacesModelHistory` | `internal/postgres/phase2_b2_memory_test.go` | 通过 | 0.81 秒 |
+| M5 | `TestPhase2B2_M5_ExplicitDeleteStillClearsDependents` | `internal/postgres/phase2_b2_memory_test.go` | 通过 | 0.68 秒 |
+| M6 | `TestPhase2B2_M6_AllBatch1SequencesUnchanged` | `internal/postgres/phase2_b2_memory_test.go` | 通过 | 88.54 秒 |
+| M7 | `TestPhase2B2_M7_NewDeputyVisibilityInitializesOnlyOnce` | `internal/postgres/phase2_b2_memory_test.go` | 通过 | 0.55 秒 |
+| M8 | `TestPhase2B2_M8_DeleteCleansOrphansButKeepsSharedAndSelf` | `internal/postgres/phase2_b2_memory_test.go` | 通过 | 0.39 秒 |
+| M9 | `TestPhase2B2_M9_CorrectionCarriesMentionsAndEventToNewVersion` | `internal/postgres/phase2_b2_memory_test.go` | 通过 | 0.36 秒 |
+| M10 | `TestPhase2B2_M10_DistinctActionableHumanJobMessages` | `internal/postgres/phase2_b2_memory_test.go` | 通过 | 0.23 秒 |
+| M11 | `TestPhase2B2_M11_ExportContainsNewTablesAndEventValues` | `internal/postgres/phase2_b2_memory_test.go` | 通过 | 0.30 秒 |
+| U1 | `U1 记忆卡片显示人地点说话和事件日期，没有内容的卡片无空位及内部说法` | `web/tests/phase2-batch2.spec.ts` | 失败 | 5.27 秒 |
+| U2 | `U2 点人后仅保留提到他的记忆，清掉筛选后恢复；地点和性质筛选传给接口` | `web/tests/phase2-batch2.spec.ts` | 失败 | 5.45 秒 |
+| U3 | `U3 300条记忆从接口翻至末尾不重复，390px无横向溢出` | `web/tests/phase2-batch2.spec.ts` | 失败 | 5.54 秒 |
+| U1 | `U1 事件区间卡片显示实际最后一天` | `web/tests/phase2-batch2.spec.ts` | 失败 | 5.63 秒 |
+| U4 | `U4 真实秘书原话经后台变成带成都老王日期的记忆，点老王可筛出` | `web/tests/phase2-batch2-backend.spec.ts` | 失败 | 7.71 秒 |
+| M12 | `TestPhase2B2_M12_ProjectEpistemicAgentAndCombinedFilters` | `internal/postgres/phase2_b2_memory_test.go` | 通过 | 1.23 秒 |
+| M13 | `TestPhase2B2_M13_DetailIsDirectMemoryAndMissingIsNotFound` | `internal/postgres/phase2_b2_memory_test.go` | 通过 | 0.33 秒 |
+| M14 | `TestPhase2B2_M14_ModelFacingMemoryCarriesTimePeoplePlaces` | `internal/postgres/phase2_b2_memory_test.go` | 通过 | 0.33 秒 |
+| U5 | 项目时间轴决定不丢失 | 已按协调者第 10 节取消 | 不在本轮范围 | — |
+
+## 发现、归属及未完成的覆盖
+
+| 用例 | 首个失败位置 | 现象 | 归属 |
+|---|---|---|---|
+| `U1 记忆卡片显示人地点说话和事件日期，没有内容的卡片无空位及内部说法` | `phase2-batch2.spec.ts:55` | 记忆文字在 5 秒内不可见；尚未到达后续界面断言 | T2 导航入口 |
+| `U2 点人后仅保留提到他的记忆，清掉筛选后恢复；地点和性质筛选传给接口` | `phase2-batch2.spec.ts:89` | 记忆文字在 5 秒内不可见；尚未到达后续界面断言 | T2 导航入口 |
+| `U3 300条记忆从接口翻至末尾不重复，390px无横向溢出` | `phase2-batch2.spec.ts:113` | 记忆文字在 5 秒内不可见；尚未到达后续界面断言 | T2 导航入口 |
+| `U1 事件区间卡片显示实际最后一天` | `phase2-batch2.spec.ts:55` | 记忆文字在 5 秒内不可见；尚未到达后续界面断言 | T2 导航入口 |
+| `U4 真实秘书原话经后台变成带成都老王日期的记忆，点老王可筛出` | `phase2-batch2-backend.spec.ts:47` | 记忆文字在 5 秒内不可见；尚未到达后续界面断言 | T2 导航入口 |
+
+这五个用例都访问 `/library?tab=memories`。实际页面 `web/src/pages/LibraryPage.tsx:603` 的标签取值是 `memory`，649 行只在这个取值下挂载 MemoryTab；无 tab 时也默认 memory。失败 trace 和 error-context 显示页面有“资料库”标题及记忆 / 来源 / 训练数据三个标签，但没有记忆列表。U4 的页面导航返回 200，抽取记忆的 API 查询也返回 200。依据这些证据，本轮首个失败归为验收测试入口写错，不能据此判定 U2 的卡片或筛选实现有错。
+
+U4 到导航前已经通过：真实秘书原话经 worker 抽出计划；confirmation=adopted；说话时刻存在；上海事件区间端点准确；人物地点为老王、成都、春熙路；实际模型 HTTP 请求包含用户原话。之后的卡片显示、点老王筛选和手机宽度断言没有执行。U1 的卡片内容 / 内部说法 / 区间最后一天、U2 筛选、U3 300 条分页与 390px 检查均被入口失败挡住，不能标为通过。
+
+按本轮要求不改断言、导航或产品，不重跑失败用例。后续若协调者安排修复，应由 T2 只修导航到现有记忆标签，保留全部业务断言；再固定新的执行提交做统一一轮。本报告保留这次失败，不作全绿验收结论。
+
+## 超过一分钟的用例
+
+| 用例 | 本轮耗时 |
+|---|---|
+| `TestPhase2B1_N12_RandomTwentyActionsInTwentySeededGroups` | 69.97 秒 |
+| `TestPhase2B2_M6_AllBatch1SequencesUnchanged/N12_RandomTwentyActionsInTwentySeededGroups` | 62.32 秒 |
+| `TestPhase2B2_M6_AllBatch1SequencesUnchanged` | 88.54 秒 |
+| 浏览器 `G6 提醒送达：真实等待一分钟、首页、Web Push、Telegram` | 106.34 秒 |
+| 浏览器 `G9 不丢话：模型真实超时后收到保存回执并能查原话` | 91.61 秒 |
+
+## 证据与清理
+
+证据目录：`/tmp/pcas-t2-final-z8nvyphp`。`run-manifest.json` 记录基线与执行提交；`make-check.log`、`go-test.json`、`make-check.exit` 和 `final-summary.json` 保留完整后端结果；`web-*.log` 保留前端检查；`browser-mocked.json` / log、`browser-b2-real.json` / log、三个 `browser-legacy-real-*.json` 及对应日志保留全部浏览器结果。失败 trace、error-context、U4 截图与真实服务日志也已保留。每个浏览器测试结果都只有一次执行、retry=0。
+
+本轮自建数据库容器和服务进程均已清理；只清理记录的本轮容器与 PID。没有部署或合入 main，验收 PR 仍为 Draft。
+
+---
+
+## 历史记录：准备与首次预跑
+
+下面保留之前各轮的原始结论、失败记录与批准修订。下列“当前状态”“等待通知”等表述均属于历史记录；本次最终轮以以上结果为准。
 
 日期：2026-10-02。任务：T2。已完成 dda8ef5 上首次后端预跑；正式最终一轮仍等 M2 和 U2 合入后协调者通知。
 

@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
-import { ArrowUpRight, Check } from 'lucide-react'
-import { isKnownCard, type DeskCard, type LinksCard, type SourcesCard, type TasksCard, type TimelineCard } from '../domain/desk'
+import { ArrowUpRight, Box, Building2, CalendarDays, Check, MapPin, UserRound } from 'lucide-react'
+import { eventText, isKnownCard, saidDay, type DeskCard, type LinksCard, type SourcesCard, type TasksCard, type TimelineCard } from '../domain/desk'
 import { formatShortDate, formatDateTime, isOverdue } from '../domain/time'
+import type { MemoryMention } from '../domain/types'
 import { useStore } from '../store/context'
 import { SourceSheet } from './SourceSheet'
 
@@ -70,34 +71,89 @@ function Links({ card }: { card: LinksCard }) {
 
 type Moment = TimelineCard['items'][number] & { source?: Quote }
 
+/** What became of it afterwards. A moment nothing happened to carries no word. */
+const outcome: Partial<Record<Moment['status'], string>> = { done: '已完成', dropped: '已取消', changed: '后来改过' }
+
+const mentionIcon = {
+  person: <UserRound size={11} />,
+  place: <MapPin size={11} />,
+  organization: <Building2 size={11} />,
+  thing: <Box size={11} />,
+}
+const mentionOrder: MemoryMention['role'][] = ['person', 'place', 'organization', 'thing']
+/** People and places named on one moment before the rest are only counted. */
+const MENTIONS_SHOWN = 3
+
 function Timeline({ title, items }: { title?: string; items: Moment[] }) {
   const { state } = useStore()
+  const timeZone = state.settings.timezone ?? 'UTC'
   const [open, setOpen] = useState<{ id: string; version?: number } | null>(null)
   return (
-    <figure className="sec-timeline">
+    <figure className={`sec-timeline${items.length === 1 ? ' single' : ''}`}>
       {open && <SourceSheet id={open.id} version={open.version} conversation={{}} onClose={() => setOpen(null)} />}
       {title && <figcaption>{title}</figcaption>}
       <ol>
-        {items.map((item, i) => (
-          <li key={i} className={item.status}>
-            <time>{item.at ? formatShortDate(item.at, state.settings.timezone ?? 'UTC') : ''}</time>
-            <span className="t-mark" aria-label={item.status === 'done' ? '已完成' : item.status === 'dropped' ? '放弃了' : undefined}>
-              {item.status === 'done' && <Check size={9} strokeWidth={3.5} />}
-            </span>
-            {item.source?.sourceId ? (
-              // Each moment opens the record it came from.
-              <button type="button" className="t-text t-source" title="看原文" onClick={() => setOpen({ id: item.source!.sourceId!, version: item.source!.sourceVersion ?? undefined })}>
-                {item.text}
-              </button>
-            ) : item.thingId ? (
-              <Link className="t-text" to={`/t/${item.thingId}`}>
-                {item.text}
-              </Link>
-            ) : (
-              <span className="t-text">{item.text}</span>
-            )}
-          </li>
-        ))}
+        {items.map((item, i) => {
+          // The margin says when it was said; when the thing itself happens goes beside the words.
+          const said = saidDay(item.at, timeZone)
+          const event = eventText(item, timeZone)
+          const mentions = [...(item.mentions ?? [])].sort((a, b) => mentionOrder.indexOf(a.role) - mentionOrder.indexOf(b.role))
+          const became = outcome[item.status]
+          return (
+            <li key={i} className={item.status}>
+              {said ? (
+                <time dateTime={item.at!} title={`${formatDateTime(item.at!, timeZone)} 说的`}>
+                  {said.day}
+                  {said.year && <small>{said.year}</small>}
+                </time>
+              ) : (
+                <span className="t-undated">时间不详</span>
+              )}
+              <span className="t-mark" aria-hidden>
+                {item.status === 'done' && <Check size={9} strokeWidth={3.5} />}
+              </span>
+              <div className="t-body">
+                <div className="t-line">
+                  {item.source?.sourceId ? (
+                    // Each moment opens the record it came from.
+                    <button type="button" className="t-text t-source" title="看原文" onClick={() => setOpen({ id: item.source!.sourceId!, version: item.source!.sourceVersion ?? undefined })}>
+                      {item.text}
+                    </button>
+                  ) : item.thingId ? (
+                    <Link className="t-text" to={`/t/${item.thingId}`}>
+                      {item.text}
+                    </Link>
+                  ) : (
+                    <span className="t-text">{item.text}</span>
+                  )}
+                  {became && <span className="t-state">{became}</span>}
+                </div>
+                {(event || mentions.length > 0) && (
+                  // One line at most: the date stays whole, the names give way.
+                  <div className="t-meta">
+                    {event && (
+                      <span className="t-event" title="说的是这个时候的事">
+                        <CalendarDays size={11} />
+                        {event}
+                      </span>
+                    )}
+                    {mentions.length > 0 && (
+                      <span className="t-who" title={mentions.map((m) => m.name).join('、')}>
+                        {mentions.slice(0, MENTIONS_SHOWN).map((m) => (
+                          <span key={`${m.role}:${m.entityId}`}>
+                            {mentionIcon[m.role]}
+                            {m.name}
+                          </span>
+                        ))}
+                        {mentions.length > MENTIONS_SHOWN && <span>+{mentions.length - MENTIONS_SHOWN}</span>}
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
+            </li>
+          )
+        })}
       </ol>
     </figure>
   )
@@ -110,7 +166,6 @@ function Timeline({ title, items }: { title?: string; items: Moment[] }) {
  */
 function withQuotes(timeline: TimelineCard, sources: SourcesCard | undefined): Moment[] {
   const quotes = sources?.items.filter((q) => !isSaid(q)) ?? []
-  if (!quotes.length) return timeline.items
   const byMemory = new Map(quotes.map((q) => [q.memoryId, q]))
   const placed = new Set<string>()
   const moments: Moment[] = timeline.items.map((item) => {
@@ -120,7 +175,7 @@ function withQuotes(timeline: TimelineCard, sources: SourcesCard | undefined): M
   })
   const rest = quotes.filter((q) => !placed.has(q.memoryId)).map((q): Moment => ({ at: q.at, text: q.text, status: 'open', memoryId: q.memoryId, thingId: null, source: q }))
   // Keep the timeline in time order; moments without a time go last, in the order given.
-  const when = (m: Moment) => (m.at ? new Date(m.at).getTime() : Infinity)
+  const when = (m: Moment) => (m.at && !Number.isNaN(new Date(m.at).getTime()) ? new Date(m.at).getTime() : Infinity)
   return [...moments, ...rest].sort((a, b) => when(a) - when(b))
 }
 

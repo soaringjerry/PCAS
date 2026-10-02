@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/workspace"
@@ -244,10 +245,15 @@ func TestPhase2B1_N10_ManualUndoDoesNotCascadeSecretaryMemory(t *testing.T) {
 	b1HasRef(t, b1Refs(t, s, scope, query.RequestID), source, true)
 }
 func TestPhase2B1_N11_UndoUpdateThenCreationDeletesOnlyCompleteTurn(t *testing.T) {
-	s, scope, f, _, first, source := b1Plan(t, `{"reply":"已安排","actions":[{"op":"create_task","title":"和张三对方案","due":"2099-10-02T15:00","remind":"none"}]}`)
+	loc, err := time.LoadLocation("Asia/Shanghai")
+	if err != nil {
+		t.Fatal(err)
+	}
+	date := time.Now().In(loc).AddDate(0, 0, 7).Format("2006-01-02")
+	s, scope, f, _, first, source := b1Plan(t, string(asJSON(map[string]any{"reply": "已安排", "actions": []map[string]any{{"op": "create_task", "title": "和张三对方案", "due": date + "T15:00", "remind": "none"}}})))
 	text := b1Text(t, "plan", "claim")
 	claim := b1MemoryRef(t, b1Extract(t, s, scope, f, source, b1ExtractItem(text, "plan")), text)
-	f.set(`{"reply":"改到四点","actions":[{"op":"update","ref":"R1","set":{"due":"2099-10-02T16:00","remind":"none"}}]}`)
+	f.set(map[string]any{"reply": "改到四点", "actions": []map[string]any{{"op": "update", "ref": "R1", "set": map[string]any{"due": date + "T16:00", "remind": "none"}}}})
 	req := turnRequest("改到四点")
 	req.ConversationID = &first.ConversationID
 	second := mustTurn(t, s, scope, req)

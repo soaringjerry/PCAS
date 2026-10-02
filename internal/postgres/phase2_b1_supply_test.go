@@ -563,3 +563,263 @@ func TestPhase2B1_P10_ExclusionsInferenceAndProjectFiltersStayOnClaimsOnly(t *te
 		b1HasRef(t, run.ContextVersions, ref, false)
 	}
 }
+
+func b1R2aFixture(t *testing.T, id string) map[string]string {
+	t.Helper()
+	var supplement struct {
+		Fixtures map[string]map[string]string `json:"fixtures"`
+	}
+	if err := json.Unmarshal(b1Gold(t)["R2a_supplement_2026_10_02"], &supplement); err != nil {
+		t.Fatal(err)
+	}
+	fixture := supplement.Fixtures[id]
+	if fixture["raw"] == "" || fixture["claim"] == "" || fixture["query"] == "" {
+		t.Fatal("missing frozen R2a fixture", id)
+	}
+	return fixture
+}
+
+func b1R2aVisibility(t *testing.T, s *Store, scope memory.Scope, claim memory.Ref, agents ...string) {
+	t.Helper()
+	workspaceCommand(t, s, scope, workspace.Command{Type: "setMemoryVisibility", ID: string(claim.ID), AgentIDs: agents})
+}
+
+func b1R2aRun(t *testing.T, s *Store, scope memory.Scope, f *b1Fake, task, agent, query string, reply any) workspace.Run {
+	t.Helper()
+	f.set(reply)
+	st := workspaceCommand(t, s, scope, workspace.Command{Type: "requestRun", ThingID: task, AgentID: agent, Kind: "ask", Prompt: query})
+	run := st.Runs[0]
+	if agent == "manual" {
+		if run.Status != "waiting" {
+			t.Error("manual handoff did not complete", run.Status)
+		}
+		return run
+	}
+	before := len(f.all())
+	if err := s.runAgentOnce(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.all()) != before+1 {
+		t.Fatal("deputy request was not actually sent exactly once")
+	}
+	st, err := s.Snapshot(context.Background(), scope)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, completed := range st.Runs {
+		if completed.ID == run.ID {
+			if completed.Status != "done" {
+				t.Error("deputy failed", completed.Status, completed.Output)
+			}
+			return completed
+		}
+	}
+	t.Fatal("completed deputy run missing")
+	return run
+}
+
+func b1R2aSupply(t *testing.T, prompt string, refs []memory.Ref, fixture map[string]string, source, claim memory.Ref, want bool) {
+	t.Helper()
+	if want {
+		b1Contains(t, prompt, fixture["raw"], fixture["claim"])
+	} else {
+		b1Absent(t, prompt, fixture["raw"], fixture["claim"])
+	}
+	b1HasRef(t, refs, source, want)
+	b1HasRef(t, refs, claim, want)
+}
+
+func TestPhase2B1_P14_CapturedMemoryVisibilityClosesAndReopensOriginal(t *testing.T) {
+	s, scope := b1Store(t), owner()
+	fixture := b1R2aFixture(t, "P14")
+	f := b1Model(t, s, `{"reply":"R2a原回答固定标记","used":["S1"],"actions":[]}`)
+	second := s.models.Config.Providers[0]
+	second.ID, second.Name = "model2", "仍然可见的副手"
+	s.models.Config.Providers = append(s.models.Config.Providers, second)
+	// Capture and adoption use the same public workspace commands as the UI.
+	st := workspaceCommand(t, s, scope, workspace.Command{Type: "capture", Text: fixture["raw"]})
+	candidate := st.Candidates[0]
+	source := memory.Ref{ID: memory.ID(candidate.Source.SourceID), Version: candidate.Source.Version, Kind: memory.SourceKind}
+	st = workspaceCommand(t, s, scope, workspace.Command{Type: "acceptCandidate", ID: candidate.ID, Kind: "memory", MemoryKind: "fact", Text: fixture["claim"]})
+	claim := b1MemoryRef(t, st.Memories, fixture["claim"])
+	b1R2aVisibility(t, s, scope, claim, "model", "model2", "manual")
+	originalRequest := turnRequest(fixture["query"])
+	original := mustTurn(t, s, scope, originalRequest)
+	b1R2aSupply(t, f.last(t).Prompt, b1Refs(t, s, scope, originalRequest.RequestID), fixture, source, claim, true)
+
+	b1R2aVisibility(t, s, scope, claim, "model2", "manual")
+	b1Preserved(t, original.Turn, b1History(t, s, scope, original.ConversationID))
+	f.set(`{"reply":"当前资料作答","actions":[]}`)
+	follow := turnRequest(fixture["query"])
+	follow.ConversationID = &original.ConversationID
+	mustTurn(t, s, scope, follow)
+	b1R2aSupply(t, f.last(t).Prompt, b1Refs(t, s, scope, follow.RequestID), fixture, source, claim, false)
+	b1Contains(t, f.last(t).Prompt, original.Turn.Text, "（先前回答的依据已更新，请按现在的资料回答）")
+	b1Absent(t, f.last(t).Prompt, original.Turn.Reply)
+	// A fresh conversation must also obey the visibility closure.
+	fresh := turnRequest(fixture["query"])
+	mustTurn(t, s, scope, fresh)
+	b1R2aSupply(t, f.last(t).Prompt, b1Refs(t, s, scope, fresh.RequestID), fixture, source, claim, false)
+	st = workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "R2a 可见副手事项"})
+	run := b1R2aRun(t, s, scope, f, st.Tasks[0].ID, "model2", fixture["query"], "仍可见的副手固定回答")
+	b1R2aSupply(t, f.last(t).Prompt, run.ContextVersions, fixture, source, claim, true)
+
+	b1R2aVisibility(t, s, scope, claim, "model", "model2", "manual")
+	f.set(`{"reply":"重新打开后作答","actions":[]}`)
+	reopened := turnRequest(fixture["query"])
+	mustTurn(t, s, scope, reopened)
+	b1R2aSupply(t, f.last(t).Prompt, b1Refs(t, s, scope, reopened.RequestID), fixture, source, claim, true)
+}
+
+func TestPhase2B1_P15_ItemExclusionAffectsOnlyThatItemAcrossAllEntrances(t *testing.T) {
+	s, scope := b1Store(t), owner()
+	fixture := b1R2aFixture(t, "P15")
+	f := b1Model(t, s, `{"reply":"准备资料","actions":[]}`)
+	source := b1Source(t, s, scope, fixture["title"], fixture["raw"], "manual")
+	item := b1ExtractItem(fixture["claim"], "fact")
+	item["quote"] = fixture["raw"]
+	claim := b1MemoryRef(t, b1Extract(t, s, scope, f, source, item), fixture["claim"])
+	b1R2aVisibility(t, s, scope, claim, "model", "manual")
+	st := workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "R2a 事项甲"})
+	a := st.Tasks[0].ID
+	st = workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "R2a 事项乙"})
+	b := ""
+	for _, task := range st.Tasks {
+		if task.ID != a {
+			b = task.ID
+		}
+	}
+	if b == "" {
+		t.Fatal("second item missing")
+	}
+	workspaceCommand(t, s, scope, workspace.Command{Type: "toggleContextMemory", ThingID: a, MemoryID: string(claim.ID)})
+	for _, target := range []struct {
+		id   string
+		want bool
+	}{{a, false}, {b, true}} {
+		for _, agent := range []string{"model", "manual"} {
+			run := b1R2aRun(t, s, scope, f, target.id, agent, fixture["query"], "R2a 副手固定回答")
+			b1R2aSupply(t, run.Brief, run.ContextVersions, fixture, source, claim, target.want)
+			if agent != "manual" {
+				b1R2aSupply(t, f.last(t).Prompt, run.ContextVersions, fixture, source, claim, target.want)
+			}
+		}
+		f.set(`{"reply":"事项页固定回答","actions":[]}`)
+		req := turnRequest(fixture["query"])
+		req.ThingID = &target.id
+		mustTurn(t, s, scope, req)
+		b1R2aSupply(t, f.last(t).Prompt, b1Refs(t, s, scope, req.RequestID), fixture, source, claim, target.want)
+	}
+	// No concrete item: another item's exclusion must not become global.
+	f.set(`{"reply":"大厅固定回答","actions":[]}`)
+	hall := turnRequest(fixture["query"])
+	mustTurn(t, s, scope, hall)
+	b1R2aSupply(t, f.last(t).Prompt, b1Refs(t, s, scope, hall.RequestID), fixture, source, claim, true)
+	workspaceCommand(t, s, scope, workspace.Command{Type: "toggleContextMemory", ThingID: a, MemoryID: string(claim.ID)})
+	reopened := b1R2aRun(t, s, scope, f, a, "model", fixture["query"], "排除恢复后的回答")
+	b1R2aSupply(t, f.last(t).Prompt, reopened.ContextVersions, fixture, source, claim, true)
+}
+
+func TestPhase2B1_P14_OneRestrictedActiveClaimClosesWholeSource(t *testing.T) {
+	s, scope := b1Store(t), owner()
+	fixture := b1R2aFixture(t, "P15")
+	f := b1Model(t, s, `{"reply":"多记忆固定回答","actions":[]}`)
+	source := b1Source(t, s, scope, fixture["title"], fixture["raw"], "manual")
+	first := b1ExtractItem(fixture["claim"], "fact")
+	second := b1ExtractItem(fixture["other_claim"], "fact")
+	first["quote"], second["quote"] = fixture["raw"], fixture["raw"]
+	memories := b1Extract(t, s, scope, f, source, first, second)
+	allowed := b1MemoryRef(t, memories, fixture["claim"])
+	restricted := b1MemoryRef(t, memories, fixture["other_claim"])
+	b1R2aVisibility(t, s, scope, allowed, "model", "manual")
+	b1R2aVisibility(t, s, scope, restricted, "manual")
+	f.set(`{"reply":"多记忆固定回答","actions":[]}`)
+	req := turnRequest(fixture["query"])
+	mustTurn(t, s, scope, req)
+	b1Contains(t, f.last(t).Prompt, fixture["claim"])
+	b1Absent(t, f.last(t).Prompt, fixture["raw"], fixture["other_claim"])
+	b1HasRef(t, b1Refs(t, s, scope, req.RequestID), source, false)
+	b1R2aVisibility(t, s, scope, restricted, "model", "manual")
+	req = turnRequest(fixture["query"])
+	mustTurn(t, s, scope, req)
+	b1Contains(t, f.last(t).Prompt, fixture["raw"], fixture["other_claim"])
+	b1HasRef(t, b1Refs(t, s, scope, req.RequestID), source, true)
+	b1R2aVisibility(t, s, scope, restricted, "manual")
+	b1Delete(t, s, scope, restricted)
+	// Withdrawn claims must cease restricting their still-live original.
+	req = turnRequest(fixture["query"])
+	mustTurn(t, s, scope, req)
+	b1Contains(t, f.last(t).Prompt, fixture["raw"], fixture["claim"])
+	b1Absent(t, f.last(t).Prompt, fixture["other_claim"])
+	b1HasRef(t, b1Refs(t, s, scope, req.RequestID), source, true)
+	b1Active(t, s, scope, source, true)
+}
+
+func TestPhase2B1_P15_SourceDependentAdoptionObeysVisibilityAndItemExclusion(t *testing.T) {
+	for _, closure := range []string{"hidden", "excluded"} {
+		t.Run(closure, func(t *testing.T) {
+			s, scope := b1Store(t), owner()
+			fixture := b1R2aFixture(t, "P15")
+			f := b1Model(t, s, "- [ ] "+fixture["adopted"])
+			source := b1Source(t, s, scope, fixture["title"], fixture["raw"], "manual")
+			st := workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "R2a 采纳事项"})
+			task := st.Tasks[0].ID
+			run := b1R2aRun(t, s, scope, f, task, "model", fixture["query"], "- [ ] "+fixture["adopted"])
+			b1HasRef(t, run.ContextVersions, source, true)
+			if run.Adopted == nil {
+				t.Fatal("source-dependent result not adopted")
+			}
+			// Add the claim after adoption: the adopted run's input dependency is
+			// strictly source, so claim validation cannot accidentally mask R2a.
+			item := b1ExtractItem(fixture["claim"], "fact")
+			item["quote"] = fixture["raw"]
+			claim := b1MemoryRef(t, b1Extract(t, s, scope, f, source, item), fixture["claim"])
+			b1R2aVisibility(t, s, scope, claim, "model", "manual")
+			secretary := func(want bool) workspace.DeskTurnResponse {
+				f.set(`{"reply":"采纳事项固定回答","used":["S1"],"actions":[]}`)
+				req := turnRequest(fixture["query"])
+				req.ThingID = &task
+				out := mustTurn(t, s, scope, req)
+				if want {
+					b1Contains(t, f.last(t).Prompt, fixture["adopted"], fixture["raw"])
+				} else {
+					b1Absent(t, f.last(t).Prompt, fixture["adopted"], fixture["raw"], fixture["claim"])
+				}
+				b1HasRef(t, b1Refs(t, s, scope, req.RequestID), source, want)
+				return out
+			}
+			before := secretary(true)
+			originalChecklist := ""
+			for _, item := range before.State.Tasks {
+				if item.ID == task {
+					originalChecklist = string(asJSON(item.Checklist))
+				}
+			}
+			b1Contains(t, originalChecklist, fixture["adopted"])
+			if closure == "hidden" {
+				b1R2aVisibility(t, s, scope, claim, "manual")
+			} else {
+				workspaceCommand(t, s, scope, workspace.Command{Type: "toggleContextMemory", ThingID: task, MemoryID: string(claim.ID)})
+			}
+			secretary(false)
+			current := b1R2aRun(t, s, scope, f, task, "model", fixture["query"], "当前可用资料回答")
+			b1Absent(t, f.last(t).Prompt, fixture["adopted"], fixture["raw"], fixture["claim"])
+			b1HasRef(t, current.ContextVersions, source, false)
+			st, err := s.Snapshot(context.Background(), scope)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, item := range st.Tasks {
+				if item.ID == task && string(asJSON(item.Checklist)) != originalChecklist {
+					t.Error("R2a erased user-visible adopted content")
+				}
+			}
+			if closure == "hidden" {
+				b1R2aVisibility(t, s, scope, claim, "model", "manual")
+			} else {
+				workspaceCommand(t, s, scope, workspace.Command{Type: "toggleContextMemory", ThingID: task, MemoryID: string(claim.ID)})
+			}
+			secretary(true)
+		})
+	}
+}

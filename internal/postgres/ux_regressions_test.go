@@ -395,12 +395,13 @@ func TestDeskHistoryCannotBypassDestinationItemScope(t *testing.T) {
 			}
 			st = workspaceCommand(t, s, scope, command)
 			brief := st.Runs[0].Brief
-			memorySection, _, found := strings.Cut(brief, "\n相关原话：")
+			memorySection, rawSection, found := strings.Cut(brief, "\n相关原话：")
 			if !found || strings.Contains(brief, answerMarker) || !strings.Contains(brief, questionMarker) || !strings.Contains(brief, "（先前回答的依据已更新，请按现在的资料回答）") || strings.Contains(memorySection, claimMarker) || oneOf(m.ID, st.Runs[0].ContextMemoryIDs...) {
 				t.Fatalf("desk history bypassed destination scope or lost the user's question: %+v", st.Runs[0])
 			}
-			// Whether excluded memories' originals should be supplied is pending R2a.
-			// Do not assert the related-raw section's content here.
+			if strings.Contains(rawSection, claimMarker) != (change != "exclude") {
+				t.Fatalf("R2a original availability must follow item exclusion, while project differences leave it available: %s", rawSection)
+			}
 		})
 	}
 }

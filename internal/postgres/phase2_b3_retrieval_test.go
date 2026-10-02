@@ -1,7 +1,9 @@
 package postgres
 
 import (
+	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -341,4 +343,54 @@ func TestPhase2B3_S13_OnlyCurrentUtterancePlansEntities(t *testing.T) {
 	mustTurn(t, s, scope, req)
 	b1Contains(t, f.last(t).Prompt, "当前地点结构命中")
 	b1Absent(t, f.last(t).Prompt, "前轮地点结构命中")
+}
+
+func TestPhase2B3_S1_EventPrecisionAndInclusiveRangeDisplay(t *testing.T) {
+	var oracle struct{ ModelTemplates map[string]string }
+	if err := json.Unmarshal(b3Gold(t)["rangeDisplayRuling"], &oracle); err != nil {
+		t.Fatal(err)
+	}
+	for _, precision := range []string{"day", "month", "year", "range"} {
+		t.Run(precision, func(t *testing.T) {
+			s, scope := b1Store(t), owner()
+			f := b1Model(t, s, b3Used())
+			now := b3Zone(t, s, scope, "Asia/Shanghai")
+			self := b3Entity(t, s, scope, "self", "本人")
+			place := b3Entity(t, s, scope, "place", "成都", "成都")
+			said := b3Year(now, -1, time.January, 1)
+			from := b3Year(now, -1, time.June, 12)
+			from = time.Date(from.Year(), from.Month(), from.Day(), 0, 0, 0, 0, from.Location())
+			to := from.AddDate(0, 0, 1)
+			switch precision {
+			case "month":
+				from = time.Date(now.Year()-1, time.June, 1, 0, 0, 0, 0, now.Location())
+				to = from.AddDate(0, 1, 0)
+			case "year":
+				from = time.Date(now.Year()-1, time.January, 1, 0, 0, 0, 0, now.Location())
+				to = from.AddDate(1, 0, 0)
+			case "range":
+				to = from.AddDate(0, 0, 3)
+			}
+			text := "事件格式验收" + precision
+			b3Claim(t, s, scope, b3ClaimSpec{Text: text, Subject: self, Said: &said, EventFrom: &from, EventTo: &to, Precision: precision, Mentions: []b3Mention{{place, "place"}}})
+			mustTurn(t, s, scope, turnRequest("成都的安排来着"))
+			line := b3MemoryLine(t, f.last(t).Prompt, text)
+			expand := func(key string) string {
+				template := oracle.ModelTemplates[key]
+				if template == "" {
+					t.Fatal("missing frozen event display template", key)
+				}
+				return strings.ReplaceAll(template, "{year}", fmt.Sprint(now.Year()-1))
+			}
+			if precision == "range" {
+				b1Contains(t, line, "事件 "+expand("rangeFrom"), expand("rangeTo"))
+				b1Absent(t, line, expand("rangeExcludedEnd"))
+			} else {
+				pattern := regexp.MustCompile("事件 " + regexp.QuoteMeta(expand(precision)) + `(?:$|\s*/)`)
+				if !pattern.MatchString(line) {
+					t.Errorf("event precision %s did not match frozen display: %q", precision, line)
+				}
+			}
+		})
+	}
 }

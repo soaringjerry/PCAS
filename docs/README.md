@@ -8,7 +8,7 @@ PCAS 的所有文档都从这一页找。新增或移动文档时，同时改这
 |---|---|---|
 | 第 1 阶段：秘书前台 | 已上线（2026-10-01） | [任务总览](tasks/phase1/README.md) |
 | 第 1.5 阶段：稳定化 | 修复已合并；线上实测 11 项和试用一天还没做 | [稳定化计划](tasks/stabilization/README.md) |
-| 第 2 阶段：记忆核心 | 分四批。**第 1 批已派工**。第一次尝试（2.0）已回滚 | [任务入口](tasks/phase2/README.md) · [方向稿](tasks/phase2/direction.md) · [第 1 批](tasks/phase2/batch1/README.md) |
+| 第 2 阶段：记忆核心 | 分四批。**第 1 批已通过验收（2026-10-02），等用户说部署**。第一次尝试（2.0）已回滚 | [任务入口](tasks/phase2/README.md) · [方向稿](tasks/phase2/direction.md) · [第 1 批](tasks/phase2/batch1/README.md) |
 | 第 3 阶段及以后 | 未开始 | [白皮书 §16 路线图](whitepaper.md) |
 
 还没处理的问题统一记在 [待办清单](tasks/backlog.md)。
@@ -132,6 +132,8 @@ PCAS 的所有文档都从这一页找。新增或移动文档时，同时改这
 | [C2](tasks/phase2/batch1/C2-source-sheet.md) | 从依据卡片点开，直接看到当时那句话（前端） | Opus 5.5 |
 | [D](tasks/phase2/batch1/D-date-fixtures.md) | 旧测试里写死的日期（从 main 修） | 6.1 Sol |
 | [T](tasks/phase2/batch1/T-acceptance.md) | 独立验收 | 6.1 Sol（另一个执行者） |
+
+第 1 批的验收报告：[最终一轮（38 条序列全部通过）](evaluations/2026-10-02-phase2-batch1-acceptance.md) · [首次交付时的基线记录](evaluations/2026-10-01-phase2-batch1-acceptance.md)
 
 2.0 的代码和研究稿不在 `docs/` 里，归档为 git 标签 `archive/phase2-0/*`，位置和用法见任务入口第 6 节。
 

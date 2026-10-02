@@ -326,7 +326,7 @@ func currentExtractionSource(ctx context.Context, tx pgx.Tx, j worker.Job) (bool
 func (s *Store) ProcessExtraction(ctx context.Context, j worker.Job) (err error) {
 	defer func() {
 		var failure *worker.JobError
-		if errors.As(err, &failure) && (!failure.Retry || j.Attempts >= maxAttempts) {
+		if errors.As(err, &failure) && failure.Code != "budget_deferred" && (!failure.Retry || j.Attempts >= maxAttempts) {
 			if persistErr := s.extractionFailed(ctx, j); persistErr != nil {
 				err = persistErr
 			}

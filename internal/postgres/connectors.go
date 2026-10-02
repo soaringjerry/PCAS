@@ -323,29 +323,7 @@ func (s *Store) ImportArchive(ctx context.Context, scope memory.Scope, name stri
 	return s.ingestArchive(ctx, scope, name, data, "archive")
 }
 func (s *Store) ingestArchive(ctx context.Context, scope memory.Scope, name string, data []byte, namespace string) (connectors.Result, error) {
-	out := connectors.Result{Refs: []memory.Ref{}, Gaps: []string{}}
-	if err := requireOwner(scope); err != nil {
-		return out, err
-	}
-	if len(data) > 20<<20 || strings.TrimSpace(name) == "" || len(name) > 2000 {
-		return out, memory.ErrInvalid
-	}
-	if _, err := connectors.DecodeArchive(name, data); err != nil {
-		return out, memory.ErrInvalid
-	}
-	hash := sha256.Sum256(data)
-	r, err := s.IngestAttachment(ctx, scope, memory.IngestRequest{Connector: namespace, ExternalID: hex.EncodeToString(hash[:]), ExternalVersion: "1", Title: name, MediaType: "application/x-pcas-archive"}, bytes.NewReader(data))
-	if err != nil {
-		return out, err
-	}
-	out.Refs = append(out.Refs, r.Ref)
-	if r.Duplicate {
-		out.Duplicates = 1
-	} else {
-		out.Imported = 1
-	}
-	out.Gaps = append(out.Gaps, "原始归档已保留，记录正在后台解析；处理进度可在来源中查看")
-	return out, nil
+	return s.importArchiveReader(ctx, scope, name, bytes.NewReader(data), namespace)
 }
 
 var _ connectors.API = (*Store)(nil)

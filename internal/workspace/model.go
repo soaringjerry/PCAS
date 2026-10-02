@@ -118,7 +118,17 @@ type MemoryVersion struct {
 	Text   string `json:"text"`
 	Reason string `json:"reason,omitempty"`
 }
+type MemoryMention struct {
+	EntityID string `json:"entityId"`
+	Name     string `json:"name"`
+	Role     string `json:"role"`
+}
 type Memory struct {
+	ExpressedAt        string          `json:"expressedAt,omitempty"`
+	EventFrom          string          `json:"eventFrom,omitempty"`
+	EventTo            string          `json:"eventTo,omitempty"`
+	EventPrecision     string          `json:"eventPrecision,omitempty"`
+	Mentions           []MemoryMention `json:"mentions"`
 	HalfLifeDays       float64         `json:"halfLifeDays"`
 	ReinforcementLimit float64         `json:"reinforcementLimit"`
 	ID                 string          `json:"id"`
@@ -136,6 +146,16 @@ type Memory struct {
 	LastUsedAt         string          `json:"lastUsedAt"`
 	Pinned             bool            `json:"pinned"`
 }
+
+// MarshalJSON keeps absent mentions an empty array, including for older values.
+func (m Memory) MarshalJSON() ([]byte, error) {
+	type wire Memory
+	if m.Mentions == nil {
+		m.Mentions = []MemoryMention{}
+	}
+	return json.Marshal(wire(m))
+}
+
 type Agent struct {
 	Default         bool     `json:"default,omitempty"`
 	Protocol        string   `json:"protocol,omitempty"`
@@ -243,6 +263,7 @@ type Activity struct {
 	Failed bool   `json:"failed,omitempty"`
 }
 type State struct {
+	MemoryTotal      int                 `json:"memoryTotal"`
 	Notices          []Notice            `json:"notices"`
 	BudgetUsage      float64             `json:"budgetUsage"`
 	Version          int                 `json:"version"`

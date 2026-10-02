@@ -526,6 +526,15 @@ func (s *Store) runAgentOnce(ctx context.Context) error {
 			}
 		} else {
 			current.Cost = result.Cost
+			p, _ := s.models.Get(run.AgentID)
+			if err := recordUsageTx(ctx, tx, modelUsage{
+				OwnerID: scope.OwnerID, ID: memory.NewID(), At: time.Now().UTC(),
+				Purpose: "deputy", AgentID: run.AgentID, Model: p.Model,
+				InputTokens: result.InputTokens, OutputTokens: result.OutputTokens, Cost: result.Cost,
+				RunID: run.ID, MemoryRefs: run.ContextVersions,
+			}); err != nil {
+				return err
+			}
 		}
 		if verifyRunTx(ctx, tx, scope, current) != nil {
 			current.StaleContext = true

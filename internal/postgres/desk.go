@@ -200,6 +200,14 @@ func (s *Store) AnswerDesk(ctx context.Context, scope memory.Scope, agentID, que
 		if err := verifyRunTx(ctx, tx, scope, workspace.Run{AgentID: agent.ID, ContextVersions: dependencies}); err != nil {
 			return err
 		}
+		if err := recordUsageTx(ctx, tx, modelUsage{
+			OwnerID: scope.OwnerID, ID: memory.NewID(), At: time.Now().UTC(),
+			Purpose: "answer", AgentID: agent.ID, Model: p.Model,
+			InputTokens: result.InputTokens, OutputTokens: result.OutputTokens, Cost: result.Cost,
+			TurnID: out.ID, MemoryRefs: dependencies,
+		}); err != nil {
+			return err
+		}
 		_, err := tx.Exec(ctx, "INSERT INTO desk_turns(owner_id,id,agent_id,question,answer,dependencies) VALUES($1,$2,$3,$4,$5,$6)", string(scope.OwnerID), out.ID, agent.ID, question, out.Answer, asJSON(dependencies))
 		return err
 	})

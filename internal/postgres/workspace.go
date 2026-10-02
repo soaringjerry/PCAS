@@ -196,6 +196,7 @@ func (s *Store) snapshotTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) (
 	if out.Memories, err = s.memoriesTx(ctx, tx, scope); err != nil {
 		return out, err
 	}
+	out.MemoryTotal = len(out.Memories)
 	if out.Agents, err = queryDocuments[workspace.Agent](ctx, tx, "SELECT document FROM workspace_agents WHERE owner_id=$1 ORDER BY id", string(scope.OwnerID)); err != nil {
 		return out, err
 	}

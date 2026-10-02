@@ -1,4 +1,4 @@
-import type { State, TaskStatus } from './types'
+import type { EventPrecision, MemoryMention, State, TaskStatus } from './types'
 
 // The secretary's wire format (docs/tasks/phase1/contracts.md §2).
 
@@ -16,7 +16,7 @@ export interface LinksCard {
 export interface TimelineCard {
   kind: 'timeline'
   title?: string
-  items: { at?: string | null; text: string; status: 'open' | 'done' | 'dropped'; memoryId?: string | null; thingId?: string | null }[]
+  items: { at?: string | null; text: string; status: 'open' | 'done' | 'dropped' | 'changed'; eventFrom?: string; eventTo?: string; eventPrecision?: EventPrecision; mentions?: MemoryMention[]; memoryId?: string | null; thingId?: string | null }[]
 }
 
 export interface TasksCard {

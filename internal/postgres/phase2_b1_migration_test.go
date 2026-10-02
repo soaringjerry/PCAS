@@ -136,6 +136,58 @@ func b1DatabaseRows(t *testing.T, s *Store, ignoreLegacy bool) map[string]string
 	}
 	return out
 }
+
+// G2 freezes the retained columns of every pre-migration business table so
+// later additive migrations do not change the cleanup comparison's scope.
+func b1DatabaseColumns(t *testing.T, s *Store, before map[string]string) map[string][]string {
+	t.Helper()
+	_, _, legacyColumns := b1Leftovers(t)
+	rows, err := s.pool.Query(context.Background(), "SELECT table_name,column_name FROM information_schema.columns WHERE table_schema=current_schema() ORDER BY table_name,ordinal_position")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	columns := map[string][]string{}
+	for rows.Next() {
+		var table, column string
+		if err := rows.Scan(&table, &column); err != nil {
+			t.Fatal(err)
+		}
+		if _, exists := before[table]; exists && !oneOf(column, legacyColumns[table]...) {
+			columns[table] = append(columns[table], column)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	for table := range before {
+		if len(columns[table]) == 0 {
+			t.Fatalf("no retained columns for pre-migration table %s", table)
+		}
+	}
+	return columns
+}
+
+func b1DatabaseRowsAtColumns(t *testing.T, s *Store, columns map[string][]string) map[string]string {
+	t.Helper()
+	out := map[string]string{}
+	for table, names := range columns {
+		quoted := make([]string, len(names))
+		for i, name := range names {
+			quoted[i] = pgx.Identifier{name}.Sanitize()
+		}
+		// Selecting the captured columns also fails if an old table or column
+		// disappeared. Ordered JSON arrays retain every row, including duplicates.
+		sql := "SELECT coalesce(jsonb_agg(v ORDER BY v::text),'[]')::text FROM (SELECT to_jsonb(t) AS v FROM (SELECT " + strings.Join(quoted, ",") + " FROM " + pgx.Identifier{table}.Sanitize() + ") t) data"
+		var data string
+		if err := s.pool.QueryRow(context.Background(), sql).Scan(&data); err != nil {
+			t.Fatal(table, err)
+		}
+		out[table] = data
+	}
+	return out
+}
+
 func b1LegacyDatabase(t *testing.T) (*Store, map[string]string) {
 	t.Helper()
 	s := b1EmptyStore(t)
@@ -211,11 +263,12 @@ func TestPhase2B1_G1_FreshDatabaseMigratesWithoutLegacyObjects(t *testing.T) {
 }
 func TestPhase2B1_G2_LegacyCleanupPreservesEveryBusinessRow(t *testing.T) {
 	s, before := b1LegacyDatabase(t)
+	columns := b1DatabaseColumns(t, s, before)
 	if err := s.Migrate(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 	b1AssertClean(t, s)
-	after := b1DatabaseRows(t, s, true)
+	after := b1DatabaseRowsAtColumns(t, s, columns)
 	if !reflect.DeepEqual(before, after) {
 		for table, data := range before {
 			if after[table] != data {

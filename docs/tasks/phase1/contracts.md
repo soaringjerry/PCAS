@@ -95,12 +95,12 @@ B1 另外导出 `(s *Store) Undo(ctx, scope, actionID string) (workspace.State, 
 
 - **删除传播**：记忆 / 来源删除流程（`internal/postgres/editing.go`）修改或删除了某些 `work_items` / `work_documents` 行时，凡是 `changes` 涉及这些行的 `action_log` 记录，一律把 `changes` 清成 `[]`，并写入 `expired_at`。之后对这些记录执行撤销，返回 `expired`（与已确认并实现的 F10 规则统一）。
 - **保留期**：`before` 快照只保留 30 天。超过 30 天的记录同样把 `changes` 清成 `[]` 并写入 `expired_at`。清理时机：每次 `flushActionLog` 时顺带清理当前 owner 的过期记录，靠 `created_at` 索引，开销很小。
-- `id`、`source`、`turn_id`、`summary`、`created_at`、`undone_at` 永久保留，第 6 阶段用作"撤销 / 保留"的训练信号。
+- `id`、`source`、`turn_id`、`summary`、`created_at`、`undone_at` 永久保留，训练与回灌阶段（现第 7 阶段）用作"撤销 / 保留"的训练信号。
 - 迁移 016 给 `action_log` 加 `expired_at timestamptz` 列。
 
 ### 1.5 训练信号
 
-`action_log` 就是撤销和保留的原始记录，第 1 阶段只需要存下来。转成训练样本是第 6 阶段的事，现在**不要**写入 `training_samples`。
+`action_log` 就是撤销和保留的原始记录，第 1 阶段只需要存下来。转成训练样本是训练与回灌阶段（现第 7 阶段）的事，现在**不要**写入 `training_samples`。
 
 ---
 

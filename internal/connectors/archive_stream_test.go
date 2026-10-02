@@ -153,3 +153,65 @@ func TestStreamArchiveErrorsAndSkippedAssets(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestStreamArchiveBlockedSelectionAndDrop(t *testing.T) {
+	previous := MaxArchiveRecords
+	MaxArchiveRecords = 3
+	t.Cleanup(func() { MaxArchiveRecords = previous })
+	input := "[" + syntheticConversation("old", 1, 2, 3) + "," + syntheticConversation("new", 100, 101, 102) + "]"
+	a, err := OpenArchive(context.Background(), "conversations.json", strings.NewReader(input))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer a.Close()
+	err = a.Select(context.Background(), func(ids []ArchiveIdentity) ([]bool, error) {
+		allowed := make([]bool, len(ids))
+		for i, r := range ids {
+			allowed[i] = r.ID != "chatgpt/new/m1" && r.ID != "chatgpt/new/m2"
+		}
+		return allowed, nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a.Preview.Messages != 6 || a.Preview.Blocked != 2 || a.Preview.LeftOut != 1 || a.Len() != 3 {
+		t.Fatal(a.Preview, a.Len())
+	}
+	records, err := a.Records(0, 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if records[0].ID != "chatgpt/new/m0" || records[1].ID != "chatgpt/old/m2" || records[2].ID != "chatgpt/old/m1" {
+		t.Fatal("cap did not refill with unblocked messages", records)
+	}
+	if err = a.Drop(1, []bool{false, true}); err != nil {
+		t.Fatal(err)
+	}
+	records, err = a.Records(0, 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a.Len() != 2 || a.Preview.Blocked != 3 || len(records) != 2 || records[1].ID != "chatgpt/old/m1" {
+		t.Fatal("dropped index corrupted", a.Preview, records)
+	}
+	// A new process builds exactly the same eligible prefix, independently of
+	// the original unfiltered offset and the previous process's temporary files.
+	again, err := OpenArchive(context.Background(), "conversations.json", strings.NewReader(input))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer again.Close()
+	err = again.Select(context.Background(), func(ids []ArchiveIdentity) ([]bool, error) {
+		allowed := make([]bool, len(ids))
+		for i, r := range ids {
+			allowed[i] = strings.HasSuffix(r.ID, "/m0")
+		}
+		return allowed, nil
+	})
+	if err != nil || again.Preview.Blocked != 4 || again.Preview.LeftOut != 0 || again.Len() != 2 {
+		t.Fatal(again.Preview, err)
+	}
+	if len(again.Preview.Gaps) != 1 {
+		t.Fatal("blocked explanation missing", again.Preview.Gaps)
+	}
+}

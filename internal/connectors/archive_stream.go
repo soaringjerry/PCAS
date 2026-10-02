@@ -57,6 +57,7 @@ type ArchivePreview struct {
 	Earliest        *time.Time `json:"earliest"`
 	Latest          *time.Time `json:"latest"`
 	AlreadyImported int        `json:"alreadyImported"`
+	Blocked         int        `json:"blocked"`
 	LeftOut         int        `json:"leftOut"`
 	Gaps            []string   `json:"gaps"`
 }
@@ -249,13 +250,7 @@ func OpenArchive(ctx context.Context, name string, input io.Reader) (_ *Archive,
 		return nil, archiveError("no_supported_records")
 	}
 	a.Preview.LeftOut = a.Preview.Messages - len(a.entries)
-	sort.Slice(a.entries, func(i, j int) bool {
-		x, y := a.entries[i], a.entries[j]
-		if !x.conversationAt.Equal(y.conversationAt) {
-			return x.conversationAt.After(y.conversationAt)
-		}
-		return olderEntry(y, x)
-	})
+	a.sortEntries()
 	return a, nil
 }
 func (a *Archive) add(batch Batch) error {
@@ -266,7 +261,7 @@ func (a *Archive) add(batch Batch) error {
 		}
 	}
 	for _, r := range batch.Records {
-		data, err := json.Marshal(r)
+		data, err := json.Marshal(archiveSpoolRecord{Record: r, ConversationAt: conversationAt})
 		if err != nil {
 			return err
 		}
@@ -296,12 +291,7 @@ func (a *Archive) add(batch Batch) error {
 		for _, gap := range r.MissingAttachments {
 			a.Preview.Gaps = appendGap(a.Preview.Gaps, gap)
 		}
-		if len(a.entries) < MaxArchiveRecords {
-			heap.Push(&a.entries, e)
-		} else if len(a.entries) > 0 && olderEntry(a.entries[0], e) {
-			a.entries[0] = e
-			heap.Fix(&a.entries, 0)
-		}
+		a.keep(e)
 	}
 	for _, gap := range batch.Gaps {
 		a.Preview.Gaps = appendGap(a.Preview.Gaps, gap)
@@ -525,4 +515,137 @@ func DecodeArchive(name string, data []byte) (Batch, error) {
 		return Batch{}, err
 	}
 	return Normalize(Batch{Records: records, Gaps: a.Preview.Gaps})
+}
+
+// The timestamp used for conversation ordering is spool metadata, not part of
+// the stable external record/version identity.
+type archiveSpoolRecord struct {
+	Record
+	ConversationAt time.Time `json:"_conversationAt"`
+}
+
+type ArchiveIdentity struct {
+	ID      string `json:"id"`
+	Version string `json:"version"`
+}
+
+const blockedArchiveGap = "已跳过你设置为不再导入的消息。"
+
+func (a *Archive) keep(e archiveEntry) {
+	if len(a.entries) < MaxArchiveRecords {
+		heap.Push(&a.entries, e)
+	} else if len(a.entries) > 0 && olderEntry(a.entries[0], e) {
+		a.entries[0] = e
+		heap.Fix(&a.entries, 0)
+	}
+}
+func (a *Archive) sortEntries() {
+	sort.Slice(a.entries, func(i, j int) bool {
+		x, y := a.entries[i], a.entries[j]
+		if !x.conversationAt.Equal(y.conversationAt) {
+			return x.conversationAt.After(y.conversationAt)
+		}
+		return olderEntry(y, x)
+	})
+}
+func (a *Archive) noteBlocked() {
+	if a.Preview.Blocked == 0 {
+		return
+	}
+	for _, gap := range a.Preview.Gaps {
+		if gap == blockedArchiveGap {
+			return
+		}
+	}
+	if len(a.Preview.Gaps) < 100 {
+		a.Preview.Gaps = append(a.Preview.Gaps, blockedArchiveGap)
+	} else {
+		a.Preview.Gaps[99] = blockedArchiveGap
+	}
+}
+
+// Select applies batched identity policy checks before the newest-message cap.
+// Blocked identities consume neither the selected count nor LeftOut. Only
+// identity/offset metadata is retained while scanning the private record spool.
+func (a *Archive) Select(ctx context.Context, allowed func([]ArchiveIdentity) ([]bool, error)) error {
+	a.entries = a.entries[:0]
+	a.Preview.Blocked = 0
+	identities := make([]ArchiveIdentity, 0, 500)
+	entries := make([]archiveEntry, 0, 500)
+	flush := func() error {
+		if len(identities) == 0 {
+			return nil
+		}
+		keep, err := allowed(identities)
+		if err != nil {
+			return err
+		}
+		if len(keep) != len(entries) {
+			return archiveError("invalid_metadata")
+		}
+		for i, e := range entries {
+			if keep[i] {
+				a.keep(e)
+			} else {
+				a.Preview.Blocked++
+			}
+		}
+		identities = identities[:0]
+		entries = entries[:0]
+		return nil
+	}
+	d := json.NewDecoder(io.NewSectionReader(a.spool, 0, a.offset))
+	for {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		offset := d.InputOffset()
+		var row archiveSpoolRecord
+		err := d.Decode(&row)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return err
+		}
+		e := archiveEntry{offset: offset, size: int(d.InputOffset() - offset), id: row.ID, conversationAt: row.ConversationAt}
+		if row.ExpressedAt != nil {
+			e.at = *row.ExpressedAt
+		}
+		entries = append(entries, e)
+		identities = append(identities, ArchiveIdentity{ID: row.ID, Version: row.Version})
+		if len(identities) == cap(identities) {
+			if err = flush(); err != nil {
+				return err
+			}
+		}
+	}
+	if err := flush(); err != nil {
+		return err
+	}
+	a.Preview.LeftOut = a.Preview.Messages - a.Preview.Blocked - len(a.entries)
+	a.noteBlocked()
+	a.sortEntries()
+	return nil
+}
+
+// Drop accounts for identities blocked after the initial policy snapshot. The
+// remaining selected sequence continues to use Stored as its durable position.
+func (a *Archive) Drop(start int, allowed []bool) error {
+	if start < 0 || start+len(allowed) > len(a.entries) {
+		return archiveError("invalid_record_count")
+	}
+	write := start
+	for i, keep := range allowed {
+		if keep {
+			a.entries[write] = a.entries[start+i]
+			write++
+		} else {
+			a.Preview.Blocked++
+		}
+	}
+	write += copy(a.entries[write:], a.entries[start+len(allowed):])
+	a.entries = a.entries[:write]
+	a.noteBlocked()
+	return nil
 }

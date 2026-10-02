@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -39,41 +40,8 @@ func (s *Store) PreviewArchive(ctx context.Context, scope memory.Scope, name str
 		return connectors.ArchivePreview{}, err
 	}
 	defer archive.Close()
-	type key struct {
-		ID      string `json:"id"`
-		Version string `json:"version"`
-	}
-	err = pgx.BeginTxFunc(ctx, s.pool, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
-		keys := make([]key, 0, 500)
-		flush := func() error {
-			if len(keys) == 0 {
-				return nil
-			}
-			var n int
-			err := tx.QueryRow(ctx, `SELECT count(*) FROM jsonb_to_recordset($2::jsonb) AS k(id text,version text)
-   JOIN sources s ON s.owner_id=$1 AND s.connector='archive-records' AND s.external_id=k.id
-   JOIN source_versions v ON v.owner_id=s.owner_id AND v.source_id=s.id AND v.external_version=k.version
-   JOIN memory_records r ON r.owner_id=s.owner_id AND r.id=s.id AND r.state='active'
-   JOIN record_versions rv ON (rv.owner_id,rv.record_id,rv.version)=(v.owner_id,v.source_id,v.version) AND rv.state='active'`, string(scope.OwnerID), asJSON(keys)).Scan(&n)
-			if err != nil {
-				return err
-			}
-			archive.Preview.AlreadyImported += n
-			keys = keys[:0]
-			return nil
-		}
-		err := archive.Walk(ctx, func(r connectors.Record) error {
-			keys = append(keys, key{ID: r.ID, Version: r.Version})
-			if len(keys) == cap(keys) {
-				return flush()
-			}
-			return nil
-		})
-		if err == nil {
-			err = flush()
-		}
-		return err
-	})
+	err = s.selectArchive(ctx, scope, "archive-records", archive)
+
 	return archive.Preview, err
 }
 
@@ -96,6 +64,13 @@ func (s *Store) importArchiveReader(ctx context.Context, scope memory.Scope, nam
 		return out, err
 	}
 	defer archive.Close()
+	recordNamespace := "archive-records"
+	if strings.HasPrefix(namespace, "connection-archive:") {
+		recordNamespace = "connection:" + strings.TrimPrefix(namespace, "connection-archive:")
+	}
+	if err = s.selectArchive(ctx, scope, recordNamespace, archive); err != nil {
+		return out, err
+	}
 	// Avoid even a redundant blob upload for an identical archive.
 	var ref memory.Ref
 	ref.Kind = memory.SourceKind
@@ -113,7 +88,7 @@ func (s *Store) importArchiveReader(ctx context.Context, scope memory.Scope, nam
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return out, err
 	}
-	key, err := s.blobs.Put(ctx, scope, archive.Original())
+	key, err := s.putArchiveBlob(ctx, scope, archive.Original())
 	if err != nil {
 		return out, err
 	}
@@ -200,8 +175,6 @@ func importErrorMessage(code string) string {
 	switch code {
 	case "import_storage_failed":
 		return "保存中断了，已存好的记录仍在，请点继续重试。"
-	case "reimport_blocked":
-		return "归档里包含已删除的记录，请移除这些记录后重新导入。"
 	case "import_source_missing":
 		return "原始文件已不可用，请重新上传导出文件。"
 	default:
@@ -289,6 +262,18 @@ func (s *Store) processArchiveImport(ctx context.Context, j worker.Job, title st
 	}
 	defer archive.Close()
 	scope := memory.Scope{OwnerID: j.OwnerID, PrincipalID: "worker", IsOwner: true}
+	var connector string
+	if err = s.pool.QueryRow(ctx, "SELECT connector FROM sources WHERE owner_id=$1 AND id=$2", string(j.OwnerID), string(j.Record.ID)).Scan(&connector); err != nil {
+		return err
+	}
+	namespace := "archive-records"
+	connectionID := strings.TrimPrefix(connector, "connection-archive:")
+	if strings.HasPrefix(connector, "connection-archive:") && memory.ID(connectionID).Valid() {
+		namespace = "connection:" + connectionID
+	}
+	if err = s.selectArchive(ctx, scope, namespace, archive); err != nil {
+		return err
+	}
 	for {
 		if err = ctx.Err(); err != nil {
 			return err
@@ -330,41 +315,52 @@ func (s *Store) processArchiveImport(ctx context.Context, j worker.Job, title st
 				_, err = tx.Exec(ctx, `UPDATE memory_jobs SET state='blocked',error_code='import_paused',lease_token=NULL,lease_until=NULL,updated_at=now() WHERE id=$1 AND lease_token=$2`, string(j.ID), string(j.LeaseToken))
 				return err
 			}
-			records, err := archive.Records(stored, max(1, ImportChunkSize))
+			// Blocking can change after upload or while paused. Rebuilds of
+			// the eligible sequence determine the current work count; consumed
+			// messages remain the same prefix unless their archive was deleted.
+			total = archive.Len()
+			records, err := archive.Records(stored, min(max(1, ImportChunkSize), max(0, total-stored)))
 			if err != nil {
 				return err
-			}
-			var connector string
-			if err = tx.QueryRow(ctx, "SELECT connector FROM sources WHERE owner_id=$1 AND id=$2", string(j.OwnerID), string(j.Record.ID)).Scan(&connector); err != nil {
-				return err
-			}
-			namespace := "archive-records"
-			connectionID := strings.TrimPrefix(connector, "connection-archive:")
-			if strings.HasPrefix(connector, "connection-archive:") && memory.ID(connectionID).Valid() {
-				namespace = "connection:" + connectionID
 			}
 			result, err := s.importBatchTx(ctx, tx, scope, namespace, connectors.Batch{Records: records, Gaps: archive.Preview.Gaps}, &j.Record)
 			if err != nil {
 				return err
 			}
 			if result.Blocked > 0 {
-				return memory.ErrBlocked
+				identities := make([]connectors.ArchiveIdentity, len(records))
+				for i, r := range records {
+					identities[i] = connectors.ArchiveIdentity{ID: r.ID, Version: r.Version}
+				}
+				allowed, _, err := classifyArchiveTx(ctx, tx, scope, namespace, identities)
+				if err != nil {
+					return err
+				}
+				if err = archive.Drop(stored, allowed); err != nil {
+					return err
+				}
+				total -= result.Blocked
 			}
 			if namespace != "archive-records" {
 				if _, err = tx.Exec(ctx, "UPDATE connector_configs SET imported=imported+$3,gaps=$4 WHERE owner_id=$1 AND id=$2", string(j.OwnerID), connectionID, result.Imported, asJSON(result.Gaps)); err != nil {
 					return err
 				}
 			}
-			stored += len(records)
+			stored += len(records) - result.Blocked
 			state = "importing"
 			if stored >= total {
 				state = "done"
 				stopped = true
 			}
-			if _, err = tx.Exec(ctx, "UPDATE import_batches SET stored=$3,state=$4,error_code='',updated_at=now() WHERE owner_id=$1 AND id=$2", string(j.OwnerID), id, stored, state); err != nil {
+			if _, err = tx.Exec(ctx, "UPDATE import_batches SET stored=$3,state=$4,total=$5,error_code='',updated_at=now() WHERE owner_id=$1 AND id=$2", string(j.OwnerID), id, stored, state, total); err != nil {
 				return err
 			}
 			if stopped {
+				if archive.Preview.Blocked > 0 {
+					if err = redactArchivesTx(ctx, tx, scope, []string{string(j.Record.ID)}); err != nil {
+						return err
+					}
+				}
 				return acknowledge(ctx, tx, j)
 			}
 			// Finish before the worker's four-minute deadline, returning the durable
@@ -404,9 +400,6 @@ func (s *Store) recordImportFailure(ctx context.Context, j worker.Job, err error
 	if errors.Is(err, memory.ErrNotFound) {
 		code = "import_source_missing"
 	}
-	if errors.Is(err, memory.ErrBlocked) {
-		code = "reimport_blocked"
-	}
 	slog.WarnContext(ctx, "archive import failed", "stage", "import_records", "error_type", code, "job_id", j.ID)
 	failureCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 	defer cancel()
@@ -420,4 +413,70 @@ func (s *Store) recordImportFailure(ctx context.Context, j worker.Job, err error
 		return err
 	}
 	return &worker.JobError{Code: code, Retry: false}
+}
+
+// Implementations may offer the archive-specific limit without changing the
+// ordinary attachment port or widening other attachment uploads.
+func (s *Store) putArchiveBlob(ctx context.Context, scope memory.Scope, r io.Reader) (string, error) {
+	if store, ok := s.blobs.(interface {
+		PutArchive(context.Context, memory.Scope, io.Reader) (string, error)
+	}); ok {
+		return store.PutArchive(ctx, scope, r)
+	}
+	return s.blobs.Put(ctx, scope, r)
+}
+
+func (s *Store) selectArchive(ctx context.Context, scope memory.Scope, namespace string, archive *connectors.Archive) error {
+	archive.Preview.AlreadyImported = 0
+	return pgx.BeginTxFunc(ctx, s.pool, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
+		return archive.Select(ctx, func(identities []connectors.ArchiveIdentity) ([]bool, error) {
+			allowed, imported, err := classifyArchiveTx(ctx, tx, scope, namespace, identities)
+			if err == nil {
+				archive.Preview.AlreadyImported += imported
+			}
+			return allowed, err
+		})
+	})
+}
+
+// The identity policy mirrors ingestTx: owner/connector/external id controls
+// deletion blocking, while the external version controls duplicate detection.
+func classifyArchiveTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, namespace string, identities []connectors.ArchiveIdentity) ([]bool, int, error) {
+	type key struct {
+		Index   int    `json:"idx"`
+		ID      string `json:"id"`
+		Version string `json:"version"`
+		Hash    string `json:"hash"`
+	}
+	keys := make([]key, len(identities))
+	allowed := make([]bool, len(identities))
+	for i, r := range identities {
+		keys[i] = key{Index: i, ID: r.ID, Version: r.Version, Hash: hex.EncodeToString(sourceKey(namespace, r.ID))}
+	}
+	rows, err := tx.Query(ctx, `SELECT k.idx,
+  EXISTS(SELECT 1 FROM reimport_blocks b WHERE b.owner_id=$1 AND b.source_key_hash=decode(k.hash,'hex'))
+  OR EXISTS(SELECT 1 FROM sources s JOIN memory_records r ON r.owner_id=s.owner_id AND r.id=s.id
+   WHERE s.owner_id=$1 AND s.connector=$2 AND s.external_id=k.id AND r.state!='active') AS blocked,
+  EXISTS(SELECT 1 FROM sources s JOIN source_versions v ON v.owner_id=s.owner_id AND v.source_id=s.id
+   JOIN memory_records r ON r.owner_id=s.owner_id AND r.id=s.id AND r.state='active'
+   JOIN record_versions rv ON (rv.owner_id,rv.record_id,rv.version)=(v.owner_id,v.source_id,v.version) AND rv.state='active'
+   WHERE s.owner_id=$1 AND s.connector=$2 AND s.external_id=k.id AND v.external_version=k.version) AS imported
+  FROM jsonb_to_recordset($3::jsonb) AS k(idx integer,id text,version text,hash text) ORDER BY k.idx`, string(scope.OwnerID), namespace, asJSON(keys))
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+	imported := 0
+	for rows.Next() {
+		var index int
+		var blocked, duplicate bool
+		if err = rows.Scan(&index, &blocked, &duplicate); err != nil {
+			return nil, 0, err
+		}
+		allowed[index] = !blocked
+		if !blocked && duplicate {
+			imported++
+		}
+	}
+	return allowed, imported, rows.Err()
 }

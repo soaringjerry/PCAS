@@ -287,6 +287,13 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 				return memory.ErrInvalid
 			}
 		}
+		if a.Enabled && !a.MemoryInitialized {
+			if err := initializeAgentMemoriesTx(ctx, tx, scope.OwnerID, a.ID); err != nil {
+				return err
+			}
+			a.MemoryInitialized = true
+		}
+
 		_, err = tx.Exec(ctx, "UPDATE workspace_agents SET document=$3 WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), c.ID, asJSON(a))
 		return err
 	case "toggleContextMemory":

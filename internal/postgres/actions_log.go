@@ -281,7 +281,7 @@ func (s *Store) deleteUndoneTurnMemoriesTx(ctx context.Context, tx pgx.Tx, scope
 	// The existing deletion entry point applies artifact propagation and snapshot
 	// expiration. Keep sources and allow reimport; its request limit is 100.
 	for start := 0; start < len(targets); start += 100 {
-		if err := s.deleteTx(ctx, tx, scope, memory.DeleteRequest{Targets: targets[start:min(start+100, len(targets))]}); err != nil {
+		if err := s.deleteTx(context.WithValue(ctx, retainUndoneAnswersKey{}, true), tx, scope, memory.DeleteRequest{Targets: targets[start:min(start+100, len(targets))]}); err != nil {
 			return err
 		}
 	}

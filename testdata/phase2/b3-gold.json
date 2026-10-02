@@ -1528,6 +1528,70 @@
       },
       "natures": [],
       "recall": false
+    },
+    {
+      "group": "P1",
+      "name": "chengdu_recall",
+      "text": "我去年说去成都要干什么来着",
+      "zone": "Australia/Sydney",
+      "now": "2026-10-02T12:00:00+10:00",
+      "time": {
+        "from": "2025-01-01T00:00:00+11:00",
+        "to": "2026-01-01T00:00:00+11:00",
+        "precision": "year",
+        "axis": "said",
+        "phrase": "去年"
+      },
+      "natures": [
+        "intention",
+        "plan"
+      ],
+      "recall": true
+    },
+    {
+      "group": "P2",
+      "name": "最近",
+      "text": "最近",
+      "zone": "Australia/Sydney",
+      "now": "2026-10-02T12:00:00+10:00",
+      "time": {
+        "from": "2026-09-03T00:00:00+10:00",
+        "to": "2026-10-03T00:00:00+10:00",
+        "precision": "range",
+        "axis": "either",
+        "phrase": "最近"
+      },
+      "natures": [],
+      "recall": false
+    },
+    {
+      "group": "P2",
+      "name": "这几天",
+      "text": "这几天",
+      "zone": "Australia/Sydney",
+      "now": "2026-10-02T12:00:00+10:00",
+      "time": {
+        "from": "2026-09-26T00:00:00+10:00",
+        "to": "2026-10-03T00:00:00+10:00",
+        "precision": "range",
+        "axis": "either",
+        "phrase": "这几天"
+      },
+      "natures": [],
+      "recall": false
+    },
+    {
+      "group": "P6",
+      "name": "要干",
+      "text": "要干事项",
+      "zone": "Australia/Sydney",
+      "now": "2026-10-02T12:00:00+10:00",
+      "time": null,
+      "natures": [
+        "intention",
+        "plan"
+      ],
+      "recall": false
     }
   ],
   "fixtures": {
@@ -1610,5 +1674,9 @@
         "statusLabel": "后来改过"
       }
     ]
+  },
+  "coordinatorRuling": {
+    "commit": "5865411",
+    "S6": "无新字段逐字相同；有新字段只允许记忆行尾追加 R12；我不构成实体条件。"
   }
 }

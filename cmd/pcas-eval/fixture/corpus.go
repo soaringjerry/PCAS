@@ -56,6 +56,7 @@ type Fact struct {
 	Any []string `json:"any"`
 }
 type Query struct {
+	Type        string     `json:"type,omitempty"`
 	ID          string     `json:"id"`
 	Text        string     `json:"text"`
 	Evidence    []Evidence `json:"evidence"`
@@ -71,6 +72,7 @@ type Scenario struct {
 	Queries      []Query    `json:"queries"`
 }
 type Corpus struct {
+	Tier          string     `json:"tier,omitempty"`
 	SchemaVersion int        `json:"schema_version"`
 	Persona       string     `json:"persona"`
 	Timezone      string     `json:"timezone"`
@@ -182,7 +184,7 @@ func (c Corpus) Validate() error {
 	docs := c.ByID()
 	qids := map[string]bool{}
 	for _, s := range c.Scenarios {
-		if len(s.Documents) < 6 || len(s.Documents) > 12 || len(s.Queries) < 2 || len(s.Queries) > 3 {
+		if len(s.Documents) < 6 || len(s.Documents) > 12 || (c.Tier != "hard" && (len(s.Queries) < 2 || len(s.Queries) > 3)) {
 			return fmt.Errorf("invalid scene size %s", s.ID)
 		}
 		for _, tag := range s.Interference {
@@ -217,6 +219,24 @@ func (c Corpus) Validate() error {
 				}
 			}
 		}
+	}
+	if c.Tier == "hard" {
+		counts := map[string]int{}
+		for _, q := range c.Queries() {
+			counts[q.Type]++
+			if len(q.Distractors) < 40 {
+				return fmt.Errorf("hard query missing competitors: %s", q.ID)
+			}
+		}
+		for _, typ := range QueryTypes {
+			if counts[typ] < 8 {
+				return fmt.Errorf("insufficient hard query type %s", typ)
+			}
+		}
+		if len(c.Documents()) < 2000 {
+			return fmt.Errorf("hard corpus too small")
+		}
+		return nil
 	}
 	for _, tag := range []string{"same_name", "others_plan", "cancelled", "completed", "wrong_year", "late_import", "similar_place", "repeated_details"} {
 		if coverage[tag] < 2 {

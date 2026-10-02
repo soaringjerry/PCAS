@@ -1,0 +1,246 @@
+go vet ./cmd/... ./internal/...
+go test -race ./cmd/... ./internal/...
+?   	github.com/soaringjerry/PCAS/cmd/pcas	[no test files]
+ok  	github.com/soaringjerry/PCAS/cmd/pcas-eval	1.110s
+ok  	github.com/soaringjerry/PCAS/cmd/pcas-eval/fixture	3.736s
+ok  	github.com/soaringjerry/PCAS/internal/ai	2.136s
+ok  	github.com/soaringjerry/PCAS/internal/ai/siwc	10.117s
+ok  	github.com/soaringjerry/PCAS/internal/blob	1.060s
+ok  	github.com/soaringjerry/PCAS/internal/config	1.118s
+ok  	github.com/soaringjerry/PCAS/internal/connectors	1.175s
+ok  	github.com/soaringjerry/PCAS/internal/httpapi	1.652s
+ok  	github.com/soaringjerry/PCAS/internal/memory	1.106s
+ok  	github.com/soaringjerry/PCAS/internal/notify	10.330s
+2026/10/02 18:52:28 INFO secretary output parsed stage=parse error_type=none
+2026/10/02 18:52:29 INFO secretary output parsed stage=parse error_type=none
+2026/10/02 18:52:30 INFO secretary output parsed stage=parse error_type=none
+2026/10/02 18:52:30 INFO secretary output parsed stage=parse error_type=none
+2026/10/02 18:52:31 INFO secretary output parsed stage=parse error_type=none
+2026/10/02 18:52:32 INFO secretary output parsed stage=parse error_type=none
+2026/10/02 18:52:32 WARN secretary action skipped stage=parse error_type=invalid_field_type
+2026/10/02 18:52:33 INFO secretary output parsed stage=parse error_type=none
+2026/10/02 18:52:35 INFO secretary output parsed stage=parse error_type=none
+2026/10/02 18:52:36 INFO secretary output parsed stage=parse error_type=none
+2026/10/02 18:52:37 INFO secretary output parsed stage=parse error_type=none
+2026/10/02 18:52:39 INFO secretary output parsed stage=parse error_type=none
+2026/10/02 18:52:40 INFO secretary output parsed stage=parse error_type=none
+2026/10/02 18:52:41 INFO secretary output parsed stage=parse error_type=none
+2026/10/02 18:52:43 INFO secretary output parsed stage=parse error_type=none
+2026/10/02 18:52:44 INFO secretary output parsed stage=parse error_type=none
+2026/10/02 18:52:44 INFO secretary output parsed stage=parse error_type=none
+2026/10/02 18:52:45 INFO secretary output parsed stage=parse error_type=none
+2026/10/02 18:52:47 INFO secretary output parsed stage=parse error_type=none
+2026/10/02 18:52:49 INFO secretary output parsed stage=parse error_type=none
+2026/10/02 18:52:49 INFO secretary output parsed stage=parse error_type=none
+--- FAIL: TestSecretaryRejectsStaleRowsAndKeepsOriginalOnCancellation (2.18s)
+    --- FAIL: TestSecretaryRejectsStaleRowsAndKeepsOriginalOnCancellation/timeout (0.58s)
+        desk_turn_test.go:521: context deadline exceeded { {false    [] [] <nil>  } {0 [] 0 0 0 {false false false  0  } [] [] [] [] [] [] [] [] [] [] [] [] map[]}}
+panic: test timed out after 10m0s
+	running tests:
+		TestPhase2EvalRetrieval (1m0s)
+		TestPhase2EvalRetrieval/hard (42s)
+		TestPhase2EvalRetrieval/hard/gold-structured (42s)
+
+goroutine 4850 [running]:
+testing.(*M).startAlarm.func1()
+	/root/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.8.linux-amd64/src/testing/testing.go:2802 +0x605
+created by time.goFunc
+	/root/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.8.linux-amd64/src/time/sleep.go:215 +0x45
+
+goroutine 1 [chan receive]:
+testing.(*T).Run(0xc0002ba008, {0x11d2d74, 0x17}, 0x122dab0)
+	/root/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.8.linux-amd64/src/testing/testing.go:2109 +0xb3e
+testing.runTests.func1(0xc0002ba008)
+	/root/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.8.linux-amd64/src/testing/testing.go:2585 +0x85
+testing.tRunner(0xc0002ba008, 0xc00020bad0)
+	/root/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.8.linux-amd64/src/testing/testing.go:2036 +0x21d
+testing.runTests({0x11d8c2b, 0x1c}, {0x11ec8da, 0x2e}, 0xc0002b6000, {0x196e580, 0xff, 0xff}, {0xc2a81dcf4d5b6a16, 0x8bb46df883, ...})
+	/root/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.8.linux-amd64/src/testing/testing.go:2583 +0x9ea
+testing.(*M).Run(0xc00028e1e0)
+	/root/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.8.linux-amd64/src/testing/testing.go:2443 +0xf4c
+main.main()
+	_testmain.go:554 +0x165
+
+goroutine 4806 [IO wait]:
+internal/poll.runtime_pollWait(0x76081d3a6600, 0x72)
+	/root/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.8.linux-amd64/src/runtime/netpoll.go:351 +0x85
+internal/poll.(*pollDesc).wait(0xc0006c61a0, 0x72, 0x0)
+	/root/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.8.linux-amd64/src/internal/poll/fd_poll_runtime.go:84 +0xb1
+internal/poll.(*pollDesc).waitRead(...)
+	/root/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.8.linux-amd64/src/internal/poll/fd_poll_runtime.go:89
+internal/poll.(*FD).Read(0xc0006c6180, {0xc000ade000, 0x1000, 0x1000})
+	/root/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.8.linux-amd64/src/internal/poll/fd_unix.go:165 +0x499
+net.(*netFD).Read(0xc0006c6180, {0xc000ade000, 0x1000, 0x1000})
+	/root/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.8.linux-amd64/src/net/fd_posix.go:68 +0x4b
+net.(*conn).Read(0xc000102e28, {0xc000ade000, 0x1000, 0x1000})
+	/root/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.8.linux-amd64/src/net/net.go:196 +0xad
+net/http.(*connReader).Read(0xc0005df1c0, {0xc000ade000, 0x1000, 0x1000})
+	/root/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.8.linux-amd64/src/net/http/server.go:812 +0x288
+bufio.(*Reader).fill(0xc0004580c0)
+	/root/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.8.linux-amd64/src/bufio/bufio.go:113 +0x2a4
+bufio.(*Reader).Peek(0xc0004580c0, 0x4)
+	/root/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.8.linux-amd64/src/bufio/bufio.go:152 +0xb0
+net/http.(*conn).serve(0xc000adc000, {0x1242f88, 0xc0004839b0})
+	/root/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.8.linux-amd64/src/net/http/server.go:2103 +0x10bb
+created by net/http.(*Server).Serve in goroutine 4804
+	/root/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.8.linux-amd64/src/net/http/server.go:3464 +0x88a
+
+goroutine 4681 [chan receive]:
+testing.(*T).Run(0xc0002106c8, {0x11c2578, 0x4}, 0xc000225420)
+	/root/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.8.linux-amd64/src/testing/testing.go:2109 +0xb3e
+github.com/soaringjerry/PCAS/internal/postgres.TestPhase2EvalRetrieval(0xc0002106c8)
+	/root/PCAS-wt/b4-V2/internal/postgres/phase2_eval_test.go:34 +0x130
+testing.tRunner(0xc0002106c8, 0x122dab0)
+	/root/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.8.linux-amd64/src/testing/testing.go:2036 +0x21d
+created by testing.(*T).Run in goroutine 1
+	/root/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.8.linux-amd64/src/testing/testing.go:2101 +0xb13
+
+goroutine 4836 [IO wait]:
+internal/poll.runtime_pollWait(0x76081d3a6a00, 0x72)
+	/root/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.8.linux-amd64/src/runtime/netpoll.go:351 +0x85
+internal/poll.(*pollDesc).wait(0xc0004746a0, 0x72, 0x0)
+	/root/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.8.linux-amd64/src/internal/poll/fd_poll_runtime.go:84 +0xb1
+internal/poll.(*pollDesc).waitRead(...)
+	/root/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.8.linux-amd64/src/internal/poll/fd_poll_runtime.go:89
+internal/poll.(*FD).Read(0xc000474680, {0xc00089f000, 0x1000, 0x1000})
+	/root/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.8.linux-amd64/src/internal/poll/fd_unix.go:165 +0x499
+net.(*netFD).Read(0xc000474680, {0xc00089f000, 0x1000, 0x1000})
+	/root/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.8.linux-amd64/src/net/fd_posix.go:68 +0x4b
+net.(*conn).Read(0xc000295358, {0xc00089f000, 0x1000, 0x1000})
+	/root/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.8.linux-amd64/src/net/net.go:196 +0xad
+net/http.(*persistConn).Read(0xc000341540, {0xc00089f000, 0x1000, 0x1000})
+	/root/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.8.linux-amd64/src/net/http/transport.go:2174 +0x233
+bufio.(*Reader).fill(0xc00019be00)
+	/root/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.8.linux-amd64/src/bufio/bufio.go:113 +0x2a4
+bufio.(*Reader).Peek(0xc00019be00, 0x1)
+	/root/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.8.linux-amd64/src/bufio/bufio.go:152 +0xb0
+net/http.(*persistConn).readLoop(0xc000341540)
+	/root/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.8.linux-amd64/src/net/http/transport.go:2330 +0x31b
+created by net/http.(*Transport).dialConn in goroutine 4835
+	/root/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.8.linux-amd64/src/net/http/transport.go:1994 +0x2fb1
+
+goroutine 4837 [select]:
+net/http.(*persistConn).writeLoop(0xc000341540)
+	/root/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.8.linux-amd64/src/net/http/transport.go:2652 +0x1b5
+created by net/http.(*Transport).dialConn in goroutine 4835
+	/root/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.8.linux-amd64/src/net/http/transport.go:1995 +0x303d
+
+goroutine 4796 [select]:
+github.com/jackc/pgx/v5/pgxpool.(*Pool).backgroundHealthCheck(0xc0002255e0)
+	/root/go/pkg/mod/github.com/jackc/pgx/v5@v5.11.0/pgxpool/pool.go:510 +0x1cc
+github.com/jackc/pgx/v5/pgxpool.NewWithConfig.func5()
+	/root/go/pkg/mod/github.com/jackc/pgx/v5@v5.11.0/pgxpool/pool.go:337 +0x8f
+created by github.com/jackc/pgx/v5/pgxpool.NewWithConfig in goroutine 4795
+	/root/go/pkg/mod/github.com/jackc/pgx/v5@v5.11.0/pgxpool/pool.go:334 +0xc1d
+
+goroutine 4804 [IO wait]:
+internal/poll.runtime_pollWait(0x76081d3a7200, 0x72)
+	/root/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.8.linux-amd64/src/runtime/netpoll.go:351 +0x85
+internal/poll.(*pollDesc).wait(0xc0006c6020, 0x72, 0x0)
+	/root/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.8.linux-amd64/src/internal/poll/fd_poll_runtime.go:84 +0xb1
+internal/poll.(*pollDesc).waitRead(...)
+	/root/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.8.linux-amd64/src/internal/poll/fd_poll_runtime.go:89
+internal/poll.(*FD).Accept(0xc0006c6000)
+	/root/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.8.linux-amd64/src/internal/poll/fd_unix.go:613 +0x4ea
+net.(*netFD).accept(0xc0006c6000)
+	/root/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.8.linux-amd64/src/net/fd_unix.go:150 +0x45
+net.(*TCPListener).accept(0xc0002f6000)
+	/root/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.8.linux-amd64/src/net/tcpsock_posix.go:159 +0x4e
+net.(*TCPListener).Accept(0xc0002f6000)
+	/root/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.8.linux-amd64/src/net/tcpsock.go:387 +0x65
+net/http.(*Server).Serve(0xc0006d8000, {0x12416f0, 0xc0002f6000})
+	/root/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.8.linux-amd64/src/net/http/server.go:3434 +0x610
+net/http/httptest.(*Server).goServe.func1()
+	/root/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.8.linux-amd64/src/net/http/httptest/server.go:341 +0xb3
+created by net/http/httptest.(*Server).goServe in goroutine 4795
+	/root/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.8.linux-amd64/src/net/http/httptest/server.go:339 +0xa5
+
+goroutine 4799 [select]:
+github.com/jackc/pgx/v5/pgxpool.(*Pool).backgroundHealthCheck(0xc0002256c0)
+	/root/go/pkg/mod/github.com/jackc/pgx/v5@v5.11.0/pgxpool/pool.go:510 +0x1cc
+github.com/jackc/pgx/v5/pgxpool.NewWithConfig.func5()
+	/root/go/pkg/mod/github.com/jackc/pgx/v5@v5.11.0/pgxpool/pool.go:337 +0x8f
+created by github.com/jackc/pgx/v5/pgxpool.NewWithConfig in goroutine 4795
+	/root/go/pkg/mod/github.com/jackc/pgx/v5@v5.11.0/pgxpool/pool.go:334 +0xc1d
+
+goroutine 4795 [IO wait]:
+internal/poll.runtime_pollWait(0x76081cf2ac00, 0x72)
+	/root/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.8.linux-amd64/src/runtime/netpoll.go:351 +0x85
+internal/poll.(*pollDesc).wait(0xc0004741a0, 0x72, 0x0)
+	/root/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.8.linux-amd64/src/internal/poll/fd_poll_runtime.go:84 +0xb1
+internal/poll.(*pollDesc).waitRead(...)
+	/root/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.8.linux-amd64/src/internal/poll/fd_poll_runtime.go:89
+internal/poll.(*FD).Read(0xc000474180, {0xc0000e6000, 0x2000, 0x2000})
+	/root/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.8.linux-amd64/src/internal/poll/fd_unix.go:165 +0x499
+net.(*netFD).Read(0xc000474180, {0xc0000e6000, 0x2000, 0x2000})
+	/root/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.8.linux-amd64/src/net/fd_posix.go:68 +0x4b
+net.(*conn).Read(0xc0002940f8, {0xc0000e6000, 0x2000, 0x2000})
+	/root/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.8.linux-amd64/src/net/net.go:196 +0xad
+github.com/jackc/pgx/v5/pgconn/internal/bgreader.(*BGReader).Read(0xc00030c3c0, {0xc0000e6000, 0x2000, 0x2000})
+	/root/go/pkg/mod/github.com/jackc/pgx/v5@v5.11.0/pgconn/internal/bgreader/bgreader.go:100 +0x1db
+io.ReadAtLeast({0x123acc0, 0xc00030c3c0}, {0xc0000e6000, 0x2000, 0x2000}, 0x5)
+	/root/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.8.linux-amd64/src/io/io.go:335 +0xd1
+github.com/jackc/pgx/v5/pgproto3.(*chunkReader).Next(0xc000483200, 0x5)
+	/root/go/pkg/mod/github.com/jackc/pgx/v5@v5.11.0/pgproto3/chunkreader.go:80 +0x82f
+github.com/jackc/pgx/v5/pgproto3.(*Frontend).Receive(0xc0004d6488)
+	/root/go/pkg/mod/github.com/jackc/pgx/v5@v5.11.0/pgproto3/frontend.go:313 +0x85
+github.com/jackc/pgx/v5/pgconn.(*PgConn).peekMessage(0xc0002a4b08)
+	/root/go/pkg/mod/github.com/jackc/pgx/v5@v5.11.0/pgconn/pgconn.go:643 +0x1f8
+github.com/jackc/pgx/v5/pgconn.(*PgConn).receiveMessage(0xc0002a4b08)
+	/root/go/pkg/mod/github.com/jackc/pgx/v5@v5.11.0/pgconn/pgconn.go:667 +0xc6
+github.com/jackc/pgx/v5/pgconn.(*ResultReader).receiveMessage(0xc0002a4bc0)
+	/root/go/pkg/mod/github.com/jackc/pgx/v5@v5.11.0/pgconn/pgconn.go:1921 +0x95
+github.com/jackc/pgx/v5/pgconn.(*ResultReader).readUntilRowDescription(0xc0002a4bc0, 0xc0005fe2d0, {0xc0000d0f40, 0x2, 0x10})
+	/root/go/pkg/mod/github.com/jackc/pgx/v5@v5.11.0/pgconn/pgconn.go:1888 +0x85
+github.com/jackc/pgx/v5/pgconn.(*PgConn).execExtendedSuffix(0xc0002a4b08, 0xc0002a4bc0, 0xc0005fe2d0, {0xc0000d0f40, 0x2, 0x10})
+	/root/go/pkg/mod/github.com/jackc/pgx/v5@v5.11.0/pgconn/pgconn.go:1388 +0x365
+github.com/jackc/pgx/v5/pgconn.(*PgConn).ExecStatement(0xc0002a4b08, {0x1242ff8, 0xc000748000}, 0xc0005fe2d0, {0xc0006ee180, 0x4, 0x10}, {0xc0000d14a0, 0x4, 0x10}, ...)
+	/root/go/pkg/mod/github.com/jackc/pgx/v5@v5.11.0/pgconn/pgconn.go:1328 +0x267
+github.com/jackc/pgx/v5.(*Conn).Query(0xc0002a0140, {0x1242ff8, 0xc000748000}, {0xc0001afc00, 0x3c6}, {0xc00030ca40, 0x4, 0x4})
+	/root/go/pkg/mod/github.com/jackc/pgx/v5@v5.11.0/conn.go:857 +0x2116
+github.com/jackc/pgx/v5.(*dbTx).Query(0xc00055eba0, {0x1242ff8, 0xc000748000}, {0xc0001afc00, 0x3c6}, {0xc00030ca40, 0x4, 0x4})
+	/root/go/pkg/mod/github.com/jackc/pgx/v5@v5.11.0/tx.go:262 +0x1ce
+github.com/jackc/pgx/v5/pgxpool.(*Tx).Query(0xc0002b77b8, {0x1242ff8, 0xc000748000}, {0xc0001afc00, 0x3c6}, {0xc00030ca40, 0x4, 0x4})
+	/root/go/pkg/mod/github.com/jackc/pgx/v5@v5.11.0/pgxpool/tx.go:74 +0xaf
+github.com/soaringjerry/PCAS/internal/postgres.teamSourceExcerptsTx({0x1242ff8, 0xc000748000}, {0x124b930, 0xc0002b77b8}, {0x0, {0xc0000402a0, 0x24}, {0x11c2b6b, 0x5}, 0x1}, ...)
+	/root/PCAS-wt/b4-V2/internal/postgres/retrieval.go:596 +0x638
+github.com/soaringjerry/PCAS/internal/postgres.(*Store).secretaryPrompt(0xc0004834d0, {0x1242ff8, 0xc000748000}, {0x124b930, 0xc0002b77b8}, {0x0, {0xc0000402a0, 0x24}, {0x11c2b6b, 0x5}, ...}, ...)
+	/root/PCAS-wt/b4-V2/internal/postgres/desk_turn.go:292 +0x2565
+github.com/soaringjerry/PCAS/internal/postgres.(*Store).DeskTurn.func1({0x124b930, 0xc0002b77b8}, 0x0)
+	/root/PCAS-wt/b4-V2/internal/postgres/desk_turn.go:430 +0xf05
+github.com/soaringjerry/PCAS/internal/postgres.(*Store).withOrderedSecretaryTurn.func2({0x124b930, 0xc0002b77b8})
+	/root/PCAS-wt/b4-V2/internal/postgres/desk_turn_order.go:219 +0xa0b
+github.com/jackc/pgx/v5.beginFuncExec({0x1242ff8, 0xc000748000}, {0x124b930, 0xc0002b77b8}, 0xc000be0e80)
+	/root/go/pkg/mod/github.com/jackc/pgx/v5@v5.11.0/tx.go:446 +0x122
+github.com/jackc/pgx/v5.BeginFunc({0x1242ff8, 0xc000748000}, {0x1239660, 0xc0002256c0}, 0xc000be0e80)
+	/root/go/pkg/mod/github.com/jackc/pgx/v5@v5.11.0/tx.go:415 +0x90
+github.com/soaringjerry/PCAS/internal/postgres.(*Store).withOrderedSecretaryTurn(0xc0004834d0, {0x1242ff8, 0xc000748000}, {0x1242db0, 0x19945c0}, {0xc0000402a0, 0x24}, {0xc000e66030, 0x24}, {{0xc0009549c0, ...}, ...}, ...)
+	/root/PCAS-wt/b4-V2/internal/postgres/desk_turn_order.go:187 +0x5a5
+github.com/soaringjerry/PCAS/internal/postgres.(*Store).DeskTurn(_, {_, _}, {_, {_, _}, {_, _}, _}, {{0xc000e66030, ...}, ...})
+	/root/PCAS-wt/b4-V2/internal/postgres/desk_turn.go:384 +0xa8d
+github.com/soaringjerry/PCAS/internal/postgres.evalRetrieval(0xc0002ba6c8, {{0x11c2578, 0x4}, 0x1, {0x11d4f96, 0x18}, {0x11c8fc0, 0xd}, {0xc0000d2388, 0x5, ...}, ...}, ...)
+	/root/PCAS-wt/b4-V2/internal/postgres/phase2_eval_test.go:68 +0x1705
+github.com/soaringjerry/PCAS/internal/postgres.TestPhase2EvalRetrieval.func1.1(0xc0002ba6c8)
+	/root/PCAS-wt/b4-V2/internal/postgres/phase2_eval_test.go:46 +0x245
+testing.tRunner(0xc0002ba6c8, 0xc000225500)
+	/root/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.8.linux-amd64/src/testing/testing.go:2036 +0x21d
+created by testing.(*T).Run in goroutine 4794
+	/root/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.8.linux-amd64/src/testing/testing.go:2101 +0xb13
+
+goroutine 4794 [chan receive]:
+testing.(*T).Run(0xc0002ba488, {0x11caef9, 0xf}, 0xc000225500)
+	/root/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.8.linux-amd64/src/testing/testing.go:2109 +0xb3e
+github.com/soaringjerry/PCAS/internal/postgres.TestPhase2EvalRetrieval.func1(0xc0002ba488)
+	/root/PCAS-wt/b4-V2/internal/postgres/phase2_eval_test.go:46 +0x17a
+testing.tRunner(0xc0002ba488, 0xc000225420)
+	/root/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.8.linux-amd64/src/testing/testing.go:2036 +0x21d
+created by testing.(*T).Run in goroutine 4681
+	/root/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.8.linux-amd64/src/testing/testing.go:2101 +0xb13
+FAIL	github.com/soaringjerry/PCAS/internal/postgres	600.134s
+ok  	github.com/soaringjerry/PCAS/internal/telegram	22.646s
+?   	github.com/soaringjerry/PCAS/internal/testsupport	[no test files]
+?   	github.com/soaringjerry/PCAS/internal/testsupport/golden	[no test files]
+ok  	github.com/soaringjerry/PCAS/internal/worker	1.206s
+ok  	github.com/soaringjerry/PCAS/internal/workspace	1.308s
+FAIL
+make: *** [Makefile:13: test] Error 1

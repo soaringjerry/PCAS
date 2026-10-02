@@ -1,0 +1,5 @@
+{
+  "minimum_recall": 0,
+  "status": "awaiting_coordinator",
+  "reason": "压力档单独定线，首次由协调者审核；不得用基础档的基线替代。"
+}

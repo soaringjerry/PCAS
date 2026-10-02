@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "seed": 20261002,
+  "competitors_per_case": 64,
+  "unrelated_documents": 128,
+  "ci_cases_per_type": 2
+}

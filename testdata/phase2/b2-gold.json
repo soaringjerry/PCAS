@@ -390,5 +390,31 @@
       ],
       "person_filter": true
     }
+  },
+  "supplement_5865411": {
+    "approval": "Coordinator user message, 2026-10-02; README section 6 and revised F5/M6.",
+    "F5": {
+      "max_enqueued_hour": 30,
+      "drain_between_checks": true,
+      "advance_after_checks_hours": 1,
+      "pending_limit": 20,
+      "next_hour_can_enqueue": true
+    },
+    "F4": {
+      "max_jitter_seconds": 600,
+      "budget_helper": "nextBudgetDay",
+      "backfill_method": "BackfillExtractions"
+    },
+    "M6": {
+      "all_prefixes": [
+        "P",
+        "M",
+        "N",
+        "G"
+      ],
+      "change_existing_assertions": false
+    },
+    "history_replacement": "（先前回答的依据已更新，请按现在的资料回答）",
+    "notes": "Original fixtures.outdated_replacement was a draft description, not the literal R7 replacement; use this additive exact contract fixture."
   }
 }

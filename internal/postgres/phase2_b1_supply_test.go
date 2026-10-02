@@ -24,7 +24,7 @@ func TestPhase2B1_P1_DeskTurnRawSourceAndDeletionControl(t *testing.T) {
 	source := b1TurnSource(t, s, scope, originalReq.RequestID)
 	// The frozen trip fixture has a known expression time; DeskTurn accepts no
 	// timestamp field, so attach this synthetic metadata before the recall step.
-	if _, err := s.pool.Exec(context.Background(), "UPDATE source_versions SET expressed_at=$1::timestamptz WHERE owner_id=$2 AND source_id=$3 AND version=$4", b1Text(t, "trip", "expressed_at"), string(scope.OwnerID), string(source.ID), source.Version); err != nil {
+	if _, err := s.pool.Exec(context.Background(), "UPDATE record_versions SET expressed_at=$1::timestamptz WHERE owner_id=$2 AND record_id=$3 AND version=$4", b1Text(t, "trip", "expressed_at"), string(scope.OwnerID), string(source.ID), source.Version); err != nil {
 		t.Fatal(err)
 	}
 	b1ZeroClaims(t, s, scope)

@@ -75,5 +75,19 @@ const budgetJitter = 10 * time.Minute
 
 func nextBudgetDay(now time.Time, loc *time.Location) time.Time {
 	local := now.In(loc)
-	return time.Date(local.Year(), local.Month(), local.Day()+1, 0, 0, 0, 0, loc)
+	date := time.Date(local.Year(), local.Month(), local.Day()+1, 0, 0, 0, 0, time.UTC)
+	next := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, loc)
+	wallDate := func(at time.Time) time.Time {
+		at = at.In(loc)
+		return time.Date(at.Year(), at.Month(), at.Day(), 0, 0, 0, 0, time.UTC)
+	}
+	// A midnight DST jump can normalize Date to the preceding evening. Advance
+	// to the next calendar day; at a repeated midnight choose its first instant.
+	for wallDate(next).Before(date) {
+		next = next.Add(time.Second)
+	}
+	for wallDate(next.Add(-time.Second)).Equal(date) {
+		next = next.Add(-time.Second)
+	}
+	return next
 }

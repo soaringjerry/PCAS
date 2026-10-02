@@ -37,3 +37,25 @@ func TestRetryDelayMatchesBoundedSchedule(t *testing.T) {
 		}
 	}
 }
+
+func TestNextBudgetDayAtMidnightDSTJump(t *testing.T) {
+	for _, tc := range []struct {
+		zone  string
+		month time.Month
+		day   int
+		hour  int
+	}{
+		{"America/Santiago", time.September, 6, 1},
+		{"America/Havana", time.November, 1, 0},
+	} {
+		loc, err := time.LoadLocation(tc.zone)
+		if err != nil {
+			t.Fatal(err)
+		}
+		now := time.Date(2026, tc.month, tc.day-1, 12, 0, 0, 0, loc)
+		next := nextBudgetDay(now, loc)
+		if next.In(loc).Day() != tc.day || next.In(loc).Hour() != tc.hour || next.Add(-time.Nanosecond).In(loc).Day() == tc.day {
+			t.Fatalf("%s next=%v preceding=%v", tc.zone, next, next.Add(-time.Nanosecond).In(loc))
+		}
+	}
+}

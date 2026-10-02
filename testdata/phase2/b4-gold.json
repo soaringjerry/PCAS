@@ -159,5 +159,63 @@
       "依赖",
       "抽取"
     ]
+  },
+  "coordinator_amendment_5865411": {
+    "authority": "batch4/README.md section 6 and coordinator instruction 2026-10-02",
+    "I9": "cancel running source.parse after partial chunk commits; let owned lease expire and re-lease; resume without loss or duplication",
+    "variables": {
+      "connectors.MaxUploadBytes": 209715200,
+      "connectors.MaxArchiveBytes": 536870912,
+      "connectors.MaxArchiveRecords": 200000,
+      "postgres.ImportChunkSize": 500
+    },
+    "W4": {
+      "environment": "PCAS_IMPORT_CHUNK_SIZE=1",
+      "messages": 2000,
+      "artificialDelay": false
+    },
+    "errors": {
+      "renamedZip": {
+        "code": "invalid_zip",
+        "status": 400
+      },
+      "unsupported": {
+        "code": "unsupported_archive",
+        "status": 400
+      },
+      "emptyZip": {
+        "code": "no_supported_records",
+        "status": 400
+      },
+      "truncatedJSON": {
+        "code": "invalid_json",
+        "status": 400
+      },
+      "tooLarge": {
+        "code": "archive_too_large",
+        "status": 413
+      },
+      "wrongImportState": {
+        "code": "import_not_active",
+        "status": 409
+      }
+    },
+    "usageSummary": {
+      "inclusiveDates": true,
+      "order": "ascending",
+      "emptyDays": "omit"
+    },
+    "calls": {
+      "order": "descending",
+      "defaultLimit": 50,
+      "maxLimit": 100,
+      "cursor": "next -> before",
+      "deleted": {
+        "deleted": true,
+        "text": ""
+      },
+      "textMaxCharacters": 80
+    },
+    "imports": "items array, newest first, no pagination, leftOut is persisted in left_out"
   }
 }

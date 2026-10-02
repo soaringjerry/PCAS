@@ -65,6 +65,15 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 		for _, check := range item.Checklist {
 			fmt.Fprintf(&brief, "子步骤（完成=%t）：%s\n", check.Done, check.Text)
 		}
+		settings, err := queryDocument[workspace.Settings](ctx, tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1", string(scope.OwnerID))
+		if err != nil {
+			return err
+		}
+		loc := deskLocation(settings)
+		plan := memory.PlanQuery(c.Prompt, time.Now(), loc)
+		if prepared, ok := ctx.Value(runContextKey{}).(preparedRunContext); ok {
+			plan = prepared.Plan
+		}
 		fmt.Fprintln(&brief, "相关记忆（引用 ID 与版本；长期约束继续适用）：")
 		// Rank through the same scoped retrieval used by Recall instead of
 		// filling the prompt with globally recent memories. No nested model
@@ -84,7 +93,7 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 			}
 		}
 		recall := memory.RecallResult{Coverage: coverage()}
-		request := memory.RecallRequest{Query: query, Mode: memory.Remember, Context: memory.WorkingContext{Objects: []memory.ID{}}}
+		request := memory.RecallRequest{Team: &memory.TeamRecall{Text: c.Prompt, Plan: plan, ThingID: &item.ID, ProjectID: &projectID}, Query: query, Mode: memory.Remember, Context: memory.WorkingContext{Objects: []memory.ID{}}}
 		if projectID != "" {
 			request.Context.Objects = append(request.Context.Objects, memory.ID(projectID))
 		}
@@ -98,6 +107,16 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 		}
 		ordered := []workspace.Memory{}
 		selected := map[string]bool{}
+		// Structured matches precede handoff history and long-term constraints.
+		for _, ref := range recall.Structured {
+			if m, ok := byID[string(ref.ID)]; ok && m.Version == ref.Version && !selected[m.ID] {
+				ordered = append(ordered, m)
+				selected[m.ID] = true
+			}
+		}
+		if recall.TimeRelaxed {
+			fmt.Fprintln(&brief, recallTimeRelaxed)
+		}
 		excerpts := recall.Excerpts
 		historyRequests := []string{}
 		if prepared, ok := ctx.Value(runContextKey{}).(preparedRunContext); ok {
@@ -141,19 +160,15 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 			if !oneOf(m.Kind, agent.MemoryKinds...) || m.Epistemic == "inferred" && !agent.IncludeInferred || oneOf(m.ID, excluded...) || m.ProjectID != "" && m.ProjectID != projectID {
 				continue
 			}
-			if brief.Len()+len(m.Text) > 30000 {
+			if brief.Len()+len(m.Text)+len(memoryPromptSuffix(m, loc)) > 30000 {
 				continue
 			}
-			fmt.Fprintf(&brief, "[%s@%d / %s / confirmation=%s / acquisition=%s] %s\n", m.ID, m.Version, m.Epistemic, m.Confirmation, m.Acquisition, m.Text)
+			fmt.Fprintf(&brief, "[%s@%d / %s / confirmation=%s / acquisition=%s] %s\n", m.ID, m.Version, m.Epistemic, m.Confirmation, m.Acquisition, m.Text+memoryPromptSuffix(m, loc))
 			run.ContextMemoryIDs = append(run.ContextMemoryIDs, m.ID)
 			run.ContextVersions = append(run.ContextVersions, memory.Ref{ID: memory.ID(m.ID), Version: m.Version, Kind: memory.ClaimKind})
 		}
 
-		settings, err := queryDocument[workspace.Settings](ctx, tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1", string(scope.OwnerID))
-		if err != nil {
-			return err
-		}
-		loc := deskLocation(settings)
+		orderTeamExcerpts(excerpts, plan)
 		fmt.Fprintln(&brief, "\n相关原话：")
 		sources, err := teamSourceExcerptsTx(ctx, tx, scope, agent.ID, &item.ID, excerpts, historyRequests, 8, 4000)
 		if err != nil {
@@ -179,6 +194,9 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 			}
 		}
 		fmt.Fprintf(&brief, "\n本次请求：%s", c.Prompt)
+		if plan.Recall || recall.TimeRelaxed {
+			fmt.Fprintln(&brief, "\n"+recallDateInstructions)
+		}
 		if c.Kind == "breakdown" {
 			// Automatic adoption turns "- [ ]" lines into subtasks. Real models
 			// otherwise answer with a numbered list, which is filed as a document.

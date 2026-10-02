@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -129,6 +130,22 @@ func (s *Store) Recall(ctx context.Context, scope memory.Scope, in memory.Recall
 // already holding the owner transaction must not open another transaction or
 // reserve model cost; they use lexical/graph retrieval when no vector is supplied.
 func (s *Store) recallTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in memory.RecallRequest, b memory.Budget, query, fts string, vector []byte, model string, offset int, fingerprint string, tokens []string, out *memory.RecallResult) error {
+	structured := []memory.Ref{}
+	if scope.Team && in.Team != nil {
+		var err error
+		structured, out.TimeRelaxed, err = structuredRecallTx(ctx, tx, scope, *in.Team, b.Candidates)
+		if err != nil {
+			return err
+		}
+		out.Structured = structured
+		if len(structured) > 0 && in.Team.Candidates > b.Candidates {
+			b.Candidates = in.Team.Candidates
+		}
+	}
+	structuredIDs := []memory.ID{}
+	for _, ref := range structured {
+		structuredIDs = append(structuredIDs, ref.ID)
+	}
 	querySQL := `WITH linked AS (SELECT m.member_id FROM episode_members m JOIN memory_records e ON(e.owner_id,e.id,e.version)=(m.owner_id,m.episode_id,m.episode_version) JOIN episodes ep ON(ep.owner_id,ep.id,ep.version)=(e.owner_id,e.id,e.version) WHERE m.owner_id=$1 AND e.state='active' AND (m.episode_id=ANY($8::uuid[]) OR ($6='history' AND $4!='' AND position(lower($4) in lower(ep.title))>0)) AND ($2 OR ($17 AND e.kind='source') OR EXISTS(SELECT 1 FROM record_grants g WHERE g.owner_id=e.owner_id AND g.record_id=e.id AND g.principal_id=$3))), hits AS (
  SELECT t.id::text AS id,t.version,r.kind,coalesce(hit.body,t.body) AS body,
 		 (CASE WHEN $4='' THEN 0 WHEN position(lower($4) in lower(t.body))>0 THEN 5 ELSE 0 END
@@ -172,17 +189,31 @@ func (s *Store) recallTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in 
 		 OR t.id IN (SELECT member_id FROM linked) OR t.id=ANY($8::uuid[]) OR t.id IN (SELECT claim_id FROM claim_revisions WHERE owner_id=$1 AND (subject_id=ANY($8::uuid[]) OR scope->>'project_id'=ANY($8::text[])))
 		 OR ($11::text IS NOT NULL AND EXISTS(SELECT 1 FROM embeddings e WHERE e.owner_id=t.owner_id AND ((e.record_id,e.record_version)=(t.id,t.version) OR e.record_id IN (SELECT id FROM chunks WHERE owner_id=t.owner_id AND source_id=t.id AND source_version=t.version)) AND e.model=$12 AND CASE WHEN e.dimensions=$13 THEN (e.embedding <=> $11::vector)<0.65 ELSE false END)))
  )`
+	if len(structured) > 0 {
+		querySQL = strings.Replace(querySQL, "AND ($4='' OR EXISTS", "AND (t.id=ANY($18::uuid[]) OR $4='' OR EXISTS", 1)
+	}
 	// Team source excerpts have their own candidate/token allowance. They must
 	// not displace the existing claim and graph budgets. Public recall retains
 	// its original ordering and pagination across all record kinds.
 	const hitColumns = "id,version,kind,body,score,role,branch,gaps,excerpt,title,connector,external_id,expressed_at,recorded_at,readable"
-	const hitOrder = "CASE WHEN $6='history' THEN recorded_at END,explicit DESC,score DESC,id::uuid,version"
+	hitOrder := "CASE WHEN $6='history' THEN recorded_at END,explicit DESC,score DESC,id::uuid,version"
+	args := []any{string(scope.OwnerID), scope.IsOwner, scope.PrincipalID, query, fts, string(in.Mode), "", in.Context.Objects, in.Context.ValidAt, in.Context.KnownAt, nullString(string(vector)), model, embeddingDimensions(vector), b.Candidates + 1, offset, tokens, scope.Team}
+	if len(structured) > 0 {
+		args = append(args, structuredIDs)
+		hitOrder = "array_position($18::uuid[],id::uuid) ASC NULLS LAST," + hitOrder
+	}
+	if scope.Team && in.Team != nil && in.Team.Plan.Time != nil {
+		slot := len(args) + 1
+		args = append(args, in.Team.Plan.Time.From, in.Team.Plan.Time.To)
+		at := "coalesce(expressed_at,CASE WHEN connector IN ('desk','capture','telegram','desk-incomplete') THEN recorded_at END)"
+		hitOrder = fmt.Sprintf("CASE WHEN kind='source' THEN coalesce(%s >= $%d AND %s < $%d,false) ELSE false END DESC,", at, slot, at, slot+1) + hitOrder
+	}
 	if scope.Team {
 		querySQL += ", ranked AS (SELECT *,row_number() OVER (PARTITION BY kind='source' ORDER BY " + hitOrder + ") AS rank FROM hits) SELECT " + hitColumns + " FROM ranked WHERE rank>$15 AND rank<=$15+$14 ORDER BY " + hitOrder
 	} else {
 		querySQL += " SELECT " + hitColumns + " FROM hits ORDER BY " + hitOrder + " LIMIT $14 OFFSET $15"
 	}
-	rows, err := tx.Query(ctx, querySQL, string(scope.OwnerID), scope.IsOwner, scope.PrincipalID, query, fts, string(in.Mode), "", in.Context.Objects, in.Context.ValidAt, in.Context.KnownAt, nullString(string(vector)), model, embeddingDimensions(vector), b.Candidates+1, offset, tokens, scope.Team)
+	rows, err := tx.Query(ctx, querySQL, args...)
 	if err != nil {
 		return err
 	}
@@ -654,4 +685,127 @@ func sourceExcerptTime(excerpt memory.RecallExcerpt) (time.Time, string) {
 		return *excerpt.ExpressedAt, "说于"
 	}
 	return excerpt.RecordedAt, "记录于"
+}
+
+// Enumerate only the alias lengths present for this owner, then probe the
+// existing (owner_id, lower(alias)) index with exact substrings. The lateral
+// boundary keeps probes parameterized instead of scanning all active entities. We never run
+// position(message, alias) for every entity; work is message windows plus one
+// owner-scoped pass over alias lengths, independent of memory count.
+const teamEntitiesSQL = `WITH lengths AS MATERIALIZED (
+ SELECT DISTINCT char_length(alias) AS n FROM aliases
+ WHERE owner_id=$1 AND char_length(alias) BETWEEN 2 AND char_length($2)
+), names AS MATERIALIZED (
+ SELECT DISTINCT lower(substr($2,p,n)) AS name FROM lengths
+ CROSS JOIN LATERAL generate_series(1,char_length($2)-n+1) AS p
+)
+SELECT DISTINCT a.entity_id::text FROM names
+JOIN LATERAL (
+ SELECT owner_id,entity_id,entity_version FROM aliases
+ WHERE owner_id=$1 AND lower(alias)=names.name OFFSET 0
+) a ON true
+JOIN memory_records r ON (r.owner_id,r.id,r.version)=(a.owner_id,a.entity_id,a.entity_version)
+JOIN record_versions v ON (v.owner_id,v.record_id,v.version)=(r.owner_id,r.id,r.version)
+WHERE r.kind='entity' AND r.state='active' AND v.state='active'
+ORDER BY a.entity_id::text`
+
+// Candidate IDs use mentions, speech-time and event-time indexes. Current
+// versions and all prompt visibility restrictions are checked before deciding
+// whether the time condition has any hits, including the relaxation decision.
+const teamStructuredSQL = `WITH candidates AS (
+ SELECT c.claim_id,c.version FROM claim_revisions c WHERE c.owner_id=$1 AND c.subject_id=ANY($2::uuid[])
+ UNION SELECT m.claim_id,m.claim_version FROM claim_mentions m WHERE m.owner_id=$1 AND m.entity_id=ANY($2::uuid[])
+ UNION SELECT v.record_id,v.version FROM record_versions v WHERE v.owner_id=$1 AND cardinality($2::uuid[])=0 AND v.expressed_at >= $3 AND v.expressed_at < $4
+ UNION SELECT c.claim_id,c.version FROM claim_revisions c WHERE c.owner_id=$1 AND cardinality($2::uuid[])=0 AND $5='either' AND c.event_from < $4 AND (c.event_to IS NULL OR (c.event_to > $3 AND c.event_to > c.event_from))
+), visible AS MATERIALIZED (
+ SELECT c.claim_id,c.version,c.subject_id,c.nature,v.expressed_at,c.event_from,c.event_to
+ FROM candidates hit
+ JOIN claim_revisions c ON (c.owner_id,c.claim_id,c.version)=($1,hit.claim_id,hit.version)
+ JOIN memory_records r ON (r.owner_id,r.id)=(c.owner_id,c.claim_id)
+ JOIN record_versions v ON (v.owner_id,v.record_id,v.version)=(c.owner_id,c.claim_id,c.version)
+ JOIN applicable_claim_versions($1,now(),now()) current ON (current.claim_id,current.version)=(c.claim_id,c.version)
+ JOIN workspace_agents agent ON agent.owner_id=$1 AND agent.id=$6
+ WHERE r.state='active' AND v.state='active'
+ AND EXISTS(SELECT 1 FROM record_grants g WHERE g.owner_id=$1 AND g.record_id=c.claim_id AND g.principal_id=$6)
+ AND agent.document->'memoryKinds' ? c.nature
+ AND (coalesce((agent.document->>'includeInferred')::boolean,false) OR c.confirmation='confirmed' OR (c.confirmation='adopted' AND c.acquisition='direct'))
+ AND NOT EXISTS(SELECT 1 FROM context_exclusions ex WHERE ex.owner_id=$1 AND ex.thing_id=$7::uuid AND ex.memory_id=c.claim_id)
+ AND ($8::text IS NULL OR coalesce(c.scope->>'project_id','')='' OR c.scope->>'project_id'=$8)
+), timed AS (
+ SELECT *,($3::timestamptz IS NULL OR (expressed_at >= $3 AND expressed_at < $4) OR ($5='either' AND event_from < $4 AND (event_to IS NULL OR (event_to > $3 AND event_to > event_from)))) IS TRUE AS fits FROM visible
+), chosen AS (
+ SELECT *,NOT fits AS relaxed FROM timed
+ WHERE fits OR (cardinality($2::uuid[])>0 AND $3::timestamptz IS NOT NULL AND NOT EXISTS(SELECT 1 FROM timed WHERE fits))
+)
+SELECT claim_id::text,version,relaxed FROM chosen
+ORDER BY EXISTS(SELECT 1 FROM entity_versions self JOIN memory_records sr ON (sr.owner_id,sr.id,sr.version)=(self.owner_id,self.entity_id,self.version)
+ WHERE self.owner_id=$1 AND self.entity_id=chosen.subject_id AND self.entity_type='self' AND sr.state='active') DESC,
+ nature=ANY($9::text[]) DESC,expressed_at DESC NULLS LAST,claim_id,version
+LIMIT $10`
+
+func structuredRecallTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, hints memory.TeamRecall, limit int) ([]memory.Ref, bool, error) {
+	ids := []memory.ID{}
+	rows, err := tx.Query(ctx, teamEntitiesSQL, string(scope.OwnerID), hints.Text)
+	if err != nil {
+		return nil, false, err
+	}
+	for rows.Next() {
+		var id memory.ID
+		if err = rows.Scan(&id); err != nil {
+			rows.Close()
+			return nil, false, err
+		}
+		ids = append(ids, id)
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return nil, false, err
+	}
+	refs := []memory.Ref{}
+	if len(ids) == 0 && hints.Plan.Time == nil {
+		return refs, false, nil
+	}
+	var from, to *time.Time
+	axis := ""
+	if hints.Plan.Time != nil {
+		from = &hints.Plan.Time.From
+		to = &hints.Plan.Time.To
+		axis = hints.Plan.Time.Axis
+	}
+	if hints.Candidates > limit {
+		limit = hints.Candidates
+	}
+	rows, err = tx.Query(ctx, teamStructuredSQL, string(scope.OwnerID), ids, from, to, axis, scope.PrincipalID, hints.ThingID, hints.ProjectID, hints.Plan.Natures, limit)
+	if err != nil {
+		return nil, false, err
+	}
+	relaxed := false
+	for rows.Next() {
+		ref := memory.Ref{Kind: memory.ClaimKind}
+		var r bool
+		if err = rows.Scan(&ref.ID, &ref.Version, &r); err != nil {
+			rows.Close()
+			return nil, false, err
+		}
+		refs = append(refs, ref)
+		relaxed = relaxed || r
+	}
+	err = rows.Err()
+	rows.Close()
+	return refs, relaxed, err
+}
+
+func orderTeamExcerpts(excerpts []memory.RecallExcerpt, plan memory.QueryPlan) {
+	if plan.Time == nil {
+		return
+	}
+	inTime := func(e memory.RecallExcerpt) bool {
+		at := e.ExpressedAt
+		if at == nil && oneOf(e.Connector, "desk", "capture", "telegram", "desk-incomplete") {
+			at = &e.RecordedAt
+		}
+		return at != nil && !at.Before(plan.Time.From) && at.Before(plan.Time.To)
+	}
+	sort.SliceStable(excerpts, func(i, j int) bool { return inTime(excerpts[i]) && !inTime(excerpts[j]) })
 }

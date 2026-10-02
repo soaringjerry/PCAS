@@ -6,7 +6,7 @@
 
 被测集成提交：**尚未指定**。收到实现合入通知后，在同一个明确提交上统一跑全量；届时追加实际结果、发现及修复归属。
 
-依据：`parallel.md`、第 4 批契约和 T4 任务包；补充接缝依据协调者确认的 `5865411`、`1cec28b` 第 6 节。未读取 I/L/U4 的新实现，也未修改产品代码或已有测试预期。
+依据：`parallel.md`、第 4 批契约和 T4 任务包；补充接缝依据协调者确认的 `5865411`、`1cec28b` 第 6 节，以及 `b9d26f0` 的 R12、L8/L9。未读取 I/L/U4 的新实现，也未修改产品代码或已有测试预期。
 
 下文冻结提交号是变基前已推送的原始提交，用于记录预期在测试之前冻结的顺序；变基重放未改变原条目。
 
@@ -39,6 +39,8 @@
 | L5 | [TestPhase2B4_L5_CurrentUnicodeExcerptDeletedRefAndEveryColumnPrivacy](../../internal/postgres/phase2_b4_usage_test.go) | 待运行 |
 | L6 | [TestPhase2B4_L6_UsageEndpointsEnforceOwnerAndIsolation](../../internal/postgres/phase2_b4_usage_test.go) | 待运行 |
 | L7 | [TestPhase2B4_L7_UndoClearAndDeleteKeepExactUsageRows](../../internal/postgres/phase2_b4_usage_test.go) | 待运行 |
+| L8 | [TestPhase2B4_L8_ReturnedButInvalidExtractionStillRecordsUsage](../../internal/postgres/phase2_b4_usage_test.go)<br>[TestPhase2B4_L8_ReturnedButInvalidSecretaryStillRecordsUsage](../../internal/postgres/phase2_b4_usage_test.go) | 待运行；副手样例待协调者确认 |
+| L9 | [TestPhase2B4_L9_IdenticalLegacyRequestsMakeTwoCallsAndTwoUsageRows](../../internal/postgres/phase2_b4_usage_test.go) | 待运行 |
 
 | 浏览器序列 | 文件与覆盖 | 状态 |
 |---|---|---|
@@ -75,6 +77,7 @@
 
 1. 集成分支现已创建且 T4 已变基。测试直接使用第 6 节的可调变量，合入 I 后才能编译；Draft PR 自动 CI 当前可能因此失败，不等同于已进行人工统一验收。
 2. 指定实现全部合入后的被测提交，通知 T4 运行统一全量。运行临时 pgvector 16、tmpfs、随机本机端口，设 `PCAS_TEST_DATABASE_URL`，不读线上 `.env` 或 `config/`，不调真实模型，不发真实通知。
-3. 两处接缝均由协调者确认并写入 `1cec28b`：错误说明使用 `message`，只断言非空且四类互不相同；I10 从批次接口读取 `archiveId/archiveVersion`，沿用 `POST /v1/memory/delete` 和 `include_sources: true`。没有待定规则。
+3. 两处接缝均由协调者确认并写入 `1cec28b`：错误说明使用 `message`，只断言非空且四类互不相同；I10 从批次接口读取 `archiveId/archiveVersion`，沿用 `POST /v1/memory/delete` 和 `include_sources: true`。这些接口字段均已确定。
+4. `b9d26f0` 新增的 L8/L9 已先追加冻结（`1387dde`），没有改动 L1–L7 的预期。L8 抽取和秘书用 HTTP 200 返回非空但截断的 JSON；分别检查输出确实被拒绝、模型仅调用一次、记录恰好一行、token 和花费准确。L9 给旧问答入口传两次完全相同的参数，检查真实模型调用两次、产生两行独立记录并对应两个回答。副手既有验收允许自由文本，已请协调者指定 L8 的不合格样例，暂不自行定义。
 
 正式结果追加时逐条写清现象、契约预期、应修任务及未覆盖之处；每个失败都保留，不跳过、不放宽，不重复运行碰运气。

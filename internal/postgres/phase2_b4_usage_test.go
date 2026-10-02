@@ -2,18 +2,155 @@ package postgres
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/worker"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
+
+// Read the independently frozen invalid content, never a product serializer.
+func b4UsageAmendment(t *testing.T) map[string]string {
+	t.Helper()
+	raw, err := os.ReadFile("../../testdata/phase2/b4-gold.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var gold struct {
+		Amendment struct{ Fixtures map[string]string } `json:"coordinator_amendment_b9d26f0"`
+	}
+	b4JSON(t, raw, &gold)
+	return gold.Amendment.Fixtures
+}
+
+func TestPhase2B4_L8_ReturnedButInvalidExtractionStillRecordsUsage(t *testing.T) {
+	s, scope := b4Store(t), owner()
+	f := b4Model(t, s)
+	content := b4UsageAmendment(t)["invalidExtractionContent"]
+	if content == "" || json.Valid([]byte(content)) {
+		t.Fatal("fixture must return nonempty malformed JSON")
+	}
+	f.set(content, 200)
+	text := "合成L8抽取原话：我喜欢在清晨整理青玉罗盘。"
+	source := b1Source(t, s, scope, "L8抽取样例", text, "manual")
+	job := leaseStage(t, s, scope, source, "source.extract")
+	err := s.ProcessExtraction(context.Background(), job)
+	var failure *worker.JobError
+	if !errors.As(err, &failure) || failure.Code != "model_output_invalid" {
+		t.Errorf("fixture did not reach format rejection: %v", err)
+	}
+	if len(f.all()) != 1 {
+		t.Fatalf("invalid output must come from one returned model call; got %d", len(f.all()))
+	}
+	b1Contains(t, f.last(t).Prompt, text)
+	rows := b4Usage(t, s, scope)
+	if len(rows) != 1 {
+		t.Fatalf("returned extraction content must record one usage row despite rejection; got %d", len(rows))
+	}
+	row := rows[0]
+	b4UsageNumbers(t, row)
+	if row.Purpose != "extraction" || row.JobID == nil || *row.JobID != string(job.ID) {
+		t.Errorf("invalid extraction usage correlation: %+v", row)
+	}
+	b1HasRef(t, row.MemoryRefs, source, true)
+	b4NoProse(t, s, scope, text)
+}
+
+func TestPhase2B4_L8_ReturnedButInvalidSecretaryStillRecordsUsage(t *testing.T) {
+	s, scope := b4Store(t), owner()
+	f := b4Model(t, s)
+	content := b4UsageAmendment(t)["invalidSecretaryContent"]
+	if content == "" || json.Valid([]byte(content)) {
+		t.Fatal("fixture must return nonempty malformed JSON")
+	}
+	f.set(content, 200)
+	req := turnRequest("合成L8秘书格式失败样例")
+	if _, err := s.DeskTurn(context.Background(), scope, req); err == nil {
+		t.Error("malformed secretary content did not reach format rejection")
+	}
+	if len(f.all()) != 1 {
+		t.Fatalf("invalid output must come from one returned model call; got %d", len(f.all()))
+	}
+	b1Contains(t, f.last(t).Prompt, req.Text)
+	rows := b4Usage(t, s, scope)
+	if len(rows) != 1 {
+		t.Fatalf("returned secretary content must record one usage row despite rejection; got %d", len(rows))
+	}
+	row := rows[0]
+	b4UsageNumbers(t, row)
+	if row.Purpose != "secretary" || row.AgentID != "model" {
+		t.Errorf("invalid secretary usage purpose/agent: %+v", row)
+	}
+}
+
+func TestPhase2B4_L9_IdenticalLegacyRequestsMakeTwoCallsAndTwoUsageRows(t *testing.T) {
+	s, scope := b4Store(t), owner()
+	f := b4Model(t, s)
+	f.set(`{"answer":"合成回答：今天整理青玉罗盘。","used":[],"links":[]}`, 200)
+	question := b4UsageAmendment(t)["legacyQuestion"]
+	if question == "" {
+		t.Fatal("missing frozen legacy question")
+	}
+	first, err := s.AnswerDesk(context.Background(), scope, "model", question, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	firstRows := b4Usage(t, s, scope)
+	if len(firstRows) != 1 {
+		t.Fatalf("first legacy request rows=%d", len(firstRows))
+	}
+	second, err := s.AnswerDesk(context.Background(), scope, "model", question, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	requests := f.all()
+	if len(requests) != 2 {
+		t.Fatalf("identical legacy requests must invoke model twice; got %d", len(requests))
+	}
+	for _, request := range requests {
+		b1Contains(t, request.Prompt, question)
+	}
+	if first.ID == "" || second.ID == "" || first.ID == second.ID {
+		t.Errorf("legacy requests must create independent answers: %q/%q", first.ID, second.ID)
+	}
+	rows := b4Usage(t, s, scope)
+	if len(rows) != 2 {
+		t.Fatalf("identical legacy requests must record two returned calls; got %d", len(rows))
+	}
+	if !reflect.DeepEqual(firstRows[0], rows[0]) {
+		t.Error("second legacy request changed the first usage row")
+	}
+	if rows[0].ID == rows[1].ID {
+		t.Error("two returned legacy calls share a usage identity")
+	}
+	turns := map[string]bool{first.ID: false, second.ID: false}
+	for _, row := range rows {
+		b4UsageNumbers(t, row)
+		if row.Purpose != "answer" || row.AgentID != "model" || row.TurnID == nil {
+			t.Errorf("legacy usage correlation: %+v", row)
+			continue
+		}
+		if seen, exists := turns[*row.TurnID]; !exists || seen {
+			t.Errorf("duplicate or wrong legacy turnId: %s", *row.TurnID)
+		}
+		turns[*row.TurnID] = true
+	}
+	for turn, seen := range turns {
+		if !seen {
+			t.Errorf("legacy answer %s has no usage row", turn)
+		}
+	}
+}
 
 func TestPhase2B4_L1_SecretaryRecordsExactNumbersAndDependencies(t *testing.T) {
 	s, scope := b4Store(t), owner()

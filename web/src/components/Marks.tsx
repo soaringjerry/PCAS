@@ -1,10 +1,10 @@
 import { SourceSheet } from './SourceSheet'
 import { useState } from 'react'
 import { Link } from 'react-router'
-import { ArrowUpRight, Check, CornerDownRight, FileText, Flag, PenLine, Send, Sparkles } from 'lucide-react'
+import { ArrowUpRight, Box, Building2, CalendarDays, Check, CornerDownRight, FileText, Flag, MapPin, PenLine, Send, Sparkles, UserRound } from 'lucide-react'
 import { kindText, type Thing, type TimelineEvent } from '../domain/things'
-import { formatAgo } from '../domain/time'
-import type { Epistemic, SourceRef } from '../domain/types'
+import { dayOffset, formatAgo, formatDateTime } from '../domain/time'
+import type { Epistemic, EventPrecision, MemoryMention, SourceRef } from '../domain/types'
 import { useStore } from '../store/context'
 import { Tag } from './ui'
 
@@ -60,6 +60,109 @@ export function Fade({ value }: { value: number }) {
       ))}
     </span>
   )
+}
+
+const mentionIcon = {
+  person: <UserRound size={12} />,
+  place: <MapPin size={12} />,
+  organization: <Building2 size={12} />,
+  thing: <Box size={12} />,
+}
+const mentionOrder: MemoryMention['role'][] = ['person', 'place', 'organization', 'thing']
+
+/**
+ * Who and where a memory is about, people first. With `onPick` each one is a
+ * button that narrows a list to the memories mentioning it; `active` is the one
+ * the list is already narrowed to.
+ */
+export function Mentions({ mentions, active, onPick, limit }: {
+  mentions?: MemoryMention[]
+  active?: string
+  onPick?: (mention: MemoryMention) => void
+  /** Show this many and count the rest. */
+  limit?: number
+}) {
+  if (!mentions?.length) return null
+  const ordered = [...mentions].sort((a, b) => mentionOrder.indexOf(a.role) - mentionOrder.indexOf(b.role))
+  const shown = limit && ordered.length > limit ? ordered.slice(0, limit) : ordered
+  return (
+    <>
+      {shown.map((m) =>
+        onPick ? (
+          <button
+            key={`${m.role}:${m.entityId}`}
+            type="button"
+            className={`mention${m.entityId === active ? ' on' : ''}`}
+            aria-pressed={m.entityId === active}
+            title={m.entityId === active ? '不再只看提到它的记忆' : `只看提到「${m.name}」的记忆`}
+            onClick={(e) => {
+              e.stopPropagation()
+              onPick(m)
+            }}
+          >
+            {mentionIcon[m.role]}
+            <span className="mention-name">{m.name}</span>
+          </button>
+        ) : (
+          <span key={`${m.role}:${m.entityId}`} className="mention">
+            {mentionIcon[m.role]}
+            <span className="mention-name">{m.name}</span>
+          </span>
+        ),
+      )}
+      {ordered.length > shown.length && <span className="mention-rest">+{ordered.length - shown.length}</span>}
+    </>
+  )
+}
+
+/** The calendar day an instant falls on in the workspace zone. */
+function dayOf(at: Date, timeZone: string) {
+  const parts = new Intl.DateTimeFormat('zh-CN', { timeZone, year: 'numeric', month: 'numeric', day: 'numeric', weekday: 'short' }).formatToParts(at)
+  const value = (type: string) => parts.find((p) => p.type === type)!.value
+  return { year: value('year'), month: value('month'), day: value('day'), weekday: value('weekday') }
+}
+
+/** "10月9日 周五", "2025年3月", "2025年", "9月14日至20日": as exact as the words were, and no more. */
+function eventText(from: string | undefined, to: string | undefined, precision: EventPrecision | undefined, timeZone: string): string {
+  if (!from || !precision || precision === 'unknown') return ''
+  const start = new Date(from)
+  if (Number.isNaN(start.getTime())) return ''
+  const a = dayOf(start, timeZone)
+  if (precision === 'year') return `${a.year}年`
+  if (precision === 'month') return `${a.year}年${a.month}月`
+  const day = `${a.year === dayOf(new Date(), timeZone).year ? '' : `${a.year}年`}${a.month}月${a.day}日`
+  // The interval excludes its end, so the last day it covers is the one before.
+  const end = to ? new Date(new Date(to).getTime() - 1) : start
+  const b = Number.isNaN(end.getTime()) || end < start ? a : dayOf(end, timeZone)
+  if (precision === 'day' || (a.year === b.year && a.month === b.month && a.day === b.day)) return `${day} ${a.weekday}`
+  if (a.year !== b.year) return `${a.year}年${a.month}月${a.day}日至${b.year}年${b.month}月${b.day}日`
+  return a.month === b.month ? `${day}至${b.day}日` : `${day}至${b.month}月${b.day}日`
+}
+
+/** When the thing a memory talks about happens. Not when it was said; that is `SaidAt`. */
+export function EventTime({ from, to, precision, bare = false }: { from?: string; to?: string; precision?: EventPrecision; bare?: boolean }) {
+  const { state } = useStore()
+  const text = eventText(from, to, precision, state.settings.timezone ?? 'UTC')
+  if (!text) return null
+  if (bare) return <>{text}</>
+  return (
+    <span className="event-time" title="说的是这个时候的事">
+      <CalendarDays size={12} />
+      {text}
+    </span>
+  )
+}
+
+/** When something was said: "今天说的", "9月12日说的"; `full` adds the weekday and the time and drops the suffix. */
+export function SaidAt({ at, full = false }: { at?: string; full?: boolean }) {
+  const { state } = useStore()
+  if (!at || Number.isNaN(new Date(at).getTime())) return null
+  const timeZone = state.settings.timezone ?? 'UTC'
+  if (full) return <>{formatDateTime(at, timeZone)}</>
+  const days = dayOffset(at, timeZone)
+  const d = dayOf(new Date(at), timeZone)
+  const day = days === 0 ? '今天' : days === -1 ? '昨天' : `${d.year === dayOf(new Date(), timeZone).year ? '' : `${d.year}年`}${d.month}月${d.day}日`
+  return <span title="什么时候说的">{day}说的</span>
 }
 
 const tlIcon = {

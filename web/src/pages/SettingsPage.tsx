@@ -4,7 +4,6 @@ import { NotifySettings, type NotifySummary } from '../components/NotifySettings
 import { TimezoneSettings } from '../components/TimezoneSettings'
 import { MemoryActivitySettings } from '../components/MemoryActivitySettings'
 import { ConnectorSettings } from '../components/ConnectorSettings'
-import { memoriesFor } from '../domain/agent'
 import { memoryKindLabel } from '../domain/labels'
 import { spentToday } from '../domain/lines'
 import { clockTime } from '../domain/time'
@@ -14,6 +13,7 @@ import { Button, Progress, SaveMark, Sheet, Switch, Tag, type SaveState } from '
 import { Chip, Select, Stepper } from '../components/controls'
 import { useToast } from '../store/toast'
 import { useStore } from '../store/context'
+import { useMemoryCount } from '../store/memories'
 import { ChatGPTConnection } from '../components/ChatGPTConnection'
 import { OpenAIConnection } from '../components/OpenAIConnection'
 import { api, downloadExport } from '../store/api'
@@ -181,12 +181,12 @@ const channelText = { mcp: 'MCP', api: '按量计费', manual: '不调用模型'
 
 /** One model: whether work may be handed to it, and which memories it is given. */
 function AgentRow({ agent }: { agent: Agent }) {
-  const { state, dispatch } = useStore()
+  const { dispatch } = useStore()
   const [open, setOpen] = useState(false)
   const [mark, run] = useSaving()
   const update = (patch: Partial<Agent>) => run(() => dispatch({ type: 'updateAgent', id: agent.id, patch }))
   const kinds = (Object.keys(memoryKindLabel) as MemoryKind[]).filter((k) => agent.memoryKinds.includes(k))
-  const seen = memoriesFor(state, agent).length
+  const seen = useMemoryCount(agent)
   const scope = kinds.length ? `能看 ${kinds.map((k) => memoryKindLabel[k]).join('、')}${agent.includeInferred ? '，含未确认的推测' : ''}` : '不给它看记忆'
   const use = !agent.enabled
     ? '已停用，秘书和副手不会用它'

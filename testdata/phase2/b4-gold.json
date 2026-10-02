@@ -1,0 +1,163 @@
+{
+  "contract": "docs/tasks/phase2/batch4/README.md",
+  "frozenBeforeTests": true,
+  "fixtures": {
+    "recall": {
+      "text": "2024 年成都出差，青色灯塔7319寄存柜的密码是8624。",
+      "question": "成都青色灯塔7319寄存柜密码是什么",
+      "at": "2024-06-12T03:10:00Z",
+      "role": "user"
+    },
+    "oldPlan": {
+      "text": "明天交成都旅行计划",
+      "at": "2025-05-14T03:10:00Z",
+      "nature": "plan",
+      "confirmation": "candidate"
+    },
+    "assistant": {
+      "text": "AI 提到紫色风车9427的备用号码是3816。",
+      "question": "紫色风车9427备用号码是什么",
+      "at": "2024-06-12T03:11:00Z",
+      "role": "assistant"
+    },
+    "branch": {
+      "active": "当前分支的成都饭店是银杏小馆2718。",
+      "abandoned": "放弃分支的成都饭店是红杉小馆1618。"
+    },
+    "usage": {
+      "inputTokens": 123,
+      "outputTokens": 17,
+      "inputPrice": 2,
+      "outputPrice": 4,
+      "cost": 0.000314,
+      "model": "b4-synthetic-model",
+      "privateMemory": "验收私密记忆：青玉罗盘5591，见到红塔以后向东走。",
+      "privateSource": "验收私密原话：蓝色雨伞6632，地下室只在清晨开放。"
+    },
+    "timezone": [
+      {
+        "zone": "Australia/Sydney",
+        "instant": "2024-06-12T23:30:00Z",
+        "date": "2024-06-13"
+      },
+      {
+        "zone": "Asia/Shanghai",
+        "instant": "2024-06-12T23:30:00Z",
+        "date": "2024-06-13"
+      }
+    ],
+    "usageDays": [
+      {
+        "zone": "Australia/Sydney",
+        "instants": [
+          "2025-05-13T13:59:00Z",
+          "2025-05-13T14:01:00Z"
+        ],
+        "dates": [
+          "2025-05-13",
+          "2025-05-14"
+        ]
+      },
+      {
+        "zone": "Asia/Shanghai",
+        "instants": [
+          "2025-05-13T15:59:00Z",
+          "2025-05-13T16:01:00Z"
+        ],
+        "dates": [
+          "2025-05-13",
+          "2025-05-14"
+        ]
+      },
+      {
+        "zone": "Australia/Sydney",
+        "instants": [
+          "2025-10-04T13:59:00Z",
+          "2025-10-04T14:01:00Z",
+          "2025-10-04T15:59:00Z",
+          "2025-10-04T16:01:00Z",
+          "2025-10-05T12:59:00Z",
+          "2025-10-05T13:01:00Z"
+        ],
+        "dates": [
+          "2025-10-04",
+          "2025-10-05",
+          "2025-10-05",
+          "2025-10-05",
+          "2025-10-05",
+          "2025-10-06"
+        ]
+      },
+      {
+        "zone": "Australia/Sydney",
+        "instants": [
+          "2025-04-05T12:59:00Z",
+          "2025-04-05T13:01:00Z",
+          "2025-04-05T15:59:00Z",
+          "2025-04-05T16:01:00Z",
+          "2025-04-06T13:59:00Z",
+          "2025-04-06T14:01:00Z"
+        ],
+        "dates": [
+          "2025-04-05",
+          "2025-04-06",
+          "2025-04-06",
+          "2025-04-06",
+          "2025-04-06",
+          "2025-04-07"
+        ]
+      }
+    ]
+  },
+  "oracles": {
+    "I1": "zip preview counts every supported message, reports skipped images, and changes no database rows",
+    "I2": "during a partial import with zero completed extraction, a new secretary conversation supplies original 2024 text with local spoken date and role to the actual fake-model HTTP request",
+    "I3": "real background import stops after its current chunk; paused-batch extraction is not leased; ordinary source completes; resume stores every message exactly once",
+    "I4": "identical file creates zero new sources; duplicate preview alreadyImported equals all messages; extended export adds only three new conversations",
+    "I5": "historical plan creates no current task or awakened idea despite enabled settings; extracted claim remains candidate and expressed_at is retained",
+    "I6": "among 500 imported messages, a newly spoken secretary source is extracted before queued imported sources",
+    "I7": "renamed non-zip, no-conversation zip, truncated JSON, upload overflow each have a distinct nonempty error type and human explanation and leave no data",
+    "I8": "small test limit keeps newest messages, reports exact leftOut in preview and batch, accepts export",
+    "I9": "SIGKILL the owned running background subprocess after a partial commit; restarted production worker completes without loss or duplication",
+    "I10": "HTTP archive deletion with children removes messages, derived claims, batch; a fresh secretary prompt omits original text",
+    "I11": "active and abandoned regenerated branches retain role, time and historical-branch marking",
+    "I12": "two genuinely concurrent imports; pausing one leaves other complete while paused stored is stable",
+    "I13": "UTC late-night message formats spoken date in Sydney and Shanghai",
+    "I14": "assistant original remains retrievable; assistant/system/tool texts never go to extraction model",
+    "L1": "successful secretary call writes one exact token/cost/model/purpose/turn record, references equal actual turn dependencies",
+    "L2": "successful deputy, legacy answer and extraction calls each write one row with correct purpose and corresponding run/turn/job identifier",
+    "L3": "failed model call writes zero rows; replayed successful request invokes model and records usage once",
+    "L4": "summary groups by owner local calendar day and purpose through both Sydney DST boundaries and Shanghai midnight",
+    "L5": "all usage columns contain no fixture prose; current text lookup clips at 80 Unicode characters; deleted ref has deleted indication and no text",
+    "L6": "both usage endpoints refuse a non-owner, unauthenticated caller; another owner cannot read this owner records",
+    "L7": "undo action, clear turn, delete referenced memory preserve exact usage row",
+    "W1": "file selection shows preview counts/date range/duplicates/leftOut before confirmation with no internal terminology",
+    "W2": "importing/paused/done/failed have appropriate progress/actions and no horizontal overflow at width 390",
+    "W3": "four import errors have four different human explanations",
+    "W4": "browser talks to real temporary backend, uploads synthetic export, pauses/resumes and sees completed progress plus messages in library"
+  },
+  "browser": {
+    "preview": {
+      "name": "chatgpt-export.zip",
+      "conversations": 3,
+      "messages": 12,
+      "fromUser": 6,
+      "earliest": "2024-06-12T03:10:00Z",
+      "latest": "2025-05-14T03:10:00Z",
+      "alreadyImported": 4,
+      "leftOut": 2,
+      "gaps": [
+        "图片 photo-1.png 已跳过"
+      ]
+    },
+    "width": 390,
+    "forbiddenTerms": [
+      "来源",
+      "陈述",
+      "实体",
+      "版本",
+      "依赖",
+      "抽取"
+    ]
+  }
+}

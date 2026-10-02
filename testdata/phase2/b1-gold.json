@@ -1,0 +1,822 @@
+{
+  "contract": "docs/tasks/phase2/batch1/README.md sections 3 and 4",
+  "frozen_before_implementation": true,
+  "policy": "Expectations may only be appended; corrections require coordinator approval. Synthetic content only.",
+  "fixtures": {
+    "trip": {
+      "title": "秘书原话",
+      "text": "下周去成都，想吃春熙路那家火锅，顺便见老王",
+      "expressed_at": "2026-09-12T09:00:00Z",
+      "role": "user",
+      "claims": []
+    },
+    "duplicate_titles": {
+      "count": 18,
+      "titles": [
+        "秘书原话",
+        "快速记录"
+      ],
+      "template": "成都旅行备忘第{n}份：在地点{n}吃特色菜{n}，联系朋友{n}",
+      "claims": [],
+      "query_anchor_template": "b1needle{n:02d}"
+    },
+    "long_sources": {
+      "count": 20,
+      "title": "快速记录",
+      "characters": 2000,
+      "text_prefix": "成都旅行长资料",
+      "tail_marker": "不应收到的全文尾部",
+      "claims": []
+    },
+    "plan": {
+      "title": "秘书原话",
+      "text": "周五三点和张三对方案",
+      "claim": "周五三点和张三对方案",
+      "nature": "plan",
+      "confirmation": "unconfirmed"
+    },
+    "remember_plan": {
+      "title": "秘书原话",
+      "text": "记住我不吃香菜，顺便周五三点开会",
+      "preference": "不吃香菜",
+      "plan": "周五三点开会"
+    },
+    "versioned": {
+      "title": "秘书原话",
+      "old": "成都旧版本春熙路火锅",
+      "current": "成都新版本宽窄巷子兔头"
+    },
+    "media": {
+      "transcript": "音频转录青羊宫见老李",
+      "ocr": "图片OCR武侯祠买明信片"
+    },
+    "system_sources": {
+      "actions": "成都 actions 系统动作正文",
+      "corrections": "成都 corrections 系统纠正正文",
+      "memory-input": "成都 memory-input 系统记忆正文"
+    },
+    "reply": "验收固定回答：春熙路火锅，见老王。",
+    "history_replacement": "（先前回答的依据已更新，请按现在的资料回答）",
+    "deleted_dependency": "（这条回答依据的记忆已变更）",
+    "deleted_content": "（内容已删除）",
+    "brief_date_boundary": {
+      "title": "快速记录",
+      "text": "b1dateneedle 跨日原话日期校验资料。",
+      "at": "2026-09-12T17:30:00Z",
+      "Asia/Shanghai": "2026-09-13",
+      "UTC": "2026-09-12"
+    }
+  },
+  "budgets": {
+    "source_characters": 600,
+    "secretary": {
+      "segments": 6,
+      "characters": 2400
+    },
+    "deputy_and_manual": {
+      "segments": 8,
+      "characters": 4000
+    },
+    "truncation": "…"
+  },
+  "leftovers": {
+    "tables": [
+      "source_scope_revisions",
+      "source_scope_assignments",
+      "source_authorizations",
+      "context_attempts",
+      "attempt_typed_dependencies",
+      "context_artifact_dependencies"
+    ],
+    "columns": {
+      "run_dependencies": [
+        "memory_kind"
+      ],
+      "derived_dependencies": [
+        "dependency_kind"
+      ],
+      "desk_turns": [
+        "context_task"
+      ],
+      "action_log": [
+        "context_task",
+        "context_stale"
+      ]
+    },
+    "migration_rows": [
+      "022_phase2_context_contract.sql",
+      "023_context_policy_undo.sql",
+      "024_context_execution_recovery.sql",
+      "025_secretary_action_lineage.sql"
+    ]
+  },
+  "sequences": [
+    {
+      "id": "P1",
+      "sequence": "新对话召回零陈述原话",
+      "must": [
+        "春熙路",
+        "火锅",
+        "老王",
+        "kind=source",
+        "sourceId 可读取原文"
+      ],
+      "must_not": [
+        "删除后请求不得有原话",
+        "不得凭空有陈述"
+      ]
+    },
+    {
+      "id": "P2",
+      "sequence": "副手实际请求",
+      "must": [
+        "春熙路",
+        "火锅",
+        "老王",
+        "contextVersions 包含原话 id/version/kind=source",
+        "run_dependencies 包含原话"
+      ],
+      "must_not": [
+        "删除后不得供给",
+        "不得需要原话授权"
+      ]
+    },
+    {
+      "id": "P3",
+      "sequence": "manual Brief",
+      "must": [
+        "春熙路",
+        "火锅",
+        "老王",
+        "相关原话：",
+        "source:id@version"
+      ],
+      "must_not": [
+        "删除后 Brief 不得有原话",
+        "不得需要授权"
+      ]
+    },
+    {
+      "id": "P4",
+      "sequence": "只有陈述",
+      "must": [
+        "相关原话",
+        "（没有）",
+        "现有陈述"
+      ],
+      "must_not": [
+        "不得把陈述伪装成原话"
+      ]
+    },
+    {
+      "id": "P5",
+      "sequence": "系统生成记录",
+      "must": [
+        "可读用户资料"
+      ],
+      "must_not": [
+        "actions 正文",
+        "corrections 正文",
+        "memory-input 正文"
+      ]
+    },
+    {
+      "id": "P6",
+      "sequence": "20份2000字资料",
+      "must": [
+        "秘书正常完成",
+        "副手正常完成",
+        "按排名截取摘录",
+        "截断加…"
+      ],
+      "must_not": [
+        "秘书超过6段/单段600字符/合计2400字符",
+        "副手或manual超过8段/单段600字符/合计4000字符",
+        "错误回执",
+        "全文泄漏"
+      ]
+    },
+    {
+      "id": "P7",
+      "sequence": "三句同对话",
+      "must": [
+        "第一句在历史提问恰好一次",
+        "第三句正常请求"
+      ],
+      "must_not": [
+        "第一句重复在相关原话出现"
+      ]
+    },
+    {
+      "id": "P8",
+      "sequence": "大量同名资料",
+      "must": [
+        "同名资料以不同id独立供给",
+        "秘书原话",
+        "快速记录"
+      ],
+      "must_not": [
+        "按标题去重或混淆引用"
+      ]
+    },
+    {
+      "id": "P9",
+      "sequence": "外部非本人接口",
+      "must": [
+        "本人可以读取原文",
+        "原有陈述过滤"
+      ],
+      "must_not": [
+        "非本人 recall/expand/source 获得未授权原话",
+        "客户端JSON伪造内部标记生效"
+      ]
+    },
+    {
+      "id": "P10",
+      "sequence": "副手类别限制",
+      "must": [
+        "相关原话照样供给",
+        "可见类别陈述"
+      ],
+      "must_not": [
+        "偏好类别陈述",
+        "排除陈述",
+        "项目外陈述"
+      ]
+    },
+    {
+      "id": "P11",
+      "sequence": "原话两个版本",
+      "must": [
+        "成都新版本宽窄巷子兔头",
+        "依赖当前版本"
+      ],
+      "must_not": [
+        "成都旧版本春熙路火锅"
+      ]
+    },
+    {
+      "id": "P12",
+      "sequence": "媒体文本",
+      "must": [
+        "音频转录青羊宫见老李",
+        "图片OCR武侯祠买明信片"
+      ],
+      "must_not": [
+        "无可读文本的媒体资料",
+        "二进制或路径冒充文本"
+      ]
+    },
+    {
+      "id": "M1",
+      "sequence": "纠正陈述后读对话",
+      "must": [
+        "原回答",
+        "原卡片",
+        "outdated=true"
+      ],
+      "must_not": [
+        "用户回答被替换语覆盖"
+      ]
+    },
+    {
+      "id": "M2",
+      "sequence": "过期历史进入模型",
+      "must": [
+        "原提问",
+        "（先前回答的依据已更新，请按现在的资料回答）"
+      ],
+      "must_not": [
+        "历史原回答",
+        "旧依赖带入新轮"
+      ]
+    },
+    {
+      "id": "M3",
+      "sequence": "原话新版本",
+      "must": [
+        "原回答",
+        "原卡片",
+        "outdated=true"
+      ],
+      "must_not": [
+        "用户内容被清空"
+      ]
+    },
+    {
+      "id": "M4",
+      "sequence": "删除原话",
+      "must": [
+        "（这条回答依据的记忆已变更）",
+        "依赖轮清空",
+        "原话不可读",
+        "副手结果及文档删除"
+      ],
+      "must_not": [
+        "原回答/原卡片/回执残留",
+        "删除资料继续供给"
+      ]
+    },
+    {
+      "id": "M5",
+      "sequence": "过期回执撤销",
+      "must": [
+        "原回答/卡片/回执",
+        "撤销成功",
+        "刷新仍显示已撤销"
+      ],
+      "must_not": [
+        "outdated 阻止撤销",
+        "刷新撤销状态消失"
+      ]
+    },
+    {
+      "id": "M6",
+      "sequence": "请求及Telegram重放",
+      "must": [
+        "原回答/卡片/回执",
+        "outdated=true",
+        "原轮id"
+      ],
+      "must_not": [
+        "再次调用模型",
+        "重复执行动作"
+      ]
+    },
+    {
+      "id": "M7",
+      "sequence": "纠正副手依据",
+      "must": [
+        "原结果内容",
+        "依据变了/过期标记"
+      ],
+      "must_not": [
+        "结果或文档被删"
+      ]
+    },
+    {
+      "id": "M8",
+      "sequence": "依赖未变",
+      "must": [
+        "原回答",
+        "原卡片",
+        "有效依赖"
+      ],
+      "must_not": [
+        "JSON存在outdated字段"
+      ]
+    },
+    {
+      "id": "N1",
+      "sequence": "完整撤销新建",
+      "must": [
+        "计划陈述删除",
+        "原话保留",
+        "对话保留"
+      ],
+      "must_not": [
+        "之后请求有计划陈述",
+        "之后请求有该轮原话"
+      ]
+    },
+    {
+      "id": "N2",
+      "sequence": "先撤销后抽取",
+      "must": [
+        "抽取完成",
+        "原话保留",
+        "确认/其他证据/remember保护按规则保留"
+      ],
+      "must_not": [
+        "生成可撤除计划陈述"
+      ]
+    },
+    {
+      "id": "N3",
+      "sequence": "两个动作撤一个",
+      "must": [
+        "记忆保留",
+        "原话仍供给",
+        "另一动作仍有效"
+      ],
+      "must_not": [
+        "误判整轮撤销",
+        "提前删除记忆"
+      ]
+    },
+    {
+      "id": "N4",
+      "sequence": "remember加计划",
+      "must": [
+        "计划删除",
+        "不吃香菜偏好保留",
+        "remember回执保留"
+      ],
+      "must_not": [
+        "偏好连带删除",
+        "完整撤销原话继续供给"
+      ]
+    },
+    {
+      "id": "N5",
+      "sequence": "用户确认",
+      "must": [
+        "confirmed陈述保留",
+        "原话保留"
+      ],
+      "must_not": [
+        "confirmed陈述删除",
+        "整轮撤销原话继续供给"
+      ]
+    },
+    {
+      "id": "N6",
+      "sequence": "其他证据",
+      "must": [
+        "多证据陈述保留",
+        "其他资料保留"
+      ],
+      "must_not": [
+        "多证据陈述删除",
+        "整轮撤销原话继续供给"
+      ]
+    },
+    {
+      "id": "N7",
+      "sequence": "拒绝撤销",
+      "must": [
+        "动作/事项/记忆/资料/轮次不变",
+        "原话仍供给"
+      ],
+      "must_not": [
+        "拒绝也删记忆",
+        "错误设置已撤销"
+      ]
+    },
+    {
+      "id": "N8",
+      "sequence": "Telegram撤销",
+      "must": [
+        "同N1计划删除",
+        "资料/轮次保留",
+        "回调确认"
+      ],
+      "must_not": [
+        "真实通知",
+        "之后请求含该轮原话或计划"
+      ]
+    },
+    {
+      "id": "N9",
+      "sequence": "撤销重放",
+      "must": [
+        "返回相同结果",
+        "仅一次删除",
+        "资料/轮次保留"
+      ],
+      "must_not": [
+        "重放报错",
+        "二次副作用"
+      ]
+    },
+    {
+      "id": "N10",
+      "sequence": "界面手动动作",
+      "must": [
+        "记忆保留",
+        "原话可供给"
+      ],
+      "must_not": [
+        "手动撤销触发秘书记忆连带删除"
+      ]
+    },
+    {
+      "id": "N11",
+      "sequence": "修改后逆序撤销",
+      "must": [
+        "先撤修改时第一轮记忆保留",
+        "再撤新建时第一轮记忆删除",
+        "每轮资料/对话保留"
+      ],
+      "must_not": [
+        "只撤修改误删第一轮记忆",
+        "完整撤新建后继续供给"
+      ]
+    },
+    {
+      "id": "G1",
+      "sequence": "全新库迁移",
+      "must": [
+        "全部迁移通过",
+        "正常业务表存在"
+      ],
+      "must_not": [
+        "6张旧表",
+        "5个旧列",
+        "4条旧迁移记录"
+      ]
+    },
+    {
+      "id": "G2",
+      "sequence": "2.0遗留库迁移",
+      "must": [
+        "全部迁移通过",
+        "所有非遗留表的数据逐行一致"
+      ],
+      "must_not": [
+        "6张旧表",
+        "5个旧列",
+        "4条旧迁移记录"
+      ]
+    },
+    {
+      "id": "G3",
+      "sequence": "迁移后重启",
+      "must": [
+        "再次Migrate通过",
+        "结构及业务数据完全相同"
+      ],
+      "must_not": [
+        "重复迁移副作用",
+        "业务行减少"
+      ]
+    },
+    {
+      "id": "N12",
+      "sequence": "固定种子20组，每组分布在多轮里的20个秘书动作，每轮原话各抽出一条计划记忆，逆序逐个撤销",
+      "must": [
+        "每撤完一轮最后一个动作，该轮计划删除",
+        "其他未完整撤销轮的计划保留",
+        "全部撤完事项与开始一致",
+        "每轮原话资料和对话记录保留",
+        "失败输出种子"
+      ],
+      "must_not": [
+        "提前删除该轮计划",
+        "误删其他轮计划",
+        "遗失原话或对话",
+        "随机失败被重跑掩盖"
+      ]
+    },
+    {
+      "id": "P13",
+      "sequence": "副手原话依赖结果采纳进事项，秘书或另一个副手再次处理；原话升版本后再次处理",
+      "must": [
+        "升版本前采纳内容照常给秘书和另一个副手",
+        "原话升版本后模型输入不再包含过时采纳内容",
+        "用户可见事项内容原样保留"
+      ],
+      "must_not": [
+        "有效的source依赖被按claim拒绝",
+        "过时采纳内容继续给模型",
+        "用户可见内容被擦除"
+      ]
+    },
+    {
+      "id": "P14",
+      "sequence": "速记并采纳记忆，关闭秘书可见性，再开另一副手处理同资料，最后重新打开秘书",
+      "must": [
+        "关闭前秘书实际请求含原话和记忆",
+        "关闭后秘书实际请求既无原话也无记忆",
+        "仍开着的副手实际请求照常含原话和记忆",
+        "重新打开后秘书再次实际收到原话和记忆",
+        "受限原话依赖不带入新轮"
+      ],
+      "must_not": [
+        "用同名或另一条可见记忆绕过隐藏",
+        "以类别、推测、项目过滤误挡仍可见原话"
+      ]
+    },
+    {
+      "id": "P15",
+      "sequence": "同一句原话抽出记忆，在事项甲排除，再分别处理甲乙及恢复排除",
+      "must": [
+        "事项乙副手实际请求和manual Brief含原话",
+        "事项甲副手实际请求、manual Brief、事项页秘书请求均无原话和被排除记忆",
+        "大厅秘书没有具体事项时不套用甲的排除",
+        "去掉排除后事项甲再次得到原话",
+        "R2a阻断后原回答和回执保留，模型历史用替换语",
+        "原话依赖采纳内容在受限上下文不供给模型，用户事项原样保留"
+      ],
+      "must_not": [
+        "把事项甲的排除套在事项乙",
+        "只挡新检索却继续使用旧原话依赖或采纳副本"
+      ]
+    }
+  ],
+  "browser": {
+    "mock": [
+      "source卡片可见并打开原文",
+      "outdated标记为依据已更新",
+      "回答/卡片/回执保留",
+      "撤销可用且刷新保留",
+      "正常轮无标记",
+      "390px不横向溢出"
+    ],
+    "backend": [
+      "页面提交合成原话",
+      "新对话询问",
+      "假模型实际请求含原话细节",
+      "source依据卡片打开原文"
+    ],
+    "limits": "Fixed fake replies verify transport and reference handling, not real model behavior."
+  },
+  "random_undo": {
+    "groups": 20,
+    "actions_per_group": 20,
+    "seed_base": 20261001,
+    "seed_step": 1,
+    "failure_reports_seed": true
+  },
+  "additional_rule_checks": {
+    "P6_matched_tail": {
+      "rule": "R3",
+      "must": [
+        "命中尾部摘录中的 成都交付暗号青色灯塔7319",
+        "秘书/副手/manual 三个入口均给命中段",
+        "分段前后的资料均可召回"
+      ],
+      "must_not": [
+        "只给无关头部",
+        "长资料全文"
+      ]
+    },
+    "P10_filters": {
+      "rule": "R1/R2",
+      "must": [
+        "当前项目事实",
+        "跨项目原话",
+        "排除项只影响陈述"
+      ],
+      "must_not": [
+        "偏好陈述",
+        "不包含推测时的推测陈述",
+        "事项排除陈述",
+        "其他项目陈述"
+      ]
+    }
+  },
+  "supplement_2026_10_02": {
+    "rules": [
+      "R8",
+      "R8a"
+    ],
+    "mock_browser": {
+      "must": [
+        "同时有时间轴时，原话留在独立依据列表，陈述照旧进时间轴",
+        "依据入口单击后全文自动可见",
+        "摘录是原文一部分且可精确找到时，有可见标记并定位；摘录等于全文时无 mark",
+        "依据面板没有第 N 版、处理状态、摘要",
+        "资料库入口保留原面板的版本、摘要、展开原文交互"
+      ],
+      "must_not": [
+        "原话并入时间轴",
+        "依据入口需要再次点击展开原文",
+        "摘录找不到时出现伪标记或异常",
+        "资料库入口被全局改成精简面板"
+      ]
+    },
+    "fixture": {
+      "prefix": "合成原文开头：这是完整资料的前文。",
+      "excerpt": "下周去成都，想吃春熙路那家火锅，顺便见老王",
+      "suffix": "合成原文结尾：这是摘录之外的后文。",
+      "missing_excerpt": "完全不在原文里的摘录（合成）",
+      "processing_status": "source.extract：queued"
+    }
+  },
+  "integration_supplement_2026_10_02": {
+    "rules": [
+      "R7 history scope/receipt supplements",
+      "R8a real backend long multiline text"
+    ],
+    "R2_pending": "用户明确隐藏或事项排除的陈述对应原话是否供给尚未决定；不新增这方面断言，保留 TestSecretaryStablePrefixAndVisibility 失败。",
+    "R7": {
+      "must": [
+        "当前场合陈述不可用时，用户轮次内容和回执保留并带 outdated:true",
+        "模型历史保留提问，以替换语取代旧回答，旧陈述依赖不带入",
+        "outdated 轮次在秘书本对话历史里仍保留动作回执行；副手交接不要求回执行"
+      ],
+      "must_not": [
+        "整轮历史被省略",
+        "旧模型回答或不可用陈述依赖继续带入",
+        "秘书本对话历史因 outdated 丢失动作回执行"
+      ]
+    },
+    "long_browser": {
+      "title": "快速记录",
+      "prefix_line": "合成长资料前言：成都出差的普通记录，不含关键交付答案。",
+      "middle_lines": [
+        "成都资料中段：交付暗号是青色灯塔7319。",
+        "见面地点是锦江桥东侧，带上蓝色档案袋。"
+      ],
+      "suffix_line": "合成长资料后记：这些是与暗号无关的日常安排。",
+      "prefix_repetitions": 30,
+      "suffix_repetitions": 30,
+      "question": "成都长资料中段的交付暗号是什么",
+      "reply": "交付暗号是青色灯塔7319。",
+      "must": [
+        "原文超过600字符且含换行",
+        "实际模型请求包含中段交付暗号",
+        "依据点击一次直接展示完整原文",
+        "卡片摘录在原文中一字不差找到",
+        "mark 存在并在面板可见区域内"
+      ],
+      "must_not": [
+        "换行被改写成空格导致摘录无法精确匹配",
+        "标记缺失或在可见区域外",
+        "只展示600字摘录或需二次展开"
+      ]
+    },
+    "approved_legacy": {
+      "TestSecretaryConversationDependenciesStayASet": [
+        "明确陈述与原话两条依赖，各一条且kind正确",
+        "对话变长、600项旧结构均不放大新依赖集合"
+      ],
+      "TestDeskHistoryCannotBypassDestinationItemScope": [
+        "提问、陈述、回答三种独立合成标记",
+        "旧回答替换，提问保留",
+        "记忆节无不可用陈述，ContextMemoryIDs无该id",
+        "exclude 子用例不判断相关原话是否包含其原话"
+      ],
+      "TestSecretaryStablePrefixAndVisibility": "先不改，保持失败并报告"
+    },
+    "long_browser_exact_query_control": {
+      "question": "蓝色档案袋",
+      "must": [
+        "仅位于资料中段的唯一检索词进入实际模型请求和卡片摘录",
+        "同一份带换行长原文的中段摘录可精确定位并标记",
+        "标记在面板可见区域内"
+      ],
+      "must_not": [
+        "使用只有前言的摘录",
+        "原文与摘录的换行差异导致没有标记"
+      ]
+    }
+  },
+  "R2a_supplement_2026_10_02": {
+    "contract_commit": "6ba44aa",
+    "decision": "用户亲手隐藏或排除任一有效证据陈述时，整份原话跟着收紧；类别、推测、项目设置不影响原话；无陈述资料不受影响。",
+    "supersedes_historical_pending": "integration_supplement_2026_10_02.R2_pending / approved_legacy 的旧待定状态，仅保留历史原值，本补充记录已定规则。",
+    "fixtures": {
+      "P14": {
+        "title": "快速记录",
+        "query": "b1visibilityneedle7319",
+        "raw": "b1visibilityneedle7319 原话细节：成都茶馆约老周，带上橙色便签。",
+        "claim": "b1visibilityneedle7319 采纳记忆标记：茶馆计划白鹭。"
+      },
+      "P15": {
+        "title": "秘书原话",
+        "query": "b1exclusionneedle8420",
+        "raw": "b1exclusionneedle8420 原话细节：成都锦江桥东侧交接青色资料袋。",
+        "claim": "b1exclusionneedle8420 记忆标记：锦江桥交接事项。",
+        "other_claim": "b1exclusionneedle8420 第二条记忆标记：青色资料袋。",
+        "adopted": "R2a 副手采纳标记海棠9531"
+      }
+    },
+    "multi_claim_control": {
+      "must": [
+        "同原话两条记忆中一条被隐藏或排除时整份原话不可用",
+        "所有陈述重新可见且未排除时原话恢复",
+        "已删除的陈述不再导致原话阻断",
+        "纯类别限制、推测限制、跨项目不阻断原话",
+        "依赖有效时采纳内容照常给模型，收紧后不再给，用户内容不变"
+      ]
+    },
+    "approved_legacy_additions": {
+      "TestDeskHistoryCannotBypassDestinationItemScope": [
+        "exclude 的相关原话节不含那条陈述的原话",
+        "other-project 和 delegate-other-project 的相关原话节含该原话"
+      ],
+      "TestSecretaryStablePrefixAndVisibility": "原样保留，R2a 合入后应当通过"
+    },
+    "dates": "四组旧固定日期失败单列为任务 D，不算本批发现；T 不写死必须未来的日期。"
+  },
+  "coordinator_adjudication_079151e": {
+    "authority": "docs/tasks/phase2/batch1/T-acceptance.md 协调者对 8a4ac50 一轮发现的裁定；用户明确指令",
+    "authorized_corrections": [
+      {
+        "path": "integration_supplement_2026_10_02.R7.must[2]",
+        "before": "outdated 模型历史仍保留动作回执行",
+        "after": "outdated 轮次在秘书本对话历史里仍保留动作回执行；副手交接不要求回执行",
+        "approval": "I-A1 / R7"
+      },
+      {
+        "path": "integration_supplement_2026_10_02.R7.must_not[2]",
+        "before": "因 outdated 丢失动作回执行",
+        "after": "秘书本对话历史因 outdated 丢失动作回执行",
+        "approval": "I-A1 / R7"
+      },
+      {
+        "path": "supplement_2026_10_02.mock_browser.must[2]",
+        "before": "原文中存在摘录时，该段有可见标记并定位",
+        "after": "摘录是原文一部分且可精确找到时，有可见标记并定位；摘录等于全文时无 mark",
+        "approval": "I-C2-1 / R8a"
+      }
+    ],
+    "I-A2": "秘书 delegate 不要求携带讨论历史；显式 deskTurnIds 的请求仍要问答替换和旧依赖排除",
+    "N12_business_comparison": "严格比较标题、状态、时间、提醒、步骤、项目、说明等业务字段；忽略历史、更新时间、事项版本、sources 中动作及撤销操作记录及其版本，其他来源仍比较",
+    "I-A3": "宽泛提问用例及断言不改；窗口按不同查询词命中数最多的位置选，并列靠前",
+    "Brief_date_boundary": "表达时间和记录时间两个对照；2026-09-12T17:30Z 在 UTC 显示 2026-09-12，在 Asia/Shanghai 显示 2026-09-13；真实副手请求和 manual Brief 都按事项设置时区输出，不能混用 UTC 日期",
+    "D": "四组固定日期失败为主干问题，单独列为 D，不能算本批发现"
+  }
+}

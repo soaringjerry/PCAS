@@ -26,8 +26,10 @@ func (s *Store) DeskTurnByRequest(ctx context.Context, scope memory.Scope, reque
 		var response []byte
 		var dependencies []byte
 		var agent string
-		var erased bool
-		err := tx.QueryRow(ctx, "SELECT response,dependencies,agent_id,question='' AND answer='' FROM desk_turns WHERE owner_id=$1 AND request_id=$2 AND response IS NOT NULL", string(scope.OwnerID), requestID).Scan(&response, &dependencies, &agent, &erased)
+		var erased, originalDeleted bool
+		err := tx.QueryRow(ctx, `SELECT response,dependencies,agent_id,question='' AND answer='',
+ request_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM sources s WHERE s.owner_id=t.owner_id AND s.connector IN ('desk','capture','desk-incomplete') AND lower(s.external_id)=t.request_id::text)
+ FROM desk_turns t WHERE owner_id=$1 AND request_id=$2 AND response IS NOT NULL`, string(scope.OwnerID), requestID).Scan(&response, &dependencies, &agent, &erased, &originalDeleted)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return memory.ErrNotFound
 		}
@@ -43,10 +45,7 @@ func (s *Store) DeskTurnByRequest(ctx context.Context, scope memory.Scope, reque
 			return err
 		}
 		out.ConversationID, out.Turn = saved.ConversationID, saved.Turn
-		if erased || len(refs) > 0 && verifyRunTx(ctx, tx, scope, workspace.Run{AgentID: agent, ContextVersions: refs}) != nil {
-			out.Turn.Reply = "（这条回答依据的记忆已变更）"
-			out.Turn.Cards = []workspace.DeskCard{}
-		}
+		refreshDeskTurnTx(ctx, tx, scope, &out.Turn, workspace.Run{AgentID: agent, ContextVersions: refs}, erased, originalDeleted)
 		if err = refreshDeskReceiptUndoTx(ctx, tx, scope, []workspace.SecretaryTurn{out.Turn}); err != nil {
 			return err
 		}

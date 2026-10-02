@@ -51,6 +51,7 @@ func TestPhase2B1_M2_ModelHistoryReplacesOnlyOldAnswer(t *testing.T) {
 		t.Fatal("no delegated run")
 	}
 	run := delegated.State.Runs[0]
+	t.Logf("delegated actual brief=%s", run.Brief)
 	b1Contains(t, run.Brief, out.Turn.Text, "（先前回答的依据已更新，请按现在的资料回答）")
 	b1Absent(t, run.Brief, out.Turn.Reply)
 	for _, receipt := range out.Turn.Receipts {

@@ -2,25 +2,35 @@ import { RecallSheet } from '../components/RecallSheet'
 import { SourceSheet } from '../components/SourceSheet'
 import { ImportSheet } from '../components/ImportSheet'
 import { downloadExport } from '../store/api'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router'
-import { ChevronRight, Download, History, Info, RotateCw, Search, Trash2, Upload } from 'lucide-react'
+import { ChevronRight, CircleAlert, Download, History, Info, RotateCw, Search, Trash2, Upload } from 'lucide-react'
 import { Checkbox, Chip } from '../components/controls'
-import { Fade, FromLine, ProjectLink, TrustTag } from '../components/Marks'
+import { EventTime, Fade, FromLine, Mentions, ProjectLink, SaidAt, TrustTag } from '../components/Marks'
 import { ConfirmModal, SideSheet } from '../components/Overlay'
 import { UnsureSheet } from '../components/UnsureSheet'
-import { Button, Empty, Progress, Seg, Sheet, Switch, Tag } from '../components/ui'
+import { Button, Empty, Progress, Seg, Sheet, Spinner, Switch, Tag } from '../components/ui'
 import { jobStatusLabel, memoryKindLabel, sampleStateLabel, sourceStatusLabel, triggerLabel } from '../domain/labels'
 import { formatAgo, formatWhen } from '../domain/time'
-import type { Epistemic, Memory, MemoryKind, TrainingSample } from '../domain/types'
+import type { Memory, MemoryFacet, MemoryKind, MemoryMention, TrainingSample } from '../domain/types'
 import { useStore } from '../store/context'
+import { useMemory, useMemoryFacets, useMemoryList } from '../store/memories'
 import { useToast } from '../store/toast'
 
 type Tab = 'memory' | 'sources' | 'training'
 
 const actor = { user: '你', ai: 'AI', import: '导入', system: '系统' } as const
 
-function MemorySheet({ memory, onClose }: { memory: Memory; onClose: () => void }) {
+const hasEventTime = (m: Memory) => Boolean(m.eventFrom && m.eventPrecision && m.eventPrecision !== 'unknown')
+
+function MemorySheet({ memory, entity, onClose, onPick, onDeleted }: {
+  memory: Memory
+  /** The person or place the list is narrowed to, if any. */
+  entity: string
+  onClose: () => void
+  onPick: (mention: MemoryMention) => void
+  onDeleted: () => void
+}) {
   const { state, dispatch } = useStore()
   const toast = useToast()
   const [text, setText] = useState(memory.text)
@@ -30,6 +40,10 @@ function MemorySheet({ memory, onClose }: { memory: Memory; onClose: () => void 
   const runs = state.runs.filter((r) => r.contextMemoryIds.includes(memory.id))
   const samples = state.samples.filter((s) => s.origin.memoryId === memory.id)
   const changed = text.trim() !== memory.text
+  const mentions = memory.mentions ?? []
+  const people = mentions.filter((m) => m.role === 'person')
+  const places = mentions.filter((m) => m.role === 'place')
+  const others = mentions.filter((m) => m.role !== 'person' && m.role !== 'place')
 
   return (
     <SideSheet
@@ -74,6 +88,41 @@ function MemorySheet({ memory, onClose }: { memory: Memory; onClose: () => void 
             <span>{memory.exposure < 0.4 ? '很久没用到，已经变淡，但还在' : `最近用到：${formatAgo(memory.lastUsedAt, state.settings.timezone ?? 'UTC')}`}</span>
           </div>
         </div>
+
+        {(hasEventTime(memory) || memory.expressedAt || mentions.length > 0) && (
+          <dl className="mem-facts">
+            {hasEventTime(memory) && (
+              <div>
+                <dt>说的是哪天的事</dt>
+                <dd><EventTime bare from={memory.eventFrom} to={memory.eventTo} precision={memory.eventPrecision} /></dd>
+              </div>
+            )}
+            {memory.expressedAt && (
+              <div>
+                <dt>什么时候说的</dt>
+                <dd><SaidAt full at={memory.expressedAt} /></dd>
+              </div>
+            )}
+            {people.length > 0 && (
+              <div>
+                <dt>提到的人</dt>
+                <dd className="mem-marks"><Mentions mentions={people} active={entity} onPick={onPick} /></dd>
+              </div>
+            )}
+            {places.length > 0 && (
+              <div>
+                <dt>地点</dt>
+                <dd className="mem-marks"><Mentions mentions={places} active={entity} onPick={onPick} /></dd>
+              </div>
+            )}
+            {others.length > 0 && (
+              <div>
+                <dt>还提到</dt>
+                <dd className="mem-marks"><Mentions mentions={others} active={entity} onPick={onPick} /></dd>
+              </div>
+            )}
+          </dl>
+        )}
 
         <div className="stack-sm">
           <h3 className="sheet-subtitle">谁能看到</h3>
@@ -146,6 +195,7 @@ function MemorySheet({ memory, onClose }: { memory: Memory; onClose: () => void 
           onClose={() => setDeleting(false)}
           onConfirm={async () => {
             if (!(await dispatch({ type: 'deleteMemory', id: memory.id, includeSources }))) return
+            onDeleted()
             onClose()
             toast.show('删掉了')
           }}
@@ -166,27 +216,103 @@ function MemorySheet({ memory, onClose }: { memory: Memory; onClose: () => void 
   )
 }
 
+const natures = Object.keys(memoryKindLabel) as MemoryKind[]
+/** How many people or places are offered before 「更多」. */
+const FACETS_SHOWN = 6
+
+/** The people or the places memories mention, as a row to pick one from. */
+function FacetRow({ label, entries, active, onPick }: { label: string; entries: MemoryFacet[]; active: string; onPick: (entityId: string) => void }) {
+  const [all, setAll] = useState(false)
+  if (!entries.length) return null
+  // The one in use stays in sight even when it is far down the list.
+  const shown = all ? entries : entries.filter((e, i) => i < FACETS_SHOWN || e.entityId === active)
+  return (
+    <div className="mem-facet" role="group" aria-label={label}>
+      <span className="mem-facet-label">{label}</span>
+      <div className="mem-facet-chips">
+        {shown.map((e) => (
+          <button
+            key={e.entityId}
+            type="button"
+            className={`chip chip-toggle${e.entityId === active ? ' on' : ''}`}
+            aria-pressed={e.entityId === active}
+            onClick={() => onPick(e.entityId)}
+          >
+            <span className="mem-facet-name">{e.name}</span>
+            <span className="n">{e.count}</span>
+          </button>
+        ))}
+        {entries.length > FACETS_SHOWN && (
+          <button type="button" className="link-btn mem-facet-more" onClick={() => setAll((v) => !v)}>
+            {all ? '收起' : `更多 ${entries.length - shown.length}`}
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function MemoryTab() {
-  const { state } = useStore()
   const [params, setParams] = useSearchParams()
-  const [kind, setKind] = useState<MemoryKind | 'all'>('all')
-  const [trust, setTrust] = useState<Epistemic | 'all'>('all')
-  const [query, setQuery] = useState('')
+  // The filters live in the address, so a reload or the back button keeps them.
+  const q = params.get('q') ?? ''
+  const entity = params.get('entity') ?? ''
+  const nature = natures.find((n) => n === params.get('nature')) ?? ''
+  const openId = params.get('m')
+  const change = (patch: Record<string, string | null>, replace = false) =>
+    setParams((current) => {
+      const next = new URLSearchParams(current)
+      for (const [name, value] of Object.entries(patch)) {
+        if (value) next.set(name, value)
+        else next.delete(name)
+      }
+      return next
+    }, { replace })
+
+  const [typed, setTyped] = useState({ text: q, from: q })
+  // Back and forward change the address without going through the input.
+  if (typed.from !== q) setTyped({ text: q, from: q })
+  const typing = useRef<number | undefined>(undefined)
+  useEffect(() => () => window.clearTimeout(typing.current), [])
+  const type = (text: string) => {
+    setTyped((t) => ({ ...t, text }))
+    window.clearTimeout(typing.current)
+    typing.current = window.setTimeout(() => {
+      setTyped({ text, from: text.trim() })
+      change({ q: text.trim() }, true)
+    }, 250)
+  }
+
+  const list = useMemoryList({ q, entity, nature })
+  const { facets, problem: facetsProblem, retry: retryFacets } = useMemoryFacets()
+  const opened = useMemory(openId, list.items.find((m) => m.id === openId))
   const [recalling, setRecalling] = useState(false)
-  const open = state.memories.find((m) => m.id === params.get('m'))
-  const shown = state.memories
-    .filter((m) => kind === 'all' || m.kind === kind)
-    .filter((m) => trust === 'all' || m.epistemic === trust)
-    .filter((m) => !query.trim() || m.text.includes(query.trim()))
-    .sort((a, b) => b.exposure - a.exposure)
+  const filtered = Boolean(q || entity || nature)
+  const pick = (entityId: string) => change({ entity: entityId === entity ? null : entityId, m: null })
+  const entityName = entity
+    ? [...(facets?.people ?? []), ...(facets?.places ?? [])].find((f) => f.entityId === entity)?.name
+      ?? list.items.flatMap((m) => m.mentions ?? []).find((m) => m.entityId === entity)?.name
+    : undefined
+
+  // Reading on is automatic: the next page is fetched as the end of the list comes into view.
+  const end = useRef<HTMLDivElement>(null)
+  const { hasMore, more, loadMore } = list
+  const count = list.items.length
+  useEffect(() => {
+    const el = end.current
+    if (!el || !hasMore || more !== 'idle') return
+    const observer = new IntersectionObserver((entries) => { if (entries.some((e) => e.isIntersecting)) loadMore() }, { rootMargin: '600px' })
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [hasMore, more, loadMore, count])
 
   return (
     <>
-      {recalling && <RecallSheet query={query} onClose={() => setRecalling(false)} />}
+      {recalling && <RecallSheet query={typed.text} onClose={() => setRecalling(false)} />}
       <div className="toolbar">
         <label className="search">
           <Search size={15} />
-          <input placeholder="筛选当前记忆…" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="搜索记忆" />
+          <input placeholder="搜记忆里的字…" value={typed.text} onChange={(e) => type(e.target.value)} aria-label="搜索记忆" />
         </label>
         <Button icon={<History size={14} />} onClick={() => setRecalling(true)}>
           深入查找
@@ -195,47 +321,71 @@ function MemoryTab() {
       <div className="toolbar">
         <Seg
           label="类型"
-          value={kind}
-          onChange={setKind}
-          items={[{ value: 'all', label: '全部' }, ...(Object.keys(memoryKindLabel) as MemoryKind[]).map((k) => ({ value: k, label: memoryKindLabel[k] }))]}
-        />
-        <Seg
-          label="可信度"
-          value={trust}
-          onChange={setTrust}
-          items={[
-            { value: 'all', label: '都看' },
-            { value: 'confirmed', label: '已确认' },
-            { value: 'sourced', label: '原话有据' },
-            { value: 'inferred', label: '推测' },
-            { value: 'planned', label: '计划' },
-          ]}
+          value={nature || 'all'}
+          onChange={(v) => change({ nature: v === 'all' ? null : v })}
+          items={[{ value: 'all', label: '全部' }, ...natures.map((k) => ({ value: k, label: memoryKindLabel[k] }))]}
         />
       </div>
+      {facets && (facets.people.length > 0 || facets.places.length > 0) && (
+        <div className="mem-facets">
+          <FacetRow label="提到的人" entries={facets.people} active={entity} onPick={pick} />
+          <FacetRow label="地点" entries={facets.places} active={entity} onPick={pick} />
+        </div>
+      )}
+      {facetsProblem && (
+        <p className="hint-line" role="alert">
+          <CircleAlert size={13} />
+          <span>
+            人和地点没读出来：{facetsProblem}{' '}
+            <button type="button" className="link-btn" onClick={retryFacets}>再读一次</button>
+          </span>
+        </p>
+      )}
       <p className="hint-line">
         <Info size={13} />
         「原话有据」保留你刚记录的直接表达，不代表已经核实；波浪下划线是待确认的 AI 理解。长期不用的记忆会变淡；深入查找可翻历史和原文。
       </p>
+      {filtered && (
+        <p className="mem-summary" role="status">
+          {list.phase === 'ready' && <span>{entity ? `提到「${entityName ?? '它'}」的记忆` : '符合的记忆'}有 {list.total} 条</span>}
+          <button type="button" className="link-btn" onClick={() => { window.clearTimeout(typing.current); change({ q: null, entity: null, nature: null }) }}>
+            清掉筛选
+          </button>
+        </p>
+      )}
       <Sheet>
-        {shown.length === 0 ? (
-          <Empty>没找到。</Empty>
+        {list.phase === 'loading' ? (
+          <div className="mem-state" role="status">
+            <Spinner />
+            正在读取记忆…
+          </div>
+        ) : list.phase === 'failed' ? (
+          <div className="mem-state failed" role="alert">
+            <CircleAlert size={15} />
+            <span>记忆没读出来：{list.problem}</span>
+            <Button size="sm" icon={<RotateCw size={13} />} onClick={list.retry}>
+              重试
+            </Button>
+          </div>
+        ) : count === 0 ? (
+          <Empty>{filtered ? '没找到符合的记忆。' : '还没有记忆。跟秘书说点什么，或者导入资料，就会有了。'}</Empty>
         ) : (
           <div className="list">
-            {shown.map((m) => (
-              <div
-                key={m.id}
-                className="mem-entry"
-                style={{ opacity: 0.5 + m.exposure * 0.5 }}
-                onClick={() => setParams({ m: m.id })}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => e.key === 'Enter' && setParams({ m: m.id })}
-              >
+            {list.items.map((m) => (
+              <div key={m.id} className="mem-entry" style={{ opacity: 0.5 + m.exposure * 0.5 }} onClick={() => change({ m: m.id })}>
                 <div className="grow">
-                  <div className={`text${m.epistemic === 'inferred' ? ' guess' : ''}`}>{m.text}</div>
+                  {/* The click is handled by the row; the button gives the keyboard the same way in. */}
+                  <button type="button" className={`mem-text${m.epistemic === 'inferred' ? ' guess' : ''}`}>{m.text}</button>
+                  {(hasEventTime(m) || (m.mentions?.length ?? 0) > 0) && (
+                    <div className="mem-marks">
+                      <EventTime from={m.eventFrom} to={m.eventTo} precision={m.eventPrecision} />
+                      <Mentions mentions={m.mentions} active={entity} limit={6} onPick={(mention) => pick(mention.entityId)} />
+                    </div>
+                  )}
                   <div className="meta">
                     <span>{memoryKindLabel[m.kind]}</span>
                     <TrustTag value={m.epistemic} />
+                    <SaidAt at={m.expressedAt} />
                     {m.versions.length > 1 && <span>改过 {m.versions.length - 1} 次</span>}
                     <span>{m.visibleTo.length ? `${m.visibleTo.length} 个 AI 能看` : '只有你能看'}</span>
                     <ProjectLink id={m.projectId} />
@@ -244,10 +394,49 @@ function MemoryTab() {
                 <Fade value={m.exposure} />
               </div>
             ))}
+            {hasMore && (
+              <div ref={end} className={`mem-state${more === 'failed' ? ' failed' : ''}`} role={more === 'failed' ? 'alert' : 'status'}>
+                {more === 'failed' ? (
+                  <>
+                    <CircleAlert size={15} />
+                    <span>后面的没读出来：{list.moreProblem}</span>
+                    <Button size="sm" icon={<RotateCw size={13} />} onClick={loadMore}>
+                      接着读
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <Spinner />
+                    正在读后面的…
+                  </>
+                )}
+              </div>
+            )}
           </div>
         )}
       </Sheet>
-      {open && <MemorySheet key={open.id} memory={open} onClose={() => setParams({})} />}
+      {openId && opened.memory && (
+        <MemorySheet
+          key={opened.memory.id}
+          memory={opened.memory}
+          entity={entity}
+          onClose={() => change({ m: null })}
+          onPick={(mention) => pick(mention.entityId)}
+          onDeleted={() => list.remove(opened.memory!.id)}
+        />
+      )}
+      {openId && !opened.memory && (
+        <SideSheet title="记忆" onClose={() => change({ m: null })}>
+          {opened.phase === 'loading' && <p className="row muted"><Spinner />读取中…</p>}
+          {opened.phase === 'gone' && <p className="muted">这条记忆已经不在了：它被删掉了，或者记下它的那一步被撤销了。</p>}
+          {opened.phase === 'failed' && (
+            <div className="stack-sm">
+              <p className="form-error" role="alert"><CircleAlert size={14} />这条记忆没读出来：{opened.problem}</p>
+              <div><Button size="sm" icon={<RotateCw size={13} />} onClick={opened.retry}>重试</Button></div>
+            </div>
+          )}
+        </SideSheet>
+      )}
     </>
   )
 }
@@ -438,7 +627,7 @@ export function LibraryPage() {
           value={tab}
           onChange={(v) => setParams(v === 'memory' ? {} : { tab: v })}
           items={[
-            { value: 'memory', label: '记忆', count: state.memories.length },
+            { value: 'memory', label: '记忆', count: state.memoryTotal ?? state.memories.length },
             { value: 'sources', label: failed ? `来源 · ${failed} 项出错` : '来源' },
             { value: 'training', label: '训练数据', count: state.samples.length },
           ]}

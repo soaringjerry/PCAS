@@ -1,0 +1,188 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { Memory, MemoryFacets, MemoryKind, MemoryPage } from '../domain/types'
+import { api, APIError } from './api'
+import { useStore } from './context'
+
+// The workspace snapshot carries only the 200 most recently updated memories.
+// The full list, one memory by id, and the people and places come from here.
+
+export interface MemoryFilter {
+  /** Words the memory contains. */
+  q: string
+  /** A person or place: only memories that mention it. */
+  entity: string
+  nature: MemoryKind | ''
+}
+
+const PAGE = 50
+
+/** Why a read failed, in words the user can act on. */
+function readProblem(e: unknown): string {
+  if (!(e instanceof APIError)) return '网络连接中断，请检查网络后重试。'
+  if (e.status === 401) return '登录已过期，请重新登录。'
+  return `服务器出错了（错误 ${e.status}${e.code ? `，${e.code}` : ''}）。请稍后重试；一直这样请查看服务日志。`
+}
+
+function listPath(filter: MemoryFilter, cursor?: string): string {
+  const query = new URLSearchParams({ limit: String(PAGE) })
+  if (filter.q) query.set('q', filter.q)
+  if (filter.entity) query.set('entity', filter.entity)
+  if (filter.nature) query.set('nature', filter.nature)
+  if (cursor) query.set('cursor', cursor)
+  return `/v1/workspace/memories?${query}`
+}
+
+interface Loaded {
+  /** The filter these items answer; anything else on screen is still being read. */
+  key: string
+  phase: 'ready' | 'failed'
+  problem: string
+  items: Memory[]
+  next: string
+  total: number
+  /** Pages read so far. */
+  pages: number
+  more: 'idle' | 'loading' | 'failed'
+  moreProblem: string
+}
+
+const nothing: Loaded = { key: '', phase: 'ready', problem: '', items: [], next: '', total: 0, pages: 0, more: 'idle', moreProblem: '' }
+
+/** A fresh first page replaces a list that is one page long, and is laid over a longer one so the place scrolled to is kept. */
+function refreshed(prev: Loaded, key: string, page: Partial<MemoryPage>): Loaded {
+  const items = page.items ?? []
+  const total = page.total ?? items.length
+  if (prev.key !== key || prev.phase !== 'ready' || prev.pages <= 1) {
+    return { ...nothing, key, items, next: page.next ?? '', total, pages: 1 }
+  }
+  const seen = new Set(items.map((m) => m.id))
+  return { ...prev, items: [...items, ...prev.items.filter((m) => !seen.has(m.id))], total }
+}
+
+export interface MemoryList {
+  phase: 'loading' | 'ready' | 'failed'
+  problem: string
+  items: Memory[]
+  total: number
+  hasMore: boolean
+  more: Loaded['more']
+  moreProblem: string
+  loadMore: () => void
+  retry: () => void
+  /** Takes a memory the user just deleted out of the list without waiting for the next read. */
+  remove: (id: string) => void
+}
+
+/** The memory list for one filter, read a page at a time and re-read from the top whenever the workspace changes. */
+export function useMemoryList(filter: MemoryFilter): MemoryList {
+  const { state } = useStore()
+  const { q, entity, nature } = filter
+  const key = `${q}\n${entity}\n${nature}`
+  const [data, setData] = useState(nothing)
+  const [attempt, setAttempt] = useState(0)
+  const reading = useRef('')
+
+  useEffect(() => {
+    let alive = true
+    api<Partial<MemoryPage>>(listPath({ q, entity, nature }))
+      .then((page) => { if (alive) setData((prev) => refreshed(prev, key, page)) })
+      // A failed re-read keeps what is already shown; only a first read has nothing to fall back on.
+      .catch((e: unknown) => { if (alive) setData((prev) => prev.key === key && prev.phase === 'ready' ? prev : { ...nothing, key, phase: 'failed', problem: readProblem(e) }) })
+    return () => { alive = false }
+  }, [key, q, entity, nature, state.revision, attempt])
+
+  const current = data.key === key ? data : undefined
+  const cursor = current?.phase === 'ready' ? current.next : ''
+  const loadMore = useCallback(() => {
+    const token = `${key}\n${cursor}`
+    if (!cursor || reading.current === token) return
+    reading.current = token
+    setData((prev) => prev.key === key ? { ...prev, more: 'loading', moreProblem: '' } : prev)
+    api<Partial<MemoryPage>>(listPath({ q, entity, nature }, cursor))
+      .then((page) => setData((prev) => {
+        // The list moved on while this page was on its way.
+        if (prev.key !== key || prev.next !== cursor) return prev
+        const seen = new Set(prev.items.map((m) => m.id))
+        return { ...prev, items: [...prev.items, ...(page.items ?? []).filter((m) => !seen.has(m.id))], next: page.next ?? '', total: page.total ?? prev.total, pages: prev.pages + 1, more: 'idle' }
+      }))
+      .catch((e: unknown) => setData((prev) => prev.key === key && prev.next === cursor ? { ...prev, more: 'failed', moreProblem: readProblem(e) } : prev))
+      .finally(() => { if (reading.current === token) reading.current = '' })
+  }, [key, q, entity, nature, cursor])
+
+  const retry = useCallback(() => { setData(nothing); setAttempt((n) => n + 1) }, [])
+  const remove = useCallback((id: string) => setData((prev) => prev.items.some((m) => m.id === id) ? { ...prev, items: prev.items.filter((m) => m.id !== id), total: Math.max(0, prev.total - 1) } : prev), [])
+
+  // The snapshot is re-read after every change, so its copy of a memory is the newer one.
+  const recent = useMemo(() => new Map(state.memories.map((m) => [m.id, m])), [state.memories])
+  const items = useMemo(() => (current?.items ?? []).map((m) => recent.get(m.id) ?? m), [current, recent])
+
+  return {
+    phase: current?.phase ?? 'loading',
+    problem: current?.problem ?? '',
+    items,
+    total: current?.total ?? 0,
+    hasMore: Boolean(cursor),
+    more: current?.more ?? 'idle',
+    moreProblem: current?.moreProblem ?? '',
+    loadMore,
+    retry,
+    remove,
+  }
+}
+
+/** The people and places memories mention, most mentioned first. */
+export function useMemoryFacets(): { facets?: MemoryFacets; problem: string; retry: () => void } {
+  const { state } = useStore()
+  const [facets, setFacets] = useState<MemoryFacets>()
+  const [problem, setProblem] = useState('')
+  const [attempt, setAttempt] = useState(0)
+  useEffect(() => {
+    let alive = true
+    api<Partial<MemoryFacets>>('/v1/workspace/memory-facets')
+      .then((v) => { if (alive) { setFacets({ people: v.people ?? [], places: v.places ?? [] }); setProblem('') } })
+      .catch((e: unknown) => { if (alive) setProblem(readProblem(e)) })
+    return () => { alive = false }
+  }, [state.revision, attempt])
+  const retry = useCallback(() => { setProblem(''); setAttempt((n) => n + 1) }, [])
+  // An earlier answer stays usable when a later read fails.
+  return { facets, problem: facets ? '' : problem, retry }
+}
+
+export interface OneMemory {
+  memory?: Memory
+  /** `gone`: it was deleted, or the action that made it was undone. */
+  phase: 'loading' | 'ready' | 'gone' | 'failed'
+  problem: string
+  retry: () => void
+}
+
+/**
+ * One memory by id. The snapshot answers for the recent ones; an older one is
+ * read on its own, with `known` (say, its row in a list) shown meanwhile.
+ */
+export function useMemory(id: string | null, known?: Memory): OneMemory {
+  const { state } = useStore()
+  const recent = id ? state.memories.find((m) => m.id === id) : undefined
+  const [read, setRead] = useState<{ id: string; memory?: Memory; phase: 'ready' | 'gone' | 'failed'; problem: string }>()
+  const [attempt, setAttempt] = useState(0)
+  const wanted = id && !recent ? id : ''
+  useEffect(() => {
+    if (!wanted) return
+    let alive = true
+    api<Partial<Memory>>(`/v1/workspace/memories/${encodeURIComponent(wanted)}`)
+      .then((memory) => { if (alive) setRead(memory.id ? { id: wanted, memory: memory as Memory, phase: 'ready', problem: '' } : { id: wanted, phase: 'gone', problem: '' }) })
+      .catch((e: unknown) => {
+        if (!alive) return
+        if (e instanceof APIError && e.status === 404) setRead({ id: wanted, phase: 'gone', problem: '' })
+        else setRead((prev) => prev?.id === wanted && prev.memory ? prev : { id: wanted, phase: 'failed', problem: readProblem(e) })
+      })
+    return () => { alive = false }
+  }, [wanted, state.revision, attempt])
+  const retry = useCallback(() => { setRead(undefined); setAttempt((n) => n + 1) }, [])
+
+  if (!id) return { phase: 'gone', problem: '', retry }
+  if (recent) return { memory: recent, phase: 'ready', problem: '', retry }
+  if (read?.id === id && read.phase !== 'failed') return { memory: read.memory, phase: read.phase, problem: '', retry }
+  if (known) return { memory: known, phase: 'ready', problem: '', retry }
+  return read?.id === id ? { phase: 'failed', problem: read.problem, retry } : { phase: 'loading', problem: '', retry }
+}

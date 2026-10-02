@@ -309,10 +309,9 @@ func TestPhase2B2_M7_NewDeputyVisibilityInitializesOnlyOnce(t *testing.T) {
 	}
 	// Existing enabled agents have been observed before the new deputy appears.
 	initial := b2Snapshot(t, s, scope)
-	newAgent := initial.Agents[0]
-	newAgent.ID = "B"
-	newAgent.Name = "新副手B"
-	newAgent.Enabled = false
+	// Construct a fresh deputy. Copying the existing agent would also copy
+	// its already-initialized memory marker, contradicting this fixture.
+	newAgent := workspace.Agent{ID: "B", Name: "新副手B", Enabled: false, Channel: initial.Agents[0].Channel, MemoryKinds: append([]string{}, initial.Agents[0].MemoryKinds...)}
 	b2Exec(t, s, `INSERT INTO workspace_agents(owner_id,id,document) VALUES($1,'B',$2)`, string(scope.OwnerID), asJSON(newAgent))
 	registry := s.models
 	registry.Config.Providers = append(registry.Config.Providers, ai.Provider{ID: "B", Name: "新副手B", Protocol: "openai", BaseURL: registry.Config.Providers[0].BaseURL, Model: "test", MaxOutput: 100, CostMode: "free"})

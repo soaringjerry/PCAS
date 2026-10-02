@@ -7,7 +7,9 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/soaringjerry/PCAS/internal/testsupport"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -17,7 +19,7 @@ func TestSecretaryHistoryOneEntryPerAction(t *testing.T) {
 	ctx := context.Background()
 	workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: asJSON(map[string]string{"timezone": "Asia/Shanghai"})})
 	output := secretaryOutput{Actions: []secretaryAction{{
-		Op: "create_task", Title: "给张三回邮件", Due: stringPointer("2026-10-02T15:00"),
+		Op: "create_task", Title: "给张三回邮件", Due: stringPointer(testsupport.DateFromToday(t, "Asia/Shanghai", 1, 15, 0).Format("2006-01-02T15:04")),
 		Project: stringPointer("new:A"), Notes: stringPointer("核对附件"),
 		OwedTo: stringPointer("张三"), WaitingFor: stringPointer("确认方案"),
 	}}}
@@ -31,7 +33,7 @@ func TestSecretaryHistoryOneEntryPerAction(t *testing.T) {
 	if len(task.History) != 1 || task.History[0].By != "secretary" || !strings.HasPrefix(task.History[0].Summary, "新建：") || !strings.Contains(task.History[0].Summary, "15:00 给张三回邮件 · A 项目 · 14:30 提醒") {
 		t.Fatalf("creation must have one meaningful secretary revision: %+v", task.History)
 	}
-	if task.Notes != "核对附件" || task.OwedTo == nil || task.OwedTo.Who != "张三" || task.WaitingFor != "确认方案" || len(task.Triggers) != 1 || task.Triggers[0].NextAt != "2026-10-02T06:30:00Z" {
+	if task.Notes != "核对附件" || task.OwedTo == nil || task.OwedTo.Who != "张三" || task.WaitingFor != "确认方案" || len(task.Triggers) != 1 || task.Triggers[0].NextAt != testsupport.DateFromToday(t, "Asia/Shanghai", 1, 15, 0).Add(-30*time.Minute).UTC().Format(time.RFC3339) {
 		t.Fatal("creation lost fields or reminder", task)
 	}
 	if replay := mustTurn(t, s, scope, req); !reflect.DeepEqual(replay.State.Tasks[0].History, task.History) {
@@ -85,7 +87,7 @@ func TestSecretaryHistoryOneEntryPerAction(t *testing.T) {
 		t.Fatal("task absent from action log")
 	}
 	assertLog(created.Turn.Receipts[0], nil, 2) // task and implicit project
-	output.Actions = []secretaryAction{{Op: "update", Ref: "THIS", Set: map[string]json.RawMessage{"due": asJSON("2026-10-05T10:00")}}}
+	output.Actions = []secretaryAction{{Op: "update", Ref: "THIS", Set: map[string]json.RawMessage{"due": asJSON(testsupport.DateFromToday(t, "Asia/Shanghai", 4, 10, 0).Format("2006-01-02T15:04"))}}}
 	req = turnRequest("改到周一十点")
 	req.ThingID = &task.ID
 	updated := mustTurn(t, s, scope, req)
@@ -93,7 +95,7 @@ func TestSecretaryHistoryOneEntryPerAction(t *testing.T) {
 	if len(changed.History) != 2 || changed.History[0] != task.History[0] || changed.History[1].By != "secretary" || !strings.HasPrefix(changed.History[1].Summary, "更新：") {
 		t.Fatal("reschedule must append exactly one revision", changed.History)
 	}
-	if changed.Due != "2026-10-05T02:00:00Z" || changed.Triggers[0].NextAt != "2026-10-05T01:30:00Z" || !strings.Contains(changed.History[1].Summary, "09:30 提醒") {
+	if changed.Due != testsupport.DateFromToday(t, "Asia/Shanghai", 4, 10, 0).UTC().Format(time.RFC3339) || changed.Triggers[0].NextAt != testsupport.DateFromToday(t, "Asia/Shanghai", 4, 10, 0).Add(-30*time.Minute).UTC().Format(time.RFC3339) || !strings.Contains(changed.History[1].Summary, "09:30 提醒") {
 		t.Fatal("reschedule did not preserve reminder", changed)
 	}
 	assertLog(updated.Turn.Receipts[0], &task, 1)
@@ -122,8 +124,8 @@ func TestSecretaryHistoryBatchesOnlyWithinOneAction(t *testing.T) {
 		kind   string
 	}{
 		{"plain task and steps", secretaryAction{Op: "create_task", Title: "任务"}, secretaryAction{Op: "add_steps", Ref: "THIS", Steps: []string{"核对", "准备", "发送"}}, "task"},
-		{"reminder only", secretaryAction{Op: "create_task", Title: "提醒", Due: stringPointer("2026-10-02T15:00")}, secretaryAction{Op: "update", Ref: "THIS", Set: map[string]json.RawMessage{"remind": asJSON("-1h")}}, "task"},
-		{"idea with condition", secretaryAction{Op: "create_idea", Title: "想法", Condition: stringPointer("下周再看"), ConditionDue: stringPointer("2026-10-05")}, secretaryAction{Op: "update", Ref: "THIS", Set: map[string]json.RawMessage{"title": asJSON("新想法"), "notesAppend": asJSON("补充")}}, "idea"},
+		{"reminder only", secretaryAction{Op: "create_task", Title: "提醒", Due: stringPointer(testsupport.DateFromToday(t, "Asia/Shanghai", 1, 15, 0).Format("2006-01-02T15:04"))}, secretaryAction{Op: "update", Ref: "THIS", Set: map[string]json.RawMessage{"remind": asJSON("-1h")}}, "task"},
+		{"idea with condition", secretaryAction{Op: "create_idea", Title: "想法", Condition: stringPointer("下周再看"), ConditionDue: stringPointer(testsupport.DateFromToday(t, "Asia/Shanghai", 4, 23, 59).Format("2006-01-02"))}, secretaryAction{Op: "update", Ref: "THIS", Set: map[string]json.RawMessage{"title": asJSON("新想法"), "notesAppend": asJSON("补充")}}, "idea"},
 		{"project", secretaryAction{Op: "create_project", Name: "项目"}, secretaryAction{Op: "update", Ref: "THIS", Set: map[string]json.RawMessage{"title": asJSON("新项目"), "notesAppend": asJSON("目标")}}, "project"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/soaringjerry/PCAS/internal/ai"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/testsupport"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -44,12 +46,12 @@ func TestStabilizationS1_ConcurrentConversationSeesPreviousObject(t *testing.T) 
 		if calls.Add(1) == 1 {
 			close(firstEntered)
 			<-releaseFirst
-			secretaryModelReply(w, `{"actions":[{"op":"create_task","title":"S1会议","due":"2026-10-02T15:00"}]}`)
+			secretaryModelReply(w, fmt.Sprintf(`{"actions":[{"op":"create_task","title":"S1会议","due":"%s"}]}`, testsupport.DateFromToday(t, "UTC", 1, 15, 0).Format("2006-01-02T15:04")))
 			return
 		}
 		secondPrompt = string(body)
 		close(secondEntered)
-		secretaryModelReply(w, `{"actions":[{"op":"update","ref":"R1","set":{"due":"2026-10-02T16:00"}}]}`)
+		secretaryModelReply(w, fmt.Sprintf(`{"actions":[{"op":"update","ref":"R1","set":{"due":"%s"}}]}`, testsupport.DateFromToday(t, "UTC", 1, 16, 0).Format("2006-01-02T15:04")))
 	})
 	t.Cleanup(release)
 	type result struct {
@@ -96,7 +98,7 @@ func TestStabilizationS1_ConcurrentConversationSeesPreviousObject(t *testing.T) 
 	if premature {
 		t.Error("same conversation second model entered before first result was released")
 	}
-	if len(current.Tasks) != 1 || current.Tasks[0].Due != "2026-10-02T16:00:00Z" {
+	if len(current.Tasks) != 1 || current.Tasks[0].Due != testsupport.DateFromToday(t, "UTC", 1, 16, 0).UTC().Format(time.RFC3339) {
 		t.Errorf("final stored task was not rescheduled: %+v", current.Tasks)
 	}
 	if len(a.out.State.Tasks) != 1 || len(b.out.State.Tasks) != 1 || len(b.out.Turn.Receipts) != 1 {

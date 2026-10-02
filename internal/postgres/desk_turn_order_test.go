@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 	"sync"
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/testsupport"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -100,11 +102,11 @@ func TestSecretaryOrderCommittedFIFOAcrossStores(t *testing.T) {
 		case "三点开会":
 			close(held)
 			<-release
-			secretaryModelReply(w, `{"actions":[{"op":"create_task","title":"F15会议","due":"2026-10-02T15:00"}]}`)
+			secretaryModelReply(w, fmt.Sprintf(`{"actions":[{"op":"create_task","title":"F15会议","due":"%s"}]}`, testsupport.DateFromToday(t, "UTC", 1, 15, 0).Format("2006-01-02T15:04")))
 		case "改四点":
-			secretaryModelReply(w, `{"actions":[{"op":"update","ref":"R1","set":{"due":"2026-10-02T16:00"}}]}`)
+			secretaryModelReply(w, fmt.Sprintf(`{"actions":[{"op":"update","ref":"R1","set":{"due":"%s"}}]}`, testsupport.DateFromToday(t, "UTC", 1, 16, 0).Format("2006-01-02T15:04")))
 		case "最后改五点":
-			secretaryModelReply(w, `{"actions":[{"op":"update","ref":"R1","set":{"due":"2026-10-02T17:00"}}]}`)
+			secretaryModelReply(w, fmt.Sprintf(`{"actions":[{"op":"update","ref":"R1","set":{"due":"%s"}}]}`, testsupport.DateFromToday(t, "UTC", 1, 17, 0).Format("2006-01-02T15:04")))
 		default:
 			http.Error(w, "unexpected fixture", 500)
 		}
@@ -144,7 +146,7 @@ func TestSecretaryOrderCommittedFIFOAcrossStores(t *testing.T) {
 		t.Fatal(got)
 	}
 	state, err := s.Snapshot(context.Background(), scope)
-	if err != nil || len(state.Tasks) != 1 || state.Tasks[0].Due != "2026-10-02T17:00:00Z" {
+	if err != nil || len(state.Tasks) != 1 || state.Tasks[0].Due != testsupport.DateFromToday(t, "UTC", 1, 17, 0).UTC().Format(time.RFC3339) {
 		t.Fatalf("final business state: %v %+v", err, state.Tasks)
 	}
 	for _, r := range results {
@@ -487,7 +489,7 @@ func TestSecretaryOrderConnectionLossThenNewStoreContinues(t *testing.T) {
 	peer := orderedPeer(t, s)
 	conversation := string(memory.NewID())
 	workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: asJSON(map[string]string{"timezone": "UTC"})})
-	base := workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "surviving meeting", Due: "2026-10-02T15:00:00Z"})
+	base := workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "surviving meeting", Due: testsupport.DateFromToday(t, "UTC", 1, 15, 0).UTC().Format(time.RFC3339)})
 	id := base.Tasks[0].ID
 	entered, release := make(chan struct{}), make(chan struct{})
 	var once sync.Once
@@ -500,10 +502,10 @@ func TestSecretaryOrderConnectionLossThenNewStoreContinues(t *testing.T) {
 		if text == "old failed update" {
 			close(entered)
 			<-release
-			secretaryModelReply(w, `{"actions":[{"op":"update","ref":"THIS","set":{"due":"2026-10-02T16:00"}}]}`)
+			secretaryModelReply(w, fmt.Sprintf(`{"actions":[{"op":"update","ref":"THIS","set":{"due":"%s"}}]}`, testsupport.DateFromToday(t, "UTC", 1, 16, 0).Format("2006-01-02T15:04")))
 			return
 		}
-		secretaryModelReply(w, `{"actions":[{"op":"update","ref":"THIS","set":{"due":"2026-10-02T17:00"}}]}`)
+		secretaryModelReply(w, fmt.Sprintf(`{"actions":[{"op":"update","ref":"THIS","set":{"due":"%s"}}]}`, testsupport.DateFromToday(t, "UTC", 1, 17, 0).Format("2006-01-02T15:04")))
 	})
 	peer.SetModels(s.models)
 	req := turnRequest("old failed update")
@@ -535,12 +537,12 @@ func TestSecretaryOrderConnectionLossThenNewStoreContinues(t *testing.T) {
 	next.ConversationID = &conversation
 	next.ThingID = &id
 	out := mustTurn(t, restarted, scope, next)
-	if len(out.State.Tasks) != 1 || out.State.Tasks[0].Due != "2026-10-02T17:00:00Z" || out.Turn.Receipts[0].Status != "done" {
+	if len(out.State.Tasks) != 1 || out.State.Tasks[0].Due != testsupport.DateFromToday(t, "UTC", 1, 17, 0).UTC().Format(time.RFC3339) || out.Turn.Receipts[0].Status != "done" {
 		t.Fatal("restart failed to advance business state", out.Turn, out.State.Tasks)
 	}
 	recovered := mustTurn(t, restarted, scope, req)
 	orderedAssertCapture(t, orderedTurnResult{out: recovered}, req.Text)
-	if calls.Load() != 2 || recovered.State.Tasks[0].Due != "2026-10-02T17:00:00Z" {
+	if calls.Load() != 2 || recovered.State.Tasks[0].Due != testsupport.DateFromToday(t, "UTC", 1, 17, 0).UTC().Format(time.RFC3339) {
 		t.Fatal("failed old request overwrote newer update", calls.Load(), recovered.State.Tasks)
 	}
 	history, err := restarted.DeskTurns(context.Background(), scope, conversation)

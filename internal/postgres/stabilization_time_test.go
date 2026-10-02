@@ -21,6 +21,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/notify"
+	"github.com/soaringjerry/PCAS/internal/testsupport"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -218,14 +219,16 @@ func TestR2_DateOnlyCreatedAfterNineFallsBackTo2359(t *testing.T) {
 func TestR3_RescheduleRetainsLeadAndRemovingDueDeletesReminder(t *testing.T) {
 	s := testStore(t)
 	scope := owner()
+	due := testsupport.DateFromToday(t, "Australia/Melbourne", 1, 15, 0)
+	updatedDue := testsupport.DateFromToday(t, "Australia/Melbourne", 2, 16, 0)
 	workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: asJSON(map[string]string{"timezone": "Australia/Melbourne"})})
-	out := stabilizationTimeTurn(t, s, scope, map[string]any{"op": "create_task", "title": "改期", "due": "2099-01-05T15:00", "remind": "-2h"})
+	out := stabilizationTimeTurn(t, s, scope, map[string]any{"op": "create_task", "title": "改期", "due": due.Format("2006-01-02T15:04"), "remind": "-2h"})
 	task := stabilizationTimeTask(t, out.State, "")
-	stabilizationTimeReminder(t, task, "2099-01-05T04:00:00Z", "2099-01-05T02:00:00Z", "-2h")
-	out = stabilizationTimeTurn(t, s, scope, map[string]any{"op": "update", "ref": "T1", "set": map[string]any{"due": "2099-01-06T16:00"}})
-	stabilizationTimeReminder(t, stabilizationTimeTask(t, out.State, task.ID), "2099-01-06T05:00:00Z", "2099-01-06T03:00:00Z", "-2h")
+	stabilizationTimeReminder(t, task, due.UTC().Format(time.RFC3339), due.Add(-2*time.Hour).UTC().Format(time.RFC3339), "-2h")
+	out = stabilizationTimeTurn(t, s, scope, map[string]any{"op": "update", "ref": "T1", "set": map[string]any{"due": updatedDue.Format("2006-01-02T15:04")}})
+	stabilizationTimeReminder(t, stabilizationTimeTask(t, out.State, task.ID), updatedDue.UTC().Format(time.RFC3339), updatedDue.Add(-2*time.Hour).UTC().Format(time.RFC3339), "-2h")
 	channel := &stabilizationTimeChannel{}
-	stabilizationTimeCheck(t, s, time.Date(2099, 1, 5, 2, 0, 0, 0, time.UTC), channel)
+	stabilizationTimeCheck(t, s, due.Add(-2*time.Hour), channel)
 	if len(channel.calls) != 0 || len(stabilizationTimeSnapshot(t, s, scope).Notices) != 0 {
 		t.Fatal("old reminder survived rescheduling")
 	}
@@ -234,7 +237,7 @@ func TestR3_RescheduleRetainsLeadAndRemovingDueDeletesReminder(t *testing.T) {
 	if task.Due != "" || len(task.Triggers) != 0 {
 		t.Fatalf("removed due retained reminder: due=%q triggers=%+v", task.Due, task.Triggers)
 	}
-	stabilizationTimeCheck(t, s, time.Date(2099, 1, 6, 5, 0, 0, 0, time.UTC), channel)
+	stabilizationTimeCheck(t, s, updatedDue, channel)
 	if len(channel.calls) != 0 || len(stabilizationTimeSnapshot(t, s, scope).Notices) != 0 {
 		t.Fatal("removed reminder generated notification")
 	}
@@ -295,11 +298,16 @@ func TestR5_UndoCompletionAfterOneHourNeverCatchesUp(t *testing.T) {
 func TestR6_NonexistentMelbourne0230Becomes0330(t *testing.T) {
 	s := testStore(t)
 	scope := owner()
+	// Preserve the independent DST oracle on October's first Sunday next year.
+	year := testsupport.DateFromToday(t, "Australia/Melbourne", 1, 0, 0).Year() + 1
+	october := time.Date(year, 10, 1, 0, 0, 0, 0, time.UTC)
+	sunday := october.AddDate(0, 0, (7-int(october.Weekday()))%7)
+	expected := sunday.AddDate(0, 0, -1).Add(16*time.Hour + 30*time.Minute)
 	workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: asJSON(map[string]string{"timezone": "Australia/Melbourne"})})
-	out := stabilizationTimeTurn(t, s, scope, map[string]any{"op": "create_task", "title": "夏令时安排", "due": "2099-10-04T02:30", "remind": "at"})
+	out := stabilizationTimeTurn(t, s, scope, map[string]any{"op": "create_task", "title": "夏令时安排", "due": sunday.Format("2006-01-02") + "T02:30", "remind": "at"})
 	task := stabilizationTimeTask(t, out.State, "")
 	// Independent UTC fixture: 03:30 AEDT is 16:30Z the previous day.
-	if task.Due != "2099-10-03T16:30:00Z" || len(out.Turn.Receipts) != 1 || !strings.Contains(out.Turn.Receipts[0].Text, "03:30") || strings.Contains(out.Turn.Receipts[0].Text, "02:30") {
+	if task.Due != expected.Format(time.RFC3339) || len(out.Turn.Receipts) != 1 || !strings.Contains(out.Turn.Receipts[0].Text, "03:30") || strings.Contains(out.Turn.Receipts[0].Text, "02:30") {
 		t.Fatalf("DST gap: due=%q receipts=%+v; want 03:30 AEDT / 16:30Z", task.Due, out.Turn.Receipts)
 	}
 }
@@ -307,12 +315,18 @@ func TestR6_NonexistentMelbourne0230Becomes0330(t *testing.T) {
 func TestR7_ReminderAcrossDSTUsesMondayLocalTime(t *testing.T) {
 	s := testStore(t)
 	scope := owner()
+	// Preserve the independent DST oracle on October's first Sunday next year.
+	year := testsupport.DateFromToday(t, "Australia/Melbourne", 1, 0, 0).Year() + 1
+	october := time.Date(year, 10, 1, 0, 0, 0, 0, time.UTC)
+	sunday := october.AddDate(0, 0, (7-int(october.Weekday()))%7)
+	monday := sunday.AddDate(0, 0, 1)
+	due := sunday.Add(22 * time.Hour) // Monday 09:00 AEDT, independently in UTC.
 	workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: asJSON(map[string]string{"timezone": "Australia/Melbourne"})})
-	out := stabilizationTimeTurn(t, s, scope, map[string]any{"op": "create_task", "title": "跨夏令时", "due": "2099-10-05T09:00", "remind": "at"})
+	out := stabilizationTimeTurn(t, s, scope, map[string]any{"op": "create_task", "title": "跨夏令时", "due": monday.Format("2006-01-02") + "T09:00", "remind": "at"})
 	task := stabilizationTimeTask(t, out.State, "")
-	stabilizationTimeReminder(t, task, "2099-10-04T22:00:00Z", "2099-10-04T22:00:00Z", "at")
+	stabilizationTimeReminder(t, task, due.Format(time.RFC3339), due.Format(time.RFC3339), "at")
 	channel := &stabilizationTimeChannel{}
-	for _, at := range []string{"2099-10-03T00:00:00Z", "2099-10-04T21:59:59Z"} {
+	for _, at := range []string{sunday.AddDate(0, 0, -1).Format(time.RFC3339), due.Add(-time.Second).Format(time.RFC3339)} {
 		instant, err := time.Parse(time.RFC3339, at)
 		if err != nil {
 			t.Fatal(err)
@@ -322,10 +336,10 @@ func TestR7_ReminderAcrossDSTUsesMondayLocalTime(t *testing.T) {
 	if len(channel.calls) != 0 || len(stabilizationTimeSnapshot(t, s, scope).Notices) != 0 {
 		t.Fatal("DST reminder sent early")
 	}
-	instant := time.Date(2099, 10, 4, 22, 0, 0, 0, time.UTC)
+	instant := due
 	stabilizationTimeCheck(t, s, instant, channel)
 	state := stabilizationTimeSnapshot(t, s, scope)
-	if len(channel.calls) != 1 || len(state.Notices) != 1 || !strings.Contains(channel.calls[0].Body, "2099-10-05 09:00 AEDT") {
+	if len(channel.calls) != 1 || len(state.Notices) != 1 || !strings.Contains(channel.calls[0].Body, monday.Format("2006-01-02")+" 09:00 AEDT") {
 		t.Fatalf("DST delivery: calls=%+v notices=%+v", channel.calls, state.Notices)
 	}
 	actualDue, err := time.Parse(time.RFC3339, state.Notices[0].DueAt)
@@ -337,29 +351,35 @@ func TestR7_ReminderAcrossDSTUsesMondayLocalTime(t *testing.T) {
 func TestR8_ChangingTimezonePreservesUTCAndChangesFutureInterpretation(t *testing.T) {
 	s := testStore(t)
 	scope := owner()
+	due := testsupport.DateFromToday(t, "Australia/Melbourne", 2, 9, 0)
+	shanghai, err := time.LoadLocation("Asia/Shanghai")
+	if err != nil {
+		t.Fatal(err)
+	}
+	newDue := time.Date(due.Year(), due.Month(), due.Day(), 9, 0, 0, 0, shanghai)
 	workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: asJSON(map[string]string{"timezone": "Australia/Melbourne"})})
-	out := stabilizationTimeTurn(t, s, scope, map[string]any{"op": "create_task", "title": "原事项", "due": "2099-01-05T09:00"})
+	out := stabilizationTimeTurn(t, s, scope, map[string]any{"op": "create_task", "title": "原事项", "due": due.Format("2006-01-02T15:04")})
 	before := stabilizationTimeTask(t, out.State, "")
-	stabilizationTimeReminder(t, before, "2099-01-04T22:00:00Z", "2099-01-04T21:30:00Z", "-30m")
+	stabilizationTimeReminder(t, before, due.UTC().Format(time.RFC3339), due.Add(-30*time.Minute).UTC().Format(time.RFC3339), "-30m")
 	workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: asJSON(map[string]string{"timezone": "Asia/Shanghai"})})
 	after := stabilizationTimeTask(t, stabilizationTimeSnapshot(t, s, scope), before.ID)
 	if after.Due != before.Due || string(asJSON(after.Triggers)) != string(asJSON(before.Triggers)) {
 		t.Fatalf("timezone translated persisted UTC: before=%+v after=%+v", before, after)
 	}
-	out = stabilizationTimeTurn(t, s, scope, map[string]any{"op": "create_task", "title": "新事项", "due": "2099-01-05T09:00"})
+	out = stabilizationTimeTurn(t, s, scope, map[string]any{"op": "create_task", "title": "新事项", "due": due.Format("2006-01-02T15:04")})
 	var next workspace.Item
 	for _, task := range out.State.Tasks {
 		if task.Title == "新事项" {
 			next = task
 		}
 	}
-	stabilizationTimeReminder(t, next, "2099-01-05T01:00:00Z", "2099-01-05T00:30:00Z", "-30m")
+	stabilizationTimeReminder(t, next, newDue.UTC().Format(time.RFC3339), newDue.Add(-30*time.Minute).UTC().Format(time.RFC3339), "-30m")
 	if len(out.Turn.Receipts) != 1 || !strings.Contains(out.Turn.Receipts[0].Text, "09:00 新事项") || !strings.Contains(out.Turn.Receipts[0].Text, "08:30 提醒") {
 		t.Fatalf("new-timezone receipt: %+v", out.Turn.Receipts)
 	}
 	channel := &stabilizationTimeChannel{}
-	stabilizationTimeCheck(t, s, time.Date(2099, 1, 4, 21, 30, 0, 0, time.UTC), channel)
-	if len(channel.calls) != 1 || !strings.Contains(channel.calls[0].Body, "2099-01-05 05:30 CST") {
+	stabilizationTimeCheck(t, s, due.Add(-30*time.Minute), channel)
+	if len(channel.calls) != 1 || !strings.Contains(channel.calls[0].Body, due.Add(-30*time.Minute).In(shanghai).Format("2006-01-02 15:04 MST")) {
 		t.Fatalf("existing reminder display did not use new timezone: %+v", channel.calls)
 	}
 }

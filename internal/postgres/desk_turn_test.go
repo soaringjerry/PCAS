@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -18,6 +19,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/ai"
 	"github.com/soaringjerry/PCAS/internal/httpapi"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/testsupport"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -51,9 +53,9 @@ func TestSecretarySchedulesAndUpdatesRecentTask(t *testing.T) {
 	var calls atomic.Int32
 	secretaryModel(t, s, func(w http.ResponseWriter, r *http.Request) {
 		if calls.Add(1) == 1 {
-			secretaryModelReply(w, `{"reply":"安排好了。","actions":[{"op":"create_task","title":"给张三回邮件","due":"2026-10-02T15:00","project":"P1","remind":null},{"op":"create_task","title":"买牛奶"}]}`)
+			secretaryModelReply(w, fmt.Sprintf(`{"reply":"安排好了。","actions":[{"op":"create_task","title":"给张三回邮件","due":"%s","project":"P1","remind":null},{"op":"create_task","title":"买牛奶"}]}`, testsupport.DateFromToday(t, "Asia/Shanghai", 1, 15, 0).Format("2006-01-02T15:04")))
 		} else {
-			secretaryModelReply(w, `{"reply":"改好了。","actions":[{"op":"update","ref":"R1","set":{"due":"2026-10-05T10:00"}}]}`)
+			secretaryModelReply(w, fmt.Sprintf(`{"reply":"改好了。","actions":[{"op":"update","ref":"R1","set":{"due":"%s"}}]}`, testsupport.DateFromToday(t, "Asia/Shanghai", 4, 10, 0).Format("2006-01-02T15:04")))
 		}
 	})
 	workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: asJSON(map[string]string{"timezone": "Asia/Shanghai"})})
@@ -75,7 +77,7 @@ func TestSecretarySchedulesAndUpdatesRecentTask(t *testing.T) {
 			task = item
 		}
 	}
-	if task.Due != "2026-10-02T07:00:00Z" || task.ProjectID != project || len(task.Triggers) != 1 || task.Triggers[0].NextAt != "2026-10-02T06:30:00Z" || task.Triggers[0].Offset != "-30m" {
+	if task.Due != testsupport.DateFromToday(t, "Asia/Shanghai", 1, 15, 0).UTC().Format(time.RFC3339) || task.ProjectID != project || len(task.Triggers) != 1 || task.Triggers[0].NextAt != testsupport.DateFromToday(t, "Asia/Shanghai", 1, 15, 0).Add(-30*time.Minute).UTC().Format(time.RFC3339) || task.Triggers[0].Offset != "-30m" {
 		t.Fatal(task)
 	}
 	if !strings.Contains(receipt.Text, "15:00 给张三回邮件 · A 项目 · 14:30 提醒") {
@@ -97,7 +99,7 @@ func TestSecretarySchedulesAndUpdatesRecentTask(t *testing.T) {
 	}
 	for _, item := range updated.State.Tasks {
 		if item.ID == task.ID {
-			if item.Due != "2026-10-05T02:00:00Z" || item.Triggers[0].NextAt != "2026-10-05T01:30:00Z" {
+			if item.Due != testsupport.DateFromToday(t, "Asia/Shanghai", 4, 10, 0).UTC().Format(time.RFC3339) || item.Triggers[0].NextAt != testsupport.DateFromToday(t, "Asia/Shanghai", 4, 10, 0).Add(-30*time.Minute).UTC().Format(time.RFC3339) {
 				t.Fatal(item)
 			}
 		}
@@ -107,7 +109,7 @@ func TestSecretarySchedulesAndUpdatesRecentTask(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, item := range restored.Tasks {
-		if item.ID == task.ID && item.Due != "2026-10-02T07:00:00Z" {
+		if item.ID == task.ID && item.Due != testsupport.DateFromToday(t, "Asia/Shanghai", 1, 15, 0).UTC().Format(time.RFC3339) {
 			t.Fatal(item)
 		}
 	}
@@ -445,16 +447,16 @@ func TestSecretaryActionMappingAndDateDefaults(t *testing.T) {
 	secretaryModel(t, s, func(w http.ResponseWriter, r *http.Request) { secretaryModelReply(w, payload) })
 	st := workspaceCommand(t, s, scope, workspace.Command{Type: "addProject", Name: "A"})
 	project := st.Projects[0].ID
-	payload = `{"reply":"办好了","remember":true,"ask":{"question":"还有补充吗？","options":["没有"]},"actions":[{"op":"create_task","title":"寄信","due":"2026-10-04","project":"new: a ","notes":"信封","owedTo":"朋友","waitingFor":"地址"},{"op":"create_idea","title":"小工具","condition":"等成本降下来","conditionDue":"2026-10-10"},{"op":"create_project","name":"B"}]}`
+	payload = fmt.Sprintf(`{"reply":"办好了","remember":true,"ask":{"question":"还有补充吗？","options":["没有"]},"actions":[{"op":"create_task","title":"寄信","due":"%s","project":"new: a ","notes":"信封","owedTo":"朋友","waitingFor":"地址"},{"op":"create_idea","title":"小工具","condition":"等成本降下来","conditionDue":"%s"},{"op":"create_project","name":"B"}]}`, testsupport.DateFromToday(t, "Asia/Shanghai", 3, 23, 59).Format("2006-01-02"), testsupport.DateFromToday(t, "Asia/Shanghai", 9, 23, 59).Format("2006-01-02"))
 	out := mustTurn(t, s, scope, turnRequest("寄信，还想做个小工具，新建 B 项目，记住我的偏好"))
 	if len(out.State.Projects) != 2 || len(out.State.Ideas) != 1 || len(out.State.Tasks) != 1 || out.Turn.Ask == nil || len(out.Turn.Receipts) != 4 {
 		t.Fatal(out)
 	}
 	item := out.State.Tasks[0]
-	if item.ProjectID != project || item.Due != "2026-10-04T15:59:00Z" || item.Triggers[0].NextAt != "2026-10-04T01:00:00Z" || item.Triggers[0].Offset != "09:00" || item.Notes != "信封" || item.OwedTo == nil || item.OwedTo.Who != "朋友" || item.WaitingFor != "地址" {
+	if item.ProjectID != project || item.Due != testsupport.DateFromToday(t, "Asia/Shanghai", 3, 23, 59).UTC().Format(time.RFC3339) || item.Triggers[0].NextAt != testsupport.DateFromToday(t, "Asia/Shanghai", 3, 9, 0).UTC().Format(time.RFC3339) || item.Triggers[0].Offset != "09:00" || item.Notes != "信封" || item.OwedTo == nil || item.OwedTo.Who != "朋友" || item.WaitingFor != "地址" {
 		t.Fatal(item)
 	}
-	if len(out.State.Ideas[0].Conditions) != 1 || out.State.Ideas[0].Conditions[0].DueAt != "2026-10-10T15:59:00Z" || out.Turn.Receipts[3].Op != "remember" || out.Turn.Receipts[3].Undoable {
+	if len(out.State.Ideas[0].Conditions) != 1 || out.State.Ideas[0].Conditions[0].DueAt != testsupport.DateFromToday(t, "Asia/Shanghai", 9, 23, 59).UTC().Format(time.RFC3339) || out.Turn.Receipts[3].Op != "remember" || out.Turn.Receipts[3].Undoable {
 		t.Fatal(out.State.Ideas, out.Turn.Receipts)
 	}
 	payload = `{"actions":[{"op":"add_steps","ref":"THIS","steps":["写信","装信封"]},{"op":"update","ref":"THIS","set":{"title":"寄两封信","notesAppend":"带邮票","project":"none","remind":"none"}},{"op":"delegate","ref":"THIS","kind":"plan","prompt":"写寄信方案"}]}`

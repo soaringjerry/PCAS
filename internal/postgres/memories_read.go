@@ -80,12 +80,9 @@ func memoryWhere(scope memory.Scope, currentOnly bool, opts memoryReadOptions) (
 	return " WHERE " + strings.Join(clauses, " AND "), args
 }
 
-// JSON field access also works before 027 has added event columns. Model
-// callers do not need these fields and avoid constructing that metadata.
-func memoryEventColumns(model bool) string {
-	if model {
-		return "NULL::timestamptz,NULL::timestamptz,'unknown'::text"
-	}
+// JSON field access also works before 027 has added event columns. Both
+// workspace cards and model callers need the same event metadata.
+func memoryEventColumns() string {
 	return "(to_jsonb(c)->>'event_from')::timestamptz,(to_jsonb(c)->>'event_to')::timestamptz,coalesce(to_jsonb(c)->>'event_precision','unknown')"
 }
 
@@ -97,12 +94,9 @@ func (s *Store) readMemoriesTx(ctx context.Context, tx pgx.Tx, scope memory.Scop
 	result := []workspace.Memory{}
 	where, args := memoryWhere(scope, currentOnly, opts)
 	mentionsAvailable := "to_regclass('claim_mentions') IS NOT NULL"
-	if currentOnly {
-		mentionsAvailable = "false"
-	}
 	query := `SELECT r.id::text,c.version,c.nature,c.value #>> '{}',c.confirmation,c.acquisition,coalesce(c.scope->>'project_id',''),
  coalesce(a.last_effective_use_at,r.created_at),coalesce(a.stability,1),coalesce(a.half_life_seconds,2592000),coalesce(a.pinned,false),coalesce(a.reinforcement_limit,8),
- rv.expressed_at,` + memoryEventColumns(currentOnly) + "," + mentionsAvailable + memoryJoins + where + ` ORDER BY r.updated_at DESC,r.id`
+ rv.expressed_at,` + memoryEventColumns() + "," + mentionsAvailable + memoryJoins + where + ` ORDER BY r.updated_at DESC,r.id`
 	if opts.limit > 0 {
 		args = append(args, opts.limit)
 		query += fmt.Sprintf(" LIMIT $%d", len(args))
@@ -141,19 +135,17 @@ func (s *Store) readMemoriesTx(ctx context.Context, tx pgx.Tx, scope memory.Scop
 		m.Versions = []workspace.MemoryVersion{}
 		m.VisibleTo = []string{}
 		m.Mentions = []workspace.MemoryMention{}
-		if !currentOnly {
-			if expressed != nil {
-				m.ExpressedAt = expressed.UTC().Format(time.RFC3339Nano)
-			}
-			if from != nil {
-				m.EventFrom = from.Format(time.RFC3339Nano)
-			}
-			if to != nil {
-				m.EventTo = to.Format(time.RFC3339Nano)
-			}
-			if precision != "unknown" {
-				m.EventPrecision = precision
-			}
+		if expressed != nil {
+			m.ExpressedAt = expressed.UTC().Format(time.RFC3339Nano)
+		}
+		if from != nil {
+			m.EventFrom = from.Format(time.RFC3339Nano)
+		}
+		if to != nil {
+			m.EventTo = to.Format(time.RFC3339Nano)
+		}
+		if precision != "unknown" {
+			m.EventPrecision = precision
 		}
 		indices[m.ID] = len(result)
 		ids = append(ids, m.ID)
@@ -194,48 +186,48 @@ func (s *Store) readMemoriesTx(ctx context.Context, tx pgx.Tx, scope memory.Scop
 	if err != nil {
 		return nil, err
 	}
-	if currentOnly {
-		return result, nil
-	}
-	rows, err = tx.Query(ctx, `SELECT c.claim_id::text,rv.recorded_at,rv.actor,c.value #>> '{}',c.reason FROM claim_revisions c JOIN record_versions rv
- ON(rv.owner_id,rv.record_id,rv.version)=(c.owner_id,c.claim_id,c.version) WHERE c.owner_id=$1 AND c.claim_id=ANY($2::uuid[]) ORDER BY c.claim_id,c.version`, string(scope.OwnerID), ids)
-	if err != nil {
-		return nil, err
-	}
-	for rows.Next() {
-		var id string
-		var v workspace.MemoryVersion
-		var at time.Time
-		if err := rows.Scan(&id, &at, &v.By, &v.Text, &v.Reason); err != nil {
-			rows.Close()
+	// Model callers need mentions below, but not history or grant details.
+	if !currentOnly {
+		rows, err = tx.Query(ctx, `SELECT c.claim_id::text,rv.recorded_at,rv.actor,c.value #>> '{}',c.reason FROM claim_revisions c JOIN record_versions rv
+	 ON(rv.owner_id,rv.record_id,rv.version)=(c.owner_id,c.claim_id,c.version) WHERE c.owner_id=$1 AND c.claim_id=ANY($2::uuid[]) ORDER BY c.claim_id,c.version`, string(scope.OwnerID), ids)
+		if err != nil {
 			return nil, err
 		}
-		v.At = at.UTC().Format(time.RFC3339Nano)
-		i := indices[id]
-		result[i].Versions = append(result[i].Versions, v)
-	}
-	err = rows.Err()
-	rows.Close()
-	if err != nil {
-		return nil, err
-	}
-	rows, err = tx.Query(ctx, `SELECT record_id::text,principal_id FROM record_grants WHERE owner_id=$1 AND record_id=ANY($2::uuid[]) ORDER BY record_id,principal_id`, string(scope.OwnerID), ids)
-	if err != nil {
-		return nil, err
-	}
-	for rows.Next() {
-		var id, agent string
-		if err := rows.Scan(&id, &agent); err != nil {
-			rows.Close()
+		for rows.Next() {
+			var id string
+			var v workspace.MemoryVersion
+			var at time.Time
+			if err := rows.Scan(&id, &at, &v.By, &v.Text, &v.Reason); err != nil {
+				rows.Close()
+				return nil, err
+			}
+			v.At = at.UTC().Format(time.RFC3339Nano)
+			i := indices[id]
+			result[i].Versions = append(result[i].Versions, v)
+		}
+		err = rows.Err()
+		rows.Close()
+		if err != nil {
 			return nil, err
 		}
-		i := indices[id]
-		result[i].VisibleTo = append(result[i].VisibleTo, agent)
-	}
-	err = rows.Err()
-	rows.Close()
-	if err != nil {
-		return nil, err
+		rows, err = tx.Query(ctx, `SELECT record_id::text,principal_id FROM record_grants WHERE owner_id=$1 AND record_id=ANY($2::uuid[]) ORDER BY record_id,principal_id`, string(scope.OwnerID), ids)
+		if err != nil {
+			return nil, err
+		}
+		for rows.Next() {
+			var id, agent string
+			if err := rows.Scan(&id, &agent); err != nil {
+				rows.Close()
+				return nil, err
+			}
+			i := indices[id]
+			result[i].VisibleTo = append(result[i].VisibleTo, agent)
+		}
+		err = rows.Err()
+		rows.Close()
+		if err != nil {
+			return nil, err
+		}
 	}
 	if opts.legacy {
 		return result, nil

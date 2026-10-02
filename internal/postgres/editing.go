@@ -440,7 +440,8 @@ func (s *Store) deleteRecordsTx(ctx context.Context, tx pgx.Tx, scope memory.Sco
 	if err := redactArchivesTx(ctx, tx, scope, archiveIDs); err != nil {
 		return err
 	}
-	// Collect only AI-created non-self entities; retained subjects or mentions
+	// Preserve the original orphan-subject cleanup and add AI mention cleanup;
+	// self is retained and subjects or mentions
 	// (including other memory versions) prevent garbage collection.
 	subjects, err := tx.Query(ctx, `WITH candidates(entity_id) AS (
         SELECT subject_id FROM claim_revisions WHERE owner_id=$1 AND claim_id=ANY($2::uuid[])
@@ -448,7 +449,8 @@ func (s *Store) deleteRecordsTx(ctx context.Context, tx pgx.Tx, scope memory.Sco
         SELECT DISTINCT e.id::text FROM candidates x JOIN memory_records e ON e.owner_id=$1 AND e.id=x.entity_id
         JOIN entity_versions ev ON(ev.owner_id,ev.entity_id,ev.version)=(e.owner_id,e.id,e.version)
         JOIN record_versions created ON(created.owner_id,created.record_id,created.version)=(e.owner_id,e.id,1)
-        WHERE ev.entity_type<>'self' AND created.actor='ai'
+        WHERE ev.entity_type<>'self' AND (created.actor='ai' OR EXISTS(
+            SELECT 1 FROM claim_revisions erased WHERE erased.owner_id=e.owner_id AND erased.subject_id=e.id AND erased.claim_id=ANY($2::uuid[])))
         AND NOT EXISTS(SELECT 1 FROM claim_revisions kept WHERE kept.owner_id=e.owner_id AND kept.subject_id=e.id AND NOT(kept.claim_id=ANY($2::uuid[])))
         AND NOT EXISTS(SELECT 1 FROM claim_mentions kept WHERE kept.owner_id=e.owner_id AND kept.entity_id=e.id AND NOT(kept.claim_id=ANY($2::uuid[])))`, string(scope.OwnerID), ids)
 	if err != nil {

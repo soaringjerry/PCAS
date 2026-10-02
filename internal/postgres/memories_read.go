@@ -15,6 +15,7 @@ import (
 )
 
 type memoryReadOptions struct {
+	legacy   bool
 	query    workspace.MemoryQuery
 	id       string
 	limit    int
@@ -79,6 +80,15 @@ func memoryWhere(scope memory.Scope, currentOnly bool, opts memoryReadOptions) (
 	return " WHERE " + strings.Join(clauses, " AND "), args
 }
 
+// JSON field access also works before 027 has added event columns. Model
+// callers do not need these fields and avoid constructing that metadata.
+func memoryEventColumns(model bool) string {
+	if model {
+		return "NULL::timestamptz,NULL::timestamptz,'unknown'::text"
+	}
+	return "(to_jsonb(c)->>'event_from')::timestamptz,(to_jsonb(c)->>'event_to')::timestamptz,coalesce(to_jsonb(c)->>'event_precision','unknown')"
+}
+
 func (s *Store) memoriesTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, effective ...bool) ([]workspace.Memory, error) {
 	return s.readMemoriesTx(ctx, tx, scope, len(effective) > 0 && effective[0], memoryReadOptions{})
 }
@@ -86,9 +96,13 @@ func (s *Store) memoriesTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, e
 func (s *Store) readMemoriesTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, currentOnly bool, opts memoryReadOptions) ([]workspace.Memory, error) {
 	result := []workspace.Memory{}
 	where, args := memoryWhere(scope, currentOnly, opts)
+	mentionsAvailable := "to_regclass('claim_mentions') IS NOT NULL"
+	if currentOnly {
+		mentionsAvailable = "false"
+	}
 	query := `SELECT r.id::text,c.version,c.nature,c.value #>> '{}',c.confirmation,c.acquisition,coalesce(c.scope->>'project_id',''),
  coalesce(a.last_effective_use_at,r.created_at),coalesce(a.stability,1),coalesce(a.half_life_seconds,2592000),coalesce(a.pinned,false),coalesce(a.reinforcement_limit,8),
- rv.expressed_at,c.event_from,c.event_to,c.event_precision` + memoryJoins + where + ` ORDER BY r.updated_at DESC,r.id`
+ rv.expressed_at,` + memoryEventColumns(currentOnly) + "," + mentionsAvailable + memoryJoins + where + ` ORDER BY r.updated_at DESC,r.id`
 	if opts.limit > 0 {
 		args = append(args, opts.limit)
 		query += fmt.Sprintf(" LIMIT $%d", len(args))
@@ -104,11 +118,13 @@ func (s *Store) readMemoriesTx(ctx context.Context, tx pgx.Tx, scope memory.Scop
 		var last time.Time
 		var expressed, from, to *time.Time
 		var precision string
+		var hasMentions bool
 		var stability, halfLife float64
-		if err := rows.Scan(&m.ID, &m.Version, &m.Kind, &m.Text, &m.Confirmation, &m.Acquisition, &m.ProjectID, &last, &stability, &halfLife, &m.Pinned, &m.ReinforcementLimit, &expressed, &from, &to, &precision); err != nil {
+		if err := rows.Scan(&m.ID, &m.Version, &m.Kind, &m.Text, &m.Confirmation, &m.Acquisition, &m.ProjectID, &last, &stability, &halfLife, &m.Pinned, &m.ReinforcementLimit, &expressed, &from, &to, &precision, &hasMentions); err != nil {
 			rows.Close()
 			return nil, err
 		}
+		opts.legacy = !hasMentions
 		m.Epistemic = "inferred"
 		if m.Confirmation == "confirmed" {
 			m.Epistemic = "confirmed"
@@ -221,6 +237,10 @@ func (s *Store) readMemoriesTx(ctx context.Context, tx pgx.Tx, scope memory.Scop
 	if err != nil {
 		return nil, err
 	}
+	if opts.legacy {
+		return result, nil
+	}
+
 	rows, err = tx.Query(ctx, `SELECT cm.claim_id::text,cm.claim_version,cm.entity_id::text,ev.name,cm.role FROM claim_mentions cm
  JOIN memory_records er ON(er.owner_id,er.id)=(cm.owner_id,cm.entity_id) AND er.state='active'
  JOIN entity_versions ev ON(ev.owner_id,ev.entity_id,ev.version)=(er.owner_id,er.id,er.version)

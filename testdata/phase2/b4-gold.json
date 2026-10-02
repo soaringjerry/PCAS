@@ -288,5 +288,111 @@
       "blocked": 3
     },
     "blockedWillImport": 8
+  },
+  "coordinator_amendment_96c6cb1": {
+    "authority": "batch4/README.md section 8 at 96c6cb1 and coordinator instruction",
+    "classificationOrder": "apply newest-record cap first; every excluded message is only leftOut regardless of prior import or ban; classify retained messages as alreadyImported, blocked or new, with no overlap",
+    "previewInvariant": "messages = leftOut + alreadyImported + blocked + new",
+    "batchTotal": "messages - leftOut - blocked; retained alreadyImported messages count as stored",
+    "completedStored": "equals batch total; alreadyImported + newly stored, never blocked or leftOut",
+    "supersedes": "the earlier blocked-message test inferred total=stored=1 for one existing and one new retained message; section 8 requires total=stored=2; earlier golden entries remain unchanged",
+    "blockedExtension": {
+      "messages": 3,
+      "leftOut": 0,
+      "alreadyImported": 1,
+      "blocked": 1,
+      "new": 1,
+      "total": 2,
+      "stored": 2
+    },
+    "duplicateOnly": {
+      "messages": 4,
+      "leftOut": 0,
+      "alreadyImported": 4,
+      "blocked": 0,
+      "new": 0,
+      "total": 4,
+      "stored": 4
+    },
+    "extended": {
+      "messages": 7,
+      "leftOut": 0,
+      "alreadyImported": 4,
+      "blocked": 0,
+      "new": 3,
+      "total": 7,
+      "stored": 7
+    },
+    "cappedMixed": {
+      "chronologicalIndices": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
+      "initiallyImportedIndices": [
+        0,
+        1,
+        3,
+        4,
+        6
+      ],
+      "bannedIndices": [
+        1,
+        4
+      ],
+      "cap": 5,
+      "leftOutIndices": [
+        0,
+        1,
+        2
+      ],
+      "retainedAlreadyImportedIndices": [
+        3,
+        6
+      ],
+      "retainedBlockedIndices": [
+        4
+      ],
+      "newIndices": [
+        5,
+        7
+      ],
+      "messages": 8,
+      "leftOut": 3,
+      "alreadyImported": 2,
+      "blocked": 1,
+      "new": 2,
+      "total": 4,
+      "stored": 4,
+      "oldExisting": "index 0 stays in the database but counts only as leftOut in this preview",
+      "oldBanned": "index 1 counts only as leftOut, not blocked, and must not be restored",
+      "oldUnseen": "index 2 is not stored"
+    },
+    "browser": {
+      "preview": {
+        "name": "chatgpt-export.zip",
+        "conversations": 3,
+        "messages": 17,
+        "fromUser": 10,
+        "earliest": "2024-06-12T03:10:00Z",
+        "latest": "2025-05-14T03:10:00Z",
+        "alreadyImported": 4,
+        "leftOut": 2,
+        "gaps": [
+          "图片 photo-1.png 已跳过",
+          "3 条消息已被设为不再导入，已跳过。"
+        ],
+        "blocked": 3
+      },
+      "new": 8,
+      "batchTotal": 12,
+      "initialStored": 4,
+      "blockedDisplay": "show the gaps explanation; no separate blocked legend row is required"
+    }
   }
 }

@@ -477,7 +477,7 @@ func sourceExcerpt(text, query string, tokens []string, limit int) string {
 	if len(runes) <= limit {
 		return text
 	}
-	start, end := matchedExcerptRange(text, query, tokens, limit-2)
+	start, end := sourceExcerptRange(text, query, tokens, limit-2)
 	excerpt := string(runes[start:end])
 	if start > 0 {
 		excerpt = "…" + excerpt
@@ -486,6 +486,82 @@ func sourceExcerpt(text, query string, tokens []string, limit int) string {
 		excerpt += "…"
 	}
 	return excerpt
+}
+
+// Score windows anchored before each hit by distinct query words. Merge each word's
+// matching window intervals so repeated occurrences only contribute one vote.
+func sourceExcerptRange(text, query string, tokens []string, limit int) (int, int) {
+	lower := strings.ToLower(text)
+	if query != "" && strings.Contains(lower, strings.ToLower(query)) {
+		return matchedExcerptRange(text, query, tokens, limit)
+	}
+	length := len([]rune(text))
+	if length <= limit {
+		return 0, length
+	}
+	// Substring searches use bytes; all window bounds use Unicode characters.
+	positions := make([]int, len(lower)+1)
+	character := 0
+	for byteIndex := range lower {
+		positions[byteIndex] = character
+		character++
+	}
+	positions[len(lower)] = character
+	lastStart := length - limit
+	votes := make([]int, lastStart+2)
+	candidates := make([]bool, lastStart+1)
+	prefix := min(200, limit/4)
+	seen := map[string]bool{}
+	matches := 0
+	for _, token := range tokens {
+		token = strings.ToLower(token)
+		width := len([]rune(token))
+		if width <= 1 || seen[token] {
+			continue
+		}
+		seen[token] = true
+		left, right := -1, -1
+		for offset := 0; offset < len(lower); {
+			found := strings.Index(lower[offset:], token)
+			if found < 0 {
+				break
+			}
+			at := offset + found
+			offset = at + 1
+			matches++
+			candidates[min(max(0, positions[at]-prefix), lastStart)] = true
+			first := max(0, positions[at]+width-limit)
+			last := min(positions[at], lastStart)
+			if first > last {
+				continue
+			}
+			if left < 0 {
+				left, right = first, last
+			} else if first <= right+1 {
+				right = max(right, last)
+			} else {
+				votes[left]++
+				votes[right+1]--
+				left, right = first, last
+			}
+		}
+		if left >= 0 {
+			votes[left]++
+			votes[right+1]--
+		}
+	}
+	// Keep the existing amount of preceding context for a single hit.
+	if matches == 1 {
+		return matchedExcerptRange(text, query, tokens, limit)
+	}
+	start, best, score := 0, -1, 0
+	for candidate := 0; candidate <= lastStart; candidate++ {
+		score += votes[candidate]
+		if candidates[candidate] && score > best {
+			start, best = candidate, score
+		}
+	}
+	return start, start + limit
 }
 
 // teamSourceVisibleSQL follows explicit visibility and item exclusions on any

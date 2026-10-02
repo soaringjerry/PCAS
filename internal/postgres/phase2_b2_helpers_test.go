@@ -402,3 +402,32 @@ func b2SupplementFrom(t *testing.T, supplement, key string, out any) {
 		t.Fatal(err)
 	}
 }
+
+// These are task/idea suggestions. Memory candidates and accepted records in
+// the same snapshot are not pending task creation (R2/X9/X13).
+func b2TaskIdeaCandidates(items []workspace.Candidate) int {
+	n := 0
+	for _, item := range items {
+		if item.Kind == "task" || item.Kind == "idea" {
+			n++
+		}
+	}
+	return n
+}
+
+func b2ExtractionPayload(t *testing.T, prompt string) struct {
+	Source      string     `json:"source"`
+	ExpressedAt *time.Time `json:"expressed_at"`
+	Timezone    string     `json:"timezone"`
+} {
+	t.Helper()
+	var out struct {
+		Source      string     `json:"source"`
+		ExpressedAt *time.Time `json:"expressed_at"`
+		Timezone    string     `json:"timezone"`
+	}
+	if err := json.Unmarshal([]byte(prompt), &out); err != nil {
+		t.Fatal("captured extraction input is not JSON", err)
+	}
+	return out
+}

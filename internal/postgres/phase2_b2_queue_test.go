@@ -390,10 +390,16 @@ func TestPhase2B2_F6_PausedArchiveSkippedOrdinaryProcessedResumeWorks(t *testing
 	s.SetBlobs(files)
 	at := b2Anchor(t, "Asia/Shanghai")
 	root, src, _ := b2Archive(t, s, scope, at, b2Fixture(t, "archive_user", ""), "")
+	if err := s.ProcessChunks(context.Background(), leaseStage(t, s, scope, src, "source.chunk")); err != nil {
+		t.Fatal(err)
+	}
 	b2Equal(t, b2Count(t, s, `SELECT priority FROM memory_jobs WHERE owner_id=$1 AND record_id=$2 AND stage='source.extract'`, string(scope.OwnerID), string(src.ID)), b2Want[int](t, "F6", "archive_priority"))
 	batch := string(memory.NewID())
 	b2Exec(t, s, `INSERT INTO import_batches(owner_id,id,archive_id,name,state,total,stored) VALUES($1,$2,$3,'合成暂停批次','paused',1,1)`, string(scope.OwnerID), batch, string(root.ID))
 	ordinary := b2Source(t, s, scope, "desk", "user", "我去大理", nil)
+	if err := s.ProcessChunks(context.Background(), leaseStage(t, s, scope, ordinary, "source.chunk")); err != nil {
+		t.Fatal(err)
+	}
 	b2Exec(t, s, `DELETE FROM memory_jobs WHERE owner_id=$1 AND (stage<>'source.extract' OR record_id NOT IN ($2,$3))`, string(scope.OwnerID), string(src.ID), string(ordinary.ID))
 	job, err := s.Claim(context.Background(), time.Minute)
 	if err != nil || job == nil {

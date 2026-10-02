@@ -39,20 +39,36 @@ func b2Library(t *testing.T, s *Store, scope memory.Scope, n int) b2LibraryFixtu
 			g.Places = append(g.Places, e)
 		}
 	}
-	req := memory.CommitRequest{RequestID: memory.NewID(), Entities: entities}
+	// Commit requires evidence for each claim and at most 200 graph records.
+	if _, err := s.Commit(context.Background(), scope, memory.CommitRequest{RequestID: memory.NewID(), Entities: entities}); err != nil {
+		t.Fatal(err)
+	}
+	req := memory.CommitRequest{RequestID: memory.NewID()}
+	flush := func() {
+		if len(req.Claims) == 0 {
+			return
+		}
+		if _, err := s.Commit(context.Background(), scope, req); err != nil {
+			t.Fatal(err)
+		}
+		req = memory.CommitRequest{RequestID: memory.NewID()}
+	}
 	g.From, g.To = b2Interval(t, "Asia/Shanghai", "range")
 	for x := 0; x < n; x++ {
 		date := at.AddDate(0, 0, -x)
 		nature := []string{"fact", "preference", "intention", "plan", "decision"}[x%5]
 		ref := memory.Ref{ID: memory.NewID(), Version: 1, Kind: memory.ClaimKind}
 		req.Claims = append(req.Claims, memory.Claim{Revision: memory.Revision{Ref: ref, ExpressedAt: &date}, SubjectID: self.ID, Predicate: fmt.Sprintf("fixture-%03d", x), Value: asJSON(b2Label(x)), Nature: nature, Acquisition: "direct", Confirmation: "adopted"})
+		source := b2Source(t, s, scope, "memory-input", "user", b2Label(x), &date)
+		req.Evidence = append(req.Evidence, memory.Evidence{Source: source, Target: ref, Acquisition: "direct", Stance: "supports"})
+		if len(req.Claims) == 200 {
+			flush()
+		}
 		g.Refs = append(g.Refs, ref)
 		g.Expressions = append(g.Expressions, date)
 		g.Natures = append(g.Natures, nature)
 	}
-	if _, err := s.Commit(context.Background(), scope, req); err != nil {
-		t.Fatal(err)
-	}
+	flush()
 	for x, ref := range g.Refs {
 		b2Exec(t, s, `UPDATE record_versions SET actor='ai' WHERE owner_id=$1 AND record_id=$2`, string(scope.OwnerID), string(ref.ID))
 		b2Exec(t, s, `UPDATE memory_records SET updated_at=$1 WHERE owner_id=$2 AND id=$3`, at.Add(time.Duration(x)*time.Minute), string(scope.OwnerID), string(ref.ID))
@@ -378,14 +394,22 @@ func TestPhase2B2_M10_DistinctActionableHumanJobMessages(t *testing.T) {
 	}
 	st := b2Snapshot(t, s, scope)
 	messages := []string{}
-	for _, ref := range refs {
+	for index, ref := range refs {
 		found := false
 		for _, j := range st.Jobs {
 			if strings.HasSuffix(j.ID, b2SQLIDs(t, s, `SELECT id::text FROM memory_jobs WHERE owner_id=$1 AND record_id=$2 AND stage='source.extract'`, string(scope.OwnerID), string(ref.ID))[0]) {
 				found = true
 				text := j.Detail + " " + j.Recovery
-				if j.Recovery == "" {
-					t.Error("job must give a recovery suggestion", j.ID)
+				advice := []string{"重试", "再试", "检查", "配置"}
+				if codes[index] == "budget_deferred" {
+					advice = []string{"明天", "提高", "调整", "增加"}
+				}
+				actionable := false
+				for _, fragment := range advice {
+					actionable = actionable || strings.Contains(text, fragment)
+				}
+				if !actionable {
+					t.Error("job must give a recovery suggestion", j.ID, text)
 				}
 				if len([]rune(text)) < 8 {
 					t.Error("job explanation lacks an actionable sentence", text)

@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/blob"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/worker"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -38,7 +39,11 @@ func TestPhase2B2_X1_SelfMentionsExpressionAndEvent(t *testing.T) {
 			b2Event(t, m, &from, &to, "range")
 			b2Confirmation(t, s, scope, m, b2Want[string](t, "X1", "confirmation"))
 			b2ExtractionRecord(t, s, scope, src, "done", 1)
-			b1Contains(t, f.last(t).Raw, zone, at.Format("2006-01-02"))
+			input := b2ExtractionPayload(t, f.last(t).Prompt)
+			b2Equal(t, input.Timezone, zone)
+			if input.ExpressedAt == nil || !input.ExpressedAt.Equal(at) {
+				t.Error("model must receive the exact expression instant", input.ExpressedAt, at)
+			}
 			b2Equal(t, b2Count(t, s, `SELECT count(*) FROM record_versions WHERE owner_id=$1 AND record_id=$2 AND (valid_from IS NOT NULL OR valid_to IS NOT NULL)`, string(scope.OwnerID), m.ID), 0)
 		})
 	}
@@ -242,7 +247,7 @@ func TestPhase2B2_X9_SecretaryTaskAlsoRetainsPlan(t *testing.T) {
 	b2Names(t, m, "person", b2Want[[]string](t, "X9", "people"))
 	b2Event(t, m, &from, &to, b2Want[string](t, "X9", "precision"))
 	st := b2Snapshot(t, s, scope)
-	b2Equal(t, len(st.Candidates), b2Want[int](t, "X9", "candidates"))
+	b2Equal(t, b2TaskIdeaCandidates(st.Candidates), b2Want[int](t, "X9", "candidates"))
 	b2Equal(t, len(st.Tasks), 1)
 }
 func TestPhase2B2_X10_ReprocessingEnrichesWithoutRevisionOrOutdated(t *testing.T) {
@@ -285,7 +290,11 @@ func TestPhase2B2_X11_UserEditedOrConfirmedMemoryNotEnriched(t *testing.T) {
 			before := b2One(t, b2Snapshot(t, s, scope).Memories)
 			after := b2Extract(t, s, scope, f, src, b2TripItem(t, "Asia/Shanghai"))
 			b2Equal(t, len(after), b2Want[int](t, "X11", "memories"))
-			b2Equal(t, b1Map(t, b2One(t, after)), b1Map(t, before))
+			got, want := b1Map(t, b2One(t, after)), b1Map(t, before)
+			// Exposure is computed from time.Now() on each read, not stored content.
+			delete(got, "exposure")
+			delete(want, "exposure")
+			b2Equal(t, got, want)
 			b2Event(t, b2One(t, after), nil, nil, "")
 			b2Names(t, b2One(t, after), "person", []string{})
 		})
@@ -316,7 +325,7 @@ func TestPhase2B2_X13_ImportedHistoricalTimeAndNoTodayTask(t *testing.T) {
 	b2Confirmation(t, s, scope, m, b2Want[string](t, "X13", "confirmation"))
 	st := b2Snapshot(t, s, scope)
 	b2Equal(t, len(st.Tasks), 0)
-	b2Equal(t, len(st.Candidates), b2Want[int](t, "X13", "candidates"))
+	b2Equal(t, b2TaskIdeaCandidates(st.Candidates), b2Want[int](t, "X13", "candidates"))
 }
 func TestPhase2B2_X14_AllLongSourceSegmentsAndOverlapDeduplicated(t *testing.T) {
 	s, scope := testStore(t), owner()
@@ -362,8 +371,9 @@ func TestPhase2B2_X14_AllLongSourceSegmentsAndOverlapDeduplicated(t *testing.T) 
 				prompt += m.Content
 			}
 		}
+		input := b2ExtractionPayload(t, prompt)
 		mu.Lock()
-		requests = append(requests, prompt)
+		requests = append(requests, input.Source)
 		mu.Unlock()
 		// No finished processing record may be visible while any segment is in flight.
 		var premature int
@@ -375,7 +385,7 @@ func TestPhase2B2_X14_AllLongSourceSegmentsAndOverlapDeduplicated(t *testing.T) 
 		}
 		items := []map[string]any{}
 		for _, item := range replies {
-			if strings.Contains(prompt, item["quote"].(string)) {
+			if strings.Contains(input.Source, item["quote"].(string)) {
 				items = append(items, item)
 			}
 		}
@@ -476,7 +486,9 @@ func TestPhase2B2_X16_DeleteOrReplaceDuringActualModelCall(t *testing.T) {
 			unblock()
 			select {
 			case err := <-done:
-				if err != nil {
+				// Deleting the source deletes the fenced job as well. The worker's
+				// lease-lost sentinel is the expected cancellation in that case.
+				if err != nil && !(kind == "delete_during_call" && errors.Is(err, worker.ErrLeaseLost)) {
 					t.Fatal(err)
 				}
 			case <-time.After(5 * time.Second):

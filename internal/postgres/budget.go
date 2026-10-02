@@ -2,7 +2,9 @@ package postgres
 
 import (
 	"context"
+	"crypto/rand"
 	"math"
+	"math/big"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -36,8 +38,8 @@ func (s *Store) reserveModelCost(ctx context.Context, owner memory.ID, cost floa
 			if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM background_usage WHERE job_id=$1)", string(j.ID)).Scan(&exists); err != nil {
 				return err
 			}
-			if exists && j.Attempts != 1 {
-				return memory.ErrUnavailable
+			if exists && j.Attempts != 1 && cost > 0 {
+				return &worker.JobError{Code: "model_call_failed"}
 			}
 		}
 		settings, err := queryDocument[workspace.Settings](ctx, tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1", string(owner))
@@ -55,9 +57,23 @@ func (s *Store) reserveModelCost(ctx context.Context, owner memory.ID, cost floa
 			return err
 		}
 		if spent+cost > settings.DailyBudget {
-			return memory.ErrUnavailable
+			if j == nil {
+				return memory.ErrUnavailable
+			}
+			jitter, err := rand.Int(rand.Reader, big.NewInt(int64(budgetJitter)+1))
+			if err != nil {
+				return err
+			}
+			return &worker.JobError{Code: "budget_deferred", Until: nextBudgetDay(now, loc).Add(time.Duration(jitter.Int64())), NoAttempt: true}
 		}
 		_, err = tx.Exec(ctx, "INSERT INTO background_usage(owner_id,job_id,reserved_cost) VALUES($1,$2,$3)", string(owner), jobID, cost)
 		return err
 	})
+}
+
+const budgetJitter = 10 * time.Minute
+
+func nextBudgetDay(now time.Time, loc *time.Location) time.Time {
+	local := now.In(loc)
+	return time.Date(local.Year(), local.Month(), local.Day()+1, 0, 0, 0, 0, loc)
 }

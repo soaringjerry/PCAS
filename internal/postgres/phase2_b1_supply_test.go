@@ -630,6 +630,34 @@ func b1R2aSupply(t *testing.T, prompt string, refs []memory.Ref, fixture map[str
 	b1HasRef(t, refs, claim, want)
 }
 
+// Review candidates from one original, then adopt through the same command as
+// the UI. Conservative agents keep their existing inference settings.
+func b1R2aExtractAndAdopt(t *testing.T, s *Store, scope memory.Scope, f *b1Fake, source memory.Ref, items ...map[string]any) []workspace.Memory {
+	t.Helper()
+	for _, item := range items {
+		item["kind"] = "unknown"
+	}
+	b1Extract(t, s, scope, f, source, items...)
+	st, err := s.Snapshot(context.Background(), scope)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, item := range items {
+		candidateID := ""
+		for _, candidate := range st.Candidates {
+			if candidate.State == "pending" && candidate.Text == item["text"] && candidate.Source.SourceID == string(source.ID) && candidate.Source.Version == source.Version {
+				candidateID = candidate.ID
+				break
+			}
+		}
+		if candidateID == "" {
+			t.Fatal("review candidate missing for adoption", item["text"])
+		}
+		st = workspaceCommand(t, s, scope, workspace.Command{Type: "acceptCandidate", ID: candidateID, Kind: "memory", MemoryKind: item["nature"].(string), Text: item["text"].(string)})
+	}
+	return st.Memories
+}
+
 func TestPhase2B1_P14_CapturedMemoryVisibilityClosesAndReopensOriginal(t *testing.T) {
 	s, scope := b1Store(t), owner()
 	fixture := b1R2aFixture(t, "P14")
@@ -681,7 +709,7 @@ func TestPhase2B1_P15_ItemExclusionAffectsOnlyThatItemAcrossAllEntrances(t *test
 	item["quote"], item["predicate"] = fixture["raw"], "交接位置"
 	otherItem := b1ExtractItem(fixture["other_claim"], "fact")
 	otherItem["quote"], otherItem["predicate"] = fixture["raw"], "携带物品"
-	memories := b1Extract(t, s, scope, f, source, item, otherItem)
+	memories := b1R2aExtractAndAdopt(t, s, scope, f, source, item, otherItem)
 	claim := b1MemoryRef(t, memories, fixture["claim"])
 	otherClaim := b1MemoryRef(t, memories, fixture["other_claim"])
 	b1R2aVisibility(t, s, scope, claim, "model", "manual")
@@ -740,7 +768,7 @@ func TestPhase2B1_P14_OneRestrictedActiveClaimClosesWholeSource(t *testing.T) {
 	second := b1ExtractItem(fixture["other_claim"], "fact")
 	first["quote"], second["quote"] = fixture["raw"], fixture["raw"]
 	first["predicate"], second["predicate"] = "交接位置", "携带物品"
-	memories := b1Extract(t, s, scope, f, source, first, second)
+	memories := b1R2aExtractAndAdopt(t, s, scope, f, source, first, second)
 	allowed := b1MemoryRef(t, memories, fixture["claim"])
 	restricted := b1MemoryRef(t, memories, fixture["other_claim"])
 	b1R2aVisibility(t, s, scope, allowed, "model", "manual")

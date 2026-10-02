@@ -383,7 +383,7 @@ func TestDeskHistoryCannotBypassDestinationItemScope(t *testing.T) {
 			if change != "exclude" {
 				destination = ""
 			}
-			command := workspace.Command{Type: "requestRun", AgentID: "model", Kind: "draft", Prompt: "Continue the discussion", DeskTurnIDs: []string{answer.ID}}
+			command := workspace.Command{Type: "requestRun", AgentID: "model", Kind: "draft", Prompt: "Continue the discussion about C-8420", DeskTurnIDs: []string{answer.ID}}
 			if change == "delegate-other-project" {
 				command.Type, command.ID, command.Title = "delegateTask", string(memory.NewID()), "New work"
 			} else {

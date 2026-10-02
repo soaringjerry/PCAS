@@ -40,17 +40,20 @@
 | K2 | 同上 | `K2_CompletedAndCancelledTurnItems`：真实秘书动作记录与事项 done/cancelled |
 | K3 | 同上 | `K3_CorrectionAndChangeUseCurrentText`：correction/change 两类新版本，changed 及当前文字 |
 | K4 | 同上 | `K4_SingleRecallGetsTimelineOnlyWithSaidDate`：有日期的单条回忆有时间轴；非回忆单条、无日期单条没有 |
-| K5 | 同上 | `K5_UnknownSaidTimeLastAndEmpty`：无说话时间、也无原话退回日期的条目排最后，at 为空 |
+| K5 | 同上 | `K5_UnknownSaidTimeLastAndEmpty`：按 5beb42c 将夹具收窄到无日期导入文件；记忆和资料表达时间均为空，导入记录时间不能顶替说话时间，条目排最后且 at 为空 |
 | K6 | 同上 | `K6_AllItemsDetermineStatus`：done/todo、done/cancelled、全 done、全 cancelled |
 | K7 | 同上 | `K7_RawOriginalStaysInEvidenceList`：同时引用 M1/S1，原话留在独立依据列表 |
 | K8 | 同上 | `K8_UnrelatedItemFromSameOriginalDoesNotChangeStatus`：同资料的另一轮事项，无论 todo/cancelled 都不影响原轮 done |
+| K9 | `internal/postgres/phase2_b3_timeline_receipts_test.go` | `K9_OldCreationReceiptSurvivesPurgedActionDetails`：真实创建回执、40 天前的原轮，正常命令清空动作明细后事项才做完；回执仍保留，时间轴 done |
+| K10 | 同上 | `K10_UndoneCreationLeavesNoAssociatedItems`：真实当场撤销、事项确实消失、原回执保留且已撤销；独立背景记忆无变化 open，纠正后 changed |
+| K11 | `internal/postgres/phase2_b3_timeline_test.go` | `K11_LegacySecretaryMemoryUsesOriginalRecordedTime`：真实秘书原话，记忆和原话表达时间均为空；按原话记录时间排序，覆盖悉尼/上海 |
 | V1 | `web/tests/phase2-batch3.spec.ts` | 四状态、说话日期/事件日期、地点人、时间不详、390px 元素和页面不溢出 |
 | V2 | 同上 | 点击时间轴按钮，全文自动可见；检查原话 ID 与版本请求 |
 | V3 | `web/tests/phase2-batch3-backend.spec.ts` | 独立 schema 数据约定直接写进临时真实后端；假模型 M1；完整实际 HTTP 请求；去年单条时间轴；点击原话 |
 
 ## 规则位置和检查
 
-R1–R4：P 序列；R5：S9/S10/S13；R6：S4/S5/S12；R7：S1/S4/S5；R8：S3；R9：S2/S6；R10：S2/S7；R11：S8；R12：S1/S6/V3；R13：S2/S7/S8/S9/S11；R14：K1/K5/K7；R15：K2/K3/K6/K8；R16：K4；R17：V1–V3。
+R1–R4：P 序列；R5：S9/S10/S13；R6：S4/S5/S12；R7：S1/S4/S5；R8：S3；R9：S2/S6；R10：S2/S7；R11：S8；R12：S1/S6/V3；R13：S2/S7/S8/S9/S11；R14：K1/K5/K7/K11；R15：K2/K3/K6/K8/K9/K10；R16：K4；R17：V1–V3。
 
 - PostgreSQL 测试的 `go test ./internal/postgres -run '^$'` 编译检查通过；没有运行验收函数。
 - P 序列的同类编译检查报 `undefined: PlanQuery`：当前基线上 Q1 尚未合入。没有添加产品 stub、构建标签或 Skip 来绕过；Q1 合入后再检查。
@@ -65,3 +68,15 @@ R1–R4：P 序列；R5：S9/S10/S13；R6：S4/S5/S12；R7：S1/S4/S5；R8：S3�
 正式运行前由协调者通知集成提交，在同一提交上统一运行全量与浏览器。失败不跳过、不放宽、不重复碰运气，按归属派回 Q1/Q2/K/U3。
 
 当前验收发现清单为空，因为正式验收尚未执行。range 显示问题由协调者在 `0f8e759` 裁定：显示到实际覆盖的最后一天。已按裁定追加冻结预期，V1 及 S1 检查显示 06-14、不显示排除端点 06-15。[Draft PR #86](https://github.com/soaringjerry/PCAS/pull/86)，base 为 `phase2/batch3`。
+
+## b9d26f0 / 5beb42c 的测试补充（待正式运行）
+
+按协调者两次明确指令，先分别提交冻结预期，再写 K9/K10/K11 并调整 K5 夹具。冻结文件已有值不改；K5 的 `at` 为空、排最后的预期不改，只将原无来源夹具改为没有日期的导入文件。没有修改其他旧测试预期，也没有改产品代码。
+
+K9 通过真实秘书创建任务并保留回执，把该轮、原话、任务及创建动作日期设为相对今天的 40 天前；夹具和可见性设置在老化动作之前完成。随后用正常工作台命令触发既有 30 天明细保留策略，先断言原动作确有明细、再断言明细为 `[]` 且已过期，并经历史接口确认回执保留，然后才把事项做完并问回忆，断言 `done`。
+
+K10 当场真实撤销秘书创建事项，断言原事项数据库行已消失、原轮回执仍存在并已撤销。独立背景事实从保留的原话构造，避免把本条时间轴规则和第 1/2 批的记忆撤销混在一起；分别检查 `open` 和纠正后的 `changed`。纠正版本保留同一原话的证据关系，防止「丢掉关联资料」掩盖过期事项关联错误。
+
+K11 用真实秘书入口产生原话，再直接设置其表达时间为空、记录时间为相对今天 45 天前；旧记忆自身表达时间为空，与有自己说话日期的 40 天前记忆一起引用。断言原话记录时间成为 `at`，正确排在后者前面，覆盖悉尼和上海。
+
+本轮只做 PostgreSQL 测试编译（`go test ./internal/postgres -run '^$'`）、gofmt、`git diff --check`、冻结预期只增不改及 31 个 P/S/K 编号覆盖审计；没有运行任何验收函数，继续等待协调者通知。

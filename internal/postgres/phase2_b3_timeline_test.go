@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/testsupport"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -165,9 +166,28 @@ func TestPhase2B3_K5_UnknownSaidTimeLastAndEmpty(t *testing.T) {
 	place := b3Entity(t, s, scope, "place", "成都", "成都")
 	old := b3Year(now, -1, time.January, 1)
 	newer := b3Year(now, -1, time.June, 1)
+	var fallback struct {
+		K5 struct {
+			Connector, Title, SourceText string
+			RecordedDaysAgo              int
+		}
+	}
+	if err := json.Unmarshal(b3Gold(t)["timelineSaidFallback"], &fallback); err != nil {
+		t.Fatal(err)
+	}
+	if fallback.K5.Connector == "" || fallback.K5.SourceText == "" || fallback.K5.RecordedDaysAgo == 0 {
+		t.Fatal("missing frozen K5 import fixture")
+	}
+	imported := mustIngest(t, s, scope, memory.IngestRequest{Connector: fallback.K5.Connector, ExternalID: string(memory.NewID()), ExternalVersion: "1", Title: fallback.K5.Title, Text: fallback.K5.SourceText, MediaType: "text/plain"}).Ref
+	importedAt := now.AddDate(0, 0, -fallback.K5.RecordedDaysAgo)
+	b3Exec(t, s, `UPDATE record_versions SET expressed_at=NULL,actor='import',recorded_at=$3 WHERE owner_id=$1 AND record_id=$2`, scope.OwnerID, imported.ID, importedAt)
 	refs := []memory.Ref{}
 	for i, at := range []*time.Time{nil, &newer, &old} {
-		refs = append(refs, b3Claim(t, s, scope, b3ClaimSpec{Text: fmt.Sprintf("未知排序计划%d", i), Subject: self, Said: at, Mentions: []b3Mention{{place, "place"}}}))
+		spec := b3ClaimSpec{Text: fmt.Sprintf("未知排序计划%d", i), Subject: self, Said: at, Mentions: []b3Mention{{place, "place"}}}
+		if i == 0 {
+			spec.Source = imported
+		}
+		refs = append(refs, b3Claim(t, s, scope, spec))
 	}
 	b1Model(t, s, b3Used(refs...))
 	out := mustTurn(t, s, scope, turnRequest("成都的计划来着"))
@@ -279,5 +299,63 @@ func TestPhase2B3_K8_UnrelatedItemFromSameOriginalDoesNotChangeStatus(t *testing
 		if item["status"] != "done" {
 			t.Errorf("unrelated %s item changed associated done status to %v", status, item["status"])
 		}
+	}
+}
+
+func TestPhase2B3_K11_LegacySecretaryMemoryUsesOriginalRecordedTime(t *testing.T) {
+	var fallback struct {
+		K11 struct {
+			SourceText, MemoryText, DatedMemoryText, Query string
+			SourceRecordedDaysAgo, DatedMemoryDaysAgo      int
+			TimelineOrder                                  []string
+		}
+	}
+	if err := json.Unmarshal(b3Gold(t)["timelineSaidFallback"], &fallback); err != nil {
+		t.Fatal(err)
+	}
+	gold := fallback.K11
+	if gold.SourceText == "" || gold.SourceRecordedDaysAgo == 0 || len(gold.TimelineOrder) != 2 || gold.TimelineOrder[0] != "legacy" || gold.TimelineOrder[1] != "dated" {
+		t.Fatal("missing frozen K11 secretary fallback oracle")
+	}
+	for _, zone := range []string{"Australia/Sydney", "Asia/Shanghai"} {
+		t.Run(zone, func(t *testing.T) {
+			s, scope := b1Store(t), owner()
+			f := b1Model(t, s, b3Used())
+			b3Zone(t, s, scope, zone)
+			self := b3Entity(t, s, scope, "self", "本人")
+			place := b3Entity(t, s, scope, "place", "成都", "成都")
+			// Establish a genuine user-entered secretary original, without extraction.
+			req := turnRequest(gold.SourceText)
+			mustTurn(t, s, scope, req)
+			source := b1TurnSource(t, s, scope, req.RequestID)
+			recorded := testsupport.DateFromToday(t, zone, -gold.SourceRecordedDaysAgo, 12, 0)
+			dated := testsupport.DateFromToday(t, zone, -gold.DatedMemoryDaysAgo, 12, 0)
+			b3Exec(t, s, `UPDATE record_versions SET expressed_at=NULL,recorded_at=$3 WHERE owner_id=$1 AND record_id=$2 AND version=$4`, scope.OwnerID, source.ID, recorded, source.Version)
+			legacy := b3Claim(t, s, scope, b3ClaimSpec{Text: gold.MemoryText, Nature: "fact", Subject: self, Source: source, Mentions: []b3Mention{{place, "place"}}})
+			known := b3Claim(t, s, scope, b3ClaimSpec{Text: gold.DatedMemoryText, Nature: "fact", Subject: self, Said: &dated, Mentions: []b3Mention{{place, "place"}}})
+			var legacyUndated, sourceUndated bool
+			var savedRecorded time.Time
+			if err := s.pool.QueryRow(t.Context(), `SELECT c.expressed_at IS NULL,v.expressed_at IS NULL,v.recorded_at FROM record_versions c JOIN record_versions v ON v.owner_id=c.owner_id AND v.record_id=$3 AND v.version=$4 WHERE c.owner_id=$1 AND c.record_id=$2 AND c.version=$5`, scope.OwnerID, legacy.ID, source.ID, source.Version, legacy.Version).Scan(&legacyUndated, &sourceUndated, &savedRecorded); err != nil {
+				t.Fatal(err)
+			}
+			if !legacyUndated || !sourceUndated || !savedRecorded.Equal(recorded) {
+				t.Fatal("legacy/source dates do not match the recorded-time-only fixture")
+			}
+			f.set(b3Used(legacy, known))
+			recall := turnRequest(gold.Query)
+			out := mustTurn(t, s, scope, recall)
+			b1Contains(t, f.last(t).Prompt, gold.MemoryText, gold.DatedMemoryText)
+			for _, ref := range []memory.Ref{legacy, known} {
+				b1HasRef(t, b1Refs(t, s, scope, recall.RequestID), ref, true)
+			}
+			items := b3Timeline(t, out)
+			if len(items) != 2 {
+				t.Fatalf("timeline count=%d want 2", len(items))
+			}
+			b3MustRef(t, items[0]["memoryId"], legacy)
+			b3Date(t, items[0]["at"], recorded)
+			b3MustRef(t, items[1]["memoryId"], known)
+			b3Date(t, items[1]["at"], dated)
+		})
 	}
 }

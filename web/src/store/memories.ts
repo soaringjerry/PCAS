@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { Epistemic, Memory, MemoryFacets, MemoryKind, MemoryPage, State } from '../domain/types'
+import { memoriesFor } from '../domain/agent'
+import type { Agent, Epistemic, Memory, MemoryFacets, MemoryKind, MemoryPage, State } from '../domain/types'
 import { api, APIError } from './api'
 import { useStore } from './context'
 
@@ -225,4 +226,31 @@ export function useMemorySearch(q: string, limit: number): Memory[] {
     if (wanted && read?.q === wanted) return read.items
     return state.memories.filter((m) => m.text.includes(q)).slice(0, limit)
   }, [q, wanted, read, limit, state.memories])
+}
+
+/**
+ * How many memories an agent can be given under its current scope: open to it,
+ * of a kind it reads, and not a guess unless it takes guesses. Counted from the
+ * snapshot when that is every memory there is, and by the server otherwise.
+ */
+export function useMemoryCount(agent: Agent): number {
+  const { state } = useStore()
+  const kinds = agent.memoryKinds.join(',')
+  const { id, includeInferred } = agent
+  const key = snapshotIsComplete(state) ? '' : `${id}\n${kinds}\n${includeInferred}`
+  const [read, setRead] = useState<{ key: string; total: number }>()
+  useEffect(() => {
+    if (!key) return
+    let alive = true
+    // The list takes one kind and one level of trust at a time, so the scope is counted piece by piece.
+    const pieces = (kinds ? kinds.split(',') : []).flatMap((nature) =>
+      includeInferred ? [{ agent: id, nature }] : [{ agent: id, nature, epistemic: 'confirmed' }, { agent: id, nature, epistemic: 'sourced' }],
+    ) as MemoryQuery[]
+    Promise.all(pieces.map((piece) => api<Partial<MemoryPage>>(listPath(piece, undefined, 1))))
+      .then((pages) => { if (alive) setRead({ key, total: pages.reduce((n, page) => n + (page.total ?? 0), 0) }) })
+      // The snapshot's count stays; it is what this showed before.
+      .catch(() => undefined)
+    return () => { alive = false }
+  }, [key, id, kinds, includeInferred, state.revision])
+  return key && read?.key === key ? read.total : memoriesFor(state, agent).length
 }

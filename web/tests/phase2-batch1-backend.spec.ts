@@ -82,7 +82,7 @@ test('P6/R8a 带换行的长资料：实际中段摘录能标记并定位在可�
   ].join('\n')
   expect(Array.from(fullText).length).toBeGreaterThan(600)
   expect(fullText).toContain('\n')
-  await login(page, '/library')
+  await login(page, '/library?tab=sources')
   await fixture(page, [{ kind: 'extraction', match: '', content: '{"items":[]}' }])
   await page.getByRole('button', { name: '导入资料', exact: true }).click()
   const importing = page.getByRole('dialog')

@@ -188,8 +188,14 @@ func TestPhase2B3_S8_LargeMetadataStillKeepsTheSameTopTwenty(t *testing.T) {
 		text := fmt.Sprintf(gold.MemoryTemplate, index)
 		at := base.Add(-time.Duration(index) * time.Hour)
 		suffix := strings.NewReplacer("{saidDate}", at.Format("2006-01-02"), "{year}", fmt.Sprint(now.Year()-1), "{placeName}", gold.PlaceName, "{personName}", gold.PersonName).Replace(gold.MetadataSuffixTemplate)
-		if !strings.Contains(rows[position], text) || !strings.HasSuffix(rows[position], suffix) {
-			t.Errorf("row %d does not contain ranked memory %d and the complete frozen R12 suffix", position, index)
+		if !strings.Contains(rows[position], text) {
+			t.Errorf("row %d does not contain ranked memory %d", position, index)
+		}
+		if !strings.HasSuffix(rows[position], suffix) {
+			t.Errorf("row %d lacks the complete frozen R12 suffix; actual place position=%d, person position=%d", position, strings.Index(rows[position], gold.PlaceName), strings.Index(rows[position], gold.PersonName))
+			if position == 0 {
+				t.Logf("actual first model memory line: %q", rows[position])
+			}
 		}
 	}
 	actual := b1Refs(t, s, scope, req.RequestID)

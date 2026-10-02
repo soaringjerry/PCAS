@@ -217,5 +217,28 @@
       "textMaxCharacters": 80
     },
     "imports": "items array, newest first, no pagination, leftOut is persisted in left_out"
+  },
+  "coordinator_amendment_1cec28b": {
+    "authority": "batch4/README.md section 6 and coordinator instruction 2026-10-02",
+    "errorEnvelope": {
+      "fields": [
+        "error",
+        "message"
+      ],
+      "message": "nonempty; distinct across failure kinds; wording not asserted"
+    },
+    "imports": {
+      "requiredArchiveFields": [
+        "archiveId",
+        "archiveVersion"
+      ]
+    },
+    "I10": {
+      "method": "POST",
+      "endpoint": "/v1/memory/delete",
+      "target": "batch.archiveId + batch.archiveVersion + kind=source",
+      "include_sources": true,
+      "closure": "archive, all its messages and derived claims; import_batches cascades with archive"
+    }
   }
 }

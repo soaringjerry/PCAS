@@ -28,6 +28,7 @@ type DeskCard struct {
 	Items any    `json:"items"`
 }
 type SecretaryTurn struct {
+	Outdated  bool          `json:"outdated,omitempty"`
 	ID        string        `json:"id"`
 	Text      string        `json:"text"`
 	Reply     string        `json:"reply"`
@@ -47,6 +48,7 @@ type DeskTurnsResponse struct {
 	Turns          []SecretaryTurn `json:"turns"`
 }
 type DeskSourceItem struct {
+	Kind          string  `json:"kind,omitempty"`
 	MemoryID      string  `json:"memoryId"`
 	Version       int     `json:"version"`
 	Text          string  `json:"text"`

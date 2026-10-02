@@ -422,6 +422,21 @@ func (s *Store) ProcessExtraction(ctx context.Context, j worker.Job) error {
 			}
 			return acknowledge(ctx, tx, j)
 		}
+		// Recheck under the same owner lock used by undo, after generation: an
+		// undo during the model call must not resurrect the extracted memories.
+		var fullyUndone, remembered bool
+		if source.Source.Connector == "desk" {
+			fullyUndone, err = deskTurnFullyUndoneTx(ctx, tx, j.OwnerID, source.Source.ExternalID)
+			if err != nil {
+				return err
+			}
+			if fullyUndone {
+				remembered, err = deskTurnRememberedTx(ctx, tx, j.OwnerID, source.Source.ExternalID)
+				if err != nil {
+					return err
+				}
+			}
+		}
 		settings, err := queryDocument[workspace.Settings](ctx, tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1", string(j.OwnerID))
 		if err != nil {
 			return err
@@ -435,6 +450,9 @@ func (s *Store) ProcessExtraction(ctx context.Context, j worker.Job) error {
 		}
 		accepted := 0
 		for _, item := range extraction.Items {
+			if fullyUndone && item.Kind == "memory" && (oneOf(item.Nature, "plan", "intention") || !remembered) {
+				continue
+			}
 			if source.Source.Connector == "desk" && oneOf(item.Kind, "task", "idea") {
 				continue
 			}

@@ -117,6 +117,10 @@ function ReceiptRow({ receipt, onEdit }: { receipt: Receipt; onEdit: (title: str
   )
 }
 
+// What the server puts in place of an answer it has cleared; such a turn has nothing left to be out of date.
+const CLEARED = ['（内容已删除）', '（这条回答依据的记忆已变更）']
+const OUTDATED_WHY = '这条回答用到的资料后来改过，内容可能过时'
+
 function TurnView({ turn, last, onSend, onEdit }: { turn: DeskTurn; last: boolean; onSend: (text: string) => void; onEdit: (title: string) => void }) {
   // The model may come back with nothing to say or do; the turn must not look blank.
   const empty = !turn.reply && !turn.receipts?.length && !turn.ask && !(turn.cards ?? []).some(isKnownCard)
@@ -124,6 +128,12 @@ function TurnView({ turn, last, onSend, onEdit }: { turn: DeskTurn; last: boolea
     <>
       {empty && <p className="sec-status">没听出要做什么，换个说法试试？</p>}
       {turn.reply && <p className="sec-reply">{turn.reply}</p>}
+      {turn.outdated && !CLEARED.includes(turn.reply) && (
+        // A quiet note: the answer, its cards and its receipts stay exactly as they were.
+        <p className="sec-outdated" title={OUTDATED_WHY}>
+          依据已更新<span className="visually-hidden">：{OUTDATED_WHY}</span>
+        </p>
+      )}
       <SecretaryCards cards={turn.cards ?? []} />
       {turn.receipts?.length > 0 && (
         <ul className="sec-receipts">

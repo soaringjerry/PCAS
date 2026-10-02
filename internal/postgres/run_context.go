@@ -12,13 +12,16 @@ import (
 type runContextKey struct{}
 type preparedRunContext struct {
 	Refs     []memory.Ref
+	Excerpts []memory.RecallExcerpt
 	Previous *workspace.Run
 	History  []storedDeskContext
 }
 
 type storedDeskContext struct {
 	Question, Answer string
+	RequestID        string
 	Refs             []memory.Ref
+	Outdated         bool
 }
 
 // Resolve references and perform semantic retrieval before Execute takes the
@@ -55,10 +58,11 @@ func (s *Store) prepareRunContext(ctx context.Context, scope memory.Scope, c wor
 				return memory.ErrInvalid
 			}
 			var turn storedDeskContext
-			if err := tx.QueryRow(ctx, "SELECT question,answer,dependencies FROM desk_turns WHERE owner_id=$1 AND id=$2 AND agent_id=$3", string(scope.OwnerID), id, c.AgentID).Scan(&turn.Question, &turn.Answer, &turn.Refs); err != nil {
+			if err := tx.QueryRow(ctx, "SELECT question,answer,dependencies,coalesce(request_id::text,'') FROM desk_turns WHERE owner_id=$1 AND id=$2 AND agent_id=$3", string(scope.OwnerID), id, c.AgentID).Scan(&turn.Question, &turn.Answer, &turn.Refs, &turn.RequestID); err != nil {
 				return memory.ErrNotFound
 			}
-			if turn.Answer != "" && verifyRunForItemTx(ctx, tx, scope, workspace.Run{AgentID: c.AgentID, ContextVersions: turn.Refs}, &item) == nil {
+			if turn.Question != "" || turn.Answer != "" {
+				turn.Outdated = verifyRunForItemTx(ctx, tx, scope, workspace.Run{AgentID: c.AgentID, ContextVersions: turn.Refs}, &item) != nil
 				history = append(history, turn)
 			}
 		}
@@ -88,11 +92,11 @@ func (s *Store) prepareRunContext(ctx context.Context, scope memory.Scope, c wor
 	if projectID != "" {
 		request.Context.Objects = []memory.ID{memory.ID(projectID)}
 	}
-	result, err := s.Recall(ctx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: c.AgentID}, request)
+	result, err := s.Recall(ctx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: c.AgentID, Team: true}, request)
 	if err != nil {
 		return ctx, err
 	}
-	return context.WithValue(ctx, runContextKey{}, preparedRunContext{Refs: result.Memories, Previous: previous, History: history}), nil
+	return context.WithValue(ctx, runContextKey{}, preparedRunContext{Refs: result.Memories, Excerpts: result.Excerpts, Previous: previous, History: history}), nil
 }
 
 func mostRecentPermittedRunTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, item workspace.Item, agent string) (*workspace.Run, error) {

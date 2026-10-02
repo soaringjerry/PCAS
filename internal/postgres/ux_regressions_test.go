@@ -358,17 +358,20 @@ func TestDeskHistoryCannotBypassDestinationItemScope(t *testing.T) {
 			s := testStore(t)
 			scope := owner()
 			ctx := context.Background()
+			questionMarker := "Scope question marker Q-7319"
+			claimMarker := "Scope claim marker C-8420"
+			answerMarker := "Scope old answer marker A-9531"
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": map[string]string{"content": `{"answer":"Private derived answer 519823","used":[],"links":[]}`}}}})
+				_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": map[string]string{"content": string(asJSON(map[string]any{"answer": answerMarker, "used": []string{}, "links": []string{}}))}}}})
 			}))
 			defer server.Close()
 			s.SetModels(&ai.Registry{HTTP: server.Client(), Config: ai.Configuration{Providers: []ai.Provider{{ID: "model", Name: "Model", Protocol: "openai", BaseURL: server.URL, Model: "test", MaxOutput: 100, CostMode: "free"}}}})
 			project := string(memory.NewID())
 			workspaceCommand(t, s, scope, workspace.Command{Type: "addProject", ID: project, Name: "Private project"})
-			st := workspaceCommand(t, s, scope, workspace.Command{Type: "capture", Text: "Private reference 519823"})
-			st = workspaceCommand(t, s, scope, workspace.Command{Type: "acceptCandidate", ID: st.Candidates[0].ID, Kind: "memory", MemoryKind: "fact", Text: "Private reference 519823", ProjectID: project})
+			st := workspaceCommand(t, s, scope, workspace.Command{Type: "capture", Text: claimMarker})
+			st = workspaceCommand(t, s, scope, workspace.Command{Type: "acceptCandidate", ID: st.Candidates[0].ID, Kind: "memory", MemoryKind: "fact", Text: claimMarker, ProjectID: project})
 			m := st.Memories[0]
-			answer, err := s.AnswerDesk(ctx, scope, "model", "Private reference 519823", nil)
+			answer, err := s.AnswerDesk(ctx, scope, "model", questionMarker, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -380,7 +383,7 @@ func TestDeskHistoryCannotBypassDestinationItemScope(t *testing.T) {
 			if change != "exclude" {
 				destination = ""
 			}
-			command := workspace.Command{Type: "requestRun", AgentID: "model", Kind: "draft", Prompt: "Continue the discussion", DeskTurnIDs: []string{answer.ID}}
+			command := workspace.Command{Type: "requestRun", AgentID: "model", Kind: "draft", Prompt: "Continue the discussion about C-8420", DeskTurnIDs: []string{answer.ID}}
 			if change == "delegate-other-project" {
 				command.Type, command.ID, command.Title = "delegateTask", string(memory.NewID()), "New work"
 			} else {
@@ -391,8 +394,13 @@ func TestDeskHistoryCannotBypassDestinationItemScope(t *testing.T) {
 				}
 			}
 			st = workspaceCommand(t, s, scope, command)
-			if strings.Contains(st.Runs[0].Brief, "519823") || oneOf(m.ID, st.Runs[0].ContextMemoryIDs...) {
-				t.Fatalf("desk history bypassed destination scope: %+v", st.Runs[0])
+			brief := st.Runs[0].Brief
+			memorySection, rawSection, found := strings.Cut(brief, "\n相关原话：")
+			if !found || strings.Contains(brief, answerMarker) || !strings.Contains(brief, questionMarker) || !strings.Contains(brief, "（先前回答的依据已更新，请按现在的资料回答）") || strings.Contains(memorySection, claimMarker) || oneOf(m.ID, st.Runs[0].ContextMemoryIDs...) {
+				t.Fatalf("desk history bypassed destination scope or lost the user's question: %+v", st.Runs[0])
+			}
+			if strings.Contains(rawSection, claimMarker) != (change != "exclude") {
+				t.Fatalf("R2a original availability must follow item exclusion, while project differences leave it available: %s", rawSection)
 			}
 		})
 	}

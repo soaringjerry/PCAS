@@ -89,7 +89,7 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 			request.Context.Objects = append(request.Context.Objects, memory.ID(projectID))
 		}
 		budget := memory.Budget{Candidates: 100, Tokens: 10000, Edges: 30, Hops: 1}
-		if err := s.recallTx(ctx, tx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: agent.ID}, request, budget, query, strings.Join(terms, " | "), nil, "", 0, "", tokens, &recall); err != nil {
+		if err := s.recallTx(ctx, tx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: agent.ID, Team: true}, request, budget, query, strings.Join(terms, " | "), nil, "", 0, "", tokens, &recall); err != nil {
 			return err
 		}
 		byID := map[string]workspace.Memory{}
@@ -98,12 +98,19 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 		}
 		ordered := []workspace.Memory{}
 		selected := map[string]bool{}
+		excerpts := recall.Excerpts
+		historyRequests := []string{}
 		if prepared, ok := ctx.Value(runContextKey{}).(preparedRunContext); ok {
+			excerpts = append(append([]memory.RecallExcerpt{}, prepared.Excerpts...), excerpts...)
 			for _, turn := range prepared.History {
-				if verifyRunTx(ctx, tx, scope, workspace.Run{ThingID: item.ID, AgentID: agent.ID, ContextVersions: turn.Refs}) == nil {
-					fmt.Fprintf(&brief, "\n导办台之前的讨论：\n问：%s\n答：%s\n", turn.Question, turn.Answer)
+				historyRequests = append(historyRequests, turn.RequestID)
+				answer := turn.Answer
+				if turn.Outdated || verifyRunTx(ctx, tx, scope, workspace.Run{ThingID: item.ID, AgentID: agent.ID, ContextVersions: turn.Refs}) != nil {
+					answer = outdatedDeskAnswer
+				} else {
 					artifactRefs = append(artifactRefs, turn.Refs...)
 				}
+				fmt.Fprintf(&brief, "\n导办台之前的讨论：\n问：%s\n答：%s\n", turn.Question, answer)
 			}
 			for _, ref := range prepared.Refs {
 				if m, ok := byID[string(ref.ID)]; ok && m.Version == ref.Version && !selected[m.ID] {
@@ -142,6 +149,27 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 			run.ContextVersions = append(run.ContextVersions, memory.Ref{ID: memory.ID(m.ID), Version: m.Version, Kind: memory.ClaimKind})
 		}
 
+		settings, err := queryDocument[workspace.Settings](ctx, tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1", string(scope.OwnerID))
+		if err != nil {
+			return err
+		}
+		loc := deskLocation(settings)
+		fmt.Fprintln(&brief, "\n相关原话：")
+		sources, err := teamSourceExcerptsTx(ctx, tx, scope, agent.ID, &item.ID, excerpts, historyRequests, 8, 4000)
+		if err != nil {
+			return err
+		}
+		for _, source := range sources {
+			at, label := sourceExcerptTime(source)
+			line := fmt.Sprintf("[source:%s@%d / %s / %s %s] %s\n", source.ID, source.Version, source.Title, label, at.In(loc).Format("2006-01-02"), source.Text)
+			if brief.Len()+len(line) > 30000 {
+				continue
+			}
+			brief.WriteString(line)
+			run.ContextMemoryIDs = append(run.ContextMemoryIDs, string(source.ID))
+			run.ContextVersions = append(run.ContextVersions, source.Ref)
+		}
+
 		// Derived copies carry input dependencies even when their source memories
 		// fall outside this run's text budget.
 		for _, ref := range artifactRefs {
@@ -156,6 +184,7 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 			// otherwise answer with a numbered list, which is filed as a document.
 			brief.WriteString("\n输出格式：每个步骤单独一行，写成「- [ ] 步骤」；不要编号，不要加粗，步骤之外不写别的内容。")
 		}
+		run.ContextVersions = uniqueRefs(run.ContextVersions)
 		run.Brief = brief.String()
 		dbStatus := "queued"
 		if agent.Channel == "manual" {
@@ -167,10 +196,6 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 			}
 			p, _ := s.models.Get(agent.ID)
 			run.Cost = p.Reserve(assistantInstructions + run.Brief)
-			settings, err := queryDocument[workspace.Settings](ctx, tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1", string(scope.OwnerID))
-			if err != nil {
-				return err
-			}
 			loc, err := time.LoadLocation(settings.Timezone)
 			if err != nil {
 				return err
@@ -368,6 +393,17 @@ func verifyRunForItemTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run 
 		}
 	}
 	for _, ref := range uniqueRefs(run.ContextVersions) {
+		if ref.Kind == memory.SourceKind {
+			var thingID *string
+			if item != nil && item.ID != "" {
+				thingID = &item.ID
+			}
+			var currentVersion int
+			if err := tx.QueryRow(ctx, "SELECT r.version FROM memory_records r JOIN record_versions v ON (v.owner_id,v.record_id,v.version)=(r.owner_id,r.id,r.version) WHERE r.owner_id=$1 AND r.id=$2 AND r.kind='source' AND r.state='active' AND v.state='active' AND "+teamSourceVisibleSQL("$1", "r.id", "$3", "$4"), string(scope.OwnerID), string(ref.ID), run.AgentID, thingID).Scan(&currentVersion); err != nil || currentVersion != ref.Version {
+				return memory.ErrConflict
+			}
+			continue
+		}
 		var currentVersion int
 		if err := tx.QueryRow(ctx, "SELECT version FROM applicable_claim_versions($1,now(),now()) WHERE claim_id=$2", string(scope.OwnerID), string(ref.ID)).Scan(&currentVersion); err != nil || currentVersion != ref.Version {
 			return memory.ErrConflict

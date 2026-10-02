@@ -442,5 +442,122 @@
       "last_display_day": "14",
       "excluded_display_day": "15"
     }
+  },
+  "supplement_2e2b8f9": {
+    "approval": "Coordinator approval, README sections 7 and 8, main 2e2b8f9, 2026-10-02.",
+    "F5": {
+      "marker": "backfill_queued_at",
+      "root_stage": "source.extract",
+      "count_unit": "source_version",
+      "max_pending_sources": 20,
+      "max_enqueued_sources_hour": 30,
+      "archive_priority": 10,
+      "archive_marker": null,
+      "archive_queued_roots": 25,
+      "long_source_characters": 18000,
+      "first_three_enqueued_sources": [
+        20,
+        10,
+        0
+      ],
+      "after_hour_enqueued_sources": 20
+    },
+    "legacy_confirmation": {
+      "unresolved subject": "adopted",
+      "unresolved predicate": "adopted",
+      "paraphrased assertion": "adopted",
+      "confidence_0.79": "candidate",
+      "confidence_0.8": "adopted",
+      "other_expectations_unchanged": true
+    },
+    "legacy_not_configured": {
+      "code": "provider_not_configured",
+      "retry": false,
+      "state": "blocked",
+      "attempts": 0,
+      "manual_retry": "done"
+    },
+    "M12": {
+      "fixture_count": 12,
+      "project_a": [
+        0,
+        2,
+        4,
+        6,
+        8,
+        10
+      ],
+      "project_b": [
+        1,
+        3,
+        5,
+        7,
+        9,
+        11
+      ],
+      "confirmed": [
+        0,
+        3,
+        6,
+        9
+      ],
+      "sourced": [
+        1,
+        4,
+        7,
+        10
+      ],
+      "inferred": [
+        2,
+        5,
+        8,
+        11
+      ],
+      "model": [
+        0,
+        1,
+        4,
+        5,
+        8,
+        9
+      ],
+      "manual": [
+        1,
+        3,
+        5,
+        7,
+        9,
+        11
+      ],
+      "combined": [
+        4
+      ],
+      "empty_combination": [],
+      "page_limit": 2,
+      "sort": "updated_at_desc"
+    },
+    "M13": {
+      "existing_status": 200,
+      "missing_status": 404,
+      "direct_object": true,
+      "deleted_status": 404,
+      "other_owner_status": 404
+    },
+    "U5": {
+      "project_id": "project-decisions",
+      "project_name": "成都旅行项目",
+      "decisions": [
+        "决定坐早班高铁",
+        "决定住春熙路附近",
+        "决定周五见老王"
+      ],
+      "newer_unrelated": 250,
+      "snapshot_size": 200,
+      "query_nature": "decision",
+      "expected_visible_decisions": 3
+    },
+    "U1": {
+      "forbidden_scope": "new memory cards, filters and facets only"
+    }
   }
 }

@@ -37,7 +37,20 @@
 
 原话不按项目过滤：团队共用全部资料。
 
-**待定（2026-10-02，等用户决定）**：用户在资料库里把某条记忆对某个副手隐藏，或在某件事上排除了某条记忆之后，这条记忆出自的那句原话还给不给这个副手、这件事。现在的实现是照给。定了之后写成 R2a。
+**R2a 用户亲手收紧的，原话跟着收紧**（2026-10-02 用户决定）。一份原话不给某个副手、某件事，如果从它抽出来的记忆里有任何一条：
+
+- 在资料库「谁能看到」里对这个副手是关着的（这条陈述没有给这个副手的 `record_grants` 记录）；或者
+- 在这件事上被排除了（`context_exclusions` 里有「这件事 + 这条陈述」）。只在上下文有具体事项时判断：副手运行、手动转交、事项页上的秘书对话。
+
+「从它抽出来的记忆」指：有证据（`evidence`）从这份原话指向、并且现在还有效的陈述。一份原话有多条记忆时，只要有一条被收紧，整份不给。
+
+只认这两个由用户亲手做的动作。副手的类别设置、是否包含推测、项目归属**不影响原话**，仍按 R2「不按项目过滤」。还没抽出任何记忆的原话不受影响。
+
+同一个判断用在三处，写成一个共用的条件，不要各写各的：
+
+1. 挑选要给的原话时（R2）；
+2. 校验原话依赖时（R6 的 `verifyRunForItemTx`）：不满足算「在当前场合不可用」，按 R7 的补充处理；
+3. 采纳内容再交给模型时（R6 的 `sanitizeItemTx`）：不满足则这段采纳内容不交给模型，和陈述依赖不满足时一样。
 
 **R3 给多少。** 每条原话给一段摘录，不给全文：
 
@@ -149,6 +162,8 @@
 | P11 | 原话有两个版本 | 只给当前版本的内容 |
 | P12 | 图片、音频这类没有可读文本的资料 | 不给；有转录或 OCR 文本的，给那份文本 |
 | P13 | 副手用到一份原话，结果被采纳进事项 → 再让秘书或另一个副手处理这件事 | 采纳进来的内容照常交给模型，不因为依赖是原话而被去掉；这份原话出了新版本之后再处理，这段内容不再交给模型（和陈述被纠正时一样），用户自己看到的事项内容不变 |
+| P14 | 速记一句话并采纳成记忆 → 在资料库里把这条记忆对秘书关掉 → 问秘书相关的问题 | 秘书的模型收不到这句原话，也收不到这条记忆；另一个仍然开着的副手处理相关事项时照常收到；重新打开后秘书又能收到 |
+| P15 | 一句话抽出了记忆 → 在事项甲上排除这条记忆 → 让副手处理事项甲，再处理事项乙 | 事项甲的交接内容里没有这句原话；事项乙的有 |
 
 ### 依据变了只标记
 
@@ -208,6 +223,7 @@
 | [B](B-undo-memory.md) | 「整轮都被撤销」判断、撤销连带记忆、抽取跳过、清理迁移 | 6.1 Sol | 无 |
 | [C](C-frontend.md) | 依据卡片里的原话条目、「依据已更新」标记（前端） | Opus 5.5 | 无，按第 3、5 节的形状做 |
 | [C2](C2-source-sheet.md) | 从依据卡片点开，直接看到当时那句话（前端，R8a） | Opus 5.5（做 C 的同一个执行者） | C 已合入 |
+| [D](D-date-fixtures.md) | 旧测试里写死的日期（主干上的旧问题，挡住全绿） | 6.1 Sol（做 B 的执行者） | 无；base 是 main |
 | [T](T-acceptance.md) | 独立验收：按第 4 节写测试，不看实现 | 6.1 Sol（另一个执行者） | 先按本页写；A、B、C、C2 合进集成分支后跑 |
 
 Astra 这一批不用，留作疑难时的后备。A、B、C、T 各由一个执行者做，C2 交给做 C 的执行者，**A、B、T 必须是三个不同的执行者**。
@@ -219,7 +235,8 @@ Astra 这一批不用，留作疑难时的后备。A、B、C、T 各由一个执
 | 写入者 | 文件 |
 |---|---|
 | A | `internal/memory/contracts.go`（只加 Scope 的内部标记，以及 `RecallResult` 上不对外输出的摘录列表，标 `json:"-"`）、`internal/postgres/retrieval.go`、`desk_turn.go`、`run_context.go`、`runs.go`、`telegram_turn.go`、`artifacts.go`（只改 `sanitizeItemTx` 里校验运行依赖的那条查询，见 R6）、`internal/workspace/desk.go`、`internal/telegram/`（只在 R7 需要时） |
-| A（后续修改） | `internal/postgres/desk_turn.go`、`runs.go`、`retrieval.go`，范围见 [任务 A](A-raw-text.md) 末尾 |
+| A（后续修改，含 R2a） | `internal/postgres/desk_turn.go`、`runs.go`、`retrieval.go`、`artifacts.go`（只改 `sanitizeItemTx` 的运行依赖查询），范围见 [任务 A](A-raw-text.md) 末尾 |
+| D | 已有测试文件里写死的日期夹具，范围见 [任务 D](D-date-fixtures.md)；从 main 修，不走集成分支 |
 | B | `internal/postgres/undone_turns.go`（新）、`actions_log.go`、`processing.go`、`internal/postgres/migrations/026_drop_phase2_0_leftovers.sql`（新） |
 | C | `web/src/domain/desk.ts`、`web/src/components/SecretaryCards.tsx`、`web/src/components/Secretary.tsx`、`web/src/styles/secretary.css`（已合入） |
 | C2 | `web/src/components/SourceSheet.tsx`、`web/src/components/SecretaryCards.tsx`（只改打开面板的调用）、`web/src/styles/app.css`（只动 `.source-*` 这一组样式）（已合入） |

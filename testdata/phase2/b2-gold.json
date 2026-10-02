@@ -432,5 +432,15 @@
       "first_only": "我偏好每天清晨整理资料。",
       "second_only": "我决定晚上检查旅行清单。"
     }
+  },
+  "supplement_0f8e759": {
+    "approval": "Coordinator clarification in parallel.md and U2-frontend.md, merged into batch2 at 1cec28b.",
+    "U1": {
+      "event_from": "2025-06-12T00:00:00+08:00",
+      "event_to": "2025-06-15T00:00:00+08:00",
+      "first_display_day": "12",
+      "last_display_day": "14",
+      "excluded_display_day": "15"
+    }
   }
 }

@@ -136,6 +136,11 @@ func (s *Store) ensureOwner(ctx context.Context, tx pgx.Tx, scope memory.Scope) 
 		if err != nil {
 			return err
 		}
+		if tag.RowsAffected() == 1 && a.Enabled {
+			if err := initializeAgentMemoriesTx(ctx, tx, scope.OwnerID, a.ID); err != nil {
+				return err
+			}
+		}
 		if a.ID == "chatgpt-direct" && tag.RowsAffected() == 1 {
 			// The new model channel inherits precisely the existing subscription
 			// visibility once. Subsequent explicit grant changes remain authoritative.
@@ -143,6 +148,12 @@ func (s *Store) ensureOwner(ctx context.Context, tx pgx.Tx, scope memory.Scope) 
 				return err
 			}
 		}
+	}
+	// Existing enabled agents are initialized without reopening any grants.
+	if _, err := tx.Exec(ctx, `UPDATE workspace_agents SET document=jsonb_set(document,'{memoryInitialized}','true')
+        WHERE owner_id=$1 AND coalesce((document->>'enabled')::boolean,false)
+        AND NOT coalesce((document->>'memoryInitialized')::boolean,false)`, string(scope.OwnerID)); err != nil {
+		return err
 	}
 	return nil
 }
@@ -193,10 +204,13 @@ func (s *Store) snapshotTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) (
         WHERE n.owner_id=$1 AND NOT (n.delivered @> '{"_suppressionOnly":true}'::jsonb) ORDER BY (n.dismissed_at IS NOT NULL),n.created_at DESC,n.id LIMIT 100`, string(scope.OwnerID)); err != nil {
 		return out, err
 	}
-	if out.Memories, err = s.memoriesTx(ctx, tx, scope); err != nil {
+	if out.Memories, err = s.readMemoriesTx(ctx, tx, scope, false, memoryReadOptions{limit: 200}); err != nil {
 		return out, err
 	}
-	out.MemoryTotal = len(out.Memories)
+	where, args := memoryWhere(scope, false, memoryReadOptions{})
+	if err := tx.QueryRow(ctx, "SELECT count(*)"+memoryJoins+where, args...).Scan(&out.MemoryTotal); err != nil {
+		return out, err
+	}
 	if out.Agents, err = queryDocuments[workspace.Agent](ctx, tx, "SELECT document FROM workspace_agents WHERE owner_id=$1 ORDER BY id", string(scope.OwnerID)); err != nil {
 		return out, err
 	}
@@ -464,7 +478,7 @@ func (s *Store) Export(ctx context.Context, scope memory.Scope, training, confir
 			}
 			canonical := map[string][]json.RawMessage{}
 			// Names are a fixed server allowlist, never caller-supplied SQL.
-			for _, table := range []string{"memory_records", "record_versions", "sources", "source_versions", "entities", "entity_versions", "aliases", "episodes", "episode_members", "claims", "claim_revisions", "evidence", "relations", "activity", "record_grants", "claim_source_keys", "claim_key_redirects", "claim_reimport_blocks", "reimport_blocks", "record_reimport_blocks", "source_contexts", "episode_keys", "archive_entries"} {
+			for _, table := range []string{"memory_records", "record_versions", "sources", "source_versions", "entities", "entity_versions", "aliases", "episodes", "episode_members", "claims", "claim_revisions", "evidence", "relations", "activity", "record_grants", "claim_source_keys", "claim_key_redirects", "claim_reimport_blocks", "reimport_blocks", "record_reimport_blocks", "source_contexts", "episode_keys", "archive_entries", "claim_mentions", "source_extractions", "import_batches", "model_usage"} {
 				rows, err := queryDocuments[json.RawMessage](ctx, tx, "SELECT to_jsonb(t) FROM "+table+" t WHERE owner_id=$1", string(scope.OwnerID))
 				if err != nil {
 					return err
@@ -594,6 +608,10 @@ func jobProblem(code string) string {
 	switch code {
 	case "provider_not_configured", "handler_not_configured":
 		return "还没配置处理它的模型"
+	case "provider_unavailable":
+		return "模型通道暂时不可用；稍后会自动再试，若已停住请检查连接后点重试"
+	case "budget_deferred":
+		return "今天的预算已用完，明天会继续；需要现在处理可提高每日预算"
 	case "archive_redacted", "source_unavailable":
 		return "原文已经删除"
 	case "attempts_exhausted", "processing_failed":
@@ -707,4 +725,16 @@ func activityTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, timezone str
 	}
 	rows.Close()
 	return out, rows.Err()
+}
+
+// New enabled agents inherit only memories already shared with a deputy. Old
+// enabled documents are marked initialized by ensureOwner without this call.
+func initializeAgentMemoriesTx(ctx context.Context, tx pgx.Tx, owner memory.ID, agent string) error {
+	_, err := tx.Exec(ctx, `INSERT INTO record_grants(owner_id,record_id,principal_id)
+        SELECT r.owner_id,r.id,$2 FROM memory_records r JOIN claim_revisions c ON(c.owner_id,c.claim_id,c.version)=(r.owner_id,r.id,r.version)
+        WHERE r.owner_id=$1 AND r.state='active' AND claim_source_is_current($1,c.claim_id,c.version,now())
+        AND EXISTS(SELECT 1 FROM record_grants g JOIN workspace_agents ag ON(ag.owner_id,ag.id)=(g.owner_id,g.principal_id)
+            WHERE g.owner_id=r.owner_id AND g.record_id=r.id)
+        ON CONFLICT DO NOTHING`, string(owner), agent)
+	return err
 }

@@ -17,11 +17,11 @@ function memory(n: number, details = true): MemoryFixture {
     ...(details ? { expressedAt: at, eventFrom: '2025-03-01T00:00:00+08:00', eventTo: '2025-04-01T00:00:00+08:00', eventPrecision: 'month' } : {}),
   }
 }
-async function backend(page: Page, all: MemoryFixture[]) {
+async function backend(page: Page, all: MemoryFixture[], projects: State['projects'] = []) {
   const state: State & { memoryTotal: number } = {
     version: 1, revision: 1, budgetUsage: 0,
     settings: { dailyBudget: 10, autoAccept: false, wakeIdeas: false, followUps: false, dailyReviewAt: '09:00', timezone: 'Asia/Shanghai' },
-    tasks: [], ideas: [], projects: [], memories: all.slice(0, 200), memoryTotal: all.length,
+    tasks: [], ideas: [], projects, memories: all.slice(0, 200), memoryTotal: all.length,
     candidates: [], docs: [], runs: [], samples: [], sources: [], jobs: [], notices: [], activity: [], excludedMemories: {},
     agents: [{ id: 'model', name: '验收假模型', enabled: true, available: true, default: true, channel: 'api', note: '', inputPrice: 0, outputPrice: 0, maxOutput: 100, memoryKinds: ['fact', 'plan', 'preference'], includeInferred: false }],
   }
@@ -36,7 +36,8 @@ async function backend(page: Page, all: MemoryFixture[]) {
     const url = new URL(route.request().url())
     queries.push(url)
     const entity = url.searchParams.get('entity'), nature = url.searchParams.get('nature'), q = url.searchParams.get('q')
-    const filtered = all.filter(m => (!entity || m.mentions.some(x => x.entityId === entity)) && (!nature || nature === m.kind) && (!q || m.text.includes(q)))
+    const project = url.searchParams.get('project'), epistemic = url.searchParams.get('epistemic'), agent = url.searchParams.get('agent')
+    const filtered = all.filter(m => (!entity || m.mentions.some(x => x.entityId === entity)) && (!nature || nature === m.kind) && (!q || m.text.includes(q)) && (!project || m.projectId === project) && (!epistemic || m.epistemic === epistemic) && (!agent || m.visibleTo.includes(agent)))
     const start = Number(url.searchParams.get('cursor') ?? '0'), limit = Math.min(Number(url.searchParams.get('limit') ?? '50'), 100)
     const items = filtered.slice(start, start + limit)
     returned.push(...items.map(m => m.id))
@@ -139,4 +140,40 @@ test('U1 事件区间卡片显示实际最后一天', async ({ page }) => {
   await expect(rangeCard).toContainText(spec.first_display_day)
   await expect(rangeCard).toContainText(spec.last_display_day)
   await expect(rangeCard).not.toContainText(spec.excluded_display_day)
+})
+
+
+test('U5 项目决定超出200条快照后仍全部出现在时间轴', async ({ page }) => {
+  const spec = gold.supplement_2e2b8f9.U5
+  const older = new Date(Date.now() - 14 * 86400_000).toISOString()
+  const decisions: MemoryFixture[] = spec.decisions.map((text: string, i: number) => ({
+    ...memory(spec.newer_unrelated + i, false), kind: 'decision', text, projectId: spec.project_id,
+    versions: [{ at: older, by: 'user', text, reason: '' }], lastUsedAt: older,
+  }))
+  const unrelated = Array.from({ length: spec.newer_unrelated }, (_, i) => {
+    const item = memory(i, false)
+    item.versions = [{ at, by: 'user', text: item.text, reason: '' }]
+    item.lastUsedAt = at
+    return item
+  })
+  unrelated[0].kind = 'decision'
+  unrelated[0].projectId = 'other-project'
+  unrelated[1].kind = 'fact'
+  unrelated[1].projectId = spec.project_id
+  const all = [...unrelated, ...decisions]
+  expect(all.slice(0, spec.snapshot_size).some(m => decisions.some(d => d.id === m.id))).toBe(false)
+  const mock = await backend(page, all, [{
+    id: spec.project_id, name: spec.project_name, goal: '', status: 'active', progress: '', nextSteps: [], updatedAt: at,
+  }])
+  await page.goto(`/t/${spec.project_id}`)
+  await expect(page.getByRole('heading', { name: spec.project_name, exact: true })).toBeVisible()
+  await expect.poll(() => mock.queries.some(q => q.searchParams.get('project') === spec.project_id && q.searchParams.get('nature') === spec.query_nature)).toBe(true)
+  for (const decision of decisions) {
+    await expect(page.getByText(decision.text, { exact: true })).toBeVisible()
+    await expect(page.getByText(decision.text, { exact: true })).toHaveCount(1)
+  }
+  await expect(page.getByText(unrelated[0].text, { exact: true })).toHaveCount(0)
+  await expect(page.getByText(unrelated[1].text, { exact: true })).toHaveCount(0)
+  expect(new Set(mock.returned.filter(id => decisions.some(d => d.id === id))).size).toBe(spec.expected_visible_decisions)
+  expect(mock.errors).toEqual([])
 })

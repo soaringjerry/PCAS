@@ -4,19 +4,19 @@
 
 ## 当前状态
 
-- 起点：`origin/main` 的 `66b1a43`。编写期间没有读取 S0/E1/E2/M/U2 的实现分支。起初没有远端 `phase2/batch2`，按任务包先从 main 建 `phase2/b2-T2-acceptance`，工作区 `/root/PCAS-wt/b2-T2`；随后变基到 `origin/phase2/batch2` 的 `1cec28b`；Draft PR 的 base 为 `phase2/batch2`。
+- 起点：`origin/main` 的 `66b1a43`。编写期间没有读取 S0/E1/E2/M/U2 的实现分支。起初没有远端 `phase2/batch2`，按任务包先从 main 建 `phase2/b2-T2-acceptance`，工作区 `/root/PCAS-wt/b2-T2`；随后变基到 `origin/phase2/batch2` 的 `1cec28b`，本次第二轮补充再变基到 `2e2b8f9`；Draft PR 的 base 为 `phase2/batch2`。
 - 被测集成提交号：未指定；尚未进行集成验收。下面的“未运行”不代表通过。
 - 第 1 批测试文件及断言：零修改。M6 原样调用现有 P/M/N/G 序列，包括 N12 的 20 组固定种子。
 - 不改产品代码，不连接线上数据库、不读线上 `.env` 或 `config/`、不调用真实模型和通知通道。
 
 ## 冻结预期与协调修订
 
-1. `825845d`（变基前 `f38f622`） 先提交 `testdata/phase2/b2-gold.json`，随后开始写测试。时间锚点使用 `DateFromToday`，下周一和周五的日期偏移表由验收者独立给出，事件按当地日历构造左闭右开区间；覆盖上海和悉尼。
-2. `56369aa`（变基前 `866c662`） 追加 `supplement_5865411`：协调者明确 M6 是第 1 批全部 P/M/N/G 序列不改断言；冻结 `BackfillExtractions(ctx, now)`、`nextBudgetDay(now, loc)`、10 分钟错开上限；F5 改为同一小时排入最多 30 个，处理完各次排队任务后检查并向后拨一小时。原字段 `F5.max_started_hour` 是旧契约记录，执行预期以补充为准。
-3. `7952aed`（变基前 `296316d`） 追加 `supplement_32ccb70`（main 合并 `e2175b0`）：X14 每段 12000、步长 11000、重叠 1000；18000 字符的两段资料中，共用句从第 11500 个字符开始，各段独有句各一条，最终 `items = 3`。补充覆盖原 X14 的笼统总数描述。
+1. `24cbeac`（变基前 `f38f622`） 先提交 `testdata/phase2/b2-gold.json`，随后开始写测试。时间锚点使用 `DateFromToday`，下周一和周五的日期偏移表由验收者独立给出，事件按当地日历构造左闭右开区间；覆盖上海和悉尼。
+2. `82602d0`（变基前 `866c662`） 追加 `supplement_5865411`：协调者明确 M6 是第 1 批全部 P/M/N/G 序列不改断言；冻结 `BackfillExtractions(ctx, now)`、`nextBudgetDay(now, loc)`、10 分钟错开上限；F5 改为同一小时排入最多 30 个，处理完各次排队任务后检查并向后拨一小时。原字段 `F5.max_started_hour` 是旧契约记录，执行预期以补充为准。
+3. `ef02169`（变基前 `296316d`） 追加 `supplement_32ccb70`（main 合并 `e2175b0`）：X14 每段 12000、步长 11000、重叠 1000；18000 字符的两段资料中，共用句从第 11500 个字符开始，各段独有句各一条，最终 `items = 3`。补充覆盖原 X14 的笼统总数描述。
 4. 原 `fixtures.outdated_replacement` 写的是替换语说明，不是第 1 批 R7 的逐字替换语；测试使用后追加的 `supplement_5865411.history_replacement`，原字段不修改。此项属于冻结文件中的未使用描述纠偏，没有改变已有验收预期。
 
-5. `9cc1930` 先追加 `supplement_0f8e759`：协调者冻结“显示事件区间最后一天为 `eventTo` 前一天”。U1 追加 `[2025-06-12, 2025-06-15)` 显示到 14 日的浏览器断言。
+5. `c68f77c` 先追加 `supplement_0f8e759`：协调者冻结“显示事件区间最后一天为 `eventTo` 前一天”。U1 追加 `[2025-06-12, 2025-06-15)` 显示到 14 日的浏览器断言。
 
 ## 静态验证
 
@@ -75,6 +75,9 @@
 | U3 | `U3 300条记忆从接口翻至末尾不重复，390px无横向溢出` | `web/tests/phase2-batch2.spec.ts` | 未运行 |
 | U1 | `U1 事件区间卡片显示实际最后一天` | `web/tests/phase2-batch2.spec.ts` | 未运行 |
 | U4 | `U4 真实秘书原话经后台变成带成都老王日期的记忆，点老王可筛出` | `web/tests/phase2-batch2-backend.spec.ts` | 未运行 |
+| M12 | `TestPhase2B2_M12_ProjectEpistemicAgentAndCombinedFilters` | `internal/postgres/phase2_b2_memory_test.go` | 未运行 |
+| M13 | `TestPhase2B2_M13_DetailIsDirectMemoryAndMissingIsNotFound` | `internal/postgres/phase2_b2_memory_test.go` | 未运行 |
+| U5 | `U5 项目决定超出200条快照后仍全部出现在时间轴` | `web/tests/phase2-batch2.spec.ts` | 未运行 |
 
 ## 验收方法与接线
 
@@ -118,3 +121,20 @@ go test -race -count=100 -json -run '^TestSecretaryRejectsStaleRowsAndKeepsOrigi
 建议协调者安排修改 `desk_turn_test.go` 的此子用例：先完成全部夹具准备；以通道确认假模型实际收到请求，验证真正的模型阶段超时；若仍采用真实 deadline，留足入队和数据库准备余量，并让假模型阻塞到取消，不能仅放大 100ms 而保留 1 秒后成功回复的竞速。保留原话、禁止过时更新、WARN/model/timeout 的原断言；受理前取消继续由已有专门用例覆盖。本次没有证明所有取消路径均无竞态，但已定位此次偶发失败的测试原因。
 
 原始 JSON 和代理日志留在诊断环境 `/tmp/pcas-t2-flaky-fb1y3a4u/`（`baseline20.json`、`timeout100.json`、`latency1.json`、`proxy.log`）；容器与代理在诊断后清理。正式 X/F/M/U 验收仍等协调者通知。
+
+
+## 第二轮补充：经协调者批准的调整（2e2b8f9）
+
+先以 `b91fcdf` 追加冻结 `supplement_2e2b8f9`，再改测试。原冻结字段均未修改；第 1 批 P/M/N/G 的文件与断言仍零修改，N12 不改。
+
+- 旧测试 `TestExtractionConfirmationRequiresCurrentVerbatimCapture`：只把 unresolved subject、unresolved predicate、paraphrased assertion 三项预期改成 adopted；新增 0.79 → candidate、0.8 → adopted 边界，其余原项的预期不变。
+- 旧测试 `TestExtractionWithoutModelStaysNotConfigured`：改为检查明确、不可重试的 `provider_not_configured`，实际 Worker 处理后 blocked、没有消耗重试、不会自动再领取；配置假模型后手动 retryJob，同一任务完成并留下记忆。以上两组由契约第 7 节明确批准，放在验收 PR #88；尚未运行，等实现合入。
+- F5 的 20 / 30 均按资料版本计数，只认 `backfill_queued_at` 非空的 `source.extract` 根任务。造 50 份待补资料，其中一份 18000 字符、产生两段任务；另放 25 个优先级同为 10、标记为空的归档抽取根任务。两个 Store 同时检查，三轮各排 20、10、0 份，之间处理完所有根任务和分段；拨一小时后再排 20 份。按标记核对最近连续一小时的排入数，归档任务与分段不占额外名额。
+- M12：12 条固定记忆分别属于两个项目、三类可信度、两位副手的不同可见范围。九组筛选（包括全部新参数与旧 entity/nature/q/from/to 组合、空交集）以 limit=2 翻到末页，每页检查筛选 total，按已知更新顺序比对全部 id。
+- M13：详情直接返回记忆对象，核对列表同形字段、提及、说话和事件时间；不存在、其他用户和已删除条目均 404。
+- U5：项目三条旧决定全部在 200 条快照之外，另造 250 条更新记忆；打开项目页，检查实际请求 project+nature=decision，并检查三条决定可见且不重复。加另一项目的决定和同项目的事实，确认不混入时间轴。
+- U1 的禁止词仍只检查记忆卡片；不扩大到资料库原有标签页、版本按钮等页面文案。
+
+本轮静态验证：`make fmt-check`、`git diff --check`、仓库外仅供编译的 E2 入口 overlay 下 `go test -c` 和 `go vet` 通过；前端 lint / type-check / build、新增 spec 的独立 TypeScript 检查通过；Playwright `--list` 发现 U1–U5 共 6 个用例（U1 含区间末日独立用例）。没有执行这些验收用例，也没有运行全量 `make check`。
+
+偶发失败的计时修复按要求另开 [PR #112](https://github.com/soaringjerry/PCAS/pull/112)，base 为 main，提交 `90bbdcf`，不在本验收 PR。只把原 WithTimeout 100ms 块移到假模型、任务、请求准备完成后，全部断言逐字保留。独立临时库 `-race -count=20` 三个子用例各 20 次通过；外部代理给准备阶段 addTask 增加 200ms 延迟，修复后 timeout 也通过。单次旧测试最长 2.28 秒，本次没有超过一分钟的单条测试。临时数据库、代理和编译占位均清理，原始验证日志保留在 `/tmp/pcas-t2-timeout-fix-rl65nk3w/`。

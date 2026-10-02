@@ -590,3 +590,149 @@ func TestPhase2B2_M3_FacetsTakeFiftyMostFrequentPerRole(t *testing.T) {
 		}
 	}
 }
+
+func TestPhase2B2_M12_ProjectEpistemicAgentAndCombinedFilters(t *testing.T) {
+	s, scope := testStore(t), owner()
+	b1Model(t, s, nil)
+	projects := []string{}
+	for _, name := range []string{"成都项目", "大理项目"} {
+		st := workspaceCommand(t, s, scope, workspace.Command{Type: "addProject", Name: name})
+		for _, project := range st.Projects {
+			if project.Name == name {
+				projects = append(projects, project.ID)
+			}
+		}
+	}
+	if len(projects) != 2 {
+		t.Fatal("project fixtures", projects)
+	}
+	var spec struct {
+		Count int `json:"fixture_count"`
+		Limit int `json:"page_limit"`
+	}
+	b2SupplementFrom(t, "supplement_2e2b8f9", "M12", &spec)
+	g := b2Library(t, s, scope, spec.Count)
+	for i, ref := range g.Refs {
+		confirmation, acquisition := "adopted", "direct"
+		if i%3 == 0 {
+			confirmation = "confirmed"
+		}
+		if i%3 == 2 {
+			confirmation, acquisition = "candidate", "inferred"
+		}
+		b2Exec(t, s, `UPDATE claim_revisions SET scope=jsonb_set(scope,'{project_id}',to_jsonb($1::text),true),confirmation=$2,acquisition=$3 WHERE owner_id=$4 AND claim_id=$5`, projects[i%2], confirmation, acquisition, string(scope.OwnerID), string(ref.ID))
+		agents := []string{}
+		if i%4 < 2 {
+			agents = append(agents, "model")
+		}
+		if i%2 == 1 {
+			agents = append(agents, "manual")
+		}
+		workspaceCommand(t, s, scope, workspace.Command{Type: "setMemoryVisibility", ID: string(ref.ID), AgentIDs: agents})
+		b2Exec(t, s, `UPDATE memory_records SET updated_at=$1 WHERE owner_id=$2 AND id=$3`, b2Anchor(t, "Asia/Shanghai").Add(time.Duration(i)*time.Minute), string(scope.OwnerID), string(ref.ID))
+	}
+	cases := []struct{ key, query string }{
+		{"project_a", "project=" + url.QueryEscape(projects[0])},
+		{"project_b", "project=" + url.QueryEscape(projects[1])},
+		{"confirmed", "epistemic=confirmed"},
+		{"sourced", "epistemic=sourced"},
+		{"inferred", "epistemic=inferred"},
+		{"model", "agent=model"},
+		{"manual", "agent=manual"},
+		{"combined", "project=" + url.QueryEscape(projects[0]) + "&epistemic=sourced&agent=model&nature=decision&entity=" + string(g.Places[0].ID) + "&q=" + url.QueryEscape("合成记忆") + "&from=" + url.QueryEscape(g.Expressions[4].Add(-time.Hour).Format(time.RFC3339)) + "&to=" + url.QueryEscape(g.Expressions[4].Add(time.Hour).Format(time.RFC3339))},
+		{"empty_combination", "project=" + url.QueryEscape(projects[1]) + "&epistemic=sourced&agent=model&nature=decision"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.key, func(t *testing.T) {
+			var indices []int
+			var fields map[string]json.RawMessage
+			b2SupplementFrom(t, "supplement_2e2b8f9", "M12", &fields)
+			if err := json.Unmarshal(fields[tc.key], &indices); err != nil {
+				t.Fatal(err)
+			}
+			want := []string{}
+			for i := len(indices) - 1; i >= 0; i-- {
+				want = append(want, string(g.Refs[indices[i]].ID))
+			}
+			seen := []string{}
+			cursor := ""
+			for pageNo := 0; ; pageNo++ {
+				if pageNo > spec.Count {
+					t.Fatal("cursor did not terminate")
+				}
+				query := "?" + tc.query + fmt.Sprintf("&limit=%d", spec.Limit)
+				if cursor != "" {
+					query += "&cursor=" + url.QueryEscape(cursor)
+				}
+				page := b2List(t, s, scope, query)
+				b2Equal(t, page.Total, len(want))
+				if len(page.Items) > spec.Limit {
+					t.Error("limit exceeded", len(page.Items))
+				}
+				for _, item := range page.Items {
+					seen = append(seen, item.ID)
+				}
+				cursor = page.Next
+				if cursor == "" {
+					break
+				}
+				if len(page.Items) == 0 {
+					t.Fatal("empty page had continuation")
+				}
+			}
+			b2Equal(t, seen, want)
+		})
+	}
+}
+
+func TestPhase2B2_M13_DetailIsDirectMemoryAndMissingIsNotFound(t *testing.T) {
+	s, scope := testStore(t), owner()
+	b1Model(t, s, nil)
+	g := b2Library(t, s, scope, 1)
+	id := string(g.Refs[0].ID)
+	var spec struct {
+		Existing   int `json:"existing_status"`
+		Missing    int `json:"missing_status"`
+		Deleted    int `json:"deleted_status"`
+		OtherOwner int `json:"other_owner_status"`
+	}
+	b2SupplementFrom(t, "supplement_2e2b8f9", "M13", &spec)
+	response := b1HTTP(t, s, scope, "GET", "/v1/workspace/memories/"+id, nil)
+	b2Equal(t, response.Code, spec.Existing)
+	var wire map[string]json.RawMessage
+	if err := json.Unmarshal(response.Body.Bytes(), &wire); err != nil {
+		t.Fatal(err)
+	}
+	for _, wrapper := range []string{"item", "items", "memory"} {
+		if _, exists := wire[wrapper]; exists {
+			t.Error("detail must be a direct object", wrapper)
+		}
+	}
+	var got workspace.Memory
+	if err := json.Unmarshal(response.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	listed := b2One(t, b2List(t, s, scope, "").Items)
+	b2Equal(t, got.ID, id)
+	b2Equal(t, got.Text, b2Label(0))
+	b2Equal(t, got.Version, listed.Version)
+	b2Equal(t, got.Kind, listed.Kind)
+	b2Equal(t, got.Epistemic, listed.Epistemic)
+	b2Equal(t, got.Confirmation, listed.Confirmation)
+	b2Equal(t, got.Acquisition, listed.Acquisition)
+	b2Equal(t, got.VisibleTo, listed.VisibleTo)
+	b2Equal(t, got.Sources, listed.Sources)
+	b2Equal(t, got.Versions, listed.Versions)
+	b2Equal(t, b2Mentions(t, got), b2Mentions(t, listed))
+	b2Time(t, got, "expressedAt", &g.Expressions[0])
+	b2Event(t, got, &g.From, &g.To, "range")
+	b2Names(t, got, "person", []string{"老王"})
+	b2Names(t, got, "place", []string{"成都"})
+	missing := b1HTTP(t, s, scope, "GET", "/v1/workspace/memories/"+string(memory.NewID()), nil)
+	b2Equal(t, missing.Code, spec.Missing)
+	other := b1HTTP(t, s, owner(), "GET", "/v1/workspace/memories/"+id, nil)
+	b2Equal(t, other.Code, spec.OtherOwner)
+	b1Delete(t, s, scope, g.Refs[0])
+	deleted := b1HTTP(t, s, scope, "GET", "/v1/workspace/memories/"+id, nil)
+	b2Equal(t, deleted.Code, spec.Deleted)
+}

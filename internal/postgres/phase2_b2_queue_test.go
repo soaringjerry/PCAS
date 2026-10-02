@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -239,11 +240,23 @@ func TestPhase2B2_F4_BudgetDefersWithoutAttemptAndCalendarHandlesDST(t *testing.
 }
 func TestPhase2B2_F5_ConcurrentBackfillCapAndHourlyRecovery(t *testing.T) {
 	s, scope := testStore(t), owner()
-	f := b1Model(t, s, map[string]any{"items": []any{}})
-	_ = f
+	b1Model(t, s, map[string]any{"items": []any{}})
+	var spec struct {
+		MaxPending     int   `json:"max_pending_sources"`
+		MaxHourly      int   `json:"max_enqueued_sources_hour"`
+		ArchiveRoots   int   `json:"archive_queued_roots"`
+		LongCharacters int   `json:"long_source_characters"`
+		Enqueued       []int `json:"first_three_enqueued_sources"`
+		NextHour       int   `json:"after_hour_enqueued_sources"`
+	}
+	b2SupplementFrom(t, "supplement_2e2b8f9", "F5", &spec)
 	eligible := []memory.Ref{}
 	for n := 0; n < b2Want[int](t, "F5", "sources"); n++ {
-		src := b2Source(t, s, scope, "desk", "user", b2Label(n), nil)
+		text := b2Label(n)
+		if n == b2Want[int](t, "F5", "sources")-1 {
+			text = strings.Repeat("长", spec.LongCharacters)
+		}
+		src := b2Source(t, s, scope, "desk", "user", text, nil)
 		eligible = append(eligible, src)
 		at := b2Anchor(t, "Asia/Shanghai").Add(time.Duration(n) * time.Minute)
 		b2Exec(t, s, `UPDATE record_versions SET recorded_at=$1 WHERE owner_id=$2 AND record_id=$3`, at, string(scope.OwnerID), string(src.ID))
@@ -255,6 +268,16 @@ func TestPhase2B2_F5_ConcurrentBackfillCapAndHourlyRecovery(t *testing.T) {
 	b2Exec(t, s, `INSERT INTO source_extractions(owner_id,source_id,source_version,extractor,state,items) VALUES($1,$2,$3,3,'empty',0)`, string(scope.OwnerID), string(processed.ID), processed.Version)
 	b2Exec(t, s, `DELETE FROM memory_jobs WHERE owner_id=$1`, string(scope.OwnerID))
 	b2Exec(t, s, `INSERT INTO source_extractions(owner_id,source_id,source_version,extractor,state,items) VALUES($1,$2,1,1,'empty',0)`, string(scope.OwnerID), string(eligible[0].ID))
+	// Already queued archive extractions share priority 10, but consume no
+	// backfill quota. Keep more than twenty to expose priority-only counting.
+	archives := []memory.Ref{}
+	for n := 0; n < spec.ArchiveRoots; n++ {
+		archives = append(archives, b2Source(t, s, scope, "archive", "user", "合成归档原话"+b2Label(n), nil))
+	}
+	b2Exec(t, s, `DELETE FROM memory_jobs WHERE owner_id=$1`, string(scope.OwnerID))
+	for _, ref := range archives {
+		b2Exec(t, s, `INSERT INTO memory_jobs(id,owner_id,record_id,record_version,stage,priority) VALUES(gen_random_uuid(),$1,$2,$3,'source.extract',10)`, string(scope.OwnerID), string(ref.ID), ref.Version)
+	}
 	peer, err := Open(context.Background(), s.pool.Config().ConnConfig.ConnString())
 	if err != nil {
 		t.Fatal(err)
@@ -286,24 +309,29 @@ func TestPhase2B2_F5_ConcurrentBackfillCapAndHourlyRecovery(t *testing.T) {
 				t.Fatal(err)
 			}
 		}
+		added := 0
 		for n := range counts {
-			hourTotal += n
+			added += n
 		}
-		pending := b2Count(t, s, `SELECT count(*) FROM memory_jobs WHERE owner_id=$1 AND priority=10 AND state='queued'`, string(scope.OwnerID))
-		if pending > b2Want[int](t, "F5", "max_pending") {
+		hourTotal += added
+		b2Equal(t, added, spec.Enqueued[check])
+		pending := b2Count(t, s, `SELECT count(*) FROM memory_jobs WHERE owner_id=$1 AND backfill_queued_at IS NOT NULL AND stage='source.extract' AND state IN ('queued','leased')`, string(scope.OwnerID))
+		if pending > spec.MaxPending {
 			t.Error("pending cap exceeded", pending)
 		}
-		if hourTotal > 30 {
+		if hourTotal > spec.MaxHourly {
 			t.Error("hourly enqueue cap exceeded", hourTotal)
 		}
+		b2Equal(t, b2Count(t, s, `SELECT count(*) FROM memory_jobs WHERE owner_id=$1 AND stage='source.extract' AND backfill_queued_at>$2::timestamptz-interval '1 hour' AND backfill_queued_at<=$2::timestamptz`, string(scope.OwnerID), now), hourTotal)
 		if check == 0 {
+			b2Equal(t, b2Count(t, s, `SELECT count(*) FROM memory_jobs WHERE owner_id=$1 AND stage='source.extract' AND priority=10 AND backfill_queued_at IS NULL AND state='queued'`, string(scope.OwnerID)), spec.ArchiveRoots)
 			b2Equal(t, hourTotal, 20)
 			want := []string{}
 			for _, r := range eligible[30:] {
 				want = append(want, string(r.ID))
 			}
 			sort.Strings(want)
-			b2Equal(t, b2SQLIDs(t, s, `SELECT record_id::text FROM memory_jobs WHERE owner_id=$1 AND priority=10`, string(scope.OwnerID)), want)
+			b2Equal(t, b2SQLIDs(t, s, `SELECT record_id::text FROM memory_jobs WHERE owner_id=$1 AND backfill_queued_at IS NOT NULL AND stage='source.extract'`, string(scope.OwnerID)), want)
 		}
 		if check == 1 {
 			b2Equal(t, hourTotal, 30)
@@ -311,18 +339,38 @@ func TestPhase2B2_F5_ConcurrentBackfillCapAndHourlyRecovery(t *testing.T) {
 		for _, r := range extraSystems {
 			b2Equal(t, b2Count(t, s, `SELECT count(*) FROM memory_jobs WHERE owner_id=$1 AND record_id=$2`, string(scope.OwnerID), string(r.ID)), 0)
 		}
-		for range pending {
-			b2RunOnce(t, b2Worker(s), true)
+		// Drain roots and all generated segment jobs, including the long source.
+		w := b2Worker(s)
+		for step := 0; ; step++ {
+			if step > len(eligible)*4+len(archives) {
+				t.Fatal("extraction queue did not drain within the fixture bound")
+			}
+			worked, err := w.RunOnce(context.Background())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !worked {
+				break
+			}
+		}
+		b2Equal(t, b2Count(t, s, `SELECT count(*) FROM memory_jobs WHERE owner_id=$1 AND backfill_queued_at IS NOT NULL AND stage='source.extract' AND state IN ('queued','leased')`, string(scope.OwnerID)), 0)
+		if check == 0 {
+			long := eligible[len(eligible)-1]
+			b2Equal(t, b2Count(t, s, `SELECT count(*) FROM memory_jobs WHERE owner_id=$1 AND record_id=$2 AND stage LIKE 'source.extract:%'`, string(scope.OwnerID), string(long.ID)), 2)
 		}
 		b2Equal(t, b2Count(t, s, `SELECT count(*) FROM memory_jobs WHERE owner_id=$1 AND record_id IN ($2,$3)`, string(scope.OwnerID), string(system.ID), string(processed.ID)), 0)
 		b2Equal(t, b2Count(t, s, `SELECT count(*) FROM (SELECT record_id,record_version,stage FROM memory_jobs WHERE owner_id=$1 GROUP BY record_id,record_version,stage HAVING count(*)>1) d`, string(scope.OwnerID)), 0)
+	}
+	for _, ref := range archives {
+		b2Equal(t, b2Count(t, s, `SELECT count(*) FROM memory_jobs WHERE owner_id=$1 AND record_id=$2 AND stage='source.extract' AND backfill_queued_at IS NOT NULL`, string(scope.OwnerID), string(ref.ID)), 0)
 	}
 	n, err := s.BackfillExtractions(context.Background(), now.Add(time.Hour+time.Second))
 	if err != nil {
 		t.Fatal(err)
 	}
-	b2Equal(t, n, 20)
-	b2Equal(t, b2Count(t, s, `SELECT count(*) FROM memory_jobs WHERE owner_id=$1 AND priority=10`, string(scope.OwnerID)), len(eligible))
+	b2Equal(t, n, spec.NextHour)
+	b2Equal(t, b2Count(t, s, `SELECT count(*) FROM memory_jobs WHERE owner_id=$1 AND stage='source.extract' AND backfill_queued_at>$2::timestamptz-interval '1 hour' AND backfill_queued_at<=$2::timestamptz`, string(scope.OwnerID), now.Add(time.Hour+time.Second)), spec.NextHour)
+	b2Equal(t, b2Count(t, s, `SELECT count(*) FROM memory_jobs WHERE owner_id=$1 AND backfill_queued_at IS NOT NULL AND stage='source.extract'`, string(scope.OwnerID)), len(eligible))
 }
 func TestPhase2B2_F6_PausedArchiveSkippedOrdinaryProcessedResumeWorks(t *testing.T) {
 	s, scope := testStore(t), owner()

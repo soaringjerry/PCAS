@@ -130,6 +130,7 @@ PCAS 的所有文档都从这一页找。新增或移动文档时，同时改这
 | [B](tasks/phase2/batch1/B-undo-memory.md) | 撤销连带记忆、抽取跳过、清理 2.0 遗留 | 6.1 Sol |
 | [C](tasks/phase2/batch1/C-frontend.md) | 依据卡片里的原话、「依据已更新」标记（前端） | Opus 5.5 |
 | [C2](tasks/phase2/batch1/C2-source-sheet.md) | 从依据卡片点开，直接看到当时那句话（前端） | Opus 5.5 |
+| [D](tasks/phase2/batch1/D-date-fixtures.md) | 旧测试里写死的日期（从 main 修） | 6.1 Sol |
 | [T](tasks/phase2/batch1/T-acceptance.md) | 独立验收 | 6.1 Sol（另一个执行者） |
 
 2.0 的代码和研究稿不在 `docs/` 里，归档为 git 标签 `archive/phase2-0/*`，位置和用法见任务入口第 6 节。

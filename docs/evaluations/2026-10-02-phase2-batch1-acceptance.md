@@ -1,168 +1,169 @@
-# 第 2 阶段第 1 批：8a4ac50 集成复验（待后续最终一轮）
+# 第 2 阶段第 1 批：12abe94 统一全量验收
 
-本页保留 8a4ac50 的历史测量。协调者在 `079151e` 已裁定部分预期，见文末“裁定后的测试交付”；原失败数不能当成新契约下的结果。当前等待 R2a/摘录窗口和 D 合入后的统一最终一轮。
+**本轮未达到全绿，不能签署验收通过。** 按编号下任一主测试失败即失败汇总，38 条序列为 **36 通过、2 失败（P14、P15）**；44 个编号 Go 主测试为 **42 通过、2 失败**。另外一组获批修改的旧测试失败，`make check` 退出码为 2。全部浏览器 **126/126 通过**，包括本批 8 个用例及 I-A3 长资料用例。
 
-本轮**未通过验收**。36 条序列按编号汇总为 **34 通过、2 失败（M2、N12）**；39 个 Go 主测试汇总为 36 通过、3 失败。新浏览器 8 个逻辑用例：6 通过、2 失败。现有浏览器回归 118 个全部通过。`make check` 失败仍保留，不能据此上线。
+失败证据集中在 T 的夹具对照：两项新增测试期待 manual 抽取的候选陈述被供给；旧测试期待与当前查询无相关词的资料进入跨项目交接。原话本身的 R2a 隐藏、事项排除、恢复断言均通过。静态定位提示夹具前提不完整，详见发现清单；本轮没有将这些失败认定为已证实产品缺陷，也没有删断言、改预期或重跑。
 
-这是协调者要求的当前一轮，不是甲的后续 PR 合入后的最终结果。最终一轮收到通知后再 fetch、变基、完整复验。
+## 被测提交与运行边界
 
-## 被测版本和证据
+- 集成分支提交：`12abe94e7541713d164e476a4dffecfc85a27992`（12abe94；含 A #60/#68/#72、B #58、C #59、C2 #65、D #74）。
+- 含 T 验收测试的实际被测提交：`60bde6d25466a2ac4997bae5e422c0385d3b432e`（60bde6d）。Go、全部浏览器、前端静态检查和构建都来自此提交；运行期间工作树保持干净。报告更新后没有修改测试或产品代码。
+- 证据元数据记录区间：`2026-10-02T10:48:41.180406+00:00` 至 `2026-10-02T10:55:19.915484+00:00`。这是一次统一全量，未拼接 8a4ac50 或此前定向结果。已清除 Go 测试缓存；浏览器每个用例只执行一次、`--retries=0`，黄金路径没有 repeat-each。
+- 冻结文件 [b1-gold.json](../../testdata/phase2/b1-gold.json) 与前次交付 254b0c0 逐字一致，SHA256：`cbddbb479212d7a0dd48850c708262497732167ef7aef5ae6ee21ef8e6fa67ec`。
+- Draft PR：[T 独立验收 #64](https://github.com/soaringjerry/PCAS/pull/64)，base 为 `phase2/batch1`。
 
-- 被测产品/集成分支：`8a4ac5047940f2e149fce43f29b0a593accbddf1`。本轮所有执行使用同一产品版本。
-- 初次 `make check` 的测试提交：`08158f4`；修正测试接线后的定向复验：`e43f820`、`834743d`、`2ce6542`。当前交付提交：`31e63f363e7a5e93435d6129b40eaeb027029980`（之后仅报告和 PR 说明更新）。
-- 长资料最终浏览器运行使用 `e43f820`；已有浏览器启动时使用 `fb56243`。期间未修改产品代码。
-- 报告汇总是“一次全量 + 有明确接线修正原因的定向复验”，**不是当前测试提交一次全量全绿**。下次最终一轮必须统一重跑。
-- Draft PR：[T 独立验收 #64](https://github.com/soaringjerry/PCAS/pull/64)。[首交付基线](2026-10-01-phase2-batch1-acceptance.md)仅是历史记录。
+仅在 `/root/PCAS-wt/b1-T` 执行。两套临时 PostgreSQL 均使用 `pgvector/pgvector:0.8.2-pg16-bookworm`、tmpfs、随机 loopback 端口。浏览器 API 也使用随机本机端口；订阅协议用例使用测试 runner 的固定回调端口 14559，启动前已检查空闲。资料、输出、模型 HTTP、Telegram、Web Push 及协议服务全部为合成或本地假服务。没有读取线上 `.env`/`config/`、连接线上数据库、调用真实模型或发送真实通知。仅按记录的容器 ID 和子进程 PID 清理；运行后已确认两个容器移除、四个服务进程退出。
 
-全部资料和输出均为合成。临时 PostgreSQL 使用指定 `pgvector/pgvector:0.8.2-pg16-bookworm`、tmpfs、随机 loopback 端口。模型正文由本地假 HTTP 服务捕获；副手结果由假服务固定。真实浏览器使用临时 serve/worker，Telegram、Web Push 和订阅协议外部依赖也是假服务。未读取线上 `.env`/`config/`，未连接线上库、真实模型或真实通知通道。容器仅按记录的 ID 移除，进程仅按自己记录的 PID 清理。
+## 38 条逐条结果
 
-## 36 条逐条结果
-
-| 序列 | 本轮结果 | 测试名 | 说明 |
+| 序列 | 本轮结果 | 对应测试名及结果 | 补充 |
 |---|---|---|---|
-| P1 | 通过 | `TestPhase2B1_P1_DeskTurnRawSourceAndDeletionControl` |  |
-| P2 | 通过 | `TestPhase2B1_P2_ActualDeputyRequestAndSourceDependencies` |  |
-| P3 | 通过 | `TestPhase2B1_P3_ManualBriefAndDeletionControl` |  |
-| P4 | 通过 | `TestPhase2B1_P4_ClaimOnlyEmptySourceSection` |  |
-| P5 | 通过 | `TestPhase2B1_P5_SystemGeneratedSourcesExcluded` |  |
-| P6 | 通过 | `TestPhase2B1_P6_BudgetsTruncateAndComplete`<br>`TestPhase2B1_P6_MatchedTailExcerptBeforeAndAfterChunking` |  |
-| P7 | 通过 | `TestPhase2B1_P7_HistoricalQuestionsNotRepeatedAsSources` |  |
-| P8 | 通过 | `TestPhase2B1_P8_DuplicateTitlesDoNotMergeIdentities` |  |
-| P9 | 通过 | `TestPhase2B1_P9_PublicReadsCannotForgeInternalAccess` |  |
-| P10 | 通过 | `TestPhase2B1_P10_DeputyClaimFiltersAndSharedRawSources`<br>`TestPhase2B1_P10_ExclusionsInferenceAndProjectFiltersStayOnClaimsOnly` |  |
-| P11 | 通过 | `TestPhase2B1_P11_CurrentVersionOnly` |  |
-| P12 | 通过 | `TestPhase2B1_P12_MediaRequiresReadableTranscriptOrOCR` |  |
-| P13 | 通过 | `TestPhase2B1_P13_AdoptedSourceContentSurvivesForUserButExpiresForModels` |  |
-| M1 | 通过 | `TestPhase2B1_M1_ClaimCorrectionKeepsVisibleExchange` |  |
-| M2 | 失败 | `TestPhase2B1_M2_ModelHistoryReplacesOnlyOldAnswer`<br>`TestPhase2B1_M2_CurrentDestinationUnavailablePreservesQuestionAndReceipt` | 模型历史缺回执行；秘书 delegate 缺讨论历史。 |
-| M3 | 通过 | `TestPhase2B1_M3_SourceVersionMarksOutdatedWithoutErasure` |  |
-| M4 | 通过 | `TestPhase2B1_M4_SourceDeletionScrubsDependentTurnRunAndDoc` |  |
-| M5 | 通过 | `TestPhase2B1_M5_OutdatedReceiptCanUndoAndSurvivesReload` |  |
-| M6 | 通过 | `TestPhase2B1_M6_ReplayAndTelegramDuplicateKeepOldAnswer` |  |
-| M7 | 通过 | `TestPhase2B1_M7_CorrectedDeputyResultRemainsButStale` |  |
-| M8 | 通过 | `TestPhase2B1_M8_UnchangedTurnOmitsOutdatedField` |  |
-| N1 | 通过 | `TestPhase2B1_N1_UndoDeletesPlanKeepsOriginalAndHistory` |  |
-| N2 | 通过 | `TestPhase2B1_N2_ExtractionAfterFullUndoDoesNotRecreatePlan` |  |
-| N3 | 通过 | `TestPhase2B1_N3_PartialUndoKeepsMemoryAndRawSupply` |  |
-| N4 | 通过 | `TestPhase2B1_N4_RememberKeepsPreferenceButDeletesPlan` |  |
-| N5 | 通过 | `TestPhase2B1_N5_ConfirmedClaimSurvivesFullUndo` |  |
-| N6 | 通过 | `TestPhase2B1_N6_IndependentEvidenceProtectsClaim` |  |
-| N7 | 通过 | `TestPhase2B1_N7_RefusedUndoIsAtomic` |  |
-| N8 | 通过 | `TestPhase2B1_N8_TelegramCallbackUsesRealUndo` |  |
-| N9 | 通过 | `TestPhase2B1_N9_UndoCommandReplayHasNoSecondDeletion` |  |
-| N10 | 通过 | `TestPhase2B1_N10_ManualUndoDoesNotCascadeSecretaryMemory` |  |
-| N11 | 通过 | `TestPhase2B1_N11_UndoUpdateThenCreationDeletesOnlyCompleteTurn` |  |
-| N12 | 失败 | `TestPhase2B1_N12_RandomTwentyActionsInTwentySeededGroups` | 20/20 组最后的 sources 与初始值不同；撤销、各轮计划删除及资料保留断言通过。 |
-| G1 | 通过 | `TestPhase2B1_G1_FreshDatabaseMigratesWithoutLegacyObjects` |  |
-| G2 | 通过 | `TestPhase2B1_G2_LegacyCleanupPreservesEveryBusinessRow` |  |
-| G3 | 通过 | `TestPhase2B1_G3_SecondStartupMakesNoFurtherChanges` |  |
+| P1 | 通过 | `TestPhase2B1_P1_DeskTurnRawSourceAndDeletionControl`（通过） |  |
+| P2 | 通过 | `TestPhase2B1_P2_ActualDeputyRequestAndSourceDependencies`（通过） |  |
+| P3 | 通过 | `TestPhase2B1_P3_ManualBriefAndDeletionControl`（通过）<br>`TestPhase2B1_P3_BriefDateUsesWorkspaceTimezoneAcrossUTCDayBoundary`（通过） | 含上海/UTC 跨日：表达日期、记录日期，manual Brief 和副手实际请求。 |
+| P4 | 通过 | `TestPhase2B1_P4_ClaimOnlyEmptySourceSection`（通过） |  |
+| P5 | 通过 | `TestPhase2B1_P5_SystemGeneratedSourcesExcluded`（通过） |  |
+| P6 | 通过 | `TestPhase2B1_P6_BudgetsTruncateAndComplete`（通过）<br>`TestPhase2B1_P6_MatchedTailExcerptBeforeAndAfterChunking`（通过） |  |
+| P7 | 通过 | `TestPhase2B1_P7_HistoricalQuestionsNotRepeatedAsSources`（通过） |  |
+| P8 | 通过 | `TestPhase2B1_P8_DuplicateTitlesDoNotMergeIdentities`（通过） |  |
+| P9 | 通过 | `TestPhase2B1_P9_PublicReadsCannotForgeInternalAccess`（通过） |  |
+| P10 | 通过 | `TestPhase2B1_P10_DeputyClaimFiltersAndSharedRawSources`（通过）<br>`TestPhase2B1_P10_ExclusionsInferenceAndProjectFiltersStayOnClaimsOnly`（通过） |  |
+| P11 | 通过 | `TestPhase2B1_P11_CurrentVersionOnly`（通过） |  |
+| P12 | 通过 | `TestPhase2B1_P12_MediaRequiresReadableTranscriptOrOCR`（通过） |  |
+| P13 | 通过 | `TestPhase2B1_P13_AdoptedSourceContentSurvivesForUserButExpiresForModels`（通过） |  |
+| P14 | 失败 | `TestPhase2B1_P14_CapturedMemoryVisibilityClosesAndReopensOriginal`（通过）<br>`TestPhase2B1_P14_OneRestrictedActiveClaimClosesWholeSource`（失败） | 速记采纳主路径通过；多陈述原话控制因陈述供给断言失败，见 F-T1。 |
+| P15 | 失败 | `TestPhase2B1_P15_ItemExclusionAffectsOnlyThatItemAcrossAllEntrances`（失败）<br>`TestPhase2B1_P15_SourceDependentAdoptionObeysVisibilityAndItemExclusion`（通过） | 原话事项隔离和 source 依赖采纳控制通过；多陈述供给断言失败，见 F-T1。 |
+| M1 | 通过 | `TestPhase2B1_M1_ClaimCorrectionKeepsVisibleExchange`（通过） |  |
+| M2 | 通过 | `TestPhase2B1_M2_ModelHistoryReplacesOnlyOldAnswer`（通过）<br>`TestPhase2B1_M2_CurrentDestinationUnavailablePreservesQuestionAndReceipt`（通过） | 秘书历史回执行及显式 deskTurnIds 副手历史对照通过。 |
+| M3 | 通过 | `TestPhase2B1_M3_SourceVersionMarksOutdatedWithoutErasure`（通过） |  |
+| M4 | 通过 | `TestPhase2B1_M4_SourceDeletionScrubsDependentTurnRunAndDoc`（通过） |  |
+| M5 | 通过 | `TestPhase2B1_M5_OutdatedReceiptCanUndoAndSurvivesReload`（通过） |  |
+| M6 | 通过 | `TestPhase2B1_M6_ReplayAndTelegramDuplicateKeepOldAnswer`（通过） |  |
+| M7 | 通过 | `TestPhase2B1_M7_CorrectedDeputyResultRemainsButStale`（通过） |  |
+| M8 | 通过 | `TestPhase2B1_M8_UnchangedTurnOmitsOutdatedField`（通过） |  |
+| N1 | 通过 | `TestPhase2B1_N1_UndoDeletesPlanKeepsOriginalAndHistory`（通过） |  |
+| N2 | 通过 | `TestPhase2B1_N2_ExtractionAfterFullUndoDoesNotRecreatePlan`（通过） |  |
+| N3 | 通过 | `TestPhase2B1_N3_PartialUndoKeepsMemoryAndRawSupply`（通过） |  |
+| N4 | 通过 | `TestPhase2B1_N4_RememberKeepsPreferenceButDeletesPlan`（通过） |  |
+| N5 | 通过 | `TestPhase2B1_N5_ConfirmedClaimSurvivesFullUndo`（通过） |  |
+| N6 | 通过 | `TestPhase2B1_N6_IndependentEvidenceProtectsClaim`（通过） |  |
+| N7 | 通过 | `TestPhase2B1_N7_RefusedUndoIsAtomic`（通过） |  |
+| N8 | 通过 | `TestPhase2B1_N8_TelegramCallbackUsesRealUndo`（通过） |  |
+| N9 | 通过 | `TestPhase2B1_N9_UndoCommandReplayHasNoSecondDeletion`（通过） |  |
+| N10 | 通过 | `TestPhase2B1_N10_ManualUndoDoesNotCascadeSecretaryMemory`（通过） |  |
+| N11 | 通过 | `TestPhase2B1_N11_UndoUpdateThenCreationDeletesOnlyCompleteTurn`（通过） |  |
+| N12 | 通过 | `TestPhase2B1_N12_RandomTwentyActionsInTwentySeededGroups`（通过） | 20 个固定种子、每组 20 个动作逆序撤销均通过。 |
+| G1 | 通过 | `TestPhase2B1_G1_FreshDatabaseMigratesWithoutLegacyObjects`（通过） |  |
+| G2 | 通过 | `TestPhase2B1_G2_LegacyCleanupPreservesEveryBusinessRow`（通过） |  |
+| G3 | 通过 | `TestPhase2B1_G3_SecondStartupMakesNoFurtherChanges`（通过） |  |
 
-N12 使用 20261001–20261020 固定种子，每组 20 个跨轮秘书动作并逆序撤销。20 组都执行了全部动作、撤销和计划断言：每轮最后一个动作撤销后，该轮计划消失，其他轮计划仍在；所有原话和对话保留。20 组都在最后的事项比较失败。增加差异诊断后只检查 seed 20261001：标题、状态、步骤等一致，但 `sources` 比初始值多了 `label:"撤销：加了 1 步"` 的条目，版本也不同。历史、更新时间、事项 revision 已排除，`sources` 仍严格比较。该条究竟应算业务差异还是允许保留的审计来源，需要协调者明确；当前保持失败，不放宽预期。
-
-M2 的秘书实际请求保留提问并使用替换语，旧陈述依赖不再带入，用户内容也保留。失败包括：秘书历史漏回执行；秘书的 `delegate` 动作产生的 Brief 没有“导办台之前的讨论”及替换语，提问仅被再次作为原话召回；显式 `requestRun` 在排除/不可见两种当前场合对照中有正确的提问和替换语，但漏回执行。实际副手 HTTP 请求也验证了这些缺失。
+N12 的种子为 20261001–20261020，共 400 个秘书动作及 400 次逆序撤销。每轮最后一个动作撤销后，该轮计划记忆删除、其他轮计划保留；最后严格比较业务字段，动作/撤销来源条目及操作版本按裁定排除，真实原话与对话记录保留。20/20 组全部通过。
 
 ## 浏览器结果
 
-| 文件 / 用例 | 结果 | 观察 |
+| 文件 | 本批用例名 | 结果 |
 |---|---|---|
-| 模拟 P1/R8a：单击直接全文、定位标记、无版本状态摘要 | 通过 | 精确摘录在长原文中标记且可见 |
-| 模拟 M1/M3/M5：更新标记、内容保留、撤销及刷新 | 通过 | 回执撤销后刷新仍在 |
-| 模拟 M8/P1：无标记、独立依据列表、390px | 通过 | 原话没有并入时间轴，无横向溢出 |
-| 模拟 P1/R8a：摘录不存在 | 通过 | 全文自动显示，没有伪标记 |
-| 模拟 P1/R8a：资料库同一资料 | 通过 | 版本、状态、摘要、手动展开保持原交互 |
-| 真实 P1/P8：12 份同名资料、新对话、请求、原文及删除对照 | 失败 | 实际请求含原话、零陈述、卡片和全文正常；全文等于摘录时没有 mark。此处中止，所以浏览器删除对照未执行；Go P1 的删除对照通过 |
-| 真实 P6/R8a：多行长资料、宽泛提问 | 失败 | 请求和卡片只给前言，缺中段暗号；前言能匹配、能标记且可见。中段问题未拿到中段资料 |
-| 真实 P6/R8a：同资料、唯一中段检索词对照 | 通过 | 请求和卡片有中段暗号；直接全文、mark、可见区域断言全通过；换行没有被改成空格 |
+| `phase2-batch1-backend.spec.ts` | P1/P8 页面原话→新对话→真实请求与来源卡片，删除后不再供给 | 通过 |
+| `phase2-batch1-backend.spec.ts` | P6/R8a 带换行的长资料：实际中段摘录能标记并定位在可见区域 | 通过 |
+| `phase2-batch1-backend.spec.ts` | P6/R8a 带换行的长资料唯一中段查询对照：实际中段摘录能标记并定位在可见区域 | 通过 |
+| `phase2-batch1.spec.ts` | P1/R8a 单击依据直接看到全文、定位标记，面板无版本状态摘要 | 通过 |
+| `phase2-batch1.spec.ts` | M1/M3/M5 依据已更新保留回答卡片回执，撤销刷新后仍在 | 通过 |
+| `phase2-batch1.spec.ts` | M8/P1 正常轮无更新标记，原话不混入时间轴，390px不溢出 | 通过 |
+| `phase2-batch1.spec.ts` | P1/R8a 摘录不在原文时全文仍自动可见，没有伪标记 | 通过 |
+| `phase2-batch1.spec.ts` | P1/R8a 资料库打开同一原话保留版本、处理状态、摘要及展开原文 | 通过 |
 
-真实长原文共 61 个换行，超过 600 字；中段两行是“成都资料中段：交付暗号是青色灯塔7319。”和“见面地点是锦江桥东侧，带上蓝色档案袋。”。宽泛提问是“成都长资料中段的交付暗号是什么”，唯一中段对照是“蓝色档案袋”。后端摘录保留换行，去掉截断提示用的首尾省略号后可在原文中精确找到；本轮未观察到“换行被压为空格导致无标记”的问题。宽泛提问失败来自选段位置。
+真实长资料保留换行、超过 600 字符。宽泛提问和唯一中段词对照都检查假模型实际请求、中段细节、后端摘录、全文逐字一致、唯一 mark 及可见区域；两条均通过，I-A3 已在本轮验证通过。短资料摘录等于全文时，全文直接可见且无 mark；删除后的实际模型请求对照也完整执行并通过。模拟用例验证时间轴与依据分离、outdated 回执撤销、刷新、资料库入口不变及 390px 不溢出。
 
-现有浏览器回归单次运行且 `--retries=0`：`timezone-backend` 1 个，加上其余既有文件 117 个，共 118 个全部通过，包含黄金路径、订阅协议、真实副手、通知及模拟界面。黄金路径没有 repeat-each。新增用例之外未改旧浏览器预期。
+全部浏览器按文件统计如下（118 个既有 + 8 个本批 = 126）：
+
+| 文件 | 用例数 | 结果 |
+|---|---|---|
+| `backend.spec.ts` | 1 | 全部通过 |
+| `buttons.spec.ts` | 9 | 全部通过 |
+| `chatgpt-direct.spec.ts` | 1 | 全部通过 |
+| `continuity.spec.ts` | 1 | 全部通过 |
+| `fixes.spec.ts` | 12 | 全部通过 |
+| `golden.spec.ts` | 12 | 全部通过 |
+| `model-api.spec.ts` | 1 | 全部通过 |
+| `notify.spec.ts` | 5 | 全部通过 |
+| `phase2-batch1-backend.spec.ts` | 3 | 全部通过 |
+| `phase2-batch1.spec.ts` | 5 | 全部通过 |
+| `secretary.spec.ts` | 18 | 全部通过 |
+| `settings-things-ux.spec.ts` | 19 | 全部通过 |
+| `timezone-backend.spec.ts` | 1 | 全部通过 |
+| `timezone.spec.ts` | 18 | 全部通过 |
+| `usability-acceptance.spec.ts` | 20 | 全部通过 |
+
+首次登录时区测试先在空工作区执行，其余 125 个用例在同一套临时真实后端执行；模拟文件使用自己的浏览器路由夹具。Playwright JSON 显示全部用例只有一个 `passed` 结果，没有重试或 flaky 结果。
 
 ## 发现清单
 
-| 编号 | 现象 / 契约预期 | 建议归属 |
+| 编号 | 现象与冻结预期 | 定位及建议归属 |
 |---|---|---|
-| I-A1 | outdated 的模型历史漏动作回执行。R7 补充明确要求保留。秘书和显式副手入口均失败 | A；协调者提到的后续 PR 部分范围 |
-| I-A2 | 秘书 delegate 的 Brief 不带本段讨论历史、替换语和回执行。原提问被作为相关原话再次送出，不能替代 R7 历史处理 | A |
-| I-N1 | N12 最终 `sources` 新增撤销来源，导致 20 组严格恢复断言失败；其他可逆业务字段、计划和资料断言通过 | B / 协调者：确认 `sources` 的恢复边界，再决定实现或预期处理 |
-| I-C2-1 | 短原话本身就是完整摘录时，全文直接显示但没有 mark。R8a 当前没有全文等于摘录的例外 | C2 / 协调者 |
-| I-A3 | 宽泛中段提问与前言共享词语时，摘录选在前言，中段细节没有进模型；唯一词对照通过 | A / 协调者：判断检索选段质量的处理范围 |
-| I-PENDING | `TestSecretaryStablePrefixAndVisibility` 的旧隐藏断言失败，当前原话仍供给 | R2 待用户决定；按协调者指示保持失败 |
+| F-T1 | `P15_ItemExclusionAffectsOnlyThatItemAcrossAllEntrances` 和 `P14_OneRestrictedActiveClaimClosesWholeSource` 期待未受限的两条陈述出现在 Brief/实际模型正文及依赖中；实际没有陈述，相关 claim 依赖计数为 0。原话隐藏、排除、恢复及 source 依赖检查没有失败。 | **T 的夹具前提问题，交协调者核定。** 夹具从 manual 来源抽取，正文与 quote 分别使用记忆标记和原话；未执行采纳/确认，也未开启副手包含推测。静态定位：`processing.go::extractionConfirmation` 对此返回 candidate；`claims.go::memoriesTx` 将其映射为 inferred；秘书/副手的现有过滤排除 inferred。R1/R2a 明确保留陈述过滤规则。可补齐符合原冻结供给前提的夹具状态，断言和原话标记保持；本轮未调整、未复跑。不能据这两项认定 R2a 产品缺陷。 |
+| F-T2 | 获批旧测试 `TestDeskHistoryCannotBypassDestinationItemScope` 的 other-project、delegate-other-project 两子用例期待「相关原话」含原件；实际原话节为空。exclude 子用例、提问保留、旧回答替换和陈述排除均通过。 | **T 的检索对照夹具问题，交协调者核定。** 新增断言的资料为 `Scope claim marker C-8420`，交接请求为 `Continue the discussion`，事项为 Destination/New work，假服务未配置 embedding。静态定位：`prepareRunContext`/`requestRun` 检索以当前请求和事项为查询，不把历史提问加入查询；本对照缺相关词，不能区分「按项目过滤」与「没有检索命中」。建议补齐相关查询的对照前提；本轮保留失败，不改断言、不重跑。 |
 
-## 单列：主干固定日期问题（任务 D，不计本批发现）
+以上定位发生在冻结预期、统一运行之后，只用于解释失败，没有据产品实现改写预期。失败仍计入本轮结果；这是一份红色验收报告，不把静态解释当作通过证据。未发现其他已证实的本批产品缺陷。
 
-四组旧夹具失败：`TestCodexSecretaryAndLegacyFormats`、`TestSecretaryHistoryOneEntryPerAction`、`TestSecretarySchedulesAndUpdatesRecentTask`、`TestDueReminderOffsets`。固定的 2026-10-02 15:00 上海及提醒时间在本轮执行时已过去。协调者已派 D 从 main 修复；T 不改这四组。它们保留为本轮检查失败的独立原因，不计本批缺陷。
+## 用户指定复验项与历史裁定
 
-## 获批的既有测试变更
-
-严格按 T-acceptance 的批准范围修改两组：
-
-1. `desk_dependency_growth_test.go::TestSecretaryConversationDependenciesStayASet`：每轮检查捕获原话 + 采纳陈述的精确集合，`kind`、版本、各一次；保留 9 轮增长、600 项旧重复结构读取及后继集合不膨胀的检查。原话取 capture 候选的源，采纳时生成的 `memory-input` 记录不算原话。定向复验通过。
-2. `ux_regressions_test.go::TestDeskHistoryCannotBypassDestinationItemScope`：提问、陈述、模型回答使用三个不同合成标记。三个子用例均检查旧回答不在、替换语和提问在、相关记忆段无受限陈述、ContextMemoryIDs 无其 id。没有判断 exclude 对应原话是否供给。全量中三个子用例全部通过。
-
-`TestSecretaryStablePrefixAndVisibility` 文件未改，继续失败。没有修改其他旧预期。冻结 JSON 的原有值全部保留，只追加 R7、长资料和唯一中段对照。
-
-## 检查、测试接线与证据目录
-
-- `GOFLAGS=-v bash testdata/phase2/run-go.sh make check`：失败。fmt-check、vet 先通过，test 阶段失败后 make 停止；随后 `make fmt-check lint build` 通过。全量及所有定向运行均没有 DATA RACE。
-- 前端 `npm run lint && npm run type-check && npm run build` 通过；浏览器接线修正后再次 lint/type-check 通过。
-- 39 个编号主测试覆盖全部 36 序列；冻结 JSON 只增不改审计、shell 语法、diff whitespace 检查通过。相对被测 8a4ac50 的改动没有产品文件，旧测试仅上述两份。
-- 接线修正及定向执行都有具体原因：JSONB/HTTP 对象键排序导致字节比较误报，改为保留所有值的语义比较；P1 补齐冻结夹具已指定的表达时间元数据；旧依赖增长测试指向 capture 原件；长浏览器进入来源页签并按实际依据按钮定位。未改 gold 的旧值，也未放宽任何内容、依赖、预算、撤销或标记断言。
-- 长资料用 `expect.soft` 汇集多个失败：失败仍令用例失败，继续点击以保存原文、摘录和 mark 证据。不是失败降级。没有同代码重跑碰运气。
-
-本机证据均为合成内容，未把大日志或 token 提交到仓库：
-
-- `/tmp/pcas-b1-T-integration-8a4ac50-go.log`：一次全量及 20 个种子。
-- `...-targeted-go.jsonl`、`...-targeted-final.jsonl`、`...-p1-final.jsonl`：修正后的定向结果和 N12 精确字段差异。
-- `...-browser-first/`：新用例首次运行截图/trace；`...-long-final/`：长资料最后的截图/trace/摘录附件。
-- `...-existing-browser.log`、`/tmp/pcas-b1-T-existing-{timezone,browser}/`：118 个现有用例及截图。
-
-既有三个真实服务 opt-in 用例按原有机制未执行：`TestInstalledCodexHandshake`、`TestLiveCodexSecretaryAndLegacyFormats`、`TestLiveContinuityReplay`。T 没有添加 skip；runner 明确清除真实服务 opt-in，符合本轮只用假模型的要求。上述三项不算真实模型验收通过。
-
-## 规则对应位置（用于复查，不代表逐行实现审计）
-
-| 规则 | 被测代码位置 / 入口 |
+| 项目 | 本轮结果 |
 |---|---|
-| R1 | `internal/memory/contracts.go` Scope.Team；`internal/postgres/retrieval.go`；P9 外部 HTTP 对照 |
-| R2/R3 | `retrieval.go` 的 `teamSourceExcerptsTx`、`sourceExcerpt`；秘书、实际副手、manual 三入口 |
-| R4/R5 | `desk_turn.go::secretaryPrompt`、`runs.go::runCommandTx`；实际提示词、Brief 和依赖持久化 |
-| R6 | `runs.go` 运行依赖校验、`artifacts.go::sanitizeItemTx`；P13、M3/M4 |
-| R7 | `desk_turn.go::deskTurnsTx` / `secretaryPrompt`、`run_context.go`、`runs.go`、Telegram 重投；M1–M8 与当前场合对照 |
-| R8/R8a | `desk_turn.go::secretaryCardsTx`、前端 SecretaryCards/SourceSheet；独立依据、mark 和资料库对照 |
-| R9 | `undone_turns.go`、`actions_log.go::Undo` / `deleteUndoneTurnMemoriesTx`、`processing.go`；N1–N12 |
-| R10 | `migrations/026_drop_phase2_0_leftovers.sql`；新库、遗留库及第二次启动 |
+| `TestSecretaryStablePrefixAndVisibility` | 原文件一个字未改；通过 |
+| `TestCodexSecretaryAndLegacyFormats` | 通过 |
+| `TestSecretaryHistoryOneEntryPerAction` | 通过 |
+| `TestSecretarySchedulesAndUpdatesRecentTask` | 通过 |
+| `TestDueReminderOffsets` | 通过 |
+| I-A1 秘书历史回执行（#68） | M2 秘书断言通过；副手回执断言已按裁定去掉 |
+| I-A2 秘书 delegate 历史 | 按裁定去掉批外预期，显式 deskTurnIds 的问答替换、依赖和实际请求通过 |
+| I-N1 N12 操作来源比较 | 按裁定只排除操作记录；20 个种子全部通过 |
+| I-C2-1 全文摘录无标记 | 真实短资料全文可见、mark=0，通过 |
+| I-A3 摘录窗口 | 宽泛问题、长资料及断言原样保留，本轮通过 |
+| Brief 跨 UTC 日界时区 | 表达时间/记录时间均以 2026-09-12T17:30Z 对照：上海 9 月 13 日、UTC 9 月 12 日；manual 与副手实际请求通过 |
 
-## 未覆盖和最终一轮边界
+四项固定日期旧问题由 D #74 修复，本轮均通过，不计本批发现。T 的 N11 使用上海当前日期后七天的 15/16 时，未写死必须在未来的日期；本轮没有采用新 DateFromToday helper 或为此改动测试。
 
-没有验证真实模型能否回答、真实向量语义质量、真实 OCR/转录准确率、大规模性能、线上冒烟或部署。外部调用全为假服务。模拟卡片不能替代真实请求证据，真实请求已另行捕获。
+## 获批的旧测试与冻结预期变更
 
-本轮未加入 Brief 跨 UTC 日期边界的时区对照；现有原话日期样本在两时区是同一天，因此不能据本轮通过判断甲后续时区修复正确。最终一轮应补齐该边界（预期须继续来自契约）。R2 隐藏/排除陈述对应原话的决定待用户；不据本轮实现自行定预期。
+这些变更均在本轮运行前交付，本轮没有改动任何断言或 gold 值：
 
-当前报告的代码并非一次统一全量测量；最终必须在甲后续及协调者处理本轮发现后重新变基运行全量。没有合并、部署或线上操作。
+1. `desk_dependency_growth_test.go::TestSecretaryConversationDependenciesStayASet`：批准把依赖改为供给陈述 + 原话的精确去重集合，保留对话增长和旧结构读取保护；本轮通过。
+2. `ux_regressions_test.go::TestDeskHistoryCannotBypassDestinationItemScope`：批准把提问/陈述/旧回答拆为不同标记，检查记忆部分与 ContextMemoryIDs，保留问题和替换语；按 R2a 增加 exclude 原话关闭、两个仅项目不同的原话开放对照。本轮 exclude 通过，另两子用例失败，见 F-T2。
+3. `TestSecretaryStablePrefixAndVisibility`：从未修改，本轮通过。
+4. 协调者在 079151e 批准的三个 gold 旧字符串修正：R7 两条回执行描述收窄到秘书；R8a 增加全文例外。`coordinator_adjudication_079151e.authorized_corrections` 保存路径、前值、新值和授权。其他旧值保留；P14/P15、跨日日期预期均先冻结提交，再写测试。
 
-## 裁定后的测试交付（079151e；尚未运行最终全量）
+## 检查命令与证据
 
-已 fetch 并变基到 `079151e`，当前契约为 38 条序列。补充测试编译检查通过；本节没有宣称新规则的运行结果。冻结 P14/P15 先于新增测试，跨日时区预期也先提交，再接线。产品实现没有改动。
+- `GOFLAGS=-v bash testdata/phase2/run-go.sh make check`：**失败，退出 2**。fmt-check 和 go vet 通过；`go test -race ./cmd/... ./internal/...` 有三个主测试失败（F-T1 两个、F-T2 一个），其余完成，未出现 DATA RACE。原有 build 目标因 test 失败未执行；浏览器 runner 从同一提交成功构建真实后端二进制，不把它等同于 make check 通过。
+- Go 主测试日志汇总：339 通过、3 失败、3 个既有真实服务 opt-in 未执行。44 个 T 主测试全部执行、零 skip；38 个编号都存在。
+- 前端 `npm run lint && npm run type-check && npm run build`：全部通过（Node 22.23.3）。
+- `bash web/tests/support/real-backend.sh bash /tmp/pcas-b1-T-final-12abe94-browser.sh`：通过，先 timezone-backend，再其他全部文件，`--retries=0`，一次运行。
+- 冻结文件字节比对、测试编号集合和 git diff whitespace 检查通过；本轮结束时仅验收报告有后续编辑，没有产品或测试代码修改。
 
-| 历史发现 | 协调者裁定及本次测试调整 |
+本地证据路径只含合成资料；不提交大日志或临时 token：
+
+- `/tmp/pcas-b1-T-final-12abe94-meta.json`：统一提交、冻结 SHA256、运行区间、自己起的资源与清理确认。
+- `/tmp/pcas-b1-T-final-12abe94-go.log`、`...-go-results.json`：完整 make check 输出及主测试结果。
+- `/tmp/pcas-b1-T-final-12abe94-browser.log`、`...-timezone.json`、`...-browser.json`、`...-browser-results.json`：浏览器输出、原始 JSON 及逐例状态。
+- `/tmp/pcas-b1-T-final-12abe94-browser/`、`...-timezone/`：截图及长资料摘录附件；`...-services/`：本轮临时服务日志。
+
+既有三个真实服务 opt-in：`TestInstalledCodexHandshake`、`TestLiveCodexSecretaryAndLegacyFormats`、`TestLiveContinuityReplay`，按原有机制未执行。runner 清除了真实服务 opt-in 配置；T 没有新增 skip，也不把这三项算作真实模型验收通过。
+
+## 规则与入口对应
+
+| 规则 | 验收入口 / 定位 |
 |---|---|
-| I-A1 | 秘书历史仍断言回执行；#68 已合入，但本轮尚未复验新提交。副手交接不要求回执行，按批准去掉相关断言 |
-| I-A2 | 秘书 delegate 讨论历史不属本批；删除该预期。M2 的副手历史改为显式 requestRun + deskTurnIds，仍检查问答替换、旧依赖排除和实际请求 |
-| I-N1 | 动作/撤销来源是操作记录；N12 依据 sources.connector=actions 过滤操作条目，排除其版本。历史、更新时间、事项版本同样不比较，其他真实来源及所有业务字段继续严格比较 |
-| I-C2-1 | 摘录等于全文时无标记；真实短资料改为全文可见且 mark 数量为零，部分摘录的长资料标记及定位断言不变 |
-| I-A3 | 确认为缺陷；宽泛问题、资料、内容断言全部保留，等待 A 修查询词命中最多的窗口 |
-| R2 待定 | 用户已决定 R2a，原待定结束。TestSecretaryStablePrefixAndVisibility 不改，R2a 合入后应原样通过 |
+| R1/R2/R3 | DeskTurn 实际模型请求、requestRun + runAgentOnce 实际请求、manual Brief；retrieval.go |
+| R2a | P14/P15 三入口、历史依赖、source 依赖采纳对照；teamSourceVisibleSQL、verifyRunForItemTx、sanitizeItemTx |
+| R4/R5 | 实际提示词、Brief、desk_turns.dependencies、run.contextVersions 和 run_dependencies |
+| R6 | P13 采纳及原话新版本、M4 删除传播；artifacts.go 与运行依赖校验 |
+| R7 | M1–M8、显式 deskTurnIds、重放与本地 Telegram 假回调；desk_turn.go、run_context.go |
+| R8/R8a | 两个浏览器文件、实际请求捕获、长资料标记可见；SecretaryCards / SourceSheet |
+| R9 | Store.Undo、undoAction、ProcessExtraction、N12 固定种子；undone_turns.go、actions_log.go |
+| R10 | 空库、遗留 2.0 对象及无关业务行、再次 Migrate；迁移 026 与 G1–G3 |
 
-预期修改的授权是任务包“协调者对 8a4ac50 一轮发现的裁定”和用户本轮明确指令。gold 中仅修正三个已批准的旧字符串：R7 的两个回执行描述收窄到秘书历史；R8a 的描述加入全文例外。`coordinator_adjudication_079151e.authorized_corrections` 逐项保存路径、前值、新值及授权编号。其余冻结值均保留。
+## 未覆盖
 
-新增编号测试（合计 44 个 Go 主测试，覆盖 38 条序列）：
+本轮两个多陈述夹具的陈述供给正向对照未通过，不能据本轮签署这些对照通过；旧跨项目原话开放对照也未通过。它们的原话关闭/恢复结果与其他通过测试仍分别列出，不抵销失败。
 
-- `TestPhase2B1_P14_CapturedMemoryVisibilityClosesAndReopensOriginal`：真实速记、采纳、关闭秘书、历史替换和新对话、仍可见副手实际请求、重新打开。
-- `TestPhase2B1_P14_OneRestrictedActiveClaimClosesWholeSource`：同原话两条陈述，任一隐藏阻断整份，重新打开恢复；已删除陈述不再阻断原件。
-- `TestPhase2B1_P15_ItemExclusionAffectsOnlyThatItemAcrossAllEntrances`：同一句话两条抽取记忆，只排除其中一条；事项甲乙的副手实际 HTTP、manual Brief、事项页秘书及无事项大厅对照，其他可见陈述继续给，原话整份收紧；解除排除恢复。
-- `TestPhase2B1_P15_SourceDependentAdoptionObeysVisibilityAndItemExclusion`：采纳时只有 source 依赖，之后抽取记忆再隐藏或排除；秘书和副手不再得到采纳内容，用户的事项内容保留，解除限制恢复。
-- `TestPhase2B1_P3_BriefDateUsesWorkspaceTimezoneAcrossUTCDayBoundary`：表达时间/记录时间两种来源，`2026-09-12T17:30Z` 在上海是 9 月 13 日、UTC 是 9 月 12 日；manual 和真实副手请求均检查正确日期并排除错误日期。此时间仅为历史资料元数据，不是未来事项。
-
-获批旧测试 `TestDeskHistoryCannotBypassDestinationItemScope` 已按 R2a 补齐相关原话节：exclude 不含原话，两个仅项目不同的子用例含原话。第三组旧测试一个字未动。T 的 N11 原未来时间已改为从上海今天起七天后的 15/16 时，不依赖星期；未改任何被冻结的正文或撤销期望。
-
-最终一轮须等 A 的 R2a+摘录窗口及 D 合入后，以同一个提交统一执行全部用例一次，不拼接此前定向结果；届时重写 38 条逐条结果、浏览器、当前发现及覆盖边界。本轮只交付上述测试调整和静态验证。
+假模型证明系统实际把哪些内容交给模型，以及处理固定引用/动作的行为；不能证明真实模型会如何作答。没有验证真实向量语义质量、真实 OCR/转录准确率、大规模性能、线上默认 Codex 通道、真实提醒到手机、部署或线上冒烟。浏览器通知权限为 denied 时黄金用例走既有合成订阅回退，只证明临时后端向假端点投递。未合并、部署或操作线上实例。

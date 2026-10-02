@@ -88,14 +88,14 @@ func (s *Store) ProcessIndex(ctx context.Context, j worker.Job) error {
 }
 func (s *Store) ProcessEmbedding(ctx context.Context, j worker.Job) error {
 	if s.models == nil || s.models.EmbeddingID() == "" {
-		return &worker.JobError{Code: "provider_not_configured"}
+		return errors.Join(memory.ErrUnavailable, &worker.JobError{Code: "provider_not_configured"})
 	}
 	provider, ok := s.models.Get(s.models.EmbeddingID())
 	if !ok {
-		return &worker.JobError{Code: "provider_not_configured"}
+		return errors.Join(memory.ErrUnavailable, &worker.JobError{Code: "provider_not_configured"})
 	}
 	if !s.models.Available(provider.ID) {
-		return &worker.JobError{Code: "provider_unavailable", Retry: true}
+		return errors.Join(memory.ErrUnavailable, &worker.JobError{Code: "provider_unavailable", Retry: true})
 	}
 	var text string
 	err := s.pool.QueryRow(ctx, `SELECT t.body FROM memory_text t JOIN memory_records r ON (r.owner_id,r.id,r.version)=(t.owner_id,t.id,t.version) WHERE t.owner_id=$1 AND t.id=$2 AND t.version=$3 AND r.state='active'`, string(j.OwnerID), string(j.Record.ID), j.Record.Version).Scan(&text)
@@ -196,7 +196,7 @@ func (s *Store) ProcessEmbedding(ctx context.Context, j worker.Job) error {
 			if err := s.releaseUnavailableReservation(ctx, j); err != nil {
 				return err
 			}
-			return &worker.JobError{Code: "provider_unavailable", Retry: true}
+			return errors.Join(memory.ErrUnavailable, &worker.JobError{Code: "provider_unavailable", Retry: true})
 		}
 		if err != nil {
 			return &worker.JobError{Code: "model_call_failed", Retry: cost == 0}

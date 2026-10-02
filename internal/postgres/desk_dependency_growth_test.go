@@ -23,7 +23,24 @@ func TestSecretaryConversationDependenciesStayASet(t *testing.T) {
 	})
 	text := "去年关于成都的计划"
 	st := workspaceCommand(t, s, scope, workspace.Command{Type: "capture", Text: text})
-	workspaceCommand(t, s, scope, workspace.Command{Type: "acceptCandidate", ID: st.Candidates[0].ID, Kind: "memory", MemoryKind: "fact", Text: text})
+	st = workspaceCommand(t, s, scope, workspace.Command{Type: "acceptCandidate", ID: st.Candidates[0].ID, Kind: "memory", MemoryKind: "fact", Text: text})
+
+	claim := memory.Ref{ID: memory.ID(st.Memories[0].ID), Version: st.Memories[0].Version, Kind: memory.ClaimKind}
+	source := memory.Ref{ID: memory.ID(st.Memories[0].Sources[0].SourceID), Version: st.Memories[0].Sources[0].Version, Kind: memory.SourceKind}
+	assertSet := func(turnID string) {
+		t.Helper()
+		var refs []memory.Ref
+		if err := s.pool.QueryRow(ctx, "SELECT dependencies FROM desk_turns WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), turnID).Scan(&refs); err != nil {
+			t.Fatal(err)
+		}
+		counts := map[memory.Ref]int{}
+		for _, ref := range refs {
+			counts[ref]++
+		}
+		if len(refs) != 2 || counts[claim] != 1 || counts[source] != 1 {
+			t.Fatalf("expected one claim and one supplied source, without duplicates: got=%+v claim=%+v source=%+v", refs, claim, source)
+		}
+	}
 
 	count := func(turnID string) int {
 		t.Helper()
@@ -40,9 +57,7 @@ func TestSecretaryConversationDependenciesStayASet(t *testing.T) {
 		req.ConversationID = conversation
 		last = mustTurn(t, s, scope, req)
 		conversation = &last.ConversationID
-		if n := count(last.Turn.ID); n != 1 {
-			t.Fatalf("turn %d stored %d dependencies for one recalled memory", i, n)
-		}
+		assertSet(last.Turn.ID)
 	}
 
 	// Rows written before the fix hold the same reference hundreds of times.
@@ -63,9 +78,7 @@ func TestSecretaryConversationDependenciesStayASet(t *testing.T) {
 	req := turnRequest("关于成都的计划，再问一次")
 	req.ConversationID = conversation
 	next := mustTurn(t, s, scope, req)
-	if n := count(next.Turn.ID); n != 1 {
-		t.Fatalf("a legacy turn inflated its successor to %d dependencies", n)
-	}
+	assertSet(next.Turn.ID)
 }
 
 func TestUniqueRefsKeepsFirstOccurrenceOrder(t *testing.T) {

@@ -38,6 +38,9 @@ func TestPhase2B1_M2_ModelHistoryReplacesOnlyOldAnswer(t *testing.T) {
 	mustTurn(t, s, scope, req)
 	b1Contains(t, f.last(t).Prompt, out.Turn.Text, "（先前回答的依据已更新，请按现在的资料回答）")
 	b1Absent(t, f.last(t).Prompt, out.Turn.Reply)
+	for _, receipt := range out.Turn.Receipts {
+		b1Contains(t, f.last(t).Prompt, receipt.Text)
+	}
 	b1HasRef(t, b1Refs(t, s, scope, req.RequestID), claim, false)
 	// Delegation from the same discussion must apply the same model-history rule.
 	f.set(`{"reply":"交给副手","actions":[{"op":"delegate","ref":"R1","kind":"ask","prompt":"根据当前成都资料作答"}]}`)
@@ -50,6 +53,9 @@ func TestPhase2B1_M2_ModelHistoryReplacesOnlyOldAnswer(t *testing.T) {
 	run := delegated.State.Runs[0]
 	b1Contains(t, run.Brief, out.Turn.Text, "（先前回答的依据已更新，请按现在的资料回答）")
 	b1Absent(t, run.Brief, out.Turn.Reply)
+	for _, receipt := range out.Turn.Receipts {
+		b1Contains(t, run.Brief, receipt.Text)
+	}
 	b1HasRef(t, run.ContextVersions, claim, false)
 	f.set("当前副手回答")
 	if err := s.runAgentOnce(context.Background()); err != nil {
@@ -57,6 +63,9 @@ func TestPhase2B1_M2_ModelHistoryReplacesOnlyOldAnswer(t *testing.T) {
 	}
 	b1Contains(t, f.last(t).Prompt, "（先前回答的依据已更新，请按现在的资料回答）")
 	b1Absent(t, f.last(t).Prompt, out.Turn.Reply)
+	for _, receipt := range out.Turn.Receipts {
+		b1Contains(t, f.last(t).Prompt, receipt.Text)
+	}
 }
 func TestPhase2B1_M3_SourceVersionMarksOutdatedWithoutErasure(t *testing.T) {
 	s, scope := b1Store(t), owner()
@@ -223,5 +232,40 @@ func TestPhase2B1_M8_UnchangedTurnOmitsOutdatedField(t *testing.T) {
 	b1Outdated(t, replay.Turn, false)
 	if replay.Turn.Reply != out.Turn.Reply || len(f.all()) != 1 {
 		t.Error("unchanged replay altered answer or regenerated")
+	}
+}
+
+func TestPhase2B1_M2_CurrentDestinationUnavailablePreservesQuestionAndReceipt(t *testing.T) {
+	for _, change := range []string{"exclude", "invisible"} {
+		t.Run(change, func(t *testing.T) {
+			s, scope, f, claim, _, out := b1AnsweredClaim(t)
+			task := *out.Turn.Receipts[0].ThingID
+			if change == "exclude" {
+				workspaceCommand(t, s, scope, workspace.Command{Type: "toggleContextMemory", ThingID: task, MemoryID: string(claim.ID)})
+			} else {
+				workspaceCommand(t, s, scope, workspace.Command{Type: "setMemoryVisibility", ID: string(claim.ID), AgentIDs: []string{}})
+			}
+			f.set("当前场合副手回答")
+			st := workspaceCommand(t, s, scope, workspace.Command{Type: "requestRun", ThingID: task, AgentID: "model", Kind: "ask", Prompt: "根据当前可用资料继续", DeskTurnIDs: []string{out.Turn.ID}})
+			run := st.Runs[0]
+			b1Contains(t, run.Brief, out.Turn.Text, "（先前回答的依据已更新，请按现在的资料回答）")
+			b1Absent(t, run.Brief, out.Turn.Reply)
+			for _, receipt := range out.Turn.Receipts {
+				b1Contains(t, run.Brief, receipt.Text)
+			}
+			b1HasRef(t, run.ContextVersions, claim, false)
+			if err := s.runAgentOnce(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			b1Contains(t, f.last(t).Prompt, out.Turn.Text, "（先前回答的依据已更新，请按现在的资料回答）")
+			b1Absent(t, f.last(t).Prompt, out.Turn.Reply, "成都陈述旧说法蓝灯")
+			for _, receipt := range out.Turn.Receipts {
+				b1Contains(t, f.last(t).Prompt, receipt.Text)
+			}
+			visible := b1History(t, s, scope, out.ConversationID)
+			if visible.Reply != out.Turn.Reply || string(asJSON(visible.Cards)) != string(asJSON(out.Turn.Cards)) || string(asJSON(visible.Receipts)) != string(asJSON(out.Turn.Receipts)) {
+				t.Error("current destination scope erased user-visible exchange")
+			}
+		})
 	}
 }

@@ -72,3 +72,53 @@ test('P1/P8 页面原话→新对话→真实请求与来源卡片，删除后�
   expect(actualControl).toHaveLength(1)
   expect(actualControl[0].messages.map(m => m.content).join('\n')).not.toContain(text)
 })
+
+test('P6/R8a 带换行的长资料：实际中段摘录能标记并定位在可见区域', async ({ page }, info) => {
+  const spec = gold.integration_supplement_2026_10_02.long_browser
+  const fullText = [
+    ...Array<string>(spec.prefix_repetitions).fill(spec.prefix_line),
+    ...spec.middle_lines,
+    ...Array<string>(spec.suffix_repetitions).fill(spec.suffix_line),
+  ].join('\n')
+  expect(Array.from(fullText).length).toBeGreaterThan(600)
+  expect(fullText).toContain('\n')
+  await login(page, '/library')
+  await fixture(page, [{ kind: 'extraction', match: '', content: '{"items":[]}' }])
+  await page.getByRole('button', { name: '导入资料', exact: true }).click()
+  const importing = page.getByRole('dialog')
+  await importing.getByLabel('标题', { exact: true }).fill(spec.title)
+  await importing.getByLabel('原文', { exact: true }).fill(fullText)
+  await importing.getByRole('button', { name: '导入', exact: true }).click()
+  await expect(importing).toHaveCount(0)
+  await page.goto('/')
+  await input(page).press('Escape')
+  expect((await page.request.delete(`${captureURL}/b1/requests`)).ok()).toBeTruthy()
+  await fixture(page, [
+    { kind: 'secretary', match: spec.question, content: JSON.stringify({ reply: spec.reply, used: ['S1'], actions: [] }) },
+    { kind: 'extraction', match: '', content: '{"items":[]}' },
+  ])
+  const answer = await say(page, spec.question)
+  const captured = await (await page.request.get(`${captureURL}/b1/requests`)).json()
+  const requests = captured.requests.filter((r: { messages: { role: string; content: string }[] }) => r.messages.some(m => m.role === 'system' && m.content.includes('前台秘书')))
+  expect(requests).toHaveLength(1)
+  expect(requests[0].messages.map((m: { content: string }) => m.content).join('\n')).toContain('青色灯塔7319')
+  const sources: { kind: string; sourceId: string; sourceVersion: number; text: string }[] = answer.turn.cards.filter((c: { kind: string }) => c.kind === 'sources').flatMap((c: { items: unknown[] }) => c.items)
+  expect(sources).toHaveLength(1)
+  expect(sources[0].kind).toBe('source')
+  expect(sources[0].text).toContain('青色灯塔7319')
+  const source = await (await page.request.get(`/v1/memory/sources/${sources[0].sourceId}?version=${sources[0].sourceVersion}`)).json()
+  expect(source.source.text).toBe(fullText)
+  // Keep the exact backend text, including whitespace, to diagnose matching.
+  await info.attach('long-source-excerpt', { body: JSON.stringify({ excerpt: sources[0].text, original: source.source.text, exactMatch: fullText.includes(sources[0].text), whitespaceCollapsedMatch: fullText.replace(/\s+/g, ' ').includes(sources[0].text.replace(/…$/, '')) }, null, 2), contentType: 'application/json' })
+  await page.getByRole('list', { name: '依据' }).getByRole('button', { name: sources[0].text, exact: true }).click()
+  const dialog = page.getByRole('dialog')
+  const original = dialog.locator('pre')
+  await expect(original).toBeVisible()
+  expect(await original.textContent()).toBe(fullText)
+  const mark = original.locator('mark')
+  await expect(mark).toHaveCount(1)
+  await expect(mark).toContainText('青色灯塔7319')
+  await expect(mark).toBeInViewport()
+  await expect(dialog.getByText('展开原文', { exact: true })).toHaveCount(0)
+  await expect(dialog).not.toContainText(/第\s*\d+\s*版|摘要/)
+})

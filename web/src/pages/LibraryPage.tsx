@@ -12,7 +12,7 @@ import { UnsureSheet } from '../components/UnsureSheet'
 import { Button, Empty, Progress, Seg, Sheet, Spinner, Switch, Tag } from '../components/ui'
 import { jobStatusLabel, memoryKindLabel, sampleStateLabel, sourceStatusLabel, triggerLabel } from '../domain/labels'
 import { formatAgo, formatWhen } from '../domain/time'
-import type { Memory, MemoryFacet, MemoryKind, MemoryMention, TrainingSample } from '../domain/types'
+import type { Epistemic, Memory, MemoryFacet, MemoryKind, MemoryMention, TrainingSample } from '../domain/types'
 import { useStore } from '../store/context'
 import { useMemory, useMemoryFacets, useMemoryList } from '../store/memories'
 import { useToast } from '../store/toast'
@@ -217,6 +217,12 @@ function MemorySheet({ memory, entity, onClose, onPick, onDeleted }: {
 }
 
 const natures = Object.keys(memoryKindLabel) as MemoryKind[]
+type Trust = Exclude<Epistemic, 'planned'>
+const trusts: { value: Trust; label: string }[] = [
+  { value: 'confirmed', label: '已确认' },
+  { value: 'sourced', label: '原话有据' },
+  { value: 'inferred', label: '推测' },
+]
 /** How many people or places are offered before 「更多」. */
 const FACETS_SHOWN = 6
 
@@ -258,6 +264,7 @@ function MemoryTab() {
   const q = params.get('q') ?? ''
   const entity = params.get('entity') ?? ''
   const nature = natures.find((n) => n === params.get('nature')) ?? ''
+  const epistemic = trusts.find((t) => t.value === params.get('epistemic'))?.value ?? ''
   const openId = params.get('m')
   const change = (patch: Record<string, string | null>, replace = false) =>
     setParams((current) => {
@@ -283,11 +290,11 @@ function MemoryTab() {
     }, 250)
   }
 
-  const list = useMemoryList({ q, entity, nature })
+  const list = useMemoryList({ q, entity, nature, epistemic })
   const { facets, problem: facetsProblem, retry: retryFacets } = useMemoryFacets()
   const opened = useMemory(openId, list.items.find((m) => m.id === openId))
   const [recalling, setRecalling] = useState(false)
-  const filtered = Boolean(q || entity || nature)
+  const filtered = Boolean(q || entity || nature || epistemic)
   const pick = (entityId: string) => change({ entity: entityId === entity ? null : entityId, m: null })
   const entityName = entity
     ? [...(facets?.people ?? []), ...(facets?.places ?? [])].find((f) => f.entityId === entity)?.name
@@ -325,6 +332,12 @@ function MemoryTab() {
           onChange={(v) => change({ nature: v === 'all' ? null : v })}
           items={[{ value: 'all', label: '全部' }, ...natures.map((k) => ({ value: k, label: memoryKindLabel[k] }))]}
         />
+        <Seg
+          label="可信度"
+          value={epistemic || 'all'}
+          onChange={(v) => change({ epistemic: v === 'all' ? null : v })}
+          items={[{ value: 'all', label: '都看' }, ...trusts]}
+        />
       </div>
       {facets && (facets.people.length > 0 || facets.places.length > 0) && (
         <div className="mem-facets">
@@ -348,7 +361,7 @@ function MemoryTab() {
       {filtered && (
         <p className="mem-summary" role="status">
           {list.phase === 'ready' && <span>{entity ? `提到「${entityName ?? '它'}」的记忆` : '符合的记忆'}有 {list.total} 条</span>}
-          <button type="button" className="link-btn" onClick={() => { window.clearTimeout(typing.current); change({ q: null, entity: null, nature: null }) }}>
+          <button type="button" className="link-btn" onClick={() => { window.clearTimeout(typing.current); change({ q: null, entity: null, nature: null, epistemic: null }) }}>
             清掉筛选
           </button>
         </p>

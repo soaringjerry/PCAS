@@ -2018,5 +2018,32 @@
       "existingItems": 0,
       "receiptUndone": true
     }
+  },
+  "timelineSaidFallback": {
+    "contractCommit": "5beb42c",
+    "K5": {
+      "connector": "upload",
+      "title": "没有日期的导入文件.txt",
+      "sourceText": "成都旧资料：原文件没有写下这段话的日期。",
+      "recordedDaysAgo": 90,
+      "memoryExpressedAt": null,
+      "sourceExpressedAt": null,
+      "at": null
+    },
+    "K11": {
+      "sourceText": "成都那次谈到了看展和书店。",
+      "memoryText": "旧记忆：成都那次谈的是看展",
+      "datedMemoryText": "有自己说话日期的成都记忆",
+      "query": "成都那次说了什么来着",
+      "sourceRecordedDaysAgo": 45,
+      "datedMemoryDaysAgo": 40,
+      "memoryExpressedAt": null,
+      "sourceExpressedAt": null,
+      "atAxis": "sourceRecordedAt",
+      "timelineOrder": [
+        "legacy",
+        "dated"
+      ]
+    }
   }
 }

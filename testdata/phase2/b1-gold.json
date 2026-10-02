@@ -701,6 +701,18 @@
         "exclude 子用例不判断相关原话是否包含其原话"
       ],
       "TestSecretaryStablePrefixAndVisibility": "先不改，保持失败并报告"
+    },
+    "long_browser_exact_query_control": {
+      "question": "蓝色档案袋",
+      "must": [
+        "仅位于资料中段的唯一检索词进入实际模型请求和卡片摘录",
+        "同一份带换行长原文的中段摘录可精确定位并标记",
+        "标记在面板可见区域内"
+      ],
+      "must_not": [
+        "使用只有前言的摘录",
+        "原文与摘录的换行差异导致没有标记"
+      ]
     }
   }
 }

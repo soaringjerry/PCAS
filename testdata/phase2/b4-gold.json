@@ -252,5 +252,41 @@
       "invalidSecretaryContent": "{\"reply\":",
       "legacyQuestion": "合成L9旧导办台相同问话：青玉罗盘今天怎样安排"
     }
+  },
+  "coordinator_amendment_2e2b8f9": {
+    "authority": "batch4/README.md section 7 and coordinator instruction",
+    "L8Deputy": "a referenced memory is corrected while the fake model is generating; the returned free-text result is rejected, run fails with 生成期间记忆或授权已变化 and is not adopted, but exactly one returned-call usage row remains",
+    "usagePersistence": "record returned content in an independent short transaction; later result failure, cancellation or rollback cannot erase the row",
+    "blocked": {
+      "previewField": "blocked",
+      "classification": "separate from alreadyImported and leftOut",
+      "behavior": "skip messages banned from reimport without failing the batch",
+      "excludeFrom": [
+        "total",
+        "stored"
+      ],
+      "gaps": "nonempty human explanation",
+      "uiCountFormula": "messages - alreadyImported - leftOut - blocked"
+    },
+    "fixtures": {
+      "deputyReturnedText": "- [ ] 合成L8副手结果：整理青玉罗盘，向东走。",
+      "deputyCorrection": "验收私密记忆：青玉罗盘5591，现在应向西走。",
+      "rollbackReply": "合成L8结果提交前已成功返回。"
+    },
+    "blockedPreview": {
+      "name": "chatgpt-export.zip",
+      "conversations": 3,
+      "messages": 17,
+      "fromUser": 10,
+      "earliest": "2024-06-12T03:10:00Z",
+      "latest": "2025-05-14T03:10:00Z",
+      "alreadyImported": 4,
+      "leftOut": 2,
+      "gaps": [
+        "图片 photo-1.png 已跳过"
+      ],
+      "blocked": 3
+    },
+    "blockedWillImport": 8
   }
 }

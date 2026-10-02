@@ -12,9 +12,10 @@ type Item = { id: string; at: string | null; eventFrom: string; eventTo: string;
 const items: Item[] = gold.browser.items
 
 // Accept familiar numeric/date punctuation while checking every calendar part.
-function datePattern(iso: string) {
+function datePattern(iso: string, optionalYear = false) {
   const [y, m, d] = iso.split('-')
-  return new RegExp(`${y}(?:年|[-/.])0?${Number(m)}${d ? `(?:月|[-/.])0?${Number(d)}` : ''}`)
+  const year = optionalYear ? `(?:${y}(?:年|[-/.]))?` : `${y}(?:年|[-/.])`
+  return new RegExp(`${year}0?${Number(m)}${d ? `(?:月|[-/.])0?${Number(d)}` : ''}`)
 }
 async function backend(page: Page) {
   const at = '2026-10-02T12:00:00Z'
@@ -73,8 +74,8 @@ test('V1 四种状态、说话日期和事件日期、人地点与无日期，39
     else await expect(row).toContainText('时间不详')
     await expect(row).toContainText(item.eventPrecision === 'year' ? item.eventLabel : datePattern(item.eventLabel))
     if (item.eventPrecision === 'range') {
-      await expect(row).toContainText(datePattern(gold.rangeDisplayRuling.browserEnd))
-      await expect(row).not.toContainText(datePattern(gold.rangeDisplayRuling.browserExcludedEnd))
+      await expect(row).toContainText(datePattern(gold.rangeDisplayRuling.browserEnd, true))
+      await expect(row).not.toContainText(datePattern(gold.rangeDisplayRuling.browserExcludedEnd, true))
     }
     if (item.statusLabel) await expect(row).toContainText(item.statusLabel)
     else await expect(row).not.toContainText(/已完成|已取消|后来改过|未完成|未变化|open/)

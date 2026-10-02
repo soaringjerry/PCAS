@@ -383,8 +383,8 @@ func TestPhase2B3_S1_EventPrecisionAndInclusiveRangeDisplay(t *testing.T) {
 				return strings.ReplaceAll(template, "{year}", fmt.Sprint(now.Year()-1))
 			}
 			if precision == "range" {
-				b1Contains(t, line, "事件 "+expand("rangeFrom"), expand("rangeTo"))
-				b1Absent(t, line, expand("rangeExcludedEnd"))
+				b1Contains(t, line, "事件 "+expand("rangeFrom"), strings.TrimPrefix(expand("rangeTo"), fmt.Sprint(now.Year()-1)+"-"))
+				b1Absent(t, line, strings.TrimPrefix(expand("rangeExcludedEnd"), fmt.Sprint(now.Year()-1)+"-"))
 			} else {
 				pattern := regexp.MustCompile("事件 " + regexp.QuoteMeta(expand(precision)) + `(?:$|\s*/)`)
 				if !pattern.MatchString(line) {

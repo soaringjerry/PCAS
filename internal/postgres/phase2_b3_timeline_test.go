@@ -56,7 +56,7 @@ func TestPhase2B3_K1_SaidChronologyEventAndMentions(t *testing.T) {
 }
 
 // Create genuine desk actions and derive a synthetic claim from that exact
-// turn's original, so association has to use the real action log.
+// turn's original, preserving its real creation receipt for the association.
 func b3TurnPlan(t *testing.T, s *Store, scope memory.Scope, f *b1Fake, self, place memory.ID, now time.Time, n int, label string) (memory.Ref, []string, memory.Ref) {
 	t.Helper()
 	actions := []map[string]any{}

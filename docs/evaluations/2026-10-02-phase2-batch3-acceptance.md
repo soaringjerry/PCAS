@@ -4,7 +4,7 @@
 
 执行者 T3；工作区 `/root/PCAS-wt/b3-T3`，分支 `phase2/b3-T3-acceptance`。只按契约编写测试，未阅读 Q1/Q2/K 的实现，未修改产品代码、已有测试或它们的预期。
 
-正式验收 **待协调者通知**；本报告没有将测试已写或静态检查通过记为验收通过。集成分支的被测提交号、统一 `make check` 和浏览器运行结果届时填写。当前未运行 P/S/K/V 验收。测试分支已变基到 `origin/phase2/batch3` 的 `1cec28b`；该提交仍未包含 Q1，因此 P 编译的待实现状态未变化。
+正式验收 **待协调者通知**；本报告没有将测试已写或静态检查通过记为验收通过。集成分支的被测提交号、统一 `make check` 和浏览器运行结果届时填写。当前未运行 P/S/K/V 验收。首轮交付变基到 `origin/phase2/batch3` 的 `1cec28b`（当时 Q1 尚未合入），随后按通知变基到 `b7340fe`。本次 K5/K9/K10/K11 补充已变基到最新集成提交 `de59215`。
 
 初始基线 `66b1a43`；按用户裁定 fetch 了契约提交 `586541120729befc81cb7e15aac7706fd0124516`。在该提交的产品代码上，用自建 `pgvector/pgvector:0.8.2-pg16-bookworm` tmpfs 容器、随机本机端口及 `testStore` 的独立 schema 采集 S6/S10 改动前基准。只使用本机假模型，未读取 `/root/PCAS/.env` 或 `config/`，未调用真实模型、线上库或真实通知。临时采集程序及容器已清理。两组 S6 分别使用新 schema，避免第一次采集自己产生的原话污染第二组输入。
 
@@ -56,7 +56,7 @@
 R1–R4：P 序列；R5：S9/S10/S13；R6：S4/S5/S12；R7：S1/S4/S5；R8：S3；R9：S2/S6；R10：S2/S7；R11：S8；R12：S1/S6/V3；R13：S2/S7/S8/S9/S11；R14：K1/K5/K7/K11；R15：K2/K3/K6/K8/K9/K10；R16：K4；R17：V1–V3。
 
 - PostgreSQL 测试的 `go test ./internal/postgres -run '^$'` 编译检查通过；没有运行验收函数。
-- P 序列的同类编译检查报 `undefined: PlanQuery`：当前基线上 Q1 尚未合入。没有添加产品 stub、构建标签或 Skip 来绕过；Q1 合入后再检查。
+- 首轮 P 序列的同类编译检查报 `undefined: PlanQuery`：当时基线上 Q1 尚未合入。没有添加产品 stub、构建标签或 Skip 来绕过；Q1 合入后再检查。
 - `npm run lint && npm run type-check && npm run build` 通过，使用本机已有的 Node 22.23.3。初次 `npm ci` 默认 Node 20 有 engine 提示，后续检查切到仓库要求的 Node 22。
 - 两份新增浏览器用例额外做直接 TypeScript 检查，通过。现有依赖未包含 `@types/node`，检查使用 `/tmp/pcas-b3-ts-types` 临时安装的 Node 22 类型，不修改依赖文件。
 - V1/V2/V3 的 Playwright `--list` 只收集用例，成功；没有运行浏览器验收。V3 内嵌的 Go seed 程序编译通过。

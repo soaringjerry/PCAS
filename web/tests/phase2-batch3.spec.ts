@@ -70,8 +70,13 @@ test('V1 四种状态、说话日期和事件日期、人地点与无日期，39
     await expect(row).toHaveCount(1)
     await expect(row).toContainText('成都')
     await expect(row).toContainText('老王')
-    if (item.at) await expect(row.locator('time').first()).toHaveText(datePattern(item.saidLabel))
-    else await expect(row).toContainText('时间不详')
+    if (item.at) {
+      const said = row.locator('time').first()
+      await expect(said).toHaveJSProperty('dateTime', item.at)
+      const [year, month, day] = item.saidLabel.split('-')
+      await expect(said).toContainText(`${Number(month)}月${Number(day)}日`)
+      await expect(said).toContainText(`${year}年`)
+    } else await expect(row).toContainText('时间不详')
     await expect(row).toContainText(item.eventPrecision === 'year' ? item.eventLabel : datePattern(item.eventLabel))
     if (item.eventPrecision === 'range') {
       await expect(row).toContainText(datePattern(gold.rangeDisplayRuling.browserEnd, true))

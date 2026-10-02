@@ -58,7 +58,14 @@
     "reply": "验收固定回答：春熙路火锅，见老王。",
     "history_replacement": "（先前回答的依据已更新，请按现在的资料回答）",
     "deleted_dependency": "（这条回答依据的记忆已变更）",
-    "deleted_content": "（内容已删除）"
+    "deleted_content": "（内容已删除）",
+    "brief_date_boundary": {
+      "title": "快速记录",
+      "text": "b1dateneedle 跨日原话日期校验资料。",
+      "at": "2026-09-12T17:30:00Z",
+      "Asia/Shanghai": "2026-09-13",
+      "UTC": "2026-09-12"
+    }
   },
   "budgets": {
     "source_characters": 600,
@@ -658,7 +665,7 @@
       "must": [
         "同时有时间轴时，原话留在独立依据列表，陈述照旧进时间轴",
         "依据入口单击后全文自动可见",
-        "原文中存在摘录时，该段有可见标记并定位",
+        "摘录是原文一部分且可精确找到时，有可见标记并定位；摘录等于全文时无 mark",
         "依据面板没有第 N 版、处理状态、摘要",
         "资料库入口保留原面板的版本、摘要、展开原文交互"
       ],
@@ -687,12 +694,12 @@
       "must": [
         "当前场合陈述不可用时，用户轮次内容和回执保留并带 outdated:true",
         "模型历史保留提问，以替换语取代旧回答，旧陈述依赖不带入",
-        "outdated 模型历史仍保留动作回执行"
+        "outdated 轮次在秘书本对话历史里仍保留动作回执行；副手交接不要求回执行"
       ],
       "must_not": [
         "整轮历史被省略",
         "旧模型回答或不可用陈述依赖继续带入",
-        "因 outdated 丢失动作回执行"
+        "秘书本对话历史因 outdated 丢失动作回执行"
       ]
     },
     "long_browser": {
@@ -783,5 +790,33 @@
       "TestSecretaryStablePrefixAndVisibility": "原样保留，R2a 合入后应当通过"
     },
     "dates": "四组旧固定日期失败单列为任务 D，不算本批发现；T 不写死必须未来的日期。"
+  },
+  "coordinator_adjudication_079151e": {
+    "authority": "docs/tasks/phase2/batch1/T-acceptance.md 协调者对 8a4ac50 一轮发现的裁定；用户明确指令",
+    "authorized_corrections": [
+      {
+        "path": "integration_supplement_2026_10_02.R7.must[2]",
+        "before": "outdated 模型历史仍保留动作回执行",
+        "after": "outdated 轮次在秘书本对话历史里仍保留动作回执行；副手交接不要求回执行",
+        "approval": "I-A1 / R7"
+      },
+      {
+        "path": "integration_supplement_2026_10_02.R7.must_not[2]",
+        "before": "因 outdated 丢失动作回执行",
+        "after": "秘书本对话历史因 outdated 丢失动作回执行",
+        "approval": "I-A1 / R7"
+      },
+      {
+        "path": "supplement_2026_10_02.mock_browser.must[2]",
+        "before": "原文中存在摘录时，该段有可见标记并定位",
+        "after": "摘录是原文一部分且可精确找到时，有可见标记并定位；摘录等于全文时无 mark",
+        "approval": "I-C2-1 / R8a"
+      }
+    ],
+    "I-A2": "秘书 delegate 不要求携带讨论历史；显式 deskTurnIds 的请求仍要问答替换和旧依赖排除",
+    "N12_business_comparison": "严格比较标题、状态、时间、提醒、步骤、项目、说明等业务字段；忽略历史、更新时间、事项版本、sources 中动作及撤销操作记录及其版本，其他来源仍比较",
+    "I-A3": "宽泛提问用例及断言不改；窗口按不同查询词命中数最多的位置选，并列靠前",
+    "Brief_date_boundary": "表达时间和记录时间两个对照；2026-09-12T17:30Z 在 UTC 显示 2026-09-12，在 Asia/Shanghai 显示 2026-09-13；真实副手请求和 manual Brief 都按事项设置时区输出，不能混用 UTC 日期",
+    "D": "四组固定日期失败为主干问题，单独列为 D，不能算本批发现"
   }
 }

@@ -1994,5 +1994,29 @@
       "rangeTo": "{year}-06-14",
       "rangeExcludedEnd": "{year}-06-15"
     }
+  },
+  "timelineReceiptRetention": {
+    "contractCommit": "b9d26f0",
+    "K9": {
+      "ageDays": 40,
+      "sourceText": "成都那次的安排：准备去看展，请建一个事项。",
+      "taskTitle": "成都看展旧事项",
+      "memoryText": "四十天前的成都看展打算",
+      "query": "成都那次的事项后来怎样了来着",
+      "status": "done",
+      "purgedChanges": [],
+      "keptReceiptOp": "create_task"
+    },
+    "K10": {
+      "sourceText": "成都那次谈到了看展，顺便建一个事项。",
+      "taskTitle": "当时撤销的成都事项",
+      "memoryText": "撤销事项那轮的成都背景记忆",
+      "changedText": "后来纠正的成都背景记忆：当时谈的是书展",
+      "query": "成都那次的背景后来怎样了来着",
+      "unchangedStatus": "open",
+      "correctedStatus": "changed",
+      "existingItems": 0,
+      "receiptUndone": true
+    }
   }
 }

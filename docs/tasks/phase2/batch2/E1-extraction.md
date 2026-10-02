@@ -47,6 +47,10 @@
 
 `ProcessExtraction` 里：没有配置抽取模型时返回类型为 `provider_not_configured`、不可重试的错误；调用模型时通道暂时不可用返回 `provider_unavailable`、可重试。`worker.JobError` 这个类型归 E2，它会加字段；你只按现有字段用，需要新字段时和 E2 通过协调者对齐。
 
+### 8 模型返回了就记用量（第 4 批契约 R12 的补充）
+
+S0 在抽取成功提交的那个事务里放了 `recordUsageTx` 调用。还有一条路走不到它：模型返回了内容，但 JSON 解析失败或条目超限，这时直接返回 `model_output_invalid`。这次调用同样花了钱。请在这条路上也调一次 `recordUsageTx`（需要自己开一个小事务），用模型返回的 token 数和花费；然后照旧返回错误。调用本身出错、没有返回内容的不记。同一次模型调用不要记两行。
+
 ## 你独占的文件
 
 `internal/postgres/processing.go`、`claims.go`、`source_context.go`、`entities.go`（新）。可以给 `entities.go` 配自己的单元测试 `entities_test.go`。

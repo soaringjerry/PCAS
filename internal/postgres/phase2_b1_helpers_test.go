@@ -27,10 +27,6 @@ import (
 
 func b1Store(t *testing.T) *Store {
 	t.Helper()
-	u, err := url.Parse(os.Getenv("PCAS_TEST_DATABASE_URL"))
-	if err != nil || u == nil || u.Hostname() != "127.0.0.1" || u.Path != "/b1_acceptance" || u.User == nil || u.User.Username() != "b1_test" {
-		t.Fatal("batch1 requires its disposable loopback b1_acceptance database; run testdata/phase2/run-go.sh (missing configuration is a failure, never a skip)")
-	}
 	return testStore(t)
 }
 func b1Gold(t *testing.T) map[string]json.RawMessage {

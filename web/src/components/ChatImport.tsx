@@ -39,7 +39,7 @@ export function ChatImportFlow({ file, onCancel, onStarted }: { file: File; onCa
   useEffect(() => {
     const control = new AbortController()
     upload<Partial<ArchivePreview>>('/v1/connectors/archive/preview', file, '读取这个文件', (sent, total) => setStep({ at: 'reading', sent, total }), control.signal)
-      .then((p) => setStep({ at: 'preview', preview: { name: p.name ?? file.name, conversations: p.conversations ?? 0, messages: p.messages ?? 0, fromUser: p.fromUser ?? 0, earliest: p.earliest, latest: p.latest, alreadyImported: p.alreadyImported ?? 0, leftOut: p.leftOut ?? 0, gaps: p.gaps ?? [] } }))
+      .then((p) => setStep({ at: 'preview', preview: { name: p.name ?? file.name, conversations: p.conversations ?? 0, messages: p.messages ?? 0, fromUser: p.fromUser ?? 0, earliest: p.earliest, latest: p.latest, alreadyImported: p.alreadyImported ?? 0, leftOut: p.leftOut ?? 0, blocked: p.blocked ?? 0, gaps: p.gaps ?? [] } }))
       .catch((e: unknown) => { if (!control.signal.aborted) setStep({ at: 'failed', again: worthRetrying(e), problem: e instanceof Error ? e.message : '读取这个文件没有完成。' }) })
     return () => control.abort()
   }, [file, attempt])
@@ -55,8 +55,8 @@ export function ChatImportFlow({ file, onCancel, onStarted }: { file: File; onCa
   }
 
   const preview = step.at === 'reading' ? undefined : step.preview
-  // What a confirmed import would add: not what is here already, not what is beyond the limit.
-  const fresh = preview ? Math.max(0, preview.messages - preview.alreadyImported - preview.leftOut) : 0
+  // What a confirmed import would add: not what is here already, not what is beyond the limit, not what the user said never to bring back.
+  const fresh = preview ? Math.max(0, preview.messages - preview.alreadyImported - preview.leftOut - preview.blocked) : 0
   const share = (n: number) => (preview && preview.messages > 0 ? `${(n / preview.messages) * 100}%` : '0%')
   const sent = step.at === 'reading' || step.at === 'starting' ? step : undefined
 
@@ -143,7 +143,7 @@ export function ChatImportFlow({ file, onCancel, onStarted }: { file: File; onCa
         </p>
       )}
 
-      {step.at === 'preview' && <p className="small muted">{fresh > 0 ? '现在还什么都没存。导入后，存好的话马上就能问到；整理成记忆在后台慢慢做。' : '这份里的消息以前都导过了，不用再导。'}</p>}
+      {step.at === 'preview' && <p className="small muted">{fresh > 0 ? '现在还什么都没存。导入后，存好的话马上就能问到；整理成记忆在后台慢慢做。' : preview?.blocked ? '这份里没有新的可以导入：不是以前导过，就是你说过不要再导入的。' : '这份里的消息以前都导过了，不用再导。'}</p>}
 
       <div className="row">
         {step.at === 'preview' && fresh > 0 && (

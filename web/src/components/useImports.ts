@@ -14,6 +14,8 @@ export interface ArchivePreview {
   alreadyImported: number
   /** Messages beyond what one import takes; the newest are kept. */
   leftOut: number
+  /** Messages the user deleted before and asked never to import again; in neither of the two above. `gaps` says so in words. */
+  blocked: number
   gaps: string[]
 }
 

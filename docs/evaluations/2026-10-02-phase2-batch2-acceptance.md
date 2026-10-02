@@ -90,3 +90,31 @@
 - 集成分支已建立并已变基；需要协调者合入实现并通知验收提交号，再在指定提交上一次执行全量。
 - 本次覆盖不评判真实模型的抽取准确率；真实默认通道验证和上线仍由协调者负责。
 - 如运行发现测试夹具或接口语义问题，先记录具体原因并与协调者确认；冻结预期只追加协调者批准的修订。
+
+
+## 附：旧测试偶发失败定位（待办第 25 项）
+
+2026-10-02，已 fetch，并将本分支变基到 `origin/phase2/batch2` 的 `6dc8719474952febf42793d57f2ea85c5beb87f9`。诊断在该提交的独立、干净工作区执行；Go `1.26.8 linux/amd64`，独立临时 PostgreSQL 16 / pgvector 0.8.2，只用合成数据。没有改旧测试、产品代码或第 1 批断言，没有运行正式 T2 验收。
+
+**结论：本次复现是 `timeout` 子用例的计时与阶段假设过紧，建议修测试，不建议据此改产品取消逻辑。** 100ms 调用者 deadline 在假模型与任务夹具准备之前就启动，测试却无条件要求已经进入模型阶段、捕获原话成功。
+
+复现命令（`PCAS_TEST_DATABASE_URL` 指向临时库；两组样本均完整保留失败）：
+
+```sh
+go test -race -count=20 -json -run '^TestSecretaryRejectsStaleRowsAndKeepsOriginalOnCancellation$' ./internal/postgres
+go test -race -count=100 -json -run '^TestSecretaryRejectsStaleRowsAndKeepsOriginalOnCancellation$/^timeout$' ./internal/postgres
+```
+
+| 样本 | 结果 |
+|---|---|
+| 正常连接，完整旧测试 20 次 | stale / cancel / timeout 各 20 次通过，0 次失败 |
+| 正常连接，仅 timeout 100 次 | 99 次通过，1 次失败；本组观察失败比例 1%，不是稳定概率估计 |
+| 外部代理仅延迟夹具 `INSERT INTO work_items` 200ms，timeout 1 次 | 1 次失败；是受控因果验证，不计入正常失败比例 |
+
+自然复现与受控实验均在 `internal/postgres/desk_turn_test.go:521` 报 `context deadline exceeded`，返回的 `ConversationID` 和 `Turn` 为空；不是旧回答被错误更新，也不是捕获后丢失。三组均没有 `DATA RACE` 报告。自然失败不能仅凭返回值分辨是哪个受理/排队检查先看到 deadline，但可以确定尚未进入初始化 `Turn` 的工作回调。
+
+原因链：`desk_turn_test.go:500` 启动 100ms 时限，随后才执行 `secretaryModel`（503）与 `workspaceCommand(addTask)`（516）。后者使用 `context.Background()`，不会随这 100ms 中止，因此可能在进入 `DeskTurn` 前耗尽调用者时间。`DeskTurn` 的初始 Snapshot 使用独立持久化上下文（`desk_turn.go:368–372`），随后受理与排队检查调用者取消（`desk_turn_order.go:59、95、167、216`），到期可直接返回空响应；工作回调才会初始化 Turn（`desk_turn.go:412–413`）并进入模型失败捕获。受控实验实际延迟 200.41ms，代理未观察到 `INSERT INTO desk_turn_order`，与受理前到期路径一致。已有 `TestSecretaryOrderCanceledBeforeAdmission`（`desk_turn_order_test.go:416`）明确要求受理前取消不创建票据，因此不应为了通过本测试而让已过期输入无条件被受理。
+
+建议协调者安排修改 `desk_turn_test.go` 的此子用例：先完成全部夹具准备；以通道确认假模型实际收到请求，验证真正的模型阶段超时；若仍采用真实 deadline，留足入队和数据库准备余量，并让假模型阻塞到取消，不能仅放大 100ms 而保留 1 秒后成功回复的竞速。保留原话、禁止过时更新、WARN/model/timeout 的原断言；受理前取消继续由已有专门用例覆盖。本次没有证明所有取消路径均无竞态，但已定位此次偶发失败的测试原因。
+
+原始 JSON 和代理日志留在诊断环境 `/tmp/pcas-t2-flaky-fb1y3a4u/`（`baseline20.json`、`timeout100.json`、`latency1.json`、`proxy.log`）；容器与代理在诊断后清理。正式 X/F/M/U 验收仍等协调者通知。

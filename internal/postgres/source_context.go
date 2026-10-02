@@ -65,7 +65,7 @@ func extractionEvent(when *extractedWhen, source memory.SourceResult, loc *time.
 		return nil, nil, "unknown"
 	}
 	to, err := time.ParseInLocation("2006-01-02", when.To, loc)
-	if err != nil || to.Before(from) || to.After(from.AddDate(10, 0, 0)) {
+	if err != nil || to.Before(from) || to.After(from.AddDate(10, 0, 0)) || when.Precision == "range" && !to.After(from) {
 		return nil, nil, "unknown"
 	}
 	switch when.Precision {

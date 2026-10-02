@@ -494,6 +494,18 @@ func (s *Store) ProcessExtraction(ctx context.Context, j worker.Job) (err error)
 	text = strings.TrimSuffix(text, "```")
 	var extraction extracted
 	if strictJSON([]byte(strings.TrimSpace(text)), &extraction) != nil || len(extraction.Items) > 30 {
+		if strings.TrimSpace(result.Text) != "" {
+			if err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+				return recordUsageTx(ctx, tx, modelUsage{
+					OwnerID: j.OwnerID, ID: memory.NewID(), At: time.Now().UTC(),
+					Purpose: "extraction", AgentID: p.ID, Model: p.Model,
+					InputTokens: result.InputTokens, OutputTokens: result.OutputTokens, Cost: result.Cost,
+					JobID: string(j.ID), MemoryRefs: []memory.Ref{j.Record},
+				})
+			}); err != nil {
+				return err
+			}
+		}
 		return &worker.JobError{Code: "model_output_invalid", Retry: free}
 	}
 	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {

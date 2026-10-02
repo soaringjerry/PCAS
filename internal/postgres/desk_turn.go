@@ -291,7 +291,7 @@ func (s *Store) secretaryPrompt(ctx context.Context, tx pgx.Tx, scope memory.Sco
 	if err != nil {
 		return "", nil, err
 	}
-	excerpts, err := teamSourceExcerptsTx(ctx, tx, scope, recall.Excerpts, historyRequests, 6, 2400)
+	excerpts, err := teamSourceExcerptsTx(ctx, tx, scope, c.Agent.ID, req.ThingID, recall.Excerpts, historyRequests, 6, 2400)
 	if err != nil {
 		return "", nil, err
 	}

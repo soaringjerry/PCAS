@@ -3020,3 +3020,196 @@ a.btn:hover {
   width: 160px;
   flex: none;
 }
+
+/* ===== U4 导入聊天记录：开始 ===== */
+
+.imp-flow {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+/* The file on its way up: a bar and what it is doing. */
+.imp-wait {
+  display: grid;
+  gap: 6px;
+}
+
+.imp-preview {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+/* How much is in the file: three numbers side by side. */
+.imp-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.imp-stats > div {
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: var(--r);
+  background: var(--fill);
+  min-width: 0;
+}
+
+.imp-stats strong {
+  overflow: hidden;
+  color: var(--label);
+  font-size: 20px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 26px;
+  text-overflow: ellipsis;
+}
+
+.imp-stats span {
+  color: var(--label-2);
+  font-size: 12px;
+}
+
+.imp-span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: var(--label);
+  font-size: 13px;
+}
+
+.imp-span svg {
+  flex: none;
+  color: var(--label-3);
+}
+
+/* Of those messages: new, here already, beyond the limit. */
+.imp-split {
+  display: flex;
+  height: 8px;
+  overflow: hidden;
+  border-radius: var(--r-pill);
+  background: var(--fill-2);
+}
+
+.imp-split i {
+  flex: none;
+  min-width: 0;
+}
+
+.imp-split .new,
+.imp-legend .new::before {
+  background: var(--blue);
+}
+
+.imp-split .had,
+.imp-legend .had::before {
+  background: var(--label-3);
+}
+
+.imp-split .out,
+.imp-legend .out::before {
+  background: var(--orange);
+}
+
+.imp-legend,
+.imp-gaps {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--label-2);
+  font-size: 12.5px;
+}
+
+.imp-legend li {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+}
+
+.imp-legend li::before {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  content: "";
+}
+
+.imp-legend .new {
+  color: var(--label);
+}
+
+.imp-gaps li {
+  overflow-wrap: anywhere;
+}
+
+/* Imports and how far each has got. */
+.imp-list {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.imp-item {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px 14px;
+  border-radius: var(--r);
+  background: var(--fill);
+}
+
+.imp-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.imp-head strong {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.imp-item p {
+  margin: 0;
+}
+
+/* Two counts, two bars: stored is blue, gone through for memories is the assistant's purple. */
+.imp-meter {
+  display: grid;
+  grid-template-columns: 3.6em minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  font-size: 12.5px;
+}
+
+.imp-meter-label {
+  color: var(--label-2);
+}
+
+.imp-meter-count {
+  color: var(--label-2);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.imp-note {
+  margin: 0;
+}
+
+.imp-meter.organized .progress > div {
+  background: var(--purple);
+}
+
+/* ===== U4 导入聊天记录：结束 ===== */

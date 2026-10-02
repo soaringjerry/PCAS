@@ -125,3 +125,18 @@ test('U3 300条记忆从接口翻至末尾不重复，390px无横向溢出', asy
   expect(mock.queries.slice(1).every(q => q.searchParams.get('cursor'))).toBeTruthy()
   expect(mock.errors).toEqual([])
 })
+
+test('U1 事件区间卡片显示实际最后一天', async ({ page }) => {
+  const spec = gold.supplement_0f8e759.U1
+  const ranged = memory(0)
+  delete ranged.expressedAt
+  ranged.eventFrom = spec.event_from
+  ranged.eventTo = spec.event_to
+  ranged.eventPrecision = 'range'
+  await backend(page, [ranged])
+  await page.goto('/library?tab=memories')
+  const rangeCard = await card(page, ranged.text)
+  await expect(rangeCard).toContainText(spec.first_display_day)
+  await expect(rangeCard).toContainText(spec.last_display_day)
+  await expect(rangeCard).not.toContainText(spec.excluded_display_day)
+})

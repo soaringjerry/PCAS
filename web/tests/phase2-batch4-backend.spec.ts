@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { fixture, login, evidence } from './support/real'
 
 const gold = JSON.parse(readFileSync(new URL('../../testdata/phase2/b4-gold.json', import.meta.url), 'utf8'))
-type Batch = { id: string; name: string; state: string; total: number; stored: number; organized: number; leftOut: number }
+type Batch = { id: string; archiveId: string; archiveVersion: number; name: string; state: string; total: number; stored: number; organized: number; leftOut: number }
 test.use({ timezoneId: 'Asia/Shanghai', viewport: { width: 390, height: 844 } })
 test.afterEach(async ({ page }, info) => { await evidence(page, info, 'phase2-b4-real') })
 
@@ -45,6 +45,8 @@ test('W4 真实后端：历史导入、暂停、继续至完成，在资料库�
     const items: { items: Batch[] } = await response.json()
     const item = items.items.find(item => item.id === result.batchId)
     expect(item).toBeDefined()
+    expect(item?.archiveId).toBeTruthy()
+    expect(item?.archiveVersion).toBeGreaterThan(0)
     return item!
   }
   await expect.poll(async () => (await progress()).stored, { timeout: 30_000 }).toBeGreaterThan(0)

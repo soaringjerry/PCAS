@@ -9,11 +9,12 @@ const preview = gold.browser.preview
 const at = '2025-05-14T03:10:00Z'
 type Batch = {
   id: string; name: string; state: 'importing' | 'paused' | 'done' | 'failed'
+  archiveId: string; archiveVersion: number
   total: number; stored: number; organized: number; leftOut: number
   earliest: string; latest: string; errorCode: string; error: string; createdAt: string; updatedAt: string
 }
 function batch(state: Batch['state']): Batch {
-  return { id: 'b4-synthetic-batch', name: 'chatgpt-export.zip', state, total: 500, stored: state === 'done' ? 500 : 250,
+  return { id: 'b4-synthetic-batch', archiveId: '11111111-1111-4111-8111-111111111111', archiveVersion: 1, name: 'chatgpt-export.zip', state, total: 500, stored: state === 'done' ? 500 : 250,
     organized: state === 'done' ? 300 : 25, leftOut: 2, earliest: preview.earliest, latest: preview.latest,
     errorCode: state === 'failed' ? 'invalid_json' : '', error: state === 'failed' ? '聊天文件没有读完，请继续导入。' : '', createdAt: at, updatedAt: at }
 }

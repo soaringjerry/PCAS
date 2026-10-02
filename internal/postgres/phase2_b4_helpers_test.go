@@ -414,6 +414,8 @@ func b4NonemptyText(t *testing.T, text string) {
 }
 
 type b4ImportItem struct {
+	ArchiveID                                                string
+	ArchiveVersion                                           int
 	ID, Name, State                                          string
 	Total, Stored, Organized, LeftOut                        int
 	Earliest, Latest, ErrorCode, Error, CreatedAt, UpdatedAt string
@@ -427,6 +429,11 @@ func b4Imports(t *testing.T, s *Store, scope memory.Scope) []b4ImportItem {
 	b4JSON(t, w.Body.Bytes(), &response)
 	if response.Items == nil {
 		t.Fatal("imports must contain items array")
+	}
+	for _, item := range response.Items {
+		if item.ArchiveID == "" || item.ArchiveVersion < 1 {
+			t.Errorf("batch lacks frozen archiveId/archiveVersion: %+v", item)
+		}
 	}
 	return response.Items
 }
@@ -449,9 +456,21 @@ func b4ImportFile(t *testing.T, s *Store, scope memory.Scope, name string, data 
 	if result.BatchID == "" {
 		t.Fatal("archive HTTP response lacks batchId")
 	}
-	ref := memory.Ref{Version: 1, Kind: memory.SourceKind}
-	if err := s.pool.QueryRow(context.Background(), `SELECT archive_id::text FROM import_batches WHERE owner_id=$1 AND id=$2`, string(scope.OwnerID), result.BatchID).Scan(&ref.ID); err != nil {
+	item := b4ImportItemFor(t, s, scope, result.BatchID)
+	ref := memory.Ref{ID: memory.ID(item.ArchiveID), Version: item.ArchiveVersion, Kind: memory.SourceKind}
+	var persistedID string
+	if err := s.pool.QueryRow(context.Background(), `SELECT archive_id::text FROM import_batches WHERE owner_id=$1 AND id=$2`, string(scope.OwnerID), result.BatchID).Scan(&persistedID); err != nil {
 		t.Fatal(err)
+	}
+	if persistedID != item.ArchiveID {
+		t.Errorf("wire archiveId differs from persistent batch: %s vs %s", item.ArchiveID, persistedID)
+	}
+	w = b4HTTP(t, s, scope, "GET", fmt.Sprintf("/v1/memory/sources/%s?version=%d", ref.ID, ref.Version), nil)
+	b4OK(t, w)
+	var original memory.SourceResult
+	b4JSON(t, w.Body.Bytes(), &original)
+	if !original.Source.HasAttachment {
+		t.Error("archive upload did not retain its original attachment")
 	}
 	return result.BatchID, ref
 }
@@ -463,6 +482,9 @@ func b4ImportAction(t *testing.T, s *Store, scope memory.Scope, id, action strin
 	b4JSON(t, w.Body.Bytes(), &item)
 	if item.ID != id {
 		t.Errorf("%s returned wrong batch: %+v", action, item)
+	}
+	if item.ArchiveID == "" || item.ArchiveVersion < 1 {
+		t.Errorf("%s omitted archive deletion target: %+v", action, item)
 	}
 	return item
 }

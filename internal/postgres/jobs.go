@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -16,18 +17,18 @@ func (s *Store) Claim(ctx context.Context, lease time.Duration) (*worker.Job, er
 	if lease <= 0 {
 		return nil, memory.ErrInvalid
 	}
-	// Exhausted jobs also terminate if all previous attempts crashed.
-	_, err := s.pool.Exec(ctx, `UPDATE memory_jobs SET state='failed',lease_until=NULL,lease_token=NULL,error_code='attempts_exhausted',updated_at=now()
-		WHERE state='leased' AND lease_until < now() AND attempts >= $1`, maxAttempts)
-	if err != nil {
+	if err := s.expireExhaustedJobs(ctx); err != nil {
 		return nil, err
 	}
+	var err error
 	var job worker.Job
 	var id, ownerID, recordID, token, kind string
 	err = s.pool.QueryRow(ctx, `WITH candidate AS (
 		SELECT j.id,r.kind FROM memory_jobs j JOIN memory_records r ON (r.owner_id,r.id)=(j.owner_id,j.record_id)
-		WHERE (j.state='queued' AND j.available_at<=now()) OR (j.state='leased' AND j.lease_until<now() AND j.attempts<$3)
-		ORDER BY j.available_at,j.created_at FOR UPDATE OF j SKIP LOCKED LIMIT 1
+		WHERE ((j.state='queued' AND j.available_at<=now()) OR (j.state='leased' AND j.lease_until<now() AND j.attempts<$3))
+        AND NOT EXISTS (SELECT 1 FROM archive_entries ae JOIN import_batches ib ON (ib.owner_id,ib.archive_id)=(ae.owner_id,ae.archive_id)
+            WHERE ae.owner_id=j.owner_id AND ae.source_id=j.record_id AND ib.state='paused')
+		ORDER BY j.priority,j.available_at,j.created_at,j.id FOR UPDATE OF j SKIP LOCKED LIMIT 1
 	) UPDATE memory_jobs j SET state='leased',attempts=j.attempts+1,lease_until=now()+$1*interval '1 second',lease_token=$2,updated_at=now()
 	FROM candidate c WHERE j.id=c.id RETURNING j.id::text,j.owner_id::text,j.record_id::text,j.record_version,j.stage,j.attempts,j.lease_token::text,c.kind`,
 		lease.Seconds(), string(memory.NewID()), maxAttempts).Scan(&id, &ownerID, &recordID, &job.Record.Version, &job.Stage, &job.Attempts, &token, &kind)
@@ -51,17 +52,95 @@ func (s *Store) Retry(ctx context.Context, job worker.Job, code string) error {
 	if job.Attempts >= maxAttempts {
 		state = "failed"
 	}
-	return s.finishAttempt(ctx, job, state, code, time.Duration(1<<min(job.Attempts, 6))*time.Second)
+	return s.finishAttempt(ctx, job, state, code, retryDelay(job.Attempts))
 }
 
 func (s *Store) finishAttempt(ctx context.Context, job worker.Job, state, code string, delay time.Duration) error {
-	tag, err := s.pool.Exec(ctx, `UPDATE memory_jobs SET state=$3,error_code=$4,available_at=now()+$5*interval '1 second',lease_until=NULL,lease_token=NULL,updated_at=now()
-		WHERE id=$1 AND lease_token=$2 AND state='leased' AND lease_until>clock_timestamp()`, string(job.ID), string(job.LeaseToken), state, code, delay.Seconds())
+	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		if strings.HasPrefix(job.Stage, "source.extract") {
+			if err := extractionOwnerLock(ctx, tx, job.OwnerID); err != nil {
+				return err
+			}
+		}
+		if err := lockJob(ctx, tx, job); err != nil {
+			return err
+		}
+		_, err := tx.Exec(ctx, `UPDATE memory_jobs SET state=$3,error_code=$4,available_at=now()+$5*interval '1 second',lease_until=NULL,lease_token=NULL,updated_at=now()
+            WHERE id=$1 AND lease_token=$2`, string(job.ID), string(job.LeaseToken), state, code, delay.Seconds())
+		if err != nil {
+			return err
+		}
+		if (state == "blocked" || state == "failed") && strings.HasPrefix(job.Stage, "source.extract") {
+			return extractionStateTx(ctx, tx, job, "failed")
+		}
+		return nil
+	})
+}
+
+func retryDelay(attempt int) time.Duration {
+	delays := [...]time.Duration{time.Minute, 5 * time.Minute, 15 * time.Minute, time.Hour}
+	return delays[max(0, min(attempt-1, len(delays)-1))]
+}
+
+func (s *Store) Defer(ctx context.Context, job worker.Job, code string, until time.Time, noAttempt bool) error {
+	if until.IsZero() {
+		return memory.ErrInvalid
+	}
+	decrement := 0
+	if noAttempt {
+		decrement = 1
+	}
+	tag, err := s.pool.Exec(ctx, `UPDATE memory_jobs SET state='queued',error_code=$3,available_at=$4,attempts=greatest(0,attempts-$5),
+        lease_until=NULL,lease_token=NULL,updated_at=now() WHERE id=$1 AND lease_token=$2 AND state='leased' AND lease_until>clock_timestamp()`,
+		string(job.ID), string(job.LeaseToken), code, until, decrement)
 	if err != nil {
 		return err
 	}
 	if tag.RowsAffected() != 1 {
 		return worker.ErrLeaseLost
+	}
+	return nil
+}
+
+func (s *Store) expireExhaustedJobs(ctx context.Context) error {
+	rows, err := s.pool.Query(ctx, `SELECT id::text,owner_id::text,record_id::text,record_version,stage,lease_token::text FROM memory_jobs
+        WHERE state='leased' AND lease_until<now() AND attempts >= $1`, maxAttempts)
+	if err != nil {
+		return err
+	}
+	var jobs []worker.Job
+	for rows.Next() {
+		var j worker.Job
+		if err := rows.Scan(&j.ID, &j.OwnerID, &j.Record.ID, &j.Record.Version, &j.Stage, &j.LeaseToken); err != nil {
+			rows.Close()
+			return err
+		}
+		jobs = append(jobs, j)
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return err
+	}
+	for _, j := range jobs {
+		if err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+			if strings.HasPrefix(j.Stage, "source.extract") {
+				if err := extractionOwnerLock(ctx, tx, j.OwnerID); err != nil {
+					return err
+				}
+			}
+			tag, err := tx.Exec(ctx, `UPDATE memory_jobs SET state='failed',lease_until=NULL,lease_token=NULL,error_code='attempts_exhausted',updated_at=now()
+                WHERE id=$1 AND lease_token=$2 AND state='leased' AND lease_until<now() AND attempts >= $3`, string(j.ID), string(j.LeaseToken), maxAttempts)
+			if err != nil {
+				return err
+			}
+			if tag.RowsAffected() == 1 && strings.HasPrefix(j.Stage, "source.extract") {
+				return extractionStateTx(ctx, tx, j, "failed")
+			}
+			return nil
+		}); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -114,6 +193,11 @@ func (s *Store) ProcessChunks(ctx context.Context, job worker.Job) error {
 				return err
 			}
 		}
+		if _, err := tx.Exec(ctx, `UPDATE memory_jobs SET priority=10 WHERE owner_id=$1 AND record_id=$2 AND record_version=$3 AND stage='source.extract'
+            AND EXISTS(SELECT 1 FROM archive_entries WHERE owner_id=$1 AND source_id=$2 AND source_version=$3)`, string(job.OwnerID), string(job.Record.ID), job.Record.Version); err != nil {
+			return err
+		}
+
 		tag, err := tx.Exec(ctx, `UPDATE memory_jobs SET state='done',lease_until=NULL,lease_token=NULL,error_code='',updated_at=now()
 			WHERE id=$1 AND lease_token=$2 AND lease_until>clock_timestamp()`, string(job.ID), string(job.LeaseToken))
 		if err != nil {

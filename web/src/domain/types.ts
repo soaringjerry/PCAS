@@ -160,6 +160,26 @@ export interface Memory {
   lastUsedAt: string
 }
 
+/** One page of `GET /v1/workspace/memories`, most recently updated first. */
+export interface MemoryPage {
+  items: Memory[]
+  /** Cursor for the page after this one; absent on the last page. */
+  next?: string
+  total: number
+}
+
+/** A person or place with the number of memories that mention it. */
+export interface MemoryFacet {
+  entityId: ID
+  name: string
+  count: number
+}
+
+export interface MemoryFacets {
+  people: MemoryFacet[]
+  places: MemoryFacet[]
+}
+
 export type CandidateKind = 'task' | 'idea' | 'memory' | 'unknown'
 export type CandidateState = 'pending' | 'accepted' | 'ignored' | 'merged'
 
@@ -322,6 +342,7 @@ export interface Notice {
 }
 
 export interface State {
+  /** All memories there are; `memories` holds only the 200 most recently updated. */
   memoryTotal?: number
   notices: Notice[]
   budgetUsage: number

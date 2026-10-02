@@ -4,6 +4,7 @@ import { BookOpen, FolderPlus, House, Lightbulb, ListPlus, PenLine, Settings } f
 import { newId } from '../domain/ids'
 import { allThings, findThing, thingProjectId, thingTitle } from '../domain/things'
 import { useStore } from '../store/context'
+import { useMemorySearch } from '../store/memories'
 import { useToast } from '../store/toast'
 import { KindLabel } from './Marks'
 
@@ -27,6 +28,8 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
   const [query, setQuery] = useState('')
   const [active, setActive] = useState(0)
   const q = query.trim()
+  // The snapshot holds only the latest memories; an older one is found by asking for it.
+  const found = useMemorySearch(q, 3)
 
   const entries = useMemo<Entry[]>(() => {
     const done = (fn: () => void | Promise<void>) => async () => {
@@ -97,13 +100,11 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
       .filter((t) => thingTitle(t).includes(q))
       .slice(0, 6)
       .map((t) => ({ key: t.id, group: '事情', icon: <KindLabel kind={t.kind} bare />, label: thingTitle(t), text: '', run: go(`/t/${t.id}`) }))
-    const memories = state.memories
-      .filter((m) => m.text.includes(q))
-      .slice(0, 3)
+    const memories = found
       .map((m) => ({ key: m.id, group: '记忆', label: m.text, text: '', run: go(`/library?m=${m.id}`) }))
     const commands = nav.filter((c) => c.text.toLowerCase().includes(q.toLowerCase()))
     return [...things, ...commands, ...create, ...memories]
-  }, [q, state, current, dispatch, navigate, onClose, toast])
+  }, [q, state, found, current, dispatch, navigate, onClose, toast])
 
   const selected = Math.min(active, entries.length - 1)
 

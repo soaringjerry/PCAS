@@ -3020,3 +3020,216 @@ a.btn:hover {
   width: 160px;
   flex: none;
 }
+
+/* ===== U2 记忆卡片与筛选：开始 ===== */
+
+/* The memory itself: the way in for the keyboard, looking like plain text. */
+.mem-text {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--label);
+  font: inherit;
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+/* When it happens, then who and where. Absent when a memory has none of them. */
+.mem-marks {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px 6px;
+  min-width: 0;
+}
+
+.mem-entry .mem-marks {
+  margin: 6px 0 5px;
+}
+
+.event-time {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-right: 4px;
+  color: var(--label);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.event-time svg {
+  color: var(--label-3);
+}
+
+.mention {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: min(100%, 17em);
+  height: 22px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: var(--fill);
+  color: var(--label-2);
+  font: inherit;
+  font-size: 12px;
+}
+
+.mention svg {
+  flex: none;
+  color: var(--label-3);
+}
+
+.mention-name,
+.mem-facet-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+button.mention {
+  cursor: pointer;
+  transition: background 120ms, color 120ms;
+}
+
+button.mention:hover {
+  background: var(--fill-2);
+  color: var(--label);
+}
+
+button.mention.on {
+  background: var(--blue-soft);
+  color: var(--blue);
+}
+
+button.mention.on svg {
+  color: inherit;
+}
+
+.mention-rest {
+  color: var(--label-3);
+  font-size: 12px;
+}
+
+/* People and places to narrow the list by. */
+.mem-facets {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 14px;
+}
+
+.mem-facet {
+  display: grid;
+  grid-template-columns: 4.6em minmax(0, 1fr);
+  align-items: start;
+  gap: 8px;
+}
+
+.mem-facet-label {
+  color: var(--label-2);
+  font-size: 12.5px;
+  line-height: 26px;
+}
+
+.mem-facet-chips {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.mem-facet-chips .chip {
+  max-width: 100%;
+}
+
+.mem-facet-chips .n {
+  color: var(--label-3);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.mem-facet-chips .chip.on .n {
+  color: inherit;
+  opacity: 0.7;
+}
+
+.mem-facet-more {
+  padding: 0 4px;
+  color: var(--label-2);
+  font-size: 12.5px;
+}
+
+.mem-summary {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin: 0 4px 10px;
+  color: var(--label-2);
+  font-size: 13px;
+}
+
+/* Still reading, or could not read: one line where the memories would be. */
+.mem-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 22px 16px;
+  color: var(--label-2);
+  font-size: 13px;
+}
+
+.list > .mem-state {
+  border-top: 1px solid var(--sep);
+}
+
+.mem-state.failed {
+  color: var(--label);
+}
+
+.mem-state.failed > svg {
+  flex: none;
+  color: var(--red);
+}
+
+.mem-state > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* In the sheet: the same facts, one per line with its name. */
+.mem-facts {
+  display: grid;
+  gap: 9px;
+  margin: 0;
+}
+
+.mem-facts > div {
+  display: grid;
+  grid-template-columns: 7.5em minmax(0, 1fr);
+  align-items: start;
+  gap: 8px;
+}
+
+.mem-facts dt {
+  color: var(--label-2);
+  font-size: 12.5px;
+  line-height: 22px;
+}
+
+.mem-facts dd {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 22px;
+}
+
+/* ===== U2 记忆卡片与筛选：结束 ===== */

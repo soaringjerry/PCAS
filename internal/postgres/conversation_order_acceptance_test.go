@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -18,6 +19,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/soaringjerry/PCAS/internal/httpapi"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/testsupport"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -231,9 +233,9 @@ func TestConversationOrderAcceptance_CommittedOrderAcrossStores(t *testing.T) {
 	s, scope, ctx := testStore(t), owner(), q2Context(t)
 	q2Settings(t, s, scope)
 	m := q2Script(t, s, "三点开会", map[string]string{
-		"三点开会":  `{"actions":[{"op":"create_task","title":"Q2明确顺序会议","due":"2026-10-02T15:00"}]}`,
-		"改四点":   `{"actions":[{"op":"update","ref":"R1","set":{"due":"2026-10-02T16:00"}}]}`,
-		"最后改五点": `{"actions":[{"op":"update","ref":"R1","set":{"due":"2026-10-02T17:00"}}]}`,
+		"三点开会":  fmt.Sprintf(`{"actions":[{"op":"create_task","title":"Q2明确顺序会议","due":"%s"}]}`, testsupport.DateFromToday(t, "UTC", 1, 15, 0).Format("2006-01-02T15:04")),
+		"改四点":   fmt.Sprintf(`{"actions":[{"op":"update","ref":"R1","set":{"due":"%s"}}]}`, testsupport.DateFromToday(t, "UTC", 1, 16, 0).Format("2006-01-02T15:04")),
+		"最后改五点": fmt.Sprintf(`{"actions":[{"op":"update","ref":"R1","set":{"due":"%s"}}]}`, testsupport.DateFromToday(t, "UTC", 1, 17, 0).Format("2006-01-02T15:04")),
 	})
 	peer := q2Peer(t, s)
 	conversation := string(memory.NewID())
@@ -253,7 +255,7 @@ func TestConversationOrderAcceptance_CommittedOrderAcrossStores(t *testing.T) {
 	}
 	m.release()
 	outs := []workspace.DeskTurnResponse{q2Successful(t, q2Receive(t, aDone), "create_task"), q2Successful(t, q2Receive(t, bDone), "update"), q2Successful(t, q2Receive(t, cDone), "update")}
-	meeting := q2Meeting(t, peer, scope, "2026-10-02T17:00:00Z")
+	meeting := q2Meeting(t, peer, scope, testsupport.DateFromToday(t, "UTC", 1, 17, 0).UTC().Format(time.RFC3339))
 	for i, out := range outs {
 		if out.ConversationID != conversation || out.Turn.Receipts[0].ThingID == nil || *out.Turn.Receipts[0].ThingID != meeting.ID {
 			t.Fatalf("turn %d did not operate on the shared meeting", i+1)
@@ -279,7 +281,7 @@ func TestConversationOrderAcceptance_SameKeyNullConversationAndDuplicateCancella
 	s, scope, ctx := testStore(t), owner(), q2Context(t)
 	q2Settings(t, s, scope)
 	req := q2Request("只建一次空conversation会议", "")
-	m := q2Script(t, s, req.Text, map[string]string{req.Text: `{"actions":[{"op":"create_task","title":"Q2只执行一次","due":"2026-10-02T15:00"}]}`})
+	m := q2Script(t, s, req.Text, map[string]string{req.Text: fmt.Sprintf(`{"actions":[{"op":"create_task","title":"Q2只执行一次","due":"%s"}]}`, testsupport.DateFromToday(t, "UTC", 1, 15, 0).Format("2006-01-02T15:04"))})
 	peer := q2Peer(t, s)
 	witness := q2WitnessDuplicate(t, peer)
 	creator := q2Start(ctx, s, scope, req)
@@ -321,7 +323,7 @@ func TestConversationOrderAcceptance_SameKeyNullConversationAndDuplicateCancella
 	if one.Turn.ID != two.Turn.ID || one.ConversationID != accepted.conversation || two.ConversationID != accepted.conversation {
 		t.Fatal("duplicate did not replay the original turn/conversation")
 	}
-	q2Meeting(t, s, scope, "2026-10-02T15:00:00Z")
+	q2Meeting(t, s, scope, testsupport.DateFromToday(t, "UTC", 1, 15, 0).UTC().Format(time.RFC3339))
 	if order, _ := m.observed(); !reflect.DeepEqual(order, []string{req.Text}) {
 		t.Fatalf("same key executed more than once: %v", order)
 	}
@@ -349,9 +351,9 @@ func q2CanceledInput(t *testing.T) (*Store, *Store, memory.Scope, workspace.Desk
 	first, old, last := q2Request("Q2阻塞三点", conversation), q2Request("Q2故障暗号橙色山脉，创建旧四点事项", conversation), q2Request("Q2新意图五点", conversation)
 	old.RequestID = strings.ToUpper(old.RequestID)
 	m := q2Script(t, s, first.Text, map[string]string{
-		first.Text: `{"actions":[{"op":"create_task","title":"Q2取消后的同一会议","due":"2026-10-02T15:00"}]}`,
-		old.Text:   `{"actions":[{"op":"create_task","title":"Q2禁止迟到旧事项","due":"2026-10-02T16:00"}]}`,
-		last.Text:  `{"actions":[{"op":"update","ref":"R1","set":{"due":"2026-10-02T17:00"}}]}`,
+		first.Text: fmt.Sprintf(`{"actions":[{"op":"create_task","title":"Q2取消后的同一会议","due":"%s"}]}`, testsupport.DateFromToday(t, "UTC", 1, 15, 0).Format("2006-01-02T15:04")),
+		old.Text:   fmt.Sprintf(`{"actions":[{"op":"create_task","title":"Q2禁止迟到旧事项","due":"%s"}]}`, testsupport.DateFromToday(t, "UTC", 1, 16, 0).Format("2006-01-02T15:04")),
+		last.Text:  fmt.Sprintf(`{"actions":[{"op":"update","ref":"R1","set":{"due":"%s"}}]}`, testsupport.DateFromToday(t, "UTC", 1, 17, 0).Format("2006-01-02T15:04")),
 	})
 	peer := q2Peer(t, s)
 	firstDone := q2Start(ctx, s, scope, first)
@@ -377,7 +379,7 @@ func q2CanceledInput(t *testing.T) (*Store, *Store, memory.Scope, workspace.Desk
 	m.release()
 	q2Successful(t, q2Receive(t, firstDone), "create_task")
 	q2Successful(t, q2Receive(t, lastDone), "update")
-	q2Meeting(t, s, scope, "2026-10-02T17:00:00Z")
+	q2Meeting(t, s, scope, testsupport.DateFromToday(t, "UTC", 1, 17, 0).UTC().Format(time.RFC3339))
 	if order, _ := m.observed(); !reflect.DeepEqual(order, []string{first.Text, last.Text}) {
 		t.Fatalf("canceled request called model: %v", order)
 	}
@@ -509,7 +511,7 @@ func TestConversationOrderAcceptance_TerminalRecoveryPreservesRawWithoutAutomati
 	if after, _ := m.observed(); !reflect.DeepEqual(after, before) {
 		t.Fatalf("terminal retry called model after later input: %v", after)
 	}
-	q2Meeting(t, s, scope, "2026-10-02T17:00:00Z")
+	q2Meeting(t, s, scope, testsupport.DateFromToday(t, "UTC", 1, 17, 0).UTC().Format(time.RFC3339))
 	q2Admission(t, s, scope, old, "done")
 	t.Logf("terminal recovery HTTP=200 source=%s raw_read/export=true jobs=%d ordinary_capture_jobs=%d model=%v final_due=17:00", source.ID, incompleteJobs, normalJobs, before)
 }
@@ -557,7 +559,7 @@ func TestConversationOrderAcceptance_DeletedRecoveryDoesNotResurrectThroughHTTP(
 	if after, _ := m.observed(); !reflect.DeepEqual(after, before) {
 		t.Fatalf("deleted same-key replay called model: %v", after)
 	}
-	q2Meeting(t, s, scope, "2026-10-02T17:00:00Z")
+	q2Meeting(t, s, scope, testsupport.DateFromToday(t, "UTC", 1, 17, 0).UTC().Format(time.RFC3339))
 }
 
 func TestConversationOrderAcceptance_ConnectionLossAndExpiredHeadFence(t *testing.T) {
@@ -566,8 +568,8 @@ func TestConversationOrderAcceptance_ConnectionLossAndExpiredHeadFence(t *testin
 	conversation := string(memory.NewID())
 	old, next := q2Request("Q2旧连接故障不得迟到建四点", conversation), q2Request("Q2连接故障后五点", conversation)
 	m := q2Script(t, s, old.Text, map[string]string{
-		old.Text:  `{"actions":[{"op":"create_task","title":"Q2旧故障四点","due":"2026-10-02T16:00"}]}`,
-		next.Text: `{"actions":[{"op":"create_task","title":"Q2故障后五点","due":"2026-10-02T17:00"}]}`,
+		old.Text:  fmt.Sprintf(`{"actions":[{"op":"create_task","title":"Q2旧故障四点","due":"%s"}]}`, testsupport.DateFromToday(t, "UTC", 1, 16, 0).Format("2006-01-02T15:04")),
+		next.Text: fmt.Sprintf(`{"actions":[{"op":"create_task","title":"Q2故障后五点","due":"%s"}]}`, testsupport.DateFromToday(t, "UTC", 1, 17, 0).Format("2006-01-02T15:04")),
 	})
 	// Hold the execution lock just for fixture setup. Admission can commit;
 	// its creator cannot hold the ticket row for generation yet.
@@ -628,7 +630,7 @@ func TestConversationOrderAcceptance_ConnectionLossAndExpiredHeadFence(t *testin
 		t.Fatalf("own synthetic backend termination failed: pid=%d %v", pid, err)
 	}
 	newResult := q2Successful(t, q2Receive(t, nextDone), "create_task")
-	q2Meeting(t, peer, scope, "2026-10-02T17:00:00Z")
+	q2Meeting(t, peer, scope, testsupport.DateFromToday(t, "UTC", 1, 17, 0).UTC().Format(time.RFC3339))
 	q2Admission(t, peer, scope, old, "expired")
 	if order, _ := m.observed(); !reflect.DeepEqual(order, []string{old.Text, next.Text}) {
 		t.Fatalf("new Store failed to advance after connection loss: %v", order)
@@ -643,7 +645,7 @@ func TestConversationOrderAcceptance_ConnectionLossAndExpiredHeadFence(t *testin
 	if recovered.ConversationID != newResult.ConversationID {
 		t.Fatal("expired same-key recovery changed conversation")
 	}
-	q2Meeting(t, peer, scope, "2026-10-02T17:00:00Z")
+	q2Meeting(t, peer, scope, testsupport.DateFromToday(t, "UTC", 1, 17, 0).UTC().Format(time.RFC3339))
 	if after, _ := m.observed(); !reflect.DeepEqual(after, before) {
 		t.Fatalf("expired recovery reran old model: %v", after)
 	}

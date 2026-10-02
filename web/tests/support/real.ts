@@ -42,8 +42,8 @@ export function reply(match: string, actions: unknown[], extra = {}): Rule {
   return { kind: 'secretary', match, content: JSON.stringify({ reply: '安排好了。', actions, ...extra }) }
 }
 // UTC date arithmetic describes the calendar in the configured Shanghai zone.
-export function localTime(days: number, hour: number, minute = 0) {
-  const now = new Date(Date.now() + 8 * 3600_000)
+export function localTime(days: number, hour: number, minute = 0, anchor = Date.now()) {
+  const now = new Date(anchor + 8 * 3600_000)
   now.setUTCDate(now.getUTCDate() + days)
   return `${now.toISOString().slice(0, 10)}T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`
 }
@@ -66,6 +66,13 @@ export function daysFromToday(iso: string) {
   return day(new Date(iso).getTime()) - day(Date.now())
 }
 export const utc = (local: string) => new Date(`${local}+08:00`).toISOString().replace('.000Z', 'Z')
+// Independent calendar/clock expectations for the same instant in another zone.
+export function zonedTime(iso: string, timeZone: string) {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', {
+    timeZone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+  }).formatToParts(new Date(iso)).map(part => [part.type, part.value]))
+  return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`
+}
 export async function evidence(page: Page, info: TestInfo, name = 'browser') {
   const path = info.outputPath(`${name}.png`)
   await page.screenshot({ path, fullPage: true, animations: 'disabled' })

@@ -1,10 +1,19 @@
 import { test, expect } from '@playwright/test'
-import { command, evidence, fixture, login, reply, say, snapshot } from './support/real'
+import { command, evidence, fixture, localTime, login, reply, say, snapshot, utc, zonedTime } from './support/real'
 
 test.use({ timezoneId: 'Australia/Melbourne', viewport: { width: 1440, height: 1000 } })
 test.afterEach(async ({ page }, info) => { await evidence(page, info) })
 
 test('F6 first login defaults to the browser; settings, validation, hint and today agree with real receipts', async ({ page }) => {
+  const anchor = Date.now()
+  const shanghaiNow = localTime(1, 22, 30, anchor)
+  const shanghaiDue = localTime(1, 23, 0, anchor)
+  const due = utc(shanghaiDue)
+  const reminder = utc(shanghaiNow)
+  const melbourneNow = zonedTime(reminder, 'Australia/Melbourne')
+  const melbourneDue = zonedTime(due, 'Australia/Melbourne')
+  const melbourneClock = melbourneDue.slice(11)
+  const dateText = (local: string) => `${Number(local.slice(5, 7))}月${Number(local.slice(8, 10))}日`
   // Run on the runner's fresh database before the other real-backend suites.
   await login(page)
   expect((await snapshot(page)).settings.timezone).toBe('Australia/Melbourne')
@@ -46,7 +55,7 @@ test('F6 first login defaults to the browser; settings, validation, hint and tod
   expect((await snapshot(page)).settings.timezone).toBe('Australia/Melbourne')
 
   // An absolute instant on different calendar dates in the two zones.
-  await page.clock.install({ time: new Date('2026-10-03T14:30:00Z') })
+  await page.clock.install({ time: new Date(reminder) })
   // Remount the clock after changing browser time; NowLine normally updates once a minute.
   await page.reload()
   await expect(page.locator('.hall-today')).toBeVisible()
@@ -58,7 +67,7 @@ test('F6 first login defaults to the browser; settings, validation, hint and tod
     const projectState = await command(page, { type: 'addProject', id: projectId, name: 'F8 跨页项目' })
     const project = projectState.projects.find(p => p.id === projectId)!
     const title = 'F6 跨日回信'
-    await fixture(page, [reply('安排跨日回信', [{ op: 'create_task', title, due: '2026-10-03T23:00', remind: '-30m', project: 'P1' }])])
+    await fixture(page, [reply('安排跨日回信', [{ op: 'create_task', title, due: shanghaiDue, remind: '-30m', project: 'P1' }])])
     const response = await say(page, '安排跨日回信')
     const taskId = response.turn.receipts[0].thingId
     createdTaskIds.push(taskId)
@@ -68,11 +77,11 @@ test('F6 first login defaults to the browser; settings, validation, hint and tod
     await expect(receipt).toContainText('23:00')
     await expect(receipt).toContainText('22:30 提醒')
     expect(task.projectId).toBe(projectId)
-    expect(new Date(task.due).toISOString()).toBe('2026-10-03T15:00:00.000Z')
-    expect(new Date(task.triggers[0].nextAt).toISOString()).toBe('2026-10-03T14:30:00.000Z')
+    expect(new Date(task.due).toISOString()).toBe(new Date(due).toISOString())
+    expect(new Date(task.triggers[0].nextAt).toISOString()).toBe(new Date(reminder).toISOString())
     const today = page.locator('.hall-today')
     const row = today.locator('.hall-task').filter({ hasText: title })
-    await expect(today.locator('.hall-head')).toContainText('10月3日')
+    await expect(today.locator('.hall-head')).toContainText(dateText(shanghaiNow))
     await expect(row.locator('.hall-time')).toHaveText('23:00')
     await expect(today.getByRole('separator')).toHaveAttribute('aria-label', '现在 22:30')
     // The model fake supplies only the requested show operation; cards come from real stored tasks.
@@ -86,32 +95,32 @@ test('F6 first login defaults to the browser; settings, validation, hint and tod
     await expect(page.locator('.item-row .reason')).toHaveText('今天 23:00 截止')
     await page.goto('/')
     await page.getByRole('button', { name: '改成 Australia/Melbourne' }).click()
-    await expect(today.locator('.hall-head')).toContainText('10月4日')
-    await expect(row.locator('.hall-time')).toHaveText('01:00')
-    await expect(today.getByRole('separator')).toHaveAttribute('aria-label', '现在 00:30')
-    await expect(page.locator('.sec-tasks .k-meta')).toContainText('今天 01:00')
+    await expect(today.locator('.hall-head')).toContainText(dateText(melbourneNow))
+    await expect(row.locator('.hall-time')).toHaveText(melbourneClock)
+    await expect(today.getByRole('separator')).toHaveAttribute('aria-label', `现在 ${melbourneNow.slice(11)}`)
+    await expect(page.locator('.sec-tasks .k-meta')).toContainText(`今天 ${melbourneClock}`)
     await expect(receipt.locator('.r-what')).toHaveText(historicalReceipt)
     await page.reload()
-    await expect(page.locator('.sec-tasks .k-meta')).toContainText('今天 01:00')
+    await expect(page.locator('.sec-tasks .k-meta')).toContainText(`今天 ${melbourneClock}`)
     await expect(receipt.locator('.r-what')).toHaveText(historicalReceipt)
     await expect(receipt).toHaveCount(1)
     await page.goto(`/t/${task.id}`)
-    await expect(page.locator('.info-line')).toContainText('今天 01:00 截止')
+    await expect(page.locator('.info-line')).toContainText(`今天 ${melbourneClock} 截止`)
     await page.goto(`/t/${project.id}`)
-    await expect(page.locator('.item-row .reason')).toHaveText('今天 01:00 截止')
+    await expect(page.locator('.item-row .reason')).toHaveText(`今天 ${melbourneClock} 截止`)
     const unchanged = (await snapshot(page)).tasks.find(t => t.id === task.id)!
     expect(unchanged.due).toBe(task.due)
     expect(unchanged.triggers[0].nextAt).toBe(task.triggers[0].nextAt)
     await page.goto('/')
     // The Melbourne secretary uses the same instant/clock as the hall.
-    await fixture(page, [reply('再按墨尔本时间安排', [{ op: 'create_task', title: 'F6 墨尔本回信', due: '2026-10-04T01:00', remind: '-30m' }])])
+    await fixture(page, [reply('再按墨尔本时间安排', [{ op: 'create_task', title: 'F6 墨尔本回信', due: melbourneDue, remind: '-30m' }])])
     const melbourne = await say(page, '再按墨尔本时间安排')
     const melbourneTaskId = melbourne.turn.receipts[0].thingId
     createdTaskIds.push(melbourneTaskId)
     const melbourneTask = melbourne.state.tasks.find((t: { id: string }) => t.id === melbourneTaskId)
     expect(melbourneTask.title).toBe('F6 墨尔本回信')
     expect(melbourneTask.due).toBe(task.due)
-    await expect(page.locator('.sec-receipt').filter({ hasText: 'F6 墨尔本回信' })).toContainText('01:00')
+    await expect(page.locator('.sec-receipt').filter({ hasText: 'F6 墨尔本回信' })).toContainText(melbourneClock)
     await evidence(page, test.info(), 'melbourne')
   } finally {
     // Suites share this workspace. Finish only our records, including on assertion failure,

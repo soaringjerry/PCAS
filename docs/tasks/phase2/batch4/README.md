@@ -129,3 +129,61 @@ T4 按这张表写测试，测试名带编号（`TestPhase2B4_I1_…`）。导�
 ## 5 上线后协调者做的事
 
 部署后：用一份小的合成导出在线上走一遍导入、暂停、继续、删除；确认花费记录在增长并且读得出来；跑冒烟测试；清掉测试数据。然后在临时库上用真实默认通道跑 R18、R19，把结果写成评测报告，并把召回率的基线定下来。用户自己的 ChatGPT 导出由用户自己导入。
+
+## 6 接口形状、错误类型和测试入口（2026-10-02 补充，冻结）
+
+### 导入
+
+- `POST /v1/connectors/archive` 的返回在现有字段之外加 `"batchId"`。
+- `GET /v1/connectors/imports`：`{ "items": [ … ] }`，新的在前，不分页。每一项：
+
+```json
+{ "id": "…", "name": "chatgpt-export.zip", "state": "importing", "total": 23110, "stored": 4000, "organized": 120,
+  "leftOut": 0, "earliest": "2023-02-11T08:02:00Z", "latest": "2026-09-30T12:40:00Z",
+  "errorCode": "", "error": "", "createdAt": "…", "updatedAt": "…" }
+```
+
+- `POST /v1/connectors/imports/{id}/pause`、`/resume`：返回上面这样的一项。批次不存在返回 404；状态不允许（例如对已经做完的批次暂停、对正在进行的批次继续）返回 409，错误类型 `import_not_active`。
+- 错误类型（预览和导入相同，沿用现有的名字）：
+
+| 情况 | 错误类型 | HTTP |
+|---|---|---|
+| 扩展名是 zip 但不是 zip；既不是 zip 也不是认得的格式 | `invalid_zip`；`unsupported_archive` | 400 |
+| zip 里没有任何对话 | `no_supported_records` | 400 |
+| JSON 被截断或不合法 | `invalid_json` | 400 |
+| 超过上传上限或解压上限 | `archive_too_large` | 413 |
+
+每种错误的返回里带一句给用户看的说明，四句各不相同。
+
+- 上限和小批大小做成包级变量，测试里可以调小、用完改回去：
+
+| 变量 | 默认 | 含义 |
+|---|---|---|
+| `connectors.MaxUploadBytes` | 200 MB | 上传文件的上限 |
+| `connectors.MaxArchiveBytes` | 512 MB | 解压后 `conversations.json` 的上限（现有常量改成变量） |
+| `connectors.MaxArchiveRecords` | 200000 | 消息条数上限，超过取最新的（现有常量改成变量） |
+| `postgres.ImportChunkSize` | 500 | 每一小批存多少条消息；每一小批是一个独立的事务，小批之间检查是否被暂停、是否被取消 |
+
+- 后台进程启动时读环境变量 `PCAS_IMPORT_CHUNK_SIZE`（正整数）覆盖 `ImportChunkSize`。浏览器用例 W4 用它把小批调成 1，配一份两千条消息的合成导出，这样有足够的时间点暂停。不加任何人为的延时。
+- 存原话沿用现有的 `source.parse` 后台任务。I9 的「被杀」：测试在 `stored` 增长到一半时取消这次处理，再让租约过期、重新领取。
+
+### 花费记录
+
+- `GET /v1/workspace/usage?from=YYYY-MM-DD&to=YYYY-MM-DD`：日期是用户时区的自然日，两端都包含；不给时默认最近 30 天。只返回有数据的日子，从早到晚：
+
+```json
+{ "days": [ { "date": "2026-10-02", "purposes": [
+  { "purpose": "secretary", "calls": 12, "inputTokens": 48211, "outputTokens": 3190, "cost": 0 } ] } ] }
+```
+
+- `GET /v1/workspace/usage/calls?limit=&before=`：新的在前；`limit` 默认 50、最大 100；`before` 用上一页返回的 `next`：
+
+```json
+{ "items": [ { "id": "…", "at": "…", "purpose": "secretary", "agentId": "chatgpt", "model": "…",
+    "inputTokens": 4021, "outputTokens": 233, "cost": 0, "turnId": "…", "runId": null, "jobId": null,
+    "refs": [ { "id": "…", "version": 1, "kind": "claim", "text": "下周去成都", "deleted": false } ] } ],
+  "next": "…" }
+```
+
+已删除的引用 `deleted` 为真、`text` 为空字符串。
+

@@ -64,7 +64,7 @@ Astra 留作后备：某个任务两轮没收敛时换它接手。U3 很小，�
 | 表 `source_extractions` | `owner_id, source_id, source_version, extractor integer, state`（`done`/`empty`/`failed`）`, items integer, updated_at`；主键前三列；随资料版本级联删除 | 每份资料有没有被新版抽取处理过。`empty` 是处理过但没抽出东西 |
 | `memory_jobs` 加一列 | `priority smallint NOT NULL DEFAULT 0` | 0 是正常，10 是补做旧资料。数字小的先做 |
 | 表 `model_usage` | `owner_id, id, at, purpose`（`secretary`/`deputy`/`answer`/`extraction`/`embedding`）`, agent_id, model, input_tokens, output_tokens, cost, turn_id, run_id, job_id, memory_refs jsonb, plan jsonb`；索引 `(owner_id, at)` | 每次模型调用的记录。`memory_refs` 只放 `{id,version,kind}`，**不放正文** |
-| 表 `import_batches` | `owner_id, id, archive_id, name, state`（`importing`/`paused`/`done`/`failed`）`, total, stored, earliest, latest, error_code, created_at, updated_at`；随归档资料级联删除 | 一次历史导入的进度。`stored` 是已经存成原话的条数 |
+| 表 `import_batches` | `owner_id, id, archive_id, name, state`（`importing`/`paused`/`done`/`failed`）`, total, stored, left_out, earliest, latest, error_code, created_at, updated_at`；随归档资料级联删除 | 一次历史导入的进度。`stored` 是已经存成原话的条数，`left_out` 是因为超过条数上限没有导入的条数 |
 
 ### 3.2 实体
 

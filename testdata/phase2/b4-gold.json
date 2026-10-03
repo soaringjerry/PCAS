@@ -466,5 +466,18 @@
     "reason": "default positive extraction output must contain only extraction-contract fields; prior universal reply/answer/used/actions/output fields made extraction parsing fail",
     "oracles": "all sequence expectations remain unchanged, including organized growth, ordinary/new-source priority, and independent usage before result commit with rollback/cancel durability",
     "baseline": "c093e0a5568cad3c1e307076c70a6b41dcc569a8"
+  },
+  "coordinator_fixture_e775cd6_conversation": {
+    "authority": "coordinator instruction 2026-10-03; batch4 README sections 12, 12.1 and 13 items 6-7; origin/phase2/final e775cd688355ce4aef98c06dd38b95b6332073eb",
+    "scope": [
+      "I5",
+      "I10",
+      "I14"
+    ],
+    "entry": "complete the actual uploaded archive, release organizing through the existing HTTP organize operation, then drain the real worker queue; do not manufacture conversation stages or bypass holds",
+    "output": "conversation extraction items carry message_index starting at 1 and an exact user-message quote; only conversation-contract fields, without legacy task/signal output",
+    "I5": "same historical plan, historical spoken time, candidate confirmation, no current task and no shelved-idea wake",
+    "I10": "same three-message export; return the recall memory only for the conversation containing that user text; delete archive with include_sources=true, then require all messages, memory and batch absent and no subsequent recall",
+    "I14": "same assistant/system/tool original texts, roles and times; no user message in the conversation, no extraction call, each message has empty processing record with items=0 and extractor=3; assistant original remains recallable"
   }
 }

@@ -259,15 +259,13 @@ func (p *poller) handle(ctx context.Context, c notify.Credentials, st *state, u 
 		if m.Voice != nil || m.Audio != nil {
 			prefix = "🎤 听到：" + saved.Turn.Text
 		}
-		if m.Document != nil || len(m.Photo) > 0 {
-			prefix = "收到，已存进资料"
-		}
 		return p.deliver(ctx, c, savedID, saved, prefix)
 	}
 	if !errors.Is(lookupErr, memory.ErrNotFound) {
 		return lookupErr
 	}
 	text, prefix := strings.TrimSpace(m.Text), ""
+	var attachments []memory.Ref
 	var f *file
 	audio := false
 	switch {
@@ -280,8 +278,8 @@ func (p *poller) handle(ctx context.Context, c notify.Credentials, st *state, u 
 	case len(m.Photo) > 0:
 		f = &m.Photo[len(m.Photo)-1]
 	}
-	if audio && st.Pending != nil && st.Pending.Request.RequestID == requestID(botChat(c), event) {
-		return p.turn(ctx, c, st, event, c.TelegramConversation, st.Pending.Request.Text, st.Pending.Prefix)
+	if st.Pending != nil && st.Pending.Request.RequestID == requestID(botChat(c), event) {
+		return p.turn(ctx, c, st, event, c.TelegramConversation, st.Pending.Request.Text, st.Pending.Prefix, st.Pending.Request.Attachments...)
 	}
 	if f != nil {
 		data, path, err := p.api.download(ctx, c.TelegramToken, *f)
@@ -318,26 +316,28 @@ func (p *poller) handle(ctx context.Context, c notify.Credentials, st *state, u 
 				return p.say(ctx, c, "语音转写暂时失败，音频已存进资料，先发文字吧")
 			}
 		} else {
-			if err = p.ingest(ctx, c, m, *f, data, name); err != nil {
+			saved, err := p.saveAttachment(ctx, c, m, *f, data, name)
+			if err != nil {
 				if errors.Is(err, memory.ErrInvalid) {
 					return p.say(ctx, c, "这种文件格式暂时不支持，请发送 PDF 或图片。")
 				}
 				return err
 			}
 			text = strings.TrimSpace(m.Caption)
-			prefix = "收到，已存进资料"
-			if text == "" {
-				return p.say(ctx, c, prefix)
-			}
+			attachments = []memory.Ref{saved.Ref}
 		}
 	}
-	if text == "" {
+	if text == "" && len(attachments) == 0 {
 		return nil
 	}
-	return p.turn(ctx, c, st, event, c.TelegramConversation, text, prefix)
+	return p.turn(ctx, c, st, event, c.TelegramConversation, text, prefix, attachments...)
 }
 
 func (p *poller) ingest(ctx context.Context, c notify.Credentials, m *message, f file, data []byte, name string) error {
+	_, err := p.saveAttachment(ctx, c, m, f, data, name)
+	return err
+}
+func (p *poller) saveAttachment(ctx context.Context, c notify.Credentials, m *message, f file, data []byte, name string) (memory.IngestResult, error) {
 	media := f.MIME
 	if media == "" {
 		media = http.DetectContentType(data)
@@ -345,11 +345,11 @@ func (p *poller) ingest(ctx context.Context, c notify.Credentials, m *message, f
 	if m.Voice != nil {
 		media = "audio/ogg"
 	}
-	_, err := p.store.IngestAttachment(ctx, p.scope, memory.IngestRequest{Connector: "telegram", ExternalID: botChat(c) + ":" + strconv.FormatInt(m.ID, 10), ExternalVersion: "1", Title: clip(name, 200), MediaType: media}, bytes.NewReader(data))
-	return err
+	result, err := p.store.IngestAttachment(ctx, p.scope, memory.IngestRequest{Connector: "telegram", ExternalID: botChat(c) + ":" + strconv.FormatInt(m.ID, 10), ExternalVersion: "1", Title: clip(name, 200), MediaType: media}, bytes.NewReader(data))
+	return result, err
 }
 
-func (p *poller) turn(ctx context.Context, c notify.Credentials, st *state, event, conversation, text, prefix string) error {
+func (p *poller) turn(ctx context.Context, c notify.Credentials, st *state, event, conversation, text, prefix string, attachments ...memory.Ref) error {
 	saved, savedID, lookupErr := p.savedTurn(ctx, c, event)
 	if lookupErr == nil {
 		return p.deliver(ctx, c, savedID, saved, prefix)
@@ -357,7 +357,7 @@ func (p *poller) turn(ctx context.Context, c notify.Credentials, st *state, even
 	if !errors.Is(lookupErr, memory.ErrNotFound) {
 		return lookupErr
 	}
-	request := workspace.DeskTurnRequest{RequestID: requestID(botChat(c), event), ConversationID: &conversation, Text: text}
+	request := workspace.DeskTurnRequest{RequestID: requestID(botChat(c), event), ConversationID: &conversation, Text: text, Attachments: attachments}
 	if st.Pending != nil && st.Pending.Request.RequestID == request.RequestID {
 		request, prefix = st.Pending.Request, st.Pending.Prefix
 		text = request.Text

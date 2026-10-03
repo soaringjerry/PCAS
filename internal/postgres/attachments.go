@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -88,93 +89,156 @@ func (s *Store) ProcessAttachment(ctx context.Context, j worker.Job) error {
 	if err != nil {
 		return s.recordImportFailure(ctx, j, err)
 	}
-	defer file.Close()
 	if media == "application/x-pcas-archive" {
+		defer file.Close()
 		return s.processArchiveImport(ctx, j, title, file)
 	}
+	file.Close()
+	if _, err := s.readAttachment(ctx, scope, j.Record, &j); err != nil {
+		return err
+	}
+	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		if err := lockJob(ctx, tx, j); err != nil {
+			return err
+		}
+		return acknowledge(ctx, tx, j)
+	})
+}
 
+type parsedAttachment struct{ Text, Representation, Title, Media string }
+
+// Serialize parsing per original across API and worker processes. Existing OCR
+// derivatives are reused, never upgraded or reread by this change.
+func (s *Store) readAttachment(ctx context.Context, scope memory.Scope, ref memory.Ref, job *worker.Job) (parsedAttachment, error) {
+	var parsed parsedAttachment
+	select {
+	case s.secretarySlots <- struct{}{}:
+	case <-ctx.Done():
+		return parsed, ctx.Err()
+	}
+	defer func() { <-s.secretarySlots }()
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended($1,0))", "attachment:"+string(scope.OwnerID)+":"+string(ref.ID)+fmt.Sprint(ref.Version)); err != nil {
+			return err
+		}
+		original, err := s.GetSource(ctx, scope, ref.ID, ref.Version)
+		if err != nil {
+			return err
+		}
+		if !original.Source.HasAttachment || original.Source.State != "active" {
+			return memory.ErrNotFound
+		}
+		parsed.Title, parsed.Media = original.Source.Title, original.Source.MediaType
+		err = tx.QueryRow(ctx, `SELECT v.body,v.representation FROM source_versions v JOIN memory_records r ON(r.owner_id,r.id,r.version)=(v.owner_id,v.source_id,v.version) WHERE v.owner_id=$1 AND v.derived_from_id=$2 AND v.derived_from_version=$3 AND r.state='active' ORDER BY v.version DESC LIMIT 1`, string(scope.OwnerID), string(ref.ID), ref.Version).Scan(&parsed.Text, &parsed.Representation)
+		if err == nil {
+			return nil
+		}
+		if !errors.Is(err, pgx.ErrNoRows) {
+			return err
+		}
+		parsed, err = s.parseAttachment(ctx, scope, ref, job)
+		if err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(scope.OwnerID)); err != nil {
+			return err
+		}
+		if job != nil {
+			if err := lockJob(ctx, tx, *job); err != nil {
+				return err
+			}
+		}
+		// Deletion during the external call must not resurrect derived material.
+		var active bool
+		if err := tx.QueryRow(ctx, "SELECT state='active' AND version=$3 FROM memory_records WHERE owner_id=$1 AND id=$2 FOR SHARE", string(scope.OwnerID), string(ref.ID), ref.Version).Scan(&active); err != nil {
+			return err
+		}
+		if !active {
+			return memory.ErrNotFound
+		}
+		derived, err := s.ingestTx(ctx, tx, scope, memory.IngestRequest{Connector: "attachment-text", ExternalID: fmt.Sprintf("%s:%d", ref.ID, ref.Version), ExternalVersion: "parser-1", Title: parsed.Title + " · " + parsed.Representation, Text: parsed.Text, MediaType: "text/plain"})
+		if err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, "UPDATE source_versions SET representation=$4,derived_from_id=$5,derived_from_version=$6 WHERE owner_id=$1 AND source_id=$2 AND version=$3", string(scope.OwnerID), string(derived.ID), derived.Version, parsed.Representation, string(ref.ID), ref.Version); err != nil {
+			return err
+		}
+		_, err = tx.Exec(ctx, "UPDATE workspace_owners SET revision=revision+1 WHERE owner_id=$1", string(scope.OwnerID))
+		return err
+	})
+	return parsed, err
+}
+func (s *Store) parseAttachment(ctx context.Context, scope memory.Scope, ref memory.Ref, job *worker.Job) (parsedAttachment, error) {
+	var parsed parsedAttachment
+	file, title, media, err := s.OpenAttachment(ctx, scope, ref.ID, ref.Version)
+	if err != nil {
+		return parsed, err
+	}
+	defer file.Close()
+	parsed.Title, parsed.Media = title, media
 	dir, err := os.MkdirTemp("", "pcas-parse-")
 	if err != nil {
-		return err
+		return parsed, err
 	}
 	defer os.RemoveAll(dir)
 	path := filepath.Join(dir, "original")
 	input, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {
-		return err
+		return parsed, err
 	}
 	_, err = io.Copy(input, file)
 	closeErr := input.Close()
 	if err != nil {
-		return err
+		return parsed, err
 	}
 	if closeErr != nil {
-		return closeErr
+		return parsed, closeErr
 	}
 	var text, representation string
 	if strings.HasPrefix(media, "audio/") {
 		if s.models == nil {
-			return memory.ErrUnavailable
+			return parsed, memory.ErrUnavailable
 		}
 		provider, ok := s.models.Get(s.models.Config.Transcription)
 		if !ok {
-			return memory.ErrUnavailable
+			return parsed, memory.ErrUnavailable
 		}
 		durationText, durationErr := parserOutput(ctx, "ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", path)
 		if durationErr != nil {
-			return memory.ErrUnavailable
+			return parsed, memory.ErrUnavailable
 		}
 		seconds, durationErr := strconv.ParseFloat(strings.TrimSpace(durationText), 64)
 		if durationErr != nil || seconds <= 0 || seconds > 4*3600 {
-			return memory.ErrUnavailable
+			return parsed, memory.ErrUnavailable
 		}
-		if err := s.reserveBackgroundCost(ctx, j, (seconds+1)/60*provider.AudioPerMinute); err != nil {
-			return err
+		if err := s.reserveModelCost(ctx, scope.OwnerID, (seconds+1)/60*provider.AudioPerMinute, job); err != nil {
+			return parsed, err
 		}
 		audio, err := os.Open(path)
 		if err != nil {
-			return err
+			return parsed, err
 		}
 		text, err = s.models.Transcribe(ctx, audio, title)
 		audio.Close()
 		if err != nil {
-			return memory.ErrUnavailable
+			return parsed, memory.ErrUnavailable
 		}
 		representation = "transcript"
 	} else if media == "application/pdf" {
-		text, representation, err = parsePDF(ctx, dir, path)
+		text, representation, err = parsePDFWithReader(ctx, dir, path, func(ctx context.Context, path string) (string, string, error) {
+			return s.readImage(ctx, scope, ref, path, "image/png", job)
+		})
 	} else {
-		text, err = ocrImage(ctx, path)
-		representation = "ocr"
+		text, representation, err = s.readImage(ctx, scope, ref, path, media, job)
 	}
 	if err != nil {
-		return err
+		return parsed, err
 	}
 	if strings.TrimSpace(text) == "" || len(text) > 1<<20 {
-		return memory.ErrUnavailable
+		return parsed, memory.ErrUnavailable
 	}
-	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-		if err := s.ensureOwner(ctx, tx, scope); err != nil {
-			return err
-		}
-		if _, err := tx.Exec(ctx, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(j.OwnerID)); err != nil {
-			return err
-		}
-		if err := lockJob(ctx, tx, j); err != nil {
-			return err
-		}
-		derived, err := s.ingestTx(ctx, tx, scope, memory.IngestRequest{Connector: "attachment-text", ExternalID: fmt.Sprintf("%s:%d", j.Record.ID, j.Record.Version), ExternalVersion: "parser-1", Title: title + " · " + representation, Text: text, MediaType: "text/plain"})
-		if err != nil {
-			return err
-		}
-		if _, err := tx.Exec(ctx, "UPDATE source_versions SET representation=$4,derived_from_id=$5,derived_from_version=$6 WHERE owner_id=$1 AND source_id=$2 AND version=$3", string(j.OwnerID), string(derived.ID), derived.Version, representation, string(j.Record.ID), j.Record.Version); err != nil {
-			return err
-		}
-		if _, err := tx.Exec(ctx, "UPDATE workspace_owners SET revision=revision+1 WHERE owner_id=$1", string(j.OwnerID)); err != nil {
-			return err
-		}
-		return acknowledge(ctx, tx, j)
-	})
+	parsed.Text, parsed.Representation = text, representation
+	return parsed, nil
 }
 func parserOutput(ctx context.Context, name string, args ...string) (string, error) {
 	if _, err := exec.LookPath(name); err != nil {
@@ -202,6 +266,12 @@ func ocrImage(ctx context.Context, path string) (string, error) {
 	return parserOutput(ctx, "tesseract", path, "stdout", "-l", "chi_sim+eng")
 }
 func parsePDF(ctx context.Context, dir, path string) (string, string, error) {
+	return parsePDFWithReader(ctx, dir, path, func(ctx context.Context, path string) (string, string, error) {
+		text, err := ocrImage(ctx, path)
+		return text, "ocr", err
+	})
+}
+func parsePDFWithReader(ctx context.Context, dir, path string, read func(context.Context, string) (string, string, error)) (string, string, error) {
 	info, err := parserOutput(ctx, "pdfinfo", path)
 	if err != nil {
 		return "", "", err
@@ -228,11 +298,16 @@ func parsePDF(ctx context.Context, dir, path string) (string, string, error) {
 			if _, err := parserOutput(ctx, "pdftoppm", "-f", n, "-l", n, "-singlefile", "-scale-to", "1800", "-png", path, prefix); err != nil {
 				return "", "", err
 			}
-			text, err = ocrImage(ctx, prefix+".png")
+			var pageRepresentation string
+			text, pageRepresentation, err = read(ctx, prefix+".png")
 			if err != nil {
 				return "", "", err
 			}
-			representation = "ocr"
+			if pageRepresentation == "ocr" {
+				representation = "ocr"
+			} else if representation != "ocr" {
+				representation = pageRepresentation
+			}
 		}
 		fmt.Fprintf(&out, "\n[第 %d 页]\n%s", page, text)
 		if out.Len() > 1<<20 {

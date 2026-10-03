@@ -51,6 +51,14 @@ func (m *Manager) Models(ctx context.Context) ([]Model, error) {
 // treated as a completed assistant result. This body is independent of API-key
 // Responses: no max_output_tokens, previous_response_id or other forbidden keys.
 func (m *Manager) Generate(ctx context.Context, model, instructions, prompt string) (Result, error) {
+	return m.generate(ctx, model, instructions, prompt, "")
+}
+
+// Vision uses the same supported Responses fields and OAuth lifecycle as text.
+func (m *Manager) Vision(ctx context.Context, model, instruction, dataURL string) (Result, error) {
+	return m.generate(ctx, model, "", instruction, dataURL)
+}
+func (m *Manager) generate(ctx context.Context, model, instructions, prompt, dataURL string) (Result, error) {
 	a, err := m.access(ctx, false)
 	if err != nil {
 		return Result{}, err
@@ -78,7 +86,11 @@ func (m *Manager) Generate(ctx context.Context, model, instructions, prompt stri
 			return Result{}, &ProviderError{Status: 400, Code: "subscription_sharing_unsupported_capability", Param: "model"}
 		}
 	}
-	body, _ := json.Marshal(map[string]any{"model": model, "instructions": instructions, "input": []any{map[string]string{"role": "user", "content": prompt}}, "store": false, "stream": true})
+	var content any = prompt
+	if dataURL != "" {
+		content = []any{map[string]string{"type": "input_text", "text": prompt}, map[string]string{"type": "input_image", "image_url": dataURL}}
+	}
+	body, _ := json.Marshal(map[string]any{"model": model, "instructions": instructions, "input": []any{map[string]any{"role": "user", "content": content}}, "store": false, "stream": true})
 	req, err := http.NewRequestWithContext(ctx, "POST", m.api+"/responses", bytes.NewReader(body))
 	if err != nil {
 		return Result{}, err

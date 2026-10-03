@@ -40,6 +40,8 @@ func TestDirectChatGPTHTTPBoundary(t *testing.T) {
 		{"no tokens returned", "GET", "/v1/chatgpt/direct/account", "", false, 403},
 		{"model unauthenticated", "GET", "/v1/chatgpt/direct/models", "", true, 501},
 		{"unknown credential fields", "POST", "/v1/chatgpt/direct/login", `{"access_token":"secret"}`, true, 400},
+		{"agent cannot complete sign-in", "POST", "/v1/chatgpt/direct/callback", `{"url":"http://127.0.0.1:1455/auth/callback?state=a&code=b"}`, false, 403},
+		{"no pending sign-in", "POST", "/v1/chatgpt/direct/callback", `{"url":"http://127.0.0.1:1455/auth/callback?state=a&code=b"}`, true, 404},
 		{"missing registration", "POST", "/v1/chatgpt/direct/select", `{"client_id":"missing"}`, true, 400},
 	} {
 		t.Run(test.name, func(t *testing.T) {

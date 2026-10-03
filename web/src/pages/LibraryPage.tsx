@@ -11,7 +11,7 @@ import { ConfirmModal, SideSheet } from '../components/Overlay'
 import { UnsureSheet } from '../components/UnsureSheet'
 import { Button, Empty, Progress, Seg, Sheet, Spinner, Switch, Tag } from '../components/ui'
 import { jobStatusLabel, memoryKindLabel, sampleStateLabel, sourceStatusLabel, triggerLabel } from '../domain/labels'
-import { formatAgo, formatTimestamp, formatWhen } from '../domain/time'
+import { formatAgo, formatShortWhen, formatWhen } from '../domain/time'
 import type { Epistemic, Memory, MemoryFacet, MemoryKind, MemoryMention, Source, TrainingSample } from '../domain/types'
 import { useStore } from '../store/context'
 import { useMemory, useMemoryFacets, useMemoryList } from '../store/memories'
@@ -454,8 +454,8 @@ function MemoryTab() {
   )
 }
 
-const sourceKindMark: Record<Source['kind'], string> = { said: '说', note: '记', telegram: 'T', import: '聊', file: '文' }
-const sourceKindText: Record<Source['kind'], string> = { said: '你在这里说过的每一句', note: '手动添加记忆时写下的', telegram: '发给机器人的消息', import: '导入的聊天记录', file: '单份资料' }
+const sourceKindMark: Record<Source['kind'], string> = { said: '说', note: '记', capture: '记', telegram: 'T', import: '聊', file: '文' }
+const sourceKindText: Record<Source['kind'], string> = { said: '你在这里说过的每一句', note: '手动添加记忆时写下的', capture: '随手记下的', telegram: '发给机器人的消息', import: '导入的聊天记录', file: '单份资料' }
 const roleText: Record<string, string> = { user: '你', assistant: 'AI', system: '系统', tool: '工具' }
 
 interface SourceItem { id: string; title: string; excerpt: string; role?: string; at: string }
@@ -496,7 +496,7 @@ function SourceGroupSheet({ group, onOpen, onClose }: { group: Source; onOpen: (
               <div className="meta" style={{ marginTop: 0 }}>
                 {item.role && roleText[item.role] && <span>{roleText[item.role]}</span>}
                 {group.kind === 'import' && item.title && <span>{item.title}</span>}
-                <span>{formatTimestamp(item.at, state.settings.timezone ?? 'UTC')}</span>
+                <span>{formatShortWhen(item.at, state.settings.timezone ?? 'UTC')}</span>
               </div>
             </div>
             <ChevronRight size={14} />
@@ -516,7 +516,10 @@ function SourcesTab() {
   const [group, setGroup] = useState<Source | null>(null)
   const { state, dispatch } = useStore()
   const rank = { running: 0, failed: 1, waiting: 2, queued: 3, done: 4 }
-  const jobs = [...state.jobs].sort((a, b) => rank[a.status] - rank[b.status])
+  const [showDone, setShowDone] = useState(false)
+  const finished = state.jobs.filter((j) => j.status === 'done').length
+  // What is finished is not news: only what is running, waiting or stuck is listed until asked.
+  const jobs = [...state.jobs].filter((j) => showDone || j.status !== 'done').sort((a, b) => rank[a.status] - rank[b.status])
   return (
     <div className="stack">
       <div className="spread">
@@ -554,6 +557,7 @@ function SourcesTab() {
       </div>
 
       <Sheet title={<h3>后台在做的事</h3>} aside={<span className="tiny muted">和你的待办分开；重复导入不会产生重复内容</span>}>
+        {jobs.length === 0 && <p className="hall-empty">现在没有在做或卡住的事。</p>}
         <div className="list">
           {jobs.map((job) => (
             <div key={job.id} className="item">
@@ -580,6 +584,11 @@ function SourcesTab() {
             </div>
           ))}
         </div>
+        {finished > 0 && (
+          <button type="button" className="fact add" style={{ margin: '8px 16px 12px' }} aria-expanded={showDone} onClick={() => setShowDone((v) => !v)}>
+            {showDone ? '收起已完成的' : `已完成 ${finished} 项，点开看`}
+          </button>
+        )}
       </Sheet>
     </div>
   )

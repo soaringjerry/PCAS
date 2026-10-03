@@ -16,7 +16,7 @@ import (
 // material and stay out.
 const sourceGroupKey = `CASE WHEN l.archive_id IS NOT NULL THEN 'import:'||l.archive_id::text
   WHEN l.connector IN ('desk','desk-incomplete') THEN 'said'
-  WHEN l.connector IN ('memory-input','telegram') THEN l.connector
+  WHEN l.connector IN ('memory-input','telegram','capture') THEN l.connector
   ELSE l.id::text END`
 
 const liveSources = `SELECT s.id,s.connector,v.title,v.body,r.updated_at,r.created_at,r.version,
@@ -61,6 +61,8 @@ GROUP BY k.key ORDER BY max(k.updated_at) DESC,k.key`, string(scope.OwnerID))
 			source.Kind, source.Name = "said", "跟秘书说的话"
 		case source.ID == "memory-input":
 			source.Kind, source.Name = "note", "添加记忆时写的话"
+		case source.ID == "capture":
+			source.Kind, source.Name = "capture", "快速记录"
 		case source.ID == "telegram":
 			source.Kind, source.Name = "telegram", "从 Telegram 发来的"
 		default:
@@ -96,7 +98,7 @@ func (s *Store) SourceGroupItems(ctx context.Context, scope memory.Scope, key, f
 		limit = 50
 	}
 	archive, grouped := strings.CutPrefix(key, "import:")
-	if grouped && !memory.ID(archive).Valid() || !grouped && !oneOf(key, "said", "memory-input", "telegram") {
+	if grouped && !memory.ID(archive).Valid() || !grouped && !oneOf(key, "said", "memory-input", "telegram", "capture") {
 		return out, memory.ErrInvalid
 	}
 	find = strings.TrimSpace(find)

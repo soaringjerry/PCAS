@@ -74,6 +74,15 @@ func TestLibraryListsSourcesByOrigin(t *testing.T) {
 			t.Errorf("find %q: %d items %v", find, len(got.Items), err)
 		}
 	}
+	// Quick notes are one entry too.
+	for _, text := range []string{"随手记一", "随手记二"} {
+		if _, err := memory.NewService(s).Ingest(ctx, scope, memory.IngestRequest{Connector: "capture", ExternalID: text, ExternalVersion: "1", Title: "快速记录", Text: text, MediaType: "text/plain"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if st, err = s.Snapshot(ctx, scope); err != nil || len(st.Sources) != 3 || sourceEntry(t, st, "capture").ItemCount != 2 || sourceEntry(t, st, "capture").Single {
+		t.Fatalf("quick notes entry: %+v %v", st.Sources, err)
+	}
 	for _, key := range []string{"", "actions", "import:not-a-uuid", string(doc.Ref.ID)} {
 		if _, err := s.SourceGroupItems(ctx, scope, key, "", "", 10); !errors.Is(err, memory.ErrInvalid) {
 			t.Errorf("key %q: %v", key, err)

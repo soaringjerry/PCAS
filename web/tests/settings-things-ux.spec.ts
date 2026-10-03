@@ -684,3 +684,31 @@ test('a long title and long notes stay readable and editable on a phone', async 
   expect(m.errors).toEqual([])
   await context.close()
 })
+
+test('a ChatGPT sign-in waiting on a remote server is finished by pasting the address the browser ended on', async ({ page }) => {
+  const m = await mock(page, workspace(), { chatgpt: true })
+  let connected = false
+  await page.route((url) => url.pathname === '/v1/chatgpt/direct/account', (route) => route.fulfill({
+    json: connected
+      ? { accounts: [{ client_id: 'oaiapp_test', email: 'me@example.test', connected: true, plan_enabled: true, verified: false, paused: false }], active_client_id: 'oaiapp_test', pending: false, default_ready: false }
+      : { accounts: [], active_client_id: '', pending: true, default_ready: false },
+  }))
+  await page.route((url) => url.pathname === '/v1/chatgpt/direct/models', (route) => route.fulfill({ json: { models: [] } }))
+  await page.route((url) => url.pathname === '/v1/chatgpt/direct/callback', (route) => {
+    m.posts.push({ path: '/v1/chatgpt/direct/callback', method: route.request().method(), body: route.request().postDataJSON() })
+    connected = true
+    return route.fulfill({ json: { connected: true } })
+  })
+  await page.goto('/settings')
+  await page.getByRole('button', { name: /ChatGPT 订阅（官方授权）/ }).click()
+  const address = page.getByRole('textbox', { name: '授权后的浏览器地址' })
+  const finish = page.getByRole('button', { name: '完成登录' })
+  await expect(finish).toBeDisabled()
+  const pasted = 'http://127.0.0.1:1455/auth/callback?code=test-code&state=test-state'
+  await address.fill(`  ${pasted}  `)
+  await finish.click()
+  await expect(page.getByText('已连接 me@example.test').first()).toBeVisible()
+  await expect(address).toHaveCount(0)
+  expect(m.posts.filter((p) => p.path === '/v1/chatgpt/direct/callback')).toEqual([{ path: '/v1/chatgpt/direct/callback', method: 'POST', body: { url: pasted } }])
+  expect(m.errors).toEqual([])
+})

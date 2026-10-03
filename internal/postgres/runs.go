@@ -499,6 +499,17 @@ func (s *Store) runAgentOnce(ctx context.Context) error {
 	workCtx, cancel := context.WithTimeout(ctx, 4*time.Minute)
 	result, generationErr := s.models.Generate(workCtx, run.AgentID, assistantInstructions, run.Brief)
 	cancel()
+	if generationErr == nil {
+		p, _ := s.models.Get(run.AgentID)
+		if err := s.recordUsage(ctx, modelUsage{
+			OwnerID: scope.OwnerID, ID: memory.NewID(), At: time.Now().UTC(),
+			Purpose: "deputy", AgentID: run.AgentID, Model: p.Model,
+			InputTokens: result.InputTokens, OutputTokens: result.OutputTokens, Cost: result.Cost,
+			RunID: run.ID, MemoryRefs: run.ContextVersions,
+		}); err != nil {
+			return err
+		}
+	}
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
@@ -526,15 +537,6 @@ func (s *Store) runAgentOnce(ctx context.Context) error {
 			}
 		} else {
 			current.Cost = result.Cost
-			p, _ := s.models.Get(run.AgentID)
-			if err := recordUsageTx(ctx, tx, modelUsage{
-				OwnerID: scope.OwnerID, ID: memory.NewID(), At: time.Now().UTC(),
-				Purpose: "deputy", AgentID: run.AgentID, Model: p.Model,
-				InputTokens: result.InputTokens, OutputTokens: result.OutputTokens, Cost: result.Cost,
-				RunID: run.ID, MemoryRefs: run.ContextVersions,
-			}); err != nil {
-				return err
-			}
 		}
 		if verifyRunTx(ctx, tx, scope, current) != nil {
 			current.StaleContext = true

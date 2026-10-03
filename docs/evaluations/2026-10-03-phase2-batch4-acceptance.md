@@ -1,3 +1,25 @@
+# 第 4 批 T4：最终分支的整段协议夹具迁移通过（2026-10-03）
+
+本轮从 `origin/phase2/final` 的 `e775cd688355ce4aef98c06dd38b95b6332073eb` 建分支 `phase2/T4-final-conversation-fixtures`。验收提交为 `602bf083d00d179ce2af79d2fd445a02383d042f`；后续报告提交只增加本轮结果，不改测试或产品代码。Draft PR 的 base 为 `phase2/final`。
+
+依照 README §12、§12.1、§13 第 6、7 条，迁移 I5、I10、I14 的夹具入口和假模型输出。先提交追加式 golden 协议说明（`801e18e`），再提交测试；原有 golden 全部键值保持一致。真实上传、存完后通过 HTTP `organize` 解除「先不整理」，由真实 worker 领取整段任务；测试不制造对话任务或绕过领取条件。I5 的输出改为合法的记忆项并带 `message_index=1`，不再使用旧的 task/signals 输出；I10 根据整段请求中的用户消息返回相应记忆；I14 检查整段协议的 `extractor=3` 处理记录。
+
+| 编号 | 预期（保留） | 实际 |
+|---|---|---|
+| I5 | 历史计划保持待确认；保留历史说话时间，不产生今天待办，不唤醒搁置想法 | 真实对话整理调用 1 次；生成指定计划，confirmation=candidate、时间一致；Tasks 为空，想法仍搁置且无 Wake；通过 |
+| I10 | 删除归档后原话、抽出的记忆、批次消失，不能再次召回 | 3 段对话各整理 1 次，指定历史细节生成记忆；删除前真实秘书请求包含该细节；删除后全部消息、目标记忆、归档和批次均消失，后续秘书请求不含该细节；通过 |
+| I14 | assistant/system/tool 原话、角色、时间保留，不为无用户消息的对话调用抽取；AI 原话仍可回忆 | 整理模型调用 0 次；每条 empty/items=0/extractor=3；原话、角色、时间一致；随后秘书调用 1 次并收到 AI 原话；通过 |
+
+验证：三条定向 `go test -race -count=1 -v` 为 **3/3 通过**。同一验收提交上执行实际 **`GOFLAGS=-v make check`，退出码 0**：格式检查、`go vet`、全量 race 测试、构建均通过。顶层测试 **520 通过、0 失败、3 跳过**（包括子测试为 1370 通过、0 失败、3 跳过）；T4 **39/39**；4b 的 C1–C12 和 worker 子进程入口 **13/13**。PostgreSQL 包用时 658.794 秒。没有 race 报告，也没有新增跳过。
+
+三个既有真实通道测试按环境条件跳过：`TestInstalledCodexHandshake`、`TestLiveCodexSecretaryAndLegacyFormats`、`TestLiveContinuityReplay`。此次没有调用真实模型、真实通知或线上数据库。数据库为本轮自建 tmpfs PostgreSQL/pgvector、随机本机端口，模型全部为本地假服务；测试结束后已按记录的容器 ID 清理。
+
+原始证据：`/tmp/pcas-T4-final-go-Ui8vB1/targeted.log`、`make-check.log`、`commit.txt`、`targeted.exit`、`make-check.exit`、`results.json`、`container-cleanup.log`。改动范围为三条测试、golden 的追加协议说明和本报告。本轮没有发现产品行为与上述预期不符。
+
+---
+
+以下保留上一轮及历史验收记录。
+
 # 第 4 批独立验收：c093e0a 修复后通过（2026-10-03）
 
 最新执行记录见「c093e0a 修复后的同一提交全量验收」。下文 §13 裁定轮、原轮和第一次新增序列结果均保留为历史，不替换为本轮结果。

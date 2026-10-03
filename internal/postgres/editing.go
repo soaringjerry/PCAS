@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -166,6 +167,16 @@ func (s *Store) correctTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in
 		return out, err
 	}
 
+	if _, err := tx.Exec(ctx, `UPDATE claim_revisions newer SET event_from=old.event_from,event_to=old.event_to,event_precision=old.event_precision
+        FROM claim_revisions old WHERE (newer.owner_id,newer.claim_id,newer.version)=($1,$2,$3)
+        AND (old.owner_id,old.claim_id,old.version)=($1,$2,$4)`, string(scope.OwnerID), string(out.ID), version, prior.Version); err != nil {
+		return out, err
+	}
+	if _, err := tx.Exec(ctx, `INSERT INTO claim_mentions(owner_id,claim_id,claim_version,entity_id,role)
+        SELECT owner_id,claim_id,$3,entity_id,role FROM claim_mentions WHERE owner_id=$1 AND claim_id=$2 AND claim_version=$4`, string(scope.OwnerID), string(out.ID), version, prior.Version); err != nil {
+		return out, err
+	}
+
 	if _, err := tx.Exec(ctx, "UPDATE memory_records SET version=$3,updated_at=now() WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), string(out.ID), version); err != nil {
 		return out, err
 	}
@@ -288,7 +299,11 @@ func (s *Store) deleteTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in 
 	}()
 	return s.deleteRecordsTx(ctx, tx, scope, in)
 }
+
+type retainUndoneAnswersKey struct{}
+
 func (s *Store) deleteRecordsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in memory.DeleteRequest) error {
+	retainAnswers, _ := ctx.Value(retainUndoneAnswersKey{}).(bool)
 	if len(in.Targets) == 0 || len(in.Targets) > 100 {
 		return memory.ErrInvalid
 	}
@@ -330,7 +345,7 @@ func (s *Store) deleteRecordsTx(ctx context.Context, tx pgx.Tx, scope memory.Sco
 		}
 	}
 	// Deleting a source also deletes its extracted records, chunks and derived views.
-	const deletionClosure = `WITH RECURSIVE affected(id) AS (
+	deletionClosure := `WITH RECURSIVE affected(id) AS (
 		SELECT unnest($2::uuid[]) UNION SELECT links.child FROM affected a JOIN (
 		SELECT source_id AS parent,id AS child FROM chunks WHERE owner_id=$1 UNION SELECT source_id,target_id FROM evidence WHERE owner_id=$1
 		UNION SELECT dependency_id,view_id FROM derived_dependencies WHERE owner_id=$1 UNION SELECT from_id,id FROM relations WHERE owner_id=$1 UNION SELECT to_id,id FROM relations WHERE owner_id=$1
@@ -341,6 +356,9 @@ func (s *Store) deleteRecordsTx(ctx context.Context, tx pgx.Tx, scope memory.Sco
  UNION SELECT archive_id,source_id FROM archive_entries WHERE owner_id=$1
  UNION SELECT derived_from_id,source_id FROM source_versions WHERE owner_id=$1 AND derived_from_id IS NOT NULL
 		) links ON links.parent=a.id) SELECT id::text FROM affected`
+	if retainAnswers {
+		deletionClosure = strings.Replace(deletionClosure, ` UNION SELECT d.memory_id,s.id FROM run_dependencies d JOIN adopted_artifacts a ON (a.owner_id,a.run_id)=(d.owner_id,d.run_id) JOIN sources s ON s.owner_id=a.owner_id AND s.connector='actions' AND s.external_id=a.thing_id::text WHERE d.owner_id=$1`, "", 1)
+	}
 	rows, err := tx.Query(ctx, deletionClosure, string(scope.OwnerID), ids)
 	if err != nil {
 		return err
@@ -422,8 +440,19 @@ func (s *Store) deleteRecordsTx(ctx context.Context, tx pgx.Tx, scope memory.Sco
 	if err := redactArchivesTx(ctx, tx, scope, archiveIDs); err != nil {
 		return err
 	}
-	// Remove orphan subjects whose only supporting claims are being deleted.
-	subjects, err := tx.Query(ctx, `SELECT DISTINCT subject_id::text FROM claim_revisions c WHERE owner_id=$1 AND claim_id=ANY($2::uuid[]) AND NOT EXISTS(SELECT 1 FROM claim_revisions kept WHERE kept.owner_id=c.owner_id AND kept.subject_id=c.subject_id AND NOT(kept.claim_id=ANY($2::uuid[])))`, string(scope.OwnerID), ids)
+	// Preserve the original orphan-subject cleanup and add AI mention cleanup;
+	// self is retained and subjects or mentions
+	// (including other memory versions) prevent garbage collection.
+	subjects, err := tx.Query(ctx, `WITH candidates(entity_id) AS (
+        SELECT subject_id FROM claim_revisions WHERE owner_id=$1 AND claim_id=ANY($2::uuid[])
+        UNION SELECT entity_id FROM claim_mentions WHERE owner_id=$1 AND claim_id=ANY($2::uuid[]))
+        SELECT DISTINCT e.id::text FROM candidates x JOIN memory_records e ON e.owner_id=$1 AND e.id=x.entity_id
+        JOIN entity_versions ev ON(ev.owner_id,ev.entity_id,ev.version)=(e.owner_id,e.id,e.version)
+        JOIN record_versions created ON(created.owner_id,created.record_id,created.version)=(e.owner_id,e.id,1)
+        WHERE ev.entity_type<>'self' AND (created.actor='ai' OR EXISTS(
+            SELECT 1 FROM claim_revisions erased WHERE erased.owner_id=e.owner_id AND erased.subject_id=e.id AND erased.claim_id=ANY($2::uuid[])))
+        AND NOT EXISTS(SELECT 1 FROM claim_revisions kept WHERE kept.owner_id=e.owner_id AND kept.subject_id=e.id AND NOT(kept.claim_id=ANY($2::uuid[])))
+        AND NOT EXISTS(SELECT 1 FROM claim_mentions kept WHERE kept.owner_id=e.owner_id AND kept.entity_id=e.id AND NOT(kept.claim_id=ANY($2::uuid[])))`, string(scope.OwnerID), ids)
 	if err != nil {
 		return err
 	}
@@ -440,9 +469,29 @@ func (s *Store) deleteRecordsTx(ctx context.Context, tx pgx.Tx, scope memory.Sco
 	if err != nil {
 		return err
 	}
-	ids, err = purgeArtifactsTx(ctx, tx, scope, ids)
-	if err != nil {
-		return err
+	if retainAnswers {
+		for _, id := range ids {
+			if err := invalidateTx(ctx, tx, scope, id); err != nil {
+				return err
+			}
+		}
+		if _, err := tx.Exec(ctx, `UPDATE agent_runs SET document=jsonb_set(jsonb_set(document,'{staleContext}','true'),'{outdated}','true')
+            WHERE owner_id=$1 AND id IN(SELECT run_id FROM run_dependencies WHERE owner_id=$1 AND memory_id=ANY($2::uuid[]))`, string(scope.OwnerID), ids); err != nil {
+			return err
+		}
+		if err := retainDeletedMemoryOriginsTx(ctx, tx, scope.OwnerID, ids); err != nil {
+			return err
+		}
+		// JSON context references remain in the retained result for stale checks;
+		// remove relational references before deleting their referenced versions.
+		if _, err := tx.Exec(ctx, `DELETE FROM run_dependencies WHERE owner_id=$1 AND memory_id=ANY($2::uuid[])`, string(scope.OwnerID), ids); err != nil {
+			return err
+		}
+	} else {
+		ids, err = purgeArtifactsTx(ctx, tx, scope, ids)
+		if err != nil {
+			return err
+		}
 	}
 	if in.BlockReimport {
 		rows, err := tx.Query(ctx, "SELECT connector,external_id FROM sources WHERE owner_id=$1 AND id=ANY($2::uuid[])", string(scope.OwnerID), ids)
@@ -524,6 +573,10 @@ func (s *Store) deleteRecordsTx(ctx context.Context, tx pgx.Tx, scope memory.Sco
 		`DELETE FROM claim_revisions WHERE owner_id=$1 AND claim_id=ANY($2::uuid[])`,
 		`DELETE FROM source_versions WHERE owner_id=$1 AND source_id=ANY($2::uuid[])`,
 	} {
+
+		if retainAnswers && (strings.HasPrefix(sql, "UPDATE desk_turns") || strings.HasPrefix(sql, "DELETE FROM work_documents") || strings.HasPrefix(sql, "DELETE FROM training_samples") || strings.HasPrefix(sql, "INSERT INTO background_usage") || strings.HasPrefix(sql, "DELETE FROM agent_runs")) {
+			continue
+		}
 		if _, err := tx.Exec(ctx, sql, string(scope.OwnerID), ids); err != nil {
 			return err
 		}
@@ -589,4 +642,34 @@ func (s *Store) deleteRecordsTx(ctx context.Context, tx pgx.Tx, scope memory.Sco
 	}
 	_, err = tx.Exec(ctx, "DELETE FROM memory_records WHERE owner_id=$1 AND id=ANY($2::uuid[])", string(scope.OwnerID), ids)
 	return err
+}
+
+// Keep origin references on retained answers. A later explicit deletion of the
+// original must still erase its copies even though undo removed the memory.
+func retainDeletedMemoryOriginsTx(ctx context.Context, tx pgx.Tx, owner memory.ID, ids []string) error {
+	for _, stmt := range []string{
+		`UPDATE desk_turns t SET dependencies=(SELECT jsonb_agg(ref) FROM(
+            SELECT value AS ref FROM jsonb_array_elements(coalesce(t.dependencies,'[]'::jsonb))
+            UNION SELECT jsonb_build_object('id',e.source_id,'version',e.source_version,'kind','source')
+            FROM evidence e JOIN jsonb_array_elements(coalesce(t.dependencies,'[]'::jsonb)) d ON d->>'id'=e.target_id::text
+            WHERE e.owner_id=t.owner_id AND e.target_id=ANY($2::uuid[]) AND e.target_version=(d->>'version')::integer
+            AND NOT(e.source_id=ANY($2::uuid[]))) refs)
+            WHERE t.owner_id=$1 AND EXISTS(SELECT 1 FROM jsonb_array_elements(coalesce(t.dependencies,'[]'::jsonb)) d WHERE d->>'id'=ANY($2::text[]))`,
+		`UPDATE agent_runs r SET document=jsonb_set(r.document,'{contextVersions}',(SELECT jsonb_agg(ref) FROM(
+            SELECT value AS ref FROM jsonb_array_elements(coalesce(r.document->'contextVersions','[]'::jsonb))
+            UNION SELECT jsonb_build_object('id',e.source_id,'version',e.source_version,'kind','source')
+            FROM run_dependencies d JOIN evidence e ON(e.owner_id,e.target_id,e.target_version)=(d.owner_id,d.memory_id,d.memory_version)
+            WHERE d.owner_id=r.owner_id AND d.run_id=r.id AND d.memory_id=ANY($2::uuid[]) AND NOT(e.source_id=ANY($2::uuid[]))) refs))
+            WHERE r.owner_id=$1 AND EXISTS(SELECT 1 FROM run_dependencies d WHERE d.owner_id=r.owner_id AND d.run_id=r.id AND d.memory_id=ANY($2::uuid[]))`,
+		`INSERT INTO run_dependencies(owner_id,run_id,memory_id,memory_version)
+            SELECT DISTINCT ON(d.owner_id,d.run_id,e.source_id) d.owner_id,d.run_id,e.source_id,e.source_version
+            FROM run_dependencies d JOIN evidence e ON(e.owner_id,e.target_id,e.target_version)=(d.owner_id,d.memory_id,d.memory_version)
+            WHERE d.owner_id=$1 AND d.memory_id=ANY($2::uuid[]) AND NOT(e.source_id=ANY($2::uuid[]))
+            ORDER BY d.owner_id,d.run_id,e.source_id,e.source_version DESC ON CONFLICT DO NOTHING`,
+	} {
+		if _, err := tx.Exec(ctx, stmt, string(owner), ids); err != nil {
+			return err
+		}
+	}
+	return nil
 }

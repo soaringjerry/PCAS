@@ -123,6 +123,28 @@ func run(ctx context.Context, args []string, logger *slog.Logger) error {
 	}
 	if command == "worker" {
 		logger.Info("memory worker started")
+		backfillCtx, stopBackfill := context.WithCancel(ctx)
+		defer stopBackfill()
+		backfillDone := make(chan struct{})
+		defer func() { stopBackfill(); <-backfillDone }()
+		go func() {
+			defer close(backfillDone)
+			timer := time.NewTicker(postgres.ExtractionBackfillInterval)
+			defer timer.Stop()
+			for {
+				if backfillCtx.Err() != nil {
+					return
+				}
+				if _, err := db.BackfillExtractions(backfillCtx, time.Now()); err != nil && backfillCtx.Err() == nil {
+					logger.Warn("extraction backfill check failed", "error_type", "backfill_failed")
+				}
+				select {
+				case <-backfillCtx.Done():
+					return
+				case <-timer.C:
+				}
+			}
+		}()
 		return worker.New(db, map[string]worker.Handler{"memory.summary": db.ProcessSummary, "source.parse": db.ProcessAttachment, "source.chunk": db.ProcessChunks, "source.tokenize": db.ProcessIndex, "memory.index": db.ProcessIndex, "source.extract": db.ProcessExtraction, "source.embed": db.ProcessEmbedding, "memory.embed": db.ProcessEmbedding}, logger).Run(ctx)
 	}
 	webDir := os.Getenv("PCAS_WEB_DIR")

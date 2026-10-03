@@ -37,7 +37,7 @@ func (s *Store) Claim(ctx context.Context, lease time.Duration) (*worker.Job, er
 		 JOIN archive_entries ae ON(ae.owner_id,ae.source_id,ae.source_version)=(sibling.owner_id,sibling.source_id,sibling.source_version)
 		 JOIN import_batches ib ON(ib.owner_id,ib.archive_id)=(ae.owner_id,ae.archive_id)
 		 WHERE sibling.owner_id=own.owner_id AND sibling.conversation_key=own.conversation_key
-		 AND (ib.state IN('importing','paused','failed') OR ib.hold_organizing)))
+		 AND (ib.stored<>ib.total OR ib.state='paused' OR ib.hold_organizing)))
 		-- Per-message extraction jobs coalesce into a single sequential family.
 		-- Completed/failed segment identities deduplicate retries in enqueue;
 		-- a failed old manifest must not prevent processing a new source version.

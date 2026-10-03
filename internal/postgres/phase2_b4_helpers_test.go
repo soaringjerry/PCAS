@@ -242,7 +242,9 @@ func b4HoldModel(t *testing.T, f *b4Fake) *b4ModelGate {
 
 func b4Model(t *testing.T, s *Store, withVectors ...bool) *b4Fake {
 	t.Helper()
-	f := &b4Fake{reply: `{"reply":"收到。","answer":"收到。","used":[],"actions":[],"items":[],"output":"完成。"}`, status: 200}
+	// Empty extraction is valid; purpose-specific or invalid responses can be
+	// supplied with set. Extra secretary/deputy fields invalidate extraction.
+	f := &b4Fake{reply: `{"items":[]}`, status: 200}
 	usage := b4FixtureFor(t, "usage")
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		raw, err := io.ReadAll(r.Body)

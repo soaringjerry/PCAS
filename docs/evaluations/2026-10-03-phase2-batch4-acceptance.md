@@ -1,26 +1,38 @@
 # 第 4 批独立验收：原轮结果与先存原话补充（2026-10-03）
 
-产品基线：`origin/phase2/batch4` 的 `b526328c6529056513bf533d370d799f09430b33`。T4 已变基；CI 冲突处理保留 batch2 和 batch4 的步骤。
+当前产品基线：`origin/phase2/batch4` 的 `41902ca34fbd78c6eef42b8444a98fda7991c252`，已 fetch 并变基。原轮产品基线仍为 `b526328c6529056513bf533d370d799f09430b33`；下面的原轮结果没有替换成新基线结果。CI 冲突处理保留 batch2 和 batch4 的步骤。
 
 本轮被测提交：`c719783`（该产品基线 + 原有 T4 测试与 CI 接线）。所有原轮 Go、模拟浏览器、真实后端 W4 均在 `/root/PCAS-wt/b4-T4-original-run` 的同一固定提交执行，没有加入 I15–I20、W5。没有改产品代码，没有读取 I/L/U4 的新实现，没有修改原有验收文件的预期。
 
-## 新增序列：已交付、未验收
+## 新增序列：41902ca 上的运行结果
 
 第 11 节和 T4 末尾补充的预期先在 `631ab49` 追加冻结到 [b4-gold.json](../../testdata/phase2/b4-gold.json)，所有旧条目不变。第 12 节 C 序列属于补充批 4b，未编写。
 
 | 序列 | 新测试 | 当前状态 |
 |---|---|---|
-| I15 | `TestPhase2B4_I15_LaterStoresIndexedOriginalsWithoutExtracting`；`TestPhase2B4_I15_NowPositiveControlCallsExtraction` | 编译通过，未运行 |
-| I16 | `TestPhase2B4_I16_HeldOriginalReachesSecretaryInAnotherConversation` | 编译通过，未运行 |
-| I17 | `TestPhase2B4_I17_StartOrganizingReleasesRealPriorityTenExtraction` | 编译通过，未运行 |
-| I18 | `TestPhase2B4_I18_NewSecretaryUtteranceExtractsWhileImportHeld` | 编译通过，未运行 |
-| I19 | `TestPhase2B4_I19_HeldImportPausesResumesAndDeletesItsClosure` | 编译通过，未运行 |
-| I20 | `TestPhase2B4_I20_OmittedOrganizeDefaultsToHeldIndexedOriginals` | 编译通过，未运行 |
-| W5 | `W5 默认先存着；存好后开始整理，进度随接口返回增长`；`W5 确认前可以改为现在整理，表单实际发送 now` | lint、TypeScript 检查通过，未运行 |
+| I15 | `TestPhase2B4_I15_LaterStoresIndexedOriginalsWithoutExtracting`；`TestPhase2B4_I15_NowPositiveControlCallsExtraction` | later 通过；now 对照失败：存好 3/3、实际抽取调用 3 次，但 organized=0 |
+| I16 | `TestPhase2B4_I16_HeldOriginalReachesSecretaryInAnotherConversation` | 通过：另一段秘书对话的真实模型请求带有原话，hold 保持 |
+| I17 | `TestPhase2B4_I17_StartOrganizingReleasesRealPriorityTenExtraction` | 失败：HTTP 释放 hold、优先级 10、实际模型调用 3 次和原话内容检查通过，但 organized=0 |
+| I18 | `TestPhase2B4_I18_NewSecretaryUtteranceExtractsWhileImportHeld` | 通过：新的秘书原话照常抽取，held 导入仍未整理 |
+| I19 | `TestPhase2B4_I19_HeldImportPausesResumesAndDeletesItsClosure` | 失败：暂停后的 ProcessAttachment 返回 job lease lost，后续继续/删除未验到；同原轮暂停口径待确认 |
+| I20 | `TestPhase2B4_I20_OmittedOrganizeDefaultsToHeldIndexedOriginals` | 通过：省略字段等同 later，原话索引齐全，零抽取 |
+| W5 | `W5 默认先存着；存好后开始整理，进度随接口返回增长`；`W5 确认前可以改为现在整理，表单实际发送 now` | 修正 T4 定位器后两条通过；首次两条失败记录保留 |
 
 后端测试在 [phase2_b4_deferred_test.go](../../internal/postgres/phase2_b4_deferred_test.go)。分段、分词、向量和抽取都由真实 `Claim` 与处理函数运行，不强制领取被 hold 的抽取任务；直接检查每条原话的 chunk、词索引、向量、未领取任务和 `hold_organizing`，向量只用本地免费的确定性服务，单独抓请求，不混入抽取模型调用数。
 
 I16 抓另一段秘书对话的真实 HTTP 请求；I17 通过 HTTP 释放 hold，并验证真实抽取及优先级 10；I18 用真实秘书入口记录新原话；I19 在解析 goroutine 正在逐批提交时真实暂停、继续，再走归档删除闭包。W5 在既有模拟浏览器文件中，随已有 CI 文件入口自动包含。
+
+本次 Go 被测提交 `8e904ad2481eba06cf184c4bc2f26058eb7105a3`（41902ca + 变基后的 T4 测试）：`go test -race -count=1 -v -timeout 10m -run '^TestPhase2B4_I(1[5-9]|20)_' ./internal/postgres`。7 个主测试：**4 通过、3 失败、0 跳过**，包耗时 6.453 秒，退出 1，没有重复运行。数据库为自有 tmpfs pgvector 容器，已清理；模型和向量为本地假服务。原始输出：[deferred.log](/tmp/pcas-b4-deferred-41902ca-MHnm08/deferred.log)。I15 now 与 I17 的 fake 返回非空 JSON（items 空数组），实际各有 3 次调用；R4 将 organized 定义为已经处理过抽取的条数，本测试要求它增长，未把空 items 当作放宽计数的理由。交 I 核对处理完成后的计数；报告只陈述观察，不推断实现根因。
+
+W5 使用同一产品基线的前端构建产物，npm ci/lint/type-check/build 均通过；本机 Node 20.19.5，仍有 package 的 >=22.12 engine 警告。初次筛选 `--grep '^W5 '` 未选中用例，属运行夹具，不计测试结果。改正筛选后 `8e904ad` 上的两条 W5 均超时：默认「先存着」已显示，但测试寻找「确认导入/开始导入/确认」按钮，页面实际可访问标签是「导入 6 条」；now 用例寻找「现在整理」等文案，实际是「现在就整理」。轨迹只有 preview，没有确认导入 POST，后续行为未验到。首轮日志/JSON：[mocked.log](/tmp/pcas-b4-w5-41902ca-UwFGBc/mocked.log)、[mocked.json](/tmp/pcas-b4-w5-41902ca-UwFGBc/mocked.json)。
+
+T4 在 `25dadd66a79a0161f13a73d29cfe2621b3b5cc59` 只补 W5 定位器对上述标签的匹配；冻结条目及行为断言不变，W1 等旧用例不改。在该明确修正后的提交执行 `npx playwright test tests/phase2-batch4.spec.ts --grep 'W5 ' --retries=0 --reporter=list,json`，**2 通过、0 失败、0 跳过、0 重试、0 flaky**：默认 later、实际 multipart 字段、存完的人话状态、开始整理 HTTP 与进度增长、可选 now 及实际字段、390px 无溢出和无 pageerror 均通过。复核输出：[mocked.log](/tmp/pcas-b4-w5-41902ca-FzMeDA/mocked.log)、[mocked.json](/tmp/pcas-b4-w5-41902ca-FzMeDA/mocked.json)。截图在当前工作区 `web/test-results/phase2-b4-w5-41902ca`；首次轨迹目录被同名输出覆盖，仅保留首轮日志/JSON及本段已核对的观察。修正后 lint/type-check 另行检查也通过。此次是新增序列专项运行，未在 41902ca 重跑原轮或宣称全量通过。
+
+## 三处待协调者确认的口径
+
+1. **W1/W2 禁止词范围**：预期是不给用户展示内部术语；测试扫描整个设置页，实际已有导出说明含「来源」。需确认范围是整页还是导入区域，当前旧断言保留。
+2. **L3/L8 秘书错误通道**：测试分别假设模型 HTTP 503 后入口返回 HTTP 错误、非法 JSON 后 DeskTurn 返回 Go 错误；实际为 HTTP 200 / nil error 的 fallback。需确认允许既有 fallback 时是否只按结果未采用及花费行为验收，当前断言保留。
+3. **I3/I12/I19 暂停控制返回**：测试假设暂停后的解析正常返回；实际返回 worker.ErrLeaseLost（job lease lost）。需确认是否可视为内部控制返回、按暂停状态和存储稳定及恢复行为验收，当前断言保留。
 
 ## 原轮统一运行
 

@@ -88,7 +88,6 @@ jobs:
       - run: bash web/tests/support/real-backend.sh npx playwright test tests/phase2-batch2-backend.spec.ts --output=test-results/phase2-batch2
       - if: ${{ matrix.round == 1 }}
         run: PCAS_IMPORT_CHUNK_SIZE=1 bash web/tests/support/real-backend.sh npx playwright test tests/phase2-batch4-backend.spec.ts --retries=0
->>>>>>> 3860b0d (test(phase2): author batch4 import usage and browser acceptance sequences)
       - uses: actions/upload-artifact@v4
         if: always()
         with:

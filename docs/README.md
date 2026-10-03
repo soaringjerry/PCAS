@@ -8,7 +8,7 @@ PCAS 的所有文档都从这一页找。新增或移动文档时，同时改这
 |---|---|---|
 | 第 1 阶段：秘书前台 | 已上线（2026-10-01） | [任务总览](tasks/phase1/README.md) |
 | 第 1.5 阶段：稳定化 | 修复已合并；线上实测 11 项和试用一天还没做 | [稳定化计划](tasks/stabilization/README.md) |
-| 第 2 阶段：记忆核心 | 分四批。**第 1 批已上线（2026-10-02）**；第 1、2 批已上线（第 2 批 2026-10-03）；第 3 批已通过验收；第 4 批验收中；补充批 4b（按整段对话整理）已派工。第一次尝试（2.0）已回滚 | [任务入口](tasks/phase2/README.md) · [方向稿](tasks/phase2/direction.md) · [第 1 批](tasks/phase2/batch1/README.md) · [第 2–4 批并行方案](tasks/phase2/parallel.md) |
+| 第 2 阶段：记忆核心 | 分四批，**全部已上线**：第 1 批 2026-10-02，第 2 批 2026-10-03，第 3 批、第 4 批和补充批 4b（按整段对话整理）2026-10-03 一起上线。还没做的：用真实模型跑回忆评测并定基线。第一次尝试（2.0）已回滚 | [任务入口](tasks/phase2/README.md) · [方向稿](tasks/phase2/direction.md) · [第 1 批](tasks/phase2/batch1/README.md) · [第 2–4 批并行方案](tasks/phase2/parallel.md) |
 | 第 3 阶段及以后 | 未开始 | [白皮书 §16 路线图](whitepaper.md) |
 
 还没处理的问题统一记在 [待办清单](tasks/backlog.md)。

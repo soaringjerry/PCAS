@@ -313,6 +313,8 @@ func TestPhase2B4_L8_ReturnedButInvalidSecretaryStillRecordsUsage(t *testing.T) 
 func TestPhase2B4_L9_IdenticalLegacyRequestsMakeTwoCallsAndTwoUsageRows(t *testing.T) {
 	s, scope := b4Store(t), owner()
 	f := b4Model(t, s)
+	// Initialize the configured legacy agent as a browser snapshot does.
+	b4OK(t, b4HTTP(t, s, scope, "GET", "/v1/workspace", nil))
 	f.set(`{"answer":"合成回答：今天整理青玉罗盘。","used":[],"links":[]}`, 200)
 	question := b4UsageAmendment(t)["legacyQuestion"]
 	if question == "" {
@@ -413,6 +415,7 @@ func TestPhase2B4_L2_DeputyLegacyAnswerExtractionEachRecordTheirCall(t *testing.
 	t.Run("legacy answer", func(t *testing.T) {
 		s, scope := b4Store(t), owner()
 		f := b4Model(t, s)
+		b4OK(t, b4HTTP(t, s, scope, "GET", "/v1/workspace", nil))
 		f.set(`{"answer":"没有安排。","used":[],"links":[]}`, 200)
 		out, err := s.AnswerDesk(context.Background(), scope, "model", "今天有哪些安排", nil)
 		if err != nil {

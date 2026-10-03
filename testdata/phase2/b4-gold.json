@@ -437,5 +437,20 @@
     },
     "embedding": "local free deterministic embedding provider only; embedding HTTP requests are captured separately from extraction/secretary requests and are excluded from extraction call counts",
     "originalRound": "I1-I14/L1-L9/W1-W4 run once on pinned acceptance commit based on b526328; new tests are delivered first, not included in this original-round result"
+  },
+  "coordinator_adjudication_pr129": {
+    "authority": "batch4/README.md section 13 in PR #129 at 52eaf1865e1eaa01884b6234697008f66abbde4e; coordinator instruction 2026-10-03",
+    "fixture": "b4API passes Editor: s to register the existing POST /v1/memory/delete; all deletion oracles unchanged",
+    "browserInternalTerms": "W1/W2 inspect only the import upload/progress area and import preview dialog; other settings text is outside batch4 scope; forbiddenTerms list unchanged",
+    "secretaryErrorChannel": "L3/L8 permit existing HTTP 200 / nil Go error fallback; failed model calls record zero rows, returned malformed content records one row, successful replay records no additional call or usage row",
+    "pauseReturn": "I3/I12/I19 may accept errors.Is(err, worker.ErrLeaseLost) only at paused-parser completion; still require stable stored/organized, isolation and complete nonduplicating resume",
+    "pauseFixture": "I3/I12 use explicit organize=now so paused extraction jobs are otherwise eligible; I19 stays later and retains its hold through pause/resume",
+    "unchanged": [
+      "L8 independent short transaction and rollback/cancel durability",
+      "I15 now positive control organized growth",
+      "I17 organized growth",
+      "I6 extraction priority and original timeout"
+    ],
+    "browserFixture": "accessible confirmation button may be 导入 N 条; only locators change, confirmation-before-upload and behavior oracles remain unchanged"
   }
 }

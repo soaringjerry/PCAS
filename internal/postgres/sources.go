@@ -190,7 +190,7 @@ func (s *Store) GetSource(ctx context.Context, scope memory.Scope, id memory.ID,
 	}
 	result.Source.ID = memory.ID(sourceID)
 	result.Source.Kind = memory.SourceKind
-	rows, err := s.pool.Query(ctx, `SELECT id::text,stage,state,attempts,error_code FROM memory_jobs
+	rows, err := s.pool.Query(ctx, `SELECT id::text,stage,state,attempts,error_code,CASE WHEN stage='source.parse' THEN coalesce((SELECT v.representation FROM source_versions v WHERE v.owner_id=memory_jobs.owner_id AND v.derived_from_id=memory_jobs.record_id AND v.derived_from_version=memory_jobs.record_version ORDER BY version DESC LIMIT 1),'') ELSE '' END FROM memory_jobs
 		WHERE owner_id=$1 AND record_id=$2 AND record_version=$3 ORDER BY created_at,stage`, string(scope.OwnerID), string(id), result.Source.Version)
 	if err != nil {
 		return result, err
@@ -199,7 +199,7 @@ func (s *Store) GetSource(ctx context.Context, scope memory.Scope, id memory.ID,
 	for rows.Next() {
 		var item memory.Processing
 		var jobID string
-		if err := rows.Scan(&jobID, &item.Stage, &item.State, &item.Attempts, &item.ErrorCode); err != nil {
+		if err := rows.Scan(&jobID, &item.Stage, &item.State, &item.Attempts, &item.ErrorCode, &item.Method); err != nil {
 			return result, err
 		}
 		item.ID = memory.ID(jobID)

@@ -167,5 +167,16 @@
     "overlap_quote": "第一段去成都。",
     "valid_quote": "第二段去杭州。",
     "accepted_memory": "第二段杭州计划"
+  },
+  "ruling_8a159a8": {
+    "contract_pr": 129,
+    "contract_head": "8a159a8e8467042c4362c312619af0acefb22b9e",
+    "section": "13.7",
+    "sequence": "C11",
+    "calls": 1,
+    "message_index": 2,
+    "context_message_index": 1,
+    "processing_records": 2,
+    "no_user_segment_calls": 0
   }
 }

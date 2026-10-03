@@ -180,11 +180,12 @@ test('G9 不丢话：模型真实超时后收到保存回执并能查原话', as
   await evidence(page, test.info(), 'captured')
   const state = await snapshot(page)
   const sourceID = state.candidates.find(c => c.text === text)!.source.sourceId
-  const index = state.sources.findIndex(s => s.id === sourceID)
-  expect(index).toBeGreaterThanOrEqual(0)
+  expect(sourceID).toBeTruthy()
   await page.goto('/library')
   await page.getByRole('radio', { name: /^来源/ }).click()
-  await page.locator('.source-card').nth(index).click()
+  // The library lists quick notes as one entry; the kept sentence is one of its originals.
+  await page.getByRole('button', { name: /^查看：快速记录/ }).click()
+  await page.getByRole('button', { name: `查看原文：快速记录 · ${text}` }).click()
   await page.getByText('展开原文', { exact: true }).click()
   await expect(page.getByText('展开原文', { exact: true }).locator('..').locator('pre')).toHaveText(text)
 })

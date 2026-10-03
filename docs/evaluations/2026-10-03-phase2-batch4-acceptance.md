@@ -1,6 +1,63 @@
-# 第 4 批独立验收：原轮结果与先存原话补充（2026-10-03）
+# 第 4 批独立验收：c093e0a 修复后通过（2026-10-03）
 
-最新执行记录见本节「§13 裁定后的统一运行与补充复核」。下文的原轮、第一次新增序列和当时待确认口径均保留为历史，不替换为补充复核结果。
+最新执行记录见「c093e0a 修复后的同一提交全量验收」。下文 §13 裁定轮、原轮和第一次新增序列结果均保留为历史，不替换为本轮结果。
+
+## c093e0a 修复后的同一提交全量验收
+
+产品基线：`c093e0a5568cad3c1e307076c70a6b41dcc569a8`，已 fetch 并变基。最终被测验收提交：`58043322d9b8bd3b520a937aa21e3d383b904e3d`，固定工作区 `/root/PCAS-wt/b4-T4-c093e0a-final-run`；Go 全仓、I1–I20/L1–L9、W1–W5 全部在这个提交运行，不拼接不同提交的通过结果。没有读取新后端实现来推导预期。
+
+协调者已定位旧默认假模型响应的问题：它同时包含 reply/answer/used/actions/items/output，额外字段不属于抽取格式，三次解析失败时 organized=0 是正确行为。按明确指示，在 `bbe508b` 先追加冻结合法空抽取夹具，再于 `e39e68b` 把默认内容改为 `{"items":[]}`。全部旧黄金条目、organized 增长、普通/新资料优先级、L8 独立可见及 rollback/new cancel 的预期保持。I3/I6 上轮还受到无效假输出影响；历史分段优先级为 0 的产品问题由 #133 修复。上述归因来自协调者裁定，本执行者不反推实现。
+
+初次 `e39e68b` 的浏览器为 8 通过、1 失败，真实 W4 通过。W5 now 的旧 getByText.first 定位到背景说明中的「现在就整理」，点击被预览弹窗拦截；它尚未到达确认导入和字段断言。`5804332` 只把选择限定到预览弹窗内的 radio/option，行为预期不变。为保持同一提交的统一全量，停止了尚未完成的旧 Go 运行，只终止自有 Go/test 子进程，自有临时数据库已清理；该中断不算 Go 验收结果。首轮日志/JSON/轨迹保留在 `/tmp/pcas-b4-c093e0a-go-D4clbB`、`/tmp/pcas-b4-c093e0a-browser-23Phip`、`/tmp/pcas-b4-c093e0a-w4-me2ddP` 和初次固定工作区中，没有把已知夹具失败当作产品失败或碰运气重跑。
+
+最终 Go 命令：`make fmt-check lint`；`go test -race -count=1 -v -timeout 30m ./cmd/... ./internal/...`；`make build`，包含 make check 全部步骤。使用自有 tmpfs pgvector 16 容器和随机本机端口，模型/向量/通知均本地假服务，不调用真实模型、不读线上 .env/config。
+
+完整 Go **退出 0**：仓库主测试 **453 通过、0 失败、3 个既有条件测试跳过**；T4 **39 个主测试全部通过、0 失败、0 跳过**。postgres 包耗时 650.296 秒。fmt-check、vet、make build 均通过，三个步骤退出码均为 0，自有数据库已清理。
+
+| 序列 | 结果 | 对应主测试 |
+|---|---|---|
+| I1 | 1 通过 | `TestPhase2B4_I1_ZipPreviewCountsMediaGapsAndNeverWrites` |
+| I2 | 1 通过 | `TestPhase2B4_I2_PartialImportOriginalReachesNewSecretaryConversation` |
+| I3 | 2 通过 | `TestPhase2B4_I3_PauseStopsStorageAndExtractionButNotOrdinarySource`<br>`TestPhase2B4_I3_ImportStateErrorsHaveFrozenCode` |
+| I4 | 2 通过 | `TestPhase2B4_I4_BlockedMessageIsReportedAndSkippedWithoutFailingImport`<br>`TestPhase2B4_I4_ReimportAndExtendedExportOnlyAddUnseenMessages` |
+| I5 | 1 通过 | `TestPhase2B4_I5_HistoricalPlanRemainsCandidateWithoutPresentActions` |
+| I6 | 1 通过 | `TestPhase2B4_I6_SecretaryOriginalExtractionPrecedes500ImportedMessages` |
+| I7 | 2 通过 | `TestPhase2B4_I7_UnsupportedAndDecompressedLimitAreAtomic`<br>`TestPhase2B4_I7_FourUploadErrorsAreDistinctAndAtomic` |
+| I8 | 2 通过 | `TestPhase2B4_I8_RecordCapKeepsNewestAndReportsLeftOut`<br>`TestPhase2B4_I8_CapPrecedesDisjointDuplicateBlockedAndNewCounts` |
+| I9 | 1 通过 | `TestPhase2B4_I9_CancelAtHalfCommitThenRecoverExpiredLease` |
+| I10 | 1 通过 | `TestPhase2B4_I10_DeleteArchiveChildrenClaimsBatchAndRecallControl` |
+| I11 | 1 通过 | `TestPhase2B4_I11_RegeneratedAnswerPreservesHistoricalBranch` |
+| I12 | 1 通过 | `TestPhase2B4_I12_ConcurrentImportsPauseOnlyOneBatch` |
+| I13 | 1 通过 | `TestPhase2B4_I13_SpokenDateUsesSydneyAndShanghai` |
+| I14 | 1 通过 | `TestPhase2B4_I14_NonUserMessagesRemainOriginalWithoutExtractionCalls` |
+| I15 | 2 通过 | `TestPhase2B4_I15_LaterStoresIndexedOriginalsWithoutExtracting`<br>`TestPhase2B4_I15_NowPositiveControlCallsExtraction` |
+| I16 | 1 通过 | `TestPhase2B4_I16_HeldOriginalReachesSecretaryInAnotherConversation` |
+| I17 | 1 通过 | `TestPhase2B4_I17_StartOrganizingReleasesRealPriorityTenExtraction` |
+| I18 | 1 通过 | `TestPhase2B4_I18_NewSecretaryUtteranceExtractsWhileImportHeld` |
+| I19 | 1 通过 | `TestPhase2B4_I19_HeldImportPausesResumesAndDeletesItsClosure` |
+| I20 | 1 通过 | `TestPhase2B4_I20_OmittedOrganizeDefaultsToHeldIndexedOriginals` |
+| L1 | 2 通过 | `TestPhase2B4_L1_SecretaryRecordsExactNumbersAndDependencies`<br>`TestPhase2B4_L1_CallsPaginationHasNoDuplicatesAndPreservesNumbers` |
+| L2 | 1 通过 | `TestPhase2B4_L2_DeputyLegacyAnswerExtractionEachRecordTheirCall` |
+| L3 | 1 通过 | `TestPhase2B4_L3_FailureAndSuccessfulRequestReplayDoNotAddRows` |
+| L4 | 2 通过 | `TestPhase2B4_L4_LocalDaysAndSydneyDSTHaveExactSummaries`<br>`TestPhase2B4_L4_SummarySeparatesPurposesAndOmitsEmptyDays` |
+| L5 | 1 通过 | `TestPhase2B4_L5_CurrentUnicodeExcerptDeletedRefAndEveryColumnPrivacy` |
+| L6 | 1 通过 | `TestPhase2B4_L6_UsageEndpointsEnforceOwnerAndIsolation` |
+| L7 | 1 通过 | `TestPhase2B4_L7_UndoClearAndDeleteKeepExactUsageRows` |
+| L8 | 4 通过；rollback/new cancel 两子用例也通过 | `TestPhase2B4_L8_CorrectedMemoryDuringDeputyGenerationKeepsReturnedUsage`<br>`TestPhase2B4_L8_UsageIsVisibleBeforeResultTransactionAndSurvivesRollback`<br>`TestPhase2B4_L8_ReturnedButInvalidExtractionStillRecordsUsage`<br>`TestPhase2B4_L8_ReturnedButInvalidSecretaryStillRecordsUsage` |
+| L9 | 1 通过 | `TestPhase2B4_L9_IdenticalLegacyRequestsMakeTwoCallsAndTwoUsageRows` |
+
+关键复核：I15 now 对照和 I17 的 organized 增长检查通过；I3 暂停后普通资料照常整理、存储/整理稳定和恢复完成通过（21.98 秒）；I6 新原话优先于历史队列抽取通过（5.40 秒）；L8 rollback/new cancel 都实际先在另一连接读到独立提交的 1 行，SQL 回滚/取消后仍是同一行，未要求取消停止写回答；旧 batch2 F6 通过（0.29 秒），T4 未改该旧测试。
+
+三个既有跳过是 TestInstalledCodexHandshake、TestLiveCodexSecretaryAndLegacyFormats、TestLiveContinuityReplay，未配置真实服务；本轮未新增跳过或调用真实模型。最终统一提交没有重试，没有剩余失败。第 4 批全部已执行验收通过（Go 39 + 浏览器 10 = 49 条主用例），不以不同提交拼接通过结果。
+
+最终模拟浏览器：**9 通过、0 失败、0 跳过、0 重试、0 flaky**（15.926 秒），W1 两条、W2 四种状态、W3、W5 两条均通过。最终真实后端 W4：**1 通过、0 失败、0 跳过、0 重试、0 flaky**（测试 24.8 秒，Playwright 总耗时 27.475 秒）；PCAS_IMPORT_CHUNK_SIZE=1，两千条合成导出，真实预览/导入/暂停/五次稳定读取/继续到 2000/2000/资料库打开原话/390px 无溢出/无 pageerror 均通过，没有人为延时。两类浏览器 commit.txt 均为 5804332。
+
+前端 npm ci/lint/type-check/build 通过；最终定位器改动另行 lint/type-check 通过。最终工作区复用初次同产品基线的 node_modules 与 dist，前端产品代码未改变。本机 Node 20.19.5，npm 有 package 要求 >=22.12 的 engine 警告，不影响本轮已执行检查。
+
+原始产物：[完整 Go](/tmp/pcas-b4-c093e0a-final-go-sy1iPK/make-check.log)、[模拟浏览器](/tmp/pcas-b4-c093e0a-final-browser-eKrLwf/mocked.log)、[真实 W4](/tmp/pcas-b4-c093e0a-final-w4-0FkRMl/w4.log)。浏览器截图/失败轨迹策略产物在最终固定工作区 `web/test-results/phase2-b4-c093e0a-final-mocked`、`web/test-results/phase2-b4-c093e0a-final-real`；成功用例的截图与 JSON 保留。主测试计数、子用例和逐序列结果已从完整原始输出逐项核对。
+
+## 以下为 §13 裁定轮和此前历史
+
 
 ## §13 裁定后的统一运行与补充复核
 

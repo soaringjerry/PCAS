@@ -35,3 +35,24 @@ func TestFormatCardsAndLimits(t *testing.T) {
 		t.Fatal("bad truncation")
 	}
 }
+
+// A hand-off says who has the work and that the result will follow, instead
+// of the whole brief cut off mid-sentence; a link is the address, not a host.
+func TestFormatHandOffAndLinks(t *testing.T) {
+	brief := "交给 ChatGPT 订阅：" + strings.Repeat("深入研究公开仓库，结合此前的讨论，产出中文研究报告。", 20)
+	turn := workspace.SecretaryTurn{Reply: "这次深入研究白皮书、架构和代码。", Receipts: []workspace.DeskReceipt{
+		{Op: "delegate", Status: "done", Text: brief},
+		{Op: "delegate", Status: "skipped", Text: "没有可用的副手"},
+	}, Cards: []workspace.DeskCard{{Kind: "links", Items: []workspace.DeskLinkItem{
+		{URL: "https://github.com/soaringjerry/PCAS", Host: "github.com"}, {Host: "example.com"},
+	}}}}
+	text, _ := format(turn, "", "Asia/Shanghai")
+	for _, want := range []string{"✓ 交给 ChatGPT 订阅，做完会发到这里", "· 没有可用的副手", "https://github.com/soaringjerry/PCAS", "example.com"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("missing %q in:\n%s", want, text)
+		}
+	}
+	if strings.Contains(text, "深入研究公开仓库") || strings.Contains(text, "…") || strings.Contains(text, "\ngithub.com") {
+		t.Fatalf("brief or bare host leaked:\n%s", text)
+	}
+}

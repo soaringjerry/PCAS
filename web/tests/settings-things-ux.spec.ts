@@ -900,3 +900,19 @@ test('a to-do is deleted only after confirming, and the page returns home withou
   expect(m.state.tasks.map((t) => t.id)).toEqual(['kept'])
   expect(m.errors).toEqual([])
 })
+
+/* ---------- 副手做完了 ---------- */
+
+test('finished agent work is pinned on the home page as a result, not as a reminder that came due', async ({ page }) => {
+  await mock(page, workspace({
+    tasks: [task({ id: 'research', title: '研究 PCAS' })],
+    notices: [{ id: 'n-run', thingId: 'research', title: '研究 PCAS', reason: '副手做完了：\n研究结论：三层记忆已经落地。', result: true, dueAt: at, createdAt: at }] as State['notices'],
+  }))
+  await page.goto('/')
+  const today = page.getByRole('region', { name: '今天' })
+  await expect(today.getByRole('heading', { name: '做完了，等你看' })).toBeVisible()
+  const row = today.locator('.hall-rang')
+  await expect(row).toContainText('研究 PCAS')
+  await expect(row).toContainText('副手做完了')
+  await expect(row).not.toContainText('到点')
+})

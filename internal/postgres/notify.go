@@ -261,15 +261,15 @@ func (s *Store) DispatchNotices(ctx context.Context, now time.Time, channels []n
 				return nil
 			}
 			for _, channel := range channels {
-				var owner, title, thing, reason, timezone string
+				var owner, title, thing, reason, timezone, trigger string
 				var due time.Time
 				var raw []byte
 				// Re-read immediately before every send, including dismissal and followUps.
-				err := tx.QueryRow(ctx, `SELECT n.owner_id::text,n.thing_id::text,w.title,n.reason,n.due_at,o.settings->>'timezone',n.delivered
+				err := tx.QueryRow(ctx, `SELECT n.owner_id::text,n.thing_id::text,w.title,n.reason,n.due_at,o.settings->>'timezone',n.delivered,n.trigger_id
       FROM workspace_notices n JOIN work_items w ON (w.owner_id,w.id)=(n.owner_id,n.thing_id)
       JOIN workspace_owners o ON o.owner_id=n.owner_id
       WHERE n.id=$1 AND n.dismissed_at IS NULL AND NOT (n.delivered @> '{"_suppressed":true}'::jsonb) AND w.status NOT IN ('done','cancelled','dropped','promoted')
-      AND o.settings->>'followUps'='true'`, id).Scan(&owner, &thing, &title, &reason, &due, &timezone, &raw)
+      AND o.settings->>'followUps'='true'`, id).Scan(&owner, &thing, &title, &reason, &due, &timezone, &raw, &trigger)
 				if errors.Is(err, pgx.ErrNoRows) {
 					return nil
 				}
@@ -298,6 +298,9 @@ func (s *Store) DispatchNotices(ctx context.Context, now time.Time, channels []n
 				}
 				publicURL := strings.TrimRight(getPublicURL(), "/")
 				m := notify.Message{OwnerID: owner, NoticeID: id, ThingID: thing, Title: title, Body: due.In(loc).Format("2006-01-02 15:04 MST") + " · " + reason, URL: publicURL + "/t/" + thing}
+				if strings.HasPrefix(trigger, runNoticePrefix) {
+					m.Result, m.Body = true, reason
+				}
 				err = channel.Send(ctx, m)
 				if errors.Is(err, notify.ErrUnconfigured) {
 					continue

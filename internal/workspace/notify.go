@@ -7,10 +7,12 @@ import (
 )
 
 type Notice struct {
-	ID          string `json:"id"`
-	ThingID     string `json:"thingId"`
-	Title       string `json:"title"`
-	Reason      string `json:"reason"`
+	ID      string `json:"id"`
+	ThingID string `json:"thingId"`
+	Title   string `json:"title"`
+	Reason  string `json:"reason"`
+	// Result: reports how handed-off work ended, rather than a reminder that came due.
+	Result      bool   `json:"result,omitempty"`
 	DueAt       string `json:"dueAt"`
 	CreatedAt   string `json:"createdAt"`
 	DismissedAt string `json:"dismissedAt,omitempty"`

@@ -105,6 +105,9 @@ func (t *Telegram) SendTo(ctx context.Context, token, chatID string, m Message) 
 	if token == "" || chatID == "" {
 		return ErrUnconfigured
 	}
+	if m.Result {
+		return t.call(ctx, token, "sendMessage", map[string]any{"chat_id": chatID, "text": "📄 " + m.Title + "\n" + m.Body + "\n" + m.URL, "link_preview_options": map[string]bool{"is_disabled": true}}, nil)
+	}
 	clock, _, _ := strings.Cut(m.Body, " · ")
 	return t.call(ctx, token, "sendMessage", map[string]any{"chat_id": chatID, "text": "⏰ " + m.Title + "\n" + clock + "\n" + m.URL, "link_preview_options": map[string]bool{"is_disabled": true}}, nil)
 }

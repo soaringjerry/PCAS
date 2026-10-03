@@ -201,10 +201,14 @@ export interface Candidate {
 
 export type SourceStatus = 'connected' | 'manual' | 'unverified' | 'failed' | 'syncing'
 
+/** One entry in the library's list of where material came from. */
 export interface Source {
+  /** The original's id when `single`; otherwise the key its originals are listed under. */
   id: ID
   name: string
-  method: string
+  kind: 'said' | 'note' | 'telegram' | 'import' | 'file'
+  /** One stored original, opened directly; otherwise many, opened as a list. */
+  single: boolean
   status: SourceStatus
   note: string
   itemCount: number

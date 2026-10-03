@@ -75,9 +75,12 @@ test('W4 真实后端：历史导入、暂停、继续至完成，在资料库�
   await expect(page.getByText(/2[,]?000/).first()).toBeVisible()
   await expect(page.locator('body')).toContainText(/完成|已导入|已存好/)
   await page.goto('/library?tab=sources')
+  // The library lists the import once; its messages are opened from inside it.
+  await page.getByRole('button', { name: new RegExp(`^查看：.*共 ${count} 条`) }).click()
+  await page.getByRole('searchbox', { name: '在这里面搜' }).fill('青色灯塔7319')
   await expect(page.getByRole('button', { name: /查看原文：.*合成历史0/ })).toBeVisible()
   await page.getByRole('button', { name: /查看原文：.*合成历史0/ }).click()
-  await expect(page.getByRole('dialog')).toContainText(text)
+  await expect(page.getByRole('dialog').last()).toContainText(text)
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy()
   expect(errors).toEqual([])
 })

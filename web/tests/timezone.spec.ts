@@ -265,7 +265,7 @@ test('source records, background jobs and settings timestamps follow workspace c
   await page.clock.install({ time: new Date(now) })
   const state = workspace()
   const due = '2026-10-03T15:00:00Z'
-  state.sources = [{ id: 'source', name: '跨日来源', method: '导入', status: 'manual', note: '', itemCount: 1, lastSyncAt: '2026-08-31T15:00:00Z' }]
+  state.sources = [{ id: 'source', name: '跨日来源', kind: 'file', single: true, status: 'manual', note: '', itemCount: 1, lastSyncAt: '2026-08-31T15:00:00Z' }]
   state.jobs = [{ id: 'job', title: '跨日同步', trigger: 'time', status: 'waiting', detail: '', createdAt: now, nextRunAt: due }]
   const backend = await mock(page, state)
   await page.route('**/v1/memory/sources/source', route => route.fulfill({ json: { derived: [], processing: [], source: { id: 'source', version: 1, title: '跨日来源', text: '合成原文', recorded_at: due, has_attachment: false, attachment_missing: false, representation: 'original' } } }))

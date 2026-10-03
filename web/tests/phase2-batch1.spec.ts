@@ -14,7 +14,7 @@ async function backend(page: Page, outdated: boolean, withTimeline = false, exce
     version: 1, revision: 1, budgetUsage: 0,
     settings: { dailyBudget: 10, autoAccept: false, wakeIdeas: false, followUps: false, dailyReviewAt: '09:00', timezone: 'Asia/Shanghai' },
     tasks: [{ id: 'task', title: '检查旅行安排', notes: '', status: 'todo', dependsOn: [], checklist: [], triggers: [], sources: [], history: [], createdAt: at, updatedAt: at }],
-    ideas: [], projects: [], memories: [], candidates: [], docs: [], runs: [], samples: [], sources: [{ id: sourceId, name: '秘书原话', method: '手动导入', status: 'manual', note: '合成资料', itemCount: 0 }], jobs: [], activity: [], excludedMemories: {},
+    ideas: [], projects: [], memories: [], candidates: [], docs: [], runs: [], samples: [], sources: [{ id: sourceId, name: '秘书原话', kind: 'file', single: true, status: 'manual', note: '合成资料', itemCount: 0 }], jobs: [], activity: [], excludedMemories: {},
     agents: [{ id: 'model', name: '验收假模型', enabled: true, available: true, default: true, channel: 'api', note: '', inputPrice: 0, outputPrice: 0, maxOutput: 100, memoryKinds: ['fact'], includeInferred: false }],
   }
   const turn = {

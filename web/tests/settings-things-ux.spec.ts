@@ -826,3 +826,47 @@ test('on a phone the five rows are: what rang, who waits, what cannot wait, then
   await expect(rows).toContainText(['到点的事', '回李四', '尽快甲', '尽快乙', '今晚一'])
   expect(await noSidewaysScroll(page)).toBe(true)
 })
+
+/* ---------- 资料库：来源按出处合并 ---------- */
+
+test('the library lists each origin once; what was said opens as a list that can be searched and paged', async ({ page }) => {
+  const m = await mock(page, workspace({
+    sources: [
+      { id: 'said', name: '跟秘书说的话', kind: 'said', single: false, status: 'connected', note: '', itemCount: 61, lastSyncAt: at },
+      { id: 'import:11111111-1111-4111-8111-111111111111', name: 'chatgpt-export.zip', kind: 'import', single: false, status: 'connected', note: '', itemCount: 23110, lastSyncAt: at },
+      { id: 'doc', name: '租房合同', kind: 'file', single: true, status: 'failed', note: '原文可读，部分处理未完成；展开后台任务查看缺口', itemCount: 1, lastSyncAt: at },
+    ],
+  }))
+  const asked: string[] = []
+  await page.route((url) => url.pathname === '/v1/workspace/source-groups/said/items', (route) => {
+    const url = new URL(route.request().url())
+    asked.push(url.search)
+    const q = url.searchParams.get('q')
+    if (q) return route.fulfill({ json: { items: [{ id: 's-hit', title: '', excerpt: '周末想去爬山', at }], next: '' } })
+    if (url.searchParams.get('cursor')) return route.fulfill({ json: { items: [{ id: 's-51', title: '', excerpt: '最早的一句', at }], next: '' } })
+    return route.fulfill({ json: { items: Array.from({ length: 50 }, (_, n) => ({ id: `s-${n}`, title: '', excerpt: `第 ${n + 1} 句话`, at })), next: `${at}|00000000-0000-4000-8000-000000000050` } })
+  })
+  await page.route((url) => url.pathname === '/v1/memory/sources/s-hit', (route) => route.fulfill({ json: { derived: [], processing: [], source: { id: 's-hit', version: 1, title: '秘书原话', text: '周末想去爬山', recorded_at: at, has_attachment: false, representation: 'original' } } }))
+  await page.goto('/library?tab=sources')
+  const cards = page.locator('.source-card')
+  await expect(cards).toHaveCount(3)
+  await expect(cards.nth(0)).toContainText('跟秘书说的话')
+  await expect(cards.nth(0)).toContainText('61 条')
+  await expect(cards.nth(1)).toContainText('23110 条')
+  // No internal words, and nothing is tagged unless something is wrong.
+  await expect(page.locator('.sources-grid')).not.toContainText(/desk|actions|已连接|原文已保存/)
+  await expect(cards.nth(2)).toContainText('部分处理未完成')
+
+  await page.getByRole('button', { name: '查看：跟秘书说的话，共 61 条' }).click()
+  const sheet = page.getByRole('dialog')
+  await expect(sheet.locator('.source-item')).toHaveCount(50)
+  await sheet.getByRole('button', { name: '再看 50 条' }).click()
+  await expect(sheet.locator('.source-item')).toHaveCount(51)
+  await expect(sheet.getByRole('button', { name: '再看 50 条' })).toHaveCount(0)
+  await sheet.getByRole('searchbox', { name: '在这里面搜' }).fill('爬山')
+  await expect(sheet.locator('.source-item')).toHaveCount(1)
+  await sheet.getByRole('button', { name: '查看原文：周末想去爬山' }).click()
+  await expect(page.getByRole('dialog').last()).toContainText('周末想去爬山')
+  expect(asked.some((s) => s.includes('q=%E7%88%AC%E5%B1%B1'))).toBe(true)
+  expect(m.errors).toEqual([])
+})

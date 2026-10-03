@@ -239,14 +239,30 @@ type Sample struct {
 	Stale     bool   `json:"stale"`
 	CreatedAt string `json:"createdAt"`
 }
+
+// Source is one entry in the library's list of where material came from. A
+// single entry is one stored original, opened by ID; any other entry stands
+// for many originals, read through SourceItems with ID as the key.
 type Source struct {
 	ID         string `json:"id"`
 	Name       string `json:"name"`
-	Method     string `json:"method"`
+	Kind       string `json:"kind"`
+	Single     bool   `json:"single"`
 	Status     string `json:"status"`
 	Note       string `json:"note"`
 	ItemCount  int    `json:"itemCount"`
 	LastSyncAt string `json:"lastSyncAt,omitempty"`
+}
+type SourceItem struct {
+	ID      string `json:"id"`
+	Title   string `json:"title"`
+	Excerpt string `json:"excerpt"`
+	Role    string `json:"role,omitempty"`
+	At      string `json:"at"`
+}
+type SourceItems struct {
+	Items []SourceItem `json:"items"`
+	Next  string       `json:"next"`
 }
 type Job struct {
 	ID        string `json:"id"`

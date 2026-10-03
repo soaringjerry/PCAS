@@ -916,3 +916,24 @@ test('finished agent work is pinned on the home page as a result, not as a remin
   await expect(row).toContainText('副手做完了')
   await expect(row).not.toContainText('到点')
 })
+
+/* ---------- 要你动手 ---------- */
+
+test('a stale result asks to be redone only while its thing is open and it is the newest result', async ({ page }) => {
+  const stale = (over: Partial<Run>) => run({ status: 'done', output: '旧结果', staleContext: true, prompt: '今天天气怎么样', ...over })
+  await mock(page, workspace({
+    tasks: [task({ id: 'closed', title: '今天天气怎么样', status: 'done' }), task({ id: 'open', title: '写周报' }), task({ id: 'redone', title: '订机票' })],
+    runs: [
+      stale({ id: 'r-closed', thingId: 'closed' }),
+      stale({ id: 'r-open', thingId: 'open', prompt: '列提纲' }),
+      stale({ id: 'r-old', thingId: 'redone', prompt: '查航班', createdAt: '2026-09-29T02:00:00Z' }),
+      run({ id: 'r-new', thingId: 'redone', status: 'done', output: '新结果', prompt: '查航班', createdAt: '2026-09-30T02:00:00Z' }),
+    ],
+  }))
+  await page.goto('/')
+  await page.getByRole('button', { name: /1 件要你动手/ }).click()
+  const queue = page.locator('.hall-tag.redo')
+  await expect(queue).toHaveCount(1)
+  await expect(page.getByText('「列提纲」用到的记忆后来改过，要重做')).toBeVisible()
+  await expect(page.getByText('「今天天气怎么样」用到的记忆后来改过，要重做')).toHaveCount(0)
+})

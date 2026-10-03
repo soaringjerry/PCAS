@@ -137,8 +137,25 @@ function thingName(state: State, id: string): string {
  */
 export function decisionQueue(state: State): { items: QueueItem[]; working: number } {
   const items: QueueItem[] = []
+  /** A thing that is finished, dropped or gone asks nothing more of the user. */
+  const open = (id: string) => {
+    const task = state.tasks.find((t) => t.id === id)
+    if (task) return isOpenTask(task)
+    const idea = state.ideas.find((i) => i.id === id)
+    if (idea) return idea.status !== 'promoted' && idea.status !== 'dropped'
+    const project = state.projects.find((p) => p.id === id)
+    return !!project && project.status !== 'done'
+  }
+  /** Only the newest result for a thing can need redoing; an older one was already superseded. */
+  const newest = new Map<string, string>()
   for (const run of state.runs) {
+    const seen = newest.get(run.thingId)
+    if (!seen || run.createdAt > seen) newest.set(run.thingId, run.createdAt)
+  }
+  for (const run of state.runs) {
+    if (!open(run.thingId)) continue
     if (run.status === 'done' && run.output && !run.adopted && run.staleContext) {
+      if (newest.get(run.thingId) !== run.createdAt) continue
       items.push({ key: run.id, kind: 'redo', title: thingName(state, run.thingId), detail: `「${run.prompt}」用到的记忆后来改过，要重做`, to: `/t/${run.thingId}` })
     } else if (run.status === 'waiting') {
       items.push({ key: run.id, kind: 'handoff', title: thingName(state, run.thingId), detail: '要你手动转交给外部 AI，再把回答贴回来', to: `/t/${run.thingId}` })

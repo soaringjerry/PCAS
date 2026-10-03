@@ -448,11 +448,16 @@ func TestPhase2B4b_C11_VisibleLimitsRejectHiddenQuoteAndPreserveOriginals(t *tes
 		AIVisible    int    `json:"assistant_visible_characters"`
 		UserOriginal int    `json:"user_original_characters"`
 		UserVisible  int    `json:"user_visible_characters"`
-		Calls        int    `json:"calls"`
 		Memories     int    `json:"memories"`
 		Visible      string `json:"visible_quote"`
 		Hidden       string `json:"hidden_quote"`
 	}](t, "C11")
+	ruling := b4bSpec[struct {
+		Calls        int `json:"calls"`
+		MessageIndex int `json:"message_index"`
+		ContextIndex int `json:"context_message_index"`
+		Records      int `json:"processing_records"`
+	}](t, "ruling_8a159a8")
 	assistant := b4bSized("AI 长方案开头。", spec.AIOriginal)
 	user := []rune(b4bSized("用户超长资料。", spec.UserOriginal))
 	copy(user[20:], []rune(spec.Visible))
@@ -466,30 +471,16 @@ func TestPhase2B4b_C11_VisibleLimitsRejectHiddenQuoteAndPreserveOriginals(t *tes
 	a := b4bImport(t, s, scope, b4bMessages(t, []string{"assistant", "user"}, []string{assistant, string(user)}))
 	b4bOperation(t, s, scope, a.Batch, "organize")
 	b4bDrain(t, s)
-	b2Equal(t, len(f.all()), spec.Calls)
-	// Inspect the required visible contents independently of the disputed
-	// exact call count, so that one failure cannot hide the other C11 checks.
-	sawAI, sawUser := false, false
+	b2Equal(t, len(f.all()), ruling.Calls)
+	wantUser := a.Messages[ruling.MessageIndex-1]
+	wantUser.Text = string(user[:spec.UserVisible])
+	wantAI := a.Messages[ruling.ContextIndex-1]
+	wantAI.Text = string([]rune(assistant)[:spec.AIVisible])
 	for _, req := range f.all() {
 		in := b4bInputFrom(t, req)
-		for _, m := range append(append([]b4bMessage{}, in.Messages...), in.Context...) {
-			if m.Index == 1 {
-				sawAI = true
-				b2Equal(t, m.Role, "assistant")
-				b2Equal(t, m.Text, string([]rune(assistant)[:spec.AIVisible]))
-			}
-		}
-		for _, m := range in.Messages {
-			if m.Index == 2 {
-				sawUser = true
-				b2Equal(t, len(in.Messages), 1)
-				b2Equal(t, m.Role, "user")
-				b2Equal(t, m.Text, string(user[:spec.UserVisible]))
-			}
-		}
+		b2Equal(t, in.Messages, []b4bMessage{wantUser})
+		b2Equal(t, in.Context, []b4bMessage{wantAI})
 	}
-	b2Equal(t, sawAI, true)
-	b2Equal(t, sawUser, true)
 	memories := b2Snapshot(t, s, scope).Memories
 	b2Equal(t, len(memories), spec.Memories)
 	m := b2One(t, memories)
@@ -502,6 +493,7 @@ func TestPhase2B4b_C11_VisibleLimitsRejectHiddenQuoteAndPreserveOriginals(t *tes
 		}
 		b2Equal(t, raw.Source.Text, a.Messages[n].Text)
 	}
+	b2Equal(t, len(a.Sources), ruling.Records)
 	b4bRecord(t, s, scope, a.Sources[0], "empty", 0)
 	b4bRecord(t, s, scope, a.Sources[1], "done", spec.Memories)
 }

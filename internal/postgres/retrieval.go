@@ -157,7 +157,7 @@ func (s *Store) recallTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in 
          coalesce(hit.excerpt,sv.body,'') AS excerpt,coalesce(sv.title,'') AS title,
          coalesce(src.connector,'') AS connector,coalesce(src.external_id,'') AS external_id,
          rv.expressed_at,rv.recorded_at,t.id=ANY($8::uuid[]) AS explicit,
-         coalesce(btrim(sv.body)!='' AND (sv.media_type LIKE 'text/%' OR sv.representation IN ('ocr','transcript','extracted')),false) AS readable
+         coalesce(btrim(sv.body)!='' AND (sv.media_type LIKE 'text/%' OR sv.representation IN ('ocr','transcript','extracted','vision')),false) AS readable
 		 FROM memory_text t JOIN memory_records r ON (r.owner_id,r.id)=(t.owner_id,t.id)
 		 JOIN record_versions rv ON (rv.owner_id,rv.record_id,rv.version)=(t.owner_id,t.id,t.version)
 		 LEFT JOIN record_search rs ON (rs.owner_id,rs.record_id,rs.record_version)=(t.owner_id,t.id,t.version)

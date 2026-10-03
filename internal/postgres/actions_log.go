@@ -124,6 +124,21 @@ func (s *Store) undoActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 	// Lock all rows first. The owner lock serializes commands and undo; run locks
 	// fence the worker, which does not take the owner lock when claiming work.
 	for _, c := range changes {
+		if c.Table == "source_attachments" {
+			var ref memory.Ref
+			if json.Unmarshal(c.Before, &ref) != nil || ref.Kind != memory.SourceKind || string(ref.ID) != c.ID || ref.Version < 1 {
+				return memory.ErrInvalid
+			}
+			var active bool
+			err := tx.QueryRow(ctx, "SELECT r.state='active' AND r.version=$3 AND v.blob_key IS NOT NULL FROM memory_records r JOIN source_versions v ON(v.owner_id,v.source_id,v.version)=(r.owner_id,r.id,r.version) WHERE r.owner_id=$1 AND r.id=$2 FOR UPDATE OF r", string(scope.OwnerID), c.ID, ref.Version).Scan(&active)
+			if errors.Is(err, pgx.ErrNoRows) || err == nil && !active {
+				return workspace.ErrExpired
+			}
+			if err != nil {
+				return err
+			}
+			continue
+		}
 		if !oneOf(c.Table, "work_items", "work_documents", "agent_runs", "training_samples") {
 			return memory.ErrInvalid
 		}
@@ -177,6 +192,16 @@ func (s *Store) undoActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 	}
 	for i := len(changes) - 1; i >= 0; i-- {
 		c := changes[i]
+		if c.Table == "source_attachments" {
+			var ref memory.Ref
+			if err := json.Unmarshal(c.Before, &ref); err != nil {
+				return err
+			}
+			if err := s.deleteTx(context.WithValue(ctx, retainUndoneAnswersKey{}, true), tx, scope, memory.DeleteRequest{Targets: []memory.Ref{ref}}); err != nil {
+				return err
+			}
+			continue
+		}
 		if string(c.Before) == "null" {
 			if c.Table == "work_items" {
 				var referenced bool

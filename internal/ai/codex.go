@@ -250,7 +250,7 @@ func (c *Codex) Close() {
 	}
 }
 func (c *Codex) Generate(ctx context.Context, model, system, prompt string) (string, error) {
-	text, _, err := c.generate(ctx, model, system, prompt, false, nil)
+	text, _, err := c.generate(ctx, model, system, prompt, false, nil, nil)
 	return text, err
 }
 
@@ -263,10 +263,15 @@ func (c *Codex) GenerateWithSearch(ctx context.Context, model, system, prompt st
 // GenerateWithSearchSchema constrains only this turn's final message. Callers
 // that need plain text or another JSON shape keep using GenerateWithSearch.
 func (c *Codex) GenerateWithSearchSchema(ctx context.Context, model, system, prompt string, schema json.RawMessage) (string, []string, error) {
-	return c.generate(ctx, model, system, prompt, true, schema)
+	return c.generate(ctx, model, system, prompt, true, schema, nil)
 }
 
-func (c *Codex) generate(ctx context.Context, model, system, prompt string, web bool, schema json.RawMessage) (string, []string, error) {
+func (c *Codex) Vision(ctx context.Context, model, instruction string, image Image) (string, error) {
+	text, _, err := c.generate(ctx, model, "", instruction, false, nil, &image)
+	return text, err
+}
+
+func (c *Codex) generate(ctx context.Context, model, system, prompt string, web bool, schema json.RawMessage, image *Image) (string, []string, error) {
 	if err := c.ready(ctx); err != nil {
 		return "", nil, err
 	}
@@ -318,6 +323,9 @@ func (c *Codex) generate(ctx context.Context, model, system, prompt string, web 
 		_, _ = c.call(cleanup, "thread/archive", map[string]string{"threadId": thread.Thread.ID})
 	}()
 	turnParams := map[string]any{"threadId": thread.Thread.ID, "input": []any{map[string]string{"type": "text", "text": prompt}}}
+	if image != nil {
+		turnParams["input"] = []any{map[string]string{"type": "text", "text": prompt}, map[string]string{"type": "image", "url": image.DataURL()}}
+	}
 	if len(schema) > 0 {
 		turnParams["outputSchema"] = schema
 	}

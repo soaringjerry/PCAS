@@ -571,10 +571,11 @@ func (s *Store) deleteRecordsTx(ctx context.Context, tx pgx.Tx, scope memory.Sco
 		`DELETE FROM derived_dependencies WHERE owner_id=$1 AND dependency_id=ANY($2::uuid[])`,
 		`DELETE FROM relations WHERE owner_id=$1 AND (from_id=ANY($2::uuid[]) OR to_id=ANY($2::uuid[]))`,
 		`DELETE FROM claim_revisions WHERE owner_id=$1 AND claim_id=ANY($2::uuid[])`,
+		`UPDATE desk_turns SET response=response - 'attachmentContext' WHERE owner_id=$1 AND request_id IN (SELECT request_id FROM desk_attachments WHERE owner_id=$1 AND source_id=ANY($2::uuid[]))`,
 		`DELETE FROM source_versions WHERE owner_id=$1 AND source_id=ANY($2::uuid[])`,
 	} {
 
-		if retainAnswers && (strings.HasPrefix(sql, "UPDATE desk_turns") || strings.HasPrefix(sql, "DELETE FROM work_documents") || strings.HasPrefix(sql, "DELETE FROM training_samples") || strings.HasPrefix(sql, "INSERT INTO background_usage") || strings.HasPrefix(sql, "DELETE FROM agent_runs")) {
+		if retainAnswers && (strings.HasPrefix(sql, "UPDATE desk_turns SET question=") || strings.HasPrefix(sql, "DELETE FROM work_documents") || strings.HasPrefix(sql, "DELETE FROM training_samples") || strings.HasPrefix(sql, "INSERT INTO background_usage") || strings.HasPrefix(sql, "DELETE FROM agent_runs")) {
 			continue
 		}
 		if _, err := tx.Exec(ctx, sql, string(scope.OwnerID), ids); err != nil {

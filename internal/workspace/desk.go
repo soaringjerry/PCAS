@@ -1,28 +1,34 @@
 package workspace
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"github.com/soaringjerry/PCAS/internal/memory"
+)
 
 // DeskTurnRequest is also the server-side entry point used by connectors.
 type DeskTurnRequest struct {
-	RequestID      string  `json:"requestId"`
-	ConversationID *string `json:"conversationId"`
-	ThingID        *string `json:"thingId"`
-	Text           string  `json:"text"`
-	AgentID        string  `json:"agentId"`
+	Attachments    []memory.Ref `json:"attachments,omitempty"`
+	RequestID      string       `json:"requestId"`
+	ConversationID *string      `json:"conversationId"`
+	ThingID        *string      `json:"thingId"`
+	Text           string       `json:"text"`
+	AgentID        string       `json:"agentId"`
 }
 type DeskAsk struct {
 	Question string   `json:"question"`
 	Options  []string `json:"options"`
 }
 type DeskReceipt struct {
-	ActionID *string `json:"actionId"`
-	Op       string  `json:"op"`
-	Text     string  `json:"text"`
-	ThingID  *string `json:"thingId"`
-	Undoable bool    `json:"undoable"`
-	Undone   bool    `json:"undone"`
-	Status   string  `json:"status"`
-	Reason   string  `json:"reason,omitempty"`
+	SourceID      *string `json:"sourceId,omitempty"`
+	SourceVersion int     `json:"sourceVersion,omitempty"`
+	ActionID      *string `json:"actionId"`
+	Op            string  `json:"op"`
+	Text          string  `json:"text"`
+	ThingID       *string `json:"thingId"`
+	Undoable      bool    `json:"undoable"`
+	Undone        bool    `json:"undone"`
+	Status        string  `json:"status"`
+	Reason        string  `json:"reason,omitempty"`
 }
 type DeskCard struct {
 	Kind  string `json:"kind"`

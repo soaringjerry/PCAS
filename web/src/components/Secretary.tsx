@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
-import { ArrowUp, Check, Minus, Undo2, X } from 'lucide-react'
+import { ArrowUp, Check, Minus, Undo2, X, Paperclip } from 'lucide-react'
 import {
   isKnownCard,
   loadConversation,
@@ -17,6 +17,8 @@ import { api, APIError } from '../store/api'
 import { useStore } from '../store/context'
 import { useShell } from '../store/shell'
 import { SecretaryCards } from './SecretaryCards'
+import { SourceSheet } from './SourceSheet'
+import { attachmentAccept, checkAttachment, uploadSecretaryAttachment, type SelectedAttachment } from '../domain/attachments'
 import '../styles/secretary.css'
 
 const MAX_LENGTH = 4000
@@ -58,6 +60,7 @@ function failure(e: unknown): { error: string; retry: boolean } {
 
 function ReceiptRow({ receipt, onEdit }: { receipt: Receipt; onEdit: (title: string) => void }) {
   const { state, tryUndo } = useStore()
+  const [openSource, setOpenSource] = useState(false)
   const [undo, setUndo] = useState<{ busy?: boolean; done?: boolean; error?: string }>({ done: receipt.undone })
   const thing = receipt.thingId ? findThing(state, receipt.thingId) : undefined
   const title = thing && thingTitle(thing)
@@ -71,12 +74,15 @@ function ReceiptRow({ receipt, onEdit }: { receipt: Receipt; onEdit: (title: str
     </>
   ) : !undo.done && thing ? (
     <Link to={`/t/${thing.id}`}>{receipt.text}</Link>
+  ) : receipt.sourceId && !undo.done ? (
+    <button type="button" className="sec-source" onClick={() => setOpenSource(true)}>{receipt.text}</button>
   ) : (
     receipt.text
   )
 
   return (
     <li className={`sec-receipt${skipped ? ' skipped' : ''}${undo.done ? ' undone' : ''}`}>
+      {openSource && receipt.sourceId && <SourceSheet id={receipt.sourceId} version={receipt.sourceVersion} onClose={() => setOpenSource(false)} />}
       <span className="r-icon" aria-hidden="true">
         {undo.done ? <Undo2 size={13} /> : skipped ? <Minus size={13} /> : <Check size={13} strokeWidth={3} />}
       </span>
@@ -206,6 +212,10 @@ export function Secretary({ thingId, variant = 'full' }: { thingId?: string; var
     )
   }
 
+  const [attachments, setAttachments] = useState<SelectedAttachment[]>([])
+  const [attachmentError, setAttachmentError] = useState('')
+  const [uploading, setUploading] = useState(false)
+  const fileInput = useRef<HTMLInputElement>(null)
   const alive = useRef(true)
   useEffect(() => {
     alive.current = true
@@ -263,9 +273,9 @@ export function Secretary({ thingId, variant = 'full' }: { thingId?: string; var
     if (reveal) thread.current?.lastElementChild?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
   }, [reveal])
 
-  const send = (said: string) => {
+  const send = (said: string, attached?: DeskTurnRequest['attachments']) => {
     const words = said.trim()
-    if (!words || words.length > MAX_LENGTH) return
+    if ((!words && !attached?.length) || words.length > MAX_LENGTH) return
     const saved = loadConversation(key)
     const request: DeskTurnRequest = {
       requestId: crypto.randomUUID(),
@@ -274,6 +284,7 @@ export function Secretary({ thingId, variant = 'full' }: { thingId?: string; var
       thingId: thingId ?? null,
       text: words,
       agentId: agentFor('desk'),
+      ...(attached?.length ? { attachments: attached } : {}),
     }
     // Keep the words before anything goes out, so a lost connection loses nothing.
     updateConversation(key, (c) => ({ conversationId: c.conversationId ?? request.conversationId, unanswered: [...c.unanswered, request] }))
@@ -282,10 +293,29 @@ export function Secretary({ thingId, variant = 'full' }: { thingId?: string; var
     follow(request.requestId, deliver(key, request), alive)
   }
 
-  const submit = () => {
-    if (!text.trim() || text.trim().length > MAX_LENGTH) return
-    send(text)
-    setDraft(key, '')
+  const chooseAttachments = (files: File[]) => {
+    if (uploading) return
+    const reason = files.map(checkAttachment).find(Boolean)
+    if (reason) { setAttachmentError(reason); return }
+    if (attachments.length + files.length > 4) { setAttachmentError('一次最多带 4 个附件，请分次发送。'); return }
+    setAttachments((old) => [...old, ...files.map((file) => ({ file, externalId: crypto.randomUUID() }))])
+    setAttachmentError('')
+  }
+
+  const submit = async () => {
+    if (uploading || (!text.trim() && !attachments.length) || text.trim().length > MAX_LENGTH) return
+    if (!attachments.length) { send(text); setDraft(key, ''); return }
+    setUploading(true); setAttachmentError('')
+    try {
+      const refs: NonNullable<DeskTurnRequest['attachments']> = []
+      // Stable upload IDs preserve originals when an interrupted send is retried.
+      for (const selected of attachments) refs.push(await uploadSecretaryAttachment(selected))
+      send(text, refs)
+      setDraft(key, '')
+      setAttachments([])
+    } catch (e) {
+      setAttachmentError(e instanceof Error ? e.message : '附件没传好，请重试。')
+    } finally { setUploading(false) }
   }
 
   const retry = (line: Extract<Line, { kind: 'failed' }>) => {
@@ -354,23 +384,33 @@ export function Secretary({ thingId, variant = 'full' }: { thingId?: string; var
         </div>
       )}
       {/* A solid dock under the input, so pinned at the bottom nothing shows through. */}
-      <div className="sec-dock">
+      <div className="sec-dock"
+        onDragOver={(e) => { if (e.dataTransfer.types.includes('Files')) e.preventDefault() }}
+        onDrop={(e) => { if (e.dataTransfer.files.length) { e.preventDefault(); chooseAttachments(Array.from(e.dataTransfer.files)) } }}
+        onPaste={(e) => { if (e.clipboardData.files.length) { e.preventDefault(); chooseAttachments(Array.from(e.clipboardData.files)) } }}
+      >
+        {attachments.length > 0 && <ul className="sec-attachments" aria-label="待发送的附件">
+          {attachments.map((selected) => <li key={selected.externalId}><Paperclip size={14} aria-hidden="true" /><span>{selected.file.name}</span><button type="button" aria-label={`去掉附件：${selected.file.name}`} disabled={uploading} onClick={() => setAttachments((old) => old.filter((a) => a.externalId !== selected.externalId))}><X size={14} /></button></li>)}
+        </ul>}
+        <input ref={fileInput} type="file" multiple accept={attachmentAccept} className="visually-hidden" aria-label="选择附件" tabIndex={-1} onChange={(e) => { chooseAttachments(Array.from(e.currentTarget.files ?? [])); e.currentTarget.value = '' }} />
         <form
           className="sec-input"
           onSubmit={(e) => {
             e.preventDefault()
-            submit()
+            void submit()
           }}
         >
+          <button type="button" className="sec-attach" aria-label="添加附件" title="图片、PDF 或音频，20 MB 以内；也可以粘贴或拖进来" disabled={uploading} onClick={() => fileInput.current?.click()}><Paperclip size={18} /></button>
           <textarea
             ref={input}
             rows={1}
+            disabled={uploading}
             value={text}
             onChange={(e) => setDraft(key, e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing && e.keyCode !== 229) {
                 e.preventDefault()
-                submit()
+                void submit()
               } else if (e.key === 'Escape' && lines.some((l) => l.kind === 'turn')) {
                 e.preventDefault()
                 end()
@@ -382,10 +422,12 @@ export function Secretary({ thingId, variant = 'full' }: { thingId?: string; var
             autoComplete="off"
             enterKeyHint="send"
           />
-          <button type="submit" className="sec-send" aria-label="发送" disabled={!text.trim() || tooLong}>
+          <button type="submit" className="sec-send" aria-label="发送" disabled={(!text.trim() && !attachments.length) || tooLong || uploading}>
             <ArrowUp size={18} strokeWidth={2.5} />
           </button>
         </form>
+        {attachmentError && <p className="sec-hint" role="alert">{attachmentError}</p>}
+        {uploading && <p className="sec-hint" role="status">正在上传附件…</p>}
         {tooLong && <p className="sec-hint">太长了，一次最多 {MAX_LENGTH} 字</p>}
       </div>
     </section>

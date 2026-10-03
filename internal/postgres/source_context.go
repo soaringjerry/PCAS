@@ -100,6 +100,16 @@ FROM recent ORDER BY ordered_at,admission_order NULLS FIRST,id`, string(scope.Ow
 		}
 		return nil
 	})
+	if err == nil {
+		var attachmentContext string
+		e := s.pool.QueryRow(ctx, "SELECT coalesce(response->>'attachmentContext','') FROM desk_turns WHERE owner_id=$1 AND request_id=$2", string(scope.OwnerID), request).Scan(&attachmentContext)
+		if e != nil && e != pgx.ErrNoRows {
+			return out, e
+		}
+		if attachmentContext != "" {
+			out = append(out, map[string]any{"role": "assistant", "branch": "current", "text": boundedAttachmentText(attachmentContext, 1200), "kind": "attachment_context"})
+		}
+	}
 	return out, err
 }
 

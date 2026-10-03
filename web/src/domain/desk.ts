@@ -33,9 +33,11 @@ export function isKnownCard(card: DeskCard): card is SourcesCard | LinksCard | T
   return ['sources', 'links', 'timeline', 'tasks'].includes(card.kind) && Array.isArray(card.items) && card.items.length > 0
 }
 
-export type ReceiptOp = 'create_task' | 'update' | 'create_idea' | 'create_project' | 'add_steps' | 'remember' | 'delegate' | 'capture'
+export type ReceiptOp = 'create_task' | 'update' | 'create_idea' | 'create_project' | 'add_steps' | 'remember' | 'delegate' | 'capture' | 'attachment'
 
 export interface Receipt {
+  sourceId?: string
+  sourceVersion?: number
   actionId: string | null
   op: ReceiptOp
   text: string
@@ -66,6 +68,7 @@ export interface DeskTurn {
 }
 
 export interface DeskTurnRequest {
+  attachments?: { id: string; version: number; kind: 'source' }[]
   requestId: string
   /** Made by the client when a conversation starts, so its lines can go out together. */
   conversationId: string

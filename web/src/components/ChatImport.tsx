@@ -62,7 +62,7 @@ export function ChatImportFlow({ file, onCancel, onStarted }: { file: File; onCa
   useEffect(() => {
     const control = new AbortController()
     sendArchive<Partial<ArchivePreview>>('/v1/connectors/archive/preview', file, '读取这个文件', (sent, total) => setStep({ at: 'reading', sent, total }), control.signal)
-      .then((p) => setStep({ at: 'preview', preview: { name: p.name ?? file.name, conversations: p.conversations ?? 0, messages: p.messages ?? 0, fromUser: p.fromUser ?? 0, earliest: p.earliest, latest: p.latest, alreadyImported: p.alreadyImported ?? 0, leftOut: p.leftOut ?? 0, blocked: p.blocked ?? 0, gaps: p.gaps ?? [] } }))
+      .then((p) => setStep({ at: 'preview', preview: { name: file.name, conversations: p.conversations ?? 0, messages: p.messages ?? 0, fromUser: p.fromUser ?? 0, earliest: p.earliest, latest: p.latest, alreadyImported: p.alreadyImported ?? 0, leftOut: p.leftOut ?? 0, blocked: p.blocked ?? 0, gaps: p.gaps ?? [] } }))
       .catch((e: unknown) => { if (!control.signal.aborted) setStep({ at: 'failed', again: worthRetrying(e), problem: e instanceof Error ? e.message : '读取这个文件没有完成。' }) })
     return () => control.abort()
   }, [file, attempt])

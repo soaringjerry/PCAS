@@ -37,7 +37,7 @@ export function ConnectorSettings({ children }: { children?: ReactNode }) {
   const failing = connections.filter(c => c.error).length
   return <>
     <div className="setting set-block">
-      <label className="field"><span className="ink">导入聊天记录</span><FileDrop key={picked} file={null} accept=".zip,.json,.jsonl,.txt,.md" hint="ChatGPT 导出的 zip，或其他聊天记录 · ZIP、JSON、JSONL、TXT、Markdown" onClear={() => {}} onFile={file => {
+      <label className="field"><span className="ink">导入聊天记录</span><FileDrop key={picked} file={null} accept=".zip,.json,.jsonl,.txt,.md" hint="ChatGPT 导出的 zip（多大都行，只取里面的对话，图片和语音不上传），或其他聊天记录 · ZIP、JSON、JSONL、TXT、Markdown" onClear={() => {}} onFile={file => {
         if (busy) return
         setPicked(n => n + 1)
         if (isChatExport(file)) { setError(''); setMessage(''); setChat(file); return }

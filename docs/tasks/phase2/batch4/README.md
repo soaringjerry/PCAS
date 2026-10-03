@@ -176,7 +176,7 @@ T4 按这张表写测试，测试名带编号（`TestPhase2B4_I1_…`）。导�
 
 | 变量 | 默认 | 含义 |
 |---|---|---|
-| `connectors.MaxUploadBytes` | 200 MB | 上传文件的上限 |
+| `connectors.MaxUploadBytes` | 512 MB（2026-10-03 起；原来 200 MB） | 上传文件的上限。zip 由浏览器只取出对话文件上传，所以这个上限是对对话文件说的，见 [U1](../../improvements/U1-archive-upload-in-pieces.md) |
 | `connectors.MaxArchiveBytes` | 512 MB | 解压后 `conversations.json` 的上限（现有常量改成变量） |
 | `connectors.MaxArchiveRecords` | 200000 | 消息条数上限，超过取最新的（现有常量改成变量） |
 | `postgres.ImportChunkSize` | 500 | 每一小批存多少条消息；每一小批是一个独立的事务，小批之间检查是否被暂停、是否被取消 |

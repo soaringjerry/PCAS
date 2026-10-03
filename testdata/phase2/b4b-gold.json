@@ -22,11 +22,9 @@
   },
   "limits": {
     "body_characters": 12000,
-    "assistant_characters": 1200,
     "overlap_messages": 2,
-    "overlap_characters": 1200,
     "message_index_first": 1,
-    "extractor": 3,
+    "extractor": 4,
     "priority": 10,
     "confirmation": "candidate"
   },
@@ -151,14 +149,13 @@
   },
   "C11": {
     "assistant_original_characters": 5000,
-    "assistant_visible_characters": 1200,
     "user_original_characters": 15000,
-    "user_visible_characters": 12000,
     "messages": 2,
     "calls": 2,
-    "memories": 1,
+    "memories": 2,
     "visible_quote": "边界内明确去成都。",
-    "hidden_quote": "截取后面才说去杭州见钱叔。"
+    "hidden_quote": "截取后面才说去杭州见钱叔。",
+    "user_fragment_characters": 12000
   },
   "C12": {
     "only_context_memories": 0,
@@ -174,6 +171,14 @@
     "section": "13.7",
     "sequence": "C11",
     "calls": 1,
+    "message_index": 2,
+    "context_message_index": 1,
+    "processing_records": 2,
+    "no_user_segment_calls": 0
+  },
+  "fulltext_revision_20261003": {
+    "supersedes": "ruling_8a159a8",
+    "calls": 2,
     "message_index": 2,
     "context_message_index": 1,
     "processing_records": 2,

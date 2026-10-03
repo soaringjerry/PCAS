@@ -41,16 +41,16 @@ func b4bSpec[T any](t *testing.T, sequence string) T {
 }
 
 type b4bLimits struct {
-	Body              int    `json:"body_characters"`
-	AI                int    `json:"assistant_characters"`
-	Overlap           int    `json:"overlap_messages"`
-	OverlapCharacters int    `json:"overlap_characters"`
-	First             int    `json:"message_index_first"`
-	Extractor         int    `json:"extractor"`
-	Priority          int    `json:"priority"`
-	Confirmation      string `json:"confirmation"`
+	Body         int    `json:"body_characters"`
+	Overlap      int    `json:"overlap_messages"`
+	First        int    `json:"message_index_first"`
+	Extractor    int    `json:"extractor"`
+	Priority     int    `json:"priority"`
+	Confirmation string `json:"confirmation"`
 }
 type b4bMessage struct {
+	Part  int        `json:"part,omitempty"`
+	Parts int        `json:"parts,omitempty"`
 	Index int        `json:"message_index"`
 	Role  string     `json:"role"`
 	Text  string     `json:"text"`

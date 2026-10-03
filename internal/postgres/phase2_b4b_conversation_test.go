@@ -80,7 +80,6 @@ func TestPhase2B4b_C2_FinalChoiceAndAgreementKeepUserEvidence(t *testing.T) {
 	})
 	t.Run("agreement_with_long_AI_proposal", func(t *testing.T) {
 		s, scope := testStore(t), owner()
-		limit := b4bSpec[b4bLimits](t, "limits")
 		texts := []string{"给我一个成都安排。", spec.Proposal + strings.Repeat("方案填充", 500), spec.Agreement}
 		i := b4bItem(spec.AgreementIndex, spec.AgreementMemory, spec.Agreement, "plan")
 		i["people"] = spec.People
@@ -90,7 +89,7 @@ func TestPhase2B4b_C2_FinalChoiceAndAgreementKeepUserEvidence(t *testing.T) {
 		b4bOperation(t, s, scope, a.Batch, "organize")
 		b4bDrain(t, s)
 		in := b4bInputFrom(t, f.last(t))
-		b2Equal(t, in.Messages[1].Text, string([]rune(texts[1])[:limit.AI]))
+		b2Equal(t, in.Messages[1].Text, texts[1])
 		m := b2One(t, b2Snapshot(t, s, scope).Memories)
 		b2Equal(t, m.Text, spec.AgreementMemory)
 		b2Names(t, m, "person", spec.People)
@@ -205,7 +204,6 @@ func b4bBoundaries(t *testing.T, requests []b1Request, a b4bArchive) {
 		}
 		for _, index := range spec.Contexts[n] {
 			m := a.Messages[index-1]
-			m.Text = string([]rune(m.Text)[:limits.OverlapCharacters])
 			overlap = append(overlap, m)
 		}
 		b2Equal(t, in.Messages, want)
@@ -441,13 +439,12 @@ func TestPhase2B4b_C10_CrossSegmentWithdrawalCarriesOnlyThisRunsMemories(t *test
 	b2Equal(t, count, 1)
 }
 
-func TestPhase2B4b_C11_VisibleLimitsRejectHiddenQuoteAndPreserveOriginals(t *testing.T) {
+func TestPhase2B4b_C11_FullTextFragmentsPreserveOriginals(t *testing.T) {
 	s, scope := testStore(t), owner()
 	spec := b4bSpec[struct {
 		AIOriginal   int    `json:"assistant_original_characters"`
-		AIVisible    int    `json:"assistant_visible_characters"`
 		UserOriginal int    `json:"user_original_characters"`
-		UserVisible  int    `json:"user_visible_characters"`
+		UserFragment int    `json:"user_fragment_characters"`
 		Memories     int    `json:"memories"`
 		Visible      string `json:"visible_quote"`
 		Hidden       string `json:"hidden_quote"`
@@ -457,35 +454,48 @@ func TestPhase2B4b_C11_VisibleLimitsRejectHiddenQuoteAndPreserveOriginals(t *tes
 		MessageIndex int `json:"message_index"`
 		ContextIndex int `json:"context_message_index"`
 		Records      int `json:"processing_records"`
-	}](t, "ruling_8a159a8")
+	}](t, "fulltext_revision_20261003")
 	assistant := b4bSized("AI 长方案开头。", spec.AIOriginal)
 	user := []rune(b4bSized("用户超长资料。", spec.UserOriginal))
 	copy(user[20:], []rune(spec.Visible))
-	copy(user[spec.UserVisible+20:], []rune(spec.Hidden))
+	copy(user[spec.UserFragment+20:], []rune(spec.Hidden))
 	f := b4bModel(t, s, func(in b4bInput) any {
 		if in.Messages[0].Index == 1 {
 			return map[string]any{"items": []any{}}
 		}
-		return map[string]any{"items": []any{b4bItem(2, "有效成都计划", spec.Visible, "plan"), b4bItem(2, "不可见杭州计划", spec.Hidden, "plan")}}
+		return map[string]any{"items": []any{b4bItem(2, "有效成都计划", spec.Visible, "plan"), b4bItem(2, "尾部杭州计划", spec.Hidden, "plan")}}
 	})
 	a := b4bImport(t, s, scope, b4bMessages(t, []string{"assistant", "user"}, []string{assistant, string(user)}))
 	b4bOperation(t, s, scope, a.Batch, "organize")
 	b4bDrain(t, s)
 	b2Equal(t, len(f.all()), ruling.Calls)
-	wantUser := a.Messages[ruling.MessageIndex-1]
-	wantUser.Text = string(user[:spec.UserVisible])
 	wantAI := a.Messages[ruling.ContextIndex-1]
-	wantAI.Text = string([]rune(assistant)[:spec.AIVisible])
-	for _, req := range f.all() {
+	var previous b4bMessage
+	for n, req := range f.all() {
 		in := b4bInputFrom(t, req)
+		wantUser := a.Messages[ruling.MessageIndex-1]
+		start, end := n*spec.UserFragment, min((n+1)*spec.UserFragment, len(user))
+		wantUser.Text = string(user[start:end])
+		wantUser.Part, wantUser.Parts = n+1, ruling.Calls
 		b2Equal(t, in.Messages, []b4bMessage{wantUser})
-		b2Equal(t, in.Context, []b4bMessage{wantAI})
+		wantContext := []b4bMessage{wantAI}
+		if n > 0 {
+			wantContext = append(wantContext, previous)
+		}
+		b2Equal(t, in.Context, wantContext)
+		previous = wantUser
 	}
 	memories := b2Snapshot(t, s, scope).Memories
 	b2Equal(t, len(memories), spec.Memories)
-	m := b2One(t, memories)
-	b2Equal(t, m.Text, "有效成都计划")
-	b4bEvidence(t, s, scope, m, a.Sources[1], spec.Visible, a.Messages[1].At)
+	for _, m := range memories {
+		quote := spec.Visible
+		if m.Text == "尾部杭州计划" {
+			quote = spec.Hidden
+		} else {
+			b2Equal(t, m.Text, "有效成都计划")
+		}
+		b4bEvidence(t, s, scope, m, a.Sources[1], quote, a.Messages[1].At)
+	}
 	for n, source := range a.Sources {
 		raw, err := s.GetSource(context.Background(), scope, source.ID, source.Version)
 		if err != nil {

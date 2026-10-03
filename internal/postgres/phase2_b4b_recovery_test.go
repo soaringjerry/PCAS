@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -51,6 +52,14 @@ func TestPhase2B4bWorkerChild(t *testing.T) {
 }
 
 func TestPhase2B4b_C7_KilledWorkerResumesWithoutReplayingCompletedSegment(t *testing.T) {
+	b4bKilledWorkerRecovery(t, false)
+}
+
+func TestConversationLongMessageKilledWorkerResumesTail(t *testing.T) {
+	b4bKilledWorkerRecovery(t, true)
+}
+
+func b4bKilledWorkerRecovery(t *testing.T, longMessage bool) {
 	s, scope := testStore(t), owner()
 	spec := b4bSpec[struct {
 		Memories  int `json:"memories"`
@@ -67,13 +76,23 @@ func TestPhase2B4b_C7_KilledWorkerResumesWithoutReplayingCompletedSegment(t *tes
 			close(entered)
 			<-release
 		}
-		if in.Messages[0].Index == 1 {
+		if in.Messages[0].Part == 1 || (!longMessage && in.Messages[0].Index == 1) {
 			return map[string]any{"items": []any{b4bItem(1, "第一段成都记忆", first, "plan")}}
 		}
-		return map[string]any{"items": []any{b4bItem(4, "第二段杭州记忆", last, "plan")}}
+		index := 4
+		if longMessage {
+			index = 1
+		}
+		return map[string]any{"items": []any{b4bItem(index, "第二段杭州记忆", last, "plan")}}
 	})
 	t.Cleanup(unblock)
-	a := b4bLongFixture(t, s, scope, []string{first, "", "", last})
+	var a b4bArchive
+	if longMessage {
+		a = b4bImport(t, s, scope, b4bMessages(t, []string{"user"}, []string{b4bSized(first, 12000) + last + strings.Repeat("尾", 2990)}))
+		spec.Organized = 1
+	} else {
+		a = b4bLongFixture(t, s, scope, []string{first, "", "", last})
+	}
 	b4bOperation(t, s, scope, a.Batch, "organize")
 	dir := t.TempDir()
 	jobFile := filepath.Join(dir, "leased-job.json")
@@ -108,6 +127,9 @@ func TestPhase2B4b_C7_KilledWorkerResumesWithoutReplayingCompletedSegment(t *tes
 	}
 	// The first segment really committed while the second HTTP call is held.
 	b2Equal(t, len(b2Snapshot(t, s, scope).Memories), 1)
+	if longMessage {
+		b2Equal(t, b4bProgress(t, s, scope, a.Batch).Organized, 0)
+	}
 	data, err := os.ReadFile(jobFile)
 	if err != nil {
 		t.Fatal(err)
@@ -134,7 +156,11 @@ func TestPhase2B4b_C7_KilledWorkerResumesWithoutReplayingCompletedSegment(t *tes
 		case "第一段成都记忆":
 			b4bEvidence(t, s, scope, m, a.Sources[0], first, a.Messages[0].At)
 		case "第二段杭州记忆":
-			b4bEvidence(t, s, scope, m, a.Sources[3], last, a.Messages[3].At)
+			index := 3
+			if longMessage {
+				index = 0
+			}
+			b4bEvidence(t, s, scope, m, a.Sources[index], last, a.Messages[index].At)
 		default:
 			t.Error("unexpected recovery memory", m.Text)
 		}
@@ -144,11 +170,20 @@ func TestPhase2B4b_C7_KilledWorkerResumesWithoutReplayingCompletedSegment(t *tes
 	firstCalls, secondCalls := 0, 0
 	for _, req := range f.all() {
 		in := b4bInputFrom(t, req)
-		switch in.Messages[0].Index {
-		case 1:
-			firstCalls++
-		case 3:
-			secondCalls++
+		if longMessage {
+			switch in.Messages[0].Part {
+			case 1:
+				firstCalls++
+			case 2:
+				secondCalls++
+			}
+		} else {
+			switch in.Messages[0].Index {
+			case 1:
+				firstCalls++
+			case 3:
+				secondCalls++
+			}
 		}
 	}
 	b2Equal(t, firstCalls, 1)
@@ -158,6 +193,9 @@ func TestPhase2B4b_C7_KilledWorkerResumesWithoutReplayingCompletedSegment(t *tes
 		state, count := "empty", 0
 		if n == 0 || n == 3 {
 			state, count = "done", 1
+		}
+		if longMessage {
+			count = 2
 		}
 		b4bRecord(t, s, scope, src, state, count)
 	}

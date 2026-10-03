@@ -20,15 +20,21 @@ func TestConversationSegmentBoundaries(t *testing.T) {
 		makeSource("user", "最后一句"),
 	}
 	segments := splitConversation(sources)
-	if len(segments) != 3 || len(segments[0].Messages) != 3 || len(segments[1].Messages) != 1 || len(segments[2].Messages) != 1 {
+	if len(segments) != 5 || len(segments[0].Messages) != 2 {
 		t.Fatalf("message boundaries: %+v", segments)
 	}
-	if utf8.RuneCountInString(segments[0].Messages[1].Text) != 1200 || utf8.RuneCountInString(segments[1].Messages[0].Text) != 12000 || utf8.RuneCountInString(sources[3].Source.Text) != 15000 {
-		t.Fatal("visible limits or original changed")
+	if utf8.RuneCountInString(segments[0].Messages[1].Text) != 5000 || segments[2].Messages[0].Text+segments[3].Messages[0].Text != sources[3].Source.Text {
+		t.Fatal("full text coverage or original changed")
 	}
-	context := segments[1].Context
-	if len(context) != 2 || context[0].Index != 2 || context[1].Index != 3 || utf8.RuneCountInString(context[1].Text) != 1200 || segments[1].Messages[0].Index != 4 || segments[2].Messages[0].Index != 5 {
-		t.Fatal("global numbering or bounded overlap")
+	for i, size := range []int{12000, 3000} {
+		fragment := segments[i+2].Messages[0]
+		if fragment.Index != 4 || fragment.Part != i+1 || fragment.Parts != 2 || utf8.RuneCountInString(fragment.Text) != size {
+			t.Fatal("fragment numbering or budget", fragment)
+		}
+	}
+	context := segments[2].Context
+	if len(context) != 2 || context[0].Index != 2 || context[1].Index != 3 || context[0].Text != sources[1].Source.Text || context[1].Text != sources[2].Source.Text || segments[4].Messages[0].Index != 5 {
+		t.Fatal("global numbering or complete overlap")
 	}
 }
 

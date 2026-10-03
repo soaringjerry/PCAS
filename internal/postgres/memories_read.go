@@ -160,12 +160,12 @@ func (s *Store) readMemoriesTx(ctx context.Context, tx pgx.Tx, scope memory.Scop
 		return result, nil
 	}
 	// Evidence is needed by both workspace cards and model callers. Preserve the
-	// historical evidence behavior while batching it for the entire selection.
-	rows, err = tx.Query(ctx, `SELECT DISTINCT e.target_id::text,v.source_id::text,v.version,v.title,left(v.body,400),rv.recorded_at
+	// source deduplication while showing the quoted location, including long-message tails.
+	rows, err = tx.Query(ctx, `SELECT DISTINCT ON(e.target_id::text,v.source_id::text,v.version) e.target_id::text,v.source_id::text,v.version,v.title,substring(v.body FROM greatest(0,coalesce((e.locator->>'start_rune')::int,0))+1 FOR 400),rv.recorded_at
  FROM evidence e JOIN source_versions v ON(v.owner_id,v.source_id,v.version)=(e.owner_id,e.source_id,e.source_version)
  JOIN record_versions rv ON(rv.owner_id,rv.record_id,rv.version)=(v.owner_id,v.source_id,v.version)
  WHERE e.owner_id=$1 AND e.target_id=ANY($2::uuid[]) AND ($3 OR EXISTS(SELECT 1 FROM record_grants g WHERE g.owner_id=v.owner_id AND g.record_id=v.source_id AND g.principal_id=$4))
- ORDER BY e.target_id::text,v.source_id::text,v.version`, string(scope.OwnerID), ids, scope.IsOwner, scope.PrincipalID)
+ ORDER BY e.target_id::text,v.source_id::text,v.version,coalesce((e.locator->>'start_rune')::int,0)`, string(scope.OwnerID), ids, scope.IsOwner, scope.PrincipalID)
 	if err != nil {
 		return nil, err
 	}

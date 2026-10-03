@@ -452,5 +452,12 @@
       "I6 extraction priority and original timeout"
     ],
     "browserFixture": "accessible confirmation button may be 导入 N 条; only locators change, confirmation-before-upload and behavior oracles remain unchanged"
+  },
+  "coordinator_adjudication_pr129_followup": {
+    "authority": "batch4/README.md section 13 items 4-5 in PR #129 at 6a2dc94c1ca133f35b1c97326ae3e054f9229839; coordinator follow-up 2026-10-03",
+    "L8Cancel": "before cancellation, returned-call usage is independently visible; after cancellation the exact same row persists; secretary may save its original and answer; no ten-second result-writing stop requirement, no required Go error or absent answer",
+    "L8Rollback": "unchanged independent visibility, real SQL rollback, retained exact row and absent rejected answer assertions",
+    "browserStoredStatus": "W2/W4 completed-original status matcher additionally accepts 已存好; all counts, controls and subsequent behavior assertions unchanged",
+    "rerunGate": "modified L8 independent transaction, I15 now positive control, I17 and I6 await coordinator notification after backend fixes merge"
   }
 }

@@ -50,7 +50,10 @@ function NoticeRow({ row }: { row: NoticeRowData }) {
   const toast = useToast()
   const [busy, setBusy] = useState(false)
   const { notice, task } = row
-  const note = [notice.reason && notice.reason !== notice.title ? notice.reason : '', `${formatWhen(notice.dueAt, state.settings.timezone ?? 'UTC')} 到点`].filter(Boolean).join(' · ')
+  // A result says how the work ended; only a reminder has a time it came due.
+  const note = notice.result
+    ? `${notice.reason.split('\n')[0].replace(/：$/, '')} · ${formatWhen(notice.dueAt, state.settings.timezone ?? 'UTC')}`
+    : [notice.reason && notice.reason !== notice.title ? notice.reason : '', `${formatWhen(notice.dueAt, state.settings.timezone ?? 'UTC')} 到点`].filter(Boolean).join(' · ')
   return (
     <div className="hall-task hall-rang">
       {task ? (
@@ -144,7 +147,7 @@ function TodayWall({ compact }: { compact: boolean }) {
       <div className="hall-scroll">
         {rang.length > 0 && (
           <div className="hall-group hall-rang-group">
-            <h2 className="hall-sub rang">到点了</h2>
+            <h2 className="hall-sub rang">{rang.every((r) => r.notice.result) ? '做完了，等你看' : '到点了'}</h2>
             {rang.map((r) => (
               <NoticeRow key={r.notice.id} row={r} />
             ))}

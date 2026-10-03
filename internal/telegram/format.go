@@ -75,6 +75,12 @@ func format(turn workspace.SecretaryTurn, prefix, timezone string) (string, [][]
 		if r.Undone {
 			text += "（已撤销）"
 		}
+		// The hand-off receipt repeats the whole brief written for the agent;
+		// in a chat it is enough to say who has it and that the result will follow.
+		if r.Op == "delegate" && r.Status != "skipped" {
+			who, _, _ := strings.Cut(text, "：")
+			text = who + "，做完会发到这里"
+		}
 		lines = append(lines, sign+clip(text, 240))
 		if r.Undoable && !r.Undone && r.ActionID != nil && len(*r.ActionID) <= 62 {
 			rows = append(rows, []button{{Text: "撤销 " + clip(r.Text, 20), Data: "u:" + *r.ActionID}})
@@ -85,8 +91,13 @@ func format(turn workspace.SecretaryTurn, prefix, timezone string) (string, [][]
 		case "sources":
 			lines = append(lines, fmt.Sprintf("依据 %d 条记录", len(cardItems[workspace.DeskSourceItem](card.Items))))
 		case "links":
+			// A bare host says nothing in a chat; the address itself can be tapped.
 			for _, item := range cardItems[workspace.DeskLinkItem](card.Items) {
-				lines = append(lines, clip(item.Host, 100))
+				if item.URL != "" {
+					lines = append(lines, clip(item.URL, 300))
+				} else {
+					lines = append(lines, clip(item.Host, 100))
+				}
 			}
 		case "timeline":
 			for _, item := range cardItems[workspace.DeskTimelineItem](card.Items) {

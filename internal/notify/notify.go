@@ -17,7 +17,10 @@ type Message struct {
 	Title    string `json:"title"`
 	Body     string `json:"body"`
 	URL      string `json:"url"`
-	OwnerID  string `json:"-"` // isolates device subscriptions for each owner
+	// Result: this reports how handed-off work ended; Body is the whole report,
+	// not a time followed by a reason.
+	Result  bool   `json:"result,omitempty"`
+	OwnerID string `json:"-"` // isolates device subscriptions for each owner
 }
 type Channel interface {
 	Name() string

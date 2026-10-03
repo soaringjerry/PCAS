@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/ai/siwc"
@@ -573,6 +574,12 @@ func (s *Store) runAgentOnce(ctx context.Context) error {
 		if err := s.autoAdoptRunTx(ctx, tx, scope, &current); err != nil {
 			return err
 		}
+		// Work handed off is reported back where reminders go, so the person who
+		// asked from their phone hears how it ended without opening the page.
+		if _, err := tx.Exec(ctx, `INSERT INTO workspace_notices(owner_id,thing_id,trigger_id,due_at,reason) VALUES($1,$2,$3,now(),$4) ON CONFLICT DO NOTHING`,
+			string(scope.OwnerID), current.ThingID, runNoticePrefix+current.ID, runNoticeReason(current)); err != nil {
+			return err
+		}
 		_, err = tx.Exec(ctx, "UPDATE workspace_owners SET revision=revision+1 WHERE owner_id=$1", string(scope.OwnerID))
 		return err
 	})
@@ -683,4 +690,22 @@ func (s *Store) autoAdoptResultTx(ctx context.Context, tx pgx.Tx, scope memory.S
 		return err
 	}
 	return flushActionLog(ctx, tx, scope)
+}
+
+// runNoticePrefix marks a notice that reports how handed-off work ended,
+// as opposed to a reminder that came due.
+const runNoticePrefix = "run:"
+
+func runNoticeReason(run workspace.Run) string {
+	if run.Status != "done" {
+		return "副手没做成：" + run.Error
+	}
+	text := strings.TrimSpace(run.Output)
+	if utf8.RuneCountInString(text) > 600 {
+		text = string([]rune(text)[:600]) + "…"
+	}
+	if text == "" {
+		return "副手做完了。"
+	}
+	return "副手做完了：\n" + text
 }

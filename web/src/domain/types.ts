@@ -342,6 +342,8 @@ export interface Notice {
   thingId: ID
   title: string
   reason: string
+  /** How handed-off work ended, rather than a reminder that came due. */
+  result?: boolean
   dueAt: string
   createdAt: string
   dismissedAt?: string

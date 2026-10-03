@@ -199,6 +199,7 @@ func (s *Store) snapshotTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) (
 	if out.Notices, err = queryDocuments[workspace.Notice](ctx, tx, `SELECT jsonb_build_object(
         'id',n.id,'thingId',n.thing_id,'title',w.title,'reason',n.reason,
         'dueAt',n.due_at,'createdAt',n.created_at) ||
+        CASE WHEN n.trigger_id LIKE 'run:%' THEN '{"result":true}'::jsonb ELSE '{}'::jsonb END ||
         CASE WHEN n.dismissed_at IS NULL THEN '{}'::jsonb ELSE jsonb_build_object('dismissedAt',n.dismissed_at) END
         FROM workspace_notices n JOIN work_items w ON (w.owner_id,w.id)=(n.owner_id,n.thing_id)
         WHERE n.owner_id=$1 AND NOT (n.delivered @> '{"_suppressionOnly":true}'::jsonb) ORDER BY (n.dismissed_at IS NOT NULL),n.created_at DESC,n.id LIMIT 100`, string(scope.OwnerID)); err != nil {
@@ -662,7 +663,7 @@ func activityTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, timezone str
 	}
 	rows, err = tx.Query(ctx, `SELECT n.thing_id::text,n.trigger_id,n.due_at,w.title,n.reason,n.created_at FROM workspace_notices n
 		JOIN work_items w ON (w.owner_id,w.id)=(n.owner_id,n.thing_id)
-		WHERE n.owner_id=$1 AND NOT (n.delivered @> '{"_suppressionOnly":true}'::jsonb) AND w.kind='task' AND n.created_at>=now()-interval '2 days' ORDER BY n.created_at DESC LIMIT 20`, owner)
+		WHERE n.owner_id=$1 AND NOT (n.delivered @> '{"_suppressionOnly":true}'::jsonb) AND w.kind='task' AND n.trigger_id NOT LIKE 'run:%' AND n.created_at>=now()-interval '2 days' ORDER BY n.created_at DESC LIMIT 20`, owner)
 	if err != nil {
 		return nil, err
 	}

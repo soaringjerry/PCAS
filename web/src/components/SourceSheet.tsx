@@ -1,6 +1,7 @@
 import { useStore } from '../store/context'
 import { formatTimestamp } from '../domain/time'
 import { MemorySummary } from './MemorySummary'
+import { ConversationContext } from './ConversationContext'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { CircleAlert, Download, FileText } from 'lucide-react'
 import { api } from '../store/api'
@@ -32,7 +33,7 @@ function Words({ text, excerpt }: { text: string; excerpt?: string }) {
   return <pre ref={box} className="source-text source-words" tabIndex={0}>{parts ? <>{parts[0]}<mark>{parts[1]}</mark>{parts[2]}</> : text}</pre>
 }
 
-interface SourceResult { derived: { id: string; version: number }[]; source: { id: string; version: number; title: string; text: string; recorded_at: string; has_attachment: boolean; attachment_missing: boolean; representation: string }; processing: { id: string; stage: string; state: string; error_code?: string }[] }
+interface SourceResult { context?: { conversation?: string }; derived: { id: string; version: number }[]; source: { id: string; version: number; title: string; text: string; recorded_at: string; has_attachment: boolean; attachment_missing: boolean; representation: string }; processing: { id: string; stage: string; state: string; error_code?: string }[] }
 /**
  * The library opens a record with its version, processing state and summary.
  * Opened from a conversation (`conversation` given), it shows what was said and
@@ -57,6 +58,7 @@ export function SourceSheet({ id, version, onClose, conversation }: { id: string
       {!data && !error && <p className="row muted"><Spinner />读取中…</p>}
       {data && <div className="source-read">
         {data.source.text ? <Words text={data.source.text} excerpt={conversation.excerpt} /> : <p className="tiny muted">这份原件里没有能直接显示的文字。</p>}
+        {data.context?.conversation && <ConversationContext key={`${id}:${data.source.version}`} id={id} version={data.source.version} />}
         {data.source.attachment_missing && <p className="callout callout-danger" role="alert"><CircleAlert size={15} />原件现在打不开，这段文字代替不了原件；请检查附件存放的地方。</p>}
         {data.source.representation !== 'original' && <p className="callout">这段文字是从原件里读出来的{readBy ? `（${readBy}）` : ''}，可能有出入，请对照原件。</p>}
         {(data.source.has_attachment && !data.source.attachment_missing || data.derived.length > 0) && <div className="row">
@@ -81,6 +83,7 @@ export function SourceSheet({ id, version, onClose, conversation }: { id: string
         {data.derived.map((ref) => <button type="button" className="btn btn-sm" key={ref.id} onClick={() => setDerived(ref)}><FileText size={14} />展开解析文本</button>)}
       </div>}
       <MemorySummary id={data.source.id} version={data.source.version} />
+      {data.context?.conversation && <ConversationContext key={`${id}:${data.source.version}`} id={id} version={data.source.version} />}
       <details><summary>展开原文</summary><pre className="source-text">{data.source.text}</pre></details></div>}
     {derived && <SourceSheet id={derived.id} version={derived.version} onClose={() => setDerived(null)} />}
   </SideSheet>

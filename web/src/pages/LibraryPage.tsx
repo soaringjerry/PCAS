@@ -60,6 +60,7 @@ function MemorySheet({ memory, entity, onClose, onPick, onDeleted }: {
       <div className="stack">
         <div className="stack-sm">
           <textarea className="textarea" style={{ minHeight: 84 }} value={text} onChange={(e) => setText(e.target.value)} aria-label="内容" />
+          {memory.contextDependent && <p className="callout">这条记忆含有指代，请在「从哪来的」里查看当时对话，核对对象和限定。</p>}
           {changed && (
             <input className="input" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="为什么改？（会记成一次纠正）" />
           )}

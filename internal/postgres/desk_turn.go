@@ -281,6 +281,7 @@ func (s *Store) secretaryPrompt(ctx context.Context, tx pgx.Tx, scope memory.Sco
 		fmt.Fprintln(&prompt, recallTimeRelaxed)
 	}
 	sent := map[string]workspace.Memory{}
+	contextClaims := []evidenceContextClaim{}
 	seen := map[string]bool{}
 	for _, ref := range recall.Memories {
 		m, ok := c.Memories[string(ref.ID)]
@@ -296,6 +297,7 @@ func (s *Store) secretaryPrompt(ctx context.Context, tx pgx.Tx, scope memory.Sco
 		seen[m.ID] = true
 		alias := fmt.Sprintf("M%d", len(sent)+1)
 		sent[alias] = m
+		contextClaims = append(contextClaims, evidenceContextClaim{Label: alias, Ref: memory.Ref{ID: memory.ID(m.ID), Version: m.Version, Kind: memory.ClaimKind}, Text: m.Text})
 		fmt.Fprintf(&prompt, "[%s / %s / confirmation=%s / acquisition=%s] %s\n", alias, m.Epistemic, m.Confirmation, m.Acquisition, m.Text+memoryPromptSuffix(m, loc))
 		c.Dependencies = append(c.Dependencies, memory.Ref{ID: memory.ID(m.ID), Version: m.Version, Kind: memory.ClaimKind})
 	}
@@ -339,6 +341,29 @@ func (s *Store) secretaryPrompt(ctx context.Context, tx pgx.Tx, scope memory.Sco
 	if len(excerpts) == 0 {
 		fmt.Fprintln(&prompt, "（没有）")
 	}
+	groups, gaps, err := evidenceContextsTx(ctx, tx, scope, c.Agent.ID, req.ThingID, contextClaims)
+	if err != nil {
+		return "", nil, err
+	}
+	if len(groups) > 0 || len(gaps) > 0 {
+		fmt.Fprintln(&prompt, "\n记忆的来源上下文：\n"+evidenceContextInstructions)
+	}
+	for _, group := range groups {
+		c.Dependencies = append(c.Dependencies, group.Window.ProofRefs...)
+		fmt.Fprintf(&prompt, "%s 的原对话片段：\n", group.Label)
+		for _, message := range group.Window.Messages {
+			alias := fmt.Sprintf("S%d", len(c.Sources)+1)
+			prompt.WriteString(contextMessageLine(alias, message, loc))
+			at := message.RecordedAt
+			if message.ExpressedAt != nil {
+				at = *message.ExpressedAt
+			}
+			c.Sources[alias] = workspace.DeskSourceItem{Kind: "source", MemoryID: string(message.ID), Version: message.Version, Text: message.Text, SourceID: string(message.ID), SourceVersion: message.Version, At: stringPointer(at.Format(time.RFC3339))}
+			c.Dependencies = append(c.Dependencies, message.Ref)
+		}
+		writeContextGaps(&prompt, group.Label, group.Window.Gaps)
+	}
+	writeContextGaps(&prompt, "范围提示", gaps)
 	// Each of the last turns already carries its own history. Without this the
 	// stored list doubles every turn of a conversation.
 	c.Dependencies = uniqueRefs(c.Dependencies)

@@ -127,6 +127,7 @@ type MemoryMention struct {
 	Role     string `json:"role"`
 }
 type Memory struct {
+	ContextDependent   bool            `json:"contextDependent,omitempty"`
 	ExpressedAt        string          `json:"expressedAt,omitempty"`
 	EventFrom          string          `json:"eventFrom,omitempty"`
 	EventTo            string          `json:"eventTo,omitempty"`
@@ -156,6 +157,7 @@ func (m Memory) MarshalJSON() ([]byte, error) {
 	if m.Mentions == nil {
 		m.Mentions = []MemoryMention{}
 	}
+	m.ContextDependent = memory.ContextDependent(m.Text)
 	return json.Marshal(wire(m))
 }
 

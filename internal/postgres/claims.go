@@ -48,6 +48,10 @@ func (s *Store) rememberTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, i
 	if strings.TrimSpace(in.Text) == "" || len(in.Text) > 1<<20 {
 		return result, memory.ErrInvalid
 	}
+	if in.Structured && memory.AmbiguousEntityName(in.Subject) {
+		in.Subject = ""
+		in.SubjectType = ""
+	}
 	if !oneOf(in.Nature, "fact", "preference", "intention", "plan", "decision") {
 		return result, memory.ErrInvalid
 	}

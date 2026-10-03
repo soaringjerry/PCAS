@@ -39,6 +39,7 @@ PCAS 的所有文档都从这一页找。新增或移动文档时，同时改这
 | [U1 归档上传：分片，压缩包只传对话文件](tasks/improvements/U1-archive-upload-in-pieces.md) | 阶段之间的小改进：上传失败的原因、分片规则、只取对话文件、图片不解析的决定（2026-10-03） |
 | [Q3 历史对话及时进入记忆提取](tasks/improvements/Q3-conversation-dispatch.md) | 修复旧入口阻塞领取、记忆提取排在索引之后的问题（2026-10-03） |
 | [Q4 后台进程回收与索引持续推进](tasks/improvements/Q4-process-cleanup-and-index-lane.md) | 修复残留 Codex 子进程耗尽内存，增加独立索引通道（2026-10-03） |
+| [E4 记忆保留原对话上下文](tasks/improvements/E4-memory-evidence-context.md) | 来源展开原对话、模型补读证据上下文、模糊指代核对（2026-10-03） |
 | [M1 秘书看得见图片](tasks/improvements/M1-images-for-the-secretary.md) | 待做：模型看图、发给秘书的图片当成说的话、网页输入框带附件（2026-10-03 用户提出） |
 | [R1 检查报告里的九个问题](tasks/improvements/R1-review-1003-fixes.md) | 2026-10-03 独立检查发现的问题：已修的四条、交给执行者的四条规则、没改的一条 |
 | [P1 资料多了以后，秘书回话不能变慢](tasks/improvements/P1-recall-speed.md) | 导入 2.7 万条后秘书回一句话要 46 秒：量出的原因、改法、前后对比（2026-10-03） |

@@ -65,7 +65,7 @@ func groundedMentions(names []string, role, text string) []claimMention {
 	for _, name := range names {
 		name = strings.TrimSpace(name)
 		key := strings.ToLower(name)
-		if name == "" || utf8.RuneCountInString(name) > 40 || seen[key] || !strings.Contains(text, name) || role == "person" && oneOf(name, "我", "我们") {
+		if name == "" || utf8.RuneCountInString(name) > 40 || seen[key] || !strings.Contains(text, name) || memory.AmbiguousEntityName(name) || role == "person" && oneOf(name, "我", "我们") {
 			continue
 		}
 		seen[key] = true

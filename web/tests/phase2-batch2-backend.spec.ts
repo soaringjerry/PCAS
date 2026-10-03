@@ -43,7 +43,7 @@ test('U4 真实秘书原话经后台变成带成都老王日期的记忆，点�
   const actual = captured.requests.filter(r => r.messages.some(m => m.content.includes('从原文提取独立线索')))
   // Match the actual source in a non-system message; no fabricated prompt.
   expect(actual.some(r => r.messages.some(m => m.role !== 'system' && m.content.includes(gold.fixtures.trip.text)))).toBeTruthy()
-  await page.goto('/library?tab=memories')
+  await page.goto('/library?tab=memory')
   await expect(page.getByText(gold.fixtures.trip.memory, { exact: true })).toBeVisible()
   await expect(page.getByText('成都', { exact: true }).first()).toBeVisible()
   const request = page.waitForRequest(r => new URL(r.url()).pathname === '/v1/workspace/memories' && new URL(r.url()).searchParams.get('entity') === found!.mentions.find(x => x.name === '老王')!.entityId)

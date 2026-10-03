@@ -67,7 +67,7 @@ test.use({ timezoneId: 'Asia/Shanghai', viewport: { width: 390, height: 844 } })
 test('U1 记忆卡片显示人地点说话和事件日期，没有内容的卡片无空位及内部说法', async ({ page }) => {
   const rich = memory(0), bare = memory(1, false)
   const mock = await backend(page, [rich, bare])
-  await page.goto('/library?tab=memories')
+  await page.goto('/library?tab=memory')
   const richCard = await card(page, rich.text)
   await expect(richCard).toContainText(gold.sequences.U1.people[0])
   await expect(richCard).toContainText(gold.sequences.U1.places[0])
@@ -85,7 +85,7 @@ test('U2 点人后仅保留提到他的记忆，清掉筛选后恢复；地点�
   const wang = memory(0), zhang = memory(1)
   zhang.mentions = [{ entityId: 'person-zhang', name: '张三', role: 'person' }]
   const mock = await backend(page, [wang, zhang])
-  await page.goto('/library?tab=memories')
+  await page.goto('/library?tab=memory')
   await expect(page.getByText(zhang.text, { exact: true })).toBeVisible()
   await page.getByRole('button', { name: /老王/ }).first().click()
   await expect.poll(() => mock.queries.at(-1)?.searchParams.get('entity')).toBe('person-wang')
@@ -109,7 +109,7 @@ test('U2 点人后仅保留提到他的记忆，清掉筛选后恢复；地点�
 test('U3 300条记忆从接口翻至末尾不重复，390px无横向溢出', async ({ page }) => {
   const all = Array.from({ length: gold.sequences.U3.total }, (_, n) => memory(n, false))
   const mock = await backend(page, all)
-  await page.goto('/library?tab=memories')
+  await page.goto('/library?tab=memory')
   await expect(page.getByText(all[0].text, { exact: true })).toBeVisible()
   for (let pageNo = 1; pageNo <= 10 && !mock.returned.includes(all.at(-1)!.id); pageNo++) {
     const before = mock.returned.length
@@ -135,7 +135,7 @@ test('U1 事件区间卡片显示实际最后一天', async ({ page }) => {
   ranged.eventTo = spec.event_to
   ranged.eventPrecision = 'range'
   await backend(page, [ranged])
-  await page.goto('/library?tab=memories')
+  await page.goto('/library?tab=memory')
   const rangeCard = await card(page, ranged.text)
   await expect(rangeCard).toContainText(spec.first_display_day)
   await expect(rangeCard).toContainText(spec.last_display_day)

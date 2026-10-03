@@ -370,6 +370,9 @@ func (s *Store) ProcessExtraction(ctx context.Context, j worker.Job) (err error)
 	if err := s.pool.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM archive_entries WHERE owner_id=$1 AND source_id=$2 AND source_version=$3)", string(j.OwnerID), string(j.Record.ID), j.Record.Version).Scan(&imported); err != nil {
 		return err
 	}
+	if imported && source.Context != nil && source.Context.Conversation != "" {
+		return s.processConversationExtraction(ctx, j, source.Context.Conversation)
+	}
 	if imported && source.Context != nil && oneOf(source.Context.Role, "assistant", "system", "tool") {
 		return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 			if err := extractionOwnerLock(ctx, tx, j.OwnerID); err != nil {
@@ -690,6 +693,9 @@ func completeExtractionTx(ctx context.Context, tx pgx.Tx, j worker.Job, state st
 // done after scheduling windows; only all completed windows finish the source.
 // E2 also calls this after a job permanently stops or exhausts its lease.
 func extractionStateTx(ctx context.Context, tx pgx.Tx, j worker.Job, state string) error {
+	if strings.HasPrefix(j.Stage, conversationExtractionPrefix) {
+		return conversationExtractionStateTx(ctx, tx, j, state)
+	}
 	if !strings.HasPrefix(j.Stage, "source.extract") {
 		return nil
 	}

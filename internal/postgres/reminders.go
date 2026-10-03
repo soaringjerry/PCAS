@@ -21,13 +21,11 @@ const currentNoticeTriggerSQL = `(n.trigger_id LIKE 'run:%' OR EXISTS (
 // Persist invalidation so an old occurrence cannot reappear in the pinned
 // list or be retried by another dispatcher after a due-time edit.
 func invalidateObsoleteNoticesTx(ctx context.Context, tx pgx.Tx, selector string, id string) error {
-	_, err := tx.Exec(ctx, `WITH invalidated AS (
- UPDATE workspace_notices n SET dismissed_at=now() FROM work_items w
+	// The trigger edit already advances the owner's revision. Delivery must
+	// not acquire the owner lock after the notice lock or hold it across Send.
+	_, err := tx.Exec(ctx, `UPDATE workspace_notices n SET dismissed_at=now() FROM work_items w
  WHERE (w.owner_id,w.id)=(n.owner_id,n.thing_id) AND `+selector+`
- AND n.dismissed_at IS NULL AND NOT `+currentNoticeTriggerSQL+`
- RETURNING n.owner_id
- ) UPDATE workspace_owners SET revision=revision+1
- WHERE owner_id IN (SELECT owner_id FROM invalidated)`, id)
+ AND n.dismissed_at IS NULL AND NOT `+currentNoticeTriggerSQL, id)
 	return err
 }
 

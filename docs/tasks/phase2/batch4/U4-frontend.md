@@ -36,3 +36,12 @@
 ## 交付
 
 Draft PR；`npm run lint && npm run type-check && npm run build` 通过；桌面 1440 和手机 390 各三张截图（模拟数据）：预览、进行中的进度、一种出错。说明里写清进度放在哪、为什么。
+
+## 跟进任务 U5：导入时选择「先存着」（2026-10-03）
+
+规则在契约第 11 节（R21，序列 W5）。另开分支 `phase2/b4-U5-organize-later`，从 `origin/phase2/batch4` 建，Draft PR 的 base 是 `phase2/batch4`。
+
+- 确认导入那一步加一个选择：「先存着，以后再整理（现在不调用 AI）」和「现在就整理」。默认是先存着。用一句话说清区别：存好就能问到里面的话；整理成带人、地点、时间的记忆可以以后再做。
+- 上传时把选择作为表单字段 `organize`（`later` 或 `now`）带上。
+- 进度那里：`organizeLater` 为真并且已经存完时，显示「已存好，还没开始整理」和一个「开始整理」按钮（调 `POST /v1/connectors/imports/{id}/organize`）。
+- 界面上不出现「抽取」「批次」这类内部说法。

@@ -63,3 +63,12 @@ Draft PR。说明里写：每条规则对应的代码位置；流式解析的做
 ## 第二轮补充（2026-10-02）
 
 你的两个问题的答案在契约第 7 节：`internal/blob/files.go` 批准你改，只为原始归档放开上限，普通附件不变；被禁止重新导入的消息跳过、不计入 `total` 和 `stored`、批次照常做完，已有测试的预期不变。
+
+## 跟进任务 I2：导入时先只存原话（2026-10-03）
+
+规则在契约第 11 节（R21，序列 I15–I20）。另开分支 `phase2/b4-I2-organize-later`，从 `origin/phase2/batch4` 建，Draft PR 的 base 是 `phase2/batch4`。
+
+- 迁移 029（`029_import_hold_organizing.sql`）分配给你：`import_batches` 加 `hold_organizing boolean NOT NULL DEFAULT false`。
+- 批准你改 `internal/postgres/jobs.go` 里领取任务的那一个条件：跳过 `hold_organizing` 为真的批次的**抽取**任务（`source.extract` 及其子段），别的环节不跳过。只改这一处。
+- 导入接口的 `organize` 字段、新接口 `organize`、列表项的 `organizeLater`。
+- 不带 `organize` 时按 `later`。已有的导入测试如果因此要改预期，列给协调者，不要自己改。

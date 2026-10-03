@@ -598,5 +598,95 @@
     "U2b": {
       "project_timeline_requirement": "cancelled; section 8 table first row excluded"
     }
+  },
+  "supplement_R23_275f97f": {
+    "authority": "batch2/README.md section 13, R23 and X19-X23; coordinator supplement request 2026-10-03",
+    "limits": {
+      "previous_rounds": 6,
+      "characters_per_message": 1200,
+      "roles": [
+        "user",
+        "assistant"
+      ],
+      "connectors": [
+        "desk",
+        "desk-incomplete"
+      ],
+      "extraction_calls": 1,
+      "future_messages": 0
+    },
+    "fixtures": {
+      "previous_question": "下周去成都。",
+      "previous_answer": "成都安排记下了，下周在那里见老李。",
+      "current_question": "改到下下周吧，把老王也叫上。",
+      "current_answer": "已记下这次改动。",
+      "memory": "计划下下周去成都并邀老王",
+      "other_question": "另一段对话准备去杭州见钱叔，代号隔离杏色7241。",
+      "other_answer": "另一段回答只谈杭州钱叔，代号隔离靛色7242。",
+      "foreign_question": "另一位用户去昆明见孙叔，代号私有绿色8241。",
+      "foreign_answer": "另一位用户的回答昆明孙叔，代号私有蓝色8242。",
+      "future_question": "后来一轮才说深圳赵叔，未来橙色9241。",
+      "future_answer": "后来回答深圳赵叔，未来紫色9242。"
+    },
+    "X19": {
+      "memories": 1,
+      "people": [
+        "老王"
+      ],
+      "places": [
+        "成都"
+      ],
+      "quote_source": "current_source_only",
+      "neighbors": 2,
+      "boundary_prior_rounds": 8,
+      "boundary_retained_rounds": [
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
+      "boundary_neighbor_messages": 12,
+      "character_unit": "Unicode code points"
+    },
+    "X20": {
+      "neighbors": 2,
+      "other_conversation_messages": 0,
+      "other_owner_messages": 0,
+      "foreign_mentions": 0
+    },
+    "X21": {
+      "cleared_messages": 0,
+      "outdated_question_kept": true,
+      "outdated_answer": "（先前回答的依据已更新，请按现在的资料回答）",
+      "ordinary_messages_kept": 2,
+      "neighbors": 4
+    },
+    "X22": {
+      "enqueued_sources": 1,
+      "priority": 10,
+      "backfill_marker_present": true,
+      "neighbors": 2,
+      "memories": 1,
+      "people": [
+        "老王"
+      ],
+      "places": [
+        "成都"
+      ],
+      "old_days": 7
+    },
+    "X23": {
+      "neighbor_quote_memories": 0,
+      "mixed_quote_memories": 1,
+      "only_invalid_state": "empty",
+      "mixed_state": "done",
+      "invalid_user_quote": "下周去成都。",
+      "invalid_assistant_quote": "成都安排记下了，下周在那里见老李。",
+      "invalid_user_memory": "错误地把上文问题当成依据7611",
+      "invalid_assistant_memory": "错误地把上文回答当成依据7612",
+      "accepted_quote": "改到下下周吧，把老王也叫上。"
+    }
   }
 }

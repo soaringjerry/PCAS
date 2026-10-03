@@ -14,7 +14,7 @@ function workspace(candidates: Candidate[] = []): State {
     tasks: [{ id: 'task-original', title: '原任务：长标题与原说明必须保留', notes: '原说明', status: 'todo', dependsOn: [], checklist: [], triggers: [], sources: [source], history: [], createdAt: at, updatedAt: at }],
     ideas: [], projects: [], memories: [], candidates,
     agents: [{ id: 'agent-limited', name: '独立验收模型', enabled: false, available: true, default: true, channel: 'api', note: '', inputPrice: 3, outputPrice: 7, maxOutput: 100, memoryKinds: ['fact', 'plan'], includeInferred: false }],
-    docs: [], runs: [], samples: [], sources: [{ id: source.sourceId, name: source.label, method: 'manual', status: 'manual', note: '不随忽略候选删除', itemCount: 1 }], jobs: [], activity: [], excludedMemories: {},
+    docs: [], runs: [], samples: [], sources: [{ id: source.sourceId, name: source.label, kind: 'file', single: true, status: 'manual', note: '不随忽略候选删除', itemCount: 1 }], jobs: [], activity: [], excludedMemories: {},
   }
 }
 function candidate(kind: Candidate['kind'], id = `candidate-${kind}`): Candidate {

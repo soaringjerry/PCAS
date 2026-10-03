@@ -263,40 +263,10 @@ func (s *Store) snapshotTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) (
 	if out.Samples, err = queryDocuments[workspace.Sample](ctx, tx, "SELECT document || jsonb_build_object('stale',stale,'state',state) FROM training_samples WHERE owner_id=$1 ORDER BY document->>'createdAt' DESC,id", string(scope.OwnerID)); err != nil {
 		return out, err
 	}
-	rows, err := tx.Query(ctx, `SELECT s.id::text,v.title,s.connector,r.updated_at,(SELECT count(*) FROM chunks c WHERE c.owner_id=s.owner_id AND c.source_id=s.id AND c.source_version=r.version),
-		EXISTS(SELECT 1 FROM memory_jobs j WHERE j.owner_id=s.owner_id AND j.record_id=s.id AND j.record_version=r.version AND j.state IN ('failed','blocked')),
-		EXISTS(SELECT 1 FROM memory_jobs j WHERE j.owner_id=s.owner_id AND j.record_id=s.id AND j.record_version=r.version AND j.state IN ('queued','leased'))
-		FROM sources s JOIN memory_records r ON (r.owner_id,r.id)=(s.owner_id,s.id) JOIN source_versions v ON (v.owner_id,v.source_id,v.version)=(r.owner_id,r.id,r.version) WHERE s.owner_id=$1 AND r.state='active' ORDER BY r.updated_at DESC`, string(scope.OwnerID))
-	if err != nil {
+	if out.Sources, err = sourceGroupsTx(ctx, tx, scope); err != nil {
 		return out, err
 	}
-	for rows.Next() {
-		var source workspace.Source
-		var at time.Time
-		var blocked, pending bool
-		if err = rows.Scan(&source.ID, &source.Name, &source.Method, &at, &source.ItemCount, &blocked, &pending); err != nil {
-			rows.Close()
-			return out, err
-		}
-		source.Status = "connected"
-		source.Note = "原文已保存"
-		if pending {
-			source.Status = "syncing"
-			source.Note = "原文可读，索引处理中"
-		}
-		if blocked {
-			source.Status = "failed"
-			source.Note = "原文可读，部分处理未完成；展开后台任务查看缺口"
-		}
-		source.LastSyncAt = at.UTC().Format(time.RFC3339Nano)
-		out.Sources = append(out.Sources, source)
-	}
-	err = rows.Err()
-	rows.Close()
-	if err != nil {
-		return out, err
-	}
-	rows, err = tx.Query(ctx, `SELECT j.id::text,j.stage,j.state,j.error_code,j.created_at,j.available_at,
+	rows, err := tx.Query(ctx, `SELECT j.id::text,j.stage,j.state,j.error_code,j.created_at,j.available_at,
 		coalesce((SELECT v.title FROM source_versions v WHERE (v.owner_id,v.source_id,v.version)=(j.owner_id,j.record_id,j.record_version)),'')
 		FROM memory_jobs j WHERE j.owner_id=$1 ORDER BY j.created_at DESC LIMIT 500`, string(scope.OwnerID))
 	if err != nil {

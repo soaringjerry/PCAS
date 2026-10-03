@@ -1,8 +1,8 @@
 import { RecallSheet } from '../components/RecallSheet'
 import { SourceSheet } from '../components/SourceSheet'
 import { ImportSheet } from '../components/ImportSheet'
-import { downloadExport } from '../store/api'
-import { useEffect, useRef, useState } from 'react'
+import { api, downloadExport } from '../store/api'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { ChevronRight, CircleAlert, Download, History, Info, RotateCw, Search, Trash2, Upload } from 'lucide-react'
 import { Checkbox, Chip } from '../components/controls'
@@ -11,8 +11,8 @@ import { ConfirmModal, SideSheet } from '../components/Overlay'
 import { UnsureSheet } from '../components/UnsureSheet'
 import { Button, Empty, Progress, Seg, Sheet, Spinner, Switch, Tag } from '../components/ui'
 import { jobStatusLabel, memoryKindLabel, sampleStateLabel, sourceStatusLabel, triggerLabel } from '../domain/labels'
-import { formatAgo, formatWhen } from '../domain/time'
-import type { Epistemic, Memory, MemoryFacet, MemoryKind, MemoryMention, TrainingSample } from '../domain/types'
+import { formatAgo, formatTimestamp, formatWhen } from '../domain/time'
+import type { Epistemic, Memory, MemoryFacet, MemoryKind, MemoryMention, Source, TrainingSample } from '../domain/types'
 import { useStore } from '../store/context'
 import { useMemory, useMemoryFacets, useMemoryList } from '../store/memories'
 import { useToast } from '../store/toast'
@@ -454,39 +454,98 @@ function MemoryTab() {
   )
 }
 
+const sourceKindMark: Record<Source['kind'], string> = { said: '说', note: '记', telegram: 'T', import: '聊', file: '文' }
+const sourceKindText: Record<Source['kind'], string> = { said: '你在这里说过的每一句', note: '手动添加记忆时写下的', telegram: '发给机器人的消息', import: '导入的聊天记录', file: '单份资料' }
+const roleText: Record<string, string> = { user: '你', assistant: 'AI', system: '系统', tool: '工具' }
+
+interface SourceItem { id: string; title: string; excerpt: string; role?: string; at: string }
+
+/** The originals behind one library entry, newest first, a page at a time. */
+function SourceGroupSheet({ group, onOpen, onClose }: { group: Source; onOpen: (id: string) => void; onClose: () => void }) {
+  const { state } = useStore()
+  const [items, setItems] = useState<SourceItem[]>([])
+  const [next, setNext] = useState('')
+  const [busy, setBusy] = useState(true)
+  const [error, setError] = useState('')
+  const [typed, setTyped] = useState('')
+  const [find, setFind] = useState('')
+  // Search a moment after typing stops, not on every key.
+  useEffect(() => {
+    const t = window.setTimeout(() => setFind(typed.trim()), 300)
+    return () => window.clearTimeout(t)
+  }, [typed])
+  const load = useCallback(async (cursor: string) => {
+    setBusy(true); setError('')
+    try {
+      const page = await api<{ items: SourceItem[]; next: string }>(`/v1/workspace/source-groups/${encodeURIComponent(group.id)}/items?limit=50${find ? `&q=${encodeURIComponent(find)}` : ''}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`)
+      setItems((old) => (cursor ? [...old, ...page.items] : page.items))
+      setNext(page.next)
+    } catch (e) { setError(e instanceof Error ? e.message : '没读到，请重试') } finally { setBusy(false) }
+  }, [group.id, find])
+  // The list is fetched after the sheet opens; nothing is shown from a previous entry.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { void load('') }, [load])
+  return (
+    <SideSheet title={group.name} top={<span className="tiny muted">共 {group.itemCount} 条，新的在前</span>} onClose={onClose}>
+      {group.itemCount > 10 && <input className="input" type="search" aria-label="在这里面搜" placeholder="搜这里面的字…" value={typed} onChange={(e) => setTyped(e.target.value)} />}
+      <div className="list">
+        {items.map((item) => (
+          <button key={item.id} type="button" className="item source-item" onClick={() => onOpen(item.id)} aria-label={`查看原文：${[item.title, item.excerpt].filter(Boolean).join(' · ')}`}>
+            <div className="grow stack-sm" style={{ gap: 4 }}>
+              <span className="item-title">{item.excerpt || item.title || '（没有文字）'}</span>
+              <div className="meta" style={{ marginTop: 0 }}>
+                {item.role && roleText[item.role] && <span>{roleText[item.role]}</span>}
+                {group.kind === 'import' && item.title && <span>{item.title}</span>}
+                <span>{formatTimestamp(item.at, state.settings.timezone ?? 'UTC')}</span>
+              </div>
+            </div>
+            <ChevronRight size={14} />
+          </button>
+        ))}
+      </div>
+      {error && <p className="form-error" role="alert">{error}</p>}
+      {!busy && !error && items.length === 0 && <p className="hall-empty">{find ? '没有搜到。' : '这里现在没有内容。'}</p>}
+      {(next || busy) && <Button disabled={busy} onClick={() => void load(next)}>{busy ? '正在读取…' : '再看 50 条'}</Button>}
+    </SideSheet>
+  )
+}
+
 function SourcesTab() {
   const [importing, setImporting] = useState(false)
   const [sourceId, setSourceId] = useState<string | null>(null)
+  const [group, setGroup] = useState<Source | null>(null)
   const { state, dispatch } = useStore()
   const rank = { running: 0, failed: 1, waiting: 2, queued: 3, done: 4 }
   const jobs = [...state.jobs].sort((a, b) => rank[a.status] - rank[b.status])
   return (
     <div className="stack">
       <div className="spread">
-        <p className="small muted">资料从哪来。各平台能用的导入方式还在逐个验证。</p>
+        <p className="small muted">资料从哪来。同一个出处的合在一起，点开再逐条看。</p>
         <Button variant="primary" icon={<Upload size={14} />} onClick={() => setImporting(true)}>
           导入资料
         </Button>
       </div>
       {sourceId && <SourceSheet id={sourceId} onClose={() => setSourceId(null)} />}
       {importing && <ImportSheet onClose={() => setImporting(false)} />}
+      {group && <SourceGroupSheet group={group} onOpen={setSourceId} onClose={() => setGroup(null)} />}
+      {state.sources.length === 0 && <p className="hall-empty">还没有资料。跟秘书说话、导入聊天记录或文件之后，会出现在这里。</p>}
       <div className="sources-grid">
         {state.sources.map((s) => (
-          <button key={s.id} type="button" className="source-card" onClick={() => setSourceId(s.id)} aria-label={`查看原文：${s.name}`}>
+          <button key={s.id} type="button" className="source-card" onClick={() => (s.single ? setSourceId(s.id) : setGroup(s))} aria-label={s.single ? `查看原文：${s.name}` : `查看：${s.name}，共 ${s.itemCount} 条`}>
             <div className="source-card-head">
-              <span className="stamp">{s.name.slice(0, 1)}</span>
+              <span className="stamp">{sourceKindMark[s.kind] ?? s.name.slice(0, 1)}</span>
               <div className="grow">
                 <div className="source-name">{s.name}</div>
-                <div className="tiny muted">{s.method}</div>
+                <div className="tiny muted">{sourceKindText[s.kind]}</div>
               </div>
-              <Tag tone={sourceStatusLabel[s.status].tone}>{sourceStatusLabel[s.status].text}</Tag>
+              {s.status !== 'connected' && <Tag tone={sourceStatusLabel[s.status].tone}>{sourceStatusLabel[s.status].text}</Tag>}
             </div>
             {s.note && <p className="source-note">{s.note}</p>}
             <div className="source-card-foot">
-              <span>{s.itemCount} 条</span>
-              {s.lastSyncAt && <span>{formatAgo(s.lastSyncAt, state.settings.timezone ?? 'UTC')}更新</span>}
+              {!s.single && <span>{s.itemCount} 条</span>}
+              {s.lastSyncAt && <span>{s.single ? `${formatAgo(s.lastSyncAt, state.settings.timezone ?? 'UTC')}更新` : `最近 ${formatAgo(s.lastSyncAt, state.settings.timezone ?? 'UTC')}`}</span>}
               <span className="source-open">
-                查看原文
+                {s.single ? '查看原文' : '逐条查看'}
                 <ChevronRight size={13} />
               </span>
             </div>

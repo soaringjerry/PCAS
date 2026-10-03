@@ -472,9 +472,10 @@ func TestConversationOrderAcceptance_TerminalRecoveryPreservesRawWithoutAutomati
 	}
 	sourceVisible := false
 	for _, entry := range recovered.State.Sources {
-		if entry.ID == string(source.ID) {
+		// The library lists everything said to the secretary as one entry.
+		if entry.ID == "said" && entry.ItemCount >= 1 {
 			sourceVisible = true
-			if entry.Note != "原文已保存" || entry.Status != "connected" {
+			if entry.Note != "" || entry.Status != "connected" {
 				t.Fatalf("untouched raw source falsely presented as extracted/failure: %+v", entry)
 			}
 		}

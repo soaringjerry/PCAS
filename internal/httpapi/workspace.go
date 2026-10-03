@@ -31,6 +31,23 @@ type Options struct {
 }
 
 func (s *Server) workspaceRoutes(mux *http.ServeMux) {
+	if groups, ok := s.options.Workspace.(interface {
+		SourceGroupItems(context.Context, memory.Scope, string, string, string, int) (workspace.SourceItems, error)
+	}); ok {
+		mux.HandleFunc("GET /v1/workspace/source-groups/{key}/items", s.authorize(func(w http.ResponseWriter, r *http.Request, scope memory.Scope) {
+			if !scope.IsOwner {
+				s.fail(w, memory.ErrForbidden)
+				return
+			}
+			limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+			out, err := groups.SourceGroupItems(r.Context(), scope, r.PathValue("key"), r.URL.Query().Get("q"), r.URL.Query().Get("cursor"), limit)
+			if err != nil {
+				s.fail(w, err)
+				return
+			}
+			writeJSON(w, 200, out)
+		}))
+	}
 	if reader, ok := s.options.Workspace.(interface {
 		ListMemories(context.Context, memory.Scope, workspace.MemoryQuery) (workspace.MemoryPage, error)
 		GetMemory(context.Context, memory.Scope, string) (workspace.Memory, error)

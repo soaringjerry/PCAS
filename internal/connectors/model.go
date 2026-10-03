@@ -60,6 +60,7 @@ type Configured struct {
 	WebhookToken string     `json:"webhook_token,omitempty"`
 }
 type Result struct {
+	BatchID    memory.ID    `json:"batchId,omitempty"`
 	Refs       []memory.Ref `json:"refs"`
 	Imported   int          `json:"imported"`
 	Duplicates int          `json:"duplicates"`
@@ -73,4 +74,22 @@ type API interface {
 	ImportBatch(context.Context, memory.Scope, memory.ID, Batch) (Result, error)
 	ImportArchive(context.Context, memory.Scope, string, []byte) (Result, error)
 	AuthenticateConnection(context.Context, memory.ID, string) (memory.Scope, error)
+}
+
+type ImportBatch struct {
+	ID             memory.ID  `json:"id"`
+	ArchiveID      memory.ID  `json:"archiveId"`
+	ArchiveVersion int        `json:"archiveVersion"`
+	Name           string     `json:"name"`
+	State          string     `json:"state"`
+	Total          int        `json:"total"`
+	Stored         int        `json:"stored"`
+	Organized      int        `json:"organized"`
+	LeftOut        int        `json:"leftOut"`
+	Earliest       *time.Time `json:"earliest"`
+	Latest         *time.Time `json:"latest"`
+	ErrorCode      string     `json:"errorCode"`
+	Error          string     `json:"error"`
+	CreatedAt      time.Time  `json:"createdAt"`
+	UpdatedAt      time.Time  `json:"updatedAt"`
 }

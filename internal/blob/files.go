@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/soaringjerry/PCAS/internal/connectors"
 	"github.com/soaringjerry/PCAS/internal/memory"
 )
 
@@ -41,6 +42,16 @@ func (f *Files) path(scope memory.Scope, key string) (string, error) {
 	return filepath.Join(f.root, parts[0], parts[1]), nil
 }
 func (f *Files) Put(ctx context.Context, scope memory.Scope, r io.Reader) (string, error) {
+	return f.put(ctx, scope, r, MaxBytes)
+}
+
+// PutArchive is reserved for original archives. Ordinary Put keeps its 20 MB
+// limit, independently of the configurable archive upload limit.
+func (f *Files) PutArchive(ctx context.Context, scope memory.Scope, r io.Reader) (string, error) {
+	return f.put(ctx, scope, r, connectors.MaxUploadBytes)
+}
+
+func (f *Files) put(ctx context.Context, scope memory.Scope, r io.Reader, limit int64) (string, error) {
 	if !scope.Valid() || !scope.IsOwner {
 		return "", memory.ErrForbidden
 	}
@@ -58,11 +69,11 @@ func (f *Files) Put(ctx context.Context, scope memory.Scope, r io.Reader) (strin
 	defer os.Remove(file.Name())
 	defer file.Close()
 	hash := sha256.New()
-	n, err := io.Copy(io.MultiWriter(file, hash), io.LimitReader(r, MaxBytes+1))
+	n, err := io.Copy(io.MultiWriter(file, hash), io.LimitReader(r, limit+1))
 	if err != nil {
 		return "", err
 	}
-	if n == 0 || n > MaxBytes {
+	if n == 0 || n > limit {
 		return "", memory.ErrInvalid
 	}
 	if err := ctx.Err(); err != nil {

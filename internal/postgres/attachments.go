@@ -11,7 +11,6 @@ import (
 	"strings"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/soaringjerry/PCAS/internal/connectors"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/worker"
 )
@@ -34,25 +33,32 @@ func (s *Store) IngestAttachment(ctx context.Context, scope memory.Scope, in mem
 	in.Text = "[附件原件；正文尚未解析。校验标识：" + strings.Split(strings.Split(key, "/")[1], "-")[0] + "]"
 	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		var err error
-		result, err = s.ingestTx(ctx, tx, scope, in)
-		if err != nil {
-			return err
-		}
-		if result.Duplicate {
-			_, err := tx.Exec(ctx, "INSERT INTO blob_cleanup_jobs(owner_id,blob_key) VALUES($1,$2) ON CONFLICT DO NOTHING", string(scope.OwnerID), key)
-			return err
-		}
-		if _, err := tx.Exec(ctx, "UPDATE source_versions SET blob_key=$4,body='' WHERE owner_id=$1 AND source_id=$2 AND version=$3", string(scope.OwnerID), string(result.ID), result.Version, key); err != nil {
-			return err
-		}
-		if _, err := tx.Exec(ctx, "DELETE FROM memory_jobs WHERE owner_id=$1 AND record_id=$2 AND record_version=$3 AND stage='source.chunk' AND state='queued'", string(scope.OwnerID), string(result.ID), result.Version); err != nil {
-			return err
-		}
-		return enqueue(ctx, tx, scope.OwnerID, result.ID, result.Version, "source.parse")
+		result, err = s.ingestAttachmentTx(ctx, tx, scope, in, key)
+		return err
 	})
 	if err != nil { // An uncommitted upload is cleaned only when no committed source uses it.
 		_, _ = s.pool.Exec(context.WithoutCancel(ctx), "INSERT INTO blob_cleanup_jobs(owner_id,blob_key) VALUES($1,$2) ON CONFLICT DO NOTHING", string(scope.OwnerID), key)
 	}
+	return result, err
+}
+
+// ingestAttachmentTx lets archive creation and its batch share one transaction.
+func (s *Store) ingestAttachmentTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in memory.IngestRequest, key string) (memory.IngestResult, error) {
+	result, err := s.ingestTx(ctx, tx, scope, in)
+	if err != nil {
+		return result, err
+	}
+	if result.Duplicate {
+		_, err = tx.Exec(ctx, "INSERT INTO blob_cleanup_jobs(owner_id,blob_key) VALUES($1,$2) ON CONFLICT DO NOTHING", string(scope.OwnerID), key)
+		return result, err
+	}
+	if _, err = tx.Exec(ctx, "UPDATE source_versions SET blob_key=$4,body='' WHERE owner_id=$1 AND source_id=$2 AND version=$3", string(scope.OwnerID), string(result.ID), result.Version, key); err != nil {
+		return result, err
+	}
+	if _, err = tx.Exec(ctx, "DELETE FROM memory_jobs WHERE owner_id=$1 AND record_id=$2 AND record_version=$3 AND stage='source.chunk' AND state='queued'", string(scope.OwnerID), string(result.ID), result.Version); err != nil {
+		return result, err
+	}
+	err = enqueue(ctx, tx, scope.OwnerID, result.ID, result.Version, "source.parse")
 	return result, err
 }
 func (s *Store) OpenAttachment(ctx context.Context, scope memory.Scope, id memory.ID, version int) (io.ReadCloser, string, string, error) {
@@ -80,54 +86,11 @@ func (s *Store) ProcessAttachment(ctx context.Context, j worker.Job) error {
 	scope := memory.Scope{OwnerID: j.OwnerID, PrincipalID: "worker", IsOwner: true}
 	file, title, media, err := s.OpenAttachment(ctx, scope, j.Record.ID, j.Record.Version)
 	if err != nil {
-		return err
+		return s.recordImportFailure(ctx, j, err)
 	}
 	defer file.Close()
 	if media == "application/x-pcas-archive" {
-		data, err := io.ReadAll(io.LimitReader(file, 20<<20+1))
-		if err != nil || len(data) > 20<<20 {
-			return memory.ErrInvalid
-		}
-		batch, err := connectors.DecodeArchive(title, data)
-		if err != nil {
-			return memory.ErrInvalid
-		}
-		return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-			if err := lockJob(ctx, tx, j); err != nil {
-				return err
-			}
-			var connector string
-			if err := tx.QueryRow(ctx, "SELECT connector FROM sources WHERE owner_id=$1 AND id=$2", string(j.OwnerID), string(j.Record.ID)).Scan(&connector); err != nil {
-				return err
-			}
-			namespace := "archive-records"
-			connectionID := strings.TrimPrefix(connector, "connection-archive:")
-			if strings.HasPrefix(connector, "connection-archive:") && memory.ID(connectionID).Valid() {
-				namespace = "connection:" + connectionID
-			}
-			gaps := batch.Gaps
-			if gaps == nil {
-				gaps = []string{}
-			}
-			if _, err := tx.Exec(ctx, `INSERT INTO source_contexts(owner_id,source_id,source_version,gaps) VALUES($1,$2,$3,$4) ON CONFLICT(owner_id,source_id,source_version) DO UPDATE SET gaps=excluded.gaps`, string(j.OwnerID), string(j.Record.ID), j.Record.Version, asJSON(gaps)); err != nil {
-				return err
-			}
-			result, err := s.importBatchTx(ctx, tx, scope, namespace, batch, &j.Record)
-			if err != nil {
-				return err
-			}
-			if namespace != "archive-records" {
-				if _, err := tx.Exec(ctx, "UPDATE connector_configs SET imported=imported+$3,gaps=$4 WHERE owner_id=$1 AND id=$2", string(j.OwnerID), connectionID, result.Imported, asJSON(result.Gaps)); err != nil {
-					return err
-				}
-			}
-			if result.Blocked > 0 {
-				if err := redactArchivesTx(ctx, tx, scope, []string{string(j.Record.ID)}); err != nil {
-					return err
-				}
-			}
-			return acknowledge(ctx, tx, j)
-		})
+		return s.processArchiveImport(ctx, j, title, file)
 	}
 
 	dir, err := os.MkdirTemp("", "pcas-parse-")

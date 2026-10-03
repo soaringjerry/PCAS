@@ -200,7 +200,7 @@ func (s *Store) ProcessEmbedding(ctx context.Context, j worker.Job) (err error) 
 	for start := 0; start < len(texts); start += 32 {
 		v, err := s.models.EmbedProvider(ctx, provider, texts[start:min(start+32, len(texts))])
 		if errors.Is(err, memory.ErrUnavailable) && start == 0 {
-			if err := s.releaseUnavailableReservation(ctx, j); err != nil {
+			if err := s.releaseUnavailableReservation(ctx, j, reservationID); err != nil {
 				return err
 			}
 			return errors.Join(memory.ErrUnavailable, &worker.JobError{Code: "provider_unavailable", Retry: true})
@@ -503,7 +503,7 @@ func (s *Store) ProcessExtraction(ctx context.Context, j worker.Job) (err error)
 		return settleErr
 	}
 	if errors.Is(err, memory.ErrUnavailable) {
-		if err := s.releaseUnavailableReservation(ctx, j); err != nil {
+		if err := s.releaseUnavailableReservation(ctx, j, reservationID); err != nil {
 			return err
 		}
 		return &worker.JobError{Code: "provider_unavailable", Retry: true}
@@ -671,12 +671,12 @@ func (s *Store) ProcessExtraction(ctx context.Context, j worker.Job) (err error)
 
 // ErrUnavailable means no request was sent. Release its reservation under the
 // job fence so a metered retry cannot be mistaken for an ambiguous paid call.
-func (s *Store) releaseUnavailableReservation(ctx context.Context, j worker.Job) error {
+func (s *Store) releaseUnavailableReservation(ctx context.Context, j worker.Job, reservationID string) error {
 	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		if err := lockJob(ctx, tx, j); err != nil {
 			return err
 		}
-		_, err := tx.Exec(ctx, "DELETE FROM background_usage WHERE job_id=$1", string(j.ID))
+		_, err := tx.Exec(ctx, "DELETE FROM background_usage WHERE owner_id=$1 AND job_id=$2 AND id=$3", string(j.OwnerID), string(j.ID), reservationID)
 		return err
 	})
 }

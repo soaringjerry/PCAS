@@ -26,7 +26,7 @@ type storedDeskContext struct {
 }
 
 // Resolve references and perform semantic retrieval before Execute takes the
-// owner lock. All selected versions and previous outputs are rechecked inside
+// owner lock. All selected versions and current documents are rechecked inside
 // the transaction; this snapshot never grants access by itself.
 func (s *Store) prepareRunContext(ctx context.Context, scope memory.Scope, c workspace.Command) (context.Context, error) {
 	if len(c.DeskTurnIDs) > 6 {

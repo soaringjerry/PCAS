@@ -308,7 +308,7 @@ func (s *Store) processConversationExtraction(ctx context.Context, j worker.Job,
 			return settleErr
 		}
 		if errors.Is(err, memory.ErrUnavailable) {
-			if err := s.releaseUnavailableReservation(ctx, j); err != nil {
+			if err := s.releaseUnavailableReservation(ctx, j, reservationID); err != nil {
 				return err
 			}
 			return &worker.JobError{Code: "provider_unavailable", Retry: true}

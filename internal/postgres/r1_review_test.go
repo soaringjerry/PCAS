@@ -17,7 +17,7 @@ import (
 // Exercise the real HTTP provider while its response is withheld. Corrections
 // must not erase a paid answer; loss of access must dominate any correction.
 func TestR1R2CompletionRechecksDependencyAccess(t *testing.T) {
-	for _, change := range []string{"correct", "source-correct", "revoke", "correct-and-revoke", "correct-and-delete", "delete"} {
+	for _, change := range []string{"correct", "source-correct", "revoke", "correct-and-revoke", "correct-and-delete", "correct-and-full-delete", "delete"} {
 		t.Run(change, func(t *testing.T) {
 			s, scope := testStore(t), owner()
 			f := b4Model(t, s)
@@ -43,7 +43,7 @@ func TestR1R2CompletionRechecksDependencyAccess(t *testing.T) {
 				t.Fatal(ctx.Err())
 			}
 			switch change {
-			case "correct", "correct-and-revoke", "correct-and-delete":
+			case "correct", "correct-and-revoke", "correct-and-delete", "correct-and-full-delete":
 				b1Correct(t, s, scope, claim, "R1 corrected lighthouse fact")
 			case "source-correct":
 				sourceInput.ExternalVersion, sourceInput.Text = "2", "R1 corrected reference"
@@ -61,7 +61,7 @@ func TestR1R2CompletionRechecksDependencyAccess(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			if change == "delete" {
+			if change == "delete" || change == "correct-and-full-delete" {
 				workspaceCommand(t, s, scope, workspace.Command{Type: "deleteMemory", ID: string(second.ID)})
 			}
 			gate.unblock()
@@ -91,7 +91,7 @@ func TestR1R2CompletionRechecksDependencyAccess(t *testing.T) {
 					t.Errorf("inaccessible dependency retained output: %+v", r)
 				}
 			}
-			if !found && change != "delete" {
+			if !found && change != "delete" && change != "correct-and-full-delete" {
 				t.Error("run disappeared")
 			}
 			if len(st.Docs) != 0 {
@@ -619,5 +619,39 @@ func TestR1R6DeputySettlesReturnedUsageAfterLeaseLoss(t *testing.T) {
 	}
 	if state.Runs[0].Status != "failed" || state.Runs[0].Output != "" {
 		t.Error("billing resurrected failed result")
+	}
+}
+
+func TestR1R6UnavailableRetryKeepsPreviouslyReturnedCost(t *testing.T) {
+	s, scope := testStore(t), owner()
+	f := b4Model(t, s)
+	f.set("R1 invalid returned extraction", 200)
+	source := mustIngest(t, s, scope, memory.IngestRequest{Connector: "manual", ExternalID: "r1-retry", ExternalVersion: "1", Title: "R1 retry", Text: "R1 retry source", MediaType: "text/plain"})
+	job := leaseStage(t, s, scope, source.Ref, "source.extract")
+	if err := s.ProcessExtraction(context.Background(), job); err == nil {
+		t.Fatal("expected invalid returned extraction")
+	}
+	usage := b4Usage(t, s, scope)
+	if len(usage) != 1 {
+		t.Fatal(usage)
+	}
+	// An explicit retry can reserve a new call. If it is unavailable before
+	// submitting anything, only that new reservation may be removed.
+	reservationID, err := s.reserveModelCostID(context.Background(), scope.OwnerID, 0.01, &job)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.releaseUnavailableReservation(context.Background(), job, reservationID); err != nil {
+		t.Fatal(err)
+	}
+	state, err := s.Snapshot(context.Background(), scope)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if math.Abs(state.BudgetUsage-usage[0].Cost) > 1e-9 {
+		t.Errorf("unavailable retry erased previous spending: budget=%g actual=%g", state.BudgetUsage, usage[0].Cost)
+	}
+	if len(f.all()) != 1 {
+		t.Error("unavailable retry made another model call")
 	}
 }

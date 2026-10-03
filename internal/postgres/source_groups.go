@@ -14,30 +14,33 @@ import (
 // said to the secretary is one entry, each import is one entry, and a document
 // stands on its own. Records the system writes about its own actions are not
 // material and stay out.
-const sourceGroupKey = `CASE WHEN l.archive_id IS NOT NULL THEN 'import:'||l.archive_id::text
-  WHEN l.connector IN ('desk','desk-incomplete') THEN 'said'
-  WHEN l.connector IN ('memory-input','telegram','capture') THEN l.connector
-  ELSE l.id::text END`
-
-const liveSources = `SELECT s.id,s.connector,v.title,v.body,r.updated_at,r.created_at,r.version,
-  (SELECT ae.archive_id FROM archive_entries ae WHERE ae.owner_id=s.owner_id AND ae.source_id=s.id ORDER BY ae.archive_id LIMIT 1) AS archive_id
- FROM sources s JOIN memory_records r ON (r.owner_id,r.id)=(s.owner_id,s.id)
- JOIN source_versions v ON (v.owner_id,v.source_id,v.version)=(r.owner_id,r.id,r.version)
- WHERE s.owner_id=$1 AND r.state='active' AND s.connector NOT IN ('actions','corrections')
-  AND NOT EXISTS(SELECT 1 FROM archive_entries root WHERE root.owner_id=s.owner_id AND root.archive_id=s.id)`
-
 func sourceGroupsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) ([]workspace.Source, error) {
-	rows, err := tx.Query(ctx, `WITH live AS (`+liveSources+`),
- bad AS (SELECT DISTINCT record_id FROM memory_jobs WHERE owner_id=$1 AND state IN ('failed','blocked')),
- pend AS (SELECT DISTINCT record_id FROM memory_jobs WHERE owner_id=$1 AND state IN ('queued','leased'))
-SELECT k.key,min(k.connector),count(*),max(k.updated_at),min(k.title),
- bool_or(k.id IN (SELECT record_id FROM bad)),
- -- An import that is only stored waits for the owner, not for the queue.
- bool_or(k.archive_id IS NULL AND k.id IN (SELECT record_id FROM pend)),
+	// An import is counted from its archive's listing, in one pass; only the
+	// material outside archives, which stays small, is read row by row.
+	rows, err := tx.Query(ctx, `WITH bad AS (SELECT DISTINCT record_id FROM memory_jobs WHERE owner_id=$1 AND state IN ('failed','blocked')),
+ member AS (SELECT DISTINCT source_id FROM archive_entries WHERE owner_id=$1),
+ root AS (SELECT DISTINCT archive_id FROM archive_entries WHERE owner_id=$1),
+ imports AS (
+  SELECT 'import:'||ae.archive_id::text AS key,'import' AS connector,count(*) AS items,max(r.updated_at) AS at,'' AS title,
+   bool_or(ae.source_id IN (SELECT record_id FROM bad)) AS blocked,false AS pending,ae.archive_id
+  FROM archive_entries ae JOIN memory_records r ON (r.owner_id,r.id)=(ae.owner_id,ae.source_id)
+  WHERE ae.owner_id=$1 AND r.state='active' AND r.version=ae.source_version GROUP BY ae.archive_id),
+ rest AS (
+  SELECT CASE WHEN s.connector IN ('desk','desk-incomplete') THEN 'said' WHEN s.connector IN ('memory-input','telegram','capture') THEN s.connector ELSE s.id::text END AS key,
+   s.connector,s.id,r.updated_at,v.title
+  FROM sources s JOIN memory_records r ON (r.owner_id,r.id)=(s.owner_id,s.id)
+  JOIN source_versions v ON (v.owner_id,v.source_id,v.version)=(r.owner_id,r.id,r.version)
+  WHERE s.owner_id=$1 AND r.state='active' AND s.connector NOT IN ('actions','corrections')
+   AND s.id NOT IN (SELECT source_id FROM member) AND s.id NOT IN (SELECT archive_id FROM root)),
+ others AS (
+  SELECT k.key,min(k.connector) AS connector,count(*) AS items,max(k.updated_at) AS at,min(k.title) AS title,
+   bool_or(k.id IN (SELECT record_id FROM bad)) AS blocked,
+   bool_or(EXISTS(SELECT 1 FROM memory_jobs j WHERE j.owner_id=$1 AND j.record_id=k.id AND j.state IN ('queued','leased'))) AS pending,NULL::uuid AS archive_id
+  FROM rest k GROUP BY k.key)
+SELECT g.key,g.connector,g.items,g.at,g.title,g.blocked,g.pending,
  coalesce((SELECT v.title FROM memory_records r JOIN source_versions v ON (v.owner_id,v.source_id,v.version)=(r.owner_id,r.id,r.version)
-   WHERE r.owner_id=$1 AND r.id=min(k.archive_id::text)::uuid),'')
-FROM (SELECT l.*,`+sourceGroupKey+` AS key FROM live l) k
-GROUP BY k.key ORDER BY max(k.updated_at) DESC,k.key`, string(scope.OwnerID))
+   WHERE r.owner_id=$1 AND r.id=g.archive_id),'')
+FROM (SELECT * FROM imports UNION ALL SELECT * FROM others) g ORDER BY g.at DESC,g.key`, string(scope.OwnerID))
 	if err != nil {
 		return nil, err
 	}
@@ -118,14 +121,28 @@ func (s *Store) SourceGroupItems(ctx context.Context, scope memory.Scope, key, f
 		}
 		before, beforeID = parsed, id
 	}
-	rows, err := s.pool.Query(ctx, `WITH live AS (`+liveSources+`)
-SELECT k.id::text,k.title,left(k.body,160),coalesce(c.role,''),coalesce(rv.expressed_at,k.created_at) AS at
-FROM (SELECT l.*,`+sourceGroupKey+` AS key FROM live l) k
-JOIN record_versions rv ON (rv.owner_id,rv.record_id,rv.version)=($1,k.id,k.version)
-LEFT JOIN source_contexts c ON (c.owner_id,c.source_id,c.source_version)=($1,k.id,k.version)
-WHERE k.key=$2 AND (coalesce(rv.expressed_at,k.created_at),k.id)<($3,$4::uuid)
- AND ($6='' OR k.body ILIKE $6 ESCAPE '\' OR k.title ILIKE $6 ESCAPE '\')
-ORDER BY at DESC,k.id DESC LIMIT $5`, string(scope.OwnerID), key, before, beforeID, limit+1, pattern)
+	// The originals of one entry are found from where that entry lives: an
+	// archive's listing, or the handful of connectors that are grouped.
+	from := `sources s JOIN memory_records r ON (r.owner_id,r.id)=(s.owner_id,s.id)
+ WHERE s.owner_id=$1 AND r.state='active' AND s.connector=ANY($2::text[])
+  AND NOT EXISTS(SELECT 1 FROM archive_entries ae WHERE ae.owner_id=s.owner_id AND ae.source_id=s.id)`
+	var member any = []string{key}
+	if key == "said" {
+		member = []string{"desk", "desk-incomplete"}
+	}
+	if grouped {
+		from = `archive_entries ae JOIN memory_records r ON (r.owner_id,r.id)=(ae.owner_id,ae.source_id)
+ WHERE ae.owner_id=$1 AND ae.archive_id=$2::uuid AND r.state='active' AND r.version=ae.source_version`
+		member = archive
+	}
+	rows, err := s.pool.Query(ctx, `SELECT r.id::text,v.title,left(v.body,160),coalesce(c.role,''),coalesce(rv.expressed_at,r.created_at) AS at
+FROM (SELECT r.id,r.version,r.created_at FROM `+from+`) r
+JOIN source_versions v ON (v.owner_id,v.source_id,v.version)=($1,r.id,r.version)
+JOIN record_versions rv ON (rv.owner_id,rv.record_id,rv.version)=($1,r.id,r.version)
+LEFT JOIN source_contexts c ON (c.owner_id,c.source_id,c.source_version)=($1,r.id,r.version)
+WHERE (coalesce(rv.expressed_at,r.created_at),r.id)<($3,$4::uuid)
+ AND ($6='' OR v.body ILIKE $6 ESCAPE '\' OR v.title ILIKE $6 ESCAPE '\')
+ORDER BY at DESC,r.id DESC LIMIT $5`, string(scope.OwnerID), member, before, beforeID, limit+1, pattern)
 	if err != nil {
 		return out, err
 	}

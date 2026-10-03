@@ -11,14 +11,15 @@ type Batch = {
   id: string; name: string; state: 'importing' | 'paused' | 'done' | 'failed'
   archiveId: string; archiveVersion: number
   total: number; stored: number; organized: number; leftOut: number
+  organizeLater: boolean
   earliest: string; latest: string; errorCode: string; error: string; createdAt: string; updatedAt: string
 }
 function batch(state: Batch['state']): Batch {
   return { id: 'b4-synthetic-batch', archiveId: '11111111-1111-4111-8111-111111111111', archiveVersion: 1, name: 'chatgpt-export.zip', state, total: 500, stored: state === 'done' ? 500 : 250,
-    organized: state === 'done' ? 300 : 25, leftOut: 2, earliest: preview.earliest, latest: preview.latest,
+    organized: state === 'done' ? 300 : 25, organizeLater: false, leftOut: 2, earliest: preview.earliest, latest: preview.latest,
     errorCode: state === 'failed' ? 'invalid_json' : '', error: state === 'failed' ? '聊天文件没有读完，请继续导入。' : '', createdAt: at, updatedAt: at }
 }
-async function mock(page: Page, initial: Batch[] = [], failure?: { error: string; message: string; status: number }, importPreview = { ...preview, blocked: 0 }) {
+async function mock(page: Page, initial: Batch[] = [], failure?: { error: string; message: string; status: number }, importPreview = { ...preview, blocked: 0 }, completeImport = false) {
   const state: State = {
     version: 1, revision: 1, budgetUsage: 0, notices: [],
     settings: { dailyBudget: 10, autoAccept: false, wakeIdeas: false, followUps: false, dailyReviewAt: '09:00', timezone: 'Asia/Shanghai' },
@@ -27,6 +28,7 @@ async function mock(page: Page, initial: Batch[] = [], failure?: { error: string
   const items = initial.map(item => ({ ...item }))
   const requests: { path: string; method: string }[] = []
   const errors: string[] = []
+  const submittedModes: string[] = []
   page.on('pageerror', error => errors.push(error.message))
   await page.route('**/v1/**', route => {
     const path = new URL(route.request().url()).pathname
@@ -49,8 +51,20 @@ async function mock(page: Page, initial: Batch[] = [], failure?: { error: string
       return route.fulfill({ json: importPreview })
     }
     if (path === '/v1/connectors/archive' && method === 'POST') {
-      items.unshift({ ...batch('importing'), total: importPreview.messages - importPreview.leftOut - importPreview.blocked, stored: importPreview.alreadyImported, organized: 0, leftOut: importPreview.leftOut })
+      const form = route.request().postDataBuffer()?.toString('utf8') ?? ''
+      const organize = form.match(/name="organize"\r?\n\r?\n([^\r\n]+)/)?.[1] ?? 'later'
+      submittedModes.push(organize)
+      const total = importPreview.messages - importPreview.leftOut - importPreview.blocked
+      items.unshift({ ...batch(completeImport ? 'done' : 'importing'), total, stored: completeImport ? total : importPreview.alreadyImported, organized: 0, organizeLater: organize !== 'now', leftOut: importPreview.leftOut })
       return route.fulfill({ status: 202, json: { batchId: items[0].id, imported: 0, refs: [], gaps: importPreview.gaps } })
+    }
+    const organizeAction = path.match(/^\/v1\/connectors\/imports\/([^/]+)\/organize$/)
+    if (organizeAction && method === 'POST') {
+      const item = items.find(item => item.id === organizeAction[1])
+      if (!item) return route.fulfill({ status: 404, json: { error: 'not_found' } })
+      item.organizeLater = false
+      item.organized = 1
+      return route.fulfill({ json: item })
     }
     const action = path.match(/^\/v1\/connectors\/imports\/([^/]+)\/(pause|resume)$/)
     if (action && method === 'POST') {
@@ -61,7 +75,7 @@ async function mock(page: Page, initial: Batch[] = [], failure?: { error: string
     }
     return route.fulfill({ status: 500, json: { error: 'unexpected_b4_request' } })
   })
-  return { requests, errors }
+  return { requests, errors, submittedModes }
 }
 async function open(page: Page) {
   await page.goto('/settings')
@@ -123,6 +137,51 @@ test('W1 文件选择先预览：数量、时间、已导过和放不下；确�
   await page.getByRole('button', { name: /确认导入|开始导入|^确认$/ }).click()
   expect((await response).ok()).toBeTruthy()
   expect(m.requests.filter(r => r.path === '/v1/connectors/archive' && r.method === 'POST')).toHaveLength(1)
+  expect(m.errors).toEqual([])
+})
+
+// W5 expectations were appended and committed in 631ab49 before this code.
+test('W5 默认先存着；存好后开始整理，进度随接口返回增长', async ({ page }) => {
+  const expected = gold.coordinator_amendment_b526328.fixtures
+  const m = await mock(page, [], undefined, { ...preview, blocked: 0 }, true)
+  await open(page)
+  await choose(page)
+  await expect(page.getByText(expected.laterLabel, { exact: false }).first()).toBeVisible()
+  expect(m.requests.filter(r => r.path === '/v1/connectors/archive' && r.method === 'POST')).toHaveLength(0)
+  const importing = page.waitForResponse(r => new URL(r.url()).pathname === '/v1/connectors/archive' && r.request().method() === 'POST')
+  await page.getByRole('button', { name: /确认导入|开始导入|^确认$/ }).click()
+  expect((await importing).ok()).toBeTruthy()
+  expect(m.submittedModes).toEqual(['later'])
+  await expect(page.locator('body')).toContainText(expected.heldStatus)
+  const start = page.getByRole('button', { name: expected.startLabel, exact: true })
+  await expect(start).toBeVisible()
+  const organizing = page.waitForResponse(r => new URL(r.url()).pathname.endsWith('/b4-synthetic-batch/organize') && r.request().method() === 'POST')
+  await start.click()
+  expect((await organizing).ok()).toBeTruthy()
+  expect(m.requests.filter(r => r.path.endsWith('/organize') && r.method === 'POST')).toHaveLength(1)
+  await expect(page.getByText(/已整理\s*1|整理[^\n]*1\s*\/|1\s*\/\s*10/).first()).toBeVisible()
+  await expect(page.locator('body')).not.toContainText(expected.heldStatus)
+  await noOverflow(page)
+  expect(m.errors).toEqual([])
+})
+
+test('W5 确认前可以改为现在整理，表单实际发送 now', async ({ page }) => {
+  const m = await mock(page)
+  await open(page)
+  await choose(page)
+  const nowName = /现在整理|立即整理|马上整理|边存边整理|导入时整理|同时整理/
+  const option = page.getByRole('option', { name: nowName })
+  if (await option.count()) {
+    const label = (await option.first().textContent())!.trim()
+    await page.getByRole('combobox').filter({ has: option }).selectOption({ label })
+  } else {
+    await page.getByText(nowName).first().click()
+  }
+  const importing = page.waitForResponse(r => new URL(r.url()).pathname === '/v1/connectors/archive' && r.request().method() === 'POST')
+  await page.getByRole('button', { name: /确认导入|开始导入|^确认$/ }).click()
+  expect((await importing).ok()).toBeTruthy()
+  expect(m.submittedModes).toEqual(['now'])
+  await noOverflow(page)
   expect(m.errors).toEqual([])
 })
 

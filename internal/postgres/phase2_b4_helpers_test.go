@@ -102,7 +102,7 @@ func b4HTTP(t *testing.T, s *Store, scope memory.Scope, method, path string, bod
 	b4API(s, scope, true).ServeHTTP(w, r)
 	return w
 }
-func b4Upload(t *testing.T, api http.Handler, endpoint, filename string, content []byte) *httptest.ResponseRecorder {
+func b4Upload(t *testing.T, api http.Handler, endpoint, filename string, content []byte, fields ...map[string]string) *httptest.ResponseRecorder {
 	t.Helper()
 	var body bytes.Buffer
 	form := multipart.NewWriter(&body)
@@ -112,6 +112,13 @@ func b4Upload(t *testing.T, api http.Handler, endpoint, filename string, content
 	}
 	if _, err := part.Write(content); err != nil {
 		t.Fatal(err)
+	}
+	for _, group := range fields {
+		for key, value := range group {
+			if err := form.WriteField(key, value); err != nil {
+				t.Fatal(err)
+			}
+		}
 	}
 	if err := form.Close(); err != nil {
 		t.Fatal(err)
@@ -209,6 +216,7 @@ type b4Fake struct {
 	reply    string
 	status   int
 	gate     *b4ModelGate
+	vectors  []string
 }
 
 type b4ModelGate struct {
@@ -232,7 +240,7 @@ func b4HoldModel(t *testing.T, f *b4Fake) *b4ModelGate {
 	return g
 }
 
-func b4Model(t *testing.T, s *Store) *b4Fake {
+func b4Model(t *testing.T, s *Store, withVectors ...bool) *b4Fake {
 	t.Helper()
 	f := &b4Fake{reply: `{"reply":"收到。","answer":"收到。","used":[],"actions":[],"items":[],"output":"完成。"}`, status: 200}
 	usage := b4FixtureFor(t, "usage")
@@ -241,6 +249,23 @@ func b4Model(t *testing.T, s *Store) *b4Fake {
 		if err != nil {
 			t.Error(err)
 			w.WriteHeader(500)
+			return
+		}
+		if strings.HasSuffix(r.URL.Path, "/embeddings") {
+			var in struct{ Input []string }
+			if err := json.Unmarshal(raw, &in); err != nil {
+				t.Error(err)
+				w.WriteHeader(400)
+				return
+			}
+			f.mu.Lock()
+			f.vectors = append(f.vectors, in.Input...)
+			f.mu.Unlock()
+			data := make([]map[string]any, 0, len(in.Input))
+			for i := range in.Input {
+				data = append(data, map[string]any{"index": i, "embedding": []float32{1, 0, 0}})
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"data": data})
 			return
 		}
 		var in struct {
@@ -286,7 +311,12 @@ func b4Model(t *testing.T, s *Store) *b4Fake {
 		}
 	}))
 	t.Cleanup(server.Close)
-	s.SetModels(&ai.Registry{HTTP: server.Client(), Config: ai.Configuration{Extraction: "model", Providers: []ai.Provider{{ID: "model", Name: "验收假模型", Protocol: "openai", BaseURL: server.URL, Model: usage.Model, MaxOutput: 4096, CostMode: "token", InputPerMillion: usage.InputPrice, OutputPerMillion: usage.OutputPrice}}}})
+	config := ai.Configuration{Extraction: "model", Providers: []ai.Provider{{ID: "model", Name: "验收假模型", Protocol: "openai", BaseURL: server.URL, Model: usage.Model, MaxOutput: 4096, CostMode: "token", InputPerMillion: usage.InputPrice, OutputPerMillion: usage.OutputPrice}}}
+	if len(withVectors) > 0 && withVectors[0] {
+		config.Embedding = "b4-vector"
+		config.Providers = append(config.Providers, ai.Provider{ID: "b4-vector", Name: "验收本地向量", Protocol: "openai", BaseURL: server.URL, Model: "b4-vector", Embedding: true, CostMode: "free"})
+	}
+	s.SetModels(&ai.Registry{HTTP: server.Client(), Config: config})
 	return f
 }
 func (f *b4Fake) set(reply string, status int) {
@@ -497,6 +527,7 @@ type b4ImportItem struct {
 	ID, Name, State                                          string
 	Total, Stored, Organized, LeftOut                        int
 	Earliest, Latest, ErrorCode, Error, CreatedAt, UpdatedAt string
+	OrganizeLater                                            *bool
 }
 
 func b4Imports(t *testing.T, s *Store, scope memory.Scope) []b4ImportItem {

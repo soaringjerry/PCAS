@@ -28,7 +28,9 @@ test('W4 真实后端：历史导入、暂停、继续至完成，在资料库�
           content: { content_type: 'text', parts: [n === 0 ? text : `合成导入消息 ${prefix} 第${n}条。`] } } } } }
   })
   const previewResponse = page.waitForResponse(r => new URL(r.url()).pathname === '/v1/connectors/archive/preview')
-  await page.locator('input[type="file"]').last().setInputFiles({ name: `${prefix}.json`, mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(conversations)) })
+  // Use the official export filename so this fixture exercises ChatGPT's
+  // preview/confirmation flow rather than the generic JSON upload flow.
+  await page.locator('input[type="file"]').last().setInputFiles({ name: 'conversations.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(conversations)) })
   const preview = await previewResponse
   expect(preview.ok(), await preview.text()).toBeTruthy()
   expect(await preview.json()).toMatchObject({ conversations: count, messages: count, fromUser: count, alreadyImported: 0, leftOut: 0, blocked: 0 })

@@ -204,7 +204,16 @@ func (s *Store) processConversationExtraction(ctx context.Context, j worker.Job,
 		run = conversationRun(sources)
 		if !strings.HasPrefix(j.Stage, conversationExtractionPrefix) {
 			if len(segments) == 0 {
+				if err := s.replaceConversationMemoriesTx(ctx, tx, scope, sources); err != nil {
+					return err
+				}
 				if err := writeConversationStatesTx(ctx, tx, j.OwnerID, sources, ""); err != nil {
+					return err
+				}
+				if err := retireConversationJobsTx(ctx, tx, j, conversation, run); err != nil {
+					return err
+				}
+				if _, err := tx.Exec(ctx, "UPDATE workspace_owners SET revision=revision+1 WHERE owner_id=$1", string(j.OwnerID)); err != nil {
 					return err
 				}
 				return acknowledge(ctx, tx, j)
@@ -437,9 +446,7 @@ func (s *Store) processConversationExtraction(ctx context.Context, j worker.Job,
 			if err := writeConversationStatesTx(ctx, tx, j.OwnerID, sources, ""); err != nil {
 				return err
 			}
-			if _, err := tx.Exec(ctx, `UPDATE memory_jobs j SET state='done',lease_token=NULL,lease_until=NULL,error_code='',updated_at=now()
- WHERE j.owner_id=$1 AND (j.stage='source.extract' OR (j.stage LIKE 'source.extract:%' AND j.stage NOT LIKE $3))
- AND EXISTS(SELECT 1 FROM source_contexts c WHERE(c.owner_id,c.source_id,c.source_version)=(j.owner_id,j.record_id,j.record_version) AND c.conversation_key=$2)`, string(j.OwnerID), conversation, conversationExtractionPrefix+run+":%"); err != nil {
+			if err := retireConversationJobsTx(ctx, tx, j, conversation, run); err != nil {
 				return err
 			}
 		}
@@ -448,6 +455,13 @@ func (s *Store) processConversationExtraction(ctx context.Context, j worker.Job,
 		}
 		return acknowledge(ctx, tx, j)
 	})
+}
+
+func retireConversationJobsTx(ctx context.Context, tx pgx.Tx, job worker.Job, conversation, run string) error {
+	_, err := tx.Exec(ctx, `UPDATE memory_jobs j SET state='done',lease_token=NULL,lease_until=NULL,error_code='',updated_at=now()
+ WHERE j.owner_id=$1 AND j.id<>$4 AND (j.stage='source.extract' OR (j.stage LIKE 'source.extract:%' AND j.stage NOT LIKE $3))
+ AND EXISTS(SELECT 1 FROM source_contexts c WHERE(c.owner_id,c.source_id,c.source_version)=(j.owner_id,j.record_id,j.record_version) AND c.conversation_key=$2)`, string(job.OwnerID), conversation, conversationExtractionPrefix+run+":%", string(job.ID))
+	return err
 }
 
 func writeConversationStatesTx(ctx context.Context, tx pgx.Tx, owner memory.ID, sources []memory.SourceResult, state string) error {

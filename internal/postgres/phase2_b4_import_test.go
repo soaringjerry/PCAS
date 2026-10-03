@@ -220,24 +220,27 @@ func TestPhase2B4_I4_ReimportAndExtendedExportOnlyAddUnseenMessages(t *testing.T
 
 func TestPhase2B4_I5_HistoricalPlanRemainsCandidateWithoutPresentActions(t *testing.T) {
 	s, scope := b4Store(t), owner()
-	f := b4Model(t, s)
 	gold := b4FixtureFor(t, "oldPlan")
 	workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: asJSON(map[string]bool{"autoAccept": true, "wakeIdeas": true})})
 	state := workspaceCommand(t, s, scope, workspace.Command{Type: "addIdea", Title: "去成都"})
 	state = workspaceCommand(t, s, scope, workspace.Command{Type: "ideaShelve", ID: state.Ideas[0].ID, Condition: "旅行计划交上去了"})
-	idea := state.Ideas[0]
 	conv := b4Conversations(t, "old-plan", 1)
 	conv[0].Messages[0].Text = gold.Text
 	conv[0].Messages[0].At = b4Instant(t, gold.At)
 	id, archive := b4ImportFile(t, s, scope, "old-plan.zip", b4Zip(t, b4Export(conv), false))
 	b4Complete(t, s, scope, id, archive)
-	item := b1ExtractItem(gold.Text, "plan")
+	item := b4bItem(1, gold.Text, gold.Text, "plan")
 	item["places"] = []string{"成都"}
-	f.set(string(asJSON(map[string]any{"items": []any{item, map[string]any{"kind": "task", "text": gold.Text, "quote": gold.Text, "confidence": 1, "explicit": true, "acquisition": "direct"}}, "signals": []conditionSignal{{IdeaID: idea.ID, ConditionID: idea.Conditions[0].ID, Quote: gold.Text, Explanation: "合成触发信号", Confidence: 0.99}}})), 200)
-	source := b4SourceByText(t, s, scope, gold.Text)
-	if err := s.ProcessExtraction(context.Background(), leaseStage(t, s, scope, source, "source.extract")); err != nil {
-		t.Fatal(err)
-	}
+	f := b4bModel(t, s, func(input b4bInput) any {
+		b2Equal(t, len(input.Messages), 1)
+		b2Equal(t, input.Messages[0].Index, 1)
+		b2Equal(t, input.Messages[0].Role, "user")
+		b2Equal(t, input.Messages[0].Text, gold.Text)
+		return map[string]any{"items": []any{item}}
+	})
+	b4ImportAction(t, s, scope, id, "organize")
+	b4DrainQueue(t, s)
+	b2Equal(t, len(f.all()), 1)
 	state, err := s.Snapshot(context.Background(), scope)
 	if err != nil {
 		t.Fatal(err)
@@ -322,22 +325,30 @@ func TestPhase2B4_I9_CancelAtHalfCommitThenRecoverExpiredLease(t *testing.T) {
 
 func TestPhase2B4_I10_DeleteArchiveChildrenClaimsBatchAndRecallControl(t *testing.T) {
 	s, scope := b4Store(t), owner()
-	f := b4Model(t, s)
 	gold := b4FixtureFor(t, "recall")
 	conversations := b4Conversations(t, "delete", 3)
 	conversations[2].Messages[0].Text = gold.Text
 	id, archive := b4ImportFile(t, s, scope, "delete.zip", b4Zip(t, b4Export(conversations), false))
 	b4Complete(t, s, scope, id, archive)
 	source := b4SourceByText(t, s, scope, gold.Text)
-	f.set(string(asJSON(map[string]any{"items": []any{b1ExtractItem(gold.Text, "fact")}})), 200)
-	if err := s.ProcessExtraction(context.Background(), leaseStage(t, s, scope, source, "source.extract")); err != nil {
-		t.Fatal(err)
-	}
+	extraction := b4bModel(t, s, func(input b4bInput) any {
+		items := []any{}
+		for _, message := range input.Messages {
+			if message.Role == "user" && message.Text == gold.Text {
+				items = append(items, b4bItem(message.Index, gold.Text, gold.Text, "fact"))
+			}
+		}
+		return map[string]any{"items": items}
+	})
+	b4ImportAction(t, s, scope, id, "organize")
+	b4DrainQueue(t, s)
+	b2Equal(t, len(extraction.all()), len(conversations))
 	state, err := s.Snapshot(context.Background(), scope)
 	if err != nil {
 		t.Fatal(err)
 	}
 	claim := b1MemoryRef(t, state.Memories, gold.Text)
+	f := b4Model(t, s)
 	f.set(`{"reply":"密码8624。","used":["S1"],"actions":[]}`, 200)
 	mustTurn(t, s, scope, turnRequest(gold.Question))
 	b1Contains(t, f.last(t).Prompt, gold.Text)
@@ -461,20 +472,12 @@ func TestPhase2B4_I14_NonUserMessagesRemainOriginalWithoutExtractionCalls(t *tes
 	conv[0].Messages = []b4Message{{ID: "system-msg", Role: "system", Text: "合成系统消息金色木马1717。", At: base.Add(-time.Minute)}, {ID: "tool-msg", Role: "tool", Text: "合成工具结果橙色木马1818。", At: base}, {ID: "assistant-msg", Role: "assistant", Text: gold.Text, At: base.Add(time.Minute)}}
 	id, archive := b4ImportFile(t, s, scope, "roles.zip", b4Zip(t, b4Export(conv), false))
 	b4Complete(t, s, scope, id, archive)
+	b4ImportAction(t, s, scope, id, "organize")
+	b4DrainQueue(t, s)
 	for _, message := range conv[0].Messages {
 		source := b4SourceByText(t, s, scope, message.Text)
 		b4RoleAndTime(t, s, scope, source, message.Role, message.At, "")
-		if err := s.ProcessExtraction(context.Background(), leaseStage(t, s, scope, source, "source.extract")); err != nil {
-			t.Fatal(err)
-		}
-		var state string
-		var items, extractor int
-		if err := s.pool.QueryRow(context.Background(), `SELECT state,items,extractor FROM source_extractions WHERE owner_id=$1 AND source_id=$2 AND source_version=$3`, string(scope.OwnerID), string(source.ID), source.Version).Scan(&state, &items, &extractor); err != nil {
-			t.Fatal(err)
-		}
-		if state != "empty" || items != 0 || extractor != 2 {
-			t.Errorf("nonuser extraction marker %s/%d/%d", state, items, extractor)
-		}
+		b4bRecord(t, s, scope, source, "empty", 0)
 	}
 	if len(f.all()) != 0 {
 		t.Fatal("nonuser original was sent to extraction model")

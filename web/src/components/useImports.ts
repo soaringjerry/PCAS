@@ -1,3 +1,4 @@
+import { conversationsOnly } from '../domain/zipSlim'
 import { useCallback, useEffect, useState } from 'react'
 
 // Bringing a chat history in: what the file holds (nothing stored yet), then
@@ -103,6 +104,9 @@ export function upload<T>(path: string, file: File, doing: string, onProgress: (
 /** Above this size a file goes up in pieces: a proxy in front of the server may refuse one large request (100 MB is a common limit). */
 const PIECES_FROM = 32 * 1024 * 1024
 
+/** What is actually sent for a picked file, worked out once so reading and importing send the same thing. */
+const slimmed = new WeakMap<File, Promise<File>>()
+
 /** Pieces already on the server for a file, so reading it and then importing it sends it only once. */
 const sentPieces = new WeakMap<File, string>()
 
@@ -143,7 +147,12 @@ async function sendPieces(file: File, doing: string, onProgress: (sent: number, 
  * Sends an archive to `path`. A small file goes in one request; a large one
  * goes up in pieces once and is then read or imported from what the server has.
  */
-export async function sendArchive<T>(path: string, file: File, doing: string, onProgress: (sent: number, total: number) => void, signal?: AbortSignal, fields?: Record<string, string>): Promise<T> {
+export async function sendArchive<T>(path: string, picked: File, doing: string, onProgress: (sent: number, total: number) => void, signal?: AbortSignal, fields?: Record<string, string>): Promise<T> {
+  // A chat export zip is mostly images and audio; only its conversations file is sent.
+  let slim = slimmed.get(picked)
+  if (!slim) { slim = conversationsOnly(picked); slimmed.set(picked, slim) }
+  const file = await slim
+  stopped(signal)
   if (file.size <= PIECES_FROM) return upload<T>(path, file, doing, onProgress, signal, fields)
   for (let attempt = 0; ; attempt++) {
     let id = sentPieces.get(file)

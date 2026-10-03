@@ -1,3 +1,4 @@
+import { deflateRawSync } from 'node:zlib'
 import { test, expect, type Page } from '@playwright/test'
 import { readFileSync } from 'node:fs'
 import type { State } from '../src/domain/types'
@@ -297,5 +298,68 @@ test('a large archive goes up in pieces once, carries on after a dropped piece, 
     { path: '/v1/connectors/archive/preview', body: { upload: 'up-1' } },
     { path: '/v1/connectors/archive', body: { upload: 'up-1', organize: 'later' } },
   ])
+  expect(m.errors).toEqual([])
+})
+
+/** A zip as an export tool writes it: entries one after another, then the directory, then the end record. */
+function zipOf(entries: { name: string; data: Buffer; deflate: boolean }[]): Buffer {
+  const crcTable = Array.from({ length: 256 }, (_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; return c >>> 0 })
+  const crc = (b: Buffer) => { let c = 0xffffffff; for (const x of b) c = crcTable[(c ^ x) & 0xff] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0 }
+  const parts: Buffer[] = []
+  const directory: Buffer[] = []
+  let offset = 0
+  for (const e of entries) {
+    const name = Buffer.from(e.name, 'utf8')
+    const packed = e.deflate ? deflateRawSync(e.data) : e.data
+    const sum = crc(e.data)
+    const local = Buffer.alloc(30)
+    local.writeUInt32LE(0x04034b50, 0); local.writeUInt16LE(20, 4); local.writeUInt16LE(0x0800, 6); local.writeUInt16LE(e.deflate ? 8 : 0, 8)
+    local.writeUInt32LE(sum, 14); local.writeUInt32LE(packed.length, 18); local.writeUInt32LE(e.data.length, 22); local.writeUInt16LE(name.length, 26)
+    const central = Buffer.alloc(46)
+    central.writeUInt32LE(0x02014b50, 0); central.writeUInt16LE(20, 4); central.writeUInt16LE(20, 6); central.writeUInt16LE(0x0800, 8); central.writeUInt16LE(e.deflate ? 8 : 0, 10)
+    central.writeUInt32LE(sum, 16); central.writeUInt32LE(packed.length, 20); central.writeUInt32LE(e.data.length, 24); central.writeUInt16LE(name.length, 28); central.writeUInt32LE(offset, 42)
+    parts.push(local, name, packed)
+    directory.push(central, name)
+    offset += 30 + name.length + packed.length
+  }
+  const dir = Buffer.concat(directory)
+  const end = Buffer.alloc(22)
+  end.writeUInt32LE(0x06054b50, 0); end.writeUInt16LE(entries.length, 8); end.writeUInt16LE(entries.length, 10); end.writeUInt32LE(dir.length, 12); end.writeUInt32LE(offset, 16)
+  return Buffer.concat([...parts, dir, end])
+}
+
+test('from an export zip full of media only the conversations file is sent, whatever the zip weighs', async ({ page }) => {
+  test.setTimeout(90_000)
+  const m = await mock(page, [], undefined, { ...preview, blocked: 0 }, true)
+  const conversations = Buffer.from(JSON.stringify([{ id: 'c1', title: '只传对话', current_node: 'u', mapping: { u: { id: 'u', parent: null, children: [], message: { id: 'u', author: { role: 'user' }, create_time: 1718161800, content: { content_type: 'text', parts: ['压缩包里只有这一句是对话。'.repeat(200)] } } } } }]))
+  const zip = zipOf([
+    { name: 'export/audio/voice-001.wav', data: Buffer.alloc(45 * 1024 * 1024, 7), deflate: false },
+    { name: 'export/conversations.json', data: conversations, deflate: true },
+    { name: 'export/image-002.png', data: Buffer.alloc(1024 * 1024, 9), deflate: false },
+  ])
+  expect(zip.length).toBeGreaterThan(45 * 1024 * 1024)
+  const sent: { path: string; file: string; bytes: number; whole: boolean }[] = []
+  await page.route((url) => url.pathname.startsWith('/v1/connectors/archive'), (route) => {
+    const request = route.request()
+    const body = request.postDataBuffer() ?? Buffer.alloc(0)
+    if (request.method() === 'POST') sent.push({ path: new URL(request.url()).pathname, file: body.toString('latin1').match(/filename="([^"]+)"/)?.[1] ?? '', bytes: body.length, whole: body.includes(conversations) })
+    return route.fallback()
+  })
+  await open(page)
+  await page.locator('input[type="file"]').last().setInputFiles({ name: 'chatgpt-2026-10-03.zip', mimeType: 'application/zip', buffer: zip })
+  const confirm = page.getByRole('button', { name: /确认导入|开始导入|^确认$|^导入\s*[\d,]+\s*条$/ })
+  await expect(confirm).toBeVisible({ timeout: 60_000 })
+  // The page still calls it by the name of the file that was picked.
+  await expect(page.locator('body')).toContainText('chatgpt-2026-10-03.zip')
+  const importing = page.waitForResponse((r) => new URL(r.url()).pathname === '/v1/connectors/archive' && r.request().method() === 'POST')
+  await confirm.click()
+  expect((await importing).ok()).toBeTruthy()
+  // Both requests carried the unpacked conversations file and nothing else: no pieces, no media.
+  expect(sent.map((s) => s.path)).toEqual(['/v1/connectors/archive/preview', '/v1/connectors/archive'])
+  for (const s of sent) {
+    expect(s.file).toBe('chatgpt-2026-10-03.conversations.json')
+    expect(s.whole).toBe(true)
+    expect(s.bytes).toBeLessThan(conversations.length + 4096)
+  }
   expect(m.errors).toEqual([])
 })

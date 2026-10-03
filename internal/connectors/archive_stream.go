@@ -18,7 +18,7 @@ import (
 	"time"
 )
 
-var MaxUploadBytes int64 = 200 << 20
+var MaxUploadBytes int64 = 512 << 20
 var MaxArchiveBytes int64 = 512 << 20
 var MaxArchiveRecords = 200000
 

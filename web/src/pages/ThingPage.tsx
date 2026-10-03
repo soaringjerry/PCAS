@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link, useParams } from 'react-router'
-import { Check, ChevronLeft, Copy, Ellipsis, FileText, Lightbulb, Pencil, Plus, Sparkles, X } from 'lucide-react'
+import { Link, useNavigate, useParams } from 'react-router'
+import { Check, ChevronLeft, Copy, Ellipsis, FileText, Lightbulb, Pencil, Plus, Sparkles, Trash2, X } from 'lucide-react'
 import { Popover } from '../components/controls'
+import { ConfirmModal } from '../components/Overlay'
 import { SaveMark, type SaveState } from '../components/ui'
 import { Markdown } from '../components/Markdown'
 import { Secretary } from '../components/Secretary'
@@ -62,10 +63,12 @@ function facts(state: ReturnType<typeof useStore>['state'], thing: Thing): Fact[
       ...inProject,
       ...(remind ? [{ text: `${t.due && dayOffset(remind, timezone) === dayOffset(t.due, timezone) ? clockTime(remind, timezone) : formatShortWhen(remind, timezone)} 提醒`, say: '把提醒改到：' }] : []),
       ...(t.owedTo ? [{ text: `${t.owedTo.who}在等你`, tone: 'owed' as const }] : []),
+      ...(open && t.urgent ? [{ text: '尽快', tone: 'owed' as const, say: '这件事不急了' }] : []),
       ...(open && !t.due ? [{ text: '定个截止时间', add: true, say: '截止时间定在：' }] : []),
       ...(open && !remind && state.settings.followUps ? [{ text: '加个提醒', add: true, say: '到这个时间提醒我：' }] : []),
       ...(open && !state.settings.followUps && reminderAt(t) ? [{ text: '提醒已在设置里停了', to: '/settings' }] : []),
       ...(open && !project && state.projects.length > 0 ? [{ text: '归到项目', add: true, say: '把这件事归到项目：' }] : []),
+      ...(open && !t.urgent ? [{ text: '标成尽快', add: true, say: '这件事要尽快' }] : []),
     ]
   }
   if (thing.kind === 'idea') return [{ text: ideaStatusText[thing.item.status] }, ...inProject]
@@ -77,9 +80,8 @@ function facts(state: ReturnType<typeof useStore>['state'], thing: Thing): Fact[
 
 /** Status, due time, reminder and project are changed by saying so: each one starts its own sentence. */
 function InfoLine({ thing }: { thing: Thing }) {
-  const { state, dispatchUndoable } = useStore()
+  const { state } = useStore()
   const { prefill } = useShell()
-  const task = thing.kind === 'task' && isOpenTask(thing.item) ? thing.item : undefined
   return (
     <div className="info-line" role="group" aria-label="这件事的情况，点一项就跟秘书说怎么改">
       {facts(state, thing).map((f, i) =>
@@ -96,18 +98,6 @@ function InfoLine({ thing }: { thing: Thing }) {
             {f.text}
           </span>
         ),
-      )}
-      {task && (
-        <button
-          type="button"
-          role="switch"
-          aria-checked={!!task.urgent}
-          className={`fact${task.urgent ? ' owed' : ' add'}`}
-          title="排在首页时间线最前面，直到做完或定了时间"
-          onClick={() => dispatchUndoable({ type: 'updateTask', id: task.id, patch: { urgent: !task.urgent }, summary: task.urgent ? '不急了' : '标成尽快' }, task.urgent ? '不急了' : '标成尽快了')}
-        >
-          尽快
-        </button>
       )}
     </div>
   )
@@ -206,6 +196,8 @@ function Header({ thing }: { thing: Thing }) {
   )
   const [titleBox, putTitle] = useFollowSaved(saved, title.state)
   const [notesBox, putNotes] = useFollowSaved(notes, note.state)
+  const navigate = useNavigate()
+  const [deleting, setDeleting] = useState(false)
   const busy = title.state === 'saving' || note.state === 'saving'
   const done = title.state === 'saved' || note.state === 'saved'
   /** What each box held when the caret went in, to tell an edit from a visit. */
@@ -262,7 +254,22 @@ function Header({ thing }: { thing: Thing }) {
         <button type="button" className="edit-hint" tabIndex={-1} aria-hidden onClick={() => titleBox.current?.focus()}>
           <Pencil size={14} />
         </button>
+        <button type="button" className="edit-hint thing-delete" aria-label={`删除：${saved}`} title="删除" onClick={() => setDeleting(true)}>
+          <Trash2 size={14} />
+        </button>
       </div>
+      {deleting && (
+        <ConfirmModal
+          title={`删除「${saved}」？`}
+          onClose={() => setDeleting(false)}
+          onConfirm={async () => {
+            if (await dispatch({ type: 'deleteThing', id: thing.id })) navigate('/')
+            else setDeleting(false)
+          }}
+        >
+          <p>它的子任务、文档、提醒和副手的工作记录会一起删掉，删了找不回来。不想做了但想留个记录的话，改成「已取消」就行。</p>
+        </ConfirmModal>
+      )}
       {title.state === 'failed' && (
         <Unsaved
           what="标题"

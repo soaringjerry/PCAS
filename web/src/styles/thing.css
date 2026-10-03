@@ -589,3 +589,14 @@ button.fact.add:hover {
     opacity: 0.7;
   }
 }
+
+/* Deleting is reachable without a pointer hovering: always there, quiet until wanted. */
+.title-row .thing-delete {
+  opacity: 0.45;
+}
+
+.title-row .thing-delete:hover,
+.title-row .thing-delete:focus-visible {
+  opacity: 1;
+  color: var(--red, #d70015);
+}

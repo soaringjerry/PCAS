@@ -18,6 +18,8 @@ export type Action =
   | { type: 'addTask'; id?: string; title: string; projectId?: string; text?: string }
   | { type: 'updateTask'; id: string; patch: Partial<Task>; summary: string }
   | { type: 'setTaskStatus'; id: string; status: TaskStatus }
+  /** Removes a to-do, an idea or an empty project for good; confirmed first, never undone. */
+  | { type: 'deleteThing'; id: string }
   | { type: 'toggleTrigger'; taskId: string; triggerId: string }
   | { type: 'ideaContinue'; id: string }
   | { type: 'ideaPromote'; id: string }

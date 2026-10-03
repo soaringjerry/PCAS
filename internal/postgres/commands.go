@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -338,6 +339,8 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 			return memory.ErrConflict
 		}
 		return nil
+	case "deleteThing":
+		return s.deleteThingTx(ctx, tx, scope, c.ID)
 	}
 	// Remaining commands operate on a single action record.
 	id := c.ID
@@ -581,3 +584,46 @@ func sampleTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, sample workspa
 
 // The wire format is deliberately a small explicit command vocabulary. Client
 // supplied run outputs, costs, provenance, and processing states are not trusted.
+
+// deleteThingTx removes a to-do, idea or empty project for good: its
+// reminders, documents and agent runs go with it, other to-dos stop depending
+// on it, and the receipts memory kept of its changes are deleted like any
+// other material. It is confirmed in the interface and cannot be undone.
+func (s *Store) deleteThingTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, id string) error {
+	item, err := getItem(ctx, tx, scope, id)
+	if err != nil {
+		return err
+	}
+	var children, running bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM work_items WHERE owner_id=$1 AND project_id=$2),
+		EXISTS(SELECT 1 FROM agent_runs WHERE owner_id=$1 AND thing_id=$2 AND status='running')`, string(scope.OwnerID), item.ID).Scan(&children, &running); err != nil {
+		return err
+	}
+	if children {
+		return memory.ErrConflict
+	}
+	if running {
+		return workspace.ErrWorkStarted
+	}
+	var receipt memory.Ref
+	err = tx.QueryRow(ctx, `SELECT s.id::text,r.version FROM sources s JOIN memory_records r ON (r.owner_id,r.id)=(s.owner_id,s.id)
+		WHERE s.owner_id=$1 AND s.connector='actions' AND s.external_id=$2 AND r.state='active'`, string(scope.OwnerID), item.ID).Scan(&receipt.ID, &receipt.Version)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return err
+	}
+	if err == nil {
+		receipt.Kind = memory.SourceKind
+		if err := s.deleteRecordsTx(ctx, tx, scope, memory.DeleteRequest{Targets: []memory.Ref{receipt}}); err != nil {
+			return err
+		}
+	}
+	if _, err := tx.Exec(ctx, `UPDATE work_items SET document=jsonb_set(document,'{dependsOn}',(document->'dependsOn')-$2)
+		WHERE owner_id=$1 AND kind='task' AND document->'dependsOn' ? $2`, string(scope.OwnerID), item.ID); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, "DELETE FROM agent_runs WHERE owner_id=$1 AND thing_id=$2", string(scope.OwnerID), item.ID); err != nil {
+		return err
+	}
+	_, err = tx.Exec(ctx, "DELETE FROM work_items WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), item.ID)
+	return err
+}

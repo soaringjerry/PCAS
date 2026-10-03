@@ -269,6 +269,9 @@ func TestPhase2B4b_C6_ReplacesOnlyUntouchedSystemMemoriesAndMarksHistory(t *test
 	b1Model(t, s, `{"reply":"旧回答青灯完整保留","used":["M1"],"actions":[]}`)
 	a := b4bImport(t, s, scope, b4bMessages(t, []string{"user", "user", "user"}, []string{"成都旧计划青灯。", "成都确认过的旧计划。", "成都修改过的旧计划。"}))
 	old := b4bOldClaim(t, s, scope, "成都旧计划青灯", a.Sources[0])
+	// Explicitly allow the secretary to use this legacy pending plan so the
+	// real answer records the dependency that R28 must later invalidate.
+	workspaceCommand(t, s, scope, workspace.Command{Type: "updateAgent", ID: "model", Patch: asJSON(map[string]any{"memoryKinds": []string{"plan"}, "includeInferred": true})})
 	req := turnRequest("成都旧计划青灯是什么？")
 	out := mustTurn(t, s, scope, req)
 	b1HasRef(t, b1Refs(t, s, scope, req.RequestID), old, true)

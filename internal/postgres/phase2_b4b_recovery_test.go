@@ -3,6 +3,8 @@ package postgres
 import (
 	"context"
 	"encoding/json"
+	"io"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/exec"
@@ -29,20 +31,20 @@ func TestPhase2B4bWorkerChild(t *testing.T) {
 	}
 	defer s.Close()
 	s.SetModels(&ai.Registry{HTTP: &http.Client{Timeout: 30 * time.Second}, Config: ai.Configuration{Extraction: "model", Providers: []ai.Provider{{ID: "model", Name: "合成对话抽取", Protocol: "openai", BaseURL: os.Getenv("PCAS_B4B_WORKER_URL"), Model: "test", MaxOutput: 100, CostMode: "free"}}}})
-	for n := 0; n < 20; n++ {
-		job, err := s.Claim(context.Background(), time.Minute)
-		if err != nil || job == nil {
-			t.Fatal("child expected another conversation job", err)
-		}
+	w := worker.New(s, map[string]worker.Handler{"source.extract": func(ctx context.Context, job worker.Job) error {
 		data, err := json.Marshal(job)
 		if err != nil {
-			t.Fatal(err)
+			return err
 		}
 		if err = os.WriteFile(os.Getenv("PCAS_B4B_WORKER_JOB"), data, 0600); err != nil {
-			t.Fatal(err)
+			return err
 		}
-		if err = s.ProcessExtraction(context.Background(), *job); err != nil {
-			t.Fatal(err)
+		return s.ProcessExtraction(ctx, job)
+	}}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	for n := 0; n < 100; n++ {
+		worked, err := w.RunOnce(context.Background())
+		if err != nil || !worked {
+			t.Fatal("child expected another conversation job", err)
 		}
 	}
 	t.Fatal("child did not reach the held generation")

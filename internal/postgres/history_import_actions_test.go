@@ -42,19 +42,6 @@ func TestImportedHistoryNeverBecomesCurrentAction(t *testing.T) {
 			idea := st.Ideas[0]
 
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if tc.imported {
-					var request struct {
-						Messages []struct{ Role, Content string }
-					}
-					if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-						t.Error(err)
-					}
-					for _, message := range request.Messages {
-						if message.Role != "system" {
-							t.Logf("imported extraction input: %s", message.Content)
-						}
-					}
-				}
 				item := map[string]any{"kind": "task", "text": said, "quote": said, "confidence": 1, "explicit": true, "acquisition": "direct"}
 				if tc.imported {
 					item = b4bItem(1, said, said, "plan")
@@ -62,6 +49,11 @@ func TestImportedHistoryNeverBecomesCurrentAction(t *testing.T) {
 				content := map[string]any{
 					"items":   []map[string]any{item},
 					"signals": []conditionSignal{{IdeaID: idea.ID, ConditionID: idea.Conditions[0].ID, Quote: said, Explanation: "写明要交旅行计划", Confidence: 0.99}},
+				}
+				if tc.imported {
+					// Conversation output supports items and withdraw; live-entry
+					// condition signals remain part of the present-day fixture.
+					delete(content, "signals")
 				}
 				_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": map[string]string{"content": string(asJSON(content))}}}, "usage": map[string]int{"prompt_tokens": 100, "completion_tokens": 30}})
 			}))

@@ -282,8 +282,15 @@ func b4bEvidence(t *testing.T, s *Store, scope memory.Scope, m workspace.Memory,
 	for _, ref := range m.Sources {
 		b2Equal(t, ref.SourceID, string(source.ID))
 		b2Equal(t, ref.Version, source.Version)
-		b2Equal(t, ref.Excerpt, quote)
+		b1Contains(t, ref.Excerpt, quote)
 	}
+	// The public excerpt may include surrounding original text. Check the
+	// stored evidence locator itself for the exact quotation.
+	var evidenceQuote string
+	if err := s.pool.QueryRow(context.Background(), `SELECT substring(v.body FROM (e.locator->>'start_rune')::int+1 FOR (e.locator->>'end_rune')::int-(e.locator->>'start_rune')::int) FROM evidence e JOIN source_versions v ON(v.owner_id,v.source_id,v.version)=(e.owner_id,e.source_id,e.source_version) WHERE e.owner_id=$1 AND e.target_id=$2 AND e.target_version=$3 AND e.source_id=$4 AND e.source_version=$5`, string(scope.OwnerID), m.ID, m.Version, string(source.ID), source.Version).Scan(&evidenceQuote); err != nil {
+		t.Fatal(err)
+	}
+	b2Equal(t, evidenceQuote, quote)
 	b2Time(t, m, "expressedAt", at)
 	b2Confirmation(t, s, scope, m, b4bSpec[b4bLimits](t, "limits").Confirmation)
 	b2Equal(t, len(b2Snapshot(t, s, scope).Tasks), 0)

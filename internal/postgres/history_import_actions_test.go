@@ -42,6 +42,19 @@ func TestImportedHistoryNeverBecomesCurrentAction(t *testing.T) {
 			idea := st.Ideas[0]
 
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if tc.imported {
+					var request struct {
+						Messages []struct{ Role, Content string }
+					}
+					if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+						t.Error(err)
+					}
+					for _, message := range request.Messages {
+						if message.Role != "system" {
+							t.Logf("imported extraction input: %s", message.Content)
+						}
+					}
+				}
 				item := map[string]any{"kind": "task", "text": said, "quote": said, "confidence": 1, "explicit": true, "acquisition": "direct"}
 				if tc.imported {
 					item = b4bItem(1, said, said, "plan")
@@ -113,6 +126,18 @@ func TestImportedHistoryNeverBecomesCurrentAction(t *testing.T) {
 					}
 				}
 				if historical == nil {
+					rows, queryErr := s.pool.Query(ctx, `SELECT stage,state,error_code FROM memory_jobs WHERE owner_id=$1 AND stage LIKE 'source.extract%'`, string(scope.OwnerID))
+					if queryErr != nil {
+						t.Fatal(queryErr)
+					}
+					for rows.Next() {
+						var stage, state, code string
+						if scanErr := rows.Scan(&stage, &state, &code); scanErr != nil {
+							t.Fatal(scanErr)
+						}
+						t.Log("extraction job", stage, state, code)
+					}
+					rows.Close()
 					t.Fatal("the statement must remain reviewable as a candidate", st.Memories)
 				}
 				if len(st.Tasks) != 0 {

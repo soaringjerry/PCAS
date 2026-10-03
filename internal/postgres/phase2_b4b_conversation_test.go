@@ -266,9 +266,9 @@ func TestPhase2B4b_C6_ReplacesOnlyUntouchedSystemMemoriesAndMarksHistory(t *test
 		New      string `json:"new_memory"`
 		Outdated bool   `json:"outdated"`
 	}](t, "C6")
+	b1Model(t, s, `{"reply":"旧回答青灯完整保留","used":["M1"],"actions":[]}`)
 	a := b4bImport(t, s, scope, b4bMessages(t, []string{"user", "user", "user"}, []string{"成都旧计划青灯。", "成都确认过的旧计划。", "成都修改过的旧计划。"}))
 	old := b4bOldClaim(t, s, scope, "成都旧计划青灯", a.Sources[0])
-	b1Model(t, s, `{"reply":"旧回答青灯完整保留","used":["M1"],"actions":[]}`)
 	req := turnRequest("成都旧计划青灯是什么？")
 	out := mustTurn(t, s, scope, req)
 	b1HasRef(t, b1Refs(t, s, scope, req.RequestID), old, true)

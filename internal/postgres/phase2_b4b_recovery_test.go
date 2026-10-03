@@ -100,6 +100,8 @@ func TestPhase2B4b_C7_KilledWorkerResumesWithoutReplayingCompletedSegment(t *tes
 	select {
 	case <-entered:
 	case <-time.After(45 * time.Second):
+		childOutput, _ := os.ReadFile(filepath.Join(dir, "child.log"))
+		t.Logf("owned child diagnostics: %s", childOutput)
 		t.Fatal("child did not enter second segment generation")
 	}
 	// The first segment really committed while the second HTTP call is held.

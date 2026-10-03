@@ -84,7 +84,7 @@ func (s *Store) importArchiveReader(ctx context.Context, scope memory.Scope, nam
 	if err == nil {
 		out.Refs = append(out.Refs, ref)
 		out.Duplicates = 1
-		out.Gaps = archive.Preview.Gaps
+		out.Gaps = append(archive.Preview.Gaps, "原始归档已保留，记录正在后台解析；处理进度可在来源中查看")
 		return out, nil
 	}
 	if !errors.Is(err, pgx.ErrNoRows) {
@@ -161,7 +161,7 @@ func (s *Store) importArchiveReader(ctx context.Context, scope memory.Scope, nam
 		defer cancel()
 		_, _ = s.pool.Exec(cleanupCtx, "INSERT INTO blob_cleanup_jobs(owner_id,blob_key) VALUES($1,$2) ON CONFLICT DO NOTHING", string(scope.OwnerID), key)
 	}
-	out.Gaps = archive.Preview.Gaps
+	out.Gaps = append(archive.Preview.Gaps, "原始归档已保留，记录正在后台解析；处理进度可在来源中查看")
 	return out, err
 }
 

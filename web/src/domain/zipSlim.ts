@@ -5,7 +5,42 @@
  * sits at the end and says where each entry is.
  */
 
+import { Inflate } from 'fflate'
+
 const view = async (file: Blob, from: number, to: number) => new DataView(await file.slice(from, to).arrayBuffer())
+
+/** ZIP uses raw DEFLATE, which some browsers do not support even though they
+ * expose DecompressionStream. Fall back to a bundled decoder, still reading
+ * only this entry. Its output must fit the size declared by the ZIP directory.
+ */
+async function inflateEntry(packed: Blob, expectedSize: number): Promise<Blob> {
+  if (typeof DecompressionStream !== 'undefined') {
+    try {
+      return await new Response(packed.stream().pipeThrough(new DecompressionStream('deflate-raw'))).blob()
+    } catch { /* Try the same entry with the portable decoder. */ }
+  }
+  const parts: BlobPart[] = []
+  let size = 0
+  const inflater = new Inflate((chunk) => {
+    size += chunk.byteLength
+    if (size > expectedSize) throw new Error('zip entry exceeds declared size')
+    // Keep owned buffers; the decoder reuses its rolling window.
+    parts.push(new Uint8Array(chunk).buffer)
+  })
+  const reader = packed.stream().getReader()
+  try {
+    for (;;) {
+      const { value, done } = await reader.read()
+      if (done) break
+      inflater.push(value)
+    }
+    inflater.push(new Uint8Array(0), true)
+  } finally {
+    await reader.cancel()
+    reader.releaseLock()
+  }
+  return new Blob(parts)
+}
 
 /** A 64-bit little-endian size or offset; anything past what a number holds exactly is not a file we can slice. */
 function u64(v: DataView, at: number): number {
@@ -69,7 +104,7 @@ async function findConversations(file: File): Promise<Entry | undefined> {
 }
 
 /** Why a zip is sent whole instead of only its conversations file, in words for the user. */
-export type KeptWhole = '' | '压缩包里没有找到 conversations.json' | '压缩包加了密' | '压缩包用了浏览器解不开的压缩方式' | '这个浏览器不能在本地解压，请换新版的 Chrome、Edge、Firefox 或 Safari' | '压缩包读不出来，可能下载时损坏了'
+export type KeptWhole = '' | '压缩包里没有找到 conversations.json' | '压缩包加了密' | '压缩包用了浏览器解不开的压缩方式' | '压缩包读不出来，可能下载时损坏了'
 
 /** What is sent for a picked file, and why when it is still the whole zip. */
 export interface Slimmed { file: File; whole: KeptWhole }
@@ -86,13 +121,12 @@ export async function conversationsOnly(file: File): Promise<Slimmed> {
     if (!entry) return { file, whole: '压缩包里没有找到 conversations.json' }
     if (entry.flags & 1) return { file, whole: '压缩包加了密' }
     if (entry.method !== 0 && entry.method !== 8) return { file, whole: '压缩包用了浏览器解不开的压缩方式' }
-    if (entry.method === 8 && typeof DecompressionStream === 'undefined') return { file, whole: '这个浏览器不能在本地解压，请换新版的 Chrome、Edge、Firefox 或 Safari' }
     const local = await view(file, entry.header, entry.header + 30)
     if (local.getUint32(0, true) !== 0x04034b50) return { file, whole: '压缩包读不出来，可能下载时损坏了' }
     const from = entry.header + 30 + local.getUint16(26, true) + local.getUint16(28, true)
     const packed = file.slice(from, from + entry.packed)
     if (packed.size !== entry.packed) return { file, whole: '压缩包读不出来，可能下载时损坏了' }
-    const data = entry.method === 0 ? packed : await new Response(packed.stream().pipeThrough(new DecompressionStream('deflate-raw'))).blob()
+    const data = entry.method === 0 ? packed : await inflateEntry(packed, entry.size)
     if (data.size !== entry.size) return { file, whole: '压缩包读不出来，可能下载时损坏了' }
     return { file: new File([data], `${file.name.replace(/\.zip$/i, '')}.conversations.json`, { type: 'application/json', lastModified: file.lastModified }), whole: '' }
   } catch {

@@ -1,6 +1,9 @@
-import { deflateRawSync } from 'node:zlib'
+import { crc32, deflateRawSync } from 'node:zlib'
 import { test, expect, type Page } from '@playwright/test'
-import { readFileSync } from 'node:fs'
+import { closeSync, mkdtempSync, openSync, readFileSync, rmSync, writeSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { randomBytes } from 'node:crypto'
 import type { State } from '../src/domain/types'
 
 // Independent UI acceptance. Mock payloads follow batch4 section 6; no
@@ -363,3 +366,78 @@ test('from an export zip full of media only the conversations file is sent, what
   }
   expect(m.errors).toEqual([])
 })
+
+// A real ZIP directory past 1 GB, backed by a sparse media file so the test
+// does not allocate or transfer a gigabyte just to exercise File.slice.
+function largeExport(conversations: Buffer): { directory: string; path: string } {
+  const mediaBytes = 1250 * 1024 * 1024
+  const mediaName = 'export/voice.wav'
+  const small = zipOf([
+    { name: mediaName, data: Buffer.alloc(0), deflate: false },
+    { name: 'export/conversations.json', data: conversations, deflate: true },
+  ])
+  const dataAt = 30 + Buffer.byteLength(mediaName)
+  const end = small.length - 22
+  const central = small.readUInt32LE(end + 16)
+  const zero = Buffer.alloc(1024 * 1024)
+  let sum = 0
+  for (let i = 0; i < 1250; i++) sum = crc32(zero, sum)
+  for (const at of [14, central + 16]) small.writeUInt32LE(sum, at)
+  for (const at of [18, 22, central + 20, central + 24]) small.writeUInt32LE(mediaBytes, at)
+  small.writeUInt32LE(dataAt + mediaBytes, central + 46 + Buffer.byteLength(mediaName) + 42)
+  small.writeUInt32LE(central + mediaBytes, end + 16)
+  const directory = mkdtempSync(join(tmpdir(), 'pcas-large-export-'))
+  const path = join(directory, 'gpt20261004.zip')
+  const fd = openSync(path, 'wx')
+  try {
+    writeSync(fd, small.subarray(0, dataAt), 0, dataAt, 0)
+    writeSync(fd, small.subarray(dataAt), 0, small.length - dataAt, dataAt + mediaBytes)
+  } finally { closeSync(fd) }
+  return { directory, path }
+}
+
+for (const compression of ['native', 'missing', 'raw-unsupported'] as const) {
+  test(`a 1250 MB export imports only conversations when browser decompression is ${compression}`, async ({ page }) => {
+    const m = await mock(page, [], undefined, { ...preview, blocked: 0 }, true)
+    await page.addInitScript((mode) => {
+      if (mode === 'missing') Object.defineProperty(window, 'DecompressionStream', { value: undefined })
+      if (mode === 'raw-unsupported') {
+        const Native = DecompressionStream
+        Object.defineProperty(window, 'DecompressionStream', { value: class extends Native {
+          constructor(format: CompressionFormat) {
+            if (format === 'deflate-raw') throw new TypeError('unsupported compression format')
+            super(format)
+          }
+        } })
+      }
+    }, compression)
+    // Incompressible text makes the entry span several streamed input chunks.
+    const conversations = Buffer.from(JSON.stringify([{ id: 'large-c1', title: '大归档', messages: [{ role: 'user', text: '这是对话原文，媒体不上传。' + randomBytes(192 * 1024).toString('base64') }] }]))
+    const archive = largeExport(conversations)
+    const sent: { path: string; bytes: number; text: boolean; filename: string }[] = []
+    await page.route((url) => url.pathname.startsWith('/v1/connectors/archive'), (route) => {
+      const request = route.request()
+      const path = new URL(request.url()).pathname
+      if (path === '/v1/connectors/archive/uploads') return route.fulfill({ status: 413, json: { error: 'archive_too_large', message: '文件超过可读取的大小，请拆成几份后再导入。' } })
+      const body = request.postDataBuffer() ?? Buffer.alloc(0)
+      sent.push({ path, bytes: body.length, text: body.includes(conversations), filename: body.toString().match(/filename="([^"]+)"/)?.[1] ?? '' })
+      return route.fallback()
+    })
+    try {
+      await open(page)
+      await page.locator('input[type="file"]').last().setInputFiles(archive.path)
+      const confirm = page.getByRole('button', { name: /^导入\s*[\d,]+\s*条$/ })
+      await expect(confirm).toBeVisible({ timeout: 5000 })
+      await expect(page.getByRole('dialog')).toContainText('gpt20261004.zip')
+      await confirm.click()
+      await expect(page.getByRole('dialog')).toHaveCount(0)
+      expect(sent.map((s) => s.path)).toEqual(['/v1/connectors/archive/preview', '/v1/connectors/archive'])
+      for (const s of sent) {
+        expect(s.filename).toBe('gpt20261004.conversations.json')
+        expect(s.bytes).toBeLessThan(conversations.length + 4096)
+        expect(s.text).toBe(true)
+      }
+      expect(m.errors).toEqual([])
+    } finally { rmSync(archive.directory, { recursive: true }) }
+  })
+}

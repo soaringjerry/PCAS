@@ -30,6 +30,16 @@ type modelUsage struct {
 	Plan         json.RawMessage
 }
 
+// A returned model call has already incurred usage. Persist it independently
+// before validating or committing its result, even during caller cancellation.
+func (s *Store) recordUsage(ctx context.Context, usage modelUsage) error {
+	usageCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+	return pgx.BeginFunc(usageCtx, s.pool, func(tx pgx.Tx) error {
+		return recordUsageTx(usageCtx, tx, usage)
+	})
+}
+
 func recordUsageTx(ctx context.Context, tx pgx.Tx, usage modelUsage) error {
 	refs := usage.MemoryRefs
 	if refs == nil {

@@ -40,14 +40,17 @@ func TestExtractionConfirmationRequiresCurrentVerbatimCapture(t *testing.T) {
 	for _, change := range []struct {
 		name string
 		edit func(*extractedItem)
+		want string
 	}{
-		{"inference", func(i *extractedItem) { i.Acquisition = "inferred" }},
-		{"reported speech", func(i *extractedItem) { i.Acquisition = "reported" }},
-		{"missing provenance", func(i *extractedItem) { i.Acquisition = "" }},
-		{"low confidence", func(i *extractedItem) { i.Confidence = 0.5 }},
-		{"unresolved subject", func(i *extractedItem) { i.Subject = "" }},
-		{"unresolved predicate", func(i *extractedItem) { i.Predicate = "" }},
-		{"paraphrased assertion", func(i *extractedItem) { i.Text = "月光列车已经交付" }},
+		{"inference", func(i *extractedItem) { i.Acquisition = "inferred" }, "candidate"},
+		{"reported speech", func(i *extractedItem) { i.Acquisition = "reported" }, "candidate"},
+		{"missing provenance", func(i *extractedItem) { i.Acquisition = "" }, "candidate"},
+		{"low confidence", func(i *extractedItem) { i.Confidence = 0.5 }, "candidate"},
+		{"confidence 0.79", func(i *extractedItem) { i.Confidence = 0.79 }, "candidate"},
+		{"confidence 0.8", func(i *extractedItem) { i.Confidence = 0.8 }, "adopted"},
+		{"unresolved subject", func(i *extractedItem) { i.Subject = "" }, "adopted"},
+		{"unresolved predicate", func(i *extractedItem) { i.Predicate = "" }, "adopted"},
+		{"paraphrased assertion", func(i *extractedItem) { i.Text = "月光列车已经交付" }, "adopted"},
 	} {
 		item := baseItem
 		change.edit(&item)
@@ -56,7 +59,7 @@ func TestExtractionConfirmationRequiresCurrentVerbatimCapture(t *testing.T) {
 			source memory.SourceResult
 			item   extractedItem
 			want   string
-		}{change.name, baseSource, item, "candidate"})
+		}{change.name, baseSource, item, change.want})
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

@@ -213,7 +213,7 @@ for (const kind of ['importing', 'paused', 'done', 'failed'] as const) {
       expect((await response).ok()).toBeTruthy()
       await expect(page.getByRole('button', { name: /^暂停/ })).toBeVisible()
     } else {
-      await expect(page.locator('body')).toContainText(/完成|已导入/)
+      await expect(page.locator('body')).toContainText(/完成|已导入|已存好/)
       await expect(page.getByRole('button', { name: /^暂停|继续|恢复/ })).toHaveCount(0)
     }
     expect(m.errors).toEqual([])

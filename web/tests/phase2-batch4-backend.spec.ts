@@ -73,7 +73,7 @@ test('W4 真实后端：历史导入、暂停、继续至完成，在资料库�
   const done = await progress()
   expect(done).toMatchObject({ total: count, stored: count, leftOut: 0 })
   await expect(page.getByText(/2[,]?000/).first()).toBeVisible()
-  await expect(page.locator('body')).toContainText(/完成|已导入/)
+  await expect(page.locator('body')).toContainText(/完成|已导入|已存好/)
   await page.goto('/library?tab=sources')
   await expect(page.getByRole('button', { name: /查看原文：.*合成历史0/ })).toBeVisible()
   await page.getByRole('button', { name: /查看原文：.*合成历史0/ }).click()

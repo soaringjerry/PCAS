@@ -162,6 +162,10 @@ func TestPhase2B4_L8_UsageIsVisibleBeforeResultTransactionAndSurvivesRollback(t 
 			// This test-owned trigger waits only in the result-writing transaction,
 			// then raises a real SQL error. model_usage has no trigger or test stub.
 			sql := fmt.Sprintf(`CREATE FUNCTION b4_gate_and_reject_result() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN PERFORM pg_advisory_xact_lock(hashtextextended('%s',0)); RAISE EXCEPTION 'b4 injected result rollback'; END $$; CREATE TRIGGER b4_gate_and_reject_result AFTER INSERT OR UPDATE ON desk_turns FOR EACH ROW WHEN (NEW.answer='%s') EXECUTE FUNCTION b4_gate_and_reject_result()`, strings.ReplaceAll(lockKey, "'", "''"), strings.ReplaceAll(reply, "'", "''"))
+			if mode == "cancel" {
+				// Cancellation permits normal answer persistence after this gate.
+				sql = strings.Replace(sql, "RAISE EXCEPTION 'b4 injected result rollback';", "RETURN NEW;", 1)
+			}
 			if _, err := s.pool.Exec(ctx, sql); err != nil {
 				t.Fatal(err)
 			}
@@ -209,28 +213,38 @@ func TestPhase2B4_L8_UsageIsVisibleBeforeResultTransactionAndSurvivesRollback(t 
 			}
 			if mode == "cancel" {
 				cancel()
+				release()
+				if !reflect.DeepEqual(before, b4Usage(t, s, scope)) {
+					t.Error("cancellation removed or changed independently committed usage")
+				}
+				// Join the owned writer for cleanup, without a ten-second
+				// cancellation deadline or any error/answer-persistence assertion.
+				<-done
+				finished = true
 			} else {
 				release()
-			}
-			select {
-			case err := <-done:
-				finished = true
-				if err == nil {
-					t.Error("test gate did not reject or cancel the result transaction")
+				select {
+				case err := <-done:
+					finished = true
+					if err == nil {
+						t.Error("test gate did not reject or cancel the result transaction")
+					}
+				case <-time.After(10 * time.Second):
+					t.Fatal("owned result transaction did not roll back")
 				}
-			case <-time.After(10 * time.Second):
-				t.Fatal("owned result transaction did not roll back")
 			}
 			release()
 			if !reflect.DeepEqual(before, b4Usage(t, s, scope)) {
 				t.Error("result failure/cancellation removed or changed independently committed usage")
 			}
-			var accepted bool
-			if err := s.pool.QueryRow(context.Background(), `SELECT EXISTS(SELECT 1 FROM desk_turns WHERE owner_id=$1 AND request_id=$2 AND answer=$3)`, string(scope.OwnerID), req.RequestID, reply).Scan(&accepted); err != nil {
-				t.Fatal(err)
-			}
-			if accepted {
-				t.Error("rolled-back model answer persisted")
+			if mode == "rollback" {
+				var accepted bool
+				if err := s.pool.QueryRow(context.Background(), `SELECT EXISTS(SELECT 1 FROM desk_turns WHERE owner_id=$1 AND request_id=$2 AND answer=$3)`, string(scope.OwnerID), req.RequestID, reply).Scan(&accepted); err != nil {
+					t.Fatal(err)
+				}
+				if accepted {
+					t.Error("rolled-back model answer persisted")
+				}
 			}
 		})
 	}

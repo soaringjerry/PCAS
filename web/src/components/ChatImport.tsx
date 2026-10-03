@@ -3,7 +3,7 @@ import { CalendarDays, CircleAlert, FileText, Pause, Play, RotateCw, Sparkles, T
 import { useStore } from '../store/context'
 import { ConfirmModal } from './Overlay'
 import { Button, Progress, Spinner, Tag } from './ui'
-import { ImportProblem, upload, type ArchivePreview, type ImportBatch, type Imports, type Organize } from './useImports'
+import { ImportProblem, sendArchive, type ArchivePreview, type ImportBatch, type Imports, type Organize } from './useImports'
 
 const count = (n: number) => n.toLocaleString('zh-CN')
 
@@ -61,7 +61,7 @@ export function ChatImportFlow({ file, onCancel, onStarted }: { file: File; onCa
 
   useEffect(() => {
     const control = new AbortController()
-    upload<Partial<ArchivePreview>>('/v1/connectors/archive/preview', file, '读取这个文件', (sent, total) => setStep({ at: 'reading', sent, total }), control.signal)
+    sendArchive<Partial<ArchivePreview>>('/v1/connectors/archive/preview', file, '读取这个文件', (sent, total) => setStep({ at: 'reading', sent, total }), control.signal)
       .then((p) => setStep({ at: 'preview', preview: { name: p.name ?? file.name, conversations: p.conversations ?? 0, messages: p.messages ?? 0, fromUser: p.fromUser ?? 0, earliest: p.earliest, latest: p.latest, alreadyImported: p.alreadyImported ?? 0, leftOut: p.leftOut ?? 0, blocked: p.blocked ?? 0, gaps: p.gaps ?? [] } }))
       .catch((e: unknown) => { if (!control.signal.aborted) setStep({ at: 'failed', again: worthRetrying(e), problem: e instanceof Error ? e.message : '读取这个文件没有完成。' }) })
     return () => control.abort()
@@ -72,7 +72,7 @@ export function ChatImportFlow({ file, onCancel, onStarted }: { file: File; onCa
     const control = new AbortController()
     sending.current = control
     setStep({ at: 'starting', preview, sent: 0, total: file.size })
-    upload('/v1/connectors/archive', file, '导入', (sent, total) => setStep({ at: 'starting', preview, sent, total }), control.signal, { organize })
+    sendArchive('/v1/connectors/archive', file, '导入', (sent, total) => setStep({ at: 'starting', preview, sent, total }), control.signal, { organize })
       .then(onStarted)
       .catch((e: unknown) => { if (!control.signal.aborted) setStep({ at: 'failed', again: worthRetrying(e), preview, problem: e instanceof Error ? e.message : '导入没有完成。' }) })
   }

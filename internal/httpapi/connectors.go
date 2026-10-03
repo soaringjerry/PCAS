@@ -121,6 +121,7 @@ type archiveOrganizingAPI interface {
 func (s *Server) archiveRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /v1/connectors/archive/preview", s.authorize(func(w http.ResponseWriter, r *http.Request, scope memory.Scope) { s.archiveUpload(w, r, scope, true) }))
 	mux.HandleFunc("POST /v1/connectors/archive", s.authorize(func(w http.ResponseWriter, r *http.Request, scope memory.Scope) { s.archiveUpload(w, r, scope, false) }))
+	s.archiveUploadRoutes(mux)
 	mux.HandleFunc("GET /v1/connectors/imports", s.authorize(func(w http.ResponseWriter, r *http.Request, scope memory.Scope) {
 		if !scope.IsOwner {
 			s.fail(w, memory.ErrForbidden)
@@ -194,59 +195,36 @@ func (s *Server) archiveUpload(w http.ResponseWriter, r *http.Request, scope mem
 	defer cancel()
 	r = r.WithContext(ctx)
 	_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(5 * time.Minute))
-	// Multipart overhead is separate from the file size checked by OpenArchive.
-	r.Body = http.MaxBytesReader(w, r.Body, connectors.MaxUploadBytes+(1<<20))
-	err := r.ParseMultipartForm(1 << 20)
-	if r.MultipartForm != nil {
-		defer r.MultipartForm.RemoveAll()
-	}
-	if err != nil {
-		var large *http.MaxBytesError
-		if errors.As(err, &large) {
-			s.archiveFail(w, r, &connectors.ArchiveError{Code: "archive_too_large"})
-		} else {
-			s.fail(w, memory.ErrInvalid)
-		}
-		return
-	}
-	organize := r.FormValue("organize")
-	if !preview && organize != "" && organize != "later" && organize != "now" {
-		s.fail(w, memory.ErrInvalid)
-		return
-	}
-	file, header, err := r.FormFile("file")
-	if err != nil {
-		s.fail(w, memory.ErrInvalid)
+	file, name, organize, used, ok := s.archiveInput(w, r, scope, preview)
+	if !ok {
 		return
 	}
 	defer file.Close()
-	if header.Size > connectors.MaxUploadBytes {
-		s.archiveFail(w, r, &connectors.ArchiveError{Code: "archive_too_large"})
-		return
-	}
 	if api, ok := s.options.Connectors.(archiveOrganizingAPI); ok && !preview {
-		out, err := api.ImportArchiveReaderWithOrganizing(r.Context(), scope, header.Filename, file, organize)
+		out, err := api.ImportArchiveReaderWithOrganizing(r.Context(), scope, name, file, organize)
 		if err != nil {
 			s.archiveFail(w, r, err)
 			return
 		}
+		used()
 		writeJSON(w, http.StatusAccepted, out)
 		return
 	}
 	if api, ok := s.options.Connectors.(archiveAPI); ok {
 		if preview {
-			out, err := api.PreviewArchive(r.Context(), scope, header.Filename, file)
+			out, err := api.PreviewArchive(r.Context(), scope, name, file)
 			if err != nil {
 				s.archiveFail(w, r, err)
 				return
 			}
 			writeJSON(w, http.StatusOK, out)
 		} else {
-			out, err := api.ImportArchiveReader(r.Context(), scope, header.Filename, file)
+			out, err := api.ImportArchiveReader(r.Context(), scope, name, file)
 			if err != nil {
 				s.archiveFail(w, r, err)
 				return
 			}
+			used()
 			writeJSON(w, http.StatusAccepted, out)
 		}
 		return
@@ -265,11 +243,12 @@ func (s *Server) archiveUpload(w http.ResponseWriter, r *http.Request, scope mem
 		s.archiveFail(w, r, &connectors.ArchiveError{Code: "archive_too_large"})
 		return
 	}
-	out, err := s.options.Connectors.ImportArchive(r.Context(), scope, header.Filename, data)
+	out, err := s.options.Connectors.ImportArchive(r.Context(), scope, name, data)
 	if err != nil {
 		s.archiveFail(w, r, err)
 		return
 	}
+	used()
 	writeJSON(w, http.StatusAccepted, out)
 }
 func (s *Server) archiveFail(w http.ResponseWriter, r *http.Request, err error) {

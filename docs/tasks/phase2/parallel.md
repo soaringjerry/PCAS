@@ -67,7 +67,7 @@ Astra 留作后备：某个任务两轮没收敛时换它接手。
 
 ### 3.1 迁移 027（S0 写，别人不新增迁移）
 
-第 2–4 批的主要迁移是 `027_structured_memory.sql`。别的任务确实需要再加表或列时，告诉协调者，由协调者分配编号。已分配：**028**（`028_backfill_queue.sql`，任务 E2）：`memory_jobs` 加一列 `backfill_queued_at timestamptz`，记录这个任务被补做检查排入的时间；只有补做检查排入的任务才有值。下一个可用的编号是 029。
+第 2–4 批的主要迁移是 `027_structured_memory.sql`。别的任务确实需要再加表或列时，告诉协调者，由协调者分配编号。已分配：**028**（`028_backfill_queue.sql`，任务 E2）：`memory_jobs` 加一列 `backfill_queued_at timestamptz`，记录这个任务被补做检查排入的时间；只有补做检查排入的任务才有值。**029**（`029_import_hold_organizing.sql`，任务 I 的跟进 I2）：`import_batches` 加 `hold_organizing boolean NOT NULL DEFAULT false`。下一个可用的编号是 030。
 
 | 对象 | 内容 | 用途 |
 |---|---|---|

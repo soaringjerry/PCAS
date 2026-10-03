@@ -8,7 +8,7 @@ PCAS 的所有文档都从这一页找。新增或移动文档时，同时改这
 |---|---|---|
 | 第 1 阶段：秘书前台 | 已上线（2026-10-01） | [任务总览](tasks/phase1/README.md) |
 | 第 1.5 阶段：稳定化 | 修复已合并；线上实测 11 项和试用一天还没做 | [稳定化计划](tasks/stabilization/README.md) |
-| 第 2 阶段：记忆核心 | 分四批。**第 1 批已上线（2026-10-02）**；第 2 批已通过验收（2026-10-03），等用户说部署；第 3、4 批验收中。第一次尝试（2.0）已回滚 | [任务入口](tasks/phase2/README.md) · [方向稿](tasks/phase2/direction.md) · [第 1 批](tasks/phase2/batch1/README.md) · [第 2–4 批并行方案](tasks/phase2/parallel.md) |
+| 第 2 阶段：记忆核心 | 分四批。**第 1 批已上线（2026-10-02）**；第 1、2 批已上线（第 2 批 2026-10-03）；第 3 批已通过验收；第 4 批验收中；补充批 4b（按整段对话整理）已派工。第一次尝试（2.0）已回滚 | [任务入口](tasks/phase2/README.md) · [方向稿](tasks/phase2/direction.md) · [第 1 批](tasks/phase2/batch1/README.md) · [第 2–4 批并行方案](tasks/phase2/parallel.md) |
 | 第 3 阶段及以后 | 未开始 | [白皮书 §16 路线图](whitepaper.md) |
 
 还没处理的问题统一记在 [待办清单](tasks/backlog.md)。
@@ -140,9 +140,9 @@ PCAS 的所有文档都从这一页找。新增或移动文档时，同时改这
 | 批 | 契约 | 任务包 |
 |---|---|---|
 | 共用 | [并行方案与数据约定](tasks/phase2/parallel.md) | [S0 骨架](tasks/phase2/S0-skeleton.md) |
-| 第 2 批：结构化抽取 | [契约](tasks/phase2/batch2/README.md) | [E1 抽取](tasks/phase2/batch2/E1-extraction.md) · [E2 队列与补做](tasks/phase2/batch2/E2-backfill.md) · [M 记忆库](tasks/phase2/batch2/M-memory-store.md) · [U2 前端](tasks/phase2/batch2/U2-frontend.md) · [T2 验收](tasks/phase2/batch2/T2-acceptance.md) · [验收报告](evaluations/2026-10-02-phase2-batch2-acceptance.md) |
+| 第 2 批：结构化抽取 | [契约](tasks/phase2/batch2/README.md) | [E1 抽取](tasks/phase2/batch2/E1-extraction.md) · [E2 队列与补做](tasks/phase2/batch2/E2-backfill.md) · [M 记忆库](tasks/phase2/batch2/M-memory-store.md) · [U2 前端](tasks/phase2/batch2/U2-frontend.md) · [E3 秘书对话上文](tasks/phase2/batch2/E3-conversation-context.md) · [T2 验收](tasks/phase2/batch2/T2-acceptance.md) · [验收报告](evaluations/2026-10-02-phase2-batch2-acceptance.md) |
 | 第 3 批：查询规划和时间轴 | [契约](tasks/phase2/batch3/README.md) | [Q1 拆条件](tasks/phase2/batch3/Q1-planner.md) · [Q2 按条件找](tasks/phase2/batch3/Q2-recall.md) · [K 时间轴](tasks/phase2/batch3/K-timeline.md) · [U3 前端](tasks/phase2/batch3/U3-frontend.md) · [T3 验收](tasks/phase2/batch3/T3-acceptance.md) |
-| 第 4 批：评测、花费、导入 | [契约](tasks/phase2/batch4/README.md) | [I 导入](tasks/phase2/batch4/I-import.md) · [L 花费记录](tasks/phase2/batch4/L-usage.md) · [U4 前端](tasks/phase2/batch4/U4-frontend.md) · [V 评测](tasks/phase2/batch4/V-eval.md) · [T4 验收](tasks/phase2/batch4/T4-acceptance.md) |
+| 第 4 批：评测、花费、导入 | [契约](tasks/phase2/batch4/README.md) | [I 导入](tasks/phase2/batch4/I-import.md) · [L 花费记录](tasks/phase2/batch4/L-usage.md) · [U4 前端](tasks/phase2/batch4/U4-frontend.md) · [V 评测](tasks/phase2/batch4/V-eval.md) · [T4 验收](tasks/phase2/batch4/T4-acceptance.md) · [E4 按整段对话整理](tasks/phase2/batch4/E4-conversation-extraction.md) |
 
 2.0 的代码和研究稿不在 `docs/` 里，归档为 git 标签 `archive/phase2-0/*`，位置和用法见任务入口第 6 节。
 

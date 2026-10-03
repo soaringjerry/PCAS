@@ -1,4 +1,4 @@
-import { conversationsOnly } from '../domain/zipSlim'
+import { conversationsOnly, type Slimmed } from '../domain/zipSlim'
 import { useCallback, useEffect, useState } from 'react'
 
 // Bringing a chat history in: what the file holds (nothing stored yet), then
@@ -105,7 +105,7 @@ export function upload<T>(path: string, file: File, doing: string, onProgress: (
 const PIECES_FROM = 32 * 1024 * 1024
 
 /** What is actually sent for a picked file, worked out once so reading and importing send the same thing. */
-const slimmed = new WeakMap<File, Promise<File>>()
+const slimmed = new WeakMap<File, Promise<Slimmed>>()
 
 /** Pieces already on the server for a file, so reading it and then importing it sends it only once. */
 const sentPieces = new WeakMap<File, string>()
@@ -151,8 +151,25 @@ export async function sendArchive<T>(path: string, picked: File, doing: string, 
   // A chat export zip is mostly images and audio; only its conversations file is sent.
   let slim = slimmed.get(picked)
   if (!slim) { slim = conversationsOnly(picked); slimmed.set(picked, slim) }
-  const file = await slim
+  const { file, whole } = await slim
   stopped(signal)
+  try {
+    return await sendPrepared<T>(path, file, doing, onProgress, signal, fields)
+  } catch (e) {
+    // Say what was actually sent and why, so "too large" is never a riddle.
+    if (e instanceof ImportProblem && e.status === 413) {
+      const mb = Math.ceil(file.size / (1024 * 1024))
+      e.message = file === picked && whole
+        ? `${whole}，所以只能整个上传；整个压缩包 ${mb} MB，超过了能收的大小。请检查这个文件是不是 ChatGPT 导出的压缩包。`
+        : file === picked
+          ? `这个文件 ${mb} MB，超过了能收的大小，请拆成几份后再导入。`
+          : `压缩包里的对话文件有 ${mb} MB，超过了能收的大小。请把这句话告诉维护的人，上限可以调。`
+    }
+    throw e
+  }
+}
+
+async function sendPrepared<T>(path: string, file: File, doing: string, onProgress: (sent: number, total: number) => void, signal?: AbortSignal, fields?: Record<string, string>): Promise<T> {
   if (file.size <= PIECES_FROM) return upload<T>(path, file, doing, onProgress, signal, fields)
   for (let attempt = 0; ; attempt++) {
     let id = sentPieces.get(file)

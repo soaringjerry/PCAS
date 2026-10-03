@@ -68,26 +68,34 @@ async function findConversations(file: File): Promise<Entry | undefined> {
   return undefined
 }
 
+/** Why a zip is sent whole instead of only its conversations file, in words for the user. */
+export type KeptWhole = '' | '压缩包里没有找到 conversations.json' | '压缩包加了密' | '压缩包用了浏览器解不开的压缩方式' | '这个浏览器不能在本地解压，请换新版的 Chrome、Edge、Firefox 或 Safari' | '压缩包读不出来，可能下载时损坏了'
+
+/** What is sent for a picked file, and why when it is still the whole zip. */
+export interface Slimmed { file: File; whole: KeptWhole }
+
 /**
  * The conversations file from a chat export zip, as a file of its own. Any
- * other file, or a zip this cannot read, comes back unchanged and is handled
- * by the server as before.
+ * other file comes back unchanged; a zip this cannot take apart comes back
+ * unchanged with the reason, and is handled by the server as before.
  */
-export async function conversationsOnly(file: File): Promise<File> {
-  if (!/\.zip$/i.test(file.name) && file.type !== 'application/zip') return file
+export async function conversationsOnly(file: File): Promise<Slimmed> {
+  if (!/\.zip$/i.test(file.name) && file.type !== 'application/zip') return { file, whole: '' }
   try {
     const entry = await findConversations(file)
-    // Encrypted, or packed in a way the browser cannot unpack: leave it to the server.
-    if (!entry || entry.flags & 1 || (entry.method !== 0 && entry.method !== 8)) return file
+    if (!entry) return { file, whole: '压缩包里没有找到 conversations.json' }
+    if (entry.flags & 1) return { file, whole: '压缩包加了密' }
+    if (entry.method !== 0 && entry.method !== 8) return { file, whole: '压缩包用了浏览器解不开的压缩方式' }
+    if (entry.method === 8 && typeof DecompressionStream === 'undefined') return { file, whole: '这个浏览器不能在本地解压，请换新版的 Chrome、Edge、Firefox 或 Safari' }
     const local = await view(file, entry.header, entry.header + 30)
-    if (local.getUint32(0, true) !== 0x04034b50) return file
+    if (local.getUint32(0, true) !== 0x04034b50) return { file, whole: '压缩包读不出来，可能下载时损坏了' }
     const from = entry.header + 30 + local.getUint16(26, true) + local.getUint16(28, true)
     const packed = file.slice(from, from + entry.packed)
-    if (packed.size !== entry.packed) return file
+    if (packed.size !== entry.packed) return { file, whole: '压缩包读不出来，可能下载时损坏了' }
     const data = entry.method === 0 ? packed : await new Response(packed.stream().pipeThrough(new DecompressionStream('deflate-raw'))).blob()
-    if (data.size !== entry.size) return file
-    return new File([data], `${file.name.replace(/\.zip$/i, '')}.conversations.json`, { type: 'application/json', lastModified: file.lastModified })
+    if (data.size !== entry.size) return { file, whole: '压缩包读不出来，可能下载时损坏了' }
+    return { file: new File([data], `${file.name.replace(/\.zip$/i, '')}.conversations.json`, { type: 'application/json', lastModified: file.lastModified }), whole: '' }
   } catch {
-    return file
+    return { file, whole: '压缩包读不出来，可能下载时损坏了' }
   }
 }

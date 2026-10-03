@@ -1,0 +1,602 @@
+{
+  "schema": 1,
+  "frozen_from": "docs/tasks/phase2/batch2/README.md at 66b1a43",
+  "policy": "Append only; expectation changes require coordinator approval recorded in acceptance report.",
+  "time_oracle": {
+    "anchor": "DateFromToday(test, zone, -7, 9, 30)",
+    "next_week_monday_days_by_weekday_sun0": [
+      1,
+      7,
+      6,
+      5,
+      4,
+      3,
+      2
+    ],
+    "next_week_duration_calendar_days": 7,
+    "friday_days_by_weekday_sun0": [
+      5,
+      4,
+      3,
+      2,
+      1,
+      0,
+      6
+    ],
+    "day_duration_calendar_days": 1,
+    "zones": [
+      "Asia/Shanghai",
+      "Australia/Sydney"
+    ]
+  },
+  "fixtures": {
+    "trip": {
+      "title": "秘书原话",
+      "text": "下周去成都，想吃春熙路那家火锅，顺便见老王",
+      "memory": "计划下周去成都吃火锅并见老王"
+    },
+    "plan": {
+      "title": "秘书原话",
+      "text": "周五三点和张三对方案"
+    },
+    "empty": {
+      "title": "秘书原话",
+      "text": "成都柜子的合成暗号是青色灯塔7319"
+    },
+    "question": "我去成都想吃什么",
+    "operation": "把刚才那件事改到四点",
+    "reported": "老王说他要去成都",
+    "import_unknown": "下周交稿；2025 年 3 月去过大理",
+    "archive_user": "明天交成都旅行计划",
+    "archive_assistant": "记得把紫色灯塔4821写在封面。",
+    "long_key": "我下周去成都见老王，合成暗号橙色灯塔6193",
+    "outdated_replacement": "先前一条回答的依据后来有变化，这条回答先不沿用。"
+  },
+  "sequences": {
+    "X1": {
+      "subject_type": "self",
+      "people": [
+        "老王"
+      ],
+      "places": [
+        "成都",
+        "春熙路"
+      ],
+      "confirmation": "adopted",
+      "expressed": "source",
+      "event": "next_week"
+    },
+    "X2": {
+      "same_self": true,
+      "same_person": true,
+      "same_place": true
+    },
+    "X3": {
+      "trim_case_same": true,
+      "cross_type_same": false
+    },
+    "X4": {
+      "memories": 1,
+      "people": []
+    },
+    "X5": {
+      "expressed": null,
+      "relative_event": null,
+      "absolute_from": "2025-03-01",
+      "absolute_to": "2025-04-01",
+      "precision": "month"
+    },
+    "X6": {
+      "invalid": [
+        "reversed",
+        "twenty_years",
+        "not_date",
+        "missing_quote"
+      ],
+      "memories_each": 1,
+      "event": null
+    },
+    "X7": {
+      "direct": "adopted",
+      "qualified": "candidate",
+      "imported": "candidate",
+      "reported": "candidate",
+      "assistant": "candidate",
+      "low_confidence": "candidate",
+      "inferred": "candidate"
+    },
+    "X8": {
+      "question_memories": 0,
+      "operation_memories": 0
+    },
+    "X9": {
+      "candidates": 0,
+      "memories": 1,
+      "nature": "plan",
+      "people": [
+        "张三"
+      ],
+      "precision": "day"
+    },
+    "X10": {
+      "memories": 1,
+      "version": 1,
+      "outdated": false,
+      "enrich": true
+    },
+    "X11": {
+      "memories": 1,
+      "version": 2,
+      "enrich": false
+    },
+    "X12": {
+      "fully_undone": 0,
+      "partially_undone": 1
+    },
+    "X13": {
+      "expressed": "2025-03-08T09:00:00+08:00",
+      "event_from": "2025-03-09T00:00:00+08:00",
+      "event_to": "2025-03-10T00:00:00+08:00",
+      "confirmation": "candidate",
+      "candidates": 0
+    },
+    "X14": {
+      "min_characters": 12001,
+      "key_memories": 1,
+      "state": "done",
+      "items": "unique_total"
+    },
+    "X15": {
+      "state": "empty",
+      "items": 0,
+      "raw_in_actual_request": true
+    },
+    "X16": {
+      "cases": [
+        "delete_during_call",
+        "replace_during_call"
+      ],
+      "memories": 0,
+      "entities": 0
+    },
+    "X17": {
+      "places": [
+        "地点一",
+        "地点二",
+        "地点三",
+        "地点四",
+        "地点五",
+        "地点六",
+        "地点七",
+        "地点八"
+      ],
+      "max_per_role": 8,
+      "max_name_characters": 40
+    },
+    "X18": {
+      "assistant_calls": 0,
+      "assistant_state": "empty",
+      "assistant_raw_recalled": true,
+      "user_neighbor_received": true
+    },
+    "F1": {
+      "new_priority": 0,
+      "backfill_priority": 10,
+      "claim_new_first": true
+    },
+    "F2": {
+      "retry_seconds": [
+        60,
+        300,
+        900,
+        3600
+      ],
+      "stop_after": 5,
+      "error": "provider_unavailable",
+      "first_case": "done",
+      "manual_retry": true
+    },
+    "F3": {
+      "state": "blocked",
+      "error": "provider_not_configured",
+      "manual_retry": "done"
+    },
+    "F4": {
+      "error": "budget_deferred",
+      "state": "queued",
+      "attempts": 0,
+      "defer": "next_local_midnight_with_jitter",
+      "zones": [
+        "Asia/Shanghai",
+        "Australia/Sydney"
+      ],
+      "dst": {
+        "zone": "Australia/Sydney",
+        "now": "2025-04-06T00:30:00+11:00",
+        "midnight": "2025-04-07T00:00:00+10:00",
+        "day_hours": 25
+      }
+    },
+    "F5": {
+      "sources": 50,
+      "max_pending": 20,
+      "max_started_hour": 30,
+      "checks": 3,
+      "duplicate_jobs": 0,
+      "exclude": [
+        "actions",
+        "extractor_ge_2"
+      ]
+    },
+    "F6": {
+      "paused_claimed": false,
+      "ordinary_claimed": true,
+      "resumed_claimed": true,
+      "archive_priority": 10
+    },
+    "F7": {
+      "memories": 1,
+      "reclaimed_attempts": 2,
+      "old_worker_commit": false
+    },
+    "F8": {
+      "state": "blocked",
+      "error": "model_call_failed",
+      "automatic_calls": 1
+    },
+    "M1": {
+      "initial_total": 130,
+      "page_size": 50,
+      "page_sizes": [
+        50,
+        50,
+        30
+      ],
+      "unique": 130,
+      "new_row_in_old_scan": false
+    },
+    "M2": {
+      "total": 250,
+      "snapshot_size": 200,
+      "oldest_in_actual_request": true
+    },
+    "M3": {
+      "people": {
+        "老王": 2,
+        "张三": 1
+      },
+      "places": {
+        "成都": 2,
+        "大理": 1
+      },
+      "max_per_role": 50,
+      "deleted_counted": false
+    },
+    "M4": {
+      "memory_deleted": true,
+      "answer_preserved": true,
+      "outdated": true,
+      "history_replaced": true,
+      "deputy_preserved": true
+    },
+    "M5": {
+      "memory_deleted": true,
+      "answer_cleared": true,
+      "deputy_cleared": true
+    },
+    "M6": {
+      "batch1_sequences": [
+        "N1",
+        "N2",
+        "N3",
+        "N4",
+        "N5",
+        "N6",
+        "N7",
+        "N8",
+        "N9",
+        "N10",
+        "N11",
+        "N12"
+      ],
+      "unchanged_unless_coordinator_approves": true
+    },
+    "M7": {
+      "first_visible": [
+        "甲",
+        "乙"
+      ],
+      "first_hidden": [
+        "丙"
+      ],
+      "reenabled_visible": [
+        "乙"
+      ],
+      "reenabled_hidden": [
+        "甲",
+        "丙"
+      ]
+    },
+    "M8": {
+      "deleted_entities": [
+        "老王"
+      ],
+      "retained_entities": [
+        "成都",
+        "self"
+      ]
+    },
+    "M9": {
+      "version": 2,
+      "mentions_preserved": true,
+      "event_preserved": true
+    },
+    "M10": {
+      "codes": [
+        "provider_unavailable",
+        "budget_deferred"
+      ],
+      "distinct_human_messages": true
+    },
+    "M11": {
+      "tables": [
+        "claim_mentions",
+        "source_extractions",
+        "import_batches",
+        "model_usage"
+      ],
+      "event_columns": [
+        "event_from",
+        "event_to",
+        "event_precision"
+      ]
+    },
+    "U1": {
+      "people": [
+        "老王"
+      ],
+      "places": [
+        "成都"
+      ],
+      "times_visible": true,
+      "no_empty_metadata": true,
+      "forbidden": [
+        "来源",
+        "陈述",
+        "实体",
+        "版本",
+        "依赖",
+        "抽取"
+      ]
+    },
+    "U2": {
+      "person": "老王",
+      "filtered_only_person": true,
+      "clear_restores": true
+    },
+    "U3": {
+      "total": 300,
+      "unique": 300,
+      "viewport_width": 390,
+      "overflow": false
+    },
+    "U4": {
+      "real_backend": true,
+      "people": [
+        "老王"
+      ],
+      "places": [
+        "成都"
+      ],
+      "person_filter": true
+    }
+  },
+  "supplement_5865411": {
+    "approval": "Coordinator user message, 2026-10-02; README section 6 and revised F5/M6.",
+    "F5": {
+      "max_enqueued_hour": 30,
+      "drain_between_checks": true,
+      "advance_after_checks_hours": 1,
+      "pending_limit": 20,
+      "next_hour_can_enqueue": true
+    },
+    "F4": {
+      "max_jitter_seconds": 600,
+      "budget_helper": "nextBudgetDay",
+      "backfill_method": "BackfillExtractions"
+    },
+    "M6": {
+      "all_prefixes": [
+        "P",
+        "M",
+        "N",
+        "G"
+      ],
+      "change_existing_assertions": false
+    },
+    "history_replacement": "（先前回答的依据已更新，请按现在的资料回答）",
+    "notes": "Original fixtures.outdated_replacement was a draft description, not the literal R7 replacement; use this additive exact contract fixture."
+  },
+  "supplement_32ccb70": {
+    "approval": "R9/X14 clarified in coordinator-authored docs commit 32ccb70 (merged e2175b0).",
+    "X14": {
+      "segment_characters": 12000,
+      "step_characters": 11000,
+      "overlap_characters": 1000,
+      "key_start_character": 11500,
+      "source_characters": 18000,
+      "requests": 2,
+      "unique_total": 3,
+      "items": 3,
+      "key_memories": 1,
+      "first_only": "我偏好每天清晨整理资料。",
+      "second_only": "我决定晚上检查旅行清单。"
+    }
+  },
+  "supplement_0f8e759": {
+    "approval": "Coordinator clarification in parallel.md and U2-frontend.md, merged into batch2 at 1cec28b.",
+    "U1": {
+      "event_from": "2025-06-12T00:00:00+08:00",
+      "event_to": "2025-06-15T00:00:00+08:00",
+      "first_display_day": "12",
+      "last_display_day": "14",
+      "excluded_display_day": "15"
+    }
+  },
+  "supplement_2e2b8f9": {
+    "approval": "Coordinator approval, README sections 7 and 8, main 2e2b8f9, 2026-10-02.",
+    "F5": {
+      "marker": "backfill_queued_at",
+      "root_stage": "source.extract",
+      "count_unit": "source_version",
+      "max_pending_sources": 20,
+      "max_enqueued_sources_hour": 30,
+      "archive_priority": 10,
+      "archive_marker": null,
+      "archive_queued_roots": 25,
+      "long_source_characters": 18000,
+      "first_three_enqueued_sources": [
+        20,
+        10,
+        0
+      ],
+      "after_hour_enqueued_sources": 20
+    },
+    "legacy_confirmation": {
+      "unresolved subject": "adopted",
+      "unresolved predicate": "adopted",
+      "paraphrased assertion": "adopted",
+      "confidence_0.79": "candidate",
+      "confidence_0.8": "adopted",
+      "other_expectations_unchanged": true
+    },
+    "legacy_not_configured": {
+      "code": "provider_not_configured",
+      "retry": false,
+      "state": "blocked",
+      "attempts": 0,
+      "manual_retry": "done"
+    },
+    "M12": {
+      "fixture_count": 12,
+      "project_a": [
+        0,
+        2,
+        4,
+        6,
+        8,
+        10
+      ],
+      "project_b": [
+        1,
+        3,
+        5,
+        7,
+        9,
+        11
+      ],
+      "confirmed": [
+        0,
+        3,
+        6,
+        9
+      ],
+      "sourced": [
+        1,
+        4,
+        7,
+        10
+      ],
+      "inferred": [
+        2,
+        5,
+        8,
+        11
+      ],
+      "model": [
+        0,
+        1,
+        4,
+        5,
+        8,
+        9
+      ],
+      "manual": [
+        1,
+        3,
+        5,
+        7,
+        9,
+        11
+      ],
+      "combined": [
+        4
+      ],
+      "empty_combination": [],
+      "page_limit": 2,
+      "sort": "updated_at_desc"
+    },
+    "M13": {
+      "existing_status": 200,
+      "missing_status": 404,
+      "direct_object": true,
+      "deleted_status": 404,
+      "other_owner_status": 404
+    },
+    "U5": {
+      "project_id": "project-decisions",
+      "project_name": "成都旅行项目",
+      "decisions": [
+        "决定坐早班高铁",
+        "决定住春熙路附近",
+        "决定周五见老王"
+      ],
+      "newer_unrelated": 250,
+      "snapshot_size": 200,
+      "query_nature": "decision",
+      "expected_visible_decisions": 3
+    },
+    "U1": {
+      "forbidden_scope": "new memory cards, filters and facets only"
+    }
+  },
+  "supplement_dda8ef5": {
+    "approval": "Coordinator user message and README section 9, integration dda8ef5, 2026-10-02.",
+    "legacy_not_configured": {
+      "attempts": 1,
+      "after_no_automatic_reclaim_attempts": 1,
+      "manual_retry_attempts": 1,
+      "state": "blocked",
+      "retry": false,
+      "code": "provider_not_configured",
+      "note": "Overrides only attempts=0 in supplement_2e2b8f9; first claim is one attempt, no second automatic claim. Manual retry resets counting."
+    },
+    "M14": {
+      "fixture_count": 2,
+      "visible_index": 0,
+      "hidden_index": 1,
+      "deputy": "manual",
+      "returned_memories": 1,
+      "people": [
+        "老王"
+      ],
+      "places": [
+        "成都"
+      ],
+      "event_precision": "range",
+      "expressed_at_present": true,
+      "event_bounds_present": true,
+      "model_prompt_after_batch3": "Deferred to phase3 integration; batch2 checks memoriesTx under deputy identity."
+    }
+  },
+  "supplement_02e7a27": {
+    "U5": {
+      "status": "cancelled",
+      "authority": "batch2/README.md section 10; coordinator final-round instruction",
+      "reason": "Project timeline was removed and domain/things.ts decision reader has no callers."
+    },
+    "U2b": {
+      "project_timeline_requirement": "cancelled; section 8 table first row excluded"
+    }
+  }
+}

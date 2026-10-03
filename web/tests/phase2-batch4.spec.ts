@@ -149,7 +149,7 @@ test('W5 默认先存着；存好后开始整理，进度随接口返回增长',
   await expect(page.getByText(expected.laterLabel, { exact: false }).first()).toBeVisible()
   expect(m.requests.filter(r => r.path === '/v1/connectors/archive' && r.method === 'POST')).toHaveLength(0)
   const importing = page.waitForResponse(r => new URL(r.url()).pathname === '/v1/connectors/archive' && r.request().method() === 'POST')
-  await page.getByRole('button', { name: /确认导入|开始导入|^确认$/ }).click()
+  await page.getByRole('button', { name: /确认导入|开始导入|^确认$|^导入\s*\d+\s*条$/ }).click()
   expect((await importing).ok()).toBeTruthy()
   expect(m.submittedModes).toEqual(['later'])
   await expect(page.locator('body')).toContainText(expected.heldStatus)
@@ -169,7 +169,7 @@ test('W5 确认前可以改为现在整理，表单实际发送 now', async ({ p
   const m = await mock(page)
   await open(page)
   await choose(page)
-  const nowName = /现在整理|立即整理|马上整理|边存边整理|导入时整理|同时整理/
+  const nowName = /现在(?:就)?整理|立即整理|马上整理|边存边整理|导入时整理|同时整理/
   const option = page.getByRole('option', { name: nowName })
   if (await option.count()) {
     const label = (await option.first().textContent())!.trim()
@@ -178,7 +178,7 @@ test('W5 确认前可以改为现在整理，表单实际发送 now', async ({ p
     await page.getByText(nowName).first().click()
   }
   const importing = page.waitForResponse(r => new URL(r.url()).pathname === '/v1/connectors/archive' && r.request().method() === 'POST')
-  await page.getByRole('button', { name: /确认导入|开始导入|^确认$/ }).click()
+  await page.getByRole('button', { name: /确认导入|开始导入|^确认$|^导入\s*\d+\s*条$/ }).click()
   expect((await importing).ok()).toBeTruthy()
   expect(m.submittedModes).toEqual(['now'])
   await noOverflow(page)

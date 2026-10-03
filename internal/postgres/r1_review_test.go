@@ -522,3 +522,35 @@ func TestR1R7EquivalentInstantKeepsCurrentNotice(t *testing.T) {
 		t.Error("same instant suppressed because its timezone spelling changed")
 	}
 }
+
+func TestR1R7InvalidationDoesNotLockOwnerDuringDelivery(t *testing.T) {
+	s, scope := testStore(t), owner()
+	now := time.Now().Add(time.Second)
+	notice := dueNotice(t, s, scope, now)
+	var ownerTx pgx.Tx
+	defer func() {
+		if ownerTx != nil {
+			_ = ownerTx.Rollback(context.Background())
+		}
+	}()
+	first := &fakeNotifyChannel{name: "first", before: func() {
+		workspaceCommand(t, s, scope, workspace.Command{Type: "toggleTrigger", ID: notice.ThingID, TriggerID: "due-reminder"})
+		var err error
+		ownerTx, err = s.pool.Begin(context.Background())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := ownerTx.Exec(context.Background(), "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(scope.OwnerID)); err != nil {
+			t.Fatal(err)
+		}
+	}}
+	second := &fakeNotifyChannel{name: "second"}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := s.DispatchNotices(ctx, now, []notify.Channel{first, second}); err != nil {
+		t.Fatal("notice invalidation waited on owner lock during delivery", err)
+	}
+	if len(second.calls) != 0 {
+		t.Error("disabled reminder sent to second channel")
+	}
+}

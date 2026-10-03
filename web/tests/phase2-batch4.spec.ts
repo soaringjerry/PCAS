@@ -139,7 +139,7 @@ test('W1 文件选择先预览：数量、时间、已导过和放不下；确�
   await noOverflow(page)
   await noInternals(page)
   const response = page.waitForResponse(r => new URL(r.url()).pathname === '/v1/connectors/archive' && r.request().method() === 'POST')
-  await page.getByRole('button', { name: /确认导入|开始导入|^确认$|^导入\s*\d+\s*条$/ }).click()
+  await page.getByRole('button', { name: /确认导入|开始导入|^确认$|^导入\s*[\d,]+\s*条$/ }).click()
   expect((await response).ok()).toBeTruthy()
   expect(m.requests.filter(r => r.path === '/v1/connectors/archive' && r.method === 'POST')).toHaveLength(1)
   expect(m.errors).toEqual([])
@@ -154,7 +154,7 @@ test('W5 默认先存着；存好后开始整理，进度随接口返回增长',
   await expect(page.getByText(expected.laterLabel, { exact: false }).first()).toBeVisible()
   expect(m.requests.filter(r => r.path === '/v1/connectors/archive' && r.method === 'POST')).toHaveLength(0)
   const importing = page.waitForResponse(r => new URL(r.url()).pathname === '/v1/connectors/archive' && r.request().method() === 'POST')
-  await page.getByRole('button', { name: /确认导入|开始导入|^确认$|^导入\s*\d+\s*条$/ }).click()
+  await page.getByRole('button', { name: /确认导入|开始导入|^确认$|^导入\s*[\d,]+\s*条$/ }).click()
   expect((await importing).ok()).toBeTruthy()
   expect(m.submittedModes).toEqual(['later'])
   await expect(page.locator('body')).toContainText(expected.heldStatus)
@@ -183,7 +183,7 @@ test('W5 确认前可以改为现在整理，表单实际发送 now', async ({ p
     await page.getByText(nowName).first().click()
   }
   const importing = page.waitForResponse(r => new URL(r.url()).pathname === '/v1/connectors/archive' && r.request().method() === 'POST')
-  await page.getByRole('button', { name: /确认导入|开始导入|^确认$|^导入\s*\d+\s*条$/ }).click()
+  await page.getByRole('button', { name: /确认导入|开始导入|^确认$|^导入\s*[\d,]+\s*条$/ }).click()
   expect((await importing).ok()).toBeTruthy()
   expect(m.submittedModes).toEqual(['now'])
   await noOverflow(page)
@@ -209,7 +209,7 @@ for (const kind of ['importing', 'paused', 'done', 'failed'] as const) {
     } else if (kind === 'paused' || kind === 'failed') {
       if (kind === 'failed') await expect(page.locator('body')).toContainText(/没有读完|继续导入/)
       const response = page.waitForResponse(r => new URL(r.url()).pathname.endsWith(`/${item.id}/resume`))
-      await page.getByRole('button', { name: /继续|恢复|重试/ }).click()
+      await page.getByRole('button', { name: /继续|恢复|重试|接着导/ }).click()
       expect((await response).ok()).toBeTruthy()
       await expect(page.getByRole('button', { name: /^暂停/ })).toBeVisible()
     } else {

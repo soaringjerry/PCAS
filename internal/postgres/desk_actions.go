@@ -159,7 +159,9 @@ func deskDue(value string, loc *time.Location) (string, bool, bool) {
 	case dateOnly:
 		at, err = time.ParseInLocation("2006-01-02", value, loc)
 		if err == nil {
-			at = at.Add(23*time.Hour + 59*time.Minute)
+			// The end of that calendar day where the user is. Adding hours to
+			// midnight lands on the wrong day when the clocks change.
+			at = time.Date(at.Year(), at.Month(), at.Day(), 23, 59, 0, 0, loc)
 		}
 	case len(value) == 16:
 		at, err = time.ParseInLocation("2006-01-02T15:04", value, loc)

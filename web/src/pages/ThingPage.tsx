@@ -517,10 +517,16 @@ function DocRow({ doc, fresh }: { doc: Doc; fresh: boolean }) {
   const [menu, setMenu] = useState(false)
   const more = useRef<HTMLButtonElement>(null)
 
+  const [unsaved, setUnsaved] = useState(false)
+  const editor = useRef<HTMLTextAreaElement>(null)
+
+  // The editor closes only once the text is safely stored: a failed save
+  // leaves it open with what was typed, to send again.
   const save = async (body: string) => {
-    setEditing(false)
-    if (body === doc.body) return
-    await dispatch({ type: 'updateDoc', id: doc.id, patch: { body, title: titleFor(doc, body) } })
+    if (body === doc.body) { setUnsaved(false); setEditing(false); return }
+    const ok = await dispatch({ type: 'updateDoc', id: doc.id, patch: { body, title: titleFor(doc, body) } })
+    setUnsaved(!ok)
+    if (ok) setEditing(false)
   }
 
   return (
@@ -554,9 +560,16 @@ function DocRow({ doc, fresh }: { doc: Doc; fresh: boolean }) {
           </Popover>
         )}
       </div>
+      {open && unsaved && (
+        <p className="form-error" role="alert">
+          没保存上，你写的内容还在下面。
+          <button type="button" className="fact add" onClick={() => editor.current && void save(editor.current.value)}>再保存一次</button>
+        </p>
+      )}
       {open &&
         (editing ? (
           <textarea
+            ref={editor}
             className="doc-editor"
             defaultValue={doc.body}
             aria-label={`${doc.title} 的内容`}

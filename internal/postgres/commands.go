@@ -621,9 +621,34 @@ func (s *Store) deleteThingTx(ctx context.Context, tx pgx.Tx, scope memory.Scope
 		WHERE owner_id=$1 AND kind='task' AND document->'dependsOn' ? $2`, string(scope.OwnerID), item.ID); err != nil {
 		return err
 	}
+	// Undo keeps earlier versions of the item, its documents, its agent runs
+	// and the samples drawn from them. A deletion empties those too: the
+	// trigger does it for the item and its documents once this setting names
+	// the owner, and the runs and samples are named here.
+	var previous string
+	if err := tx.QueryRow(ctx, "SELECT coalesce(current_setting('pcas.expire_actions',true),'')").Scan(&previous); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, "SELECT set_config('pcas.expire_actions',$1,true)", string(scope.OwnerID)); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `UPDATE action_log SET changes='[]'::jsonb,expired_at=now()
+		WHERE owner_id=$1 AND expired_at IS NULL AND EXISTS(SELECT 1 FROM jsonb_array_elements(changes) c WHERE
+		 (c->>'table'='agent_runs' AND c->>'id' IN (SELECT id::text FROM agent_runs WHERE owner_id=$1 AND thing_id=$2))
+		 OR (c->>'table'='training_samples' AND c->>'id' IN (SELECT t.id::text FROM training_samples t JOIN agent_runs r ON (r.owner_id,r.id)=(t.owner_id,t.run_id) WHERE r.owner_id=$1 AND r.thing_id=$2))
+		 OR (c->>'table'='work_items' AND c->>'id'=$2::text))`, string(scope.OwnerID), item.ID); err != nil {
+		return err
+	}
+	// Samples drawn from this item's agent runs refer to those runs and go first.
+	if _, err := tx.Exec(ctx, "DELETE FROM training_samples WHERE owner_id=$1 AND run_id IN (SELECT id FROM agent_runs WHERE owner_id=$1 AND thing_id=$2)", string(scope.OwnerID), item.ID); err != nil {
+		return err
+	}
 	if _, err := tx.Exec(ctx, "DELETE FROM agent_runs WHERE owner_id=$1 AND thing_id=$2", string(scope.OwnerID), item.ID); err != nil {
 		return err
 	}
-	_, err = tx.Exec(ctx, "DELETE FROM work_items WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), item.ID)
+	if _, err := tx.Exec(ctx, "DELETE FROM work_items WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), item.ID); err != nil {
+		return err
+	}
+	_, err = tx.Exec(ctx, "SELECT set_config('pcas.expire_actions',$1,true)", previous)
 	return err
 }

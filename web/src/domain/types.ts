@@ -206,7 +206,7 @@ export interface Source {
   /** The original's id when `single`; otherwise the key its originals are listed under. */
   id: ID
   name: string
-  kind: 'said' | 'note' | 'telegram' | 'import' | 'file'
+  kind: 'said' | 'note' | 'capture' | 'telegram' | 'import' | 'file'
   /** One stored original, opened directly; otherwise many, opened as a list. */
   single: boolean
   status: SourceStatus

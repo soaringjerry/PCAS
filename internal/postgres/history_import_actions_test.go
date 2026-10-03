@@ -98,29 +98,36 @@ func TestImportedHistoryNeverBecomesCurrentAction(t *testing.T) {
 				t.Fatal(err)
 			}
 			var candidate *workspace.Candidate
-			candidateKind := "task"
-			if tc.imported {
-				candidateKind = "memory"
-			}
 			for i := range st.Candidates {
-				if st.Candidates[i].Kind == candidateKind && st.Candidates[i].Text == said {
+				if st.Candidates[i].Kind == "task" && st.Candidates[i].Text == said {
 					candidate = &st.Candidates[i]
 				}
 			}
-			if candidate == nil {
-				t.Fatal("the statement must remain reviewable as a candidate", st.Candidates)
-			}
 			if tc.imported {
+				// Whole-conversation output is a reviewable memory, not a task
+				// suggestion. Its pending status is still mandatory.
+				var historical *workspace.Memory
+				for i := range st.Memories {
+					if st.Memories[i].Text == said {
+						historical = &st.Memories[i]
+					}
+				}
+				if historical == nil {
+					t.Fatal("the statement must remain reviewable as a candidate", st.Memories)
+				}
 				if len(st.Tasks) != 0 {
 					t.Fatalf("2025 history became %d current task(s); first title=%q", len(st.Tasks), st.Tasks[0].Title)
 				}
-				if candidate.State != "pending" {
-					t.Fatal("imported candidate was adopted without the owner", candidate.State)
+				if historical.Confirmation != b4bSpec[b4bLimits](t, "limits").Confirmation {
+					t.Fatal("imported candidate was adopted without the owner", historical.Confirmation)
 				}
 				if st.Ideas[0].Status != "shelved" || st.Ideas[0].Wake != nil {
 					t.Fatalf("2025 history woke an idea: %+v", st.Ideas[0])
 				}
 				return
+			}
+			if candidate == nil {
+				t.Fatal("the statement must remain reviewable as a candidate", st.Candidates)
 			}
 			if len(st.Tasks) != 1 || st.Tasks[0].Title != said {
 				t.Fatal("a present-day explicit task must still be adopted automatically", st.Tasks)

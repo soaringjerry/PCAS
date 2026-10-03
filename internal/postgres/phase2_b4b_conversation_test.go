@@ -253,6 +253,7 @@ func TestPhase2B4b_C5_MessageBoundarySegmentsGlobalNumbersAndOverlap(t *testing.
 
 func b4bOldClaim(t *testing.T, s *Store, scope memory.Scope, text string, source memory.Ref) memory.Ref {
 	t.Helper()
+	b2Snapshot(t, s, scope)
 	ref := b1Claim(t, s, scope, text, "plan", "candidate", source)
 	// Represent a pre-E4 system extraction through the existing commit fixture.
 	b2Exec(t, s, `UPDATE record_versions SET actor='ai' WHERE owner_id=$1 AND record_id=$2`, string(scope.OwnerID), string(ref.ID))
@@ -463,6 +464,9 @@ func TestPhase2B4b_C11_VisibleLimitsRejectHiddenQuoteAndPreserveOriginals(t *tes
 	b4bOperation(t, s, scope, a.Batch, "organize")
 	b4bDrain(t, s)
 	b2Equal(t, len(f.all()), spec.Calls)
+	if len(f.all()) != spec.Calls {
+		t.Fatal("cannot inspect incomplete long-message requests")
+	}
 	first := b4bInputFrom(t, f.all()[0])
 	second := b4bInputFrom(t, f.all()[1])
 	b2Equal(t, len(first.Messages), 1)

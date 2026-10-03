@@ -184,6 +184,9 @@ func b4bImport(t *testing.T, s *Store, scope memory.Scope, messages []b4bMessage
 			t.Fatal("imported fixture message missing", n, err)
 		}
 		a.Sources[n] = ref
+		if err = s.ProcessChunks(context.Background(), leaseStage(t, s, scope, ref, "source.chunk")); err != nil {
+			t.Fatal(err)
+		}
 	}
 	b2Equal(t, b4bProgress(t, s, scope, a.Batch).Stored, len(messages))
 	b4bOnlyArchiveJobs(t, s, scope, a.Root)

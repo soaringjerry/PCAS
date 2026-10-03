@@ -113,6 +113,11 @@ type archiveAPI interface {
 	ResumeImport(context.Context, memory.Scope, memory.ID) (connectors.ImportBatch, error)
 }
 
+type archiveOrganizingAPI interface {
+	ImportArchiveReaderWithOrganizing(context.Context, memory.Scope, string, io.Reader, string) (connectors.Result, error)
+	OrganizeImport(context.Context, memory.Scope, memory.ID) (connectors.ImportBatch, error)
+}
+
 func (s *Server) archiveRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /v1/connectors/archive/preview", s.authorize(func(w http.ResponseWriter, r *http.Request, scope memory.Scope) { s.archiveUpload(w, r, scope, true) }))
 	mux.HandleFunc("POST /v1/connectors/archive", s.authorize(func(w http.ResponseWriter, r *http.Request, scope memory.Scope) { s.archiveUpload(w, r, scope, false) }))
@@ -159,6 +164,23 @@ func (s *Server) archiveRoutes(mux *http.ServeMux) {
 			writeJSON(w, http.StatusOK, out)
 		}))
 	}
+	mux.HandleFunc("POST /v1/connectors/imports/{id}/organize", s.authorize(func(w http.ResponseWriter, r *http.Request, scope memory.Scope) {
+		if !scope.IsOwner {
+			s.fail(w, memory.ErrForbidden)
+			return
+		}
+		api, ok := s.options.Connectors.(archiveOrganizingAPI)
+		if !ok {
+			s.fail(w, memory.ErrUnavailable)
+			return
+		}
+		out, err := api.OrganizeImport(r.Context(), scope, memory.ID(r.PathValue("id")))
+		if err != nil {
+			s.archiveFail(w, r, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, out)
+	}))
 }
 func (s *Server) archiveUpload(w http.ResponseWriter, r *http.Request, scope memory.Scope, preview bool) {
 	if !scope.IsOwner {
@@ -187,6 +209,11 @@ func (s *Server) archiveUpload(w http.ResponseWriter, r *http.Request, scope mem
 		}
 		return
 	}
+	organize := r.FormValue("organize")
+	if !preview && organize != "" && organize != "later" && organize != "now" {
+		s.fail(w, memory.ErrInvalid)
+		return
+	}
 	file, header, err := r.FormFile("file")
 	if err != nil {
 		s.fail(w, memory.ErrInvalid)
@@ -195,6 +222,15 @@ func (s *Server) archiveUpload(w http.ResponseWriter, r *http.Request, scope mem
 	defer file.Close()
 	if header.Size > connectors.MaxUploadBytes {
 		s.archiveFail(w, r, &connectors.ArchiveError{Code: "archive_too_large"})
+		return
+	}
+	if api, ok := s.options.Connectors.(archiveOrganizingAPI); ok && !preview {
+		out, err := api.ImportArchiveReaderWithOrganizing(r.Context(), scope, header.Filename, file, organize)
+		if err != nil {
+			s.archiveFail(w, r, err)
+			return
+		}
+		writeJSON(w, http.StatusAccepted, out)
 		return
 	}
 	if api, ok := s.options.Connectors.(archiveAPI); ok {

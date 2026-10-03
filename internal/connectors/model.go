@@ -85,6 +85,7 @@ type ImportBatch struct {
 	Total          int        `json:"total"`
 	Stored         int        `json:"stored"`
 	Organized      int        `json:"organized"`
+	OrganizeLater  bool       `json:"organizeLater"`
 	LeftOut        int        `json:"leftOut"`
 	Earliest       *time.Time `json:"earliest"`
 	Latest         *time.Time `json:"latest"`

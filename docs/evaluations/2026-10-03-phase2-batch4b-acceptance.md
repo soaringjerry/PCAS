@@ -2,11 +2,11 @@
 
 集成基线是 `origin/phase2/batch4b` 的 `da7d4e9`，包含 E4 #132 和第 4 批修复 #134。测试分支 `phase2/b4b-T2-conversation-acceptance`，PR base 为 `phase2/batch4b`。
 
-契约按协调者指定的 PR #129 `6a2dc94c1ca133f35b1c97326ae3e054f9229839` 中 `docs/tasks/phase2/batch4/README.md` §12、§12.1、§13.6 读取。当前集成分支的同名文件没有完整的 §12.1 和 C10–C12，测试没有用旧版本替代裁定。用户要求 E4 合入后开始，故本次测试在实现合入后编写；先单独提交契约预期 `a9488b2`，再提交测试，失败后才读实现定位。
+契约按协调者指定的 PR #129 `6a2dc94c1ca133f35b1c97326ae3e054f9229839` 中 `docs/tasks/phase2/batch4/README.md` §12、§12.1、§13.6 读取；C11 最新裁定另按 PR #129 的 `8a159a8e8467042c4362c312619af0acefb22b9e` §13.7 执行。当前集成分支的同名文件没有完整的 §12.1 和 C10–C12，测试没有用旧版本替代裁定。用户要求 E4 合入后开始，故本次测试在实现合入后编写；先单独提交契约预期 `a9488b2`，再提交测试，失败后才读实现定位。
 
 ## 全量检查
 
-执行提交 `7abd1782d42be1533ac2aed1916e7488c570d951`。所有新序列、批准迁移的三个旧测试、F6 与既有后端回归都在本次 `make check` 的同一执行中运行。结果：顶层测试 **429 通过、1 失败、3 个原有 live guard 跳过**；含子用例共 973 个通过项、1 个失败项、3 个跳过项。耗时 466.22 秒，`make check` 退出码为 2，不能记为通过。唯一失败是 C11 的额外调用次数断言（实际 1，冻结预期 2）。`fmt-check`、`go vet` 通过；由于测试失败，Makefile 后续 build 目标没有执行，另在同一代码提交执行 `make build`，退出码 0。
+执行提交 `258eb1c18b2a0e0bbf989f30083e8ccc9669e94e`。所有新序列、批准迁移的三个旧测试、F6 与既有后端回归都在本次 `make check` 的同一执行中运行。结果：顶层测试 **430 通过、0 失败、3 个原有 live guard 跳过**；含子用例共 974 个通过项、0 个失败项、3 个跳过项。耗时 512.53 秒，`make check` 退出码为 0，`fmt-check`、`go vet`、`go test -race -count=1` 和 `go build` 全部通过。C1–C12 全部通过。
 
 数据库是临时 PostgreSQL 16 / pgvector 0.8.2、UTF8、仅监听本机随机端口，每个测试沿用 `testStore` 独立 schema。模型均为本地 `httptest` HTTP 假模型，归档、身份和时间数据均为合成。没有读取生产 `.env` 或数据库，没有调用真实模型或通知。测试器只删除自己记录的容器 ID。
 
@@ -14,12 +14,12 @@
 
 ```sh
 python3 /tmp/pcas-t2-isolated-go-check-20261003.py \
-  /root/PCAS-wt/b4b-T2 make-check pcas-t2-4b-full-
+  /root/PCAS-wt/b4b-T2 make-check pcas-t2-4b-c11-final-
 ```
 
-该环境辅助脚本为 `make check` 注入临时 `PCAS_TEST_DATABASE_URL`，通过独立 PATH 包装 Go 测试调用增加 `-json -count=1`；保留 Makefile 的 `-race -timeout 30m`，不用缓存，不修改 Makefile。常规复现入口是为自己的一次性测试库配置 `PCAS_TEST_DATABASE_URL` 后执行 `make check`。证据目录 `/tmp/pcas-t2-4b-full-3lpn5qwl` 的 `manifest.json` 记录执行 HEAD 和容器，`go-test.json` / `summary.json` / `make-check.log` 记录测试和命令结果，`cleanup.json` 记录容器清理。
+该环境辅助脚本为 `make check` 注入临时 `PCAS_TEST_DATABASE_URL`，通过独立 PATH 包装 Go 测试调用增加 `-json -count=1`；保留 Makefile 的 `-race -timeout 30m`，不用缓存，不修改 Makefile。常规复现入口是为自己的一次性测试库配置 `PCAS_TEST_DATABASE_URL` 后执行 `make check`。证据目录 `/tmp/pcas-t2-4b-c11-final-6h39fz3n` 的 `manifest.json` 记录执行 HEAD 和容器，`go-test.json` / `summary.json` / `make-check.log` 记录测试和命令结果，`cleanup.json` 记录容器清理。
 
-原有三个 live guard 是 `TestInstalledCodexHandshake`、`TestLiveCodexSecretaryAndLegacyFormats`、`TestLiveContinuityReplay`；本次没有新增跳过或禁用用例。容器清理结果 `remove_exit=0`、`exists=false`。`summary.json` SHA256：`ee4b1fa82168aface92ecb0a59b5d7e375a9c1636155d2a8001b943120564cac`。
+原有三个 live guard 是 `TestInstalledCodexHandshake`、`TestLiveCodexSecretaryAndLegacyFormats`、`TestLiveContinuityReplay`；本次没有新增跳过或禁用用例。容器清理结果 `remove_exit=0`、`exists=false`。`summary.json` SHA256：`596fe310fca1fdf397dd2fc539648c263567079088c0b6b0507cdb47ba85d3cd`。
 
 ## 序列
 
@@ -35,7 +35,7 @@ python3 /tmp/pcas-t2-isolated-go-check-20261003.py \
 | C8 | `TestPhase2B4b_C8_HoldPauseIncompleteBatchAndFreshInputPriority` | 先存着、暂停、未存完均不领取；完成并继续后优先级 10；新输入先领取 | 通过 |
 | C9 | `TestPhase2B4b_C9_ConversationCallsAtMostOneFifthOfMessageCalls` | 同样 200 条合成消息真实逐条 HTTP 基线与整段 HTTP 对照，整段不超过 40 次 | 通过 |
 | C10 | `TestPhase2B4b_C10_CrossSegmentWithdrawalCarriesOnlyThisRunsMemories` | 跨段 earlier_memories 只带本次记忆；撤回已有 ref，忽略未知 ref；确认和改过的记忆不进入清单 | 通过 |
-| C11 | `TestPhase2B4b_C11_VisibleLimitsRejectHiddenQuoteAndPreserveOriginals` | AI 前 1200 字、超长用户独自正文前 12000 字、截取外引用丢弃、原话不变、两个 extractor=3 记录；额外调用次数待裁定 | 失败：仅额外次数断言，待裁定 |
+| C11 | `TestPhase2B4b_C11_VisibleLimitsRejectHiddenQuoteAndPreserveOriginals` | AI 前 1200 字、超长用户独自正文前 12000 字、截取外引用丢弃、原话不变、两个 extractor=3 记录；只调用一次，messages 仅用户正文，context_messages 仅 AI 上文 | 通过 |
 | C12 | `TestPhase2B4b_C12_OverlapCannotBeEvidenceForNewSegment` | 上文不能作为本段依据；合法本段项仍保留 | 通过 |
 
 C2、C3、C4、C12 都包括正反用例。模型输入断言针对实际 HTTP 请求；依据同时核对消息对应 source、version、说话时间以及数据库证据定位的逐字原文。公开 excerpt 可带上下文，未把它误当作纯 quote。
@@ -62,7 +62,11 @@ C2、C3、C4、C12 都包括正反用例。模型输入断言针对实际 HTTP �
 
 以上改动均在测试夹具或检查证据入口，产品代码未改，原有业务要求未放宽。
 
-C11 待协调者裁定：契约表只规定可见长度、截取外证据和处理记录，没有规定这组消息必须调用几次。我首次冻结时额外写了 `calls=2`；实现跳过纯 AI 的段，把它的前 1200 字作为下一段的上文，实际只调用一次。已问协调者是否允许这条额外预期删除；在获得答复前保留 `calls=2`，不将整轮报成全过。本次全量中只有 `phase2_b4b_conversation_test.go:469` 的次数断言失败；AI 前 1200 字、用户独自成段前 12000 字、隐藏引用丢弃、原话保持 5000/15000 字以及两条 extractor=3 处理记录均完成且通过。PR 保持 Draft，等待这条额外次数要求的裁定。
+C11 裁定已经落实：协调者按 PR #129 §13.7 明确纯 AI 段不调用模型，直接写处理记录；其前 1200 字符作为用户段的上文。因此本例只调用一次，唯一请求的 `messages` 只含全局 index=2 的用户前 12000 字符，`context_messages` 只含全局 index=1 的 AI 前 1200 字符，两条消息均有 extractor=3 处理记录。隐藏引用丢弃、有效记忆、逐字证据、原始 5000/15000 字文本保留的其余 C11 断言不变。
+
+按冻结文件只增不改的约定，先提交 `4fb0da7`，追加 `ruling_8a159a8` 保存上述裁定；原 `C11.calls=2` 保留为历史冻结值，现行测试读取新增裁定的 `calls=1`，随后在 `258eb1c` 修改请求结构断言。本次只修改 C11 和冻结预期的追加项，没有产品代码或其他测试变更。
+
+上一轮统一全量 `7abd178` 的原始证据仍在 `/tmp/pcas-t2-4b-full-3lpn5qwl`：429 个顶层通过、1 个失败、3 个原有跳过，466.22 秒，退出码 2；唯一失败为当时未获裁定的额外次数断言。没有将旧轮追记为通过。
 
 ## 范围与限制
 

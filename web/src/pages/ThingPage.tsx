@@ -77,8 +77,9 @@ function facts(state: ReturnType<typeof useStore>['state'], thing: Thing): Fact[
 
 /** Status, due time, reminder and project are changed by saying so: each one starts its own sentence. */
 function InfoLine({ thing }: { thing: Thing }) {
-  const { state } = useStore()
+  const { state, dispatchUndoable } = useStore()
   const { prefill } = useShell()
+  const task = thing.kind === 'task' && isOpenTask(thing.item) ? thing.item : undefined
   return (
     <div className="info-line" role="group" aria-label="这件事的情况，点一项就跟秘书说怎么改">
       {facts(state, thing).map((f, i) =>
@@ -95,6 +96,18 @@ function InfoLine({ thing }: { thing: Thing }) {
             {f.text}
           </span>
         ),
+      )}
+      {task && (
+        <button
+          type="button"
+          role="switch"
+          aria-checked={!!task.urgent}
+          className={`fact${task.urgent ? ' owed' : ' add'}`}
+          title="排在首页时间线最前面，直到做完或定了时间"
+          onClick={() => dispatchUndoable({ type: 'updateTask', id: task.id, patch: { urgent: !task.urgent }, summary: task.urgent ? '不急了' : '标成尽快' }, task.urgent ? '不急了' : '标成尽快了')}
+        >
+          尽快
+        </button>
       )}
     </div>
   )

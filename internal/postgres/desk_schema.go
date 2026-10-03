@@ -27,9 +27,10 @@ var secretaryOutputSchema = json.RawMessage(`{
               "project": {"type": ["string", "null"]},
               "notes": {"type": ["string", "null"]},
               "owedTo": {"type": ["string", "null"]},
-              "waitingFor": {"type": ["string", "null"]}
+              "waitingFor": {"type": ["string", "null"]},
+              "urgent": {"type": ["boolean", "null"]}
             },
-            "required": ["op", "title", "due", "remind", "project", "notes", "owedTo", "waitingFor"],
+            "required": ["op", "title", "due", "remind", "project", "notes", "owedTo", "waitingFor", "urgent"],
             "additionalProperties": false
           },
           {
@@ -45,9 +46,10 @@ var secretaryOutputSchema = json.RawMessage(`{
                   "remind": {"type": ["string", "null"], "description": "null 表示不修改此字段。"},
                   "project": {"type": ["string", "null"], "description": "null 表示不修改此字段。"},
                   "status": {"type": ["string", "null"], "description": "null 表示不修改此字段。"},
-                  "notesAppend": {"type": ["string", "null"], "description": "null 表示不修改此字段。"}
+                  "notesAppend": {"type": ["string", "null"], "description": "null 表示不修改此字段。"},
+                  "urgent": {"type": ["boolean", "null"], "description": "null 表示不修改此字段。"}
                 },
-                "required": ["title", "due", "remind", "project", "status", "notesAppend"],
+                "required": ["title", "due", "remind", "project", "status", "notesAppend", "urgent"],
                 "additionalProperties": false
               }
             },

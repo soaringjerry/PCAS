@@ -100,6 +100,7 @@ type secretaryAction struct {
 	Notes        *string                    `json:"notes"`
 	OwedTo       *string                    `json:"owedTo"`
 	WaitingFor   *string                    `json:"waitingFor"`
+	Urgent       *bool                      `json:"urgent"`
 	Condition    *string                    `json:"condition"`
 	ConditionDue *string                    `json:"conditionDue"`
 	Set          map[string]json.RawMessage `json:"set"`
@@ -253,6 +254,9 @@ func taskReceiptText(ctx context.Context, tx pgx.Tx, scope memory.Scope, item wo
 	if due, err := time.Parse(time.RFC3339, item.Due); err == nil && !due.After(time.Now()) {
 		parts = append(parts, "时间已过，没有设提醒")
 	}
+	if item.Urgent {
+		parts = append(parts, "尽快")
+	}
 	return "已建：" + strings.Join(parts, " · ")
 }
 func (s *Store) executeSecretaryActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, a secretaryAction, aliases map[string]workspace.Item, agent workspace.Agent, loc *time.Location, currentThingID string) (workspace.DeskReceipt, error) {
@@ -313,6 +317,9 @@ func (s *Store) executeSecretaryActionTx(ctx context.Context, tx pgx.Tx, scope m
 			if a.WaitingFor != nil {
 				patch["waitingFor"] = *a.WaitingFor
 			}
+			if a.Urgent != nil && *a.Urgent {
+				patch["urgent"] = true
+			}
 			if len(patch) > 0 {
 				if err = call(workspace.Command{Type: "updateTask", ID: id, Patch: asJSON(patch)}); err != nil {
 					return receipt, err
@@ -359,7 +366,7 @@ func (s *Store) executeSecretaryActionTx(ctx context.Context, tx pgx.Tx, scope m
 				return receipt, err
 			}
 		}
-		patch := map[string]string{}
+		patch := map[string]any{}
 		dateOnly := false
 		dueChanged := false
 		if due, ok := textField(a.Set, "due"); ok && item.Kind == "task" {
@@ -370,6 +377,13 @@ func (s *Store) executeSecretaryActionTx(ctx context.Context, tx pgx.Tx, scope m
 				dueChanged = true
 			} else {
 				note = " · 时间没看懂"
+			}
+		}
+		// null leaves the mark as it is; only an explicit true or false changes it.
+		if raw, ok := a.Set["urgent"]; ok && item.Kind == "task" {
+			var urgent bool
+			if string(raw) != "null" && json.Unmarshal(raw, &urgent) == nil && urgent != item.Urgent {
+				patch["urgent"] = urgent
 			}
 		}
 		if len(patch) > 0 {

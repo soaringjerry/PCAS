@@ -26,12 +26,13 @@ const secretaryInstructions = assistantInstructions + "\n" + recallDateInstructi
 reply 简短纯文本，像当面回话，不列 1. 2. 3.；事项清单用 show，依据用 used。只引用服务端提供的短别名或下面的本轮 N*，不能使用真实 UUID。记忆引用用 M*，原话引用用 S*，used 两种都可以填；事项用 T*、P*、I*、R*、THIS。
 同一句话新建事项后继续操作，用 N加动作在原 actions 数组里的序号（从1开始）：N1是第1个动作创建的事项，不是第1个成功动作。只可引用本轮更早且成功的 create_task/create_idea/create_project；失败位置仍占序号，delegate:new 和 project:new:名称 的附带创建不产生 N。N只用于后续动作的 ref、project、set.project，项目字段仍只能引用项目；used、links、show不能用N。N不跨轮保留，R1仍指给出的已有对话事项，THIS仍是事项页对象。
 例如建交作业任务并加两个步骤：actions=[{"op":"create_task","title":"交作业"},{"op":"add_steps","ref":"N1","steps":["查资料","写提纲"]}]。
+urgent：用户明确表示这件事着急（尽快、不能拖、马上、赶紧、抓紧、越快越好）时填 true；用户说不急了、不用赶时，用 update 填 false；没提到就填 null，不改变原值。只说了一个具体时间不算着急。
 有 timeline、tasks 等卡片展示时，reply 只写一句结论（40 字以内），不要重复列举卡片内容。
 搜索词会离开对话：只写公开信息关键词，绝不能把资料中的人名、数字、私事放进搜索词。实时信息查不到就说明，不能编造。
 只输出 JSON：{"reply":"简短回答或空字符串","used":["M1"],"links":["https://..."],"show":["T1"],"remember":false,"actions":[...],"ask":null}。
 actions 每轮最多 10 条，格式：
-{"op":"create_task","title":"…","due":"YYYY-MM-DDTHH:MM 或 YYYY-MM-DD 或 null","remind":"-30m|-2h|at|HH:MM|none 或 null","project":"P1|N1|new:名称 或 null","notes":null,"owedTo":null,"waitingFor":null}
-{"op":"update","ref":"T3|I2|P1|R1|THIS|N1","set":{"title":"…","due":"本地时间或空字符串去掉","remind":"…","project":"P1|N1|none","status":"todo|doing|waiting|done|cancelled","notesAppend":"…"}}
+{"op":"create_task","title":"…","due":"YYYY-MM-DDTHH:MM 或 YYYY-MM-DD 或 null","remind":"-30m|-2h|at|HH:MM|none 或 null","project":"P1|N1|new:名称 或 null","notes":null,"owedTo":null,"waitingFor":null,"urgent":"true 或 null"}
+{"op":"update","ref":"T3|I2|P1|R1|THIS|N1","set":{"title":"…","due":"本地时间或空字符串去掉","remind":"…","project":"P1|N1|none","status":"todo|doing|waiting|done|cancelled","notesAppend":"…","urgent":"true|false 或 null"}}
 {"op":"create_idea","title":"…","condition":"…或 null","conditionDue":"…或 null","project":"P1|N1 或 null"}
 {"op":"create_project","name":"…"}
 {"op":"add_steps","ref":"T3|THIS|R1|N1","steps":["…"]}

@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import { CalendarDays, CircleAlert, FileText, Pause, Play, RotateCw, Trash2 } from 'lucide-react'
+import { CalendarDays, CircleAlert, FileText, Pause, Play, RotateCw, Sparkles, Trash2 } from 'lucide-react'
 import { useStore } from '../store/context'
 import { ConfirmModal } from './Overlay'
 import { Button, Progress, Spinner, Tag } from './ui'
-import { ImportProblem, upload, type ArchivePreview, type ImportBatch, type Imports } from './useImports'
+import { ImportProblem, upload, type ArchivePreview, type ImportBatch, type Imports, type Organize } from './useImports'
 
 const count = (n: number) => n.toLocaleString('zh-CN')
 
@@ -21,6 +21,28 @@ function Span({ from, to }: { from?: string; to?: string }) {
   return <>{a && b && a !== b ? `${a} 至 ${b}` : a || b}</>
 }
 
+const organizeChoices: { value: Organize; title: string; detail: string }[] = [
+  { value: 'later', title: '先存着，以后再整理', detail: '现在不调用 AI' },
+  { value: 'now', title: '现在就整理', detail: '存好后由 AI 在后台慢慢整理' },
+]
+
+/** The one choice before an import: store only, or also go through it for memories. */
+function OrganizeChoice({ value, onChange }: { value: Organize; onChange: (v: Organize) => void }) {
+  return (
+    <div className="imp-choice" role="radiogroup" aria-label="什么时候整理">
+      {organizeChoices.map((c) => (
+        <button key={c.value} type="button" role="radio" aria-checked={value === c.value} className={value === c.value ? 'on' : ''} onClick={() => onChange(c.value)}>
+          <i aria-hidden />
+          <span>
+            <strong>{c.title}</strong>
+            <small>{c.detail}</small>
+          </span>
+        </button>
+      ))}
+    </div>
+  )
+}
+
 type Step =
   | { at: 'reading'; sent: number; total: number }
   | { at: 'preview'; preview: ArchivePreview }
@@ -34,6 +56,7 @@ type Step =
 export function ChatImportFlow({ file, onCancel, onStarted }: { file: File; onCancel: () => void; onStarted: () => void }) {
   const [step, setStep] = useState<Step>({ at: 'reading', sent: 0, total: file.size })
   const [attempt, setAttempt] = useState(0)
+  const [organize, setOrganize] = useState<Organize>('later')
   const sending = useRef<AbortController | null>(null)
 
   useEffect(() => {
@@ -49,7 +72,7 @@ export function ChatImportFlow({ file, onCancel, onStarted }: { file: File; onCa
     const control = new AbortController()
     sending.current = control
     setStep({ at: 'starting', preview, sent: 0, total: file.size })
-    upload('/v1/connectors/archive', file, '导入', (sent, total) => setStep({ at: 'starting', preview, sent, total }), control.signal)
+    upload('/v1/connectors/archive', file, '导入', (sent, total) => setStep({ at: 'starting', preview, sent, total }), control.signal, { organize })
       .then(onStarted)
       .catch((e: unknown) => { if (!control.signal.aborted) setStep({ at: 'failed', again: worthRetrying(e), preview, problem: e instanceof Error ? e.message : '导入没有完成。' }) })
   }
@@ -143,7 +166,9 @@ export function ChatImportFlow({ file, onCancel, onStarted }: { file: File; onCa
         </p>
       )}
 
-      {step.at === 'preview' && <p className="small muted">{fresh > 0 ? '现在还什么都没存。导入后，存好的话马上就能问到；整理成记忆在后台慢慢做。' : preview?.blocked ? '这份里没有新的可以导入：不是以前导过，就是你说过不要再导入的。' : '这份里的消息以前都导过了，不用再导。'}</p>}
+      {step.at === 'preview' && fresh > 0 && <OrganizeChoice value={organize} onChange={setOrganize} />}
+
+      {step.at === 'preview' && <p className="small muted">{fresh > 0 ? '现在还什么都没存。两种都是存好就能问到里面的话；整理成带人、地点、时间的记忆可以以后再做。' : preview?.blocked ? '这份里没有新的可以导入：不是以前导过，就是你说过不要再导入的。' : '这份里的消息以前都导过了，不用再导。'}</p>}
 
       <div className="row">
         {step.at === 'preview' && fresh > 0 && (
@@ -210,6 +235,9 @@ function ImportRow({ batch, imports }: { batch: ImportBatch; imports: Imports })
     }
   }
   const finished = batch.state === 'done' && batch.organized >= batch.total
+  // Stored only, by the user's choice: there is no second bar to watch until they start it.
+  const held = batch.organizeLater === true && !finished
+  const waiting = held && batch.state === 'done'
   return (
     <div className="imp-item">
       <div className="imp-head">
@@ -223,10 +251,12 @@ function ImportRow({ batch, imports }: { batch: ImportBatch; imports: Imports })
       </div>
       {finished ? (
         <p className="small muted">都存好了，也整理完了。</p>
+      ) : waiting ? (
+        <p className="small">已存好，还没开始整理。里面的话现在就能问到。</p>
       ) : (
         <>
           <Meter kind="stored" label="已存好" value={batch.stored} total={batch.total} />
-          <Meter kind="organized" label="已整理" value={batch.organized} total={batch.total} />
+          {held ? <p className="tiny muted">存好的话现在就能问到。存完之后先不整理，等你点「开始整理」。</p> : <Meter kind="organized" label="已整理" value={batch.organized} total={batch.total} />}
         </>
       )}
       {batch.leftOut > 0 && <p className="tiny muted">另有 {count(batch.leftOut)} 条太多了没有导入，留下的是最新的。</p>}
@@ -244,6 +274,11 @@ function ImportRow({ batch, imports }: { batch: ImportBatch; imports: Imports })
         </p>
       )}
       <div className="row">
+        {waiting && (
+          <Button size="sm" variant="primary" icon={<Sparkles size={13} />} disabled={busy} onClick={() => void run(() => imports.organize(batch))}>
+            开始整理
+          </Button>
+        )}
         {batch.state === 'importing' && (
           <Button size="sm" icon={<Pause size={13} />} disabled={busy} onClick={() => void run(() => imports.pause(batch))}>
             暂停
@@ -286,7 +321,7 @@ export function ImportList({ imports, title }: { imports: Imports; title?: strin
     <div className="imp-list">
       {title && Boolean(imports.items?.length) && <h3 className="sheet-subtitle">{title}</h3>}
       {/* Said once for the whole list: the two bars count two different things. */}
-      {imports.items?.some((b) => !(b.state === 'done' && b.organized >= b.total)) && <p className="small muted imp-note">存好的话现在就能问到；整理成记忆在后台慢慢做，不用等。</p>}
+      {imports.items?.some((b) => !(b.state === 'done' && b.organized >= b.total) && !b.organizeLater) && <p className="small muted imp-note">存好的话现在就能问到；整理成记忆在后台慢慢做，不用等。</p>}
       {imports.items?.map((batch) => <ImportRow key={batch.id} batch={batch} imports={imports} />)}
       {imports.problem && (
         <p className="small muted" role="status">

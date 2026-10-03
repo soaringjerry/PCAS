@@ -124,15 +124,16 @@ function TodayWall({ compact }: { compact: boolean }) {
   const short = compact && !all
   const date = new Date().toLocaleDateString('zh-CN', { timeZone: timezone, month: 'long', day: 'numeric', weekday: 'long' })
 
-  // Short, rows are kept in this order: what rang, who waits, what is still ahead today, then what already passed.
+  // Short, rows are kept in this order: what rang, who waits, what cannot wait, what is still ahead today, then what already passed.
   const cap = short ? COMPACT_ROWS : Infinity
   const rang = full.rang.slice(0, cap)
   const waiting = full.waiting.slice(0, cap - rang.length)
-  const ahead = full.timeline.filter((r) => !r.past).slice(0, cap - rang.length - waiting.length)
-  const passed = full.timeline.filter((r) => r.past).slice(0, cap - rang.length - waiting.length - ahead.length)
+  const urgent = full.urgent.slice(0, cap - rang.length - waiting.length)
+  const ahead = full.timeline.filter((r) => !r.past).slice(0, cap - rang.length - waiting.length - urgent.length)
+  const passed = full.timeline.filter((r) => r.past).slice(0, cap - rang.length - waiting.length - urgent.length - ahead.length)
   const soon = short ? [] : full.soon
-  const hidden = full.rang.length + full.waiting.length + full.timeline.length + full.soon.length - (rang.length + waiting.length + ahead.length + passed.length + soon.length)
-  const nothing = full.rang.length + full.waiting.length + full.timeline.length + full.soon.length === 0
+  const hidden = full.rang.length + full.waiting.length + full.urgent.length + full.timeline.length + full.soon.length - (rang.length + waiting.length + urgent.length + ahead.length + passed.length + soon.length)
+  const nothing = full.rang.length + full.waiting.length + full.urgent.length + full.timeline.length + full.soon.length === 0
 
   return (
     <section className={`hall-panel hall-today${compact ? ' compact' : ''}`} aria-labelledby="hall-today-title">
@@ -157,9 +158,12 @@ function TodayWall({ compact }: { compact: boolean }) {
             ))}
           </div>
         )}
-        {(!short || ahead.length + passed.length > 0 || full.timeline.length === 0) && (
+        {(!short || urgent.length + ahead.length + passed.length > 0 || full.timeline.length + full.urgent.length === 0) && (
           <div className="hall-group">
             <h2 className="hall-sub">按时间</h2>
+            {urgent.map((r) => (
+              <TaskRow key={r.task.id} row={r} withTime />
+            ))}
             {passed.map((r) => (
               <TaskRow key={r.task.id} row={r} withTime />
             ))}
@@ -167,7 +171,7 @@ function TodayWall({ compact }: { compact: boolean }) {
             {ahead.map((r) => (
               <TaskRow key={r.task.id} row={r} withTime />
             ))}
-            {full.timeline.length === 0 && <p className="hall-empty">今天没有定了时间的事。</p>}
+            {full.timeline.length + full.urgent.length === 0 && <p className="hall-empty">今天没有定了时间的事。</p>}
           </div>
         )}
         {soon.length > 0 && (

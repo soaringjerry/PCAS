@@ -37,6 +37,7 @@ PCAS 的所有文档都从这一页找。新增或移动文档时，同时改这
 | [D1 待办、想法、项目可以删除](tasks/improvements/D1-delete-a-thing.md) | 阶段之间的小改进：规则、数据、测试（2026-10-03） |
 | [T1 Telegram 里的回复不再缺斤少两](tasks/improvements/T1-telegram-replies.md) | 阶段之间的小改进：交办回执、链接、副手做完后把结果发回来（2026-10-03） |
 | [U1 归档上传：分片，压缩包只传对话文件](tasks/improvements/U1-archive-upload-in-pieces.md) | 阶段之间的小改进：上传失败的原因、分片规则、只取对话文件、图片不解析的决定（2026-10-03） |
+| [Q3 历史对话及时进入记忆提取](tasks/improvements/Q3-conversation-dispatch.md) | 修复旧入口阻塞领取、记忆提取排在索引之后的问题（2026-10-03） |
 | [M1 秘书看得见图片](tasks/improvements/M1-images-for-the-secretary.md) | 待做：模型看图、发给秘书的图片当成说的话、网页输入框带附件（2026-10-03 用户提出） |
 
 **要部署、接模型、接数据**

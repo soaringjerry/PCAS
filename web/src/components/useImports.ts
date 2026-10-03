@@ -31,6 +31,11 @@ export interface ImportBatch {
   stored: number
   /** Of those, how many have been gone through for memories. */
   organized: number
+  prepared?: number
+  indexed?: number
+  vectorized?: number
+  activity?: 'storing' | 'preparing' | 'organizing' | 'indexing' | 'vectorizing' | 'queued' | 'paused' | 'failed' | 'held' | 'organizing_failed' | 'budget_wait' | 'complete'
+  organizingFailed?: number
   /** Stored only: nothing goes through these for memories until the user says so. Absent from a server that always organizes. */
   organizeLater?: boolean
   leftOut: number
@@ -203,7 +208,7 @@ async function call<T>(path: string, doing: string, body?: unknown, signal?: Abo
 /** How soon to look again: often while messages are being stored, now and then otherwise. */
 function pace(items: ImportBatch[]): number {
   if (items.some((b) => b.state === 'importing')) return 2500
-  if (items.some((b) => b.state === 'done' && b.organized < b.total && !b.organizeLater)) return 10000
+  if (items.some((b) => b.state === 'done' && ((b.organized < b.total && !b.organizeLater) || (b.prepared !== undefined && b.prepared < b.total) || (b.indexed !== undefined && b.indexed < b.total) || (b.vectorized !== undefined && b.vectorized < b.total)))) return 5000
   return 30000
 }
 

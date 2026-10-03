@@ -77,20 +77,25 @@ type API interface {
 }
 
 type ImportBatch struct {
-	ID             memory.ID  `json:"id"`
-	ArchiveID      memory.ID  `json:"archiveId"`
-	ArchiveVersion int        `json:"archiveVersion"`
-	Name           string     `json:"name"`
-	State          string     `json:"state"`
-	Total          int        `json:"total"`
-	Stored         int        `json:"stored"`
-	Organized      int        `json:"organized"`
-	OrganizeLater  bool       `json:"organizeLater"`
-	LeftOut        int        `json:"leftOut"`
-	Earliest       *time.Time `json:"earliest"`
-	Latest         *time.Time `json:"latest"`
-	ErrorCode      string     `json:"errorCode"`
-	Error          string     `json:"error"`
-	CreatedAt      time.Time  `json:"createdAt"`
-	UpdatedAt      time.Time  `json:"updatedAt"`
+	ID               memory.ID  `json:"id"`
+	ArchiveID        memory.ID  `json:"archiveId"`
+	ArchiveVersion   int        `json:"archiveVersion"`
+	Name             string     `json:"name"`
+	State            string     `json:"state"`
+	Total            int        `json:"total"`
+	Stored           int        `json:"stored"`
+	Organized        int        `json:"organized"`
+	Prepared         int        `json:"prepared"`
+	Indexed          int        `json:"indexed"`
+	Vectorized       int        `json:"vectorized"`
+	Activity         string     `json:"activity"`
+	OrganizingFailed int        `json:"organizingFailed"`
+	OrganizeLater    bool       `json:"organizeLater"`
+	LeftOut          int        `json:"leftOut"`
+	Earliest         *time.Time `json:"earliest"`
+	Latest           *time.Time `json:"latest"`
+	ErrorCode        string     `json:"errorCode"`
+	Error            string     `json:"error"`
+	CreatedAt        time.Time  `json:"createdAt"`
+	UpdatedAt        time.Time  `json:"updatedAt"`
 }

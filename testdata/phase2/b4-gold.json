@@ -459,5 +459,12 @@
     "L8Rollback": "unchanged independent visibility, real SQL rollback, retained exact row and absent rejected answer assertions",
     "browserStoredStatus": "W2/W4 completed-original status matcher additionally accepts 已存好; all counts, controls and subsequent behavior assertions unchanged",
     "rerunGate": "modified L8 independent transaction, I15 now positive control, I17 and I6 await coordinator notification after backend fixes merge"
+  },
+  "coordinator_fixture_c093e0a": {
+    "authority": "coordinator instruction to rebase onto c093e0a and rerun all on 2026-10-03; batch2 R1 extraction format",
+    "defaultExtractionContent": "{\"items\":[]}",
+    "reason": "default positive extraction output must contain only extraction-contract fields; prior universal reply/answer/used/actions/output fields made extraction parsing fail",
+    "oracles": "all sequence expectations remain unchanged, including organized growth, ordinary/new-source priority, and independent usage before result commit with rollback/cancel durability",
+    "baseline": "c093e0a5568cad3c1e307076c70a6b41dcc569a8"
   }
 }

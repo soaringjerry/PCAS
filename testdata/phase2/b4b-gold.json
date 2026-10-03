@@ -1,0 +1,171 @@
+{
+  "authority": {
+    "contract_pr": 129,
+    "contract_head": "6a2dc94c1ca133f35b1c97326ae3e054f9229839",
+    "integration_base": "da7d4e9",
+    "sections": [
+      "12",
+      "12.1",
+      "13.6"
+    ],
+    "approved_legacy_tests": [
+      "TestImportedHistoryNeverBecomesCurrentAction/uploaded_ChatGPT_archive",
+      "TestPhase2B2_X13_ImportedHistoricalTimeAndNoTodayTask",
+      "TestPhase2B2_X18_ArchiveAssistantSkippedButAvailableAsNeighborAndRaw"
+    ],
+    "preserved": [
+      "candidate confirmation",
+      "no current task from imported history",
+      "assistant original remains retrievable"
+    ],
+    "F6": "unchanged"
+  },
+  "limits": {
+    "body_characters": 12000,
+    "assistant_characters": 1200,
+    "overlap_messages": 2,
+    "overlap_characters": 1200,
+    "message_index_first": 1,
+    "extractor": 3,
+    "priority": 10,
+    "confirmation": "candidate"
+  },
+  "C1": {
+    "messages": 12,
+    "calls": 1,
+    "memories": 0,
+    "organized": 12,
+    "roles": [
+      "user",
+      "assistant"
+    ],
+    "old_days": 7
+  },
+  "C2": {
+    "memories": 1,
+    "final_index": 12,
+    "abandoned": "以前考虑去大理",
+    "final_quote": "还是去成都吧。",
+    "final_memory": "改为去成都",
+    "places": [
+      "成都"
+    ],
+    "long_proposal": "已同意的计划在长方案前部：周五去成都见老王。",
+    "agreement": "好，就按这个。",
+    "agreement_memory": "同意周五去成都见老王",
+    "agreement_index": 3,
+    "people": [
+      "老王"
+    ]
+  },
+  "C3": {
+    "only_invalid_memories": 0,
+    "mixed_memories": 1,
+    "ai_quote": "AI 建议去杭州见钱叔。",
+    "ai_memory": "错误地采纳AI杭州建议",
+    "user_quote": "我决定去成都。",
+    "user_memory": "用户决定去成都"
+  },
+  "C4": {
+    "invalid_memories": 0,
+    "mixed_memories": 1,
+    "first": "我偏好清晨散步。",
+    "second": "我偏好晚上读书。",
+    "invalid": "把别句引用挂在这句",
+    "accepted": "偏好晚上读书"
+  },
+  "C5": {
+    "message_characters": [
+      6500,
+      5500,
+      6000,
+      6000
+    ],
+    "segments": [
+      [
+        1,
+        2
+      ],
+      [
+        3,
+        4
+      ]
+    ],
+    "contexts": [
+      [],
+      [
+        1,
+        2
+      ]
+    ],
+    "calls": 2,
+    "memories": 2,
+    "first_memory": "先去成都计划",
+    "last_memory": "后来去杭州计划"
+  },
+  "C6": {
+    "old_removed": true,
+    "confirmed_kept": true,
+    "edited_kept": true,
+    "outdated": true,
+    "old_answer_retained": true,
+    "memories": 3,
+    "new_memory": "整段对话的新计划"
+  },
+  "C7": {
+    "characters": [
+      6500,
+      5500,
+      6000,
+      6000
+    ],
+    "messages": 4,
+    "memories": 2,
+    "organized": 4,
+    "completed_segments_recalled": 0,
+    "expired_lease_recovers": true
+  },
+  "C8": {
+    "not_stored_claims": 0,
+    "held_claims": 0,
+    "paused_claims": 0,
+    "resumed_claims": 1,
+    "fresh_before_archive": true
+  },
+  "C9": {
+    "messages": 200,
+    "per_message_calls": 200,
+    "conversation_calls_max": 40,
+    "final_memories": 0
+  },
+  "C10": {
+    "segments": 2,
+    "first_memory": "想去大理",
+    "second_memory": "改成去成都",
+    "first_quote": "想去大理。",
+    "second_quote": "还是去成都吧。",
+    "withdraw_ref": 1,
+    "unknown_ref": 987654,
+    "final_memories": 1,
+    "protected_excluded": true
+  },
+  "C11": {
+    "assistant_original_characters": 5000,
+    "assistant_visible_characters": 1200,
+    "user_original_characters": 15000,
+    "user_visible_characters": 12000,
+    "messages": 2,
+    "calls": 2,
+    "memories": 1,
+    "visible_quote": "边界内明确去成都。",
+    "hidden_quote": "截取后面才说去杭州见钱叔。"
+  },
+  "C12": {
+    "only_context_memories": 0,
+    "mixed_memories": 1,
+    "segments": 2,
+    "overlap_quote": "第一段去成都。",
+    "valid_quote": "第二段去杭州。",
+    "accepted_memory": "第二段杭州计划"
+  }
+}

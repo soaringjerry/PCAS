@@ -58,6 +58,8 @@ export interface Task {
   waitingFor?: string
   /** Someone is waiting on you for this; counts as urgent. */
   owedTo?: { who: string; since: string }
+  /** The user said this cannot wait; while it has no time it leads today's timeline. */
+  urgent?: boolean
   dependsOn: ID[]
   checklist: ChecklistItem[]
   triggers: Trigger[]

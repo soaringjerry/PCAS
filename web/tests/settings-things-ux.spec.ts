@@ -93,6 +93,8 @@ async function mock(page: Page, state = workspace(), options: Partial<Pick<Mock,
       case 'updateAgent': s.agents = s.agents.map((a) => (a.id === body.id ? { ...a, ...body.patch } : a)); break
       case 'renameThing': s.tasks = s.tasks.map((t) => (t.id === body.id ? { ...t, title: body.title } : t)); break
       case 'setNotes': s.tasks = s.tasks.map((t) => (t.id === body.id ? { ...t, notes: body.text } : t)); break
+      case 'updateTask': s.tasks = s.tasks.map((t) => (t.id === body.id ? { ...t, ...body.patch } : t)); break
+      case 'setTaskStatus': s.tasks = s.tasks.map((t) => (t.id === body.id ? { ...t, status: body.status } : t)); break
       case 'acceptCandidate':
         s.candidates = s.candidates.map((c) => (c.id === body.id ? { ...c, state: 'accepted', resolvedInto: body.kind === 'task' ? `made-${c.id}` : undefined } : c))
         if (body.kind === 'task') s.tasks = [...s.tasks, task({ id: `made-${body.id}`, title: body.text })]
@@ -711,4 +713,87 @@ test('a ChatGPT sign-in waiting on a remote server is finished by pasting the ad
   await expect(address).toHaveCount(0)
   expect(m.posts.filter((p) => p.path === '/v1/chatgpt/direct/callback')).toEqual([{ path: '/v1/chatgpt/direct/callback', method: 'POST', body: { url: pasted } }])
   expect(m.errors).toEqual([])
+})
+
+/* ---------- 说了「尽快」的事（H1） ---------- */
+
+test('a to-do the user said cannot wait leads today\'s timeline until it is done or gets a time', async ({ page }) => {
+  const today = (hour: number) => { const d = new Date(); d.setHours(hour, 0, 0, 0); return d.toISOString() }
+  const m = await mock(page, workspace({
+    settings: { timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, city: '上海', dailyBudget: 10, autoAccept: false, wakeIdeas: true, followUps: true, dailyReviewAt: '09:00' },
+    tasks: [
+      task({ id: 'later', title: '晚上对账', due: today(23) }),
+      task({ id: 'second', title: '赶紧回客户邮件', urgent: true, createdAt: '2026-09-30T03:00:00Z' }),
+      task({ id: 'first', title: '尽快开始推广', urgent: true, createdAt: '2026-09-29T03:00:00Z' }),
+      task({ id: 'done', title: '马上交表', urgent: true, status: 'done' }),
+      task({ id: 'plain', title: '整理发票' }),
+    ],
+  }))
+  await page.goto('/')
+  const today_ = page.getByRole('region', { name: '今天' })
+  const rows = today_.locator('.hall-task')
+  // Urgent ones first, oldest first, with 尽快 where the clock time goes; done and unmarked ones stay out.
+  await expect(rows).toHaveCount(3)
+  await expect(rows.nth(0)).toContainText('尽快开始推广')
+  await expect(rows.nth(0).locator('.hall-time')).toHaveText('尽快')
+  await expect(rows.nth(1)).toContainText('赶紧回客户邮件')
+  await expect(rows.nth(2)).toContainText('晚上对账')
+  await expect(today_).not.toContainText('马上交表')
+  await expect(today_).not.toContainText('整理发票')
+
+  // The switch on the thing page turns it off, and the row leaves the timeline.
+  await page.goto('/t/first')
+  const urgent = page.getByRole('switch', { name: '尽快' })
+  await expect(urgent).toHaveAttribute('aria-checked', 'true')
+  await urgent.click()
+  await expect(urgent).toHaveAttribute('aria-checked', 'false')
+  expect(m.commands.at(-1)).toMatchObject({ type: 'updateTask', id: 'first', patch: { urgent: false } })
+  await page.goto('/')
+  await expect(rows.nth(0)).toContainText('赶紧回客户邮件')
+  await expect(today_).not.toContainText('尽快开始推广')
+
+  // Given a time today, it sits by that time and no longer says 尽快; without it, it is back on top.
+  m.state = { ...m.state, tasks: m.state.tasks.map((t) => (t.id === 'second' ? { ...t, due: today(22) } : t)) }
+  await page.goto('/')
+  await expect(rows.nth(0)).toContainText('赶紧回客户邮件')
+  await expect(today_.locator('.hall-time', { hasText: '尽快' })).toHaveCount(0)
+  m.state = { ...m.state, tasks: m.state.tasks.map((t) => (t.id === 'second' ? { ...t, due: undefined } : t)) }
+  await page.goto('/')
+  await expect(rows.nth(0).locator('.hall-time')).toHaveText('尽快')
+  expect(m.errors).toEqual([])
+})
+
+test('only urgent to-dos: the timeline shows them and does not say nothing is timed; ideas have no switch', async ({ page }) => {
+  await mock(page, workspace({ tasks: [task({ id: 'only', title: '抓紧续签合同', urgent: true })], ideas: [{ id: 'idea', title: '学游泳', body: '', status: 'active', conditions: [], evolution: [], sources: [], remindersOn: false, createdAt: at, updatedAt: at }] as State['ideas'] }))
+  await page.goto('/')
+  const today_ = page.getByRole('region', { name: '今天' })
+  await expect(today_.locator('.hall-task').first()).toContainText('抓紧续签合同')
+  await expect(today_).not.toContainText('今天没有定了时间的事')
+  await page.goto('/t/idea')
+  await expect(page.getByRole('group', { name: /这件事的情况/ })).toBeVisible()
+  await expect(page.getByRole('switch', { name: '尽快' })).toHaveCount(0)
+})
+
+test('on a phone the five rows are: what rang, who waits, what cannot wait, then what is ahead', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  const today = (hour: number, minute = 0) => { const d = new Date(); d.setHours(hour, minute, 0, 0); return d.toISOString() }
+  const zone = Intl.DateTimeFormat().resolvedOptions().timeZone
+  await mock(page, workspace({
+    settings: { timezone: zone, city: '上海', dailyBudget: 10, autoAccept: false, wakeIdeas: true, followUps: true, dailyReviewAt: '09:00' },
+    notices: [{ id: 'n1', thingId: 'rang', triggerId: 'due-reminder', title: '到点的事', reason: '', dueAt: '2026-09-30T01:00:00Z', createdAt: at }] as State['notices'],
+    tasks: [
+      task({ id: 'rang', title: '到点的事' }),
+      task({ id: 'owed', title: '回李四', owedTo: { who: '李四', since: at } }),
+      task({ id: 'u1', title: '尽快甲', urgent: true, createdAt: '2026-09-29T03:00:00Z' }),
+      task({ id: 'u2', title: '尽快乙', urgent: true, createdAt: '2026-09-29T04:00:00Z' }),
+      task({ id: 'a1', title: '今晚一', due: today(23, 40) }),
+      task({ id: 'a2', title: '今晚二', due: today(23, 50) }),
+      task({ id: 'a3', title: '今晚三', due: today(23, 55) }),
+    ],
+  }))
+  await page.goto('/')
+  const rows = page.getByRole('region', { name: '今天' }).locator('.hall-task')
+  await expect(rows).toHaveCount(5)
+  await expect(rows).toContainText(['到点的事', '回李四', '尽快甲', '尽快乙', '今晚一'])
+  expect(await noSidewaysScroll(page)).toBe(true)
 })

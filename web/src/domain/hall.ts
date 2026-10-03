@@ -34,6 +34,8 @@ export interface TodayColumn {
   rang: NoticeRow[]
   /** Someone is waiting, a follow-up is due, or it went late on an earlier day. */
   waiting: TodayRow[]
+  /** Said to be urgent and given no time yet; these lead the timeline, oldest first. */
+  urgent: TodayRow[]
   /** Due or scheduled today, in clock order; the ones already past are marked. */
   timeline: TodayRow[]
   /** Due within the next three days. Anything later stays out until it is close. */
@@ -64,6 +66,7 @@ export function todayColumn(state: State): TodayColumn {
   // A task whose reminder is pinned on top is not listed a second time below.
   const pinned = new Set(rang.map((r) => r.notice.thingId))
   const waiting: TodayRow[] = []
+  const urgent: TodayRow[] = []
   const timeline: TodayRow[] = []
   const soon: TodayRow[] = []
   const now = Date.now()
@@ -95,12 +98,18 @@ export function todayColumn(state: State): TodayColumn {
       waiting.push({ task, note: `${task.owedTo.who}在等你 · ${daysSince(task.owedTo.since)} 天` })
       continue
     }
+    // No time at all, but the user said it cannot wait: it stays on the timeline until it is done or gets a time.
+    if (task.urgent && !due && !task.scheduled) {
+      urgent.push({ task, note: task.notes?.split('\n')[0] || '你说过要尽快', time: '尽快' })
+      continue
+    }
     if (due && dayOffset(due, timezone) <= 3) soon.push({ task, note: `${formatWhen(due, timezone).replace(/ \d\d:\d\d$/, '')}截止` })
   }
 
+  urgent.sort((a, b) => a.task.createdAt.localeCompare(b.task.createdAt))
   timeline.sort((a, b) => (a.at ?? '').localeCompare(b.at ?? ''))
   soon.sort((a, b) => (a.task.due ?? '').localeCompare(b.task.due ?? ''))
-  return { rang, waiting, timeline, soon }
+  return { rang, waiting, urgent, timeline, soon }
 }
 
 export interface QueueItem {

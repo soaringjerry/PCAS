@@ -1,18 +1,16 @@
-# 第 3 批独立验收：第三轮统一结果及测试交付
+# 第 3 批独立验收：第 2 批进 main 后的整库结果
 
 ## 状态和基线
 
 执行者 T3；工作区 `/root/PCAS-wt/b3-T3`，分支 `phase2/b3-T3-acceptance`。只按契约编写测试，未阅读 Q1/Q2/K 的实现，未修改产品代码或其他任务的测试。第 8 节裁定批准修改三个冻结后缀，其余既有冻结值保持不变。
 
-本轮按协调者指令 fetch、变基到 `origin/phase2/batch3` 的 `f5b2a42b361c7eb67852538c028a277816c2664e`，应用 README 第 8 节的全部裁定。先在 `f140f53` 提交冻结预期修正，再于 `a174b9270faa3f69a5df30f767605124b13403b6` 提交测试；这个提交是统一全量 Go 和 V1–V3 的唯一被测提交，未在运行中改变测试或产品。
+第 2 批已进 main 并上线后，按协调者指令 fetch、变基到 `origin/phase2/batch3` 的 `635d1bb69f7ae98b817f7f9481ec3a51f01c460a`。浏览器工作流唯一冲突是用例列表，保留已合入的第 2 批用例并加入第 3 批用例；没有改产品或测试预期。统一本地被测提交为 `119f74bb86b18ac10c59bcb32bbb68396b6a0056`。
 
-第三轮第 3 批验收全部通过：**34 个 Go 顶层用例通过、0 失败、0 跳过；V1/V2/V3 全部通过**。P1–P7、S1–S13、K1–K11 及补充的元数据预算、名字排序、事件精度断言都在同一提交上通过，本轮没有定向补跑或浏览器重试。
+整库 **`make check` 退出 0，fmt-check、go vet、Go race 全量和 build 全部通过**。Go 顶层用例 **438 通过、0 失败、3 个既有真实模型用例跳过**；第 3 批 **34 通过、0 失败、0 跳过**。此前单列的 `TestExtractionWithoutModelStaysNotConfigured` 和 `TestExtractionConfirmationRequiresCurrentVerbatimCapture` 都已通过，旧失败已消除。
 
-全部 Go 顶层用例 **392 通过、2 失败、3 个既有真实模型用例跳过**。两个失败仅为协调者要求单列的第 2 批旧抽取测试，由 T2 修改，因此 `make check` 退出 2、未执行其 build 目标；同提交单独 `go build -trimpath` 通过。不能将整库 `make check` 报成全绿。
+同提交 V1/V2/V3 **全部通过，零重试**；前端 `npm ci`、lint、type-check、build 通过。本轮没有新发现，也没有调整预期或定向重跑。
 
-fmt-check、go vet、前端 lint/type-check/build 和新增浏览器用例直接 TypeScript 检查通过。第三轮逐项结果及预期修正清单见末节；首轮、第二轮记录保留为历史，之前三项待裁定均已获明确批准并处理。
-
-历史集成基线：首轮 `cd5815e`，被测 `d98a527cf8a3a5dd0c4d1f41039b21ca93397e00`；第二轮 `f6613bc`，统一被测 `348651e71315c37f2902262a0aef2cd896df58d2`，另有 `ffcd259` 六条夹具修正补跑。测试交付此前依次变基到 `1cec28b`、`b7340fe`、`de59215`、`41960e9`；本轮再变基到 `f5b2a42`。
+此前三轮结果保留为历史。README 第 8 节授权的三个后缀、S7 和 V1 预期修正仍有效；本轮冻结文件与第三轮逐字节相同。PR #86 的 CI 在交付分支推送后验证，最终 CI 结果记录在 PR 及本地 manifest。
 
 初始基线 `66b1a43`；按用户裁定 fetch 了契约提交 `586541120729befc81cb7e15aac7706fd0124516`。在该提交的产品代码上，用自建 `pgvector/pgvector:0.8.2-pg16-bookworm` tmpfs 容器、随机本机端口及 `testStore` 的独立 schema 采集 S6/S10 改动前基准。只使用本机假模型，未读取 `/root/PCAS/.env` 或 `config/`，未调用真实模型、线上库或真实通知。临时采集程序及容器已清理。两组 S6 分别使用新 schema，避免第一次采集自己产生的原话污染第二组输入。
 
@@ -74,9 +72,9 @@ R1–R4：P 序列；R5：S9/S10/S13；R6：S4/S5/S12；R7：S1/S4/S5；R8：S3�
 
 ## 待办与发现
 
-三项裁定均已按 README 第 8 节执行，第三轮在同一提交统一运行。实际结果见末节；失败不跳过，不作未经批准的预期调整，不重复运行碰运气。
+三项裁定均已按 README 第 8 节执行；第 2 批进 main 后再次统一确认整库。实际结果见末节；失败不跳过，不作未经批准的预期调整，不重复运行碰运气。
 
-测试先行交付时发现清单为空；三轮结果分别列在后文。range 显示问题由协调者在 `0f8e759` 裁定：显示到实际覆盖的最后一天。已按裁定追加冻结预期，V1 及 S1 检查显示 06-14、不显示排除端点 06-15。[Draft PR #86](https://github.com/soaringjerry/PCAS/pull/86)，base 为 `phase2/batch3`。
+测试先行交付时发现清单为空；历轮结果分别列在后文。range 显示问题由协调者在 `0f8e759` 裁定：显示到实际覆盖的最后一天。已按裁定追加冻结预期，V1 及 S1 检查显示 06-14、不显示排除端点 06-15。[Draft PR #86](https://github.com/soaringjerry/PCAS/pull/86)，base 为 `phase2/batch3`。
 
 ## b9d26f0 / 5beb42c 的测试补充（待正式运行）
 
@@ -262,7 +260,7 @@ S8 原长元数据断言把文字/排序和精确后缀合并报错。`b9210feb6
 
 原始 `make-check.log`、前端和 build 日志、浏览器 JSON/trace 与服务日志、六条夹具补跑日志、S8 诊断日志以及带提交号/计数的 manifest 保存在 `/tmp/pcas-b3-t3-round2-348651e/`。临时数据库与服务已清理。测试及报告交付在 [Draft PR #86](https://github.com/soaringjerry/PCAS/pull/86)，base `phase2/batch3`。三个裁定到达后继续按通知修正、复验；本报告不宣称最终验收通过。
 
-## f5b2a42 第三轮统一验收（2026-10-03）
+## f5b2a42 第三轮统一验收（2026-10-03，历史记录）
 
 ### 被测提交与统一运行
 
@@ -350,3 +348,75 @@ S8 原长元数据断言把文字/排序和精确后缀合并报错。`b9210feb6
 全量使用自建 `pgvector/pgvector:0.8.2-pg16-bookworm` tmpfs PostgreSQL，随机 loopback 端口和每测试独立 schema。本机假模型的实际 HTTP 请求是模型输入断言的来源；浏览器 runner 使用自己管理的临时数据库与 PID。未读取线上配置，未调用真实模型、线上库或真实通知；仅按 ID 清理自己的容器，临时服务已清理。
 
 日志、34 条 Go 的逐项结果及整库计数、两个单列失败的完整输出、浏览器 JSON/服务日志、冻结修改审计和被测提交 manifest 在 `/tmp/pcas-b3-t3-round3-a174b92/`。测试和报告交付在 [Draft PR #86](https://github.com/soaringjerry/PCAS/pull/86)，base 为 `phase2/batch3`。第 3 批本地验收已通过；整库 `make check` 的两组旧测试仍等待 T2 的调整合入。
+
+## 635d1bb：第 2 批进 main 后的整库确认（2026-10-03）
+
+### 基线和命令
+
+按协调者通知 fetch、变基到 `635d1bb69f7ae98b817f7f9481ec3a51f01c460a`。变基只在浏览器工作流的模拟用例列表产生冲突：合并后保留已合入的 `tests/phase2-batch2.spec.ts`，并保留 T3 的 `tests/phase2-batch3.spec.ts`；第 2 批真实后端步骤原样保留，T3 的 V3 步骤保留。其他变基自动完成。
+
+统一本地被测提交 `119f74bb86b18ac10c59bcb32bbb68396b6a0056`，Go 与 V1–V3 都在该提交上各跑一次；执行期间工作树保持干净，冻结文件与上一轮逐字节相同。
+
+- `PCAS_TEST_DATABASE_URL=<自建临时库> GOFLAGS='-v' make check`：**退出 0**。fmt-check、go vet、Go race 测试及 make 的 build 目标全部通过，PostgreSQL 包耗时 794.975 秒。
+- 全部 Go 顶层用例 **438 通过 / 0 失败 / 3 跳过**。T3 **34 通过 / 0 失败 / 0 跳过**。没有定向补跑。
+- Node 22.23.3：`npm ci && npm run lint && npm run type-check && npm run build` 通过。
+- 临时真实后端的 V1–V3，`--retries=0 --reporter=list,json`：**3 通过 / 0 失败 / 0 跳过 / 0 重试**。
+
+### 第 3 批序列结果
+
+测试后缀统一加上 `TestPhase2B3_`；文件映射仍见前文。下表全部结果来自本轮 `119f74b`。
+
+| 序列 | 测试后缀 | 本轮结果 |
+|---|---|---|
+| P1 | `P1_ChengduRecall` | 通过 |
+| P2 | `P2_EveryTimePhrase` | 通过 |
+| P3 | `P3_LocalCalendarBoundaries` | 通过 |
+| P4 | `P4_NoTimeAndMeaningIndependent` | 通过 |
+| P5 | `P5_MostRecentMonthAndDay` | 通过 |
+| P6 | `P6_NaturesAndRecallWords` | 通过 |
+| P7 | `P7_AxisAndFirstPhrase` | 通过 |
+| S6 | `S6_NoConditionsPreserveBaselineBytesAndOnlyAppendMetadata` | 通过 |
+| S10 | `S10_PublicRecallFifteenRequestsByteIdentical` | 通过 |
+| S6 | `S6_MetadataDoesNotConsumeDeputyOrManualByteBudget` | 通过 |
+| S8 | `S8_LargeMetadataStillKeepsTheSameTopTwenty` | 通过 |
+| S1 | `S1_StructuredHitsFirstWithLocalMetadata` | 通过 |
+| S2 | `S2_VisibilityAndExcerptTimePriority` | 通过 |
+| S3 | `S3_RelaxTimeOnlyWhenEntityMatches` | 通过 |
+| S4 | `S4_TimeOnlyNaturePriorityAndSaidAxis` | 通过 |
+| S5 | `S5_EntityOnlyAcrossYears` | 通过 |
+| S7 | `S7_AllExistingFiltersApplyToStructuredHits` | 通过 |
+| S8 | `S8_SixtyHitsKeepTopTwentyAndExcerptBudget` | 通过 |
+| S9 | `S9_SecretaryDeputyManualShareStructuredPrefix` | 通过 |
+| S11 | `S11_StructuredDependencyCorrectionMarksTurnOutdated` | 通过 |
+| S12 | `S12_AliasLengthSubstringCaseAndDeletedEntity` | 通过 |
+| S13 | `S13_OnlyCurrentUtterancePlansEntities` | 通过 |
+| S1 | `S1_EventPrecisionAndInclusiveRangeDisplay` | 通过 |
+| K9 | `K9_OldCreationReceiptSurvivesPurgedActionDetails` | 通过 |
+| K10 | `K10_UndoneCreationLeavesNoAssociatedItems` | 通过 |
+| K1 | `K1_SaidChronologyEventAndMentions` | 通过 |
+| K2 | `K2_CompletedAndCancelledTurnItems` | 通过 |
+| K3 | `K3_CorrectionAndChangeUseCurrentText` | 通过 |
+| K4 | `K4_SingleRecallGetsTimelineOnlyWithSaidDate` | 通过 |
+| K5 | `K5_UnknownSaidTimeLastAndEmpty` | 通过 |
+| K6 | `K6_AllItemsDetermineStatus` | 通过 |
+| K7 | `K7_RawOriginalStaysInEvidenceList` | 通过 |
+| K8 | `K8_UnrelatedItemFromSameOriginalDoesNotChangeStatus` | 通过 |
+| K11 | `K11_LegacySecretaryMemoryUsesOriginalRecordedTime` | 通过 |
+
+| 浏览器 | 本轮结果 |
+|---|---|
+| V1 `V1 四种状态、说话日期和事件日期、人地点与无日期，390px不溢出` | 通过，含跨年事件日期检查 |
+| V2 `V2 点击时间轴条目直接打开当时的原话` | 通过 |
+| V3 `V3 真实结构化记忆→秘书实际请求→去年的时间轴→当时原话` | 通过 |
+
+### 旧失败及发现
+
+第 2 批的两组旧抽取测试已随 main 的调整通过：`TestExtractionWithoutModelStaysNotConfigured` 通过；`TestExtractionConfirmationRequiresCurrentVerbatimCapture` 及原失败的 `unresolved_subject`、`unresolved_predicate`、`paraphrased_assertion` 三个子用例均通过。T3 没有改这些测试。
+
+发现清单为空。3 个跳过仍为既有的 `TestInstalledCodexHandshake`、`TestLiveCodexSecretaryAndLegacyFormats`、`TestLiveContinuityReplay`；本轮不接真实模型，第 3 批没有跳过。线上真实通道及黄金路径仍由协调者按契约执行。
+
+### 交付和边界
+
+只使用自建 tmpfs PostgreSQL16/pgvector0.8.2、随机 loopback 端口、独立 schema 和本机假模型。未读线上配置，未调真实模型、线上库或真实通知；数据库按本轮记录的 container ID 清理，浏览器 runner 清理自己的容器和 PID。
+
+原始全量日志、逐项结果、前端日志、浏览器 JSON/服务日志、被测提交及退出码 manifest 在 `/tmp/pcas-b3-t3-main-sync-119f74b/`。运行结束后只更新本报告，测试和冻结预期保持原样。报告与测试在 [PR #86](https://github.com/soaringjerry/PCAS/pull/86)，base `phase2/batch3`；PR 最新 head 的 CI 结果另记录在 PR 与本地 manifest，避免将先前提交的检查结果算入当前交付。

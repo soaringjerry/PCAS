@@ -6,11 +6,16 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
 // Adjacent context remains bounded, keeps roles, and cannot supply extraction quotes.
 func (s *Store) adjacentContext(ctx context.Context, scope memory.Scope, source memory.SourceResult) ([]map[string]any, error) {
+	if oneOf(source.Source.Connector, "desk", "desk-incomplete") {
+		return s.deskExtractionContext(ctx, scope, source.Source.ExternalID)
+	}
 	out := []map[string]any{}
 	if source.Context == nil || source.Context.Conversation == "" {
 		return out, nil
@@ -33,6 +38,69 @@ func (s *Store) adjacentContext(ctx context.Context, scope memory.Scope, source 
 		out = append(out, map[string]any{"id": id, "role": role, "branch": branch, "text": text, "expressed_at": at})
 	}
 	return out, rows.Err()
+}
+
+// Only earlier exchanges in this request's conversation can resolve references.
+// Failed/canceled requests have no desk_turns row; their admission metadata still
+// identifies the conversation, while all context bodies come from desk_turns.
+func (s *Store) deskExtractionContext(ctx context.Context, scope memory.Scope, request string) ([]map[string]any, error) {
+	out := []map[string]any{}
+	if !memory.ID(request).Valid() {
+		return out, nil
+	}
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `WITH anchor AS (
+ SELECT t.conversation_id,t.created_at,t.id,o.admission_order FROM desk_turns t
+ LEFT JOIN desk_turn_order o ON (o.owner_id,o.request_id)=(t.owner_id,t.request_id)
+ WHERE t.owner_id=$1 AND t.request_id=$2
+ UNION ALL
+ SELECT conversation_id,accepted_at,'ffffffff-ffff-ffff-ffff-ffffffffffff'::uuid,admission_order FROM desk_turn_order
+ WHERE owner_id=$1 AND request_id=$2 AND NOT EXISTS(SELECT 1 FROM desk_turns WHERE owner_id=$1 AND request_id=$2)
+), recent AS (
+ SELECT t.id,t.question,t.answer,t.dependencies,t.agent_id,t.thing_id,t.created_at,
+ coalesce(o.accepted_at,t.created_at) AS ordered_at,o.admission_order
+ FROM desk_turns t JOIN anchor a ON t.conversation_id=a.conversation_id
+ LEFT JOIN desk_turn_order o ON (o.owner_id,o.request_id)=(t.owner_id,t.request_id)
+ WHERE t.owner_id=$1 AND t.question<>'' AND (
+  (a.admission_order IS NOT NULL AND o.admission_order IS NOT NULL AND o.admission_order<a.admission_order)
+  OR ((a.admission_order IS NULL OR o.admission_order IS NULL) AND (t.created_at,t.id)<(a.created_at,a.id)))
+ ORDER BY ordered_at DESC,o.admission_order DESC NULLS LAST,t.id DESC LIMIT 6
+)
+SELECT id::text,left(question,1200),left(answer,1200),dependencies,agent_id,coalesce(thing_id::text,''),created_at
+FROM recent ORDER BY ordered_at,admission_order NULLS FIRST,id`, string(scope.OwnerID), request)
+		if err != nil {
+			return err
+		}
+		type exchange struct {
+			id, question, answer string
+			run                  workspace.Run
+			at                   time.Time
+		}
+		var turns []exchange
+		for rows.Next() {
+			var turn exchange
+			if err := rows.Scan(&turn.id, &turn.question, &turn.answer, &turn.run.ContextVersions, &turn.run.AgentID, &turn.run.ThingID, &turn.at); err != nil {
+				rows.Close()
+				return err
+			}
+			turns = append(turns, turn)
+		}
+		err = rows.Err()
+		rows.Close()
+		if err != nil {
+			return err
+		}
+		for _, turn := range turns {
+			if len(turn.run.ContextVersions) > 0 && verifyRunTx(ctx, tx, scope, turn.run) != nil {
+				turn.answer = outdatedDeskAnswer
+			}
+			for _, message := range []struct{ role, text string }{{"user", turn.question}, {"assistant", turn.answer}} {
+				out = append(out, map[string]any{"id": turn.id, "role": message.role, "branch": "current", "text": message.text, "expressed_at": turn.at})
+			}
+		}
+		return nil
+	})
+	return out, err
 }
 
 func sourceExpressedAt(source memory.SourceResult) *time.Time {

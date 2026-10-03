@@ -203,24 +203,26 @@ type Adoption struct {
 	Edited   bool   `json:"edited"`
 }
 type Run struct {
-	Outdated         bool            `json:"outdated,omitempty"`
-	ID               string          `json:"id"`
-	ThingID          string          `json:"thingId"`
-	AgentID          string          `json:"agentId"`
-	Kind             string          `json:"kind"`
-	Prompt           string          `json:"prompt"`
-	Brief            string          `json:"brief"`
-	ContextMemoryIDs []string        `json:"contextMemoryIds"`
-	ContextVersions  []memory.Ref    `json:"contextVersions"`
-	Status           string          `json:"status"`
-	Output           string          `json:"output,omitempty"`
-	Error            string          `json:"error,omitempty"`
-	ProviderError    json.RawMessage `json:"providerError,omitempty"`
-	Adopted          *Adoption       `json:"adopted,omitempty"`
-	StaleContext     bool            `json:"staleContext"`
-	Cost             float64         `json:"cost"`
-	CreatedAt        string          `json:"createdAt"`
-	FinishedAt       string          `json:"finishedAt,omitempty"`
+	Outdated         bool         `json:"outdated,omitempty"`
+	ID               string       `json:"id"`
+	ThingID          string       `json:"thingId"`
+	AgentID          string       `json:"agentId"`
+	Kind             string       `json:"kind"`
+	Prompt           string       `json:"prompt"`
+	Brief            string       `json:"brief"`
+	ContextMemoryIDs []string     `json:"contextMemoryIds"`
+	ContextVersions  []memory.Ref `json:"contextVersions"`
+	Status           string       `json:"status"`
+	Output           string       `json:"output,omitempty"`
+	// Searches are the web searches the agent made for this result.
+	Searches      []string        `json:"searches,omitempty"`
+	Error         string          `json:"error,omitempty"`
+	ProviderError json.RawMessage `json:"providerError,omitempty"`
+	Adopted       *Adoption       `json:"adopted,omitempty"`
+	StaleContext  bool            `json:"staleContext"`
+	Cost          float64         `json:"cost"`
+	CreatedAt     string          `json:"createdAt"`
+	FinishedAt    string          `json:"finishedAt,omitempty"`
 }
 type Origin struct {
 	Label    string `json:"label"`

@@ -48,9 +48,18 @@ func (s *Store) PreviewArchive(ctx context.Context, scope memory.Scope, name str
 }
 
 func (s *Store) ImportArchiveReader(ctx context.Context, scope memory.Scope, name string, r io.Reader) (connectors.Result, error) {
-	return s.importArchiveReader(ctx, scope, name, r, "archive")
+	return s.ImportArchiveReaderWithOrganizing(ctx, scope, name, r, "later")
 }
-func (s *Store) importArchiveReader(ctx context.Context, scope memory.Scope, name string, r io.Reader, namespace string) (connectors.Result, error) {
+func (s *Store) ImportArchiveReaderWithOrganizing(ctx context.Context, scope memory.Scope, name string, r io.Reader, organize string) (connectors.Result, error) {
+	if err := requireOwner(scope); err != nil {
+		return connectors.Result{}, err
+	}
+	if organize != "" && organize != "later" && organize != "now" {
+		return connectors.Result{}, memory.ErrInvalid
+	}
+	return s.importArchiveReader(ctx, scope, name, r, "archive", organize != "now")
+}
+func (s *Store) importArchiveReader(ctx context.Context, scope memory.Scope, name string, r io.Reader, namespace string, holdOrganizing bool) (connectors.Result, error) {
 	out := connectors.Result{Refs: []memory.Ref{}, Gaps: []string{}}
 	if err := requireOwner(scope); err != nil {
 		return out, err
@@ -146,8 +155,8 @@ func (s *Store) importArchiveReader(ctx context.Context, scope memory.Scope, nam
 		if err != nil {
 			return err
 		}
-		_, err = tx.Exec(ctx, `INSERT INTO import_batches(owner_id,id,archive_id,name,state,total,stored,left_out,earliest,latest)
-   VALUES($1,$2,$3,$4,'importing',$5,$9,$6,$7,$8)`, string(scope.OwnerID), string(out.BatchID), string(result.ID), name, archive.Len(), archive.Preview.LeftOut, archive.Preview.Earliest, archive.Preview.Latest, stored)
+		_, err = tx.Exec(ctx, `INSERT INTO import_batches(owner_id,id,archive_id,name,state,total,stored,left_out,earliest,latest,hold_organizing)
+   VALUES($1,$2,$3,$4,'importing',$5,$9,$6,$7,$8,$10)`, string(scope.OwnerID), string(out.BatchID), string(result.ID), name, archive.Len(), archive.Preview.LeftOut, archive.Preview.Earliest, archive.Preview.Latest, stored, holdOrganizing)
 		if err != nil {
 			return err
 		}
@@ -171,12 +180,12 @@ type ImportBatch = connectors.ImportBatch
 const importBatchSelect = `SELECT b.id::text,b.archive_id::text,r.version,b.name,b.state,b.total,b.stored,
  (SELECT count(*) FROM archive_entries e WHERE e.owner_id=b.owner_id AND e.archive_id=b.archive_id
   AND EXISTS(SELECT 1 FROM source_extractions x WHERE (x.owner_id,x.source_id,x.source_version)=(e.owner_id,e.source_id,e.source_version) AND x.state IN ('done','empty'))),
- b.left_out,b.earliest,b.latest,b.error_code,b.created_at,b.updated_at
+ b.hold_organizing,b.left_out,b.earliest,b.latest,b.error_code,b.created_at,b.updated_at
  FROM import_batches b JOIN memory_records r ON r.owner_id=b.owner_id AND r.id=b.archive_id`
 
 func scanImportBatch(row pgx.Row) (ImportBatch, error) {
 	var b ImportBatch
-	err := row.Scan(&b.ID, &b.ArchiveID, &b.ArchiveVersion, &b.Name, &b.State, &b.Total, &b.Stored, &b.Organized, &b.LeftOut, &b.Earliest, &b.Latest, &b.ErrorCode, &b.CreatedAt, &b.UpdatedAt)
+	err := row.Scan(&b.ID, &b.ArchiveID, &b.ArchiveVersion, &b.Name, &b.State, &b.Total, &b.Stored, &b.Organized, &b.OrganizeLater, &b.LeftOut, &b.Earliest, &b.Latest, &b.ErrorCode, &b.CreatedAt, &b.UpdatedAt)
 	if b.ErrorCode != "" {
 		b.Error = importErrorMessage(b.ErrorCode)
 	}
@@ -213,6 +222,33 @@ func (s *Store) ListImports(ctx context.Context, scope memory.Scope) ([]ImportBa
 }
 
 var ErrImportNotActive = &connectors.ArchiveError{Code: "import_not_active"}
+
+// Starting organization changes only the hold. Paused imports stay paused, and
+// repeated requests keep already queued or completed extraction work intact.
+func (s *Store) OrganizeImport(ctx context.Context, scope memory.Scope, id memory.ID) (ImportBatch, error) {
+	var out ImportBatch
+	if err := requireOwner(scope); err != nil {
+		return out, err
+	}
+	if !id.Valid() {
+		return out, memory.ErrInvalid
+	}
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(scope.OwnerID)); err != nil {
+			return err
+		}
+		tag, err := tx.Exec(ctx, "UPDATE import_batches SET hold_organizing=false,updated_at=now() WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), string(id))
+		if err != nil {
+			return err
+		}
+		if tag.RowsAffected() == 0 {
+			return memory.ErrNotFound
+		}
+		out, err = scanImportBatch(tx.QueryRow(ctx, importBatchSelect+" WHERE b.owner_id=$1 AND b.id=$2", string(scope.OwnerID), string(id)))
+		return err
+	})
+	return out, err
+}
 
 func (s *Store) PauseImport(ctx context.Context, scope memory.Scope, id memory.ID) (ImportBatch, error) {
 	return s.changeImportState(ctx, scope, id, true)
@@ -403,6 +439,8 @@ func (s *Store) processArchiveImport(ctx context.Context, j worker.Job, title st
 var _ interface {
 	PreviewArchive(context.Context, memory.Scope, string, io.Reader) (connectors.ArchivePreview, error)
 	ImportArchiveReader(context.Context, memory.Scope, string, io.Reader) (connectors.Result, error)
+	ImportArchiveReaderWithOrganizing(context.Context, memory.Scope, string, io.Reader, string) (connectors.Result, error)
+	OrganizeImport(context.Context, memory.Scope, memory.ID) (connectors.ImportBatch, error)
 } = (*Store)(nil)
 
 // The initial attachment open can fail before parsing begins, so it shares the

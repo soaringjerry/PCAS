@@ -328,7 +328,9 @@ func (s *Store) ImportArchive(ctx context.Context, scope memory.Scope, name stri
 	return s.ingestArchive(ctx, scope, name, data, "archive")
 }
 func (s *Store) ingestArchive(ctx context.Context, scope memory.Scope, name string, data []byte, namespace string) (connectors.Result, error) {
-	return s.importArchiveReader(ctx, scope, name, bytes.NewReader(data), namespace)
+	// The upload default changes; existing folder connector imports keep their
+	// automatic organization behavior.
+	return s.importArchiveReader(ctx, scope, name, bytes.NewReader(data), namespace, namespace == "archive")
 }
 
 var _ connectors.API = (*Store)(nil)

@@ -2,8 +2,13 @@ package postgres
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"log/slog"
+	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"slices"
 	"strings"
@@ -11,6 +16,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/soaringjerry/PCAS/internal/httpapi"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
@@ -113,6 +119,48 @@ func TestEvidenceConversationWindowPaginationAndIsolation(t *testing.T) {
 	}
 	if _, err = s.SourceConversation(ctx, scope, in); !errors.Is(err, memory.ErrNotFound) {
 		t.Fatal("deleted anchor returned", err)
+	}
+}
+
+func TestEvidenceConversationHTTPService(t *testing.T) {
+	s, scope := b1Store(t), owner()
+	refs := e4Conversation(t, s, scope, "fiction-http", 13)
+	// Match the production composition, including the memory service wrapper.
+	server := httptest.NewServer(httpapi.New(memory.NewService(s), s, httpapi.NewOwnerToken("synthetic-token", scope.OwnerID), s.Ping, slog.New(slog.NewTextHandler(io.Discard, nil))))
+	defer server.Close()
+	path := "/v1/memory/sources/" + string(refs[6].ID) + "/conversation"
+	for _, tc := range []struct {
+		query string
+		auth  bool
+		code  int
+	}{
+		{"?version=1", true, 200},
+		{"", false, 401},
+		{"?version=0", true, 400},
+		{"?limit=21", true, 400},
+		{"?before=invalid", true, 400},
+		{"?before=" + string(refs[3].ID) + "&after=" + string(refs[9].ID), true, 400},
+	} {
+		req, err := http.NewRequest(http.MethodGet, server.URL+path+tc.query, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if tc.auth {
+			req.Header.Set("Authorization", "Bearer synthetic-token")
+		}
+		res, err := server.Client().Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var page memory.ConversationResult
+		err = json.NewDecoder(res.Body).Decode(&page)
+		res.Body.Close()
+		if res.StatusCode != tc.code {
+			t.Fatalf("service composition: status %d, want %d", res.StatusCode, tc.code)
+		}
+		if tc.code == 200 && (err != nil || len(page.Messages) != 7 || page.Anchor.ID != refs[6].ID || len(page.ProofRefs) != 0) {
+			t.Fatal("HTTP context did not preserve the conversation or exposed internal proof refs", err)
+		}
 	}
 }
 
@@ -237,5 +285,35 @@ func TestEvidenceContextBudgetAndUnresolvedNames(t *testing.T) {
 	got := groundedMentions([]string{"那位同事", "对方", "测试人物甲"}, "person", "那位同事是对方，测试人物甲在上文出现。")
 	if len(got) != 1 || got[0].Name != "测试人物甲" {
 		t.Fatal("ambiguous label became a person entity")
+	}
+}
+
+func TestEvidenceAmbiguousSubjectsStaySeparate(t *testing.T) {
+	s, scope := b1Store(t), owner()
+	var subjects []string
+	for _, external := range []string{"fiction-subject-one", "fiction-subject-two"} {
+		text := "那位同事参与演示项目。"
+		source := mustIngest(t, s, scope, memory.IngestRequest{Connector: "archive-records", ExternalID: external, ExternalVersion: "1", Title: "虚构资料", Text: text, MediaType: "text/plain"}).Ref
+		err := pgx.BeginFunc(t.Context(), s.pool, func(tx pgx.Tx) error {
+			ref, err := s.rememberTx(t.Context(), tx, scope, statement{Text: text, Nature: "fact", Subject: "那位同事", SubjectType: "person", Structured: true, Actor: "ai", Confirmation: "candidate", Source: source, Quote: text})
+			if err != nil {
+				return err
+			}
+			var id, kind, name string
+			if err := tx.QueryRow(t.Context(), `SELECT c.subject_id::text,e.entity_type,e.name FROM claim_revisions c JOIN entity_versions e ON(e.owner_id,e.entity_id)=(c.owner_id,c.subject_id) WHERE c.owner_id=$1 AND c.claim_id=$2 AND c.version=$3`, scope.OwnerID, ref.ID, ref.Version).Scan(&id, &kind, &name); err != nil {
+				return err
+			}
+			if kind != "unknown" || name != "未解析主体" {
+				t.Fatal("unresolved subject became a definite person")
+			}
+			subjects = append(subjects, id)
+			return nil
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if subjects[0] == subjects[1] {
+		t.Fatal("ambiguous labels from different sources merged")
 	}
 }

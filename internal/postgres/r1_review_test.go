@@ -181,7 +181,7 @@ func TestR1R6SecretarySettlesOnlyItsReservation(t *testing.T) {
 				case <-time.After(10 * time.Second):
 					t.Fatal("model not started")
 				}
-				gate.unblock()
+				// Withhold the response until the canceled invocation ends.
 			}
 			select {
 			case err := <-done:
@@ -257,7 +257,7 @@ func TestR1R6DeputyAndExtractionReleaseFailedReservations(t *testing.T) {
 				case <-time.After(10 * time.Second):
 					t.Fatal("model not started")
 				}
-				gate.unblock()
+				// Withhold the response until the canceled invocation ends.
 			}
 			select {
 			case err := <-done:
@@ -472,7 +472,6 @@ func TestR1R6ConcurrentSecretaryReservationsAreIndependent(t *testing.T) {
 		t.Fatal("second call did not return")
 	}
 	cancel()
-	gate.unblock()
 	select {
 	case err := <-done:
 		if err != nil {
@@ -552,5 +551,73 @@ func TestR1R7InvalidationDoesNotLockOwnerDuringDelivery(t *testing.T) {
 	}
 	if len(second.calls) != 0 {
 		t.Error("disabled reminder sent to second channel")
+	}
+}
+
+func TestR1R6DeletedQueuedRunBudgetIsOwnerScoped(t *testing.T) {
+	s := testStore(t)
+	f := b4Model(t, s)
+	sharedRunID := string(memory.NewID())
+	firstOwner, secondOwner := owner(), owner()
+	for _, scope := range []memory.Scope{firstOwner, secondOwner, firstOwner} {
+		source := b1Source(t, s, scope, "R1 queued reference", "R1 queued reference", "manual")
+		claim := b1Claim(t, s, scope, "R1 queued constraint", "preference", "confirmed", source)
+		state := workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "R1 queued task"})
+		state = workspaceCommand(t, s, scope, workspace.Command{Type: "requestRun", ID: sharedRunID, ThingID: state.Tasks[0].ID, AgentID: "model", Kind: "draft", Prompt: "Write"})
+		b1HasRef(t, state.Runs[0].ContextVersions, claim, true)
+		state = workspaceCommand(t, s, scope, workspace.Command{Type: "deleteMemory", ID: string(claim.ID)})
+		if len(state.Runs) != 0 || state.BudgetUsage != 0 {
+			t.Errorf("deleted queued run retained reservation: runs=%d budget=%g", len(state.Runs), state.BudgetUsage)
+		}
+	}
+	if len(f.all()) != 0 {
+		t.Error("queued cancellation must not call the model")
+	}
+}
+
+func TestR1R6DeputySettlesReturnedUsageAfterLeaseLoss(t *testing.T) {
+	s, scope := testStore(t), owner()
+	f := b4Model(t, s)
+	f.set("R1 paid result", 200)
+	state := workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "R1 lease loss"})
+	state = workspaceCommand(t, s, scope, workspace.Command{Type: "requestRun", ThingID: state.Tasks[0].ID, AgentID: "model", Kind: "draft", Prompt: "Write"})
+	run := state.Runs[0]
+	gate := b4HoldModel(t, f)
+	defer gate.unblock()
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { done <- s.runAgentOnce(ctx) }()
+	select {
+	case <-gate.started:
+	case <-ctx.Done():
+		t.Fatal(ctx.Err())
+	}
+	_, err := s.pool.Exec(context.Background(), "UPDATE agent_runs SET status='failed',lease_token=NULL,lease_until=NULL,document=jsonb_set(document,'{status}','\"failed\"') WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), run.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gate.unblock()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-ctx.Done():
+		t.Fatal(ctx.Err())
+	}
+	state, err = s.Snapshot(context.Background(), scope)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows := b4Usage(t, s, scope)
+	if len(rows) != 1 {
+		t.Fatal("returned usage lost", rows)
+	}
+	if math.Abs(state.BudgetUsage-rows[0].Cost) > 1e-9 {
+		t.Errorf("lost result lease retained maximum reservation: budget=%g actual=%g", state.BudgetUsage, rows[0].Cost)
+	}
+	if state.Runs[0].Status != "failed" || state.Runs[0].Output != "" {
+		t.Error("billing resurrected failed result")
 	}
 }

@@ -251,7 +251,15 @@ const claimWhole = `WITH candidate AS (
 	FROM candidate c WHERE j.id=c.id RETURNING j.id::text,j.owner_id::text,j.record_id::text,j.record_version,j.stage,j.attempts,j.lease_token::text,c.kind`
 
 const claimWindowed = `WITH ready AS MATERIALIZED (
-		(SELECT id FROM memory_jobs WHERE state='queued' AND available_at<=now() ORDER BY priority,available_at,created_at,id LIMIT 500)
+		-- The head of the queue is taken per kind of work. Per-message organizing
+		-- jobs of an imported conversation wait for that conversation's own job
+		-- and can fill the front of the queue by the thousand; taking the first
+		-- few of each kind keeps something claimable in view.
+		(SELECT id FROM memory_jobs WHERE state='queued' AND available_at<=now() AND stage NOT LIKE 'source.extract%' ORDER BY priority,available_at,created_at,id LIMIT 300)
+		UNION ALL
+		(SELECT id FROM memory_jobs WHERE state='queued' AND available_at<=now() AND stage LIKE 'source.extract:conversation:%' ORDER BY priority,available_at,created_at,id LIMIT 100)
+		UNION ALL
+		(SELECT id FROM memory_jobs WHERE state='queued' AND available_at<=now() AND stage='source.extract' ORDER BY priority,available_at,created_at,id LIMIT 100)
 		UNION ALL
 		(SELECT id FROM memory_jobs WHERE state='leased' AND lease_until<now() AND attempts<$3 ORDER BY lease_until LIMIT 100)
 	), candidate AS (

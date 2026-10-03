@@ -558,7 +558,7 @@ func (s *Store) runAgentOnce(ctx context.Context) error {
 	if generationErr != nil && strings.TrimSpace(result.Text) == "" {
 		cost = 0
 	}
-	if err := s.settleRunCost(ctx, scope.OwnerID, run.ID, token, cost); err != nil {
+	if err := s.settleRunCost(ctx, scope.OwnerID, run, cost); err != nil {
 		return err
 	}
 	if generationErr == nil {

@@ -91,20 +91,21 @@ func (s *Store) settleModelCost(ctx context.Context, owner memory.ID, id string,
 	return err
 }
 
-// Deletion moves a run's budget into background_usage under the same opaque
-// ID. Settle either location under the owner lock used by deletion, without
-// restoring the deleted run or any of its text.
-func (s *Store) settleRunCost(ctx context.Context, owner memory.ID, runID, token string, cost float64) error {
+// Deletion uses an opaque invocation ID derived from owner, run and creation
+// time. Run IDs can coincide across owners or be reused after deletion. Settle
+// either location under the deletion lock without restoring deleted text.
+// Billing survives result-lease loss; creation time fences a reused run ID.
+func (s *Store) settleRunCost(ctx context.Context, owner memory.ID, run workspace.Run, cost float64) error {
 	settleCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 	defer cancel()
 	return pgx.BeginFunc(settleCtx, s.pool, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(settleCtx, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(owner)); err != nil {
 			return err
 		}
-		if _, err := tx.Exec(settleCtx, "UPDATE agent_runs SET reserved_cost=$4,document=jsonb_set(document,'{cost}',to_jsonb($4::numeric)) WHERE owner_id=$1 AND id=$2 AND lease_token=$3", string(owner), runID, token, cost); err != nil {
+		if _, err := tx.Exec(settleCtx, "UPDATE agent_runs SET reserved_cost=$4,document=jsonb_set(document,'{cost}',to_jsonb($4::numeric)) WHERE owner_id=$1 AND id=$2 AND document->>'createdAt'=$3", string(owner), run.ID, run.CreatedAt, cost); err != nil {
 			return err
 		}
-		_, err := tx.Exec(settleCtx, "UPDATE background_usage SET reserved_cost=$3 WHERE owner_id=$1 AND id=$2", string(owner), runID, cost)
+		_, err := tx.Exec(settleCtx, "UPDATE background_usage SET reserved_cost=$3 WHERE owner_id=$1 AND id=md5($1::uuid::text || ':' || $2::uuid::text || ':' || $4::text)::uuid", string(owner), run.ID, cost, run.CreatedAt)
 		return err
 	})
 }

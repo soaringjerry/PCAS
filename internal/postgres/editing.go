@@ -564,7 +564,7 @@ func (s *Store) deleteRecordsTx(ctx context.Context, tx pgx.Tx, scope memory.Sco
 		`DELETE FROM capture_candidates WHERE owner_id=$1 AND document->>'resolvedInto'=ANY($2::text[])`,
 		`DELETE FROM work_documents WHERE owner_id=$1 AND document->>'runId' IN (SELECT run_id::text FROM run_dependencies WHERE owner_id=$1 AND memory_id=ANY($2::uuid[]))`,
 		`DELETE FROM training_samples WHERE owner_id=$1 AND (memory_id=ANY($2::uuid[]) OR run_id IN (SELECT run_id FROM run_dependencies WHERE owner_id=$1 AND memory_id=ANY($2::uuid[])))`,
-		`INSERT INTO background_usage(owner_id,id,job_id,reserved_cost,created_at) SELECT owner_id,id,NULL,reserved_cost,created_at FROM agent_runs WHERE owner_id=$1 AND id IN (SELECT run_id FROM run_dependencies WHERE owner_id=$1 AND memory_id=ANY($2::uuid[]))`,
+		`INSERT INTO background_usage(owner_id,id,job_id,reserved_cost,created_at) SELECT owner_id,md5(owner_id::text || ':' || id::text || ':' || coalesce(document->>'createdAt',''))::uuid,NULL,CASE WHEN status IN ('queued','waiting') THEN 0 ELSE reserved_cost END,created_at FROM agent_runs WHERE owner_id=$1 AND id IN (SELECT run_id FROM run_dependencies WHERE owner_id=$1 AND memory_id=ANY($2::uuid[]))`,
 		`DELETE FROM agent_runs WHERE owner_id=$1 AND id IN (SELECT run_id FROM run_dependencies WHERE owner_id=$1 AND memory_id=ANY($2::uuid[]))`,
 		`DELETE FROM evidence WHERE owner_id=$1 AND (source_id=ANY($2::uuid[]) OR target_id=ANY($2::uuid[]))`,
 		`DELETE FROM episode_members WHERE owner_id=$1 AND member_id=ANY($2::uuid[])`,

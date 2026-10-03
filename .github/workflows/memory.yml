@@ -3,11 +3,12 @@ name: memory
 on:
   push:
     branches: [main]
-    paths: ["cmd/**", "internal/**", "services/**", "config/**", "go.mod", "go.sum", "Makefile", "Dockerfile", "compose.yml", ".github/workflows/memory.yml"]
+    paths: ["cmd/**", "internal/**", "services/**", "config/**", "go.mod", "go.sum", "Makefile", "Dockerfile", "compose.yml", "scripts/test-shard.sh", ".github/workflows/memory.yml"]
   pull_request:
-    paths: ["cmd/**", "internal/**", "services/**", "config/**", "go.mod", "go.sum", "Makefile", "Dockerfile", "compose.yml", ".github/workflows/memory.yml"]
+    paths: ["cmd/**", "internal/**", "services/**", "config/**", "go.mod", "go.sum", "Makefile", "Dockerfile", "compose.yml", "scripts/test-shard.sh", ".github/workflows/memory.yml"]
 
 jobs:
+  # Formatting, vet, build and every package except the PostgreSQL one.
   check:
     runs-on: ubuntu-latest
     services:
@@ -29,10 +30,38 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
       - run: go mod download
-      - run: make check
+      - run: make fmt-check lint build
+      - run: go test -race -timeout 30m $(go list ./cmd/... ./internal/... | grep -v '/internal/postgres$')
+
+  # The PostgreSQL integration tests take most of the time, so they run in
+  # slices side by side, each with its own database.
+  postgres:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        slice: [0, 1, 2, 3]
+    services:
+      postgres:
+        image: pgvector/pgvector:0.8.2-pg16-bookworm
+        env:
+          POSTGRES_USER: pcas
+          POSTGRES_PASSWORD: pcas-test
+          POSTGRES_DB: pcas_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U pcas -d pcas_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      PCAS_TEST_DATABASE_URL: postgres://pcas:pcas-test@localhost:5432/pcas_test?sslmode=disable
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - run: go mod download
+      - run: scripts/test-shard.sh ${{ matrix.slice }} 4
         env:
           GOFLAGS: -v

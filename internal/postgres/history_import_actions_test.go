@@ -42,9 +42,18 @@ func TestImportedHistoryNeverBecomesCurrentAction(t *testing.T) {
 			idea := st.Ideas[0]
 
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				item := map[string]any{"kind": "task", "text": said, "quote": said, "confidence": 1, "explicit": true, "acquisition": "direct"}
+				if tc.imported {
+					item = b4bItem(1, said, said, "plan")
+				}
 				content := map[string]any{
-					"items":   []map[string]any{{"kind": "task", "text": said, "quote": said, "confidence": 1, "explicit": true, "acquisition": "direct"}},
+					"items":   []map[string]any{item},
 					"signals": []conditionSignal{{IdeaID: idea.ID, ConditionID: idea.Conditions[0].ID, Quote: said, Explanation: "写明要交旅行计划", Confidence: 0.99}},
+				}
+				if tc.imported {
+					// Conversation output supports items and withdraw; live-entry
+					// condition signals remain part of the present-day fixture.
+					delete(content, "signals")
 				}
 				_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": map[string]string{"content": string(asJSON(content))}}}, "usage": map[string]int{"prompt_tokens": 100, "completion_tokens": 30}})
 			}))
@@ -74,8 +83,19 @@ func TestImportedHistoryNeverBecomesCurrentAction(t *testing.T) {
 			} else {
 				source = mustIngest(t, s, scope, memory.IngestRequest{Connector: "manual", ExternalID: string(memory.NewID()), ExternalVersion: "1", Title: "笔记", Text: said, MediaType: "text/plain"}).Ref
 			}
+			if tc.imported {
+				var batch, archive string
+				if err = s.pool.QueryRow(ctx, `SELECT b.id::text,b.archive_id::text FROM import_batches b JOIN archive_entries e ON(e.owner_id,e.archive_id)=(b.owner_id,b.archive_id) WHERE e.owner_id=$1 AND e.source_id=$2`, string(scope.OwnerID), string(source.ID)).Scan(&batch, &archive); err != nil {
+					t.Fatal(err)
+				}
+				b4bOperation(t, s, scope, memory.ID(batch), "organize")
+				b4bOnlyArchiveJobs(t, s, scope, memory.Ref{ID: memory.ID(archive), Kind: memory.SourceKind})
+			}
 			if err := s.ProcessExtraction(ctx, leaseStage(t, s, scope, source, "source.extract")); err != nil {
 				t.Fatal(err)
+			}
+			if tc.imported {
+				b4bDrain(t, s)
 			}
 
 			st, err = s.Snapshot(ctx, scope)
@@ -88,20 +108,43 @@ func TestImportedHistoryNeverBecomesCurrentAction(t *testing.T) {
 					candidate = &st.Candidates[i]
 				}
 			}
-			if candidate == nil {
-				t.Fatal("the statement must remain reviewable as a candidate", st.Candidates)
-			}
 			if tc.imported {
+				// Whole-conversation output is a reviewable memory, not a task
+				// suggestion. Its pending status is still mandatory.
+				var historical *workspace.Memory
+				for i := range st.Memories {
+					if st.Memories[i].Text == said {
+						historical = &st.Memories[i]
+					}
+				}
+				if historical == nil {
+					rows, queryErr := s.pool.Query(ctx, `SELECT stage,state,error_code FROM memory_jobs WHERE owner_id=$1 AND stage LIKE 'source.extract%'`, string(scope.OwnerID))
+					if queryErr != nil {
+						t.Fatal(queryErr)
+					}
+					for rows.Next() {
+						var stage, state, code string
+						if scanErr := rows.Scan(&stage, &state, &code); scanErr != nil {
+							t.Fatal(scanErr)
+						}
+						t.Log("extraction job", stage, state, code)
+					}
+					rows.Close()
+					t.Fatal("the statement must remain reviewable as a candidate", st.Memories)
+				}
 				if len(st.Tasks) != 0 {
 					t.Fatalf("2025 history became %d current task(s); first title=%q", len(st.Tasks), st.Tasks[0].Title)
 				}
-				if candidate.State != "pending" {
-					t.Fatal("imported candidate was adopted without the owner", candidate.State)
+				if historical.Confirmation != b4bSpec[b4bLimits](t, "limits").Confirmation {
+					t.Fatal("imported candidate was adopted without the owner", historical.Confirmation)
 				}
 				if st.Ideas[0].Status != "shelved" || st.Ideas[0].Wake != nil {
 					t.Fatalf("2025 history woke an idea: %+v", st.Ideas[0])
 				}
 				return
+			}
+			if candidate == nil {
+				t.Fatal("the statement must remain reviewable as a candidate", st.Candidates)
 			}
 			if len(st.Tasks) != 1 || st.Tasks[0].Title != said {
 				t.Fatal("a present-day explicit task must still be adopted automatically", st.Tasks)

@@ -224,19 +224,34 @@ func (r *Registry) GenerateWithSearchSchema(ctx context.Context, id, system, pro
 	return Result{Text: text, Searches: searches}, err
 }
 func (r *Registry) Generate(ctx context.Context, id, system, prompt string) (Result, error) {
+	return r.generate(ctx, id, system, prompt, nil)
+}
+func (r *Registry) generate(ctx context.Context, id, system, prompt string, image *Image) (Result, error) {
 	p, ok := r.Get(id)
 	if !ok || !r.providerAvailable(p) || p.Embedding || p.Transcription {
 		return Result{}, memory.ErrUnavailable
 	}
 	if p.Protocol == "siwc" {
-		result, err := r.ChatGPT.Generate(ctx, p.Model, system, prompt)
+		var result siwc.Result
+		var err error
+		if image != nil {
+			result, err = r.ChatGPT.Vision(ctx, p.Model, prompt, image.DataURL())
+		} else {
+			result, err = r.ChatGPT.Generate(ctx, p.Model, system, prompt)
+		}
 		return Result{Text: result.Text, InputTokens: result.InputTokens, OutputTokens: result.OutputTokens}, err
 	}
 	if p.Protocol == "codex" {
 		if r.ReloadSubscription {
 			defer r.Codex.Close()
 		}
-		text, err := r.Codex.Generate(ctx, p.Model, system, prompt)
+		var text string
+		var err error
+		if image != nil {
+			text, err = r.Codex.Vision(ctx, p.Model, prompt, *image)
+		} else {
+			text, err = r.Codex.Generate(ctx, p.Model, system, prompt)
+		}
 		return Result{Text: text}, err
 	}
 	path := "/chat/completions"
@@ -248,6 +263,16 @@ func (r *Registry) Generate(ctx context.Context, id, system, prompt string) (Res
 	if p.Protocol == "anthropic" {
 		path = "/messages"
 		body = map[string]any{"model": p.Model, "system": system, "messages": []any{map[string]string{"role": "user", "content": prompt}}, "max_tokens": p.MaxOutput}
+	}
+	if image != nil {
+		switch p.Protocol {
+		case "responses":
+			body["input"] = []any{map[string]any{"role": "user", "content": visionContent(prompt, *image, true)}}
+		case "anthropic":
+			body["messages"] = []any{map[string]any{"role": "user", "content": []any{map[string]string{"type": "text", "text": prompt}, map[string]any{"type": "image", "source": map[string]string{"type": "base64", "media_type": image.MediaType, "data": strings.TrimPrefix(image.DataURL(), "data:"+image.MediaType+";base64,")}}}}}
+		default:
+			body["messages"] = []any{map[string]string{"role": "system", "content": system}, map[string]any{"role": "user", "content": visionContent(prompt, *image, false)}}
+		}
 	}
 	var result struct {
 		Choices []struct {
@@ -296,7 +321,11 @@ func (r *Registry) Generate(ctx context.Context, id, system, prompt string) (Res
 	}
 	out.Cost = (float64(out.InputTokens)*p.InputPerMillion + float64(out.OutputTokens)*p.OutputPerMillion) / 1e6
 	if out.InputTokens+out.OutputTokens == 0 {
-		out.Cost = p.Reserve(system + prompt)
+		if image != nil {
+			out.Cost = p.ReserveVision(system+prompt, *image)
+		} else {
+			out.Cost = p.Reserve(system + prompt)
+		}
 	} // unknown billing must not look free
 	return out, nil
 }

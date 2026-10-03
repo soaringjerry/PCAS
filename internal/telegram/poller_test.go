@@ -80,7 +80,10 @@ func (s *fakeStore) IngestAttachment(_ context.Context, _ memory.Scope, in memor
 	s.attachments = append(s.attachments, in)
 	b, _ := io.ReadAll(r)
 	s.data = append(s.data, string(b))
-	return memory.IngestResult{}, s.attachErr
+	if s.attachErr != nil {
+		return memory.IngestResult{}, s.attachErr
+	}
+	return memory.IngestResult{Ref: memory.Ref{ID: memory.NewID(), Version: 1, Kind: memory.SourceKind}}, nil
 }
 
 type botCall struct {
@@ -401,7 +404,7 @@ func TestAttachmentsCaptionsAndLimits(t *testing.T) {
 	big.Message.Document = &file{ID: "big", Size: maxFileSize + 1}
 	b.enqueue(photo, doc, big)
 	step(t, p)
-	if len(s.attachments) != 2 || s.attachments[0].MediaType != "image/jpeg" || s.attachments[1].Title != "brief.pdf" || len(s.requests) != 1 || s.requests[0].Text != "帮我安排" {
+	if len(s.attachments) != 2 || s.attachments[0].MediaType != "image/jpeg" || s.attachments[1].Title != "brief.pdf" || len(s.requests) != 2 || s.requests[0].Text != "帮我安排" {
 		t.Fatal(s.attachments, s.requests)
 	}
 	if len(b.of("getFile")) != 2 || !strings.Contains(decode[string](b.of("sendMessage")[2].body["text"]), "20 MB") {

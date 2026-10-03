@@ -491,24 +491,22 @@ func (s *Store) ProcessExtraction(ctx context.Context, j worker.Job) (err error)
 	if err != nil {
 		return &worker.JobError{Code: "model_call_failed", Retry: free}
 	}
+	if strings.TrimSpace(result.Text) != "" {
+		if err := s.recordUsage(ctx, modelUsage{
+			OwnerID: j.OwnerID, ID: memory.NewID(), At: time.Now().UTC(),
+			Purpose: "extraction", AgentID: p.ID, Model: p.Model,
+			InputTokens: result.InputTokens, OutputTokens: result.OutputTokens, Cost: result.Cost,
+			JobID: string(j.ID), MemoryRefs: []memory.Ref{j.Record},
+		}); err != nil {
+			return err
+		}
+	}
 	text := strings.TrimSpace(result.Text)
 	text = strings.TrimPrefix(text, "```json")
 	text = strings.TrimPrefix(text, "```")
 	text = strings.TrimSuffix(text, "```")
 	var extraction extracted
 	if strictJSON([]byte(strings.TrimSpace(text)), &extraction) != nil || len(extraction.Items) > 30 {
-		if strings.TrimSpace(result.Text) != "" {
-			if err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-				return recordUsageTx(ctx, tx, modelUsage{
-					OwnerID: j.OwnerID, ID: memory.NewID(), At: time.Now().UTC(),
-					Purpose: "extraction", AgentID: p.ID, Model: p.Model,
-					InputTokens: result.InputTokens, OutputTokens: result.OutputTokens, Cost: result.Cost,
-					JobID: string(j.ID), MemoryRefs: []memory.Ref{j.Record},
-				})
-			}); err != nil {
-				return err
-			}
-		}
 		return &worker.JobError{Code: "model_output_invalid", Retry: free}
 	}
 	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
@@ -516,14 +514,6 @@ func (s *Store) ProcessExtraction(ctx context.Context, j worker.Job) (err error)
 			return err
 		}
 		if err := lockJob(ctx, tx, j); err != nil {
-			return err
-		}
-		if err := recordUsageTx(ctx, tx, modelUsage{
-			OwnerID: j.OwnerID, ID: memory.NewID(), At: time.Now().UTC(),
-			Purpose: "extraction", AgentID: p.ID, Model: p.Model,
-			InputTokens: result.InputTokens, OutputTokens: result.OutputTokens, Cost: result.Cost,
-			JobID: string(j.ID), MemoryRefs: []memory.Ref{j.Record},
-		}); err != nil {
 			return err
 		}
 		current, err := currentExtractionSource(ctx, tx, j)

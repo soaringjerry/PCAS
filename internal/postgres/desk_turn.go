@@ -449,7 +449,7 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 				contextErr = err
 				if contextErr == nil {
 					p, _ := s.models.Get(c.Agent.ID)
-					if err := recordUsageTx(ctx, tx, modelUsage{
+					if err := s.recordUsage(ctx, modelUsage{
 						OwnerID: scope.OwnerID, ID: memory.NewID(), At: time.Now().UTC(),
 						Purpose: "secretary", AgentID: c.Agent.ID, Model: p.Model,
 						InputTokens: result.InputTokens, OutputTokens: result.OutputTokens, Cost: result.Cost,

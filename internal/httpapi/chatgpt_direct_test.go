@@ -42,6 +42,7 @@ func TestDirectChatGPTHTTPBoundary(t *testing.T) {
 		{"unknown credential fields", "POST", "/v1/chatgpt/direct/login", `{"access_token":"secret"}`, true, 400},
 		{"agent cannot complete sign-in", "POST", "/v1/chatgpt/direct/callback", `{"url":"http://127.0.0.1:1455/auth/callback?state=a&code=b"}`, false, 403},
 		{"no pending sign-in", "POST", "/v1/chatgpt/direct/callback", `{"url":"http://127.0.0.1:1455/auth/callback?state=a&code=b"}`, true, 404},
+		{"typed model with a bad shape", "POST", "/v1/chatgpt/direct/select", `{"client_id":"","model":"bad model\n","manual":true}`, true, 400},
 		{"missing registration", "POST", "/v1/chatgpt/direct/select", `{"client_id":"missing"}`, true, 400},
 	} {
 		t.Run(test.name, func(t *testing.T) {

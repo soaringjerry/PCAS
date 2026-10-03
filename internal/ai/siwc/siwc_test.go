@@ -37,6 +37,9 @@ type fixture struct {
 	revokeStatus                             int
 	identityChange                           func(jwt.MapClaims)
 	stream                                   string
+	catalogs                                 int
+	catalogStatus                            int
+	model                                    string
 }
 
 func newFixture(t *testing.T) (*fixture, *Manager) {
@@ -111,6 +114,11 @@ func (f *fixture) handle(w http.ResponseWriter, r *http.Request) {
 		}
 		write(tokenResponse{Access: "access-PRIVATE", Refresh: f.refresh, ID: signed, Type: "Bearer", Scope: f.scope, Expires: 3600})
 	case "/v1/models":
+		f.catalogs++
+		if f.catalogStatus != 0 {
+			w.WriteHeader(f.catalogStatus)
+			return
+		}
 		if r.Header.Get("Authorization") != "Bearer access-PRIVATE" {
 			f.t.Error("catalog bearer missing")
 		}
@@ -127,6 +135,7 @@ func (f *fixture) handle(w http.ResponseWriter, r *http.Request) {
 		if len(body) != 5 || body["stream"] != true || body["store"] != false || body["model"] == "" {
 			f.t.Errorf("unsupported request body: %v", body)
 		}
+		f.model, _ = body["model"].(string)
 		if _, ok := body["input"].([]any); !ok {
 			f.t.Error("input must be an array")
 		}
@@ -519,6 +528,57 @@ func TestEarliestRefreshAndProtectedPaths(t *testing.T) {
 	}
 }
 
+func TestTypedModelIsUsedWithoutTheCatalog(t *testing.T) {
+	f, m := newFixture(t)
+	signIn(t, f, m, "")
+	ctx := context.Background()
+	// The catalog lists neither this model nor, here, anything at all.
+	f.mu.Lock()
+	f.catalogStatus = 503
+	f.mu.Unlock()
+	if _, err := m.Generate(ctx, "", "system", "prompt"); err == nil {
+		t.Fatal("generation without a model must still need the catalog")
+	}
+	if err := m.Select(ctx, "oaiapp_registration", "typed-model", true, false); err != nil {
+		t.Fatal(err)
+	}
+	status, err := m.Status(ctx)
+	if err != nil || status.Accounts[0].Model != "typed-model" || !status.Accounts[0].ModelManual {
+		t.Fatalf("typed model not kept: %+v %v", status, err)
+	}
+	f.mu.Lock()
+	before := f.catalogs
+	f.mu.Unlock()
+	result, err := m.Generate(ctx, "", "system", "prompt")
+	if err != nil || result.Text != "PCAS" {
+		t.Fatalf("typed model generation: %+v %v", result, err)
+	}
+	f.mu.Lock()
+	if f.model != "typed-model" || f.catalogs != before {
+		t.Fatalf("model=%q catalog calls=%d", f.model, f.catalogs-before)
+	}
+	f.catalogStatus = 0
+	f.mu.Unlock()
+	// Another model is still checked against the catalog, and picking one from
+	// the catalog clears the typed mark.
+	if _, err := m.Generate(ctx, "unlisted", "system", "prompt"); err == nil {
+		t.Fatal("an unlisted model that was not typed in was accepted")
+	}
+	if err := m.Select(ctx, "oaiapp_registration", "second", false, false); err != nil {
+		t.Fatal(err)
+	}
+	if status, _ := m.Status(ctx); status.Accounts[0].ModelManual {
+		t.Fatal("catalog choice kept the typed mark")
+	}
+	if _, err := m.Generate(ctx, "", "system", "prompt"); err != nil {
+		t.Fatal(err)
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.model != "second" {
+		t.Fatalf("model=%q", f.model)
+	}
+}
 func TestStreamCompletionAndLimits(t *testing.T) {
 	for _, name := range []string{"completed", "interrupted", "incomplete", "late-limit", "explicit-error", "invalid-json"} {
 		t.Run(name, func(t *testing.T) {

@@ -2,9 +2,12 @@ package httpapi
 
 import (
 	"net/http"
+	"regexp"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
 )
+
+var directModelName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`)
 
 func (s *Server) directChatGPTRoutes(mux *http.ServeMux) {
 	for _, route := range []string{"GET /v1/chatgpt/direct/account", "POST /v1/chatgpt/direct/login", "POST /v1/chatgpt/direct/callback", "POST /v1/chatgpt/direct/select", "POST /v1/chatgpt/direct/logout", "POST /v1/chatgpt/direct/refresh", "GET /v1/chatgpt/direct/models"} {
@@ -26,6 +29,7 @@ func (s *Server) directChatGPT(w http.ResponseWriter, r *http.Request, scope mem
 		Consent  bool   `json:"consent"`
 		Model    string `json:"model"`
 		Resume   bool   `json:"resume"`
+		Manual   bool   `json:"manual"`
 		URL      string `json:"url"`
 	}
 	if r.Method == "POST" && !decode(w, r, &in) {
@@ -67,23 +71,32 @@ func (s *Server) directChatGPT(w http.ResponseWriter, r *http.Request, scope mem
 				s.fail(w, memory.ErrInvalid)
 				return
 			}
-			models, err := m.Models(r.Context())
-			if err != nil {
-				s.fail(w, err)
-				return
-			}
-			found := false
-			for _, model := range models {
-				if model.Slug == in.Model {
-					found = true
+			if in.Manual {
+				// A typed model name skips the catalog, which may not list
+				// every model the account can run; only its shape is checked.
+				if !directModelName.MatchString(in.Model) {
+					s.fail(w, memory.ErrInvalid)
+					return
+				}
+			} else {
+				models, err := m.Models(r.Context())
+				if err != nil {
+					s.fail(w, err)
+					return
+				}
+				found := false
+				for _, model := range models {
+					if model.Slug == in.Model {
+						found = true
+					}
+				}
+				if !found {
+					s.fail(w, memory.ErrInvalid)
+					return
 				}
 			}
-			if !found {
-				s.fail(w, memory.ErrInvalid)
-				return
-			}
 		}
-		if err := m.Select(r.Context(), in.ClientID, in.Model, in.Resume); err != nil {
+		if err := m.Select(r.Context(), in.ClientID, in.Model, in.Manual, in.Resume); err != nil {
 			s.fail(w, err)
 			return
 		}

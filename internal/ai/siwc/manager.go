@@ -50,6 +50,7 @@ type AccountView struct {
 	Verified    bool   `json:"verified"`
 	Paused      bool   `json:"paused"`
 	Model       string `json:"model,omitempty"`
+	ModelManual bool   `json:"model_manual,omitempty"`
 }
 type Status struct {
 	Accounts     []AccountView `json:"accounts"`
@@ -115,7 +116,7 @@ func (m *Manager) Status(ctx context.Context) (Status, error) {
 	}
 	out.Active = d.Active
 	for _, a := range d.Accounts {
-		out.Accounts = append(out.Accounts, AccountView{a.ClientID, a.Email, a.AccessToken != "", a.PlanEnabled(), a.Verified, a.Paused, a.Model})
+		out.Accounts = append(out.Accounts, AccountView{a.ClientID, a.Email, a.AccessToken != "", a.PlanEnabled(), a.Verified, a.Paused, a.Model, a.ModelManual})
 	}
 	if a := d.account(d.Active); a != nil {
 		out.DefaultReady = a.Verified && a.Default
@@ -383,7 +384,9 @@ func (m *Manager) Close() {
 	}
 }
 
-func (m *Manager) Select(ctx context.Context, client, model string, resume bool) error {
+// Select makes client the active account. A non-empty model becomes its model;
+// manual says the owner typed it in rather than picking it from the catalog.
+func (m *Manager) Select(ctx context.Context, client, model string, manual, resume bool) error {
 	return m.locked(ctx, func(d *diskState) error {
 		a := d.account(client)
 		if a == nil {
@@ -391,6 +394,7 @@ func (m *Manager) Select(ctx context.Context, client, model string, resume bool)
 		}
 		if model != "" {
 			a.Model = model
+			a.ModelManual = manual
 		}
 		if resume {
 			a.Paused = false

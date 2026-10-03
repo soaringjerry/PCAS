@@ -90,7 +90,7 @@ function CodexConnection() {
   </Fold>
 }
 
-interface DirectAccount { client_id: string; email?: string; connected: boolean; plan_enabled: boolean; verified: boolean; paused: boolean; model?: string }
+interface DirectAccount { client_id: string; email?: string; connected: boolean; plan_enabled: boolean; verified: boolean; paused: boolean; model?: string; model_manual?: boolean }
 interface DirectStatus { accounts: DirectAccount[]; active_client_id: string; pending: boolean; error?: string; default_ready: boolean }
 interface DirectModel { slug: string; display_name: string }
 
@@ -101,6 +101,7 @@ function DirectConnection() {
   const [models, setModels] = useState<DirectModel[]>([])
   const [authorization, setAuthorization] = useState('')
   const [pasted, setPasted] = useState('')
+  const [typedModel, setTypedModel] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
@@ -114,7 +115,8 @@ function DirectConnection() {
       setStatus(next)
       const selected = next.accounts.find(a => a.client_id === next.active_client_id)
       if (selected?.plan_enabled && !selected.paused) {
-        setModels((await api<{ models: DirectModel[] }>('/v1/chatgpt/direct/models')).models)
+        // The list is only a convenience: a model can be typed in when it is missing or cannot be read.
+        try { setModels((await api<{ models: DirectModel[] }>('/v1/chatgpt/direct/models')).models) } catch { setModels([]) }
       } else setModels([])
       if (!next.pending) { setAuthorization(''); setPasted('') }
     } catch (e) { setError(e instanceof Error ? e.message : '连接失败') }
@@ -167,8 +169,21 @@ function DirectConnection() {
       options={status.accounts.map(a => ({ value: a.client_id, label: `${a.email ?? 'ChatGPT'} · ${a.client_id}`, hint: a.connected ? '已连接' : '已退出' }))}
       onChange={client => void action(async () => { await api('/v1/chatgpt/direct/select', { client_id: client }) })} disabled={busy} />}
     {models.length > 0 && active && <Select label="ChatGPT 可用模型" value={active.model || models[0].slug}
-      options={models.map(m => ({ value: m.slug, label: m.display_name || m.slug }))}
+      options={[...(active.model && !models.some(m => m.slug === active.model) ? [{ value: active.model, label: active.model, hint: '手动填写' }] : []), ...models.map(m => ({ value: m.slug, label: m.display_name || m.slug }))]}
       onChange={model => void action(async () => { await api('/v1/chatgpt/direct/select', { client_id: active.client_id, model }) })} disabled={busy} />}
+    {active?.connected && active.plan_enabled && <div className="stack-sm" style={{ gap: 6 }}>
+      <label className="field"><span className="field-label">手动填写模型名</span>
+        <div className="row-nowrap">
+          <input className="input" aria-label="手动填写模型名" placeholder="例如 gpt-6.1-sol" value={typedModel} onChange={e => setTypedModel(e.target.value)}
+            autoComplete="off" spellCheck={false} maxLength={64} style={{ flex: 1, minWidth: 0 }} />
+          <Button disabled={busy || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(typedModel.trim())} onClick={() => void action(async () => {
+            await api('/v1/chatgpt/direct/select', { client_id: active.client_id, model: typedModel.trim(), manual: true })
+            setTypedModel('')
+          })}>用这个模型</Button>
+        </div>
+      </label>
+      <p className="tiny muted">{active.model_manual ? `现在用的是手动填写的 ${active.model}。` : ''}上面的列表里没有、但你的账户能用的模型，可以直接填名字。填错了不会报错在这里，而是在用到它时提示模型不可用。</p>
+    </div>}
     {active?.connected && !active.plan_enabled && <p className="callout">账户已连接，尚未允许 PCAS 使用套餐。请开启套餐授权，或选择 API Key 通道。</p>}
     {active?.paused && <p className="callout">此账户的套餐请求已暂停。请先在 ChatGPT 用量设置中检查限制，再恢复请求。</p>}
     {active?.connected && !active.verified && <p className="small muted">完整授权流程尚未验收，暂未设为默认。你可以在副手中选择「ChatGPT · 套餐授权」。</p>}

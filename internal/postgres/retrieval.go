@@ -156,27 +156,48 @@ func (s *Store) recallTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in 
 	for _, ref := range structured {
 		structuredIDs = append(structuredIDs, ref.ID)
 	}
+	// Two steps. First every record is matched and scored, which decides the
+	// order; then the passage to show is worked out only for the few that are
+	// returned. Choosing a passage for every match, and joins the planner ran
+	// as a scan per row, made this take a minute or more over tens of
+	// thousands of records.
 	querySQL := `WITH linked AS (SELECT m.member_id FROM episode_members m JOIN memory_records e ON(e.owner_id,e.id,e.version)=(m.owner_id,m.episode_id,m.episode_version) JOIN episodes ep ON(ep.owner_id,ep.id,ep.version)=(e.owner_id,e.id,e.version) WHERE m.owner_id=$1 AND e.state='active' AND (m.episode_id=ANY($8::uuid[]) OR ($6='history' AND $4!='' AND position(lower($4) in lower(ep.title))>0)) AND ($2 OR ($17 AND e.kind='source') OR EXISTS(SELECT 1 FROM record_grants g WHERE g.owner_id=e.owner_id AND g.record_id=e.id AND g.principal_id=$3))), hits AS (
- SELECT t.id::text AS id,t.version,r.kind,coalesce(hit.body,t.body) AS body,
-		 (CASE WHEN $4='' THEN 0 WHEN position(lower($4) in lower(t.body))>0 THEN 5 ELSE 0 END
+ SELECT t.id::text AS id,t.id AS uid,t.version,r.kind,
+		 (CASE WHEN $4='' THEN 0 WHEN position(lower($4) in lb.body)>0 THEN 5 ELSE 0 END
 		 +CASE WHEN $5='' THEN 0 ELSE coalesce(ts_rank_cd(rs.search_vector,to_tsquery('simple',$5)),0) END
-         +(SELECT count(*) FROM unnest($16::text[]) token WHERE length(token)>1 AND position(lower(token) in lower(t.body))>0)::float
-		 +CASE WHEN $11::text IS NULL THEN 0 ELSE coalesce((SELECT max(1-(e.embedding <=> $11::vector)) FROM embeddings e WHERE e.owner_id=t.owner_id AND ((e.record_id,e.record_version)=(t.id,t.version) OR e.record_id IN (SELECT id FROM chunks WHERE owner_id=t.owner_id AND source_id=t.id AND source_version=t.version)) AND e.model=$12 AND e.dimensions=$13),0) END
+         +(SELECT count(*) FROM unnest(words.patterns) pattern WHERE lb.body LIKE pattern)::float
+		 +CASE WHEN $11::text IS NULL THEN 0 ELSE coalesce(greatest((SELECT max(1-(e.embedding <=> $11::vector)) FROM embeddings e WHERE e.owner_id=t.owner_id AND e.record_id=t.id AND e.record_version=t.version AND e.model=$12 AND e.dimensions=$13),(SELECT max(1-(e.embedding <=> $11::vector)) FROM chunks c JOIN embeddings e ON (e.owner_id,e.record_id)=(c.owner_id,c.id) WHERE c.owner_id=t.owner_id AND c.source_id=t.id AND c.source_version=t.version AND e.model=$12 AND e.dimensions=$13)),0) END
 		 +CASE WHEN t.id=ANY($8::uuid[]) OR t.id IN (SELECT claim_id FROM claim_revisions WHERE owner_id=$1 AND (subject_id=ANY($8::uuid[]) OR scope->>'project_id'=ANY($8::text[]))) THEN 10 ELSE 0 END
-		 +CASE WHEN $6='continue' THEN coalesce(CASE WHEN a.pinned THEN 1 ELSE exp(-0.693147*greatest(0,extract(epoch from(now()-a.last_effective_use_at)))/(a.half_life_seconds*a.stability)) END,0)*0.2 ELSE 0 END) AS score,coalesce(sc.role,'') AS role,coalesce(sc.branch,'') AS branch,coalesce(sc.gaps,'[]') AS gaps,
-         coalesce(hit.excerpt,sv.body,'') AS excerpt,coalesce(sv.title,'') AS title,
+		 +CASE WHEN $6='continue' THEN coalesce(CASE WHEN a.pinned THEN 1 ELSE exp(-0.693147*greatest(0,extract(epoch from(now()-a.last_effective_use_at)))/(a.half_life_seconds*a.stability)) END,0)*0.2 ELSE 0 END) AS score,
          coalesce(src.connector,'') AS connector,coalesce(src.external_id,'') AS external_id,
-         rv.expressed_at,rv.recorded_at,t.id=ANY($8::uuid[]) AS explicit,
-         coalesce(btrim(sv.body)!='' AND (sv.media_type LIKE 'text/%' OR sv.representation IN ('ocr','transcript','extracted')),false) AS readable
+         rv.expressed_at,rv.recorded_at,t.id=ANY($8::uuid[]) AS explicit
 		 FROM memory_text t JOIN memory_records r ON (r.owner_id,r.id)=(t.owner_id,t.id)
+		 CROSS JOIN LATERAL (SELECT lower(t.body) AS body OFFSET 0) lb
+		 CROSS JOIN (SELECT coalesce((SELECT array_agg('%'||replace(replace(replace(lower(token),'\','\\'),'%','\%'),'_','\_')||'%') FROM unnest($16::text[]) token WHERE length(token)>1),'{}'::text[]) AS patterns) words
 		 JOIN record_versions rv ON (rv.owner_id,rv.record_id,rv.version)=(t.owner_id,t.id,t.version)
 		 LEFT JOIN record_search rs ON (rs.owner_id,rs.record_id,rs.record_version)=(t.owner_id,t.id,t.version)
 
+		 LEFT JOIN LATERAL (SELECT x.pinned,x.last_effective_use_at,x.half_life_seconds,x.stability FROM activity x WHERE x.owner_id=t.owner_id AND x.record_id=t.id OFFSET 0) a ON true
+ LEFT JOIN LATERAL (SELECT x.connector,x.external_id FROM sources x WHERE x.owner_id=t.owner_id AND x.id=t.id OFFSET 0) src ON true
+		 WHERE t.owner_id=$1 AND r.state='active' AND rv.state='active' AND ($2 OR ($17 AND r.kind='source') OR EXISTS(SELECT 1 FROM record_grants g WHERE g.owner_id=t.owner_id AND g.record_id=t.id AND g.principal_id=$3))
+		 AND (NOT $17 OR r.kind!='source' OR t.version=r.version)
+		 AND ($6='history' OR (r.kind='claim' AND t.version=(SELECT a.version FROM applicable_claim_versions($1,coalesce($9,now()),coalesce($10,now())) a WHERE a.claim_id=t.id)) OR (r.kind!='claim' AND t.version=(SELECT max(v.version) FROM record_versions v WHERE v.owner_id=t.owner_id AND v.record_id=t.id AND v.recorded_at<=coalesce($10,now()))))
+		 AND ($9::timestamptz IS NULL OR (rv.valid_from IS NULL OR rv.valid_from<=$9) AND (rv.valid_to IS NULL OR rv.valid_to>$9))
+		 AND ($10::timestamptz IS NULL OR rv.recorded_at<=$10)
+		 AND ($4='' OR lb.body LIKE ANY(words.patterns) OR position(lower($4) in lb.body)>0 OR ($5!='' AND (coalesce(rs.search_vector,to_tsvector('simple',$7)) @@ to_tsquery('simple',$5)))
+		 OR t.id IN (SELECT member_id FROM linked) OR t.id=ANY($8::uuid[]) OR t.id IN (SELECT claim_id FROM claim_revisions WHERE owner_id=$1 AND (subject_id=ANY($8::uuid[]) OR scope->>'project_id'=ANY($8::text[])))
+		 OR ($11::text IS NOT NULL AND (EXISTS(SELECT 1 FROM embeddings e WHERE e.owner_id=t.owner_id AND e.record_id=t.id AND e.record_version=t.version AND e.model=$12 AND CASE WHEN e.dimensions=$13 THEN (e.embedding <=> $11::vector)<0.65 ELSE false END) OR EXISTS(SELECT 1 FROM chunks c JOIN embeddings e ON (e.owner_id,e.record_id)=(c.owner_id,c.id) WHERE c.owner_id=t.owner_id AND c.source_id=t.id AND c.source_version=t.version AND e.model=$12 AND CASE WHEN e.dimensions=$13 THEN (e.embedding <=> $11::vector)<0.65 ELSE false END))))
+ )`
+	detailSQL := ` SELECT p.id,p.version,p.kind,coalesce(hit.body,t.body) AS body,p.score,coalesce(sc.role,'') AS role,coalesce(sc.branch,'') AS branch,coalesce(sc.gaps,'[]') AS gaps,
+         coalesce(hit.excerpt,sv.body,'') AS excerpt,coalesce(sv.title,'') AS title,p.connector,p.external_id,p.expressed_at,p.recorded_at,p.explicit,
+         coalesce(btrim(sv.body)!='' AND (sv.media_type LIKE 'text/%' OR sv.representation IN ('ocr','transcript','extracted')),false) AS readable
+ FROM picked p
+ JOIN LATERAL (SELECT m.body FROM memory_text m WHERE m.owner_id=$1 AND m.id=p.uid AND m.version=p.version) t ON true
         LEFT JOIN LATERAL (
           SELECT '[片段 ' || c.ordinal::text || '；字符 ' || c.start_rune::text || '-' || c.end_rune::text || '] ' || c.body AS body,c.body AS excerpt
           FROM chunks c JOIN record_versions cv ON (cv.owner_id,cv.record_id,cv.version)=(c.owner_id,c.id,c.version)
           JOIN memory_records cr ON (cr.owner_id,cr.id)=(c.owner_id,c.id)
-          WHERE r.kind='source' AND c.owner_id=t.owner_id AND c.source_id=t.id AND c.source_version=t.version
+          WHERE p.kind='source' AND c.owner_id=$1 AND c.source_id=p.uid AND c.source_version=p.version
             AND cv.state='active' AND cr.state='active'
           ORDER BY
             (CASE WHEN $4!='' AND position(lower($4) in lower(c.body))>0 THEN 5 ELSE 0 END
@@ -186,21 +207,10 @@ func (s *Store) recallTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in 
             c.ordinal
           LIMIT 1
         ) hit ON true
-		 LEFT JOIN activity a ON (a.owner_id,a.record_id)=(t.owner_id,t.id)
- LEFT JOIN sources src ON (src.owner_id,src.id)=(t.owner_id,t.id)
- LEFT JOIN source_versions sv ON (sv.owner_id,sv.source_id,sv.version)=(t.owner_id,t.id,t.version)
- LEFT JOIN source_contexts sc ON(sc.owner_id,sc.source_id,sc.source_version)=(t.owner_id,t.id,t.version)
-		 WHERE t.owner_id=$1 AND r.state='active' AND rv.state='active' AND ($2 OR ($17 AND r.kind='source') OR EXISTS(SELECT 1 FROM record_grants g WHERE g.owner_id=t.owner_id AND g.record_id=t.id AND g.principal_id=$3))
-		 AND (NOT $17 OR r.kind!='source' OR t.version=r.version)
-		 AND ($6='history' OR (r.kind='claim' AND t.version=(SELECT a.version FROM applicable_claim_versions($1,coalesce($9,now()),coalesce($10,now())) a WHERE a.claim_id=t.id)) OR (r.kind!='claim' AND t.version=(SELECT max(v.version) FROM record_versions v WHERE v.owner_id=t.owner_id AND v.record_id=t.id AND v.recorded_at<=coalesce($10,now()))))
-		 AND ($9::timestamptz IS NULL OR (rv.valid_from IS NULL OR rv.valid_from<=$9) AND (rv.valid_to IS NULL OR rv.valid_to>$9))
-		 AND ($10::timestamptz IS NULL OR rv.recorded_at<=$10)
-		 AND ($4='' OR EXISTS(SELECT 1 FROM unnest($16::text[]) token WHERE length(token)>1 AND position(lower(token) in lower(t.body))>0) OR position(lower($4) in lower(t.body))>0 OR ($5!='' AND (coalesce(rs.search_vector,to_tsvector('simple',$7)) @@ to_tsquery('simple',$5)))
-		 OR t.id IN (SELECT member_id FROM linked) OR t.id=ANY($8::uuid[]) OR t.id IN (SELECT claim_id FROM claim_revisions WHERE owner_id=$1 AND (subject_id=ANY($8::uuid[]) OR scope->>'project_id'=ANY($8::text[])))
-		 OR ($11::text IS NOT NULL AND EXISTS(SELECT 1 FROM embeddings e WHERE e.owner_id=t.owner_id AND ((e.record_id,e.record_version)=(t.id,t.version) OR e.record_id IN (SELECT id FROM chunks WHERE owner_id=t.owner_id AND source_id=t.id AND source_version=t.version)) AND e.model=$12 AND CASE WHEN e.dimensions=$13 THEN (e.embedding <=> $11::vector)<0.65 ELSE false END)))
- )`
+ LEFT JOIN source_versions sv ON (sv.owner_id,sv.source_id,sv.version)=($1,p.uid,p.version)
+ LEFT JOIN source_contexts sc ON(sc.owner_id,sc.source_id,sc.source_version)=($1,p.uid,p.version)`
 	if len(structured) > 0 {
-		querySQL = strings.Replace(querySQL, "AND ($4='' OR EXISTS", "AND (t.id=ANY($18::uuid[]) OR $4='' OR EXISTS", 1)
+		querySQL = strings.Replace(querySQL, "AND ($4='' OR lb.body LIKE ANY", "AND (t.id=ANY($18::uuid[]) OR $4='' OR lb.body LIKE ANY", 1)
 	}
 	// Team source excerpts have their own candidate/token allowance. They must
 	// not displace the existing claim and graph budgets. Public recall retains
@@ -219,9 +229,15 @@ func (s *Store) recallTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in 
 		hitOrder = fmt.Sprintf("CASE WHEN kind='source' THEN coalesce(%s >= $%d AND %s < $%d,false) ELSE false END DESC,", at, slot, at, slot+1) + hitOrder
 	}
 	if scope.Team {
-		querySQL += ", ranked AS (SELECT *,row_number() OVER (PARTITION BY kind='source' ORDER BY " + hitOrder + ") AS rank FROM hits) SELECT " + hitColumns + " FROM ranked WHERE rank>$15 AND rank<=$15+$14 ORDER BY " + hitOrder
+		querySQL += ", ranked AS (SELECT *,row_number() OVER (PARTITION BY kind='source' ORDER BY " + hitOrder + ") AS rank FROM hits), picked AS (SELECT * FROM ranked WHERE rank>$15 AND rank<=$15+$14)"
 	} else {
-		querySQL += " SELECT " + hitColumns + " FROM hits ORDER BY " + hitOrder + " LIMIT $14 OFFSET $15"
+		querySQL += ", picked AS (SELECT * FROM hits ORDER BY " + hitOrder + " LIMIT $14 OFFSET $15)"
+	}
+	querySQL += " SELECT " + hitColumns + " FROM (" + detailSQL + ") shown ORDER BY " + hitOrder
+
+	// Compiling this statement costs the database far more than running it.
+	if _, err := tx.Exec(ctx, "SET LOCAL jit = off"); err != nil {
+		return err
 	}
 	rows, err := tx.Query(ctx, querySQL, args...)
 	if err != nil {

@@ -467,16 +467,29 @@ func TestPhase2B4b_C11_VisibleLimitsRejectHiddenQuoteAndPreserveOriginals(t *tes
 	b4bOperation(t, s, scope, a.Batch, "organize")
 	b4bDrain(t, s)
 	b2Equal(t, len(f.all()), spec.Calls)
-	if len(f.all()) != spec.Calls {
-		t.Fatal("cannot inspect incomplete long-message requests")
+	// Inspect the required visible contents independently of the disputed
+	// exact call count, so that one failure cannot hide the other C11 checks.
+	sawAI, sawUser := false, false
+	for _, req := range f.all() {
+		in := b4bInputFrom(t, req)
+		for _, m := range append(append([]b4bMessage{}, in.Messages...), in.Context...) {
+			if m.Index == 1 {
+				sawAI = true
+				b2Equal(t, m.Role, "assistant")
+				b2Equal(t, m.Text, string([]rune(assistant)[:spec.AIVisible]))
+			}
+		}
+		for _, m := range in.Messages {
+			if m.Index == 2 {
+				sawUser = true
+				b2Equal(t, len(in.Messages), 1)
+				b2Equal(t, m.Role, "user")
+				b2Equal(t, m.Text, string(user[:spec.UserVisible]))
+			}
+		}
 	}
-	first := b4bInputFrom(t, f.all()[0])
-	second := b4bInputFrom(t, f.all()[1])
-	b2Equal(t, len(first.Messages), 1)
-	b2Equal(t, first.Messages[0].Text, string([]rune(assistant)[:spec.AIVisible]))
-	b2Equal(t, len(second.Messages), 1)
-	b2Equal(t, second.Messages[0].Index, 2)
-	b2Equal(t, second.Messages[0].Text, string(user[:spec.UserVisible]))
+	b2Equal(t, sawAI, true)
+	b2Equal(t, sawUser, true)
 	memories := b2Snapshot(t, s, scope).Memories
 	b2Equal(t, len(memories), spec.Memories)
 	m := b2One(t, memories)

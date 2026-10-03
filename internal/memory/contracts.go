@@ -76,7 +76,17 @@ type WorkingContext struct {
 	KnownAt *time.Time `json:"known_at,omitempty"`
 }
 
+// TeamRecall contains trusted prompt hints, never accepted from the public API.
+type TeamRecall struct {
+	Text       string
+	Plan       QueryPlan
+	ThingID    *string
+	ProjectID  *string // nil means no project restriction; empty means unassigned
+	Candidates int
+}
+
 type RecallRequest struct {
+	Team    *TeamRecall    `json:"-"`
 	Query   string         `json:"query"`
 	Context WorkingContext `json:"context"`
 	Mode    RecallMode     `json:"mode"`
@@ -105,13 +115,15 @@ type RecallExcerpt struct {
 }
 
 type RecallResult struct {
-	Excerpts   []RecallExcerpt `json:"-"`
-	Summary    string          `json:"summary"`
-	Memories   []Ref           `json:"memories"`
-	Evidence   []Evidence      `json:"evidence"`
-	Unresolved []string        `json:"unresolved"`
-	Coverage   Coverage        `json:"coverage"`
-	FollowUps  []string        `json:"follow_ups"`
+	Structured  []Ref           `json:"-"`
+	TimeRelaxed bool            `json:"-"`
+	Excerpts    []RecallExcerpt `json:"-"`
+	Summary     string          `json:"summary"`
+	Memories    []Ref           `json:"memories"`
+	Evidence    []Evidence      `json:"evidence"`
+	Unresolved  []string        `json:"unresolved"`
+	Coverage    Coverage        `json:"coverage"`
+	FollowUps   []string        `json:"follow_ups"`
 }
 
 type ExpandRequest struct {

@@ -394,5 +394,48 @@
       "initialStored": 4,
       "blockedDisplay": "show the gaps explanation; no separate blocked legend row is required"
     }
+  },
+  "coordinator_amendment_b526328": {
+    "authority": "batch4/README.md section 11 and T4 acceptance supplement at b526328, coordinator instruction 2026-10-03",
+    "scope": "I15-I20 and W5; section 12 C sequences remain outside this delivery",
+    "form": {
+      "field": "organize",
+      "values": [
+        "later",
+        "now"
+      ],
+      "default": "later"
+    },
+    "wire": {
+      "batchFlag": "organizeLater",
+      "startEndpoint": "POST /v1/connectors/imports/{id}/organize"
+    },
+    "persistence": {
+      "migration": 29,
+      "table": "import_batches",
+      "holdColumn": "hold_organizing",
+      "held": true
+    },
+    "sequences": {
+      "I15": "explicit later stores all original messages; stored equals total, organized=0, organizeLater=true; drain the actual queue to prove chunks, tokens and vectors are processed while extraction is never claimed and no extraction model or usage row is produced",
+      "I16": "after a fully indexed held import, ask the frozen historical detail in another conversation; inspect actual secretary HTTP prompt and original-source dependency; no extraction of held messages",
+      "I17": "start organizing through HTTP after I15; organizeLater and hold flag become false; real queue claims user-message extraction jobs with priority 10; actual extraction HTTP calls occur and organized grows",
+      "I18": "while import extraction is held, a new ordinary secretary utterance is handled and extracted; actual extraction prompt includes the new utterance but none of the held import texts; import flag stays true and organized stays zero",
+      "I19": "pause a genuinely processing later import, finish the current small batch, resume and store everything without releasing extraction hold; delete original archive through existing HTTP closure; all messages and batch disappear",
+      "I20": "omit organize form field; same stored/indexed but held, zero extraction behavior as explicit later",
+      "W5": "confirmation defaults to 先存着 and offers immediate organizing; submitted later and now fields reflect selection; completed held batch says 已存好，还没开始整理 and exposes 开始整理; clicking calls organize endpoint, releases hold and displayed organized progress grows"
+    },
+    "positiveControl": "explicit organize=now releases extraction from the outset; real queue produces extraction calls and organized progress, contrasting later",
+    "fixtures": {
+      "messages": 3,
+      "prefix": "合成先存着资料",
+      "ordinaryUtterance": "合成秘书新原话：紫玉铃铛5508，我每天喜欢步行到河边。",
+      "heldStatus": "已存好，还没开始整理",
+      "laterLabel": "先存着",
+      "startLabel": "开始整理",
+      "pauseMessages": 2000
+    },
+    "embedding": "local free deterministic embedding provider only; embedding HTTP requests are captured separately from extraction/secretary requests and are excluded from extraction call counts",
+    "originalRound": "I1-I14/L1-L9/W1-W4 run once on pinned acceptance commit based on b526328; new tests are delivered first, not included in this original-round result"
   }
 }

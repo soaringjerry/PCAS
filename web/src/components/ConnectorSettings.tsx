@@ -6,7 +6,7 @@ import { api } from '../store/api'
 import { ChatImportFlow, ImportList } from './ChatImport'
 import { SideSheet } from './Overlay'
 import { Button, Fold, Progress, Tag } from './ui'
-import { isChatExport, upload, useImports } from './useImports'
+import { isChatExport, sendArchive, useImports } from './useImports'
 
 type Connection = { id: string; name: string; kind: 'webhook' | 'poll' | 'folder'; url?: string; token_env?: string; enabled: boolean; version: number; interval_seconds: number; status: string; imported: number; error?: string; gaps: string[]; folder?: string; last_sync?: string }
 const statusText: Record<string, string> = { idle: '等待同步', syncing: '同步中', queued: '待同步', error: '同步失败' }
@@ -43,7 +43,7 @@ export function ConnectorSettings({ children }: { children?: ReactNode }) {
         if (isChatExport(file)) { setError(''); setMessage(''); setChat(file); return }
         void run(async () => {
           try {
-            const result = await upload<{ gaps?: string[] }>('/v1/connectors/archive', file, '导入', (done, total) => setSent(total ? done / total : null))
+            const result = await sendArchive<{ gaps?: string[] }>('/v1/connectors/archive', file, '导入', (done, total) => setSent(total ? done / total : null))
             setMessage(result.gaps?.join('；') || '已收到，原文已保存。')
             imports.reload()
           } finally { setSent(null) }

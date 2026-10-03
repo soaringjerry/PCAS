@@ -249,3 +249,53 @@ test('W3 四种导入失败各有不同的人话，无内部错误码和确认�
   }
   expect(descriptions.size).toBe(4)
 })
+
+test('a large archive goes up in pieces once, carries on after a dropped piece, and is imported from what the server holds', async ({ page }) => {
+  test.setTimeout(90_000)
+  const m = await mock(page, [], undefined, { ...preview, blocked: 0 }, true)
+  const size = 40 * 1024 * 1024
+  const piece = 8 * 1024 * 1024
+  const puts: { offset: number; bytes: number }[] = []
+  const posted: { path: string; body: unknown }[] = []
+  let received = 0
+  let dropped = false
+  await page.route((url) => url.pathname.startsWith('/v1/connectors/archive'), (route) => {
+    const request = route.request()
+    const url = new URL(request.url())
+    if (url.pathname === '/v1/connectors/archive/uploads' && request.method() === 'POST') {
+      posted.push({ path: url.pathname, body: request.postDataJSON() })
+      return route.fulfill({ status: 201, json: { id: 'up-1', pieceBytes: piece } })
+    }
+    if (url.pathname === '/v1/connectors/archive/uploads/up-1' && request.method() === 'PUT') {
+      const offset = Number(url.searchParams.get('offset'))
+      // The third piece is lost once, as a proxy or a flaky connection would lose it.
+      if (offset === 2 * piece && !dropped) { dropped = true; return route.abort('connectionreset') }
+      if (offset !== received) return route.fulfill({ status: 409, json: { error: 'upload_offset', received } })
+      const bytes = request.postDataBuffer()?.length ?? 0
+      puts.push({ offset, bytes })
+      received += bytes
+      return route.fulfill({ json: { received } })
+    }
+    if (request.method() === 'POST' && request.headers()['content-type']?.startsWith('application/json')) {
+      posted.push({ path: url.pathname, body: request.postDataJSON() })
+    }
+    return route.fallback()
+  })
+  await open(page)
+  await page.locator('input[type="file"]').last().setInputFiles({ name: 'chatgpt-export.zip', mimeType: 'application/zip', buffer: Buffer.alloc(size, 1) })
+  await expect(page.getByRole('button', { name: /确认导入|开始导入|^确认$|^导入\s*[\d,]+\s*条$/ })).toBeVisible({ timeout: 60_000 })
+  expect(dropped).toBe(true)
+  expect(puts.map((p) => p.offset)).toEqual([0, piece, 2 * piece, 3 * piece, 4 * piece])
+  expect(puts.reduce((n, p) => n + p.bytes, 0)).toBe(size)
+  const importing = page.waitForResponse((r) => new URL(r.url()).pathname === '/v1/connectors/archive' && r.request().method() === 'POST')
+  await page.getByRole('button', { name: /确认导入|开始导入|^确认$|^导入\s*[\d,]+\s*条$/ }).click()
+  expect((await importing).ok()).toBeTruthy()
+  // Reading and importing used the same pieces: nothing was sent a second time.
+  expect(puts).toHaveLength(5)
+  expect(posted).toEqual([
+    { path: '/v1/connectors/archive/uploads', body: { name: 'chatgpt-export.zip', size } },
+    { path: '/v1/connectors/archive/preview', body: { upload: 'up-1' } },
+    { path: '/v1/connectors/archive', body: { upload: 'up-1', organize: 'later' } },
+  ])
+  expect(m.errors).toEqual([])
+})

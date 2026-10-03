@@ -100,10 +100,72 @@ export function upload<T>(path: string, file: File, doing: string, onProgress: (
   })
 }
 
-async function call<T>(path: string, doing: string, body?: unknown): Promise<T> {
+/** Above this size a file goes up in pieces: a proxy in front of the server may refuse one large request (100 MB is a common limit). */
+const PIECES_FROM = 32 * 1024 * 1024
+
+/** Pieces already on the server for a file, so reading it and then importing it sends it only once. */
+const sentPieces = new WeakMap<File, string>()
+
+const stopped = (signal?: AbortSignal) => { if (signal?.aborted) throw new DOMException('aborted', 'AbortError') }
+
+async function sendPieces(file: File, doing: string, onProgress: (sent: number, total: number) => void, signal?: AbortSignal): Promise<string> {
+  const opened = await call<{ id?: string; pieceBytes?: number }>('/v1/connectors/archive/uploads', doing, { name: file.name, size: file.size }, signal)
+  if (!opened.id) throw new ImportProblem(0, {}, doing)
+  const piece = opened.pieceBytes && opened.pieceBytes > 0 ? opened.pieceBytes : 8 * 1024 * 1024
+  let sent = 0
+  let failures = 0
+  while (sent < file.size) {
+    stopped(signal)
+    let response: Response | undefined
+    try {
+      response = await fetch(`/v1/connectors/archive/uploads/${encodeURIComponent(opened.id)}?offset=${sent}`, { method: 'PUT', credentials: 'same-origin', headers: { 'Content-Type': 'application/octet-stream' }, body: file.slice(sent, sent + piece), signal })
+    } catch {
+      stopped(signal)
+    }
+    const body = response ? parse(await response.text()) : {}
+    if (response?.ok && typeof body.received === 'number') {
+      sent = body.received
+      failures = 0
+      onProgress(sent, file.size)
+      continue
+    }
+    // The server says how much it has when a piece arrives out of place, e.g. after a reply was lost.
+    if (response?.status === 409 && typeof body.received === 'number') { sent = body.received; continue }
+    if (response && response.status !== 409 && response.status < 500) throw new ImportProblem(response.status, body, doing)
+    // A dropped connection or a busy server: wait a little and send the same piece again.
+    if (++failures > 4) throw new ImportProblem(response?.status ?? 0, body, doing)
+    await new Promise((done) => setTimeout(done, 1000 * failures))
+  }
+  return opened.id
+}
+
+/**
+ * Sends an archive to `path`. A small file goes in one request; a large one
+ * goes up in pieces once and is then read or imported from what the server has.
+ */
+export async function sendArchive<T>(path: string, file: File, doing: string, onProgress: (sent: number, total: number) => void, signal?: AbortSignal, fields?: Record<string, string>): Promise<T> {
+  if (file.size <= PIECES_FROM) return upload<T>(path, file, doing, onProgress, signal, fields)
+  for (let attempt = 0; ; attempt++) {
+    let id = sentPieces.get(file)
+    if (!id) {
+      id = await sendPieces(file, doing, onProgress, signal)
+      sentPieces.set(file, id)
+    }
+    onProgress(file.size, file.size)
+    try {
+      return await call<T>(path, doing, { upload: id, ...fields }, signal)
+    } catch (e) {
+      // The server no longer has the pieces (it restarted, or they went stale): send them again, once.
+      if (e instanceof ImportProblem && e.status === 404 && attempt === 0) { sentPieces.delete(file); continue }
+      throw e
+    }
+  }
+}
+
+async function call<T>(path: string, doing: string, body?: unknown, signal?: AbortSignal): Promise<T> {
   let response: Response
   try {
-    response = await fetch(path, { method: body === undefined ? 'GET' : 'POST', credentials: 'same-origin', headers: body === undefined ? undefined : { 'Content-Type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) })
+    response = await fetch(path, { method: body === undefined ? 'GET' : 'POST', credentials: 'same-origin', signal, headers: body === undefined ? undefined : { 'Content-Type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) })
   } catch {
     throw new ImportProblem(0, {}, doing)
   }

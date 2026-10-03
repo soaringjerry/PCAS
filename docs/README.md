@@ -36,6 +36,7 @@ PCAS 的所有文档都从这一页找。新增或移动文档时，同时改这
 | [L1 资料库的「来源」按出处合并](tasks/improvements/L1-library-sources-by-origin.md) | 阶段之间的小改进：之前的问题、规则、数据、测试（2026-10-03 用户确认） |
 | [D1 待办、想法、项目可以删除](tasks/improvements/D1-delete-a-thing.md) | 阶段之间的小改进：规则、数据、测试（2026-10-03） |
 | [T1 Telegram 里的回复不再缺斤少两](tasks/improvements/T1-telegram-replies.md) | 阶段之间的小改进：交办回执、链接、副手做完后把结果发回来（2026-10-03） |
+| [U1 大的归档分片上传](tasks/improvements/U1-archive-upload-in-pieces.md) | 阶段之间的小改进：上传失败的原因、分片规则、接口（2026-10-03） |
 
 **要部署、接模型、接数据**
 

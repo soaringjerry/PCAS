@@ -56,6 +56,10 @@ for line in sys.stdin:
   elif '导办台' in system:
    assert web and 'outputSchema' not in p
    value={'answer':'没有相关记录。','used':[],'links':[]}
+  elif '能联网就上网查' in system:
+   # Work handed to an agent may search.
+   assert web and 'outputSchema' not in p
+   value={'draft':'邮件草稿'} if 'JSON' in prompt else '邮件草稿：您好。'
   else:
    assert not web and 'outputSchema' not in p
    value={'draft':'邮件草稿'} if 'JSON' in prompt else '邮件草稿：您好。'

@@ -30,6 +30,8 @@ export interface ImportBatch {
   stored: number
   /** Of those, how many have been gone through for memories. */
   organized: number
+  /** Stored only: nothing goes through these for memories until the user says so. Absent from a server that always organizes. */
+  organizeLater?: boolean
   leftOut: number
   earliest?: string
   latest?: string
@@ -73,8 +75,11 @@ const parse = (text: string): Record<string, unknown> => {
   }
 }
 
-/** Sends one file, reporting how much has gone up; `signal` gives up on it. */
-export function upload<T>(path: string, file: File, doing: string, onProgress: (sent: number, total: number) => void, signal?: AbortSignal): Promise<T> {
+/** Whether an import is gone through for memories as it is stored, or only once the user asks. */
+export type Organize = 'later' | 'now'
+
+/** Sends one file, reporting how much has gone up; `signal` gives up on it. `fields` go along in the same form. */
+export function upload<T>(path: string, file: File, doing: string, onProgress: (sent: number, total: number) => void, signal?: AbortSignal, fields?: Record<string, string>): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const xhr = new XMLHttpRequest()
     xhr.open('POST', path)
@@ -89,6 +94,7 @@ export function upload<T>(path: string, file: File, doing: string, onProgress: (
     xhr.onabort = () => reject(new DOMException('aborted', 'AbortError'))
     signal?.addEventListener('abort', () => xhr.abort())
     const form = new FormData()
+    for (const [name, value] of Object.entries(fields ?? {})) form.append(name, value)
     form.append('file', file)
     xhr.send(form)
   })
@@ -109,7 +115,7 @@ async function call<T>(path: string, doing: string, body?: unknown): Promise<T> 
 /** How soon to look again: often while messages are being stored, now and then otherwise. */
 function pace(items: ImportBatch[]): number {
   if (items.some((b) => b.state === 'importing')) return 2500
-  if (items.some((b) => b.state === 'done' && b.organized < b.total)) return 10000
+  if (items.some((b) => b.state === 'done' && b.organized < b.total && !b.organizeLater)) return 10000
   return 30000
 }
 
@@ -120,6 +126,8 @@ export interface Imports {
   reload: () => void
   pause: (batch: ImportBatch) => Promise<void>
   resume: (batch: ImportBatch) => Promise<void>
+  /** Starts going through an import that was only stored. */
+  organize: (batch: ImportBatch) => Promise<void>
   /** Deletes the import: every message it brought in and the memories drawn from them. */
   remove: (batch: ImportBatch) => Promise<void>
 }
@@ -164,11 +172,12 @@ export function useImports(): Imports {
   }, [reload])
   const pause = useCallback(async (batch: ImportBatch) => put(await call<Partial<ImportBatch>>(`/v1/connectors/imports/${encodeURIComponent(batch.id)}/pause`, '暂停', {})), [put])
   const resume = useCallback(async (batch: ImportBatch) => put(await call<Partial<ImportBatch>>(`/v1/connectors/imports/${encodeURIComponent(batch.id)}/resume`, '继续', {})), [put])
+  const organize = useCallback(async (batch: ImportBatch) => put(await call<Partial<ImportBatch>>(`/v1/connectors/imports/${encodeURIComponent(batch.id)}/organize`, '开始整理', {})), [put])
   const remove = useCallback(async (batch: ImportBatch) => {
     await call('/v1/memory/delete', '删除', { targets: [{ id: batch.archiveId, version: batch.archiveVersion, kind: 'source' }], include_sources: true })
     setItems((prev) => prev?.filter((b) => b.id !== batch.id))
     reload()
   }, [reload])
 
-  return { items, problem, reload, pause, resume, remove }
+  return { items, problem, reload, pause, resume, organize, remove }
 }

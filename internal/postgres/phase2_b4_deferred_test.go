@@ -252,10 +252,17 @@ func TestPhase2B4_I19_HeldImportPausesResumesAndDeletesItsClosure(t *testing.T) 
 	p := b4ParseAsync(t, s, scope, archive)
 	b4Partial(t, s, scope, id, 10)
 	paused := b4ImportAction(t, s, scope, id, "pause")
-	p.await(t, false)
+	p.awaitPaused(t)
 	stable := b4OrganizingHeld(t, s, scope, id, true)
-	if stable.State != "paused" || stable.Stored > paused.Stored+1 {
+	if stable.State != "paused" || stable.Stored > paused.Stored+1 || stable.Organized != 0 {
 		t.Errorf("held import did not pause after current chunk: %+v", stable)
+	}
+	for range 10 {
+		now := b4OrganizingHeld(t, s, scope, id, true)
+		if now.State != "paused" || now.Stored != stable.Stored || now.Organized != stable.Organized {
+			t.Fatalf("paused held import continued storing or organizing: %+v -> %+v", stable, now)
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 	b4ImportAction(t, s, scope, id, "resume")
 	b4OrganizingHeld(t, s, scope, id, true)
@@ -264,6 +271,7 @@ func TestPhase2B4_I19_HeldImportPausesResumesAndDeletesItsClosure(t *testing.T) 
 		t.Errorf("resuming changed hold or lost originals: %+v", done)
 	}
 	b4OrganizingHeld(t, s, scope, id, true)
+	b4MessagesExactlyOnce(t, s, scope, conv)
 	if len(f.all()) != 0 {
 		t.Error("pause/resume caused model extraction")
 	}

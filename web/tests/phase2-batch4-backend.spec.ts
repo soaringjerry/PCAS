@@ -36,7 +36,7 @@ test('W4 真实后端：历史导入、暂停、继续至完成，在资料库�
   expect(await preview.json()).toMatchObject({ conversations: count, messages: count, fromUser: count, alreadyImported: 0, leftOut: 0, blocked: 0 })
   await expect(page.getByText(/2[,]?000/).first()).toBeVisible()
   const importResponse = page.waitForResponse(r => new URL(r.url()).pathname === '/v1/connectors/archive' && r.request().method() === 'POST')
-  await page.getByRole('button', { name: /确认导入|开始导入|^确认$/ }).click()
+  await page.getByRole('button', { name: /确认导入|开始导入|^确认$|^导入\s*\d+\s*条$/ }).click()
   const imported = await importResponse
   expect(imported.ok(), await imported.text()).toBeTruthy()
   const result: { batchId: string } = await imported.json()

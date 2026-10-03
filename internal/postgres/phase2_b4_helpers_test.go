@@ -91,7 +91,7 @@ type b4Auth struct {
 
 func (a b4Auth) Authenticate(*http.Request) (memory.Scope, bool) { return a.scope, a.authenticated }
 func b4API(s *Store, scope memory.Scope, authenticated bool) http.Handler {
-	return httpapi.New(s, s, b4Auth{scope, authenticated}, func(context.Context) error { return nil }, slog.New(slog.NewTextHandler(io.Discard, nil)), httpapi.Options{Workspace: s, Connectors: s, Attachments: s})
+	return httpapi.New(s, s, b4Auth{scope, authenticated}, func(context.Context) error { return nil }, slog.New(slog.NewTextHandler(io.Discard, nil)), httpapi.Options{Workspace: s, Connectors: s, Attachments: s, Editor: s})
 }
 func b4HTTP(t *testing.T, s *Store, scope memory.Scope, method, path string, body any) *httptest.ResponseRecorder {
 	t.Helper()
@@ -556,9 +556,9 @@ func b4ImportItemFor(t *testing.T, s *Store, scope memory.Scope, id string) b4Im
 	t.Fatalf("batch %s absent from imports", id)
 	return b4ImportItem{}
 }
-func b4ImportFile(t *testing.T, s *Store, scope memory.Scope, name string, data []byte) (string, memory.Ref) {
+func b4ImportFile(t *testing.T, s *Store, scope memory.Scope, name string, data []byte, fields ...map[string]string) (string, memory.Ref) {
 	t.Helper()
-	w := b4Upload(t, b4API(s, scope, true), "/v1/connectors/archive", name, data)
+	w := b4Upload(t, b4API(s, scope, true), "/v1/connectors/archive", name, data, fields...)
 	b4OK(t, w)
 	var result struct{ BatchID string }
 	b4JSON(t, w.Body.Bytes(), &result)
@@ -630,10 +630,23 @@ func b4ParseAsync(t *testing.T, s *Store, scope memory.Scope, archive memory.Ref
 // each scenario, rather than silently retried or replaced by another run.
 func (p *b4Parsing) await(t *testing.T, allowCancelled bool) {
 	t.Helper()
+	p.awaitResult(t, allowCancelled, false)
+}
+
+// Section 13 permits lease revocation only as a paused parser's control return.
+func (p *b4Parsing) awaitPaused(t *testing.T) {
+	t.Helper()
+	p.awaitResult(t, false, true)
+}
+
+func (p *b4Parsing) awaitResult(t *testing.T, allowCancelled, allowLeaseLost bool) {
+	t.Helper()
 	select {
 	case err := <-p.done:
 		p.done <- err
-		if err != nil && !(allowCancelled && (errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded))) {
+		cancelled := allowCancelled && (errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded))
+		paused := allowLeaseLost && errors.Is(err, worker.ErrLeaseLost)
+		if err != nil && !cancelled && !paused {
 			t.Fatal("background parse", err)
 		}
 	case <-time.After(60 * time.Second):

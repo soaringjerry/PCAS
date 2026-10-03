@@ -92,7 +92,12 @@ async function noOverflow(page: Page) {
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy()
 }
 async function noInternals(page: Page) {
-  const visible = await page.locator('body').innerText()
+  // Section 13 scopes the check to importing, including its preview dialog.
+  const importArea = page.locator('#settings-material .set-block').filter({ has: page.getByText('导入聊天记录', { exact: true }) })
+  await expect(importArea).toBeVisible()
+  let visible = await importArea.innerText()
+  const dialog = page.getByRole('dialog')
+  if (await dialog.count()) visible += `\n${await dialog.innerText()}`
   for (const word of gold.browser.forbiddenTerms as string[]) expect(visible).not.toContain(word)
 }
 test.use({ viewport: { width: 390, height: 844 }, timezoneId: 'Asia/Shanghai' })
@@ -134,7 +139,7 @@ test('W1 文件选择先预览：数量、时间、已导过和放不下；确�
   await noOverflow(page)
   await noInternals(page)
   const response = page.waitForResponse(r => new URL(r.url()).pathname === '/v1/connectors/archive' && r.request().method() === 'POST')
-  await page.getByRole('button', { name: /确认导入|开始导入|^确认$/ }).click()
+  await page.getByRole('button', { name: /确认导入|开始导入|^确认$|^导入\s*\d+\s*条$/ }).click()
   expect((await response).ok()).toBeTruthy()
   expect(m.requests.filter(r => r.path === '/v1/connectors/archive' && r.method === 'POST')).toHaveLength(1)
   expect(m.errors).toEqual([])

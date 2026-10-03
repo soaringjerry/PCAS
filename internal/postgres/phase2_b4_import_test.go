@@ -139,14 +139,14 @@ func TestPhase2B4_I3_PauseStopsStorageAndExtractionButNotOrdinarySource(t *testi
 	f := b4Model(t, s)
 	b4SmallChunks(t, 1)
 	conversations := b4Conversations(t, "pause", 2000)
-	id, archive := b4ImportFile(t, s, scope, "pause.zip", b4Zip(t, b4Export(conversations), false))
+	id, archive := b4ImportFile(t, s, scope, "pause.zip", b4Zip(t, b4Export(conversations), false), map[string]string{"organize": "now"})
 	p := b4ParseAsync(t, s, scope, archive)
 	partial := b4Partial(t, s, scope, id, 10)
 	paused := b4ImportAction(t, s, scope, id, "pause")
 	if paused.State != "paused" {
 		t.Fatalf("pause state %+v", paused)
 	}
-	p.await(t, false)
+	p.awaitPaused(t)
 	stable := b4ImportItemFor(t, s, scope, id)
 	if stable.Stored < partial.Stored || stable.Stored > paused.Stored+1 {
 		t.Errorf("pause stored beyond current small batch: pause=%d after=%d", paused.Stored, stable.Stored)
@@ -163,10 +163,13 @@ func TestPhase2B4_I3_PauseStopsStorageAndExtractionButNotOrdinarySource(t *testi
 	})
 	for _, request := range f.all() {
 		b1Absent(t, request.Prompt, "合成成都历史消息")
+		for _, conversation := range conversations {
+			b1Absent(t, request.Prompt, conversation.Messages[0].Text)
+		}
 	}
 	for range 10 {
 		now := b4ImportItemFor(t, s, scope, id)
-		if now.State != "paused" || now.Stored != stable.Stored {
+		if now.State != "paused" || now.Stored != stable.Stored || now.Organized != stable.Organized {
 			t.Fatalf("paused batch continued storing %+v", now)
 		}
 		time.Sleep(10 * time.Millisecond)
@@ -397,8 +400,8 @@ func TestPhase2B4_I12_ConcurrentImportsPauseOnlyOneBatch(t *testing.T) {
 	s, scope := b4Store(t), owner()
 	b4SmallChunks(t, 1)
 	first, second := b4Conversations(t, "concurrent-a", 2000), b4Conversations(t, "concurrent-b", 2000)
-	idA, archiveA := b4ImportFile(t, s, scope, "first.zip", b4Zip(t, b4Export(first), false))
-	idB, archiveB := b4ImportFile(t, s, scope, "second.zip", b4Zip(t, b4Export(second), false))
+	idA, archiveA := b4ImportFile(t, s, scope, "first.zip", b4Zip(t, b4Export(first), false), map[string]string{"organize": "now"})
+	idB, archiveB := b4ImportFile(t, s, scope, "second.zip", b4Zip(t, b4Export(second), false), map[string]string{"organize": "now"})
 	a, b := b4ParseAsync(t, s, scope, archiveA), b4ParseAsync(t, s, scope, archiveB)
 	b4Partial(t, s, scope, idA, 10)
 	b4Partial(t, s, scope, idB, 10)
@@ -406,14 +409,17 @@ func TestPhase2B4_I12_ConcurrentImportsPauseOnlyOneBatch(t *testing.T) {
 	if paused.State != "paused" {
 		t.Fatal(paused)
 	}
-	a.await(t, false)
+	a.awaitPaused(t)
 	stable := b4ImportItemFor(t, s, scope, idA)
+	if stable.Stored > paused.Stored+1 {
+		t.Errorf("paused concurrent batch stored beyond its current small batch: %+v -> %+v", paused, stable)
+	}
 	b.await(t, false)
 	done := b4ImportItemFor(t, s, scope, idB)
 	if done.State != "done" || done.Total != 2000 || done.Stored != 2000 {
 		t.Errorf("other concurrent import affected %+v", done)
 	}
-	if now := b4ImportItemFor(t, s, scope, idA); now.State != "paused" || now.Stored != stable.Stored {
+	if now := b4ImportItemFor(t, s, scope, idA); now.State != "paused" || now.Stored != stable.Stored || now.Organized != stable.Organized {
 		t.Errorf("paused batch changed while other finished: %+v -> %+v", stable, now)
 	}
 	b4MessagesExactlyOnce(t, s, scope, second)

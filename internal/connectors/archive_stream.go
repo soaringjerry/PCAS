@@ -13,6 +13,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -21,6 +22,12 @@ import (
 var MaxUploadBytes int64 = 512 << 20
 var MaxArchiveBytes int64 = 512 << 20
 var MaxArchiveRecords = 200000
+
+var conversationFileName = regexp.MustCompile(`(?i)^conversations(?:[-_]\d+)?\.json$`)
+
+func isConversationFile(name string) bool {
+	return conversationFileName.MatchString(filepath.Base(strings.ReplaceAll(name, `\`, "/")))
+}
 
 // ArchiveError carries a fixed code and a user-facing recovery suggestion.
 // It never includes source text, paths or parser output.
@@ -216,7 +223,7 @@ func OpenArchive(ctx context.Context, name string, input io.Reader) (_ *Archive,
 				continue
 			}
 			ext := strings.ToLower(filepath.Ext(f.Name))
-			if filepath.Base(f.Name) != "conversations.json" && ext != ".txt" && ext != ".md" && ext != ".jsonl" && ext != ".ndjson" {
+			if !isConversationFile(f.Name) && ext != ".txt" && ext != ".md" && ext != ".jsonl" && ext != ".ndjson" {
 				a.Preview.Gaps = appendGap(a.Preview.Gaps, "已跳过归档中的非对话文件："+filepath.Base(f.Name))
 				continue
 			}

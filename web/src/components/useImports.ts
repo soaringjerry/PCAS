@@ -1,4 +1,4 @@
-import { conversationsOnly, type Slimmed } from '../domain/zipSlim'
+import { conversationsOnly, isConversationFile, type Slimmed } from '../domain/zipSlim'
 import { useCallback, useEffect, useState } from 'react'
 
 // Bringing a chat history in: what the file holds (nothing stored yet), then
@@ -65,7 +65,7 @@ export class ImportProblem extends Error {
 }
 
 /** A ChatGPT export is a zip; some people unpack it and pick the conversations file. Anything else is imported as before. */
-export const isChatExport = (file: File) => /\.zip$/i.test(file.name) || file.type === 'application/zip' || file.name.toLowerCase() === 'conversations.json'
+export const isChatExport = (file: File) => /\.zip$/i.test(file.name) || file.type === 'application/zip' || isConversationFile(file.name)
 
 const parse = (text: string): Record<string, unknown> => {
   try {
@@ -148,7 +148,7 @@ async function sendPieces(file: File, doing: string, onProgress: (sent: number, 
  * goes up in pieces once and is then read or imported from what the server has.
  */
 export async function sendArchive<T>(path: string, picked: File, doing: string, onProgress: (sent: number, total: number) => void, signal?: AbortSignal, fields?: Record<string, string>): Promise<T> {
-  // A chat export zip is mostly images and audio; only its conversations file is sent.
+  // A chat export zip is mostly media; send only its conversation JSON files.
   let slim = slimmed.get(picked)
   if (!slim) { slim = conversationsOnly(picked); slimmed.set(picked, slim) }
   const { file, whole } = await slim

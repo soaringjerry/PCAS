@@ -40,6 +40,8 @@ PCAS 的所有文档都从这一页找。新增或移动文档时，同时改这
 | [M1 秘书看得见图片](tasks/improvements/M1-images-for-the-secretary.md) | 待做：模型看图、发给秘书的图片当成说的话、网页输入框带附件（2026-10-03 用户提出） |
 | [M1 image acceptance expectations](tasks/improvements/M1-images-expectations.md) | V1–V10 expectations written before implementation; synthetic fixtures only |
 | [M1 image validation](evaluations/2026-10-03-m1-images.md) | Rule coverage, Codex protocol evidence and synthetic desktop/mobile screenshots |
+| [R1 检查报告里的九个问题](tasks/improvements/R1-review-1003-fixes.md) | 2026-10-03 独立检查发现的问题：已修的四条、交给执行者的四条规则、没改的一条 |
+| [P1 资料多了以后，秘书回话不能变慢](tasks/improvements/P1-recall-speed.md) | 待做，最优先：导入 2.7 万条后秘书回一句话要 46 秒，原因和要求（2026-10-03） |
 
 **要部署、接模型、接数据**
 

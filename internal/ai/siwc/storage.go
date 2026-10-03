@@ -14,24 +14,27 @@ import (
 const UsageURL = "https://chatgpt.com/settings/usage"
 
 type Account struct {
-	ClientID              string    `json:"client_id"`
-	Subject               string    `json:"subject"`
-	Issuer                string    `json:"issuer"`
-	Email                 string    `json:"email,omitempty"`
-	Scopes                []string  `json:"scopes"`
-	AccessToken           string    `json:"access_token,omitempty"`
-	RefreshToken          string    `json:"refresh_token,omitempty"`
-	IDToken               string    `json:"id_token,omitempty"`
-	ExpiresAt             time.Time `json:"expires_at"`
-	EarliestRefreshAt     int64     `json:"earliest_refresh_at,omitempty"`
-	Session               string    `json:"session,omitempty"`
-	Model                 string    `json:"model,omitempty"`
-	Paused                bool      `json:"paused,omitempty"`
-	Generated             bool      `json:"generated,omitempty"`
-	Refreshed             bool      `json:"refreshed,omitempty"`
-	GeneratedAfterRefresh bool      `json:"generated_after_refresh,omitempty"`
-	Verified              bool      `json:"verified,omitempty"`
-	Default               bool      `json:"default_initialized,omitempty"`
+	ClientID          string    `json:"client_id"`
+	Subject           string    `json:"subject"`
+	Issuer            string    `json:"issuer"`
+	Email             string    `json:"email,omitempty"`
+	Scopes            []string  `json:"scopes"`
+	AccessToken       string    `json:"access_token,omitempty"`
+	RefreshToken      string    `json:"refresh_token,omitempty"`
+	IDToken           string    `json:"id_token,omitempty"`
+	ExpiresAt         time.Time `json:"expires_at"`
+	EarliestRefreshAt int64     `json:"earliest_refresh_at,omitempty"`
+	Session           string    `json:"session,omitempty"`
+	Model             string    `json:"model,omitempty"`
+	// ModelManual: the owner typed Model in; it is used without the catalog,
+	// which can omit models the account is nevertheless able to run.
+	ModelManual           bool `json:"model_manual,omitempty"`
+	Paused                bool `json:"paused,omitempty"`
+	Generated             bool `json:"generated,omitempty"`
+	Refreshed             bool `json:"refreshed,omitempty"`
+	GeneratedAfterRefresh bool `json:"generated_after_refresh,omitempty"`
+	Verified              bool `json:"verified,omitempty"`
+	Default               bool `json:"default_initialized,omitempty"`
 }
 
 func (a Account) PlanEnabled() bool {

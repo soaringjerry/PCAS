@@ -55,24 +55,28 @@ func (m *Manager) Generate(ctx context.Context, model, instructions, prompt stri
 	if err != nil {
 		return Result{}, err
 	}
-	models, err := m.models(ctx, a)
-	if err != nil {
-		return Result{}, err
-	}
 	if model == "" {
 		model = a.Model
 	}
-	if model == "" && len(models) > 0 {
-		model = models[0].Slug
-	}
-	found := false
-	for _, entry := range models {
-		if entry.Slug == model {
-			found = true
+	// A model the owner typed in is sent as is: the catalog may not list every
+	// model the account can run, and the provider rejects one it cannot.
+	if !(a.ModelManual && model != "" && model == a.Model) {
+		models, err := m.models(ctx, a)
+		if err != nil {
+			return Result{}, err
 		}
-	}
-	if !found {
-		return Result{}, &ProviderError{Status: 400, Code: "subscription_sharing_unsupported_capability", Param: "model"}
+		if model == "" && len(models) > 0 {
+			model = models[0].Slug
+		}
+		found := false
+		for _, entry := range models {
+			if entry.Slug == model {
+				found = true
+			}
+		}
+		if !found {
+			return Result{}, &ProviderError{Status: 400, Code: "subscription_sharing_unsupported_capability", Param: "model"}
+		}
 	}
 	body, _ := json.Marshal(map[string]any{"model": model, "instructions": instructions, "input": []any{map[string]string{"role": "user", "content": prompt}}, "store": false, "stream": true})
 	req, err := http.NewRequestWithContext(ctx, "POST", m.api+"/responses", bytes.NewReader(body))

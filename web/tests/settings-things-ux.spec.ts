@@ -715,6 +715,35 @@ test('a ChatGPT sign-in waiting on a remote server is finished by pasting the ad
   expect(m.errors).toEqual([])
 })
 
+test('a ChatGPT model missing from the list can be typed in, and an unreadable list does not block the page', async ({ page }) => {
+  const m = await mock(page, workspace(), { chatgpt: true })
+  let model = ''
+  await page.route((url) => url.pathname === '/v1/chatgpt/direct/account', (route) => route.fulfill({
+    json: { accounts: [{ client_id: 'oaiapp_test', email: 'me@example.test', connected: true, plan_enabled: true, verified: false, paused: false, model, model_manual: model !== '' }], active_client_id: 'oaiapp_test', pending: false, default_ready: false },
+  }))
+  await page.route((url) => url.pathname === '/v1/chatgpt/direct/models', (route) => route.fulfill({ status: 502, json: { error: 'chatgpt_provider_error', message: '模型列表暂时读不到' } }))
+  await page.route((url) => url.pathname === '/v1/chatgpt/direct/select', (route) => {
+    const body = route.request().postDataJSON()
+    m.posts.push({ path: '/v1/chatgpt/direct/select', method: 'POST', body })
+    model = body.model
+    return route.fulfill({ json: { selected: true } })
+  })
+  await page.goto('/settings')
+  await page.getByRole('button', { name: /ChatGPT 订阅（官方授权）/ }).click()
+  await expect(page.getByText('已连接 me@example.test').first()).toBeVisible()
+  const name = page.getByRole('textbox', { name: '手动填写模型名' })
+  const use = page.getByRole('button', { name: '用这个模型' })
+  await expect(use).toBeDisabled()
+  await name.fill('bad name')
+  await expect(use).toBeDisabled()
+  await name.fill(' gpt-6.1-sol ')
+  await use.click()
+  await expect(page.getByText('现在用的是手动填写的 gpt-6.1-sol。')).toBeVisible()
+  expect(m.posts.filter((p) => p.path === '/v1/chatgpt/direct/select')).toEqual([{ path: '/v1/chatgpt/direct/select', method: 'POST', body: { client_id: 'oaiapp_test', model: 'gpt-6.1-sol', manual: true } }])
+  expect(m.errors).toEqual([])
+})
+
+
 /* ---------- 说了「尽快」的事（H1） ---------- */
 
 test('a to-do the user said cannot wait leads today\'s timeline until it is done or gets a time', async ({ page }) => {

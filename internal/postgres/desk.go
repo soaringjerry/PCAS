@@ -160,6 +160,15 @@ func (s *Store) AnswerDesk(ctx context.Context, scope memory.Scope, agentID, que
 	if err != nil {
 		return out, fmt.Errorf("%w: %w", memory.ErrUnavailable, err)
 	}
+	turnID := string(memory.NewID())
+	if err := s.recordUsage(ctx, modelUsage{
+		OwnerID: scope.OwnerID, ID: memory.NewID(), At: time.Now().UTC(),
+		Purpose: "answer", AgentID: agent.ID, Model: p.Model,
+		InputTokens: result.InputTokens, OutputTokens: result.OutputTokens, Cost: result.Cost,
+		TurnID: turnID, MemoryRefs: dependencies,
+	}); err != nil {
+		return out, err
+	}
 	if err := checkContext(); err != nil {
 		return out, err
 	}
@@ -174,7 +183,7 @@ func (s *Store) AnswerDesk(ctx context.Context, scope memory.Scope, agentID, que
 		// A model that ignored the format still answered; show it without sources.
 		reply.Answer, reply.Used, reply.Links = strings.TrimSpace(result.Text), nil, nil
 	}
-	out = workspace.DeskAnswer{Answer: strings.TrimSpace(reply.Answer), Agent: agent.Name, Used: []workspace.DeskSource{}, Searches: []string{}, Links: []string{}}
+	out = workspace.DeskAnswer{ID: turnID, Answer: strings.TrimSpace(reply.Answer), Agent: agent.Name, Used: []workspace.DeskSource{}, Searches: []string{}, Links: []string{}}
 	if len(result.Searches) > 0 {
 		out.Searches = result.Searches[:min(len(result.Searches), 5)]
 	}
@@ -192,20 +201,11 @@ func (s *Store) AnswerDesk(ctx context.Context, scope memory.Scope, agentID, que
 			delete(sent, id)
 		}
 	}
-	out.ID = string(memory.NewID())
 	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(scope.OwnerID)); err != nil {
 			return err
 		}
 		if err := verifyRunTx(ctx, tx, scope, workspace.Run{AgentID: agent.ID, ContextVersions: dependencies}); err != nil {
-			return err
-		}
-		if err := recordUsageTx(ctx, tx, modelUsage{
-			OwnerID: scope.OwnerID, ID: memory.NewID(), At: time.Now().UTC(),
-			Purpose: "answer", AgentID: agent.ID, Model: p.Model,
-			InputTokens: result.InputTokens, OutputTokens: result.OutputTokens, Cost: result.Cost,
-			TurnID: out.ID, MemoryRefs: dependencies,
-		}); err != nil {
 			return err
 		}
 		_, err := tx.Exec(ctx, "INSERT INTO desk_turns(owner_id,id,agent_id,question,answer,dependencies) VALUES($1,$2,$3,$4,$5,$6)", string(scope.OwnerID), out.ID, agent.ID, question, out.Answer, asJSON(dependencies))

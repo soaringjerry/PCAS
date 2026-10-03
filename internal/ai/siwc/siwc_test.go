@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -20,6 +21,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/soaringjerry/PCAS/internal/memory"
 )
 
 type fixture struct {
@@ -284,6 +286,42 @@ func TestCallbackChecksAndKeepsActiveAccount(t *testing.T) {
 				t.Fatal("unvalidated callback exchanged code")
 			}
 		})
+	}
+}
+func TestCompleteFromPastedCallbackAddress(t *testing.T) {
+	f, m := newFixture(t)
+	if err := m.Complete(context.Background(), "http://127.0.0.1:1455/auth/callback?state=x&code=y"); !errors.Is(err, memory.ErrNotFound) {
+		t.Fatalf("no pending sign-in: %v", err)
+	}
+	_, q := begin(t, f, m, "")
+	good := q.Get("redirect_uri") + "?" + url.Values{"state": {q.Get("state")}, "code": {"test-code"}, "client_id": {"oaiapp_registration"}}.Encode()
+	for name, bad := range map[string]string{
+		"state":  q.Get("redirect_uri") + "?state=wrong&code=test-code&client_id=oaiapp_registration",
+		"host":   strings.Replace(good, "127.0.0.1", "attacker.invalid", 1),
+		"scheme": strings.Replace(good, "http://", "https://", 1),
+		"path":   strings.Replace(good, "/auth/callback", "/other", 1),
+		"user":   strings.Replace(good, "http://", "http://u@", 1),
+		"text":   "not an address",
+	} {
+		if err := m.Complete(context.Background(), bad); !errors.Is(err, memory.ErrInvalid) {
+			t.Fatalf("%s: %v", name, err)
+		}
+	}
+	// A mistyped address must leave the attempt usable.
+	if err := m.Complete(context.Background(), "  "+good+"\n"); err != nil {
+		t.Fatal(err)
+	}
+	status, err := m.Status(context.Background())
+	if err != nil || status.Pending || len(status.Accounts) != 1 || !status.Accounts[0].Connected {
+		t.Fatalf("not connected: %+v %v", status, err)
+	}
+	if err := m.Complete(context.Background(), good); !errors.Is(err, memory.ErrNotFound) {
+		t.Fatalf("address reused: %v", err)
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.exchanges != 1 {
+		t.Fatalf("exchanges = %d", f.exchanges)
 	}
 }
 func TestIdentityValidation(t *testing.T) {

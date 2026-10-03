@@ -100,6 +100,7 @@ function DirectConnection() {
   const [status, setStatus] = useState<DirectStatus | null>(null)
   const [models, setModels] = useState<DirectModel[]>([])
   const [authorization, setAuthorization] = useState('')
+  const [pasted, setPasted] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
@@ -115,7 +116,7 @@ function DirectConnection() {
       if (selected?.plan_enabled && !selected.paused) {
         setModels((await api<{ models: DirectModel[] }>('/v1/chatgpt/direct/models')).models)
       } else setModels([])
-      if (!next.pending) setAuthorization('')
+      if (!next.pending) { setAuthorization(''); setPasted('') }
     } catch (e) { setError(e instanceof Error ? e.message : '连接失败') }
   }, [])
   // Account state is hydrated only after awaiting the external service.
@@ -181,8 +182,19 @@ function DirectConnection() {
         if (!result.remote_revocation_confirmed) setNotice('已清除本地凭据，远端撤销未确认。请到 ChatGPT 设置中断开 PCAS。')
       })}>退出并撤销授权</Button>}
     </div>
-    {authorization && status?.pending && <p role="status">请在本机浏览器完成授权。<a href={authorization} target="_blank" rel="noreferrer">打开授权页面</a></p>}
-    <p className="tiny muted">本机 Docker 可直接登录；个人远程 Docker／VM 请在浏览器所在本机授权，再通过 SSH 转移受保护凭据，按部署文档操作。</p>
+    {status?.pending && <div className="stack-sm" role="status">
+      <p>请在弹出的页面完成授权。{authorization && <a href={authorization} target="_blank" rel="noreferrer">重新打开授权页面</a>}</p>
+      <p className="small muted">授权后浏览器会跳到一个以 http://127.0.0.1 开头、显示「无法访问」的页面，这是正常的。把地址栏里的完整地址复制过来，粘贴到下面。</p>
+      <div className="row-nowrap">
+        <input className="input" aria-label="授权后的浏览器地址" placeholder="http://127.0.0.1:1455/auth/callback?code=…" value={pasted}
+          onChange={e => setPasted(e.target.value)} autoComplete="off" spellCheck={false} style={{ flex: 1, minWidth: 0 }} />
+        <Button variant="primary" disabled={busy || !pasted.trim()} onClick={() => void action(async () => {
+          await api('/v1/chatgpt/direct/callback', { url: pasted.trim() })
+          setPasted('')
+        })}>完成登录</Button>
+      </div>
+    </div>}
+    <p className="tiny muted">这个地址只能用一次，十分钟内有效。PCAS 和浏览器在同一台电脑上时会自动完成，不用粘贴。</p>
     {failed && <p className="form-error" role="alert"><CircleAlert size={14} />{failed}</p>}
     {notice && <p className="callout" role="status">{notice}</p>}
   </div></Fold>

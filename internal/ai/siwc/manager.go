@@ -32,6 +32,7 @@ type Manager struct {
 }
 type attempt struct {
 	state, nonce, verifier, redirect, client, subject string
+	token                                             string
 	expires                                           time.Time
 	server                                            *http.Server
 	used                                              bool
@@ -175,7 +176,7 @@ func (m *Manager) Begin(ctx context.Context, clientID string, consent, includeHi
 		return Login{}, fmt.Errorf("ChatGPT callback port is unavailable; use local authorization helper")
 	}
 	port := listener.Addr().(*net.TCPAddr).Port
-	a := &attempt{state: randomValue(), nonce: randomValue(), verifier: randomValue(), redirect: fmt.Sprintf("http://127.0.0.1:%d/auth/callback", port), client: selected.ClientID, subject: selected.Subject, expires: time.Now().Add(10 * time.Minute)}
+	a := &attempt{state: randomValue(), nonce: randomValue(), verifier: randomValue(), redirect: fmt.Sprintf("http://127.0.0.1:%d/auth/callback", port), client: selected.ClientID, subject: selected.Subject, token: d.Token, expires: time.Now().Add(10 * time.Minute)}
 	challenge := sha256.Sum256([]byte(a.verifier))
 	client := a.client
 	if client == "" {
@@ -331,6 +332,47 @@ func (m *Manager) callback(w http.ResponseWriter, r *http.Request, a *attempt, t
 	}
 	fmt.Fprintln(w, "PCAS: ChatGPT connected. You may close this window and return to PCAS.")
 }
+
+// Complete finishes the pending sign-in from a callback address the owner copied
+// out of a browser that cannot reach this host's loopback port. A wrong or stale
+// address is rejected without consuming the attempt, so the owner can paste again.
+func (m *Manager) Complete(ctx context.Context, raw string) error {
+	raw = strings.TrimSpace(raw)
+	u, err := url.Parse(raw)
+	if err != nil || len(raw) > 8<<10 {
+		return memory.ErrInvalid
+	}
+	m.mu.Lock()
+	a := m.pending
+	m.mu.Unlock()
+	if a == nil {
+		return memory.ErrNotFound
+	}
+	want, _ := url.Parse(a.redirect)
+	q := u.Query()
+	if u.Scheme != want.Scheme || u.Host != want.Host || u.Path != want.Path || u.User != nil || len(q["state"]) != 1 || subtle.ConstantTimeCompare([]byte(q.Get("state")), []byte(a.state)) != 1 {
+		return memory.ErrInvalid
+	}
+	r, err := http.NewRequestWithContext(ctx, "GET", u.String(), nil)
+	if err != nil {
+		return memory.ErrInvalid
+	}
+	w := &pastedResponse{header: http.Header{}, status: 200}
+	m.callback(w, r, a, a.token)
+	if w.status != 200 {
+		return fmt.Errorf("ChatGPT sign-in was not completed")
+	}
+	return nil
+}
+
+type pastedResponse struct {
+	header http.Header
+	status int
+}
+
+func (p *pastedResponse) Header() http.Header         { return p.header }
+func (p *pastedResponse) Write(b []byte) (int, error) { return len(b), nil }
+func (p *pastedResponse) WriteHeader(status int)      { p.status = status }
 func (m *Manager) Close() {
 	m.mu.Lock()
 	defer m.mu.Unlock()

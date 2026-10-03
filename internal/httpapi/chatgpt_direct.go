@@ -7,7 +7,7 @@ import (
 )
 
 func (s *Server) directChatGPTRoutes(mux *http.ServeMux) {
-	for _, route := range []string{"GET /v1/chatgpt/direct/account", "POST /v1/chatgpt/direct/login", "POST /v1/chatgpt/direct/select", "POST /v1/chatgpt/direct/logout", "POST /v1/chatgpt/direct/refresh", "GET /v1/chatgpt/direct/models"} {
+	for _, route := range []string{"GET /v1/chatgpt/direct/account", "POST /v1/chatgpt/direct/login", "POST /v1/chatgpt/direct/callback", "POST /v1/chatgpt/direct/select", "POST /v1/chatgpt/direct/logout", "POST /v1/chatgpt/direct/refresh", "GET /v1/chatgpt/direct/models"} {
 		mux.HandleFunc(route, s.authorize(s.directChatGPT))
 	}
 }
@@ -26,6 +26,7 @@ func (s *Server) directChatGPT(w http.ResponseWriter, r *http.Request, scope mem
 		Consent  bool   `json:"consent"`
 		Model    string `json:"model"`
 		Resume   bool   `json:"resume"`
+		URL      string `json:"url"`
 	}
 	if r.Method == "POST" && !decode(w, r, &in) {
 		return
@@ -45,6 +46,14 @@ func (s *Server) directChatGPT(w http.ResponseWriter, r *http.Request, scope mem
 			return
 		}
 		writeJSON(w, 200, out)
+	case "/v1/chatgpt/direct/callback":
+		// The owner's browser could not reach this host's loopback callback, so
+		// the owner pastes the address it ended on.
+		if err := m.Complete(r.Context(), in.URL); err != nil {
+			s.fail(w, err)
+			return
+		}
+		writeJSON(w, 200, map[string]bool{"connected": true})
 	case "/v1/chatgpt/direct/select":
 		if in.Model != "" {
 			// Model changes apply only to the active registration, and must come

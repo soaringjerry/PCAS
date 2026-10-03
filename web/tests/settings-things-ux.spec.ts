@@ -937,3 +937,24 @@ test('a stale result asks to be redone only while its thing is open and it is th
   await expect(page.getByText('「列提纲」用到的记忆后来改过，要重做')).toBeVisible()
   await expect(page.getByText('「今天天气怎么样」用到的记忆后来改过，要重做')).toHaveCount(0)
 })
+
+/* ---------- 文档：保存失败不丢字 ---------- */
+
+test('a document keeps what was typed when saving fails, and can be saved again', async ({ page }) => {
+  const m = await mock(page, workspace({ docs: [{ id: 'doc', thingId: 'task', title: '方案', body: '旧正文', by: 'user', createdAt: at, updatedAt: at }] as State['docs'] }))
+  m.refuse.add('updateDoc')
+  await page.goto('/t/task')
+  await page.getByRole('button', { name: /方案/ }).first().click()
+  await page.getByRole('textbox', { name: '方案 的内容' }).click()
+  const editor = page.locator('textarea.doc-editor')
+  await editor.fill('刚写的新正文，不能丢')
+  await editor.blur()
+  // The save was refused: the editor stays open with the text, and says so.
+  await expect(page.getByRole('alert').filter({ hasText: '没保存上' })).toBeVisible()
+  await expect(editor).toHaveValue('刚写的新正文，不能丢')
+  m.refuse.delete('updateDoc')
+  await page.getByRole('button', { name: '再保存一次' }).click()
+  await expect(page.getByRole('alert').filter({ hasText: '没保存上' })).toHaveCount(0)
+  expect(m.commands.filter((c) => c.type === 'updateDoc').at(-1)).toMatchObject({ patch: { body: '刚写的新正文，不能丢' } })
+
+})

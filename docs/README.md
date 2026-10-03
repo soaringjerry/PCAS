@@ -38,6 +38,7 @@ PCAS 的所有文档都从这一页找。新增或移动文档时，同时改这
 | [T1 Telegram 里的回复不再缺斤少两](tasks/improvements/T1-telegram-replies.md) | 阶段之间的小改进：交办回执、链接、副手做完后把结果发回来（2026-10-03） |
 | [U1 归档上传：分片，压缩包只传对话文件](tasks/improvements/U1-archive-upload-in-pieces.md) | 阶段之间的小改进：上传失败的原因、分片规则、只取对话文件、图片不解析的决定（2026-10-03） |
 | [M1 秘书看得见图片](tasks/improvements/M1-images-for-the-secretary.md) | 待做：模型看图、发给秘书的图片当成说的话、网页输入框带附件（2026-10-03 用户提出） |
+| [R1 检查报告里的九个问题](tasks/improvements/R1-review-1003-fixes.md) | 2026-10-03 独立检查发现的问题：已修的四条、交给执行者的四条规则、没改的一条 |
 
 **要部署、接模型、接数据**
 

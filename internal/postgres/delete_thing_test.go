@@ -63,3 +63,39 @@ func TestDeleteThingRemovesItAndWhatHangsOffIt(t *testing.T) {
 		t.Fatal("a non-owner deleted a to-do")
 	}
 }
+
+// A deleted item leaves nothing of its text behind: not in the snapshots undo
+// keeps, and not blocked by the training sample an adopted result produced.
+func TestDeleteThingAfterAdoptedResultLeavesNoCopies(t *testing.T) {
+	s, scope := testStore(t), owner()
+	ctx := context.Background()
+	autoAdoptModel(t, s, "- [ ] 独特步骤甲7731\n- [ ] 独特步骤乙7731", nil)
+	st := workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "独特标题7731"})
+	id := st.Tasks[0].ID
+	workspaceCommand(t, s, scope, workspace.Command{Type: "setNotes", ID: id, Text: "独特说明7731"})
+	workspaceCommand(t, s, scope, workspace.Command{Type: "setTaskStatus", ID: id, Status: "doing"})
+	workspaceCommand(t, s, scope, workspace.Command{Type: "requestRun", ThingID: id, AgentID: "auto-model", Kind: "breakdown", Prompt: "列步骤"})
+	if err := s.runAgentOnce(ctx); err != nil {
+		t.Fatal(err)
+	}
+	var samples int
+	if err := s.pool.QueryRow(ctx, `SELECT count(*) FROM training_samples t JOIN agent_runs r ON (r.owner_id,r.id)=(t.owner_id,t.run_id) WHERE r.owner_id=$1 AND r.thing_id=$2`, string(scope.OwnerID), id).Scan(&samples); err != nil || samples == 0 {
+		t.Fatalf("fixture: the adopted result produced no sample (%d, %v)", samples, err)
+	}
+	st = workspaceCommand(t, s, scope, workspace.Command{Type: "deleteThing", ID: id})
+	if len(st.Tasks) != 0 || len(st.Runs) != 0 || len(st.Samples) != 0 {
+		t.Fatalf("after delete: %d tasks, %d runs, %d samples", len(st.Tasks), len(st.Runs), len(st.Samples))
+	}
+	for table, query := range map[string]string{
+		"action_log":       `SELECT count(*) FROM action_log WHERE owner_id=$1 AND changes::text LIKE '%7731%'`,
+		"agent_runs":       `SELECT count(*) FROM agent_runs WHERE owner_id=$1 AND document::text LIKE '%7731%'`,
+		"training_samples": `SELECT count(*) FROM training_samples WHERE owner_id=$1 AND document::text LIKE '%7731%'`,
+		"work_items":       `SELECT count(*) FROM work_items WHERE owner_id=$1 AND document::text LIKE '%7731%'`,
+		"work_documents":   `SELECT count(*) FROM work_documents WHERE owner_id=$1 AND document::text LIKE '%7731%'`,
+	} {
+		var n int
+		if err := s.pool.QueryRow(ctx, query, string(scope.OwnerID)).Scan(&n); err != nil || n != 0 {
+			t.Errorf("%s still holds the deleted item's text: %d rows %v", table, n, err)
+		}
+	}
+}

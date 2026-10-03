@@ -42,3 +42,4 @@
   - `conversation_order_acceptance_test.go`：恢复出来的那句原话，原来按它自己的编号在 `sources` 里找，现在看「跟秘书说的话」这一张卡，仍然要求它没有被标成失败或处理中。
   - `phase2-batch4-backend.spec.ts`（W4）：原来在来源页直接点那条消息的卡片，现在先点这次导入的卡片，搜到那条消息再点开；仍然要求看到原文。
   - `phase2-batch1.spec.ts`、`usability-acceptance.spec.ts`、`timezone.spec.ts`：模拟数据里的来源补上 `kind` 和 `single`。
+  - `internal/telegram/integration_test.go`、`stabilization_secretary_test.go`：没配转写时语音原件要留着。原来用 `sources` 第一行的编号直接打开附件，现在先从「从 Telegram 发来的」这张卡里取到那一条再打开；仍然要求原件在、类型对。

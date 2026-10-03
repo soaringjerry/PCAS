@@ -93,7 +93,12 @@ func TestIntegrationUnconfiguredVoicePreservesOriginal(t *testing.T) {
 	if err != nil || len(st.Sources) != 1 {
 		t.Fatal("audio not retained", err)
 	}
-	f, _, media, err := s.OpenAttachment(context.Background(), p.scope, memory.ID(st.Sources[0].ID), 0)
+	// The library lists Telegram messages as one entry; the audio is one of its originals.
+	kept, err := s.SourceGroupItems(context.Background(), p.scope, st.Sources[0].ID, "", "", 10)
+	if err != nil || len(kept.Items) != 1 {
+		t.Fatal("audio original not listed", err)
+	}
+	f, _, media, err := s.OpenAttachment(context.Background(), p.scope, memory.ID(kept.Items[0].ID), 0)
 	if err != nil {
 		t.Fatal(err)
 	}

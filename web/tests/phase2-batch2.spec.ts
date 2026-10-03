@@ -54,12 +54,12 @@ async function card(page: Page, text: string) {
   const line = page.getByText(text, { exact: true })
   await expect(line).toBeVisible()
   // Existing card/list semantics only. No data-test hook is required of U2.
-  return line.locator('xpath=ancestor::*[self::article or self::li or contains(@class,"mem-row") or contains(@class,"memory-card") or contains(@class,"mem-card") or contains(concat(" ",normalize-space(@class)," ")," card ")][1]')
+  return line.locator('xpath=ancestor::*[self::article or self::li or contains(@class,"mem-row") or contains(@class,"mem-entry") or contains(@class,"memory-card") or contains(@class,"mem-card") or contains(concat(" ",normalize-space(@class)," ")," card ")][1]')
 }
 async function more(page: Page) {
   const button = page.getByRole('button', { name: /加载更多|查看更多|更多记忆|下一页/ })
   if (await button.count()) await button.click()
-  else { await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight)); await page.mouse.wheel(0, 1600) }
+  else { await page.getByText(/^合成浏览器记忆\d{3}$/, { exact: true }).last().scrollIntoViewIfNeeded(); await page.mouse.wheel(0, 1600) }
 }
 
 test.use({ timezoneId: 'Asia/Shanghai', viewport: { width: 390, height: 844 } })
@@ -91,15 +91,15 @@ test('U2 点人后仅保留提到他的记忆，清掉筛选后恢复；地点�
   await expect.poll(() => mock.queries.at(-1)?.searchParams.get('entity')).toBe('person-wang')
   await expect(page.getByText(wang.text, { exact: true })).toBeVisible()
   await expect(page.getByText(zhang.text, { exact: true })).toHaveCount(0)
-  await page.getByRole('button', { name: /清除筛选|清空筛选|全部记忆|所有记忆|全部/ }).first().click()
+  await page.getByRole('button', { name: /清掉筛选|清除筛选|清空筛选|全部记忆|所有记忆|全部/ }).first().click()
   await expect(page.getByText(zhang.text, { exact: true })).toBeVisible()
   await page.getByRole('button', { name: /成都/ }).first().click()
   await expect.poll(() => mock.queries.at(-1)?.searchParams.get('entity')).toBe('place-chengdu')
   await expect(page.getByText(zhang.text, { exact: true })).toHaveCount(0)
-  await page.getByRole('button', { name: /清除筛选|清空筛选|全部记忆|所有记忆|全部/ }).first().click()
+  await page.getByRole('button', { name: /清掉筛选|清除筛选|清空筛选|全部记忆|所有记忆|全部/ }).first().click()
   const nature = page.getByRole('combobox', { name: /性质/ })
   if (await nature.count()) await nature.selectOption('plan')
-  else await page.getByRole('button', { name: '计划', exact: true }).click()
+  else await page.getByRole('radio', { name: '计划', exact: true }).click()
   await expect.poll(() => mock.queries.at(-1)?.searchParams.get('nature')).toBe('plan')
   await expect(page.getByText(wang.text, { exact: true })).toBeVisible()
   await expect(page.getByText(zhang.text, { exact: true })).toHaveCount(0)

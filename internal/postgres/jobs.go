@@ -26,41 +26,17 @@ func (s *Store) Claim(ctx context.Context, lease time.Duration) (*worker.Job, er
 	// History preparation and conversation indexing must yield to fresh input
 	// too. Resolve archive membership at claim time so already queued jobs and
 	// follow-up stages receive the same priority without replaying an import.
-	err = s.pool.QueryRow(ctx, `WITH candidate AS (
-		SELECT j.id,r.kind,
-          CASE WHEN EXISTS(SELECT 1 FROM import_batches b WHERE b.owner_id=j.owner_id AND b.archive_id=j.record_id)
-            OR EXISTS(SELECT 1 FROM archive_entries ae WHERE ae.owner_id=j.owner_id AND ae.source_id=j.record_id AND ae.source_version=j.record_version)
-            OR EXISTS(SELECT 1 FROM episode_members em JOIN archive_entries ae
-              ON (ae.owner_id,ae.source_id,ae.source_version)=(em.owner_id,em.member_id,em.member_version)
-              WHERE em.owner_id=j.owner_id AND em.episode_id=j.record_id AND em.episode_version=j.record_version)
-          THEN greatest(j.priority,10) ELSE j.priority END AS dispatch_priority
-        FROM memory_jobs j JOIN memory_records r ON (r.owner_id,r.id)=(j.owner_id,j.record_id)
-		LEFT JOIN source_contexts own ON(own.owner_id,own.source_id,own.source_version)=(j.owner_id,j.record_id,j.record_version)
-		WHERE ((j.state='queued' AND j.available_at<=now()) OR (j.state='leased' AND j.lease_until<now() AND j.attempts<$3))
-        AND NOT EXISTS (SELECT 1 FROM archive_entries ae JOIN import_batches ib ON (ib.owner_id,ib.archive_id)=(ae.owner_id,ae.archive_id)
-            WHERE ae.owner_id=j.owner_id AND ae.source_id=j.record_id
-              AND (ib.state='paused' OR (ib.hold_organizing AND (j.stage='source.extract' OR j.stage LIKE 'source.extract:%'))))
-		-- A conversation must be fully stored before being organized. Pause/hold
-		-- applies to every message in it, including a segment anchored in another batch.
-		AND (j.stage NOT LIKE 'source.extract%' OR coalesce(own.conversation_key,'')='' OR NOT EXISTS (
-		 SELECT 1 FROM source_contexts sibling
-		 JOIN archive_entries ae ON(ae.owner_id,ae.source_id,ae.source_version)=(sibling.owner_id,sibling.source_id,sibling.source_version)
-		 JOIN import_batches ib ON(ib.owner_id,ib.archive_id)=(ae.owner_id,ae.archive_id)
-		 WHERE sibling.owner_id=own.owner_id AND sibling.conversation_key=own.conversation_key
-		 AND (ib.stored<>ib.total OR ib.state='paused' OR ib.hold_organizing)))
-		-- Per-message extraction jobs coalesce into a single sequential family.
-		-- Completed/failed segment identities deduplicate retries in enqueue;
-		-- a failed old manifest must not prevent processing a new source version.
-		AND (j.stage NOT LIKE 'source.extract%' OR j.stage LIKE 'source.extract:conversation:%' OR coalesce(own.conversation_key,'')='' OR NOT EXISTS (
-		 SELECT 1 FROM source_contexts sibling
-		 JOIN memory_jobs family ON(family.owner_id,family.record_id,family.record_version)=(sibling.owner_id,sibling.source_id,sibling.source_version)
-		 JOIN memory_records live ON(live.owner_id,live.id,live.version)=(family.owner_id,family.record_id,family.record_version) AND live.state='active'
-		 WHERE sibling.owner_id=own.owner_id AND sibling.conversation_key=own.conversation_key
-		 AND family.stage LIKE 'source.extract:conversation:%' AND family.state IN('queued','leased')))
-		ORDER BY dispatch_priority,j.available_at,j.created_at,j.id FOR UPDATE OF j SKIP LOCKED LIMIT 1
-	) UPDATE memory_jobs j SET priority=c.dispatch_priority,state='leased',attempts=j.attempts+1,lease_until=now()+$1*interval '1 second',lease_token=$2,updated_at=now()
-	FROM candidate c WHERE j.id=c.id RETURNING j.id::text,j.owner_id::text,j.record_id::text,j.record_version,j.stage,j.attempts,j.lease_token::text,c.kind`,
-		lease.Seconds(), string(memory.NewID()), maxAttempts).Scan(&id, &ownerID, &recordID, &job.Record.Version, &job.Stage, &job.Attempts, &token, &kind)
+	// Which job is next is decided among the first few hundred in queue order,
+	// which the index hands over at once; looking at every waiting job took
+	// seconds per claim with a large import queued. Only when all of those are
+	// held back (a paused or stored-only import) is the whole queue examined.
+	leaseToken := string(memory.NewID())
+	for _, query := range []string{claimWindowed, claimWhole} {
+		err = s.pool.QueryRow(ctx, query, lease.Seconds(), leaseToken, maxAttempts).Scan(&id, &ownerID, &recordID, &job.Record.Version, &job.Stage, &job.Attempts, &token, &kind)
+		if !errors.Is(err, pgx.ErrNoRows) {
+			break
+		}
+	}
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -238,3 +214,77 @@ func (s *Store) ProcessChunks(ctx context.Context, job worker.Job) error {
 		return nil
 	})
 }
+
+const claimWhole = `WITH candidate AS (
+		SELECT j.id,r.kind,
+          CASE WHEN EXISTS(SELECT 1 FROM import_batches b WHERE b.owner_id=j.owner_id AND b.archive_id=j.record_id)
+            OR EXISTS(SELECT 1 FROM archive_entries ae WHERE ae.owner_id=j.owner_id AND ae.source_id=j.record_id AND ae.source_version=j.record_version)
+            OR EXISTS(SELECT 1 FROM episode_members em JOIN archive_entries ae
+              ON (ae.owner_id,ae.source_id,ae.source_version)=(em.owner_id,em.member_id,em.member_version)
+              WHERE em.owner_id=j.owner_id AND em.episode_id=j.record_id AND em.episode_version=j.record_version)
+          THEN greatest(j.priority,10) ELSE j.priority END AS dispatch_priority
+        FROM memory_jobs j JOIN memory_records r ON (r.owner_id,r.id)=(j.owner_id,j.record_id)
+		LEFT JOIN source_contexts own ON(own.owner_id,own.source_id,own.source_version)=(j.owner_id,j.record_id,j.record_version)
+		WHERE ((j.state='queued' AND j.available_at<=now()) OR (j.state='leased' AND j.lease_until<now() AND j.attempts<$3))
+        AND NOT EXISTS (SELECT 1 FROM archive_entries ae JOIN import_batches ib ON (ib.owner_id,ib.archive_id)=(ae.owner_id,ae.archive_id)
+            WHERE ae.owner_id=j.owner_id AND ae.source_id=j.record_id
+              AND (ib.state='paused' OR (ib.hold_organizing AND (j.stage='source.extract' OR j.stage LIKE 'source.extract:%'))))
+		-- A conversation must be fully stored before being organized. Pause/hold
+		-- applies to every message in it, including a segment anchored in another batch.
+		AND (j.stage NOT LIKE 'source.extract%' OR coalesce(own.conversation_key,'')='' OR NOT EXISTS (
+		 SELECT 1 FROM source_contexts sibling
+		 JOIN archive_entries ae ON(ae.owner_id,ae.source_id,ae.source_version)=(sibling.owner_id,sibling.source_id,sibling.source_version)
+		 JOIN import_batches ib ON(ib.owner_id,ib.archive_id)=(ae.owner_id,ae.archive_id)
+		 WHERE sibling.owner_id=own.owner_id AND sibling.conversation_key=own.conversation_key
+		 AND (ib.stored<>ib.total OR ib.state='paused' OR ib.hold_organizing)))
+		-- Per-message extraction jobs coalesce into a single sequential family.
+		-- Completed/failed segment identities deduplicate retries in enqueue;
+		-- a failed old manifest must not prevent processing a new source version.
+		AND (j.stage NOT LIKE 'source.extract%' OR j.stage LIKE 'source.extract:conversation:%' OR coalesce(own.conversation_key,'')='' OR NOT EXISTS (
+		 SELECT 1 FROM source_contexts sibling
+		 JOIN memory_jobs family ON(family.owner_id,family.record_id,family.record_version)=(sibling.owner_id,sibling.source_id,sibling.source_version)
+		 JOIN memory_records live ON(live.owner_id,live.id,live.version)=(family.owner_id,family.record_id,family.record_version) AND live.state='active'
+		 WHERE sibling.owner_id=own.owner_id AND sibling.conversation_key=own.conversation_key
+		 AND family.stage LIKE 'source.extract:conversation:%' AND family.state IN('queued','leased')))
+		ORDER BY dispatch_priority,j.available_at,j.created_at,j.id FOR UPDATE OF j SKIP LOCKED LIMIT 1
+	) UPDATE memory_jobs j SET priority=c.dispatch_priority,state='leased',attempts=j.attempts+1,lease_until=now()+$1*interval '1 second',lease_token=$2,updated_at=now()
+	FROM candidate c WHERE j.id=c.id RETURNING j.id::text,j.owner_id::text,j.record_id::text,j.record_version,j.stage,j.attempts,j.lease_token::text,c.kind`
+
+const claimWindowed = `WITH ready AS MATERIALIZED (
+		(SELECT id FROM memory_jobs WHERE state='queued' AND available_at<=now() ORDER BY priority,available_at,created_at,id LIMIT 500)
+		UNION ALL
+		(SELECT id FROM memory_jobs WHERE state='leased' AND lease_until<now() AND attempts<$3 ORDER BY lease_until LIMIT 100)
+	), candidate AS (
+		SELECT j.id,r.kind,
+          CASE WHEN EXISTS(SELECT 1 FROM import_batches b WHERE b.owner_id=j.owner_id AND b.archive_id=j.record_id)
+            OR EXISTS(SELECT 1 FROM archive_entries ae WHERE ae.owner_id=j.owner_id AND ae.source_id=j.record_id AND ae.source_version=j.record_version)
+            OR EXISTS(SELECT 1 FROM episode_members em JOIN archive_entries ae
+              ON (ae.owner_id,ae.source_id,ae.source_version)=(em.owner_id,em.member_id,em.member_version)
+              WHERE em.owner_id=j.owner_id AND em.episode_id=j.record_id AND em.episode_version=j.record_version)
+          THEN greatest(j.priority,10) ELSE j.priority END AS dispatch_priority
+        FROM memory_jobs j JOIN memory_records r ON (r.owner_id,r.id)=(j.owner_id,j.record_id)
+		LEFT JOIN source_contexts own ON(own.owner_id,own.source_id,own.source_version)=(j.owner_id,j.record_id,j.record_version)
+		WHERE j.id IN (SELECT id FROM ready) AND ((j.state='queued' AND j.available_at<=now()) OR (j.state='leased' AND j.lease_until<now() AND j.attempts<$3))
+        AND NOT EXISTS (SELECT 1 FROM archive_entries ae JOIN import_batches ib ON (ib.owner_id,ib.archive_id)=(ae.owner_id,ae.archive_id)
+            WHERE ae.owner_id=j.owner_id AND ae.source_id=j.record_id
+              AND (ib.state='paused' OR (ib.hold_organizing AND (j.stage='source.extract' OR j.stage LIKE 'source.extract:%'))))
+		-- A conversation must be fully stored before being organized. Pause/hold
+		-- applies to every message in it, including a segment anchored in another batch.
+		AND (j.stage NOT LIKE 'source.extract%' OR coalesce(own.conversation_key,'')='' OR NOT EXISTS (
+		 SELECT 1 FROM source_contexts sibling
+		 JOIN archive_entries ae ON(ae.owner_id,ae.source_id,ae.source_version)=(sibling.owner_id,sibling.source_id,sibling.source_version)
+		 JOIN import_batches ib ON(ib.owner_id,ib.archive_id)=(ae.owner_id,ae.archive_id)
+		 WHERE sibling.owner_id=own.owner_id AND sibling.conversation_key=own.conversation_key
+		 AND (ib.stored<>ib.total OR ib.state='paused' OR ib.hold_organizing)))
+		-- Per-message extraction jobs coalesce into a single sequential family.
+		-- Completed/failed segment identities deduplicate retries in enqueue;
+		-- a failed old manifest must not prevent processing a new source version.
+		AND (j.stage NOT LIKE 'source.extract%' OR j.stage LIKE 'source.extract:conversation:%' OR coalesce(own.conversation_key,'')='' OR NOT EXISTS (
+		 SELECT 1 FROM source_contexts sibling
+		 JOIN memory_jobs family ON(family.owner_id,family.record_id,family.record_version)=(sibling.owner_id,sibling.source_id,sibling.source_version)
+		 JOIN memory_records live ON(live.owner_id,live.id,live.version)=(family.owner_id,family.record_id,family.record_version) AND live.state='active'
+		 WHERE sibling.owner_id=own.owner_id AND sibling.conversation_key=own.conversation_key
+		 AND family.stage LIKE 'source.extract:conversation:%' AND family.state IN('queued','leased')))
+		ORDER BY dispatch_priority,j.available_at,j.created_at,j.id FOR UPDATE OF j SKIP LOCKED LIMIT 1
+	) UPDATE memory_jobs j SET priority=c.dispatch_priority,state='leased',attempts=j.attempts+1,lease_until=now()+$1*interval '1 second',lease_token=$2,updated_at=now()
+	FROM candidate c WHERE j.id=c.id RETURNING j.id::text,j.owner_id::text,j.record_id::text,j.record_version,j.stage,j.attempts,j.lease_token::text,c.kind`

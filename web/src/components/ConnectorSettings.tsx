@@ -48,7 +48,7 @@ export function ConnectorSettings({ children }: { children?: ReactNode }) {
             imports.reload()
           } finally { setSent(null) }
         })
-      }} /><span className="tiny muted">ChatGPT 的导出会先让你看看里面有多少，确认了才导入。原文先原样存下，之后在导入列表里点「开始整理」才整理；图片和附件会标出没解析的部分。</span></label>
+      }} /><span className="tiny muted">ChatGPT 的导出会先让你看看里面有多少，确认了才导入。原文先原样存下；没选「现在就整理」的，之后在导入列表里点「开始整理」才整理；图片和附件会标出没解析的部分。</span></label>
       {sent !== null && <Progress value={sent} />}
       {chat && <SideSheet title="导入聊天记录" onClose={() => setChat(null)}>
         <ChatImportFlow file={chat} onCancel={() => setChat(null)} onStarted={() => { setChat(null); imports.reload() }} />

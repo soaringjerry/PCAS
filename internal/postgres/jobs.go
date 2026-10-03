@@ -39,12 +39,14 @@ func (s *Store) Claim(ctx context.Context, lease time.Duration) (*worker.Job, er
 		 WHERE sibling.owner_id=own.owner_id AND sibling.conversation_key=own.conversation_key
 		 AND (ib.state IN('importing','paused','failed') OR ib.hold_organizing)))
 		-- Per-message extraction jobs coalesce into a single sequential family.
-		-- Failed segments remain the retry target; other messages must not restart it.
+		-- Completed/failed segment identities deduplicate retries in enqueue;
+		-- a failed old manifest must not prevent processing a new source version.
 		AND (j.stage NOT LIKE 'source.extract%' OR j.stage LIKE 'source.extract:conversation:%' OR coalesce(own.conversation_key,'')='' OR NOT EXISTS (
 		 SELECT 1 FROM source_contexts sibling
 		 JOIN memory_jobs family ON(family.owner_id,family.record_id,family.record_version)=(sibling.owner_id,sibling.source_id,sibling.source_version)
+		 JOIN memory_records live ON(live.owner_id,live.id,live.version)=(family.owner_id,family.record_id,family.record_version) AND live.state='active'
 		 WHERE sibling.owner_id=own.owner_id AND sibling.conversation_key=own.conversation_key
-		 AND family.stage LIKE 'source.extract:conversation:%' AND family.state<>'done'))
+		 AND family.stage LIKE 'source.extract:conversation:%' AND family.state IN('queued','leased')))
 		ORDER BY j.priority,j.available_at,j.created_at,j.id FOR UPDATE OF j SKIP LOCKED LIMIT 1
 	) UPDATE memory_jobs j SET state='leased',attempts=j.attempts+1,lease_until=now()+$1*interval '1 second',lease_token=$2,updated_at=now()
 	FROM candidate c WHERE j.id=c.id RETURNING j.id::text,j.owner_id::text,j.record_id::text,j.record_version,j.stage,j.attempts,j.lease_token::text,c.kind`,

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"errors"
+	"io"
 	"strconv"
 	"strings"
 	"time"
@@ -116,16 +117,18 @@ func conversationRun(sources []memory.SourceResult) string {
 	// Including text also protects redactions that preserve source version.
 	type input struct {
 		Ref     memory.Ref
-		Text    string
 		Context *memory.SourceContext
 		At      *time.Time
 	}
-	manifest := make([]input, 0, len(sources))
+	hash := sha256.New()
 	for _, source := range sources {
-		manifest = append(manifest, input{source.Source.Ref, source.Source.Text, source.Context, sourceExpressedAt(source)})
+		hash.Write(asJSON(input{source.Source.Ref, source.Context, sourceExpressedAt(source)}))
+		// Stream originals into the digest without another whole-conversation
+		// JSON copy. Length framing keeps record boundaries unambiguous.
+		io.WriteString(hash, strconv.Itoa(len(source.Source.Text))+":")
+		io.WriteString(hash, source.Source.Text)
 	}
-	hash := sha256.Sum256(asJSON(manifest))
-	return stringHex(hash[:])
+	return stringHex(hash.Sum(nil))
 }
 
 func conversationStage(run string, segment, nextRef int) string {
@@ -435,8 +438,8 @@ func (s *Store) processConversationExtraction(ctx context.Context, j worker.Job,
 				return err
 			}
 			if _, err := tx.Exec(ctx, `UPDATE memory_jobs j SET state='done',lease_token=NULL,lease_until=NULL,error_code='',updated_at=now()
- WHERE j.owner_id=$1 AND (j.stage='source.extract' OR (j.stage LIKE 'source.extract:%' AND j.stage NOT LIKE 'source.extract:conversation:%'))
- AND EXISTS(SELECT 1 FROM source_contexts c WHERE(c.owner_id,c.source_id,c.source_version)=(j.owner_id,j.record_id,j.record_version) AND c.conversation_key=$2)`, string(j.OwnerID), conversation); err != nil {
+ WHERE j.owner_id=$1 AND (j.stage='source.extract' OR (j.stage LIKE 'source.extract:%' AND j.stage NOT LIKE $3))
+ AND EXISTS(SELECT 1 FROM source_contexts c WHERE(c.owner_id,c.source_id,c.source_version)=(j.owner_id,j.record_id,j.record_version) AND c.conversation_key=$2)`, string(j.OwnerID), conversation, conversationExtractionPrefix+run+":%"); err != nil {
 				return err
 			}
 		}
@@ -510,7 +513,8 @@ func archiveConversationSources(ctx context.Context, tx pgx.Tx, owner memory.ID,
  JOIN source_versions v ON(v.owner_id,v.source_id,v.version)=(r.owner_id,r.id,r.version)
  WHERE c.owner_id=$1 AND c.conversation_key=$2 AND r.state='active' AND rv.state='active'
  AND EXISTS(SELECT 1 FROM archive_entries ae WHERE(ae.owner_id,ae.source_id,ae.source_version)=(r.owner_id,r.id,r.version))
- ORDER BY coalesce(rv.expressed_at,rv.recorded_at),s.external_id,r.id`, string(owner), conversation)
+ ORDER BY coalesce(rv.expressed_at,rv.recorded_at),s.external_id,r.id
+ FOR SHARE OF r,rv,v,c`, string(owner), conversation)
 	if err != nil {
 		return nil, err
 	}

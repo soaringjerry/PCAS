@@ -94,13 +94,23 @@ func (s *Store) Recall(ctx context.Context, scope memory.Scope, in memory.Recall
 		provider, _ := s.models.Get(s.models.EmbeddingID())
 		var embeddings []memory.Embedding
 		var e error
+		var reservationID string
+		reserved := float64(len(query)+16) * provider.InputPerMillion / 1e6
 		if !s.models.Available(provider.ID) {
 			e = memory.ErrUnavailable
 		} else {
-			e = s.reserveModelCost(ctx, scope.OwnerID, float64(len(query)+16)*provider.InputPerMillion/1e6, nil)
+			reservationID, e = s.reserveModelCostID(ctx, scope.OwnerID, reserved, nil)
 		}
 		if e == nil {
 			embeddings, e = s.models.EmbedProvider(ctx, provider, []string{provider.EmbeddingQueryPrefix + query})
+			// The embedding adapter exposes no token usage; keep its existing
+			// estimate for a returned vector, release it when nothing returned.
+			if e != nil {
+				reserved = 0
+			}
+			if err := s.settleModelCost(ctx, scope.OwnerID, reservationID, reserved); err != nil {
+				return out, err
+			}
 		}
 		if e == nil && len(embeddings) == 1 {
 			vector = asJSON(embeddings[0].Values)

@@ -128,15 +128,28 @@ func (s *Store) ProcessAttachment(ctx context.Context, j worker.Job) error {
 		if durationErr != nil || seconds <= 0 || seconds > 4*3600 {
 			return memory.ErrUnavailable
 		}
-		if err := s.reserveBackgroundCost(ctx, j, (seconds+1)/60*provider.AudioPerMinute); err != nil {
-			return err
+		reservationID, reserveErr := s.reserveModelCostID(ctx, j.OwnerID, (seconds+1)/60*provider.AudioPerMinute, &j)
+		if reserveErr != nil {
+			return reserveErr
 		}
 		audio, err := os.Open(path)
 		if err != nil {
+			if settleErr := s.settleModelCost(ctx, j.OwnerID, reservationID, 0); settleErr != nil {
+				return settleErr
+			}
 			return err
 		}
 		text, err = s.models.Transcribe(ctx, audio, title)
 		audio.Close()
+		// This adapter reports text, not billing. Use the measured duration
+		// rather than the extra second held during reservation.
+		cost := seconds / 60 * provider.AudioPerMinute
+		if err != nil && strings.TrimSpace(text) == "" {
+			cost = 0
+		}
+		if settleErr := s.settleModelCost(ctx, j.OwnerID, reservationID, cost); settleErr != nil {
+			return settleErr
+		}
 		if err != nil {
 			return memory.ErrUnavailable
 		}

@@ -10,6 +10,27 @@ import (
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
+// A reminder occurrence is valid only while its trigger still names the same
+// instant and its guard still applies. Result notices have no reminder trigger.
+const currentNoticeTriggerSQL = `(n.trigger_id LIKE 'run:%' OR EXISTS (
+ SELECT 1 FROM jsonb_array_elements(coalesce(nullif(w.document->'triggers','null'::jsonb),'[]'::jsonb)) t
+ WHERE t->>'id'=n.trigger_id AND t->>'active'='true'
+ AND nullif(t->>'nextAt','')::timestamptz=n.due_at
+ AND (coalesce(t->>'guard','')='' OR t->>'guard'=w.status)))`
+
+// Persist invalidation so an old occurrence cannot reappear in the pinned
+// list or be retried by another dispatcher after a due-time edit.
+func invalidateObsoleteNoticesTx(ctx context.Context, tx pgx.Tx, selector string, id string) error {
+	_, err := tx.Exec(ctx, `WITH invalidated AS (
+ UPDATE workspace_notices n SET dismissed_at=now() FROM work_items w
+ WHERE (w.owner_id,w.id)=(n.owner_id,n.thing_id) AND `+selector+`
+ AND n.dismissed_at IS NULL AND NOT `+currentNoticeTriggerSQL+`
+ RETURNING n.owner_id
+ ) UPDATE workspace_owners SET revision=revision+1
+ WHERE owner_id IN (SELECT owner_id FROM invalidated)`, id)
+	return err
+}
+
 // RunReminders evaluates explicit times and acknowledged conditions. Natural
 // language conditions stay unresolved until there is evidence, never become
 // arbitrary keyword triggers or age-based nags.
@@ -51,6 +72,9 @@ func (s *Store) CheckReminders(ctx context.Context, now time.Time) error {
 		scope := memory.Scope{OwnerID: id, PrincipalID: "worker", IsOwner: true}
 		if err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 			if _, err := tx.Exec(ctx, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(id)); err != nil {
+				return err
+			}
+			if err := invalidateObsoleteNoticesTx(ctx, tx, "n.owner_id=$1", string(id)); err != nil {
 				return err
 			}
 			settings, err := queryDocument[workspace.Settings](ctx, tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1", string(id))

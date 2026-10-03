@@ -86,7 +86,7 @@ func (s *Store) ProcessIndex(ctx context.Context, j worker.Job) error {
 		return acknowledge(ctx, tx, j)
 	})
 }
-func (s *Store) ProcessEmbedding(ctx context.Context, j worker.Job) error {
+func (s *Store) ProcessEmbedding(ctx context.Context, j worker.Job) (err error) {
 	if s.models == nil || s.models.EmbeddingID() == "" {
 		return errors.Join(memory.ErrUnavailable, &worker.JobError{Code: "provider_not_configured"})
 	}
@@ -98,7 +98,7 @@ func (s *Store) ProcessEmbedding(ctx context.Context, j worker.Job) error {
 		return errors.Join(memory.ErrUnavailable, &worker.JobError{Code: "provider_unavailable", Retry: true})
 	}
 	var text string
-	err := s.pool.QueryRow(ctx, `SELECT t.body FROM memory_text t JOIN memory_records r ON (r.owner_id,r.id,r.version)=(t.owner_id,t.id,t.version) WHERE t.owner_id=$1 AND t.id=$2 AND t.version=$3 AND r.state='active'`, string(j.OwnerID), string(j.Record.ID), j.Record.Version).Scan(&text)
+	err = s.pool.QueryRow(ctx, `SELECT t.body FROM memory_text t JOIN memory_records r ON (r.owner_id,r.id,r.version)=(t.owner_id,t.id,t.version) WHERE t.owner_id=$1 AND t.id=$2 AND t.version=$3 AND r.state='active'`, string(j.OwnerID), string(j.Record.ID), j.Record.Version).Scan(&text)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 			if err := lockJob(ctx, tx, j); err != nil {
@@ -186,9 +186,16 @@ func (s *Store) ProcessEmbedding(ctx context.Context, j worker.Job) error {
 	for _, text := range texts {
 		cost += float64(len(text)+16) * provider.InputPerMillion / 1e6
 	}
-	if err := s.reserveBackgroundCost(ctx, j, cost); err != nil {
+	reservationID, err := s.reserveModelCostID(ctx, j.OwnerID, cost, &j)
+	if err != nil {
 		return err
 	}
+	actualCost := 0.0
+	defer func() {
+		if settleErr := s.settleModelCost(ctx, j.OwnerID, reservationID, actualCost); settleErr != nil {
+			err = errors.Join(err, settleErr)
+		}
+	}()
 	vectors := []memory.Embedding{}
 	for start := 0; start < len(texts); start += 32 {
 		v, err := s.models.EmbedProvider(ctx, provider, texts[start:min(start+32, len(texts))])
@@ -200,6 +207,11 @@ func (s *Store) ProcessEmbedding(ctx context.Context, j worker.Job) error {
 		}
 		if err != nil {
 			return &worker.JobError{Code: "model_call_failed", Retry: cost == 0}
+		}
+		// The adapter exposes vectors rather than provider token usage. Retain
+		// the existing estimate only for batches that actually returned.
+		for _, text := range texts[start:min(start+32, len(texts))] {
+			actualCost += float64(len(text)+16) * provider.InputPerMillion / 1e6
 		}
 		vectors = append(vectors, v...)
 	}
@@ -473,7 +485,8 @@ func (s *Store) ProcessExtraction(ctx context.Context, j worker.Job) (err error)
 	}
 	// Reserve before submitting a background generation. Repeated processing can
 	// retry DB work, but an ambiguous costly request requires explicit user retry.
-	if err := s.reserveBackgroundCost(ctx, j, p.Reserve(structuredExtractionInstructions+prompt)); err != nil {
+	reservationID, err := s.reserveModelCostID(ctx, j.OwnerID, p.Reserve(structuredExtractionInstructions+prompt), &j)
+	if err != nil {
 		return err
 	}
 
@@ -482,6 +495,13 @@ func (s *Store) ProcessExtraction(ctx context.Context, j worker.Job) (err error)
 	// waiting for an explicit retry: its request may already have been billed.
 	free := p.Reserve(structuredExtractionInstructions+prompt) == 0
 	result, err := s.models.Generate(ctx, p.ID, structuredExtractionInstructions, prompt)
+	actualCost := result.Cost
+	if err != nil && strings.TrimSpace(result.Text) == "" {
+		actualCost = 0
+	}
+	if settleErr := s.settleModelCost(ctx, j.OwnerID, reservationID, actualCost); settleErr != nil {
+		return settleErr
+	}
 	if errors.Is(err, memory.ErrUnavailable) {
 		if err := s.releaseUnavailableReservation(ctx, j); err != nil {
 			return err
@@ -521,9 +541,6 @@ func (s *Store) ProcessExtraction(ctx context.Context, j worker.Job) (err error)
 			return err
 		}
 		if !current {
-			if _, err := tx.Exec(ctx, "UPDATE background_usage SET reserved_cost=$2 WHERE id=(SELECT id FROM background_usage WHERE job_id=$1 ORDER BY created_at DESC LIMIT 1)", string(j.ID), result.Cost); err != nil {
-				return err
-			}
 			return acknowledge(ctx, tx, j)
 		}
 		// Recheck under the same owner lock used by undo, after generation: an
@@ -644,9 +661,6 @@ func (s *Store) ProcessExtraction(ctx context.Context, j worker.Job) (err error)
 			if _, err := tx.Exec(ctx, "UPDATE capture_candidates SET state='merged',document=jsonb_set(document,'{state}','\"merged\"') WHERE owner_id=$1 AND source_id=$2 AND state='pending' AND document->>'kind'='unknown' AND (document->>'confidence')::numeric=0", string(j.OwnerID), string(j.Record.ID)); err != nil {
 				return err
 			}
-		}
-		if _, err := tx.Exec(ctx, "UPDATE background_usage SET reserved_cost=$2 WHERE id=(SELECT id FROM background_usage WHERE job_id=$1 ORDER BY created_at DESC LIMIT 1)", string(j.ID), result.Cost); err != nil {
-			return err
 		}
 		if _, err := tx.Exec(ctx, "UPDATE workspace_owners SET revision=revision+1 WHERE owner_id=$1", string(j.OwnerID)); err != nil {
 			return err

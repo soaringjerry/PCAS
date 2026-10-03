@@ -183,7 +183,7 @@ func (s *Store) AnswerDesk(ctx context.Context, scope memory.Scope, agentID, que
 		// A model that ignored the format still answered; show it without sources.
 		reply.Answer, reply.Used, reply.Links = strings.TrimSpace(result.Text), nil, nil
 	}
-	out = workspace.DeskAnswer{Answer: strings.TrimSpace(reply.Answer), Agent: agent.Name, Used: []workspace.DeskSource{}, Searches: []string{}, Links: []string{}}
+	out = workspace.DeskAnswer{ID: turnID, Answer: strings.TrimSpace(reply.Answer), Agent: agent.Name, Used: []workspace.DeskSource{}, Searches: []string{}, Links: []string{}}
 	if len(result.Searches) > 0 {
 		out.Searches = result.Searches[:min(len(result.Searches), 5)]
 	}
@@ -201,7 +201,6 @@ func (s *Store) AnswerDesk(ctx context.Context, scope memory.Scope, agentID, que
 			delete(sent, id)
 		}
 	}
-	out.ID = turnID
 	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(scope.OwnerID)); err != nil {
 			return err

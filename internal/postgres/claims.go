@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"errors"
+	"strconv"
 	"strings"
 	"time"
 
@@ -13,6 +14,8 @@ import (
 )
 
 type statement struct {
+	ExtractionRun  string
+	ExtractionRef  int
 	Structured     bool
 	SubjectType    string
 	Mentions       []claimMention
@@ -213,6 +216,10 @@ func (s *Store) rememberTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, i
 	claimScope := map[string]string{}
 	if in.ProjectID != "" {
 		claimScope["project_id"] = in.ProjectID
+	}
+	if in.ExtractionRun != "" {
+		claimScope["conversation_extraction"] = in.ExtractionRun
+		claimScope["conversation_ref"] = strconv.Itoa(in.ExtractionRef)
 	}
 	scopeJSON, _ := json.Marshal(claimScope)
 	acquisition := in.Acquisition

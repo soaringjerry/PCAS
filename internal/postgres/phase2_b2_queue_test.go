@@ -390,6 +390,8 @@ func TestPhase2B2_F6_PausedArchiveSkippedOrdinaryProcessedResumeWorks(t *testing
 	s.SetBlobs(files)
 	at := b2Anchor(t, "Asia/Shanghai")
 	root, src, _ := b2Archive(t, s, scope, at, b2Fixture(t, "archive_user", ""), "")
+	// I2 uploads start on hold; F6 exercises pause/resume after organizing is enabled.
+	b2Exec(t, s, `UPDATE import_batches SET hold_organizing=false WHERE owner_id=$1 AND archive_id=$2`, string(scope.OwnerID), string(root.ID))
 	if err := s.ProcessChunks(context.Background(), leaseStage(t, s, scope, src, "source.chunk")); err != nil {
 		t.Fatal(err)
 	}

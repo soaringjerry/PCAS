@@ -1,12 +1,10 @@
 package connectors
 
 import (
-	"archive/zip"
 	"bytes"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
-	"io"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -14,68 +12,7 @@ import (
 	"unicode/utf8"
 )
 
-const MaxArchiveBytes = 64 << 20
-const MaxArchiveRecords = 10000
-
-// DecodeArchive preserves conversation branches and roles; unsupported parts
-// become explicit coverage gaps instead of fabricated text or silent omissions.
-func DecodeArchive(name string, data []byte) (Batch, error) {
-	if len(data) > MaxArchiveBytes {
-		return Batch{}, fmt.Errorf("archive_too_large")
-	}
-	if strings.EqualFold(filepath.Ext(name), ".zip") {
-		z, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
-		if err != nil {
-			return Batch{}, fmt.Errorf("invalid_zip")
-		}
-		if len(z.File) > 20000 {
-			return Batch{}, fmt.Errorf("too_many_files")
-		}
-		out := Batch{Records: []Record{}, Gaps: []string{}}
-		total := 0
-		for _, f := range z.File {
-			if f.FileInfo().IsDir() {
-				continue
-			}
-			ext := strings.ToLower(filepath.Ext(f.Name))
-			if ext != ".json" && ext != ".jsonl" && ext != ".md" && ext != ".txt" {
-				continue
-			}
-			if f.UncompressedSize64 > MaxArchiveBytes || uint64(total)+f.UncompressedSize64 > MaxArchiveBytes {
-				return Batch{}, fmt.Errorf("archive_expansion_limit")
-			}
-			r, err := f.Open()
-			if err != nil {
-				return Batch{}, err
-			}
-			b, err := io.ReadAll(io.LimitReader(r, MaxArchiveBytes-int64(total)+1))
-			r.Close()
-			if err != nil {
-				return Batch{}, err
-			}
-			total += len(b)
-			if total > MaxArchiveBytes {
-				return Batch{}, fmt.Errorf("archive_expansion_limit")
-			}
-			batch, err := decodeDocument(f.Name, b)
-			if err != nil {
-				out.Gaps = appendGap(out.Gaps, "未识别归档中的 "+filepath.Base(f.Name))
-				continue
-			}
-			out.Records = append(out.Records, batch.Records...)
-			out.Gaps = append(out.Gaps, batch.Gaps...)
-			if len(out.Records) > MaxArchiveRecords {
-				return Batch{}, fmt.Errorf("too_many_records")
-			}
-		}
-		if len(out.Records) == 0 {
-			return Batch{}, fmt.Errorf("no_supported_records")
-		}
-		return out, nil
-	}
-	return decodeDocument(name, data)
-}
-func decodeDocument(name string, data []byte) (Batch, error) {
+func decodeLegacyDocument(name string, data []byte) (Batch, error) {
 	out := Batch{Records: []Record{}, Gaps: []string{}}
 	ext := strings.ToLower(filepath.Ext(name))
 	if ext == ".txt" || ext == ".md" {
@@ -224,7 +161,7 @@ func decodeDocument(name string, data []byte) (Batch, error) {
 	return finishBatch(out)
 }
 func finishBatch(b Batch) (Batch, error) {
-	if len(b.Records) == 0 || len(b.Records) > MaxArchiveRecords {
+	if len(b.Records) == 0 {
 		return b, fmt.Errorf("invalid_record_count")
 	}
 	if len(b.Gaps) > 100 || len(b.NextCursor) > 4096 {

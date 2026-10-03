@@ -175,7 +175,7 @@ func (s *Store) importBatchTx(ctx context.Context, tx pgx.Tx, scope memory.Scope
 	}
 	episodes := map[string]*episodeBatch{}
 	for _, r := range batch.Records {
-		result, err := s.ingestTx(ctx, tx, scope, memory.IngestRequest{Connector: namespace, ExternalID: r.ID, ExternalVersion: r.Version, Title: r.Title, Text: r.Text, MediaType: r.MediaType, ExpressedAt: r.ExpressedAt})
+		result, err := s.ingestTx(ctx, tx, scope, archiveIngestRequest(namespace, r))
 		if errors.Is(err, memory.ErrBlocked) {
 			out.Blocked++
 			continue
@@ -256,6 +256,11 @@ func (s *Store) importBatchTx(ctx context.Context, tx pgx.Tx, scope memory.Scope
 	}
 	return out, nil
 }
+
+func archiveIngestRequest(namespace string, r connectors.Record) memory.IngestRequest {
+	return memory.IngestRequest{Connector: namespace, ExternalID: r.ID, ExternalVersion: r.Version, Title: r.Title, Text: r.Text, MediaType: r.MediaType, ExpressedAt: r.ExpressedAt}
+}
+
 func (s *Store) linkEpisodeTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, key, title string, refs []memory.Ref) error {
 	if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended($1,0))", string(scope.OwnerID)+":episode:"+key); err != nil {
 		return err
@@ -323,29 +328,9 @@ func (s *Store) ImportArchive(ctx context.Context, scope memory.Scope, name stri
 	return s.ingestArchive(ctx, scope, name, data, "archive")
 }
 func (s *Store) ingestArchive(ctx context.Context, scope memory.Scope, name string, data []byte, namespace string) (connectors.Result, error) {
-	out := connectors.Result{Refs: []memory.Ref{}, Gaps: []string{}}
-	if err := requireOwner(scope); err != nil {
-		return out, err
-	}
-	if len(data) > 20<<20 || strings.TrimSpace(name) == "" || len(name) > 2000 {
-		return out, memory.ErrInvalid
-	}
-	if _, err := connectors.DecodeArchive(name, data); err != nil {
-		return out, memory.ErrInvalid
-	}
-	hash := sha256.Sum256(data)
-	r, err := s.IngestAttachment(ctx, scope, memory.IngestRequest{Connector: namespace, ExternalID: hex.EncodeToString(hash[:]), ExternalVersion: "1", Title: name, MediaType: "application/x-pcas-archive"}, bytes.NewReader(data))
-	if err != nil {
-		return out, err
-	}
-	out.Refs = append(out.Refs, r.Ref)
-	if r.Duplicate {
-		out.Duplicates = 1
-	} else {
-		out.Imported = 1
-	}
-	out.Gaps = append(out.Gaps, "原始归档已保留，记录正在后台解析；处理进度可在来源中查看")
-	return out, nil
+	// The upload default changes; existing folder connector imports keep their
+	// automatic organization behavior.
+	return s.importArchiveReader(ctx, scope, name, bytes.NewReader(data), namespace, namespace == "archive")
 }
 
 var _ connectors.API = (*Store)(nil)

@@ -93,6 +93,69 @@ func TestStreamArchiveConversationOrder(t *testing.T) {
 		t.Fatal("not newest conversation first", records)
 	}
 }
+
+func TestStreamArchiveNumberedConversations(t *testing.T) {
+	previous := MaxArchiveRecords
+	MaxArchiveRecords = 3
+	t.Cleanup(func() { MaxArchiveRecords = previous })
+	for _, names := range [][2]string{
+		{"export/conversations-000.json", "export/conversations-001.json"},
+		{`export\Conversations-000.JSON`, `export\conversations-001.json`},
+		{"conversations_000.json", "conversations_001.json"},
+		{"conversations.json", "conversations-001.json"},
+	} {
+		t.Run(names[0], func(t *testing.T) {
+			var buf bytes.Buffer
+			z := zip.NewWriter(&buf)
+			for i, name := range names {
+				f, err := z.Create(name)
+				if err != nil {
+					t.Fatal(err)
+				}
+				raw := "[" + syntheticConversation("old", 1) + "]"
+				if i == 1 {
+					raw = "[" + syntheticConversation("new", 100, 101, 102) + "]"
+				}
+				if _, err = f.Write([]byte(raw)); err != nil {
+					t.Fatal(err)
+				}
+			}
+			for _, name := range []string{"user.json", "export_manifest.json", "conversations-draft.json", "audio.wav"} {
+				f, err := z.Create(name)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if _, err = f.Write([]byte("not dialogue JSON")); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := z.Close(); err != nil {
+				t.Fatal(err)
+			}
+			a, err := OpenArchive(context.Background(), "numbered.zip", bytes.NewReader(buf.Bytes()))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer a.Close()
+			if a.Preview.Conversations != 2 || a.Preview.Messages != 4 || a.Preview.FromUser != 3 || a.Preview.LeftOut != 1 || len(a.Preview.Gaps) != 4 {
+				t.Fatal(a.Preview)
+			}
+			records, err := a.Records(0, 10)
+			if err != nil || len(records) != 3 {
+				t.Fatal(records, err)
+			}
+			for _, record := range records {
+				if record.ConversationID != "new" {
+					t.Fatal("selection did not span all files", records)
+				}
+			}
+			walked := 0
+			if err := a.Walk(context.Background(), func(r Record) error { walked++; return nil }); err != nil || walked != 4 {
+				t.Fatal("original records missing", walked, err)
+			}
+		})
+	}
+}
 func TestStreamArchiveErrorsAndSkippedAssets(t *testing.T) {
 	zipped := func(files map[string]string) []byte {
 		var buf bytes.Buffer

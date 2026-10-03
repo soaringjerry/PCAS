@@ -28,7 +28,33 @@ I16 抓另一段秘书对话的真实 HTTP 请求；I17 通过 HTTP 释放 hold�
 
 命令：`GOFLAGS=-v make check`，其中数据库测试通过显式 `PCAS_TEST_DATABASE_URL` 指向自有临时库；浏览器两个文件分别 `--retries=0 --reporter=list,json`；W4 使用共享真实后端 runner、`PCAS_IMPORT_CHUNK_SIZE=1`，并设置随机 HTTP 端口。
 
-Go 全量：正在运行，完成后追加逐序列结果。
+Go 全量已完成：`make check` 返回 2，失败发生在测试步骤；fmt-check、vet 已过。T4 原轮 32 个主测试：**19 通过、13 失败、0 跳过**。postgres 包耗时 920.944 秒；仓库主测试总计 433 通过、13 失败、3 个既有条件测试跳过（未改）。全部 13 个主测试失败来自 T4，本批以外没有主测试失败。构建另用同一提交的 `make build` 完成并通过。
+
+| 序列 | 原轮结果 | 原轮对应测试 |
+|---|---|---|
+| I1 | 通过 | ✅ `TestPhase2B4_I1_ZipPreviewCountsMediaGapsAndNeverWrites` |
+| I2 | 通过 | ✅ `TestPhase2B4_I2_PartialImportOriginalReachesNewSecretaryConversation` |
+| I3 | 失败（含通过用例） | ❌ `TestPhase2B4_I3_PauseStopsStorageAndExtractionButNotOrdinarySource`<br>✅ `TestPhase2B4_I3_ImportStateErrorsHaveFrozenCode` |
+| I4 | 失败（含通过用例） | ❌ `TestPhase2B4_I4_BlockedMessageIsReportedAndSkippedWithoutFailingImport`<br>✅ `TestPhase2B4_I4_ReimportAndExtendedExportOnlyAddUnseenMessages` |
+| I5 | 通过 | ✅ `TestPhase2B4_I5_HistoricalPlanRemainsCandidateWithoutPresentActions` |
+| I6 | 失败 | ❌ `TestPhase2B4_I6_SecretaryOriginalExtractionPrecedes500ImportedMessages` |
+| I7 | 通过 | ✅ `TestPhase2B4_I7_UnsupportedAndDecompressedLimitAreAtomic`<br>✅ `TestPhase2B4_I7_FourUploadErrorsAreDistinctAndAtomic` |
+| I8 | 失败（含通过用例） | ✅ `TestPhase2B4_I8_RecordCapKeepsNewestAndReportsLeftOut`<br>❌ `TestPhase2B4_I8_CapPrecedesDisjointDuplicateBlockedAndNewCounts` |
+| I9 | 通过 | ✅ `TestPhase2B4_I9_CancelAtHalfCommitThenRecoverExpiredLease` |
+| I10 | 失败 | ❌ `TestPhase2B4_I10_DeleteArchiveChildrenClaimsBatchAndRecallControl` |
+| I11 | 通过 | ✅ `TestPhase2B4_I11_RegeneratedAnswerPreservesHistoricalBranch` |
+| I12 | 失败 | ❌ `TestPhase2B4_I12_ConcurrentImportsPauseOnlyOneBatch` |
+| I13 | 通过 | ✅ `TestPhase2B4_I13_SpokenDateUsesSydneyAndShanghai` |
+| I14 | 通过 | ✅ `TestPhase2B4_I14_NonUserMessagesRemainOriginalWithoutExtractionCalls` |
+| L1 | 通过 | ✅ `TestPhase2B4_L1_SecretaryRecordsExactNumbersAndDependencies`<br>✅ `TestPhase2B4_L1_CallsPaginationHasNoDuplicatesAndPreservesNumbers` |
+| L2 | 失败 | ❌ `TestPhase2B4_L2_DeputyLegacyAnswerExtractionEachRecordTheirCall` |
+| L3 | 失败 | ❌ `TestPhase2B4_L3_FailureAndSuccessfulRequestReplayDoNotAddRows` |
+| L4 | 通过 | ✅ `TestPhase2B4_L4_LocalDaysAndSydneyDSTHaveExactSummaries`<br>✅ `TestPhase2B4_L4_SummarySeparatesPurposesAndOmitsEmptyDays` |
+| L5 | 失败 | ❌ `TestPhase2B4_L5_CurrentUnicodeExcerptDeletedRefAndEveryColumnPrivacy` |
+| L6 | 通过 | ✅ `TestPhase2B4_L6_UsageEndpointsEnforceOwnerAndIsolation` |
+| L7 | 失败 | ❌ `TestPhase2B4_L7_UndoClearAndDeleteKeepExactUsageRows` |
+| L8 | 失败（含通过用例） | ✅ `TestPhase2B4_L8_CorrectedMemoryDuringDeputyGenerationKeepsReturnedUsage`<br>❌ `TestPhase2B4_L8_UsageIsVisibleBeforeResultTransactionAndSurvivesRollback`<br>✅ `TestPhase2B4_L8_ReturnedButInvalidExtractionStillRecordsUsage`<br>❌ `TestPhase2B4_L8_ReturnedButInvalidSecretaryStillRecordsUsage` |
+| L9 | 失败 | ❌ `TestPhase2B4_L9_IdenticalLegacyRequestsMakeTwoCallsAndTwoUsageRows` |
 
 | 浏览器序列 | 实际结果 | 到达的断言 / 限制 |
 |---|---|---|
@@ -45,6 +71,14 @@ Go 全量：正在运行，完成后追加逐序列结果。
 
 1. W1/W2 的禁止词范围：待协调者确认。保持旧冻结预期和旧断言，不自行决定放宽或改产品。W1 次数在构建产物上为 1，原开发模式次数疑问已由环境对照消除。
 2. W3 开发模式在重载时遇到资源 `ERR_NETWORK_CHANGED`，属夹具/环境；构建产物上完整通过。保留开发失败日志，不把改变服务方式后的核对称为重试碰运气。
-3. W4 的合成文件名使入口与预期不符：归属 T4 夹具。交付版本已改为官方 `conversations.json`；没有改预览、暂停、继续和查看原话的预期，本轮原失败仍保留，修正版本未重跑。
+3. 原轮 L2 的 legacy answer 子用例和 L9 返回 `not found`：T4 夹具没有先初始化配置的代理。已有 `TestDeskServerOwnedAskEditReuse` 明确在 `AnswerDesk` 前调用 Snapshot。已在 `1aa3bd9` 通过真实 `GET /v1/workspace` 补上初始化，不改任何花费、请求次数、关联或原黄金预期；同一产品基线上的单独复核（`-race -count=1 -run '^TestPhase2B4_(L2|L9)_'`）两条均通过，L2 三个子用例均通过。该复核不替换 `c719783` 原轮的两个失败，也不算重新统一全量。
+4. 五处 `POST /v1/memory/delete` 返回 404：I4 禁止再导入、I8 混合计数、I10 删除归档、L5 删除引用、L7 删除后花费保留。固定使用协调者第 6 节确认的路径，不自行改成其他接口。预期是已有删除接口能完成相应闭包；建议协调者核对接口契约与集成接线，交 I/接口负责者处理；后续删除效果未验到。
+5. I3/I12 暂停后实际 `ProcessAttachment` 返回 `job lease lost`，测试停在内部返回值检查；暂停/继续及按批次隔离的后续断言未到达。已询问协调者是否允许暂停撤销租约作为内部控制返回，以业务状态和存储停止为准。尚不能仅凭内部返回值认定暂停产品行为错误，新增 I19 同样待这个接缝确认。
+6. I6：30 秒内没有等到新的秘书原话整理完成；建议 I 核对优先级和领取进度，T4 同时保留夹具/运行时序限制，不宣称已证明某个实现根因。
+7. L8 独立花费事务的 rollback/cancel 两个子用例：真实模型已返回一次，结果写入事务已在自有 SQL 门闩等待；另一个连接读到 **0 行** 花费，契约要求此时已独立提交 **1 行**。因此后续回滚/取消检查未到达；建议 L 按第 7 节修正花费提交时点和独立事务。不能用结果事务成功后的记录存在来替代本断言。
+8. L8 秘书的格式错误用例：`DeskTurn` 返回 nil error，与测试的 Go 错误返回假设不符；实际非空不合格模型内容、调用一次、花费一行、准确数字和无正文检查均已到达并通过。L3 的模型 HTTP 503 后秘书 HTTP 200，测试停止在 HTTP 错误返回假设，零花费和重放后续断言未到达。已询问协调者是否沿用既有秘书 fallback，不自行改断言或要求产品改变对外错误通道。
+9. W4 的合成文件名使入口与预期不符：归属 T4 夹具。交付版本已改为官方 `conversations.json`；没有改预览、暂停、继续和查看原话的预期，本轮原失败仍保留，修正版本未重跑。
 
-构建模式截图、轨迹和原始输出保留在固定验收工作区的 `web/test-results/phase2-b4-original-mocked`、`web/test-results/phase2-b4-original-real`，以及各自临时运行目录；全是合成资料。后续测试修改或产品修复需要在新的明确提交上重新统一验收，不能把本轮未到达的断言当作通过。
+构建模式截图、轨迹和原始输出保留在固定验收工作区的 `web/test-results/phase2-b4-original-mocked`、`web/test-results/phase2-b4-original-real`，以及各自临时运行目录；全是合成资料。除已明确修改夹具并复核的 L2/L9 外，失败未作重复试跑；后续测试修改或产品修复需要在新的明确提交上重新统一验收，不能把本轮未到达的断言当作通过。
+
+原轮 Go 原始输出：[make-check.log](/tmp/pcas-b4-original-go-gBFB0Y/make-check.log)。模型花费独立事务及所有失败的原始断言均保留；本轮只报告观察到的现象，不根据 I/L/U4 实现反推或放宽预期。

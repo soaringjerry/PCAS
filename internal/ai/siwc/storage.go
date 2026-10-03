@@ -5,11 +5,9 @@ package siwc
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
-	"syscall"
 	"time"
 )
 
@@ -74,7 +72,7 @@ func (m *Manager) locked(ctx context.Context, fn func(*diskState) error) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	f, err := os.OpenFile(filepath.Join(m.dir, "session.lock"), os.O_CREATE|os.O_RDWR|syscall.O_NOFOLLOW, 0600)
+	f, err := os.OpenFile(filepath.Join(m.dir, "session.lock"), os.O_CREATE|os.O_RDWR|openNoFollow, 0600)
 	if err != nil {
 		return fmt.Errorf("cannot lock ChatGPT credentials")
 	}
@@ -83,12 +81,12 @@ func (m *Manager) locked(ctx context.Context, fn func(*diskState) error) error {
 		return err
 	}
 	for {
-		err = syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
-		if err == nil {
-			break
-		}
-		if !errors.Is(err, syscall.EWOULDBLOCK) {
+		held, err := tryLock(f)
+		if err != nil {
 			return fmt.Errorf("cannot lock ChatGPT credentials")
+		}
+		if !held {
+			break
 		}
 		select {
 		case <-ctx.Done():
@@ -96,7 +94,7 @@ func (m *Manager) locked(ctx context.Context, fn func(*diskState) error) error {
 		case <-time.After(20 * time.Millisecond):
 		}
 	}
-	defer syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
+	defer unlock(f)
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -108,7 +106,7 @@ func (m *Manager) locked(ctx context.Context, fn func(*diskState) error) error {
 }
 func (m *Manager) read() (diskState, error) {
 	var d diskState
-	f, err := os.OpenFile(filepath.Join(m.dir, "credentials.json"), os.O_RDONLY|syscall.O_NOFOLLOW, 0)
+	f, err := os.OpenFile(filepath.Join(m.dir, "credentials.json"), os.O_RDONLY|openNoFollow, 0)
 	if os.IsNotExist(err) {
 		return d, nil
 	}
@@ -117,7 +115,7 @@ func (m *Manager) read() (diskState, error) {
 	}
 	defer f.Close()
 	info, err := f.Stat()
-	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0077 != 0 || info.Size() > 1<<20 {
+	if err != nil || !info.Mode().IsRegular() || !ownerOnly(info) || info.Size() > 1<<20 {
 		return d, fmt.Errorf("ChatGPT credentials must be a protected regular file")
 	}
 	if json.NewDecoder(f).Decode(&d) != nil {
@@ -152,10 +150,5 @@ func (m *Manager) save(d *diskState) error {
 	if err = os.Rename(name, filepath.Join(m.dir, "credentials.json")); err != nil {
 		return err
 	}
-	dir, err := os.Open(m.dir)
-	if err != nil {
-		return err
-	}
-	defer dir.Close()
-	return dir.Sync()
+	return syncDir(m.dir)
 }

@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"os"
 	"strings"
-	"syscall"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
 )
@@ -241,13 +240,13 @@ func consumeStream(resp *http.Response) (Result, error) {
 // credentials against OpenAI, and preserves the destination's own host ID.
 // The source process must stop refreshing after transfer (official VM flow).
 func (m *Manager) Import(ctx context.Context, path string) error {
-	f, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NOFOLLOW, 0)
+	f, err := os.OpenFile(path, os.O_RDONLY|openNoFollow, 0)
 	if err != nil {
 		return fmt.Errorf("cannot open protected transfer file")
 	}
 	defer f.Close()
 	info, err := f.Stat()
-	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0077 != 0 {
+	if err != nil || !info.Mode().IsRegular() || !ownerOnly(info) {
 		return fmt.Errorf("transfer file must have owner-only permissions")
 	}
 	var imported diskState

@@ -160,6 +160,15 @@ func (s *Store) AnswerDesk(ctx context.Context, scope memory.Scope, agentID, que
 	if err != nil {
 		return out, fmt.Errorf("%w: %w", memory.ErrUnavailable, err)
 	}
+	turnID := string(memory.NewID())
+	if err := s.recordReturnedUsage(ctx, result.Text, modelUsage{
+		OwnerID: scope.OwnerID, ID: memory.NewID(), At: time.Now().UTC(),
+		Purpose: "answer", AgentID: agent.ID, Model: p.Model,
+		InputTokens: result.InputTokens, OutputTokens: result.OutputTokens, Cost: result.Cost,
+		TurnID: turnID, MemoryRefs: dependencies,
+	}); err != nil {
+		return out, err
+	}
 	if err := checkContext(); err != nil {
 		return out, err
 	}
@@ -174,7 +183,7 @@ func (s *Store) AnswerDesk(ctx context.Context, scope memory.Scope, agentID, que
 		// A model that ignored the format still answered; show it without sources.
 		reply.Answer, reply.Used, reply.Links = strings.TrimSpace(result.Text), nil, nil
 	}
-	out = workspace.DeskAnswer{Answer: strings.TrimSpace(reply.Answer), Agent: agent.Name, Used: []workspace.DeskSource{}, Searches: []string{}, Links: []string{}}
+	out = workspace.DeskAnswer{ID: turnID, Answer: strings.TrimSpace(reply.Answer), Agent: agent.Name, Used: []workspace.DeskSource{}, Searches: []string{}, Links: []string{}}
 	if len(result.Searches) > 0 {
 		out.Searches = result.Searches[:min(len(result.Searches), 5)]
 	}
@@ -192,20 +201,11 @@ func (s *Store) AnswerDesk(ctx context.Context, scope memory.Scope, agentID, que
 			delete(sent, id)
 		}
 	}
-	out.ID = string(memory.NewID())
 	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(scope.OwnerID)); err != nil {
 			return err
 		}
 		if err := verifyRunTx(ctx, tx, scope, workspace.Run{AgentID: agent.ID, ContextVersions: dependencies}); err != nil {
-			return err
-		}
-		if err := recordUsageTx(ctx, tx, modelUsage{
-			OwnerID: scope.OwnerID, ID: memory.NewID(), At: time.Now().UTC(),
-			Purpose: "answer", AgentID: agent.ID, Model: p.Model,
-			InputTokens: result.InputTokens, OutputTokens: result.OutputTokens, Cost: result.Cost,
-			TurnID: out.ID, MemoryRefs: dependencies,
-		}); err != nil {
 			return err
 		}
 		_, err := tx.Exec(ctx, "INSERT INTO desk_turns(owner_id,id,agent_id,question,answer,dependencies) VALUES($1,$2,$3,$4,$5,$6)", string(scope.OwnerID), out.ID, agent.ID, question, out.Answer, asJSON(dependencies))
@@ -215,6 +215,21 @@ func (s *Store) AnswerDesk(ctx context.Context, scope memory.Scope, agentID, que
 		return workspace.DeskAnswer{}, err
 	}
 	return out, nil
+}
+
+// A returned model response incurred usage even if later validation, lease
+// checks or the answer transaction fail. Commit it once, independently of the
+// answer, and finish that short write if the caller disconnects. Text is only
+// checked for presence here; it is never included in the usage record.
+func (s *Store) recordReturnedUsage(ctx context.Context, text string, usage modelUsage) error {
+	if strings.TrimSpace(text) == "" {
+		return nil
+	}
+	persistCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+	defer cancel()
+	return pgx.BeginFunc(persistCtx, s.pool, func(tx pgx.Tx) error {
+		return recordUsageTx(persistCtx, tx, usage)
+	})
 }
 
 // tail keeps the last n bytes of s without splitting a character.
@@ -266,4 +281,43 @@ func deskLocation(settings workspace.Settings) *time.Location {
 func deskNow(loc *time.Location) string {
 	now := time.Now().In(loc)
 	return fmt.Sprintf("现在：%s 星期%s（%s）\n", now.Format("2006-01-02 15:04"), []string{"日", "一", "二", "三", "四", "五", "六"}[now.Weekday()], loc)
+}
+
+const recallTimeRelaxed = "按这个时间没有找到，下面是其他时间说的，回答时说明实际日期"
+const recallDateInstructions = "回忆类的问题按给出的日期回答；看到按时间没有找到的说明时，要说明实际是哪天说的。"
+
+// Append only supplied metadata; old memory lines stay byte-for-byte intact.
+func memoryPromptSuffix(m workspace.Memory, loc *time.Location) string {
+	if loc == nil {
+		loc = time.UTC
+	}
+	var suffix strings.Builder
+	if at, err := time.Parse(time.RFC3339Nano, m.ExpressedAt); err == nil {
+		fmt.Fprintf(&suffix, " / 说于 %s", at.In(loc).Format("2006-01-02"))
+	}
+	if from, err := time.Parse(time.RFC3339Nano, m.EventFrom); err == nil {
+		from = from.In(loc)
+		date := ""
+		switch m.EventPrecision {
+		case "day":
+			date = from.Format("2006-01-02")
+		case "month":
+			date = from.Format("2006-01")
+		case "year":
+			date = from.Format("2006")
+		case "range":
+			if to, err := time.Parse(time.RFC3339Nano, m.EventTo); err == nil && to.After(from) {
+				date = from.Format("2006-01-02") + " 至 " + to.Add(-time.Nanosecond).In(loc).Format("2006-01-02")
+			}
+		}
+		if date != "" {
+			fmt.Fprintf(&suffix, " / 事件 %s", date)
+		}
+	}
+	for _, mention := range m.Mentions {
+		if oneOf(mention.Role, "place", "person") && strings.TrimSpace(mention.Name) != "" {
+			fmt.Fprintf(&suffix, " / %s", mention.Name)
+		}
+	}
+	return suffix.String()
 }

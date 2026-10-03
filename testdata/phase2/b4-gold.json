@@ -1,0 +1,483 @@
+{
+  "contract": "docs/tasks/phase2/batch4/README.md",
+  "frozenBeforeTests": true,
+  "fixtures": {
+    "recall": {
+      "text": "2024 年成都出差，青色灯塔7319寄存柜的密码是8624。",
+      "question": "成都青色灯塔7319寄存柜密码是什么",
+      "at": "2024-06-12T03:10:00Z",
+      "role": "user"
+    },
+    "oldPlan": {
+      "text": "明天交成都旅行计划",
+      "at": "2025-05-14T03:10:00Z",
+      "nature": "plan",
+      "confirmation": "candidate"
+    },
+    "assistant": {
+      "text": "AI 提到紫色风车9427的备用号码是3816。",
+      "question": "紫色风车9427备用号码是什么",
+      "at": "2024-06-12T03:11:00Z",
+      "role": "assistant"
+    },
+    "branch": {
+      "active": "当前分支的成都饭店是银杏小馆2718。",
+      "abandoned": "放弃分支的成都饭店是红杉小馆1618。"
+    },
+    "usage": {
+      "inputTokens": 123,
+      "outputTokens": 17,
+      "inputPrice": 2,
+      "outputPrice": 4,
+      "cost": 0.000314,
+      "model": "b4-synthetic-model",
+      "privateMemory": "验收私密记忆：青玉罗盘5591，见到红塔以后向东走。",
+      "privateSource": "验收私密原话：蓝色雨伞6632，地下室只在清晨开放。"
+    },
+    "timezone": [
+      {
+        "zone": "Australia/Sydney",
+        "instant": "2024-06-12T23:30:00Z",
+        "date": "2024-06-13"
+      },
+      {
+        "zone": "Asia/Shanghai",
+        "instant": "2024-06-12T23:30:00Z",
+        "date": "2024-06-13"
+      }
+    ],
+    "usageDays": [
+      {
+        "zone": "Australia/Sydney",
+        "instants": [
+          "2025-05-13T13:59:00Z",
+          "2025-05-13T14:01:00Z"
+        ],
+        "dates": [
+          "2025-05-13",
+          "2025-05-14"
+        ]
+      },
+      {
+        "zone": "Asia/Shanghai",
+        "instants": [
+          "2025-05-13T15:59:00Z",
+          "2025-05-13T16:01:00Z"
+        ],
+        "dates": [
+          "2025-05-13",
+          "2025-05-14"
+        ]
+      },
+      {
+        "zone": "Australia/Sydney",
+        "instants": [
+          "2025-10-04T13:59:00Z",
+          "2025-10-04T14:01:00Z",
+          "2025-10-04T15:59:00Z",
+          "2025-10-04T16:01:00Z",
+          "2025-10-05T12:59:00Z",
+          "2025-10-05T13:01:00Z"
+        ],
+        "dates": [
+          "2025-10-04",
+          "2025-10-05",
+          "2025-10-05",
+          "2025-10-05",
+          "2025-10-05",
+          "2025-10-06"
+        ]
+      },
+      {
+        "zone": "Australia/Sydney",
+        "instants": [
+          "2025-04-05T12:59:00Z",
+          "2025-04-05T13:01:00Z",
+          "2025-04-05T15:59:00Z",
+          "2025-04-05T16:01:00Z",
+          "2025-04-06T13:59:00Z",
+          "2025-04-06T14:01:00Z"
+        ],
+        "dates": [
+          "2025-04-05",
+          "2025-04-06",
+          "2025-04-06",
+          "2025-04-06",
+          "2025-04-06",
+          "2025-04-07"
+        ]
+      }
+    ]
+  },
+  "oracles": {
+    "I1": "zip preview counts every supported message, reports skipped images, and changes no database rows",
+    "I2": "during a partial import with zero completed extraction, a new secretary conversation supplies original 2024 text with local spoken date and role to the actual fake-model HTTP request",
+    "I3": "real background import stops after its current chunk; paused-batch extraction is not leased; ordinary source completes; resume stores every message exactly once",
+    "I4": "identical file creates zero new sources; duplicate preview alreadyImported equals all messages; extended export adds only three new conversations",
+    "I5": "historical plan creates no current task or awakened idea despite enabled settings; extracted claim remains candidate and expressed_at is retained",
+    "I6": "among 500 imported messages, a newly spoken secretary source is extracted before queued imported sources",
+    "I7": "renamed non-zip, no-conversation zip, truncated JSON, upload overflow each have a distinct nonempty error type and human explanation and leave no data",
+    "I8": "small test limit keeps newest messages, reports exact leftOut in preview and batch, accepts export",
+    "I9": "SIGKILL the owned running background subprocess after a partial commit; restarted production worker completes without loss or duplication",
+    "I10": "HTTP archive deletion with children removes messages, derived claims, batch; a fresh secretary prompt omits original text",
+    "I11": "active and abandoned regenerated branches retain role, time and historical-branch marking",
+    "I12": "two genuinely concurrent imports; pausing one leaves other complete while paused stored is stable",
+    "I13": "UTC late-night message formats spoken date in Sydney and Shanghai",
+    "I14": "assistant original remains retrievable; assistant/system/tool texts never go to extraction model",
+    "L1": "successful secretary call writes one exact token/cost/model/purpose/turn record, references equal actual turn dependencies",
+    "L2": "successful deputy, legacy answer and extraction calls each write one row with correct purpose and corresponding run/turn/job identifier",
+    "L3": "failed model call writes zero rows; replayed successful request invokes model and records usage once",
+    "L4": "summary groups by owner local calendar day and purpose through both Sydney DST boundaries and Shanghai midnight",
+    "L5": "all usage columns contain no fixture prose; current text lookup clips at 80 Unicode characters; deleted ref has deleted indication and no text",
+    "L6": "both usage endpoints refuse a non-owner, unauthenticated caller; another owner cannot read this owner records",
+    "L7": "undo action, clear turn, delete referenced memory preserve exact usage row",
+    "W1": "file selection shows preview counts/date range/duplicates/leftOut before confirmation with no internal terminology",
+    "W2": "importing/paused/done/failed have appropriate progress/actions and no horizontal overflow at width 390",
+    "W3": "four import errors have four different human explanations",
+    "W4": "browser talks to real temporary backend, uploads synthetic export, pauses/resumes and sees completed progress plus messages in library",
+    "L8": "a model returns nonempty content with malformed output in extraction, secretary and deputy; each actual returned call adds exactly one usage row with its tokens and cost despite output rejection",
+    "L9": "repeat the identical legacy AnswerDesk request twice; it performs two actual model calls and writes two distinct usage rows, one per returned call"
+  },
+  "browser": {
+    "preview": {
+      "name": "chatgpt-export.zip",
+      "conversations": 3,
+      "messages": 12,
+      "fromUser": 6,
+      "earliest": "2024-06-12T03:10:00Z",
+      "latest": "2025-05-14T03:10:00Z",
+      "alreadyImported": 4,
+      "leftOut": 2,
+      "gaps": [
+        "图片 photo-1.png 已跳过"
+      ]
+    },
+    "width": 390,
+    "forbiddenTerms": [
+      "来源",
+      "陈述",
+      "实体",
+      "版本",
+      "依赖",
+      "抽取"
+    ]
+  },
+  "coordinator_amendment_5865411": {
+    "authority": "batch4/README.md section 6 and coordinator instruction 2026-10-02",
+    "I9": "cancel running source.parse after partial chunk commits; let owned lease expire and re-lease; resume without loss or duplication",
+    "variables": {
+      "connectors.MaxUploadBytes": 209715200,
+      "connectors.MaxArchiveBytes": 536870912,
+      "connectors.MaxArchiveRecords": 200000,
+      "postgres.ImportChunkSize": 500
+    },
+    "W4": {
+      "environment": "PCAS_IMPORT_CHUNK_SIZE=1",
+      "messages": 2000,
+      "artificialDelay": false
+    },
+    "errors": {
+      "renamedZip": {
+        "code": "invalid_zip",
+        "status": 400
+      },
+      "unsupported": {
+        "code": "unsupported_archive",
+        "status": 400
+      },
+      "emptyZip": {
+        "code": "no_supported_records",
+        "status": 400
+      },
+      "truncatedJSON": {
+        "code": "invalid_json",
+        "status": 400
+      },
+      "tooLarge": {
+        "code": "archive_too_large",
+        "status": 413
+      },
+      "wrongImportState": {
+        "code": "import_not_active",
+        "status": 409
+      }
+    },
+    "usageSummary": {
+      "inclusiveDates": true,
+      "order": "ascending",
+      "emptyDays": "omit"
+    },
+    "calls": {
+      "order": "descending",
+      "defaultLimit": 50,
+      "maxLimit": 100,
+      "cursor": "next -> before",
+      "deleted": {
+        "deleted": true,
+        "text": ""
+      },
+      "textMaxCharacters": 80
+    },
+    "imports": "items array, newest first, no pagination, leftOut is persisted in left_out"
+  },
+  "coordinator_amendment_1cec28b": {
+    "authority": "batch4/README.md section 6 and coordinator instruction 2026-10-02",
+    "errorEnvelope": {
+      "fields": [
+        "error",
+        "message"
+      ],
+      "message": "nonempty; distinct across failure kinds; wording not asserted"
+    },
+    "imports": {
+      "requiredArchiveFields": [
+        "archiveId",
+        "archiveVersion"
+      ]
+    },
+    "I10": {
+      "method": "POST",
+      "endpoint": "/v1/memory/delete",
+      "target": "batch.archiveId + batch.archiveVersion + kind=source",
+      "include_sources": true,
+      "closure": "archive, all its messages and derived claims; import_batches cascades with archive"
+    }
+  },
+  "coordinator_amendment_b9d26f0": {
+    "authority": "batch4/README.md R12, sequences L8/L9 and coordinator instruction",
+    "returnedButRejected": "returning model content is billed and logged even if subsequent format validation rejects it",
+    "replayProtection": "secretary request ID and deputy run only; legacy answer has no request ID and is billed per call",
+    "fixtures": {
+      "invalidExtractionContent": "{\"items\":[",
+      "invalidSecretaryContent": "{\"reply\":",
+      "legacyQuestion": "合成L9旧导办台相同问话：青玉罗盘今天怎样安排"
+    }
+  },
+  "coordinator_amendment_2e2b8f9": {
+    "authority": "batch4/README.md section 7 and coordinator instruction",
+    "L8Deputy": "a referenced memory is corrected while the fake model is generating; the returned free-text result is rejected, run fails with 生成期间记忆或授权已变化 and is not adopted, but exactly one returned-call usage row remains",
+    "usagePersistence": "record returned content in an independent short transaction; later result failure, cancellation or rollback cannot erase the row",
+    "blocked": {
+      "previewField": "blocked",
+      "classification": "separate from alreadyImported and leftOut",
+      "behavior": "skip messages banned from reimport without failing the batch",
+      "excludeFrom": [
+        "total",
+        "stored"
+      ],
+      "gaps": "nonempty human explanation",
+      "uiCountFormula": "messages - alreadyImported - leftOut - blocked"
+    },
+    "fixtures": {
+      "deputyReturnedText": "- [ ] 合成L8副手结果：整理青玉罗盘，向东走。",
+      "deputyCorrection": "验收私密记忆：青玉罗盘5591，现在应向西走。",
+      "rollbackReply": "合成L8结果提交前已成功返回。"
+    },
+    "blockedPreview": {
+      "name": "chatgpt-export.zip",
+      "conversations": 3,
+      "messages": 17,
+      "fromUser": 10,
+      "earliest": "2024-06-12T03:10:00Z",
+      "latest": "2025-05-14T03:10:00Z",
+      "alreadyImported": 4,
+      "leftOut": 2,
+      "gaps": [
+        "图片 photo-1.png 已跳过"
+      ],
+      "blocked": 3
+    },
+    "blockedWillImport": 8
+  },
+  "coordinator_amendment_96c6cb1": {
+    "authority": "batch4/README.md section 8 at 96c6cb1 and coordinator instruction",
+    "classificationOrder": "apply newest-record cap first; every excluded message is only leftOut regardless of prior import or ban; classify retained messages as alreadyImported, blocked or new, with no overlap",
+    "previewInvariant": "messages = leftOut + alreadyImported + blocked + new",
+    "batchTotal": "messages - leftOut - blocked; retained alreadyImported messages count as stored",
+    "completedStored": "equals batch total; alreadyImported + newly stored, never blocked or leftOut",
+    "supersedes": "the earlier blocked-message test inferred total=stored=1 for one existing and one new retained message; section 8 requires total=stored=2; earlier golden entries remain unchanged",
+    "blockedExtension": {
+      "messages": 3,
+      "leftOut": 0,
+      "alreadyImported": 1,
+      "blocked": 1,
+      "new": 1,
+      "total": 2,
+      "stored": 2
+    },
+    "duplicateOnly": {
+      "messages": 4,
+      "leftOut": 0,
+      "alreadyImported": 4,
+      "blocked": 0,
+      "new": 0,
+      "total": 4,
+      "stored": 4
+    },
+    "extended": {
+      "messages": 7,
+      "leftOut": 0,
+      "alreadyImported": 4,
+      "blocked": 0,
+      "new": 3,
+      "total": 7,
+      "stored": 7
+    },
+    "cappedMixed": {
+      "chronologicalIndices": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
+      "initiallyImportedIndices": [
+        0,
+        1,
+        3,
+        4,
+        6
+      ],
+      "bannedIndices": [
+        1,
+        4
+      ],
+      "cap": 5,
+      "leftOutIndices": [
+        0,
+        1,
+        2
+      ],
+      "retainedAlreadyImportedIndices": [
+        3,
+        6
+      ],
+      "retainedBlockedIndices": [
+        4
+      ],
+      "newIndices": [
+        5,
+        7
+      ],
+      "messages": 8,
+      "leftOut": 3,
+      "alreadyImported": 2,
+      "blocked": 1,
+      "new": 2,
+      "total": 4,
+      "stored": 4,
+      "oldExisting": "index 0 stays in the database but counts only as leftOut in this preview",
+      "oldBanned": "index 1 counts only as leftOut, not blocked, and must not be restored",
+      "oldUnseen": "index 2 is not stored"
+    },
+    "browser": {
+      "preview": {
+        "name": "chatgpt-export.zip",
+        "conversations": 3,
+        "messages": 17,
+        "fromUser": 10,
+        "earliest": "2024-06-12T03:10:00Z",
+        "latest": "2025-05-14T03:10:00Z",
+        "alreadyImported": 4,
+        "leftOut": 2,
+        "gaps": [
+          "图片 photo-1.png 已跳过",
+          "3 条消息已被设为不再导入，已跳过。"
+        ],
+        "blocked": 3
+      },
+      "new": 8,
+      "batchTotal": 12,
+      "initialStored": 4,
+      "blockedDisplay": "show the gaps explanation; no separate blocked legend row is required"
+    }
+  },
+  "coordinator_amendment_b526328": {
+    "authority": "batch4/README.md section 11 and T4 acceptance supplement at b526328, coordinator instruction 2026-10-03",
+    "scope": "I15-I20 and W5; section 12 C sequences remain outside this delivery",
+    "form": {
+      "field": "organize",
+      "values": [
+        "later",
+        "now"
+      ],
+      "default": "later"
+    },
+    "wire": {
+      "batchFlag": "organizeLater",
+      "startEndpoint": "POST /v1/connectors/imports/{id}/organize"
+    },
+    "persistence": {
+      "migration": 29,
+      "table": "import_batches",
+      "holdColumn": "hold_organizing",
+      "held": true
+    },
+    "sequences": {
+      "I15": "explicit later stores all original messages; stored equals total, organized=0, organizeLater=true; drain the actual queue to prove chunks, tokens and vectors are processed while extraction is never claimed and no extraction model or usage row is produced",
+      "I16": "after a fully indexed held import, ask the frozen historical detail in another conversation; inspect actual secretary HTTP prompt and original-source dependency; no extraction of held messages",
+      "I17": "start organizing through HTTP after I15; organizeLater and hold flag become false; real queue claims user-message extraction jobs with priority 10; actual extraction HTTP calls occur and organized grows",
+      "I18": "while import extraction is held, a new ordinary secretary utterance is handled and extracted; actual extraction prompt includes the new utterance but none of the held import texts; import flag stays true and organized stays zero",
+      "I19": "pause a genuinely processing later import, finish the current small batch, resume and store everything without releasing extraction hold; delete original archive through existing HTTP closure; all messages and batch disappear",
+      "I20": "omit organize form field; same stored/indexed but held, zero extraction behavior as explicit later",
+      "W5": "confirmation defaults to 先存着 and offers immediate organizing; submitted later and now fields reflect selection; completed held batch says 已存好，还没开始整理 and exposes 开始整理; clicking calls organize endpoint, releases hold and displayed organized progress grows"
+    },
+    "positiveControl": "explicit organize=now releases extraction from the outset; real queue produces extraction calls and organized progress, contrasting later",
+    "fixtures": {
+      "messages": 3,
+      "prefix": "合成先存着资料",
+      "ordinaryUtterance": "合成秘书新原话：紫玉铃铛5508，我每天喜欢步行到河边。",
+      "heldStatus": "已存好，还没开始整理",
+      "laterLabel": "先存着",
+      "startLabel": "开始整理",
+      "pauseMessages": 2000
+    },
+    "embedding": "local free deterministic embedding provider only; embedding HTTP requests are captured separately from extraction/secretary requests and are excluded from extraction call counts",
+    "originalRound": "I1-I14/L1-L9/W1-W4 run once on pinned acceptance commit based on b526328; new tests are delivered first, not included in this original-round result"
+  },
+  "coordinator_adjudication_pr129": {
+    "authority": "batch4/README.md section 13 in PR #129 at 52eaf1865e1eaa01884b6234697008f66abbde4e; coordinator instruction 2026-10-03",
+    "fixture": "b4API passes Editor: s to register the existing POST /v1/memory/delete; all deletion oracles unchanged",
+    "browserInternalTerms": "W1/W2 inspect only the import upload/progress area and import preview dialog; other settings text is outside batch4 scope; forbiddenTerms list unchanged",
+    "secretaryErrorChannel": "L3/L8 permit existing HTTP 200 / nil Go error fallback; failed model calls record zero rows, returned malformed content records one row, successful replay records no additional call or usage row",
+    "pauseReturn": "I3/I12/I19 may accept errors.Is(err, worker.ErrLeaseLost) only at paused-parser completion; still require stable stored/organized, isolation and complete nonduplicating resume",
+    "pauseFixture": "I3/I12 use explicit organize=now so paused extraction jobs are otherwise eligible; I19 stays later and retains its hold through pause/resume",
+    "unchanged": [
+      "L8 independent short transaction and rollback/cancel durability",
+      "I15 now positive control organized growth",
+      "I17 organized growth",
+      "I6 extraction priority and original timeout"
+    ],
+    "browserFixture": "accessible confirmation button may be 导入 N 条; only locators change, confirmation-before-upload and behavior oracles remain unchanged"
+  },
+  "coordinator_adjudication_pr129_followup": {
+    "authority": "batch4/README.md section 13 items 4-5 in PR #129 at 6a2dc94c1ca133f35b1c97326ae3e054f9229839; coordinator follow-up 2026-10-03",
+    "L8Cancel": "before cancellation, returned-call usage is independently visible; after cancellation the exact same row persists; secretary may save its original and answer; no ten-second result-writing stop requirement, no required Go error or absent answer",
+    "L8Rollback": "unchanged independent visibility, real SQL rollback, retained exact row and absent rejected answer assertions",
+    "browserStoredStatus": "W2/W4 completed-original status matcher additionally accepts 已存好; all counts, controls and subsequent behavior assertions unchanged",
+    "rerunGate": "modified L8 independent transaction, I15 now positive control, I17 and I6 await coordinator notification after backend fixes merge"
+  },
+  "coordinator_fixture_c093e0a": {
+    "authority": "coordinator instruction to rebase onto c093e0a and rerun all on 2026-10-03; batch2 R1 extraction format",
+    "defaultExtractionContent": "{\"items\":[]}",
+    "reason": "default positive extraction output must contain only extraction-contract fields; prior universal reply/answer/used/actions/output fields made extraction parsing fail",
+    "oracles": "all sequence expectations remain unchanged, including organized growth, ordinary/new-source priority, and independent usage before result commit with rollback/cancel durability",
+    "baseline": "c093e0a5568cad3c1e307076c70a6b41dcc569a8"
+  },
+  "coordinator_fixture_e775cd6_conversation": {
+    "authority": "coordinator instruction 2026-10-03; batch4 README sections 12, 12.1 and 13 items 6-7; origin/phase2/final e775cd688355ce4aef98c06dd38b95b6332073eb",
+    "scope": [
+      "I5",
+      "I10",
+      "I14"
+    ],
+    "entry": "complete the actual uploaded archive, release organizing through the existing HTTP organize operation, then drain the real worker queue; do not manufacture conversation stages or bypass holds",
+    "output": "conversation extraction items carry message_index starting at 1 and an exact user-message quote; only conversation-contract fields, without legacy task/signal output",
+    "I5": "same historical plan, historical spoken time, candidate confirmation, no current task and no shelved-idea wake",
+    "I10": "same three-message export; return the recall memory only for the conversation containing that user text; delete archive with include_sources=true, then require all messages, memory and batch absent and no subsequent recall",
+    "I14": "same assistant/system/tool original texts, roles and times; no user message in the conversation, no extraction call, each message has empty processing record with items=0 and extractor=3; assistant original remains recallable"
+  }
+}

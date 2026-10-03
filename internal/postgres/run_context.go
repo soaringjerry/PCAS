@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
@@ -11,6 +12,7 @@ import (
 
 type runContextKey struct{}
 type preparedRunContext struct {
+	Plan     memory.QueryPlan
 	Refs     []memory.Ref
 	Excerpts []memory.RecallExcerpt
 	Previous *workspace.Run
@@ -35,6 +37,8 @@ func (s *Store) prepareRunContext(ctx context.Context, scope memory.Scope, c wor
 	query := c.Prompt
 	projectID := c.ProjectID
 	var previous *workspace.Run
+	var plan memory.QueryPlan
+	var thingID string
 	if err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		agent, err := queryDocument[workspace.Agent](ctx, tx, "SELECT document FROM workspace_agents WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), c.AgentID)
 		if err != nil {
@@ -53,6 +57,12 @@ func (s *Store) prepareRunContext(ctx context.Context, scope memory.Scope, c wor
 				return err
 			}
 		}
+		thingID = item.ID
+		settings, err := queryDocument[workspace.Settings](ctx, tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1", string(scope.OwnerID))
+		if err != nil {
+			return err
+		}
+		plan = memory.PlanQuery(c.Prompt, time.Now(), deskLocation(settings))
 		for _, id := range c.DeskTurnIDs {
 			if !memory.ID(id).Valid() {
 				return memory.ErrInvalid
@@ -88,7 +98,7 @@ func (s *Store) prepareRunContext(ctx context.Context, scope memory.Scope, c wor
 	}); err != nil {
 		return ctx, err
 	}
-	request := memory.RecallRequest{Query: tail(strings.TrimSpace(query), 4000), Mode: memory.Continue, Budget: memory.Budget{Candidates: 100, Tokens: 10000, Edges: 30, Hops: 1}}
+	request := memory.RecallRequest{Team: &memory.TeamRecall{Text: c.Prompt, Plan: plan, ThingID: &thingID, ProjectID: &projectID}, Query: tail(strings.TrimSpace(query), 4000), Mode: memory.Continue, Budget: memory.Budget{Candidates: 100, Tokens: 10000, Edges: 30, Hops: 1}}
 	if projectID != "" {
 		request.Context.Objects = []memory.ID{memory.ID(projectID)}
 	}
@@ -96,7 +106,7 @@ func (s *Store) prepareRunContext(ctx context.Context, scope memory.Scope, c wor
 	if err != nil {
 		return ctx, err
 	}
-	return context.WithValue(ctx, runContextKey{}, preparedRunContext{Refs: result.Memories, Excerpts: result.Excerpts, Previous: previous, History: history}), nil
+	return context.WithValue(ctx, runContextKey{}, preparedRunContext{Plan: plan, Refs: result.Memories, Excerpts: result.Excerpts, Previous: previous, History: history}), nil
 }
 
 func mostRecentPermittedRunTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, item workspace.Item, agent string) (*workspace.Run, error) {

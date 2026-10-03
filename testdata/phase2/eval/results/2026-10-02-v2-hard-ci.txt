@@ -1,0 +1,37 @@
+=== RUN   TestPhase2EvalRetrieval
+=== RUN   TestPhase2EvalRetrieval/hard
+=== RUN   TestPhase2EvalRetrieval/hard/gold-structured
+    phase2_eval_test.go:62: tier=hard native structured migration=true baseline=awaiting_coordinator docs=2728 queries=10/40 seed+setup=17.226769171s
+    phase2_eval_test.go:63: | question | type | delivered/required | recall | distractor pairs | interference |
+        |---|---|---:|---:|---:|---:|
+2026/10/02 18:47:59 INFO secretary output parsed stage=parse error_type=none
+    phase2_eval_test.go:86: | hard-time-entity-01 | time-entity | 0/1 | 0.0000 | 19/64 | 0.2969 |
+2026/10/02 18:48:06 INFO secretary output parsed stage=parse error_type=none
+    phase2_eval_test.go:86: | hard-time-entity-02 | time-entity | 0/1 | 0.0000 | 19/64 | 0.2969 |
+2026/10/02 18:48:12 INFO secretary output parsed stage=parse error_type=none
+    phase2_eval_test.go:86: | hard-time-only-01 | time-only | 0/8 | 0.0000 | 40/4096 | 0.0098 |
+2026/10/02 18:48:17 INFO secretary output parsed stage=parse error_type=none
+    phase2_eval_test.go:86: | hard-time-only-02 | time-only | 0/8 | 0.0000 | 0/4096 | 0.0000 |
+2026/10/02 18:48:22 INFO secretary output parsed stage=parse error_type=none
+    phase2_eval_test.go:86: | hard-entity-only-01 | entity-only | 1/1 | 1.0000 | 0/64 | 0.0000 |
+2026/10/02 18:48:26 INFO secretary output parsed stage=parse error_type=none
+    phase2_eval_test.go:86: | hard-entity-only-02 | entity-only | 1/1 | 1.0000 | 0/64 | 0.0000 |
+2026/10/02 18:48:31 INFO secretary output parsed stage=parse error_type=none
+    phase2_eval_test.go:86: | hard-wrong-time-01 | wrong-time | 1/1 | 1.0000 | 8/64 | 0.1250 |
+2026/10/02 18:48:35 INFO secretary output parsed stage=parse error_type=none
+    phase2_eval_test.go:86: | hard-wrong-time-02 | wrong-time | 1/1 | 1.0000 | 7/64 | 0.1094 |
+2026/10/02 18:48:39 INFO secretary output parsed stage=parse error_type=none
+    phase2_eval_test.go:86: | hard-ordinary-01 | ordinary | 1/1 | 1.0000 | 0/64 | 0.0000 |
+2026/10/02 18:48:44 INFO secretary output parsed stage=parse error_type=none
+    phase2_eval_test.go:86: | hard-ordinary-02 | ordinary | 1/1 | 1.0000 | 0/64 | 0.0000 |
+    phase2_eval_test.go:89: hard TYPE=time-entity queries=2 recall=0.000000 interference=0.296875 evidence=0/2 inversions=38/128 elapsed=1m7.512518776s
+    phase2_eval_test.go:89: hard TYPE=time-only queries=2 recall=0.000000 interference=0.004883 evidence=0/16 inversions=40/8192 elapsed=1m7.512543146s
+    phase2_eval_test.go:89: hard TYPE=entity-only queries=2 recall=1.000000 interference=0.000000 evidence=2/2 inversions=0/128 elapsed=1m7.512550116s
+    phase2_eval_test.go:89: hard TYPE=wrong-time queries=2 recall=1.000000 interference=0.117188 evidence=2/2 inversions=15/128 elapsed=1m7.512560226s
+    phase2_eval_test.go:89: hard TYPE=ordinary queries=2 recall=1.000000 interference=0.000000 evidence=2/2 inversions=0/128 elapsed=1m7.512569406s
+    phase2_eval_test.go:89: hard TYPE=all queries=10 recall=0.250000 interference=0.010685 evidence=6/24 inversions=93/8704 elapsed=1m7.512579276s
+--- PASS: TestPhase2EvalRetrieval (67.62s)
+    --- PASS: TestPhase2EvalRetrieval/hard (67.58s)
+        --- PASS: TestPhase2EvalRetrieval/hard/gold-structured (67.58s)
+PASS
+ok  	github.com/soaringjerry/PCAS/internal/postgres	67.636s

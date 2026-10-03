@@ -370,6 +370,9 @@ func (s *Store) ProcessExtraction(ctx context.Context, j worker.Job) (err error)
 	if err := s.pool.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM archive_entries WHERE owner_id=$1 AND source_id=$2 AND source_version=$3)", string(j.OwnerID), string(j.Record.ID), j.Record.Version).Scan(&imported); err != nil {
 		return err
 	}
+	if imported && source.Context != nil && source.Context.Conversation != "" {
+		return s.processConversationExtraction(ctx, j, source.Context.Conversation)
+	}
 	if imported && source.Context != nil && oneOf(source.Context.Role, "assistant", "system", "tool") {
 		return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 			if err := extractionOwnerLock(ctx, tx, j.OwnerID); err != nil {
@@ -488,24 +491,22 @@ func (s *Store) ProcessExtraction(ctx context.Context, j worker.Job) (err error)
 	if err != nil {
 		return &worker.JobError{Code: "model_call_failed", Retry: free}
 	}
+	if strings.TrimSpace(result.Text) != "" {
+		if err := s.recordUsage(ctx, modelUsage{
+			OwnerID: j.OwnerID, ID: memory.NewID(), At: time.Now().UTC(),
+			Purpose: "extraction", AgentID: p.ID, Model: p.Model,
+			InputTokens: result.InputTokens, OutputTokens: result.OutputTokens, Cost: result.Cost,
+			JobID: string(j.ID), MemoryRefs: []memory.Ref{j.Record},
+		}); err != nil {
+			return err
+		}
+	}
 	text := strings.TrimSpace(result.Text)
 	text = strings.TrimPrefix(text, "```json")
 	text = strings.TrimPrefix(text, "```")
 	text = strings.TrimSuffix(text, "```")
 	var extraction extracted
 	if strictJSON([]byte(strings.TrimSpace(text)), &extraction) != nil || len(extraction.Items) > 30 {
-		if strings.TrimSpace(result.Text) != "" {
-			if err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-				return recordUsageTx(ctx, tx, modelUsage{
-					OwnerID: j.OwnerID, ID: memory.NewID(), At: time.Now().UTC(),
-					Purpose: "extraction", AgentID: p.ID, Model: p.Model,
-					InputTokens: result.InputTokens, OutputTokens: result.OutputTokens, Cost: result.Cost,
-					JobID: string(j.ID), MemoryRefs: []memory.Ref{j.Record},
-				})
-			}); err != nil {
-				return err
-			}
-		}
 		return &worker.JobError{Code: "model_output_invalid", Retry: free}
 	}
 	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
@@ -513,14 +514,6 @@ func (s *Store) ProcessExtraction(ctx context.Context, j worker.Job) (err error)
 			return err
 		}
 		if err := lockJob(ctx, tx, j); err != nil {
-			return err
-		}
-		if err := recordUsageTx(ctx, tx, modelUsage{
-			OwnerID: j.OwnerID, ID: memory.NewID(), At: time.Now().UTC(),
-			Purpose: "extraction", AgentID: p.ID, Model: p.Model,
-			InputTokens: result.InputTokens, OutputTokens: result.OutputTokens, Cost: result.Cost,
-			JobID: string(j.ID), MemoryRefs: []memory.Ref{j.Record},
-		}); err != nil {
 			return err
 		}
 		current, err := currentExtractionSource(ctx, tx, j)
@@ -690,6 +683,9 @@ func completeExtractionTx(ctx context.Context, tx pgx.Tx, j worker.Job, state st
 // done after scheduling windows; only all completed windows finish the source.
 // E2 also calls this after a job permanently stops or exhausts its lease.
 func extractionStateTx(ctx context.Context, tx pgx.Tx, j worker.Job, state string) error {
+	if strings.HasPrefix(j.Stage, conversationExtractionPrefix) {
+		return conversationExtractionStateTx(ctx, tx, j, state)
+	}
 	if !strings.HasPrefix(j.Stage, "source.extract") {
 		return nil
 	}

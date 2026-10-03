@@ -1,0 +1,4463 @@
+{
+  "schema_version": 1,
+  "persona": "南枝（完全虚构）",
+  "timezone": "Asia/Shanghai",
+  "scenarios": [
+    {
+      "id": "names-tea",
+      "interference": [
+        "same_name",
+        "others_plan"
+      ],
+      "rationale": "两位同名者用职业区分；标准实体仍按契约合并，不人工消除难点。",
+      "documents": [
+        {
+          "id": "nt1",
+          "title": "随手记",
+          "text": "我和书店店员林舟约好在青禾书店交换《雨巷》初版。",
+          "expressed_days": -20,
+          "recorded_days": -20,
+          "connector": "capture",
+          "role": "user",
+          "gold": {
+            "items": [
+              {
+                "kind": "memory",
+                "text": "我和书店店员林舟约好在青禾书店交换《雨巷》初版。",
+                "nature": "plan",
+                "subject": "我",
+                "predicate": "描述",
+                "quote": "我和书店店员林舟约好在青禾书店交换《雨巷》初版。",
+                "confidence": 1.0,
+                "explicit": false,
+                "acquisition": "direct",
+                "qualification": "asserted",
+                "people": [
+                  "林舟"
+                ],
+                "places": [
+                  "青禾书店"
+                ],
+                "organizations": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "nt2",
+          "title": "随手记",
+          "text": "林舟是医院护士；他自己的计划是去云桥医院上夜班，不是我的安排。",
+          "expressed_days": -19,
+          "recorded_days": -19,
+          "connector": "capture",
+          "role": "user",
+          "gold": {
+            "items": [
+              {
+                "kind": "memory",
+                "text": "林舟是医院护士；他自己的计划是去云桥医院上夜班，不是我的安排。",
+                "nature": "plan",
+                "subject": "林舟",
+                "predicate": "描述",
+                "quote": "林舟是医院护士；他自己的计划是去云桥医院上夜班，不是我的安排。",
+                "confidence": 1.0,
+                "explicit": false,
+                "acquisition": "reported",
+                "qualification": "quoted",
+                "people": [
+                  "林舟"
+                ],
+                "places": [
+                  "云桥医院"
+                ],
+                "organizations": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "nt3",
+          "title": "随手记",
+          "text": "书店店员林舟喜欢乌龙茶，医院护士林舟喜欢柠檬水。",
+          "expressed_days": -18,
+          "recorded_days": -18,
+          "connector": "capture",
+          "role": "user",
+          "gold": {
+            "items": [
+              {
+                "kind": "memory",
+                "text": "书店店员林舟喜欢乌龙茶，医院护士林舟喜欢柠檬水。",
+                "nature": "fact",
+                "subject": "我",
+                "predicate": "描述",
+                "quote": "书店店员林舟喜欢乌龙茶，医院护士林舟喜欢柠檬水。",
+                "confidence": 1.0,
+                "explicit": false,
+                "acquisition": "direct",
+                "qualification": "asserted",
+                "people": [
+                  "林舟"
+                ],
+                "places": [],
+                "organizations": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "nt4",
+          "title": "随手记",
+          "text": "我决定给书店店员林舟带一罐乌龙茶。",
+          "expressed_days": -17,
+          "recorded_days": -17,
+          "connector": "capture",
+          "role": "user",
+          "gold": {
+            "items": [
+              {
+                "kind": "memory",
+                "text": "我决定给书店店员林舟带一罐乌龙茶。",
+                "nature": "decision",
+                "subject": "我",
+                "predicate": "描述",
+                "quote": "我决定给书店店员林舟带一罐乌龙茶。",
+                "confidence": 1.0,
+                "explicit": false,
+                "acquisition": "direct",
+                "qualification": "asserted",
+                "people": [
+                  "林舟"
+                ],
+                "places": [],
+                "organizations": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "nt5",
+          "title": "聊天记录",
+          "text": "AI建议：给林舟带柠檬水。",
+          "expressed_days": -16,
+          "recorded_days": 0,
+          "connector": "archive",
+          "role": "assistant",
+          "gold": {
+            "items": []
+          }
+        },
+        {
+          "id": "nt6",
+          "title": "随手记",
+          "text": "我明天在青禾书店只待半小时，不去医院。",
+          "expressed_days": -15,
+          "recorded_days": -15,
+          "connector": "capture",
+          "role": "user",
+          "gold": {
+            "items": [
+              {
+                "kind": "memory",
+                "text": "我明天在青禾书店只待半小时，不去医院。",
+                "nature": "plan",
+                "subject": "我",
+                "predicate": "描述",
+                "quote": "我明天在青禾书店只待半小时，不去医院。",
+                "confidence": 1.0,
+                "explicit": false,
+                "acquisition": "direct",
+                "qualification": "asserted",
+                "people": [],
+                "places": [
+                  "青禾书店"
+                ],
+                "organizations": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "names-tea-d7",
+          "title": "随手记",
+          "text": "我为names-tea这次记录换了一个灰色笔记封面，编号是7。",
+          "expressed_days": -7,
+          "recorded_days": -7,
+          "connector": "capture",
+          "role": "user",
+          "gold": {
+            "items": [
+              {
+                "kind": "memory",
+                "text": "我为names-tea这次记录换了一个灰色笔记封面，编号是7。",
+                "nature": "preference",
+                "subject": "我",
+                "predicate": "描述",
+                "quote": "我为names-tea这次记录换了一个灰色笔记封面，编号是7。",
+                "confidence": 1.0,
+                "explicit": false,
+                "acquisition": "direct",
+                "qualification": "asserted",
+                "people": [],
+                "places": [],
+                "organizations": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "names-tea-d8",
+          "title": "随手记",
+          "text": "我为names-tea这次记录换了一个灰色笔记封面，编号是8。",
+          "expressed_days": -8,
+          "recorded_days": -8,
+          "connector": "capture",
+          "role": "user",
+          "gold": {
+            "items": [
+              {
+                "kind": "memory",
+                "text": "我为names-tea这次记录换了一个灰色笔记封面，编号是8。",
+                "nature": "preference",
+                "subject": "我",
+                "predicate": "描述",
+                "quote": "我为names-tea这次记录换了一个灰色笔记封面，编号是8。",
+                "confidence": 1.0,
+                "explicit": false,
+                "acquisition": "direct",
+                "qualification": "asserted",
+                "people": [],
+                "places": [],
+                "organizations": []
+              }
+            ]
+          }
+        }
+      ],
+      "queries": [
+        {
+          "id": "nt-q1",
+          "text": "我和青禾书店的林舟交换什么？",
+          "evidence": [
+            {
+              "source": "nt1",
+              "item": 0
+            }
+          ],
+          "distractors": [
+            "nt2",
+            "nt5"
+          ],
+          "facts": [
+            {
+              "any": [
+                "《雨巷》"
+              ]
+            },
+            {
+              "any": [
+                "初版"
+              ]
+            }
+          ],
+          "rationale": "nt1直接写交换对象；护士夜班属于另一人。"
+        },
+        {
+          "id": "nt-q2",
+          "text": "我要给书店店员林舟带什么饮料？",
+          "evidence": [
+            {
+              "source": "nt4",
+              "item": 0
+            }
+          ],
+          "distractors": [
+            "nt2",
+            "nt5"
+          ],
+          "facts": [
+            {
+              "any": [
+                "乌龙茶"
+              ]
+            }
+          ],
+          "rationale": "nt4是本人决定，AI建议不能替代。"
+        },
+        {
+          "id": "nt-q3",
+          "text": "去云桥医院上夜班是谁的计划？",
+          "evidence": [
+            {
+              "source": "nt2",
+              "item": 0
+            }
+          ],
+          "distractors": [
+            "nt1",
+            "nt6"
+          ],
+          "facts": [
+            {
+              "any": [
+                "林舟"
+              ]
+            },
+            {
+              "any": [
+                "医院护士"
+              ]
+            }
+          ],
+          "rationale": "nt2明确归属；两个林舟只能靠原话区分。"
+        }
+      ]
+    },
+    {
+      "id": "names-camera",
+      "interference": [
+        "same_name",
+        "others_plan",
+        "repeated_details"
+      ],
+      "rationale": "同名职业、转述他人计划和复核后数量交叉。",
+      "documents": [
+        {
+          "id": "nc1",
+          "title": "随手记",
+          "text": "我约摄影师温岚在照相馆修复母亲的底片。",
+          "expressed_days": -40,
+          "recorded_days": -40,
+          "connector": "capture",
+          "role": "user",
+          "gold": {
+            "items": [
+              {
+                "kind": "memory",
+                "text": "我约摄影师温岚在照相馆修复母亲的底片。",
+                "nature": "plan",
+                "subject": "我",
+                "predicate": "描述",
+                "quote": "我约摄影师温岚在照相馆修复母亲的底片。",
+                "confidence": 1.0,
+                "explicit": false,
+                "acquisition": "direct",
+                "qualification": "asserted",
+                "people": [
+                  "温岚"
+                ],
+                "places": [
+                  "照相馆"
+                ],
+                "organizations": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "nc2",
+          "title": "随手记",
+          "text": "温岚是园艺师；她说她要买月季种苗，和我的底片无关。",
+          "expressed_days": -39,
+          "recorded_days": -39,
+          "connector": "capture",
+          "role": "user",
+          "gold": {
+            "items": [
+              {
+                "kind": "memory",
+                "text": "温岚是园艺师；她说她要买月季种苗，和我的底片无关。",
+                "nature": "plan",
+                "subject": "温岚",
+                "predicate": "描述",
+                "quote": "温岚是园艺师；她说她要买月季种苗，和我的底片无关。",
+                "confidence": 1.0,
+                "explicit": false,
+                "acquisition": "reported",
+                "qualification": "quoted",
+                "people": [
+                  "温岚"
+                ],
+                "places": [],
+                "organizations": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "nc3",
+          "title": "随手记",
+          "text": "我最初说底片有十二张，后来数清是十五张；交给摄影师温岚的是十五张。",
+          "expressed_days": -38,
+          "recorded_days": -38,
+          "connector": "capture",
+          "role": "user",
+          "gold": {
+            "items": [
+              {
+                "kind": "memory",
+                "text": "我最初说底片有十二张，后来数清是十五张；交给摄影师温岚的是十五张。",
+                "nature": "fact",
+                "subject": "我",
+                "predicate": "描述",
+                "quote": "我最初说底片有十二张，后来数清是十五张；交给摄影师温岚的是十五张。",
+                "confidence": 1.0,
+                "explicit": false,
+                "acquisition": "direct",
+                "qualification": "asserted",
+                "people": [
+                  "温岚"
+                ],
+                "places": [],
+                "organizations": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "nc4",
+          "title": "随手记",
+          "text": "我决定请摄影师温岚把十五张底片扫描成TIFF。",
+          "expressed_days": -37,
+          "recorded_days": -37,
+          "connector": "capture",
+          "role": "user",
+          "gold": {
+            "items": [
+              {
+                "kind": "memory",
+                "text": "我决定请摄影师温岚把十五张底片扫描成TIFF。",
+                "nature": "decision",
+                "subject": "我",
+                "predicate": "描述",
+                "quote": "我决定请摄影师温岚把十五张底片扫描成TIFF。",
+                "confidence": 1.0,
+                "explicit": false,
+                "acquisition": "direct",
+                "qualification": "asserted",
+                "people": [
+                  "温岚"
+                ],
+                "places": [],
+                "organizations": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "nc5",
+          "title": "聊天记录",
+          "text": "AI建议扫描成JPEG会更省空间。",
+          "expressed_days": -36,
+          "recorded_days": 0,
+          "connector": "archive",
+          "role": "assistant",
+          "gold": {
+            "items": []
+          }
+        },
+        {
+          "id": "nc6",
+          "title": "随手记",
+          "text": "我在旧便笺写了十二张底片，那个数字还没有复核。",
+          "expressed_days": -41,
+          "recorded_days": -41,
+          "connector": "capture",
+          "role": "user",
+          "gold": {
+            "items": [
+              {
+                "kind": "memory",
+                "text": "我在旧便笺写了十二张底片，那个数字还没有复核。",
+                "nature": "fact",
+                "subject": "我",
+                "predicate": "描述",
+                "quote": "我在旧便笺写了十二张底片，那个数字还没有复核。",
+                "confidence": 1.0,
+                "explicit": false,
+                "acquisition": "direct",
+                "qualification": "asserted",
+                "people": [],
+                "places": [],
+                "organizations": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "names-camera-d7",
+          "title": "随手记",
+          "text": "我为names-camera这次记录换了一个灰色笔记封面，编号是7。",
+          "expressed_days": -7,
+          "recorded_days": -7,
+          "connector": "capture",
+          "role": "user",
+          "gold": {
+            "items": [
+              {
+                "kind": "memory",
+                "text": "我为names-camera这次记录换了一个灰色笔记封面，编号是7。",
+                "nature": "preference",
+                "subject": "我",
+                "predicate": "描述",
+                "quote": "我为names-camera这次记录换了一个灰色笔记封面，编号是7。",
+                "confidence": 1.0,
+                "explicit": false,
+                "acquisition": "direct",
+                "qualification": "asserted",
+                "people": [],
+                "places": [],
+                "organizations": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "names-camera-d8",
+          "title": "随手记",
+          "text": "我为names-camera这次记录换了一个灰色笔记封面，编号是8。",
+          "expressed_days": -8,
+          "recorded_days": -8,
+          "connector": "capture",
+          "role": "user",
+          "gold": {
+            "items": [
+              {
+                "kind": "memory",
+                "text": "我为names-camera这次记录换了一个灰色笔记封面，编号是8。",
+                "nature": "preference",
+                "subject": "我",
+                "predicate": "描述",
+                "quote": "我为names-camera这次记录换了一个灰色笔记封面，编号是8。",
+                "confidence": 1.0,
+                "explicit": false,
+                "acquisition": "direct",
+                "qualification": "asserted",
+                "people": [],
+                "places": [],
+                "organizations": []
+              }
+            ]
+          }
+        }
+      ],
+      "queries": [
+        {
+          "id": "nc-q1",
+          "text": "摄影师温岚帮我做什么？",
+          "evidence": [
+            {
+              "source": "nc1",
+              "item": 0
+            }
+          ],
+          "distractors": [
+            "nc2",
+            "nc5"
+          ],
+          "facts": [
+            {
+              "any": [
+                "修复"
+              ]
+            },
+            {
+              "any": [
+                "底片"
+              ]
+            }
+          ],
+          "rationale": "职业限定主体。"
+        },
+        {
+          "id": "nc-q2",
+          "text": "我最后给温岚多少张底片，用什么格式？",
+          "evidence": [
+            {
+              "source": "nc3",
+              "item": 0
+            },
+            {
+              "source": "nc4",
+              "item": 0
+            }
+          ],
+          "distractors": [
+            "nc6",
+            "nc5"
+          ],
+          "facts": [
+            {
+              "any": [
+                "十五张",
+                "15张"
+              ]
+            },
+            {
+              "any": [
+                "TIFF"
+              ]
+            }
+          ],
+          "rationale": "后来复核和决定共同给出最后细节。"
+        },
+        {
+          "id": "nc-q3",
+          "text": "温岚买月季是我的计划吗？",
+          "evidence": [
+            {
+              "source": "nc2",
+              "item": 0
+            }
+          ],
+          "distractors": [
+            "nc1"
+          ],
+          "facts": [
+            {
+              "any": [
+                "园艺师"
+              ]
+            },
+            {
+              "any": [
+                "她",
+                "温岚"
+              ]
+            }
+          ],
+          "rationale": "本人未承诺园艺师的计划。"
+        }
+      ]
+    },
+    {
+      "id": "cancel-trip",
+      "interference": [
+        "cancelled",
+        "similar_place"
+      ],
+      "rationale": "早先计划和AI复述都不能覆盖后来的取消决定。",
+      "documents": [
+        {
+          "id": "ct1",
+          "title": "随手记",
+          "text": "我原计划去青川看山地茶园，订了清溪旅舍。",
+          "expressed_days": -50,
+          "recorded_days": -50,
+          "connector": "capture",
+          "role": "user",
+          "gold": {
+            "items": [
+              {
+                "kind": "memory",
+                "text": "我原计划去青川看山地茶园，订了清溪旅舍。",
+                "nature": "plan",
+                "subject": "我",
+                "predicate": "描述",
+                "quote": "我原计划去青川看山地茶园，订了清溪旅舍。",
+                "confidence": 1.0,
+                "explicit": false,
+                "acquisition": "direct",
+                "qualification": "asserted",
+                "people": [],
+                "places": [
+                  "青川",
+                  "清溪旅舍"
+                ],
+                "organizations": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "ct2",
+          "title": "随手记",
+          "text": "我取消了青川茶园行程，因为山路封闭；清溪旅舍也退订了。",
+          "expressed_days": -45,
+          "recorded_days": -45,
+          "connector": "capture",
+          "role": "user",
+          "gold": {
+            "items": [
+              {
+                "kind": "memory",
+                "text": "我取消了青川茶园行程，因为山路封闭；清溪旅舍也退订了。",
+                "nature": "decision",
+                "subject": "我",
+                "predicate": "描述",
+                "quote": "我取消了青川茶园行程，因为山路封闭；清溪旅舍也退订了。",
+                "confidence": 1.0,
+                "explicit": false,
+                "acquisition": "direct",
+                "qualification": "asserted",
+                "people": [],
+                "places": [
+                  "青川",
+                  "清溪旅舍"
+                ],
+                "organizations": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "ct3",
+          "title": "随手记",
+          "text": "我现在决定去青城参观竹编展，住竹影客栈。",
+          "expressed_days": -44,
+          "recorded_days": -44,
+          "connector": "capture",
+          "role": "user",
+          "gold": {
+            "items": [
+              {
+                "kind": "memory",
+                "text": "我现在决定去青城参观竹编展，住竹影客栈。",
+                "nature": "decision",
+                "subject": "我",
+                "predicate": "描述",
+                "quote": "我现在决定去青城参观竹编展，住竹影客栈。",
+                "confidence": 1.0,
+                "explicit": false,
+                "acquisition": "direct",
+                "qualification": "asserted",
+                "people": [],
+                "places": [
+                  "青城",
+                  "竹影客栈"
+                ],
+                "organizations": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "ct4",
+          "title": "聊天记录",
+          "text": "AI建议：青川茶园值得去，继续住清溪旅舍。",
+          "expressed_days": -43,
+          "recorded_days": 0,
+          "connector": "archive",
+          "role": "assistant",
+          "gold": {
+            "items": []
+          }
+        },
+        {
+          "id": "ct5",
+          "title": "随手记",
+          "text": "许澄说他下月去青川看茶园，这是他的行程。",
+          "expressed_days": -42,
+          "recorded_days": -42,
+          "connector": "capture",
+          "role": "user",
+          "gold": {
+            "items": [
+              {
+                "kind": "memory",
+                "text": "许澄说他下月去青川看茶园，这是他的行程。",
+                "nature": "plan",
+                "subject": "许澄",
+                "predicate": "描述",
+                "quote": "许澄说他下月去青川看茶园，这是他的行程。",
+                "confidence": 1.0,
+                "explicit": false,
+                "acquisition": "reported",
+                "qualification": "quoted",
+                "people": [
+                  "许澄"
+                ],
+                "places": [
+                  "青川"
+                ],
+                "organizations": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "ct6",
+          "title": "随手记",
+          "text": "我买过青城的竹编杯垫，还没参观展览。",
+          "expressed_days": -41,
+          "recorded_days": -41,
+          "connector": "capture",
+          "role": "user",
+          "gold": {
+            "items": [
+              {
+                "kind": "memory",
+                "text": "我买过青城的竹编杯垫，还没参观展览。",
+                "nature": "fact",
+                "subject": "我",
+                "predicate": "描述",
+                "quote": "我买过青城的竹编杯垫，还没参观展览。",
+                "confidence": 1.0,
+                "explicit": false,
+                "acquisition": "direct",
+                "qualification": "asserted",
+                "people": [],
+                "places": [
+                  "青城"
+                ],
+                "organizations": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "cancel-trip-d7",
+          "title": "随手记",
+          "text": "我为cancel-trip这次记录换了一个灰色笔记封面，编号是7。",
+          "expressed_days": -7,
+          "recorded_days": -7,
+          "connector": "capture",
+          "role": "user",
+          "gold": {
+            "items": [
+              {
+                "kind": "memory",
+                "text": "我为cancel-trip这次记录换了一个灰色笔记封面，编号是7。",
+                "nature": "preference",
+                "subject": "我",
+                "predicate": "描述",
+                "quote": "我为cancel-trip这次记录换了一个灰色笔记封面，编号是7。",
+                "confidence": 1.0,
+                "explicit": false,
+                "acquisition": "direct",
+                "qualification": "asserted",
+                "people": [],
+                "places": [],
+                "organizations": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "cancel-trip-d8",
+          "title": "随手记",
+          "text": "我为cancel-trip这次记录换了一个灰色笔记封面，编号是8。",
+          "expressed_days": -8,
+          "recorded_days": -8,
+          "connector": "capture",
+          "role": "user",
+          "gold": {
+            "items": [
+              {
+                "kind": "memory",
+                "text": "我为cancel-trip这次记录换了一个灰色笔记封面，编号是8。",
+                "nature": "preference",
+                "subject": "我",
+                "predicate": "描述",
+                "quote": "我为cancel-trip这次记录换了一个灰色笔记封面，编号是8。",
+                "confidence": 1.0,
+                "explicit": false,
+                "acquisition": "direct",
+                "qualification": "asserted",
+                "people": [],
+                "places": [],
+                "organizations": []
+              }
+            ]
+          }
+        }
+      ],
+      "queries": [
+        {
+          "id": "ct-q1",
+          "text": "我去青川看茶园的计划后来怎样了？",
+          "evidence": [
+            {
+              "source": "ct1",
+              "item": 0
+            },
+            {
+              "source": "ct2",
+              "item": 0
+            }
+          ],
+          "distractors": [
+            "ct4",
+            "ct5"
+          ],
+          "facts": [
+            {
+              "any": [
+                "取消"
+              ]
+            },
+            {
+              "any": [
+                "山路封闭"
+              ]
+            }
+          ],
+          "rationale": "必须保留原计划与取消原因两条证据。"
+        },
+        {
+          "id": "ct-q2",
+          "text": "我现在决定去青川还是青城，住哪家？",
+          "evidence": [
+            {
+              "source": "ct2",
+              "item": 0
+            },
+            {
+              "source": "ct3",
+              "item": 0
+            }
+          ],
+          "distractors": [
+            "ct1",
+            "ct4"
+          ],
+          "facts": [
+            {
+              "any": [
+                "青城"
+              ]
+            },
+            {
+              "any": [
+                "竹影客栈"
+              ]
+            }
+          ],
+          "rationale": "地名相近且后来改目的地。"
+        },
+        {
+          "id": "ct-q3",
+          "text": "清溪旅舍的预订还有效吗？",
+          "evidence": [
+            {
+              "source": "ct2",
+              "item": 0
+            }
+          ],
+          "distractors": [
+            "ct1",
+            "ct4"
+          ],
+          "facts": [
+            {
+              "any": [
+                "退订"
+              ]
+            }
+          ],
+          "rationale": "取消覆盖早先预订。"
+        }
+      ]
+    },
+    {
+      "id": "cancel-course",
+      "interference": [
+        "cancelled",
+        "repeated_details"
+      ],
+      "rationale": "金额冲突与取消报名的时间先后。",
+      "documents": [
+        {
+          "id": "cc1",
+          "title": "随手记",
+          "text": "我计划参加木刻夜校，学费是九百元。",
+          "expressed_days": -70,
+          "recorded_days": -70,
+          "connector": "capture",
+          "role": "user",
+          "gold": {
+            "items": [
+              {
+                "kind": "memory",
+                "text": "我计划参加木刻夜校，学费是九百元。",
+                "nature": "plan",
+                "subject": "我",
+                "predicate": "描述",
+                "quote": "我计划参加木刻夜校，学费是九百元。",
+                "confidence": 1.0,
+                "explicit": false,
+                "acquisition": "direct",
+                "qualification": "asserted",
+                "people": [],
+                "places": [
+                  "木刻夜校"
+                ],
+                "organizations": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "cc2",
+          "title": "随手记",
+          "text": "我修正木刻夜校学费：早先说九百元，实际一千二百元。",
+          "expressed_days": -65,
+          "recorded_days": -65,
+          "connector": "capture",
+          "role": "user",
+          "gold": {
+            "items": [
+              {
+                "kind": "memory",
+                "text": "我修正木刻夜校学费：早先说九百元，实际一千二百元。",
+                "nature": "fact",
+                "subject": "我",
+                "predicate": "描述",
+                "quote": "我修正木刻夜校学费：早先说九百元，实际一千二百元。",
+                "confidence": 1.0,
+                "explicit": false,
+                "acquisition": "direct",
+                "qualification": "asserted",
+                "people": [],
+                "places": [
+                  "木刻夜校"
+                ],
+                "organizations": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "cc3",
+          "title": "随手记",
+          "text": "我取消了木刻夜校报名，因为值班冲突，学费已退回。",
+          "expressed_days": -60,
+          "recorded_days": -60,
+          "connector": "capture",
+          "role": "user",
+          "gold": {
+            "items": [
+              {
+                "kind": "memory",
+                "text": "我取消了木刻夜校报名，因为值班冲突，学费已退回。",
+                "nature": "decision",
+                "subject": "我",
+                "predicate": "描述",
+                "quote": "我取消了木刻夜校报名，因为值班冲突，学费已退回。",
+                "confidence": 1.0,
+                "explicit": false,
+                "acquisition": "direct",
+                "qualification": "asserted",
+                "people": [],
+                "places": [
+                  "木刻夜校"
+                ],
+                "organizations": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "cc4",
+          "title": "随手记",
+          "text": "我决定改为周末在家练习木刻，不再报名夜校。",
+          "expressed_days": -59,
+          "recorded_days": -59,
+          "connector": "capture",
+          "role": "user",
+          "gold": {
+            "items": [
+              {
+                "kind": "memory",
+                "text": "我决定改为周末在家练习木刻，不再报名夜校。",
+                "nature": "decision",
+                "subject": "我",
+                "predicate": "描述",
+                "quote": "我决定改为周末在家练习木刻，不再报名夜校。",
+                "confidence": 1.0,
+                "explicit": false,
+                "acquisition": "direct",
+                "qualification": "asserted",
+                "people": [],
+                "places": [],
+                "organizations": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "cc5",
+          "title": "聊天记录",
+          "text": "AI建议继续木刻夜校的九百元课程。",
+          "expressed_days": -58,
+          "recorded_days": 0,
+          "connector": "archive",
+          "role": "assistant",
+          "gold": {
+            "items": []
+          }
+        },
+        {
+          "id": "cc6",
+          "title": "随手记",
+          "text": "叶砚自己已经参加木刻夜校，我没有参加。",
+          "expressed_days": -57,
+          "recorded_days": -57,
+          "connector": "capture",
+          "role": "user",
+          "gold": {
+            "items": [
+              {
+                "kind": "memory",
+                "text": "叶砚自己已经参加木刻夜校，我没有参加。",
+                "nature": "fact",
+                "subject": "我",
+                "predicate": "描述",
+                "quote": "叶砚自己已经参加木刻夜校，我没有参加。",
+                "confidence": 1.0,
+                "explicit": false,
+                "acquisition": "direct",
+                "qualification": "asserted",
+                "people": [
+                  "叶砚"
+                ],
+                "places": [
+                  "木刻夜校"
+                ],
+                "organizations": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "cancel-course-d7",
+          "title": "随手记",
+          "text": "我为cancel-course这次记录换了一个灰色笔记封面，编号是7。",
+          "expressed_days": -7,
+          "recorded_days": -7,
+          "connector": "capture",
+          "role": "user",
+          "gold": {
+            "items": [
+              {
+                "kind": "memory",
+                "text": "我为cancel-course这次记录换了一个灰色笔记封面，编号是7。",
+                "nature": "preference",
+                "subject": "我",
+                "predicate": "描述",
+                "quote": "我为cancel-course这次记录换了一个灰色笔记封面，编号是7。",
+                "confidence": 1.0,
+                "explicit": false,
+                "acquisition": "direct",
+                "qualification": "asserted",
+                "people": [],
+                "places": [],
+                "organizations": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "cancel-course-d8",
+          "title": "随手记",
+          "text": "我为cancel-course这次记录换了一个灰色笔记封面，编号是8。",
+          "expressed_days": -8,
+          "recorded_days": -8,
+          "connector": "capture",
+          "role": "user",
+          "gold": {
+            "items": [
+              {
+                "kind": "memory",
+                "text": "我为cancel-course这次记录换了一个灰色笔记封面，编号是8。",
+                "nature": "preference",
+                "subject": "我",
+                "predicate": "描述",
+                "quote": "我为cancel-course这次记录换了一个灰色笔记封面，编号是8。",
+                "confidence": 1.0,
+                "explicit": false,
+                "acquisition": "direct",
+                "qualification": "asserted",
+                "people": [],
+                "places": [],
+                "organizations": []
+              }
+            ]
+          }
+        }
+      ],
+      "queries": [
+        {
+          "id": "cc-q1",
+          "text": "我报名木刻夜校后来怎样了？",
+          "evidence": [
+            {
+              "source": "cc1",
+              "item": 0
+            },
+            {
+              "source": "cc3",
+              "item": 0
+            }
+          ],
+          "distractors": [
+            "cc5",
+            "cc6"
+          ],
+          "facts": [
+            {
+              "any": [
+                "取消"
+              ]
+            },
+            {
+              "any": [
+                "值班冲突"
+              ]
+            }
+          ],
+          "rationale": "不能把别人已参加当成本人已参加。"
+        },
+        {
+          "id": "cc-q2",
+          "text": "木刻夜校学费最后核实是多少？",
+          "evidence": [
+            {
+              "source": "cc2",
+              "item": 0
+            }
+          ],
+          "distractors": [
+            "cc1",
+            "cc5"
+          ],
+          "facts": [
+            {
+              "any": [
+                "一千二百元",
+                "1200元"
+              ]
+            }
+          ],
+          "rationale": "后写的修正直接说明准确数字。"
+        },
+        {
+          "id": "cc-q3",
+          "text": "我现在怎样学木刻？",
+          "evidence": [
+            {
+              "source": "cc3",
+              "item": 0
+            },
+            {
+              "source": "cc4",
+              "item": 0
+            }
+          ],
+          "distractors": [
+            "cc1",
+            "cc5"
+          ],
+          "facts": [
+            {
+              "any": [
+                "周末"
+              ]
+            },
+            {
+              "any": [
+                "在家"
+              ]
+            }
+          ],
+          "rationale": "退款后的替代决定。"
+        }
+      ]
+    },
+    {
+      "id": "done-letter",
+      "interference": [
+        "completed",
+        "others_plan"
+      ],
+      "rationale": "完成、未完成以及他人的同类动作。",
+      "documents": [
+        {
+          "id": "dl1",
+          "title": "随手记",
+          "text": "我计划把手写感谢信寄给陶宁。",
+          "expressed_days": -25,
+          "recorded_days": -25,
+          "connector": "capture",
+          "role": "user",
+          "gold": {
+            "items": [
+              {
+                "kind": "memory",
+                "text": "我计划把手写感谢信寄给陶宁。",
+                "nature": "plan",
+                "subject": "我",
+                "predicate": "描述",
+                "quote": "我计划把手写感谢信寄给陶宁。",
+                "confidence": 1.0,
+                "explicit": false,
+                "acquisition": "direct",
+                "qualification": "asserted",
+                "people": [
+                  "陶宁"
+                ],
+                "places": [],
+                "organizations": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "dl2",
+          "title": "随手记",
+          "text": "我已经把手写感谢信寄给陶宁，邮寄凭证号码是蓝邮七二。",
+          "expressed_days": -21,
+          "recorded_days": -21,
+          "connector": "capture",
+          "role": "user",
+          "gold": {
+            "items": [
+              {
+                "kind": "memory",
+                "text": "我已经把手写感谢信寄给陶宁，邮寄凭证号码是蓝邮七二。",
+                "nature": "fact",
+                "subject": "我",
+                "predicate": "描述",
+                "quote": "我已经把手写感谢信寄给陶宁，邮寄凭证号码是蓝邮七二。",
+                "confidence": 1.0,
+                "explicit": false,
+                "acquisition": "direct",
+                "qualification": "asserted",
+                "people": [
+                  "陶宁"
+                ],
+                "places": [],
+                "organizations": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "dl3",
+          "title": "随手记",
+          "text": "陶宁说他下周才寄感谢信给老师，是他自己的事。",
+          "expressed_days": -20,
+          "recorded_days": -20,
+          "connector": "capture",
+          "role": "user",
+          "gold": {
+            "items": [
+              {
+                "kind": "memory",
+                "text": "陶宁说他下周才寄感谢信给老师，是他自己的事。",
+                "nature": "plan",
+                "subject": "陶宁",
+                "predicate": "描述",
+                "quote": "陶宁说他下周才寄感谢信给老师，是他自己的事。",
+                "confidence": 1.0,
+                "explicit": false,
+                "acquisition": "reported",
+                "qualification": "quoted",
+                "people": [
+                  "陶宁"
+                ],
+                "places": [],
+                "organizations": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "dl4",
+          "title": "随手记",
+          "text": "我保留了蓝邮七二凭证，感谢信这件事已经办完。",
+          "expressed_days": -19,
+          "recorded_days": -19,
+          "connector": "capture",
+          "role": "user",
+          "gold": {
+            "items": [
+              {
+                "kind": "memory",
+                "text": "我保留了蓝邮七二凭证，感谢信这件事已经办完。",
+                "nature": "fact",
+                "subject": "我",
+                "predicate": "描述",
+                "quote": "我保留了蓝邮七二凭证，感谢信这件事已经办完。",
+                "confidence": 1.0,
+                "explicit": false,
+                "acquisition": "direct",
+                "qualification": "asserted",
+                "people": [],
+                "places": [],
+                "organizations": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "dl5",
+          "title": "聊天记录",
+          "text": "AI提醒：你可以明天寄感谢信。",
+          "expressed_days": -18,
+          "recorded_days": 0,
+          "connector": "archive",
+          "role": "assistant",
+          "gold": {
+            "items": []
+          }
+        },
+        {
+          "id": "dl6",
+          "title": "随手记",
+          "text": "我还有一张明信片没寄给夏遥，不是陶宁的感谢信。",
+          "expressed_days": -17,
+          "recorded_days": -17,
+          "connector": "capture",
+          "role": "user",
+          "gold": {
+            "items": [
+              {
+                "kind": "memory",
+                "text": "我还有一张明信片没寄给夏遥，不是陶宁的感谢信。",
+                "nature": "intention",
+                "subject": "我",
+                "predicate": "描述",
+                "quote": "我还有一张明信片没寄给夏遥，不是陶宁的感谢信。",
+                "confidence": 1.0,
+                "explicit": false,
+                "acquisition": "direct",
+                "qualification": "asserted",
+                "people": [
+                  "夏遥",
+                  "陶宁"
+                ],
+                "places": [],
+                "organizations": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "done-letter-d7",
+          "title": "随手记",
+          "text": "我为done-letter这次记录换了一个灰色笔记封面，编号是7。",
+          "expressed_days": -7,
+          "recorded_days": -7,
+          "connector": "capture",
+          "role": "user",
+          "gold": {
+            "items": [
+              {
+                "kind": "memory",
+                "text": "我为done-letter这次记录换了一个灰色笔记封面，编号是7。",
+                "nature": "preference",
+                "subject": "我",
+                "predicate": "描述",
+                "quote": "我为done-letter这次记录换了一个灰色笔记封面，编号是7。",
+                "confidence": 1.0,
+                "explicit": false,
+                "acquisition": "direct",
+                "qualification": "asserted",
+                "people": [],
+                "places": [],
+                "organizations": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "done-letter-d8",
+          "title": "随手记",
+          "text": "我为done-letter这次记录换了一个灰色笔记封面，编号是8。",
+          "expressed_days": -8,
+          "recorded_days": -8,
+          "connector": "capture",
+          "role": "user",
+          "gold": {
+            "items": [
+              {
+                "kind": "memory",
+                "text": "我为done-letter这次记录换了一个灰色笔记封面，编号是8。",
+                "nature": "preference",
+                "subject": "我",
+                "predicate": "描述",
+                "quote": "我为done-letter这次记录换了一个灰色笔记封面，编号是8。",
+                "confidence": 1.0,
+                "explicit": false,
+                "acquisition": "direct",
+                "qualification": "asserted",
+                "people": [],
+                "places": [],
+                "organizations": []
+              }
+            ]
+          }
+        }
+      ],
+      "queries": [
+        {
+          "id": "dl-q1",
+          "text": "给陶宁的感谢信寄出没有？",
+          "evidence": [
+            {
+              "source": "dl2",
+              "item": 0
+            }
+          ],
+          "distractors": [
+            "dl1",
+            "dl3",
+            "dl5"
+          ],
+          "facts": [
+            {
+              "any": [
+                "寄"
+              ]
+            },
+            {
+              "any": [
+                "已经",
+                "寄出"
+              ]
+            }
+          ],
+          "rationale": "完成事实超过未完成提醒。"
+        },
+        {
+          "id": "dl-q2",
+          "text": "感谢信邮寄凭证号码是什么？",
+          "evidence": [
+            {
+              "source": "dl2",
+              "item": 0
+            }
+          ],
+          "distractors": [
+            "dl3",
+            "dl6"
+          ],
+          "facts": [
+            {
+              "any": [
+                "蓝邮七二"
+              ]
+            }
+          ],
+          "rationale": "单据标识逐字可核。"
+        },
+        {
+          "id": "dl-q3",
+          "text": "下周才寄给老师的感谢信是谁的？",
+          "evidence": [
+            {
+              "source": "dl3",
+              "item": 0
+            }
+          ],
+          "distractors": [
+            "dl1"
+          ],
+          "facts": [
+            {
+              "any": [
+                "陶宁"
+              ]
+            },
+            {
+              "any": [
+                "老师"
+              ]
+            }
+          ],
+          "rationale": "转述中指向陶宁而非本人。"
+        }
+      ]
+    },
+    {
+      "id": "done-report",
+      "interference": [
+        "completed",
+        "repeated_details"
+      ],
+      "rationale": "计划的页数不等于实际完成的页数。",
+      "documents": [
+        {
+          "id": "dr1",
+          "title": "随手记",
+          "text": "我计划提交潮汐观察报告，草稿预计有八页。",
+          "expressed_days": -35,
+          "recorded_days": -35,
+          "connector": "capture",
+          "role": "user",
+          "gold": {
+            "items": [
+              {
+                "kind": "memory",
+                "text": "我计划提交潮汐观察报告，草稿预计有八页。",
+                "nature": "plan",
+                "subject": "我",
+                "predicate": "描述",
+                "quote": "我计划提交潮汐观察报告，草稿预计有八页。",
+                "confidence": 1.0,
+                "explicit": false,
+                "acquisition": "direct",
+                "qualification": "asserted",
+                "people": [],
+                "places": [],
+                "organizations": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "dr2",
+          "title": "随手记",
+          "text": "我后来把潮汐观察报告扩成十一页，增加了夜潮记录。",
+          "expressed_days": -32,
+          "recorded_days": -32,
+          "connector": "capture",
+          "role": "user",
+          "gold": {
+            "items": [
+              {
+                "kind": "memory",
+                "text": "我后来把潮汐观察报告扩成十一页，增加了夜潮记录。",
+                "nature": "fact",
+                "subject": "我",
+                "predicate": "描述",
+                "quote": "我后来把潮汐观察报告扩成十一页，增加了夜潮记录。",
+                "confidence": 1.0,
+                "explicit": false,
+                "acquisition": "direct",
+                "qualification": "asserted",
+                "people": [],
+                "places": [],
+                "organizations": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "dr3",
+          "title": "随手记",
+          "text": "我已经提交十一页的潮汐观察报告，收件人是顾禾。",
+          "expressed_days": -28,
+          "recorded_days": -28,
+          "connector": "capture",
+          "role": "user",
+          "gold": {
+            "items": [
+              {
+                "kind": "memory",
+                "text": "我已经提交十一页的潮汐观察报告，收件人是顾禾。",
+                "nature": "fact",
+                "subject": "我",
+                "predicate": "描述",
+                "quote": "我已经提交十一页的潮汐观察报告，收件人是顾禾。",
+                "confidence": 1.0,
+                "explicit": false,
+                "acquisition": "direct",
+                "qualification": "asserted",
+                "people": [
+                  "顾禾"
+                ],
+                "places": [],
+                "organizations": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "dr4",
+          "title": "随手记",
+          "text": "我收到顾禾的回执：潮汐观察报告已收，校验码是潮蓝四。",
+          "expressed_days": -27,
+          "recorded_days": -27,
+          "connector": "capture",
+          "role": "user",
+          "gold": {
+            "items": [
+              {
+                "kind": "memory",
+                "text": "我收到顾禾的回执：潮汐观察报告已收，校验码是潮蓝四。",
+                "nature": "fact",
+                "subject": "我",
+                "predicate": "描述",
+                "quote": "我收到顾禾的回执：潮汐观察报告已收，校验码是潮蓝四。",
+                "confidence": 1.0,
+                "explicit": false,
+                "acquisition": "direct",
+                "qualification": "asserted",
+                "people": [
+                  "顾禾"
+                ],
+                "places": [],
+                "organizations": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "dr5",
+          "title": "聊天记录",
+          "text": "AI建议明天提交八页潮汐报告。",
+          "expressed_days": -26,
+          "recorded_days": 0,
+          "connector": "archive",
+          "role": "assistant",
+          "gold": {
+            "items": []
+          }
+        },
+        {
+          "id": "dr6",
+          "title": "随手记",
+          "text": "我还没有提交另一份星象报告，它不是潮汐报告。",
+          "expressed_days": -25,
+          "recorded_days": -25,
+          "connector": "capture",
+          "role": "user",
+          "gold": {
+            "items": [
+              {
+                "kind": "memory",
+                "text": "我还没有提交另一份星象报告，它不是潮汐报告。",
+                "nature": "fact",
+                "subject": "我",
+                "predicate": "描述",
+                "quote": "我还没有提交另一份星象报告，它不是潮汐报告。",
+                "confidence": 1.0,
+                "explicit": false,
+                "acquisition": "direct",
+                "qualification": "asserted",
+                "people": [],
+                "places": [],
+                "organizations": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "done-report-d7",
+          "title": "随手记",
+          "text": "我为done-report这次记录换了一个灰色笔记封面，编号是7。",
+          "expressed_days": -7,
+          "recorded_days": -7,
+          "connector": "capture",
+          "role": "user",
+          "gold": {
+            "items": [
+              {
+                "kind": "memory",
+                "text": "我为done-report这次记录换了一个灰色笔记封面，编号是7。",
+                "nature": "preference",
+                "subject": "我",
+                "predicate": "描述",
+                "quote": "我为done-report这次记录换了一个灰色笔记封面，编号是7。",
+                "confidence": 1.0,
+                "explicit": false,
+                "acquisition": "direct",
+                "qualification": "asserted",
+                "people": [],
+                "places": [],
+                "organizations": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "done-report-d8",
+          "title": "随手记",
+          "text": "我为done-report这次记录换了一个灰色笔记封面，编号是8。",
+          "expressed_days": -8,
+          "recorded_days": -8,
+          "connector": "capture",
+          "role": "user",
+          "gold": {
+            "items": [
+              {
+                "kind": "memory",
+                "text": "我为done-report这次记录换了一个灰色笔记封面，编号是8。",
+                "nature": "preference",
+                "subject": "我",
+                "predicate": "描述",
+                "quote": "我为done-report这次记录换了一个灰色笔记封面，编号是8。",
+                "confidence": 1.0,
+                "explicit": false,
+                "acquisition": "direct",
+                "qualification": "asserted",
+                "people": [],
+                "places": [],
+                "organizations": []
+              }
+            ]
+          }
+        }
+      ],
+      "queries": [
+        {
+          "id": "dr-q1",
+          "text": "潮汐观察报告交完了吗，交给谁？",
+          "evidence": [
+            {
+              "source": "dr3",
+              "item": 0
+            }
+          ],
+          "distractors": [
+            "dr1",
+            "dr5",
+            "dr6"
+          ],
+          "facts": [
+            {
+              "any": [
+                "提交"
+              ]
+            },
+            {
+              "any": [
+                "顾禾"
+              ]
+            }
+          ],
+          "rationale": "实际提交有具体收件人。"
+        },
+        {
+          "id": "dr-q2",
+          "text": "我提交的潮汐报告最后多少页？",
+          "evidence": [
+            {
+              "source": "dr2",
+              "item": 0
+            },
+            {
+              "source": "dr3",
+              "item": 0
+            }
+          ],
+          "distractors": [
+            "dr1",
+            "dr5"
+          ],
+          "facts": [
+            {
+              "any": [
+                "十一页",
+                "11页"
+              ]
+            },
+            {
+              "any": [
+                "夜潮"
+              ]
+            }
+          ],
+          "rationale": "新增页说明变化依据。"
+        },
+        {
+          "id": "dr-q3",
+          "text": "顾禾收到报告的回执校验码是什么？",
+          "evidence": [
+            {
+              "source": "dr4",
+              "item": 0
+            }
+          ],
+          "distractors": [
+            "dr5",
+            "dr6"
+          ],
+          "facts": [
+            {
+              "any": [
+                "潮蓝四"
+              ]
+            }
+          ],
+          "rationale": "只取回执原话。"
+        }
+      ]
+    },
+    {
+      "id": "year-pottery",
+      "interference": [
+        "wrong_year",
+        "late_import"
+      ],
+      "rationale": "事件日期和表达日期两年前，记录时间今天。",
+      "documents": [
+        {
+          "id": "yp1",
+          "title": "聊天记录",
+          "text": "{{date:-730}}我在陶泉学习拉坯，做了一个蓝釉碗。",
+          "expressed_days": -730,
+          "recorded_days": 0,
+          "connector": "archive",
+          "role": "user",
+          "gold": {
+            "items": [
+              {
+                "kind": "memory",
+                "text": "{{date:-730}}我在陶泉学习拉坯，做了一个蓝釉碗。",
+                "nature": "fact",
+                "subject": "我",
+                "predicate": "描述",
+                "quote": "{{date:-730}}我在陶泉学习拉坯，做了一个蓝釉碗。",
+                "confidence": 1.0,
+                "explicit": false,
+                "acquisition": "direct",
+                "qualification": "asserted",
+                "people": [],
+                "places": [
+                  "陶泉"
+                ],
+                "organizations": [],
+                "when": {
+                  "from": "{{date:-730}}",
+                  "to": "{{date:-729}}",
+                  "precision": "day",
+                  "quote": "{{date:-730}}"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "yp2",
+          "title": "随手记",
+          "text": "{{date:-365}}我在陶泉只是参观展厅，没有学拉坯。",
+          "expressed_days": -365,
+          "recorded_days": -365,
+          "connector": "capture",
+          "role": "user",
+          "gold": {
+            "items": [
+              {
+                "kind": "memory",
+                "text": "{{date:-365}}我在陶泉只是参观展厅，没有学拉坯。",
+                "nature": "fact",
+                "subject": "我",
+                "predicate": "描述",
+                "quote": "{{date:-365}}我在陶泉只是参观展厅，没有学拉坯。",
+                "confidence": 1.0,
+                "explicit": false,
+                "acquisition": "direct",
+                "qualification": "asserted",
+                "people": [],
+                "places": [
+                  "陶泉"
+                ],
+                "organizations": [],
+                "when": {
+                  "from": "{{date:-365}}",
+                  "to": "{{date:-364}}",
+                  "precision": "day",
+                  "quote": "{{date:-365}}"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "yp3",
+          "title": "随手记",
+          "text": "我今天导入了旧陶艺聊天，旧话中的蓝釉碗是两年前做的，不是今天。",
+          "expressed_days": -1,
+          "recorded_days": -1,
+          "connector": "capture",
+          "role": "user",
+          "gold": {
+            "items": [
+              {
+                "kind": "memory",
+                "text": "我今天导入了旧陶艺聊天，旧话中的蓝釉碗是两年前做的，不是今天。",
+                "nature": "fact",
+                "subject": "我",
+                "predicate": "描述",
+                "quote": "我今天导入了旧陶艺聊天，旧话中的蓝釉碗是两年前做的，不是今天。",
+                "confidence": 1.0,
+                "explicit": false,
+                "acquisition": "direct",
+                "qualification": "asserted",
+                "people": [],
+                "places": [],
+                "organizations": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "yp4",
+          "title": "聊天记录",
+          "text": "AI回忆草稿：你去年学拉坯。",
+          "expressed_days": -364,
+          "recorded_days": 0,
+          "connector": "archive",
+          "role": "assistant",
+          "gold": {
+            "items": []
+          }
+        },
+        {
+          "id": "yp5",
+          "title": "随手记",
+          "text": "{{date:-730}}沈葵在陶泉学彩绘，她没有和我一起拉坯。",
+          "expressed_days": -729,
+          "recorded_days": -729,
+          "connector": "capture",
+          "role": "user",
+          "gold": {
+            "items": [
+              {
+                "kind": "memory",
+                "text": "{{date:-730}}沈葵在陶泉学彩绘，她没有和我一起拉坯。",
+                "nature": "fact",
+                "subject": "沈葵",
+                "predicate": "描述",
+                "quote": "{{date:-730}}沈葵在陶泉学彩绘，她没有和我一起拉坯。",
+                "confidence": 1.0,
+                "explicit": false,
+                "acquisition": "reported",
+                "qualification": "quoted",
+                "people": [
+                  "沈葵"
+                ],
+                "places": [
+                  "陶泉"
+                ],
+                "organizations": [],
+                "when": {
+                  "from": "{{date:-730}}",
+                  "to": "{{date:-729}}",
+                  "precision": "day",
+                  "quote": "{{date:-730}}"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "yp6",
+          "title": "随手记",
+          "text": "我给蓝釉碗起名叫海雾，底部刻着陶泉。",
+          "expressed_days": -728,
+          "recorded_days": -728,
+          "connector": "capture",
+          "role": "user",
+          "gold": {
+            "items": [
+              {
+                "kind": "memory",
+                "text": "我给蓝釉碗起名叫海雾，底部刻着陶泉。",
+                "nature": "fact",
+                "subject": "我",
+                "predicate": "描述",
+                "quote": "我给蓝釉碗起名叫海雾，底部刻着陶泉。",
+                "confidence": 1.0,
+                "explicit": false,
+                "acquisition": "direct",
+                "qualification": "asserted",
+                "people": [],
+                "places": [
+                  "陶泉"
+                ],
+                "organizations": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "year-pottery-d7",
+          "title": "随手记",
+          "text": "我为year-pottery这次记录换了一个灰色笔记封面，编号是7。",
+          "expressed_days": -7,
+          "recorded_days": -7,
+          "connector": "capture",
+          "role": "user",
+          "gold": {
+            "items": [
+              {
+                "kind": "memory",
+                "text": "我为year-pottery这次记录换了一个灰色笔记封面，编号是7。",
+                "nature": "preference",
+                "subject": "我",
+                "predicate": "描述",
+                "quote": "我为year-pottery这次记录换了一个灰色笔记封面，编号是7。",
+                "confidence": 1.0,
+                "explicit": false,
+                "acquisition": "direct",
+                "qualification": "asserted",
+                "people": [],
+                "places": [],
+                "organizations": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "year-pottery-d8",
+          "title": "随手记",
+          "text": "我为year-pottery这次记录换了一个灰色笔记封面，编号是8。",
+          "expressed_days": -8,
+          "recorded_days": -8,
+          "connector": "capture",
+          "role": "user",
+          "gold": {
+            "items": [
+              {
+                "kind": "memory",
+                "text": "我为year-pottery这次记录换了一个灰色笔记封面，编号是8。",
+                "nature": "preference",
+                "subject": "我",
+                "predicate": "描述",
+                "quote": "我为year-pottery这次记录换了一个灰色笔记封面，编号是8。",
+                "confidence": 1.0,
+                "explicit": false,
+                "acquisition": "direct",
+                "qualification": "asserted",
+                "people": [],
+                "places": [],
+                "organizations": []
+              }
+            ]
+          }
+        }
+      ],
+      "queries": [
+        {
+          "id": "yp-q1",
+          "text": "我是不是去年在陶泉学拉坯？实际是哪一年？",
+          "evidence": [
+            {
+              "source": "yp1",
+              "item": 0
+            },
+            {
+              "source": "yp2",
+              "item": 0
+            }
+          ],
+          "distractors": [
+            "yp4",
+            "yp5"
+          ],
+          "facts": [
+            {
+              "any": [
+                "{{year:-730}}"
+              ]
+            },
+            {
+              "any": [
+                "蓝釉碗"
+              ]
+            }
+          ],
+          "rationale": "错误年份必须由两个年份的原話校正。"
+        },
+        {
+          "id": "yp-q2",
+          "text": "旧聊天里我拉坯做了什么？",
+          "evidence": [
+            {
+              "source": "yp1",
+              "item": 0
+            }
+          ],
+          "distractors": [
+            "yp2",
+            "yp4"
+          ],
+          "facts": [
+            {
+              "any": [
+                "蓝釉碗"
+              ]
+            }
+          ],
+          "rationale": "最近导入不改变旧话说话时间。"
+        },
+        {
+          "id": "yp-q3",
+          "text": "蓝釉碗叫什么名字？",
+          "evidence": [
+            {
+              "source": "yp6",
+              "item": 0
+            }
+          ],
+          "distractors": [
+            "yp4",
+            "yp5"
+          ],
+          "facts": [
+            {
+              "any": [
+                "海雾"
+              ]
+            }
+          ],
+          "rationale": "命名只在后续原话里。"
+        }
+      ]
+    },
+    {
+      "id": "year-orchard",
+      "interference": [
+        "wrong_year",
+        "late_import"
+      ],
+      "rationale": "晚导入的旧话与最近记录并存，年份和编号都易错。",
+      "documents": [
+        {
+          "id": "yo1",
+          "title": "聊天记录",
+          "text": "{{date:-730}}我在杏原认领了七号杏树，编号是杏七。",
+          "expressed_days": -730,
+          "recorded_days": 0,
+          "connector": "archive",
+          "role": "user",
+          "gold": {
+            "items": [
+              {
+                "kind": "memory",
+                "text": "{{date:-730}}我在杏原认领了七号杏树，编号是杏七。",
+                "nature": "fact",
+                "subject": "我",
+                "predicate": "描述",
+                "quote": "{{date:-730}}我在杏原认领了七号杏树，编号是杏七。",
+                "confidence": 1.0,
+                "explicit": false,
+                "acquisition": "direct",
+                "qualification": "asserted",
+                "people": [],
+                "places": [
+                  "杏原"
+                ],
+                "organizations": [],
+                "when": {
+                  "from": "{{date:-730}}",
+                  "to": "{{date:-729}}",
+                  "precision": "day",
+                  "quote": "{{date:-730}}"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "yo2",
+          "title": "随手记",
+          "text": "{{date:-365}}我在杏原摘果，只续费，没有新认领树。",
+          "expressed_days": -365,
+          "recorded_days": -365,
+          "connector": "capture",
+          "role": "user",
+          "gold": {
+            "items": [
+              {
+                "kind": "memory",
+                "text": "{{date:-365}}我在杏原摘果，只续费，没有新认领树。",
+                "nature": "fact",
+                "subject": "我",
+                "predicate": "描述",
+                "quote": "{{date:-365}}我在杏原摘果，只续费，没有新认领树。",
+                "confidence": 1.0,
+                "explicit": false,
+                "acquisition": "direct",
+                "qualification": "asserted",
+                "people": [],
+                "places": [
+                  "杏原"
+                ],
+                "organizations": [],
+                "when": {
+                  "from": "{{date:-365}}",
+                  "to": "{{date:-364}}",
+                  "precision": "day",
+                  "quote": "{{date:-365}}"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "yo3",
+          "title": "聊天记录",
+          "text": "AI提案：去年认领的树也许是九号。",
+          "expressed_days": -364,
+          "recorded_days": 0,
+          "connector": "archive",
+          "role": "assistant",
+          "gold": {
+            "items": []
+          }
+        },
+        {
+          "id": "yo4",
+          "title": "随手记",
+          "text": "我现在刚导入认领杏树的旧聊天，认领时间仍是{{year:-730}}年。",
+          "expressed_days": -1,
+          "recorded_days": -1,
+          "connector": "capture",
+          "role": "user",
+          "gold": {
+            "items": [
+              {
+                "kind": "memory",
+                "text": "我现在刚导入认领杏树的旧聊天，认领时间仍是{{year:-730}}年。",
+                "nature": "fact",
+                "subject": "我",
+                "predicate": "描述",
+                "quote": "我现在刚导入认领杏树的旧聊天，认领时间仍是{{year:-730}}年。",
+                "confidence": 1.0,
+                "explicit": false,
+                "acquisition": "direct",
+                "qualification": "asserted",
+                "people": [],
+                "places": [],
+                "organizations": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "yo5",
+          "title": "随手记",
+          "text": "阮岑去年认领九号杏树，是她的杏九。",
+          "expressed_days": -363,
+          "recorded_days": -363,
+          "connector": "capture",
+          "role": "user",
+          "gold": {
+            "items": [
+              {
+                "kind": "memory",
+                "text": "阮岑去年认领九号杏树，是她的杏九。",
+                "nature": "fact",
+                "subject": "阮岑",
+                "predicate": "描述",
+                "quote": "阮岑去年认领九号杏树，是她的杏九。",
+                "confidence": 1.0,
+                "explicit": false,
+                "acquisition": "reported",
+                "qualification": "quoted",
+                "people": [
+                  "阮岑"
+                ],
+                "places": [],
+                "organizations": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "yo6",
+          "title": "随手记",
+          "text": "我给杏七树牌绑了一条赭色布带。",
+          "expressed_days": -729,
+          "recorded_days": -729,
+          "connector": "capture",
+          "role": "user",
+          "gold": {
+            "items": [
+              {
+                "kind": "memory",
+                "text": "我给杏七树牌绑了一条赭色布带。",
+                "nature": "fact",
+                "subject": "我",
+                "predicate": "描述",
+                "quote": "我给杏七树牌绑了一条赭色布带。",
+                "confidence": 1.0,
+                "explicit": false,
+                "acquisition": "direct",
+                "qualification": "asserted",
+                "people": [],
+                "places": [],
+                "organizations": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "year-orchard-d7",
+          "title": "随手记",
+          "text": "我为year-orchard这次记录换了一个灰色笔记封面，编号是7。",
+          "expressed_days": -7,
+          "recorded_days": -7,
+          "connector": "capture",
+          "role": "user",
+          "gold": {
+            "items": [
+              {
+                "kind": "memory",
+                "text": "我为year-orchard这次记录换了一个灰色笔记封面，编号是7。",
+                "nature": "preference",
+                "subject": "我",
+                "predicate": "描述",
+                "quote": "我为year-orchard这次记录换了一个灰色笔记封面，编号是7。",
+                "confidence": 1.0,
+                "explicit": false,
+                "acquisition": "direct",
+                "qualification": "asserted",
+                "people": [],
+                "places": [],
+                "organizations": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "year-orchard-d8",
+          "title": "随手记",
+          "text": "我为year-orchard这次记录换了一个灰色笔记封面，编号是8。",
+          "expressed_days": -8,
+          "recorded_days": -8,
+          "connector": "capture",
+          "role": "user",
+          "gold": {
+            "items": [
+              {
+                "kind": "memory",
+                "text": "我为year-orchard这次记录换了一个灰色笔记封面，编号是8。",
+                "nature": "preference",
+                "subject": "我",
+                "predicate": "描述",
+                "quote": "我为year-orchard这次记录换了一个灰色笔记封面，编号是8。",
+                "confidence": 1.0,
+                "explicit": false,
+                "acquisition": "direct",
+                "qualification": "asserted",
+                "people": [],
+                "places": [],
+                "organizations": []
+              }
+            ]
+          }
+        }
+      ],
+      "queries": [
+        {
+          "id": "yo-q1",
+          "text": "我去年在杏原新认领了哪棵树？",
+          "evidence": [
+            {
+              "source": "yo1",
+              "item": 0
+            },
+            {
+              "source": "yo2",
+              "item": 0
+            }
+          ],
+          "distractors": [
+            "yo3",
+            "yo5"
+          ],
+          "facts": [
+            {
+              "any": [
+                "{{year:-730}}"
+              ]
+            },
+            {
+              "any": [
+                "杏七"
+              ]
+            },
+            {
+              "any": [
+                "续费",
+                "没有新认领"
+              ]
+            }
+          ],
+          "rationale": "应纠正问法隐含的年份。"
+        },
+        {
+          "id": "yo-q2",
+          "text": "刚导入的杏树聊天里，我的树编号是什么？",
+          "evidence": [
+            {
+              "source": "yo1",
+              "item": 0
+            }
+          ],
+          "distractors": [
+            "yo3",
+            "yo5"
+          ],
+          "facts": [
+            {
+              "any": [
+                "杏七"
+              ]
+            }
+          ],
+          "rationale": "导入时间不是事件时间。"
+        },
+        {
+          "id": "yo-q3",
+          "text": "杏七的树牌绑的什么颜色？",
+          "evidence": [
+            {
+              "source": "yo6",
+              "item": 0
+            }
+          ],
+          "distractors": [
+            "yo3",
+            "yo5"
+          ],
+          "facts": [
+            {
+              "any": [
+                "赭色"
+              ]
+            }
+          ],
+          "rationale": "不混进别人的树。"
+        }
+      ]
+    },
+    {
+      "id": "place-museum",
+      "interference": [
+        "similar_place",
+        "others_plan"
+      ],
+      "rationale": "镇和村仅一字之差，分别承载不同展览。",
+      "documents": [
+        {
+          "id": "pm1",
+          "title": "随手记",
+          "text": "我决定在石桥镇的钟表馆看机械钟。",
+          "expressed_days": -14,
+          "recorded_days": -14,
+          "connector": "capture",
+          "role": "user",
+          "gold": {
+            "items": [
+              {
+                "kind": "memory",
+                "text": "我决定在石桥镇的钟表馆看机械钟。",
+                "nature": "decision",
+                "subject": "我",
+                "predicate": "描述",
+                "quote": "我决定在石桥镇的钟表馆看机械钟。",
+                "confidence": 1.0,
+                "explicit": false,
+                "acquisition": "direct",
+                "qualification": "asserted",
+                "people": [],
+                "places": [
+                  "石桥镇",
+                  "钟表馆"
+                ],
+                "organizations": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "pm2",
+          "title": "随手记",
+          "text": "石桥村的民俗馆在另一条河边，那里不展机械钟。",
+          "expressed_days": -13,
+          "recorded_days": -13,
+          "connector": "capture",
+          "role": "user",
+          "gold": {
+            "items": [
+              {
+                "kind": "memory",
+                "text": "石桥村的民俗馆在另一条河边，那里不展机械钟。",
+                "nature": "fact",
+                "subject": "我",
+                "predicate": "描述",
+                "quote": "石桥村的民俗馆在另一条河边，那里不展机械钟。",
+                "confidence": 1.0,
+                "explicit": false,
+                "acquisition": "direct",
+                "qualification": "asserted",
+                "people": [],
+                "places": [
+                  "石桥村",
+                  "民俗馆"
+                ],
+                "organizations": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "pm3",
+          "title": "随手记",
+          "text": "钟表馆预约口令是银轮六，入口在石桥镇西门。",
+          "expressed_days": -12,
+          "recorded_days": -12,
+          "connector": "capture",
+          "role": "user",
+          "gold": {
+            "items": [
+              {
+                "kind": "memory",
+                "text": "钟表馆预约口令是银轮六，入口在石桥镇西门。",
+                "nature": "fact",
+                "subject": "我",
+                "predicate": "描述",
+                "quote": "钟表馆预约口令是银轮六，入口在石桥镇西门。",
+                "confidence": 1.0,
+                "explicit": false,
+                "acquisition": "direct",
+                "qualification": "asserted",
+                "people": [],
+                "places": [
+                  "钟表馆",
+                  "石桥镇"
+                ],
+                "organizations": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "pm4",
+          "title": "随手记",
+          "text": "白芷打算去石桥村民俗馆看织布机，那是她的安排。",
+          "expressed_days": -11,
+          "recorded_days": -11,
+          "connector": "capture",
+          "role": "user",
+          "gold": {
+            "items": [
+              {
+                "kind": "memory",
+                "text": "白芷打算去石桥村民俗馆看织布机，那是她的安排。",
+                "nature": "plan",
+                "subject": "白芷",
+                "predicate": "描述",
+                "quote": "白芷打算去石桥村民俗馆看织布机，那是她的安排。",
+                "confidence": 1.0,
+                "explicit": false,
+                "acquisition": "reported",
+                "qualification": "quoted",
+                "people": [
+                  "白芷"
+                ],
+                "places": [
+                  "石桥村",
+                  "民俗馆"
+                ],
+                "organizations": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "pm5",
+          "title": "聊天记录",
+          "text": "AI建议：石桥村可以看机械钟。",
+          "expressed_days": -10,
+          "recorded_days": 0,
+          "connector": "archive",
+          "role": "assistant",
+          "gold": {
+            "items": []
+          }
+        },
+        {
+          "id": "pm6",
+          "title": "随手记",
+          "text": "我决定在钟表馆买一张齿轮明信片。",
+          "expressed_days": -9,
+          "recorded_days": -9,
+          "connector": "capture",
+          "role": "user",
+          "gold": {
+            "items": [
+              {
+                "kind": "memory",
+                "text": "我决定在钟表馆买一张齿轮明信片。",
+                "nature": "decision",
+                "subject": "我",
+                "predicate": "描述",
+                "quote": "我决定在钟表馆买一张齿轮明信片。",
+                "confidence": 1.0,
+                "explicit": false,
+                "acquisition": "direct",
+                "qualification": "asserted",
+                "people": [],
+                "places": [
+                  "钟表馆"
+                ],
+                "organizations": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "place-museum-d7",
+          "title": "随手记",
+          "text": "我为place-museum这次记录换了一个灰色笔记封面，编号是7。",
+          "expressed_days": -7,
+          "recorded_days": -7,
+          "connector": "capture",
+          "role": "user",
+          "gold": {
+            "items": [
+              {
+                "kind": "memory",
+                "text": "我为place-museum这次记录换了一个灰色笔记封面，编号是7。",
+                "nature": "preference",
+                "subject": "我",
+                "predicate": "描述",
+                "quote": "我为place-museum这次记录换了一个灰色笔记封面，编号是7。",
+                "confidence": 1.0,
+                "explicit": false,
+                "acquisition": "direct",
+                "qualification": "asserted",
+                "people": [],
+                "places": [],
+                "organizations": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "place-museum-d8",
+          "title": "随手记",
+          "text": "我为place-museum这次记录换了一个灰色笔记封面，编号是8。",
+          "expressed_days": -8,
+          "recorded_days": -8,
+          "connector": "capture",
+          "role": "user",
+          "gold": {
+            "items": [
+              {
+                "kind": "memory",
+                "text": "我为place-museum这次记录换了一个灰色笔记封面，编号是8。",
+                "nature": "preference",
+                "subject": "我",
+                "predicate": "描述",
+                "quote": "我为place-museum这次记录换了一个灰色笔记封面，编号是8。",
+                "confidence": 1.0,
+                "explicit": false,
+                "acquisition": "direct",
+                "qualification": "asserted",
+                "people": [],
+                "places": [],
+                "organizations": []
+              }
+            ]
+          }
+        }
+      ],
+      "queries": [
+        {
+          "id": "pm-q1",
+          "text": "我去看机械钟是在石桥镇还是石桥村？",
+          "evidence": [
+            {
+              "source": "pm1",
+              "item": 0
+            },
+            {
+              "source": "pm2",
+              "item": 0
+            }
+          ],
+          "distractors": [
+            "pm4",
+            "pm5"
+          ],
+          "facts": [
+            {
+              "any": [
+                "石桥镇"
+              ]
+            },
+            {
+              "any": [
+                "钟表馆"
+              ]
+            }
+          ],
+          "rationale": "相近地名不能互换。"
+        },
+        {
+          "id": "pm-q2",
+          "text": "钟表馆预约口令是什么，从哪进去？",
+          "evidence": [
+            {
+              "source": "pm3",
+              "item": 0
+            }
+          ],
+          "distractors": [
+            "pm4",
+            "pm5"
+          ],
+          "facts": [
+            {
+              "any": [
+                "银轮六"
+              ]
+            },
+            {
+              "any": [
+                "西门"
+              ]
+            }
+          ],
+          "rationale": "地点和口令同时匹配。"
+        },
+        {
+          "id": "pm-q3",
+          "text": "白芷去石桥村准备看什么？",
+          "evidence": [
+            {
+              "source": "pm4",
+              "item": 0
+            }
+          ],
+          "distractors": [
+            "pm1",
+            "pm5"
+          ],
+          "facts": [
+            {
+              "any": [
+                "织布机"
+              ]
+            }
+          ],
+          "rationale": "别人的计划需保留主体。"
+        }
+      ]
+    },
+    {
+      "id": "place-cafe",
+      "interference": [
+        "similar_place",
+        "cancelled"
+      ],
+      "rationale": "音近地名、取消和替代饮品并存。",
+      "documents": [
+        {
+          "id": "pc1",
+          "title": "随手记",
+          "text": "我原计划去云港咖啡馆买桂花拿铁。",
+          "expressed_days": -18,
+          "recorded_days": -18,
+          "connector": "capture",
+          "role": "user",
+          "gold": {
+            "items": [
+              {
+                "kind": "memory",
+                "text": "我原计划去云港咖啡馆买桂花拿铁。",
+                "nature": "plan",
+                "subject": "我",
+                "predicate": "描述",
+                "quote": "我原计划去云港咖啡馆买桂花拿铁。",
+                "confidence": 1.0,
+                "explicit": false,
+                "acquisition": "direct",
+                "qualification": "asserted",
+                "people": [],
+                "places": [
+                  "云港咖啡馆"
+                ],
+                "organizations": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "pc2",
+          "title": "随手记",
+          "text": "我取消云港咖啡馆的预约，它临时歇业。",
+          "expressed_days": -16,
+          "recorded_days": -16,
+          "connector": "capture",
+          "role": "user",
+          "gold": {
+            "items": [
+              {
+                "kind": "memory",
+                "text": "我取消云港咖啡馆的预约，它临时歇业。",
+                "nature": "decision",
+                "subject": "我",
+                "predicate": "描述",
+                "quote": "我取消云港咖啡馆的预约，它临时歇业。",
+                "confidence": 1.0,
+                "explicit": false,
+                "acquisition": "direct",
+                "qualification": "asserted",
+                "people": [],
+                "places": [
+                  "云港咖啡馆"
+                ],
+                "organizations": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "pc3",
+          "title": "随手记",
+          "text": "我决定改去云岗茶室喝焙火乌龙，预约名是南枝。",
+          "expressed_days": -15,
+          "recorded_days": -15,
+          "connector": "capture",
+          "role": "user",
+          "gold": {
+            "items": [
+              {
+                "kind": "memory",
+                "text": "我决定改去云岗茶室喝焙火乌龙，预约名是南枝。",
+                "nature": "decision",
+                "subject": "我",
+                "predicate": "描述",
+                "quote": "我决定改去云岗茶室喝焙火乌龙，预约名是南枝。",
+                "confidence": 1.0,
+                "explicit": false,
+                "acquisition": "direct",
+                "qualification": "asserted",
+                "people": [],
+                "places": [
+                  "云岗茶室"
+                ],
+                "organizations": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "pc4",
+          "title": "随手记",
+          "text": "云岗茶室的门牌是十九号，不是云港咖啡馆的十七号。",
+          "expressed_days": -14,
+          "recorded_days": -14,
+          "connector": "capture",
+          "role": "user",
+          "gold": {
+            "items": [
+              {
+                "kind": "memory",
+                "text": "云岗茶室的门牌是十九号，不是云港咖啡馆的十七号。",
+                "nature": "fact",
+                "subject": "我",
+                "predicate": "描述",
+                "quote": "云岗茶室的门牌是十九号，不是云港咖啡馆的十七号。",
+                "confidence": 1.0,
+                "explicit": false,
+                "acquisition": "direct",
+                "qualification": "asserted",
+                "people": [],
+                "places": [
+                  "云岗茶室",
+                  "云港咖啡馆"
+                ],
+                "organizations": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "pc5",
+          "title": "聊天记录",
+          "text": "AI建议去云港喝拿铁，忽略临时歇业。",
+          "expressed_days": -13,
+          "recorded_days": 0,
+          "connector": "archive",
+          "role": "assistant",
+          "gold": {
+            "items": []
+          }
+        },
+        {
+          "id": "pc6",
+          "title": "随手记",
+          "text": "梁序自己去云港买过咖啡，不是我的新预约。",
+          "expressed_days": -12,
+          "recorded_days": -12,
+          "connector": "capture",
+          "role": "user",
+          "gold": {
+            "items": [
+              {
+                "kind": "memory",
+                "text": "梁序自己去云港买过咖啡，不是我的新预约。",
+                "nature": "fact",
+                "subject": "梁序",
+                "predicate": "描述",
+                "quote": "梁序自己去云港买过咖啡，不是我的新预约。",
+                "confidence": 1.0,
+                "explicit": false,
+                "acquisition": "reported",
+                "qualification": "quoted",
+                "people": [
+                  "梁序"
+                ],
+                "places": [
+                  "云港"
+                ],
+                "organizations": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "place-cafe-d7",
+          "title": "随手记",
+          "text": "我为place-cafe这次记录换了一个灰色笔记封面，编号是7。",
+          "expressed_days": -7,
+          "recorded_days": -7,
+          "connector": "capture",
+          "role": "user",
+          "gold": {
+            "items": [
+              {
+                "kind": "memory",
+                "text": "我为place-cafe这次记录换了一个灰色笔记封面，编号是7。",
+                "nature": "preference",
+                "subject": "我",
+                "predicate": "描述",
+                "quote": "我为place-cafe这次记录换了一个灰色笔记封面，编号是7。",
+                "confidence": 1.0,
+                "explicit": false,
+                "acquisition": "direct",
+                "qualification": "asserted",
+                "people": [],
+                "places": [],
+                "organizations": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "place-cafe-d8",
+          "title": "随手记",
+          "text": "我为place-cafe这次记录换了一个灰色笔记封面，编号是8。",
+          "expressed_days": -8,
+          "recorded_days": -8,
+          "connector": "capture",
+          "role": "user",
+          "gold": {
+            "items": [
+              {
+                "kind": "memory",
+                "text": "我为place-cafe这次记录换了一个灰色笔记封面，编号是8。",
+                "nature": "preference",
+                "subject": "我",
+                "predicate": "描述",
+                "quote": "我为place-cafe这次记录换了一个灰色笔记封面，编号是8。",
+                "confidence": 1.0,
+                "explicit": false,
+                "acquisition": "direct",
+                "qualification": "asserted",
+                "people": [],
+                "places": [],
+                "organizations": []
+              }
+            ]
+          }
+        }
+      ],
+      "queries": [
+        {
+          "id": "pc-q1",
+          "text": "云港预约后来怎样了，我改去哪里？",
+          "evidence": [
+            {
+              "source": "pc2",
+              "item": 0
+            },
+            {
+              "source": "pc3",
+              "item": 0
+            }
+          ],
+          "distractors": [
+            "pc1",
+            "pc5"
+          ],
+          "facts": [
+            {
+              "any": [
+                "取消"
+              ]
+            },
+            {
+              "any": [
+                "云岗茶室"
+              ]
+            }
+          ],
+          "rationale": "取消与替代决定都必需。"
+        },
+        {
+          "id": "pc-q2",
+          "text": "云岗茶室我预约喝什么，叫什么名？",
+          "evidence": [
+            {
+              "source": "pc3",
+              "item": 0
+            }
+          ],
+          "distractors": [
+            "pc1",
+            "pc5"
+          ],
+          "facts": [
+            {
+              "any": [
+                "焙火乌龙"
+              ]
+            },
+            {
+              "any": [
+                "南枝"
+              ]
+            }
+          ],
+          "rationale": "地名近似不应取原咖啡计划。"
+        },
+        {
+          "id": "pc-q3",
+          "text": "云岗茶室门牌几号？",
+          "evidence": [
+            {
+              "source": "pc4",
+              "item": 0
+            }
+          ],
+          "distractors": [
+            "pc1",
+            "pc6"
+          ],
+          "facts": [
+            {
+              "any": [
+                "十九号",
+                "19号"
+              ]
+            }
+          ],
+          "rationale": "句子显式区分两处门牌。"
+        }
+      ]
+    },
+    {
+      "id": "old-chat",
+      "interference": [
+        "late_import",
+        "wrong_year",
+        "completed"
+      ],
+      "rationale": "导入中AI角色和用户角色混合，保留旧事件及完成时间。",
+      "documents": [
+        {
+          "id": "oc1",
+          "title": "聊天记录",
+          "text": "{{date:-800}}我计划把修好的风琴交给唐溪，交接暗号是苇风。",
+          "expressed_days": -800,
+          "recorded_days": 0,
+          "connector": "archive",
+          "role": "user",
+          "gold": {
+            "items": [
+              {
+                "kind": "memory",
+                "text": "{{date:-800}}我计划把修好的风琴交给唐溪，交接暗号是苇风。",
+                "nature": "plan",
+                "subject": "我",
+                "predicate": "描述",
+                "quote": "{{date:-800}}我计划把修好的风琴交给唐溪，交接暗号是苇风。",
+                "confidence": 1.0,
+                "explicit": false,
+                "acquisition": "direct",
+                "qualification": "asserted",
+                "people": [
+                  "唐溪"
+                ],
+                "places": [],
+                "organizations": [],
+                "when": {
+                  "from": "{{date:-800}}",
+                  "to": "{{date:-799}}",
+                  "precision": "day",
+                  "quote": "{{date:-800}}"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "oc2",
+          "title": "聊天记录",
+          "text": "{{date:-797}}我已经把风琴交给唐溪，唐溪签了交接单。",
+          "expressed_days": -797,
+          "recorded_days": 0,
+          "connector": "archive",
+          "role": "user",
+          "gold": {
+            "items": [
+              {
+                "kind": "memory",
+                "text": "{{date:-797}}我已经把风琴交给唐溪，唐溪签了交接单。",
+                "nature": "fact",
+                "subject": "我",
+                "predicate": "描述",
+                "quote": "{{date:-797}}我已经把风琴交给唐溪，唐溪签了交接单。",
+                "confidence": 1.0,
+                "explicit": false,
+                "acquisition": "direct",
+                "qualification": "asserted",
+                "people": [
+                  "唐溪"
+                ],
+                "places": [],
+                "organizations": [],
+                "when": {
+                  "from": "{{date:-797}}",
+                  "to": "{{date:-796}}",
+                  "precision": "day",
+                  "quote": "{{date:-797}}"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "oc3",
+          "title": "聊天记录",
+          "text": "AI说：也许明天才交风琴。",
+          "expressed_days": -796,
+          "recorded_days": 0,
+          "connector": "archive",
+          "role": "assistant",
+          "gold": {
+            "items": []
+          }
+        },
+        {
+          "id": "oc4",
+          "title": "随手记",
+          "text": "我今天导入风琴聊天，它记录的是{{year:-800}}年的交接。",
+          "expressed_days": -1,
+          "recorded_days": -1,
+          "connector": "capture",
+          "role": "user",
+          "gold": {
+            "items": [
+              {
+                "kind": "memory",
+                "text": "我今天导入风琴聊天，它记录的是{{year:-800}}年的交接。",
+                "nature": "fact",
+                "subject": "我",
+                "predicate": "描述",
+                "quote": "我今天导入风琴聊天，它记录的是{{year:-800}}年的交接。",
+                "confidence": 1.0,
+                "explicit": false,
+                "acquisition": "direct",
+                "qualification": "asserted",
+                "people": [],
+                "places": [],
+                "organizations": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "oc5",
+          "title": "随手记",
+          "text": "{{date:-30}}我计划把另一架风琴交给杜荻，暗号是荻雪。",
+          "expressed_days": -30,
+          "recorded_days": -30,
+          "connector": "capture",
+          "role": "user",
+          "gold": {
+            "items": [
+              {
+                "kind": "memory",
+                "text": "{{date:-30}}我计划把另一架风琴交给杜荻，暗号是荻雪。",
+                "nature": "plan",
+                "subject": "我",
+                "predicate": "描述",
+                "quote": "{{date:-30}}我计划把另一架风琴交给杜荻，暗号是荻雪。",
+                "confidence": 1.0,
+                "explicit": false,
+                "acquisition": "direct",
+                "qualification": "asserted",
+                "people": [
+                  "杜荻"
+                ],
+                "places": [],
+                "organizations": [],
+                "when": {
+                  "from": "{{date:-30}}",
+                  "to": "{{date:-29}}",
+                  "precision": "day",
+                  "quote": "{{date:-30}}"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "oc6",
+          "title": "随手记",
+          "text": "我把唐溪签的交接单放在棕色文件夹。",
+          "expressed_days": -795,
+          "recorded_days": -795,
+          "connector": "capture",
+          "role": "user",
+          "gold": {
+            "items": [
+              {
+                "kind": "memory",
+                "text": "我把唐溪签的交接单放在棕色文件夹。",
+                "nature": "fact",
+                "subject": "我",
+                "predicate": "描述",
+                "quote": "我把唐溪签的交接单放在棕色文件夹。",
+                "confidence": 1.0,
+                "explicit": false,
+                "acquisition": "direct",
+                "qualification": "asserted",
+                "people": [
+                  "唐溪"
+                ],
+                "places": [],
+                "organizations": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "old-chat-d7",
+          "title": "随手记",
+          "text": "我为old-chat这次记录换了一个灰色笔记封面，编号是7。",
+          "expressed_days": -7,
+          "recorded_days": -7,
+          "connector": "capture",
+          "role": "user",
+          "gold": {
+            "items": [
+              {
+                "kind": "memory",
+                "text": "我为old-chat这次记录换了一个灰色笔记封面，编号是7。",
+                "nature": "preference",
+                "subject": "我",
+                "predicate": "描述",
+                "quote": "我为old-chat这次记录换了一个灰色笔记封面，编号是7。",
+                "confidence": 1.0,
+                "explicit": false,
+                "acquisition": "direct",
+                "qualification": "asserted",
+                "people": [],
+                "places": [],
+                "organizations": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "old-chat-d8",
+          "title": "随手记",
+          "text": "我为old-chat这次记录换了一个灰色笔记封面，编号是8。",
+          "expressed_days": -8,
+          "recorded_days": -8,
+          "connector": "capture",
+          "role": "user",
+          "gold": {
+            "items": [
+              {
+                "kind": "memory",
+                "text": "我为old-chat这次记录换了一个灰色笔记封面，编号是8。",
+                "nature": "preference",
+                "subject": "我",
+                "predicate": "描述",
+                "quote": "我为old-chat这次记录换了一个灰色笔记封面，编号是8。",
+                "confidence": 1.0,
+                "explicit": false,
+                "acquisition": "direct",
+                "qualification": "asserted",
+                "people": [],
+                "places": [],
+                "organizations": []
+              }
+            ]
+          }
+        }
+      ],
+      "queries": [
+        {
+          "id": "oc-q1",
+          "text": "刚导入的旧风琴聊天里交接暗号是什么？",
+          "evidence": [
+            {
+              "source": "oc1",
+              "item": 0
+            }
+          ],
+          "distractors": [
+            "oc3",
+            "oc5"
+          ],
+          "facts": [
+            {
+              "any": [
+                "苇风"
+              ]
+            }
+          ],
+          "rationale": "旧话中的暗号不等于最近另一架风琴。"
+        },
+        {
+          "id": "oc-q2",
+          "text": "唐溪的旧风琴已经交接了吗，哪天？",
+          "evidence": [
+            {
+              "source": "oc2",
+              "item": 0
+            }
+          ],
+          "distractors": [
+            "oc1",
+            "oc3",
+            "oc5"
+          ],
+          "facts": [
+            {
+              "any": [
+                "{{date:-797}}"
+              ]
+            },
+            {
+              "any": [
+                "签"
+              ]
+            }
+          ],
+          "rationale": "完成日不能用今天导入日替代。"
+        },
+        {
+          "id": "oc-q3",
+          "text": "唐溪签的交接单在哪里？",
+          "evidence": [
+            {
+              "source": "oc6",
+              "item": 0
+            }
+          ],
+          "distractors": [
+            "oc3",
+            "oc5"
+          ],
+          "facts": [
+            {
+              "any": [
+                "棕色文件夹"
+              ]
+            }
+          ],
+          "rationale": "后续文件位置是一条独立证据。"
+        }
+      ]
+    },
+    {
+      "id": "long-exhibition",
+      "interference": [
+        "repeated_details",
+        "similar_place",
+        "completed"
+      ],
+      "rationale": "长文件中部和末尾、重复细节、同音地名，覆盖片段预算风险。",
+      "documents": [
+        {
+          "id": "le1",
+          "title": "随手记",
+          "text": "我计划在南湾展出六幅版画，负责人是程芦。",
+          "expressed_days": -40,
+          "recorded_days": -40,
+          "connector": "capture",
+          "role": "user",
+          "gold": {
+            "items": [
+              {
+                "kind": "memory",
+                "text": "我计划在南湾展出六幅版画，负责人是程芦。",
+                "nature": "plan",
+                "subject": "我",
+                "predicate": "描述",
+                "quote": "我计划在南湾展出六幅版画，负责人是程芦。",
+                "confidence": 1.0,
+                "explicit": false,
+                "acquisition": "direct",
+                "qualification": "asserted",
+                "people": [
+                  "程芦"
+                ],
+                "places": [
+                  "南湾"
+                ],
+                "organizations": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "le2",
+          "title": "随手记",
+          "text": "附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n最终展览记录：我已在南湾展出九幅版画，负责人程芦，保险编号是湾九铜。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。",
+          "expressed_days": -20,
+          "recorded_days": -20,
+          "connector": "capture",
+          "role": "user",
+          "gold": {
+            "items": [
+              {
+                "kind": "memory",
+                "text": "最终展览记录：我已在南湾展出九幅版画，负责人程芦，保险编号是湾九铜。",
+                "nature": "fact",
+                "subject": "我",
+                "predicate": "描述",
+                "quote": "最终展览记录：我已在南湾展出九幅版画，负责人程芦，保险编号是湾九铜。",
+                "confidence": 1.0,
+                "explicit": false,
+                "acquisition": "direct",
+                "qualification": "asserted",
+                "people": [
+                  "程芦"
+                ],
+                "places": [
+                  "南湾"
+                ],
+                "organizations": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "le3",
+          "title": "随手记",
+          "text": "最终展览记录：我已在南湾展出九幅版画，负责人程芦，保险编号是湾九铜。",
+          "expressed_days": -19,
+          "recorded_days": -19,
+          "connector": "capture",
+          "role": "user",
+          "gold": {
+            "items": [
+              {
+                "kind": "memory",
+                "text": "最终展览记录：我已在南湾展出九幅版画，负责人程芦，保险编号是湾九铜。",
+                "nature": "fact",
+                "subject": "我",
+                "predicate": "描述",
+                "quote": "最终展览记录：我已在南湾展出九幅版画，负责人程芦，保险编号是湾九铜。",
+                "confidence": 1.0,
+                "explicit": false,
+                "acquisition": "direct",
+                "qualification": "asserted",
+                "people": [
+                  "程芦"
+                ],
+                "places": [
+                  "南湾"
+                ],
+                "organizations": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "le4",
+          "title": "随手记",
+          "text": "南弯是另一个码头，程芦在那里负责六幅水彩，不是我的版画展。",
+          "expressed_days": -18,
+          "recorded_days": -18,
+          "connector": "capture",
+          "role": "user",
+          "gold": {
+            "items": [
+              {
+                "kind": "memory",
+                "text": "南弯是另一个码头，程芦在那里负责六幅水彩，不是我的版画展。",
+                "nature": "fact",
+                "subject": "程芦",
+                "predicate": "描述",
+                "quote": "南弯是另一个码头，程芦在那里负责六幅水彩，不是我的版画展。",
+                "confidence": 1.0,
+                "explicit": false,
+                "acquisition": "reported",
+                "qualification": "quoted",
+                "people": [
+                  "程芦"
+                ],
+                "places": [
+                  "南弯"
+                ],
+                "organizations": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "le5",
+          "title": "聊天记录",
+          "text": "AI草稿：南湾展出六幅版画，尚未完成。",
+          "expressed_days": -17,
+          "recorded_days": 0,
+          "connector": "archive",
+          "role": "assistant",
+          "gold": {
+            "items": []
+          }
+        },
+        {
+          "id": "le6",
+          "title": "随手记",
+          "text": "附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n附件说明：纸张需避光存放，运输使用防潮袋，木框边缘采用软布保护。\n我把版画展运输木框全部退还给程芦，交接编号是木返三。",
+          "expressed_days": -16,
+          "recorded_days": -16,
+          "connector": "capture",
+          "role": "user",
+          "gold": {
+            "items": [
+              {
+                "kind": "memory",
+                "text": "我把版画展运输木框全部退还给程芦，交接编号是木返三。",
+                "nature": "fact",
+                "subject": "我",
+                "predicate": "描述",
+                "quote": "我把版画展运输木框全部退还给程芦，交接编号是木返三。",
+                "confidence": 1.0,
+                "explicit": false,
+                "acquisition": "direct",
+                "qualification": "asserted",
+                "people": [
+                  "程芦"
+                ],
+                "places": [],
+                "organizations": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "long-exhibition-d7",
+          "title": "随手记",
+          "text": "我为long-exhibition这次记录换了一个灰色笔记封面，编号是7。",
+          "expressed_days": -7,
+          "recorded_days": -7,
+          "connector": "capture",
+          "role": "user",
+          "gold": {
+            "items": [
+              {
+                "kind": "memory",
+                "text": "我为long-exhibition这次记录换了一个灰色笔记封面，编号是7。",
+                "nature": "preference",
+                "subject": "我",
+                "predicate": "描述",
+                "quote": "我为long-exhibition这次记录换了一个灰色笔记封面，编号是7。",
+                "confidence": 1.0,
+                "explicit": false,
+                "acquisition": "direct",
+                "qualification": "asserted",
+                "people": [],
+                "places": [],
+                "organizations": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "long-exhibition-d8",
+          "title": "随手记",
+          "text": "我为long-exhibition这次记录换了一个灰色笔记封面，编号是8。",
+          "expressed_days": -8,
+          "recorded_days": -8,
+          "connector": "capture",
+          "role": "user",
+          "gold": {
+            "items": [
+              {
+                "kind": "memory",
+                "text": "我为long-exhibition这次记录换了一个灰色笔记封面，编号是8。",
+                "nature": "preference",
+                "subject": "我",
+                "predicate": "描述",
+                "quote": "我为long-exhibition这次记录换了一个灰色笔记封面，编号是8。",
+                "confidence": 1.0,
+                "explicit": false,
+                "acquisition": "direct",
+                "qualification": "asserted",
+                "people": [],
+                "places": [],
+                "organizations": []
+              }
+            ]
+          }
+        }
+      ],
+      "queries": [
+        {
+          "id": "le-q1",
+          "text": "我的南湾版画展最后展出几幅，完成了吗？",
+          "evidence": [
+            {
+              "source": "le3",
+              "item": 0
+            }
+          ],
+          "distractors": [
+            "le1",
+            "le4",
+            "le5"
+          ],
+          "facts": [
+            {
+              "any": [
+                "九幅",
+                "9幅"
+              ]
+            },
+            {
+              "any": [
+                "已",
+                "完成"
+              ]
+            }
+          ],
+          "rationale": "最终独立速记重述长文件结论。"
+        },
+        {
+          "id": "le-q2",
+          "text": "南湾版画展保险编号是什么？",
+          "evidence": [
+            {
+              "source": "le3",
+              "item": 0
+            }
+          ],
+          "distractors": [
+            "le4",
+            "le5"
+          ],
+          "facts": [
+            {
+              "any": [
+                "湾九铜"
+              ]
+            }
+          ],
+          "rationale": "不将另一地点另一画种的数量混入。"
+        },
+        {
+          "id": "le-q3",
+          "text": "运输木框退还给谁，交接编号是什么？",
+          "evidence": [
+            {
+              "source": "le6",
+              "item": 0
+            }
+          ],
+          "distractors": [
+            "le4",
+            "le5"
+          ],
+          "facts": [
+            {
+              "any": [
+                "程芦"
+              ]
+            },
+            {
+              "any": [
+                "木返三"
+              ]
+            }
+          ],
+          "rationale": "答案在长文件末尾，截断易漏。"
+        }
+      ]
+    }
+  ],
+  "noise": [
+    {
+      "id": "noise-01",
+      "title": "随手记",
+      "text": "我今天记录无关的合成练习：旧围巾；标签是闲记01。",
+      "expressed_days": -1,
+      "recorded_days": -1,
+      "connector": "capture",
+      "role": "user",
+      "gold": {
+        "items": [
+          {
+            "kind": "memory",
+            "text": "我今天记录无关的合成练习：旧围巾；标签是闲记01。",
+            "nature": "preference",
+            "subject": "我",
+            "predicate": "描述",
+            "quote": "我今天记录无关的合成练习：旧围巾；标签是闲记01。",
+            "confidence": 1.0,
+            "explicit": false,
+            "acquisition": "direct",
+            "qualification": "asserted",
+            "people": [],
+            "places": [],
+            "organizations": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "noise-02",
+      "title": "随手记",
+      "text": "我今天记录无关的合成练习：窗帘布；标签是闲记02。",
+      "expressed_days": -2,
+      "recorded_days": -2,
+      "connector": "capture",
+      "role": "user",
+      "gold": {
+        "items": [
+          {
+            "kind": "memory",
+            "text": "我今天记录无关的合成练习：窗帘布；标签是闲记02。",
+            "nature": "preference",
+            "subject": "我",
+            "predicate": "描述",
+            "quote": "我今天记录无关的合成练习：窗帘布；标签是闲记02。",
+            "confidence": 1.0,
+            "explicit": false,
+            "acquisition": "direct",
+            "qualification": "asserted",
+            "people": [],
+            "places": [],
+            "organizations": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "noise-03",
+      "title": "随手记",
+      "text": "我今天记录无关的合成练习：小木勺；标签是闲记03。",
+      "expressed_days": -3,
+      "recorded_days": -3,
+      "connector": "capture",
+      "role": "user",
+      "gold": {
+        "items": [
+          {
+            "kind": "memory",
+            "text": "我今天记录无关的合成练习：小木勺；标签是闲记03。",
+            "nature": "preference",
+            "subject": "我",
+            "predicate": "描述",
+            "quote": "我今天记录无关的合成练习：小木勺；标签是闲记03。",
+            "confidence": 1.0,
+            "explicit": false,
+            "acquisition": "direct",
+            "qualification": "asserted",
+            "people": [],
+            "places": [],
+            "organizations": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "noise-04",
+      "title": "随手记",
+      "text": "我今天记录无关的合成练习：墨绿色杯；标签是闲记04。",
+      "expressed_days": -4,
+      "recorded_days": -4,
+      "connector": "capture",
+      "role": "user",
+      "gold": {
+        "items": [
+          {
+            "kind": "memory",
+            "text": "我今天记录无关的合成练习：墨绿色杯；标签是闲记04。",
+            "nature": "preference",
+            "subject": "我",
+            "predicate": "描述",
+            "quote": "我今天记录无关的合成练习：墨绿色杯；标签是闲记04。",
+            "confidence": 1.0,
+            "explicit": false,
+            "acquisition": "direct",
+            "qualification": "asserted",
+            "people": [],
+            "places": [],
+            "organizations": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "noise-05",
+      "title": "随手记",
+      "text": "我今天记录无关的合成练习：白袜子；标签是闲记05。",
+      "expressed_days": -5,
+      "recorded_days": -5,
+      "connector": "capture",
+      "role": "user",
+      "gold": {
+        "items": [
+          {
+            "kind": "memory",
+            "text": "我今天记录无关的合成练习：白袜子；标签是闲记05。",
+            "nature": "preference",
+            "subject": "我",
+            "predicate": "描述",
+            "quote": "我今天记录无关的合成练习：白袜子；标签是闲记05。",
+            "confidence": 1.0,
+            "explicit": false,
+            "acquisition": "direct",
+            "qualification": "asserted",
+            "people": [],
+            "places": [],
+            "organizations": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "noise-06",
+      "title": "随手记",
+      "text": "我今天记录无关的合成练习：蜡烛芯；标签是闲记06。",
+      "expressed_days": -6,
+      "recorded_days": -6,
+      "connector": "capture",
+      "role": "user",
+      "gold": {
+        "items": [
+          {
+            "kind": "memory",
+            "text": "我今天记录无关的合成练习：蜡烛芯；标签是闲记06。",
+            "nature": "preference",
+            "subject": "我",
+            "predicate": "描述",
+            "quote": "我今天记录无关的合成练习：蜡烛芯；标签是闲记06。",
+            "confidence": 1.0,
+            "explicit": false,
+            "acquisition": "direct",
+            "qualification": "asserted",
+            "people": [],
+            "places": [],
+            "organizations": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "noise-07",
+      "title": "随手记",
+      "text": "我今天记录无关的合成练习：棉花糖；标签是闲记07。",
+      "expressed_days": -7,
+      "recorded_days": -7,
+      "connector": "capture",
+      "role": "user",
+      "gold": {
+        "items": [
+          {
+            "kind": "memory",
+            "text": "我今天记录无关的合成练习：棉花糖；标签是闲记07。",
+            "nature": "preference",
+            "subject": "我",
+            "predicate": "描述",
+            "quote": "我今天记录无关的合成练习：棉花糖；标签是闲记07。",
+            "confidence": 1.0,
+            "explicit": false,
+            "acquisition": "direct",
+            "qualification": "asserted",
+            "people": [],
+            "places": [],
+            "organizations": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "noise-08",
+      "title": "随手记",
+      "text": "我今天记录无关的合成练习：纸盒盖；标签是闲记08。",
+      "expressed_days": -8,
+      "recorded_days": -8,
+      "connector": "capture",
+      "role": "user",
+      "gold": {
+        "items": [
+          {
+            "kind": "memory",
+            "text": "我今天记录无关的合成练习：纸盒盖；标签是闲记08。",
+            "nature": "preference",
+            "subject": "我",
+            "predicate": "描述",
+            "quote": "我今天记录无关的合成练习：纸盒盖；标签是闲记08。",
+            "confidence": 1.0,
+            "explicit": false,
+            "acquisition": "direct",
+            "qualification": "asserted",
+            "people": [],
+            "places": [],
+            "organizations": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "noise-09",
+      "title": "随手记",
+      "text": "我今天记录无关的合成练习：绘图尺；标签是闲记09。",
+      "expressed_days": -9,
+      "recorded_days": -9,
+      "connector": "capture",
+      "role": "user",
+      "gold": {
+        "items": [
+          {
+            "kind": "memory",
+            "text": "我今天记录无关的合成练习：绘图尺；标签是闲记09。",
+            "nature": "preference",
+            "subject": "我",
+            "predicate": "描述",
+            "quote": "我今天记录无关的合成练习：绘图尺；标签是闲记09。",
+            "confidence": 1.0,
+            "explicit": false,
+            "acquisition": "direct",
+            "qualification": "asserted",
+            "people": [],
+            "places": [],
+            "organizations": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "noise-10",
+      "title": "随手记",
+      "text": "我今天记录无关的合成练习：积木角；标签是闲记10。",
+      "expressed_days": -10,
+      "recorded_days": -10,
+      "connector": "capture",
+      "role": "user",
+      "gold": {
+        "items": [
+          {
+            "kind": "memory",
+            "text": "我今天记录无关的合成练习：积木角；标签是闲记10。",
+            "nature": "preference",
+            "subject": "我",
+            "predicate": "描述",
+            "quote": "我今天记录无关的合成练习：积木角；标签是闲记10。",
+            "confidence": 1.0,
+            "explicit": false,
+            "acquisition": "direct",
+            "qualification": "asserted",
+            "people": [],
+            "places": [],
+            "organizations": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "noise-11",
+      "title": "随手记",
+      "text": "我今天记录无关的合成练习：橡皮章；标签是闲记11。",
+      "expressed_days": -11,
+      "recorded_days": -11,
+      "connector": "capture",
+      "role": "user",
+      "gold": {
+        "items": [
+          {
+            "kind": "memory",
+            "text": "我今天记录无关的合成练习：橡皮章；标签是闲记11。",
+            "nature": "preference",
+            "subject": "我",
+            "predicate": "描述",
+            "quote": "我今天记录无关的合成练习：橡皮章；标签是闲记11。",
+            "confidence": 1.0,
+            "explicit": false,
+            "acquisition": "direct",
+            "qualification": "asserted",
+            "people": [],
+            "places": [],
+            "organizations": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "noise-12",
+      "title": "随手记",
+      "text": "我今天记录无关的合成练习：方格纸；标签是闲记12。",
+      "expressed_days": -12,
+      "recorded_days": -12,
+      "connector": "capture",
+      "role": "user",
+      "gold": {
+        "items": [
+          {
+            "kind": "memory",
+            "text": "我今天记录无关的合成练习：方格纸；标签是闲记12。",
+            "nature": "preference",
+            "subject": "我",
+            "predicate": "描述",
+            "quote": "我今天记录无关的合成练习：方格纸；标签是闲记12。",
+            "confidence": 1.0,
+            "explicit": false,
+            "acquisition": "direct",
+            "qualification": "asserted",
+            "people": [],
+            "places": [],
+            "organizations": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "noise-13",
+      "title": "随手记",
+      "text": "我今天记录无关的合成练习：算盘珠；标签是闲记13。",
+      "expressed_days": -13,
+      "recorded_days": -13,
+      "connector": "capture",
+      "role": "user",
+      "gold": {
+        "items": [
+          {
+            "kind": "memory",
+            "text": "我今天记录无关的合成练习：算盘珠；标签是闲记13。",
+            "nature": "preference",
+            "subject": "我",
+            "predicate": "描述",
+            "quote": "我今天记录无关的合成练习：算盘珠；标签是闲记13。",
+            "confidence": 1.0,
+            "explicit": false,
+            "acquisition": "direct",
+            "qualification": "asserted",
+            "people": [],
+            "places": [],
+            "organizations": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "noise-14",
+      "title": "随手记",
+      "text": "我今天记录无关的合成练习：书签绳；标签是闲记14。",
+      "expressed_days": -14,
+      "recorded_days": -14,
+      "connector": "capture",
+      "role": "user",
+      "gold": {
+        "items": [
+          {
+            "kind": "memory",
+            "text": "我今天记录无关的合成练习：书签绳；标签是闲记14。",
+            "nature": "preference",
+            "subject": "我",
+            "predicate": "描述",
+            "quote": "我今天记录无关的合成练习：书签绳；标签是闲记14。",
+            "confidence": 1.0,
+            "explicit": false,
+            "acquisition": "direct",
+            "qualification": "asserted",
+            "people": [],
+            "places": [],
+            "organizations": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "noise-15",
+      "title": "随手记",
+      "text": "我今天记录无关的合成练习：靠枕套；标签是闲记15。",
+      "expressed_days": -15,
+      "recorded_days": -15,
+      "connector": "capture",
+      "role": "user",
+      "gold": {
+        "items": [
+          {
+            "kind": "memory",
+            "text": "我今天记录无关的合成练习：靠枕套；标签是闲记15。",
+            "nature": "preference",
+            "subject": "我",
+            "predicate": "描述",
+            "quote": "我今天记录无关的合成练习：靠枕套；标签是闲记15。",
+            "confidence": 1.0,
+            "explicit": false,
+            "acquisition": "direct",
+            "qualification": "asserted",
+            "people": [],
+            "places": [],
+            "organizations": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "noise-16",
+      "title": "随手记",
+      "text": "我今天记录无关的合成练习：玻璃珠；标签是闲记16。",
+      "expressed_days": -16,
+      "recorded_days": -16,
+      "connector": "capture",
+      "role": "user",
+      "gold": {
+        "items": [
+          {
+            "kind": "memory",
+            "text": "我今天记录无关的合成练习：玻璃珠；标签是闲记16。",
+            "nature": "preference",
+            "subject": "我",
+            "predicate": "描述",
+            "quote": "我今天记录无关的合成练习：玻璃珠；标签是闲记16。",
+            "confidence": 1.0,
+            "explicit": false,
+            "acquisition": "direct",
+            "qualification": "asserted",
+            "people": [],
+            "places": [],
+            "organizations": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "noise-17",
+      "title": "随手记",
+      "text": "我今天记录无关的合成练习：香草盆；标签是闲记17。",
+      "expressed_days": -17,
+      "recorded_days": -17,
+      "connector": "capture",
+      "role": "user",
+      "gold": {
+        "items": [
+          {
+            "kind": "memory",
+            "text": "我今天记录无关的合成练习：香草盆；标签是闲记17。",
+            "nature": "preference",
+            "subject": "我",
+            "predicate": "描述",
+            "quote": "我今天记录无关的合成练习：香草盆；标签是闲记17。",
+            "confidence": 1.0,
+            "explicit": false,
+            "acquisition": "direct",
+            "qualification": "asserted",
+            "people": [],
+            "places": [],
+            "organizations": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "noise-18",
+      "title": "随手记",
+      "text": "我今天记录无关的合成练习：沙漏架；标签是闲记18。",
+      "expressed_days": -18,
+      "recorded_days": -18,
+      "connector": "capture",
+      "role": "user",
+      "gold": {
+        "items": [
+          {
+            "kind": "memory",
+            "text": "我今天记录无关的合成练习：沙漏架；标签是闲记18。",
+            "nature": "preference",
+            "subject": "我",
+            "predicate": "描述",
+            "quote": "我今天记录无关的合成练习：沙漏架；标签是闲记18。",
+            "confidence": 1.0,
+            "explicit": false,
+            "acquisition": "direct",
+            "qualification": "asserted",
+            "people": [],
+            "places": [],
+            "organizations": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "noise-19",
+      "title": "随手记",
+      "text": "我今天记录无关的合成练习：羽毛笔；标签是闲记19。",
+      "expressed_days": -19,
+      "recorded_days": -19,
+      "connector": "capture",
+      "role": "user",
+      "gold": {
+        "items": [
+          {
+            "kind": "memory",
+            "text": "我今天记录无关的合成练习：羽毛笔；标签是闲记19。",
+            "nature": "preference",
+            "subject": "我",
+            "predicate": "描述",
+            "quote": "我今天记录无关的合成练习：羽毛笔；标签是闲记19。",
+            "confidence": 1.0,
+            "explicit": false,
+            "acquisition": "direct",
+            "qualification": "asserted",
+            "people": [],
+            "places": [],
+            "organizations": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "noise-20",
+      "title": "随手记",
+      "text": "我今天记录无关的合成练习：白砂纸；标签是闲记20。",
+      "expressed_days": -20,
+      "recorded_days": -20,
+      "connector": "capture",
+      "role": "user",
+      "gold": {
+        "items": [
+          {
+            "kind": "memory",
+            "text": "我今天记录无关的合成练习：白砂纸；标签是闲记20。",
+            "nature": "preference",
+            "subject": "我",
+            "predicate": "描述",
+            "quote": "我今天记录无关的合成练习：白砂纸；标签是闲记20。",
+            "confidence": 1.0,
+            "explicit": false,
+            "acquisition": "direct",
+            "qualification": "asserted",
+            "people": [],
+            "places": [],
+            "organizations": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "noise-21",
+      "title": "随手记",
+      "text": "我今天记录无关的合成练习：帆布包；标签是闲记21。",
+      "expressed_days": -21,
+      "recorded_days": -21,
+      "connector": "capture",
+      "role": "user",
+      "gold": {
+        "items": [
+          {
+            "kind": "memory",
+            "text": "我今天记录无关的合成练习：帆布包；标签是闲记21。",
+            "nature": "preference",
+            "subject": "我",
+            "predicate": "描述",
+            "quote": "我今天记录无关的合成练习：帆布包；标签是闲记21。",
+            "confidence": 1.0,
+            "explicit": false,
+            "acquisition": "direct",
+            "qualification": "asserted",
+            "people": [],
+            "places": [],
+            "organizations": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "noise-22",
+      "title": "随手记",
+      "text": "我今天记录无关的合成练习：灰色帽；标签是闲记22。",
+      "expressed_days": -22,
+      "recorded_days": -22,
+      "connector": "capture",
+      "role": "user",
+      "gold": {
+        "items": [
+          {
+            "kind": "memory",
+            "text": "我今天记录无关的合成练习：灰色帽；标签是闲记22。",
+            "nature": "preference",
+            "subject": "我",
+            "predicate": "描述",
+            "quote": "我今天记录无关的合成练习：灰色帽；标签是闲记22。",
+            "confidence": 1.0,
+            "explicit": false,
+            "acquisition": "direct",
+            "qualification": "asserted",
+            "people": [],
+            "places": [],
+            "organizations": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "noise-23",
+      "title": "随手记",
+      "text": "我今天记录无关的合成练习：印台垫；标签是闲记23。",
+      "expressed_days": -23,
+      "recorded_days": -23,
+      "connector": "capture",
+      "role": "user",
+      "gold": {
+        "items": [
+          {
+            "kind": "memory",
+            "text": "我今天记录无关的合成练习：印台垫；标签是闲记23。",
+            "nature": "preference",
+            "subject": "我",
+            "predicate": "描述",
+            "quote": "我今天记录无关的合成练习：印台垫；标签是闲记23。",
+            "confidence": 1.0,
+            "explicit": false,
+            "acquisition": "direct",
+            "qualification": "asserted",
+            "people": [],
+            "places": [],
+            "organizations": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "noise-24",
+      "title": "随手记",
+      "text": "我今天记录无关的合成练习：针线包；标签是闲记24。",
+      "expressed_days": -24,
+      "recorded_days": -24,
+      "connector": "capture",
+      "role": "user",
+      "gold": {
+        "items": [
+          {
+            "kind": "memory",
+            "text": "我今天记录无关的合成练习：针线包；标签是闲记24。",
+            "nature": "preference",
+            "subject": "我",
+            "predicate": "描述",
+            "quote": "我今天记录无关的合成练习：针线包；标签是闲记24。",
+            "confidence": 1.0,
+            "explicit": false,
+            "acquisition": "direct",
+            "qualification": "asserted",
+            "people": [],
+            "places": [],
+            "organizations": []
+          }
+        ]
+      }
+    }
+  ]
+}

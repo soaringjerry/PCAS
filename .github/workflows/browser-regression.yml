@@ -51,8 +51,9 @@ jobs:
           done
           cat /tmp/pcas-browser.log
           exit 1
-      - run: npx playwright test tests/secretary.spec.ts tests/fixes.spec.ts tests/notify.spec.ts tests/buttons.spec.ts tests/timezone.spec.ts tests/settings-things-ux.spec.ts tests/usability-acceptance.spec.ts tests/phase2-batch1.spec.ts tests/phase2-batch2.spec.ts
+      - run: npx playwright test tests/secretary.spec.ts tests/fixes.spec.ts tests/notify.spec.ts tests/buttons.spec.ts tests/timezone.spec.ts tests/settings-things-ux.spec.ts tests/usability-acceptance.spec.ts tests/phase2-batch1.spec.ts tests/phase2-batch2.spec.ts tests/phase2-batch3.spec.ts tests/phase2-batch4.spec.ts
         working-directory: web
+      - run: PCAS_CHATGPT_DIRECT_ENABLED=false bash web/tests/support/real-backend.sh npx playwright test tests/phase2-batch3-backend.spec.ts --retries=0
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
@@ -86,6 +87,8 @@ jobs:
       # The runner cleans up only its recorded PIDs and its own container/volumes.
       - run: bash web/tests/support/real-backend.sh
       - run: bash web/tests/support/real-backend.sh npx playwright test tests/phase2-batch2-backend.spec.ts --output=test-results/phase2-batch2
+      - if: ${{ matrix.round == 1 }}
+        run: PCAS_IMPORT_CHUNK_SIZE=1 bash web/tests/support/real-backend.sh npx playwright test tests/phase2-batch4-backend.spec.ts --retries=0
       - uses: actions/upload-artifact@v4
         if: always()
         with:

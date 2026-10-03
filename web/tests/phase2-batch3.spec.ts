@@ -11,13 +11,28 @@ const mentions = [
 type Item = { id: string; at: string | null; eventFrom: string; eventTo: string; eventPrecision: string; text: string; status: string; saidLabel: string; eventLabel: string; statusLabel?: string }
 const items: Item[] = gold.browser.items
 
-// Accept familiar numeric/date punctuation while checking every calendar part.
-function datePattern(iso: string, optionalYear = false) {
-  const [y, m, d] = iso.split('-')
-  const year = optionalYear ? `(?:${y}(?:年|[-/.]))?` : `${y}(?:年|[-/.])`
-  return new RegExp(`${year}0?${Number(m)}${d ? `(?:月|[-/.])0?${Number(d)}` : ''}`)
+// Check visible calendar parts on the event label itself, independently of order.
+async function eventDate(row: ReturnType<Page['locator']>, item: Item) {
+  const event = row.locator('.t-event')
+  await expect(event).toBeVisible()
+  const [year, month, day] = item.eventLabel.split('-')
+  const referenceYear = item.at
+    ? item.saidLabel.split('-')[0]
+    : String(new Intl.DateTimeFormat('en', { year: 'numeric', timeZone: 'Asia/Shanghai' }).format(new Date()))
+  if (item.eventPrecision === 'year' || year !== referenceYear) await expect(event).toContainText(`${year}年`)
+  if (month) await expect(event).toContainText(`${Number(month)}月`)
+  if (day) await expect(event).toContainText(`${Number(day)}日`)
+  if (item.eventPrecision === 'range') {
+    const [endYear, endMonth, endDay] = gold.rangeDisplayRuling.browserEnd.split('-')
+    // A shared month may appear once in "6月12日至14日"; the inclusive final day is required.
+    await expect(event).toContainText(new RegExp(`至\\s*(?:${endYear}年)?(?:0?${Number(endMonth)}月)?0?${Number(endDay)}日`))
+    if (endYear !== year) await expect(event).toContainText(`${endYear}年`)
+    if (endMonth !== month) await expect(event).toContainText(`${Number(endMonth)}月`)
+    const excludedDay = Number(gold.rangeDisplayRuling.browserExcludedEnd.split('-')[2])
+    await expect(event).not.toContainText(new RegExp(`(?:至\\s*(?:${endYear}年)?(?:0?${Number(endMonth)}月)?|${Number(endMonth)}月)0?${excludedDay}日`))
+  }
 }
-async function backend(page: Page) {
+async function backend(page: Page, timelineItems: Item[] = items) {
   const at = '2026-10-02T12:00:00Z'
   const state: State = {
     version: 1, revision: 1, budgetUsage: 0,
@@ -28,8 +43,8 @@ async function backend(page: Page) {
   const turn = {
     id: 'b3-turn', text: gold.fixtures.query, reply: gold.browser.reply,
     cards: [
-      { kind: 'timeline', items: items.map(item => ({ at: item.at, eventFrom: item.eventFrom, eventTo: item.eventTo, eventPrecision: item.eventPrecision, mentions, text: item.text, status: item.status, memoryId: item.id, thingId: null })) },
-      { kind: 'sources', items: items.map(item => ({ kind: 'claim', memoryId: item.id, version: 1, sourceId, sourceVersion: 1, text: item.text, at: item.at })) },
+      { kind: 'timeline', items: timelineItems.map(item => ({ at: item.at, eventFrom: item.eventFrom, eventTo: item.eventTo, eventPrecision: item.eventPrecision, mentions, text: item.text, status: item.status, memoryId: item.id, thingId: null })) },
+      { kind: 'sources', items: timelineItems.map(item => ({ kind: 'claim', memoryId: item.id, version: 1, sourceId, sourceVersion: 1, text: item.text, at: item.at })) },
     ], receipts: [], ask: null, agent: '验收假模型', createdAt: at,
   }
   const errors: string[] = [], opened: string[] = []
@@ -77,11 +92,7 @@ test('V1 四种状态、说话日期和事件日期、人地点与无日期，39
       await expect(said).toContainText(`${Number(month)}月${Number(day)}日`)
       await expect(said).toContainText(`${year}年`)
     } else await expect(row).toContainText('时间不详')
-    await expect(row).toContainText(item.eventPrecision === 'year' ? item.eventLabel : datePattern(item.eventLabel))
-    if (item.eventPrecision === 'range') {
-      await expect(row).toContainText(datePattern(gold.rangeDisplayRuling.browserEnd, true))
-      await expect(row).not.toContainText(datePattern(gold.rangeDisplayRuling.browserExcludedEnd, true))
-    }
+    await eventDate(row, item)
     if (item.statusLabel) await expect(row).toContainText(item.statusLabel)
     else await expect(row).not.toContainText(/已完成|已取消|后来改过|未完成|未变化|open/)
     await row.scrollIntoViewIfNeeded()
@@ -92,6 +103,16 @@ test('V1 四种状态、说话日期和事件日期、人地点与无日期，39
   }
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy()
   expect(mock.errors).toEqual([])
+
+  // Same-year rows above allow an omitted event year; this row must display its different year.
+  const crossYear: Item = gold.secondAcceptanceRuling.browserCrossYearItem
+  const crossMock = await backend(page, [crossYear])
+  await ask(page)
+  const crossRow = page.locator('.sec-timeline li').filter({ hasText: crossYear.text })
+  await expect(crossRow).toHaveCount(1)
+  await expect(crossRow.locator('time').first()).toHaveJSProperty('dateTime', crossYear.at)
+  await eventDate(crossRow, crossYear)
+  expect(crossMock.errors).toEqual([])
 })
 
 test('V2 点击时间轴条目直接打开当时的原话', async ({ page }) => {

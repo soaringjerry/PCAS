@@ -186,10 +186,14 @@ func TestPhase2B3_S7_AllExistingFiltersApplyToStructuredHits(t *testing.T) {
 			}
 			run := b1R2aRun(t, s, scope, f, task, "model", "去年说去成都要做什么", "过滤验收回答")
 			b1Contains(t, f.last(t).Prompt, "允许命中标记")
-			b1Absent(t, f.last(t).Prompt, "受限命中标记", "成都受限证据暗号")
+			b1Absent(t, f.last(t).Prompt, "受限命中标记")
 			b1HasRef(t, run.ContextVersions, allow, true)
-			for _, ref := range []memory.Ref{hidden, source} {
-				b1HasRef(t, run.ContextVersions, ref, false)
+			b1HasRef(t, run.ContextVersions, hidden, false)
+			// Section 8: only user visibility and item exclusions restrict originals.
+			// Category, inference and project filters restrict claims alone.
+			if filter == "excluded" || filter == "visibility" {
+				b1Absent(t, f.last(t).Prompt, "成都受限证据暗号")
+				b1HasRef(t, run.ContextVersions, source, false)
 			}
 		})
 	}
@@ -351,6 +355,39 @@ func TestPhase2B3_S1_EventPrecisionAndInclusiveRangeDisplay(t *testing.T) {
 	if err := json.Unmarshal(b3Gold(t)["rangeDisplayRuling"], &oracle); err != nil {
 		t.Fatal(err)
 	}
+	t.Run("people_then_places_each_sorted_by_name", func(t *testing.T) {
+		var ruling struct {
+			MentionOrder struct {
+				Input          []struct{ Name, Role string }
+				ExpectedNames  []string
+				ExpectedSuffix string
+			}
+		}
+		if err := json.Unmarshal(b3Gold(t)["secondAcceptanceRuling"], &ruling); err != nil {
+			t.Fatal(err)
+		}
+		if len(ruling.MentionOrder.Input) != 4 || len(ruling.MentionOrder.ExpectedNames) != 4 || ruling.MentionOrder.ExpectedSuffix == "" {
+			t.Fatal("missing frozen section 8 mention order")
+		}
+		s, scope := b1Store(t), owner()
+		f := b1Model(t, s, b3Used())
+		now := b3Zone(t, s, scope, "Asia/Shanghai")
+		self := b3Entity(t, s, scope, "self", "本人")
+		mentions := []b3Mention{}
+		for _, m := range ruling.MentionOrder.Input {
+			id := b3Entity(t, s, scope, m.Role, m.Name, m.Name)
+			mentions = append(mentions, b3Mention{id, m.Role})
+		}
+		said := b3Year(now, -1, time.January, 1)
+		text := "多人多地点排序验收"
+		b3Claim(t, s, scope, b3ClaimSpec{Text: text, Subject: self, Said: &said, Mentions: mentions})
+		mustTurn(t, s, scope, turnRequest("成都的安排来着"))
+		line := b3MemoryLine(t, f.last(t).Prompt, text)
+		if !strings.HasSuffix(line, ruling.MentionOrder.ExpectedSuffix) {
+			t.Errorf("model memory suffix must list people then places, sorted within each: %q", line)
+		}
+	})
+
 	for _, precision := range []string{"day", "month", "year", "range"} {
 		t.Run(precision, func(t *testing.T) {
 			s, scope := b1Store(t), owner()

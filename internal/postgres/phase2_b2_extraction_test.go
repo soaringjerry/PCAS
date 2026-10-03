@@ -319,7 +319,8 @@ func TestPhase2B2_X13_ImportedHistoricalTimeAndNoTodayTask(t *testing.T) {
 	from := b2ParseTime(t, b2Want[string](t, "X13", "event_from"))
 	to := b2ParseTime(t, b2Want[string](t, "X13", "event_to"))
 	i["when"] = b2When(from, to, "day", "明天")
-	m := b2One(t, b2Extract(t, s, scope, f, src, i))
+	i["message_index"] = 1
+	m := b2One(t, b4bLegacyExtract(t, s, scope, f, src, i))
 	b2Time(t, m, "expressedAt", &at)
 	b2Event(t, m, &from, &to, "day")
 	b2Confirmation(t, s, scope, m, b2Want[string](t, "X13", "confirmation"))
@@ -524,13 +525,14 @@ func TestPhase2B2_X18_ArchiveAssistantSkippedButAvailableAsNeighborAndRaw(t *tes
 	at := b2Anchor(t, "Asia/Shanghai")
 	f := b1Model(t, s, map[string]any{"items": []any{b2Item("用户成都计划", b2Fixture(t, "archive_user", ""), "plan")}})
 	_, user, assistant := b2Archive(t, s, scope, at, b2Fixture(t, "archive_user", ""), b2Fixture(t, "archive_assistant", ""))
+	b4bEnableSourceImport(t, s, scope, assistant)
 	before := len(f.all())
 	if err = s.ProcessExtraction(context.Background(), leaseStage(t, s, scope, assistant, "source.extract")); err != nil {
 		t.Fatal(err)
 	}
 	b2Equal(t, len(f.all())-before, b2Want[int](t, "X18", "assistant_calls"))
-	b2ExtractionRecord(t, s, scope, assistant, b2Want[string](t, "X18", "assistant_state"), 0)
-	b2Extract(t, s, scope, f, user, b2Item("用户成都计划", b2Fixture(t, "archive_user", ""), "plan"))
+	b4bLegacyExtract(t, s, scope, f, user, b4bItem(1, "用户成都计划", b2Fixture(t, "archive_user", ""), "plan"), b4bItem(2, "AI 建议不能成为用户计划", b2Fixture(t, "archive_assistant", ""), "plan"))
+	b4bRecord(t, s, scope, assistant, b2Want[string](t, "X18", "assistant_state"), 0)
 	b1Contains(t, f.last(t).Prompt, b2Fixture(t, "archive_assistant", ""))
 	b2Equal(t, len(b2Snapshot(t, s, scope).Memories), 1)
 	f.set(`{"reply":"紫色灯塔4821","used":["S1"],"actions":[]}`)

@@ -42,8 +42,12 @@ func TestImportedHistoryNeverBecomesCurrentAction(t *testing.T) {
 			idea := st.Ideas[0]
 
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				item := map[string]any{"kind": "task", "text": said, "quote": said, "confidence": 1, "explicit": true, "acquisition": "direct"}
+				if tc.imported {
+					item = b4bItem(1, said, said, "plan")
+				}
 				content := map[string]any{
-					"items":   []map[string]any{{"kind": "task", "text": said, "quote": said, "confidence": 1, "explicit": true, "acquisition": "direct"}},
+					"items":   []map[string]any{item},
 					"signals": []conditionSignal{{IdeaID: idea.ID, ConditionID: idea.Conditions[0].ID, Quote: said, Explanation: "写明要交旅行计划", Confidence: 0.99}},
 				}
 				_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": map[string]string{"content": string(asJSON(content))}}}, "usage": map[string]int{"prompt_tokens": 100, "completion_tokens": 30}})
@@ -74,8 +78,19 @@ func TestImportedHistoryNeverBecomesCurrentAction(t *testing.T) {
 			} else {
 				source = mustIngest(t, s, scope, memory.IngestRequest{Connector: "manual", ExternalID: string(memory.NewID()), ExternalVersion: "1", Title: "笔记", Text: said, MediaType: "text/plain"}).Ref
 			}
+			if tc.imported {
+				var batch, archive string
+				if err = s.pool.QueryRow(ctx, `SELECT b.id::text,b.archive_id::text FROM import_batches b JOIN archive_entries e ON(e.owner_id,e.archive_id)=(b.owner_id,b.archive_id) WHERE e.owner_id=$1 AND e.source_id=$2`, string(scope.OwnerID), string(source.ID)).Scan(&batch, &archive); err != nil {
+					t.Fatal(err)
+				}
+				b4bOperation(t, s, scope, memory.ID(batch), "organize")
+				b4bOnlyArchiveJobs(t, s, scope, memory.Ref{ID: memory.ID(archive), Kind: memory.SourceKind})
+			}
 			if err := s.ProcessExtraction(ctx, leaseStage(t, s, scope, source, "source.extract")); err != nil {
 				t.Fatal(err)
+			}
+			if tc.imported {
+				b4bDrain(t, s)
 			}
 
 			st, err = s.Snapshot(ctx, scope)
@@ -83,8 +98,12 @@ func TestImportedHistoryNeverBecomesCurrentAction(t *testing.T) {
 				t.Fatal(err)
 			}
 			var candidate *workspace.Candidate
+			candidateKind := "task"
+			if tc.imported {
+				candidateKind = "memory"
+			}
 			for i := range st.Candidates {
-				if st.Candidates[i].Kind == "task" && st.Candidates[i].Text == said {
+				if st.Candidates[i].Kind == candidateKind && st.Candidates[i].Text == said {
 					candidate = &st.Candidates[i]
 				}
 			}

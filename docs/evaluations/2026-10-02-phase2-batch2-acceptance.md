@@ -1,4 +1,94 @@
-# 第 2 批独立验收：最终统一轮报告
+# 第 2 批独立验收：浏览器复核完成
+
+2026-10-03。任务 T2。**验收结果通过：后端沿用协调者已确认的最终统一轮，本次全部浏览器 131/131 通过，0 失败、跳过、重试或 flaky。** U1–U4 的五个入口（U1 两项）全部完整执行。U5 按第 10 节取消。
+
+## 集成基线和本轮范围
+
+- 已 fetch 并变基到 `origin/phase2/batch2` 的 `717adeff733c8f87d819006768116418485b0252`（717adef）。与上次集成基线 02e7a27 的差异只有 batch2 / batch3 / batch4 三份 README，产品没有变化。
+- 协调者及 batch2/README.md 第 11 节已确认 `96f6fd4` 上的完整后端：`make check` 通过，第 2 批 43 个入口通过，M6 / M14 通过；全部 Go 顶层 393 通过、3 个原有真实模型 guard 跳过。本次没有重跑后端测试或 make check。
+- 本次最终浏览器执行固定在 `9600cba157d6bf355e1097b3d415fbe74c463042`（9600cba）。17 个 spec 文件、131 个用例均在此提交上各跑一次。完成运行后只修改本报告。
+- 验收测试的产品代码、Go 测试、Makefile、依赖文件和 gold 与 96f6fd4 完全相同，已用 git diff --quiet 核实。本次只改两个浏览器 spec 中的地址以及模拟 spec 的测试定位与操作。
+
+## 修正范围与断言不变的证据
+
+先以 a4c170c 改正协调者批准的五处 `/library?tab=memories` → `/library?tab=memory`，这五处外的测试字节不变。该提交上全部浏览器结果为 127 通过 / 4 失败，U4 已完整通过；失败记录仍保留在 `/tmp/pcas-t2-browser-correction-_60arzhj`，没有合并成最终通过数。
+
+修正地址后，模拟用例实际走到界面检查，暴露出另外几处测试定位 / 操作问题；产品 DOM 和失败 trace 已提供明确证据：
+
+| 位置 | 已记录的失败 / 定位问题 | 9600cba 的测试操作修正 |
+|---|---|---|
+| U1 两项的 card helper | 原 XPath 漏掉实际 `.mem-entry`，找不到卡片祖先；页面已有正确的记忆、人、地点和日期 | 将实际卡片类加入祖先定位，只检查该条卡片 |
+| U2 清筛选 | 页面按钮名为“清掉筛选”，原定位的词表没有它 | 加入实际按钮名；清除后两条记忆必须恢复的断言保持原样 |
+| U2 类型切换 | 类型控件实际 role=radio，原 fallback 用 button；这是同一 trace 中可见的后续定位问题 | 点击现有“计划”radio；接口 nature=plan、张三条目消失的断言保持原样 |
+| U3 more helper | 原操作滚动 window，但实际滚动区是页面内容区，50 条后观察器没有触发；returned 未增加 | 将当前末条记忆滚入可见区，沿真实滚动区触发下一页；不直接调用接口或改游标 |
+
+这次只修测试驱动，**所有界面断言与冻结预期原样保留**。通过 TypeScript 语法树提取两个文件全部 expect 调用表达式，对照改地址前的 f2c2631 逐字比较：模拟文件 70 个、真实后端文件 30 个，全部一致。证明在 `/tmp/pcas-t2-browser-driver-poqf_uuo/all-assertions-invariant.json`。没有跳过、放宽、删除或调整预期，没有改产品来迁就测试。a4c170c 的失败保留；新执行提交的重新验证由实际测试驱动修正触发，没有重跑相同代码碰运气。
+
+## 最终浏览器结果
+
+| 分组 | 结果 |
+|---|---|
+| 模拟后端，9 个 spec | 110 / 110 通过 |
+| 第 2 批真实后端 U4 | 1 / 1 通过 |
+| 现有真实后端（timezone / golden / legacy） | 20 / 20 通过 |
+| 全部 17 个 spec | 131 / 131 通过；0 失败、跳过、flaky；每个结果只有一条执行记录且 retry=0 |
+
+第 2 批逐用例：
+
+| 用例 | 结果 | 耗时 |
+|---|---|---|
+| `U1 记忆卡片显示人地点说话和事件日期，没有内容的卡片无空位及内部说法` | 通过 | 0.54 秒 |
+| `U2 点人后仅保留提到他的记忆，清掉筛选后恢复；地点和性质筛选传给接口` | 通过 | 1.00 秒 |
+| `U3 300条记忆从接口翻至末尾不重复，390px无横向溢出` | 通过 | 10.66 秒 |
+| `U1 事件区间卡片显示实际最后一天` | 通过 | 0.43 秒 |
+| `U4 真实秘书原话经后台变成带成都老王日期的记忆，点老王可筛出` | 通过 | 2.27 秒 |
+
+U1 已执行人 / 地点 / 说话时间 / 事件时间、裸卡无空位及无内部说法、区间最后一天检查；U2 已执行按人、清除、按地点、按性质的请求参数和结果检查；U3 已到第 300 条，逐条唯一、所有分页游标和 390px 无横向溢出检查均通过。U4 实际秘书原话经过 worker 抽成记忆、日期和人物地点 API 校验、真实模型请求捕获、资料库卡片和点老王筛选、手机宽度检查均通过，没有拦截 PCAS API。
+
+全仓按 spec 文件列出：
+
+| 文件 | 用例 | 通过 | 失败 |
+|---|---|---|---|
+| `backend.spec.ts` | 1 | 1 | 0 |
+| `buttons.spec.ts` | 9 | 9 | 0 |
+| `chatgpt-direct.spec.ts` | 1 | 1 | 0 |
+| `continuity.spec.ts` | 1 | 1 | 0 |
+| `fixes.spec.ts` | 12 | 12 | 0 |
+| `golden.spec.ts` | 12 | 12 | 0 |
+| `model-api.spec.ts` | 1 | 1 | 0 |
+| `notify.spec.ts` | 5 | 5 | 0 |
+| `phase2-batch1-backend.spec.ts` | 3 | 3 | 0 |
+| `phase2-batch1.spec.ts` | 5 | 5 | 0 |
+| `phase2-batch2-backend.spec.ts` | 1 | 1 | 0 |
+| `phase2-batch2.spec.ts` | 4 | 4 | 0 |
+| `secretary.spec.ts` | 18 | 18 | 0 |
+| `settings-things-ux.spec.ts` | 19 | 19 | 0 |
+| `timezone-backend.spec.ts` | 1 | 1 | 0 |
+| `timezone.spec.ts` | 18 | 18 | 0 |
+| `usability-acceptance.spec.ts` | 20 | 20 | 0 |
+
+主要命令与上一轮相同：模拟 CI 的九个 spec 用 `npx playwright test … --retries=0 --reporter=list,json`；U4 用 `bash web/tests/support/real-backend.sh npx playwright test tests/phase2-batch2-backend.spec.ts --retries=0 --reporter=list,json`；现有真实后端用 `PCAS_REAL_BACKEND_ROUND=1 bash web/tests/support/real-backend.sh`，golden 只跑一次。完整命令、输出和执行提交留在证据目录。
+
+## 环境、慢用例与清理
+
+Node 22.23.3、构建后的静态站点及独立临时 PostgreSQL 16 / pgvector 0.8.2。只使用合成数据、本地假模型和假通知端点；实际 serve / worker 仅为浏览器真实后端环境构建和运行，不运行 Go 测试。没有连接线上数据库、读取线上配置、调用真实模型或发送真实通知。
+
+本轮超过一分钟的用例（全部通过）：
+
+| 用例 | 耗时 |
+|---|---|
+| `G6 提醒送达：真实等待一分钟、首页、Web Push、Telegram` | 79.26 秒 |
+| `G9 不丢话：模型真实超时后收到保存回执并能查原话` | 92.45 秒 |
+
+证据目录 `/tmp/pcas-t2-browser-driver-poqf_uuo`：run-manifest.json、browser-summary.json、各组 JSON / log / command、实际服务日志、截图及 all-assertions-invariant.json。本轮的自建容器记录在 owned-containers.txt；本次两轮各自的容器及记录 PID 已全部清理。a4c170c 的 127/4 原始结果和旧 96f6fd4 的 126/5 结果都保留，未覆盖原始失败。
+
+验收 PR #88 已更新，仍以 phase2/batch2 为 base；开第 2 批进 main 的 PR 及合并由协调者处理。
+
+---
+
+## 历史：02e7a27 最终统一轮及准备记录
+
+以下是此前的完整后端及旧浏览器原始记录；旧“未通过”等结论按当时结果保留。本次最终状态以以上浏览器复核和协调者确认的后端结果为准。
 
 2026-10-02。任务 T2。**本轮未通过：后端第 2 批 43/43 个入口通过，浏览器第 2 批 0/5 通过。** 浏览器失败均定位为 T2 测试使用了错误的资料库标签参数；本轮不修改导航或断言，不重跑。
 

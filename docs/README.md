@@ -34,6 +34,7 @@ PCAS 的所有文档都从这一页找。新增或移动文档时，同时改这
 | [待办清单](tasks/backlog.md) | 已知但没处理的问题，排任务时从这里取 |
 | [H1 说了「尽快」的事排进首页时间线](tasks/improvements/H1-urgent-in-timeline.md) | 阶段之间的小改进：规则、验收序列、上线记录（2026-10-03 已上线） |
 | [L1 资料库的「来源」按出处合并](tasks/improvements/L1-library-sources-by-origin.md) | 阶段之间的小改进：之前的问题、规则、数据、测试（2026-10-03 用户确认） |
+| [D1 待办、想法、项目可以删除](tasks/improvements/D1-delete-a-thing.md) | 阶段之间的小改进：规则、数据、测试（2026-10-03） |
 
 **要部署、接模型、接数据**
 

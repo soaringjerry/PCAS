@@ -95,6 +95,7 @@ async function mock(page: Page, state = workspace(), options: Partial<Pick<Mock,
       case 'setNotes': s.tasks = s.tasks.map((t) => (t.id === body.id ? { ...t, notes: body.text } : t)); break
       case 'updateTask': s.tasks = s.tasks.map((t) => (t.id === body.id ? { ...t, ...body.patch } : t)); break
       case 'setTaskStatus': s.tasks = s.tasks.map((t) => (t.id === body.id ? { ...t, status: body.status } : t)); break
+      case 'deleteThing': s.tasks = s.tasks.filter((t) => t.id !== body.id); break
       case 'acceptCandidate':
         s.candidates = s.candidates.map((c) => (c.id === body.id ? { ...c, state: 'accepted', resolvedInto: body.kind === 'task' ? `made-${c.id}` : undefined } : c))
         if (body.kind === 'task') s.tasks = [...s.tasks, task({ id: `made-${body.id}`, title: body.text })]
@@ -585,8 +586,8 @@ test('a task with nothing set offers what can be set, and each fact starts its o
   const m = await mock(page, state)
   await page.goto('/t/task')
   const info = page.locator('.info-line')
-  await expect(info.getByRole('button')).toHaveText(['待办', '定个截止时间', '加个提醒', '归到项目'])
-  for (const [name, sentence] of [['定个截止时间', '截止时间定在：'], ['加个提醒', '到这个时间提醒我：'], ['归到项目', '把这件事归到项目：'], ['待办', '把状态改成：']]) {
+  await expect(info.getByRole('button')).toHaveText(['待办', '定个截止时间', '加个提醒', '归到项目', '标成尽快'])
+  for (const [name, sentence] of [['定个截止时间', '截止时间定在：'], ['加个提醒', '到这个时间提醒我：'], ['归到项目', '把这件事归到项目：'], ['标成尽快', '这件事要尽快'], ['待办', '把状态改成：']]) {
     await info.getByRole('button', { name, exact: true }).click()
     await expect(secretary(page)).toHaveValue(sentence)
     await expect(secretary(page)).toBeFocused()
@@ -770,13 +771,13 @@ test('a to-do the user said cannot wait leads today\'s timeline until it is done
   await expect(today_).not.toContainText('马上交表')
   await expect(today_).not.toContainText('整理发票')
 
-  // The switch on the thing page turns it off, and the row leaves the timeline.
+  // On the thing page 尽快 starts a sentence for the secretary, like the other facts; the mark itself is a plain patch.
   await page.goto('/t/first')
-  const urgent = page.getByRole('switch', { name: '尽快' })
-  await expect(urgent).toHaveAttribute('aria-checked', 'true')
-  await urgent.click()
-  await expect(urgent).toHaveAttribute('aria-checked', 'false')
-  expect(m.commands.at(-1)).toMatchObject({ type: 'updateTask', id: 'first', patch: { urgent: false } })
+  await page.getByRole('button', { name: '尽快', exact: true }).click()
+  await expect(secretary(page)).toHaveValue('这件事不急了')
+  m.state = { ...m.state, tasks: m.state.tasks.map((t) => (t.id === 'first' ? { ...t, urgent: false } : t)) }
+  await page.goto('/t/first')
+  await expect(page.getByRole('button', { name: '标成尽快' })).toBeVisible()
   await page.goto('/')
   await expect(rows.nth(0)).toContainText('赶紧回客户邮件')
   await expect(today_).not.toContainText('尽快开始推广')
@@ -792,7 +793,7 @@ test('a to-do the user said cannot wait leads today\'s timeline until it is done
   expect(m.errors).toEqual([])
 })
 
-test('only urgent to-dos: the timeline shows them and does not say nothing is timed; ideas have no switch', async ({ page }) => {
+test('only urgent to-dos: the timeline shows them and does not say nothing is timed; ideas are not marked', async ({ page }) => {
   await mock(page, workspace({ tasks: [task({ id: 'only', title: '抓紧续签合同', urgent: true })], ideas: [{ id: 'idea', title: '学游泳', body: '', status: 'active', conditions: [], evolution: [], sources: [], remindersOn: false, createdAt: at, updatedAt: at }] as State['ideas'] }))
   await page.goto('/')
   const today_ = page.getByRole('region', { name: '今天' })
@@ -800,7 +801,7 @@ test('only urgent to-dos: the timeline shows them and does not say nothing is ti
   await expect(today_).not.toContainText('今天没有定了时间的事')
   await page.goto('/t/idea')
   await expect(page.getByRole('group', { name: /这件事的情况/ })).toBeVisible()
-  await expect(page.getByRole('switch', { name: '尽快' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: /尽快/ })).toHaveCount(0)
 })
 
 test('on a phone the five rows are: what rang, who waits, what cannot wait, then what is ahead', async ({ page }) => {
@@ -879,5 +880,23 @@ test('the library lists each origin once; what was said opens as a list that can
   await sheet.getByRole('button', { name: '查看原文：周末想去爬山' }).click()
   await expect(page.getByRole('dialog').last()).toContainText('周末想去爬山')
   expect(asked.some((s) => s.includes('q=%E7%88%AC%E5%B1%B1'))).toBe(true)
+  expect(m.errors).toEqual([])
+})
+
+/* ---------- 删除一件事 ---------- */
+
+test('a to-do is deleted only after confirming, and the page returns home without it', async ({ page }) => {
+  const m = await mock(page, workspace({ tasks: [task({ id: 'gone', title: '验证用的待办', status: 'cancelled' }), task({ id: 'kept', title: '交房租' })] }))
+  await page.goto('/t/gone')
+  await page.getByRole('button', { name: '删除：验证用的待办' }).click()
+  const dialog = page.getByRole('dialog')
+  await expect(dialog).toContainText('删了找不回来')
+  await dialog.getByRole('button', { name: '留着' }).click()
+  expect(m.commands.some((c) => c.type === 'deleteThing')).toBe(false)
+  await page.getByRole('button', { name: '删除：验证用的待办' }).click()
+  await page.getByRole('dialog').getByRole('button', { name: '删掉' }).click()
+  await expect(page).toHaveURL(/\/$/)
+  expect(m.commands.filter((c) => c.type === 'deleteThing')).toMatchObject([{ type: 'deleteThing', id: 'gone' }])
+  expect(m.state.tasks.map((t) => t.id)).toEqual(['kept'])
   expect(m.errors).toEqual([])
 })

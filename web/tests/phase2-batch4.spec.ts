@@ -175,12 +175,13 @@ test('W5 确认前可以改为现在整理，表单实际发送 now', async ({ p
   await open(page)
   await choose(page)
   const nowName = /现在(?:就)?整理|立即整理|马上整理|边存边整理|导入时整理|同时整理/
-  const option = page.getByRole('option', { name: nowName })
+  const dialog = page.getByRole('dialog')
+  const option = dialog.getByRole('option', { name: nowName })
   if (await option.count()) {
     const label = (await option.first().textContent())!.trim()
-    await page.getByRole('combobox').filter({ has: option }).selectOption({ label })
+    await dialog.getByRole('combobox').filter({ has: option }).selectOption({ label })
   } else {
-    await page.getByText(nowName).first().click()
+    await dialog.getByRole('radio', { name: nowName }).click()
   }
   const importing = page.waitForResponse(r => new URL(r.url()).pathname === '/v1/connectors/archive' && r.request().method() === 'POST')
   await page.getByRole('button', { name: /确认导入|开始导入|^确认$|^导入\s*[\d,]+\s*条$/ }).click()

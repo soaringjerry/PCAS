@@ -136,7 +136,7 @@ T1 按这些序列写测试。模型用测试里的假模型，按序列需要�
 
 | 任务 | 可以动的文件 |
 |---|---|
-| O1 | `internal/postgres/migrations/035_memory_organize.sql`（新）、`internal/postgres/organize.go`（新）、`organize_test.go`（新，自己的单元测试）、`internal/postgres/memories_read.go`、`internal/postgres/editing.go`（只为 R8）、`internal/postgres/workspace.go`（只为快照的 `organize`）、`internal/postgres/usage_log.go`（只为新用途）、`internal/workspace/model.go`、`internal/httpapi/workspace.go`、`cmd/pcas/main.go`（只注册后台任务） |
+| O1 | `internal/postgres/migrations/035_memory_organize.sql`（新）、`internal/postgres/organize.go`（新）、`organize_test.go`（新，自己的单元测试）、`internal/postgres/memories_read.go`、`internal/postgres/editing.go`（只为 R8）、`internal/postgres/entities.go`（只为让 `entityTx` 接受 project、topic、area）、`internal/postgres/workspace.go`（只为快照的 `organize`）、`internal/postgres/usage_log.go`（只为新用途）、`internal/workspace/model.go`、`internal/httpapi/workspace.go`、`cmd/pcas/main.go`（只注册后台任务） |
 | T1 | `internal/postgres/phase2_5_b1_*_test.go`（新）；最终一轮的验收记录 `docs/evaluations/<日期>-phase2_5-batch1-acceptance.md`（新），以及在 [阶段入口](../README.md) 的文档表和 [文档总入口](../../../README.md) 里各加一行链接 |
 | U1 | `web/src/` 下资料库记忆页相关的文件、对应的浏览器测试；`.github/workflows/browser-regression.yml` 里把自己的测试文件加进模拟数据那一行 |
 
@@ -150,5 +150,23 @@ T1 按这些序列写测试。模型用测试里的假模型，按序列需要�
 
 | 日期 | 改了什么 | 起因 |
 |---|---|---|
+| 2026-10-04 | 第 5 节：O1 可以改 `entities.go`，只为扩展三种类型；第 8 节记下模型输出的格式 | O1b 的提问 |
 | 2026-10-04 | 2.4 的分组统计接口路径更正为现有的 `/v1/workspace/memory-facets`；R19 写明卡片上有了类型就不再并排显示性质；U1 可以在浏览器回归的工作流里加上自己的测试文件 | U1 交付时的三个问题 |
 | 2026-10-04 | 2.3 写明接口照库里存的返回，落后的记忆继续返回旧标签；R9 分清五种情况各怎么计数；X11 改成具体的四条；T1 可以新增验收记录并加链接；2.1 写明保留 `vision` | T1 的发现 F-B1-1、F-B1-2、F-B1-3；O1a 交付 |
+
+## 8 模型输出的格式（O1b 定，2026-10-04）
+
+T1 的假模型照这个返回：
+
+```json
+{
+  "items": [
+    { "n": 1, "category": "rule", "durable": true, "project": "", "topics": ["季度汇报"], "area": "工作" }
+  ],
+  "new": [
+    { "type": "topic", "name": "季度汇报", "desc": "季度汇报的准备和提交" }
+  ]
+}
+```
+
+`n` 是批内序号，从 1 开始。`durable` 必须是布尔值。`project`、`topics`、`area` 和 `new` 都可以省略，表示没有对应的分组或没有新建。同一个 `n` 出现两次取第一次。

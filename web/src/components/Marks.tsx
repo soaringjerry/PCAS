@@ -1,10 +1,10 @@
 import { SourceSheet } from './SourceSheet'
 import { useState } from 'react'
 import { Link } from 'react-router'
-import { ArrowUpRight, Box, Building2, CalendarDays, Check, CornerDownRight, FileText, Flag, MapPin, PenLine, Send, Sparkles, UserRound } from 'lucide-react'
+import { ArrowUpRight, Box, Building2, CalendarDays, Check, CornerDownRight, FileText, Flag, Folder, Hash, LayoutGrid, MapPin, PenLine, Send, Sparkles, UserRound } from 'lucide-react'
 import { kindText, type Thing, type TimelineEvent } from '../domain/things'
 import { dayOffset, formatAgo, formatDateTime } from '../domain/time'
-import type { Epistemic, EventPrecision, MemoryMention, SourceRef } from '../domain/types'
+import type { Epistemic, EventPrecision, MemoryGroup, MemoryMention, SourceRef } from '../domain/types'
 import { useStore } from '../store/context'
 import { Tag } from './ui'
 
@@ -111,6 +111,43 @@ export function Mentions({ mentions, active, onPick, limit }: {
         ),
       )}
       {ordered.length > shown.length && <span className="mention-rest">+{ordered.length - shown.length}</span>}
+    </>
+  )
+}
+
+const groupIcon = {
+  project: <Folder size={12} />,
+  topic: <Hash size={12} />,
+  area: <LayoutGrid size={12} />,
+}
+const groupOrder: MemoryGroup['type'][] = ['project', 'topic', 'area']
+
+/**
+ * The project, topics and area of life a memory is filed under. Each one is a
+ * button that narrows a list to the memories under it; `active` is the one the
+ * list is already narrowed to.
+ */
+export function Groups({ groups, active, onPick }: { groups?: MemoryGroup[]; active?: string; onPick: (group: MemoryGroup) => void }) {
+  if (!groups?.length) return null
+  const ordered = [...groups].sort((a, b) => groupOrder.indexOf(a.type) - groupOrder.indexOf(b.type))
+  return (
+    <>
+      {ordered.map((g) => (
+        <button
+          key={`${g.type}:${g.entityId}`}
+          type="button"
+          className={`mention${g.entityId === active ? ' on' : ''}`}
+          aria-pressed={g.entityId === active}
+          title={g.entityId === active ? '不再只看它下面的记忆' : `只看「${g.name}」下面的记忆`}
+          onClick={(e) => {
+            e.stopPropagation()
+            onPick(g)
+          }}
+        >
+          {groupIcon[g.type]}
+          <span className="mention-name">{g.name}</span>
+        </button>
+      ))}
     </>
   )
 }

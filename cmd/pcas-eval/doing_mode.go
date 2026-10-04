@@ -62,6 +62,12 @@ type adapterFlags []string
 func (a *adapterFlags) String() string     { return strings.Join(*a, ",") }
 func (a *adapterFlags) Set(s string) error { *a = append(*a, s); return nil }
 func runDoing(args []string) error {
+	return runDoingObserved(args, nil)
+}
+
+// Only the separate synthetic freeze mode installs this observer. The normal
+// doing mode keeps its live per-answer capture and all existing behavior.
+func runDoingObserved(args []string, captured func(doing.Task, doing.Evidence, float64) error) error {
 	f := flag.NewFlagSet("pcas-eval -mode=doing", flag.ContinueOnError)
 	path := f.String("suite", "testdata/phase2_5/doing/suite.json", "frozen synthetic suite or approved private suite")
 	dsn := f.String("database-url", "", "empty local disposable database")
@@ -248,6 +254,7 @@ func runDoing(args []string) error {
 		"current": {Name: "current", Get: func(ctx context.Context, _ doing.Suite, t doing.Task) (doing.Evidence, error) {
 			captureMu.Lock()
 			defer captureMu.Unlock()
+			started := time.Now()
 			if err := clearTransient(ctx); err != nil {
 				return doing.Evidence{}, err
 			}
@@ -264,7 +271,13 @@ func runDoing(args []string) error {
 			if text == "" {
 				return doing.Evidence{}, fmt.Errorf("secretary section format changed")
 			}
-			return doing.Evidence{Text: text, CaptureCalls: 1}, nil
+			evidence := doing.Evidence{Text: text, CaptureCalls: 1}
+			if captured != nil {
+				if err := captured(t, evidence, float64(time.Since(started))/float64(time.Millisecond)); err != nil {
+					return doing.Evidence{}, err
+				}
+			}
+			return evidence, nil
 		}},
 	}
 	for _, spec := range adapters {

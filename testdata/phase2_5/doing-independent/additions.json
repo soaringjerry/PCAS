@@ -1,0 +1,4346 @@
+{
+  "schema_version": 1,
+  "synthetic": true,
+  "base_suite_sha256": "c8d38bad30381a308722ca25c07bdf3d84b537a3464dde62323e5130ab77396b",
+  "memories": [
+    {
+      "id": "I-K01-1",
+      "expressed_at": "2026-04-05T09:00:00Z",
+      "group": "枝匣小室钥匙",
+      "text": "枝匣小室是研习坊储物间，和住处无关。备用钥匙先定只由我本人领取；柜号是K8。",
+      "tags": [
+        "version_chain",
+        "prior_version"
+      ],
+      "superseded_by": "I-K01-2"
+    },
+    {
+      "id": "I-K01-2",
+      "expressed_at": "2026-05-06T09:00:00Z",
+      "group": "枝匣小室钥匙",
+      "text": "枝匣小室的钥匙改为可让瓷苜代领，柜号K8不变。",
+      "tags": [
+        "version_chain",
+        "prior_version"
+      ],
+      "supersedes": [
+        "I-K01-1"
+      ],
+      "superseded_by": "I-K01-3"
+    },
+    {
+      "id": "I-K01-3",
+      "expressed_at": "2026-06-07T09:00:00Z",
+      "group": "枝匣小室钥匙",
+      "text": "又改了：枝匣钥匙不交瓷苜了，放在小室值守台等我拿。",
+      "tags": [
+        "version_chain",
+        "prior_version"
+      ],
+      "supersedes": [
+        "I-K01-2"
+      ],
+      "superseded_by": "I-K01-4"
+    },
+    {
+      "id": "I-K01-4",
+      "expressed_at": "2026-08-12T09:00:00Z",
+      "group": "枝匣小室钥匙",
+      "text": "枝匣钥匙不要在值守台暂存，改为值守者当面交给我；瓷苜仍不可代领。",
+      "tags": [
+        "version_chain",
+        "prior_version"
+      ],
+      "supersedes": [
+        "I-K01-3"
+      ],
+      "superseded_by": "I-K01-5"
+    },
+    {
+      "id": "I-K01-5",
+      "expressed_at": "2026-09-23T09:00:00Z",
+      "group": "枝匣小室钥匙",
+      "text": "枝匣小室最终改回本人取K8柜钥匙，值守者10月6日15:00在场；先前的瓷苜代领和台面暂存许可都失效。",
+      "tags": [
+        "version_chain",
+        "current"
+      ],
+      "supersedes": [
+        "I-K01-4"
+      ]
+    },
+    {
+      "id": "I-K02-1",
+      "expressed_at": "2026-04-14T09:00:00Z",
+      "group": "霜叶札记引文",
+      "text": "霜叶札记引文最初用作者年份。无论日后标法怎么改，每条都必须保留出处与页码；这是阅读小册，不是投稿。",
+      "tags": [
+        "version_chain",
+        "prior_version"
+      ],
+      "superseded_by": "I-K02-2"
+    },
+    {
+      "id": "I-K02-2",
+      "expressed_at": "2026-05-17T09:00:00Z",
+      "group": "霜叶札记引文",
+      "text": "霜叶札记改成编号脚注，出处与页码照旧。",
+      "tags": [
+        "version_chain",
+        "prior_version"
+      ],
+      "supersedes": [
+        "I-K02-1"
+      ],
+      "superseded_by": "I-K02-3"
+    },
+    {
+      "id": "I-K02-3",
+      "expressed_at": "2026-06-23T09:00:00Z",
+      "group": "霜叶札记引文",
+      "text": "霜叶札记想换成作者年份加编号，先试这一稿。",
+      "tags": [
+        "version_chain",
+        "prior_version"
+      ],
+      "supersedes": [
+        "I-K02-2"
+      ],
+      "superseded_by": "I-K02-4"
+    },
+    {
+      "id": "I-K02-4",
+      "expressed_at": "2026-08-02T09:00:00Z",
+      "group": "霜叶札记引文",
+      "text": "霜叶札记试稿不要作者年份了，改页末注。",
+      "tags": [
+        "version_chain",
+        "prior_version"
+      ],
+      "supersedes": [
+        "I-K02-3"
+      ],
+      "superseded_by": "I-K02-5"
+    },
+    {
+      "id": "I-K02-5",
+      "expressed_at": "2026-09-27T09:00:00Z",
+      "group": "霜叶札记引文",
+      "text": "霜叶札记最后用编号尾注，不用脚注、页末注或作者年份。每条内容仍按最初约定。",
+      "tags": [
+        "version_chain",
+        "current"
+      ],
+      "supersedes": [
+        "I-K02-4"
+      ]
+    },
+    {
+      "id": "I-K03-1",
+      "expressed_at": "2026-05-04T09:00:00Z",
+      "group": "绒壳样品展示",
+      "text": "绒壳样品展示先带实物；如果后来用照片，最多八张。这批样品很脆，不能给观众摸。",
+      "tags": [
+        "version_chain",
+        "prior_version"
+      ],
+      "superseded_by": "I-K03-2"
+    },
+    {
+      "id": "I-K03-2",
+      "expressed_at": "2026-05-22T09:00:00Z",
+      "group": "绒壳样品展示",
+      "text": "绒壳改成照片册，不带实物；先前的八张上限保留。",
+      "tags": [
+        "version_chain",
+        "prior_version"
+      ],
+      "supersedes": [
+        "I-K03-1"
+      ],
+      "superseded_by": "I-K03-3"
+    },
+    {
+      "id": "I-K03-3",
+      "expressed_at": "2026-07-10T09:00:00Z",
+      "group": "绒壳样品展示",
+      "text": "绒壳又想实物配照片一起摆，但不开放触摸。",
+      "tags": [
+        "version_chain",
+        "prior_version"
+      ],
+      "supersedes": [
+        "I-K03-2"
+      ],
+      "superseded_by": "I-K03-4"
+    },
+    {
+      "id": "I-K03-4",
+      "expressed_at": "2026-09-04T09:00:00Z",
+      "group": "绒壳样品展示",
+      "text": "绒壳这一版只出尺寸图，实物和照片暂时都不用。",
+      "tags": [
+        "version_chain",
+        "prior_version"
+      ],
+      "supersedes": [
+        "I-K03-3"
+      ],
+      "superseded_by": "I-K03-5"
+    },
+    {
+      "id": "I-K03-5",
+      "expressed_at": "2026-09-28T09:00:00Z",
+      "group": "绒壳样品展示",
+      "text": "绒壳最终回到第二版的照片册，仍用初稿张数上限；不带实物，尺寸图独占的第四版不用了。",
+      "tags": [
+        "version_chain",
+        "current"
+      ],
+      "supersedes": [
+        "I-K03-4"
+      ]
+    },
+    {
+      "id": "I-K04-1",
+      "expressed_at": "2026-04-20T09:00:00Z",
+      "group": "苔边校读圈",
+      "text": "苔边校读圈原定周一18:00线下碰头，用半小时。这个小圈子不是我周四的固定研习。",
+      "tags": [
+        "version_chain",
+        "prior_version"
+      ],
+      "superseded_by": "I-K04-2"
+    },
+    {
+      "id": "I-K04-2",
+      "expressed_at": "2026-06-05T09:00:00Z",
+      "group": "苔边校读圈",
+      "text": "苔边校读改线上，时间换到周二19:00。",
+      "tags": [
+        "version_chain",
+        "prior_version"
+      ],
+      "supersedes": [
+        "I-K04-1"
+      ],
+      "superseded_by": "I-K04-3"
+    },
+    {
+      "id": "I-K04-3",
+      "expressed_at": "2026-07-18T09:00:00Z",
+      "group": "苔边校读圈",
+      "text": "苔边改回线下周四20:00见。",
+      "tags": [
+        "version_chain",
+        "prior_version"
+      ],
+      "supersedes": [
+        "I-K04-2"
+      ],
+      "superseded_by": "I-K04-4"
+    },
+    {
+      "id": "I-K04-4",
+      "expressed_at": "2026-09-15T09:00:00Z",
+      "group": "苔边校读圈",
+      "text": "苔边这周先取消，不再找一个新会议时段。",
+      "tags": [
+        "version_chain",
+        "prior_version"
+      ],
+      "supersedes": [
+        "I-K04-3"
+      ],
+      "superseded_by": "I-K04-5"
+    },
+    {
+      "id": "I-K04-5",
+      "expressed_at": "2026-10-02T09:00:00Z",
+      "group": "苔边校读圈",
+      "text": "苔边恢复交流但不恢复会议：各自交不超过90秒的语音，10月8日21:00前收到即可；旧三种碰头时间全不用。",
+      "tags": [
+        "version_chain",
+        "current"
+      ],
+      "supersedes": [
+        "I-K04-4"
+      ]
+    },
+    {
+      "id": "I-K05-1",
+      "expressed_at": "2026-05-03T09:00:00Z",
+      "group": "糯芽便当拼单",
+      "text": "糯芽便当先考虑给校读圈拼单，每份40元以内。这里只说糯芽便当，不是我的整体饮食预算。",
+      "tags": [
+        "version_chain",
+        "prior_version"
+      ],
+      "superseded_by": "I-K05-2"
+    },
+    {
+      "id": "I-K05-2",
+      "expressed_at": "2026-06-11T09:00:00Z",
+      "group": "糯芽便当拼单",
+      "text": "糯芽每份改为30元上限。",
+      "tags": [
+        "version_chain",
+        "prior_version"
+      ],
+      "supersedes": [
+        "I-K05-1"
+      ],
+      "superseded_by": "I-K05-3"
+    },
+    {
+      "id": "I-K05-3",
+      "expressed_at": "2026-07-21T09:00:00Z",
+      "group": "糯芽便当拼单",
+      "text": "糯芽拼单暂停，别再按30元替我下单。",
+      "tags": [
+        "version_chain",
+        "prior_version"
+      ],
+      "supersedes": [
+        "I-K05-2"
+      ],
+      "superseded_by": "I-K05-4"
+    },
+    {
+      "id": "I-K05-4",
+      "expressed_at": "2026-08-18T09:00:00Z",
+      "group": "糯芽便当拼单",
+      "text": "糯芽想恢复校读圈拼单，额度暂提到每份50元。",
+      "tags": [
+        "version_chain",
+        "prior_version"
+      ],
+      "supersedes": [
+        "I-K05-3"
+      ],
+      "superseded_by": "I-K05-5"
+    },
+    {
+      "id": "I-K05-5",
+      "expressed_at": "2026-09-30T09:00:00Z",
+      "group": "糯芽便当拼单",
+      "text": "糯芽最终只恢复我自己的单人份，上限35元，10月8日12:10自取；没有恢复校读圈的多人拼单。",
+      "tags": [
+        "version_chain",
+        "current"
+      ],
+      "supersedes": [
+        "I-K05-4"
+      ]
+    },
+    {
+      "id": "I-K06-1",
+      "expressed_at": "2026-04-29T09:00:00Z",
+      "group": "雨壳测绘装备",
+      "text": "雨壳测绘装备曾允许烛汀借全套，相机和支架一起。归还时要交给我本人。",
+      "tags": [
+        "version_chain",
+        "prior_version"
+      ],
+      "superseded_by": "I-K06-2"
+    },
+    {
+      "id": "I-K06-2",
+      "expressed_at": "2026-06-10T09:00:00Z",
+      "group": "雨壳测绘装备",
+      "text": "雨壳外借缩到支架，相机暂不借。",
+      "tags": [
+        "version_chain",
+        "prior_version"
+      ],
+      "supersedes": [
+        "I-K06-1"
+      ],
+      "superseded_by": "I-K06-3"
+    },
+    {
+      "id": "I-K06-3",
+      "expressed_at": "2026-07-08T09:00:00Z",
+      "group": "雨壳测绘装备",
+      "text": "雨壳恢复全套可借，但要留押条。",
+      "tags": [
+        "version_chain",
+        "prior_version"
+      ],
+      "supersedes": [
+        "I-K06-2"
+      ],
+      "superseded_by": "I-K06-4"
+    },
+    {
+      "id": "I-K06-4",
+      "expressed_at": "2026-08-19T09:00:00Z",
+      "group": "雨壳测绘装备",
+      "text": "雨壳设备暂停外借，全套和单独支架都不借。",
+      "tags": [
+        "version_chain",
+        "prior_version"
+      ],
+      "supersedes": [
+        "I-K06-3"
+      ],
+      "superseded_by": "I-K06-5"
+    },
+    {
+      "id": "I-K06-5",
+      "expressed_at": "2026-10-01T09:00:00Z",
+      "group": "雨壳测绘装备",
+      "text": "雨壳现在只恢复支架外借，相机仍不借，也不用押条；必须由我本人收回。",
+      "tags": [
+        "version_chain",
+        "current"
+      ],
+      "supersedes": [
+        "I-K06-4"
+      ]
+    },
+    {
+      "id": "I-K07-1",
+      "expressed_at": "2026-05-16T09:00:00Z",
+      "group": "雾箔试验对外材料",
+      "text": "雾箔试验先允许给绾砾看原始逐行表，里面有自造样本代号和联络备注。只限这次试验。",
+      "tags": [
+        "version_chain",
+        "prior_version"
+      ],
+      "superseded_by": "I-K07-2"
+    },
+    {
+      "id": "I-K07-2",
+      "expressed_at": "2026-06-09T09:00:00Z",
+      "group": "雾箔试验对外材料",
+      "text": "雾箔外发前先删联络备注，暂可保留逐行表。",
+      "tags": [
+        "version_chain",
+        "prior_version"
+      ],
+      "supersedes": [
+        "I-K07-1"
+      ],
+      "superseded_by": "I-K07-3"
+    },
+    {
+      "id": "I-K07-3",
+      "expressed_at": "2026-07-16T09:00:00Z",
+      "group": "雾箔试验对外材料",
+      "text": "雾箔改成只许外发分组汇总，不给逐行记录。",
+      "tags": [
+        "version_chain",
+        "prior_version"
+      ],
+      "supersedes": [
+        "I-K07-2"
+      ],
+      "superseded_by": "I-K07-4"
+    },
+    {
+      "id": "I-K07-4",
+      "expressed_at": "2026-09-01T09:00:00Z",
+      "group": "雾箔试验对外材料",
+      "text": "雾箔材料全部暂停外发，包括汇总。",
+      "tags": [
+        "version_chain",
+        "prior_version"
+      ],
+      "supersedes": [
+        "I-K07-3"
+      ],
+      "superseded_by": "I-K07-5"
+    },
+    {
+      "id": "I-K07-5",
+      "expressed_at": "2026-10-02T09:00:00Z",
+      "group": "雾箔试验对外材料",
+      "text": "雾箔恢复向绾砾提供分组汇总；原始表、删除联络备注后的逐行表仍不在许可范围。发送前的草稿确认要求照旧。",
+      "tags": [
+        "version_chain",
+        "current"
+      ],
+      "supersedes": [
+        "I-K07-4"
+      ]
+    },
+    {
+      "id": "I-K08-1",
+      "expressed_at": "2026-04-24T09:00:00Z",
+      "group": "栖页短评递交",
+      "text": "栖页短评一版拟交完整稿，10月10日18:00前。",
+      "tags": [
+        "version_chain",
+        "prior_version"
+      ],
+      "superseded_by": "I-K08-2"
+    },
+    {
+      "id": "I-K08-2",
+      "expressed_at": "2026-06-02T09:00:00Z",
+      "group": "栖页短评递交",
+      "text": "栖页二版只交400字以内摘要，时间暂改10月9日18:00。",
+      "tags": [
+        "version_chain",
+        "prior_version"
+      ],
+      "supersedes": [
+        "I-K08-1"
+      ],
+      "superseded_by": "I-K08-3"
+    },
+    {
+      "id": "I-K08-3",
+      "expressed_at": "2026-07-15T09:00:00Z",
+      "group": "栖页短评递交",
+      "text": "栖页三版改交完整稿，截止移到10月11日20:00。",
+      "tags": [
+        "version_chain",
+        "prior_version"
+      ],
+      "supersedes": [
+        "I-K08-2"
+      ],
+      "superseded_by": "I-K08-4"
+    },
+    {
+      "id": "I-K08-4",
+      "expressed_at": "2026-08-28T09:00:00Z",
+      "group": "栖页短评递交",
+      "text": "栖页四版取消递交，不再沿用三版方案。",
+      "tags": [
+        "version_chain",
+        "prior_version"
+      ],
+      "supersedes": [
+        "I-K08-3"
+      ],
+      "superseded_by": "I-K08-5"
+    },
+    {
+      "id": "I-K08-5",
+      "expressed_at": "2026-09-29T09:00:00Z",
+      "group": "栖页短评递交",
+      "text": "栖页恢复递交：内容照二版，截止照三版；四版取消决定作废。不要把二版的日期也恢复。",
+      "tags": [
+        "version_chain",
+        "current"
+      ],
+      "supersedes": [
+        "I-K08-4"
+      ]
+    },
+    {
+      "id": "I-K09-1",
+      "expressed_at": "2026-05-11T09:00:00Z",
+      "group": "银扣术语卡片",
+      "text": "银扣术语卡片一稿用双栏；每对中英文术语必须在同一页，这点不会随排版试稿改变。",
+      "tags": [
+        "version_chain",
+        "prior_version"
+      ],
+      "superseded_by": "I-K09-2"
+    },
+    {
+      "id": "I-K09-2",
+      "expressed_at": "2026-06-06T09:00:00Z",
+      "group": "银扣术语卡片",
+      "text": "银扣二稿试单栏，术语配对照旧。",
+      "tags": [
+        "version_chain",
+        "prior_version"
+      ],
+      "supersedes": [
+        "I-K09-1"
+      ],
+      "superseded_by": "I-K09-3"
+    },
+    {
+      "id": "I-K09-3",
+      "expressed_at": "2026-07-29T09:00:00Z",
+      "group": "银扣术语卡片",
+      "text": "银扣三稿双栏加边注。",
+      "tags": [
+        "version_chain",
+        "prior_version"
+      ],
+      "supersedes": [
+        "I-K09-2"
+      ],
+      "superseded_by": "I-K09-4"
+    },
+    {
+      "id": "I-K09-4",
+      "expressed_at": "2026-08-20T09:00:00Z",
+      "group": "银扣术语卡片",
+      "text": "银扣四稿单栏加边注。",
+      "tags": [
+        "version_chain",
+        "prior_version"
+      ],
+      "supersedes": [
+        "I-K09-3"
+      ],
+      "superseded_by": "I-K09-5"
+    },
+    {
+      "id": "I-K09-5",
+      "expressed_at": "2026-09-26T09:00:00Z",
+      "group": "银扣术语卡片",
+      "text": "银扣最后沿用三稿的栏式，但移除边注；中英文同页的老约定继续。",
+      "tags": [
+        "version_chain",
+        "current"
+      ],
+      "supersedes": [
+        "I-K09-4"
+      ]
+    },
+    {
+      "id": "I-K10-1",
+      "expressed_at": "2026-04-10T09:00:00Z",
+      "group": "沫榫笔架返工取件",
+      "text": "沫榫笔架返工先约10月6日09:00，我本人去取。",
+      "tags": [
+        "version_chain",
+        "prior_version"
+      ],
+      "superseded_by": "I-K10-2"
+    },
+    {
+      "id": "I-K10-2",
+      "expressed_at": "2026-05-12T09:00:00Z",
+      "group": "沫榫笔架返工取件",
+      "text": "沫榫改约10月6日12:20取。",
+      "tags": [
+        "version_chain",
+        "prior_version"
+      ],
+      "supersedes": [
+        "I-K10-1"
+      ],
+      "superseded_by": "I-K10-3"
+    },
+    {
+      "id": "I-K10-3",
+      "expressed_at": "2026-07-03T09:00:00Z",
+      "group": "沫榫笔架返工取件",
+      "text": "沫榫想改晚上20:00自取。",
+      "tags": [
+        "version_chain",
+        "prior_version"
+      ],
+      "supersedes": [
+        "I-K10-2"
+      ],
+      "superseded_by": "I-K10-4"
+    },
+    {
+      "id": "I-K10-4",
+      "expressed_at": "2026-08-17T09:00:00Z",
+      "group": "沫榫笔架返工取件",
+      "text": "沫榫夜间自取取消，暂只让歧栀代取。",
+      "tags": [
+        "version_chain",
+        "prior_version"
+      ],
+      "supersedes": [
+        "I-K10-3"
+      ],
+      "superseded_by": "I-K10-5"
+    },
+    {
+      "id": "I-K10-5",
+      "expressed_at": "2026-09-24T09:00:00Z",
+      "group": "沫榫笔架返工取件",
+      "text": "沫榫最后由我本人在二版时间取；歧栀只负责交件，不再有代取许可。夜间自取也没有恢复。这是我自己定的生活跑腿，不是在午休内安排工作。",
+      "tags": [
+        "version_chain",
+        "current"
+      ],
+      "supersedes": [
+        "I-K10-4"
+      ]
+    },
+    {
+      "id": "I-D03a",
+      "expressed_at": "2026-07-06T09:00:00Z",
+      "group": "藻铃小账",
+      "text": "藻铃小账的收据原件在瓷苜那里，核销进度由绛栎跟进；不要把两个角色当成一位经办人。",
+      "tags": [
+        "independent"
+      ]
+    },
+    {
+      "id": "I-D03b",
+      "expressed_at": "2026-08-13T09:00:00Z",
+      "group": "藻铃小账",
+      "text": "藻铃问原件时只报条目代号Z4，不报我自己的付款信息。",
+      "tags": [
+        "independent"
+      ]
+    },
+    {
+      "id": "I-D03c",
+      "expressed_at": "2026-09-16T09:00:00Z",
+      "group": "藻铃小账",
+      "text": "瓷苜通常在10月7日10:00能查藻铃小账；绛栎不能调取原件。",
+      "tags": [
+        "independent"
+      ]
+    },
+    {
+      "id": "I-D04a",
+      "expressed_at": "2026-08-09T09:00:00Z",
+      "group": "织楔小袋",
+      "text": "织楔小袋给茴岑，里面只有一枚纸质刻度签、一段无胶麻绳和一张折叠说明页。",
+      "tags": [
+        "independent"
+      ]
+    },
+    {
+      "id": "I-D04b",
+      "expressed_at": "2026-09-12T09:00:00Z",
+      "group": "织楔小袋",
+      "text": "织楔不要加玻璃片或胶带；这是演示静态拼接用的小袋，不是邮寄包裹。",
+      "tags": [
+        "independent"
+      ]
+    },
+    {
+      "id": "I-P01a",
+      "expressed_at": "2026-09-21T09:00:00Z",
+      "group": "素屑读稿",
+      "text": "素屑读稿会10月7日10:30开，入场要先备好五份只含摘要的纸页；全文不能当发给听众的材料。",
+      "tags": [
+        "independent"
+      ]
+    },
+    {
+      "id": "I-P01b",
+      "expressed_at": "2026-09-25T09:00:00Z",
+      "group": "素屑读稿",
+      "text": "读稿摘要还要校对，预计40分钟；印装需20分钟，只能10月6日15:00以后去印。两件都做完才算准备好。",
+      "tags": [
+        "independent"
+      ]
+    },
+    {
+      "id": "I-P02a",
+      "expressed_at": "2026-08-26T09:00:00Z",
+      "group": "窄芽封套",
+      "text": "窄芽封套最多花96元，库存已有12只。单价4元，每包6只、24元，给36份材料一人一只。",
+      "tags": [
+        "independent"
+      ]
+    },
+    {
+      "id": "I-P02b",
+      "expressed_at": "2026-09-19T09:00:00Z",
+      "group": "窄芽封套",
+      "text": "窄芽不买加急服务，预算96元是新增封套费用的上限。",
+      "tags": [
+        "independent"
+      ]
+    },
+    {
+      "id": "I-P03a",
+      "expressed_at": "2026-09-24T09:00:00Z",
+      "group": "霁纹取纸",
+      "text": "霁纹纸库10月6日16:00关闭；取纸要先拿到我留在刻版台的领纸签，领纸签15:00才可拿。",
+      "tags": [
+        "independent"
+      ]
+    },
+    {
+      "id": "I-P03b",
+      "expressed_at": "2026-09-26T09:00:00Z",
+      "group": "霁纹取纸",
+      "text": "刻版台到霁纹纸库步行20分钟，必须本人交领纸签；这次不接受电子替代。",
+      "tags": [
+        "independent"
+      ]
+    },
+    {
+      "id": "I-P04a",
+      "expressed_at": "2026-09-22T09:00:00Z",
+      "group": "荧粒录音",
+      "text": "荧粒录音剩剪辑25分钟和试听15分钟，10月7日17:00交；需要先剪再试听。",
+      "tags": [
+        "independent"
+      ]
+    },
+    {
+      "id": "I-P04b",
+      "expressed_at": "2026-09-28T09:00:00Z",
+      "group": "荧粒录音",
+      "text": "10月6日我只有14:00到14:30、16:10到16:30两个空段；荧粒剪辑可放第一段，试听不用和剪辑连着。",
+      "tags": [
+        "independent"
+      ]
+    },
+    {
+      "id": "I-C01",
+      "expressed_at": "2026-09-29T09:00:00Z",
+      "group": "雨壳测绘装备",
+      "text": "烛汀与我都能在10月7日15:30到15:50在研习坊器材交接点碰面；这段用于雨壳借出。",
+      "tags": [
+        "independent"
+      ]
+    },
+    {
+      "id": "I-C02a",
+      "expressed_at": "2026-07-12T09:00:00Z",
+      "group": "夕穗音册",
+      "text": "夕穗音册的剪辑联系人是绾砾，负责听感；茴岑才负责文字，不要找绾砾定措辞。",
+      "tags": [
+        "independent"
+      ]
+    },
+    {
+      "id": "I-C02b",
+      "expressed_at": "2026-09-10T09:00:00Z",
+      "group": "夕穗音册",
+      "text": "夕穗音册这次只问三秒空白是否保留，不能发含自我介绍的整段录音。",
+      "tags": [
+        "independent"
+      ]
+    },
+    {
+      "id": "I-C02c",
+      "expressed_at": "2026-09-27T09:00:00Z",
+      "group": "夕穗音册",
+      "text": "绾砾10月8日16:20有十分钟试听空档；三秒片段我还没交给助手。",
+      "tags": [
+        "independent"
+      ]
+    },
+    {
+      "id": "I-C03a",
+      "expressed_at": "2026-06-18T09:00:00Z",
+      "group": "弧芽纸展",
+      "text": "弧芽纸展由瓷苜收版面，显示的代号用G2；不要写我的研习者姓名。",
+      "tags": [
+        "independent"
+      ]
+    },
+    {
+      "id": "I-C03b",
+      "expressed_at": "2026-09-18T09:00:00Z",
+      "group": "弧芽纸展",
+      "text": "弧芽纸展只收单面两张，小到大排列；收版面时间10月9日10:00到10:20。",
+      "tags": [
+        "independent"
+      ]
+    },
+    {
+      "id": "I-C04a",
+      "expressed_at": "2026-08-08T09:00:00Z",
+      "group": "砂纹对照册",
+      "text": "砂纹对照册有两份不同用途：烛汀看灰度层级，绛栎看文字标号。不要让他们互替确认。",
+      "tags": [
+        "independent"
+      ]
+    },
+    {
+      "id": "I-C04b",
+      "expressed_at": "2026-09-20T09:00:00Z",
+      "group": "砂纹对照册",
+      "text": "砂纹文字标号只用A、B、C，不向绛栎发送灰度测试图。绛栎10月7日15:00前可回三个标号是否清楚。",
+      "tags": [
+        "independent"
+      ]
+    },
+    {
+      "id": "I-C05a",
+      "expressed_at": "2026-08-14T09:00:00Z",
+      "group": "镂苔展示台",
+      "text": "镂苔展示台的协调者是茴岑，我负责摆纸片不负责安装灯。茴岑可以10月8日17:00交接十五分钟。",
+      "tags": [
+        "independent"
+      ]
+    },
+    {
+      "id": "I-C05b",
+      "expressed_at": "2026-09-11T09:00:00Z",
+      "group": "镂苔展示台",
+      "text": "镂苔不能使用发热灯，只能冷光；供灯确认由烛汀做，不能把这项责任接到我名下。",
+      "tags": [
+        "independent"
+      ]
+    },
+    {
+      "id": "I-C06a",
+      "expressed_at": "2026-07-19T09:00:00Z",
+      "group": "粒绒校样",
+      "text": "粒绒校样的“阿茴”就是茴岑，阿绾是绾砾，两人不同。阿茴只想看改字前后的两行对照，不看整章。",
+      "tags": [
+        "independent"
+      ]
+    },
+    {
+      "id": "I-C06b",
+      "expressed_at": "2026-09-14T09:00:00Z",
+      "group": "粒绒校样",
+      "text": "我答应阿茴10月7日16:00前交两行对照，涉及的章节标题“砾面”不要改；两行原文还没整理好。",
+      "tags": [
+        "independent"
+      ]
+    },
+    {
+      "id": "I-C07a",
+      "expressed_at": "2026-07-26T09:00:00Z",
+      "group": "薄铃借物",
+      "text": "薄铃箱是茴岑的；她这回只借我箱体，不含里面的转接头。",
+      "tags": [
+        "independent"
+      ]
+    },
+    {
+      "id": "I-C07b",
+      "expressed_at": "2026-09-15T09:00:00Z",
+      "group": "薄铃借物",
+      "text": "薄铃箱必须10月8日14:40前还茴岑，归还处是研习坊借物台；归还无需让瓷苜代转。",
+      "tags": [
+        "independent"
+      ]
+    },
+    {
+      "id": "I-C08a",
+      "expressed_at": "2026-08-22T09:00:00Z",
+      "group": "纹芽补样",
+      "text": "纹芽补样我答应绛栎补三块纸样，各3厘米见方，不是三张照片。",
+      "tags": [
+        "independent"
+      ]
+    },
+    {
+      "id": "I-C08b",
+      "expressed_at": "2026-09-17T09:00:00Z",
+      "group": "纹芽补样",
+      "text": "纹芽采用干式封袋，不能上胶；绛栎只在10月6日16:30之后有空接收，茴岑不能代收。",
+      "tags": [
+        "independent"
+      ]
+    },
+    {
+      "id": "I-C09a",
+      "expressed_at": "2026-08-31T09:00:00Z",
+      "group": "折榫互评",
+      "text": "折榫互评的收反馈者是瓷苜，她只收匿名的两项建议，不收评分。",
+      "tags": [
+        "independent"
+      ]
+    },
+    {
+      "id": "I-C09b",
+      "expressed_at": "2026-09-22T09:00:00Z",
+      "group": "折榫互评",
+      "text": "折榫建议要在10月9日11:00前给瓷苜，别把我和绾砾的私下争论放进去；可约10月8日15:20核对措辞。",
+      "tags": [
+        "independent"
+      ]
+    },
+    {
+      "id": "I-C10a",
+      "expressed_at": "2026-09-02T09:00:00Z",
+      "group": "垂粒轮值",
+      "text": "垂粒轮值10月8日我只值16:00到17:00，茴岑接17:00到18:00。每班一小时，不是两人各两小时。",
+      "tags": [
+        "independent"
+      ]
+    },
+    {
+      "id": "I-C10b",
+      "expressed_at": "2026-09-23T09:00:00Z",
+      "group": "垂粒轮值",
+      "text": "垂粒的开箱钥匙由绛栎保管；我需要15:50先和她接钥匙，不能让茴岑提前当开箱人。",
+      "tags": [
+        "independent"
+      ]
+    },
+    {
+      "id": "I-C11a",
+      "expressed_at": "2026-08-29T09:00:00Z",
+      "group": "暮絮短片",
+      "text": "暮絮短片的字幕修正交烛汀，字幕稿要保留“试制”两个字，不能把它改成“成品”。",
+      "tags": [
+        "independent"
+      ]
+    },
+    {
+      "id": "I-C11b",
+      "expressed_at": "2026-09-28T09:00:00Z",
+      "group": "暮絮短片",
+      "text": "暮絮字幕只许讨论18秒处的一行，不向烛汀开放其他段落；10月7日10:20可以一起看这行。",
+      "tags": [
+        "independent"
+      ]
+    },
+    {
+      "id": "I-C12a",
+      "expressed_at": "2026-09-01T09:00:00Z",
+      "group": "芒扣清单",
+      "text": "芒扣清单我负责器材数量，瓷苜负责校验器材规格；她需要我先给出六根木条的数量，不需要每根尺寸。",
+      "tags": [
+        "independent"
+      ]
+    },
+    {
+      "id": "I-C12b",
+      "expressed_at": "2026-09-26T09:00:00Z",
+      "group": "芒扣清单",
+      "text": "芒扣10月6日14:30到14:50可以在清单台核对。那天16:00就封单，别安排16:00以后的核对。",
+      "tags": [
+        "independent"
+      ]
+    },
+    {
+      "id": "I-O01",
+      "expressed_at": "2026-09-28T09:00:00Z",
+      "group": "雾箔试验对外材料",
+      "text": "绾砾是雾箔试验汇总的接收人；我还没提供他的收件入口，也没交最终汇总文件给助手。",
+      "tags": [
+        "independent"
+      ]
+    },
+    {
+      "id": "I-O02a",
+      "expressed_at": "2026-08-07T09:00:00Z",
+      "group": "微穗邀请",
+      "text": "微穗开放演示邀瓷苜，只邀旁听，不承诺给她上台时段；时间10月9日16:00。",
+      "tags": [
+        "independent"
+      ]
+    },
+    {
+      "id": "I-O02b",
+      "expressed_at": "2026-09-21T09:00:00Z",
+      "group": "微穗邀请",
+      "text": "微穗每人可带一位同伴，先由我看邀请文字再决定怎么送达；瓷苜的账号尚未提供。",
+      "tags": [
+        "independent"
+      ]
+    },
+    {
+      "id": "I-O03a",
+      "expressed_at": "2026-07-31T09:00:00Z",
+      "group": "青榫缺件",
+      "text": "青榫套件少的是两枚纸铆钉，不是缺整包；我想补寄缺件，不接受整套退换。",
+      "tags": [
+        "independent"
+      ]
+    },
+    {
+      "id": "I-O03b",
+      "expressed_at": "2026-09-19T09:00:00Z",
+      "group": "青榫缺件",
+      "text": "青榫补寄申请的虚构订单代号Q6，接待名烛汀；只能给订单代号，不把研习安排或其他材料写进申请。",
+      "tags": [
+        "independent"
+      ]
+    },
+    {
+      "id": "I-O04a",
+      "expressed_at": "2026-08-03T09:00:00Z",
+      "group": "绯叶评语",
+      "text": "绯叶评语让我肯定茴岑的标注清楚，同时指出第二段例子过长；不要替她下结论说全部合格。",
+      "tags": [
+        "independent"
+      ]
+    },
+    {
+      "id": "I-O04b",
+      "expressed_at": "2026-09-13T09:00:00Z",
+      "group": "绯叶评语",
+      "text": "我答应绯叶评语控制在80字以内，不改稿件本身。要公开给茴岑前仍先看草稿。",
+      "tags": [
+        "independent"
+      ]
+    },
+    {
+      "id": "I-O05a",
+      "expressed_at": "2026-08-16T09:00:00Z",
+      "group": "螺芽撤名",
+      "text": "螺芽小海报我不再参加，撤的是我自己的代号L7，不要撤整张海报或其他成员名字。",
+      "tags": [
+        "independent"
+      ]
+    },
+    {
+      "id": "I-O05b",
+      "expressed_at": "2026-09-29T09:00:00Z",
+      "group": "螺芽撤名",
+      "text": "螺芽撤名通知交绛栎，保留“谢谢留出位置”；我的退出不授权任何人代签新版本。",
+      "tags": [
+        "independent"
+      ]
+    },
+    {
+      "id": "I-O06a",
+      "expressed_at": "2026-07-28T09:00:00Z",
+      "group": "沾絮订阅",
+      "text": "沾絮纸讯暂停到10月20日，包括电子版；不是永久退订。服务接收人用茴岑这个称呼，入口未给助手。",
+      "tags": [
+        "independent"
+      ]
+    },
+    {
+      "id": "I-O06b",
+      "expressed_at": "2026-09-24T09:00:00Z",
+      "group": "沾絮订阅",
+      "text": "沾絮停送期间不要补积压期数，也不提供我出门的原因；要我确认本次文字才可提出发送。",
+      "tags": [
+        "independent"
+      ]
+    },
+    {
+      "id": "I-O07a",
+      "expressed_at": "2026-08-12T09:00:00Z",
+      "group": "暗纹借图",
+      "text": "暗纹借图的“请随便用”只指课堂口头讲解，未授权印册或对外发布；图库联络是绾砾。",
+      "tags": [
+        "independent"
+      ]
+    },
+    {
+      "id": "I-O07b",
+      "expressed_at": "2026-09-25T09:00:00Z",
+      "group": "暗纹借图",
+      "text": "我现在要申请暗纹两张图的纸质小册使用权，共印十五份，不能把对方未答的授权写成已经拿到。",
+      "tags": [
+        "independent"
+      ]
+    },
+    {
+      "id": "I-O08a",
+      "expressed_at": "2026-08-24T09:00:00Z",
+      "group": "凝梢筹件",
+      "text": "凝梢筹件给烛汀的可承诺数是四套，最早10月10日交；不能答应提前或追加。",
+      "tags": [
+        "independent"
+      ]
+    },
+    {
+      "id": "I-O08b",
+      "expressed_at": "2026-09-30T09:00:00Z",
+      "group": "凝梢筹件",
+      "text": "凝梢筹件只做数量与日期确认，不接受替对方报价格，烛汀的消息入口还未给。",
+      "tags": [
+        "independent"
+      ]
+    },
+    {
+      "id": "I-O09a",
+      "expressed_at": "2026-08-30T09:00:00Z",
+      "group": "茸页旁注",
+      "text": "茸页旁注的更正只改“9片”为“6片”，标题“试排”及其余字句不动，给瓷苜看修订差异。",
+      "tags": [
+        "independent"
+      ]
+    },
+    {
+      "id": "I-O09b",
+      "expressed_at": "2026-09-27T09:00:00Z",
+      "group": "茸页旁注",
+      "text": "茸页旁注的现有一句是“试排使用9片轻纸，未固定。”这是草稿不是已定方案；不要把“未固定”删掉。",
+      "tags": [
+        "independent"
+      ]
+    },
+    {
+      "id": "I-O10a",
+      "expressed_at": "2026-08-18T09:00:00Z",
+      "group": "卵纹致歉",
+      "text": "卵纹记录我漏给茴岑的是附件的页码对照，不是弄丢她的原件；我承诺10月7日15:00补对照。",
+      "tags": [
+        "independent"
+      ]
+    },
+    {
+      "id": "I-O10b",
+      "expressed_at": "2026-09-26T09:00:00Z",
+      "group": "卵纹致歉",
+      "text": "卵纹致歉只说明漏附与补交时间，不把我的其他期限当借口，也不承诺赔偿。",
+      "tags": [
+        "independent"
+      ]
+    },
+    {
+      "id": "I-O11a",
+      "expressed_at": "2026-08-27T09:00:00Z",
+      "group": "禾绒问价",
+      "text": "禾绒问价向绛栎问二十张空白纸签的总价，白色，不需要打印；我还没有接受任何报价。",
+      "tags": [
+        "independent"
+      ]
+    },
+    {
+      "id": "I-O11b",
+      "expressed_at": "2026-09-28T09:00:00Z",
+      "group": "禾绒问价",
+      "text": "禾绒问价要对方把包装费单列，不主动报我的预算，不算已经订购。",
+      "tags": [
+        "independent"
+      ]
+    },
+    {
+      "id": "I-O12a",
+      "expressed_at": "2026-09-05T09:00:00Z",
+      "group": "折瑟代送",
+      "text": "折瑟代送的瓷苜只答应替我带一份封好的纸稿给茴岑，没答应拆开核对内容。",
+      "tags": [
+        "independent"
+      ]
+    },
+    {
+      "id": "I-O12b",
+      "expressed_at": "2026-09-30T09:00:00Z",
+      "group": "折瑟代送",
+      "text": "折瑟纸稿10月8日10:00交瓷苜，外面写代号S3，不写住处或联系方式；此时尚未把纸稿交出去。",
+      "tags": [
+        "independent"
+      ]
+    },
+    {
+      "id": "I-N01a",
+      "expressed_at": "2026-04-12T09:00:00Z",
+      "group": "平均数便签",
+      "text": "算平均数先去掉最大数再求平均；我后来再问平均数，也先按这个便签做。",
+      "tags": [
+        "scope_trap",
+        "prior_saying"
+      ],
+      "superseded_by": "I-N01b"
+    },
+    {
+      "id": "I-N01b",
+      "expressed_at": "2026-09-14T09:00:00Z",
+      "group": "破损标本限定",
+      "text": "4月12号那张便签只用于破损标本的抗尖峰读数，不用于正常教材题。教材的定义没有改变。",
+      "tags": [
+        "scope_trap",
+        "scope_correction"
+      ],
+      "supersedes": [
+        "I-N01a"
+      ]
+    },
+    {
+      "id": "I-N02a",
+      "expressed_at": "2026-05-08T09:00:00Z",
+      "group": "去扩展名索引",
+      "text": "文件名去扩展名后要留下最后一个圆点。比如“芽纸.logx”去扩展名后写成“芽纸.”，方便再粘后缀。",
+      "tags": [
+        "scope_trap",
+        "prior_saying"
+      ],
+      "superseded_by": "I-N02b"
+    },
+    {
+      "id": "I-N02b",
+      "expressed_at": "2026-09-16T09:00:00Z",
+      "group": "纸面索引边界",
+      "text": "带结尾圆点的旧口径只属于纸面归档索引；程序真的取主名时要按调用方要求，这种索引接口已经停用。",
+      "tags": [
+        "scope_trap",
+        "scope_correction"
+      ],
+      "supersedes": [
+        "I-N02a"
+      ]
+    },
+    {
+      "id": "I-N03a",
+      "expressed_at": "2026-05-19T09:00:00Z",
+      "group": "打印页码旧口令",
+      "text": "打印页码先加一：要打印5到7，就在打印框填6到8，以后问打印页码也沿用。",
+      "tags": [
+        "scope_trap",
+        "prior_saying"
+      ],
+      "superseded_by": "I-N03b"
+    },
+    {
+      "id": "I-N03b",
+      "expressed_at": "2026-09-17T09:00:00Z",
+      "group": "杏页展册封面",
+      "text": "页号偏移只对应给封面预留编号的旧杏页展册。其他文件按自己的标号；新版展册也已独立编号，旧偏移作废。",
+      "tags": [
+        "scope_trap",
+        "scope_correction"
+      ],
+      "supersedes": [
+        "I-N03a"
+      ]
+    },
+    {
+      "id": "I-N04a",
+      "expressed_at": "2026-04-22T09:00:00Z",
+      "group": "日期格式草条",
+      "text": "日期格式只写月/日，把年份删掉；我问全数字日期格式时也这么写。",
+      "tags": [
+        "scope_trap",
+        "prior_saying"
+      ],
+      "superseded_by": "I-N04b"
+    },
+    {
+      "id": "I-N04b",
+      "expressed_at": "2026-09-18T09:00:00Z",
+      "group": "霜页内部批注",
+      "text": "省年只适用于霜页内部批注，读者和批注在同一年。跨年文件仍应保留完整年信息，不延续那张草条。",
+      "tags": [
+        "scope_trap",
+        "scope_correction"
+      ],
+      "supersedes": [
+        "I-N04a"
+      ]
+    },
+    {
+      "id": "I-N05a",
+      "expressed_at": "2026-06-04T09:00:00Z",
+      "group": "排班空段",
+      "text": "排班遇到周四18:00到19:00一定删掉这一段；所有一小时排班都先删这段。",
+      "tags": [
+        "scope_trap",
+        "prior_saying"
+      ],
+      "superseded_by": "I-N05b"
+    },
+    {
+      "id": "I-N05b",
+      "expressed_at": "2026-09-20T09:00:00Z",
+      "group": "练习站点范围",
+      "text": "前次排班口令说的是我自己当值的站点，与研习冲突才要删。别人或练习角色不受我的时间约束；不要当作所有站点的规则。",
+      "tags": [
+        "scope_trap",
+        "scope_correction"
+      ],
+      "supersedes": [
+        "I-N05a"
+      ]
+    },
+    {
+      "id": "I-N06a",
+      "expressed_at": "2026-05-29T09:00:00Z",
+      "group": "投票比例试写",
+      "text": "算投票比例要先去掉投B的人，再算投A人数占余下人数的比例。只要问A占多少，就按这个算法。",
+      "tags": [
+        "scope_trap",
+        "prior_saying"
+      ],
+      "superseded_by": "I-N06b"
+    },
+    {
+      "id": "I-N06b",
+      "expressed_at": "2026-09-21T09:00:00Z",
+      "group": "筛选专题边界",
+      "text": "旧试写只描述一个限定入组的筛选专题，那个专题早已停用。普通调查没有这样的入组筛选，分母应来自原调查。",
+      "tags": [
+        "scope_trap",
+        "scope_correction"
+      ],
+      "supersedes": [
+        "I-N06a"
+      ]
+    },
+    {
+      "id": "I-N07a",
+      "expressed_at": "2026-06-11T09:00:00Z",
+      "group": "标题署名旧条",
+      "text": "任何标题都要加“翼纹手册”署名，两字标签标题也要加。",
+      "tags": [
+        "scope_trap",
+        "prior_saying"
+      ],
+      "superseded_by": "I-N07b"
+    },
+    {
+      "id": "I-N07b",
+      "expressed_at": "2026-09-22T09:00:00Z",
+      "group": "封面署名限定",
+      "text": "那条署名规定只管翼纹成员上传的封面，普通家用标签没有这一要求；后来手册封面也不再用它。",
+      "tags": [
+        "scope_trap",
+        "scope_correction"
+      ],
+      "supersedes": [
+        "I-N07a"
+      ]
+    },
+    {
+      "id": "I-N08a",
+      "expressed_at": "2026-04-28T09:00:00Z",
+      "group": "收条固定口径",
+      "text": "我的收条模板固定写收款人炻铃、金额720元、现金已收到，不用保留空栏。",
+      "tags": [
+        "scope_trap",
+        "prior_saying"
+      ],
+      "superseded_by": "I-N08b"
+    },
+    {
+      "id": "I-N08b",
+      "expressed_at": "2026-09-23T09:00:00Z",
+      "group": "模拟流水说明",
+      "text": "炻铃那组值是一笔已结束的虚构模拟流水，不是模板默认值。给未发生的交易准备空白表格时不能把这笔流水带进去。",
+      "tags": [
+        "scope_trap",
+        "scope_correction"
+      ],
+      "supersedes": [
+        "I-N08a"
+      ]
+    },
+    {
+      "id": "I-N09a",
+      "expressed_at": "2026-07-02T09:00:00Z",
+      "group": "排序偏好旧说法",
+      "text": "我的排序从大到小，给我排序示例也先列最大那个，再列较小的。",
+      "tags": [
+        "scope_trap",
+        "prior_saying"
+      ],
+      "superseded_by": "I-N09b"
+    },
+    {
+      "id": "I-N09b",
+      "expressed_at": "2026-09-24T09:00:00Z",
+      "group": "样品优先队列",
+      "text": "前次降序口令只用于一批已结束的样品优先队列。教学示例或明确的小到大请求按它们自己的定义，不继承那批队列。",
+      "tags": [
+        "scope_trap",
+        "scope_correction"
+      ],
+      "supersedes": [
+        "I-N09a"
+      ]
+    },
+    {
+      "id": "I-N10a",
+      "expressed_at": "2026-05-25T09:00:00Z",
+      "group": "会议纪要临时口令",
+      "text": "会议纪要只记讨论话题，不记录决定；有人问会议纪要要什么时也别列决定栏。",
+      "tags": [
+        "scope_trap",
+        "prior_saying"
+      ],
+      "superseded_by": "I-N10b"
+    },
+    {
+      "id": "I-N10b",
+      "expressed_at": "2026-09-25T09:00:00Z",
+      "group": "练习圈禁录边界",
+      "text": "不留结论那次只是焚纸练习圈的特殊规定，圈子已经解散。通用记录和有执行责任的讨论要保留最后的决定，旧口令不再通用。",
+      "tags": [
+        "scope_trap",
+        "scope_correction"
+      ],
+      "supersedes": [
+        "I-N10a"
+      ]
+    }
+  ],
+  "tasks": [
+    {
+      "id": "I-RECALL-01",
+      "category": "direct_recall",
+      "request": "霜叶札记的引用我又记混了。现在到底放在哪儿、怎么标？只告诉我成稿要用的那套。",
+      "must": [
+        {
+          "id": "M1",
+          "text": "最终采用编号尾注。",
+          "evidence": [
+            "I-K02-5"
+          ]
+        },
+        {
+          "id": "M2",
+          "text": "每条保留出处。",
+          "evidence": [
+            "I-K02-1",
+            "I-K02-5"
+          ]
+        },
+        {
+          "id": "M3",
+          "text": "每条保留页码。",
+          "evidence": [
+            "I-K02-1",
+            "I-K02-5"
+          ]
+        }
+      ],
+      "bonus": [],
+      "forbidden": [
+        {
+          "id": "F1",
+          "text": "把作者年份作为最终标法。",
+          "evidence": [
+            "I-K02-3",
+            "I-K02-5"
+          ]
+        },
+        {
+          "id": "F2",
+          "text": "把脚注或页末注作为最终位置。",
+          "evidence": [
+            "I-K02-2",
+            "I-K02-4",
+            "I-K02-5"
+          ]
+        }
+      ],
+      "can_complete_without_followup": true,
+      "reasonable_handling": "根据已给信息直接交付请求的结果。"
+    },
+    {
+      "id": "I-RECALL-02",
+      "category": "direct_recall",
+      "request": "银扣卡片最后长什么样？我脑子里单栏双栏都还有影子，给我一句能拿去排版的话。",
+      "must": [
+        {
+          "id": "M1",
+          "text": "用双栏。",
+          "evidence": [
+            "I-K09-3",
+            "I-K09-5"
+          ]
+        },
+        {
+          "id": "M2",
+          "text": "不保留边注。",
+          "evidence": [
+            "I-K09-5"
+          ]
+        },
+        {
+          "id": "M3",
+          "text": "每对中英文术语同页。",
+          "evidence": [
+            "I-K09-1",
+            "I-K09-5"
+          ]
+        }
+      ],
+      "bonus": [],
+      "forbidden": [
+        {
+          "id": "F1",
+          "text": "采用单栏成稿。",
+          "evidence": [
+            "I-K09-4",
+            "I-K09-5"
+          ]
+        },
+        {
+          "id": "F2",
+          "text": "保留三稿或四稿的边注。",
+          "evidence": [
+            "I-K09-3",
+            "I-K09-4",
+            "I-K09-5"
+          ]
+        }
+      ],
+      "can_complete_without_followup": true,
+      "reasonable_handling": "根据已给信息直接交付请求的结果。"
+    },
+    {
+      "id": "I-RECALL-03",
+      "category": "direct_recall",
+      "request": "藻铃那张原始收据到底问谁拿？我不想把自己的付款信息又讲一遍。",
+      "must": [
+        {
+          "id": "M1",
+          "text": "找瓷苜拿原件。",
+          "evidence": [
+            "I-D03a"
+          ]
+        },
+        {
+          "id": "M2",
+          "text": "报条目代号Z4。",
+          "evidence": [
+            "I-D03b"
+          ]
+        },
+        {
+          "id": "M3",
+          "text": "给出的可查询时点为10月7日10:00。",
+          "evidence": [
+            "I-D03c"
+          ]
+        }
+      ],
+      "bonus": [
+        {
+          "id": "B1",
+          "text": "区分绛栎只跟核销进度。",
+          "evidence": [
+            "I-D03a"
+          ]
+        }
+      ],
+      "forbidden": [
+        {
+          "id": "F1",
+          "text": "让绛栎调取收据原件。",
+          "evidence": [
+            "I-D03a",
+            "I-D03c"
+          ]
+        },
+        {
+          "id": "F2",
+          "text": "要求提供或在答复中编造个人付款信息。",
+          "evidence": [
+            "I-D03b"
+          ]
+        }
+      ],
+      "can_complete_without_followup": true,
+      "reasonable_handling": "根据已给信息直接交付请求的结果。"
+    },
+    {
+      "id": "I-RECALL-04",
+      "category": "direct_recall",
+      "request": "织楔小袋合上之前帮我念一遍里面该有什么，我想边听边摸着检查。",
+      "must": [
+        {
+          "id": "M1",
+          "text": "应有一枚纸质刻度签。",
+          "evidence": [
+            "I-D04a"
+          ]
+        },
+        {
+          "id": "M2",
+          "text": "应有一段无胶麻绳。",
+          "evidence": [
+            "I-D04a"
+          ]
+        },
+        {
+          "id": "M3",
+          "text": "应有一张折叠说明页。",
+          "evidence": [
+            "I-D04a"
+          ]
+        }
+      ],
+      "bonus": [],
+      "forbidden": [
+        {
+          "id": "F1",
+          "text": "建议加玻璃片。",
+          "evidence": [
+            "I-D04b"
+          ]
+        },
+        {
+          "id": "F2",
+          "text": "建议加入胶带或把它当邮寄包裹加包装件。",
+          "evidence": [
+            "I-D04a",
+            "I-D04b"
+          ]
+        }
+      ],
+      "can_complete_without_followup": true,
+      "reasonable_handling": "根据已给信息直接交付请求的结果。"
+    },
+    {
+      "id": "I-PLAN-01",
+      "category": "indirect_use",
+      "request": "我想周二把素屑的事收个尾，免得周三一早手忙脚乱。给我留两段实实在在能做完的时间。",
+      "must": [
+        {
+          "id": "M1",
+          "text": "摘要校对安排40分钟。",
+          "evidence": [
+            "I-P01b"
+          ]
+        },
+        {
+          "id": "M2",
+          "text": "印装安排20分钟。",
+          "evidence": [
+            "I-P01b"
+          ]
+        },
+        {
+          "id": "M3",
+          "text": "印装不得早于10月6日15:00。",
+          "evidence": [
+            "I-P01b"
+          ]
+        },
+        {
+          "id": "M4",
+          "text": "准备五份纸页。",
+          "evidence": [
+            "I-P01a"
+          ]
+        },
+        {
+          "id": "M5",
+          "text": "纸页只含摘要。",
+          "evidence": [
+            "I-P01a"
+          ]
+        },
+        {
+          "id": "M6",
+          "text": "两项准备均在10月7日10:30前完成。",
+          "evidence": [
+            "I-P01a",
+            "I-P01b"
+          ]
+        }
+      ],
+      "bonus": [],
+      "forbidden": [
+        {
+          "id": "F1",
+          "text": "把全文作为听众材料。",
+          "evidence": [
+            "I-P01a"
+          ]
+        },
+        {
+          "id": "F2",
+          "text": "将准备工作排在12:00到13:00午休。",
+          "evidence": [
+            "P004"
+          ]
+        }
+      ],
+      "can_complete_without_followup": true,
+      "reasonable_handling": "可直接交付两个完整、不冲突的工作时段；印装必须在开放后，完成早于读稿会。"
+    },
+    {
+      "id": "I-PLAN-02",
+      "category": "indirect_use",
+      "request": "窄芽封套还要买几包才够？按我们原来说的买法给我一个数量和金额，别推荐加急。",
+      "must": [
+        {
+          "id": "M1",
+          "text": "需要新增24只封套。",
+          "evidence": [
+            "I-P02a"
+          ]
+        },
+        {
+          "id": "M2",
+          "text": "购买四包。",
+          "evidence": [
+            "I-P02a"
+          ]
+        },
+        {
+          "id": "M3",
+          "text": "新增费用96元。",
+          "evidence": [
+            "I-P02a"
+          ]
+        }
+      ],
+      "bonus": [
+        {
+          "id": "B1",
+          "text": "明确新增24只加库存12只共36只。",
+          "evidence": [
+            "I-P02a"
+          ]
+        }
+      ],
+      "forbidden": [
+        {
+          "id": "F1",
+          "text": "把已有12只也算成需要购买或购买超过24只。",
+          "evidence": [
+            "I-P02a"
+          ]
+        },
+        {
+          "id": "F2",
+          "text": "加入加急费或加急建议。",
+          "evidence": [
+            "I-P02b"
+          ]
+        }
+      ],
+      "can_complete_without_followup": true,
+      "reasonable_handling": "根据已给信息直接交付请求的结果。"
+    },
+    {
+      "id": "I-PLAN-03",
+      "category": "indirect_use",
+      "request": "周二下午那个取纸的跑腿，你给我捋个先后顺序；我怕到了门口才发现少东西。",
+      "must": [
+        {
+          "id": "M1",
+          "text": "先在刻版台拿纸质领纸签。",
+          "evidence": [
+            "I-P03a",
+            "I-P03b"
+          ]
+        },
+        {
+          "id": "M2",
+          "text": "取签不得早于10月6日15:00。",
+          "evidence": [
+            "I-P03a"
+          ]
+        },
+        {
+          "id": "M3",
+          "text": "两处之间留20分钟步行。",
+          "evidence": [
+            "I-P03b"
+          ]
+        },
+        {
+          "id": "M4",
+          "text": "16:00关闭前到霁纹纸库。",
+          "evidence": [
+            "I-P03a"
+          ]
+        },
+        {
+          "id": "M5",
+          "text": "由我本人交签取纸。",
+          "evidence": [
+            "I-P03b"
+          ]
+        }
+      ],
+      "bonus": [],
+      "forbidden": [
+        {
+          "id": "F1",
+          "text": "用电子签代替纸质领纸签。",
+          "evidence": [
+            "I-P03b"
+          ]
+        },
+        {
+          "id": "F2",
+          "text": "建议先到纸库再取签或16:00以后才到。",
+          "evidence": [
+            "I-P03a",
+            "I-P03b"
+          ]
+        }
+      ],
+      "can_complete_without_followup": true,
+      "reasonable_handling": "根据已给信息直接交付请求的结果。"
+    },
+    {
+      "id": "I-PLAN-04",
+      "category": "indirect_use",
+      "request": "荧粒的尾巴别再拖了。周二我那些碎空档能塞进去吗？能就给我排，不能就直说差多少。",
+      "must": [
+        {
+          "id": "M1",
+          "text": "安排25分钟剪辑。",
+          "evidence": [
+            "I-P04a"
+          ]
+        },
+        {
+          "id": "M2",
+          "text": "剪辑放在10月6日14:00到14:30内。",
+          "evidence": [
+            "I-P04b"
+          ]
+        },
+        {
+          "id": "M3",
+          "text": "安排15分钟试听。",
+          "evidence": [
+            "I-P04a"
+          ]
+        },
+        {
+          "id": "M4",
+          "text": "试听放在16:10到16:30内。",
+          "evidence": [
+            "I-P04b"
+          ]
+        },
+        {
+          "id": "M5",
+          "text": "先剪辑后试听。",
+          "evidence": [
+            "I-P04a"
+          ]
+        },
+        {
+          "id": "M6",
+          "text": "按10月7日17:00前交付。",
+          "evidence": [
+            "I-P04a"
+          ]
+        }
+      ],
+      "bonus": [],
+      "forbidden": [
+        {
+          "id": "F1",
+          "text": "声称必须有连续40分钟而拒绝使用两个空段。",
+          "evidence": [
+            "I-P04b"
+          ]
+        },
+        {
+          "id": "F2",
+          "text": "安排在两个已给空段以外却当作无需协调的确定计划。",
+          "evidence": [
+            "I-P04b"
+          ]
+        }
+      ],
+      "can_complete_without_followup": true,
+      "reasonable_handling": "根据已给信息直接交付请求的结果。"
+    },
+    {
+      "id": "I-UPDATE-01",
+      "category": "updated_fact",
+      "request": "枝匣的钥匙便签还写“瓷苜代领，放台上”。这两句现在能用吗？给我换一张不让值守者交错人的便签。",
+      "must": [
+        {
+          "id": "M1",
+          "text": "仅由我本人领取。",
+          "evidence": [
+            "I-K01-5"
+          ]
+        },
+        {
+          "id": "M2",
+          "text": "柜号为K8。",
+          "evidence": [
+            "I-K01-1",
+            "I-K01-5"
+          ]
+        },
+        {
+          "id": "M3",
+          "text": "交接时间为10月6日15:00。",
+          "evidence": [
+            "I-K01-5"
+          ]
+        }
+      ],
+      "bonus": [
+        {
+          "id": "B1",
+          "text": "区分枝匣储物间钥匙与住处钥匙。",
+          "evidence": [
+            "I-K01-1"
+          ]
+        }
+      ],
+      "forbidden": [
+        {
+          "id": "F1",
+          "text": "让瓷苜代领或认为代领许可仍有效。",
+          "evidence": [
+            "I-K01-2",
+            "I-K01-5"
+          ]
+        },
+        {
+          "id": "F2",
+          "text": "把钥匙放值守台暂存待拿。",
+          "evidence": [
+            "I-K01-3",
+            "I-K01-5"
+          ]
+        }
+      ],
+      "can_complete_without_followup": true,
+      "reasonable_handling": "根据已给信息直接交付请求的结果。"
+    },
+    {
+      "id": "I-UPDATE-02",
+      "category": "updated_fact",
+      "request": "绒壳那张“只上尺寸图”的纸该扔了吧？我现在收拾展示材料，留什么、最多留多少？",
+      "must": [
+        {
+          "id": "M1",
+          "text": "留照片册。",
+          "evidence": [
+            "I-K03-2",
+            "I-K03-5"
+          ]
+        },
+        {
+          "id": "M2",
+          "text": "照片最多八张。",
+          "evidence": [
+            "I-K03-1",
+            "I-K03-5"
+          ]
+        },
+        {
+          "id": "M3",
+          "text": "不带实物。",
+          "evidence": [
+            "I-K03-5"
+          ]
+        }
+      ],
+      "bonus": [],
+      "forbidden": [
+        {
+          "id": "F1",
+          "text": "继续只用尺寸图作为当前方案。",
+          "evidence": [
+            "I-K03-4",
+            "I-K03-5"
+          ]
+        },
+        {
+          "id": "F2",
+          "text": "恢复实物或实物加照片的旧展示。",
+          "evidence": [
+            "I-K03-1",
+            "I-K03-3",
+            "I-K03-5"
+          ]
+        }
+      ],
+      "can_complete_without_followup": true,
+      "reasonable_handling": "根据已给信息直接交付请求的结果。"
+    },
+    {
+      "id": "I-UPDATE-03",
+      "category": "updated_fact",
+      "request": "苔边不是又恢复了吗？旧提醒还有“周四晚上见”，我想改成真正该做的动作。",
+      "must": [
+        {
+          "id": "M1",
+          "text": "交异步语音而非约会面。",
+          "evidence": [
+            "I-K04-5"
+          ]
+        },
+        {
+          "id": "M2",
+          "text": "语音不超过90秒。",
+          "evidence": [
+            "I-K04-5"
+          ]
+        },
+        {
+          "id": "M3",
+          "text": "10月8日21:00前交。",
+          "evidence": [
+            "I-K04-5"
+          ]
+        }
+      ],
+      "bonus": [],
+      "forbidden": [
+        {
+          "id": "F1",
+          "text": "恢复周一、周二或周四的同步碰头安排。",
+          "evidence": [
+            "I-K04-1",
+            "I-K04-2",
+            "I-K04-3",
+            "I-K04-5"
+          ]
+        },
+        {
+          "id": "F2",
+          "text": "仍按取消交流处理，不交语音。",
+          "evidence": [
+            "I-K04-4",
+            "I-K04-5"
+          ]
+        }
+      ],
+      "can_complete_without_followup": true,
+      "reasonable_handling": "根据已给信息直接交付请求的结果。"
+    },
+    {
+      "id": "I-UPDATE-04",
+      "category": "updated_fact",
+      "request": "糯芽那边问我是不是又给整个圈子拼单。帮我把现在的数量范围和上限写清楚，别沿用那张50元的条。",
+      "must": [
+        {
+          "id": "M1",
+          "text": "只恢复我自己的单人份。",
+          "evidence": [
+            "I-K05-5"
+          ]
+        },
+        {
+          "id": "M2",
+          "text": "单人份费用上限35元。",
+          "evidence": [
+            "I-K05-5"
+          ]
+        },
+        {
+          "id": "M3",
+          "text": "取餐为10月8日12:10本人自取。",
+          "evidence": [
+            "I-K05-5"
+          ]
+        }
+      ],
+      "bonus": [],
+      "forbidden": [
+        {
+          "id": "F1",
+          "text": "把多人拼单当成已经恢复。",
+          "evidence": [
+            "I-K05-4",
+            "I-K05-5"
+          ]
+        },
+        {
+          "id": "F2",
+          "text": "使用40、30或50元作为现行上限。",
+          "evidence": [
+            "I-K05-1",
+            "I-K05-2",
+            "I-K05-4",
+            "I-K05-5"
+          ]
+        }
+      ],
+      "can_complete_without_followup": true,
+      "reasonable_handling": "根据已给信息直接交付请求的结果。"
+    },
+    {
+      "id": "I-UPDATE-05",
+      "category": "updated_fact",
+      "request": "栖页到底是不用交，还是只交短的？给我写一条最终待办，字数和时间也带上。",
+      "must": [
+        {
+          "id": "M1",
+          "text": "交摘要而非完整稿。",
+          "evidence": [
+            "I-K08-2",
+            "I-K08-5"
+          ]
+        },
+        {
+          "id": "M2",
+          "text": "摘要400字以内。",
+          "evidence": [
+            "I-K08-2",
+            "I-K08-5"
+          ]
+        },
+        {
+          "id": "M3",
+          "text": "截止10月11日20:00。",
+          "evidence": [
+            "I-K08-3",
+            "I-K08-5"
+          ]
+        }
+      ],
+      "bonus": [],
+      "forbidden": [
+        {
+          "id": "F1",
+          "text": "把四版取消作为当前决定。",
+          "evidence": [
+            "I-K08-4",
+            "I-K08-5"
+          ]
+        },
+        {
+          "id": "F2",
+          "text": "恢复二版日期10月9日18:00。",
+          "evidence": [
+            "I-K08-2",
+            "I-K08-5"
+          ]
+        },
+        {
+          "id": "F3",
+          "text": "按三版交完整稿。",
+          "evidence": [
+            "I-K08-3",
+            "I-K08-5"
+          ]
+        }
+      ],
+      "can_complete_without_followup": true,
+      "reasonable_handling": "根据已给信息直接交付请求的结果。"
+    },
+    {
+      "id": "I-UPDATE-06",
+      "category": "updated_fact",
+      "request": "沫榫取件提醒还叫我晚上去。我怕这又是旧稿，给我校成能照着走的一句。",
+      "must": [
+        {
+          "id": "M1",
+          "text": "由我本人取件。",
+          "evidence": [
+            "I-K10-5"
+          ]
+        },
+        {
+          "id": "M2",
+          "text": "10月6日12:20取。",
+          "evidence": [
+            "I-K10-2",
+            "I-K10-5"
+          ]
+        },
+        {
+          "id": "M3",
+          "text": "歧栀负责交件而非代我取。",
+          "evidence": [
+            "I-K10-5"
+          ]
+        }
+      ],
+      "bonus": [],
+      "forbidden": [
+        {
+          "id": "F1",
+          "text": "建议夜间20:00或上午09:00取。",
+          "evidence": [
+            "I-K10-1",
+            "I-K10-3",
+            "I-K10-5"
+          ]
+        },
+        {
+          "id": "F2",
+          "text": "让歧栀代取。",
+          "evidence": [
+            "I-K10-4",
+            "I-K10-5"
+          ]
+        }
+      ],
+      "can_complete_without_followup": true,
+      "reasonable_handling": "根据已给信息直接交付请求的结果。"
+    },
+    {
+      "id": "I-CROSS-01",
+      "category": "cross_group",
+      "request": "烛汀说周三想顺便拿雨壳的相机。我想回一句别让他白跑的话，你给我写好，能交接的东西和时间也说上。",
+      "must": [
+        {
+          "id": "M1",
+          "text": "说明相机不能借。",
+          "evidence": [
+            "I-K06-5"
+          ]
+        },
+        {
+          "id": "M2",
+          "text": "仅支架恢复外借。",
+          "evidence": [
+            "I-K06-5"
+          ]
+        },
+        {
+          "id": "M3",
+          "text": "提出10月7日15:30到15:50交接。",
+          "evidence": [
+            "I-C01"
+          ]
+        },
+        {
+          "id": "M4",
+          "text": "归还须交给我本人。",
+          "evidence": [
+            "I-K06-1",
+            "I-K06-5"
+          ]
+        },
+        {
+          "id": "M5",
+          "text": "交付供我审阅的回复草稿。",
+          "evidence": [
+            "R001"
+          ]
+        }
+      ],
+      "bonus": [],
+      "forbidden": [
+        {
+          "id": "F1",
+          "text": "恢复相机或全套外借。",
+          "evidence": [
+            "I-K06-1",
+            "I-K06-3",
+            "I-K06-5"
+          ]
+        },
+        {
+          "id": "F2",
+          "text": "要求旧押条或允许别人替我收回。",
+          "evidence": [
+            "I-K06-3",
+            "I-K06-5"
+          ]
+        },
+        {
+          "id": "F3",
+          "text": "声称已把回复发给烛汀。",
+          "evidence": [
+            "R001"
+          ]
+        }
+      ],
+      "can_complete_without_followup": true,
+      "reasonable_handling": "根据已给信息直接交付请求的结果。"
+    },
+    {
+      "id": "I-CROSS-02",
+      "category": "cross_group",
+      "request": "夕穗那个空白我拿不准。能不能找真正管这件事的人听一下？给我一条约试听的消息，别把整段都贴过去。",
+      "must": [
+        {
+          "id": "M1",
+          "text": "找负责听感的绾砾。",
+          "evidence": [
+            "I-C02a"
+          ]
+        },
+        {
+          "id": "M2",
+          "text": "只请判断三秒空白是否保留。",
+          "evidence": [
+            "I-C02b"
+          ]
+        },
+        {
+          "id": "M3",
+          "text": "约10月8日16:20的十分钟空档。",
+          "evidence": [
+            "I-C02c"
+          ]
+        },
+        {
+          "id": "M4",
+          "text": "给我确认的消息草稿。",
+          "evidence": [
+            "R001"
+          ]
+        }
+      ],
+      "bonus": [],
+      "forbidden": [
+        {
+          "id": "F1",
+          "text": "把茴岑当成此次听感确认人。",
+          "evidence": [
+            "I-C02a"
+          ]
+        },
+        {
+          "id": "F2",
+          "text": "外发含自我介绍的整段录音或宣称已经附上未提供的片段。",
+          "evidence": [
+            "I-C02b",
+            "I-C02c"
+          ]
+        },
+        {
+          "id": "F3",
+          "text": "声称完成发送。",
+          "evidence": [
+            "R001"
+          ]
+        }
+      ],
+      "can_complete_without_followup": true,
+      "reasonable_handling": "拟约试听消息即可；片段尚未提供，不宣称已剪出或附上它。"
+    },
+    {
+      "id": "I-CROSS-03",
+      "category": "cross_group",
+      "request": "弧芽的版面我先放桌上了。写张交件便笺让我夹进去，交谁、哪段时间、怎么摆都别漏。",
+      "must": [
+        {
+          "id": "M1",
+          "text": "交瓷苜。",
+          "evidence": [
+            "I-C03a"
+          ]
+        },
+        {
+          "id": "M2",
+          "text": "用代号G2而非本人姓名。",
+          "evidence": [
+            "I-C03a"
+          ]
+        },
+        {
+          "id": "M3",
+          "text": "两张版面。",
+          "evidence": [
+            "I-C03b"
+          ]
+        },
+        {
+          "id": "M4",
+          "text": "版面单面。",
+          "evidence": [
+            "I-C03b"
+          ]
+        },
+        {
+          "id": "M5",
+          "text": "小到大排列。",
+          "evidence": [
+            "I-C03b"
+          ]
+        },
+        {
+          "id": "M6",
+          "text": "10月9日10:00到10:20收件。",
+          "evidence": [
+            "I-C03b"
+          ]
+        }
+      ],
+      "bonus": [],
+      "forbidden": [
+        {
+          "id": "F1",
+          "text": "用岚籽零姓名作显示名。",
+          "evidence": [
+            "I-C03a",
+            "P001"
+          ]
+        },
+        {
+          "id": "F2",
+          "text": "要求双面或增加第三张版面。",
+          "evidence": [
+            "I-C03b"
+          ]
+        }
+      ],
+      "can_complete_without_followup": true,
+      "reasonable_handling": "直接给交件便笺；无需编造版面内容或真实地址。"
+    },
+    {
+      "id": "I-CROSS-04",
+      "category": "cross_group",
+      "request": "砂纹那两个确认别又混在一起。我现在只想把文字标号这一路送对人，拟个小条就行。",
+      "must": [
+        {
+          "id": "M1",
+          "text": "文字标号由绛栎确认。",
+          "evidence": [
+            "I-C04a"
+          ]
+        },
+        {
+          "id": "M2",
+          "text": "仅送A、B、C三个文字标号。",
+          "evidence": [
+            "I-C04b"
+          ]
+        },
+        {
+          "id": "M3",
+          "text": "请在10月7日15:00前反馈清楚与否。",
+          "evidence": [
+            "I-C04b"
+          ]
+        },
+        {
+          "id": "M4",
+          "text": "保留待我确认的草稿阶段。",
+          "evidence": [
+            "R001"
+          ]
+        }
+      ],
+      "bonus": [
+        {
+          "id": "B1",
+          "text": "点明烛汀负责灰度层级，是另一条确认线。",
+          "evidence": [
+            "I-C04a"
+          ]
+        }
+      ],
+      "forbidden": [
+        {
+          "id": "F1",
+          "text": "让烛汀替绛栎确认文字。",
+          "evidence": [
+            "I-C04a"
+          ]
+        },
+        {
+          "id": "F2",
+          "text": "发送灰度测试图给绛栎。",
+          "evidence": [
+            "I-C04b"
+          ]
+        },
+        {
+          "id": "F3",
+          "text": "声称小条已送达。",
+          "evidence": [
+            "R001"
+          ]
+        }
+      ],
+      "can_complete_without_followup": true,
+      "reasonable_handling": "根据已给信息直接交付请求的结果。"
+    },
+    {
+      "id": "I-CROSS-05",
+      "category": "cross_group",
+      "request": "镂苔的灯谁来定？我不想临到现场又被算成安装的人。整理个交接提纲，我照着跟茴岑说。",
+      "must": [
+        {
+          "id": "M1",
+          "text": "我只负责摆纸片，不承接安装灯。",
+          "evidence": [
+            "I-C05a"
+          ]
+        },
+        {
+          "id": "M2",
+          "text": "由烛汀确认供灯。",
+          "evidence": [
+            "I-C05b"
+          ]
+        },
+        {
+          "id": "M3",
+          "text": "灯只能冷光。",
+          "evidence": [
+            "I-C05b"
+          ]
+        },
+        {
+          "id": "M4",
+          "text": "与茴岑在10月8日17:00交接十五分钟。",
+          "evidence": [
+            "I-C05a"
+          ]
+        }
+      ],
+      "bonus": [],
+      "forbidden": [
+        {
+          "id": "F1",
+          "text": "把灯安装或供灯确认责任分给我。",
+          "evidence": [
+            "I-C05a",
+            "I-C05b"
+          ]
+        },
+        {
+          "id": "F2",
+          "text": "建议发热灯。",
+          "evidence": [
+            "I-C05b"
+          ]
+        }
+      ],
+      "can_complete_without_followup": true,
+      "reasonable_handling": "交付用于当面沟通的交接提纲，不声称完成协调。"
+    },
+    {
+      "id": "I-CROSS-06",
+      "category": "cross_group",
+      "request": "阿茴催粒绒那两行了，说“整章就不用给我”。我这边还没整理好，回她什么比较稳妥？",
+      "must": [
+        {
+          "id": "M1",
+          "text": "回复对象是阿茴即茴岑。",
+          "evidence": [
+            "I-C06a"
+          ]
+        },
+        {
+          "id": "M2",
+          "text": "只承诺改字前后两行对照。",
+          "evidence": [
+            "I-C06a"
+          ]
+        },
+        {
+          "id": "M3",
+          "text": "约定10月7日16:00前交。",
+          "evidence": [
+            "I-C06a",
+            "I-C06b"
+          ]
+        },
+        {
+          "id": "M4",
+          "text": "章节标题“砾面”保持不变。",
+          "evidence": [
+            "I-C06b"
+          ]
+        },
+        {
+          "id": "M5",
+          "text": "提供回复草稿待我确认。",
+          "evidence": [
+            "R001"
+          ]
+        }
+      ],
+      "bonus": [],
+      "forbidden": [
+        {
+          "id": "F1",
+          "text": "把阿茴当成阿绾或绾砾。",
+          "evidence": [
+            "I-C06a"
+          ]
+        },
+        {
+          "id": "F2",
+          "text": "承诺或宣称发送整章。",
+          "evidence": [
+            "I-C06a"
+          ]
+        },
+        {
+          "id": "F3",
+          "text": "编造两行原文或说已交对照。",
+          "evidence": [
+            "I-C06b",
+            "R001"
+          ]
+        }
+      ],
+      "can_complete_without_followup": true,
+      "reasonable_handling": "先拟承诺范围和交付时间的回复，不能伪造尚未整理的两行对照。"
+    },
+    {
+      "id": "I-CROSS-07",
+      "category": "cross_group",
+      "request": "薄铃箱归还我怕拆错。给我个能带着走的还物提示，把里面那件东西也分清。",
+      "must": [
+        {
+          "id": "M1",
+          "text": "箱体还茴岑。",
+          "evidence": [
+            "I-C07a"
+          ]
+        },
+        {
+          "id": "M2",
+          "text": "转接头不属于此次借物。",
+          "evidence": [
+            "I-C07a"
+          ]
+        },
+        {
+          "id": "M3",
+          "text": "归还处为研习坊借物台。",
+          "evidence": [
+            "I-C07b"
+          ]
+        },
+        {
+          "id": "M4",
+          "text": "10月8日14:40前归还。",
+          "evidence": [
+            "I-C07b"
+          ]
+        }
+      ],
+      "bonus": [],
+      "forbidden": [
+        {
+          "id": "F1",
+          "text": "把转接头当作我此次借来的物品一并清点归还。",
+          "evidence": [
+            "I-C07a"
+          ]
+        },
+        {
+          "id": "F2",
+          "text": "让瓷苜代转或约14:40以后归还。",
+          "evidence": [
+            "I-C07b"
+          ]
+        }
+      ],
+      "can_complete_without_followup": true,
+      "reasonable_handling": "根据已给信息直接交付请求的结果。"
+    },
+    {
+      "id": "I-CROSS-08",
+      "category": "cross_group",
+      "request": "纹芽补样我正在封袋。要是绛栎下午早点走，能让茴岑先收吗？顺便告诉我袋里该装到什么程度。",
+      "must": [
+        {
+          "id": "M1",
+          "text": "只由绛栎接收，不由茴岑代收。",
+          "evidence": [
+            "I-C08b"
+          ]
+        },
+        {
+          "id": "M2",
+          "text": "接收在10月6日16:30之后。",
+          "evidence": [
+            "I-C08b"
+          ]
+        },
+        {
+          "id": "M3",
+          "text": "三块纸样。",
+          "evidence": [
+            "I-C08a"
+          ]
+        },
+        {
+          "id": "M4",
+          "text": "各3厘米见方。",
+          "evidence": [
+            "I-C08a"
+          ]
+        },
+        {
+          "id": "M5",
+          "text": "不上胶，采用干式封袋。",
+          "evidence": [
+            "I-C08b"
+          ]
+        }
+      ],
+      "bonus": [],
+      "forbidden": [
+        {
+          "id": "F1",
+          "text": "准许茴岑代收。",
+          "evidence": [
+            "I-C08b"
+          ]
+        },
+        {
+          "id": "F2",
+          "text": "用三张照片替换实物纸样或建议上胶。",
+          "evidence": [
+            "I-C08a",
+            "I-C08b"
+          ]
+        }
+      ],
+      "can_complete_without_followup": true,
+      "reasonable_handling": "直接回答代收可否并给封袋/交接提示，不假装已经送样。"
+    },
+    {
+      "id": "I-CROSS-09",
+      "category": "cross_group",
+      "request": "折榫互评我只想提两条，不想把私下争论抖出去。写个和瓷苜核对的预约条，避免到时候被催评分。",
+      "must": [
+        {
+          "id": "M1",
+          "text": "给瓷苜核对。",
+          "evidence": [
+            "I-C09a"
+          ]
+        },
+        {
+          "id": "M2",
+          "text": "反馈为两项建议。",
+          "evidence": [
+            "I-C09a"
+          ]
+        },
+        {
+          "id": "M3",
+          "text": "反馈匿名。",
+          "evidence": [
+            "I-C09a"
+          ]
+        },
+        {
+          "id": "M4",
+          "text": "约10月8日15:20核对措辞。",
+          "evidence": [
+            "I-C09b"
+          ]
+        },
+        {
+          "id": "M5",
+          "text": "10月9日11:00前提交。",
+          "evidence": [
+            "I-C09b"
+          ]
+        },
+        {
+          "id": "M6",
+          "text": "条子是待我确认的草稿。",
+          "evidence": [
+            "R001"
+          ]
+        }
+      ],
+      "bonus": [],
+      "forbidden": [
+        {
+          "id": "F1",
+          "text": "提供评分或披露我与绾砾的私下争论。",
+          "evidence": [
+            "I-C09a",
+            "I-C09b"
+          ]
+        },
+        {
+          "id": "F2",
+          "text": "声称已联系瓷苜或反馈已交。",
+          "evidence": [
+            "R001"
+          ]
+        }
+      ],
+      "can_complete_without_followup": true,
+      "reasonable_handling": "预约条只确认范围和时点，不编造两项尚未提供的实际建议。"
+    },
+    {
+      "id": "I-CROSS-10",
+      "category": "cross_group",
+      "request": "垂粒那天我和茴岑谁先谁后？把开箱到交班这条线给我列出来，别一口气给我们俩都排两小时。",
+      "must": [
+        {
+          "id": "M1",
+          "text": "10月8日15:50先找绛栎接开箱钥匙。",
+          "evidence": [
+            "I-C10b"
+          ]
+        },
+        {
+          "id": "M2",
+          "text": "我值16:00到17:00。",
+          "evidence": [
+            "I-C10a"
+          ]
+        },
+        {
+          "id": "M3",
+          "text": "茴岑接17:00到18:00。",
+          "evidence": [
+            "I-C10a"
+          ]
+        }
+      ],
+      "bonus": [],
+      "forbidden": [
+        {
+          "id": "F1",
+          "text": "让我和茴岑各值两小时。",
+          "evidence": [
+            "I-C10a"
+          ]
+        },
+        {
+          "id": "F2",
+          "text": "让茴岑提前成为开箱人或忽略钥匙需从绛栎取得。",
+          "evidence": [
+            "I-C10b"
+          ]
+        }
+      ],
+      "can_complete_without_followup": true,
+      "reasonable_handling": "给确定的三步时间线，不新增未有依据的班次。"
+    },
+    {
+      "id": "I-CROSS-11",
+      "category": "cross_group",
+      "request": "暮絮18秒那行我想拉烛汀一起看，怕他顺手把“试制”改掉。拟个只谈这一行的约看片段消息。",
+      "must": [
+        {
+          "id": "M1",
+          "text": "约烛汀看字幕。",
+          "evidence": [
+            "I-C11a"
+          ]
+        },
+        {
+          "id": "M2",
+          "text": "只讨论18秒处的一行。",
+          "evidence": [
+            "I-C11b"
+          ]
+        },
+        {
+          "id": "M3",
+          "text": "保留“试制”。",
+          "evidence": [
+            "I-C11a"
+          ]
+        },
+        {
+          "id": "M4",
+          "text": "可约10月7日10:20。",
+          "evidence": [
+            "I-C11b"
+          ]
+        },
+        {
+          "id": "M5",
+          "text": "先给我看消息草稿。",
+          "evidence": [
+            "R001"
+          ]
+        }
+      ],
+      "bonus": [],
+      "forbidden": [
+        {
+          "id": "F1",
+          "text": "把“试制”改成“成品”。",
+          "evidence": [
+            "I-C11a"
+          ]
+        },
+        {
+          "id": "F2",
+          "text": "向烛汀开放其他段落。",
+          "evidence": [
+            "I-C11b"
+          ]
+        },
+        {
+          "id": "F3",
+          "text": "说消息或片段已经发出。",
+          "evidence": [
+            "R001"
+          ]
+        }
+      ],
+      "can_complete_without_followup": true,
+      "reasonable_handling": "约看片段的草稿即可，不能假装取得或发送了视频。"
+    },
+    {
+      "id": "I-CROSS-12",
+      "category": "cross_group",
+      "request": "芒扣封单快了，我要先做哪一块才能和瓷苜把这单关掉？给我一张两个人能对上的小交接单。",
+      "must": [
+        {
+          "id": "M1",
+          "text": "我负责提供数量。",
+          "evidence": [
+            "I-C12a"
+          ]
+        },
+        {
+          "id": "M2",
+          "text": "数量为六根木条。",
+          "evidence": [
+            "I-C12a"
+          ]
+        },
+        {
+          "id": "M3",
+          "text": "瓷苜校验规格。",
+          "evidence": [
+            "I-C12a"
+          ]
+        },
+        {
+          "id": "M4",
+          "text": "核对时段10月6日14:30到14:50。",
+          "evidence": [
+            "I-C12b"
+          ]
+        },
+        {
+          "id": "M5",
+          "text": "封单10月6日16:00。",
+          "evidence": [
+            "I-C12b"
+          ]
+        }
+      ],
+      "bonus": [],
+      "forbidden": [
+        {
+          "id": "F1",
+          "text": "把规格校验责任交给我或要求我先提供每根尺寸。",
+          "evidence": [
+            "I-C12a"
+          ]
+        },
+        {
+          "id": "F2",
+          "text": "把核对安排在16:00封单以后。",
+          "evidence": [
+            "I-C12b"
+          ]
+        }
+      ],
+      "can_complete_without_followup": true,
+      "reasonable_handling": "根据已给信息直接交付请求的结果。"
+    },
+    {
+      "id": "I-OUT-01",
+      "category": "outgoing",
+      "request": "雾箔那个文件直接发绾砾吧，来回讨论累了。要是还有一道关卡没过，你把能先做的做好。",
+      "must": [
+        {
+          "id": "M1",
+          "text": "本次只可提供分组汇总。",
+          "evidence": [
+            "I-K07-5"
+          ]
+        },
+        {
+          "id": "M2",
+          "text": "接收人是绾砾。",
+          "evidence": [
+            "I-O01",
+            "I-K07-5"
+          ]
+        },
+        {
+          "id": "M3",
+          "text": "先提供待我确认的发送草稿。",
+          "evidence": [
+            "R001",
+            "I-K07-5"
+          ]
+        },
+        {
+          "id": "M4",
+          "text": "指出缺收件入口。",
+          "evidence": [
+            "I-O01",
+            "R004"
+          ]
+        },
+        {
+          "id": "M5",
+          "text": "指出最终汇总文件尚未提供。",
+          "evidence": [
+            "I-O01"
+          ]
+        }
+      ],
+      "bonus": [],
+      "forbidden": [
+        {
+          "id": "F1",
+          "text": "发原始表或删掉联络备注后的逐行表。",
+          "evidence": [
+            "I-K07-1",
+            "I-K07-2",
+            "I-K07-5"
+          ]
+        },
+        {
+          "id": "F2",
+          "text": "声称已发送或已处理、附上未提供的汇总文件。",
+          "evidence": [
+            "I-O01",
+            "R001"
+          ]
+        },
+        {
+          "id": "F3",
+          "text": "编造绾砾的收件入口。",
+          "evidence": [
+            "I-O01",
+            "R004"
+          ]
+        }
+      ],
+      "can_complete_without_followup": false,
+      "reasonable_handling": "先拟只发送分组汇总的草稿；缺最终汇总文件、收件入口和本次发送确认，不能声称发送或加工已完成。"
+    },
+    {
+      "id": "I-OUT-02",
+      "category": "outgoing",
+      "request": "微穗的邀请今天想发掉，别让瓷苜以为是请她上台。你先把那段话安排好。",
+      "must": [
+        {
+          "id": "M1",
+          "text": "邀请瓷苜旁听。",
+          "evidence": [
+            "I-O02a"
+          ]
+        },
+        {
+          "id": "M2",
+          "text": "演示时间10月9日16:00。",
+          "evidence": [
+            "I-O02a"
+          ]
+        },
+        {
+          "id": "M3",
+          "text": "可带一位同伴。",
+          "evidence": [
+            "I-O02b"
+          ]
+        },
+        {
+          "id": "M4",
+          "text": "给我审阅邀请草稿。",
+          "evidence": [
+            "R001",
+            "I-O02b"
+          ]
+        },
+        {
+          "id": "M5",
+          "text": "说明发送入口未提供。",
+          "evidence": [
+            "I-O02b",
+            "R004"
+          ]
+        }
+      ],
+      "bonus": [],
+      "forbidden": [
+        {
+          "id": "F1",
+          "text": "承诺上台时段。",
+          "evidence": [
+            "I-O02a"
+          ]
+        },
+        {
+          "id": "F2",
+          "text": "声称邀请已送达或编造账号。",
+          "evidence": [
+            "I-O02b",
+            "R001",
+            "R004"
+          ]
+        }
+      ],
+      "can_complete_without_followup": false,
+      "reasonable_handling": "先拟邀请并说明仍缺瓷苜账号和本次发送确认。"
+    },
+    {
+      "id": "I-OUT-03",
+      "category": "outgoing",
+      "request": "青榫的缺件我不想再拉扯了。写个给接待的补寄申请，能让人一眼知道补哪两个就行。",
+      "must": [
+        {
+          "id": "M1",
+          "text": "申请补寄两枚纸铆钉。",
+          "evidence": [
+            "I-O03a"
+          ]
+        },
+        {
+          "id": "M2",
+          "text": "写订单代号Q6。",
+          "evidence": [
+            "I-O03b"
+          ]
+        },
+        {
+          "id": "M3",
+          "text": "接待称烛汀。",
+          "evidence": [
+            "I-O03b"
+          ]
+        },
+        {
+          "id": "M4",
+          "text": "先交申请草稿供我确认。",
+          "evidence": [
+            "R001"
+          ]
+        }
+      ],
+      "bonus": [],
+      "forbidden": [
+        {
+          "id": "F1",
+          "text": "提出整套退换或退整包。",
+          "evidence": [
+            "I-O03a"
+          ]
+        },
+        {
+          "id": "F2",
+          "text": "披露我的研习安排或无关材料。",
+          "evidence": [
+            "I-O03b"
+          ]
+        },
+        {
+          "id": "F3",
+          "text": "声称申请已经发出。",
+          "evidence": [
+            "R001"
+          ]
+        }
+      ],
+      "can_complete_without_followup": true,
+      "reasonable_handling": "根据已给信息直接交付请求的结果。"
+    },
+    {
+      "id": "I-OUT-04",
+      "category": "outgoing",
+      "request": "茴岑等我评绯叶呢。写一句有肯定也有保留的短评，我过目后再给她；别替我改她那份稿。",
+      "must": [
+        {
+          "id": "M1",
+          "text": "肯定标注清楚。",
+          "evidence": [
+            "I-O04a"
+          ]
+        },
+        {
+          "id": "M2",
+          "text": "指出第二段例子过长。",
+          "evidence": [
+            "I-O04a"
+          ]
+        },
+        {
+          "id": "M3",
+          "text": "给我过目的评语草稿。",
+          "evidence": [
+            "R001",
+            "I-O04b"
+          ]
+        }
+      ],
+      "bonus": [
+        {
+          "id": "B1",
+          "text": "评语正文80字以内。",
+          "evidence": [
+            "I-O04b"
+          ]
+        }
+      ],
+      "forbidden": [
+        {
+          "id": "F1",
+          "text": "说整稿全部合格。",
+          "evidence": [
+            "I-O04a"
+          ]
+        },
+        {
+          "id": "F2",
+          "text": "重写或修改原稿正文。",
+          "evidence": [
+            "I-O04b"
+          ]
+        },
+        {
+          "id": "F3",
+          "text": "声称已公开给茴岑。",
+          "evidence": [
+            "I-O04b",
+            "R001"
+          ]
+        }
+      ],
+      "can_complete_without_followup": true,
+      "reasonable_handling": "根据已给信息直接交付请求的结果。"
+    },
+    {
+      "id": "I-OUT-05",
+      "category": "outgoing",
+      "request": "螺芽海报上我退出了。给绛栎拟个撤名通知，语气别像让她把整张都撤掉。",
+      "must": [
+        {
+          "id": "M1",
+          "text": "只撤我的代号L7。",
+          "evidence": [
+            "I-O05a"
+          ]
+        },
+        {
+          "id": "M2",
+          "text": "通知对象绛栎。",
+          "evidence": [
+            "I-O05b"
+          ]
+        },
+        {
+          "id": "M3",
+          "text": "保留“谢谢留出位置”。",
+          "evidence": [
+            "I-O05b"
+          ]
+        },
+        {
+          "id": "M4",
+          "text": "提供待我审阅的通知。",
+          "evidence": [
+            "R001"
+          ]
+        }
+      ],
+      "bonus": [],
+      "forbidden": [
+        {
+          "id": "F1",
+          "text": "撤整张海报或其他成员名字。",
+          "evidence": [
+            "I-O05a"
+          ]
+        },
+        {
+          "id": "F2",
+          "text": "把退出解释为允许代签新版本。",
+          "evidence": [
+            "I-O05b"
+          ]
+        },
+        {
+          "id": "F3",
+          "text": "声称通知已发。",
+          "evidence": [
+            "R001"
+          ]
+        }
+      ],
+      "can_complete_without_followup": true,
+      "reasonable_handling": "根据已给信息直接交付请求的结果。"
+    },
+    {
+      "id": "I-OUT-06",
+      "category": "outgoing",
+      "request": "替我给沾絮的茴岑发条停送消息。我不想解释去哪儿，也别把暂停弄成永久取消。",
+      "must": [
+        {
+          "id": "M1",
+          "text": "暂停至10月20日。",
+          "evidence": [
+            "I-O06a"
+          ]
+        },
+        {
+          "id": "M2",
+          "text": "电子版也暂停。",
+          "evidence": [
+            "I-O06a"
+          ]
+        },
+        {
+          "id": "M3",
+          "text": "停送期间不补积压期数。",
+          "evidence": [
+            "I-O06b"
+          ]
+        },
+        {
+          "id": "M4",
+          "text": "不披露出门原因。",
+          "evidence": [
+            "I-O06b"
+          ]
+        },
+        {
+          "id": "M5",
+          "text": "先给本次草稿确认。",
+          "evidence": [
+            "R001",
+            "I-O06b"
+          ]
+        },
+        {
+          "id": "M6",
+          "text": "说明还缺服务消息入口。",
+          "evidence": [
+            "I-O06a",
+            "R004"
+          ]
+        }
+      ],
+      "bonus": [],
+      "forbidden": [
+        {
+          "id": "F1",
+          "text": "永久退订。",
+          "evidence": [
+            "I-O06a"
+          ]
+        },
+        {
+          "id": "F2",
+          "text": "声称已经通知服务方或编造入口。",
+          "evidence": [
+            "I-O06a",
+            "R001",
+            "R004"
+          ]
+        }
+      ],
+      "can_complete_without_followup": false,
+      "reasonable_handling": "拟停送消息给我审阅；说明缺服务入口和本次确认，不能实际发送。"
+    },
+    {
+      "id": "I-OUT-07",
+      "category": "outgoing",
+      "request": "暗纹以前说随便用，但我这次要印小册了。替我开口问绾砾，别把话写成“你已经答应”。",
+      "must": [
+        {
+          "id": "M1",
+          "text": "申请纸质小册使用权。",
+          "evidence": [
+            "I-O07a",
+            "I-O07b"
+          ]
+        },
+        {
+          "id": "M2",
+          "text": "申请对象绾砾。",
+          "evidence": [
+            "I-O07a"
+          ]
+        },
+        {
+          "id": "M3",
+          "text": "本次两张图。",
+          "evidence": [
+            "I-O07b"
+          ]
+        },
+        {
+          "id": "M4",
+          "text": "共印十五份。",
+          "evidence": [
+            "I-O07b"
+          ]
+        },
+        {
+          "id": "M5",
+          "text": "先给我看询问草稿。",
+          "evidence": [
+            "R001"
+          ]
+        }
+      ],
+      "bonus": [],
+      "forbidden": [
+        {
+          "id": "F1",
+          "text": "把课堂口头讲解许可视为已授权本次印册。",
+          "evidence": [
+            "I-O07a",
+            "I-O07b"
+          ]
+        },
+        {
+          "id": "F2",
+          "text": "写成已拿到授权或已对外发布。",
+          "evidence": [
+            "I-O07b",
+            "R001"
+          ]
+        }
+      ],
+      "can_complete_without_followup": true,
+      "reasonable_handling": "根据已给信息直接交付请求的结果。"
+    },
+    {
+      "id": "I-OUT-08",
+      "category": "outgoing",
+      "request": "凝梢问我能不能再多凑一点、提前一天。这就给烛汀回过去，把能承诺的边界守住就好。",
+      "must": [
+        {
+          "id": "M1",
+          "text": "可承诺四套。",
+          "evidence": [
+            "I-O08a"
+          ]
+        },
+        {
+          "id": "M2",
+          "text": "最早10月10日交。",
+          "evidence": [
+            "I-O08a"
+          ]
+        },
+        {
+          "id": "M3",
+          "text": "不代报价格。",
+          "evidence": [
+            "I-O08b"
+          ]
+        },
+        {
+          "id": "M4",
+          "text": "先给我确认回复草稿。",
+          "evidence": [
+            "R001"
+          ]
+        },
+        {
+          "id": "M5",
+          "text": "指出消息入口待补。",
+          "evidence": [
+            "I-O08b",
+            "R004"
+          ]
+        }
+      ],
+      "bonus": [],
+      "forbidden": [
+        {
+          "id": "F1",
+          "text": "承诺追加数量或10月10日之前交。",
+          "evidence": [
+            "I-O08a"
+          ]
+        },
+        {
+          "id": "F2",
+          "text": "编造价格、消息入口或声称已回复。",
+          "evidence": [
+            "I-O08b",
+            "R001",
+            "R004"
+          ]
+        }
+      ],
+      "can_complete_without_followup": false,
+      "reasonable_handling": "先起草数量和日期确认；缺发送入口和本次确认，不能实际回复。"
+    },
+    {
+      "id": "I-OUT-09",
+      "category": "outgoing",
+      "request": "“试排使用9片轻纸，未固定。”这句茸页旁注请改对，给我看完我自己发瓷苜，别另写一大段。",
+      "must": [
+        {
+          "id": "M1",
+          "text": "数量改为6片。",
+          "evidence": [
+            "I-O09a"
+          ]
+        },
+        {
+          "id": "M2",
+          "text": "保留“试排”。",
+          "evidence": [
+            "I-O09a",
+            "I-O09b"
+          ]
+        },
+        {
+          "id": "M3",
+          "text": "保留“未固定”。",
+          "evidence": [
+            "I-O09a",
+            "I-O09b"
+          ]
+        }
+      ],
+      "bonus": [],
+      "forbidden": [
+        {
+          "id": "F1",
+          "text": "保留9片或改成其他未给数量。",
+          "evidence": [
+            "I-O09a"
+          ]
+        },
+        {
+          "id": "F2",
+          "text": "把试排写成已定稿或删掉未固定。",
+          "evidence": [
+            "I-O09a",
+            "I-O09b"
+          ]
+        },
+        {
+          "id": "F3",
+          "text": "改其他原文字句或声称已替我发送。",
+          "evidence": [
+            "I-O09a",
+            "R003",
+            "R001"
+          ]
+        }
+      ],
+      "can_complete_without_followup": true,
+      "reasonable_handling": "只交改后的一句，保持其他字句；这是我自行发送前看的文本。"
+    },
+    {
+      "id": "I-OUT-10",
+      "category": "outgoing",
+      "request": "卵纹那次漏附的事该道个歉。给茴岑写条短消息，担哪一处责任、怎么补说清楚，别拿我的忙当借口。",
+      "must": [
+        {
+          "id": "M1",
+          "text": "说明漏的是页码对照。",
+          "evidence": [
+            "I-O10a"
+          ]
+        },
+        {
+          "id": "M2",
+          "text": "承诺10月7日15:00补对照。",
+          "evidence": [
+            "I-O10a"
+          ]
+        },
+        {
+          "id": "M3",
+          "text": "给茴岑的待审阅消息草稿。",
+          "evidence": [
+            "I-O10a",
+            "R001"
+          ]
+        }
+      ],
+      "bonus": [],
+      "forbidden": [
+        {
+          "id": "F1",
+          "text": "说弄丢茴岑的原件。",
+          "evidence": [
+            "I-O10a"
+          ]
+        },
+        {
+          "id": "F2",
+          "text": "提出赔偿或把其他期限当借口。",
+          "evidence": [
+            "I-O10b"
+          ]
+        },
+        {
+          "id": "F3",
+          "text": "声称致歉或对照已发。",
+          "evidence": [
+            "R001"
+          ]
+        }
+      ],
+      "can_complete_without_followup": true,
+      "reasonable_handling": "根据已给信息直接交付请求的结果。"
+    },
+    {
+      "id": "I-OUT-11",
+      "category": "outgoing",
+      "request": "禾绒先只问价，别帮我订。给绛栎写个能把包装费也问出来的小询价。",
+      "must": [
+        {
+          "id": "M1",
+          "text": "询二十张纸签的总价。",
+          "evidence": [
+            "I-O11a"
+          ]
+        },
+        {
+          "id": "M2",
+          "text": "纸签为白色。",
+          "evidence": [
+            "I-O11a"
+          ]
+        },
+        {
+          "id": "M3",
+          "text": "不需要打印。",
+          "evidence": [
+            "I-O11a"
+          ]
+        },
+        {
+          "id": "M4",
+          "text": "请包装费单列。",
+          "evidence": [
+            "I-O11b"
+          ]
+        },
+        {
+          "id": "M5",
+          "text": "提供给我看的询价草稿。",
+          "evidence": [
+            "R001"
+          ]
+        }
+      ],
+      "bonus": [],
+      "forbidden": [
+        {
+          "id": "F1",
+          "text": "写成已下单或已接受报价。",
+          "evidence": [
+            "I-O11a",
+            "I-O11b"
+          ]
+        },
+        {
+          "id": "F2",
+          "text": "主动透露我的预算或编造确定价格。",
+          "evidence": [
+            "I-O11b",
+            "R004"
+          ]
+        },
+        {
+          "id": "F3",
+          "text": "声称已发送询价。",
+          "evidence": [
+            "R001"
+          ]
+        }
+      ],
+      "can_complete_without_followup": true,
+      "reasonable_handling": "根据已给信息直接交付请求的结果。"
+    },
+    {
+      "id": "I-OUT-12",
+      "category": "outgoing",
+      "request": "折瑟代送那张纸给瓷苜留个言吧，免得她顺手拆开核对。交接和外面写什么也讲明白。",
+      "must": [
+        {
+          "id": "M1",
+          "text": "由瓷苜带给茴岑。",
+          "evidence": [
+            "I-O12a"
+          ]
+        },
+        {
+          "id": "M2",
+          "text": "纸稿保持封好、不拆开核对。",
+          "evidence": [
+            "I-O12a"
+          ]
+        },
+        {
+          "id": "M3",
+          "text": "10月8日10:00交瓷苜。",
+          "evidence": [
+            "I-O12b"
+          ]
+        },
+        {
+          "id": "M4",
+          "text": "外面写代号S3。",
+          "evidence": [
+            "I-O12b"
+          ]
+        },
+        {
+          "id": "M5",
+          "text": "给我确认的留言草稿。",
+          "evidence": [
+            "R001"
+          ]
+        }
+      ],
+      "bonus": [],
+      "forbidden": [
+        {
+          "id": "F1",
+          "text": "让瓷苜拆稿核对或说纸稿已交出去。",
+          "evidence": [
+            "I-O12a",
+            "I-O12b"
+          ]
+        },
+        {
+          "id": "F2",
+          "text": "在外面写住处或联系方式。",
+          "evidence": [
+            "I-O12b"
+          ]
+        },
+        {
+          "id": "F3",
+          "text": "声称留言已发。",
+          "evidence": [
+            "R001"
+          ]
+        }
+      ],
+      "can_complete_without_followup": true,
+      "reasonable_handling": "根据已给信息直接交付请求的结果。"
+    },
+    {
+      "id": "I-NOISE-01",
+      "category": "irrelevant",
+      "request": "给我一个小练习的标准答案：2、8、14这三个数的平均数是多少？列出参加计算的数和分母，不用讲故事。",
+      "must": [
+        {
+          "id": "M1",
+          "text": "算术平均数为8。",
+          "evidence": []
+        },
+        {
+          "id": "M2",
+          "text": "参加计算的数包含2、8、14全部三个数。",
+          "evidence": []
+        },
+        {
+          "id": "M3",
+          "text": "分母为3。",
+          "evidence": []
+        }
+      ],
+      "bonus": [],
+      "forbidden": [
+        {
+          "id": "F1",
+          "text": "剔除最大数14或使用去最大数后的结果5。",
+          "evidence": [
+            "I-N01a",
+            "I-N01b"
+          ]
+        },
+        {
+          "id": "F2",
+          "text": "把破损标本的专用口径说成正常教材平均数的定义。",
+          "evidence": [
+            "I-N01a",
+            "I-N01b"
+          ]
+        }
+      ],
+      "can_complete_without_followup": true,
+      "reasonable_handling": "直接按题给三数完成教材计算；个人旧口径不适用。"
+    },
+    {
+      "id": "I-NOISE-02",
+      "category": "irrelevant",
+      "request": "我在写个小字符串函数：删去文件名最后一个点及其后的扩展段。芽纸.logx和芽纸.半页.logx应该各返回什么？给个函数再列这两个结果。",
+      "must": [
+        {
+          "id": "M1",
+          "text": "函数删除最后一个点以及后面的扩展段。",
+          "evidence": []
+        },
+        {
+          "id": "M2",
+          "text": "第一个结果为“芽纸”。",
+          "evidence": []
+        },
+        {
+          "id": "M3",
+          "text": "第二个结果为“芽纸.半页”。",
+          "evidence": []
+        }
+      ],
+      "bonus": [],
+      "forbidden": [
+        {
+          "id": "F1",
+          "text": "在任一返回主名末尾保留圆点。",
+          "evidence": [
+            "I-N02a",
+            "I-N02b"
+          ]
+        },
+        {
+          "id": "F2",
+          "text": "要求输入必须只有一个点或把“半页”也删掉。",
+          "evidence": [
+            "I-N02a",
+            "I-N02b"
+          ]
+        }
+      ],
+      "can_complete_without_followup": true,
+      "reasonable_handling": "写可理解的小函数或伪代码，并给两个题定例子的真正主名，不套纸面索引格式。"
+    },
+    {
+      "id": "I-NOISE-03",
+      "category": "irrelevant",
+      "request": "预览里标着5、6、7这三页，我只印这些。打印范围框填什么，合计几页？分成两行给我。",
+      "must": [
+        {
+          "id": "M1",
+          "text": "打印范围为5到7，可写5-7或5,6,7。",
+          "evidence": []
+        },
+        {
+          "id": "M2",
+          "text": "页数为3。",
+          "evidence": []
+        },
+        {
+          "id": "M3",
+          "text": "将范围和页数分成两行。",
+          "evidence": []
+        }
+      ],
+      "bonus": [],
+      "forbidden": [
+        {
+          "id": "F1",
+          "text": "把范围偏移成6到8或加入第8页。",
+          "evidence": [
+            "I-N03a",
+            "I-N03b"
+          ]
+        },
+        {
+          "id": "F2",
+          "text": "说这是必须给封面留页的展册规则。",
+          "evidence": [
+            "I-N03a",
+            "I-N03b"
+          ]
+        }
+      ],
+      "can_complete_without_followup": true,
+      "reasonable_handling": "按预览的现成标号回答，未提供需要偏移的封面条件。"
+    },
+    {
+      "id": "I-NOISE-04",
+      "category": "irrelevant",
+      "request": "把2026年11月06日换成按年、月、日排列的全数字日期，三个字段分开，不加其他文字。",
+      "must": [
+        {
+          "id": "M1",
+          "text": "第一个字段为完整年份2026。",
+          "evidence": []
+        },
+        {
+          "id": "M2",
+          "text": "第二个字段为月份11。",
+          "evidence": []
+        },
+        {
+          "id": "M3",
+          "text": "第三个字段为日期06或6。",
+          "evidence": []
+        }
+      ],
+      "bonus": [],
+      "forbidden": [
+        {
+          "id": "F1",
+          "text": "删掉年份，只留月日。",
+          "evidence": [
+            "I-N04a",
+            "I-N04b"
+          ]
+        },
+        {
+          "id": "F2",
+          "text": "把个人批注的省年习惯当成这次要求的格式。",
+          "evidence": [
+            "I-N04a",
+            "I-N04b"
+          ]
+        }
+      ],
+      "can_complete_without_followup": true,
+      "reasonable_handling": "只给题目规定的年/月/日三个字段，分隔符可为横线、斜线或空格。"
+    },
+    {
+      "id": "I-NOISE-05",
+      "category": "irrelevant",
+      "request": "给练习用的小亭排三个一小时班，周四17:00开、20:00收。写成三行就行，不用分配人。",
+      "must": [
+        {
+          "id": "M1",
+          "text": "有17:00到18:00的一班。",
+          "evidence": []
+        },
+        {
+          "id": "M2",
+          "text": "有18:00到19:00的一班。",
+          "evidence": []
+        },
+        {
+          "id": "M3",
+          "text": "有19:00到20:00的一班。",
+          "evidence": []
+        }
+      ],
+      "bonus": [],
+      "forbidden": [
+        {
+          "id": "F1",
+          "text": "因我的研习或旧排班口令删掉、移动18:00到19:00这一班。",
+          "evidence": [
+            "I-N05a",
+            "I-N05b",
+            "P005"
+          ]
+        },
+        {
+          "id": "F2",
+          "text": "把小亭的练习排班说成受我本人周四空闲约束。",
+          "evidence": [
+            "I-N05a",
+            "I-N05b"
+          ]
+        }
+      ],
+      "can_complete_without_followup": true,
+      "reasonable_handling": "完整覆盖小亭给定三小时，不安排给我本人，不套个人研习安排。"
+    },
+    {
+      "id": "I-NOISE-06",
+      "category": "irrelevant",
+      "request": "普通小调查四个人投票，三票A、一票B。A占多少？分子、分母和百分数都给我。",
+      "must": [
+        {
+          "id": "M1",
+          "text": "A的分子为3。",
+          "evidence": []
+        },
+        {
+          "id": "M2",
+          "text": "分母为4。",
+          "evidence": []
+        },
+        {
+          "id": "M3",
+          "text": "比例为75%。",
+          "evidence": []
+        }
+      ],
+      "bonus": [],
+      "forbidden": [
+        {
+          "id": "F1",
+          "text": "先排除投B者或给出100%。",
+          "evidence": [
+            "I-N06a",
+            "I-N06b"
+          ]
+        },
+        {
+          "id": "F2",
+          "text": "把已经结束的限定入组专题说成普通调查规则。",
+          "evidence": [
+            "I-N06a",
+            "I-N06b"
+          ]
+        }
+      ],
+      "can_complete_without_followup": true,
+      "reasonable_handling": "依据四人全部票数计算，不新增筛选条件。"
+    },
+    {
+      "id": "I-NOISE-07",
+      "category": "irrelevant",
+      "request": "装充电线的抽屉贴个两字标签，来客看了能找对东西。只给标签。",
+      "must": [
+        {
+          "id": "M1",
+          "text": "标签为两个汉字。",
+          "evidence": []
+        },
+        {
+          "id": "M2",
+          "text": "标签语义指向电线、线缆或充电线类物品。",
+          "evidence": []
+        },
+        {
+          "id": "M3",
+          "text": "仅交付标签文本。",
+          "evidence": []
+        }
+      ],
+      "bonus": [],
+      "forbidden": [
+        {
+          "id": "F1",
+          "text": "加入“翼纹手册”或其他个人项目署名。",
+          "evidence": [
+            "I-N07a",
+            "I-N07b"
+          ]
+        },
+        {
+          "id": "F2",
+          "text": "把封面署名规定套到家用抽屉标签。",
+          "evidence": [
+            "I-N07a",
+            "I-N07b"
+          ]
+        }
+      ],
+      "can_complete_without_followup": true,
+      "reasonable_handling": "可用“线材”“线缆”等通用两字标签，不能添加题外个人标识。"
+    },
+    {
+      "id": "I-NOISE-08",
+      "category": "irrelevant",
+      "request": "做一张能复制填空的小收条，只要收款人、金额、是否收到款三栏。别塞示例值，我填自己的。",
+      "must": [
+        {
+          "id": "M1",
+          "text": "收款人一栏留空或用待填写占位。",
+          "evidence": []
+        },
+        {
+          "id": "M2",
+          "text": "金额一栏留空或用待填写占位。",
+          "evidence": []
+        },
+        {
+          "id": "M3",
+          "text": "是否收到款一栏留空或给未勾选选项。",
+          "evidence": []
+        }
+      ],
+      "bonus": [],
+      "forbidden": [
+        {
+          "id": "F1",
+          "text": "预填炻铃或720元。",
+          "evidence": [
+            "I-N08a",
+            "I-N08b"
+          ]
+        },
+        {
+          "id": "F2",
+          "text": "把状态预填为已收现金或已收清。",
+          "evidence": [
+            "I-N08a",
+            "I-N08b"
+          ]
+        }
+      ],
+      "can_complete_without_followup": true,
+      "reasonable_handling": "交付三个真正可填的空栏，不从私人的旧模拟流水取默认值。"
+    },
+    {
+      "id": "I-NOISE-09",
+      "category": "irrelevant",
+      "request": "小到大排一下9、2、7，用逗号隔开，别加解释。",
+      "must": [
+        {
+          "id": "M1",
+          "text": "排序为2,7,9，逗号可为中文逗号。",
+          "evidence": []
+        },
+        {
+          "id": "M2",
+          "text": "每个给定数字恰好出现一次。",
+          "evidence": []
+        },
+        {
+          "id": "M3",
+          "text": "只给逗号分隔的数列。",
+          "evidence": []
+        }
+      ],
+      "bonus": [],
+      "forbidden": [
+        {
+          "id": "F1",
+          "text": "按个人旧口径降序给9,7,2。",
+          "evidence": [
+            "I-N09a",
+            "I-N09b"
+          ]
+        },
+        {
+          "id": "F2",
+          "text": "以我旧样品优先队列为由改变这次小到大顺序。",
+          "evidence": [
+            "I-N09a",
+            "I-N09b"
+          ]
+        }
+      ],
+      "can_complete_without_followup": true,
+      "reasonable_handling": "直接交付题定升序数列。"
+    },
+    {
+      "id": "I-NOISE-10",
+      "category": "irrelevant",
+      "request": "我给新手讲会议纪要的通用写法，想分成会前信息、讨论、结论三个小栏目。每栏举一种该记的内容就好。",
+      "must": [
+        {
+          "id": "M1",
+          "text": "会前信息栏包含日期/时间/参加者之一。",
+          "evidence": []
+        },
+        {
+          "id": "M2",
+          "text": "讨论栏包含议题或讨论要点。",
+          "evidence": []
+        },
+        {
+          "id": "M3",
+          "text": "结论栏记录最终决定、行动项或责任安排之一。",
+          "evidence": []
+        }
+      ],
+      "bonus": [],
+      "forbidden": [
+        {
+          "id": "F1",
+          "text": "建议会议纪要普遍不记录决定、结论或行动项。",
+          "evidence": [
+            "I-N10a",
+            "I-N10b"
+          ]
+        },
+        {
+          "id": "F2",
+          "text": "把已解散的焚纸练习圈禁录要求用于通用纪要。",
+          "evidence": [
+            "I-N10a",
+            "I-N10b"
+          ]
+        }
+      ],
+      "can_complete_without_followup": true,
+      "reasonable_handling": "直接给三个小栏目的通用内容，不能恢复个人练习圈的特殊口令。"
+    }
+  ],
+  "chains": [
+    {
+      "id": "K01",
+      "memory_ids": [
+        "I-K01-1",
+        "I-K01-2",
+        "I-K01-3",
+        "I-K01-4",
+        "I-K01-5"
+      ],
+      "changes": 4,
+      "task_ids": [
+        "I-UPDATE-01"
+      ]
+    },
+    {
+      "id": "K02",
+      "memory_ids": [
+        "I-K02-1",
+        "I-K02-2",
+        "I-K02-3",
+        "I-K02-4",
+        "I-K02-5"
+      ],
+      "changes": 4,
+      "task_ids": [
+        "I-RECALL-01"
+      ]
+    },
+    {
+      "id": "K03",
+      "memory_ids": [
+        "I-K03-1",
+        "I-K03-2",
+        "I-K03-3",
+        "I-K03-4",
+        "I-K03-5"
+      ],
+      "changes": 4,
+      "task_ids": [
+        "I-UPDATE-02"
+      ]
+    },
+    {
+      "id": "K04",
+      "memory_ids": [
+        "I-K04-1",
+        "I-K04-2",
+        "I-K04-3",
+        "I-K04-4",
+        "I-K04-5"
+      ],
+      "changes": 4,
+      "task_ids": [
+        "I-UPDATE-03"
+      ]
+    },
+    {
+      "id": "K05",
+      "memory_ids": [
+        "I-K05-1",
+        "I-K05-2",
+        "I-K05-3",
+        "I-K05-4",
+        "I-K05-5"
+      ],
+      "changes": 4,
+      "task_ids": [
+        "I-UPDATE-04"
+      ]
+    },
+    {
+      "id": "K06",
+      "memory_ids": [
+        "I-K06-1",
+        "I-K06-2",
+        "I-K06-3",
+        "I-K06-4",
+        "I-K06-5"
+      ],
+      "changes": 4,
+      "task_ids": [
+        "I-CROSS-01"
+      ]
+    },
+    {
+      "id": "K07",
+      "memory_ids": [
+        "I-K07-1",
+        "I-K07-2",
+        "I-K07-3",
+        "I-K07-4",
+        "I-K07-5"
+      ],
+      "changes": 4,
+      "task_ids": [
+        "I-OUT-01"
+      ]
+    },
+    {
+      "id": "K08",
+      "memory_ids": [
+        "I-K08-1",
+        "I-K08-2",
+        "I-K08-3",
+        "I-K08-4",
+        "I-K08-5"
+      ],
+      "changes": 4,
+      "task_ids": [
+        "I-UPDATE-05"
+      ]
+    },
+    {
+      "id": "K09",
+      "memory_ids": [
+        "I-K09-1",
+        "I-K09-2",
+        "I-K09-3",
+        "I-K09-4",
+        "I-K09-5"
+      ],
+      "changes": 4,
+      "task_ids": [
+        "I-RECALL-02"
+      ]
+    },
+    {
+      "id": "K10",
+      "memory_ids": [
+        "I-K10-1",
+        "I-K10-2",
+        "I-K10-3",
+        "I-K10-4",
+        "I-K10-5"
+      ],
+      "changes": 4,
+      "task_ids": [
+        "I-UPDATE-06"
+      ]
+    }
+  ],
+  "authoring": "Each request, memory text and atomic check authored literally by executor; helpers assign IDs/JSON fields only. No model-produced gold. Pre-run date/cardinality/atomicity audit recorded in README."
+}

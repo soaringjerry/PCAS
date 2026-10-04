@@ -73,6 +73,9 @@ func envFloat(key string) (float64, error) {
 	return n, nil
 }
 func run() error {
+	if args, ok := doingFreezeArgs(os.Args[1:]); ok {
+		return runDoingFreeze(args)
+	}
 	if args, ok := doingProposeArgs(os.Args[1:]); ok {
 		return runDoingPropose(args)
 	}

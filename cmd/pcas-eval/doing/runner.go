@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -91,7 +92,42 @@ type Range struct {
 	// Descriptive repeatability floor, not a significance test.
 	IndifferencePP float64 `json:"indifference_percentage_points"`
 }
+type Failure struct {
+	Run        int    `json:"run"`
+	Task       string `json:"task"`
+	Method     string `json:"method"`
+	Error      string `json:"error"`
+	ModelCalls int    `json:"model_calls_attempted"`
+}
+
+func modelErrorType(err error) string {
+	if errors.Is(err, context.DeadlineExceeded) {
+		return "timeout"
+	}
+	if errors.Is(err, context.Canceled) {
+		return "canceled"
+	}
+	value := err.Error()
+	if strings.Contains(value, "sign-in") {
+		return "authentication"
+	}
+	if strings.Contains(value, "429") {
+		return "rate_limit"
+	}
+	if strings.Contains(value, "connection closed") {
+		return "bridge_closed"
+	}
+	if strings.Contains(value, "buffer exceeded") {
+		return "bridge_overflow"
+	}
+	if strings.Contains(value, "turn did not complete") {
+		return "remote_turn_incomplete"
+	}
+	return "model_error"
+}
+
 type Report struct {
+	Failures        []Failure `json:"failures,omitempty"`
 	Version         int       `json:"schema_version"`
 	Revision        string    `json:"revision"`
 	SuiteSHA        string    `json:"suite_sha256"`
@@ -230,6 +266,7 @@ func Execute(ctx context.Context, s Suite, model Model, providers []Provider, r 
 	if workers < 1 || workers > 8 {
 		return r, fmt.Errorf("workers must be 1..8")
 	}
+	var firstErr error
 	for run := 1; run <= r.Repeats; run++ {
 		type job struct {
 			task     Task
@@ -256,7 +293,7 @@ func Execute(ctx context.Context, s Suite, model Model, providers []Provider, r 
 				defer wg.Done()
 				for j := range jobs {
 					if callctx.Err() != nil {
-						results <- result{err: callctx.Err()}
+						results <- result{row: Row{Run: run, Task: j.task.ID, Method: j.provider.Name}, err: fmt.Errorf("run_aborted")}
 						continue
 					}
 					row, err := executeRow(callctx, s, j.task, j.provider, model, run)
@@ -265,27 +302,37 @@ func Execute(ctx context.Context, s Suite, model Model, providers []Provider, r 
 			}()
 		}
 		go func() { wg.Wait(); close(results) }()
-		var firstErr error
+		consecutiveFailures := 0
 		for v := range results {
 			if v.err != nil {
 				if firstErr == nil {
 					firstErr = v.err
+				}
+				r.Failures = append(r.Failures, Failure{v.row.Run, v.row.Task, v.row.Method, v.err.Error(), v.row.ModelCalls})
+				fmt.Fprintf(os.Stderr, "failure run=%d task=%s method=%s %s\n", v.row.Run, v.row.Task, v.row.Method, v.err.Error())
+				consecutiveFailures++
+				if consecutiveFailures >= 5 || strings.Contains(v.err.Error(), "type=authentication") || strings.Contains(v.err.Error(), "type=rate_limit") {
 					cancel()
 				}
-				continue
+			} else {
+				consecutiveFailures = 0
+				r.Rows = append(r.Rows, v.row)
 			}
-			r.Rows = append(r.Rows, v.row)
-			if checkpoint != "" && firstErr == nil {
+			if checkpoint != "" {
 				if err := WriteJSON(checkpoint, r); err != nil {
 					firstErr = err
 					cancel()
 				}
 			}
 		}
+		aborted := callctx.Err() != nil
 		cancel()
-		if firstErr != nil {
-			return r, firstErr
+		if aborted {
+			break
 		}
+	}
+	if firstErr != nil {
+		return r, firstErr
 	}
 	r.Summaries, r.Ranges = Aggregate(r.Rows, r.Repeats)
 	return r, nil
@@ -293,16 +340,18 @@ func Execute(ctx context.Context, s Suite, model Model, providers []Provider, r 
 func executeRow(ctx context.Context, s Suite, t Task, p Provider, model Model, run int) (Row, error) {
 	fmt.Fprintf(os.Stderr, "run=%d task=%s method=%s\n", run, t.ID, p.Name)
 	start := time.Now()
+	attempt := Row{Run: run, Task: t.ID, Method: p.Name}
 	ev, err := p.Get(ctx, s, t)
 	if err != nil {
-		return Row{}, fmt.Errorf("%s evidence_failed %s", t.ID, p.Name)
+		return attempt, fmt.Errorf("evidence_failed type=%s", modelErrorType(err))
 	}
 	evidenceMS := ms(start)
 	prompt := AnswerPrompt(s, t, ev.Text)
 	at := time.Now()
+	attempt.ModelCalls = ev.ModelCalls + 1
 	answer, err := model.Generate(ctx, AnswerSystem, prompt)
 	if err != nil {
-		return Row{}, fmt.Errorf("%s answer_failed %s", t.ID, p.Name)
+		return attempt, fmt.Errorf("answer_failed type=%s", modelErrorType(err))
 	}
 	answerMS := ms(at)
 	judgeAt := time.Now()
@@ -310,13 +359,14 @@ func executeRow(ctx context.Context, s Suite, t Task, p Provider, model Model, r
 	// Independent calls share neither output nor conversation; use parallelism
 	// only across different answers, keeping these two calls in a fixed order.
 	for i := 0; i < 2; i++ {
+		attempt.ModelCalls++
 		raw, err := model.Generate(ctx, JudgeSystem, JudgePrompt(s, t, answer))
 		if err != nil {
-			return Row{}, fmt.Errorf("%s judge_call_failed %s pass=%d", t.ID, p.Name, i+1)
+			return attempt, fmt.Errorf("judge_call_failed pass=%d type=%s", i+1, modelErrorType(err))
 		}
 		j[i], err = ParseJudgment(raw, t)
 		if err != nil {
-			return Row{}, fmt.Errorf("%s judge_format_failed %s pass=%d", t.ID, p.Name, i+1)
+			return attempt, fmt.Errorf("judge_format_failed pass=%d type=invalid_json", i+1)
 		}
 	}
 	row := Score(t, j)

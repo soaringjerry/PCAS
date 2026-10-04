@@ -66,3 +66,26 @@ func TestAtomicReportReplacesSymlinkWithoutTouchingTarget(t *testing.T) {
 		t.Fatal("report not private")
 	}
 }
+
+type failOnceModel struct {
+	failed atomic.Bool
+	calls  atomic.Int64
+}
+
+func (m *failOnceModel) Generate(ctx context.Context, system, prompt string) (string, error) {
+	m.calls.Add(1)
+	if system == AnswerSystem && m.failed.CompareAndSwap(false, true) {
+		return "", context.DeadlineExceeded
+	}
+	return (FakeModel{}).Generate(ctx, system, prompt)
+}
+func TestOneCallFailureKeepsIndependentRowsAndAttemptCount(t *testing.T) {
+	s, _ := Load("../../../testdata/phase2_5/doing/suite.json")
+	s.Tasks = s.Tasks[:2]
+	p := []Provider{{Name: "none", Get: func(context.Context, Suite, Task) (Evidence, error) { return Evidence{}, nil }}}
+	model := &failOnceModel{}
+	r, err := Execute(context.Background(), s, model, p, Report{Repeats: 3}, "", 2)
+	if err == nil || len(r.Rows) != 5 || len(r.Failures) != 1 || r.Failures[0].ModelCalls != 1 || r.Failures[0].Error != "answer_failed type=timeout" || model.calls.Load() != 16 {
+		t.Fatalf("bad partial failure rows=%d failures=%+v calls=%d", len(r.Rows), r.Failures, model.calls.Load())
+	}
+}

@@ -5,6 +5,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 
 	"github.com/soaringjerry/PCAS/cmd/pcas-eval/doing"
@@ -17,7 +18,10 @@ func main() {
 	}
 }
 func run() error {
-	s, err := doing.LoadSnapshot(os.Getenv("PCAS_V2B_CONTEXT_SNAPSHOT"))
+	return replay(os.Stdin, os.Stdout, os.Getenv("PCAS_V2B_CONTEXT_SNAPSHOT"))
+}
+func replay(input io.Reader, output io.Writer, path string) error {
+	s, err := doing.LoadSnapshot(path)
 	if err != nil {
 		return err
 	}
@@ -26,7 +30,7 @@ func run() error {
 		Request string `json:"request"`
 		AsOf    string `json:"as_of"`
 	}
-	if err := json.NewDecoder(os.Stdin).Decode(&in); err != nil {
+	if err := json.NewDecoder(input).Decode(&in); err != nil {
 		return err
 	}
 	if in.AsOf != s.AsOf {
@@ -37,7 +41,7 @@ func run() error {
 			if e.RequestSHA != doing.SHA(in.Request) {
 				return fmt.Errorf("request mismatch")
 			}
-			return json.NewEncoder(os.Stdout).Encode(struct {
+			return json.NewEncoder(output).Encode(struct {
 				Context    string `json:"context"`
 				ModelCalls int    `json:"model_calls"`
 			}{e.Text, 0})

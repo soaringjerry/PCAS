@@ -167,13 +167,17 @@ func (s *Store) correctTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in
 		return out, err
 	}
 
-	if _, err := tx.Exec(ctx, `UPDATE claim_revisions newer SET event_from=old.event_from,event_to=old.event_to,event_precision=old.event_precision
+	if _, err := tx.Exec(ctx, `UPDATE claim_revisions newer SET event_from=old.event_from,event_to=old.event_to,event_precision=old.event_precision,
+        category=old.category,durable=old.durable
         FROM claim_revisions old WHERE (newer.owner_id,newer.claim_id,newer.version)=($1,$2,$3)
         AND (old.owner_id,old.claim_id,old.version)=($1,$2,$4)`, string(scope.OwnerID), string(out.ID), version, prior.Version); err != nil {
 		return out, err
 	}
 	if _, err := tx.Exec(ctx, `INSERT INTO claim_mentions(owner_id,claim_id,claim_version,entity_id,role)
         SELECT owner_id,claim_id,$3,entity_id,role FROM claim_mentions WHERE owner_id=$1 AND claim_id=$2 AND claim_version=$4`, string(scope.OwnerID), string(out.ID), version, prior.Version); err != nil {
+		return out, err
+	}
+	if _, err := tx.Exec(ctx, "UPDATE claims SET organized=0,organize_attempts=0 WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), string(out.ID)); err != nil {
 		return out, err
 	}
 

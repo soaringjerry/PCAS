@@ -21,7 +21,7 @@ type claimMention struct {
 // protects self and typed names even when callers do not hold the owner row lock.
 func entityTx(ctx context.Context, tx pgx.Tx, owner memory.ID, kind, name string) (memory.ID, error) {
 	name = strings.TrimSpace(name)
-	if name == "" || !oneOf(kind, "self", "person", "place", "organization", "thing") {
+	if name == "" || !oneOf(kind, "self", "person", "place", "organization", "thing", "project", "topic", "area") {
 		return "", memory.ErrInvalid
 	}
 	if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended($1,0))", string(owner)+":entities"); err != nil {

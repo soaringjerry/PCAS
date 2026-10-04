@@ -171,6 +171,7 @@ PCAS 的所有文档都从这一页找。新增或移动文档时，同时改这
 | [第 1 批契约：分组和类型](tasks/phase2_5/batch1/README.md) | 数据约定、规则、操作序列、文件归属 |
 | [O1 整理后端](tasks/phase2_5/batch1/O1-organize-backend.md) · [T1 独立验收](tasks/phase2_5/batch1/T1-acceptance.md) · [U1 界面](tasks/phase2_5/batch1/U1-frontend.md) | 第 1 批的任务包 |
 | [V2 办事评测集](tasks/phase2_5/V2-eval-set.md) | 一百个以上的办事任务、固定的跑法和打分、真实数据上的人工抽查 |
+| [V2 办事题集与基线](evaluations/2026-10-04-phase2_5-v2-doing.md) | 671 条虚构记忆、120 题、真实通道三次结果/波动、私有抽查流程 |
 
 ### 研究
 

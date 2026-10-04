@@ -73,6 +73,13 @@ func envFloat(key string) (float64, error) {
 	return n, nil
 }
 func run() error {
+	if args, ok := doingProposeArgs(os.Args[1:]); ok {
+		return runDoingPropose(args)
+	}
+	if args, ok := doingModeArgs(os.Args[1:]); ok {
+		return runDoing(args)
+	}
+
 	tier := flag.String("tier", "basic", "basic or hard, reported separately")
 	mode := flag.String("mode", "comparison", "comparison (answers+extraction) or retrieval (secretary only)")
 	rawOnly := flag.Bool("raw-only", false, "load source-only data for retrieval diagnostic")

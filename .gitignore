@@ -19,3 +19,7 @@ web/test-results/
 web/playwright-report/
 config/models.json
 config/agent-tokens.json
+
+# Phase 2.5 private evaluation outputs: scripts reject all Git paths too.
+**/pcas-v2-private/
+**/pcas-v2-run.*/

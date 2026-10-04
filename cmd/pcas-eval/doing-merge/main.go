@@ -3,12 +3,16 @@
 package main
 
 import (
+	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"reflect"
 	"sort"
+	"strings"
 
 	"github.com/soaringjerry/PCAS/cmd/pcas-eval/doing"
 )
@@ -23,6 +27,17 @@ func read(path string, v any) (string, error) {
 	b, err := os.ReadFile(path)
 	if err != nil {
 		return "", err
+	}
+	if strings.HasSuffix(path, ".gz") {
+		reader, err := gzip.NewReader(bytes.NewReader(b))
+		if err != nil {
+			return "", err
+		}
+		b, err = io.ReadAll(reader)
+		reader.Close()
+		if err != nil {
+			return "", err
+		}
 	}
 	return doing.SHA(string(b)), json.Unmarshal(b, v)
 }
@@ -210,5 +225,5 @@ func run() error {
 		Changed       []string `json:"changed_task_ids"`
 		Missing       []string `json:"completion_task_ids"`
 		Note          string   `json:"note"`
-	}{sources, oldSHA, newSHA, ids(changed), ids(missing), "Every source file is numeric only. Source revision identifies evaluation code; product implementation stayed at original revision. Completed source-row calls exclude preflights and failed/canceled attempts; the original driver did not persist those attempt counts."})
+	}{sources, oldSHA, newSHA, ids(changed), ids(missing), "Every source file is numeric only. Hashes refer to uncompressed JSON bytes; .json.gz inputs are accepted. Source revision is the supplied revision flag; product implementation stayed at the original revision. Completed source-row calls exclude preflights and failed/canceled attempts; the original driver did not persist those attempt counts."})
 }

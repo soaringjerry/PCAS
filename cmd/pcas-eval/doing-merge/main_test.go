@@ -1,10 +1,13 @@
 package main
 
 import (
+	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"flag"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/soaringjerry/PCAS/cmd/pcas-eval/doing"
@@ -23,11 +26,23 @@ func TestMergeCompletenessAndConditions(t *testing.T) {
 			write := func(name string, v any) (string, string) {
 				t.Helper()
 				b, _ := json.Marshal(v)
+				sha := doing.SHA(string(b))
+				if strings.HasSuffix(name, ".gz") {
+					var compressed bytes.Buffer
+					w := gzip.NewWriter(&compressed)
+					if _, err := w.Write(b); err != nil {
+						t.Fatal(err)
+					}
+					if err := w.Close(); err != nil {
+						t.Fatal(err)
+					}
+					b = compressed.Bytes()
+				}
 				p := filepath.Join(dir, name)
 				if err := os.WriteFile(p, b, 0600); err != nil {
 					t.Fatal(err)
 				}
-				return p, doing.SHA(string(b))
+				return p, sha
 			}
 			oldPath, oldSHA := write("old.json", s)
 			s.Tasks[0].Must[0].Evidence = append(s.Tasks[0].Must[0].Evidence, "P003")
@@ -77,7 +92,7 @@ func TestMergeCompletenessAndConditions(t *testing.T) {
 			case "category":
 				completion.Rows[0].Category = "irrelevant"
 			}
-			basePath, _ := write("base.json", base)
+			basePath, _ := write("base.json.gz", base)
 			completionPath, _ := write("completion.json", completion)
 			replacementPath, _ := write("replacement.json", replacement)
 			priorFlags, priorArgs := flag.CommandLine, os.Args

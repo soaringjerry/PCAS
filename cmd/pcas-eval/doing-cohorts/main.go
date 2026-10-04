@@ -59,6 +59,9 @@ func unchanged(old, extended doing.Suite) error {
 	return nil
 }
 func validate(r doing.Report, s doing.Suite, suiteSHA string, snap doing.ContextSnapshot) error {
+	return validateMeasured(r, s, suiteSHA, snap, nil)
+}
+func validateMeasured(r doing.Report, s doing.Suite, suiteSHA string, snap doing.ContextSnapshot, jsonSizes map[string]int) error {
 	if r.Version != 1 || r.SuiteSHA != suiteSHA || snap.SuiteSHA != suiteSHA || r.AsOf != s.AsOf || snap.AsOf != s.AsOf || r.HostDate != snap.HostDate || r.Repeats != 3 || r.AnswerLimit != doing.AnswerLimit || r.AnswerPromptSHA != doing.SHA(doing.AnswerSystem) || r.JudgePromptSHA != doing.SHA(doing.JudgeSystem) || len(r.Failures) != 0 {
 		return fmt.Errorf("execution conditions mismatch or failures remain")
 	}
@@ -102,7 +105,13 @@ func validate(r doing.Report, s doing.Suite, suiteSHA string, snap doing.Context
 		if row.Method == "ideal" {
 			contextText = doing.IdealEvidence(s, t)
 		}
-		if row.ContextChars != utf8.RuneCountInString(contextText) || row.InputChars != utf8.RuneCountInString(doing.AnswerSystem+doing.AnswerPrompt(s, t, contextText)) {
+		chars := utf8.RuneCountInString(contextText)
+		inputChars := utf8.RuneCountInString(doing.AnswerSystem + doing.AnswerPrompt(s, t, contextText))
+		if row.Method == "frozen-current" && jsonSizes != nil {
+			chars = contexts[row.Task].ContextChars
+			inputChars = utf8.RuneCountInString(doing.AnswerSystem+doing.AnswerPrompt(s, t, "")) + jsonSizes[row.Task] - 2
+		}
+		if row.ContextChars != chars || row.InputChars != inputChars {
 			return fmt.Errorf("context/input size mismatch")
 		}
 	}
@@ -192,13 +201,17 @@ func run() error {
 	suite := f.String("suite", "testdata/phase2_5/doing-independent/suite.json", "extended suite")
 	source := f.String("source", "", "complete numeric report, JSON or gzip")
 	snapshot := f.String("snapshot", "", "outside-Git synthetic context snapshot")
+	manifest := f.String("manifest", "", "numeric capture manifest; recompute without context text")
 	out := f.String("output", "", "new numeric artifact directory")
 	fake := f.Bool("allow-fake", false, "explicit plumbing only; never real scores")
 	if err := f.Parse(os.Args[1:]); err != nil {
 		return err
 	}
-	if f.NArg() != 0 || *source == "" || *snapshot == "" || *out == "" {
-		return fmt.Errorf("source, snapshot and output required")
+	if f.NArg() != 0 || *source == "" || *out == "" || (*snapshot == "") == (*manifest == "") {
+		return fmt.Errorf("source, output and exactly one of snapshot/manifest required")
+	}
+	if *manifest != "" {
+		return recalculate(*base, *suite, *source, *manifest, *out, *fake)
 	}
 	old, err := doing.Load(*base)
 	if err != nil {
@@ -245,17 +258,10 @@ func run() error {
 		}
 	}
 	// Strip context text before producing the shareable capture manifest.
-	type numericEntry struct {
-		Task       string  `json:"task"`
-		RequestSHA string  `json:"request_sha256"`
-		ContextSHA string  `json:"context_sha256"`
-		Chars      int     `json:"context_chars"`
-		MS         float64 `json:"capture_ms"`
-		Calls      int     `json:"local_capture_calls"`
-	}
 	entries := []numericEntry{}
 	for _, e := range snap.Entries {
-		entries = append(entries, numericEntry{e.Task, e.RequestSHA, e.ContextSHA, e.ContextChars, e.CaptureMS, e.CaptureCalls})
+		encoded, _ := json.Marshal(e.Text)
+		entries = append(entries, numericEntry{e.Task, e.RequestSHA, e.ContextSHA, e.ContextChars, utf8.RuneCount(encoded), e.CaptureMS, e.CaptureCalls})
 	}
 	snapshotBytes, err := os.ReadFile(*snapshot)
 	if err != nil {
@@ -265,20 +271,5 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	return doing.WriteJSON(filepath.Join(*out, "capture-manifest.json"), struct {
-		Schema          int            `json:"schema_version"`
-		Fake            bool           `json:"fake"`
-		SourceSHA       string         `json:"source_uncompressed_sha256"`
-		SnapshotSHA     string         `json:"snapshot_sha256"`
-		SuiteSHA        string         `json:"suite_sha256"`
-		BaseSHA         string         `json:"base_suite_sha256"`
-		CaptureRevision string         `json:"capture_product_revision"`
-		ModelRevision   string         `json:"model_run_revision"`
-		AsOf            string         `json:"as_of"`
-		CaptureStart    string         `json:"capture_started_at"`
-		CaptureEnd      string         `json:"capture_completed_at"`
-		ModelStart      string         `json:"model_run_started_at"`
-		Entries         []numericEntry `json:"entries"`
-		Note            string         `json:"note"`
-	}{1, r.Fake, sourceSHA, doing.SHA(string(snapshotBytes)), r.SuiteSHA, doing.SHA(string(baseBytes)), snap.Revision, r.Revision, snap.AsOf, snap.StartedAt, snap.CompletedAt, r.StartedAt, entries, "Snapshot text is synthetic and stays outside Git. Hashes refer to uncompressed JSON except snapshot_sha256 (exact bytes). Capture is once per task; no retrieval variability is measured. Source report has zero local captures per answer and three real model calls per completed answer; preflight and interrupted work are accounted separately in the evaluation record."})
+	return doing.WriteJSON(filepath.Join(*out, "capture-manifest.json"), captureManifest{1, r.Fake, sourceSHA, doing.SHA(string(snapshotBytes)), r.SuiteSHA, doing.SHA(string(baseBytes)), snap.Revision, r.Revision, snap.AsOf, snap.StartedAt, snap.CompletedAt, r.StartedAt, entries, noiseExposure(s, snap), "Snapshot text is synthetic and stays outside Git. Hashes refer to uncompressed JSON except snapshot_sha256 (exact bytes). Capture is once per task; no retrieval variability is measured. context_json_chars counts the encoded JSON string including quotes, allowing input-size checks without context text. Source report has zero local captures per answer and three model calls per completed answer; preflight and interrupted work are accounted separately in the evaluation record."})
 }

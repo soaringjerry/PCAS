@@ -9,7 +9,7 @@ PCAS 的所有文档都从这一页找。新增或移动文档时，同时改这
 | 第 1 阶段：秘书前台 | 已上线（2026-10-01） | [任务总览](tasks/phase1/README.md) |
 | 第 1.5 阶段：稳定化 | 修复已合并；线上实测 11 项和试用一天还没做 | [稳定化计划](tasks/stabilization/README.md) |
 | 第 2 阶段：记忆核心 | 分四批，**全部已上线**：第 1 批 2026-10-02，第 2 批 2026-10-03，第 3 批、第 4 批和补充批 4b（按整段对话整理）2026-10-03 一起上线。还没做的：用真实模型跑回忆评测并定基线。第一次尝试（2.0）已回滚 | [任务入口](tasks/phase2/README.md) · [方向稿](tasks/phase2/direction.md) · [第 1 批](tasks/phase2/batch1/README.md) · [第 2–4 批并行方案](tasks/phase2/parallel.md) |
-| 第 2.5 阶段：记忆整理 | 方向已定并写入白皮书和记忆架构（2026-10-04）；实现未开始，任务包还没拆。先做的是扩评测任务并加人工抽查 | [白皮书 5.6–5.8](whitepaper.md) · [记忆架构 1.2](memory-architecture.md) · [讨论稿](research/memory-next-direction.md) |
+| 第 2.5 阶段：记忆整理 | 方向已定（2026-10-04）。分四批加一个评测集；**评测集和第 1 批（分组和类型）的任务包已写，等执行者开工**；第 2–4 批的契约在前一批上线后再写 | [任务入口](tasks/phase2_5/README.md) · [第 1 批契约](tasks/phase2_5/batch1/README.md) · [讨论稿](research/memory-next-direction.md) |
 | 第 3 阶段及以后 | 未开始 | [白皮书 §16 路线图](whitepaper.md) |
 
 还没处理的问题统一记在 [待办清单](tasks/backlog.md)。
@@ -162,6 +162,15 @@ PCAS 的所有文档都从这一页找。新增或移动文档时，同时改这
 第 2–4 批的验收和评测报告：[第 2 批](evaluations/2026-10-02-phase2-batch2-acceptance.md) · [第 2 批补充：秘书原话带对话上文](evaluations/2026-10-03-phase2-batch2-conversation-context-acceptance.md) · [第 3 批](evaluations/2026-10-02-phase2-batch3-acceptance.md) · [第 4 批](evaluations/2026-10-03-phase2-batch4-acceptance.md)（[准备阶段的记录](evaluations/2026-10-02-phase2-batch4-acceptance.md)） · [4b：按整段对话整理](evaluations/2026-10-03-phase2-batch4b-acceptance.md) · [回忆评测](evaluations/2026-10-02-phase2-eval.md)
 
 2.0 的代码和研究稿不在 `docs/` 里，归档为 git 标签 `archive/phase2-0/*`，位置和用法见任务入口第 6 节。
+
+### 第 2.5 阶段
+
+| 文档 | 内容 |
+|---|---|
+| [任务入口](tasks/phase2_5/README.md) | 要交付什么、用户定下的事、分几批、约束 |
+| [第 1 批契约：分组和类型](tasks/phase2_5/batch1/README.md) | 数据约定、规则、操作序列、文件归属 |
+| [O1 整理后端](tasks/phase2_5/batch1/O1-organize-backend.md) · [T1 独立验收](tasks/phase2_5/batch1/T1-acceptance.md) · [U1 界面](tasks/phase2_5/batch1/U1-frontend.md) | 第 1 批的任务包 |
+| [V2 办事评测集](tasks/phase2_5/V2-eval-set.md) | 一百个以上的办事任务、固定的跑法和打分、真实数据上的人工抽查 |
 
 ### 研究
 

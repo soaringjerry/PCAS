@@ -57,7 +57,7 @@
 | 接口 | 变化 |
 |---|---|
 | `GET /v1/workspace/memories` | 增加查询参数 `group`（分组的实体 ID）和 `category`；和已有参数是「并且」的关系 |
-| `GET /v1/workspace/memories/facets` | 返回里增加 `groups`：`[{entityId, name, type, count}]`，按类型、再按条数从多到少；只列至少有一条当前有效记忆的分组 |
+| `GET /v1/workspace/memory-facets` | 返回里增加 `groups`：`[{entityId, name, type, count}]`，按类型、再按条数从多到少；只列至少有一条当前有效记忆的分组 |
 | `GET /v1/workspace` | 快照里增加 `organize: {done, total, version}`：当前有效的记忆里已按最新规则整理的条数、总条数、最新规则版本号 |
 
 ## 3 规则
@@ -101,7 +101,7 @@
 
 - R17 资料库的记忆列表可以按分组翻：项目、主题、领域各一组，显示名字和条数，点一个只看它下面的记忆。记忆卡片上显示它的分组。
 - R18 还在整理时，显示一行「已整理 N / M」；全部整理完不显示。不出现「规则版本」「落后」「批」这些词。
-- R19 类型这一批不做成筛选控件，只在卡片上用中文叫法显示（`unknown` 不显示）。
+- R19 类型这一批不做成筛选控件，只在卡片上用中文叫法显示（`unknown` 不显示）。卡片和详情里，一条记忆有了类型就只显示类型，不再同时显示原来的性质（事实、偏好……）；还没有类型的照旧显示性质。按性质筛选的那一行控件不变。
 
 ## 4 操作序列
 
@@ -138,7 +138,7 @@ T1 按这些序列写测试。模型用测试里的假模型，按序列需要�
 |---|---|
 | O1 | `internal/postgres/migrations/035_memory_organize.sql`（新）、`internal/postgres/organize.go`（新）、`organize_test.go`（新，自己的单元测试）、`internal/postgres/memories_read.go`、`internal/postgres/editing.go`（只为 R8）、`internal/postgres/workspace.go`（只为快照的 `organize`）、`internal/postgres/usage_log.go`（只为新用途）、`internal/workspace/model.go`、`internal/httpapi/workspace.go`、`cmd/pcas/main.go`（只注册后台任务） |
 | T1 | `internal/postgres/phase2_5_b1_*_test.go`（新）；最终一轮的验收记录 `docs/evaluations/<日期>-phase2_5-batch1-acceptance.md`（新），以及在 [阶段入口](../README.md) 的文档表和 [文档总入口](../../../README.md) 里各加一行链接 |
-| U1 | `web/src/` 下资料库记忆页相关的文件、对应的浏览器测试 |
+| U1 | `web/src/` 下资料库记忆页相关的文件、对应的浏览器测试；`.github/workflows/browser-regression.yml` 里把自己的测试文件加进模拟数据那一行 |
 
 表里没有的产品文件，要动先找协调者。已有测试的预期不要改；确实要改的单独列出来报告。
 
@@ -150,4 +150,5 @@ T1 按这些序列写测试。模型用测试里的假模型，按序列需要�
 
 | 日期 | 改了什么 | 起因 |
 |---|---|---|
+| 2026-10-04 | 2.4 的分组统计接口路径更正为现有的 `/v1/workspace/memory-facets`；R19 写明卡片上有了类型就不再并排显示性质；U1 可以在浏览器回归的工作流里加上自己的测试文件 | U1 交付时的三个问题 |
 | 2026-10-04 | 2.3 写明接口照库里存的返回，落后的记忆继续返回旧标签；R9 分清五种情况各怎么计数；X11 改成具体的四条；T1 可以新增验收记录并加链接；2.1 写明保留 `vision` | T1 的发现 F-B1-1、F-B1-2、F-B1-3；O1a 交付 |

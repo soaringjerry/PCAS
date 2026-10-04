@@ -51,3 +51,34 @@ func TestBadReferencesAndChronology(t *testing.T) {
 		t.Fatal("accepted repeat that reasserts obsolete fact after update")
 	}
 }
+
+func TestAliasEvidenceClosure(t *testing.T) {
+	s, err := Load("../../../testdata/phase2_5/doing/suite.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	by := s.ByID()
+	count := 0
+	for _, task := range s.Tasks {
+		for _, check := range task.Must {
+			named := false
+			found := false
+			for _, ref := range check.Evidence {
+				if ref == "P003" {
+					found = true
+				} else if strings.Contains(by[ref].Text, "绒弦") {
+					named = true
+				}
+			}
+			if named {
+				if !found {
+					t.Fatalf("%s cannot judge a correct nickname", task.ID)
+				}
+				count++
+			}
+		}
+	}
+	if count != 20 {
+		t.Fatalf("alias coverage %d", count)
+	}
+}

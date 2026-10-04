@@ -167,6 +167,7 @@ PCAS 的所有文档都从这一页找。新增或移动文档时，同时改这
 | 文档 | 内容 |
 |---|---|
 | [研究笔记：Hermes Agent](research/hermes-agent.md) | 外部方案调研 |
+| [讨论稿：记忆下一步怎么做](research/memory-next-direction.md) | 未批准：四层记忆（新增现状层）、全自动整理的原则、结构化层要补什么、办事时的三档、实验否掉的办法、没解决的问题 |
 | [研究笔记：看目录、分头细读](research/memory-navigate-and-read.md) | 候选技术，未批准：办事时先让模型看分组目录、再分组细读挑出要用的记忆；做法和与现有实现的关系 |
 | [研究笔记：用途标注与事先备料](research/memory-use-phrases-and-packets.md) | 候选技术，未批准：给每条记忆标注用途后按用途查找（有效）；平时按请求种类备好记忆（这次没有测出优势）；三种办法的分工 |
 | [研究笔记：现状卡、期限表与自查](research/memory-status-cards-and-self-check.md) | 候选技术，未批准：每个分组一张放原样记忆的现状卡、一张期限表、办完后对照记忆自查一次；各档做法的调用次数和得分 |

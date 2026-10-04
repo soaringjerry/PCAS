@@ -183,8 +183,8 @@ func TestAsyncRunInvalidatesDuringGenerationAndBudget(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if st.Runs[0].Status != "failed" || !st.Runs[0].StaleContext || st.Runs[0].Output != "" {
-		t.Fatal("stale response exposed")
+	if st.Runs[0].Status != "done" || !st.Runs[0].StaleContext || st.Runs[0].Output != "旧依据生成的结果" || st.Runs[0].Adopted != nil {
+		t.Fatal("corrected-context response was not retained for review")
 	}
 	st = workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: asJSON(map[string]any{"dailyBudget": 0})})
 	_, err = s.Execute(ctx, scope, workspace.Command{Type: "requestRun", ThingID: task.ID, AgentID: "model", Kind: "ask", Prompt: "再次", RequestID: string(memory.NewID()), ExpectedRevision: st.Revision})

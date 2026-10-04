@@ -260,7 +260,13 @@ func (s *Store) DispatchNotices(ctx context.Context, now time.Time, channels []n
 			if !locked {
 				return nil
 			}
+			if err := invalidateObsoleteNoticesTx(ctx, tx, "n.id=$1", id); err != nil {
+				return err
+			}
 			for _, channel := range channels {
+				if err := invalidateObsoleteNoticesTx(ctx, tx, "n.id=$1", id); err != nil {
+					return err
+				}
 				var owner, title, thing, reason, timezone, trigger string
 				var due time.Time
 				var raw []byte

@@ -501,10 +501,11 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 				failureStage = "verify"
 				contextErr = s.checkDeskContextTx(ctx, tx, scope, c.Agent.ID, c.Dependencies, c.Items, true)
 			}
+			var reservationID string
 			if contextErr == nil {
 				failureStage = "budget"
 				p, _ := s.models.Get(c.Agent.ID)
-				contextErr = s.reserveModelCost(ctx, scope.OwnerID, p.Reserve(secretaryInstructions+prompt), nil)
+				reservationID, contextErr = s.reserveModelCostID(ctx, scope.OwnerID, p.Reserve(secretaryInstructions+prompt), nil)
 			}
 			if contextErr == nil {
 				failureStage = "model"
@@ -515,6 +516,13 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 					err = workCtx.Err()
 				}
 				cancel()
+				cost := result.Cost
+				if err != nil && strings.TrimSpace(result.Text) == "" {
+					cost = 0
+				}
+				if settleErr := s.settleModelCost(ctx, scope.OwnerID, reservationID, cost); settleErr != nil {
+					return settleErr
+				}
 				contextErr = err
 				if contextErr == nil {
 					p, _ := s.models.Get(c.Agent.ID)

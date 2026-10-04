@@ -748,6 +748,9 @@ test('a ChatGPT model missing from the list can be typed in, and an unreadable l
 /* ---------- 说了「尽快」的事（H1） ---------- */
 
 test('a to-do the user said cannot wait leads today\'s timeline until it is done or gets a time', async ({ page }) => {
+  // Midday, so that times set for this evening are still ahead whenever the test runs.
+  const noon = new Date(); noon.setHours(12, 0, 0, 0)
+  await page.clock.setFixedTime(noon)
   const today = (hour: number) => { const d = new Date(); d.setHours(hour, 0, 0, 0); return d.toISOString() }
   const m = await mock(page, workspace({
     settings: { timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, city: '上海', dailyBudget: 10, autoAccept: false, wakeIdeas: true, followUps: true, dailyReviewAt: '09:00' },
@@ -805,6 +808,9 @@ test('only urgent to-dos: the timeline shows them and does not say nothing is ti
 })
 
 test('on a phone the five rows are: what rang, who waits, what cannot wait, then what is ahead', async ({ page }) => {
+  // Midday, so that times set for this evening are still ahead whenever the test runs.
+  const noon = new Date(); noon.setHours(12, 0, 0, 0)
+  await page.clock.setFixedTime(noon)
   await page.setViewportSize({ width: 390, height: 844 })
   const today = (hour: number, minute = 0) => { const d = new Date(); d.setHours(hour, minute, 0, 0); return d.toISOString() }
   const zone = Intl.DateTimeFormat().resolvedOptions().timeZone

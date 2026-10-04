@@ -17,11 +17,18 @@ func (s *Store) reserveBackgroundCost(ctx context.Context, j worker.Job, cost fl
 	return s.reserveModelCost(ctx, j.OwnerID, cost, &j)
 }
 func (s *Store) reserveModelCost(ctx context.Context, owner memory.ID, cost float64, j *worker.Job) error {
+	_, err := s.reserveModelCostID(ctx, owner, cost, j)
+	return err
+}
+
+// Each invocation settles its own row, including concurrent calls without a job.
+func (s *Store) reserveModelCostID(ctx context.Context, owner memory.ID, cost float64, j *worker.Job) (string, error) {
+	var id string
 	if cost < 0 || math.IsNaN(cost) || math.IsInf(cost, 0) {
-		return memory.ErrInvalid
+		return "", memory.ErrInvalid
 	}
 	scope := memory.Scope{OwnerID: owner, PrincipalID: "worker", IsOwner: true}
-	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		if err := s.ensureOwner(ctx, tx, scope); err != nil {
 			return err
 		}
@@ -66,7 +73,39 @@ func (s *Store) reserveModelCost(ctx context.Context, owner memory.ID, cost floa
 			}
 			return &worker.JobError{Code: "budget_deferred", Until: nextBudgetDay(now, loc).Add(time.Duration(jitter.Int64())), NoAttempt: true}
 		}
-		_, err = tx.Exec(ctx, "INSERT INTO background_usage(owner_id,job_id,reserved_cost) VALUES($1,$2,$3)", string(owner), jobID, cost)
+		return tx.QueryRow(ctx, "INSERT INTO background_usage(owner_id,job_id,reserved_cost) VALUES($1,$2,$3) RETURNING id::text", string(owner), jobID, cost).Scan(&id)
+	})
+	return id, err
+}
+
+// A disconnected caller or failed result transaction must not leave a completed
+// invocation's maximum reservation in the daily budget. Settlement is separate
+// from business writes and does not authorize an automatic model retry.
+func (s *Store) settleModelCost(ctx context.Context, owner memory.ID, id string, cost float64) error {
+	if cost < 0 || math.IsNaN(cost) || math.IsInf(cost, 0) {
+		return memory.ErrInvalid
+	}
+	settleCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+	_, err := s.pool.Exec(settleCtx, "UPDATE background_usage SET reserved_cost=$3 WHERE owner_id=$1 AND id=$2", string(owner), id, cost)
+	return err
+}
+
+// Deletion uses an opaque invocation ID derived from owner, run and creation
+// time. Run IDs can coincide across owners or be reused after deletion. Settle
+// either location under the deletion lock without restoring deleted text.
+// Billing survives result-lease loss; creation time fences a reused run ID.
+func (s *Store) settleRunCost(ctx context.Context, owner memory.ID, run workspace.Run, cost float64) error {
+	settleCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+	return pgx.BeginFunc(settleCtx, s.pool, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(settleCtx, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(owner)); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(settleCtx, "UPDATE agent_runs SET reserved_cost=$4,document=jsonb_set(document,'{cost}',to_jsonb($4::numeric)) WHERE owner_id=$1 AND id=$2 AND document->>'createdAt'=$3", string(owner), run.ID, run.CreatedAt, cost); err != nil {
+			return err
+		}
+		_, err := tx.Exec(settleCtx, "UPDATE background_usage SET reserved_cost=$3 WHERE owner_id=$1 AND id=md5($1::uuid::text || ':' || $2::uuid::text || ':' || $4::text)::uuid", string(owner), run.ID, cost, run.CreatedAt)
 		return err
 	})
 }

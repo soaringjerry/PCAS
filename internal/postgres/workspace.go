@@ -202,7 +202,7 @@ func (s *Store) snapshotTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) (
         CASE WHEN n.trigger_id LIKE 'run:%' THEN '{"result":true}'::jsonb ELSE '{}'::jsonb END ||
         CASE WHEN n.dismissed_at IS NULL THEN '{}'::jsonb ELSE jsonb_build_object('dismissedAt',n.dismissed_at) END
         FROM workspace_notices n JOIN work_items w ON (w.owner_id,w.id)=(n.owner_id,n.thing_id)
-        WHERE n.owner_id=$1 AND NOT (n.delivered @> '{"_suppressionOnly":true}'::jsonb) ORDER BY (n.dismissed_at IS NOT NULL),n.created_at DESC,n.id LIMIT 100`, string(scope.OwnerID)); err != nil {
+        WHERE n.owner_id=$1 AND (n.dismissed_at IS NOT NULL OR `+currentNoticeTriggerSQL+`) AND NOT (n.delivered @> '{"_suppressionOnly":true}'::jsonb) ORDER BY (n.dismissed_at IS NOT NULL),n.created_at DESC,n.id LIMIT 100`, string(scope.OwnerID)); err != nil {
 		return out, err
 	}
 	if out.Memories, err = s.readMemoriesTx(ctx, tx, scope, false, memoryReadOptions{limit: 200}); err != nil {

@@ -73,6 +73,25 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 		for _, check := range item.Checklist {
 			fmt.Fprintf(&brief, "子步骤（完成=%t）：%s\n", check.Done, check.Text)
 		}
+		docs, docRefs, err := currentRunDocsTx(ctx, tx, scope, item, agent.ID)
+		if err != nil {
+			return err
+		}
+		for _, doc := range docs {
+			if brief.Len() >= 30000 {
+				break
+			}
+			text := fmt.Sprintf("\n当前文档：%s\n%s\n", doc.Title, doc.Body)
+			remaining := 30000 - brief.Len()
+			if len(text) > remaining {
+				text = text[:remaining]
+				for !utf8.ValidString(text) {
+					text = text[:len(text)-1]
+				}
+			}
+			brief.WriteString(text)
+		}
+		artifactRefs = append(artifactRefs, docRefs...)
 		settings, err := queryDocument[workspace.Settings](ctx, tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1", string(scope.OwnerID))
 		if err != nil {
 			return err
@@ -144,10 +163,6 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 					ordered = append(ordered, m)
 					selected[m.ID] = true
 				}
-			}
-			if previous := prepared.Previous; previous != nil && previous.ThingID == item.ID && previous.AgentID == agent.ID && verifyRunTx(ctx, tx, scope, *previous) == nil {
-				fmt.Fprintf(&brief, "\n同一事项上一次的要求：%s\n上一次的结果：%s\n", previous.Prompt, previous.Output)
-				artifactRefs = append(artifactRefs, previous.ContextVersions...)
 			}
 		}
 		// Explicit long-term constraints must remain applicable even when the
@@ -490,6 +505,21 @@ func verifyRunForItemTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run 
 	return nil
 }
 
+// A version change alone makes an answer outdated. Recheck every dependency
+// against its current version before deciding whether old content is safe to
+// retain; a removed grant or deleted dependency must dominate any correction.
+func verifyRunAccessTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run workspace.Run) error {
+	run.ContextVersions = append([]memory.Ref(nil), run.ContextVersions...)
+	for i, ref := range run.ContextVersions {
+		var version int
+		if err := tx.QueryRow(ctx, "SELECT version FROM memory_records WHERE owner_id=$1 AND id=$2 AND state='active'", string(scope.OwnerID), string(ref.ID)).Scan(&version); err != nil {
+			return memory.ErrConflict
+		}
+		run.ContextVersions[i].Version = version
+	}
+	return verifyRunTx(ctx, tx, scope, run)
+}
+
 // uniqueRefs keeps the first occurrence of each exact reference. Dependency
 // lists are sets: history and recall can name the same memory many times.
 func uniqueRefs(refs []memory.Ref) []memory.Ref {
@@ -544,8 +574,9 @@ func (s *Store) runAgentOnce(ctx context.Context) error {
 		}
 		if err := verifyRunTx(ctx, tx, scope, run); err != nil {
 			run.Status = "failed"
+			run.Cost = 0
 			run.Error = "记忆或授权已变化，请重新生成"
-			_, err = tx.Exec(ctx, "UPDATE agent_runs SET status='failed',document=$3 WHERE owner_id=$1 AND id=$2", ownerID, id, asJSON(run))
+			_, err = tx.Exec(ctx, "UPDATE agent_runs SET status='failed',reserved_cost=0,document=$3 WHERE owner_id=$1 AND id=$2", ownerID, id, asJSON(run))
 			return err
 		}
 		token = string(memory.NewID())
@@ -562,6 +593,13 @@ func (s *Store) runAgentOnce(ctx context.Context) error {
 	// Search is on where the channel offers it; other channels answer from what they were given.
 	result, generationErr := s.models.GenerateWithSearch(workCtx, run.AgentID, deputyInstructions, run.Brief)
 	cancel()
+	cost := result.Cost
+	if generationErr != nil && strings.TrimSpace(result.Text) == "" {
+		cost = 0
+	}
+	if err := s.settleRunCost(ctx, scope.OwnerID, run, cost); err != nil {
+		return err
+	}
 	if generationErr == nil {
 		p, _ := s.models.Get(run.AgentID)
 		if err := s.recordReturnedUsage(ctx, result.Text, modelUsage{
@@ -599,14 +637,15 @@ func (s *Store) runAgentOnce(ctx context.Context) error {
 				current.Error = provider.Message()
 				current.ProviderError = asJSON(provider)
 			}
-		} else {
-			current.Cost = result.Cost
 		}
+		current.Cost = cost
 		if verifyRunTx(ctx, tx, scope, current) != nil {
 			current.StaleContext = true
-			current.Output = ""
-			current.Status = "failed"
-			current.Error = "生成期间记忆或授权已变化，请重新生成"
+			if verifyRunAccessTx(ctx, tx, scope, current) != nil {
+				current.Output = ""
+				current.Status = "failed"
+				current.Error = "生成期间记忆或授权已变化，请重新生成"
+			}
 		}
 		if _, err := tx.Exec(ctx, "UPDATE agent_runs SET status=$4,reserved_cost=$5,document=$6,lease_until=NULL,lease_token=NULL WHERE owner_id=$1 AND id=$2 AND lease_token=$3", string(scope.OwnerID), run.ID, token, current.Status, current.Cost, asJSON(current)); err != nil {
 			return err

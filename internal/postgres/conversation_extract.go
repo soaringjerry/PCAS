@@ -300,12 +300,20 @@ func (s *Store) processConversationExtraction(ctx context.Context, j worker.Job,
 			return &worker.JobError{Code: "provider_unavailable", Retry: true}
 		}
 		reserve := provider.Reserve(conversationExtractionInstructions + prompt)
-		if err := s.reserveBackgroundCost(ctx, j, reserve); err != nil {
+		reservationID, err := s.reserveModelCostID(ctx, j.OwnerID, reserve, &j)
+		if err != nil {
 			return err
 		}
 		result, err := s.models.Generate(ctx, provider.ID, conversationExtractionInstructions, prompt)
+		actualCost := result.Cost
+		if err != nil && strings.TrimSpace(result.Text) == "" {
+			actualCost = 0
+		}
+		if settleErr := s.settleModelCost(ctx, j.OwnerID, reservationID, actualCost); settleErr != nil {
+			return settleErr
+		}
 		if errors.Is(err, memory.ErrUnavailable) {
-			if err := s.releaseUnavailableReservation(ctx, j); err != nil {
+			if err := s.releaseUnavailableReservation(ctx, j, reservationID); err != nil {
 				return err
 			}
 			return &worker.JobError{Code: "provider_unavailable", Retry: true}
@@ -329,8 +337,7 @@ func (s *Store) processConversationExtraction(ctx context.Context, j worker.Job,
 				if err := recordUsageTx(usageCtx, tx, modelUsage{OwnerID: j.OwnerID, ID: memory.NewID(), At: time.Now().UTC(), Purpose: "extraction", AgentID: provider.ID, Model: provider.Model, InputTokens: result.InputTokens, OutputTokens: result.OutputTokens, Cost: cost, JobID: string(j.ID), MemoryRefs: refs}); err != nil {
 					return err
 				}
-				_, err := tx.Exec(usageCtx, "UPDATE background_usage SET reserved_cost=$2 WHERE id=(SELECT id FROM background_usage WHERE job_id=$1 ORDER BY created_at DESC LIMIT 1)", string(j.ID), cost)
-				return err
+				return nil
 			})
 			cancel()
 			if err != nil {

@@ -176,12 +176,20 @@ func (s *Store) AnswerDesk(ctx context.Context, scope memory.Scope, agentID, que
 	if err := checkContext(); err != nil {
 		return out, err
 	}
-	if err := s.reserveModelCost(ctx, scope.OwnerID, p.Reserve(deskInstructions+prompt.String()), nil); err != nil {
+	reservationID, err := s.reserveModelCostID(ctx, scope.OwnerID, p.Reserve(deskInstructions+prompt.String()), nil)
+	if err != nil {
 		return out, err
 	}
 	workCtx, cancel := context.WithTimeout(ctx, 90*time.Second)
 	defer cancel()
 	result, err := s.models.GenerateWithSearch(workCtx, agent.ID, deskInstructions, prompt.String())
+	cost := result.Cost
+	if err != nil && strings.TrimSpace(result.Text) == "" {
+		cost = 0
+	}
+	if settleErr := s.settleModelCost(ctx, scope.OwnerID, reservationID, cost); settleErr != nil {
+		return out, settleErr
+	}
 	if err != nil {
 		return out, fmt.Errorf("%w: %w", memory.ErrUnavailable, err)
 	}

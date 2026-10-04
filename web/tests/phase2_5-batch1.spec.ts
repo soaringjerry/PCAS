@@ -152,6 +152,9 @@ test('R17/R19 卡片上有分组和类型的中文叫法；点卡片上的分组
   for (const bare of [all[4], all[5]]) {
     await expect(card(page, bare.text)).not.toContainText(/身份|口味|对助手的要求|目标|进展|一次性的事|看法|关于别人|unknown|未知/)
   }
+  // A sorted memory shows its type in place of its nature; one not sorted yet keeps the nature.
+  for (const sorted of all.slice(0, 4)) await expect(card(page, sorted.text).locator('.meta')).not.toContainText(/事实|偏好|决定|意向|计划/)
+  for (const bare of [all[4], all[5]]) await expect(card(page, bare.text).locator('.meta')).toContainText('偏好')
   // Whether it will still hold in half a year is not shown in this round.
   await expect(page.locator('.list')).not.toContainText(/长期|durable/)
   await expect(card(page, all[5].text).locator('.mem-marks')).toHaveCount(0)
@@ -172,8 +175,12 @@ test('R17/R19 卡片上有分组和类型的中文叫法；点卡片上的分组
 
   await line(page, all[2].text).click()
   const sheet = page.getByRole('dialog')
-  await expect(sheet).toContainText('对助手的要求')
+  await expect(sheet.getByRole('heading', { name: '对助手的要求' })).toBeVisible()
+  await expect(sheet.locator('.side-sheet-head')).not.toContainText('偏好')
   await expect(sheet.getByRole('button', { name: '手冲咖啡', exact: true })).toBeVisible()
+  await sheet.getByRole('button', { name: '关闭' }).click()
+  await line(page, all[4].text).click()
+  await expect(sheet.getByRole('heading', { name: '偏好', exact: true })).toBeVisible()
   expect(mock.errors).toEqual([])
 })
 

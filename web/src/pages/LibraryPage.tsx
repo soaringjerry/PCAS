@@ -54,11 +54,10 @@ function MemorySheet({ memory, entity, group, onClose, onPick, onPickGroup, onDe
 
   return (
     <SideSheet
-      title={memoryKindLabel[memory.kind]}
+      title={category ?? memoryKindLabel[memory.kind]}
       onClose={onClose}
       top={
         <>
-          {category && <Tag>{category}</Tag>}
           <TrustTag value={memory.epistemic} />
           {memory.epistemic === 'confirmed' && <Tag tone="success">已确认</Tag>}
           <ProjectLink id={memory.projectId} />
@@ -442,8 +441,8 @@ function MemoryTab() {
                     </div>
                   )}
                   <div className="meta">
-                    {categoryOf(m) && <Tag>{categoryOf(m)}</Tag>}
-                    <span>{memoryKindLabel[m.kind]}</span>
+                    {/* Once sorted, its type stands in for the older, coarser nature. */}
+                    {categoryOf(m) ? <Tag>{categoryOf(m)}</Tag> : <span>{memoryKindLabel[m.kind]}</span>}
                     <TrustTag value={m.epistemic} />
                     <SaidAt at={m.expressedAt} />
                     {m.versions.length > 1 && <span>改过 {m.versions.length - 1} 次</span>}

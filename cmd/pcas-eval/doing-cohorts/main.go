@@ -144,6 +144,48 @@ func split(r doing.Report, old doing.Suite) map[string]doing.Report {
 	}
 	return out
 }
+
+type presence struct {
+	Memory   string `json:"memory_id"`
+	FullText bool   `json:"full_original_text_present"`
+}
+type exposure struct {
+	Task     string     `json:"task"`
+	Memories []presence `json:"memories"`
+}
+
+// Exact full-original-text presence measures exposure, not semantic use. It
+// discloses only synthetic memory identifiers and booleans, never the text.
+func noiseExposure(s doing.Suite, snapshot doing.ContextSnapshot) []exposure {
+	by := s.ByID()
+	contexts := map[string]string{}
+	for _, e := range snapshot.Entries {
+		contexts[e.Task] = e.Text
+	}
+	out := []exposure{}
+	for _, task := range s.Tasks {
+		if !strings.HasPrefix(task.ID, "I-NOISE-") {
+			continue
+		}
+		refs := map[string]bool{}
+		for _, check := range task.Forbidden {
+			for _, id := range check.Evidence {
+				refs[id] = true
+			}
+		}
+		ids := []string{}
+		for id := range refs {
+			ids = append(ids, id)
+		}
+		sort.Strings(ids)
+		e := exposure{Task: task.ID, Memories: []presence{}}
+		for _, id := range ids {
+			e.Memories = append(e.Memories, presence{id, strings.Contains(contexts[task.ID], by[id].Text)})
+		}
+		out = append(out, e)
+	}
+	return out
+}
 func run() error {
 	f := flag.NewFlagSet("doing-cohorts", flag.ContinueOnError)
 	base := f.String("base-suite", "testdata/phase2_5/doing/suite.json", "unchanged old suite")
@@ -189,6 +231,9 @@ func run() error {
 		return err
 	}
 	if err = os.MkdirAll(*out, 0755); err != nil {
+		return err
+	}
+	if err = doing.WriteJSON(filepath.Join(*out, "noise-exposure.json"), noiseExposure(s, snap)); err != nil {
 		return err
 	}
 	for name, report := range split(r, old) {

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"reflect"
+	"strings"
 	"testing"
 	"unicode/utf8"
 
@@ -122,5 +123,29 @@ func TestCohortsUseRowsAndWeightedChecks(t *testing.T) {
 	}
 	if !reflect.DeepEqual(out["all168"].Rows[0].Judgments, r.Rows[0].Judgments) {
 		t.Fatal("judgments altered")
+	}
+}
+
+func TestNoiseExposureContainsIdentifiersOnly(t *testing.T) {
+	_, s, _, snap := fixture(t)
+	for i, e := range snap.Entries {
+		if e.Task == "I-NOISE-01" {
+			snap.Entries[i].Text = s.ByID()["I-N01a"].Text
+		}
+	}
+	exposed := noiseExposure(s, snap)
+	if len(exposed) != 10 {
+		t.Fatal("wrong noise cohort")
+	}
+	for _, e := range exposed {
+		if e.Task == "I-NOISE-01" {
+			if len(e.Memories) != 2 || e.Memories[0].Memory != "I-N01a" || !e.Memories[0].FullText || e.Memories[1].FullText {
+				t.Fatal("wrong exposure measurement")
+			}
+		}
+	}
+	b, _ := json.Marshal(exposed)
+	if strings.Contains(string(b), s.ByID()["I-N01a"].Text) {
+		t.Fatal("memory body leaked")
 	}
 }

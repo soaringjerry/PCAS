@@ -2,8 +2,11 @@
 import copy
 import importlib.util
 import json
+import sys
 import unittest
 from pathlib import Path
+
+sys.dont_write_bytecode = True
 
 spec = importlib.util.spec_from_file_location("v2b_suite", Path(__file__).with_name("p25-v2b-suite.py"))
 m = importlib.util.module_from_spec(spec)

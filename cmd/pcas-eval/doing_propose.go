@@ -84,6 +84,11 @@ func runDoingPropose(args []string) error {
 				return fmt.Errorf("wrong candidate category")
 			}
 			t.ID = fmt.Sprintf("PRIVATE-%s-%02d", category, i+1)
+			for groupIndex, group := range [][]doing.Check{t.Must, t.Bonus, t.Forbidden} {
+				for checkIndex := range group {
+					group[checkIndex].ID = fmt.Sprintf("%s%d", []string{"M", "B", "F"}[groupIndex], checkIndex+1)
+				}
+			}
 			t.Reviewed = false
 			if t.Bonus == nil {
 				t.Bonus = []doing.Check{}

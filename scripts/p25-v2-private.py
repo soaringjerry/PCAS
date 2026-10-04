@@ -120,7 +120,9 @@ def validate_approved(source, decisions):
             raise WorkflowError('edited task has invalid rubric counts')
         check_ids = set()
         for group in ('must', 'bonus', 'forbidden'):
-            for check in task.get(group, []):
+            for index, check in enumerate(task.get(group, []), 1):
+                if check.get('id') != {'must': 'M', 'bonus': 'B', 'forbidden': 'F'}[group] + str(index):
+                    raise WorkflowError('edited task changed numeric check numbering')
                 if not check.get('id') or check['id'] in check_ids or not check.get('text'):
                     raise WorkflowError('edited task has invalid check')
                 check_ids.add(check['id'])

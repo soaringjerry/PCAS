@@ -140,8 +140,11 @@ func (s Suite) Validate() error {
 		tasks[t.ID] = true
 		categories[t.Category]++
 		checks := map[string]bool{}
-		for _, group := range [][]Check{t.Must, t.Bonus, t.Forbidden} {
-			for _, c := range group {
+		for groupIndex, group := range [][]Check{t.Must, t.Bonus, t.Forbidden} {
+			for checkIndex, c := range group {
+				if c.ID != fmt.Sprintf("%s%d", []string{"M", "B", "F"}[groupIndex], checkIndex+1) {
+					return fmt.Errorf("invalid check numbering %s", t.ID)
+				}
 				if checks[c.ID] || c.ID == "" || c.Text == "" {
 					return fmt.Errorf("invalid check %s/%s", t.ID, c.ID)
 				}

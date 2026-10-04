@@ -5,6 +5,8 @@ import importlib.util
 import json
 from pathlib import Path
 import unittest
+import tempfile
+from argparse import Namespace
 import sys
 sys.dont_write_bytecode = True
 
@@ -49,6 +51,24 @@ class ReviewGate(unittest.TestCase):
         # resolve() includes symlinked parents; no need to touch online paths.
         self.assertEqual(workflow.outside_git('/var/tmp/pcas-v2-private/proposals.json'),
                          Path('/var/tmp/pcas-v2-private/proposals.json'))
+
+    def test_review_table_starts_pending_and_escapes_memory(self):
+        source = json.loads(json.dumps(self.source))
+        source['tasks'] = source['tasks'][:1]
+        ref = source['tasks'][0]['must'][0]['evidence'][0]
+        for memory in source['memories']:
+            if memory['id'] == ref:
+                memory['text'] = '虚构测试文本：</pre><script>test</script>'
+        with tempfile.TemporaryDirectory(prefix='pcas-v2-private-test.', dir='/var/tmp') as folder:
+            input_path, output_path = Path(folder) / 'proposals.json', Path(folder) / 'review.html'
+            workflow.write_private(input_path, json.dumps(source))
+            workflow.review(Namespace(input=input_path, output=output_path))
+            page = output_path.read_text()
+            self.assertEqual(page.count('value="pending" checked'), 1)
+            self.assertIn('&lt;script&gt;test&lt;/script&gt;', page)
+            self.assertNotIn('</pre><script>test</script>', page)
+            self.assertNotIn('<script src=', page)
+            self.assertEqual(output_path.stat().st_mode & 0o777, 0o600)
 
 
 if __name__ == '__main__':

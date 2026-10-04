@@ -4,7 +4,7 @@ import type { Memory, State } from '../src/domain/types'
 // Fictional fixtures only. Production memories and screenshots never enter git.
 const id = 'e4000000-0000-4000-8000-000000000001'
 const at = '2024-01-01T10:00:00Z'
-async function backend(page: Page, failOnce = false) {
+async function backend(page: Page, failOnce = false, withConversation = true) {
   const memory: Memory = { id: 'fiction-memory', recordVersion: 1, kind: 'intention', text: '那位同事的演示项目值得联系。', contextDependent: true, epistemic: 'sourced', confirmation: 'candidate', acquisition: 'direct', sources: [{ sourceId: id, version: 1, label: '虚构来源', excerpt: '我想给那位同事发个邮件。', at }], versions: [], visibleTo: [], exposure: 0, lastUsedAt: '', pinned: false }
   const state: State = { version: 1, revision: 1, budgetUsage: 0, settings: { dailyBudget: 10, autoAccept: false, wakeIdeas: false, followUps: false, dailyReviewAt: '09:00', timezone: 'Asia/Shanghai' }, tasks: [], ideas: [], projects: [], memories: [memory], candidates: [], docs: [], runs: [], samples: [], sources: [], jobs: [], notices: [], activity: [], excludedMemories: {}, agents: [] }
   const errors: string[] = []
@@ -14,7 +14,7 @@ async function backend(page: Page, failOnce = false) {
   await page.route(url => url.pathname === '/v1/workspace/memory-facets', route => route.fulfill({ json: { people: [], places: [] } }))
   await page.route(url => url.pathname === '/v1/workspace/memories', route => route.fulfill({ json: { items: [memory], next: '', total: 1 } }))
   await page.route(url => url.pathname === '/v1/workspace/memories/fiction-memory', route => route.fulfill({ json: memory }))
-  await page.route(url => url.pathname === `/v1/memory/sources/${id}`, route => route.fulfill({ json: { context: { conversation: 'fiction' }, source: { id, version: 1, title: '虚构对话', text: memory.sources[0].excerpt, recorded_at: at, representation: 'original', has_attachment: false, attachment_missing: false }, derived: [], processing: [] } }))
+  await page.route(url => url.pathname === `/v1/memory/sources/${id}`, route => route.fulfill({ json: { context: withConversation ? { conversation: 'fiction' } : undefined, source: { id, version: 1, title: '虚构对话', text: memory.sources[0].excerpt, recorded_at: at, representation: 'original', has_attachment: false, attachment_missing: false }, derived: [], processing: [] } }))
   const msg = (key: string, role: string, text: string, anchor = false) => ({ id: key, version: 1, text, role, anchor, expressed_at: at, recorded_at: at })
   const current = [msg('before', 'assistant', 'AI 建议交流技术方案。'), msg(id, 'user', memory.sources[0].excerpt!, true), msg('after', 'user', '仅讨论演示方案，尚未决定合作。')]
   await page.route(url => url.pathname === `/v1/memory/sources/${id}/conversation`, route => {
@@ -28,7 +28,7 @@ async function backend(page: Page, failOnce = false) {
   await page.getByText(memory.text, { exact: true }).click()
   await expect(page.getByText('这条记忆含有指代', { exact: false })).toBeVisible()
   await page.getByRole('button', { name: /虚构来源/ }).click()
-  await page.getByText('看当时的对话', { exact: true }).click()
+  if (withConversation) await page.getByText('看当时的对话', { exact: true }).click()
   return errors
 }
 
@@ -60,4 +60,12 @@ test('failed context read can retry while the original remains visible', async (
   await page.getByRole('button', { name: '重试', exact: true }).click()
   await expect(page.locator('.conversation-message')).toHaveCount(3)
   await expect(page.getByRole('alert')).toHaveCount(0)
+})
+
+test('a source without conversation keeps the original expansion control', async ({ page }) => {
+  const errors = await backend(page, false, false)
+  await page.getByText('展开原文', { exact: true }).click()
+  await expect(page.getByText('展开原文', { exact: true }).locator('..').locator('pre')).toContainText('我想给那位同事发个邮件。')
+  await expect(page.getByText('看当时的对话', { exact: true })).toHaveCount(0)
+  expect(errors).toEqual([])
 })

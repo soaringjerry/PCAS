@@ -39,7 +39,7 @@ interface SourceResult { context?: { conversation?: string }; derived: { id: str
  * Opened from a conversation (`conversation` given), it shows what was said and
  * little else: the text first, at the passage the card quoted when it has one.
  */
-export function SourceSheet({ id, version, onClose, conversation }: { id: string; version?: number; onClose: () => void; conversation?: { excerpt?: string } }) {
+export function SourceSheet({ id, version, onClose, conversation }: { id: string; version?: number; onClose: () => void; conversation?: { excerpt?: string; requireConversation?: boolean } }) {
   const { state } = useStore()
   const [data, setData] = useState<SourceResult | null>(null)
   const [error, setError] = useState('')
@@ -52,7 +52,7 @@ export function SourceSheet({ id, version, onClose, conversation }: { id: string
   }, [id, version])
   const methods = [...new Set(data?.processing.map((job) => job.method).filter((method): method is string => !!method) ?? [])]
   const pending = data?.processing.filter((job) => job.state !== 'done') ?? []
-  if (conversation) {
+  if (conversation && (!conversation.requireConversation || data?.context?.conversation)) {
     const readBy = data && data.source.representation !== 'original' ? READ_BY[data.source.representation] : undefined
     return <SideSheet title={data?.source.title || '原话'} onClose={onClose} top={data && <span className="tiny muted">记录于 {formatTimestamp(data.source.recorded_at, state.settings.timezone ?? 'UTC')}</span>}>
       {error && <p className="form-error" role="alert"><CircleAlert size={14} />{error}</p>}

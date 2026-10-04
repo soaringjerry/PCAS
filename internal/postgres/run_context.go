@@ -15,7 +15,6 @@ type preparedRunContext struct {
 	Plan     memory.QueryPlan
 	Refs     []memory.Ref
 	Excerpts []memory.RecallExcerpt
-	Previous *workspace.Run
 	History  []storedDeskContext
 }
 
@@ -27,7 +26,7 @@ type storedDeskContext struct {
 }
 
 // Resolve references and perform semantic retrieval before Execute takes the
-// owner lock. All selected versions and previous outputs are rechecked inside
+// owner lock. All selected versions and current documents are rechecked inside
 // the transaction; this snapshot never grants access by itself.
 func (s *Store) prepareRunContext(ctx context.Context, scope memory.Scope, c workspace.Command) (context.Context, error) {
 	if len(c.DeskTurnIDs) > 6 {
@@ -36,7 +35,6 @@ func (s *Store) prepareRunContext(ctx context.Context, scope memory.Scope, c wor
 	history := []storedDeskContext{}
 	query := c.Prompt
 	projectID := c.ProjectID
-	var previous *workspace.Run
 	var plan memory.QueryPlan
 	var thingID string
 	if err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
@@ -86,12 +84,12 @@ func (s *Store) prepareRunContext(ctx context.Context, scope memory.Scope, c wor
 				projectID = item.ID
 			}
 			query += " " + item.Title + " " + item.Notes + " " + item.Body + " " + item.Goal + " " + item.Progress
-			previous, err = mostRecentPermittedRunTx(ctx, tx, scope, item, c.AgentID)
+			docs, _, err := currentRunDocsTx(ctx, tx, scope, item, c.AgentID)
 			if err != nil {
 				return err
 			}
-			if previous != nil {
-				query += " " + previous.Prompt + " " + previous.Output
+			for _, doc := range docs {
+				query += " " + doc.Title + " " + tail(doc.Body, 4000)
 			}
 		}
 		return nil
@@ -106,25 +104,34 @@ func (s *Store) prepareRunContext(ctx context.Context, scope memory.Scope, c wor
 	if err != nil {
 		return ctx, err
 	}
-	return context.WithValue(ctx, runContextKey{}, preparedRunContext{Plan: plan, Refs: result.Memories, Excerpts: result.Excerpts, Previous: previous, History: history}), nil
+	return context.WithValue(ctx, runContextKey{}, preparedRunContext{Plan: plan, Refs: result.Memories, Excerpts: result.Excerpts, History: history}), nil
 }
 
-func mostRecentPermittedRunTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, item workspace.Item, agent string) (*workspace.Run, error) {
-	// Bound each page's memory use, not how far back an authorized result can
-	// be found. Revoking the newest answer must not discard ordinary history.
-	const pageSize = 20
-	for offset := 0; ; offset += pageSize {
-		runs, err := queryDocuments[workspace.Run](ctx, tx, "SELECT document FROM agent_runs WHERE owner_id=$1 AND thing_id=$2 AND agent_id=$3 AND status='done' ORDER BY created_at DESC,id DESC LIMIT $4 OFFSET $5", string(scope.OwnerID), item.ID, agent, pageSize, offset)
-		if err != nil {
-			return nil, err
-		}
-		for _, run := range runs {
-			if !run.StaleContext && verifyRunForItemTx(ctx, tx, scope, run, &item) == nil {
-				return &run, nil
-			}
-		}
-		if len(runs) < pageSize {
-			return nil, nil
-		}
+// Documents are read again inside runCommandTx. A prepared retrieval snapshot
+// must never override the owner's current writing or the destination's grants.
+func currentRunDocsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, item workspace.Item, agent string) ([]workspace.Doc, []memory.Ref, error) {
+	docs, err := queryDocuments[workspace.Doc](ctx, tx, "SELECT document FROM work_documents WHERE owner_id=$1 AND thing_id=$2 ORDER BY document->>'updatedAt' DESC,id", string(scope.OwnerID), item.ID)
+	if err != nil {
+		return nil, nil, err
 	}
+	permitted := []workspace.Doc{}
+	refs := []memory.Ref{}
+	for _, doc := range docs {
+		if doc.RunID != "" {
+			run, err := queryDocument[workspace.Run](ctx, tx, "SELECT document FROM agent_runs WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), doc.RunID)
+			if err != nil {
+				if err == memory.ErrNotFound {
+					continue
+				}
+				return nil, nil, err
+			}
+			run.AgentID = agent
+			if verifyRunForItemTx(ctx, tx, scope, run, &item) != nil {
+				continue
+			}
+			refs = append(refs, run.ContextVersions...)
+		}
+		permitted = append(permitted, doc)
+	}
+	return permitted, uniqueRefs(refs), nil
 }

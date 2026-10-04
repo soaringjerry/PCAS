@@ -102,8 +102,8 @@ func TestPhase2B4_L8_CorrectedMemoryDuringDeputyGenerationKeepsReturnedUsage(t *
 	if failed == nil {
 		t.Fatal("rejected deputy run disappeared")
 	}
-	if failed.Status != "failed" || !strings.Contains(failed.Error, "生成期间记忆或授权已变化") || failed.Adopted != nil {
-		t.Errorf("changed-context result was not rejected as contracted: %+v", failed)
+	if failed.Status != "done" || failed.Output != fixtures["deputyReturnedText"] || !failed.StaleContext || failed.Adopted != nil {
+		t.Errorf("corrected-context result was not retained for review: %+v", failed)
 	}
 	if len(st.Docs) != 0 || len(st.Tasks) != 1 || len(st.Tasks[0].Checklist) != 0 {
 		t.Errorf("rejected deputy output was adopted into workspace: tasks=%+v docs=%+v", st.Tasks, st.Docs)

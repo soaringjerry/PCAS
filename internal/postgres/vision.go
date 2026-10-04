@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/ai"
@@ -36,12 +37,19 @@ func (s *Store) readImage(ctx context.Context, scope memory.Scope, ref memory.Re
 		}
 		image := ai.Image{MediaType: visionMedia, Data: data}
 		stage = "budget"
-		err = s.reserveModelCost(ctx, scope.OwnerID, p.ReserveVision(visionInstructions, image), nil)
+		reservationID, err := s.reserveModelCostID(ctx, scope.OwnerID, p.ReserveVision(visionInstructions, image), nil)
 		if err == nil {
 			stage = "model"
 			work, cancel := context.WithTimeout(ctx, 45*time.Second)
 			result, callErr := s.models.Vision(work, p.ID, visionInstructions, image)
 			cancel()
+			cost := result.Cost
+			if callErr != nil && strings.TrimSpace(result.Text) == "" {
+				cost = 0
+			}
+			if settleErr := s.settleModelCost(ctx, scope.OwnerID, reservationID, cost); settleErr != nil {
+				return "", "", settleErr
+			}
 			err = callErr
 			if err == nil {
 				usage := modelUsage{OwnerID: scope.OwnerID, ID: memory.NewID(), At: time.Now().UTC(), Purpose: "vision", AgentID: p.ID, Model: p.Model, InputTokens: result.InputTokens, OutputTokens: result.OutputTokens, Cost: result.Cost, MemoryRefs: []memory.Ref{ref}}

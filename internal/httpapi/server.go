@@ -47,6 +47,7 @@ func New(sources memory.Sources, retriever memory.Retriever, auth Authenticator,
 	mux.HandleFunc("GET /v1/memory/capabilities", s.authorize(s.capabilities))
 	mux.HandleFunc("POST /v1/memory/sources", s.authorize(s.ingest))
 	mux.HandleFunc("GET /v1/memory/sources/{id}", s.authorize(s.getSource))
+	mux.HandleFunc("GET /v1/memory/sources/{id}/conversation", s.authorize(s.sourceConversation))
 	mux.HandleFunc("POST /v1/memory/recall", s.authorize(s.recall))
 	mux.HandleFunc("POST /v1/memory/expand", s.authorize(s.expand))
 	s.workspaceRoutes(mux)
@@ -134,6 +135,34 @@ func (s *Server) getSource(w http.ResponseWriter, r *http.Request, scope memory.
 		return
 	}
 	writeJSON(w, http.StatusOK, result)
+}
+
+func (s *Server) sourceConversation(w http.ResponseWriter, r *http.Request, scope memory.Scope) {
+	reader, ok := s.sources.(memory.ConversationReader)
+	if !ok {
+		s.fail(w, memory.ErrUnavailable)
+		return
+	}
+	in := memory.ConversationRequest{ID: memory.ID(r.PathValue("id")), Before: memory.ID(r.URL.Query().Get("before")), After: memory.ID(r.URL.Query().Get("after"))}
+	for _, field := range []struct {
+		name   string
+		target *int
+	}{{"version", &in.Version}, {"limit", &in.Limit}} {
+		if raw := r.URL.Query().Get(field.name); raw != "" {
+			v, err := strconv.Atoi(raw)
+			if err != nil || v < 1 {
+				s.fail(w, memory.ErrInvalid)
+				return
+			}
+			*field.target = v
+		}
+	}
+	out, err := reader.SourceConversation(r.Context(), scope, in)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 func (s *Server) recall(w http.ResponseWriter, r *http.Request, scope memory.Scope) {

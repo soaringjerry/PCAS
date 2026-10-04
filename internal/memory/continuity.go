@@ -1,6 +1,42 @@
 package memory
 
-import "context"
+import (
+	"context"
+	"time"
+)
+
+type ConversationRequest struct {
+	ID      ID
+	Version int
+	Before  ID
+	After   ID
+	Limit   int
+}
+
+type ConversationMessage struct {
+	Ref
+	Text        string     `json:"text"`
+	Role        string     `json:"role"`
+	ExpressedAt *time.Time `json:"expressed_at,omitempty"`
+	RecordedAt  time.Time  `json:"recorded_at"`
+	Anchor      bool       `json:"anchor"`
+}
+
+type ConversationResult struct {
+	Anchor   Ref                   `json:"anchor"`
+	Title    string                `json:"title"`
+	Messages []ConversationMessage `json:"messages"`
+	Before   ID                    `json:"before,omitempty"`
+	After    ID                    `json:"after,omitempty"`
+	Gaps     []string              `json:"gaps"`
+	// Permission proofs for assistant parents outside the displayed window.
+	ProofRefs []Ref `json:"-"`
+}
+
+// Optional source capability. Reading context never mutates memories or usage.
+type ConversationReader interface {
+	SourceConversation(context.Context, Scope, ConversationRequest) (ConversationResult, error)
+}
 
 type SourceContext struct {
 	Conversation string   `json:"conversation,omitempty"`

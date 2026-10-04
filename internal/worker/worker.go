@@ -46,6 +46,27 @@ type deferredQueue interface {
 	Defer(context.Context, Job, string, time.Time, bool) error
 }
 
+type indexQueue interface {
+	ClaimIndex(context.Context, time.Duration) (*Job, error)
+}
+
+type indexingQueue struct {
+	Queue
+	index indexQueue
+}
+
+func (q indexingQueue) Claim(ctx context.Context, lease time.Duration) (*Job, error) {
+	return q.index.ClaimIndex(ctx, lease)
+}
+
+func (q indexingQueue) Defer(ctx context.Context, job Job, code string, until time.Time, noAttempt bool) error {
+	queue, ok := q.Queue.(deferredQueue)
+	if !ok {
+		return errors.New("queue does not support deferred jobs")
+	}
+	return queue.Defer(ctx, job, code, until, noAttempt)
+}
+
 // A handler commits its output and job acknowledgement in the same fenced
 // transaction. It must be idempotent and honor context cancellation.
 type Handler func(context.Context, Job) error
@@ -116,6 +137,26 @@ func ignoreLostLease(err error) error {
 }
 
 func (w *Worker) Run(ctx context.Context) error {
+	index, ok := w.queue.(indexQueue)
+	if !ok {
+		return w.run(ctx)
+	}
+	// One general lane and one index lane. Long extraction calls cannot stop
+	// search/vector progress; model extraction concurrency remains one.
+	runCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	indexWorker := *w
+	indexWorker.queue = indexingQueue{Queue: w.queue, index: index}
+	done := make(chan error, 2)
+	go func() { done <- w.run(runCtx) }()
+	go func() { done <- indexWorker.run(runCtx) }()
+	err := <-done
+	cancel()
+	<-done
+	return err
+}
+
+func (w *Worker) run(ctx context.Context) error {
 	for {
 		if err := ctx.Err(); err != nil {
 			return nil

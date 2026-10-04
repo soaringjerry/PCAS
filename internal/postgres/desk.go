@@ -117,6 +117,7 @@ func (s *Store) AnswerDesk(ctx context.Context, scope memory.Scope, agentID, que
 	}
 	fmt.Fprintf(&prompt, "\n问题：%s\n\n检索到的记录（引用 ID）：\n", question)
 	sent := map[string]memory.Ref{}
+	contextClaims := []evidenceContextClaim{}
 	for _, ref := range recall.Memories {
 		m, ok := visible[string(ref.ID)]
 		if !ok || sent[m.ID] != (memory.Ref{}) || len(sent) >= 20 {
@@ -125,12 +126,36 @@ func (s *Store) AnswerDesk(ctx context.Context, scope memory.Scope, agentID, que
 		fmt.Fprintf(&prompt, "[%s / %s / confirmation=%s / acquisition=%s] %s\n", m.ID, m.Epistemic, m.Confirmation, m.Acquisition, m.Text)
 		sent[m.ID] = memory.Ref{ID: memory.ID(m.ID), Version: m.Version, Kind: memory.ClaimKind}
 		dependencies = append(dependencies, sent[m.ID])
+		contextClaims = append(contextClaims, evidenceContextClaim{Label: m.ID, Ref: sent[m.ID], Text: m.Text})
 	}
 	// History turns repeat their own dependencies; keep the stored list a set.
 	dependencies = uniqueRefs(dependencies)
 	if len(sent) == 0 {
 		fmt.Fprintln(&prompt, "（没有）")
 	}
+	if err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		groups, gaps, err := evidenceContextsTx(ctx, tx, scope, agent.ID, nil, contextClaims)
+		if err != nil {
+			return err
+		}
+		if len(groups) > 0 || len(gaps) > 0 {
+			fmt.Fprintln(&prompt, "\n记忆的来源上下文：\n"+evidenceContextInstructions)
+		}
+		for _, group := range groups {
+			dependencies = append(dependencies, group.Window.ProofRefs...)
+			fmt.Fprintf(&prompt, "记录 %s 的原对话片段：\n", group.Label)
+			for i, message := range group.Window.Messages {
+				prompt.WriteString(contextMessageLine(fmt.Sprintf("上下文 %d", i+1), message, loc))
+				dependencies = append(dependencies, message.Ref)
+			}
+			writeContextGaps(&prompt, group.Label, group.Window.Gaps)
+		}
+		writeContextGaps(&prompt, "范围提示", gaps)
+		return nil
+	}); err != nil {
+		return out, err
+	}
+	dependencies = uniqueRefs(dependencies)
 	fmt.Fprintln(&prompt, "\n未完成的事项：")
 	for _, t := range tasks {
 		fmt.Fprintf(&prompt, "- %s（%s", t.Title, t.Status)

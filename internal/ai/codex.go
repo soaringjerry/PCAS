@@ -26,6 +26,7 @@ type Codex struct {
 	writeMu               sync.Mutex
 	cmd                   *exec.Cmd
 	input                 io.WriteCloser
+	output                io.ReadCloser
 	done                  chan struct{}
 	sequence              uint64
 	pending               map[string]chan rpcMessage
@@ -76,6 +77,7 @@ func (c *Codex) start() error {
 		"-c", "features.hooks=false", "-c", "features.memories=false", "-c", "tools.view_image=false",
 		"-c", "project_doc_max_bytes=0", "-c", "history.persistence=\"none\"")
 	cmd.Dir = c.scratch
+	setCodexProcessGroup(cmd)
 	// Explicit allowlist: PCAS database/password/API configuration is never inherited.
 	for _, name := range []string{"PATH", "HOME", "LANG", "LC_ALL", "SSL_CERT_FILE", "SSL_CERT_DIR", "HTTPS_PROXY", "HTTP_PROXY", "NO_PROXY"} {
 		if v := os.Getenv(name); v != "" {
@@ -97,6 +99,7 @@ func (c *Codex) start() error {
 	}
 	c.cmd = cmd
 	c.input = input
+	c.output = output
 	c.done = make(chan struct{})
 	c.pending = map[string]chan rpcMessage{}
 	c.watchers = map[uint64]chan rpcMessage{}
@@ -153,7 +156,14 @@ func (c *Codex) write(value any) error {
 	defer c.writeMu.Unlock()
 	c.mu.Lock()
 	input := c.input
+	err := c.err
 	c.mu.Unlock()
+	if err != nil {
+		return err
+	}
+	if input == nil {
+		return errors.New("Codex connection closed")
+	}
 	return json.NewEncoder(input).Encode(value)
 }
 func (c *Codex) call(ctx context.Context, method string, params any) (json.RawMessage, error) {
@@ -243,10 +253,29 @@ func (c *Codex) Models(ctx context.Context) (json.RawMessage, error) {
 }
 func (c *Codex) Close() {
 	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.cmd != nil && c.err == nil {
-		_ = c.cmd.Process.Kill()
-		c.err = errors.New("closed")
+	cmd, input, output, done := c.cmd, c.input, c.output, c.done
+	if cmd == nil {
+		c.mu.Unlock()
+		return
+	}
+	c.cmd, c.input, c.output = nil, nil, nil
+	c.err = errors.New("closed")
+	c.mu.Unlock()
+	// The npm entry point launches the real app-server as a child. Killing
+	// only that entry point leaves the server alive, retaining the RPC pipes.
+	// Terminate the dedicated group and close both pipes so read can reap the
+	// entry point, even when a descendant retained a pipe descriptor.
+	killCodexProcessGroup(cmd)
+	if input != nil {
+		_ = input.Close()
+	}
+	if output != nil {
+		_ = output.Close()
+	}
+	// read needs mu to finish; never wait for it while holding that lock.
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
 	}
 }
 func (c *Codex) Generate(ctx context.Context, model, system, prompt string) (string, error) {

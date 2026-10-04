@@ -14,6 +14,16 @@ import (
 const maxAttempts = 5
 
 func (s *Store) Claim(ctx context.Context, lease time.Duration) (*worker.Job, error) {
+	return s.claim(ctx, lease, false)
+}
+
+// ClaimIndex reserves indexing capacity independently of long model calls.
+// Both lanes use the same lease fencing, pause and fresh-input rules.
+func (s *Store) ClaimIndex(ctx context.Context, lease time.Duration) (*worker.Job, error) {
+	return s.claim(ctx, lease, true)
+}
+
+func (s *Store) claim(ctx context.Context, lease time.Duration, indexOnly bool) (*worker.Job, error) {
 	if lease <= 0 {
 		return nil, memory.ErrInvalid
 	}
@@ -27,6 +37,11 @@ func (s *Store) Claim(ctx context.Context, lease time.Duration) (*worker.Job, er
 	// coalesced, advance by its ordering key rather than sorting the whole queue.
 	leaseToken := string(memory.NewID())
 	query, cursorQuery := claimWindowed, claimFirstCursor
+	nextQuery, nextCursorQuery := claimNextWindow, claimNextCursor
+	if indexOnly {
+		query, cursorQuery = claimIndexWindowed, claimIndexFirstCursor
+		nextQuery, nextCursorQuery = claimIndexNextWindow, claimIndexNextCursor
+	}
 	args := []any{lease.Seconds(), leaseToken, maxAttempts}
 	for {
 		err = s.pool.QueryRow(ctx, query, args...).Scan(&id, &ownerID, &recordID, &job.Record.Version, &job.Stage, &job.Attempts, &token, &kind)
@@ -47,7 +62,7 @@ func (s *Store) Claim(ctx context.Context, lease time.Duration) (*worker.Job, er
 		if err != nil {
 			return nil, err
 		}
-		query, cursorQuery = claimNextWindow, claimNextCursor
+		query, cursorQuery = nextQuery, nextCursorQuery
 		args = []any{lease.Seconds(), leaseToken, maxAttempts, priority, available, created, lastID}
 	}
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -267,3 +282,14 @@ const claimNextWindow = `WITH ready AS MATERIALIZED (SELECT id FROM memory_jobs 
 const claimCursorBase = `SELECT priority,available_at,created_at,id::text FROM memory_jobs WHERE state IN ('queued','leased') AND ((state='queued' AND available_at<=now()) OR (state='leased' AND lease_until<now() AND attempts<$1))`
 const claimFirstCursor = claimCursorBase + ` ORDER BY priority,available_at,created_at,id OFFSET 499 LIMIT 1`
 const claimNextCursor = claimCursorBase + ` AND (priority,available_at,created_at,id)>($2,$3,$4,$5::uuid) ORDER BY priority,available_at,created_at,id OFFSET 499 LIMIT 1`
+
+// This predicate matches jobs_index_dispatch_ready_idx; the index lane must
+// not walk all waiting extraction entrances before finding an index job.
+const claimIndexStages = `(stage IN ('source.embed','source.tokenize','memory.embed','memory.index') OR stage LIKE 'memory.embed:%')`
+
+var claimIndexWindowed = strings.Replace(claimWindowed, "WHERE state IN", "WHERE "+claimIndexStages+" AND state IN", 1)
+var claimIndexNextWindow = strings.Replace(claimNextWindow, "WHERE state IN", "WHERE "+claimIndexStages+" AND state IN", 1)
+
+const claimIndexCursorBase = claimCursorBase + ` AND ` + claimIndexStages
+const claimIndexFirstCursor = claimIndexCursorBase + ` ORDER BY priority,available_at,created_at,id OFFSET 499 LIMIT 1`
+const claimIndexNextCursor = claimIndexCursorBase + ` AND (priority,available_at,created_at,id)>($2,$3,$4,$5::uuid) ORDER BY priority,available_at,created_at,id OFFSET 499 LIMIT 1`

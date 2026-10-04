@@ -89,6 +89,9 @@ services:
   worker:
     <<: *memory
     restart: unless-stopped
+    mem_limit: 1g
+    pids_limit: 128
+    cpus: 2
     command: ["worker"]
     depends_on:
       migrate:

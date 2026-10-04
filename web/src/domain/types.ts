@@ -137,6 +137,7 @@ export interface MemoryMention {
 }
 
 export interface Memory {
+  contextDependent?: boolean
   expressedAt?: string
   eventFrom?: string
   eventTo?: string

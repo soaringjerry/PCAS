@@ -45,3 +45,14 @@ func (s *Service) GetSource(ctx context.Context, scope Scope, id ID, version int
 	}
 	return s.repo.GetSource(ctx, scope, id, version)
 }
+
+func (s *Service) SourceConversation(ctx context.Context, scope Scope, in ConversationRequest) (ConversationResult, error) {
+	if !scope.Valid() || !scope.IsOwner {
+		return ConversationResult{}, ErrForbidden
+	}
+	reader, ok := s.repo.(ConversationReader)
+	if !ok {
+		return ConversationResult{}, ErrUnavailable
+	}
+	return reader.SourceConversation(ctx, scope, in)
+}

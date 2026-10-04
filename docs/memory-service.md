@@ -28,6 +28,7 @@
 | `GET /v1/workspace/export` | JSON 资料导出；`training=true&confirmedOnly=true` 筛选 JSONL |
 | `POST /v1/memory/sources` | 版本化文本来源 |
 | `GET /v1/memory/sources/{id}?version=N` | 原文、派生解析版本和处理进度 |
+| `GET /v1/memory/sources/{id}/conversation?version=N` | owner 查看引用消息周围的原对话；`before`/`after` 为同一会话消息 ID，`limit` 默认 7、最大 20 |
 | `POST /v1/memory/attachments` | multipart 附件上传 |
 | `GET /v1/memory/sources/{id}/attachment?version=N` | 鉴权下载原件 |
 | `POST /v1/memory/commit` | 有证据的结构化图批量提交 |
@@ -47,6 +48,16 @@
 数据类型见 `internal/memory/contracts.go`、`internal/memory/commit.go` 和 `internal/workspace/model.go`；工作台 action 类型见 `web/src/store/actions.ts`。原始文件、OCR、抽取文本与转录通过 `representation` 区分。
 
 ## 存储和一致性
+
+### 记忆摘要与原对话
+
+记忆保留到原文具体版本、引用字符范围及会话归属的链接。来源面板可展开同一会话当前分支的相邻消息，保留说话人和表达时间，突出引用原话；继续向前/向后分页可阅读更完整的对话。历史旁支不与其他旧分支拼接。没有会话归属的资料提供原件，不推测关联对话。
+
+秘书、旧问答接口、副手和手动交办按已召回记忆的证据补读上下文，优先处理含指代的记忆。一次最多四个来源窗口、共 10,000 字符，每条消息最多读取 900 字符并明确标注片段；超预算或上下文不可用时提示不能从摘要补猜。窗口不代表整段对话，AI 回复只用于理解，观点与决定以用户原话为依据。
+
+读取的原话版本加入回答和交办的依赖账本，遵守原有可见性、事项排除及生成后的重新校验；受限窗口不进入模型。已有记忆无需重新提取即可查看和使用来源上下文。含指代的阅读提示不代表对象已被确认；新提取要求在有唯一明确依据时补全对象和必要限定，未明确的称呼不能建为确定人名。
+
+实现规则与操作序列见 [E4](tasks/improvements/E4-memory-evidence-context.md)。公开文档、测试和示例使用虚构内容；真实记忆、生产查询及截图只保留本地。
 
 规范记录位于 PostgreSQL，附件在独立文件卷，向量带模型与维度。摘要、交接和索引依赖原始 ID/版本。写入与队列事件同事务提交；worker 使用有期限的租约和随机 fencing token，失去租约后不能提交。普通派生处理可幂等重试；可能已付费的模型调用保留预算预留并要求显式重试。
 

@@ -2967,6 +2967,16 @@ a.btn:hover {
   scrollbar-width: thin;
 }
 
+.conversation-context > div { margin-top: 12px; }
+.conversation-message { min-width: 0; }
+.conversation-message .row { flex-wrap: wrap; }
+.conversation-message .source-text {
+  margin-top: 8px;
+  max-height: 20rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
 /* The passage the card quoted: tinted, nothing that moves. */
 .source-words mark {
   padding: 2px 0;

@@ -190,7 +190,7 @@ func (s *Store) recallTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in 
  )`
 	detailSQL := ` SELECT p.id,p.version,p.kind,coalesce(hit.body,t.body) AS body,p.score,coalesce(sc.role,'') AS role,coalesce(sc.branch,'') AS branch,coalesce(sc.gaps,'[]') AS gaps,
          coalesce(hit.excerpt,sv.body,'') AS excerpt,coalesce(sv.title,'') AS title,p.connector,p.external_id,p.expressed_at,p.recorded_at,p.explicit,
-         coalesce(btrim(sv.body)!='' AND (sv.media_type LIKE 'text/%' OR sv.representation IN ('ocr','transcript','extracted')),false) AS readable
+         coalesce(btrim(sv.body)!='' AND (sv.media_type LIKE 'text/%' OR sv.representation IN ('ocr','transcript','extracted','vision')),false) AS readable
  FROM picked p
  JOIN LATERAL (SELECT m.body FROM memory_text m WHERE m.owner_id=$1 AND m.id=p.uid AND m.version=p.version) t ON true
         LEFT JOIN LATERAL (

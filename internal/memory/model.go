@@ -113,6 +113,7 @@ type DerivedView struct {
 }
 
 type Processing struct {
+	Method    string `json:"method,omitempty"`
 	ID        ID     `json:"id"`
 	Stage     string `json:"stage"`
 	State     string `json:"state"`

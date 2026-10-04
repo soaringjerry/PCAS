@@ -38,8 +38,11 @@ PCAS 的所有文档都从这一页找。新增或移动文档时，同时改这
 | [T1 Telegram 里的回复不再缺斤少两](tasks/improvements/T1-telegram-replies.md) | 阶段之间的小改进：交办回执、链接、副手做完后把结果发回来（2026-10-03） |
 | [U1 归档上传：分片，压缩包只传对话文件](tasks/improvements/U1-archive-upload-in-pieces.md) | 阶段之间的小改进：上传失败的原因、分片规则、只取对话文件、图片不解析的决定（2026-10-03） |
 | [M1 秘书看得见图片](tasks/improvements/M1-images-for-the-secretary.md) | 待做：模型看图、发给秘书的图片当成说的话、网页输入框带附件（2026-10-03 用户提出） |
+| [M1 image acceptance expectations](tasks/improvements/M1-images-expectations.md) | V1–V10 expectations written before implementation; synthetic fixtures only |
+| [M1 image validation](evaluations/2026-10-03-m1-images.md) | Rule coverage, Codex protocol evidence and synthetic desktop/mobile screenshots |
 | [R1 检查报告里的九个问题](tasks/improvements/R1-review-1003-fixes.md) | 2026-10-03 独立检查发现的问题：已修的四条、交给执行者的四条规则、没改的一条 |
 | [P1 资料多了以后，秘书回话不能变慢](tasks/improvements/P1-recall-speed.md) | 导入 2.7 万条后秘书回一句话要 46 秒：量出的原因、改法、前后对比（2026-10-03） |
+| [W1 副手能联网查资料](tasks/improvements/W1-deputy-web-search.md) | 副手查不了网的原因、改法、哪些角色和通道能联网（2026-10-03） |
 
 **要部署、接模型、接数据**
 

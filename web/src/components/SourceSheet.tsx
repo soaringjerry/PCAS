@@ -8,7 +8,7 @@ import { SideSheet } from './Overlay'
 import { Spinner, Tag } from './ui'
 
 // How a text that was read out of an original came to be, in plain words.
-const READ_BY: Record<string, string> = { transcript: '录音转写', ocr: '图片识别', extracted: '文件提取' }
+const READ_BY: Record<string, string> = { vision: '模型读图', transcript: '录音转写', ocr: '图片识别', extracted: '文件提取' }
 
 /** Where the cited passage sits in the text; nothing when it is not there word for word, or is all there is. */
 function locate(text: string, excerpt?: string): [string, string, string] | null {
@@ -32,7 +32,7 @@ function Words({ text, excerpt }: { text: string; excerpt?: string }) {
   return <pre ref={box} className="source-text source-words" tabIndex={0}>{parts ? <>{parts[0]}<mark>{parts[1]}</mark>{parts[2]}</> : text}</pre>
 }
 
-interface SourceResult { derived: { id: string; version: number }[]; source: { id: string; version: number; title: string; text: string; recorded_at: string; has_attachment: boolean; attachment_missing: boolean; representation: string }; processing: { id: string; stage: string; state: string; error_code?: string }[] }
+interface SourceResult { derived: { id: string; version: number }[]; source: { id: string; version: number; title: string; text: string; recorded_at: string; has_attachment: boolean; attachment_missing: boolean; representation: string }; processing: { id: string; stage: string; state: string; error_code?: string; method?: string }[] }
 /**
  * The library opens a record with its version, processing state and summary.
  * Opened from a conversation (`conversation` given), it shows what was said and
@@ -49,6 +49,7 @@ export function SourceSheet({ id, version, onClose, conversation }: { id: string
       .then((data) => { if (alive) setData(data) }).catch((e: Error) => { if (alive) setError(e.message) })
     return () => { alive = false }
   }, [id, version])
+  const methods = [...new Set(data?.processing.map((job) => job.method).filter((method): method is string => !!method) ?? [])]
   const pending = data?.processing.filter((job) => job.state !== 'done') ?? []
   if (conversation) {
     const readBy = data && data.source.representation !== 'original' ? READ_BY[data.source.representation] : undefined
@@ -71,6 +72,7 @@ export function SourceSheet({ id, version, onClose, conversation }: { id: string
     {error && <p className="form-error" role="alert"><CircleAlert size={14} />{error}</p>}
     {!data && !error && <p className="row muted"><Spinner />读取中…</p>}
     {data && <div className="stack">
+      {methods.length > 0 && <p className="note">读取方式：{methods.map((method) => READ_BY[method] ?? method).join('、')}</p>}
       {(pending.length > 0 || data.source.attachment_missing || data.source.representation !== 'original') && <div className="stack-sm">
         {pending.length > 0 && <div className="row">{pending.map((job) => <Tag key={job.id} tone={job.error_code ? 'danger' : 'info'}>{job.stage}：{job.state}{job.error_code ? `（${job.error_code}）` : ''}</Tag>)}</div>}
         {data.source.attachment_missing && <p className="callout callout-danger" role="alert"><CircleAlert size={15} />原件当前不可用，解析文本不能代替原件；请核对附件存储。</p>}

@@ -12,6 +12,8 @@ export interface MemoryFilter {
   q: string
   /** A person or place: only memories that mention it. */
   entity: string
+  /** A project, topic or area of life: only memories filed under it. */
+  group: string
   nature: MemoryKind | ''
   /** How far it can be trusted; the server knows three values. */
   epistemic: Exclude<Epistemic, 'planned'> | ''
@@ -34,7 +36,7 @@ function readProblem(e: unknown): string {
 
 function listPath(filter: MemoryQuery, cursor?: string, limit = PAGE): string {
   const query = new URLSearchParams({ limit: String(limit) })
-  for (const name of ['q', 'entity', 'nature', 'epistemic', 'project', 'agent'] as const) {
+  for (const name of ['q', 'entity', 'group', 'nature', 'epistemic', 'project', 'agent'] as const) {
     const value = filter[name]
     if (value) query.set(name, value)
   }
@@ -86,20 +88,20 @@ export interface MemoryList {
 /** The memory list for one filter, read a page at a time and re-read from the top whenever the workspace changes. */
 export function useMemoryList(filter: MemoryFilter): MemoryList {
   const { state } = useStore()
-  const { q, entity, nature, epistemic } = filter
-  const key = `${q}\n${entity}\n${nature}\n${epistemic}`
+  const { q, entity, group, nature, epistemic } = filter
+  const key = `${q}\n${entity}\n${group}\n${nature}\n${epistemic}`
   const [data, setData] = useState(nothing)
   const [attempt, setAttempt] = useState(0)
   const reading = useRef('')
 
   useEffect(() => {
     let alive = true
-    api<Partial<MemoryPage>>(listPath({ q, entity, nature, epistemic }))
+    api<Partial<MemoryPage>>(listPath({ q, entity, group, nature, epistemic }))
       .then((page) => { if (alive) setData((prev) => refreshed(prev, key, page)) })
       // A failed re-read keeps what is already shown; only a first read has nothing to fall back on.
       .catch((e: unknown) => { if (alive) setData((prev) => prev.key === key && prev.phase === 'ready' ? prev : { ...nothing, key, phase: 'failed', problem: readProblem(e) }) })
     return () => { alive = false }
-  }, [key, q, entity, nature, epistemic, state.revision, attempt])
+  }, [key, q, entity, group, nature, epistemic, state.revision, attempt])
 
   const current = data.key === key ? data : undefined
   const cursor = current?.phase === 'ready' ? current.next : ''
@@ -108,7 +110,7 @@ export function useMemoryList(filter: MemoryFilter): MemoryList {
     if (!cursor || reading.current === token) return
     reading.current = token
     setData((prev) => prev.key === key ? { ...prev, more: 'loading', moreProblem: '' } : prev)
-    api<Partial<MemoryPage>>(listPath({ q, entity, nature, epistemic }, cursor))
+    api<Partial<MemoryPage>>(listPath({ q, entity, group, nature, epistemic }, cursor))
       .then((page) => setData((prev) => {
         // The list moved on while this page was on its way.
         if (prev.key !== key || prev.next !== cursor) return prev
@@ -117,7 +119,7 @@ export function useMemoryList(filter: MemoryFilter): MemoryList {
       }))
       .catch((e: unknown) => setData((prev) => prev.key === key && prev.next === cursor ? { ...prev, more: 'failed', moreProblem: readProblem(e) } : prev))
       .finally(() => { if (reading.current === token) reading.current = '' })
-  }, [key, q, entity, nature, epistemic, cursor])
+  }, [key, q, entity, group, nature, epistemic, cursor])
 
   const retry = useCallback(() => { setData(nothing); setAttempt((n) => n + 1) }, [])
   const remove = useCallback((id: string) => setData((prev) => prev.items.some((m) => m.id === id) ? { ...prev, items: prev.items.filter((m) => m.id !== id), total: Math.max(0, prev.total - 1) } : prev), [])
@@ -140,7 +142,7 @@ export function useMemoryList(filter: MemoryFilter): MemoryList {
   }
 }
 
-/** The people and places memories mention, most mentioned first. */
+/** The people and places memories mention and the groups they are filed under, most used first. */
 export function useMemoryFacets(): { facets?: MemoryFacets; problem: string; retry: () => void } {
   const { state } = useStore()
   const [facets, setFacets] = useState<MemoryFacets>()
@@ -149,7 +151,7 @@ export function useMemoryFacets(): { facets?: MemoryFacets; problem: string; ret
   useEffect(() => {
     let alive = true
     api<Partial<MemoryFacets>>('/v1/workspace/memory-facets')
-      .then((v) => { if (alive) { setFacets({ people: v.people ?? [], places: v.places ?? [] }); setProblem('') } })
+      .then((v) => { if (alive) { setFacets({ groups: v.groups ?? [], people: v.people ?? [], places: v.places ?? [] }); setProblem('') } })
       .catch((e: unknown) => { if (alive) setProblem(readProblem(e)) })
     return () => { alive = false }
   }, [state.revision, attempt])

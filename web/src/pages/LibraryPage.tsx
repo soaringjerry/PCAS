@@ -6,13 +6,13 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { ChevronRight, CircleAlert, Download, History, Info, RotateCw, Search, Trash2, Upload } from 'lucide-react'
 import { Checkbox, Chip } from '../components/controls'
-import { EventTime, Fade, FromLine, Mentions, ProjectLink, SaidAt, TrustTag } from '../components/Marks'
+import { EventTime, Fade, FromLine, Groups, Mentions, ProjectLink, SaidAt, TrustTag } from '../components/Marks'
 import { ConfirmModal, SideSheet } from '../components/Overlay'
 import { UnsureSheet } from '../components/UnsureSheet'
 import { Button, Empty, Progress, Seg, Sheet, Spinner, Switch, Tag } from '../components/ui'
-import { jobStatusLabel, memoryKindLabel, sampleStateLabel, sourceStatusLabel, triggerLabel } from '../domain/labels'
+import { jobStatusLabel, memoryCategoryLabel, memoryKindLabel, sampleStateLabel, sourceStatusLabel, triggerLabel } from '../domain/labels'
 import { formatAgo, formatShortWhen, formatWhen } from '../domain/time'
-import type { Epistemic, Memory, MemoryFacet, MemoryKind, MemoryMention, Source, TrainingSample } from '../domain/types'
+import type { Epistemic, Memory, MemoryFacet, MemoryGroup, MemoryKind, MemoryMention, Source, TrainingSample } from '../domain/types'
 import { useStore } from '../store/context'
 import { useMemory, useMemoryFacets, useMemoryList } from '../store/memories'
 import { useToast } from '../store/toast'
@@ -22,13 +22,18 @@ type Tab = 'memory' | 'sources' | 'training'
 const actor = { user: '你', ai: 'AI', import: '导入', system: '系统' } as const
 
 const hasEventTime = (m: Memory) => Boolean(m.eventFrom && m.eventPrecision && m.eventPrecision !== 'unknown')
+/** What a memory is, once it has been sorted; nothing before that. */
+const categoryOf = (m: Memory) => (m.category && m.category !== 'unknown' ? memoryCategoryLabel[m.category] : undefined)
 
-function MemorySheet({ memory, entity, onClose, onPick, onDeleted }: {
+function MemorySheet({ memory, entity, group, onClose, onPick, onPickGroup, onDeleted }: {
   memory: Memory
   /** The person or place the list is narrowed to, if any. */
   entity: string
+  /** The group the list is narrowed to, if any. */
+  group: string
   onClose: () => void
   onPick: (mention: MemoryMention) => void
+  onPickGroup: (group: MemoryGroup) => void
   onDeleted: () => void
 }) {
   const { state, dispatch } = useStore()
@@ -44,6 +49,8 @@ function MemorySheet({ memory, entity, onClose, onPick, onDeleted }: {
   const people = mentions.filter((m) => m.role === 'person')
   const places = mentions.filter((m) => m.role === 'place')
   const others = mentions.filter((m) => m.role !== 'person' && m.role !== 'place')
+  const groups = memory.groups ?? []
+  const category = categoryOf(memory)
 
   return (
     <SideSheet
@@ -51,6 +58,7 @@ function MemorySheet({ memory, entity, onClose, onPick, onDeleted }: {
       onClose={onClose}
       top={
         <>
+          {category && <Tag>{category}</Tag>}
           <TrustTag value={memory.epistemic} />
           {memory.epistemic === 'confirmed' && <Tag tone="success">已确认</Tag>}
           <ProjectLink id={memory.projectId} />
@@ -90,8 +98,14 @@ function MemorySheet({ memory, entity, onClose, onPick, onDeleted }: {
           </div>
         </div>
 
-        {(hasEventTime(memory) || memory.expressedAt || mentions.length > 0) && (
+        {(hasEventTime(memory) || memory.expressedAt || mentions.length > 0 || groups.length > 0) && (
           <dl className="mem-facts">
+            {groups.length > 0 && (
+              <div>
+                <dt>分组</dt>
+                <dd className="mem-marks"><Groups groups={groups} active={group} onPick={onPickGroup} /></dd>
+              </div>
+            )}
             {hasEventTime(memory) && (
               <div>
                 <dt>说的是哪天的事</dt>
@@ -224,10 +238,24 @@ const trusts: { value: Trust; label: string }[] = [
   { value: 'sourced', label: '原话有据' },
   { value: 'inferred', label: '推测' },
 ]
-/** How many people or places are offered before 「更多」. */
+const groupRows: { type: MemoryGroup['type']; label: string }[] = [
+  { type: 'project', label: '项目' },
+  { type: 'topic', label: '主题' },
+  { type: 'area', label: '领域' },
+]
+
+/** What the narrowed list holds, said by the person or place and the group it is narrowed to. */
+function summaryOf(entityName: string, groupName: string): string {
+  if (entityName && groupName) return `「${groupName}」下面提到「${entityName}」的记忆`
+  if (entityName) return `提到「${entityName}」的记忆`
+  if (groupName) return `「${groupName}」下面的记忆`
+  return '符合的记忆'
+}
+
+/** How many of one row (people, places, or one kind of group) are offered before 「更多」. */
 const FACETS_SHOWN = 6
 
-/** The people or the places memories mention, as a row to pick one from. */
+/** The people or places memories mention, or the groups they are filed under, as a row to pick one from. */
 function FacetRow({ label, entries, active, onPick }: { label: string; entries: MemoryFacet[]; active: string; onPick: (entityId: string) => void }) {
   const [all, setAll] = useState(false)
   if (!entries.length) return null
@@ -264,6 +292,7 @@ function MemoryTab() {
   // The filters live in the address, so a reload or the back button keeps them.
   const q = params.get('q') ?? ''
   const entity = params.get('entity') ?? ''
+  const group = params.get('group') ?? ''
   const nature = natures.find((n) => n === params.get('nature')) ?? ''
   const epistemic = trusts.find((t) => t.value === params.get('epistemic'))?.value ?? ''
   const openId = params.get('m')
@@ -291,12 +320,19 @@ function MemoryTab() {
     }, 250)
   }
 
-  const list = useMemoryList({ q, entity, nature, epistemic })
+  const list = useMemoryList({ q, entity, group, nature, epistemic })
   const { facets, problem: facetsProblem, retry: retryFacets } = useMemoryFacets()
   const opened = useMemory(openId, list.items.find((m) => m.id === openId))
   const [recalling, setRecalling] = useState(false)
-  const filtered = Boolean(q || entity || nature || epistemic)
+  const { organize } = useStore().state
+  const filtered = Boolean(q || entity || group || nature || epistemic)
   const pick = (entityId: string) => change({ entity: entityId === entity ? null : entityId, m: null })
+  const pickGroup = (entityId: string) => change({ group: entityId === group ? null : entityId, m: null })
+  const groups = facets?.groups ?? []
+  const groupName = group
+    ? groups.find((g) => g.entityId === group)?.name
+      ?? list.items.flatMap((m) => m.groups ?? []).find((g) => g.entityId === group)?.name
+    : undefined
   const entityName = entity
     ? [...(facets?.people ?? []), ...(facets?.places ?? [])].find((f) => f.entityId === entity)?.name
       ?? list.items.flatMap((m) => m.mentions ?? []).find((m) => m.entityId === entity)?.name
@@ -340,8 +376,11 @@ function MemoryTab() {
           items={[{ value: 'all', label: '都看' }, ...trusts]}
         />
       </div>
-      {facets && (facets.people.length > 0 || facets.places.length > 0) && (
+      {facets && (groups.length > 0 || facets.people.length > 0 || facets.places.length > 0) && (
         <div className="mem-facets">
+          {groupRows.map((row) => (
+            <FacetRow key={row.type} label={row.label} entries={groups.filter((g) => g.type === row.type)} active={group} onPick={pickGroup} />
+          ))}
           <FacetRow label="提到的人" entries={facets.people} active={entity} onPick={pick} />
           <FacetRow label="地点" entries={facets.places} active={entity} onPick={pick} />
         </div>
@@ -361,10 +400,15 @@ function MemoryTab() {
       </p>
       {filtered && (
         <p className="mem-summary" role="status">
-          {list.phase === 'ready' && <span>{entity ? `提到「${entityName ?? '它'}」的记忆` : '符合的记忆'}有 {list.total} 条</span>}
-          <button type="button" className="link-btn" onClick={() => { window.clearTimeout(typing.current); change({ q: null, entity: null, nature: null, epistemic: null }) }}>
+          {list.phase === 'ready' && <span>{summaryOf(entity && (entityName ?? '它'), group && (groupName ?? '它'))}有 {list.total} 条</span>}
+          <button type="button" className="link-btn" onClick={() => { window.clearTimeout(typing.current); change({ q: null, entity: null, group: null, nature: null, epistemic: null }) }}>
             清掉筛选
           </button>
+        </p>
+      )}
+      {organize && organize.done < organize.total && (
+        <p className="mem-summary" role="status" aria-label="整理进度">
+          已整理 {organize.done} / {organize.total}
         </p>
       )}
       <Sheet>
@@ -390,13 +434,15 @@ function MemoryTab() {
                 <div className="grow">
                   {/* The click is handled by the row; the button gives the keyboard the same way in. */}
                   <button type="button" className={`mem-text${m.epistemic === 'inferred' ? ' guess' : ''}`}>{m.text}</button>
-                  {(hasEventTime(m) || (m.mentions?.length ?? 0) > 0) && (
+                  {(hasEventTime(m) || (m.mentions?.length ?? 0) > 0 || (m.groups?.length ?? 0) > 0) && (
                     <div className="mem-marks">
                       <EventTime from={m.eventFrom} to={m.eventTo} precision={m.eventPrecision} />
+                      <Groups groups={m.groups} active={group} onPick={(g) => pickGroup(g.entityId)} />
                       <Mentions mentions={m.mentions} active={entity} limit={6} onPick={(mention) => pick(mention.entityId)} />
                     </div>
                   )}
                   <div className="meta">
+                    {categoryOf(m) && <Tag>{categoryOf(m)}</Tag>}
                     <span>{memoryKindLabel[m.kind]}</span>
                     <TrustTag value={m.epistemic} />
                     <SaidAt at={m.expressedAt} />
@@ -434,8 +480,10 @@ function MemoryTab() {
           key={opened.memory.id}
           memory={opened.memory}
           entity={entity}
+          group={group}
           onClose={() => change({ m: null })}
           onPick={(mention) => pick(mention.entityId)}
+          onPickGroup={(g) => pickGroup(g.entityId)}
           onDeleted={() => list.remove(opened.memory!.id)}
         />
       )}

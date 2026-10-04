@@ -7,6 +7,8 @@ from pathlib import Path
 import unittest
 import tempfile
 from argparse import Namespace
+from unittest.mock import patch, Mock
+import os
 import sys
 sys.dont_write_bytecode = True
 
@@ -51,6 +53,34 @@ class ReviewGate(unittest.TestCase):
         # resolve() includes symlinked parents; no need to touch online paths.
         self.assertEqual(workflow.outside_git('/var/tmp/pcas-v2-private/proposals.json'),
                          Path('/var/tmp/pcas-v2-private/proposals.json'))
+
+    def test_uri_credentials_are_environment_only_and_host_is_explicit(self):
+        env = workflow.pg_environment('postgres://v2_actor:fiction%2Bsecret@127.0.0.1:6543/v2_test?sslmode=disable')
+        self.assertEqual(env['PGHOST'], '127.0.0.1')
+        self.assertEqual(env['PGPORT'], '6543')
+        self.assertEqual(env['PGUSER'], 'v2_actor')
+        self.assertEqual(env['PGDATABASE'], 'v2_test')
+        self.assertEqual(env['PGPASSWORD'], 'fiction+secret')
+        with self.assertRaises(ValueError):
+            workflow.pg_environment('postgres:///ambiguous_local_socket')
+
+    def test_export_is_mocked_read_only_and_does_not_put_dsn_on_argv(self):
+        dsn = 'postgres://v2_actor:fiction_only@127.0.0.1:6543/v2_test?sslmode=disable'
+        snapshot = dict(timezone='Etc/UTC', memories=self.source['memories'][:1])
+        with tempfile.TemporaryDirectory(prefix='pcas-v2-private-test.', dir='/var/tmp') as folder:
+            args = Namespace(consent_confirmed=True, owner='11111111-1111-4111-8111-111111111111',
+                             output=Path(folder) / 'export.json')
+            with patch.dict(os.environ, {'PCAS_V2_READONLY_DSN': dsn}), patch.object(workflow.subprocess, 'run') as run:
+                run.return_value = Mock(returncode=0, stdout=json.dumps(snapshot))
+                workflow.export(args)
+                call = run.call_args
+                self.assertNotIn(dsn, str(call.args))
+                self.assertIn('REPEATABLE READ READ ONLY', call.kwargs['input'])
+                self.assertTrue(call.kwargs['input'].strip().endswith('ROLLBACK;'))
+                self.assertIn('default_transaction_read_only=on', call.kwargs['env']['PGOPTIONS'])
+            output = json.loads(args.output.read_text())
+            self.assertEqual(output['timezone'], 'Etc/UTC')
+            self.assertFalse(output['synthetic'])
 
     def test_review_table_starts_pending_and_escapes_memory(self):
         source = json.loads(json.dumps(self.source))

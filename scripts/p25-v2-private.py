@@ -13,6 +13,7 @@ from pathlib import Path
 import subprocess
 import sys
 import uuid
+from urllib.parse import urlsplit, unquote, parse_qsl
 
 class WorkflowError(ValueError):
     pass
@@ -42,6 +43,32 @@ def load_private(path):
     return json.loads(outside_git(path).read_text(encoding='utf-8'))
 
 
+def pg_environment(dsn):
+    # libpq does not expand a URI from PGDATABASE like an explicit -d argument.
+    # Split it into supported environment variables, keeping secrets off argv.
+    uri = urlsplit(dsn)
+    if uri.scheme not in ('postgres', 'postgresql') or not uri.hostname or not uri.username or not uri.path.lstrip('/'):
+        raise WorkflowError('use an explicit PostgreSQL URI with host, user and database')
+    env = dict(os.environ)
+    env.update(PGHOST=uri.hostname, PGPORT=str(uri.port or 5432), PGUSER=unquote(uri.username),
+               PGDATABASE=unquote(uri.path.lstrip('/')))
+    if uri.password is not None:
+        env['PGPASSWORD'] = unquote(uri.password)
+    else:
+        env.pop('PGPASSWORD', None)
+    supported = {'sslmode': 'PGSSLMODE', 'sslrootcert': 'PGSSLROOTCERT', 'sslcert': 'PGSSLCERT',
+                 'sslkey': 'PGSSLKEY', 'sslcrl': 'PGSSLCRL', 'connect_timeout': 'PGCONNECT_TIMEOUT',
+                 'application_name': 'PGAPPNAME', 'options': 'PGOPTIONS',
+                 'target_session_attrs': 'PGTARGETSESSIONATTRS'}
+    seen = set()
+    for key, value in parse_qsl(uri.query, keep_blank_values=True):
+        if key not in supported or key in seen:
+            raise WorkflowError('unsupported or duplicate URI connection parameter')
+        seen.add(key)
+        env[supported[key]] = value
+    return env
+
+
 def export(args):
     if not args.consent_confirmed:
         raise WorkflowError('coordinator must obtain user consent before export')
@@ -53,14 +80,18 @@ def export(args):
     # snapshot; no pg_dump, Docker access, schema changes, writes or model calls.
     sql = r"""
 BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY;
-SELECT COALESCE(jsonb_agg(jsonb_build_object(
- 'id', 'M' || row_number, 'expressed_at', expressed_at,
+SELECT jsonb_build_object('timezone', COALESCE((SELECT settings->>'timezone'
+ FROM workspace_owners WHERE owner_id=:'owner'::uuid), 'UTC'),
+ 'memories', COALESCE(jsonb_agg(jsonb_build_object(
+ 'id', 'M' || row_number, 'expressed_at', expressed_at, 'recorded_at', recorded_at,
  'group', 'exported-memory', 'text', body, 'tags', jsonb_build_array('private-export')
-) ORDER BY expressed_at, id), '[]'::jsonb)
+) ORDER BY expressed_at, id), '[]'::jsonb))
 FROM (
  SELECT t.id, t.body,
  to_char(COALESCE(v.expressed_at,v.recorded_at) AT TIME ZONE 'UTC',
          'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS expressed_at,
+ to_char(v.recorded_at AT TIME ZONE 'UTC',
+         'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS recorded_at,
  row_number() OVER (ORDER BY COALESCE(v.expressed_at,v.recorded_at),t.id) AS row_number
  FROM memory_records r
  JOIN memory_text t ON (t.owner_id,t.id,t.version)=(r.owner_id,r.id,r.version)
@@ -69,16 +100,16 @@ FROM (
 ) active_memories;
 ROLLBACK;
 """
-    env = dict(os.environ)
-    env['PGDATABASE'] = dsn  # Never place credentials on command line or in logs.
-    env['PGOPTIONS'] = '-c default_transaction_read_only=on -c statement_timeout=60000'
+    env = pg_environment(dsn)
+    env['PGOPTIONS'] = env.get('PGOPTIONS', '') + ' -c default_transaction_read_only=on -c statement_timeout=60000'
     proc = subprocess.run(['psql', '-X', '-q', '-t', '-A', '-v', 'ON_ERROR_STOP=1',
                            '-v', 'owner=' + owner], input=sql, text=True,
                           stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env)
     if proc.returncode:
         raise WorkflowError('read-only export failed; check login, schema and owner locally')
-    memories = json.loads(proc.stdout)
-    suite = dict(schema_version=1, synthetic=False, persona='private-export', timezone='UTC',
+    snapshot = json.loads(proc.stdout)
+    memories = snapshot['memories']
+    suite = dict(schema_version=1, synthetic=False, persona='private-export', timezone=snapshot['timezone'],
                  as_of=dt.datetime.now(dt.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
                  memories=memories, tasks=[])
     write_private(args.output, json.dumps(suite, ensure_ascii=False, indent=2) + '\n')

@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -189,6 +190,24 @@ func runDoing(args []string) error {
 	if err != nil {
 		return err
 	}
+	if *private {
+		// Legacy recall fixtures use day offsets. Private copies restore the exact
+		// exported timestamps so local-date boundaries and recency are not shifted.
+		for _, m := range s.Memories {
+			expressed, _ := time.Parse(time.RFC3339, m.ExpressedAt)
+			recorded := expressed
+			if m.RecordedAt != "" {
+				recorded, _ = time.Parse(time.RFC3339, m.RecordedAt)
+			}
+			source := seeded.Sources[m.ID]
+			if _, err = pool.Exec(ctx, `UPDATE record_versions v SET expressed_at=$3,recorded_at=$4
+    WHERE v.owner_id=$1 AND (v.record_id=$2 OR v.record_id IN (
+     SELECT id FROM chunks WHERE owner_id=$1 AND source_id=$2
+     UNION SELECT target_id FROM evidence WHERE owner_id=$1 AND source_id=$2))`, string(seeded.Scope.OwnerID), string(source.ID), expressed, recorded); err != nil {
+				return err
+			}
+		}
+	}
 	// Baseline identities let us remove all question/answer records before the next
 	// retrieval, without altering any frozen source or claim. No workers run.
 	if _, err = pool.Exec(ctx, `CREATE TABLE v2_frozen_records AS SELECT owner_id,id FROM memory_records`); err != nil {
@@ -196,6 +215,31 @@ func runDoing(args []string) error {
 	}
 	owner := string(seeded.Scope.OwnerID)
 	var captureMu sync.Mutex
+	clearTransient := func(ctx context.Context) error {
+		for _, query := range []string{`DELETE FROM desk_turns WHERE owner_id=$1`, `DELETE FROM desk_turn_order WHERE owner_id=$1`} {
+			if _, err := pool.Exec(ctx, query, owner); err != nil {
+				return err
+			}
+		}
+		// Sources from earlier questions must not enter later evidence.
+		if _, err := pool.Exec(ctx, `DELETE FROM memory_records r WHERE r.owner_id=$1 AND NOT EXISTS(SELECT 1 FROM v2_frozen_records f WHERE f.owner_id=r.owner_id AND f.id=r.id)`, owner); err != nil {
+			return err
+		}
+		return nil
+	}
+	adapterDSN := ""
+	if len(adapters) > 0 {
+		cfg := pool.Config().ConnConfig
+		u, parseErr := url.Parse(cfg.ConnString())
+		if parseErr != nil || (u.Scheme != "postgres" && u.Scheme != "postgresql") {
+			return fmt.Errorf("context adapters require a PostgreSQL URI DSN")
+		}
+		q := u.Query()
+		q.Del("search_path")
+		q.Set("options", strings.TrimSpace(q.Get("options")+" -c search_path="+cfg.RuntimeParams["search_path"]+" -c default_transaction_read_only=on"))
+		u.RawQuery = strings.ReplaceAll(q.Encode(), "+", "%20")
+		adapterDSN = u.String()
+	}
 	providers := map[string]doing.Provider{
 		"none": {Name: "none", Get: func(context.Context, doing.Suite, doing.Task) (doing.Evidence, error) { return doing.Evidence{}, nil }},
 		"ideal": {Name: "ideal", Get: func(_ context.Context, s doing.Suite, t doing.Task) (doing.Evidence, error) {
@@ -204,13 +248,7 @@ func runDoing(args []string) error {
 		"current": {Name: "current", Get: func(ctx context.Context, _ doing.Suite, t doing.Task) (doing.Evidence, error) {
 			captureMu.Lock()
 			defer captureMu.Unlock()
-			for _, query := range []string{`DELETE FROM desk_turns WHERE owner_id=$1`, `DELETE FROM desk_turn_order WHERE owner_id=$1`} {
-				if _, err := pool.Exec(ctx, query, owner); err != nil {
-					return doing.Evidence{}, err
-				}
-			}
-			// Sources from earlier questions must not enter later evidence.
-			if _, err := pool.Exec(ctx, `DELETE FROM memory_records r WHERE r.owner_id=$1 AND NOT EXISTS(SELECT 1 FROM v2_frozen_records f WHERE f.owner_id=r.owner_id AND f.id=r.id)`, owner); err != nil {
+			if err := clearTransient(ctx); err != nil {
 				return doing.Evidence{}, err
 			}
 			before := len(observed.Calls())
@@ -238,8 +276,15 @@ func runDoing(args []string) error {
 			return fmt.Errorf("duplicate method name")
 		}
 		providers[name] = doing.Provider{Name: name, Get: func(ctx context.Context, s doing.Suite, t doing.Task) (doing.Evidence, error) {
-			cmd := exec.CommandContext(ctx, path)
-			cmd.Stdin = strings.NewReader(stringJSON(map[string]any{"request": t.Request, "task_id": t.ID, "as_of": s.AsOf, "database_url": pool.Config().ConnConfig.ConnString(), "owner_id": owner}))
+			captureMu.Lock()
+			defer captureMu.Unlock()
+			if err := clearTransient(ctx); err != nil {
+				return doing.Evidence{}, err
+			}
+			adapterCtx, cancel := context.WithTimeout(ctx, 3*time.Minute)
+			defer cancel()
+			cmd := exec.CommandContext(adapterCtx, path)
+			cmd.Stdin = strings.NewReader(stringJSON(map[string]any{"request": t.Request, "task_id": t.ID, "as_of": s.AsOf, "database_url": adapterDSN, "owner_id": owner}))
 			var out bytes.Buffer
 			cmd.Stdout = &out
 			cmd.Stderr = io.Discard

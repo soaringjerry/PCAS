@@ -43,7 +43,7 @@ scripts/p25-v2-run.sh -fake \
   -methods=none,current,ideal,cards
 ```
 
-适配器不是 shell 字符串。stdin 是一个 JSON 对象：`request`、`task_id`、`as_of`、`database_url`、`owner_id`。DSN 指向刚装好数据的评测 schema（含 search_path），不指向线上。stdout 必须是 `{"context":"提供的上下文","model_calls":0}`；stderr 不进报告。接口不提供标准或 gold 标签；适配器须只读，禁止改变题目、原文、评分或调用模型出 gold。适配器内部调用数是它自行声明的；上下文构造耗时由驱动实测。接入带模型的读者时必须把其全部调用计入 `model_calls`。
+适配器不是 shell 字符串。stdin 是一个 JSON 对象：`request`、`task_id`、`as_of`、`database_url`、`owner_id`。适配器要求 URI 格式的 PostgreSQL DSN（容器脚本默认就是这一格式）；search_path 通过标准 options 传递，兼容 pgx 和 libpq。DSN 指向刚装好数据的评测 schema（含 search_path，并默认强制只读），不指向线上。每次适配器读取前也会清掉评测问题/回答，和 current 共用串行锁，避免并发污染；单次适配器上限三分钟。stdout 必须是 `{"context":"提供的上下文","model_calls":0}`；stderr 不进报告。接口不提供标准或 gold 标签；适配器须只读，禁止改变题目、原文、评分或调用模型出 gold。适配器内部调用数是它自行声明的；上下文构造耗时由驱动实测。接入带模型的读者时必须把其全部调用计入 `model_calls`。
 
 ## 固定办事和打分
 
@@ -67,7 +67,7 @@ scripts/p25-v2-run.sh -fake \
 
 ```sh
 # 1. 协调者在自己的私有 shell 中设置，只读账号 DSN 不放命令行或日志
-# export PCAS_V2_READONLY_DSN=<只读身份的本机DSN>
+# export PCAS_V2_READONLY_DSN=<含host、user、database的只读PostgreSQL URI>
 python3 scripts/p25-v2-private.py export --consent-confirmed --owner <OWNER_UUID>
 
 # 2. 生成待核对候选题（允许模型读真实导出，但这不是最终 gold）
@@ -92,9 +92,9 @@ PCAS_EVAL_CODEX_HOME=/ABSOLUTE/DEDICATED/CODEX_HOME \
   -suite /var/tmp/pcas-v2-private/approved.json -repeats=3
 ```
 
-导出使用 `psql -X`，在 REPEATABLE READ READ ONLY 事务中读取给定 owner 的有效 claim 原文，同时以 session 配置强制只读、限时；结束 ROLLBACK。数据库地址不自动发现；不使用 Docker 或线上容器。PSQL 错误正文、凭据、owner 和记忆不打印。导出的仅是有效记忆，缺少历史修订、原对话拓扑和向量，不能用这个副本宣称完全重现线上原话检索；若要这种等价性，需要协调者制定只读的全拓扑快照流程。
+导出使用 `psql -X`，在 REPEATABLE READ READ ONLY 事务中读取给定 owner 的有效 claim 原文，同时复制工作区时区和记忆的表达/记录时间，以 session 配置强制只读、限时；结束 ROLLBACK。URI 拆为 libpq 环境变量，不把含凭据的连接串作为进程参数；数据库地址不自动发现；不使用 Docker 或线上容器。PSQL 错误正文、凭据、owner 和记忆不打印。导出的仅是有效记忆，缺少历史修订、原对话拓扑和向量，不能用这个副本宣称完全重现线上原话检索；若要这种等价性，需要协调者制定只读的全拓扑快照流程。
 
-候选题默认六类各四题。为避免超长输入，按表达时间从新到旧完整选择不超过 100,000 字符的记忆，不截断单条原文；候选文件保留全部导出，终端只报入选数量。这个样本不是全量记忆覆盖率，可调整 `-max-memory-chars`，先确认模型上下文容量。候选标准附依据编号，并经结构核查后保存；文件本身仍未获核对资格。
+候选题默认六类各四题。为避免超长输入，按表达时间从新到旧完整选择 JSON 序列化后（包括编号、日期和元数据）不超过 100,000 字符的记忆，不截断单条原文；候选文件保留全部导出，终端只报入选数量。这个样本不是全量记忆覆盖率，可调整 `-max-memory-chars`，先确认模型上下文容量。候选标准附依据编号，并经结构核查后保存；文件本身仍未获核对资格。
 
 抽查表显示请求、必须、加分、不许、依据的记忆原文、能否不追问完成与合理处理。没有远程资源或发送功能。未核对是默认值；“改成…”可以修订完整题目 JSON。核对决定绑定候选文件指纹；候选变了必须重做核对。approve 拒绝不存在的依据、重复题号及非法标准，并为每道通过题设置 reviewed=true；驱动再次拒绝未核对的私有题。用户下载的决定文件也包含修改内容，须保持私有。
 

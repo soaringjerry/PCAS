@@ -116,6 +116,9 @@ func SHA(s string) string     { return fmt.Sprintf("%x", sha256.Sum256([]byte(s)
 func jsonText(v any) string   { b, _ := json.Marshal(v); return string(b) }
 func ms(at time.Time) float64 { return float64(time.Since(at)) / float64(time.Millisecond) }
 func AnswerPrompt(s Suite, t Task, e string) string {
+	if !s.Synthetic {
+		return jsonText(map[string]any{"as_of": s.AsOf, "timezone": s.Timezone, "request": t.Request, "memories": e})
+	}
 	return jsonText(struct {
 		AsOf     string `json:"as_of"`
 		Request  string `json:"request"`
@@ -137,7 +140,11 @@ func JudgePrompt(s Suite, t Task, answer string) string {
 	for id, m := range refs {
 		evidence[id] = m.Text
 	}
-	return jsonText(map[string]any{"task": t, "evidence": evidence, "answer": answer, "as_of": s.AsOf})
+	payload := map[string]any{"task": t, "evidence": evidence, "answer": answer, "as_of": s.AsOf}
+	if !s.Synthetic {
+		payload["timezone"] = s.Timezone
+	}
+	return jsonText(payload)
 }
 func ParseJudgment(raw string, t Task) (Judgment, error) {
 	var j Judgment

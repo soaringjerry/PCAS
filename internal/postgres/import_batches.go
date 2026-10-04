@@ -192,7 +192,7 @@ const importBatchSelect = `SELECT b.id::text,b.archive_id::text,r.version,b.name
    SELECT count(*) FILTER (WHERE j.stage='source.chunk' AND j.state='done') AS prepared,
      count(*) FILTER (WHERE j.stage='source.tokenize' AND j.state='done') AS indexed,
      count(*) FILTER (WHERE j.stage='source.embed' AND j.state='done') AS vectorized,
-     (array_agg(j.stage ORDER BY j.updated_at DESC,j.id) FILTER (WHERE j.state='leased'))[1] AS active_stage,
+     (array_agg(j.stage ORDER BY (j.stage LIKE 'source.extract:conversation:%') DESC,j.updated_at DESC,j.id) FILTER (WHERE j.state='leased'))[1] AS active_stage,
      bool_and(j.error_code='budget_deferred' AND j.available_at>now()) FILTER
        (WHERE j.stage LIKE 'source.extract:conversation:%' AND j.state='queued') AS budget_wait
    FROM archive_entries e JOIN memory_jobs j ON

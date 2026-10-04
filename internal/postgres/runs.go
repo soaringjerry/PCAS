@@ -182,6 +182,7 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 		// R12a: select against the brief without annotations. Keep their byte
 		// count separate so they cannot displace later memories or raw excerpts.
 		annotationBytes := 0
+		contextClaims := []evidenceContextClaim{}
 		for _, m := range ordered {
 			if !oneOf(m.Kind, agent.MemoryKinds...) || m.Epistemic == "inferred" && !agent.IncludeInferred || oneOf(m.ID, excluded...) || m.ProjectID != "" && m.ProjectID != projectID {
 				continue
@@ -194,6 +195,7 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 			annotationBytes += len(suffix)
 			run.ContextMemoryIDs = append(run.ContextMemoryIDs, m.ID)
 			run.ContextVersions = append(run.ContextVersions, memory.Ref{ID: memory.ID(m.ID), Version: m.Version, Kind: memory.ClaimKind})
+			contextClaims = append(contextClaims, evidenceContextClaim{Label: m.ID, Ref: memory.Ref{ID: memory.ID(m.ID), Version: m.Version, Kind: memory.ClaimKind}, Text: m.Text})
 		}
 
 		orderTeamExcerpts(excerpts, plan)
@@ -213,6 +215,35 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 			run.ContextVersions = append(run.ContextVersions, source.Ref)
 		}
 
+		groups, gaps, err := evidenceContextsTx(ctx, tx, scope, agent.ID, &item.ID, contextClaims)
+		if err != nil {
+			return err
+		}
+		if len(groups) > 0 || len(gaps) > 0 {
+			fmt.Fprintln(&brief, "\n记忆的来源上下文：\n"+evidenceContextInstructions)
+		}
+		for _, group := range groups {
+			var section strings.Builder
+			fmt.Fprintf(&section, "[%s] 的原对话片段：\n", group.Label)
+			for _, message := range group.Window.Messages {
+				section.WriteString(contextMessageLine(fmt.Sprintf("source:%s@%d", message.ID, message.Version), message, loc))
+			}
+			writeContextGaps(&section, group.Label, group.Window.Gaps)
+			if brief.Len()-annotationBytes+section.Len() > 30000 {
+				gaps = append(gaps, "部分记忆来源上下文超出本次预算，涉及对象和原因时不要猜测。")
+				continue
+			}
+			brief.WriteString(section.String())
+			for _, ref := range group.Window.ProofRefs {
+				run.ContextMemoryIDs = append(run.ContextMemoryIDs, string(ref.ID))
+				run.ContextVersions = append(run.ContextVersions, ref)
+			}
+			for _, message := range group.Window.Messages {
+				run.ContextMemoryIDs = append(run.ContextMemoryIDs, string(message.ID))
+				run.ContextVersions = append(run.ContextVersions, message.Ref)
+			}
+		}
+		writeContextGaps(&brief, "范围提示", gaps)
 		// Derived copies carry input dependencies even when their source memories
 		// fall outside this run's text budget.
 		for _, ref := range artifactRefs {

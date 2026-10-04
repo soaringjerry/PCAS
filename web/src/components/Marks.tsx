@@ -44,7 +44,7 @@ export function FromLine({ source, quote = true }: { source: SourceRef; quote?: 
         <CornerDownRight size={12} />
         {source.label} · {formatAgo(source.at, state.settings.timezone ?? 'UTC')}
       </button>
-      {open && <SourceSheet id={source.sourceId} version={source.version} onClose={() => setOpen(false)} />}
+      {open && <SourceSheet id={source.sourceId} version={source.version} conversation={{ excerpt: source.excerpt, requireConversation: true }} onClose={() => setOpen(false)} />}
       {quote && source.excerpt && <div className="quote">“{source.excerpt}”</div>}
     </div>
   )

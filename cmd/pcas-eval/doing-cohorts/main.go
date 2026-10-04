@@ -63,8 +63,11 @@ func validate(r doing.Report, s doing.Suite, suiteSHA string, snap doing.Context
 	return validateMeasured(r, s, suiteSHA, snap, nil)
 }
 func validateMeasured(r doing.Report, s doing.Suite, suiteSHA string, snap doing.ContextSnapshot, jsonSizes map[string]int) error {
+	return validateMatrix(r, s, suiteSHA, snap, jsonSizes, 3, true)
+}
+func validateMatrix(r doing.Report, s doing.Suite, suiteSHA string, snap doing.ContextSnapshot, jsonSizes map[string]int, repeats int, complete bool) error {
 	started, dateErr := time.Parse(time.RFC3339, r.StartedAt)
-	if dateErr != nil || r.HostDate != started.UTC().Format("2006-01-02") || r.Version != 1 || r.SuiteSHA != suiteSHA || snap.SuiteSHA != suiteSHA || r.AsOf != s.AsOf || snap.AsOf != s.AsOf || r.Repeats != 3 || r.AnswerLimit != doing.AnswerLimit || r.AnswerPromptSHA != doing.SHA(doing.AnswerSystem) || r.JudgePromptSHA != doing.SHA(doing.JudgeSystem) || len(r.Failures) != 0 {
+	if dateErr != nil || r.HostDate != started.UTC().Format("2006-01-02") || r.Version != 1 || r.SuiteSHA != suiteSHA || snap.SuiteSHA != suiteSHA || r.AsOf != s.AsOf || snap.AsOf != s.AsOf || r.Repeats != repeats || r.AnswerLimit != doing.AnswerLimit || r.AnswerPromptSHA != doing.SHA(doing.AnswerSystem) || r.JudgePromptSHA != doing.SHA(doing.JudgeSystem) || (complete && len(r.Failures) != 0) {
 		return fmt.Errorf("execution conditions mismatch or failures remain")
 	}
 	tasks := map[string]doing.Task{}
@@ -86,7 +89,7 @@ func validateMeasured(r doing.Report, s doing.Suite, suiteSHA string, snap doing
 	for _, row := range r.Rows {
 		t, ok := tasks[row.Task]
 		k := fmt.Sprintf("%d/%s/%s", row.Run, row.Task, row.Method)
-		if !ok || row.Run < 1 || row.Run > 3 || seen[k] || (row.Method != "none" && row.Method != "frozen-current" && row.Method != "ideal") {
+		if !ok || row.Run < 1 || row.Run > repeats || seen[k] || (row.Method != "none" && row.Method != "frozen-current" && row.Method != "ideal") {
 			return fmt.Errorf("row matrix invalid")
 		}
 		seen[k] = true
@@ -117,7 +120,7 @@ func validateMeasured(r doing.Report, s doing.Suite, suiteSHA string, snap doing
 			return fmt.Errorf("context/input size mismatch")
 		}
 	}
-	if len(r.Rows) != len(tasks)*9 {
+	if complete && len(r.Rows) != len(tasks)*3*repeats {
 		return fmt.Errorf("incomplete three-method three-run matrix")
 	}
 	return nil
@@ -206,6 +209,8 @@ func run() error {
 	manifest := f.String("manifest", "", "numeric capture manifest; recompute without context text")
 	originalSuite := f.String("original-suite", "", "suite before the two documented scope repairs")
 	replacement := f.String("replacement", "", "all-three-repetition report for exactly the repaired tasks")
+	completion2 := f.String("completion-run2", "", "one-repeat full-method completion of missing second-run tasks")
+	completion3 := f.String("completion-run3", "", "one-repeat full-method third run")
 	out := f.String("output", "", "new numeric artifact directory")
 	fake := f.Bool("allow-fake", false, "explicit plumbing only; never real scores")
 	if err := f.Parse(os.Args[1:]); err != nil {
@@ -216,6 +221,9 @@ func run() error {
 	}
 	if (*originalSuite == "") != (*replacement == "") || (*manifest != "" && *replacement != "") {
 		return fmt.Errorf("gold repair needs both original-suite/replacement and the original snapshot")
+	}
+	if (*completion2 == "") != (*completion3 == "") || (*completion2 != "" && *replacement == "") {
+		return fmt.Errorf("transport completion needs both files and the documented gold replacement")
 	}
 	if *manifest != "" {
 		return recalculate(*base, *suite, *source, *manifest, *out, *fake)
@@ -249,6 +257,8 @@ func run() error {
 	}
 	captureSuiteSHA := snap.SuiteSHA
 	var repairProof *goldProvenance
+	var transportProof *transportProvenance
+	var beforeGoldReport *doing.Report
 	if *replacement != "" {
 		before, loadErr := doing.Load(*originalSuite)
 		if loadErr != nil {
@@ -264,6 +274,30 @@ func run() error {
 			return loadErr
 		}
 		var proof goldProvenance
+		if *completion2 != "" {
+			var c2, c3 doing.Report
+			sha2, readErr := read(*completion2, &c2)
+			if readErr != nil {
+				return readErr
+			}
+			sha3, readErr := read(*completion3, &c3)
+			if readErr != nil {
+				return readErr
+			}
+			var tp transportProvenance
+			r, tp, err = completeTransport(before, r, c2, c3, snap, doing.SHA(string(beforeBytes)), sourceSHA, sha2, sha3)
+			if err != nil {
+				return err
+			}
+			transportProof = &tp
+			copyReport := r
+			beforeGoldReport = &copyReport
+			b, marshalErr := json.MarshalIndent(r, "", "  ")
+			if marshalErr != nil {
+				return marshalErr
+			}
+			sourceSHA = doing.SHA(string(append(b, '\n')))
+		}
 		r, snap, proof, err = repairGold(before, s, r, repair, snap, doing.SHA(string(beforeBytes)), doing.SHA(string(raw)), sourceSHA, repairSHA)
 		if err != nil {
 			return err
@@ -294,6 +328,14 @@ func run() error {
 			return readErr
 		}
 		repairSHA = doing.SHA(string(proofBytes))
+	}
+	if transportProof != nil {
+		if err = doing.WriteJSON(filepath.Join(*out, "transport-provenance.json"), transportProof); err != nil {
+			return err
+		}
+		if err = doing.WriteJSON(filepath.Join(*out, "source-before-gold.json"), beforeGoldReport); err != nil {
+			return err
+		}
 	}
 	if err = doing.WriteJSON(filepath.Join(*out, "noise-exposure.json"), noiseExposure(s, snap)); err != nil {
 		return err

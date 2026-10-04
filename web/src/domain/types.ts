@@ -120,6 +120,13 @@ export interface Project {
 }
 
 export type MemoryKind = 'fact' | 'preference' | 'decision' | 'intention' | 'plan'
+export type MemoryCategory = 'identity' | 'taste' | 'rule' | 'goal' | 'progress' | 'event' | 'opinion' | 'other_person' | 'unknown'
+
+export interface MemoryGroup {
+  entityId: ID
+  name: string
+  type: 'project' | 'topic' | 'area'
+}
 
 export interface MemoryVersion {
   at: string
@@ -137,6 +144,9 @@ export interface MemoryMention {
 }
 
 export interface Memory {
+  category?: MemoryCategory
+  durable?: boolean
+  groups?: MemoryGroup[]
   contextDependent?: boolean
   expressedAt?: string
   eventFrom?: string
@@ -178,7 +188,12 @@ export interface MemoryFacet {
   count: number
 }
 
+export interface MemoryGroupFacet extends MemoryGroup {
+  count: number
+}
+
 export interface MemoryFacets {
+  groups?: MemoryGroupFacet[]
   people: MemoryFacet[]
   places: MemoryFacet[]
 }
@@ -350,7 +365,14 @@ export interface Notice {
   dismissedAt?: string
 }
 
+export interface Organize {
+  done: number
+  total: number
+  version: number
+}
+
 export interface State {
+  organize?: Organize
   /** All memories there are; `memories` holds only the 200 most recently updated. */
   memoryTotal?: number
   notices: Notice[]

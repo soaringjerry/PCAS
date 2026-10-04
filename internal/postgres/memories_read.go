@@ -96,7 +96,8 @@ func (s *Store) readMemoriesTx(ctx context.Context, tx pgx.Tx, scope memory.Scop
 	mentionsAvailable := "to_regclass('claim_mentions') IS NOT NULL"
 	query := `SELECT r.id::text,c.version,c.nature,c.value #>> '{}',c.confirmation,c.acquisition,coalesce(c.scope->>'project_id',''),
  coalesce(a.last_effective_use_at,r.created_at),coalesce(a.stability,1),coalesce(a.half_life_seconds,2592000),coalesce(a.pinned,false),coalesce(a.reinforcement_limit,8),
- rv.expressed_at,` + memoryEventColumns() + "," + mentionsAvailable + memoryJoins + where + ` ORDER BY r.updated_at DESC,r.id`
+ rv.expressed_at,` + memoryEventColumns() + "," + mentionsAvailable + `,
+ coalesce(to_jsonb(c)->>'category','unknown'),(to_jsonb(c)->>'durable')::boolean` + memoryJoins + where + ` ORDER BY r.updated_at DESC,r.id`
 	if opts.limit > 0 {
 		args = append(args, opts.limit)
 		query += fmt.Sprintf(" LIMIT $%d", len(args))
@@ -114,7 +115,7 @@ func (s *Store) readMemoriesTx(ctx context.Context, tx pgx.Tx, scope memory.Scop
 		var precision string
 		var hasMentions bool
 		var stability, halfLife float64
-		if err := rows.Scan(&m.ID, &m.Version, &m.Kind, &m.Text, &m.Confirmation, &m.Acquisition, &m.ProjectID, &last, &stability, &halfLife, &m.Pinned, &m.ReinforcementLimit, &expressed, &from, &to, &precision, &hasMentions); err != nil {
+		if err := rows.Scan(&m.ID, &m.Version, &m.Kind, &m.Text, &m.Confirmation, &m.Acquisition, &m.ProjectID, &last, &stability, &halfLife, &m.Pinned, &m.ReinforcementLimit, &expressed, &from, &to, &precision, &hasMentions, &m.Category, &m.Durable); err != nil {
 			rows.Close()
 			return nil, err
 		}
@@ -135,6 +136,7 @@ func (s *Store) readMemoriesTx(ctx context.Context, tx pgx.Tx, scope memory.Scop
 		m.Versions = []workspace.MemoryVersion{}
 		m.VisibleTo = []string{}
 		m.Mentions = []workspace.MemoryMention{}
+		m.Groups = []workspace.MemoryGroup{}
 		if expressed != nil {
 			m.ExpressedAt = expressed.UTC().Format(time.RFC3339Nano)
 		}
@@ -376,7 +378,7 @@ func (s *Store) GetMemory(ctx context.Context, scope memory.Scope, id string) (w
 }
 
 func (s *Store) MemoryFacets(ctx context.Context, scope memory.Scope) (workspace.MemoryFacets, error) {
-	out := workspace.MemoryFacets{People: []workspace.MemoryFacet{}, Places: []workspace.MemoryFacet{}}
+	out := workspace.MemoryFacets{People: []workspace.MemoryFacet{}, Places: []workspace.MemoryFacet{}, Groups: []workspace.MemoryGroupFacet{}}
 	if err := requireOwner(scope); err != nil {
 		return out, err
 	}

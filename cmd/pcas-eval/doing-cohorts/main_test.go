@@ -26,7 +26,7 @@ func fixture(t *testing.T) (doing.Suite, doing.Suite, doing.Report, doing.Contex
 	if e != nil {
 		t.Fatal(e)
 	}
-	r := doing.Report{Version: 1, SuiteSHA: doing.SHA(string(b)), AsOf: s.AsOf, HostDate: "2026-10-04", Repeats: 3, AnswerLimit: doing.AnswerLimit, AnswerPromptSHA: doing.SHA(doing.AnswerSystem), JudgePromptSHA: doing.SHA(doing.JudgeSystem)}
+	r := doing.Report{Version: 1, SuiteSHA: doing.SHA(string(b)), AsOf: s.AsOf, HostDate: "2026-10-04", StartedAt: "2026-10-04T23:01:00Z", Repeats: 3, AnswerLimit: doing.AnswerLimit, AnswerPromptSHA: doing.SHA(doing.AnswerSystem), JudgePromptSHA: doing.SHA(doing.JudgeSystem)}
 	snap := doing.ContextSnapshot{SuiteSHA: r.SuiteSHA, AsOf: s.AsOf, HostDate: r.HostDate}
 	for _, task := range s.Tasks {
 		snap.Entries = append(snap.Entries, doing.ContextEntry{Task: task.ID, RequestSHA: doing.SHA(task.Request)})

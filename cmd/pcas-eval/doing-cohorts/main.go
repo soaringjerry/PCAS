@@ -14,6 +14,7 @@ import (
 	"reflect"
 	"sort"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/soaringjerry/PCAS/cmd/pcas-eval/doing"
@@ -62,7 +63,8 @@ func validate(r doing.Report, s doing.Suite, suiteSHA string, snap doing.Context
 	return validateMeasured(r, s, suiteSHA, snap, nil)
 }
 func validateMeasured(r doing.Report, s doing.Suite, suiteSHA string, snap doing.ContextSnapshot, jsonSizes map[string]int) error {
-	if r.Version != 1 || r.SuiteSHA != suiteSHA || snap.SuiteSHA != suiteSHA || r.AsOf != s.AsOf || snap.AsOf != s.AsOf || r.HostDate != snap.HostDate || r.Repeats != 3 || r.AnswerLimit != doing.AnswerLimit || r.AnswerPromptSHA != doing.SHA(doing.AnswerSystem) || r.JudgePromptSHA != doing.SHA(doing.JudgeSystem) || len(r.Failures) != 0 {
+	started, dateErr := time.Parse(time.RFC3339, r.StartedAt)
+	if dateErr != nil || r.HostDate != started.UTC().Format("2006-01-02") || r.Version != 1 || r.SuiteSHA != suiteSHA || snap.SuiteSHA != suiteSHA || r.AsOf != s.AsOf || snap.AsOf != s.AsOf || r.Repeats != 3 || r.AnswerLimit != doing.AnswerLimit || r.AnswerPromptSHA != doing.SHA(doing.AnswerSystem) || r.JudgePromptSHA != doing.SHA(doing.JudgeSystem) || len(r.Failures) != 0 {
 		return fmt.Errorf("execution conditions mismatch or failures remain")
 	}
 	tasks := map[string]doing.Task{}
@@ -202,6 +204,8 @@ func run() error {
 	source := f.String("source", "", "complete numeric report, JSON or gzip")
 	snapshot := f.String("snapshot", "", "outside-Git synthetic context snapshot")
 	manifest := f.String("manifest", "", "numeric capture manifest; recompute without context text")
+	originalSuite := f.String("original-suite", "", "suite before the two documented scope repairs")
+	replacement := f.String("replacement", "", "all-three-repetition report for exactly the repaired tasks")
 	out := f.String("output", "", "new numeric artifact directory")
 	fake := f.Bool("allow-fake", false, "explicit plumbing only; never real scores")
 	if err := f.Parse(os.Args[1:]); err != nil {
@@ -209,6 +213,9 @@ func run() error {
 	}
 	if f.NArg() != 0 || *source == "" || *out == "" || (*snapshot == "") == (*manifest == "") {
 		return fmt.Errorf("source, output and exactly one of snapshot/manifest required")
+	}
+	if (*originalSuite == "") != (*replacement == "") || (*manifest != "" && *replacement != "") {
+		return fmt.Errorf("gold repair needs both original-suite/replacement and the original snapshot")
 	}
 	if *manifest != "" {
 		return recalculate(*base, *suite, *source, *manifest, *out, *fake)
@@ -240,11 +247,53 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	captureSuiteSHA := snap.SuiteSHA
+	var repairProof *goldProvenance
+	if *replacement != "" {
+		before, loadErr := doing.Load(*originalSuite)
+		if loadErr != nil {
+			return loadErr
+		}
+		beforeBytes, loadErr := os.ReadFile(*originalSuite)
+		if loadErr != nil {
+			return loadErr
+		}
+		var repair doing.Report
+		repairSHA, loadErr := read(*replacement, &repair)
+		if loadErr != nil {
+			return loadErr
+		}
+		var proof goldProvenance
+		r, snap, proof, err = repairGold(before, s, r, repair, snap, doing.SHA(string(beforeBytes)), doing.SHA(string(raw)), sourceSHA, repairSHA)
+		if err != nil {
+			return err
+		}
+		repairProof = &proof
+		mergedBytes, marshalErr := json.MarshalIndent(r, "", "  ")
+		if marshalErr != nil {
+			return marshalErr
+		}
+		sourceSHA = doing.SHA(string(append(mergedBytes, '\n')))
+	}
 	if err = validate(r, s, doing.SHA(string(raw)), snap); err != nil {
 		return err
 	}
 	if err = os.MkdirAll(*out, 0755); err != nil {
 		return err
+	}
+	repairSHA := ""
+	if repairProof != nil {
+		if err = doing.WriteJSON(filepath.Join(*out, "source-merged.json"), r); err != nil {
+			return err
+		}
+		if err = doing.WriteJSON(filepath.Join(*out, "gold-repair-provenance.json"), repairProof); err != nil {
+			return err
+		}
+		proofBytes, readErr := os.ReadFile(filepath.Join(*out, "gold-repair-provenance.json"))
+		if readErr != nil {
+			return readErr
+		}
+		repairSHA = doing.SHA(string(proofBytes))
 	}
 	if err = doing.WriteJSON(filepath.Join(*out, "noise-exposure.json"), noiseExposure(s, snap)); err != nil {
 		return err
@@ -271,5 +320,5 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	return doing.WriteJSON(filepath.Join(*out, "capture-manifest.json"), captureManifest{1, r.Fake, sourceSHA, doing.SHA(string(snapshotBytes)), r.SuiteSHA, doing.SHA(string(baseBytes)), snap.Revision, r.Revision, snap.AsOf, snap.StartedAt, snap.CompletedAt, r.StartedAt, entries, noiseExposure(s, snap), "Snapshot text is synthetic and stays outside Git. Hashes refer to uncompressed JSON except snapshot_sha256 (exact bytes). Capture is once per task; no retrieval variability is measured. context_json_chars counts the encoded JSON string including quotes, allowing input-size checks without context text. Source report has zero local captures per answer and three model calls per completed answer; preflight and interrupted work are accounted separately in the evaluation record."})
+	return doing.WriteJSON(filepath.Join(*out, "capture-manifest.json"), captureManifest{Schema: 1, Fake: r.Fake, SourceSHA: sourceSHA, SnapshotSHA: doing.SHA(string(snapshotBytes)), SuiteSHA: r.SuiteSHA, BaseSHA: doing.SHA(string(baseBytes)), SnapshotSuiteSHA: captureSuiteSHA, GoldRepairSHA: repairSHA, CaptureRevision: snap.Revision, ModelRevision: r.Revision, AsOf: snap.AsOf, CaptureStart: snap.StartedAt, CaptureEnd: snap.CompletedAt, ModelStart: r.StartedAt, Entries: entries, Exposure: noiseExposure(s, snap), Note: "Snapshot text is synthetic and stays outside Git. Capture is once per task; no retrieval variability is measured. context_json_chars counts the encoded JSON string including quotes. Snapshot suite may differ from graded suite only for the two documented rubric-scope repairs; memory corpus, requests, evidence references and answer instructions are unchanged. Source has zero local captures per answer and three model calls per completed answer; interrupted and replaced work is accounted separately."})
 }

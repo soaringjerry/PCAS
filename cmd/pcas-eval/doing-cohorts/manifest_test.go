@@ -18,7 +18,7 @@ func TestNumericReconstructionEscapesAndLineage(t *testing.T) {
 			r.Rows[i].InputChars = utf8.RuneCountInString(doing.AnswerSystem + doing.AnswerPrompt(s, s.Tasks[0], text))
 		}
 	}
-	m := captureManifest{Schema: 1, SourceSHA: doing.SHA("source"), SnapshotSHA: doing.SHA("snapshot"), SuiteSHA: r.SuiteSHA, BaseSHA: doing.SHA("base"), AsOf: s.AsOf, CaptureStart: "2026-10-04T23:00:00Z", CaptureEnd: "2026-10-04T23:01:00Z", Exposure: noiseExposure(s, snap)}
+	m := captureManifest{Schema: 1, SourceSHA: doing.SHA("source"), SnapshotSHA: doing.SHA("snapshot"), SuiteSHA: r.SuiteSHA, BaseSHA: doing.SHA("base"), AsOf: s.AsOf, ModelStart: r.StartedAt, SnapshotSuiteSHA: r.SuiteSHA, CaptureStart: "2026-10-04T23:00:00Z", CaptureEnd: "2026-10-04T23:01:00Z", Exposure: noiseExposure(s, snap)}
 	for _, e := range snap.Entries {
 		b, _ := json.Marshal(e.Text)
 		m.Entries = append(m.Entries, numericEntry{Task: e.Task, RequestSHA: e.RequestSHA, ContextSHA: doing.SHA(e.Text), Chars: utf8.RuneCountInString(e.Text), JSONChars: utf8.RuneCount(b), Calls: 1})

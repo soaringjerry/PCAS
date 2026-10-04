@@ -19,27 +19,32 @@ type numericEntry struct {
 	Calls      int     `json:"local_capture_calls"`
 }
 type captureManifest struct {
-	Schema          int            `json:"schema_version"`
-	Fake            bool           `json:"fake"`
-	SourceSHA       string         `json:"source_uncompressed_sha256"`
-	SnapshotSHA     string         `json:"snapshot_sha256"`
-	SuiteSHA        string         `json:"suite_sha256"`
-	BaseSHA         string         `json:"base_suite_sha256"`
-	CaptureRevision string         `json:"capture_product_revision"`
-	ModelRevision   string         `json:"model_run_revision"`
-	AsOf            string         `json:"as_of"`
-	CaptureStart    string         `json:"capture_started_at"`
-	CaptureEnd      string         `json:"capture_completed_at"`
-	ModelStart      string         `json:"model_run_started_at"`
-	Entries         []numericEntry `json:"entries"`
-	Exposure        []exposure     `json:"noise_exposure"`
-	Note            string         `json:"note"`
+	Schema           int            `json:"schema_version"`
+	Fake             bool           `json:"fake"`
+	SourceSHA        string         `json:"source_uncompressed_sha256"`
+	SnapshotSHA      string         `json:"snapshot_sha256"`
+	SuiteSHA         string         `json:"suite_sha256"`
+	BaseSHA          string         `json:"base_suite_sha256"`
+	SnapshotSuiteSHA string         `json:"snapshot_suite_sha256"`
+	GoldRepairSHA    string         `json:"gold_repair_provenance_sha256,omitempty"`
+	CaptureRevision  string         `json:"capture_product_revision"`
+	ModelRevision    string         `json:"model_run_revision"`
+	AsOf             string         `json:"as_of"`
+	CaptureStart     string         `json:"capture_started_at"`
+	CaptureEnd       string         `json:"capture_completed_at"`
+	ModelStart       string         `json:"model_run_started_at"`
+	Entries          []numericEntry `json:"entries"`
+	Exposure         []exposure     `json:"noise_exposure"`
+	Note             string         `json:"note"`
 }
 
 func recordedSnapshot(m captureManifest, r doing.Report, s doing.Suite, sourceSHA, baseSHA string) (doing.ContextSnapshot, map[string]int, error) {
 	var snap doing.ContextSnapshot
 	if m.Schema != 1 || m.Fake != r.Fake || m.SourceSHA != sourceSHA || m.BaseSHA != baseSHA || m.SuiteSHA != r.SuiteSHA || m.AsOf != s.AsOf || m.ModelRevision != r.Revision || m.ModelStart != r.StartedAt || len(m.SnapshotSHA) != 64 {
 		return snap, nil, fmt.Errorf("numeric manifest lineage mismatch")
+	}
+	if len(m.SnapshotSuiteSHA) != 64 || (m.SnapshotSuiteSHA != m.SuiteSHA && len(m.GoldRepairSHA) != 64) {
+		return snap, nil, fmt.Errorf("unaccounted snapshot/graded-suite difference")
 	}
 	start, e1 := time.Parse(time.RFC3339, m.CaptureStart)
 	end, e2 := time.Parse(time.RFC3339, m.CaptureEnd)

@@ -167,3 +167,5 @@ PCAS 的所有文档都从这一页找。新增或移动文档时，同时改这
 | 文档 | 内容 |
 |---|---|
 | [研究笔记：Hermes Agent](research/hermes-agent.md) | 外部方案调研 |
+| [研究笔记：看目录、分头细读](research/memory-navigate-and-read.md) | 候选技术，未批准：办事时先让模型看分组目录、再分组细读挑出要用的记忆；做法和与现有实现的关系 |
+| [记忆查找办法的对比实验](evaluations/2026-10-04-memory-lookup-experiment.md) | 2026-10-04 线下实验：九种做法、12 个任务的设计和全部数字 |

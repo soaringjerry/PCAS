@@ -23,7 +23,7 @@
 | `claim_revisions` 加两列 | `category text NOT NULL DEFAULT 'unknown'`，取值 `identity`、`taste`、`rule`、`goal`、`progress`、`event`、`opinion`、`other_person`、`unknown`；`durable boolean`（可空，空表示还没判断） |
 | `claims` 加两列 | `organized integer NOT NULL DEFAULT 0`（这条记忆被第几版整理规则处理过，0 是没处理过）；`organize_attempts smallint NOT NULL DEFAULT 0` |
 | `claim_mentions.role` 的取值 | 在 `person`、`place`、`organization`、`thing` 之外增加 `project`、`topic`、`area` |
-| `model_usage.purpose` 的取值 | 增加 `organize` |
+| `model_usage.purpose` 的取值 | 在现有取值（含 `vision`）之外增加 `organize` |
 | 索引 | `claims (owner_id, organized)`；`claim_revisions (owner_id, category)` |
 
 类型的中文叫法（只在界面和提示词里用）：identity 身份、taste 口味、rule 对助手的要求、goal 目标、progress 进展、event 一次性的事、opinion 看法、other_person 关于别人。
@@ -50,7 +50,7 @@
 }
 ```
 
-没整理过的记忆：`category` 是 `"unknown"`，没有 `durable` 字段，`groups` 是空数组。人、地点、机构仍在原来的 `mentions` 里，不进 `groups`。
+接口照库里存的返回，不看 `organized`。从没整理过的记忆：`category` 是 `"unknown"`，没有 `durable` 字段，`groups` 是空数组。整理过、后来因为纠正（R8）或规则升级（R14）又变成落后的记忆，继续返回它保留着的旧类型、旧的长期与否和旧分组，直到新结果写入。人、地点、机构仍在原来的 `mentions` 里，不进 `groups`。
 
 ### 2.4 接口
 
@@ -75,7 +75,14 @@
 - R6 一批的结果和这批每条记忆的 `organized` 在同一个事务里写。写了一半失败等于没写。
 - R7 模型调用期间，某条记忆被纠正（版本变了）、删除或撤回：这一条跳过，批里的其他条照写。被纠正的那条因为 `organized` 没更新，下次还会被整理。
 - R8 纠正一条记忆产生新版本时，新版本先沿用旧版本的 `category`、`durable` 和分组提及，同时把 `claims.organized` 置 0，等下一次整理重新判断。
-- R9 模型输出里编号不认识、类型不认识的条目丢弃；被丢弃的记忆 `organize_attempts` 加 1，仍然落后。整个输出不是合法 JSON 时，这一批每条都加 1。一条记忆 `organize_attempts` 到 3 时，写成类型 `unknown`、无分组、`organized` 设为当前版本，不再重试，并记一条不含正文的日志（环节 `organize`，类型 `attempts_exhausted`）。
+- R9 模型输出的处理：
+  - 编号不在这一批里的条目：直接丢弃，不影响任何记忆的计数。
+  - 编号对得上、但类型不在取值里，或「是否长期成立」不是布尔值的条目：整条丢弃，这条记忆 `organize_attempts` 加 1，仍然落后。分组里个别不合规的（R3、R4）只丢那个分组，不算这条失败。
+  - 这一批里有、但输出里没出现的记忆：`organize_attempts` 加 1，仍然落后。
+  - 整个输出不是合法 JSON：这一批每条都加 1。
+  - 同一条记忆在输出里出现两次：用第一次的。
+
+ 一条记忆 `organize_attempts` 到 3 时，写成类型 `unknown`、无分组、`organized` 设为当前版本，不再重试，并记一条不含正文的日志（环节 `organize`，类型 `attempts_exhausted`）。
 
 **什么时候做**
 
@@ -112,7 +119,7 @@ T1 按这些序列写测试。模型用测试里的假模型，按序列需要�
 | X8 | 模型调用期间，批里的一条记忆被用户纠正 | 这一条不写，仍然落后；其他条照写；纠正后的新版本沿用旧标签 |
 | X9 | 模型调用期间，批里的一条记忆被删除 | 这一条不写，不报错；其他条照写 |
 | X10 | 模型返回的不是 JSON，连续三次 | 第三次后这批每条：`category='unknown'`、无分组、`organized=1`；日志里有 `attempts_exhausted`；之后不再为它们调用模型 |
-| X11 | 模型输出里夹着一个不存在的编号和一个不认识的类型 | 这两项丢弃；对应的那条记忆 `organize_attempts=1`、仍落后；其他照写 |
+| X11 | 一批四条记忆 A、B、C、D。模型输出：A 正常；B 的类型不认识；没有 C；D 正常；另有一条编号不在这批里 | A、D 照写、`organized=1`。B、C 不写，`organize_attempts=1`，仍落后。不在这批里的那条丢弃，不影响任何计数 |
 | X12 | 写结果的事务中途失败（模拟） | 这批没有任何一条被写；重跑后结果完整，没有重复的提及 |
 | X13 | 同时有一条对秘书说的话抽出的记忆和 100 条导入的记忆落后 | 第一批里包含对秘书说的那条 |
 | X14 | 全部整理完后把规则版本改成 2 | 快照 `organize.done` 变成 0、`total` 不变；每条记忆的旧类型和分组仍然读得到；重新整理后 `organized=2` |
@@ -130,7 +137,7 @@ T1 按这些序列写测试。模型用测试里的假模型，按序列需要�
 | 任务 | 可以动的文件 |
 |---|---|
 | O1 | `internal/postgres/migrations/035_memory_organize.sql`（新）、`internal/postgres/organize.go`（新）、`organize_test.go`（新，自己的单元测试）、`internal/postgres/memories_read.go`、`internal/postgres/editing.go`（只为 R8）、`internal/postgres/workspace.go`（只为快照的 `organize`）、`internal/postgres/usage_log.go`（只为新用途）、`internal/workspace/model.go`、`internal/httpapi/workspace.go`、`cmd/pcas/main.go`（只注册后台任务） |
-| T1 | `internal/postgres/phase2_5_b1_*_test.go`（新） |
+| T1 | `internal/postgres/phase2_5_b1_*_test.go`（新）；最终一轮的验收记录 `docs/evaluations/<日期>-phase2_5-batch1-acceptance.md`（新），以及在 [阶段入口](../README.md) 的文档表和 [文档总入口](../../../README.md) 里各加一行链接 |
 | U1 | `web/src/` 下资料库记忆页相关的文件、对应的浏览器测试 |
 
 表里没有的产品文件，要动先找协调者。已有测试的预期不要改；确实要改的单独列出来报告。
@@ -138,3 +145,9 @@ T1 按这些序列写测试。模型用测试里的假模型，按序列需要�
 ## 6 分支
 
 集成分支 `phase2_5/batch1`，从 main 建。每个任务的分支从它建，Draft PR 的 base 是它。O1 分两个 PR：先交骨架（迁移、类型、接口字段，行为不变），合进集成分支后 T1 和 U1 再开工；再交整理本身。
+
+## 7 契约的修订记录
+
+| 日期 | 改了什么 | 起因 |
+|---|---|---|
+| 2026-10-04 | 2.3 写明接口照库里存的返回，落后的记忆继续返回旧标签；R9 分清五种情况各怎么计数；X11 改成具体的四条；T1 可以新增验收记录并加链接；2.1 写明保留 `vision` | T1 的发现 F-B1-1、F-B1-2、F-B1-3；O1a 交付 |

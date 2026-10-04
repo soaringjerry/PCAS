@@ -60,7 +60,7 @@
 
 | 文档 | 内容 |
 |---|---|
-| [第 1 批契约](batch1/README.md) | 数据约定、规则 R1–R16、操作序列 X1–X16、文件归属 |
+| [第 1 批契约](batch1/README.md) | 数据约定、规则 R1–R19、操作序列 X1–X22、文件归属 |
 | [O1 整理后端](batch1/O1-organize-backend.md) | 迁移、整理任务、接口 |
 | [T1 独立验收](batch1/T1-acceptance.md) | 只看契约写测试 |
 | [U1 界面](batch1/U1-frontend.md) | 资料库按分组翻记忆 |

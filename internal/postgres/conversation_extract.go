@@ -162,7 +162,7 @@ func parseConversationStage(stage string) (string, int, int, error) {
 
 func enqueueConversationTx(ctx context.Context, tx pgx.Tx, owner memory.ID, anchor memory.Ref, run string, segment, next int) error {
 	_, err := tx.Exec(ctx, `INSERT INTO memory_jobs(id,owner_id,record_id,record_version,stage,priority)
- VALUES($1,$2,$3,$4,$5,10) ON CONFLICT(owner_id,record_id,record_version,stage) DO NOTHING`,
+ VALUES($1,$2,$3,$4,$5,9) ON CONFLICT(owner_id,record_id,record_version,stage) DO NOTHING`,
 		string(memory.NewID()), string(owner), string(anchor.ID), anchor.Version, conversationStage(run, segment, next))
 	return err
 }
@@ -243,6 +243,11 @@ func (s *Store) processConversationExtraction(ctx context.Context, j worker.Job,
 				if err := enqueueConversationTx(ctx, tx, j.OwnerID, current[0].Source.Ref, run, 0, 1); err != nil {
 					return err
 				}
+			}
+			// Segment continuation is durable now; sibling message entrances no
+			// longer need to wait at the head of the queue until the final segment.
+			if err := retireConversationJobsTx(ctx, tx, j, conversation, run); err != nil {
+				return err
 			}
 			return acknowledge(ctx, tx, j)
 		}
@@ -456,6 +461,9 @@ func (s *Store) processConversationExtraction(ctx context.Context, j worker.Job,
 		if err := writeConversationStatesTx(ctx, tx, j.OwnerID, processed, ""); err != nil {
 			return err
 		}
+		if err := retireConversationJobsTx(ctx, tx, j, conversation, run); err != nil {
+			return err
+		}
 		if ordinal+1 < len(segments) {
 			anchor := current[segments[ordinal+1].Messages[0].Index-1].Source.Ref
 			if err := enqueueConversationTx(ctx, tx, j.OwnerID, anchor, run, ordinal+1, next); err != nil {
@@ -480,7 +488,7 @@ func (s *Store) processConversationExtraction(ctx context.Context, j worker.Job,
 
 func retireConversationJobsTx(ctx context.Context, tx pgx.Tx, job worker.Job, conversation, run string) error {
 	_, err := tx.Exec(ctx, `UPDATE memory_jobs j SET state='done',lease_token=NULL,lease_until=NULL,error_code='',updated_at=now()
- WHERE j.owner_id=$1 AND j.id<>$4 AND (j.stage='source.extract' OR (j.stage LIKE 'source.extract:%' AND j.stage NOT LIKE $3))
+ WHERE j.owner_id=$1 AND j.id<>$4 AND j.state<>'done' AND (j.stage='source.extract' OR (j.stage LIKE 'source.extract:%' AND j.stage NOT LIKE $3))
  AND EXISTS(SELECT 1 FROM source_contexts c WHERE(c.owner_id,c.source_id,c.source_version)=(j.owner_id,j.record_id,j.record_version) AND c.conversation_key=$2)`, string(job.OwnerID), conversation, conversationExtractionPrefix+run+":%", string(job.ID))
 	return err
 }

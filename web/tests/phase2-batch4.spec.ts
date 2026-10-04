@@ -15,6 +15,7 @@ type Batch = {
   id: string; name: string; state: 'importing' | 'paused' | 'done' | 'failed'
   archiveId: string; archiveVersion: number
   total: number; stored: number; organized: number; leftOut: number
+  prepared?: number; indexed?: number; vectorized?: number; activity?: string; organizingFailed?: number
   organizeLater: boolean
   earliest: string; latest: string; errorCode: string; error: string; createdAt: string; updatedAt: string
 }
@@ -79,7 +80,7 @@ async function mock(page: Page, initial: Batch[] = [], failure?: { error: string
     }
     return route.fulfill({ status: 500, json: { error: 'unexpected_b4_request' } })
   })
-  return { requests, errors, submittedModes }
+  return { requests, errors, submittedModes, items }
 }
 async function open(page: Page) {
   await page.goto('/settings')
@@ -531,5 +532,29 @@ for (const compression of ['native', 'missing', 'raw-unsupported'] as const) {
       }
       expect(m.errors).toEqual([])
     } finally { rmSync(archive.directory, { recursive: true }) }
+  })
+}
+
+for (const width of [390, 1280]) {
+  test(`导入进度展示真实阶段并自动推进 ${width}`, async ({ page }, info) => {
+    await page.setViewportSize({ width, height: 900 })
+    const m = await mock(page, [{ ...batch('done'), organized: 0, prepared: 500, indexed: 12, vectorized: 8, activity: 'queued' }])
+    await open(page)
+    const item = page.locator('.imp-item').filter({ hasText: 'chatgpt-export.zip' })
+    await expect(item.getByRole('status')).toHaveText('原文已准备好，等待 AI 提取记忆')
+    await expect(item.locator('.imp-meter.prepared')).toContainText('500 / 500')
+    await expect(item.locator('.imp-meter.organized')).toContainText('0 / 500')
+    await expect(item.locator('.imp-meter.indexed')).toContainText('12 / 500')
+    await expect(item.locator('.imp-meter.vectorized')).toContainText('8 / 500')
+    m.items[0].activity = 'organizing'
+    m.items[0].organized = 25
+    m.items[0].indexed = 13
+    await expect(item.getByRole('status')).toHaveText('AI 正在提取记忆', { timeout: 10000 })
+    await expect(item.locator('.imp-meter.organized')).toContainText('25 / 500')
+    await expect(item.locator('.imp-meter.indexed')).toContainText('13 / 500')
+    await noOverflow(page)
+    expect(m.requests.filter(r => r.method !== 'GET')).toEqual([])
+    expect(m.errors).toEqual([])
+    await item.screenshot({ path: info.outputPath('dispatch-progress.png') })
   })
 }

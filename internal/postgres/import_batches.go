@@ -178,19 +178,71 @@ type ImportBatch = connectors.ImportBatch
 
 // importBatchSelect resolves organization progress from the extraction ledger.
 const importBatchSelect = `SELECT b.id::text,b.archive_id::text,r.version,b.name,b.state,b.total,b.stored,
- (SELECT count(*) FROM archive_entries e WHERE e.owner_id=b.owner_id AND e.archive_id=b.archive_id
-  AND EXISTS(SELECT 1 FROM source_extractions x WHERE (x.owner_id,x.source_id,x.source_version)=(e.owner_id,e.source_id,e.source_version) AND x.state IN ('done','empty'))),
- b.hold_organizing,b.left_out,b.earliest,b.latest,b.error_code,b.created_at,b.updated_at
- FROM import_batches b JOIN memory_records r ON r.owner_id=b.owner_id AND r.id=b.archive_id`
+ ledger.organized,b.hold_organizing,b.left_out,b.earliest,b.latest,b.error_code,b.created_at,b.updated_at,
+ jobs.prepared,jobs.indexed,jobs.vectorized,coalesce(jobs.active_stage,''),ledger.failed,coalesce(jobs.budget_wait,false)
+ FROM import_batches b JOIN memory_records r ON r.owner_id=b.owner_id AND r.id=b.archive_id
+ CROSS JOIN LATERAL (
+   SELECT count(*) FILTER (WHERE x.state IN ('done','empty')) AS organized,
+     count(*) FILTER (WHERE x.state='failed') AS failed
+   FROM archive_entries e JOIN source_extractions x ON
+     (x.owner_id,x.source_id,x.source_version)=(e.owner_id,e.source_id,e.source_version)
+   WHERE e.owner_id=b.owner_id AND e.archive_id=b.archive_id
+ ) ledger
+ CROSS JOIN LATERAL (
+   SELECT count(*) FILTER (WHERE j.stage='source.chunk' AND j.state='done') AS prepared,
+     count(*) FILTER (WHERE j.stage='source.tokenize' AND j.state='done') AS indexed,
+     count(*) FILTER (WHERE j.stage='source.embed' AND j.state='done') AS vectorized,
+     (array_agg(j.stage ORDER BY j.updated_at DESC,j.id) FILTER (WHERE j.state='leased'))[1] AS active_stage,
+     bool_and(j.error_code='budget_deferred' AND j.available_at>now()) FILTER
+       (WHERE j.stage LIKE 'source.extract:conversation:%' AND j.state='queued') AS budget_wait
+   FROM archive_entries e JOIN memory_jobs j ON
+     (j.owner_id,j.record_id,j.record_version)=(e.owner_id,e.source_id,e.source_version)
+   WHERE e.owner_id=b.owner_id AND e.archive_id=b.archive_id
+ ) jobs`
 
 func scanImportBatch(row pgx.Row) (ImportBatch, error) {
 	var b ImportBatch
-	err := row.Scan(&b.ID, &b.ArchiveID, &b.ArchiveVersion, &b.Name, &b.State, &b.Total, &b.Stored, &b.Organized, &b.OrganizeLater, &b.LeftOut, &b.Earliest, &b.Latest, &b.ErrorCode, &b.CreatedAt, &b.UpdatedAt)
+	var stage string
+	var budgetWait bool
+	err := row.Scan(&b.ID, &b.ArchiveID, &b.ArchiveVersion, &b.Name, &b.State, &b.Total, &b.Stored, &b.Organized, &b.OrganizeLater, &b.LeftOut, &b.Earliest, &b.Latest, &b.ErrorCode, &b.CreatedAt, &b.UpdatedAt, &b.Prepared, &b.Indexed, &b.Vectorized, &stage, &b.OrganizingFailed, &budgetWait)
 	if b.ErrorCode != "" {
 		b.Error = importErrorMessage(b.ErrorCode)
 	}
+	switch {
+	case b.State == "paused":
+		b.Activity = "paused"
+	case b.State == "failed":
+		b.Activity = "failed"
+	case b.State == "importing":
+		b.Activity = "storing"
+	case strings.HasPrefix(stage, conversationExtractionPrefix):
+		b.Activity = "organizing"
+	case stage == "source.chunk":
+		b.Activity = "preparing"
+	case stage == "source.embed":
+		b.Activity = "vectorizing"
+	case stage == "source.tokenize" || stage == "memory.summary":
+		b.Activity = "indexing"
+	case b.Prepared < b.Stored:
+		b.Activity = "preparing"
+	case b.OrganizeLater:
+		b.Activity = "held"
+	case b.OrganizingFailed > 0:
+		b.Activity = "organizing_failed"
+	case budgetWait && b.Organized < b.Total:
+		b.Activity = "budget_wait"
+	case b.Organized < b.Total:
+		b.Activity = "queued"
+	case b.Indexed < b.Total:
+		b.Activity = "indexing"
+	case b.Vectorized < b.Total:
+		b.Activity = "vectorizing"
+	default:
+		b.Activity = "complete"
+	}
 	return b, err
 }
+
 func importErrorMessage(code string) string {
 	switch code {
 	case "import_storage_failed":

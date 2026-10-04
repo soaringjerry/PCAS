@@ -3184,16 +3184,19 @@ a.btn:hover {
   margin: 0;
 }
 
-/* Two counts, two bars: stored is blue, gone through for memories is the assistant's purple. */
+/* Stage counts: stored is blue, gone through for memories is the assistant's purple. */
 .imp-meter {
   display: grid;
-  grid-template-columns: 3.6em minmax(0, 1fr) auto;
+  grid-template-columns: 4.3em minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
   font-size: 12.5px;
 }
 
+.imp-activity { color: var(--label-1); }
+
 .imp-meter-label {
+  white-space: nowrap;
   color: var(--label-2);
 }
 

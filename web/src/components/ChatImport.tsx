@@ -202,18 +202,25 @@ const stateTag: Record<ImportBatch['state'], { text: string; tone: 'info' | 'war
   failed: { text: '中途出错', tone: 'danger' },
 }
 
-/** One of the two counts of an import, as a bar. */
-function Meter({ label, value, total, kind }: { label: string; value: number; total: number; kind: 'stored' | 'organized' }) {
+/** A durable stage count of an import, as a bar. */
+function Meter({ label, value, total, kind }: { label: string; value: number; total: number; kind: 'stored' | 'prepared' | 'organized' | 'indexed' | 'vectorized' }) {
   return (
     <div className={`imp-meter ${kind}`}>
       <span className="imp-meter-label">{label}</span>
       <Progress value={total > 0 ? Math.min(1, value / total) : 0} />
-      {/* As wide as the count can get, so both bars of an import end at the same place. */}
+      {/* As wide as the count can get, so the bars of an import end at the same place. */}
       <span className="imp-meter-count" style={{ minWidth: `${count(total).length * 2 + 3}ch` }}>
         {count(value)} / {count(total)}
       </span>
     </div>
   )
+}
+
+const activityText: Record<NonNullable<ImportBatch['activity']>, string> = {
+  storing: '正在保存原文', preparing: '正在准备原文', organizing: 'AI 正在提取记忆',
+  indexing: '正在建立搜索索引', vectorizing: '正在生成向量索引', queued: '原文已准备好，等待 AI 提取记忆',
+  paused: '后台处理已暂停', failed: '保存中断了，可以接着导', held: '等待你开始整理',
+  organizing_failed: '部分记忆提取失败', budget_wait: '今天的整理预算已用完，等待明天继续', complete: '原文、记忆和搜索索引已处理完成',
 }
 
 function ImportRow({ batch, imports }: { batch: ImportBatch; imports: Imports }) {
@@ -242,21 +249,34 @@ function ImportRow({ batch, imports }: { batch: ImportBatch; imports: Imports })
     <div className="imp-item">
       <div className="imp-head">
         <strong className="ellipsis">{batch.name}</strong>
-        <Tag tone={stateTag[batch.state].tone}>{finished ? '已完成' : stateTag[batch.state].text}</Tag>
+        <Tag tone={batch.activity === 'organizing' ? 'info' : stateTag[batch.state].tone}>{finished ? '已完成' : batch.activity === 'organizing' ? '正在整理' : stateTag[batch.state].text}</Tag>
       </div>
       <div className="tiny muted">
         <Span from={batch.earliest} to={batch.latest} />
         {(batch.earliest || batch.latest) && ' · '}
         {count(batch.total)} 条消息
       </div>
+      {batch.activity && <p className="small imp-activity" role="status">{activityText[batch.activity]}{batch.activity === 'organizing_failed' && `（${count(batch.organizingFailed ?? 0)} 条）`}</p>}
       {finished ? (
-        <p className="small muted">都存好了，也整理完了。</p>
+        <>
+          <p className="small muted">都存好了，也整理完了。</p>
+          {batch.indexed !== undefined && batch.indexed < batch.total && <Meter kind="indexed" label="搜索索引" value={batch.indexed} total={batch.total} />}
+          {batch.vectorized !== undefined && batch.vectorized < batch.total && <Meter kind="vectorized" label="向量索引" value={batch.vectorized} total={batch.total} />}
+        </>
       ) : waiting ? (
-        <p className="small">已存好，还没开始整理。里面的话现在就能问到。</p>
+        <>
+          <p className="small">已存好，还没开始整理。里面的话现在就能问到。</p>
+          {batch.prepared !== undefined && <Meter kind="prepared" label="准备原文" value={batch.prepared} total={batch.total} />}
+          {batch.indexed !== undefined && <Meter kind="indexed" label="搜索索引" value={batch.indexed} total={batch.total} />}
+          {batch.vectorized !== undefined && <Meter kind="vectorized" label="向量索引" value={batch.vectorized} total={batch.total} />}
+        </>
       ) : (
         <>
           <Meter kind="stored" label="已存好" value={batch.stored} total={batch.total} />
+          {batch.prepared !== undefined && <Meter kind="prepared" label="准备原文" value={batch.prepared} total={batch.total} />}
           {held ? <p className="tiny muted">存好的话现在就能问到。存完之后先不整理，等你点「开始整理」。</p> : <Meter kind="organized" label="已整理" value={batch.organized} total={batch.total} />}
+          {batch.indexed !== undefined && <Meter kind="indexed" label="搜索索引" value={batch.indexed} total={batch.total} />}
+          {batch.vectorized !== undefined && <Meter kind="vectorized" label="向量索引" value={batch.vectorized} total={batch.total} />}
         </>
       )}
       {batch.leftOut > 0 && <p className="tiny muted">另有 {count(batch.leftOut)} 条太多了没有导入，留下的是最新的。</p>}

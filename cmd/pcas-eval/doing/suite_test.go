@@ -59,6 +59,7 @@ func TestAliasEvidenceClosure(t *testing.T) {
 	}
 	by := s.ByID()
 	count := 0
+	affected := map[string]bool{}
 	for _, task := range s.Tasks {
 		for _, check := range task.Must {
 			named := false
@@ -75,10 +76,11 @@ func TestAliasEvidenceClosure(t *testing.T) {
 					t.Fatalf("%s cannot judge a correct nickname", task.ID)
 				}
 				count++
+				affected[task.ID] = true
 			}
 		}
 	}
-	if count != 20 {
-		t.Fatalf("alias coverage %d", count)
+	if count != 24 || len(affected) != 20 {
+		t.Fatalf("alias coverage checks=%d tasks=%d", count, len(affected))
 	}
 }

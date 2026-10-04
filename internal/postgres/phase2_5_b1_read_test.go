@@ -252,9 +252,18 @@ func TestPhase25B1_R08_CorrectionInheritsStoredLabels(t *testing.T) {
 	}
 }
 
+func TestPhase25B1_FacetsRouteAvailable(t *testing.T) {
+	// F-B1-6 was a contract path mistake, resolved by #187. Exercise the
+	// corrected route independently of group behavior pending O1b (F-B1-4).
+	f := phase25B1NewFixture(t)
+	f.claim(t, "虚构用户许澄偏爱紫色积木。")
+	var facets workspace.MemoryFacets
+	f.get(t, "/v1/workspace/memory-facets", &facets)
+}
+
 func TestPhase25B1_FacetsCountsAndOwnerIsolation(t *testing.T) {
 	if os.Getenv("PCAS_P25_B1_VERIFY_FINDINGS") != "1" {
-		t.Skip("finding F-B1-6")
+		t.Skip("finding F-B1-4")
 	}
 	f := phase25B1NewFixture(t)
 	want := make(map[string]workspace.MemoryGroupFacet)
@@ -288,7 +297,7 @@ func TestPhase25B1_FacetsCountsAndOwnerIsolation(t *testing.T) {
 	f.labels(t, ref, "rule", true, 1, foreign)
 	f.scope = originalScope
 	var facets workspace.MemoryFacets
-	f.get(t, "/v1/workspace/memories/facets", &facets)
+	f.get(t, "/v1/workspace/memory-facets", &facets)
 	got := make(map[string]workspace.MemoryGroupFacet)
 	closedTypes := make(map[string]bool)
 	lastType := ""
@@ -325,7 +334,7 @@ func TestPhase25B1_FacetsCountsAndOwnerIsolation(t *testing.T) {
 
 func TestPhase25B1_X15_DeleteOnlyMemoryLeavesGroupEntity(t *testing.T) {
 	if os.Getenv("PCAS_P25_B1_VERIFY_FINDINGS") != "1" {
-		t.Skip("finding F-B1-6")
+		t.Skip("finding F-B1-4")
 	}
 	f := phase25B1NewFixture(t)
 	topic := workspace.MemoryGroup{EntityID: string(f.entity(t, "topic", "虚构航模")), Name: "虚构航模", Type: "topic"}
@@ -337,7 +346,7 @@ func TestPhase25B1_X15_DeleteOnlyMemoryLeavesGroupEntity(t *testing.T) {
 		t.Fatal(err)
 	}
 	var facets workspace.MemoryFacets
-	f.get(t, "/v1/workspace/memories/facets", &facets)
+	f.get(t, "/v1/workspace/memory-facets", &facets)
 	if len(facets.Groups) != 1 || facets.Groups[0].EntityID != topic.EntityID || facets.Groups[0].Count != 1 {
 		t.Fatalf("before delete facets = %+v", facets.Groups)
 	}
@@ -364,7 +373,7 @@ func TestPhase25B1_X15_DeleteOnlyMemoryLeavesGroupEntity(t *testing.T) {
 	if entities != 1 {
 		t.Errorf("remaining group entities = %d", entities)
 	}
-	f.get(t, "/v1/workspace/memories/facets", &facets)
+	f.get(t, "/v1/workspace/memory-facets", &facets)
 	if len(facets.Groups) != 0 {
 		t.Errorf("empty group still in facets: %+v", facets.Groups)
 	}

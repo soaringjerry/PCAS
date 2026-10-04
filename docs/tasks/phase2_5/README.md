@@ -65,3 +65,4 @@
 | [T1 独立验收](batch1/T1-acceptance.md) | 只看契约写测试 |
 | [U1 界面](batch1/U1-frontend.md) | 资料库按分组翻记忆 |
 | [V2 评测集](V2-eval-set.md) | 任务集、跑法、抽查 |
+| [V2 办事题集与基线](../../evaluations/2026-10-04-phase2_5-v2-doing.md) | 671 条虚构记忆、120 题、固定跑法、三次波动与私有抽查流程 |

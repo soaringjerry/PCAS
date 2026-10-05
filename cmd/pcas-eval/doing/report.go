@@ -97,6 +97,27 @@ func Aggregate(rows []Row, repeats int) ([]Summary, []Range) {
 func WriteMarkdown(path string, r Report) error {
 	var b strings.Builder
 	fmt.Fprintf(&b, "# Phase 2.5 doing evaluation\n\nmodel `%s`; channel `%s`; fake=%t; repeats=%d; suite SHA `%s`; revision `%s`.\n\n", r.Model, r.Channel, r.Fake, r.Repeats, r.SuiteSHA, r.Revision)
+	if p := r.Preparation; p != nil {
+		fmt.Fprintf(&b, "Preparation complete=%t; wall ms=%.0f; claims=%d; retired=%d; cards=%d; handover=%t. These costs are outside the rows.\n\n", p.Complete, p.WallMS, p.Claims, p.Retired, p.Cards, p.Handover)
+		fmt.Fprintln(&b, "| Preparation stage | Wall ms | Model calls | Failed calls | Input chars | Jobs done |\n|---|---:|---:|---:|---:|---:|")
+		for _, s := range p.Stages {
+			fmt.Fprintf(&b, "| %s | %.0f | %d | %d | %d | %d |\n", s.Stage, s.WallMS, s.ModelCalls, s.FailedCalls, s.InputChars, s.JobsDone)
+		}
+		fmt.Fprintln(&b)
+	}
+	if len(r.ResumeSources) > 0 {
+		fmt.Fprintln(&b, "Transport repair: prior failed/canceled cells and attempted calls are outside the successful rows below; preparation is reused, each real invocation has its own preflight.")
+		fmt.Fprintln(&b)
+		fmt.Fprintln(&b, "| Prior report SHA | Revision | Reused rows | Failed/canceled cells | Attempted calls in those cells |\n|---|---|---:|---:|---:|")
+		for _, s := range r.ResumeSources {
+			calls := 0
+			for _, f := range s.Failures {
+				calls += f.ModelCalls
+			}
+			fmt.Fprintf(&b, "| %s | %s | %d | %d | %d |\n", s.SHA256, s.Revision, s.ReusedRows, len(s.Failures), calls)
+		}
+		fmt.Fprintln(&b)
+	}
 	fmt.Fprintln(&b, "| Method | Category | Run | Tasks | Must % | Bonus % | Forbidden hits | Usable % | Input chars | Model calls | Doing ms | Total ms | Disputed |\n|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|")
 	for _, s := range r.Summaries {
 		fmt.Fprintf(&b, "| %s | %s | %d | %d | %.2f | %.2f | %d | %.2f | %.0f | %d | %.0f | %.0f | %d |\n", s.Method, s.Category, s.Run, s.Tasks, 100*s.MustRate, 100*s.BonusRate, s.ForbiddenHits, 100*s.UsableRate, s.InputCharsMean, s.ModelCalls, s.DoingMSMean, s.TotalMSMean, s.DisputedTasks)

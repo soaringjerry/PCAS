@@ -62,6 +62,9 @@ type adapterFlags []string
 func (a *adapterFlags) String() string     { return strings.Join(*a, ",") }
 func (a *adapterFlags) Set(s string) error { *a = append(*a, s); return nil }
 func runDoing(args []string) error {
+	if doingTierArgs(args) {
+		return runDoingTiers(args)
+	}
 	return runDoingObserved(args, nil)
 }
 

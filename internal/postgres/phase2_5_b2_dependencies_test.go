@@ -58,24 +58,40 @@ func (f *phase25B234Fixture) assertAnswerOutdated(t *testing.T, conversation str
 }
 
 func TestPhase25B2_X2_3_SupersededDependencyOutdated(t *testing.T) {
-	t.Skip("finding F-B2-5")
-	f := phase25B234NewFixture(t)
+	f := phase25B2NewFixture(t)
 	old := f.claim(t, "虚构月报周三交。")
 	kept := f.claim(t, "虚构月报改到周五交。")
 	conversation := f.seedAnswer(t, old)
 	f.assertAnswerOutdated(t, conversation, false)
-	f.retire(t, old, kept, "superseded")
+	g := workspace.MemoryGroup{EntityID: string(f.entity(t, "project", "虚构依赖月报")), Type: "project"}
+	f.labels(t, old, "progress", true, 1, g)
+	f.labels(t, kept, "progress", true, 1, g)
+	f.compareModel(t, func(in phase25B2Input) phase25B2WireOutput {
+		out := phase25B2Empty()
+		out.Superseded = []phase25B2WireSuperseded{{Old: phase25B2N(in, "虚构月报周三交。"), New: phase25B2N(in, "虚构月报改到周五交。")}}
+		return out
+	})
+	f.runCompare(t)
 	f.assertAnswerOutdated(t, conversation, true)
 	f.assertRevisions(t, old, kept)
 }
 
 func TestPhase25B2_X2_4_DuplicateDependencyStaysCurrent(t *testing.T) {
-	f := phase25B234NewFixture(t)
+	f := phase25B2NewFixture(t)
 	old := f.claim(t, "虚构月报周五交。")
 	kept := f.claim(t, "虚构月报周五提交。")
 	conversation := f.seedAnswer(t, old)
 	f.assertAnswerOutdated(t, conversation, false)
-	f.retire(t, old, kept, "duplicate")
+	g := workspace.MemoryGroup{EntityID: string(f.entity(t, "project", "虚构依赖月报")), Type: "project"}
+	f.labels(t, old, "progress", true, 1, g)
+	f.labels(t, kept, "progress", true, 1, g)
+	f.compareModel(t, func(in phase25B2Input) phase25B2WireOutput {
+		out := phase25B2Empty()
+		keep := phase25B2N(in, "虚构月报周五提交。")
+		out.Duplicates = []phase25B2WireDuplicate{{Keep: keep, Members: []int{phase25B2N(in, "虚构月报周五交。"), keep}}}
+		return out
+	})
+	f.runCompare(t)
 	f.assertAnswerOutdated(t, conversation, false)
 	f.assertRevisions(t, old, kept)
 	// Positive control: the same persisted dependency must detect a revision

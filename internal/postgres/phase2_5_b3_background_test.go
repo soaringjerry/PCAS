@@ -395,13 +395,21 @@ func TestPhase25B3_X3_6_CorrectionDebounceAndActualRebuild(t *testing.T) {
 
 func TestPhase25B3_X3_7_RebuildAfterSupersession(t *testing.T) {
 	f := phase25B234NewFixture(t)
+	f.sharedSubject = true
 	g, refs := f.cardGroup(t, 5)
 	f.statusModel(t, nil)
 	f.buildStatus(t, time.Now().Add(11*time.Minute))
 	old := refs[0]
 	replacement := f.claim(t, "虚构月报改到周五交。")
 	f.labels(t, replacement, "progress", true, 1, g)
-	f.retire(t, old, replacement, "superseded")
+	oldText := refsText(t, f, old)
+	f.compareModel(t, func(in phase25B2Input) phase25B2WireOutput {
+		out := phase25B2Empty()
+		out.Superseded = []phase25B2WireSuperseded{{Old: phase25B2N(in, oldText), New: phase25B2N(in, "虚构月报改到周五交。")}}
+		return out
+	})
+	f.runCompare(t)
+	f.statusModel(t, nil)
 	key := "entity:" + g.EntityID
 	cards := f.readCards(t, key)
 	phase25B234AssertIDs(t, phase25B3Items(cards), refs[1:]...)

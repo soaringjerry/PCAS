@@ -12,7 +12,7 @@ import (
 )
 
 func TestPhase25B2_TrustWithoutConfirmationGate(t *testing.T) {
-	f := phase25B234NewFixture(t)
+	f := phase25B2NewFixture(t)
 	for _, tc := range []struct{ name, text, acquisition, confirmation, trust string }{
 		{"direct_unknown", "虚构陆青喜欢青色笔记本。", "direct", "unknown", "stated"},
 		{"direct_candidate", "虚构陆青喜欢紫色文件夹。", "direct", "candidate", "stated"},
@@ -24,9 +24,6 @@ func TestPhase25B2_TrustWithoutConfirmationGate(t *testing.T) {
 		{"inferred_qualified", "推断虚构陆青可能喜欢绿色。", "inferred", "unknown", "inferred"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if tc.trust != "stated" {
-				t.Skip("finding F-B2-1")
-			}
 			ref := f.claimWith(t, tc.text, tc.acquisition, tc.confirmation, nil)
 			m, err := f.store.GetMemory(f.ctx, f.scope, string(ref.ID))
 			if err != nil {
@@ -54,8 +51,7 @@ func TestPhase25B2_TrustWithoutConfirmationGate(t *testing.T) {
 }
 
 func TestPhase25B2_TrustCountsDistinctSources(t *testing.T) {
-	t.Skip("finding F-B2-1")
-	f := phase25B234NewFixture(t)
+	f := phase25B2NewFixture(t)
 	ref := f.claim(t, "虚构陆青喜欢青色笔记本。")
 	var source memory.Ref
 	if err := f.db.QueryRow(f.ctx, `SELECT source_id,source_version FROM evidence WHERE owner_id=$1 AND target_id=$2 LIMIT 1`, f.scope.OwnerID, ref.ID).Scan(&source.ID, &source.Version); err != nil {
@@ -92,8 +88,7 @@ func TestPhase25B2_TrustCountsDistinctSources(t *testing.T) {
 }
 
 func TestPhase25B2_CurrentHistoryAndMergedFromReads(t *testing.T) {
-	t.Skip("finding F-B2-2")
-	f := phase25B234NewFixture(t)
+	f := phase25B2NewFixture(t)
 	kept := f.claim(t, "虚构汇报的最终期限是周五。")
 	duplicate := f.claim(t, "虚构汇报的期限是周五。")
 	old := f.claim(t, "虚构汇报的期限是周三。")
@@ -129,8 +124,7 @@ func TestPhase25B2_CurrentHistoryAndMergedFromReads(t *testing.T) {
 }
 
 func TestPhase25B2_CurrentOnlyFacetsAndPagination(t *testing.T) {
-	t.Skip("finding F-B2-3")
-	f := phase25B234NewFixture(t)
+	f := phase25B2NewFixture(t)
 	g := workspace.MemoryGroup{EntityID: string(f.entity(t, "topic", "虚构白鹭月报")), Name: "虚构白鹭月报", Type: "topic"}
 	var current, history []memory.Ref
 	for i := 0; i < 7; i++ {
@@ -185,13 +179,21 @@ func TestPhase25B2_CurrentOnlyFacetsAndPagination(t *testing.T) {
 }
 
 func TestPhase25B2_X2_9_DeleteSurvivorKeepsHistory(t *testing.T) {
-	t.Skip("finding F-B2-2")
-	f := phase25B234NewFixture(t)
+	f := phase25B2NewFixture(t)
 	kept := f.claim(t, "虚构汇报在周五交。")
 	a := f.claim(t, "虚构汇报周五交。")
 	b := f.claim(t, "虚构汇报周五提交。")
-	f.retire(t, a, kept, "duplicate")
-	f.retire(t, b, kept, "duplicate")
+	g := workspace.MemoryGroup{EntityID: string(f.entity(t, "project", "虚构删除保留项")), Type: "project"}
+	for _, r := range []memory.Ref{kept, a, b} {
+		f.labels(t, r, "progress", true, 1, g)
+	}
+	f.compareModel(t, func(in phase25B2Input) phase25B2WireOutput {
+		out := phase25B2Empty()
+		keep := phase25B2N(in, "虚构汇报在周五交。")
+		out.Duplicates = []phase25B2WireDuplicate{{Keep: keep, Members: []int{keep, phase25B2N(in, "虚构汇报周五交。"), phase25B2N(in, "虚构汇报周五提交。")}}}
+		return out
+	})
+	f.runCompare(t)
 	if err := f.store.Delete(f.ctx, f.scope, memory.DeleteRequest{Targets: []memory.Ref{kept}}); err != nil {
 		t.Fatal(err)
 	}
@@ -214,9 +216,8 @@ func TestPhase25B2_X2_9_DeleteSurvivorKeepsHistory(t *testing.T) {
 // End-to-end comparison/restore operations will be added through the adapter,
 // once the coordinator supplies entrypoints and the model wire format.
 func TestPhase25B2_RandomReadSequence(t *testing.T) {
-	t.Skip("finding F-B2-2")
 	const seed int64 = 252502
-	f := phase25B234NewFixture(t)
+	f := phase25B2NewFixture(t)
 	rng := rand.New(rand.NewSource(seed))
 	t.Logf("seed=%d", seed)
 	keeper := f.claim(t, "虚构固定的保留记忆。")

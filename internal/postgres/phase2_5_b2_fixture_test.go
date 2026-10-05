@@ -23,12 +23,14 @@ import (
 // These fixtures use only fictitious data and a container owned by this test.
 // Never accept an external DSN: acceptance must not touch a shared database.
 type phase25B234Fixture struct {
-	ctx       context.Context
-	db        *pgxpool.Pool
-	store     *postgres.Store
-	scope     memory.Scope
-	handler   http.Handler
-	statusNow time.Time // Test-only clock for the real status queue's due jobs.
+	ctx           context.Context
+	db            *pgxpool.Pool
+	store         *postgres.Store
+	scope         memory.Scope
+	handler       http.Handler
+	statusNow     time.Time // Test-only clock for the real status queue's due jobs.
+	subject       memory.ID // Optional shared speaker for isolated B2 comparison fixtures.
+	sharedSubject bool
 }
 
 func (f *phase25B234Fixture) retire(t *testing.T, ref, kept memory.Ref, reason string) {
@@ -201,7 +203,10 @@ func (f *phase25B234Fixture) claimWith(t *testing.T, text, acquisition, confirma
 	if err != nil {
 		t.Fatal(err)
 	}
-	subject := f.entity(t, "person", "虚构人物陆青")
+	if !f.sharedSubject || f.subject == "" {
+		f.subject = f.entity(t, "person", "虚构人物陆青")
+	}
+	subject := f.subject
 	ref := memory.Ref{ID: memory.NewID(), Version: 1, Kind: memory.ClaimKind}
 	evidenceID := memory.NewID()
 	value, err := json.Marshal(text)
@@ -234,4 +239,15 @@ func (f *phase25B234Fixture) labels(t *testing.T, ref memory.Ref, category strin
 		f.exec(t, `INSERT INTO claim_mentions(owner_id,claim_id,claim_version,entity_id,role) VALUES ($1,$2,$3,$4,$5)`,
 			f.scope.OwnerID, ref.ID, ref.Version, group.EntityID, group.Type)
 	}
+}
+
+func phase25B2NewFixture(t *testing.T) *phase25B234Fixture {
+	f := phase25B234NewFixture(t)
+	f.sharedSubject = true
+	return f
+}
+func phase25B2NewFixtureTimeout(t *testing.T, d time.Duration) *phase25B234Fixture {
+	f := phase25B234NewFixtureTimeout(t, d)
+	f.sharedSubject = true
+	return f
 }

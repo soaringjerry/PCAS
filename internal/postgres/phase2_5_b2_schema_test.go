@@ -7,7 +7,7 @@ import (
 )
 
 func TestPhase25B2_FrozenSchema(t *testing.T) {
-	f := phase25B234NewFixture(t)
+	f := phase25B2NewFixture(t)
 	ref := f.claim(t, "虚构人物陆青在准备白鹭月报。")
 	var retired, by *string
 	var compared int

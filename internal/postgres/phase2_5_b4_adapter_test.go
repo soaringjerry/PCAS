@@ -68,13 +68,6 @@ func phase25B4ModelOutput(a phase25B4Adapter, result phase25B4Reply, checking bo
 	return encode(result)
 }
 
-// The coordinator has not supplied a valid deletion action for X4-8.
-// Bind that public model format here; the test includes a positive control.
-func phase25B4DeleteAction(ref string) json.RawMessage {
-	data, _ := json.Marshal(map[string]any{"op": "delete", "ref": ref})
-	return data
-}
-
 // RunAgents asks for draft body text; secretary and secretary selfcheck use JSON.
 func phase25B4DeputyReply(text string) phase25B234ModelReply {
 	return phase25B234ModelReply{content: text}

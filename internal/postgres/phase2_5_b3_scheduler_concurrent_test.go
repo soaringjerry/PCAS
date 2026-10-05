@@ -21,7 +21,7 @@ import (
 // Exercise the production overlap: scheduling, result writes, and foreground
 // traffic run on independent connections. No SQL locks stand in for a handler.
 func TestPhase25B3_ConcurrentStatusSchedulerWorkerAndUserRequests(t *testing.T) {
-	t.Skip("finding F-B3-10")
+	t.Skip("finding F-B3-10: no deadlock since the lock-order fix; scheduler still abandons its pass on a busy group, so rebuilds and the handover can stay unfinished")
 	for _, rebuilding := range []bool{false, true} {
 		name := "initial"
 		if rebuilding {

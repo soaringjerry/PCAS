@@ -161,8 +161,15 @@ func (f *phase25B234Fixture) statusModel(t *testing.T, card func(phase25B3Input)
 
 func (f *phase25B234Fixture) drainStatus(t *testing.T) int {
 	t.Helper()
+	return f.drainStatusJobs(t, 150)
+}
+
+// The budget counts every claimed job, including quota deferrals, rather than
+// just model calls. Large-card fixtures must allow each remaining card to defer.
+func (f *phase25B234Fixture) drainStatusJobs(t *testing.T, jobBudget int) int {
+	t.Helper()
 	n := 0
-	for i := 0; i < 150; i++ {
+	for i := 0; i < jobBudget; i++ {
 		stage := f.statusJob(t)
 		if stage == "" {
 			return n
@@ -174,7 +181,7 @@ func (f *phase25B234Fixture) drainStatus(t *testing.T) int {
 		// after each actual completion instead of assuming all groups queue at once.
 		f.scheduleStatus(t, f.statusNow)
 	}
-	t.Fatal("status queue did not drain")
+	t.Fatalf("status queue did not drain after %d jobs (%d completed card jobs)", jobBudget, n)
 	return n
 }
 

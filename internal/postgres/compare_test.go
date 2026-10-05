@@ -220,7 +220,7 @@ func TestCompareRestoreUndoAndVersionBump(t *testing.T) {
 	compareState(t, s, scope, refs, []string{"superseded", ""}, CompareVersion)
 	f.set(`{"duplicates":[],"superseded":[]}`)
 	j := compareJob(t, s, scope, false, CompareVersion+1)
-	if err = s.ProcessCompare(context.Background(), j); err != nil {
+	if err = s.processCompareVersion(context.Background(), j, CompareVersion+1); err != nil {
 		t.Fatal(err)
 	}
 	var compared int

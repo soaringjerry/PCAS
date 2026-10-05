@@ -127,3 +127,29 @@ func TestCompareDispatchPrecedesQueuedOrganizeBacklog(t *testing.T) {
 		t.Fatal("organize backlog starves comparison", j, err)
 	}
 }
+
+func TestCompareRuleEpochComesFromProgramNotQueueAndRemovedModelSkips(t *testing.T) {
+	s := testStore(t)
+	scope := owner()
+	ctx := context.Background()
+	b1Model(t, s, `{"duplicates":[],"superseded":[]}`)
+	refs := compareFixture(t, s, scope, "虚构规则纪元记忆")
+	j := compareJob(t, s, scope, false, CompareVersion+7)
+	if err := s.ProcessCompare(ctx, j); err != nil {
+		t.Fatal(err)
+	}
+	compareState(t, s, scope, refs, []string{""}, CompareVersion)
+	if _, err := s.pool.Exec(ctx, "UPDATE claims SET compared=0 WHERE owner_id=$1", string(scope.OwnerID)); err != nil {
+		t.Fatal(err)
+	}
+	j = compareJob(t, s, scope, false, CompareVersion)
+	s.models = nil
+	if err := s.ProcessCompare(ctx, j); err != nil {
+		t.Fatal(err)
+	}
+	compareState(t, s, scope, refs, []string{""}, 0)
+	var state string
+	if err := s.pool.QueryRow(ctx, "SELECT state FROM memory_jobs WHERE id=$1", string(j.ID)).Scan(&state); err != nil || state != "done" {
+		t.Fatal(state, err)
+	}
+}

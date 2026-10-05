@@ -238,9 +238,17 @@ func compareHourlyTx(ctx context.Context, tx pgx.Tx) error {
 }
 
 func (s *Store) ProcessCompare(ctx context.Context, j worker.Job) error {
-	version, err := compareJobVersion(j)
-	if err != nil {
+	return s.processCompareVersion(ctx, j, CompareVersion)
+}
+
+// A queued stage can predate a program rule bump. Stamp the rules actually
+// implemented by this worker, rather than trusting a queue string as an epoch.
+func (s *Store) processCompareVersion(ctx context.Context, j worker.Job, version int) error {
+	if _, err := compareJobVersion(j); err != nil {
 		return err
+	}
+	if version < 1 {
+		return memory.ErrInvalid
 	}
 	conn, release, err := s.comparisonConnection(ctx)
 	if err != nil {
@@ -248,7 +256,12 @@ func (s *Store) ProcessCompare(ctx context.Context, j worker.Job) error {
 	}
 	defer release()
 	if s.models == nil {
-		return memory.ErrUnavailable
+		return pgx.BeginFunc(ctx, conn, func(tx pgx.Tx) error {
+			if err := lockJob(ctx, tx, j); err != nil {
+				return err
+			}
+			return acknowledge(ctx, tx, j)
+		})
 	}
 	p, ok := s.models.Get(s.models.ExtractionID())
 	if !ok || p.Embedding || p.Transcription {

@@ -411,6 +411,8 @@ type DeskSource struct {
 
 // MemoryQuery combines list filters; cursors keep a stable insertion boundary.
 type MemoryQuery struct {
+	Trust     string
+	RetiredBy string
 	Retired   bool
 	Group     string
 	Category  string

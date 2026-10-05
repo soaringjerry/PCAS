@@ -67,6 +67,9 @@ func memoryWhere(scope memory.Scope, currentOnly bool, opts memoryReadOptions) (
 		clauses = append(clauses, fmt.Sprintf("(c.subject_id=$%d::uuid OR EXISTS(SELECT 1 FROM claim_mentions cm WHERE (cm.owner_id,cm.claim_id,cm.claim_version)=(c.owner_id,c.claim_id,c.version) AND cm.entity_id=$%d::uuid))", slot, slot))
 	}
 	q := opts.query
+	if q.RetiredBy != "" {
+		add("EXISTS(SELECT 1 FROM claims retired WHERE retired.owner_id=r.owner_id AND retired.id=r.id AND retired.retired_by=$%d::uuid)", q.RetiredBy)
+	}
 	if q.Q != "" {
 		add("strpos(lower(c.value #>> '{}'),lower($%d))>0", q.Q)
 	}
@@ -314,6 +317,12 @@ func validateMemoryQuery(q *workspace.MemoryQuery) error {
 		return memory.ErrInvalid
 	}
 	q.Limit = min(q.Limit, 100)
+	if q.Trust != "" && !oneOf(q.Trust, "stated", "repeated", "tentative", "reported", "inferred") {
+		return memory.ErrInvalid
+	}
+	if q.RetiredBy != "" && (!q.Retired || !memory.ID(q.RetiredBy).Valid()) {
+		return memory.ErrInvalid
+	}
 	if q.Entity != "" && !memory.ID(q.Entity).Valid() || q.Project != "" && !memory.ID(q.Project).Valid() || q.Group != "" && !memory.ID(q.Group).Valid() {
 		return memory.ErrInvalid
 	}
@@ -373,16 +382,32 @@ func (s *Store) ListMemories(ctx context.Context, scope memory.Scope, q workspac
 		opts.snapshot = cursor.Snapshot
 	}
 	err := pgx.BeginTxFunc(ctx, s.pool, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
+		if q.Trust != "" {
+			// Compiling the correlated derived predicate costs more than executing a
+			// paged interactive list. This setting is local to this read transaction.
+			if _, err := tx.Exec(ctx, "SET LOCAL jit=off"); err != nil {
+				return err
+			}
+		}
 		if opts.snapshot.IsZero() {
 			if err := tx.QueryRow(ctx, "SELECT clock_timestamp()").Scan(&opts.snapshot); err != nil {
 				return err
 			}
 		}
-		countOpts := opts
-		countOpts.before = nil
-		where, args := memoryWhere(scope, false, countOpts)
-		if err := tx.QueryRow(ctx, "SELECT count(*)"+memoryJoins+where, args...).Scan(&out.Total); err != nil {
-			return err
+		if q.Trust != "" {
+			var err error
+			out.Total, opts.ids, err = trustedMemoryIDsTx(ctx, tx, scope, opts)
+			if err != nil {
+				return err
+			}
+			opts.query.Trust = ""
+		} else {
+			countOpts := opts
+			countOpts.before = nil
+			where, args := memoryWhere(scope, false, countOpts)
+			if err := tx.QueryRow(ctx, "SELECT count(*)"+memoryJoins+where, args...).Scan(&out.Total); err != nil {
+				return err
+			}
 		}
 		items, err := s.readMemoriesTx(ctx, tx, scope, false, opts)
 		if err != nil {

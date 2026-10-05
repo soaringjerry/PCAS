@@ -313,15 +313,18 @@ func qualificationContext(source, quote string) string {
 	return source[start:end]
 }
 
+var qualifiedCaptureMarkers = []string{"可能", "也许", "大概", "不确定", "考虑", "假如", "假设", "如果", "据说", "听说", "他说", "她说", "更正", "纠正", "不再", "原以为", "暂时", "试试", "“", "”", "\""}
+var qualifiedCaptureWords = []string{"maybe", "perhaps", "probably", "possibly", "likely", "might", "could", "not sure", "i think", "considering", "if", "said", "correction", "actually", "no longer"}
+
 func qualifiedCapture(text string) bool {
 	lower := strings.ToLower(text)
-	for _, marker := range []string{"可能", "也许", "大概", "不确定", "考虑", "假如", "假设", "如果", "据说", "听说", "他说", "她说", "更正", "纠正", "不再", "原以为", "暂时", "试试", "“", "”", "\""} {
+	for _, marker := range qualifiedCaptureMarkers {
 		if strings.Contains(lower, marker) {
 			return true
 		}
 	}
 	words := " " + strings.Join(strings.FieldsFunc(lower, func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsNumber(r) }), " ") + " "
-	for _, marker := range []string{"maybe", "perhaps", "probably", "possibly", "likely", "might", "could", "not sure", "i think", "considering", "if", "said", "correction", "actually", "no longer"} {
+	for _, marker := range qualifiedCaptureWords {
 		if strings.Contains(words, " "+marker+" ") {
 			return true
 		}

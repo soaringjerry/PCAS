@@ -57,6 +57,8 @@ func (s *Store) StatusCardIndexTx(ctx context.Context, tx pgx.Tx, scope memory.S
 	if err != nil {
 		return out, err
 	}
+	// A card rebuilt after this read is fresh again; the repair must not undo that.
+	builtAt := map[string]*time.Time{}
 	for rows.Next() {
 		var ref workspace.StatusCardRef
 		var built *time.Time
@@ -67,6 +69,7 @@ func (s *Store) StatusCardIndexTx(ctx context.Context, tx pgx.Tx, scope memory.S
 		if built != nil {
 			ref.BuiltAt = built.UTC().Format(time.RFC3339Nano)
 		}
+		builtAt[ref.Key] = built
 		out = append(out, ref)
 	}
 	err = rows.Err()
@@ -89,7 +92,7 @@ func (s *Store) StatusCardIndexTx(ctx context.Context, tx pgx.Tx, scope memory.S
 		}
 		sort.Strings(keys)
 		for _, key := range keys {
-			if _, err := tx.Exec(ctx, "UPDATE status_cards SET stale=true WHERE owner_id=$1 AND key=$2 AND NOT stale", string(scope.OwnerID), key); err != nil {
+			if _, err := tx.Exec(ctx, "UPDATE status_cards SET stale=true WHERE owner_id=$1 AND key=$2 AND NOT stale AND built_at IS NOT DISTINCT FROM $3", string(scope.OwnerID), key, builtAt[key]); err != nil {
 				return out, err
 			}
 		}

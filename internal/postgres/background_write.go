@@ -40,3 +40,24 @@ func backgroundWriteError(ctx context.Context, err error) error {
 	}
 	return err
 }
+
+// A model result is already paid for: wait out a brief user write before
+// yielding the job. write must be safe to run again.
+func backgroundResultTx(ctx context.Context, db interface {
+	Begin(context.Context) (pgx.Tx, error)
+}, owner memory.ID, write func(context.Context, pgx.Tx) error) error {
+	var err error
+	for attempt := 0; attempt < 5; attempt++ {
+		err = backgroundWriteTx(ctx, db, owner, write)
+		var busy *worker.JobError
+		if !errors.As(err, &busy) || busy.Code != "background_write_busy" {
+			return err
+		}
+		select {
+		case <-time.After(200 * time.Millisecond):
+		case <-ctx.Done():
+			return err
+		}
+	}
+	return err
+}

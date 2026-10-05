@@ -140,7 +140,12 @@ func (s *Store) ScheduleStatus(ctx context.Context, now time.Time) (int, error) 
 		return 0, err
 	}
 	anchors := map[memory.ID]memory.Ref{}
+	// A busy row yields to the user; the next pass picks that group up again.
+	skipped := map[memory.ID]bool{}
 	for ordinal, t := range targets {
+		if skipped[t.owner] {
+			continue
+		}
 		anchor, ok := anchors[t.owner]
 		if !ok {
 			var err error
@@ -148,12 +153,17 @@ func (s *Store) ScheduleStatus(ctx context.Context, now time.Time) (int, error) 
 				anchor, err = seedOrganizeGroupsTx(ctx, tx, t.owner)
 				return err
 			})
+			if statusScheduleBusy(err) {
+				skipped[t.owner] = true
+				continue
+			}
 			if err != nil {
 				return count, err
 			}
 			anchors[t.owner] = anchor
 		}
 		g := t.group
+		queued := 0
 		err := backgroundWriteTx(ctx, s.pool, t.owner, func(ctx context.Context, tx pgx.Tx) error {
 			if _, err := tx.Exec(ctx, `INSERT INTO status_cards(owner_id,key,kind,entity_id,name,rule) VALUES($1,$2,$3,$4,$5,$6)
  ON CONFLICT(owner_id,key) DO UPDATE SET name=excluded.name,stale=status_cards.stale OR status_cards.rule<$6`, string(t.owner), g.Key, g.Kind, g.Entity, g.Name, CardVersion); err != nil {
@@ -177,25 +187,39 @@ func (s *Store) ScheduleStatus(ctx context.Context, now time.Time) (int, error) 
 			if err != nil {
 				return err
 			}
-			count += int(tag.RowsAffected())
+			queued = int(tag.RowsAffected())
 			return nil
 		})
+		if statusScheduleBusy(err) {
+			continue
+		}
 		if err != nil {
 			return count, err
 		}
+		count += queued
 	}
 
 	for owner, anchor := range anchors {
+		queued := 0
 		err := backgroundWriteTx(ctx, s.pool, owner, func(ctx context.Context, tx pgx.Tx) error {
-			n, err := enqueueStatusHandoversTx(ctx, tx, map[memory.ID]memory.Ref{owner: anchor}, now)
-			count += n
+			var err error
+			queued, err = enqueueStatusHandoversTx(ctx, tx, map[memory.ID]memory.Ref{owner: anchor}, now)
 			return err
 		})
+		if statusScheduleBusy(err) {
+			continue
+		}
 		if err != nil {
 			return count, err
 		}
+		count += queued
 	}
 	return count, nil
+}
+
+func statusScheduleBusy(err error) bool {
+	var busy *worker.JobError
+	return errors.As(err, &busy) && busy.Code == "background_write_busy"
 }
 
 func statusCardPriority(key string) int {
@@ -389,7 +413,7 @@ func (s *Store) ProcessCard(ctx context.Context, j worker.Job) error {
 		output = cardOutput{Fields: map[string][]int{}}
 		slog.WarnContext(ctx, "card attempts exhausted", "stage", "card", "error_type", "attempts_exhausted", "key", key)
 	}
-	return backgroundWriteTx(ctx, s.pool, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
+	return backgroundResultTx(ctx, s.pool, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
 		// Every card writer takes the card before its queue slot.
 		if _, err := tx.Exec(ctx, "SELECT 1 FROM status_cards WHERE owner_id=$1 AND key=$2 FOR UPDATE", string(j.OwnerID), key); err != nil {
 			return err

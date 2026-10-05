@@ -47,14 +47,14 @@ func backgroundResultTx(ctx context.Context, db interface {
 	Begin(context.Context) (pgx.Tx, error)
 }, owner memory.ID, write func(context.Context, pgx.Tx) error) error {
 	var err error
-	for attempt := 0; attempt < 5; attempt++ {
+	for attempt := 0; attempt < 3; attempt++ {
 		err = backgroundWriteTx(ctx, db, owner, write)
 		var busy *worker.JobError
 		if !errors.As(err, &busy) || busy.Code != "background_write_busy" {
 			return err
 		}
 		select {
-		case <-time.After(200 * time.Millisecond):
+		case <-time.After(100 * time.Millisecond):
 		case <-ctx.Done():
 			return err
 		}

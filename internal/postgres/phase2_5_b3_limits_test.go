@@ -16,8 +16,10 @@ import (
 )
 
 func TestPhase25B3_X3_9_HourlyOneHundredTwentyAcrossTwoHundredStaleCards(t *testing.T) {
-	t.Skip("finding F-B3-9: status queue did not drain within this test's budget after the card cap was raised to 120 (PR #222); to be rechecked by acceptance")
 	const totalCards, hourlyLimit = 200, 120
+	// All 200 card jobs must be claimed: 120 complete, 80 defer. Leave room
+	// for a handover job and the final empty claim in either simulated hour.
+	const jobBudget = totalCards + 2
 	f := phase25B234NewFixtureTimeout(t, 10*time.Minute)
 	var all []memory.Ref
 	var seeds []struct {
@@ -46,7 +48,7 @@ func TestPhase25B3_X3_9_HourlyOneHundredTwentyAcrossTwoHundredStaleCards(t *test
 	f.statusModel(t, nil)
 	clock := time.Now().UTC().Add(11 * time.Minute)
 	f.scheduleStatus(t, clock)
-	first := f.drainStatus(t)
+	first := f.drainStatusJobs(t, jobBudget)
 	if first != hourlyLimit {
 		t.Errorf("first hour card calls=%d, want %d", first, hourlyLimit)
 	}
@@ -62,7 +64,7 @@ func TestPhase25B3_X3_9_HourlyOneHundredTwentyAcrossTwoHundredStaleCards(t *test
 		f.exec(t, "UPDATE "+tc.table+" SET "+tc.column+"="+tc.column+"-interval '1 hour 1 second' WHERE owner_id=$1", f.scope.OwnerID)
 	}
 	f.scheduleStatus(t, time.Now().Add(11*time.Minute))
-	second := f.drainStatus(t)
+	second := f.drainStatusJobs(t, jobBudget)
 	if second != totalCards-hourlyLimit {
 		t.Errorf("next hour calls=%d, want %d", second, totalCards-hourlyLimit)
 	}

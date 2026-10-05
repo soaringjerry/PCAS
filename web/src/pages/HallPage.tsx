@@ -285,6 +285,10 @@ function Desk({ compact }: { compact: boolean }) {
       {/* On a wide screen the conversation fills the column in full; stacked, only its latest turn shows. */}
       <Secretary variant={compact ? 'latest' : undefined} />
       <AwayLine />
+      <Link to="/about" className="hall-about">
+        关于你
+        <ChevronRight size={14} />
+      </Link>
     </section>
   )
 }

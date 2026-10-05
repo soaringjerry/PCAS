@@ -24,7 +24,7 @@ function load(): Persisted {
   return { drafts: {}, agents: {} }
 }
 
-const titles: Record<string, string> = { '/library': '资料库', '/settings': '设置' }
+const titles: Record<string, string> = { '/library': '资料库', '/about': '关于你', '/settings': '设置' }
 const isMac = /Mac|iPhone|iPad/.test(navigator.platform)
 
 export function Shell() {

@@ -58,11 +58,11 @@ func sanitizeItemTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, principa
 	if item.Kind == "project" {
 		projectID = item.ID
 	}
-	// The current version of every memory is worked out once for the statement.
-	// Asked per dependency row it cost about a second each time this ran, and a
-	// secretary turn runs it for every listed item that holds an adopted result.
+	// Resolve current versions only for this item's actual dependencies, once
+	// for the statement. Materializing every claim here repeated a user-wide
+	// scan for each adopted item and each before/after permission check.
 	const applicable = "applicable_claim_versions($1,now(),now())"
-	rows, err := tx.Query(ctx, "WITH applicable AS MATERIALIZED (SELECT claim_id,version FROM "+applicable+") "+strings.ReplaceAll(`SELECT a.kind,a.artifact_id,a.run_id::text, NOT EXISTS(
+	rows, err := tx.Query(ctx, "WITH applicable AS MATERIALIZED (SELECT claim_id,version FROM "+applicable+" WHERE claim_id=ANY(ARRAY(SELECT d.memory_id FROM run_dependencies d JOIN adopted_artifacts adopted ON (adopted.owner_id,adopted.run_id)=(d.owner_id,d.run_id) WHERE adopted.owner_id=$1 AND adopted.thing_id=$2))) "+strings.ReplaceAll(`SELECT a.kind,a.artifact_id,a.run_id::text, NOT EXISTS(
         SELECT 1 FROM run_dependencies d LEFT JOIN memory_records r ON (r.owner_id,r.id)=(d.owner_id,d.memory_id)
         WHERE (d.owner_id,d.run_id)=(a.owner_id,a.run_id) AND (r.state IS DISTINCT FROM 'active'
         OR EXISTS(SELECT 1 FROM context_exclusions x WHERE x.owner_id=d.owner_id AND x.thing_id=$2 AND x.memory_id=d.memory_id)

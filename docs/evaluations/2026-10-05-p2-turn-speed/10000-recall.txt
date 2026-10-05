@@ -1,0 +1,233 @@
+Sort  (cost=12139.96..12139.96 rows=1 width=348) (actual rows=32 loops=1)
+  Sort Key: ranked.explicit DESC, ranked.score DESC, ((ranked.id)::uuid), ranked.version
+  Sort Method: quicksort  Memory: 32kB
+  Buffers: shared hit=664259
+  CTE applicable
+    ->  Unique  (cost=4281.54..7722.23 rows=171 width=20) (actual rows=10000 loops=1)
+          Buffers: shared hit=181476
+          ->  Incremental Sort  (cost=4281.54..7721.29 rows=378 width=20) (actual rows=10000 loops=1)
+                Sort Key: corrected.claim_id, corrected.version DESC
+                Presorted Key: corrected.claim_id
+                Full-sort Groups: 313  Sort Method: quicksort  Average Memory: 26kB  Peak Memory: 26kB
+                Buffers: shared hit=181476
+                ->  Subquery Scan on corrected  (cost=4261.36..7710.98 rows=378 width=20) (actual rows=10000 loops=1)
+                      Filter: (((corrected.valid_from IS NULL) OR (corrected.valid_from <= COALESCE(now()))) AND ((corrected.valid_to IS NULL) OR (corrected.valid_to > COALESCE(now()))) AND claim_source_is_current('3c8cee70-49f9-49fd-82e2-af6ae0125405'::uuid, corrected.claim_id, corrected.version, COALESCE(now())))
+                      Buffers: shared hit=181476
+                      ->  Unique  (cost=4261.36..4986.25 rows=9999 width=44) (actual rows=10000 loops=1)
+                            Buffers: shared hit=1340
+                            ->  Incremental Sort  (cost=4261.36..4936.26 rows=9999 width=44) (actual rows=10000 loops=1)
+                                  Sort Key: c_3.claim_id, (sum(CASE WHEN (c_3.change_type = ANY ('{initial,change}'::text[])) THEN 1 ELSE 0 END) OVER (?)), c_3.version DESC
+                                  Presorted Key: c_3.claim_id
+                                  Full-sort Groups: 313  Sort Method: quicksort  Average Memory: 26kB  Peak Memory: 26kB
+                                  Buffers: shared hit=1340
+                                  ->  WindowAgg  (cost=4261.32..4486.30 rows=9999 width=44) (actual rows=10000 loops=1)
+                                        Buffers: shared hit=1337
+                                        ->  Sort  (cost=4261.32..4286.32 rows=9999 width=44) (actual rows=10000 loops=1)
+                                              Sort Key: c_3.claim_id, c_3.version
+                                              Sort Method: quicksort  Memory: 931kB
+                                              Buffers: shared hit=1337
+                                              ->  Hash Join  (cost=2253.00..3597.01 rows=9999 width=44) (actual rows=10000 loops=1)
+                                                    Hash Cond: (r_1.id = rv_1.record_id)
+                                                    Buffers: shared hit=1337
+                                                    ->  Seq Scan on memory_records r_1  (cost=0.00..1094.01 rows=40001 width=32) (actual rows=40001 loops=1)
+                                                          Filter: ((owner_id = '3c8cee70-49f9-49fd-82e2-af6ae0125405'::uuid) AND (state = 'active'::text))
+                                                          Buffers: shared hit=494
+                                                    ->  Hash  (cost=2128.02..2128.02 rows=9999 width=76) (actual rows=10000 loops=1)
+                                                          Buckets: 16384  Batches: 1  Memory Usage: 1027kB
+                                                          Buffers: shared hit=843
+                                                          ->  Hash Join  (cost=546.00..2128.02 rows=9999 width=76) (actual rows=10000 loops=1)
+                                                                Hash Cond: ((rv_1.record_id = c_3.claim_id) AND (rv_1.version = c_3.version))
+                                                                Buffers: shared hit=843
+                                                                ->  Seq Scan on record_versions rv_1  (cost=0.00..1372.02 rows=39997 width=52) (actual rows=40001 loops=1)
+                                                                      Filter: ((owner_id = '3c8cee70-49f9-49fd-82e2-af6ae0125405'::uuid) AND (state = 'active'::text) AND (recorded_at <= COALESCE(now())))
+                                                                      Buffers: shared hit=572
+                                                                ->  Hash  (cost=396.00..396.00 rows=10000 width=44) (actual rows=10000 loops=1)
+                                                                      Buckets: 16384  Batches: 1  Memory Usage: 871kB
+                                                                      Buffers: shared hit=271
+                                                                      ->  Seq Scan on claim_revisions c_3  (cost=0.00..396.00 rows=10000 width=44) (actual rows=10000 loops=1)
+                                                                            Filter: (owner_id = '3c8cee70-49f9-49fd-82e2-af6ae0125405'::uuid)
+                                                                            Buffers: shared hit=271
+  ->  Nested Loop Left Join  (cost=4382.72..4417.71 rows=1 width=348) (actual rows=32 loops=1)
+        Buffers: shared hit=664245
+        ->  Nested Loop Left Join  (cost=4382.30..4409.26 rows=1 width=335) (actual rows=32 loops=1)
+              Buffers: shared hit=664133
+              ->  Nested Loop Left Join  (cost=4381.89..4400.81 rows=1 width=243) (actual rows=32 loops=1)
+                    Buffers: shared hit=664021
+                    ->  Nested Loop  (cost=4372.24..4390.43 rows=1 width=179) (actual rows=32 loops=1)
+                          Buffers: shared hit=664021
+                          ->  Subquery Scan on ranked  (cost=4371.83..4372.59 rows=1 width=147) (actual rows=32 loops=1)
+                                Filter: (ranked.rank > '0'::bigint)
+                                Buffers: shared hit=663797
+                                ->  WindowAgg  (cost=4371.83..4372.58 rows=1 width=180) (actual rows=32 loops=1)
+                                      Run Condition: (row_number() OVER (?) <= '16'::bigint)
+                                      Buffers: shared hit=663797
+                                      InitPlan 10 (returns $15)
+                                        ->  Aggregate  (cost=0.52..0.53 rows=1 width=32) (actual rows=1 loops=1)
+                                              ->  Function Scan on unnest token_2  (cost=0.00..0.38 rows=8 width=32) (actual rows=12 loops=1)
+                                                    Filter: (length(token) > 1)
+                                                    Rows Removed by Filter: 13
+                                      ->  Sort  (cost=4365.40..4365.41 rows=1 width=92) (actual rows=133 loops=1)
+                                            Sort Key: ((r.kind = 'source'::text)), ((s_1.source_id = ANY ('{}'::uuid[]))) DESC, (((((((CASE WHEN (POSITION(('霜叶的季度汇报准备得怎么样？'::text) IN ((lower((((s_1.title || '
+'::text) || s_1.body)))))) > 0) THEN 5 ELSE 0 END)::double precision + COALESCE(ts_rank_cd(rs.search_vector, '''霜叶'' | ''叶的'' | ''的季'' | ''季度'' | ''度汇'' | ''汇报'' | ''报准'' | ''准备'' | ''备得'' | ''得怎'' | ''怎么'' | ''么样'''::tsquery), '0'::real)) + ((SubPlan 4))::double precision) + '0'::double precision) + (CASE WHEN ((s_1.source_id = ANY ('{}'::uuid[])) OR (hashed SubPlan 5)) THEN 10 ELSE 0 END)::double precision) + '0'::double precision)) DESC, (((s_1.source_id)::text)::uuid), s_1.version
+                                            Sort Method: quicksort  Memory: 39kB
+                                            Buffers: shared hit=663797
+                                            ->  Nested Loop Left Join  (cost=1735.09..4365.39 rows=1 width=92) (actual rows=133 loops=1)
+                                                  Buffers: shared hit=663797
+                                                  ->  Nested Loop Left Join  (cost=1728.78..4350.34 rows=1 width=161) (actual rows=133 loops=1)
+                                                        Buffers: shared hit=663366
+                                                        ->  Nested Loop Left Join  (cost=1728.50..4342.02 rows=1 width=161) (actual rows=133 loops=1)
+                                                              Filter: (((lower((((s_1.title || '
+'::text) || s_1.body)))) ~~ ANY (COALESCE($15, '{}'::text[]))) OR (POSITION(('霜叶的季度汇报准备得怎么样？'::text) IN ((lower((((s_1.title || '
+'::text) || s_1.body)))))) > 0) OR (COALESCE(rs.search_vector, ''::tsvector) @@ '''霜叶'' | ''叶的'' | ''的季'' | ''季度'' | ''度汇'' | ''汇报'' | ''报准'' | ''准备'' | ''备得'' | ''得怎'' | ''怎么'' | ''么样'''::tsquery) OR (hashed SubPlan 13) OR (s_1.source_id = ANY ('{}'::uuid[])) OR (hashed SubPlan 14))
+                                                              Rows Removed by Filter: 39867
+                                                              Buffers: shared hit=662997
+                                                              ->  Nested Loop  (cost=1705.28..4318.61 rows=1 width=90) (actual rows=40000 loops=1)
+                                                                    Buffers: shared hit=502995
+                                                                    ->  Nested Loop  (cost=1705.28..4318.58 rows=1 width=90) (actual rows=40000 loops=1)
+                                                                          Join Filter: (r.id = rv.record_id)
+                                                                          Buffers: shared hit=502995
+                                                                          ->  Hash Join  (cost=1704.86..4298.92 rows=36 width=90) (actual rows=40000 loops=1)
+                                                                                Hash Cond: (s_1.source_id = r.id)
+                                                                                Join Filter: (((r.kind <> 'source'::text) OR (s_1.version = r.version)) AND ((r.kind = 'source'::text) OR (SubPlan 6)) AND (((r.kind = 'claim'::text) AND (s_1.version = av.version)) OR ((r.kind <> 'claim'::text) AND (s_1.version = (SubPlan 9)))))
+                                                                                Rows Removed by Join Filter: 1
+                                                                                Buffers: shared hit=342995
+                                                                                ->  Hash Left Join  (cost=5.56..2494.61 rows=40002 width=72) (actual rows=40001 loops=1)
+                                                                                      Hash Cond: (s_1.source_id = av.claim_id)
+                                                                                      Buffers: shared hit=182498
+                                                                                      ->  Append  (cost=0.00..1997.02 rows=40002 width=68) (actual rows=40001 loops=1)
+                                                                                            Buffers: shared hit=1022
+                                                                                            ->  Seq Scan on source_versions s_1  (cost=0.00..1275.00 rows=30000 width=68) (actual rows=30000 loops=1)
+                                                                                                  Filter: (owner_id = '3c8cee70-49f9-49fd-82e2-af6ae0125405'::uuid)
+                                                                                                  Buffers: shared hit=750
+                                                                                            ->  Seq Scan on claim_revisions c_1  (cost=0.00..521.00 rows=10000 width=68) (actual rows=10000 loops=1)
+                                                                                                  Filter: (owner_id = '3c8cee70-49f9-49fd-82e2-af6ae0125405'::uuid)
+                                                                                                  Buffers: shared hit=271
+                                                                                            ->  Seq Scan on entity_versions e_2  (cost=0.00..1.01 rows=1 width=55) (actual rows=1 loops=1)
+                                                                                                  Filter: (owner_id = '3c8cee70-49f9-49fd-82e2-af6ae0125405'::uuid)
+                                                                                                  Buffers: shared hit=1
+                                                                                            ->  Seq Scan on episodes e_3  (cost=0.00..0.00 rows=1 width=68) (actual rows=0 loops=1)
+                                                                                                  Filter: (owner_id = '3c8cee70-49f9-49fd-82e2-af6ae0125405'::uuid)
+                                                                                      ->  Hash  (cost=3.42..3.42 rows=171 width=20) (actual rows=10000 loops=1)
+                                                                                            Buckets: 16384 (originally 1024)  Batches: 1 (originally 1)  Memory Usage: 636kB
+                                                                                            Buffers: shared hit=181476
+                                                                                            ->  CTE Scan on applicable av  (cost=0.00..3.42 rows=171 width=20) (actual rows=10000 loops=1)
+                                                                                                  Buffers: shared hit=181476
+                                                                                ->  Hash  (cost=1294.02..1294.02 rows=32423 width=42) (actual rows=40001 loops=1)
+                                                                                      Buckets: 65536 (originally 32768)  Batches: 1 (originally 1)  Memory Usage: 3481kB
+                                                                                      Buffers: shared hit=494
+                                                                                      ->  Seq Scan on memory_records r  (cost=0.00..1294.02 rows=32423 width=42) (actual rows=40001 loops=1)
+                                                                                            Filter: ((owner_id = '3c8cee70-49f9-49fd-82e2-af6ae0125405'::uuid) AND (state = 'active'::text) AND ((kind = 'claim'::text) OR (kind <> 'claim'::text)))
+                                                                                            Buffers: shared hit=494
+                                                                                SubPlan 6
+                                                                                  ->  Index Only Scan using record_grants_pkey on record_grants g  (cost=0.41..8.44 rows=1 width=0) (actual rows=1 loops=10001)
+                                                                                        Index Cond: ((owner_id = s_1.owner_id) AND (record_id = s_1.source_id) AND (principal_id = 'model'::text))
+                                                                                        Heap Fetches: 10000
+                                                                                        Buffers: shared hit=40003
+                                                                                SubPlan 9
+                                                                                  ->  Result  (cost=8.44..8.45 rows=1 width=4) (actual rows=1 loops=30000)
+                                                                                        Buffers: shared hit=120000
+                                                                                        InitPlan 8 (returns $14)
+                                                                                          ->  Limit  (cost=0.41..8.44 rows=1 width=4) (actual rows=1 loops=30000)
+                                                                                                Buffers: shared hit=120000
+                                                                                                ->  Index Scan Backward using record_versions_pkey on record_versions v  (cost=0.41..8.44 rows=1 width=4) (actual rows=1 loops=30000)
+                                                                                                      Index Cond: ((owner_id = s_1.owner_id) AND (record_id = s_1.source_id) AND (version IS NOT NULL))
+                                                                                                      Filter: (recorded_at <= COALESCE(now()))
+                                                                                                      Buffers: shared hit=120000
+                                                                          ->  Index Scan using record_versions_pkey on record_versions rv  (cost=0.41..0.53 rows=1 width=52) (actual rows=1 loops=40000)
+                                                                                Index Cond: ((owner_id = '3c8cee70-49f9-49fd-82e2-af6ae0125405'::uuid) AND (record_id = s_1.source_id) AND (version = s_1.version))
+                                                                                Filter: (state = 'active'::text)
+                                                                                Buffers: shared hit=160000
+                                                                    ->  Result  (cost=0.00..0.01 rows=1 width=32) (actual rows=1 loops=40000)
+                                                              ->  Index Scan using record_search_pkey on record_search rs  (cost=0.41..0.57 rows=1 width=107) (actual rows=1 loops=40000)
+                                                                    Index Cond: ((owner_id = '3c8cee70-49f9-49fd-82e2-af6ae0125405'::uuid) AND (record_id = s_1.source_id) AND (record_version = s_1.version))
+                                                                    Buffers: shared hit=160000
+                                                              SubPlan 13
+                                                                ->  Nested Loop  (cost=0.41..16.90 rows=1 width=16) (actual rows=0 loops=1)
+                                                                      Join Filter: ((e_4.id = ep.id) AND (ep.version = e_4.version))
+                                                                      ->  Nested Loop  (cost=0.41..16.89 rows=1 width=72) (actual rows=0 loops=1)
+                                                                            ->  Seq Scan on episode_members m_1  (cost=0.00..0.00 rows=1 width=52) (actual rows=0 loops=1)
+                                                                                  Filter: ((episode_id = ANY ('{}'::uuid[])) AND (owner_id = '3c8cee70-49f9-49fd-82e2-af6ae0125405'::uuid))
+                                                                            ->  Index Scan using memory_records_pkey on memory_records e_4  (cost=0.41..16.88 rows=1 width=36) (never executed)
+                                                                                  Index Cond: ((owner_id = '3c8cee70-49f9-49fd-82e2-af6ae0125405'::uuid) AND (id = m_1.episode_id))
+                                                                                  Filter: ((state = 'active'::text) AND (m_1.episode_version = version) AND ((kind = 'source'::text) OR (SubPlan 11)))
+                                                                                  SubPlan 11
+                                                                                    ->  Index Only Scan using record_grants_pkey on record_grants g_1  (cost=0.41..8.44 rows=1 width=0) (never executed)
+                                                                                          Index Cond: ((owner_id = e_4.owner_id) AND (record_id = e_4.id) AND (principal_id = 'model'::text))
+                                                                                          Heap Fetches: 0
+                                                                      ->  Seq Scan on episodes ep  (cost=0.00..0.00 rows=1 width=36) (never executed)
+                                                                            Filter: (owner_id = '3c8cee70-49f9-49fd-82e2-af6ae0125405'::uuid)
+                                                              SubPlan 14
+                                                                ->  Index Scan using claim_revisions_event_from_idx on claim_revisions claim_revisions_1  (cost=0.12..5.90 rows=1 width=16) (actual rows=0 loops=1)
+                                                                      Index Cond: (owner_id = '3c8cee70-49f9-49fd-82e2-af6ae0125405'::uuid)
+                                                                      Filter: ((subject_id = ANY ('{}'::uuid[])) OR ((scope ->> 'project_id'::text) = ANY ('{}'::text[])))
+                                                                      Buffers: shared hit=2
+                                                        ->  Index Only Scan using activity_pkey on activity x  (cost=0.29..8.30 rows=1 width=25) (actual rows=1 loops=133)
+                                                              Index Cond: ((owner_id = s_1.owner_id) AND (record_id = s_1.source_id))
+                                                              Heap Fetches: 103
+                                                              Buffers: shared hit=369
+                                                  ->  Index Scan using sources_pkey on sources x_1  (cost=0.41..8.43 rows=1 width=16) (actual rows=0 loops=133)
+                                                        Index Cond: ((owner_id = s_1.owner_id) AND (id = s_1.source_id))
+                                                        Buffers: shared hit=429
+                                                  SubPlan 4
+                                                    ->  Aggregate  (cost=0.66..0.67 rows=1 width=8) (actual rows=1 loops=133)
+                                                          InitPlan 3 (returns $6)
+                                                            ->  Aggregate  (cost=0.52..0.53 rows=1 width=32) (actual rows=1 loops=1)
+                                                                  ->  Function Scan on unnest token_1  (cost=0.00..0.38 rows=8 width=32) (actual rows=12 loops=1)
+                                                                        Filter: (length(token) > 1)
+                                                                        Rows Removed by Filter: 13
+                                                          ->  Function Scan on unnest pattern  (cost=0.00..0.13 rows=1 width=0) (actual rows=7 loops=133)
+                                                                Filter: ((lower((((s_1.title || '
+'::text) || s_1.body)))) ~~ pattern)
+                                                                Rows Removed by Filter: 5
+                                                  SubPlan 5
+                                                    ->  Index Scan using claim_revisions_event_from_idx on claim_revisions  (cost=0.12..5.90 rows=1 width=16) (actual rows=0 loops=1)
+                                                          Index Cond: (owner_id = '3c8cee70-49f9-49fd-82e2-af6ae0125405'::uuid)
+                                                          Filter: ((subject_id = ANY ('{}'::uuid[])) OR ((scope ->> 'project_id'::text) = ANY ('{}'::text[])))
+                                                          Buffers: shared hit=2
+                          ->  Append  (cost=0.41..17.80 rows=4 width=52) (actual rows=1 loops=32)
+                                Buffers: shared hit=224
+                                ->  Index Scan using source_versions_owner_id_source_id_external_version_key on source_versions s  (cost=0.41..8.44 rows=1 width=52) (actual rows=0 loops=32)
+                                      Index Cond: ((owner_id = '3c8cee70-49f9-49fd-82e2-af6ae0125405'::uuid) AND (source_id = ranked.uid))
+                                      Filter: (ranked.version = version)
+                                      Buffers: shared hit=112
+                                ->  Index Scan using claim_revisions_pkey on claim_revisions c  (cost=0.29..8.32 rows=1 width=52) (actual rows=0 loops=32)
+                                      Index Cond: ((owner_id = '3c8cee70-49f9-49fd-82e2-af6ae0125405'::uuid) AND (claim_id = ranked.uid) AND (version = ranked.version))
+                                      Buffers: shared hit=80
+                                ->  Seq Scan on entity_versions e  (cost=0.00..1.02 rows=1 width=39) (actual rows=0 loops=32)
+                                      Filter: ((owner_id = '3c8cee70-49f9-49fd-82e2-af6ae0125405'::uuid) AND (entity_id = ranked.uid) AND (version = ranked.version))
+                                      Rows Removed by Filter: 1
+                                      Buffers: shared hit=32
+                                ->  Seq Scan on episodes e_1  (cost=0.00..0.00 rows=1 width=52) (actual rows=0 loops=32)
+                                      Filter: ((owner_id = '3c8cee70-49f9-49fd-82e2-af6ae0125405'::uuid) AND (id = ranked.uid) AND (version = ranked.version))
+                    ->  Limit  (cost=9.65..10.36 rows=1 width=76) (actual rows=0 loops=32)
+                          ->  Result  (cost=9.65..10.36 rows=1 width=76) (actual rows=0 loops=32)
+                                ->  Sort  (cost=9.65..9.65 rows=1 width=52) (actual rows=0 loops=32)
+                                      Sort Key: (((((CASE WHEN (POSITION(('霜叶的季度汇报准备得怎么样？'::text) IN (lower(c_2.body))) > 0) THEN 5 ELSE 0 END)::double precision + ts_rank_cd(c_2.search_vector, '''霜叶'' | ''叶的'' | ''的季'' | ''季度'' | ''度汇'' | ''汇报'' | ''报准'' | ''准备'' | ''备得'' | ''得怎'' | ''怎么'' | ''么样'''::tsquery)) + ((SubPlan 2))::double precision) + '0'::double precision)) DESC, c_2.ordinal
+                                      Sort Method: quicksort  Memory: 25kB
+                                      ->  Result  (cost=0.83..9.64 rows=1 width=52) (actual rows=0 loops=32)
+                                            One-Time Filter: (ranked.kind = 'source'::text)
+                                            ->  Nested Loop  (cost=0.83..8.97 rows=1 width=76) (actual rows=0 loops=16)
+                                                  ->  Nested Loop  (cost=0.41..8.44 rows=1 width=124) (actual rows=0 loops=16)
+                                                        ->  Seq Scan on chunks c_2  (cost=0.00..0.00 rows=1 width=112) (actual rows=0 loops=16)
+                                                              Filter: ((owner_id = '3c8cee70-49f9-49fd-82e2-af6ae0125405'::uuid) AND (source_id = ranked.uid) AND (source_version = ranked.version))
+                                                        ->  Index Scan using record_versions_pkey on record_versions cv  (cost=0.41..8.44 rows=1 width=36) (never executed)
+                                                              Index Cond: ((owner_id = '3c8cee70-49f9-49fd-82e2-af6ae0125405'::uuid) AND (record_id = c_2.id) AND (version = c_2.version))
+                                                              Filter: (state = 'active'::text)
+                                                  ->  Index Scan using memory_records_pkey on memory_records cr  (cost=0.41..0.52 rows=1 width=32) (never executed)
+                                                        Index Cond: ((owner_id = '3c8cee70-49f9-49fd-82e2-af6ae0125405'::uuid) AND (id = cv.record_id))
+                                                        Filter: (state = 'active'::text)
+                                            SubPlan 2
+                                              ->  Aggregate  (cost=0.63..0.64 rows=1 width=8) (never executed)
+                                                    ->  Function Scan on unnest token  (cost=0.00..0.63 rows=3 width=0) (never executed)
+                                                          Filter: ((length(token) > 1) AND (POSITION((lower(token)) IN (lower(c_2.body))) > 0))
+              ->  Index Scan using source_versions_owner_id_source_id_external_version_key on source_versions sv  (cost=0.41..8.43 rows=1 width=112) (actual rows=0 loops=32)
+                    Index Cond: ((owner_id = '3c8cee70-49f9-49fd-82e2-af6ae0125405'::uuid) AND (source_id = ranked.uid))
+                    Filter: (version = ranked.version)
+                    Buffers: shared hit=112
+        ->  Index Scan using source_contexts_pkey on source_contexts sc  (cost=0.41..8.43 rows=1 width=37) (actual rows=0 loops=32)
+              Index Cond: ((owner_id = '3c8cee70-49f9-49fd-82e2-af6ae0125405'::uuid) AND (source_id = ranked.uid) AND (source_version = ranked.version))
+              Buffers: shared hit=112
+Planning:
+  Buffers: shared hit=1184 read=6
+Planning Time: 9.527 ms
+Execution Time: 722.348 ms

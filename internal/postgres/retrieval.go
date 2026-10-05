@@ -161,7 +161,7 @@ func (s *Store) recallTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in 
 	// returned. Choosing a passage for every match, and joins the planner ran
 	// as a scan per row, made this take a minute or more over tens of
 	// thousands of records.
-	querySQL := `WITH linked AS (SELECT m.member_id FROM episode_members m JOIN memory_records e ON(e.owner_id,e.id,e.version)=(m.owner_id,m.episode_id,m.episode_version) JOIN episodes ep ON(ep.owner_id,ep.id,ep.version)=(e.owner_id,e.id,e.version) WHERE m.owner_id=$1 AND e.state='active' AND (m.episode_id=ANY($8::uuid[]) OR ($6='history' AND $4!='' AND position(lower($4) in lower(ep.title))>0)) AND ($2 OR ($17 AND e.kind='source') OR EXISTS(SELECT 1 FROM record_grants g WHERE g.owner_id=e.owner_id AND g.record_id=e.id AND g.principal_id=$3))), hits AS (
+	querySQL := `WITH applicable AS MATERIALIZED (SELECT claim_id,version FROM applicable_claim_versions($1,coalesce($9,now()),coalesce($10,now())) WHERE $6!='history'), linked AS (SELECT m.member_id FROM episode_members m JOIN memory_records e ON(e.owner_id,e.id,e.version)=(m.owner_id,m.episode_id,m.episode_version) JOIN episodes ep ON(ep.owner_id,ep.id,ep.version)=(e.owner_id,e.id,e.version) WHERE m.owner_id=$1 AND e.state='active' AND (m.episode_id=ANY($8::uuid[]) OR ($6='history' AND $4!='' AND position(lower($4) in lower(ep.title))>0)) AND ($2 OR ($17 AND e.kind='source') OR EXISTS(SELECT 1 FROM record_grants g WHERE g.owner_id=e.owner_id AND g.record_id=e.id AND g.principal_id=$3))), hits AS (
  SELECT t.id::text AS id,t.id AS uid,t.version,r.kind,
 		 (CASE WHEN $4='' THEN 0 WHEN position(lower($4) in lb.body)>0 THEN 5 ELSE 0 END
 		 +CASE WHEN $5='' THEN 0 ELSE coalesce(ts_rank_cd(rs.search_vector,to_tsquery('simple',$5)),0) END
@@ -172,6 +172,7 @@ func (s *Store) recallTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in 
          coalesce(src.connector,'') AS connector,coalesce(src.external_id,'') AS external_id,
          rv.expressed_at,rv.recorded_at,t.id=ANY($8::uuid[]) AS explicit
 		 FROM memory_text t JOIN memory_records r ON (r.owner_id,r.id)=(t.owner_id,t.id)
+		 LEFT JOIN applicable av ON av.claim_id=t.id
 		 CROSS JOIN LATERAL (SELECT lower(t.body) AS body OFFSET 0) lb
 		 CROSS JOIN (SELECT coalesce((SELECT array_agg('%'||replace(replace(replace(lower(token),'\','\\'),'%','\%'),'_','\_')||'%') FROM unnest($16::text[]) token WHERE length(token)>1),'{}'::text[]) AS patterns) words
 		 JOIN record_versions rv ON (rv.owner_id,rv.record_id,rv.version)=(t.owner_id,t.id,t.version)
@@ -181,7 +182,7 @@ func (s *Store) recallTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in 
  LEFT JOIN LATERAL (SELECT x.connector,x.external_id FROM sources x WHERE x.owner_id=t.owner_id AND x.id=t.id OFFSET 0) src ON true
 		 WHERE t.owner_id=$1 AND r.state='active' AND rv.state='active' AND ($2 OR ($17 AND r.kind='source') OR EXISTS(SELECT 1 FROM record_grants g WHERE g.owner_id=t.owner_id AND g.record_id=t.id AND g.principal_id=$3))
 		 AND (NOT $17 OR r.kind!='source' OR t.version=r.version)
-		 AND ($6='history' OR (r.kind='claim' AND t.version=(SELECT a.version FROM applicable_claim_versions($1,coalesce($9,now()),coalesce($10,now())) a WHERE a.claim_id=t.id)) OR (r.kind!='claim' AND t.version=(SELECT max(v.version) FROM record_versions v WHERE v.owner_id=t.owner_id AND v.record_id=t.id AND v.recorded_at<=coalesce($10,now()))))
+		 AND ($6='history' OR (r.kind='claim' AND t.version=av.version) OR (r.kind!='claim' AND t.version=(SELECT max(v.version) FROM record_versions v WHERE v.owner_id=t.owner_id AND v.record_id=t.id AND v.recorded_at<=coalesce($10,now()))))
 		 AND ($9::timestamptz IS NULL OR (rv.valid_from IS NULL OR rv.valid_from<=$9) AND (rv.valid_to IS NULL OR rv.valid_to>$9))
 		 AND ($10::timestamptz IS NULL OR rv.recorded_at<=$10)
 		 AND ($4='' OR lb.body LIKE ANY(words.patterns) OR position(lower($4) in lb.body)>0 OR ($5!='' AND (coalesce(rs.search_vector,to_tsvector('simple',$7)) @@ to_tsquery('simple',$5)))
@@ -624,11 +625,17 @@ func sourceExcerptRange(text, query string, tokens []string, limit int) (int, in
 // teamSourceVisibleSQL follows explicit visibility and item exclusions on any
 // currently applicable claim evidenced by the source. Its arguments are trusted
 // SQL expressions, never request values; category and project filters do not apply.
+// Keep the temporal lookup correlated to this source's evidence targets.
+// Pulling it into a user-wide join repeated all current claims for each window
+// and each source dependency verification. OFFSET 0 preserves the bounded plan.
 func teamSourceVisibleSQL(ownerID, sourceID, principalID, thingID string) string {
 	return fmt.Sprintf(`NOT EXISTS (
  SELECT 1 FROM evidence source_evidence
- JOIN applicable_claim_versions(%[1]s,now(),now()) source_claim
- ON (source_claim.claim_id,source_claim.version)=(source_evidence.target_id,source_evidence.target_version)
+ JOIN LATERAL (
+ SELECT current_claim.claim_id,current_claim.version
+ FROM applicable_claim_versions(%[1]s,now(),now()) current_claim
+ WHERE current_claim.claim_id=source_evidence.target_id OFFSET 0
+ ) source_claim ON source_claim.version=source_evidence.target_version
  WHERE source_evidence.owner_id=%[1]s AND source_evidence.source_id=%[2]s
  AND (NOT EXISTS (SELECT 1 FROM record_grants source_grant
   WHERE source_grant.owner_id=source_evidence.owner_id AND source_grant.record_id=source_evidence.target_id AND source_grant.principal_id=%[3]s)

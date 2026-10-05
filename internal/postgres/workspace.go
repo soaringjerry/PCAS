@@ -209,14 +209,15 @@ func (s *Store) snapshotTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) (
 		return out, err
 	}
 	where, args := memoryWhere(scope, false, memoryReadOptions{})
-	if err := tx.QueryRow(ctx, "SELECT count(*)"+memoryJoins+where, args...).Scan(&out.MemoryTotal); err != nil {
-		return out, err
-	}
 	out.Organize.Version = OrganizeVersion
 	if err := tx.QueryRow(ctx, `SELECT count(*) FILTER (WHERE coalesce((to_jsonb(cl)->>'organized')::int,0) >= $5),count(*)`+memoryJoins+` JOIN claims cl ON(cl.owner_id,cl.id)=(r.owner_id,r.id)`+where,
 		append(args, OrganizeVersion)...).Scan(&out.Organize.Done, &out.Organize.Total); err != nil {
 		return out, err
 	}
+	// Both counts use exactly the same visible current rows. Every revision has
+	// a claims parent by foreign key, so the organizing count already supplies
+	// the established memory total without evaluating source validity twice.
+	out.MemoryTotal = out.Organize.Total
 	if out.Agents, err = queryDocuments[workspace.Agent](ctx, tx, "SELECT document FROM workspace_agents WHERE owner_id=$1 ORDER BY id", string(scope.OwnerID)); err != nil {
 		return out, err
 	}

@@ -100,7 +100,7 @@ func (s *Store) secretaryContextTx(ctx context.Context, tx pgx.Tx, scope memory.
 	if !out.Agent.Enabled || out.Agent.Channel == "manual" || !s.models.Available(out.Agent.ID) {
 		return out, memory.ErrUnavailable
 	}
-	memories, tasks, settings, deps, err := s.deskContextTx(ctx, tx, scope, out.Agent, true)
+	tasks, settings, deps, err := s.deskItemsContextTx(ctx, tx, scope, out.Agent, true)
 	if err != nil {
 		return out, err
 	}
@@ -175,11 +175,6 @@ func (s *Store) secretaryContextTx(ctx context.Context, tx pgx.Tx, scope memory.
 		return out, err
 	}
 	out.History = stored.Turns
-	for _, m := range memories {
-		if oneOf(m.Kind, out.Agent.MemoryKinds...) && (m.Epistemic != "inferred" || out.Agent.IncludeInferred) {
-			out.Memories[m.ID] = m
-		}
-	}
 	return out, nil
 }
 func (s *Store) checkDeskContextTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, agent string, dependencies []memory.Ref, items []workspace.Item, full bool) error {
@@ -277,6 +272,19 @@ func (s *Store) secretaryPrompt(ctx context.Context, tx pgx.Tx, scope memory.Sco
 	recall, err := s.Recall(ctx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: c.Agent.ID, Team: true}, memory.RecallRequest{Team: &memory.TeamRecall{Text: req.Text, Plan: c.Plan, ThingID: req.ThingID, ProjectID: projectID, Candidates: 20}, Query: tail(earlier+req.Text, 4000), Mode: "remember", Context: memory.WorkingContext{Objects: []memory.ID{}}, Budget: memory.Budget{Candidates: 15, Tokens: 4000, Edges: 15, Hops: 1}})
 	if err != nil {
 		return "", nil, err
+	}
+	ids := make([]string, 0, len(recall.Memories))
+	for _, ref := range recall.Memories {
+		ids = append(ids, string(ref.ID))
+	}
+	memories, err := s.readMemoriesTx(ctx, tx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: c.Agent.ID}, true, memoryReadOptions{ids: ids})
+	if err != nil {
+		return "", nil, err
+	}
+	for _, m := range memories {
+		if oneOf(m.Kind, c.Agent.MemoryKinds...) && (m.Epistemic != "inferred" || c.Agent.IncludeInferred) {
+			c.Memories[m.ID] = m
+		}
 	}
 	fmt.Fprintln(&prompt, "\n召回的记忆（引用短别名）：")
 	if recall.TimeRelaxed {

@@ -142,15 +142,18 @@ func (s *Store) ScheduleStatus(ctx context.Context, now time.Time) (int, error) 
 			if g.Built != nil && !g.Stale && g.Rule >= CardVersion {
 				continue
 			}
-			due := now.Add(time.Duration(ordinal) * time.Microsecond)
+			// Claim orders equal ready times by created_at, then random job ID.
+			// Preserve the group order there too, including after clock alignment.
+			created := now.Add(time.Duration(ordinal) * time.Microsecond)
+			due := created
 			if g.Built != nil && g.Rule < CardVersion {
 				due = now.Add(10 * time.Minute)
 			}
 			stage := fmt.Sprintf("%s:%d:%s", CardStage, CardVersion, g.Key)
-			tag, err := tx.Exec(ctx, `INSERT INTO memory_jobs(id,owner_id,record_id,record_version,stage,priority,available_at)
- VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT(owner_id,record_id,record_version,stage) DO UPDATE SET
- state='queued',attempts=0,available_at=excluded.available_at,error_code='',updated_at=$8
- WHERE memory_jobs.state IN('done','failed','blocked') AND memory_jobs.updated_at<$8-interval '10 minutes'`, string(memory.NewID()), string(t.owner), string(anchor.ID), anchor.Version, stage, CardPriority, due, now)
+			tag, err := tx.Exec(ctx, `INSERT INTO memory_jobs(id,owner_id,record_id,record_version,stage,priority,available_at,created_at)
+ VALUES($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT(owner_id,record_id,record_version,stage) DO UPDATE SET
+ state='queued',attempts=0,available_at=excluded.available_at,error_code='',updated_at=$9
+ WHERE memory_jobs.state IN('done','failed','blocked') AND memory_jobs.updated_at<$9-interval '10 minutes'`, string(memory.NewID()), string(t.owner), string(anchor.ID), anchor.Version, stage, CardPriority, due, created, now)
 			if err != nil {
 				return err
 			}

@@ -18,7 +18,7 @@ var statusISODate = regexp.MustCompile(`\b([0-9]{4})-([0-9]{1,2})-([0-9]{1,2})\b
 var statusCNDate = regexp.MustCompile(`(?:([0-9]{4})年)?([0-9]{1,2})月([0-9]{1,2})[日号]?`)
 var statusWeekday = regexp.MustCompile(`(上|下|本|这)?(?:周|星期|礼拜)([一二三四五六日天])`)
 var statusDayOffset = regexp.MustCompile(`([0-9一二两三四五六七八九十]+)天后`)
-var statusClock = regexp.MustCompile(`(凌晨|早上|上午|中午|下午|傍晚|晚上|夜里)?\s*([0-9]{1,2}|[一二两三四五六七八九十]+)(?:点|时|:)(半|一刻|三刻|[0-9]{1,2}(?:分)?|[一二两三四五六七八九十]+分)?`)
+var statusClock = regexp.MustCompile(`(凌晨|早上|上午|中午|下午|傍晚|晚上|夜里)?\s*([0-9]{1,2}|[一二两三四五六七八九十]+)\s*(?:点|时|:)\s*(半|一刻|三刻|[0-9]{1,2}(?:分)?|[一二两三四五六七八九十]+分)?`)
 var statusCycle = regexp.MustCompile(`每(?:周|星期|礼拜|月|天|日|年|[0-9一二两三四五六七八九十]+天)`)
 
 func statusNumber(raw string) (int, bool) {

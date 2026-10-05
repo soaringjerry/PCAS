@@ -30,7 +30,7 @@ function fixture() {
   const net = memory('遮阳网周六上午十点前要装完')
   const west = memory('阳台朝西，夏天下午晒得厉害')
   const order = memory('遮阳网还没下单，要先量尺寸')
-  const rules = [memory('回答先给结论，再给理由'), memory('要花钱的事先问我'), memory('发出去的东西先给我看')]
+  const rules = [memory('回答先给结论，再给理由'), memory('要花钱的事先问我'), { ...memory('发出去的东西先给我看'), appliesTo: '起草邮件' }]
   const garden: StatusCard = {
     key: 'entity:garden', kind: 'project', name: '阳台菜园改造', count: 4, builtAt: usedAt, stale: true,
     fields: [
@@ -173,6 +173,11 @@ test('R3-14 点开一张卡看各栏目的记忆；点记忆是现有的详情�
   await bar.click()
   await expect(bar).toHaveAttribute('aria-expanded', 'false')
   await expect(card.getByRole('group')).toHaveCount(0)
+
+  // What is asked of the assistant says which kind of task each one is for, when it is for one.
+  await section(page, '关于你').getByRole('button', { name: /对助手的要求/ }).click()
+  const asked = section(page, '关于你').getByRole('group', { name: '偏好' }).getByRole('listitem')
+  await expect(asked).toHaveText(['回答先给结论，再给理由', '要花钱的事先问我', '发出去的东西先给我看适用于：起草邮件'])
   expect(mock.errors).toEqual([])
 })
 

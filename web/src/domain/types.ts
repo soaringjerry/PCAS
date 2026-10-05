@@ -147,6 +147,8 @@ export interface MemoryMention {
 }
 
 export interface Memory {
+  /** On a card of what is asked of the assistant: the kind of task this one applies to; absent when it always applies. */
+  appliesTo?: string
 	trust?: MemoryTrust
 	retired?: MemoryRetired
 	retiredBy?: ID

@@ -3681,6 +3681,12 @@ button.mention.on svg {
   padding: 3px 0;
 }
 
+.about-applies {
+  display: block;
+  color: var(--label-2);
+  font-size: 12.5px;
+}
+
 .about-none {
   margin: 0;
   padding: 6px 0;

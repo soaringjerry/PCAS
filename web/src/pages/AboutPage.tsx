@@ -97,6 +97,7 @@ function Card({ card, open, onToggle, onOpen }: { card: StatusCardRef; open: boo
                       <button type="button" className={`mem-text${m.epistemic === 'inferred' ? ' guess' : ''}`} onClick={() => onOpen(m)}>
                         {m.text}
                       </button>
+                      {m.appliesTo && <span className="about-applies">适用于：{m.appliesTo}</span>}
                     </li>
                   ))}
                 </ul>

@@ -49,9 +49,10 @@ async function backend(page: Page, current: Memory[], retired: Memory[] = []) {
   await page.route((url) => url.pathname === '/v1/workspace/memories', (route) => {
     const url = new URL(route.request().url())
     queries.push(url)
-    const trust = url.searchParams.get('trust'), q = url.searchParams.get('q'), by = url.searchParams.get('retiredBy')
+    // Like the server, this lists every retired memory; it cannot narrow to the ones merged into one.
+    const q = url.searchParams.get('q')
     const from = url.searchParams.get('retired') === '1' ? retired : current
-    const items = from.filter((m) => (!trust || m.trust === trust) && (!q || m.text.includes(q)) && (!by || m.retiredBy === by))
+    const items = from.filter((m) => !q || m.text.includes(q))
     return route.fulfill({ json: { items, next: '', total: items.length } })
   })
   await page.route((url) => /^\/v1\/workspace\/memories\/[^/]+$/.test(url.pathname), (route) => {
@@ -120,21 +121,15 @@ test('R2-11 卡片和详情显示可信度的中文叫法，不再有「待确�
   expect(mock.errors).toEqual([])
 })
 
-test('R2-11 筛选换成五种可信度，传给接口；清掉筛选恢复', async ({ page }) => {
+test('R2-11 旧的「已确认 / 原话有据 / 推测」筛选没有了，地址里留着的旧筛选也不再发给接口', async ({ page }) => {
   const f = fixture()
   const mock = await backend(page, f.current, f.retired)
-  await open(page)
-  const filter = page.getByRole('radiogroup', { name: '可信度' })
-  await expect(filter.getByRole('radio')).toHaveText(['都看', '你说的', '多次说过', '带保留', '转述', '推断'])
-  await filter.getByRole('radio', { name: '转述' }).click()
-  await expect.poll(() => lastQuery(mock, 'trust')).toBe('reported')
-  expect(lastQuery(mock, 'epistemic')).toBeNull()
-  await expect(page.locator('.mem-entry')).toHaveCount(1)
-  await expect(page.getByText('林栖说云岫镇的市集下个月要涨摊位费', { exact: true })).toBeVisible()
-  expect(new URL(page.url()).searchParams.get('trust')).toBe('reported')
-  await page.getByRole('button', { name: '清掉筛选' }).click()
+  await open(page, '&epistemic=inferred')
   await expect(page.locator('.mem-entry')).toHaveCount(5)
-  expect(lastQuery(mock, 'trust')).toBeNull()
+  await expect(page.getByRole('radiogroup', { name: '可信度' })).toHaveCount(0)
+  await expect(page.getByRole('radio', { name: /已确认|原话有据|推测/ })).toHaveCount(0)
+  await expect(page.getByRole('radiogroup', { name: '类型' })).toBeVisible()
+  expect(mock.queries.every((q) => !q.searchParams.has('epistemic'))).toBeTruthy()
   expect(mock.errors).toEqual([])
 })
 
@@ -148,7 +143,7 @@ test('R2-14 有一个入口看已被替代或合并的；每条写明被哪一�
   await expect(page.getByRole('status', { name: '已被替代或合并的' })).toContainText('已被替代或合并的记忆')
   await expect(page.locator('.mem-entry')).toHaveCount(3)
   // The filters for current memories do not apply here.
-  await expect(page.getByRole('radiogroup', { name: '可信度' })).toHaveCount(0)
+  await expect(page.getByRole('radiogroup', { name: '类型' })).toHaveCount(0)
 
   const old = card(page, '遮阳网周三装')
   await expect(old).toContainText('被后来的这条替代：遮阳网的安装改到周五')
@@ -184,7 +179,7 @@ test('R2-14 有并入的卡片显示「合并了 N 条」，点开看到并入�
   const sheet = page.getByRole('dialog')
   const section = sheet.getByRole('group', { name: '合并了 2 条' })
   await expect(section).toBeInViewport()
-  await expect.poll(() => mock.queries.some((q) => q.searchParams.get('retiredBy') === f.friday.id && q.searchParams.get('retired') === '1')).toBeTruthy()
+  await expect.poll(() => mock.queries.some((q) => q.searchParams.get('retired') === '1')).toBeTruthy()
   const rows = section.getByRole('listitem')
   await expect(rows).toHaveCount(2)
   await expect(rows.nth(0)).toContainText('遮阳网安装挪到周五了')
@@ -224,7 +219,6 @@ test('没有可信度的旧数据不显示标签；没有被替代或合并的�
   const mock = await backend(page, [plain, memory('并了很多条的记忆', { trust: 'repeated', mergedFrom: 12 })], retired)
   await open(page)
   await expect(card(page, plain.text).locator('.tag')).toHaveCount(0)
-  await expect(page.getByRole('radiogroup', { name: '可信度' })).toBeVisible()
   expect(await fits(page)).toBeTruthy()
   await page.getByRole('button', { name: '看已被替代或合并的' }).click()
   await expect(page.locator('.mem-entry')).toHaveCount(1)

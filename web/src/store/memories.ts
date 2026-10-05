@@ -164,20 +164,40 @@ export function useMemoryFacets(): { facets?: MemoryFacets; problem: string; ret
   return { facets, problem: facets ? '' : problem, retry }
 }
 
+/** Pages of retired memories looked through for the ones merged into a memory before giving up. */
+const MERGED_PAGES = 20
+
+/**
+ * The memories merged into `id`, read from the retired list a page at a time
+ * until all `expected` of them are found: the server lists every retired memory
+ * and has no way to ask for one memory's alone.
+ */
+async function mergedInto(id: string, expected: number): Promise<Memory[]> {
+  const found: Memory[] = []
+  let cursor: string | undefined
+  for (let page = 0; page < MERGED_PAGES; page++) {
+    const read = await api<Partial<MemoryPage>>(listPath({ retired: '1', retiredBy: id }, cursor, 100))
+    found.push(...(read.items ?? []).filter((m) => m.retired === 'duplicate' && m.retiredBy === id))
+    cursor = read.next || undefined
+    if (!cursor || found.length >= expected) break
+  }
+  return found
+}
+
 /** The memories that were merged into one, each still carrying its own sources. */
-export function useMergedInto(id: string): { items: Memory[]; phase: 'loading' | 'ready' | 'failed'; problem: string; retry: () => void } {
+export function useMergedInto(id: string, expected: number): { items: Memory[]; phase: 'loading' | 'ready' | 'failed'; problem: string; retry: () => void } {
   const { state } = useStore()
   const [read, setRead] = useState<{ id: string; items: Memory[]; problem: string }>()
   const [attempt, setAttempt] = useState(0)
   useEffect(() => {
     if (!id) return
     let alive = true
-    api<Partial<MemoryPage>>(listPath({ retired: '1', retiredBy: id }, undefined, 100))
-      .then((page) => { if (alive) setRead({ id, items: (page.items ?? []).filter((m) => m.retired === 'duplicate' && m.retiredBy === id), problem: '' }) })
+    mergedInto(id, expected)
+      .then((items) => { if (alive) setRead({ id, items, problem: '' }) })
       // An earlier answer stays usable when a later read fails.
       .catch((e: unknown) => { if (alive) setRead((prev) => prev?.id === id && !prev.problem ? prev : { id, items: [], problem: readProblem(e) }) })
     return () => { alive = false }
-  }, [id, state.revision, attempt])
+  }, [id, expected, state.revision, attempt])
   const retry = useCallback(() => { setRead(undefined); setAttempt((n) => n + 1) }, [])
   if (!id || read?.id !== id) return { items: [], phase: 'loading', problem: '', retry }
   return { items: read.items, phase: read.problem ? 'failed' : 'ready', problem: read.problem, retry }

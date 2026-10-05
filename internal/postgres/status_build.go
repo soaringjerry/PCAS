@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -31,6 +32,7 @@ status 现状；deadline 期限；decided 定过的事；blocker 卡点；next �
 kind 是 deadline、appointment、recurring；固定安排 at 为 null，recurrence 保留原话周期。日期须按 timezone，用原话文字和 expressedAt 推导；过去的截止和预约不输出。没说上午下午、没说具体时刻等写在 timeNote，绝不编造时间。不明确具体钟点的日期用当地00:00。没法推出日期时不输出期限。`
 
 type cardMemory struct {
+	AppliesTo   string     `json:"appliesTo,omitempty"`
 	N           int        `json:"n"`
 	Text        string     `json:"text"`
 	ExpressedAt string     `json:"expressedAt"`
@@ -121,7 +123,7 @@ func (s *Store) ScheduleStatus(ctx context.Context, now time.Time) (int, error) 
 			return err
 		}
 		anchors := map[memory.ID]memory.Ref{}
-		for _, t := range targets {
+		for ordinal, t := range targets {
 			anchor, ok := anchors[t.owner]
 			if !ok {
 				var err error
@@ -139,7 +141,7 @@ func (s *Store) ScheduleStatus(ctx context.Context, now time.Time) (int, error) 
 			if g.Built != nil && !g.Stale && g.Rule >= CardVersion {
 				continue
 			}
-			due := now
+			due := now.Add(time.Duration(ordinal) * time.Microsecond)
 			if g.Built != nil && g.Rule < CardVersion {
 				due = now.Add(10 * time.Minute)
 			}
@@ -153,7 +155,9 @@ func (s *Store) ScheduleStatus(ctx context.Context, now time.Time) (int, error) 
 			}
 			count += int(tag.RowsAffected())
 		}
-		return nil
+		handoverCount, err := enqueueStatusHandoversTx(ctx, tx, anchors, now)
+		count += handoverCount
+		return err
 	})
 	return count, err
 }
@@ -248,6 +252,15 @@ func (s *Store) ProcessCard(ctx context.Context, j worker.Job) error {
 		if err := lockJob(ctx, tx, j); err != nil {
 			return err
 		}
+		version, versionErr := strconv.Atoi(parts[1])
+		var fresh bool
+		if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM status_cards WHERE owner_id=$1 AND key=$2 AND rule>=$3 AND built_at IS NOT NULL AND NOT stale)", string(j.OwnerID), key, CardVersion).Scan(&fresh); err != nil {
+			return err
+		}
+		if versionErr != nil || version != CardVersion || fresh {
+			return acknowledge(ctx, tx, j)
+		}
+
 		if err := tx.QueryRow(ctx, "SELECT available_at FROM memory_jobs WHERE id=$1", string(j.ID)).Scan(&ready); err != nil {
 			return err
 		}
@@ -378,6 +391,9 @@ func (s *Store) ProcessCard(ctx context.Context, j worker.Job) error {
 					return err
 				}
 			}
+		}
+		if err := writeCardDeadlinesTx(ctx, tx, j.OwnerID, memories, output.Deadlines, timezone, time.Now()); err != nil {
+			return err
 		}
 		if _, err := tx.Exec(ctx, "UPDATE status_cards SET rule=$3,built_at=clock_timestamp(),stale=false WHERE owner_id=$1 AND key=$2", string(j.OwnerID), key, CardVersion); err != nil {
 			return err

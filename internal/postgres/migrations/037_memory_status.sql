@@ -110,6 +110,7 @@ CREATE INDEX deadlines_claim_idx ON deadlines(owner_id,claim_id,claim_version);
 CREATE FUNCTION status_invalidate(p_owner uuid,p_claim uuid,p_key text DEFAULT '') RETURNS void LANGUAGE plpgsql AS $$
 DECLARE c record; anchor record;
 BEGIN
+ IF NOT EXISTS(SELECT 1 FROM status_cards WHERE owner_id=p_owner) AND NOT EXISTS(SELECT 1 FROM handovers WHERE owner_id=p_owner) THEN RETURN; END IF;
  SELECT r.id,r.version INTO anchor FROM memory_records r JOIN entity_versions ev
  ON(ev.owner_id,ev.entity_id,ev.version)=(r.owner_id,r.id,r.version)
  WHERE r.owner_id=p_owner AND r.state='active' AND ev.entity_type='area' ORDER BY r.created_at,r.id LIMIT 1;
@@ -135,7 +136,10 @@ BEGIN
  p=coalesce((v->>'claim_id')::uuid,(v->>'id')::uuid);
  IF TG_TABLE_NAME='memory_records' AND v->>'kind'<>'claim' THEN RETURN NULL; END IF;
  IF TG_TABLE_NAME='claim_revisions' THEN
-  IF TG_OP<>'INSERT' THEN old_key='self:'||OLD.category; PERFORM status_invalidate(OLD.owner_id,OLD.claim_id,old_key); END IF;
+  IF TG_OP<>'INSERT' THEN
+   old_key='self:'||OLD.category; PERFORM status_invalidate(OLD.owner_id,OLD.claim_id,old_key);
+   IF OLD.subject_id IS NOT NULL THEN PERFORM status_invalidate(OLD.owner_id,OLD.claim_id,'entity:'||OLD.subject_id::text); END IF;
+  END IF;
  ELSIF TG_TABLE_NAME='claim_mentions' THEN
   IF TG_OP<>'INSERT' THEN PERFORM status_invalidate(OLD.owner_id,OLD.claim_id,'entity:'||OLD.entity_id::text); END IF;
  END IF;
@@ -151,3 +155,25 @@ CREATE TRIGGER status_record_deleted BEFORE DELETE ON memory_records FOR EACH RO
 CREATE FUNCTION status_card_changed() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN UPDATE handovers SET stale=true WHERE owner_id=OLD.owner_id; RETURN NULL; END $$;
 CREATE TRIGGER status_card_rebuilt AFTER UPDATE OF built_at OR DELETE ON status_cards FOR EACH ROW EXECUTE FUNCTION status_card_changed();
+
+-- Source withdrawal/replacement can make derived claims cease to be current.
+-- Invalidate before the source/membership disappears, including unselected ones.
+CREATE FUNCTION status_source_changed() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE target record;
+BEGIN
+ FOR target IN SELECT DISTINCT target_id FROM evidence WHERE owner_id=OLD.owner_id AND source_id=OLD.id LOOP
+  PERFORM status_invalidate(OLD.owner_id,target.target_id);
+ END LOOP;
+ IF TG_OP='DELETE' THEN RETURN OLD; END IF;
+ RETURN NEW;
+END $$;
+CREATE TRIGGER status_source_deleted BEFORE DELETE ON memory_records FOR EACH ROW WHEN (OLD.kind='source') EXECUTE FUNCTION status_source_changed();
+CREATE TRIGGER status_source_updated BEFORE UPDATE OF version,state ON memory_records FOR EACH ROW WHEN (OLD.kind='source' AND (OLD.version IS DISTINCT FROM NEW.version OR OLD.state IS DISTINCT FROM NEW.state)) EXECUTE FUNCTION status_source_changed();
+CREATE FUNCTION status_evidence_changed() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ IF TG_OP<>'INSERT' THEN PERFORM status_invalidate(OLD.owner_id,OLD.target_id); END IF;
+ IF TG_OP<>'DELETE' THEN PERFORM status_invalidate(NEW.owner_id,NEW.target_id); END IF;
+ IF TG_OP='DELETE' THEN RETURN OLD; END IF;
+ RETURN NEW;
+END $$;
+CREATE TRIGGER status_evidence_mutated BEFORE INSERT OR UPDATE OR DELETE ON evidence FOR EACH ROW EXECUTE FUNCTION status_evidence_changed();

@@ -54,7 +54,10 @@ func flushActionLog(ctx context.Context, tx pgx.Tx, scope memory.Scope) error {
 		return nil
 	}
 	_, err := tx.Exec(ctx, "INSERT INTO action_log(owner_id,id,source,turn_id,summary,changes) VALUES($1,$2,$3,$4,$5,$6)", string(scope.OwnerID), log.id, log.source, nullString(log.turnID), log.summary, changes)
-	return err
+	if err != nil {
+		return err
+	}
+	return recordSmokeActionTx(ctx, tx, scope, log.id, entries)
 }
 func undoableCommand(t string) bool {
 	return oneOf(t, "addTask", "addIdea", "addProject", "updateTask", "updateProject", "setTaskStatus", "renameThing", "setNotes", "moveThing", "deferTask", "addCheck", "toggleCheck", "removeCheck", "ideaPromote", "ideaSnooze", "ideaShelve", "ideaDrop", "ideaContinue", "addCondition", "removeCondition", "adoptRun", "discardRun", "createDoc", "updateDoc", "deleteDoc", "bulkStatus", "bulkDefer", "bulkMove")
@@ -104,6 +107,14 @@ func (s *Store) undoActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 	}
 	if err != nil {
 		return err
+	}
+	{
+		var checkID string
+		if e := tx.QueryRow(ctx, "SELECT smoke_id::text FROM desk_smoke_actions WHERE owner_id=$1 AND action_id=$2", string(scope.OwnerID), id).Scan(&checkID); e == nil {
+			ctx = withSmoke(ctx, checkID)
+		} else if !errors.Is(e, pgx.ErrNoRows) {
+			return e
+		}
 	}
 	if undone != nil {
 		return workspace.ErrAlreadyUndone
@@ -252,6 +263,9 @@ func (s *Store) undoActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 	}
 	_, err = tx.Exec(ctx, "UPDATE action_log SET undone_at=now() WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), id)
 	if err != nil {
+		return err
+	}
+	if err := refreshSmokeChangesTx(ctx, tx, scope, changes); err != nil {
 		return err
 	}
 	if source != "desk" || turnID == nil {

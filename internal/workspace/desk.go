@@ -7,6 +7,8 @@ import (
 
 // DeskTurnRequest is also the server-side entry point used by connectors.
 type DeskTurnRequest struct {
+	// SmokeID groups owner-token-only check turns in a disposable conversation.
+	SmokeID        string       `json:"smokeId,omitempty"`
 	Attachments    []memory.Ref `json:"attachments,omitempty"`
 	RequestID      string       `json:"requestId"`
 	ConversationID *string      `json:"conversationId"`

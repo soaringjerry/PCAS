@@ -351,6 +351,10 @@ func (s *Server) workspaceRoutes(mux *http.ServeMux) {
 		if !decode(w, r, &in) {
 			return
 		}
+		if in.SmokeID != "" && (!scope.IsOwner || !strings.HasPrefix(r.Header.Get("Authorization"), "Bearer ")) {
+			s.fail(w, memory.ErrForbidden)
+			return
+		}
 		_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(2 * time.Minute))
 		ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), 110*time.Second)
 		defer cancel()

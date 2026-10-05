@@ -1,6 +1,6 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import { useMatch, useNavigate } from 'react-router'
-import { BookOpen, FolderPlus, House, Lightbulb, ListPlus, PenLine, Settings } from 'lucide-react'
+import { BookOpen, FolderPlus, House, Lightbulb, ListPlus, PenLine, Settings, UserRound } from 'lucide-react'
 import { newId } from '../domain/ids'
 import { allThings, findThing, thingProjectId, thingTitle } from '../domain/things'
 import { useStore } from '../store/context'
@@ -41,6 +41,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
     const nav: Entry[] = [
       { key: 'home', group: '前往', icon: <House size={16} />, label: '大厅', text: '大厅 首页 home', run: go('/') },
       { key: 'lib', group: '前往', icon: <BookOpen size={16} />, label: '资料库', text: '资料库 记忆 来源 训练', run: go('/library') },
+      { key: 'about', group: '前往', icon: <UserRound size={16} />, label: '关于你', text: '关于你 现状 期限 交接', run: go('/about') },
       { key: 'set', group: '前往', icon: <Settings size={16} />, label: '设置', text: '设置 额度 AI', run: go('/settings') },
     ]
 

@@ -28,7 +28,7 @@ const PAGE = 50
 const snapshotIsComplete = (state: State) => (state.memoryTotal ?? state.memories.length) <= state.memories.length
 
 /** Why a read failed, in words the user can act on. */
-function readProblem(e: unknown): string {
+export function readProblem(e: unknown): string {
   if (!(e instanceof APIError)) return '网络连接中断，请检查网络后重试。'
   if (e.status === 401) return '登录已过期，请重新登录。'
   return `服务器出错了（错误 ${e.status}${e.code ? `，${e.code}` : ''}）。请稍后重试；一直这样请查看服务日志。`

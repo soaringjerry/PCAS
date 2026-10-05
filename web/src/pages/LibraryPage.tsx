@@ -3,7 +3,7 @@ import { SourceSheet } from '../components/SourceSheet'
 import { ImportSheet } from '../components/ImportSheet'
 import { api, downloadExport } from '../store/api'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useSearchParams } from 'react-router'
+import { Link, useSearchParams } from 'react-router'
 import { ChevronRight, CircleAlert, Download, History, Info, RotateCw, Search, Trash2, Upload } from 'lucide-react'
 import { Checkbox, Chip } from '../components/controls'
 import { EventTime, Fade, FromLine, Groups, Mentions, ProjectLink, SaidAt, TrustTag } from '../components/Marks'
@@ -25,7 +25,7 @@ const hasEventTime = (m: Memory) => Boolean(m.eventFrom && m.eventPrecision && m
 /** What a memory is, once it has been sorted; nothing before that. */
 const categoryOf = (m: Memory) => (m.category && m.category !== 'unknown' ? memoryCategoryLabel[m.category] : undefined)
 
-function MemorySheet({ memory, entity, group, onClose, onPick, onPickGroup, onDeleted }: {
+export function MemorySheet({ memory, entity, group, onClose, onPick, onPickGroup, onDeleted }: {
   memory: Memory
   /** The person or place the list is narrowed to, if any. */
   entity: string
@@ -736,6 +736,10 @@ export function LibraryPage() {
           <h1>资料库</h1>
           <p>系统记住的东西、资料的来处，和攒下的训练数据。都归你，可以看、改、删、导出。</p>
         </div>
+        <Link to="/about" className="from">
+          关于你
+          <ChevronRight size={13} />
+        </Link>
       </div>
       {pending > 0 && (
         <div className="sheet" style={{ marginBottom: 18 }}>

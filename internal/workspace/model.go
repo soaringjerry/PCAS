@@ -219,6 +219,7 @@ type Adoption struct {
 	Edited   bool   `json:"edited"`
 }
 type Run struct {
+	SmokeID          string       `json:"smokeId,omitempty"`
 	Outdated         bool         `json:"outdated,omitempty"`
 	ID               string       `json:"id"`
 	ThingID          string       `json:"thingId"`

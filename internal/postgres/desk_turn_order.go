@@ -60,8 +60,20 @@ func (s *Store) admitSecretaryTurn(ctx, callerCtx context.Context, owner, reques
 			return ticket, err
 		}
 		err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+			if err := lockSmokeTurnTx(ctx, tx, owner); err != nil {
+				return err
+			}
 			if err := secretaryTryLock(ctx, tx, "secretary-admission-request:"+owner+":"+request); err != nil {
 				return err
+			}
+			var smokeRequest bool
+			if smokeID(ctx) == "" {
+				if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM desk_smoke_requests WHERE owner_id=$1 AND request_id=$2)", owner, request).Scan(&smokeRequest); err != nil {
+					return err
+				}
+				if smokeRequest {
+					return memory.ErrConflict
+				}
 			}
 			// Existing completed exchanges, including scrubbed history, take priority.
 			// Never recreate their source or invent a migration-era admission order.
@@ -91,6 +103,14 @@ func (s *Store) admitSecretaryTurn(ctx, callerCtx context.Context, owner, reques
 			}
 			if err := secretaryTryLock(ctx, tx, "secretary-admission-conversation:"+owner+":"+ticket.conversation); err != nil {
 				return err
+			}
+			if smokeID(ctx) == "" {
+				if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM desk_smoke_groups WHERE owner_id=$1 AND id=$2)", owner, ticket.conversation).Scan(&smokeRequest); err != nil {
+					return err
+				}
+				if smokeRequest {
+					return memory.ErrConflict
+				}
 			}
 			if err := callerCtx.Err(); err != nil {
 				return err
@@ -185,6 +205,9 @@ func (s *Store) withOrderedSecretaryTurn(ctx, callerCtx context.Context, owner, 
 			return ctx.Err()
 		}
 		err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+			if err := lockSmokeTurnTx(ctx, tx, owner); err != nil {
+				return err
+			}
 			for _, key := range []string{owner + ":" + request, secretaryConversationKey(owner, ticket.conversation)} {
 				if err := secretaryTryLock(ctx, tx, key); err != nil {
 					return err

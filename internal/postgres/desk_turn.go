@@ -411,6 +411,14 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 	if err := requireOwner(scope); err != nil {
 		return out, err
 	}
+	if req.SmokeID != "" {
+		if !memory.ID(req.SmokeID).Valid() || len(req.Attachments) != 0 || (req.ConversationID != nil && !strings.EqualFold(*req.ConversationID, req.SmokeID)) {
+			return out, memory.ErrInvalid
+		}
+		req.SmokeID = strings.ToLower(req.SmokeID)
+		req.ConversationID = &req.SmokeID
+		ctx = withSmoke(ctx, req.SmokeID)
+	}
 	text := strings.TrimSpace(req.Text)
 	if !memory.ID(req.RequestID).Valid() || (text == "" && len(req.Attachments) == 0) || len(req.Attachments) > 4 || utf8.RuneCountInString(text) > 4000 {
 		return out, memory.ErrInvalid
@@ -435,6 +443,11 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 	hash := sha256.Sum256(asJSON(req)) // The original body, before trimming, fences retries.
 	if _, err := s.Snapshot(ctx, scope); err != nil {
 		return out, err
+	}
+	if req.SmokeID != "" {
+		if err := s.registerSmokeRequest(ctx, scope, req); err != nil {
+			return out, err
+		}
 	}
 	conversationID := pointerValue(req.ConversationID)
 	if conversationID == "" {
@@ -556,13 +569,13 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 			slog.WarnContext(ctx, "secretary capture fallback", "stage", failureStage, "error_type", secretaryErrorType(failureStage, contextErr))
 			receiptText := secretaryCaptureText(failureStage, contextErr)
 			if captureOnly {
-				if text != "" {
+				if text != "" && req.SmokeID == "" {
 					if err := s.captureIncompleteSecretaryTurn(ctx, tx, scope, req.RequestID, req.Text); err != nil {
 						return err
 					}
 				}
 				receiptText = "已记下原话；这轮操作未完成，为避免覆盖后续改动，请重新说明要做的事"
-			} else if text != "" {
+			} else if text != "" && req.SmokeID == "" {
 				if err := s.commandTx(ctx, tx, scope, workspace.Command{Type: "capture", RequestID: req.RequestID, Text: req.Text}); err != nil {
 					return err
 				}
@@ -573,7 +586,7 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 			out.Turn.Receipts = append(out.Turn.Receipts, workspace.DeskReceipt{Op: "capture", Text: receiptText, Status: "done"})
 		} else {
 			dependencies = c.Dependencies
-			if text != "" {
+			if text != "" && req.SmokeID == "" {
 				if _, err := s.ingestTx(ctx, tx, scope, memory.IngestRequest{Connector: "desk", ExternalID: req.RequestID, ExternalVersion: "1", Title: "秘书原话", Text: req.Text, MediaType: "text/plain"}); err != nil {
 					return err
 				}
@@ -650,7 +663,7 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 				}
 				out.Turn.Receipts = append(out.Turn.Receipts, receipt)
 			}
-			if answer.Remember && text != "" {
+			if answer.Remember && text != "" && req.SmokeID == "" {
 				out.Turn.Receipts = append(out.Turn.Receipts, workspace.DeskReceipt{Op: "remember", Text: "记下了，会整理进记忆", Status: "done"})
 			}
 			out.Turn.Cards, err = s.secretaryCardsTx(ctx, tx, scope, answer, sent, c.Sources, c.Aliases, deskLocation(c.Settings), c.Plan.Recall)
@@ -681,6 +694,9 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 		_, err = tx.Exec(ctx, "INSERT INTO desk_turns(owner_id,id,agent_id,question,answer,dependencies,conversation_id,thing_id,request_id,request_hash,response,created_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)", string(scope.OwnerID), out.Turn.ID, c.Agent.ID, req.Text, out.Turn.Reply, asJSON(dependencies), conversationID, pointerValueOrNull(req.ThingID), req.RequestID, hash[:], asJSON(storedSecretaryResponse{ConversationID: out.ConversationID, Turn: out.Turn, AttachmentContext: c.AttachmentContext}), out.Turn.CreatedAt)
 		return err
 	})
+	if req.SmokeID != "" && errors.Is(err, pgx.ErrNoRows) {
+		err = memory.ErrConflict // Cleanup may retire a registered, still-pending ticket.
+	}
 	return out, err
 }
 

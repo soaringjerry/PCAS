@@ -134,7 +134,7 @@ func (s *Store) Commit(ctx context.Context, scope memory.Scope, in memory.Commit
 			if _, err := tx.Exec(ctx, "INSERT INTO claim_revisions(owner_id,claim_id,version,subject_id,predicate,value,scope,nature,acquisition,confirmation,change_type) VALUES($1,$2,1,$3,$4,$5,$6,$7,$8,$9,'initial')", string(scope.OwnerID), string(c.ID), string(c.SubjectID), c.Predicate, c.Value, asJSON(c.Scope), c.Nature, c.Acquisition, c.Confirmation); err != nil {
 				return err
 			}
-			if _, err := tx.Exec(ctx, "INSERT INTO activity(owner_id,record_id,last_effective_use_at) VALUES($1,$2,now())", string(scope.OwnerID), string(c.ID)); err != nil {
+			if _, err := tx.Exec(ctx, "INSERT INTO activity(owner_id,record_id,last_effective_use_at) VALUES($1,$2,least(now(),coalesce($3,now())))", string(scope.OwnerID), string(c.ID), c.ExpressedAt); err != nil {
 				return err
 			}
 		}

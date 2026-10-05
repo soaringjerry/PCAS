@@ -509,27 +509,16 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 				failureStage = "verify"
 				contextErr = s.checkDeskContextTx(ctx, tx, scope, c.Agent.ID, c.Dependencies, c.Items, true)
 			}
-			var reservationID string
 			if contextErr == nil {
-				failureStage = "budget"
-				p, _ := s.models.Get(c.Agent.ID)
-				reservationID, contextErr = s.reserveModelCostID(ctx, scope.OwnerID, p.Reserve(secretaryInstructions+prompt), nil)
-			}
-			if contextErr == nil {
-				failureStage = "model"
-				workCtx, cancel := context.WithTimeout(requestCtx, 90*time.Second)
-				result, err := s.models.GenerateWithSearchSchema(workCtx, c.Agent.ID, secretaryInstructions, prompt, secretaryOutputSchema)
-				// HTTP providers may hide cancellation behind an unreachable error.
-				if err != nil && workCtx.Err() != nil {
-					err = workCtx.Err()
-				}
+				workCtx, cancel := context.WithTimeout(requestCtx, secretaryModelTimeout)
+				result, modelStage, err := s.generateSecretaryModelWithRetry(workCtx, ctx, scope, c.Agent.ID, prompt, func(callCtx context.Context) error {
+					return s.checkDeskContextTx(callCtx, tx, scope, c.Agent.ID, c.Dependencies, c.Items, true)
+				})
+				failureStage = modelStage
 				cancel()
-				cost := result.Cost
-				if err != nil && strings.TrimSpace(result.Text) == "" {
-					cost = 0
-				}
-				if settleErr := s.settleModelCost(ctx, scope.OwnerID, reservationID, cost); settleErr != nil {
-					return settleErr
+				var accountingErr *secretaryAccountingError
+				if errors.As(err, &accountingErr) {
+					return accountingErr.error
 				}
 				contextErr = err
 				if contextErr == nil {

@@ -7,9 +7,18 @@ import (
 
 func TestCompareOutputRejectsInvalidNumbersAndFirstWins(t *testing.T) {
 	edges, ok := parseCompareOutput(`{"duplicates":[{"keep":1,"members":[1,2,99]},{"keep":4,"members":[2,3]},{"keep":"1","members":[4]}],"superseded":[{"old":2,"new":4},{"old":4,"new":5}]}`, 5)
-	want := []compareEdge{{Old: 2, New: 1, Kind: "duplicate"}, {Old: 3, New: 4, Kind: "duplicate"}, {Old: 4, New: 5, Kind: "superseded"}}
+	want := []compareEdge{{Old: 2, New: 1, Kind: "duplicate"}, {Old: 3, New: 4, Kind: "duplicate"}}
 	if !ok || !reflect.DeepEqual(edges, want) {
 		t.Fatal(edges, ok)
+	}
+	for _, text := range []string{
+		`{"duplicates":[],"superseded":[{"old":1,"new":"invalid"},{"old":1,"new":2}]}`,
+		`{"duplicates":[{"keep":"invalid","members":[1]},{"keep":2,"members":[1]}],"superseded":[]}`,
+		`{"duplicates":[{"keep":99,"members":[1]},{"keep":2,"members":[1]}],"superseded":[]}`,
+	} {
+		if edges, ok := parseCompareOutput(text, 2); !ok || len(edges) != 0 {
+			t.Fatal("invalid first suggestion replaced", edges, ok)
+		}
 	}
 	for _, text := range []string{`null`, `no JSON`, `{}`, `{"duplicates":null,"superseded":[]}`, `{"duplicates":[],"superseded":{}}`} {
 		if _, ok := parseCompareOutput(text, 5); ok {

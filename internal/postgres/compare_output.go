@@ -40,25 +40,58 @@ func parseCompareOutput(text string, count int) ([]compareEdge, bool) {
 	}
 	for _, raw := range duplicates {
 		var group struct {
-			Keep    int   `json:"keep"`
-			Members []int `json:"members"`
+			Keep    json.RawMessage   `json:"keep"`
+			Members []json.RawMessage `json:"members"`
 		}
-		if strictJSON(raw, &group) != nil || !valid(group.Keep) {
+		// Even a malformed suggestion consumes its known old numbers. Do not
+		// let a later suggestion retire them by replacing an invalid first one.
+		if json.Unmarshal(raw, &group) != nil {
 			continue
 		}
-		for _, old := range group.Members {
-			add(old, group.Keep, "duplicate")
+		var keep int
+		good := strictJSON(raw, &group) == nil && json.Unmarshal(group.Keep, &keep) == nil && valid(keep)
+		members := []int{}
+		for _, member := range group.Members {
+			var old int
+			if json.Unmarshal(member, &old) != nil {
+				good = false
+				continue
+			}
+			members = append(members, old)
+		}
+		for _, old := range members {
+			if old == keep {
+				continue
+			}
+			if good {
+				add(old, keep, "duplicate")
+			} else {
+				add(old, 0, "duplicate")
+			}
 		}
 	}
 	for _, raw := range superseded {
 		var pair struct {
-			Old int `json:"old"`
-			New int `json:"new"`
+			Old json.RawMessage `json:"old"`
+			New json.RawMessage `json:"new"`
 		}
-		if strictJSON(raw, &pair) == nil {
-			add(pair.Old, pair.New, "superseded")
+		if json.Unmarshal(raw, &pair) != nil {
+			continue
 		}
+		var old, new int
+		if json.Unmarshal(pair.Old, &old) != nil {
+			continue
+		}
+		if strictJSON(raw, &pair) != nil || json.Unmarshal(pair.New, &new) != nil {
+			new = 0
+		}
+		if old == new && valid(old) {
+			seen[old] = true
+			continue
+		}
+		add(old, new, "superseded")
 	}
+
 	return edges, true
 }
 

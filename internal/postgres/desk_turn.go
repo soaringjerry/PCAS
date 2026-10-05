@@ -275,6 +275,7 @@ func (s *Store) secretaryPrompt(ctx context.Context, tx pgx.Tx, scope memory.Sco
 	c.Tier = memoryTier(ctx, req.Text, "light")
 	var err error
 	c.Use, err = s.startUseContextTx(ctx, tx, scope)
+	c.Tier = memoryTierForStatus(c.Tier, c.Use.Ready)
 	c.Use.Location = loc
 	c.Use.Tier = c.Tier
 	if err != nil {
@@ -639,13 +640,13 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 						if c.Tier == "light" && (answer.MissingKeyInfo || secretaryNeedsCheck(answer)) {
 							c.Tier = "medium"
 						}
-						if c.Use.Ready && c.Tier != "light" {
+						if c.Tier != "light" {
 							// All heavy stages fit the same three-minute wall clock budget.
 							remaining := heavyUseTimeout - 10*time.Second - time.Since(turnStarted)
 							if c.Tier == "heavy" && remaining < time.Since(modelStarted) {
 								modelStarted = time.Now().Add(-remaining)
 							}
-							checkCtx, checkCancel := context.WithTimeout(requestCtx, time.Since(modelStarted))
+							checkCtx, checkCancel := context.WithTimeout(requestCtx, min(time.Since(modelStarted), secretaryModelTimeout))
 							answer = s.checkSecretary(checkCtx, ctx, scope, c, prompt, answer, out.Turn.ID)
 							checkCancel()
 							if _, err := tx.Exec(ctx, "UPDATE model_usage SET tier=$3 WHERE owner_id=$1 AND turn_id=$2 AND purpose='secretary'", string(scope.OwnerID), out.Turn.ID, c.Tier); err != nil {

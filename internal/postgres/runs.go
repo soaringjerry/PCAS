@@ -187,7 +187,7 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 				selected[m.ID] = true
 			}
 		}
-		run.MemoryTier = memoryTier(ctx, c.Prompt, "heavy")
+		run.MemoryTier = memoryTierForStatus(memoryTier(ctx, c.Prompt, "heavy"), u.Ready)
 		u.Tier = run.MemoryTier
 		ranked := ordered
 		if u.Ready {
@@ -670,6 +670,9 @@ func (s *Store) runAgentOnce(ctx context.Context) error {
 		defer s.models.Codex.Close()
 	}
 	u, agent, useErr := s.deputyUseContext(workCtx, scope, &run)
+	if useErr == nil {
+		run.MemoryTier = memoryTierForStatus(run.MemoryTier, u.Ready)
+	}
 	if useErr == nil && u.Ready {
 		if run.MemoryTier == "heavy" {
 			taskText := run.Prompt
@@ -739,10 +742,14 @@ func (s *Store) runAgentOnce(ctx context.Context) error {
 			return usageErr
 		}
 	}
-	if generationErr == nil && u.Ready && run.MemoryTier != "light" {
+	if generationErr == nil && run.MemoryTier != "light" {
 		checkBudget := min(time.Since(answerStarted), 30*time.Second)
 		checkCtx, checkCancel := context.WithTimeout(workCtx, checkBudget)
-		checked, err := s.useModelCall(checkCtx, ctx, scope, run.AgentID, deputyInstructions+"\n这是自查。对照完全相同的资料，修订正文：补有关情况，改矛盾和过时说法，删无依据事实，落实必须遵守的要求。只能修订草稿，不能增加新的执行动作。只输出修订正文。", run.Brief+"\n待自查草稿：\n"+result.Text, nil, modelUsage{Purpose: "selfcheck", Tier: run.MemoryTier, RunID: run.ID, MemoryRefs: run.ContextVersions, Plan: asJSON(usePlan{Groups: run.MemoryGroups})})
+		checked := ai.Result{}
+		err := s.checkDeputySelfcheckContext(checkCtx, scope, run, token)
+		if err == nil {
+			checked, err = s.useModelCall(checkCtx, ctx, scope, run.AgentID, deputyInstructions+"\n这是自查。对照完全相同的资料，修订正文：补有关情况，改矛盾和过时说法，删无依据事实，落实必须遵守的要求。只能修订草稿，不能增加新的执行动作。只输出修订正文。", run.Brief+"\n待自查草稿：\n"+result.Text, nil, modelUsage{Purpose: "selfcheck", Tier: run.MemoryTier, RunID: run.ID, MemoryRefs: run.ContextVersions, Plan: asJSON(usePlan{Groups: run.MemoryGroups})})
+		}
 		checkCancel()
 		if err == nil && strings.TrimSpace(checked.Text) != "" && len(parseRunChecklist(checked.Text)) == len(parseRunChecklist(result.Text)) {
 			result.Text = checked.Text

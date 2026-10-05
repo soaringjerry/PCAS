@@ -27,6 +27,16 @@ func memoryTier(ctx context.Context, text, fallback string) string {
 	}
 	return fallback
 }
+
+// Without a status layer there is no directory to select or read. Keep
+// medium's answer/selfcheck contract over the existing retrieval instead.
+func memoryTierForStatus(tier string, ready bool) string {
+	if tier == "heavy" && !ready {
+		return "medium"
+	}
+	return tier
+}
+
 func containsAny(text string, words ...string) bool {
 	for _, w := range words {
 		if strings.Contains(text, w) {

@@ -159,3 +159,19 @@ func checkUseRunPromptTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run
 	}
 	return nil
 }
+
+// Once the draft exists, changes to its inputs or loss of the worker lease make
+// another model call unnecessary. Retain the paid draft for the final stale-
+// context check instead of selfchecking obsolete or abandoned work.
+func (s *Store) checkDeputySelfcheckContext(ctx context.Context, scope memory.Scope, run workspace.Run, token string) error {
+	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		var leased bool
+		if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM agent_runs WHERE owner_id=$1 AND id=$2 AND status='running' AND lease_token=$3 AND lease_until>now())", string(scope.OwnerID), run.ID, token).Scan(&leased); err != nil {
+			return err
+		}
+		if !leased {
+			return memory.ErrConflict
+		}
+		return checkUseRunPromptTx(ctx, tx, scope, run)
+	})
+}

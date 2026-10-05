@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
@@ -75,7 +76,8 @@ func TestCompareEntityUndoAfterUserEditRefusesAtomically(t *testing.T) {
 	scope := owner()
 	b1Model(t, s, `{"same":true,"keep":2}`)
 	old, a := compareEntityFixture(t, s, scope, "小陈", "小陈负责虚构松林项目")
-	keep, _ := compareEntityFixture(t, s, scope, "陈亮", "陈亮就是小陈，负责虚构松林项目")
+	keep, b := compareEntityFixture(t, s, scope, "陈亮", "陈亮就是小陈，负责虚构松林项目")
+	compareEntityGroup(t, s, scope, "project", "虚构松林项目", a, b)
 	j := compareJob(t, s, scope, true, CompareVersion)
 	if err := s.ProcessEntityCompare(context.Background(), j); err != nil {
 		t.Fatal(err)
@@ -139,4 +141,78 @@ func TestCompareRestoreProtectionSurvivesActionSnapshotExpiry(t *testing.T) {
 	}
 	compareProcess(t, s, scope)
 	compareState(t, s, scope, refs, []string{"", ""}, CompareVersion)
+}
+
+// Verify the real migration-037 trigger, not a Go-side stale flag helper. The
+// unselected fourth memory must invalidate its group after it leaves current.
+func TestCompareRetirementInvalidatesCardsThroughClaimsUpdate(t *testing.T) {
+	s := testStore(t)
+	scope := owner()
+	ctx := context.Background()
+	b1Model(t, s, `{"duplicates":[],"superseded":[{"old":1,"new":4}]}`)
+	refs := compareFixture(t, s, scope, "虚构旧期限周三", "虚构现状甲", "虚构现状乙", "虚构新期限周五")
+	j := compareJob(t, s, scope, false, CompareVersion)
+	var key string
+	if err := s.pool.QueryRow(ctx, "SELECT 'entity:'||entity_id::text FROM claim_mentions WHERE owner_id=$1 AND claim_id=$2 AND role='topic'", string(scope.OwnerID), string(refs[0].ID)).Scan(&key); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.pool.Exec(ctx, "INSERT INTO status_cards(owner_id,key,kind,name,rule,built_at,stale) VALUES($1,$2,'topic','虚构汇报',1,now(),false)", string(scope.OwnerID), key); err != nil {
+		t.Fatal(err)
+	}
+	// Card items deliberately do not contain the retiring old claim.
+	if _, err := s.pool.Exec(ctx, "INSERT INTO status_card_items(owner_id,key,field,position,claim_id,claim_version) VALUES($1,$2,'status',0,$3,1)", string(scope.OwnerID), key, string(refs[1].ID)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.pool.Exec(ctx, "INSERT INTO handovers(owner_id,body,rule,built_at,stale) VALUES($1,'虚构旧交接',1,now(),false)", string(scope.OwnerID)); err != nil {
+		t.Fatal(err)
+	}
+	started := time.Now()
+	if err := s.ProcessCompare(ctx, j); err != nil {
+		t.Fatal(err)
+	}
+	var stale, handover bool
+	var available time.Time
+	if err := s.pool.QueryRow(ctx, "SELECT stale FROM status_cards WHERE owner_id=$1 AND key=$2", string(scope.OwnerID), key).Scan(&stale); err != nil || !stale {
+		t.Fatal("card not invalidated", stale, err)
+	}
+	if err := s.pool.QueryRow(ctx, "SELECT stale FROM handovers WHERE owner_id=$1", string(scope.OwnerID)).Scan(&handover); err != nil || !handover {
+		t.Fatal("handover not invalidated", handover, err)
+	}
+	if err := s.pool.QueryRow(ctx, "SELECT available_at FROM memory_jobs WHERE owner_id=$1 AND stage=$2 AND state='queued'", string(scope.OwnerID), "memory.card:1:"+key).Scan(&available); err != nil || available.Before(started.Add(10*time.Minute)) || available.After(time.Now().Add(10*time.Minute+time.Second)) {
+		t.Fatal("trigger did not debounce rebuild", available, err)
+	}
+}
+
+func TestCompareRetirementInvalidatesUnselectedSecondaryGroup(t *testing.T) {
+	s := testStore(t)
+	scope := owner()
+	ctx := context.Background()
+	b1Model(t, s, `{}`)
+	refs := compareFixture(t, s, scope, "虚构旧期限周三", "虚构现状甲", "虚构现状乙", "虚构新期限周五")
+	secondary := []memory.Ref{}
+	for _, name := range []string{"虚构甲", "虚构乙", "虚构丙"} {
+		_, ref := compareEntityFixture(t, s, scope, name, name+"负责虚构次要项目")
+		secondary = append(secondary, ref)
+	}
+	group := compareEntityGroup(t, s, scope, "project", "虚构次要项目", append(secondary, refs[0])...)
+	key := "entity:" + string(group)
+	if _, err := s.pool.Exec(ctx, "INSERT INTO status_cards(owner_id,key,kind,entity_id,name,rule,built_at,stale) VALUES($1,$2,'project',$3,'虚构次要项目',1,now(),false)", string(scope.OwnerID), key, string(group)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.pool.Exec(ctx, "INSERT INTO status_card_items(owner_id,key,field,position,claim_id,claim_version) VALUES($1,$2,'status',0,$3,1)", string(scope.OwnerID), key, string(secondary[0].ID)); err != nil {
+		t.Fatal(err)
+	}
+	batch := []compareMemory{}
+	for i, ref := range refs {
+		batch = append(batch, compareMemory{organizeMemory: organizeMemory{N: i + 1, Ref: ref}})
+	}
+	if err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		return s.writeComparisonTx(ctx, tx, scope.OwnerID, CompareVersion, batch, []compareEdge{{Old: 1, New: 4, Kind: "superseded"}}, true)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var stale bool
+	if err := s.pool.QueryRow(ctx, "SELECT stale FROM status_cards WHERE owner_id=$1 AND key=$2", string(scope.OwnerID), key).Scan(&stale); err != nil || !stale {
+		t.Fatal("secondary group lost its unselected membership before invalidation", stale, err)
+	}
 }

@@ -61,15 +61,6 @@ const compareGroupKeys = `SELECT 'entity:'||cm.entity_id::text AS key,ev.entity_
  WHERE ev.owner_id=c.owner_id AND ev.entity_id=c.subject_id AND ev.entity_type='self' AND er.state='active'
  AND c.category IN ('identity','taste','rule','goal')`
 
-// Area cards also depend on the changed memories, even though comparison itself
-// is scoped to projects, topics, people and self categories (R2-1).
-const comparisonCardGroupKeys = compareGroupKeys + `
- UNION SELECT 'entity:'||cm.entity_id::text,ev.entity_type,ev.name
- FROM claim_mentions cm JOIN memory_records er ON(er.owner_id,er.id)=(cm.owner_id,cm.entity_id)
- JOIN entity_versions ev ON(ev.owner_id,ev.entity_id,ev.version)=(er.owner_id,er.id,er.version)
- WHERE (cm.owner_id,cm.claim_id,cm.claim_version)=(c.owner_id,c.claim_id,c.version)
- AND er.state='active' AND cm.role='area'`
-
 func nextCompareGroupTx(ctx context.Context, tx pgx.Tx, owner memory.ID, version int) (compareGroup, error) {
 	var group compareGroup
 	err := tx.QueryRow(ctx, `SELECT g.key,g.kind,g.name`+strings.Replace(compareCurrent, " WHERE ", " CROSS JOIN LATERAL ("+compareGroupKeys+") g WHERE ", 1)+`
@@ -414,6 +405,12 @@ func (s *Store) writeComparisonTx(ctx context.Context, tx pgx.Tx, owner memory.I
 					return err
 				}
 			}
+			// The AFTER claims trigger sees only current membership. Invalidate
+			// before retirement too, so an unselected claim's secondary groups
+			// are still visible. Use the status layer's existing debounce path.
+			if _, err := tx.Exec(ctx, "SELECT status_invalidate($1,$2)", string(owner), string(old.Ref.ID)); err != nil {
+				return err
+			}
 			if _, err := tx.Exec(ctx, "UPDATE claims SET retired=$3,retired_by=$4,retired_at=now() WHERE owner_id=$1 AND id=$2", string(owner), string(old.Ref.ID), edge.Kind, string(new.Ref.ID)); err != nil {
 				return err
 			}
@@ -458,21 +455,9 @@ func (s *Store) writeComparisonTx(ctx context.Context, tx pgx.Tx, owner memory.I
 		changed = append(changed, string(m.Ref.ID))
 	}
 	if len(changed) > 0 {
-		if err := markComparisonCardsTx(ctx, tx, owner, changed); err != nil {
-			return err
-		}
+		// Migration 037 invalidates cards and debounces their rebuild on claims UPDATE.
 		_, err := tx.Exec(ctx, "UPDATE workspace_owners SET revision=revision+1 WHERE owner_id=$1", string(owner))
 		return err
 	}
 	return nil
-}
-
-func markComparisonCardsTx(ctx context.Context, tx pgx.Tx, owner memory.ID, ids []string) error {
-	if _, err := tx.Exec(ctx, `UPDATE status_cards card SET stale=true WHERE card.owner_id=$1 AND EXISTS(
- SELECT 1 FROM claim_revisions c JOIN memory_records r ON(r.owner_id,r.id,r.version)=(c.owner_id,c.claim_id,c.version)
- CROSS JOIN LATERAL (`+comparisonCardGroupKeys+`) g WHERE c.owner_id=$1 AND c.claim_id=ANY($2::uuid[]) AND g.key=card.key)`, string(owner), ids); err != nil {
-		return err
-	}
-	_, err := tx.Exec(ctx, "UPDATE handovers SET stale=true WHERE owner_id=$1", string(owner))
-	return err
 }

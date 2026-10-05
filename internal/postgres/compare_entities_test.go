@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"encoding/json"
+	"net/http"
 	"testing"
 	"time"
 
@@ -28,12 +29,33 @@ func compareEntityFixture(t *testing.T, s *Store, scope memory.Scope, name, text
 	}
 	return entity.Ref, claim.Ref
 }
+func compareEntityGroup(t *testing.T, s *Store, scope memory.Scope, kind, name string, refs ...memory.Ref) memory.ID {
+	t.Helper()
+	var group memory.ID
+	if err := pgx.BeginFunc(context.Background(), s.pool, func(tx pgx.Tx) error {
+		var err error
+		group, err = entityTx(context.Background(), tx, scope.OwnerID, kind, name)
+		if err != nil {
+			return err
+		}
+		for _, ref := range refs {
+			if _, err = tx.Exec(context.Background(), "INSERT INTO claim_mentions(owner_id,claim_id,claim_version,entity_id,role) VALUES($1,$2,$3,$4,$5)", string(scope.OwnerID), string(ref.ID), ref.Version, string(group), kind); err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	return group
+}
 func TestCompareEntityMergeAliasesAndUndo(t *testing.T) {
 	s := testStore(t)
 	scope := owner()
 	f := b1Model(t, s, `{"same":true,"keep":2}`)
 	old, a := compareEntityFixture(t, s, scope, "小陈", "小陈负责虚构松林项目")
 	keep, b := compareEntityFixture(t, s, scope, "陈亮", "陈亮就是负责松林项目的小陈")
+	compareEntityGroup(t, s, scope, "project", "虚构松林项目", a, b)
 	j := compareJob(t, s, scope, true, CompareVersion)
 	if err := s.ProcessEntityCompare(context.Background(), j); err != nil {
 		t.Fatal(err)
@@ -111,5 +133,96 @@ func TestCompareEntityNegativeAndAmbiguousNames(t *testing.T) {
 	}
 	if err := s.pool.QueryRow(context.Background(), "SELECT count(*) FROM memory_jobs WHERE owner_id=$1 AND stage LIKE 'memory.entity_compare:%' AND state='queued'", string(scope.OwnerID)).Scan(&n); err != nil || n != 0 || len(f.all()) != 1 {
 		t.Fatal("negative pair repeatedly queued", n, len(f.all()), err)
+	}
+}
+
+func TestCompareEntitySharedCharacterNeedsCurrentSharedProjectOrTopic(t *testing.T) {
+	for _, kind := range []string{"project", "topic", "area"} {
+		t.Run(kind, func(t *testing.T) {
+			s := testStore(t)
+			scope := owner()
+			f := b1Model(t, s, `{"same":false,"keep":null}`)
+			_, a := compareEntityFixture(t, s, scope, "小陈", "小陈负责虚构资料校对")
+			_, b := compareEntityFixture(t, s, scope, "陈亮", "陈亮负责虚构物资安排")
+			pending := func() int {
+				t.Helper()
+				if _, err := s.ScheduleCompare(context.Background(), time.Now()); err != nil {
+					t.Fatal(err)
+				}
+				var n int
+				if err := s.pool.QueryRow(context.Background(), "SELECT count(*) FROM memory_jobs WHERE owner_id=$1 AND stage LIKE 'memory.entity_compare:%' AND state='queued'", string(scope.OwnerID)).Scan(&n); err != nil {
+					t.Fatal(err)
+				}
+				return n
+			}
+			if n := pending(); n != 0 {
+				t.Fatal("shared character alone queued", n)
+			}
+			group := compareEntityGroup(t, s, scope, kind, "虚构共同分组", a, b)
+			if kind == "area" {
+				if n := pending(); n != 0 {
+					t.Fatal("area alone queued", n)
+				}
+				return
+			}
+			// A shared group containing a withdrawn claim is not sufficient.
+			if _, err := s.pool.Exec(context.Background(), "UPDATE claims SET retired='superseded',retired_by=$3 WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), string(a.ID), string(b.ID)); err != nil {
+				t.Fatal(err)
+			}
+			if n := pending(); n != 0 {
+				t.Fatal("retired shared membership queued", n)
+			}
+			if _, err := s.pool.Exec(context.Background(), "UPDATE claims SET retired='',retired_by=NULL WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), string(a.ID)); err != nil {
+				t.Fatal(err)
+			}
+			j := compareJob(t, s, scope, true, CompareVersion)
+			if err := s.ProcessEntityCompare(context.Background(), j); err != nil {
+				t.Fatal(err)
+			}
+			if len(f.all()) != 1 {
+				t.Fatal("shared group did not reach model", group, len(f.all()))
+			}
+			var n int
+			if err := s.pool.QueryRow(context.Background(), "SELECT count(*) FROM entity_merges WHERE owner_id=$1", string(scope.OwnerID)).Scan(&n); err != nil || n != 0 {
+				t.Fatal("candidate must not merge without model agreement", n, err)
+			}
+		})
+	}
+}
+
+func TestCompareEntitySharedContextRemovedDuringCallDoesNotMerge(t *testing.T) {
+	s := testStore(t)
+	scope := owner()
+	ctx := context.Background()
+	b1Model(t, s, `{}`)
+	_, a := compareEntityFixture(t, s, scope, "小陈", "小陈负责虚构资料校对")
+	_, b := compareEntityFixture(t, s, scope, "陈亮", "陈亮负责虚构物资安排")
+	group := compareEntityGroup(t, s, scope, "topic", "虚构共同主题", a, b)
+	entered, release := make(chan struct{}), make(chan struct{})
+	secretaryModel(t, s, func(w http.ResponseWriter, r *http.Request) {
+		close(entered)
+		<-release
+		secretaryModelReply(w, `{"same":true,"keep":2}`)
+	})
+	j := compareJob(t, s, scope, true, CompareVersion)
+	done := make(chan error, 1)
+	go func() { done <- s.ProcessEntityCompare(ctx, j) }()
+	select {
+	case <-entered:
+	case <-time.After(5 * time.Second):
+		close(release)
+		t.Fatal("no entity call")
+	}
+	if _, err := s.pool.Exec(ctx, "DELETE FROM claim_mentions WHERE owner_id=$1 AND claim_id=$2 AND entity_id=$3", string(scope.OwnerID), string(a.ID), string(group)); err != nil {
+		close(release)
+		t.Fatal(err)
+	}
+	close(release)
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	var n int
+	if err := s.pool.QueryRow(ctx, "SELECT count(*) FROM entity_merges WHERE owner_id=$1", string(scope.OwnerID)).Scan(&n); err != nil || n != 0 {
+		t.Fatal("changed context merged entities", n, err)
 	}
 }

@@ -75,7 +75,7 @@ func restoreMemoryTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, id stri
 	if _, err := tx.Exec(ctx, "INSERT INTO action_log(owner_id,id,source,summary,changes) VALUES($1,$2,'command','恢复退出的记忆',$3)", string(scope.OwnerID), log.id, changes); err != nil {
 		return err
 	}
-	return markComparisonCardsTx(ctx, tx, scope.OwnerID, []string{id})
+	return nil
 }
 
 func (s *Store) undoEntityCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, id string) error {
@@ -152,9 +152,6 @@ func undoComparisonActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, 
 			return true, err
 		}
 		if _, err := tx.Exec(ctx, "DELETE FROM memory_jobs WHERE owner_id=$1 AND record_id=$2 AND stage LIKE 'memory.compare_restored:%:'||$3", string(scope.OwnerID), entry.ID, id); err != nil {
-			return true, err
-		}
-		if err := markComparisonCardsTx(ctx, tx, scope.OwnerID, []string{entry.ID}); err != nil {
 			return true, err
 		}
 	case "entity_merge":

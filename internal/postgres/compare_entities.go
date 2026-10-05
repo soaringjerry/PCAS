@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
@@ -24,8 +25,9 @@ type comparisonEntity struct {
 	Ref      memory.Ref       `json:"-"`
 }
 type comparisonEntityPair struct {
-	Entities [2]comparisonEntity `json:"entities"`
-	Marker   string              `json:"-"`
+	Entities      [2]comparisonEntity `json:"entities"`
+	Marker        string              `json:"-"`
+	SharedContext bool                `json:"-"`
 }
 
 func entityComparisonName(name string) string {
@@ -38,19 +40,71 @@ func entityComparisonName(name string) string {
 	}
 	return strings.TrimSpace(name)
 }
-func possibleSameEntity(a, b string) bool {
+func entityComparisonNamesAllowed(a, b string) bool {
 	if memory.AmbiguousEntityName(a) || memory.AmbiguousEntityName(b) || strings.Contains(a, "这位") || strings.Contains(b, "这位") || strings.Contains(a, "那个") || strings.Contains(b, "那个") {
 		return false
 	}
-	a, b = strings.ToLower(strings.TrimSpace(a)), strings.ToLower(strings.TrimSpace(b))
-	if a == "" || b == "" {
+	return strings.TrimSpace(a) != "" && strings.TrimSpace(b) != ""
+}
+
+func possibleSameEntity(a, b string) bool {
+	if !entityComparisonNamesAllowed(a, b) {
 		return false
 	}
+	a, b = strings.ToLower(strings.TrimSpace(a)), strings.ToLower(strings.TrimSpace(b))
 	if strings.Contains(a, b) || strings.Contains(b, a) {
 		return true
 	}
 	aa, bb := entityComparisonName(a), entityComparisonName(b)
-	return aa != "" && bb != "" && (strings.Contains(aa, bb) || strings.Contains(bb, aa))
+	return aa != "" && bb != "" && (aa == b || bb == a || aa == bb)
+}
+
+// Shared letters alone never qualify: the two entities must also have current
+// memories in the same actual project/topic membership, not just mention a
+// project in free text. Load memberships once rather than once per entity pair.
+func entityNamesShareCharacter(a, b string) bool {
+	if !entityComparisonNamesAllowed(a, b) {
+		return false
+	}
+	for _, ch := range strings.ToLower(a) {
+		if (unicode.IsLetter(ch) || unicode.IsDigit(ch)) && strings.ContainsRune(strings.ToLower(b), ch) {
+			return true
+		}
+	}
+	return false
+}
+func entityComparisonContextsTx(ctx context.Context, tx pgx.Tx, owner memory.ID) (map[memory.ID]map[string]bool, error) {
+	rows, err := tx.Query(ctx, `SELECT DISTINCT cm.entity_id::text,m.key FROM status_current_members m
+ JOIN claim_mentions cm USING(owner_id,claim_id,claim_version)
+ WHERE m.owner_id=$1 AND m.kind IN('project','topic')
+ UNION SELECT DISTINCT c.subject_id::text,m.key FROM status_current_members m
+ JOIN claim_revisions c ON(c.owner_id,c.claim_id,c.version)=(m.owner_id,m.claim_id,m.claim_version)
+ WHERE m.owner_id=$1 AND m.kind IN('project','topic') AND c.subject_id IS NOT NULL`, string(owner))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[memory.ID]map[string]bool{}
+	for rows.Next() {
+		var id memory.ID
+		var key string
+		if err := rows.Scan(&id, &key); err != nil {
+			return nil, err
+		}
+		if out[id] == nil {
+			out[id] = map[string]bool{}
+		}
+		out[id][key] = true
+	}
+	return out, rows.Err()
+}
+func entitiesShareContext(groups map[memory.ID]map[string]bool, a, b memory.ID) bool {
+	for key := range groups[a] {
+		if groups[b][key] {
+			return true
+		}
+	}
+	return false
 }
 
 func entityComparisonMemoriesTx(ctx context.Context, tx pgx.Tx, owner memory.ID, id memory.ID) ([]organizeMemory, error) {
@@ -101,12 +155,28 @@ func nextEntityPairTx(ctx context.Context, tx pgx.Tx, owner memory.ID, version i
 		return nil, err
 	}
 	samples := map[memory.ID][]organizeMemory{}
+	var contexts map[memory.ID]map[string]bool
 	for a := range entities {
 		for b := a + 1; b < len(entities); b++ {
-			if entities[a].Type != entities[b].Type || !possibleSameEntity(entities[a].Name, entities[b].Name) {
+			if entities[a].Type != entities[b].Type {
 				continue
 			}
-			pair := &comparisonEntityPair{Entities: [2]comparisonEntity{entities[a], entities[b]}}
+			sharedContext := !possibleSameEntity(entities[a].Name, entities[b].Name)
+			if sharedContext {
+				if !entityNamesShareCharacter(entities[a].Name, entities[b].Name) {
+					continue
+				}
+				if contexts == nil {
+					contexts, err = entityComparisonContextsTx(ctx, tx, owner)
+					if err != nil {
+						return nil, err
+					}
+				}
+				if !entitiesShareContext(contexts, entities[a].Ref.ID, entities[b].Ref.ID) {
+					continue
+				}
+			}
+			pair := &comparisonEntityPair{Entities: [2]comparisonEntity{entities[a], entities[b]}, SharedContext: sharedContext}
 			refs := []memory.Ref{}
 			for i := range pair.Entities {
 				e := &pair.Entities[i]
@@ -276,6 +346,13 @@ func (s *Store) processEntityCompareVersion(ctx context.Context, j worker.Job, v
 				}
 			}
 		}
+		if current && pair.SharedContext {
+			groups, err := entityComparisonContextsTx(ctx, tx, j.OwnerID)
+			if err != nil {
+				return err
+			}
+			current = entitiesShareContext(groups, pair.Entities[0].Ref.ID, pair.Entities[1].Ref.ID)
+		}
 		if current && valid && *answer.Same {
 			kept := pair.Entities[*answer.Keep-1].Ref
 			merged := pair.Entities[2-*answer.Keep].Ref
@@ -439,9 +516,6 @@ func markMergedEntityClaimsTx(ctx context.Context, tx pgx.Tx, owner memory.ID, s
 		ids = append(ids, m.ID)
 	}
 	if _, err := tx.Exec(ctx, "UPDATE claims SET compared=0 WHERE owner_id=$1 AND id=ANY($2::uuid[])", string(owner), ids); err != nil {
-		return err
-	}
-	if err := markComparisonCardsTx(ctx, tx, owner, ids); err != nil {
 		return err
 	}
 	if _, err := tx.Exec(ctx, "UPDATE status_cards SET stale=true WHERE owner_id=$1 AND key=$2", string(owner), "entity:"+string(snapshot.Merged.ID)); err != nil {

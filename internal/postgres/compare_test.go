@@ -336,7 +336,7 @@ func TestComparePotentialEntityNames(t *testing.T) {
 	for _, tc := range []struct {
 		a, b string
 		want bool
-	}{{"小陈", "陈亮", true}, {"陈老师", "陈", true}, {"Alice", "ALICE", true}, {"这位陈老师", "陈", false}, {"那个王先生", "王", false}, {"陈亮", "刘山", false}} {
+	}{{"小陈", "陈亮", false}, {"陈老师", "陈", true}, {"Alice", "ALICE", true}, {"这位陈老师", "陈", false}, {"那个王先生", "王", false}, {"陈亮", "刘山", false}} {
 		if got := possibleSameEntity(tc.a, tc.b); got != tc.want {
 			t.Errorf("%q %q=%v", tc.a, tc.b, got)
 		}

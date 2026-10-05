@@ -94,21 +94,25 @@ func maxTime(a, b time.Time) time.Time {
 func statusTrustTx(ctx context.Context, tx pgx.Tx, owner memory.ID, m workspace.Memory) (string, error) {
 	var inferred bool
 	var distinct int
-	err := tx.QueryRow(ctx, `SELECT c.acquisition IN('inferred') OR rv.actor IN('ai','system') OR EXISTS(
- SELECT 1 FROM evidence e JOIN source_contexts sc ON(sc.owner_id,sc.source_id,sc.source_version)=(e.owner_id,e.source_id,e.source_version)
- WHERE e.owner_id=c.owner_id AND e.target_id=c.claim_id AND e.target_version=c.version AND lower(sc.role) IN('assistant','ai','system','tool')),
+	var acquisition string
+	err := tx.QueryRow(ctx, `SELECT c.acquisition IN('inferred') OR EXISTS(
+ SELECT 1 FROM evidence e JOIN source_versions v ON(v.owner_id,v.source_id,v.version)=(e.owner_id,e.source_id,e.source_version)
+ JOIN record_versions src ON(src.owner_id,src.record_id,src.version)=(v.owner_id,coalesce(v.derived_from_id,v.source_id),coalesce(v.derived_from_version,v.version))
+ LEFT JOIN source_contexts sc ON(sc.owner_id,sc.source_id,sc.source_version)=(src.owner_id,src.record_id,src.version)
+ WHERE e.owner_id=c.owner_id AND e.target_id=c.claim_id AND e.target_version=c.version
+ AND (lower(sc.role) IN('assistant','ai','system','tool') OR (coalesce(lower(sc.role),'') NOT IN('user','human') AND src.actor IN('ai','system')))),
  (SELECT count(DISTINCT CASE WHEN coalesce(sc.conversation_key,'')<>'' THEN 'conversation:'||sc.conversation_key ELSE 'source:'||e.source_id::text END)
  FROM evidence e LEFT JOIN source_contexts sc ON(sc.owner_id,sc.source_id,sc.source_version)=(e.owner_id,e.source_id,e.source_version)
- WHERE e.owner_id=c.owner_id AND e.target_id=c.claim_id AND e.target_version=c.version)
+ WHERE e.owner_id=c.owner_id AND e.target_id=c.claim_id AND e.target_version=c.version),c.acquisition
  FROM claim_revisions c JOIN record_versions rv ON(rv.owner_id,rv.record_id,rv.version)=(c.owner_id,c.claim_id,c.version)
- WHERE c.owner_id=$1 AND c.claim_id=$2 AND c.version=$3`, string(owner), m.ID, m.Version).Scan(&inferred, &distinct)
+ WHERE c.owner_id=$1 AND c.claim_id=$2 AND c.version=$3`, string(owner), m.ID, m.Version).Scan(&inferred, &distinct, &acquisition)
 	if err != nil {
 		return "", err
 	}
 	if inferred {
 		return "inferred", nil
 	}
-	if m.Acquisition == "reported" {
+	if acquisition == "reported" {
 		return "reported", nil
 	}
 	if qualifiedCapture(m.Text) {

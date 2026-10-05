@@ -47,7 +47,7 @@ func handoverFakeReply(t *testing.T, w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	for _, m := range prompt.Memories {
-		if m.Trust == "inferred" || strings.Contains(m.Text, "推断哨兵") {
+		if m.Trust == "inferred" || strings.Contains(m.Text, "推断哨兵") || strings.Contains(m.Text, "AI来源哨兵") {
 			t.Error("inferred supplied to handover")
 		}
 	}
@@ -69,6 +69,16 @@ func TestStatusHandoverGroundingLimitsAndDeletion(t *testing.T) {
 	if _, err := s.pool.Exec(context.Background(), "UPDATE claim_revisions SET value=to_jsonb('推断哨兵：云杉有未说明的经历'::text),acquisition='inferred' WHERE owner_id=$1 AND claim_id=$2", scope.OwnerID, refs[0].ID); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := s.pool.Exec(context.Background(), "UPDATE record_versions SET actor='ai' WHERE owner_id=$1 AND record_id=ANY($2::uuid[])", scope.OwnerID, []string{string(refs[2].ID), string(refs[3].ID)}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.pool.Exec(context.Background(), "UPDATE claim_revisions SET value=to_jsonb('AI来源哨兵：这是助手说的'::text) WHERE owner_id=$1 AND claim_id=$2", scope.OwnerID, refs[1].ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.pool.Exec(context.Background(), "INSERT INTO source_contexts(owner_id,source_id,source_version,role) SELECT owner_id,source_id,source_version,'assistant' FROM evidence WHERE owner_id=$1 AND target_id=$2 ON CONFLICT(owner_id,source_id,source_version) DO UPDATE SET role='assistant'", scope.OwnerID, refs[1].ID); err != nil {
+		t.Fatal(err)
+	}
+
 	for range 2 {
 		j := statusTestJob(t, s, scope)
 		if err := s.ProcessCard(context.Background(), j); err != nil {
@@ -81,7 +91,7 @@ func TestStatusHandoverGroundingLimitsAndDeletion(t *testing.T) {
 		t.Fatal(err)
 	}
 	about, err := s.About(context.Background(), scope, "")
-	if err != nil || about.Handover.Body == "" || about.Handover.Stale || strings.Count(about.Handover.Body, "## ") != 9 || strings.Contains(about.Handover.Body, "推断哨兵") {
+	if err != nil || about.Handover.Body == "" || about.Handover.Stale || strings.Count(about.Handover.Body, "## ") != 9 || strings.Contains(about.Handover.Body, "推断哨兵") || !strings.Contains(about.Handover.Body, "虚构用户云杉") {
 		t.Fatal(about, err)
 	}
 	for range 2 {

@@ -309,7 +309,6 @@ func TestPhase25B3_X3_3_WeekdayDeadlineUsesUserTimezone(t *testing.T) {
 }
 
 func TestPhase25B3_X3_4_RecurringAndAmbiguousHour(t *testing.T) {
-	t.Skip("finding F-B3-7")
 	f := phase25B234NewFixture(t)
 	a, b := "虚构课表：每周二晚上有课。", "虚构课表：每周二 7 点有课。"
 	_, refs := f.groupTexts(t, a, b, "虚构课表使用青色笔记本。")

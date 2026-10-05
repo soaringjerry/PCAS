@@ -4,12 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/soaringjerry/PCAS/internal/memory"
-	"testing"
+	"github.com/soaringjerry/PCAS/internal/postgres"
 )
 
 type phase25B4Reply struct {
 	text                  string
-	used                  []memory.ID
+	used                  []string
 	actions               []json.RawMessage
 	missingKeyInformation bool
 }
@@ -22,18 +22,8 @@ type phase25B4Adapter struct {
 	deputy          func(context.Context, string) error
 }
 
-// B4 is not merged on the current baseline. Set this at the coordinator's
-// merge notification and bind postgres.WithMemoryTier in this one place.
-// This is a prerequisite skip, not a passed test or a product finding.
-var phase25B4Merged = false
-var phase25B4TierContext func(context.Context, string) context.Context
+var phase25B4TierContext = postgres.WithMemoryTier
 
-func phase25B4RequireMerged(t *testing.T) {
-	t.Helper()
-	if !phase25B4Merged {
-		t.Skip("awaiting batch 4 merge")
-	}
-}
 func phase25B4DefaultAdapter() phase25B4Adapter {
 	encode := func(result phase25B4Reply) (string, error) {
 		actions := result.actions
@@ -42,7 +32,7 @@ func phase25B4DefaultAdapter() phase25B4Adapter {
 		}
 		used := result.used
 		if used == nil {
-			used = []memory.ID{}
+			used = []string{}
 		}
 		// The secretary's existing reply/actions shape stays in one adapter.
 		// The added contract field is never inferred
@@ -76,4 +66,16 @@ func phase25B4ModelOutput(a phase25B4Adapter, result phase25B4Reply, checking bo
 		return "", phase25B234AwaitingProtocol
 	}
 	return encode(result)
+}
+
+// The coordinator has not supplied a valid deletion action for X4-8.
+// Bind that public model format here; the test includes a positive control.
+func phase25B4DeleteAction(ref string) json.RawMessage {
+	data, _ := json.Marshal(map[string]any{"op": "delete", "ref": ref})
+	return data
+}
+
+// RunAgents asks for draft body text; secretary and secretary selfcheck use JSON.
+func phase25B4DeputyReply(text string) phase25B234ModelReply {
+	return phase25B234ModelReply{content: text}
 }

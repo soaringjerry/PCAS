@@ -25,7 +25,7 @@ func phase25B4Kind(r phase25B234ModelRequest) string {
 		}
 	}
 	s := sys.String()
-	if strings.Contains(s, `"groups"`) {
+	if strings.Contains(phase25B4Prompt(r), `只输出 JSON：{"groups"`) || strings.Contains(s, `"groups"`) {
 		return "selection"
 	}
 	if strings.Contains(s, "自查") || strings.Contains(s, "检查并修订") {
@@ -99,7 +99,6 @@ func phase25B4ReaderGroup(t *testing.T, r phase25B234ModelRequest, groups []phas
 	return found
 }
 func TestPhase25B4_X4_9_DefaultDeputyFiveReadersOneFailure(t *testing.T) {
-	phase25B4RequireMerged(t)
 	f := phase25B234NewFixtureTimeout(t, 3*time.Minute)
 	groups := f.heavyGroups(t, 5)
 	var keys []string
@@ -138,15 +137,23 @@ func TestPhase25B4_X4_9_DefaultDeputyFiveReadersOneFailure(t *testing.T) {
 			for _, g := range groups[:4] {
 				phase25B4MustContain(t, p, g.texts[0])
 			}
-			return phase25B4ReplyJSON(phase25B4Reply{text: "虚构四组接力完成。"}, kind == "selfcheck")
+			if kind == "answer" {
+				time.Sleep(50 * time.Millisecond)
+			}
+			return phase25B4DeputyReply("虚构四组接力完成。")
 		}
 	})
 	// Release only after all five independent readers enter. Serial readers
 	// cannot satisfy this barrier and produce a clear concurrency failure.
+	barrierDone := make(chan struct{})
+	t.Cleanup(func() { once.Do(func() { close(release) }); <-barrierDone })
 	go func() {
+		defer close(barrierDone)
 		for i := 0; i < 5; i++ {
 			select {
 			case <-entered:
+			case <-release:
+				return
 			case <-time.After(5 * time.Second):
 				t.Error("readers were not parallel")
 				once.Do(func() { close(release) })
@@ -172,16 +179,22 @@ func TestPhase25B4_X4_9_DefaultDeputyFiveReadersOneFailure(t *testing.T) {
 		f.assertRevisions(t, g.refs...)
 	}
 	var allPlan bool
-	if err := f.db.QueryRow(f.ctx, `SELECT bool_and(plan->'groups' @> $2::jsonb) FROM model_usage WHERE owner_id=$1 AND purpose IN ('deputy','reader','selfcheck')`, f.scope.OwnerID, phase25B4KeysJSON(keys)).Scan(&allPlan); err != nil {
+	if err := f.db.QueryRow(f.ctx, `SELECT bool_and(plan->'groups' @> $2::jsonb) FROM model_usage WHERE owner_id=$1 AND purpose IN ('deputy','selfcheck')`, f.scope.OwnerID, phase25B4KeysJSON(keys)).Scan(&allPlan); err != nil {
 		t.Fatal(err)
 	}
 	if !allPlan {
-		t.Error("heavy selected groups missing from usage plan")
+		t.Error("heavy selected groups missing from answer/selfcheck usage plan")
+	}
+	var readersValid bool
+	if err := f.db.QueryRow(f.ctx, `SELECT bool_and(jsonb_array_length(plan->'groups') > 0 AND $2::jsonb @> (plan->'groups')) FROM model_usage WHERE owner_id=$1 AND purpose='reader'`, f.scope.OwnerID, phase25B4KeysJSON(keys)).Scan(&readersValid); err != nil {
+		t.Fatal(err)
+	}
+	if !readersValid {
+		t.Error("reader plan must name a nonempty subset of selected groups")
 	}
 }
 func phase25B4KeysJSON(keys []string) string { data, _ := json.Marshal(keys); return string(data) }
 func TestPhase25B4_X4_10_SharedNinetySecondReaderDeadlineLeavesAnswerTime(t *testing.T) {
-	phase25B4RequireMerged(t)
 	f := phase25B234NewFixtureTimeout(t, 175*time.Second)
 	groups := f.heavyGroups(t, 2)
 	keys := []string{groups[0].key, groups[1].key}
@@ -215,7 +228,10 @@ func TestPhase25B4_X4_10_SharedNinetySecondReaderDeadlineLeavesAnswerTime(t *tes
 			return phase25B4Reader([]memory.ID{groups[0].refs[0].ID})
 		default:
 			phase25B4MustContain(t, phase25B4Prompt(request), groups[0].texts[0])
-			return phase25B4ReplyJSON(phase25B4Reply{text: "虚构采用已经返回的结果。"}, kind == "selfcheck")
+			if kind == "answer" {
+				time.Sleep(50 * time.Millisecond)
+			}
+			return phase25B4DeputyReply("虚构采用已经返回的结果。")
 		}
 	})
 	start := time.Now()
@@ -224,8 +240,8 @@ func TestPhase25B4_X4_10_SharedNinetySecondReaderDeadlineLeavesAnswerTime(t *tes
 	if elapsed > 170*time.Second {
 		t.Errorf("round deadline=%s", elapsed)
 	}
-	if run.Output == "" {
-		t.Error("no partial answer produced")
+	if run.Output != "虚构采用已经返回的结果。" {
+		t.Errorf("partial answer=%q", run.Output)
 	}
 	mu.Lock()
 	cancelled, started := slowCancelled, readerStarted
@@ -238,7 +254,6 @@ func TestPhase25B4_X4_10_SharedNinetySecondReaderDeadlineLeavesAnswerTime(t *tes
 	}
 }
 func TestPhase25B4_SelectionValidatesKeysTwelveCapAndReaderIDs(t *testing.T) {
-	phase25B4RequireMerged(t)
 	f := phase25B234NewFixtureTimeout(t, 3*time.Minute)
 	groups := f.heavyGroups(t, 13)
 	keys := []string{"entity:00000000-0000-0000-0000-000000000000"}
@@ -267,7 +282,10 @@ func TestPhase25B4_SelectionValidatesKeysTwelveCapAndReaderIDs(t *testing.T) {
 			if strings.Contains(phase25B4Prompt(r), "外组哨兵") {
 				t.Error("invalid reader ID reached answer")
 			}
-			return phase25B4ReplyJSON(phase25B4Reply{text: "虚构已校验分组与编号。"}, kind == "selfcheck")
+			if kind == "answer" {
+				time.Sleep(50 * time.Millisecond)
+			}
+			return phase25B4DeputyReply("虚构已校验分组与编号。")
 		}
 	})
 	f.deputyRun(t, "起草 AcceptanceHeavy 虚构方案")

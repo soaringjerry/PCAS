@@ -11,7 +11,7 @@ import (
 
 func (f *phase25B234Fixture) index(t *testing.T) {
 	t.Helper()
-	for i := 0; i < 100; i++ {
+	for i := 0; i < 1000; i++ {
 		j, err := f.store.ClaimIndex(f.ctx, time.Minute)
 		if err != nil {
 			t.Fatal(err)
@@ -71,7 +71,6 @@ func TestPhase25B4_X4_4_FallbackRecallWithoutStatusLayer(t *testing.T) {
 }
 
 func TestPhase25B4_X4_11_FallbackRecallExcludesRetired(t *testing.T) {
-	t.Skip("finding F-B4-1")
 	f := phase25B234NewFixture(t)
 	var refs []memory.Ref
 	for i := 0; i < 3; i++ {
@@ -116,7 +115,6 @@ func TestPhase25B4_ModelUsagePurposesAndTier(t *testing.T) {
 }
 
 func TestPhase25B4_RandomFallbackRecallSequence(t *testing.T) {
-	t.Skip("finding F-B4-1")
 	const seed int64 = 252504
 	f := phase25B234NewFixture(t)
 	rng := rand.New(rand.NewSource(seed))

@@ -321,19 +321,29 @@ func TestPhase25B3_DuplicateItemsAndUnsupportedFieldsDiscarded(t *testing.T) {
 }
 
 func TestPhase25B3_InitialSelfFirstThenLargestAndUsage(t *testing.T) {
-	t.Skip("finding F-B3-8")
 	f := phase25B234NewFixture(t)
 	large, largeRefs := f.cardGroup(t, 7)
 	small := workspace.MemoryGroup{EntityID: string(f.entity(t, "topic", "虚构小组")), Name: "虚构小组", Type: "topic"}
-	var all []memory.Ref
-	all = append(all, largeRefs...)
-	for i := 0; i < 3; i++ {
-		r := f.claim(t, fmt.Sprintf("虚构小组便签 %d。", i))
-		f.labels(t, r, "progress", true, 1, small)
-		all = append(all, r)
-		r = f.claim(t, fmt.Sprintf("虚构自我规则 %d：先展示草稿。", i))
-		f.labels(t, r, "rule", true, 1)
-		all = append(all, r)
+	middle := workspace.MemoryGroup{EntityID: string(f.entity(t, "area", "虚构实验领域")), Name: "虚构实验领域", Type: "area"}
+	all := append([]memory.Ref{}, largeRefs...)
+	for _, group := range []struct {
+		g workspace.MemoryGroup
+		n int
+	}{{small, 3}, {middle, 5}} {
+		for i := 0; i < group.n; i++ {
+			r := f.claim(t, fmt.Sprintf("%s虚构便签%d。", group.g.Name, i))
+			f.labels(t, r, "progress", true, 1, group.g)
+			all = append(all, r)
+		}
+	}
+	self := map[string]bool{}
+	for _, category := range []string{"identity", "taste", "rule", "goal"} {
+		self["self:"+category] = true
+		for i := 0; i < 3; i++ {
+			r := f.claim(t, fmt.Sprintf("虚构本人%s便签%d。", category, i))
+			f.labels(t, r, category, true, 1)
+			all = append(all, r)
+		}
 	}
 	model := f.statusModel(t, nil)
 	f.buildStatus(t, time.Now().Add(11*time.Minute))
@@ -344,14 +354,25 @@ func TestPhase25B3_InitialSelfFirstThenLargestAndUsage(t *testing.T) {
 			keys = append(keys, input.Key)
 		}
 	}
-	if len(keys) != 3 {
+	if len(keys) != 7 {
 		t.Fatalf("initial calls=%v", keys)
 	}
-	if keys[0] != "self:rule" || keys[1] != "entity:"+large.EntityID || keys[2] != "entity:"+small.EntityID {
-		t.Errorf("initial ordering=%v", keys)
+	for _, key := range keys[:4] {
+		if !self[key] {
+			t.Errorf("first four cards must be the four self categories: %v", keys)
+		}
+		delete(self, key)
 	}
-	if n := f.usage(t, "card"); n != 3 {
-		t.Errorf("card usage=%d", n)
+	if len(self) != 0 {
+		t.Errorf("missing or repeated self categories: %v", self)
+	}
+	for i, want := range []string{"entity:" + large.EntityID, "entity:" + middle.EntityID, "entity:" + small.EntityID} {
+		if keys[i+4] != want {
+			t.Errorf("non-self cards must descend by 7,5,3 current memories: %v", keys)
+		}
+	}
+	if n := f.usage(t, "card"); n != 7 {
+		t.Errorf("card usage=%d want 7", n)
 	}
 	f.assertRevisions(t, all...)
 }

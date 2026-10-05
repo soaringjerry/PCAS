@@ -37,6 +37,8 @@ type Provider struct {
 	Name   string
 	Get    func(context.Context, Suite, Task) (Evidence, error)
 	Accept func(Task) bool
+	// Only the tier transport-repair driver uses this repetition-aware filter.
+	AcceptRun func(int, Task) bool
 }
 type Decision struct {
 	ID    string `json:"id"`
@@ -135,26 +137,27 @@ func modelErrorType(err error) string {
 }
 
 type Report struct {
-	Failures        []Failure    `json:"failures,omitempty"`
-	Version         int          `json:"schema_version"`
-	Revision        string       `json:"revision"`
-	SuiteSHA        string       `json:"suite_sha256"`
-	AnswerPromptSHA string       `json:"answer_prompt_sha256"`
-	JudgePromptSHA  string       `json:"judge_prompt_sha256"`
-	Model           string       `json:"model"`
-	Channel         string       `json:"channel"`
-	Fake            bool         `json:"fake"`
-	AsOf            string       `json:"as_of"`
-	StartedAt       string       `json:"started_at"`
-	HostDate        string       `json:"host_date"`
-	Repeats         int          `json:"repeats"`
-	Workers         int          `json:"workers"`
-	AnswerLimit     int          `json:"answer_limit"`
-	Rows            []Row        `json:"rows"`
-	Summaries       []Summary    `json:"summaries"`
-	Ranges          []Range      `json:"ranges"`
-	Notes           []string     `json:"notes"`
-	Preparation     *Preparation `json:"preparation,omitempty"`
+	Failures        []Failure      `json:"failures,omitempty"`
+	Version         int            `json:"schema_version"`
+	Revision        string         `json:"revision"`
+	SuiteSHA        string         `json:"suite_sha256"`
+	AnswerPromptSHA string         `json:"answer_prompt_sha256"`
+	JudgePromptSHA  string         `json:"judge_prompt_sha256"`
+	Model           string         `json:"model"`
+	Channel         string         `json:"channel"`
+	Fake            bool           `json:"fake"`
+	AsOf            string         `json:"as_of"`
+	StartedAt       string         `json:"started_at"`
+	HostDate        string         `json:"host_date"`
+	Repeats         int            `json:"repeats"`
+	Workers         int            `json:"workers"`
+	AnswerLimit     int            `json:"answer_limit"`
+	Rows            []Row          `json:"rows"`
+	Summaries       []Summary      `json:"summaries"`
+	Ranges          []Range        `json:"ranges"`
+	Notes           []string       `json:"notes"`
+	Preparation     *Preparation   `json:"preparation,omitempty"`
+	ResumeSources   []ResumeSource `json:"resume_sources,omitempty"`
 }
 
 func SHA(s string) string     { return fmt.Sprintf("%x", sha256.Sum256([]byte(s))) }
@@ -291,7 +294,7 @@ func Execute(ctx context.Context, s Suite, model Model, providers []Provider, r 
 			t := s.Tasks[(n+run-1)%len(s.Tasks)]
 			for k := range providers {
 				p := providers[(k+n+run-1)%len(providers)]
-				if p.Accept == nil || p.Accept(t) {
+				if (p.Accept == nil || p.Accept(t)) && (p.AcceptRun == nil || p.AcceptRun(run, t)) {
 					jobs <- job{t, p}
 				}
 			}

@@ -34,3 +34,13 @@ type Preparation struct {
 	Handover    bool               `json:"handover"`
 	Complete    bool               `json:"complete"`
 }
+
+// A repair retains every completed result unchanged. Failed attempts and their
+// costs survive in this numeric provenance, rather than disappearing on repair.
+type ResumeSource struct {
+	SHA256     string    `json:"sha256"`
+	Revision   string    `json:"revision"`
+	StartedAt  string    `json:"started_at"`
+	ReusedRows int       `json:"reused_rows"`
+	Failures   []Failure `json:"failures"`
+}

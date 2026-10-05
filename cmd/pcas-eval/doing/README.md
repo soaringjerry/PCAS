@@ -45,6 +45,25 @@ PCAS_EVAL_CODEX_HOME=/ABSOLUTE/DEDICATED/CODEX_HOME \
 
 产品检索、期限校验和自查依赖主机当前时间，主答复与 gold 仍使用冻结 `as_of`。按本轮要求复用的 current/ideal 是历史数字：跨日期、不同并发，以及整理随机性都会影响结果，只报告数值验收和已知差异，不能把它们当成无条件的同日因果实验。heavy 未测直接回忆时，该条验收必须报告“未覆盖”，不能从 light/medium 或另两类代推。旧 baseline 和既有数字产物不修改。
 
+虚构 V2c 如遇传输缺行，可在第一次自建容器退出前，用自己记下且核对过所有权标签的完整容器 ID，对**未答题的准备模板库**保存 `pg_dump -Fc`，文件留在仓库外并限制权限。正常脚本退出仍删除其容器。补跑时显式恢复到另一个新建的 tmpfs 容器：
+
+```sh
+PCAS_EVAL_PREPARED_DUMP=/var/tmp/OWN-FICTIONAL-PREPARATION.dump \
+PCAS_EVAL_CODEX_HOME=/ABSOLUTE/DEDICATED/CODEX_HOME \
+  scripts/p25-v2-run.sh -channel=codex -model=gpt-6.1-sol \
+  -methods=light,medium,heavy -heavy-categories=cross_group,outgoing \
+  -repeats=3 -workers=4 -resume-report=/var/tmp/OWN-RUN/report.partial.json
+```
+
+此修复入口只接受旧 671 条虚构记忆/120 题的固定 V2c 矩阵，拒绝私有模式、任务筛选和跨主机日期；核对题集、模型、指令、并发、完成双判和恢复库的准备标记、全部来源原文、状态计数及没有答题原话。所有已完成行原样保留，只补缺失的档位/题号/遍次；不重新准备，不按得分挑题。`resume_sources` 保留前次指纹和全部失败尝试，每次调用仍有自己的通道预检。快照不入仓库，不能将新的整理结果冒充原快照。正常及私有运行继续要求空库，真实流程不使用此入口。
+
+完成后可用无模型、无数据库的复算命令，把历史基线与新三档分别在 old120 和共同的 cross/outgoing40 上汇总。它拒绝假模型、不完整矩阵、重复行和变动的量尺，从双判重算每行，再算范围；heavy 不进入 old120 的全体均分：
+
+```sh
+go run ./cmd/pcas-eval/doing-tiers-report \
+  -tiers /var/tmp/OWN-RUN/report.json -output /var/tmp/OWN-RUN/comparison
+```
+
 新增 `-mode=doing` 和协调者专用的 `-mode=doing-propose`。已有 comparison / retrieval、phase2 题集、产品实现与迁移均未修改。模式分发只识别新名字。
 
 ## 虚构数据运行

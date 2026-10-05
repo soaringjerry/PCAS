@@ -14,6 +14,7 @@ import (
 
 	"github.com/soaringjerry/PCAS/cmd/pcas-eval/doing"
 	"github.com/soaringjerry/PCAS/internal/ai"
+	"github.com/soaringjerry/PCAS/internal/memory"
 )
 
 func doingTierArgs(args []string) bool {
@@ -52,6 +53,7 @@ func runDoingTiers(args []string) error {
 	methods := f.String("methods", "light,medium,heavy", "product tiers only; reuse baseline reports separately")
 	heavyCategories := f.String("heavy-categories", "", "optional category subset for heavy; default all, also in private mode")
 	prepareTimeout := f.Duration("prepare-timeout", 12*time.Hour, "preparation deadline including product rate-limit waits")
+	resumePath := f.String("resume-report", "", "fictional old120 transport repair using a restored prepared snapshot; completed rows stay unchanged")
 	if err := f.Parse(args); err != nil {
 		return err
 	}
@@ -91,6 +93,9 @@ func runDoingTiers(args []string) error {
 	}
 	if *private == s.Synthetic {
 		return fmt.Errorf("private flag must match suite kind")
+	}
+	if *resumePath != "" && (*private || *filter != "" || *repeats != 3 || *methods != "light,medium,heavy" || *heavyCategories != "cross_group,outgoing") {
+		return fmt.Errorf("resume is limited to the fictional V2c old120 matrix")
 	}
 	if *private {
 		if err = outsideRepository(*path); err != nil {
@@ -141,6 +146,14 @@ func runDoingTiers(args []string) error {
 	if err = os.MkdirAll(filepath.Dir(*output), 0700); err != nil {
 		return err
 	}
+	var prior doing.Report
+	var resumeSHA string
+	if *resumePath != "" {
+		prior, resumeSHA, err = loadTierResume(*resumePath, *path, s, *fake, *modelName, *channel, *workers)
+		if err != nil {
+			return err
+		}
+	}
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 	model, closeModel, err := newTierEvalModel(*fake, *channel, *modelName, *codexHome, *workers)
@@ -155,30 +168,43 @@ func runDoingTiers(args []string) error {
 		}
 		preflight = 1
 	}
-	store, pool, cleanup, err := openTemporary(ctx, *dsn)
-	if err != nil {
-		return err
+	var preparedDSN string
+	var scope memory.Scope
+	var preparation doing.Preparation
+	if *resumePath == "" {
+		store, pool, cleanup, err := openTemporary(ctx, *dsn)
+		if err != nil {
+			return err
+		}
+		defer cleanup()
+		bridge := newTierBridge(model, *fake)
+		defer bridge.server.Close()
+		store.SetModels(bridge.registry())
+		seeded, err := seedTierSuite(ctx, store, pool, s)
+		if err != nil {
+			return fmt.Errorf("tier_seed_failed")
+		}
+		prepareCtx, prepareCancel := context.WithTimeout(ctx, *prepareTimeout)
+		preparation, err = prepareTierSuite(prepareCtx, store, pool, seeded.Scope, bridge, *output+".prepare.json")
+		prepareCancel()
+		if err != nil {
+			return err
+		}
+		// Release all template connections before PostgreSQL copies it.
+		preparedDSN, scope = pool.Config().ConnConfig.ConnString(), seeded.Scope
+		store.Close()
+		pool.Close()
+	} else {
+		preparation = *prior.Preparation
+		preparedDSN, scope, err = restoredTierDatabase(ctx, *dsn, s, preparation)
+		if err != nil {
+			return err
+		}
+		if err = doing.WriteJSON(*output+".prepare.json", preparation); err != nil {
+			return err
+		}
 	}
-	defer cleanup()
-	bridge := newTierBridge(model, *fake)
-	defer bridge.server.Close()
-	store.SetModels(bridge.registry())
-	seeded, err := seedTierSuite(ctx, store, pool, s)
-	if err != nil {
-		return fmt.Errorf("tier_seed_failed")
-	}
-	prepareCtx, prepareCancel := context.WithTimeout(ctx, *prepareTimeout)
-	preparation, err := prepareTierSuite(prepareCtx, store, pool, seeded.Scope, bridge, *output+".prepare.json")
-	prepareCancel()
-	if err != nil {
-		return err
-	}
-	// Save the isolated URI (including search_path); then release every template
-	// connection before PostgreSQL copies it. This never dumps private text.
-	preparedDSN := pool.Config().ConnConfig.ConnString()
-	store.Close()
-	pool.Close()
-	databases, cleanupCopies, err := cloneTierDatabases(ctx, preparedDSN, seeded.Scope, *workers, model, *fake)
+	databases, cleanupCopies, err := cloneTierDatabases(ctx, preparedDSN, scope, *workers, model, *fake)
 	if err != nil {
 		return err
 	}
@@ -205,6 +231,12 @@ func runDoingTiers(args []string) error {
 		r.Model = "v2-fake"
 		r.Channel = "local"
 		r.Notes = append(r.Notes, "FAKE: shape only; all must flags false, never quality scores.")
+	}
+	if *resumePath != "" {
+		r.Rows = append([]doing.Row{}, prior.Rows...)
+		r.ResumeSources = append(prior.ResumeSources, doing.ResumeSource{SHA256: resumeSHA, Revision: prior.Revision, StartedAt: prior.StartedAt, ReusedRows: len(prior.Rows), Failures: prior.Failures})
+		r.Notes = append(r.Notes, "TRANSPORT REPAIR: completed rows are retained byte-for-byte at the decoded row level; only missing method/task/repetition cells run. Native preparation is restored from the same fictional snapshot, not regenerated. Prior failures remain in resume_sources; preparation is billed once, each real invocation has its own preflight. Quality scores never determine selection.")
+		providers = missingTierProviders(providers, prior.Rows)
 	}
 	r, err = doing.Execute(ctx, s, model, providers, r, *output+".partial.json", *workers)
 	if err != nil {

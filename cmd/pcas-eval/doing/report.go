@@ -105,6 +105,19 @@ func WriteMarkdown(path string, r Report) error {
 		}
 		fmt.Fprintln(&b)
 	}
+	if len(r.ResumeSources) > 0 {
+		fmt.Fprintln(&b, "Transport repair: prior failed/canceled cells and attempted calls are outside the successful rows below; preparation is reused, each real invocation has its own preflight.")
+		fmt.Fprintln(&b)
+		fmt.Fprintln(&b, "| Prior report SHA | Revision | Reused rows | Failed/canceled cells | Attempted calls in those cells |\n|---|---|---:|---:|---:|")
+		for _, s := range r.ResumeSources {
+			calls := 0
+			for _, f := range s.Failures {
+				calls += f.ModelCalls
+			}
+			fmt.Fprintf(&b, "| %s | %s | %d | %d | %d |\n", s.SHA256, s.Revision, s.ReusedRows, len(s.Failures), calls)
+		}
+		fmt.Fprintln(&b)
+	}
 	fmt.Fprintln(&b, "| Method | Category | Run | Tasks | Must % | Bonus % | Forbidden hits | Usable % | Input chars | Model calls | Doing ms | Total ms | Disputed |\n|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|")
 	for _, s := range r.Summaries {
 		fmt.Fprintf(&b, "| %s | %s | %d | %d | %.2f | %.2f | %d | %.2f | %.0f | %d | %.0f | %.0f | %d |\n", s.Method, s.Category, s.Run, s.Tasks, 100*s.MustRate, 100*s.BonusRate, s.ForbiddenHits, 100*s.UsableRate, s.InputCharsMean, s.ModelCalls, s.DoingMSMean, s.TotalMSMean, s.DisputedTasks)

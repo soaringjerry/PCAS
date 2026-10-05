@@ -96,14 +96,15 @@ func statusTrustTx(ctx context.Context, tx pgx.Tx, owner memory.ID, m workspace.
 	var distinct int
 	var acquisition string
 	err := tx.QueryRow(ctx, `SELECT c.acquisition IN('inferred') OR EXISTS(
- SELECT 1 FROM evidence e JOIN source_versions v ON(v.owner_id,v.source_id,v.version)=(e.owner_id,e.source_id,e.source_version)
- JOIN record_versions src ON(src.owner_id,src.record_id,src.version)=(v.owner_id,coalesce(v.derived_from_id,v.source_id),coalesce(v.derived_from_version,v.version))
- LEFT JOIN source_contexts sc ON(sc.owner_id,sc.source_id,sc.source_version)=(src.owner_id,src.record_id,src.version)
- WHERE e.owner_id=c.owner_id AND e.target_id=c.claim_id AND e.target_version=c.version
- AND (lower(sc.role) IN('assistant','ai','system','tool') OR (coalesce(lower(sc.role),'') NOT IN('user','human') AND src.actor IN('ai','system')))),
- (SELECT count(DISTINCT CASE WHEN coalesce(sc.conversation_key,'')<>'' THEN 'conversation:'||sc.conversation_key ELSE 'source:'||e.source_id::text END)
+ SELECT 1 FROM evidence e JOIN sources src ON(src.owner_id,src.id)=(e.owner_id,e.source_id)
+ LEFT JOIN source_contexts sc ON(sc.owner_id,sc.source_id,sc.source_version)=(e.owner_id,e.source_id,e.source_version)
+ WHERE e.owner_id=c.owner_id AND e.target_id=c.claim_id AND e.target_version=c.version AND e.stance='supports'
+ AND (sc.role IN('assistant','system','tool') OR src.connector IN('ai','assistant','system','tool','agent','actions'))),
+ (SELECT count(DISTINCT coalesce(nullif(sc.conversation_key,''),t.conversation_id::text,e.source_id::text))
  FROM evidence e LEFT JOIN source_contexts sc ON(sc.owner_id,sc.source_id,sc.source_version)=(e.owner_id,e.source_id,e.source_version)
- WHERE e.owner_id=c.owner_id AND e.target_id=c.claim_id AND e.target_version=c.version),c.acquisition
+ JOIN sources src ON(src.owner_id,src.id)=(e.owner_id,e.source_id)
+ LEFT JOIN desk_turns t ON t.owner_id=src.owner_id AND t.request_id::text=lower(src.external_id) AND src.connector IN('desk','capture','desk-incomplete')
+ WHERE e.owner_id=c.owner_id AND e.target_id=c.claim_id AND e.target_version=c.version AND e.stance='supports'),c.acquisition
  FROM claim_revisions c JOIN record_versions rv ON(rv.owner_id,rv.record_id,rv.version)=(c.owner_id,c.claim_id,c.version)
  WHERE c.owner_id=$1 AND c.claim_id=$2 AND c.version=$3`, string(owner), m.ID, m.Version).Scan(&inferred, &distinct, &acquisition)
 	if err != nil {

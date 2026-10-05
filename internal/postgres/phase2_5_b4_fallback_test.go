@@ -8,8 +8,7 @@ import (
 
 // R4-5 falls back on memory selection. R4-10 still governs the round's tier.
 func TestPhase25B4_MediumPromotionWithoutCards(t *testing.T) {
-	t.Skip("finding F-B4-5")
-	for _, mode := range []string{"keyword", "missing", "forced"} {
+	for _, mode := range []string{"keyword", "missing", "forced", "heavy"} {
 		t.Run(mode, func(t *testing.T) {
 			f := phase25B234NewFixture(t)
 			model := f.model(t, func(_ *http.Request, n int, _ phase25B234ModelRequest) phase25B234ModelReply {
@@ -25,6 +24,9 @@ func TestPhase25B4_MediumPromotionWithoutCards(t *testing.T) {
 			}
 			if mode == "forced" {
 				tier = "medium"
+			}
+			if mode == "heavy" {
+				tier = "heavy"
 			}
 			turn := f.secretaryTurn(t, question, tier)
 			if len(model.calls()) != 2 {

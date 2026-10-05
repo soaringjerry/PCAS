@@ -32,7 +32,12 @@ type phase25B1Fixture struct {
 
 func phase25B1NewFixture(t *testing.T) *phase25B1Fixture {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	return phase25B1NewFixtureTimeout(t, time.Minute)
+}
+
+func phase25B1NewFixtureTimeout(t *testing.T, timeout time.Duration) *phase25B1Fixture {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	t.Cleanup(cancel)
 	name := "pcas-p25-t1-" + string(memory.NewID())
 	run := func(args ...string) string {
@@ -45,12 +50,13 @@ func phase25B1NewFixture(t *testing.T) *phase25B1Fixture {
 	}
 	run("run", "--detach", "--rm", "--name", name,
 		"--label", "pcas.acceptance=phase2_5-b1-T1",
+		"--tmpfs", "/var/lib/postgresql/data:rw,size=512m",
 		"--env", "POSTGRES_PASSWORD=fictitious-test-password",
 		"--publish", "127.0.0.1::5432", "pgvector/pgvector:0.8.2-pg16")
 	t.Cleanup(func() {
 		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cleanupCancel()
-		if out, err := exec.CommandContext(cleanupCtx, "docker", "rm", "--force", name).CombinedOutput(); err != nil {
+		if out, err := exec.CommandContext(cleanupCtx, "docker", "rm", "--force", "--volumes", name).CombinedOutput(); err != nil {
 			t.Errorf("remove owned container %s: %v: %s", name, err, out)
 		}
 	})

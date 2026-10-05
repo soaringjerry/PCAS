@@ -27,7 +27,6 @@ func (f *phase25B234Fixture) compareAction(t *testing.T, types []string, id stri
 	return workspace.State{}
 }
 func TestPhase25B2_X2_8_RestoreExemptionAndActionUndo(t *testing.T) {
-	t.Skip("finding F-B2-6")
 	f := phase25B2NewFixture(t)
 	texts := []string{"虚构恢复旧期限。", "虚构恢复新期限。"}
 	g, refs := f.groupTexts(t, texts...)

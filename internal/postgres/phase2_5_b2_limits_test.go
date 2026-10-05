@@ -2,12 +2,16 @@ package postgres_test
 
 import (
 	"fmt"
-	"github.com/soaringjerry/PCAS/internal/memory"
-	"github.com/soaringjerry/PCAS/internal/workspace"
+	"log/slog"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/worker"
+	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
 func TestPhase25B2_TwoHundredLatestAndRemainingEventuallyCompared(t *testing.T) {
@@ -60,77 +64,154 @@ func TestPhase25B2_TwoHundredLatestAndRemainingEventuallyCompared(t *testing.T) 
 	}
 	f.assertRevisions(t, refs...)
 }
-func TestPhase25B2_CompareAndEntityShareThirtyCallsPerHour(t *testing.T) {
-	f := phase25B2NewFixtureTimeout(t, 3*time.Minute)
-	for i := 0; i < 31; i++ {
-		g := workspace.MemoryGroup{EntityID: string(f.entity(t, "topic", fmt.Sprintf("虚构配额组%02d", i))), Type: "topic"}
-		// Each note has a separate fictitious subject; otherwise an aggregate
-		// person group can legitimately mark all 31 topics in one comparison.
-		f.subject = f.entity(t, "person", fmt.Sprintf("FictitiousQuotaPerson%02d", i))
-		r := f.claim(t, fmt.Sprintf("虚构配额便签%02d。", i))
+
+// R2-6 and batch 1 R12 share one allowance across all three model purposes.
+func TestPhase25B2_OrganizeCompareAndEntityShareOneHundredTwentyCallsPerHour(t *testing.T) {
+	t.Skip("awaiting PR #223: organize/compare/entity shared hourly limit 120")
+	const hourlyLimit, initialOrganizeCalls = 120, 20
+	f := phase25B2NewFixtureTimeout(t, 8*time.Minute)
+	var refs []memory.Ref
+	var organizeCalls, groupCalls, entityCalls atomic.Int32
+	model := f.model(t, func(_ *http.Request, _ int, request phase25B234ModelRequest) phase25B234ModelReply {
+		entities, err := phase25B2Entities(request)
+		if err != nil {
+			t.Error(err)
+			return phase25B234ModelReply{status: 400}
+		}
+		if len(entities) > 0 {
+			entityCalls.Add(1)
+			return phase25B234ModelReply{content: `{"same":false,"keep":null}`}
+		}
+		prompt, err := phase25B3Prompt(request)
+		if err != nil {
+			t.Error(err)
+			return phase25B234ModelReply{status: 400}
+		}
+		if strings.Contains(prompt, `"protected"`) {
+			groupCalls.Add(1)
+			return phase25B2JSON(phase25B2Empty())
+		}
+		organizeCalls.Add(1)
+		return phase25B234ModelReply{content: `{"items":[{"n":1,"category":"progress","durable":true}],"new":[]}`}
+	})
+	// Isolate the fixture queue while retaining actual memories and usage rows.
+	scheduleOrganize := func() {
+		t.Helper()
+		f.exec(t, `DELETE FROM memory_jobs WHERE owner_id=$1 AND stage NOT LIKE 'memory.organize:%'`, f.scope.OwnerID)
+		if _, err := f.store.ScheduleOrganize(f.ctx, time.Now().Add(11*time.Minute)); err != nil {
+			t.Fatal(err)
+		}
+		f.exec(t, `UPDATE memory_jobs SET available_at=least(available_at,now()) WHERE owner_id=$1 AND stage LIKE 'memory.organize:%' AND state='queued'`, f.scope.OwnerID)
+	}
+	organizeJob := func() {
+		t.Helper()
+		scheduleOrganize()
+		job, err := f.store.Claim(f.ctx, time.Minute)
+		if err != nil || job == nil {
+			t.Fatalf("organize claim=%+v error=%v", job, err)
+		}
+		if !strings.HasPrefix(job.Stage, "memory.organize:") {
+			t.Fatalf("unexpected organize stage=%s", job.Stage)
+		}
+		if err := f.store.ProcessOrganize(f.ctx, *job); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for i := 0; i < initialOrganizeCalls; i++ {
+		refs = append(refs, f.claim(t, fmt.Sprintf("虚构共享额度整理便签%03d。", i)))
+		organizeJob()
+	}
+	if got := f.usage(t, "organize"); got != initialOrganizeCalls {
+		t.Fatalf("initial organize ledger=%d want %d", got, initialOrganizeCalls)
+	}
+	for i := 0; i < hourlyLimit+1; i++ {
+		g := workspace.MemoryGroup{EntityID: string(f.entity(t, "topic", fmt.Sprintf("虚构配额组%03d", i))), Type: "topic"}
+		// Separate subjects avoid a legitimate aggregate comparison marking all
+		// topic inputs at once. Every group remains a real eligibility candidate.
+		f.subject = f.entity(t, "person", fmt.Sprintf("FictitiousQuotaPerson%03d", i))
+		r := f.claim(t, fmt.Sprintf("虚构配额便签%03d。", i))
 		f.labels(t, r, "progress", true, 1, g)
+		refs = append(refs, r)
 	}
 	g := workspace.MemoryGroup{EntityID: string(f.entity(t, "project", "虚构配额合用项目")), Type: "project"}
 	for i := 0; i < 2; i++ {
 		id := f.entity(t, "person", "FictitiousSameQuotaPerson")
-		f.personTexts(t, g, id, fmt.Sprintf("虚构配额实体证据 %d。", i))
+		refs = append(refs, f.personTexts(t, g, id, fmt.Sprintf("虚构配额实体证据 %d。", i))...)
 	}
-	groupCalls, entityCalls := 0, 0
-	model := f.model(t, func(_ *http.Request, _ int, r phase25B234ModelRequest) phase25B234ModelReply {
-		entities, e := phase25B2Entities(r)
-		if e != nil {
-			t.Error(e)
-			return phase25B234ModelReply{status: 400}
-		}
-		if len(entities) > 0 {
-			entityCalls++
-			return phase25B234ModelReply{content: `{"same":false,"keep":null}`}
-		}
-		groupCalls++
-		return phase25B2JSON(phase25B2Empty())
-	})
-	f.scheduleCompare(t)
-	for i := 0; i < 30; i++ {
+	for i := 0; i < hourlyLimit-initialOrganizeCalls; i++ {
+		f.scheduleCompare(t)
+		before := len(model.calls())
 		if f.compareJob(t) == "" {
-			f.scheduleCompare(t)
-			if f.compareJob(t) == "" {
-				rows, e := f.db.Query(f.ctx, `SELECT stage,state,error_code,available_at FROM memory_jobs WHERE owner_id=$1 ORDER BY created_at`, f.scope.OwnerID)
-				if e != nil {
-					t.Fatal(e)
-				}
-				for rows.Next() {
-					var stage, state, code string
-					var at time.Time
-					_ = rows.Scan(&stage, &state, &code, &at)
-					t.Logf("quota queue %s %s %s %s", stage, state, code, at)
-				}
-				rows.Close()
-				t.Fatalf("quota stopped before 30 at %d actual=%d usage=%d", i, len(model.calls()), f.usage(t, "compare"))
+			t.Fatalf("comparison queue stopped at combined call %d", before)
+		}
+		if got := len(model.calls()); got != before+1 {
+			t.Fatalf("completed comparison model calls=%d want %d", got, before+1)
+		}
+	}
+	if organizeCalls.Load() == 0 || groupCalls.Load() == 0 || entityCalls.Load() == 0 {
+		t.Fatalf("all three categories required: organize=%d compare=%d entity=%d", organizeCalls.Load(), groupCalls.Load(), entityCalls.Load())
+	}
+	assertBoundary := func() {
+		t.Helper()
+		if got := len(model.calls()); got != hourlyLimit {
+			t.Errorf("shared hourly calls=%d want %d", got, hourlyLimit)
+		}
+		if got := f.usage(t, "organize") + f.usage(t, "compare"); got != hourlyLimit {
+			t.Errorf("shared actual usage=%d want %d", got, hourlyLimit)
+		}
+	}
+	assertBoundary()
+	// Execute through the actual worker so normal quota deferral is honored.
+	// Neither remaining comparison work nor a new organize batch gets call 121.
+	deferAtBoundary := func(prefix string, handler worker.Handler) {
+		t.Helper()
+		var stage string
+		if err := f.db.QueryRow(f.ctx, `SELECT coalesce((SELECT stage FROM memory_jobs WHERE owner_id=$1 AND state='queued' AND stage LIKE $2 ORDER BY priority,created_at LIMIT 1),'')`, f.scope.OwnerID, prefix+"%").Scan(&stage); err != nil {
+			t.Fatal(err)
+		}
+		if stage != "" {
+			f.exec(t, `UPDATE memory_jobs SET available_at=now() WHERE owner_id=$1 AND state='queued' AND stage=$2`, f.scope.OwnerID, stage)
+			runner := worker.New(f.store, map[string]worker.Handler{stage: handler, "memory.compare": f.store.ProcessCompare, "memory.entity_compare": f.store.ProcessEntityCompare, "memory.organize": f.store.ProcessOrganize}, slog.Default())
+			if _, err := runner.RunOnce(f.ctx); err != nil {
+				t.Fatal(err)
 			}
 		}
-		f.scheduleCompare(t)
+		assertBoundary()
 	}
-	// Check the actual boundary without turning expected quota deferral into an
-	// assertion failure. The model must not be called for the 31st group.
-	f.exec(t, `UPDATE memory_jobs SET available_at=least(available_at,now()) WHERE owner_id=$1 AND state='queued' AND stage LIKE 'memory.compare:%'`, f.scope.OwnerID)
-	j, err := f.store.Claim(f.ctx, time.Minute)
-	if err != nil {
+	f.scheduleCompare(t)
+	deferAtBoundary("memory.compare:", f.store.ProcessCompare)
+	// A fresh same-name pair remains eligible even if the earlier pair was
+	// marked different. Exercise the entity handler at the shared boundary too.
+	entityGroup := workspace.MemoryGroup{EntityID: string(f.entity(t, "project", "虚构边界实体项目")), Type: "project"}
+	for i := 0; i < 2; i++ {
+		id := f.entity(t, "person", "FictitiousBoundaryQuotaPerson")
+		refs = append(refs, f.personTexts(t, entityGroup, id, fmt.Sprintf("虚构边界实体证据 %d。", i))...)
+	}
+	f.scheduleCompare(t)
+	f.exec(t, `DELETE FROM memory_jobs WHERE owner_id=$1 AND stage LIKE 'memory.compare:%'`, f.scope.OwnerID)
+	deferAtBoundary("memory.entity_compare:", f.store.ProcessEntityCompare)
+	last := f.claim(t, "虚构共享额度第一百二十一调用哨兵。")
+	refs = append(refs, last)
+	scheduleOrganize()
+	deferAtBoundary("memory.organize:", f.store.ProcessOrganize)
+	var organized, attempts int
+	if err := f.db.QueryRow(f.ctx, `SELECT organized,organize_attempts FROM claims WHERE owner_id=$1 AND id=$2`, f.scope.OwnerID, last.ID).Scan(&organized, &attempts); err != nil {
 		t.Fatal(err)
 	}
-	if j != nil {
-		if strings.HasPrefix(j.Stage, "memory.entity_compare:") {
-			err = f.store.ProcessEntityCompare(f.ctx, *j)
-		} else {
-			err = f.store.ProcessCompare(f.ctx, *j)
-		}
-		if err == nil {
-			t.Error("31st processing unexpectedly succeeded")
-		}
+	if organized != 0 || attempts != 0 {
+		t.Errorf("quota-deferred sentinel organized=%d attempts=%d", organized, attempts)
 	}
-	if groupCalls == 0 || entityCalls == 0 {
-		t.Errorf("both categories required: compare=%d entity=%d", groupCalls, entityCalls)
+	// Preserve real ledger history and advance only this test owner's hour.
+	for _, tc := range []struct{ table, column string }{{"model_usage", "at"}, {"background_usage", "created_at"}, {"memory_jobs", "available_at"}} {
+		f.exec(t, "UPDATE "+tc.table+" SET "+tc.column+"="+tc.column+"-interval '1 hour 1 second' WHERE owner_id=$1", f.scope.OwnerID)
 	}
-	if len(model.calls()) != 30 || f.usage(t, "compare") != 30 {
-		t.Errorf("actual hour calls=%d ledger=%d", len(model.calls()), f.usage(t, "compare"))
+	f.scheduleCompare(t)
+	if f.compareJob(t) == "" {
+		t.Fatal("next-hour comparison not resumed")
 	}
+	organizeJob()
+	if got := len(model.calls()); got != hourlyLimit+2 {
+		t.Errorf("next-hour calls=%d want %d", got, hourlyLimit+2)
+	}
+	f.assertRevisions(t, refs...)
 }

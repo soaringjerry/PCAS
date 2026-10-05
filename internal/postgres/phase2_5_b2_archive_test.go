@@ -36,7 +36,6 @@ func (f *phase25B234Fixture) answerAgent(t *testing.T) string {
 	return id
 }
 func TestPhase25B2_X2_12_ImportedUserStatementUsableWithoutConfirmation(t *testing.T) {
-	t.Skip("finding F-B2-7")
 	f := phase25B2NewFixture(t)
 	f.store.SetBlobs(&phase25B2Blobs{data: map[string][]byte{}})
 	text := "AcceptanceArchive 虚构档案：白鹭月报先写结论。"

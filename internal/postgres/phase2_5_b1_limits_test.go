@@ -11,7 +11,6 @@ import (
 )
 
 func TestPhase25B1_R12_OneHundredTwentyBatchesPerHour(t *testing.T) {
-	t.Skip("awaiting PR #223: organize/compare/entity shared hourly limit 120")
 	const hourlyLimit = 120
 	f := phase25B1NewFixtureTimeout(t, 5*time.Minute)
 	fake := f.model(t, phase25B1ModelJSON(t, phase25B1Items(40, "event", false)))

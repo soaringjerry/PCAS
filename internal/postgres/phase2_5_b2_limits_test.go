@@ -67,7 +67,6 @@ func TestPhase25B2_TwoHundredLatestAndRemainingEventuallyCompared(t *testing.T) 
 
 // R2-6 and batch 1 R12 share one allowance across all three model purposes.
 func TestPhase25B2_OrganizeCompareAndEntityShareOneHundredTwentyCallsPerHour(t *testing.T) {
-	t.Skip("awaiting PR #223: organize/compare/entity shared hourly limit 120")
 	const hourlyLimit, initialOrganizeCalls = 120, 20
 	f := phase25B2NewFixtureTimeout(t, 8*time.Minute)
 	var refs []memory.Ref

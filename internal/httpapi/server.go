@@ -51,6 +51,7 @@ func New(sources memory.Sources, retriever memory.Retriever, auth Authenticator,
 	mux.HandleFunc("POST /v1/memory/recall", s.authorize(s.recall))
 	mux.HandleFunc("POST /v1/memory/expand", s.authorize(s.expand))
 	s.workspaceRoutes(mux)
+	s.smokeRoutes(mux)
 	s.usageRoutes(mux)
 	s.connectorRoutes(mux)
 	s.notifyRoutes(mux)

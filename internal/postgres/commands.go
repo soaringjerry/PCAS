@@ -557,6 +557,9 @@ func (s *Store) saveAction(ctx context.Context, tx pgx.Tx, scope memory.Scope, i
 	if item.Kind == "idea" {
 		item.Evolution = append(item.Evolution, revision)
 	}
+	if smokeID(ctx) != "" {
+		return saveItem(ctx, tx, scope, item)
+	}
 	// Action records remain authoritative for execution; memory retains a versioned receipt.
 	source, err := s.ingestTx(ctx, tx, scope, memory.IngestRequest{Connector: "actions", ExternalID: item.ID, ExternalVersion: fmt.Sprint(item.Version), Title: item.Title, Text: string(asJSON(item)), MediaType: "text/plain"})
 	if err != nil {

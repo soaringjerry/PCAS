@@ -57,7 +57,7 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 		if err != nil {
 			return err
 		}
-		run := workspace.Run{ID: id, ThingID: item.ID, AgentID: agent.ID, Kind: c.Kind, Prompt: c.Prompt, Status: "running", ContextMemoryIDs: []string{}, ContextVersions: []memory.Ref{}, CreatedAt: stamp()}
+		run := workspace.Run{SmokeID: smokeID(ctx), ID: id, ThingID: item.ID, AgentID: agent.ID, Kind: c.Kind, Prompt: c.Prompt, Status: "running", ContextMemoryIDs: []string{}, ContextVersions: []memory.Ref{}, CreatedAt: stamp()}
 		var brief strings.Builder
 		fmt.Fprintf(&brief, "事项：%s\n当前状态：%s\n说明：%s\n%s\n目标：%s\n进度：%s\n", item.Title, item.Status, item.Notes, item.Body, item.Goal, item.Progress)
 		projectID := item.ProjectID
@@ -335,6 +335,9 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 }
 
 func (s *Store) adoptRunTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run *workspace.Run, as, text, actionID string, auto bool) error {
+	if run.SmokeID != "" {
+		ctx = withSmoke(ctx, run.SmokeID)
+	}
 	if run.Status != "done" || run.Adopted != nil || run.StaleContext {
 		return memory.ErrConflict
 	}
@@ -744,6 +747,9 @@ func (s *Store) autoAdoptRunTx(ctx context.Context, tx pgx.Tx, scope memory.Scop
 }
 
 func (s *Store) autoAdoptResultTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run *workspace.Run) error {
+	if run.SmokeID != "" {
+		ctx = withSmoke(ctx, run.SmokeID)
+	}
 	item, err := getItem(ctx, tx, scope, run.ThingID)
 	if err != nil {
 		return err

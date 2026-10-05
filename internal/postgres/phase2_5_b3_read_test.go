@@ -4,9 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/rand"
+	"net/http"
 	"net/url"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -109,7 +111,6 @@ func TestPhase25B3_EmptyAboutFallback(t *testing.T) {
 }
 
 func TestPhase25B3_OriginalCardItemsDirectoryAndFullReads(t *testing.T) {
-	t.Skip("finding F-B3-1")
 	f := phase25B234NewFixture(t)
 	g, refs := f.cardGroup(t, 12)
 	key := f.card(t, g, refs, false)
@@ -141,7 +142,6 @@ func TestPhase25B3_OriginalCardItemsDirectoryAndFullReads(t *testing.T) {
 }
 
 func TestPhase25B3_X3_6_CorrectedItemOmittedAndStale(t *testing.T) {
-	t.Skip("finding F-B3-1")
 	f := phase25B234NewFixture(t)
 	g, refs := f.cardGroup(t, 5)
 	key := f.card(t, g, refs, false)
@@ -165,7 +165,6 @@ func TestPhase25B3_X3_6_CorrectedItemOmittedAndStale(t *testing.T) {
 }
 
 func TestPhase25B3_X3_7_SupersededItemOmittedAndStale(t *testing.T) {
-	t.Skip("finding F-B3-1")
 	f := phase25B234NewFixture(t)
 	g, refs := f.cardGroup(t, 5)
 	key := f.card(t, g, refs, false)
@@ -182,7 +181,6 @@ func TestPhase25B3_X3_7_SupersededItemOmittedAndStale(t *testing.T) {
 }
 
 func TestPhase25B3_X3_8_DeleteCascadesAndStalesHandover(t *testing.T) {
-	t.Skip("finding F-B3-4")
 	f := phase25B234NewFixture(t)
 	g, refs := f.cardGroup(t, 4)
 	key := f.card(t, g, refs, false)
@@ -213,7 +211,6 @@ func TestPhase25B3_X3_8_DeleteCascadesAndStalesHandover(t *testing.T) {
 }
 
 func TestPhase25B3_X3_13_TwoCurrentMemoriesHideCard(t *testing.T) {
-	t.Skip("finding F-B3-1")
 	f := phase25B234NewFixture(t)
 	g, refs := f.cardGroup(t, 3)
 	key := f.card(t, g, refs, false)
@@ -233,7 +230,6 @@ func TestPhase25B3_X3_13_TwoCurrentMemoriesHideCard(t *testing.T) {
 }
 
 func TestPhase25B3_DeleteAllMemoriesHidesCard(t *testing.T) {
-	t.Skip("finding F-B3-1")
 	f := phase25B234NewFixture(t)
 	g, refs := f.cardGroup(t, 3)
 	key := f.card(t, g, refs, false)
@@ -255,7 +251,6 @@ func TestPhase25B3_DeleteAllMemoriesHidesCard(t *testing.T) {
 }
 
 func TestPhase25B3_StaleCardAndHandoverRemainReadable(t *testing.T) {
-	t.Skip("finding F-B3-2")
 	f := phase25B234NewFixture(t)
 	g, refs := f.cardGroup(t, 3)
 	key := f.card(t, g, refs, true)
@@ -273,7 +268,6 @@ func TestPhase25B3_StaleCardAndHandoverRemainReadable(t *testing.T) {
 }
 
 func TestPhase25B3_DeadlinesCurrentFutureOrderedAndLimited(t *testing.T) {
-	t.Skip("finding F-B3-3")
 	f := phase25B234NewFixture(t)
 	_, refs := f.cardGroup(t, 5)
 	now := time.Now().UTC().Truncate(time.Second)
@@ -308,7 +302,6 @@ func TestPhase25B3_DeadlinesCurrentFutureOrderedAndLimited(t *testing.T) {
 }
 
 func TestPhase25B3_ReadOwnerIsolation(t *testing.T) {
-	t.Skip("finding F-B3-1")
 	f := phase25B234NewFixture(t)
 	g, refs := f.cardGroup(t, 3)
 	key := f.card(t, g, refs, false)
@@ -362,14 +355,53 @@ func TestPhase25B3_ReadOwnerIsolation(t *testing.T) {
 }
 
 func TestPhase25B3_RandomCardReadSequence(t *testing.T) {
-	t.Skip("finding F-B3-1")
 	const seed int64 = 252503
 	f := phase25B234NewFixture(t)
 	rng := rand.New(rand.NewSource(seed))
 	t.Logf("seed=%d", seed)
 	g, refs := f.cardGroup(t, 8)
-	key := f.card(t, g, refs, false)
+	key := "entity:" + g.EntityID
 	current := append([]memory.Ref{}, refs...)
+	var oracleMu sync.RWMutex
+	allowed := map[string]bool{}
+	refresh := func() {
+		t.Helper()
+		next := map[string]bool{}
+		for _, r := range current {
+			m, err := f.store.GetMemory(f.ctx, f.scope, string(r.ID))
+			if err != nil {
+				t.Fatal(err)
+			}
+			next[m.Text] = true
+		}
+		oracleMu.Lock()
+		allowed = next
+		oracleMu.Unlock()
+	}
+	refresh()
+	model := f.model(t, func(_ *http.Request, _ int, request phase25B234ModelRequest) phase25B234ModelReply {
+		text, err := phase25B3Prompt(request)
+		if err != nil {
+			return phase25B234ModelReply{status: 400}
+		}
+		var input phase25B3Input
+		if err := json.Unmarshal([]byte(text), &input); err != nil {
+			return phase25B234ModelReply{status: 400}
+		}
+		oracleMu.RLock()
+		for _, m := range input.Memories {
+			if !allowed[m.Text] {
+				t.Errorf("random model consumed retired or old-version text: %s", m.Text)
+			}
+		}
+		oracleMu.RUnlock()
+		if input.Key != "" {
+			return phase25B3JSON(phase25B3All(input))
+		}
+		out, _ := phase25B3HandoverJSON(nil, nil)
+		return phase25B234ModelReply{content: out}
+	})
+	f.buildStatus(t, time.Now().Add(11*time.Minute))
 	// A positive baseline prevents an empty skeleton from satisfying safety
 	// invariants vacuously. Three fixed current items keep the group above cutoff.
 	phase25B234AssertIDs(t, phase25B3Items(f.readCards(t, key)), current...)
@@ -398,8 +430,10 @@ func TestPhase25B3_RandomCardReadSequence(t *testing.T) {
 				current = append(current[:i], current[i+1:]...)
 			}
 		case 3:
-			key = f.card(t, g, current, false)
+			refresh()
+			f.buildStatus(t, time.Now().Add(11*time.Minute))
 		}
+		refresh()
 		want := map[string]int{}
 		for _, r := range current {
 			want[string(r.ID)] = r.Version
@@ -418,6 +452,22 @@ func TestPhase25B3_RandomCardReadSequence(t *testing.T) {
 		f.assertRevisions(t, current...)
 		if t.Failed() {
 			t.Fatalf("seed=%d step=%d", seed, step)
+		}
+	}
+	if n := f.usage(t, "card"); n < 2 {
+		t.Errorf("random sequence did not exercise actual rebuilds: %d", n)
+	}
+	for _, call := range model.calls() {
+		input, err := phase25B3CardInput(call)
+		if err != nil {
+			continue
+		}
+		seen := map[string]bool{}
+		for _, m := range input.Memories {
+			if seen[m.Text] {
+				t.Error("duplicate model input")
+			}
+			seen[m.Text] = true
 		}
 	}
 }

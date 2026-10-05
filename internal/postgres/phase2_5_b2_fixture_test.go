@@ -23,11 +23,12 @@ import (
 // These fixtures use only fictitious data and a container owned by this test.
 // Never accept an external DSN: acceptance must not touch a shared database.
 type phase25B234Fixture struct {
-	ctx     context.Context
-	db      *pgxpool.Pool
-	store   *postgres.Store
-	scope   memory.Scope
-	handler http.Handler
+	ctx       context.Context
+	db        *pgxpool.Pool
+	store     *postgres.Store
+	scope     memory.Scope
+	handler   http.Handler
+	statusNow time.Time // Test-only clock for the real status queue's due jobs.
 }
 
 func (f *phase25B234Fixture) retire(t *testing.T, ref, kept memory.Ref, reason string) {
@@ -88,8 +89,12 @@ func phase25B234AssertIDs(t *testing.T, memories []workspace.Memory, want ...mem
 }
 
 func phase25B234NewFixture(t *testing.T) *phase25B234Fixture {
+	return phase25B234NewFixtureTimeout(t, 90*time.Second)
+}
+
+func phase25B234NewFixtureTimeout(t *testing.T, timeout time.Duration) *phase25B234Fixture {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	t.Cleanup(cancel)
 	name := "pcas-p25-t234-" + string(memory.NewID())
 	run := func(args ...string) string {
@@ -102,12 +107,13 @@ func phase25B234NewFixture(t *testing.T) *phase25B234Fixture {
 	}
 	run("run", "--detach", "--rm", "--name", name,
 		"--label", "pcas.acceptance=phase2_5-b234-T234",
+		"--tmpfs", "/var/lib/postgresql/data:rw,size=512m",
 		"--env", "POSTGRES_PASSWORD=fictitious-test-password",
 		"--publish", "127.0.0.1::5432", "pgvector/pgvector:0.8.2-pg16")
 	t.Cleanup(func() {
 		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cleanupCancel()
-		if out, err := exec.CommandContext(cleanupCtx, "docker", "rm", "--force", name).CombinedOutput(); err != nil {
+		if out, err := exec.CommandContext(cleanupCtx, "docker", "rm", "--force", "--volumes", name).CombinedOutput(); err != nil {
 			t.Errorf("remove owned container %s: %v: %s", name, err, out)
 		}
 	})

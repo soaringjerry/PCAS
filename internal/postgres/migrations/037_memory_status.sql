@@ -110,6 +110,7 @@ CREATE INDEX deadlines_claim_idx ON deadlines(owner_id,claim_id,claim_version);
 CREATE FUNCTION status_invalidate(p_owner uuid,p_claim uuid,p_key text DEFAULT '') RETURNS void LANGUAGE plpgsql AS $$
 DECLARE c record; anchor record;
 BEGIN
+ IF NOT EXISTS(SELECT 1 FROM status_cards WHERE owner_id=p_owner) AND NOT EXISTS(SELECT 1 FROM handovers WHERE owner_id=p_owner) THEN RETURN; END IF;
  SELECT r.id,r.version INTO anchor FROM memory_records r JOIN entity_versions ev
  ON(ev.owner_id,ev.entity_id,ev.version)=(r.owner_id,r.id,r.version)
  WHERE r.owner_id=p_owner AND r.state='active' AND ev.entity_type='area' ORDER BY r.created_at,r.id LIMIT 1;

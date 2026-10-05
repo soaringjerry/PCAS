@@ -121,7 +121,7 @@ func (s *Store) ScheduleStatus(ctx context.Context, now time.Time) (int, error) 
 			return err
 		}
 		anchors := map[memory.ID]memory.Ref{}
-		for _, t := range targets {
+		for ordinal, t := range targets {
 			anchor, ok := anchors[t.owner]
 			if !ok {
 				var err error
@@ -139,7 +139,7 @@ func (s *Store) ScheduleStatus(ctx context.Context, now time.Time) (int, error) 
 			if g.Built != nil && !g.Stale && g.Rule >= CardVersion {
 				continue
 			}
-			due := now
+			due := now.Add(time.Duration(ordinal) * time.Microsecond)
 			if g.Built != nil && g.Rule < CardVersion {
 				due = now.Add(10 * time.Minute)
 			}

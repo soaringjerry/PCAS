@@ -284,7 +284,7 @@ func (s *Store) ProcessCard(ctx context.Context, j worker.Job) error {
  WHERE job.stage LIKE 'memory.card:%' AND b.created_at>now()-interval '1 hour'`).Scan(&recent, &next); err != nil {
 			return err
 		}
-		if recent >= 60 {
+		if recent >= 120 {
 			return &worker.JobError{Code: "card_hourly_limit", Until: next.Add(time.Second), NoAttempt: true}
 		}
 		if err := tx.QueryRow(ctx, "SELECT settings->>'timezone' FROM workspace_owners WHERE owner_id=$1", string(j.OwnerID)).Scan(&timezone); err != nil {

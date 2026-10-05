@@ -255,7 +255,7 @@ func TestStatusCardsLimitsAndDuringCallChange(t *testing.T) {
 	}
 }
 
-func TestStatusCardsHourly60Of100(t *testing.T) {
+func TestStatusCardsHourly120Of200(t *testing.T) {
 	s, scope := testStore(t), owner()
 	secretaryModel(t, s, func(w http.ResponseWriter, r *http.Request) { statusFakeReply(t, w, r) })
 	refs := statusTestMemories(t, s, scope, 3)
@@ -266,7 +266,7 @@ func TestStatusCardsHourly60Of100(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := pgx.BeginFunc(context.Background(), s.pool, func(tx pgx.Tx) error {
-		for i := range 100 {
+		for i := range 200 {
 			id, err := entityTx(context.Background(), tx, scope.OwnerID, "topic", fmt.Sprintf("虚构主题%03d", i))
 			if err != nil {
 				return err
@@ -281,7 +281,7 @@ func TestStatusCardsHourly60Of100(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	for range 60 {
+	for range 120 {
 		j := statusTestJob(t, s, scope)
 		if err := s.ProcessCard(context.Background(), j); err != nil {
 			t.Fatal(err)
@@ -293,7 +293,7 @@ func TestStatusCardsHourly60Of100(t *testing.T) {
 		t.Fatal(failure)
 	}
 	about, err := s.About(context.Background(), scope, "")
-	if err != nil || about.Building.Done != 60 || about.Building.Total != 100 {
+	if err != nil || about.Building.Done != 120 || about.Building.Total != 200 {
 		t.Fatal(about.Building, err)
 	}
 	if _, err := s.pool.Exec(context.Background(), "UPDATE background_usage SET created_at=now()-interval '2 hours' WHERE owner_id=$1", scope.OwnerID); err != nil {

@@ -14,6 +14,20 @@
 
 新产物仍只有数字、题号和判定，存在仓库外。`report.prepare.json` 单独记录后台准备三阶段的墙钟耗时、调用和失败数、各用途调用数、输入字符与完成任务数，以及当前 claim/退出/卡片计数和交接说明是否建好；完成报告也嵌入该记账。准备成本与一次通道预检不计入每题模型调用或延迟。题集/固定回答指令/双判指令的 SHA 继续保留。
 
+若专用 Codex 的 WebSocket 握手持续 403，而 HTTP 可用，可在**启动前**于评测专用 home 的 `config.toml` 选择 HTTP；只编辑该专用文件，不改线上或其他窗口的配置。保留已确定的模型、推理强度和 service tier。下列配置仍使用同一 ChatGPT 后端及原有登录，未切换为 API key：
+
+```toml
+model_provider = "pcas_eval_http"
+[model_providers.pcas_eval_http]
+name = "OpenAI"
+base_url = "https://chatgpt.com/backend-api/codex"
+wire_api = "responses"
+requires_openai_auth = true
+supports_websockets = false
+```
+
+配置依据为 [OpenAI 官方配置参考](https://learn.chatgpt.com/docs/config-file/config-reference) 的自定义 provider / `supports_websockets`。先单独预检并记录调用数；握手重试会占用产品截止时间，不能把消除重试前后混在一起声称为同条件实验。若中途改连接方式，只能如实记录中断、运行来源和缺行补齐，已完成结果不重跑、不择优。
+
 本轮虚构测量：原 671 条记忆/旧 120 题不变；light/medium 全部三遍；heavy 只跑跨分组/外发 40 题三遍。下面一个命令只跑这些新对照，**不重跑 current/ideal**：
 
 ```sh
@@ -44,6 +58,8 @@ PCAS_EVAL_CODEX_HOME=/ABSOLUTE/DEDICATED/CODEX_HOME \
 这些是文本导出的平铺副本，缺少线上拓扑、历史修订和向量；三档的背景准备由副本重新推导，不能称作线上现状层的精确快照。若副本没有任何可建卡的分组，准备合法完成零张卡，产品按 R4-5 回退，报告 `effective=legacy-fallback`；不能当作三档已发挥作用。私有题、模型 home 和所有产物继续留在仓库外，不提交、不上传回复正文。
 
 产品检索、期限校验和自查依赖主机当前时间，主答复与 gold 仍使用冻结 `as_of`。按本轮要求复用的 current/ideal 是历史数字：跨日期、不同并发，以及整理随机性都会影响结果，只报告数值验收和已知差异，不能把它们当成无条件的同日因果实验。heavy 未测直接回忆时，该条验收必须报告“未覆盖”，不能从 light/medium 或另两类代推。旧 baseline 和既有数字产物不修改。
+
+含“今天”“下周”等相对日期的私有题，应在核对时明确运行日期并记录 `as_of` 与主机日期。两者跨日或跨周时，原生自查可能按今天修正主答复的冻结日期，与旧标准冲突；例如周日基准的“下周”与次日周一运行相差一周。这种扣分须单独说明，不能归因于检索漏条件。评测器不自动改任务或标准，也不覆盖产品时钟；任何题目/日期/标准修订都由协调者重新核对批准并记录版本。
 
 虚构 V2c 如遇传输缺行，可在第一次自建容器退出前，用自己记下且核对过所有权标签的完整容器 ID，对**未答题的准备模板库**保存 `pg_dump -Fc`，文件留在仓库外并限制权限。正常脚本退出仍删除其容器。补跑时显式恢复到另一个新建的 tmpfs 容器：
 

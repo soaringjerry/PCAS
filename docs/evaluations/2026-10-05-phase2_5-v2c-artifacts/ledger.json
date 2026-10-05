@@ -1,0 +1,407 @@
+{
+  "created_at": "2026-10-05T15:22:43.736243+00:00",
+  "product_revision": "346ee0c",
+  "formal_initial_revision": "46bd0a9bd7f1082ebc630bdeb6514f2543ff7eae",
+  "formal_final_revision": "96014fbe717bc37bc66c3254cc0b97c746edb784",
+  "suite_sha256": "c8d38bad30381a308722ca25c07bdf3d84b537a3464dde62323e5130ab77396b",
+  "answer_prompt_sha256": "11109e54b55c73f3ae75b227ca73cc54b96dde507f17f4abb728630452de83ec",
+  "judge_prompt_sha256": "a9ea59988beb392d3ad2cfbe5541a4c9bbf1b0d3c9421f90c6b1c1f3f4d92eeb",
+  "model": "gpt-6.1-sol",
+  "channel": "codex",
+  "reasoning_effort": "high",
+  "service_tier": "fast",
+  "global_model_concurrency": 4,
+  "host_date": "2026-10-05",
+  "as_of": "2026-10-04T09:00:00Z",
+  "prepared_dump_sha256": "75e53fd1e44be91f5ac9fe5562515cd64a9b89525bcf46372cc13fcfe071b5a6",
+  "valid_rows": 840,
+  "initial_rows_retained_unchanged": 470,
+  "valid_row_generate_calls": 3590,
+  "prior_failed_generate_calls": 40,
+  "preparation_generate_calls": 65,
+  "formal_preflight_generate_calls": 3,
+  "http_probe_generate_calls": 1,
+  "total_new_generate_calls": 3699,
+  "prior_failure_reasons": {
+    "evidence_failed type=model_error": 13,
+    "judge_format_failed pass=2 type=invalid_json": 1,
+    "judge_format_failed pass=1 type=invalid_json": 1,
+    "judge_call_failed pass=1 type=canceled": 1,
+    "run_aborted": 75
+  },
+  "unstarted_run_aborted_cells": 75,
+  "reused_current_ideal_rows": 720,
+  "reused_current_ideal_generate_calls_not_new_spend": 2160,
+  "log_event_counts": {
+    "initial": {
+      "provider_http_403_retry_warnings": 3319,
+      "native_selfcheck_fallback_warnings": 225,
+      "native_reader_skipped_warnings": 0,
+      "selfcheck_warning_types": {
+        "timeout": 223,
+        "canceled": 2
+      },
+      "reader_warning_types": {}
+    },
+    "http_resume": {
+      "provider_http_403_retry_warnings": 0,
+      "native_selfcheck_fallback_warnings": 191,
+      "native_reader_skipped_warnings": 0,
+      "selfcheck_warning_types": {
+        "timeout": 191
+      },
+      "reader_warning_types": {}
+    },
+    "http_repair2": {
+      "provider_http_403_retry_warnings": 0,
+      "native_selfcheck_fallback_warnings": 0,
+      "native_reader_skipped_warnings": 0,
+      "selfcheck_warning_types": {},
+      "reader_warning_types": {}
+    }
+  },
+  "notes": [
+    "Generate calls are adapter invocations, not provider-internal retry RPCs or a monetary bill.",
+    "Log warnings include failed/canceled rows and may include late completions; row fallback flags are snapshots and can undercount late errors. These two counts cannot be added.",
+    "Product input characters exclude judge/preflight inputs; preparation input characters are recorded separately.",
+    "470 valid rows retain the original transport conditions; remaining rows use HTTP. Native deadlines/global queue and host date still apply. This is not a controlled transport comparison.",
+    "A canceled judge attempt may have been canceled while waiting for the global limit. The attempt ledger is not proof of provider dispatch or billing for every failed attempt."
+  ],
+  "conservative_usability": [
+    {
+      "scope": "old120",
+      "method": "light",
+      "run": 1,
+      "tasks": 120,
+      "usable_completed": 116,
+      "usable_with_any_attempt_failure_zeroed": 114,
+      "cells_with_prior_attempt_failure": 2
+    },
+    {
+      "scope": "old120",
+      "method": "light",
+      "run": 2,
+      "tasks": 120,
+      "usable_completed": 117,
+      "usable_with_any_attempt_failure_zeroed": 113,
+      "cells_with_prior_attempt_failure": 4
+    },
+    {
+      "scope": "old120",
+      "method": "light",
+      "run": 3,
+      "tasks": 120,
+      "usable_completed": 114,
+      "usable_with_any_attempt_failure_zeroed": 114,
+      "cells_with_prior_attempt_failure": 1
+    },
+    {
+      "scope": "old120",
+      "method": "medium",
+      "run": 1,
+      "tasks": 120,
+      "usable_completed": 108,
+      "usable_with_any_attempt_failure_zeroed": 105,
+      "cells_with_prior_attempt_failure": 3
+    },
+    {
+      "scope": "old120",
+      "method": "medium",
+      "run": 2,
+      "tasks": 120,
+      "usable_completed": 107,
+      "usable_with_any_attempt_failure_zeroed": 103,
+      "cells_with_prior_attempt_failure": 4
+    },
+    {
+      "scope": "old120",
+      "method": "medium",
+      "run": 3,
+      "tasks": 120,
+      "usable_completed": 113,
+      "usable_with_any_attempt_failure_zeroed": 113,
+      "cells_with_prior_attempt_failure": 0
+    },
+    {
+      "scope": "cross_outgoing40",
+      "method": "light",
+      "run": 1,
+      "tasks": 40,
+      "usable_completed": 40,
+      "usable_with_any_attempt_failure_zeroed": 39,
+      "cells_with_prior_attempt_failure": 1
+    },
+    {
+      "scope": "cross_outgoing40",
+      "method": "light",
+      "run": 2,
+      "tasks": 40,
+      "usable_completed": 40,
+      "usable_with_any_attempt_failure_zeroed": 38,
+      "cells_with_prior_attempt_failure": 2
+    },
+    {
+      "scope": "cross_outgoing40",
+      "method": "light",
+      "run": 3,
+      "tasks": 40,
+      "usable_completed": 40,
+      "usable_with_any_attempt_failure_zeroed": 40,
+      "cells_with_prior_attempt_failure": 0
+    },
+    {
+      "scope": "cross_outgoing40",
+      "method": "medium",
+      "run": 1,
+      "tasks": 40,
+      "usable_completed": 40,
+      "usable_with_any_attempt_failure_zeroed": 38,
+      "cells_with_prior_attempt_failure": 2
+    },
+    {
+      "scope": "cross_outgoing40",
+      "method": "medium",
+      "run": 2,
+      "tasks": 40,
+      "usable_completed": 39,
+      "usable_with_any_attempt_failure_zeroed": 38,
+      "cells_with_prior_attempt_failure": 1
+    },
+    {
+      "scope": "cross_outgoing40",
+      "method": "medium",
+      "run": 3,
+      "tasks": 40,
+      "usable_completed": 40,
+      "usable_with_any_attempt_failure_zeroed": 40,
+      "cells_with_prior_attempt_failure": 0
+    },
+    {
+      "scope": "cross_outgoing40",
+      "method": "heavy",
+      "run": 1,
+      "tasks": 40,
+      "usable_completed": 40,
+      "usable_with_any_attempt_failure_zeroed": 39,
+      "cells_with_prior_attempt_failure": 1
+    },
+    {
+      "scope": "cross_outgoing40",
+      "method": "heavy",
+      "run": 2,
+      "tasks": 40,
+      "usable_completed": 38,
+      "usable_with_any_attempt_failure_zeroed": 37,
+      "cells_with_prior_attempt_failure": 1
+    },
+    {
+      "scope": "cross_outgoing40",
+      "method": "heavy",
+      "run": 3,
+      "tasks": 40,
+      "usable_completed": 38,
+      "usable_with_any_attempt_failure_zeroed": 38,
+      "cells_with_prior_attempt_failure": 0
+    },
+    {
+      "scope": "direct_recall20",
+      "method": "light",
+      "run": 1,
+      "tasks": 20,
+      "usable_completed": 20,
+      "usable_with_any_attempt_failure_zeroed": 20,
+      "cells_with_prior_attempt_failure": 0
+    },
+    {
+      "scope": "direct_recall20",
+      "method": "light",
+      "run": 2,
+      "tasks": 20,
+      "usable_completed": 20,
+      "usable_with_any_attempt_failure_zeroed": 18,
+      "cells_with_prior_attempt_failure": 2
+    },
+    {
+      "scope": "direct_recall20",
+      "method": "light",
+      "run": 3,
+      "tasks": 20,
+      "usable_completed": 19,
+      "usable_with_any_attempt_failure_zeroed": 19,
+      "cells_with_prior_attempt_failure": 0
+    },
+    {
+      "scope": "direct_recall20",
+      "method": "medium",
+      "run": 1,
+      "tasks": 20,
+      "usable_completed": 20,
+      "usable_with_any_attempt_failure_zeroed": 20,
+      "cells_with_prior_attempt_failure": 0
+    },
+    {
+      "scope": "direct_recall20",
+      "method": "medium",
+      "run": 2,
+      "tasks": 20,
+      "usable_completed": 20,
+      "usable_with_any_attempt_failure_zeroed": 18,
+      "cells_with_prior_attempt_failure": 2
+    },
+    {
+      "scope": "direct_recall20",
+      "method": "medium",
+      "run": 3,
+      "tasks": 20,
+      "usable_completed": 19,
+      "usable_with_any_attempt_failure_zeroed": 19,
+      "cells_with_prior_attempt_failure": 0
+    },
+    {
+      "scope": "outgoing20",
+      "method": "light",
+      "run": 1,
+      "tasks": 20,
+      "usable_completed": 20,
+      "usable_with_any_attempt_failure_zeroed": 20,
+      "cells_with_prior_attempt_failure": 0
+    },
+    {
+      "scope": "outgoing20",
+      "method": "light",
+      "run": 2,
+      "tasks": 20,
+      "usable_completed": 20,
+      "usable_with_any_attempt_failure_zeroed": 20,
+      "cells_with_prior_attempt_failure": 0
+    },
+    {
+      "scope": "outgoing20",
+      "method": "light",
+      "run": 3,
+      "tasks": 20,
+      "usable_completed": 20,
+      "usable_with_any_attempt_failure_zeroed": 20,
+      "cells_with_prior_attempt_failure": 0
+    },
+    {
+      "scope": "outgoing20",
+      "method": "medium",
+      "run": 1,
+      "tasks": 20,
+      "usable_completed": 20,
+      "usable_with_any_attempt_failure_zeroed": 20,
+      "cells_with_prior_attempt_failure": 0
+    },
+    {
+      "scope": "outgoing20",
+      "method": "medium",
+      "run": 2,
+      "tasks": 20,
+      "usable_completed": 19,
+      "usable_with_any_attempt_failure_zeroed": 19,
+      "cells_with_prior_attempt_failure": 0
+    },
+    {
+      "scope": "outgoing20",
+      "method": "medium",
+      "run": 3,
+      "tasks": 20,
+      "usable_completed": 20,
+      "usable_with_any_attempt_failure_zeroed": 20,
+      "cells_with_prior_attempt_failure": 0
+    },
+    {
+      "scope": "outgoing20",
+      "method": "heavy",
+      "run": 1,
+      "tasks": 20,
+      "usable_completed": 20,
+      "usable_with_any_attempt_failure_zeroed": 20,
+      "cells_with_prior_attempt_failure": 0
+    },
+    {
+      "scope": "outgoing20",
+      "method": "heavy",
+      "run": 2,
+      "tasks": 20,
+      "usable_completed": 19,
+      "usable_with_any_attempt_failure_zeroed": 19,
+      "cells_with_prior_attempt_failure": 0
+    },
+    {
+      "scope": "outgoing20",
+      "method": "heavy",
+      "run": 3,
+      "tasks": 20,
+      "usable_completed": 19,
+      "usable_with_any_attempt_failure_zeroed": 19,
+      "cells_with_prior_attempt_failure": 0
+    }
+  ],
+  "conservative_usability_notes": [
+    "Sensitivity only: any cell with a previous actual failed attempt is treated as unusable, including operator-canceled calls. Unstarted run_aborted cells are not penalized.",
+    "This is not a new independent repetition, no stored score is changed, and scopes overlap. It reveals completion-conditioned transport repair bias."
+  ],
+  "initial_cleanup": {
+    "at": "2026-10-05T14:18:03.140357+00:00",
+    "initial_eval_process_exited": true,
+    "initial_own_container_removed_by_script": true,
+    "initial_model_home_removed_after_fictional_trace_diagnostic": true,
+    "root_or_other_home_modified": false
+  },
+  "files": {
+    "README.md": {
+      "sha256": "6db1c42b8803fe2abae6733694cbfdc2020c8cce3a8ae655719a68f4672f55db",
+      "decoded_sha256": "6db1c42b8803fe2abae6733694cbfdc2020c8cce3a8ae655719a68f4672f55db"
+    },
+    "comparison.json": {
+      "sha256": "0b19e30dbf1bc0caf2119624e4e844a5e0a4797bd1e5663249e43126eecda8be",
+      "decoded_sha256": "0b19e30dbf1bc0caf2119624e4e844a5e0a4797bd1e5663249e43126eecda8be"
+    },
+    "http.partial.json.gz": {
+      "sha256": "a98169118ce52ccc3cf6f440c8249d36ef78e2f4c84ac20cc83a53071e5e3d8f",
+      "decoded_sha256": "1ca7ad7086302e7544a13e7c426a8968fd2f976a729ffee303ae0b007883b547"
+    },
+    "initial.partial.json.gz": {
+      "sha256": "c4a73ca929cbf6ac11d4255c5dec1e5dae4d0f1bae7ce12f336da51182a3ccec",
+      "decoded_sha256": "ff95d323b1c99d9d4f081def009e6cb1aee06c37925e853a97c71c7ce4afb44e"
+    },
+    "membership-diagnostic.json": {
+      "sha256": "dce553ebf973e62d9dedd6aa46d5aad4e53c02d9f2804135f0b89a9c93d835a0",
+      "decoded_sha256": "dce553ebf973e62d9dedd6aa46d5aad4e53c02d9f2804135f0b89a9c93d835a0"
+    },
+    "planning-date-diagnostic.json": {
+      "sha256": "a806dd5982c3ac8359c56ac9e2e0642210ad18d0d55b67e2d1157cd016a3242f",
+      "decoded_sha256": "a806dd5982c3ac8359c56ac9e2e0642210ad18d0d55b67e2d1157cd016a3242f"
+    },
+    "preparation.json": {
+      "sha256": "de6e0bd071b261728a0a656193f6ab0fa25cdd2ed9000129f075c36e8fe583b9",
+      "decoded_sha256": "de6e0bd071b261728a0a656193f6ab0fa25cdd2ed9000129f075c36e8fe583b9"
+    },
+    "prepared-membership.json.gz": {
+      "sha256": "7672a544593c6966f2e8639c995ff75f006f7dc600802ba61ec01d1f6c12dcc6",
+      "decoded_sha256": "098a8fe58395b49114d2a96dc963ecbcddc9c3cfc8968f9949f39ef1f747dd33"
+    },
+    "result.json.gz": {
+      "sha256": "e9aa37ed926a668eae45daf57c377c6ae33e77f7d4cfb7581705aa565f4c25cf",
+      "decoded_sha256": "8dc09d2bcdcbb70c993e11c64b4819376d09ae1c6dc63e80f1abbb3b255a8b0d"
+    },
+    "transport-change.json": {
+      "sha256": "f0ee6e7bcbf9bd3c6467be62da2742005967ecb32c450f481c04f0bf8e995c6b",
+      "decoded_sha256": "f0ee6e7bcbf9bd3c6467be62da2742005967ecb32c450f481c04f0bf8e995c6b"
+    }
+  },
+  "final_cleanup": {
+    "at": "2026-10-05T15:23:49.957387+00:00",
+    "all_formal_scripts_exited": true,
+    "http_resume_own_container_confirmed_removed": true,
+    "final_repair_script_exit_code": 0,
+    "final_repair_cleanup": "EXIT trap verified its own immutable label and deleted its captured container ID",
+    "dedicated_model_homes_removed": true,
+    "fictional_prepared_dump_removed_after_complete_matrix_validation": true,
+    "raw_fictional_diagnostic_prompts_removed": true,
+    "root_and_other_model_homes_modified": false,
+    "online_containers_or_databases_accessed": false
+  }
+}

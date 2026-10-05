@@ -1,0 +1,208 @@
+{
+  "scope": "Run 1 medium indirect_use unusable rows retained unchanged from initial execution",
+  "cases": [
+    {
+      "task": "PLAN-01",
+      "run": 1,
+      "method": "medium",
+      "answer_chars": 615,
+      "missing_must": [],
+      "handling_both": true,
+      "over_600": true,
+      "main_input_trace_count": 4,
+      "m3_exact_evidence_in_every_observed_main_context": true,
+      "matched_final_answer_unique": 1,
+      "preceding_selfcheck_draft_chars": 615,
+      "final_explicitly_moves_next_week_to_oct12_18": false,
+      "human_review_scope": "Own fictional transport traces; uniquely matched task and answer length; not an independent regrade or complete-suite causal audit.",
+      "observed_explanation": "All must pass; unusable because unchanged 600-character cap is exceeded. Date-shift explanation is not assigned."
+    },
+    {
+      "task": "PLAN-08",
+      "run": 1,
+      "method": "medium",
+      "answer_chars": 43,
+      "missing_must": [
+        "M2",
+        "M3",
+        "M4",
+        "M5"
+      ],
+      "handling_both": false,
+      "over_600": false,
+      "main_input_trace_count": 4,
+      "m3_exact_evidence_in_every_observed_main_context": true,
+      "matched_final_answer_unique": 1,
+      "preceding_selfcheck_draft_chars": 482,
+      "final_explicitly_moves_next_week_to_oct12_18": true,
+      "human_review_scope": "Own fictional transport traces; uniquely matched task and answer length; not an independent regrade or complete-suite causal audit.",
+      "human_verified_before_draft_contains_gold_reviewer_slot": true,
+      "human_verified_after_removes_or_declines_gold_reviewer_slot": true,
+      "observed_explanation": "Frozen main as_of uses next week Oct05–11; native selfcheck uses host Oct05 and changes next week to Oct12–18. This prevents interpreting the lost must checks as a retrieval regression."
+    },
+    {
+      "task": "PLAN-07",
+      "run": 1,
+      "method": "medium",
+      "answer_chars": 151,
+      "missing_must": [
+        "M3"
+      ],
+      "handling_both": true,
+      "over_600": false,
+      "main_input_trace_count": 4,
+      "m3_exact_evidence_in_every_observed_main_context": true,
+      "matched_final_answer_unique": 1,
+      "preceding_selfcheck_draft_chars": 413,
+      "final_explicitly_moves_next_week_to_oct12_18": true,
+      "human_review_scope": "Own fictional transport traces; uniquely matched task and answer length; not an independent regrade or complete-suite causal audit.",
+      "human_verified_before_draft_contains_gold_reviewer_slot": true,
+      "human_verified_after_removes_or_declines_gold_reviewer_slot": true,
+      "observed_explanation": "Frozen main as_of uses next week Oct05–11; native selfcheck uses host Oct05 and changes next week to Oct12–18. This prevents interpreting the lost must checks as a retrieval regression."
+    },
+    {
+      "task": "PLAN-09",
+      "run": 1,
+      "method": "medium",
+      "answer_chars": 623,
+      "missing_must": [],
+      "handling_both": true,
+      "over_600": true,
+      "main_input_trace_count": 4,
+      "m3_exact_evidence_in_every_observed_main_context": true,
+      "matched_final_answer_unique": 1,
+      "preceding_selfcheck_draft_chars": 623,
+      "final_explicitly_moves_next_week_to_oct12_18": false,
+      "human_review_scope": "Own fictional transport traces; uniquely matched task and answer length; not an independent regrade or complete-suite causal audit.",
+      "observed_explanation": "All must pass; unusable because unchanged 600-character cap is exceeded. Date-shift explanation is not assigned."
+    },
+    {
+      "task": "PLAN-10",
+      "run": 1,
+      "method": "medium",
+      "answer_chars": 235,
+      "missing_must": [
+        "M3"
+      ],
+      "handling_both": true,
+      "over_600": false,
+      "main_input_trace_count": 4,
+      "m3_exact_evidence_in_every_observed_main_context": true,
+      "matched_final_answer_unique": 1,
+      "preceding_selfcheck_draft_chars": 476,
+      "final_explicitly_moves_next_week_to_oct12_18": true,
+      "human_review_scope": "Own fictional transport traces; uniquely matched task and answer length; not an independent regrade or complete-suite causal audit.",
+      "human_verified_before_draft_contains_gold_reviewer_slot": true,
+      "human_verified_after_removes_or_declines_gold_reviewer_slot": true,
+      "observed_explanation": "Frozen main as_of uses next week Oct05–11; native selfcheck uses host Oct05 and changes next week to Oct12–18. This prevents interpreting the lost must checks as a retrieval regression."
+    },
+    {
+      "task": "PLAN-11",
+      "run": 1,
+      "method": "medium",
+      "answer_chars": 338,
+      "missing_must": [
+        "M3"
+      ],
+      "handling_both": true,
+      "over_600": false,
+      "main_input_trace_count": 4,
+      "m3_exact_evidence_in_every_observed_main_context": true,
+      "matched_final_answer_unique": 1,
+      "preceding_selfcheck_draft_chars": 509,
+      "final_explicitly_moves_next_week_to_oct12_18": true,
+      "human_review_scope": "Own fictional transport traces; uniquely matched task and answer length; not an independent regrade or complete-suite causal audit.",
+      "human_verified_before_draft_contains_gold_reviewer_slot": true,
+      "human_verified_after_removes_or_declines_gold_reviewer_slot": true,
+      "observed_explanation": "Frozen main as_of uses next week Oct05–11; native selfcheck uses host Oct05 and changes next week to Oct12–18. This prevents interpreting the lost must checks as a retrieval regression."
+    },
+    {
+      "task": "PLAN-12",
+      "run": 1,
+      "method": "medium",
+      "answer_chars": 190,
+      "missing_must": [
+        "M3"
+      ],
+      "handling_both": true,
+      "over_600": false,
+      "main_input_trace_count": 4,
+      "m3_exact_evidence_in_every_observed_main_context": true,
+      "matched_final_answer_unique": 1,
+      "preceding_selfcheck_draft_chars": 382,
+      "final_explicitly_moves_next_week_to_oct12_18": true,
+      "human_review_scope": "Own fictional transport traces; uniquely matched task and answer length; not an independent regrade or complete-suite causal audit.",
+      "human_verified_before_draft_contains_gold_reviewer_slot": true,
+      "human_verified_after_removes_or_declines_gold_reviewer_slot": true,
+      "observed_explanation": "Frozen main as_of uses next week Oct05–11; native selfcheck uses host Oct05 and changes next week to Oct12–18. This prevents interpreting the lost must checks as a retrieval regression."
+    },
+    {
+      "task": "PLAN-13",
+      "run": 1,
+      "method": "medium",
+      "answer_chars": 328,
+      "missing_must": [
+        "M3"
+      ],
+      "handling_both": true,
+      "over_600": false,
+      "main_input_trace_count": 4,
+      "m3_exact_evidence_in_every_observed_main_context": true,
+      "matched_final_answer_unique": 1,
+      "preceding_selfcheck_draft_chars": 613,
+      "final_explicitly_moves_next_week_to_oct12_18": true,
+      "human_review_scope": "Own fictional transport traces; uniquely matched task and answer length; not an independent regrade or complete-suite causal audit.",
+      "human_verified_before_draft_contains_gold_reviewer_slot": true,
+      "human_verified_after_removes_or_declines_gold_reviewer_slot": true,
+      "observed_explanation": "Frozen main as_of uses next week Oct05–11; native selfcheck uses host Oct05 and changes next week to Oct12–18. This prevents interpreting the lost must checks as a retrieval regression."
+    },
+    {
+      "task": "PLAN-15",
+      "run": 1,
+      "method": "medium",
+      "answer_chars": 285,
+      "missing_must": [
+        "M3"
+      ],
+      "handling_both": true,
+      "over_600": false,
+      "main_input_trace_count": 4,
+      "m3_exact_evidence_in_every_observed_main_context": true,
+      "matched_final_answer_unique": 1,
+      "preceding_selfcheck_draft_chars": 485,
+      "final_explicitly_moves_next_week_to_oct12_18": true,
+      "human_review_scope": "Own fictional transport traces; uniquely matched task and answer length; not an independent regrade or complete-suite causal audit.",
+      "human_verified_before_draft_contains_gold_reviewer_slot": true,
+      "human_verified_after_removes_or_declines_gold_reviewer_slot": true,
+      "observed_explanation": "Frozen main as_of uses next week Oct05–11; native selfcheck uses host Oct05 and changes next week to Oct12–18. This prevents interpreting the lost must checks as a retrieval regression."
+    },
+    {
+      "task": "PLAN-20",
+      "run": 1,
+      "method": "medium",
+      "answer_chars": 284,
+      "missing_must": [
+        "M3"
+      ],
+      "handling_both": true,
+      "over_600": false,
+      "main_input_trace_count": 4,
+      "m3_exact_evidence_in_every_observed_main_context": true,
+      "matched_final_answer_unique": 1,
+      "preceding_selfcheck_draft_chars": 475,
+      "final_explicitly_moves_next_week_to_oct12_18": true,
+      "human_review_scope": "Own fictional transport traces; uniquely matched task and answer length; not an independent regrade or complete-suite causal audit.",
+      "human_verified_before_draft_contains_gold_reviewer_slot": true,
+      "human_verified_after_removes_or_declines_gold_reviewer_slot": true,
+      "observed_explanation": "Frozen main as_of uses next week Oct05–11; native selfcheck uses host Oct05 and changes next week to Oct12–18. This prevents interpreting the lost must checks as a retrieval regression."
+    }
+  ],
+  "date_shift_cases": 8,
+  "over_limit_cases": 2,
+  "additional_model_calls": 0,
+  "limitations": [
+    "Exact text presence proves material was in the observed main prompt; lack of exact text would not prove semantic absence.",
+    "Cases selected post hoc to explain observed deficits; no new scores or changed gold.",
+    "Only these 10 first-repeat cases were manually reviewed through fictional traces; no entire suite human rejudging."
+  ]
+}

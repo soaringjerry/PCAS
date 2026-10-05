@@ -145,3 +145,29 @@ git diff --check
 上列限额命令在依赖未合入时会显示三项 skip，不代表限额通过。模型协议适配来自假模型收到的公开输入，不能参考后端实现；不修改产品来迎合验收。
 
 本轮验证的是契约行为、队列、事务、时间额度和模型上下文边界；只用确定性本地模型，**没有执行 R4-14 的真实模型 168 题三遍办事质量评测，也没有做前端视觉验收或部署**。这两项不能用本轮 Go 测试结果替代。
+
+
+## 整理、比较的调度并发补验（main，第 3 批 PR #232 的后续）
+
+按用户同一项并发验收要求，先交建卡 [PR #232](https://github.com/soaringjerry/PCAS/pull/232) 后，本次另从 `origin/main` 的 `acc6c3c` 建 `phase2_5/b12-concurrent-acceptance`，base 为 `main`，新增整理、比较各一条启用的验收测试。没有修改产品代码、建卡预算用例或 F-B2-8；F-B2-8 原 skip 保留，等待协调者通知。
+
+两条共用的夹具都运行连续 Schedule 循环、真实 Claim→Process 及另一 Store 连接池的快照／普通 addTask 命令／真实秘书 DeskTurn。每类前台请求有无后台运行的正控制，之后各设 3 秒上下文反复请求；记录真实调度／处理与前台请求重叠次数。首个本地假模型请求待前台一轮完成后释放（最长 12 秒，另受后台上下文约束），使只有两批的整理积压也确实覆盖三类前台操作的重叠，不以 SQL 造锁。开始前准备／老化自有数据；并发期间使用真实墙钟，辅助流水线任务经公共 Claim／Defer 延期保留。
+
+`go test -race` 在上述 main 基线通过两项，合计 20.196 秒，无数据库死锁、无前台请求错误、无 Go 数据竞态报告：
+
+| 路径／测试 | 输入与完成断言 | 调度／处理重叠 | 成功后台任务 | 前台请求次数／处理期间启动 | 前台最长耗时 |
+|---|---|---:|---:|---|---|
+| `TestPhase25B1_ConcurrentOrganizeSchedulerWorkerAndUserRequests` | 80 条虚构原始记忆全为当前 OrganizeVersion；整理队列全 done；真实 organize 账目存在；不增加原记忆修订 | 24 次 | 2 | 每类 4 次，其中每类 2 次在处理中启动 | 快照 33.1 ms，普通命令 65.2 ms，秘书 325.1 ms |
+| `TestPhase25B2_ConcurrentCompareSchedulerWorkerAndUserRequests` | 24 个虚构主题、72 条已整理原始记忆全为当前 CompareVersion；比较／实体比较队列全 done；真实 compare 账目存在；空比较结果不退出记忆，不增加修订 | 110 次 | 24 | 每类 13 次，均在处理中启动 | 快照 42.0 ms，普通命令 135.5 ms，秘书 355.1 ms |
+
+这两条在当前 main 的并发场景通过，保留启用；没有人为制造失败或给它们添加 finding skip。建卡路径捕获的 SQLSTATE 40P01 及未完成现状工作由先交的 PR #232／F-B3-10 记录，此处没有用整理、比较的通过覆盖建卡失败结论，也没有将本次专项统计当成三批全套回归。
+
+复验命令：
+
+```sh
+go test -race ./internal/postgres -run '^TestPhase25B[12]_Concurrent(Organize|Compare)SchedulerWorkerAndUserRequests$' -count=1 -timeout=3m -json
+go vet ./internal/postgres
+git diff --check
+```
+
+只读公开契约、公开方法声明及自有测试／本地假模型输入，没有打开后端实现、后端测试或后端 PR 差异。一次性数据库使用 tmpfs，按精确自有容器名称带卷删除；没有访问共享数据库或真实模型。

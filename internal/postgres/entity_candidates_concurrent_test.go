@@ -41,12 +41,16 @@ func TestEntityCandidatesConcurrentSchedulerWorkerAndUserRequests(t *testing.T) 
 		}
 	}
 	var catalogueCalls, confirmationCalls atomic.Int32
+	ids := make([]string, len(refs))
+	for i, ref := range refs {
+		ids[i] = string(ref.ID)
+	}
 	progress := func(ctx context.Context) (int, int, error) {
 		var merges, pending int
 		if err := f.db.QueryRow(ctx, "SELECT count(*) FROM entity_merges WHERE owner_id=$1 AND undone_at IS NULL", f.scope.OwnerID).Scan(&merges); err != nil {
 			return 0, 0, err
 		}
-		err := f.db.QueryRow(ctx, `SELECT count(*) FROM memory_jobs WHERE owner_id=$1 AND (stage LIKE 'memory.entity_candidates:%' OR stage LIKE 'memory.entity_compare:%' OR stage LIKE 'memory.compare:%') AND state<>'done'`, f.scope.OwnerID).Scan(&pending)
+		err := f.db.QueryRow(ctx, `SELECT (SELECT count(*) FROM memory_jobs WHERE owner_id=$1 AND (stage LIKE 'memory.entity_candidates:%' OR stage LIKE 'memory.entity_compare:%' OR stage LIKE 'memory.compare:%') AND state<>'done') + (SELECT count(*) FROM claims WHERE owner_id=$1 AND id=ANY($2::uuid[]) AND compared<$3)`, f.scope.OwnerID, ids, postgres.CompareVersion).Scan(&pending)
 		return merges, pending, err
 	}
 	agent := f.answerAgent(t)
@@ -144,11 +148,7 @@ func TestEntityCandidatesConcurrentSchedulerWorkerAndUserRequests(t *testing.T) 
 			return err
 		}},
 		{"command", func(ctx context.Context) error {
-			state, err := userStore.Snapshot(ctx, f.scope)
-			if err != nil {
-				return err
-			}
-			_, err = userStore.Execute(ctx, f.scope, workspace.Command{Type: "addTask", Kind: "task", Title: "虚构并发普通事项", Text: "虚构并发普通事项", Status: "todo", RequestID: string(memory.NewID()), ExpectedRevision: state.Revision})
+			_, err := userStore.Execute(ctx, f.scope, workspace.Command{Type: "addTask", Kind: "task", Title: "虚构并发普通事项", Text: "虚构并发普通事项", Status: "todo", RequestID: string(memory.NewID())})
 			return err
 		}},
 		{"secretary", func(ctx context.Context) error {

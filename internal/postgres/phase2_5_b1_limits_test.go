@@ -10,14 +10,16 @@ import (
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
-func TestPhase25B1_R12_ThirtyBatchesPerHour(t *testing.T) {
-	f := phase25B1NewFixture(t)
+func TestPhase25B1_R12_OneHundredTwentyBatchesPerHour(t *testing.T) {
+	t.Skip("awaiting PR #223: organize/compare/entity shared hourly limit 120")
+	const hourlyLimit = 120
+	f := phase25B1NewFixtureTimeout(t, 5*time.Minute)
 	fake := f.model(t, phase25B1ModelJSON(t, phase25B1Items(40, "event", false)))
-	for i := 0; i < 30; i++ {
+	for i := 0; i < hourlyLimit; i++ {
 		f.claim(t, fmt.Sprintf("虚构小时限额便签%d。", i))
 		f.batch(t)
 	}
-	last := f.claim(t, "虚构第三十一批的便签。")
+	last := f.claim(t, "虚构第一百二十一批的便签。")
 	queued := f.schedule(t)
 	if queued == 1 {
 		var stage string
@@ -35,17 +37,18 @@ func TestPhase25B1_R12_ThirtyBatchesPerHour(t *testing.T) {
 	if err := f.db.QueryRow(f.ctx, `SELECT count(*) FROM background_usage WHERE owner_id=$1 AND created_at>now()-interval '1 hour'`, f.scope.OwnerID).Scan(&reservations); err != nil {
 		t.Fatal(err)
 	}
-	t.Logf("after thirty requests: calls=%d recent reservations=%d", fake.calls(), reservations)
+	t.Logf("after %d requests: calls=%d recent reservations=%d", hourlyLimit, fake.calls(), reservations)
 	f.checkClaim(t, last, "unknown", 0, 0)
-	if fake.calls() != 30 {
+	if fake.calls() != hourlyLimit {
 		t.Errorf("hourly model calls = %d", fake.calls())
 	}
-	// Age only the owned fixture's reservations to represent the next hour.
+	// Keep real ledgers, aging only this fixture's rows to the next hour.
 	f.exec(t, `UPDATE background_usage SET created_at=now()-interval '61 minutes' WHERE owner_id=$1`, f.scope.OwnerID)
+	f.exec(t, `UPDATE model_usage SET at=now()-interval '61 minutes' WHERE owner_id=$1`, f.scope.OwnerID)
 	f.exec(t, `UPDATE memory_jobs SET available_at=now() WHERE owner_id=$1 AND stage LIKE 'memory.organize:%' AND state='queued'`, f.scope.OwnerID)
 	f.batch(t)
 	f.checkClaim(t, last, "event", 1, 0)
-	if fake.calls() != 31 {
+	if fake.calls() != hourlyLimit+1 {
 		t.Errorf("next-hour calls = %d", fake.calls())
 	}
 }

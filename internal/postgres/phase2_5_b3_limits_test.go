@@ -15,15 +15,17 @@ import (
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
-func TestPhase25B3_X3_9_HourlySixtyAcrossHundredStaleCards(t *testing.T) {
-	f := phase25B234NewFixtureTimeout(t, 3*time.Minute)
+func TestPhase25B3_X3_9_HourlyOneHundredTwentyAcrossTwoHundredStaleCards(t *testing.T) {
+	t.Skip("awaiting PR #222: card hourly limit 120")
+	const totalCards, hourlyLimit = 200, 120
+	f := phase25B234NewFixtureTimeout(t, 10*time.Minute)
 	var all []memory.Ref
 	var seeds []struct {
 		group workspace.MemoryGroup
 		refs  []memory.Ref
 	}
-	for i := 0; i < 100; i++ {
-		g := workspace.MemoryGroup{EntityID: string(f.entity(t, "topic", fmt.Sprintf("虚构百组主题%03d", i))), Name: fmt.Sprintf("虚构百组主题%03d", i), Type: "topic"}
+	for i := 0; i < totalCards; i++ {
+		g := workspace.MemoryGroup{EntityID: string(f.entity(t, "topic", fmt.Sprintf("虚构二百组主题%03d", i))), Name: fmt.Sprintf("虚构二百组主题%03d", i), Type: "topic"}
 		var refs []memory.Ref
 		for j := 0; j < 3; j++ {
 			r := f.claim(t, fmt.Sprintf("虚构主题 %03d 当前记忆 %d。", i, j))
@@ -45,13 +47,13 @@ func TestPhase25B3_X3_9_HourlySixtyAcrossHundredStaleCards(t *testing.T) {
 	clock := time.Now().UTC().Add(11 * time.Minute)
 	f.scheduleStatus(t, clock)
 	first := f.drainStatus(t)
-	if first != 60 {
-		t.Errorf("first hour card calls=%d, want 60", first)
+	if first != hourlyLimit {
+		t.Errorf("first hour card calls=%d, want %d", first, hourlyLimit)
 	}
 	if n := f.buildStatus(t, clock); n != 0 {
 		t.Errorf("same-hour extra card calls=%d", n)
 	}
-	if got := f.usage(t, "card"); got != 60 {
+	if got := f.usage(t, "card"); got != hourlyLimit {
 		t.Errorf("first hour usage=%d", got)
 	}
 	// Advance the owned database one hour relative to the handlers' wall clock.
@@ -61,15 +63,15 @@ func TestPhase25B3_X3_9_HourlySixtyAcrossHundredStaleCards(t *testing.T) {
 	}
 	f.scheduleStatus(t, time.Now().Add(11*time.Minute))
 	second := f.drainStatus(t)
-	if second != 40 {
-		t.Errorf("next hour calls=%d, want 40", second)
+	if second != totalCards-hourlyLimit {
+		t.Errorf("next hour calls=%d, want %d", second, totalCards-hourlyLimit)
 	}
-	if got := f.usage(t, "card"); got != 100 {
+	if got := f.usage(t, "card"); got != totalCards {
 		t.Errorf("total card usage=%d", got)
 	}
 	var a workspace.About
 	f.get(t, "/v1/workspace/about", &a)
-	if a.Building.Done != 100 || a.Building.Total != 100 {
+	if a.Building.Done != totalCards || a.Building.Total != totalCards {
 		t.Errorf("final building=%+v", a.Building)
 	}
 	f.assertRevisions(t, all...)

@@ -252,9 +252,6 @@ func (s *Store) processEntityCompareVersion(ctx context.Context, j worker.Job, v
 	}
 	var pair *comparisonEntityPair
 	err = pgx.BeginFunc(ctx, conn, func(tx pgx.Tx) error {
-		if err := extractionOwnerLock(ctx, tx, j.OwnerID); err != nil {
-			return err
-		}
 		if err := lockJob(ctx, tx, j); err != nil {
 			return err
 		}
@@ -317,10 +314,7 @@ func (s *Store) processEntityCompareVersion(ctx context.Context, j worker.Job, v
 		}
 		slog.WarnContext(ctx, "entity comparison attempts exhausted", "stage", "entity_compare", "error_type", "attempts_exhausted")
 	}
-	return pgx.BeginFunc(ctx, conn, func(tx pgx.Tx) error {
-		if err := extractionOwnerLock(ctx, tx, j.OwnerID); err != nil {
-			return err
-		}
+	return backgroundWriteTx(ctx, conn, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
 		if err := lockJob(ctx, tx, j); err != nil {
 			return err
 		}

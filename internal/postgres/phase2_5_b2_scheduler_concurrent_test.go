@@ -20,37 +20,53 @@ import (
 
 // Exercise the production overlap: scheduling, result writes, and foreground
 // traffic run on independent connections. No SQL locks stand in for a handler.
-func TestPhase25B3_ConcurrentStatusSchedulerWorkerAndUserRequests(t *testing.T) {
-	t.Skip("finding F-B3-10: no deadlock since the lock-order fix; scheduler still abandons its pass on a busy group, so rebuilds and the handover can stay unfinished")
-	for _, rebuilding := range []bool{false, true} {
-		name := "initial"
-		if rebuilding {
-			name = "rebuild"
-		}
-		t.Run(name, func(t *testing.T) {
-			phase25B3ConcurrentStatus(t, rebuilding)
-		})
-	}
+func TestPhase25B2_ConcurrentCompareSchedulerWorkerAndUserRequests(t *testing.T) {
+	phase25B12ConcurrentScheduler(t, "compare")
 }
 
-func phase25B3ConcurrentStatus(t *testing.T, rebuilding bool) {
+// Shared by the organize and compare cases. The first fake call stays active
+// until one user round finishes, so even a short two-batch organize backlog
+// really overlaps all three foreground operations. No database locks are forged.
+func phase25B12ConcurrentScheduler(t *testing.T, kind string) {
 	t.Helper()
-	const groups = 24
 	const requestBudget = 3 * time.Second
 	f := phase25B234NewFixture(t)
 	var refs []memory.Ref
-	for i := 0; i < groups; i++ {
-		g := workspace.MemoryGroup{EntityID: string(f.entity(t, "topic", fmt.Sprintf("虚构并发主题%02d", i))), Name: fmt.Sprintf("虚构并发主题%02d", i), Type: "topic"}
-		var members []memory.Ref
-		for j := 0; j < 3; j++ {
-			r := f.claim(t, fmt.Sprintf("虚构并发主题%02d便签%d：先写结论。", i, j))
-			f.labels(t, r, "progress", true, 1, g)
-			members = append(members, r)
+	var column, stagePattern string
+	var version int
+	if kind == "organize" {
+		column, stagePattern, version = "organized", "memory.organize:%", postgres.OrganizeVersion
+		for i := 0; i < 80; i++ {
+			refs = append(refs, f.claim(t, fmt.Sprintf("虚构并发整理便签%03d：一次性的演练记录。", i)))
 		}
-		refs = append(refs, members...)
-		if rebuilding {
-			f.card(t, g, members, true)
+	} else {
+		column, stagePattern, version = "compared", "memory.compare:%", postgres.CompareVersion
+		f.sharedSubject = true
+		for i := 0; i < 24; i++ {
+			g := workspace.MemoryGroup{EntityID: string(f.entity(t, "topic", fmt.Sprintf("虚构并发比较主题%02d", i))), Type: "topic"}
+			f.subject = f.entity(t, "person", fmt.Sprintf("FictitiousConcurrentSpeaker%02d", i))
+			for j := 0; j < 3; j++ {
+				r := f.claim(t, fmt.Sprintf("虚构并发比较主题%02d便签%d：原始演练记录。", i, j))
+				f.labels(t, r, "progress", true, 1, g)
+				refs = append(refs, r)
+			}
 		}
+	}
+	ids := make([]string, len(refs))
+	for i, ref := range refs {
+		ids[i] = string(ref.ID)
+	}
+	progress := func(ctx context.Context) (int, int, error) {
+		var marked, pending int
+		if err := f.db.QueryRow(ctx, "SELECT count(*) FROM claims WHERE owner_id=$1 AND id=ANY($2::uuid[]) AND "+column+"=$3 AND retired=''", f.scope.OwnerID, ids, version).Scan(&marked); err != nil {
+			return 0, 0, err
+		}
+		entityPattern := "unused:%"
+		if kind == "compare" {
+			entityPattern = "memory.entity_compare:%"
+		}
+		err := f.db.QueryRow(ctx, `SELECT count(*) FROM memory_jobs WHERE owner_id=$1 AND (stage LIKE $2 OR stage LIKE $3) AND state<>'done'`, f.scope.OwnerID, stagePattern, entityPattern).Scan(&pending)
+		return marked, pending, err
 	}
 	agent := f.answerAgent(t)
 	userStore, err := postgres.Open(f.ctx, f.db.Config().ConnString())
@@ -63,25 +79,37 @@ func phase25B3ConcurrentStatus(t *testing.T, rebuilding bool) {
 	userFixture.model(t, func(_ *http.Request, _ int, _ phase25B234ModelRequest) phase25B234ModelReply {
 		return phase25B4ReplyJSON(phase25B4Reply{text: "虚构并发办事回复。"}, false)
 	})
-	firstModel := make(chan struct{})
+	firstModel, firstUserRound := make(chan struct{}), make(chan struct{})
 	var first sync.Once
+	organizeJSON := phase25B1ModelJSON(t, phase25B1Items(40, "event", false))
 	f.model(t, func(r *http.Request, _ int, input phase25B234ModelRequest) phase25B234ModelReply {
-		if card, err := phase25B3CardInput(input); err == nil {
-			first.Do(func() { close(firstModel) })
-			// Local latency creates ample real overlap without holding a SQL lock
-			// or relying on private write order to manufacture a deadlock.
+		initial := false
+		first.Do(func() { initial = true; close(firstModel) })
+		if initial {
 			select {
-			case <-time.After(80 * time.Millisecond):
-				return phase25B3JSON(phase25B3All(card))
+			case <-firstUserRound:
 			case <-r.Context().Done():
+				return phase25B234ModelReply{status: http.StatusServiceUnavailable}
+			case <-time.After(12 * time.Second):
 				return phase25B234ModelReply{status: http.StatusServiceUnavailable}
 			}
 		}
-		body, err := phase25B3HandoverJSON(nil, nil)
-		if err != nil {
-			return phase25B234ModelReply{status: http.StatusInternalServerError}
+		select {
+		case <-time.After(80 * time.Millisecond):
+		case <-r.Context().Done():
+			return phase25B234ModelReply{status: http.StatusServiceUnavailable}
 		}
-		return phase25B234ModelReply{content: body}
+		if kind == "organize" {
+			return phase25B234ModelReply{content: organizeJSON}
+		}
+		entities, err := phase25B2Entities(input)
+		if err != nil {
+			return phase25B234ModelReply{status: http.StatusBadRequest}
+		}
+		if len(entities) > 0 {
+			return phase25B234ModelReply{content: `{"same":false,"keep":null}`}
+		}
+		return phase25B2JSON(phase25B2Empty())
 	})
 	f.index(t)
 	// Age only setup data. All concurrent calls below use real wall time;
@@ -133,7 +161,7 @@ func phase25B3ConcurrentStatus(t *testing.T, rebuilding bool) {
 
 	runCtx, stop := context.WithTimeout(f.ctx, 25*time.Second)
 	defer stop()
-	var processing, schedules, overlap, cards, handovers atomic.Int32
+	var processing, schedules, overlap, completed atomic.Int32
 	var mu sync.Mutex
 	var failures []string
 	latencies := map[string]time.Duration{}
@@ -169,7 +197,13 @@ func phase25B3ConcurrentStatus(t *testing.T, rebuilding bool) {
 			if processing.Load() != 0 {
 				overlap.Add(1)
 			}
-			if _, err := f.store.ScheduleStatus(runCtx, time.Now()); err != nil && runCtx.Err() == nil {
+			var err error
+			if kind == "organize" {
+				_, err = f.store.ScheduleOrganize(runCtx, time.Now())
+			} else {
+				_, err = f.store.ScheduleCompare(runCtx, time.Now())
+			}
+			if err != nil && runCtx.Err() == nil {
 				problem("scheduler", err)
 			}
 			pause()
@@ -190,27 +224,24 @@ func phase25B3ConcurrentStatus(t *testing.T, rebuilding bool) {
 				pause()
 				continue
 			}
-			if strings.HasPrefix(job.Stage, "memory.card:") || strings.HasPrefix(job.Stage, "memory.handover:") {
+			matched := kind == "organize" && strings.HasPrefix(job.Stage, "memory.organize:") || kind == "compare" && (strings.HasPrefix(job.Stage, "memory.compare:") || strings.HasPrefix(job.Stage, "memory.entity_compare:"))
+			if matched {
 				processing.Store(1)
 			}
 			switch {
-			case strings.HasPrefix(job.Stage, "memory.card:"):
-				err = f.store.ProcessCard(runCtx, *job)
-				if err == nil {
-					cards.Add(1)
-				}
-			case strings.HasPrefix(job.Stage, "memory.handover:"):
-				err = f.store.ProcessHandover(runCtx, *job)
-				if err == nil {
-					handovers.Add(1)
-				}
+			case kind == "organize" && strings.HasPrefix(job.Stage, "memory.organize:"):
+				err = f.store.ProcessOrganize(runCtx, *job)
+			case kind == "compare" && strings.HasPrefix(job.Stage, "memory.compare:"):
+				err = f.store.ProcessCompare(runCtx, *job)
+			case kind == "compare" && strings.HasPrefix(job.Stage, "memory.entity_compare:"):
+				err = f.store.ProcessEntityCompare(runCtx, *job)
 			case job.Stage == "memory.index":
 				err = f.store.ProcessIndex(runCtx, *job)
 			default:
-				// A real secretary turn also queues ingestion/extraction work.
-				// Keep those jobs, using the public lease/deferral boundary; this
-				// acceptance case processes only status work and local indexing.
-				err = f.store.Defer(runCtx, *job, "acceptance_non_status", time.Now().Add(time.Hour), true)
+				err = f.store.Defer(runCtx, *job, "acceptance_other_pipeline", time.Now().Add(time.Hour), true)
+			}
+			if err == nil && matched {
+				completed.Add(1)
 			}
 			processing.Store(0)
 			if err != nil && runCtx.Err() == nil {
@@ -260,6 +291,9 @@ func phase25B3ConcurrentStatus(t *testing.T, rebuilding bool) {
 					problem("foreground "+request.name, fmt.Errorf("elapsed %s exceeds %s", elapsed, requestBudget))
 				}
 			}
+			if round == 0 {
+				close(firstUserRound)
+			}
 			if round >= 3 {
 				select {
 				case <-backgroundDone:
@@ -282,9 +316,15 @@ func phase25B3ConcurrentStatus(t *testing.T, rebuilding bool) {
 	})
 	finished := false
 	for runCtx.Err() == nil {
-		if !finished && cards.Load() >= groups && handovers.Load() > 0 {
-			close(backgroundDone)
-			finished = true
+		if !finished && completed.Load() > 0 {
+			marked, pending, err := progress(runCtx)
+			if err != nil && runCtx.Err() == nil {
+				problem("completion check", err)
+			}
+			if err == nil && marked == len(refs) && pending == 0 {
+				close(backgroundDone)
+				finished = true
+			}
 		}
 		if finished {
 			select {
@@ -303,12 +343,12 @@ func phase25B3ConcurrentStatus(t *testing.T, rebuilding bool) {
 	}
 	mu.Lock()
 	defer mu.Unlock()
-	t.Logf("schedules=%d scheduling_during_processing=%d cards=%d handovers=%d user_calls=%v user_overlap=%v max_latency=%v", schedules.Load(), overlap.Load(), cards.Load(), handovers.Load(), userCalls, userOverlap, latencies)
+	t.Logf("pipeline=%s schedules=%d scheduling_during_processing=%d completed_jobs=%d user_calls=%v user_overlap=%v max_latency=%v", kind, schedules.Load(), overlap.Load(), completed.Load(), userCalls, userOverlap, latencies)
 	for _, failure := range failures {
 		t.Error(failure)
 	}
-	if !finished || cards.Load() != groups || handovers.Load() != 1 {
-		t.Errorf("background work incomplete: cards=%d/%d handovers=%d", cards.Load(), groups, handovers.Load())
+	if !finished {
+		t.Error("background work did not complete within 25 seconds")
 	}
 	if overlap.Load() == 0 {
 		t.Error("scheduler never ran during task processing")
@@ -318,15 +358,13 @@ func phase25B3ConcurrentStatus(t *testing.T, rebuilding bool) {
 			t.Errorf("foreground %s did not run repeatedly during background work", request.name)
 		}
 	}
-	var fresh, pending int
-	if err := f.db.QueryRow(f.ctx, `SELECT count(*) FROM status_cards WHERE owner_id=$1 AND NOT stale AND rule=$2`, f.scope.OwnerID, postgres.CardVersion).Scan(&fresh); err != nil {
+	marked, pending, err := progress(f.ctx)
+	if err != nil {
 		t.Fatal(err)
 	}
-	if err := f.db.QueryRow(f.ctx, `SELECT count(*) FROM memory_jobs WHERE owner_id=$1 AND (stage LIKE 'memory.card:%' OR stage LIKE 'memory.handover:%') AND state<>'done'`, f.scope.OwnerID).Scan(&pending); err != nil {
-		t.Fatal(err)
-	}
-	if fresh != groups || pending != 0 || f.usage(t, "card") != groups || f.usage(t, "handover") != 1 {
-		t.Errorf("final fresh=%d pending=%d card_usage=%d handover_usage=%d", fresh, pending, f.usage(t, "card"), f.usage(t, "handover"))
+	purpose := kind
+	if f.usage(t, purpose) == 0 || marked != len(refs) || pending != 0 {
+		t.Errorf("final marked=%d/%d pending=%d model_usage=%d", marked, len(refs), pending, f.usage(t, purpose))
 	}
 	f.assertRevisions(t, refs...)
 }

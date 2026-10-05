@@ -272,12 +272,23 @@ const claimCandidate = `SELECT j.id,r.kind,j.priority AS dispatch_priority
 		 WHERE sibling.owner_id=own.owner_id AND sibling.conversation_key=own.conversation_key
 		 AND family.stage LIKE 'source.extract:conversation:%' AND family.state IN('queued','leased')))`
 const claimFinish = `
-		ORDER BY dispatch_priority,j.available_at,j.created_at,j.id FOR UPDATE OF j SKIP LOCKED LIMIT 1
-	) UPDATE memory_jobs j SET priority=c.dispatch_priority,state='leased',attempts=j.attempts+1,lease_until=now()+$1*interval '1 second',lease_token=$2,updated_at=now()
-	FROM candidate c WHERE j.id=c.id RETURNING j.id::text,j.owner_id::text,j.record_id::text,j.record_version,j.stage,j.attempts,j.lease_token::text,c.kind`
+		ORDER BY dispatch_priority,
+ CASE WHEN j.priority=8 AND ((j.stage LIKE 'memory.card:%' AND (SELECT prefer_cards FROM background_dispatch))
+ OR ((j.stage LIKE 'memory.compare:%' OR j.stage LIKE 'memory.entity_compare:%') AND NOT (SELECT prefer_cards FROM background_dispatch))) THEN 0 ELSE 1 END,
+ j.available_at,j.created_at,j.id FOR UPDATE OF j SKIP LOCKED LIMIT 1
+	), claimed AS (UPDATE memory_jobs j SET priority=c.dispatch_priority,state='leased',attempts=j.attempts+1,lease_until=now()+$1*interval '1 second',lease_token=$2,updated_at=now()
+	FROM candidate c WHERE j.id=c.id RETURNING j.id,j.owner_id,j.record_id,j.record_version,j.stage,j.attempts,j.lease_token,c.kind,j.priority
+ ), rotated AS (UPDATE background_dispatch SET prefer_cards=claimed.stage NOT LIKE 'memory.card:%'
+ FROM claimed WHERE claimed.priority=8 AND (claimed.stage LIKE 'memory.card:%' OR claimed.stage LIKE 'memory.compare:%' OR claimed.stage LIKE 'memory.entity_compare:%') RETURNING background_dispatch.prefer_cards)
+ SELECT id::text,owner_id::text,record_id::text,record_version,stage,attempts,lease_token::text,kind FROM claimed`
 
-const claimWindowed = `WITH ready AS MATERIALIZED (SELECT id FROM memory_jobs WHERE state IN ('queued','leased') AND ((state='queued' AND available_at<=now()) OR (state='leased' AND lease_until<now() AND attempts<$3)) ORDER BY priority,available_at,created_at,id LIMIT 500), candidate AS (` + claimCandidate + claimFinish
-const claimNextWindow = `WITH ready AS MATERIALIZED (SELECT id FROM memory_jobs WHERE state IN ('queued','leased') AND ((state='queued' AND available_at<=now()) OR (state='leased' AND lease_until<now() AND attempts<$3)) AND (priority,available_at,created_at,id)>($4,$5,$6,$7::uuid) ORDER BY priority,available_at,created_at,id LIMIT 500), candidate AS (` + claimCandidate + claimFinish
+const claimFairReady = ` UNION (SELECT id FROM memory_jobs WHERE priority=8 AND stage LIKE 'memory.card:%' AND (SELECT prefer_cards FROM background_dispatch)
+ AND state IN('queued','leased') AND ((state='queued' AND available_at<=now()) OR (state='leased' AND lease_until<now() AND attempts<$3)) ORDER BY priority,available_at,created_at,id LIMIT 500)
+ UNION (SELECT id FROM memory_jobs WHERE priority=8 AND (stage LIKE 'memory.compare:%' OR stage LIKE 'memory.entity_compare:%') AND NOT (SELECT prefer_cards FROM background_dispatch)
+ AND state IN('queued','leased') AND ((state='queued' AND available_at<=now()) OR (state='leased' AND lease_until<now() AND attempts<$3)) ORDER BY priority,available_at,created_at,id LIMIT 500)`
+
+const claimWindowed = `WITH ready AS MATERIALIZED ((SELECT id FROM memory_jobs WHERE state IN ('queued','leased') AND ((state='queued' AND available_at<=now()) OR (state='leased' AND lease_until<now() AND attempts<$3)) ORDER BY priority,available_at,created_at,id LIMIT 500)` + claimFairReady + `), candidate AS (` + claimCandidate + claimFinish
+const claimNextWindow = `WITH ready AS MATERIALIZED ((SELECT id FROM memory_jobs WHERE state IN ('queued','leased') AND ((state='queued' AND available_at<=now()) OR (state='leased' AND lease_until<now() AND attempts<$3)) AND (priority,available_at,created_at,id)>($4,$5,$6,$7::uuid) ORDER BY priority,available_at,created_at,id LIMIT 500)` + claimFairReady + `), candidate AS (` + claimCandidate + claimFinish
 
 const claimCursorBase = `SELECT priority,available_at,created_at,id::text FROM memory_jobs WHERE state IN ('queued','leased') AND ((state='queued' AND available_at<=now()) OR (state='leased' AND lease_until<now() AND attempts<$1))`
 const claimFirstCursor = claimCursorBase + ` ORDER BY priority,available_at,created_at,id OFFSET 499 LIMIT 1`
@@ -287,8 +298,8 @@ const claimNextCursor = claimCursorBase + ` AND (priority,available_at,created_a
 // not walk all waiting extraction entrances before finding an index job.
 const claimIndexStages = `(stage IN ('source.embed','source.tokenize','memory.embed','memory.index') OR stage LIKE 'memory.embed:%')`
 
-var claimIndexWindowed = strings.Replace(claimWindowed, "WHERE state IN", "WHERE "+claimIndexStages+" AND state IN", 1)
-var claimIndexNextWindow = strings.Replace(claimNextWindow, "WHERE state IN", "WHERE "+claimIndexStages+" AND state IN", 1)
+var claimIndexWindowed = strings.Replace(strings.Replace(claimWindowed, claimFairReady, "", 1), "WHERE state IN", "WHERE "+claimIndexStages+" AND state IN", 1)
+var claimIndexNextWindow = strings.Replace(strings.Replace(claimNextWindow, claimFairReady, "", 1), "WHERE state IN", "WHERE "+claimIndexStages+" AND state IN", 1)
 
 const claimIndexCursorBase = claimCursorBase + ` AND ` + claimIndexStages
 const claimIndexFirstCursor = claimIndexCursorBase + ` ORDER BY priority,available_at,created_at,id OFFSET 499 LIMIT 1`

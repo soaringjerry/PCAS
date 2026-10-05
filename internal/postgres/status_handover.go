@@ -307,7 +307,8 @@ func (s *Store) ProcessHandover(ctx context.Context, j worker.Job) error {
 		if built != nil && now.Before(built.Add(6*time.Hour)) {
 			return &worker.JobError{Code: "handover_interval", Until: built.Add(6 * time.Hour), NoAttempt: true}
 		}
-		input, depends, refs, err = s.handoverInputTx(ctx, tx, scope)
+		// Preparing model input only reads; defer repairs to mutation paths.
+		input, depends, refs, err = s.handoverInputTx(context.WithValue(ctx, statusNoRepairKey{}, true), tx, scope)
 		if err != nil {
 			return err
 		}
@@ -332,32 +333,27 @@ func (s *Store) ProcessHandover(ctx context.Context, j worker.Job) error {
 		body = emptyHandover()
 		slog.WarnContext(ctx, "handover attempts exhausted", "stage", "handover", "error_type", "attempts_exhausted")
 	}
-	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-		if err := extractionOwnerLock(ctx, tx, j.OwnerID); err != nil {
-			return err
-		}
+	return backgroundWriteTx(ctx, s.pool, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
 		if err := lockJob(ctx, tx, j); err != nil {
 			return err
 		}
-		for _, d := range depends {
-			var current bool
-			if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM status_cards WHERE owner_id=$1 AND key=$2 AND built_at=$3::timestamptz AND NOT stale AND rule>=$4)", string(j.OwnerID), d.Key, d.BuiltAt, CardVersion).Scan(&current); err != nil {
-				return err
-			}
-			if !current {
-				return &worker.JobError{Code: "handover_changed", Until: time.Now().Add(10 * time.Minute), NoAttempt: true}
-			}
+		var current int
+		if err := tx.QueryRow(ctx, `SELECT count(*) FROM jsonb_array_elements($2::jsonb) d JOIN status_cards sc
+ ON sc.owner_id=$1 AND sc.key=d->>'key' AND sc.built_at=(d->>'builtAt')::timestamptz AND NOT sc.stale AND sc.rule>=$3`, string(j.OwnerID), asJSON(depends), CardVersion).Scan(&current); err != nil {
+			return err
 		}
-		// Includes deadline refs which need not be present in any selected card.
-		for _, ref := range refs {
-			var current bool
-			if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM memory_records r JOIN claims cl ON(cl.owner_id,cl.id)=(r.owner_id,r.id)
- WHERE r.owner_id=$1 AND r.id=$2 AND r.version=$3 AND r.state='active' AND cl.retired='' AND claim_source_is_current(r.owner_id,r.id,r.version,now()))`, string(j.OwnerID), string(ref.ID), ref.Version).Scan(&current); err != nil {
-				return err
-			}
-			if !current {
-				return &worker.JobError{Code: "handover_changed", Until: time.Now().Add(10 * time.Minute), NoAttempt: true}
-			}
+		if current != len(depends) {
+			return &worker.JobError{Code: "handover_changed", Until: time.Now().Add(10 * time.Minute), NoAttempt: true}
+		}
+		// Includes deadlines that need not be present in any selected card.
+		if err := tx.QueryRow(ctx, `SELECT count(*) FROM jsonb_to_recordset($2::jsonb) input(id uuid,version integer)
+ JOIN memory_records r ON r.owner_id=$1 AND r.id=input.id AND r.version=input.version
+ JOIN claims cl ON(cl.owner_id,cl.id)=(r.owner_id,r.id)
+ WHERE r.state='active' AND cl.retired='' AND claim_source_is_current(r.owner_id,r.id,r.version,now())`, string(j.OwnerID), asJSON(refs)).Scan(&current); err != nil {
+			return err
+		}
+		if current != len(refs) {
+			return &worker.JobError{Code: "handover_changed", Until: time.Now().Add(10 * time.Minute), NoAttempt: true}
 		}
 		if _, err := tx.Exec(ctx, `INSERT INTO handovers(owner_id,body,rule,built_at,stale,depends) VALUES($1,$2,$3,clock_timestamp(),false,$4)
  ON CONFLICT(owner_id) DO UPDATE SET body=excluded.body,rule=excluded.rule,built_at=excluded.built_at,stale=false,depends=excluded.depends`, string(j.OwnerID), body, HandoverVersion, asJSON(depends)); err != nil {

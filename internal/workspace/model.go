@@ -132,6 +132,7 @@ type MemoryGroup struct {
 	Type     string `json:"type"`
 }
 type Memory struct {
+	AppliesTo          string          `json:"appliesTo,omitempty"`
 	Trust              string          `json:"trust"`
 	Retired            string          `json:"retired,omitempty"`
 	RetiredBy          string          `json:"retiredBy,omitempty"`

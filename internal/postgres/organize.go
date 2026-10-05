@@ -21,11 +21,11 @@ import (
 var OrganizeVersion = 1
 
 const (
-	OrganizeInterval    = time.Minute
-	OrganizeStage       = "memory.organize"
-	OrganizePriority    = 11
-	organizeBatchLimit  = 40
-	organizeHourlyLimit = 30
+	OrganizeInterval           = time.Minute
+	OrganizeStage              = "memory.organize"
+	OrganizePriority           = 11
+	organizeBatchLimit         = 40
+	organizeCompareHourlyLimit = 120
 )
 
 var organizeAreas = []string{"学业", "工作", "创业", "技术", "健康", "财务", "居住", "饮食", "出行", "关系", "兴趣"}
@@ -294,6 +294,26 @@ func organizeVocabularyTx(ctx context.Context, tx pgx.Tx, owner memory.ID) ([]or
 	return groups, rows.Err()
 }
 
+// Organizing, memory comparisons and same-person checks share one rolling-hour
+// allowance. All three hold the organize-call session lock through reservation
+// and generation, so checking this shared ledger cannot race another call.
+// Count invocation reservations, including zero-cost and failed calls; other
+// background stages and foreground calls have their own limits.
+func organizeCompareHourlyTx(ctx context.Context, tx pgx.Tx, code string) error {
+	var count int
+	var next *time.Time
+	if err := tx.QueryRow(ctx, `SELECT count(*),min(b.created_at)+interval '1 hour' FROM background_usage b
+ JOIN memory_jobs j ON j.id=b.job_id
+ WHERE (j.stage LIKE 'memory.organize:%' OR j.stage LIKE 'memory.compare:%' OR j.stage LIKE 'memory.entity_compare:%')
+ AND b.created_at>now()-interval '1 hour'`).Scan(&count, &next); err != nil {
+		return err
+	}
+	if count >= organizeCompareHourlyLimit {
+		return &worker.JobError{Code: code, Until: next.Add(time.Second), NoAttempt: true}
+	}
+	return nil
+}
+
 func (s *Store) ProcessOrganize(ctx context.Context, j worker.Job) error {
 	// Hold a dedicated session lock over generation, not the user's row lock:
 	// corrections/deletions can proceed, but a recovered lease cannot race a call.
@@ -364,14 +384,8 @@ func (s *Store) ProcessOrganize(ctx context.Context, j worker.Job) error {
 		if len(batch) == 0 {
 			return acknowledge(ctx, tx, j)
 		}
-		var recent int
-		var next *time.Time
-		if err := tx.QueryRow(ctx, `SELECT count(*),min(b.created_at)+interval '1 hour' FROM background_usage b
- JOIN memory_jobs job ON job.id=b.job_id WHERE job.stage LIKE 'memory.organize:%' AND b.created_at>now()-interval '1 hour'`).Scan(&recent, &next); err != nil {
+		if err := organizeCompareHourlyTx(ctx, tx, "organize_hourly_limit"); err != nil {
 			return err
-		}
-		if recent >= organizeHourlyLimit {
-			return &worker.JobError{Code: "organize_hourly_limit", Until: next.Add(time.Second), NoAttempt: true}
 		}
 		vocabulary, err = organizeVocabularyTx(ctx, tx, j.OwnerID)
 		prepared = err == nil

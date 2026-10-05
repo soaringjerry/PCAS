@@ -26,10 +26,17 @@ type Evidence struct {
 	Text         string
 	ModelCalls   int
 	CaptureCalls int
+	// Product providers may return their already self-checked reply. Legacy
+	// context providers leave this nil and use the frozen answer call as before.
+	Answer       *string
+	InputChars   int
+	ContextChars int
+	Usage        *TierUsage
 }
 type Provider struct {
-	Name string
-	Get  func(context.Context, Suite, Task) (Evidence, error)
+	Name   string
+	Get    func(context.Context, Suite, Task) (Evidence, error)
+	Accept func(Task) bool
 }
 type Decision struct {
 	ID    string `json:"id"`
@@ -63,6 +70,7 @@ type Row struct {
 	TotalMS         float64     `json:"total_ms"`
 	Judgments       [2]Judgment `json:"judgments"`
 	Disagreements   []string    `json:"disagreements"`
+	TierUsage       *TierUsage  `json:"tier_usage,omitempty"`
 }
 type Summary struct {
 	Method           string  `json:"method"`
@@ -127,25 +135,26 @@ func modelErrorType(err error) string {
 }
 
 type Report struct {
-	Failures        []Failure `json:"failures,omitempty"`
-	Version         int       `json:"schema_version"`
-	Revision        string    `json:"revision"`
-	SuiteSHA        string    `json:"suite_sha256"`
-	AnswerPromptSHA string    `json:"answer_prompt_sha256"`
-	JudgePromptSHA  string    `json:"judge_prompt_sha256"`
-	Model           string    `json:"model"`
-	Channel         string    `json:"channel"`
-	Fake            bool      `json:"fake"`
-	AsOf            string    `json:"as_of"`
-	StartedAt       string    `json:"started_at"`
-	HostDate        string    `json:"host_date"`
-	Repeats         int       `json:"repeats"`
-	Workers         int       `json:"workers"`
-	AnswerLimit     int       `json:"answer_limit"`
-	Rows            []Row     `json:"rows"`
-	Summaries       []Summary `json:"summaries"`
-	Ranges          []Range   `json:"ranges"`
-	Notes           []string  `json:"notes"`
+	Failures        []Failure    `json:"failures,omitempty"`
+	Version         int          `json:"schema_version"`
+	Revision        string       `json:"revision"`
+	SuiteSHA        string       `json:"suite_sha256"`
+	AnswerPromptSHA string       `json:"answer_prompt_sha256"`
+	JudgePromptSHA  string       `json:"judge_prompt_sha256"`
+	Model           string       `json:"model"`
+	Channel         string       `json:"channel"`
+	Fake            bool         `json:"fake"`
+	AsOf            string       `json:"as_of"`
+	StartedAt       string       `json:"started_at"`
+	HostDate        string       `json:"host_date"`
+	Repeats         int          `json:"repeats"`
+	Workers         int          `json:"workers"`
+	AnswerLimit     int          `json:"answer_limit"`
+	Rows            []Row        `json:"rows"`
+	Summaries       []Summary    `json:"summaries"`
+	Ranges          []Range      `json:"ranges"`
+	Notes           []string     `json:"notes"`
+	Preparation     *Preparation `json:"preparation,omitempty"`
 }
 
 func SHA(s string) string     { return fmt.Sprintf("%x", sha256.Sum256([]byte(s))) }
@@ -281,7 +290,10 @@ func Execute(ctx context.Context, s Suite, model Model, providers []Provider, r 
 		for n := range s.Tasks {
 			t := s.Tasks[(n+run-1)%len(s.Tasks)]
 			for k := range providers {
-				jobs <- job{t, providers[(k+n+run-1)%len(providers)]}
+				p := providers[(k+n+run-1)%len(providers)]
+				if p.Accept == nil || p.Accept(t) {
+					jobs <- job{t, p}
+				}
 			}
 		}
 		close(jobs)
@@ -342,16 +354,24 @@ func executeRow(ctx context.Context, s Suite, t Task, p Provider, model Model, r
 	start := time.Now()
 	attempt := Row{Run: run, Task: t.ID, Method: p.Name}
 	ev, err := p.Get(ctx, s, t)
+	attempt.ModelCalls = ev.ModelCalls
 	if err != nil {
 		return attempt, fmt.Errorf("evidence_failed type=%s", modelErrorType(err))
 	}
 	evidenceMS := ms(start)
 	prompt := AnswerPrompt(s, t, ev.Text)
 	at := time.Now()
-	attempt.ModelCalls = ev.ModelCalls + 1
-	answer, err := model.Generate(ctx, AnswerSystem, prompt)
-	if err != nil {
-		return attempt, fmt.Errorf("answer_failed type=%s", modelErrorType(err))
+	var answer string
+	answerCalls := 0
+	if ev.Answer != nil {
+		answer = *ev.Answer
+	} else {
+		answerCalls = 1
+		attempt.ModelCalls++
+		answer, err = model.Generate(ctx, AnswerSystem, prompt)
+		if err != nil {
+			return attempt, fmt.Errorf("answer_failed type=%s", modelErrorType(err))
+		}
 	}
 	answerMS := ms(at)
 	judgeAt := time.Now()
@@ -376,9 +396,13 @@ func executeRow(ctx context.Context, s Suite, t Task, p Provider, model Model, r
 	row.Method = p.Name
 	row.InputChars = utf8.RuneCountInString(AnswerSystem + prompt)
 	row.ContextChars = utf8.RuneCountInString(ev.Text)
+	if ev.Answer != nil {
+		row.InputChars, row.ContextChars = ev.InputChars, ev.ContextChars
+		row.TierUsage = ev.Usage
+	}
 	row.AnswerChars = utf8.RuneCountInString(answer)
 	row.Usable = row.Usable && row.AnswerChars <= AnswerLimit
-	row.ModelCalls = 3 + ev.ModelCalls
+	row.ModelCalls = 2 + answerCalls + ev.ModelCalls
 	row.CaptureCalls = ev.CaptureCalls
 	row.EvidenceMS = evidenceMS
 	row.AnswerMS = answerMS

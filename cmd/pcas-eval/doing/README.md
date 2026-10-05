@@ -1,5 +1,50 @@
 # 办事模式与本机流程
 
+## 第 4 批：light / medium / heavy（V2c）
+
+显式选择新方法时，doing 走新增的三档驱动；省略 `-methods` 仍走原来的 none/current/ideal，原模式、题目和标准不改。三档通过真实 `Store.DeskTurn(postgres.WithMemoryTier(ctx, tier), …)` 执行，产品负责上下文接力、选分组、并行读者、自查、校验、重试和超时回退。没有改 `internal/` 或新建产品迁移。
+
+每次运行先装平铺的来源/原文 claim；只使用记忆原文、日期、来源标题，不装题集里的 tags、更新/重复关系、must/bonus/forbidden 等 oracle。随后依次调用产品 `ScheduleOrganize` / `ProcessOrganize`、`ScheduleCompare` / `ProcessCompare` / `ProcessEntityCompare`、`ScheduleStatus` / `ProcessCard` / `ProcessHandover`，经实际队列领取和确认任务。准备期间使用同一真实模型，保留产品的重试、预算、每小时限速和建卡等待规则。准备全部完成才答题；失败/中断的准备不能当作完整成绩。默认 `-prepare-timeout=12h`，可以显式延长；不会通过修改时间戳或标签赶跑限速。
+
+准备只跑一次。关闭准备库的连接后，用 PostgreSQL `CREATE DATABASE … TEMPLATE …` 复制每个 worker 的答题库，因此三个方法/三次重复从同一份派生状态出发，不反复整理，也不串入别题的原话。所用角色须有 `CREATEDB`（一次性容器脚本创建的测试角色已有）；DSN 须为 PostgreSQL URI。复制库使用新的随机名字，结束后仅删除本次创建的这些库；原库仍由空库守卫和脚本的容器归属标签保护。答题前清掉该 worker 上次产生的对话、候选和非种子原话，不运行后台 worker，不让评测问答再次抽取或参与整理。
+
+这是既有“供给上下文之后交付草稿”的评测口径：本机模型桥把真实秘书主调用转换为原样的 `AnswerSystem` / `AnswerPrompt`，保留题集 `as_of`、原回答指令和 600 字符验收上限；再把文本放进无动作、`remember=false`、`missingKeyInfo=false` 的秘书输出 envelope。重档选组/读者和中重档自查都使用产品真实提示词与模型调用，产品最终返回的回复才交给原来的双判。自查是产品原生 JSON 格式及截止时间，失败时保留原草稿，不在评测器另补自查。模型桥不启用工具或外发，不提供 gold；本模式不测完整秘书动作执行、自动升档或 Codex 原生 structured-output 的格式约束。代码不会在拿到产品回复之后再多答一次。
+
+`-workers` 在三档模式中为 1–4，并且是**全部模型调用的全局上限**，包含准备、并行重档读者、回答和评分，不仅是题目并发数。排队计入产品读者/自查的截止时间，可能引起产品回退，这是当前资源配置下的真实结果。各重复有完成屏障，题目/方法次序轮转。每行报告产品调用数（含实际发起的失败/重试）、两次评分、有效档位、选组数量、各用途输入字符、读者/自查的失败及格式问题；排队到取消、尚未发起的产品调用另列 `not_started`。它们不会算成已经调用了模型。`evidence_ms` 在新三档中包含整个产品取上下文、答题、自查流程；办事/总耗时仍按端到端实测。主答复字符与读者/自查的输入字符分开，不能将主答复的字符数当成重档全部开销。
+
+新产物仍只有数字、题号和判定，存在仓库外。`report.prepare.json` 单独记录后台准备三阶段的墙钟耗时、调用和失败数、各用途调用数、输入字符与完成任务数，以及当前 claim/退出/卡片计数和交接说明是否建好；完成报告也嵌入该记账。准备成本与一次通道预检不计入每题模型调用或延迟。题集/固定回答指令/双判指令的 SHA 继续保留。
+
+本轮虚构测量：原 671 条记忆/旧 120 题不变；light/medium 全部三遍；heavy 只跑跨分组/外发 40 题三遍。下面一个命令只跑这些新对照，**不重跑 current/ideal**：
+
+```sh
+PCAS_EVAL_CODEX_HOME=/ABSOLUTE/DEDICATED/CODEX_HOME \
+  scripts/p25-v2-run.sh -channel=codex -model=gpt-6.1-sol \
+  -methods=light,medium,heavy -heavy-categories=cross_group,outgoing \
+  -repeats=3 -workers=4
+
+# 少量假模型冒烟：仅检验实际产品通道/报告，不代表质量
+scripts/p25-v2-run.sh -fake -methods=light,medium,heavy \
+  -tasks=CROSS-01,RECALL-01 -heavy-categories=cross_group,outgoing \
+  -repeats=3 -workers=4
+```
+
+**协调者的真实题跑法**：先按下文流程取得同意并生成/核对 `approved.json`；本执行者不读真实题或线上库。先验证，再用自己的一次性 tmpfs 库跑。私有模式默认三档全跑，不继承本轮虚构题的 heavy 子集；如需子集必须明确指定 `-heavy-categories`。
+
+```sh
+go run ./cmd/pcas-eval -mode=doing -private -validate \
+  -suite /var/tmp/pcas-v2-private/approved.json \
+  -methods=light,medium,heavy
+
+PCAS_EVAL_CODEX_HOME=/ABSOLUTE/DEDICATED/CODEX_HOME \
+  scripts/p25-v2-run.sh -private \
+  -suite /var/tmp/pcas-v2-private/approved.json \
+  -methods=light,medium,heavy -repeats=3 -workers=4
+```
+
+这些是文本导出的平铺副本，缺少线上拓扑、历史修订和向量；三档的背景准备由副本重新推导，不能称作线上现状层的精确快照。若副本没有任何可建卡的分组，准备合法完成零张卡，产品按 R4-5 回退，报告 `effective=legacy-fallback`；不能当作三档已发挥作用。私有题、模型 home 和所有产物继续留在仓库外，不提交、不上传回复正文。
+
+产品检索、期限校验和自查依赖主机当前时间，主答复与 gold 仍使用冻结 `as_of`。按本轮要求复用的 current/ideal 是历史数字：跨日期、不同并发，以及整理随机性都会影响结果，只报告数值验收和已知差异，不能把它们当成无条件的同日因果实验。heavy 未测直接回忆时，该条验收必须报告“未覆盖”，不能从 light/medium 或另两类代推。旧 baseline 和既有数字产物不修改。
+
 新增 `-mode=doing` 和协调者专用的 `-mode=doing-propose`。已有 comparison / retrieval、phase2 题集、产品实现与迁移均未修改。模式分发只识别新名字。
 
 ## 虚构数据运行

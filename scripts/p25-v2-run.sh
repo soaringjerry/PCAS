@@ -32,7 +32,7 @@ container_id="$(local_docker run -d --rm \
   -p 127.0.0.1::5432 pgvector/pgvector:0.8.2-pg16-bookworm)"
 ready=false
 for attempt in {1..60}; do
-  if local_docker exec "$container_id" pg_isready -U pcas_v2 -d pcas_v2 >/dev/null 2>&1; then
+  if local_docker exec "$container_id" pg_isready -h 127.0.0.1 -U pcas_v2 -d pcas_v2 >/dev/null 2>&1; then
     ready=true
     break
   fi

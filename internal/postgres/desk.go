@@ -92,7 +92,7 @@ func (s *Store) AnswerDesk(ctx context.Context, scope memory.Scope, agentID, que
 	}
 	visible := map[string]workspace.Memory{}
 	for _, m := range memories {
-		if oneOf(m.Kind, agent.MemoryKinds...) && (m.Epistemic != "inferred" || agent.IncludeInferred) {
+		if oneOf(m.Kind, agent.MemoryKinds...) && (m.Trust != "inferred" || agent.IncludeInferred) {
 			visible[m.ID] = m
 		}
 	}
@@ -123,7 +123,7 @@ func (s *Store) AnswerDesk(ctx context.Context, scope memory.Scope, agentID, que
 		if !ok || sent[m.ID] != (memory.Ref{}) || len(sent) >= 20 {
 			continue
 		}
-		fmt.Fprintf(&prompt, "[%s / %s / confirmation=%s / acquisition=%s] %s\n", m.ID, m.Epistemic, m.Confirmation, m.Acquisition, m.Text)
+		fmt.Fprintf(&prompt, "[%s / %s / trust=%s / confirmation=%s / acquisition=%s] %s\n", m.ID, m.Epistemic, m.Trust, m.Confirmation, m.Acquisition, m.Text)
 		sent[m.ID] = memory.Ref{ID: memory.ID(m.ID), Version: m.Version, Kind: memory.ClaimKind}
 		dependencies = append(dependencies, sent[m.ID])
 		contextClaims = append(contextClaims, evidenceContextClaim{Label: m.ID, Ref: sent[m.ID], Text: m.Text})

@@ -287,7 +287,7 @@ func (s *Store) processCompareVersion(ctx context.Context, j worker.Job, version
 		// After the newest 200 are complete, choose the next lagging window,
 		// filling spare positions with recent current context. Sort that window
 		// by expressed time before supplying its local numbers.
-		rows, err := tx.Query(ctx, `SELECT r.id::text,r.version,c.value #>> '{}',rv.expressed_at,(c.confirmation='confirmed' OR EXISTS(SELECT 1 FROM record_versions edited WHERE edited.owner_id=r.owner_id AND edited.record_id=r.id AND edited.version>1 AND edited.actor='user') OR EXISTS(SELECT 1 FROM memory_jobs restored WHERE restored.owner_id=cl.owner_id AND restored.record_id=cl.id AND restored.state='done' AND restored.stage LIKE 'memory.compare_restored:'||$4::int::text||':%'))`+compareCurrent+`
+		rows, err := tx.Query(ctx, `SELECT r.id::text,r.version,c.value #>> '{}',rv.expressed_at,(c.confirmation='confirmed' OR EXISTS(SELECT 1 FROM record_versions edited WHERE edited.owner_id=r.owner_id AND edited.record_id=r.id AND edited.version>1 AND edited.actor='user') OR `+restoredMemorySQL("$4")+`)`+compareCurrent+`
  AND cl.owner_id=$2 AND EXISTS(SELECT 1 FROM (`+compareGroupKeys+`) g WHERE g.key=$3)
  ORDER BY cl.compared<$4 DESC,rv.expressed_at DESC NULLS LAST,r.created_at DESC,r.id LIMIT $5`, OrganizeVersion, string(j.OwnerID), group.Key, version, compareLimit)
 		if err != nil {
@@ -382,7 +382,7 @@ func (s *Store) writeComparisonTx(ctx context.Context, tx pgx.Tx, owner memory.I
 	eligible, protected := map[int]bool{}, map[int]bool{}
 	for _, m := range batch {
 		var confirmed, edited, restored bool
-		err := tx.QueryRow(ctx, `SELECT c.confirmation='confirmed',EXISTS(SELECT 1 FROM record_versions edited WHERE edited.owner_id=r.owner_id AND edited.record_id=r.id AND edited.version>1 AND edited.actor='user'),EXISTS(SELECT 1 FROM memory_jobs restored WHERE restored.owner_id=cl.owner_id AND restored.record_id=cl.id AND restored.state='done' AND restored.stage LIKE 'memory.compare_restored:'||$5::int::text||':%')`+compareCurrent+`
+		err := tx.QueryRow(ctx, `SELECT c.confirmation='confirmed',EXISTS(SELECT 1 FROM record_versions edited WHERE edited.owner_id=r.owner_id AND edited.record_id=r.id AND edited.version>1 AND edited.actor='user'),`+restoredMemorySQL("$5")+compareCurrent+`
  AND cl.owner_id=$2 AND cl.id=$3 AND r.version=$4 FOR UPDATE OF r,cl`, OrganizeVersion, string(owner), string(m.Ref.ID), m.Ref.Version, version).Scan(&confirmed, &edited, &restored)
 		if errors.Is(err, pgx.ErrNoRows) {
 			continue

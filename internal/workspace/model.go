@@ -228,6 +228,8 @@ type Adoption struct {
 }
 type Run struct {
 	SmokeID          string       `json:"smokeId,omitempty"`
+	MemoryTier       string       `json:"memoryTier,omitempty"`
+	MemoryGroups     []string     `json:"memoryGroups,omitempty"`
 	Outdated         bool         `json:"outdated,omitempty"`
 	ID               string       `json:"id"`
 	ThingID          string       `json:"thingId"`

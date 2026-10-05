@@ -15,13 +15,15 @@ import (
 )
 
 type memoryReadOptions struct {
-	legacy   bool
-	query    workspace.MemoryQuery
-	id       string
-	ids      []string // nil means unrestricted; an empty slice matches nothing
-	limit    int
-	snapshot time.Time
-	before   *memoryCursor
+	useEntity  string
+	useCurrent bool
+	legacy     bool
+	query      workspace.MemoryQuery
+	id         string
+	ids        []string // nil means unrestricted; an empty slice matches nothing
+	limit      int
+	snapshot   time.Time
+	before     *memoryCursor
 }
 type memoryCursor struct {
 	At       time.Time `json:"at"`
@@ -55,6 +57,14 @@ func memoryWhere(scope memory.Scope, currentOnly bool, opts memoryReadOptions) (
 		} else {
 			clauses = append(clauses, current)
 		}
+	}
+	if opts.useCurrent {
+		clauses = append(clauses, "EXISTS(SELECT 1 FROM claims use_claim WHERE use_claim.owner_id=r.owner_id AND use_claim.id=r.id AND coalesce(to_jsonb(use_claim)->>'retired','')='')")
+	}
+	if opts.useEntity != "" {
+		args = append(args, opts.useEntity)
+		slot := len(args)
+		clauses = append(clauses, fmt.Sprintf("(c.subject_id=$%d::uuid OR EXISTS(SELECT 1 FROM claim_mentions cm WHERE (cm.owner_id,cm.claim_id,cm.claim_version)=(c.owner_id,c.claim_id,c.version) AND cm.entity_id=$%d::uuid))", slot, slot))
 	}
 	q := opts.query
 	if q.Q != "" {
@@ -116,6 +126,16 @@ func (s *Store) readMemoriesTx(ctx context.Context, tx pgx.Tx, scope memory.Scop
  coalesce(a.last_effective_use_at,r.created_at),coalesce(a.stability,1),coalesce(a.half_life_seconds,2592000),coalesce(a.pinned,false),coalesce(a.reinforcement_limit,8),
  rv.expressed_at,` + memoryEventColumns() + "," + mentionsAvailable + `,
  coalesce(to_jsonb(c)->>'category','unknown'),(to_jsonb(c)->>'durable')::boolean` + memoryJoins + where + ` ORDER BY r.updated_at DESC,r.id`
+	if currentOnly && opts.useCurrent && opts.ids != nil {
+		// Ready cards and completion checks supply bounded identities. Resolve
+		// their applicable versions once, then hydrate only that scoped set.
+		args = append(args, opts.ids)
+		joins := ` FROM memory_records r JOIN applicable use_av ON use_av.claim_id=r.id
+ JOIN claim_revisions c ON (c.owner_id,c.claim_id,c.version)=(r.owner_id,r.id,use_av.version)
+ JOIN record_versions rv ON (rv.owner_id,rv.record_id,rv.version)=(c.owner_id,c.claim_id,c.version)
+ LEFT JOIN activity a ON (a.owner_id,a.record_id)=(r.owner_id,r.id)`
+		query = fmt.Sprintf("WITH applicable AS MATERIALIZED (SELECT claim_id,version FROM applicable_claim_versions($1,now(),now()) WHERE $4::boolean AND claim_id=ANY($%d::uuid[])) ", len(args)) + strings.Replace(query, memoryJoins, joins, 1)
+	}
 	if opts.limit > 0 {
 		args = append(args, opts.limit)
 		query += fmt.Sprintf(" LIMIT $%d", len(args))

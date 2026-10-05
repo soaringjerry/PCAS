@@ -302,6 +302,12 @@ func (c *Codex) GenerateWithSearchSchema(ctx context.Context, model, system, pro
 	return c.generate(ctx, model, system, prompt, true, schema, nil)
 }
 
+// GenerateSchema constrains an offline read or selfcheck without web tools.
+func (c *Codex) GenerateSchema(ctx context.Context, model, system, prompt string, schema json.RawMessage) (string, error) {
+	text, _, err := c.generate(ctx, model, system, prompt, false, schema, nil)
+	return text, err
+}
+
 func (c *Codex) Vision(ctx context.Context, model, instruction string, image Image) (string, error) {
 	text, _, err := c.generate(ctx, model, "", instruction, false, nil, &image)
 	return text, err

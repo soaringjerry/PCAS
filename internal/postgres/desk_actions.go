@@ -89,33 +89,35 @@ func applyDueReminderAt(item *workspace.Item, remind string, loc *time.Location,
 // Model actions never accept database identifiers. Refs resolve exclusively
 // through server-owned context aliases and earlier committed N creation aliases.
 type secretaryAction struct {
-	parseErr     error
-	Op           string                     `json:"op"`
-	Ref          string                     `json:"ref"`
-	Title        string                     `json:"title"`
-	Name         string                     `json:"name"`
-	Due          *string                    `json:"due"`
-	Remind       *string                    `json:"remind"`
-	Project      *string                    `json:"project"`
-	Notes        *string                    `json:"notes"`
-	OwedTo       *string                    `json:"owedTo"`
-	WaitingFor   *string                    `json:"waitingFor"`
-	Urgent       *bool                      `json:"urgent"`
-	Condition    *string                    `json:"condition"`
-	ConditionDue *string                    `json:"conditionDue"`
-	Set          map[string]json.RawMessage `json:"set"`
-	Steps        []string                   `json:"steps"`
-	Kind         string                     `json:"kind"`
-	Prompt       string                     `json:"prompt"`
+	selfcheckDropped bool
+	parseErr         error
+	Op               string                     `json:"op"`
+	Ref              string                     `json:"ref"`
+	Title            string                     `json:"title"`
+	Name             string                     `json:"name"`
+	Due              *string                    `json:"due"`
+	Remind           *string                    `json:"remind"`
+	Project          *string                    `json:"project"`
+	Notes            *string                    `json:"notes"`
+	OwedTo           *string                    `json:"owedTo"`
+	WaitingFor       *string                    `json:"waitingFor"`
+	Urgent           *bool                      `json:"urgent"`
+	Condition        *string                    `json:"condition"`
+	ConditionDue     *string                    `json:"conditionDue"`
+	Set              map[string]json.RawMessage `json:"set"`
+	Steps            []string                   `json:"steps"`
+	Kind             string                     `json:"kind"`
+	Prompt           string                     `json:"prompt"`
 }
 type secretaryOutput struct {
-	Reply    string             `json:"reply"`
-	Used     []string           `json:"used"`
-	Links    []string           `json:"links"`
-	Show     []string           `json:"show"`
-	Remember bool               `json:"remember"`
-	Actions  []secretaryAction  `json:"actions"`
-	Ask      *workspace.DeskAsk `json:"ask"`
+	MissingKeyInfo bool               `json:"missingKeyInfo"`
+	Reply          string             `json:"reply"`
+	Used           []string           `json:"used"`
+	Links          []string           `json:"links"`
+	Show           []string           `json:"show"`
+	Remember       bool               `json:"remember"`
+	Actions        []secretaryAction  `json:"actions"`
+	Ask            *workspace.DeskAsk `json:"ask"`
 }
 
 // Internal commands still persist in order for validation and undo collection.

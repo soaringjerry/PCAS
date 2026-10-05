@@ -189,6 +189,9 @@ func (s *Store) recallTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in 
 		 OR t.id IN (SELECT member_id FROM linked) OR t.id=ANY($8::uuid[]) OR t.id IN (SELECT claim_id FROM claim_revisions WHERE owner_id=$1 AND (subject_id=ANY($8::uuid[]) OR scope->>'project_id'=ANY($8::text[])))
 		 OR ($11::text IS NOT NULL AND (EXISTS(SELECT 1 FROM embeddings e WHERE e.owner_id=t.owner_id AND e.record_id=t.id AND e.record_version=t.version AND e.model=$12 AND CASE WHEN e.dimensions=$13 THEN (e.embedding <=> $11::vector)<0.65 ELSE false END) OR EXISTS(SELECT 1 FROM chunks c JOIN embeddings e ON (e.owner_id,e.record_id)=(c.owner_id,c.id) WHERE c.owner_id=t.owner_id AND c.source_id=t.id AND c.source_version=t.version AND e.model=$12 AND CASE WHEN e.dimensions=$13 THEN (e.embedding <=> $11::vector)<0.65 ELSE false END))))
  )`
+	if scope.Team {
+		querySQL = strings.Replace(querySQL, "WHERE t.owner_id=$1 AND r.state='active'", "WHERE t.owner_id=$1 AND (r.kind!='claim' OR EXISTS(SELECT 1 FROM claims active_claim WHERE active_claim.owner_id=r.owner_id AND active_claim.id=r.id AND coalesce(to_jsonb(active_claim)->>'retired','')='')) AND r.state='active'", 1)
+	}
 	detailSQL := ` SELECT p.id,p.version,p.kind,coalesce(hit.body,t.body) AS body,p.score,coalesce(sc.role,'') AS role,coalesce(sc.branch,'') AS branch,coalesce(sc.gaps,'[]') AS gaps,
          coalesce(hit.excerpt,sv.body,'') AS excerpt,coalesce(sv.title,'') AS title,p.connector,p.external_id,p.expressed_at,p.recorded_at,p.explicit,
          coalesce(btrim(sv.body)!='' AND (sv.media_type LIKE 'text/%' OR sv.representation IN ('ocr','transcript','extracted','vision')),false) AS readable
@@ -211,6 +214,19 @@ func (s *Store) recallTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in 
  LEFT JOIN source_versions sv ON (sv.owner_id,sv.source_id,sv.version)=($1,p.uid,p.version)
  LEFT JOIN source_contexts sc ON(sc.owner_id,sc.source_id,sc.source_version)=($1,p.uid,p.version)`
 	querySQL = strings.Replace(querySQL, "WHERE t.owner_id=$1 AND r.state=", "WHERE t.owner_id=$1 AND (r.kind<>'claim' OR "+currentMemorySQL("r.owner_id", "r.id")+") AND r.state=", 1)
+	if scope.Team && in.Team != nil && in.Team.RankFusion {
+		// Keep independently ranked lexical and vector evidence on the scoped row set.
+		vectorTerm := `+CASE WHEN $11::text IS NULL THEN 0 ELSE coalesce(greatest((SELECT max(1-(e.embedding <=> $11::vector)) FROM embeddings e WHERE e.owner_id=t.owner_id AND e.record_id=t.id AND e.record_version=t.version AND e.model=$12 AND e.dimensions=$13),(SELECT max(1-(e.embedding <=> $11::vector)) FROM chunks c JOIN embeddings e ON (e.owner_id,e.record_id)=(c.owner_id,c.id) WHERE c.owner_id=t.owner_id AND c.source_id=t.id AND c.source_version=t.version AND e.model=$12 AND e.dimensions=$13)),0) END`
+		querySQL = strings.Replace(querySQL, vectorTerm, "", 1)
+		objectMatch := `t.id=ANY($8::uuid[]) OR t.id IN (SELECT claim_id FROM claim_revisions WHERE owner_id=$1 AND (subject_id=ANY($8::uuid[]) OR scope->>'project_id'=ANY($8::text[])))`
+		querySQL = strings.Replace(querySQL, `+CASE WHEN `+objectMatch+` THEN 10 ELSE 0 END`, "", 1)
+		querySQL = strings.Replace(querySQL, `t.id=ANY($8::uuid[]) AS explicit`, `(`+objectMatch+`) AS explicit`, 1)
+		querySQL = strings.Replace(querySQL, `+CASE WHEN $6='continue' THEN coalesce(CASE WHEN a.pinned THEN 1 ELSE exp(-0.693147*greatest(0,extract(epoch from(now()-a.last_effective_use_at)))/(a.half_life_seconds*a.stability)) END,0)*0.2 ELSE 0 END`, "", 1)
+
+		querySQL = strings.Replace(querySQL, ") AS score,", ") AS lexical_score, "+strings.TrimPrefix(vectorTerm, "+")+" AS vector_score,", 1)
+		querySQL = strings.Replace(querySQL, "hits AS (", "scored AS (", 1)
+		querySQL += `, hits AS (SELECT *, CASE WHEN lexical_score>0 THEN 1.0/(60+row_number() OVER (ORDER BY lexical_score DESC,uid,version)) ELSE 0 END + CASE WHEN vector_score>0 THEN 1.0/(60+row_number() OVER (ORDER BY vector_score DESC,uid,version)) ELSE 0 END AS score FROM scored)`
+	}
 	if len(structured) > 0 {
 		querySQL = strings.Replace(querySQL, "AND ($4='' OR lb.body LIKE ANY", "AND (t.id=ANY($18::uuid[]) OR $4='' OR lb.body LIKE ANY", 1)
 	}
@@ -819,7 +835,11 @@ func structuredRecallTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, hint
 	if hints.Candidates > limit {
 		limit = hints.Candidates
 	}
-	rows, err = tx.Query(ctx, teamStructuredSQL, string(scope.OwnerID), ids, from, to, axis, scope.PrincipalID, hints.ThingID, hints.ProjectID, hints.Plan.Natures, limit)
+	structuredSQL := teamStructuredSQL
+	if hints.RankFusion {
+		structuredSQL = strings.Replace(structuredSQL, "WHERE r.state='active'", "WHERE EXISTS(SELECT 1 FROM claims active_claim WHERE active_claim.owner_id=r.owner_id AND active_claim.id=r.id AND coalesce(to_jsonb(active_claim)->>'retired','')='') AND r.state='active'", 1)
+	}
+	rows, err = tx.Query(ctx, structuredSQL, string(scope.OwnerID), ids, from, to, axis, scope.PrincipalID, hints.ThingID, hints.ProjectID, hints.Plan.Natures, limit)
 	if err != nil {
 		return nil, false, err
 	}

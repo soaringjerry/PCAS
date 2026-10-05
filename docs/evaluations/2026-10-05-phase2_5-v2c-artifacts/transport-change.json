@@ -1,0 +1,40 @@
+{
+  "at": "2026-10-05T14:01:29.406250+00:00",
+  "reason": "Operator diagnosed repeated WebSocket handshake HTTP 403; graceful termination to validate HTTP transport and resume missing cells only",
+  "completed_before_signal": 470,
+  "failures_before_signal": 11,
+  "retained_rows": 470,
+  "prior_failures": 90,
+  "prior_failure_categories": {
+    "evidence_failed type=model_error": 12,
+    "judge_format_failed pass=2 type=invalid_json": 1,
+    "judge_format_failed pass=1 type=invalid_json": 1,
+    "judge_call_failed pass=1 type=canceled": 1,
+    "run_aborted": 75
+  },
+  "prior_failed_generate_calls": 39,
+  "source_sha256": "ff95d323b1c99d9d4f081def009e6cb1aee06c37925e853a97c71c7ce4afb44e",
+  "http_probe": {
+    "model": "gpt-6.1-sol",
+    "reasoning": "high",
+    "service_tier": "fast",
+    "requested_transport": "http",
+    "calls": 1,
+    "status": "completed",
+    "reply_ok": true,
+    "elapsed_ms": 3930,
+    "provider_error_events": 0,
+    "websocket_log_entries": 0,
+    "http_log_entries": 0
+  },
+  "formal_transport_after_resume": "HTTP/SSE; same ChatGPT backend endpoint/authentication; same model/high/fast; supports_websockets=false",
+  "formal_resume_started_at": "2026-10-05T14:02:58Z",
+  "observed_transport_verification": {
+    "at": "2026-10-05T14:09:48.189725+00:00",
+    "last_250_transport_trace_values": {
+      "responses_http": 193,
+      "stdio": 140
+    },
+    "websocket_connection_log_entries_in_http_home": 0
+  }
+}

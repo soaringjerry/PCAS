@@ -1,0 +1,47 @@
+{
+  "started_at": "2026-10-05T12:12:56Z",
+  "completed_at": "2026-10-05T12:28:01Z",
+  "wall_ms": 904785.517459,
+  "stages": [
+    {
+      "stage": "organize",
+      "wall_ms": 405584.487775,
+      "model_calls": 17,
+      "failed_calls": 0,
+      "input_chars": 94445,
+      "purpose_calls": {
+        "organize": 17
+      },
+      "jobs_done": 17
+    },
+    {
+      "stage": "compare",
+      "wall_ms": 144950.808241,
+      "model_calls": 22,
+      "failed_calls": 0,
+      "input_chars": 36782,
+      "purpose_calls": {
+        "compare": 19,
+        "entity_compare": 3
+      },
+      "jobs_done": 22
+    },
+    {
+      "stage": "status",
+      "wall_ms": 354225.633248,
+      "model_calls": 26,
+      "failed_calls": 0,
+      "input_chars": 102404,
+      "purpose_calls": {
+        "card": 25,
+        "handover": 1
+      },
+      "jobs_done": 26
+    }
+  ],
+  "claims": 671,
+  "retired": 131,
+  "cards": 25,
+  "handover": true,
+  "complete": true
+}

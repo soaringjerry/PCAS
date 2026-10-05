@@ -13,6 +13,7 @@ var secretaryOutputSchema = json.RawMessage(`{
     "links": {"type": "array", "items": {"type": "string"}},
     "show": {"type": "array", "items": {"type": "string"}},
     "remember": {"type": "boolean"},
+    "missingKeyInfo": {"type": "boolean"},
     "actions": {
       "type": "array",
       "items": {
@@ -111,6 +112,6 @@ var secretaryOutputSchema = json.RawMessage(`{
       ]
     }
   },
-  "required": ["reply", "used", "links", "show", "remember", "actions", "ask"],
+  "required": ["reply", "used", "links", "show", "remember", "missingKeyInfo", "actions", "ask"],
   "additionalProperties": false
 }`)

@@ -11,6 +11,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/soaringjerry/PCAS/internal/ai"
 	"github.com/soaringjerry/PCAS/internal/ai/siwc"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/workspace"
@@ -49,7 +50,7 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 		if err != nil {
 			return err
 		}
-		memories, err := s.memoriesTx(ctx, tx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: agent.ID}, true)
+		memories, err := s.readMemoriesTx(ctx, tx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: agent.ID}, true, memoryReadOptions{useCurrent: true})
 		if err != nil {
 			return err
 		}
@@ -101,7 +102,14 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 		if prepared, ok := ctx.Value(runContextKey{}).(preparedRunContext); ok {
 			plan = prepared.Plan
 		}
-		fmt.Fprintln(&brief, "相关记忆（引用 ID 与版本；长期约束继续适用）：")
+		u, err := s.startUseContextTx(ctx, tx, scope)
+		if err != nil {
+			return err
+		}
+		u.Location = loc
+		if !u.Ready {
+			fmt.Fprintln(&brief, "相关记忆（引用 ID 与版本；长期约束继续适用）：")
+		}
 		// Rank through the same scoped retrieval used by Recall instead of
 		// filling the prompt with globally recent memories. No nested model
 		// request is made while the owner's transaction is locked.
@@ -120,7 +128,7 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 			}
 		}
 		recall := memory.RecallResult{Coverage: coverage()}
-		request := memory.RecallRequest{Team: &memory.TeamRecall{Text: c.Prompt, Plan: plan, ThingID: &item.ID, ProjectID: &projectID}, Query: query, Mode: memory.Remember, Context: memory.WorkingContext{Objects: []memory.ID{}}}
+		request := memory.RecallRequest{Team: &memory.TeamRecall{Text: c.Prompt, Plan: plan, ThingID: &item.ID, ProjectID: &projectID, RankFusion: u.Ready}, Query: query, Mode: memory.Remember, Context: memory.WorkingContext{Objects: []memory.ID{}}}
 		if projectID != "" {
 			request.Context.Objects = append(request.Context.Objects, memory.ID(projectID))
 		}
@@ -179,25 +187,65 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 				selected[m.ID] = true
 			}
 		}
-		// R12a: select against the brief without annotations. Keep their byte
-		// count separate so they cannot displace later memories or raw excerpts.
+		run.MemoryTier = memoryTier(ctx, c.Prompt, "heavy")
+		u.Tier = run.MemoryTier
+		ranked := ordered
+		if u.Ready {
+			ranked = []workspace.Memory{}
+			seenRanked := map[string]bool{}
+			addRanked := func(refs []memory.Ref) {
+				for _, ref := range refs {
+					if m, ok := byID[string(ref.ID)]; ok && m.Version == ref.Version && !seenRanked[m.ID] && useMemoryAllowed(m, agent) {
+						ranked = append(ranked, m)
+						seenRanked[m.ID] = true
+					}
+				}
+			}
+			addRanked(recall.Structured)
+			if prepared, ok := ctx.Value(runContextKey{}).(preparedRunContext); ok {
+				addRanked(prepared.Refs)
+			}
+			addRanked(recall.Memories)
+		}
+		if err = s.finishUseContextTx(ctx, tx, scope, agent, &item.ID, c.Prompt, ranked, &u); err != nil {
+			return err
+		}
+		run.MemoryGroups = u.Groups
 		annotationBytes := 0
 		contextClaims := []evidenceContextClaim{}
-		for _, m := range ordered {
-			if !oneOf(m.Kind, agent.MemoryKinds...) || m.Trust == "inferred" && !agent.IncludeInferred || oneOf(m.ID, excluded...) || m.ProjectID != "" && m.ProjectID != projectID {
-				continue
+		memoryStart := brief.Len()
+		if u.Ready {
+			// Keep handoff discussion outside the replaceable memory section.
+			fmt.Fprintln(&brief, "相关记忆（引用 ID 与版本；长期约束继续适用）：")
+			writeUseContext(&brief, u, loc, func(m workspace.Memory) {
+				fmt.Fprintf(&brief, "[%s@%d / trust=%s] %s%s\n", m.ID, m.Version, m.Trust, m.Text, memoryPromptSuffix(m, loc))
+				run.ContextMemoryIDs = append(run.ContextMemoryIDs, m.ID)
+				contextClaims = append(contextClaims, evidenceContextClaim{Label: m.ID, Ref: memory.Ref{ID: memory.ID(m.ID), Version: m.Version, Kind: memory.ClaimKind}, Text: m.Text})
+			})
+			run.ContextVersions = append(run.ContextVersions, u.Dependencies...)
+		} else {
+			// R12a: select against the brief without annotations. Keep their byte
+			// count separate so they cannot displace later memories or raw excerpts.
+			for _, m := range ordered {
+				if !oneOf(m.Kind, agent.MemoryKinds...) || m.Trust == "inferred" && !agent.IncludeInferred || oneOf(m.ID, excluded...) || m.ProjectID != "" && m.ProjectID != projectID {
+					continue
+				}
+				if brief.Len()-annotationBytes+len(m.Text) > 30000 {
+					continue
+				}
+				suffix := memoryPromptSuffix(m, loc)
+				fmt.Fprintf(&brief, "[%s@%d / %s / trust=%s / confirmation=%s / acquisition=%s] %s%s\n", m.ID, m.Version, m.Epistemic, m.Trust, m.Confirmation, m.Acquisition, m.Text, suffix)
+				annotationBytes += len(suffix) + len("trust="+m.Trust+" / ")
+				run.ContextMemoryIDs = append(run.ContextMemoryIDs, m.ID)
+				run.ContextVersions = append(run.ContextVersions, memory.Ref{ID: memory.ID(m.ID), Version: m.Version, Kind: memory.ClaimKind})
+				contextClaims = append(contextClaims, evidenceContextClaim{Label: m.ID, Ref: memory.Ref{ID: memory.ID(m.ID), Version: m.Version, Kind: memory.ClaimKind}, Text: m.Text})
 			}
-			if brief.Len()-annotationBytes+len(m.Text) > 30000 {
-				continue
-			}
-			suffix := memoryPromptSuffix(m, loc)
-			fmt.Fprintf(&brief, "[%s@%d / %s / trust=%s / confirmation=%s / acquisition=%s] %s%s\n", m.ID, m.Version, m.Epistemic, m.Trust, m.Confirmation, m.Acquisition, m.Text, suffix)
-			annotationBytes += len(suffix) + len("trust="+m.Trust+" / ")
-			run.ContextMemoryIDs = append(run.ContextMemoryIDs, m.ID)
-			run.ContextVersions = append(run.ContextVersions, memory.Ref{ID: memory.ID(m.ID), Version: m.Version, Kind: memory.ClaimKind})
-			contextClaims = append(contextClaims, evidenceContextClaim{Label: m.ID, Ref: memory.Ref{ID: memory.ID(m.ID), Version: m.Version, Kind: memory.ClaimKind}, Text: m.Text})
+
 		}
 
+		if u.Ready {
+			run.MemoryContextRange = &[2]int{memoryStart, brief.Len()}
+		}
 		orderTeamExcerpts(excerpts, plan)
 		fmt.Fprintln(&brief, "\n相关原话：")
 		sources, err := teamSourceExcerptsTx(ctx, tx, scope, agent.ID, &item.ID, excerpts, historyRequests, 8, 4000)
@@ -215,7 +263,11 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 			run.ContextVersions = append(run.ContextVersions, source.Ref)
 		}
 
-		groups, gaps, err := evidenceContextsTx(ctx, tx, scope, agent.ID, &item.ID, contextClaims)
+		evidenceCtx := ctx
+		if u.Ready {
+			evidenceCtx = context.WithValue(ctx, useEvidenceBatchKey{}, true)
+		}
+		groups, gaps, err := evidenceContextsTx(evidenceCtx, tx, scope, agent.ID, &item.ID, contextClaims)
 		if err != nil {
 			return err
 		}
@@ -568,6 +620,9 @@ func (s *Store) RunAgents(ctx context.Context, logger *slog.Logger) error {
 	}
 }
 func (s *Store) runAgentOnce(ctx context.Context) error {
+	started := time.Now()
+	ctx, persistCancel := context.WithDeadline(ctx, started.Add(heavyUseTimeout))
+	defer persistCancel()
 	if s.models == nil {
 		return nil
 	}
@@ -589,7 +644,10 @@ func (s *Store) runAgentOnce(ctx context.Context) error {
 		if err := strictJSON(data, &run); err != nil {
 			return err
 		}
-		if err := verifyRunTx(ctx, tx, scope, run); err != nil {
+		if !oneOf(run.MemoryTier, "light", "medium", "heavy") {
+			run.MemoryTier = "heavy"
+		}
+		if err := checkUseRunPromptTx(ctx, tx, scope, run); err != nil {
 			run.Status = "failed"
 			run.Cost = 0
 			run.Error = "记忆或授权已变化，请重新生成"
@@ -606,10 +664,56 @@ func (s *Store) runAgentOnce(ctx context.Context) error {
 	if err != nil || token == "" {
 		return err
 	}
-	workCtx, cancel := context.WithTimeout(ctx, 4*time.Minute)
-	// Search is on where the channel offers it; other channels answer from what they were given.
-	result, generationErr := s.models.GenerateWithSearch(workCtx, run.AgentID, deputyInstructions, run.Brief)
-	cancel()
+	workCtx, cancel := context.WithDeadline(ctx, started.Add(heavyUseTimeout-10*time.Second))
+	defer cancel()
+	if s.models.ReloadSubscription && s.models.Codex != nil {
+		defer s.models.Codex.Close()
+	}
+	u, agent, useErr := s.deputyUseContext(workCtx, scope, &run)
+	if useErr == nil && u.Ready {
+		if run.MemoryTier == "heavy" {
+			taskText := run.Prompt
+			if bounds := run.MemoryContextRange; bounds != nil && bounds[0] >= 0 && bounds[0] <= len(run.Brief) {
+				taskText += "\n" + run.Brief[:bounds[0]]
+			}
+			readerCtx, readerCancel := context.WithDeadline(workCtx, started.Add(heavyReaderBudget))
+			picked, refs, keys := s.heavyUse(readerCtx, ctx, scope, agent, &run.ThingID, taskText, u, "", run.ID)
+			readerCancel()
+			run.MemoryGroups = keys
+			run.ContextVersions = uniqueRefs(append(run.ContextVersions, refs...))
+			u.Cards = nil
+			u.Supplemental = picked
+		}
+		run.ContextVersions = uniqueRefs(append(run.ContextVersions, u.Dependencies...))
+		var section strings.Builder
+		writeUseContext(&section, u, u.Location, func(m workspace.Memory) {
+			fmt.Fprintf(&section, "[%s@%d / trust=%s] %s\n", m.ID, m.Version, m.Trust, m.Text+memoryPromptSuffix(m, u.Location))
+		})
+		// Use server-owned byte boundaries. Task text, discussion and memory
+		// values may contain the same headings, so never locate them by text.
+		if bounds := run.MemoryContextRange; bounds != nil && bounds[0] >= 0 && bounds[1] >= bounds[0] && bounds[1] <= len(run.Brief) {
+			run.Brief = run.Brief[:bounds[0]] + section.String() + run.Brief[bounds[1]:]
+			run.MemoryContextRange = &[2]int{bounds[0], bounds[0] + section.Len()}
+		} else {
+			// A job queued before cards existed has the legacy interleaved
+			// discussion layout. Preserve it when adding reader results.
+			run.Brief += section.String()
+		}
+	}
+	verifyErr := useErr
+	if verifyErr == nil {
+		verifyErr = pgx.BeginFunc(workCtx, s.pool, func(tx pgx.Tx) error { return checkUseRunPromptTx(workCtx, tx, scope, run) })
+	}
+	result := ai.Result{}
+	answerStarted := time.Now()
+	generationErr := verifyErr
+	if verifyErr == nil {
+		// Reserve an answer and selfcheck slice even if some readers miss their cutoff.
+		answerCtx, answerCancel := context.WithTimeout(workCtx, 60*time.Second)
+		result, generationErr = s.models.GenerateWithSearch(answerCtx, run.AgentID, deputyInstructions, run.Brief)
+		answerCancel()
+	}
+
 	cost := result.Cost
 	if generationErr != nil && strings.TrimSpace(result.Text) == "" {
 		cost = 0
@@ -617,15 +721,33 @@ func (s *Store) runAgentOnce(ctx context.Context) error {
 	if err := s.settleRunCost(ctx, scope.OwnerID, run, cost); err != nil {
 		return err
 	}
-	if generationErr == nil {
+	if verifyErr == nil && (u.Ready || generationErr == nil) {
 		p, _ := s.models.Get(run.AgentID)
-		if err := s.recordReturnedUsage(ctx, result.Text, modelUsage{
+		usage := modelUsage{
 			OwnerID: scope.OwnerID, ID: memory.NewID(), At: time.Now().UTC(),
 			Purpose: "deputy", AgentID: run.AgentID, Model: p.Model,
-			InputTokens: result.InputTokens, OutputTokens: result.OutputTokens, Cost: result.Cost,
-			RunID: run.ID, MemoryRefs: run.ContextVersions,
-		}); err != nil {
-			return err
+			InputTokens: result.InputTokens, OutputTokens: result.OutputTokens, Cost: cost,
+			RunID: run.ID, MemoryRefs: run.ContextVersions, Tier: run.MemoryTier, Plan: asJSON(usePlan{Groups: run.MemoryGroups}),
+		}
+		var usageErr error
+		if u.Ready {
+			usageErr = s.recordUsage(ctx, usage)
+		} else {
+			usageErr = s.recordReturnedUsage(ctx, result.Text, usage)
+		}
+		if usageErr != nil {
+			return usageErr
+		}
+	}
+	if generationErr == nil && u.Ready && run.MemoryTier != "light" {
+		checkBudget := min(time.Since(answerStarted), 30*time.Second)
+		checkCtx, checkCancel := context.WithTimeout(workCtx, checkBudget)
+		checked, err := s.useModelCall(checkCtx, ctx, scope, run.AgentID, deputyInstructions+"\n这是自查。对照完全相同的资料，修订正文：补有关情况，改矛盾和过时说法，删无依据事实，落实必须遵守的要求。只能修订草稿，不能增加新的执行动作。只输出修订正文。", run.Brief+"\n待自查草稿：\n"+result.Text, nil, modelUsage{Purpose: "selfcheck", Tier: run.MemoryTier, RunID: run.ID, MemoryRefs: run.ContextVersions, Plan: asJSON(usePlan{Groups: run.MemoryGroups})})
+		checkCancel()
+		if err == nil && strings.TrimSpace(checked.Text) != "" && len(parseRunChecklist(checked.Text)) == len(parseRunChecklist(result.Text)) {
+			result.Text = checked.Text
+		} else {
+			slog.WarnContext(ctx, "memory selfcheck fallback", "stage", "selfcheck", "error_type", secretaryErrorType("selfcheck", err))
 		}
 	}
 	if ctx.Err() != nil {
@@ -642,6 +764,20 @@ func (s *Store) runAgentOnce(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
+		for _, ref := range run.ContextVersions {
+			if _, err := tx.Exec(ctx, "INSERT INTO run_dependencies(owner_id,run_id,memory_id,memory_version) VALUES($1,$2,$3,$4) ON CONFLICT DO NOTHING", string(scope.OwnerID), run.ID, string(ref.ID), ref.Version); err != nil {
+				return err
+			}
+			if !oneOf(string(ref.ID), run.ContextMemoryIDs...) {
+				run.ContextMemoryIDs = append(run.ContextMemoryIDs, string(ref.ID))
+			}
+		}
+		current.ContextMemoryIDs = run.ContextMemoryIDs
+		current.ContextVersions = run.ContextVersions
+		current.MemoryGroups = run.MemoryGroups
+		current.MemoryTier = run.MemoryTier
+		current.MemoryContextRange = run.MemoryContextRange
+		current.Brief = run.Brief
 		current.FinishedAt = stamp()
 		current.Status = "done"
 		current.Output = result.Text
@@ -649,6 +785,9 @@ func (s *Store) runAgentOnce(ctx context.Context) error {
 		if generationErr != nil {
 			current.Status = "failed"
 			current.Error = "模型调用未完成，结果和用量可能未确认；请检查登录、额度与服务配置"
+			if verifyErr != nil {
+				current.Error = "生成前记忆或授权已变化，请重新生成"
+			}
 			var provider *siwc.ProviderError
 			if errors.As(generationErr, &provider) {
 				current.Error = provider.Message()

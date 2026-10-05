@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -39,8 +40,9 @@ type rpcMessage struct {
 	Params json.RawMessage `json:"params,omitempty"`
 	Result json.RawMessage `json:"result,omitempty"`
 	Error  *struct {
-		Code    int    `json:"code"`
-		Message string `json:"message"`
+		Code    int             `json:"code"`
+		Message string          `json:"message"`
+		Data    json.RawMessage `json:"data"`
 	} `json:"error,omitempty"`
 }
 
@@ -186,7 +188,12 @@ func (c *Codex) call(ctx context.Context, method string, params any) (json.RawMe
 	select {
 	case result := <-ch:
 		if result.Error != nil {
-			return nil, fmt.Errorf("Codex %s failed (%d)", method, result.Error.Code)
+			var detail codexTurnError
+			_ = json.Unmarshal(result.Error.Data, &detail)
+			detail.Message = result.Error.Message
+			err := detail.safeError(method)
+			err.RPCCode = result.Error.Code
+			return nil, err
 		}
 		return result.Result, nil
 	case <-done:
@@ -300,10 +307,32 @@ func (c *Codex) Vision(ctx context.Context, model, instruction string, image Ima
 	return text, err
 }
 
-func (c *Codex) generate(ctx context.Context, model, system, prompt string, web bool, schema json.RawMessage, image *Image) (string, []string, error) {
+func (c *Codex) generate(ctx context.Context, model, system, prompt string, web bool, schema json.RawMessage, image *Image) (text string, queries []string, generationErr error) {
+	started := time.Now()
+	operation := "initialize"
+	defer func() {
+		if generationErr == nil {
+			return
+		}
+		var detail *CodexError
+		if !errors.As(generationErr, &detail) {
+			category := "transport_error"
+			if errors.Is(generationErr, context.DeadlineExceeded) {
+				category = "timeout"
+			} else if errors.Is(generationErr, context.Canceled) {
+				category = "canceled"
+			}
+			detail = &CodexError{Operation: operation, Category: category, Cause: generationErr}
+			generationErr = detail
+		}
+		slog.WarnContext(ctx, "codex generation failed", "operation", detail.Operation,
+			"category", detail.Category, "rpc_code", detail.RPCCode,
+			"http_status", detail.HTTPStatus, "elapsed_ms", time.Since(started).Milliseconds(), "pid", os.Getpid())
+	}()
 	if err := c.ready(ctx); err != nil {
 		return "", nil, err
 	}
+	operation = "account/read"
 	account, err := c.Account(ctx)
 	if err != nil {
 		return "", nil, err
@@ -314,7 +343,7 @@ func (c *Codex) generate(ctx context.Context, model, system, prompt string, web 
 		} `json:"account"`
 	}
 	if json.Unmarshal(account, &auth) != nil || auth.Account == nil || auth.Account.Type != "chatgpt" {
-		return "", nil, fmt.Errorf("ChatGPT sign-in required")
+		return "", nil, &CodexError{Operation: operation, Category: "sign_in_required"}
 	}
 	params := map[string]any{"cwd": c.scratch, "ephemeral": true, "sandbox": "read-only", "approvalPolicy": "never", "baseInstructions": system, "developerInstructions": "Follow the output format specified in the base instructions. Use the provided context. Do not use tools or inspect local files."}
 	if web {
@@ -324,6 +353,7 @@ func (c *Codex) generate(ctx context.Context, model, system, prompt string, web 
 	if model != "" {
 		params["model"] = model
 	}
+	operation = "thread/start"
 	data, err := c.call(ctx, "thread/start", params)
 	if err != nil {
 		return "", nil, err
@@ -334,7 +364,7 @@ func (c *Codex) generate(ctx context.Context, model, system, prompt string, web 
 		} `json:"thread"`
 	}
 	if err = json.Unmarshal(data, &thread); err != nil || thread.Thread.ID == "" {
-		return "", nil, fmt.Errorf("invalid Codex thread")
+		return "", nil, &CodexError{Operation: operation, Category: "invalid_thread"}
 	}
 	c.mu.Lock()
 	c.sequence++
@@ -358,6 +388,7 @@ func (c *Codex) generate(ctx context.Context, model, system, prompt string, web 
 	if len(schema) > 0 {
 		turnParams["outputSchema"] = schema
 	}
+	operation = "turn/start"
 	turnData, err := c.call(ctx, "turn/start", turnParams)
 	if err != nil {
 		return "", nil, err
@@ -368,8 +399,10 @@ func (c *Codex) generate(ctx context.Context, model, system, prompt string, web 
 		} `json:"turn"`
 	}
 	if json.Unmarshal(turnData, &turn) != nil || turn.Turn.ID == "" {
-		return "", nil, errors.New("invalid Codex turn")
+		return "", nil, &CodexError{Operation: operation, Category: "invalid_turn"}
 	}
+	operation = "turn/completed"
+	var lastError *CodexError
 	var output strings.Builder
 	var searches []string
 	for {
@@ -383,21 +416,33 @@ func (c *Codex) generate(ctx context.Context, model, system, prompt string, web 
 			return "", nil, errors.New("Codex connection closed")
 		case event := <-events:
 			if event.Method == "pcas/overflow" {
-				return "", nil, errors.New("Codex event buffer exceeded")
+				return "", nil, &CodexError{Operation: operation, Category: "event_buffer_exceeded"}
 			}
 			var p struct {
-				ThreadID string `json:"threadId"`
-				Item     struct {
+				ThreadID  string          `json:"threadId"`
+				TurnID    string          `json:"turnId"`
+				Error     *codexTurnError `json:"error"`
+				WillRetry bool            `json:"willRetry"`
+				Item      struct {
 					Type  string `json:"type"`
 					Text  string `json:"text"`
 					Query string `json:"query"`
 				} `json:"item"`
 				Turn struct {
-					Status string `json:"status"`
+					ID     string          `json:"id"`
+					Status string          `json:"status"`
+					Error  *codexTurnError `json:"error"`
 				} `json:"turn"`
 			}
 			if json.Unmarshal(event.Params, &p) != nil || p.ThreadID != thread.Thread.ID {
 				continue
+			}
+			if event.Method == "error" && p.TurnID == turn.Turn.ID {
+				lastError = p.Error.safeError(operation)
+				slog.WarnContext(ctx, "codex turn error", "operation", operation,
+					"category", lastError.Category, "rpc_code", lastError.RPCCode,
+					"http_status", lastError.HTTPStatus, "provider_will_retry", p.WillRetry,
+					"elapsed_ms", time.Since(started).Milliseconds(), "pid", os.Getpid())
 			}
 			if event.Method == "item/completed" && p.Item.Type == "webSearch" && p.Item.Query != "" {
 				searches = append(searches, p.Item.Query)
@@ -407,8 +452,23 @@ func (c *Codex) generate(ctx context.Context, model, system, prompt string, web 
 				output.WriteByte('\n')
 			}
 			if event.Method == "turn/completed" {
+				if p.Turn.ID != "" && p.Turn.ID != turn.Turn.ID {
+					continue
+				}
 				if p.Turn.Status != "completed" || strings.TrimSpace(output.String()) == "" {
-					return "", nil, errors.New("Codex turn did not complete")
+					if p.Turn.Error != nil {
+						return "", nil, p.Turn.Error.safeError(operation)
+					}
+					if lastError != nil {
+						return "", nil, lastError
+					}
+					category := "turn_failed"
+					if p.Turn.Status == "completed" {
+						category = "empty_output"
+					} else if p.Turn.Status == "interrupted" {
+						category = "turn_interrupted"
+					}
+					return "", nil, &CodexError{Operation: operation, Category: category}
 				}
 				return strings.TrimSpace(output.String()), searches, nil
 			}

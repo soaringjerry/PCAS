@@ -600,8 +600,16 @@ func b1R2aRun(t *testing.T, s *Store, scope memory.Scope, f *b1Fake, task, agent
 	if err := s.runAgentOnce(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	if len(f.all()) != before+1 {
-		t.Fatal("deputy request was not actually sent exactly once")
+	// R4-5/R4-10 now permit selfcheck even before status cards exist.
+	// This older retrieval test still requires exactly one answer request.
+	answers := 0
+	for _, call := range f.all()[before:] {
+		if !strings.Contains(call.System, "这是自查") {
+			answers++
+		}
+	}
+	if answers != 1 {
+		t.Fatal("deputy answer request was not actually sent exactly once")
 	}
 	st, err := s.Snapshot(context.Background(), scope)
 	if err != nil {

@@ -131,26 +131,36 @@ func p2AssertReads(t *testing.T, s *Store, scope memory.Scope) {
 		}
 		p2Bytes(t, "full workspace snapshot", old, got)
 		req := turnRequest("霜叶的季度汇报准备得怎么样？")
-		oldContext, err := s.p2LegacySecretaryContextTx(ctx, tx, scope, req, string(memory.NewID()))
-		if err != nil {
-			return err
+		// Both prompts contain the current minute. Retry only if this external
+		// clock input changed during the pair; never normalize returned bytes.
+		for attempt := 0; attempt < 3; attempt++ {
+			minute := time.Now().Truncate(time.Minute)
+			oldContext, err := s.p2LegacySecretaryContextTx(ctx, tx, scope, req, string(memory.NewID()))
+			if err != nil {
+				return err
+			}
+			newContext, err := s.secretaryContextTx(ctx, tx, scope, req, oldContext.ConversationID)
+			if err != nil {
+				return err
+			}
+			op, om, err := s.p2LegacySecretaryPrompt(ctx, tx, scope, req, &oldContext)
+			if err != nil {
+				return err
+			}
+			np, nm, err := s.secretaryPrompt(ctx, tx, scope, req, &newContext)
+			if err != nil {
+				return err
+			}
+			if !minute.Equal(time.Now().Truncate(time.Minute)) {
+				continue
+			}
+
+			p2Bytes(t, "secretary prompt", op, np)
+			p2Bytes(t, "secretary sent memories", om, nm)
+			p2Bytes(t, "secretary dependencies", oldContext.Dependencies, newContext.Dependencies)
+			return nil
 		}
-		newContext, err := s.secretaryContextTx(ctx, tx, scope, req, oldContext.ConversationID)
-		if err != nil {
-			return err
-		}
-		op, om, err := s.p2LegacySecretaryPrompt(ctx, tx, scope, req, &oldContext)
-		if err != nil {
-			return err
-		}
-		np, nm, err := s.secretaryPrompt(ctx, tx, scope, req, &newContext)
-		if err != nil {
-			return err
-		}
-		p2Bytes(t, "secretary prompt", op, np)
-		p2Bytes(t, "secretary sent memories", om, nm)
-		p2Bytes(t, "secretary dependencies", oldContext.Dependencies, newContext.Dependencies)
-		return nil
+		return fmt.Errorf("prompt clock changed during all three comparison pairs")
 	})
 	if err != nil {
 		t.Fatal(err)

@@ -62,7 +62,7 @@
 
 ## 比对测试及运行方法
 
-`p2_legacy_queries_test.go` 冻结 `4401e73` 的旧查询与读取路径，仅用于比对和可选旧版测时。新旧在同一 REPEATABLE READ、READ ONLY 事务中读同一份数据，序列化 JSON 后按字节比较。快照在生产使用 FOR SHARE，PostgreSQL 的只读事务不允许该锁，测试包装器对新旧仅移除同一条 owner 读取锁；生产锁未改。虚构记忆设置 pinned，避免 Exposure 随两个读调用的墙钟间隔变化；没有放宽字段比较。
+`p2_legacy_queries_test.go` 冻结 `4401e73` 的旧查询与读取路径，仅用于比对和可选旧版测时。新旧在同一 REPEATABLE READ、READ ONLY 事务中读同一份数据，序列化 JSON 后按字节比较。快照在生产使用 FOR SHARE，PostgreSQL 的只读事务不允许该锁，测试包装器对新旧仅移除同一条 owner 读取锁；生产锁未改。虚构记忆设置 pinned，避免 Exposure 随两个读调用的墙钟间隔变化；提示词含当前分钟，如果新旧调用之间跨分钟则重读该对，仍直接比较完整字节，不替换时钟字符串。没有放宽字段比较。
 
 - `TestP2QueriesAreByteIdentical`：完整快照、事项正文与依赖、36 组召回、模型提示词与送入记忆；重复验证授权撤回、来源撤回、未来生效、过期、排除、实际纠正写入。召回涵盖 owner / 普通主体 / team、remember / history / continue、空查询、无命中、工作对象。
 - `TestP2IndexDoesNotChangeBytes`：建两个索引前后的原读取结果。
@@ -92,4 +92,4 @@ PCAS_P2_PERF=1 PCAS_P2_SIZE=10000 PCAS_P2_SAMPLES=1 PCAS_P2_PLAN_DIR=/tmp/pcas-p
 
 诊断运行采集的实际 `EXPLAIN (ANALYZE, BUFFERS, TIMING OFF)`：[回忆](2026-10-05-p2-turn-speed/10000-recall.txt)、[记忆卡片](2026-10-05-p2-turn-speed/10000-memory-list.txt)、[事项权限](2026-10-05-p2-turn-speed/10000-artifact-permissions.txt)、[原对话窗口](2026-10-05-p2-turn-speed/10000-conversation-window.txt)、[整理计数](2026-10-05-p2-turn-speed/10000-organize-counts.txt)。计划测量与正式三轮验收分开。
 
-格式检查、go vet、构建通过。小档字节比对、随机序列、万条字节比对、时间/向量比对均以 `-race` 通过。完整 `go test -race -count=1 -timeout 30m ./cmd/... ./internal/...` 正在运行，最终结果见 PR 检查说明。
+格式检查、go vet、构建通过。小档字节比对、随机序列、万条字节比对、时间/向量比对均以 `-race` 通过。完整 `go test -race -count=1 -timeout 30m ./cmd/... ./internal/...` 与 CI 的最终结果见 PR 检查说明。

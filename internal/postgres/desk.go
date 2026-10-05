@@ -284,25 +284,32 @@ func (s *Store) deskContextTx(ctx context.Context, tx pgx.Tx, scope memory.Scope
 	if err != nil {
 		return nil, nil, workspace.Settings{}, nil, err
 	}
+	tasks, settings, refs, err := s.deskItemsContextTx(ctx, tx, scope, agent, stable)
+	return memories, tasks, settings, refs, err
+}
+
+// Secretary recall supplies the memory identities later; the legacy answer
+// still needs its complete memory context. Share only the item/settings reads.
+func (s *Store) deskItemsContextTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, agent workspace.Agent, stable bool) ([]workspace.Item, workspace.Settings, []memory.Ref, error) {
 	order := "due_at NULLS LAST, updated_at DESC"
 	if stable {
 		order = "created_at,id"
 	}
 	tasks, err := queryDocuments[workspace.Item](ctx, tx, "SELECT document FROM work_items WHERE owner_id=$1 AND kind='task' AND status IN ('todo','doing','waiting') ORDER BY "+order+" LIMIT 40", string(scope.OwnerID))
 	if err != nil {
-		return nil, nil, workspace.Settings{}, nil, err
+		return nil, workspace.Settings{}, nil, err
 	}
 	dependencies := []memory.Ref{}
 	for i := range tasks {
 		var refs []memory.Ref
 		tasks[i], refs, err = sanitizeItemTx(ctx, tx, scope, agent.ID, tasks[i])
 		if err != nil {
-			return nil, nil, workspace.Settings{}, nil, err
+			return nil, workspace.Settings{}, nil, err
 		}
 		dependencies = append(dependencies, refs...)
 	}
 	settings, err := queryDocument[workspace.Settings](ctx, tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1", string(scope.OwnerID))
-	return memories, tasks, settings, dependencies, err
+	return tasks, settings, dependencies, err
 }
 func deskLocation(settings workspace.Settings) *time.Location {
 	loc, err := time.LoadLocation(settings.Timezone)

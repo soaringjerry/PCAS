@@ -1,0 +1,36 @@
+Aggregate  (cost=5977.71..5977.72 rows=1 width=16) (actual rows=1 loops=1)
+  Buffers: shared hit=181579
+  ->  Hash Join  (cost=4637.02..5919.38 rows=3333 width=62) (actual rows=10000 loops=1)
+        Hash Cond: ((r.id = c.claim_id) AND (r.version = c.version))
+        Buffers: shared hit=181576
+        ->  Hash Join  (cost=334.00..1533.03 rows=10000 width=114) (actual rows=10000 loops=1)
+              Hash Cond: (r.id = cl.id)
+              Buffers: shared hit=578
+              ->  Seq Scan on memory_records r  (cost=0.00..1094.01 rows=40001 width=36) (actual rows=40001 loops=1)
+                    Filter: ((owner_id = '2f64284b-4f5c-4626-aa15-9da49cbc5ec5'::uuid) AND (state = 'active'::text))
+                    Buffers: shared hit=494
+              ->  Hash  (cost=209.00..209.00 rows=10000 width=94) (actual rows=10000 loops=1)
+                    Buckets: 16384  Batches: 1  Memory Usage: 1330kB
+                    Buffers: shared hit=84
+                    ->  Seq Scan on claims cl  (cost=0.00..209.00 rows=10000 width=94) (actual rows=10000 loops=1)
+                          Filter: (owner_id = '2f64284b-4f5c-4626-aa15-9da49cbc5ec5'::uuid)
+                          Buffers: shared hit=84
+        ->  Hash  (cost=4253.02..4253.02 rows=3333 width=56) (actual rows=10000 loops=1)
+              Buckets: 16384 (originally 4096)  Batches: 1 (originally 1)  Memory Usage: 988kB
+              Buffers: shared hit=180998
+              ->  Hash Join  (cost=2970.99..4253.02 rows=3333 width=56) (actual rows=10000 loops=1)
+                    Hash Cond: ((rv.record_id = c.claim_id) AND (rv.version = c.version))
+                    Buffers: shared hit=180998
+                    ->  Seq Scan on record_versions rv  (cost=0.00..1072.01 rows=40001 width=36) (actual rows=40001 loops=1)
+                          Filter: (owner_id = '2f64284b-4f5c-4626-aa15-9da49cbc5ec5'::uuid)
+                          Buffers: shared hit=572
+                    ->  Hash  (cost=2921.00..2921.00 rows=3333 width=36) (actual rows=10000 loops=1)
+                          Buckets: 16384 (originally 4096)  Batches: 1 (originally 1)  Memory Usage: 793kB
+                          Buffers: shared hit=180426
+                          ->  Seq Scan on claim_revisions c  (cost=0.00..2921.00 rows=3333 width=36) (actual rows=10000 loops=1)
+                                Filter: ((owner_id = '2f64284b-4f5c-4626-aa15-9da49cbc5ec5'::uuid) AND claim_source_is_current('2f64284b-4f5c-4626-aa15-9da49cbc5ec5'::uuid, claim_id, version, now()))
+                                Buffers: shared hit=180426
+Planning:
+  Buffers: shared hit=668
+Planning Time: 2.166 ms
+Execution Time: 420.773 ms

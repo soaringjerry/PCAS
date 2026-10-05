@@ -18,6 +18,7 @@ type memoryReadOptions struct {
 	legacy   bool
 	query    workspace.MemoryQuery
 	id       string
+	ids      []string // nil means unrestricted; an empty slice matches nothing
 	limit    int
 	snapshot time.Time
 	before   *memoryCursor
@@ -43,6 +44,9 @@ func memoryWhere(scope memory.Scope, currentOnly bool, opts memoryReadOptions) (
 	}
 	if opts.id != "" {
 		add("r.id=$%d::uuid", opts.id)
+	}
+	if opts.ids != nil {
+		add("r.id=ANY($%d::uuid[])", opts.ids)
 	}
 	q := opts.query
 	if q.Q != "" {

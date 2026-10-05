@@ -132,6 +132,10 @@ type MemoryGroup struct {
 	Type     string `json:"type"`
 }
 type Memory struct {
+	Trust              string          `json:"trust"`
+	Retired            string          `json:"retired,omitempty"`
+	RetiredBy          string          `json:"retiredBy,omitempty"`
+	MergedFrom         int             `json:"mergedFrom,omitempty"`
 	Category           string          `json:"category"`
 	Durable            *bool           `json:"durable,omitempty"`
 	Groups             []MemoryGroup   `json:"groups"`
@@ -170,6 +174,9 @@ func (m Memory) MarshalJSON() ([]byte, error) {
 	}
 	if m.Category == "" {
 		m.Category = "unknown"
+	}
+	if m.Trust == "" {
+		m.Trust = "stated"
 	}
 	m.ContextDependent = memory.ContextDependent(m.Text)
 	return json.Marshal(wire(m))
@@ -399,6 +406,7 @@ type DeskSource struct {
 
 // MemoryQuery combines list filters; cursors keep a stable insertion boundary.
 type MemoryQuery struct {
+	Retired   bool
 	Group     string
 	Category  string
 	Q         string

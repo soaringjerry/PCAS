@@ -122,6 +122,9 @@ export interface Project {
 export type MemoryKind = 'fact' | 'preference' | 'decision' | 'intention' | 'plan'
 export type MemoryCategory = 'identity' | 'taste' | 'rule' | 'goal' | 'progress' | 'event' | 'opinion' | 'other_person' | 'unknown'
 
+export type MemoryTrust = 'stated' | 'repeated' | 'tentative' | 'reported' | 'inferred'
+export type MemoryRetired = 'superseded' | 'duplicate'
+
 export interface MemoryGroup {
   entityId: ID
   name: string
@@ -144,6 +147,10 @@ export interface MemoryMention {
 }
 
 export interface Memory {
+	trust?: MemoryTrust
+	retired?: MemoryRetired
+	retiredBy?: ID
+	mergedFrom?: number
   category?: MemoryCategory
   durable?: boolean
   groups?: MemoryGroup[]

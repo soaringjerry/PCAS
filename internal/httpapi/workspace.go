@@ -31,6 +31,22 @@ type Options struct {
 }
 
 func (s *Server) workspaceRoutes(mux *http.ServeMux) {
+	if reader, ok := s.options.Workspace.(interface {
+		About(context.Context, memory.Scope, string) (workspace.About, error)
+	}); ok {
+		mux.HandleFunc("GET /v1/workspace/about", s.authorize(func(w http.ResponseWriter, r *http.Request, scope memory.Scope) {
+			if !scope.IsOwner {
+				s.fail(w, memory.ErrForbidden)
+				return
+			}
+			out, err := reader.About(r.Context(), scope, r.URL.Query().Get("key"))
+			if err != nil {
+				s.fail(w, err)
+				return
+			}
+			writeJSON(w, 200, out)
+		}))
+	}
 	if groups, ok := s.options.Workspace.(interface {
 		SourceGroupItems(context.Context, memory.Scope, string, string, string, int) (workspace.SourceItems, error)
 	}); ok {
@@ -60,6 +76,7 @@ func (s *Server) workspaceRoutes(mux *http.ServeMux) {
 			}
 			values := r.URL.Query()
 			q := workspace.MemoryQuery{Q: values.Get("q"), Entity: values.Get("entity"), Nature: values.Get("nature"), Group: values.Get("group"), Category: values.Get("category"), From: values.Get("from"), To: values.Get("to"), Project: values.Get("project"), Epistemic: values.Get("epistemic"), Agent: values.Get("agent"), Cursor: values.Get("cursor")}
+			q.Retired = values.Get("retired") == "1"
 			if raw := values.Get("limit"); raw != "" {
 				n, err := strconv.Atoi(raw)
 				if err != nil || n < 1 {

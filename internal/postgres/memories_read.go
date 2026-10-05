@@ -120,6 +120,7 @@ func (s *Store) readMemoriesTx(ctx context.Context, tx pgx.Tx, scope memory.Scop
 	indices := map[string]int{}
 	for rows.Next() {
 		var m workspace.Memory
+		m.Trust = "stated" // S0 placeholder; batch 2 derives trust from evidence.
 		var last time.Time
 		var expressed, from, to *time.Time
 		var precision string
@@ -323,6 +324,9 @@ func (s *Store) ListMemories(ctx context.Context, scope memory.Scope, q workspac
 	}
 	if err := validateMemoryQuery(&q); err != nil {
 		return out, err
+	}
+	if q.Retired {
+		return out, nil // S0 has no retirement writer; batch 2 implements the view.
 	}
 	opts := memoryReadOptions{query: q, limit: q.Limit + 1}
 	if q.Cursor != "" {

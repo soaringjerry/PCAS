@@ -67,10 +67,13 @@ func nextCompareGroupTx(ctx context.Context, tx pgx.Tx, owner memory.ID, version
 	return group, err
 }
 
-func enqueueCompareTx(ctx context.Context, tx pgx.Tx, owner memory.ID, now time.Time, version int, entity bool) (bool, error) {
+func enqueueCompareTx(ctx context.Context, tx pgx.Tx, owner memory.ID, now time.Time, version int, entity bool, anchors ...memory.Ref) (bool, error) {
 	stage := CompareStage
 	if entity {
 		stage = EntityCompareStage
+		if version == CompareVersion {
+			version = EntityCompareVersion
+		}
 	}
 	var pending bool
 	if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM memory_jobs WHERE owner_id=$1 AND stage LIKE $2 AND state IN ('queued','leased'))", string(owner), stage+":%").Scan(&pending); err != nil || pending {
@@ -93,12 +96,18 @@ func enqueueCompareTx(ctx context.Context, tx pgx.Tx, owner memory.ID, now time.
 			return false, err
 		}
 	}
-	anchor, err := seedOrganizeGroupsTx(ctx, tx, owner)
-	if err != nil {
-		return false, err
+	var anchor memory.Ref
+	if len(anchors) > 0 {
+		anchor = anchors[0]
+	} else {
+		var err error
+		anchor, err = seedOrganizeGroupsTx(ctx, tx, owner)
+		if err != nil {
+			return false, err
+		}
 	}
 	id := memory.NewID()
-	_, err = tx.Exec(ctx, `INSERT INTO memory_jobs(id,owner_id,record_id,record_version,stage,priority,available_at)
+	_, err := tx.Exec(ctx, `INSERT INTO memory_jobs(id,owner_id,record_id,record_version,stage,priority,available_at)
  VALUES($1,$2,$3,$4,$5,$6,$7)`, string(id), string(owner), string(anchor.ID), anchor.Version, fmt.Sprintf("%s:%d:%s", stage, version, id), ComparePriority, now)
 	return err == nil, err
 }
@@ -170,6 +179,9 @@ func (s *Store) RunCompare(ctx context.Context, logger *slog.Logger) {
 		}
 		if _, err := s.ScheduleCompare(ctx, time.Now()); err != nil && ctx.Err() == nil {
 			logger.Warn("memory comparison check failed", "stage", "compare", "error_type", "schedule_failed")
+		}
+		if _, err := s.ScheduleEntityCandidates(ctx, time.Now()); err != nil && ctx.Err() == nil {
+			logger.Warn("entity candidate check failed", "stage", "entity_candidates", "error_type", "schedule_failed")
 		}
 		select {
 		case <-ctx.Done():

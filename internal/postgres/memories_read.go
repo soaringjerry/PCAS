@@ -15,15 +15,16 @@ import (
 )
 
 type memoryReadOptions struct {
-	useEntity  string
-	useCurrent bool
-	legacy     bool
-	query      workspace.MemoryQuery
-	id         string
-	ids        []string // nil means unrestricted; an empty slice matches nothing
-	limit      int
-	snapshot   time.Time
-	before     *memoryCursor
+	useEntity     string
+	useCurrent    bool
+	groupAsEntity bool // a topic may have merged into a place/organization
+	legacy        bool
+	query         workspace.MemoryQuery
+	id            string
+	ids           []string // nil means unrestricted; an empty slice matches nothing
+	limit         int
+	snapshot      time.Time
+	before        *memoryCursor
 }
 type memoryCursor struct {
 	At       time.Time `json:"at"`
@@ -77,7 +78,13 @@ func memoryWhere(scope memory.Scope, currentOnly bool, opts memoryReadOptions) (
 		add("EXISTS(SELECT 1 FROM claim_mentions cm WHERE (cm.owner_id,cm.claim_id,cm.claim_version)=(c.owner_id,c.claim_id,c.version) AND cm.entity_id=$%d::uuid)", q.Entity)
 	}
 	if q.Group != "" {
-		add("EXISTS(SELECT 1 FROM claim_mentions cm WHERE (cm.owner_id,cm.claim_id,cm.claim_version)=(c.owner_id,c.claim_id,c.version) AND cm.role IN ('project','topic','area') AND cm.entity_id=$%d::uuid)", q.Group)
+		if opts.groupAsEntity {
+			args = append(args, q.Group)
+			slot := len(args)
+			clauses = append(clauses, fmt.Sprintf("(c.subject_id=$%d::uuid OR EXISTS(SELECT 1 FROM claim_mentions cm WHERE (cm.owner_id,cm.claim_id,cm.claim_version)=(c.owner_id,c.claim_id,c.version) AND cm.entity_id=$%d::uuid))", slot, slot))
+		} else {
+			add("EXISTS(SELECT 1 FROM claim_mentions cm WHERE (cm.owner_id,cm.claim_id,cm.claim_version)=(c.owner_id,c.claim_id,c.version) AND cm.role IN ('project','topic','area') AND cm.entity_id=$%d::uuid)", q.Group)
+		}
 	}
 	if q.Category != "" {
 		add("c.category=$%d", q.Category)
@@ -382,6 +389,9 @@ func (s *Store) ListMemories(ctx context.Context, scope memory.Scope, q workspac
 		opts.snapshot = cursor.Snapshot
 	}
 	err := pgx.BeginTxFunc(ctx, s.pool, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
+		if err := resolveMemoryEntityFiltersTx(ctx, tx, scope.OwnerID, &opts); err != nil {
+			return err
+		}
 		if q.Trust != "" {
 			// Compiling the correlated derived predicate costs more than executing a
 			// paged interactive list. This setting is local to this read transaction.
@@ -460,14 +470,22 @@ func (s *Store) MemoryFacets(ctx context.Context, scope memory.Scope) (workspace
 		return out, err
 	}
 	rows, err := s.pool.Query(ctx, `WITH counts AS(
- SELECT cm.entity_id,cm.role,ev.name,count(DISTINCT cm.claim_id) AS n FROM claim_mentions cm
+ SELECT cm.entity_id,cm.role,ev.entity_type,ev.name,count(DISTINCT cm.claim_id) AS n FROM claim_mentions cm
  JOIN memory_records r ON(r.owner_id,r.id,r.version)=(cm.owner_id,cm.claim_id,cm.claim_version) AND r.state='active'
  JOIN memory_records er ON(er.owner_id,er.id)=(cm.owner_id,cm.entity_id) AND er.state='active'
  JOIN entity_versions ev ON(ev.owner_id,ev.entity_id,ev.version)=(er.owner_id,er.id,er.version)
  WHERE cm.owner_id=$1 AND cm.role IN('person','place','project','topic','area') AND claim_source_is_current($1,cm.claim_id,cm.claim_version,now())
  AND `+currentMemorySQL("cm.owner_id", "cm.claim_id")+`
- GROUP BY cm.entity_id,cm.role,ev.name), ranked AS(
- SELECT *,row_number() OVER(PARTITION BY role ORDER BY n DESC,name,entity_id) AS ordinal FROM counts)
+ GROUP BY cm.entity_id,cm.role,ev.entity_type,ev.name), expanded AS(
+ SELECT entity_id,role,name,CASE WHEN role='topic' AND entity_type IN('place','organization') THEN (
+ SELECT count(*) FROM memory_records member JOIN claim_revisions revision
+ ON(revision.owner_id,revision.claim_id,revision.version)=(member.owner_id,member.id,member.version)
+ WHERE member.owner_id=$1 AND member.state='active' AND member.kind='claim'
+ AND claim_source_is_current($1,member.id,member.version,now()) AND `+currentMemorySQL("member.owner_id", "member.id")+`
+ AND (revision.subject_id=counts.entity_id OR EXISTS(SELECT 1 FROM claim_mentions mention
+ WHERE (mention.owner_id,mention.claim_id,mention.claim_version)=(member.owner_id,member.id,member.version) AND mention.entity_id=counts.entity_id)))
+ ELSE n END AS n FROM counts), ranked AS(
+ SELECT *,row_number() OVER(PARTITION BY role ORDER BY n DESC,name,entity_id) AS ordinal FROM expanded)
  SELECT entity_id::text,name,n,role FROM ranked WHERE ordinal<=50 OR role IN('project','topic','area') ORDER BY role,ordinal`, string(scope.OwnerID))
 	if err != nil {
 		return out, err

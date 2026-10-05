@@ -273,7 +273,7 @@ func (s *Store) ProcessCard(ctx context.Context, j worker.Job) error {
 		if err := tx.QueryRow(ctx, "SELECT settings->>'timezone' FROM workspace_owners WHERE owner_id=$1", string(j.OwnerID)).Scan(&timezone); err != nil {
 			return err
 		}
-		rows, err := tx.Query(ctx, `SELECT m.claim_id::text,m.claim_version,c.value #>> '{}',rv.expressed_at,c.category,c.durable,c.acquisition,rv.actor
+		rows, err := tx.Query(ctx, `SELECT m.claim_id::text,m.claim_version,c.value #>> '{}',rv.expressed_at,c.category,c.durable,c.acquisition
  FROM status_current_members m JOIN claim_revisions c ON(c.owner_id,c.claim_id,c.version)=(m.owner_id,m.claim_id,m.claim_version)
  JOIN record_versions rv ON(rv.owner_id,rv.record_id,rv.version)=(m.owner_id,m.claim_id,m.claim_version)
  JOIN memory_records r ON(r.owner_id,r.id)=(m.owner_id,m.claim_id)
@@ -284,15 +284,15 @@ func (s *Store) ProcessCard(ctx context.Context, j worker.Job) error {
 		for rows.Next() {
 			m := cardMemory{N: len(memories) + 1, Ref: memory.Ref{Kind: memory.ClaimKind}, Trust: "stated"}
 			var expressed *time.Time
-			var acquisition, actor string
-			if err := rows.Scan(&m.Ref.ID, &m.Ref.Version, &m.Text, &expressed, &m.Category, &m.Durable, &acquisition, &actor); err != nil {
+			var acquisition string
+			if err := rows.Scan(&m.Ref.ID, &m.Ref.Version, &m.Text, &expressed, &m.Category, &m.Durable, &acquisition); err != nil {
 				rows.Close()
 				return err
 			}
 			if expressed != nil {
 				m.ExpressedAt = expressed.Format(time.RFC3339Nano)
 			}
-			if acquisition == "inferred" || actor == "ai" || actor == "system" {
+			if acquisition == "inferred" {
 				m.Trust = "inferred"
 			} else if acquisition == "reported" {
 				m.Trust = "reported"

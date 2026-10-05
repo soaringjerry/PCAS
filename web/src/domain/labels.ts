@@ -4,8 +4,10 @@ import type {
   RunStatus,
   IdeaStatus,
   JobStatus,
+  Memory,
   MemoryCategory,
   MemoryKind,
+  MemoryTrust,
   ProjectStatus,
   SampleState,
   SourceStatus,
@@ -69,6 +71,18 @@ export const memoryCategoryLabel: Record<Exclude<MemoryCategory, 'unknown'>, str
   opinion: '看法',
   other_person: '关于别人',
 }
+
+/** How far a memory can be relied on, by where it came from. */
+export const memoryTrustLabel: Record<MemoryTrust, string> = {
+  stated: '你说的',
+  repeated: '多次说过',
+  tentative: '带保留',
+  reported: '转述',
+  inferred: '推断',
+}
+
+/** A memory's trust; when the server has not said, the older field still tells a guess from the rest. */
+export const trustOf = (m: Pick<Memory, 'trust' | 'epistemic'>): MemoryTrust | undefined => m.trust ?? (m.epistemic === 'inferred' ? 'inferred' : undefined)
 
 export const candidateKindLabel: Record<CandidateKind, string> = {
   unknown: '待分类',

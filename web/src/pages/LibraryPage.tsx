@@ -6,15 +6,15 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { ChevronRight, CircleAlert, Download, History, Info, RotateCw, Search, Trash2, Upload } from 'lucide-react'
 import { Checkbox, Chip } from '../components/controls'
-import { EventTime, Fade, FromLine, Groups, Mentions, ProjectLink, SaidAt, TrustTag } from '../components/Marks'
+import { EventTime, Fade, FromLine, Groups, Mentions, ProjectLink, SaidAt, TrustMark, TrustTag } from '../components/Marks'
 import { ConfirmModal, SideSheet } from '../components/Overlay'
 import { UnsureSheet } from '../components/UnsureSheet'
 import { Button, Empty, Progress, Seg, Sheet, Spinner, Switch, Tag } from '../components/ui'
-import { jobStatusLabel, memoryCategoryLabel, memoryKindLabel, sampleStateLabel, sourceStatusLabel, triggerLabel } from '../domain/labels'
+import { jobStatusLabel, memoryCategoryLabel, memoryKindLabel, trustOf, sampleStateLabel, sourceStatusLabel, triggerLabel } from '../domain/labels'
 import { formatAgo, formatShortWhen, formatWhen } from '../domain/time'
-import type { Epistemic, Memory, MemoryFacet, MemoryGroup, MemoryKind, MemoryMention, Source, TrainingSample } from '../domain/types'
+import type { Memory, MemoryFacet, MemoryGroup, MemoryKind, MemoryMention, Source, TrainingSample } from '../domain/types'
 import { useStore } from '../store/context'
-import { useMemory, useMemoryFacets, useMemoryList } from '../store/memories'
+import { useMemory, useMemoryFacets, useMemoryList, useMergedInto } from '../store/memories'
 import { useToast } from '../store/toast'
 
 type Tab = 'memory' | 'sources' | 'training'
@@ -25,7 +25,7 @@ const hasEventTime = (m: Memory) => Boolean(m.eventFrom && m.eventPrecision && m
 /** What a memory is, once it has been sorted; nothing before that. */
 const categoryOf = (m: Memory) => (m.category && m.category !== 'unknown' ? memoryCategoryLabel[m.category] : undefined)
 
-export function MemorySheet({ memory, entity, group, onClose, onPick, onPickGroup, onDeleted }: {
+export function MemorySheet({ memory, entity, group, onClose, onPick, onPickGroup, onDeleted, onOpen, onRestored, showMerged = false }: {
   memory: Memory
   /** The person or place the list is narrowed to, if any. */
   entity: string
@@ -35,6 +35,12 @@ export function MemorySheet({ memory, entity, group, onClose, onPick, onPickGrou
   onPick: (mention: MemoryMention) => void
   onPickGroup: (group: MemoryGroup) => void
   onDeleted: () => void
+  /** Opens another memory in this one's place: the one that replaced it, say. */
+  onOpen?: (id: string) => void
+  /** After this memory, or one merged into it, was brought back. */
+  onRestored?: (id: string) => void
+  /** Start at the memories merged into this one. */
+  showMerged?: boolean
 }) {
   const { state, dispatch } = useStore()
   const toast = useToast()
@@ -58,13 +64,19 @@ export function MemorySheet({ memory, entity, group, onClose, onPick, onPickGrou
       onClose={onClose}
       top={
         <>
-          <TrustTag value={memory.epistemic} />
+          <TrustMark memory={memory} />
           {memory.epistemic === 'confirmed' && <Tag tone="success">已确认</Tag>}
           <ProjectLink id={memory.projectId} />
         </>
       }
     >
       <div className="stack">
+        {memory.retired && (
+          <div className="mem-retired">
+            <RetiredNote memory={memory} onOpen={onOpen} />
+            <RestoreButton id={memory.id} onRestored={onRestored} />
+          </div>
+        )}
         <div className="stack-sm">
           <textarea className="textarea" style={{ minHeight: 84 }} value={text} onChange={(e) => setText(e.target.value)} aria-label="内容" />
           {memory.contextDependent && <p className="callout">这条记忆含有指代，请在「从哪来的」里查看当时对话，核对对象和限定。</p>}
@@ -182,6 +194,8 @@ export function MemorySheet({ memory, entity, group, onClose, onPick, onPickGrou
           </ol>
         </div>
 
+        {(memory.mergedFrom ?? 0) > 0 && <MergedInto memory={memory} focus={showMerged} onRestored={onRestored} />}
+
         {memory.sources.length > 0 && (
           <div className="stack-sm">
             <h3 className="sheet-subtitle">从哪来的</h3>
@@ -230,13 +244,83 @@ export function MemorySheet({ memory, entity, group, onClose, onPick, onPickGrou
   )
 }
 
+/** Brings a replaced or merged memory back among the current ones; the toast can take that back. */
+function RestoreButton({ id, onRestored }: { id: string; onRestored?: (id: string) => void }) {
+  const { dispatchUndoable } = useStore()
+  const [busy, setBusy] = useState(false)
+  return (
+    <Button
+      size="sm"
+      disabled={busy}
+      onClick={async (e) => {
+        e.stopPropagation()
+        setBusy(true)
+        const ok = await dispatchUndoable({ type: 'restoreMemory', id }, '恢复了，它回到现在的记忆里')
+        setBusy(false)
+        if (ok) onRestored?.(id)
+      }}
+    >
+      恢复
+    </Button>
+  )
+}
+
+/** Which memory took this one's place, or took it in. */
+function RetiredNote({ memory, onOpen }: { memory: Memory; onOpen?: (id: string) => void }) {
+  const by = useMemory(memory.retiredBy ?? null)
+  return (
+    <p className="mem-retired-by">
+      <span>{memory.retired === 'duplicate' ? '和这条说的是一回事，已经并进去：' : '被后来的这条替代：'}</span>
+      {by.memory ? (
+        onOpen ? (
+          <button type="button" className="link-btn" onClick={(e) => { e.stopPropagation(); onOpen(by.memory!.id) }}>{by.memory.text}</button>
+        ) : (
+          <span className="ink">{by.memory.text}</span>
+        )
+      ) : (
+        <span className="muted">{by.phase === 'loading' ? '读取中…' : by.phase === 'failed' ? `没读出来（${by.problem}）` : '那条已经不在了'}</span>
+      )}
+    </p>
+  )
+}
+
+/** The memories that were merged into this one, each with what was originally said. */
+function MergedInto({ memory, focus, onRestored }: { memory: Memory; focus: boolean; onRestored?: (id: string) => void }) {
+  const merged = useMergedInto(memory.id, memory.mergedFrom ?? 0)
+  const top = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (focus) top.current?.scrollIntoView({ block: 'start' })
+  }, [focus])
+  return (
+    <div className="stack-sm" ref={top} role="group" aria-label={`合并了 ${memory.mergedFrom} 条`}>
+      <h3 className="sheet-subtitle">合并了 {memory.mergedFrom} 条</h3>
+      <p className="small muted">这几条和它说的是一回事，所以只留了这一条。并错了的可以恢复。</p>
+      {merged.phase === 'loading' && <p className="row muted"><Spinner />读取中…</p>}
+      {merged.phase === 'failed' && (
+        <p className="form-error" role="alert">
+          <CircleAlert size={14} />并进来的那几条没读出来：{merged.problem}{' '}
+          <button type="button" className="link-btn" onClick={merged.retry}>再读一次</button>
+        </p>
+      )}
+      {merged.phase === 'ready' && merged.items.length === 0 && <p className="small muted">并进来的那几条已经不在了。</p>}
+      <ul className="mem-merged">
+        {merged.items.map((m) => (
+          <li key={m.id}>
+            <div className="mem-merged-head">
+              <span className="ink">{m.text}</span>
+              <RestoreButton id={m.id} onRestored={onRestored} />
+            </div>
+            {m.sources.map((s, i) => (
+              <FromLine key={i} source={s} />
+            ))}
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
 const natures = Object.keys(memoryKindLabel) as MemoryKind[]
-type Trust = Exclude<Epistemic, 'planned'>
-const trusts: { value: Trust; label: string }[] = [
-  { value: 'confirmed', label: '已确认' },
-  { value: 'sourced', label: '原话有据' },
-  { value: 'inferred', label: '推测' },
-]
 const groupRows: { type: MemoryGroup['type']; label: string }[] = [
   { type: 'project', label: '项目' },
   { type: 'topic', label: '主题' },
@@ -293,7 +377,8 @@ function MemoryTab() {
   const entity = params.get('entity') ?? ''
   const group = params.get('group') ?? ''
   const nature = natures.find((n) => n === params.get('nature')) ?? ''
-  const epistemic = trusts.find((t) => t.value === params.get('epistemic'))?.value ?? ''
+  // The memories that were replaced or merged away are a view of their own.
+  const retired = params.get('retired') === '1'
   const openId = params.get('m')
   const change = (patch: Record<string, string | null>, replace = false) =>
     setParams((current) => {
@@ -319,12 +404,14 @@ function MemoryTab() {
     }, 250)
   }
 
-  const list = useMemoryList({ q, entity, group, nature, epistemic })
+  const list = useMemoryList(retired
+    ? { q, entity: '', group: '', nature: '', epistemic: '', trust: '', retired: '1' }
+    : { q, entity, group, nature, epistemic: '', trust: '', retired: '' })
   const { facets, problem: facetsProblem, retry: retryFacets } = useMemoryFacets()
   const opened = useMemory(openId, list.items.find((m) => m.id === openId))
   const [recalling, setRecalling] = useState(false)
   const { organize } = useStore().state
-  const filtered = Boolean(q || entity || group || nature || epistemic)
+  const filtered = retired ? Boolean(q) : Boolean(q || entity || group || nature)
   const pick = (entityId: string) => change({ entity: entityId === entity ? null : entityId, m: null })
   const pickGroup = (entityId: string) => change({ group: entityId === group ? null : entityId, m: null })
   const groups = facets?.groups ?? []
@@ -361,21 +448,24 @@ function MemoryTab() {
           深入查找
         </Button>
       </div>
-      <div className="toolbar">
+      {retired && (
+        <p className="mem-summary" role="status" aria-label="已被替代或合并的">
+          <span className="ink">已被替代或合并的记忆</span>
+          <span>它们不再用于回答和办事。判断错了的可以恢复。</span>
+          <button type="button" className="link-btn" onClick={() => change({ retired: null, m: null })}>
+            回到现在的记忆
+          </button>
+        </p>
+      )}
+      {!retired && <div className="toolbar">
         <Seg
           label="类型"
           value={nature || 'all'}
           onChange={(v) => change({ nature: v === 'all' ? null : v })}
           items={[{ value: 'all', label: '全部' }, ...natures.map((k) => ({ value: k, label: memoryKindLabel[k] }))]}
         />
-        <Seg
-          label="可信度"
-          value={epistemic || 'all'}
-          onChange={(v) => change({ epistemic: v === 'all' ? null : v })}
-          items={[{ value: 'all', label: '都看' }, ...trusts]}
-        />
-      </div>
-      {facets && (groups.length > 0 || facets.people.length > 0 || facets.places.length > 0) && (
+      </div>}
+      {!retired && facets && (groups.length > 0 || facets.people.length > 0 || facets.places.length > 0) && (
         <div className="mem-facets">
           {groupRows.map((row) => (
             <FacetRow key={row.type} label={row.label} entries={groups.filter((g) => g.type === row.type)} active={group} onPick={pickGroup} />
@@ -384,7 +474,7 @@ function MemoryTab() {
           <FacetRow label="地点" entries={facets.places} active={entity} onPick={pick} />
         </div>
       )}
-      {facetsProblem && (
+      {!retired && facetsProblem && (
         <p className="hint-line" role="alert">
           <CircleAlert size={13} />
           <span>
@@ -393,19 +483,24 @@ function MemoryTab() {
           </span>
         </p>
       )}
-      <p className="hint-line">
-        <Info size={13} />
-        「原话有据」保留你刚记录的直接表达，不代表已经核实；波浪下划线是待确认的 AI 理解。长期不用的记忆会变淡；深入查找可翻历史和原文。
-      </p>
-      {filtered && (
+      {!retired && (
+        <p className="hint-line">
+          <Info size={13} />
+          <span>
+            波浪下划线的是推断出来的，不是你的原话。说法变了、或者几条说的是一回事时，只留最新最全的那条；长期不用的记忆会变淡。{' '}
+            <button type="button" className="link-btn" onClick={() => change({ retired: '1', m: null })}>看已被替代或合并的</button>
+          </span>
+        </p>
+      )}
+      {filtered && !retired && (
         <p className="mem-summary" role="status">
           {list.phase === 'ready' && <span>{summaryOf(entity && (entityName ?? '它'), group && (groupName ?? '它'))}有 {list.total} 条</span>}
-          <button type="button" className="link-btn" onClick={() => { window.clearTimeout(typing.current); change({ q: null, entity: null, group: null, nature: null, epistemic: null }) }}>
+          <button type="button" className="link-btn" onClick={() => { window.clearTimeout(typing.current); change({ q: null, entity: null, group: null, nature: null }) }}>
             清掉筛选
           </button>
         </p>
       )}
-      {organize && organize.done < organize.total && (
+      {!retired && organize && organize.done < organize.total && (
         <p className="mem-summary" role="status" aria-label="整理进度">
           已整理 {organize.done} / {organize.total}
         </p>
@@ -425,14 +520,15 @@ function MemoryTab() {
             </Button>
           </div>
         ) : count === 0 ? (
-          <Empty>{filtered ? '没找到符合的记忆。' : '还没有记忆。跟秘书说点什么，或者导入资料，就会有了。'}</Empty>
+          <Empty>{filtered ? '没找到符合的记忆。' : retired ? '没有被替代或合并的记忆。' : '还没有记忆。跟秘书说点什么，或者导入资料，就会有了。'}</Empty>
         ) : (
           <div className="list">
             {list.items.map((m) => (
               <div key={m.id} className="mem-entry" style={{ opacity: 0.5 + m.exposure * 0.5 }} onClick={() => change({ m: m.id })}>
                 <div className="grow">
                   {/* The click is handled by the row; the button gives the keyboard the same way in. */}
-                  <button type="button" className={`mem-text${m.epistemic === 'inferred' ? ' guess' : ''}`}>{m.text}</button>
+                  <button type="button" className={`mem-text${trustOf(m) === 'inferred' ? ' guess' : ''}`}>{m.text}</button>
+                  {m.retired && <RetiredNote memory={m} onOpen={(id) => change({ m: id })} />}
                   {(hasEventTime(m) || (m.mentions?.length ?? 0) > 0 || (m.groups?.length ?? 0) > 0) && (
                     <div className="mem-marks">
                       <EventTime from={m.eventFrom} to={m.eventTo} precision={m.eventPrecision} />
@@ -443,14 +539,19 @@ function MemoryTab() {
                   <div className="meta">
                     {/* Once sorted, its type stands in for the older, coarser nature. */}
                     {categoryOf(m) ? <Tag>{categoryOf(m)}</Tag> : <span>{memoryKindLabel[m.kind]}</span>}
-                    <TrustTag value={m.epistemic} />
+                    <TrustMark memory={m} />
+                    {(m.mergedFrom ?? 0) > 0 && (
+                      <button type="button" className="link-btn" onClick={(e) => { e.stopPropagation(); change({ m: m.id, merged: '1' }) }}>
+                        合并了 {m.mergedFrom} 条
+                      </button>
+                    )}
                     <SaidAt at={m.expressedAt} />
                     {m.versions.length > 1 && <span>改过 {m.versions.length - 1} 次</span>}
                     <span>{m.visibleTo.length ? `${m.visibleTo.length} 个 AI 能看` : '只有你能看'}</span>
                     <ProjectLink id={m.projectId} />
                   </div>
                 </div>
-                <Fade value={m.exposure} />
+                {m.retired ? <RestoreButton id={m.id} onRestored={list.remove} /> : <Fade value={m.exposure} />}
               </div>
             ))}
             {hasMore && (
@@ -480,10 +581,13 @@ function MemoryTab() {
           memory={opened.memory}
           entity={entity}
           group={group}
-          onClose={() => change({ m: null })}
+          onClose={() => change({ m: null, merged: null })}
           onPick={(mention) => pick(mention.entityId)}
           onPickGroup={(g) => pickGroup(g.entityId)}
           onDeleted={() => list.remove(opened.memory!.id)}
+          onOpen={(id) => change({ m: id, merged: null })}
+          onRestored={(id) => { if (retired) list.remove(id) }}
+          showMerged={params.has('merged')}
         />
       )}
       {openId && !opened.memory && (

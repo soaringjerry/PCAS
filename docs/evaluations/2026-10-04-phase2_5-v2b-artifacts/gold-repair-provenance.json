@@ -1,0 +1,20 @@
+{
+  "original_suite_sha256": "3b259cd267354b93ee285b7459feac33f1c2d71ef27ceb91c16c7411c6e38d90",
+  "final_suite_sha256": "f26bfdff04c5b4d32b2b5eb9d83a091586a873ad09acdb2ea5a60e868731d0fa",
+  "original_source_uncompressed_sha256": "0af9a9da5c699a5306ff5e2db8d36292918d85d6536811802a648722f4cb33f7",
+  "repair_source_uncompressed_sha256": "7d9b3e9f4d37dc332772fcf8a47a6f9f47e82400c4cf4000964f0993bc0f48fc",
+  "changed_task_check_ids": [
+    "I-NOISE-07/M2",
+    "I-NOISE-10/M1"
+  ],
+  "original_completed_rows": 1512,
+  "original_retained_rows": 1494,
+  "original_replaced_rows": 18,
+  "replacement_rows": 18,
+  "original_completed_model_calls": 4536,
+  "repair_completed_model_calls": 54,
+  "repair_revision": "86c2b0ccbd46a62e1385ed35becb2a83c4813a67",
+  "repair_started_at": "2026-10-05T00:29:09Z",
+  "repair_host_date": "2026-10-05",
+  "note": "Scope repair was triggered after first-round scores revealed possible overly narrow positive checks. No answer texts were read to fit gold. Every method and repetition of both changed tasks is replaced, irrespective of its score. All other tasks and all memory/request/evidence fields remain exact. Snapshot was captured on the original suite date; only rubric text differs, so contexts are reused without recapture. The raw replacement report preserves its actual later host date; model clocks were not frozen."
+}

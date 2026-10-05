@@ -1,0 +1,136 @@
+[
+  {
+    "task": "I-NOISE-01",
+    "memories": [
+      {
+        "memory_id": "I-N01a",
+        "full_original_text_present": true
+      },
+      {
+        "memory_id": "I-N01b",
+        "full_original_text_present": false
+      }
+    ]
+  },
+  {
+    "task": "I-NOISE-02",
+    "memories": [
+      {
+        "memory_id": "I-N02a",
+        "full_original_text_present": true
+      },
+      {
+        "memory_id": "I-N02b",
+        "full_original_text_present": false
+      }
+    ]
+  },
+  {
+    "task": "I-NOISE-03",
+    "memories": [
+      {
+        "memory_id": "I-N03a",
+        "full_original_text_present": true
+      },
+      {
+        "memory_id": "I-N03b",
+        "full_original_text_present": false
+      }
+    ]
+  },
+  {
+    "task": "I-NOISE-04",
+    "memories": [
+      {
+        "memory_id": "I-N04a",
+        "full_original_text_present": true
+      },
+      {
+        "memory_id": "I-N04b",
+        "full_original_text_present": false
+      }
+    ]
+  },
+  {
+    "task": "I-NOISE-05",
+    "memories": [
+      {
+        "memory_id": "I-N05a",
+        "full_original_text_present": true
+      },
+      {
+        "memory_id": "I-N05b",
+        "full_original_text_present": false
+      },
+      {
+        "memory_id": "P005",
+        "full_original_text_present": false
+      }
+    ]
+  },
+  {
+    "task": "I-NOISE-06",
+    "memories": [
+      {
+        "memory_id": "I-N06a",
+        "full_original_text_present": true
+      },
+      {
+        "memory_id": "I-N06b",
+        "full_original_text_present": true
+      }
+    ]
+  },
+  {
+    "task": "I-NOISE-07",
+    "memories": [
+      {
+        "memory_id": "I-N07a",
+        "full_original_text_present": true
+      },
+      {
+        "memory_id": "I-N07b",
+        "full_original_text_present": true
+      }
+    ]
+  },
+  {
+    "task": "I-NOISE-08",
+    "memories": [
+      {
+        "memory_id": "I-N08a",
+        "full_original_text_present": true
+      },
+      {
+        "memory_id": "I-N08b",
+        "full_original_text_present": false
+      }
+    ]
+  },
+  {
+    "task": "I-NOISE-09",
+    "memories": [
+      {
+        "memory_id": "I-N09a",
+        "full_original_text_present": false
+      },
+      {
+        "memory_id": "I-N09b",
+        "full_original_text_present": true
+      }
+    ]
+  },
+  {
+    "task": "I-NOISE-10",
+    "memories": [
+      {
+        "memory_id": "I-N10a",
+        "full_original_text_present": true
+      },
+      {
+        "memory_id": "I-N10b",
+        "full_original_text_present": true
+      }
+    ]
+  }
+]

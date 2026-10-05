@@ -304,7 +304,7 @@ func organizeCompareHourlyTx(ctx context.Context, tx pgx.Tx, code string) error 
 	var next *time.Time
 	if err := tx.QueryRow(ctx, `SELECT count(*),min(b.created_at)+interval '1 hour' FROM background_usage b
  JOIN memory_jobs j ON j.id=b.job_id
- WHERE (j.stage LIKE 'memory.organize:%' OR j.stage LIKE 'memory.compare:%' OR j.stage LIKE 'memory.entity_compare:%')
+ WHERE (j.stage LIKE 'memory.organize:%' OR j.stage LIKE 'memory.compare:%' OR j.stage LIKE 'memory.entity_compare:%' OR j.stage LIKE 'memory.entity_candidates:%')
  AND b.created_at>now()-interval '1 hour'`).Scan(&count, &next); err != nil {
 		return err
 	}
@@ -593,7 +593,10 @@ func findOrganizeGroupTx(ctx context.Context, tx pgx.Tx, owner memory.ID, kind, 
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", nil
 	}
-	return id, err
+	if err != nil {
+		return "", err
+	}
+	return resolveMergedEntityTx(ctx, tx, owner, id)
 }
 
 func resolveOrganizeGroupsTx(ctx context.Context, tx pgx.Tx, owner memory.ID, batch []organizeMemory, items map[int]organizeItem, declarations []organizeGroup, eligible map[int]bool) (map[int][]organizeGroup, int, error) {

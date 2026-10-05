@@ -33,6 +33,9 @@ func (s *Store) listRetiredMemories(ctx context.Context, scope memory.Scope, q w
 		opts.snapshot = cursor.Snapshot
 	}
 	err := pgx.BeginTxFunc(ctx, s.pool, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
+		if err := resolveMemoryEntityFiltersTx(ctx, tx, scope.OwnerID, &opts); err != nil {
+			return err
+		}
 		if q.Trust != "" {
 			if _, err := tx.Exec(ctx, "SET LOCAL jit=off"); err != nil {
 				return err

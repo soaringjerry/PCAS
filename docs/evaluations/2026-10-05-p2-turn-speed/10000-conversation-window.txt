@@ -7,22 +7,22 @@ Nested Loop Left Join  (cost=2.07..337.59 rows=1 width=233) (actual rows=1 loops
               ->  Nested Loop  (cost=0.83..16.88 rows=1 width=44) (actual rows=1 loops=1)
                     Buffers: shared hit=8
                     ->  Index Scan using memory_records_pkey on memory_records r  (cost=0.41..8.44 rows=1 width=36) (actual rows=1 loops=1)
-                          Index Cond: ((owner_id = '3c8cee70-49f9-49fd-82e2-af6ae0125405'::uuid) AND (id = '717756af-5044-4dd3-ba21-2d707ab91af7'::uuid))
+                          Index Cond: ((owner_id = '2f64284b-4f5c-4626-aa15-9da49cbc5ec5'::uuid) AND (id = '717756af-5044-4dd3-ba21-2d707ab91af7'::uuid))
                           Filter: ((kind = 'source'::text) AND (state = 'active'::text))
                           Buffers: shared hit=4
                     ->  Index Scan using sources_pkey on sources s  (cost=0.41..8.43 rows=1 width=40) (actual rows=1 loops=1)
-                          Index Cond: ((owner_id = '3c8cee70-49f9-49fd-82e2-af6ae0125405'::uuid) AND (id = '717756af-5044-4dd3-ba21-2d707ab91af7'::uuid))
+                          Index Cond: ((owner_id = '2f64284b-4f5c-4626-aa15-9da49cbc5ec5'::uuid) AND (id = '717756af-5044-4dd3-ba21-2d707ab91af7'::uuid))
                           Buffers: shared hit=4
               ->  Index Scan using source_versions_owner_id_source_id_external_version_key on source_versions v  (cost=0.41..8.43 rows=1 width=108) (actual rows=1 loops=1)
-                    Index Cond: ((owner_id = '3c8cee70-49f9-49fd-82e2-af6ae0125405'::uuid) AND (source_id = '717756af-5044-4dd3-ba21-2d707ab91af7'::uuid))
+                    Index Cond: ((owner_id = '2f64284b-4f5c-4626-aa15-9da49cbc5ec5'::uuid) AND (source_id = '717756af-5044-4dd3-ba21-2d707ab91af7'::uuid))
                     Filter: (version = 1)
                     Buffers: shared hit=4
         ->  Index Scan using record_versions_pkey on record_versions rv  (cost=0.41..8.44 rows=1 width=52) (actual rows=1 loops=1)
-              Index Cond: ((owner_id = '3c8cee70-49f9-49fd-82e2-af6ae0125405'::uuid) AND (record_id = '717756af-5044-4dd3-ba21-2d707ab91af7'::uuid) AND (version = 1))
+              Index Cond: ((owner_id = '2f64284b-4f5c-4626-aa15-9da49cbc5ec5'::uuid) AND (record_id = '717756af-5044-4dd3-ba21-2d707ab91af7'::uuid) AND (version = 1))
               Filter: (state = 'active'::text)
               Buffers: shared hit=4
   ->  Index Scan using source_contexts_pkey on source_contexts c  (cost=0.41..8.43 rows=1 width=76) (actual rows=1 loops=1)
-        Index Cond: ((owner_id = '3c8cee70-49f9-49fd-82e2-af6ae0125405'::uuid) AND (source_id = '717756af-5044-4dd3-ba21-2d707ab91af7'::uuid) AND (source_version = 1))
+        Index Cond: ((owner_id = '2f64284b-4f5c-4626-aa15-9da49cbc5ec5'::uuid) AND (source_id = '717756af-5044-4dd3-ba21-2d707ab91af7'::uuid) AND (source_version = 1))
         Buffers: shared hit=4
   SubPlan 4
     ->  Nested Loop  (cost=25.81..42.31 rows=1 width=0) (actual rows=0 loops=1)
@@ -31,7 +31,7 @@ Nested Loop Left Join  (cost=2.07..337.59 rows=1 width=233) (actual rows=1 loops
             ->  Result  (cost=0.00..0.00 rows=0 width=0) (actual rows=0 loops=1)
                   One-Time Filter: false
           ->  Index Scan using evidence_source_idx on evidence source_evidence  (cost=0.29..16.74 rows=1 width=20) (actual rows=0 loops=1)
-                Index Cond: ((owner_id = '3c8cee70-49f9-49fd-82e2-af6ae0125405'::uuid) AND (source_id = r.id))
+                Index Cond: ((owner_id = '2f64284b-4f5c-4626-aa15-9da49cbc5ec5'::uuid) AND (source_id = r.id))
                 Filter: ((NOT (SubPlan 1)) OR $4)
                 Rows Removed by Filter: 1
                 Buffers: shared hit=7
@@ -47,7 +47,7 @@ Nested Loop Left Join  (cost=2.07..337.59 rows=1 width=233) (actual rows=1 loops
                             ->  Sort  (cost=25.53..25.53 rows=1 width=20) (never executed)
                                   Sort Key: corrected.version DESC
                                   ->  Subquery Scan on corrected  (cost=25.24..25.52 rows=1 width=20) (never executed)
-                                        Filter: (((corrected.valid_from IS NULL) OR (corrected.valid_from <= now())) AND ((corrected.valid_to IS NULL) OR (corrected.valid_to > now())) AND claim_source_is_current('3c8cee70-49f9-49fd-82e2-af6ae0125405'::uuid, corrected.claim_id, corrected.version, now()))
+                                        Filter: (((corrected.valid_from IS NULL) OR (corrected.valid_from <= now())) AND ((corrected.valid_to IS NULL) OR (corrected.valid_to > now())) AND claim_source_is_current('2f64284b-4f5c-4626-aa15-9da49cbc5ec5'::uuid, corrected.claim_id, corrected.version, now()))
                                         ->  Unique  (cost=25.24..25.24 rows=1 width=44) (never executed)
                                               ->  Sort  (cost=25.24..25.24 rows=1 width=44) (never executed)
                                                     Sort Key: (sum(CASE WHEN (c_1.change_type = ANY ('{initial,change}'::text[])) THEN 1 ELSE 0 END) OVER (?)), c_1.version DESC
@@ -56,12 +56,12 @@ Nested Loop Left Join  (cost=2.07..337.59 rows=1 width=233) (actual rows=1 loops
                                                                 ->  Nested Loop  (cost=0.70..16.76 rows=1 width=60) (never executed)
                                                                       Join Filter: (rv_1.version = c_1.version)
                                                                       ->  Index Scan using claim_revisions_pkey on claim_revisions c_1  (cost=0.29..8.30 rows=1 width=44) (never executed)
-                                                                            Index Cond: ((owner_id = '3c8cee70-49f9-49fd-82e2-af6ae0125405'::uuid) AND (claim_id = source_evidence.target_id))
+                                                                            Index Cond: ((owner_id = '2f64284b-4f5c-4626-aa15-9da49cbc5ec5'::uuid) AND (claim_id = source_evidence.target_id))
                                                                       ->  Index Scan using record_versions_pkey on record_versions rv_1  (cost=0.41..8.44 rows=1 width=52) (never executed)
-                                                                            Index Cond: ((owner_id = '3c8cee70-49f9-49fd-82e2-af6ae0125405'::uuid) AND (record_id = source_evidence.target_id))
+                                                                            Index Cond: ((owner_id = '2f64284b-4f5c-4626-aa15-9da49cbc5ec5'::uuid) AND (record_id = source_evidence.target_id))
                                                                             Filter: ((state = 'active'::text) AND (recorded_at <= now()))
                                                                 ->  Index Scan using memory_records_pkey on memory_records r_1  (cost=0.41..8.44 rows=1 width=32) (never executed)
-                                                                      Index Cond: ((owner_id = '3c8cee70-49f9-49fd-82e2-af6ae0125405'::uuid) AND (id = source_evidence.target_id))
+                                                                      Index Cond: ((owner_id = '2f64284b-4f5c-4626-aa15-9da49cbc5ec5'::uuid) AND (id = source_evidence.target_id))
                                                                       Filter: (state = 'active'::text)
   SubPlan 12
     ->  Nested Loop  (cost=27.34..253.05 rows=1 width=0) (never executed)
@@ -74,17 +74,17 @@ Nested Loop Left Join  (cost=2.07..337.59 rows=1 width=233) (actual rows=1 loops
                       Join Filter: (parent.source_version = parent_r.version)
                       ->  Nested Loop  (cost=0.70..210.99 rows=1 width=52) (never executed)
                             ->  Index Scan using source_contexts_conversation_idx on source_contexts parent  (cost=0.29..41.99 rows=20 width=36) (never executed)
-                                  Index Cond: ((owner_id = '3c8cee70-49f9-49fd-82e2-af6ae0125405'::uuid) AND (conversation_key = c.conversation_key))
+                                  Index Cond: ((owner_id = '2f64284b-4f5c-4626-aa15-9da49cbc5ec5'::uuid) AND (conversation_key = c.conversation_key))
                                   Filter: (branch = c.branch)
                             ->  Index Scan using sources_pkey on sources parent_s  (cost=0.41..8.45 rows=1 width=32) (never executed)
-                                  Index Cond: ((owner_id = '3c8cee70-49f9-49fd-82e2-af6ae0125405'::uuid) AND (id = parent.source_id))
+                                  Index Cond: ((owner_id = '2f64284b-4f5c-4626-aa15-9da49cbc5ec5'::uuid) AND (id = parent.source_id))
                                   Filter: ("right"(external_id, (length(c.parent_key) + 1)) = ('/'::text || c.parent_key))
                       ->  Index Scan using memory_records_pkey on memory_records parent_r  (cost=0.41..7.16 rows=1 width=36) (never executed)
-                            Index Cond: ((owner_id = '3c8cee70-49f9-49fd-82e2-af6ae0125405'::uuid) AND (id = parent_s.id))
+                            Index Cond: ((owner_id = '2f64284b-4f5c-4626-aa15-9da49cbc5ec5'::uuid) AND (id = parent_s.id))
                             Filter: (state = 'active'::text)
                 ->  Nested Loop  (cost=25.81..34.33 rows=1 width=16) (never executed)
                       ->  Index Scan using evidence_source_idx on evidence source_evidence_1  (cost=0.29..8.77 rows=1 width=36) (never executed)
-                            Index Cond: ((owner_id = '3c8cee70-49f9-49fd-82e2-af6ae0125405'::uuid) AND (source_id = parent_r.id))
+                            Index Cond: ((owner_id = '2f64284b-4f5c-4626-aa15-9da49cbc5ec5'::uuid) AND (source_id = parent_r.id))
                             Filter: ((NOT (SubPlan 9)) OR $23)
                             SubPlan 9
                               ->  Index Only Scan using record_grants_pkey on record_grants source_grant_1  (cost=0.41..8.44 rows=1 width=0) (never executed)
@@ -97,7 +97,7 @@ Nested Loop Left Join  (cost=2.07..337.59 rows=1 width=233) (actual rows=1 loops
                                         ->  Sort  (cost=25.53..25.53 rows=1 width=20) (never executed)
                                               Sort Key: corrected_1.version DESC
                                               ->  Subquery Scan on corrected_1  (cost=25.24..25.52 rows=1 width=20) (never executed)
-                                                    Filter: (((corrected_1.valid_from IS NULL) OR (corrected_1.valid_from <= now())) AND ((corrected_1.valid_to IS NULL) OR (corrected_1.valid_to > now())) AND claim_source_is_current('3c8cee70-49f9-49fd-82e2-af6ae0125405'::uuid, corrected_1.claim_id, corrected_1.version, now()))
+                                                    Filter: (((corrected_1.valid_from IS NULL) OR (corrected_1.valid_from <= now())) AND ((corrected_1.valid_to IS NULL) OR (corrected_1.valid_to > now())) AND claim_source_is_current('2f64284b-4f5c-4626-aa15-9da49cbc5ec5'::uuid, corrected_1.claim_id, corrected_1.version, now()))
                                                     ->  Unique  (cost=25.24..25.24 rows=1 width=44) (never executed)
                                                           ->  Sort  (cost=25.24..25.24 rows=1 width=44) (never executed)
                                                                 Sort Key: (sum(CASE WHEN (c_2.change_type = ANY ('{initial,change}'::text[])) THEN 1 ELSE 0 END) OVER (?)), c_2.version DESC
@@ -106,17 +106,17 @@ Nested Loop Left Join  (cost=2.07..337.59 rows=1 width=233) (actual rows=1 loops
                                                                             ->  Nested Loop  (cost=0.70..16.76 rows=1 width=60) (never executed)
                                                                                   Join Filter: (rv_2.version = c_2.version)
                                                                                   ->  Index Scan using claim_revisions_pkey on claim_revisions c_2  (cost=0.29..8.30 rows=1 width=44) (never executed)
-                                                                                        Index Cond: ((owner_id = '3c8cee70-49f9-49fd-82e2-af6ae0125405'::uuid) AND (claim_id = source_evidence_1.target_id))
+                                                                                        Index Cond: ((owner_id = '2f64284b-4f5c-4626-aa15-9da49cbc5ec5'::uuid) AND (claim_id = source_evidence_1.target_id))
                                                                                   ->  Index Scan using record_versions_pkey on record_versions rv_2  (cost=0.41..8.44 rows=1 width=52) (never executed)
-                                                                                        Index Cond: ((owner_id = '3c8cee70-49f9-49fd-82e2-af6ae0125405'::uuid) AND (record_id = source_evidence_1.target_id))
+                                                                                        Index Cond: ((owner_id = '2f64284b-4f5c-4626-aa15-9da49cbc5ec5'::uuid) AND (record_id = source_evidence_1.target_id))
                                                                                         Filter: ((state = 'active'::text) AND (recorded_at <= now()))
                                                                             ->  Index Scan using memory_records_pkey on memory_records r_2  (cost=0.41..8.44 rows=1 width=32) (never executed)
-                                                                                  Index Cond: ((owner_id = '3c8cee70-49f9-49fd-82e2-af6ae0125405'::uuid) AND (id = source_evidence_1.target_id))
+                                                                                  Index Cond: ((owner_id = '2f64284b-4f5c-4626-aa15-9da49cbc5ec5'::uuid) AND (id = source_evidence_1.target_id))
                                                                                   Filter: (state = 'active'::text)
           ->  Index Scan using record_versions_pkey on record_versions parent_v  (cost=0.41..0.53 rows=1 width=36) (never executed)
-                Index Cond: ((owner_id = '3c8cee70-49f9-49fd-82e2-af6ae0125405'::uuid) AND (record_id = parent_r.id) AND (version = parent_r.version))
+                Index Cond: ((owner_id = '2f64284b-4f5c-4626-aa15-9da49cbc5ec5'::uuid) AND (record_id = parent_r.id) AND (version = parent_r.version))
                 Filter: (state = 'active'::text)
 Planning:
-  Buffers: shared hit=1077
-Planning Time: 5.939 ms
-Execution Time: 0.781 ms
+  Buffers: shared hit=1086
+Planning Time: 8.346 ms
+Execution Time: 1.112 ms

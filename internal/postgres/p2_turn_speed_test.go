@@ -301,6 +301,9 @@ func TestP2TurnSpeed(t *testing.T) {
 				if out.Turn.Reply != "虚构季度汇报已准备。" {
 					t.Fatal(out.Turn.Reply)
 				}
+				if os.Getenv("PCAS_P2_ENFORCE") != "" && n == 10000 && total > 2*time.Second {
+					t.Fatalf("10,000-claim sample %d exceeded 2s: %s", i, total)
+				}
 				samples = append(samples, total)
 			}
 			sort.Slice(samples, func(i, j int) bool { return samples[i] < samples[j] })

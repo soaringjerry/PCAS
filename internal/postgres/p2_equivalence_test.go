@@ -491,3 +491,25 @@ func TestP2RecallTemporalAndVectorBytes(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestP2SourceDependentArtifactsAreByteIdentical(t *testing.T) {
+	s, scope := p2Fixture(t, 120)
+	ctx := context.Background()
+	// The adopted run depends on the raw source, while the source's visibility
+	// is governed by a claim extracted later. That claim is not a run dependency.
+	if _, err := s.pool.Exec(ctx, "UPDATE run_dependencies SET memory_id=$3 WHERE owner_id=$1 AND run_id=$2", scope.OwnerID, p2ID("run", 1), p2ID("source", 1)); err != nil {
+		t.Fatal(err)
+	}
+	p2AssertReads(t, s, scope)
+	if _, err := s.pool.Exec(ctx, "DELETE FROM record_grants WHERE owner_id=$1 AND record_id=$2 AND principal_id='model'", scope.OwnerID, p2ID("claim", 1)); err != nil {
+		t.Fatal(err)
+	}
+	p2AssertReads(t, s, scope)
+	if _, err := s.pool.Exec(ctx, "INSERT INTO record_grants VALUES($1,$2,'model')", scope.OwnerID, p2ID("claim", 1)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.pool.Exec(ctx, "INSERT INTO context_exclusions VALUES($1,$2,$3)", scope.OwnerID, p2ID("task", 1), p2ID("claim", 1)); err != nil {
+		t.Fatal(err)
+	}
+	p2AssertReads(t, s, scope)
+}

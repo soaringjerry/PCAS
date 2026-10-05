@@ -1509,7 +1509,12 @@ var p2LegacySourceJoin = regexp.MustCompile(`(?s)JOIN LATERAL \(\s*SELECT curren
 func p2LegacySQL(sql string) string {
 	sql = p2LegacySourceJoin.ReplaceAllString(sql, "JOIN applicable_claim_versions(${1},now(),now()) source_claim ON (source_claim.claim_id,source_claim.version)=(source_evidence.target_id,source_evidence.target_version)")
 	const bounded = "WITH applicable AS MATERIALIZED (SELECT claim_id,version FROM applicable_claim_versions($1,now(),now()) WHERE claim_id=ANY(ARRAY(SELECT d.memory_id FROM run_dependencies d JOIN adopted_artifacts adopted ON (adopted.owner_id,adopted.run_id)=(d.owner_id,d.run_id) WHERE adopted.owner_id=$1 AND adopted.thing_id=$2))) "
-	return strings.ReplaceAll(sql, bounded, "WITH applicable AS MATERIALIZED (SELECT claim_id,version FROM applicable_claim_versions($1,now(),now())) ")
+	const full = "WITH applicable AS MATERIALIZED (SELECT claim_id,version FROM applicable_claim_versions($1,now(),now())) "
+	sql = strings.ReplaceAll(sql, bounded, full)
+	if strings.HasPrefix(sql, full) {
+		sql = strings.ReplaceAll(sql, "JOIN applicable_claim_versions($1,now(),now()) source_claim", "JOIN applicable source_claim")
+	}
+	return sql
 }
 func (tx p2LegacySQLTx) Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error) {
 	return tx.Tx.Query(ctx, p2LegacySQL(sql), args...)

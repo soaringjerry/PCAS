@@ -992,5 +992,257 @@
         "duration": "773.524994ms"
       }
     ]
+  },
+  {
+    "stage": "final-source-permissions-corrected",
+    "memories": 2500,
+    "sources": 30000,
+    "tasks": 20,
+    "adopted": 5,
+    "sample": 0,
+    "database": "1.402505028s",
+    "wall": "1.418406624s",
+    "queries": [
+      {
+        "query": "artifact permissions",
+        "calls": 80,
+        "duration": "62.82631ms"
+      },
+      {
+        "query": "conversation window",
+        "calls": 31,
+        "duration": "68.481493ms"
+      },
+      {
+        "query": "memory list",
+        "calls": 3,
+        "duration": "240.623898ms"
+      },
+      {
+        "query": "organize counts",
+        "calls": 2,
+        "duration": "136.505941ms"
+      },
+      {
+        "query": "other",
+        "calls": 413,
+        "duration": "523.162597ms"
+      },
+      {
+        "query": "recall",
+        "calls": 1,
+        "duration": "370.904789ms"
+      }
+    ]
+  },
+  {
+    "stage": "final-source-permissions-corrected",
+    "memories": 2500,
+    "sources": 30000,
+    "tasks": 20,
+    "adopted": 5,
+    "sample": 1,
+    "database": "1.255112526s",
+    "wall": "1.25982665s",
+    "queries": [
+      {
+        "query": "artifact permissions",
+        "calls": 80,
+        "duration": "32.24046ms"
+      },
+      {
+        "query": "conversation window",
+        "calls": 31,
+        "duration": "40.43233ms"
+      },
+      {
+        "query": "memory list",
+        "calls": 3,
+        "duration": "264.997754ms"
+      },
+      {
+        "query": "organize counts",
+        "calls": 2,
+        "duration": "127.896577ms"
+      },
+      {
+        "query": "other",
+        "calls": 414,
+        "duration": "437.72732ms"
+      },
+      {
+        "query": "recall",
+        "calls": 1,
+        "duration": "351.818085ms"
+      }
+    ]
+  },
+  {
+    "stage": "final-source-permissions-corrected",
+    "memories": 2500,
+    "sources": 30000,
+    "tasks": 20,
+    "adopted": 5,
+    "sample": 2,
+    "database": "1.211536524s",
+    "wall": "1.215107458s",
+    "queries": [
+      {
+        "query": "artifact permissions",
+        "calls": 80,
+        "duration": "29.742777ms"
+      },
+      {
+        "query": "conversation window",
+        "calls": 31,
+        "duration": "8.905557ms"
+      },
+      {
+        "query": "memory list",
+        "calls": 3,
+        "duration": "243.79901ms"
+      },
+      {
+        "query": "organize counts",
+        "calls": 2,
+        "duration": "130.31424ms"
+      },
+      {
+        "query": "other",
+        "calls": 415,
+        "duration": "434.271813ms"
+      },
+      {
+        "query": "recall",
+        "calls": 1,
+        "duration": "364.503127ms"
+      }
+    ]
+  },
+  {
+    "stage": "final-source-permissions-corrected",
+    "memories": 10000,
+    "sources": 30000,
+    "tasks": 20,
+    "adopted": 5,
+    "sample": 0,
+    "database": "1.881826352s",
+    "wall": "1.899130959s",
+    "queries": [
+      {
+        "query": "artifact permissions",
+        "calls": 80,
+        "duration": "67.833516ms"
+      },
+      {
+        "query": "conversation window",
+        "calls": 31,
+        "duration": "69.434323ms"
+      },
+      {
+        "query": "memory list",
+        "calls": 3,
+        "duration": "41.657892ms"
+      },
+      {
+        "query": "organize counts",
+        "calls": 2,
+        "duration": "471.861787ms"
+      },
+      {
+        "query": "other",
+        "calls": 411,
+        "duration": "527.860739ms"
+      },
+      {
+        "query": "recall",
+        "calls": 1,
+        "duration": "703.178095ms"
+      }
+    ]
+  },
+  {
+    "stage": "final-source-permissions-corrected",
+    "memories": 10000,
+    "sources": 30000,
+    "tasks": 20,
+    "adopted": 5,
+    "sample": 1,
+    "database": "1.627546273s",
+    "wall": "1.630825301s",
+    "queries": [
+      {
+        "query": "artifact permissions",
+        "calls": 80,
+        "duration": "31.433586ms"
+      },
+      {
+        "query": "conversation window",
+        "calls": 31,
+        "duration": "37.488301ms"
+      },
+      {
+        "query": "memory list",
+        "calls": 3,
+        "duration": "34.06039ms"
+      },
+      {
+        "query": "organize counts",
+        "calls": 2,
+        "duration": "497.282171ms"
+      },
+      {
+        "query": "other",
+        "calls": 412,
+        "duration": "416.11766ms"
+      },
+      {
+        "query": "recall",
+        "calls": 1,
+        "duration": "611.164165ms"
+      }
+    ]
+  },
+  {
+    "stage": "final-source-permissions-corrected",
+    "memories": 10000,
+    "sources": 30000,
+    "tasks": 20,
+    "adopted": 5,
+    "sample": 2,
+    "database": "1.623811604s",
+    "wall": "1.627526222s",
+    "queries": [
+      {
+        "query": "artifact permissions",
+        "calls": 80,
+        "duration": "32.07678ms"
+      },
+      {
+        "query": "conversation window",
+        "calls": 31,
+        "duration": "12.30165ms"
+      },
+      {
+        "query": "memory list",
+        "calls": 3,
+        "duration": "31.033291ms"
+      },
+      {
+        "query": "organize counts",
+        "calls": 2,
+        "duration": "519.192994ms"
+      },
+      {
+        "query": "other",
+        "calls": 413,
+        "duration": "407.757675ms"
+      },
+      {
+        "query": "recall",
+        "calls": 1,
+        "duration": "621.449214ms"
+      }
+    ]
   }
 ]

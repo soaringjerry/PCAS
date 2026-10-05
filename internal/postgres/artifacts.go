@@ -2,7 +2,6 @@ package postgres
 
 import (
 	"context"
-	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
@@ -61,19 +60,21 @@ func sanitizeItemTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, principa
 	// Resolve current versions only for this item's actual dependencies, once
 	// for the statement. Materializing every claim here repeated a user-wide
 	// scan for each adopted item and each before/after permission check.
+	// Source dependencies must still resolve their evidenced claims separately:
+	// those claim identities are not direct run dependencies in this CTE.
 	const applicable = "applicable_claim_versions($1,now(),now())"
-	rows, err := tx.Query(ctx, "WITH applicable AS MATERIALIZED (SELECT claim_id,version FROM "+applicable+" WHERE claim_id=ANY(ARRAY(SELECT d.memory_id FROM run_dependencies d JOIN adopted_artifacts adopted ON (adopted.owner_id,adopted.run_id)=(d.owner_id,d.run_id) WHERE adopted.owner_id=$1 AND adopted.thing_id=$2))) "+strings.ReplaceAll(`SELECT a.kind,a.artifact_id,a.run_id::text, NOT EXISTS(
+	rows, err := tx.Query(ctx, "WITH applicable AS MATERIALIZED (SELECT claim_id,version FROM "+applicable+" WHERE claim_id=ANY(ARRAY(SELECT d.memory_id FROM run_dependencies d JOIN adopted_artifacts adopted ON (adopted.owner_id,adopted.run_id)=(d.owner_id,d.run_id) WHERE adopted.owner_id=$1 AND adopted.thing_id=$2))) "+`SELECT a.kind,a.artifact_id,a.run_id::text, NOT EXISTS(
         SELECT 1 FROM run_dependencies d LEFT JOIN memory_records r ON (r.owner_id,r.id)=(d.owner_id,d.memory_id)
         WHERE (d.owner_id,d.run_id)=(a.owner_id,a.run_id) AND (r.state IS DISTINCT FROM 'active'
         OR EXISTS(SELECT 1 FROM context_exclusions x WHERE x.owner_id=d.owner_id AND x.thing_id=$2 AND x.memory_id=d.memory_id)
         OR CASE WHEN r.kind='source' THEN d.memory_version IS DISTINCT FROM r.version
         OR NOT (`+teamSourceVisibleSQL("$1", "d.memory_id", "$3", "$2")+`) ELSE (
-        d.memory_version IS DISTINCT FROM (SELECT v.version FROM applicable_claim_versions($1,now(),now()) v WHERE v.claim_id=d.memory_id)
+        d.memory_version IS DISTINCT FROM (SELECT v.version FROM applicable v WHERE v.claim_id=d.memory_id)
         OR NOT EXISTS(SELECT 1 FROM record_grants g WHERE g.owner_id=d.owner_id AND g.record_id=d.memory_id AND g.principal_id=$3)
         OR NOT EXISTS(SELECT 1 FROM workspace_agents ag JOIN claim_revisions c ON c.owner_id=ag.owner_id WHERE ag.owner_id=$1 AND ag.id=$3 AND c.claim_id=d.memory_id AND c.version=d.memory_version AND ag.document->'memoryKinds' ? c.nature AND (coalesce(c.scope->>'project_id','')='' OR c.scope->>'project_id'=$4) AND (c.confirmation='confirmed' OR (c.confirmation='adopted' AND c.acquisition='direct') OR (ag.document->>'includeInferred')::boolean))
         ) END
         )),coalesce((SELECT jsonb_agg(jsonb_build_object('id',d.memory_id,'version',d.memory_version,'kind',r.kind)) FROM run_dependencies d JOIN memory_records r ON (r.owner_id,r.id)=(d.owner_id,d.memory_id) WHERE (d.owner_id,d.run_id)=(a.owner_id,a.run_id)),'[]'::jsonb)
-        FROM adopted_artifacts a WHERE a.owner_id=$1 AND a.thing_id=$2`, applicable, "applicable"), string(scope.OwnerID), item.ID, principal, projectID)
+        FROM adopted_artifacts a WHERE a.owner_id=$1 AND a.thing_id=$2`, string(scope.OwnerID), item.ID, principal, projectID)
 	if err != nil {
 		return item, nil, err
 	}

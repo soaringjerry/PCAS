@@ -1,26 +1,26 @@
-Limit  (cost=1.40..1852.01 rows=200 width=263) (actual rows=200 loops=1)
-  Buffers: shared hit=5775 read=9
-  ->  Nested Loop Left Join  (cost=1.40..30841.76 rows=3333 width=263) (actual rows=200 loops=1)
-        Buffers: shared hit=5775 read=9
-        ->  Nested Loop  (cost=1.11..29553.22 rows=3333 width=363) (actual rows=200 loops=1)
+Limit  (cost=1.40..1851.99 rows=200 width=263) (actual rows=200 loops=1)
+  Buffers: shared hit=5779
+  ->  Nested Loop Left Join  (cost=1.40..30841.42 rows=3333 width=263) (actual rows=200 loops=1)
+        Buffers: shared hit=5779
+        ->  Nested Loop  (cost=1.11..29552.89 rows=3333 width=363) (actual rows=200 loops=1)
               Join Filter: ((c.claim_id = rv.record_id) AND (c.version = rv.version))
-              Buffers: shared hit=5169 read=8
+              Buffers: shared hit=5174
               ->  Nested Loop  (cost=0.70..27732.74 rows=3333 width=391) (actual rows=200 loops=1)
-                    Buffers: shared hit=4369 read=8
+                    Buffers: shared hit=4374
                     ->  Index Scan using memory_records_active_updated_idx on memory_records r  (cost=0.41..3896.49 rows=40001 width=52) (actual rows=201 loops=1)
-                          Index Cond: (owner_id = '3c8cee70-49f9-49fd-82e2-af6ae0125405'::uuid)
-                          Buffers: shared hit=4 read=5
+                          Index Cond: (owner_id = '2f64284b-4f5c-4626-aa15-9da49cbc5ec5'::uuid)
+                          Buffers: shared hit=9
                     ->  Index Scan using claim_revisions_pkey on claim_revisions c  (cost=0.29..0.60 rows=1 width=339) (actual rows=1 loops=201)
-                          Index Cond: ((owner_id = '3c8cee70-49f9-49fd-82e2-af6ae0125405'::uuid) AND (claim_id = r.id) AND (version = r.version))
-                          Filter: claim_source_is_current('3c8cee70-49f9-49fd-82e2-af6ae0125405'::uuid, claim_id, version, now())
-                          Buffers: shared hit=4365 read=3
+                          Index Cond: ((owner_id = '2f64284b-4f5c-4626-aa15-9da49cbc5ec5'::uuid) AND (claim_id = r.id) AND (version = r.version))
+                          Filter: claim_source_is_current('2f64284b-4f5c-4626-aa15-9da49cbc5ec5'::uuid, claim_id, version, now())
+                          Buffers: shared hit=4365
               ->  Index Scan using record_versions_pkey on record_versions rv  (cost=0.41..0.53 rows=1 width=44) (actual rows=1 loops=200)
-                    Index Cond: ((owner_id = '3c8cee70-49f9-49fd-82e2-af6ae0125405'::uuid) AND (record_id = r.id) AND (version = r.version))
+                    Index Cond: ((owner_id = '2f64284b-4f5c-4626-aa15-9da49cbc5ec5'::uuid) AND (record_id = r.id) AND (version = r.version))
                     Buffers: shared hit=800
         ->  Index Scan using activity_pkey on activity a  (cost=0.29..0.32 rows=1 width=61) (actual rows=1 loops=200)
-              Index Cond: ((owner_id = '3c8cee70-49f9-49fd-82e2-af6ae0125405'::uuid) AND (record_id = r.id))
-              Buffers: shared hit=599 read=1
+              Index Cond: ((owner_id = '2f64284b-4f5c-4626-aa15-9da49cbc5ec5'::uuid) AND (record_id = r.id))
+              Buffers: shared hit=600
 Planning:
-  Buffers: shared hit=605 read=4
-Planning Time: 2.188 ms
-Execution Time: 21.405 ms
+  Buffers: shared hit=634
+Planning Time: 2.971 ms
+Execution Time: 25.831 ms

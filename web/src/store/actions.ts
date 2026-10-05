@@ -32,6 +32,7 @@ export type Action =
   | { type: 'confirmMemory'; id: string }
   | { type: 'deleteMemory'; id: string; includeSources?: boolean }
   | { type: 'pinMemory'; id: string }
+  | { type: 'restoreMemory'; id: string }
   | { type: 'setMemoryVisibility'; id: string; agentIds: string[] }
   | { type: 'pasteRunResult'; id: string; output: string }
   | { type: 'adoptRun'; id: string; as: 'doc' | 'subtasks' | 'progress'; text: string }

@@ -14,6 +14,7 @@ import (
 
 // modelUsage mirrors model_usage. References contain identity only, never text.
 type modelUsage struct {
+	Tier         string
 	OwnerID      memory.ID
 	ID           memory.ID
 	At           time.Time
@@ -51,14 +52,13 @@ func recordUsageTx(ctx context.Context, tx pgx.Tx, usage modelUsage) error {
 	if usage.At.IsZero() {
 		usage.At = time.Now().UTC()
 	}
-	// Plan is deliberately not persisted: arbitrary JSON can contain source text.
-	// This batch records only the identities actually supplied by the call sites.
+	// Persist only validated group keys; arbitrary plan text never reaches storage.
 	_, err := tx.Exec(ctx, `INSERT INTO model_usage
- (owner_id,id,at,purpose,agent_id,model,input_tokens,output_tokens,cost,turn_id,run_id,job_id,memory_refs)
- VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+ (owner_id,id,at,purpose,agent_id,model,input_tokens,output_tokens,cost,turn_id,run_id,job_id,memory_refs,tier,plan)
+ VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
  ON CONFLICT (owner_id,id) DO NOTHING`, string(usage.OwnerID), string(usage.ID), usage.At,
 		usage.Purpose, nullString(usage.AgentID), usage.Model, usage.InputTokens, usage.OutputTokens,
-		usage.Cost, nullString(usage.TurnID), nullString(usage.RunID), nullString(usage.JobID), asJSON(refs))
+		usage.Cost, nullString(usage.TurnID), nullString(usage.RunID), nullString(usage.JobID), asJSON(refs), usage.Tier, safeUsePlan(usage.Plan))
 	return err
 }
 
@@ -135,18 +135,20 @@ type usageCallRef struct {
 }
 
 type usageCall struct {
-	ID           memory.ID      `json:"id"`
-	At           time.Time      `json:"at"`
-	Purpose      string         `json:"purpose"`
-	AgentID      *string        `json:"agentId"`
-	Model        string         `json:"model"`
-	InputTokens  int            `json:"inputTokens"`
-	OutputTokens int            `json:"outputTokens"`
-	Cost         float64        `json:"cost"`
-	TurnID       *string        `json:"turnId"`
-	RunID        *string        `json:"runId"`
-	JobID        *string        `json:"jobId"`
-	Refs         []usageCallRef `json:"refs"`
+	Tier         string          `json:"tier"`
+	Plan         json.RawMessage `json:"plan,omitempty"`
+	ID           memory.ID       `json:"id"`
+	At           time.Time       `json:"at"`
+	Purpose      string          `json:"purpose"`
+	AgentID      *string         `json:"agentId"`
+	Model        string          `json:"model"`
+	InputTokens  int             `json:"inputTokens"`
+	OutputTokens int             `json:"outputTokens"`
+	Cost         float64         `json:"cost"`
+	TurnID       *string         `json:"turnId"`
+	RunID        *string         `json:"runId"`
+	JobID        *string         `json:"jobId"`
+	Refs         []usageCallRef  `json:"refs"`
 }
 
 func parseUsageCursor(before string) (usageCursor, error) {
@@ -184,7 +186,7 @@ func (s *Store) UsageCalls(ctx context.Context, scope memory.Scope, limit int, b
 	next := ""
 	err = pgx.BeginTxFunc(ctx, s.pool, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx, `SELECT id::text,at,purpose,agent_id,model,input_tokens,output_tokens,cost,
-   turn_id::text,run_id::text,job_id::text,memory_refs FROM model_usage
+   turn_id::text,run_id::text,job_id::text,memory_refs,tier,plan FROM model_usage
    WHERE owner_id=$1 AND ($2::timestamptz IS NULL OR (at,id)<($2,$3::uuid))
    ORDER BY at DESC,id DESC LIMIT $4`, string(scope.OwnerID), usageBefore(cursor), nullString(string(cursor.ID)), limit+1)
 		if err != nil {
@@ -195,7 +197,7 @@ func (s *Store) UsageCalls(ctx context.Context, scope memory.Scope, limit int, b
 			var call usageCall
 			var refs []memory.Ref
 			if err := rows.Scan(&call.ID, &call.At, &call.Purpose, &call.AgentID, &call.Model, &call.InputTokens,
-				&call.OutputTokens, &call.Cost, &call.TurnID, &call.RunID, &call.JobID, &refs); err != nil {
+				&call.OutputTokens, &call.Cost, &call.TurnID, &call.RunID, &call.JobID, &refs, &call.Tier, &call.Plan); err != nil {
 				rows.Close()
 				return err
 			}

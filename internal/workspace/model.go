@@ -132,6 +132,11 @@ type MemoryGroup struct {
 	Type     string `json:"type"`
 }
 type Memory struct {
+	AppliesTo          string          `json:"appliesTo,omitempty"`
+	Trust              string          `json:"trust"`
+	Retired            string          `json:"retired,omitempty"`
+	RetiredBy          string          `json:"retiredBy,omitempty"`
+	MergedFrom         int             `json:"mergedFrom,omitempty"`
 	Category           string          `json:"category"`
 	Durable            *bool           `json:"durable,omitempty"`
 	Groups             []MemoryGroup   `json:"groups"`
@@ -170,6 +175,9 @@ func (m Memory) MarshalJSON() ([]byte, error) {
 	}
 	if m.Category == "" {
 		m.Category = "unknown"
+	}
+	if m.Trust == "" {
+		m.Trust = "stated"
 	}
 	m.ContextDependent = memory.ContextDependent(m.Text)
 	return json.Marshal(wire(m))
@@ -219,18 +227,21 @@ type Adoption struct {
 	Edited   bool   `json:"edited"`
 }
 type Run struct {
-	SmokeID          string       `json:"smokeId,omitempty"`
-	Outdated         bool         `json:"outdated,omitempty"`
-	ID               string       `json:"id"`
-	ThingID          string       `json:"thingId"`
-	AgentID          string       `json:"agentId"`
-	Kind             string       `json:"kind"`
-	Prompt           string       `json:"prompt"`
-	Brief            string       `json:"brief"`
-	ContextMemoryIDs []string     `json:"contextMemoryIds"`
-	ContextVersions  []memory.Ref `json:"contextVersions"`
-	Status           string       `json:"status"`
-	Output           string       `json:"output,omitempty"`
+	MemoryContextRange *[2]int      `json:"memoryContextRange,omitempty"`
+	MemoryTier         string       `json:"memoryTier,omitempty"`
+	MemoryGroups       []string     `json:"memoryGroups,omitempty"`
+	SmokeID            string       `json:"smokeId,omitempty"`
+	Outdated           bool         `json:"outdated,omitempty"`
+	ID                 string       `json:"id"`
+	ThingID            string       `json:"thingId"`
+	AgentID            string       `json:"agentId"`
+	Kind               string       `json:"kind"`
+	Prompt             string       `json:"prompt"`
+	Brief              string       `json:"brief"`
+	ContextMemoryIDs   []string     `json:"contextMemoryIds"`
+	ContextVersions    []memory.Ref `json:"contextVersions"`
+	Status             string       `json:"status"`
+	Output             string       `json:"output,omitempty"`
 	// Searches are the web searches the agent made for this result.
 	Searches      []string        `json:"searches,omitempty"`
 	Error         string          `json:"error,omitempty"`
@@ -400,6 +411,9 @@ type DeskSource struct {
 
 // MemoryQuery combines list filters; cursors keep a stable insertion boundary.
 type MemoryQuery struct {
+	Trust     string
+	RetiredBy string
+	Retired   bool
 	Group     string
 	Category  string
 	Q         string

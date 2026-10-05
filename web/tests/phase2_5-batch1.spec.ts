@@ -210,7 +210,7 @@ test('一个分组都没有时不出现分组入口，人和地点照旧', async
   await expect(row(page, '提到的人').getByRole('button')).toHaveText(['林栖1'])
   await expect(row(page, '地点').getByRole('button')).toHaveText(['云岫镇2'])
   await expect(page.locator('body')).not.toContainText('已整理')
-  await expect(page.locator('.mem-entry .tag')).toHaveText(['原话有据', '原话有据'])
+  await expect(page.locator('.mem-entry .tag')).toHaveCount(0)
   expect(mock.queries.every((q) => !q.searchParams.has('group'))).toBeTruthy()
   expect(mock.errors).toEqual([])
 })

@@ -414,7 +414,21 @@ func TestPhase2B4_L2_DeputyLegacyAnswerExtractionEachRecordTheirCall(t *testing.
 		s, scope := b4Store(t), owner()
 		f := b4Model(t, s)
 		f.set(`{"summary":"完成。","output":"完成。","used":[],"actions":[]}`, 200)
-		run := b1Run(t, s, scope, "model", "整理合成验收资料")
+		st := workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "整理合成验收资料"})
+		// Isolate the one-call usage contract from medium's separate selfcheck.
+		ctx := WithMemoryTier(context.Background(), "light")
+		_, err := s.Execute(ctx, scope, workspace.Command{RequestID: string(memory.NewID()), ExpectedRevision: st.Revision, Type: "requestRun", ThingID: st.Tasks[0].ID, AgentID: "model", Kind: "ask", Prompt: "整理合成验收资料"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err = s.runAgentOnce(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+		st, err = s.Snapshot(context.Background(), scope)
+		if err != nil || len(st.Runs) != 1 || st.Runs[0].Status != "done" || st.Runs[0].Output == "" {
+			t.Fatalf("deputy did not complete normally: %+v %v", st.Runs, err)
+		}
+		run := st.Runs[0]
 		rows := b4Usage(t, s, scope)
 		if len(rows) != 1 {
 			t.Fatalf("deputy usage rows=%d", len(rows))

@@ -821,3 +821,19 @@
   .timezone-hint > .btn { grid-area: 2 / 1; justify-self: start; margin-left: -11px; }
   .timezone-hint > .btn-icon { grid-area: 1 / 2; margin-left: 0; }
 }
+
+/* The way to what has been worked out about the user: one quiet line under the desk. */
+.hall-about {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-end;
+  gap: 2px;
+  flex: none;
+  padding: 0 4px;
+  color: var(--label-2);
+  font-size: 13px;
+}
+
+.hall-about:hover {
+  color: var(--label);
+}

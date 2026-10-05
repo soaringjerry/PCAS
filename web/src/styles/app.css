@@ -3528,3 +3528,253 @@ button.mention.on svg {
   -webkit-box-orient: vertical;
   overflow-wrap: anywhere;
 }
+
+/* ================= About you ================= */
+
+.about-block {
+  margin-top: 22px;
+}
+
+.about-title {
+  margin: 0 4px 8px;
+  color: var(--label-2);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.about-handover {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px 28px;
+  padding: 16px;
+}
+
+.about-part {
+  min-width: 0;
+}
+
+.about-part h3 {
+  margin: 0 0 4px;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.about-part p {
+  margin: 0;
+  color: var(--label);
+  font-size: 14px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.about-dates,
+.about-cards,
+.about-field ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.about-dates li + li,
+.about-card + .about-card {
+  border-top: 1px solid var(--sep);
+}
+
+.about-dates button {
+  display: grid;
+  grid-template-columns: 13.5em minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 4px 12px;
+  width: 100%;
+  padding: 10px 16px;
+  border: 0;
+  background: none;
+  color: var(--label);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.about-dates button:hover,
+.about-card-bar:hover {
+  background: var(--fill);
+}
+
+.about-when {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13.5px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.about-when svg {
+  flex: none;
+  color: var(--label-3);
+}
+
+.about-what {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.about-note {
+  margin-left: 8px;
+  color: var(--orange);
+  font-size: 12.5px;
+}
+
+.about-kind,
+.about-card-count {
+  color: var(--label-3);
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+
+.about-card-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 11px 16px;
+  border: 0;
+  background: none;
+  color: var(--label);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.about-card-bar svg {
+  flex: none;
+  color: var(--label-3);
+}
+
+.about-card-name {
+  min-width: 0;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.about-card-count {
+  margin-left: auto;
+}
+
+.about-card-body {
+  padding: 2px 16px 14px;
+}
+
+.about-field + .about-field {
+  margin-top: 12px;
+}
+
+.about-field h4 {
+  margin: 0 0 2px;
+  color: var(--label-2);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+.about-field li {
+  padding: 3px 0;
+}
+
+.about-applies {
+  display: block;
+  color: var(--label-2);
+  font-size: 12.5px;
+}
+
+.about-none {
+  margin: 0;
+  padding: 6px 0;
+  color: var(--label-3);
+  font-size: 13px;
+}
+
+@media (max-width: 600px) {
+  .about-handover {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .about-dates button {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .about-what {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+}
+
+/* A memory that was replaced or merged away: what took its place, and the way back. */
+.mem-retired {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: var(--r-sm);
+  background: var(--fill);
+}
+
+.mem-retired-by {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 2px 4px;
+  min-width: 0;
+  margin: 4px 0 0;
+  color: var(--label-2);
+  font-size: 13px;
+}
+
+.mem-retired .mem-retired-by {
+  margin: 0;
+}
+
+.mem-retired-by .link-btn {
+  min-width: 0;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+.mem-entry > .btn {
+  flex: none;
+  align-self: center;
+}
+
+.mem-merged {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mem-merged li {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 10px 12px;
+  border-radius: var(--r-sm);
+  background: var(--fill);
+}
+
+.mem-merged-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.mem-merged-head > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.mem-merged-head > .btn {
+  flex: none;
+}

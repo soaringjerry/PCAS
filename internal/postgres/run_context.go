@@ -36,6 +36,7 @@ func (s *Store) prepareRunContext(ctx context.Context, scope memory.Scope, c wor
 	query := c.Prompt
 	projectID := c.ProjectID
 	var plan memory.QueryPlan
+	ready := false
 	var thingID string
 	if err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		agent, err := queryDocument[workspace.Agent](ctx, tx, "SELECT document FROM workspace_agents WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), c.AgentID)
@@ -61,6 +62,11 @@ func (s *Store) prepareRunContext(ctx context.Context, scope memory.Scope, c wor
 			return err
 		}
 		plan = memory.PlanQuery(c.Prompt, time.Now(), deskLocation(settings))
+		u, err := s.startUseContextTx(ctx, tx, scope)
+		if err != nil {
+			return err
+		}
+		ready = u.Ready
 		for _, id := range c.DeskTurnIDs {
 			if !memory.ID(id).Valid() {
 				return memory.ErrInvalid
@@ -96,7 +102,7 @@ func (s *Store) prepareRunContext(ctx context.Context, scope memory.Scope, c wor
 	}); err != nil {
 		return ctx, err
 	}
-	request := memory.RecallRequest{Team: &memory.TeamRecall{Text: c.Prompt, Plan: plan, ThingID: &thingID, ProjectID: &projectID}, Query: tail(strings.TrimSpace(query), 4000), Mode: memory.Continue, Budget: memory.Budget{Candidates: 100, Tokens: 10000, Edges: 30, Hops: 1}}
+	request := memory.RecallRequest{Team: &memory.TeamRecall{Text: c.Prompt, Plan: plan, ThingID: &thingID, ProjectID: &projectID, RankFusion: ready}, Query: tail(strings.TrimSpace(query), 4000), Mode: memory.Continue, Budget: memory.Budget{Candidates: 100, Tokens: 10000, Edges: 30, Hops: 1}}
 	if projectID != "" {
 		request.Context.Objects = []memory.ID{memory.ID(projectID)}
 	}

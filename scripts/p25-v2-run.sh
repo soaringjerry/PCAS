@@ -23,6 +23,19 @@ trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 cd "$repo_dir"
+if [[ -n "${PCAS_EVAL_PREPARED_DUMP:-}" ]]; then
+  resume_requested=false
+  for arg in "$@"; do
+    case "$arg" in
+      -resume-report|--resume-report|-resume-report=*|--resume-report=*) resume_requested=true ;;
+      -private|--private|-private=*|--private=*) echo 'snapshot repair is fictional-only' >&2; exit 1 ;;
+    esac
+  done
+  [[ "$resume_requested" == true && -f "$PCAS_EVAL_PREPARED_DUMP" ]] || {
+    echo 'prepared dump requires an explicit fictional resume report' >&2
+    exit 1
+  }
+fi
 go build -o "$run_dir/pcas-eval" ./cmd/pcas-eval
 container_id="$(local_docker run -d --rm \
   --label "pcas.eval.owner=v2-$$" \
@@ -32,13 +45,20 @@ container_id="$(local_docker run -d --rm \
   -p 127.0.0.1::5432 pgvector/pgvector:0.8.2-pg16-bookworm)"
 ready=false
 for attempt in {1..60}; do
-  if local_docker exec "$container_id" pg_isready -U pcas_v2 -d pcas_v2 >/dev/null 2>&1; then
+  if local_docker exec "$container_id" pg_isready -h 127.0.0.1 -U pcas_v2 -d pcas_v2 >/dev/null 2>&1; then
     ready=true
     break
   fi
   sleep 1
 done
 [[ "$ready" == true ]] || { echo 'disposable database failed to start' >&2; exit 1; }
+if [[ -n "${PCAS_EVAL_PREPARED_DUMP:-}" ]]; then
+  # Restore only into the new container this script just created. Never point
+  # pg_restore at a supplied DSN or an existing server/container.
+  local_docker exec -i "$container_id" pg_restore --exit-on-error --no-owner --no-privileges \
+    -U pcas_v2 -d pcas_v2 < "$PCAS_EVAL_PREPARED_DUMP"
+  sha256sum -- "$PCAS_EVAL_PREPARED_DUMP"
+fi
 port="$(local_docker port "$container_id" 5432/tcp)"
 port="${port##*:}"
 revision="$(git rev-parse HEAD)"

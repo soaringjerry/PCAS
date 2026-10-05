@@ -48,7 +48,7 @@ for line in sys.stdin:
   if '前台秘书' in system:
    assert web and prompt.endswith('只输出 JSON 对象。\n')
    schema=p['outputSchema']; props=schema['properties']
-   assert set(props)=={'reply','used','links','show','remember','actions','ask'}
+   assert set(props)=={'reply','used','links','show','remember','missingKeyInfo','actions','ask'}
    assert set(schema['required'])==set(props) and schema['additionalProperties']==False
    variants=props['actions']['items']['anyOf']
    assert {v['properties']['op']['enum'][0] for v in variants}=={'create_task','update','create_idea','create_project','add_steps','delegate'}

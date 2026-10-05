@@ -15,13 +15,15 @@ import (
 )
 
 type memoryReadOptions struct {
-	legacy   bool
-	query    workspace.MemoryQuery
-	id       string
-	ids      []string // nil means unrestricted; an empty slice matches nothing
-	limit    int
-	snapshot time.Time
-	before   *memoryCursor
+	useEntity  string
+	useCurrent bool
+	legacy     bool
+	query      workspace.MemoryQuery
+	id         string
+	ids        []string // nil means unrestricted; an empty slice matches nothing
+	limit      int
+	snapshot   time.Time
+	before     *memoryCursor
 }
 type memoryCursor struct {
 	At       time.Time `json:"at"`
@@ -48,7 +50,26 @@ func memoryWhere(scope memory.Scope, currentOnly bool, opts memoryReadOptions) (
 	if opts.ids != nil {
 		add("r.id=ANY($%d::uuid[])", opts.ids)
 	}
+	if opts.id == "" {
+		current := currentMemorySQL("r.owner_id", "r.id")
+		if opts.query.Retired {
+			clauses = append(clauses, "NOT "+current)
+		} else {
+			clauses = append(clauses, current)
+		}
+	}
+	if opts.useCurrent {
+		clauses = append(clauses, "EXISTS(SELECT 1 FROM claims use_claim WHERE use_claim.owner_id=r.owner_id AND use_claim.id=r.id AND coalesce(to_jsonb(use_claim)->>'retired','')='')")
+	}
+	if opts.useEntity != "" {
+		args = append(args, opts.useEntity)
+		slot := len(args)
+		clauses = append(clauses, fmt.Sprintf("(c.subject_id=$%d::uuid OR EXISTS(SELECT 1 FROM claim_mentions cm WHERE (cm.owner_id,cm.claim_id,cm.claim_version)=(c.owner_id,c.claim_id,c.version) AND cm.entity_id=$%d::uuid))", slot, slot))
+	}
 	q := opts.query
+	if q.RetiredBy != "" {
+		add("EXISTS(SELECT 1 FROM claims retired WHERE retired.owner_id=r.owner_id AND retired.id=r.id AND retired.retired_by=$%d::uuid)", q.RetiredBy)
+	}
 	if q.Q != "" {
 		add("strpos(lower(c.value #>> '{}'),lower($%d))>0", q.Q)
 	}
@@ -108,6 +129,16 @@ func (s *Store) readMemoriesTx(ctx context.Context, tx pgx.Tx, scope memory.Scop
  coalesce(a.last_effective_use_at,r.created_at),coalesce(a.stability,1),coalesce(a.half_life_seconds,2592000),coalesce(a.pinned,false),coalesce(a.reinforcement_limit,8),
  rv.expressed_at,` + memoryEventColumns() + "," + mentionsAvailable + `,
  coalesce(to_jsonb(c)->>'category','unknown'),(to_jsonb(c)->>'durable')::boolean` + memoryJoins + where + ` ORDER BY r.updated_at DESC,r.id`
+	if currentOnly && opts.useCurrent && opts.ids != nil {
+		// Ready cards and completion checks supply bounded identities. Resolve
+		// their applicable versions once, then hydrate only that scoped set.
+		args = append(args, opts.ids)
+		joins := ` FROM memory_records r JOIN applicable use_av ON use_av.claim_id=r.id
+ JOIN claim_revisions c ON (c.owner_id,c.claim_id,c.version)=(r.owner_id,r.id,use_av.version)
+ JOIN record_versions rv ON (rv.owner_id,rv.record_id,rv.version)=(c.owner_id,c.claim_id,c.version)
+ LEFT JOIN activity a ON (a.owner_id,a.record_id)=(r.owner_id,r.id)`
+		query = fmt.Sprintf("WITH applicable AS MATERIALIZED (SELECT claim_id,version FROM applicable_claim_versions($1,now(),now()) WHERE $4::boolean AND claim_id=ANY($%d::uuid[])) ", len(args)) + strings.Replace(query, memoryJoins, joins, 1)
+	}
 	if opts.limit > 0 {
 		args = append(args, opts.limit)
 		query += fmt.Sprintf(" LIMIT $%d", len(args))
@@ -120,6 +151,7 @@ func (s *Store) readMemoriesTx(ctx context.Context, tx pgx.Tx, scope memory.Scop
 	indices := map[string]int{}
 	for rows.Next() {
 		var m workspace.Memory
+		m.Trust = "stated" // S0 placeholder; batch 2 derives trust from evidence.
 		var last time.Time
 		var expressed, from, to *time.Time
 		var precision string
@@ -241,6 +273,9 @@ func (s *Store) readMemoriesTx(ctx context.Context, tx pgx.Tx, scope memory.Scop
 			return nil, err
 		}
 	}
+	if err := fillMemoryStatusesTx(ctx, tx, scope.OwnerID, result); err != nil {
+		return nil, err
+	}
 	if opts.legacy {
 		return result, nil
 	}
@@ -282,6 +317,12 @@ func validateMemoryQuery(q *workspace.MemoryQuery) error {
 		return memory.ErrInvalid
 	}
 	q.Limit = min(q.Limit, 100)
+	if q.Trust != "" && !oneOf(q.Trust, "stated", "repeated", "tentative", "reported", "inferred") {
+		return memory.ErrInvalid
+	}
+	if q.RetiredBy != "" && (!q.Retired || !memory.ID(q.RetiredBy).Valid()) {
+		return memory.ErrInvalid
+	}
 	if q.Entity != "" && !memory.ID(q.Entity).Valid() || q.Project != "" && !memory.ID(q.Project).Valid() || q.Group != "" && !memory.ID(q.Group).Valid() {
 		return memory.ErrInvalid
 	}
@@ -324,6 +365,9 @@ func (s *Store) ListMemories(ctx context.Context, scope memory.Scope, q workspac
 	if err := validateMemoryQuery(&q); err != nil {
 		return out, err
 	}
+	if q.Retired {
+		return s.listRetiredMemories(ctx, scope, q)
+	}
 	opts := memoryReadOptions{query: q, limit: q.Limit + 1}
 	if q.Cursor != "" {
 		data, err := base64.RawURLEncoding.DecodeString(q.Cursor)
@@ -338,16 +382,32 @@ func (s *Store) ListMemories(ctx context.Context, scope memory.Scope, q workspac
 		opts.snapshot = cursor.Snapshot
 	}
 	err := pgx.BeginTxFunc(ctx, s.pool, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
+		if q.Trust != "" {
+			// Compiling the correlated derived predicate costs more than executing a
+			// paged interactive list. This setting is local to this read transaction.
+			if _, err := tx.Exec(ctx, "SET LOCAL jit=off"); err != nil {
+				return err
+			}
+		}
 		if opts.snapshot.IsZero() {
 			if err := tx.QueryRow(ctx, "SELECT clock_timestamp()").Scan(&opts.snapshot); err != nil {
 				return err
 			}
 		}
-		countOpts := opts
-		countOpts.before = nil
-		where, args := memoryWhere(scope, false, countOpts)
-		if err := tx.QueryRow(ctx, "SELECT count(*)"+memoryJoins+where, args...).Scan(&out.Total); err != nil {
-			return err
+		if q.Trust != "" {
+			var err error
+			out.Total, opts.ids, err = trustedMemoryIDsTx(ctx, tx, scope, opts)
+			if err != nil {
+				return err
+			}
+			opts.query.Trust = ""
+		} else {
+			countOpts := opts
+			countOpts.before = nil
+			where, args := memoryWhere(scope, false, countOpts)
+			if err := tx.QueryRow(ctx, "SELECT count(*)"+memoryJoins+where, args...).Scan(&out.Total); err != nil {
+				return err
+			}
 		}
 		items, err := s.readMemoriesTx(ctx, tx, scope, false, opts)
 		if err != nil {
@@ -405,6 +465,7 @@ func (s *Store) MemoryFacets(ctx context.Context, scope memory.Scope) (workspace
  JOIN memory_records er ON(er.owner_id,er.id)=(cm.owner_id,cm.entity_id) AND er.state='active'
  JOIN entity_versions ev ON(ev.owner_id,ev.entity_id,ev.version)=(er.owner_id,er.id,er.version)
  WHERE cm.owner_id=$1 AND cm.role IN('person','place','project','topic','area') AND claim_source_is_current($1,cm.claim_id,cm.claim_version,now())
+ AND `+currentMemorySQL("cm.owner_id", "cm.claim_id")+`
  GROUP BY cm.entity_id,cm.role,ev.name), ranked AS(
  SELECT *,row_number() OVER(PARTITION BY role ORDER BY n DESC,name,entity_id) AS ordinal FROM counts)
  SELECT entity_id::text,name,n,role FROM ranked WHERE ordinal<=50 OR role IN('project','topic','area') ORDER BY role,ordinal`, string(scope.OwnerID))

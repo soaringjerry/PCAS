@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { memoriesFor } from '../domain/agent'
-import type { Agent, Epistemic, Memory, MemoryFacets, MemoryKind, MemoryPage, State } from '../domain/types'
+import type { Agent, Epistemic, Memory, MemoryFacets, MemoryKind, MemoryPage, MemoryTrust, State } from '../domain/types'
 import { api, APIError } from './api'
 import { useStore } from './context'
 
@@ -17,10 +17,14 @@ export interface MemoryFilter {
   nature: MemoryKind | ''
   /** How far it can be trusted; the server knows three values. */
   epistemic: Exclude<Epistemic, 'planned'> | ''
+  /** How far it can be relied on, by where it came from. */
+  trust: MemoryTrust | ''
+  /** `1`: the memories that were replaced or merged away, instead of the current ones. */
+  retired: '1' | ''
 }
 
 /** Everything the list can be narrowed by; `project` and `agent` are for the places that ask about one of them. */
-type MemoryQuery = Partial<MemoryFilter> & { project?: string; agent?: string }
+type MemoryQuery = Partial<MemoryFilter> & { project?: string; agent?: string; retiredBy?: string }
 
 const PAGE = 50
 
@@ -28,7 +32,7 @@ const PAGE = 50
 const snapshotIsComplete = (state: State) => (state.memoryTotal ?? state.memories.length) <= state.memories.length
 
 /** Why a read failed, in words the user can act on. */
-function readProblem(e: unknown): string {
+export function readProblem(e: unknown): string {
   if (!(e instanceof APIError)) return '网络连接中断，请检查网络后重试。'
   if (e.status === 401) return '登录已过期，请重新登录。'
   return `服务器出错了（错误 ${e.status}${e.code ? `，${e.code}` : ''}）。请稍后重试；一直这样请查看服务日志。`
@@ -36,7 +40,7 @@ function readProblem(e: unknown): string {
 
 function listPath(filter: MemoryQuery, cursor?: string, limit = PAGE): string {
   const query = new URLSearchParams({ limit: String(limit) })
-  for (const name of ['q', 'entity', 'group', 'nature', 'epistemic', 'project', 'agent'] as const) {
+  for (const name of ['q', 'entity', 'group', 'nature', 'epistemic', 'trust', 'retired', 'retiredBy', 'project', 'agent'] as const) {
     const value = filter[name]
     if (value) query.set(name, value)
   }
@@ -88,20 +92,20 @@ export interface MemoryList {
 /** The memory list for one filter, read a page at a time and re-read from the top whenever the workspace changes. */
 export function useMemoryList(filter: MemoryFilter): MemoryList {
   const { state } = useStore()
-  const { q, entity, group, nature, epistemic } = filter
-  const key = `${q}\n${entity}\n${group}\n${nature}\n${epistemic}`
+  const { q, entity, group, nature, epistemic, trust, retired } = filter
+  const key = `${q}\n${entity}\n${group}\n${nature}\n${epistemic}\n${trust}\n${retired}`
   const [data, setData] = useState(nothing)
   const [attempt, setAttempt] = useState(0)
   const reading = useRef('')
 
   useEffect(() => {
     let alive = true
-    api<Partial<MemoryPage>>(listPath({ q, entity, group, nature, epistemic }))
+    api<Partial<MemoryPage>>(listPath({ q, entity, group, nature, epistemic, trust, retired }))
       .then((page) => { if (alive) setData((prev) => refreshed(prev, key, page)) })
       // A failed re-read keeps what is already shown; only a first read has nothing to fall back on.
       .catch((e: unknown) => { if (alive) setData((prev) => prev.key === key && prev.phase === 'ready' ? prev : { ...nothing, key, phase: 'failed', problem: readProblem(e) }) })
     return () => { alive = false }
-  }, [key, q, entity, group, nature, epistemic, state.revision, attempt])
+  }, [key, q, entity, group, nature, epistemic, trust, retired, state.revision, attempt])
 
   const current = data.key === key ? data : undefined
   const cursor = current?.phase === 'ready' ? current.next : ''
@@ -110,7 +114,7 @@ export function useMemoryList(filter: MemoryFilter): MemoryList {
     if (!cursor || reading.current === token) return
     reading.current = token
     setData((prev) => prev.key === key ? { ...prev, more: 'loading', moreProblem: '' } : prev)
-    api<Partial<MemoryPage>>(listPath({ q, entity, group, nature, epistemic }, cursor))
+    api<Partial<MemoryPage>>(listPath({ q, entity, group, nature, epistemic, trust, retired }, cursor))
       .then((page) => setData((prev) => {
         // The list moved on while this page was on its way.
         if (prev.key !== key || prev.next !== cursor) return prev
@@ -119,7 +123,7 @@ export function useMemoryList(filter: MemoryFilter): MemoryList {
       }))
       .catch((e: unknown) => setData((prev) => prev.key === key && prev.next === cursor ? { ...prev, more: 'failed', moreProblem: readProblem(e) } : prev))
       .finally(() => { if (reading.current === token) reading.current = '' })
-  }, [key, q, entity, group, nature, epistemic, cursor])
+  }, [key, q, entity, group, nature, epistemic, trust, retired, cursor])
 
   const retry = useCallback(() => { setData(nothing); setAttempt((n) => n + 1) }, [])
   const remove = useCallback((id: string) => setData((prev) => prev.items.some((m) => m.id === id) ? { ...prev, items: prev.items.filter((m) => m.id !== id), total: Math.max(0, prev.total - 1) } : prev), [])
@@ -158,6 +162,26 @@ export function useMemoryFacets(): { facets?: MemoryFacets; problem: string; ret
   const retry = useCallback(() => { setProblem(''); setAttempt((n) => n + 1) }, [])
   // An earlier answer stays usable when a later read fails.
   return { facets, problem: facets ? '' : problem, retry }
+}
+
+/** The memories that were merged into one, each still carrying its own sources. */
+export function useMergedInto(id: string): { items: Memory[]; phase: 'loading' | 'ready' | 'failed'; problem: string; retry: () => void } {
+  const { state } = useStore()
+  const [read, setRead] = useState<{ id: string; items: Memory[]; problem: string }>()
+  const [attempt, setAttempt] = useState(0)
+  useEffect(() => {
+    if (!id) return
+    let alive = true
+    // The server lists what retired because of this memory; the ones replaced by it, rather than merged in, are left out here.
+    api<Partial<MemoryPage>>(listPath({ retired: '1', retiredBy: id }, undefined, 100))
+      .then((page) => { if (alive) setRead({ id, items: (page.items ?? []).filter((m) => m.retired === 'duplicate' && m.retiredBy === id), problem: '' }) })
+      // An earlier answer stays usable when a later read fails.
+      .catch((e: unknown) => { if (alive) setRead((prev) => prev?.id === id && !prev.problem ? prev : { id, items: [], problem: readProblem(e) }) })
+    return () => { alive = false }
+  }, [id, state.revision, attempt])
+  const retry = useCallback(() => { setRead(undefined); setAttempt((n) => n + 1) }, [])
+  if (!id || read?.id !== id) return { items: [], phase: 'loading', problem: '', retry }
+  return { items: read.items, phase: read.problem ? 'failed' : 'ready', problem: read.problem, retry }
 }
 
 export interface OneMemory {

@@ -13,6 +13,11 @@ import (
 
 // Accounting failures abort the result transaction, as they did before retries.
 type secretaryAccountingError struct{ error }
+type secretaryUsageKey struct{}
+type secretaryUsageMeta struct {
+	Usage    modelUsage
+	AllCalls bool
+}
 
 func (s *Store) generateSecretaryModelWithRetry(workCtx, persistCtx context.Context, scope memory.Scope, agentID, prompt string, verify func(context.Context) error) (ai.Result, string, error) {
 	stage := "model"
@@ -31,12 +36,16 @@ func (s *Store) generateSecretaryModelWithRetry(workCtx, persistCtx context.Cont
 		p, _ := s.models.Get(agentID)
 		reservationID, err := s.reserveModelCostID(callCtx, scope.OwnerID, p.Reserve(secretaryInstructions+prompt), nil)
 		if err != nil {
+			if callCtx.Err() != nil {
+				stage = "model"
+				err = callCtx.Err()
+			}
 			return ai.Result{}, err
 		}
 		stage = "model"
 		result, err := s.models.GenerateWithSearchSchema(callCtx, agentID, secretaryInstructions, prompt, secretaryOutputSchema)
 		// HTTP providers may hide cancellation behind an unreachable error.
-		if err != nil && callCtx.Err() != nil {
+		if callCtx.Err() != nil {
 			err = callCtx.Err()
 		}
 		cost := result.Cost
@@ -46,6 +55,19 @@ func (s *Store) generateSecretaryModelWithRetry(workCtx, persistCtx context.Cont
 		accountingErr = s.settleModelCost(persistCtx, scope.OwnerID, reservationID, cost)
 		if accountingErr != nil {
 			return result, accountingErr
+		}
+		if meta, ok := workCtx.Value(secretaryUsageKey{}).(secretaryUsageMeta); ok && (meta.AllCalls || strings.TrimSpace(result.Text) != "") {
+			usage := meta.Usage
+			usage.OwnerID = scope.OwnerID
+			usage.Purpose = "secretary"
+			usage.AgentID = agentID
+			usage.Model = p.Model
+			usage.InputTokens = result.InputTokens
+			usage.OutputTokens = result.OutputTokens
+			usage.Cost = cost
+			if accountingErr = s.recordUsage(persistCtx, usage); accountingErr != nil {
+				return result, accountingErr
+			}
 		}
 		return result, err
 	})
@@ -98,6 +120,9 @@ func retrySecretaryModel(ctx context.Context, call func(context.Context) (ai.Res
 			return ai.Result{}, err
 		}
 		result, err := call(ctx)
+		if ctx.Err() != nil {
+			return result, ctx.Err()
+		}
 		if err == nil {
 			return result, nil
 		}

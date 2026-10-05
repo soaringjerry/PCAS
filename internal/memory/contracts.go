@@ -78,6 +78,7 @@ type WorkingContext struct {
 
 // TeamRecall contains trusted prompt hints, never accepted from the public API.
 type TeamRecall struct {
+	RankFusion bool
 	Text       string
 	Plan       QueryPlan
 	ThingID    *string

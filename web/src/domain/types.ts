@@ -122,6 +122,9 @@ export interface Project {
 export type MemoryKind = 'fact' | 'preference' | 'decision' | 'intention' | 'plan'
 export type MemoryCategory = 'identity' | 'taste' | 'rule' | 'goal' | 'progress' | 'event' | 'opinion' | 'other_person' | 'unknown'
 
+export type MemoryTrust = 'stated' | 'repeated' | 'tentative' | 'reported' | 'inferred'
+export type MemoryRetired = 'superseded' | 'duplicate'
+
 export interface MemoryGroup {
   entityId: ID
   name: string
@@ -144,6 +147,12 @@ export interface MemoryMention {
 }
 
 export interface Memory {
+  /** On a card of what is asked of the assistant: the kind of task this one applies to; absent when it always applies. */
+  appliesTo?: string
+	trust?: MemoryTrust
+	retired?: MemoryRetired
+	retiredBy?: ID
+	mergedFrom?: number
   category?: MemoryCategory
   durable?: boolean
   groups?: MemoryGroup[]

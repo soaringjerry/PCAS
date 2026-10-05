@@ -223,6 +223,17 @@ func (r *Registry) GenerateWithSearchSchema(ctx context.Context, id, system, pro
 	text, searches, err := r.Codex.GenerateWithSearchSchema(ctx, p.Model, system, prompt, schema)
 	return Result{Text: text, Searches: searches}, err
 }
+
+// GenerateSchema keeps readers and selfchecks on the supplied context only.
+func (r *Registry) GenerateSchema(ctx context.Context, id, system, prompt string, schema json.RawMessage) (Result, error) {
+	p, ok := r.Get(id)
+	if !ok || p.Protocol != "codex" || !r.providerAvailable(p) {
+		return r.Generate(ctx, id, system, prompt)
+	}
+	text, err := r.Codex.GenerateSchema(ctx, p.Model, system, prompt, schema)
+	return Result{Text: text}, err
+}
+
 func (r *Registry) Generate(ctx context.Context, id, system, prompt string) (Result, error) {
 	return r.generate(ctx, id, system, prompt, nil)
 }

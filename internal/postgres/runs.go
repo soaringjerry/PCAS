@@ -647,7 +647,7 @@ func (s *Store) runAgentOnce(ctx context.Context) error {
 		if !oneOf(run.MemoryTier, "light", "medium", "heavy") {
 			run.MemoryTier = "heavy"
 		}
-		if err := verifyRunTx(ctx, tx, scope, run); err != nil {
+		if err := checkUseRunPromptTx(ctx, tx, scope, run); err != nil {
 			run.Status = "failed"
 			run.Cost = 0
 			run.Error = "记忆或授权已变化，请重新生成"
@@ -670,19 +670,22 @@ func (s *Store) runAgentOnce(ctx context.Context) error {
 		defer s.models.Codex.Close()
 	}
 	u, agent, useErr := s.deputyUseContext(workCtx, scope, &run)
-	if useErr == nil && u.Ready && run.MemoryTier == "heavy" {
-		taskText := run.Prompt
-		if bounds := run.MemoryContextRange; bounds != nil && bounds[0] >= 0 && bounds[0] <= len(run.Brief) {
-			taskText += "\n" + run.Brief[:bounds[0]]
+	if useErr == nil && u.Ready {
+		if run.MemoryTier == "heavy" {
+			taskText := run.Prompt
+			if bounds := run.MemoryContextRange; bounds != nil && bounds[0] >= 0 && bounds[0] <= len(run.Brief) {
+				taskText += "\n" + run.Brief[:bounds[0]]
+			}
+			readerCtx, readerCancel := context.WithDeadline(workCtx, started.Add(heavyReaderBudget))
+			picked, refs, keys := s.heavyUse(readerCtx, ctx, scope, agent, &run.ThingID, taskText, u, "", run.ID)
+			readerCancel()
+			run.MemoryGroups = keys
+			run.ContextVersions = uniqueRefs(append(run.ContextVersions, refs...))
+			u.Cards = nil
+			u.Supplemental = picked
 		}
-		readerCtx, readerCancel := context.WithDeadline(workCtx, started.Add(heavyReaderBudget))
-		picked, refs, keys := s.heavyUse(readerCtx, ctx, scope, agent, &run.ThingID, taskText, u, "", run.ID)
-		readerCancel()
-		run.MemoryGroups = keys
-		run.ContextVersions = uniqueRefs(append(run.ContextVersions, refs...))
+		run.ContextVersions = uniqueRefs(append(run.ContextVersions, u.Dependencies...))
 		var section strings.Builder
-		u.Cards = nil
-		u.Supplemental = picked
 		writeUseContext(&section, u, u.Location, func(m workspace.Memory) {
 			fmt.Fprintf(&section, "[%s@%d / trust=%s] %s\n", m.ID, m.Version, m.Trust, m.Text+memoryPromptSuffix(m, u.Location))
 		})
@@ -699,7 +702,7 @@ func (s *Store) runAgentOnce(ctx context.Context) error {
 	}
 	verifyErr := useErr
 	if verifyErr == nil {
-		verifyErr = pgx.BeginFunc(workCtx, s.pool, func(tx pgx.Tx) error { return verifyRunTx(workCtx, tx, scope, run) })
+		verifyErr = pgx.BeginFunc(workCtx, s.pool, func(tx pgx.Tx) error { return checkUseRunPromptTx(workCtx, tx, scope, run) })
 	}
 	result := ai.Result{}
 	answerStarted := time.Now()

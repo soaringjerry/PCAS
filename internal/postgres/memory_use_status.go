@@ -136,9 +136,6 @@ func (s *Store) useStatusCardsTx(ctx context.Context, tx pgx.Tx, scope memory.Sc
 	if err != nil {
 		return out, err
 	}
-	if err = s.useStatusTrustTx(ctx, tx, scope.OwnerID, ms); err != nil {
-		return out, err
-	}
 	byID := map[string]workspace.Memory{}
 	for _, m := range ms {
 		byID[m.ID] = m
@@ -169,56 +166,4 @@ func (s *Store) useStatusCardsTx(ctx context.Context, tx pgx.Tx, scope memory.Sc
 		out = append(out, card)
 	}
 	return out, nil
-}
-
-// Derive the same evidence-based trust as statusTrustTx, in one bounded query.
-func (s *Store) useStatusTrustTx(ctx context.Context, tx pgx.Tx, owner memory.ID, ms []workspace.Memory) error {
-	ids := []string{}
-	for _, m := range ms {
-		ids = append(ids, m.ID)
-	}
-	if len(ids) == 0 {
-		return nil
-	}
-	rows, err := tx.Query(ctx, `SELECT c.claim_id::text,c.version,c.acquisition,
- bool_or(coalesce(sc.role IN('assistant','system','tool') OR src.connector IN('ai','assistant','system','tool','agent','actions'),false)),
- count(DISTINCT coalesce(nullif(sc.conversation_key,''),t.conversation_id::text,e.source_id::text))
- FROM claim_revisions c JOIN record_versions rv ON(rv.owner_id,rv.record_id,rv.version)=(c.owner_id,c.claim_id,c.version)
- LEFT JOIN evidence e ON(e.owner_id,e.target_id,e.target_version)=(c.owner_id,c.claim_id,c.version) AND e.stance='supports'
- LEFT JOIN sources src ON(src.owner_id,src.id)=(e.owner_id,e.source_id)
- LEFT JOIN source_contexts sc ON(sc.owner_id,sc.source_id,sc.source_version)=(e.owner_id,e.source_id,e.source_version)
- LEFT JOIN desk_turns t ON t.owner_id=src.owner_id AND t.request_id::text=lower(src.external_id) AND src.connector IN('desk','capture','desk-incomplete')
- WHERE c.owner_id=$1 AND c.claim_id=ANY($2::uuid[]) GROUP BY c.claim_id,c.version,c.acquisition`, string(owner), ids)
-	if err != nil {
-		return err
-	}
-	for rows.Next() {
-		var id, acquisition string
-		var version, distinct int
-		var inferred bool
-		if err := rows.Scan(&id, &version, &acquisition, &inferred, &distinct); err != nil {
-			rows.Close()
-			return err
-		}
-		for i, m := range ms {
-			if m.ID != id || m.Version != version {
-				continue
-			}
-			switch {
-			case inferred || acquisition == "inferred":
-				ms[i].Trust = "inferred"
-			case acquisition == "reported":
-				ms[i].Trust = "reported"
-			case qualifiedCapture(m.Text):
-				ms[i].Trust = "tentative"
-			case distinct >= 2:
-				ms[i].Trust = "repeated"
-			default:
-				ms[i].Trust = "stated"
-			}
-		}
-	}
-	err = rows.Err()
-	rows.Close()
-	return err
 }

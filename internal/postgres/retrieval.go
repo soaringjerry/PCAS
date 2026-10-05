@@ -189,9 +189,6 @@ func (s *Store) recallTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in 
 		 OR t.id IN (SELECT member_id FROM linked) OR t.id=ANY($8::uuid[]) OR t.id IN (SELECT claim_id FROM claim_revisions WHERE owner_id=$1 AND (subject_id=ANY($8::uuid[]) OR scope->>'project_id'=ANY($8::text[])))
 		 OR ($11::text IS NOT NULL AND (EXISTS(SELECT 1 FROM embeddings e WHERE e.owner_id=t.owner_id AND e.record_id=t.id AND e.record_version=t.version AND e.model=$12 AND CASE WHEN e.dimensions=$13 THEN (e.embedding <=> $11::vector)<0.65 ELSE false END) OR EXISTS(SELECT 1 FROM chunks c JOIN embeddings e ON (e.owner_id,e.record_id)=(c.owner_id,c.id) WHERE c.owner_id=t.owner_id AND c.source_id=t.id AND c.source_version=t.version AND e.model=$12 AND CASE WHEN e.dimensions=$13 THEN (e.embedding <=> $11::vector)<0.65 ELSE false END))))
  )`
-	if scope.Team {
-		querySQL = strings.Replace(querySQL, "WHERE t.owner_id=$1 AND r.state='active'", "WHERE t.owner_id=$1 AND (r.kind!='claim' OR EXISTS(SELECT 1 FROM claims active_claim WHERE active_claim.owner_id=r.owner_id AND active_claim.id=r.id AND coalesce(to_jsonb(active_claim)->>'retired','')='')) AND r.state='active'", 1)
-	}
 	detailSQL := ` SELECT p.id,p.version,p.kind,coalesce(hit.body,t.body) AS body,p.score,coalesce(sc.role,'') AS role,coalesce(sc.branch,'') AS branch,coalesce(sc.gaps,'[]') AS gaps,
          coalesce(hit.excerpt,sv.body,'') AS excerpt,coalesce(sv.title,'') AS title,p.connector,p.external_id,p.expressed_at,p.recorded_at,p.explicit,
          coalesce(btrim(sv.body)!='' AND (sv.media_type LIKE 'text/%' OR sv.representation IN ('ocr','transcript','extracted','vision')),false) AS readable
@@ -835,11 +832,7 @@ func structuredRecallTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, hint
 	if hints.Candidates > limit {
 		limit = hints.Candidates
 	}
-	structuredSQL := teamStructuredSQL
-	if hints.RankFusion {
-		structuredSQL = strings.Replace(structuredSQL, "WHERE r.state='active'", "WHERE EXISTS(SELECT 1 FROM claims active_claim WHERE active_claim.owner_id=r.owner_id AND active_claim.id=r.id AND coalesce(to_jsonb(active_claim)->>'retired','')='') AND r.state='active'", 1)
-	}
-	rows, err = tx.Query(ctx, structuredSQL, string(scope.OwnerID), ids, from, to, axis, scope.PrincipalID, hints.ThingID, hints.ProjectID, hints.Plan.Natures, limit)
+	rows, err = tx.Query(ctx, teamStructuredSQL, string(scope.OwnerID), ids, from, to, axis, scope.PrincipalID, hints.ThingID, hints.ProjectID, hints.Plan.Natures, limit)
 	if err != nil {
 		return nil, false, err
 	}

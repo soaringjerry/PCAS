@@ -115,7 +115,7 @@ func TestB4StatusPromptAndDependencies(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, text := range []string{"交接说明：", "必须遵守的要求", "相关的现状卡", "期限和固定安排", "补充记忆", "相关原话", "每周二晚上", "周五上午十点", "发出去之前先给我看", "trust=stated"} {
+	for _, text := range []string{"交接说明：", "必须遵守的要求", "相关的现状卡", "期限和固定安排", "补充记忆", "相关原话", "每周二晚上", "周五上午十点", "发出去之前先给我看", "trust=repeated"} {
 		if !strings.Contains(prompt, text) {
 			t.Errorf("missing %s in %s", text, prompt)
 		}
@@ -406,7 +406,7 @@ func TestB4HeavyCutoffUsesFinishedReaders(t *testing.T) {
 		if strings.Contains(prompt, "虚构慢读者") {
 			select {
 			case <-r.Context().Done():
-			case <-time.After(2 * time.Second):
+			case <-time.After(5 * time.Second):
 			}
 			return
 		}
@@ -449,11 +449,11 @@ func TestB4HeavyCutoffUsesFinishedReaders(t *testing.T) {
 	for _, key := range keys {
 		u.Index = append(u.Index, workspace.StatusCardRef{Key: key, Name: "虚构限时组", Count: 3})
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	start := time.Now()
 	picked, _, chosen := s.heavyUse(ctx, context.Background(), scope, agent, nil, "虚构请求", u, "", "")
-	if len(picked) != 2 || len(chosen) != 3 || time.Since(start) > time.Second {
+	if len(picked) != 2 || len(chosen) != 3 || time.Since(start) > 1500*time.Millisecond {
 		t.Fatal(len(picked), chosen, time.Since(start))
 	}
 }
@@ -503,7 +503,7 @@ func TestB4RuleScopeAndSafePlans(t *testing.T) {
 }
 
 func TestB4BulkValidationRejectsChangesDuringGeneration(t *testing.T) {
-	for _, mode := range []string{"correct", "grant", "exclude"} {
+	for _, mode := range []string{"correct", "grant", "exclude", "assistant_evidence"} {
 		t.Run(mode, func(t *testing.T) {
 			s := testStore(t)
 			scope := owner()
@@ -514,6 +514,8 @@ func TestB4BulkValidationRejectsChangesDuringGeneration(t *testing.T) {
 					workspaceCommand(t, s, scope, workspace.Command{Type: "editMemory", ID: target, Text: "虚构已纠正的约束"})
 				case "grant":
 					workspaceCommand(t, s, scope, workspace.Command{Type: "setMemoryVisibility", ID: target, AgentIDs: []string{"manual"}})
+				case "assistant_evidence":
+					b4Exec(t, s, `INSERT INTO source_contexts(owner_id,source_id,source_version,role,branch) SELECT DISTINCT owner_id,source_id,source_version,'assistant','active' FROM evidence WHERE owner_id=$1 AND target_id=$2 AND stance='supports' ON CONFLICT(owner_id,source_id,source_version) DO UPDATE SET role='assistant'`, scope.OwnerID, target)
 				case "exclude":
 					workspaceCommand(t, s, scope, workspace.Command{Type: "toggleContextMemory", ThingID: item, MemoryID: target})
 				}

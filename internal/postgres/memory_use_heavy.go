@@ -75,9 +75,6 @@ func (s *Store) heavyUse(ctx, persist context.Context, scope memory.Scope, agent
 				if err != nil {
 					return err
 				}
-				if err = s.useStatusTrustTx(readCtx, tx, scope.OwnerID, ms); err != nil {
-					return err
-				}
 				allowed := []workspace.Memory{}
 				for _, m := range ms {
 					if useMemoryAllowed(m, agent) {

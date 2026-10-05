@@ -58,7 +58,8 @@ func (s *Store) checkSecretaryUseContextTx(ctx context.Context, tx pgx.Tx, scope
  JOIN record_versions rv ON (rv.owner_id,rv.record_id,rv.version)=(c.owner_id,c.claim_id,c.version)
  JOIN claims active ON (active.owner_id,active.id)=(c.owner_id,c.claim_id)
  WHERE r.state='active' AND rv.state='active' AND active.retired='' AND claim_source_is_current($1,c.claim_id,c.version,now())
- AND EXISTS(SELECT 1 FROM record_grants g WHERE g.owner_id=c.owner_id AND g.record_id=c.claim_id AND g.principal_id=$3)`, string(scope.OwnerID), claimIDs, agent.ID)
+ AND EXISTS(SELECT 1 FROM record_grants g WHERE g.owner_id=c.owner_id AND g.record_id=c.claim_id AND g.principal_id=$3)
+ AND ($4 OR `+humanMemorySQL("c")+`)`, string(scope.OwnerID), claimIDs, agent.ID, agent.IncludeInferred)
 	if err != nil {
 		return err
 	}
@@ -131,4 +132,30 @@ func (tx useClockTx) Query(ctx context.Context, sql string, args ...any) (pgx.Ro
 func (tx useClockTx) QueryRow(ctx context.Context, sql string, args ...any) pgx.Row {
 	sql, args = tx.queryAt(sql, args)
 	return tx.Tx.QueryRow(ctx, sql, args...)
+}
+
+// Historical duplicate dependencies stay valid. A queued prompt is a new model
+// input, however, and must never replay a retired memory's saved text or label.
+// Old layouts lack a safe replacement boundary, so require regeneration only
+// when a retired identity actually occurs in the saved prompt.
+func checkUseRunPromptTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run workspace.Run) error {
+	if err := verifyRunTx(ctx, tx, scope, run); err != nil {
+		return err
+	}
+	ids := []string{}
+	for _, ref := range run.ContextVersions {
+		if ref.Kind != memory.SourceKind {
+			ids = append(ids, string(ref.ID))
+		}
+	}
+	retired, err := queryDocuments[string](ctx, tx, "SELECT to_jsonb(id::text) FROM claims WHERE owner_id=$1 AND id=ANY($2::uuid[]) AND coalesce(to_jsonb(claims)->>'retired','')!=''", string(scope.OwnerID), ids)
+	if err != nil {
+		return err
+	}
+	for _, id := range retired {
+		if strings.Contains(run.Brief, id) {
+			return memory.ErrConflict
+		}
+	}
+	return nil
 }

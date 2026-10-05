@@ -256,9 +256,6 @@ func (s *Store) finishUseContextTx(ctx context.Context, tx pgx.Tx, scope memory.
 			}
 		}
 	}
-	if err = s.useStatusTrustTx(ctx, tx, scope.OwnerID, ranked); err != nil {
-		return err
-	}
 	for _, m := range ranked {
 		ids = append(ids, m.ID)
 		if previous, ok := supplied[m.ID]; !ok || previous.Version < m.Version {

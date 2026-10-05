@@ -545,9 +545,9 @@ func TestB4UnbuiltStatusKeepsOriginalSingleCall(t *testing.T) {
 	var calls atomic.Int32
 	secretaryModel(t, s, func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
-		secretaryModelReply(w, `{"reply":"虚构旧路径答复","missingKeyInfo":true,"actions":[]}`)
+		secretaryModelReply(w, `{"reply":"虚构旧路径答复","actions":[]}`)
 	})
-	out, err := s.DeskTurn(b4Context(s), scope, turnRequest("认真查一下虚构事项"))
+	out, err := s.DeskTurn(b4Context(s), scope, turnRequest("虚构事项现在如何"))
 	if err != nil || calls.Load() != 1 || out.Turn.Reply != "虚构旧路径答复" {
 		t.Fatal(out, err, calls.Load())
 	}

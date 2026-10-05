@@ -498,7 +498,24 @@ FOR EACH ROW WHEN (NEW.source='worker') EXECUTE FUNCTION reject_worker_adoption(
 					t.Fatalf("failed adoption was recorded: count=%d err=%v", workerActions, err)
 				}
 				log := warnings.String()
-				if strings.Contains(log, privateText) || strings.Contains(log, "Generate result") || strings.Count(log, `"level":"WARN"`) != 1 || !strings.Contains(log, runID) {
+				adoptionWarnings := 0
+				for _, line := range strings.Split(strings.TrimSpace(log), "\n") {
+					var record struct {
+						Level string `json:"level"`
+						Msg   string `json:"msg"`
+						RunID string `json:"run_id"`
+					}
+					if err := json.Unmarshal([]byte(line), &record); err != nil {
+						t.Fatalf("invalid warning record: %v", err)
+					}
+					if record.Level == "WARN" && record.Msg == "assistant result auto-adoption failed" {
+						adoptionWarnings++
+						if record.RunID != runID {
+							t.Fatalf("adoption warning references wrong run: %s", record.RunID)
+						}
+					}
+				}
+				if strings.Contains(log, privateText) || strings.Contains(log, "Generate result") || adoptionWarnings != 1 {
 					t.Fatalf("warning missing, duplicated or contains private text: %s", log)
 				}
 				var status string
@@ -508,14 +525,18 @@ FOR EACH ROW WHEN (NEW.source='worker') EXECUTE FUNCTION reject_worker_adoption(
 				if err := s.pool.QueryRow(ctx, "SELECT status,reserved_cost,lease_token IS NOT NULL OR lease_until IS NOT NULL FROM agent_runs WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), runID).Scan(&status, &cost, &leased); err != nil || status != "done" || cost != run.Cost || leased {
 					t.Fatalf("completion/billing not committed: status=%s cost=%f leased=%t err=%v", status, cost, leased, err)
 				}
-				expectedCalls := int32(0)
+				expectedCalls := calls.Load()
 				if path == "worker" {
-					expectedCalls = 1
+					// The default medium turn may also reach selfcheck within its
+					// budget. Neither call may repeat once the run is done.
+					if expectedCalls < 1 || expectedCalls > 2 {
+						t.Fatalf("unexpected model calls: %d", expectedCalls)
+					}
 					if cost <= 0 {
 						t.Fatal("fixture did not bill the model")
 					}
-				} else if cost != 0 {
-					t.Fatalf("manual handoff incurred model cost: %f", cost)
+				} else if cost != 0 || expectedCalls != 0 {
+					t.Fatalf("manual handoff incurred model cost: %f calls=%d", cost, expectedCalls)
 				}
 				// Processing again must not regenerate or attempt adoption of a done run.
 				if err := s.runAgentOnce(ctx); err != nil {

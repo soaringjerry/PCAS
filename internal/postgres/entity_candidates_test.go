@@ -449,3 +449,88 @@ func TestEntityCandidatesThreeNamesKeepChineseAndUndoInReverse(t *testing.T) {
 	aliasAssertSubjects(t, s, scope, br, b.ID)
 	aliasAssertSubjects(t, s, scope, cr, c.ID)
 }
+
+func TestEntityCandidatesInitialCatalogueCallEstimate(t *testing.T) {
+	// Supplied inventory sizes only; all names/IDs and counts are fictitious.
+	// Match the catalogue's ORDER BY entity_type,name,id before partitioning.
+	names := []entityCandidateName{}
+	for _, group := range []struct {
+		kind string
+		n    int
+	}{{"organization", 323}, {"person", 92}, {"place", 251}, {"project", 47}, {"topic", 225}} {
+		for i := range group.n {
+			names = append(names, entityCandidateName{Type: group.kind, Name: fmt.Sprintf("虚构名单%04d", i), MemoryCount: 1, Ref: memory.Ref{ID: memory.NewID(), Kind: memory.EntityKind, Version: 1}})
+		}
+	}
+	counts := map[string]int{}
+	batches := entityCandidateBatches(names, EntityCompareVersion)
+	for _, batch := range batches {
+		counts[batch.Scope]++
+	}
+	for scope, want := range map[string]int{"organization": 6, "person": 1, "place": 3, "project": 1, "topic": 3, "place_topic": 8, "organization_topic": 11} {
+		if counts[scope] != want {
+			t.Errorf("scope=%s calls=%d want=%d", scope, counts[scope], want)
+		}
+	}
+	if len(batches) != 33 {
+		t.Errorf("initial catalogue calls=%d want=33", len(batches))
+	}
+	t.Logf("initial catalogue calls=%d scopes=%v; pair confirmations are additional", len(batches), counts)
+}
+
+func TestEntityCandidatesAndConfirmationCallsLeaveRowsUnlocked(t *testing.T) {
+	for _, stage := range []string{"catalogue", "confirmation"} {
+		t.Run(stage, func(t *testing.T) {
+			s, scope := testStore(t), owner()
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			b1Model(t, s, `{"groups":[[1,2]]}`)
+			aliasEntityFixture(t, s, scope, "place", "蓝沙湾", 1)
+			aliasEntityFixture(t, s, scope, "place", "Azure Quay", 1)
+			j := aliasNamesJob(t, s, scope)
+			process := s.ProcessEntityCandidates
+			reply := `{"groups":[[1,2]]}`
+			if stage == "confirmation" {
+				if err := process(ctx, j); err != nil {
+					t.Fatal(err)
+				}
+				j = compareJob(t, s, scope, true, EntityCompareVersion)
+				process = s.ProcessEntityCompare
+				reply = `{"same":true,"keep":1}`
+			}
+			entered, release := make(chan struct{}), make(chan struct{})
+			secretaryModel(t, s, func(w http.ResponseWriter, r *http.Request) {
+				close(entered)
+				select {
+				case <-release:
+				case <-r.Context().Done():
+					return
+				}
+				secretaryModelReply(w, reply)
+			})
+			done := make(chan error, 1)
+			go func() { done <- process(ctx, j) }()
+			select {
+			case <-entered:
+			case <-ctx.Done():
+				close(release)
+				t.Fatal("no model call")
+			}
+			err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+				for _, table := range []string{"workspace_owners", "memory_records", "claims", "memory_jobs", "status_cards"} {
+					if _, err := tx.Exec(ctx, "SELECT 1 FROM "+table+" WHERE owner_id=$1 FOR UPDATE NOWAIT", scope.OwnerID); err != nil {
+						return fmt.Errorf("%s: %w", table, err)
+					}
+				}
+				return nil
+			})
+			close(release)
+			if err != nil {
+				t.Errorf("row held during %s model call: %v", stage, err)
+			}
+			if err := <-done; err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}

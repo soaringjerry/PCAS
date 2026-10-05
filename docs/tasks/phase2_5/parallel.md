@@ -269,6 +269,26 @@ HTTP：`GET /v1/workspace/about` 返回
 
 - R3-6 的最小扩展：`status_card_items` 加了 `applies_to text NOT NULL DEFAULT ''`，读出来是记忆上的 `appliesTo`。
 
+**第 2 批（新旧比较）**
+
+- 入口：`ScheduleCompare(ctx, now) (int, error)`、`ProcessCompare(ctx, worker.Job) error`、`ProcessEntityCompare(ctx, worker.Job) error`、`RunCompare(ctx, logger)`。阶段 `memory.compare:<规则版本>:<任务UUID>`、`memory.entity_compare:<规则版本>:<任务UUID>`，优先级都是 8。每分钟检查一次；两种合计每小时最多 30 次调用。和整理共用一把锁，不同时调用模型。
+- 分组比较的输入里每条记忆有 `n`（从 1 开始）、`text`、`expressedAt`、`protected`。输出两个数组都必须有，没有就给空数组：
+
+```json
+{"duplicates":[{"keep":1,"members":[1,3,4]}],"superseded":[{"old":5,"new":6}]}
+```
+
+- 判断两个实体是不是同一个：输出 `{"same":true,"keep":2}` 或 `{"same":false,"keep":null}`。只有 `same` 为 true 且 `keep` 有效才合并。
+- X2-9 选的是：保留的那条被删后，并入它的那些留作历史，不会变回当前的。
+
+**第 4 批（办事时用上）**
+
+- 指定档位（评测和测试用）：`postgres.WithMemoryTier(ctx, "light"|"medium"|"heavy")`。不加 HTTP 参数。秘书默认轻，副手默认重。
+- 秘书的输出多一个布尔字段 `missingKeyInfo`（省略等于 false）。自查用同一个输出格式，另外允许 `{"op":"skip"}` 撤掉原来的某个动作。
+- 重档选分组的输出：`{"groups":["卡片 key", …]}`；读者的输出：`{"used":["所给的记忆 ID", …]}`。key 和 ID 由服务端校验。
+- 时间：秘书的主调用 30 秒内最多两次；自查一次、不重试，时限是首次作答的实际耗时（不超过 30 秒），失败或到点就用草稿。重档选分组和读者共用 90 秒，整轮 170 秒前截止。
+- 花费记录的 `tier` 记档位，`plan.groups` 记选了哪些分组。
+
 ## 8 修订记录
 
 | 日期 | 改了什么 | 起因 |

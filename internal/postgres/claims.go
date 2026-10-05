@@ -247,7 +247,9 @@ func (s *Store) rememberTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, i
 			return result, err
 		}
 	}
-	if _, err := tx.Exec(ctx, "INSERT INTO activity(owner_id,record_id,last_effective_use_at) VALUES($1,$2,now())", string(scope.OwnerID), string(id)); err != nil {
+	// A memory was last brought up when it was said, not when it was filed:
+	// history imported today must not look as fresh as something said today.
+	if _, err := tx.Exec(ctx, "INSERT INTO activity(owner_id,record_id,last_effective_use_at) VALUES($1,$2,least(now(),coalesce($3,now())))", string(scope.OwnerID), string(id), in.ExpressedAt); err != nil {
 		return result, err
 	}
 	if _, err := tx.Exec(ctx, `INSERT INTO record_grants(owner_id,record_id,principal_id) SELECT owner_id,$2,id FROM workspace_agents WHERE owner_id=$1 AND (document->>'enabled')::boolean`, string(scope.OwnerID), string(id)); err != nil {

@@ -318,40 +318,59 @@ func TestPhase25B4_X4_7_SelfcheckFailureKeepsDraftWithoutRetry(t *testing.T) {
 		t.Errorf("selfcheck retried calls=%d", len(model.calls()))
 	}
 }
-func TestPhase25B4_X4_8_SelfcheckCannotAddDeletion(t *testing.T) {
-	t.Skip("finding F-B4-4")
-	for _, added := range []bool{false, true} {
-		t.Run(fmt.Sprintf("added_by_selfcheck=%v", added), func(t *testing.T) {
+func TestPhase25B4_X4_8_SelfcheckCannotAddActions(t *testing.T) {
+	original := json.RawMessage(`{"op":"create_task","title":"虚构原有事项"}`)
+	extra := json.RawMessage(`{"op":"create_task","title":"虚构额外事项"}`)
+	for _, tc := range []struct {
+		name                    string
+		tier                    string
+		draft, checked          []json.RawMessage
+		wantOriginal, wantExtra int
+	}{
+		{"valid_actions_positive_control", "light", []json.RawMessage{original, extra}, nil, 1, 1},
+		{"original_action_unchanged", "medium", []json.RawMessage{original}, []json.RawMessage{original}, 1, 0},
+		{"original_and_invented_action", "medium", []json.RawMessage{original}, []json.RawMessage{original, extra}, 1, 0},
+		{"invented_action_without_original", "medium", nil, []json.RawMessage{extra}, 0, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
 			f := phase25B234NewFixture(t)
 			g, refs := f.cardGroup(t, 3)
 			f.card(t, g, refs, false)
-			taskID := f.task(t, "虚构不可删事项")
-			deletion := phase25B4DeleteAction("T1")
 			model := f.model(t, func(_ *http.Request, n int, _ phase25B234ModelRequest) phase25B234ModelReply {
-				var actions []json.RawMessage
-				if !added || n > 1 {
-					actions = []json.RawMessage{deletion}
-				}
 				if n == 1 {
 					time.Sleep(50 * time.Millisecond)
-					return phase25B4ReplyJSON(phase25B4Reply{text: "虚构保留事项。", actions: actions}, false)
+					return phase25B4ReplyJSON(phase25B4Reply{text: "虚构初稿。", actions: tc.draft}, false)
 				}
-				return phase25B4ReplyJSON(phase25B4Reply{text: "虚构检查稿。", actions: actions}, true)
+				return phase25B4ReplyJSON(phase25B4Reply{text: "虚构检查稿。", actions: tc.checked}, true)
 			})
-			turn := f.secretaryTurn(t, "仔细检查虚构事项", "medium")
-			if len(model.calls()) != 2 || turn.Turn.Reply != "虚构检查稿。" {
-				t.Errorf("selfcheck did not run: calls=%d reply=%s", len(model.calls()), turn.Turn.Reply)
+			question := "新建虚构原有事项"
+			if tc.tier == "light" {
+				question += "和虚构额外事项"
 			}
-			var exists bool
-			if err := f.db.QueryRow(f.ctx, `SELECT EXISTS(SELECT 1 FROM work_items WHERE owner_id=$1 AND id=$2)`, f.scope.OwnerID, taskID).Scan(&exists); err != nil {
-				t.Fatal(err)
+			turn := f.secretaryTurn(t, question, tc.tier)
+			wantCalls, wantReply := 2, "虚构检查稿。"
+			wantUsage := map[string]int{"secretary": 1, "selfcheck": 1}
+			if tc.tier == "light" {
+				wantCalls, wantReply = 1, "虚构初稿。"
+				wantUsage["selfcheck"] = 0
 			}
-			if added && !exists {
-				t.Error("selfcheck invented deletion executed")
+			if len(model.calls()) != wantCalls || turn.Turn.Reply != wantReply {
+				t.Errorf("calls=%d reply=%q want %d/%q", len(model.calls()), turn.Turn.Reply, wantCalls, wantReply)
 			}
-			if !added && exists {
-				t.Error("original deletion positive control did not execute; bind the valid model action format")
+			for _, item := range []struct {
+				title string
+				want  int
+			}{{"虚构原有事项", tc.wantOriginal}, {"虚构额外事项", tc.wantExtra}} {
+				var count int
+				if err := f.db.QueryRow(f.ctx, `SELECT count(*) FROM work_items WHERE owner_id=$1 AND kind='task' AND title=$2`, f.scope.OwnerID, item.title).Scan(&count); err != nil {
+					t.Fatal(err)
+				}
+				if count != item.want {
+					t.Errorf("task %q count=%d want %d", item.title, count, item.want)
+				}
 			}
+			f.tierUsage(t, tc.tier, wantUsage)
+			f.assertRevisions(t, refs...)
 		})
 	}
 }

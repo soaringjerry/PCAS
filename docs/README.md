@@ -9,7 +9,7 @@ PCAS 的所有文档都从这一页找。新增或移动文档时，同时改这
 | 第 1 阶段：秘书前台 | 已上线（2026-10-01） | [任务总览](tasks/phase1/README.md) |
 | 第 1.5 阶段：稳定化 | 修复已合并；线上实测 11 项和试用一天还没做 | [稳定化计划](tasks/stabilization/README.md) |
 | 第 2 阶段：记忆核心 | 分四批，**全部已上线**：第 1 批 2026-10-02，第 2 批 2026-10-03，第 3 批、第 4 批和补充批 4b（按整段对话整理）2026-10-03 一起上线。还没做的：用真实模型跑回忆评测并定基线。第一次尝试（2.0）已回滚 | [任务入口](tasks/phase2/README.md) · [方向稿](tasks/phase2/direction.md) · [第 1 批](tasks/phase2/batch1/README.md) · [第 2–4 批并行方案](tasks/phase2/parallel.md) |
-| 第 2.5 阶段：记忆整理 | 方向已定（2026-10-04）。分四批加一个评测集；**评测集和第 1 批（分组和类型）的任务包已写，等执行者开工**；第 2–4 批的契约在前一批上线后再写 | [任务入口](tasks/phase2_5/README.md) · [第 1 批契约](tasks/phase2_5/batch1/README.md) · [讨论稿](research/memory-next-direction.md) |
+| 第 2.5 阶段：记忆整理 | 方向已定（2026-10-04）。分四批加一个评测集；**第 1 批（分组和类型）2026-10-05 已上线，评测集已交付**；第 2–4 批的契约还没写 | [任务入口](tasks/phase2_5/README.md) · [第 1 批契约](tasks/phase2_5/batch1/README.md) · [讨论稿](research/memory-next-direction.md) |
 | 第 3 阶段及以后 | 未开始 | [白皮书 §16 路线图](whitepaper.md) |
 
 还没处理的问题统一记在 [待办清单](tasks/backlog.md)。
@@ -46,6 +46,7 @@ PCAS 的所有文档都从这一页找。新增或移动文档时，同时改这
 | [M1 image validation](evaluations/2026-10-03-m1-images.md) | Rule coverage, Codex protocol evidence and synthetic desktop/mobile screenshots |
 | [R1 检查报告里的九个问题](tasks/improvements/R1-review-1003-fixes.md) | 2026-10-03 独立检查发现的问题：已修的四条、交给执行者的四条规则、没改的一条 |
 | [P1 资料多了以后，秘书回话不能变慢](tasks/improvements/P1-recall-speed.md) | 导入 2.7 万条后秘书回一句话要 46 秒：量出的原因、改法、前后对比（2026-10-03） |
+| [P2 记忆多了以后，秘书回一句话又变慢了](tasks/improvements/P2-turn-speed.md) | 待做：5254 条记忆时一轮 27–36 秒，八成在数据库上；量到的分布、对原因的判断、验收数字（2026-10-05） |
 | [W1 副手能联网查资料](tasks/improvements/W1-deputy-web-search.md) | 副手查不了网的原因、改法、哪些角色和通道能联网（2026-10-03） |
 
 **要部署、接模型、接数据**

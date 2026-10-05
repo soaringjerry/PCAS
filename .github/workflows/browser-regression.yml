@@ -51,7 +51,7 @@ jobs:
           done
           cat /tmp/pcas-browser.log
           exit 1
-      - run: npx playwright test tests/secretary.spec.ts tests/secretary-attachments.spec.ts tests/fixes.spec.ts tests/notify.spec.ts tests/buttons.spec.ts tests/timezone.spec.ts tests/settings-things-ux.spec.ts tests/usability-acceptance.spec.ts tests/phase2-batch1.spec.ts tests/phase2-batch2.spec.ts tests/phase2-batch3.spec.ts tests/phase2-batch4.spec.ts tests/evidence-context.spec.ts
+      - run: npx playwright test tests/secretary.spec.ts tests/secretary-attachments.spec.ts tests/fixes.spec.ts tests/notify.spec.ts tests/buttons.spec.ts tests/timezone.spec.ts tests/settings-things-ux.spec.ts tests/usability-acceptance.spec.ts tests/phase2-batch1.spec.ts tests/phase2-batch2.spec.ts tests/phase2-batch3.spec.ts tests/phase2-batch4.spec.ts tests/evidence-context.spec.ts tests/phase2_5-batch1.spec.ts
         working-directory: web
       - run: PCAS_CHATGPT_DIRECT_ENABLED=false bash web/tests/support/real-backend.sh npx playwright test tests/phase2-batch3-backend.spec.ts --retries=0
       - uses: actions/upload-artifact@v4

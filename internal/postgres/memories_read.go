@@ -51,6 +51,12 @@ func memoryWhere(scope memory.Scope, currentOnly bool, opts memoryReadOptions) (
 	if q.Entity != "" {
 		add("EXISTS(SELECT 1 FROM claim_mentions cm WHERE (cm.owner_id,cm.claim_id,cm.claim_version)=(c.owner_id,c.claim_id,c.version) AND cm.entity_id=$%d::uuid)", q.Entity)
 	}
+	if q.Group != "" {
+		add("EXISTS(SELECT 1 FROM claim_mentions cm WHERE (cm.owner_id,cm.claim_id,cm.claim_version)=(c.owner_id,c.claim_id,c.version) AND cm.role IN ('project','topic','area') AND cm.entity_id=$%d::uuid)", q.Group)
+	}
+	if q.Category != "" {
+		add("c.category=$%d", q.Category)
+	}
 	if q.Nature != "" {
 		add("c.nature=$%d", q.Nature)
 	}
@@ -96,7 +102,8 @@ func (s *Store) readMemoriesTx(ctx context.Context, tx pgx.Tx, scope memory.Scop
 	mentionsAvailable := "to_regclass('claim_mentions') IS NOT NULL"
 	query := `SELECT r.id::text,c.version,c.nature,c.value #>> '{}',c.confirmation,c.acquisition,coalesce(c.scope->>'project_id',''),
  coalesce(a.last_effective_use_at,r.created_at),coalesce(a.stability,1),coalesce(a.half_life_seconds,2592000),coalesce(a.pinned,false),coalesce(a.reinforcement_limit,8),
- rv.expressed_at,` + memoryEventColumns() + "," + mentionsAvailable + memoryJoins + where + ` ORDER BY r.updated_at DESC,r.id`
+ rv.expressed_at,` + memoryEventColumns() + "," + mentionsAvailable + `,
+ coalesce(to_jsonb(c)->>'category','unknown'),(to_jsonb(c)->>'durable')::boolean` + memoryJoins + where + ` ORDER BY r.updated_at DESC,r.id`
 	if opts.limit > 0 {
 		args = append(args, opts.limit)
 		query += fmt.Sprintf(" LIMIT $%d", len(args))
@@ -114,7 +121,7 @@ func (s *Store) readMemoriesTx(ctx context.Context, tx pgx.Tx, scope memory.Scop
 		var precision string
 		var hasMentions bool
 		var stability, halfLife float64
-		if err := rows.Scan(&m.ID, &m.Version, &m.Kind, &m.Text, &m.Confirmation, &m.Acquisition, &m.ProjectID, &last, &stability, &halfLife, &m.Pinned, &m.ReinforcementLimit, &expressed, &from, &to, &precision, &hasMentions); err != nil {
+		if err := rows.Scan(&m.ID, &m.Version, &m.Kind, &m.Text, &m.Confirmation, &m.Acquisition, &m.ProjectID, &last, &stability, &halfLife, &m.Pinned, &m.ReinforcementLimit, &expressed, &from, &to, &precision, &hasMentions, &m.Category, &m.Durable); err != nil {
 			rows.Close()
 			return nil, err
 		}
@@ -135,6 +142,7 @@ func (s *Store) readMemoriesTx(ctx context.Context, tx pgx.Tx, scope memory.Scop
 		m.Versions = []workspace.MemoryVersion{}
 		m.VisibleTo = []string{}
 		m.Mentions = []workspace.MemoryMention{}
+		m.Groups = []workspace.MemoryGroup{}
 		if expressed != nil {
 			m.ExpressedAt = expressed.UTC().Format(time.RFC3339Nano)
 		}
@@ -250,7 +258,11 @@ func (s *Store) readMemoriesTx(ctx context.Context, tx pgx.Tx, scope memory.Scop
 		}
 		i := indices[id]
 		if result[i].Version == version {
-			result[i].Mentions = append(result[i].Mentions, mention)
+			if oneOf(mention.Role, "project", "topic", "area") {
+				result[i].Groups = append(result[i].Groups, workspace.MemoryGroup{EntityID: mention.EntityID, Name: mention.Name, Type: mention.Role})
+			} else {
+				result[i].Mentions = append(result[i].Mentions, mention)
+			}
 		}
 	}
 	err = rows.Err()
@@ -266,7 +278,10 @@ func validateMemoryQuery(q *workspace.MemoryQuery) error {
 		return memory.ErrInvalid
 	}
 	q.Limit = min(q.Limit, 100)
-	if q.Entity != "" && !memory.ID(q.Entity).Valid() || q.Project != "" && !memory.ID(q.Project).Valid() {
+	if q.Entity != "" && !memory.ID(q.Entity).Valid() || q.Project != "" && !memory.ID(q.Project).Valid() || q.Group != "" && !memory.ID(q.Group).Valid() {
+		return memory.ErrInvalid
+	}
+	if q.Category != "" && !validMemoryCategory(q.Category) {
 		return memory.ErrInvalid
 	}
 	if q.Nature != "" && !oneOf(q.Nature, "fact", "preference", "decision", "intention", "plan") {
@@ -376,7 +391,7 @@ func (s *Store) GetMemory(ctx context.Context, scope memory.Scope, id string) (w
 }
 
 func (s *Store) MemoryFacets(ctx context.Context, scope memory.Scope) (workspace.MemoryFacets, error) {
-	out := workspace.MemoryFacets{People: []workspace.MemoryFacet{}, Places: []workspace.MemoryFacet{}}
+	out := workspace.MemoryFacets{People: []workspace.MemoryFacet{}, Places: []workspace.MemoryFacet{}, Groups: []workspace.MemoryGroupFacet{}}
 	if err := requireOwner(scope); err != nil {
 		return out, err
 	}
@@ -385,10 +400,10 @@ func (s *Store) MemoryFacets(ctx context.Context, scope memory.Scope) (workspace
  JOIN memory_records r ON(r.owner_id,r.id,r.version)=(cm.owner_id,cm.claim_id,cm.claim_version) AND r.state='active'
  JOIN memory_records er ON(er.owner_id,er.id)=(cm.owner_id,cm.entity_id) AND er.state='active'
  JOIN entity_versions ev ON(ev.owner_id,ev.entity_id,ev.version)=(er.owner_id,er.id,er.version)
- WHERE cm.owner_id=$1 AND cm.role IN('person','place') AND claim_source_is_current($1,cm.claim_id,cm.claim_version,now())
+ WHERE cm.owner_id=$1 AND cm.role IN('person','place','project','topic','area') AND claim_source_is_current($1,cm.claim_id,cm.claim_version,now())
  GROUP BY cm.entity_id,cm.role,ev.name), ranked AS(
  SELECT *,row_number() OVER(PARTITION BY role ORDER BY n DESC,name,entity_id) AS ordinal FROM counts)
- SELECT entity_id::text,name,n,role FROM ranked WHERE ordinal<=50 ORDER BY role,ordinal`, string(scope.OwnerID))
+ SELECT entity_id::text,name,n,role FROM ranked WHERE ordinal<=50 OR role IN('project','topic','area') ORDER BY role,ordinal`, string(scope.OwnerID))
 	if err != nil {
 		return out, err
 	}
@@ -401,8 +416,10 @@ func (s *Store) MemoryFacets(ctx context.Context, scope memory.Scope) (workspace
 		}
 		if role == "person" {
 			out.People = append(out.People, f)
-		} else {
+		} else if role == "place" {
 			out.Places = append(out.Places, f)
+		} else {
+			out.Groups = append(out.Groups, workspace.MemoryGroupFacet{EntityID: f.EntityID, Name: f.Name, Type: role, Count: f.Count})
 		}
 	}
 	return out, rows.Err()

@@ -4,6 +4,7 @@ import type {
   RunStatus,
   IdeaStatus,
   JobStatus,
+  MemoryCategory,
   MemoryKind,
   ProjectStatus,
   SampleState,
@@ -55,6 +56,18 @@ export const memoryKindLabel: Record<MemoryKind, string> = {
   decision: '决定',
   intention: '意向',
   plan: '计划',
+}
+
+/** What a memory is, in the user's words; one not sorted yet has no label. */
+export const memoryCategoryLabel: Record<Exclude<MemoryCategory, 'unknown'>, string> = {
+  identity: '身份',
+  taste: '口味',
+  rule: '对助手的要求',
+  goal: '目标',
+  progress: '进展',
+  event: '一次性的事',
+  opinion: '看法',
+  other_person: '关于别人',
 }
 
 export const candidateKindLabel: Record<CandidateKind, string> = {

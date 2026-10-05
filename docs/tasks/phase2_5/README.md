@@ -63,6 +63,7 @@
 | [第 1 批契约](batch1/README.md) | 数据约定、规则 R1–R19、操作序列 X1–X22、文件归属 |
 | [O1 整理后端](batch1/O1-organize-backend.md) | 迁移、整理任务、接口 |
 | [T1 独立验收](batch1/T1-acceptance.md) | 只看契约写测试 |
+| [第 1 批独立验收最终一轮](../../evaluations/2026-10-05-phase2_5-batch1-acceptance.md) | X1–X22、80 步随机序列和并发专项全部通过；F-B1-1–8 关闭 |
 | [U1 界面](batch1/U1-frontend.md) | 资料库按分组翻记忆 |
 | [V2 评测集](V2-eval-set.md) | 任务集、跑法、抽查 |
 | [V2 办事题集与基线](../../evaluations/2026-10-04-phase2_5-v2-doing.md) | 671 条虚构记忆、120 题、真实通道三次结果/波动、私有抽查流程 |

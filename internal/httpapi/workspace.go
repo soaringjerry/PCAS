@@ -59,7 +59,7 @@ func (s *Server) workspaceRoutes(mux *http.ServeMux) {
 				return
 			}
 			values := r.URL.Query()
-			q := workspace.MemoryQuery{Q: values.Get("q"), Entity: values.Get("entity"), Nature: values.Get("nature"), From: values.Get("from"), To: values.Get("to"), Project: values.Get("project"), Epistemic: values.Get("epistemic"), Agent: values.Get("agent"), Cursor: values.Get("cursor")}
+			q := workspace.MemoryQuery{Q: values.Get("q"), Entity: values.Get("entity"), Nature: values.Get("nature"), Group: values.Get("group"), Category: values.Get("category"), From: values.Get("from"), To: values.Get("to"), Project: values.Get("project"), Epistemic: values.Get("epistemic"), Agent: values.Get("agent"), Cursor: values.Get("cursor")}
 			if raw := values.Get("limit"); raw != "" {
 				n, err := strconv.Atoi(raw)
 				if err != nil || n < 1 {

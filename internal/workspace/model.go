@@ -126,7 +126,15 @@ type MemoryMention struct {
 	Name     string `json:"name"`
 	Role     string `json:"role"`
 }
+type MemoryGroup struct {
+	EntityID string `json:"entityId"`
+	Name     string `json:"name"`
+	Type     string `json:"type"`
+}
 type Memory struct {
+	Category           string          `json:"category"`
+	Durable            *bool           `json:"durable,omitempty"`
+	Groups             []MemoryGroup   `json:"groups"`
 	ContextDependent   bool            `json:"contextDependent,omitempty"`
 	ExpressedAt        string          `json:"expressedAt,omitempty"`
 	EventFrom          string          `json:"eventFrom,omitempty"`
@@ -151,11 +159,17 @@ type Memory struct {
 	Pinned             bool            `json:"pinned"`
 }
 
-// MarshalJSON keeps absent mentions an empty array, including for older values.
+// MarshalJSON keeps absent mentions and groups empty, including for older values.
 func (m Memory) MarshalJSON() ([]byte, error) {
 	type wire Memory
 	if m.Mentions == nil {
 		m.Mentions = []MemoryMention{}
+	}
+	if m.Groups == nil {
+		m.Groups = []MemoryGroup{}
+	}
+	if m.Category == "" {
+		m.Category = "unknown"
 	}
 	m.ContextDependent = memory.ContextDependent(m.Text)
 	return json.Marshal(wire(m))
@@ -287,7 +301,13 @@ type Activity struct {
 	To     string `json:"to,omitempty"`
 	Failed bool   `json:"failed,omitempty"`
 }
+type Organize struct {
+	Done    int `json:"done"`
+	Total   int `json:"total"`
+	Version int `json:"version"`
+}
 type State struct {
+	Organize         Organize            `json:"organize"`
 	MemoryTotal      int                 `json:"memoryTotal"`
 	Notices          []Notice            `json:"notices"`
 	BudgetUsage      float64             `json:"budgetUsage"`
@@ -379,6 +399,8 @@ type DeskSource struct {
 
 // MemoryQuery combines list filters; cursors keep a stable insertion boundary.
 type MemoryQuery struct {
+	Group     string
+	Category  string
 	Q         string
 	Entity    string
 	Nature    string
@@ -400,7 +422,14 @@ type MemoryFacet struct {
 	Name     string `json:"name"`
 	Count    int    `json:"count"`
 }
+type MemoryGroupFacet struct {
+	EntityID string `json:"entityId"`
+	Name     string `json:"name"`
+	Type     string `json:"type"`
+	Count    int    `json:"count"`
+}
 type MemoryFacets struct {
-	People []MemoryFacet `json:"people"`
-	Places []MemoryFacet `json:"places"`
+	Groups []MemoryGroupFacet `json:"groups"`
+	People []MemoryFacet      `json:"people"`
+	Places []MemoryFacet      `json:"places"`
 }

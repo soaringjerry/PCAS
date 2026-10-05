@@ -70,8 +70,9 @@ func sanitizeItemTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, principa
         OR CASE WHEN r.kind='source' THEN d.memory_version IS DISTINCT FROM r.version
         OR NOT (`+teamSourceVisibleSQL("$1", "d.memory_id", "$3", "$2")+`) ELSE (
         d.memory_version IS DISTINCT FROM (SELECT v.version FROM applicable v WHERE v.claim_id=d.memory_id)
+        OR NOT (`+dependencyMemorySQL("d.owner_id", "d.memory_id")+`)
         OR NOT EXISTS(SELECT 1 FROM record_grants g WHERE g.owner_id=d.owner_id AND g.record_id=d.memory_id AND g.principal_id=$3)
-        OR NOT EXISTS(SELECT 1 FROM workspace_agents ag JOIN claim_revisions c ON c.owner_id=ag.owner_id WHERE ag.owner_id=$1 AND ag.id=$3 AND c.claim_id=d.memory_id AND c.version=d.memory_version AND ag.document->'memoryKinds' ? c.nature AND (coalesce(c.scope->>'project_id','')='' OR c.scope->>'project_id'=$4) AND (c.confirmation='confirmed' OR (c.confirmation='adopted' AND c.acquisition='direct') OR (ag.document->>'includeInferred')::boolean))
+        OR NOT EXISTS(SELECT 1 FROM workspace_agents ag JOIN claim_revisions c ON c.owner_id=ag.owner_id WHERE ag.owner_id=$1 AND ag.id=$3 AND c.claim_id=d.memory_id AND c.version=d.memory_version AND ag.document->'memoryKinds' ? c.nature AND (coalesce(c.scope->>'project_id','')='' OR c.scope->>'project_id'=$4) AND (`+humanMemorySQL("c")+` OR (ag.document->>'includeInferred')::boolean))
         ) END
         )),coalesce((SELECT jsonb_agg(jsonb_build_object('id',d.memory_id,'version',d.memory_version,'kind',r.kind)) FROM run_dependencies d JOIN memory_records r ON (r.owner_id,r.id)=(d.owner_id,d.memory_id) WHERE (d.owner_id,d.run_id)=(a.owner_id,a.run_id)),'[]'::jsonb)
         FROM adopted_artifacts a WHERE a.owner_id=$1 AND a.thing_id=$2`, string(scope.OwnerID), item.ID, principal, projectID)

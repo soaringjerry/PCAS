@@ -16,6 +16,10 @@ import (
 
 func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c workspace.Command) error {
 	switch c.Type {
+	case "restoreMemory":
+		return restoreMemoryTx(ctx, tx, scope, c.ID)
+	case "undoEntityMerge":
+		return s.undoEntityCommandTx(ctx, tx, scope, c.ID)
 	case "undoAction":
 		return s.undoActionTx(ctx, tx, scope, c.ID)
 	case "delegateTask":

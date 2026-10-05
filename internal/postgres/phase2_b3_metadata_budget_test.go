@@ -56,6 +56,11 @@ func TestPhase2B3_S6_MetadataDoesNotConsumeDeputyOrManualByteBudget(t *testing.T
 	if len(want) != g.BaselineBriefBytes || fmt.Sprintf("%x", sha256.Sum256([]byte(want))) != g.BaselineBriefSHA256 {
 		t.Fatal("frozen lossless baseline template no longer reproduces the observed bytes")
 	}
+	if g.ExpectedStructuredBriefBytes != g.BaselineBriefBytes+len(g.MetadataSuffix)*len(g.MemoryIDs) {
+		t.Fatal("frozen metadata budget oracle is inconsistent")
+	}
+	want = compareBaselineExpectation(t, want, true)
+	memoryIDs := append(append([]memory.ID{}, g.MemoryIDs...), b3FixedID(22))
 	for _, agent := range g.Entries {
 		for _, structured := range []bool{false, true} {
 			t.Run(fmt.Sprintf("%s_structured_%v", agent, structured), func(t *testing.T) {
@@ -84,9 +89,9 @@ func TestPhase2B3_S6_MetadataDoesNotConsumeDeputyOrManualByteBudget(t *testing.T
 				} else if len(f.all()) != 0 {
 					t.Fatal("manual handoff unexpectedly called a model")
 				}
-				wantBytes := g.BaselineBriefBytes
+				wantBytes := len(want)
 				if structured {
-					wantBytes = g.ExpectedStructuredBriefBytes
+					wantBytes += len(g.MetadataSuffix) * len(memoryIDs)
 				}
 				if len(content) != wantBytes {
 					t.Errorf("handoff bytes=%d want %d", len(content), wantBytes)
@@ -99,7 +104,7 @@ func TestPhase2B3_S6_MetadataDoesNotConsumeDeputyOrManualByteBudget(t *testing.T
 				lines := strings.Split(content, "\n")
 				seen := 0
 				for i, line := range lines {
-					for _, id := range g.MemoryIDs {
+					for _, id := range memoryIDs {
 						if strings.HasPrefix(line, "["+string(id)+"@1 / ") {
 							seen++
 							if structured {
@@ -112,15 +117,15 @@ func TestPhase2B3_S6_MetadataDoesNotConsumeDeputyOrManualByteBudget(t *testing.T
 						}
 					}
 				}
-				if seen != len(g.MemoryIDs) {
-					t.Errorf("selected memory lines=%d want %d", seen, len(g.MemoryIDs))
+				if seen != len(memoryIDs) {
+					t.Errorf("selected memory lines=%d want %d", seen, len(memoryIDs))
 				}
 				plain := strings.Join(lines, "\n")
 				if plain != want {
 					t.Errorf("handoff differs from pre-batch3 %s after removing only R12 suffixes: got %d bytes, want %d", g.BaselineCommit, len(plain), len(want))
 				}
 				refs := []memory.Ref{}
-				for _, id := range g.MemoryIDs {
+				for _, id := range memoryIDs {
 					refs = append(refs, memory.Ref{ID: id, Version: 1, Kind: memory.ClaimKind})
 				}
 				refs = append(refs, memory.Ref{ID: g.SourceID, Version: 1, Kind: memory.SourceKind})

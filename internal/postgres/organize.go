@@ -176,6 +176,7 @@ const organizeEligible = ` FROM claims cl JOIN memory_records r ON(r.owner_id,r.
  JOIN claim_revisions c ON(c.owner_id,c.claim_id,c.version)=(r.owner_id,r.id,r.version)
  JOIN record_versions rv ON(rv.owner_id,rv.record_id,rv.version)=(r.owner_id,r.id,r.version)
  WHERE r.state='active' AND rv.state='active' AND cl.organized<$1
+ AND coalesce(to_jsonb(cl)->>'retired','')=''
  AND claim_source_is_current(r.owner_id,c.claim_id,c.version,now())`
 
 func enqueueOrganizeTx(ctx context.Context, tx pgx.Tx, owner memory.ID, now time.Time, version int) (bool, error) {

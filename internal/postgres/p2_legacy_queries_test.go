@@ -226,6 +226,11 @@ func (s *Store) p2LegacyReadMemoriesTx(ctx context.Context, tx pgx.Tx, scope mem
 			return nil, err
 		}
 	}
+	// Share only the new 2.5 presentation semantics. The legacy SQL, temporal
+	// resolver and permission paths above remain the independent P2 oracle.
+	if err := fillMemoryStatusesTx(ctx, tx, scope.OwnerID, result); err != nil {
+		return nil, err
+	}
 	if opts.legacy {
 		return result, nil
 	}
@@ -892,7 +897,7 @@ func (s *Store) p2LegacySecretaryContextTx(ctx context.Context, tx pgx.Tx, scope
 	}
 	out.History = stored.Turns
 	for _, m := range memories {
-		if oneOf(m.Kind, out.Agent.MemoryKinds...) && (m.Epistemic != "inferred" || out.Agent.IncludeInferred) {
+		if oneOf(m.Kind, out.Agent.MemoryKinds...) && (m.Trust != "inferred" || out.Agent.IncludeInferred) {
 			out.Memories[m.ID] = m
 		}
 	}
@@ -994,7 +999,7 @@ func (s *Store) p2LegacySecretaryPrompt(ctx context.Context, tx pgx.Tx, scope me
 		alias := fmt.Sprintf("M%d", len(sent)+1)
 		sent[alias] = m
 		contextClaims = append(contextClaims, evidenceContextClaim{Label: alias, Ref: memory.Ref{ID: memory.ID(m.ID), Version: m.Version, Kind: memory.ClaimKind}, Text: m.Text})
-		fmt.Fprintf(&prompt, "[%s / %s / confirmation=%s / acquisition=%s] %s\n", alias, m.Epistemic, m.Confirmation, m.Acquisition, m.Text+memoryPromptSuffix(m, loc))
+		fmt.Fprintf(&prompt, "[%s / %s / trust=%s / confirmation=%s / acquisition=%s] %s\n", alias, m.Epistemic, m.Trust, m.Confirmation, m.Acquisition, m.Text+memoryPromptSuffix(m, loc))
 		c.Dependencies = append(c.Dependencies, memory.Ref{ID: memory.ID(m.ID), Version: m.Version, Kind: memory.ClaimKind})
 	}
 	if len(sent) == 0 {

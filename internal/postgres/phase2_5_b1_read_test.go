@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
-	"os"
 	"reflect"
 	"testing"
 
@@ -116,9 +115,6 @@ func phase25B1AssertLabels(t *testing.T, m workspace.Memory, category string, du
 }
 
 func TestPhase25B1_X21_GroupAndCategoryHTTPPagination(t *testing.T) {
-	if os.Getenv("PCAS_P25_B1_VERIFY_FINDINGS") != "1" {
-		t.Skip("finding F-B1-5")
-	}
 	f := phase25B1NewFixture(t)
 	topic := workspace.MemoryGroup{EntityID: string(f.entity(t, "topic", "虚构月报")), Name: "虚构月报", Type: "topic"}
 	other := workspace.MemoryGroup{EntityID: string(f.entity(t, "topic", "虚构周报")), Name: "虚构周报", Type: "topic"}
@@ -192,9 +188,6 @@ func TestPhase25B1_X21_GroupAndCategoryHTTPPagination(t *testing.T) {
 }
 
 func TestPhase25B1_R08_CorrectionInheritsStoredLabels(t *testing.T) {
-	if os.Getenv("PCAS_P25_B1_VERIFY_FINDINGS") != "1" {
-		t.Skip("finding F-B1-8")
-	}
 	f := phase25B1NewFixture(t)
 	ref := f.claim(t, "虚构季度汇报要求先列三项结论。")
 	topic := workspace.MemoryGroup{EntityID: string(f.entity(t, "topic", "季度汇报")), Name: "季度汇报", Type: "topic"}
@@ -262,9 +255,6 @@ func TestPhase25B1_FacetsRouteAvailable(t *testing.T) {
 }
 
 func TestPhase25B1_FacetsCountsAndOwnerIsolation(t *testing.T) {
-	if os.Getenv("PCAS_P25_B1_VERIFY_FINDINGS") != "1" {
-		t.Skip("finding F-B1-4")
-	}
 	f := phase25B1NewFixture(t)
 	want := make(map[string]workspace.MemoryGroupFacet)
 	for _, group := range []struct {
@@ -333,9 +323,6 @@ func TestPhase25B1_FacetsCountsAndOwnerIsolation(t *testing.T) {
 }
 
 func TestPhase25B1_X15_DeleteOnlyMemoryLeavesGroupEntity(t *testing.T) {
-	if os.Getenv("PCAS_P25_B1_VERIFY_FINDINGS") != "1" {
-		t.Skip("finding F-B1-4")
-	}
 	f := phase25B1NewFixture(t)
 	topic := workspace.MemoryGroup{EntityID: string(f.entity(t, "topic", "虚构航模")), Name: "虚构航模", Type: "topic"}
 	ref := f.claim(t, "虚构人物陆青本周拼装航模。")
@@ -394,9 +381,6 @@ func TestPhase25B1_X15_DeleteOnlyMemoryLeavesGroupEntity(t *testing.T) {
 }
 
 func TestPhase25B1_StoredGroupsAndOrdinaryMentions(t *testing.T) {
-	if os.Getenv("PCAS_P25_B1_VERIFY_FINDINGS") != "1" {
-		t.Skip("finding F-B1-4")
-	}
 	f := phase25B1NewFixture(t)
 	ref := f.claim(t, "虚构人物陆青在松湾的蓝鹭公司筹备季度汇报。")
 	groups := []workspace.MemoryGroup{
@@ -447,9 +431,6 @@ func TestPhase25B1_StoredGroupsAndOrdinaryMentions(t *testing.T) {
 }
 
 func TestPhase25B1_SnapshotProgressUsesStoredOrganized(t *testing.T) {
-	if os.Getenv("PCAS_P25_B1_VERIFY_FINDINGS") != "1" {
-		t.Skip("finding F-B1-7")
-	}
 	f := phase25B1NewFixture(t)
 	ref := f.claim(t, "虚构整理已完成的便签。")
 	f.labels(t, ref, "identity", true, 1)

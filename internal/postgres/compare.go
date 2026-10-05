@@ -141,17 +141,19 @@ func (s *Store) scheduleCompareVersion(ctx context.Context, now time.Time, versi
 			return err
 		}
 		for _, owner := range owners {
-			if err := extractionOwnerLock(ctx, tx, owner); err != nil {
+			if err := backgroundWriteTx(ctx, s.pool, owner, func(ctx context.Context, tx pgx.Tx) error {
+				for _, entity := range []bool{false, true} {
+					queued, err := enqueueCompareTx(ctx, tx, owner, now, version, entity)
+					if err != nil {
+						return err
+					}
+					if queued {
+						count++
+					}
+				}
+				return nil
+			}); err != nil {
 				return err
-			}
-			for _, entity := range []bool{false, true} {
-				queued, err := enqueueCompareTx(ctx, tx, owner, now, version, entity)
-				if err != nil {
-					return err
-				}
-				if queued {
-					count++
-				}
 			}
 		}
 		return nil
@@ -260,9 +262,6 @@ func (s *Store) processCompareVersion(ctx context.Context, j worker.Job, version
 	batch := []compareMemory{}
 	prepared := false
 	err = pgx.BeginFunc(ctx, conn, func(tx pgx.Tx) error {
-		if err := extractionOwnerLock(ctx, tx, j.OwnerID); err != nil {
-			return err
-		}
 		if err := lockJob(ctx, tx, j); err != nil {
 			return err
 		}
@@ -350,10 +349,7 @@ func (s *Store) processCompareVersion(ctx context.Context, j worker.Job, version
 		return &worker.JobError{Code: "model_call_failed", Retry: true}
 	}
 	edges, valid := parseCompareOutput(result.Text, len(batch))
-	return pgx.BeginFunc(ctx, conn, func(tx pgx.Tx) error {
-		if err := extractionOwnerLock(ctx, tx, j.OwnerID); err != nil {
-			return err
-		}
+	return backgroundWriteTx(ctx, conn, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
 		if err := lockJob(ctx, tx, j); err != nil {
 			return err
 		}
@@ -370,18 +366,30 @@ func (s *Store) processCompareVersion(ctx context.Context, j worker.Job, version
 
 func (s *Store) writeComparisonTx(ctx context.Context, tx pgx.Tx, owner memory.ID, version int, batch []compareMemory, edges []compareEdge, valid bool) error {
 	eligible, protected := map[int]bool{}, map[int]bool{}
+	inputs := make([]map[string]any, 0, len(batch))
 	for _, m := range batch {
+		inputs = append(inputs, map[string]any{"id": m.Ref.ID, "version": m.Ref.Version, "n": m.N})
+	}
+	rows, err := tx.Query(ctx, `SELECT input.n,c.confirmation='confirmed',EXISTS(SELECT 1 FROM record_versions edited WHERE edited.owner_id=r.owner_id AND edited.record_id=r.id AND edited.version>1 AND edited.actor='user'),`+restoredMemorySQL("$3")+
+		strings.Replace(compareCurrent, " WHERE r.state", ` JOIN jsonb_to_recordset($4::jsonb) input(id uuid,version integer,n integer) ON r.id=input.id AND r.version=input.version WHERE r.state`, 1)+`
+ AND cl.owner_id=$2 ORDER BY r.id FOR UPDATE OF r,cl`, OrganizeVersion, string(owner), version, asJSON(inputs))
+	if err != nil {
+		return err
+	}
+	for rows.Next() {
+		var n int
 		var confirmed, edited, restored bool
-		err := tx.QueryRow(ctx, `SELECT c.confirmation='confirmed',EXISTS(SELECT 1 FROM record_versions edited WHERE edited.owner_id=r.owner_id AND edited.record_id=r.id AND edited.version>1 AND edited.actor='user'),`+restoredMemorySQL("$5")+compareCurrent+`
- AND cl.owner_id=$2 AND cl.id=$3 AND r.version=$4 FOR UPDATE OF r,cl`, OrganizeVersion, string(owner), string(m.Ref.ID), m.Ref.Version, version).Scan(&confirmed, &edited, &restored)
-		if errors.Is(err, pgx.ErrNoRows) {
-			continue
-		}
-		if err != nil {
+		if err := rows.Scan(&n, &confirmed, &edited, &restored); err != nil {
+			rows.Close()
 			return err
 		}
-		eligible[m.N] = true
-		protected[m.N] = confirmed || edited || restored
+		eligible[n] = true
+		protected[n] = confirmed || edited || restored
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return err
 	}
 	if valid {
 		for _, edge := range resolveCompareEdges(edges, eligible, protected) {
@@ -439,13 +447,23 @@ func (s *Store) writeComparisonTx(ctx context.Context, tx pgx.Tx, owner memory.I
 			}
 			slog.WarnContext(ctx, "memory comparison attempts exhausted", "stage", "compare", "error_type", "attempts_exhausted", "memory_id", m.Ref.ID)
 		}
-		if _, err := tx.Exec(ctx, "UPDATE claims SET compared=$3 WHERE owner_id=$1 AND id=$2", string(owner), string(m.Ref.ID), version); err != nil {
-			return err
-		}
 		changed = append(changed, string(m.Ref.ID))
 	}
 	if len(changed) > 0 {
-		// Migration 037 invalidates cards and debounces their rebuild on claims UPDATE.
+		// Only this bulk metadata update defers per-row invalidation. Other
+		// claims writes (including retirement) retain the normal trigger path.
+		if _, err := tx.Exec(ctx, "SET LOCAL pcas.defer_compared_invalidation='on'"); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, "UPDATE claims SET compared=$3 WHERE owner_id=$1 AND id=ANY($2::uuid[])", string(owner), changed, version); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, "SET LOCAL pcas.defer_compared_invalidation='off'"); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `SELECT status_invalidate_keys($1,ARRAY(SELECT DISTINCT key FROM status_current_members WHERE owner_id=$1 AND claim_id=ANY($2::uuid[])))`, string(owner), changed); err != nil {
+			return err
+		}
 		_, err := tx.Exec(ctx, "UPDATE workspace_owners SET revision=revision+1 WHERE owner_id=$1", string(owner))
 		return err
 	}

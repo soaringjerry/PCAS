@@ -127,6 +127,14 @@ func parseOrganizeOutput(text string, size int) (map[int]organizeItem, []organiz
 // batch cannot cascade-delete the job and prevent the other claims from writing.
 func seedOrganizeGroupsTx(ctx context.Context, tx pgx.Tx, owner memory.ID) (memory.Ref, error) {
 	var anchor memory.Ref
+	// Status and comparison schedules seed the same anchors. Fence user writes
+	// first, then serialize only this owner's anchor initialization.
+	if _, err := tx.Exec(ctx, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR KEY SHARE", string(owner)); err != nil {
+		return anchor, err
+	}
+	if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended(current_database() || ':' || current_schema() || ':background-anchor:' || $1::text,0))", string(owner)); err != nil {
+		return anchor, err
+	}
 	for _, name := range organizeAreas {
 		id, err := entityTx(ctx, tx, owner, "area", name)
 		if err != nil {
@@ -513,7 +521,9 @@ func (s *Store) ProcessOrganize(ctx context.Context, j worker.Job) error {
 // fresh invocation through the shared budget policy, then bind it to the fenced
 // job. Each call's reservation ID also deduplicates its usage log.
 func (s *Store) reserveOrganizeCost(ctx context.Context, j worker.Job, cost float64) (string, error) {
-	id, err := s.reserveModelCostID(ctx, j.OwnerID, cost, nil)
+	reserveCtx, cancel := context.WithTimeout(ctx, backgroundWriteTimeout)
+	id, err := s.reserveModelCostID(reserveCtx, j.OwnerID, cost, nil)
+	cancel()
 	if errors.Is(err, memory.ErrUnavailable) {
 		var timezone string
 		if err := s.pool.QueryRow(ctx, "SELECT settings->>'timezone' FROM workspace_owners WHERE owner_id=$1", string(j.OwnerID)).Scan(&timezone); err != nil {
@@ -530,12 +540,9 @@ func (s *Store) reserveOrganizeCost(ctx context.Context, j worker.Job, cost floa
 		return "", &worker.JobError{Code: "budget_deferred", Until: nextBudgetDay(time.Now(), loc).Add(time.Duration(jitter.Int64())), NoAttempt: true}
 	}
 	if err != nil {
-		return "", err
+		return "", backgroundWriteError(ctx, err)
 	}
 	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-		if err := extractionOwnerLock(ctx, tx, j.OwnerID); err != nil {
-			return err
-		}
 		if err := lockJob(ctx, tx, j); err != nil {
 			return err
 		}

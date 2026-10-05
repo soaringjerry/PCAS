@@ -4,7 +4,8 @@ import { Link } from 'react-router'
 import { ArrowUpRight, Box, Building2, CalendarDays, Check, CornerDownRight, FileText, Flag, Folder, Hash, LayoutGrid, MapPin, PenLine, Send, Sparkles, UserRound } from 'lucide-react'
 import { kindText, type Thing, type TimelineEvent } from '../domain/things'
 import { dayOffset, formatAgo, formatDateTime } from '../domain/time'
-import type { Epistemic, EventPrecision, MemoryGroup, MemoryMention, SourceRef } from '../domain/types'
+import { memoryTrustLabel, trustOf } from '../domain/labels'
+import type { Epistemic, EventPrecision, Memory, MemoryGroup, MemoryMention, SourceRef } from '../domain/types'
 import { useStore } from '../store/context'
 import { Tag } from './ui'
 
@@ -14,6 +15,13 @@ export function TrustTag({ value }: { value: Epistemic }) {
   if (value === 'inferred') return <Tag tone="warning">推测</Tag>
   if (value === 'planned') return <Tag tone="info">计划</Tag>
   return null
+}
+
+/** How far a memory can be relied on, in the user's words. */
+export function TrustMark({ memory }: { memory: Pick<Memory, 'trust' | 'epistemic'> }) {
+  const trust = trustOf(memory)
+  if (!trust) return null
+  return <Tag tone={trust === 'inferred' ? 'warning' : trust === 'repeated' ? 'success' : 'neutral'}>{memoryTrustLabel[trust]}</Tag>
 }
 
 export function KindLabel({ kind, bare = false }: { kind: Thing['kind']; bare?: boolean }) {

@@ -1,8 +1,29 @@
-# 第 2.5 阶段第 2–4 批独立验收：最终一轮
+# 第 2.5 阶段第 2–4 批独立验收：最终一轮及上线并发补验
 
 2026-10-05。契约：[并行方案与契约](../tasks/phase2_5/parallel.md)。验收 PR [#206](https://github.com/soaringjerry/PCAS/pull/206) 和 X4-8 修订 PR [#219](https://github.com/soaringjerry/PCAS/pull/219) 已合入；本次修复重验仍以 `phase2_5/batch234` 为 base。先 fetch、rebase，本次实际集成基线为 `0f13127`；首次最终一轮的基线为 `346ee0c099a82428c9bdec68eb9e42ae359e25a3`。
 
-## 结论
+## 上线后的建卡并发补验（先交第 3 批）
+
+本次先 fetch，从 `origin/main` 建 `phase2_5/b3-concurrent-acceptance`，PR base 为 `main`。首次复现基线 `f517cf9`，提交前更新到 `acc6c3c`。按用户 2026-10-05 补充的并发验收要求，调度循环、真实队列处理及另一个 Store 连接的用户请求同时运行；这是原序列未覆盖的运行场景。
+
+新增 `TestPhase25B3_ConcurrentStatusSchedulerWorkerAndUserRequests`，含首次建卡和过期重建两个子用例，各 24 组、每组 3 条虚构当前记忆。`ScheduleStatus` 连续运行，另一 goroutine 使用 `Store.Claim` 领取后执行 `ProcessCard`／`ProcessHandover`。另一 Store 的独立连接池重复取快照、执行普通 `addTask` 命令、完成真实秘书 `DeskTurn`；每类请求先做无后台调度的正控制，再在任务处理中反复请求，每次上下文期限 3 秒。记录调度／处理重叠次数、各类用户请求重叠次数和最长耗时，不能以三段顺序调用代替并发。
+
+只在开始前准备、老化自有夹具数据；所有并发调用使用真实墙钟，无并发 SQL 造锁、队列删除或改 due 时间。80 毫秒本地假模型延迟扩大自然重叠窗口。对话产生的抽取等辅助任务由公共 Claim／Defer 延期保留，建卡和交接说明任务必须全部完成；不把本用例扩大为抽取实现验收。断言包含无数据库死锁错误、24 张新鲜卡、状态任务队列全部 done、24 次真实 card 花费、1 次交接说明、三类用户请求在 3 秒上下文内正常返回，以及原记忆无新增修订。
+
+**F-B3-10：已复现 SQL 死锁，待后端修复。** 首轮 `-race` 在 `f517cf9` 的两个场景均捕获 `SQLSTATE 40P01: deadlock detected`。首次建卡调度／处理重叠 96 次；过期重建重叠 83 次，最终新鲜卡只有 21/24，交接说明未完成。该轮用户请求最长约 2.49 秒，未出现 3 秒超时；不能把用户报告的线上请求超时记成这轮已复现的事实。无 Go 数据竞态报告。
+
+提交前在 `acc6c3c` 的干净夹具 `-race` 运行再次失败（71.747 秒，无 Go 数据竞态报告）：
+
+| 场景 | 调度／处理重叠 | 成功建卡／交接说明 | 最终新鲜卡／未完成状态任务 | 用户请求最长耗时 |
+|---|---:|---|---|---|
+| 首次建卡 | 89 次 | 24／1 | 24／0 | 快照 60.5 ms，普通命令 1.086 s，秘书 2.864 s |
+| 过期重建 | 58 次 | 23／0 | 20／1 | 快照 1.116 s，普通命令 1.179 s，秘书 2.959 s |
+
+两种场景的调度器均捕获 SQLSTATE 40P01，重建场景的 `ProcessCard` 也直接捕获 SQLSTATE 40P01。三类前台请求在每种场景都重复执行至少 10 次，并均有任务处理中启动的记录。请求未达到 3 秒超时；本轮明确复现的是 SQL 死锁和后台未完成。按原验收规则，对当前未通过用例保留全部断言，以 `t.Skip("finding F-B3-10")` 标记；修复后去掉这一处 skip 重验。原契约遗漏了调度／写入／前台请求同时运行的验收场景，本用例按用户补充规则填补该缺口。
+
+F-B3-9 的领取预算问题已独立确认：原 150 次 guard 在 120 次成功、30 条延期时触发，真实 card 账目 120、十分钟上下文未超时；自有 210 次预算原型及交接限速、随机序列共 3 项 `-race` 通过。协调者的预算修复 PR #229 已合入 main，本并发 PR 不重复修改该测试。F-B2-8 原 skip 保持，等待第 2 批后端及协调者通知；整理、比较的并发用例随后单独补交。
+
+## 合入 main 前的结论（历史）
 
 **此前四项未关闭发现均已关闭。** PR #220 修复的 F-B2-6、F-B2-7，PR #221 修复的 F-B4-5 在 `0f13127` 上通过重验，已去掉 skip。X4-8 按修订契约测试“自查多建一个事项，多出的不执行，原有的照常”，关闭 F-B4-4；本次也重新通过。
 
@@ -16,7 +37,8 @@
 | 第 3 批 | 29 | 28 | 1（#222） | 0 |
 | 第 4 批 | 25 | 25 | 0 | 0 |
 
-第 1 批真实整理夹具的 `-race` 烟测通过；三项新限额用例的编译／skip 专项通过，确认均显示对应依赖 PR。`go vet ./internal/postgres` 和 `git diff --check` 通过。
+第 1 批真实整理夹具的 `-race` 烟测通过；三项新限额用例的编译／skip 专项通过，确认均显示对应依赖 PR。`go test -race ./internal/postgres -run '^TestPhase25B3_ConcurrentStatusSchedulerWorkerAndUserRequests$' -count=1 -timeout=3m -json
+go vet ./internal/postgres` 和 `git diff --check` 通过。
 
 三项修复和 X4-8 的 `-race` 专项共 5 个顶层测试、8 个子用例通过。无现状层增加了强制 `heavy` 的子用例，验证退为 `medium` 后仍有主调用和自查，实际账目为 `tier=medium`、`secretary=1`、`selfcheck=1`；关键词升中、`missingKeyInfo` 升中、强制中档也全部通过。
 
@@ -64,7 +86,7 @@
 | X3-6 | 实际纠正使旧版本条目不返回，卡 stale；10 分钟后真实重建纳入新版本 | 通过 |
 | X3-7 | 实际比较退出旧条目，然后读失效卡并真实重建纳入新记忆 | 通过 |
 | X3-8 | 删除条目和关联期限，交接说明过期 | 通过 |
-| X3-9 | 200 张过期卡，第一小时重建 120 张、同小时不再重建，下一小时完成余下 80 张；核对账目和进度 | 等待 PR #222，预期跳过 |
+| X3-9 | 200 张过期卡，第一小时重建 120 张、同小时不再重建，下一小时完成余下 80 张；核对账目和进度 | 预算原因确认；#229 已合入，本并发轮未重验 |
 | X3-10 | 30 次实际重建，首次交接单独算，普通重写最多两次且间隔至少 6 小时 | 通过 |
 | X3-11 | inferred 不进入交接说明模型输入 | 通过 |
 | X3-12 | 临时提高串行公共规则版本，重建期间仍返回旧卡，测完恢复变量 | 通过 |
@@ -110,18 +132,21 @@
 | F-B2-7 | 实现问题，**已关闭** | PR #220：本人直接导入消息提取出的记忆 trust=stated、confirmation=unknown；单独查询和加入相同原话的 confirmed 对照后，均按 trust 进入真实 AnswerDesk 输入／Used。已删除 skip |
 | F-B4-4 | 契约问题，**已关闭** | 协调者修订 X4-8；目前没有删除动作。PR #219 已改用有效 create_task，证明原动作可执行后验证自查增加的动作不执行；本轮再次通过，无 skip。R4-10 的删除条件留待产品以后支持删除时验证 |
 | F-B4-5 | 实现问题，**已关闭** | PR #221：无现状层时只回退取材，中档照常自查；关键词、missingKeyInfo、强制中档及新增的强制重档回退中档均通过，核对回复和真实调用账目，已删除 skip |
+| F-B3-9 | 测试预算问题，原因已确认，PR #229 已合入 | 150 次领取 guard 包含额度延期，200 张卡需继续领取剩余任务；独立诊断未发现建卡突破 120 次上限，本并发 PR 不重复改预算源码 |
+| F-B3-10 | 原契约遗漏并发场景，**当前实现死锁已复现，待修复** | 调度、建卡写入和用户请求真正同时运行；捕获 SQLSTATE 40P01，后台未全部完成。新用例保留完整断言并按 finding 跳过，修复后重验 |
+| F-B2-8 | 用户报告 CI 失败，待后端调查／裁定 | 本次未重验、未修改其测试或 skip；只按用户报告保留状态 |
 
-此前已关闭：F-B2-1–5、F-B3-1–8、F-B4-1–3。原 F-B2-6、F-B2-7、F-B4-5 的上线阻碍已消除；当前没有仍开放的行为失败发现。
+此前已关闭：F-B2-1–5、F-B3-1–8、F-B4-1–3。原 F-B2-6、F-B2-7、F-B4-5 的发现已关闭；现在新增的并发问题不能由历史顺序序列通过结果替代。
 
-## 等待后端的限额验收
+## 限额验收历史与当前状态
 
 | 测试 | 新契约断言 | 等待及状态 |
 |---|---|---|
-| `TestPhase25B1_R12_OneHundredTwentyBatchesPerHour` | 整理前 120 次成功，第 121 次延期且不加尝试；推进自有账目到下一小时后恢复，无新记忆修订 | 等待 [PR #223](https://github.com/soaringjerry/PCAS/pull/223)，已 skip |
-| `TestPhase25B2_OrganizeCompareAndEntityShareOneHundredTwentyCallsPerHour` | 先真实整理 20 次，比较和实体比较继续占用同一额度，总共 120 次；三种处理入口在边界都不能再调用模型；下一小时恢复，记忆不增修订 | 等待 [PR #223](https://github.com/soaringjerry/PCAS/pull/223)，已 skip |
-| `TestPhase25B3_X3_9_HourlyOneHundredTwentyAcrossTwoHundredStaleCards` | 200 张过期卡，120／80 分两小时完成；同小时无额外调用，最终 card 花费 200 次、进度 200／200，记忆不增修订 | 等待 [PR #222](https://github.com/soaringjerry/PCAS/pull/222)，已 skip |
+| `TestPhase25B1_R12_OneHundredTwentyBatchesPerHour` | 整理前 120 次成功，第 121 次延期且不加尝试；推进自有账目到下一小时后恢复，无新记忆修订 | [PR #223](https://github.com/soaringjerry/PCAS/pull/223) 已合入 main；本次未重验 |
+| `TestPhase25B2_OrganizeCompareAndEntityShareOneHundredTwentyCallsPerHour` | 先真实整理 20 次，比较和实体比较继续占用同一额度，总共 120 次；三种处理入口在边界都不能再调用模型；下一小时恢复，记忆不增修订 | [PR #223](https://github.com/soaringjerry/PCAS/pull/223) 已合入 main；F-B2-8 保留 skip，等待通知 |
+| `TestPhase25B3_X3_9_HourlyOneHundredTwentyAcrossTwoHundredStaleCards` | 200 张过期卡，120／80 分两小时完成；同小时无额外调用，最终 card 花费 200 次、进度 200／200，记忆不增修订 | [PR #222](https://github.com/soaringjerry/PCAS/pull/222)、预算修复 #229 已合入 main；本并发 PR 未重复改预算源码 |
 
-三项新限额测试目前只验证编译和 skip 状态，没有声称新断言执行通过。后端合入并收到协调者通知后，去掉这三处 skip，执行全部限额断言并更新本记录。记录和代码明确区别“等待依赖”与 `finding F-B…`。
+上表旧的等待合入状态来自 `0f13127` 轮次；相关后端 PR 现在已合入 main。当前新增的 F-B2-8、F-B3-10 状态见发现清单；不要把历史仅编译／skip 的记录计成新断言通过。
 
 契约同步备注：`parallel.md` R2-6 和第 8 节已改为整理／比较合计 120 次，但第 7 节入口摘要仍写“两种合计每小时最多 30 次”。本次按用户明确裁定及 R2-6 的新数编写；未擅自改契约。
 
@@ -138,10 +163,37 @@ go test ./internal/postgres -run '^TestPhase25B3_InitialSelfFirstThenLargestAndU
 go test ./internal/postgres -run '^TestPhase25B4_CardContextUsesTrust' -count=1 -timeout=3m -json
 go test -race ./internal/postgres -run 'TestPhase25B2_X2_(8_Restore|12_Imported)|TestPhase25B4_(MediumPromotionWithoutCards|X4_8_SelfcheckCannotAddActions)$' -count=1 -json
 go test -race ./internal/postgres -run '^TestPhase25B(1_(X01_OrganizeInPlace|R12_OneHundredTwentyBatchesPerHour)|2_OrganizeCompareAndEntityShareOneHundredTwentyCallsPerHour|3_X3_9_HourlyOneHundredTwentyAcrossTwoHundredStaleCards)$' -count=1 -json
+go test -race ./internal/postgres -run '^TestPhase25B3_ConcurrentStatusSchedulerWorkerAndUserRequests$' -count=1 -timeout=3m -json
 go vet ./internal/postgres
 git diff --check
 ```
 
-上列限额命令在依赖未合入时会显示三项 skip，不代表限额通过。模型协议适配来自假模型收到的公开输入，不能参考后端实现；不修改产品来迎合验收。
+新并发命令当前显示 F-B3-10 skip。后端修复后只去掉该用例开头的 finding skip 再运行；当前未通过的断言不能算通过。模型协议适配来自假模型收到的公开输入，不能参考后端实现；不修改产品来迎合验收。
 
 本轮验证的是契约行为、队列、事务、时间额度和模型上下文边界；只用确定性本地模型，**没有执行 R4-14 的真实模型 168 题三遍办事质量评测，也没有做前端视觉验收或部署**。这两项不能用本轮 Go 测试结果替代。
+
+
+## 整理、比较的调度并发补验（main，第 3 批 PR #232 的后续）
+
+按用户同一项并发验收要求，先交建卡 [PR #232](https://github.com/soaringjerry/PCAS/pull/232) 后，本次另从 `origin/main` 的 `acc6c3c` 建 `phase2_5/b12-concurrent-acceptance`，base 为 `main`，新增整理、比较各一条启用的验收测试。没有修改产品代码、建卡预算用例或 F-B2-8；F-B2-8 原 skip 保留，等待协调者通知。
+
+两条共用的夹具都运行连续 Schedule 循环、真实 Claim→Process 及另一 Store 连接池的快照／普通 addTask 命令／真实秘书 DeskTurn。每类前台请求有无后台运行的正控制，之后各设 3 秒上下文反复请求；记录真实调度／处理与前台请求重叠次数。首个本地假模型请求待前台一轮完成后释放（最长 12 秒，另受后台上下文约束），使只有两批的整理积压也确实覆盖三类前台操作的重叠，不以 SQL 造锁。开始前准备／老化自有数据；并发期间使用真实墙钟，辅助流水线任务经公共 Claim／Defer 延期保留。
+
+`go test -race` 在上述 main 基线通过两项，合计 20.196 秒，无数据库死锁、无前台请求错误、无 Go 数据竞态报告：
+
+| 路径／测试 | 输入与完成断言 | 调度／处理重叠 | 成功后台任务 | 前台请求次数／处理期间启动 | 前台最长耗时 |
+|---|---|---:|---:|---|---|
+| `TestPhase25B1_ConcurrentOrganizeSchedulerWorkerAndUserRequests` | 80 条虚构原始记忆全为当前 OrganizeVersion；整理队列全 done；真实 organize 账目存在；不增加原记忆修订 | 24 次 | 2 | 每类 4 次，其中每类 2 次在处理中启动 | 快照 33.1 ms，普通命令 65.2 ms，秘书 325.1 ms |
+| `TestPhase25B2_ConcurrentCompareSchedulerWorkerAndUserRequests` | 24 个虚构主题、72 条已整理原始记忆全为当前 CompareVersion；比较／实体比较队列全 done；真实 compare 账目存在；空比较结果不退出记忆，不增加修订 | 110 次 | 24 | 每类 13 次，均在处理中启动 | 快照 42.0 ms，普通命令 135.5 ms，秘书 355.1 ms |
+
+这两条在当前 main 的并发场景通过，保留启用；没有人为制造失败或给它们添加 finding skip。建卡路径捕获的 SQLSTATE 40P01 及未完成现状工作由先交的 PR #232／F-B3-10 记录，此处没有用整理、比较的通过覆盖建卡失败结论，也没有将本次专项统计当成三批全套回归。
+
+复验命令：
+
+```sh
+go test -race ./internal/postgres -run '^TestPhase25B[12]_Concurrent(Organize|Compare)SchedulerWorkerAndUserRequests$' -count=1 -timeout=3m -json
+go vet ./internal/postgres
+git diff --check
+```
+
+只读公开契约、公开方法声明及自有测试／本地假模型输入，没有打开后端实现、后端测试或后端 PR 差异。一次性数据库使用 tmpfs，按精确自有容器名称带卷删除；没有访问共享数据库或真实模型。

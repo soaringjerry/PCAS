@@ -253,7 +253,7 @@ func (s *Store) processEntityCompareVersion(ctx context.Context, j worker.Job, v
 	}
 	defer release()
 	if s.models == nil {
-		return pgx.BeginFunc(ctx, conn, func(tx pgx.Tx) error {
+		return backgroundWriteTx(ctx, conn, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
 			if err := lockJob(ctx, tx, j); err != nil {
 				return err
 			}
@@ -262,7 +262,7 @@ func (s *Store) processEntityCompareVersion(ctx context.Context, j worker.Job, v
 	}
 	p, ok := s.models.Get(s.models.ExtractionID())
 	if !ok || p.Embedding || p.Transcription {
-		return pgx.BeginFunc(ctx, conn, func(tx pgx.Tx) error {
+		return backgroundWriteTx(ctx, conn, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
 			if err := lockJob(ctx, tx, j); err != nil {
 				return err
 			}
@@ -273,10 +273,7 @@ func (s *Store) processEntityCompareVersion(ctx context.Context, j worker.Job, v
 		return &worker.JobError{Code: "provider_unavailable", Until: time.Now().Add(CompareInterval), NoAttempt: true}
 	}
 	var pair *comparisonEntityPair
-	err = pgx.BeginFunc(ctx, conn, func(tx pgx.Tx) error {
-		if err := extractionOwnerLock(ctx, tx, j.OwnerID); err != nil {
-			return err
-		}
+	err = backgroundWriteTx(ctx, conn, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
 		if err := lockJob(ctx, tx, j); err != nil {
 			return err
 		}
@@ -339,8 +336,10 @@ func (s *Store) processEntityCompareVersion(ctx context.Context, j worker.Job, v
 		}
 		slog.WarnContext(ctx, "entity comparison attempts exhausted", "stage", "entity_compare", "error_type", "attempts_exhausted")
 	}
-	err = pgx.BeginFunc(ctx, conn, func(tx pgx.Tx) error {
-		if err := extractionOwnerLock(ctx, tx, j.OwnerID); err != nil {
+	err = backgroundWriteTx(ctx, conn, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
+		// Claim/mention invalidation can update cards and their queued jobs.
+		// Match card builders: acquire cards in key order before the job row.
+		if _, err := tx.Exec(ctx, "SELECT 1 FROM status_cards WHERE owner_id=$1 ORDER BY key FOR UPDATE", string(j.OwnerID)); err != nil {
 			return err
 		}
 		if err := lockJob(ctx, tx, j); err != nil {
@@ -410,9 +409,9 @@ func (s *Store) processEntityCompareVersion(ctx context.Context, j worker.Job, v
 	if err != nil {
 		return err
 	}
-	// Scan/schedule the next pair after releasing the owner row lock. The
-	// shared scheduler lock prevents duplicate slots without fencing users.
-	return pgx.BeginFunc(ctx, conn, func(tx pgx.Tx) error {
+	// Schedule after committing the result, with a fresh bounded write fence.
+	// The shared scheduler lock prevents duplicate slots.
+	return backgroundWriteTx(ctx, conn, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended(current_database()||':'||current_schema()||':compare-schedule',0))"); err != nil {
 			return err
 		}

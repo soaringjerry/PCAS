@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"errors"
+	"sort"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -16,6 +17,8 @@ var CardVersion = 1
 var HandoverVersion = 1
 
 var statusFields = []string{"status", "deadline", "decided", "blocker", "next", "preference", "people"}
+
+type statusNoRepairKey struct{}
 
 func (s *Store) HandoverTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) (workspace.Handover, error) {
 	out := workspace.Handover{}
@@ -77,12 +80,17 @@ func (s *Store) StatusCardIndexTx(ctx context.Context, tx pgx.Tx, scope memory.S
 	if err := tx.QueryRow(ctx, "SHOW transaction_read_only").Scan(&readOnly); err != nil {
 		return out, err
 	}
-	if readOnly == "off" {
+	if readOnly == "off" && ctx.Value(statusNoRepairKey{}) == nil {
+		keys := []string{}
 		for _, ref := range out {
 			if ref.Stale {
-				if _, err := tx.Exec(ctx, "UPDATE status_cards SET stale=true WHERE owner_id=$1 AND key=$2 AND NOT stale", string(scope.OwnerID), ref.Key); err != nil {
-					return out, err
-				}
+				keys = append(keys, ref.Key)
+			}
+		}
+		sort.Strings(keys)
+		for _, key := range keys {
+			if _, err := tx.Exec(ctx, "UPDATE status_cards SET stale=true WHERE owner_id=$1 AND key=$2 AND NOT stale", string(scope.OwnerID), key); err != nil {
+				return out, err
 			}
 		}
 	}

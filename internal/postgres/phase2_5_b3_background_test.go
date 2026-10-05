@@ -55,8 +55,14 @@ func (f *phase25B234Fixture) statusJob(t *testing.T) string {
 	}
 	var processErr error
 	if strings.HasPrefix(j.Stage, "memory.card:") {
-		if priority != 13 {
-			t.Errorf("card priority=%d, want 13", priority)
+		// Cards about the user come before comparison (7); the rest share its
+		// priority (8) and alternate with it.
+		want := 8
+		if strings.HasPrefix(j.Stage, "memory.card:") && strings.Contains(j.Stage, ":self:") {
+			want = 7
+		}
+		if priority != want {
+			t.Errorf("card priority=%d, want %d", priority, want)
 		}
 		processErr = f.store.ProcessCard(f.ctx, *j)
 	} else if strings.HasPrefix(j.Stage, "memory.handover:") {

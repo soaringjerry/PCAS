@@ -180,12 +180,6 @@ func enqueueEntityCandidatesTx(ctx context.Context, tx pgx.Tx, owner memory.ID, 
 	if err != nil || batch == nil {
 		return false, err
 	}
-	// Read the potentially large catalogue before fencing the owner. Only the
-	// small anchor/job write uses the owner -> entity lock order of foreground
-	// writes, and the transaction finishes before any model call is attempted.
-	if err := extractionOwnerLock(ctx, tx, owner); err != nil {
-		return false, err
-	}
 	anchor, err := seedOrganizeGroupsTx(ctx, tx, owner)
 	if err != nil {
 		return false, err
@@ -228,7 +222,7 @@ func (s *Store) ScheduleEntityCandidates(ctx context.Context, now time.Time) (in
 	}
 	count := 0
 	for _, owner := range owners {
-		err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		err := backgroundWriteTx(ctx, s.pool, owner, func(ctx context.Context, tx pgx.Tx) error {
 			if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended(current_database()||':'||current_schema()||':compare-schedule',0))"); err != nil {
 				return err
 			}
@@ -255,17 +249,17 @@ func (s *Store) ProcessEntityCandidates(ctx context.Context, j worker.Job) error
 	}
 	defer release()
 	if s.models == nil {
-		return pgx.BeginFunc(ctx, conn, func(tx pgx.Tx) error { return acknowledge(ctx, tx, j) })
+		return backgroundWriteTx(ctx, conn, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error { return acknowledge(ctx, tx, j) })
 	}
 	p, ok := s.models.Get(s.models.ExtractionID())
 	if !ok || p.Embedding || p.Transcription {
-		return pgx.BeginFunc(ctx, conn, func(tx pgx.Tx) error { return acknowledge(ctx, tx, j) })
+		return backgroundWriteTx(ctx, conn, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error { return acknowledge(ctx, tx, j) })
 	}
 	if !s.models.Available(p.ID) {
 		return &worker.JobError{Code: "provider_unavailable", Until: time.Now().Add(CompareInterval), NoAttempt: true}
 	}
 	var batch *entityCandidateBatch
-	err = pgx.BeginFunc(ctx, conn, func(tx pgx.Tx) error {
+	err = backgroundWriteTx(ctx, conn, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
 		if err := lockJob(ctx, tx, j); err != nil {
 			return err
 		}
@@ -324,7 +318,7 @@ func (s *Store) ProcessEntityCandidates(ctx context.Context, j worker.Job) error
 		}
 		slog.WarnContext(ctx, "entity candidate attempts exhausted", "stage", "entity_candidates", "error_type", "attempts_exhausted")
 	}
-	return pgx.BeginFunc(ctx, conn, func(tx pgx.Tx) error {
+	return backgroundWriteTx(ctx, conn, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
 		if err := lockJob(ctx, tx, j); err != nil {
 			return err
 		}

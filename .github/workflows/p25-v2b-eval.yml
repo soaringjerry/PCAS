@@ -1,0 +1,22 @@
+name: phase2.5-independent-eval
+on:
+  pull_request:
+    paths: ["cmd/pcas-eval/**", "testdata/phase2_5/doing-independent/**", "scripts/p25-v2b-*", ".github/workflows/p25-v2b-eval.yml"]
+  push:
+    branches: [main]
+    paths: ["cmd/pcas-eval/**", "testdata/phase2_5/doing-independent/**", "scripts/p25-v2b-*", ".github/workflows/p25-v2b-eval.yml"]
+jobs:
+  independent-fake-pipeline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - run: go test -race ./cmd/pcas-eval/...
+      - run: go vet ./cmd/pcas-eval/...
+      - run: python3 scripts/p25-v2b-suite.py
+      - run: python3 scripts/p25-v2b-suite_test.py
+      - run: scripts/p25-v2-run.sh -fake -suite=testdata/phase2_5/doing-independent/suite.json -repeats=3 -workers=4

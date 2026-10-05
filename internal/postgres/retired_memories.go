@@ -33,16 +33,30 @@ func (s *Store) listRetiredMemories(ctx context.Context, scope memory.Scope, q w
 		opts.snapshot = cursor.Snapshot
 	}
 	err := pgx.BeginTxFunc(ctx, s.pool, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
+		if q.Trust != "" {
+			if _, err := tx.Exec(ctx, "SET LOCAL jit=off"); err != nil {
+				return err
+			}
+		}
 		if opts.snapshot.IsZero() {
 			if err := tx.QueryRow(ctx, "SELECT clock_timestamp()").Scan(&opts.snapshot); err != nil {
 				return err
 			}
 		}
-		countOpts := opts
-		countOpts.before = nil
-		where, args := memoryWhere(scope, false, countOpts)
-		if err := tx.QueryRow(ctx, "SELECT count(*)"+memoryJoins+where, args...).Scan(&out.Total); err != nil {
-			return err
+		if q.Trust != "" {
+			var err error
+			out.Total, opts.ids, err = trustedMemoryIDsTx(ctx, tx, scope, opts)
+			if err != nil {
+				return err
+			}
+			opts.query.Trust = ""
+		} else {
+			countOpts := opts
+			countOpts.before = nil
+			where, args := memoryWhere(scope, false, countOpts)
+			if err := tx.QueryRow(ctx, "SELECT count(*)"+memoryJoins+where, args...).Scan(&out.Total); err != nil {
+				return err
+			}
 		}
 		items, err := s.readMemoriesTx(ctx, tx, scope, false, opts)
 		if err != nil {

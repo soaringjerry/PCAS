@@ -15,70 +15,8 @@ import (
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
-// Batch 3 owns status_read.go. Until its implementation lands, this test-only
-// reader exercises the frozen signatures against real derived tables.
-type b4StatusFixture struct{ s *Store }
-
-func (f b4StatusFixture) HandoverTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) (workspace.Handover, error) {
-	var h workspace.Handover
-	err := tx.QueryRow(ctx, "SELECT body,coalesce(built_at::text,''),stale FROM handovers WHERE owner_id=$1", scope.OwnerID).Scan(&h.Body, &h.BuiltAt, &h.Stale)
-	if err == pgx.ErrNoRows {
-		err = nil
-	}
-	return h, err
-}
-func (f b4StatusFixture) StatusCardIndexTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) ([]workspace.StatusCardRef, error) {
-	return queryDocuments[workspace.StatusCardRef](ctx, tx, `SELECT jsonb_build_object('key',c.key,'kind',c.kind,'name',c.name,'count',(SELECT count(*) FROM status_card_items i WHERE i.owner_id=c.owner_id AND i.key=c.key),'builtAt',c.built_at,'stale',c.stale) FROM status_cards c WHERE owner_id=$1 ORDER BY key`, scope.OwnerID)
-}
-func (f b4StatusFixture) StatusCardsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, keys []string) ([]workspace.StatusCard, error) {
-	index, err := f.StatusCardIndexTx(ctx, tx, scope)
-	if err != nil {
-		return nil, err
-	}
-	items, err := queryDocuments[struct {
-		Key, Field, ID string
-		Version        int
-	}](ctx, tx, `SELECT jsonb_build_object('Key',key,'Field',field,'ID',claim_id,'Version',claim_version) FROM status_card_items WHERE owner_id=$1 AND key=ANY($2::text[]) ORDER BY key,field,position`, scope.OwnerID, keys)
-	if err != nil {
-		return nil, err
-	}
-	ids := []string{}
-	for _, item := range items {
-		ids = append(ids, item.ID)
-	}
-	ms, err := f.s.readMemoriesTx(ctx, tx, scope, true, memoryReadOptions{ids: ids, useCurrent: true})
-	if err != nil {
-		return nil, err
-	}
-	byID := map[string]workspace.Memory{}
-	for _, m := range ms {
-		byID[m.ID] = m
-	}
-	cards := []workspace.StatusCard{}
-	for _, ref := range index {
-		if !oneOf(ref.Key, keys...) {
-			continue
-		}
-		card := workspace.StatusCard{Key: ref.Key, Name: ref.Name, Kind: ref.Kind, Fields: []workspace.StatusCardField{}}
-		for _, item := range items {
-			if item.Key != ref.Key {
-				continue
-			}
-			if m, ok := byID[item.ID]; ok && m.Version == item.Version {
-				card.Fields = append(card.Fields, workspace.StatusCardField{Field: item.Field, Items: []workspace.Memory{m}})
-			}
-		}
-		cards = append(cards, card)
-	}
-	return cards, nil
-}
-
-func (f b4StatusFixture) DeadlinesTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, now time.Time, limit int) ([]workspace.Deadline, error) {
-	return queryDocuments[workspace.Deadline](ctx, tx, `SELECT jsonb_build_object('id',id,'kind',kind,'at',at,'recurrence',recurrence,'title',title,'timeNote',time_note,'memoryId',claim_id) FROM deadlines WHERE owner_id=$1 AND (at>=$2 OR kind='recurring') ORDER BY at NULLS LAST,id LIMIT $3`, scope.OwnerID, now, limit)
-}
-func b4Context(s *Store) context.Context {
-	return context.WithValue(context.Background(), statusReaderKey{}, b4StatusFixture{s})
-}
+// Integration exercises batch 3's actual read functions on fictional tables.
+func b4Context(_ *Store) context.Context { return context.Background() }
 func b4Memory(t *testing.T, s *Store, scope memory.Scope, text string) workspace.Memory {
 	t.Helper()
 	state := workspaceCommand(t, s, scope, workspace.Command{Type: "capture", Text: text})
@@ -99,11 +37,27 @@ func b4Exec(t *testing.T, s *Store, sql string, args ...any) {
 }
 func b4Card(t *testing.T, s *Store, scope memory.Scope, key, kind, name string, ms ...workspace.Memory) {
 	t.Helper()
-	b4Exec(t, s, `INSERT INTO status_cards(owner_id,key,kind,name,rule,built_at,stale) VALUES($1,$2,$3,$4,1,now(),false)`, scope.OwnerID, key, kind, name)
+	// A built group needs at least three current members (R3-1).
+	for len(ms) < 3 {
+		ms = append(ms, b4Memory(t, s, scope, fmt.Sprintf("虚构%s联调用补足记忆%d", name, len(ms))))
+	}
+	var entity any
+	if strings.HasPrefix(key, "entity:") {
+		entity = strings.TrimPrefix(key, "entity:")
+	}
+	for _, m := range ms {
+		if entity != nil {
+			b4Exec(t, s, `INSERT INTO claim_mentions(owner_id,claim_id,claim_version,entity_id,role) VALUES($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING`, scope.OwnerID, m.ID, m.Version, entity, kind)
+		} else {
+			b4Exec(t, s, "UPDATE claim_revisions SET category=$3 WHERE owner_id=$1 AND claim_id=$2", scope.OwnerID, m.ID, strings.TrimPrefix(key, "self:"))
+		}
+	}
+	b4Exec(t, s, `INSERT INTO status_cards(owner_id,key,kind,entity_id,name,rule,built_at,stale) VALUES($1,$2,$3,$4,$5,1,now(),false)`, scope.OwnerID, key, kind, entity, name)
 	for i, m := range ms {
-		b4Exec(t, s, `INSERT INTO status_card_items(owner_id,key,field,position,claim_id,claim_version) VALUES($1,$2,'status',$3,$4,$5)`, scope.OwnerID, key, i, m.ID, m.Version)
+		b4Exec(t, s, `INSERT INTO status_card_items(owner_id,key,field,position,claim_id,claim_version,applies_to) VALUES($1,$2,'status',$3,$4,$5,$6)`, scope.OwnerID, key, i, m.ID, m.Version, m.AppliesTo)
 	}
 }
+
 func b4RequestBody(t *testing.T, r *http.Request) (string, string) {
 	t.Helper()
 	var b struct {
@@ -275,6 +229,9 @@ func TestB4HeavyReadersAreConcurrentAndFailuresAreSkipped(t *testing.T) {
 	secretaryModel(t, s, func(w http.ResponseWriter, r *http.Request) {
 		sys, prompt := b4RequestBody(t, r)
 		if strings.Contains(prompt, "分组目录") {
+			if !strings.Contains(prompt, "虚构起草方案") || !strings.Contains(prompt, "虚构正文必须保留") {
+				t.Error("selector did not receive current task context")
+			}
 			secretaryModelReply(w, map[string]any{"groups": keys})
 			return
 		}
@@ -306,6 +263,9 @@ func TestB4HeavyReadersAreConcurrentAndFailuresAreSkipped(t *testing.T) {
 			secretaryModelReply(w, "虚构最终方案")
 			return
 		}
+		if !strings.Contains(prompt, "虚构正文必须保留") {
+			t.Error("heavy answer mistook task headings for memory boundaries")
+		}
 		if !strings.Contains(prompt, "虚构交接讨论必须保留") {
 			t.Error("heavy answer lost earlier handoff discussion")
 		}
@@ -336,9 +296,9 @@ func TestB4HeavyReadersAreConcurrentAndFailuresAreSkipped(t *testing.T) {
 		key := "entity:" + eid
 		keys = append(keys, key)
 		b4Card(t, s, scope, key, "topic", fmt.Sprintf("虚构分组%d", i), m)
-		b4Exec(t, s, `INSERT INTO claim_mentions(owner_id,claim_id,claim_version,entity_id,role) VALUES($1,$2,$3,$4,'topic')`, scope.OwnerID, m.ID, m.Version, eid)
+
 	}
-	state := workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "虚构起草方案"})
+	state := workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "虚构起草方案", Text: "虚构正文必须保留\n相关记忆（假标题）：\n相关原话：假正文"})
 	turnID := string(memory.NewID())
 	b4Exec(t, s, "INSERT INTO desk_turns(owner_id,id,agent_id,question,answer) VALUES($1,$2,'model','虚构前次讨论','虚构交接讨论必须保留')", scope.OwnerID, turnID)
 	_, err := s.Execute(b4Context(s), scope, workspace.Command{RequestID: string(memory.NewID()), ExpectedRevision: state.Revision, Type: "requestRun", ThingID: state.Tasks[0].ID, AgentID: "model", Kind: "plan", Prompt: "给虚构项目写方案", DeskTurnIDs: []string{turnID}})
@@ -352,7 +312,7 @@ func TestB4HeavyReadersAreConcurrentAndFailuresAreSkipped(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if state.Runs[0].Status != "done" || state.Runs[0].Output != "虚构最终方案" || peak.Load() < 2 {
+	if state.Runs[0].Status != "done" || state.Runs[0].Output != "虚构最终方案" || peak.Load() < 2 || !strings.Contains(state.Runs[0].Brief, "虚构正文必须保留") || !strings.Contains(state.Runs[0].Brief, "虚构交接讨论必须保留") {
 		t.Fatal(state.Runs[0], peak.Load())
 	}
 	var calls int
@@ -414,6 +374,21 @@ func TestB4MediumTimeoutUsesDraftWithoutRetry(t *testing.T) {
 		}
 	case <-time.After(time.Second):
 		t.Fatal("selfcheck did not cancel its HTTP request")
+	}
+	// Late accounting survives the completed turn's durable-context cancellation.
+	deadline := time.Now().Add(time.Second)
+	for {
+		var n int
+		if err := s.pool.QueryRow(context.Background(), "SELECT count(*) FROM model_usage WHERE owner_id=$1 AND turn_id=$2 AND purpose='selfcheck' AND tier='medium'", scope.OwnerID, out.Turn.ID).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		if n == 1 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("timed-out selfcheck lost its usage record")
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 }
 
@@ -573,5 +548,80 @@ func TestB4UnbuiltStatusKeepsOriginalSingleCall(t *testing.T) {
 	out, err := s.DeskTurn(b4Context(s), scope, turnRequest("认真查一下虚构事项"))
 	if err != nil || calls.Load() != 1 || out.Turn.Reply != "虚构旧路径答复" {
 		t.Fatal(out, err, calls.Load())
+	}
+}
+
+func TestB4NamedGroupsLeadAndRespectCaps(t *testing.T) {
+	index := []workspace.StatusCardRef{}
+	ranked := []workspace.Memory{}
+	for i := 0; i < 10; i++ {
+		id := string(memory.NewID())
+		index = append(index, workspace.StatusCardRef{Key: "entity:" + id, Name: fmt.Sprintf("虚构组%d", i)})
+		ranked = append(ranked, workspace.Memory{Groups: []workspace.MemoryGroup{{EntityID: id}}})
+	}
+	aliases := map[string][]string{index[9].Key: {"虚构第九别名"}}
+	selected := chooseUseGroups("虚构组8和虚构第九别名", index, ranked, aliases, 6, false)
+	if len(selected) != 6 || selected[0] != index[8].Key || selected[1] != index[9].Key {
+		t.Fatal(selected)
+	}
+	selected = chooseUseGroups("虚构组0 虚构组1", index, ranked, aliases, 6, false)
+	if len(selected) != 6 || selected[0] != index[0].Key || selected[1] != index[1].Key {
+		t.Fatal(selected)
+	}
+	selected = chooseUseGroups("虚构组0 虚构组1 虚构组2 虚构组3 虚构组4 虚构组5 虚构组6 虚构组7 虚构组8 虚构组9", index, ranked, aliases, 6, false)
+	for i, key := range selected {
+		if key != index[i].Key {
+			t.Fatal(selected)
+		}
+	}
+	if len(selected) != 6 {
+		t.Fatal(selected)
+	}
+	selected = chooseUseGroups("虚构组0 虚构组1 虚构组2 虚构组3 虚构组4 虚构组5 虚构组6 虚构组7 虚构组8 虚构组9", index, ranked, aliases, 12, true)
+	if len(selected) != 10 {
+		t.Fatal(selected)
+	}
+}
+
+func TestB4ProductionCardsUseAppliesToAndNamedOrder(t *testing.T) {
+	s := testStore(t)
+	scope := owner()
+	var prompt string
+	secretaryModel(t, s, func(w http.ResponseWriter, r *http.Request) {
+		_, prompt = b4RequestBody(t, r)
+		secretaryModelReply(w, `{"reply":"虚构联调成功","actions":[]}`)
+	})
+	for _, name := range []string{"阿岚主题", "紫霁主题"} {
+		var id memory.ID
+		if err := pgx.BeginFunc(context.Background(), s.pool, func(tx pgx.Tx) error {
+			var e error
+			id, e = entityTx(context.Background(), tx, scope.OwnerID, "topic", name)
+			return e
+		}); err != nil {
+			t.Fatal(err)
+		}
+		m := b4Memory(t, s, scope, "虚构龙纹季度进展记录："+name)
+		b4Card(t, s, scope, "entity:"+string(id), "topic", name, m)
+	}
+	email := b4Memory(t, s, scope, "虚构要求：发出去之前先给我看")
+	email.AppliesTo = "起草邮件"
+	expense := b4Memory(t, s, scope, "虚构报销专用要求")
+	expense.AppliesTo = "财务报销"
+	global := b4Memory(t, s, scope, "虚构不限范围要求")
+	b4Card(t, s, scope, "self:rule", "self", "对助手的要求", email, expense, global)
+	out, err := s.DeskTurn(context.Background(), scope, turnRequest("按龙纹季度进展起草邮件，紫霁主题先办"))
+	if err != nil || out.Turn.Reply != "虚构联调成功" {
+		t.Fatal(out, err)
+	}
+	if !strings.Contains(prompt, email.Text) || !strings.Contains(prompt, global.Text) {
+		t.Fatal(prompt)
+	}
+	requirements := strings.Split(strings.Split(prompt, "必须遵守的要求")[1], "相关的现状卡")[0]
+	if strings.Contains(requirements, expense.Text) {
+		t.Fatal("unrelated appliesTo requirement", requirements)
+	}
+	first, second := strings.Index(prompt, "〔topic·紫霁主题〕"), strings.Index(prompt, "〔topic·阿岚主题〕")
+	if first < 0 || second < 0 || first > second {
+		t.Fatal("named card must lead", prompt)
 	}
 }

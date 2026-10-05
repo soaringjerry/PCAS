@@ -40,6 +40,9 @@ const statusValidItems = `SELECT i.* FROM status_card_items i JOIN status_curren
  ON(m.owner_id,m.key,m.claim_id,m.claim_version)=(i.owner_id,i.key,i.claim_id,i.claim_version)`
 
 func (s *Store) StatusCardIndexTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) ([]workspace.StatusCardRef, error) {
+	if _, ok := ctx.Value(useStatusReadKey{}).(useStatusRead); ok {
+		return s.useStatusIndexTx(ctx, tx, scope)
+	}
 	out := []workspace.StatusCardRef{}
 	rows, err := tx.Query(ctx, `SELECT sc.key,sc.kind,sc.name,count(i.claim_id),sc.built_at,
  sc.stale OR sc.rule<$2 OR EXISTS(SELECT 1 FROM status_card_items raw WHERE raw.owner_id=sc.owner_id AND raw.key=sc.key
@@ -87,6 +90,9 @@ func (s *Store) StatusCardIndexTx(ctx context.Context, tx pgx.Tx, scope memory.S
 }
 
 func (s *Store) StatusCardsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, keys []string) ([]workspace.StatusCard, error) {
+	if opt, ok := ctx.Value(useStatusReadKey{}).(useStatusRead); ok {
+		return s.useStatusCardsTx(ctx, tx, scope, keys, opt.Index)
+	}
 	out := []workspace.StatusCard{}
 	if len(keys) == 0 {
 		return out, nil

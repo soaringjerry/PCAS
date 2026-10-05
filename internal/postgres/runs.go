@@ -188,6 +188,7 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 			}
 		}
 		run.MemoryTier = memoryTier(ctx, c.Prompt, "heavy")
+		u.Tier = run.MemoryTier
 		ranked := ordered
 		if u.Ready {
 			ranked = []workspace.Memory{}
@@ -212,6 +213,7 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 		run.MemoryGroups = u.Groups
 		annotationBytes := 0
 		contextClaims := []evidenceContextClaim{}
+		memoryStart := brief.Len()
 		if u.Ready {
 			// Keep handoff discussion outside the replaceable memory section.
 			fmt.Fprintln(&brief, "相关记忆（引用 ID 与版本；长期约束继续适用）：")
@@ -241,6 +243,9 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 
 		}
 
+		if u.Ready {
+			run.MemoryContextRange = &[2]int{memoryStart, brief.Len()}
+		}
 		orderTeamExcerpts(excerpts, plan)
 		fmt.Fprintln(&brief, "\n相关原话：")
 		sources, err := teamSourceExcerptsTx(ctx, tx, scope, agent.ID, &item.ID, excerpts, historyRequests, 8, 4000)
@@ -258,7 +263,11 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 			run.ContextVersions = append(run.ContextVersions, source.Ref)
 		}
 
-		groups, gaps, err := evidenceContextsTx(ctx, tx, scope, agent.ID, &item.ID, contextClaims)
+		evidenceCtx := ctx
+		if u.Ready {
+			evidenceCtx = context.WithValue(ctx, useEvidenceBatchKey{}, true)
+		}
+		groups, gaps, err := evidenceContextsTx(evidenceCtx, tx, scope, agent.ID, &item.ID, contextClaims)
 		if err != nil {
 			return err
 		}
@@ -611,6 +620,9 @@ func (s *Store) RunAgents(ctx context.Context, logger *slog.Logger) error {
 	}
 }
 func (s *Store) runAgentOnce(ctx context.Context) error {
+	started := time.Now()
+	ctx, persistCancel := context.WithDeadline(ctx, started.Add(heavyUseTimeout))
+	defer persistCancel()
 	if s.models == nil {
 		return nil
 	}
@@ -632,6 +644,9 @@ func (s *Store) runAgentOnce(ctx context.Context) error {
 		if err := strictJSON(data, &run); err != nil {
 			return err
 		}
+		if !oneOf(run.MemoryTier, "light", "medium", "heavy") {
+			run.MemoryTier = "heavy"
+		}
 		if err := verifyRunTx(ctx, tx, scope, run); err != nil {
 			run.Status = "failed"
 			run.Cost = 0
@@ -649,14 +664,20 @@ func (s *Store) runAgentOnce(ctx context.Context) error {
 	if err != nil || token == "" {
 		return err
 	}
-	workCtx, cancel := context.WithTimeout(ctx, heavyUseTimeout-10*time.Second)
+	workCtx, cancel := context.WithDeadline(ctx, started.Add(heavyUseTimeout-10*time.Second))
 	defer cancel()
 	if s.models.ReloadSubscription && s.models.Codex != nil {
 		defer s.models.Codex.Close()
 	}
 	u, agent, useErr := s.deputyUseContext(workCtx, scope, &run)
 	if useErr == nil && u.Ready && run.MemoryTier == "heavy" {
-		picked, refs, keys := s.heavyUse(workCtx, ctx, scope, agent, &run.ThingID, run.Prompt, u, "", run.ID)
+		taskText := run.Prompt
+		if bounds := run.MemoryContextRange; bounds != nil && bounds[0] >= 0 && bounds[0] <= len(run.Brief) {
+			taskText += "\n" + run.Brief[:bounds[0]]
+		}
+		readerCtx, readerCancel := context.WithDeadline(workCtx, started.Add(heavyReaderBudget))
+		picked, refs, keys := s.heavyUse(readerCtx, ctx, scope, agent, &run.ThingID, taskText, u, "", run.ID)
+		readerCancel()
 		run.MemoryGroups = keys
 		run.ContextVersions = uniqueRefs(append(run.ContextVersions, refs...))
 		var section strings.Builder
@@ -665,11 +686,11 @@ func (s *Store) runAgentOnce(ctx context.Context) error {
 		writeUseContext(&section, u, u.Location, func(m workspace.Memory) {
 			fmt.Fprintf(&section, "[%s@%d / trust=%s] %s\n", m.ID, m.Version, m.Trust, m.Text+memoryPromptSuffix(m, u.Location))
 		})
-		// Keep original task and raw evidence, replace the light memory section.
-		from := strings.Index(run.Brief, "相关记忆（")
-		to := strings.Index(run.Brief, "\n相关原话：")
-		if from >= 0 && to > from && !strings.Contains(run.Brief[from:to], "导办台之前的讨论：") {
-			run.Brief = run.Brief[:from] + section.String() + run.Brief[to:]
+		// Use server-owned byte boundaries. Task text, discussion and memory
+		// values may contain the same headings, so never locate them by text.
+		if bounds := run.MemoryContextRange; bounds != nil && bounds[0] >= 0 && bounds[1] >= bounds[0] && bounds[1] <= len(run.Brief) {
+			run.Brief = run.Brief[:bounds[0]] + section.String() + run.Brief[bounds[1]:]
+			run.MemoryContextRange = &[2]int{bounds[0], bounds[0] + section.Len()}
 		} else {
 			// A job queued before cards existed has the legacy interleaved
 			// discussion layout. Preserve it when adding reader results.
@@ -752,6 +773,8 @@ func (s *Store) runAgentOnce(ctx context.Context) error {
 		current.ContextVersions = run.ContextVersions
 		current.MemoryGroups = run.MemoryGroups
 		current.MemoryTier = run.MemoryTier
+		current.MemoryContextRange = run.MemoryContextRange
+		current.Brief = run.Brief
 		current.FinishedAt = stamp()
 		current.Status = "done"
 		current.Output = result.Text

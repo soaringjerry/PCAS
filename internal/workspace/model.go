@@ -227,20 +227,21 @@ type Adoption struct {
 	Edited   bool   `json:"edited"`
 }
 type Run struct {
-	SmokeID          string       `json:"smokeId,omitempty"`
-	MemoryTier       string       `json:"memoryTier,omitempty"`
-	MemoryGroups     []string     `json:"memoryGroups,omitempty"`
-	Outdated         bool         `json:"outdated,omitempty"`
-	ID               string       `json:"id"`
-	ThingID          string       `json:"thingId"`
-	AgentID          string       `json:"agentId"`
-	Kind             string       `json:"kind"`
-	Prompt           string       `json:"prompt"`
-	Brief            string       `json:"brief"`
-	ContextMemoryIDs []string     `json:"contextMemoryIds"`
-	ContextVersions  []memory.Ref `json:"contextVersions"`
-	Status           string       `json:"status"`
-	Output           string       `json:"output,omitempty"`
+	MemoryContextRange *[2]int      `json:"memoryContextRange,omitempty"`
+	MemoryTier         string       `json:"memoryTier,omitempty"`
+	MemoryGroups       []string     `json:"memoryGroups,omitempty"`
+	SmokeID            string       `json:"smokeId,omitempty"`
+	Outdated           bool         `json:"outdated,omitempty"`
+	ID                 string       `json:"id"`
+	ThingID            string       `json:"thingId"`
+	AgentID            string       `json:"agentId"`
+	Kind               string       `json:"kind"`
+	Prompt             string       `json:"prompt"`
+	Brief              string       `json:"brief"`
+	ContextMemoryIDs   []string     `json:"contextMemoryIds"`
+	ContextVersions    []memory.Ref `json:"contextVersions"`
+	Status             string       `json:"status"`
+	Output             string       `json:"output,omitempty"`
 	// Searches are the web searches the agent made for this result.
 	Searches      []string        `json:"searches,omitempty"`
 	Error         string          `json:"error,omitempty"`

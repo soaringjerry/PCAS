@@ -276,6 +276,7 @@ func (s *Store) secretaryPrompt(ctx context.Context, tx pgx.Tx, scope memory.Sco
 	var err error
 	c.Use, err = s.startUseContextTx(ctx, tx, scope)
 	c.Use.Location = loc
+	c.Use.Tier = c.Tier
 	if err != nil {
 		return "", nil, err
 	}
@@ -396,7 +397,11 @@ func (s *Store) secretaryPrompt(ctx context.Context, tx pgx.Tx, scope memory.Sco
 	if len(excerpts) == 0 {
 		fmt.Fprintln(&prompt, "（没有）")
 	}
-	groups, gaps, err := evidenceContextsTx(ctx, tx, scope, c.Agent.ID, req.ThingID, contextClaims)
+	evidenceCtx := ctx
+	if c.Use.Ready {
+		evidenceCtx = context.WithValue(ctx, useEvidenceBatchKey{}, true)
+	}
+	groups, gaps, err := evidenceContextsTx(evidenceCtx, tx, scope, c.Agent.ID, req.ThingID, contextClaims)
 	if err != nil {
 		return "", nil, err
 	}
@@ -483,15 +488,25 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 	// Finish accepted input durably even when the caller disconnects. Model
 	// generation still observes the caller cancellation below.
 	requestCtx := ctx
+	turnStarted := time.Now()
 	persistTimeout := 2 * time.Minute
 	if memoryTier(ctx, req.Text, "light") == "heavy" {
-		persistTimeout = heavyUseTimeout + 15*time.Second
+		persistTimeout = heavyUseTimeout
+		var generationCancel context.CancelFunc
+		requestCtx, generationCancel = context.WithDeadline(requestCtx, turnStarted.Add(heavyUseTimeout-10*time.Second))
+		defer generationCancel()
 	}
 	ctx, persistCancel := context.WithTimeout(context.WithoutCancel(ctx), persistTimeout)
 	defer persistCancel()
 	hash := sha256.Sum256(asJSON(req)) // The original body, before trimming, fences retries.
-	if _, err := s.Snapshot(ctx, scope); err != nil {
+	prepared, err := s.prepareUseOwner(ctx, scope)
+	if err != nil {
 		return out, err
+	}
+	if !prepared {
+		if _, err := s.Snapshot(ctx, scope); err != nil {
+			return out, err
+		}
 	}
 	if req.SmokeID != "" {
 		if err := s.registerSmokeRequest(ctx, scope, req); err != nil {
@@ -572,10 +587,13 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 				contextErr = s.checkSecretaryUseContextTx(ctx, tx, scope, c)
 			}
 			if contextErr == nil {
-				started := time.Now()
 				if c.Tier == "heavy" && c.Use.Ready {
-					heavyCtx, heavyCancel := context.WithTimeout(requestCtx, heavyUseTimeout)
-					picked, refs, keys := s.heavyUse(heavyCtx, ctx, scope, c.Agent, req.ThingID, req.Text, c.Use, out.Turn.ID, "")
+					heavyCtx, heavyCancel := context.WithDeadline(requestCtx, turnStarted.Add(heavyReaderBudget))
+					taskText := req.Text
+					if item, ok := c.Aliases["THIS"]; ok {
+						taskText += "\n事项：" + item.Title + "\n" + item.Notes + "\n" + item.Body + "\n目标：" + item.Goal + "\n进度：" + item.Progress
+					}
+					picked, refs, keys := s.heavyUse(heavyCtx, ctx, scope, c.Agent, req.ThingID, taskText, c.Use, out.Turn.ID, "")
 					heavyCancel()
 					c.Use.Groups = keys
 					c.Dependencies = uniqueRefs(append(c.Dependencies, refs...))
@@ -623,7 +641,7 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 						}
 						if c.Use.Ready && c.Tier != "light" {
 							// All heavy stages fit the same three-minute wall clock budget.
-							remaining := heavyUseTimeout - time.Since(started)
+							remaining := heavyUseTimeout - 10*time.Second - time.Since(turnStarted)
 							if c.Tier == "heavy" && remaining < time.Since(modelStarted) {
 								modelStarted = time.Now().Add(-remaining)
 							}

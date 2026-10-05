@@ -246,17 +246,30 @@ func evidenceContextsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, prin
 		}
 		return 1
 	})
+	var anchors map[memory.Ref]useEvidenceAnchor
+	if enabled, _ := ctx.Value(useEvidenceBatchKey{}).(bool); enabled {
+		var err error
+		anchors, err = useEvidenceAnchorsTx(ctx, tx, scope, claims)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
 	characters := 0
 	seen := map[memory.Ref]int{}
 	for _, claim := range claims {
 		var source string
 		var version, start, end int
-		err := tx.QueryRow(ctx, `SELECT e.source_id::text,e.source_version,coalesce((e.locator->>'start_rune')::int,0),coalesce((e.locator->>'end_rune')::int,0)
+		var err error
+		if anchors != nil {
+			err = useEvidenceRow(anchors, claim.Ref, &source, &version, &start, &end)
+		} else {
+			err = tx.QueryRow(ctx, `SELECT e.source_id::text,e.source_version,coalesce((e.locator->>'start_rune')::int,0),coalesce((e.locator->>'end_rune')::int,0)
    FROM evidence e JOIN memory_records r ON(r.owner_id,r.id,r.version)=(e.owner_id,e.source_id,e.source_version)
    JOIN record_versions rv ON(rv.owner_id,rv.record_id,rv.version)=(r.owner_id,r.id,r.version)
    JOIN source_contexts c ON(c.owner_id,c.source_id,c.source_version)=(r.owner_id,r.id,r.version)
    WHERE e.owner_id=$1 AND e.target_id=$2 AND e.target_version=$3 AND r.state='active' AND rv.state='active' AND c.conversation_key<>'' AND c.branch<>'historical'
    ORDER BY e.id LIMIT 1`, string(scope.OwnerID), string(claim.Ref.ID), claim.Ref.Version).Scan(&source, &version, &start, &end)
+		}
 		if errors.Is(err, pgx.ErrNoRows) {
 			if memory.ContextDependent(claim.Text) {
 				gaps = append(gaps, claim.Label+" 含未明确指代，当前没有可用的原对话上下文；不要猜测对象。")

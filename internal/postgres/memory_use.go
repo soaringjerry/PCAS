@@ -36,22 +36,8 @@ func containsAny(text string, words ...string) bool {
 	return false
 }
 
-type statusContextReader interface {
-	HandoverTx(context.Context, pgx.Tx, memory.Scope) (workspace.Handover, error)
-	StatusCardsTx(context.Context, pgx.Tx, memory.Scope, []string) ([]workspace.StatusCard, error)
-	DeadlinesTx(context.Context, pgx.Tx, memory.Scope, time.Time, int) ([]workspace.Deadline, error)
-	StatusCardIndexTx(context.Context, pgx.Tx, memory.Scope) ([]workspace.StatusCardRef, error)
-}
-type statusReaderKey struct{}
-
-func (s *Store) statusReader(ctx context.Context) statusContextReader {
-	if r, ok := ctx.Value(statusReaderKey{}).(statusContextReader); ok {
-		return r
-	}
-	return s
-}
-
 type useContext struct {
+	Tier             string
 	Location         *time.Location
 	Handover         workspace.Handover
 	Index            []workspace.StatusCardRef
@@ -68,13 +54,26 @@ type useContext struct {
 
 func (s *Store) startUseContextTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) (useContext, error) {
 	var u useContext
-	r := s.statusReader(ctx)
+	var installed, built bool
+	if err := tx.QueryRow(ctx, "SELECT to_regclass('status_cards') IS NOT NULL AND to_regclass('status_current_members') IS NOT NULL").Scan(&installed); err != nil {
+		return u, err
+	}
+	if !installed {
+		return u, nil
+	}
+	if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM status_cards WHERE owner_id=$1 AND built_at IS NOT NULL)
+ OR EXISTS(SELECT 1 FROM handovers WHERE owner_id=$1 AND btrim(body)!='')`, string(scope.OwnerID)).Scan(&built); err != nil {
+		return u, err
+	}
+	if !built {
+		return u, nil
+	}
 	var err error
-	u.Handover, err = r.HandoverTx(ctx, tx, scope)
+	u.Handover, err = s.HandoverTx(ctx, tx, scope)
 	if err != nil {
 		return u, err
 	}
-	u.Index, err = r.StatusCardIndexTx(ctx, tx, scope)
+	u.Index, err = s.StatusCardIndexTx(context.WithValue(ctx, useStatusReadKey{}, useStatusRead{}), tx, scope)
 	if err != nil {
 		return u, err
 	}
@@ -87,20 +86,27 @@ func (s *Store) startUseContextTx(ctx context.Context, tx pgx.Tx, scope memory.S
 	}
 	return u, nil
 }
-func chooseUseGroups(text string, index []workspace.StatusCardRef, ranked []workspace.Memory, aliases map[string][]string) []string {
+func chooseUseGroups(text string, index []workspace.StatusCardRef, ranked []workspace.Memory, aliases map[string][]string, limit int, namedOnly bool) []string {
 	scores := map[string]float64{}
 	for i, m := range ranked {
 		if i >= 40 {
 			break
 		}
+		seen := map[string]bool{}
+		add := func(key string) {
+			if !seen[key] {
+				scores[key] += 1 / float64(60+i+1)
+				seen[key] = true
+			}
+		}
 		for _, mention := range m.Mentions {
-			scores["entity:"+mention.EntityID] += 1 / float64(60+i+1)
+			add("entity:" + mention.EntityID)
 		}
 		for _, g := range m.Groups {
-			scores["entity:"+g.EntityID] += 1 / float64(60+i+1)
+			add("entity:" + g.EntityID)
 		}
 		if oneOf(m.Category, "identity", "taste", "rule", "goal") {
-			scores["self:"+m.Category] += 1 / float64(60+i+1)
+			add("self:" + m.Category)
 		}
 	}
 	candidates := append([]workspace.StatusCardRef{}, index...)
@@ -110,29 +116,42 @@ func chooseUseGroups(text string, index []workspace.StatusCardRef, ranked []work
 		}
 		return scores[candidates[i].Key] > scores[candidates[j].Key]
 	})
-	selected := []string{}
+	named := map[string]bool{}
+	lower := strings.ToLower(text)
 	for _, g := range candidates {
 		if g.Key == "self:rule" {
 			continue
 		}
-		if len(selected) < 4 && scores[g.Key] > 0 {
-			selected = append(selected, g.Key)
-		}
-	}
-	lower := strings.ToLower(text)
-	for _, g := range index {
-		names := append([]string{g.Name}, aliases[g.Key]...)
-		for _, name := range names {
+		for _, name := range append([]string{g.Name}, aliases[g.Key]...) {
 			if name != "" && strings.Contains(lower, strings.ToLower(name)) {
-				if !oneOf(g.Key, selected...) {
-					selected = append(selected, g.Key)
-				}
+				named[g.Key] = true
 				break
 			}
 		}
 	}
+	selected := []string{}
+	for _, g := range candidates {
+		if named[g.Key] && len(selected) < limit {
+			selected = append(selected, g.Key)
+		}
+	}
+	if namedOnly {
+		return selected
+	}
+	scored := 0
+	for _, g := range candidates {
+		if g.Key == "self:rule" || named[g.Key] || scores[g.Key] <= 0 {
+			continue
+		}
+		if scored >= 4 || len(selected) >= limit {
+			break
+		}
+		scored++
+		selected = append(selected, g.Key)
+	}
 	return selected
 }
+
 func useMemoryAllowed(m workspace.Memory, agent workspace.Agent) bool {
 	return m.Retired == "" && oneOf(m.Kind, agent.MemoryKinds...) && (agent.IncludeInferred || m.Trust != "inferred" && m.Acquisition != "inferred")
 }
@@ -202,11 +221,14 @@ func (s *Store) finishUseContextTx(ctx context.Context, tx pgx.Tx, scope memory.
 	if err = rows.Err(); err != nil {
 		return err
 	}
-	u.Groups = chooseUseGroups(text, u.Index, ranked, aliases)
-	u.RequiredGroups = chooseUseGroups(text, u.Index, nil, aliases)
+	limit := 6
+	if u.Tier == "heavy" {
+		limit = 12
+	}
+	u.Groups = chooseUseGroups(text, u.Index, ranked, aliases, limit, false)
+	u.RequiredGroups = chooseUseGroups(text, u.Index, ranked, aliases, 12, true)
 	keys := append(append([]string{}, u.Groups...), "self:rule")
-	r := s.statusReader(ctx)
-	cards, err := r.StatusCardsTx(ctx, tx, scope, keys)
+	cards, err := s.StatusCardsTx(context.WithValue(ctx, useStatusReadKey{}, useStatusRead{Index: u.Index}), tx, scope, keys)
 	if err != nil {
 		return err
 	}
@@ -219,7 +241,7 @@ func (s *Store) finishUseContextTx(ctx context.Context, tx pgx.Tx, scope memory.
 			}
 		}
 	}
-	u.Deadlines, err = r.DeadlinesTx(ctx, tx, scope, time.Now(), 15)
+	u.Deadlines, err = s.DeadlinesTx(ctx, tx, scope, time.Now(), 15)
 	if err != nil {
 		return err
 	}
@@ -232,6 +254,15 @@ func (s *Store) finishUseContextTx(ctx context.Context, tx pgx.Tx, scope memory.
 			for _, m := range field.Items {
 				supplied[m.ID] = m
 			}
+		}
+	}
+	if err = s.useStatusTrustTx(ctx, tx, scope.OwnerID, ranked); err != nil {
+		return err
+	}
+	for _, m := range ranked {
+		ids = append(ids, m.ID)
+		if previous, ok := supplied[m.ID]; !ok || previous.Version < m.Version {
+			supplied[m.ID] = m
 		}
 	}
 	extraIDs := []string{}
@@ -281,21 +312,14 @@ func (s *Store) finishUseContextTx(ctx context.Context, tx pgx.Tx, scope memory.
 		return err
 	}
 	ruleScopes := map[string]string{}
-	rows, err = tx.Query(ctx, `SELECT claim_id::text,coalesce(to_jsonb(i)->>'applies_to',to_jsonb(i)->>'appliesTo','') FROM status_card_items i WHERE owner_id=$1 AND key='self:rule'`, string(scope.OwnerID))
-	if err != nil {
-		return err
-	}
-	for rows.Next() {
-		var id, applies string
-		if err = rows.Scan(&id, &applies); err != nil {
-			rows.Close()
-			return err
+	for _, card := range cards {
+		if card.Key == "self:rule" {
+			for _, field := range card.Fields {
+				for _, m := range field.Items {
+					ruleScopes[m.ID] = m.AppliesTo
+				}
+			}
 		}
-		ruleScopes[id] = applies
-	}
-	rows.Close()
-	if err = rows.Err(); err != nil {
-		return err
 	}
 	for ci := range cards {
 		if cards[ci].Key == "self:rule" {
@@ -309,6 +333,11 @@ func (s *Store) finishUseContextTx(ctx context.Context, tx pgx.Tx, scope memory.
 			cards[ci].Fields = []workspace.StatusCardField{{Field: "preference", Items: rules}}
 		}
 	}
+	positions := map[string]int{}
+	for i, key := range u.Groups {
+		positions[key] = i
+	}
+	sort.SliceStable(cards, func(i, j int) bool { return positions[cards[i].Key] < positions[cards[j].Key] })
 	u.DeadlineMemories = map[string]workspace.Memory{}
 	// Track the raw input references behind a handover, including omitted card
 	// entries, so correction/retirement cannot preserve a stale summary silently.
@@ -341,7 +370,9 @@ func (s *Store) finishUseContextTx(ctx context.Context, tx pgx.Tx, scope memory.
 			return false
 		}
 		ref := memory.Ref{ID: memory.ID(m.ID), Version: m.Version, Kind: memory.ClaimKind}
-		if thing != nil && verifyRunTx(ctx, tx, scope, workspace.Run{ThingID: *thing, AgentID: agent.ID, ContextVersions: []memory.Ref{ref}}) != nil {
+		// The batch above applies the same current/access/project/exclusion
+		// checks to cards, deadlines and ranked supplements, including THIS.
+		if v, ok := valid[m.ID]; !ok || v.Version != m.Version {
 			return false
 		}
 		u.Dependencies = append(u.Dependencies, ref)
@@ -480,4 +511,32 @@ func ruleRelevance(applies, text string) int {
 		return 2
 	}
 	return 0
+}
+
+// The initial Snapshot return value was discarded. Ready turns need its owner
+// initialization and configuration checks, then their normal context reads;
+// the final response still reads a complete snapshot. Unbuilt status preserves
+// the established initial Snapshot path as well as the legacy model context.
+func (s *Store) prepareUseOwner(ctx context.Context, scope memory.Scope) (bool, error) {
+	ready := false
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		if err := s.ensureOwner(ctx, tx, scope); err != nil {
+			return err
+		}
+		u, err := s.startUseContextTx(ctx, tx, scope)
+		if err != nil {
+			return err
+		}
+		ready = u.Ready
+		if !ready {
+			return nil
+		}
+		settings, err := queryDocument[workspace.Settings](ctx, tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1 FOR SHARE", string(scope.OwnerID))
+		if err != nil {
+			return err
+		}
+		_, err = time.LoadLocation(settings.Timezone)
+		return err
+	})
+	return ready, err
 }

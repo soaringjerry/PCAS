@@ -93,7 +93,9 @@ func (s *Store) useModelCall(ctx, persist context.Context, scope memory.Scope, a
 	// budget. Late calls finish their own ledger write without holding the turn.
 	billed := make(chan error, 1)
 	go func() {
-		if e := s.settleModelCost(persist, scope.OwnerID, reservation, cost); e != nil {
+		accountingCtx, accountingCancel := context.WithTimeout(context.WithoutCancel(persist), 20*time.Second)
+		defer accountingCancel()
+		if e := s.settleModelCost(accountingCtx, scope.OwnerID, reservation, cost); e != nil {
 			billed <- e
 			return
 		}
@@ -103,7 +105,7 @@ func (s *Store) useModelCall(ctx, persist context.Context, scope memory.Scope, a
 		usage.InputTokens = result.InputTokens
 		usage.OutputTokens = result.OutputTokens
 		usage.Cost = cost
-		if e := s.recordUsage(persist, usage); e != nil {
+		if e := s.recordUsage(accountingCtx, usage); e != nil {
 			billed <- e
 			return
 		}

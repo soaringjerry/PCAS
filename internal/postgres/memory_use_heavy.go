@@ -31,7 +31,8 @@ func (s *Store) heavyUse(ctx, persist context.Context, scope memory.Scope, agent
 	}
 	if err == nil {
 		var p usePlan
-		if json.Unmarshal([]byte(choice.Text), &p) == nil {
+		err = json.Unmarshal([]byte(choice.Text), &p)
+		if err == nil {
 			for _, key := range p.Groups {
 				for _, g := range u.Index {
 					if key == g.Key && !oneOf(key, keys...) && len(keys) < 12 {
@@ -42,9 +43,10 @@ func (s *Store) heavyUse(ctx, persist context.Context, scope memory.Scope, agent
 		}
 	}
 	if err != nil || len(keys) == 0 {
-		keys = append(keys, u.Groups...)
-		if len(keys) > 12 {
-			keys = keys[:12]
+		for _, key := range u.Groups {
+			if !oneOf(key, keys...) && len(keys) < 12 {
+				keys = append(keys, key)
+			}
 		}
 	}
 	if err == nil {
@@ -53,6 +55,7 @@ func (s *Store) heavyUse(ctx, persist context.Context, scope memory.Scope, agent
 		}
 	}
 	type readerResult struct {
+		key      string
 		memories []workspace.Memory
 		refs     []memory.Ref
 	}
@@ -70,6 +73,9 @@ func (s *Store) heavyUse(ctx, persist context.Context, scope memory.Scope, agent
 				var err error
 				ms, err = s.readMemoriesTx(readCtx, tx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: agent.ID}, true, opts)
 				if err != nil {
+					return err
+				}
+				if err = s.useStatusTrustTx(readCtx, tx, scope.OwnerID, ms); err != nil {
 					return err
 				}
 				allowed := []workspace.Memory{}
@@ -93,7 +99,8 @@ func (s *Store) heavyUse(ctx, persist context.Context, scope memory.Scope, agent
 					var out struct {
 						Used []string `json:"used"`
 					}
-					if e = json.Unmarshal([]byte(raw.Text), &out); e == nil {
+					err = json.Unmarshal([]byte(raw.Text), &out)
+					if err == nil {
 						for _, id := range out.Used {
 							for _, m := range ms {
 								if m.ID == id {
@@ -109,15 +116,16 @@ func (s *Store) heavyUse(ctx, persist context.Context, scope memory.Scope, agent
 				slog.WarnContext(persist, "memory reader skipped", "stage", "reader", "error_type", secretaryErrorType("reader", err))
 				refs = nil
 			}
-			results <- readerResult{selected, refs}
+			results <- readerResult{key, selected, refs}
 		}(key)
 	}
-	picked := []workspace.Memory{}
-	refs := []memory.Ref{}
-	seen := map[string]bool{}
-	for range keys {
-		select {
-		case result := <-results:
+	completed := map[string]readerResult{}
+	finish := func() ([]workspace.Memory, []memory.Ref, []string) {
+		picked := []workspace.Memory{}
+		refs := []memory.Ref{}
+		seen := map[string]bool{}
+		for _, key := range keys {
+			result := completed[key]
 			refs = append(refs, result.refs...)
 			for _, m := range result.memories {
 				if !seen[m.ID] {
@@ -125,11 +133,26 @@ func (s *Store) heavyUse(ctx, persist context.Context, scope memory.Scope, agent
 					seen[m.ID] = true
 				}
 			}
+		}
+		return picked, uniqueRefs(refs), keys
+	}
+	for range keys {
+		select {
+		case result := <-results:
+			completed[result.key] = result
 		case <-readCtx.Done():
-			return picked, uniqueRefs(refs), keys
+			// The deadline must not discard completed results still buffered.
+			for {
+				select {
+				case result := <-results:
+					completed[result.key] = result
+				default:
+					return finish()
+				}
+			}
 		}
 	}
-	return picked, uniqueRefs(refs), keys
+	return finish()
 }
 
 func (s *Store) deputyUseContext(ctx context.Context, scope memory.Scope, run *workspace.Run) (useContext, workspace.Agent, error) {
@@ -154,6 +177,7 @@ func (s *Store) deputyUseContext(ctx context.Context, scope memory.Scope, run *w
 			return err
 		}
 		u.Location = deskLocation(settings)
+		u.Tier = run.MemoryTier
 		return s.finishUseContextTx(ctx, tx, scope, agent, &run.ThingID, run.Prompt, ms, &u)
 	})
 	return u, agent, err

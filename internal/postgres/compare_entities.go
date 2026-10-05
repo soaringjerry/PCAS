@@ -411,13 +411,20 @@ func (s *Store) processEntityCompareVersion(ctx context.Context, j worker.Job, v
 	}
 	// Schedule after committing the result, with a fresh bounded write fence.
 	// The shared scheduler lock prevents duplicate slots.
-	return backgroundWriteTx(ctx, conn, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
+	err = backgroundWriteTx(ctx, conn, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended(current_database()||':'||current_schema()||':compare-schedule',0))"); err != nil {
 			return err
 		}
 		_, err := enqueueCompareTx(ctx, tx, j.OwnerID, time.Now(), version, true, j.Record)
 		return err
 	})
+	// This job is already done; a busy opportunistic enqueue cannot defer its
+	// completed lease. RunCompare will discover the remaining pair next tick.
+	var busy *worker.JobError
+	if errors.As(err, &busy) && busy.Code == "background_write_busy" {
+		return nil
+	}
+	return err
 }
 
 func entityPairKeepIndex(pair *comparisonEntityPair, fallback int) int {

@@ -534,3 +534,49 @@ func TestEntityCandidatesAndConfirmationCallsLeaveRowsUnlocked(t *testing.T) {
 		})
 	}
 }
+
+func TestEntityCompareCompletedResultSurvivesBusyFollowupScheduling(t *testing.T) {
+	s, scope := testStore(t), owner()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	model := b1Model(t, s, `{"groups":[[1,2,3]]}`)
+	for _, name := range []string{"蓝沙湾", "Azure Quay", "Fictitious Azure Waterfront"} {
+		aliasEntityFixture(t, s, scope, "place", name, 1)
+	}
+	if err := s.ProcessEntityCandidates(ctx, aliasNamesJob(t, s, scope)); err != nil {
+		t.Fatal(err)
+	}
+	j := compareJob(t, s, scope, true, EntityCompareVersion)
+	model.set(`{"same":true,"keep":1}`)
+	blocker, err := s.pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer blocker.Rollback(context.Background())
+	if _, err := blocker.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended(current_database()||':'||current_schema()||':compare-schedule',0))"); err != nil {
+		t.Fatal(err)
+	}
+	// Result writes do not need the scheduler lock. After they commit, a busy
+	// opportunistic follow-up must not try to defer the completed lease.
+	if err := s.ProcessEntityCompare(ctx, j); err != nil {
+		t.Errorf("completed result returned scheduling failure: %v", err)
+	}
+	var state string
+	var merges int
+	if err := s.pool.QueryRow(ctx, "SELECT state FROM memory_jobs WHERE id=$1", j.ID).Scan(&state); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.pool.QueryRow(ctx, "SELECT count(*) FROM entity_merges WHERE owner_id=$1 AND undone_at IS NULL", scope.OwnerID).Scan(&merges); err != nil {
+		t.Fatal(err)
+	}
+	if state != "done" || merges != 1 {
+		t.Fatalf("result state=%s merges=%d", state, merges)
+	}
+	if err := blocker.Rollback(ctx); err != nil {
+		t.Fatal(err)
+	}
+	queued, err := s.ScheduleCompare(ctx, time.Now())
+	if err != nil || queued == 0 {
+		t.Fatal("periodic scheduling did not recover follow-up", queued, err)
+	}
+}

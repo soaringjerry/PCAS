@@ -210,6 +210,7 @@ func (s *Store) recallTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in 
         ) hit ON true
  LEFT JOIN source_versions sv ON (sv.owner_id,sv.source_id,sv.version)=($1,p.uid,p.version)
  LEFT JOIN source_contexts sc ON(sc.owner_id,sc.source_id,sc.source_version)=($1,p.uid,p.version)`
+	querySQL = strings.Replace(querySQL, "WHERE t.owner_id=$1 AND r.state=", "WHERE t.owner_id=$1 AND (r.kind<>'claim' OR "+currentMemorySQL("r.owner_id", "r.id")+") AND r.state=", 1)
 	if len(structured) > 0 {
 		querySQL = strings.Replace(querySQL, "AND ($4='' OR lb.body LIKE ANY", "AND (t.id=ANY($18::uuid[]) OR $4='' OR lb.body LIKE ANY", 1)
 	}
@@ -745,7 +746,7 @@ ORDER BY a.entity_id::text`
 // Candidate IDs use mentions, speech-time and event-time indexes. Current
 // versions and all prompt visibility restrictions are checked before deciding
 // whether the time condition has any hits, including the relaxation decision.
-const teamStructuredSQL = `WITH candidates AS (
+var teamStructuredSQL = `WITH candidates AS (
  SELECT c.claim_id,c.version FROM claim_revisions c WHERE c.owner_id=$1 AND c.subject_id=ANY($2::uuid[])
  UNION SELECT m.claim_id,m.claim_version FROM claim_mentions m WHERE m.owner_id=$1 AND m.entity_id=ANY($2::uuid[])
  UNION SELECT v.record_id,v.version FROM record_versions v WHERE v.owner_id=$1 AND cardinality($2::uuid[])=0 AND v.expressed_at >= $3 AND v.expressed_at < $4
@@ -761,7 +762,8 @@ const teamStructuredSQL = `WITH candidates AS (
  WHERE r.state='active' AND v.state='active'
  AND EXISTS(SELECT 1 FROM record_grants g WHERE g.owner_id=$1 AND g.record_id=c.claim_id AND g.principal_id=$6)
  AND agent.document->'memoryKinds' ? c.nature
- AND (coalesce((agent.document->>'includeInferred')::boolean,false) OR c.confirmation='confirmed' OR (c.confirmation='adopted' AND c.acquisition='direct'))
+ AND ` + currentMemorySQL("r.owner_id", "r.id") + `
+ AND (coalesce((agent.document->>'includeInferred')::boolean,false) OR ` + humanMemorySQL("c") + `)
  AND NOT EXISTS(SELECT 1 FROM context_exclusions ex WHERE ex.owner_id=$1 AND ex.thing_id=$7::uuid AND ex.memory_id=c.claim_id)
  AND ($8::text IS NULL OR coalesce(c.scope->>'project_id','')='' OR c.scope->>'project_id'=$8)
 ), timed AS (
@@ -778,7 +780,15 @@ LIMIT $10`
 
 func structuredRecallTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, hints memory.TeamRecall, limit int) ([]memory.Ref, bool, error) {
 	ids := []memory.ID{}
-	rows, err := tx.Query(ctx, teamEntitiesSQL, string(scope.OwnerID), hints.Text)
+	entitiesSQL := teamEntitiesSQL
+	mergesAvailable, err := entityMergeSchemaTx(ctx, tx)
+	if err != nil {
+		return nil, false, err
+	}
+	if mergesAvailable {
+		entitiesSQL = strings.Replace(entitiesSQL, "ORDER BY a.entity_id::text", "AND NOT EXISTS(SELECT 1 FROM entity_merges m WHERE m.owner_id=r.owner_id AND m.merged_id=r.id AND m.undone_at IS NULL) ORDER BY a.entity_id::text", 1)
+	}
+	rows, err := tx.Query(ctx, entitiesSQL, string(scope.OwnerID), hints.Text)
 	if err != nil {
 		return nil, false, err
 	}

@@ -48,6 +48,14 @@ func memoryWhere(scope memory.Scope, currentOnly bool, opts memoryReadOptions) (
 	if opts.ids != nil {
 		add("r.id=ANY($%d::uuid[])", opts.ids)
 	}
+	if opts.id == "" {
+		current := currentMemorySQL("r.owner_id", "r.id")
+		if opts.query.Retired {
+			clauses = append(clauses, "NOT "+current)
+		} else {
+			clauses = append(clauses, current)
+		}
+	}
 	q := opts.query
 	if q.Q != "" {
 		add("strpos(lower(c.value #>> '{}'),lower($%d))>0", q.Q)
@@ -242,6 +250,9 @@ func (s *Store) readMemoriesTx(ctx context.Context, tx pgx.Tx, scope memory.Scop
 			return nil, err
 		}
 	}
+	if err := fillMemoryStatusesTx(ctx, tx, scope.OwnerID, result); err != nil {
+		return nil, err
+	}
 	if opts.legacy {
 		return result, nil
 	}
@@ -326,7 +337,7 @@ func (s *Store) ListMemories(ctx context.Context, scope memory.Scope, q workspac
 		return out, err
 	}
 	if q.Retired {
-		return out, nil // S0 has no retirement writer; batch 2 implements the view.
+		return s.listRetiredMemories(ctx, scope, q)
 	}
 	opts := memoryReadOptions{query: q, limit: q.Limit + 1}
 	if q.Cursor != "" {
@@ -409,6 +420,7 @@ func (s *Store) MemoryFacets(ctx context.Context, scope memory.Scope) (workspace
  JOIN memory_records er ON(er.owner_id,er.id)=(cm.owner_id,cm.entity_id) AND er.state='active'
  JOIN entity_versions ev ON(ev.owner_id,ev.entity_id,ev.version)=(er.owner_id,er.id,er.version)
  WHERE cm.owner_id=$1 AND cm.role IN('person','place','project','topic','area') AND claim_source_is_current($1,cm.claim_id,cm.claim_version,now())
+ AND `+currentMemorySQL("cm.owner_id", "cm.claim_id")+`
  GROUP BY cm.entity_id,cm.role,ev.name), ranked AS(
  SELECT *,row_number() OVER(PARTITION BY role ORDER BY n DESC,name,entity_id) AS ordinal FROM counts)
  SELECT entity_id::text,name,n,role FROM ranked WHERE ordinal<=50 OR role IN('project','topic','area') ORDER BY role,ordinal`, string(scope.OwnerID))

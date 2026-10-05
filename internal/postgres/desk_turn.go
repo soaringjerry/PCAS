@@ -282,7 +282,7 @@ func (s *Store) secretaryPrompt(ctx context.Context, tx pgx.Tx, scope memory.Sco
 		return "", nil, err
 	}
 	for _, m := range memories {
-		if oneOf(m.Kind, c.Agent.MemoryKinds...) && (m.Epistemic != "inferred" || c.Agent.IncludeInferred) {
+		if oneOf(m.Kind, c.Agent.MemoryKinds...) && (m.Trust != "inferred" || c.Agent.IncludeInferred) {
 			c.Memories[m.ID] = m
 		}
 	}
@@ -308,7 +308,7 @@ func (s *Store) secretaryPrompt(ctx context.Context, tx pgx.Tx, scope memory.Sco
 		alias := fmt.Sprintf("M%d", len(sent)+1)
 		sent[alias] = m
 		contextClaims = append(contextClaims, evidenceContextClaim{Label: alias, Ref: memory.Ref{ID: memory.ID(m.ID), Version: m.Version, Kind: memory.ClaimKind}, Text: m.Text})
-		fmt.Fprintf(&prompt, "[%s / %s / confirmation=%s / acquisition=%s] %s\n", alias, m.Epistemic, m.Confirmation, m.Acquisition, m.Text+memoryPromptSuffix(m, loc))
+		fmt.Fprintf(&prompt, "[%s / %s / trust=%s / confirmation=%s / acquisition=%s] %s\n", alias, m.Epistemic, m.Trust, m.Confirmation, m.Acquisition, m.Text+memoryPromptSuffix(m, loc))
 		c.Dependencies = append(c.Dependencies, memory.Ref{ID: memory.ID(m.ID), Version: m.Version, Kind: memory.ClaimKind})
 	}
 	if len(sent) == 0 {

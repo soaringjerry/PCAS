@@ -73,11 +73,12 @@ func TestPhase2B3_S6_NoConditionsPreserveBaselineBytesAndOnlyAppendMetadata(t *t
 						seen++
 					}
 				}
-				if seen != 2 {
-					t.Errorf("structured baseline memory lines=%d want 2", seen)
+				if seen != 3 {
+					t.Errorf("structured baseline memory lines=%d want 3", seen)
 				}
 				content = strings.Join(lines, "\n")
 			}
+			want = compareBaselineExpectation(t, want, false)
 			if content != want {
 				t.Errorf("actual memory/original bytes differ from baseline %s:\nwant:\n%s\ngot:\n%s", gold.Commit, want, content)
 			}

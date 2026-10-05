@@ -177,6 +177,9 @@ func (s *Store) correctTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in
         SELECT owner_id,claim_id,$3,entity_id,role FROM claim_mentions WHERE owner_id=$1 AND claim_id=$2 AND claim_version=$4`, string(scope.OwnerID), string(out.ID), version, prior.Version); err != nil {
 		return out, err
 	}
+	if err := resetComparisonTx(ctx, tx, scope.OwnerID, string(out.ID)); err != nil {
+		return out, err
+	}
 	if _, err := tx.Exec(ctx, "UPDATE claims SET organized=0,organize_attempts=0 WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), string(out.ID)); err != nil {
 		return out, err
 	}

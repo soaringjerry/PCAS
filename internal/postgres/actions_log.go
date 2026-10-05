@@ -60,6 +60,9 @@ func flushActionLog(ctx context.Context, tx pgx.Tx, scope memory.Scope) error {
 	return recordSmokeActionTx(ctx, tx, scope, log.id, entries)
 }
 func undoableCommand(t string) bool {
+	if t == "restoreMemory" {
+		return true
+	}
 	return oneOf(t, "addTask", "addIdea", "addProject", "updateTask", "updateProject", "setTaskStatus", "renameThing", "setNotes", "moveThing", "deferTask", "addCheck", "toggleCheck", "removeCheck", "ideaPromote", "ideaSnooze", "ideaShelve", "ideaDrop", "ideaContinue", "addCondition", "removeCondition", "adoptRun", "discardRun", "createDoc", "updateDoc", "deleteDoc", "bulkStatus", "bulkDefer", "bulkMove")
 }
 func commandSummary(ctx context.Context, tx pgx.Tx, scope memory.Scope, c workspace.Command) string {
@@ -89,6 +92,9 @@ func commandSummary(ctx context.Context, tx pgx.Tx, scope memory.Scope, c worksp
 	return prefix + title
 }
 func (s *Store) undoActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, id string) error {
+	if handled, err := undoComparisonActionTx(ctx, tx, scope, id); handled {
+		return err
+	}
 	ctx = withActor(ctx, "user")
 	if !memory.ID(id).Valid() {
 		return memory.ErrInvalid

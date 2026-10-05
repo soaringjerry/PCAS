@@ -34,7 +34,7 @@ func entityTx(ctx context.Context, tx pgx.Tx, owner memory.ID, kind, name string
 		AND ($2='self' OR EXISTS(SELECT 1 FROM aliases a WHERE a.owner_id=e.owner_id AND a.entity_id=e.entity_id
 		  AND lower(btrim(a.alias,$4))=lower($3))) ORDER BY r.created_at,r.id LIMIT 1`, string(owner), kind, name, entityWhitespace).Scan(&id)
 	if err == nil {
-		return memory.ID(id), nil
+		return resolveMergedEntityTx(ctx, tx, owner, memory.ID(id))
 	}
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return "", err

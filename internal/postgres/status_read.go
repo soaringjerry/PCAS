@@ -20,10 +20,12 @@ var statusFields = []string{"status", "deadline", "decided", "blocker", "next", 
 func (s *Store) HandoverTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) (workspace.Handover, error) {
 	out := workspace.Handover{}
 	var built *time.Time
-	err := tx.QueryRow(ctx, `SELECT h.body,h.built_at,h.stale OR h.rule<$2 OR EXISTS(
+	err := tx.QueryRow(ctx, `SELECT CASE WHEN EXISTS(SELECT 1 FROM (`+statusEligibleGroups+`) g WHERE g.owner_id=h.owner_id) THEN h.body ELSE '' END,h.built_at,h.stale OR h.rule<$2 OR EXISTS(
  SELECT 1 FROM jsonb_array_elements(h.depends) d LEFT JOIN status_cards sc ON sc.owner_id=h.owner_id AND sc.key=d->>'key'
- WHERE sc.key IS NULL OR sc.stale OR sc.built_at IS DISTINCT FROM (d->>'builtAt')::timestamptz)
- FROM handovers h WHERE h.owner_id=$1`, string(scope.OwnerID), HandoverVersion).Scan(&out.Body, &built, &out.Stale)
+ WHERE sc.key IS NULL OR sc.stale OR sc.rule<$3 OR sc.built_at IS DISTINCT FROM (d->>'builtAt')::timestamptz
+ OR (SELECT count(*) FROM status_current_members m WHERE m.owner_id=sc.owner_id AND m.key=sc.key)<3
+ OR EXISTS(SELECT 1 FROM status_card_items i WHERE i.owner_id=sc.owner_id AND i.key=sc.key AND NOT EXISTS(SELECT 1 FROM status_current_members m WHERE (m.owner_id,m.key,m.claim_id,m.claim_version)=(i.owner_id,i.key,i.claim_id,i.claim_version))))
+ FROM handovers h WHERE h.owner_id=$1`, string(scope.OwnerID), HandoverVersion, CardVersion).Scan(&out.Body, &built, &out.Stale)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return out, nil
 	}
@@ -128,6 +130,11 @@ func (s *Store) StatusCardsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope
 	}
 	byID := map[string]workspace.Memory{}
 	for _, m := range memories {
+		trust, err := statusTrustTx(ctx, tx, scope.OwnerID, m)
+		if err != nil {
+			return out, err
+		}
+		m.Trust = trust
 		byID[m.ID] = m
 	}
 	for _, ref := range index {

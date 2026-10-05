@@ -254,3 +254,52 @@ func TestStatusCardsLimitsAndDuringCallChange(t *testing.T) {
 		t.Fatal("committed output after input changed")
 	}
 }
+
+func TestStatusCardsHourly60Of100(t *testing.T) {
+	s, scope := testStore(t), owner()
+	secretaryModel(t, s, func(w http.ResponseWriter, r *http.Request) { statusFakeReply(t, w, r) })
+	refs := statusTestMemories(t, s, scope, 3)
+	if _, err := s.pool.Exec(context.Background(), "DELETE FROM claim_mentions WHERE owner_id=$1", scope.OwnerID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.pool.Exec(context.Background(), "UPDATE claim_revisions SET category='progress' WHERE owner_id=$1", scope.OwnerID); err != nil {
+		t.Fatal(err)
+	}
+	if err := pgx.BeginFunc(context.Background(), s.pool, func(tx pgx.Tx) error {
+		for i := range 100 {
+			id, err := entityTx(context.Background(), tx, scope.OwnerID, "topic", fmt.Sprintf("虚构主题%03d", i))
+			if err != nil {
+				return err
+			}
+			for _, ref := range refs {
+				if _, err := tx.Exec(context.Background(), "INSERT INTO claim_mentions(owner_id,claim_id,claim_version,entity_id,role) VALUES($1,$2,1,$3,'topic')", scope.OwnerID, ref.ID, id); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	for range 60 {
+		j := statusTestJob(t, s, scope)
+		if err := s.ProcessCard(context.Background(), j); err != nil {
+			t.Fatal(err)
+		}
+	}
+	j := statusTestJob(t, s, scope)
+	failure, ok := s.ProcessCard(context.Background(), j).(*worker.JobError)
+	if !ok || failure.Code != "card_hourly_limit" || !failure.NoAttempt {
+		t.Fatal(failure)
+	}
+	about, err := s.About(context.Background(), scope, "")
+	if err != nil || about.Building.Done != 60 || about.Building.Total != 100 {
+		t.Fatal(about.Building, err)
+	}
+	if _, err := s.pool.Exec(context.Background(), "UPDATE background_usage SET created_at=now()-interval '2 hours' WHERE owner_id=$1", scope.OwnerID); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ProcessCard(context.Background(), j); err != nil {
+		t.Fatal(err)
+	}
+}

@@ -349,9 +349,9 @@ func TestOrganizeConfiguredChannelAndHourlyLimit(t *testing.T) {
 	}
 	s.SetModels(models)
 	j := organizeTestJob(t, s, scope)
-	// Thirty synthetic reservation identities represent this channel's rolling
+	// 120 synthetic invocation reservations represent the shared rolling
 	// hour, even if they have zero cost (subscription requests).
-	for range 30 {
+	for range 120 {
 		if _, err := s.pool.Exec(ctx, "INSERT INTO background_usage(owner_id,job_id,reserved_cost) VALUES($1,$2,0)", string(scope.OwnerID), string(j.ID)); err != nil {
 			t.Fatal(err)
 		}

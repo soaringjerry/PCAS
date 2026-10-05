@@ -66,7 +66,7 @@ func TestCompareUnavailableBudgetAndSharedOrganizeLock(t *testing.T) {
 		t.Fatal("unexpected calls", len(f.all()))
 	}
 }
-func TestCompareHourlyCapCoversBothComparisonKinds(t *testing.T) {
+func TestCompareHourlyCapCoversOrganizeAndBothComparisonKinds(t *testing.T) {
 	s := testStore(t)
 	scope := owner()
 	ctx := context.Background()
@@ -74,12 +74,15 @@ func TestCompareHourlyCapCoversBothComparisonKinds(t *testing.T) {
 	compareFixture(t, s, scope, "合成每小时上限记忆")
 	j := compareJob(t, s, scope, false, CompareVersion)
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-		for i := 0; i < 30; i++ {
+		for i := 0; i < 120; i++ {
 			record := j
-			if i%2 == 0 {
-				record.Stage = "memory.entity_compare:1:fictional"
-			} else {
+			switch i % 3 {
+			case 0:
+				record.Stage = "memory.organize:1:fictional"
+			case 1:
 				record.Stage = "memory.compare:1:fictional"
+			case 2:
+				record.Stage = "memory.entity_compare:1:fictional"
 			}
 			var id string
 			if err := tx.QueryRow(ctx, "INSERT INTO memory_jobs(id,owner_id,record_id,record_version,stage,state) VALUES(gen_random_uuid(),$1,$2,$3,$4,'done') ON CONFLICT(owner_id,record_id,record_version,stage) DO UPDATE SET updated_at=now() RETURNING id::text", string(scope.OwnerID), string(j.Record.ID), j.Record.Version, record.Stage).Scan(&id); err != nil {

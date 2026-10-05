@@ -97,6 +97,19 @@ test('可信度、已退出的记忆和合并读真实后端：列表、恢复�
   expect(gone.find((m) => m.id === wednesday.ID)).toMatchObject({ retired: 'superseded', retiredBy: friday.ID })
   expect(gone.find((m) => m.id === merged[0].ID)).toMatchObject({ retired: 'duplicate', retiredBy: friday.ID })
 
+  // The two list parameters the page relies on.
+  const ask = async (query: string): Promise<Memory[]> => {
+    const response = await page.request.get(`/v1/workspace/memories?limit=100&${query}`)
+    expect(response.ok(), await response.text()).toBeTruthy()
+    return ((await response.json()) as MemoryPage).items
+  }
+  const hedgedOnly = await ask('trust=tentative')
+  expect(hedgedOnly.every((m) => m.trust === 'tentative')).toBeTruthy()
+  expect(hedgedOnly.filter((m) => mine.has(m.id)).map((m) => m.id)).toEqual([maybe.ID])
+  expect((await ask('trust=stated')).filter((m) => mine.has(m.id)).map((m) => m.id)).toEqual([friday.ID])
+  expect((await ask(`retired=1&retiredBy=${friday.ID}`)).map((m) => m.id).sort()).toEqual([wednesday.ID, ...merged.map((m) => m.ID)].sort())
+  expect(await ask(`retired=1&retiredBy=${maybe.ID}`)).toEqual([])
+
   await page.goto('/library?tab=memory')
   const card = (text: string) => page.locator('.mem-entry').filter({ has: page.getByText(text, { exact: true }) })
   await expect(card(friday.Text).locator('.tag')).toHaveText([label[kept.trust!]])
@@ -104,11 +117,30 @@ test('可信度、已退出的记忆和合并读真实后端：列表、恢复�
   for (const c of [wednesday, ...merged]) await expect(page.getByText(c.Text, { exact: true })).toHaveCount(0)
   await expect(page.locator('main.page')).not.toContainText(/待确认|原话有据|推测/)
 
+  // Narrowing by trust is answered by the server.
+  const filter = page.getByRole('radiogroup', { name: '可信度' })
+  const narrowed = page.waitForResponse((r) => new URL(r.url()).pathname === '/v1/workspace/memories' && new URL(r.url()).searchParams.get('trust') === 'tentative')
+  await filter.getByRole('radio', { name: '带保留' }).click()
+  const answer = (await (await narrowed).json()) as MemoryPage
+  expect(answer.items.every((m) => m.trust === 'tentative')).toBeTruthy()
+  await expect(card(maybe.Text)).toHaveCount(1)
+  await expect(card(friday.Text)).toHaveCount(0)
+  await expect(page.locator('.mem-entry')).toHaveCount(answer.total)
+  await expect(page.getByText(`符合的记忆有 ${answer.total} 条`)).toBeVisible()
+  await filter.getByRole('radio', { name: '都看' }).click()
+  await expect(card(friday.Text)).toHaveCount(1)
+
   // The memories merged into one, each with where it came from; one merged by mistake comes back.
+  const forMerged: string[] = []
+  page.on('request', (r) => { if (new URL(r.url()).searchParams.has('retiredBy')) forMerged.push(r.url()) })
   await card(friday.Text).getByRole('button', { name: '合并了 2 条' }).click()
   const sheet = page.getByRole('dialog')
   const rows = sheet.getByRole('group', { name: '合并了 2 条' }).getByRole('listitem')
   await expect(rows).toHaveCount(2)
+  // Asked for once, by the memory they were merged into.
+  expect(forMerged).toHaveLength(1)
+  expect(new URL(forMerged[0]).searchParams.get('retiredBy')).toBe(friday.ID)
+  expect(new URL(forMerged[0]).searchParams.get('retired')).toBe('1')
   for (const m of merged) {
     const row = rows.filter({ hasText: m.Text })
     await expect(row).toHaveCount(1)

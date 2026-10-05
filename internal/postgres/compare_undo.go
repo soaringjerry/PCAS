@@ -31,6 +31,14 @@ func retirementSnapshotTx(ctx context.Context, tx pgx.Tx, owner memory.ID, id st
 	}
 	return out, err
 }
+
+// Done restoration markers belong to the comparison namespace, so queue
+// cleanup for unrelated processing cannot discard a comparison exemption.
+// Recognize the original spelling too for restores made before this fix.
+func restoredMemorySQL(rule string) string {
+	return `EXISTS(SELECT 1 FROM memory_jobs restored WHERE restored.owner_id=cl.owner_id AND restored.record_id=cl.id AND restored.state='done' AND (restored.stage LIKE 'memory.compare:'||` + rule + `::int::text||':restored:%' OR restored.stage LIKE 'memory.compare_restored:'||` + rule + `::int::text||':%'))`
+}
+
 func retirementFingerprint(state retirementSnapshot) string {
 	return fmt.Sprintf("%x", sha256.Sum256(asJSON(state)))
 }
@@ -68,7 +76,7 @@ func restoreMemoryTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, id stri
 	// protection independently, so expiration never silently retires a restored
 	// memory again. This done marker carries IDs only and is not worker work.
 	if _, err := tx.Exec(ctx, `INSERT INTO memory_jobs(id,owner_id,record_id,record_version,stage,state)
- VALUES(gen_random_uuid(),$1,$2,$3,$4,'done')`, string(scope.OwnerID), id, before.Version, fmt.Sprintf("memory.compare_restored:%d:%s", CompareVersion, log.id)); err != nil {
+ VALUES(gen_random_uuid(),$1,$2,$3,$4,'done')`, string(scope.OwnerID), id, before.Version, fmt.Sprintf("%s:%d:restored:%s", CompareStage, CompareVersion, log.id)); err != nil {
 		return err
 	}
 	changes := asJSON([]map[string]any{{"table": "claim_retirement", "id": id, "before": before, "afterHash": retirementFingerprint(after), "rule": CompareVersion}})
@@ -151,7 +159,7 @@ func undoComparisonActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, 
 		if _, err := tx.Exec(ctx, "UPDATE claims SET retired=$3,retired_by=$4,retired_at=$5,compared=$6 WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), entry.ID, before.Retired, before.By, before.At, before.Compared); err != nil {
 			return true, err
 		}
-		if _, err := tx.Exec(ctx, "DELETE FROM memory_jobs WHERE owner_id=$1 AND record_id=$2 AND stage LIKE 'memory.compare_restored:%:'||$3", string(scope.OwnerID), entry.ID, id); err != nil {
+		if _, err := tx.Exec(ctx, "DELETE FROM memory_jobs WHERE owner_id=$1 AND record_id=$2 AND (stage LIKE 'memory.compare:%:restored:'||$3 OR stage LIKE 'memory.compare_restored:%:'||$3)", string(scope.OwnerID), entry.ID, id); err != nil {
 			return true, err
 		}
 	case "entity_merge":

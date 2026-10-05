@@ -9,7 +9,7 @@ PCAS 的所有文档都从这一页找。新增或移动文档时，同时改这
 | 第 1 阶段：秘书前台 | 已上线（2026-10-01） | [任务总览](tasks/phase1/README.md) |
 | 第 1.5 阶段：稳定化 | 修复已合并；线上实测 11 项和试用一天还没做 | [稳定化计划](tasks/stabilization/README.md) |
 | 第 2 阶段：记忆核心 | 分四批，**全部已上线**：第 1 批 2026-10-02，第 2 批 2026-10-03，第 3 批、第 4 批和补充批 4b（按整段对话整理）2026-10-03 一起上线。还没做的：用真实模型跑回忆评测并定基线。第一次尝试（2.0）已回滚 | [任务入口](tasks/phase2/README.md) · [方向稿](tasks/phase2/direction.md) · [第 1 批](tasks/phase2/batch1/README.md) · [第 2–4 批并行方案](tasks/phase2/parallel.md) |
-| 第 2.5 阶段：记忆整理 | 方向已定（2026-10-04）。分四批加一个评测集；**第 1 批（分组和类型）2026-10-05 已上线，评测集已交付**；第 2–4 批的契约还没写 | [任务入口](tasks/phase2_5/README.md) · [第 1 批契约](tasks/phase2_5/batch1/README.md) · [讨论稿](research/memory-next-direction.md) |
+| 第 2.5 阶段：记忆整理 | 方向已定（2026-10-04）。分四批加一个评测集；**第 1 批（分组和类型）2026-10-05 已上线，评测集已交付**；第 2–4 批改为同时开发，契约已写（2026-10-05） | [任务入口](tasks/phase2_5/README.md) · [第 1 批契约](tasks/phase2_5/batch1/README.md) · [讨论稿](research/memory-next-direction.md) |
 | 第 3 阶段及以后 | 未开始 | [白皮书 §16 路线图](whitepaper.md) |
 
 还没处理的问题统一记在 [待办清单](tasks/backlog.md)。
@@ -173,6 +173,7 @@ PCAS 的所有文档都从这一页找。新增或移动文档时，同时改这
 | [第 1 批契约：分组和类型](tasks/phase2_5/batch1/README.md) | 数据约定、规则、操作序列、文件归属 |
 | [O1 整理后端](tasks/phase2_5/batch1/O1-organize-backend.md) · [T1 独立验收](tasks/phase2_5/batch1/T1-acceptance.md) · [U1 界面](tasks/phase2_5/batch1/U1-frontend.md) | 第 1 批的任务包 |
 | [第 2.5 阶段第 1 批独立验收](evaluations/2026-10-05-phase2_5-batch1-acceptance.md) | X1–X22、80 步随机序列和并发专项全部通过；F-B1-1–8 关闭 |
+| [第 2–4 批并行方案与契约](tasks/phase2_5/parallel.md) | 新旧比较、现状层、办事时用上：数据约定、规则、序列，三批同时开发 |
 | [V2 办事评测集](tasks/phase2_5/V2-eval-set.md) | 一百个以上的办事任务、固定的跑法和打分、真实数据上的人工抽查 |
 | [V2 办事题集与基线](evaluations/2026-10-04-phase2_5-v2-doing.md) | 671 条虚构记忆、120 题、真实通道三次结果/波动、私有抽查流程 |
 | [V2b 独立任务增补](evaluations/2026-10-04-phase2_5-v2-doing.md#6-v2b独立任务增补2026-10-04-起) | 48 个独立任务、10 条四次改动链，旧/新/合并分别报告 |

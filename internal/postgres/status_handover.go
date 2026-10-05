@@ -333,7 +333,7 @@ func (s *Store) ProcessHandover(ctx context.Context, j worker.Job) error {
 		body = emptyHandover()
 		slog.WarnContext(ctx, "handover attempts exhausted", "stage", "handover", "error_type", "attempts_exhausted")
 	}
-	return backgroundWriteTx(ctx, s.pool, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
+	return backgroundResultTx(ctx, s.pool, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
 		if err := lockJob(ctx, tx, j); err != nil {
 			return err
 		}

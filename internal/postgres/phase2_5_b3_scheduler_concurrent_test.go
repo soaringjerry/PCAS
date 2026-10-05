@@ -21,7 +21,6 @@ import (
 // Exercise the production overlap: scheduling, result writes, and foreground
 // traffic run on independent connections. No SQL locks stand in for a handler.
 func TestPhase25B3_ConcurrentStatusSchedulerWorkerAndUserRequests(t *testing.T) {
-	t.Skip("finding F-B3-10: no deadlock since the lock-order fix; scheduler still abandons its pass on a busy group, so rebuilds and the handover can stay unfinished")
 	for _, rebuilding := range []bool{false, true} {
 		name := "initial"
 		if rebuilding {
@@ -214,13 +213,15 @@ func phase25B3ConcurrentStatus(t *testing.T, rebuilding bool) {
 			}
 			processing.Store(0)
 			if err != nil && runCtx.Err() == nil {
-				problem("worker "+job.Stage, err)
+				// Same rule as the worker: an error carrying a time is a deferral,
+				// not a failure; completion is asserted below.
 				var deferred *worker.JobError
-				if errors.As(err, &deferred) && deferred.Retry && !deferred.Until.IsZero() {
+				if errors.As(err, &deferred) && !deferred.Until.IsZero() {
 					if err := f.store.Defer(runCtx, *job, deferred.Code, deferred.Until, deferred.NoAttempt); err != nil {
 						problem("defer", err)
 					}
 				} else {
+					problem("worker "+job.Stage, err)
 					if err := f.store.Retry(runCtx, *job, "acceptance_processing_error"); err != nil {
 						problem("retry", err)
 					}

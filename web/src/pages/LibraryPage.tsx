@@ -10,9 +10,9 @@ import { EventTime, Fade, FromLine, Groups, Mentions, ProjectLink, SaidAt, Trust
 import { ConfirmModal, SideSheet } from '../components/Overlay'
 import { UnsureSheet } from '../components/UnsureSheet'
 import { Button, Empty, Progress, Seg, Sheet, Spinner, Switch, Tag } from '../components/ui'
-import { jobStatusLabel, memoryCategoryLabel, memoryKindLabel, trustOf, sampleStateLabel, sourceStatusLabel, triggerLabel } from '../domain/labels'
+import { jobStatusLabel, memoryCategoryLabel, memoryKindLabel, memoryTrustLabel, trustOf, sampleStateLabel, sourceStatusLabel, triggerLabel } from '../domain/labels'
 import { formatAgo, formatShortWhen, formatWhen } from '../domain/time'
-import type { Memory, MemoryFacet, MemoryGroup, MemoryKind, MemoryMention, Source, TrainingSample } from '../domain/types'
+import type { Memory, MemoryFacet, MemoryGroup, MemoryKind, MemoryMention, MemoryTrust, Source, TrainingSample } from '../domain/types'
 import { useStore } from '../store/context'
 import { useMemory, useMemoryFacets, useMemoryList, useMergedInto } from '../store/memories'
 import { useToast } from '../store/toast'
@@ -286,7 +286,7 @@ function RetiredNote({ memory, onOpen }: { memory: Memory; onOpen?: (id: string)
 
 /** The memories that were merged into this one, each with what was originally said. */
 function MergedInto({ memory, focus, onRestored }: { memory: Memory; focus: boolean; onRestored?: (id: string) => void }) {
-  const merged = useMergedInto(memory.id, memory.mergedFrom ?? 0)
+  const merged = useMergedInto(memory.id)
   const top = useRef<HTMLDivElement>(null)
   useEffect(() => {
     if (focus) top.current?.scrollIntoView({ block: 'start' })
@@ -321,6 +321,7 @@ function MergedInto({ memory, focus, onRestored }: { memory: Memory; focus: bool
 }
 
 const natures = Object.keys(memoryKindLabel) as MemoryKind[]
+const trusts = (Object.keys(memoryTrustLabel) as MemoryTrust[]).map((value) => ({ value, label: memoryTrustLabel[value] }))
 const groupRows: { type: MemoryGroup['type']; label: string }[] = [
   { type: 'project', label: '项目' },
   { type: 'topic', label: '主题' },
@@ -377,6 +378,7 @@ function MemoryTab() {
   const entity = params.get('entity') ?? ''
   const group = params.get('group') ?? ''
   const nature = natures.find((n) => n === params.get('nature')) ?? ''
+  const trust = trusts.find((t) => t.value === params.get('trust'))?.value ?? ''
   // The memories that were replaced or merged away are a view of their own.
   const retired = params.get('retired') === '1'
   const openId = params.get('m')
@@ -406,12 +408,12 @@ function MemoryTab() {
 
   const list = useMemoryList(retired
     ? { q, entity: '', group: '', nature: '', epistemic: '', trust: '', retired: '1' }
-    : { q, entity, group, nature, epistemic: '', trust: '', retired: '' })
+    : { q, entity, group, nature, epistemic: '', trust, retired: '' })
   const { facets, problem: facetsProblem, retry: retryFacets } = useMemoryFacets()
   const opened = useMemory(openId, list.items.find((m) => m.id === openId))
   const [recalling, setRecalling] = useState(false)
   const { organize } = useStore().state
-  const filtered = retired ? Boolean(q) : Boolean(q || entity || group || nature)
+  const filtered = retired ? Boolean(q) : Boolean(q || entity || group || nature || trust)
   const pick = (entityId: string) => change({ entity: entityId === entity ? null : entityId, m: null })
   const pickGroup = (entityId: string) => change({ group: entityId === group ? null : entityId, m: null })
   const groups = facets?.groups ?? []
@@ -464,6 +466,12 @@ function MemoryTab() {
           onChange={(v) => change({ nature: v === 'all' ? null : v })}
           items={[{ value: 'all', label: '全部' }, ...natures.map((k) => ({ value: k, label: memoryKindLabel[k] }))]}
         />
+        <Seg
+          label="可信度"
+          value={trust || 'all'}
+          onChange={(v) => change({ trust: v === 'all' ? null : v })}
+          items={[{ value: 'all', label: '都看' }, ...trusts]}
+        />
       </div>}
       {!retired && facets && (groups.length > 0 || facets.people.length > 0 || facets.places.length > 0) && (
         <div className="mem-facets">
@@ -495,7 +503,7 @@ function MemoryTab() {
       {filtered && !retired && (
         <p className="mem-summary" role="status">
           {list.phase === 'ready' && <span>{summaryOf(entity && (entityName ?? '它'), group && (groupName ?? '它'))}有 {list.total} 条</span>}
-          <button type="button" className="link-btn" onClick={() => { window.clearTimeout(typing.current); change({ q: null, entity: null, group: null, nature: null }) }}>
+          <button type="button" className="link-btn" onClick={() => { window.clearTimeout(typing.current); change({ q: null, entity: null, group: null, nature: null, trust: null }) }}>
             清掉筛选
           </button>
         </p>

@@ -14,6 +14,8 @@ export type UndoOutcome = { ok: true } | { ok: false; error: string; code?: stri
 
 export interface Store {
   state: State
+  /** How many of this window's own commands the server has taken. */
+  writes: number
   dispatch: (action: Action) => Promise<boolean>
   /** Dispatches, then shows `label` with 【撤销】 for 8 seconds. */
   dispatchUndoable: (action: Action, label: string) => Promise<boolean>

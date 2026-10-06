@@ -3,14 +3,16 @@ import { SourceSheet } from '../components/SourceSheet'
 import { ImportSheet } from '../components/ImportSheet'
 import { api, downloadExport } from '../store/api'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Link, useSearchParams } from 'react-router'
+import { Navigate, useSearchParams } from 'react-router'
 import { ChevronRight, CircleAlert, Download, History, Info, RotateCw, Search, Trash2, Upload } from 'lucide-react'
 import { Checkbox, Chip } from '../components/controls'
 import { EventTime, Fade, FromLine, Groups, Mentions, ProjectLink, SaidAt, TrustMark, TrustTag } from '../components/Marks'
 import { ConfirmModal, SideSheet } from '../components/Overlay'
+import { NowPanel } from '../components/NowPanel'
 import { UnsureSheet } from '../components/UnsureSheet'
 import { Button, Empty, Progress, Seg, Sheet, Spinner, Switch, Tag } from '../components/ui'
 import { jobStatusLabel, memoryCategoryLabel, memoryKindLabel, memoryTrustLabel, trustOf, sampleStateLabel, sourceStatusLabel, triggerLabel } from '../domain/labels'
+import { cardFilter, selfCategories } from '../domain/now'
 import { formatAgo, formatShortWhen, formatWhen } from '../domain/time'
 import type { Memory, MemoryFacet, MemoryGroup, MemoryKind, MemoryMention, MemoryTrust, Source, TrainingSample } from '../domain/types'
 import { useStore } from '../store/context'
@@ -328,48 +330,63 @@ const groupRows: { type: MemoryGroup['type']; label: string }[] = [
   { type: 'area', label: '领域' },
 ]
 
-/** What the narrowed list holds, said by the person or place and the group it is narrowed to. */
-function summaryOf(entityName: string, groupName: string): string {
-  if (entityName && groupName) return `「${groupName}」下面提到「${entityName}」的记忆`
-  if (entityName) return `提到「${entityName}」的记忆`
-  if (groupName) return `「${groupName}」下面的记忆`
-  return '符合的记忆'
+/** What the narrowed list holds, said by the kind, the group and the person or place it is narrowed to. */
+function summaryOf(categoryName: string, entityName: string, groupName: string): string {
+  const under = [categoryName && `「${categoryName}」这一类`, groupName && `「${groupName}」下面`].filter(Boolean).join('、')
+  if (entityName) return `${under}提到「${entityName}」的记忆`
+  return under ? `${under}的记忆` : '符合的记忆'
 }
 
 /** How many of one row (people, places, or one kind of group) are offered before 「更多」. */
 const FACETS_SHOWN = 6
 
-/** The people or places memories mention, or the groups they are filed under, as a row to pick one from. */
-function FacetRow({ label, entries, active, onPick }: { label: string; entries: MemoryFacet[]; active: string; onPick: (entityId: string) => void }) {
+interface FacetEntry {
+  /** What the list is narrowed by when this one is picked. */
+  id: string
+  name: string
+  /** Left out where the server does not count. */
+  count?: number
+}
+
+/**
+ * One row of things to narrow the list by: people, places, one kind of group,
+ * or the kinds of memory about the user. While a name is being searched for,
+ * every match is shown; otherwise the first few and the one in use.
+ */
+function FacetRow({ label, entries, active, find, onPick }: { label: string; entries: FacetEntry[]; active: string; find: string; onPick: (id: string) => void }) {
   const [all, setAll] = useState(false)
-  if (!entries.length) return null
+  const matching = find ? entries.filter((e) => e.name.toLowerCase().includes(find)) : entries
+  if (!matching.length) return null
   // The one in use stays in sight even when it is far down the list.
-  const shown = all ? entries : entries.filter((e, i) => i < FACETS_SHOWN || e.entityId === active)
+  const shown = all || find ? matching : matching.filter((e, i) => i < FACETS_SHOWN || e.id === active)
   return (
     <div className="mem-facet" role="group" aria-label={label}>
       <span className="mem-facet-label">{label}</span>
       <div className="mem-facet-chips">
         {shown.map((e) => (
           <button
-            key={e.entityId}
+            key={e.id}
             type="button"
-            className={`chip chip-toggle${e.entityId === active ? ' on' : ''}`}
-            aria-pressed={e.entityId === active}
-            onClick={() => onPick(e.entityId)}
+            className={`chip chip-toggle${e.id === active ? ' on' : ''}`}
+            aria-pressed={e.id === active}
+            onClick={() => onPick(e.id)}
           >
             <span className="mem-facet-name">{e.name}</span>
-            <span className="n">{e.count}</span>
+            {e.count !== undefined && <span className="n">{e.count}</span>}
           </button>
         ))}
-        {entries.length > FACETS_SHOWN && (
+        {!find && matching.length > FACETS_SHOWN && (
           <button type="button" className="link-btn mem-facet-more" onClick={() => setAll((v) => !v)}>
-            {all ? '收起' : `更多 ${entries.length - shown.length}`}
+            {all ? '收起' : `更多 ${matching.length - shown.length}`}
           </button>
         )}
       </div>
     </div>
   )
 }
+
+const facetEntries = (facets: MemoryFacet[]): FacetEntry[] => facets.map((f) => ({ id: f.entityId, name: f.name, count: f.count }))
+const selfEntries: FacetEntry[] = selfCategories.map((c) => ({ id: c, name: memoryCategoryLabel[c] }))
 
 function MemoryTab() {
   const [params, setParams] = useSearchParams()
@@ -378,6 +395,7 @@ function MemoryTab() {
   const entity = params.get('entity') ?? ''
   const group = params.get('group') ?? ''
   const nature = natures.find((n) => n === params.get('nature')) ?? ''
+  const category = selfCategories.find((c) => c === params.get('category')) ?? ''
   const trust = trusts.find((t) => t.value === params.get('trust'))?.value ?? ''
   // The memories that were replaced or merged away are a view of their own.
   const retired = params.get('retired') === '1'
@@ -407,16 +425,24 @@ function MemoryTab() {
   }
 
   const list = useMemoryList(retired
-    ? { q, entity: '', group: '', nature: '', epistemic: '', trust: '', retired: '1' }
-    : { q, entity, group, nature, epistemic: '', trust, retired: '' })
+    ? { q, entity: '', group: '', nature: '', category: '', epistemic: '', trust: '', retired: '1' }
+    : { q, entity, group, nature, category, epistemic: '', trust, retired: '' })
   const { facets, problem: facetsProblem, retry: retryFacets } = useMemoryFacets()
   const opened = useMemory(openId, list.items.find((m) => m.id === openId))
   const [recalling, setRecalling] = useState(false)
   const { organize } = useStore().state
-  const filtered = retired ? Boolean(q) : Boolean(q || entity || group || nature || trust)
+  const filtered = retired ? Boolean(q) : Boolean(q || entity || group || nature || category || trust)
   const pick = (entityId: string) => change({ entity: entityId === entity ? null : entityId, m: null })
   const pickGroup = (entityId: string) => change({ group: entityId === group ? null : entityId, m: null })
+  const pickCategory = (name: string) => change({ category: name === category ? null : name, m: null })
   const groups = facets?.groups ?? []
+  const people = facets?.people ?? []
+  const places = facets?.places ?? []
+  // Looks only at the names on offer, to find one among hundreds; it decides nothing about what a memory means.
+  const [named, setNamed] = useState('')
+  const find = named.trim().toLowerCase()
+  const offered = [...selfEntries, ...groups, ...people, ...places]
+  const noneNamed = Boolean(find) && !offered.some((e) => e.name.toLowerCase().includes(find))
   const groupName = group
     ? groups.find((g) => g.entityId === group)?.name
       ?? list.items.flatMap((m) => m.groups ?? []).find((g) => g.entityId === group)?.name
@@ -441,6 +467,7 @@ function MemoryTab() {
   return (
     <>
       {recalling && <RecallSheet query={typed.text} onClose={() => setRecalling(false)} />}
+      {!retired && <NowPanel onOpen={(id) => change({ m: id, merged: null })} />}
       <div className="toolbar">
         <label className="search">
           <Search size={15} />
@@ -473,20 +500,28 @@ function MemoryTab() {
           items={[{ value: 'all', label: '都看' }, ...trusts]}
         />
       </div>}
-      {!retired && facets && (groups.length > 0 || facets.people.length > 0 || facets.places.length > 0) && (
+      {!retired && (
         <div className="mem-facets">
+          {offered.length > FACETS_SHOWN && (
+            <label className="search mem-facet-find">
+              <Search size={14} />
+              <input type="search" placeholder="搜分组的名字：人、项目、主题、领域…" value={named} onChange={(e) => setNamed(e.target.value)} aria-label="搜索分组" />
+            </label>
+          )}
+          <FacetRow label="你本人" entries={selfEntries} active={category} find={find} onPick={pickCategory} />
+          <FacetRow label="提到的人" entries={facetEntries(people)} active={entity} find={find} onPick={pick} />
           {groupRows.map((row) => (
-            <FacetRow key={row.type} label={row.label} entries={groups.filter((g) => g.type === row.type)} active={group} onPick={pickGroup} />
+            <FacetRow key={row.type} label={row.label} entries={facetEntries(groups.filter((g) => g.type === row.type))} active={group} find={find} onPick={pickGroup} />
           ))}
-          <FacetRow label="提到的人" entries={facets.people} active={entity} onPick={pick} />
-          <FacetRow label="地点" entries={facets.places} active={entity} onPick={pick} />
+          <FacetRow label="地点" entries={facetEntries(places)} active={entity} find={find} onPick={pick} />
+          {noneNamed && <p className="mem-facet-none" role="status">没有名字里带「{named.trim()}」的分组。</p>}
         </div>
       )}
       {!retired && facetsProblem && (
         <p className="hint-line" role="alert">
           <CircleAlert size={13} />
           <span>
-            人和地点没读出来：{facetsProblem}{' '}
+            人、地点和分组没读出来：{facetsProblem}{' '}
             <button type="button" className="link-btn" onClick={retryFacets}>再读一次</button>
           </span>
         </p>
@@ -502,8 +537,8 @@ function MemoryTab() {
       )}
       {filtered && !retired && (
         <p className="mem-summary" role="status">
-          {list.phase === 'ready' && <span>{summaryOf(entity && (entityName ?? '它'), group && (groupName ?? '它'))}有 {list.total} 条</span>}
-          <button type="button" className="link-btn" onClick={() => { window.clearTimeout(typing.current); change({ q: null, entity: null, group: null, nature: null, trust: null }) }}>
+          {list.phase === 'ready' && <span>{summaryOf(category && memoryCategoryLabel[category], entity && (entityName ?? '它'), group && (groupName ?? '它'))}有 {list.total} 条</span>}
+          <button type="button" className="link-btn" onClick={() => { window.clearTimeout(typing.current); change({ q: null, entity: null, group: null, nature: null, category: null, trust: null }) }}>
             清掉筛选
           </button>
         </p>
@@ -825,6 +860,29 @@ function TrainingTab() {
   )
 }
 
+/** The address of the page this used to have to itself. A link to one of its cards lands on the same memories here. */
+export function FormerAbout() {
+  const [params] = useSearchParams()
+  const key = params.get('card') ?? ''
+  const { facets, problem } = useMemoryFacets()
+  // Whether the card was a person's or a group's is told by the groups there are.
+  if (key.startsWith('entity:') && !facets && !problem) {
+    return (
+      <main className="page page-narrow">
+        <div className="mem-state" role="status">
+          <Spinner />
+          正在读取…
+        </div>
+      </main>
+    )
+  }
+  const next = new URLSearchParams(cardFilter(key, (id) => Boolean(facets?.groups?.some((g) => g.entityId === id))))
+  const opened = params.get('m')
+  if (opened) next.set('m', opened)
+  const query = next.toString()
+  return <Navigate to={`/library${query ? `?${query}` : ''}`} replace />
+}
+
 export function LibraryPage() {
   const { state } = useStore()
   const [params, setParams] = useSearchParams()
@@ -848,10 +906,6 @@ export function LibraryPage() {
           <h1>资料库</h1>
           <p>系统记住的东西、资料的来处，和攒下的训练数据。都归你，可以看、改、删、导出。</p>
         </div>
-        <Link to="/about" className="from">
-          关于你
-          <ChevronRight size={13} />
-        </Link>
       </div>
       {pending > 0 && (
         <div className="sheet" style={{ marginBottom: 18 }}>

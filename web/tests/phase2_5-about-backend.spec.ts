@@ -4,13 +4,22 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execFileSync } from 'node:child_process'
-import type { About } from '../src/domain/status'
+import type { Deadline, Handover } from '../src/domain/status'
+import type { Memory } from '../src/domain/types'
 import { command, evidence, fixture, login } from './support/real'
 
 const databaseURL = process.env.PCAS_TEST_DATABASE_URL
 const owner = process.env.PCAS_OWNER_ID
 if (!databaseURL || !owner) throw new Error('The About page backend test needs the disposable real-backend runner')
 if (databaseURL !== process.env.PCAS_DATABASE_URL || !['localhost', '127.0.0.1'].includes(new URL(databaseURL).hostname)) throw new Error('The About page backend test needs the same local disposable database as the backend')
+// What the 2.5 backend still answers at the former page's address. The library reads the note and
+// the dates from it; the cards are no longer shown and go away with the backend's part of phase 2.6.
+interface About {
+  handover: Handover
+  deadlines: Deadline[]
+  building: { done: number; total: number }
+  cards: { key: string; kind: string; name: string; count: number; fields: { field: string; items: Memory[] }[] }[]
+}
 const repo = fileURLToPath(new URL('../../', import.meta.url))
 
 test.use({ timezoneId: 'Asia/Shanghai', viewport: { width: 390, height: 844 } })
@@ -62,7 +71,7 @@ const projectName = '阳台菜园改造'
 const projectTexts = ['菜园的滴灌定时器装好了，早晚各十分钟', '阳台朝西，夏天下午晒得厉害', '遮阳网还没下单，要先量尺寸', '番茄苗要在四月前移到大盆里']
 const ruleTexts = ['回答先给结论，再给理由', '要花钱的事先问我', '发出去的东西先给我看']
 
-test('「关于你」读真实后端：后台建出的卡片和交接说明显示出来，改一条记忆后它从卡里退出', async ({ page }) => {
+test('资料库读真实后端：「眼下」显示后台写出的交接说明；原来卡片的链接落到同一批记忆上', async ({ page }) => {
   test.setTimeout(8 * 60_000)
   await login(page)
   await command(page, { type: 'updateSettings', patch: { timezone: 'Asia/Shanghai' } })
@@ -107,44 +116,43 @@ test('「关于你」读真实后端：后台建出的卡片和交接说明显�
   expect(project.fields.flatMap((f) => f.items.map((m) => m.text)).sort()).toEqual([...projectTexts].sort())
   expect(rules.fields.flatMap((f) => f.items.map((m) => m.appliesTo))).toEqual(['起草邮件', '起草邮件', '起草邮件'])
 
-  await page.goto('/about')
-  const region = (name: string) => page.getByRole('region', { name, exact: true })
-  await expect(region('交接说明').getByRole('heading', { level: 3 })).toHaveText(titles)
-  await expect(region('交接说明')).toContainText('先给结论，再给理由；要花钱的事先问。')
-  await expect(region('交接说明')).not.toContainText('#')
-  await expect(region('关于你').getByRole('button', { name: /对助手的要求/ })).toContainText('3 条')
-  await expect(page.getByRole('status', { name: '整理进度' })).toHaveCount(0)
-  await expect(region('期限和固定安排')).toHaveCount(index.deadlines.length ? 1 : 0)
+  await page.goto('/library')
+  const now = page.getByRole('region', { name: '眼下', exact: true })
+  const note = now.getByRole('region', { name: '交接说明', exact: true })
+  await expect(note).toContainText('写于')
+  await note.getByRole('button', { name: /看全文/ }).click()
+  await expect(note.getByRole('heading', { level: 4 })).toHaveText(titles)
+  await expect(note).toContainText('先给结论，再给理由；要花钱的事先问。')
+  await expect(note).not.toContainText('#')
+  const dates = now.getByRole('region', { name: '期限和固定安排', exact: true })
+  if (index.deadlines.length) await expect(dates.getByRole('listitem')).toHaveCount(index.deadlines.length)
+  else await expect(dates).toContainText('没有记下期限或固定安排。')
+  await expect(page.getByRole('link', { name: '关于你' })).toHaveCount(0)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy()
 
-  // The rules card: each memory with the kind of task it is for.
-  await region('关于你').getByRole('button', { name: /对助手的要求/ }).click()
-  const asked = region('关于你').getByRole('group', { name: '偏好' }).getByRole('listitem')
-  await expect(asked).toHaveCount(3)
-  for (const text of ruleTexts) await expect(asked.filter({ hasText: text })).toContainText('适用于：起草邮件')
+  // A link to the project's card: the library narrowed to that project, holding what the card held.
+  await page.goto(`/about?card=${encodeURIComponent(projectKey)}`)
+  await expect(page).toHaveURL(new RegExp(`/library\\?group=${seed.Project}$`))
+  await expect(page.locator('.mem-summary')).toContainText(`「${projectName}」下面的记忆有 ${project.count} 条`)
+  for (const text of projectTexts) await expect(page.getByRole('button', { name: text, exact: true })).toBeVisible()
+  await expect(page.getByRole('group', { name: '项目', exact: true }).getByRole('button', { name: new RegExp(projectName) })).toHaveAttribute('aria-pressed', 'true')
 
-  // The project card: the same memories under the same headings as the server's answer.
-  const bar = region('项目').getByRole('button', { name: new RegExp(projectName) })
-  await expect(bar).toContainText('4 条')
-  await bar.click()
-  const label = { status: '现状', deadline: '期限', decided: '已经定的', blocker: '卡点', next: '下一步', preference: '偏好', people: '相关的人' }
-  for (const field of project.fields.filter((f) => f.items.length)) {
-    await expect(region('项目').getByRole('group', { name: label[field.field] }).getByRole('listitem')).toHaveText(field.items.map((m) => m.text))
-  }
+  // A link to what is asked of the assistant: that kind of memory.
+  await page.goto('/about?card=self%3Arule')
+  await expect(page).toHaveURL(/\/library\?category=rule$/)
+  await expect(page.locator('.mem-summary')).toContainText(`「对助手的要求」这一类的记忆有 ${rules.count} 条`)
+  for (const text of ruleTexts) await expect(page.getByRole('button', { name: text, exact: true })).toBeVisible()
+  for (const text of projectTexts) await expect(page.getByRole('button', { name: text, exact: true })).toHaveCount(0)
 
-  // A memory opens in the usual sheet; correcting it there takes the old wording off the card (R3-5).
-  const target = project.fields.find((f) => f.items.length)!.items[0]
-  await region('项目').getByRole('button', { name: target.text, exact: true }).click()
+  // A memory opens in the usual sheet and can be corrected there.
+  const target = ruleTexts[0]
+  await page.getByRole('button', { name: target, exact: true }).click()
   const sheet = page.getByRole('dialog')
-  await expect(sheet.getByRole('textbox', { name: '内容' })).toHaveValue(target.text)
-  await sheet.getByRole('textbox', { name: '内容' }).fill(`${target.text}（改过）`)
+  await expect(sheet.getByRole('textbox', { name: '内容' })).toHaveValue(target)
+  await sheet.getByRole('textbox', { name: '内容' }).fill(`${target}（改过）`)
   await sheet.getByRole('button', { name: '存为新版本' }).click()
   await expect(sheet.getByRole('button', { name: '存为新版本' })).toBeDisabled()
   await sheet.getByRole('button', { name: '关闭' }).click()
-  await expect(region('项目').getByRole('button', { name: target.text, exact: true })).toHaveCount(0)
-  await expect(bar).toContainText('3 条')
-  const after = (await read(projectKey)).cards.find((c) => c.key === projectKey)!
-  expect(after.fields.flatMap((f) => f.items.map((m) => m.id))).not.toContain(target.id)
-  // A card that is behind carries no mark, and none of the inner words show.
-  await expect(page.locator('main.page')).not.toContainText(/规则版本|过期|重建|实体/)
+  await expect(page.getByRole('button', { name: `${target}（改过）`, exact: true })).toBeVisible()
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy()
 })

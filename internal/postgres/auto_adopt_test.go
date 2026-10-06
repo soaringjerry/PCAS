@@ -196,8 +196,12 @@ func TestAutoAdoptDestinationsAndUndo(t *testing.T) {
 				if run.Status != "done" || run.Adopted == nil || !run.Adopted.Auto || run.Adopted.Edited || run.Adopted.As != tc.as || !memory.ID(run.Adopted.ActionID).Valid() {
 					t.Fatalf("run not auto-adopted: %+v", run)
 				}
-				if st.Revision != revision+1 {
-					t.Fatalf("revision=%d want %d", st.Revision, revision+1)
+				wantRevision := revision
+				if path == "manual" {
+					wantRevision++
+				}
+				if st.Revision != wantRevision {
+					t.Fatalf("revision=%d want %d", st.Revision, wantRevision)
 				}
 				item := autoAdoptItem(st, id)
 				if item.History[len(item.History)-1].By != "assistant" {

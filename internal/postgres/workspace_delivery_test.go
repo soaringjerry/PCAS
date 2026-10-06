@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/soaringjerry/PCAS/internal/httpapi"
 	"github.com/soaringjerry/PCAS/internal/memory"
@@ -80,5 +81,90 @@ func TestWorkspaceDeliveryVersionsAndConditionalRead(t *testing.T) {
 	}
 	if response := read("W/" + changed.Header().Get("ETag")); response.Code != 200 || !strings.Contains(response.Body.String(), `"done":true`) {
 		t.Fatal(response.Code, response.Body.String())
+	}
+}
+
+func TestWorkspaceDeliveryJournalDoesNotBlockBehindCommandOwner(t *testing.T) {
+	s, scope, ctx := testStore(t), owner(), context.Background()
+	b1Model(t, s, `{"items":[]}`)
+	workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "虚构队列锁验证"})
+	organizeTestMemory(t, s, scope, "虚构队列锁验证记忆")
+	job := organizeTestJob(t, s, scope)
+	before, err := s.SnapshotETag(ctx, scope)
+	if err != nil {
+		t.Fatal(err)
+	}
+	foreground, err := s.pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer foreground.Rollback(ctx)
+	if _, err := foreground.Exec(ctx, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", scope.OwnerID); err != nil {
+		t.Fatal(err)
+	}
+	// Queue updates cannot take the owner lock after the job lock: a command
+	// already holding the owner must remain free to cancel or inspect that job.
+	bounded, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	if _, err := s.pool.Exec(bounded, "UPDATE memory_jobs SET updated_at=clock_timestamp() WHERE id=$1", job.ID); err != nil {
+		t.Fatal("background delivery waits on foreground owner", err)
+	}
+	if _, err := foreground.Exec(bounded, "SELECT 1 FROM memory_jobs WHERE id=$1 FOR UPDATE", job.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := foreground.Rollback(ctx); err != nil {
+		t.Fatal(err)
+	}
+	after, err := s.SnapshotETag(ctx, scope)
+	if err != nil || after == before {
+		t.Fatal("committed queue update must change delivery", before, after, err)
+	}
+	state, err := s.Snapshot(ctx, scope)
+	if err != nil {
+		t.Fatal(err)
+	}
+	commandVersion, libraryVersion := state.Revision, state.MemoryRevision
+	// A rolled-back event is invisible. A lower-ID event committed after a
+	// higher-ID event must still invalidate delivery (MAX(id) cannot do that).
+	early, err := s.pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer early.Rollback(ctx)
+	if _, err := early.Exec(ctx, "INSERT INTO workspace_snapshot_events(owner_id) VALUES($1)", scope.OwnerID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.pool.Exec(ctx, "INSERT INTO workspace_snapshot_events(owner_id) VALUES($1)", scope.OwnerID); err != nil {
+		t.Fatal(err)
+	}
+	higher, err := s.SnapshotETag(ctx, scope)
+	if err != nil || higher == after {
+		t.Fatal(higher, err)
+	}
+	if err := early.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	later, err := s.SnapshotETag(ctx, scope)
+	if err != nil || later == higher {
+		t.Fatal("late commit was hidden", later, err)
+	}
+	rolledBack, err := s.pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rolledBack.Rollback(ctx)
+	if _, err := rolledBack.Exec(ctx, "INSERT INTO workspace_snapshot_events(owner_id) VALUES($1)", scope.OwnerID); err != nil {
+		t.Fatal(err)
+	}
+	if err := rolledBack.Rollback(ctx); err != nil {
+		t.Fatal(err)
+	}
+	final, err := s.SnapshotETag(ctx, scope)
+	if err != nil || final != later {
+		t.Fatal("rollback changed delivery", final, later, err)
+	}
+	state, err = s.Snapshot(ctx, scope)
+	if err != nil || state.Revision != commandVersion || state.MemoryRevision != libraryVersion {
+		t.Fatal("delivery changed command or library version", state.Revision, state.MemoryRevision, err)
 	}
 }

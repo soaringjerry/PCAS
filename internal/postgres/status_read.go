@@ -23,11 +23,13 @@ type statusNoRepairKey struct{}
 func (s *Store) HandoverTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) (workspace.Handover, error) {
 	out := workspace.Handover{}
 	var built *time.Time
-	err := tx.QueryRow(ctx, `SELECT CASE WHEN EXISTS(SELECT 1 FROM (`+statusEligibleGroups+`) g WHERE g.owner_id=h.owner_id) THEN h.body ELSE '' END,h.built_at,h.stale OR h.rule<$2 OR EXISTS(
+	err := tx.QueryRow(ctx, statusMembersOnce+`,bad AS(SELECT DISTINCT i.key FROM status_card_items i WHERE i.owner_id=$1
+ AND NOT EXISTS(SELECT 1 FROM members m WHERE (m.key,m.claim_id,m.claim_version)=(i.key,i.claim_id,i.claim_version)))
+ SELECT CASE WHEN EXISTS(SELECT 1 FROM sizes WHERE n>=3) THEN h.body ELSE '' END,h.built_at,h.stale OR h.rule<$2 OR EXISTS(
  SELECT 1 FROM jsonb_array_elements(h.depends) d LEFT JOIN status_cards sc ON sc.owner_id=h.owner_id AND sc.key=d->>'key'
+ LEFT JOIN sizes s ON s.key=sc.key LEFT JOIN bad b ON b.key=sc.key
  WHERE sc.key IS NULL OR sc.stale OR sc.rule<$3 OR sc.built_at IS DISTINCT FROM (d->>'builtAt')::timestamptz
- OR (SELECT count(*) FROM status_current_members m WHERE m.owner_id=sc.owner_id AND m.key=sc.key)<3
- OR EXISTS(SELECT 1 FROM status_card_items i WHERE i.owner_id=sc.owner_id AND i.key=sc.key AND NOT EXISTS(SELECT 1 FROM status_current_members m WHERE (m.owner_id,m.key,m.claim_id,m.claim_version)=(i.owner_id,i.key,i.claim_id,i.claim_version))))
+ OR coalesce(s.n,0)<3 OR b.key IS NOT NULL)
  FROM handovers h WHERE h.owner_id=$1`, string(scope.OwnerID), HandoverVersion, CardVersion).Scan(&out.Body, &built, &out.Stale)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return out, nil
@@ -38,6 +40,10 @@ func (s *Store) HandoverTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) (
 	return out, err
 }
 
+// The members view is costly; these reads work it out once instead of once per card or item.
+const statusMembersOnce = `WITH members AS MATERIALIZED(SELECT key,claim_id,claim_version FROM status_current_members WHERE owner_id=$1),
+ sizes AS(SELECT key,count(*) AS n FROM members GROUP BY key)`
+
 const statusEligibleGroups = `SELECT owner_id,key,kind,entity_id,name,count(*) AS members FROM status_current_members GROUP BY owner_id,key,kind,entity_id,name HAVING count(*)>=3`
 const statusValidItems = `SELECT i.* FROM status_card_items i JOIN status_current_members m
  ON(m.owner_id,m.key,m.claim_id,m.claim_version)=(i.owner_id,i.key,i.claim_id,i.claim_version)`
@@ -47,13 +53,12 @@ func (s *Store) StatusCardIndexTx(ctx context.Context, tx pgx.Tx, scope memory.S
 		return s.useStatusIndexTx(ctx, tx, scope)
 	}
 	out := []workspace.StatusCardRef{}
-	rows, err := tx.Query(ctx, `SELECT sc.key,sc.kind,sc.name,count(i.claim_id),sc.built_at,
- sc.stale OR sc.rule<$2 OR EXISTS(SELECT 1 FROM status_card_items raw WHERE raw.owner_id=sc.owner_id AND raw.key=sc.key
- AND NOT EXISTS(SELECT 1 FROM status_current_members m WHERE (m.owner_id,m.key,m.claim_id,m.claim_version)=(raw.owner_id,raw.key,raw.claim_id,raw.claim_version)))
- FROM status_cards sc JOIN (`+statusEligibleGroups+`) g USING(owner_id,key)
- LEFT JOIN (`+statusValidItems+`) i ON(i.owner_id,i.key)=(sc.owner_id,sc.key)
+	rows, err := tx.Query(ctx, statusMembersOnce+`,items AS(SELECT i.key,count(m.claim_id) AS valid,count(*)-count(m.claim_id) AS invalid FROM status_card_items i
+ LEFT JOIN members m ON(m.key,m.claim_id,m.claim_version)=(i.key,i.claim_id,i.claim_version) WHERE i.owner_id=$1 GROUP BY i.key)
+ SELECT sc.key,sc.kind,sc.name,coalesce(it.valid,0),sc.built_at,sc.stale OR sc.rule<$2 OR coalesce(it.invalid,0)>0
+ FROM status_cards sc JOIN sizes g ON g.key=sc.key AND g.n>=3 LEFT JOIN items it ON it.key=sc.key
  WHERE sc.owner_id=$1 AND sc.built_at IS NOT NULL
- GROUP BY sc.owner_id,sc.key ORDER BY CASE sc.kind WHEN 'self' THEN 0 WHEN 'project' THEN 1 WHEN 'person' THEN 2 WHEN 'topic' THEN 3 ELSE 4 END,sc.name,sc.key`, string(scope.OwnerID), CardVersion)
+ ORDER BY CASE sc.kind WHEN 'self' THEN 0 WHEN 'project' THEN 1 WHEN 'person' THEN 2 WHEN 'topic' THEN 3 ELSE 4 END,sc.name,sc.key`, string(scope.OwnerID), CardVersion)
 	if err != nil {
 		return out, err
 	}

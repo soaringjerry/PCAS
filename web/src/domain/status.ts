@@ -16,10 +16,8 @@ export interface Deadline {
   title: string
   timeNote: string
   memoryId: ID
-}
-
-/** What matters right now: the note a new helper would be handed, and the dates to keep. */
-export interface Now {
-  handover: Handover
-  deadlines: Deadline[]
+  /** Which part of the table it belongs in, as the server judged it when read. */
+  dateStatus: 'upcoming' | 'expired_unknown' | 'recurring' | 'unclear'
+  /** What was actually said, for a date that could not be pinned down. */
+  originalText: string
 }

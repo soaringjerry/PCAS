@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { memoriesFor } from '../domain/agent'
-import type { Agent, Epistemic, Memory, MemoryCategory, MemoryFacets, MemoryKind, MemoryPage, MemoryTrust, State } from '../domain/types'
+import type { Agent, AssistantRequirement, Epistemic, Memory, MemoryFacets, MemoryGroupEntry, MemoryKind, MemoryPage, MemoryTrust, State } from '../domain/types'
 import { api, APIError } from './api'
 import { useStore } from './context'
 
@@ -15,8 +15,11 @@ export interface MemoryFilter {
   /** A project, topic or area of life: only memories filed under it. */
   group: string
   nature: MemoryKind | ''
-  /** What kind of thing it says, as sorted in the background. */
-  category: MemoryCategory | ''
+  /**
+   * A group from the directory, by its key: the memories under it, as the
+   * server counts them there. The server takes nothing else alongside it.
+   */
+  within: string
   /** How far it can be trusted; the server knows three values. */
   epistemic: Exclude<Epistemic, 'planned'> | ''
   /** How far it can be relied on, by where it came from. */
@@ -68,7 +71,11 @@ export function readProblem(e: unknown): string {
 
 function listPath(filter: MemoryQuery, cursor?: string, limit = PAGE): string {
   const query = new URLSearchParams({ limit: String(limit) })
-  for (const name of ['q', 'entity', 'group', 'nature', 'category', 'epistemic', 'trust', 'retired', 'retiredBy', 'project', 'agent'] as const) {
+  if (filter.within) {
+    if (cursor) query.set('cursor', cursor)
+    return `/v1/workspace/memory-groups/${encodeURIComponent(filter.within)}/memories?${query}`
+  }
+  for (const name of ['q', 'entity', 'group', 'nature', 'epistemic', 'trust', 'retired', 'retiredBy', 'project', 'agent'] as const) {
     const value = filter[name]
     if (value) query.set(name, value)
   }
@@ -117,33 +124,37 @@ export interface MemoryList {
   remove: (id: string) => void
 }
 
-/** The memory list for one filter, read a page at a time and re-read from the top whenever a memory changes. */
-export function useMemoryList(filter: MemoryFilter): MemoryList {
+/**
+ * The memory list for one filter, read a page at a time and re-read from the
+ * top whenever a memory changes. Reads nothing while not `wanted`.
+ */
+export function useMemoryList(filter: MemoryFilter, wanted = true): MemoryList {
   const { state } = useStore()
   const changed = useMemoryChange()
-  const { q, entity, group, nature, category, epistemic, trust, retired } = filter
-  const key = `${q}\n${entity}\n${group}\n${nature}\n${category}\n${epistemic}\n${trust}\n${retired}`
+  const { q, entity, group, nature, within, epistemic, trust, retired } = filter
+  const key = `${q}\n${entity}\n${group}\n${nature}\n${within}\n${epistemic}\n${trust}\n${retired}`
   const [data, setData] = useState(nothing)
   const [attempt, setAttempt] = useState(0)
   const reading = useRef('')
 
   useEffect(() => {
+    if (!wanted) return
     let alive = true
-    api<Partial<MemoryPage>>(listPath({ q, entity, group, nature, category, epistemic, trust, retired }))
+    api<Partial<MemoryPage>>(listPath({ q, entity, group, nature, within, epistemic, trust, retired }))
       .then((page) => { if (alive) setData((prev) => refreshed(prev, key, page)) })
       // A failed re-read keeps what is already shown; only a first read has nothing to fall back on.
       .catch((e: unknown) => { if (alive) setData((prev) => prev.key === key && prev.phase === 'ready' ? prev : { ...nothing, key, phase: 'failed', problem: readProblem(e) }) })
     return () => { alive = false }
-  }, [key, q, entity, group, nature, category, epistemic, trust, retired, changed, attempt])
+  }, [wanted, key, q, entity, group, nature, within, epistemic, trust, retired, changed, attempt])
 
-  const current = data.key === key ? data : undefined
+  const current = wanted && data.key === key ? data : undefined
   const cursor = current?.phase === 'ready' ? current.next : ''
   const loadMore = useCallback(() => {
     const token = `${key}\n${cursor}`
     if (!cursor || reading.current === token) return
     reading.current = token
     setData((prev) => prev.key === key ? { ...prev, more: 'loading', moreProblem: '' } : prev)
-    api<Partial<MemoryPage>>(listPath({ q, entity, group, nature, category, epistemic, trust, retired }, cursor))
+    api<Partial<MemoryPage>>(listPath({ q, entity, group, nature, within, epistemic, trust, retired }, cursor))
       .then((page) => setData((prev) => {
         // The list moved on while this page was on its way.
         if (prev.key !== key || prev.next !== cursor) return prev
@@ -152,7 +163,7 @@ export function useMemoryList(filter: MemoryFilter): MemoryList {
       }))
       .catch((e: unknown) => setData((prev) => prev.key === key && prev.next === cursor ? { ...prev, more: 'failed', moreProblem: readProblem(e) } : prev))
       .finally(() => { if (reading.current === token) reading.current = '' })
-  }, [key, q, entity, group, nature, category, epistemic, trust, retired, cursor])
+  }, [key, q, entity, group, nature, within, epistemic, trust, retired, cursor])
 
   const retry = useCallback(() => { setData(nothing); setAttempt((n) => n + 1) }, [])
   const remove = useCallback((id: string) => setData((prev) => prev.items.some((m) => m.id === id) ? { ...prev, items: prev.items.filter((m) => m.id !== id), total: Math.max(0, prev.total - 1) } : prev), [])
@@ -191,6 +202,122 @@ export function useMemoryFacets(): { facets?: MemoryFacets; problem: string; ret
   const retry = useCallback(() => { setProblem(''); setAttempt((n) => n + 1) }, [])
   // An earlier answer stays usable when a later read fails.
   return { facets, problem: facets ? '' : problem, retry }
+}
+
+/** The most the server gives of a group at a time. */
+const GROUP_PAGE = 100
+
+export interface WholeGroups {
+  phase: 'loading' | 'ready' | 'failed'
+  problem: string
+  /** The memories under every one of the groups, once all of them have been read. */
+  items: Memory[]
+  /** How far the reading has got, for saying so while it lasts. */
+  read: number
+  total: number
+  retry: () => void
+}
+
+/**
+ * Everything under each of `keys`, read to the end a page at a time, and what
+ * they have in common. The server lists one group and takes no other filter
+ * with it, so narrowing a group further is done here, over all of it: nothing
+ * is left out for being on a later page. Reads nothing while not `wanted`.
+ */
+export function useWholeGroups(keys: string[], wanted: boolean): WholeGroups {
+  const changed = useMemoryChange()
+  const [attempt, setAttempt] = useState(0)
+  const token = `${changed}\n${attempt}`
+  const joined = keys.join('\n')
+  // A group already read to the end is not read again until a memory changes.
+  const cache = useRef({ token: '', groups: new Map<string, Memory[]>(), done: new Set<string>() })
+  const [state, setState] = useState({ id: '', phase: 'loading' as WholeGroups['phase'], problem: '', items: [] as Memory[], read: 0, total: 0 })
+  const id = `${token}\n${joined}`
+  useEffect(() => {
+    if (!wanted) return
+    let alive = true
+    if (cache.current.token !== token) cache.current = { token, groups: new Map(), done: new Set() }
+    const { groups, done } = cache.current
+    const wantedKeys = joined ? joined.split('\n') : []
+    const totals = new Map<string, number>()
+    const progress = () => {
+      let read = 0, total = 0
+      for (const key of wantedKeys) {
+        read += groups.get(key)?.length ?? 0
+        total += totals.get(key) ?? groups.get(key)?.length ?? 0
+      }
+      return { read, total }
+    }
+    const run = async () => {
+      for (const key of wantedKeys) {
+        if (done.has(key)) continue
+        const items: Memory[] = []
+        groups.set(key, items)
+        for (let cursor = ''; ;) {
+          const page = await api<Partial<MemoryPage>>(listPath({ within: key }, cursor, GROUP_PAGE))
+          if (!alive) return
+          items.push(...(page.items ?? []))
+          totals.set(key, page.total ?? items.length)
+          cursor = page.next ?? ''
+          setState({ id, phase: 'loading', problem: '', items: [], ...progress() })
+          if (!cursor) break
+        }
+        done.add(key)
+      }
+      const [first = [], ...rest] = wantedKeys.map((key) => groups.get(key) ?? [])
+      const others = rest.map((items) => new Set(items.map((m) => m.id)))
+      const common = first.filter((m) => others.every((ids) => ids.has(m.id)))
+      setState({ id, phase: 'ready', problem: '', items: common, ...progress() })
+    }
+    run().catch((e: unknown) => {
+      if (!alive) return
+      // A group read part of the way is not kept as if it were whole.
+      for (const key of wantedKeys) if (!done.has(key)) groups.delete(key)
+      setState({ id, phase: 'failed', problem: readProblem(e), items: [], read: 0, total: 0 })
+    })
+    return () => {
+      alive = false
+      for (const key of wantedKeys) if (!done.has(key)) groups.delete(key)
+    }
+  }, [wanted, id, token, joined])
+  const retry = useCallback(() => setAttempt((n) => n + 1), [])
+  if (!wanted || state.id !== id) return { phase: 'loading', problem: '', items: [], read: 0, total: 0, retry }
+  return { ...state, retry }
+}
+
+/** The directory of groups, each with how many memories are under it. An earlier answer stays usable when a later read fails. */
+export function useMemoryGroups(): { groups?: MemoryGroupEntry[]; problem: string; retry: () => void } {
+  const changed = useMemoryChange()
+  const [groups, setGroups] = useState<MemoryGroupEntry[]>()
+  const [problem, setProblem] = useState('')
+  const [attempt, setAttempt] = useState(0)
+  useEffect(() => {
+    let alive = true
+    api<{ items?: MemoryGroupEntry[] }>('/v1/workspace/memory-groups')
+      .then((v) => { if (alive) { setGroups(v.items ?? []); setProblem('') } })
+      .catch((e: unknown) => { if (alive) setProblem(readProblem(e)) })
+    return () => { alive = false }
+  }, [changed, attempt])
+  const retry = useCallback(() => { setProblem(''); setAttempt((n) => n + 1) }, [])
+  return { groups, problem: groups ? '' : problem, retry }
+}
+
+/**
+ * What the user asks of the assistant, by the memory each one is. Read only
+ * while `wanted`; a list shows without it when it cannot be read.
+ */
+export function useRequirements(wanted: boolean): Map<string, AssistantRequirement> {
+  const changed = useMemoryChange()
+  const [items, setItems] = useState<AssistantRequirement[]>()
+  useEffect(() => {
+    if (!wanted) return
+    let alive = true
+    api<{ items?: AssistantRequirement[] }>('/v1/workspace/assistant-requirements')
+      .then((v) => { if (alive) setItems(v.items ?? []) })
+      .catch(() => undefined)
+    return () => { alive = false }
+  }, [wanted, changed])
+  return useMemo(() => new Map((wanted ? items ?? [] : []).map((r) => [r.memoryId, r])), [wanted, items])
 }
 
 /** The memories that were merged into one, each still carrying its own sources. */

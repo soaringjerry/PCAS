@@ -1,25 +1,17 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { Now } from '../domain/status'
+import type { Deadline, Handover } from '../domain/status'
 import { api } from './api'
 import { readProblem, useMemoryChange } from './memories'
 
 // What matters right now: the handover note and the dates to keep. Both are
-// worked out in the background from the memories.
-
-const blank: Now = { handover: { body: '', builtAt: '', stale: false }, deadlines: [] }
-
-/** Fills whatever the server left out, so the page never meets a missing list. */
-function whole(v: Partial<Now>): Now {
-  return { handover: { ...blank.handover, ...v.handover }, deadlines: v.deadlines ?? [] }
-}
+// worked out in the background from the memories, and each is read on its own,
+// so one that cannot be read does not take the other with it.
 
 /** The note is rewritten in the background at most once an hour; this is how soon a new one shows without a reload. */
 const RECHECK = 5 * 60_000
 
-export interface NowRead {
-  now?: Now
-  /** When `now` was read, in milliseconds. */
-  readAt: number
+export interface Read<T> {
+  value?: T
   phase: 'loading' | 'ready' | 'failed'
   problem: string
   retry: () => void
@@ -29,24 +21,36 @@ export interface NowRead {
  * Read again when a memory changes, and every few minutes while the page is in
  * sight. An earlier answer stays up when a later read fails.
  */
-export function useNow(): NowRead {
+function useRead<T>(path: string, shape: (answer: unknown) => T): Read<T> {
   const changed = useMemoryChange()
-  const [read, setRead] = useState<{ now: Now; at: number }>()
+  const [value, setValue] = useState<T>()
   const [problem, setProblem] = useState('')
   const [attempt, setAttempt] = useState(0)
   useEffect(() => {
     let alive = true
-    // The former page's address still answers; the new reads replace it once the backend has them.
-    api<Partial<Now>>('/v1/workspace/about')
-      .then((v) => { if (alive) { setRead({ now: whole(v), at: Date.now() }); setProblem('') } })
+    api<unknown>(path)
+      .then((v) => { if (alive) { setValue(shape(v)); setProblem('') } })
       .catch((e: unknown) => { if (alive) setProblem(readProblem(e)) })
     return () => { alive = false }
-  }, [changed, attempt])
+  }, [path, shape, changed, attempt])
   useEffect(() => {
     const timer = window.setInterval(() => { if (!document.hidden) setAttempt((n) => n + 1) }, RECHECK)
     return () => window.clearInterval(timer)
   }, [])
   const retry = useCallback(() => { setProblem(''); setAttempt((n) => n + 1) }, [])
-  if (read) return { now: read.now, readAt: read.at, phase: 'ready', problem: '', retry }
-  return { readAt: 0, phase: problem ? 'failed' : 'loading', problem, retry }
+  if (value !== undefined) return { value, phase: 'ready', problem: '', retry }
+  return { phase: problem ? 'failed' : 'loading', problem, retry }
+}
+
+// Whatever the server left out is filled in, so the page never meets a missing field.
+const handover = (v: unknown): Handover => ({ body: '', builtAt: '', stale: false, ...(v as Partial<Handover> | null) })
+const deadlines = (v: unknown): Deadline[] => (v as { items?: Deadline[] } | null)?.items ?? []
+
+export function useHandover(): Read<Handover> {
+  return useRead('/v1/workspace/handover', handover)
+}
+
+/** Every date there is: the server sends them all, the ones gone by included. */
+export function useDeadlines(): Read<Deadline[]> {
+  return useRead('/v1/workspace/deadlines', deadlines)
 }

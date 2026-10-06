@@ -3718,6 +3718,25 @@ button.mention.on svg {
   font-size: 12.5px;
 }
 
+.now-said {
+  display: block;
+  color: var(--label-2);
+  font-size: 12.5px;
+}
+
+.now-body > .mem-state + .now-block,
+.now-body > .now-block + .mem-state,
+.now-body > .mem-state + .mem-state {
+  border-top: 1px solid var(--sep);
+}
+
+.mem-applies {
+  display: block;
+  margin-top: 2px;
+  color: var(--label-2);
+  font-size: 12.5px;
+}
+
 .now-kind {
   color: var(--label-3);
   font-size: 12.5px;

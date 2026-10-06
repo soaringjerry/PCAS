@@ -5,35 +5,28 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execFileSync } from 'node:child_process'
 import type { Deadline, Handover } from '../src/domain/status'
-import type { Memory } from '../src/domain/types'
-import { command, evidence, fixture, login } from './support/real'
+import type { AssistantRequirement, Memory, MemoryGroupEntry } from '../src/domain/types'
+import { command, evidence, fixture, login, snapshot } from './support/real'
 
 const databaseURL = process.env.PCAS_TEST_DATABASE_URL
 const owner = process.env.PCAS_OWNER_ID
 if (!databaseURL || !owner) throw new Error('The About page backend test needs the disposable real-backend runner')
 if (databaseURL !== process.env.PCAS_DATABASE_URL || !['localhost', '127.0.0.1'].includes(new URL(databaseURL).hostname)) throw new Error('The About page backend test needs the same local disposable database as the backend')
-// What the 2.5 backend still answers at the former page's address. The library reads the note and
-// the dates from it; the cards are no longer shown and go away with the backend's part of phase 2.6.
-interface About {
-  handover: Handover
-  deadlines: Deadline[]
-  building: { done: number; total: number }
-  cards: { key: string; kind: string; name: string; count: number; fields: { field: string; items: Memory[] }[] }[]
-}
 const repo = fileURLToPath(new URL('../../', import.meta.url))
 
 test.use({ timezoneId: 'Asia/Shanghai', viewport: { width: 390, height: 844 } })
-test.afterEach(async ({ page }, info) => { await evidence(page, info, 'phase2_5-about') })
+test.afterEach(async ({ page }, info) => { await evidence(page, info, 'phase2_6-library') })
 
 // Everything here is made up. The memories go straight into the schema, already
-// sorted into their groups, so the only background work left is the real one
-// under test: building the cards and the handover note. The small temporary Go
+// sorted into their groups, with the dates and the scope of each requirement the
+// sorting would have drawn from them. The background work left is the real one
+// under test: writing the handover note from them. The small temporary Go
 // program avoids requiring an extra browser dependency or psql.
 const seeder = `package main
 import("context";"encoding/json";"os";"github.com/jackc/pgx/v5")
 func main(){
  ctx:=context.Background(); db,err:=pgx.Connect(ctx,os.Getenv("PCAS_TEST_DATABASE_URL"));if err!=nil{panic(err)};defer db.Close(ctx)
- var f struct{Owner,Self,Project,ProjectName,Said string;Claims []struct{ID,Source,Chunk,Text,Category string;Project bool}}
+ var f struct{Owner,Self,Project,ProjectName,Said string;Version int;Claims []struct{ID,Source,Chunk,Text,Category string;Project bool};Deadlines []struct{Claim,Kind,Recurrence,Title,Note,Original string;At *string};Requirements []struct{Claim,Scope string;Unrestricted bool}}
  if err=json.Unmarshal([]byte(os.Getenv("PCAS_ABOUT_FIXTURE")),&f);err!=nil{panic(err)}
  tx,err:=db.Begin(ctx);if err!=nil{panic(err)};defer tx.Rollback(ctx)
  x:=func(q string,a ...any){if _,e:=tx.Exec(ctx,q,a...);e!=nil{panic(e)}}
@@ -57,12 +50,14 @@ func main(){
  x("INSERT INTO sources(owner_id,id,connector,external_id) VALUES($1,$2,'manual',$3)",f.Owner,c.Source,c.Source)
  x("INSERT INTO source_versions(owner_id,source_id,version,external_version,content_hash,title,body,media_type) VALUES($1,$2,1,'1',sha256(convert_to($3,'UTF8')),'虚构的随手记',$4,'text/plain')",f.Owner,c.Source,c.Source,c.Text)
  x("INSERT INTO chunks(owner_id,id,version,source_id,source_version,ordinal,start_rune,end_rune,body,search_text) VALUES($1,$2,1,$3,1,0,0,$4,$5,$5)",f.Owner,c.Chunk,c.Source,len([]rune(c.Text)),c.Text)
- x("INSERT INTO claims(owner_id,id,organized,compared) VALUES($1,$2,1,1)",f.Owner,c.ID)
+ x("INSERT INTO claims(owner_id,id,organized,compared) VALUES($1,$2,$3,1)",f.Owner,c.ID,f.Version)
  value,_:=json.Marshal(c.Text)
  x("INSERT INTO claim_revisions(owner_id,claim_id,version,subject_id,predicate,value,nature,acquisition,confirmation,change_type,category,durable) VALUES($1,$2,1,$3,'虚构的事',$4::jsonb,'fact','direct','adopted','initial',$5,true)",f.Owner,c.ID,f.Self,string(value),c.Category)
  if c.Project{x("INSERT INTO claim_mentions(owner_id,claim_id,claim_version,entity_id,role) VALUES($1,$2,1,$3,'project')",f.Owner,c.ID,f.Project)}
  x("INSERT INTO evidence(owner_id,id,source_id,source_version,target_id,target_version,locator,acquisition,stance) VALUES($1,gen_random_uuid(),$2,1,$3,1,'{}','direct','supports')",f.Owner,c.Source,c.ID)
  }
+ for _,d:=range f.Deadlines{x("INSERT INTO deadlines(owner_id,id,claim_id,claim_version,kind,at,recurrence,title,time_note,original_text) VALUES($1,gen_random_uuid(),$2,1,$3,$4::timestamptz,$5,$6,$7,$8)",f.Owner,d.Claim,d.Kind,d.At,d.Recurrence,d.Title,d.Note,d.Original)}
+ for _,r:=range f.Requirements{x("INSERT INTO assistant_requirements(owner_id,claim_id,claim_version,unrestricted,scope) VALUES($1,$2,1,$3,$4)",f.Owner,r.Claim,r.Unrestricted,r.Scope)}
  if err=tx.Commit(ctx);err!=nil{panic(err)}
 }`
 
@@ -71,81 +66,120 @@ const projectName = '阳台菜园改造'
 const projectTexts = ['菜园的滴灌定时器装好了，早晚各十分钟', '阳台朝西，夏天下午晒得厉害', '遮阳网还没下单，要先量尺寸', '番茄苗要在四月前移到大盆里']
 const ruleTexts = ['回答先给结论，再给理由', '要花钱的事先问我', '发出去的东西先给我看']
 
-test('资料库读真实后端：「眼下」显示后台写出的交接说明；原来卡片的链接落到同一批记忆上', async ({ page }) => {
+test('资料库读真实后端：「眼下」和分组筛选读的是 2.6 的五个读接口', async ({ page }) => {
   test.setTimeout(8 * 60_000)
   await login(page)
   await command(page, { type: 'updateSettings', patch: { timezone: 'Asia/Shanghai' } })
-  // The model is the runner's fake; these are its answers to the card and handover requests.
-  const handover = { sections: titles.map((title, i) => ({ title, body: i === 1 ? '先给结论，再给理由；要花钱的事先问。' : i === 2 ? '阳台菜园改造，还差遮阳网。' : '（暂无依据）', refs: i === 1 || i === 2 ? [1] : [] })) }
-  await fixture(page, [
-    // First, because the note's request quotes the cards and so contains their keys too.
-    { kind: 'assistant', match: '"cards"', content: JSON.stringify(handover) },
-    { kind: 'assistant', match: '"key":"self:rule"', content: JSON.stringify({ fields: { preference: [1, 2, 3] }, rules: [{ n: 1, appliesTo: '起草邮件' }, { n: 2, appliesTo: '起草邮件' }, { n: 3, appliesTo: '起草邮件' }], deadlines: [] }) },
-    { kind: 'assistant', match: '"key":"entity:', content: JSON.stringify({ fields: { status: [1, 2], next: [3], blocker: [4] }, rules: [], deadlines: [] }) },
-  ])
+  const organize = (await snapshot(page)).organize
+  // The model is the runner's fake; this is its answer when asked for the handover note.
+  const handover = { sections: titles.map((title, i) => ({ title, body: i === 1 ? '先给结论，再给理由；要花钱的事先问。' : i === 3 ? '遮阳网要在期限前装完；每周日喂酸面团。' : '（暂无依据）', refs: i === 1 || i === 3 ? [1] : [] })) }
+  await fixture(page, [{ kind: 'assistant', match: '"inputHash"', content: JSON.stringify(handover) }])
   const claim = (text: string, category: string, project: boolean) => ({ ID: crypto.randomUUID(), Source: crypto.randomUUID(), Chunk: crypto.randomUUID(), Text: text, Category: category, Project: project })
+  const projects = projectTexts.map((t) => claim(t, 'progress', true))
+  const rules = ruleTexts.map((t) => claim(t, 'rule', false))
+  const day = 86400_000
+  const soon = new Date(Date.now() + 3 * day).toISOString()
+  const gone = new Date(Date.now() - 2 * day).toISOString()
   const seed = {
-    Owner: owner, Self: crypto.randomUUID(), Project: crypto.randomUUID(), ProjectName: projectName, Said: new Date(Date.now() - 3 * 86400_000).toISOString(),
-    Claims: [...projectTexts.map((t) => claim(t, 'progress', true)), ...ruleTexts.map((t) => claim(t, 'rule', false))],
+    Owner: owner, Self: crypto.randomUUID(), Project: crypto.randomUUID(), ProjectName: projectName, Said: new Date(Date.now() - 3 * day).toISOString(),
+    // Already sorted under the rules in force, so the sorting stage has nothing to ask the model.
+    Version: organize?.version ?? 1,
+    Claims: [...projects, ...rules],
+    Deadlines: [
+      { Claim: projects[2].ID, Kind: 'deadline', At: soon, Recurrence: '', Title: '给遮阳网下单', Note: '', Original: '' },
+      { Claim: projects[3].ID, Kind: 'deadline', At: gone, Recurrence: '', Title: '番茄苗移盆', Note: '', Original: '' },
+      { Claim: projects[0].ID, Kind: 'recurring', At: null, Recurrence: '每天早晚', Title: '滴灌', Note: '', Original: '' },
+      { Claim: projects[1].ID, Kind: 'unclear', At: null, Recurrence: '', Title: '装遮阳', Note: '只说了夏天前', Original: '夏天前把遮阳装上' },
+    ],
+    Requirements: [
+      { Claim: rules[0].ID, Unrestricted: true, Scope: '' },
+      { Claim: rules[2].ID, Unrestricted: false, Scope: '起草邮件' },
+    ],
   }
-  const directory = mkdtempSync(join(tmpdir(), 'pcas-about-browser-'))
+  const directory = mkdtempSync(join(tmpdir(), 'pcas-library-browser-'))
   try {
     const path = join(directory, 'seed.go')
     writeFileSync(path, seeder)
     execFileSync('go', ['run', path], { cwd: repo, env: { ...process.env, PCAS_ABOUT_FIXTURE: JSON.stringify(seed) }, stdio: ['ignore', 'pipe', 'pipe'] })
   } finally { rmSync(directory, { recursive: true, force: true }) }
 
-  const read = async (key = ''): Promise<About> => {
-    const response = await page.request.get(`/v1/workspace/about${key ? `?key=${encodeURIComponent(key)}` : ''}`)
-    expect(response.ok(), await response.text()).toBeTruthy()
+  const read = async <T>(path: string): Promise<T> => {
+    const response = await page.request.get(`/v1/workspace/${path}`)
+    expect(response.ok(), `${path}: ${await response.text()}`).toBeTruthy()
     return response.json()
   }
-  // The worker builds the cards on its own schedule, then writes the note once they are all there.
-  const projectKey = `entity:${seed.Project}`
-  await expect.poll(async () => {
-    const about = await read()
-    return [about.cards.some((c) => c.key === projectKey), about.cards.some((c) => c.key === 'self:rule'), about.handover.body.includes('先给结论'), about.building.done === about.building.total].join()
-  }, { timeout: 6 * 60_000, intervals: [2000] }).toBe('true,true,true,true')
+  // The worker writes the note on its own schedule, from the memories, the requirements and the dates.
+  await expect.poll(async () => (await read<Handover>('handover')).body.includes('先给结论'), { timeout: 6 * 60_000, intervals: [2000] }).toBe(true)
 
-  const index = await read()
-  const project = (await read(projectKey)).cards.find((c) => c.key === projectKey)!
-  const rules = (await read('self:rule')).cards.find((c) => c.key === 'self:rule')!
   // What the server sends is what the mocked tests assumed.
-  expect(index.cards.find((c) => c.key === projectKey)).toMatchObject({ kind: 'project', name: projectName, count: 4, fields: [] })
-  expect(index.cards.find((c) => c.key === 'self:rule')).toMatchObject({ kind: 'self', name: '对助手的要求', count: 3 })
-  expect(project.fields.flatMap((f) => f.items.map((m) => m.text)).sort()).toEqual([...projectTexts].sort())
-  expect(rules.fields.flatMap((f) => f.items.map((m) => m.appliesTo))).toEqual(['起草邮件', '起草邮件', '起草邮件'])
+  const note = await read<Handover>('handover')
+  expect(note.stale).toBe(false)
+  expect(Number.isNaN(new Date(note.builtAt).getTime())).toBe(false)
+  const dates = (await read<{ items: Deadline[] }>('deadlines')).items
+  expect(dates.map((d) => [d.title, d.dateStatus]).sort()).toEqual([['番茄苗移盆', 'expired_unknown'], ['给遮阳网下单', 'upcoming'], ['滴灌', 'recurring'], ['装遮阳', 'unclear']].sort())
+  expect(dates.find((d) => d.title === '装遮阳')).toMatchObject({ at: null, originalText: '夏天前把遮阳装上', timeNote: '只说了夏天前', memoryId: projects[1].ID })
+  expect((await read<{ items: Deadline[] }>('deadlines?expired=true')).items.map((d) => d.title)).toEqual(['番茄苗移盆'])
+  const asked = (await read<{ items: AssistantRequirement[] }>('assistant-requirements')).items
+  expect(asked.map((r) => r.text).sort()).toEqual([...ruleTexts].sort())
+  expect(asked.find((r) => r.memoryId === rules[0].ID)).toMatchObject({ unrestricted: true })
+  expect(asked.find((r) => r.memoryId === rules[2].ID)).toMatchObject({ unrestricted: false, scope: '起草邮件' })
+  const groups = (await read<{ items: MemoryGroupEntry[] }>('memory-groups')).items
+  const project = groups.find((g) => g.kind === 'project' && g.name === projectName)!
+  const rule = groups.find((g) => g.kind === 'self' && g.name === '对助手的要求')!
+  expect(project).toMatchObject({ count: 4 })
+  expect(rule).toMatchObject({ count: 3 })
+  const first = await read<{ items: Memory[]; next: string; total: number }>(`memory-groups/${encodeURIComponent(project.key)}/memories?limit=3`)
+  expect(first.total).toBe(4)
+  expect(first.items).toHaveLength(3)
+  const rest = await read<{ items: Memory[]; next: string }>(`memory-groups/${encodeURIComponent(project.key)}/memories?limit=3&cursor=${encodeURIComponent(first.next)}`)
+  expect([...first.items, ...rest.items].map((m) => m.text).sort()).toEqual([...projectTexts].sort())
+  expect(rest.next).toBe('')
 
   await page.goto('/library')
   const now = page.getByRole('region', { name: '眼下', exact: true })
-  const note = now.getByRole('region', { name: '交接说明', exact: true })
-  await expect(note).toContainText('写于')
-  await note.getByRole('button', { name: /看全文/ }).click()
-  await expect(note.getByRole('heading', { level: 4 })).toHaveText(titles)
-  await expect(note).toContainText('先给结论，再给理由；要花钱的事先问。')
-  await expect(note).not.toContainText('#')
-  const dates = now.getByRole('region', { name: '期限和固定安排', exact: true })
-  if (index.deadlines.length) await expect(dates.getByRole('listitem')).toHaveCount(index.deadlines.length)
-  else await expect(dates).toContainText('没有记下期限或固定安排。')
+  const shown = now.getByRole('region', { name: '交接说明', exact: true })
+  await expect(shown).toContainText('写于')
+  await expect(shown).not.toContainText('正在更新')
+  await shown.getByRole('button', { name: /看全文/ }).click()
+  await expect(shown.getByRole('heading', { level: 4 })).toHaveText(titles)
+  await expect(shown).toContainText('先给结论，再给理由；要花钱的事先问。')
+  await expect(shown).not.toContainText('#')
+  const table = now.getByRole('region', { name: '期限和固定安排', exact: true })
+  await expect(table.getByRole('group', { name: '还没到的' }).getByRole('listitem')).toContainText(['给遮阳网下单'])
+  await expect(table.getByRole('group', { name: '已过期，不知是否完成' }).getByRole('listitem')).toContainText(['番茄苗移盆'])
+  await expect(table.getByRole('group', { name: '固定安排' }).getByRole('listitem')).toContainText(['每天早晚'])
+  const vague = table.getByRole('group', { name: '日期没说清的' }).getByRole('listitem')
+  await expect(vague).toContainText(['装遮阳'])
+  await expect(vague).toContainText(['原话：夏天前把遮阳装上'])
   await expect(page.getByRole('link', { name: '关于你' })).toHaveCount(0)
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy()
 
-  // A link to the project's card: the library narrowed to that project, holding what the card held.
-  await page.goto(`/about?card=${encodeURIComponent(projectKey)}`)
-  await expect(page).toHaveURL(new RegExp(`/library\\?group=${seed.Project}$`))
-  await expect(page.locator('.mem-summary')).toContainText(`「${projectName}」下面的记忆有 ${project.count} 条`)
+  // The directory's rows; a project narrows the list to what is under it.
+  const row = (name: string) => page.getByRole('group', { name, exact: true })
+  await expect(row('你本人').getByRole('button', { name: /对助手的要求/ })).toContainText('3')
+  await row('项目').getByRole('button', { name: new RegExp(projectName) }).click()
+  await expect(page.locator('.mem-summary')).toContainText(`「${projectName}」名下的记忆有 4 条`)
   for (const text of projectTexts) await expect(page.getByRole('button', { name: text, exact: true })).toBeVisible()
-  await expect(page.getByRole('group', { name: '项目', exact: true }).getByRole('button', { name: new RegExp(projectName) })).toHaveAttribute('aria-pressed', 'true')
+  // Narrowed further, over the whole group.
+  await page.getByRole('textbox', { name: '搜索记忆' }).fill('番茄')
+  await expect(page.locator('.mem-summary')).toContainText('符合其余条件的记忆有 1 条')
+  await expect(page.getByRole('button', { name: projectTexts[3], exact: true })).toBeVisible()
 
-  // A link to what is asked of the assistant: that kind of memory.
+  // A link to the project's former card lands on the same group.
+  await page.goto(`/about?card=${encodeURIComponent(`entity:${seed.Project}`)}`)
+  await expect(page.locator('.mem-summary')).toContainText(`「${projectName}」名下的记忆有 4 条`)
+  expect(new URL(page.url()).pathname).toBe('/library')
+
+  // A link to what is asked of the assistant: each one with when it holds.
   await page.goto('/about?card=self%3Arule')
-  await expect(page).toHaveURL(/\/library\?category=rule$/)
-  await expect(page.locator('.mem-summary')).toContainText(`「对助手的要求」这一类的记忆有 ${rules.count} 条`)
-  for (const text of ruleTexts) await expect(page.getByRole('button', { name: text, exact: true })).toBeVisible()
+  await expect(page.locator('.mem-summary')).toContainText('「对助手的要求」名下的记忆有 3 条')
+  const entry = (text: string) => page.locator('.mem-entry').filter({ hasText: text })
+  await expect(entry(ruleTexts[0])).toContainText('不限范围，每一轮都带')
+  await expect(entry(ruleTexts[2])).toContainText('范围：起草邮件')
   for (const text of projectTexts) await expect(page.getByRole('button', { name: text, exact: true })).toHaveCount(0)
 
   // A memory opens in the usual sheet and can be corrected there.
-  const target = ruleTexts[0]
+  const target = ruleTexts[1]
   await page.getByRole('button', { name: target, exact: true }).click()
   const sheet = page.getByRole('dialog')
   await expect(sheet.getByRole('textbox', { name: '内容' })).toHaveValue(target)

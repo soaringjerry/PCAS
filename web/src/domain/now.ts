@@ -1,5 +1,4 @@
 import type { Deadline } from './status'
-import type { MemoryCategory } from './types'
 
 export const deadlineKindLabel = { deadline: '截止', appointment: '预约', recurring: '固定安排' } as const
 
@@ -57,36 +56,15 @@ export const deadlineGroups: { group: DeadlineGroup; label: string }[] = [
   { group: 'unclear', label: '日期没说清的' },
 ]
 
-export function deadlineGroupOf(d: Deadline, now: number): DeadlineGroup {
-  if (d.kind === 'recurring') return 'recurring'
-  if (!d.at || Number.isNaN(new Date(d.at).getTime())) return 'unclear'
-  return new Date(d.at).getTime() < now ? 'overdue' : 'upcoming'
-}
+const groupOfStatus: Record<Deadline['dateStatus'], DeadlineGroup> = { upcoming: 'upcoming', expired_unknown: 'overdue', recurring: 'recurring', unclear: 'unclear' }
 
-/** The dates by part: the nearest first among those to come, the latest first among those gone by. */
-export function groupDeadlines(items: Deadline[], now: number): Record<DeadlineGroup, Deadline[]> {
+/** The dates by part, as the server sorted them: the nearest first among those to come, the latest first among those gone by. */
+export function groupDeadlines(items: Deadline[]): Record<DeadlineGroup, Deadline[]> {
   const out: Record<DeadlineGroup, Deadline[]> = { upcoming: [], overdue: [], recurring: [], unclear: [] }
-  for (const d of items) out[deadlineGroupOf(d, now)].push(d)
-  const time = (d: Deadline) => new Date(d.at!).getTime()
+  // A status this page does not know is kept, among the ones whose date is not clear.
+  for (const d of items) out[groupOfStatus[d.dateStatus] ?? 'unclear'].push(d)
+  const time = (d: Deadline) => (d.at ? new Date(d.at).getTime() : 0)
   out.upcoming.sort((a, b) => time(a) - time(b))
   out.overdue.sort((a, b) => time(b) - time(a))
   return out
-}
-
-/** The kinds of memory about the user themselves that the library can be narrowed to. */
-export const selfCategories: Extract<MemoryCategory, 'identity' | 'goal' | 'taste' | 'rule'>[] = ['identity', 'goal', 'taste', 'rule']
-
-/**
- * Where a link to one of the former cards leads: the library narrowed to the
- * same memories. `isGroup` says whether an id is a project, topic or area;
- * anything else is a person.
- */
-export function cardFilter(key: string, isGroup: (entityId: string) => boolean): { category?: string; group?: string; entity?: string } {
-  if (key.startsWith('self:')) {
-    const category = selfCategories.find((c) => c === key.slice(5))
-    return category ? { category } : {}
-  }
-  if (!key.startsWith('entity:') || key.length === 7) return {}
-  const id = key.slice(7)
-  return isGroup(id) ? { group: id } : { entity: id }
 }

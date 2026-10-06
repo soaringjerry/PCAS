@@ -206,7 +206,8 @@ test('一个分组都没有时不出现分组入口，人和地点照旧', async
   await open(page)
   await expect(page.locator('.mem-entry')).toHaveCount(2)
   for (const name of ['项目', '主题', '领域']) await expect(row(page, name)).toHaveCount(0)
-  await expect(page.locator('.mem-facet')).toHaveCount(2)
+  // The kinds of memory about the user are always on offer; they do not come from the groups.
+  await expect(page.locator('.mem-facet-label')).toHaveText(['你本人', '提到的人', '地点'])
   await expect(row(page, '提到的人').getByRole('button')).toHaveText(['林栖1'])
   await expect(row(page, '地点').getByRole('button')).toHaveText(['云岫镇2'])
   await expect(page.locator('body')).not.toContainText('已整理')

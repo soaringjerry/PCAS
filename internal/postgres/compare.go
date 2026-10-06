@@ -79,15 +79,8 @@ func enqueueCompareTx(ctx context.Context, tx pgx.Tx, owner memory.ID, now time.
 	if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM memory_jobs WHERE owner_id=$1 AND stage LIKE $2 AND state IN ('queued','leased'))", string(owner), stage+":%").Scan(&pending); err != nil || pending {
 		return false, err
 	}
-	if entity {
-		pair, err := nextEntityPairTx(ctx, tx, owner, version)
-		if err != nil {
-			return false, err
-		}
-		if pair == nil {
-			return false, nil
-		}
-	} else {
+	// The caller has already found a pair to confirm, outside this write.
+	if !entity {
 		_, err := nextCompareGroupTx(ctx, tx, owner, version)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return false, nil
@@ -149,23 +142,44 @@ func (s *Store) scheduleCompareVersion(ctx context.Context, now time.Time, versi
 		if err != nil {
 			return err
 		}
+		// One write per kind: a slow or busy one must not undo the other.
+		var failed error
 		for _, owner := range owners {
-			if err := backgroundWriteTx(ctx, s.pool, owner, func(ctx context.Context, tx pgx.Tx) error {
-				for _, entity := range []bool{false, true} {
-					queued, err := enqueueCompareTx(ctx, tx, owner, now, version, entity)
-					if err != nil {
-						return err
+			for _, entity := range []bool{false, true} {
+				if entity {
+					entityVersion := version
+					if version == CompareVersion {
+						entityVersion = EntityCompareVersion
 					}
+					var pending bool
+					if err := s.pool.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM memory_jobs WHERE owner_id=$1 AND stage LIKE $2 AND state IN ('queued','leased'))", string(owner), EntityCompareStage+":%").Scan(&pending); err != nil {
+						failed = err
+						continue
+					}
+					if pending {
+						continue
+					}
+					pair, err := s.nextEntityPair(ctx, owner, entityVersion)
+					if err != nil {
+						failed = err
+						continue
+					}
+					if pair == nil {
+						continue
+					}
+				}
+				if err := backgroundWriteTx(ctx, s.pool, owner, func(ctx context.Context, tx pgx.Tx) error {
+					queued, err := enqueueCompareTx(ctx, tx, owner, now, version, entity)
 					if queued {
 						count++
 					}
+					return err
+				}); err != nil {
+					failed = err
 				}
-				return nil
-			}); err != nil {
-				return err
 			}
 		}
-		return nil
+		return failed
 	})
 	return count, err
 }

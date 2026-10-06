@@ -97,6 +97,27 @@ func TestR1R2CompletionRechecksDependencyAccess(t *testing.T) {
 			if len(st.Docs) != 0 {
 				t.Error("changed result automatically adopted")
 			}
+			// C5 permits the optional check after unrelated correction. Its
+			// model deadline can expire before A9's cancellation-independent
+			// accounting finishes; wait for that bounded settlement, not a
+			// fixed sleep or a weaker cost comparison.
+			if change == "correct" || change == "source-correct" {
+				deadline := time.Now().Add(21 * time.Second)
+				for {
+					var ledger float64
+					if err := s.pool.QueryRow(context.Background(), `SELECT coalesce(sum(cost),0) FROM model_usage WHERE owner_id=$1`, scope.OwnerID).Scan(&ledger); err != nil {
+						t.Fatal(err)
+					}
+					st, err = s.Snapshot(context.Background(), scope)
+					if err != nil {
+						t.Fatal(err)
+					}
+					if math.Abs(st.BudgetUsage-ledger) <= 1e-9 || time.Now().After(deadline) {
+						break
+					}
+					time.Sleep(10 * time.Millisecond)
+				}
+			}
 			rows := b4Usage(t, s, scope)
 			wantMax := 1
 			if change == "correct" || change == "source-correct" {

@@ -100,8 +100,14 @@ func (s *Store) useModelCall(ctx, persist context.Context, scope memory.Scope, a
 	go func() {
 		accountingCtx, accountingCancel := context.WithTimeout(context.WithoutCancel(persist), 20*time.Second)
 		defer accountingCancel()
+		report := func(err error) {
+			if err != nil {
+				slog.ErrorContext(accountingCtx, "model accounting failed", "stage", usage.Purpose, "error_type", backgroundFailureReason(err))
+			}
+			billed <- err
+		}
 		if e := s.settleModelCost(accountingCtx, scope.OwnerID, reservation, cost); e != nil {
-			billed <- e
+			report(e)
 			return
 		}
 		usage.OwnerID = scope.OwnerID
@@ -112,10 +118,10 @@ func (s *Store) useModelCall(ctx, persist context.Context, scope memory.Scope, a
 		usage.InputEstimated, usage.OutputEstimated, usage.CostEstimated = result.InputEstimated, result.OutputEstimated, result.CostEstimated
 		usage.Cost = cost
 		if e := s.recordUsage(accountingCtx, usage); e != nil {
-			billed <- e
+			report(e)
 			return
 		}
-		billed <- nil
+		report(nil)
 	}()
 	select {
 	case e := <-billed:

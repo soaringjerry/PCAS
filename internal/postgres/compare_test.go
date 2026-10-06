@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 	"testing"
@@ -72,9 +73,18 @@ func compareJob(t *testing.T, s *Store, scope memory.Scope, entity bool, version
 func compareProcess(t *testing.T, s *Store, scope memory.Scope) {
 	t.Helper()
 	j := compareJob(t, s, scope, false, CompareVersion)
-	if err := s.ProcessCompare(context.Background(), j); err != nil {
-		t.Fatal(err)
+	for attempt := 0; attempt < 5; attempt++ {
+		err := s.ProcessCompare(context.Background(), j)
+		if err == nil {
+			return
+		}
+		var deferred *worker.JobError
+		if !errors.As(err, &deferred) || deferred.Code != "background_write_busy" || !deferred.NoAttempt {
+			t.Fatal(err)
+		}
+		time.Sleep(100 * time.Millisecond)
 	}
+	t.Fatal("bounded comparison writes did not recover")
 }
 func compareDetail(t *testing.T, s *Store, scope memory.Scope, ref memory.Ref) workspace.Memory {
 	t.Helper()
@@ -219,6 +229,7 @@ func TestCompareRestoreUndoAndVersionBump(t *testing.T) {
 	b1Undo(t, s, scope, cmd.RequestID)
 	compareState(t, s, scope, refs, []string{"superseded", ""}, CompareVersion)
 	f.set(`{"duplicates":[],"superseded":[]}`)
+	compareFixture(t, s, scope, "虚构规则升级后新增的当前记忆")
 	j := compareJob(t, s, scope, false, CompareVersion+1)
 	if err = s.processCompareVersion(context.Background(), j, CompareVersion+1); err != nil {
 		t.Fatal(err)
@@ -277,12 +288,11 @@ func TestCompareInvalidOutputAttemptsAndUsage(t *testing.T) {
 	f := b1Model(t, s, "not JSON")
 	refs := compareFixture(t, s, scope, "合成比较甲", "合成比较乙")
 	for i := 1; i <= 3; i++ {
-		compareProcess(t, s, scope)
-		want := 0
-		if i == 3 {
-			want = CompareVersion
+		if _, err := s.pool.Exec(context.Background(), "UPDATE memory_comparison_batches SET retry_after=now() WHERE owner_id=$1", scope.OwnerID); err != nil {
+			t.Fatal(err)
 		}
-		compareState(t, s, scope, refs, []string{"", ""}, want)
+		compareProcess(t, s, scope)
+		compareState(t, s, scope, refs, []string{"", ""}, 0)
 	}
 	var count int
 	if err := s.pool.QueryRow(context.Background(), "SELECT count(*) FROM model_usage WHERE owner_id=$1 AND purpose='compare'", string(scope.OwnerID)).Scan(&count); err != nil || count != 3 || len(f.all()) != 3 {
@@ -306,24 +316,26 @@ func TestCompareWindowAndNoModel(t *testing.T) {
  identifier:=gen_random_uuid();
  INSERT INTO memory_records(owner_id,id,kind,version) VALUES(o,identifier,'claim',1);
  INSERT INTO record_versions(owner_id,record_id,version,actor,expressed_at) VALUES(o,identifier,1,'ai','2026-09-12 10:00:00+00'::timestamptz+i*interval '1 second');
- INSERT INTO claims(owner_id,id,organized) VALUES(o,identifier,1);
+ INSERT INTO claims(owner_id,id,organized) VALUES(o,identifier,2);
  INSERT INTO claim_revisions(owner_id,claim_id,version,subject_id,predicate,value,nature,acquisition,confirmation,change_type,category,durable) VALUES(o,identifier,1,subject,'合成批量',to_jsonb('合成记忆'||i),'fact','direct','candidate','initial','progress',true);
  INSERT INTO claim_mentions(owner_id,claim_id,claim_version,entity_id,role) VALUES(o,identifier,1,grp,'topic');
  END LOOP; END $$`); err != nil {
 		t.Fatal(err)
 	}
 	f := b1Model(t, s, `{"duplicates":[],"superseded":[]}`)
-	for i, want := range []int{200, 205} {
+	// Three stable blocks require all six within/cross-block comparisons.
+	for range 6 {
 		compareProcess(t, s, scope)
-		var n int
-		if err := s.pool.QueryRow(context.Background(), "SELECT count(*) FROM claims WHERE owner_id=$1 AND compared=$2", string(scope.OwnerID), CompareVersion).Scan(&n); err != nil || n != want {
-			t.Fatal(i, n, err)
-		}
 		var p struct{ Memories []compareMemory }
 		if err := json.Unmarshal([]byte(strings.TrimSpace(f.last(t).Prompt)), &p); err != nil || len(p.Memories) > 200 {
 			t.Fatal(err, len(p.Memories))
 		}
 	}
+	var n int
+	if err := s.pool.QueryRow(context.Background(), "SELECT count(*) FROM claims WHERE owner_id=$1 AND compared=$2", scope.OwnerID, CompareVersion).Scan(&n); err != nil || n != 205 {
+		t.Fatal("all memories must participate", n, err)
+	}
+
 	if m := compareDetail(t, s, scope, refs[0]); m.Retired != "" {
 		t.Fatal(m)
 	}

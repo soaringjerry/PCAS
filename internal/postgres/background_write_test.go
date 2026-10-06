@@ -24,11 +24,7 @@ func backgroundFixture(t *testing.T, stage string) (*Store, memory.Scope, worker
 		}
 	case "handover":
 		statusTestMemories(t, s, scope, 3)
-		for range 2 {
-			if err := s.ProcessCard(context.Background(), statusTestJob(t, s, scope)); err != nil {
-				t.Fatal(err)
-			}
-		}
+
 		j := handoverTestJob(t, s, scope)
 		return s, scope, j, s.ProcessHandover, func(w http.ResponseWriter, r *http.Request) { handoverFakeReply(t, w, r) }
 	default:
@@ -39,7 +35,7 @@ func backgroundFixture(t *testing.T, stage string) (*Store, memory.Scope, worker
 }
 
 func TestBackgroundModelCallsLeaveOwnerUnlocked(t *testing.T) {
-	for _, stage := range []string{"card", "compare", "handover"} {
+	for _, stage := range []string{"compare", "handover"} {
 		t.Run(stage, func(t *testing.T) {
 			s, scope, j, process, reply := backgroundFixture(t, stage)
 			entered, release := make(chan struct{}), make(chan struct{})
@@ -68,8 +64,8 @@ func TestBackgroundModelCallsLeaveOwnerUnlocked(t *testing.T) {
 	}
 }
 
-func TestBackgroundContendedCardYieldsOwnerPromptly(t *testing.T) {
-	s, scope, j, process, reply := backgroundFixture(t, "card")
+func TestBackgroundContendedHandoverYieldsOwnerPromptly(t *testing.T) {
+	s, scope, j, process, reply := backgroundFixture(t, "handover")
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	tx, err := s.pool.Begin(ctx)
@@ -77,7 +73,10 @@ func TestBackgroundContendedCardYieldsOwnerPromptly(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer tx.Rollback(context.Background())
-	if _, err := tx.Exec(ctx, "SELECT 1 FROM status_cards WHERE owner_id=$1 FOR UPDATE", scope.OwnerID); err != nil {
+	if _, err := tx.Exec(ctx, "INSERT INTO handovers(owner_id,body,rule) VALUES($1,'虚构旧交接',1) ON CONFLICT(owner_id) DO NOTHING", scope.OwnerID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.Exec(ctx, "SELECT 1 FROM handovers WHERE owner_id=$1 FOR UPDATE", scope.OwnerID); err != nil {
 		t.Fatal(err)
 	}
 	entered := make(chan struct{})

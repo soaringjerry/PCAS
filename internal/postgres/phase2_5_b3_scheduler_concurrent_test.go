@@ -20,17 +20,6 @@ import (
 
 // Exercise the production overlap: scheduling, result writes, and foreground
 // traffic run on independent connections. No SQL locks stand in for a handler.
-func TestPhase25B3_ConcurrentStatusSchedulerWorkerAndUserRequests(t *testing.T) {
-	for _, rebuilding := range []bool{false, true} {
-		name := "initial"
-		if rebuilding {
-			name = "rebuild"
-		}
-		t.Run(name, func(t *testing.T) {
-			phase25B3ConcurrentStatus(t, rebuilding)
-		})
-	}
-}
 
 func phase25B3ConcurrentStatus(t *testing.T, rebuilding bool) {
 	t.Helper()

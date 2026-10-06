@@ -145,7 +145,7 @@ func TestCompareRestoreProtectionSurvivesActionSnapshotExpiry(t *testing.T) {
 
 // Verify the real migration-037 trigger, not a Go-side stale flag helper. The
 // unselected fourth memory must invalidate its group after it leaves current.
-func TestCompareRetirementInvalidatesCardsThroughClaimsUpdate(t *testing.T) {
+func TestCompareRetirementPreservesFrozenCards(t *testing.T) {
 	s := testStore(t)
 	scope := owner()
 	ctx := context.Background()
@@ -166,24 +166,24 @@ func TestCompareRetirementInvalidatesCardsThroughClaimsUpdate(t *testing.T) {
 	if _, err := s.pool.Exec(ctx, "INSERT INTO handovers(owner_id,body,rule,built_at,stale) VALUES($1,'虚构旧交接',1,now(),false)", string(scope.OwnerID)); err != nil {
 		t.Fatal(err)
 	}
-	started := time.Now()
 	if err := s.ProcessCompare(ctx, j); err != nil {
 		t.Fatal(err)
 	}
-	var stale, handover bool
-	var available time.Time
-	if err := s.pool.QueryRow(ctx, "SELECT stale FROM status_cards WHERE owner_id=$1 AND key=$2", string(scope.OwnerID), key).Scan(&stale); err != nil || !stale {
-		t.Fatal("card not invalidated", stale, err)
+	var stale bool
+	if err := s.pool.QueryRow(ctx, "SELECT stale FROM status_cards WHERE owner_id=$1 AND key=$2", scope.OwnerID, key).Scan(&stale); err != nil || stale {
+		t.Fatal("frozen card changed", stale, err)
 	}
-	if err := s.pool.QueryRow(ctx, "SELECT stale FROM handovers WHERE owner_id=$1", string(scope.OwnerID)).Scan(&handover); err != nil || !handover {
-		t.Fatal("handover not invalidated", handover, err)
+	var queued int
+	if err := s.pool.QueryRow(ctx, "SELECT count(*) FROM memory_jobs WHERE owner_id=$1 AND stage LIKE 'memory.card:%' AND state='queued'", scope.OwnerID).Scan(&queued); err != nil || queued != 0 {
+		t.Fatal("retirement queued card rebuild", queued, err)
 	}
-	if err := s.pool.QueryRow(ctx, "SELECT available_at FROM memory_jobs WHERE owner_id=$1 AND stage=$2 AND state='queued'", string(scope.OwnerID), "memory.card:1:"+key).Scan(&available); err != nil || available.Before(started.Add(10*time.Minute)) || available.After(time.Now().Add(10*time.Minute+time.Second)) {
-		t.Fatal("trigger did not debounce rebuild", available, err)
+	if m := compareDetail(t, s, scope, refs[0]); m.Retired != "superseded" {
+		t.Fatal("retirement missing", m)
 	}
+
 }
 
-func TestCompareRetirementInvalidatesUnselectedSecondaryGroup(t *testing.T) {
+func TestCompareRetirementPreservesFrozenSecondaryCard(t *testing.T) {
 	s := testStore(t)
 	scope := owner()
 	ctx := context.Background()
@@ -212,7 +212,7 @@ func TestCompareRetirementInvalidatesUnselectedSecondaryGroup(t *testing.T) {
 		t.Fatal(err)
 	}
 	var stale bool
-	if err := s.pool.QueryRow(ctx, "SELECT stale FROM status_cards WHERE owner_id=$1 AND key=$2", string(scope.OwnerID), key).Scan(&stale); err != nil || !stale {
-		t.Fatal("secondary group lost its unselected membership before invalidation", stale, err)
+	if err := s.pool.QueryRow(ctx, "SELECT stale FROM status_cards WHERE owner_id=$1 AND key=$2", string(scope.OwnerID), key).Scan(&stale); err != nil || stale {
+		t.Fatal("frozen secondary card changed", stale, err)
 	}
 }

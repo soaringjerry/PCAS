@@ -115,7 +115,7 @@ func TestB4StatusPromptAndDependencies(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, text := range []string{"交接说明：", "必须遵守的要求", "相关的现状卡", "期限和固定安排", "补充记忆", "相关原话", "每周二晚上", "周五上午十点", "发出去之前先给我看", "trust=repeated"} {
+	for _, text := range []string{"交接说明：", "（写于 ", "必须遵守的要求", "相关的现状卡", "期限和固定安排", "补充记忆", "相关原话", "每周二晚上", "周五上午十点", "发出去之前先给我看", "trust=repeated"} {
 		if !strings.Contains(prompt, text) {
 			t.Errorf("missing %s in %s", text, prompt)
 		}

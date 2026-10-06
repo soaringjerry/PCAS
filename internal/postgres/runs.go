@@ -823,8 +823,9 @@ func (s *Store) runAgentOnce(ctx context.Context) error {
 			string(scope.OwnerID), current.ThingID, runNoticePrefix+current.ID, runNoticeReason(current)); err != nil {
 			return err
 		}
-		_, err = tx.Exec(ctx, "UPDATE workspace_owners SET revision=revision+1 WHERE owner_id=$1", string(scope.OwnerID))
-		return err
+		// Delivery triggers expose background results without changing the
+		// revision used to authorize checkbox, reminder and bulk commands.
+		return nil
 	})
 }
 

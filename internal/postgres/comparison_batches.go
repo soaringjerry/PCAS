@@ -86,6 +86,9 @@ func comparisonPlanTx(ctx context.Context, tx pgx.Tx, owner memory.ID, version i
 				if a != b {
 					batch.Memories = append(batch.Memories, blocks[g.Key][b]...)
 				}
+				if len(batch.Memories) < 2 {
+					continue
+				}
 				sort.SliceStable(batch.Memories, func(i, j int) bool {
 					a, b := batch.Memories[i], batch.Memories[j]
 					if a.ExpressedAt == nil {
@@ -178,12 +181,20 @@ func writeComparisonReceiptTx(ctx context.Context, tx pgx.Tx, owner memory.ID, v
 	}
 	// Per-memory/per-group receipts record participation, never replace the batch
 	// coverage ledger that must finish every cross-block comparison.
-	for _, m := range b.Memories {
-		if _, err := tx.Exec(ctx, `INSERT INTO memory_group_progress(owner_id,group_key,claim_id,claim_version,rule,compared_at)
- SELECT $1,$2,$3,$4,$5,clock_timestamp() WHERE EXISTS(SELECT 1 FROM claims WHERE owner_id=$1 AND id=$3)
- ON CONFLICT(owner_id,group_key,claim_id) DO UPDATE SET claim_version=excluded.claim_version,rule=excluded.rule,compared_at=excluded.compared_at`, string(owner), b.Group.Key, string(m.Ref.ID), m.Ref.Version, version); err != nil {
-			return err
-		}
-	}
-	return nil
+	_, err := tx.Exec(ctx, `INSERT INTO memory_group_progress(owner_id,group_key,claim_id,claim_version,rule,compared_at)
+ SELECT $1,$2,input.id,input.version,$3,clock_timestamp() FROM jsonb_to_recordset($4::jsonb) input(id uuid,version integer)
+ JOIN claims cl ON(cl.owner_id,cl.id)=($1::uuid,input.id)
+ ON CONFLICT(owner_id,group_key,claim_id) DO UPDATE SET claim_version=excluded.claim_version,rule=excluded.rule,compared_at=excluded.compared_at
+ WHERE (memory_group_progress.claim_version,memory_group_progress.rule) IS DISTINCT FROM (excluded.claim_version,excluded.rule)`, string(owner), b.Group.Key, version, asJSON(b.Refs))
+	return err
+}
+
+func (s *Store) nextComparisonBatch(ctx context.Context, owner memory.ID, version int) (*comparisonBatch, error) {
+	var batch *comparisonBatch
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		var e error
+		batch, e = nextComparisonBatchTx(ctx, tx, owner, version)
+		return e
+	})
+	return batch, err
 }

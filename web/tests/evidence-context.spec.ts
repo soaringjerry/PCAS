@@ -11,6 +11,7 @@ async function backend(page: Page, failOnce = false, withConversation = true) {
   page.on('pageerror', e => errors.push(e.message))
   await page.route('**/v1/**', route => route.fulfill({ status: 500, json: { error: 'unexpected_fiction_request' } }))
   await page.route(url => url.pathname === '/v1/workspace', route => route.fulfill({ json: state }))
+  await page.route(url => url.pathname === '/v1/workspace/about', route => route.fulfill({ json: { handover: { body: '', builtAt: '', stale: false }, deadlines: [] } }))
   await page.route(url => url.pathname === '/v1/workspace/memory-facets', route => route.fulfill({ json: { people: [], places: [] } }))
   await page.route(url => url.pathname === '/v1/workspace/memories', route => route.fulfill({ json: { items: [memory], next: '', total: 1 } }))
   await page.route(url => url.pathname === '/v1/workspace/memories/fiction-memory', route => route.fulfill({ json: memory }))

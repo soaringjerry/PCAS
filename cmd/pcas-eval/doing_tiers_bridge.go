@@ -77,7 +77,7 @@ func (b *tierBridge) registry() *ai.Registry {
 }
 
 func tierContextSections(prompt string) (string, error) {
-	start := strings.Index(prompt, "\n交接说明：")
+	start := strings.Index(prompt, "\n交接说明")
 	if start < 0 {
 		start = strings.Index(prompt, "召回的记忆")
 	}
@@ -227,7 +227,7 @@ func tierFakeReply(purpose, prompt string) (string, error) {
 	case "organize":
 		items := []any{}
 		for _, m := range input.Memories {
-			items = append(items, map[string]any{"n": m.N, "category": "taste", "durable": true, "area": "兴趣"})
+			items = append(items, map[string]any{"n": m.N, "category": "taste", "durable": true, "deadlines": []any{}, "area": "兴趣"})
 		}
 		return stringJSON(map[string]any{"items": items, "new": []any{}}), nil
 	case "compare":

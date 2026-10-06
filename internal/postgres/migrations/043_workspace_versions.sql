@@ -51,14 +51,22 @@ BEGIN
 END $$;
 CREATE TRIGGER library_agent_update AFTER UPDATE ON workspace_agents FOR EACH ROW EXECUTE FUNCTION bump_agent_library_version();
 
+-- An append-only journal avoids locking the owner after a queue/run row.
+-- Delivery counts committed events, so concurrent out-of-order commits and
+-- rollbacks cannot hide a change. No FK lock is taken on workspace_owners.
+CREATE TABLE workspace_snapshot_events (
+ id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+ owner_id uuid NOT NULL
+);
+CREATE INDEX workspace_snapshot_events_owner_idx ON workspace_snapshot_events(owner_id);
 CREATE FUNCTION bump_workspace_snapshot_version() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
  IF TG_OP='INSERT' THEN
-  UPDATE workspace_owners SET snapshot_revision=snapshot_revision+1 WHERE owner_id IN(SELECT DISTINCT owner_id FROM new_rows);
+  INSERT INTO workspace_snapshot_events(owner_id) SELECT DISTINCT owner_id FROM new_rows;
  ELSIF TG_OP='DELETE' THEN
-  UPDATE workspace_owners SET snapshot_revision=snapshot_revision+1 WHERE owner_id IN(SELECT DISTINCT owner_id FROM old_rows);
+  INSERT INTO workspace_snapshot_events(owner_id) SELECT DISTINCT owner_id FROM old_rows;
  ELSE
-  UPDATE workspace_owners SET snapshot_revision=snapshot_revision+1 WHERE owner_id IN(SELECT DISTINCT owner_id FROM (SELECT * FROM new_rows EXCEPT SELECT * FROM old_rows) changed);
+  INSERT INTO workspace_snapshot_events(owner_id) SELECT DISTINCT owner_id FROM (SELECT * FROM new_rows EXCEPT SELECT * FROM old_rows) changed;
  END IF;
  RETURN NULL;
 END $$;

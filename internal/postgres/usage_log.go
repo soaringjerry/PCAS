@@ -14,21 +14,24 @@ import (
 
 // modelUsage mirrors model_usage. References contain identity only, never text.
 type modelUsage struct {
-	Tier         string
-	OwnerID      memory.ID
-	ID           memory.ID
-	At           time.Time
-	Purpose      string
-	AgentID      string
-	Model        string
-	InputTokens  int
-	OutputTokens int
-	Cost         float64
-	TurnID       string
-	RunID        string
-	JobID        string
-	MemoryRefs   []memory.Ref
-	Plan         json.RawMessage
+	Tier            string
+	OwnerID         memory.ID
+	ID              memory.ID
+	At              time.Time
+	Purpose         string
+	AgentID         string
+	Model           string
+	InputTokens     int
+	OutputTokens    int
+	InputEstimated  bool
+	OutputEstimated bool
+	CostEstimated   bool
+	Cost            float64
+	TurnID          string
+	RunID           string
+	JobID           string
+	MemoryRefs      []memory.Ref
+	Plan            json.RawMessage
 }
 
 // A returned model call has already incurred usage. Persist it independently
@@ -54,11 +57,11 @@ func recordUsageTx(ctx context.Context, tx pgx.Tx, usage modelUsage) error {
 	}
 	// Persist only validated group keys; arbitrary plan text never reaches storage.
 	_, err := tx.Exec(ctx, `INSERT INTO model_usage
- (owner_id,id,at,purpose,agent_id,model,input_tokens,output_tokens,cost,turn_id,run_id,job_id,memory_refs,tier,plan)
- VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+ (owner_id,id,at,purpose,agent_id,model,input_tokens,output_tokens,cost,turn_id,run_id,job_id,memory_refs,tier,plan,input_estimated,output_estimated,cost_estimated)
+ VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
  ON CONFLICT (owner_id,id) DO NOTHING`, string(usage.OwnerID), string(usage.ID), usage.At,
 		usage.Purpose, nullString(usage.AgentID), usage.Model, usage.InputTokens, usage.OutputTokens,
-		usage.Cost, nullString(usage.TurnID), nullString(usage.RunID), nullString(usage.JobID), asJSON(refs), usage.Tier, safeUsePlan(usage.Plan))
+		usage.Cost, nullString(usage.TurnID), nullString(usage.RunID), nullString(usage.JobID), asJSON(refs), usage.Tier, safeUsePlan(usage.Plan), usage.InputEstimated, usage.OutputEstimated, usage.CostEstimated)
 	return err
 }
 
@@ -86,12 +89,13 @@ func (s *Store) UsageSummary(ctx context.Context, scope memory.Scope, from, to s
 		}
 		return tx.QueryRow(ctx, `WITH totals AS (
    SELECT (at AT TIME ZONE $2)::date AS day,purpose,count(*) AS calls,
-    sum(input_tokens) AS input,sum(output_tokens) AS output,sum(cost) AS cost
+    sum(input_tokens) AS input,sum(output_tokens) AS output,sum(cost) AS cost,
+ count(*) FILTER(WHERE input_estimated OR output_estimated) AS estimated_tokens, count(*) FILTER(WHERE cost_estimated) AS estimated_cost
    FROM model_usage WHERE owner_id=$1 AND at >= $3 AND at < $4
    GROUP BY 1,2
   ), days AS (
    SELECT day,jsonb_agg(jsonb_build_object('purpose',purpose,'calls',calls,
-    'inputTokens',input,'outputTokens',output,'cost',cost) ORDER BY purpose) AS purposes
+    'inputTokens',input,'outputTokens',output,'cost',cost,'estimatedTokenCalls',estimated_tokens,'estimatedCostCalls',estimated_cost) ORDER BY purpose) AS purposes
    FROM totals GROUP BY day
   ) SELECT jsonb_build_object('days',coalesce(jsonb_agg(jsonb_build_object(
    'date',day::text,'purposes',purposes) ORDER BY day),'[]'::jsonb)) FROM days`,
@@ -135,20 +139,23 @@ type usageCallRef struct {
 }
 
 type usageCall struct {
-	Tier         string          `json:"tier"`
-	Plan         json.RawMessage `json:"plan,omitempty"`
-	ID           memory.ID       `json:"id"`
-	At           time.Time       `json:"at"`
-	Purpose      string          `json:"purpose"`
-	AgentID      *string         `json:"agentId"`
-	Model        string          `json:"model"`
-	InputTokens  int             `json:"inputTokens"`
-	OutputTokens int             `json:"outputTokens"`
-	Cost         float64         `json:"cost"`
-	TurnID       *string         `json:"turnId"`
-	RunID        *string         `json:"runId"`
-	JobID        *string         `json:"jobId"`
-	Refs         []usageCallRef  `json:"refs"`
+	InputEstimated  bool            `json:"inputEstimated"`
+	OutputEstimated bool            `json:"outputEstimated"`
+	CostEstimated   bool            `json:"costEstimated"`
+	Tier            string          `json:"tier"`
+	Plan            json.RawMessage `json:"plan,omitempty"`
+	ID              memory.ID       `json:"id"`
+	At              time.Time       `json:"at"`
+	Purpose         string          `json:"purpose"`
+	AgentID         *string         `json:"agentId"`
+	Model           string          `json:"model"`
+	InputTokens     int             `json:"inputTokens"`
+	OutputTokens    int             `json:"outputTokens"`
+	Cost            float64         `json:"cost"`
+	TurnID          *string         `json:"turnId"`
+	RunID           *string         `json:"runId"`
+	JobID           *string         `json:"jobId"`
+	Refs            []usageCallRef  `json:"refs"`
 }
 
 func parseUsageCursor(before string) (usageCursor, error) {
@@ -186,7 +193,7 @@ func (s *Store) UsageCalls(ctx context.Context, scope memory.Scope, limit int, b
 	next := ""
 	err = pgx.BeginTxFunc(ctx, s.pool, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx, `SELECT id::text,at,purpose,agent_id,model,input_tokens,output_tokens,cost,
-   turn_id::text,run_id::text,job_id::text,memory_refs,tier,plan FROM model_usage
+   turn_id::text,run_id::text,job_id::text,memory_refs,tier,plan,input_estimated,output_estimated,cost_estimated FROM model_usage
    WHERE owner_id=$1 AND ($2::timestamptz IS NULL OR (at,id)<($2,$3::uuid))
    ORDER BY at DESC,id DESC LIMIT $4`, string(scope.OwnerID), usageBefore(cursor), nullString(string(cursor.ID)), limit+1)
 		if err != nil {
@@ -197,7 +204,7 @@ func (s *Store) UsageCalls(ctx context.Context, scope memory.Scope, limit int, b
 			var call usageCall
 			var refs []memory.Ref
 			if err := rows.Scan(&call.ID, &call.At, &call.Purpose, &call.AgentID, &call.Model, &call.InputTokens,
-				&call.OutputTokens, &call.Cost, &call.TurnID, &call.RunID, &call.JobID, &refs, &call.Tier, &call.Plan); err != nil {
+				&call.OutputTokens, &call.Cost, &call.TurnID, &call.RunID, &call.JobID, &refs, &call.Tier, &call.Plan, &call.InputEstimated, &call.OutputEstimated, &call.CostEstimated); err != nil {
 				rows.Close()
 				return err
 			}

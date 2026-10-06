@@ -758,18 +758,15 @@ func (s *Store) runAgentOnce(ctx context.Context) error {
 	}
 
 	cost := result.Cost
-	if generationErr != nil && strings.TrimSpace(result.Text) == "" {
-		cost = 0
-	}
 	if err := s.settleRunCost(ctx, scope.OwnerID, run, cost); err != nil {
 		return err
 	}
-	if verifyErr == nil && (u.Ready || generationErr == nil) {
+	if verifyErr == nil {
 		p, _ := s.models.Get(run.AgentID)
 		usage := modelUsage{
 			OwnerID: scope.OwnerID, ID: memory.NewID(), At: time.Now().UTC(),
 			Purpose: "deputy", AgentID: run.AgentID, Model: p.Model,
-			InputTokens: result.InputTokens, OutputTokens: result.OutputTokens, Cost: cost,
+			InputTokens: result.InputTokens, OutputTokens: result.OutputTokens, InputEstimated: result.InputEstimated, OutputEstimated: result.OutputEstimated, CostEstimated: result.CostEstimated, Cost: cost,
 			RunID: run.ID, MemoryRefs: run.ContextVersions, Tier: run.MemoryTier, Plan: asJSON(usePlan{Groups: run.MemoryGroups}),
 		}
 		var usageErr error

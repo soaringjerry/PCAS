@@ -202,7 +202,7 @@ func TestB4MissingInformationEscalates(t *testing.T) {
 	var calls atomic.Int32
 	secretaryModel(t, s, func(w http.ResponseWriter, r *http.Request) {
 		if calls.Add(1) == 1 {
-			time.Sleep(10 * time.Millisecond)
+			time.Sleep(150 * time.Millisecond)
 			secretaryModelReply(w, `{"reply":"资料不够","missingKeyInfo":true,"actions":[]}`)
 		} else {
 			secretaryModelReply(w, `{"reply":"先做已有的部分","actions":[]}`)
@@ -210,6 +210,7 @@ func TestB4MissingInformationEscalates(t *testing.T) {
 	})
 	m := b4Memory(t, s, scope, "虚构可用卡片背景")
 	b4Card(t, s, scope, "self:goal", "self", "虚构目标", m)
+	b4Exec(t, s, `INSERT INTO handovers(owner_id,body,rule,built_at,stale) VALUES($1,'虚构缺信息测试交接',1,now(),false)`, scope.OwnerID)
 	out, err := s.DeskTurn(b4Context(s), scope, turnRequest("虚构项目现在能做什么"))
 	if err != nil || calls.Load() != 2 || out.Turn.Reply != "先做已有的部分" {
 		t.Fatal(out, err, calls.Load())

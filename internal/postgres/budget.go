@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"math"
 	"math/big"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -41,7 +42,7 @@ func (s *Store) reserveModelCostID(ctx context.Context, owner memory.ID, cost fl
 			if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended(current_database()||':'||current_schema()||':budget:'||$1,0))", stage); err != nil {
 				return err
 			}
-			if err := backgroundHourlyTx(ctx, tx, stage, stage+"_hourly_limit"); err != nil {
+			if err := backgroundHourlyTx(ctx, tx, stage, strings.TrimPrefix(stage, "memory.")+"_hourly_limit"); err != nil {
 				return err
 			}
 		}

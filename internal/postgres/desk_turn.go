@@ -635,7 +635,7 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 				}
 				modelStarted := time.Now()
 				workCtx, cancel := context.WithTimeout(requestCtx, secretaryModelTimeout)
-				workCtx = context.WithValue(workCtx, secretaryUsageKey{}, secretaryUsageMeta{AllCalls: c.Use.Ready, Usage: modelUsage{Tier: c.Tier, TurnID: out.Turn.ID, MemoryRefs: c.Dependencies, Plan: asJSON(usePlan{Groups: c.Use.Groups})}})
+				workCtx = context.WithValue(workCtx, secretaryUsageKey{}, secretaryUsageMeta{AllCalls: true, Usage: modelUsage{Tier: c.Tier, TurnID: out.Turn.ID, MemoryRefs: c.Dependencies, Plan: asJSON(usePlan{Groups: c.Use.Groups})}})
 				result, modelStage, err := s.generateSecretaryModelWithRetry(workCtx, ctx, scope, c.Agent.ID, prompt, func(callCtx context.Context) error {
 					return s.checkSecretaryUseContextTx(callCtx, tx, scope, c)
 				})

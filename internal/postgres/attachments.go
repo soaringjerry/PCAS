@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -233,7 +234,16 @@ func (s *Store) parseAttachment(ctx context.Context, scope memory.Scope, ref mem
 		if settleErr := s.settleModelCost(ctx, scope.OwnerID, reservationID, cost); settleErr != nil {
 			return parsed, settleErr
 		}
-		if err != nil {
+		callErr := err
+		refs := []memory.Ref{ref}
+		usage := modelUsage{OwnerID: scope.OwnerID, ID: memory.ID(reservationID), Purpose: "transcription", AgentID: provider.ID, Model: provider.Model, InputTokens: int(math.Ceil(seconds * 50)), OutputTokens: len([]rune(text)), InputEstimated: true, OutputEstimated: true, Cost: cost, CostEstimated: provider.CostMode != "free", MemoryRefs: refs}
+		if job != nil {
+			usage.JobID = string(job.ID)
+		}
+		if err := s.recordUsage(ctx, usage); err != nil {
+			return parsed, err
+		}
+		if callErr != nil {
 			return parsed, memory.ErrUnavailable
 		}
 		representation = "transcript"

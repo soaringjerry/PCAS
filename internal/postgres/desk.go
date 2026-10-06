@@ -214,23 +214,21 @@ func (s *Store) AnswerDesk(ctx context.Context, scope memory.Scope, agentID, que
 	defer cancel()
 	result, err := s.models.GenerateWithSearch(workCtx, agent.ID, deskInstructions, prompt.String())
 	cost := result.Cost
-	if err != nil && strings.TrimSpace(result.Text) == "" {
-		cost = 0
-	}
 	if settleErr := s.settleModelCost(ctx, scope.OwnerID, reservationID, cost); settleErr != nil {
 		return out, settleErr
 	}
-	if err != nil {
-		return out, fmt.Errorf("%w: %w", memory.ErrUnavailable, err)
-	}
+
 	turnID := string(memory.NewID())
 	if err := s.recordReturnedUsage(ctx, result.Text, modelUsage{
 		OwnerID: scope.OwnerID, ID: memory.NewID(), At: time.Now().UTC(),
 		Purpose: "answer", AgentID: agent.ID, Model: p.Model,
-		InputTokens: result.InputTokens, OutputTokens: result.OutputTokens, Cost: result.Cost,
+		InputTokens: result.InputTokens, OutputTokens: result.OutputTokens, InputEstimated: result.InputEstimated, OutputEstimated: result.OutputEstimated, CostEstimated: result.CostEstimated, Cost: result.Cost,
 		TurnID: turnID, MemoryRefs: dependencies,
 	}); err != nil {
 		return out, err
+	}
+	if err != nil {
+		return out, fmt.Errorf("%w: %w", memory.ErrUnavailable, err)
 	}
 	if err := checkContext(); err != nil {
 		return out, err
@@ -288,7 +286,7 @@ func (s *Store) AnswerDesk(ctx context.Context, scope memory.Scope, agentID, que
 // answer, and finish that short write if the caller disconnects. Text is only
 // checked for presence here; it is never included in the usage record.
 func (s *Store) recordReturnedUsage(ctx context.Context, text string, usage modelUsage) error {
-	if strings.TrimSpace(text) == "" {
+	if strings.TrimSpace(text) == "" && usage.InputTokens+usage.OutputTokens == 0 {
 		return nil
 	}
 	persistCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)

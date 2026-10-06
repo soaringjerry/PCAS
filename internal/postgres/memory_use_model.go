@@ -94,9 +94,6 @@ func (s *Store) useModelCall(ctx, persist context.Context, scope memory.Scope, a
 		result, err = s.models.Generate(ctx, agent, instructions, prompt)
 	}
 	cost := result.Cost
-	if err != nil && strings.TrimSpace(result.Text) == "" {
-		cost = 0
-	}
 	// Accounting survives the model deadline, but does not extend the answer's
 	// budget. Late calls finish their own ledger write without holding the turn.
 	billed := make(chan error, 1)
@@ -112,6 +109,7 @@ func (s *Store) useModelCall(ctx, persist context.Context, scope memory.Scope, a
 		usage.Model = p.Model
 		usage.InputTokens = result.InputTokens
 		usage.OutputTokens = result.OutputTokens
+		usage.InputEstimated, usage.OutputEstimated, usage.CostEstimated = result.InputEstimated, result.OutputEstimated, result.CostEstimated
 		usage.Cost = cost
 		if e := s.recordUsage(accountingCtx, usage); e != nil {
 			billed <- e

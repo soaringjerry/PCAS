@@ -65,7 +65,7 @@ func validMemoryCategory(category string) bool {
 	return oneOf(category, "identity", "taste", "rule", "goal", "progress", "event", "opinion", "other_person", "unknown")
 }
 
-// Decode each field separately: an invalid group must not discard a valid label.
+// Validate the whole item before replacing existing labels, membership, or dates.
 // The first occurrence of a known n wins even when that occurrence is invalid.
 func parseOrganizeOutput(text string, size int) (map[int]organizeItem, []organizeGroup) {
 	items := map[int]organizeItem{}
@@ -93,20 +93,30 @@ func parseOrganizeOutput(text string, size int) (map[int]organizeItem, []organiz
 		if json.Unmarshal(fields["durable"], &item.Durable) != nil || item.Durable == nil {
 			continue
 		}
+		validGroups := true
 		for _, kind := range []string{"project", "area"} {
 			var name string
-			if json.Unmarshal(fields[kind], &name) == nil && strings.TrimSpace(name) != "" {
+			if len(fields[kind]) > 0 && json.Unmarshal(fields[kind], &name) != nil {
+				validGroups = false
+				break
+			}
+			if strings.TrimSpace(name) != "" {
 				item.Groups = append(item.Groups, organizeGroup{Type: kind, Name: strings.TrimSpace(name)})
 			}
 		}
-		var topics []json.RawMessage
-		_ = json.Unmarshal(fields["topics"], &topics)
-		for _, raw := range topics {
-			var name string
-			if json.Unmarshal(raw, &name) == nil && strings.TrimSpace(name) != "" {
+		var topics []string
+		if len(fields["topics"]) > 0 && (string(fields["topics"]) == "null" || json.Unmarshal(fields["topics"], &topics) != nil) {
+			validGroups = false
+		}
+		for _, name := range topics {
+			if strings.TrimSpace(name) != "" {
 				item.Groups = append(item.Groups, organizeGroup{Type: "topic", Name: strings.TrimSpace(name)})
 			}
 		}
+		if !validGroups {
+			continue
+		}
+
 		if len(fields["deadlines"]) == 0 || string(fields["deadlines"]) == "null" || json.Unmarshal(fields["deadlines"], &item.Deadlines) != nil {
 			continue
 		}
@@ -371,12 +381,7 @@ func (s *Store) ProcessOrganize(ctx context.Context, j worker.Job) error {
 	}
 	p, ok := s.models.Get(s.models.ExtractionID())
 	if cached == nil && (!ok || p.Embedding || p.Transcription) {
-		return pgx.BeginFunc(ctx, conn, func(tx pgx.Tx) error {
-			if err := lockJob(ctx, tx, j); err != nil {
-				return err
-			}
-			return acknowledge(ctx, tx, j)
-		})
+		return &worker.JobError{Code: "provider_unavailable", Until: time.Now().Add(OrganizeInterval), NoAttempt: true}
 	}
 	if cached == nil && !s.models.Available(p.ID) {
 		return &worker.JobError{Code: "provider_unavailable", Until: time.Now().Add(OrganizeInterval), NoAttempt: true}
@@ -554,7 +559,7 @@ func (s *Store) ProcessOrganize(ctx context.Context, j worker.Job) error {
 			slog.InfoContext(ctx, "memory groups discarded", "stage", "organize", "error_type", "ungrounded_group", "count", ungrounded)
 		}
 		for _, id := range exhausted {
-			slog.WarnContext(ctx, "memory organization attempts exhausted", "stage", "organize", "error_type", "attempts_exhausted", "memory_id", id)
+			slog.WarnContext(ctx, "memory organization deferred after invalid output", "stage", "organize", "error_type", "invalid_output", "memory_id", id)
 		}
 	}
 	return err

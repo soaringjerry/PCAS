@@ -313,7 +313,7 @@ func (s *Store) processEntityCompareVersion(ctx context.Context, j worker.Job, v
 		if pair == nil {
 			return acknowledge(ctx, tx, j)
 		}
-		return compareHourlyTx(ctx, tx)
+		return backgroundHourlyTx(ctx, tx, EntityCompareStage, "entity_compare_hourly_limit")
 	})
 	if err != nil || pair == nil {
 		return err
@@ -645,8 +645,6 @@ func markMergedEntityClaimsTx(ctx context.Context, tx pgx.Tx, owner memory.ID, s
 	if _, err := tx.Exec(ctx, "UPDATE claims SET compared=0 WHERE owner_id=$1 AND id=ANY($2::uuid[])", string(owner), ids); err != nil {
 		return err
 	}
-	if _, err := tx.Exec(ctx, "UPDATE status_cards SET stale=true WHERE owner_id=$1 AND key=$2", string(owner), "entity:"+string(snapshot.Merged.ID)); err != nil {
-		return err
-	}
+
 	return nil
 }

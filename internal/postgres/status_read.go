@@ -3,7 +3,6 @@ package postgres
 import (
 	"context"
 	"errors"
-	"sort"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -14,7 +13,7 @@ import (
 const CompareVersion = 1
 
 var CardVersion = 1
-var HandoverVersion = 1
+var HandoverVersion = 2
 
 var statusFields = []string{"status", "deadline", "decided", "blocker", "next", "preference", "people"}
 
@@ -23,14 +22,8 @@ type statusNoRepairKey struct{}
 func (s *Store) HandoverTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) (workspace.Handover, error) {
 	out := workspace.Handover{}
 	var built *time.Time
-	err := tx.QueryRow(ctx, statusMembersOnce+`,bad AS(SELECT DISTINCT i.key FROM status_card_items i WHERE i.owner_id=$1
- AND NOT EXISTS(SELECT 1 FROM members m WHERE (m.key,m.claim_id,m.claim_version)=(i.key,i.claim_id,i.claim_version)))
- SELECT CASE WHEN EXISTS(SELECT 1 FROM sizes WHERE n>=3) THEN h.body ELSE '' END,h.built_at,h.stale OR h.rule<$2 OR EXISTS(
- SELECT 1 FROM jsonb_array_elements(h.depends) d LEFT JOIN status_cards sc ON sc.owner_id=h.owner_id AND sc.key=d->>'key'
- LEFT JOIN sizes s ON s.key=sc.key LEFT JOIN bad b ON b.key=sc.key
- WHERE sc.key IS NULL OR sc.stale OR sc.rule<$3 OR sc.built_at IS DISTINCT FROM (d->>'builtAt')::timestamptz
- OR coalesce(s.n,0)<3 OR b.key IS NOT NULL)
- FROM handovers h WHERE h.owner_id=$1`, string(scope.OwnerID), HandoverVersion, CardVersion).Scan(&out.Body, &built, &out.Stale)
+	err := tx.QueryRow(ctx, `SELECT h.body,h.built_at,h.stale OR h.rule<$2 OR h.input_hash IS DISTINCT FROM library_handover_hash(h.owner_id)
+ FROM handovers h WHERE h.owner_id=$1`, string(scope.OwnerID), HandoverVersion).Scan(&out.Body, &built, &out.Stale)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return out, nil
 	}
@@ -62,8 +55,6 @@ func (s *Store) StatusCardIndexTx(ctx context.Context, tx pgx.Tx, scope memory.S
 	if err != nil {
 		return out, err
 	}
-	// A card rebuilt after this read is fresh again; the repair must not undo that.
-	builtAt := map[string]*time.Time{}
 	for rows.Next() {
 		var ref workspace.StatusCardRef
 		var built *time.Time
@@ -74,7 +65,6 @@ func (s *Store) StatusCardIndexTx(ctx context.Context, tx pgx.Tx, scope memory.S
 		if built != nil {
 			ref.BuiltAt = built.UTC().Format(time.RFC3339Nano)
 		}
-		builtAt[ref.Key] = built
 		out = append(out, ref)
 	}
 	err = rows.Err()
@@ -82,26 +72,7 @@ func (s *Store) StatusCardIndexTx(ctx context.Context, tx pgx.Tx, scope memory.S
 	if err != nil {
 		return out, err
 	}
-	// Caller transactions can be read-only (recall). Mutation triggers already
-	// invalidate normal writes; repair legacy/corrupt items when writes are allowed.
-	var readOnly string
-	if err := tx.QueryRow(ctx, "SHOW transaction_read_only").Scan(&readOnly); err != nil {
-		return out, err
-	}
-	if readOnly == "off" && ctx.Value(statusNoRepairKey{}) == nil {
-		keys := []string{}
-		for _, ref := range out {
-			if ref.Stale {
-				keys = append(keys, ref.Key)
-			}
-		}
-		sort.Strings(keys)
-		for _, key := range keys {
-			if _, err := tx.Exec(ctx, "UPDATE status_cards SET stale=true WHERE owner_id=$1 AND key=$2 AND NOT stale AND built_at IS NOT DISTINCT FROM $3", string(scope.OwnerID), key, builtAt[key]); err != nil {
-				return out, err
-			}
-		}
-	}
+
 	return out, nil
 }
 

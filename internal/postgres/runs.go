@@ -230,9 +230,10 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 			return err
 		}
 		run.MemoryGroups = u.Groups
+		annotationBytes := 0
 		contextClaims := []evidenceContextClaim{}
 		memoryStart := brief.Len()
-		{
+		if u.Ready || len(u.Rules) > 0 || len(u.Deadlines) > 0 {
 			// Keep handoff discussion outside the replaceable memory section.
 			fmt.Fprintln(&brief, "相关记忆（引用 ID 与版本；长期约束继续适用）：")
 			writeUseContext(&brief, u, loc, func(m workspace.Memory) {
@@ -241,6 +242,27 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 				contextClaims = append(contextClaims, evidenceContextClaim{Label: m.ID, Ref: memory.Ref{ID: memory.ID(m.ID), Version: m.Version, Kind: memory.ClaimKind}, Text: m.Text})
 			})
 			run.ContextVersions = append(run.ContextVersions, u.Dependencies...)
+		} else {
+			// R12a: select against the brief without annotations. Keep their byte
+			// count separate so they cannot displace later memories or raw excerpts.
+			for _, m := range u.Supplemental {
+				if !useMemoryAllowed(m, agent) {
+					continue
+				}
+				if brief.Len()-annotationBytes+len(m.Text) > 30000 {
+					if err := stageEventTx(ctx, tx, scope.OwnerID, "deputy", "overflow", "memory_char_budget", 1); err != nil {
+						return err
+					}
+					continue
+				}
+				suffix := memoryPromptSuffix(m, loc)
+				fmt.Fprintf(&brief, "[%s@%d / %s / trust=%s / confirmation=%s / acquisition=%s] %s%s\n", m.ID, m.Version, m.Epistemic, m.Trust, m.Confirmation, m.Acquisition, m.Text, suffix)
+				annotationBytes += len(suffix) + len("trust="+m.Trust+" / ")
+				run.ContextMemoryIDs = append(run.ContextMemoryIDs, m.ID)
+				run.ContextVersions = append(run.ContextVersions, memory.Ref{ID: memory.ID(m.ID), Version: m.Version, Kind: memory.ClaimKind})
+				contextClaims = append(contextClaims, evidenceContextClaim{Label: m.ID, Ref: memory.Ref{ID: memory.ID(m.ID), Version: m.Version, Kind: memory.ClaimKind}, Text: m.Text})
+			}
+
 		}
 
 		if u.Ready {
@@ -255,6 +277,12 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 		for _, source := range sources {
 			at, label := sourceExcerptTime(source)
 			line := fmt.Sprintf("[source:%s@%d / %s / %s %s] %s\n", source.ID, source.Version, source.Title, label, at.In(loc).Format("2006-01-02"), source.Text)
+			if brief.Len()-annotationBytes+len(line) > 30000 {
+				if err := stageEventTx(ctx, tx, scope.OwnerID, "deputy", "overflow", "source_excerpt_char_budget", 1); err != nil {
+					return err
+				}
+				continue
+			}
 			brief.WriteString(line)
 			run.ContextMemoryIDs = append(run.ContextMemoryIDs, string(source.ID))
 			run.ContextVersions = append(run.ContextVersions, source.Ref)
@@ -278,7 +306,7 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 				section.WriteString(contextMessageLine(fmt.Sprintf("source:%s@%d", message.ID, message.Version), message, loc))
 			}
 			writeContextGaps(&section, group.Label, group.Window.Gaps)
-			if brief.Len()+section.Len() > 30000 {
+			if brief.Len()-annotationBytes+section.Len() > 30000 {
 				if err := stageEventTx(ctx, tx, scope.OwnerID, "deputy", "overflow", "evidence_context_char_budget", 1); err != nil {
 					return err
 				}

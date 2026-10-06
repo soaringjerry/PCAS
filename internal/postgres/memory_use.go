@@ -54,6 +54,7 @@ type useContext struct {
 	Supplemental           []workspace.Memory
 	Groups, RequiredGroups []string
 	Dependencies           []memory.Ref
+	Installed              bool
 	Ready                  bool
 	Coverage               *useCoverage
 	Selected               bool
@@ -61,6 +62,14 @@ type useContext struct {
 
 func (s *Store) startUseContextTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) (useContext, error) {
 	u := useContext{Coverage: &useCoverage{}}
+	// Legacy migration fixtures have no live library columns in their schema.
+	// Do not accidentally resolve a newer view from the public search path.
+	if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM pg_attribute a JOIN pg_class c ON c.oid=a.attrelid JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname=current_schema() AND c.relname='claim_revisions' AND a.attname='category' AND NOT a.attisdropped)`).Scan(&u.Installed); err != nil {
+		return u, err
+	}
+	if !u.Installed {
+		return u, nil
+	}
 	var err error
 	u.Handover, err = s.HandoverTx(ctx, tx, scope)
 	if err != nil {
@@ -149,6 +158,13 @@ func (s *Store) useMemoriesTx(ctx context.Context, tx pgx.Tx, scope memory.Scope
 
 const globalRequirementRunes = 6000 // Dedicated space: about 3k Chinese tokens; overflow is counted.
 func (s *Store) finishUseContextTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, agent workspace.Agent, thing *string, text string, ranked []workspace.Memory, u *useContext) error {
+	if !u.Installed {
+		u.Supplemental = ranked
+		for _, m := range ranked {
+			u.Dependencies = append(u.Dependencies, memory.Ref{ID: memory.ID(m.ID), Version: m.Version, Kind: memory.ClaimKind})
+		}
+		return nil
+	}
 	visible, err := queryDocuments[workspace.StatusCardRef](ctx, tx, `SELECT jsonb_build_object('key',m.key,'kind',m.kind,'name',m.name,'count',count(*)) FROM status_current_members m JOIN claim_revisions c ON(c.owner_id,c.claim_id,c.version)=(m.owner_id,m.claim_id,m.claim_version)
  WHERE m.owner_id=$1 AND c.nature=ANY($2::text[]) AND ($3 OR c.acquisition!='inferred')
  AND EXISTS(SELECT 1 FROM record_grants g WHERE g.owner_id=m.owner_id AND g.record_id=m.claim_id AND g.principal_id=$4)

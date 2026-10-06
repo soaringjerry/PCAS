@@ -22,6 +22,13 @@ func p2ID(kind string, n int) string {
 }
 func p2Bytes(t *testing.T, label string, want, got any) {
 	t.Helper()
+	if legacy, ok := want.(memory.RecallResult); ok {
+		current := got.(memory.RecallResult)
+		// C6 introduces overflow metadata; the legacy oracle still checks all
+		// returned business content, ranking, privacy and pagination exactly.
+		legacy.Coverage.Omitted, legacy.Coverage.OmittedSources = current.Coverage.Omitted, current.Coverage.OmittedSources
+		want = legacy
+	}
 	a, b := asJSON(want), asJSON(got)
 	if !bytes.Equal(a, b) {
 		t.Fatalf("%s differs byte for byte: old=%s new=%s", label, a, b)

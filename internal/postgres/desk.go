@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/url"
 	"strings"
@@ -194,7 +195,11 @@ func (s *Store) AnswerDesk(ctx context.Context, scope memory.Scope, agentID, que
 	p, _ := s.models.Get(agent.ID)
 	checkContext := func() error {
 		return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-			return s.checkSecretaryUseContextTx(ctx, tx, scope, secretaryContext{Agent: agent})
+			err := s.checkSecretaryUseContextTx(ctx, tx, scope, secretaryContext{Agent: agent, Dependencies: dependencies})
+			if errors.Is(err, memory.ErrForbidden) {
+				return memory.ErrConflict
+			}
+			return err
 		})
 	}
 
@@ -263,7 +268,10 @@ func (s *Store) AnswerDesk(ctx context.Context, scope memory.Scope, agentID, que
 		if _, err := tx.Exec(ctx, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(scope.OwnerID)); err != nil {
 			return err
 		}
-		if err := verifyRunTx(ctx, tx, scope, workspace.Run{AgentID: agent.ID, ContextVersions: dependencies}); err != nil {
+		if err := s.checkSecretaryUseContextTx(ctx, tx, scope, secretaryContext{Agent: agent, Dependencies: dependencies}); err != nil {
+			if errors.Is(err, memory.ErrForbidden) {
+				return memory.ErrConflict
+			}
 			return err
 		}
 		_, err := tx.Exec(ctx, "INSERT INTO desk_turns(owner_id,id,agent_id,question,answer,dependencies) VALUES($1,$2,$3,$4,$5,$6)", string(scope.OwnerID), out.ID, agent.ID, question, out.Answer, asJSON(dependencies))

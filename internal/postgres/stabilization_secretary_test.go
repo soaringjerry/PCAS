@@ -354,7 +354,7 @@ func TestStabilizationS8_FailureCategoriesKeepOriginalAndPrivateLogs(t *testing.
 	}
 }
 
-func TestStabilizationS9_LongReplyTruncatesWithoutLosingActions(t *testing.T) {
+func TestStabilizationS9_LongReplyPreservesBodyAndActions(t *testing.T) {
 	s, scope := testStore(t), owner()
 	secretaryModel(t, s, func(w http.ResponseWriter, r *http.Request) {
 		secretaryModelReply(w, map[string]any{"reply": strings.Repeat("长", 2500), "actions": []any{map[string]string{"op": "create_task", "title": "S9仍执行"}}})
@@ -365,8 +365,8 @@ func TestStabilizationS9_LongReplyTruncatesWithoutLosingActions(t *testing.T) {
 		t.Fatal("long reply prevented action", out.Turn.Receipts)
 	}
 	stabilizationSecretaryTasks(t, s, scope, 1)
-	if !utf8.ValidString(out.Turn.Reply) || !strings.Contains(out.Turn.Reply, "回答太长，已截断") || utf8.RuneCountInString(out.Turn.Reply) > 2000+utf8.RuneCountInString("回答太长，已截断")+4 {
-		t.Errorf("reply did not meet truncation contract: runes=%d containsNotice=%v", utf8.RuneCountInString(out.Turn.Reply), strings.Contains(out.Turn.Reply, "回答太长，已截断"))
+	if !utf8.ValidString(out.Turn.Reply) || out.Turn.Reply != strings.Repeat("长", 2500) {
+		t.Errorf("C6 must preserve the complete model reply: runes=%d", utf8.RuneCountInString(out.Turn.Reply))
 	}
 	var cached struct {
 		Turn  workspace.SecretaryTurn `json:"turn"`

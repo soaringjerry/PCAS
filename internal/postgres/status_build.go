@@ -87,9 +87,16 @@ func (s *Store) RunStatus(ctx context.Context, logger *slog.Logger) {
 	}
 }
 
+// StatusCardsPaused stops cards and the handover from being rebuilt; what is
+// already built is still read. Cards are being removed (phase 2.6).
+var StatusCardsPaused bool
+
 func (s *Store) ScheduleStatus(ctx context.Context, now time.Time) (int, error) {
 	if now.IsZero() {
 		return 0, memory.ErrInvalid
+	}
+	if StatusCardsPaused {
+		return 0, nil
 	}
 	p, ok := s.models.Get(s.models.ExtractionID())
 	if !ok || p.Embedding || p.Transcription {
@@ -302,7 +309,7 @@ func (s *Store) ProcessCard(ctx context.Context, j worker.Job) error {
 	}
 	key := parts[2]
 	p, ok := s.models.Get(s.models.ExtractionID())
-	if !ok || p.Embedding || p.Transcription {
+	if StatusCardsPaused || !ok || p.Embedding || p.Transcription {
 		return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 			if err := lockJob(ctx, tx, j); err != nil {
 				return err
@@ -410,8 +417,17 @@ func (s *Store) ProcessCard(ctx context.Context, j worker.Job) error {
 		return &worker.JobError{Code: "card_invalid_output", Retry: true}
 	}
 	if invalid {
-		output = cardOutput{Fields: map[string][]int{}}
+		// Keep what the card already holds; an empty card marked built hid the failure.
 		slog.WarnContext(ctx, "card attempts exhausted", "stage", "card", "error_type", "attempts_exhausted", "key", key)
+		return backgroundResultTx(ctx, s.pool, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
+			if _, err := tx.Exec(ctx, "SELECT 1 FROM status_cards WHERE owner_id=$1 AND key=$2 FOR UPDATE", string(j.OwnerID), key); err != nil {
+				return err
+			}
+			if err := lockJob(ctx, tx, j); err != nil {
+				return err
+			}
+			return acknowledge(ctx, tx, j)
+		})
 	}
 	return backgroundResultTx(ctx, s.pool, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
 		// Every card writer takes the card before its queue slot.

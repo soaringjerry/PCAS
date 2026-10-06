@@ -198,3 +198,4 @@ PCAS 的所有文档都从这一页找。新增或移动文档时，同时改这
 | 4 | [研究笔记：用途标注与事先备料](research/memory-use-phrases-and-packets.md) | 两种没有显出优势的做法，以及原因 |
 | 5 | [评测记录：第一轮](evaluations/2026-10-04-memory-lookup-experiment.md) | 十一种做法、12 个任务的设计和数字；丢分在办事那一步的发现 |
 | 6 | [评测记录：第二轮](evaluations/2026-10-04-memory-lookup-round2.md) | 固定办事方式、调强基础线后重测二十多种组合；丢分归因 |
+| 7 | [现状层问题清单](research/memory-status-layer-audit.md) | 2026-10-06 复查线上现状层查出的 42 个设计问题和 16 个故障，逐条附证据和状态；待审计。末尾有协调者建议的处理思路，未批准 |

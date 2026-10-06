@@ -225,9 +225,6 @@ func (s *Store) processConversationExtraction(ctx context.Context, j worker.Job,
 				if err := retireConversationJobsTx(ctx, tx, j, conversation, run); err != nil {
 					return err
 				}
-				if _, err := tx.Exec(ctx, "UPDATE workspace_owners SET revision=revision+1 WHERE owner_id=$1", string(j.OwnerID)); err != nil {
-					return err
-				}
 				return acknowledge(ctx, tx, j)
 			}
 			var complete bool
@@ -478,9 +475,6 @@ func (s *Store) processConversationExtraction(ctx context.Context, j worker.Job,
 			if err := retireConversationJobsTx(ctx, tx, j, conversation, run); err != nil {
 				return err
 			}
-		}
-		if _, err := tx.Exec(ctx, "UPDATE workspace_owners SET revision=revision+1 WHERE owner_id=$1", string(j.OwnerID)); err != nil {
-			return err
 		}
 		return acknowledge(ctx, tx, j)
 	})

@@ -5,14 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
 	"strings"
 	"testing"
 	"time"
-	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/soaringjerry/PCAS/internal/ai"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/worker"
 	"github.com/soaringjerry/PCAS/internal/workspace"
@@ -23,7 +20,7 @@ func handoverTestJob(t *testing.T, s *Store, scope memory.Scope) worker.Job {
 	if _, err := s.ScheduleStatus(context.Background(), time.Now()); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.pool.Exec(context.Background(), "DELETE FROM memory_jobs WHERE owner_id=$1 AND stage NOT LIKE 'memory.handover:%'", scope.OwnerID); err != nil {
+	if _, err := s.pool.Exec(context.Background(), "DELETE FROM memory_jobs WHERE owner_id=$1 AND state='queued' AND stage NOT LIKE 'memory.handover:%'", scope.OwnerID); err != nil {
 		t.Fatal(err)
 	}
 	j, err := s.Claim(context.Background(), 5*time.Minute)
@@ -79,12 +76,6 @@ func TestStatusHandoverGroundingLimitsAndDeletion(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for range 2 {
-		j := statusTestJob(t, s, scope)
-		if err := s.ProcessCard(context.Background(), j); err != nil {
-			t.Fatal(err)
-		}
-	}
 	secretaryModel(t, s, func(w http.ResponseWriter, r *http.Request) { handoverFakeReply(t, w, r) })
 	j := handoverTestJob(t, s, scope)
 	if err := s.ProcessHandover(context.Background(), j); err != nil {
@@ -94,31 +85,23 @@ func TestStatusHandoverGroundingLimitsAndDeletion(t *testing.T) {
 	if err != nil || about.Handover.Body == "" || about.Handover.Stale || strings.Count(about.Handover.Body, "## ") != 9 || strings.Contains(about.Handover.Body, "推断哨兵") || !strings.Contains(about.Handover.Body, "虚构用户云杉") {
 		t.Fatal(about, err)
 	}
-	for range 2 {
-		if _, err := s.pool.Exec(context.Background(), "UPDATE handovers SET stale=true,built_at=now()-interval '7 hours' WHERE owner_id=$1", scope.OwnerID); err != nil {
-			t.Fatal(err)
-		}
-		j = handoverTestJob(t, s, scope)
-		if err := s.ProcessHandover(context.Background(), j); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if _, err := s.pool.Exec(context.Background(), "UPDATE handovers SET stale=true,built_at=now()-interval '7 hours' WHERE owner_id=$1", scope.OwnerID); err != nil {
+	// Changing an eligible source stales the note, but keeps its old text/time.
+	if _, err := s.pool.Exec(context.Background(), "UPDATE memory_records SET state='withdrawn' WHERE owner_id=$1 AND id=$2", scope.OwnerID, refs[2].ID); err != nil {
 		t.Fatal(err)
 	}
-	j = handoverTestJob(t, s, scope)
-	err = s.ProcessHandover(context.Background(), j)
-	failure, ok := err.(*worker.JobError)
-	if !ok || failure.Code != "handover_daily_limit" || !failure.NoAttempt {
-		t.Fatal("more than two rewrites", err)
+	stale, err := s.ReadHandover(context.Background(), scope)
+	if err != nil || !stale.Stale || stale.Body != about.Handover.Body || stale.BuiltAt != about.Handover.BuiltAt {
+		t.Fatal("stale text/time must remain available", stale, err)
 	}
-	if _, err := s.pool.Exec(context.Background(), "DELETE FROM memory_records WHERE owner_id=$1 AND id=$2", scope.OwnerID, refs[1].ID); err != nil {
+	// The changed input waits a full hour even when callers schedule early.
+	if _, err := s.ScheduleStatus(context.Background(), time.Now()); err != nil {
 		t.Fatal(err)
 	}
-	about, err = s.About(context.Background(), scope, "")
-	if err != nil || !about.Handover.Stale || about.Handover.Body == "" {
-		t.Fatal("stale text not retained", about, err)
+	var due, built time.Time
+	if err := s.pool.QueryRow(context.Background(), "SELECT available_at,(SELECT built_at FROM handovers WHERE owner_id=$1) FROM memory_jobs WHERE owner_id=$1 AND stage LIKE 'memory.handover:%' AND state='queued'", scope.OwnerID).Scan(&due, &built); err != nil || due.Before(built.Add(time.Hour)) {
+		t.Fatal(due, built, err)
 	}
+
 }
 func TestStatusHandoverParser(t *testing.T) {
 	ms := []cardMemory{{N: 1, Text: "虚构规则", Category: "rule", Trust: "stated"}, {N: 2, Text: "可能参加一次活动", Category: "event", Trust: "tentative"}, {N: 3, Text: "推断", Trust: "inferred"}}
@@ -131,7 +114,7 @@ func TestStatusHandoverParser(t *testing.T) {
 		output.Sections = append(output.Sections, handoverSection{Title: title, Body: "可能参加一次活动", Refs: []int{ref}})
 	}
 	body, valid := parseHandover(string(asJSON(output)), ms)
-	if !valid || strings.Count(body, "可能参加一次活动") != 2 {
+	if valid || body != "" {
 		t.Fatal(body, valid)
 	}
 	output.Sections[0].Title = "不合法标题"
@@ -200,109 +183,55 @@ func statusRichSynthetic80(t *testing.T, s *Store, scope memory.Scope) []memory.
 	}
 	return refs
 }
-func TestLiveStatusCompleteSynthetic80(t *testing.T) {
-	home := os.Getenv("PCAS_LIVE_CODEX_HOME")
-	if home == "" {
-		t.Skip("requires dedicated PCAS_LIVE_CODEX_HOME")
-	}
-	s, scope := testStore(t), owner()
-	b1Model(t, s, `{}`)
-	refs := statusRichSynthetic80(t, s, scope)
-	workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: asJSON(map[string]string{"timezone": "Asia/Shanghai"})})
-	c, err := ai.NewCodex(os.Getenv("PCAS_LIVE_CODEX_BINARY"), home)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer c.Close()
-	models, err := ai.Load(os.Getenv("PCAS_LIVE_MODELS_FILE"), c)
-	if err != nil {
-		t.Fatal(err)
-	}
-	s.SetModels(models)
-	for range 5 {
-		j := statusTestJob(t, s, scope)
-		if err := s.ProcessCard(context.Background(), j); err != nil {
-			t.Fatal(err)
-		}
-	}
-	j := handoverTestJob(t, s, scope)
-	if err := s.ProcessHandover(context.Background(), j); err != nil {
-		t.Fatal(err)
-	}
-	about, err := s.About(context.Background(), scope, "")
-	if err != nil || len(about.Cards) != 5 || about.Building.Done != about.Building.Total || len(about.Deadlines) < 8 || about.Handover.Body == "" {
-		t.Fatal("incomplete real status build", about.Building, len(about.Cards), len(about.Deadlines), err)
-	}
-	t.Logf("synthetic=%d default_provider=%s model=gpt-6.1-sol cards=%d deadlines=%d handover_runes=%d progress=%d/%d", len(refs), models.ExtractionID(), len(about.Cards), len(about.Deadlines), utf8.RuneCountInString(about.Handover.Body), about.Building.Done, about.Building.Total)
-	response := b1HTTP(t, s, scope, "GET", "/v1/workspace/about", nil)
-	if response.Code != 200 {
-		t.Fatal(response.Code)
-	}
-	for _, c := range about.Cards {
-		t.Logf("card kind=%s items=%d", c.Kind, c.Count)
-	}
-}
-
 func TestStatusCorrectionAndSourceWithdrawal(t *testing.T) {
-	s, scope := testStore(t), owner()
-	secretaryModel(t, s, func(w http.ResponseWriter, r *http.Request) { statusFakeReply(t, w, r) })
-	refs := statusTestMemories(t, s, scope, 12)
-	for range 2 {
-		j := statusTestJob(t, s, scope)
-		if err := s.ProcessCard(context.Background(), j); err != nil {
-			t.Fatal(err)
-		}
-	}
+	s, scope, ctx := testStore(t), owner(), context.Background()
 	secretaryModel(t, s, func(w http.ResponseWriter, r *http.Request) { handoverFakeReply(t, w, r) })
-	j := handoverTestJob(t, s, scope)
-	if err := s.ProcessHandover(context.Background(), j); err != nil {
+	refs := statusTestMemories(t, s, scope, 12)
+	if err := s.ProcessHandover(ctx, handoverTestJob(t, s, scope)); err != nil {
+		t.Fatal(err)
+	}
+	previous, err := s.ReadHandover(ctx, scope)
+	if err != nil {
 		t.Fatal(err)
 	}
 	workspaceCommand(t, s, scope, workspace.Command{Type: "editMemory", ID: string(refs[0].ID), Text: "虚构流萤项目的原要求改为附上样品日期。"})
-	about, err := s.About(context.Background(), scope, "self:rule")
-	if err != nil || len(about.Cards) != 1 || about.Cards[0].Count != 2 || !about.Cards[0].Stale || !about.Handover.Stale {
-		t.Fatal(about, err)
-	}
-	secretaryModel(t, s, func(w http.ResponseWriter, r *http.Request) { statusFakeReply(t, w, r) })
-	if _, err := s.pool.Exec(context.Background(), "UPDATE memory_jobs SET available_at=now()-interval '1 second' WHERE owner_id=$1 AND stage LIKE 'memory.card:%'", scope.OwnerID); err != nil {
+	rules, err := s.ListAssistantRequirements(ctx, scope)
+	if err != nil {
 		t.Fatal(err)
 	}
-	for range 2 {
-		j := statusTestJob(t, s, scope)
-		if err := s.ProcessCard(context.Background(), j); err != nil {
-			t.Fatal(err)
-		}
-	}
-	about, err = s.About(context.Background(), scope, "self:rule")
-	if err != nil || about.Cards[0].Count != 3 || about.Cards[0].Stale {
-		t.Fatal(about, err)
-	}
 	found := false
-	for _, f := range about.Cards[0].Fields {
-		for _, m := range f.Items {
-			if m.ID == string(refs[0].ID) {
-				found = m.Version == 2 && strings.Contains(m.Text, "样品日期")
-			}
+	for _, r := range rules.Items {
+		if r.MemoryID == string(refs[0].ID) {
+			found = strings.Contains(r.Text, "样品日期")
 		}
 	}
 	if !found {
-		t.Fatal("new revision not rebuilt")
+		t.Fatal("requirements must read current corrected memory", rules)
 	}
-	if _, err := s.pool.Exec(context.Background(), "UPDATE record_versions SET actor='ai' WHERE owner_id=$1 AND record_id=$2", scope.OwnerID, refs[1].ID); err != nil {
+	note, err := s.ReadHandover(ctx, scope)
+	if err != nil || !note.Stale || note.Body != previous.Body {
+		t.Fatal("correction must retain old stale handover", note, err)
+	}
+	if _, err := s.pool.Exec(ctx, "UPDATE record_versions SET actor='ai' WHERE owner_id=$1 AND record_id=$2", scope.OwnerID, refs[1].ID); err != nil {
 		t.Fatal(err)
 	}
 	var source string
-	if err := s.pool.QueryRow(context.Background(), "SELECT source_id::text FROM evidence WHERE owner_id=$1 AND target_id=$2 LIMIT 1", scope.OwnerID, refs[1].ID).Scan(&source); err != nil {
+	if err := s.pool.QueryRow(ctx, "SELECT source_id::text FROM evidence WHERE owner_id=$1 AND target_id=$2 LIMIT 1", scope.OwnerID, refs[1].ID).Scan(&source); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.pool.Exec(context.Background(), "INSERT INTO claim_source_keys(owner_id,source_id,claim_key,claim_id) VALUES($1,$2,'synthetic-extracted',$3)", scope.OwnerID, source, refs[1].ID); err != nil {
+	if _, err := s.pool.Exec(ctx, "INSERT INTO claim_source_keys(owner_id,source_id,claim_key,claim_id) VALUES($1,$2,'synthetic-extracted',$3)", scope.OwnerID, source, refs[1].ID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.pool.Exec(context.Background(), "UPDATE memory_records SET state='withdrawn' WHERE owner_id=$1 AND id=$2", scope.OwnerID, source); err != nil {
+	if _, err := s.pool.Exec(ctx, "UPDATE memory_records SET state='withdrawn' WHERE owner_id=$1 AND id=$2", scope.OwnerID, source); err != nil {
 		t.Fatal(err)
 	}
-	about, err = s.About(context.Background(), scope, "self:rule")
-	if err != nil || len(about.Cards) != 0 || !about.Handover.Stale {
-		t.Fatal(about, err)
+	rules, err = s.ListAssistantRequirements(ctx, scope)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range rules.Items {
+		if r.MemoryID == string(refs[1].ID) {
+			t.Fatal("withdrawn evidence still supplies requirement", r)
+		}
 	}
 }

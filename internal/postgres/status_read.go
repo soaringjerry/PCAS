@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -213,9 +214,16 @@ func (s *Store) About(ctx context.Context, scope memory.Scope, key string) (work
 		if err != nil {
 			return err
 		}
-		out.Deadlines, err = s.DeadlinesTx(ctx, tx, scope, time.Now(), 1000)
+		dates, err := s.libraryDeadlinesTx(ctx, tx, scope, workspace.DeadlineQuery{})
 		if err != nil {
 			return err
+		}
+		for _, d := range dates.Items {
+			note := d.TimeNote
+			if d.Expired {
+				note = strings.TrimSpace(note + " 已过期，不知是否完成")
+			}
+			out.Deadlines = append(out.Deadlines, workspace.Deadline{ID: d.ID, Kind: d.Kind, At: d.At, Recurrence: d.Recurrence, Title: d.Title, TimeNote: note, MemoryID: d.MemoryID})
 		}
 		return tx.QueryRow(ctx, `SELECT count(*) FILTER(WHERE sc.built_at IS NOT NULL AND sc.rule>=$2),count(*) FROM (`+statusEligibleGroups+`) g LEFT JOIN status_cards sc USING(owner_id,key) WHERE g.owner_id=$1`, string(scope.OwnerID), CardVersion).Scan(&out.Building.Done, &out.Building.Total)
 	})

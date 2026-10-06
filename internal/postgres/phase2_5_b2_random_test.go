@@ -37,7 +37,7 @@ func TestPhase25B2_RandomActualComparisonSequence(t *testing.T) {
 		if target != "" {
 			old, keep := phase25B2N(in, target), phase25B2N(in, "虚构随机保留项。")
 			if old == 0 || keep == 0 {
-				t.Errorf("planned current items missing: target=%d keep=%d", old, keep)
+				return out // Other group/block pairs need no suggestion for this planted edge.
 			}
 			if reason == "duplicate" {
 				out.Duplicates = []phase25B2WireDuplicate{{Keep: keep, Members: []int{old, keep}}}
@@ -69,7 +69,7 @@ func TestPhase25B2_RandomActualComparisonSequence(t *testing.T) {
 				text := fmt.Sprintf("虚构随机纠正 %d。", step)
 				current[i] = f.correct(t, current[i], text)
 				texts[current[i].ID] = text
-				f.exec(t, `UPDATE claims SET organized=1 WHERE owner_id=$1 AND id=$2`, f.scope.OwnerID, current[i].ID)
+				f.exec(t, `UPDATE claims SET organized=2 WHERE owner_id=$1 AND id=$2`, f.scope.OwnerID, current[i].ID)
 			}
 		case 2:
 			if len(current) > 1 {

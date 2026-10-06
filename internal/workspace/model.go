@@ -325,6 +325,8 @@ type State struct {
 	BudgetUsage      float64             `json:"budgetUsage"`
 	Version          int                 `json:"version"`
 	Revision         int64               `json:"revision"`
+	SnapshotRevision int64               `json:"-"`
+	MemoryRevision   int64               `json:"memoryRevision"`
 	Settings         Settings            `json:"settings"`
 	Tasks            []Item              `json:"tasks"`
 	Ideas            []Item              `json:"ideas"`

@@ -50,7 +50,7 @@ func TestEntityCandidatesConcurrentSchedulerWorkerAndUserRequests(t *testing.T) 
 		if err := f.db.QueryRow(ctx, "SELECT count(*) FROM entity_merges WHERE owner_id=$1 AND undone_at IS NULL", f.scope.OwnerID).Scan(&merges); err != nil {
 			return 0, 0, err
 		}
-		err := f.db.QueryRow(ctx, `SELECT (SELECT count(*) FROM memory_jobs WHERE owner_id=$1 AND (stage LIKE 'memory.entity_candidates:%' OR stage LIKE 'memory.entity_compare:%' OR stage LIKE 'memory.compare:%') AND state<>'done') + (SELECT count(*) FROM claims WHERE owner_id=$1 AND id=ANY($2::uuid[]) AND compared<$3)`, f.scope.OwnerID, ids, postgres.CompareVersion).Scan(&pending)
+		err := f.db.QueryRow(ctx, `SELECT (SELECT count(*) FROM memory_jobs WHERE owner_id=$1 AND (stage LIKE 'memory.entity_candidates:%' OR stage LIKE 'memory.entity_compare:%' OR stage LIKE 'memory.compare:%') AND (state='leased' OR (state='queued' AND available_at<=now()))) + (SELECT count(*) FROM claims WHERE owner_id=$1 AND id=ANY($2::uuid[]) AND compared<$3)`, f.scope.OwnerID, ids, postgres.CompareVersion).Scan(&pending)
 		return merges, pending, err
 	}
 	agent := f.answerAgent(t)
@@ -118,6 +118,9 @@ func TestEntityCandidatesConcurrentSchedulerWorkerAndUserRequests(t *testing.T) 
 		}
 		return phase25B2JSON(phase25B2Empty())
 	})
+	// Existing card rows stay frozen even during alias work.
+	frozenGroup, frozenRefs := f.cardGroup(t, 3)
+	f.card(t, frozenGroup, frozenRefs, false)
 	f.index(t)
 	// Create real card rows before overlap, so actual merge invalidation triggers
 	// exercise the cards-before-jobs order rather than an empty-card fast path.
@@ -262,7 +265,7 @@ func TestEntityCandidatesConcurrentSchedulerWorkerAndUserRequests(t *testing.T) 
 			processing.Store(0)
 			if err != nil && runCtx.Err() == nil {
 				var deferred *worker.JobError
-				if errors.As(err, &deferred) && deferred.Code == "background_write_busy" && !deferred.Until.IsZero() {
+				if errors.As(err, &deferred) && deferred.NoAttempt && !deferred.Until.IsZero() {
 					if err := f.store.Defer(runCtx, *job, deferred.Code, deferred.Until, deferred.NoAttempt); err != nil {
 						problem("defer", err)
 					}
@@ -388,9 +391,9 @@ func TestEntityCandidatesConcurrentSchedulerWorkerAndUserRequests(t *testing.T) 
 	if err := f.db.QueryRow(f.ctx, "SELECT count(*) FROM memory_jobs WHERE owner_id=$1 AND stage LIKE 'memory.card:%'", f.scope.OwnerID).Scan(&changedCards); err != nil {
 		t.Fatal(err)
 	}
-	if deadlocksAfter != deadlocksBefore || changedCards == 0 {
-		t.Errorf("deadlocks before=%d after=%d invalidated card jobs=%d", deadlocksBefore, deadlocksAfter, changedCards)
+	if deadlocksAfter != deadlocksBefore || changedCards != 0 {
+		t.Errorf("deadlocks before=%d after=%d unexpected card jobs=%d", deadlocksBefore, deadlocksAfter, changedCards)
 	}
-	t.Logf("catalogue_calls=%d confirmation_calls=%d card_invalidations=%d deadlocks=%d", catalogueCalls.Load(), confirmationCalls.Load(), changedCards, deadlocksAfter-deadlocksBefore)
+	t.Logf("catalogue_calls=%d confirmation_calls=%d frozen_card_jobs=%d deadlocks=%d", catalogueCalls.Load(), confirmationCalls.Load(), changedCards, deadlocksAfter-deadlocksBefore)
 	f.assertRevisions(t, refs...)
 }

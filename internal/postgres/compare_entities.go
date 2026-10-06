@@ -281,21 +281,11 @@ func (s *Store) processEntityCompareVersion(ctx context.Context, j worker.Job, v
 	}
 	defer release()
 	if s.models == nil {
-		return backgroundWriteTx(ctx, conn, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
-			if err := lockJob(ctx, tx, j); err != nil {
-				return err
-			}
-			return acknowledge(ctx, tx, j)
-		})
+		return &worker.JobError{Code: "provider_unavailable", Until: time.Now().Add(CompareInterval), NoAttempt: true}
 	}
 	p, ok := s.models.Get(s.models.ExtractionID())
 	if !ok || p.Embedding || p.Transcription {
-		return backgroundWriteTx(ctx, conn, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
-			if err := lockJob(ctx, tx, j); err != nil {
-				return err
-			}
-			return acknowledge(ctx, tx, j)
-		})
+		return &worker.JobError{Code: "provider_unavailable", Until: time.Now().Add(CompareInterval), NoAttempt: true}
 	}
 	if !s.models.Available(p.ID) {
 		return &worker.JobError{Code: "provider_unavailable", Until: time.Now().Add(CompareInterval), NoAttempt: true}
@@ -627,24 +617,5 @@ func mergeEntityTx(ctx context.Context, tx pgx.Tx, owner memory.ID, merged, kept
 	if _, err := tx.Exec(ctx, `INSERT INTO action_log(owner_id,id,source,summary,changes) VALUES($1,$2,'worker','合并同一实体的叫法',$3)`, string(owner), string(memory.NewID()), changes); err != nil {
 		return err
 	}
-	if err := markMergedEntityClaimsTx(ctx, tx, owner, snapshot); err != nil {
-		return err
-	}
-	_, err = tx.Exec(ctx, "UPDATE workspace_owners SET revision=revision+1 WHERE owner_id=$1", string(owner))
-	return err
-}
-
-func markMergedEntityClaimsTx(ctx context.Context, tx pgx.Tx, owner memory.ID, snapshot entityMergeSnapshot) error {
-	ids := []string{}
-	for _, s := range snapshot.Subjects {
-		ids = append(ids, s.ID)
-	}
-	for _, m := range snapshot.Mentions {
-		ids = append(ids, m.ID)
-	}
-	if _, err := tx.Exec(ctx, "UPDATE claims SET compared=0 WHERE owner_id=$1 AND id=ANY($2::uuid[])", string(owner), ids); err != nil {
-		return err
-	}
-
 	return nil
 }

@@ -540,9 +540,6 @@ func (s *Store) ProcessOrganize(ctx context.Context, j worker.Job) error {
 				return err
 			}
 		}
-		if _, err := tx.Exec(ctx, "UPDATE workspace_owners SET revision=revision+1 WHERE owner_id=$1", string(j.OwnerID)); err != nil {
-			return err
-		}
 		if err := acknowledge(ctx, tx, j); err != nil {
 			return err
 		}

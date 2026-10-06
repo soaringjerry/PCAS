@@ -129,6 +129,7 @@ func p2AssertReads(t *testing.T, s *Store, scope memory.Scope) {
 		if err != nil {
 			return err
 		}
+		old.MemoryRevision = got.MemoryRevision // New delivery metadata has no legacy oracle.
 		p2Bytes(t, "full workspace snapshot", old, got)
 		req := turnRequest("霜叶的季度汇报准备得怎么样？")
 		// Both prompts contain the current minute. Retry only if this external

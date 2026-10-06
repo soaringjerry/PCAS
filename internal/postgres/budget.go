@@ -83,6 +83,15 @@ func (s *Store) reserveModelCostID(ctx context.Context, owner memory.ID, cost fl
 			}
 			return &worker.JobError{Code: "budget_deferred", Until: nextBudgetDay(now, loc).Add(time.Duration(jitter.Int64())), NoAttempt: true}
 		}
+		// Migration verification can still exercise foreground use on the old
+		// schema. Resolve the actual relation instead of a same-named public table.
+		var staged bool
+		if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM pg_attribute WHERE attrelid='background_usage'::regclass AND attname='stage' AND NOT attisdropped)").Scan(&staged); err != nil {
+			return err
+		}
+		if !staged {
+			return tx.QueryRow(ctx, "INSERT INTO background_usage(owner_id,job_id,reserved_cost) VALUES($1,$2,$3) RETURNING id::text", string(owner), jobID, cost).Scan(&id)
+		}
 		return tx.QueryRow(ctx, "INSERT INTO background_usage(owner_id,job_id,reserved_cost,stage) VALUES($1,$2,$3,$4) RETURNING id::text", string(owner), jobID, cost, stage).Scan(&id)
 	})
 	return id, err

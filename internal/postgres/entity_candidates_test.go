@@ -317,13 +317,13 @@ func TestEntityCandidatesHourlyBudgetAndRuleRecheck(t *testing.T) {
 	if _, err := s.pool.Exec(ctx, `INSERT INTO memory_jobs(id,owner_id,record_id,record_version,stage,state) VALUES(gen_random_uuid(),$1,$2,$3,'memory.organize:1:quota-seed','done')`, scope.OwnerID, j.Record.ID, j.Record.Version); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.pool.Exec(ctx, `INSERT INTO background_usage(owner_id,job_id,reserved_cost) SELECT $1,id,0 FROM memory_jobs CROSS JOIN generate_series(1,120) WHERE owner_id=$1 AND stage='memory.organize:1:quota-seed'`, scope.OwnerID); err != nil {
+	if _, err := s.pool.Exec(ctx, `INSERT INTO background_usage(owner_id,job_id,reserved_cost,stage) SELECT $1,id,0,'memory.entity_candidates' FROM memory_jobs CROSS JOIN generate_series(1,6) WHERE owner_id=$1 AND stage='memory.organize:1:quota-seed'`, scope.OwnerID); err != nil {
 		t.Fatal(err)
 	}
 	err := s.ProcessEntityCandidates(ctx, j)
 	var quota *worker.JobError
-	if !errors.As(err, &quota) || quota.Code != "compare_hourly_limit" || !quota.NoAttempt || len(f.all()) != 0 {
-		t.Fatal("catalogue bypassed 120 cap", err, len(f.all()))
+	if !errors.As(err, &quota) || quota.Code != "entity_candidates_hourly_limit" || !quota.NoAttempt || len(f.all()) != 0 {
+		t.Fatal("catalogue bypassed independent six-call cap", err, len(f.all()))
 	}
 	if _, err := s.pool.Exec(ctx, `UPDATE background_usage SET created_at=now()-interval '2 hours'`); err != nil {
 		t.Fatal(err)
@@ -334,16 +334,13 @@ func TestEntityCandidatesHourlyBudgetAndRuleRecheck(t *testing.T) {
 	if len(f.all()) != 1 {
 		t.Fatal("released budget", len(f.all()))
 	}
-	// The actual name-list invocation must also block the OLD organizer:
-	// bring 119 prior calls back into the hour, plus that real list call.
-	if _, err := s.pool.Exec(ctx, `UPDATE background_usage SET created_at=now() WHERE id IN(SELECT b.id FROM background_usage b JOIN memory_jobs job ON job.id=b.job_id WHERE job.stage='memory.organize:1:quota-seed' LIMIT 119)`); err != nil {
-		t.Fatal(err)
-	}
+	// Even a saturated scan ledger cannot consume classification capacity.
+	seedStageUsage(t, s, scope, EntityCandidatesStage, 6)
 	organizeTestMemory(t, s, scope, "虚构名单调用后的整理哨兵")
 	organizeJob := leaseStage(t, s, scope, j.Record, fmt.Sprintf("%s:%d:%s", OrganizeStage, OrganizeVersion, memory.NewID()))
-	err = s.ProcessOrganize(ctx, organizeJob)
-	if !errors.As(err, &quota) || quota.Code != "organize_hourly_limit" || !quota.NoAttempt || len(f.all()) != 1 {
-		t.Fatal("organizer omitted actual name-list call", err, len(f.all()))
+	f.set(`{"items":[{"n":1,"category":"event","durable":false,"deadlines":[]}]}`)
+	if err := s.ProcessOrganize(ctx, organizeJob); err != nil || len(f.all()) != 2 {
+		t.Fatal("scan must not consume classification capacity", err, len(f.all()))
 	}
 	if err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		b, err := nextEntityCandidateBatchTx(ctx, tx, scope.OwnerID, EntityCompareVersion)

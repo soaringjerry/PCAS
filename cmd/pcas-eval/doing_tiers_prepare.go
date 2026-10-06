@@ -63,7 +63,7 @@ func prepareTierSuite(ctx context.Context, store *postgres.Store, pool *pgxpool.
 	}{
 		{"organize", store.ScheduleOrganize, map[string]worker.Handler{postgres.OrganizeStage: store.ProcessOrganize}},
 		{"compare", store.ScheduleCompare, map[string]worker.Handler{postgres.CompareStage: store.ProcessCompare, postgres.EntityCompareStage: store.ProcessEntityCompare}},
-		{"status", store.ScheduleStatus, map[string]worker.Handler{postgres.CardStage: store.ProcessCard, postgres.HandoverStage: store.ProcessHandover}},
+		{"status", store.ScheduleStatus, map[string]worker.Handler{postgres.HandoverStage: store.ProcessHandover}},
 	}
 	for _, stage := range stages {
 		at := time.Now()
@@ -153,10 +153,10 @@ func prepareTierSuite(ctx context.Context, store *postgres.Store, pool *pgxpool.
  FROM status_cards WHERE owner_id=$1 AND key IN(SELECT key FROM status_current_members WHERE owner_id=$1 GROUP BY key HAVING count(*)>=3)`, owner, postgres.CardVersion).Scan(&p.Cards, &stale); err != nil {
 		return p, err
 	}
-	if err := pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM handovers WHERE owner_id=$1 AND NOT stale AND rule>=$2 AND btrim(body)!='')`, owner, postgres.HandoverVersion).Scan(&p.Handover); err != nil {
+	if err := pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM handovers WHERE owner_id=$1 AND input_hash=library_handover_hash($1) AND rule>=$2 AND btrim(body)!='')`, owner, postgres.HandoverVersion).Scan(&p.Handover); err != nil {
 		return p, err
 	}
-	if stale != 0 || p.Cards > 0 && !p.Handover {
+	if !p.Handover {
 		return p, fmt.Errorf("prepare_status_incomplete")
 	}
 	// Freeze identities AFTER derived product records have been created.

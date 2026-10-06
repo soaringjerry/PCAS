@@ -437,10 +437,9 @@ func (s *Store) finishUseContextTx(ctx context.Context, tx pgx.Tx, scope memory.
 	return nil
 }
 func writeUseContext(b *strings.Builder, u useContext, loc *time.Location, write func(workspace.Memory)) {
+	fmt.Fprintln(b, "\n交接说明：")
 	if built, err := time.Parse(time.RFC3339Nano, u.Handover.BuiltAt); err == nil && u.Handover.Body != "" {
-		fmt.Fprintf(b, "\n交接说明（写于 %s，之后的变化以下面的记忆为准）：\n", built.In(loc).Format("2006-01-02 15:04"))
-	} else {
-		fmt.Fprintln(b, "\n交接说明：")
+		fmt.Fprintf(b, "（写于 %s，之后的变化以下面的记忆为准）\n", built.In(loc).Format("2006-01-02 15:04"))
 	}
 	fmt.Fprintln(b, u.Handover.Body)
 	fmt.Fprintln(b, "\n必须遵守的要求（每一条只要沾边就要落实）：")

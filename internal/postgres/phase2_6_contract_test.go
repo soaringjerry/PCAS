@@ -1,4 +1,4 @@
-package store
+package postgres
 
 // Frozen before reading implementation, from docs/tasks/phase2_6/README.md
 // and docs/research/memory-status-layer-audit.md at origin/phase2_6/main 98443bb.

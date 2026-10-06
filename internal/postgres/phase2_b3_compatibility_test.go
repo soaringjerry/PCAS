@@ -94,6 +94,16 @@ func TestPhase2B3_S10_PublicRecallFifteenRequestsByteIdentical(t *testing.T) {
 	gold := b3BaselineOracle(t)
 	for i, c := range gold.S10 {
 		t.Run(fmt.Sprintf("request_%02d", i+1), func(t *testing.T) {
+			// The frozen continuation cases included an activity prior. C7
+			// requires actual use evidence for that prior and enables it in
+			// every mode. Give each case its original activity/no-activity
+			// condition without relaxing any ranking or pagination oracle.
+			b3Exec(t, s, `DELETE FROM use_events WHERE owner_id=$1 AND event_key LIKE 'b3-baseline-confirmation-%'`, scope.OwnerID)
+			if c.Request.Mode == memory.Continue {
+				for _, n := range []int{20, 21, 22} {
+					b3Exec(t, s, `INSERT INTO use_events(owner_id,event_key,record_id,record_version,kind,occurred_at) VALUES($1,$2,$3,1,'confirmation','2025-08-01T00:00:00Z')`, scope.OwnerID, fmt.Sprintf("b3-baseline-confirmation-%d", n), b3FixedID(n))
+				}
+			}
 			who := scope
 			if c.External {
 				who.IsOwner = false

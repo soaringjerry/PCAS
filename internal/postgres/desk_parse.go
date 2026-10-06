@@ -107,7 +107,7 @@ func secretaryCaptureText(stage string, err error) string {
 			reason = "模型响应超时"
 		}
 	case "verify":
-		reason = "上下文已变更，请重试"
+		return "本轮要改动的事项已变更，请重试"
 	}
 	return "已记下原话；" + reason + "，稍后会自动整理"
 }

@@ -14,7 +14,10 @@ import (
 )
 
 type usePlan struct {
-	Groups []string `json:"groups"`
+	Depth     string   `json:"depth,omitempty"`
+	Mentioned []string `json:"mentioned,omitempty"`
+	Adopted   []string `json:"adopted,omitempty"`
+	Groups    []string `json:"groups"`
 }
 
 func safeUsePlan(raw json.RawMessage) any {
@@ -30,7 +33,7 @@ func safeUsePlan(raw json.RawMessage) any {
 			}
 		}
 	}
-	return asJSON(usePlan{Groups: keys})
+	return asJSON(usePlan{Groups: keys, Depth: p.Depth, Mentioned: p.Mentioned, Adopted: p.Adopted})
 }
 func secretaryNeedsCheck(out secretaryOutput) bool {
 	for _, a := range out.Actions {
@@ -70,6 +73,7 @@ func constrainSecretaryCheck(before, after secretaryOutput) secretaryOutput {
 		actions[i] = a
 	}
 	after.Actions = actions
+	after.MemoryPlan = before.MemoryPlan
 	after.Remember = before.Remember
 	return after
 }

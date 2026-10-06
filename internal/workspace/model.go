@@ -227,6 +227,7 @@ type Adoption struct {
 	Edited   bool   `json:"edited"`
 }
 type Run struct {
+	TargetHash         string       `json:"targetHash,omitempty"`
 	MemoryContextRange *[2]int      `json:"memoryContextRange,omitempty"`
 	MemoryTier         string       `json:"memoryTier,omitempty"`
 	MemoryGroups       []string     `json:"memoryGroups,omitempty"`

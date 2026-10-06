@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"strings"
 	"time"
@@ -11,18 +12,9 @@ import (
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
-// Cards may contribute over a hundred dependencies. Hydrate and validate claims
-// as one scoped set instead of issuing two round trips for each card item.
-// Source visibility and duplicate redirection retain the canonical verifier.
+// Input memories may change during generation. Only agent availability is a
+// precondition for producing an answer; final checks cover actual write targets.
 func (s *Store) checkSecretaryUseContextTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c secretaryContext) error {
-	if !c.Use.Ready {
-		return s.checkDeskContextTx(ctx, tx, scope, c.Agent.ID, c.Dependencies, c.Items, true)
-	}
-	var at time.Time
-	if err := tx.QueryRow(ctx, "SELECT clock_timestamp()").Scan(&at); err != nil {
-		return err
-	}
-	tx = useClockTx{Tx: tx, at: at}
 	agent, err := queryDocument[workspace.Agent](ctx, tx, "SELECT document FROM workspace_agents WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), c.Agent.ID)
 	if err != nil {
 		return err
@@ -30,84 +22,46 @@ func (s *Store) checkSecretaryUseContextTx(ctx context.Context, tx pgx.Tx, scope
 	if !agent.Enabled {
 		return memory.ErrForbidden
 	}
-	var item *workspace.Item
-	if sent, ok := c.Aliases["THIS"]; ok {
-		current, err := getItem(ctx, tx, scope, sent.ID)
-		if err != nil {
-			return err
-		}
-		item = &current
-	}
-	claimIDs := []string{}
-	for _, ref := range c.Dependencies {
-		if ref.Kind != memory.SourceKind {
-			claimIDs = append(claimIDs, string(ref.ID))
-		}
-	}
-	duplicates, err := queryDocuments[string](ctx, tx, "SELECT to_jsonb(id::text) FROM claims WHERE owner_id=$1 AND id=ANY($2::uuid[]) AND retired='duplicate'", string(scope.OwnerID), claimIDs)
-	if err != nil {
+	return nil
+}
+func (s *Store) checkSecretaryActionTargetsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c secretaryContext, out secretaryOutput) error {
+	if err := s.checkSecretaryUseContextTx(ctx, tx, scope, c); err != nil {
 		return err
 	}
-	// Completion only needs version, access and policy fields. Rehydrating
-	// evidence/mentions for every supplied card on each check is unnecessary.
-	rows, err := tx.Query(ctx, `WITH applicable AS MATERIALIZED (
- SELECT claim_id,version FROM applicable_claim_versions($1,now(),now()) WHERE claim_id=ANY($2::uuid[]))
- SELECT c.claim_id::text,c.version,c.nature,c.acquisition,coalesce(c.scope->>'project_id','')
- FROM applicable a JOIN claim_revisions c ON c.owner_id=$1 AND (c.claim_id,c.version)=(a.claim_id,a.version)
- JOIN memory_records r ON (r.owner_id,r.id)=(c.owner_id,c.claim_id)
- JOIN record_versions rv ON (rv.owner_id,rv.record_id,rv.version)=(c.owner_id,c.claim_id,c.version)
- JOIN claims active ON (active.owner_id,active.id)=(c.owner_id,c.claim_id)
- WHERE r.state='active' AND rv.state='active' AND active.retired='' AND claim_source_is_current($1,c.claim_id,c.version,now())
- AND EXISTS(SELECT 1 FROM record_grants g WHERE g.owner_id=c.owner_id AND g.record_id=c.claim_id AND g.principal_id=$3)
- AND ($4 OR `+humanMemorySQL("c")+`)`, string(scope.OwnerID), claimIDs, agent.ID, agent.IncludeInferred)
-	if err != nil {
-		return err
-	}
-	byID := map[string]workspace.Memory{}
-	for rows.Next() {
-		var m workspace.Memory
-		if err := rows.Scan(&m.ID, &m.Version, &m.Kind, &m.Acquisition, &m.ProjectID); err != nil {
-			rows.Close()
-			return err
-		}
-		byID[m.ID] = m
-	}
-	err = rows.Err()
-	rows.Close()
-	if err != nil {
-		return err
-	}
-	excluded := []string{}
-	project := ""
-	if item != nil {
-		project = item.ProjectID
-		if item.Kind == "project" {
-			project = item.ID
-		}
-		excluded, err = queryDocuments[string](ctx, tx, "SELECT to_jsonb(memory_id::text) FROM context_exclusions WHERE owner_id=$1 AND thing_id=$2", string(scope.OwnerID), item.ID)
-		if err != nil {
-			return err
-		}
-	}
-	canonical := []memory.Ref{}
-	for _, ref := range uniqueRefs(c.Dependencies) {
-		if ref.Kind == memory.SourceKind || oneOf(string(ref.ID), duplicates...) {
-			canonical = append(canonical, ref)
+	seen := map[string]bool{}
+	for _, action := range out.Actions {
+		if action.selfcheckDropped {
 			continue
 		}
-		m, ok := byID[string(ref.ID)]
-		if !ok || m.Version != ref.Version || !useMemoryAllowed(m, agent) {
-			return memory.ErrConflict
+		refs := []string{action.Ref}
+		if action.Project != nil {
+			refs = append(refs, *action.Project)
 		}
-		if item != nil && (oneOf(m.ID, excluded...) || m.ProjectID != "" && m.ProjectID != project) {
-			return memory.ErrConflict
+		if project, ok := textField(action.Set, "project"); ok {
+			refs = append(refs, project)
+		}
+		for _, ref := range refs {
+			sent, ok := c.Aliases[ref]
+			if !ok || seen[sent.ID] {
+				continue
+			}
+			seen[sent.ID] = true
+			current, err := getItem(ctx, tx, scope, sent.ID)
+			if err != nil {
+				return memory.ErrConflict
+			}
+			// Compare the target's stored document, independent of changes to
+			// memory provenance used to sanitize the model's input.
+			if original, ok := c.TargetItems[sent.ID]; ok {
+				sent = original
+			}
+
+			if string(asJSON(current)) != string(asJSON(sent)) {
+				return memory.ErrConflict
+			}
 		}
 	}
-	if err := verifyRunForItemTx(ctx, tx, scope, workspace.Run{AgentID: agent.ID, ContextVersions: canonical}, item); err != nil {
-		return err
-	}
-	// Keep the original full document and adopted-artifact comparison for items.
-	return s.checkDeskContextTx(ctx, tx, scope, agent.ID, nil, c.Items, true)
+	return nil
 }
 
 // PostgreSQL now() is frozen at transaction start. The ordered turn keeps its
@@ -134,35 +88,28 @@ func (tx useClockTx) QueryRow(ctx context.Context, sql string, args ...any) pgx.
 	return tx.Tx.QueryRow(ctx, sql, args...)
 }
 
-// Historical duplicate dependencies stay valid. A queued prompt is a new model
-// input, however, and must never replay a retired memory's saved text or label.
-// Old layouts lack a safe replacement boundary, so require regeneration only
-// when a retired identity actually occurs in the saved prompt.
+// A run writes its destination item. Other input memories may change while
+// its paid draft is generated; their revision is not an abort condition.
 func checkUseRunPromptTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run workspace.Run) error {
-	if err := verifyRunTx(ctx, tx, scope, run); err != nil {
-		return err
-	}
-	ids := []string{}
-	for _, ref := range run.ContextVersions {
-		if ref.Kind != memory.SourceKind {
-			ids = append(ids, string(ref.ID))
-		}
-	}
-	retired, err := queryDocuments[string](ctx, tx, "SELECT to_jsonb(id::text) FROM claims WHERE owner_id=$1 AND id=ANY($2::uuid[]) AND coalesce(to_jsonb(claims)->>'retired','')!=''", string(scope.OwnerID), ids)
+	agent, err := queryDocument[workspace.Agent](ctx, tx, "SELECT document FROM workspace_agents WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), run.AgentID)
 	if err != nil {
 		return err
 	}
-	for _, id := range retired {
-		if strings.Contains(run.Brief, id) {
-			return memory.ErrConflict
-		}
+	if !agent.Enabled {
+		return memory.ErrForbidden
+	}
+	item, err := getItem(ctx, tx, scope, run.ThingID)
+	if err != nil {
+		return err
+	}
+	if run.TargetHash != "" && itemHash(item) != run.TargetHash {
+		return memory.ErrConflict
 	}
 	return nil
 }
+func itemHash(item workspace.Item) string { return fmt.Sprintf("%x", sha256.Sum256(asJSON(item))) }
 
-// Once the draft exists, changes to its inputs or loss of the worker lease make
-// another model call unnecessary. Retain the paid draft for the final stale-
-// context check instead of selfchecking obsolete or abandoned work.
+// A changed destination or lost worker lease prevents further model work.
 func (s *Store) checkDeputySelfcheckContext(ctx context.Context, scope memory.Scope, run workspace.Run, token string) error {
 	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		var leased bool

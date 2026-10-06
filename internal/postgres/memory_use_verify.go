@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -12,8 +13,8 @@ import (
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
-// Input memories may change during generation. Only agent availability is a
-// precondition for producing an answer; final checks cover actual write targets.
+// Input content may change during generation. Access revocation and deletion
+// remain fences; use current versions so unrelated edits do not abort a reply.
 func (s *Store) checkSecretaryUseContextTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c secretaryContext) error {
 	agent, err := queryDocument[workspace.Agent](ctx, tx, "SELECT document FROM workspace_agents WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), c.Agent.ID)
 	if err != nil {
@@ -21,6 +22,13 @@ func (s *Store) checkSecretaryUseContextTx(ctx context.Context, tx pgx.Tx, scope
 	}
 	if !agent.Enabled {
 		return memory.ErrForbidden
+	}
+	var thing string
+	if item, ok := c.Aliases["THIS"]; ok {
+		thing = item.ID
+	}
+	if err := verifyRunAccessTx(ctx, useClockTx{Tx: tx, at: time.Now()}, scope, workspace.Run{ThingID: thing, AgentID: c.Agent.ID, ContextVersions: c.Dependencies}); err != nil {
+		return fmt.Errorf("%w: input access changed", memory.ErrForbidden)
 	}
 	return nil
 }
@@ -88,6 +96,28 @@ func (tx useClockTx) QueryRow(ctx context.Context, sql string, args ...any) pgx.
 	return tx.Tx.QueryRow(ctx, sql, args...)
 }
 
+// A queued prompt has not been sent yet. Preserve the existing access/currentness
+// fence before the first paid call; later input changes do not discard a draft.
+func checkQueuedUseRunPromptTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run workspace.Run) error {
+	if err := verifyRunTx(ctx, tx, scope, run); err != nil {
+		return err
+	}
+	ids := []string{}
+	for _, ref := range run.ContextVersions {
+		if ref.Kind != memory.SourceKind {
+			ids = append(ids, string(ref.ID))
+		}
+	}
+	var retired bool
+	if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM claims WHERE owner_id=$1 AND id=ANY($2::uuid[]) AND coalesce(to_jsonb(claims)->>'retired','')!='')", string(scope.OwnerID), ids).Scan(&retired); err != nil {
+		return err
+	}
+	if retired {
+		return memory.ErrConflict
+	}
+	return checkUseRunPromptTx(ctx, tx, scope, run)
+}
+
 // A run writes its destination item. Other input memories may change while
 // its paid draft is generated; their revision is not an abort condition.
 func checkUseRunPromptTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run workspace.Run) error {
@@ -119,6 +149,27 @@ func (s *Store) checkDeputySelfcheckContext(ctx context.Context, scope memory.Sc
 		if !leased {
 			return memory.ErrConflict
 		}
-		return checkUseRunPromptTx(ctx, tx, scope, run)
+		if err := checkUseRunPromptTx(ctx, tx, scope, run); err != nil {
+			return err
+		}
+		return verifyRunAccessTx(ctx, useClockTx{Tx: tx, at: time.Now()}, scope, run)
 	})
+}
+
+// Context-derived events refer to an identity already supplied to the model.
+// A concurrent revision can update that identity without invalidating the answer.
+func recordContextUseTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, event memory.UseEvent) error {
+	if event.Kind != "user_mention" && event.Kind != "adoption" {
+		return memory.ErrInvalid
+	}
+	var current int
+	err := tx.QueryRow(ctx, "SELECT version FROM memory_records WHERE owner_id=$1 AND id=$2 AND state='active'", string(scope.OwnerID), string(event.Ref.ID)).Scan(&current)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return memory.ErrNotFound
+	}
+	if err != nil {
+		return err
+	}
+	event.Ref.Version = current
+	return recordUseTx(ctx, tx, scope, event)
 }

@@ -649,7 +649,7 @@ func (s *Store) runAgentOnce(ctx context.Context) error {
 		if !oneOf(run.MemoryTier, "light", "medium", "heavy") {
 			run.MemoryTier = "heavy"
 		}
-		if err := checkUseRunPromptTx(ctx, tx, scope, run); err != nil {
+		if err := checkQueuedUseRunPromptTx(ctx, tx, scope, run); err != nil {
 			run.Status = "failed"
 			run.Cost = 0
 			run.Error = "记忆或授权已变化，请重新生成"
@@ -806,6 +806,12 @@ func (s *Store) runAgentOnce(ctx context.Context) error {
 		current.Cost = cost
 		if checkUseRunPromptTx(ctx, tx, scope, current) != nil {
 			current.StaleContext = true
+		}
+		if verifyRunAccessTx(ctx, tx, scope, current) != nil {
+			current.StaleContext = true
+			current.Status = "failed"
+			current.Output = ""
+			current.Error = "生成期间授权已撤回或资料已删除，请重新生成"
 		}
 		if u.Coverage != nil && len(u.Coverage.Skipped) > 0 {
 			current.Output += "\n这几组没来得及看：" + strings.Join(u.Coverage.Skipped, "、")

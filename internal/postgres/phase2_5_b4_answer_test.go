@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"math/rand"
 	"net/http"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -78,7 +79,7 @@ func phase25B4Section(t *testing.T, prompt, heading, needle string) {
 		t.Errorf("%q not in %s section", needle, heading)
 	}
 	end := len(prompt)
-	for _, h := range []string{"交接说明", "必须遵守的要求", "现状卡", "期限和固定安排", "补充记忆", "相关原话"} {
+	for _, h := range []string{"交接说明", "对助手的要求", "期限和固定安排", "补充记忆", "相关原话"} {
 		if h == heading {
 			continue
 		}
@@ -196,14 +197,18 @@ func TestPhase25B4_X4_3_ApplicableSelfRulesAndSectionOrder(t *testing.T) {
 	}
 	f.exec(t, `INSERT INTO status_cards(owner_id,key,kind,name,rule,built_at,stale) VALUES($1,'self:rule','self','虚构对助手的要求',1,now(),false)`, f.scope.OwnerID)
 	for i, r := range rs {
+		f.exec(t, `INSERT INTO assistant_requirements(owner_id,claim_id,claim_version,unrestricted,scope) VALUES($1,$2,$3,$4,$5)`, f.scope.OwnerID, r.ID, r.Version, i == 1, []string{"起草邮件", "", "游泳"}[i])
 		f.exec(t, `INSERT INTO status_card_items(owner_id,key,field,position,claim_id,claim_version,applies_to) VALUES($1,'self:rule','status',$2,$3,$4,$5)`, f.scope.OwnerID, i, r.ID, r.Version, []string{"起草邮件", "", "游泳"}[i])
 	}
 	f.handover(t, "entity:"+g.EntityID, false)
 	f.model(t, func(_ *http.Request, _ int, r phase25B234ModelRequest) phase25B234ModelReply {
 		p := phase25B4Prompt(r)
-		phase25B4Section(t, p, "必须遵守的要求", rules[0])
-		phase25B4Section(t, p, "必须遵守的要求", rules[1])
-		ordered := []string{"交接说明", "必须遵守的要求", "现状卡", "期限和固定安排", "补充记忆", "相关原话"}
+		phase25B4Section(t, p, "对助手的要求", rules[0])
+		phase25B4Section(t, p, "对助手的要求", rules[1])
+		ordered := []string{"交接说明", "对助手的要求", "期限和固定安排", "补充记忆", "相关原话"}
+		if strings.Contains(p, "相关的现状卡") {
+			t.Error("secretary still reads frozen cards")
+		}
 		last := -1
 		for _, h := range ordered {
 			i := strings.Index(p, h)
@@ -270,7 +275,7 @@ func TestPhase25B4_X4_6_MediumPromotionSameDataAndBilling(t *testing.T) {
 					firstMu.Lock()
 					first = p
 					firstMu.Unlock()
-					return phase25B4ReplyJSON(phase25B4Reply{text: "虚构初稿。", missingKeyInformation: missing}, false)
+					return phase25B4ReplyJSON(phase25B4Reply{text: "虚构初稿。", missingKeyInformation: missing, depth: "medium"}, false)
 				}
 				firstMu.Lock()
 				initial := first
@@ -306,7 +311,7 @@ func TestPhase25B4_X4_7_SelfcheckFailureKeepsDraftWithoutRetry(t *testing.T) {
 	model := f.model(t, func(_ *http.Request, n int, _ phase25B234ModelRequest) phase25B234ModelReply {
 		if n == 1 {
 			time.Sleep(50 * time.Millisecond)
-			return phase25B4ReplyJSON(phase25B4Reply{text: "虚构可用初稿。"}, false)
+			return phase25B4ReplyJSON(phase25B4Reply{text: "虚构可用初稿。", depth: "medium"}, false)
 		}
 		return phase25B234ModelReply{status: 503}
 	})
@@ -339,7 +344,7 @@ func TestPhase25B4_X4_8_SelfcheckCannotAddActions(t *testing.T) {
 			model := f.model(t, func(_ *http.Request, n int, _ phase25B234ModelRequest) phase25B234ModelReply {
 				if n == 1 {
 					time.Sleep(50 * time.Millisecond)
-					return phase25B4ReplyJSON(phase25B4Reply{text: "虚构初稿。", actions: tc.draft}, false)
+					return phase25B4ReplyJSON(phase25B4Reply{text: "虚构初稿。", depth: tc.tier, actions: tc.draft}, false)
 				}
 				return phase25B4ReplyJSON(phase25B4Reply{text: "虚构检查稿。", actions: tc.checked}, true)
 			})
@@ -400,6 +405,7 @@ func TestPhase25B4_RandomPromptAndTierSequence(t *testing.T) {
 	t.Logf("seed=%d", seed)
 	g, refs := f.cardGroup(t, 8)
 	var mu sync.RWMutex
+	desiredDepth := "light"
 	allowed := map[string]bool{}
 	for _, r := range refs {
 		allowed[refsText(t, f, r)] = true
@@ -417,7 +423,8 @@ func TestPhase25B4_RandomPromptAndTierSequence(t *testing.T) {
 				t.Errorf("retired or superseded version in model content: %s", s)
 			}
 		}
-		return phase25B4ReplyJSON(phase25B4Reply{text: "虚构随机轮次回复。"}, false)
+		depth := desiredDepth
+		return phase25B4ReplyJSON(phase25B4Reply{text: "虚构随机轮次回复。", depth: depth}, false)
 	})
 	for step := 0; step < 24; step++ {
 		i := 3 + rng.Intn(len(refs)-3)
@@ -463,6 +470,12 @@ func TestPhase25B4_RandomPromptAndTierSequence(t *testing.T) {
 		if step%2 == 1 {
 			question = "仔细" + question
 		}
+		mu.Lock()
+		desiredDepth = "light"
+		if step%2 == 1 {
+			desiredDepth = "medium"
+		}
+		mu.Unlock()
 		before := len(model.calls())
 		f.secretaryTurn(t, question, "")
 		wantCalls, wantTier := 1, "light"
@@ -539,45 +552,54 @@ func (f *phase25B234Fixture) deputyRun(t *testing.T, question string) workspace.
 	}
 }
 
-func TestPhase25B4_NamedGroupsRespectSixCardLimit(t *testing.T) {
+// The answer's metadata selects seven live groups. Reader work reuses that
+// choice without an extra selector or a legacy six-card limit.
+func TestPhase25B4_NamedGroupsPiggybackAnswerAndUseLiveDirectory(t *testing.T) {
 	f := phase25B234NewFixture(t)
 	groups := f.heavyGroups(t, 7)
-	var names []string
-	for i := range groups {
-		names = append(names, fmt.Sprintf("虚构接力项目%02d", i))
-	}
-	f.model(t, func(_ *http.Request, _ int, _ phase25B234ModelRequest) phase25B234ModelReply {
-		return phase25B4ReplyJSON(phase25B4Reply{text: "虚构六卡上限回复。"}, false)
-	})
-	f.secretaryTurn(t, "处理 "+strings.Join(names, "、"), "")
-	var raw json.RawMessage
-	if err := f.db.QueryRow(f.ctx, `SELECT plan->'groups' FROM model_usage WHERE owner_id=$1 AND purpose='secretary' ORDER BY at DESC LIMIT 1`, f.scope.OwnerID).Scan(&raw); err != nil {
-		t.Fatal(err)
-	}
-	var keys []string
-	if err := json.Unmarshal(raw, &keys); err != nil {
-		t.Fatal(err)
-	}
-	if len(keys) != 6 {
-		t.Errorf("seven named groups selected=%d want 6", len(keys))
-	}
-	seen := map[string]bool{}
-	for _, key := range keys {
-		if seen[key] {
-			t.Error("duplicate selected group")
-		}
-		seen[key] = true
-		found := false
-		for _, g := range groups {
-			if key == g.key {
-				found = true
+	var mu sync.Mutex
+	calls := map[string]int{}
+	model := f.model(t, func(_ *http.Request, _ int, input phase25B234ModelRequest) phase25B234ModelReply {
+		kind := phase25B4Kind(input)
+		mu.Lock()
+		calls[kind]++
+		mu.Unlock()
+		if kind == "reader" {
+			i := phase25B4ReaderGroup(t, input, groups)
+			if i < 0 {
+				return phase25B234ModelReply{status: 400}
 			}
+			return phase25B4Reader([]memory.ID{groups[i].refs[0].ID})
 		}
-		if !found {
-			t.Errorf("selected unnamed group=%s", key)
+		if kind == "selection" {
+			t.Error("piggyback choice made an extra selector call")
 		}
+		aliases := []string{}
+		for _, m := range regexp.MustCompile(`(?m)^(G[0-9]+)：虚构接力项目[0-9]+`).FindAllStringSubmatch(phase25B4Prompt(input), -1) {
+			aliases = append(aliases, m[1])
+		}
+		if len(aliases) != 7 {
+			t.Errorf("live directory exposes %d named groups, want 7", len(aliases))
+		}
+		raw, _ := json.Marshal(map[string]any{"reply": "虚构七组取材回复。", "actions": []any{}, "memoryPlan": map[string]any{"depth": "heavy", "groups": aliases, "mentioned": []string{}, "adopted": []string{}}})
+		time.Sleep(50 * time.Millisecond)
+		return phase25B234ModelReply{content: string(raw)}
+	})
+	turn := f.secretaryTurn(t, "核查虚构接力的七个项目", "")
+	if turn.Turn.Reply != "虚构七组取材回复。" {
+		t.Fatal(turn.Turn)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if calls["selection"] != 0 || calls["reader"] != 7 || calls["answer"] != 1 || calls["selfcheck"] != 1 || len(model.calls()) != 9 {
+		t.Fatal(calls, len(model.calls()))
+	}
+	var count int
+	if err := f.db.QueryRow(f.ctx, `SELECT jsonb_array_length(plan->'groups') FROM model_usage WHERE owner_id=$1 AND purpose='secretary' ORDER BY at DESC LIMIT 1`, f.scope.OwnerID).Scan(&count); err != nil || count != 7 {
+		t.Fatal("selected live groups", count, err)
 	}
 }
+
 func TestPhase25B4_MainRetryAtMostTwiceWithinThirtySeconds(t *testing.T) {
 	f := phase25B234NewFixture(t)
 	g, refs := f.cardGroup(t, 3)
@@ -610,7 +632,7 @@ func TestPhase25B4_SelfcheckUsesActualDraftDurationAndKeepsDraft(t *testing.T) {
 			case <-time.After(150 * time.Millisecond):
 			case <-r.Context().Done():
 			}
-			return phase25B4ReplyJSON(phase25B4Reply{text: "虚构快速初稿。"}, false)
+			return phase25B4ReplyJSON(phase25B4Reply{text: "虚构快速初稿。", depth: "medium"}, false)
 		}
 		select {
 		case <-r.Context().Done():
@@ -651,7 +673,7 @@ func TestPhase25B4_SelfcheckSkipRemovesOriginalAction(t *testing.T) {
 	model := f.model(t, func(_ *http.Request, n int, _ phase25B234ModelRequest) phase25B234ModelReply {
 		if n == 1 {
 			time.Sleep(50 * time.Millisecond)
-			return phase25B4ReplyJSON(phase25B4Reply{text: "虚构初稿。", actions: []json.RawMessage{json.RawMessage(`{"op":"create_task","title":"虚构应被撤掉的事项"}`)}}, false)
+			return phase25B4ReplyJSON(phase25B4Reply{text: "虚构初稿。", depth: "medium", actions: []json.RawMessage{json.RawMessage(`{"op":"create_task","title":"虚构应被撤掉的事项"}`)}}, false)
 		}
 		return phase25B4ReplyJSON(phase25B4Reply{text: "虚构撤掉动作。", actions: []json.RawMessage{json.RawMessage(`{"op":"skip"}`)}}, true)
 	})
@@ -677,7 +699,7 @@ func phase25B4Region(t *testing.T, prompt, heading string) string {
 	}
 	i += len(heading)
 	end := len(prompt)
-	for _, next := range []string{"交接说明", "必须遵守的要求", "现状卡", "期限和固定安排", "补充记忆", "相关原话"} {
+	for _, next := range []string{"交接说明", "对助手的要求", "期限和固定安排", "补充记忆", "相关原话"} {
 		if next == heading {
 			continue
 		}
@@ -687,7 +709,7 @@ func phase25B4Region(t *testing.T, prompt, heading string) string {
 	}
 	return prompt[i:end]
 }
-func TestPhase25B4_TwelveRulesFifteenDeadlinesAndSupplementLimits(t *testing.T) {
+func TestPhase25B4_AllGlobalRulesAndDeadlinesHaveIndependentSpace(t *testing.T) {
 	f := phase25B234NewFixtureTimeout(t, 3*time.Minute)
 	g, cardRefs := f.cardGroup(t, 3)
 	f.card(t, g, cardRefs, false)
@@ -699,6 +721,7 @@ func TestPhase25B4_TwelveRulesFifteenDeadlinesAndSupplementLimits(t *testing.T) 
 	}
 	f.exec(t, `INSERT INTO status_cards(owner_id,key,kind,name,rule,built_at,stale) VALUES($1,'self:rule','self','虚构对助手的要求',1,now(),false)`, f.scope.OwnerID)
 	for i, r := range rules {
+		f.exec(t, `INSERT INTO assistant_requirements(owner_id,claim_id,claim_version,unrestricted,scope) VALUES($1,$2,$3,true,'')`, f.scope.OwnerID, r.ID, r.Version)
 		f.exec(t, `INSERT INTO status_card_items(owner_id,key,field,position,claim_id,claim_version,applies_to) VALUES($1,'self:rule','status',$2,$3,$4,'')`, f.scope.OwnerID, i, r.ID, r.Version)
 	}
 	for i := 0; i < 16; i++ {
@@ -713,18 +736,18 @@ func TestPhase25B4_TwelveRulesFifteenDeadlinesAndSupplementLimits(t *testing.T) 
 	}
 	f.model(t, func(_ *http.Request, _ int, r phase25B234ModelRequest) phase25B234ModelReply {
 		p := phase25B4Prompt(r)
-		if n := strings.Count(phase25B4Region(t, p, "必须遵守的要求"), "MustRule"); n != 12 {
-			t.Errorf("unlimited applicable rules=%d want 12", n)
+		if n := strings.Count(phase25B4Region(t, p, "对助手的要求"), "MustRule"); n != 15 {
+			t.Errorf("unlimited applicable rules=%d want 15", n)
 		}
 		deadlineBody := phase25B4Region(t, p, "期限和固定安排")
-		if n := strings.Count(deadlineBody, "AcceptanceDeadline"); n != 15 {
-			t.Errorf("future deadlines=%d want 15", n)
+		if n := strings.Count(deadlineBody, "AcceptanceDeadline"); n != 16 {
+			t.Errorf("future deadlines=%d want 16", n)
 		}
-		if strings.Contains(deadlineBody, "AcceptanceDeadline15") {
-			t.Error("latest sixteenth deadline displaced nearer deadline")
+		if !strings.Contains(deadlineBody, "AcceptanceDeadline15") {
+			t.Error("sixteenth deadline silently discarded")
 		}
-		if n := strings.Count(phase25B4Region(t, p, "补充记忆"), "AcceptanceSupplementNote"); n == 0 || n > 15 {
-			t.Errorf("supplement count=%d want 1..15", n)
+		if n := len(regexp.MustCompile(`(?m)^\[M[0-9]+ / trust=[^\n]*AcceptanceSupplementNote`).FindAllString(phase25B4Region(t, p, "补充记忆"), -1)); n == 0 || n > 20 {
+			t.Errorf("supplement count=%d want 1..20", n)
 		}
 		return phase25B4ReplyJSON(phase25B4Reply{text: "虚构分节上限回复。"}, false)
 	})

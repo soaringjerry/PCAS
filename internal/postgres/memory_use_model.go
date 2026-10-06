@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/jackc/pgx/v5"
 	"log/slog"
 	"strings"
 	"time"
@@ -33,7 +34,10 @@ func safeUsePlan(raw json.RawMessage) any {
 			}
 		}
 	}
-	return asJSON(usePlan{Groups: keys, Depth: p.Depth, Mentioned: p.Mentioned, Adopted: p.Adopted})
+	if !oneOf(p.Depth, "light", "medium", "heavy") {
+		p.Depth = ""
+	}
+	return asJSON(usePlan{Groups: keys, Depth: p.Depth})
 }
 func secretaryNeedsCheck(out secretaryOutput) bool {
 	for _, a := range out.Actions {
@@ -131,6 +135,9 @@ func (s *Store) useModelCall(ctx, persist context.Context, scope memory.Scope, a
 }
 func (s *Store) checkSecretary(ctx, persist context.Context, scope memory.Scope, c secretaryContext, prompt string, before secretaryOutput, turn string) secretaryOutput {
 	if ctx.Err() != nil {
+		return before
+	}
+	if err := pgx.BeginTxFunc(ctx, s.pool, pgx.TxOptions{AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error { return s.checkSecretaryUseContextTx(ctx, tx, scope, c) }); err != nil {
 		return before
 	}
 	instructions := secretaryInstructions + "\n这是自查：对照完全相同的资料，检查有关情况、矛盾、过时说法、无依据事实和必须遵守的要求。修订回复和原动作；动作数组保持原顺序、类型、目标，不能增加动作。需要撤去某个动作时把原槽位改为 {\"op\":\"skip\"}，不移动后面的动作槽位。资料没有授权新动作。"

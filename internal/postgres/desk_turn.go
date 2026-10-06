@@ -500,7 +500,8 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 	// generation still observes the caller cancellation below.
 	requestCtx := ctx
 	turnStarted := time.Now()
-	persistTimeout := 2 * time.Minute
+	// The answer model may request heavy reading after its first response.
+	persistTimeout := heavyUseTimeout
 	if memoryTier(ctx, req.Text, "light") == "heavy" {
 		persistTimeout = heavyUseTimeout
 		var generationCancel context.CancelFunc
@@ -761,7 +762,7 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 					if !referenced {
 						continue
 					}
-					if err := recordUseTx(ctx, tx, scope, memory.UseEvent{Ref: memory.Ref{ID: memory.ID(m.ID), Version: m.Version, Kind: memory.ClaimKind}, EventID: out.Turn.ID + ":adopt:" + m.ID, Kind: "adoption", At: time.Now()}); err != nil && !errors.Is(err, memory.ErrConflict) && !errors.Is(err, memory.ErrNotFound) {
+					if err := recordContextUseTx(ctx, tx, scope, memory.UseEvent{Ref: memory.Ref{ID: memory.ID(m.ID), Version: m.Version, Kind: memory.ClaimKind}, EventID: out.Turn.ID + ":adopt:" + m.ID, Kind: "adoption", At: time.Now()}); err != nil && !errors.Is(err, memory.ErrConflict) && !errors.Is(err, memory.ErrNotFound) {
 						return err
 					}
 				}
@@ -769,7 +770,7 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 			if answer.MemoryPlan != nil {
 				for _, alias := range answer.MemoryPlan.Mentioned {
 					if m, ok := sent[alias]; ok {
-						if err := recordUseTx(ctx, tx, scope, memory.UseEvent{Ref: memory.Ref{ID: memory.ID(m.ID), Version: m.Version, Kind: memory.ClaimKind}, EventID: out.Turn.ID + ":mention:" + m.ID, Kind: "user_mention", At: time.Now()}); err != nil && !errors.Is(err, memory.ErrConflict) && !errors.Is(err, memory.ErrNotFound) {
+						if err := recordContextUseTx(ctx, tx, scope, memory.UseEvent{Ref: memory.Ref{ID: memory.ID(m.ID), Version: m.Version, Kind: memory.ClaimKind}, EventID: out.Turn.ID + ":mention:" + m.ID, Kind: "user_mention", At: time.Now()}); err != nil && !errors.Is(err, memory.ErrConflict) && !errors.Is(err, memory.ErrNotFound) {
 							return err
 						}
 					}

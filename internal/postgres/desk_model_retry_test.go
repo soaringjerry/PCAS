@@ -235,7 +235,7 @@ func TestSecretaryModelRetryDefersBusinessWrites(t *testing.T) {
 	})
 }
 
-func TestSecretaryModelRetryRechecksContext(t *testing.T) {
+func TestSecretaryModelRetryPreservesReplyAfterUnrelatedTaskChange(t *testing.T) {
 	s, scope := testStore(t), owner()
 	dir := secretaryRetryCodex(t, s, 1, 1, "serverOverloaded")
 	state := workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "Q5原名称"})
@@ -246,9 +246,21 @@ func TestSecretaryModelRetryRechecksContext(t *testing.T) {
 	secretaryRetryGate(t, dir, done, func() {
 		workspaceCommand(t, s, scope, workspace.Command{Type: "renameThing", ID: state.Tasks[0].ID, Title: "Q5后来的名称"})
 	})
-	if len(secretaryRetryCalls(t, dir)) != 1 {
-		t.Fatal("sent stale context on retry")
+	if len(secretaryRetryCalls(t, dir)) != 2 {
+		t.Fatal("unrelated task change prevented reply retry")
 	}
+	state, err := s.Snapshot(context.Background(), scope)
+	if err != nil || len(state.Tasks) != 2 {
+		t.Fatal(state, err)
+	}
+	titles := map[string]bool{}
+	for _, task := range state.Tasks {
+		titles[task.Title] = true
+	}
+	if !titles["Q5后来的名称"] || !titles["Q5虚构事项"] {
+		t.Fatal("reply actions or concurrent edit lost", titles)
+	}
+
 }
 
 func secretaryRetryGate(t *testing.T, dir string, done <-chan error, change func()) {

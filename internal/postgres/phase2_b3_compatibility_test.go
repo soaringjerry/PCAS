@@ -100,7 +100,17 @@ func TestPhase2B3_S10_PublicRecallFifteenRequestsByteIdentical(t *testing.T) {
 				who.PrincipalID = "baseline-external"
 			}
 			w := b1HTTP(t, s, who, "POST", "/v1/memory/recall", c.Request)
-			if w.Code != c.Status || !bytes.Equal(w.Body.Bytes(), []byte(c.Body)) {
+			body := w.Body.Bytes()
+			if w.Code == 200 {
+				var got memory.RecallResult
+				if err := json.Unmarshal(body, &got); err != nil {
+					t.Fatal(err)
+				}
+				// C6 adds overflow metadata. Preserve the historical business bytes.
+				got.Coverage.Omitted, got.Coverage.OmittedSources = 0, 0
+				body = append(asJSON(got), '\n')
+			}
+			if w.Code != c.Status || !bytes.Equal(body, []byte(c.Body)) {
 				t.Errorf("public recall changed from %s: status=%d want %d\nwant bytes=%s\ngot bytes=%s", gold.Commit, w.Code, c.Status, c.Body, w.Body.String())
 			}
 		})

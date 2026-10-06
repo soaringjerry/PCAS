@@ -165,7 +165,8 @@ func (s *Store) finishUseContextTx(ctx context.Context, tx pgx.Tx, scope memory.
 		}
 		return nil
 	}
-	visible, err := queryDocuments[workspace.StatusCardRef](ctx, tx, `SELECT jsonb_build_object('key',m.key,'kind',m.kind,'name',m.name,'count',count(*)) FROM status_current_members m JOIN claim_revisions c ON(c.owner_id,c.claim_id,c.version)=(m.owner_id,m.claim_id,m.claim_version)
+	visible, err := queryDocuments[workspace.StatusCardRef](ctx, tx, `WITH members AS MATERIALIZED(SELECT * FROM status_current_members WHERE owner_id=$1)
+ SELECT jsonb_build_object('key',m.key,'kind',m.kind,'name',m.name,'count',count(*)) FROM members m JOIN claim_revisions c ON(c.owner_id,c.claim_id,c.version)=(m.owner_id,m.claim_id,m.claim_version)
  WHERE m.owner_id=$1 AND c.nature=ANY($2::text[]) AND ($3 OR c.acquisition!='inferred')
  AND EXISTS(SELECT 1 FROM record_grants g WHERE g.owner_id=m.owner_id AND g.record_id=m.claim_id AND g.principal_id=$4)
  AND NOT EXISTS(SELECT 1 FROM context_exclusions ex WHERE ex.owner_id=m.owner_id AND ex.thing_id=$5::uuid AND ex.memory_id=m.claim_id)

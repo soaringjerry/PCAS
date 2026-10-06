@@ -809,7 +809,7 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 					continue
 				}
 				actionID := string(memory.NewID())
-				actionCtx := withActionLog(withActor(ctx, "secretary"), actionID, "desk", out.Turn.ID, "秘书："+a.Op)
+				actionCtx := withActionLog(withActor(WithMemoryTier(ctx, c.Tier), "secretary"), actionID, "desk", out.Turn.ID, "秘书："+a.Op)
 				actionTx, err := tx.Begin(ctx)
 				if err != nil {
 					return err

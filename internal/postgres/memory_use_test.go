@@ -156,7 +156,7 @@ func TestB4MediumCannotAddActionsAndFallsBack(t *testing.T) {
 			var calls atomic.Int32
 			secretaryModel(t, s, func(w http.ResponseWriter, r *http.Request) {
 				if calls.Add(1) == 1 {
-					time.Sleep(10 * time.Millisecond)
+					time.Sleep(150 * time.Millisecond)
 					secretaryModelReply(w, `{"reply":"草稿","memoryPlan":{"depth":"medium","groups":[],"mentioned":[],"adopted":[]},"actions":[{"op":"create_task","title":"虚构原动作"}]}`)
 					return
 				}
@@ -629,5 +629,31 @@ func TestB4ProductionLiveDirectoryAndRequirementScopes(t *testing.T) {
 	}
 	if strings.Contains(prompt, "相关的现状卡") {
 		t.Fatal("legacy cards reached secretary", prompt)
+	}
+}
+
+func TestB4LightDelegationInheritsAnswerDepth(t *testing.T) {
+	s, scope := testStore(t), owner()
+	var calls atomic.Int32
+	secretaryModel(t, s, func(w http.ResponseWriter, r *http.Request) {
+		if calls.Add(1) == 1 {
+			secretaryModelReply(w, `{"reply":"已安排虚构步骤","memoryPlan":{"depth":"light"},"actions":[{"op":"create_task","title":"虚构工坊任务"},{"op":"delegate","ref":"N1","kind":"breakdown","prompt":"虚构拆步骤"}]}`)
+		} else {
+			secretaryModelReply(w, "- [ ] 虚构核对资料\n- [ ] 虚构提交说明")
+		}
+	})
+	out := mustTurn(t, s, scope, turnRequest("给虚构工坊任务拆步骤"))
+	var run workspace.Run
+	if err := s.pool.QueryRow(context.Background(), "SELECT document FROM agent_runs WHERE owner_id=$1", scope.OwnerID).Scan(&run); err != nil {
+		t.Fatal(err)
+	}
+	if run.MemoryTier != "light" {
+		t.Fatal("delegation discarded the model's light depth", run.MemoryTier)
+	}
+	if err := s.runAgentOnce(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if calls.Load() != 2 {
+		t.Fatal("light delegation added a selector or selfcheck", calls.Load(), out)
 	}
 }

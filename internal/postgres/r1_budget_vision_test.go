@@ -82,6 +82,13 @@ func TestR1R6VisionSettlesOnlyItsReservation(t *testing.T) {
 			want := 0.03
 			if outcome == "success" {
 				want += (30*2.0 + 4*4.0) / 1e6
+			} else {
+				rows := b4Usage(t, s, scope)
+				if len(rows) != 1 || rows[0].InputTokens <= 0 || rows[0].OutputTokens != 0 || rows[0].Cost != float64(rows[0].InputTokens)*2/1e6 {
+					t.Fatal("failed vision call lacks estimated priced input", rows)
+				}
+				r1RequireEstimatedInput(t, s, scope)
+				want += rows[0].Cost
 			}
 			if math.Abs(cost-want) > 1e-9 {
 				t.Errorf("vision did not settle only its reservation: got %g want %g", cost, want)

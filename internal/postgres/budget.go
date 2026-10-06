@@ -42,7 +42,11 @@ func (s *Store) reserveModelCostID(ctx context.Context, owner memory.ID, cost fl
 			if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended(current_database()||':'||current_schema()||':budget:'||$1,0))", stage); err != nil {
 				return err
 			}
-			if err := backgroundHourlyTx(ctx, tx, stage, strings.TrimPrefix(stage, "memory.")+"_hourly_limit"); err != nil {
+			reason := strings.TrimPrefix(stage, "memory.") + "_hourly_limit"
+			if stage == HandoverStage {
+				reason = "memory.handover_hourly_limit"
+			}
+			if err := backgroundHourlyTx(ctx, tx, stage, reason); err != nil {
 				return err
 			}
 		}

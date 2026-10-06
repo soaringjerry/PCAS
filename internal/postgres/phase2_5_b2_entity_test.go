@@ -44,6 +44,10 @@ func phase25B2EntityScenario(t *testing.T, undo bool) {
 	a, b := f.entity(t, "person", "小陈"), f.entity(t, "person", "陈亮")
 	ra := f.personTexts(t, g, a, "虚构小陈负责白鹭月报图表。")
 	rb := f.personTexts(t, g, b, "虚构陈亮负责白鹭月报提交。")
+	// A7 consumes model-proposed candidates. This confirmation/undo fixture
+	// supplies that proposal; independent scanning tests exercise its creation.
+	f.exec(t, `INSERT INTO entity_alias_candidates(owner_id,left_id,right_id,name_hash,rule,source_marker)
+ VALUES($1,least($2::uuid,$3::uuid),greatest($2::uuid,$3::uuid),entity_name_hash($1,$2,$3),2,'fictional model proposal')`, f.scope.OwnerID, a, b)
 	calls := 0
 	f.model(t, func(_ *http.Request, _ int, r phase25B234ModelRequest) phase25B234ModelReply {
 		entities, e := phase25B2Entities(r)

@@ -208,12 +208,18 @@ func TestR1R6SecretarySettlesOnlyItsReservation(t *testing.T) {
 				t.Fatal(err)
 			}
 			want := 0.03
-			if mode == "success" || mode == "invalid" {
+			{
 				rows := b4Usage(t, s, scope)
 				if len(rows) != 1 {
 					t.Fatal(rows)
 				}
 				want += rows[0].Cost
+				if rows[0].InputTokens <= 0 || rows[0].Cost <= 0 {
+					t.Fatal("submitted secretary call lacks accounted input usage", rows)
+				}
+				if mode == "failure" || mode == "cancel" {
+					r1RequireEstimatedInput(t, s, scope)
+				}
 			}
 			if math.Abs(reserved-want) > 1e-9 {
 				t.Errorf("budget reserved=%g want actual=%g", reserved, want)
@@ -231,7 +237,7 @@ func TestR1R6SecretarySettlesOnlyItsReservation(t *testing.T) {
 	}
 }
 
-func TestR1R6DeputyAndExtractionReleaseFailedReservations(t *testing.T) {
+func TestR1R6DeputyAndExtractionSettleFailedReservations(t *testing.T) {
 	for _, kind := range []string{"deputy", "extraction", "invalid-extraction", "cancel-deputy", "cancel-extraction"} {
 		t.Run(kind, func(t *testing.T) {
 			s, scope := testStore(t), owner()
@@ -284,17 +290,31 @@ func TestR1R6DeputyAndExtractionReleaseFailedReservations(t *testing.T) {
 				t.Fatal(err)
 			}
 			want := 0.0
-			if kind == "invalid-extraction" {
+			{
 				rows := b4Usage(t, s, scope)
 				if len(rows) != 1 {
 					t.Fatal(rows)
 				}
 				want = rows[0].Cost
+				if rows[0].InputTokens <= 0 || want <= 0 {
+					t.Fatal("submitted call lacks accounted input usage", rows)
+				}
+				if kind != "invalid-extraction" {
+					r1RequireEstimatedInput(t, s, scope)
+				}
 			}
 			if math.Abs(reserved-want) > 1e-9 {
 				t.Errorf("finished %s reserved=%g want=%g", kind, reserved, want)
 			}
 		})
+	}
+}
+
+func r1RequireEstimatedInput(t *testing.T, s *Store, scope memory.Scope) {
+	t.Helper()
+	var estimated bool
+	if err := s.pool.QueryRow(context.Background(), `SELECT input_estimated FROM model_usage WHERE owner_id=$1`, scope.OwnerID).Scan(&estimated); err != nil || !estimated {
+		t.Fatal("missing estimated input accounting for a submitted failed call", estimated, err)
 	}
 }
 

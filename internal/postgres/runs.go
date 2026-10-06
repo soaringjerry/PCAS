@@ -396,7 +396,17 @@ func (s *Store) adoptRunTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, r
 	if requireText(text) != nil || !oneOf(as, "doc", "subtasks", "progress") {
 		return memory.ErrInvalid
 	}
-	if err := checkUseRunPromptTx(ctx, tx, scope, *run); err != nil {
+	// A completed draft can be adopted again after undo, whose audit/version
+	// changes do not alter its content. Generation fences the destination;
+	// adoption still fences revoked or deleted input and disabled agents.
+	agent, err := queryDocument[workspace.Agent](ctx, tx, "SELECT document FROM workspace_agents WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), run.AgentID)
+	if err != nil {
+		return err
+	}
+	if !agent.Enabled {
+		return memory.ErrForbidden
+	}
+	if err := verifyRunAccessTx(ctx, useClockTx{Tx: tx, at: time.Now()}, scope, *run); err != nil {
 		return err
 	}
 	item, err := getItem(ctx, tx, scope, run.ThingID)

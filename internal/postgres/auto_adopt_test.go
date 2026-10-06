@@ -484,8 +484,12 @@ FOR EACH ROW WHEN (NEW.source='worker') EXECUTE FUNCTION reject_worker_adoption(
 				} else {
 					st = workspaceCommand(t, s, scope, workspace.Command{Type: "pasteRunResult", ID: runID, Output: output})
 				}
+				wantRevision := revision
+				if path == "manual" {
+					wantRevision++
+				}
 				run := st.Runs[0]
-				if run.Status != "done" || run.Adopted != nil || run.Output != output || run.FinishedAt == "" || st.Revision != revision+1 {
+				if run.Status != "done" || run.Adopted != nil || run.Output != output || run.FinishedAt == "" || st.Revision != wantRevision {
 					t.Fatalf("completion lost after adoption failure: run=%+v revision=%d", run, st.Revision)
 				}
 				if !reflect.DeepEqual(st.Projects[0], project) || len(st.Tasks) != 0 || len(st.Docs) != 0 || len(st.Samples) != 0 {

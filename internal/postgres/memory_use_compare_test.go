@@ -53,7 +53,9 @@ func TestB4ComparedRetirementAcrossSecretaryAndDeputy(t *testing.T) {
 			var readers atomic.Int32
 			secretaryModel(t, s, func(w http.ResponseWriter, r *http.Request) {
 				sys, prompt := b4RequestBody(t, r)
-				for _, bad := range []string{string(old.ID), "虚构已退出的交接摘要", "虚构已退出的期限"} {
+				// The handover written before the retirement is still given, dated;
+				// the retired memory itself and its deadline must not be.
+				for _, bad := range []string{string(old.ID), "虚构已退出的期限"} {
 					if strings.Contains(prompt, bad) {
 						t.Errorf("retired context reached model: %s", bad)
 					}

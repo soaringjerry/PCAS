@@ -152,16 +152,15 @@ func TestStatusCardsBadOutputAndVersion(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	// Exhausted attempts must not write an empty card and call it built.
 	about, err := s.About(context.Background(), scope, "self:rule")
-	if err != nil || len(about.Cards) != 1 || about.Cards[0].Count != 0 {
+	if err != nil || len(about.Cards) != 0 || about.Building.Done != 0 {
 		t.Fatal(about, err)
 	}
-	old := CardVersion
-	CardVersion++
-	defer func() { CardVersion = old }()
-	about, err = s.About(context.Background(), scope, "self:rule")
-	if err != nil || len(about.Cards) != 1 || !about.Cards[0].Stale || about.Building.Done != 0 {
-		t.Fatal(about, err)
+	var built, done int
+	if err := s.pool.QueryRow(context.Background(), `SELECT (SELECT count(*) FROM status_cards WHERE owner_id=$1 AND built_at IS NOT NULL),
+ (SELECT count(*) FROM memory_jobs WHERE id=$2 AND state='done')`, scope.OwnerID, j.ID).Scan(&built, &done); err != nil || built != 0 || done != 1 {
+		t.Fatal(built, done, err)
 	}
 }
 func errorsAsJob(err error, out **worker.JobError) bool {

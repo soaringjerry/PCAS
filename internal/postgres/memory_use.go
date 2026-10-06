@@ -346,31 +346,8 @@ func (s *Store) finishUseContextTx(ctx context.Context, tx pgx.Tx, scope memory.
 	}
 	sort.SliceStable(cards, func(i, j int) bool { return positions[cards[i].Key] < positions[cards[j].Key] })
 	u.DeadlineMemories = map[string]workspace.Memory{}
-	// Track the raw input references behind a handover, including omitted card
-	// entries, so correction/retirement cannot preserve a stale summary silently.
-	if u.Handover.Body != "" {
-		handoverRefs, err := queryDocuments[memory.Ref](ctx, tx, `SELECT jsonb_build_object('id',i.claim_id,'version',i.claim_version,'kind','claim') FROM handovers h CROSS JOIN LATERAL jsonb_array_elements(h.depends) d JOIN status_card_items i ON i.owner_id=h.owner_id AND i.key=d->>'key' WHERE h.owner_id=$1`, string(scope.OwnerID))
-		if err != nil {
-			return err
-		}
-		handoverIDs := []string{}
-		for _, ref := range handoverRefs {
-			handoverIDs = append(handoverIDs, string(ref.ID))
-		}
-		var retired bool
-		if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM claims WHERE owner_id=$1 AND id=ANY($2::uuid[]) AND retired!='')", string(scope.OwnerID), handoverIDs).Scan(&retired); err != nil {
-			return err
-		}
-		handoverRun := workspace.Run{AgentID: agent.ID, ContextVersions: handoverRefs}
-		if thing != nil {
-			handoverRun.ThingID = *thing
-		}
-		if retired || verifyRunTx(ctx, tx, scope, handoverRun) != nil {
-			u.Handover.Body = ""
-		} else {
-			u.Dependencies = append(u.Dependencies, handoverRefs...)
-		}
-	}
+	// A handover written before a later correction is still given, with its
+	// date: dropping it left the secretary with none while cards were rebuilt.
 	seen := map[string]bool{}
 	accept := func(m workspace.Memory) bool {
 		if !useMemoryAllowed(m, agent) {
@@ -460,7 +437,11 @@ func (s *Store) finishUseContextTx(ctx context.Context, tx pgx.Tx, scope memory.
 	return nil
 }
 func writeUseContext(b *strings.Builder, u useContext, loc *time.Location, write func(workspace.Memory)) {
-	fmt.Fprintln(b, "\n交接说明：")
+	if built, err := time.Parse(time.RFC3339Nano, u.Handover.BuiltAt); err == nil && u.Handover.Body != "" {
+		fmt.Fprintf(b, "\n交接说明（写于 %s，之后的变化以下面的记忆为准）：\n", built.In(loc).Format("2006-01-02 15:04"))
+	} else {
+		fmt.Fprintln(b, "\n交接说明：")
+	}
 	fmt.Fprintln(b, u.Handover.Body)
 	fmt.Fprintln(b, "\n必须遵守的要求（每一条只要沾边就要落实）：")
 	for _, m := range u.Rules {

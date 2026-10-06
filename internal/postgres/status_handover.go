@@ -255,7 +255,7 @@ func (s *Store) ProcessHandover(ctx context.Context, j worker.Job) error {
 	}
 	defer unlock()
 	p, ok := s.models.Get(s.models.ExtractionID())
-	if !ok || p.Embedding || p.Transcription {
+	if StatusCardsPaused || !ok || p.Embedding || p.Transcription {
 		return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 			if err := lockJob(ctx, tx, j); err != nil {
 				return err
@@ -330,8 +330,14 @@ func (s *Store) ProcessHandover(ctx context.Context, j worker.Job) error {
 		return &worker.JobError{Code: "handover_invalid_output", Retry: true}
 	}
 	if !valid {
-		body = emptyHandover()
+		// Keep the previous handover rather than replace it with an empty one.
 		slog.WarnContext(ctx, "handover attempts exhausted", "stage", "handover", "error_type", "attempts_exhausted")
+		return backgroundResultTx(ctx, s.pool, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
+			if err := lockJob(ctx, tx, j); err != nil {
+				return err
+			}
+			return acknowledge(ctx, tx, j)
+		})
 	}
 	return backgroundResultTx(ctx, s.pool, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
 		if err := lockJob(ctx, tx, j); err != nil {

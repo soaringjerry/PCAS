@@ -112,28 +112,47 @@ func entitiesShareContext(groups map[memory.ID]map[string]bool, a, b memory.ID) 
 	return false
 }
 
-func entityComparisonMemoriesTx(ctx context.Context, tx pgx.Tx, owner memory.ID, id memory.ID) ([]organizeMemory, error) {
-	rows, err := tx.Query(ctx, `SELECT r.id::text,r.version,c.value #>> '{}',rv.expressed_at
- FROM claims cl JOIN memory_records r ON(r.owner_id,r.id)=(cl.owner_id,cl.id)
+// The ten most recent current memories of every entity, read in one pass:
+// asking per entity made finding the next pair slower with every pair judged.
+func entityComparisonSamplesTx(ctx context.Context, tx pgx.Tx, owner memory.ID) (map[memory.ID][]organizeMemory, error) {
+	rows, err := tx.Query(ctx, `SELECT entity_id,id,version,value,expressed_at FROM (
+ SELECT x.entity_id::text,r.id::text,r.version,c.value #>> '{}' AS value,rv.expressed_at,
+ row_number() OVER(PARTITION BY x.entity_id ORDER BY rv.expressed_at DESC NULLS LAST,r.created_at DESC,r.id) AS n
+ FROM (SELECT owner_id,claim_id,version,subject_id AS entity_id FROM claim_revisions WHERE owner_id=$1 AND subject_id IS NOT NULL
+ UNION SELECT owner_id,claim_id,claim_version,entity_id FROM claim_mentions WHERE owner_id=$1) x
+ JOIN claims cl ON(cl.owner_id,cl.id)=(x.owner_id,x.claim_id)
+ JOIN memory_records r ON(r.owner_id,r.id,r.version)=(x.owner_id,x.claim_id,x.version)
  JOIN claim_revisions c ON(c.owner_id,c.claim_id,c.version)=(r.owner_id,r.id,r.version)
  JOIN record_versions rv ON(rv.owner_id,rv.record_id,rv.version)=(r.owner_id,r.id,r.version)
- WHERE cl.owner_id=$1 AND cl.retired='' AND r.state='active' AND rv.state='active'
- AND claim_source_is_current(cl.owner_id,cl.id,r.version,now())
- AND (c.subject_id=$2 OR EXISTS(SELECT 1 FROM claim_mentions cm WHERE (cm.owner_id,cm.claim_id,cm.claim_version)=(c.owner_id,c.claim_id,c.version) AND cm.entity_id=$2))
- ORDER BY rv.expressed_at DESC NULLS LAST,r.created_at DESC,r.id LIMIT 10`, string(owner), string(id))
+ WHERE cl.retired='' AND r.state='active' AND rv.state='active'
+ AND claim_source_is_current(cl.owner_id,cl.id,r.version,now())) ranked WHERE n<=10 ORDER BY entity_id,n`, string(owner))
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	out := []organizeMemory{}
+	out := map[memory.ID][]organizeMemory{}
 	for rows.Next() {
-		m := organizeMemory{N: len(out) + 1, Ref: memory.Ref{Kind: memory.ClaimKind}}
-		if err := rows.Scan(&m.Ref.ID, &m.Ref.Version, &m.Text, &m.ExpressedAt); err != nil {
+		var entity memory.ID
+		m := organizeMemory{Ref: memory.Ref{Kind: memory.ClaimKind}}
+		if err := rows.Scan(&entity, &m.Ref.ID, &m.Ref.Version, &m.Text, &m.ExpressedAt); err != nil {
 			return nil, err
 		}
-		out = append(out, m)
+		m.N = len(out[entity]) + 1
+		out[entity] = append(out[entity], m)
 	}
 	return out, rows.Err()
+}
+
+// Finding the next pair only reads, and can take longer than a background
+// write may hold the owner, so it runs outside that window.
+func (s *Store) nextEntityPair(ctx context.Context, owner memory.ID, version int) (*comparisonEntityPair, error) {
+	var pair *comparisonEntityPair
+	err := pgx.BeginTxFunc(ctx, s.pool, pgx.TxOptions{AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
+		var err error
+		pair, err = nextEntityPairTx(ctx, tx, owner, version)
+		return err
+	})
+	return pair, err
 }
 
 func nextEntityPairTx(ctx context.Context, tx pgx.Tx, owner memory.ID, version int) (*comparisonEntityPair, error) {
@@ -170,7 +189,28 @@ func nextEntityPairTx(ctx context.Context, tx pgx.Tx, owner memory.ID, version i
 	if err != nil {
 		return nil, err
 	}
-	samples := map[memory.ID][]organizeMemory{}
+	samples, err := entityComparisonSamplesTx(ctx, tx, owner)
+	if err != nil {
+		return nil, err
+	}
+	judged := map[string]bool{}
+	rows, err := tx.Query(ctx, "SELECT stage FROM memory_jobs WHERE owner_id=$1 AND state='done' AND stage LIKE $2", string(owner), fmt.Sprintf("memory.entity_result:%d:%%", version))
+	if err != nil {
+		return nil, err
+	}
+	for rows.Next() {
+		var stage string
+		if err := rows.Scan(&stage); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		judged[stage] = true
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return nil, err
+	}
 	var contexts map[memory.ID]map[string]bool
 	for a := range entities {
 		for b := a + 1; b < len(entities); b++ {
@@ -203,15 +243,7 @@ func nextEntityPairTx(ctx context.Context, tx pgx.Tx, owner memory.ID, version i
 			for i := range pair.Entities {
 				e := &pair.Entities[i]
 				e.N = i + 1
-				var exists bool
-				e.Memories, exists = samples[e.Ref.ID]
-				if !exists {
-					e.Memories, err = entityComparisonMemoriesTx(ctx, tx, owner, e.Ref.ID)
-					if err != nil {
-						return nil, err
-					}
-					samples[e.Ref.ID] = e.Memories
-				}
+				e.Memories = samples[e.Ref.ID]
 				refs = append(refs, e.Ref)
 				for _, m := range e.Memories {
 					refs = append(refs, m.Ref)
@@ -222,11 +254,7 @@ func nextEntityPairTx(ctx context.Context, tx pgx.Tx, owner memory.ID, version i
 			}
 			fingerprint := sha256.Sum256(asJSON(refs))
 			pair.Marker = fmt.Sprintf("memory.entity_result:%d:%s:%s:%x", version, entities[a].Ref.ID, entities[b].Ref.ID, fingerprint)
-			var done bool
-			if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM memory_jobs WHERE owner_id=$1 AND stage=$2 AND state='done')", string(owner), pair.Marker).Scan(&done); err != nil {
-				return nil, err
-			}
-			if !done {
+			if !judged[pair.Marker] {
 				return pair, nil
 			}
 		}
@@ -272,14 +300,14 @@ func (s *Store) processEntityCompareVersion(ctx context.Context, j worker.Job, v
 	if !s.models.Available(p.ID) {
 		return &worker.JobError{Code: "provider_unavailable", Until: time.Now().Add(CompareInterval), NoAttempt: true}
 	}
-	var pair *comparisonEntityPair
+	// The result write checks every memory again, so a pair read just before
+	// the lease is locked cannot store a stale answer.
+	pair, err := s.nextEntityPair(ctx, j.OwnerID, version)
+	if err != nil {
+		return err
+	}
 	err = backgroundWriteTx(ctx, conn, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
 		if err := lockJob(ctx, tx, j); err != nil {
-			return err
-		}
-		var err error
-		pair, err = nextEntityPairTx(ctx, tx, j.OwnerID, version)
-		if err != nil {
 			return err
 		}
 		if pair == nil {
@@ -411,6 +439,10 @@ func (s *Store) processEntityCompareVersion(ctx context.Context, j worker.Job, v
 	}
 	// Schedule after committing the result, with a fresh bounded write fence.
 	// The shared scheduler lock prevents duplicate slots.
+	next, err := s.nextEntityPair(ctx, j.OwnerID, version)
+	if err != nil || next == nil {
+		return err
+	}
 	err = backgroundWriteTx(ctx, conn, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended(current_database()||':'||current_schema()||':compare-schedule',0))"); err != nil {
 			return err

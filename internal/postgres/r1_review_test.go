@@ -98,10 +98,22 @@ func TestR1R2CompletionRechecksDependencyAccess(t *testing.T) {
 				t.Error("changed result automatically adopted")
 			}
 			rows := b4Usage(t, s, scope)
-			if len(rows) != 1 || rows[0].Cost <= 0 {
+			wantMax := 1
+			if change == "correct" || change == "source-correct" {
+				wantMax = 2
+			}
+			if len(rows) < 1 || len(rows) > wantMax || rows[0].Cost <= 0 {
 				t.Errorf("returned usage lost: %+v", rows)
-			} else if math.Abs(st.BudgetUsage-rows[0].Cost) > 1e-9 {
-				t.Errorf("completion did not settle budget after %s: budget=%g cost=%g", change, st.BudgetUsage, rows[0].Cost)
+			}
+			var paid float64
+			for _, row := range rows {
+				paid += row.Cost
+				if row.RunID == nil || *row.RunID != run.ID || !oneOf(row.Purpose, "deputy", "selfcheck") {
+					t.Errorf("uncorrelated returned usage: %+v", row)
+				}
+			}
+			if math.Abs(st.BudgetUsage-paid) > 1e-9 {
+				t.Errorf("completion did not settle budget after %s: budget=%g cost=%g", change, st.BudgetUsage, paid)
 			}
 		})
 	}

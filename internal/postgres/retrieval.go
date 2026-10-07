@@ -191,7 +191,7 @@ func (s *Store) recallTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in 
  )`
 	detailSQL := ` SELECT p.id,p.version,p.kind,coalesce(hit.body,t.body) AS body,p.score,coalesce(sc.role,'') AS role,coalesce(sc.branch,'') AS branch,coalesce(sc.gaps,'[]') AS gaps,
          coalesce(hit.excerpt,sv.body,'') AS excerpt,coalesce(sv.title,'') AS title,p.connector,p.external_id,p.expressed_at,p.recorded_at,p.explicit,
-         coalesce(btrim(sv.body)!='' AND (sv.media_type LIKE 'text/%' OR sv.representation IN ('ocr','transcript','extracted','vision')),false) AS readable
+         coalesce(btrim(sv.body)!='' AND (sv.media_type LIKE 'text/%' OR sv.representation IN ('ocr','transcript','extracted','vision')),false) AS readable,p.total_count
  FROM picked p
  JOIN LATERAL (SELECT m.body FROM memory_text m WHERE m.owner_id=$1 AND m.id=p.uid AND m.version=p.version) t ON true
         LEFT JOIN LATERAL (
@@ -211,6 +211,13 @@ func (s *Store) recallTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in 
  LEFT JOIN source_versions sv ON (sv.owner_id,sv.source_id,sv.version)=($1,p.uid,p.version)
  LEFT JOIN source_contexts sc ON(sc.owner_id,sc.source_id,sc.source_version)=($1,p.uid,p.version)`
 	querySQL = strings.Replace(querySQL, "WHERE t.owner_id=$1 AND r.state=", "WHERE t.owner_id=$1 AND (r.kind<>'claim' OR "+currentMemorySQL("r.owner_id", "r.id")+") AND r.state=", 1)
+	// Only explicit effective-use events activate the prior. Legacy activity
+	// timestamps populated from expression time carry no retrieval weight.
+	activityTerm := `CASE WHEN a.pinned THEN 1 WHEN EXISTS(SELECT 1 FROM use_events ue WHERE ue.owner_id=t.owner_id AND ue.record_id=t.id AND ue.kind IN ('user_mention','confirmation','adoption')) THEN coalesce(exp(-0.693147*greatest(0,extract(epoch from(now()-a.last_effective_use_at)))/nullif(a.half_life_seconds*a.stability,0)),0) ELSE 0 END`
+	if enabled, ok := ctx.Value(activityRankingKey{}).(bool); ok && !enabled {
+		activityTerm = "0::float"
+	}
+	querySQL = strings.Replace(querySQL, `+CASE WHEN $6='continue' THEN coalesce(CASE WHEN a.pinned THEN 1 ELSE exp(-0.693147*greatest(0,extract(epoch from(now()-a.last_effective_use_at)))/(a.half_life_seconds*a.stability)) END,0)*0.2 ELSE 0 END`, "+0.2*("+activityTerm+")", 1)
 	if scope.Team && in.Team != nil && in.Team.RankFusion {
 		// Keep independently ranked lexical and vector evidence on the scoped row set.
 		vectorTerm := `+CASE WHEN $11::text IS NULL THEN 0 ELSE coalesce(greatest((SELECT max(1-(e.embedding <=> $11::vector)) FROM embeddings e WHERE e.owner_id=t.owner_id AND e.record_id=t.id AND e.record_version=t.version AND e.model=$12 AND e.dimensions=$13),(SELECT max(1-(e.embedding <=> $11::vector)) FROM chunks c JOIN embeddings e ON (e.owner_id,e.record_id)=(c.owner_id,c.id) WHERE c.owner_id=t.owner_id AND c.source_id=t.id AND c.source_version=t.version AND e.model=$12 AND e.dimensions=$13)),0) END`
@@ -218,11 +225,11 @@ func (s *Store) recallTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in 
 		objectMatch := `t.id=ANY($8::uuid[]) OR t.id IN (SELECT claim_id FROM claim_revisions WHERE owner_id=$1 AND (subject_id=ANY($8::uuid[]) OR scope->>'project_id'=ANY($8::text[])))`
 		querySQL = strings.Replace(querySQL, `+CASE WHEN `+objectMatch+` THEN 10 ELSE 0 END`, "", 1)
 		querySQL = strings.Replace(querySQL, `t.id=ANY($8::uuid[]) AS explicit`, `(`+objectMatch+`) AS explicit`, 1)
-		querySQL = strings.Replace(querySQL, `+CASE WHEN $6='continue' THEN coalesce(CASE WHEN a.pinned THEN 1 ELSE exp(-0.693147*greatest(0,extract(epoch from(now()-a.last_effective_use_at)))/(a.half_life_seconds*a.stability)) END,0)*0.2 ELSE 0 END`, "", 1)
+		querySQL = strings.Replace(querySQL, "+0.2*("+activityTerm+")", "", 1)
 
-		querySQL = strings.Replace(querySQL, ") AS score,", ") AS lexical_score, "+strings.TrimPrefix(vectorTerm, "+")+" AS vector_score,", 1)
+		querySQL = strings.Replace(querySQL, ") AS score,", ") AS lexical_score, "+strings.TrimPrefix(vectorTerm, "+")+" AS vector_score, "+activityTerm+" AS activity_score,", 1)
 		querySQL = strings.Replace(querySQL, "hits AS (", "scored AS (", 1)
-		querySQL += `, hits AS (SELECT *, CASE WHEN lexical_score>0 THEN 1.0/(60+row_number() OVER (ORDER BY lexical_score DESC,uid,version)) ELSE 0 END + CASE WHEN vector_score>0 THEN 1.0/(60+row_number() OVER (ORDER BY vector_score DESC,uid,version)) ELSE 0 END AS score FROM scored)`
+		querySQL += `, hits AS (SELECT *, CASE WHEN lexical_score>0 THEN 1.0/(60+row_number() OVER (ORDER BY lexical_score DESC,uid,version)) ELSE 0 END + CASE WHEN vector_score>0 THEN 1.0/(60+row_number() OVER (ORDER BY vector_score DESC,uid,version)) ELSE 0 END + 0.002*activity_score AS score FROM scored)`
 	}
 	if len(structured) > 0 {
 		querySQL = strings.Replace(querySQL, "AND ($4='' OR lb.body LIKE ANY", "AND (t.id=ANY($18::uuid[]) OR $4='' OR lb.body LIKE ANY", 1)
@@ -230,7 +237,7 @@ func (s *Store) recallTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in 
 	// Team source excerpts have their own candidate/token allowance. They must
 	// not displace the existing claim and graph budgets. Public recall retains
 	// its original ordering and pagination across all record kinds.
-	const hitColumns = "id,version,kind,body,score,role,branch,gaps,excerpt,title,connector,external_id,expressed_at,recorded_at,readable"
+	const hitColumns = "id,version,kind,body,score,role,branch,gaps,excerpt,title,connector,external_id,expressed_at,recorded_at,readable,total_count"
 	hitOrder := "CASE WHEN $6='history' THEN recorded_at END,explicit DESC,score DESC,id::uuid,version"
 	args := []any{string(scope.OwnerID), scope.IsOwner, scope.PrincipalID, query, fts, string(in.Mode), "", in.Context.Objects, in.Context.ValidAt, in.Context.KnownAt, nullString(string(vector)), model, embeddingDimensions(vector), b.Candidates + 1, offset, tokens, scope.Team}
 	if len(structured) > 0 {
@@ -244,9 +251,9 @@ func (s *Store) recallTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in 
 		hitOrder = fmt.Sprintf("CASE WHEN kind='source' THEN coalesce(%s >= $%d AND %s < $%d,false) ELSE false END DESC,", at, slot, at, slot+1) + hitOrder
 	}
 	if scope.Team {
-		querySQL += ", ranked AS (SELECT *,row_number() OVER (PARTITION BY kind='source' ORDER BY " + hitOrder + ") AS rank FROM hits), picked AS (SELECT * FROM ranked WHERE rank>$15 AND rank<=$15+$14)"
+		querySQL += ", ranked AS (SELECT *,row_number() OVER (PARTITION BY kind='source' ORDER BY " + hitOrder + ") AS rank,count(*) OVER(PARTITION BY kind='source') AS total_count FROM hits), picked AS (SELECT * FROM ranked WHERE rank>$15 AND rank<=$15+$14)"
 	} else {
-		querySQL += ", picked AS (SELECT * FROM hits ORDER BY " + hitOrder + " LIMIT $14 OFFSET $15)"
+		querySQL += ", picked AS (SELECT *,count(*) OVER() AS total_count FROM hits ORDER BY " + hitOrder + " LIMIT $14 OFFSET $15)"
 	}
 	querySQL += " SELECT " + hitColumns + " FROM (" + detailSQL + ") shown ORDER BY " + hitOrder
 
@@ -262,6 +269,7 @@ func (s *Store) recallTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in 
 	consumed := 0
 	teamSources := []memory.Ref{}
 	claimBudgetFull := false
+	totalClaims, totalSources := 0, 0
 	for rows.Next() {
 		var ref memory.Ref
 		var text string
@@ -269,9 +277,15 @@ func (s *Store) recallTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in 
 		var role, branch string
 		var gaps []string
 		var excerpt memory.RecallExcerpt
-		if err := rows.Scan(&ref.ID, &ref.Version, &ref.Kind, &text, &score, &role, &branch, &gaps, &excerpt.Text, &excerpt.Title, &excerpt.Connector, &excerpt.ExternalID, &excerpt.ExpressedAt, &excerpt.RecordedAt, &excerpt.Readable); err != nil {
+		var total int
+		if err := rows.Scan(&ref.ID, &ref.Version, &ref.Kind, &text, &score, &role, &branch, &gaps, &excerpt.Text, &excerpt.Title, &excerpt.Connector, &excerpt.ExternalID, &excerpt.ExpressedAt, &excerpt.RecordedAt, &excerpt.Readable, &total); err != nil {
 			rows.Close()
 			return err
+		}
+		if scope.Team && ref.Kind == memory.SourceKind {
+			totalSources = total
+		} else {
+			totalClaims = total
 		}
 		_ = score
 		excerpt.Ref, excerpt.Role = ref, role
@@ -318,6 +332,8 @@ func (s *Store) recallTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in 
 	if err != nil {
 		return err
 	}
+	out.Coverage.Omitted = max(0, totalClaims-offset-consumed)
+	out.Coverage.OmittedSources = max(0, totalSources-offset-len(teamSources))
 	out.Summary = summary.String()
 	relations, related, err := graphTx(ctx, tx, scope, out.Memories, b, in.Mode == memory.History, in.Context)
 	if err != nil {
@@ -700,6 +716,7 @@ func teamSourceExcerptsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, pr
 	}
 	seen := map[memory.ID]bool{}
 	characters := 0
+	omitted := 0
 	for _, excerpt := range excerpts {
 		if excerpt.Kind != memory.SourceKind || seen[excerpt.ID] || !current[excerpt.Ref] || !excerpt.Readable || strings.TrimSpace(excerpt.Text) == "" || oneOf(excerpt.Connector, "actions", "corrections", "memory-input") {
 			continue
@@ -719,10 +736,16 @@ func teamSourceExcerptsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, pr
 		seen[excerpt.ID] = true
 		count := len([]rune(excerpt.Text))
 		if len(selected) >= maxSegments || characters+count > maxCharacters {
+			omitted++
 			continue
 		}
 		selected = append(selected, excerpt)
 		characters += count
+	}
+	if omitted > 0 {
+		if err := stageEventTx(ctx, tx, scope.OwnerID, "secretary", "overflow", "source_excerpt_budget", omitted); err != nil {
+			return nil, err
+		}
 	}
 	return selected, nil
 }
@@ -864,4 +887,11 @@ func orderTeamExcerpts(excerpts []memory.RecallExcerpt, plan memory.QueryPlan) {
 		return at != nil && !at.Before(plan.Time.From) && at.Before(plan.Time.To)
 	}
 	sort.SliceStable(excerpts, func(i, j int) bool { return inTime(excerpts[i]) && !inTime(excerpts[j]) })
+}
+
+type activityRankingKey struct{}
+
+// WithActivityRanking supports fictional on/off evaluations without a UI switch.
+func WithActivityRanking(ctx context.Context, enabled bool) context.Context {
+	return context.WithValue(ctx, activityRankingKey{}, enabled)
 }

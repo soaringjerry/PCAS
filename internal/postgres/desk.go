@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/url"
 	"strings"
@@ -128,6 +129,30 @@ func (s *Store) AnswerDesk(ctx context.Context, scope memory.Scope, agentID, que
 		dependencies = append(dependencies, sent[m.ID])
 		contextClaims = append(contextClaims, evidenceContextClaim{Label: m.ID, Ref: sent[m.ID], Text: m.Text})
 	}
+	if err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		u, err := s.startUseContextTx(ctx, tx, scope)
+		if err != nil {
+			return err
+		}
+		ranked := []workspace.Memory{}
+		for _, ref := range recall.Memories {
+			if m, ok := visible[string(ref.ID)]; ok {
+				ranked = append(ranked, m)
+			}
+		}
+		if err := s.finishUseContextTx(ctx, tx, scope, agent, nil, question, ranked, &u); err != nil {
+			return err
+		}
+		u.Supplemental = nil
+		writeUseContext(&prompt, u, loc, func(m workspace.Memory) {
+			fmt.Fprintf(&prompt, "[%s] %s\n", m.ID, m.Text)
+			sent[m.ID] = memory.Ref{ID: memory.ID(m.ID), Version: m.Version, Kind: memory.ClaimKind}
+		})
+		dependencies = append(dependencies, u.Dependencies...)
+		return nil
+	}); err != nil {
+		return out, err
+	}
 	// History turns repeat their own dependencies; keep the stored list a set.
 	dependencies = uniqueRefs(dependencies)
 	if len(sent) == 0 {
@@ -170,9 +195,14 @@ func (s *Store) AnswerDesk(ctx context.Context, scope memory.Scope, agentID, que
 	p, _ := s.models.Get(agent.ID)
 	checkContext := func() error {
 		return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-			return s.checkDeskContextTx(ctx, tx, scope, agent.ID, dependencies, tasks, false)
+			err := s.checkSecretaryUseContextTx(ctx, tx, scope, secretaryContext{Agent: agent, Dependencies: dependencies})
+			if errors.Is(err, memory.ErrForbidden) {
+				return memory.ErrConflict
+			}
+			return err
 		})
 	}
+
 	if err := checkContext(); err != nil {
 		return out, err
 	}
@@ -218,12 +248,12 @@ func (s *Store) AnswerDesk(ctx context.Context, scope memory.Scope, agentID, que
 	}
 	out = workspace.DeskAnswer{ID: turnID, Answer: strings.TrimSpace(reply.Answer), Agent: agent.Name, Used: []workspace.DeskSource{}, Searches: []string{}, Links: []string{}}
 	if len(result.Searches) > 0 {
-		out.Searches = result.Searches[:min(len(result.Searches), 5)]
+		out.Searches = append([]string{}, result.Searches...)
 	}
 	// Links become anchors on the page: web addresses only, a few, short.
 	for _, link := range reply.Links {
 		u, err := url.Parse(link)
-		if err == nil && (u.Scheme == "https" || u.Scheme == "http") && u.Host != "" && u.User == nil && len(link) <= 500 && len(out.Links) < 3 {
+		if err == nil && (u.Scheme == "https" || u.Scheme == "http") && u.Host != "" && u.User == nil && len(link) <= 500 {
 			out.Links = append(out.Links, u.String())
 		}
 	}
@@ -238,7 +268,10 @@ func (s *Store) AnswerDesk(ctx context.Context, scope memory.Scope, agentID, que
 		if _, err := tx.Exec(ctx, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(scope.OwnerID)); err != nil {
 			return err
 		}
-		if err := verifyRunTx(ctx, tx, scope, workspace.Run{AgentID: agent.ID, ContextVersions: dependencies}); err != nil {
+		if err := s.checkSecretaryUseContextTx(ctx, tx, scope, secretaryContext{Agent: agent, Dependencies: dependencies}); err != nil {
+			if errors.Is(err, memory.ErrForbidden) {
+				return memory.ErrConflict
+			}
 			return err
 		}
 		_, err := tx.Exec(ctx, "INSERT INTO desk_turns(owner_id,id,agent_id,question,answer,dependencies) VALUES($1,$2,$3,$4,$5,$6)", string(scope.OwnerID), out.ID, agent.ID, question, out.Answer, asJSON(dependencies))

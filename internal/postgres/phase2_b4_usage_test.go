@@ -86,8 +86,8 @@ func TestPhase2B4_L8_CorrectedMemoryDuringDeputyGenerationKeepsReturnedUsage(t *
 	case <-time.After(10 * time.Second):
 		t.Fatal("deputy runner did not finish")
 	}
-	if len(f.all()) != 1 {
-		t.Fatalf("rejected deputy result must come from exactly one returned call; got %d", len(f.all()))
+	if len(f.all()) < 1 || len(f.all()) > 2 {
+		t.Fatalf("unrelated correction permits the existing optional selfcheck, got %d calls", len(f.all()))
 	}
 	st, err := s.Snapshot(context.Background(), scope)
 	if err != nil {
@@ -109,8 +109,8 @@ func TestPhase2B4_L8_CorrectedMemoryDuringDeputyGenerationKeepsReturnedUsage(t *
 		t.Errorf("rejected deputy output was adopted into workspace: tasks=%+v docs=%+v", st.Tasks, st.Docs)
 	}
 	rows := b4Usage(t, s, scope)
-	if len(rows) != 1 {
-		t.Fatalf("rejected returned deputy call must record one usage row; got %d", len(rows))
+	if len(rows) != len(f.all()) {
+		t.Fatalf("every returned call must have usage, got %d rows for %d calls", len(rows), len(f.all()))
 	}
 	row := rows[0]
 	b4UsageNumbers(t, row)

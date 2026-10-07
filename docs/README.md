@@ -9,7 +9,7 @@ PCAS 的所有文档都从这一页找。新增或移动文档时，同时改这
 | 第 1 阶段：秘书前台 | 已上线（2026-10-01） | [任务总览](tasks/phase1/README.md) |
 | 第 1.5 阶段：稳定化 | 修复已合并；线上实测 11 项和试用一天还没做 | [稳定化计划](tasks/stabilization/README.md) |
 | 第 2 阶段：记忆核心 | 分四批，**全部已上线**：第 1 批 2026-10-02，第 2 批 2026-10-03，第 3 批、第 4 批和补充批 4b（按整段对话整理）2026-10-03 一起上线。还没做的：用真实模型跑回忆评测并定基线。第一次尝试（2.0）已回滚 | [任务入口](tasks/phase2/README.md) · [方向稿](tasks/phase2/direction.md) · [第 1 批](tasks/phase2/batch1/README.md) · [第 2–4 批并行方案](tasks/phase2/parallel.md) |
-| 第 2.5 阶段：记忆整理 | 方向已定（2026-10-04）。分四批加一个评测集；**四批全部已上线（2026-10-05）**：分组和类型、新旧比较、现状层、办事时用上。上线后后台要几个小时把比较、现状卡和交接说明跑完。待办：验收的两条限速测试（F-B2-8、F-B3-9）、评测的三档数字、真实题上的前后对比 | [任务入口](tasks/phase2_5/README.md) · [第 1 批契约](tasks/phase2_5/batch1/README.md) · [讨论稿](research/memory-next-direction.md) |
+| 第 2.5 阶段：记忆整理 | 方向已定（2026-10-04）。分四批加一个评测集；**四批全部已上线（2026-10-05）**：分组和类型、新旧比较、现状层、办事时用上。现状卡已在 2.6 去掉。待办：验收的两条限速测试（F-B2-8、F-B3-9）、评测的三档数字、真实题上的前后对比 | [任务入口](tasks/phase2_5/README.md) · [第 1 批契约](tasks/phase2_5/batch1/README.md) · [讨论稿](research/memory-next-direction.md) |
 | 第 2.6 阶段：现状层返工 | **已上线（2026-10-07）**。去掉现状卡，「关于你」并入资料库；期限表和对助手的要求在归类时抽出；后台分阶段预算、失败不覆盖、失败可见。遗留事项在待办 54–61 | [契约](tasks/phase2_6/README.md) · [问题清单](research/memory-status-layer-audit.md) · [上线记录](evaluations/2026-10-07-phase2_6-rollout.md) |
 | 第 3 阶段及以后 | 未开始 | [白皮书 §16 路线图](whitepaper.md) |
 
@@ -196,7 +196,7 @@ PCAS 的所有文档都从这一页找。新增或移动文档时，同时改这
 | 顺序 | 文档 | 内容 |
 |---|---|---|
 | 1 | [讨论稿：记忆下一步怎么做](research/memory-next-direction.md) | 总览，方向已确认。四层记忆（新增现状层）、全自动整理的原则、结构化层要补什么、办事时的三档、实验否掉的办法、没解决的问题、建议的顺序 |
-| 2 | [研究笔记：现状卡、期限表与自查](research/memory-status-cards-and-self-check.md) | 目前最看好的做法：每个分组一张放原样记忆的现状卡、一张期限表、办完后对照记忆自查一次 |
+| 2 | [研究笔记：现状卡、期限表与自查](research/memory-status-cards-and-self-check.md) | 2.5 阶段采用的做法：每个分组一张放原样记忆的现状卡、一张期限表、办完后对照记忆自查一次。现状卡上线后不成立，2.6 已去掉（见[问题清单](research/memory-status-layer-audit.md)）；期限表和自查保留 |
 | 3 | [研究笔记：看目录、分头细读](research/memory-navigate-and-read.md) | 质量最高但最慢的做法：模型先看分组目录，再分组细读挑出要用的记忆 |
 | 4 | [研究笔记：用途标注与事先备料](research/memory-use-phrases-and-packets.md) | 两种没有显出优势的做法，以及原因 |
 | 5 | [评测记录：第一轮](evaluations/2026-10-04-memory-lookup-experiment.md) | 十一种做法、12 个任务的设计和数字；丢分在办事那一步的发现 |

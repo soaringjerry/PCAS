@@ -23,10 +23,14 @@ func (s *Store) heavyUse(ctx, persist context.Context, scope memory.Scope, agent
 	for _, g := range u.Index {
 		fmt.Fprintf(&catalog, "%s：%s（%s，%d条；%s的当前情况）\n", g.Key, g.Name, g.Kind, g.Count, g.Name)
 	}
+	writeProjectHandover(&catalog, u.ProjectHandover)
 	catalog.WriteString(`只输出 JSON：{"groups":["目录里的key"]}。` + "\n")
 	selectionID := memory.NewID()
 	keys := []string{}
 	requested := append([]string{}, u.RequiredGroups...)
+	if u.ProjectGroup != "" {
+		requested = append([]string{u.ProjectGroup}, requested...)
+	}
 	var err error
 	if !u.Selected {
 		choice, e := s.useModelCall(readCtx, persist, scope, agent.ID, useReaderInstructions, catalog.String(), useGroupsSchema, modelUsage{ID: selectionID, Purpose: "reader", Tier: "heavy", TurnID: turn, RunID: run, MemoryRefs: u.Dependencies, Plan: asJSON(usePlan{Groups: u.Groups})})

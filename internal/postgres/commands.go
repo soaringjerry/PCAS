@@ -208,6 +208,8 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 				return memory.ErrInvalid
 			}
 			doc = *c.Doc
+			doc.Version = 0
+			doc.BasedOn = nil
 			if !memory.ID(doc.ID).Valid() || doc.By != "user" || doc.RunID != "" {
 				return memory.ErrInvalid
 			}
@@ -235,6 +237,9 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 				_, err := tx.Exec(ctx, "DELETE FROM work_documents WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), c.ID)
 				return err
 			}
+			base := doc.Version
+			doc.BasedOn = &base
+			doc.By = actorFromContext(ctx)
 			if err := patchAllowed(&doc, c.Patch, "title", "body"); err != nil {
 				return err
 			}
@@ -275,7 +280,16 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 			return err
 		}
 		_, err = tx.Exec(ctx, "UPDATE workspace_owners SET settings=$2 WHERE owner_id=$1", string(scope.OwnerID), asJSON(settings))
-		return err
+		if err != nil {
+			return err
+		}
+		if _, zone := fields["timezone"]; zone {
+			return refreshTaskPlansTx(ctx, tx, scope)
+		}
+		if _, clock := fields["dailyReviewAt"]; clock {
+			return refreshTaskPlansTx(ctx, tx, scope)
+		}
+		return nil
 	case "updateAgent":
 		a, err := queryDocument[workspace.Agent](ctx, tx, "SELECT document FROM workspace_agents WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), c.ID)
 		if err != nil {
@@ -367,11 +381,15 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 	summary := c.Summary
 	switch c.Type {
 	case "updateTask":
-		if err := patchAllowed(&item, c.Patch, "title", "notes", "status", "projectId", "due", "scheduled", "waitingFor", "owedTo", "urgent", "dependsOn"); err != nil {
+		if err := patchAllowed(&item, c.Patch, "title", "notes", "status", "projectId", "due", "scheduled", "waitingFor", "owedTo", "urgent", "dependsOn", "estimatedHours"); err != nil {
 			return err
 		}
 		var fields map[string]json.RawMessage
 		if json.Unmarshal(c.Patch, &fields) == nil {
+			if _, changed := fields["estimatedHours"]; changed {
+				item.EffortSource = "user"
+				item.EffortReason = "用户设定"
+			}
 			if _, changed := fields["due"]; changed {
 				settings, err := queryDocument[workspace.Settings](ctx, tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1", string(scope.OwnerID))
 				if err != nil {
@@ -388,7 +406,7 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 		if item.Kind != "project" {
 			return memory.ErrInvalid
 		}
-		if err := patchAllowed(&item, c.Patch, "name", "goal", "status", "progress", "nextSteps"); err != nil {
+		if err := patchAllowed(&item, c.Patch, "name", "goal", "status"); err != nil {
 			return err
 		}
 		item.Title = item.Name
@@ -548,7 +566,15 @@ func saveCandidate(ctx context.Context, tx pgx.Tx, scope memory.Scope, v workspa
 	return err
 }
 func saveDoc(ctx context.Context, tx pgx.Tx, scope memory.Scope, doc workspace.Doc) error {
-	_, err := tx.Exec(ctx, `INSERT INTO work_documents(owner_id,id,thing_id,document) VALUES($1,$2,$3,$4) ON CONFLICT(owner_id,id) DO UPDATE SET document=excluded.document`, string(scope.OwnerID), doc.ID, doc.ThingID, asJSON(doc))
+	var exists bool
+	if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM work_documents WHERE owner_id=$1 AND id=$2)", string(scope.OwnerID), doc.ID).Scan(&exists); err != nil {
+		return err
+	}
+	if exists {
+		_, err := tx.Exec(ctx, "UPDATE work_documents SET document=$3 WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), doc.ID, asJSON(doc))
+		return err
+	}
+	_, err := tx.Exec(ctx, "INSERT INTO work_documents(owner_id,id,thing_id,document) VALUES($1,$2,$3,$4)", string(scope.OwnerID), doc.ID, doc.ThingID, asJSON(doc))
 	return err
 }
 func (s *Store) saveAction(ctx context.Context, tx pgx.Tx, scope memory.Scope, item workspace.Item, summary string) error {

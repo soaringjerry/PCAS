@@ -116,6 +116,18 @@ func (s *Store) CheckReminders(ctx context.Context, now time.Time) error {
 						if trigger.Guard != "" && trigger.Guard != item.Status {
 							continue
 						}
+						if trigger.ID == startWorkTrigger {
+							if !item.RemindersOn || !oneOf(item.Status, "todo", "waiting") {
+								continue
+							}
+							var once bool
+							if err = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM workspace_notices WHERE owner_id=$1 AND thing_id=$2 AND trigger_id=$3)", string(id), item.ID, startWorkTrigger).Scan(&once); err != nil {
+								return err
+							}
+							if once {
+								continue
+							}
+						}
 						_, err = tx.Exec(ctx, "INSERT INTO workspace_notices(owner_id,thing_id,trigger_id,due_at,reason) VALUES($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING", string(id), item.ID, trigger.ID, at, trigger.Description)
 						if err != nil {
 							return err

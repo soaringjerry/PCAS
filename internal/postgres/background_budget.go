@@ -16,6 +16,8 @@ var backgroundHourlyBudgets = map[string]int{
 	EntityCompareStage:    30,
 	EntityCandidatesStage: 6,
 	HandoverStage:         2,
+	ProjectHandoverStage:  10,
+	EffortStage:           10,
 }
 
 func backgroundStage(stage string) string { return strings.SplitN(stage, ":", 2)[0] }

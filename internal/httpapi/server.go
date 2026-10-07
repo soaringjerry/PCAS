@@ -237,6 +237,16 @@ func (s *Server) fail(w http.ResponseWriter, err error) {
 	}
 	status, code := http.StatusInternalServerError, "internal_error"
 	switch {
+	case errors.Is(err, workspace.ErrFileTooLarge):
+		s.logger.Warn("project file upload rejected", "stage", "file_upload", "error_type", "file_too_large")
+		writeJSON(w, http.StatusRequestEntityTooLarge, map[string]any{"error": "file_too_large", "message": "文件超过现有附件20MiB上限，请拆分后上传；原有文件不受影响"})
+		return
+	case errors.Is(err, workspace.ErrFileEmpty):
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "file_empty", "message": "文件为空，请选择有内容的文件"})
+		return
+	case errors.Is(err, workspace.ErrFileConfirmation):
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "file_confirmation_required", "message": "请确认删除文件及其派生内容，再提交 confirmed=true"})
+		return
 	case errors.Is(err, workspace.ErrTimezone):
 		status, code = http.StatusBadRequest, "invalid_timezone"
 		s.logger.Warn("workspace timezone validation failed", "stage", "workspace_settings", "error_type", code)

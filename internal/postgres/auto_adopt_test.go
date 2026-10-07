@@ -157,7 +157,7 @@ func TestAutoAdoptDestinationsAndUndo(t *testing.T) {
 			{"task checks", "task", "breakdown", "介绍\n- [ ] 第一项\n- [x] 第二项\n- [ ] 3. 第三项\n结语", "subtasks", "副手结果：加了 3 个子任务"},
 			{"idea tasks", "idea", "breakdown", "- [ ] 第一项\n- [x] 第二项\n- [ ] 第三项", "subtasks", "副手结果：加了 3 个子任务"},
 			{"project tasks", "project", "summary", "- [ ] 第一项\n- [ ] 第二项\n- [ ] 第三项", "subtasks", "副手结果：加了 3 个子任务"},
-			{"project progress", "project", "summary", "项目已完成设计", "progress", "副手结果：写进进度"},
+			{"project progress", "project", "summary", "项目已完成设计", "progress", "副手结果：记住项目进展"},
 			{"task progress", "task", "summary", "任务已完成设计", "progress", "副手结果：写进进度"},
 			{"idea progress", "idea", "summary", "想法已完成评估", "progress", "副手结果：写进进度"},
 			{"document", "task", "draft", "这是一篇普通文档。", "doc", "副手结果：存成文档"},
@@ -169,9 +169,6 @@ func TestAutoAdoptDestinationsAndUndo(t *testing.T) {
 				autoAdoptModel(t, s, tc.output, nil)
 				id := string(memory.NewID())
 				st := workspaceCommand(t, s, scope, workspace.Command{Type: map[string]string{"task": "addTask", "idea": "addIdea", "project": "addProject"}[tc.itemKind], ID: id, Title: "事项", Name: "项目", Text: "原有说明"})
-				if tc.itemKind == "project" {
-					st = workspaceCommand(t, s, scope, workspace.Command{Type: "updateProject", ID: id, Patch: asJSON(map[string]any{"progress": "原有进度"})})
-				}
 				before := autoAdoptItem(st, id)
 				agent := "auto-model"
 				if path == "manual" {
@@ -238,9 +235,17 @@ func TestAutoAdoptDestinationsAndUndo(t *testing.T) {
 						}
 					}
 				case "progress":
-					field := map[string]string{"task": "notes", "idea": "body", "project": "progress"}[tc.itemKind]
-					if !strings.Contains(fieldText(item, field), tc.output) {
-						t.Fatalf("missing progress: %+v", item)
+					if tc.itemKind == "project" {
+						// Phase 3 H7: a project's progress is remembered as a project
+						// memory instead of being written into a field.
+						if !autoAdoptHasMemory(st, tc.output) {
+							t.Fatalf("missing project memory: %+v", st.Memories)
+						}
+					} else {
+						field := map[string]string{"task": "notes", "idea": "body"}[tc.itemKind]
+						if !strings.Contains(fieldText(item, field), tc.output) {
+							t.Fatalf("missing progress: %+v", item)
+						}
 					}
 				case "doc":
 					if len(st.Docs) != 1 || st.Docs[0].By != "ai" || st.Docs[0].Body != tc.output || st.Docs[0].RunID != runID {
@@ -308,6 +313,9 @@ func TestAutoAdoptDestinationsAndUndo(t *testing.T) {
 				}
 				if !reflect.DeepEqual(restored.Checklist, before.Checklist) || restored.Notes != before.Notes || restored.Body != before.Body || restored.Progress != before.Progress || len(st.Docs) != 0 || len(st.Tasks) != map[bool]int{true: 1, false: 0}[tc.itemKind == "task"] {
 					t.Fatalf("undo did not restore destination: %+v", st)
+				}
+				if tc.itemKind == "project" && tc.as == "progress" && autoAdoptHasMemory(st, tc.output) {
+					t.Fatalf("undo left the adopted project memory in view: %+v", st.Memories)
 				}
 				if restored.Version <= item.Version || st.Runs[0].Status != "done" || st.Runs[0].Adopted != nil || st.Runs[0].Output != tc.output || st.Runs[0].Cost != run.Cost {
 					t.Fatalf("undo did not retain completed result: %+v", st.Runs)
@@ -567,4 +575,13 @@ FOR EACH ROW WHEN (NEW.source='worker') EXECUTE FUNCTION reject_worker_adoption(
 			})
 		}
 	}
+}
+
+func autoAdoptHasMemory(st workspace.State, text string) bool {
+	for _, m := range st.Memories {
+		if m.Text == text {
+			return true
+		}
+	}
+	return false
 }

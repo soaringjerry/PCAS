@@ -131,7 +131,9 @@ func TestPhase26A9EstimatedSubscriptionDailyBudgetAndHealth(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, h := range decoded.Stages {
-		if h.Deferred < 1 {
+		// Only the stages this test drove had due work; the phase 3 stages
+		// (project handover, effort) are idle here and so show no deferral.
+		if oneOf(h.Stage, stages...) && h.Deferred < 1 {
 			t.Errorf("missing visible daily deferral for %s", h.Stage)
 		}
 	}

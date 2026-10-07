@@ -48,9 +48,10 @@ var secretaryOutputSchema = json.RawMessage(`{
                   "project": {"type": ["string", "null"], "description": "null 表示不修改此字段。"},
                   "status": {"type": ["string", "null"], "description": "null 表示不修改此字段。"},
                   "notesAppend": {"type": ["string", "null"], "description": "null 表示不修改此字段。"},
-                  "urgent": {"type": ["boolean", "null"], "description": "null 表示不修改此字段。"}
+                  "urgent": {"type": ["boolean", "null"], "description": "null 表示不修改此字段。"},
+                  "estimatedHours": {"type": ["number", "null"], "description": "用户指定的工作小时数；null不修改。一个工作日按4小时折算。"}
                 },
-                "required": ["title", "due", "remind", "project", "status", "notesAppend", "urgent"],
+                "required": ["title", "due", "remind", "project", "status", "notesAppend", "urgent", "estimatedHours"],
                 "additionalProperties": false
               }
             },
@@ -91,10 +92,12 @@ var secretaryOutputSchema = json.RawMessage(`{
               "op": {"type": "string", "enum": ["delegate"]},
               "ref": {"type": "string"},
               "title": {"type": "string"},
-              "kind": {"type": "string", "enum": ["plan", "draft", "breakdown", "summary", "ask"]},
-              "prompt": {"type": "string"}
+              "kind": {"type": "string", "enum": ["plan", "draft", "breakdown", "summary", "ask", "revise"]},
+              "prompt": {"type": "string"},
+              "documentId": {"type": ["string", "null"]},
+              "baseVersion": {"type": ["integer", "null"]}
             },
-            "required": ["op", "ref", "title", "kind", "prompt"],
+            "required": ["op", "ref", "title", "kind", "prompt", "documentId", "baseVersion"],
             "additionalProperties": false
           }
         ]

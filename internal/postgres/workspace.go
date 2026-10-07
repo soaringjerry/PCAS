@@ -205,9 +205,24 @@ func (s *Store) snapshotTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) (
 	if err != nil {
 		return out, err
 	}
+	studioInstalled, err := studioInstalledTx(ctx, tx)
+	if err != nil {
+		return out, err
+	}
 	for _, item := range items {
+		if studioInstalled && item.Kind == "project" {
+			h, e := projectHandoverTx(ctx, tx, scope, item.ID)
+			if e != nil {
+				return out, e
+			}
+			item.ProjectHandover = &h
+		}
 		switch item.Kind {
 		case "task":
+			item.StartDate, err = taskStartDate(item.Due, item.EstimatedHours, deskLocation(out.Settings))
+			if err != nil {
+				return out, err
+			}
 			out.Tasks = append(out.Tasks, item)
 		case "idea":
 			out.Ideas = append(out.Ideas, item)
@@ -430,7 +445,15 @@ func (s *Store) Execute(ctx context.Context, scope memory.Scope, in workspace.Co
 		if (oneOf(in.Type, "toggleCheck", "toggleTrigger", "toggleContextMemory") || strings.HasPrefix(in.Type, "bulk")) && revision != in.ExpectedRevision {
 			return memory.ErrConflict
 		}
-		if undoableCommand(in.Type) {
+		recordAction := undoableCommand(in.Type)
+		if in.Type == "undoAction" {
+			var err error
+			recordAction, err = reviseUndoActionTx(ctx, tx, scope, in.ID)
+			if err != nil {
+				return err
+			}
+		}
+		if recordAction {
 			ctx = withActionLog(ctx, in.RequestID, "command", "", commandSummary(ctx, tx, scope, in))
 			if err := beginActionLogTx(ctx, tx); err != nil {
 				return err
@@ -517,6 +540,9 @@ func getItem(ctx context.Context, tx pgx.Tx, scope memory.Scope, id string) (wor
 	return queryDocument[workspace.Item](ctx, tx, "SELECT document FROM work_items WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), id)
 }
 func saveItem(ctx context.Context, tx pgx.Tx, scope memory.Scope, item workspace.Item) error {
+	if err := maintainTaskPlanTx(ctx, tx, scope, &item); err != nil {
+		return err
+	}
 	if err := syncArtifactEditsTx(ctx, tx, scope, item); err != nil {
 		return err
 	}

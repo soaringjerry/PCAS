@@ -89,7 +89,7 @@ func (s *Store) prepareRunContext(ctx context.Context, scope memory.Scope, c wor
 			if item.Kind == "project" {
 				projectID = item.ID
 			}
-			query += " " + item.Title + " " + item.Notes + " " + item.Body + " " + item.Goal + " " + item.Progress
+			query += " " + item.Title + " " + item.Notes + " " + item.Body + " " + item.Goal
 			docs, _, err := currentRunDocsTx(ctx, tx, scope, item, c.AgentID)
 			if err != nil {
 				return err
@@ -123,7 +123,11 @@ func (s *Store) prepareRunContext(ctx context.Context, scope memory.Scope, c wor
 // Documents are read again inside runCommandTx. A prepared retrieval snapshot
 // must never override the owner's current writing or the destination's grants.
 func currentRunDocsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, item workspace.Item, agent string) ([]workspace.Doc, []memory.Ref, error) {
-	docs, err := queryDocuments[workspace.Doc](ctx, tx, "SELECT document FROM work_documents WHERE owner_id=$1 AND thing_id=$2 ORDER BY document->>'updatedAt' DESC,id", string(scope.OwnerID), item.ID)
+	project := item.ProjectID
+	if item.Kind == "project" {
+		project = item.ID
+	}
+	docs, err := queryDocuments[workspace.Doc](ctx, tx, "SELECT d.document FROM work_documents d JOIN work_items w ON(w.owner_id,w.id)=(d.owner_id,d.thing_id) WHERE d.owner_id=$1 AND (w.id=$2 OR w.id=nullif($3,'')::uuid OR w.project_id=nullif($3,'')::uuid) ORDER BY d.document->>'updatedAt' DESC,d.id", string(scope.OwnerID), item.ID, project)
 	if err != nil {
 		return nil, nil, err
 	}

@@ -154,7 +154,7 @@ func (s *Store) GetSource(ctx context.Context, scope memory.Scope, id memory.ID,
 	var sourceID string
 	var blobKey *string
 	err := s.pool.QueryRow(ctx, `SELECT s.id::text,v.version,s.connector,s.external_id,v.external_version,v.title,v.body,v.media_type,
-		rv.valid_from,rv.valid_to,rv.time_precision,rv.expressed_at,rv.recorded_at,rv.state,v.representation,(v.blob_key IS NOT NULL OR v.attachment_redacted),v.blob_key
+		rv.valid_from,rv.valid_to,rv.time_precision,rv.expressed_at,rv.recorded_at,rv.state,v.representation,(v.blob_key IS NOT NULL OR v.attachment_redacted),v.blob_key,coalesce(to_jsonb(v)->'scope','{}'::jsonb)
 		FROM sources s JOIN memory_records r ON (r.owner_id,r.id)=(s.owner_id,s.id)
 		JOIN source_versions v ON (v.owner_id,v.source_id)=(s.owner_id,s.id) AND v.version=CASE WHEN $3=0 THEN r.version ELSE $3 END
 		JOIN record_versions rv ON (rv.owner_id,rv.record_id,rv.version)=(v.owner_id,v.source_id,v.version)
@@ -162,7 +162,7 @@ func (s *Store) GetSource(ctx context.Context, scope memory.Scope, id memory.ID,
 		AND ($4 OR EXISTS(SELECT 1 FROM record_grants g WHERE g.owner_id=s.owner_id AND g.record_id=s.id AND g.principal_id=$5))`,
 		string(scope.OwnerID), string(id), version, scope.IsOwner, scope.PrincipalID).Scan(&sourceID, &result.Source.Version,
 		&result.Source.Connector, &result.Source.ExternalID, &result.Source.ExternalVersion, &result.Source.Title, &result.Source.Text, &result.Source.MediaType,
-		&result.Source.ValidTime.From, &result.Source.ValidTime.To, &result.Source.ValidTime.Precision, &result.Source.ExpressedAt, &result.Source.RecordedAt, &result.Source.State, &result.Source.Representation, &result.Source.HasAttachment, &blobKey)
+		&result.Source.ValidTime.From, &result.Source.ValidTime.To, &result.Source.ValidTime.Precision, &result.Source.ExpressedAt, &result.Source.RecordedAt, &result.Source.State, &result.Source.Representation, &result.Source.HasAttachment, &blobKey, &result.Source.Scope)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return result, memory.ErrNotFound
 	}

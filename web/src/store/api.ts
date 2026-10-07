@@ -29,6 +29,20 @@ export async function api<T>(path: string, body?: unknown, method?: string): Pro
   if (!response.ok) throw new APIError(response.status, messages[value.error] ?? (value.error === 'chatgpt_provider_error' ? value.message : undefined) ?? '服务暂时不可用，操作没有确认保存。', typeof value.error === 'string' ? value.error : undefined)
   return value as T
 }
+/**
+ * The workspace as it is now, or nothing when it is still what `etag` named.
+ * The server answers an unchanged workspace with no body, which is most polls.
+ */
+export async function readWorkspace<T>(etag?: string): Promise<{ state: T; etag?: string } | undefined> {
+  const response = await fetch('/v1/workspace', {
+    credentials: 'same-origin',
+    headers: { 'X-PCAS-Timezone': Intl.DateTimeFormat().resolvedOptions().timeZone, ...(etag ? { 'If-None-Match': etag } : {}) },
+  })
+  if (response.status === 304) return undefined
+  const value = await response.json().catch(() => ({}))
+  if (!response.ok) throw new APIError(response.status, messages[value.error] ?? '服务暂时不可用，操作没有确认保存。', typeof value.error === 'string' ? value.error : undefined)
+  return { state: value as T, etag: response.headers.get('ETag') ?? undefined }
+}
 export async function downloadExport(training = false, confirmedOnly = false) {
   const response = await fetch(`/v1/workspace/export?training=${training}&confirmedOnly=${confirmedOnly}`, { credentials: 'same-origin' })
   if (!response.ok) throw new Error('导出失败，请重新登录后重试')

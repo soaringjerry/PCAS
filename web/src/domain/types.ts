@@ -207,6 +207,25 @@ export interface MemoryFacets {
   places: MemoryFacet[]
 }
 
+/** One entry of the directory of groups: a person, a project, a topic, an area of life, or a kind of memory about the user. */
+export interface MemoryGroupEntry {
+  /** Names the group to the server; means nothing here. */
+  key: string
+  kind: 'person' | 'project' | 'topic' | 'area' | 'self'
+  name: string
+  /** How many current memories are under it. */
+  count: number
+}
+
+/** Something the user asks of the assistant, after the ones saying the same were merged. */
+export interface AssistantRequirement {
+  memoryId: ID
+  text: string
+  /** It holds in every turn; otherwise `scope` says when it does. */
+  unrestricted: boolean
+  scope: string
+}
+
 export type CandidateKind = 'task' | 'idea' | 'memory' | 'unknown'
 export type CandidateState = 'pending' | 'accepted' | 'ignored' | 'merged'
 
@@ -387,6 +406,8 @@ export interface State {
   notices: Notice[]
   budgetUsage: number
   revision: number
+  /** Moves only when a memory, its groups or its names change. Absent on an older server. */
+  memoryRevision?: number
   version: number
   settings: Settings
   tasks: Task[]

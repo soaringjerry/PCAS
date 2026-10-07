@@ -510,6 +510,9 @@ func (s *Store) executeSecretaryActionTx(ctx context.Context, tx pgx.Tx, scope m
 			return skippedReceipt(a.Op, "没说清要交给副手做什么"), nil
 		}
 		c := workspace.Command{Type: "requestRun", ThingID: id, AgentID: agent.ID, Kind: a.Kind, Prompt: a.Prompt}
+		if history, ok := ctx.Value(delegateHistoryKey{}).(delegateHistoryContext); ok {
+			c.DeskTurnIDs = append([]string{}, history.IDs...)
+		}
 		if a.Ref == "new" {
 			if !validDeskTitle(a.Title) {
 				return skippedReceipt(a.Op, "标题为空或太长"), nil

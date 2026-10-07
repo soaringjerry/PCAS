@@ -15,7 +15,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/soaringjerry/PCAS/cmd/pcas-eval/doing"
 	"github.com/soaringjerry/PCAS/internal/memory"
-	"github.com/soaringjerry/PCAS/internal/postgres"
 )
 
 func tierCell(run int, method, task string) string {
@@ -159,15 +158,15 @@ func restoredTierDatabase(ctx context.Context, dsn string, s doing.Suite, p doin
 		return "", scope, fmt.Errorf("invalid restored owner")
 	}
 	scope = memory.Scope{OwnerID: memory.ID(owners[0]), PrincipalID: "owner", IsOwner: true}
-	var extra, turns, candidates, claims, retired, unorganized, cards int
-	var handover bool
+	var extra, turns, candidates int
 	if err = pool.QueryRow(ctx, `SELECT
  (SELECT count(*) FROM memory_records r WHERE NOT EXISTS(SELECT 1 FROM v2_frozen_records f WHERE (f.owner_id,f.id)=(r.owner_id,r.id))),
- (SELECT count(*) FROM desk_turns),(SELECT count(*) FROM capture_candidates),
- (SELECT count(*) FROM claims),(SELECT count(*) FROM claims WHERE retired!=''),
- (SELECT count(*) FROM claims WHERE organized<$1),(SELECT count(*) FROM status_cards WHERE NOT stale AND built_at IS NOT NULL AND rule>=$2),
- EXISTS(SELECT 1 FROM handovers WHERE NOT stale AND rule>=$3 AND btrim(body)!='')`, postgres.OrganizeVersion, postgres.CardVersion, postgres.HandoverVersion).Scan(&extra, &turns, &candidates, &claims, &retired, &unorganized, &cards, &handover); err != nil || extra != 0 || turns != 0 || candidates != 0 || unorganized != 0 || claims != p.Claims || retired != p.Retired || cards != p.Cards || handover != p.Handover {
+ (SELECT count(*) FROM desk_turns),(SELECT count(*) FROM capture_candidates)`).Scan(&extra, &turns, &candidates); err != nil || extra != 0 || turns != 0 || candidates != 0 {
 		return "", scope, fmt.Errorf("restored preparation differs or contains answer turns")
+	}
+	state, err := readTierPreparation(ctx, pool, scope)
+	if err != nil || state.Claims != p.Claims || state.Retired != p.Retired || state.OrganizeRule != p.OrganizeRule || state.HandoverRule != p.HandoverRule || state.Deadlines != p.Deadlines || state.Requirements != p.Requirements || state.HandoverInputs != p.HandoverInputs || state.Handover != p.Handover {
+		return "", scope, fmt.Errorf("restored preparation differs or is stale")
 	}
 	memories := s.ByID()
 	rows, err := pool.Query(ctx, `SELECT s.external_id,v.title,v.body FROM sources s JOIN source_versions v ON(v.owner_id,v.source_id,v.version)=(s.owner_id,s.id,1)`)

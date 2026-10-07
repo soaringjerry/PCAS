@@ -46,7 +46,8 @@ test('U4 真实秘书原话经后台变成带成都老王日期的记忆，点�
   await page.goto('/library?tab=memory')
   await expect(page.getByText(gold.fixtures.trip.memory, { exact: true })).toBeVisible()
   await expect(page.getByText('成都', { exact: true }).first()).toBeVisible()
-  const request = page.waitForRequest(r => new URL(r.url()).pathname === '/v1/workspace/memories' && new URL(r.url()).searchParams.get('entity') === found!.mentions.find(x => x.name === '老王')!.entityId)
+  // Since phase 2.6 a person is a group in the directory, read through the group's own list.
+  const request = page.waitForRequest(r => /^\/v1\/workspace\/memory-groups\/[^/]+\/memories$/.test(new URL(r.url()).pathname))
   await page.getByRole('button', { name: /老王/ }).first().click()
   await request
   const person = found!.mentions.find(x => x.name === '老王')!

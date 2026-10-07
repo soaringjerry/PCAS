@@ -4,7 +4,7 @@ import { deadlineGroups, deadlineKindLabel, groupDeadlines, handoverSections, ty
 import type { Deadline, Handover } from '../domain/status'
 import { formatDateTime } from '../domain/time'
 import { useStore } from '../store/context'
-import { useNow } from '../store/now'
+import { useDeadlines, useHandover, type Read } from '../store/now'
 import { Button, Spinner } from './ui'
 
 const KEY = 'pcas.now.closed'
@@ -77,11 +77,12 @@ function DateGroup({ group, label, items, onOpen }: { group: DeadlineGroup; labe
             <button type="button" onClick={() => onOpen(d.memoryId)}>
               <span className="now-when">
                 {groupIcon[group]}
-                {group === 'recurring' ? d.recurrence || '周期没说清' : group === 'unclear' ? '日期没说清' : formatDateTime(d.at!, timeZone)}
+                {group === 'recurring' ? d.recurrence || '周期没说清' : group === 'unclear' || !d.at ? '日期没说清' : formatDateTime(d.at, timeZone)}
               </span>
               <span className="now-what">
                 {d.title}
                 {d.timeNote && <span className="now-note">{d.timeNote}</span>}
+                {group === 'unclear' && d.originalText && <span className="now-said">原话：{d.originalText}</span>}
               </span>
               {d.kind !== 'recurring' && <span className="now-kind">{deadlineKindLabel[d.kind]}</span>}
             </button>
@@ -97,9 +98,8 @@ function DateGroup({ group, label, items, onOpen }: { group: DeadlineGroup; labe
   )
 }
 
-/** `at`: when the dates were read, which is what decides the ones gone by. */
-function Dates({ items, at, onOpen }: { items: Deadline[]; at: number; onOpen: (memoryId: string) => void }) {
-  const groups = groupDeadlines(items, at)
+function Dates({ items, onOpen }: { items: Deadline[]; onOpen: (memoryId: string) => void }) {
+  const groups = groupDeadlines(items)
   return (
     <section className="now-block" aria-labelledby="now-deadlines">
       <div className="now-block-head">
@@ -118,9 +118,30 @@ function wasClosed(): boolean {
   try { return localStorage.getItem(KEY) === '1' } catch { return false }
 }
 
+/** One part of the panel once it has been read; until then, that it is being read or why it could not be. */
+function Part<T>({ read, what, children }: { read: Read<T>; what: string; children: (value: T) => ReactNode }) {
+  if (read.value !== undefined) return children(read.value)
+  if (read.phase === 'loading') {
+    return (
+      <div className="mem-state" role="status">
+        <Spinner />
+        正在读取{what}…
+      </div>
+    )
+  }
+  return (
+    <div className="mem-state failed" role="alert">
+      <CircleAlert size={15} />
+      <span>{what}没读出来：{read.problem}</span>
+      <Button size="sm" icon={<RotateCw size={13} />} onClick={read.retry}>
+        重试
+      </Button>
+    </div>
+  )
+}
+
 /** What matters right now, above everything the library holds: the handover note and the dates to keep. */
 export function NowPanel({ onOpen }: { onOpen: (memoryId: string) => void }) {
-  const { now, readAt, phase, problem, retry } = useNow()
   const [closed, setClosed] = useState(wasClosed)
   const toggle = () => {
     const next = !closed
@@ -137,27 +158,19 @@ export function NowPanel({ onOpen }: { onOpen: (memoryId: string) => void }) {
           {closed ? <ChevronRight size={13} /> : <ChevronDown size={13} />}
         </button>
       </div>
-      {!closed && (
-        phase === 'loading' ? (
-          <div className="mem-state" role="status">
-            <Spinner />
-            正在读取…
-          </div>
-        ) : phase === 'failed' || !now ? (
-          <div className="mem-state failed" role="alert">
-            <CircleAlert size={15} />
-            <span>没读出来：{problem}</span>
-            <Button size="sm" icon={<RotateCw size={13} />} onClick={retry}>
-              重试
-            </Button>
-          </div>
-        ) : (
-          <div className="now-body">
-            <HandoverNote handover={now.handover} />
-            <Dates items={now.deadlines} at={readAt} onOpen={onOpen} />
-          </div>
-        )
-      )}
+      {!closed && <NowBody onOpen={onOpen} />}
     </section>
+  )
+}
+
+/** Mounted only while the panel is open, so a closed panel reads nothing. */
+function NowBody({ onOpen }: { onOpen: (memoryId: string) => void }) {
+  const handover = useHandover()
+  const deadlines = useDeadlines()
+  return (
+    <div className="now-body">
+      <Part read={handover} what="交接说明">{(value) => <HandoverNote handover={value} />}</Part>
+      <Part read={deadlines} what="期限和固定安排">{(items) => <Dates items={items} onOpen={onOpen} />}</Part>
+    </div>
   )
 }

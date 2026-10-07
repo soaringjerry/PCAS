@@ -668,9 +668,6 @@ func (s *Store) ProcessExtraction(ctx context.Context, j worker.Job) (err error)
 				return err
 			}
 		}
-		if _, err := tx.Exec(ctx, "UPDATE workspace_owners SET revision=revision+1 WHERE owner_id=$1", string(j.OwnerID)); err != nil {
-			return err
-		}
 		return completeExtractionTx(ctx, tx, j, "")
 	})
 }

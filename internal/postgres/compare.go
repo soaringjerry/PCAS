@@ -2,10 +2,9 @@ package postgres
 
 import (
 	"context"
-	"errors"
+	"encoding/json"
 	"fmt"
 	"log/slog"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -47,24 +46,18 @@ const compareCurrent = ` FROM claims cl
  WHERE r.state='active' AND rv.state='active' AND cl.retired='' AND cl.organized >= $1
  AND claim_source_is_current(cl.owner_id,cl.id,r.version,now())`
 
-const compareGroupKeys = `SELECT 'entity:'||cm.entity_id::text AS key,ev.entity_type AS kind,ev.name
- FROM claim_mentions cm JOIN memory_records er ON (er.owner_id,er.id)=(cm.owner_id,cm.entity_id)
- JOIN entity_versions ev ON (ev.owner_id,ev.entity_id,ev.version)=(er.owner_id,er.id,er.version)
- WHERE (cm.owner_id,cm.claim_id,cm.claim_version)=(c.owner_id,c.claim_id,c.version)
- AND er.state='active' AND cm.role IN ('project','topic','person')
- UNION SELECT 'entity:'||c.subject_id::text,ev.entity_type,ev.name FROM entity_versions ev
- JOIN memory_records er ON (er.owner_id,er.id,er.version)=(ev.owner_id,ev.entity_id,ev.version)
- WHERE ev.owner_id=c.owner_id AND ev.entity_id=c.subject_id AND er.state='active' AND ev.entity_type IN ('project','topic','person')
- UNION SELECT 'self:'||c.category,'self',c.category FROM entity_versions ev
- JOIN memory_records er ON (er.owner_id,er.id,er.version)=(ev.owner_id,ev.entity_id,ev.version)
- WHERE ev.owner_id=c.owner_id AND ev.entity_id=c.subject_id AND ev.entity_type='self' AND er.state='active'
- AND c.category IN ('identity','taste','rule','goal')`
+const compareGroupKeys = `SELECT key,kind,name FROM status_current_members
+ WHERE (owner_id,claim_id,claim_version)=(c.owner_id,c.claim_id,c.version)`
 
 func nextCompareGroupTx(ctx context.Context, tx pgx.Tx, owner memory.ID, version int) (compareGroup, error) {
-	var group compareGroup
-	err := tx.QueryRow(ctx, `SELECT g.key,g.kind,g.name`+strings.Replace(compareCurrent, " WHERE ", " CROSS JOIN LATERAL ("+compareGroupKeys+") g WHERE ", 1)+`
- AND cl.owner_id=$2 AND cl.compared<$3 GROUP BY g.key,g.kind,g.name ORDER BY g.key LIMIT 1`, OrganizeVersion, string(owner), version).Scan(&group.Key, &group.Kind, &group.Name)
-	return group, err
+	b, err := nextComparisonBatchTx(ctx, tx, owner, version)
+	if err != nil {
+		return compareGroup{}, err
+	}
+	if b == nil {
+		return compareGroup{}, pgx.ErrNoRows
+	}
+	return b.Group, nil
 }
 
 func enqueueCompareTx(ctx context.Context, tx pgx.Tx, owner memory.ID, now time.Time, version int, entity bool, anchors ...memory.Ref) (bool, error) {
@@ -75,20 +68,14 @@ func enqueueCompareTx(ctx context.Context, tx pgx.Tx, owner memory.ID, now time.
 			version = EntityCompareVersion
 		}
 	}
+	if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended(current_database()||':'||current_schema()||':queue:'||$1||':'||$2,0))", string(owner), stage); err != nil {
+		return false, err
+	}
 	var pending bool
 	if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM memory_jobs WHERE owner_id=$1 AND stage LIKE $2 AND state IN ('queued','leased'))", string(owner), stage+":%").Scan(&pending); err != nil || pending {
 		return false, err
 	}
-	// The caller has already found a pair to confirm, outside this write.
-	if !entity {
-		_, err := nextCompareGroupTx(ctx, tx, owner, version)
-		if errors.Is(err, pgx.ErrNoRows) {
-			return false, nil
-		}
-		if err != nil {
-			return false, err
-		}
-	}
+
 	var anchor memory.Ref
 	if len(anchors) > 0 {
 		anchor = anchors[0]
@@ -120,67 +107,78 @@ func (s *Store) scheduleCompareVersion(ctx context.Context, now time.Time, versi
 		return 0, nil
 	}
 	count := 0
-	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-		if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended(current_database()||':'||current_schema()||':compare-schedule',0))"); err != nil {
-			return err
+	rows, err := s.pool.Query(ctx, "SELECT DISTINCT cl.owner_id::text"+compareCurrent, OrganizeVersion)
+	if err != nil {
+		return count, err
+	}
+	owners := []memory.ID{}
+	for rows.Next() {
+		var owner memory.ID
+		if err := rows.Scan(&owner); err != nil {
+			rows.Close()
+			return count, err
 		}
-		rows, err := tx.Query(ctx, "SELECT DISTINCT cl.owner_id::text"+compareCurrent, OrganizeVersion)
-		if err != nil {
-			return err
-		}
-		owners := []memory.ID{}
-		for rows.Next() {
-			var owner memory.ID
-			if err := rows.Scan(&owner); err != nil {
-				rows.Close()
-				return err
+		owners = append(owners, owner)
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return count, err
+	}
+	var failed error
+	for _, owner := range owners {
+		for _, entity := range []bool{false, true} {
+			v := version
+			if entity && version == CompareVersion {
+				v = EntityCompareVersion
 			}
-			owners = append(owners, owner)
-		}
-		err = rows.Err()
-		rows.Close()
-		if err != nil {
-			return err
-		}
-		// One write per kind: a slow or busy one must not undo the other.
-		var failed error
-		for _, owner := range owners {
-			for _, entity := range []bool{false, true} {
-				if entity {
-					entityVersion := version
-					if version == CompareVersion {
-						entityVersion = EntityCompareVersion
-					}
-					var pending bool
-					if err := s.pool.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM memory_jobs WHERE owner_id=$1 AND stage LIKE $2 AND state IN ('queued','leased'))", string(owner), EntityCompareStage+":%").Scan(&pending); err != nil {
-						failed = err
-						continue
-					}
-					if pending {
-						continue
-					}
-					pair, err := s.nextEntityPair(ctx, owner, entityVersion)
-					if err != nil {
-						failed = err
-						continue
-					}
-					if pair == nil {
-						continue
-					}
+			var input *comparisonBatch
+			if entity {
+				pair, e := s.nextEntityPair(ctx, owner, v)
+				if e != nil {
+					failed = e
+					continue
 				}
-				if err := backgroundWriteTx(ctx, s.pool, owner, func(ctx context.Context, tx pgx.Tx) error {
-					queued, err := enqueueCompareTx(ctx, tx, owner, now, version, entity)
-					if queued {
-						count++
-					}
+				if pair == nil {
+					continue
+				}
+			} else {
+				var e error
+				input, e = s.nextComparisonBatch(ctx, owner, v)
+				if e != nil {
+					failed = e
+					continue
+				}
+				if input == nil {
+					continue
+				}
+			}
+			e := backgroundWriteTx(ctx, s.pool, owner, func(ctx context.Context, tx pgx.Tx) error {
+				if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended(current_database()||':'||current_schema()||':queue:'||$1||':'||$2,0))", string(owner), backgroundStage(map[bool]string{false: CompareStage, true: EntityCompareStage}[entity])); err != nil {
 					return err
-				}); err != nil {
-					failed = err
 				}
+				if input != nil {
+					var complete bool
+					if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM memory_comparison_batches WHERE owner_id=$1 AND group_key=$2 AND block_a=$3 AND block_b=$4 AND fingerprint=$5 AND rule>=$6 AND completed_at IS NOT NULL)", string(owner), input.Group.Key, input.A, input.B, input.Fingerprint, v).Scan(&complete); err != nil {
+						return err
+					}
+					if complete {
+						return nil
+					}
+				}
+				queued, err := enqueueCompareTx(ctx, tx, owner, now, v, entity)
+				if queued {
+					count++
+				}
+				return err
+			})
+			if e != nil {
+				failed = e
 			}
 		}
-		return failed
-	})
+	}
+	err = failed
+
 	return count, err
 }
 
@@ -192,10 +190,10 @@ func (s *Store) RunCompare(ctx context.Context, logger *slog.Logger) {
 			return
 		}
 		if _, err := s.ScheduleCompare(ctx, time.Now()); err != nil && ctx.Err() == nil {
-			logger.Warn("memory comparison check failed", "stage", "compare", "error_type", "schedule_failed")
+			s.recordScheduleFailure(ctx, CompareStage, err)
 		}
 		if _, err := s.ScheduleEntityCandidates(ctx, time.Now()); err != nil && ctx.Err() == nil {
-			logger.Warn("entity candidate check failed", "stage", "entity_candidates", "error_type", "schedule_failed")
+			s.recordScheduleFailure(ctx, EntityCandidatesStage, err)
 		}
 		select {
 		case <-ctx.Done():
@@ -265,129 +263,84 @@ func (s *Store) processCompareVersion(ctx context.Context, j worker.Job, version
 	}
 	defer release()
 	if s.models == nil {
-		return pgx.BeginFunc(ctx, conn, func(tx pgx.Tx) error {
-			if err := lockJob(ctx, tx, j); err != nil {
-				return err
-			}
-			return acknowledge(ctx, tx, j)
-		})
+		return &worker.JobError{Code: "provider_unavailable", Until: time.Now().Add(CompareInterval), NoAttempt: true}
 	}
 	p, ok := s.models.Get(s.models.ExtractionID())
 	if !ok || p.Embedding || p.Transcription {
-		return pgx.BeginFunc(ctx, conn, func(tx pgx.Tx) error {
-			if err := lockJob(ctx, tx, j); err != nil {
-				return err
-			}
-			return acknowledge(ctx, tx, j)
-		})
+		return &worker.JobError{Code: "provider_unavailable", Until: time.Now().Add(CompareInterval), NoAttempt: true}
 	}
 	if !s.models.Available(p.ID) {
 		return &worker.JobError{Code: "provider_unavailable", Until: time.Now().Add(CompareInterval), NoAttempt: true}
 	}
-	var group compareGroup
-	batch := []compareMemory{}
-	prepared := false
-	err = pgx.BeginFunc(ctx, conn, func(tx pgx.Tx) error {
-		if err := lockJob(ctx, tx, j); err != nil {
-			return err
-		}
-		var err error
-		group, err = nextCompareGroupTx(ctx, tx, j.OwnerID, version)
-		if errors.Is(err, pgx.ErrNoRows) {
-			return acknowledge(ctx, tx, j)
-		}
-		if err != nil {
-			return err
-		}
-		// After the newest 200 are complete, choose the next lagging window,
-		// filling spare positions with recent current context. Sort that window
-		// by expressed time before supplying its local numbers.
-		rows, err := tx.Query(ctx, `SELECT r.id::text,r.version,c.value #>> '{}',rv.expressed_at,(c.confirmation='confirmed' OR EXISTS(SELECT 1 FROM record_versions edited WHERE edited.owner_id=r.owner_id AND edited.record_id=r.id AND edited.version>1 AND edited.actor='user') OR `+restoredMemorySQL("$4")+`)`+compareCurrent+`
- AND cl.owner_id=$2 AND EXISTS(SELECT 1 FROM (`+compareGroupKeys+`) g WHERE g.key=$3)
- ORDER BY cl.compared<$4 DESC,rv.expressed_at DESC NULLS LAST,r.created_at DESC,r.id LIMIT $5`, OrganizeVersion, string(j.OwnerID), group.Key, version, compareLimit)
-		if err != nil {
-			return err
-		}
-		for rows.Next() {
-			m := compareMemory{organizeMemory: organizeMemory{Ref: memory.Ref{Kind: memory.ClaimKind}}}
-			if err := rows.Scan(&m.Ref.ID, &m.Ref.Version, &m.Text, &m.ExpressedAt, &m.Protected); err != nil {
-				rows.Close()
-				return err
-			}
-			batch = append(batch, m)
-		}
-		err = rows.Err()
-		rows.Close()
-		if err != nil {
-			return err
-		}
-		sort.SliceStable(batch, func(a, b int) bool {
-			if batch[a].ExpressedAt == nil {
-				return batch[b].ExpressedAt != nil
-			}
-			if batch[b].ExpressedAt == nil {
-				return false
-			}
-			return batch[a].ExpressedAt.Before(*batch[b].ExpressedAt)
-		})
-		for i := range batch {
-			batch[i].N = i + 1
-		}
-		if err := compareHourlyTx(ctx, tx); err != nil {
-			return err
-		}
-		prepared = true
-		return nil
-	})
-	if err != nil || !prepared {
-		return err
-	}
-	prompt := string(asJSON(map[string]any{"group": group, "memories": batch}))
-	reservation, err := s.reserveOrganizeCost(ctx, j, p.Reserve(compareInstructions+prompt))
+	var input *comparisonBatch
+	cached, err := s.paidModelResult(ctx, j)
 	if err != nil {
 		return err
 	}
-	result, callErr := s.models.Generate(ctx, p.ID, compareInstructions, prompt)
-	cost := result.Cost
-	if callErr != nil && strings.TrimSpace(result.Text) == "" {
-		cost = 0
-	}
-	if callErr == nil {
-		refs := []memory.Ref{}
-		for _, m := range batch {
-			refs = append(refs, m.Ref)
-		}
-		if err := s.recordUsage(ctx, modelUsage{OwnerID: j.OwnerID, ID: memory.ID(reservation), Purpose: "compare", AgentID: p.ID, Model: p.Model, InputTokens: result.InputTokens, OutputTokens: result.OutputTokens, Cost: cost, JobID: string(j.ID), MemoryRefs: refs}); err != nil {
-			_ = s.settleModelCost(ctx, j.OwnerID, reservation, cost)
+	if cached == nil {
+		err = pgx.BeginFunc(ctx, conn, func(tx pgx.Tx) error {
+			if err := lockJob(ctx, tx, j); err != nil {
+				return err
+			}
+			var err error
+			input, err = nextComparisonBatchTx(ctx, tx, j.OwnerID, version)
+			if err != nil {
+				return err
+			}
+			if input == nil {
+				return acknowledge(ctx, tx, j)
+			}
+			return backgroundHourlyTx(ctx, tx, CompareStage, "compare_hourly_limit")
+		})
+		if err != nil || input == nil {
 			return err
 		}
 	}
-	if err := s.settleModelCost(ctx, j.OwnerID, reservation, cost); err != nil {
+	refs := []memory.Ref{}
+	if input != nil {
+		refs = input.Refs
+	}
+	result, err := s.generatePaid(ctx, j, "compare", compareInstructions, asJSON(input), refs)
+	if err != nil {
 		return err
 	}
-	if errors.Is(callErr, memory.ErrUnavailable) {
-		if err := s.releaseUnavailableReservation(ctx, j, reservation); err != nil {
-			return err
-		}
-		return &worker.JobError{Code: "provider_unavailable", Until: time.Now().Add(CompareInterval), NoAttempt: true}
+	if err := json.Unmarshal(result.Prompt, &input); err != nil {
+		return err
 	}
-	if callErr != nil {
-		return &worker.JobError{Code: "model_call_failed", Retry: true}
+	if len(input.Memories) != len(input.Refs) {
+		return memory.ErrInvalid
 	}
-	edges, valid := parseCompareOutput(result.Text, len(batch))
-	return backgroundWriteTx(ctx, conn, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
+	for i := range input.Memories {
+		input.Memories[i].Ref = input.Refs[i]
+	}
+	edges, valid := parseCompareOutput(result.Output, len(input.Memories))
+	err = backgroundResultTx(ctx, conn, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
 		if err := lockJob(ctx, tx, j); err != nil {
 			return err
 		}
-		if err := s.writeComparisonTx(ctx, tx, j.OwnerID, version, batch, edges, valid); err != nil {
+		if valid {
+			if err := s.writeComparisonTx(ctx, tx, j.OwnerID, version, input.Memories, edges, true); err != nil {
+				return err
+			}
+		}
+		if err := writeComparisonReceiptTx(ctx, tx, j.OwnerID, version, *input, valid); err != nil {
+			return err
+		}
+		if err := discardPaidResultTx(ctx, tx, j); err != nil {
 			return err
 		}
 		if err := acknowledge(ctx, tx, j); err != nil {
 			return err
 		}
-		_, err := enqueueCompareTx(ctx, tx, j.OwnerID, time.Now(), version, false)
-		return err
+		return nil
 	})
+	if err != nil {
+		return err
+	}
+	if _, err := s.ScheduleCompare(ctx, time.Now()); err != nil {
+		s.recordScheduleFailure(ctx, CompareStage, err)
+	}
+	return nil
 }
 
 func (s *Store) writeComparisonTx(ctx context.Context, tx pgx.Tx, owner memory.ID, version int, batch []compareMemory, edges []compareEdge, valid bool) error {
@@ -462,16 +415,7 @@ func (s *Store) writeComparisonTx(ctx context.Context, tx pgx.Tx, owner memory.I
 			continue
 		}
 		if !valid {
-			var attempts int
-			if err := tx.QueryRow(ctx, `INSERT INTO memory_jobs(id,owner_id,record_id,record_version,stage,state,attempts,error_code)
- VALUES(gen_random_uuid(),$1,$2,$3,$4,'done',1,'invalid_compare_output') ON CONFLICT(owner_id,record_id,record_version,stage)
- DO UPDATE SET attempts=memory_jobs.attempts+1,updated_at=now() RETURNING attempts`, string(owner), string(m.Ref.ID), m.Ref.Version, fmt.Sprintf("memory.compare_attempt:%d", version)).Scan(&attempts); err != nil {
-				return err
-			}
-			if attempts < 3 {
-				continue
-			}
-			slog.WarnContext(ctx, "memory comparison attempts exhausted", "stage", "compare", "error_type", "attempts_exhausted", "memory_id", m.Ref.ID)
+			continue
 		}
 		changed = append(changed, string(m.Ref.ID))
 	}
@@ -490,8 +434,7 @@ func (s *Store) writeComparisonTx(ctx context.Context, tx pgx.Tx, owner memory.I
 		if _, err := tx.Exec(ctx, `SELECT status_invalidate_keys($1,ARRAY(SELECT DISTINCT key FROM status_current_members WHERE owner_id=$1 AND claim_id=ANY($2::uuid[])))`, string(owner), changed); err != nil {
 			return err
 		}
-		_, err := tx.Exec(ctx, "UPDATE workspace_owners SET revision=revision+1 WHERE owner_id=$1", string(owner))
-		return err
+		return nil
 	}
 	return nil
 }

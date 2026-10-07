@@ -208,9 +208,8 @@ func undoComparisonActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, 
 		if tag.RowsAffected() != 1 {
 			return true, workspace.ErrChangedSince
 		}
-		if err := markMergedEntityClaimsTx(ctx, tx, scope.OwnerID, snapshot); err != nil {
-			return true, err
-		}
+		// Canonical membership fingerprints determine affected comparison batches;
+		// unrelated group completion must survive an identity undo.
 	}
 	_, err = tx.Exec(ctx, "UPDATE action_log SET undone_at=now() WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), id)
 	return true, err

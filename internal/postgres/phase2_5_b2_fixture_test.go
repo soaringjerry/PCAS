@@ -233,6 +233,9 @@ func (f *phase25B234Fixture) claimWith(t *testing.T, text, acquisition, confirma
 // Organizing acceptance must call the real background entrypoint instead.
 func (f *phase25B234Fixture) labels(t *testing.T, ref memory.Ref, category string, durable bool, organized int, groups ...workspace.MemoryGroup) {
 	t.Helper()
+	if organized == 1 {
+		organized = postgres.OrganizeVersion
+	}
 	f.exec(t, `UPDATE claim_revisions SET category=$4,durable=$5 WHERE owner_id=$1 AND claim_id=$2 AND version=$3`, f.scope.OwnerID, ref.ID, ref.Version, category, durable)
 	f.exec(t, `UPDATE claims SET organized=$3 WHERE owner_id=$1 AND id=$2`, f.scope.OwnerID, ref.ID, organized)
 	for _, group := range groups {

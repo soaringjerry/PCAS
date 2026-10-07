@@ -42,7 +42,7 @@ func phase25B12ConcurrentScheduler(t *testing.T, kind string) {
 	} else {
 		column, stagePattern, version = "compared", "memory.compare:%", postgres.CompareVersion
 		f.sharedSubject = true
-		for i := 0; i < 24; i++ {
+		for i := 0; i < 12; i++ {
 			g := workspace.MemoryGroup{EntityID: string(f.entity(t, "topic", fmt.Sprintf("虚构并发比较主题%02d", i))), Type: "topic"}
 			f.subject = f.entity(t, "person", fmt.Sprintf("FictitiousConcurrentSpeaker%02d", i))
 			for j := 0; j < 3; j++ {
@@ -66,6 +66,13 @@ func phase25B12ConcurrentScheduler(t *testing.T, kind string) {
 			entityPattern = "memory.entity_compare:%"
 		}
 		err := f.db.QueryRow(ctx, `SELECT count(*) FROM memory_jobs WHERE owner_id=$1 AND (stage LIKE $2 OR stage LIKE $3) AND state<>'done'`, f.scope.OwnerID, stagePattern, entityPattern).Scan(&pending)
+		if err == nil && kind == "compare" {
+			// Participation flags can complete before every person's and topic's
+			// batch. An empty queue between scheduling rounds is not full coverage.
+			var covered int
+			err = f.db.QueryRow(ctx, "SELECT count(*) FROM memory_comparison_batches WHERE owner_id=$1 AND completed_at IS NOT NULL", f.scope.OwnerID).Scan(&covered)
+			pending += max(0, 24-covered)
+		}
 		return marked, pending, err
 	}
 	agent := f.answerAgent(t)
@@ -247,7 +254,7 @@ func phase25B12ConcurrentScheduler(t *testing.T, kind string) {
 			if err != nil && runCtx.Err() == nil {
 				problem("worker "+job.Stage, err)
 				var deferred *worker.JobError
-				if errors.As(err, &deferred) && deferred.Retry && !deferred.Until.IsZero() {
+				if errors.As(err, &deferred) && !deferred.Until.IsZero() {
 					if err := f.store.Defer(runCtx, *job, deferred.Code, deferred.Until, deferred.NoAttempt); err != nil {
 						problem("defer", err)
 					}

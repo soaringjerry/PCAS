@@ -10,8 +10,8 @@ import (
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
-func TestPhase25B1_R12_OneHundredTwentyBatchesPerHour(t *testing.T) {
-	const hourlyLimit = 120
+func TestPhase25B1_R12_FortyClassificationBatchesPerHour(t *testing.T) {
+	const hourlyLimit = 40
 	f := phase25B1NewFixtureTimeout(t, 5*time.Minute)
 	fake := f.model(t, phase25B1ModelJSON(t, phase25B1Items(40, "event", false)))
 	for i := 0; i < hourlyLimit; i++ {

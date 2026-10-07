@@ -271,7 +271,7 @@ func (s *Store) ProcessEntityCandidates(ctx context.Context, j worker.Job) error
 		if batch == nil {
 			return acknowledge(ctx, tx, j)
 		}
-		return compareHourlyTx(ctx, tx)
+		return backgroundHourlyTx(ctx, tx, EntityCandidatesStage, "entity_candidates_hourly_limit")
 	})
 	if err != nil || batch == nil {
 		return err

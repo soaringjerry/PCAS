@@ -42,7 +42,17 @@ func TestPhase25B2_CompareDoesNotCallModelDuringOrganize(t *testing.T) {
 		case <-r.Context().Done():
 			return phase25B234ModelReply{status: 503}
 		}
-		return phase25B234ModelReply{content: `{"items":[{"n":1,"category":"progress","durable":true}],"new":[]}`}
+		return phase25B234ModelReply{content: `{
+ "items": [
+  {
+   "category": "progress",
+   "deadlines": [],
+   "durable": true,
+   "n": 1
+  }
+ ],
+ "new": []
+}`}
 	})
 	f.exec(t, `DELETE FROM memory_jobs WHERE owner_id=$1`, f.scope.OwnerID)
 	if n, e := f.store.ScheduleOrganize(f.ctx, time.Now().Add(11*time.Minute)); e != nil || n == 0 {

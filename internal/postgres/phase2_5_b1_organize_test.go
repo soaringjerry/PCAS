@@ -1,7 +1,6 @@
 package postgres_test
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -97,7 +96,7 @@ func TestPhase25B1_X04_CreateGroundedTopic(t *testing.T) {
 	}
 }
 
-func TestPhase25B1_X05_RejectUngroundedTopic(t *testing.T) {
+func TestPhase25B1_X05_ModelCanDeclareSemanticTopic(t *testing.T) {
 	f := phase25B1NewFixture(t)
 	ref := f.claim(t, "虚构人物陆青今天买了青色纸张。")
 	f.model(t, phase25B1ModelJSON(t, []phase25B1ModelItem{{Number: 1, Category: "event", Durable: false, Topics: []string{"效率提升"}}}, phase25B1NewGroup{Type: "topic", Name: "效率提升", Description: "虚构说明"}))
@@ -107,37 +106,41 @@ func TestPhase25B1_X05_RejectUngroundedTopic(t *testing.T) {
 	if err := f.db.QueryRow(f.ctx, `SELECT count(*) FROM entity_versions WHERE owner_id=$1 AND name='效率提升'`, f.scope.OwnerID).Scan(&count); err != nil {
 		t.Fatal(err)
 	}
-	if count != 0 {
+	if count != 1 {
 		t.Errorf("ungrounded groups = %d", count)
 	}
 	m, err := f.store.GetMemory(f.ctx, f.scope, string(ref.ID))
 	if err != nil {
 		t.Fatal(err)
 	}
-	phase25B1AssertLabels(t, m, "event", false, nil)
+	if len(m.Groups) != 1 || m.Groups[0].Name != "效率提升" {
+		t.Fatal(m.Groups)
+	}
 }
 
-func TestPhase25B1_X06_RejectUnknownArea(t *testing.T) {
+func TestPhase25B1_X06_ModelCanAddArea(t *testing.T) {
 	f := phase25B1NewFixture(t)
 	ref := f.claim(t, "虚构人物许澄本周读宇宙探索小说。")
-	f.model(t, phase25B1ModelJSON(t, []phase25B1ModelItem{{Number: 1, Category: "taste", Durable: true, Area: "宇宙探索"}}))
+	f.model(t, phase25B1ModelJSON(t, []phase25B1ModelItem{{Number: 1, Category: "taste", Durable: true, Area: "宇宙探索"}}, phase25B1NewGroup{Type: "area", Name: "宇宙探索", Description: "虚构宇宙探索兴趣"}))
 	f.batch(t)
 	f.checkClaim(t, ref, "taste", 1, 0)
 	m, err := f.store.GetMemory(f.ctx, f.scope, string(ref.ID))
 	if err != nil {
 		t.Fatal(err)
 	}
-	phase25B1AssertLabels(t, m, "taste", true, nil)
+	if len(m.Groups) != 1 || m.Groups[0].Name != "宇宙探索" {
+		t.Fatal(m.Groups)
+	}
 	var count int
 	if err := f.db.QueryRow(f.ctx, `SELECT count(*) FROM entity_versions WHERE owner_id=$1 AND entity_type='area' AND name='宇宙探索'`, f.scope.OwnerID).Scan(&count); err != nil {
 		t.Fatal(err)
 	}
-	if count != 0 {
+	if count != 1 {
 		t.Errorf("invalid area entities = %d", count)
 	}
 }
 
-func TestPhase25B1_X07_OnlyFirstThreeNewGroups(t *testing.T) {
+func TestPhase25B1_X07_AllDeclaredGroupsAccepted(t *testing.T) {
 	f := phase25B1NewFixture(t)
 	names := []string{"雪峰观察", "海湾漫步", "庭院种植", "纸船竞速", "灯塔绘制"}
 	items := phase25B1Items(5, "event", false)
@@ -162,12 +165,8 @@ func TestPhase25B1_X07_OnlyFirstThreeNewGroups(t *testing.T) {
 		if err := f.db.QueryRow(f.ctx, `SELECT count(*) FROM entity_versions WHERE owner_id=$1 AND entity_type='topic' AND name=$2`, f.scope.OwnerID, names[i]).Scan(&entities); err != nil {
 			t.Fatal(err)
 		}
-		if i < 3 {
-			if entities != 1 || len(m.Groups) != 1 || m.Groups[0].Name != names[i] {
-				t.Errorf("first group %d = entities:%d memory:%+v", i, entities, m.Groups)
-			}
-		} else if entities != 0 || len(m.Groups) != 0 {
-			t.Errorf("extra group %d = entities:%d memory:%+v", i, entities, m.Groups)
+		if entities != 1 || len(m.Groups) != 1 || m.Groups[0].Name != names[i] {
+			t.Errorf("declared group %d = entities:%d memory:%+v", i, entities, m.Groups)
 		}
 	}
 }
@@ -230,45 +229,34 @@ func TestPhase25B1_X09_DeletedDuringModelCall(t *testing.T) {
 	}
 }
 
-func TestPhase25B1_X10_ThreeBadJSONAttempts(t *testing.T) {
+func TestPhase25B1_X10_BadJSONKeepsGoodLabelsAndRetries(t *testing.T) {
 	f := phase25B1NewFixture(t)
-	var logs bytes.Buffer
-	oldLogger := slog.Default()
-	slog.SetDefault(slog.New(slog.NewJSONHandler(&logs, nil)))
-	defer slog.SetDefault(oldLogger)
 	topic := workspace.MemoryGroup{EntityID: string(f.entity(t, "topic", "虚构旧分组")), Name: "虚构旧分组", Type: "topic"}
-	refs := []memory.Ref{f.claim(t, "虚构正文标记甲，不应写入耗尽日志。"), f.claim(t, "虚构正文标记乙，不应写入耗尽日志。")}
-	for _, ref := range refs {
-		f.labels(t, ref, "rule", true, 0, topic)
-	}
+	ref := f.claim(t, "虚构正文标记，失败不得丢失")
+	f.labels(t, ref, "rule", true, 0, topic)
 	fake := f.model(t, "deliberately invalid JSON")
-	for attempt := 1; attempt <= 3; attempt++ {
+	var previous time.Duration
+	for attempt := 1; attempt <= 4; attempt++ {
+		f.exec(t, "UPDATE claims SET organize_after=now() WHERE owner_id=$1", f.scope.OwnerID)
 		f.batch(t)
-		for _, ref := range refs {
-			category, organized := "rule", 0
-			if attempt == 3 {
-				category, organized = "unknown", 1
-			}
-			f.checkClaim(t, ref, category, organized, attempt)
+		f.checkClaim(t, ref, "rule", 0, attempt)
+		var after time.Time
+		if err := f.db.QueryRow(f.ctx, "SELECT organize_after FROM claims WHERE owner_id=$1 AND id=$2", f.scope.OwnerID, ref.ID).Scan(&after); err != nil {
+			t.Fatal(err)
 		}
-	}
-	for _, ref := range refs {
+		delay := time.Until(after)
+		if delay <= previous {
+			t.Fatal("backoff must increase", delay, previous)
+		}
+		previous = delay
 		m, err := f.store.GetMemory(f.ctx, f.scope, string(ref.ID))
 		if err != nil {
 			t.Fatal(err)
 		}
-		if len(m.Groups) != 0 {
-			t.Errorf("exhausted groups = %+v", m.Groups)
-		}
+		phase25B1AssertLabels(t, m, "rule", true, []workspace.MemoryGroup{topic})
 	}
-	if f.schedule(t) != 0 || f.claimOrganize(t) != nil || fake.calls() != 3 {
-		t.Errorf("exhausted memory retried, calls=%d", fake.calls())
-	}
-	if !strings.Contains(logs.String(), "attempts_exhausted") || !strings.Contains(logs.String(), "organize") {
-		t.Errorf("missing exhaustion log: %s", logs.String())
-	}
-	if strings.Contains(logs.String(), "虚构正文标记") {
-		t.Error("exhaustion log contains memory body")
+	if fake.calls() != 4 {
+		t.Fatal("invalid result must remain retryable", fake.calls())
 	}
 }
 
@@ -379,6 +367,10 @@ func TestPhase25B1_X12_TransactionRollsBackAndRetries(t *testing.T) {
 	if partial != 3 {
 		t.Errorf("retried mentions = %d", partial)
 	}
+	if fake.calls() != 1 {
+		t.Fatal("write retry repeated a paid call", fake.calls())
+	}
+
 }
 
 func TestPhase25B1_X14_RuleUpgradePreservesLabels(t *testing.T) {
@@ -393,10 +385,10 @@ func TestPhase25B1_X14_RuleUpgradePreservesLabels(t *testing.T) {
 	}
 	f.model(t, phase25B1ModelJSON(t, first))
 	f.batch(t)
-	postgres.OrganizeVersion = 2
+	postgres.OrganizeVersion = oldVersion + 1
 	var state workspace.State
 	f.get(t, "/v1/workspace", &state)
-	if state.Organize != (workspace.Organize{Done: 0, Total: 2, Version: 2}) {
+	if state.Organize != (workspace.Organize{Done: 0, Total: 2, Version: postgres.OrganizeVersion}) {
 		t.Errorf("upgraded progress = %+v", state.Organize)
 	}
 	for _, ref := range refs {
@@ -409,10 +401,10 @@ func TestPhase25B1_X14_RuleUpgradePreservesLabels(t *testing.T) {
 	f.model(t, phase25B1ModelJSON(t, phase25B1Items(2, "goal", false)))
 	f.batch(t)
 	for _, ref := range refs {
-		f.checkClaim(t, ref, "goal", 2, 0)
+		f.checkClaim(t, ref, "goal", postgres.OrganizeVersion, 0)
 	}
 	f.get(t, "/v1/workspace", &state)
-	if state.Organize != (workspace.Organize{Done: 2, Total: 2, Version: 2}) {
+	if state.Organize != (workspace.Organize{Done: 2, Total: 2, Version: postgres.OrganizeVersion}) {
 		t.Errorf("redone progress = %+v", state.Organize)
 	}
 }
@@ -427,7 +419,7 @@ func TestPhase25B1_X16_NoModelThenConfigured(t *testing.T) {
 	}
 	var state workspace.State
 	f.get(t, "/v1/workspace", &state)
-	if state.Organize != (workspace.Organize{Done: 0, Total: 1, Version: 1}) {
+	if state.Organize != (workspace.Organize{Done: 0, Total: 1, Version: postgres.OrganizeVersion}) {
 		t.Errorf("unconfigured progress = %+v", state.Organize)
 	}
 	fake := f.model(t, phase25B1ModelJSON(t, phase25B1Items(1, "identity", true)))
@@ -528,7 +520,7 @@ func (f *phase25B1Fixture) schedule(t *testing.T) int {
 	t.Helper()
 	// Fixture ingestion/Commit also queues unrelated work. This suite exercises
 	// organizing only; remove that auxiliary fixture work, never organize jobs.
-	f.exec(t, `DELETE FROM memory_jobs WHERE owner_id=$1 AND stage NOT LIKE 'memory.organize:%'`, f.scope.OwnerID)
+	f.exec(t, `DELETE FROM memory_jobs WHERE owner_id=$1 AND state='queued' AND stage NOT LIKE 'memory.organize:%'`, f.scope.OwnerID)
 	n, err := f.store.ScheduleOrganize(f.ctx, time.Now())
 	if err != nil {
 		t.Fatal(err)
@@ -550,7 +542,7 @@ func (f *phase25B1Fixture) claimOrganize(t *testing.T) *worker.Job {
 		if err := f.db.QueryRow(f.ctx, `SELECT priority FROM memory_jobs WHERE id=$1`, j.ID).Scan(&priority); err != nil {
 			t.Fatal(err)
 		}
-		if priority != 11 {
+		if priority != 4 {
 			t.Fatalf("organize priority = %d", priority)
 		}
 	}
@@ -571,6 +563,9 @@ func (f *phase25B1Fixture) batch(t *testing.T) {
 
 func (f *phase25B1Fixture) checkClaim(t *testing.T, ref memory.Ref, category string, organized, attempts int) {
 	t.Helper()
+	if organized == 1 {
+		organized = postgres.OrganizeVersion
+	}
 	var gotCategory string
 	var gotOrganized, gotAttempts, version, revisions int
 	if err := f.db.QueryRow(f.ctx, `SELECT cr.category,c.organized,c.organize_attempts,r.version,(SELECT count(*) FROM claim_revisions old WHERE old.owner_id=c.owner_id AND old.claim_id=c.id) FROM claims c JOIN memory_records r ON r.owner_id=c.owner_id AND r.id=c.id JOIN claim_revisions cr ON cr.owner_id=c.owner_id AND cr.claim_id=c.id AND cr.version=r.version WHERE c.owner_id=$1 AND c.id=$2`, f.scope.OwnerID, ref.ID).Scan(&gotCategory, &gotOrganized, &gotAttempts, &version, &revisions); err != nil {

@@ -83,7 +83,6 @@ func (s *Store) CheckReminders(ctx context.Context, now time.Time) error {
 			if err != nil {
 				return err
 			}
-			changed := false
 			loc, err := time.LoadLocation(settings.Timezone)
 			if err != nil {
 				return err
@@ -99,11 +98,10 @@ func (s *Store) CheckReminders(ctx context.Context, now time.Time) error {
 				if err := tx.QueryRow(ctx, "SELECT count(*) FROM capture_candidates WHERE owner_id=$1 AND state='pending'", string(id)).Scan(&pending); err != nil {
 					return err
 				}
-				tag, err := tx.Exec(ctx, "INSERT INTO workspace_reviews(owner_id,due_at,pending_count) VALUES($1,$2,$3) ON CONFLICT DO NOTHING", string(id), due, pending)
+				_, err := tx.Exec(ctx, "INSERT INTO workspace_reviews(owner_id,due_at,pending_count) VALUES($1,$2,$3) ON CONFLICT DO NOTHING", string(id), due, pending)
 				if err != nil {
 					return err
 				}
-				changed = tag.RowsAffected() > 0
 			}
 			for _, item := range items {
 				if item.Kind == "task" && settings.FollowUps {
@@ -118,11 +116,10 @@ func (s *Store) CheckReminders(ctx context.Context, now time.Time) error {
 						if trigger.Guard != "" && trigger.Guard != item.Status {
 							continue
 						}
-						tag, err := tx.Exec(ctx, "INSERT INTO workspace_notices(owner_id,thing_id,trigger_id,due_at,reason) VALUES($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING", string(id), item.ID, trigger.ID, at, trigger.Description)
+						_, err = tx.Exec(ctx, "INSERT INTO workspace_notices(owner_id,thing_id,trigger_id,due_at,reason) VALUES($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING", string(id), item.ID, trigger.ID, at, trigger.Description)
 						if err != nil {
 							return err
 						}
-						changed = changed || tag.RowsAffected() > 0
 					}
 				}
 				if item.Kind != "idea" || !settings.WakeIdeas || !item.RemindersOn || item.Status != "shelved" {
@@ -158,12 +155,8 @@ func (s *Store) CheckReminders(ctx context.Context, now time.Time) error {
 					if err := saveItem(ctx, tx, scope, item); err != nil {
 						return err
 					}
-					changed = true
 					break
 				}
-			}
-			if changed {
-				_, err = tx.Exec(ctx, "UPDATE workspace_owners SET revision=revision+1 WHERE owner_id=$1", string(id))
 			}
 			return err
 		}); err != nil {

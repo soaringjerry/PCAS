@@ -35,6 +35,16 @@ func (s *Store) reserveModelCostID(ctx context.Context, owner memory.ID, cost fl
 		if _, err := tx.Exec(ctx, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(owner)); err != nil {
 			return err
 		}
+		stage := ""
+		if j != nil {
+			stage = backgroundStage(j.Stage)
+			if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended(current_database()||':'||current_schema()||':budget:'||$1,0))", stage); err != nil {
+				return err
+			}
+			if err := backgroundHourlyTx(ctx, tx, stage, stage+"_hourly_limit"); err != nil {
+				return err
+			}
+		}
 		var jobID any
 		if j != nil {
 			jobID = string(j.ID)
@@ -45,7 +55,7 @@ func (s *Store) reserveModelCostID(ctx context.Context, owner memory.ID, cost fl
 			if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM background_usage WHERE job_id=$1)", string(j.ID)).Scan(&exists); err != nil {
 				return err
 			}
-			if exists && j.Attempts != 1 && cost > 0 {
+			if exists && j.Attempts != 1 && cost > 0 && backgroundHourlyBudgets[backgroundStage(j.Stage)] == 0 {
 				return &worker.JobError{Code: "model_call_failed"}
 			}
 		}
@@ -73,7 +83,16 @@ func (s *Store) reserveModelCostID(ctx context.Context, owner memory.ID, cost fl
 			}
 			return &worker.JobError{Code: "budget_deferred", Until: nextBudgetDay(now, loc).Add(time.Duration(jitter.Int64())), NoAttempt: true}
 		}
-		return tx.QueryRow(ctx, "INSERT INTO background_usage(owner_id,job_id,reserved_cost) VALUES($1,$2,$3) RETURNING id::text", string(owner), jobID, cost).Scan(&id)
+		// Migration verification can still exercise foreground use on the old
+		// schema. Resolve the actual relation instead of a same-named public table.
+		var staged bool
+		if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM pg_attribute WHERE attrelid='background_usage'::regclass AND attname='stage' AND NOT attisdropped)").Scan(&staged); err != nil {
+			return err
+		}
+		if !staged {
+			return tx.QueryRow(ctx, "INSERT INTO background_usage(owner_id,job_id,reserved_cost) VALUES($1,$2,$3) RETURNING id::text", string(owner), jobID, cost).Scan(&id)
+		}
+		return tx.QueryRow(ctx, "INSERT INTO background_usage(owner_id,job_id,reserved_cost,stage) VALUES($1,$2,$3,$4) RETURNING id::text", string(owner), jobID, cost, stage).Scan(&id)
 	})
 	return id, err
 }

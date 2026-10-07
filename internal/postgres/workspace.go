@@ -219,6 +219,10 @@ func (s *Store) snapshotTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) (
 		}
 		switch item.Kind {
 		case "task":
+			item.StartDate, err = taskStartDate(item.Due, item.EstimatedHours, deskLocation(out.Settings))
+			if err != nil {
+				return out, err
+			}
 			out.Tasks = append(out.Tasks, item)
 		case "idea":
 			out.Ideas = append(out.Ideas, item)
@@ -536,6 +540,9 @@ func getItem(ctx context.Context, tx pgx.Tx, scope memory.Scope, id string) (wor
 	return queryDocument[workspace.Item](ctx, tx, "SELECT document FROM work_items WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), id)
 }
 func saveItem(ctx context.Context, tx pgx.Tx, scope memory.Scope, item workspace.Item) error {
+	if err := maintainTaskPlanTx(ctx, tx, scope, &item); err != nil {
+		return err
+	}
 	if err := syncArtifactEditsTx(ctx, tx, scope, item); err != nil {
 		return err
 	}

@@ -87,6 +87,20 @@ func (s *Server) studioRoutes(mux *http.ServeMux) {
 				writeJSON(w, 200, out)
 				return
 			}
+			if r.Method == "GET" && strings.HasSuffix(r.URL.Path, "/timeline") {
+				reader, ok := s.options.Workspace.(workspace.StudioAPI)
+				if !ok {
+					s.fail(w, memory.ErrUnavailable)
+					return
+				}
+				out, err := reader.ReadProjectTimeline(r.Context(), scope, r.PathValue("id"))
+				if err != nil {
+					s.fail(w, err)
+					return
+				}
+				writeJSON(w, 200, out)
+				return
+			}
 			if strings.HasSuffix(r.URL.Path, "/files") || r.PathValue("sourceId") != "" {
 				reader, ok := s.options.Workspace.(workspace.StudioAPI)
 				if !ok {

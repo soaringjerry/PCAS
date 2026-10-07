@@ -34,12 +34,13 @@ memoryPlan 在同一次回答中判断：depth 为 light/medium/heavy，用户�
 missingKeyInfo：缺少会影响结果的关键信息时填 true，否则 false。信任标签 trust 为 stated/repeated/tentative/reported/inferred，带保留和转述必须保留限定。
 actions 每轮最多 10 条，格式：
 {"op":"create_task","title":"…","due":"YYYY-MM-DDTHH:MM 或 YYYY-MM-DD 或 null","remind":"-30m|-2h|at|HH:MM|none 或 null","project":"P1|N1|new:名称 或 null","notes":null,"owedTo":null,"waitingFor":null,"urgent":"true 或 null"}
-{"op":"update","ref":"T3|I2|P1|R1|THIS|N1","set":{"title":"…","due":"本地时间或空字符串去掉","remind":"…","project":"P1|N1|none","status":"todo|doing|waiting|done|cancelled","notesAppend":"…","urgent":"true|false 或 null"}}
+{"op":"update","ref":"T3|I2|P1|R1|THIS|N1","set":{"title":"…","due":"本地时间或空字符串去掉","remind":"…","project":"P1|N1|none","status":"todo|doing|waiting|done|cancelled","notesAppend":"…","urgent":"true|false 或 null","estimatedHours":"工作小时数或 null"}}
 {"op":"create_idea","title":"…","condition":"…或 null","conditionDue":"…或 null","project":"P1|N1 或 null"}
 {"op":"create_project","name":"…"}
 {"op":"add_steps","ref":"T3|THIS|R1|N1","steps":["…"]}
 {"op":"delegate","ref":"T3|THIS|R1|N1|new","title":"ref 为 new 必填","kind":"plan|draft|breakdown|summary|ask|revise","prompt":"…","documentId":"revise 填 D1 等文档别名，其余填 null","baseVersion":"revise 填正整数，其余填 null"}
 revise 是在某份文档指定基准版上改一部分：从文档目录按用户的意思定 documentId=D* 和 baseVersion，输出完整新正文由副手执行。ref 用该文档的 D*，由服务端定所属事项。用户明确说第二版就填 2；没有指定版本、明确要改当前版时填目录当前版。文档或版本真正有歧义，只追问那个字段，不猜、不发起这个动作。
+事项工作量使用update.set.estimatedHours。用户说“这个要两天”按每天可投入4小时填8；明确说小时用原小时数，未提工作量则null、不修改。不替用户随意估值，后台另有估计阶段。开工日由程序从截止倒推、不由你写。用户说“不用提醒”用update.set.remind="none"，取消提醒。
 ask 为 null 或 {"question":"…","options":["…"]}。`
 
 var deskUUID = regexp.MustCompile(`(?i)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}`)
@@ -247,7 +248,7 @@ func (s *Store) secretaryPrompt(ctx context.Context, tx pgx.Tx, scope memory.Sco
 	}
 	fmt.Fprintln(&prompt, "\n未完成任务：")
 	for i, t := range c.Tasks {
-		fmt.Fprintf(&prompt, "T%d：%s（%s；截止 %s；项目 %s）\n", i+1, t.Title, t.Status, t.Due, projectNames[t.ProjectID])
+		fmt.Fprintf(&prompt, "T%d：%s（%s；截止 %s；项目 %s；估计工作量 %s小时；开工日 %s）\n", i+1, t.Title, t.Status, t.Due, projectNames[t.ProjectID], string(asJSON(t.EstimatedHours)), pointerValue(t.StartDate))
 	}
 	fmt.Fprintln(&prompt, "\n想法：")
 	for i, t := range c.Ideas {

@@ -122,6 +122,11 @@ func (s *Store) ScheduleStatus(ctx context.Context, now time.Time) (int, error) 
 			count += n
 			n, err = enqueueProjectHandoversTx(ctx, tx, owner, anchor, now)
 			count += n
+			if err != nil {
+				return err
+			}
+			n, err = enqueueEffortTx(ctx, tx, owner, anchor, now)
+			count += n
 			return err
 		})
 		if err != nil {

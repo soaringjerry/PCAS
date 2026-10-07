@@ -280,7 +280,16 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 			return err
 		}
 		_, err = tx.Exec(ctx, "UPDATE workspace_owners SET settings=$2 WHERE owner_id=$1", string(scope.OwnerID), asJSON(settings))
-		return err
+		if err != nil {
+			return err
+		}
+		if _, zone := fields["timezone"]; zone {
+			return refreshTaskPlansTx(ctx, tx, scope)
+		}
+		if _, clock := fields["dailyReviewAt"]; clock {
+			return refreshTaskPlansTx(ctx, tx, scope)
+		}
+		return nil
 	case "updateAgent":
 		a, err := queryDocument[workspace.Agent](ctx, tx, "SELECT document FROM workspace_agents WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), c.ID)
 		if err != nil {
@@ -372,11 +381,15 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 	summary := c.Summary
 	switch c.Type {
 	case "updateTask":
-		if err := patchAllowed(&item, c.Patch, "title", "notes", "status", "projectId", "due", "scheduled", "waitingFor", "owedTo", "urgent", "dependsOn"); err != nil {
+		if err := patchAllowed(&item, c.Patch, "title", "notes", "status", "projectId", "due", "scheduled", "waitingFor", "owedTo", "urgent", "dependsOn", "estimatedHours"); err != nil {
 			return err
 		}
 		var fields map[string]json.RawMessage
 		if json.Unmarshal(c.Patch, &fields) == nil {
+			if _, changed := fields["estimatedHours"]; changed {
+				item.EffortSource = "user"
+				item.EffortReason = "用户设定"
+			}
 			if _, changed := fields["due"]; changed {
 				settings, err := queryDocument[workspace.Settings](ctx, tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1", string(scope.OwnerID))
 				if err != nil {

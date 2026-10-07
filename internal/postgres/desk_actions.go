@@ -343,6 +343,9 @@ func (s *Store) executeSecretaryActionTx(ctx context.Context, tx pgx.Tx, scope m
 				return receipt, err
 			}
 			applyDueReminder(&item, reminderValue(a.Remind, dateOnly), loc)
+			if a.Remind != nil {
+				item.RemindersOn = *a.Remind != "none"
+			}
 			if err = saveItem(ctx, tx, scope, item); err != nil {
 				return receipt, err
 			}
@@ -398,6 +401,16 @@ func (s *Store) executeSecretaryActionTx(ctx context.Context, tx pgx.Tx, scope m
 			if string(raw) != "null" && json.Unmarshal(raw, &urgent) == nil && urgent != item.Urgent {
 				patch["urgent"] = urgent
 			}
+		}
+		if raw, ok := a.Set["estimatedHours"]; ok && string(raw) != "null" && item.Kind == "task" {
+			var h float64
+			if json.Unmarshal(raw, &h) != nil {
+				return skippedReceipt(a.Op, "工作量不是有效小时数"), nil
+			}
+			if _, err = taskStartDate(item.Due, &h, loc); err != nil {
+				return skippedReceipt(a.Op, "工作量须为非负小时数，并能计算有效开工日"), nil
+			}
+			patch["estimatedHours"] = h
 		}
 		if len(patch) > 0 {
 			if err = call(workspace.Command{Type: "updateTask", ID: id, Patch: asJSON(patch)}); err != nil {
@@ -463,6 +476,9 @@ func (s *Store) executeSecretaryActionTx(ctx context.Context, tx pgx.Tx, scope m
 				}
 			}
 			applyDueReminder(&item, remind, loc)
+			if hasRemind {
+				item.RemindersOn = remind != "none"
+			}
 			if _, recorded := history.summaries[id]; !recorded {
 				item.Version++
 				item.UpdatedAt = stamp()

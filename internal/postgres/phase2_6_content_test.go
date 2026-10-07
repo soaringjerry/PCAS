@@ -219,7 +219,7 @@ func TestPhase26G6B3B7B8LibraryAndC1C2Content(t *testing.T) {
 func TestPhase26G4A6A10ComparisonCoverageAndUnchangedScheduling(t *testing.T) {
 	f := phase26LoadFixture(t)
 	phase26NewModel(t, f)
-	phase26Exec(t, f, `UPDATE claims SET organized=2 WHERE owner_id=$1`, f.Scope.OwnerID)
+	phase26Exec(t, f, `UPDATE claims SET organized=$2 WHERE owner_id=$1`, f.Scope.OwnerID, OrganizeVersion)
 	s, ctx := f.Store, f.Context
 	var first, second []comparisonBatch
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {

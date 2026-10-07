@@ -62,7 +62,13 @@ func TestOrganizeCompareIndependentHourlyCalls(t *testing.T) {
 			case CompareStage:
 				compareFixture(t, s, scope, "虚构新的比较便签")
 			case EntityCompareStage:
-				_, a := compareEntityFixture(t, s, scope, "虚构额度同名", "虚构人物丙")
+				entity, a := compareEntityFixture(t, s, scope, "虚构额度同名", "虚构人物丙")
+				var existing memory.Ref
+				existing.Kind = memory.EntityKind
+				if err := s.pool.QueryRow(ctx, "SELECT id::text,version FROM memory_records WHERE owner_id=$1 AND kind='entity' AND id<>$2 AND state='active' AND EXISTS(SELECT 1 FROM entity_versions v WHERE(v.owner_id,v.entity_id,v.version)=(memory_records.owner_id,memory_records.id,memory_records.version) AND v.entity_type='person') ORDER BY id LIMIT 1", scope.OwnerID, entity.ID).Scan(&existing.ID, &existing.Version); err != nil {
+					t.Fatal(err)
+				}
+				aliasProposalFixture(t, s, scope, existing, entity, EntityCompareVersion)
 				compareEntityGroup(t, s, scope, "project", "虚构额度项目", a)
 			}
 			job = leaseStage(t, s, scope, job.Record, fmt.Sprintf("%s:1:%s", kind, memory.NewID()))

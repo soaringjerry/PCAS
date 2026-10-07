@@ -97,6 +97,27 @@ func TestR1R2CompletionRechecksDependencyAccess(t *testing.T) {
 			if len(st.Docs) != 0 {
 				t.Error("changed result automatically adopted")
 			}
+			// C5 permits the optional check after unrelated correction. Its
+			// model deadline can expire before A9's cancellation-independent
+			// accounting finishes; wait for that bounded settlement, not a
+			// fixed sleep or a weaker cost comparison.
+			if change == "correct" || change == "source-correct" {
+				deadline := time.Now().Add(21 * time.Second)
+				for {
+					var ledger float64
+					if err := s.pool.QueryRow(context.Background(), `SELECT coalesce(sum(cost),0) FROM model_usage WHERE owner_id=$1`, scope.OwnerID).Scan(&ledger); err != nil {
+						t.Fatal(err)
+					}
+					st, err = s.Snapshot(context.Background(), scope)
+					if err != nil {
+						t.Fatal(err)
+					}
+					if math.Abs(st.BudgetUsage-ledger) <= 1e-9 || time.Now().After(deadline) {
+						break
+					}
+					time.Sleep(10 * time.Millisecond)
+				}
+			}
 			rows := b4Usage(t, s, scope)
 			wantMax := 1
 			if change == "correct" || change == "source-correct" {
@@ -208,12 +229,18 @@ func TestR1R6SecretarySettlesOnlyItsReservation(t *testing.T) {
 				t.Fatal(err)
 			}
 			want := 0.03
-			if mode == "success" || mode == "invalid" {
+			{
 				rows := b4Usage(t, s, scope)
 				if len(rows) != 1 {
 					t.Fatal(rows)
 				}
 				want += rows[0].Cost
+				if rows[0].InputTokens <= 0 || rows[0].Cost <= 0 {
+					t.Fatal("submitted secretary call lacks accounted input usage", rows)
+				}
+				if mode == "failure" || mode == "cancel" {
+					r1RequireEstimatedInput(t, s, scope)
+				}
 			}
 			if math.Abs(reserved-want) > 1e-9 {
 				t.Errorf("budget reserved=%g want actual=%g", reserved, want)
@@ -231,7 +258,7 @@ func TestR1R6SecretarySettlesOnlyItsReservation(t *testing.T) {
 	}
 }
 
-func TestR1R6DeputyAndExtractionReleaseFailedReservations(t *testing.T) {
+func TestR1R6DeputyAndExtractionSettleFailedReservations(t *testing.T) {
 	for _, kind := range []string{"deputy", "extraction", "invalid-extraction", "cancel-deputy", "cancel-extraction"} {
 		t.Run(kind, func(t *testing.T) {
 			s, scope := testStore(t), owner()
@@ -284,17 +311,31 @@ func TestR1R6DeputyAndExtractionReleaseFailedReservations(t *testing.T) {
 				t.Fatal(err)
 			}
 			want := 0.0
-			if kind == "invalid-extraction" {
+			{
 				rows := b4Usage(t, s, scope)
 				if len(rows) != 1 {
 					t.Fatal(rows)
 				}
 				want = rows[0].Cost
+				if rows[0].InputTokens <= 0 || want <= 0 {
+					t.Fatal("submitted call lacks accounted input usage", rows)
+				}
+				if kind != "invalid-extraction" {
+					r1RequireEstimatedInput(t, s, scope)
+				}
 			}
 			if math.Abs(reserved-want) > 1e-9 {
 				t.Errorf("finished %s reserved=%g want=%g", kind, reserved, want)
 			}
 		})
+	}
+}
+
+func r1RequireEstimatedInput(t *testing.T, s *Store, scope memory.Scope) {
+	t.Helper()
+	var estimated bool
+	if err := s.pool.QueryRow(context.Background(), `SELECT input_estimated FROM model_usage WHERE owner_id=$1`, scope.OwnerID).Scan(&estimated); err != nil || !estimated {
+		t.Fatal("missing estimated input accounting for a submitted failed call", estimated, err)
 	}
 }
 

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -169,9 +170,9 @@ func TestSecretaryModelRetryOutcomeAndIdempotency(t *testing.T) {
 			if len(calls) == 2 && !bytes.Equal(calls[0], calls[1]) {
 				t.Fatal("retry changed instructions, context or schema")
 			}
-			connector, tasks, actions, usage := "capture", 0, 0, 0
+			connector, tasks, actions, usage := "capture", 0, 0, tt.calls
 			if tt.success {
-				connector, tasks, actions, usage = "desk", 1, 1, 1
+				connector, tasks, actions = "desk", 1, 1
 				if out.Turn.Reply != "安排好了。" || len(out.Turn.Receipts) != 1 || out.Turn.Receipts[0].Op != "create_task" || strings.Contains(logs.String(), "secretary capture fallback") {
 					t.Fatal("intermediate failure reached the user", out.Turn)
 				}
@@ -197,8 +198,12 @@ func TestSecretaryModelRetryOutcomeAndIdempotency(t *testing.T) {
 					}
 				}
 				var cost float64
-				if err := s.pool.QueryRow(context.Background(), "SELECT sum(reserved_cost) FROM background_usage WHERE owner_id=$1", string(scope.OwnerID)).Scan(&cost); err != nil || cost != 0 {
-					t.Fatal("failed subscription attempts left reserved spending", cost, err)
+				var measured float64
+				if err := s.pool.QueryRow(context.Background(), "SELECT sum(reserved_cost) FROM background_usage WHERE owner_id=$1", string(scope.OwnerID)).Scan(&cost); err != nil || cost <= 0 {
+					t.Fatal("subscription calls bypassed daily accounting", cost, err)
+				}
+				if err := s.pool.QueryRow(context.Background(), "SELECT sum(cost) FROM model_usage WHERE owner_id=$1", string(scope.OwnerID)).Scan(&measured); err != nil || math.Abs(cost-measured) > 1e-9 {
+					t.Fatal("usage and reservation settlement differ", cost, measured, err)
 				}
 			}
 			assertRows()

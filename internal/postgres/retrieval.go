@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/soaringjerry/PCAS/internal/ai"
 	"github.com/soaringjerry/PCAS/internal/memory"
 )
 
@@ -102,11 +103,13 @@ func (s *Store) Recall(ctx context.Context, scope memory.Scope, in memory.Recall
 			reservationID, e = s.reserveModelCostID(ctx, scope.OwnerID, reserved, nil)
 		}
 		if e == nil {
-			embeddings, e = s.models.EmbedProvider(ctx, provider, []string{provider.EmbeddingQueryPrefix + query})
-			// The embedding adapter exposes no token usage; keep its existing
-			// estimate for a returned vector, release it when nothing returned.
-			if e != nil {
-				reserved = 0
+			var usage ai.Result
+			embeddings, usage, e = s.models.EmbedProviderUsage(ctx, provider, []string{provider.EmbeddingQueryPrefix + query})
+			reserved = usage.Cost
+			if usage.InputTokens > 0 {
+				if err := s.recordUsage(ctx, modelUsage{OwnerID: scope.OwnerID, ID: memory.ID(reservationID), Purpose: "query_embedding", AgentID: provider.ID, Model: provider.Model, InputTokens: usage.InputTokens, InputEstimated: usage.InputEstimated, Cost: usage.Cost, CostEstimated: usage.CostEstimated}); err != nil {
+					return out, err
+				}
 			}
 			if err := s.settleModelCost(ctx, scope.OwnerID, reservationID, reserved); err != nil {
 				return out, err

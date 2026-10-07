@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strconv"
@@ -74,6 +75,17 @@ func enqueueCompareTx(ctx context.Context, tx pgx.Tx, owner memory.ID, now time.
 	var pending bool
 	if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM memory_jobs WHERE owner_id=$1 AND stage LIKE $2 AND state IN ('queued','leased'))", string(owner), stage+":%").Scan(&pending); err != nil || pending {
 		return false, err
+	}
+
+	if entity {
+		var left, right string
+		err := tx.QueryRow(ctx, aliasPendingSQL, string(owner), version, []string(nil)).Scan(&left, &right)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return false, nil
+		}
+		if err != nil {
+			return false, err
+		}
 	}
 
 	var anchor memory.Ref
@@ -262,22 +274,19 @@ func (s *Store) processCompareVersion(ctx context.Context, j worker.Job, version
 		return err
 	}
 	defer release()
-	if s.models == nil {
-		return &worker.JobError{Code: "provider_unavailable", Until: time.Now().Add(CompareInterval), NoAttempt: true}
-	}
-	p, ok := s.models.Get(s.models.ExtractionID())
-	if !ok || p.Embedding || p.Transcription {
-		return &worker.JobError{Code: "provider_unavailable", Until: time.Now().Add(CompareInterval), NoAttempt: true}
-	}
-	if !s.models.Available(p.ID) {
-		return &worker.JobError{Code: "provider_unavailable", Until: time.Now().Add(CompareInterval), NoAttempt: true}
-	}
 	var input *comparisonBatch
 	cached, err := s.paidModelResult(ctx, j)
 	if err != nil {
 		return err
 	}
 	if cached == nil {
+		if s.models == nil {
+			return &worker.JobError{Code: "provider_unavailable", Until: time.Now().Add(CompareInterval), NoAttempt: true}
+		}
+		p, ok := s.models.Get(s.models.ExtractionID())
+		if !ok || p.Embedding || p.Transcription || !s.models.Available(p.ID) {
+			return &worker.JobError{Code: "provider_unavailable", Until: time.Now().Add(CompareInterval), NoAttempt: true}
+		}
 		err = pgx.BeginFunc(ctx, conn, func(tx pgx.Tx) error {
 			if err := lockJob(ctx, tx, j); err != nil {
 				return err
@@ -315,6 +324,9 @@ func (s *Store) processCompareVersion(ctx context.Context, j worker.Job, version
 	}
 	edges, valid := parseCompareOutput(result.Output, len(input.Memories))
 	err = backgroundResultTx(ctx, conn, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended(current_database()||':'||current_schema()||':queue:'||$1||':'||$2,0))", string(j.OwnerID), CompareStage); err != nil {
+			return err
+		}
 		if err := lockJob(ctx, tx, j); err != nil {
 			return err
 		}

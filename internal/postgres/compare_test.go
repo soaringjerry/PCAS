@@ -51,9 +51,34 @@ func compareFixture(t *testing.T, s *Store, scope memory.Scope, texts ...string)
 	}
 	return refs
 }
+func aliasProposalFixture(t *testing.T, s *Store, scope memory.Scope, a, b memory.Ref, rule int) {
+	t.Helper()
+	if _, err := s.pool.Exec(context.Background(), `INSERT INTO entity_alias_candidates(owner_id,left_id,right_id,name_hash,rule,source_marker)
+ VALUES($1,least($2::uuid,$3::uuid),greatest($2::uuid,$3::uuid),entity_name_hash($1,$2,$3),$4,'fictional model proposal') ON CONFLICT DO NOTHING`, scope.OwnerID, a.ID, b.ID, rule); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func compareJob(t *testing.T, s *Store, scope memory.Scope, entity bool, version int) worker.Job {
 	t.Helper()
 	ctx := context.Background()
+	if entity {
+		// Older confirmation-only fixtures supply a modeled candidate explicitly.
+		// End-to-end scan tests retain their actual model-created candidates.
+		for _, candidateRule := range []int{version, EntityCompareVersion} {
+			if _, err := s.pool.Exec(ctx, `INSERT INTO entity_alias_candidates(owner_id,left_id,right_id,name_hash,rule,source_marker)
+ SELECT $1,least(a.id,b.id),greatest(a.id,b.id),entity_name_hash($1,a.id,b.id),$2,'fictional model proposal'
+ FROM memory_records a JOIN entity_versions av ON(av.owner_id,av.entity_id,av.version)=(a.owner_id,a.id,a.version)
+ JOIN memory_records b ON b.owner_id=a.owner_id AND b.id<>a.id
+ JOIN entity_versions bv ON(bv.owner_id,bv.entity_id,bv.version)=(b.owner_id,b.id,b.version)
+ WHERE a.owner_id=$1 AND a.state='active' AND b.state='active'
+ AND ((av.entity_type=bv.entity_type AND av.entity_type IN('person','place','organization','topic','project')) OR (av.entity_type='topic' AND bv.entity_type IN('place','organization')) OR (bv.entity_type='topic' AND av.entity_type IN('place','organization')))
+ AND NOT EXISTS(SELECT 1 FROM entity_alias_candidates WHERE owner_id=$1 AND rule=$2)
+ ORDER BY av.entity_type,av.name,bv.name LIMIT 1 ON CONFLICT DO NOTHING`, scope.OwnerID, candidateRule); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
 	if _, err := s.scheduleCompareVersion(ctx, time.Now(), version); err != nil {
 		t.Fatal(err)
 	}
@@ -341,16 +366,5 @@ func TestCompareWindowAndNoModel(t *testing.T) {
 	}
 	if n, err := s.ScheduleCompare(context.Background(), time.Now()); err != nil || n != 0 {
 		t.Fatal("completed group repeated", n, err)
-	}
-}
-
-func TestComparePotentialEntityNames(t *testing.T) {
-	for _, tc := range []struct {
-		a, b string
-		want bool
-	}{{"小陈", "陈亮", false}, {"陈老师", "陈", true}, {"Alice", "ALICE", true}, {"这位陈老师", "陈", false}, {"那个王先生", "王", false}, {"陈亮", "刘山", false}} {
-		if got := possibleSameEntity(tc.a, tc.b); got != tc.want {
-			t.Errorf("%q %q=%v", tc.a, tc.b, got)
-		}
 	}
 }

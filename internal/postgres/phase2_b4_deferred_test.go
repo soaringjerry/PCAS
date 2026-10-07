@@ -108,13 +108,24 @@ func b4HeldImport(t *testing.T, mode string) b4HeldFixture {
 	return x
 }
 
+func b4HasExtractionUsage(t *testing.T, s *Store, scope memory.Scope) bool {
+	t.Helper()
+	// A9 now bills indexing calls too; these were already executed while held.
+	for _, row := range b4Usage(t, s, scope) {
+		if row.Purpose != "embedding" && row.Purpose != "query_embedding" {
+			return true
+		}
+	}
+	return false
+}
+
 func b4AssertHeldAndIndexed(t *testing.T, x b4HeldFixture) {
 	t.Helper()
 	item := b4OrganizingHeld(t, x.s, x.scope, x.id, true)
 	if item.Stored != len(x.conversations) || item.Total != item.Stored || item.Organized != 0 {
 		t.Errorf("held originals not completely stored without organizing: %+v", item)
 	}
-	if len(x.f.all()) != 0 || len(b4Usage(t, x.s, x.scope)) != 0 {
+	if len(x.f.all()) != 0 || b4HasExtractionUsage(t, x.s, x.scope) {
 		t.Error("held import called extraction model or recorded model usage")
 	}
 	b4MessagesExactlyOnce(t, x.s, x.scope, x.conversations)
@@ -174,7 +185,7 @@ func TestPhase2B4_I16_HeldOriginalReachesSecretaryInAnotherConversation(t *testi
 		t.Error("secretary recall released held extraction")
 	}
 	for _, row := range b4Usage(t, x.s, x.scope) {
-		if row.Purpose != "secretary" {
+		if row.Purpose != "secretary" && row.Purpose != "embedding" && row.Purpose != "query_embedding" {
 			t.Errorf("unexpected held extraction usage: %+v", row)
 		}
 	}

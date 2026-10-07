@@ -140,8 +140,12 @@ func TestOrganizeParserFirstWinsAndGroupsAreIndependent(t *testing.T) {
   }
  ]
 }`, 5)
-	if len(items) != 1 || items[3].Category != "event" || items[3].Durable == nil || *items[3].Durable || len(items[3].Groups) != 3 {
-		t.Fatal("invalid labels/duplicates must fail individually; invalid groups must not discard labels", items)
+	if len(items) != 0 {
+		t.Fatal("malformed output must leave the batch pending, without partial labels", items)
+	}
+	valid, _ := parseOrganizeOutput(`{"items":[{"n":3,"category":"event","durable":false,"topics":["季度汇报","第三个主题"],"area":"虚构新增领域","deadlines":[]}],"new":[]}`, 5)
+	if len(valid) != 1 || valid[3].Category != "event" || valid[3].Durable == nil || *valid[3].Durable || len(valid[3].Groups) != 3 {
+		t.Fatal("valid output lost labels/groups", valid)
 	}
 	for _, invalid := range []string{"not JSON", `{"items":[`, `null`, `{"items":[]}`} {
 		got, _ := parseOrganizeOutput(invalid, 3)

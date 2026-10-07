@@ -102,6 +102,9 @@ func comparisonPlanTx(ctx context.Context, tx pgx.Tx, owner memory.ID, version i
 					}
 					return a.Ref.ID < b.Ref.ID
 				})
+				if len(batch.Memories) < 2 {
+					continue
+				}
 				for i := range batch.Memories {
 					batch.Memories[i].N = i + 1
 					batch.Refs = append(batch.Refs, batch.Memories[i].Ref)
@@ -150,6 +153,46 @@ func nextComparisonBatchTx(ctx context.Context, tx pgx.Tx, owner memory.ID, vers
 	if err != nil {
 		return nil, err
 	}
+	// Completion is scoped to a memory and group. A row completes only when
+	// every current batch containing it has a matching successful receipt.
+	pending := map[string]bool{}
+	for _, b := range plan {
+		r := receipts[key(b.Group.Key, b.A, b.B)]
+		if r.Rule < version || r.Fingerprint != b.Fingerprint || r.Completed == nil {
+			for _, m := range b.Memories {
+				pending[b.Group.Key+"/"+string(m.Ref.ID)] = true
+			}
+		}
+	}
+	rows, err = tx.Query(ctx, `SELECT m.key,m.claim_id::text,m.claim_version FROM status_current_members m
+ JOIN claims cl ON(cl.owner_id,cl.id)=(m.owner_id,m.claim_id) WHERE m.owner_id=$1 AND cl.organized>=$2`, string(owner), OrganizeVersion)
+	if err != nil {
+		return nil, err
+	}
+	groups, ids, versions, complete := []string{}, []string{}, []int{}, []bool{}
+	for rows.Next() {
+		var group, id string
+		var v int
+		if err := rows.Scan(&group, &id, &v); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		groups = append(groups, group)
+		ids = append(ids, id)
+		versions = append(versions, v)
+		complete = append(complete, !pending[group+"/"+id])
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return nil, err
+	}
+	if _, err = tx.Exec(ctx, `INSERT INTO memory_group_progress(owner_id,group_key,claim_id,claim_version,rule,compared_at,completed)
+ SELECT $1,x.g,x.id,x.v,$6,clock_timestamp(),x.done FROM unnest($2::text[],$3::uuid[],$4::int[],$5::boolean[]) x(g,id,v,done)
+ ON CONFLICT(owner_id,group_key,claim_id) DO UPDATE SET claim_version=excluded.claim_version,rule=excluded.rule,completed=excluded.completed,compared_at=excluded.compared_at
+ WHERE (memory_group_progress.claim_version,memory_group_progress.rule,memory_group_progress.completed) IS DISTINCT FROM (excluded.claim_version,excluded.rule,excluded.completed)`, string(owner), groups, ids, versions, complete, version); err != nil {
+		return nil, err
+	}
 	for _, b := range plan {
 		r := receipts[key(b.Group.Key, b.A, b.B)]
 		if r.Rule >= version && r.Fingerprint == b.Fingerprint && (r.Completed != nil || r.After != nil && r.After.After(time.Now())) {
@@ -184,7 +227,7 @@ func writeComparisonReceiptTx(ctx context.Context, tx pgx.Tx, owner memory.ID, v
 	_, err := tx.Exec(ctx, `INSERT INTO memory_group_progress(owner_id,group_key,claim_id,claim_version,rule,compared_at)
  SELECT $1,$2,input.id,input.version,$3,clock_timestamp() FROM jsonb_to_recordset($4::jsonb) input(id uuid,version integer)
  JOIN claims cl ON(cl.owner_id,cl.id)=($1::uuid,input.id)
- ON CONFLICT(owner_id,group_key,claim_id) DO UPDATE SET claim_version=excluded.claim_version,rule=excluded.rule,compared_at=excluded.compared_at
+ ON CONFLICT(owner_id,group_key,claim_id) DO UPDATE SET claim_version=excluded.claim_version,rule=excluded.rule,compared_at=excluded.compared_at,completed=false
  WHERE (memory_group_progress.claim_version,memory_group_progress.rule) IS DISTINCT FROM (excluded.claim_version,excluded.rule)`, string(owner), b.Group.Key, version, asJSON(b.Refs))
 	return err
 }

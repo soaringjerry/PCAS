@@ -47,11 +47,14 @@ type Configuration struct {
 	Transcription string     `json:"transcription_provider"`
 }
 type Result struct {
-	Text         string
-	Searches     []string
-	Cost         float64
-	InputTokens  int
-	OutputTokens int
+	Text            string
+	Searches        []string
+	Cost            float64
+	InputTokens     int
+	OutputTokens    int
+	InputEstimated  bool
+	OutputEstimated bool
+	CostEstimated   bool
 }
 type Registry struct {
 	SettingsPath       string
@@ -196,12 +199,39 @@ func (r *Registry) ExtractionID() string {
 	}
 	return r.Config.Extraction
 }
-func (p Provider) Reserve(input string) float64 {
-	if p.Protocol == "codex" || p.Protocol == "siwc" {
-		return 0
+
+// Subscription channels have no per-request invoice. These conservative internal
+// accounting rates keep the owner's daily cap effective; they are not prices.
+func (p Provider) accountingRates() (float64, float64, bool) {
+	if (p.Protocol == "codex" || p.Protocol == "siwc") && p.InputPerMillion+p.OutputPerMillion == 0 {
+		return 3, 12, true
 	}
-	// UTF-8 byte count is a conservative input token bound, with framing margin.
-	return (float64(len(input)+4096)*p.InputPerMillion + float64(p.MaxOutput)*p.OutputPerMillion) / 1e6
+	if p.CostMode == "free" && p.InputPerMillion+p.OutputPerMillion == 0 {
+		return 0, 0, false
+	}
+	return p.InputPerMillion, p.OutputPerMillion, p.Protocol == "codex" || p.Protocol == "siwc"
+}
+func (p Provider) Reserve(input string) float64 {
+	in, out, _ := p.accountingRates()
+	// UTF-8 bytes bound text tokens conservatively, including request framing.
+	return (float64(len(input)+4096)*in + float64(p.MaxOutput)*out) / 1e6
+}
+func (p Provider) account(result Result, input string, image *Image) Result {
+	if result.InputTokens == 0 {
+		result.InputTokens = len([]rune(input))
+		if image != nil {
+			result.InputTokens += len(image.DataURL())
+		}
+		result.InputEstimated = true
+	}
+	if result.OutputTokens == 0 {
+		result.OutputTokens = len([]rune(result.Text))
+		result.OutputEstimated = true
+	}
+	in, out, estimate := p.accountingRates()
+	result.Cost = (float64(result.InputTokens)*in + float64(result.OutputTokens)*out) / 1e6
+	result.CostEstimated = estimate || in+out > 0 && (result.InputEstimated || result.OutputEstimated)
+	return result
 }
 
 // GenerateWithSearch is Generate with web search where the provider offers it
@@ -220,8 +250,8 @@ func (r *Registry) GenerateWithSearchSchema(ctx context.Context, id, system, pro
 	if r.ReloadSubscription {
 		defer r.Codex.Close()
 	}
-	text, searches, err := r.Codex.GenerateWithSearchSchema(ctx, p.Model, system, prompt, schema)
-	return Result{Text: text, Searches: searches}, err
+	result, err := r.Codex.generateResult(ctx, p.Model, system, prompt, true, schema, nil)
+	return p.account(result, system+prompt, nil), err
 }
 
 // GenerateSchema keeps readers and selfchecks on the supplied context only.
@@ -230,8 +260,8 @@ func (r *Registry) GenerateSchema(ctx context.Context, id, system, prompt string
 	if !ok || p.Protocol != "codex" || !r.providerAvailable(p) {
 		return r.Generate(ctx, id, system, prompt)
 	}
-	text, err := r.Codex.GenerateSchema(ctx, p.Model, system, prompt, schema)
-	return Result{Text: text}, err
+	result, err := r.Codex.generateResult(ctx, p.Model, system, prompt, false, schema, nil)
+	return p.account(result, system+prompt, nil), err
 }
 
 func (r *Registry) Generate(ctx context.Context, id, system, prompt string) (Result, error) {
@@ -250,21 +280,16 @@ func (r *Registry) generate(ctx context.Context, id, system, prompt string, imag
 		} else {
 			result, err = r.ChatGPT.Generate(ctx, p.Model, system, prompt)
 		}
-		return Result{Text: result.Text, InputTokens: result.InputTokens, OutputTokens: result.OutputTokens}, err
+		return p.account(Result{Text: result.Text, InputTokens: result.InputTokens, OutputTokens: result.OutputTokens}, system+prompt, image), err
 	}
 	if p.Protocol == "codex" {
 		if r.ReloadSubscription {
 			defer r.Codex.Close()
 		}
-		var text string
-		var err error
-		if image != nil {
-			text, err = r.Codex.Vision(ctx, p.Model, prompt, *image)
-		} else {
-			text, err = r.Codex.Generate(ctx, p.Model, system, prompt)
-		}
-		return Result{Text: text}, err
+		result, err := r.Codex.generateResult(ctx, p.Model, system, prompt, false, nil, image)
+		return p.account(result, system+prompt, image), err
 	}
+
 	path := "/chat/completions"
 	body := map[string]any{"model": p.Model, "messages": []any{map[string]string{"role": "system", "content": system}, map[string]string{"role": "user", "content": prompt}}, "max_completion_tokens": p.MaxOutput, "stream": false}
 	if p.Protocol == "responses" {
@@ -309,9 +334,9 @@ func (r *Registry) generate(ctx context.Context, id, system, prompt string, imag
 		} `json:"usage"`
 	}
 	if err := r.call(ctx, p, path, body, &result); err != nil {
-		return Result{}, err
+		return p.account(Result{}, system+prompt, image), err
 	}
-	out := Result{InputTokens: result.Usage.Input + result.Usage.Prompt, OutputTokens: result.Usage.Output + result.Usage.Completion}
+	out := Result{InputTokens: max(result.Usage.Input, result.Usage.Prompt), OutputTokens: max(result.Usage.Output, result.Usage.Completion)}
 	if len(result.Choices) > 0 {
 		out.Text = result.Choices[0].Message.Content
 	}
@@ -328,17 +353,9 @@ func (r *Registry) generate(ctx context.Context, id, system, prompt string, imag
 		}
 	}
 	if strings.TrimSpace(out.Text) == "" {
-		return Result{}, fmt.Errorf("provider returned no text")
+		return p.account(out, system+prompt, image), fmt.Errorf("provider returned no text")
 	}
-	out.Cost = (float64(out.InputTokens)*p.InputPerMillion + float64(out.OutputTokens)*p.OutputPerMillion) / 1e6
-	if out.InputTokens+out.OutputTokens == 0 {
-		if image != nil {
-			out.Cost = p.ReserveVision(system+prompt, *image)
-		} else {
-			out.Cost = p.Reserve(system + prompt)
-		}
-	} // unknown billing must not look free
-	return out, nil
+	return p.account(out, system+prompt, image), nil
 }
 func (r *Registry) EmbedQuery(ctx context.Context, query string) ([]memory.Embedding, error) {
 	p, _ := r.Get(r.EmbeddingID())
@@ -354,41 +371,64 @@ func (r *Registry) Embed(ctx context.Context, texts []string) ([]memory.Embeddin
 
 // Pin the provider for an entire indexing job while settings may change.
 func (r *Registry) EmbedProvider(ctx context.Context, p Provider, texts []string) ([]memory.Embedding, error) {
+	vectors, _, err := r.EmbedProviderUsage(ctx, p, texts)
+	return vectors, err
+}
+
+func (r *Registry) EmbedProviderUsage(ctx context.Context, p Provider, texts []string) (vectors []memory.Embedding, usage Result, generationErr error) {
 	if !p.Embedding || !r.providerAvailable(p) {
-		return nil, memory.ErrUnavailable
+		return nil, usage, memory.ErrUnavailable
 	}
 	var result struct {
+		Usage struct {
+			Input  int `json:"input_tokens"`
+			Prompt int `json:"prompt_tokens"`
+			Total  int `json:"total_tokens"`
+		} `json:"usage"`
 		Data []struct {
 			Index  int       `json:"index"`
 			Vector []float32 `json:"embedding"`
 		} `json:"data"`
 	}
-	if err := r.call(ctx, p, "/embeddings", map[string]any{"model": p.Model, "input": texts, "encoding_format": "float"}, &result); err != nil {
-		return nil, err
+	generationErr = r.call(ctx, p, "/embeddings", map[string]any{"model": p.Model, "input": texts, "encoding_format": "float"}, &result)
+	usage.InputTokens = max(result.Usage.Input, result.Usage.Prompt)
+	if usage.InputTokens == 0 {
+		usage.InputTokens = result.Usage.Total
+	}
+	if usage.InputTokens == 0 {
+		for _, text := range texts {
+			usage.InputTokens += len([]rune(text))
+		}
+		usage.InputEstimated = true
+	}
+	usage.Cost = float64(usage.InputTokens) * p.InputPerMillion / 1e6
+	usage.CostEstimated = usage.InputEstimated && p.InputPerMillion > 0
+	if generationErr != nil {
+		return nil, usage, generationErr
 	}
 	if len(result.Data) != len(texts) {
-		return nil, fmt.Errorf("incomplete embeddings")
+		return nil, usage, fmt.Errorf("incomplete embeddings")
 	}
 	out := make([]memory.Embedding, len(texts))
 	seen := map[int]bool{}
 	dim := 0
 	for _, d := range result.Data {
 		if d.Index < 0 || d.Index >= len(texts) || seen[d.Index] || len(d.Vector) == 0 || len(d.Vector) > 16000 {
-			return nil, fmt.Errorf("invalid embeddings")
+			return nil, usage, fmt.Errorf("invalid embeddings")
 		}
 		seen[d.Index] = true
 		if dim != 0 && dim != len(d.Vector) {
-			return nil, fmt.Errorf("inconsistent embedding dimensions")
+			return nil, usage, fmt.Errorf("inconsistent embedding dimensions")
 		}
 		dim = len(d.Vector)
 		for _, v := range d.Vector {
 			if math.IsNaN(float64(v)) || math.IsInf(float64(v), 0) {
-				return nil, fmt.Errorf("non-finite embedding")
+				return nil, usage, fmt.Errorf("non-finite embedding")
 			}
 		}
 		out[d.Index] = memory.Embedding{Model: p.ID + ":" + p.Model, Values: d.Vector}
 	}
-	return out, nil
+	return out, usage, nil
 }
 func (r *Registry) call(ctx context.Context, p Provider, path string, body, out any) error {
 	data, err := json.Marshal(body)

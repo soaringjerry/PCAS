@@ -32,6 +32,9 @@ func TestOrganizeCompareHourlyPipelineRetainsCompletedHistory(t *testing.T) {
 	claim := func(stage string) worker.Job {
 		t.Helper()
 		var err error
+		if stage == EntityCompareStage {
+			return compareJob(t, s, scope, true, EntityCompareVersion)
+		}
 		if stage == OrganizeStage {
 			_, err = s.ScheduleOrganize(ctx, time.Now())
 		} else {
@@ -66,8 +69,9 @@ func TestOrganizeCompareHourlyPipelineRetainsCompletedHistory(t *testing.T) {
 	f.set(`{"same":false,"keep":null}`)
 	for i := range 30 {
 		name := fmt.Sprintf("虚构分期人物%03d", i)
-		compareEntityFixture(t, s, scope, name, "虚构人物在海岚工坊负责文具")
-		compareEntityFixture(t, s, scope, name, "虚构人物在杉木实验室负责器材")
+		a, _ := compareEntityFixture(t, s, scope, name, "虚构人物在海岚工坊负责文具")
+		b, _ := compareEntityFixture(t, s, scope, name, "虚构人物在杉木实验室负责器材")
+		aliasProposalFixture(t, s, scope, a, b, EntityCompareVersion)
 		if err := s.ProcessEntityCompare(ctx, claim(EntityCompareStage)); err != nil {
 			t.Fatal(err)
 		}
@@ -88,8 +92,9 @@ func TestOrganizeCompareHourlyPipelineRetainsCompletedHistory(t *testing.T) {
 		case CompareStage:
 			compareFixture(t, s, scope, "虚构额度已满比较哨兵")
 		case EntityCompareStage:
-			compareEntityFixture(t, s, scope, "虚构额度已满同名", "虚构人物分别负责书籍")
-			compareEntityFixture(t, s, scope, "虚构额度已满同名", "虚构人物分别负责盆栽")
+			a, _ := compareEntityFixture(t, s, scope, "虚构额度已满同名", "虚构人物分别负责书籍")
+			b, _ := compareEntityFixture(t, s, scope, "虚构额度已满同名", "虚构人物分别负责盆栽")
+			aliasProposalFixture(t, s, scope, a, b, EntityCompareVersion)
 		case OrganizeStage:
 			sentinel = organizeTestMemory(t, s, scope, "虚构额度已满整理哨兵")
 		}

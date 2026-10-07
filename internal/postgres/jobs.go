@@ -11,6 +11,15 @@ import (
 	"github.com/soaringjerry/PCAS/internal/worker"
 )
 
+// These stages keep paid snapshots and retry until success or changed inputs.
+func persistentBackgroundStage(stage string) bool {
+	_, ok := backgroundHourlyBudgets[backgroundStage(stage)]
+	return ok
+}
+
+const persistentJobStageSQL = "j.stage ~ '^memory\\.(organize|compare|entity_compare|entity_candidates|handover):'"
+const persistentStageSQL = "stage ~ '^memory\\.(organize|compare|entity_compare|entity_candidates|handover):'"
+
 const maxAttempts = 5
 
 func (s *Store) Claim(ctx context.Context, lease time.Duration) (*worker.Job, error) {
@@ -85,7 +94,7 @@ func (s *Store) Block(ctx context.Context, job worker.Job, code string) error {
 
 func (s *Store) Retry(ctx context.Context, job worker.Job, code string) error {
 	state := "queued"
-	if job.Attempts >= maxAttempts {
+	if job.Attempts >= maxAttempts && !persistentBackgroundStage(job.Stage) {
 		state = "failed"
 	}
 	return s.finishAttempt(ctx, job, state, code, retryDelay(job.Attempts))
@@ -140,7 +149,7 @@ func (s *Store) Defer(ctx context.Context, job worker.Job, code string, until ti
 
 func (s *Store) expireExhaustedJobs(ctx context.Context) error {
 	rows, err := s.pool.Query(ctx, `SELECT id::text,owner_id::text,record_id::text,record_version,stage,lease_token::text FROM memory_jobs
-        WHERE state='leased' AND lease_until<now() AND attempts >= $1`, maxAttempts)
+        WHERE state='leased' AND lease_until<now() AND attempts >= $1 AND NOT (`+persistentStageSQL+`)`, maxAttempts)
 	if err != nil {
 		return err
 	}
@@ -253,7 +262,7 @@ const claimWhole = `WITH ready AS (SELECT id FROM memory_jobs), candidate AS (` 
 const claimCandidate = `SELECT j.id,r.kind,j.priority AS dispatch_priority
         FROM memory_jobs j JOIN memory_records r ON (r.owner_id,r.id)=(j.owner_id,j.record_id)
 		LEFT JOIN source_contexts own ON(own.owner_id,own.source_id,own.source_version)=(j.owner_id,j.record_id,j.record_version)
-		WHERE j.id IN (SELECT id FROM ready) AND ((j.state='queued' AND j.available_at<=now()) OR (j.state='leased' AND j.lease_until<now() AND j.attempts<$3))
+		WHERE j.id IN (SELECT id FROM ready) AND ((j.state='queued' AND j.available_at<=now()) OR (j.state='leased' AND j.lease_until<now() AND (j.attempts<$3 OR ` + persistentJobStageSQL + `)))
         AND NOT EXISTS (SELECT 1 FROM archive_entries ae JOIN import_batches ib ON (ib.owner_id,ib.archive_id)=(ae.owner_id,ae.archive_id)
             WHERE ae.owner_id=j.owner_id AND ae.source_id=j.record_id
               AND (ib.state='paused' OR (ib.hold_organizing AND (j.stage='source.extract' OR j.stage LIKE 'source.extract:%'))))
@@ -286,14 +295,14 @@ const claimFinish = `
  SELECT id::text,owner_id::text,record_id::text,record_version,stage,attempts,lease_token::text,kind FROM claimed`
 
 const claimFairReady = ` UNION (SELECT id FROM memory_jobs WHERE priority=8 AND stage LIKE 'memory.card:%' AND (SELECT prefer_cards FROM background_dispatch)
- AND state IN('queued','leased') AND ((state='queued' AND available_at<=now()) OR (state='leased' AND lease_until<now() AND attempts<$3)) ORDER BY priority,available_at,created_at,id LIMIT 500)
+ AND state IN('queued','leased') AND ((state='queued' AND available_at<=now()) OR (state='leased' AND lease_until<now() AND (attempts<$3 OR ` + persistentStageSQL + `))) ORDER BY priority,available_at,created_at,id LIMIT 500)
  UNION (SELECT id FROM memory_jobs WHERE priority=8 AND (stage LIKE 'memory.compare:%' OR stage LIKE 'memory.entity_compare:%') AND NOT (SELECT prefer_cards FROM background_dispatch)
- AND state IN('queued','leased') AND ((state='queued' AND available_at<=now()) OR (state='leased' AND lease_until<now() AND attempts<$3)) ORDER BY priority,available_at,created_at,id LIMIT 500)`
+ AND state IN('queued','leased') AND ((state='queued' AND available_at<=now()) OR (state='leased' AND lease_until<now() AND (attempts<$3 OR ` + persistentStageSQL + `))) ORDER BY priority,available_at,created_at,id LIMIT 500)`
 
-const claimWindowed = `WITH ready AS MATERIALIZED ((SELECT id FROM memory_jobs WHERE state IN ('queued','leased') AND ((state='queued' AND available_at<=now()) OR (state='leased' AND lease_until<now() AND attempts<$3)) ORDER BY priority,available_at,created_at,id LIMIT 500)` + claimFairReady + `), candidate AS (` + claimCandidate + claimFinish
-const claimNextWindow = `WITH ready AS MATERIALIZED ((SELECT id FROM memory_jobs WHERE state IN ('queued','leased') AND ((state='queued' AND available_at<=now()) OR (state='leased' AND lease_until<now() AND attempts<$3)) AND (priority,available_at,created_at,id)>($4,$5,$6,$7::uuid) ORDER BY priority,available_at,created_at,id LIMIT 500)` + claimFairReady + `), candidate AS (` + claimCandidate + claimFinish
+const claimWindowed = `WITH ready AS MATERIALIZED ((SELECT id FROM memory_jobs WHERE state IN ('queued','leased') AND ((state='queued' AND available_at<=now()) OR (state='leased' AND lease_until<now() AND (attempts<$3 OR ` + persistentStageSQL + `))) ORDER BY priority,available_at,created_at,id LIMIT 500)` + claimFairReady + `), candidate AS (` + claimCandidate + claimFinish
+const claimNextWindow = `WITH ready AS MATERIALIZED ((SELECT id FROM memory_jobs WHERE state IN ('queued','leased') AND ((state='queued' AND available_at<=now()) OR (state='leased' AND lease_until<now() AND (attempts<$3 OR ` + persistentStageSQL + `))) AND (priority,available_at,created_at,id)>($4,$5,$6,$7::uuid) ORDER BY priority,available_at,created_at,id LIMIT 500)` + claimFairReady + `), candidate AS (` + claimCandidate + claimFinish
 
-const claimCursorBase = `SELECT priority,available_at,created_at,id::text FROM memory_jobs WHERE state IN ('queued','leased') AND ((state='queued' AND available_at<=now()) OR (state='leased' AND lease_until<now() AND attempts<$1))`
+const claimCursorBase = `SELECT priority,available_at,created_at,id::text FROM memory_jobs WHERE state IN ('queued','leased') AND ((state='queued' AND available_at<=now()) OR (state='leased' AND lease_until<now() AND (attempts<$1 OR ` + persistentStageSQL + `)))`
 const claimFirstCursor = claimCursorBase + ` ORDER BY priority,available_at,created_at,id OFFSET 499 LIMIT 1`
 const claimNextCursor = claimCursorBase + ` AND (priority,available_at,created_at,id)>($2,$3,$4,$5::uuid) ORDER BY priority,available_at,created_at,id OFFSET 499 LIMIT 1`
 

@@ -7,6 +7,7 @@ import (
 	"embed"
 	"fmt"
 	"sort"
+	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -19,7 +20,8 @@ import (
 var migrations embed.FS
 
 type Store struct {
-	pool *pgxpool.Pool
+	pool        *pgxpool.Pool
+	pendingPaid sync.Map
 	// DeskTurn also borrows a connection for Recall and budget reservation.
 	secretarySlots chan struct{}
 	models         *ai.Registry

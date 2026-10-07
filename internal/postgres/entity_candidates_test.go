@@ -392,8 +392,8 @@ func TestEntityCandidatesModelCallDoesNotHoldOwnerLock(t *testing.T) {
 		t.Fatal("owner row held across list call", lockErr)
 	}
 	var hints int
-	if err := s.pool.QueryRow(ctx, `SELECT count(*) FROM memory_jobs WHERE owner_id=$1 AND stage LIKE 'memory.entity_candidates:%:pair:%'`, scope.OwnerID).Scan(&hints); err != nil || hints != 0 {
-		t.Fatal("changed list wrote hints", hints, err)
+	if err := s.pool.QueryRow(ctx, `SELECT count(*) FROM entity_alias_candidates WHERE owner_id=$1`, scope.OwnerID).Scan(&hints); err != nil || hints != 1 {
+		t.Fatal("name-stable list lost its modeled candidate after memory-count change", hints, err)
 	}
 }
 
@@ -406,7 +406,7 @@ func TestEntityCandidatesRuleUpgradeRechecksEntitiesOnly(t *testing.T) {
 	}
 	compareEntityFixture(t, s, scope, "虚构星岚", "虚构星岚负责同一份器材")
 	compareEntityFixture(t, s, scope, "虚构星岚女士", "虚构星岚女士是器材负责人的完整称呼")
-	j := compareJob(t, s, scope, true, EntityCompareVersion)
+	j := compareJob(t, s, scope, true, 1)
 	if err := s.processEntityCompareVersion(ctx, j, 1); err != nil {
 		t.Fatal(err)
 	}
@@ -464,13 +464,13 @@ func TestEntityCandidatesInitialCatalogueCallEstimate(t *testing.T) {
 	for _, batch := range batches {
 		counts[batch.Scope]++
 	}
-	for scope, want := range map[string]int{"organization": 6, "person": 1, "place": 3, "project": 1, "topic": 3, "place_topic": 8, "organization_topic": 11} {
+	for scope, want := range map[string]int{"organization": 10, "person": 1, "place": 6, "project": 1, "topic": 6, "place_topic": 9, "organization_topic": 12} {
 		if counts[scope] != want {
 			t.Errorf("scope=%s calls=%d want=%d", scope, counts[scope], want)
 		}
 	}
-	if len(batches) != 33 {
-		t.Errorf("initial catalogue calls=%d want=33", len(batches))
+	if len(batches) != 45 {
+		t.Errorf("initial catalogue calls=%d want=45", len(batches))
 	}
 	t.Logf("initial catalogue calls=%d scopes=%v; pair confirmations are additional", len(batches), counts)
 }

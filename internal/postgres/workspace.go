@@ -229,7 +229,7 @@ func (s *Store) snapshotTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) (
 	}
 	where, args := memoryWhere(scope, false, memoryReadOptions{})
 	out.Organize.Version = OrganizeVersion
-	if err := tx.QueryRow(ctx, `SELECT count(*) FILTER (WHERE coalesce((to_jsonb(cl)->>'organized')::int,0) >= $5),count(*)`+memoryJoins+` JOIN claims cl ON(cl.owner_id,cl.id)=(r.owner_id,r.id)`+where,
+	if err := tx.QueryRow(ctx, `SELECT count(*) FILTER (WHERE coalesce((to_jsonb(cl)->>'organized')::int,0) >= `+organizeRequiredSQL("coalesce(to_jsonb(c)->>'category','')", "$5")+`),count(*)`+memoryJoins+` JOIN claims cl ON(cl.owner_id,cl.id)=(r.owner_id,r.id)`+where,
 		append(args, OrganizeVersion)...).Scan(&out.Organize.Done, &out.Organize.Total); err != nil {
 		return out, err
 	}

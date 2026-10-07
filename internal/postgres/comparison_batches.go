@@ -33,7 +33,7 @@ func syncComparisonMembersTx(ctx context.Context, tx pgx.Tx, owner memory.ID) er
  + row_number() OVER(PARTITION BY m.key ORDER BY rv.expressed_at NULLS FIRST,m.claim_id)-1
  FROM status_current_members m JOIN claims cl ON(cl.owner_id,cl.id)=(m.owner_id,m.claim_id)
  JOIN record_versions rv ON(rv.owner_id,rv.record_id,rv.version)=(m.owner_id,m.claim_id,m.claim_version)
- WHERE m.owner_id=$1 AND cl.organized>=$2 AND NOT EXISTS(
+ WHERE m.owner_id=$1 AND cl.organized>=`+organizeRequiredSQL("(SELECT ov.category FROM claim_revisions ov WHERE (ov.owner_id,ov.claim_id,ov.version)=(m.owner_id,m.claim_id,m.claim_version))", "$2")+` AND NOT EXISTS(
  SELECT 1 FROM memory_comparison_members p WHERE (p.owner_id,p.group_key,p.claim_id)=(m.owner_id,m.key,m.claim_id))
  ON CONFLICT(owner_id,group_key,claim_id) DO NOTHING`, string(owner), OrganizeVersion)
 	return err
@@ -47,7 +47,7 @@ func comparisonPlanTx(ctx context.Context, tx pgx.Tx, owner memory.ID, version i
  JOIN claims cl ON(cl.owner_id,cl.id)=(r.owner_id,r.id)
  JOIN claim_revisions c ON(c.owner_id,c.claim_id,c.version)=(m.owner_id,m.claim_id,m.claim_version)
  JOIN record_versions rv ON(rv.owner_id,rv.record_id,rv.version)=(m.owner_id,m.claim_id,m.claim_version)
- WHERE m.owner_id=$1 AND cl.organized>=$2
+ WHERE m.owner_id=$1 AND cl.organized>=`+organizeRequiredSQL("(SELECT ov.category FROM claim_revisions ov WHERE (ov.owner_id,ov.claim_id,ov.version)=(m.owner_id,m.claim_id,m.claim_version))", "$2")+`
  ORDER BY CASE WHEN m.key='self:rule' THEN 0 WHEN m.kind='self' THEN 1 ELSE 2 END,m.key,p.position`, string(owner), OrganizeVersion, comparisonBlockSize, version)
 	if err != nil {
 		return nil, err
@@ -165,7 +165,7 @@ func nextComparisonBatchTx(ctx context.Context, tx pgx.Tx, owner memory.ID, vers
 		}
 	}
 	rows, err = tx.Query(ctx, `SELECT m.key,m.claim_id::text,m.claim_version FROM status_current_members m
- JOIN claims cl ON(cl.owner_id,cl.id)=(m.owner_id,m.claim_id) WHERE m.owner_id=$1 AND cl.organized>=$2`, string(owner), OrganizeVersion)
+ JOIN claims cl ON(cl.owner_id,cl.id)=(m.owner_id,m.claim_id) WHERE m.owner_id=$1 AND cl.organized>=`+organizeRequiredSQL("(SELECT ov.category FROM claim_revisions ov WHERE (ov.owner_id,ov.claim_id,ov.version)=(m.owner_id,m.claim_id,m.claim_version))", "$2")+``, string(owner), OrganizeVersion)
 	if err != nil {
 		return nil, err
 	}

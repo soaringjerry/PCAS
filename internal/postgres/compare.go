@@ -40,11 +40,11 @@ type compareMemory struct {
 // A group's progress is derived from claims, not a separate cursor. A memory
 // can participate through its subject or a mention; self categories are only
 // about the owner, not an arbitrary third person's preference.
-const compareCurrent = ` FROM claims cl
+var compareCurrent = ` FROM claims cl
  JOIN memory_records r ON (r.owner_id,r.id)=(cl.owner_id,cl.id)
  JOIN claim_revisions c ON (c.owner_id,c.claim_id,c.version)=(r.owner_id,r.id,r.version)
  JOIN record_versions rv ON (rv.owner_id,rv.record_id,rv.version)=(r.owner_id,r.id,r.version)
- WHERE r.state='active' AND rv.state='active' AND cl.retired='' AND cl.organized >= $1
+ WHERE r.state='active' AND rv.state='active' AND cl.retired='' AND cl.organized >= ` + organizeRequiredSQL("c.category", "$1") + `
  AND claim_source_is_current(cl.owner_id,cl.id,r.version,now())`
 
 const compareGroupKeys = `SELECT key,kind,name FROM status_current_members

@@ -114,6 +114,9 @@ async function mockBackend(page: Page, start: Partial<Pick<Backend, 'handover' |
     if (backend.handover === 'broken') return route.fulfill({ status: 503, json: { error: 'unavailable' } })
     return route.fulfill({ json: id === 'project' ? backend.handover : unwritten() })
   })
+  // The plan and the files have their own spec; here the project has neither.
+  await page.route((url) => /^\/v1\/workspace\/projects\/[^/]+\/timeline$/.test(url.pathname), (route) => route.fulfill({ json: { projectId: 'project', items: [], withoutDue: [], dailyHours: 4 } }))
+  await page.route((url) => /^\/v1\/workspace\/items\/[^/]+\/files$/.test(url.pathname), (route) => route.fulfill({ json: { items: [] } }))
   await page.route((url) => url.pathname === '/v1/workspace/memories/m-1', (route) => route.fulfill({ json: memory() }))
   await page.route((url) => url.pathname === '/v1/workspace/memories/m-gone', (route) => route.fulfill({ status: 404, json: { error: 'not_found' } }))
   await page.route((url) => url.pathname === '/v1/workspace/documents/doc/versions', (route) => route.fulfill({ json: { items: versions(), currentVersion: 5 } }))
@@ -150,6 +153,8 @@ test('the status block leads the studio: three parts, when it was written, and n
   // It comes before everything the project holds.
   const order = await page.locator('.doc-page > section').evaluateAll((all) => all.map((s) => s.getAttribute('aria-label') ?? s.querySelector('.section-label')?.textContent ?? ''))
   expect(order[0]).toBe('现状')
+  // A project with no dated items draws no plan.
+  await expect(page.getByRole('region', { name: '计划' })).toHaveCount(0)
   // Its text is the model's: no field, no editable box, no pencil.
   await expect(status(page).locator('input, textarea, [contenteditable], [role="textbox"]')).toHaveCount(0)
   await expect(status(page).getByRole('button', { name: /改|编辑|保存/ })).toHaveCount(0)

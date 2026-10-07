@@ -4,14 +4,17 @@ import { Check, ChevronLeft, Copy, Ellipsis, FileText, Lightbulb, Pencil, Plus, 
 import { Popover } from '../components/controls'
 import { DocVersions } from '../components/DocVersions'
 import { ConfirmModal } from '../components/Overlay'
+import { PlanTimeline } from '../components/PlanTimeline'
 import { SaveMark, type SaveState } from '../components/ui'
 import { Markdown } from '../components/Markdown'
 import { Secretary } from '../components/Secretary'
 import { StatusBlock } from '../components/StatusBlock'
+import { StudioFiles } from '../components/StudioFiles'
 import { parseChecklist } from '../domain/agent'
 import { newId } from '../domain/ids'
 import { projectStatusLabel, taskStatusLabel } from '../domain/labels'
 import { ongoingLine, urgentLine, type LineItem } from '../domain/lines'
+import { effortText } from '../domain/studio'
 import { findThing, isOpenTask, thingProjectId, thingTitle, type Thing } from '../domain/things'
 import { clockTime, dayOffset, formatAgo, formatShortWhen } from '../domain/time'
 import type { Doc, Run, Task } from '../domain/types'
@@ -62,6 +65,9 @@ function facts(state: ReturnType<typeof useStore>['state'], thing: Thing): Fact[
     return [
       { text: t.status === 'waiting' && t.waitingFor ? `在等${t.waitingFor}` : taskStatusLabel[t.status].text, say: '把状态改成：' },
       ...(t.due ? [{ text: `${formatShortWhen(t.due, timezone)} 截止`, tone: late ? ('late' as const) : undefined, say: '把截止时间改到：' }] : []),
+      // How much work it is and the day to start by come from the plan; the figure is changed by saying so.
+      ...(t.estimatedHours != null ? [{ text: effortText(t.estimatedHours), say: '这件事的工作量改成：' }] : []),
+      ...(open && t.startDate ? [{ text: `${Number(t.startDate.slice(5, 7))}月${Number(t.startDate.slice(8, 10))}日 开工` }] : []),
       ...inProject,
       ...(remind ? [{ text: `${t.due && dayOffset(remind, timezone) === dayOffset(t.due, timezone) ? clockTime(remind, timezone) : formatShortWhen(remind, timezone)} 提醒`, say: '把提醒改到：' }] : []),
       ...(t.owedTo ? [{ text: `${t.owedTo.who}在等你`, tone: 'owed' as const }] : []),
@@ -1022,9 +1028,11 @@ export function ThingPage() {
     <div className="doc-page" key={thing.id}>
       <Header thing={thing} />
       {thing.kind === 'project' && <StatusBlock projectId={thing.id} />}
+      {thing.kind === 'project' && <PlanTimeline projectId={thing.id} />}
       {thing.kind === 'idea' && <IdeaBanner thing={thing} />}
       {thing.kind === 'task' && <Checklist task={thing.item} />}
       {thing.kind === 'project' && <ProjectItems projectId={thing.id} />}
+      {thing.kind === 'project' && <StudioFiles itemId={thing.id} />}
       <Docs thing={thing} />
       <Activity thing={thing} />
       <Secretary thingId={thing.id} variant="latest" />

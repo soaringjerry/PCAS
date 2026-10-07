@@ -98,7 +98,7 @@ func WriteMarkdown(path string, r Report) error {
 	var b strings.Builder
 	fmt.Fprintf(&b, "# Phase 2.5 doing evaluation\n\nmodel `%s`; channel `%s`; fake=%t; repeats=%d; suite SHA `%s`; revision `%s`.\n\n", r.Model, r.Channel, r.Fake, r.Repeats, r.SuiteSHA, r.Revision)
 	if p := r.Preparation; p != nil {
-		fmt.Fprintf(&b, "Preparation complete=%t; wall ms=%.0f; claims=%d; retired=%d; cards=%d; handover=%t. These costs are outside the rows.\n\n", p.Complete, p.WallMS, p.Claims, p.Retired, p.Cards, p.Handover)
+		fmt.Fprintf(&b, "Preparation complete=%t; wall ms=%.0f; claims=%d; retired=%d; organize_rule=%d; deadlines=%d; requirements=%d; handover=%t. These costs are outside the rows.\n\n", p.Complete, p.WallMS, p.Claims, p.Retired, p.OrganizeRule, p.Deadlines, p.Requirements, p.Handover)
 		fmt.Fprintln(&b, "| Preparation stage | Wall ms | Model calls | Failed calls | Input chars | Jobs done |\n|---|---:|---:|---:|---:|---:|")
 		for _, s := range p.Stages {
 			fmt.Fprintf(&b, "| %s | %.0f | %d | %d | %d | %d |\n", s.Stage, s.WallMS, s.ModelCalls, s.FailedCalls, s.InputChars, s.JobsDone)

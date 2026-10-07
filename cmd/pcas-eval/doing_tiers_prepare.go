@@ -139,26 +139,14 @@ func prepareTierSuite(ctx context.Context, store *postgres.Store, pool *pgxpool.
 			}
 		}
 	}
-	owner := string(scope.OwnerID)
-	var unorganized int
-	if err := pool.QueryRow(ctx, `SELECT count(*),count(*) FILTER(WHERE c.retired!=''),count(*) FILTER(WHERE c.organized<$2)
- FROM claims c JOIN memory_records r ON(r.owner_id,r.id)=(c.owner_id,c.id) WHERE c.owner_id=$1 AND r.state='active'`, owner, postgres.OrganizeVersion).Scan(&p.Claims, &p.Retired, &unorganized); err != nil {
+	state, err := readTierPreparation(ctx, pool, scope)
+	if err != nil {
 		return p, err
 	}
-	if unorganized != 0 {
-		return p, fmt.Errorf("prepare_organize_incomplete")
-	}
-	p.Cards = 0
-	if err := pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM handovers WHERE owner_id=$1 AND input_hash=library_handover_hash($1) AND rule>=$2 AND btrim(body)!='')`, owner, postgres.HandoverVersion).Scan(&p.Handover); err != nil {
-		return p, err
-	}
-	var handoverInputs bool
-	if err := pool.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM library_handover_members($1))", owner).Scan(&handoverInputs); err != nil {
-		return p, err
-	}
-	if handoverInputs && !p.Handover {
-		return p, fmt.Errorf("prepare_handover_incomplete")
-	}
+	p.Claims, p.Retired = state.Claims, state.Retired
+	p.OrganizeRule, p.HandoverRule = state.OrganizeRule, state.HandoverRule
+	p.Deadlines, p.Requirements = state.Deadlines, state.Requirements
+	p.Handover, p.HandoverInputs = state.Handover, state.HandoverInputs
 	// Freeze identities AFTER derived product records have been created.
 	if _, err := pool.Exec(ctx, `CREATE TABLE v2_frozen_records AS SELECT owner_id,id FROM memory_records`); err != nil {
 		return p, err
@@ -167,4 +155,40 @@ func prepareTierSuite(ctx context.Context, store *postgres.Store, pool *pgxpool.
 	p.CompletedAt = time.Now().UTC().Format(time.RFC3339)
 	p.WallMS = float64(time.Since(start)) / float64(time.Millisecond)
 	return p, doing.WriteJSON(checkpoint, p)
+}
+
+// The organizer commits labels, deadlines (including an empty set) and
+// requirements atomically before advancing organized. An up-to-date organized
+// version is therefore also the extraction-completion marker.
+func readTierPreparation(ctx context.Context, pool *pgxpool.Pool, scope memory.Scope) (doing.Preparation, error) {
+	p := doing.Preparation{OrganizeRule: postgres.OrganizeVersion, HandoverRule: postgres.HandoverVersion}
+	var unorganized, staleExtractions int
+	err := pool.QueryRow(ctx, `SELECT
+ (SELECT count(*) FROM claims WHERE owner_id=$1),
+ (SELECT count(*) FROM claims WHERE owner_id=$1 AND retired!=''),
+ (SELECT count(*) FROM claims c JOIN memory_records r ON(r.owner_id,r.id)=(c.owner_id,c.id)
+  WHERE c.owner_id=$1 AND r.state='active' AND c.organized<$2),
+ (SELECT count(*) FROM deadlines WHERE owner_id=$1),
+ (SELECT count(*) FROM assistant_requirements WHERE owner_id=$1),
+ (SELECT count(*) FROM (
+ SELECT claim_id,claim_version FROM deadlines WHERE owner_id=$1
+ UNION ALL SELECT claim_id,claim_version FROM assistant_requirements WHERE owner_id=$1) x
+ JOIN memory_records r ON r.owner_id=$1 AND r.id=x.claim_id WHERE r.version!=x.claim_version),
+ EXISTS(SELECT 1 FROM library_handover_members($1)),
+ EXISTS(SELECT 1 FROM handovers WHERE owner_id=$1 AND input_hash=library_handover_hash($1)
+ AND rule>=$3 AND btrim(body)!='')`, string(scope.OwnerID), p.OrganizeRule, p.HandoverRule).
+		Scan(&p.Claims, &p.Retired, &unorganized, &p.Deadlines, &p.Requirements, &staleExtractions, &p.HandoverInputs, &p.Handover)
+	if err != nil {
+		return p, err
+	}
+	if unorganized != 0 {
+		return p, fmt.Errorf("prepare_organize_incomplete")
+	}
+	if staleExtractions != 0 {
+		return p, fmt.Errorf("prepare_extraction_stale")
+	}
+	if p.HandoverInputs && !p.Handover {
+		return p, fmt.Errorf("prepare_handover_incomplete")
+	}
+	return p, nil
 }

@@ -192,8 +192,10 @@ export function backgroundFeed(state: State, since = Date.now() - 2 * DAY): Feed
 
 export interface ProjectCard {
   project: Project
-  last: string
+  /** The first sentence of the handover's 下一步. */
   next?: string
+  /** Shown when there is no handover yet. */
+  goal: string
   open: number
   fresh: boolean
 }
@@ -212,8 +214,8 @@ export function projectCards(state: State): ProjectCard[] {
       const fresh = hasFreshResult(state.runs, ids) || Date.now() - new Date(project.updatedAt).getTime() < DAY
       return {
         project,
-        last: project.progress.split('\n').filter(Boolean).at(-1) ?? project.goal ?? '',
-        next: project.nextSteps[0] ?? tasks[0]?.title,
+        next: project.handoverNext || undefined,
+        goal: project.goal ?? '',
         open: tasks.length,
         fresh,
       }

@@ -114,8 +114,12 @@ export interface Project {
   name: string
   goal: string
   status: ProjectStatus
-  progress: string
-  nextSteps: string[]
+  /** The first sentence of 下一步 in the project's handover, when one is written. */
+  handoverNext?: string
+  /** @deprecated Retired in phase 3; the handover says where a project stands. Still sent, no longer read. */
+  progress?: string
+  /** @deprecated Retired in phase 3, like `progress`. */
+  nextSteps?: string[]
   updatedAt: string
 }
 
@@ -331,6 +335,8 @@ export interface Run {
     /** Adopted by the worker as soon as the run finished, not by the user. */
     auto?: boolean
   }
+  /** What it worked from: the document versions it was given and the project handover it read. */
+  used?: { documents?: { id: ID; title?: string; version: number }[]; handoverWrittenAt?: string }
   /** A memory it used changed or was deleted afterwards. */
   staleContext: boolean
   /** Estimated cost in CNY, charged against the daily budget. */

@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
 import { Check, ChevronLeft, Copy, Ellipsis, FileText, Lightbulb, Pencil, Plus, Sparkles, Trash2, X } from 'lucide-react'
 import { Popover } from '../components/controls'
+import { DocVersions } from '../components/DocVersions'
 import { ConfirmModal } from '../components/Overlay'
 import { SaveMark, type SaveState } from '../components/ui'
 import { Markdown } from '../components/Markdown'
 import { Secretary } from '../components/Secretary'
+import { StatusBlock } from '../components/StatusBlock'
 import { parseChecklist } from '../domain/agent'
 import { newId } from '../domain/ids'
 import { projectStatusLabel, taskStatusLabel } from '../domain/labels'
@@ -74,8 +76,8 @@ function facts(state: ReturnType<typeof useStore>['state'], thing: Thing): Fact[
   if (thing.kind === 'idea') return [{ text: ideaStatusText[thing.item.status] }, ...inProject]
   const p = thing.item
   const open = state.tasks.filter((t) => t.projectId === p.id && isOpenTask(t)).length
-  const last = p.progress.split('\n').filter(Boolean).at(-1)
-  return [{ text: projectStatusLabel[p.status].text, say: '把这个项目的状态改成：' }, ...(last ? [{ text: last, say: '更新一下进度：' }] : []), ...(open ? [{ text: `${open} 件没做完` }] : [])]
+  // Where the project stands is the status block's to say; it is not a fact to edit here.
+  return [{ text: projectStatusLabel[p.status].text, say: '把这个项目的状态改成：' }, ...(open ? [{ text: `${open} 件没做完` }] : [])]
 }
 
 /** Status, due time, reminder and project are changed by saying so: each one starts its own sentence. */
@@ -510,12 +512,24 @@ function titleFor(doc: Doc, body: string): string {
   return doc.title
 }
 
-function DocRow({ doc, fresh }: { doc: Doc; fresh: boolean }) {
+/** Brings what a link pointed at into view, once. */
+function useArrive<T extends HTMLElement>(arrived: boolean) {
+  const row = useRef<T>(null)
+  useEffect(() => {
+    if (arrived) row.current?.scrollIntoView({ block: 'center' })
+  }, [arrived])
+  return row
+}
+
+/** `asked` is the version a link pointed at: the row opens on its versions with that one picked. */
+function DocRow({ doc, fresh, asked }: { doc: Doc; fresh: boolean; asked?: number }) {
   const { state, dispatch, dispatchUndoable } = useStore()
-  const [open, setOpen] = useState(fresh)
+  const [open, setOpen] = useState(fresh || asked !== undefined)
   const [editing, setEditing] = useState(fresh)
+  const [versions, setVersions] = useState(asked !== undefined)
   const [menu, setMenu] = useState(false)
   const more = useRef<HTMLButtonElement>(null)
+  const row = useArrive<HTMLDivElement>(asked !== undefined)
 
   const [unsaved, setUnsaved] = useState(false)
   const editor = useRef<HTMLTextAreaElement>(null)
@@ -530,7 +544,7 @@ function DocRow({ doc, fresh }: { doc: Doc; fresh: boolean }) {
   }
 
   return (
-    <div className={`doc-row${open ? ' open' : ''}`}>
+    <div ref={row} className={`doc-row${open ? ' open' : ''}`}>
       <div className="doc-head">
         <button type="button" className="doc-open" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
           <FileText size={15} />
@@ -566,7 +580,16 @@ function DocRow({ doc, fresh }: { doc: Doc; fresh: boolean }) {
           <button type="button" className="fact add" onClick={() => editor.current && void save(editor.current.value)}>再保存一次</button>
         </p>
       )}
+      {open && !fresh && (
+        <div className="doc-versions">
+          <button type="button" className="act-btn" aria-expanded={versions} onClick={() => setVersions((v) => !v)}>
+            {versions ? '收起版本' : '版本'}
+          </button>
+          {versions && <DocVersions doc={doc} asked={asked} />}
+        </div>
+      )}
       {open &&
+        !versions &&
         (editing ? (
           <textarea
             ref={editor}
@@ -589,6 +612,9 @@ function DocRow({ doc, fresh }: { doc: Doc; fresh: boolean }) {
 /** The documents a thing produced, each one line until opened. */
 function Docs({ thing }: { thing: Thing }) {
   const { state, dispatch } = useStore()
+  const [params] = useSearchParams()
+  const askedDoc = params.get('doc')
+  const askedVersion = Number(params.get('v')) || undefined
   const [fresh, setFresh] = useState<string>()
   const docs = state.docs.filter((d) => d.thingId === thing.id).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
   const write = (
@@ -614,7 +640,7 @@ function Docs({ thing }: { thing: Thing }) {
       <div className="section-label">文档</div>
       <div className="group docs">
         {docs.map((d) => (
-          <DocRow key={d.id} doc={d} fresh={d.id === fresh} />
+          <DocRow key={d.id === askedDoc ? `${d.id}@${askedVersion}` : d.id} doc={d} fresh={d.id === fresh} asked={d.id === askedDoc ? askedVersion : undefined} />
         ))}
         {write}
       </div>
@@ -624,8 +650,8 @@ function Docs({ thing }: { thing: Thing }) {
 
 /* ---------- 动态: everything that happened, newest first ---------- */
 
-/** Where a summary is written: a project's progress is replaced, a task's notes and an idea's body are added to. */
-const summaryInto = { project: { label: '更新项目进度', done: '已更新项目进度' }, task: { label: '追加到说明', done: '已追加到说明' }, idea: { label: '追加到想法', done: '已追加到想法' } } as const
+/** Where a summary is kept: a project remembers it, which the status block is then written from; a task's notes and an idea's body are added to. */
+const summaryInto = { project: { label: '记进项目记忆', done: '已记进项目记忆' }, task: { label: '追加到说明', done: '已追加到说明' }, idea: { label: '追加到想法', done: '已追加到想法' } } as const
 
 /** What putting a result into the thing does, decided from the result itself; the button says it. */
 function adoptAs(thing: Thing, run: Run): { as: 'doc' | 'subtasks' | 'progress'; label: string; done: string } {
@@ -716,12 +742,34 @@ function Handoff({ run }: { run: Run }) {
   )
 }
 
-function RunRow({ thing, run }: { thing: Thing; run: Run }) {
+/** What the work was done from: which version of which document, and which status block. */
+function RunUsed({ run }: { run: Run }) {
+  const { state } = useStore()
+  const docs = run.used?.documents ?? []
+  const handover = run.used?.handoverWrittenAt
+  if (docs.length === 0 && !handover) return null
+  return (
+    <p className="act-used">
+      用了
+      {docs.map((d) => (
+        <Link key={`${d.id}@${d.version}`} to={`/t/${state.docs.find((doc) => doc.id === d.id)?.thingId ?? run.thingId}?doc=${encodeURIComponent(d.id)}&v=${d.version}`}>
+          「{d.title ?? state.docs.find((doc) => doc.id === d.id)?.title ?? '文档'}」第 {d.version} 版
+        </Link>
+      ))}
+      {handover && <span>写于 {formatShortWhen(handover, state.settings.timezone ?? 'UTC')} 的现状</span>}
+    </p>
+  )
+}
+
+function RunRow({ thing, run, asked }: { thing: Thing; run: Run; asked: boolean }) {
   const { state, dispatchUndoable, undo, runAgent } = useStore()
   const { agentFor } = useShell()
   const toast = useToast()
   const [busy, guard] = useBusy()
-  const [shown, setShown] = useState(false)
+  const [shown, setShown] = useState(asked)
+  const row = useArrive<HTMLLIElement>(asked)
+  const rowClass = `card act-run${asked ? ' asked' : ''}`
+  const used = <RunUsed run={run} />
   const agent = state.agents.find((a) => a.id === run.agentId)
   // Which model did it is a detail; it stays in the tooltip.
   const who = (
@@ -744,7 +792,7 @@ function RunRow({ thing, run }: { thing: Thing; run: Run }) {
   if (run.adopted) {
     const actionId = run.adopted.actionId
     return (
-      <li className="card act-run">
+      <li ref={row} className={rowClass}>
         <div className="act-line">
           {who}
           <span className="act-text">{adoptedLine(thing, run)}</span>
@@ -756,6 +804,7 @@ function RunRow({ thing, run }: { thing: Thing; run: Run }) {
           {look}
           {when}
         </div>
+        {used}
         {output}
       </li>
     )
@@ -763,19 +812,20 @@ function RunRow({ thing, run }: { thing: Thing; run: Run }) {
 
   if (run.status === 'running') {
     return (
-      <li className="card act-run">
+      <li ref={row} className={rowClass}>
         <div className="act-line">
           {who}
           <span className="act-text working">正在做：{run.prompt}</span>
           {when}
         </div>
+        {used}
       </li>
     )
   }
 
   if (run.status === 'waiting') {
     return (
-      <li className="card act-run">
+      <li ref={row} className={rowClass}>
         <div className="act-line">
           {who}
           <span className="act-text">等你转交：{run.prompt}</span>
@@ -790,6 +840,7 @@ function RunRow({ thing, run }: { thing: Thing; run: Run }) {
           </button>
           {when}
         </div>
+        {used}
         <Handoff run={run} />
       </li>
     )
@@ -799,7 +850,7 @@ function RunRow({ thing, run }: { thing: Thing; run: Run }) {
     const retryAgent = state.agents.find((a) => a.id === agentFor(thing.id) && a.enabled && a.id !== run.agentId)
     const retry = (agentId: string) => guard(() => runAgent({ thingId: run.thingId, agentId, kind: run.kind, prompt: run.prompt }))
     return (
-      <li className="card act-run">
+      <li ref={row} className={rowClass}>
         <div className="act-line">
           {who}
           <span className="act-text failed" title={run.error ?? run.output}>
@@ -815,6 +866,7 @@ function RunRow({ thing, run }: { thing: Thing; run: Run }) {
           )}
           {when}
         </div>
+        {used}
       </li>
     )
   }
@@ -823,7 +875,7 @@ function RunRow({ thing, run }: { thing: Thing; run: Run }) {
   // Finished but not in the thing: it was undone, or what it relied on has changed since.
   const choice = adoptAs(thing, run)
   return (
-    <li className="card act-run">
+    <li ref={row} className={rowClass}>
       <div className="act-line">
         {who}
         <span className="act-text">{run.prompt}</span>
@@ -856,6 +908,7 @@ function RunRow({ thing, run }: { thing: Thing; run: Run }) {
         {look}
         {when}
       </div>
+      {used}
       {output}
     </li>
   )
@@ -904,7 +957,10 @@ const FOLD = 10
 /** The one place that says what happened: edits, the secretary's and assistants' work, and how an idea evolved. */
 function Activity({ thing }: { thing: Thing }) {
   const { state } = useStore()
-  const [all, setAll] = useState(false)
+  const [params] = useSearchParams()
+  const askedRun = params.get('run')
+  // A link to one piece of work must find it, however far back it is.
+  const [all, setAll] = useState(Boolean(askedRun))
   const history = thing.kind === 'task' ? thing.item.history : thing.kind === 'idea' ? thing.item.evolution : []
   type Entry = { key: string; at: string; run?: Run; by?: string; summary?: string }
   const entries: Entry[] = [
@@ -924,7 +980,7 @@ function Activity({ thing }: { thing: Thing }) {
         <ol className="record activity">
           {entries.slice(0, entries.length - hidden).map((e) =>
             e.run ? (
-              <RunRow key={e.key} thing={thing} run={e.run} />
+              <RunRow key={e.key === askedRun ? `${e.key}@asked` : e.key} thing={thing} run={e.run} asked={e.key === askedRun} />
             ) : (
               <li key={e.key} className="act-row">
                 <div className="act-line">
@@ -958,6 +1014,7 @@ export function ThingPage() {
   return (
     <div className="doc-page" key={thing.id}>
       <Header thing={thing} />
+      {thing.kind === 'project' && <StatusBlock projectId={thing.id} />}
       {thing.kind === 'idea' && <IdeaBanner thing={thing} />}
       {thing.kind === 'task' && <Checklist task={thing.item} />}
       {thing.kind === 'project' && <ProjectItems projectId={thing.id} />}

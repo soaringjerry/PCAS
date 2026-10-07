@@ -550,7 +550,8 @@ function DocRow({ doc, fresh, asked }: { doc: Doc; fresh: boolean; asked?: numbe
           <FileText size={15} />
           <span className="doc-name">{doc.title}</span>
           <span className="doc-meta">
-            {doc.by === 'ai' ? '副手写的' : '你写的'} · {formatAgo(doc.updatedAt, state.settings.timezone ?? 'UTC')}
+            {doc.by === 'ai' ? '副手写的' : '你写的'}
+            {doc.version ? ` · 第 ${doc.version} 版` : ''} · {formatAgo(doc.updatedAt, state.settings.timezone ?? 'UTC')}
           </span>
         </button>
         <button ref={more} type="button" className="doc-more" aria-label={`文档「${doc.title}」的更多操作`} aria-expanded={menu} onClick={() => setMenu((v) => !v)}>
@@ -658,6 +659,8 @@ function adoptAs(thing: Thing, run: Run): { as: 'doc' | 'subtasks' | 'progress';
   const n = parseChecklist(run.output ?? '').length
   if (n > 0) return thing.kind === 'task' ? { as: 'subtasks', label: `加入 ${n} 个子任务`, done: `已加入 ${n} 个子任务` } : { as: 'subtasks', label: `创建 ${n} 件待办`, done: `已创建 ${n} 件待办` }
   if (run.kind === 'summary') return { as: 'progress', ...summaryInto[thing.kind] }
+  // A revision is the whole new text of the document it was asked to change.
+  if (run.kind === 'revise') return { as: 'doc', label: '存为新版本', done: '已存为新版本' }
   return { as: 'doc', label: '保存为文档', done: '已保存为文档' }
 }
 
@@ -666,6 +669,7 @@ function adoptedLine(thing: Thing, run: Run): string {
     const n = parseChecklist(run.output ?? '').length
     return n ? (thing.kind === 'task' ? `已加入 ${n} 个子任务` : `已创建 ${n} 件待办`) : '已创建待办'
   }
+  if (run.kind === 'revise') return '已存为新版本'
   return run.adopted?.as === 'progress' ? summaryInto[thing.kind].done : '已保存为文档'
 }
 
@@ -745,17 +749,20 @@ function Handoff({ run }: { run: Run }) {
 /** What the work was done from: which version of which document, and which status block. */
 function RunUsed({ run }: { run: Run }) {
   const { state } = useStore()
-  const docs = run.used?.documents ?? []
-  const handover = run.used?.handoverWrittenAt
+  const docs = run.documentVersions ?? []
+  const handover = run.projectHandoverWrittenAt
   if (docs.length === 0 && !handover) return null
   return (
     <p className="act-used">
       用了
-      {docs.map((d) => (
-        <Link key={`${d.id}@${d.version}`} to={`/t/${state.docs.find((doc) => doc.id === d.id)?.thingId ?? run.thingId}?doc=${encodeURIComponent(d.id)}&v=${d.version}`}>
-          「{d.title ?? state.docs.find((doc) => doc.id === d.id)?.title ?? '文档'}」第 {d.version} 版
-        </Link>
-      ))}
+      {docs.map((d) => {
+        const doc = state.docs.find((doc) => doc.id === d.documentId)
+        return (
+          <Link key={`${d.documentId}@${d.version}`} to={`/t/${doc?.thingId ?? run.thingId}?doc=${encodeURIComponent(d.documentId)}&v=${d.version}`}>
+            「{doc?.title ?? '文档'}」第 {d.version} 版
+          </Link>
+        )
+      })}
       {handover && <span>写于 {formatShortWhen(handover, state.settings.timezone ?? 'UTC')} 的现状</span>}
     </p>
   )

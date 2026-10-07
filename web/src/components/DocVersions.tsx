@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import { Link } from 'react-router'
-import { authorText, defaultPair, foldVersions, pick, type DiffBlock, type DocVersion, type VersionGroup } from '../domain/studio'
+import { authorText, defaultPair, foldVersions, pick, type DocVersion, type ParagraphChange, type VersionGroup } from '../domain/studio'
 import { formatAgo } from '../domain/time'
 import type { Doc } from '../domain/types'
 import { useStore } from '../store/context'
@@ -12,38 +12,23 @@ import { Markdown } from './Markdown'
 // is read. Nothing is edited here: the document itself is edited when this is
 // closed, and that writes the next version.
 
-const MARK = { added: '增', removed: '删', changed: '改' } as const
+const MARK = { add: '增', delete: '删', change: '改' } as const
 
-function Block({ block }: { block: DiffBlock }) {
-  if (block.op === 'same') {
-    return (
-      <div className="diff-block same">
-        <Markdown text={block.text} />
-      </div>
-    )
-  }
+function Change({ change }: { change: ParagraphChange }) {
   return (
-    <div className={`diff-block ${block.op}`}>
-      <span className="diff-mark" aria-label={MARK[block.op]}>
-        {MARK[block.op]}
+    <div className={`diff-block ${change.kind}`}>
+      <span className="diff-mark" aria-label={MARK[change.kind]}>
+        {MARK[change.kind]}
       </span>
       <div className="diff-text">
-        {block.op === 'changed' ? (
-          <>
-            <del>
-              <Markdown text={block.before} />
-            </del>
-            <ins>
-              <Markdown text={block.after} />
-            </ins>
-          </>
-        ) : block.op === 'removed' ? (
+        {change.kind !== 'add' && (
           <del>
-            <Markdown text={block.text} />
+            <Markdown text={change.before} />
           </del>
-        ) : (
+        )}
+        {change.kind !== 'delete' && (
           <ins>
-            <Markdown text={block.text} />
+            <Markdown text={change.after} />
           </ins>
         )}
       </div>
@@ -51,6 +36,7 @@ function Block({ block }: { block: DiffBlock }) {
   )
 }
 
+/** Only the paragraphs that changed, in the document's order. */
 function Comparison({ docId, from, to }: { docId: string; from: number; to: number }) {
   const [read, retry] = useRead(`${docId}:${from}:${to}`, 0, () => readDiff(docId, from, to))
   if (read.phase === 'loading') return <p className="ver-note">正在比较…</p>
@@ -64,12 +50,11 @@ function Comparison({ docId, from, to }: { docId: string; from: number; to: numb
       </p>
     )
   }
-  const blocks = read.value.blocks ?? []
-  if (!blocks.some((b) => b.op !== 'same')) return <p className="ver-note">这两版没有差别</p>
+  if (read.value.changes.length === 0) return <p className="ver-note">这两版没有差别</p>
   return (
     <div className="diff" aria-label={`第 ${from} 版到第 ${to} 版的差异`}>
-      {blocks.map((b, i) => (
-        <Block key={i} block={b} />
+      {read.value.changes.map((c, i) => (
+        <Change key={i} change={c} />
       ))}
     </div>
   )
@@ -103,7 +88,7 @@ function VersionRow({ doc, version, label, picked, onPick, children }: { doc: Do
         <span className="ver-no">{label}</span>
         <span className="ver-by">{authorText[version.author] ?? '你'}</span>
         <span className="ver-when">{formatAgo(version.writtenAt, state.settings.timezone ?? 'UTC')}</span>
-        {version.basedOn !== undefined && version.basedOn !== version.version - 1 && <span className="ver-base">基于第 {version.basedOn} 版</span>}
+        {version.basedOn != null && version.basedOn !== version.version - 1 && <span className="ver-base">基于第 {version.basedOn} 版</span>}
       </button>
       {version.runId && (
         <Link className="act-btn" to={`/t/${doc.thingId}?run=${encodeURIComponent(version.runId)}`}>

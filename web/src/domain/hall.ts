@@ -214,7 +214,7 @@ export function projectCards(state: State): ProjectCard[] {
       const fresh = hasFreshResult(state.runs, ids) || Date.now() - new Date(project.updatedAt).getTime() < DAY
       return {
         project,
-        next: project.handoverNext || undefined,
+        next: project.projectHandover?.nextSteps[0]?.text || undefined,
         goal: project.goal ?? '',
         open: tasks.length,
         fresh,

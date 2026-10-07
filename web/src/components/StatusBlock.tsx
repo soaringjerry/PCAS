@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
 import { findThing, thingTitle } from '../domain/things'
-import type { Evidence, Handover, Sentence } from '../domain/studio'
+import { isWritten, type Evidence, type Handover, type Sentence } from '../domain/studio'
 import { formatAgo, formatShortDate } from '../domain/time'
 import { useStore } from '../store/context'
+import { useMemory } from '../store/memories'
 import { readHandover, useRead } from '../store/studio'
 import { SourceSheet } from './SourceSheet'
 
@@ -12,65 +13,79 @@ import { SourceSheet } from './SourceSheet'
 // sentence is put right by telling the secretary, who changes the memory or the
 // item under it; that makes the handover stale and it is written again.
 
-/** Where a document version or a piece of assistant work is shown: on its thing's page. */
-function placeOf(thingId: string | undefined, fallback: string, query: string): string {
-  return `/t/${thingId ?? fallback}?${query}`
+/** A memory is named by id; its words and where they were said are read when the sentence is opened. */
+function MemoryEvidence({ id }: { id: string }) {
+  const { state } = useStore()
+  const { memory, phase, problem, retry } = useMemory(id)
+  const [open, setOpen] = useState(false)
+  if (!memory) {
+    return (
+      <li>
+        <div>
+          <span className="ev-kind">记忆</span>
+          <span className="ev-text">{phase === 'loading' ? '读取中…' : phase === 'gone' ? '这条记忆已经不在了' : `没读出来：${problem}`}</span>
+          {phase === 'failed' && (
+            <button type="button" className="act-btn" onClick={retry}>
+              再读一次
+            </button>
+          )}
+        </div>
+      </li>
+    )
+  }
+  const source = memory.sources[0]
+  const body = (
+    <>
+      <span className="ev-kind">记忆</span>
+      <span className="ev-text">{memory.text}</span>
+      {source?.at && <time className="ev-when">{formatShortDate(source.at, state.settings.timezone ?? 'UTC')}</time>}
+    </>
+  )
+  return source ? (
+    <li>
+      {open && <SourceSheet id={source.sourceId} version={source.version} conversation={{ excerpt: source.excerpt }} onClose={() => setOpen(false)} />}
+      <button type="button" title="看原话" onClick={() => setOpen(true)}>
+        {body}
+      </button>
+    </li>
+  ) : (
+    <li>
+      <div>{body}</div>
+    </li>
+  )
 }
 
 function EvidenceRow({ projectId, evidence }: { projectId: string; evidence: Evidence }) {
   const { state } = useStore()
-  const [source, setSource] = useState(false)
-  const timezone = state.settings.timezone ?? 'UTC'
-  if (evidence.kind === 'memory') {
-    const when = evidence.at ? formatShortDate(evidence.at, timezone) : ''
-    const body = (
-      <>
-        <span className="ev-kind">记忆</span>
-        <span className="ev-text">{evidence.text}</span>
-        {when && <time className="ev-when">{when}</time>}
-      </>
-    )
-    return evidence.sourceId ? (
-      <li>
-        {source && <SourceSheet id={evidence.sourceId} version={evidence.sourceVersion} conversation={{ excerpt: evidence.excerpt }} onClose={() => setSource(false)} />}
-        <button type="button" title="看原话" onClick={() => setSource(true)}>
-          {body}
-        </button>
-      </li>
-    ) : (
-      <li>
-        <div>{body}</div>
-      </li>
-    )
-  }
+  if (evidence.kind === 'memory') return <MemoryEvidence id={evidence.id} />
   if (evidence.kind === 'item') {
     const thing = findThing(state, evidence.id)
-    const title = evidence.title ?? (thing ? thingTitle(thing) : '')
-    // An item that is gone can still be named, but there is nowhere to go.
+    // An item that is gone has nowhere to go.
     return (
       <li>
         {thing ? (
           <Link to={`/t/${evidence.id}`}>
             <span className="ev-kind">事项</span>
-            <span className="ev-text">{title}</span>
+            <span className="ev-text">{thingTitle(thing)}</span>
           </Link>
         ) : (
           <div>
             <span className="ev-kind">事项</span>
-            <span className="ev-text">{title || '这件事已经不在了'}</span>
+            <span className="ev-text">这件事已经不在了</span>
           </div>
         )}
       </li>
     )
   }
-  if (evidence.kind === 'document') {
+  if (evidence.kind === 'documentVersion') {
+    // A document or a piece of work is shown on its own thing's page, which may be an item of this project.
     const doc = state.docs.find((d) => d.id === evidence.id)
     return (
       <li>
-        <Link to={placeOf(evidence.thingId ?? doc?.thingId, projectId, `doc=${encodeURIComponent(evidence.id)}&v=${evidence.version}`)}>
+        <Link to={`/t/${doc?.thingId ?? projectId}?doc=${encodeURIComponent(evidence.id)}&v=${evidence.version ?? ''}`}>
           <span className="ev-kind">文档</span>
-          <span className="ev-text">{evidence.title ?? doc?.title ?? '文档'}</span>
-          <span className="ev-when">第 {evidence.version} 版</span>
+          <span className="ev-text">{doc?.title ?? '文档'}</span>
+          {evidence.version !== undefined && <span className="ev-when">第 {evidence.version} 版</span>}
         </Link>
       </li>
     )
@@ -78,9 +93,9 @@ function EvidenceRow({ projectId, evidence }: { projectId: string; evidence: Evi
   const run = state.runs.find((r) => r.id === evidence.id)
   return (
     <li>
-      <Link to={placeOf(evidence.thingId ?? run?.thingId, projectId, `run=${encodeURIComponent(evidence.id)}`)}>
+      <Link to={`/t/${run?.thingId ?? projectId}?run=${encodeURIComponent(evidence.id)}`}>
         <span className="ev-kind">副手</span>
-        <span className="ev-text">{evidence.prompt ?? run?.prompt ?? '副手的工作'}</span>
+        <span className="ev-text">{run?.prompt ?? '副手的工作'}</span>
       </Link>
     </li>
   )
@@ -135,13 +150,13 @@ export function StatusBlock({ projectId }: { projectId: string }) {
   const { state } = useStore()
   // The snapshot's revision moves when anything the handover is written from does.
   const [read, retry] = useRead(projectId, state.revision, () => readHandover(projectId))
-  const handover = read.phase === 'ready' ? read.value : undefined
+  const handover = read.phase === 'ready' && isWritten(read.value) ? read.value : undefined
 
   return (
     <section className="section status-block" aria-label="现状">
       <div className="section-label">
         现状
-        {handover && <span className="faint"> · 写于 {formatAgo(handover.writtenAt, state.settings.timezone ?? 'UTC')}</span>}
+        {handover?.writtenAt && <span className="faint"> · 写于 {formatAgo(handover.writtenAt, state.settings.timezone ?? 'UTC')}</span>}
       </div>
       {read.phase === 'failed' && (
         <p className="status-note" role="alert">
@@ -151,7 +166,7 @@ export function StatusBlock({ projectId }: { projectId: string }) {
           </button>
         </p>
       )}
-      {read.phase === 'ready' && !handover && <p className="status-note">还没有现状。</p>}
+      {read.phase === 'ready' && !handover && <p className="status-note">{read.value.stale ? '还没有现状，正在写第一份。' : '还没有现状。'}</p>}
       {handover?.stale && (
         <p className="status-note" role="status">
           正在更新，下面是上一份

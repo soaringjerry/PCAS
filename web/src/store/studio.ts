@@ -6,23 +6,25 @@ import { api } from './api'
 
 const enc = encodeURIComponent
 
-/** The project's handover, or nothing when none has been written yet. */
-export async function readHandover(projectId: string): Promise<Handover | null> {
-  return (await api<{ handover: Handover | null }>(`/v1/workspace/projects/${enc(projectId)}/handover`)).handover ?? null
+/** The project's handover. One that has not been written yet comes back with empty parts and no time. */
+export async function readHandover(projectId: string): Promise<Handover> {
+  const h = await api<Partial<Handover>>(`/v1/workspace/projects/${enc(projectId)}/handover`)
+  return { projectId, writtenAt: h.writtenAt ?? null, stale: Boolean(h.stale), conclusion: h.conclusion ?? [], blockers: h.blockers ?? [], nextSteps: h.nextSteps ?? [] }
 }
 
 /** Every version of a document, newest first. */
 export async function readVersions(docId: string): Promise<DocVersion[]> {
-  const { versions } = await api<{ versions: DocVersion[] }>(`/v1/workspace/documents/${enc(docId)}/versions`)
-  return [...(versions ?? [])].sort((a, b) => b.version - a.version)
+  const { items } = await api<{ items?: DocVersion[] }>(`/v1/workspace/documents/${enc(docId)}/versions`)
+  return [...(items ?? [])].sort((a, b) => b.version - a.version)
 }
 
 export async function readVersionBody(docId: string, version: number): Promise<string> {
-  return (await api<{ body: string }>(`/v1/workspace/documents/${enc(docId)}/versions/${version}`)).body ?? ''
+  return (await api<{ body?: string }>(`/v1/workspace/documents/${enc(docId)}/versions/${version}`)).body ?? ''
 }
 
 export async function readDiff(docId: string, from: number, to: number): Promise<DocDiff> {
-  return api<DocDiff>(`/v1/workspace/documents/${enc(docId)}/diff?from=${from}&to=${to}`)
+  const diff = await api<Partial<DocDiff>>(`/v1/workspace/documents/${enc(docId)}/diff?from=${from}&to=${to}`)
+  return { documentId: docId, fromVersion: from, toVersion: to, changes: diff.changes ?? [] }
 }
 
 export type Read<T> = { phase: 'loading' } | { phase: 'ready'; value: T } | { phase: 'failed'; problem: string }

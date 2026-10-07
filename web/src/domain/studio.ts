@@ -1,16 +1,20 @@
 // What a studio (a project's page) reads on top of the workspace snapshot:
 // the project's handover, shown as the status block, and a document's versions.
-// The field names follow the phase 3 backend; `store/studio.ts` is the only
-// place that knows the paths.
+// The shapes are the phase 3 backend's (the skeleton PR freezes them);
+// `store/studio.ts` is the only place that knows the paths.
 
 import type { ID } from './types'
 
-/** What one sentence of the handover rests on. */
-export type Evidence =
-  | { kind: 'memory'; id: ID; text: string; at?: string; sourceId?: ID; sourceVersion?: number; excerpt?: string }
-  | { kind: 'item'; id: ID; title?: string }
-  | { kind: 'document'; id: ID; version: number; title?: string; thingId?: ID }
-  | { kind: 'run'; id: ID; prompt?: string; thingId?: ID }
+/**
+ * What one sentence of the handover rests on, by id. For a memory `version` is
+ * the memory's version; for `documentVersion` the id is the document's and
+ * `version` its version number.
+ */
+export interface Evidence {
+  kind: 'memory' | 'item' | 'documentVersion' | 'run'
+  id: ID
+  version?: number
+}
 
 export interface Sentence {
   text: string
@@ -19,7 +23,9 @@ export interface Sentence {
 
 /** A project's handover: written by the model, never edited here. */
 export interface Handover {
-  writtenAt: string
+  projectId: ID
+  /** Absent while none has been written; the three parts are then empty. */
+  writtenAt: string | null
   /** Something it was written from has changed; a new one is on its way. */
   stale: boolean
   conclusion: Sentence[]
@@ -27,27 +33,38 @@ export interface Handover {
   nextSteps: Sentence[]
 }
 
+/** Whether there is a handover to show at all. */
+export function isWritten(handover: Handover): boolean {
+  return Boolean(handover.writtenAt) || handover.conclusion.length + handover.blockers.length + handover.nextSteps.length > 0
+}
+
 export type VersionAuthor = 'user' | 'deputy' | 'secretary'
 
 export interface DocVersion {
+  documentId: ID
   version: number
   writtenAt: string
   author: VersionAuthor
-  basedOn?: number
-  runId?: ID
+  basedOn: number | null
+  /** The assistant work that wrote it, when one did. */
+  runId: ID | null
 }
 
-/** One paragraph of a comparison. `changed` carries both sides. */
-export type DiffBlock =
-  | { op: 'same'; text: string }
-  | { op: 'added'; text: string }
-  | { op: 'removed'; text: string }
-  | { op: 'changed'; before: string; after: string }
+/** One changed paragraph, in the document's order. The side a paragraph is missing from is empty. */
+export interface ParagraphChange {
+  kind: 'add' | 'delete' | 'change'
+  beforeIndex: number | null
+  afterIndex: number | null
+  before: string
+  after: string
+}
 
+/** Only what changed between two versions; paragraphs that stayed are not listed. */
 export interface DocDiff {
-  from: number
-  to: number
-  blocks: DiffBlock[]
+  documentId: ID
+  fromVersion: number
+  toVersion: number
+  changes: ParagraphChange[]
 }
 
 export const authorText: Record<VersionAuthor, string> = { user: '你', deputy: '副手', secretary: '秘书' }
@@ -71,7 +88,7 @@ export function foldVersions(versions: DocVersion[]): VersionGroup[] {
   for (const v of oldestFirst) {
     const group = groups.at(-1)
     const first = group?.[0]
-    if (group && first && first.author === v.author && first.runId === v.runId && new Date(v.writtenAt).getTime() - new Date(first.writtenAt).getTime() <= FOLD_WINDOW) group.push(v)
+    if (group && first && first.author === v.author && (first.runId ?? '') === (v.runId ?? '') && new Date(v.writtenAt).getTime() - new Date(first.writtenAt).getTime() <= FOLD_WINDOW) group.push(v)
     else groups.push([v])
   }
   return groups.reverse().map((g) => ({ versions: g.reverse() }))

@@ -705,9 +705,9 @@ button.fact.add:hover {
   margin: 6px 0 8px;
 }
 
-.status-evidence button,
-.status-evidence a,
-.status-evidence div {
+.status-evidence > li > button,
+.status-evidence > li > a,
+.status-evidence > li > div {
   display: flex;
   align-items: baseline;
   gap: 10px;
@@ -725,13 +725,13 @@ button.fact.add:hover {
   text-decoration: none;
 }
 
-.status-evidence button,
-.status-evidence a {
+.status-evidence > li > button,
+.status-evidence > li > a {
   cursor: pointer;
 }
 
-.status-evidence button:hover,
-.status-evidence a:hover {
+.status-evidence > li > button:hover,
+.status-evidence > li > a:hover {
   border-left-color: var(--blue);
   background: var(--fill-2);
   text-decoration: none;
@@ -856,20 +856,15 @@ button.fact.add:hover {
   margin-top: 4px;
 }
 
-.diff-block.same {
-  padding-left: 34px;
-  color: var(--label-2);
-}
-
-.diff-block.added {
+.diff-block.add {
   background: var(--green-soft);
 }
 
-.diff-block.removed {
+.diff-block.delete {
   background: var(--red-soft);
 }
 
-.diff-block.changed {
+.diff-block.change {
   background: var(--orange-soft);
 }
 
@@ -882,15 +877,15 @@ button.fact.add:hover {
   line-height: 2.1;
 }
 
-.diff-block.added .diff-mark {
+.diff-block.add .diff-mark {
   color: var(--green);
 }
 
-.diff-block.removed .diff-mark {
+.diff-block.delete .diff-mark {
   color: var(--red);
 }
 
-.diff-block.changed .diff-mark {
+.diff-block.change .diff-mark {
   color: var(--orange);
 }
 

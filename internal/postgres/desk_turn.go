@@ -248,7 +248,13 @@ func (s *Store) secretaryPrompt(ctx context.Context, tx pgx.Tx, scope memory.Sco
 	}
 	fmt.Fprintln(&prompt, "\n未完成任务：")
 	for i, t := range c.Tasks {
-		fmt.Fprintf(&prompt, "T%d：%s（%s；截止 %s；项目 %s；估计工作量 %s小时；开工日 %s）\n", i+1, t.Title, t.Status, t.Due, projectNames[t.ProjectID], string(asJSON(t.EstimatedHours)), pointerValue(t.StartDate))
+		// Effort and start date only appear once they exist; every other task
+		// line stays byte-identical to the pre-phase-3 prompt.
+		effort := ""
+		if t.EstimatedHours != nil {
+			effort = fmt.Sprintf("；估计工作量 %s小时；开工日 %s", formatHours(*t.EstimatedHours), pointerValue(t.StartDate))
+		}
+		fmt.Fprintf(&prompt, "T%d：%s（%s；截止 %s；项目 %s%s）\n", i+1, t.Title, t.Status, t.Due, projectNames[t.ProjectID], effort)
 	}
 	fmt.Fprintln(&prompt, "\n想法：")
 	for i, t := range c.Ideas {

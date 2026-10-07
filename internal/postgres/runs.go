@@ -65,6 +65,11 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 		run := workspace.Run{DocumentVersions: []workspace.RunDocumentVersion{}, DocumentID: c.DocumentID, BaseVersion: c.BaseVersion, TargetHash: targetHash, SmokeID: smokeID(ctx), ID: id, ThingID: item.ID, AgentID: agent.ID, Kind: c.Kind, Prompt: c.Prompt, Status: "running", ContextMemoryIDs: []string{}, ContextVersions: []memory.Ref{}, CreatedAt: stamp()}
 		var brief strings.Builder
 		fmt.Fprintf(&brief, "事项：%s\n当前状态：%s\n说明：%s\n%s\n目标：%s\n", item.Title, item.Status, item.Notes, item.Body, item.Goal)
+		if item.Kind != "project" {
+			// Projects hand over through their handover note (phase 3 H7); other
+			// items keep the pre-phase-3 brief byte for byte.
+			fmt.Fprintf(&brief, "进度：%s\n", item.Progress)
+		}
 		projectID := item.ProjectID
 		if item.Kind == "project" {
 			projectID = item.ID

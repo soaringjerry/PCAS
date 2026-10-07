@@ -293,6 +293,12 @@ func (s *Store) executeSecretaryActionTx(ctx context.Context, tx pgx.Tx, scope m
 		id = string(memory.NewID())
 		project := ""
 		var err error
+		if a.Op != "create_project" && a.Project == nil {
+			project, err = currentStudioProjectTx(ctx, tx, scope, currentThingID)
+			if err != nil {
+				return receipt, err
+			}
+		}
 		if a.Project != nil {
 			project, err = s.secretaryProjectTx(ctx, tx, scope, *a.Project, aliases)
 			if err != nil {
@@ -537,6 +543,11 @@ func (s *Store) executeSecretaryActionTx(ctx context.Context, tx pgx.Tx, scope m
 			c.Type = "delegateTask"
 			c.ID = id
 			c.Title = strings.TrimSpace(a.Title)
+			var err error
+			c.ProjectID, err = currentStudioProjectTx(ctx, tx, scope, currentThingID)
+			if err != nil {
+				return receipt, err
+			}
 		}
 		if err := call(c); err != nil {
 			return receipt, err

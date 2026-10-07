@@ -789,6 +789,10 @@ func (s *Store) runAgentOnce(ctx context.Context) error {
 		run.MemoryTier = memoryTierForStatus(run.MemoryTier, u.Ready)
 	}
 	if useErr == nil && u.Ready {
+		run.ProjectHandoverWrittenAt = nil
+		if u.ProjectHandover != nil {
+			run.ProjectHandoverWrittenAt = u.ProjectHandover.WrittenAt
+		}
 		if run.MemoryTier == "heavy" {
 			taskText := run.Prompt
 			if bounds := run.MemoryContextRange; bounds != nil && bounds[0] >= 0 && bounds[0] <= len(run.Brief) {
@@ -837,10 +841,6 @@ func (s *Store) runAgentOnce(ctx context.Context) error {
 	}
 
 	if run.Kind == "revise" && generationErr == nil {
-		run.ProjectHandoverWrittenAt = nil
-		if u.ProjectHandover != nil {
-			run.ProjectHandoverWrittenAt = u.ProjectHandover.WrittenAt
-		}
 		paid, err := s.cacheReviseResult(ctx, scope, run, result)
 		if err != nil {
 			return err
@@ -909,9 +909,6 @@ func (s *Store) runAgentOnce(ctx context.Context) error {
 		current.ContextMemoryIDs = run.ContextMemoryIDs
 		current.ContextVersions = run.ContextVersions
 		current.ProjectHandoverWrittenAt = run.ProjectHandoverWrittenAt
-		if u.ProjectHandover != nil {
-			current.ProjectHandoverWrittenAt = u.ProjectHandover.WrittenAt
-		}
 		current.MemoryGroups = run.MemoryGroups
 		current.MemoryTier = run.MemoryTier
 		current.MemoryContextRange = run.MemoryContextRange

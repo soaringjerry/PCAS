@@ -193,6 +193,11 @@ func (s *Store) snapshotTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) (
 		}
 		out.SnapshotRevision += events
 	}
+	changes, err := libraryEvents(ctx, tx, scope.OwnerID)
+	if err != nil {
+		return out, err
+	}
+	out.MemoryRevision += changes
 	if err = json.Unmarshal(data, &out.Settings); err != nil {
 		return out, err
 	}
@@ -744,5 +749,23 @@ func (s *Store) SnapshotETag(ctx context.Context, scope memory.Scope) (string, e
 	if err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("\"workspace-%s-%d-%d-%d\"", scope.OwnerID, revision, library, snapshot), nil
+	changes, err := libraryEvents(ctx, s.pool, scope.OwnerID)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("\"workspace-%s-%d-%d-%d\"", scope.OwnerID, revision, library+changes, snapshot), nil
+}
+
+// Memory changes counted since migration 045, which stopped writing them to
+// the owner's row. Zero on a schema that predates it.
+func libraryEvents(ctx context.Context, q interface {
+	QueryRow(context.Context, string, ...any) pgx.Row
+}, owner memory.ID) (int64, error) {
+	var journal bool
+	if err := q.QueryRow(ctx, "SELECT to_regclass('workspace_library_events') IS NOT NULL").Scan(&journal); err != nil || !journal {
+		return 0, err
+	}
+	var n int64
+	err := q.QueryRow(ctx, "SELECT count(*) FROM workspace_library_events WHERE owner_id=$1", string(owner)).Scan(&n)
+	return n, err
 }

@@ -800,7 +800,16 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 					continue
 				}
 				if i >= 10 {
-					out.Turn.Receipts = append(out.Turn.Receipts, skippedReceipt(a.Op, "一次太多了，只做了前 10 件"))
+					extra := 0
+					for _, rest := range answer.Actions[i:] {
+						if !rest.selfcheckDropped {
+							extra++
+						}
+					}
+					out.Turn.Receipts = append(out.Turn.Receipts, skippedReceipt(a.Op, fmt.Sprintf("一次太多了，只做了前 10 件，还有 %d 件没做", extra)))
+					if err := stageEventTx(ctx, tx, scope.OwnerID, "secretary", "overflow", "action_limit", extra); err != nil {
+						return err
+					}
 					break
 				}
 				if a.parseErr != nil {

@@ -340,7 +340,7 @@ func (s *Store) ScheduleEntityCandidates(ctx context.Context, now time.Time) (in
 		if batch == nil {
 			continue
 		}
-		err := backgroundWriteTx(ctx, s.pool, owner, func(ctx context.Context, tx pgx.Tx) error {
+		err := backgroundResultTx(ctx, s.pool, owner, func(ctx context.Context, tx pgx.Tx) error {
 			if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended(current_database()||':'||current_schema()||':compare-schedule',0))"); err != nil {
 				return err
 			}
@@ -351,6 +351,9 @@ func (s *Store) ScheduleEntityCandidates(ctx context.Context, now time.Time) (in
 			return err
 		})
 		if err != nil {
+			if s.scheduleYielded(ctx, owner, EntityCandidatesStage, err) {
+				continue
+			}
 			return count, err
 		}
 	}

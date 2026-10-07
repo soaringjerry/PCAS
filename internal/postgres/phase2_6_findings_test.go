@@ -2,7 +2,6 @@ package postgres
 
 import (
 	"encoding/json"
-	"os"
 	"testing"
 )
 
@@ -47,10 +46,10 @@ import (
 // during Docker network creation/removal is an environment failure: rerun browsers
 // after database/container work finishes. All such setup errors were corrected.
 func phase26Finding(t *testing.T, id string) {
+	// Fixed in the coordinator's follow-up; the gate is removed so the
+	// reproduction now runs as an ordinary regression.
 	t.Helper()
-	if os.Getenv("PCAS_PHASE26_RUN_FINDINGS") != "1" {
-		t.Skip("finding " + id + "; outstanding independent acceptance, set PCAS_PHASE26_RUN_FINDINGS=1 to reproduce")
-	}
+	_ = id
 }
 
 func phase26InvalidHealth(t *testing.T, health json.RawMessage, stage string) {

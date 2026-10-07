@@ -165,7 +165,7 @@ func (s *Store) scheduleCompareVersion(ctx context.Context, now time.Time, versi
 					continue
 				}
 			}
-			e := backgroundWriteTx(ctx, s.pool, owner, func(ctx context.Context, tx pgx.Tx) error {
+			e := backgroundResultTx(ctx, s.pool, owner, func(ctx context.Context, tx pgx.Tx) error {
 				if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended(current_database()||':'||current_schema()||':queue:'||$1||':'||$2,0))", string(owner), backgroundStage(map[bool]string{false: CompareStage, true: EntityCompareStage}[entity])); err != nil {
 					return err
 				}
@@ -185,7 +185,13 @@ func (s *Store) scheduleCompareVersion(ctx context.Context, now time.Time, versi
 				return err
 			})
 			if e != nil {
-				failed = e
+				stage := CompareStage
+				if entity {
+					stage = EntityCompareStage
+				}
+				if !s.scheduleYielded(ctx, owner, stage, e) {
+					failed = e
+				}
 			}
 		}
 	}

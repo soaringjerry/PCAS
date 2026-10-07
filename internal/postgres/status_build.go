@@ -110,7 +110,7 @@ func (s *Store) ScheduleStatus(ctx context.Context, now time.Time) (int, error) 
 		return count, err
 	}
 	for _, owner := range owners {
-		err := backgroundWriteTx(ctx, s.pool, owner, func(ctx context.Context, tx pgx.Tx) error {
+		err := backgroundResultTx(ctx, s.pool, owner, func(ctx context.Context, tx pgx.Tx) error {
 			anchor, err := seedOrganizeGroupsTx(ctx, tx, owner)
 			if err != nil {
 				return err
@@ -120,6 +120,9 @@ func (s *Store) ScheduleStatus(ctx context.Context, now time.Time) (int, error) 
 			return err
 		})
 		if err != nil {
+			if s.scheduleYielded(ctx, owner, HandoverStage, err) {
+				continue
+			}
 			return count, err
 		}
 	}

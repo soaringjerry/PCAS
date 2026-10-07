@@ -223,7 +223,8 @@ func (s *Store) parseAttachment(ctx context.Context, scope memory.Scope, ref mem
 			}
 			return parsed, err
 		}
-		text, err = s.models.Transcribe(ctx, audio, title)
+		var durationMS *int64
+		text, durationMS, err = s.models.TranscribeUsage(ctx, audio, title)
 		audio.Close()
 		// This adapter reports text, not billing. Use the measured duration
 		// rather than the extra second held during reservation.
@@ -236,7 +237,7 @@ func (s *Store) parseAttachment(ctx context.Context, scope memory.Scope, ref mem
 		}
 		callErr := err
 		refs := []memory.Ref{ref}
-		usage := modelUsage{OwnerID: scope.OwnerID, ID: memory.ID(reservationID), Purpose: "transcription", AgentID: provider.ID, Model: provider.Model, InputTokens: int(math.Ceil(seconds * 50)), OutputTokens: len([]rune(text)), InputEstimated: true, OutputEstimated: true, Cost: cost, CostEstimated: provider.CostMode != "free", MemoryRefs: refs}
+		usage := modelUsage{OwnerID: scope.OwnerID, ID: memory.ID(reservationID), Purpose: "transcription", DurationMS: durationMS, AgentID: provider.ID, Model: provider.Model, InputTokens: int(math.Ceil(seconds * 50)), OutputTokens: len([]rune(text)), InputEstimated: true, OutputEstimated: true, Cost: cost, CostEstimated: provider.CostMode != "free", MemoryRefs: refs}
 		if job != nil {
 			usage.JobID = string(job.ID)
 		}

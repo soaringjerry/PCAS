@@ -87,6 +87,7 @@ func (s *Store) useModelCall(ctx, persist context.Context, scope memory.Scope, a
 	if err != nil {
 		return ai.Result{}, err
 	}
+	ctx = executionCallContext(ctx, usage.Purpose)
 	var result ai.Result
 	if schema != nil {
 		result, err = s.models.GenerateSchema(ctx, agent, instructions, prompt, schema)
@@ -113,6 +114,7 @@ func (s *Store) useModelCall(ctx, persist context.Context, scope memory.Scope, a
 		usage.OwnerID = scope.OwnerID
 		usage.AgentID = agent
 		usage.Model = p.Model
+		usage.DurationMS = result.DurationMS
 		usage.InputTokens = result.InputTokens
 		usage.OutputTokens = result.OutputTokens
 		usage.InputEstimated, usage.OutputEstimated, usage.CostEstimated = result.InputEstimated, result.OutputEstimated, result.CostEstimated

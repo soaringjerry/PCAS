@@ -40,13 +40,13 @@ func TestCompareRestoreMarkerCompatibilityAndRuleScope(t *testing.T) {
 				t.Fatal("undo left exemption", remaining, err)
 			}
 			compareState(t, s, scope, refs, []string{"superseded", ""}, CompareVersion)
-			// Restoring exempts one rule version, not every future comparison rule.
+			// A restoration of this record version survives a comparison rule upgrade.
 			workspaceCommand(t, s, scope, workspace.Command{Type: "restoreMemory", ID: string(refs[0].ID)})
 			j := compareJob(t, s, scope, false, CompareVersion+1)
 			if err := s.processCompareVersion(ctx, j, CompareVersion+1); err != nil {
 				t.Fatal(err)
 			}
-			compareState(t, s, scope, refs, []string{"superseded", ""}, CompareVersion+1)
+			compareState(t, s, scope, refs, []string{"", ""}, CompareVersion+1)
 		})
 	}
 }

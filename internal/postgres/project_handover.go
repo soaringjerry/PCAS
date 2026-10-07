@@ -402,7 +402,7 @@ func currentProjectEvidenceTx(ctx context.Context, tx pgx.Tx, scope memory.Scope
 					query = `SELECT 1 FROM work_items WHERE owner_id=$1 AND id=$2 AND (id=$3 OR project_id=$3) FOR SHARE`
 					args = append(args, input.Project.ID)
 				case "documentVersion":
-					query = `SELECT 1 FROM work_documents d JOIN work_items w ON(w.owner_id,w.id)=(d.owner_id,d.thing_id) WHERE d.owner_id=$1 AND d.id=$2 AND (w.id=$3 OR w.project_id=$3) AND coalesce((d.document->>'version')::int,1)=$4 FOR SHARE OF d,w`
+					query = `SELECT 1 FROM work_documents d JOIN work_items w ON(w.owner_id,w.id)=(d.owner_id,d.thing_id) WHERE d.owner_id=$1 AND d.id=$2 AND (w.id=$3 OR w.project_id=$3) AND greatest(coalesce((d.document->>'version')::int,1),1)=$4 FOR SHARE OF d,w`
 					args = append(args, input.Project.ID, ref.Version)
 				case "run":
 					query = `SELECT 1 FROM agent_runs r JOIN work_items w ON(w.owner_id,w.id)=(r.owner_id,r.thing_id) WHERE r.owner_id=$1 AND r.id=$2 AND r.status='done' AND (w.id=$3 OR w.project_id=$3) FOR SHARE OF r,w`

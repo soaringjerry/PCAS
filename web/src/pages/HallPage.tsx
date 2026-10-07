@@ -314,8 +314,7 @@ function ProjectWall() {
                 {projectStatusLabel[c.project.status].text}
                 {c.open > 0 && ` · ${c.open} 件在做`}
               </span>
-              <span className="h-last">{c.last || '还没有进展记录'}</span>
-              {c.next && <span className="h-next">下一步：{c.next}</span>}
+              {c.next ? <span className="h-last">下一步：{c.next}</span> : c.goal && <span className="h-last">{c.goal}</span>}
             </Link>
           ))}
         </div>

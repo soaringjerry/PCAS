@@ -33,6 +33,7 @@ type Options struct {
 
 func (s *Server) workspaceRoutes(mux *http.ServeMux) {
 	s.libraryRoutes(mux)
+	s.studioRoutes(mux)
 	if reader, ok := s.options.Workspace.(interface {
 		About(context.Context, memory.Scope, string) (workspace.About, error)
 	}); ok {

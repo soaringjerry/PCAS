@@ -182,11 +182,27 @@ func writeReaderMemories(ms []workspace.Memory, loc *time.Location) string {
 	return b.String()
 }
 
+// The self-check may also skip an action. The extra form is spliced into the
+// written schema as text: decoding and re-encoding it would sort the keys and
+// change what a schema-constrained provider can emit (see desk_schema.go).
 var secretaryCheckSchema = func() json.RawMessage {
-	var schema map[string]any
-	_ = json.Unmarshal(secretaryOutputSchema, &schema)
-	props := schema["properties"].(map[string]any)
-	action := props["actions"].(map[string]any)["items"].(map[string]any)
-	action["anyOf"] = append(action["anyOf"].([]any), map[string]any{"type": "object", "properties": map[string]any{"op": map[string]any{"type": "string", "enum": []string{"skip"}}}, "required": []string{"op"}, "additionalProperties": false})
-	return asJSON(schema)
+	const lastAction = `"required": ["op", "ref", "title", "kind", "prompt"],
+            "additionalProperties": false
+          }
+        ]`
+	skip := `"required": ["op", "ref", "title", "kind", "prompt"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {"op": {"type": "string", "enum": ["skip"]}},
+            "required": ["op"],
+            "additionalProperties": false
+          }
+        ]`
+	raw := string(secretaryOutputSchema)
+	if strings.Count(raw, lastAction) != 1 {
+		panic("secretary schema: action list not found")
+	}
+	return json.RawMessage(strings.Replace(raw, lastAction, skip, 1))
 }()

@@ -107,7 +107,7 @@ func (s *Store) Recall(ctx context.Context, scope memory.Scope, in memory.Recall
 			embeddings, usage, e = s.models.EmbedProviderUsage(ctx, provider, []string{provider.EmbeddingQueryPrefix + query})
 			reserved = usage.Cost
 			if usage.InputTokens > 0 {
-				if err := s.recordUsage(ctx, modelUsage{OwnerID: scope.OwnerID, ID: memory.ID(reservationID), Purpose: "query_embedding", AgentID: provider.ID, Model: provider.Model, InputTokens: usage.InputTokens, InputEstimated: usage.InputEstimated, Cost: usage.Cost, CostEstimated: usage.CostEstimated}); err != nil {
+				if err := s.recordUsage(ctx, modelUsage{OwnerID: scope.OwnerID, ID: memory.ID(reservationID), Purpose: "query_embedding", AgentID: provider.ID, Model: provider.Model, DurationMS: usage.DurationMS, InputTokens: usage.InputTokens, InputEstimated: usage.InputEstimated, Cost: usage.Cost, CostEstimated: usage.CostEstimated}); err != nil {
 					return out, err
 				}
 			}

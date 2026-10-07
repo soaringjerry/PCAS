@@ -14,6 +14,7 @@ import (
 
 // modelUsage mirrors model_usage. References contain identity only, never text.
 type modelUsage struct {
+	DurationMS      *int64
 	Tier            string
 	OwnerID         memory.ID
 	ID              memory.ID
@@ -57,11 +58,11 @@ func recordUsageTx(ctx context.Context, tx pgx.Tx, usage modelUsage) error {
 	}
 	// Persist only validated group keys; arbitrary plan text never reaches storage.
 	_, err := tx.Exec(ctx, `INSERT INTO model_usage
- (owner_id,id,at,purpose,agent_id,model,input_tokens,output_tokens,cost,turn_id,run_id,job_id,memory_refs,tier,plan,input_estimated,output_estimated,cost_estimated)
- VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
+ (owner_id,id,at,purpose,agent_id,model,input_tokens,output_tokens,cost,turn_id,run_id,job_id,memory_refs,tier,plan,input_estimated,output_estimated,cost_estimated,duration_ms)
+ VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
  ON CONFLICT (owner_id,id) DO NOTHING`, string(usage.OwnerID), string(usage.ID), usage.At,
 		usage.Purpose, nullString(usage.AgentID), usage.Model, usage.InputTokens, usage.OutputTokens,
-		usage.Cost, nullString(usage.TurnID), nullString(usage.RunID), nullString(usage.JobID), asJSON(refs), usage.Tier, safeUsePlan(usage.Plan), usage.InputEstimated, usage.OutputEstimated, usage.CostEstimated)
+		usage.Cost, nullString(usage.TurnID), nullString(usage.RunID), nullString(usage.JobID), asJSON(refs), usage.Tier, safeUsePlan(usage.Plan), usage.InputEstimated, usage.OutputEstimated, usage.CostEstimated, usage.DurationMS)
 	return err
 }
 
@@ -88,17 +89,41 @@ func (s *Store) UsageSummary(ctx context.Context, scope memory.Scope, from, to s
 			return err
 		}
 		return tx.QueryRow(ctx, `WITH totals AS (
-   SELECT (at AT TIME ZONE $2)::date AS day,purpose,count(*) AS calls,
-    sum(input_tokens) AS input,sum(output_tokens) AS output,sum(cost) AS cost,
- count(*) FILTER(WHERE input_estimated OR output_estimated) AS estimated_tokens, count(*) FILTER(WHERE cost_estimated) AS estimated_cost
-   FROM model_usage WHERE owner_id=$1 AND at >= $3 AND at < $4
-   GROUP BY 1,2
-  ), days AS (
-   SELECT day,jsonb_agg(jsonb_build_object('purpose',purpose,'calls',calls,
-    'inputTokens',input,'outputTokens',output,'cost',cost,'estimatedTokenCalls',estimated_tokens,'estimatedCostCalls',estimated_cost) ORDER BY purpose) AS purposes
-   FROM totals GROUP BY day
-  ) SELECT jsonb_build_object('days',coalesce(jsonb_agg(jsonb_build_object(
-   'date',day::text,'purposes',purposes) ORDER BY day),'[]'::jsonb)) FROM days`,
+ SELECT (at AT TIME ZONE $2)::date AS day,purpose,count(*) AS calls,
+ sum(input_tokens) AS input,sum(output_tokens) AS output,sum(cost) AS cost,
+ count(*) FILTER(WHERE input_estimated OR output_estimated) AS estimated_tokens,
+ count(*) FILTER(WHERE cost_estimated) AS estimated_cost,
+ count(duration_ms) AS measured_calls,
+ percentile_cont(0.5) WITHIN GROUP(ORDER BY duration_ms) AS duration_median,max(duration_ms) AS duration_max
+ FROM model_usage WHERE owner_id=$1 AND at >= $3 AND at < $4 GROUP BY 1,2
+ ), days AS (
+ SELECT day,jsonb_agg(jsonb_build_object('purpose',purpose,'calls',calls,
+ 'inputTokens',input,'outputTokens',output,'cost',cost,'estimatedTokenCalls',estimated_tokens,'estimatedCostCalls',estimated_cost,
+ 'durationMs',jsonb_build_object('measuredCalls',measured_calls,'median',duration_median,'max',duration_max)) ORDER BY purpose) AS purposes
+ FROM totals GROUP BY day
+ ), timings AS (
+ SELECT (at AT TIME ZONE $2)::date AS day,kind,tier,count(*) AS executions,
+ percentile_cont(0.5) WITHIN GROUP(ORDER BY prepare_ms) AS prepare_median, max(prepare_ms) AS prepare_max,
+percentile_cont(0.5) WITHIN GROUP(ORDER BY answer_ms) AS answer_median, max(answer_ms) AS answer_max,
+percentile_cont(0.5) WITHIN GROUP(ORDER BY selfcheck_ms) AS selfcheck_median, max(selfcheck_ms) AS selfcheck_max,
+percentile_cont(0.5) WITHIN GROUP(ORDER BY writeback_ms) AS writeback_median, max(writeback_ms) AS writeback_max,
+percentile_cont(0.5) WITHIN GROUP(ORDER BY model_ms) AS model_median, max(model_ms) AS model_max,
+percentile_cont(0.5) WITHIN GROUP(ORDER BY total_ms) AS total_median, max(total_ms) AS total_max,
+percentile_cont(0.5) WITHIN GROUP(ORDER BY other_ms) AS other_median, max(other_ms) AS other_max
+ FROM execution_timings WHERE owner_id=$1 AND at >= $3 AND at < $4 GROUP BY 1,2,3
+ ), timing_days AS (
+ SELECT day,jsonb_agg(jsonb_build_object('kind',kind,'tier',tier,'executions',executions,
+ 'prepareMs',jsonb_build_object('median',prepare_median,'max',prepare_max),
+'answerMs',jsonb_build_object('median',answer_median,'max',answer_max),
+'selfcheckMs',jsonb_build_object('median',selfcheck_median,'max',selfcheck_max),
+'writebackMs',jsonb_build_object('median',writeback_median,'max',writeback_max),
+'modelMs',jsonb_build_object('median',model_median,'max',model_max),
+'totalMs',jsonb_build_object('median',total_median,'max',total_max),
+'otherMs',jsonb_build_object('median',other_median,'max',other_max)) ORDER BY kind,tier) AS timings FROM timings GROUP BY day
+ ), day_keys AS (SELECT day FROM days UNION SELECT day FROM timing_days)
+ SELECT jsonb_build_object('days',coalesce(jsonb_agg(jsonb_build_object('date',k.day::text,
+ 'purposes',coalesce(d.purposes,'[]'::jsonb),'timings',coalesce(t.timings,'[]'::jsonb)) ORDER BY k.day),'[]'::jsonb))
+ FROM day_keys k LEFT JOIN days d USING(day) LEFT JOIN timing_days t USING(day)`,
 			string(scope.OwnerID), settings.Timezone, start, end).Scan(&out)
 	})
 	return out, err
@@ -139,6 +164,8 @@ type usageCallRef struct {
 }
 
 type usageCall struct {
+	DurationMS      *int64          `json:"durationMs"`
+	ExecutionTiming json.RawMessage `json:"executionTiming,omitempty"`
 	InputEstimated  bool            `json:"inputEstimated"`
 	OutputEstimated bool            `json:"outputEstimated"`
 	CostEstimated   bool            `json:"costEstimated"`
@@ -192,10 +219,13 @@ func (s *Store) UsageCalls(ctx context.Context, scope memory.Scope, limit int, b
 	items := []usageCall{}
 	next := ""
 	err = pgx.BeginTxFunc(ctx, s.pool, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
-		rows, err := tx.Query(ctx, `SELECT id::text,at,purpose,agent_id,model,input_tokens,output_tokens,cost,
-   turn_id::text,run_id::text,job_id::text,memory_refs,tier,plan,input_estimated,output_estimated,cost_estimated FROM model_usage
-   WHERE owner_id=$1 AND ($2::timestamptz IS NULL OR (at,id)<($2,$3::uuid))
-   ORDER BY at DESC,id DESC LIMIT $4`, string(scope.OwnerID), usageBefore(cursor), nullString(string(cursor.ID)), limit+1)
+		rows, err := tx.Query(ctx, `SELECT u.id::text,u.at,u.purpose,u.agent_id,u.model,u.input_tokens,u.output_tokens,u.cost,
+ u.turn_id::text,u.run_id::text,u.job_id::text,u.memory_refs,u.tier,u.plan,u.input_estimated,u.output_estimated,u.cost_estimated,u.duration_ms,
+ CASE WHEN e.id IS NOT NULL THEN jsonb_build_object('kind',e.kind,'tier',e.tier,'prepareMs',e.prepare_ms,'answerMs',e.answer_ms,'selfcheckMs',e.selfcheck_ms,'writebackMs',e.writeback_ms,'modelMs',e.model_ms,'totalMs',e.total_ms,'otherMs',e.other_ms) END
+ FROM model_usage u LEFT JOIN execution_timings e ON e.owner_id=u.owner_id AND e.id=coalesce(u.turn_id,u.run_id)
+ AND e.kind=CASE WHEN u.turn_id IS NOT NULL THEN 'secretary' ELSE 'deputy' END
+ WHERE u.owner_id=$1 AND ($2::timestamptz IS NULL OR (u.at,u.id)<($2,$3::uuid))
+ ORDER BY u.at DESC,u.id DESC LIMIT $4`, string(scope.OwnerID), usageBefore(cursor), nullString(string(cursor.ID)), limit+1)
 		if err != nil {
 			return err
 		}
@@ -204,7 +234,7 @@ func (s *Store) UsageCalls(ctx context.Context, scope memory.Scope, limit int, b
 			var call usageCall
 			var refs []memory.Ref
 			if err := rows.Scan(&call.ID, &call.At, &call.Purpose, &call.AgentID, &call.Model, &call.InputTokens,
-				&call.OutputTokens, &call.Cost, &call.TurnID, &call.RunID, &call.JobID, &refs, &call.Tier, &call.Plan, &call.InputEstimated, &call.OutputEstimated, &call.CostEstimated); err != nil {
+				&call.OutputTokens, &call.Cost, &call.TurnID, &call.RunID, &call.JobID, &refs, &call.Tier, &call.Plan, &call.InputEstimated, &call.OutputEstimated, &call.CostEstimated, &call.DurationMS, &call.ExecutionTiming); err != nil {
 				rows.Close()
 				return err
 			}

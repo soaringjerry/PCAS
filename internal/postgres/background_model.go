@@ -12,6 +12,7 @@ import (
 )
 
 type paidModelResult struct {
+	DurationMS      *int64
 	Prompt          json.RawMessage
 	Output          string
 	Reservation     string
@@ -31,8 +32,8 @@ func (s *Store) paidModelResult(ctx context.Context, j worker.Job) (*paidModelRe
 		return pending.(*paidModelResult), nil
 	}
 	r := &paidModelResult{}
-	err := s.pool.QueryRow(ctx, `SELECT prompt,output,reservation_id::text,provider_id,model,input_tokens,output_tokens,cost,refs,input_estimated,output_estimated,cost_estimated
- FROM background_model_results WHERE owner_id=$1 AND job_id=$2`, string(j.OwnerID), string(j.ID)).Scan(&r.Prompt, &r.Output, &r.Reservation, &r.Provider, &r.Model, &r.InputTokens, &r.OutputTokens, &r.Cost, &r.Refs, &r.InputEstimated, &r.OutputEstimated, &r.CostEstimated)
+	err := s.pool.QueryRow(ctx, `SELECT prompt,output,reservation_id::text,provider_id,model,input_tokens,output_tokens,cost,refs,input_estimated,output_estimated,cost_estimated,duration_ms
+ FROM background_model_results WHERE owner_id=$1 AND job_id=$2`, string(j.OwnerID), string(j.ID)).Scan(&r.Prompt, &r.Output, &r.Reservation, &r.Provider, &r.Model, &r.InputTokens, &r.OutputTokens, &r.Cost, &r.Refs, &r.InputEstimated, &r.OutputEstimated, &r.CostEstimated, &r.DurationMS)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -69,7 +70,7 @@ func (s *Store) generatePaid(ctx context.Context, j worker.Job, purpose, instruc
 		if callErr != nil {
 			// Account even failed/partial calls; no call was made on unavailable providers.
 			if !errors.Is(callErr, memory.ErrUnavailable) {
-				if err := s.recordUsage(ctx, modelUsage{OwnerID: j.OwnerID, ID: memory.ID(id), Purpose: purpose, AgentID: p.ID, Model: p.Model, InputTokens: result.InputTokens, OutputTokens: result.OutputTokens, InputEstimated: result.InputEstimated, OutputEstimated: result.OutputEstimated, CostEstimated: result.CostEstimated, Cost: result.Cost, JobID: string(j.ID), MemoryRefs: refs}); err != nil {
+				if err := s.recordUsage(ctx, modelUsage{OwnerID: j.OwnerID, ID: memory.ID(id), Purpose: purpose, AgentID: p.ID, Model: p.Model, DurationMS: result.DurationMS, InputTokens: result.InputTokens, OutputTokens: result.OutputTokens, InputEstimated: result.InputEstimated, OutputEstimated: result.OutputEstimated, CostEstimated: result.CostEstimated, Cost: result.Cost, JobID: string(j.ID), MemoryRefs: refs}); err != nil {
 					return nil, err
 				}
 			}
@@ -87,15 +88,15 @@ func (s *Store) generatePaid(ctx context.Context, j worker.Job, purpose, instruc
 			}
 			return nil, &worker.JobError{Code: "model_call_failed", Until: time.Now().Add(retryDelay(j.Attempts))}
 		}
-		saved = &paidModelResult{Prompt: prompt, Output: result.Text, Reservation: id, Provider: p.ID, Model: p.Model, InputTokens: result.InputTokens, OutputTokens: result.OutputTokens, InputEstimated: result.InputEstimated, OutputEstimated: result.OutputEstimated, CostEstimated: result.CostEstimated, Cost: result.Cost, Refs: refs}
+		saved = &paidModelResult{Prompt: prompt, Output: result.Text, Reservation: id, Provider: p.ID, Model: p.Model, DurationMS: result.DurationMS, InputTokens: result.InputTokens, OutputTokens: result.OutputTokens, InputEstimated: result.InputEstimated, OutputEstimated: result.OutputEstimated, CostEstimated: result.CostEstimated, Cost: result.Cost, Refs: refs}
 		// A canceled lease can retry persistence in this process without losing
 		// the response. Once stored, restart recovery uses the durable snapshot.
 		s.pendingPaid.Store(j.ID, saved)
 	}
 	for {
 		persistCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
-		_, err = s.pool.Exec(persistCtx, `INSERT INTO background_model_results(owner_id,job_id,purpose,prompt,output,reservation_id,provider_id,model,input_tokens,output_tokens,cost,refs,input_estimated,output_estimated,cost_estimated)
- VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) ON CONFLICT(job_id) DO NOTHING`, string(j.OwnerID), string(j.ID), purpose, saved.Prompt, saved.Output, saved.Reservation, saved.Provider, saved.Model, saved.InputTokens, saved.OutputTokens, saved.Cost, asJSON(saved.Refs), saved.InputEstimated, saved.OutputEstimated, saved.CostEstimated)
+		_, err = s.pool.Exec(persistCtx, `INSERT INTO background_model_results(owner_id,job_id,purpose,prompt,output,reservation_id,provider_id,model,input_tokens,output_tokens,cost,refs,input_estimated,output_estimated,cost_estimated,duration_ms)
+ VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) ON CONFLICT(job_id) DO NOTHING`, string(j.OwnerID), string(j.ID), purpose, saved.Prompt, saved.Output, saved.Reservation, saved.Provider, saved.Model, saved.InputTokens, saved.OutputTokens, saved.Cost, asJSON(saved.Refs), saved.InputEstimated, saved.OutputEstimated, saved.CostEstimated, saved.DurationMS)
 		cancel()
 		if err == nil {
 			s.pendingPaid.Delete(j.ID)
@@ -108,7 +109,7 @@ func (s *Store) generatePaid(ctx context.Context, j worker.Job, purpose, instruc
 		}
 	}
 
-	if err := s.recordUsage(ctx, modelUsage{OwnerID: j.OwnerID, ID: memory.ID(saved.Reservation), Purpose: purpose, AgentID: saved.Provider, Model: saved.Model, InputTokens: saved.InputTokens, OutputTokens: saved.OutputTokens, InputEstimated: saved.InputEstimated, OutputEstimated: saved.OutputEstimated, CostEstimated: saved.CostEstimated, Cost: saved.Cost, JobID: string(j.ID), MemoryRefs: saved.Refs}); err != nil {
+	if err := s.recordUsage(ctx, modelUsage{OwnerID: j.OwnerID, ID: memory.ID(saved.Reservation), Purpose: purpose, AgentID: saved.Provider, Model: saved.Model, DurationMS: saved.DurationMS, InputTokens: saved.InputTokens, OutputTokens: saved.OutputTokens, InputEstimated: saved.InputEstimated, OutputEstimated: saved.OutputEstimated, CostEstimated: saved.CostEstimated, Cost: saved.Cost, JobID: string(j.ID), MemoryRefs: saved.Refs}); err != nil {
 		return nil, err
 	}
 	if err := s.settleModelCost(ctx, j.OwnerID, saved.Reservation, saved.Cost); err != nil {

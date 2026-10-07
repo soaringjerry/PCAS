@@ -284,12 +284,15 @@ func writeUseContext(b *strings.Builder, u useContext, loc *time.Location, write
 	if u.Coverage != nil && len(u.Coverage.Skipped) > 0 {
 		fmt.Fprintln(b, "这几组没来得及看："+strings.Join(u.Coverage.Skipped, "、"))
 	}
+	// A requirement shapes how this sentence is answered. Left unsaid, the model
+	// carried out old one-off requests filed as requirements and edited unrelated items.
 	fmt.Fprintln(b, "\n对助手的要求（独立名额；不限范围全部落实，限范围由你判断是否适用并排序）：")
+	fmt.Fprintln(b, "这些要求只约束你怎么回应「这句话」，本身不是这一轮要办的事：不得因为某条要求去新建、修改或完成任何事项。要求里如果是过去某一次的具体请求（例如某天几点提醒做某事），已不适用，忽略。")
 	for _, m := range u.Rules {
 		fmt.Fprintln(b, u.RequirementScopes[m.ID])
 		write(m)
 	}
-	fmt.Fprintln(b, "\n期限和固定安排（已过期不代表完成，日期没说清保留原话）：")
+	fmt.Fprintln(b, "\n期限和固定安排（仅供参考，不是这一轮要办的事；已过期不代表完成，日期没说清保留原话）：")
 	for _, d := range u.Deadlines {
 		at := ""
 		if d.At != nil {

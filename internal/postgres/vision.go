@@ -2,6 +2,8 @@ package postgres
 
 import (
 	"context"
+	"crypto/sha256"
+	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -17,6 +19,21 @@ const visionInstructions = `请读这张图片。先把图里能辨认的文字�
 // A failed or unavailable model falls back to the existing OCR processor.
 // Logs contain stages and error classes, never images, transcripts or keys.
 func (s *Store) readImage(ctx context.Context, scope memory.Scope, ref memory.Ref, path, media string, job *worker.Job) (string, string, error) {
+	originalData, err := os.ReadFile(path)
+	if err != nil {
+		return "", "", err
+	}
+	component := fmt.Sprintf("vision:%s:%x", filepath.Base(path), sha256.Sum256(originalData))
+	cached, err := s.attachmentReceipt(ctx, scope, ref, component)
+	if err != nil {
+		return "", "", err
+	}
+	if cached != nil {
+		if err = s.accountAttachmentReceipt(ctx, scope, ref, cached, "vision", job); err != nil {
+			return "", "", err
+		}
+		return cached.Output, "vision", nil
+	}
 	p, ok := s.models.VisionProvider()
 	stage, kind := "select", "unavailable"
 	if ok {
@@ -43,6 +60,16 @@ func (s *Store) readImage(ctx context.Context, scope memory.Scope, ref memory.Re
 			result, callErr := s.models.Vision(work, p.ID, visionInstructions, image)
 			cancel()
 			cost := result.Cost
+			if callErr == nil {
+				paid := &paidModelResult{Output: result.Text, Reservation: reservationID, Provider: p.ID, Model: p.Model, InputTokens: result.InputTokens, OutputTokens: result.OutputTokens, InputEstimated: result.InputEstimated, OutputEstimated: result.OutputEstimated, CostEstimated: result.CostEstimated, Cost: cost}
+				if err = s.saveAttachmentReceipt(ctx, scope, ref, component, paid); err != nil {
+					return "", "", err
+				}
+				if err = s.accountAttachmentReceipt(ctx, scope, ref, paid, "vision", job); err != nil {
+					return "", "", err
+				}
+				return paid.Output, "vision", nil
+			}
 			if settleErr := s.settleModelCost(ctx, scope.OwnerID, reservationID, cost); settleErr != nil {
 				return "", "", settleErr
 			}

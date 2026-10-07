@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
@@ -96,7 +97,14 @@ func (s *Store) ProcessAttachment(ctx context.Context, j worker.Job) error {
 	}
 	file.Close()
 	if _, err := s.readAttachment(ctx, scope, j.Record, &j); err != nil {
-		return err
+		var specific *worker.JobError
+		if errors.As(err, &specific) {
+			return err
+		}
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) || errors.Is(err, worker.ErrLeaseLost) {
+			return err
+		}
+		return &worker.JobError{Code: "file_parse_failed", Retry: true}
 	}
 	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		if err := lockJob(ctx, tx, j); err != nil {
@@ -164,6 +172,11 @@ func (s *Store) readAttachment(ctx context.Context, scope memory.Scope, ref memo
 		if _, err := tx.Exec(ctx, "UPDATE source_versions SET representation=$4,derived_from_id=$5,derived_from_version=$6 WHERE owner_id=$1 AND source_id=$2 AND version=$3", string(scope.OwnerID), string(derived.ID), derived.Version, parsed.Representation, string(ref.ID), ref.Version); err != nil {
 			return err
 		}
+		if raw := original.Source.Scope["project_id"]; raw != nil {
+			if _, err = tx.Exec(ctx, `UPDATE source_versions SET scope=$4 WHERE owner_id=$1 AND source_id=$2 AND version=$3`, string(scope.OwnerID), string(derived.ID), derived.Version, asJSON(original.Source.Scope)); err != nil {
+				return err
+			}
+		}
 		_, err = tx.Exec(ctx, "UPDATE workspace_owners SET revision=revision+1 WHERE owner_id=$1", string(scope.OwnerID))
 		return err
 	})
@@ -196,9 +209,38 @@ func (s *Store) parseAttachment(ctx context.Context, scope memory.Scope, ref mem
 		return parsed, closeErr
 	}
 	var text, representation string
-	if strings.HasPrefix(media, "audio/") {
+	if strings.HasPrefix(media, "text/") || oneOf(media, "application/json", "application/xml") {
+		data, readErr := os.ReadFile(path)
+		if readErr != nil {
+			return parsed, readErr
+		}
+		if len(data) > 1<<20 {
+			return parsed, &worker.JobError{Code: "file_text_too_large"}
+		}
+		if !utf8.Valid(data) || strings.TrimSpace(string(data)) == "" {
+			return parsed, &worker.JobError{Code: "file_text_invalid"}
+		}
+		text, representation = string(data), "extracted"
+	} else if strings.HasPrefix(media, "audio/") {
 		if s.models == nil {
 			return parsed, memory.ErrUnavailable
+		}
+		saved, cacheErr := s.attachmentReceipt(ctx, scope, ref, "transcript")
+		if cacheErr != nil {
+			return parsed, cacheErr
+		}
+		if saved != nil {
+			if err := s.accountAttachmentReceipt(ctx, scope, ref, saved, "transcription", job); err != nil {
+				return parsed, err
+			}
+			if len(saved.Output) > 1<<20 {
+				return parsed, &worker.JobError{Code: "file_text_too_large"}
+			}
+			if strings.TrimSpace(saved.Output) == "" {
+				return parsed, &worker.JobError{Code: "file_text_invalid"}
+			}
+			parsed.Text, parsed.Representation = saved.Output, "transcript"
+			return parsed, nil
 		}
 		provider, ok := s.models.Get(s.models.Config.Transcription)
 		if !ok {
@@ -209,8 +251,11 @@ func (s *Store) parseAttachment(ctx context.Context, scope memory.Scope, ref mem
 			return parsed, memory.ErrUnavailable
 		}
 		seconds, durationErr := strconv.ParseFloat(strings.TrimSpace(durationText), 64)
-		if durationErr != nil || seconds <= 0 || seconds > 4*3600 {
-			return parsed, memory.ErrUnavailable
+		if durationErr != nil || seconds <= 0 {
+			return parsed, &worker.JobError{Code: "file_audio_probe_failed"}
+		}
+		if seconds > 4*3600 {
+			return parsed, &worker.JobError{Code: "file_audio_duration_limit"}
 		}
 		reservationID, reserveErr := s.reserveModelCostID(ctx, scope.OwnerID, (seconds+1)/60*provider.AudioPerMinute, job)
 		if reserveErr != nil {
@@ -230,6 +275,20 @@ func (s *Store) parseAttachment(ctx context.Context, scope memory.Scope, ref mem
 		cost := seconds / 60 * provider.AudioPerMinute
 		if err != nil && strings.TrimSpace(text) == "" {
 			cost = 0
+		}
+		if err == nil {
+			paid := &paidModelResult{Output: text, Reservation: reservationID, Provider: provider.ID, Model: provider.Model, InputTokens: int(math.Ceil(seconds * 50)), OutputTokens: len([]rune(text)), InputEstimated: true, OutputEstimated: true, Cost: cost, CostEstimated: provider.CostMode != "free"}
+			if writeErr := s.saveAttachmentReceipt(ctx, scope, ref, "transcript", paid); writeErr != nil {
+				return parsed, writeErr
+			}
+			if writeErr := s.accountAttachmentReceipt(ctx, scope, ref, paid, "transcription", job); writeErr != nil {
+				return parsed, writeErr
+			}
+			parsed.Text, parsed.Representation = text, "transcript"
+			if strings.TrimSpace(text) == "" || len(text) > 1<<20 {
+				return parsed, &worker.JobError{Code: "file_text_too_large"}
+			}
+			return parsed, nil
 		}
 		if settleErr := s.settleModelCost(ctx, scope.OwnerID, reservationID, cost); settleErr != nil {
 			return parsed, settleErr
@@ -251,14 +310,16 @@ func (s *Store) parseAttachment(ctx context.Context, scope memory.Scope, ref mem
 		text, representation, err = parsePDFWithReader(ctx, dir, path, func(ctx context.Context, path string) (string, string, error) {
 			return s.readImage(ctx, scope, ref, path, "image/png", job)
 		})
-	} else {
+	} else if oneOf(media, "image/png", "image/jpeg", "image/webp", "image/tiff", "image/gif", "image/bmp") {
 		text, representation, err = s.readImage(ctx, scope, ref, path, media, job)
+	} else {
+		return parsed, &worker.JobError{Code: "file_parser_unsupported"}
 	}
 	if err != nil {
 		return parsed, err
 	}
 	if strings.TrimSpace(text) == "" || len(text) > 1<<20 {
-		return parsed, memory.ErrUnavailable
+		return parsed, &worker.JobError{Code: "file_text_too_large"}
 	}
 	parsed.Text, parsed.Representation = text, representation
 	return parsed, nil
@@ -305,8 +366,11 @@ func parsePDFWithReader(ctx context.Context, dir, path string, read func(context
 			pages, _ = strconv.Atoi(strings.TrimSpace(strings.TrimPrefix(line, "Pages:")))
 		}
 	}
-	if pages < 1 || pages > 100 {
-		return "", "", memory.ErrUnavailable
+	if pages < 1 {
+		return "", "", errors.Join(memory.ErrUnavailable, &worker.JobError{Code: "file_pdf_invalid"})
+	}
+	if pages > 100 {
+		return "", "", errors.Join(memory.ErrUnavailable, &worker.JobError{Code: "file_pdf_page_limit"})
 	}
 	var out strings.Builder
 	representation := "extracted"
@@ -317,7 +381,7 @@ func parsePDFWithReader(ctx context.Context, dir, path string, read func(context
 			return "", "", err
 		}
 		if strings.TrimSpace(text) == "" {
-			prefix := filepath.Join(dir, "page")
+			prefix := filepath.Join(dir, "page-"+n)
 			if _, err := parserOutput(ctx, "pdftoppm", "-f", n, "-l", n, "-singlefile", "-scale-to", "1800", "-png", path, prefix); err != nil {
 				return "", "", err
 			}
@@ -334,7 +398,7 @@ func parsePDFWithReader(ctx context.Context, dir, path string, read func(context
 		}
 		fmt.Fprintf(&out, "\n[第 %d 页]\n%s", page, text)
 		if out.Len() > 1<<20 {
-			return "", "", memory.ErrUnavailable
+			return "", "", &worker.JobError{Code: "file_text_too_large"}
 		}
 	}
 	return out.String(), representation, nil

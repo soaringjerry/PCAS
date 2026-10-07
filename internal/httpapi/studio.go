@@ -2,8 +2,11 @@ package httpapi
 
 import (
 	"context"
+	"errors"
+	"github.com/soaringjerry/PCAS/internal/blob"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/workspace"
+	"mime"
 	"net/http"
 	"strconv"
 	"strings"
@@ -82,6 +85,68 @@ func (s *Server) studioRoutes(mux *http.ServeMux) {
 					return
 				}
 				writeJSON(w, 200, out)
+				return
+			}
+			if strings.HasSuffix(r.URL.Path, "/files") || r.PathValue("sourceId") != "" {
+				reader, ok := s.options.Workspace.(workspace.StudioAPI)
+				if !ok {
+					s.fail(w, memory.ErrUnavailable)
+					return
+				}
+				var out any
+				var err error
+				status := http.StatusOK
+				switch r.Method {
+				case "GET":
+					out, err = reader.ListProjectFiles(r.Context(), scope, r.PathValue("id"))
+				case "POST":
+					r.Body = http.MaxBytesReader(w, r.Body, blob.MaxBytes+(1<<20))
+					if err = r.ParseMultipartForm(1 << 20); err != nil {
+						var tooLarge *http.MaxBytesError
+						if errors.As(err, &tooLarge) {
+							s.fail(w, workspace.ErrFileTooLarge)
+						} else {
+							s.fail(w, memory.ErrInvalid)
+						}
+						return
+					}
+					defer r.MultipartForm.RemoveAll()
+					if len(r.MultipartForm.File["file"]) != 1 {
+						writeJSON(w, http.StatusBadRequest, map[string]any{"error": "single_file_required", "message": "一次请求上传一个文件，请逐个上传"})
+						return
+					}
+					f, h, e := r.FormFile("file")
+					if e != nil {
+						s.fail(w, memory.ErrInvalid)
+						return
+					}
+					defer f.Close()
+					if h.Size > blob.MaxBytes {
+						s.fail(w, workspace.ErrFileTooLarge)
+						return
+					}
+					media := h.Header.Get("Content-Type")
+					if v, _, e := mime.ParseMediaType(media); e == nil {
+						media = v
+					}
+					var uploaded workspace.ProjectFileUpload
+					uploaded, err = reader.UploadProjectFile(r.Context(), scope, r.PathValue("id"), h.Filename, media, f)
+					out = uploaded
+					if !uploaded.AlreadyExists {
+						status = http.StatusCreated
+					}
+				case "DELETE":
+					err = reader.DeleteProjectFile(r.Context(), scope, r.PathValue("id"), r.PathValue("sourceId"), r.URL.Query().Get("confirmed") == "true")
+					if err == nil {
+						w.WriteHeader(http.StatusNoContent)
+						return
+					}
+				}
+				if err != nil {
+					s.fail(w, err)
+					return
+				}
+				writeJSON(w, status, out)
 				return
 			}
 			s.fail(w, memory.ErrUnavailable)

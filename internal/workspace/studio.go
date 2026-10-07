@@ -2,6 +2,7 @@ package workspace
 
 import (
 	"context"
+	"errors"
 	"io"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
@@ -114,3 +115,7 @@ type RunDocumentVersion struct {
 	DocumentID string `json:"documentId"`
 	Version    int    `json:"version"`
 }
+
+var ErrFileTooLarge = errors.New("file exceeds attachment limit")
+var ErrFileEmpty = errors.New("file is empty")
+var ErrFileConfirmation = errors.New("file deletion requires confirmation")

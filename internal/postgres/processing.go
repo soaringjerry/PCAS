@@ -483,6 +483,11 @@ func (s *Store) ProcessExtraction(ctx context.Context, j worker.Job) (err error)
 		return err
 	}
 	sourceProject := ""
+	if raw := source.Source.Scope["project_id"]; raw != nil {
+		if json.Unmarshal(raw, &sourceProject) != nil {
+			return memory.ErrInvalid
+		}
+	}
 	if source.Source.Connector == "desk" {
 		err = s.pool.QueryRow(ctx, `SELECT coalesce(CASE WHEN w.kind='project' THEN w.id::text ELSE w.project_id::text END,'') FROM desk_turns t JOIN work_items w ON(w.owner_id,w.id)=(t.owner_id,t.thing_id) WHERE t.owner_id=$1 AND t.request_id::text=$2`, string(scope.OwnerID), source.Source.ExternalID).Scan(&sourceProject)
 		if err != nil && !errors.Is(err, pgx.ErrNoRows) {

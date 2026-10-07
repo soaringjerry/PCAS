@@ -99,7 +99,11 @@ func TestPhase26C3SemanticGroupAndDepthPiggybackPrimaryAnswer(t *testing.T) {
 			selector++
 		}
 	}
-	if primary != 1 || reader != 1 || selector != 0 || out.Turn.Reply != "Fictitious semantic answer." {
+	// Coordinator change after the live rollout: scoped requirements are no
+	// longer pre-sent, so the group reader can bring in material the first
+	// answer had not seen and the turn answers once more with it. What this
+	// case guards is that choosing the group and depth costs no selector call.
+	if primary < 1 || primary > 2 || reader != 1 || selector != 0 || out.Turn.Reply != "Fictitious semantic answer." {
 		t.Errorf("piggyback semantics primary=%d target_reader=%d extra_selector=%d reply=%q", primary, reader, selector, out.Turn.Reply)
 	}
 	t.Logf("semantic group/depth in primary answer: primary=%d reader=%d selector=%d elapsed=%s", primary, reader, selector, time.Since(start))

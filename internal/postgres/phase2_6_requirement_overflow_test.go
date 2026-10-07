@@ -59,8 +59,15 @@ func TestPhase26C2C6GlobalRequirementsOverflowIsVisibleAndPrioritized(t *testing
 		t.Fatal(err)
 	}
 	// Raw global total=42: the original26 plus16 newly scoped-to-global rows.
-	if omitted != 12 || kept != 354 {
-		t.Errorf("overflow kept=%d omitted=%d expected354/12", kept, omitted)
+	// Coordinator change after the live rollout (contract section 2 item 4
+	// revised): scoped requirements are no longer handed over wholesale, so
+	// only the 30 global ones that fit are kept; the scoped ones are counted.
+	if omitted != 12 || kept != 30 {
+		t.Errorf("overflow kept=%d omitted=%d expected30/12", kept, omitted)
+	}
+	var scoped int
+	if err := f.Store.pool.QueryRow(f.Context, `SELECT coalesce(sum(count),0) FROM background_stage_events WHERE owner_id=$1 AND stage='secretary' AND reason='scoped_requirement_left_to_recall'`, f.Scope.OwnerID).Scan(&scoped); err != nil || scoped != 324 {
+		t.Errorf("scoped requirements left to recall=%d expected324 err=%v", scoped, err)
 	}
 	health, err := f.Store.BackgroundHealth(f.Context, f.Scope)
 	if err != nil || !strings.Contains(string(health), "global_requirement_char_budget") {

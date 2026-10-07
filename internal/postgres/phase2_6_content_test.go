@@ -126,7 +126,8 @@ func TestPhase26G6B3B7B8LibraryAndC1C2Content(t *testing.T) {
 				t.Error("lost requirement scope")
 			}
 		}
-		if len(u.Rules) != 366 || unrestricted != 26 || len(u.Deadlines) != 48 {
+		// Coordinator change after the live rollout: only unrestricted requirements ride on every turn.
+		if len(u.Rules) != 26 || unrestricted != 26 || len(u.Deadlines) != 48 {
 			t.Errorf("per-turn content rules=%d unrestricted=%d deadlines=%d", len(u.Rules), unrestricted, len(u.Deadlines))
 		}
 		var b strings.Builder
@@ -353,8 +354,9 @@ func TestPhase26G4A6A10ComparisonCoverageAndUnchangedScheduling(t *testing.T) {
 				unrestricted++
 			}
 		}
-		if len(u.Rules) != 363 || unrestricted != 24 {
-			t.Errorf("effective per-turn rules=%d unrestricted=%d expected363/24", len(u.Rules), unrestricted)
+		// Coordinator change after the live rollout: only unrestricted requirements ride on every turn.
+		if len(u.Rules) != 24 || unrestricted != 24 {
+			t.Errorf("effective per-turn rules=%d unrestricted=%d expected24/24", len(u.Rules), unrestricted)
 		}
 		return nil
 	}); err != nil {

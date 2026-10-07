@@ -313,6 +313,16 @@ func (c *Codex) Vision(ctx context.Context, model, instruction string, image Ima
 	return text, err
 }
 
+type codexUsageKey struct{}
+type codexTokenUsage struct{ Input, Output int }
+
+// The capture belongs to this thread/turn; concurrent calls never share counters.
+func (c *Codex) generateResult(ctx context.Context, model, system, prompt string, web bool, schema json.RawMessage, image *Image) (Result, error) {
+	usage := &codexTokenUsage{}
+	text, searches, err := c.generate(context.WithValue(ctx, codexUsageKey{}, usage), model, system, prompt, web, schema, image)
+	return Result{Text: text, Searches: searches, InputTokens: usage.Input, OutputTokens: usage.Output}, err
+}
+
 func (c *Codex) generate(ctx context.Context, model, system, prompt string, web bool, schema json.RawMessage, image *Image) (text string, queries []string, generationErr error) {
 	started := time.Now()
 	operation := "initialize"
@@ -425,11 +435,17 @@ func (c *Codex) generate(ctx context.Context, model, system, prompt string, web 
 				return "", nil, &CodexError{Operation: operation, Category: "event_buffer_exceeded"}
 			}
 			var p struct {
-				ThreadID  string          `json:"threadId"`
-				TurnID    string          `json:"turnId"`
-				Error     *codexTurnError `json:"error"`
-				WillRetry bool            `json:"willRetry"`
-				Item      struct {
+				ThreadID   string          `json:"threadId"`
+				TurnID     string          `json:"turnId"`
+				Error      *codexTurnError `json:"error"`
+				WillRetry  bool            `json:"willRetry"`
+				TokenUsage struct {
+					Total struct {
+						Input  int `json:"inputTokens"`
+						Output int `json:"outputTokens"`
+					} `json:"total"`
+				} `json:"tokenUsage"`
+				Item struct {
 					Type  string `json:"type"`
 					Text  string `json:"text"`
 					Query string `json:"query"`
@@ -442,6 +458,11 @@ func (c *Codex) generate(ctx context.Context, model, system, prompt string, web 
 			}
 			if json.Unmarshal(event.Params, &p) != nil || p.ThreadID != thread.Thread.ID {
 				continue
+			}
+			if event.Method == "thread/tokenUsage/updated" && p.TurnID == turn.Turn.ID {
+				if usage, ok := ctx.Value(codexUsageKey{}).(*codexTokenUsage); ok {
+					usage.Input, usage.Output = p.TokenUsage.Total.Input, p.TokenUsage.Total.Output
+				}
 			}
 			if event.Method == "error" && p.TurnID == turn.Turn.ID {
 				lastError = p.Error.safeError(operation)

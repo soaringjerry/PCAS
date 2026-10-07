@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"mime"
 	"net/http"
@@ -225,10 +226,35 @@ func (s *Server) workspaceRoutes(mux *http.ServeMux) {
 					return
 				}
 			}
+			if versioned, ok := s.options.Workspace.(interface {
+				SnapshotETag(context.Context, memory.Scope) (string, error)
+			}); ok {
+				tag, err := versioned.SnapshotETag(ctx, scope)
+				if err != nil {
+					s.fail(w, err)
+					return
+				}
+				if tag != "" {
+					w.Header().Set("ETag", tag)
+					w.Header().Set("Cache-Control", "private, no-cache")
+				}
+				for _, known := range strings.Split(r.Header.Get("If-None-Match"), ",") {
+					if tag != "" && (strings.TrimSpace(known) == tag || strings.TrimSpace(known) == "W/"+tag) {
+						w.WriteHeader(http.StatusNotModified)
+						return
+					}
+				}
+			}
 			out, err := s.options.Workspace.Snapshot(ctx, scope)
 			if err != nil {
 				s.fail(w, err)
 				return
+			}
+			if _, ok := s.options.Workspace.(interface {
+				SnapshotETag(context.Context, memory.Scope) (string, error)
+			}); ok {
+				w.Header().Set("Cache-Control", "private, no-cache")
+				w.Header().Set("ETag", fmt.Sprintf("\"workspace-%s-%d-%d-%d\"", scope.OwnerID, out.Revision, out.MemoryRevision, out.SnapshotRevision))
 			}
 			writeJSON(w, 200, out)
 		}))

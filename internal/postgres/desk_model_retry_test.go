@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -169,9 +170,9 @@ func TestSecretaryModelRetryOutcomeAndIdempotency(t *testing.T) {
 			if len(calls) == 2 && !bytes.Equal(calls[0], calls[1]) {
 				t.Fatal("retry changed instructions, context or schema")
 			}
-			connector, tasks, actions, usage := "capture", 0, 0, 0
+			connector, tasks, actions, usage := "capture", 0, 0, tt.calls
 			if tt.success {
-				connector, tasks, actions, usage = "desk", 1, 1, 1
+				connector, tasks, actions = "desk", 1, 1
 				if out.Turn.Reply != "安排好了。" || len(out.Turn.Receipts) != 1 || out.Turn.Receipts[0].Op != "create_task" || strings.Contains(logs.String(), "secretary capture fallback") {
 					t.Fatal("intermediate failure reached the user", out.Turn)
 				}
@@ -197,8 +198,12 @@ func TestSecretaryModelRetryOutcomeAndIdempotency(t *testing.T) {
 					}
 				}
 				var cost float64
-				if err := s.pool.QueryRow(context.Background(), "SELECT sum(reserved_cost) FROM background_usage WHERE owner_id=$1", string(scope.OwnerID)).Scan(&cost); err != nil || cost != 0 {
-					t.Fatal("failed subscription attempts left reserved spending", cost, err)
+				var measured float64
+				if err := s.pool.QueryRow(context.Background(), "SELECT sum(reserved_cost) FROM background_usage WHERE owner_id=$1", string(scope.OwnerID)).Scan(&cost); err != nil || cost <= 0 {
+					t.Fatal("subscription calls bypassed daily accounting", cost, err)
+				}
+				if err := s.pool.QueryRow(context.Background(), "SELECT sum(cost) FROM model_usage WHERE owner_id=$1", string(scope.OwnerID)).Scan(&measured); err != nil || math.Abs(cost-measured) > 1e-9 {
+					t.Fatal("usage and reservation settlement differ", cost, measured, err)
 				}
 			}
 			assertRows()
@@ -235,7 +240,7 @@ func TestSecretaryModelRetryDefersBusinessWrites(t *testing.T) {
 	})
 }
 
-func TestSecretaryModelRetryRechecksContext(t *testing.T) {
+func TestSecretaryModelRetryPreservesReplyAfterUnrelatedTaskChange(t *testing.T) {
 	s, scope := testStore(t), owner()
 	dir := secretaryRetryCodex(t, s, 1, 1, "serverOverloaded")
 	state := workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "Q5原名称"})
@@ -246,9 +251,21 @@ func TestSecretaryModelRetryRechecksContext(t *testing.T) {
 	secretaryRetryGate(t, dir, done, func() {
 		workspaceCommand(t, s, scope, workspace.Command{Type: "renameThing", ID: state.Tasks[0].ID, Title: "Q5后来的名称"})
 	})
-	if len(secretaryRetryCalls(t, dir)) != 1 {
-		t.Fatal("sent stale context on retry")
+	if len(secretaryRetryCalls(t, dir)) != 2 {
+		t.Fatal("unrelated task change prevented reply retry")
 	}
+	state, err := s.Snapshot(context.Background(), scope)
+	if err != nil || len(state.Tasks) != 2 {
+		t.Fatal(state, err)
+	}
+	titles := map[string]bool{}
+	for _, task := range state.Tasks {
+		titles[task.Title] = true
+	}
+	if !titles["Q5后来的名称"] || !titles["Q5虚构事项"] {
+		t.Fatal("reply actions or concurrent edit lost", titles)
+	}
+
 }
 
 func secretaryRetryGate(t *testing.T, dir string, done <-chan error, change func()) {

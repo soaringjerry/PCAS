@@ -29,6 +29,7 @@ reply 简短纯文本，像当面回话，不列 1. 2. 3.；事项清单用 show
 urgent：用户明确表示这件事着急（尽快、不能拖、马上、赶紧、抓紧、越快越好）时填 true；用户说不急了、不用赶时，用 update 填 false；没提到就填 null，不改变原值。只说了一个具体时间不算着急。
 有 timeline、tasks 等卡片展示时，reply 只写一句结论（40 字以内），不要重复列举卡片内容。
 搜索词会离开对话：只写公开信息关键词，绝不能把资料中的人名、数字、私事放进搜索词。实时信息查不到就说明，不能编造。
+memoryPlan 在同一次回答中判断：depth 为 light/medium/heavy，用户要求仔细核查或点名分组时选 heavy；groups 填目录中相关或用户点名的 key；mentioned 仅填用户主动提及的 M*，不可把你自己选为依据的记忆算主动提及；adopted 仅填用户明确采纳上一轮回答时其中引用过的 M*，普通显示或自动保存不算采纳。无目录可用仍可给 medium。
 只输出 JSON：{"reply":"简短回答或空字符串","used":["M1"],"links":["https://..."],"show":["T1"],"remember":false,"missingKeyInfo":false,"actions":[...],"ask":null}。
 missingKeyInfo：缺少会影响结果的关键信息时填 true，否则 false。信任标签 trust 为 stated/repeated/tentative/reported/inferred，带保留和转述必须保留限定。
 actions 每轮最多 10 条，格式：
@@ -50,6 +51,7 @@ type storedSecretaryResponse struct {
 }
 
 type secretaryContext struct {
+	TargetItems       map[string]workspace.Item
 	ConversationID    string
 	Agent             workspace.Agent
 	Settings          workspace.Settings
@@ -84,7 +86,7 @@ func pointerValue(v *string) string {
 }
 
 func (s *Store) secretaryContextTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, req workspace.DeskTurnRequest, conversationID string) (secretaryContext, error) {
-	out := secretaryContext{ConversationID: conversationID, Aliases: map[string]workspace.Item{}, Memories: map[string]workspace.Memory{}, Counts: map[string]int{}}
+	out := secretaryContext{TargetItems: map[string]workspace.Item{}, ConversationID: conversationID, Aliases: map[string]workspace.Item{}, Memories: map[string]workspace.Memory{}, Counts: map[string]int{}}
 	agentID := req.AgentID
 	if agentID == "" {
 		agentID = s.models.ExtractionID()
@@ -132,6 +134,11 @@ func (s *Store) secretaryContextTx(ctx context.Context, tx pgx.Tx, scope memory.
 	}{{"P", &out.Projects}, {"T", &out.Tasks}, {"I", &out.Ideas}, {"R", &out.Recent}} {
 		for i := range *group.items {
 			item := (*group.items)[i]
+			original, err := getItem(ctx, tx, scope, item.ID)
+			if err != nil {
+				return out, err
+			}
+			out.TargetItems[item.ID] = original
 			var refs []memory.Ref
 			item, refs, err = sanitizeItemTx(ctx, tx, scope, out.Agent.ID, item)
 			if err != nil {
@@ -148,6 +155,7 @@ func (s *Store) secretaryContextTx(ctx context.Context, tx pgx.Tx, scope memory.
 		if err != nil {
 			return out, err
 		}
+		out.TargetItems[item.ID] = item
 		item, refs, err := sanitizeItemTx(ctx, tx, scope, out.Agent.ID, item)
 		if err != nil {
 			return out, err
@@ -175,6 +183,9 @@ func (s *Store) secretaryContextTx(ctx context.Context, tx pgx.Tx, scope memory.
 	}
 	stored, err := s.deskTurnsTx(ctx, tx, scope, conversationID, 6, out.Agent.ID, req.ThingID, &out.Dependencies)
 	if err != nil {
+		return out, err
+	}
+	if err := recordSecretaryOverflowTx(ctx, tx, scope, out); err != nil {
 		return out, err
 	}
 	out.History = stored.Turns
@@ -291,6 +302,13 @@ func (s *Store) secretaryPrompt(ctx context.Context, tx pgx.Tx, scope memory.Sco
 	if err != nil {
 		return "", nil, err
 	}
+	for reason, n := range map[string]int{"recall_budget": recall.Coverage.Omitted, "source_recall_budget": recall.Coverage.OmittedSources} {
+		if n > 0 {
+			if err := stageEventTx(ctx, tx, scope.OwnerID, "secretary", "overflow", reason, n); err != nil {
+				return "", nil, err
+			}
+		}
+	}
 	ids := make([]string, 0, len(recall.Memories))
 	for _, ref := range recall.Memories {
 		ids = append(ids, string(ref.ID))
@@ -315,7 +333,7 @@ func (s *Store) secretaryPrompt(ctx context.Context, tx pgx.Tx, scope memory.Sco
 	}
 	sent := map[string]workspace.Memory{}
 	contextClaims := []evidenceContextClaim{}
-	if c.Use.Ready {
+	if c.Use.Ready || len(c.Use.Rules) > 0 || len(c.Use.Deadlines) > 0 {
 		writeUseContext(&prompt, c.Use, loc, func(m workspace.Memory) {
 			alias := ""
 			for k, v := range sent {
@@ -490,7 +508,8 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 	// generation still observes the caller cancellation below.
 	requestCtx := ctx
 	turnStarted := time.Now()
-	persistTimeout := 2 * time.Minute
+	// The answer model may request heavy reading after its first response.
+	persistTimeout := heavyUseTimeout
 	if memoryTier(ctx, req.Text, "light") == "heavy" {
 		persistTimeout = heavyUseTimeout
 		var generationCancel context.CancelFunc
@@ -616,7 +635,7 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 				}
 				modelStarted := time.Now()
 				workCtx, cancel := context.WithTimeout(requestCtx, secretaryModelTimeout)
-				workCtx = context.WithValue(workCtx, secretaryUsageKey{}, secretaryUsageMeta{AllCalls: c.Use.Ready, Usage: modelUsage{Tier: c.Tier, TurnID: out.Turn.ID, MemoryRefs: c.Dependencies, Plan: asJSON(usePlan{Groups: c.Use.Groups})}})
+				workCtx = context.WithValue(workCtx, secretaryUsageKey{}, secretaryUsageMeta{AllCalls: true, Usage: modelUsage{Tier: c.Tier, TurnID: out.Turn.ID, MemoryRefs: c.Dependencies, Plan: asJSON(usePlan{Groups: c.Use.Groups})}})
 				result, modelStage, err := s.generateSecretaryModelWithRetry(workCtx, ctx, scope, c.Agent.ID, prompt, func(callCtx context.Context) error {
 					return s.checkSecretaryUseContextTx(callCtx, tx, scope, c)
 				})
@@ -637,6 +656,39 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 						answer = secretaryOutput{Reply: strings.TrimSpace(result.Text)}
 					} else {
 						slog.InfoContext(ctx, "secretary output parsed", "stage", "parse", "error_type", "none")
+						if answer.MemoryPlan != nil && oneOf(answer.MemoryPlan.Depth, "medium", "heavy") {
+							readHeavy := c.Tier != "heavy"
+							c.Tier = memoryTierForStatus(answer.MemoryPlan.Depth, c.Use.Ready)
+							if c.Tier == "heavy" && readHeavy {
+								c.Use.RequiredGroups = []string{}
+								for _, key := range answer.MemoryPlan.Groups {
+									for i, g := range c.Use.Index {
+										if key == fmt.Sprintf("G%d", i+1) {
+											c.Use.RequiredGroups = append(c.Use.RequiredGroups, g.Key)
+										}
+									}
+								}
+								c.Use.Selected = true
+								picked, refs, keys := s.heavyUse(requestCtx, ctx, scope, c.Agent, req.ThingID, req.Text, c.Use, out.Turn.ID, "")
+								c.Use.Groups = keys
+								c.Dependencies = uniqueRefs(append(c.Dependencies, refs...))
+								for _, m := range picked {
+									exists := false
+									for _, old := range sent {
+										if old.ID == m.ID {
+											exists = true
+											break
+										}
+									}
+									if exists {
+										continue
+									}
+									alias := fmt.Sprintf("M%d", len(sent)+1)
+									sent[alias] = m
+									prompt += fmt.Sprintf("\n重读补充 [%s] %s\n", alias, m.Text)
+								}
+							}
+						}
 						if c.Tier == "light" && (answer.MissingKeyInfo || secretaryNeedsCheck(answer)) {
 							c.Tier = "medium"
 						}
@@ -662,7 +714,7 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 		}
 		if contextErr == nil {
 			failureStage = "verify"
-			contextErr = s.checkSecretaryUseContextTx(ctx, tx, scope, c)
+			contextErr = s.checkSecretaryActionTargetsTx(ctx, tx, scope, c, answer)
 		}
 		dependencies := []memory.Ref{}
 		if contextErr != nil {
@@ -692,6 +744,47 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 				}
 			}
 			out.Turn.Reply = secretaryReply(answer.Reply)
+			if c.Use.Coverage != nil && len(c.Use.Coverage.Skipped) > 0 {
+				out.Turn.Reply += "\n这几组没来得及看：" + strings.Join(c.Use.Coverage.Skipped, "、")
+			}
+			if answer.MemoryPlan != nil && len(c.History) > 0 {
+				last := c.History[len(c.History)-1]
+				for _, alias := range answer.MemoryPlan.Adopted {
+					m, ok := sent[alias]
+					if !ok {
+						continue
+					}
+					referenced := false
+					for _, card := range last.Cards {
+						if card.Kind == "sources" {
+							var items []workspace.DeskSourceItem
+							if json.Unmarshal(asJSON(card.Items), &items) == nil {
+								for _, item := range items {
+									if item.MemoryID == m.ID {
+										referenced = true
+									}
+								}
+							}
+						}
+					}
+					if !referenced {
+						continue
+					}
+					if err := recordContextUseTx(ctx, tx, scope, memory.UseEvent{Ref: memory.Ref{ID: memory.ID(m.ID), Version: m.Version, Kind: memory.ClaimKind}, EventID: out.Turn.ID + ":adopt:" + m.ID, Kind: "adoption", At: time.Now()}); err != nil && !errors.Is(err, memory.ErrConflict) && !errors.Is(err, memory.ErrNotFound) {
+						return err
+					}
+				}
+			}
+			if answer.MemoryPlan != nil {
+				for _, alias := range answer.MemoryPlan.Mentioned {
+					if m, ok := sent[alias]; ok {
+						if err := recordContextUseTx(ctx, tx, scope, memory.UseEvent{Ref: memory.Ref{ID: memory.ID(m.ID), Version: m.Version, Kind: memory.ClaimKind}, EventID: out.Turn.ID + ":mention:" + m.ID, Kind: "user_mention", At: time.Now()}); err != nil && !errors.Is(err, memory.ErrConflict) && !errors.Is(err, memory.ErrNotFound) {
+							return err
+						}
+					}
+				}
+			}
+
 			out.Turn.Ask = answer.Ask
 			if out.Turn.Ask != nil && out.Turn.Ask.Options == nil {
 				out.Turn.Ask.Options = []string{}
@@ -716,7 +809,7 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 					continue
 				}
 				actionID := string(memory.NewID())
-				actionCtx := withActionLog(withActor(ctx, "secretary"), actionID, "desk", out.Turn.ID, "秘书："+a.Op)
+				actionCtx := withActionLog(withActor(WithMemoryTier(ctx, c.Tier), "secretary"), actionID, "desk", out.Turn.ID, "秘书："+a.Op)
 				actionTx, err := tx.Begin(ctx)
 				if err != nil {
 					return err
@@ -803,13 +896,7 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 	return out, err
 }
 
-func secretaryReply(reply string) string {
-	reply = strings.TrimSpace(reply)
-	if utf8.RuneCountInString(reply) > 2000 {
-		return string([]rune(reply)[:2000]) + "\n回答太长，已截断"
-	}
-	return reply
-}
+func secretaryReply(reply string) string { return strings.TrimSpace(reply) }
 
 func pointerValueOrNull(v *string) any {
 	if v == nil {
@@ -921,6 +1008,52 @@ func refreshDeskReceiptUndoTx(ctx context.Context, tx pgx.Tx, scope memory.Scope
 				receipt.Undone = byID[*receipt.ActionID]
 			}
 		}
+	}
+	return nil
+}
+
+func recordSecretaryOverflowTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c secretaryContext) error {
+	rows, err := tx.Query(ctx, `SELECT kind,count(*) FROM work_items WHERE owner_id=$1 AND ((kind='task' AND status IN ('todo','doing','waiting')) OR (kind='project' AND status='active') OR kind='idea') GROUP BY kind`, string(scope.OwnerID))
+	if err != nil {
+		return err
+	}
+	counts := map[string]int{}
+	for rows.Next() {
+		var kind string
+		var n int
+		if err := rows.Scan(&kind, &n); err != nil {
+			rows.Close()
+			return err
+		}
+		counts[kind] = n
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return err
+	}
+	for kind, limit := range map[string]int{"task": 40, "project": 50, "idea": 20} {
+		if n := counts[kind] - limit; n > 0 {
+			if err := stageEventTx(ctx, tx, scope.OwnerID, "secretary", "overflow", kind+"_context_limit", n); err != nil {
+				return err
+			}
+		}
+	}
+	var recent int
+	if err := tx.QueryRow(ctx, `SELECT count(DISTINCT w.id) FROM action_log l JOIN desk_turns t ON(t.owner_id,t.id)=(l.owner_id,l.turn_id) CROSS JOIN LATERAL jsonb_array_elements(l.changes) c JOIN work_items w ON w.owner_id=l.owner_id AND w.id::text=c->>'id' WHERE l.owner_id=$1 AND t.conversation_id=$2 AND l.undone_at IS NULL AND c->>'table'='work_items'`, string(scope.OwnerID), c.ConversationID).Scan(&recent); err != nil {
+		return err
+	}
+	if recent > 20 {
+		if err := stageEventTx(ctx, tx, scope.OwnerID, "secretary", "overflow", "recent_item_context_limit", recent-20); err != nil {
+			return err
+		}
+	}
+	var turns int
+	if err := tx.QueryRow(ctx, "SELECT count(*) FROM desk_turns WHERE owner_id=$1 AND conversation_id=$2", string(scope.OwnerID), c.ConversationID).Scan(&turns); err != nil {
+		return err
+	}
+	if turns > 6 {
+		return stageEventTx(ctx, tx, scope.OwnerID, "secretary", "overflow", "history_context_limit", turns-6)
 	}
 	return nil
 }

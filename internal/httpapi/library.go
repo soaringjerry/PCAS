@@ -1,6 +1,8 @@
 package httpapi
 
 import (
+	"context"
+	"encoding/json"
 	"net/http"
 	"strconv"
 
@@ -26,6 +28,13 @@ func (s *Server) libraryRoutes(mux *http.ServeMux) {
 			}
 			writeJSON(w, http.StatusOK, out)
 		})
+	}
+	if health, ok := s.options.Workspace.(interface {
+		BackgroundHealth(context.Context, memory.Scope) (json.RawMessage, error)
+	}); ok {
+		mux.HandleFunc("GET /v1/workspace/background", ownerRead(func(r *http.Request, scope memory.Scope) (any, error) {
+			return health.BackgroundHealth(r.Context(), scope)
+		}))
 	}
 	mux.HandleFunc("GET /v1/workspace/handover", ownerRead(func(r *http.Request, scope memory.Scope) (any, error) {
 		return reader.ReadHandover(r.Context(), scope)

@@ -25,7 +25,7 @@ func phase25B4Kind(r phase25B234ModelRequest) string {
 		}
 	}
 	s := sys.String()
-	if strings.Contains(phase25B4Prompt(r), `只输出 JSON：{"groups"`) || strings.Contains(s, `"groups"`) {
+	if strings.Contains(phase25B4Prompt(r), `只输出 JSON：{"groups"`) {
 		return "selection"
 	}
 	if strings.Contains(s, "自查") || strings.Contains(s, "检查并修订") {
@@ -53,6 +53,7 @@ func phase25B4Reader(ids []memory.ID) phase25B234ModelReply {
 
 type phase25B4HeavyGroup struct {
 	key   string
+	name  string
 	refs  []memory.Ref
 	texts []string
 }
@@ -62,7 +63,7 @@ func (f *phase25B234Fixture) heavyGroups(t *testing.T, n int) []phase25B4HeavyGr
 	var groups []phase25B4HeavyGroup
 	for i := 0; i < n; i++ {
 		g := workspace.MemoryGroup{EntityID: string(f.entity(t, "project", fmt.Sprintf("虚构接力项目%02d", i))), Type: "project", Name: fmt.Sprintf("虚构接力项目%02d", i)}
-		group := phase25B4HeavyGroup{key: "entity:" + g.EntityID}
+		group := phase25B4HeavyGroup{key: "entity:" + g.EntityID, name: g.Name}
 		for j := 0; j < 3; j++ {
 			text := fmt.Sprintf("AcceptanceHeavy 虚构接力项目%02d原文%02d：提交蓝色图表。", i, j)
 			r := f.claim(t, text)
@@ -72,6 +73,9 @@ func (f *phase25B234Fixture) heavyGroups(t *testing.T, n int) []phase25B4HeavyGr
 		}
 		f.card(t, g, group.refs, false)
 		groups = append(groups, group)
+	}
+	if len(groups) > 0 {
+		f.handover(t, groups[0].key, false)
 	}
 	return groups
 }
@@ -240,7 +244,7 @@ func TestPhase25B4_X4_10_SharedNinetySecondReaderDeadlineLeavesAnswerTime(t *tes
 	if elapsed > 170*time.Second {
 		t.Errorf("round deadline=%s", elapsed)
 	}
-	if run.Output != "虚构采用已经返回的结果。" {
+	if run.Output != "虚构采用已经返回的结果。\n这几组没来得及看："+groups[1].name {
 		t.Errorf("partial answer=%q", run.Output)
 	}
 	mu.Lock()

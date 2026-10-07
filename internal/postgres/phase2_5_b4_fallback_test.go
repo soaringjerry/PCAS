@@ -14,7 +14,7 @@ func TestPhase25B4_MediumPromotionWithoutCards(t *testing.T) {
 			model := f.model(t, func(_ *http.Request, n int, _ phase25B234ModelRequest) phase25B234ModelReply {
 				if n == 1 {
 					time.Sleep(50 * time.Millisecond)
-					return phase25B4ReplyJSON(phase25B4Reply{text: "虚构无卡初稿。", missingKeyInformation: mode == "missing"}, false)
+					return phase25B4ReplyJSON(phase25B4Reply{text: "虚构无卡初稿。", missingKeyInformation: mode == "missing", depth: "medium"}, false)
 				}
 				return phase25B4ReplyJSON(phase25B4Reply{text: "虚构无卡自查回复。"}, true)
 			})

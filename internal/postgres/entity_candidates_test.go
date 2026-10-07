@@ -317,13 +317,13 @@ func TestEntityCandidatesHourlyBudgetAndRuleRecheck(t *testing.T) {
 	if _, err := s.pool.Exec(ctx, `INSERT INTO memory_jobs(id,owner_id,record_id,record_version,stage,state) VALUES(gen_random_uuid(),$1,$2,$3,'memory.organize:1:quota-seed','done')`, scope.OwnerID, j.Record.ID, j.Record.Version); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.pool.Exec(ctx, `INSERT INTO background_usage(owner_id,job_id,reserved_cost) SELECT $1,id,0 FROM memory_jobs CROSS JOIN generate_series(1,120) WHERE owner_id=$1 AND stage='memory.organize:1:quota-seed'`, scope.OwnerID); err != nil {
+	if _, err := s.pool.Exec(ctx, `INSERT INTO background_usage(owner_id,job_id,reserved_cost,stage) SELECT $1,id,0,'memory.entity_candidates' FROM memory_jobs CROSS JOIN generate_series(1,6) WHERE owner_id=$1 AND stage='memory.organize:1:quota-seed'`, scope.OwnerID); err != nil {
 		t.Fatal(err)
 	}
 	err := s.ProcessEntityCandidates(ctx, j)
 	var quota *worker.JobError
-	if !errors.As(err, &quota) || quota.Code != "compare_hourly_limit" || !quota.NoAttempt || len(f.all()) != 0 {
-		t.Fatal("catalogue bypassed 120 cap", err, len(f.all()))
+	if !errors.As(err, &quota) || quota.Code != "entity_candidates_hourly_limit" || !quota.NoAttempt || len(f.all()) != 0 {
+		t.Fatal("catalogue bypassed independent six-call cap", err, len(f.all()))
 	}
 	if _, err := s.pool.Exec(ctx, `UPDATE background_usage SET created_at=now()-interval '2 hours'`); err != nil {
 		t.Fatal(err)
@@ -334,16 +334,13 @@ func TestEntityCandidatesHourlyBudgetAndRuleRecheck(t *testing.T) {
 	if len(f.all()) != 1 {
 		t.Fatal("released budget", len(f.all()))
 	}
-	// The actual name-list invocation must also block the OLD organizer:
-	// bring 119 prior calls back into the hour, plus that real list call.
-	if _, err := s.pool.Exec(ctx, `UPDATE background_usage SET created_at=now() WHERE id IN(SELECT b.id FROM background_usage b JOIN memory_jobs job ON job.id=b.job_id WHERE job.stage='memory.organize:1:quota-seed' LIMIT 119)`); err != nil {
-		t.Fatal(err)
-	}
+	// Even a saturated scan ledger cannot consume classification capacity.
+	seedStageUsage(t, s, scope, EntityCandidatesStage, 6)
 	organizeTestMemory(t, s, scope, "虚构名单调用后的整理哨兵")
 	organizeJob := leaseStage(t, s, scope, j.Record, fmt.Sprintf("%s:%d:%s", OrganizeStage, OrganizeVersion, memory.NewID()))
-	err = s.ProcessOrganize(ctx, organizeJob)
-	if !errors.As(err, &quota) || quota.Code != "organize_hourly_limit" || !quota.NoAttempt || len(f.all()) != 1 {
-		t.Fatal("organizer omitted actual name-list call", err, len(f.all()))
+	f.set(`{"items":[{"n":1,"category":"event","durable":false,"deadlines":[]}]}`)
+	if err := s.ProcessOrganize(ctx, organizeJob); err != nil || len(f.all()) != 2 {
+		t.Fatal("scan must not consume classification capacity", err, len(f.all()))
 	}
 	if err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		b, err := nextEntityCandidateBatchTx(ctx, tx, scope.OwnerID, EntityCompareVersion)
@@ -395,8 +392,8 @@ func TestEntityCandidatesModelCallDoesNotHoldOwnerLock(t *testing.T) {
 		t.Fatal("owner row held across list call", lockErr)
 	}
 	var hints int
-	if err := s.pool.QueryRow(ctx, `SELECT count(*) FROM memory_jobs WHERE owner_id=$1 AND stage LIKE 'memory.entity_candidates:%:pair:%'`, scope.OwnerID).Scan(&hints); err != nil || hints != 0 {
-		t.Fatal("changed list wrote hints", hints, err)
+	if err := s.pool.QueryRow(ctx, `SELECT count(*) FROM entity_alias_candidates WHERE owner_id=$1`, scope.OwnerID).Scan(&hints); err != nil || hints != 1 {
+		t.Fatal("name-stable list lost its modeled candidate after memory-count change", hints, err)
 	}
 }
 
@@ -409,7 +406,7 @@ func TestEntityCandidatesRuleUpgradeRechecksEntitiesOnly(t *testing.T) {
 	}
 	compareEntityFixture(t, s, scope, "虚构星岚", "虚构星岚负责同一份器材")
 	compareEntityFixture(t, s, scope, "虚构星岚女士", "虚构星岚女士是器材负责人的完整称呼")
-	j := compareJob(t, s, scope, true, EntityCompareVersion)
+	j := compareJob(t, s, scope, true, 1)
 	if err := s.processEntityCompareVersion(ctx, j, 1); err != nil {
 		t.Fatal(err)
 	}
@@ -467,13 +464,13 @@ func TestEntityCandidatesInitialCatalogueCallEstimate(t *testing.T) {
 	for _, batch := range batches {
 		counts[batch.Scope]++
 	}
-	for scope, want := range map[string]int{"organization": 6, "person": 1, "place": 3, "project": 1, "topic": 3, "place_topic": 8, "organization_topic": 11} {
+	for scope, want := range map[string]int{"organization": 10, "person": 1, "place": 6, "project": 1, "topic": 6, "place_topic": 9, "organization_topic": 12} {
 		if counts[scope] != want {
 			t.Errorf("scope=%s calls=%d want=%d", scope, counts[scope], want)
 		}
 	}
-	if len(batches) != 33 {
-		t.Errorf("initial catalogue calls=%d want=33", len(batches))
+	if len(batches) != 45 {
+		t.Errorf("initial catalogue calls=%d want=45", len(batches))
 	}
 	t.Logf("initial catalogue calls=%d scopes=%v; pair confirmations are additional", len(batches), counts)
 }

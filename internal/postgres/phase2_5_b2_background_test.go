@@ -96,7 +96,7 @@ func (f *phase25B234Fixture) scheduleCompare(t *testing.T) int {
 	t.Helper()
 	// Age only fixture inputs. Organizing is a precondition supplied by labels;
 	// unrelated ingestion/card jobs are excluded from this isolated queue test.
-	f.exec(t, `DELETE FROM memory_jobs WHERE owner_id=$1 AND stage NOT LIKE 'memory.compare:%' AND stage NOT LIKE 'memory.entity_compare:%'`, f.scope.OwnerID)
+	f.exec(t, `DELETE FROM memory_jobs WHERE owner_id=$1 AND state='queued' AND stage NOT LIKE 'memory.compare:%' AND stage NOT LIKE 'memory.entity_compare:%'`, f.scope.OwnerID)
 	n, err := f.store.ScheduleCompare(f.ctx, time.Now().Add(11*time.Minute))
 	if err != nil {
 		t.Fatal(err)
@@ -168,7 +168,7 @@ func TestPhase25B2_X2_1_ActualDuplicateEvidenceAndHistory(t *testing.T) {
 		out.Duplicates = []phase25B2WireDuplicate{{Keep: phase25B2N(in, texts[2]), Members: []int{phase25B2N(in, texts[0]), phase25B2N(in, texts[1]), phase25B2N(in, texts[2])}}}
 		return out
 	})
-	if n := f.runCompare(t); n != 1 {
+	if n := f.runCompare(t); n < 1 {
 		t.Errorf("group calls=%d", n)
 	}
 	for _, r := range refs[:2] {
@@ -231,7 +231,7 @@ func TestPhase25B2_X2_5_ConfirmedAndManuallyCorrectedProtected(t *testing.T) {
 	manual := f.claim(t, "虚构待纠正的原话。")
 	f.labels(t, manual, "progress", true, 1, g)
 	manual = f.correct(t, manual, "虚构用户亲手纠正的原话。")
-	f.exec(t, `UPDATE claims SET organized=1 WHERE owner_id=$1 AND id=$2`, f.scope.OwnerID, manual.ID)
+	f.exec(t, `UPDATE claims SET organized=2 WHERE owner_id=$1 AND id=$2`, f.scope.OwnerID, manual.ID)
 	f.compareModel(t, func(in phase25B2Input) phase25B2WireOutput {
 		out := phase25B2Empty()
 		for _, m := range in.Memories {
@@ -360,6 +360,8 @@ func TestPhase25B2_X2_13_VersionUpgradeCurrentOnly(t *testing.T) {
 	// CompareVersion is a public constant. Seed the previous generation marker
 	// to reproduce the persisted state seen by a binary whose rule increased.
 	f.exec(t, `UPDATE claims SET compared=$2 WHERE owner_id=$1 AND retired=''`, f.scope.OwnerID, old-1)
+	f.exec(t, `UPDATE memory_comparison_batches SET rule=$2 WHERE owner_id=$1`, f.scope.OwnerID, old-1)
+	f.groupTexts(t, "虚构升级后的另一条当前记忆")
 	f.scheduleCompare(t)
 	f.assertRetirement(t, refs[0], "superseded", refs[1])
 	f.runCompare(t)

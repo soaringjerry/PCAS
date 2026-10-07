@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -14,7 +15,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/memory"
 )
 
-func TestR1R6FailedEmbeddingReleasesReservation(t *testing.T) {
+func TestR1R6FailedEmbeddingSettlesEstimatedUsage(t *testing.T) {
 	for _, kind := range []string{"query", "background"} {
 		t.Run(kind, func(t *testing.T) {
 			s, scope := testStore(t), owner()
@@ -42,8 +43,13 @@ func TestR1R6FailedEmbeddingReleasesReservation(t *testing.T) {
 			if err := s.pool.QueryRow(context.Background(), "SELECT coalesce(sum(reserved_cost),0) FROM background_usage WHERE owner_id=$1", string(scope.OwnerID)).Scan(&cost); err != nil {
 				t.Fatal(err)
 			}
-			if cost != 0 {
-				t.Errorf("failed embedding retained reservation: %g", cost)
+			rows := b4Usage(t, s, scope)
+			if len(rows) != 1 || rows[0].InputTokens <= 0 || rows[0].OutputTokens != 0 || rows[0].Cost != float64(rows[0].InputTokens)*2/1e6 {
+				t.Fatal("failed embedding call lacks estimated priced input", rows)
+			}
+			r1RequireEstimatedInput(t, s, scope)
+			if math.Abs(cost-rows[0].Cost) > 1e-9 {
+				t.Errorf("failed embedding retained maximum reservation: %g want settled %g", cost, rows[0].Cost)
 			}
 		})
 	}

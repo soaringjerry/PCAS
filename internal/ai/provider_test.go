@@ -34,7 +34,7 @@ func TestDirectSubscriptionBootsWithoutCodexAndKeepsAPIProviders(t *testing.T) {
 		t.Fatal("direct channel depends on Codex or changed default before verification")
 	}
 	p, ok := r.Get("chatgpt-direct")
-	if !ok || p.Protocol != "siwc" || p.Reserve("input") != 0 {
+	if !ok || p.Protocol != "siwc" || p.Reserve("input") <= 0 {
 		t.Fatal("direct provider missing")
 	}
 	api, ok := r.Get("api")
@@ -244,5 +244,56 @@ func TestTranscriptionAdapter(t *testing.T) {
 	text, err := r.Transcribe(context.Background(), strings.NewReader("test-only"), "voice.wav")
 	if err != nil || text != "原文转录" {
 		t.Fatal(text, err)
+	}
+}
+
+func TestAccountingEstimatesMissingUsageAndFailedCalls(t *testing.T) {
+	for _, protocol := range []string{"openai", "responses", "anthropic"} {
+		for _, failed := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/failure=%t", protocol, failed), func(t *testing.T) {
+				server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					if failed {
+						http.Error(w, "fictional unavailable", 503)
+						return
+					}
+					switch protocol {
+					case "openai":
+						fmt.Fprint(w, `{"choices":[{"message":{"content":"虚构答复"}}]}`)
+					case "responses":
+						fmt.Fprint(w, `{"output":[{"content":[{"type":"output_text","text":"虚构答复"}]}]}`)
+					case "anthropic":
+						fmt.Fprint(w, `{"content":[{"type":"text","text":"虚构答复"}]}`)
+					}
+				}))
+				defer server.Close()
+				p := Provider{ID: "fixture", Protocol: protocol, BaseURL: server.URL, InputPerMillion: 1, OutputPerMillion: 2, MaxOutput: 10}
+				r := &Registry{HTTP: server.Client(), Config: Configuration{Providers: []Provider{p}}}
+				got, err := r.Generate(context.Background(), p.ID, "虚构系统", "fictional input")
+				if (err != nil) != failed || got.InputTokens != len([]rune("虚构系统fictional input")) || !got.InputEstimated || !got.OutputEstimated || !got.CostEstimated || got.Cost <= 0 || got.Cost > p.Reserve("虚构系统fictional input") {
+					t.Fatal(got, err)
+				}
+				if !failed && got.OutputTokens != 4 {
+					t.Fatal("output rune estimate", got)
+				}
+			})
+		}
+	}
+	for _, protocol := range []string{"codex", "siwc"} {
+		p := Provider{Protocol: protocol, MaxOutput: 100, CostMode: "free"}
+		got := p.account(Result{Text: "虚构答复", InputTokens: 17, OutputTokens: 4}, "prompt", nil)
+		if got.InputEstimated || got.OutputEstimated || !got.CostEstimated || got.Cost <= 0 || p.Reserve("prompt") <= 0 {
+			t.Fatal("subscription accounting", got)
+		}
+	}
+}
+
+func TestEmbeddingFailureRetainsEstimatedUsage(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { http.Error(w, "fictional failure", 503) }))
+	defer server.Close()
+	p := Provider{ID: "embedding", Protocol: "openai", BaseURL: server.URL, Embedding: true, InputPerMillion: 1}
+	r := &Registry{HTTP: server.Client(), Config: Configuration{Providers: []Provider{p}}}
+	_, got, err := r.EmbedProviderUsage(context.Background(), p, []string{"虚构甲", "fictional beta"})
+	if err == nil || got.InputTokens != 17 || !got.InputEstimated || !got.CostEstimated || got.Cost <= 0 {
+		t.Fatal(got, err)
 	}
 }

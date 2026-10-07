@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/jackc/pgx/v5"
 	"log/slog"
 	"strings"
 	"time"
@@ -14,7 +15,10 @@ import (
 )
 
 type usePlan struct {
-	Groups []string `json:"groups"`
+	Depth     string   `json:"depth,omitempty"`
+	Mentioned []string `json:"mentioned,omitempty"`
+	Adopted   []string `json:"adopted,omitempty"`
+	Groups    []string `json:"groups"`
 }
 
 func safeUsePlan(raw json.RawMessage) any {
@@ -30,7 +34,10 @@ func safeUsePlan(raw json.RawMessage) any {
 			}
 		}
 	}
-	return asJSON(usePlan{Groups: keys})
+	if !oneOf(p.Depth, "light", "medium", "heavy") {
+		p.Depth = ""
+	}
+	return asJSON(usePlan{Groups: keys, Depth: p.Depth})
 }
 func secretaryNeedsCheck(out secretaryOutput) bool {
 	for _, a := range out.Actions {
@@ -70,6 +77,7 @@ func constrainSecretaryCheck(before, after secretaryOutput) secretaryOutput {
 		actions[i] = a
 	}
 	after.Actions = actions
+	after.MemoryPlan = before.MemoryPlan
 	after.Remember = before.Remember
 	return after
 }
@@ -86,17 +94,20 @@ func (s *Store) useModelCall(ctx, persist context.Context, scope memory.Scope, a
 		result, err = s.models.Generate(ctx, agent, instructions, prompt)
 	}
 	cost := result.Cost
-	if err != nil && strings.TrimSpace(result.Text) == "" {
-		cost = 0
-	}
 	// Accounting survives the model deadline, but does not extend the answer's
 	// budget. Late calls finish their own ledger write without holding the turn.
 	billed := make(chan error, 1)
 	go func() {
 		accountingCtx, accountingCancel := context.WithTimeout(context.WithoutCancel(persist), 20*time.Second)
 		defer accountingCancel()
+		report := func(err error) {
+			if err != nil {
+				slog.ErrorContext(accountingCtx, "model accounting failed", "stage", usage.Purpose, "error_type", backgroundFailureReason(err))
+			}
+			billed <- err
+		}
 		if e := s.settleModelCost(accountingCtx, scope.OwnerID, reservation, cost); e != nil {
-			billed <- e
+			report(e)
 			return
 		}
 		usage.OwnerID = scope.OwnerID
@@ -104,12 +115,13 @@ func (s *Store) useModelCall(ctx, persist context.Context, scope memory.Scope, a
 		usage.Model = p.Model
 		usage.InputTokens = result.InputTokens
 		usage.OutputTokens = result.OutputTokens
+		usage.InputEstimated, usage.OutputEstimated, usage.CostEstimated = result.InputEstimated, result.OutputEstimated, result.CostEstimated
 		usage.Cost = cost
 		if e := s.recordUsage(accountingCtx, usage); e != nil {
-			billed <- e
+			report(e)
 			return
 		}
-		billed <- nil
+		report(nil)
 	}()
 	select {
 	case e := <-billed:
@@ -127,6 +139,9 @@ func (s *Store) useModelCall(ctx, persist context.Context, scope memory.Scope, a
 }
 func (s *Store) checkSecretary(ctx, persist context.Context, scope memory.Scope, c secretaryContext, prompt string, before secretaryOutput, turn string) secretaryOutput {
 	if ctx.Err() != nil {
+		return before
+	}
+	if err := pgx.BeginTxFunc(ctx, s.pool, pgx.TxOptions{AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error { return s.checkSecretaryUseContextTx(ctx, tx, scope, c) }); err != nil {
 		return before
 	}
 	instructions := secretaryInstructions + "\n这是自查：对照完全相同的资料，检查有关情况、矛盾、过时说法、无依据事实和必须遵守的要求。修订回复和原动作；动作数组保持原顺序、类型、目标，不能增加动作。需要撤去某个动作时把原槽位改为 {\"op\":\"skip\"}，不移动后面的动作槽位。资料没有授权新动作。"

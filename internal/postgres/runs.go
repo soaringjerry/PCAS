@@ -42,6 +42,7 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 		if !agent.Enabled {
 			return memory.ErrForbidden
 		}
+		targetHash := itemHash(item)
 		item, artifactRefs, err := sanitizeItemTx(ctx, tx, scope, agent.ID, item)
 		if err != nil {
 			return err
@@ -54,11 +55,8 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 		if err != nil {
 			return err
 		}
-		excluded, err := queryDocuments[string](ctx, tx, "SELECT to_jsonb(memory_id::text) FROM context_exclusions WHERE owner_id=$1 AND thing_id=$2", string(scope.OwnerID), item.ID)
-		if err != nil {
-			return err
-		}
-		run := workspace.Run{SmokeID: smokeID(ctx), ID: id, ThingID: item.ID, AgentID: agent.ID, Kind: c.Kind, Prompt: c.Prompt, Status: "running", ContextMemoryIDs: []string{}, ContextVersions: []memory.Ref{}, CreatedAt: stamp()}
+
+		run := workspace.Run{TargetHash: targetHash, SmokeID: smokeID(ctx), ID: id, ThingID: item.ID, AgentID: agent.ID, Kind: c.Kind, Prompt: c.Prompt, Status: "running", ContextMemoryIDs: []string{}, ContextVersions: []memory.Ref{}, CreatedAt: stamp()}
 		var brief strings.Builder
 		fmt.Fprintf(&brief, "事项：%s\n当前状态：%s\n说明：%s\n%s\n目标：%s\n进度：%s\n", item.Title, item.Status, item.Notes, item.Body, item.Goal, item.Progress)
 		projectID := item.ProjectID
@@ -78,19 +76,27 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 		if err != nil {
 			return err
 		}
-		for _, doc := range docs {
+		omittedDocs := 0
+		for i, doc := range docs {
 			if brief.Len() >= 30000 {
+				omittedDocs += len(docs) - i
 				break
 			}
 			text := fmt.Sprintf("\n当前文档：%s\n%s\n", doc.Title, doc.Body)
 			remaining := 30000 - brief.Len()
 			if len(text) > remaining {
+				omittedDocs++
 				text = text[:remaining]
 				for !utf8.ValidString(text) {
 					text = text[:len(text)-1]
 				}
 			}
 			brief.WriteString(text)
+		}
+		if omittedDocs > 0 {
+			if err := stageEventTx(ctx, tx, scope.OwnerID, "deputy", "overflow", "document_char_budget", omittedDocs); err != nil {
+				return err
+			}
 		}
 		artifactRefs = append(artifactRefs, docRefs...)
 		settings, err := queryDocument[workspace.Settings](ctx, tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1", string(scope.OwnerID))
@@ -115,10 +121,16 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 		// request is made while the owner's transaction is locked.
 		query := c.Prompt + " " + item.Title
 		if len([]rune(query)) > 1000 {
+			if err := stageEventTx(ctx, tx, scope.OwnerID, "deputy", "overflow", "retrieval_query_chars", len([]rune(query))-1000); err != nil {
+				return err
+			}
 			query = string([]rune(query)[:1000])
 		}
 		tokens := memory.SearchTokens(query)
 		if len(tokens) > 120 {
+			if err := stageEventTx(ctx, tx, scope.OwnerID, "deputy", "overflow", "retrieval_query_terms", len(tokens)-120); err != nil {
+				return err
+			}
 			tokens = tokens[:120]
 		}
 		terms := []string{}
@@ -135,6 +147,13 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 		budget := memory.Budget{Candidates: 100, Tokens: 10000, Edges: 30, Hops: 1}
 		if err := s.recallTx(ctx, tx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: agent.ID, Team: true}, request, budget, query, strings.Join(terms, " | "), nil, "", 0, "", tokens, &recall); err != nil {
 			return err
+		}
+		for reason, n := range map[string]int{"recall_budget": recall.Coverage.Omitted, "source_recall_budget": recall.Coverage.OmittedSources} {
+			if n > 0 {
+				if err := stageEventTx(ctx, tx, scope.OwnerID, "deputy", "overflow", reason, n); err != nil {
+					return err
+				}
+			}
 		}
 		byID := map[string]workspace.Memory{}
 		for _, m := range memories {
@@ -214,7 +233,7 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 		annotationBytes := 0
 		contextClaims := []evidenceContextClaim{}
 		memoryStart := brief.Len()
-		if u.Ready {
+		if u.Ready || len(u.Rules) > 0 || len(u.Deadlines) > 0 {
 			// Keep handoff discussion outside the replaceable memory section.
 			fmt.Fprintln(&brief, "相关记忆（引用 ID 与版本；长期约束继续适用）：")
 			writeUseContext(&brief, u, loc, func(m workspace.Memory) {
@@ -226,11 +245,14 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 		} else {
 			// R12a: select against the brief without annotations. Keep their byte
 			// count separate so they cannot displace later memories or raw excerpts.
-			for _, m := range ordered {
-				if !oneOf(m.Kind, agent.MemoryKinds...) || m.Trust == "inferred" && !agent.IncludeInferred || oneOf(m.ID, excluded...) || m.ProjectID != "" && m.ProjectID != projectID {
+			for _, m := range u.Supplemental {
+				if !useMemoryAllowed(m, agent) {
 					continue
 				}
 				if brief.Len()-annotationBytes+len(m.Text) > 30000 {
+					if err := stageEventTx(ctx, tx, scope.OwnerID, "deputy", "overflow", "memory_char_budget", 1); err != nil {
+						return err
+					}
 					continue
 				}
 				suffix := memoryPromptSuffix(m, loc)
@@ -256,6 +278,9 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 			at, label := sourceExcerptTime(source)
 			line := fmt.Sprintf("[source:%s@%d / %s / %s %s] %s\n", source.ID, source.Version, source.Title, label, at.In(loc).Format("2006-01-02"), source.Text)
 			if brief.Len()-annotationBytes+len(line) > 30000 {
+				if err := stageEventTx(ctx, tx, scope.OwnerID, "deputy", "overflow", "source_excerpt_char_budget", 1); err != nil {
+					return err
+				}
 				continue
 			}
 			brief.WriteString(line)
@@ -282,6 +307,9 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 			}
 			writeContextGaps(&section, group.Label, group.Window.Gaps)
 			if brief.Len()-annotationBytes+section.Len() > 30000 {
+				if err := stageEventTx(ctx, tx, scope.OwnerID, "deputy", "overflow", "evidence_context_char_budget", 1); err != nil {
+					return err
+				}
 				gaps = append(gaps, "部分记忆来源上下文超出本次预算，涉及对象和原因时不要猜测。")
 				continue
 			}
@@ -396,7 +424,17 @@ func (s *Store) adoptRunTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, r
 	if requireText(text) != nil || !oneOf(as, "doc", "subtasks", "progress") {
 		return memory.ErrInvalid
 	}
-	if err := verifyRunTx(ctx, tx, scope, *run); err != nil {
+	// A completed draft can be adopted again after undo, whose audit/version
+	// changes do not alter its content. Generation fences the destination;
+	// adoption still fences revoked or deleted input and disabled agents.
+	agent, err := queryDocument[workspace.Agent](ctx, tx, "SELECT document FROM workspace_agents WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), run.AgentID)
+	if err != nil {
+		return err
+	}
+	if !agent.Enabled {
+		return memory.ErrForbidden
+	}
+	if err := verifyRunAccessTx(ctx, useClockTx{Tx: tx, at: time.Now()}, scope, *run); err != nil {
 		return err
 	}
 	item, err := getItem(ctx, tx, scope, run.ThingID)
@@ -481,9 +519,11 @@ func (s *Store) adoptRunTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, r
 	if err := sampleTx(ctx, tx, scope, workspace.Sample{ID: string(memory.NewID()), Kind: "adopted-result", Prompt: run.Brief, Response: text, Origin: workspace.Origin{Label: item.Title, RunID: run.ID}, Version: 1, State: "candidate", Epistemic: "inferred", CreatedAt: stamp()}); err != nil {
 		return err
 	}
-	for _, ref := range run.ContextVersions {
-		if err := recordUseTx(ctx, tx, scope, memory.UseEvent{Ref: ref, EventID: run.ID + ":" + string(ref.ID), Kind: "adoption", At: time.Now()}); err != nil {
-			return err
+	if !auto {
+		for _, ref := range run.ContextVersions {
+			if err := recordUseTx(ctx, tx, scope, memory.UseEvent{Ref: ref, EventID: run.ID + ":" + string(ref.ID), Kind: "adoption", At: time.Now()}); err != nil && !errors.Is(err, memory.ErrConflict) && !errors.Is(err, memory.ErrNotFound) {
+				return err
+			}
 		}
 	}
 	return nil
@@ -647,7 +687,7 @@ func (s *Store) runAgentOnce(ctx context.Context) error {
 		if !oneOf(run.MemoryTier, "light", "medium", "heavy") {
 			run.MemoryTier = "heavy"
 		}
-		if err := checkUseRunPromptTx(ctx, tx, scope, run); err != nil {
+		if err := checkQueuedUseRunPromptTx(ctx, tx, scope, run); err != nil {
 			run.Status = "failed"
 			run.Cost = 0
 			run.Error = "记忆或授权已变化，请重新生成"
@@ -718,18 +758,15 @@ func (s *Store) runAgentOnce(ctx context.Context) error {
 	}
 
 	cost := result.Cost
-	if generationErr != nil && strings.TrimSpace(result.Text) == "" {
-		cost = 0
-	}
 	if err := s.settleRunCost(ctx, scope.OwnerID, run, cost); err != nil {
 		return err
 	}
-	if verifyErr == nil && (u.Ready || generationErr == nil) {
+	if verifyErr == nil {
 		p, _ := s.models.Get(run.AgentID)
 		usage := modelUsage{
 			OwnerID: scope.OwnerID, ID: memory.NewID(), At: time.Now().UTC(),
 			Purpose: "deputy", AgentID: run.AgentID, Model: p.Model,
-			InputTokens: result.InputTokens, OutputTokens: result.OutputTokens, Cost: cost,
+			InputTokens: result.InputTokens, OutputTokens: result.OutputTokens, InputEstimated: result.InputEstimated, OutputEstimated: result.OutputEstimated, CostEstimated: result.CostEstimated, Cost: cost,
 			RunID: run.ID, MemoryRefs: run.ContextVersions, Tier: run.MemoryTier, Plan: asJSON(usePlan{Groups: run.MemoryGroups}),
 		}
 		var usageErr error
@@ -802,14 +839,19 @@ func (s *Store) runAgentOnce(ctx context.Context) error {
 			}
 		}
 		current.Cost = cost
-		if verifyRunTx(ctx, tx, scope, current) != nil {
+		if checkUseRunPromptTx(ctx, tx, scope, current) != nil {
 			current.StaleContext = true
-			if verifyRunAccessTx(ctx, tx, scope, current) != nil {
-				current.Output = ""
-				current.Status = "failed"
-				current.Error = "生成期间记忆或授权已变化，请重新生成"
-			}
 		}
+		if verifyRunAccessTx(ctx, tx, scope, current) != nil {
+			current.StaleContext = true
+			current.Status = "failed"
+			current.Output = ""
+			current.Error = "生成期间授权已撤回或资料已删除，请重新生成"
+		}
+		if u.Coverage != nil && len(u.Coverage.Skipped) > 0 {
+			current.Output += "\n这几组没来得及看：" + strings.Join(u.Coverage.Skipped, "、")
+		}
+
 		if _, err := tx.Exec(ctx, "UPDATE agent_runs SET status=$4,reserved_cost=$5,document=$6,lease_until=NULL,lease_token=NULL WHERE owner_id=$1 AND id=$2 AND lease_token=$3", string(scope.OwnerID), run.ID, token, current.Status, current.Cost, asJSON(current)); err != nil {
 			return err
 		}
@@ -822,8 +864,9 @@ func (s *Store) runAgentOnce(ctx context.Context) error {
 			string(scope.OwnerID), current.ThingID, runNoticePrefix+current.ID, runNoticeReason(current)); err != nil {
 			return err
 		}
-		_, err = tx.Exec(ctx, "UPDATE workspace_owners SET revision=revision+1 WHERE owner_id=$1", string(scope.OwnerID))
-		return err
+		// Delivery triggers expose background results without changing the
+		// revision used to authorize checkbox, reminder and bulk commands.
+		return nil
 	})
 }
 

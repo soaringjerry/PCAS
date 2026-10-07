@@ -325,10 +325,24 @@ func (s *Store) ProcessProjectHandover(ctx context.Context, j worker.Job) error 
 	if err = json.Unmarshal(result.Prompt, &input); err != nil {
 		return err
 	}
-	out, invalid, overflow, valid := parseProjectHandover(result.Output, input)
 	return backgroundResultTx(ctx, s.pool, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(j.OwnerID)); err != nil {
+			return err
+		}
 		if err := lockJob(ctx, tx, j); err != nil {
 			return err
+		}
+		// Check the paid snapshot first, then only its referenced records at write
+		// time. Deleted or superseded evidence cannot become a new saved sentence.
+		out, invalid, overflow, valid := parseProjectHandover(result.Output, input)
+		if valid {
+			current, err := currentProjectEvidenceTx(ctx, tx, scope, input, out)
+			if err != nil {
+				return err
+			}
+			var removed int
+			out, removed, _, valid = parseProjectHandover(string(asJSON(out)), current)
+			invalid += removed
 		}
 		if invalid > 0 {
 			if err := stageEventTx(ctx, tx, j.OwnerID, ProjectHandoverStage, "overflow", "ungrounded_sentences", invalid); err != nil {
@@ -368,6 +382,50 @@ func (s *Store) ProcessProjectHandover(ctx context.Context, j worker.Job) error 
 		}
 		return acknowledge(ctx, tx, j)
 	})
+}
+
+func currentProjectEvidenceTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, input projectHandoverInput, out workspace.ProjectHandover) (projectHandoverInput, error) {
+	current := projectHandoverInput{Project: input.Project, Parts: []projectInputPart{}}
+	checked := map[workspace.ProjectEvidence]bool{}
+	sections := [][]workspace.ProjectSentence{out.Conclusion, out.Blockers, out.NextSteps}
+	for _, section := range sections {
+		for _, sentence := range section {
+			for _, ref := range sentence.Evidence {
+				if checked[ref] {
+					continue
+				}
+				checked[ref] = true
+				var query string
+				args := []any{string(scope.OwnerID), ref.ID}
+				switch ref.Kind {
+				case "item":
+					query = `SELECT 1 FROM work_items WHERE owner_id=$1 AND id=$2 AND (id=$3 OR project_id=$3) FOR SHARE`
+					args = append(args, input.Project.ID)
+				case "documentVersion":
+					query = `SELECT 1 FROM work_documents d JOIN work_items w ON(w.owner_id,w.id)=(d.owner_id,d.thing_id) WHERE d.owner_id=$1 AND d.id=$2 AND (w.id=$3 OR w.project_id=$3) AND greatest(coalesce((d.document->>'version')::int,1),1)=$4 FOR SHARE OF d,w`
+					args = append(args, input.Project.ID, ref.Version)
+				case "run":
+					query = `SELECT 1 FROM agent_runs r JOIN work_items w ON(w.owner_id,w.id)=(r.owner_id,r.thing_id) WHERE r.owner_id=$1 AND r.id=$2 AND r.status='done' AND (w.id=$3 OR w.project_id=$3) FOR SHARE OF r,w`
+					args = append(args, input.Project.ID)
+				case "memory":
+					query = `SELECT 1 FROM memory_records r JOIN claims cl ON(cl.owner_id,cl.id)=(r.owner_id,r.id) WHERE r.owner_id=$1 AND r.id=$2 AND r.version=$3 AND r.state='active' AND cl.retired='' AND claim_source_is_current(r.owner_id,r.id,r.version,now()) FOR SHARE OF r,cl`
+					args = append(args, ref.Version)
+				default:
+					continue
+				}
+				var exists int
+				err := tx.QueryRow(ctx, query, args...).Scan(&exists)
+				if errors.Is(err, pgx.ErrNoRows) {
+					continue
+				}
+				if err != nil {
+					return current, err
+				}
+				current.Parts = append(current.Parts, projectInputPart{Evidence: ref})
+			}
+		}
+	}
+	return current, nil
 }
 func deferInvalidProjectTx(ctx context.Context, tx pgx.Tx, j worker.Job) error {
 	_, err := tx.Exec(ctx, `UPDATE memory_jobs SET state='queued',error_code='project_handover_invalid_output',available_at=clock_timestamp()+$3*interval '1 second',lease_token=NULL,lease_until=NULL WHERE id=$1 AND lease_token=$2`, string(j.ID), string(j.LeaseToken), retryDelay(j.Attempts).Seconds())

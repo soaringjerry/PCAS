@@ -29,7 +29,7 @@ func inputs(t *testing.T) (doing.Suite, string, doing.Report, doing.Report) {
 	r.Workers = 4
 	r.HostDate = "2026-10-05"
 	r.Rows = nil
-	r.Preparation = &doing.Preparation{Complete: true, Handover: true, Cards: 1, Stages: []doing.PreparationStage{
+	r.Preparation = &doing.Preparation{Complete: true, Handover: true, HandoverInputs: true, Stages: []doing.PreparationStage{
 		{Stage: "organize", JobsDone: 1, WallMS: 1}, {Stage: "compare", JobsDone: 1, WallMS: 1}, {Stage: "status", JobsDone: 1, WallMS: 1},
 	}}
 	for _, row := range b.Rows {
@@ -121,7 +121,7 @@ func TestAnswerLimitRemainsPartOfUsability(t *testing.T) {
 
 func TestCompletedLegacyFallbackStillReportable(t *testing.T) {
 	s, sha, b, r := inputs(t)
-	r.Preparation.Cards, r.Preparation.Handover = 0, false
+	r.Preparation.HandoverInputs, r.Preparation.Handover = false, false
 	for i := range r.Rows {
 		r.Rows[i].TierUsage.Effective = "legacy-fallback"
 	}

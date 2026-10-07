@@ -24,15 +24,19 @@ type PreparationStage struct {
 	JobsDone     int            `json:"jobs_done"`
 }
 type Preparation struct {
-	StartedAt   string             `json:"started_at"`
-	CompletedAt string             `json:"completed_at,omitempty"`
-	WallMS      float64            `json:"wall_ms"`
-	Stages      []PreparationStage `json:"stages"`
-	Claims      int                `json:"claims"`
-	Retired     int                `json:"retired"`
-	Cards       int                `json:"cards"`
-	Handover    bool               `json:"handover"`
-	Complete    bool               `json:"complete"`
+	StartedAt      string             `json:"started_at"`
+	CompletedAt    string             `json:"completed_at,omitempty"`
+	WallMS         float64            `json:"wall_ms"`
+	Stages         []PreparationStage `json:"stages"`
+	Claims         int                `json:"claims"`
+	Retired        int                `json:"retired"`
+	OrganizeRule   int                `json:"organize_rule"`
+	HandoverRule   int                `json:"handover_rule"`
+	Deadlines      int                `json:"deadlines"`
+	Requirements   int                `json:"requirements"`
+	HandoverInputs bool               `json:"handover_inputs"`
+	Handover       bool               `json:"handover"`
+	Complete       bool               `json:"complete"`
 }
 
 // A repair retains every completed result unchanged. Failed attempts and their

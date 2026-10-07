@@ -11,14 +11,25 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/worker"
 )
 
 func stageEventTx(ctx context.Context, tx pgx.Tx, owner memory.ID, stage, outcome, reason string, count int) error {
+	if outcome == "failure" {
+		// The job's slot is handed back in this same write; that is not a success.
+		if _, err := tx.Exec(ctx, "SELECT set_config('pcas.stage_failed',$1,true)", stage); err != nil {
+			return err
+		}
+	}
 	_, err := tx.Exec(ctx, "INSERT INTO background_stage_events(owner_id,stage,outcome,reason,count) VALUES($1,$2,$3,$4,$5)", nullString(string(owner)), stage, outcome, reason, count)
 	return err
 }
 
 func backgroundFailureReason(err error) string {
+	var job *worker.JobError
+	if errors.As(err, &job) && job.Code != "" {
+		return job.Code
+	}
 	var pg *pgconn.PgError
 	if errors.As(err, &pg) {
 		return "postgres_" + pg.Code
@@ -30,6 +41,23 @@ func backgroundFailureReason(err error) string {
 		return "canceled"
 	}
 	return fmt.Sprintf("%T", err)
+}
+
+// The owner's row is held while the user's own command commits. Scheduling
+// gives way and returns on the next tick, so one busy owner does not end the
+// pass; the missed tick is still recorded with its cause.
+func (s *Store) scheduleYielded(ctx context.Context, owner memory.ID, stage string, err error) bool {
+	if !statusScheduleBusy(err) {
+		return false
+	}
+	persist, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+	if e := pgx.BeginFunc(persist, s.pool, func(tx pgx.Tx) error {
+		return stageEventTx(persist, tx, owner, stage, "failure", "schedule_"+backgroundFailureReason(err), 1)
+	}); e != nil {
+		slog.ErrorContext(ctx, "background event storage failed", "stage", stage, "reason", backgroundFailureReason(e))
+	}
+	return true
 }
 
 func (s *Store) recordScheduleFailure(ctx context.Context, stage string, err error) {
@@ -54,6 +82,7 @@ func (s *Store) BackgroundHealth(ctx context.Context, scope memory.Scope) (json.
  'deferred',coalesce((SELECT n FROM totals WHERE stage=s.stage AND outcome='deferred'),0),
  'failure',coalesce((SELECT n FROM totals WHERE stage=s.stage AND outcome='failure'),0),
  'overflow',coalesce((SELECT n FROM totals WHERE stage=s.stage AND outcome='overflow'),0),
+ 'deferredBy',coalesce((SELECT jsonb_object_agg(reason,n) FROM (SELECT reason,sum(count) AS n FROM background_stage_events e WHERE (e.owner_id=$1 OR e.owner_id IS NULL) AND e.stage=s.stage AND e.outcome='deferred' AND e.at>now()-interval '1 hour' GROUP BY reason) why),'{}'::jsonb),
  'lastFailure',coalesce((SELECT reason FROM background_stage_events e WHERE (e.owner_id=$1 OR e.owner_id IS NULL) AND e.stage=s.stage AND e.outcome='failure' ORDER BY at DESC,id DESC LIMIT 1),''),
  'calls',(SELECT count(*) FROM background_usage b WHERE b.stage=s.stage AND b.created_at>now()-interval '1 hour')) ORDER BY s.stage),'[]'::jsonb),
  'overflow',coalesce((SELECT jsonb_agg(jsonb_build_object('stage',stage,'reason',reason,'count',n)) FROM (

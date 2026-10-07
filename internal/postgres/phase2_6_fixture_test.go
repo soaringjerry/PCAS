@@ -429,13 +429,19 @@ func phase26DisposableStore(t *testing.T) (*Store, context.Context) {
 		return strings.TrimSpace(string(out)), err
 	}
 	name := "pcas-phase2_6-t-" + string(memory.NewID())
-	out, err := docker(ctx, "run", "--detach", "--rm", "--name", name, "--label", "pcas.acceptance=phase2_6-T", "--tmpfs", "/var/lib/postgresql/data:rw,size=512m", "--env", "POSTGRES_PASSWORD=fictitious-test-password", "--publish", "127.0.0.1::5432", "pgvector/pgvector:0.8.2-pg16")
+	// Real PostgreSQL WAL may approach 1 GiB during repeated scale writes.
+	// Allow 2 GiB of ephemeral storage; allocation follows actual use.
+	out, err := docker(ctx, "run", "--detach", "--rm", "--name", name, "--label", "pcas.acceptance=phase2_6-T", "--tmpfs", "/var/lib/postgresql/data:rw,size=2g", "--env", "POSTGRES_PASSWORD=fictitious-test-password", "--publish", "127.0.0.1::5432", "pgvector/pgvector:0.8.2-pg16")
 	if err != nil {
 		t.Fatalf("create owned test container: %v: %s", err, out)
 	}
 	t.Cleanup(func() {
 		cleanupCtx, stop := context.WithTimeout(context.Background(), 15*time.Second)
 		defer stop()
+		if t.Failed() {
+			logs, _ := docker(cleanupCtx, "logs", "--tail", "35", name)
+			t.Logf("owned disposable database diagnostics: %s", logs)
+		}
 		out, err := docker(cleanupCtx, "rm", "--force", "--volumes", name)
 		if err != nil {
 			t.Errorf("remove owned container %s: %v: %s", name, err, out)
@@ -549,6 +555,11 @@ func phase26LoadFixture(t *testing.T) *phase26LoadedFixture {
 		return nil
 	})
 	if err != nil {
+		t.Fatal(err)
+	}
+	// Fresh disposable databases otherwise lack production-scale planner statistics.
+	// Analyze only this owned synthetic database; retain all real indexes/triggers.
+	if _, err := s.pool.Exec(ctx, "ANALYZE"); err != nil {
 		t.Fatal(err)
 	}
 	return f

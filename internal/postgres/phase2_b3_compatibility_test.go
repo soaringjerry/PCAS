@@ -94,13 +94,33 @@ func TestPhase2B3_S10_PublicRecallFifteenRequestsByteIdentical(t *testing.T) {
 	gold := b3BaselineOracle(t)
 	for i, c := range gold.S10 {
 		t.Run(fmt.Sprintf("request_%02d", i+1), func(t *testing.T) {
+			// The frozen continuation cases included an activity prior. C7
+			// requires actual use evidence for that prior and enables it in
+			// every mode. Give each case its original activity/no-activity
+			// condition without relaxing any ranking or pagination oracle.
+			b3Exec(t, s, `DELETE FROM use_events WHERE owner_id=$1 AND event_key LIKE 'b3-baseline-confirmation-%'`, scope.OwnerID)
+			if c.Request.Mode == memory.Continue {
+				for _, n := range []int{20, 21, 22} {
+					b3Exec(t, s, `INSERT INTO use_events(owner_id,event_key,record_id,record_version,kind,occurred_at) VALUES($1,$2,$3,1,'confirmation','2025-08-01T00:00:00Z')`, scope.OwnerID, fmt.Sprintf("b3-baseline-confirmation-%d", n), b3FixedID(n))
+				}
+			}
 			who := scope
 			if c.External {
 				who.IsOwner = false
 				who.PrincipalID = "baseline-external"
 			}
 			w := b1HTTP(t, s, who, "POST", "/v1/memory/recall", c.Request)
-			if w.Code != c.Status || !bytes.Equal(w.Body.Bytes(), []byte(c.Body)) {
+			body := w.Body.Bytes()
+			if w.Code == 200 {
+				var got memory.RecallResult
+				if err := json.Unmarshal(body, &got); err != nil {
+					t.Fatal(err)
+				}
+				// C6 adds overflow metadata. Preserve the historical business bytes.
+				got.Coverage.Omitted, got.Coverage.OmittedSources = 0, 0
+				body = append(asJSON(got), '\n')
+			}
+			if w.Code != c.Status || !bytes.Equal(body, []byte(c.Body)) {
 				t.Errorf("public recall changed from %s: status=%d want %d\nwant bytes=%s\ngot bytes=%s", gold.Commit, w.Code, c.Status, c.Body, w.Body.String())
 			}
 		})

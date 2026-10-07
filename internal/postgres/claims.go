@@ -14,25 +14,26 @@ import (
 )
 
 type statement struct {
-	ExtractionRun  string
-	ExtractionRef  int
-	Structured     bool
-	SubjectType    string
-	Mentions       []claimMention
-	ExpressedAt    *time.Time
-	EventFrom      *time.Time
-	EventTo        *time.Time
-	EventPrecision string
-	Text           string
-	Nature         string
-	ProjectID      string
-	Subject        string
-	Predicate      string
-	Confirmation   string
-	Acquisition    string
-	Actor          string
-	Quote          string
-	Source         memory.Ref
+	ExtractionRun   string
+	ExtractionRef   int
+	AllowNewAtQuote bool
+	Structured      bool
+	SubjectType     string
+	Mentions        []claimMention
+	ExpressedAt     *time.Time
+	EventFrom       *time.Time
+	EventTo         *time.Time
+	EventPrecision  string
+	Text            string
+	Nature          string
+	ProjectID       string
+	Subject         string
+	Predicate       string
+	Confirmation    string
+	Acquisition     string
+	Actor           string
+	Quote           string
+	Source          memory.Ref
 }
 
 func createRecord(ctx context.Context, tx pgx.Tx, owner memory.ID, id memory.ID, kind memory.Kind, actor string) error {
@@ -121,7 +122,7 @@ func (s *Store) rememberTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, i
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return result, err
 	}
-	if in.Structured && in.Quote != "" {
+	if in.Structured && in.Quote != "" && !in.AllowNewAtQuote {
 		var editable bool
 		var id string
 		err := tx.QueryRow(ctx, `SELECT r.id::text,r.version,rv.actor='ai' AND c.confirmation!='confirmed' FROM evidence e

@@ -115,3 +115,16 @@ var secretaryOutputSchema = json.RawMessage(`{
   "required": ["reply", "used", "links", "show", "remember", "missingKeyInfo", "actions", "ask"],
   "additionalProperties": false
 }`)
+
+func init() {
+	var schema map[string]any
+	_ = json.Unmarshal(secretaryOutputSchema, &schema)
+	schema["properties"].(map[string]any)["memoryPlan"] = map[string]any{"anyOf": []any{map[string]any{"type": "null"}, map[string]any{"type": "object", "properties": map[string]any{"depth": map[string]any{"type": "string", "enum": []string{"light", "medium", "heavy"}}, "groups": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}, "mentioned": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}, "adopted": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}}, "required": []string{"depth", "groups", "mentioned", "adopted"}, "additionalProperties": false}}}
+	schema["required"] = append(schema["required"].([]any), "memoryPlan")
+	secretaryOutputSchema = asJSON(schema)
+	var checks map[string]any
+	_ = json.Unmarshal(secretaryCheckSchema, &checks)
+	checks["properties"].(map[string]any)["memoryPlan"] = schema["properties"].(map[string]any)["memoryPlan"]
+	checks["required"] = append(checks["required"].([]any), "memoryPlan")
+	secretaryCheckSchema = asJSON(checks)
+}

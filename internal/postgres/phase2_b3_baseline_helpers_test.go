@@ -10,7 +10,7 @@ import (
 )
 
 // Deterministic IDs, times, evidence and chunks are identical on the pre-batch3
-// baseline and candidate. No response bytes are normalized in S10.
+// baseline and candidate. S10 permits only the explicit C6 metadata additions.
 func b3FixedID(n int) memory.ID { return memory.ID(fmt.Sprintf("b3000000-0000-4000-8000-%012d", n)) }
 func b3BaselineData(t *testing.T, s *Store, scope memory.Scope) {
 	t.Helper()

@@ -412,7 +412,7 @@ func (s *Store) p2LegacyRecallTx(ctx context.Context, tx pgx.Tx, scope memory.Sc
          +(SELECT count(*) FROM unnest(words.patterns) pattern WHERE lb.body LIKE pattern)::float
 		 +CASE WHEN $11::text IS NULL THEN 0 ELSE coalesce(greatest((SELECT max(1-(e.embedding <=> $11::vector)) FROM embeddings e WHERE e.owner_id=t.owner_id AND e.record_id=t.id AND e.record_version=t.version AND e.model=$12 AND e.dimensions=$13),(SELECT max(1-(e.embedding <=> $11::vector)) FROM chunks c JOIN embeddings e ON (e.owner_id,e.record_id)=(c.owner_id,c.id) WHERE c.owner_id=t.owner_id AND c.source_id=t.id AND c.source_version=t.version AND e.model=$12 AND e.dimensions=$13)),0) END
 		 +CASE WHEN t.id=ANY($8::uuid[]) OR t.id IN (SELECT claim_id FROM claim_revisions WHERE owner_id=$1 AND (subject_id=ANY($8::uuid[]) OR scope->>'project_id'=ANY($8::text[]))) THEN 10 ELSE 0 END
-		 +CASE WHEN $6='continue' THEN coalesce(CASE WHEN a.pinned THEN 1 ELSE exp(-0.693147*greatest(0,extract(epoch from(now()-a.last_effective_use_at)))/(a.half_life_seconds*a.stability)) END,0)*0.2 ELSE 0 END) AS score,
+		 +0.2*CASE WHEN a.pinned THEN 1 WHEN EXISTS(SELECT 1 FROM use_events ue WHERE ue.owner_id=t.owner_id AND ue.record_id=t.id AND ue.kind IN ('user_mention','confirmation','adoption')) THEN coalesce(exp(-0.693147*greatest(0,extract(epoch from(now()-a.last_effective_use_at)))/nullif(a.half_life_seconds*a.stability,0)),0) ELSE 0 END) AS score,
          coalesce(src.connector,'') AS connector,coalesce(src.external_id,'') AS external_id,
          rv.expressed_at,rv.recorded_at,t.id=ANY($8::uuid[]) AS explicit
 		 FROM memory_text t JOIN memory_records r ON (r.owner_id,r.id)=(t.owner_id,t.id)

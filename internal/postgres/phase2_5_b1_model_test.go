@@ -14,12 +14,15 @@ import (
 // All organize output field names live here, independent of scenario assertions.
 // Durable deliberately accepts any value so R9 tests can send invalid values.
 type phase25B1ModelItem struct {
-	Number   int      `json:"n"`
-	Category string   `json:"category"`
-	Durable  any      `json:"durable"`
-	Project  string   `json:"project,omitempty"`
-	Topics   []string `json:"topics,omitempty"`
-	Area     string   `json:"area,omitempty"`
+	Number       int      `json:"n"`
+	Category     string   `json:"category"`
+	Durable      any      `json:"durable"`
+	Project      string   `json:"project,omitempty"`
+	Topics       []string `json:"topics,omitempty"`
+	Area         string   `json:"area,omitempty"`
+	Deadlines    []any    `json:"deadlines"`
+	Unrestricted bool     `json:"unrestricted"`
+	Scope        string   `json:"scope"`
 }
 
 type phase25B1NewGroup struct {
@@ -30,6 +33,10 @@ type phase25B1NewGroup struct {
 
 func phase25B1ModelJSON(t *testing.T, items []phase25B1ModelItem, groups ...phase25B1NewGroup) string {
 	t.Helper()
+	for i := range items {
+		items[i].Deadlines = []any{}
+		items[i].Unrestricted = true
+	}
 	data, err := json.Marshal(struct {
 		Items []phase25B1ModelItem `json:"items"`
 		New   []phase25B1NewGroup  `json:"new,omitempty"`

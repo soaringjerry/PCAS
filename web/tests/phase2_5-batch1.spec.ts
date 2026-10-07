@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test'
-import type { Memory, MemoryCategory, MemoryGroup, MemoryGroupFacet, MemoryMention, Organize, State } from '../src/domain/types'
+import type { Memory, MemoryCategory, MemoryGroup, MemoryGroupEntry, MemoryGroupFacet, MemoryMention, Organize, State } from '../src/domain/types'
 
 // Everything here is made up: the people, the places, the projects and what was said.
 type Fixture = Memory & { mentions: MemoryMention[]; groups: MemoryGroup[] }
@@ -41,6 +41,22 @@ function facetsOf(all: Fixture[]) {
   return { groups, people: count(mentions.filter((m) => m.role === 'person')), places: count(mentions.filter((m) => m.role === 'place')) }
 }
 
+const selfNames: Partial<Record<MemoryCategory, string>> = { identity: '身份', taste: '口味', rule: '对助手的要求', goal: '目标' }
+/** The keys a memory is under in the directory of groups: its groups, the people it mentions, and its kind when that is about the user. */
+const keysOf = (m: Fixture) => [...m.groups.map((g) => `entity:${g.entityId}`), ...m.mentions.filter((x) => x.role === 'person').map((x) => `entity:${x.entityId}`), ...(m.category && selfNames[m.category] ? [`self:${m.category}`] : [])]
+
+/** The directory since phase 2.6: every group with its count, the fullest first within a kind. */
+function directoryOf(all: Fixture[]): MemoryGroupEntry[] {
+  const found = new Map<string, MemoryGroupEntry>()
+  const add = (key: string, kind: MemoryGroupEntry['kind'], name: string) => found.set(key, { key, kind, name, count: (found.get(key)?.count ?? 0) + 1 })
+  for (const m of all) {
+    for (const g of m.groups) add(`entity:${g.entityId}`, g.type, g.name)
+    for (const x of m.mentions) if (x.role === 'person') add(`entity:${x.entityId}`, 'person', x.name)
+    if (m.category && selfNames[m.category]) add(`self:${m.category}`, 'self', selfNames[m.category]!)
+  }
+  return [...found.values()].sort((a, b) => b.count - a.count)
+}
+
 async function backend(page: Page, all: Fixture[], organize?: Organize, facets = facetsOf(all)) {
   const state: State = {
     version: 1, revision: 1, budgetUsage: 0,
@@ -51,11 +67,23 @@ async function backend(page: Page, all: Fixture[], organize?: Organize, facets =
     ...(organize ? { organize } : {}),
   }
   const queries: URL[] = []
+  /** The groups whose memories were asked for, by key, in order. */
+  const groupReads: string[] = []
   const errors: string[] = []
   page.on('pageerror', (e) => errors.push(e.message))
   await page.route('**/v1/**', (route) => route.fulfill({ status: 500, json: { error: 'unexpected_p25_b1_request' } }))
   await page.route((url) => url.pathname === '/v1/workspace', (route) => route.fulfill({ json: state }))
   await page.route((url) => url.pathname === '/v1/workspace/memory-facets', (route) => route.fulfill({ json: facets }))
+  await page.route((url) => url.pathname === '/v1/workspace/handover', (route) => route.fulfill({ json: { body: '', builtAt: '', stale: false } }))
+  await page.route((url) => url.pathname === '/v1/workspace/deadlines', (route) => route.fulfill({ json: { items: [] } }))
+  await page.route((url) => url.pathname === '/v1/workspace/assistant-requirements', (route) => route.fulfill({ json: { items: [] } }))
+  await page.route((url) => url.pathname === '/v1/workspace/memory-groups', (route) => route.fulfill({ json: { items: directoryOf(all) } }))
+  await page.route((url) => /^\/v1\/workspace\/memory-groups\/[^/]+\/memories$/.test(url.pathname), (route) => {
+    const key = decodeURIComponent(new URL(route.request().url()).pathname.split('/')[4])
+    groupReads.push(key)
+    const items = all.filter((m) => keysOf(m).includes(key))
+    return route.fulfill({ json: { items, next: '', total: items.length } })
+  })
   await page.route((url) => url.pathname === '/v1/workspace/memories', (route) => {
     const url = new URL(route.request().url())
     queries.push(url)
@@ -63,7 +91,7 @@ async function backend(page: Page, all: Fixture[], organize?: Organize, facets =
     const items = all.filter((m) => (!entity || m.mentions.some((x) => x.entityId === entity)) && (!group || m.groups.some((x) => x.entityId === group)) && (!q || m.text.includes(q)))
     return route.fulfill({ json: { items, next: '', total: items.length } })
   })
-  return { state, queries, errors }
+  return { state, queries, groupReads, errors }
 }
 
 const open = (page: Page) => page.goto('/library?tab=memory')
@@ -71,6 +99,7 @@ const row = (page: Page, name: string) => page.getByRole('group', { name, exact:
 const line = (page: Page, text: string) => page.getByText(text, { exact: true })
 const card = (page: Page, text: string) => page.locator('.mem-entry').filter({ hasText: text })
 const lastQuery = (mock: { queries: URL[] }, name: string) => mock.queries.at(-1)?.searchParams.get(name) ?? null
+const within = (page: Page) => new URL(page.url()).searchParams.getAll('in')
 const fits = (page: Page) => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)
 /** Words for how the sorting works inside; none of them belongs on this page. */
 const internals = /规则版本|落后|批|实体/
@@ -91,18 +120,20 @@ test('R17 项目、主题、领域各一行，带名字和条数；点一个只�
 
   const chip = row(page, '主题').getByRole('button', { name: /手冲咖啡/ })
   await chip.click()
-  await expect.poll(() => lastQuery(mock, 'group')).toBe(coffee.entityId)
+  await expect.poll(() => mock.groupReads.at(-1)).toBe(`entity:${coffee.entityId}`)
   await expect(chip).toHaveAttribute('aria-pressed', 'true')
   await expect(page.locator('.mem-entry')).toHaveCount(2)
   await expect(line(page, all[1].text)).toBeVisible()
   await expect(line(page, all[2].text)).toBeVisible()
-  await expect(page.getByText('「手冲咖啡」下面的记忆有 2 条')).toBeVisible()
-  expect(new URL(page.url()).searchParams.get('group')).toBe(coffee.entityId)
+  await expect(page.getByText('「手冲咖啡」名下的记忆有 2 条')).toBeVisible()
+  expect(within(page)).toEqual([`entity:${coffee.entityId}`])
 
   await chip.click()
   await expect(page.locator('.mem-entry')).toHaveCount(5)
   await expect(chip).toHaveAttribute('aria-pressed', 'false')
-  expect(lastQuery(mock, 'group')).toBeNull()
+  expect(within(page)).toEqual([])
+  // The list of everything never carried the group.
+  expect(mock.queries.every((q) => !q.searchParams.has('group'))).toBeTruthy()
   expect(mock.errors).toEqual([])
 })
 
@@ -112,21 +143,21 @@ test('R17 分组和按人、搜索同时生效；清掉筛选一起清', async (
   await open(page)
   await row(page, '领域').getByRole('button', { name: /饮食/ }).click()
   await expect(page.locator('.mem-entry')).toHaveCount(2)
-  await row(page, '提到的人').getByRole('button', { name: /林栖/ }).click()
-  await expect.poll(() => lastQuery(mock, 'entity')).toBe(linqi.entityId)
-  expect(lastQuery(mock, 'group')).toBe(food.entityId)
+  await row(page, '人').getByRole('button', { name: /林栖/ }).click()
+  expect(within(page)).toEqual([`entity:${food.entityId}`, `entity:${linqi.entityId}`])
   await expect(page.locator('.mem-entry')).toHaveCount(1)
   await expect(line(page, all[1].text)).toBeVisible()
-  await expect(page.getByText('「饮食」下面提到「林栖」的记忆有 1 条')).toBeVisible()
+  await expect(page.getByText('同时在「饮食」「林栖」名下的记忆有 1 条')).toBeVisible()
 
   await page.getByRole('textbox', { name: '搜索记忆' }).fill('中烘')
-  await expect.poll(() => lastQuery(mock, 'q')).toBe('中烘')
-  expect(lastQuery(mock, 'group')).toBe(food.entityId)
-  expect(lastQuery(mock, 'entity')).toBe(linqi.entityId)
-  await expect(page.locator('.mem-entry')).toHaveCount(1)
+  await expect(page.getByText('同时在「饮食」「林栖」名下、符合其余条件的记忆有 1 条')).toBeVisible()
+  await page.getByRole('textbox', { name: '搜索记忆' }).fill('没有这几个字')
+  await expect(page.getByText('没找到符合的记忆。')).toBeVisible()
+  expect(within(page)).toHaveLength(2)
 
   await page.getByRole('button', { name: '清掉筛选' }).click()
   await expect(page.locator('.mem-entry')).toHaveCount(5)
+  expect(new URL(page.url()).search).toBe('?tab=memory')
   for (const name of ['group', 'entity', 'q']) expect(lastQuery(mock, name)).toBeNull()
   expect(mock.errors).toEqual([])
 })
@@ -165,7 +196,7 @@ test('R17/R19 卡片上有分组和类型的中文叫法；点卡片上的分组
   await expect(beansCard.getByRole('button', { name: '林栖', exact: true })).toBeVisible()
 
   await beansCard.getByRole('button', { name: '手冲咖啡', exact: true }).click()
-  await expect.poll(() => lastQuery(mock, 'group')).toBe(coffee.entityId)
+  await expect.poll(() => within(page)).toEqual([`entity:${coffee.entityId}`])
   await expect(page.locator('.mem-entry')).toHaveCount(2)
   await expect(row(page, '主题').getByRole('button', { name: /手冲咖啡/ })).toHaveAttribute('aria-pressed', 'true')
   // Narrowing from a card does not open it.
@@ -206,8 +237,8 @@ test('一个分组都没有时不出现分组入口，人和地点照旧', async
   await open(page)
   await expect(page.locator('.mem-entry')).toHaveCount(2)
   for (const name of ['项目', '主题', '领域']) await expect(row(page, name)).toHaveCount(0)
-  await expect(page.locator('.mem-facet')).toHaveCount(2)
-  await expect(row(page, '提到的人').getByRole('button')).toHaveText(['林栖1'])
+  await expect(page.locator('.mem-facet-label')).toHaveText(['人', '地点'])
+  await expect(row(page, '人').getByRole('button')).toHaveText(['林栖1'])
   await expect(row(page, '地点').getByRole('button')).toHaveText(['云岫镇2'])
   await expect(page.locator('body')).not.toContainText('已整理')
   await expect(page.locator('.mem-entry .tag')).toHaveCount(0)
@@ -232,7 +263,7 @@ test('分组很多时每行先显示条数最多的 6 个，其余收起；手�
   await expect(chips).toHaveCount(12)
   expect(await fits(page)).toBeTruthy()
   await chips.last().click()
-  await expect.poll(() => lastQuery(mock, 'group')).toBe('topic-11')
+  await expect.poll(() => within(page)).toEqual(['entity:topic-11'])
   await row(page, '主题').getByRole('button', { name: '收起' }).click()
   // The one in use stays in sight.
   await expect(chips).toHaveCount(7)
@@ -257,7 +288,7 @@ test('截图', async ({ page }) => {
   await backend(page, all, { done: 9, total: 10, version: 1 })
   for (const [name, width, height] of [['desktop', 1280, 900], ['phone', 390, 844]] as const) {
     await page.setViewportSize({ width, height })
-    await page.goto(`/library?tab=memory&group=${coffee.entityId}`)
+    await page.goto(`/library?tab=memory&in=${encodeURIComponent(`entity:${coffee.entityId}`)}`)
     await expect(page.locator('.mem-entry')).toHaveCount(3)
     await row(page, '主题').getByRole('button', { name: /手冲咖啡/ }).click()
     await expect(page.locator('.mem-entry')).toHaveCount(10)

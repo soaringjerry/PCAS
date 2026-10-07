@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
@@ -24,96 +25,102 @@ func (s *Store) heavyUse(ctx, persist context.Context, scope memory.Scope, agent
 	}
 	catalog.WriteString(`只输出 JSON：{"groups":["目录里的key"]}。` + "\n")
 	selectionID := memory.NewID()
-	choice, err := s.useModelCall(readCtx, persist, scope, agent.ID, useReaderInstructions, catalog.String(), useGroupsSchema, modelUsage{ID: selectionID, Purpose: "reader", Tier: "heavy", TurnID: turn, RunID: run, MemoryRefs: u.Dependencies, Plan: asJSON(usePlan{Groups: u.Groups})})
-	keys := append([]string{}, u.RequiredGroups...)
-	if len(keys) > 12 {
-		keys = keys[:12]
-	}
-	if err == nil {
-		var p usePlan
-		err = json.Unmarshal([]byte(choice.Text), &p)
+	keys := []string{}
+	requested := append([]string{}, u.RequiredGroups...)
+	var err error
+	if !u.Selected {
+		choice, e := s.useModelCall(readCtx, persist, scope, agent.ID, useReaderInstructions, catalog.String(), useGroupsSchema, modelUsage{ID: selectionID, Purpose: "reader", Tier: "heavy", TurnID: turn, RunID: run, MemoryRefs: u.Dependencies, Plan: asJSON(usePlan{Groups: u.Groups})})
+		err = e
 		if err == nil {
-			for _, key := range p.Groups {
-				for _, g := range u.Index {
-					if key == g.Key && !oneOf(key, keys...) && len(keys) < 12 {
-						keys = append(keys, key)
-					}
-				}
-			}
+			var p usePlan
+			err = json.Unmarshal([]byte(choice.Text), &p)
+			requested = append(requested, p.Groups...)
 		}
 	}
-	if err != nil || len(keys) == 0 {
-		for _, key := range u.Groups {
-			if !oneOf(key, keys...) && len(keys) < 12 {
+	if err != nil || len(requested) == 0 {
+		requested = append(requested, u.Groups...)
+	}
+	omitted := []string{}
+	for _, key := range requested {
+		for _, g := range u.Index {
+			if g.Key != key || oneOf(key, keys...) || oneOf(g.Name, omitted...) {
+				continue
+			}
+			if len(keys) < 12 {
 				keys = append(keys, key)
+			} else {
+				omitted = append(omitted, g.Name)
 			}
 		}
 	}
-	if err == nil {
-		if _, e := s.pool.Exec(readCtx, "UPDATE model_usage SET plan=$3 WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), string(selectionID), safeUsePlan(asJSON(usePlan{Groups: keys}))); e != nil {
-			slog.WarnContext(persist, "memory selector accounting update failed", "stage", "reader", "error_type", secretaryErrorType("reader", e))
-		}
+	if u.Coverage != nil {
+		u.Coverage.Skipped = append(u.Coverage.Skipped, omitted...)
 	}
+	if len(omitted) > 0 {
+		s.recordUseOverflow(persist, scope, "reader_group_limit", len(omitted))
+	}
+
 	type readerResult struct {
 		key      string
 		memories []workspace.Memory
 		refs     []memory.Ref
+		complete bool
 	}
 	results := make(chan readerResult, len(keys))
 	for _, key := range keys {
 		go func(key string) {
-			ms := []workspace.Memory{}
-			err := pgx.BeginFunc(readCtx, s.pool, func(tx pgx.Tx) error {
-				opts := memoryReadOptions{useCurrent: true}
-				if strings.HasPrefix(key, "entity:") {
-					opts.useEntity = strings.TrimPrefix(key, "entity:")
-				} else {
-					opts.query.Category = strings.TrimPrefix(key, "self:")
-				}
-				var err error
-				ms, err = s.readMemoriesTx(readCtx, tx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: agent.ID}, true, opts)
-				if err != nil {
-					return err
-				}
-				allowed := []workspace.Memory{}
-				for _, m := range ms {
-					if useMemoryAllowed(m, agent) {
-						ref := memory.Ref{ID: memory.ID(m.ID), Version: m.Version, Kind: memory.ClaimKind}
-						if thing == nil || verifyRunTx(readCtx, tx, scope, workspace.Run{ThingID: *thing, AgentID: agent.ID, ContextVersions: []memory.Ref{ref}}) == nil {
-							allowed = append(allowed, m)
-						}
-					}
-				}
-				ms = allowed
-				return nil
-			})
-			refs := memoryRefs(ms)
 			selected := []workspace.Memory{}
-			if err == nil && len(ms) > 0 {
-				raw, e := s.useModelCall(readCtx, persist, scope, agent.ID, useReaderInstructions, "这件事："+text+"\n分组："+key+"\n"+writeReaderMemories(ms, u.Location)+`只输出 JSON：{"used":["上面的记忆ID"]}。`, useReaderSchema, modelUsage{Purpose: "reader", Tier: "heavy", TurnID: turn, RunID: run, MemoryRefs: refs, Plan: asJSON(usePlan{Groups: []string{key}})})
+			refs := []memory.Ref{}
+			ids := []string{}
+			err := pgx.BeginTxFunc(readCtx, s.pool, pgx.TxOptions{AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
+				var e error
+				ids, e = queryDocuments[string](readCtx, tx, "SELECT to_jsonb(claim_id::text) FROM status_current_members WHERE owner_id=$1 AND key=$2 ORDER BY claim_id", string(scope.OwnerID), key)
+				return e
+			})
+			// 100 memories per model input bounds both hydration and prompt
+			// size. Every page is read, subject only to the shared wall clock.
+			for offset := 0; err == nil && offset < len(ids); offset += 100 {
+				var ms []workspace.Memory
+				end := min(offset+100, len(ids))
+				err = pgx.BeginTxFunc(readCtx, s.pool, pgx.TxOptions{AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
+					var e error
+					ms, e = s.useMemoriesTx(readCtx, tx, scope, agent, thing, ids[offset:end])
+					return e
+				})
+				if err != nil {
+					break
+				}
+				if len(ms) == 0 {
+					continue
+				}
+				batchRefs := memoryRefs(ms)
+				raw, e := s.useModelCall(readCtx, persist, scope, agent.ID, useReaderInstructions, "这件事："+text+"\n分组："+key+"\n"+writeReaderMemories(ms, u.Location)+`只输出 JSON：{"used":["上面的记忆ID"]}。`, useReaderSchema, modelUsage{Purpose: "reader", Tier: "heavy", TurnID: turn, RunID: run, MemoryRefs: batchRefs, Plan: asJSON(usePlan{Groups: []string{key}})})
 				err = e
-				if err == nil {
-					var out struct {
-						Used []string `json:"used"`
-					}
-					err = json.Unmarshal([]byte(raw.Text), &out)
-					if err == nil {
-						for _, id := range out.Used {
-							for _, m := range ms {
-								if m.ID == id {
-									selected = append(selected, m)
-									break
-								}
-							}
+				if err != nil {
+					break
+				}
+				var out struct {
+					Used []string `json:"used"`
+				}
+				err = json.Unmarshal([]byte(raw.Text), &out)
+				if err != nil {
+					break
+				}
+				refs = append(refs, batchRefs...)
+				for _, id := range out.Used {
+					for _, m := range ms {
+						if m.ID == id {
+							selected = append(selected, m)
+							break
 						}
 					}
 				}
 			}
 			if err != nil {
 				slog.WarnContext(persist, "memory reader skipped", "stage", "reader", "error_type", secretaryErrorType("reader", err))
-				refs = nil
 			}
-			results <- readerResult{key, selected, refs}
+			results <- readerResult{key: key, memories: selected, refs: refs, complete: err == nil}
+
 		}(key)
 	}
 	completed := map[string]readerResult{}
@@ -123,6 +130,15 @@ func (s *Store) heavyUse(ctx, persist context.Context, scope memory.Scope, agent
 		seen := map[string]bool{}
 		for _, key := range keys {
 			result := completed[key]
+			if !result.complete && u.Coverage != nil {
+				for _, g := range u.Index {
+					if g.Key == key {
+						u.Coverage.Skipped = append(u.Coverage.Skipped, g.Name)
+						break
+					}
+				}
+				s.recordUseOverflow(persist, scope, "reader_timeout_or_failure", 1)
+			}
 			refs = append(refs, result.refs...)
 			for _, m := range result.memories {
 				if !seen[m.ID] {
@@ -162,7 +178,7 @@ func (s *Store) deputyUseContext(ctx context.Context, scope memory.Scope, run *w
 			return err
 		}
 		u, err = s.startUseContextTx(ctx, tx, scope)
-		if err != nil || !u.Ready {
+		if err != nil {
 			return err
 		}
 		ms, err := s.readMemoriesTx(ctx, tx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: agent.ID}, true, memoryReadOptions{useCurrent: true, ids: run.ContextMemoryIDs})
@@ -178,4 +194,12 @@ func (s *Store) deputyUseContext(ctx context.Context, scope memory.Scope, run *w
 		return s.finishUseContextTx(ctx, tx, scope, agent, &run.ThingID, run.Prompt, ms, &u)
 	})
 	return u, agent, err
+}
+
+func (s *Store) recordUseOverflow(ctx context.Context, scope memory.Scope, reason string, count int) {
+	persist, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+	if _, err := s.pool.Exec(persist, "INSERT INTO background_stage_events(owner_id,stage,outcome,reason,count) VALUES($1,'reader','overflow',$2,$3)", string(scope.OwnerID), reason, count); err != nil {
+		slog.WarnContext(persist, "reader overflow accounting failed", "reason", reason, "count", count)
+	}
 }

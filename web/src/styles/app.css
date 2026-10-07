@@ -3373,6 +3373,16 @@ button.mention.on svg {
   font-size: 12.5px;
 }
 
+.mem-facet-find {
+  max-width: 340px;
+}
+
+.mem-facet-none {
+  margin: 0;
+  color: var(--label-3);
+  font-size: 12.5px;
+}
+
 .mem-summary {
   display: flex;
   align-items: baseline;
@@ -3529,37 +3539,90 @@ button.mention.on svg {
   overflow-wrap: anywhere;
 }
 
-/* ================= About you ================= */
+/* ================= What matters now, at the top of the library ================= */
 
-.about-block {
-  margin-top: 22px;
+.now {
+  margin-bottom: 18px;
 }
 
-.about-title {
-  margin: 0 4px 8px;
+.now-bar {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 12px 16px;
+}
+
+.now-bar h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.now-about {
+  min-width: 0;
+  color: var(--label-3);
+  font-size: 12.5px;
+}
+
+.now-bar .link-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+  margin-left: auto;
+  color: var(--label-2);
+  font-size: 12.5px;
+}
+
+.now-body {
+  border-top: 1px solid var(--sep);
+}
+
+.now-block {
+  padding: 14px 16px;
+}
+
+.now-block + .now-block {
+  border-top: 1px solid var(--sep);
+}
+
+.now-block-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+  margin-bottom: 10px;
+}
+
+.now-block-head h3 {
+  margin: 0;
   color: var(--label-2);
   font-size: 13px;
   font-weight: 500;
 }
 
-.about-handover {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px 28px;
-  padding: 16px;
+.now-written {
+  color: var(--label-3);
+  font-size: 12.5px;
 }
 
-.about-part {
+.now-handover {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 28px;
+}
+
+.now-part {
   min-width: 0;
 }
 
-.about-part h3 {
+.now-part h4 {
   margin: 0 0 4px;
   font-size: 13.5px;
   font-weight: 600;
 }
 
-.about-part p {
+.now-part p {
   margin: 0;
   color: var(--label);
   font-size: 14px;
@@ -3568,27 +3631,57 @@ button.mention.on svg {
   overflow-wrap: anywhere;
 }
 
-.about-dates,
-.about-cards,
-.about-field ul {
+.now-more {
+  margin-top: 10px;
+  color: var(--label-2);
+  font-size: 12.5px;
+}
+
+.now-none {
   margin: 0;
+  color: var(--label-3);
+  font-size: 13px;
+}
+
+.now-dates + .now-dates {
+  margin-top: 14px;
+}
+
+.now-dates h4 {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin: 0 0 2px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.now-dates h4 .n {
+  color: var(--label-3);
+  font-size: 11.5px;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+.now-dates-overdue h4 {
+  color: var(--orange);
+}
+
+.now-dates ul {
+  margin: 0 -8px;
   padding: 0;
   list-style: none;
 }
 
-.about-dates li + li,
-.about-card + .about-card {
-  border-top: 1px solid var(--sep);
-}
-
-.about-dates button {
+.now-dates li button {
   display: grid;
   grid-template-columns: 13.5em minmax(0, 1fr) auto;
   align-items: baseline;
   gap: 4px 12px;
   width: 100%;
-  padding: 10px 16px;
+  padding: 7px 8px;
   border: 0;
+  border-radius: 8px;
   background: none;
   color: var(--label);
   font: inherit;
@@ -3596,12 +3689,11 @@ button.mention.on svg {
   cursor: pointer;
 }
 
-.about-dates button:hover,
-.about-card-bar:hover {
+.now-dates li button:hover {
   background: var(--fill);
 }
 
-.about-when {
+.now-when {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -3610,100 +3702,57 @@ button.mention.on svg {
   white-space: nowrap;
 }
 
-.about-when svg {
+.now-when svg {
   flex: none;
   color: var(--label-3);
 }
 
-.about-what {
+.now-what {
   min-width: 0;
   overflow-wrap: anywhere;
 }
 
-.about-note {
+.now-note {
   margin-left: 8px;
   color: var(--orange);
   font-size: 12.5px;
 }
 
-.about-kind,
-.about-card-count {
-  color: var(--label-3);
-  font-size: 12.5px;
-  white-space: nowrap;
-}
-
-.about-card-bar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 11px 16px;
-  border: 0;
-  background: none;
-  color: var(--label);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-.about-card-bar svg {
-  flex: none;
-  color: var(--label-3);
-}
-
-.about-card-name {
-  min-width: 0;
-  font-weight: 500;
-  overflow-wrap: anywhere;
-}
-
-.about-card-count {
-  margin-left: auto;
-}
-
-.about-card-body {
-  padding: 2px 16px 14px;
-}
-
-.about-field + .about-field {
-  margin-top: 12px;
-}
-
-.about-field h4 {
-  margin: 0 0 2px;
-  color: var(--label-2);
-  font-size: 12.5px;
-  font-weight: 500;
-}
-
-.about-field li {
-  padding: 3px 0;
-}
-
-.about-applies {
+.now-said {
   display: block;
   color: var(--label-2);
   font-size: 12.5px;
 }
 
-.about-none {
-  margin: 0;
-  padding: 6px 0;
+.now-body > .mem-state + .now-block,
+.now-body > .now-block + .mem-state,
+.now-body > .mem-state + .mem-state {
+  border-top: 1px solid var(--sep);
+}
+
+.mem-applies {
+  display: block;
+  margin-top: 2px;
+  color: var(--label-2);
+  font-size: 12.5px;
+}
+
+.now-kind {
   color: var(--label-3);
-  font-size: 13px;
+  font-size: 12.5px;
+  white-space: nowrap;
 }
 
 @media (max-width: 600px) {
-  .about-handover {
+  .now-handover {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .about-dates button {
+  .now-dates li button {
     grid-template-columns: minmax(0, 1fr) auto;
   }
 
-  .about-what {
+  .now-what {
     grid-column: 1 / -1;
     grid-row: 2;
   }

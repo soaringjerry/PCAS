@@ -61,3 +61,20 @@ func backgroundResultTx(ctx context.Context, db interface {
 	}
 	return err
 }
+
+// Merges can touch many historical revisions. Keep the decision atomic, but
+// remove the 1.5-second statement cap used for small derived writes. Each
+// mutation inside mergeEntityTx is paged; no status-card lock is acquired.
+func backgroundMergeResultTx(ctx context.Context, db interface {
+	Begin(context.Context) (pgx.Tx, error)
+}, owner memory.ID, write func(context.Context, pgx.Tx) error) error {
+	writeCtx, cancel := context.WithTimeout(ctx, time.Minute)
+	defer cancel()
+	err := pgx.BeginFunc(writeCtx, db, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(writeCtx, "SET LOCAL lock_timeout='100ms'; SET LOCAL statement_timeout='50s'"); err != nil {
+			return err
+		}
+		return write(writeCtx, tx)
+	})
+	return backgroundWriteError(ctx, err)
+}

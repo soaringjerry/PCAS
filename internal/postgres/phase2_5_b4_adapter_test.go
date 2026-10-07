@@ -8,6 +8,7 @@ import (
 )
 
 type phase25B4Reply struct {
+	depth                 string
 	text                  string
 	used                  []string
 	actions               []json.RawMessage
@@ -37,7 +38,11 @@ func phase25B4DefaultAdapter() phase25B4Adapter {
 		// The secretary's existing reply/actions shape stays in one adapter.
 		// The added contract field is never inferred
 		// from the draft text: it is an explicit boolean from the fake model.
-		data, err := json.Marshal(map[string]any{"reply": result.text, "used": used, "actions": actions, "missingKeyInfo": result.missingKeyInformation})
+		out := map[string]any{"reply": result.text, "used": used, "actions": actions, "missingKeyInfo": result.missingKeyInformation}
+		if result.depth != "" {
+			out["memoryPlan"] = map[string]any{"depth": result.depth, "groups": []string{}, "mentioned": []string{}, "adopted": []string{}}
+		}
+		data, err := json.Marshal(out)
 		return string(data), err
 	}
 	return phase25B4Adapter{encodeAnswer: encode, encodeSelfcheck: encode,

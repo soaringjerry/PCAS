@@ -127,7 +127,6 @@ func run(ctx context.Context, args []string, logger *slog.Logger) error {
 		defer stopBackfill()
 		statusDone := make(chan struct{})
 		defer func() { stopBackfill(); <-statusDone }()
-		postgres.StatusCardsPaused = os.Getenv("PCAS_STATUS_CARDS_PAUSED") == "1"
 		go func() { defer close(statusDone); db.RunStatus(backfillCtx, logger) }()
 		organizeDone := make(chan struct{})
 		defer func() { stopBackfill(); <-organizeDone }()

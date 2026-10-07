@@ -1,23 +1,4 @@
-import type { StatusCardFieldKind, StatusCardKind } from './status'
-
-/** The order the cards are shown in, and what each kind is called. */
-export const cardKinds: { kind: StatusCardKind; label: string }[] = [
-  { kind: 'self', label: '关于你' },
-  { kind: 'project', label: '项目' },
-  { kind: 'person', label: '人' },
-  { kind: 'topic', label: '主题' },
-  { kind: 'area', label: '领域' },
-]
-
-export const cardFieldLabel: Record<StatusCardFieldKind, string> = {
-  status: '现状',
-  deadline: '期限',
-  decided: '已经定的',
-  blocker: '卡点',
-  next: '下一步',
-  preference: '偏好',
-  people: '相关的人',
-}
+import type { Deadline } from './status'
 
 export const deadlineKindLabel = { deadline: '截止', appointment: '预约', recurring: '固定安排' } as const
 
@@ -63,4 +44,27 @@ export function handoverSections(body: string): HandoverSection[] {
   }
   if (current.title || current.text.trim()) out.push(current)
   return out.map((s) => ({ title: s.title, text: s.text.trim() }))
+}
+
+export type DeadlineGroup = 'upcoming' | 'overdue' | 'recurring' | 'unclear'
+
+/** The order the dates are shown in, and what each part is called. */
+export const deadlineGroups: { group: DeadlineGroup; label: string }[] = [
+  { group: 'upcoming', label: '还没到的' },
+  { group: 'overdue', label: '已过期，不知是否完成' },
+  { group: 'recurring', label: '固定安排' },
+  { group: 'unclear', label: '日期没说清的' },
+]
+
+const groupOfStatus: Record<Deadline['dateStatus'], DeadlineGroup> = { upcoming: 'upcoming', expired_unknown: 'overdue', recurring: 'recurring', unclear: 'unclear' }
+
+/** The dates by part, as the server sorted them: the nearest first among those to come, the latest first among those gone by. */
+export function groupDeadlines(items: Deadline[]): Record<DeadlineGroup, Deadline[]> {
+  const out: Record<DeadlineGroup, Deadline[]> = { upcoming: [], overdue: [], recurring: [], unclear: [] }
+  // A status this page does not know is kept, among the ones whose date is not clear.
+  for (const d of items) out[groupOfStatus[d.dateStatus] ?? 'unclear'].push(d)
+  const time = (d: Deadline) => (d.at ? new Date(d.at).getTime() : 0)
+  out.upcoming.sort((a, b) => time(a) - time(b))
+  out.overdue.sort((a, b) => time(b) - time(a))
+  return out
 }

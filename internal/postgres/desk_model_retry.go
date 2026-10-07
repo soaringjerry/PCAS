@@ -49,9 +49,6 @@ func (s *Store) generateSecretaryModelWithRetry(workCtx, persistCtx context.Cont
 			err = callCtx.Err()
 		}
 		cost := result.Cost
-		if err != nil && strings.TrimSpace(result.Text) == "" {
-			cost = 0
-		}
 		accountingErr = s.settleModelCost(persistCtx, scope.OwnerID, reservationID, cost)
 		if accountingErr != nil {
 			return result, accountingErr
@@ -64,6 +61,7 @@ func (s *Store) generateSecretaryModelWithRetry(workCtx, persistCtx context.Cont
 			usage.Model = p.Model
 			usage.InputTokens = result.InputTokens
 			usage.OutputTokens = result.OutputTokens
+			usage.InputEstimated, usage.OutputEstimated, usage.CostEstimated = result.InputEstimated, result.OutputEstimated, result.CostEstimated
 			usage.Cost = cost
 			if accountingErr = s.recordUsage(persistCtx, usage); accountingErr != nil {
 				return result, accountingErr

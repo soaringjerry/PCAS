@@ -251,9 +251,6 @@ func (s *Store) importBatchTx(ctx context.Context, tx pgx.Tx, scope memory.Scope
 	if out.Blocked > 0 {
 		out.Gaps = append(out.Gaps, "已删除的来源被阻止重新导入")
 	}
-	if _, err := tx.Exec(ctx, "UPDATE workspace_owners SET revision=revision+1 WHERE owner_id=$1", string(scope.OwnerID)); err != nil {
-		return out, err
-	}
 	return out, nil
 }
 

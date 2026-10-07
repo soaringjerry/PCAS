@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-func TestPhase25B4_CardContextUsesTrustAndAgentInferredSetting(t *testing.T) {
+func TestPhase25B4_LiveMemoryContextUsesTrustAndAgentInferredSetting(t *testing.T) {
 	for _, include := range []bool{false, true} {
 		t.Run(fmt.Sprintf("include_inferred=%v", include), func(t *testing.T) {
 			f := phase25B234NewFixture(t)
@@ -29,14 +29,14 @@ func TestPhase25B4_CardContextUsesTrustAndAgentInferredSetting(t *testing.T) {
 			f.exec(t, `INSERT INTO evidence(owner_id,id,source_id,source_version,target_id,target_version,locator,acquisition,stance) VALUES($1,$2,$3,$4,$5,$6,'{}','direct','supports')`, f.scope.OwnerID, memory.NewID(), source.Ref.ID, source.Ref.Version, refs[1].ID, refs[1].Version)
 			f.card(t, g, refs, false)
 			f.model(t, func(_ *http.Request, _ int, r phase25B234ModelRequest) phase25B234ModelReply {
-				body := phase25B4Region(t, phase25B4Prompt(r), "现状卡")
+				body := phase25B4Prompt(r)
 				for i, trust := range []string{"stated", "repeated", "tentative", "reported"} {
 					phase25B4MustContain(t, body, texts[i], "trust="+trust)
 				}
 				if include {
 					phase25B4MustContain(t, body, texts[4], "trust=inferred")
 				} else if strings.Contains(body, texts[4]) {
-					t.Error("agent excludes inferred but inferred memory reached card context")
+					t.Error("agent excludes inferred but inferred memory reached live memory context")
 				}
 				return phase25B4ReplyJSON(phase25B4Reply{text: "虚构按可信度回答。"}, false)
 			})

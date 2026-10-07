@@ -1,30 +1,11 @@
-import type { ID, Memory } from './types'
+import type { ID } from './types'
 
 export interface Handover {
   body: string
+  /** When this note was written; empty when there is none yet. */
   builtAt: string
+  /** A newer one is on its way; this is the one before it. */
   stale: boolean
-}
-
-export type StatusCardKind = 'project' | 'topic' | 'area' | 'person' | 'self'
-export type StatusCardFieldKind = 'status' | 'deadline' | 'decided' | 'blocker' | 'next' | 'preference' | 'people'
-
-export interface StatusCardRef {
-  key: string
-  kind: StatusCardKind
-  name: string
-  count: number
-  builtAt: string
-  stale: boolean
-}
-
-export interface StatusCardField {
-  field: StatusCardFieldKind
-  items: Memory[]
-}
-
-export interface StatusCard extends StatusCardRef {
-  fields: StatusCardField[]
 }
 
 export interface Deadline {
@@ -35,11 +16,8 @@ export interface Deadline {
   title: string
   timeNote: string
   memoryId: ID
-}
-
-export interface About {
-  handover: Handover
-  cards: StatusCard[]
-  deadlines: Deadline[]
-  building: { done: number; total: number }
+  /** Which part of the table it belongs in, as the server judged it when read. */
+  dateStatus: 'upcoming' | 'expired_unknown' | 'recurring' | 'unclear'
+  /** What was actually said, for a date that could not be pinned down. */
+  originalText: string
 }

@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -375,7 +376,7 @@ func TestPhase25B1_X15_DeleteOnlyMemoryLeavesGroupEntity(t *testing.T) {
 	}
 	var state workspace.State
 	f.get(t, "/v1/workspace", &state)
-	if state.Organize != (workspace.Organize{Done: 0, Total: 1, Version: 1}) {
+	if state.Organize != (workspace.Organize{Done: 0, Total: 1, Version: postgres.OrganizeVersion}) {
 		t.Errorf("after delete progress = %+v", state.Organize)
 	}
 }
@@ -437,12 +438,12 @@ func TestPhase25B1_SnapshotProgressUsesStoredOrganized(t *testing.T) {
 	f.claim(t, "虚构首次整理前的便签。")
 	var state workspace.State
 	f.get(t, "/v1/workspace", &state)
-	if state.Organize != (workspace.Organize{Done: 1, Total: 2, Version: 1}) {
+	if state.Organize != (workspace.Organize{Done: 1, Total: 2, Version: postgres.OrganizeVersion}) {
 		t.Errorf("progress = %+v", state.Organize)
 	}
 	f.exec(t, `UPDATE claims SET organized=0 WHERE owner_id=$1 AND id=$2`, f.scope.OwnerID, ref.ID)
 	f.get(t, "/v1/workspace", &state)
-	if state.Organize != (workspace.Organize{Done: 0, Total: 2, Version: 1}) {
+	if state.Organize != (workspace.Organize{Done: 0, Total: 2, Version: postgres.OrganizeVersion}) {
 		t.Errorf("lagging progress = %+v", state.Organize)
 	}
 }

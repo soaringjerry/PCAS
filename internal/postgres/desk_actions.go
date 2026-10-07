@@ -110,6 +110,7 @@ type secretaryAction struct {
 	Prompt           string                     `json:"prompt"`
 }
 type secretaryOutput struct {
+	MemoryPlan     *usePlan           `json:"memoryPlan,omitempty"`
 	MissingKeyInfo bool               `json:"missingKeyInfo"`
 	Reply          string             `json:"reply"`
 	Used           []string           `json:"used"`

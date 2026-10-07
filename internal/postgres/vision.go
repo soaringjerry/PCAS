@@ -5,7 +5,6 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/ai"
@@ -44,21 +43,18 @@ func (s *Store) readImage(ctx context.Context, scope memory.Scope, ref memory.Re
 			result, callErr := s.models.Vision(work, p.ID, visionInstructions, image)
 			cancel()
 			cost := result.Cost
-			if callErr != nil && strings.TrimSpace(result.Text) == "" {
-				cost = 0
-			}
 			if settleErr := s.settleModelCost(ctx, scope.OwnerID, reservationID, cost); settleErr != nil {
 				return "", "", settleErr
 			}
 			err = callErr
+			usage := modelUsage{OwnerID: scope.OwnerID, ID: memory.NewID(), At: time.Now().UTC(), Purpose: "vision", AgentID: p.ID, Model: p.Model, InputTokens: result.InputTokens, OutputTokens: result.OutputTokens, InputEstimated: result.InputEstimated, OutputEstimated: result.OutputEstimated, CostEstimated: result.CostEstimated, Cost: result.Cost, MemoryRefs: []memory.Ref{ref}}
+			if job != nil {
+				usage.JobID = string(job.ID)
+			}
+			if err := s.recordReturnedUsage(ctx, result.Text, usage); err != nil {
+				return "", "", err
+			}
 			if err == nil {
-				usage := modelUsage{OwnerID: scope.OwnerID, ID: memory.NewID(), At: time.Now().UTC(), Purpose: "vision", AgentID: p.ID, Model: p.Model, InputTokens: result.InputTokens, OutputTokens: result.OutputTokens, Cost: result.Cost, MemoryRefs: []memory.Ref{ref}}
-				if job != nil {
-					usage.JobID = string(job.ID)
-				}
-				if err := s.recordReturnedUsage(ctx, result.Text, usage); err != nil {
-					return "", "", err
-				}
 				return result.Text, "vision", nil
 			}
 		}

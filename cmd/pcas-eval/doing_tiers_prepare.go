@@ -17,7 +17,7 @@ import (
 )
 
 // No tags, supersession edges, must references or expected answers enter the
-// product seed. The product itself derives every grouping/retirement/card.
+// product seed. The product itself derives every grouping and retirement.
 func seedTierSuite(ctx context.Context, store *postgres.Store, pool *pgxpool.Pool, s doing.Suite) (fixture.Seeded, error) {
 	asof, _ := time.Parse(time.RFC3339, s.AsOf)
 	anchor := time.Date(asof.Year(), asof.Month(), asof.Day(), 0, 0, 0, 0, time.UTC)
@@ -63,7 +63,7 @@ func prepareTierSuite(ctx context.Context, store *postgres.Store, pool *pgxpool.
 	}{
 		{"organize", store.ScheduleOrganize, map[string]worker.Handler{postgres.OrganizeStage: store.ProcessOrganize}},
 		{"compare", store.ScheduleCompare, map[string]worker.Handler{postgres.CompareStage: store.ProcessCompare, postgres.EntityCompareStage: store.ProcessEntityCompare}},
-		{"status", store.ScheduleStatus, map[string]worker.Handler{postgres.CardStage: store.ProcessCard, postgres.HandoverStage: store.ProcessHandover}},
+		{"status", store.ScheduleStatus, map[string]worker.Handler{postgres.HandoverStage: store.ProcessHandover}},
 	}
 	for _, stage := range stages {
 		at := time.Now()
@@ -148,16 +148,16 @@ func prepareTierSuite(ctx context.Context, store *postgres.Store, pool *pgxpool.
 	if unorganized != 0 {
 		return p, fmt.Errorf("prepare_organize_incomplete")
 	}
-	var stale int
-	if err := pool.QueryRow(ctx, `SELECT count(*),count(*) FILTER(WHERE stale OR built_at IS NULL OR rule<$2)
- FROM status_cards WHERE owner_id=$1 AND key IN(SELECT key FROM status_current_members WHERE owner_id=$1 GROUP BY key HAVING count(*)>=3)`, owner, postgres.CardVersion).Scan(&p.Cards, &stale); err != nil {
+	p.Cards = 0
+	if err := pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM handovers WHERE owner_id=$1 AND input_hash=library_handover_hash($1) AND rule>=$2 AND btrim(body)!='')`, owner, postgres.HandoverVersion).Scan(&p.Handover); err != nil {
 		return p, err
 	}
-	if err := pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM handovers WHERE owner_id=$1 AND NOT stale AND rule>=$2 AND btrim(body)!='')`, owner, postgres.HandoverVersion).Scan(&p.Handover); err != nil {
+	var handoverInputs bool
+	if err := pool.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM library_handover_members($1))", owner).Scan(&handoverInputs); err != nil {
 		return p, err
 	}
-	if stale != 0 || p.Cards > 0 && !p.Handover {
-		return p, fmt.Errorf("prepare_status_incomplete")
+	if handoverInputs && !p.Handover {
+		return p, fmt.Errorf("prepare_handover_incomplete")
 	}
 	// Freeze identities AFTER derived product records have been created.
 	if _, err := pool.Exec(ctx, `CREATE TABLE v2_frozen_records AS SELECT owner_id,id FROM memory_records`); err != nil {

@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { State } from '../domain/types'
 import { StoreContext, type RunRequest, type UndoOutcome } from './context'
+import { CONFLICT_RESENDS, sameTargets } from './conflict'
 import type { Action } from './actions'
-import { api, APIError } from './api'
+import { api, APIError, readWorkspace } from './api'
 import { ToastContext, type ToastApi, type ToastOptions } from './toast'
 import { CircleAlert, KeyRound, RotateCw } from 'lucide-react'
 import { Toast, type ToastEntry } from '../components/Shell'
@@ -23,8 +24,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [saving, setSaving] = useState(false)
   const [signingIn, setSigningIn] = useState(false)
   const [toast, setToast] = useState<ToastEntry | null>(null)
+  const [writes, setWrites] = useState(0)
   const closeToast = useCallback(() => setToast(null), [])
   const stateRef = useRef<State | null>(null)
+  const etag = useRef<string | undefined>(undefined)
   const queue = useRef<Promise<unknown>>(Promise.resolve())
   const pending = useRef(0)
   const alive = useRef(true)
@@ -32,11 +35,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const fail = useCallback((e: unknown) => {
     if (!alive.current) return
     // A lapsed session shows the sign-in form; that is not an error to report.
-    if (e instanceof APIError && e.status === 401) { setLogin(true); setState(null); stateRef.current = null; setError(''); return }
+    if (e instanceof APIError && e.status === 401) { setLogin(true); setState(null); stateRef.current = null; etag.current = undefined; setError(''); return }
     setError(e instanceof Error ? e.message : '网络连接中断，请重试')
   }, [])
   const refresh = useCallback(async () => {
-    try { accept(await api<State>('/v1/workspace')) } catch (e) { fail(e) }
+    try {
+      // Only a poll over a state already on screen may be answered with "unchanged".
+      const read = await readWorkspace<State>(stateRef.current ? etag.current : undefined)
+      if (read) { etag.current = read.etag; accept(read.state) }
+    } catch (e) { fail(e) }
     finally { if (alive.current) setLoading(false) }
   }, [accept, fail])
   useEffect(() => {
@@ -48,30 +55,44 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return () => { alive.current = false; window.clearInterval(timer) }
   }, [refresh])
 
-  /** Sends one command in order. `quiet` leaves reporting the failure to the caller. */
+  /**
+   * Sends one command in order. `quiet` leaves reporting the failure to the caller.
+   * The server turns a toggle or a bulk change down when the workspace moved on
+   * since it was read. The background moves it on all the time, so the command
+   * is sent again when what it acts on is the same as it was on screen.
+   */
   const command = useCallback((action: object, requestId: string, quiet = false): Promise<Outcome> => {
     pending.current++; setSaving(true)
     const work = queue.current.then(async (): Promise<Outcome> => {
-      if (!stateRef.current) return { ok: false, error: new Error('还没有连上 PCAS') }
-      const body = { ...action, requestId, expectedRevision: stateRef.current.revision }
-      try {
-        let next: State
-        try { next = await api<State>('/v1/workspace/commands', body) }
-        catch (e) {
-          // Retrying the identical request is safe because the server deduplicates it.
-          if (e instanceof APIError) throw e
-          next = await api<State>('/v1/workspace/commands', body)
+      let seen = stateRef.current
+      if (!seen) return { ok: false, error: new Error('还没有连上 PCAS') }
+      for (let resent = 0; ; resent++) {
+        const body = { ...action, requestId, expectedRevision: seen.revision }
+        try {
+          let next: State
+          try { next = await api<State>('/v1/workspace/commands', body) }
+          catch (e) {
+            // Retrying the identical request is safe because the server deduplicates it.
+            if (e instanceof APIError) throw e
+            next = await api<State>('/v1/workspace/commands', body)
+          }
+          accept(next); setError('')
+          if (alive.current) setWrites((n) => n + 1)
+          return { ok: true }
+        } catch (e) {
+          if (e instanceof APIError && e.status === 409) {
+            let fresh: State | undefined
+            try { fresh = await api<State>('/v1/workspace'); accept(fresh) } catch (failure) { fail(failure) }
+            if (fresh && e.code === 'version_conflict' && resent < CONFLICT_RESENDS && fresh.revision !== seen.revision && sameTargets(action, seen, fresh)) { seen = fresh; continue }
+          }
+          if (!quiet || e instanceof APIError && e.status === 401) fail(e)
+          return { ok: false, error: e }
         }
-        accept(next); setError(''); return { ok: true }
-      } catch (e) {
-        if (!quiet || e instanceof APIError && e.status === 401) fail(e)
-        if (e instanceof APIError && e.status === 409) await refresh()
-        return { ok: false, error: e }
       }
     }).finally(() => { pending.current--; if (alive.current) setSaving(pending.current > 0) })
     queue.current = work.catch(() => undefined)
     return work
-  }, [accept, fail, refresh])
+  }, [accept, fail])
   const dispatch = useCallback(async (action: Action) => (await command(action, crypto.randomUUID())).ok, [command])
   const showToast = useCallback((text: string, options?: ToastOptions) => setToast({ text, ...options, key: Date.now() }), [])
   const tryUndo = useCallback(async (actionId: string): Promise<UndoOutcome> => {
@@ -113,7 +134,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       await refresh(); setError(''); return true
     } catch (e) { fail(e); return false }
   }, [fail, refresh])
-  const value = useMemo(() => state ? ({ state, dispatch, dispatchUndoable, undo, tryUndo, applyState: accept, runAgent, importText, importAttachment, refresh }) : null, [state, dispatch, dispatchUndoable, undo, tryUndo, accept, runAgent, importText, importAttachment, refresh])
+  const value = useMemo(() => state ? ({ state, writes, dispatch, dispatchUndoable, undo, tryUndo, applyState: accept, runAgent, importText, importAttachment, refresh }) : null, [state, writes, dispatch, dispatchUndoable, undo, tryUndo, accept, runAgent, importText, importAttachment, refresh])
   const toastApi = useMemo<ToastApi>(() => ({ show: showToast }), [showToast])
 
   if (loading) return <main className="gate"><div className="gate-card gate-loading" role="status"><Logo /><Spinner size={16} /><span className="muted">正在连接 PCAS…</span></div></main>

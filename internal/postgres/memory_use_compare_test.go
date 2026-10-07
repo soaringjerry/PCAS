@@ -60,7 +60,7 @@ func TestB4ComparedRetirementAcrossSecretaryAndDeputy(t *testing.T) {
 						t.Errorf("retired context reached model: %s", bad)
 					}
 				}
-				if strings.Contains(prompt, "分组目录") {
+				if strings.Contains(prompt, `只输出 JSON：{"groups"`) {
 					secretaryModelReply(w, map[string]any{"groups": []string{key}})
 					return
 				}

@@ -179,6 +179,25 @@ func (s *Store) snapshotTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) (
 	if err != nil {
 		return out, err
 	}
+	if err := tx.QueryRow(ctx, "SELECT coalesce((to_jsonb(o)->>'library_revision')::bigint,1),coalesce((to_jsonb(o)->>'snapshot_revision')::bigint,1) FROM workspace_owners o WHERE owner_id=$1", string(scope.OwnerID)).Scan(&out.MemoryRevision, &out.SnapshotRevision); err != nil {
+		return out, err
+	}
+	var journal bool
+	if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname=current_schema() AND c.relname='workspace_snapshot_events')").Scan(&journal); err != nil {
+		return out, err
+	}
+	if journal {
+		var events int64
+		if err := tx.QueryRow(ctx, "SELECT count(*) FROM workspace_snapshot_events WHERE owner_id=$1", string(scope.OwnerID)).Scan(&events); err != nil {
+			return out, err
+		}
+		out.SnapshotRevision += events
+	}
+	changes, err := libraryEvents(ctx, tx, scope.OwnerID)
+	if err != nil {
+		return out, err
+	}
+	out.MemoryRevision += changes
 	if err = json.Unmarshal(data, &out.Settings); err != nil {
 		return out, err
 	}
@@ -714,4 +733,39 @@ func initializeAgentMemoriesTx(ctx context.Context, tx pgx.Tx, owner memory.ID, 
             WHERE g.owner_id=r.owner_id AND g.record_id=r.id)
         ON CONFLICT DO NOTHING`, string(owner), agent)
 	return err
+}
+
+// SnapshotETag reads only counters; matching polling requests never hydrate the
+// memory list. The token includes job/notices freshness as well as commands.
+func (s *Store) SnapshotETag(ctx context.Context, scope memory.Scope) (string, error) {
+	if err := requireOwner(scope); err != nil {
+		return "", err
+	}
+	var revision, library, snapshot int64
+	err := s.pool.QueryRow(ctx, "SELECT revision,library_revision,snapshot_revision+(SELECT count(*) FROM workspace_snapshot_events WHERE owner_id=$1) FROM workspace_owners WHERE owner_id=$1", string(scope.OwnerID)).Scan(&revision, &library, &snapshot)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	changes, err := libraryEvents(ctx, s.pool, scope.OwnerID)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("\"workspace-%s-%d-%d-%d\"", scope.OwnerID, revision, library+changes, snapshot), nil
+}
+
+// Memory changes counted since migration 045, which stopped writing them to
+// the owner's row. Zero on a schema that predates it.
+func libraryEvents(ctx context.Context, q interface {
+	QueryRow(context.Context, string, ...any) pgx.Row
+}, owner memory.ID) (int64, error) {
+	var journal bool
+	if err := q.QueryRow(ctx, "SELECT to_regclass('workspace_library_events') IS NOT NULL").Scan(&journal); err != nil || !journal {
+		return 0, err
+	}
+	var n int64
+	err := q.QueryRow(ctx, "SELECT count(*) FROM workspace_library_events WHERE owner_id=$1", string(owner)).Scan(&n)
+	return n, err
 }

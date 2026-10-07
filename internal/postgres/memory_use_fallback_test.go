@@ -31,7 +31,7 @@ func TestB4UnbuiltSecretarySelfchecksSameLegacyContext(t *testing.T) {
 						t.Error("legacy retrieval changed", prompt)
 					}
 					time.Sleep(100 * time.Millisecond)
-					secretaryModelReply(w, map[string]any{"reply": "虚构初稿", "missingKeyInfo": mode == "missing", "actions": []map[string]any{{"op": "create_task", "title": "虚构原任务"}}})
+					secretaryModelReply(w, map[string]any{"reply": "虚构初稿", "missingKeyInfo": mode == "missing", "memoryPlan": map[string]any{"depth": "medium", "groups": []string{}}, "actions": []map[string]any{{"op": "create_task", "title": "虚构原任务"}}})
 					return
 				}
 				promptMu.Lock()

@@ -3,18 +3,19 @@ import { SourceSheet } from '../components/SourceSheet'
 import { ImportSheet } from '../components/ImportSheet'
 import { api, downloadExport } from '../store/api'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Link, useSearchParams } from 'react-router'
+import { Navigate, useSearchParams } from 'react-router'
 import { ChevronRight, CircleAlert, Download, History, Info, RotateCw, Search, Trash2, Upload } from 'lucide-react'
 import { Checkbox, Chip } from '../components/controls'
 import { EventTime, Fade, FromLine, Groups, Mentions, ProjectLink, SaidAt, TrustMark, TrustTag } from '../components/Marks'
 import { ConfirmModal, SideSheet } from '../components/Overlay'
+import { NowPanel } from '../components/NowPanel'
 import { UnsureSheet } from '../components/UnsureSheet'
 import { Button, Empty, Progress, Seg, Sheet, Spinner, Switch, Tag } from '../components/ui'
 import { jobStatusLabel, memoryCategoryLabel, memoryKindLabel, memoryTrustLabel, trustOf, sampleStateLabel, sourceStatusLabel, triggerLabel } from '../domain/labels'
 import { formatAgo, formatShortWhen, formatWhen } from '../domain/time'
-import type { Memory, MemoryFacet, MemoryGroup, MemoryKind, MemoryMention, MemoryTrust, Source, TrainingSample } from '../domain/types'
+import type { Memory, MemoryFacet, MemoryGroup, MemoryGroupEntry, MemoryKind, MemoryMention, MemoryTrust, Source, TrainingSample } from '../domain/types'
 import { useStore } from '../store/context'
-import { useMemory, useMemoryFacets, useMemoryList, useMergedInto } from '../store/memories'
+import { type MemoryList, useMemory, useMemoryFacets, useMemoryGroups, useMemoryList, useMergedInto, useRequirements, useWholeGroups } from '../store/memories'
 import { useToast } from '../store/toast'
 
 type Tab = 'memory' | 'sources' | 'training'
@@ -322,10 +323,13 @@ function MergedInto({ memory, focus, onRestored }: { memory: Memory; focus: bool
 
 const natures = Object.keys(memoryKindLabel) as MemoryKind[]
 const trusts = (Object.keys(memoryTrustLabel) as MemoryTrust[]).map((value) => ({ value, label: memoryTrustLabel[value] }))
-const groupRows: { type: MemoryGroup['type']; label: string }[] = [
-  { type: 'project', label: '项目' },
-  { type: 'topic', label: '主题' },
-  { type: 'area', label: '领域' },
+/** The rows of the directory, in the order they are offered. */
+const groupRows: { kind: MemoryGroupEntry['kind']; label: string }[] = [
+  { kind: 'self', label: '你本人' },
+  { kind: 'person', label: '人' },
+  { kind: 'project', label: '项目' },
+  { kind: 'topic', label: '主题' },
+  { kind: 'area', label: '领域' },
 ]
 
 /** What the narrowed list holds, said by the person or place and the group it is narrowed to. */
@@ -339,37 +343,53 @@ function summaryOf(entityName: string, groupName: string): string {
 /** How many of one row (people, places, or one kind of group) are offered before 「更多」. */
 const FACETS_SHOWN = 6
 
-/** The people or places memories mention, or the groups they are filed under, as a row to pick one from. */
-function FacetRow({ label, entries, active, onPick }: { label: string; entries: MemoryFacet[]; active: string; onPick: (entityId: string) => void }) {
+interface FacetEntry {
+  /** What the list is narrowed by when this one is picked. */
+  id: string
+  name: string
+  /** Left out where the server does not count. */
+  count?: number
+}
+
+/**
+ * One row of things to narrow the list by: one kind of group from the
+ * directory, or the places memories mention. While a name is being searched for,
+ * every match is shown; otherwise the first few and the one in use.
+ */
+function FacetRow({ label, entries, active, find, onPick }: { label: string; entries: FacetEntry[]; active: string[]; find: string; onPick: (id: string) => void }) {
   const [all, setAll] = useState(false)
-  if (!entries.length) return null
-  // The one in use stays in sight even when it is far down the list.
-  const shown = all ? entries : entries.filter((e, i) => i < FACETS_SHOWN || e.entityId === active)
+  const matching = find ? entries.filter((e) => e.name.toLowerCase().includes(find)) : entries
+  if (!matching.length) return null
+  // The ones in use stay in sight even when they are far down the list.
+  const shown = all || find ? matching : matching.filter((e, i) => i < FACETS_SHOWN || active.includes(e.id))
   return (
     <div className="mem-facet" role="group" aria-label={label}>
       <span className="mem-facet-label">{label}</span>
       <div className="mem-facet-chips">
         {shown.map((e) => (
           <button
-            key={e.entityId}
+            key={e.id}
             type="button"
-            className={`chip chip-toggle${e.entityId === active ? ' on' : ''}`}
-            aria-pressed={e.entityId === active}
-            onClick={() => onPick(e.entityId)}
+            className={`chip chip-toggle${active.includes(e.id) ? ' on' : ''}`}
+            aria-pressed={active.includes(e.id)}
+            onClick={() => onPick(e.id)}
           >
             <span className="mem-facet-name">{e.name}</span>
-            <span className="n">{e.count}</span>
+            {e.count !== undefined && <span className="n">{e.count}</span>}
           </button>
         ))}
-        {entries.length > FACETS_SHOWN && (
+        {!find && matching.length > FACETS_SHOWN && (
           <button type="button" className="link-btn mem-facet-more" onClick={() => setAll((v) => !v)}>
-            {all ? '收起' : `更多 ${entries.length - shown.length}`}
+            {all ? '收起' : `更多 ${matching.length - shown.length}`}
           </button>
         )}
       </div>
     </div>
   )
 }
+
+const facetEntries = (facets: MemoryFacet[]): FacetEntry[] => facets.map((f) => ({ id: f.entityId, name: f.name, count: f.count }))
+const groupEntries = (groups: MemoryGroupEntry[]): FacetEntry[] => groups.map((g) => ({ id: g.key, name: g.name, count: g.count }))
 
 function MemoryTab() {
   const [params, setParams] = useSearchParams()
@@ -381,6 +401,9 @@ function MemoryTab() {
   const trust = trusts.find((t) => t.value === params.get('trust'))?.value ?? ''
   // The memories that were replaced or merged away are a view of their own.
   const retired = params.get('retired') === '1'
+  // Groups from the directory, by key: the memories under every one of them.
+  const within = params.getAll('in')
+  const inGroups = within.length > 0 && !retired
   const openId = params.get('m')
   const change = (patch: Record<string, string | null>, replace = false) =>
     setParams((current) => {
@@ -406,24 +429,81 @@ function MemoryTab() {
     }, 250)
   }
 
-  const list = useMemoryList(retired
-    ? { q, entity: '', group: '', nature: '', epistemic: '', trust: '', retired: '1' }
-    : { q, entity, group, nature, epistemic: '', trust, retired: '' })
+  // The server lists one group and takes nothing else with it. One group and
+  // no other filter is read a page at a time; anything more is worked out
+  // here, over everything under the groups.
+  const narrowedHere = inGroups && (within.length > 1 || Boolean(q || entity || nature || trust))
+  const paged = useMemoryList(retired
+    ? { q, entity: '', group: '', nature: '', within: '', epistemic: '', trust: '', retired: '1' }
+    : inGroups
+      ? { q: '', entity: '', group: '', nature: '', within: within[0], epistemic: '', trust: '', retired: '' }
+      : { q, entity, group, nature, within: '', epistemic: '', trust, retired: '' }, !narrowedHere)
+  const whole = useWholeGroups(within, narrowedHere)
+  const words = q.toLowerCase()
+  const narrowed = narrowedHere
+    ? whole.items.filter((m) =>
+      (!words || m.text.toLowerCase().includes(words))
+      && (!nature || m.kind === nature)
+      && (!trust || trustOf(m) === trust)
+      && (!entity || (m.mentions ?? []).some((x) => x.entityId === entity)))
+    : []
+  const list: MemoryList = narrowedHere
+    ? { phase: whole.phase, problem: whole.problem, items: narrowed, total: narrowed.length, hasMore: false, more: 'idle', moreProblem: '', loadMore: () => undefined, retry: whole.retry, remove: () => undefined }
+    : paged
+  const directory = useMemoryGroups()
   const { facets, problem: facetsProblem, retry: retryFacets } = useMemoryFacets()
   const opened = useMemory(openId, list.items.find((m) => m.id === openId))
   const [recalling, setRecalling] = useState(false)
   const { organize } = useStore().state
-  const filtered = retired ? Boolean(q) : Boolean(q || entity || group || nature || trust)
+  const filtered = retired ? Boolean(q) : Boolean(inGroups || q || entity || group || nature || trust)
+  const setWithin = (keys: string[], patch: Record<string, null> = {}) =>
+    setParams((now) => {
+      const next = new URLSearchParams(now)
+      next.delete('in')
+      for (const key of keys) next.append('in', key)
+      for (const name of ['m', 'group', ...Object.keys(patch)]) next.delete(name)
+      return next
+    })
+  const clearAll = () => { window.clearTimeout(typing.current); setWithin([], { q: null, entity: null, nature: null, trust: null }) }
   const pick = (entityId: string) => change({ entity: entityId === entity ? null : entityId, m: null })
-  const pickGroup = (entityId: string) => change({ group: entityId === group ? null : entityId, m: null })
+  const pickGroup = (entityId: string) => change({ in: null, group: entityId === group ? null : entityId, m: null })
+  const pickWithin = (key: string) => setWithin(within.includes(key) ? within.filter((k) => k !== key) : [...within, key])
+  const listed = directory.groups ?? []
+  // In the order they were picked.
+  const current = [...new Set(within)].flatMap((key) => listed.find((g) => g.key === key) ?? [])
+  // The address names a group the directory does not have: it is gone, or it never was one.
+  const gone = inGroups && Boolean(directory.groups) && current.length < new Set(within).size
+  /** The directory's entry for a group or person named on a memory, when exactly one has that kind and name. */
+  const entryFor = (kind: MemoryGroupEntry['kind'], name: string) => {
+    const same = listed.filter((g) => g.kind === kind && g.name === name)
+    return same.length === 1 ? same[0] : undefined
+  }
+  const pickNamedGroup = (g: MemoryGroup) => {
+    const entry = entryFor(g.type, g.name)
+    if (entry) pickWithin(entry.key)
+    else pickGroup(g.entityId)
+  }
+  const pickMention = (mention: MemoryMention) => {
+    const entry = mention.role === 'person' ? entryFor('person', mention.name) : undefined
+    if (entry) pickWithin(entry.key)
+    else pick(mention.entityId)
+  }
+  const onMemory = { groups: current.filter((g) => g.kind !== 'person' && g.kind !== 'self').map((g) => g.name), people: current.filter((g) => g.kind === 'person').map((g) => g.name) }
+  const requirements = useRequirements(current.some((g) => g.kind === 'self'))
   const groups = facets?.groups ?? []
+  const places = facets?.places ?? []
+  // Looks only at the names on offer, to find one among hundreds; it decides nothing about what a memory means.
+  const [named, setNamed] = useState('')
+  const find = named.trim().toLowerCase()
+  const offered = [...listed, ...places]
+  const noneNamed = Boolean(find) && !offered.some((e) => e.name.toLowerCase().includes(find))
   const groupName = group
     ? groups.find((g) => g.entityId === group)?.name
       ?? list.items.flatMap((m) => m.groups ?? []).find((g) => g.entityId === group)?.name
     : undefined
   const entityName = entity
     ? [...(facets?.people ?? []), ...(facets?.places ?? [])].find((f) => f.entityId === entity)?.name
-      ?? list.items.flatMap((m) => m.mentions ?? []).find((m) => m.entityId === entity)?.name
+      ?? (narrowedHere ? whole.items : list.items).flatMap((m) => m.mentions ?? []).find((m) => m.entityId === entity)?.name
     : undefined
 
   // Reading on is automatic: the next page is fetched as the end of the list comes into view.
@@ -441,6 +521,7 @@ function MemoryTab() {
   return (
     <>
       {recalling && <RecallSheet query={typed.text} onClose={() => setRecalling(false)} />}
+      {!retired && <NowPanel onOpen={(id) => change({ m: id, merged: null })} />}
       <div className="toolbar">
         <label className="search">
           <Search size={15} />
@@ -473,20 +554,35 @@ function MemoryTab() {
           items={[{ value: 'all', label: '都看' }, ...trusts]}
         />
       </div>}
-      {!retired && facets && (groups.length > 0 || facets.people.length > 0 || facets.places.length > 0) && (
+      {!retired && (
         <div className="mem-facets">
+          {offered.length > FACETS_SHOWN && (
+            <label className="search mem-facet-find">
+              <Search size={14} />
+              <input type="search" placeholder="搜分组的名字：人、项目、主题、领域…" value={named} onChange={(e) => setNamed(e.target.value)} aria-label="搜索分组" />
+            </label>
+          )}
           {groupRows.map((row) => (
-            <FacetRow key={row.type} label={row.label} entries={groups.filter((g) => g.type === row.type)} active={group} onPick={pickGroup} />
+            <FacetRow key={row.kind} label={row.label} entries={groupEntries(listed.filter((g) => g.kind === row.kind))} active={within} find={find} onPick={pickWithin} />
           ))}
-          <FacetRow label="提到的人" entries={facets.people} active={entity} onPick={pick} />
-          <FacetRow label="地点" entries={facets.places} active={entity} onPick={pick} />
+          <FacetRow label="地点" entries={facetEntries(places)} active={[entity]} find={find} onPick={pick} />
+          {noneNamed && <p className="mem-facet-none" role="status">没有名字里带「{named.trim()}」的分组。</p>}
         </div>
+      )}
+      {!retired && directory.problem && (
+        <p className="hint-line" role="alert">
+          <CircleAlert size={13} />
+          <span>
+            分组没读出来：{directory.problem}{' '}
+            <button type="button" className="link-btn" onClick={directory.retry}>再读一次</button>
+          </span>
+        </p>
       )}
       {!retired && facetsProblem && (
         <p className="hint-line" role="alert">
           <CircleAlert size={13} />
           <span>
-            人和地点没读出来：{facetsProblem}{' '}
+            地点没读出来：{facetsProblem}{' '}
             <button type="button" className="link-btn" onClick={retryFacets}>再读一次</button>
           </span>
         </p>
@@ -502,8 +598,17 @@ function MemoryTab() {
       )}
       {filtered && !retired && (
         <p className="mem-summary" role="status">
-          {list.phase === 'ready' && <span>{summaryOf(entity && (entityName ?? '它'), group && (groupName ?? '它'))}有 {list.total} 条</span>}
-          <button type="button" className="link-btn" onClick={() => { window.clearTimeout(typing.current); change({ q: null, entity: null, group: null, nature: null, trust: null }) }}>
+          {inGroups
+            ? !gone && list.phase === 'ready' && (
+              <span>
+                {within.length > 1 && '同时在'}
+                {current.map((g) => `「${g.name}」`).join('')}名下
+                {entity && `、提到「${entityName ?? '它'}」`}
+                {(q || nature || trust) && '、符合其余条件'}的记忆有 {list.total} 条
+              </span>
+            )
+            : list.phase === 'ready' && <span>{summaryOf(entity && (entityName ?? '它'), group && (groupName ?? '它'))}有 {list.total} 条</span>}
+          <button type="button" className="link-btn" onClick={clearAll}>
             清掉筛选
           </button>
         </p>
@@ -514,10 +619,12 @@ function MemoryTab() {
         </p>
       )}
       <Sheet>
-        {list.phase === 'loading' ? (
+        {gone ? (
+          <Empty>没有这个分组，或者它名下已经没有记忆了。</Empty>
+        ) : list.phase === 'loading' ? (
           <div className="mem-state" role="status">
             <Spinner />
-            正在读取记忆…
+            {narrowedHere && whole.total > 0 ? `正在读这${within.length > 1 ? '几个' : '个'}分组的全部记忆，已读 ${whole.read} / ${whole.total} 条…` : '正在读取记忆…'}
           </div>
         ) : list.phase === 'failed' ? (
           <div className="mem-state failed" role="alert">
@@ -536,12 +643,15 @@ function MemoryTab() {
                 <div className="grow">
                   {/* The click is handled by the row; the button gives the keyboard the same way in. */}
                   <button type="button" className={`mem-text${trustOf(m) === 'inferred' ? ' guess' : ''}`}>{m.text}</button>
+                  {requirements.has(m.id) && (
+                    <span className="mem-applies">{requirements.get(m.id)!.unrestricted ? '不限范围，每一轮都带' : `范围：${requirements.get(m.id)!.scope}`}</span>
+                  )}
                   {m.retired && <RetiredNote memory={m} onOpen={(id) => change({ m: id })} />}
                   {(hasEventTime(m) || (m.mentions?.length ?? 0) > 0 || (m.groups?.length ?? 0) > 0) && (
                     <div className="mem-marks">
                       <EventTime from={m.eventFrom} to={m.eventTo} precision={m.eventPrecision} />
-                      <Groups groups={m.groups} active={group} onPick={(g) => pickGroup(g.entityId)} />
-                      <Mentions mentions={m.mentions} active={entity} limit={6} onPick={(mention) => pick(mention.entityId)} />
+                      <Groups groups={m.groups} active={inGroups ? m.groups?.find((g) => onMemory.groups.includes(g.name))?.entityId : group} onPick={pickNamedGroup} />
+                      <Mentions mentions={m.mentions} active={entity} limit={6} onPick={pickMention} />
                     </div>
                   )}
                   <div className="meta">
@@ -590,8 +700,8 @@ function MemoryTab() {
           entity={entity}
           group={group}
           onClose={() => change({ m: null, merged: null })}
-          onPick={(mention) => pick(mention.entityId)}
-          onPickGroup={(g) => pickGroup(g.entityId)}
+          onPick={pickMention}
+          onPickGroup={pickNamedGroup}
           onDeleted={() => list.remove(opened.memory!.id)}
           onOpen={(id) => change({ m: id, merged: null })}
           onRestored={(id) => { if (retired) list.remove(id) }}
@@ -825,6 +935,21 @@ function TrainingTab() {
   )
 }
 
+/**
+ * The address of the page this used to have to itself. A link to one of its
+ * cards lands on the same group here: the directory's keys are the cards' keys.
+ */
+export function FormerAbout() {
+  const [params] = useSearchParams()
+  const next = new URLSearchParams()
+  for (const [from, to] of [['card', 'in'], ['m', 'm']]) {
+    const value = params.get(from)
+    if (value) next.set(to, value)
+  }
+  const query = next.toString()
+  return <Navigate to={`/library${query ? `?${query}` : ''}`} replace />
+}
+
 export function LibraryPage() {
   const { state } = useStore()
   const [params, setParams] = useSearchParams()
@@ -848,10 +973,6 @@ export function LibraryPage() {
           <h1>资料库</h1>
           <p>系统记住的东西、资料的来处，和攒下的训练数据。都归你，可以看、改、删、导出。</p>
         </div>
-        <Link to="/about" className="from">
-          关于你
-          <ChevronRight size={13} />
-        </Link>
       </div>
       {pending > 0 && (
         <div className="sheet" style={{ marginBottom: 18 }}>

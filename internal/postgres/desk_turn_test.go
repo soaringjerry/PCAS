@@ -527,7 +527,11 @@ func TestSecretaryRejectsStaleRowsAndKeepsOriginalOnCancellation(t *testing.T) {
 				errorType, reason = "timeout", "模型响应超时"
 			}
 			assertSecretaryLog(t, logs, "WARN", stage, errorType)
-			if out.Turn.Receipts[0].Text != "已记下原话；"+reason+"，稍后会自动整理" {
+			wantReceipt := "已记下原话；" + reason + "，稍后会自动整理"
+			if mode == "stale" {
+				wantReceipt = "本轮要改动的事项已变更，请重试"
+			}
+			if out.Turn.Receipts[0].Text != wantReceipt {
 				t.Fatal(out.Turn.Receipts)
 			}
 			if mode == "stale" && out.State.Tasks[0].Title != "后来的名称" {

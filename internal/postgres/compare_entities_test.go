@@ -136,7 +136,7 @@ func TestCompareEntityNegativeAndAmbiguousNames(t *testing.T) {
 	}
 }
 
-func TestCompareEntitySharedCharacterNeedsCurrentSharedProjectOrTopic(t *testing.T) {
+func TestCompareEntityCandidatesRequireModelProposalForEveryContext(t *testing.T) {
 	for _, kind := range []string{"project", "topic", "area"} {
 		t.Run(kind, func(t *testing.T) {
 			s := testStore(t)
@@ -190,14 +190,14 @@ func TestCompareEntitySharedCharacterNeedsCurrentSharedProjectOrTopic(t *testing
 	}
 }
 
-func TestCompareEntitySharedContextRemovedDuringCallDoesNotMerge(t *testing.T) {
+func TestCompareEntityInputMemoryChangedDuringCallDoesNotMerge(t *testing.T) {
 	s := testStore(t)
 	scope := owner()
 	ctx := context.Background()
 	b1Model(t, s, `{}`)
 	_, a := compareEntityFixture(t, s, scope, "小陈", "小陈负责虚构资料校对")
 	_, b := compareEntityFixture(t, s, scope, "陈亮", "陈亮负责虚构物资安排")
-	group := compareEntityGroup(t, s, scope, "topic", "虚构共同主题", a, b)
+	compareEntityGroup(t, s, scope, "topic", "虚构共同主题", a, b)
 	entered, release := make(chan struct{}), make(chan struct{})
 	secretaryModel(t, s, func(w http.ResponseWriter, r *http.Request) {
 		close(entered)
@@ -213,10 +213,7 @@ func TestCompareEntitySharedContextRemovedDuringCallDoesNotMerge(t *testing.T) {
 		close(release)
 		t.Fatal("no entity call")
 	}
-	if _, err := s.pool.Exec(ctx, "DELETE FROM claim_mentions WHERE owner_id=$1 AND claim_id=$2 AND entity_id=$3", string(scope.OwnerID), string(a.ID), string(group)); err != nil {
-		close(release)
-		t.Fatal(err)
-	}
+	b1Correct(t, s, scope, a, "虚构人物改口：负责另一份物资安排")
 	close(release)
 	if err := <-done; err != nil {
 		t.Fatal(err)

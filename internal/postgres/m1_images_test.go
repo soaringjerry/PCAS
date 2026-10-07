@@ -213,7 +213,11 @@ func TestM1V4V5FailuresRetainImageAndUseCaption(t *testing.T) {
 			}
 			retained.Close()
 			m1Parsed(t, s, scope, ref, "ocr")
-			m1Usage(t, s, scope, 0)
+			wantUsage := 0
+			if mode == "500" {
+				wantUsage = 1
+			} // A9 records the attempted vision call.
+			m1Usage(t, s, scope, wantUsage)
 		})
 	}
 }

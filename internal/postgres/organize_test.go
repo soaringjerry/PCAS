@@ -79,21 +79,73 @@ func TestOrganizeSkeletonUpgradePreservesData(t *testing.T) {
 		t.Fatal("unexpected group facets", facets, err)
 	}
 	state, err := s.Snapshot(ctx, scope)
-	if err != nil || state.Organize != (workspace.Organize{Done: 0, Total: 1, Version: 1}) {
+	if err != nil || state.Organize != (workspace.Organize{Done: 0, Total: 1, Version: OrganizeVersion}) {
 		t.Fatal("unexpected organize snapshot", state.Organize, err)
 	}
 }
 
 func TestOrganizeParserFirstWinsAndGroupsAreIndependent(t *testing.T) {
-	items, _ := parseOrganizeOutput(`{"items":[
- {"n":99,"category":"rule","durable":true},
- {"n":1,"category":"bad","durable":true},
- {"n":1,"category":"rule","durable":true},
- {"n":2,"category":"rule","durable":"true"},
- {"n":3,"category":"event","durable":false,"project":[],"area":"不在词表里","topics":[42,"季度汇报","第三个主题"]},
- {"n":4,"category":"rule","durable":null}]}`, 5)
-	if len(items) != 1 || items[3].Category != "event" || items[3].Durable == nil || *items[3].Durable || len(items[3].Groups) != 2 {
-		t.Fatal("invalid labels/duplicates must fail individually; invalid groups must not discard labels", items)
+	items, _ := parseOrganizeOutput(`{
+ "items": [
+  {
+   "category": "rule",
+   "deadlines": [],
+   "durable": true,
+   "n": 99,
+   "scope": "",
+   "unrestricted": true
+  },
+  {
+   "category": "bad",
+   "deadlines": [],
+   "durable": true,
+   "n": 1
+  },
+  {
+   "category": "rule",
+   "deadlines": [],
+   "durable": true,
+   "n": 1,
+   "scope": "",
+   "unrestricted": true
+  },
+  {
+   "category": "rule",
+   "deadlines": [],
+   "durable": "true",
+   "n": 2,
+   "scope": "",
+   "unrestricted": true
+  },
+  {
+   "area": "不在词表里",
+   "category": "event",
+   "deadlines": [],
+   "durable": false,
+   "n": 3,
+   "project": [],
+   "topics": [
+    42,
+    "季度汇报",
+    "第三个主题"
+   ]
+  },
+  {
+   "category": "rule",
+   "deadlines": [],
+   "durable": null,
+   "n": 4,
+   "scope": "",
+   "unrestricted": true
+  }
+ ]
+}`, 5)
+	if len(items) != 0 {
+		t.Fatal("malformed output must leave the batch pending, without partial labels", items)
+	}
+	valid, _ := parseOrganizeOutput(`{"items":[{"n":3,"category":"event","durable":false,"topics":["季度汇报","第三个主题"],"area":"虚构新增领域","deadlines":[]}],"new":[]}`, 5)
+	if len(valid) != 1 || valid[3].Category != "event" || valid[3].Durable == nil || *valid[3].Durable || len(valid[3].Groups) != 3 {
+		t.Fatal("valid output lost labels/groups", valid)
 	}
 	for _, invalid := range []string{"not JSON", `{"items":[`, `null`, `{"items":[]}`} {
 		got, _ := parseOrganizeOutput(invalid, 3)
@@ -116,7 +168,7 @@ func organizeTestJob(t *testing.T, s *Store, scope memory.Scope) worker.Job {
 	}
 	// Other stages are covered by their own suites. This fixture isolates the
 	// organizer while still leasing its real scheduled job through the queue.
-	if _, err := s.pool.Exec(context.Background(), "DELETE FROM memory_jobs WHERE owner_id=$1 AND stage NOT LIKE 'memory.organize:%'", string(scope.OwnerID)); err != nil {
+	if _, err := s.pool.Exec(context.Background(), "DELETE FROM memory_jobs WHERE owner_id=$1 AND state='queued' AND stage NOT LIKE 'memory.organize:%'", string(scope.OwnerID)); err != nil {
 		t.Fatal(err)
 	}
 	j, err := s.Claim(context.Background(), 5*time.Minute)
@@ -146,7 +198,7 @@ func organizeTestReply(t *testing.T, w http.ResponseWriter, r *http.Request, cat
 	}
 	items := []any{}
 	for _, m := range prompt.Memories {
-		items = append(items, map[string]any{"n": m.N, "category": category, "durable": true, "topics": []string{"季度汇报"}, "area": "工作"})
+		items = append(items, map[string]any{"n": m.N, "category": category, "durable": true, "deadlines": []any{}, "unrestricted": true, "scope": "", "topics": []string{"季度汇报"}, "area": "工作"})
 	}
 	text := string(asJSON(map[string]any{"items": items, "new": []any{map[string]any{"type": "topic", "name": "季度汇报", "desc": "虚构季度汇报"}}}))
 	_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": map[string]any{"content": text}}}, "usage": map[string]int{"prompt_tokens": 100, "completion_tokens": 100}})
@@ -229,18 +281,21 @@ func TestOrganizeBadOutputAndExhaustion(t *testing.T) {
 	ctx := context.Background()
 	b1Model(t, s, "not JSON")
 	ref := organizeTestMemory(t, s, scope, "虚构用户霜叶在周末散步。")
-	for attempt := 1; attempt <= 3; attempt++ {
+	for attempt := 1; attempt <= 4; attempt++ {
+		if _, err := s.pool.Exec(ctx, "UPDATE claims SET organize_after=now() WHERE owner_id=$1", scope.OwnerID); err != nil {
+			t.Fatal(err)
+		}
 		j := organizeTestJob(t, s, scope)
 		if err := s.ProcessOrganize(ctx, j); err != nil {
 			t.Fatal(err)
 		}
 		var got, version int
-		if err := s.pool.QueryRow(ctx, "SELECT organize_attempts,organized FROM claims WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), string(ref.ID)).Scan(&got, &version); err != nil || got != attempt || (version == OrganizeVersion) != (attempt == 3) {
+		if err := s.pool.QueryRow(ctx, "SELECT organize_attempts,organized FROM claims WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), string(ref.ID)).Scan(&got, &version); err != nil || got != attempt || (version != 0) {
 			t.Fatal(got, version, err)
 		}
 	}
 	var usages int
-	if err := s.pool.QueryRow(ctx, "SELECT count(*) FROM model_usage WHERE owner_id=$1 AND purpose='organize' AND memory_refs=$2::jsonb", string(scope.OwnerID), asJSON([]memory.Ref{ref})).Scan(&usages); err != nil || usages != 3 {
+	if err := s.pool.QueryRow(ctx, "SELECT count(*) FROM model_usage WHERE owner_id=$1 AND purpose='organize' AND memory_refs=$2::jsonb", string(scope.OwnerID), asJSON([]memory.Ref{ref})).Scan(&usages); err != nil || usages != 4 {
 		t.Fatal(usages, err)
 	}
 	queued, err := s.ScheduleOrganize(ctx, time.Now())
@@ -323,8 +378,8 @@ func TestOrganizeTransactionRollbackAndRecovery(t *testing.T) {
 	if _, err := s.pool.Exec(ctx, "DROP TRIGGER organize_test_fail ON claim_revisions"); err != nil {
 		t.Fatal(err)
 	}
-	// Reprocessing the same fenced task reserves/logs a fresh invocation and
-	// recovers all still-outdated claims after the result transaction rolls back.
+	// Reprocessing the same fenced task reuses its paid output and recovers
+	// all still-outdated claims after the result transaction rolls back.
 	if err := s.ProcessOrganize(ctx, j); err != nil {
 		t.Fatal(err)
 	}
@@ -340,7 +395,16 @@ func TestOrganizeConfiguredChannelAndHourlyLimit(t *testing.T) {
 	s := testStore(t)
 	scope := owner()
 	ctx := context.Background()
-	b1Model(t, s, `{"items":[{"n":1,"category":"taste","durable":true}]}`)
+	b1Model(t, s, `{
+ "items": [
+  {
+   "category": "taste",
+   "deadlines": [],
+   "durable": true,
+   "n": 1
+  }
+ ]
+}`)
 	ref := organizeTestMemory(t, s, scope, "虚构霜叶喜欢蓝色的水杯。")
 	models := s.models
 	s.SetModels(nil)
@@ -349,10 +413,10 @@ func TestOrganizeConfiguredChannelAndHourlyLimit(t *testing.T) {
 	}
 	s.SetModels(models)
 	j := organizeTestJob(t, s, scope)
-	// 120 synthetic invocation reservations represent the shared rolling
-	// hour, even if they have zero cost (subscription requests).
-	for range 120 {
-		if _, err := s.pool.Exec(ctx, "INSERT INTO background_usage(owner_id,job_id,reserved_cost) VALUES($1,$2,0)", string(scope.OwnerID), string(j.ID)); err != nil {
+	// Forty synthetic reservations fill classification's own rolling hour,
+	// including zero-cost subscription requests.
+	for range 40 {
+		if _, err := s.pool.Exec(ctx, "INSERT INTO background_usage(owner_id,job_id,reserved_cost,stage) VALUES($1,$2,0,'memory.organize')", string(scope.OwnerID), string(j.ID)); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -376,12 +440,47 @@ func TestOrganizeMissingInvalidAndUnknownNumbers(t *testing.T) {
 	s := testStore(t)
 	scope := owner()
 	ctx := context.Background()
-	b1Model(t, s, `{"items":[
- {"n":1,"category":"rule","durable":true,"area":"宇宙探索"},
- {"n":2,"category":"bad","durable":true},
- {"n":2,"category":"rule","durable":true},
- {"n":4,"category":"taste","durable":false},
- {"n":99,"category":"rule","durable":true}]}`)
+	b1Model(t, s, `{
+ "items": [
+  {
+   "area": "宇宙探索",
+   "category": "rule",
+   "deadlines": [],
+   "durable": true,
+   "n": 1,
+   "scope": "",
+   "unrestricted": true
+  },
+  {
+   "category": "bad",
+   "deadlines": [],
+   "durable": true,
+   "n": 2
+  },
+  {
+   "category": "rule",
+   "deadlines": [],
+   "durable": true,
+   "n": 2,
+   "scope": "",
+   "unrestricted": true
+  },
+  {
+   "category": "taste",
+   "deadlines": [],
+   "durable": false,
+   "n": 4
+  },
+  {
+   "category": "rule",
+   "deadlines": [],
+   "durable": true,
+   "n": 99,
+   "scope": "",
+   "unrestricted": true
+  }
+ ]
+}`)
 	for i := 0; i < 4; i++ {
 		organizeTestMemory(t, s, scope, fmt.Sprintf("虚构霜叶的第%d条盆栽观察。", i))
 	}
@@ -418,15 +517,71 @@ func TestOrganizeMissingInvalidAndUnknownNumbers(t *testing.T) {
 	}
 }
 
-func TestOrganizeGroupGroundingAndCreationLimit(t *testing.T) {
+func TestOrganizeModelDeclaredGroupsHaveNoLexicalOrThreeGroupLimit(t *testing.T) {
 	s := testStore(t)
 	scope := owner()
 	ctx := context.Background()
-	b1Model(t, s, `{"items":[
- {"n":1,"category":"progress","durable":false,"topics":["季度汇报","盆栽观察"]},
- {"n":2,"category":"progress","durable":false,"topics":["书店走访","蓝杯计划"]},
- {"n":3,"category":"progress","durable":false,"topics":["阅读记录","效率提升"],"area":"宇宙探索"}],
- "new":[{"type":"topic","name":"季度汇报"},{"type":"topic","name":"盆栽观察"},{"type":"topic","name":"书店走访"},{"type":"topic","name":"蓝杯计划"},{"type":"topic","name":"阅读记录"},{"type":"topic","name":"效率提升"}]}`)
+	b1Model(t, s, `{
+ "items": [
+  {
+   "category": "progress",
+   "deadlines": [],
+   "durable": false,
+   "n": 1,
+   "topics": [
+    "季度汇报",
+    "盆栽观察"
+   ]
+  },
+  {
+   "category": "progress",
+   "deadlines": [],
+   "durable": false,
+   "n": 2,
+   "topics": [
+    "书店走访",
+    "蓝杯计划"
+   ]
+  },
+  {
+   "area": "宇宙探索",
+   "category": "progress",
+   "deadlines": [],
+   "durable": false,
+   "n": 3,
+   "topics": [
+    "阅读记录",
+    "效率提升"
+   ]
+  }
+ ],
+ "new": [
+  {
+   "name": "季度汇报",
+   "type": "topic"
+  },
+  {
+   "name": "盆栽观察",
+   "type": "topic"
+  },
+  {
+   "name": "书店走访",
+   "type": "topic"
+  },
+  {
+   "name": "蓝杯计划",
+   "type": "topic"
+  },
+  {
+   "name": "阅读记录",
+   "type": "topic"
+  },
+  {
+   "name": "效率提升",
+   "type": "topic"
+  }
+ ]
+}`)
 	for range 3 {
 		organizeTestMemory(t, s, scope, "虚构霜叶的季度汇报、盆栽观察、书店走访、蓝杯计划和阅读记录都在推进。")
 	}
@@ -435,10 +590,10 @@ func TestOrganizeGroupGroundingAndCreationLimit(t *testing.T) {
 		t.Fatal(err)
 	}
 	var names []string
-	if err := s.pool.QueryRow(ctx, "SELECT array_agg(name ORDER BY name) FROM entity_versions WHERE owner_id=$1 AND entity_type='topic'", string(scope.OwnerID)).Scan(&names); err != nil || len(names) != 3 {
+	if err := s.pool.QueryRow(ctx, "SELECT array_agg(name ORDER BY name) FROM entity_versions WHERE owner_id=$1 AND entity_type='topic'", string(scope.OwnerID)).Scan(&names); err != nil || len(names) != 6 {
 		t.Fatal(names, err)
 	}
-	for _, name := range []string{"季度汇报", "盆栽观察", "书店走访"} {
+	for _, name := range []string{"季度汇报", "盆栽观察", "书店走访", "蓝杯计划", "阅读记录", "效率提升"} {
 		if !oneOf(name, names...) {
 			t.Fatal(names)
 		}
@@ -453,7 +608,16 @@ func TestOrganizeUnavailableDoesNotConsumeAttemptsAndBudgetDefers(t *testing.T) 
 	s := testStore(t)
 	scope := owner()
 	ctx := context.Background()
-	b1Model(t, s, `{"items":[{"n":1,"category":"taste","durable":true}]}`)
+	b1Model(t, s, `{
+ "items": [
+  {
+   "category": "taste",
+   "deadlines": [],
+   "durable": true,
+   "n": 1
+  }
+ ]
+}`)
 	ref := organizeTestMemory(t, s, scope, "虚构霜叶喜欢蓝色水杯。")
 	channelKey := "PCAS_TEST_O1_CHANNEL_AVAILABLE"
 	t.Setenv(channelKey, "")

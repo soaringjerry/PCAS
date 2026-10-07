@@ -96,6 +96,8 @@ type RecallRequest struct {
 }
 
 type Coverage struct {
+	Omitted        int      `json:"omitted,omitempty"`
+	OmittedSources int      `json:"omitted_sources,omitempty"`
 	Complete       bool     `json:"complete"`
 	Gaps           []string `json:"gaps"`
 	PendingSources []ID     `json:"pending_sources"`

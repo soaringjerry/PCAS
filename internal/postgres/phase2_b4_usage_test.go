@@ -86,8 +86,8 @@ func TestPhase2B4_L8_CorrectedMemoryDuringDeputyGenerationKeepsReturnedUsage(t *
 	case <-time.After(10 * time.Second):
 		t.Fatal("deputy runner did not finish")
 	}
-	if len(f.all()) != 1 {
-		t.Fatalf("rejected deputy result must come from exactly one returned call; got %d", len(f.all()))
+	if len(f.all()) < 1 || len(f.all()) > 2 {
+		t.Fatalf("unrelated correction permits the existing optional selfcheck, got %d calls", len(f.all()))
 	}
 	st, err := s.Snapshot(context.Background(), scope)
 	if err != nil {
@@ -109,8 +109,8 @@ func TestPhase2B4_L8_CorrectedMemoryDuringDeputyGenerationKeepsReturnedUsage(t *
 		t.Errorf("rejected deputy output was adopted into workspace: tasks=%+v docs=%+v", st.Tasks, st.Docs)
 	}
 	rows := b4Usage(t, s, scope)
-	if len(rows) != 1 {
-		t.Fatalf("rejected returned deputy call must record one usage row; got %d", len(rows))
+	if len(rows) != len(f.all()) {
+		t.Fatalf("every returned call must have usage, got %d rows for %d calls", len(rows), len(f.all()))
 	}
 	row := rows[0]
 	b4UsageNumbers(t, row)
@@ -483,7 +483,7 @@ func TestPhase2B4_L2_DeputyLegacyAnswerExtractionEachRecordTheirCall(t *testing.
 	})
 }
 
-func TestPhase2B4_L3_FailureAndSuccessfulRequestReplayDoNotAddRows(t *testing.T) {
+func TestPhase2B4_L3_FailureKeepsUsageAndSuccessfulReplayDoesNotAddRows(t *testing.T) {
 	s, scope := b4Store(t), owner()
 	f := b4Model(t, s)
 	f.set(`{"reply":"unused","actions":[]}`, 503)
@@ -491,15 +491,19 @@ func TestPhase2B4_L3_FailureAndSuccessfulRequestReplayDoNotAddRows(t *testing.T)
 	if len(f.all()) != 1 {
 		t.Fatal("failed-call billing check did not reach the actual fake model")
 	}
-	if rows := b4Usage(t, s, scope); len(rows) != 0 {
-		t.Fatalf("failed model call recorded usage: %+v", rows)
+	if rows := b4Usage(t, s, scope); len(rows) != 1 || rows[0].InputTokens <= 0 || rows[0].OutputTokens != 0 {
+		t.Fatalf("failed model call missing estimated input usage: %+v", rows)
+	}
+	var estimated bool
+	if err := s.pool.QueryRow(context.Background(), "SELECT input_estimated FROM model_usage WHERE owner_id=$1", scope.OwnerID).Scan(&estimated); err != nil || !estimated {
+		t.Fatal("failure estimate not labeled", estimated, err)
 	}
 	f.set(`{"reply":"成功。","used":[],"actions":[]}`, 200)
 	req := turnRequest("合成成功请求")
 	first := mustTurn(t, s, scope, req)
 	before := b4Usage(t, s, scope)
 	requests := len(f.all())
-	if len(before) != 1 {
+	if len(before) != 2 {
 		t.Fatalf("successful call rows=%d", len(before))
 	}
 	replay := mustTurn(t, s, scope, req)

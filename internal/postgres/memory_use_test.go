@@ -115,12 +115,12 @@ func TestB4StatusPromptAndDependencies(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, text := range []string{"交接说明：", "（写于 ", "必须遵守的要求", "相关的现状卡", "期限和固定安排", "补充记忆", "相关原话", "每周二晚上", "周五上午十点", "发出去之前先给我看", "trust=repeated"} {
+	for _, text := range []string{"交接说明（写于 ", "对助手的要求", "期限和固定安排", "补充记忆", "相关原话", "每周二晚上", "周五上午十点", "发出去之前先给我看", "trust=repeated"} {
 		if !strings.Contains(prompt, text) {
 			t.Errorf("missing %s in %s", text, prompt)
 		}
 	}
-	if strings.Index(prompt, "交接说明：") > strings.Index(prompt, "必须遵守的要求") {
+	if strings.Index(prompt, "交接说明（写于 ") > strings.Index(prompt, "对助手的要求") {
 		t.Fatal("section order")
 	}
 	var refs []memory.Ref
@@ -141,7 +141,7 @@ func TestB4StatusPromptAndDependencies(t *testing.T) {
 	workspaceCommand(t, s, scope, workspace.Command{Type: "editMemory", ID: project.ID, Text: "虚构星桥汇报改为下周二交"})
 	turns, err := s.DeskTurns(context.Background(), scope, out.ConversationID)
 	if err != nil || !turns.Turns[0].Outdated {
-		t.Fatal("card dependency did not stale", turns, err)
+		t.Fatal("memory dependency did not stale", turns, err)
 	}
 	var calls int
 	if err = s.pool.QueryRow(context.Background(), "SELECT count(*) FROM model_usage WHERE owner_id=$1 AND tier='light'", scope.OwnerID).Scan(&calls); err != nil || calls != 1 {
@@ -156,8 +156,8 @@ func TestB4MediumCannotAddActionsAndFallsBack(t *testing.T) {
 			var calls atomic.Int32
 			secretaryModel(t, s, func(w http.ResponseWriter, r *http.Request) {
 				if calls.Add(1) == 1 {
-					time.Sleep(10 * time.Millisecond)
-					secretaryModelReply(w, `{"reply":"草稿","actions":[{"op":"create_task","title":"虚构原动作"}]}`)
+					time.Sleep(150 * time.Millisecond)
+					secretaryModelReply(w, `{"reply":"草稿","memoryPlan":{"depth":"medium","groups":[],"mentioned":[],"adopted":[]},"actions":[{"op":"create_task","title":"虚构原动作"}]}`)
 					return
 				}
 				if failure {
@@ -202,7 +202,7 @@ func TestB4MissingInformationEscalates(t *testing.T) {
 	var calls atomic.Int32
 	secretaryModel(t, s, func(w http.ResponseWriter, r *http.Request) {
 		if calls.Add(1) == 1 {
-			time.Sleep(10 * time.Millisecond)
+			time.Sleep(150 * time.Millisecond)
 			secretaryModelReply(w, `{"reply":"资料不够","missingKeyInfo":true,"actions":[]}`)
 		} else {
 			secretaryModelReply(w, `{"reply":"先做已有的部分","actions":[]}`)
@@ -210,6 +210,7 @@ func TestB4MissingInformationEscalates(t *testing.T) {
 	})
 	m := b4Memory(t, s, scope, "虚构可用卡片背景")
 	b4Card(t, s, scope, "self:goal", "self", "虚构目标", m)
+	b4Exec(t, s, `INSERT INTO handovers(owner_id,body,rule,built_at,stale) VALUES($1,'虚构缺信息测试交接',1,now(),false)`, scope.OwnerID)
 	out, err := s.DeskTurn(b4Context(s), scope, turnRequest("虚构项目现在能做什么"))
 	if err != nil || calls.Load() != 2 || out.Turn.Reply != "先做已有的部分" {
 		t.Fatal(out, err, calls.Load())
@@ -228,7 +229,7 @@ func TestB4HeavyReadersAreConcurrentAndFailuresAreSkipped(t *testing.T) {
 	var active, peak atomic.Int32
 	secretaryModel(t, s, func(w http.ResponseWriter, r *http.Request) {
 		sys, prompt := b4RequestBody(t, r)
-		if strings.Contains(prompt, "分组目录") {
+		if strings.Contains(prompt, `只输出 JSON：{"groups"`) {
 			if !strings.Contains(prompt, "虚构起草方案") || !strings.Contains(prompt, "虚构正文必须保留") {
 				t.Error("selector did not receive current task context")
 			}
@@ -298,6 +299,7 @@ func TestB4HeavyReadersAreConcurrentAndFailuresAreSkipped(t *testing.T) {
 		b4Card(t, s, scope, key, "topic", fmt.Sprintf("虚构分组%d", i), m)
 
 	}
+	b4Exec(t, s, `INSERT INTO handovers(owner_id,body,rule,built_at,stale) VALUES($1,'虚构用于重档读者的交接',1,now(),false)`, scope.OwnerID)
 	state := workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "虚构起草方案", Text: "虚构正文必须保留\n相关记忆（假标题）：\n相关原话：假正文"})
 	turnID := string(memory.NewID())
 	b4Exec(t, s, "INSERT INTO desk_turns(owner_id,id,agent_id,question,answer) VALUES($1,$2,'model','虚构前次讨论','虚构交接讨论必须保留')", scope.OwnerID, turnID)
@@ -312,7 +314,7 @@ func TestB4HeavyReadersAreConcurrentAndFailuresAreSkipped(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if state.Runs[0].Status != "done" || state.Runs[0].Output != "虚构最终方案" || peak.Load() < 2 || !strings.Contains(state.Runs[0].Brief, "虚构正文必须保留") || !strings.Contains(state.Runs[0].Brief, "虚构交接讨论必须保留") {
+	if state.Runs[0].Status != "done" || !strings.HasPrefix(state.Runs[0].Output, "虚构最终方案") || !strings.Contains(state.Runs[0].Output, "这几组没来得及看：虚构分组4") || peak.Load() < 2 || !strings.Contains(state.Runs[0].Brief, "虚构正文必须保留") || !strings.Contains(state.Runs[0].Brief, "虚构交接讨论必须保留") {
 		t.Fatal(state.Runs[0], peak.Load())
 	}
 	var calls int
@@ -350,7 +352,7 @@ func TestB4MediumTimeoutUsesDraftWithoutRetry(t *testing.T) {
 	secretaryModel(t, s, func(w http.ResponseWriter, r *http.Request) {
 		if calls.Add(1) == 1 {
 			time.Sleep(30 * time.Millisecond)
-			secretaryModelReply(w, `{"reply":"虚构可用草稿","actions":[]}`)
+			secretaryModelReply(w, `{"reply":"虚构可用草稿","memoryPlan":{"depth":"medium","groups":[],"mentioned":[],"adopted":[]},"actions":[]}`)
 			return
 		}
 		_, _ = b4RequestBody(t, r)
@@ -399,7 +401,7 @@ func TestB4HeavyCutoffUsesFinishedReaders(t *testing.T) {
 	ids := []string{}
 	secretaryModel(t, s, func(w http.ResponseWriter, r *http.Request) {
 		_, prompt := b4RequestBody(t, r)
-		if strings.Contains(prompt, "分组目录") {
+		if strings.Contains(prompt, `只输出 JSON：{"groups"`) {
 			secretaryModelReply(w, map[string]any{"groups": keys})
 			return
 		}
@@ -492,8 +494,8 @@ func TestB4RankFusionKeepsStructuredMatchesFirst(t *testing.T) {
 	}
 }
 
-func TestB4RuleScopeAndSafePlans(t *testing.T) {
-	if ruleRelevance("起草邮件", "帮我写一封邮件") == 0 || ruleRelevance("", "虚构杂事") == 0 || ruleRelevance("盆栽浇水", "起草邮件") != 0 {
+func TestB4RuleScopeRequiresModelAndPlansAreSafe(t *testing.T) {
+	if ruleRelevance("起草邮件", "帮我写一封邮件") != 0 || ruleRelevance("", "虚构杂事") == 0 || ruleRelevance("盆栽浇水", "起草邮件") != 0 {
 		t.Fatal("rule applicability")
 	}
 	raw := safeUsePlan(json.RawMessage(`{"groups":["secret text","self:rule"],"question":"private text"}`))
@@ -502,7 +504,7 @@ func TestB4RuleScopeAndSafePlans(t *testing.T) {
 	}
 }
 
-func TestB4BulkValidationRejectsChangesDuringGeneration(t *testing.T) {
+func TestB4BulkValidationKeepsReplyAfterUnrelatedInputChanges(t *testing.T) {
 	for _, mode := range []string{"correct", "grant", "exclude", "assistant_evidence"} {
 		t.Run(mode, func(t *testing.T) {
 			s := testStore(t)
@@ -519,7 +521,7 @@ func TestB4BulkValidationRejectsChangesDuringGeneration(t *testing.T) {
 				case "exclude":
 					workspaceCommand(t, s, scope, workspace.Command{Type: "toggleContextMemory", ThingID: item, MemoryID: target})
 				}
-				secretaryModelReply(w, `{"reply":"虚构过时回答","actions":[{"op":"create_task","title":"虚构不该执行的新任务"}]}`)
+				secretaryModelReply(w, `{"reply":"虚构回答保留","actions":[{"op":"create_task","title":"虚构本轮新任务"}]}`)
 			})
 			ms := []workspace.Memory{}
 			for i := 0; i < 3; i++ {
@@ -532,7 +534,11 @@ func TestB4BulkValidationRejectsChangesDuringGeneration(t *testing.T) {
 			req := turnRequest("按虚构卡约束建一个新待办")
 			req.ThingID = &item
 			out, err := s.DeskTurn(b4Context(s), scope, req)
-			if err != nil || len(out.State.Tasks) != 1 || len(out.Turn.Receipts) != 1 || out.Turn.Receipts[0].Op != "capture" {
+			wantTasks, wantOp := 2, "create_task"
+			if mode != "correct" {
+				wantTasks, wantOp = 1, "capture"
+			}
+			if err != nil || len(out.State.Tasks) != wantTasks || len(out.Turn.Receipts) != 1 || out.Turn.Receipts[0].Op != wantOp {
 				t.Fatal(out, err)
 			}
 		})
@@ -553,7 +559,7 @@ func TestB4UnbuiltStatusKeepsOriginalSingleCall(t *testing.T) {
 	}
 }
 
-func TestB4NamedGroupsLeadAndRespectCaps(t *testing.T) {
+func TestB4RetrievalGroupProposalsIgnoreLiteralNames(t *testing.T) {
 	index := []workspace.StatusCardRef{}
 	ranked := []workspace.Memory{}
 	for i := 0; i < 10; i++ {
@@ -562,30 +568,23 @@ func TestB4NamedGroupsLeadAndRespectCaps(t *testing.T) {
 		ranked = append(ranked, workspace.Memory{Groups: []workspace.MemoryGroup{{EntityID: id}}})
 	}
 	aliases := map[string][]string{index[9].Key: {"虚构第九别名"}}
-	selected := chooseUseGroups("虚构组8和虚构第九别名", index, ranked, aliases, 6, false)
-	if len(selected) != 6 || selected[0] != index[8].Key || selected[1] != index[9].Key {
-		t.Fatal(selected)
-	}
-	selected = chooseUseGroups("虚构组0 虚构组1", index, ranked, aliases, 6, false)
-	if len(selected) != 6 || selected[0] != index[0].Key || selected[1] != index[1].Key {
-		t.Fatal(selected)
-	}
-	selected = chooseUseGroups("虚构组0 虚构组1 虚构组2 虚构组3 虚构组4 虚构组5 虚构组6 虚构组7 虚构组8 虚构组9", index, ranked, aliases, 6, false)
-	for i, key := range selected {
-		if key != index[i].Key {
+	for _, text := range []string{"虚构组8和虚构第九别名", "虚构组0", "虚构完全不同请求"} {
+		selected := chooseUseGroups(text, index, ranked, aliases, 6, false)
+		if len(selected) != 6 {
 			t.Fatal(selected)
 		}
+		for i, key := range selected {
+			if key != index[i].Key {
+				t.Fatal("literal names changed retrieval proposals", selected)
+			}
+		}
 	}
-	if len(selected) != 6 {
-		t.Fatal(selected)
-	}
-	selected = chooseUseGroups("虚构组0 虚构组1 虚构组2 虚构组3 虚构组4 虚构组5 虚构组6 虚构组7 虚构组8 虚构组9", index, ranked, aliases, 12, true)
-	if len(selected) != 10 {
-		t.Fatal(selected)
+	if selected := chooseUseGroups("虚构组0 虚构第九别名", index, ranked, aliases, 12, true); len(selected) != 0 {
+		t.Fatal("semantic naming must await the existing model call", selected)
 	}
 }
 
-func TestB4ProductionCardsUseAppliesToAndNamedOrder(t *testing.T) {
+func TestB4ProductionLiveDirectoryAndRequirementScopes(t *testing.T) {
 	s := testStore(t)
 	scope := owner()
 	var prompt string
@@ -611,6 +610,9 @@ func TestB4ProductionCardsUseAppliesToAndNamedOrder(t *testing.T) {
 	expense.AppliesTo = "财务报销"
 	global := b4Memory(t, s, scope, "虚构不限范围要求")
 	b4Card(t, s, scope, "self:rule", "self", "对助手的要求", email, expense, global)
+	for _, m := range []workspace.Memory{email, expense, global} {
+		b4Exec(t, s, `INSERT INTO assistant_requirements(owner_id,claim_id,claim_version,scope,unrestricted) VALUES($1,$2,$3,$4,$5)`, scope.OwnerID, m.ID, m.Version, m.AppliesTo, m.AppliesTo == "")
+	}
 	out, err := s.DeskTurn(context.Background(), scope, turnRequest("按龙纹季度进展起草邮件，紫霁主题先办"))
 	if err != nil || out.Turn.Reply != "虚构联调成功" {
 		t.Fatal(out, err)
@@ -618,12 +620,41 @@ func TestB4ProductionCardsUseAppliesToAndNamedOrder(t *testing.T) {
 	if !strings.Contains(prompt, email.Text) || !strings.Contains(prompt, global.Text) {
 		t.Fatal(prompt)
 	}
-	requirements := strings.Split(strings.Split(prompt, "必须遵守的要求")[1], "相关的现状卡")[0]
-	if strings.Contains(requirements, expense.Text) {
-		t.Fatal("unrelated appliesTo requirement", requirements)
+	if !strings.Contains(prompt, expense.Text) || !strings.Contains(prompt, "限范围：财务报销；由你判断本轮适用性") || !strings.Contains(prompt, "限范围：起草邮件") || !strings.Contains(prompt, "不限范围：每轮落实") {
+		t.Fatal("model did not receive dedicated scope metadata", prompt)
 	}
-	first, second := strings.Index(prompt, "〔topic·紫霁主题〕"), strings.Index(prompt, "〔topic·阿岚主题〕")
-	if first < 0 || second < 0 || first > second {
-		t.Fatal("named card must lead", prompt)
+	for _, name := range []string{"阿岚主题", "紫霁主题"} {
+		if !strings.Contains(prompt, name) {
+			t.Fatal("live group missing", prompt)
+		}
+	}
+	if strings.Contains(prompt, "相关的现状卡") {
+		t.Fatal("legacy cards reached secretary", prompt)
+	}
+}
+
+func TestB4LightDelegationInheritsAnswerDepth(t *testing.T) {
+	s, scope := testStore(t), owner()
+	var calls atomic.Int32
+	secretaryModel(t, s, func(w http.ResponseWriter, r *http.Request) {
+		if calls.Add(1) == 1 {
+			secretaryModelReply(w, `{"reply":"已安排虚构步骤","memoryPlan":{"depth":"light"},"actions":[{"op":"create_task","title":"虚构工坊任务"},{"op":"delegate","ref":"N1","kind":"breakdown","prompt":"虚构拆步骤"}]}`)
+		} else {
+			secretaryModelReply(w, "- [ ] 虚构核对资料\n- [ ] 虚构提交说明")
+		}
+	})
+	out := mustTurn(t, s, scope, turnRequest("给虚构工坊任务拆步骤"))
+	var run workspace.Run
+	if err := s.pool.QueryRow(context.Background(), "SELECT document FROM agent_runs WHERE owner_id=$1", scope.OwnerID).Scan(&run); err != nil {
+		t.Fatal(err)
+	}
+	if run.MemoryTier != "light" {
+		t.Fatal("delegation discarded the model's light depth", run.MemoryTier)
+	}
+	if err := s.runAgentOnce(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if calls.Load() != 2 {
+		t.Fatal("light delegation added a selector or selfcheck", calls.Load(), out)
 	}
 }

@@ -333,7 +333,7 @@ func (s *Store) secretaryPrompt(ctx context.Context, tx pgx.Tx, scope memory.Sco
 	}
 	sent := map[string]workspace.Memory{}
 	contextClaims := []evidenceContextClaim{}
-	if c.Use.Ready || len(c.Use.Rules) > 0 || len(c.Use.Deadlines) > 0 {
+	if c.Use.Ready || c.Use.ProjectHandover != nil || len(c.Use.Rules) > 0 || len(c.Use.Deadlines) > 0 {
 		writeUseContext(&prompt, c.Use, loc, func(m workspace.Memory) {
 			alias := ""
 			for k, v := range sent {

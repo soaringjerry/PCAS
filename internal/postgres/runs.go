@@ -58,7 +58,7 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 
 		run := workspace.Run{TargetHash: targetHash, SmokeID: smokeID(ctx), ID: id, ThingID: item.ID, AgentID: agent.ID, Kind: c.Kind, Prompt: c.Prompt, Status: "running", ContextMemoryIDs: []string{}, ContextVersions: []memory.Ref{}, CreatedAt: stamp()}
 		var brief strings.Builder
-		fmt.Fprintf(&brief, "事项：%s\n当前状态：%s\n说明：%s\n%s\n目标：%s\n进度：%s\n", item.Title, item.Status, item.Notes, item.Body, item.Goal, item.Progress)
+		fmt.Fprintf(&brief, "事项：%s\n当前状态：%s\n说明：%s\n%s\n目标：%s\n", item.Title, item.Status, item.Notes, item.Body, item.Goal)
 		projectID := item.ProjectID
 		if item.Kind == "project" {
 			projectID = item.ID
@@ -68,6 +68,20 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 				return err
 			}
 			fmt.Fprintf(&brief, "所属项目：%s\n项目目标：%s\n", project.Name, project.Goal)
+		}
+		if projectID != "" {
+			installed, e := studioInstalledTx(ctx, tx)
+			if e != nil {
+				return e
+			}
+			if installed {
+				h, e := projectHandoverTx(ctx, tx, scope, projectID)
+				if e != nil {
+					return e
+				}
+				writeProjectHandover(&brief, &h)
+				run.ProjectHandoverWrittenAt = h.WrittenAt
+			}
 		}
 		for _, check := range item.Checklist {
 			fmt.Fprintf(&brief, "子步骤（完成=%t）：%s\n", check.Done, check.Text)
@@ -453,8 +467,7 @@ func (s *Store) adoptRunTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, r
 		}
 	case "progress":
 		if item.Kind == "project" {
-			item.Progress = text
-			if err := artifactTx(ctx, tx, scope, run.ID, item.ID, "progress", run.ID, text); err != nil {
+			if err := s.adoptProjectMemoryTx(ctx, tx, scope, run, item, text, actionID, auto); err != nil {
 				return err
 			}
 		} else if item.Kind == "task" {
@@ -961,6 +974,9 @@ func (s *Store) autoAdoptResultTx(ctx context.Context, tx pgx.Tx, scope memory.S
 	summary := "副手结果：存成文档"
 	if as == "progress" {
 		summary = "副手结果：写进进度"
+		if item.Kind == "project" {
+			summary = "副手结果：记住项目进展"
+		}
 	}
 	if as == "subtasks" {
 		summary = fmt.Sprintf("副手结果：加了 %d 个子任务", len(parseRunChecklist(run.Output)))

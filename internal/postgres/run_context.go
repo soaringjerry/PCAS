@@ -89,7 +89,7 @@ func (s *Store) prepareRunContext(ctx context.Context, scope memory.Scope, c wor
 			if item.Kind == "project" {
 				projectID = item.ID
 			}
-			query += " " + item.Title + " " + item.Notes + " " + item.Body + " " + item.Goal + " " + item.Progress
+			query += " " + item.Title + " " + item.Notes + " " + item.Body + " " + item.Goal
 			docs, _, err := currentRunDocsTx(ctx, tx, scope, item, c.AgentID)
 			if err != nil {
 				return err

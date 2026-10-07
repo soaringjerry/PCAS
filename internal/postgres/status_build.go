@@ -116,6 +116,11 @@ func (s *Store) ScheduleStatus(ctx context.Context, now time.Time) (int, error) 
 				return err
 			}
 			n, err := enqueueStatusHandoversTx(ctx, tx, map[memory.ID]memory.Ref{owner: anchor}, now)
+			if err != nil {
+				return err
+			}
+			count += n
+			n, err = enqueueProjectHandoversTx(ctx, tx, owner, anchor, now)
 			count += n
 			return err
 		})

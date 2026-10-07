@@ -388,7 +388,7 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 		if item.Kind != "project" {
 			return memory.ErrInvalid
 		}
-		if err := patchAllowed(&item, c.Patch, "name", "goal", "status", "progress", "nextSteps"); err != nil {
+		if err := patchAllowed(&item, c.Patch, "name", "goal", "status"); err != nil {
 			return err
 		}
 		item.Title = item.Name

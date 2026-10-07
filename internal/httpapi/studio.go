@@ -1,8 +1,11 @@
 package httpapi
 
 import (
+	"context"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/workspace"
 	"net/http"
+	"strings"
 )
 
 // Phase 3 paths are frozen here; business implementations follow in H/D/S/F/P.
@@ -20,6 +23,22 @@ func (s *Server) studioRoutes(mux *http.ServeMux) {
 		mux.HandleFunc(route, s.authorize(func(w http.ResponseWriter, r *http.Request, scope memory.Scope) {
 			if !scope.IsOwner {
 				s.fail(w, memory.ErrForbidden)
+				return
+			}
+			if r.Method == "GET" && strings.HasSuffix(r.URL.Path, "/handover") {
+				reader, ok := s.options.Workspace.(interface {
+					ReadProjectHandover(context.Context, memory.Scope, string) (workspace.ProjectHandover, error)
+				})
+				if !ok {
+					s.fail(w, memory.ErrUnavailable)
+					return
+				}
+				out, err := reader.ReadProjectHandover(r.Context(), scope, r.PathValue("id"))
+				if err != nil {
+					s.fail(w, err)
+					return
+				}
+				writeJSON(w, 200, out)
 				return
 			}
 			s.fail(w, memory.ErrUnavailable)

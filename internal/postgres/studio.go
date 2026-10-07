@@ -10,9 +10,6 @@ import (
 var _ workspace.StudioAPI = (*Store)(nil)
 
 // Skeleton only: never present an unavailable implementation as successful data.
-func (s *Store) ReadProjectHandover(context.Context, memory.Scope, string) (workspace.ProjectHandover, error) {
-	return workspace.ProjectHandover{}, memory.ErrUnavailable
-}
 func (s *Store) ListDocumentVersions(context.Context, memory.Scope, string) (workspace.DocumentVersionList, error) {
 	return workspace.DocumentVersionList{}, memory.ErrUnavailable
 }

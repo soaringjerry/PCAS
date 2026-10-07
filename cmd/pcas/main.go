@@ -157,7 +157,7 @@ func run(ctx context.Context, args []string, logger *slog.Logger) error {
 				}
 			}
 		}()
-		return worker.New(db, map[string]worker.Handler{"memory.compare": db.ProcessCompare, "memory.entity_compare": db.ProcessEntityCompare, "memory.entity_candidates": db.ProcessEntityCandidates, "memory.handover": db.ProcessHandover, "memory.card": db.ProcessCard, "memory.organize": db.ProcessOrganize, "memory.summary": db.ProcessSummary, "source.parse": db.ProcessAttachment, "source.chunk": db.ProcessChunks, "source.tokenize": db.ProcessIndex, "memory.index": db.ProcessIndex, "source.extract": db.ProcessExtraction, "source.embed": db.ProcessEmbedding, "memory.embed": db.ProcessEmbedding}, logger).Run(ctx)
+		return worker.New(db, map[string]worker.Handler{"memory.compare": db.ProcessCompare, "memory.entity_compare": db.ProcessEntityCompare, "memory.entity_candidates": db.ProcessEntityCandidates, "memory.handover": db.ProcessHandover, "memory.project_handover": db.ProcessProjectHandover, "memory.card": db.ProcessCard, "memory.organize": db.ProcessOrganize, "memory.summary": db.ProcessSummary, "source.parse": db.ProcessAttachment, "source.chunk": db.ProcessChunks, "source.tokenize": db.ProcessIndex, "memory.index": db.ProcessIndex, "source.extract": db.ProcessExtraction, "source.embed": db.ProcessEmbedding, "memory.embed": db.ProcessEmbedding}, logger).Run(ctx)
 	}
 	webDir := os.Getenv("PCAS_WEB_DIR")
 	if webDir == "" {

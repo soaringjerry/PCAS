@@ -205,7 +205,18 @@ func (s *Store) snapshotTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) (
 	if err != nil {
 		return out, err
 	}
+	studioInstalled, err := studioInstalledTx(ctx, tx)
+	if err != nil {
+		return out, err
+	}
 	for _, item := range items {
+		if studioInstalled && item.Kind == "project" {
+			h, e := projectHandoverTx(ctx, tx, scope, item.ID)
+			if e != nil {
+				return out, e
+			}
+			item.ProjectHandover = &h
+		}
 		switch item.Kind {
 		case "task":
 			out.Tasks = append(out.Tasks, item)

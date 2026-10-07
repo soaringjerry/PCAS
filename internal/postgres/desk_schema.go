@@ -110,21 +110,30 @@ var secretaryOutputSchema = json.RawMessage(`{
           "additionalProperties": false
         }
       ]
+    },
+    "memoryPlan": {
+      "anyOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "properties": {
+            "depth": {"type": "string", "enum": ["light", "medium", "heavy"]},
+            "groups": {"type": "array", "items": {"type": "string"}},
+            "mentioned": {"type": "array", "items": {"type": "string"}},
+            "adopted": {"type": "array", "items": {"type": "string"}}
+          },
+          "required": ["depth", "groups", "mentioned", "adopted"],
+          "additionalProperties": false
+        }
+      ]
     }
   },
-  "required": ["reply", "used", "links", "show", "remember", "missingKeyInfo", "actions", "ask"],
+  "required": ["reply", "used", "links", "show", "remember", "missingKeyInfo", "actions", "ask", "memoryPlan"],
   "additionalProperties": false
 }`)
 
-func init() {
-	var schema map[string]any
-	_ = json.Unmarshal(secretaryOutputSchema, &schema)
-	schema["properties"].(map[string]any)["memoryPlan"] = map[string]any{"anyOf": []any{map[string]any{"type": "null"}, map[string]any{"type": "object", "properties": map[string]any{"depth": map[string]any{"type": "string", "enum": []string{"light", "medium", "heavy"}}, "groups": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}, "mentioned": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}, "adopted": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}}, "required": []string{"depth", "groups", "mentioned", "adopted"}, "additionalProperties": false}}}
-	schema["required"] = append(schema["required"].([]any), "memoryPlan")
-	secretaryOutputSchema = asJSON(schema)
-	var checks map[string]any
-	_ = json.Unmarshal(secretaryCheckSchema, &checks)
-	checks["properties"].(map[string]any)["memoryPlan"] = schema["properties"].(map[string]any)["memoryPlan"]
-	checks["required"] = append(checks["required"].([]any), "memoryPlan")
-	secretaryCheckSchema = asJSON(checks)
-}
+// The schema is written out in full above and must stay that way. A provider
+// that constrains output follows the order the properties are written in, and
+// each action form is told apart by "op", which therefore comes first.
+// Rebuilding this schema from a decoded map sorts the keys: "op" then led only
+// in update and add_steps, and every create_task came back as one of those.

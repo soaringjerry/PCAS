@@ -208,6 +208,8 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 				return memory.ErrInvalid
 			}
 			doc = *c.Doc
+			doc.Version = 0
+			doc.BasedOn = nil
 			if !memory.ID(doc.ID).Valid() || doc.By != "user" || doc.RunID != "" {
 				return memory.ErrInvalid
 			}
@@ -235,6 +237,9 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 				_, err := tx.Exec(ctx, "DELETE FROM work_documents WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), c.ID)
 				return err
 			}
+			base := doc.Version
+			doc.BasedOn = &base
+			doc.By = actorFromContext(ctx)
 			if err := patchAllowed(&doc, c.Patch, "title", "body"); err != nil {
 				return err
 			}
@@ -548,7 +553,15 @@ func saveCandidate(ctx context.Context, tx pgx.Tx, scope memory.Scope, v workspa
 	return err
 }
 func saveDoc(ctx context.Context, tx pgx.Tx, scope memory.Scope, doc workspace.Doc) error {
-	_, err := tx.Exec(ctx, `INSERT INTO work_documents(owner_id,id,thing_id,document) VALUES($1,$2,$3,$4) ON CONFLICT(owner_id,id) DO UPDATE SET document=excluded.document`, string(scope.OwnerID), doc.ID, doc.ThingID, asJSON(doc))
+	var exists bool
+	if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM work_documents WHERE owner_id=$1 AND id=$2)", string(scope.OwnerID), doc.ID).Scan(&exists); err != nil {
+		return err
+	}
+	if exists {
+		_, err := tx.Exec(ctx, "UPDATE work_documents SET document=$3 WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), doc.ID, asJSON(doc))
+		return err
+	}
+	_, err := tx.Exec(ctx, "INSERT INTO work_documents(owner_id,id,thing_id,document) VALUES($1,$2,$3,$4)", string(scope.OwnerID), doc.ID, doc.ThingID, asJSON(doc))
 	return err
 }
 func (s *Store) saveAction(ctx context.Context, tx pgx.Tx, scope memory.Scope, item workspace.Item, summary string) error {

@@ -10,15 +10,6 @@ import (
 var _ workspace.StudioAPI = (*Store)(nil)
 
 // Skeleton only: never present an unavailable implementation as successful data.
-func (s *Store) ListDocumentVersions(context.Context, memory.Scope, string) (workspace.DocumentVersionList, error) {
-	return workspace.DocumentVersionList{}, memory.ErrUnavailable
-}
-func (s *Store) ReadDocumentVersion(context.Context, memory.Scope, string, int) (workspace.DocumentVersion, error) {
-	return workspace.DocumentVersion{}, memory.ErrUnavailable
-}
-func (s *Store) ReadDocumentDiff(context.Context, memory.Scope, string, int, int) (workspace.DocumentDiff, error) {
-	return workspace.DocumentDiff{}, memory.ErrUnavailable
-}
 func (s *Store) ListProjectFiles(context.Context, memory.Scope, string) (workspace.ProjectFileList, error) {
 	return workspace.ProjectFileList{}, memory.ErrUnavailable
 }

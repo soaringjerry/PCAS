@@ -5,6 +5,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 	"net/http"
+	"strconv"
 	"strings"
 )
 
@@ -34,6 +35,48 @@ func (s *Server) studioRoutes(mux *http.ServeMux) {
 					return
 				}
 				out, err := reader.ReadProjectHandover(r.Context(), scope, r.PathValue("id"))
+				if err != nil {
+					s.fail(w, err)
+					return
+				}
+				writeJSON(w, 200, out)
+				return
+			}
+
+			if r.Method == "GET" && strings.Contains(r.URL.Path, "/documents/") {
+				reader, ok := s.options.Workspace.(workspace.StudioAPI)
+				if !ok {
+					s.fail(w, memory.ErrUnavailable)
+					return
+				}
+				var out any
+				var err error
+				if strings.HasSuffix(r.URL.Path, "/diff") {
+					from, to := 0, 0
+					values := r.URL.Query()
+					if values.Has("from") || values.Has("to") {
+						from, err = strconv.Atoi(values.Get("from"))
+						if err != nil || from < 1 {
+							s.fail(w, memory.ErrInvalid)
+							return
+						}
+						to, err = strconv.Atoi(values.Get("to"))
+						if err != nil || to < 1 {
+							s.fail(w, memory.ErrInvalid)
+							return
+						}
+					}
+					out, err = reader.ReadDocumentDiff(r.Context(), scope, r.PathValue("id"), from, to)
+				} else if value := r.PathValue("version"); value != "" {
+					version, e := strconv.Atoi(value)
+					if e != nil || version < 1 {
+						s.fail(w, memory.ErrInvalid)
+						return
+					}
+					out, err = reader.ReadDocumentVersion(r.Context(), scope, r.PathValue("id"), version)
+				} else {
+					out, err = reader.ListDocumentVersions(r.Context(), scope, r.PathValue("id"))
+				}
 				if err != nil {
 					s.fail(w, err)
 					return

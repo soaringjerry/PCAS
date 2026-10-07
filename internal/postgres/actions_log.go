@@ -254,7 +254,7 @@ func (s *Store) undoActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 			case "work_documents":
 				var doc workspace.Doc
 				if err = json.Unmarshal(c.Before, &doc); err == nil {
-					err = saveDoc(ctx, tx, scope, doc)
+					err = restoreDocumentTx(ctx, tx, scope, doc)
 				}
 			case "agent_runs":
 				var run workspace.Run

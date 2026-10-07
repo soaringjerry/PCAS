@@ -89,6 +89,8 @@ func applyDueReminderAt(item *workspace.Item, remind string, loc *time.Location,
 // Model actions never accept database identifiers. Refs resolve exclusively
 // through server-owned context aliases and earlier committed N creation aliases.
 type secretaryAction struct {
+	DocumentID       *string `json:"documentId"`
+	BaseVersion      *int    `json:"baseVersion"`
 	selfcheckDropped bool
 	parseErr         error
 	Op               string                     `json:"op"`
@@ -506,10 +508,27 @@ func (s *Store) executeSecretaryActionTx(ctx context.Context, tx pgx.Tx, scope m
 			receipt.Text = fmt.Sprintf("加了 %d 步", len(a.Steps))
 		}
 	case "delegate":
-		if !oneOf(a.Kind, "plan", "draft", "breakdown", "summary", "ask") || strings.TrimSpace(a.Prompt) == "" {
+		if !oneOf(a.Kind, "plan", "draft", "breakdown", "summary", "ask", "revise") || strings.TrimSpace(a.Prompt) == "" {
 			return skippedReceipt(a.Op, "没说清要交给副手做什么"), nil
 		}
 		c := workspace.Command{Type: "requestRun", ThingID: id, AgentID: agent.ID, Kind: a.Kind, Prompt: a.Prompt}
+		if a.Kind == "revise" {
+			docs, _ := ctx.Value(secretaryDocumentsKey{}).(map[string]workspace.Doc)
+			doc, ok := docs[pointerValue(a.DocumentID)]
+			if !ok {
+				return skippedReceipt(a.Op, "目标文档不明确"), nil
+			}
+			if a.BaseVersion == nil || *a.BaseVersion < 1 {
+				return skippedReceipt(a.Op, "基准版本不明确"), nil
+			}
+			c.DocumentID = doc.ID
+			c.BaseVersion = *a.BaseVersion
+			c.ThingID = doc.ThingID
+			id = doc.ThingID
+			if a.Ref == "new" {
+				return skippedReceipt(a.Op, "改写不能新建事项"), nil
+			}
+		}
 		if a.Ref == "new" {
 			if !validDeskTitle(a.Title) {
 				return skippedReceipt(a.Op, "标题为空或太长"), nil

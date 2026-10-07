@@ -91,10 +91,12 @@ var secretaryOutputSchema = json.RawMessage(`{
               "op": {"type": "string", "enum": ["delegate"]},
               "ref": {"type": "string"},
               "title": {"type": "string"},
-              "kind": {"type": "string", "enum": ["plan", "draft", "breakdown", "summary", "ask"]},
-              "prompt": {"type": "string"}
+              "kind": {"type": "string", "enum": ["plan", "draft", "breakdown", "summary", "ask", "revise"]},
+              "prompt": {"type": "string"},
+              "documentId": {"type": ["string", "null"]},
+              "baseVersion": {"type": ["integer", "null"]}
             },
-            "required": ["op", "ref", "title", "kind", "prompt"],
+            "required": ["op", "ref", "title", "kind", "prompt", "documentId", "baseVersion"],
             "additionalProperties": false
           }
         ]

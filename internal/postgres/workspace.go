@@ -441,7 +441,15 @@ func (s *Store) Execute(ctx context.Context, scope memory.Scope, in workspace.Co
 		if (oneOf(in.Type, "toggleCheck", "toggleTrigger", "toggleContextMemory") || strings.HasPrefix(in.Type, "bulk")) && revision != in.ExpectedRevision {
 			return memory.ErrConflict
 		}
-		if undoableCommand(in.Type) {
+		recordAction := undoableCommand(in.Type)
+		if in.Type == "undoAction" {
+			var err error
+			recordAction, err = reviseUndoActionTx(ctx, tx, scope, in.ID)
+			if err != nil {
+				return err
+			}
+		}
+		if recordAction {
 			ctx = withActionLog(ctx, in.RequestID, "command", "", commandSummary(ctx, tx, scope, in))
 			if err := beginActionLogTx(ctx, tx); err != nil {
 				return err

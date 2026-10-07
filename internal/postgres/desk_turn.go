@@ -38,7 +38,8 @@ actions 每轮最多 10 条，格式：
 {"op":"create_idea","title":"…","condition":"…或 null","conditionDue":"…或 null","project":"P1|N1 或 null"}
 {"op":"create_project","name":"…"}
 {"op":"add_steps","ref":"T3|THIS|R1|N1","steps":["…"]}
-{"op":"delegate","ref":"T3|THIS|R1|N1|new","title":"ref 为 new 必填","kind":"plan|draft|breakdown|summary|ask","prompt":"…"}
+{"op":"delegate","ref":"T3|THIS|R1|N1|new","title":"ref 为 new 必填","kind":"plan|draft|breakdown|summary|ask|revise","prompt":"…","documentId":"revise 填 D1 等文档别名，其余填 null","baseVersion":"revise 填正整数，其余填 null"}
+revise 是在某份文档指定基准版上改一部分：从文档目录按用户的意思定 documentId=D* 和 baseVersion，输出完整新正文由副手执行。ref 用该文档的 D*，由服务端定所属事项。用户明确说第二版就填 2；没有指定版本、明确要改当前版时填目录当前版。文档或版本真正有歧义，只追问那个字段，不猜、不发起这个动作。
 ask 为 null 或 {"question":"…","options":["…"]}。`
 
 var deskUUID = regexp.MustCompile(`(?i)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}`)
@@ -51,6 +52,7 @@ type storedSecretaryResponse struct {
 }
 
 type secretaryContext struct {
+	Documents         map[string]workspace.Doc
 	TargetItems       map[string]workspace.Item
 	ConversationID    string
 	Agent             workspace.Agent
@@ -230,6 +232,11 @@ func (s *Store) secretaryPrompt(ctx context.Context, tx pgx.Tx, scope memory.Sco
 		}
 		projectID = &project
 	}
+	docCatalog, docErr := s.secretaryDocumentsTx(ctx, tx, scope, req, c)
+	if docErr != nil {
+		return "", nil, docErr
+	}
+	prompt.WriteString(docCatalog)
 	fmt.Fprintf(&prompt, "用户所在城市：%s\n时区：%s\n\n项目列表：\n", c.Settings.City, loc)
 	projectNames := map[string]string{}
 	for _, p := range c.Projects {
@@ -819,6 +826,7 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 				}
 				actionID := string(memory.NewID())
 				actionCtx := withActionLog(withActor(WithMemoryTier(ctx, c.Tier), "secretary"), actionID, "desk", out.Turn.ID, "秘书："+a.Op)
+				actionCtx = context.WithValue(actionCtx, secretaryDocumentsKey{}, c.Documents)
 				actionTx, err := tx.Begin(ctx)
 				if err != nil {
 					return err

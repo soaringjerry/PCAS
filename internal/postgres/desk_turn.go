@@ -525,6 +525,9 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 	// generation still observes the caller cancellation below.
 	requestCtx := ctx
 	turnStarted := time.Now()
+	requestCtx, timing := newExecutionTimer(requestCtx, "secretary", turnStarted)
+	ctx = requestCtx
+	defer s.finishExecutionTiming(ctx, scope.OwnerID, timing)
 	// The answer model may request heavy reading after its first response.
 	persistTimeout := heavyUseTimeout
 	if memoryTier(ctx, req.Text, "light") == "heavy" {
@@ -536,6 +539,7 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 	ctx, persistCancel := context.WithTimeout(context.WithoutCancel(ctx), persistTimeout)
 	defer persistCancel()
 	hash := sha256.Sum256(asJSON(req)) // The original body, before trimming, fences retries.
+	ownerPrepStarted := time.Now()
 	prepared, err := s.prepareUseOwner(ctx, scope)
 	if err != nil {
 		return out, err
@@ -545,6 +549,7 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 			return out, err
 		}
 	}
+	timing.addPrepare(time.Since(ownerPrepStarted))
 	if req.SmokeID != "" {
 		if err := s.registerSmokeRequest(ctx, scope, req); err != nil {
 			return out, err
@@ -561,7 +566,9 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 	conversationID = ticket.conversation
 	var attachments []deskAttachment
 	if !ticket.legacy && len(req.Attachments) > 0 {
+		attachmentStarted := time.Now()
 		attachments, err = s.prepareDeskAttachments(requestCtx, scope, req)
+		timing.addPrepare(time.Since(attachmentStarted))
 		if err != nil {
 			return out, err
 		}
@@ -596,12 +603,15 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 		}
 		out.ConversationID = conversationID
 		out.Turn = workspace.SecretaryTurn{ID: string(memory.NewID()), Text: req.Text, Cards: []workspace.DeskCard{}, Receipts: []workspace.DeskReceipt{}, CreatedAt: stamp()}
+		timing.id = out.Turn.ID
 		if req.ThingID != nil && !captureOnly {
 			if _, err := getItem(ctx, tx, scope, *req.ThingID); err != nil {
 				return err
 			}
 		}
+		timing.beginPrepare()
 		c, contextErr := s.secretaryContextTx(ctx, tx, scope, req, conversationID)
+		timing.Tier = c.Tier
 		for _, a := range attachments {
 			if a.Context != "" {
 				c.AttachmentContext += a.Context + "\n"
@@ -650,6 +660,7 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 						prompt += fmt.Sprintf("\n重档读者补充 [%s / trust=%s] %s\n", alias, m.Trust, m.Text+memoryPromptSuffix(m, deskLocation(c.Settings)))
 					}
 				}
+				timing.finishPrepare()
 				modelStarted := time.Now()
 				workCtx, cancel := context.WithTimeout(requestCtx, secretaryModelTimeout)
 				workCtx = context.WithValue(workCtx, secretaryUsageKey{}, secretaryUsageMeta{AllCalls: true, Usage: modelUsage{Tier: c.Tier, TurnID: out.Turn.ID, MemoryRefs: c.Dependencies, Plan: asJSON(usePlan{Groups: c.Use.Groups})}})
@@ -686,7 +697,9 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 									}
 								}
 								c.Use.Selected = true
+								readingStarted := time.Now()
 								picked, refs, keys := s.heavyUse(requestCtx, ctx, scope, c.Agent, req.ThingID, req.Text, c.Use, out.Turn.ID, "")
+								timing.addPrepare(time.Since(readingStarted))
 								c.Use.Groups = keys
 								c.Dependencies = uniqueRefs(append(c.Dependencies, refs...))
 								for _, m := range picked {
@@ -726,6 +739,7 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 				}
 			}
 		}
+		timing.beginWrite(c.Tier)
 		if _, err := tx.Exec(ctx, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(scope.OwnerID)); err != nil {
 			return err
 		}

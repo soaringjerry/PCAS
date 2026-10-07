@@ -189,8 +189,8 @@ func (s *Store) statusGenerate(ctx context.Context, j worker.Job, purpose, instr
 	}
 	result, callErr := s.models.Generate(ctx, p.ID, instructions, prompt)
 	cost := result.Cost
-	if callErr == nil {
-		if err := s.recordUsage(ctx, modelUsage{OwnerID: j.OwnerID, ID: memory.ID(reservation), Purpose: purpose, AgentID: p.ID, Model: p.Model, InputTokens: result.InputTokens, OutputTokens: result.OutputTokens, InputEstimated: result.InputEstimated, OutputEstimated: result.OutputEstimated, CostEstimated: result.CostEstimated, Cost: cost, JobID: string(j.ID), MemoryRefs: refs}); err != nil {
+	if result.DurationMS != nil {
+		if err := s.recordUsage(ctx, modelUsage{OwnerID: j.OwnerID, ID: memory.ID(reservation), Purpose: purpose, AgentID: p.ID, Model: p.Model, DurationMS: result.DurationMS, InputTokens: result.InputTokens, OutputTokens: result.OutputTokens, InputEstimated: result.InputEstimated, OutputEstimated: result.OutputEstimated, CostEstimated: result.CostEstimated, Cost: cost, JobID: string(j.ID), MemoryRefs: refs}); err != nil {
 			return "", err
 		}
 	}

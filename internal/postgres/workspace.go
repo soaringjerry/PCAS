@@ -244,7 +244,7 @@ func (s *Store) snapshotTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) (
 	}
 	where, args := memoryWhere(scope, false, memoryReadOptions{})
 	out.Organize.Version = OrganizeVersion
-	if err := tx.QueryRow(ctx, `SELECT count(*) FILTER (WHERE coalesce((to_jsonb(cl)->>'organized')::int,0) >= $5),count(*)`+memoryJoins+` JOIN claims cl ON(cl.owner_id,cl.id)=(r.owner_id,r.id)`+where,
+	if err := tx.QueryRow(ctx, `SELECT count(*) FILTER (WHERE coalesce((to_jsonb(cl)->>'organized')::int,0) >= `+organizeRequiredSQL("coalesce(to_jsonb(c)->>'category','')", "$5")+`),count(*)`+memoryJoins+` JOIN claims cl ON(cl.owner_id,cl.id)=(r.owner_id,r.id)`+where,
 		append(args, OrganizeVersion)...).Scan(&out.Organize.Done, &out.Organize.Total); err != nil {
 		return out, err
 	}
@@ -497,7 +497,7 @@ func (s *Store) Export(ctx context.Context, scope memory.Scope, training, confir
 			}
 			canonical := map[string][]json.RawMessage{}
 			// Names are a fixed server allowlist, never caller-supplied SQL.
-			for _, table := range []string{"memory_records", "record_versions", "sources", "source_versions", "entities", "entity_versions", "aliases", "episodes", "episode_members", "claims", "claim_revisions", "evidence", "relations", "activity", "record_grants", "claim_source_keys", "claim_key_redirects", "claim_reimport_blocks", "reimport_blocks", "record_reimport_blocks", "source_contexts", "episode_keys", "archive_entries", "claim_mentions", "source_extractions", "import_batches", "model_usage"} {
+			for _, table := range []string{"memory_records", "record_versions", "sources", "source_versions", "entities", "entity_versions", "aliases", "episodes", "episode_members", "claims", "claim_revisions", "evidence", "relations", "activity", "record_grants", "claim_source_keys", "claim_key_redirects", "claim_reimport_blocks", "reimport_blocks", "record_reimport_blocks", "source_contexts", "episode_keys", "archive_entries", "claim_mentions", "source_extractions", "import_batches", "model_usage", "execution_timings"} {
 				rows, err := queryDocuments[json.RawMessage](ctx, tx, "SELECT to_jsonb(t) FROM "+table+" t WHERE owner_id=$1", string(scope.OwnerID))
 				if err != nil {
 					return err

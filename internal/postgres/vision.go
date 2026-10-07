@@ -74,7 +74,7 @@ func (s *Store) readImage(ctx context.Context, scope memory.Scope, ref memory.Re
 				return "", "", settleErr
 			}
 			err = callErr
-			usage := modelUsage{OwnerID: scope.OwnerID, ID: memory.NewID(), At: time.Now().UTC(), Purpose: "vision", AgentID: p.ID, Model: p.Model, InputTokens: result.InputTokens, OutputTokens: result.OutputTokens, InputEstimated: result.InputEstimated, OutputEstimated: result.OutputEstimated, CostEstimated: result.CostEstimated, Cost: result.Cost, MemoryRefs: []memory.Ref{ref}}
+			usage := modelUsage{OwnerID: scope.OwnerID, ID: memory.NewID(), At: time.Now().UTC(), Purpose: "vision", AgentID: p.ID, Model: p.Model, DurationMS: result.DurationMS, InputTokens: result.InputTokens, OutputTokens: result.OutputTokens, InputEstimated: result.InputEstimated, OutputEstimated: result.OutputEstimated, CostEstimated: result.CostEstimated, Cost: result.Cost, MemoryRefs: []memory.Ref{ref}}
 			if job != nil {
 				usage.JobID = string(job.ID)
 			}

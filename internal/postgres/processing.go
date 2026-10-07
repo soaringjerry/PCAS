@@ -207,7 +207,7 @@ func (s *Store) ProcessEmbedding(ctx context.Context, j worker.Job) (err error) 
 			return errors.Join(memory.ErrUnavailable, &worker.JobError{Code: "provider_unavailable", Retry: true})
 		}
 		actualCost += usage.Cost
-		if err := s.recordUsage(ctx, modelUsage{OwnerID: j.OwnerID, ID: memory.NewID(), Purpose: "embedding", AgentID: provider.ID, Model: provider.Model, InputTokens: usage.InputTokens, InputEstimated: usage.InputEstimated, Cost: usage.Cost, CostEstimated: usage.CostEstimated, JobID: string(j.ID), MemoryRefs: refs[start:min(start+32, len(refs))]}); err != nil {
+		if err := s.recordUsage(ctx, modelUsage{OwnerID: j.OwnerID, ID: memory.NewID(), Purpose: "embedding", AgentID: provider.ID, Model: provider.Model, DurationMS: usage.DurationMS, InputTokens: usage.InputTokens, InputEstimated: usage.InputEstimated, Cost: usage.Cost, CostEstimated: usage.CostEstimated, JobID: string(j.ID), MemoryRefs: refs[start:min(start+32, len(refs))]}); err != nil {
 			return err
 		}
 		if err != nil {

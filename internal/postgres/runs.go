@@ -716,6 +716,7 @@ func (s *Store) RunAgents(ctx context.Context, logger *slog.Logger) error {
 }
 func (s *Store) runAgentOnce(ctx context.Context) error {
 	started := time.Now()
+	ctx, timing := newExecutionTimer(ctx, "deputy", started)
 	ctx, persistCancel := context.WithDeadline(ctx, started.Add(heavyUseTimeout))
 	defer persistCancel()
 	if s.models == nil {
@@ -788,6 +789,9 @@ func (s *Store) runAgentOnce(ctx context.Context) error {
 	if err != nil || token == "" {
 		return err
 	}
+	timing.id = run.ID
+	timing.Tier = run.MemoryTier
+	defer s.finishExecutionTiming(ctx, scope.OwnerID, timing)
 	if cached != nil && run.Kind == "revise" {
 		return s.finishPaidRevise(ctx, scope, run, token, cached)
 	}
@@ -796,6 +800,7 @@ func (s *Store) runAgentOnce(ctx context.Context) error {
 	if s.models.ReloadSubscription && s.models.Codex != nil {
 		defer s.models.Codex.Close()
 	}
+	timing.beginPrepare()
 	u, agent, useErr := s.deputyUseContext(workCtx, scope, &run)
 	if useErr == nil {
 		run.MemoryTier = memoryTierForStatus(run.MemoryTier, u.Ready)
@@ -839,15 +844,16 @@ func (s *Store) runAgentOnce(ctx context.Context) error {
 		verifyErr = pgx.BeginFunc(workCtx, s.pool, func(tx pgx.Tx) error { return checkUseRunPromptTx(workCtx, tx, scope, run) })
 	}
 	result := ai.Result{}
+	timing.finishPrepare()
 	answerStarted := time.Now()
 	generationErr := verifyErr
 	if verifyErr == nil {
 		// Reserve an answer and selfcheck slice even if some readers miss their cutoff.
 		answerCtx, answerCancel := context.WithTimeout(workCtx, 60*time.Second)
 		if run.Kind == "revise" {
-			result, generationErr = s.models.GenerateWithSearchSchema(answerCtx, run.AgentID, reviseInstructions, run.Brief, reviseOutputSchema)
+			result, generationErr = s.models.GenerateWithSearchSchema(executionCallContext(answerCtx, "answer"), run.AgentID, reviseInstructions, run.Brief, reviseOutputSchema)
 		} else {
-			result, generationErr = s.models.GenerateWithSearch(answerCtx, run.AgentID, deputyInstructions, run.Brief)
+			result, generationErr = s.models.GenerateWithSearch(executionCallContext(answerCtx, "answer"), run.AgentID, deputyInstructions, run.Brief)
 		}
 		answerCancel()
 	}
@@ -868,7 +874,7 @@ func (s *Store) runAgentOnce(ctx context.Context) error {
 		usage := modelUsage{
 			OwnerID: scope.OwnerID, ID: memory.NewID(), At: time.Now().UTC(),
 			Purpose: "deputy", AgentID: run.AgentID, Model: p.Model,
-			InputTokens: result.InputTokens, OutputTokens: result.OutputTokens, InputEstimated: result.InputEstimated, OutputEstimated: result.OutputEstimated, CostEstimated: result.CostEstimated, Cost: cost,
+			DurationMS: result.DurationMS, InputTokens: result.InputTokens, OutputTokens: result.OutputTokens, InputEstimated: result.InputEstimated, OutputEstimated: result.OutputEstimated, CostEstimated: result.CostEstimated, Cost: cost,
 			RunID: run.ID, MemoryRefs: run.ContextVersions, Tier: run.MemoryTier, Plan: asJSON(usePlan{Groups: run.MemoryGroups}),
 		}
 		var usageErr error
@@ -899,6 +905,7 @@ func (s *Store) runAgentOnce(ctx context.Context) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
+	timing.beginWrite(run.MemoryTier)
 	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(scope.OwnerID)); err != nil {
 			return err

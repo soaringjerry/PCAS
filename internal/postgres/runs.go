@@ -47,6 +47,10 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 		if err != nil {
 			return err
 		}
+		history, err := readRunHistoryTx(ctx, tx, scope, c, item)
+		if err != nil {
+			return err
+		}
 		id, err := uuidOrNew(c.ID)
 		if err != nil {
 			return err
@@ -119,19 +123,19 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 		// Rank through the same scoped retrieval used by Recall instead of
 		// filling the prompt with globally recent memories. No nested model
 		// request is made while the owner's transaction is locked.
-		query := c.Prompt + " " + item.Title
-		if len([]rune(query)) > 1000 {
-			if err := stageEventTx(ctx, tx, scope.OwnerID, "deputy", "overflow", "retrieval_query_chars", len([]rune(query))-1000); err != nil {
+		query := runHistoryQuery(item.Title, history, c.Prompt)
+		if omitted := len(query) - len(tail(query, delegateContextBytes)); omitted > 0 {
+			if err := stageEventTx(ctx, tx, scope.OwnerID, "deputy", "overflow", "retrieval_query_bytes", omitted); err != nil {
 				return err
 			}
-			query = string([]rune(query)[:1000])
 		}
+		query = tail(query, delegateContextBytes)
 		tokens := memory.SearchTokens(query)
 		if len(tokens) > 120 {
 			if err := stageEventTx(ctx, tx, scope.OwnerID, "deputy", "overflow", "retrieval_query_terms", len(tokens)-120); err != nil {
 				return err
 			}
-			tokens = tokens[:120]
+			tokens = tokens[len(tokens)-120:]
 		}
 		terms := []string{}
 		for _, token := range tokens {
@@ -140,7 +144,7 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 			}
 		}
 		recall := memory.RecallResult{Coverage: coverage()}
-		request := memory.RecallRequest{Team: &memory.TeamRecall{Text: c.Prompt, Plan: plan, ThingID: &item.ID, ProjectID: &projectID, RankFusion: u.Ready}, Query: query, Mode: memory.Remember, Context: memory.WorkingContext{Objects: []memory.ID{}}}
+		request := memory.RecallRequest{Team: &memory.TeamRecall{Text: query, Plan: plan, ThingID: &item.ID, ProjectID: &projectID, RankFusion: u.Ready}, Query: query, Mode: memory.Remember, Context: memory.WorkingContext{Objects: []memory.ID{}}}
 		if projectID != "" {
 			request.Context.Objects = append(request.Context.Objects, memory.ID(projectID))
 		}
@@ -175,16 +179,6 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 		historyRequests := []string{}
 		if prepared, ok := ctx.Value(runContextKey{}).(preparedRunContext); ok {
 			excerpts = append(append([]memory.RecallExcerpt{}, prepared.Excerpts...), excerpts...)
-			for _, turn := range prepared.History {
-				historyRequests = append(historyRequests, turn.RequestID)
-				answer := turn.Answer
-				if turn.Outdated || verifyRunTx(ctx, tx, scope, workspace.Run{ThingID: item.ID, AgentID: agent.ID, ContextVersions: turn.Refs}) != nil {
-					answer = outdatedDeskAnswer
-				} else {
-					artifactRefs = append(artifactRefs, turn.Refs...)
-				}
-				fmt.Fprintf(&brief, "\n导办台之前的讨论：\n问：%s\n答：%s\n", turn.Question, answer)
-			}
 			for _, ref := range prepared.Refs {
 				if m, ok := byID[string(ref.ID)]; ok && m.Version == ref.Version && !selected[m.ID] {
 					ordered = append(ordered, m)
@@ -192,6 +186,19 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 				}
 			}
 		}
+		for _, turn := range history {
+			historyRequests = append(historyRequests, turn.RequestID)
+			if !turn.Outdated {
+				artifactRefs = append(artifactRefs, turn.Refs...)
+			}
+		}
+		historyText := runHistoryText(history)
+		if omitted := len(historyText) - len(tail(historyText, delegateContextBytes)); omitted > 0 {
+			if err := stageEventTx(ctx, tx, scope.OwnerID, "deputy", "overflow", "delegate_history_bytes", omitted); err != nil {
+				return err
+			}
+		}
+		brief.WriteString(tail(historyText, delegateContextBytes))
 		// Explicit long-term constraints must remain applicable even when the
 		// task vocabulary does not repeat them.
 		for _, m := range memories {
@@ -661,6 +668,7 @@ func (s *Store) RunAgents(ctx context.Context, logger *slog.Logger) error {
 }
 func (s *Store) runAgentOnce(ctx context.Context) error {
 	started := time.Now()
+	ctx, timing := newExecutionTimer(ctx, "deputy", started)
 	ctx, persistCancel := context.WithDeadline(ctx, started.Add(heavyUseTimeout))
 	defer persistCancel()
 	if s.models == nil {
@@ -704,11 +712,15 @@ func (s *Store) runAgentOnce(ctx context.Context) error {
 	if err != nil || token == "" {
 		return err
 	}
+	timing.id = run.ID
+	timing.Tier = run.MemoryTier
+	defer s.finishExecutionTiming(ctx, scope.OwnerID, timing)
 	workCtx, cancel := context.WithDeadline(ctx, started.Add(heavyUseTimeout-10*time.Second))
 	defer cancel()
 	if s.models.ReloadSubscription && s.models.Codex != nil {
 		defer s.models.Codex.Close()
 	}
+	timing.beginPrepare()
 	u, agent, useErr := s.deputyUseContext(workCtx, scope, &run)
 	if useErr == nil {
 		run.MemoryTier = memoryTierForStatus(run.MemoryTier, u.Ready)
@@ -748,12 +760,13 @@ func (s *Store) runAgentOnce(ctx context.Context) error {
 		verifyErr = pgx.BeginFunc(workCtx, s.pool, func(tx pgx.Tx) error { return checkUseRunPromptTx(workCtx, tx, scope, run) })
 	}
 	result := ai.Result{}
+	timing.finishPrepare()
 	answerStarted := time.Now()
 	generationErr := verifyErr
 	if verifyErr == nil {
 		// Reserve an answer and selfcheck slice even if some readers miss their cutoff.
 		answerCtx, answerCancel := context.WithTimeout(workCtx, 60*time.Second)
-		result, generationErr = s.models.GenerateWithSearch(answerCtx, run.AgentID, deputyInstructions, run.Brief)
+		result, generationErr = s.models.GenerateWithSearch(executionCallContext(answerCtx, "answer"), run.AgentID, deputyInstructions, run.Brief)
 		answerCancel()
 	}
 
@@ -766,7 +779,7 @@ func (s *Store) runAgentOnce(ctx context.Context) error {
 		usage := modelUsage{
 			OwnerID: scope.OwnerID, ID: memory.NewID(), At: time.Now().UTC(),
 			Purpose: "deputy", AgentID: run.AgentID, Model: p.Model,
-			InputTokens: result.InputTokens, OutputTokens: result.OutputTokens, InputEstimated: result.InputEstimated, OutputEstimated: result.OutputEstimated, CostEstimated: result.CostEstimated, Cost: cost,
+			DurationMS: result.DurationMS, InputTokens: result.InputTokens, OutputTokens: result.OutputTokens, InputEstimated: result.InputEstimated, OutputEstimated: result.OutputEstimated, CostEstimated: result.CostEstimated, Cost: cost,
 			RunID: run.ID, MemoryRefs: run.ContextVersions, Tier: run.MemoryTier, Plan: asJSON(usePlan{Groups: run.MemoryGroups}),
 		}
 		var usageErr error
@@ -797,6 +810,7 @@ func (s *Store) runAgentOnce(ctx context.Context) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
+	timing.beginWrite(run.MemoryTier)
 	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(scope.OwnerID)); err != nil {
 			return err

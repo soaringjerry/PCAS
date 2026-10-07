@@ -63,6 +63,10 @@ CREATE TRIGGER fictional_write_failure BEFORE INSERT ON `+table+` FOR EACH ROW E
 				t.Fatal(err)
 			}
 			defer reopened.Close()
+			var originalDuration *int64
+			if err := s.pool.QueryRow(ctx, "SELECT duration_ms FROM background_model_results WHERE job_id=$1", job.ID).Scan(&originalDuration); err != nil || originalDuration == nil {
+				t.Fatal("paid duration not durable", err)
+			}
 			// Recovery must work with no available provider and no in-process cache.
 			if err := process(reopened, ctx, job); err != nil {
 				t.Fatal("recover paid write", err)
@@ -74,6 +78,10 @@ CREATE TRIGGER fictional_write_failure BEFORE INSERT ON `+table+` FOR EACH ROW E
 			}
 			if err := s.pool.QueryRow(ctx, "SELECT count(*) FROM model_usage WHERE owner_id=$1 AND job_id=$2", scope.OwnerID, job.ID).Scan(&usage); err != nil || usage != 1 {
 				t.Fatal("usage duplicated or absent", usage, err)
+			}
+			var recoveredDuration *int64
+			if err := s.pool.QueryRow(ctx, "SELECT duration_ms FROM model_usage WHERE owner_id=$1 AND job_id=$2", scope.OwnerID, job.ID).Scan(&recoveredDuration); err != nil || recoveredDuration == nil || *recoveredDuration != *originalDuration {
+				t.Fatal("replay lost original duration", err)
 			}
 			if len(fake.all()) != 1 {
 				t.Fatal("paid call repeated", len(fake.all()))

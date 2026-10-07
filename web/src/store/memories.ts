@@ -43,6 +43,8 @@ const snapshotIsComplete = (state: State) => (state.memoryTotal ?? state.memorie
 const changes = new WeakMap<Memory[], string>()
 
 function memoryChange(state: State): string {
+  // The server counts memory changes itself; the rest is for a server that does not yet.
+  if (state.memoryRevision !== undefined) return `r${state.memoryRevision}`
   let mark = changes.get(state.memories)
   if (mark === undefined) {
     // How faded a memory is drifts with the clock; that alone is no reason to read again.

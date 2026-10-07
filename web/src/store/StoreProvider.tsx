@@ -3,7 +3,7 @@ import type { State } from '../domain/types'
 import { StoreContext, type RunRequest, type UndoOutcome } from './context'
 import { CONFLICT_RESENDS, sameTargets } from './conflict'
 import type { Action } from './actions'
-import { api, APIError } from './api'
+import { api, APIError, readWorkspace } from './api'
 import { ToastContext, type ToastApi, type ToastOptions } from './toast'
 import { CircleAlert, KeyRound, RotateCw } from 'lucide-react'
 import { Toast, type ToastEntry } from '../components/Shell'
@@ -27,6 +27,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [writes, setWrites] = useState(0)
   const closeToast = useCallback(() => setToast(null), [])
   const stateRef = useRef<State | null>(null)
+  const etag = useRef<string | undefined>(undefined)
   const queue = useRef<Promise<unknown>>(Promise.resolve())
   const pending = useRef(0)
   const alive = useRef(true)
@@ -34,11 +35,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const fail = useCallback((e: unknown) => {
     if (!alive.current) return
     // A lapsed session shows the sign-in form; that is not an error to report.
-    if (e instanceof APIError && e.status === 401) { setLogin(true); setState(null); stateRef.current = null; setError(''); return }
+    if (e instanceof APIError && e.status === 401) { setLogin(true); setState(null); stateRef.current = null; etag.current = undefined; setError(''); return }
     setError(e instanceof Error ? e.message : '网络连接中断，请重试')
   }, [])
   const refresh = useCallback(async () => {
-    try { accept(await api<State>('/v1/workspace')) } catch (e) { fail(e) }
+    try {
+      // Only a poll over a state already on screen may be answered with "unchanged".
+      const read = await readWorkspace<State>(stateRef.current ? etag.current : undefined)
+      if (read) { etag.current = read.etag; accept(read.state) }
+    } catch (e) { fail(e) }
     finally { if (alive.current) setLoading(false) }
   }, [accept, fail])
   useEffect(() => {

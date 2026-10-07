@@ -440,6 +440,40 @@ test('U4 后台只动了版本号时不重读列表；记忆真的变了才重�
   expect(mock.errors).toEqual([])
 })
 
+test('U4 工作区没变时轮询不取正文；记忆的版本号变了才重读列表', async ({ page }) => {
+  const f = fixture()
+  const mock = await backend(page, { handover: { body: handover, builtAt: writtenAt, stale: false }, deadlines: f.deadlines, memories: f.memories })
+  mock.state = { ...mock.state, memoryRevision: 7 }
+  let tag = '"w1"'
+  const asked: (string | undefined)[] = []
+  let unchanged = 0
+  await page.route((url) => url.pathname === '/v1/workspace', (route) => {
+    const sent = route.request().headers()['if-none-match']
+    asked.push(sent)
+    if (sent === tag) { unchanged++; return route.fulfill({ status: 304, headers: { ETag: tag } }) }
+    return route.fulfill({ json: mock.state, headers: { ETag: tag } })
+  })
+  await page.goto('/library')
+  await expect(page.getByRole('button', { name: f.net.text })).toBeVisible()
+  expect(asked[0]).toBeUndefined()
+  await expect.poll(() => unchanged, { timeout: 10000 }).toBeGreaterThanOrEqual(2)
+  // Nothing was taken away by an answer with no body.
+  await expect(page.getByRole('button', { name: f.net.text })).toBeVisible()
+  expect(mock.reads('/v1/workspace/memories')).toBe(1)
+
+  // The background wrote something that is not a memory: a new snapshot, the same memory count.
+  tag = '"w2"'
+  mock.state = { ...mock.state, memories: [{ ...f.net, recordVersion: 2 }] }
+  await expect.poll(() => asked.filter((a) => a === '"w2"').length, { timeout: 10000 }).toBeGreaterThanOrEqual(1)
+  expect(mock.reads('/v1/workspace/memories')).toBe(1)
+
+  // The server says a memory changed.
+  tag = '"w3"'
+  mock.state = { ...mock.state, memoryRevision: 8 }
+  await expect.poll(() => mock.reads('/v1/workspace/memories'), { timeout: 10000 }).toBe(2)
+  expect(mock.errors).toEqual([])
+})
+
 const at = '2031-03-01T01:30:00Z'
 const task = (): Task => ({
   id: 'task-net', title: '装遮阳网', notes: '', status: 'todo', dependsOn: [], triggers: [], sources: [], history: [], createdAt: at, updatedAt: at,

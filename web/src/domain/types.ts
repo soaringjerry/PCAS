@@ -406,6 +406,8 @@ export interface State {
   notices: Notice[]
   budgetUsage: number
   revision: number
+  /** Moves only when a memory, its groups or its names change. Absent on an older server. */
+  memoryRevision?: number
   version: number
   settings: Settings
   tasks: Task[]

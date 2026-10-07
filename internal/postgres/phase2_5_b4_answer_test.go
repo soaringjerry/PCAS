@@ -203,7 +203,7 @@ func TestPhase25B4_X4_3_ApplicableSelfRulesAndSectionOrder(t *testing.T) {
 	f.handover(t, "entity:"+g.EntityID, false)
 	f.model(t, func(_ *http.Request, _ int, r phase25B234ModelRequest) phase25B234ModelReply {
 		p := phase25B4Prompt(r)
-		phase25B4Section(t, p, "对助手的要求", rules[0])
+		// Only the requirement that applies to every turn has a standing place.
 		phase25B4Section(t, p, "对助手的要求", rules[1])
 		ordered := []string{"交接说明", "对助手的要求", "期限和固定安排", "补充记忆", "相关原话"}
 		if strings.Contains(p, "相关的现状卡") {

@@ -221,7 +221,7 @@ func (s *Store) finishUseContextTx(ctx context.Context, tx pgx.Tx, scope memory.
 	})
 	u.RequirementScopes = map[string]string{}
 	seen := map[string]bool{}
-	used, omitted := 0, 0
+	used, omitted, scoped := 0, 0, 0
 	accept := func(m workspace.Memory) {
 		u.Dependencies = append(u.Dependencies, memory.Ref{ID: memory.ID(m.ID), Version: m.Version, Kind: memory.ClaimKind})
 		seen[m.ID] = true
@@ -240,10 +240,20 @@ func (s *Store) finishUseContextTx(ctx context.Context, tx pgx.Tx, scope memory.
 			used += n
 			u.RequirementScopes[m.ID] = "不限范围：每轮落实"
 		} else {
-			u.RequirementScopes[m.ID] = "限范围：" + r.Scope + "；由你判断本轮适用性，在要求内部排名"
+			// Handing every scoped requirement to the model each turn (335 on
+			// the live library, 42,000 characters) buried the user's sentence
+			// and had old one-off requests carried out. A scoped requirement
+			// now reaches a turn only when recall finds it relevant.
+			scoped++
+			continue
 		}
 		u.Rules = append(u.Rules, m)
 		accept(m)
+	}
+	if scoped > 0 {
+		if err := stageEventTx(ctx, tx, scope.OwnerID, "secretary", "overflow", "scoped_requirement_left_to_recall", scoped); err != nil {
+			return err
+		}
 	}
 	if omitted > 0 {
 		if err := stageEventTx(ctx, tx, scope.OwnerID, "secretary", "overflow", "global_requirement_char_budget", omitted); err != nil {
@@ -286,7 +296,7 @@ func writeUseContext(b *strings.Builder, u useContext, loc *time.Location, write
 	}
 	// A requirement shapes how this sentence is answered. Left unsaid, the model
 	// carried out old one-off requests filed as requirements and edited unrelated items.
-	fmt.Fprintln(b, "\n对助手的要求（独立名额；不限范围全部落实，限范围由你判断是否适用并排序）：")
+	fmt.Fprintln(b, "\n对助手的要求（每轮都落实）：")
 	fmt.Fprintln(b, "这些要求只约束你怎么回应「这句话」，本身不是这一轮要办的事：不得因为某条要求去新建、修改或完成任何事项。要求里如果是过去某一次的具体请求（例如某天几点提醒做某事），已不适用，忽略。")
 	for _, m := range u.Rules {
 		fmt.Fprintln(b, u.RequirementScopes[m.ID])

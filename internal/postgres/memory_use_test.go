@@ -115,7 +115,7 @@ func TestB4StatusPromptAndDependencies(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, text := range []string{"交接说明（写于 ", "对助手的要求", "期限和固定安排", "补充记忆", "相关原话", "每周二晚上", "周五上午十点", "发出去之前先给我看", "trust=repeated"} {
+	for _, text := range []string{"交接说明（写于 ", "对助手的要求", "期限和固定安排", "补充记忆", "相关原话", "每周二晚上", "周五上午十点", "trust=repeated"} {
 		if !strings.Contains(prompt, text) {
 			t.Errorf("missing %s in %s", text, prompt)
 		}
@@ -127,7 +127,9 @@ func TestB4StatusPromptAndDependencies(t *testing.T) {
 	if err = s.pool.QueryRow(context.Background(), "SELECT dependencies FROM desk_turns WHERE owner_id=$1 AND id=$2", scope.OwnerID, out.Turn.ID).Scan(&refs); err != nil {
 		t.Fatal(err)
 	}
-	for _, m := range []workspace.Memory{project, rule, recurring} {
+	// The scoped rule is no longer a standing input of every turn.
+	_ = rule
+	for _, m := range []workspace.Memory{project, recurring} {
 		found := false
 		for _, ref := range refs {
 			if string(ref.ID) == m.ID {
@@ -617,11 +619,13 @@ func TestB4ProductionLiveDirectoryAndRequirementScopes(t *testing.T) {
 	if err != nil || out.Turn.Reply != "虚构联调成功" {
 		t.Fatal(out, err)
 	}
-	if !strings.Contains(prompt, email.Text) || !strings.Contains(prompt, global.Text) {
+	// Only requirements that apply to every turn have a place of their own;
+	// a scoped one reaches a turn through recall, not as a standing block.
+	if !strings.Contains(prompt, global.Text) || !strings.Contains(prompt, "不限范围：每轮落实") {
 		t.Fatal(prompt)
 	}
-	if !strings.Contains(prompt, expense.Text) || !strings.Contains(prompt, "限范围：财务报销；由你判断本轮适用性") || !strings.Contains(prompt, "限范围：起草邮件") || !strings.Contains(prompt, "不限范围：每轮落实") {
-		t.Fatal("model did not receive dedicated scope metadata", prompt)
+	if strings.Contains(prompt, "限范围：财务报销") || strings.Contains(prompt, "限范围：起草邮件") {
+		t.Fatal("scoped requirements were handed over wholesale", prompt)
 	}
 	for _, name := range []string{"阿岚主题", "紫霁主题"} {
 		if !strings.Contains(prompt, name) {

@@ -8,9 +8,10 @@ package postgres
 // Record baseline and concurrent request latency, SQLSTATE, deferred reasons,
 // queue completion, actual provider calls, and lock waits. No 40P01 or repeated
 // lock deferrals caused by independent background objects are acceptable.
-// A three-second foreground deadline is a diagnostic interactive-response guard
-// (matching prior independent concurrent acceptance); report actual measurements
-// and the baseline as well, rather than treating the guard as a contract number.
+// The initial three-second diagnostic guard was expanded to 30s baseline/20s
+// concurrent to diagnose cold planner statistics. Measurements are reported,
+// not treated as a contract SLO. The fixture ANALYZE precondition matches the
+// statistics available in an established scale database, without changing indexes.
 //
 // FOCUS-2: Merge an entity with at least 1,200 current/historical links using the
 // real confirmation processor, while foreground reads and writes run. Assert all
@@ -35,6 +36,6 @@ package postgres
 // deadline contents/IDs, all requirement scopes, and handover input identities.
 //
 // Remaining matrix: execute the original G1-G7/A1-A12/B1-B9/C1-C8 expectations.
-// Page checks stay pending until #249 merges. A documented finding/skip is an
+// Page checks started after #249 merged at e1e6271. A finding/skip remains an
 // outstanding acceptance blocker, never a pass. Only fictitious data and owned
 // disposable containers are permitted; implementations remain untouched.

@@ -74,4 +74,21 @@ func TestTierPreparationAndRestoreValidateLibraryState(t *testing.T) {
 	if _, _, err = restoredTierDatabase(ctx, dsn, suite, changed); err == nil {
 		t.Fatal("accepted mismatched extraction counts")
 	}
+	// P0-55 upgrades only rule classifications; other v2 results remain current.
+	original := postgres.OrganizeVersion
+	postgres.OrganizeVersion = 3
+	t.Cleanup(func() { postgres.OrganizeVersion = original })
+	if _, err = pool.Exec(ctx, "UPDATE claims SET organized=2 WHERE owner_id=$1", owner); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = readTierPreparation(ctx, pool, seeded.Scope); err != nil {
+		t.Fatal("rejected retained non-rule v2 classification", err)
+	}
+	if _, err = pool.Exec(ctx, "UPDATE claim_revisions SET category='rule' WHERE owner_id=$1", owner); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = readTierPreparation(ctx, pool, seeded.Scope); err == nil {
+		t.Fatal("accepted pending v3 rule classification")
+	}
+
 }

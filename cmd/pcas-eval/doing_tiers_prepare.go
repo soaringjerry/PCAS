@@ -167,7 +167,7 @@ func readTierPreparation(ctx context.Context, pool *pgxpool.Pool, scope memory.S
  (SELECT count(*) FROM claims WHERE owner_id=$1),
  (SELECT count(*) FROM claims WHERE owner_id=$1 AND retired!=''),
  (SELECT count(*) FROM claims c JOIN memory_records r ON(r.owner_id,r.id)=(c.owner_id,c.id)
-  WHERE c.owner_id=$1 AND r.state='active' AND c.organized<$2),
+  WHERE c.owner_id=$1 AND r.state='active' AND c.organized<(CASE WHEN $2::int=3 AND (SELECT v.category FROM claim_revisions v WHERE (v.owner_id,v.claim_id,v.version)=(r.owner_id,r.id,r.version))<>'rule' THEN 2 ELSE $2 END)),
  (SELECT count(*) FROM deadlines WHERE owner_id=$1),
  (SELECT count(*) FROM assistant_requirements WHERE owner_id=$1),
  (SELECT count(*) FROM (

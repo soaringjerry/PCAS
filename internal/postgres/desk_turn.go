@@ -831,6 +831,11 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 				actionID := string(memory.NewID())
 				actionCtx := withActionLog(withActor(WithMemoryTier(ctx, c.Tier), "secretary"), actionID, "desk", out.Turn.ID, "秘书："+a.Op)
 				actionCtx = context.WithValue(actionCtx, secretaryDocumentsKey{}, c.Documents)
+				history := delegateHistoryContext{ConversationID: c.ConversationID}
+				for _, turn := range c.History {
+					history.IDs = append(history.IDs, turn.ID)
+				}
+				actionCtx = context.WithValue(actionCtx, delegateHistoryKey{}, history)
 				actionTx, err := tx.Begin(ctx)
 				if err != nil {
 					return err

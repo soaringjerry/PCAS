@@ -551,6 +551,9 @@ func (s *Store) executeSecretaryActionTx(ctx context.Context, tx pgx.Tx, scope m
 				return skippedReceipt(a.Op, "改写不能新建事项"), nil
 			}
 		}
+		if history, ok := ctx.Value(delegateHistoryKey{}).(delegateHistoryContext); ok {
+			c.DeskTurnIDs = append([]string{}, history.IDs...)
+		}
 		if a.Ref == "new" {
 			if !validDeskTitle(a.Title) {
 				return skippedReceipt(a.Op, "标题为空或太长"), nil

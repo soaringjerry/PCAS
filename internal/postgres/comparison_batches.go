@@ -14,6 +14,7 @@ import (
 const comparisonBlockSize = compareLimit / 2
 
 type comparisonBatch struct {
+	Rule        int             `json:"rule"`
 	Group       compareGroup    `json:"group"`
 	A           int64           `json:"blockA"`
 	B           int64           `json:"blockB"`
@@ -82,7 +83,7 @@ func comparisonPlanTx(ctx context.Context, tx pgx.Tx, owner memory.ID, version i
 		list := blockIDs[g.Key]
 		for i, a := range list {
 			for _, b := range list[i:] {
-				batch := comparisonBatch{Group: g, A: a, B: b, Memories: append([]compareMemory{}, blocks[g.Key][a]...)}
+				batch := comparisonBatch{Rule: version, Group: g, A: a, B: b, Memories: append([]compareMemory{}, blocks[g.Key][a]...)}
 				if a != b {
 					batch.Memories = append(batch.Memories, blocks[g.Key][b]...)
 				}
@@ -158,7 +159,7 @@ func nextComparisonBatchTx(ctx context.Context, tx pgx.Tx, owner memory.ID, vers
 	pending := map[string]bool{}
 	for _, b := range plan {
 		r := receipts[key(b.Group.Key, b.A, b.B)]
-		if r.Rule < version || r.Fingerprint != b.Fingerprint || r.Completed == nil {
+		if !comparisonRuleAccepted(r.Rule, version) || r.Fingerprint != b.Fingerprint || r.Completed == nil {
 			for _, m := range b.Memories {
 				pending[b.Group.Key+"/"+string(m.Ref.ID)] = true
 			}
@@ -195,7 +196,7 @@ func nextComparisonBatchTx(ctx context.Context, tx pgx.Tx, owner memory.ID, vers
 	}
 	for _, b := range plan {
 		r := receipts[key(b.Group.Key, b.A, b.B)]
-		if r.Rule >= version && r.Fingerprint == b.Fingerprint && (r.Completed != nil || r.After != nil && r.After.After(time.Now())) {
+		if comparisonRuleAccepted(r.Rule, version) && r.Fingerprint == b.Fingerprint && (r.Completed != nil || r.After != nil && r.After.After(time.Now())) {
 			continue
 		}
 		return &b, nil
@@ -240,4 +241,11 @@ func (s *Store) nextComparisonBatch(ctx context.Context, owner memory.ID, versio
 		return e
 	})
 	return batch, err
+}
+
+// Version 2 changes future judgments and explicitly selected superseded pairs.
+// Successful, unchanged version-1 batches retain their original receipt;
+// upgrading the prompt must not schedule a library-wide comparison.
+func comparisonRuleAccepted(rule, current int) bool {
+	return rule >= current || rule == 1 && current == 2
 }

@@ -612,12 +612,6 @@
   overflow: hidden;
 }
 
-.hall-card .h-next {
-  color: var(--label-2);
-  font-size: 13px;
-  line-height: 1.45;
-}
-
 /* ---------- Ideas ---------- */
 
 .hall-ideas {

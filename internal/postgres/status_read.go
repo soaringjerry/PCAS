@@ -11,7 +11,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
-const CompareVersion = 1
+const CompareVersion = 2
 
 var CardVersion = 1
 var HandoverVersion = 2

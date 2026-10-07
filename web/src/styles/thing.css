@@ -600,3 +600,342 @@ button.fact.add:hover {
   opacity: 1;
   color: var(--red, #d70015);
 }
+
+/* ---------- 现状: the project's handover, read only ---------- */
+
+.status-block {
+  margin-top: 24px;
+}
+
+.status-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  margin: 0;
+  padding: 0 4px 8px;
+  color: var(--label-2);
+  font-size: 13.5px;
+}
+
+.status-note[role="alert"] {
+  color: var(--orange);
+}
+
+.status-parts {
+  border-radius: var(--r);
+  background: var(--bg-2);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .status-parts {
+    background: var(--elevated);
+  }
+}
+
+:root[data-theme="dark"] .status-parts {
+  background: var(--elevated);
+}
+
+.status-part {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr);
+  align-items: baseline;
+  gap: 4px 8px;
+  padding: 12px 14px;
+}
+
+.status-part + .status-part {
+  border-top: 1px solid var(--sep);
+}
+
+.status-part-label {
+  color: var(--label-2);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.status-sentences,
+.status-evidence {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.status-sentences {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* A sentence is the handover's own text: it opens, it is never edited. */
+.status-sentence {
+  display: block;
+  width: calc(100% + 12px);
+  padding: 3px 6px;
+  margin: 0 -6px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--label);
+  font: inherit;
+  font-size: 15px;
+  line-height: 1.55;
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.status-sentence:hover,
+.status-sentences .open > .status-sentence {
+  background: var(--fill);
+}
+
+.status-none {
+  margin: 0;
+  padding: 3px 0;
+  color: var(--label-3);
+  font-size: 14px;
+}
+
+.status-evidence {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 6px 0 8px;
+}
+
+.status-evidence > li > button,
+.status-evidence > li > a,
+.status-evidence > li > div {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  box-sizing: border-box;
+  width: 100%;
+  padding: 7px 12px;
+  border: 0;
+  border-left: 3px solid var(--sep-strong);
+  border-radius: 4px 8px 8px 4px;
+  background: var(--fill);
+  color: var(--label);
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  text-decoration: none;
+}
+
+.status-evidence > li > button,
+.status-evidence > li > a {
+  cursor: pointer;
+}
+
+.status-evidence > li > button:hover,
+.status-evidence > li > a:hover {
+  border-left-color: var(--blue);
+  background: var(--fill-2);
+  text-decoration: none;
+}
+
+.ev-kind {
+  flex: none;
+  color: var(--label-2);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.ev-text {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.ev-when {
+  flex: none;
+  color: var(--label-3);
+  font-size: 12px;
+}
+
+@media (max-width: 600px) {
+  .status-part {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ---------- A document's versions and what changed between two ---------- */
+
+.doc-versions {
+  padding: 0 14px 10px 39px;
+}
+
+.ver-list {
+  display: flex;
+  flex-direction: column;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ver-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 12px;
+  border-top: 1px solid var(--sep);
+}
+
+.ver-pick {
+  display: flex;
+  flex: 1 1 14em;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 10px;
+  min-width: 0;
+  padding: 8px 8px 8px 10px;
+  border: 0;
+  border-left: 3px solid transparent;
+  background: none;
+  color: var(--label);
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ver-pick:hover {
+  background: var(--fill);
+}
+
+.ver-row.picked .ver-pick {
+  border-left-color: var(--blue);
+  background: var(--blue-soft);
+}
+
+.ver-no {
+  font-weight: 600;
+}
+
+.ver-by,
+.ver-base {
+  color: var(--label-2);
+  font-size: 13px;
+}
+
+.ver-when {
+  color: var(--label-3);
+  font-size: 12px;
+}
+
+.ver-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  margin: 12px 0 6px;
+  color: var(--label-2);
+  font-size: 13px;
+}
+
+.ver-note[role="alert"] {
+  color: var(--orange);
+}
+
+.diff {
+  font-size: 15px;
+  line-height: 1.65;
+}
+
+.diff-block {
+  display: flex;
+  gap: 8px;
+  padding: 2px 8px;
+  border-radius: 6px;
+}
+
+.diff-block + .diff-block {
+  margin-top: 4px;
+}
+
+.diff-block.add {
+  background: var(--green-soft);
+}
+
+.diff-block.delete {
+  background: var(--red-soft);
+}
+
+.diff-block.change {
+  background: var(--orange-soft);
+}
+
+/* The three marks are the whole legend: 增, 删, 改. */
+.diff-mark {
+  flex: none;
+  width: 18px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 2.1;
+}
+
+.diff-block.add .diff-mark {
+  color: var(--green);
+}
+
+.diff-block.delete .diff-mark {
+  color: var(--red);
+}
+
+.diff-block.change .diff-mark {
+  color: var(--orange);
+}
+
+.diff-text {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.diff-text ins {
+  display: block;
+  text-decoration: none;
+}
+
+.diff-text del {
+  display: block;
+  color: var(--label-2);
+  text-decoration: line-through;
+}
+
+/* ---------- What a piece of assistant work was done from ---------- */
+
+.act-used {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+  margin: 2px 0 0 40px;
+  color: var(--label-3);
+  font-size: 12.5px;
+}
+
+.act-used a {
+  color: var(--label-2);
+}
+
+/* The record a link pointed at. */
+.activity > .act-run.asked {
+  margin: 0 -8px;
+  padding-right: 12px;
+  padding-left: 12px;
+  border-radius: var(--r-sm);
+  background: var(--blue-soft);
+}
+
+@media (max-width: 600px) {
+  .doc-versions {
+    padding-left: 14px;
+  }
+
+  .act-used {
+    margin-left: 0;
+  }
+}

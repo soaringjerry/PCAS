@@ -88,7 +88,7 @@ func validate(s doing.Suite, sha string, r doing.Report, tiers bool) error {
 	methods := []string{"none", "current", "ideal"}
 	if tiers {
 		methods = []string{"light", "medium", "heavy"}
-		if r.Workers < 1 || r.Workers > 4 || r.Preparation == nil || !r.Preparation.Complete || r.Preparation.Cards > 0 && !r.Preparation.Handover || len(r.Preparation.Stages) != 3 {
+		if r.Workers < 1 || r.Workers > 4 || r.Preparation == nil || !r.Preparation.Complete || r.Preparation.HandoverInputs && !r.Preparation.Handover || len(r.Preparation.Stages) != 3 {
 			return fmt.Errorf("tier run needs completed native preparation and concurrency <= 4")
 		}
 		for i, name := range []string{"organize", "compare", "status"} {

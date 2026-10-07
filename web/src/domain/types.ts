@@ -2,6 +2,8 @@
 // is deliberately close to what the backend will need, but it is not the final
 // schema: the backend data model is designed separately.
 
+import type { Handover } from './studio'
+
 export type ID = string
 
 /** How much a piece of knowledge can be trusted (PRD §2). */
@@ -60,6 +62,12 @@ export interface Task {
   owedTo?: { who: string; since: string }
   /** The user said this cannot wait; while it has no time it leads today's timeline. */
   urgent?: boolean
+  /** How much work it is thought to be, in hours; the user's own figure is never overwritten. */
+  estimatedHours?: number | null
+  /** The day to start by, worked back from the due time; the server computes it. */
+  startDate?: string | null
+  effortReason?: string
+  effortSource?: 'model' | 'user'
   dependsOn: ID[]
   checklist: ChecklistItem[]
   triggers: Trigger[]
@@ -114,8 +122,12 @@ export interface Project {
   name: string
   goal: string
   status: ProjectStatus
-  progress: string
-  nextSteps: string[]
+  /** The project's handover, as the studio's status block shows it. */
+  projectHandover?: Handover
+  /** @deprecated Retired in phase 3; the handover says where a project stands. Still sent, no longer read. */
+  progress?: string
+  /** @deprecated Retired in phase 3, like `progress`. */
+  nextSteps?: string[]
   updatedAt: string
 }
 
@@ -299,11 +311,14 @@ export interface Doc {
   body: string
   by: 'user' | 'ai'
   runId?: ID
+  /** The number of the version shown, and the one it was written on. */
+  version?: number
+  basedOn?: number | null
   createdAt: string
   updatedAt: string
 }
 
-export type RunKind = 'plan' | 'breakdown' | 'summary' | 'draft' | 'ask'
+export type RunKind = 'plan' | 'breakdown' | 'summary' | 'draft' | 'ask' | 'revise'
 export type RunStatus = 'running' | 'waiting' | 'done' | 'failed'
 
 /**
@@ -331,6 +346,13 @@ export interface Run {
     /** Adopted by the worker as soon as the run finished, not by the user. */
     auto?: boolean
   }
+  /** For `revise`: the document it rewrites and the version it starts from. */
+  documentId?: ID
+  baseVersion?: number
+  /** The document versions it was actually given. */
+  documentVersions?: { documentId: ID; version: number }[]
+  /** When the project handover it read was written; absent when it read none. */
+  projectHandoverWrittenAt?: string | null
   /** A memory it used changed or was deleted afterwards. */
   staleContext: boolean
   /** Estimated cost in CNY, charged against the daily budget. */

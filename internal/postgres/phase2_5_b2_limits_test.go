@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres"
 	"github.com/soaringjerry/PCAS/internal/worker"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
@@ -56,7 +57,7 @@ func TestPhase25B2_AllStableBlocksEventuallyCompared(t *testing.T) {
 		}
 	}
 	var marked int
-	if err := f.db.QueryRow(f.ctx, `SELECT count(*) FROM claims WHERE owner_id=$1 AND compared=1`, f.scope.OwnerID).Scan(&marked); err != nil {
+	if err := f.db.QueryRow(f.ctx, `SELECT count(*) FROM claims WHERE owner_id=$1 AND compared=$2`, f.scope.OwnerID, postgres.CompareVersion).Scan(&marked); err != nil {
 		t.Fatal(err)
 	}
 	if marked != 205 {

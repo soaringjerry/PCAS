@@ -43,7 +43,7 @@ func (s *Store) generateSecretaryModelWithRetry(workCtx, persistCtx context.Cont
 			return ai.Result{}, err
 		}
 		stage = "model"
-		result, err := s.models.GenerateWithSearchSchema(callCtx, agentID, secretaryInstructions, prompt, secretaryOutputSchema)
+		result, err := s.models.GenerateWithSearchSchema(executionCallContext(callCtx, "answer"), agentID, secretaryInstructions, prompt, secretaryOutputSchema)
 		// HTTP providers may hide cancellation behind an unreachable error.
 		if callCtx.Err() != nil {
 			err = callCtx.Err()
@@ -59,6 +59,7 @@ func (s *Store) generateSecretaryModelWithRetry(workCtx, persistCtx context.Cont
 			usage.Purpose = "secretary"
 			usage.AgentID = agentID
 			usage.Model = p.Model
+			usage.DurationMS = result.DurationMS
 			usage.InputTokens = result.InputTokens
 			usage.OutputTokens = result.OutputTokens
 			usage.InputEstimated, usage.OutputEstimated, usage.CostEstimated = result.InputEstimated, result.OutputEstimated, result.CostEstimated

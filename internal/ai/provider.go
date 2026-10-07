@@ -47,6 +47,7 @@ type Configuration struct {
 	Transcription string     `json:"transcription_provider"`
 }
 type Result struct {
+	DurationMS      *int64 // nil means no invocation was made or duration is unknown.
 	Text            string
 	Searches        []string
 	Cost            float64
@@ -242,11 +243,12 @@ func (r *Registry) GenerateWithSearch(ctx context.Context, id, system, prompt st
 
 // GenerateWithSearchSchema uses Codex's turn-scoped structured output. Other
 // providers retain their existing generation request and instruction format.
-func (r *Registry) GenerateWithSearchSchema(ctx context.Context, id, system, prompt string, schema json.RawMessage) (Result, error) {
+func (r *Registry) GenerateWithSearchSchema(ctx context.Context, id, system, prompt string, schema json.RawMessage) (outcome Result, callErr error) {
 	p, ok := r.Get(id)
 	if !ok || p.Protocol != "codex" || !r.providerAvailable(p) {
 		return r.Generate(ctx, id, system, prompt)
 	}
+	defer measureInvocation(ctx, &outcome)()
 	if r.ReloadSubscription {
 		defer r.Codex.Close()
 	}
@@ -255,11 +257,12 @@ func (r *Registry) GenerateWithSearchSchema(ctx context.Context, id, system, pro
 }
 
 // GenerateSchema keeps readers and selfchecks on the supplied context only.
-func (r *Registry) GenerateSchema(ctx context.Context, id, system, prompt string, schema json.RawMessage) (Result, error) {
+func (r *Registry) GenerateSchema(ctx context.Context, id, system, prompt string, schema json.RawMessage) (outcome Result, callErr error) {
 	p, ok := r.Get(id)
 	if !ok || p.Protocol != "codex" || !r.providerAvailable(p) {
 		return r.Generate(ctx, id, system, prompt)
 	}
+	defer measureInvocation(ctx, &outcome)()
 	result, err := r.Codex.generateResult(ctx, p.Model, system, prompt, false, schema, nil)
 	return p.account(result, system+prompt, nil), err
 }
@@ -267,11 +270,12 @@ func (r *Registry) GenerateSchema(ctx context.Context, id, system, prompt string
 func (r *Registry) Generate(ctx context.Context, id, system, prompt string) (Result, error) {
 	return r.generate(ctx, id, system, prompt, nil)
 }
-func (r *Registry) generate(ctx context.Context, id, system, prompt string, image *Image) (Result, error) {
+func (r *Registry) generate(ctx context.Context, id, system, prompt string, image *Image) (outcome Result, callErr error) {
 	p, ok := r.Get(id)
 	if !ok || !r.providerAvailable(p) || p.Embedding || p.Transcription {
 		return Result{}, memory.ErrUnavailable
 	}
+	defer measureInvocation(ctx, &outcome)()
 	if p.Protocol == "siwc" {
 		var result siwc.Result
 		var err error
@@ -379,6 +383,7 @@ func (r *Registry) EmbedProviderUsage(ctx context.Context, p Provider, texts []s
 	if !p.Embedding || !r.providerAvailable(p) {
 		return nil, usage, memory.ErrUnavailable
 	}
+	defer measureInvocation(ctx, &usage)()
 	var result struct {
 		Usage struct {
 			Input  int `json:"input_tokens"`
@@ -470,4 +475,16 @@ func (r *Registry) call(ctx context.Context, p Provider, path string, body, out 
 		return fmt.Errorf("model provider HTTP %d", response.StatusCode)
 	}
 	return json.NewDecoder(io.LimitReader(response.Body, 8<<20)).Decode(out)
+}
+
+// Duration spans the channel invocation (including transport/startup and a
+// failed or canceled response), using Go's monotonic clock. Preflight
+// unavailable checks and nested adapter fallbacks do not create measurements.
+func measureInvocation(ctx context.Context, result *Result) func() {
+	started := time.Now()
+	return func() {
+		ms := time.Since(started).Milliseconds()
+		result.DurationMS = &ms
+		observeInvocation(ctx, ms)
+	}
 }

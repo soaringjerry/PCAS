@@ -18,7 +18,7 @@ func TestPhase26G4T4OneMemoryEditRunsOnlyIts40AffectedComparisonCalls(t *testing
 	m := phase26NewModel(t, f)
 	// Prior successful batch receipts are explicit preconditions, not measured
 	// model calls. This test measures a single edit after an established library.
-	phase26Exec(t, f, `UPDATE claims SET organized=2 WHERE owner_id=$1`, f.Scope.OwnerID)
+	phase26Exec(t, f, `UPDATE claims SET organized=$2 WHERE owner_id=$1`, f.Scope.OwnerID, OrganizeVersion)
 	var prior []comparisonBatch
 	if err := pgx.BeginFunc(ctx, f.Store.pool, func(tx pgx.Tx) error {
 		if err := syncComparisonMembersTx(ctx, tx, f.Scope.OwnerID); err != nil {

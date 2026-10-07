@@ -11,7 +11,7 @@ func TestPhase26A3ClassificationClaimsBeforeAllOtherBackgroundStages(t *testing.
 	m := phase26NewModel(t, f)
 	// Forty already classified rows supply comparison/handover inputs; the other
 	// 4960 rows still need classification. No quotas or paid history are cleared.
-	phase26Exec(t, f, `UPDATE claims SET organized=2 WHERE owner_id=$1 AND id=ANY($2::uuid[])`, f.Scope.OwnerID, f.Claims[:40])
+	phase26Exec(t, f, `UPDATE claims SET organized=$3 WHERE owner_id=$1 AND id=ANY($2::uuid[])`, f.Scope.OwnerID, f.Claims[:40], OrganizeVersion)
 	phase26Proposal(t, f, 0, 4)
 	for _, stage := range []string{CompareStage, EntityCompareStage, EntityCandidatesStage, HandoverStage, OrganizeStage} {
 		if _, err := phase26Schedule(f.Context, f.Store, stage); err != nil {

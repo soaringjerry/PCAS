@@ -7,6 +7,13 @@ on:
 permissions:
   contents: read
 
+
+# One run per branch at a time: a newer push on the same branch cancels the
+# run it supersedes, so the account's concurrent-job slots go to the latest
+# commits instead of to results nobody will read.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 jobs:
   browser-mocked:
     runs-on: ubuntu-latest

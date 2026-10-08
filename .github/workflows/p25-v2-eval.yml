@@ -5,6 +5,13 @@ on:
   push:
     branches: [main]
     paths: ["cmd/pcas-eval/**", "testdata/phase2_5/doing/**", "scripts/p25-v2-*", ".github/workflows/p25-v2-eval.yml"]
+
+# One run per branch at a time: a newer push on the same branch cancels the
+# run it supersedes, so the account's concurrent-job slots go to the latest
+# commits instead of to results nobody will read.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 jobs:
   fake-pipeline:
     runs-on: ubuntu-latest

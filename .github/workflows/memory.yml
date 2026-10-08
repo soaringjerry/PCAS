@@ -2,11 +2,18 @@ name: memory
 
 on:
   push:
-    branches: [main]
+    branches: [main, "phase*/main"]
     paths: ["cmd/**", "internal/**", "services/**", "config/**", "go.mod", "go.sum", "Makefile", "Dockerfile", "compose.yml", "scripts/test-shard.sh", ".github/workflows/memory.yml"]
   pull_request:
     paths: ["cmd/**", "internal/**", "services/**", "config/**", "go.mod", "go.sum", "Makefile", "Dockerfile", "compose.yml", "scripts/test-shard.sh", ".github/workflows/memory.yml"]
 
+
+# One run per branch at a time: a newer push on the same branch cancels the
+# run it supersedes, so the account's concurrent-job slots go to the latest
+# commits instead of to results nobody will read.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 jobs:
   # Formatting, vet, build and every package except the PostgreSQL one.
   check:
@@ -41,7 +48,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        slice: [0, 1, 2, 3]
+        slice: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
     services:
       postgres:
         image: pgvector/pgvector:0.8.2-pg16-bookworm
@@ -70,6 +77,10 @@ jobs:
           PCAS_DATABASE_URL: ${{ env.PCAS_TEST_DATABASE_URL }}
           PCAS_OWNER_ID: 11111111-1111-4111-8111-111111111111
           PCAS_API_TOKEN: pcas-ci-check-secret-123456789012
-      - run: scripts/test-shard.sh ${{ matrix.slice }} 4
+      # Pull requests into an integration branch run the fast gate (the scale and
+      # concurrency tests are left out); pull requests into main, main itself and
+      # the integration branches run everything.
+      - run: scripts/test-shard.sh ${{ matrix.slice }} 12
         env:
           GOFLAGS: -v
+          PCAS_CI_FAST: ${{ (github.event_name == 'pull_request' && github.base_ref != 'main') && '1' || '' }}

@@ -110,7 +110,12 @@ type secretaryAction struct {
 	Steps            []string                   `json:"steps"`
 	Kind             string                     `json:"kind"`
 	Prompt           string                     `json:"prompt"`
+	As               string                     `json:"as"`
 }
+
+// The memories this turn's prompt showed, by their M* alias; close_date
+// resolves its ref through them and nothing else.
+type secretaryMemoriesKey struct{}
 type secretaryOutput struct {
 	MemoryPlan     *usePlan           `json:"memoryPlan,omitempty"`
 	MissingKeyInfo bool               `json:"missingKeyInfo"`
@@ -308,6 +313,8 @@ func (s *Store) executeSecretaryActionTx(ctx context.Context, tx pgx.Tx, scope m
 		id = item.ID
 	}
 	switch a.Op {
+	case "close_date":
+		return s.closeDateActionTx(ctx, tx, scope, a)
 	case "create_task", "create_idea", "create_project":
 		title := strings.TrimSpace(a.Title)
 		if a.Op == "create_project" {
@@ -639,5 +646,41 @@ func (s *Store) executeSecretaryActionTx(ctx context.Context, tx pgx.Tx, scope m
 		}
 	}
 	receipt.ThingID = &id
+	return receipt, nil
+}
+
+// closeDateActionTx closes the date a memory carries: met, not wanted any more,
+// or turned into a to-do. It marks the memory version the same way the home
+// page's circle does, so the date leaves the home page and the list the
+// secretary is shown; the memory stays and the action can be undone.
+func (s *Store) closeDateActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, a secretaryAction) (workspace.DeskReceipt, error) {
+	receipt := workspace.DeskReceipt{Op: a.Op, Status: "done"}
+	as, ok := validDeadlineClose(a.As)
+	if !ok {
+		return skippedReceipt(a.Op, "没说清是做完了还是不要了"), nil
+	}
+	memories, _ := ctx.Value(secretaryMemoriesKey{}).(map[string]workspace.Memory)
+	m, ok := memories[a.Ref]
+	if !ok {
+		return skippedReceipt(a.Op, "找不到说的是哪一条"), nil
+	}
+	var title string
+	var version int
+	err := tx.QueryRow(ctx, "SELECT title,claim_version FROM deadlines WHERE owner_id=$1 AND claim_id=$2 ORDER BY id LIMIT 1", string(scope.OwnerID), m.ID).Scan(&title, &version)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return skippedReceipt(a.Op, "这条记忆上没有期限或安排"), nil
+	}
+	if err != nil {
+		return receipt, err
+	}
+	if err = activeClaim(ctx, tx, scope, m.ID); err != nil {
+		return skippedReceipt(a.Op, "这条记忆已经不在了"), nil
+	}
+	if err = completeDeadlineTx(ctx, tx, scope, m.ID, version, as); errors.Is(err, memory.ErrConflict) {
+		return skippedReceipt(a.Op, "这条记忆刚改过，再说一遍"), nil
+	} else if err != nil {
+		return receipt, err
+	}
+	receipt.Text = map[string]string{"done": "记下做完了：", "dropped": "不再提：", "task": "转成了待办，不再单独提："}[as] + title
 	return receipt, nil
 }

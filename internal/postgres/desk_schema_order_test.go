@@ -31,7 +31,7 @@ func TestSecretarySchemasListOpFirstInEveryAction(t *testing.T) {
 		if err := json.Unmarshal(schema, &doc); err != nil {
 			t.Fatal(name, err)
 		}
-		want := map[string]int{"answer": 6, "selfcheck": 7}[name]
+		want := map[string]int{"answer": 7, "selfcheck": 8}[name]
 		if len(doc.Properties.Actions.Items.AnyOf) != want {
 			t.Fatalf("%s schema has %d action forms, expected %d", name, len(doc.Properties.Actions.Items.AnyOf), want)
 		}

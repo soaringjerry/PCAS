@@ -87,7 +87,7 @@ func commandSummary(ctx context.Context, tx pgx.Tx, scope memory.Scope, c worksp
 	if c.Type == "completeDeadline" {
 		var title string
 		_ = tx.QueryRow(ctx, "SELECT title FROM deadlines WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), c.ID).Scan(&title)
-		return "完成期限：" + title
+		return map[string]string{"dropped": "不再显示：", "task": "转成待办：", "done": "完成期限：", "": "完成期限："}[c.Reason] + title
 	}
 	title := c.Title
 	if title == "" {

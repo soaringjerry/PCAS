@@ -34,7 +34,7 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 		if err := activeClaim(ctx, tx, scope, claim); err != nil {
 			return err
 		}
-		return completeDeadlineTx(ctx, tx, scope, claim, version)
+		return completeDeadlineTx(ctx, tx, scope, claim, version, c.Reason)
 	case "restoreMemory":
 		return restoreMemoryTx(ctx, tx, scope, c.ID)
 	case "undoEntityMerge":

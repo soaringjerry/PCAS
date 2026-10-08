@@ -71,12 +71,14 @@ func enqueueStatusHandoversTx(ctx context.Context, tx pgx.Tx, anchors map[memory
 		if pending || old != nil && *old == hash {
 			continue
 		}
-		var exists bool
-		if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM library_handover_members($1))", string(owner)).Scan(&exists); err != nil {
-			return count, err
-		}
-		if !exists && old == nil {
-			continue
+		if old == nil {
+			var exists bool
+			if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM library_handover_members($1))", string(owner)).Scan(&exists); err != nil {
+				return count, err
+			}
+			if !exists {
+				continue
+			}
 		}
 		due := now
 		if built != nil {

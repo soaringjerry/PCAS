@@ -234,7 +234,13 @@ func TestSameTurnOnlyExplicitCreateActionsBindAliases(t *testing.T) {
 	s, scope := testStore(t), owner()
 	sameTurnFakeModel(t, s, `{"actions":[{"op":"create_task","title":"附带项目任务","project":"new:附带项目"},{"op":"create_task","title":"类型不合","project":"N1"},{"op":"update","ref":"N1","set":{"title":"改名"}},{"op":"add_steps","ref":"N3","steps":["非创建"]},{"op":"delegate","ref":"new","title":"代理任务","kind":"plan","prompt":"列计划"},{"op":"add_steps","ref":"N5","steps":["不绑定代理"]},{"op":"create_task","title":"不绑定附带项目","project":"N5"},{"op":"create_task","title":"不猜标题","project":"附带项目"}]}`)
 	out := mustTurn(t, s, scope, turnRequest("附带创建不建立N引用"))
-	sameTurnReceipts(t, s, scope, out, "done", "skipped", "done", "skipped", "done", "skipped", "skipped", "skipped")
+	// Phase 3.5 C1 gives the incidental project its own undo receipt. N1
+	// still binds the explicit task, not this extra project receipt.
+	sameTurnReceipts(t, s, scope, out, "done", "done", "skipped", "done", "skipped", "done", "skipped", "skipped", "skipped")
+	if out.Turn.Receipts[0].Op != "create_project" || out.Turn.Receipts[1].Op != "create_task" ||
+		*out.Turn.Receipts[3].ThingID != *out.Turn.Receipts[1].ThingID {
+		t.Fatal("incidental project receipt rebound N1", out.Turn.Receipts)
+	}
 	if len(out.State.Tasks) != 2 || len(out.State.Projects) != 1 || len(out.State.Runs) != 1 {
 		t.Fatal("dependent action or incidental alias executed", out.State)
 	}

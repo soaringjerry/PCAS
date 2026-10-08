@@ -601,6 +601,21 @@ func (s *Store) deleteRecordsTx(ctx context.Context, tx pgx.Tx, scope memory.Sco
 	for _, item := range items {
 		kept := []workspace.SourceRef{}
 		changed := false
+		if item.Creation != nil {
+			if item.Creation.Source != nil && deleted[item.Creation.Source.SourceID] {
+				item.Creation.Source = nil
+				changed = true
+			}
+			ids := []string{}
+			for _, id := range item.Creation.MemoryIDs {
+				if deleted[id] {
+					changed = true
+				} else {
+					ids = append(ids, id)
+				}
+			}
+			item.Creation.MemoryIDs = ids
+		}
 		for _, source := range item.Sources {
 			if deleted[source.SourceID] {
 				changed = true

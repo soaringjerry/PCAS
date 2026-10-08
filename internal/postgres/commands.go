@@ -16,6 +16,25 @@ import (
 
 func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c workspace.Command) error {
 	switch c.Type {
+	case "completeDeadline":
+		if !memory.ID(c.ID).Valid() {
+			return memory.ErrInvalid
+		}
+		var claim string
+		var version int
+		if err := tx.QueryRow(ctx, "SELECT claim_id::text,claim_version FROM deadlines WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), c.ID).Scan(&claim, &version); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return memory.ErrNotFound
+			}
+			return err
+		}
+		if c.MemoryID != "" && c.MemoryID != claim {
+			return memory.ErrInvalid
+		}
+		if err := activeClaim(ctx, tx, scope, claim); err != nil {
+			return err
+		}
+		return completeDeadlineTx(ctx, tx, scope, claim, version)
 	case "restoreMemory":
 		return restoreMemoryTx(ctx, tx, scope, c.ID)
 	case "undoEntityMerge":
@@ -139,6 +158,15 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 			title = c.Name
 		}
 		item := newItem(kind, title)
+		if original, ok := ctx.Value(secretaryCreationKey{}).(workspace.SourceRef); ok {
+			item.Creation = &workspace.ItemCreation{By: "secretary", Source: &original}
+			if log, ok := ctx.Value(actionLogKey{}).(actionLog); ok {
+				item.Creation.ActionID = log.id
+			}
+			if original.SourceID != "" {
+				item.Sources = append(item.Sources, original)
+			}
+		}
 		item.History[0].By = actorFromContext(ctx)
 		item.Evolution[0].By = actorFromContext(ctx)
 		if ctx.Value(secretaryHistoryKey{}) != nil {
@@ -146,6 +174,10 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 			// and reminders have been applied by its internal commands.
 			item.History = []workspace.Revision{}
 			item.Evolution = []workspace.Revision{}
+		} else if item.Creation != nil && item.Creation.By == "secretary" {
+			// A companion project has its own action, outside the task's history
+			// collector. saveAction publishes its single creation revision.
+			item.History = []workspace.Revision{}
 		}
 		if kind == "task" && c.Text != "" {
 			if err := requireText(c.Text); err != nil {
@@ -278,9 +310,17 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 		if err != nil {
 			return err
 		}
-		if err := patchAllowed(&settings, c.Patch, "autoAccept", "wakeIdeas", "followUps", "dailyReviewAt", "dailyBudget", "timezone", "city"); err != nil {
-			return err
+		if json.Unmarshal(c.Patch, &fields) != nil || len(fields) == 0 {
+			return memory.ErrInvalid
 		}
+		delete(fields, "autoAccept")
+		c.Patch = asJSON(fields)
+		if len(fields) != 0 {
+			if err := patchAllowed(&settings, c.Patch, "wakeIdeas", "followUps", "dailyReviewAt", "dailyBudget", "timezone", "city"); err != nil {
+				return err
+			}
+		}
+		settings.AutoAccept = false
 		settings.City = strings.TrimSpace(settings.City)
 		if utf8.RuneCountInString(settings.City) > 60 || strings.ContainsAny(settings.City, "\r\n") {
 			return memory.ErrInvalid
@@ -396,7 +436,7 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 	summary := c.Summary
 	switch c.Type {
 	case "updateTask":
-		if err := patchAllowed(&item, c.Patch, "title", "notes", "status", "projectId", "due", "scheduled", "waitingFor", "owedTo", "urgent", "dependsOn", "estimatedHours", "remindersOn"); err != nil {
+		if err := patchAllowed(&item, c.Patch, "title", "notes", "status", "projectId", "due", "dueDateOnly", "scheduled", "waitingFor", "owedTo", "urgent", "dependsOn", "estimatedHours", "remindersOn"); err != nil {
 			return err
 		}
 		var fields map[string]json.RawMessage
@@ -406,6 +446,10 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 				item.EffortReason = "用户设定"
 			}
 			if _, changed := fields["due"]; changed {
+				if _, known := fields["dueDateOnly"]; !known {
+					value := false
+					item.DueDateOnly = &value
+				}
 				settings, err := queryDocument[workspace.Settings](ctx, tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1", string(scope.OwnerID))
 				if err != nil {
 					return err

@@ -135,7 +135,7 @@ func (s *Store) readMemoriesTx(ctx context.Context, tx pgx.Tx, scope memory.Scop
 	query := `SELECT r.id::text,c.version,c.nature,c.value #>> '{}',c.confirmation,c.acquisition,coalesce(c.scope->>'project_id',''),
  coalesce(a.last_effective_use_at,r.created_at),coalesce(a.stability,1),coalesce(a.half_life_seconds,2592000),coalesce(a.pinned,false),coalesce(a.reinforcement_limit,8),
  rv.expressed_at,` + memoryEventColumns() + "," + mentionsAvailable + `,
- coalesce(to_jsonb(c)->>'category','unknown'),(to_jsonb(c)->>'durable')::boolean` + memoryJoins + where + ` ORDER BY r.updated_at DESC,r.id`
+ coalesce(to_jsonb(c)->>'category','unknown'),(to_jsonb(c)->>'durable')::boolean,coalesce(c.scope->>'deadline_completed','false')='true' AND coalesce(c.scope->>'deadline_completed_version','')=c.version::text` + memoryJoins + where + ` ORDER BY r.updated_at DESC,r.id`
 	if currentOnly && opts.useCurrent && opts.ids != nil {
 		// Ready cards and completion checks supply bounded identities. Resolve
 		// their applicable versions once, then hydrate only that scoped set.
@@ -164,7 +164,7 @@ func (s *Store) readMemoriesTx(ctx context.Context, tx pgx.Tx, scope memory.Scop
 		var precision string
 		var hasMentions bool
 		var stability, halfLife float64
-		if err := rows.Scan(&m.ID, &m.Version, &m.Kind, &m.Text, &m.Confirmation, &m.Acquisition, &m.ProjectID, &last, &stability, &halfLife, &m.Pinned, &m.ReinforcementLimit, &expressed, &from, &to, &precision, &hasMentions, &m.Category, &m.Durable); err != nil {
+		if err := rows.Scan(&m.ID, &m.Version, &m.Kind, &m.Text, &m.Confirmation, &m.Acquisition, &m.ProjectID, &last, &stability, &halfLife, &m.Pinned, &m.ReinforcementLimit, &expressed, &from, &to, &precision, &hasMentions, &m.Category, &m.Durable, &m.Completed); err != nil {
 			rows.Close()
 			return nil, err
 		}

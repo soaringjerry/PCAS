@@ -127,6 +127,8 @@ type secretaryOutput struct {
 // Publish history and its memory source only after the whole secretary action,
 // including reminder changes, has reached its final state.
 type secretaryHistoryKey struct{}
+type secretaryCreationKey struct{}
+type secretaryProjectReceiptsKey struct{}
 type secretaryHistory struct {
 	ids       []string
 	summaries map[string]string
@@ -202,8 +204,32 @@ func (s *Store) secretaryProjectTx(ctx context.Context, tx pgx.Tx, scope memory.
 			return "", err
 		}
 		id = string(memory.NewID())
-		err = s.commandTx(ctx, tx, scope, workspace.Command{Type: "addProject", ID: id, Name: name})
-		return id, err
+		// A companion project is a distinct reversible action. Restore the
+		// enclosing task buffer so task undo does not also remove its project.
+		var buffer string
+		if err = tx.QueryRow(ctx, "SELECT current_setting('pcas.action_changes',true)").Scan(&buffer); err != nil {
+			return "", err
+		}
+		log, _ := ctx.Value(actionLogKey{}).(actionLog)
+		actionID := string(memory.NewID())
+		projectCtx := withActionLog(ctx, actionID, "desk", log.turnID, "建了项目「"+name+"」")
+		projectCtx = context.WithValue(projectCtx, secretaryHistoryKey{}, nil)
+		if err = beginActionLogTx(projectCtx, tx); err != nil {
+			return "", err
+		}
+		if err = s.commandTx(projectCtx, tx, scope, workspace.Command{Type: "addProject", ID: id, Name: name}); err != nil {
+			return "", err
+		}
+		if err = flushActionLog(projectCtx, tx, scope); err != nil {
+			return "", err
+		}
+		if _, err = tx.Exec(ctx, "SELECT set_config('pcas.action_changes',$1,true)", buffer); err != nil {
+			return "", err
+		}
+		if receipts, ok := ctx.Value(secretaryProjectReceiptsKey{}).(*[]workspace.DeskReceipt); ok {
+			*receipts = append(*receipts, workspace.DeskReceipt{ActionID: &actionID, Op: "create_project", Text: "建了项目「" + name + "」", ThingID: &id, Undoable: true, Status: "done"})
+		}
+		return id, nil
 	}
 	return "", memory.ErrInvalid
 }
@@ -290,6 +316,16 @@ func (s *Store) executeSecretaryActionTx(ctx context.Context, tx pgx.Tx, scope m
 		if !validDeskTitle(title) {
 			return skippedReceipt(a.Op, "标题为空或太长"), nil
 		}
+		if a.Op == "create_project" {
+			var existing string
+			e := tx.QueryRow(ctx, "SELECT id::text FROM work_items WHERE owner_id=$1 AND kind='project' AND lower(btrim(title))=lower($2) ORDER BY id LIMIT 1", string(scope.OwnerID), title).Scan(&existing)
+			if e == nil {
+				return skippedReceipt(a.Op, "已有同名项目，沿用已有项目"), nil
+			}
+			if !errors.Is(e, pgx.ErrNoRows) {
+				return receipt, e
+			}
+		}
 		id = string(memory.NewID())
 		project := ""
 		var err error
@@ -317,6 +353,7 @@ func (s *Store) executeSecretaryActionTx(ctx context.Context, tx pgx.Tx, scope m
 				dateOnly = date
 				if ok {
 					patch["due"] = due
+					patch["dueDateOnly"] = date
 				} else {
 					note = " · 时间没看懂"
 				}
@@ -367,7 +404,7 @@ func (s *Store) executeSecretaryActionTx(ctx context.Context, tx pgx.Tx, scope m
 				receipt.Text += " · " + *a.Condition + note
 			}
 		} else {
-			receipt.Text = "新建项目：" + title
+			receipt.Text = "建了项目「" + title + "」"
 		}
 	case "update":
 		item, err := getItem(ctx, tx, scope, id)
@@ -390,6 +427,7 @@ func (s *Store) executeSecretaryActionTx(ctx context.Context, tx pgx.Tx, scope m
 			dateOnly = date
 			if valid {
 				patch["due"] = parsed
+				patch["dueDateOnly"] = date
 				dueChanged = true
 			} else {
 				note = " · 时间没看懂"

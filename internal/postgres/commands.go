@@ -278,9 +278,15 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 		if err != nil {
 			return err
 		}
-		if err := patchAllowed(&settings, c.Patch, "autoAccept", "wakeIdeas", "followUps", "dailyReviewAt", "dailyBudget", "timezone", "city"); err != nil {
+		if json.Unmarshal(c.Patch, &fields) != nil {
+			return memory.ErrInvalid
+		}
+		delete(fields, "autoAccept")
+		c.Patch = asJSON(fields)
+		if err := patchAllowed(&settings, c.Patch, "wakeIdeas", "followUps", "dailyReviewAt", "dailyBudget", "timezone", "city"); err != nil {
 			return err
 		}
+		settings.AutoAccept = false
 		settings.City = strings.TrimSpace(settings.City)
 		if utf8.RuneCountInString(settings.City) > 60 || strings.ContainsAny(settings.City, "\r\n") {
 			return memory.ErrInvalid

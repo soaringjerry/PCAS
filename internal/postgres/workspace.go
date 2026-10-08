@@ -201,6 +201,7 @@ func (s *Store) snapshotTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) (
 	if err = json.Unmarshal(data, &out.Settings); err != nil {
 		return out, err
 	}
+	out.Settings.AutoAccept = false
 	items, err := queryDocuments[workspace.Item](ctx, tx, "SELECT document FROM work_items WHERE owner_id=$1 ORDER BY updated_at DESC,id", string(scope.OwnerID))
 	if err != nil {
 		return out, err
@@ -654,7 +655,10 @@ func jobProblem(code string) string {
 // import reads as one line rather than a dozen stage names. Idea wakes and
 // finished runs are already on their own records and are added by the client.
 func activityTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, timezone string) ([]workspace.Activity, error) {
-	out := []workspace.Activity{}
+	out, err := queryDocuments[workspace.Activity](ctx, tx, `SELECT jsonb_build_object('id',id::text,'at',created_at,'text',summary,'to','/t/'||coalesce((changes->0->>'id'),'')) FROM action_log WHERE owner_id=$1 AND source IN('background_extraction','background_topic') AND undone_at IS NULL AND expired_at IS NULL AND created_at>=now()-interval '30 days' ORDER BY created_at DESC,id`, string(scope.OwnerID))
+	if err != nil {
+		return nil, err
+	}
 	owner := string(scope.OwnerID)
 	rows, err := tx.Query(ctx, `WITH finished AS (
 		SELECT j.record_id,j.record_version,max(j.updated_at) AS at FROM memory_jobs j

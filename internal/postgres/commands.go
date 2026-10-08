@@ -154,6 +154,21 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 			item.Notes = c.Text
 		}
 		item.ProjectID = c.ProjectID
+		if kind == "task" && c.Due != "" {
+			if _, err := time.Parse(time.RFC3339, c.Due); err != nil {
+				return memory.ErrInvalid
+			}
+			item.Due = c.Due
+			settings, err := queryDocument[workspace.Settings](ctx, tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1", string(scope.OwnerID))
+			if err != nil {
+				return err
+			}
+			loc, err := time.LoadLocation(settings.Timezone)
+			if err != nil {
+				loc = time.UTC
+			}
+			applyDueReminder(&item, "", loc)
+		}
 		id, err := uuidOrNew(c.ID)
 		if err != nil {
 			return err
@@ -381,7 +396,7 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 	summary := c.Summary
 	switch c.Type {
 	case "updateTask":
-		if err := patchAllowed(&item, c.Patch, "title", "notes", "status", "projectId", "due", "scheduled", "waitingFor", "owedTo", "urgent", "dependsOn", "estimatedHours"); err != nil {
+		if err := patchAllowed(&item, c.Patch, "title", "notes", "status", "projectId", "due", "scheduled", "waitingFor", "owedTo", "urgent", "dependsOn", "estimatedHours", "remindersOn"); err != nil {
 			return err
 		}
 		var fields map[string]json.RawMessage

@@ -325,7 +325,8 @@ func (s *Store) ProcessProjectHandover(ctx context.Context, j worker.Job) error 
 	if err = json.Unmarshal(result.Prompt, &input); err != nil {
 		return err
 	}
-	return backgroundResultTx(ctx, s.pool, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
+	invalidOutput := false
+	err = backgroundResultTx(ctx, s.pool, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(j.OwnerID)); err != nil {
 			return err
 		}
@@ -343,6 +344,9 @@ func (s *Store) ProcessProjectHandover(ctx context.Context, j worker.Job) error 
 			var removed int
 			out, removed, _, valid = parseProjectHandover(string(asJSON(out)), current)
 			invalid += removed
+			if valid && len(out.Conclusion)+len(out.Blockers)+len(out.NextSteps) == 0 {
+				valid = false
+			}
 		}
 		if invalid > 0 {
 			if err := stageEventTx(ctx, tx, j.OwnerID, ProjectHandoverStage, "overflow", "ungrounded_sentences", invalid); err != nil {
@@ -361,8 +365,10 @@ func (s *Store) ProcessProjectHandover(ctx context.Context, j worker.Job) error 
 			if err := stageEventTx(ctx, tx, j.OwnerID, ProjectHandoverStage, "failure", "project_handover_invalid_output", 1); err != nil {
 				return err
 			}
-			// Commit discarded unusable output before returning a retry error.
-			return deferInvalidProjectTx(ctx, tx, j)
+			// Commit the discarded output and the failure count; the retry with
+			// backoff is signalled to the worker below, as the 2.6 handover does.
+			invalidOutput = true
+			return nil
 		}
 		item, err := getItem(ctx, tx, scope, id)
 		if errors.Is(err, memory.ErrNotFound) || err == nil && item.Status == "done" {
@@ -382,6 +388,13 @@ func (s *Store) ProcessProjectHandover(ctx context.Context, j worker.Job) error 
 		}
 		return acknowledge(ctx, tx, j)
 	})
+	if err != nil {
+		return err
+	}
+	if invalidOutput {
+		return &worker.JobError{Code: "project_handover_invalid_output", Until: time.Now().Add(retryDelay(j.Attempts)), NoAttempt: false}
+	}
+	return nil
 }
 
 func currentProjectEvidenceTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, input projectHandoverInput, out workspace.ProjectHandover) (projectHandoverInput, error) {
@@ -426,10 +439,6 @@ func currentProjectEvidenceTx(ctx context.Context, tx pgx.Tx, scope memory.Scope
 		}
 	}
 	return current, nil
-}
-func deferInvalidProjectTx(ctx context.Context, tx pgx.Tx, j worker.Job) error {
-	_, err := tx.Exec(ctx, `UPDATE memory_jobs SET state='queued',error_code='project_handover_invalid_output',available_at=clock_timestamp()+$3*interval '1 second',lease_token=NULL,lease_until=NULL WHERE id=$1 AND lease_token=$2`, string(j.ID), string(j.LeaseToken), retryDelay(j.Attempts).Seconds())
-	return err
 }
 func writeProjectHandover(b *strings.Builder, h *workspace.ProjectHandover) {
 	if h == nil || h.WrittenAt == nil {

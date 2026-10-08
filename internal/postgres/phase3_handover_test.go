@@ -16,6 +16,9 @@ import (
 func phase3OnlyProject(t *testing.T, f *phase3LoadedFixture, id string) {
 	t.Helper()
 	phase26Exec(t, f.phase26LoadedFixture, `UPDATE work_items SET status='done',document=jsonb_set(document,'{status}','"done"') WHERE owner_id=$1 AND kind='project' AND id<>$2`, f.Scope.OwnerID, id)
+	// Jobs the global schedule already queued for the other projects would be
+	// claimed first and acknowledged as done; only this project's work stays.
+	phase26Exec(t, f.phase26LoadedFixture, `DELETE FROM memory_jobs WHERE owner_id=$1 AND stage LIKE 'memory.project_handover:%' AND stage NOT LIKE 'memory.project_handover:'||$2||':%'`, f.Scope.OwnerID, id)
 }
 func phase3AgeHandoverClock(t *testing.T, f *phase3LoadedFixture) {
 	t.Helper()

@@ -500,7 +500,12 @@ FOR EACH ROW WHEN (NEW.source='worker') EXECUTE FUNCTION reject_worker_adoption(
 				if run.Status != "done" || run.Adopted != nil || run.Output != output || run.FinishedAt == "" || st.Revision != wantRevision {
 					t.Fatalf("completion lost after adoption failure: run=%+v revision=%d", run, st.Revision)
 				}
-				if !reflect.DeepEqual(st.Projects[0], project) || len(st.Tasks) != 0 || len(st.Docs) != 0 || len(st.Samples) != 0 {
+				// The run's completion is kept and is itself a project input (phase 3
+				// H3), so the handover's stale flag may flip; everything else on the
+				// project must be exactly as before the adoption attempt.
+				before, after := project, st.Projects[0]
+				before.ProjectHandover, after.ProjectHandover = nil, nil
+				if !reflect.DeepEqual(after, before) || len(st.Tasks) != 0 || len(st.Docs) != 0 || len(st.Samples) != 0 {
 					t.Fatalf("partial adoption survived rollback: %+v", st)
 				}
 				for _, table := range []string{"adopted_artifacts", "artifact_fields", "training_samples"} {

@@ -166,7 +166,9 @@ func readRunHistoryTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c work
 		if !memory.ID(id).Valid() {
 			return nil, memory.ErrInvalid
 		}
-		boundary := "agent_id=$3"
+		// The team shares the owner's conversation: a manual handoff may carry
+		// turns held with any agent, as the automatic one does.
+		boundary := "$3::text=$3::text"
 		target := c.AgentID
 		if auto {
 			if !oneOf(id, automatic.IDs...) {

@@ -159,6 +159,10 @@ func TestPhase3P3T3StartReminderTimingRecheckAndStop(t *testing.T) {
 				if err := f.Store.CheckReminders(f.Context, at); err != nil {
 					t.Fatal(err)
 				}
+				// Notices are stamped with the database clock; dispatch looks at the
+				// 24 hours before its simulated "now", so align this item's new
+				// notices with the simulated clock.
+				phase26Exec(t, f.phase26LoadedFixture, `UPDATE workspace_notices SET created_at=$2 WHERE owner_id=$1 AND thing_id=$3 AND created_at>now()-interval '1 minute'`, f.Scope.OwnerID, at, id)
 				if dispatch {
 					if err := f.Store.DispatchNotices(f.Context, at, channels); err != nil {
 						t.Fatal(err)
@@ -191,6 +195,7 @@ func TestPhase3P3T3StartReminderTimingRecheckAndStop(t *testing.T) {
 			if sequence == "user_stop" {
 				h.command(t, f.Context, map[string]any{"type": "updateTask", "id": id, "patch": map[string]any{"remindersOn": false}})
 			}
+			phase26Exec(t, f.phase26LoadedFixture, `UPDATE workspace_notices SET created_at=$2 WHERE owner_id=$1 AND thing_id=$3 AND created_at>now()-interval '1 minute'`, f.Scope.OwnerID, start, id)
 			if err := f.Store.DispatchNotices(f.Context, start, channels); err != nil {
 				t.Fatal(err)
 			}

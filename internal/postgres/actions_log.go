@@ -64,9 +64,16 @@ func flushActionLog(ctx context.Context, tx pgx.Tx, scope memory.Scope) error {
 	if len(entries) == 0 {
 		return nil
 	}
-	_, err := tx.Exec(ctx, "INSERT INTO action_log(owner_id,id,source,turn_id,summary,changes,undo_of) VALUES($1,$2,$3,$4,$5,$6,$7)", string(scope.OwnerID), log.id, log.source, nullString(log.turnID), log.summary, changes, nullString(log.undoOf))
+	_, err := tx.Exec(ctx, "INSERT INTO action_log(owner_id,id,source,turn_id,summary,changes) VALUES($1,$2,$3,$4,$5,$6)", string(scope.OwnerID), log.id, log.source, nullString(log.turnID), log.summary, changes)
 	if err != nil {
 		return err
+	}
+	// Written separately so the pre-053 legacy fixtures keep inserting the
+	// columns they have; only an undo carries the marker.
+	if log.undoOf != "" {
+		if _, err := tx.Exec(ctx, "UPDATE action_log SET undo_of=$3 WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), log.id, log.undoOf); err != nil {
+			return err
+		}
 	}
 	return recordSmokeActionTx(ctx, tx, scope, log.id, entries)
 }
@@ -285,10 +292,29 @@ func (s *Store) undoActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 	if err := refreshSmokeChangesTx(ctx, tx, scope, changes); err != nil {
 		return err
 	}
+	if err := s.deleteUndoneAdoptionSourcesTx(ctx, tx, scope, id); err != nil {
+		return err
+	}
 	if source != "desk" || turnID == nil {
 		return nil
 	}
 	return s.deleteUndoneTurnMemoriesTx(ctx, tx, scope, *turnID)
+}
+
+// A project adoption (phase 3 H7) remembers the deputy's text through a source
+// of its own. Undoing the adoption deletes that source, which takes the memory
+// it was the only evidence for out of the current view; the deputy result
+// itself stays and can be adopted again under a new action.
+func (s *Store) deleteUndoneAdoptionSourcesTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, actionID string) error {
+	sources, err := queryDocuments[string](ctx, tx, "SELECT to_jsonb(source_id::text) FROM project_adoption_sources WHERE owner_id=$1 AND action_id=$2", string(scope.OwnerID), actionID)
+	if err != nil || len(sources) == 0 {
+		return err
+	}
+	targets := []memory.Ref{}
+	for _, id := range sources {
+		targets = append(targets, memory.Ref{ID: memory.ID(id), Kind: memory.SourceKind})
+	}
+	return s.deleteTx(context.WithValue(ctx, retainUndoneAnswersKey{}, true), tx, scope, memory.DeleteRequest{Targets: targets})
 }
 
 func (s *Store) deleteUndoneTurnMemoriesTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, turnID string) error {

@@ -23,6 +23,9 @@ Existing defects do not become required behavior merely because the migration ke
 Keep Go, PostgreSQL, pgvector, and file storage.
 Keep one application deployment with explicit internal interfaces.
 Phase 3.9 keeps Phase 2.0 and its event-bus design archived.
+Do not restore the earlier intelligent event bus or policy router.
+The secretary and responsible domains make decisions. Events record occurrences and trigger declared processing.
+
 The [Memory Architecture](memory-architecture.md) remains authoritative for memory behavior.
 
 ## 2 Code Findings
@@ -94,7 +97,7 @@ These are logical boundaries. One package per table or per existing file prefix 
 | Deputy | Work generation, review, revision, result adoption, and recovery. | Uses memory and workspace interfaces, the gateway, and saved-result storage. |
 | Workspace | Projects, tasks, ideas, files, document versions, effort, plans, and project handovers. | Uses shared memory for evidence. Owns workspace operations and their invariants. |
 | Actions | Request identity, command application, receipts, dependency checks, and undo. | Coordinates affected domains within one transaction boundary. Does not make semantic decisions from text similarity. |
-| Background coordination | Scheduling, leases, priorities, deferral, and handler dispatch. | Uses the existing queue. Calls domain services without private queues. |
+| Background coordination | Scheduling, leases, priorities, deferral, and handler dispatch. | Uses the existing queue and one declared event-response table. Calls domain services without private queues or semantic routing. |
 | Observation | Activity, call, cost, reason, and failure read models. | Reads authoritative records. Recovery commands return through the responsible business service. |
 
 These services share source identities and versioned evidence in one memory core.
@@ -274,6 +277,106 @@ Unsupported necessary capabilities fail before the call. An authorized weaker mo
 
 Use visual status and short explanations for users. Do not turn every fallback into a long conversation message.
 
+### Event Records and Triggers
+
+Events have two purposes: activity records and triggers for declared processing.
+An event does not select business policy, interpret user intent, or decide whether to create a project.
+The secretary, specialist stages, and responsible data owners keep those decisions.
+Event dispatch uses explicit registrations. It does not make model calls to select a handler.
+
+Give each recorded occurrence one stable event identity.
+Record its owner, type, object identity and version, time, trigger source, root execution, and immediate cause.
+Link applicable requests, jobs, proposals, invocation identities, and receipts.
+Keep outcomes and reasons distinct from facts about committed data changes.
+
+Repeated delivery keeps the same event identity. It does not create another business occurrence or duplicate activity entry.
+One execution can contain several linked occurrences, such as a decision, a model invocation, and an applied action.
+
+The data owner records a committed change and its event within the same transaction.
+That transaction also makes the declared background work durable through the existing queue.
+A rollback must leave neither a committed-change event nor runnable work for that change.
+If delivery preparation is deferred, keep its pending state durable in the same transaction.
+Use the existing queue's leases, fencing, duplicate control, and recovery. Do not introduce another queue or event broker.
+
+```mermaid
+flowchart LR
+    Decision[Secretary or specialist proposal] --> Owner[Responsible data owner]
+    subgraph Transaction[One database transaction]
+        Owner --> Data[Business change]
+        Owner --> Event[Event with trigger and causal IDs]
+        Event --> Pending[Durable queue or pending delivery]
+    end
+    Responses[Central event-response table] --> Pending
+    Pending --> Specialist[Named specialist]
+    Specialist --> Proposal[Proposal to the responsible owner]
+    Event --> Activity[Activity read model]
+```
+
+Record skipped and failed operations as outcomes. Do not emit a data-change event for an unchanged or rolled-back object.
+Persist failure diagnostics outside an aborted transaction when necessary.
+Recording an outcome must not itself trigger business work unless the response table explicitly declares that response.
+Activity queries read these records. Events do not replace authoritative business data or require event replay to rebuild it.
+
+### Central Event-Response Table
+
+Keep one authoritative table of event types and their named specialist responses.
+Use the same definition for runtime registration and its documented representation.
+Each row identifies the producing owner, specialist, relevant input dependencies, job stage, duplicate key, and limit policy.
+Do not scatter subscriptions or semantic routing rules through business workflows.
+The producer supplies the fact. The specialist prepares a proposal, and the data owner applies the corresponding command.
+
+The table below supplies target responsibilities. Event descriptions are not assigned wire names or implemented subscriptions.
+Concrete registrations must follow the verified input dependencies of each existing path.
+
+| Event or trigger | Producing owner | Named response | Existing queue path or activity use |
+|---|---|---|---|
+| Source version accepted | Input. | Attachment processor or text processor, as declared for the source representation. | `source.parse`, `source.chunk`. |
+| Source text available | Input. | Memory extraction specialist. | `source.extract`. |
+| Search input changed | Input or memory. | Search index processor. | `source.tokenize`, `memory.index`. |
+| Embedding input changed | Input or memory. | Vector index processor. | `source.embed`, `memory.embed`. |
+| Statement interpretation input changed | Memory. | Organization and statement comparison specialists. | `memory.organize`, `memory.compare`. |
+| Entity comparison input changed | Memory. | Entity candidate and comparison specialists. | `memory.entity_candidates`, `memory.entity_compare`. |
+| Handover or date-review input changed | The applicable memory or current-state owner. | Global handover and date-review specialists. | `memory.handover`, `memory.date_tidy`. |
+| Project or effort input changed | The applicable memory or workspace owner. | Project handover, effort, and project candidate specialists. | `memory.project_handover`, `memory.effort`, `memory.topic_project`. |
+| Scheduled freshness check | Background coordination. | The specialist named by the applicable registration. | Existing scheduling and backfill paths. |
+| Operation executed, skipped, deferred, or failed | The responsible service. | Activity recording. No business response by default. | Receipts and recorded outcomes. |
+
+Multiple named responses are explicit registrations, not a broadcast to every specialist.
+Changes to derived fields cannot trigger all responses merely because an object's version increased.
+The responsible service checks the response's declared input dependencies before scheduling work.
+Record unchanged-input suppression with its reason and coverage information.
+
+### Event Limits and Chain Control
+
+Every event type needs a documented limit policy before its trigger path is enabled.
+The policy identifies its counting scope, time window, measured basis, numerical values, and overflow behavior.
+Select the values from representative input volume and resource measurements. Do not invent one limit for all event types.
+Keep event records durable when processing is deferred. An exhausted processing budget must not erase a committed change.
+
+| Limit | Required control and evidence |
+|---|---|
+| Responses per event | Bound the number of named responses. Count scheduled, combined, suppressed, and deferred responses. |
+| Causal chain | Bound follow-on depth and repeated stage responses within one root execution. Child events retain the original root and counters. |
+| Duplicate and unchanged input | Use event identity, response identity, input identity/version or hash, and processing-rule version. Record duplicate delivery and unchanged-input suppression separately. |
+| Model amplification | Bound invocation attempts, context, and cost across the causal chain, in addition to stage budgets. Include retries and failed paid calls. |
+| Processing capacity | Bound rate, concurrent work, and pending work for the declared owner/type scope. Count excess work and show its waiting state. |
+
+An organization result cannot restart organization indefinitely through a generic memory-change event.
+A relevant input change can permit new work, but it cannot reset the current chain's resource limits.
+No-change writes must not emit another change trigger.
+Combine pending work only when its input contract permits this. Keep the combined-event count and source associations.
+Preserve necessary intermediate versions when combining work would change required processing.
+
+Overflow produces an explicit deferred, suppressed, or failed outcome with its reason, affected count, and recovery path.
+Cycle or chain exhaustion remains visible for investigation and explicit recovery.
+Retries and recovery keep the relevant causal identities. They cannot silently start a fresh chain to bypass limits.
+The gateway enforces the applicable call budget supplied by the responsible service.
+Index progress and interactive work keep their declared capacity while other event processing waits.
+
+The existing [queue schema](../internal/postgres/migrations/001_memory.sql), [enqueue helper](../internal/postgres/sources.go), and [worker](../internal/worker/worker.go) supply the starting mechanism.
+The [handler map](../cmd/pcas/main.go) already names stage responses.
+Causal identities, centralized producer mappings, and chain limits are target work, not existing guarantees.
+
 ## 8 State and Recovery Boundaries
 
 Keep model calls outside database transactions.
@@ -281,8 +384,10 @@ Prepare versioned input, release the transaction, call the model, and validate a
 Save paid results before retryable business writes where the existing workflow needs this.
 
 The applicable mutation, action receipt, dependency update, and job acknowledgement complete within one fenced transaction.
+Include the corresponding committed-change event and durable trigger delivery in that transaction.
 Keep an explicit unit-of-work interface for operations that touch several domains.
 The storage adapter implements its transaction. The business service supplies the operation and its checks.
+
 Lease loss prevents commit. Unrelated changes must not invalidate an operation without an affected dependency.
 
 Result recovery keeps owner scope, source access, versions, request identity, and undo rules.
@@ -344,6 +449,9 @@ Text searches alone cannot prove ownership for dynamic SQL or indirect calls.
 Use isolated database checks for affected read paths and cross-domain transactions.
 
 Temporary migration exceptions need named callers, a responsible maintainer, and a removal condition.
+Check that event responses have one authoritative registration and use the existing queue.
+Verify rollback, duplicate delivery, unchanged input, recursive triggers, overflow, and recovery on isolated data.
+Measure causal-chain model calls and cost as well as individual stage results.
 
 ## 10 Foundation Acceptance
 
@@ -359,6 +467,9 @@ Passing CI alone does not close the phase.
 | Prompt identity | Calls resolve registered instructions and templates with hashes. Schema identity and context builder version are available. |
 | Traceable work | One owner-scoped SQL query answers yesterday's work, costs, and recorded reasons. It handles duplicates, reversals, retries, and missing history. |
 | Visible outcomes | Skips, deferrals, rejected proposals, and authorized fallbacks have recorded reasons and visible returned states. Capability loss cannot silently become success. |
+| Event boundaries | Events record occurrences and trigger declared specialists. A central response table uses the existing queue. Event handling does not perform semantic routing. |
+| Atomic event delivery | Committed changes, their events, and durable delivery state share a transaction. Rollback leaves no runnable change event. Duplicate delivery reuses operation identities. Recovery keeps pending work. |
+| Bounded causal work | Every event type has measured limits, overflow counts, and recovery. Recursive changes and retries cannot bypass root-chain call and cost limits. |
 | Reliable state | Affected transaction, version, lease, access, cancellation, deletion, replay, recovery, and undo checks show no migration regression. Existing defects stay separately recorded. |
 | Resource evidence | Calls, context, costs, duration, and progress have comparable baselines and results. Regressions have resolved causes or an explicit scope decision. |
 | Local repair | Investigations locate both an incorrect action and a missing expected action. Trace inputs, candidates, scheduling, decisions, validation, and actual writes. Identify the responsible boundary and its affected checks. |

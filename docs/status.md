@@ -70,6 +70,9 @@ The [foundation inventory](evaluations/2026-10-08-foundation-inventory.md) recor
 It includes exclusions before model calls and missing expected actions. No architecture code has changed.
 Controlled scenario baselines remain necessary before the corresponding production paths change.
 
+The [event contract](architecture.md#event-records-and-triggers) uses the existing queue for declared specialist processing and causal records.
+Central event responses and chain limits are targets. This documentation change does not implement them.
+
 ## Documentation Changes
 
 Product requirements are merged into the whitepaper.

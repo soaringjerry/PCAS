@@ -276,6 +276,11 @@ Each business object has one owner. Other domains request changes and receive ex
 Model stages supply proposals. The responsible domain validates and applies them.
 Home and timeline queries only read business data. Skips, deferrals, and fallbacks have visible states and reasons.
 
+Events record work and trigger declared specialist processing through the existing queue.
+They carry trigger sources and causal identities. They do not make business decisions or select policy.
+Owners record changes and their events within one transaction. A central response table names the applicable specialists.
+Each event type has measured limits, visible overflow, and recovery to control repeated processing and model calls.
+
 The system explains both an incorrect action and a missing expected action.
 This includes why an expected project was not created, from source processing through candidate selection and execution.
 Obsolete interfaces, duplicate implementations, and unsupported compatibility branches have explicit removal decisions.

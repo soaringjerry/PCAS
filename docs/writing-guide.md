@@ -69,6 +69,9 @@ Code names and literal UI labels keep their existing spelling.
 | Domain | A group of business responsibilities with explicit interfaces. |
 | Invocation | One attempted model call, with its own identity and outcome. |
 | Execution | One business request or background operation that can contain several invocations and actions. |
+| Event | A recorded occurrence that identifies its trigger source and cause. Declared event types can trigger specialist processing. |
+| Causal chain | Linked processing and events that share one root execution and its resource counters. |
+| Event-response table | The authoritative mapping from event types to named specialists, input dependencies, queue stages, and limit policies. |
 | Input manifest | The recorded identities, versions, and processing details for data supplied to a model. |
 | Read model | A query representation of stored records for a specific reading purpose. |
 | Model token | A text unit counted by the selected model. |

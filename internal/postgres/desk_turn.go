@@ -115,7 +115,7 @@ func (s *Store) secretaryContextTx(ctx context.Context, tx pgx.Tx, scope memory.
 	out.Settings = settings
 	out.Tasks = tasks
 	out.Dependencies = deps
-	out.Projects, err = queryDocuments[workspace.Item](ctx, tx, "SELECT document FROM work_items WHERE owner_id=$1 AND kind='project' AND status IN('active','paused') ORDER BY created_at,id", string(scope.OwnerID))
+	out.Projects, err = queryDocuments[workspace.Item](ctx, tx, "SELECT document FROM work_items WHERE owner_id=$1 AND kind='project' AND status='active' ORDER BY created_at,id LIMIT 50", string(scope.OwnerID))
 	if err != nil {
 		return out, err
 	}

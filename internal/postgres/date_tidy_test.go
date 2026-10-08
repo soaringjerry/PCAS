@@ -3,6 +3,7 @@ package postgres_test
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 	"testing"
@@ -215,5 +216,44 @@ func TestDateTidyInvalidOutputAndChangedInputChangeNothing(t *testing.T) {
 	}
 	if len(state.Tasks) != 0 || checks != 0 {
 		t.Fatalf("tasks=%d checks=%d", len(state.Tasks), checks)
+	}
+}
+
+// One thing read from two memories is two rows with the same title. Each is
+// shown the other, with what was said, so only one of them stays; once one is
+// put away the other no longer sees it.
+func TestDateTidyShowsRowsWithTheSameTitleSoOneThingStaysOnce(t *testing.T) {
+	f := &dateTidyFixture{phase25B234Fixture: phase25B234NewFixture(t)}
+	g, refs := f.groupTexts(t, "虚构：窑炉课的作业月底前要交。", "虚构：别忘了窑炉课那份作业。")
+	f.card(t, g, refs, false)
+	for i, at := range []time.Time{time.Now().AddDate(0, 0, -12), time.Now().AddDate(0, 0, -10)} {
+		f.exec(t, `INSERT INTO deadlines(owner_id,id,claim_id,claim_version,kind,title,original_text,at) VALUES($1,$2,$3,$4,'deadline','交窑炉课作业',$5,$6)`,
+			f.scope.OwnerID, memory.NewID(), refs[i].ID, refs[i].Version, fmt.Sprintf("虚构原话 第%d条", i+1), at)
+	}
+	var prompts []string
+	f.model(t, func(_ *http.Request, _ int, r phase25B234ModelRequest) phase25B234ModelReply {
+		prompts = append(prompts, phase25B4Prompt(r))
+		if len(prompts) == 1 {
+			return dateTidyReply("drop", "")
+		}
+		return dateTidyReply("keep", "")
+	})
+	jobs := f.schedule(t)
+	if len(jobs) != 2 {
+		t.Fatalf("queued=%v", jobs)
+	}
+	for i := 0; i < 2; i++ {
+		if err := f.run(t, refs[i], "memory.date_tidy:past"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if len(prompts) != 2 || !strings.Contains(prompts[0], `"sameTitle":[{`) || !strings.Contains(prompts[0], "虚构原话 第2条") {
+		t.Fatalf("the first row was not shown the other: %v", prompts)
+	}
+	if !strings.Contains(prompts[1], `"sameTitle":[]`) {
+		t.Fatalf("the row put away was still shown to the other: %.400s", prompts[1])
+	}
+	if f.open(t, refs[0]) || !f.open(t, refs[1]) {
+		t.Fatal("one of the two is to stay, the other is put away")
 	}
 }

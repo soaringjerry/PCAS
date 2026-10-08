@@ -43,6 +43,7 @@ type ScheduleSource struct {
 }
 type ItemCreation struct {
 	By        string     `json:"by"` // secretary, background_extraction, background_topic
+	ActionID  string     `json:"actionId,omitempty"`
 	Source    *SourceRef `json:"source,omitempty"`
 	MemoryIDs []string   `json:"memoryIds,omitempty"`
 	GroupKey  string     `json:"groupKey,omitempty"`

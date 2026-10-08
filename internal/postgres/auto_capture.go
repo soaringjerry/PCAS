@@ -79,8 +79,8 @@ func (s *Store) captureActionTx(ctx context.Context, tx pgx.Tx, scope memory.Sco
 		item.Evolution[0].By = "ai"
 		item.ProjectID = project
 		item.Sources = append(item.Sources, v.Source)
-		item.Creation = &workspace.ItemCreation{By: "background_extraction", Source: &v.Source}
 		actionID := string(memory.NewID())
+		item.Creation = &workspace.ItemCreation{By: "background_extraction", ActionID: actionID, Source: &v.Source}
 		label := map[string]string{"task": "待办", "idea": "想法"}[v.Kind]
 		actionCtx := withActionLog(withActor(ctx, "ai"), actionID, "background_extraction", "", "建了"+label+"「"+v.Text+"」")
 		if err := beginActionLogTx(actionCtx, tx); err != nil {

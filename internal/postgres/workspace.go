@@ -202,7 +202,7 @@ func (s *Store) snapshotTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) (
 		return out, err
 	}
 	out.Settings.AutoAccept = false
-	items, err := queryDocuments[workspace.Item](ctx, tx, "SELECT document FROM work_items WHERE owner_id=$1 ORDER BY updated_at DESC,id", string(scope.OwnerID))
+	items, err := queryDocuments[workspace.Item](ctx, tx, `SELECT document || CASE WHEN coalesce(document->>'createdAt','')='' THEN jsonb_build_object('createdAt',created_at) ELSE '{}'::jsonb END FROM work_items WHERE owner_id=$1 ORDER BY updated_at DESC,id`, string(scope.OwnerID))
 	if err != nil {
 		return out, err
 	}
@@ -655,10 +655,9 @@ func jobProblem(code string) string {
 // import reads as one line rather than a dozen stage names. Idea wakes and
 // finished runs are already on their own records and are added by the client.
 func activityTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, timezone string) ([]workspace.Activity, error) {
-	out, err := queryDocuments[workspace.Activity](ctx, tx, `SELECT jsonb_build_object('id',id::text,'at',created_at,'text',summary,'to','/t/'||coalesce((changes->0->>'id'),(SELECT project_id::text FROM topic_project_links l WHERE(l.owner_id,l.action_id)=(action_log.owner_id,action_log.id)),'')) FROM action_log WHERE owner_id=$1 AND source IN('background_extraction','background_topic') AND undone_at IS NULL AND expired_at IS NULL AND created_at>=now()-interval '30 days' ORDER BY created_at DESC,id`, string(scope.OwnerID))
-	if err != nil {
-		return nil, err
-	}
+	// Automatic creation is presented once through the item and its creation
+	// actionId. Keep the action audit without duplicating that receipt here.
+	out := []workspace.Activity{}
 	owner := string(scope.OwnerID)
 	rows, err := tx.Query(ctx, `WITH finished AS (
 		SELECT j.record_id,j.record_version,max(j.updated_at) AS at FROM memory_jobs j

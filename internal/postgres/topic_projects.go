@@ -334,7 +334,7 @@ func (s *Store) ProcessTopicProject(ctx context.Context, j worker.Job) error {
 			for _, ref := range refs {
 				ids = append(ids, string(ref.ID))
 			}
-			item.Creation = &workspace.ItemCreation{By: "background_topic", MemoryIDs: ids, GroupKey: input.Key}
+			item.Creation = &workspace.ItemCreation{By: "background_topic", ActionID: actionID, MemoryIDs: ids, GroupKey: input.Key}
 			if err = saveItem(ctx, tx, scope, item); err != nil {
 				return err
 			}

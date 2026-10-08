@@ -78,12 +78,17 @@ func flushActionLog(ctx context.Context, tx pgx.Tx, scope memory.Scope) error {
 	return recordSmokeActionTx(ctx, tx, scope, log.id, entries)
 }
 func undoableCommand(t string) bool {
-	if t == "restoreMemory" {
+	if oneOf(t, "restoreMemory", "completeDeadline") {
 		return true
 	}
 	return oneOf(t, "addTask", "addIdea", "addProject", "updateTask", "updateProject", "setTaskStatus", "renameThing", "setNotes", "moveThing", "deferTask", "addCheck", "toggleCheck", "removeCheck", "ideaPromote", "ideaSnooze", "ideaShelve", "ideaDrop", "ideaContinue", "addCondition", "removeCondition", "adoptRun", "discardRun", "createDoc", "updateDoc", "deleteDoc", "bulkStatus", "bulkDefer", "bulkMove")
 }
 func commandSummary(ctx context.Context, tx pgx.Tx, scope memory.Scope, c workspace.Command) string {
+	if c.Type == "completeDeadline" {
+		var title string
+		_ = tx.QueryRow(ctx, "SELECT title FROM deadlines WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), c.ID).Scan(&title)
+		return "完成期限：" + title
+	}
 	title := c.Title
 	if title == "" {
 		title = c.Name
@@ -162,6 +167,12 @@ func (s *Store) undoActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 	// Lock all rows first. The owner lock serializes commands and undo; run locks
 	// fence the worker, which does not take the owner lock when claiming work.
 	for _, c := range changes {
+		if c.Table == "deadline_completion" {
+			if err := checkDeadlineCompletionTx(ctx, tx, scope, c); err != nil {
+				return err
+			}
+			continue
+		}
 		if c.Table == "source_attachments" {
 			var ref memory.Ref
 			if json.Unmarshal(c.Before, &ref) != nil || ref.Kind != memory.SourceKind || string(ref.ID) != c.ID || ref.Version < 1 {
@@ -230,6 +241,12 @@ func (s *Store) undoActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 	}
 	for i := len(changes) - 1; i >= 0; i-- {
 		c := changes[i]
+		if c.Table == "deadline_completion" {
+			if err := restoreDeadlineCompletionTx(ctx, tx, scope, c); err != nil {
+				return err
+			}
+			continue
+		}
 		if c.Table == "source_attachments" {
 			var ref memory.Ref
 			if err := json.Unmarshal(c.Before, &ref); err != nil {

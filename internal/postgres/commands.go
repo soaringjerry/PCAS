@@ -34,14 +34,7 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 		if err := activeClaim(ctx, tx, scope, claim); err != nil {
 			return err
 		}
-		tag, err := tx.Exec(ctx, `UPDATE claim_revisions c SET scope=c.scope||jsonb_build_object('deadline_completed',true,'deadline_completed_version',c.version,'deadline_completed_at',clock_timestamp()) FROM memory_records r WHERE(c.owner_id,c.claim_id,c.version)=(r.owner_id,r.id,r.version) AND c.owner_id=$1 AND c.claim_id=$2 AND c.version=$3`, string(scope.OwnerID), claim, version)
-		if err != nil {
-			return err
-		}
-		if tag.RowsAffected() != 1 {
-			return memory.ErrConflict
-		}
-		return nil
+		return completeDeadlineTx(ctx, tx, scope, claim, version)
 	case "restoreMemory":
 		return restoreMemoryTx(ctx, tx, scope, c.ID)
 	case "undoEntityMerge":
@@ -167,6 +160,9 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 		item := newItem(kind, title)
 		if original, ok := ctx.Value(secretaryCreationKey{}).(workspace.SourceRef); ok {
 			item.Creation = &workspace.ItemCreation{By: "secretary", Source: &original}
+			if log, ok := ctx.Value(actionLogKey{}).(actionLog); ok {
+				item.Creation.ActionID = log.id
+			}
 			if original.SourceID != "" {
 				item.Sources = append(item.Sources, original)
 			}
@@ -178,6 +174,10 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 			// and reminders have been applied by its internal commands.
 			item.History = []workspace.Revision{}
 			item.Evolution = []workspace.Revision{}
+		} else if item.Creation != nil && item.Creation.By == "secretary" {
+			// A companion project has its own action, outside the task's history
+			// collector. saveAction publishes its single creation revision.
+			item.History = []workspace.Revision{}
 		}
 		if kind == "task" && c.Text != "" {
 			if err := requireText(c.Text); err != nil {
@@ -310,13 +310,15 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 		if err != nil {
 			return err
 		}
-		if json.Unmarshal(c.Patch, &fields) != nil {
+		if json.Unmarshal(c.Patch, &fields) != nil || len(fields) == 0 {
 			return memory.ErrInvalid
 		}
 		delete(fields, "autoAccept")
 		c.Patch = asJSON(fields)
-		if err := patchAllowed(&settings, c.Patch, "wakeIdeas", "followUps", "dailyReviewAt", "dailyBudget", "timezone", "city"); err != nil {
-			return err
+		if len(fields) != 0 {
+			if err := patchAllowed(&settings, c.Patch, "wakeIdeas", "followUps", "dailyReviewAt", "dailyBudget", "timezone", "city"); err != nil {
+				return err
+			}
 		}
 		settings.AutoAccept = false
 		settings.City = strings.TrimSpace(settings.City)

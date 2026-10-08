@@ -23,6 +23,9 @@ func (r scheduleRule) valid() bool {
 	if !oneOf(r.Frequency, "daily", "weekly", "monthly", "yearly") || r.Interval < 1 {
 		return false
 	}
+	if r.Interval > 1 && r.Anchor == "0001-01-01" {
+		return false
+	}
 	if _, err := time.Parse("2006-01-02", r.Anchor); err != nil {
 		return false
 	}

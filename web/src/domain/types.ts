@@ -309,7 +309,8 @@ export interface Doc {
   thingId: ID
   title: string
   body: string
-  by: 'user' | 'ai'
+  /** Who wrote this version: the user, a deputy (phase 3 revise), the secretary, or an older 'ai' record. */
+  by: 'user' | 'ai' | 'deputy' | 'secretary'
   runId?: ID
   /** The number of the version shown, and the one it was written on. */
   version?: number

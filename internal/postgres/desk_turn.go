@@ -1109,7 +1109,8 @@ func recordSecretaryOverflowTx(ctx context.Context, tx pgx.Tx, scope memory.Scop
 	if err != nil {
 		return err
 	}
-	for kind, limit := range map[string]int{"task": 40, "project": 50, "idea": 20} {
+	// C3 supplies every project for semantic reuse; it is not omitted at 50.
+	for kind, limit := range map[string]int{"task": 40, "idea": 20} {
 		if n := counts[kind] - limit; n > 0 {
 			if err := stageEventTx(ctx, tx, scope.OwnerID, "secretary", "overflow", kind+"_context_limit", n); err != nil {
 				return err

@@ -57,13 +57,15 @@ func TestPhase26G1C6SecretaryContextAndActionOverflowRemainVisible(t *testing.T)
 			prompt = call.Prompt
 		}
 	}
-	for prefix, want := range map[string]int{"T": 40, "P": 50, "I": 20} {
+	// Phase 3.5 C3 supplies the complete existing project directory so a
+	// semantically matching project beyond the historical 50 cannot duplicate.
+	for prefix, want := range map[string]int{"T": 40, "P": 60, "I": 20} {
 		count := len(regexp.MustCompile(`(?m)^`+prefix+`[0-9]+：`).FindAllString(prompt, -1))
 		if count != want {
 			t.Errorf("bounded %s prompt rows=%d expected%d", prefix, count, want)
 		}
 	}
-	for reason, want := range map[string]int{"task_context_limit": 15, "project_context_limit": 10, "idea_context_limit": 10} {
+	for reason, want := range map[string]int{"task_context_limit": 15, "project_context_limit": 0, "idea_context_limit": 10} {
 		var count int
 		if err := f.Store.pool.QueryRow(f.Context, `SELECT coalesce(sum(count),0) FROM background_stage_events WHERE owner_id=$1 AND reason=$2`, f.Scope.OwnerID, reason).Scan(&count); err != nil || count != want {
 			t.Errorf("observable %s count=%d expected%d err=%v", reason, count, want, err)
@@ -84,12 +86,12 @@ func TestPhase26G1C6SecretaryContextAndActionOverflowRemainVisible(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, reason := range []string{"task_context_limit", "project_context_limit", "idea_context_limit"} {
+	for _, reason := range []string{"task_context_limit", "idea_context_limit"} {
 		if !strings.Contains(string(health), reason) {
 			t.Errorf("health hides %s", reason)
 		}
 	}
-	t.Logf("actual prompt tasks/projects/ideas=40/50/20; visible omitted=15/10/10; actions applied10/skipped_receipts=%d; retained_items=155 elapsed=%s health=%s", skipped, time.Since(start), health)
+	t.Logf("actual prompt tasks/projects/ideas=40/60/20; visible omitted=15/0/10; actions applied10/skipped_receipts=%d; retained_items=155 elapsed=%s health=%s", skipped, time.Since(start), health)
 	t.Run("extra_actions_are_counted_and_visible", func(t *testing.T) {
 		phase26Finding(t, "S-P26-005")
 		var count int

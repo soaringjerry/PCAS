@@ -59,7 +59,7 @@ function FinishDate({ entry, children, onDone }: { entry: ScheduleEntry; childre
       className={children ? 'hall-finish' : 'hall-check'}
       aria-label={`做完了：${entry.title}`}
       onClick={async () => {
-        if (await dispatchUndoable({ type: 'completeDeadline', id: entry.source.deadlineId ?? entry.id }, '做完了')) onDone?.()
+        if (await dispatchUndoable({ type: 'completeDeadline', id: entry.source.deadlineId ?? entry.id, memoryId: entry.source.memoryId }, '做完了')) onDone?.()
       }}
     >
       <span className="ring" />

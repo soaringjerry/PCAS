@@ -164,7 +164,7 @@ test('a deadline that went by unmet looks like 已过截止 and can be said to b
   await expect(late.locator('.h-title').filter({ hasText: '给烤箱续保' })).toHaveCount(0)
   // The circle on the row does the same, and it can be taken back.
   await late.getByRole('button', { name: '做完了：旧期限 6' }).click()
-  await expect.poll(() => mock.commands.at(-1)).toMatchObject({ type: 'completeDeadline', id: 'd-old-5' })
+  await expect.poll(() => mock.commands.at(-1)).toMatchObject({ type: 'completeDeadline', id: 'd-old-5', memoryId: 'm-old-5' })
   const done = mock.commands.at(-1)!.requestId
   await page.getByRole('button', { name: '撤销' }).click()
   await expect.poll(() => mock.commands.at(-1)).toMatchObject({ type: 'undoAction', id: done })

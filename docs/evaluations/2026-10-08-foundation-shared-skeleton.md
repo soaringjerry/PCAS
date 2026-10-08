@@ -122,10 +122,35 @@ Final review then centralized retry and lease-expiry journal writes in their sto
 A resolved constant-SQL guard checks that first table boundary. Complete domain ownership remains outstanding.
 The affected recovery group passed with the race detector in 16.400 seconds.
 
-The final owner-boundary revision still requires complete CI before integration.
-Deployment remains pending at this record's preparation.
-A preparation backup was verified for the initial skeleton revision.
-The final release backup and live secretary check remain pending.
+The [final skeleton CI run](https://github.com/soaringjerry/PCAS/actions/runs/37855492332) passed all thirteen jobs at revision `935ad5b`.
+That revision was merged directly into `main` and released.
+The final local unsharded checks were stopped after complete CI passed. Neither local run is recorded as a complete pass.
+
+## Release and Live Check
+
+Release revision: `935ad5bb3070cfb6df38015f93297cb34c5bc033`.
+The image and both running services identify that revision.
+The release used its immutable source archive, separate from other executors' worktrees.
+
+The API and worker stopped before the final backup.
+The custom `pg_dump` archive and its restore listing passed validation.
+The complete memory file volume and private configuration were also backed up and checked.
+The backup retains the previous image identity for recovery.
+
+Existing production migration checksums matched the release source.
+Only `062_model_calls.sql` was new. Its applied checksum matched the source.
+Owner-scoped memory, claim, source, and work-item counts were unchanged across migration.
+Readiness passed. Startup logs had no error markers.
+
+The live secretary used the default Codex channel, model `gpt-6.1-sol`.
+The check returned `运行正常` in 17.12 seconds, with recorded secretary usage.
+Total claims and active claims were both 5,253 before and after the check.
+
+Cleanup selected only this check's smoke identity. Its request source count was zero after cleanup.
+No failed or mutating receipt was observed. Accounting evidence was retained.
+
+This live secretary call still uses its declared legacy migration path.
+The check verifies live deployment, not complete gateway coverage or Phase 3.9 acceptance.
 
 ## Uncertain and Remaining
 

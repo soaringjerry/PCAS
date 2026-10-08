@@ -37,6 +37,7 @@ The [Roadmap](whitepaper.md#10-roadmap) gives the phase sequence, delivery scope
 | Phase 3 | Workspace release on 2026-10-08. | [Rollout](evaluations/2026-10-08-phase3-rollout.md). |
 | Phase 3.5 | Automatic-item release on 2026-10-08. | [Rollout](evaluations/2026-10-08-phase3_5-rollout.md). |
 | Phase 3.6 | Date-review release on 2026-10-08. | [Rollout](evaluations/2026-10-08-phase3_6-rollout.md). |
+| Phase 3.9 shared skeleton | First background scope released at `935ad5b`. Phase 3.9 remains incomplete. | [Acceptance and live check](evaluations/2026-10-08-foundation-shared-skeleton.md). |
 
 Phase 2.0 was rolled back on 2026-10-01.
 Its design is stored under the recorded `archive/phase2-0/*` tags.
@@ -81,6 +82,24 @@ The [five-layer test contract](architecture.md#five-test-layers) is required for
 Architecture checks come first. Recorded production-copy replay comes second, before further business-domain migration.
 Owner contracts, fixed concurrency scenarios, and nightly real-model score trends remain required work.
 These requirements are not a claim that the five layers are complete.
+
+### Foundation Delivery Milestones
+
+These milestones expand the [roadmap](whitepaper.md#phase-39-foundation) into delivery order.
+They have different workloads. Their count does not establish a completion percentage.
+The [architecture acceptance](architecture.md#10-foundation-acceptance) governs phase closure.
+
+| Order | Delivery | Current state |
+|---|---|---|
+| First | Architecture documents, responsibilities, and existing-path inventory. | Initial direction and inventory recorded. Refresh affected paths before each migration. |
+| Second | Shared gateway, registered prompts, and architecture checks. | First background skeleton released at `935ad5b`. Complete provider and owner coverage remains outstanding. |
+| Third | Recorded production-copy replay. | Required next, before business-domain migration. Not delivered. |
+| Fourth | Owner pilot, then complete business paths and remaining model calls. | Domain extraction has not started. Keep temporary adapters until their named callers migrate. |
+| Fifth | Unified activity queries, declared event responses, and causal-chain limits. | Targets. Existing records and queue supply their starting mechanisms. |
+| Sixth | Complete five-layer and whole-system acceptance. | Outstanding. Include resource comparisons and traces for incorrect and missing expected actions. |
+
+The order identifies dependencies. Compatible scopes can proceed together after their prerequisites are established.
+Start nightly evaluation after complete gateway coverage under the architecture's [test contract](architecture.md#five-test-layers).
 
 ## Documentation Changes
 

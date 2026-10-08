@@ -1,5 +1,9 @@
 # 任务 C2：从依据卡片点开，直接看到当时那句话（前端）
 
+> **Historical task record.** This text records an earlier phase or investigation.
+> Use the [current documentation](../../../README.md) and [project status](../../../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 执行者 Opus 5.5（任务 C 的同一个执行者）。分支 `phase2/b1-C2-source-sheet`，从 `origin/phase2/batch1` 建；工作区 `/root/PCAS-wt/b1-C2`；PR base `phase2/batch1`。
 
 先读 [本批总览与契约](README.md) 的 R8、R8a 和第 7、8 节，以及 [界面与交互原则](../../../design/principles.md)。这是任务 C 交付时提出来的后续：依据卡片里的原话现在能点开，但点开之后的面板是给资料库用的，不适合日常对话。

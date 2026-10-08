@@ -1,16 +1,16 @@
 # PCAS
 
-PCAS 是一支围绕你一个人的自托管 AI 支持团队：秘书、二把手、管家与工作室共用一个记忆核心，一句话就能把事办了。前端通过 Go 服务读写 PostgreSQL；浏览器只保留未发送的草稿和界面偏好。记忆的原文、陈述、版本、证据与授权由统一服务维护。
+PCAS is a self-hosted personal AI support team.
+The secretary, deputy, butler, and project workspaces use one memory core.
+The user gives a request. The team finds the necessary information, does permitted work, and shows the result.
 
-文档从 [文档总入口](docs/README.md) 找：现在做到哪了、每个阶段的入口、部署和接入说明、每次验收的记录都在那里登记。最常用的三个：
+[Documentation](docs/README.md) is the entry point for current specifications and historical records.
+Start with the [Whitepaper](docs/whitepaper.md), [Memory Architecture](docs/memory-architecture.md), and [Project Status](docs/status.md).
 
-- [白皮书](docs/whitepaper.md)：定位、团队角色、记忆核心与路线图，其他文档以它为准
-- [第 2 阶段任务入口](docs/tasks/phase2/README.md)：下一步要做的事（未开工）
-- [待办清单](docs/tasks/backlog.md)：已知但还没处理的问题
+## Run
 
-## 运行
-
-需要 Docker Compose。复制 `.env.example` 为 `.env`，设置独立的随机数据库密码、所有者 UUID 和至少 32 字符的随机 `PCAS_API_TOKEN`。不要提交 `.env`。
+Use Docker Compose. Copy `.env.example` to `.env`.
+Set a database password. Set the owner UUID. Set a random API token with at least 32 characters.
 
 ```sh
 chmod 600 .env
@@ -18,17 +18,18 @@ docker compose build api
 docker compose up -d --no-build
 ```
 
-默认入口 `http://127.0.0.1:12352`。登录密码是服务端 `PCAS_API_TOKEN`。公网部署设置 `PCAS_BIND_ADDRESS=0.0.0.0` 和精确的 HTTPS `PCAS_PUBLIC_URL`。数据库不发布端口。
+The default address is `http://127.0.0.1:12352`.
+The login password is `PCAS_API_TOKEN`.
+The default text channel uses the configured Codex account and `gpt-6.1-sol`.
+API models, embeddings, and audio have different configuration.
+See [Deployment](docs/deployment.md) and [Input Reference](docs/connectors.md).
 
-设置页通过 Codex 设备登录接入 ChatGPT 订阅。官方 Sign in with ChatGPT 直连通道暂时默认关闭；可通过 `PCAS_CHATGPT_DIRECT_ENABLED=true` 开启开发验证入口，且须完成真实登录、生成、刷新及撤销验收并重新连接后才成为默认。默认文本模型固定为 `gpt-6.1-sol`。设置页支持填写 OpenAI 兼容 API 地址、密钥与模型；服务端 JSON 配置继续支持 OpenAI Chat Completions、Responses 和 Anthropic Messages。手动交接无需模型账户。默认向量模型为 OpenAI `text-embedding-3-small`，需配置独立 API Key；设置页可补建旧资料向量。本地中文向量服务作为可选 profile 保留；音频转录仍使用独立的通用模型配置。设置页可管理 Webhook、定时拉取、文件夹同步和 ChatGPT/Claude 归档导入。
+## Check
 
-## 检查
-
-Go 版本由 `go.mod` 指定，前端需要 Node.js 22.12+。
+Use the Go version in `go.mod` and the Node.js version range in `web/package.json`.
 
 ```sh
 make check
-# PostgreSQL 必须支持 vector；测试在独立临时 schema 中执行。
 PCAS_TEST_DATABASE_URL='postgres://user:password@localhost/test?sslmode=disable' make test-integration
 cd web
 npm ci
@@ -37,10 +38,15 @@ npm run type-check
 npm run build
 ```
 
-真实浏览器回放需要一个使用临时数据库的服务，见 [前端测试说明](web/README.md)。验证范围与未完成的架构评测列在 [服务文档](docs/memory-service.md)，不将适配器测试等同于真实账户调用或完整召回率验收。
+Use a disposable integration test database with pgvector.
+Without its environment variable, PostgreSQL integration tests can skip.
+Run Playwright and Chromium with `env -u DISPLAY`.
+See [Frontend Tests](web/README.md) for the applicable commands and isolated backend setup.
+[Project Status](docs/status.md) gives the limits of recorded model and live checks.
 
-## 许可证
+## License
 
-Copyright (C) 2026 CoYume Pty Ltd (Australia)
+Copyright (C) 2026 CoYume Pty Ltd (Australia).
 
-本项目以 [GNU Affero General Public License v3.0](LICENSE) 发布。修改后通过网络向他人提供服务时，须向这些用户提供修改后的完整源码。
+PCAS uses the [GNU Affero General Public License v3.0](LICENSE).
+The license gives source-distribution requirements for modified software offered over a network.

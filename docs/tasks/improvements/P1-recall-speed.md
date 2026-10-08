@@ -1,5 +1,9 @@
 # 任务 P1：资料多了以后，秘书回话不能变慢
 
+> **Historical task record.** This text records an earlier phase or investigation.
+> Use the [current documentation](../../README.md) and [project status](../../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 2026-10-03 用户导入了 27,399 条聊天记录（1,447 段对话）。协调者在线上实测：导入前秘书回一句话约 6 秒，导入后同样一句短问话 46.5 秒；数据库里那条回忆查询单次执行超过 80 秒的也看到过（当时后台同时在整理）。这是现在最影响使用的问题。
 
 ## 原因（查代码确认）

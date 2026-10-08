@@ -1,5 +1,9 @@
 # P2 记忆多了以后，秘书回一句话又变慢了
 
+> **Historical task record.** This text records an earlier phase or investigation.
+> Use the [current documentation](../../README.md) and [project status](../../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 2026-10-05。执行者 6.1 Sol。**已完成并上线（PR #195，2026-10-05）**：线上 5254 条记忆时一轮从 27–36 秒降到 12–20 秒；交付记录见 [P2 秘书一轮对话的数据库耗时](../../evaluations/2026-10-05-p2-turn-speed.md)。
 
 分支 `fix/p2-turn-speed`，从 `origin/main` 建；工作区 `/root/PCAS-wt/p2`；Draft PR 的 base 是 `main`。

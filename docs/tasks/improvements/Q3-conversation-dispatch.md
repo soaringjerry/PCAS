@@ -1,5 +1,9 @@
 # Q3 历史对话及时进入记忆提取
 
+> **Historical task record.** This text records an earlier phase or investigation.
+> Use the [current documentation](../../README.md) and [project status](../../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 2026-10-03 用户要求修复已存好 27,399 条消息但已整理仍为零的问题。
 
 ## 规则与操作序列

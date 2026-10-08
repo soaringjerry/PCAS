@@ -1,74 +1,143 @@
-# 统一记忆与工作台服务
+# PCAS Service Reference
 
-架构依据为 [记忆架构](memory-architecture.md)。本文描述的是已经接通的实现，对应架构 1.1 的范围；架构 1.2 新增的现状层、分组、新旧比较和办事时的强度还没有实现。Go 服务集中维护原文、规范记录、派生索引、授权与工作上下文；待办、日程、想法的执行状态属于工作台行动模块，执行回执作为来源回写记忆。
+Implementation reference for repository commit `c9ac3fd`. Updated 2026-10-08.
 
-## 已连接的链路
+The Go service stores memory and workspace state in PostgreSQL.
+The browser stores drafts and interface preferences, not the authoritative fact database.
+The [Memory Architecture](memory-architecture.md) gives behavior requirements.
+[Project Status](status.md) records delivery and validation limits.
 
-- 原文和附件先保存，来源 ID/版本去重，事务事件队列异步解析、分段、抽取、分词和向量化；尚未索引的原文可以直接搜索。长文抽取分成有重叠的独立作业，尾部不会静默丢弃。
-- 实体/别名、经历、原子陈述、证据与有限关系写入；关系和陈述必须有依据。抽取内容保留不确定性，不把模型输出标成用户确认。
-- `continue`、`remember`、`history` 三种召回；全文、属性与可选向量结合；历史逐页展开，返回覆盖缺口。对象、关系和 token 预算限制上下文，低活跃不作为硬过滤。
-- 陈述纠正/现实变化、有效时间/表达时间/系统时间、版本冲突与幂等提交；更改或撤销授权使依赖结果过期。生成期间发生变化时不能采纳旧输出。
-- 删除按范围清理规范记录、相关派生结果、附件与训练副本，保留无正文的阻断标记。只删除陈述会保留原文；前端可选择同时删除来源。
-- 固定保留、按实际使用强化、查询时衰减；显式定时跟进、每日待确认检查、条件线索唤醒、暂缓和停止。模型关联线索注明「待核验」，不会自动把条件当成事实或创建任务。
-- Webhook、带游标的 HTTP 定时读取、文件夹同步、ChatGPT/Claude/通用归档；消息角色、历史分支、相邻上下文和有版本的经历成员保留。
-- 带依赖的摘录摘要异步生成，读取时核对版本、授权与成员变化；每条记忆的衰减半衰期及强化上限可在设置页调整。
-- 前端的任务/想法/项目、确认/纠正、来源查看、导入、手动交接、AI 生成与结果采纳、训练筛选/导出均通过服务端命令持久化。没有示例 AI 回复或浏览器事实数据库。
+## 1 Code Boundaries
 
-## API
-
-所有业务接口使用 owner Cookie 或 Bearer 令牌。服务端固定用户范围；外部 AI principal 另行授予记录权限。
-
-| 接口 | 用途 |
+| Concern | Code |
 |---|---|
-| `POST /v1/session` / `DELETE /v1/session` | 登录 / 退出 |
-| `GET /v1/workspace` | 工作台快照、修订号、处理状态与预算 |
-| `POST /v1/workspace/commands` | `requestId` + `expectedRevision` + 明确 action；幂等；只有切换与批量命令严格校验修订号；`undoAction` 按动作记录撤销 |
-| `POST /v1/desk/turn` / `GET /v1/desk/turns` | 秘书：一句话理解并执行，返回回执与卡片；按对话恢复（见 [接口契约](tasks/phase1/contracts.md) 第 2 节） |
-| `/v1/notify/config`、`/push-subscriptions`、`/telegram`、`/test`、`/notices/{id}/dismiss` | 提醒通道配置与关闭置顶提醒 |
-| `GET /v1/workspace/export` | JSON 资料导出；`training=true&confirmedOnly=true` 筛选 JSONL |
-| `POST /v1/memory/sources` | 版本化文本来源 |
-| `GET /v1/memory/sources/{id}?version=N` | 原文、派生解析版本和处理进度 |
-| `GET /v1/memory/sources/{id}/conversation?version=N` | owner 查看引用消息周围的原对话；`before`/`after` 为同一会话消息 ID，`limit` 默认 7、最大 20 |
-| `POST /v1/memory/attachments` | multipart 附件上传 |
-| `GET /v1/memory/sources/{id}/attachment?version=N` | 鉴权下载原件 |
-| `POST /v1/memory/commit` | 有证据的结构化图批量提交 |
-| `POST /v1/memory/correct` | 带期望版本的纠正或真实变化 |
-| `POST /v1/memory/delete` | 按范围删除并阻断重导入 |
-| `POST /v1/memory/use` | 幂等的用户提及、确认、实际采用事件 |
-| `POST /v1/memory/recall` | 召回摘要、引用、缺口与继续查询游标 |
-| `POST /v1/memory/expand` | 原文、实体、经历、陈述、证据和历史展开 |
-| `GET /v1/memory/capabilities` | 区分已提供与尚未配置的能力 |
-| `GET/POST /v1/connectors` | 查看或配置资料接入 |
-| `POST /v1/connectors/{id}/records`, `/{id}/sync`, `/archive` | 推送记录、排队同步、保存聊天归档 |
-| `POST /v1/memory/summary` | 按有效依赖读取或重建摘要 |
-| `POST /v1/memory/activity` | 单条记忆的曝光参数 |
-| `GET /v1/models` | 不包含密钥的模型信息 |
-| `/v1/chatgpt/account`, `/login`, `/logout`, `/limits`, `/models` | 官方 Codex 订阅接入 |
+| Memory interfaces and record types | [Memory package](../internal/memory/contracts.go). |
+| Workspace types and commands | [Workspace model](../internal/workspace/model.go). |
+| HTTP authentication and memory routes | [HTTP server](../internal/httpapi/server.go). |
+| Source storage and migrations | [Database](../internal/postgres/database.go) and [migrations](../internal/postgres/migrations/). |
+| Retrieval | [Retrieval](../internal/postgres/retrieval.go) and [query hints](../internal/memory/query_plan.go). |
+| Secretary preparation, model work, and execution | [Desk turn](../internal/postgres/desk_turn.go) and [actions](../internal/postgres/desk_actions.go). |
+| Commands and undo | [Commands](../internal/postgres/commands.go) and [action log](../internal/postgres/actions_log.go). |
+| Background queue coordination | [Worker](../internal/worker/worker.go). |
+| Date closure and review | [Date completion](../internal/postgres/deadline_completion.go) and [date review](../internal/postgres/date_tidy.go). |
+| Project creation and planning | [Topic projects](../internal/postgres/topic_projects.go) and [effort](../internal/postgres/effort.go). |
 
-数据类型见 `internal/memory/contracts.go`、`internal/memory/commit.go` 和 `internal/workspace/model.go`；工作台 action 类型见 `web/src/store/actions.ts`。原始文件、OCR、抽取文本与转录通过 `representation` 区分。
+Many business operations stay in the PostgreSQL package.
+An application-service boundary must have explicit interfaces in addition to a package name.
+The public retrieval path and team retrieval path have different inputs and ranking options.
+Query hints currently use deterministic text rules. These rules are not complete natural-language interpretation.
 
-## 存储和一致性
+## 2 HTTP Interfaces
 
-### 记忆摘要与原对话
+Authentication uses an owner session or an applicable Bearer token.
+The service binds the owner scope. External principals use explicit grants.
+Connector tokens can write only to their connector.
 
-记忆保留到原文具体版本、引用字符范围及会话归属的链接。来源面板可展开同一会话当前分支的相邻消息，保留说话人和表达时间，突出引用原话；继续向前/向后分页可阅读更完整的对话。历史旁支不与其他旧分支拼接。没有会话归属的资料提供原件，不推测关联对话。
+| Interface | Purpose |
+|---|---|
+| `POST /v1/session`, `DELETE /v1/session` | Start or end an owner session. |
+| `GET /v1/workspace` | Read workspace state, revisions, processing status, and budget. |
+| `POST /v1/workspace/commands` | Execute a command with `requestId` and applicable revision checks. |
+| `POST /v1/desk/turn`, `GET /v1/desk/turns` | Execute a secretary turn or read conversation history. |
+| `DELETE /v1/desk/smoke/{id}` | Clean an identified check-only group. |
+| `GET /v1/workspace/schedule`, `/in-progress` | Read timed work or untimed task progress. |
+| `GET /v1/workspace/handover`, `/deadlines`, `/assistant-requirements` | Read current-state information. |
+| `GET /v1/workspace/memory-groups`, `/memory-groups/{key}/memories` | Read memory groups and paginated members. |
+| `GET /v1/workspace/memories`, `/memories/{id}`, `/memory-facets` | Search memory, read one memory, or read filter values. |
+| `GET /v1/workspace/projects/{id}/handover`, `/timeline` | Read project status or plan. |
+| `GET /v1/workspace/documents/{id}/versions`, `/versions/{version}`, `/diff` | Read document history and differences. |
+| `GET`, `POST /v1/workspace/items/{id}/files` | Read or add workspace files. |
+| `DELETE /v1/workspace/items/{id}/files/{sourceId}` | Remove a workspace file. |
+| `GET /v1/workspace/export` | Export records or selected training samples. |
+| `POST /v1/memory/sources` | Store a versioned text source. |
+| `GET /v1/memory/sources/{id}` | Read source content and processing state. |
+| `GET /v1/memory/sources/{id}/conversation` | Read neighboring messages on the same branch. |
+| `POST /v1/memory/attachments` | Store an attachment. |
+| `GET /v1/memory/sources/{id}/attachment` | Download the authenticated source original. |
+| `POST /v1/memory/commit`, `/correct`, `/delete`, `/use` | Write structured data, correct data, delete data, or record use. |
+| `POST /v1/memory/recall`, `/expand` | Retrieve references or expand their data and evidence. |
+| `POST /v1/memory/summary`, `/activity` | Request a dependent summary or set activity parameters. |
+| `GET /v1/memory/capabilities` | Read available capabilities and configuration gaps. |
+| `GET`, `POST /v1/connectors` | Read or configure input sources. |
+| `GET /v1/models` | Read model information without credentials. |
+| `/v1/chatgpt/account`, `/login`, `/logout`, `/limits`, `/models` | Manage the Codex channel. |
+| `/v1/chatgpt/direct/account`, `/login`, `/callback`, `/select`, `/logout` | Manage the optional direct channel. |
+| `/v1/notify/config`, `/push-subscriptions`, `/telegram`, `/test`, `/notices/{id}/dismiss` | Manage notification delivery. |
 
-秘书、旧问答接口、副手和手动交办按已召回记忆的证据补读上下文，优先处理含指代的记忆。一次最多四个来源窗口、共 10,000 字符，每条消息最多读取 900 字符并明确标注片段；超预算或上下文不可用时提示不能从摘要补猜。窗口不代表整段对话，AI 回复只用于理解，观点与决定以用户原话为依据。
+Full route methods and optional interfaces are in the [HTTP package](../internal/httpapi/).
+Command types are in [Frontend Actions](../web/src/store/actions.ts).
+`expectedRevision` is not a universal lock for each command. Examine the command's actual validation path.
+Legacy `/v1/desk/answer` and `/v1/desk/route` stay in code; the current secretary does not use them.
 
-读取的原话版本加入回答和交办的依赖账本，遵守原有可见性、事项排除及生成后的重新校验；受限窗口不进入模型。已有记忆无需重新提取即可查看和使用来源上下文。含指代的阅读提示不代表对象已被确认；新提取要求在有唯一明确依据时补全对象和必要限定，未明确的称呼不能建为确定人名。
+## 3 Execution and Evidence
 
-实现规则与操作序列见 [E4](tasks/improvements/E4-memory-evidence-context.md)。公开文档、测试和示例使用虚构内容；真实记忆、生产查询及截图只保留本地。
+Secretary requests use request identities and conversation ordering.
+Actions resolve server-supplied aliases. A model must not invent database identifiers.
+The action path validates the result and records actual changes for undo.
+Home date closure and secretary date closure share `completeDeadlineTx`.
 
-规范记录位于 PostgreSQL，附件在独立文件卷，向量带模型与维度。摘要、交接和索引依赖原始 ID/版本。写入与队列事件同事务提交；worker 使用有期限的租约和随机 fencing token，失去租约后不能提交。普通派生处理可幂等重试；可能已付费的模型调用保留预算预留并要求显式重试。
+That function marks a memory version. It does not delete the memory.
 
-副手上下文由服务端组装，校验记忆可见性、有效版本和排除项。采纳输出嵌入事项后仍记录依赖；输入删除时清理这些副本，撤权后后续交接排除其内容。训练输出另存版本和选取清单。
+Source context keeps speaker, branch, statement time, and version.
+The neighboring-message interface defaults to seven messages and permits up to twenty.
+Model evidence expansion reads up to four source windows in 10,000 characters.
+Each message excerpt is limited to 900 characters.
+Clipped or unavailable context supplies a coverage gap.
 
-## 验证与能力边界
+These values are implemented in [Evidence Context](../internal/postgres/evidence_context.go).
+The model must not treat an excerpt as the complete conversation.
 
-自动测试覆盖事务回滚、并发重复写入、来源版本、授权隔离、过期租约、原文立即召回、历史分页、纠正传播、生成中途变化、撤权后的派生内容、删除传播、条件提醒去重、长文分段和预算。新增接入游标原子提交、归档删除阻断、摘要并发/权限失效、衰减与提醒独立性，以及前端完整流程的浏览器检查。
+The source write and work event share a transaction.
+Workers commit with a lease and fencing token.
+Derived results keep dependencies. Reads and result application check the applicable current versions and access.
 
-已使用部署账户的 ChatGPT 订阅和真实本地向量运行五组固定场景，包括日期记错、同名对象、局部偏好、旧方案、AI 补充、他人状态及附件缺口；报告见 [2026-09-29 验收](evaluations/2026-09-29.md)。测试数据位于隔离数据库 schema，测试结束删除；没有把回放资料写进用户记忆。
+Deletion follows scope and clears affected copies. Blocking markers contain no source text.
+Training exports keep the selected samples and versions.
 
-通用服务、连接器和 UI 已接通。具体应用的封闭接口仍需由对应应用提供导出、Webhook 或适配通用读取格式；商业模型需配置自己的密钥和价格。实体消歧保留候选，同名不自动强行合并；跨应用稳定对象可由结构化提交明确引用。关系展开有边数、候选和跳数预算，完整历史分页返回覆盖情况。
+## 4 Current Processing Values
 
-固定回放是可重复的功能基线，12 条合成资料的结果不能替代大规模真实资料上的召回率或任意自然语言的准确率承诺。模型输出仍带证据和可纠正状态，摘要使用原文摘录与当前规范记录，不引入额外事实来源。
+The values below come from code. They are not a new performance or model-quality guarantee.
+
+| Background stage | Calls per rolling hour |
+|---|---:|
+| Organization | 40 |
+| Statement comparison | 40 |
+| Entity comparison | 30 |
+| Entity candidate scan | 6 |
+| Global handover | 2 |
+| Project handover | 10 |
+| Effort estimation | 10 |
+| Topic project judgment | 2 |
+| Date review | 30 |
+
+[Background Budgets](../internal/postgres/background_budget.go) gives these limits.
+Unused capacity is not transferred between stages. Excess work is deferred.
+Do not copy a previous phase's total as the current total.
+This reference does not establish the rationale or complete omission accounting for each limit.
+
+Date review checks unresolved dates, recurring arrangements without a clock time, and dates more than one day past.
+It records a decision per memory version and class.
+It shows up to forty task titles and twenty idea titles to the model.
+It clips source and memory text at 1,200 characters and counts clipping.
+
+The prompt contains age-based guidance. Its decision quality is under review.
+See [Date Review](../internal/postgres/date_tidy.go).
+
+Automatic topic projects use a minimum of ten current memories, a goal, and a date.
+The model checks existing project meaning before creation.
+The daily creation limit is four. Excess work can continue on a subsequent day.
+See [Topic Projects](../internal/postgres/topic_projects.go).
+
+Start-date calculation uses four work hours per day and excludes weekends.
+The user estimate is kept. See [Effort](../internal/postgres/effort.go).
+These implementation values can change through an approved behavior change.
+
+## 5 Validation Limits
+
+CI includes unit tests, PostgreSQL integration tests, and browser checks.
+Without `PCAS_TEST_DATABASE_URL`, PostgreSQL tests can skip; see [Test Setup](../internal/postgres/integration_test.go).
+A skipped suite is not database validation.
+Account, device, performance, and recall checks have different conditions.
+The reports in the [History Catalog](history/README.md) give their data and scope.
+
+Passing mocked output checks does not prove prompt quality or correctness on large personal datasets.

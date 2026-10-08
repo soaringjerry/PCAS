@@ -1,5 +1,9 @@
 # 第 2–4 批：并行方案与数据约定
 
+> **Historical task record.** This text records an earlier phase or investigation.
+> Use the [current documentation](../../README.md) and [project status](../../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 2026-10-02。用户要求第 2、3、4 批并行开发，尽快做完第二阶段。本页是三批共用的约定：谁先谁后、文件怎么分、数据长什么样、大家共同遵守什么。**所有执行者先读完本页，再读自己那一批的契约和自己的任务包。** 本页和任务包冲突时以本页为准，并立刻告诉协调者。
 
 各批的规则和操作序列在各自的契约里：[第 2 批](batch2/README.md) · [第 3 批](batch3/README.md) · [第 4 批](batch4/README.md)。

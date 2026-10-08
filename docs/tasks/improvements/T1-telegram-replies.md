@@ -1,5 +1,9 @@
 # 任务 T1：Telegram 里的回复不再缺斤少两
 
+> **Historical task record.** This text records an earlier phase or investigation.
+> Use the [current documentation](../../README.md) and [project status](../../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 2026-10-03 用户反馈（附了一段真实对话），由协调者直接实现。
 
 ## 之前的问题

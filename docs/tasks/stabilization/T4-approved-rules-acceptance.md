@@ -1,5 +1,9 @@
 # T4：独立验证四个已确认用例并汇总
 
+> **Historical task record.** This text records an earlier phase or investigation.
+> Use the [current documentation](../../README.md) and [project status](../../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 执行者 Sol / high，不写产品实现。用户 2026-10-01 已确认撤销从最后一步往回退，以及同轮新建后继续加步骤。此前 U3、U4-user、U5、U10 从待裁定转为待实现/验证，不是直接标为通过。
 
 基线 `59e25daa67df7447f0a09b7f0bd9e5d65edab65e`；工作区 `/root/PCAS-wt/T4`，分支 `stabilization/T4-approved-rules`。先读协调者工作区 [正式契约](../phase1/contracts.md) 与 F13/F14 任务。本轮新引用编码由协调者在 F14 技术审查后固定，未收到固定协议前只做已明确的撤销测试和验收准备。

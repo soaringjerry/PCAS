@@ -1,5 +1,9 @@
 # 任务 D1：副手结果自动采纳
 
+> **Historical task record.** This text records an earlier phase or investigation.
+> Use the [current documentation](../../README.md) and [project status](../../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 执行者：**6.1 Sol** · 分支：`phase1/D1-auto-adopt` · 依赖：**B1 已合并**（需要用到它的动作记录收集器）
 开工前读：[README.md](README.md)、[contracts.md](contracts.md) 第 1、5 节。
 

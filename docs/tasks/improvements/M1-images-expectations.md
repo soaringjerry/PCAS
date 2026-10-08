@@ -1,5 +1,9 @@
 # M1 image acceptance expectations
 
+> **Historical task record.** This text records an earlier phase or investigation.
+> Use the [current documentation](../../README.md) and [project status](../../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 Written before product implementation. All model responses, attachments and screenshots are synthetic. Existing tests remain unchanged.
 
 | Sequence | Expected observations | Planned coverage |

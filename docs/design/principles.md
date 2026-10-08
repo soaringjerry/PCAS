@@ -1,88 +1,80 @@
-# PCAS 界面与交互原则
+# PCAS Interface Principles
 
-这几条是讨论后定下的，界面和后台逻辑都按它来。改设计前先对照这里；上位依据是 [白皮书](../whitepaper.md)。
+Current interface specification. Updated 2026-10-08.
 
-## 定位
+The interface helps the user get work done and see the result.
+The [Whitepaper](../whitepaper.md) gives product behavior and action boundaries.
+This document gives presentation rules. It does not change those boundaries.
 
-PCAS 是一支围绕你一个人的支持团队：前台秘书、二把手、管家，每件大事有自己的工作室，观测台管着整个团队。
-用户操作越少越好，更多的逻辑在后台跑。它和 AI 聊天的区别是：办事而不是回话，能可视化就不写长文。
+## 1 Conversation and Results
 
-## 先做后报，一键撤销
+Use one secretary input on the home page and in each workspace.
+Keep the input available while an answer or background action is in progress.
+Keep an unsent draft after refresh.
+Show receipts beside the resulting work.
+Show the actual outcome, including skipped and failed actions.
 
-- 用户说一句，秘书理解整句意图，能做的都做掉：回答、建事项、设提醒、归项目、派副手，可以同时发生。
-  不让用户先选"问一下 / 记下来 / 交给副手"。
-- 可以撤回的动作直接执行，回执一行说清做了什么，后面跟【改】【撤销】。不先生成候选再等用户逐条确认。
-- 只有真有歧义、会影响结果的那一个字段才追问（例如"张三"对应两个人），其余照常执行。
-- 撤销本身也是动作，会被记录；被撤销和被保留同时是训练信号。
+Ask only about the field that contains a meaningful ambiguity.
 
-## 按钮只剩三种
+## 2 Visual Information
 
-1. **完成打勾**
-2. **撤销 / 改**，跟在回执和结果后面
-3. **确认**，只在往外发送、删除、花钱之前出现
+Use cards for sourced answers, timelines for work, and charts for cost.
+Use date blocks and a current-time line for schedules.
+Use short text for receipts, reasons, and necessary explanations.
+Do not repeat a displayed list in a long paragraph.
+Give each source a way to open its source content.
 
-状态、截止、项目、交给哪个副手、带上哪些记忆，不做成下拉框和勾选框：由系统推断，要改就说一句，
-或者直接点文字改。标题、说明、文档正文点进去就能改，失焦自动保存，不设"编辑 / 保存 / 取消"。
+The main action controls are completion, change or undo, and necessary confirmation.
+Users can edit a title, note, or document in place.
+Show the save status of an edit. Keep the draft when saving fails.
 
-## 出错要说清楚
+## 3 Home
 
-每个失败都要告诉用户具体是什么问题、该怎么办（例如「token 不对」「请先给 bot 发一句话」「超过今天的额度」），不能一律说「出了点问题」或「暂时不可用」；同时留一条不含正文和密钥的日志，写明出错的环节和错误类型。原话和已经付费的结果在任何失败下都不能丢。
+Put the most applicable current request above the secretary input.
+Show recent team activity below the input.
+Organize remaining information into timed work, tasks, projects, and ideas.
+Remove empty sections from the daily view.
 
-## 能可视化就不写长文
+Put only applicable timed entries on the timeline.
+Keep unresolved dates and arrangements without a usable time outside the timeline.
+Show overdue work without making each previous entry an urgent warning.
+Show automatic work with its source and undo.
 
-日程用时间块，进展用时间轴，花费用图，找到的记忆用带来源的卡片。秘书的回复是短回执加卡片，
-不写"今天 1. … 2. … 3. …"。文字只用于短回执和必要的解释。
+Group older entries when necessary. Keep the complete list accessible.
 
-## 界面：功能不少，界面极致简洁
+The current layout direction replaces the earlier three-column design.
+[Project Status](../status.md) gives the layout direction and its delivery status.
 
-- Apple 式设计：只露出当下需要的东西，其余放到第二层或后台。
-- 首页先是秘书，再是清单（2026-10-09 起，替换 2026-09-30 的「左今天、中导办台、右项目」三栏）：
-  正中最上面是「最要紧」的一件事（到点的提醒、今天下一个钟点、有人在等、你说过要尽快的），
-  紧接着是导办台的输入框，输入框下面直接是「你不在的时候」的最近三条。
-  往下并排三块：「今天」只放有时间的，「待办」只放没时间的，「项目」和「想法」。空的那块不占位置。
-  原来的问题是中间一片空白只有输入框、信息全挤在两侧，最显眼的位置什么都没有。
-- 警示色只给真正赶时间的：今天的钟点、有人在等。以前的截止没了结的，排在今天下面、不用警示色；
-  超过一周的收成一行「更早的 N 条」。读记忆时对时间拿不准的备注不放在行上，点开在原话旁边。
-- 圆圈是「做完了」，行尾是「不要了」（指着时显示这三个字）。两个都能撤销。
-- 「待办」里你说过要尽快的在前，后台自己建的在后并标「后台建的」。
-- 导办台就是前台秘书，是首页唯一的输入框。它是一段连续的对话：问答进行中也可以顺手记另一件事、
-  改刚才的安排，输入框永远不被占住。草稿刷新后不丢。
-  它上方是叫号条，只放真正等你拍板的事（副手交回的结果、待发出的邮件）；下方是「你不在的时候，我做了这些」。
-- 大事进工作室：现状（结论 / 卡点 / 下一步）、计划时间轴、文件、文档与版本、副手的工作记录，
-  底部是同一个秘书，只是它知道你在看哪件事。
-- 只有三样东西会自己动：新回执、「现在」那条线、没人用导办台时慢慢流过的想法；
-  鼠标指着、正在输入或系统设置了减少动态效果时都停下。
-- 不做侧边栏。项目已经在大厅右边的项目墙上，侧边栏再列一遍只会重复，还把三块屏挤窄。
-  顶部只留一条细栏：回大厅（PCAS 标志，不在大厅时后面跟当前页标题）、搜索（`⌘K`）、观测台、设置。
-  新建项目、跳到某件事都在命令面板里做。手机上这条栏只剩图标。
-- 不做标签页、状态栏和常驻的记忆栏。快捷键提示只出现在顶栏的搜索按钮上，别处不放。
-- 系统内部的概念（候选、推测、曝光度、来源、训练样本）不出现在日常界面上，只在观测台里出现。
-  现在的资料库并入观测台。
+## 4 Workspace
 
-## 两条推进线
+Show the conclusion, blockers, and next action at the top.
+Show the handover update time and sources.
+During regeneration, identify the previous handover as the previous result.
+If there is no handover, show that the handover is unavailable.
+Correct underlying information through the secretary.
 
-事情按性质分两种，共用同一套事项和状态。
+Keep the plan timeline, files, document versions, and deputy results in the workspace.
+Show additions and removals when comparing versions.
+Show processing and upload failures beside the file.
+Keep the secretary input in the same workspace.
 
-| | 紧迫 | 在推进 |
-|---|---|---|
-| 是什么 | 有截止时间的，或者**别人在等你**的 | 没有截止时间的：长期的事、想法、你在等别人的事 |
-| 靠什么推进 | 时间 | 事件：新信息到了、前置事情做完了、副手推进了一步 |
-| 排序 | 已过截止 → 今天截止 → 别人在等你（等得越久越靠前）→ 近几天截止 | 刚有新进展、条件已经具备的排在前面 |
-| 提醒 | 按时间提醒；截止前按工作量倒推，提醒"该开始了" | **不主动提醒**。放在界面上，有新进展时才排到前面 |
+## 5 Observation Panel
 
-- "你在等别人"放在"在推进"。对方回复了就带回来；到了约定的跟进时间还没动静，才转进"紧迫"。
-- 很久没动的事安静地待着，不会消失。
-- **首页不是哪张表的全部内容。** 往首页放一类东西之前先问：真秘书会不会把这个摆到你面前。从记忆里读出来的日期，过了期的、别人报的时效、只是考虑过的，由秘书自己收起来再报一声（能放回去）；没有确定时间但确实要办的，是待办，进"在推进"，不上时间线。不给用户一张清单去勾。（2026-10-08，第 3.6 阶段）
+Put internal processing information in the observation panel.
+Show calls, source use, cost, access settings, background stages, and recovery actions there.
+Show deferral and failure with different status labels.
+Give the user a path from each result to its action and source.
+Daily work must proceed without approval of each memory or processing step.
 
-## 谁来做决定
+Some controls stay in the current library and settings.
+The complete observation panel includes functions in addition to these controls.
 
-- **后台自动做**（便宜，用规则、小模型或自己训练的模型）：提取和归类、更新状态、识别"别人在等你"、
-  检查条件和唤醒想法、去重。从你的话和接入的资料里提取出的待办、想法、项目，按可信度直接建（2026-10-08 起）：
-  你直接说的、不带「可能、考虑、如果」的，建好并在「你不在的时候，我做了这些」里回执，附【撤销】；
-  转述的、带保留的、AI 建议的留作候选放在观测台。没有「自动采纳」开关。
-  从历史导入里来的旧话不建当前待办（它们是过去的事）。
-- **秘书直接做**：用户这句话里能办的、可以撤销的动作。
-- **花 token 的重活**（写方案、查资料、起草、拆步骤）：用户明确要求就直接做，受每日额度约束；
-  系统自己觉得该做时只提建议，不自己开工。不做带预计花费的按钮，花费在观测台里看。
-  副手做完的结果自动放到该去的地方（子任务、文档、进度），附【撤销】；依据已经变了的结果不自动放。
-- **往外发送**：起草好给用户看，点一下才发。删除、花钱之前一定先问。
+## 6 Errors and Motion
+
+Show the failed step, reason, and available recovery action.
+Do not show an expected future action as completed work.
+Use empty-state text that agrees with the data.
+Limit motion to useful changes, such as new receipts and the current-time line.
+Stop nonessential motion during input, pointer interaction, or reduced-motion mode.
+
+Keep navigation compact. Do not add duplicate project lists or persistent internal-status controls.

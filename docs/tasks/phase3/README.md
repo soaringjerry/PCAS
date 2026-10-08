@@ -1,5 +1,9 @@
 # 第 3 阶段：工作室（入口与契约）
 
+> **Historical task record.** This text records an earlier phase or investigation.
+> Use the [current documentation](../../README.md) and [project status](../../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 2026-10-08。上位依据：[白皮书](../../whitepaper.md) §4 工作室、§5.6（项目交接说明）、§11、§16 第 3 阶段、§17 黄金路径 4 和 5；[记忆架构](../../memory-architecture.md) 1.4；[界面与交互原则](../../design/principles.md)；[任务流程规则](../process.md)。本页是第 3 阶段的唯一契约，三个窗口同时开发；和上位文档冲突时以本页为准，冲突处由协调者在收尾时改上位文档。**所有执行者先读完本页再动手。**
 
 开工前的六项修复另有任务包：[P0](P0-fixes.md)，在 `main` 上单独走，和本页的代码没有交集。

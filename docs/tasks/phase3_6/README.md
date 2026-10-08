@@ -1,5 +1,9 @@
 # 第 3.6 阶段：秘书会收拾（入口与规则）
 
+> **Historical task record.** This text records an earlier phase or investigation.
+> Use the [current documentation](../../README.md) and [project status](../../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 2026-10-08。上位依据：[白皮书](../../whitepaper.md) §3「一句话办事」「先做后报」、[界面与交互原则](../../design/principles.md)。协调者直接实现，没有分给执行窗口。
 
 ## 0 为什么有这一期

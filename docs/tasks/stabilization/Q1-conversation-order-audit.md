@@ -1,5 +1,9 @@
 # Q1：快速连续修改的顺序复现
 
+> **Historical task record.** This text records an earlier phase or investigation.
+> Use the [current documentation](../../README.md) and [project status](../../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 Sol / high，用户 2026-10-01 同意继续并行；任务是核实 A1-L1 静态风险，不先写产品实现。根协调者不写产品/测试。基线后端组合 `210144a93753bed736d2d5561a454f8d07185eb0`（含F13/F14，已完整Go验证），自建 `/root/PCAS-wt/Q1`，分支 `review/Q1-conversation-order`。
 
 场景：同一 conversation 先说「三点开会」，第一轮未返回时依次提交「改四点」「最后改五点」。当前设计串行处理，但 try_advisory_xact_lock 的多个等待者未保证先后。核实有明确接受顺序的第二/第三请求，是否会倒置执行并把最后时间改回四点。区分互斥、因果上下文和FIFO，不能把客户端并发启动顺序当服务端接受顺序。

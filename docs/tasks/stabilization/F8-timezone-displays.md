@@ -1,5 +1,9 @@
 # F8：各页面按工作区时区显示
 
+> **Historical task record.** This text records an earlier phase or investigation.
+> Use the [current documentation](../../README.md) and [project status](../../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 执行者：6.1 Sol。先读 [执行分工](dispatch.md)、[设计原则](../../design/principles.md) 与 F6 的 [任务要求](../phase1/postlaunch.md)。
 
 ## 问题和目标

@@ -1,5 +1,9 @@
 # 任务 B2：秘书前端
 
+> **Historical task record.** This text records an earlier phase or investigation.
+> Use the [current documentation](../../README.md) and [project status](../../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 执行者：**Opus 5.5** · 分支：`phase1/B2-secretary-frontend` · 依赖：A 已合并；与 B1 并行，按 [contracts.md](contracts.md) 第 1.4、2、6 节写代码，后端用 mock。
 开工前读：[README.md](README.md)、[contracts.md](contracts.md)、[界面与交互原则](../../design/principles.md)、[白皮书](../../whitepaper.md) 第 3、11 章。
 

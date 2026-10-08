@@ -1,5 +1,9 @@
 # 任务 U3：时间轴卡片的界面（前端）
 
+> **Historical task record.** This text records an earlier phase or investigation.
+> Use the [current documentation](../../../README.md) and [project status](../../../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 执行者 Opus 5.5（可以是做完 U2 的同一个执行者）。分支 `phase2/b3-U3-frontend`，从 `origin/phase2/batch3` 建；工作区 `/root/PCAS-wt/b3-U3`；Draft PR 的 base 是 `phase2/batch3`。
 
 先读 [并行方案与数据约定](../parallel.md) 第 3.4、5 节、[第 3 批契约](README.md) 的 R17 和序列 V1–V3，以及 [界面与交互原则](../../../design/principles.md)。这是一个小任务：只改秘书回答下面的时间轴卡片。

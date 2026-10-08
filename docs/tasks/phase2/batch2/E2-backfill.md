@@ -1,5 +1,9 @@
 # 任务 E2：后台队列的优先级、重试和旧资料补做（后端）
 
+> **Historical task record.** This text records an earlier phase or investigation.
+> Use the [current documentation](../../../README.md) and [project status](../../../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 执行者 6.1 Sol。分支 `phase2/b2-E2-backfill`，从 `origin/phase2/batch2` 建；工作区 `/root/PCAS-wt/b2-E2`；Draft PR 的 base 是 `phase2/batch2`。
 
 先读 [并行方案与数据约定](../parallel.md) 和 [第 2 批契约](README.md) 的 R11–R14 和序列 F1–F8。

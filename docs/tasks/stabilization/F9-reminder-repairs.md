@@ -1,5 +1,9 @@
 # F9：按独立发现修复提醒边界与失败日志
 
+> **Historical task record.** This text records an earlier phase or investigation.
+> Use the [current documentation](../../README.md) and [project status](../../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 执行者：6.1 Sol / high，`f9_reminder_repairs`，不是 T2 测试作者。T2 已交付 #24 / `a113988` 并停止写入，指定两份测试的后续写入权交给本任务。按 [执行分工](dispatch.md) 指定的 F7 + T2 候选基线开始，记录集成 SHA；依据 [R1–R11](README.md) 与正式接口契约，不能自行扩大提醒语义。
 
 ## 已确认的发现与要求

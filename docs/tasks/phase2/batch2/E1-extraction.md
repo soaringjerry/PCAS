@@ -1,5 +1,9 @@
 # 任务 E1：抽取出人、地点、时间（后端）
 
+> **Historical task record.** This text records an earlier phase or investigation.
+> Use the [current documentation](../../../README.md) and [project status](../../../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 执行者 6.1 Sol。分支 `phase2/b2-E1-extraction`，从 `origin/phase2/batch2` 建；工作区 `/root/PCAS-wt/b2-E1`；Draft PR 的 base 是 `phase2/batch2`。
 
 先读 [并行方案与数据约定](../parallel.md) 和 [第 2 批契约](README.md) 的 R1–R10、R12 和序列 X1–X18。你负责让抽取的结果带上人、地点、时间，并正确地写进记忆。

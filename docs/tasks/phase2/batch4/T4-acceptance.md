@@ -1,5 +1,9 @@
 # 任务 T4：第 4 批独立验收
 
+> **Historical task record.** This text records an earlier phase or investigation.
+> Use the [current documentation](../../../README.md) and [project status](../../../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 执行者 6.1 Sol，**不能是做 I、L 的执行者**（可以是做 V 的执行者）。分支 `phase2/b4-T4-acceptance`，从 `origin/phase2/batch4` 建（集成分支建好之前先从 `origin/main` 建，之后变基）；工作区 `/root/PCAS-wt/b4-T4`；Draft PR 的 base 是 `phase2/batch4`。
 
 先读 [并行方案与数据约定](../parallel.md) 和 [第 4 批契约](README.md)。你只看契约写测试，不看实现的做法。

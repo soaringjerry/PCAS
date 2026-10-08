@@ -1,5 +1,9 @@
 # 任务 M1：秘书看得见图片
 
+> **Historical task record.** This text records an earlier phase or investigation.
+> Use the [current documentation](../../README.md) and [project status](../../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 2026-10-03 用户提出三个问题，协调者查代码后确认都是真的。这是一个中等大小的任务（要动模型通道、后台处理、Telegram、网页四处），交给一个执行者实现，协调者读代码、上线、线上验证。
 
 ## 现在是什么样（查代码确认）

@@ -1,5 +1,9 @@
 # 任务 C2：Telegram 双向对话
 
+> **Historical task record.** This text records an earlier phase or investigation.
+> Use the [current documentation](../../README.md) and [project status](../../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 执行者：**6.1 Sol** · 分支：`phase1/C2-telegram-inbound` · 依赖：**B1 和 C1 都已合并**
 开工前读：[README.md](README.md)、[contracts.md](contracts.md) 第 1.4、2、4 节、[白皮书](../../whitepaper.md) 第 6、11 章。
 

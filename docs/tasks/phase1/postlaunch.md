@@ -1,5 +1,9 @@
 # 第 1 阶段上线后修复
 
+> **Historical task record.** This text records an earlier phase or investigation.
+> Use the [current documentation](../../README.md) and [project status](../../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 问题与根因见 [上线后问题复盘](../../evaluations/2026-10-01-phase1-postlaunch.md)。共同规则、环境和禁止事项沿用 [README](README.md)，包括 2026-10-01 新增的「验收与部署」要求。
 
 ## 任务

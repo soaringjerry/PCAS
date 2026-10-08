@@ -1,10 +1,17 @@
-# 通用资料接入
+# PCAS Input Reference
 
-在「设置 → 资料接入」创建 Webhook、HTTP 定时读取或服务器文件夹接入，也可以直接上传聊天归档。每条资料保留来源 ID、版本、原文、表达时间、角色、父消息和分支；相同来源版本重复发送不会重复创建记忆。正文立即可搜索，抽取和索引异步执行。
+Implementation reference. Updated 2026-10-08.
 
-## 应用推送
+Generic inputs include webhooks, HTTP polling, folders, and conversation archives.
+Each record keeps a source identity, version, text, statement time, role, parent message, and branch when supplied.
+Duplicate source versions do not create duplicate memory.
+Source storage and asynchronous interpretation have different progress states.
+Native application adapters are additional delivery work; see [Project Status](status.md).
 
-创建 Webhook 后，界面显示一次独立 Bearer 密钥。它只能写入对应接入，不能读取记忆或管理工作台。暂停接入立即停止接受写入。调用：
+## 1 Webhook Input
+
+Create the connector in settings. The interface supplies its write-only Bearer token once.
+A paused connector rejects writes. The token cannot read memory or manage the workspace.
 
 ```http
 POST /v1/connectors/{id}/records
@@ -17,54 +24,116 @@ Content-Type: application/json
   "records": [{
     "id": "conversation-42/message-7",
     "version": "3",
-    "title": "PCAS 方案讨论",
-    "text": "我决定采用统一记忆服务，图数据库先作为备选。",
+    "title": "Project discussion",
+    "text": "I decided to use the shared memory service.",
     "media_type": "text/plain",
     "expressed_at": "2026-09-29T09:00:00Z",
     "conversation_id": "conversation-42",
     "parent_id": "message-6",
     "role": "user",
     "branch": "active",
-    "episode_key": "PCAS",
-    "episode_title": "PCAS 架构讨论",
+    "episode_key": "project-example",
+    "episode_title": "Project discussion",
     "missing_attachments": []
   }],
   "gaps": []
 }
 ```
 
-`id` 与非空 `text` 必填；省略 `version` 时根据完整记录内容生成稳定哈希。显式版本号对应的正文不得更改。每次最多 100 条，HTTP 请求体最多 2 MiB，单条正文最多 1 MiB。`episode_key` 是用户范围内明确共享的经历键，可跨接入关联；省略时按接入内的会话组织，避免同名会话被自动合并。
+The record must have an ID and nonempty text.
+An omitted version uses a stable content hash. Content must not change under an explicit version.
+An explicit `episode_key` can connect a shared episode across inputs.
+Without that key, equal conversation names do not identify a shared episode.
 
-返回 `refs`、`imported`、`duplicates`、`blocked` 和 `gaps`。删除过且禁止重导入的记录会计入 `blocked`，其他记录可以继续导入。
+The response reports references, imports, duplicates, blocked records, and gaps.
+Blocked records do not prevent other accepted records from import.
 
-## 定时读取
+## 2 HTTP Polling
 
-数据源响应沿用上述 JSON，额外支持：
+The data source returns the record format above with pagination fields:
 
 ```json
 {"records": [], "next_cursor": "page-2", "has_more": true, "gaps": []}
 ```
 
-PCAS 使用 `GET`，后续请求带 `?cursor=...`。`has_more=true` 必须提供与当前不同的非空游标。最多每页 100 条、响应 8 MiB；游标只在资料事务提交成功后推进。最后一页的 `ETag` 用于后续 `If-None-Match`，支持 `304`。数据源应提供增量游标语义，不能在同一游标上永久重复旧页面。失败保留游标和明确状态，按配置间隔重试。
+Later requests include `?cursor=...`.
+A continued page must have a new nonempty cursor.
+The service advances the cursor after successful data commit.
+The final ETag is an input to subsequent conditional requests.
+Failures keep the cursor and expose their state.
 
-需要凭据时，填写以 `PCAS_CONNECTOR_` 开头的环境变量名，在 API 服务环境中注入其值。凭据不会发给浏览器或记录到日志。HTTP 重定向不自动跟随，以免凭据被转发。间隔为 15 秒至 24 小时，调度器每 5 秒检查到期接入；租约避免重复调度，设置修改带版本检查。
+The source must use incremental cursors to prevent repeated retrieval of previous pages.
 
-## 文件夹
+Private source credentials use a configured environment variable with the `PCAS_CONNECTOR_` prefix.
+Credentials stay on the server. Redirects must not forward them to a different destination.
+See [Connector Processing](../internal/postgres/connectors.go).
 
-目录为 `PCAS_INBOX_DIR/{接入 ID}`。Compose 内位于 `/var/lib/pcas/inbox/{接入 ID}`，属于持久化文件卷。把受支持文件放到此目录即可同步：TXT、Markdown、JSON、JSONL、ZIP。仅扫描该目录的普通文件，不递归子目录、不跟随符号链接，不接受任意服务器路径。
+## 3 Folder Input
 
-每个文件最多 8 MiB，目录最多 1,000 个条目；按内容指纹处理新增和修改。TXT/Markdown 原文直接入库；聊天归档先保存原件，再异步整理。不会因上游文件消失而自动删除已有记忆。连接器只读取文件，不删除或移动原文件。
+The native path is `PCAS_INBOX_DIR/{connector ID}`.
+Compose uses `/var/lib/pcas/inbox/{connector ID}` in the persistent file volume.
+Supported formats include TXT, Markdown, JSON, JSONL, and ZIP.
+The service scans regular files in that folder. It does not follow symlinks or recurse into subfolders.
 
-## 聊天归档
+Content fingerprints identify new or changed files.
+Removing an upstream file does not delete stored memory.
+The connector does not move or delete the input file.
 
-支持 ChatGPT `conversations.json`/ZIP 的消息树、Claude `chat_messages` 格式，以及通用 `records` JSON、JSONL、TXT/Markdown。上传最多 20 MiB；ZIP 解压文本总量最多 64 MiB、最多 10,000 条记录，超出时明确拒绝。ZIP 在内存中读取，不向文件系统解压路径。
+## 4 Conversation Archives
 
-ChatGPT 的活跃分支和历史分支分别保存；AI、用户与工具角色分别保存。非文本消息、原图和未解析附件显式标为缺口。原始归档可在来源页面鉴权下载，文本记录可逐条展开。归档中的独立图片和音频不会假装已经完成 OCR/转录，需要通过附件导入通道接入。
+Supported inputs include ChatGPT conversation trees, Claude message archives, generic records, JSONL, TXT, and Markdown.
+Preview shows accepted content and gaps before import.
+Import batches support pause, resume, and the implemented organization options.
+The current web path supports upload pieces for large archives.
 
-删除一条来源时，会清理含有这条内容的已保存归档原件，其他消息的独立记录继续保留；原件入口标明缺失。重导入新归档时仍检查被删来源的阻断标记，含有被阻断内容的归档原件也会被清理。重新上传同一归档不会撤销用户纠正。
+```http
+POST /v1/connectors/archive/preview
+POST /v1/connectors/archive
+POST /v1/connectors/archive/uploads
+GET /v1/connectors/imports
+POST /v1/connectors/imports/{id}/pause
+POST /v1/connectors/imports/{id}/resume
+```
 
-## 摘要与曝光
+[Archive Upload Routes](../internal/httpapi/archive_uploads.go) gives piece and completion operations.
+[Archive Routes](../internal/httpapi/connectors.go) gives preview, import, and batch operations.
 
-`POST /v1/memory/summary` 接受 `{ "id": "UUID", "version": 1, "tokens": 2000 }`，返回带版本引用的摘录摘要、依赖、覆盖缺口及缓存状态。当前来源、相关陈述及经历成员共同参与，原话与当前理解分别标注。缓存绑定 principal、根版本、预算和成员指纹；纠正、删除、授权变化或新增材料后重建。摘要不是独立事实库。
+Speaker roles and active or historical branches stay distinct.
+ZIP handling selects supported conversation content and does not extract archive paths into the filesystem.
+Media that is not parsed stays a gap. Archive import does not include OCR or transcription of each embedded file.
 
-`POST /v1/memory/activity` 接受 `ref`、`half_life_days`、`reinforcement_limit`、`pinned`；对应设置页的「记忆曝光」。基础减半时间为 1 至 36,500 天，强化上限为 1 至 100。用户采用只在有效使用后有限强化，查询和展示不强化；暂缓提醒、事实状态和事项状态保持独立。
+Deleting a source can remove a saved source original of an archive that contains its text.
+Other message sources stay stored with their own source identities.
+Reimport checks deletion markers and must not reverse a user correction.
+
+## 5 Implemented Limits
+
+These values come from current code paths. Measure capacity and speed through the complete system.
+
+| Input | Value | Overflow behavior | Code |
+|---|---|---|---|
+| Ordinary attachment | 20 MiB | Reject the oversized binary. | [File store](../internal/blob/files.go). |
+| Archive upload | 512 MiB | Return an archive-size error. | [Archive reader](../internal/connectors/archive_stream.go). |
+| Decoded archive content | 512 MiB | Return an archive-size error. | [Archive reader](../internal/connectors/archive_stream.go). |
+| Kept archive messages | 200,000 | Keep newer entries and report `LeftOut`. | [Archive reader](../internal/connectors/archive_stream.go). |
+| Upload piece | 8 MiB | Reject an oversized piece. | [Upload routes](../internal/httpapi/archive_uploads.go). |
+| Connector record batch | 100 records | Reject an oversized batch. | [Connector write](../internal/postgres/connectors.go). |
+| One record's text | 1 MiB | Reject invalid content. | [Record validation](../internal/connectors/archive.go). |
+| Parsed PDF | 100 pages | Keep the source and report a parsing failure. | [Attachment processing](../internal/postgres/attachments.go). |
+
+The former 20 MiB archive and 10,000-message values are obsolete.
+Ordinary attachment limits still apply to ordinary attachment uploads.
+Large-archive selection is bounded. `LeftOut` means incomplete import, not complete coverage.
+This reference does not establish a measured capacity rationale for each limit.
+For new or changed limits, record the reason, overflow path, and count in the applicable change.
+
+## 6 Derived Summaries and Activity
+
+`POST /v1/memory/summary` returns an extractive summary with dependencies, coverage gaps, and cache state.
+The cache depends on the principal, root version, budget, and members.
+Corrections, deletion, access changes, or new members can invalidate it.
+A summary is not an independent fact store.
+
+`POST /v1/memory/activity` changes the applicable decay, reinforcement, and pin settings.
+User adoption can strengthen activity. Retrieval and display do not count as adoption.
+Reminder state, memory validity, and task status are different properties.

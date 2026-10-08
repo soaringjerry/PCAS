@@ -1,5 +1,9 @@
 # 任务 H1：说了「尽快」的事排进首页时间线
 
+> **Historical task record.** This text records an earlier phase or investigation.
+> Use the [current documentation](../../README.md) and [project status](../../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 2026-10-03 用户提出、确认。背景：用户说「yufolo要尽快开始推广了 不能拖了」，秘书建了待办，但它没有具体时间，首页时间线只显示今天定了时间的事，所以它不出现。用户不要在首页加新的模块，要它出现在时间线里。
 
 **上线后用户能感受到的变化**：说了「尽快」「不能拖」的事，每天都排在首页时间线最前面，时间那一栏写「尽快」，直到做完、取消，或者给它定了时间。

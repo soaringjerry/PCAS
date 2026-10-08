@@ -1,5 +1,9 @@
 # 第 2.5 阶段第 2–4 批：并行方案与契约
 
+> **Historical task record.** This text records an earlier phase or investigation.
+> Use the [current documentation](../../README.md) and [project status](../../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 2026-10-05。用户要求加快：第 2、3、4 批不再一批上线后才写下一批，改为同时开发、一起上线。本页是三批共用的约定和各批的规则。**所有执行者先读完本页，再读 [阶段入口](README.md)。** 上位文档：[白皮书](../../whitepaper.md) 5.6–5.8、[记忆架构](../../memory-architecture.md) 1.2。
 
 ## 0 这次的工作方式

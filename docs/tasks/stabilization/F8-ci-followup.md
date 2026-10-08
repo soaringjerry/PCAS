@@ -1,5 +1,9 @@
 # F8 补验：完整真实后端浏览器套件
 
+> **Historical task record.** This text records an earlier phase or investigation.
+> Use the [current documentation](../../README.md) and [project status](../../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 执行者：6.1 Sol / high。尚未启动，等待执行位。接手已停止的 F8 工作区 `/root/PCAS` / `fix/timezone-displays`，PR #23，输入 `bddc14b`。本任务不能替换既有本地专项证据；必须单独说明完整套件的失败与修复。
 
 ## 已有证据

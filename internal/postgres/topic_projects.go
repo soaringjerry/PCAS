@@ -322,6 +322,8 @@ func (s *Store) ProcessTopicProject(ctx context.Context, j worker.Job) error {
 				return &worker.JobError{Code: "topic_project_daily_limit", Until: midnight.AddDate(0, 0, 1), NoAttempt: true}
 			}
 			item := newItem("project", strings.TrimSpace(output.Name))
+			item.History[0].By = "ai"
+			item.Evolution[0].By = "ai"
 			project = item.ID
 			ids := []string{}
 			for _, ref := range refs {

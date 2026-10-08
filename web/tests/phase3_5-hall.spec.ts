@@ -24,6 +24,8 @@ function schedule(): Schedule {
       { date: day(0), items: [
         entry('flour', 'deadline', '给面粉供应商回话', { at: '2031-03-05T02:00:00Z', originalText: '周三上午十点前要给面粉那边回话' }),
         entry('class', 'recurring', '裱花课', { at: '2031-03-05T11:00:00Z' }),
+        // A habit with no hour: not an event of the day, so not on the line.
+        entry('walk', 'recurring', '每天散步', { dateOnly: true, timeNote: '未指定钟点' }),
         entry('dentist', 'appointment', '看牙', { at: '2031-03-05T07:30:00Z', originalText: '牙医约在周三下午三点半' }),
         entry('permit', 'deadline', '交摊位申请表', { dateOnly: true, timeNote: '没说几点' }),
         // A to-do the workspace already has is placed by the workspace's rules, once.
@@ -121,25 +123,18 @@ test('the day reads the schedule: appointments, deadlines, fixed arrangements an
   expect(mock.errors).toEqual([])
 })
 
-test('the next three days list deadlines and appointments, and end with the dates that were never pinned down', async ({ page }) => {
+test('the next three days list deadlines and appointments; dates that were never pinned down stay off the line', async ({ page }) => {
   const mock = await backend(page, { tasks: [task('rent', '交房租', { due: '2031-03-06T10:00:00Z' })] })
   await page.goto('/')
   const soon = today(page).locator('.hall-group').filter({ has: page.getByRole('heading', { name: '这几天', exact: true }) })
   // A fixed arrangement shows on its own day, not ahead of it.
-  await expect(soon.locator('.h-title')).toHaveText(['市集摊位续约面谈', '交房租', '报上个月的税', '去看林栖的新店'])
+  await expect(soon.locator('.h-title')).toHaveText(['市集摊位续约面谈', '交房租', '报上个月的税'])
   await expect(soon.locator('.hall-task').filter({ hasText: '市集摊位续约面谈' }).locator('.h-note')).toHaveText('明天 14:00 预约')
   await expect(soon.locator('.hall-task').filter({ hasText: '报上个月的税' }).locator('.h-note')).toHaveText('3月7日截止')
-  const unclear = soon.getByRole('group', { name: '日期没说清的' })
-  await expect(unclear.locator('.h-title')).toHaveText(['去看林栖的新店'])
-  await expect(unclear.locator('.h-note')).toHaveText('原话：说好了找个时间去看林栖的新店')
-  // It opens onto what was said and the memory under it.
-  await unclear.getByRole('button', { name: /^去看林栖的新店/ }).click()
-  const sheet = page.getByRole('dialog')
-  await expect(sheet.getByRole('heading', { name: '去看林栖的新店' })).toBeVisible()
-  await expect(sheet).toContainText('预约 · 日期没说清')
-  await expect(sheet.locator('.source-text')).toHaveText('说好了找个时间去看林栖的新店')
-  await expect(sheet.getByRole('link', { name: '看这条记忆和它的来源' })).toHaveAttribute('href', '/library?m=m-visit')
-  await expect(sheet.getByRole('button', { name: /做完了/ })).toHaveCount(0)
+  // With no day to stand on it is not on the line of time; it stays in the library.
+  await expect(today(page).getByRole('group', { name: '日期没说清的' })).toHaveCount(0)
+  await expect(today(page).locator('.h-title').filter({ hasText: '去看林栖的新店' })).toHaveCount(0)
+  await expect(today(page).locator('.h-title').filter({ hasText: '每天散步' })).toHaveCount(0)
   expect(mock.errors).toEqual([])
 })
 
@@ -303,7 +298,7 @@ test('on a phone the short column keeps its five rows, dates and to-dos together
   // Today comes before the deadlines of earlier days, however many of those there are.
   await expect(today(page).locator('.hall-task .h-title')).toHaveText(['给烤箱续保', '交摊位申请表', '看牙', '给烤箱除垢', '裱花课'])
   await today(page).getByRole('button', { name: /^还有 \d+ 件$/ }).click()
-  await expect(today(page).getByRole('group', { name: '日期没说清的' })).toBeVisible()
+  await expect(today(page).getByRole('group', { name: '日期没说清的' })).toHaveCount(0)
   await expect(page.getByRole('region', { name: '今天', exact: true })).toBeVisible()
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
   expect(mock.errors).toEqual([])

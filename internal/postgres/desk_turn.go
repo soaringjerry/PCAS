@@ -115,9 +115,21 @@ func (s *Store) secretaryContextTx(ctx context.Context, tx pgx.Tx, scope memory.
 	out.Settings = settings
 	out.Tasks = tasks
 	out.Dependencies = deps
-	out.Projects, err = queryDocuments[workspace.Item](ctx, tx, "SELECT document FROM work_items WHERE owner_id=$1 AND kind='project' AND status IN('active','paused') ORDER BY created_at,id", string(scope.OwnerID))
+	out.Projects, err = queryDocuments[workspace.Item](ctx, tx, "SELECT document FROM work_items WHERE owner_id=$1 AND kind='project' ORDER BY created_at,id", string(scope.OwnerID))
 	if err != nil {
 		return out, err
+	}
+	goals, err := projectGoalEvidenceTx(ctx, tx, scope.OwnerID)
+	if err != nil {
+		return out, err
+	}
+	for i := range out.Projects {
+		p := &out.Projects[i]
+		excerpt := ""
+		if p.Creation != nil && p.Creation.Source != nil {
+			excerpt = p.Creation.Source.Excerpt
+		}
+		p.Goal = projectMeaning(p.Goal, excerpt, goals[p.ID])
 	}
 	out.Ideas, err = queryDocuments[workspace.Item](ctx, tx, "SELECT document FROM (SELECT document,created_at,id FROM work_items WHERE owner_id=$1 AND kind='idea' ORDER BY created_at DESC,id DESC LIMIT 20) recent ORDER BY created_at,id", string(scope.OwnerID))
 	if err != nil {
@@ -245,7 +257,7 @@ func (s *Store) secretaryPrompt(ctx context.Context, tx pgx.Tx, scope memory.Sco
 	}
 	for i, p := range c.Projects {
 		evidence := p.Goal
-		if p.Creation != nil && p.Creation.Source != nil {
+		if p.Creation != nil && p.Creation.Source != nil && evidence != p.Creation.Source.Excerpt {
 			evidence += "\n" + p.Creation.Source.Excerpt
 		}
 		runes := []rune(evidence)
@@ -255,7 +267,7 @@ func (s *Store) secretaryPrompt(ctx context.Context, tx pgx.Tx, scope memory.Sco
 				return "", nil, err
 			}
 		}
-		fmt.Fprintf(&prompt, "P%d：%s（未完成 %d；目标与依据：%s）\n", i+1, p.Title, c.Counts[p.ID], evidence)
+		fmt.Fprintf(&prompt, "P%d：%s（未完成 %d；状态 %s；目标与依据：%s）\n", i+1, p.Title, c.Counts[p.ID], p.Status, evidence)
 	}
 	fmt.Fprintln(&prompt, "\n未完成任务：")
 	for i, t := range c.Tasks {

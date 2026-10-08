@@ -128,11 +128,16 @@ func topicProjectInputTx(ctx context.Context, tx pgx.Tx, owner memory.ID, topic 
 	}
 	base := sha256.Sum256(asJSON([]any{out.Topic, manifest, out.Memories, out.Timezone}))
 	out.EvidenceHash = fmt.Sprintf("%x", base)
-	projects, err := queryDocuments[topicProjectSummary](ctx, tx, `SELECT jsonb_build_object('id',id::text,'name',title,'goal',coalesce(document->>'goal',''),'status',status) FROM work_items WHERE owner_id=$1 AND kind='project' ORDER BY id`, string(owner))
+	projects, err := queryDocuments[topicProjectSummary](ctx, tx, `SELECT jsonb_build_object('id',id::text,'name',title,'goal',coalesce(nullif(document->>'goal',''),document->'creation'->'source'->>'excerpt',''),'status',status) FROM work_items WHERE owner_id=$1 AND kind='project' ORDER BY id`, string(owner))
+	if err != nil {
+		return out, nil, err
+	}
+	goals, err := projectGoalEvidenceTx(ctx, tx, owner)
 	if err != nil {
 		return out, nil, err
 	}
 	for i := range projects {
+		projects[i].Goal = projectMeaning(projects[i].Goal, "", goals[projects[i].ID])
 		goal := []rune(projects[i].Goal)
 		if len(goal) > topicProjectGoalCharacters {
 			out.ClippedCharacters += len(goal) - topicProjectGoalCharacters

@@ -76,7 +76,19 @@ That test container also exited during the run.
 The interrupted attempt is not a pass. Its private log is retained.
 Replacement checks separate the normal check environment from the migrated integration database.
 
-CI and deployment remain pending at this record's preparation.
+Both local full commands reached the existing thirty-minute suite timeout.
+Neither result is a pass.
+The integration run also found provider-free restart recovery failures.
+The opened Store did not construct its gateway until model setup.
+The initialization repair passed the existing recovery checks without changing their expected values.
+
+The first [CI run](https://github.com/soaringjerry/PCAS/actions/runs/37846483143) completed with three failing PostgreSQL slices.
+One failure group is the repaired initialization defect.
+Another group expects automatic recovery after interrupting explicitly free model calls.
+That existing behavior conflicts with the draft's unconditional unknown-outcome block.
+The coordinator's recovery-policy decision is pending.
+
+Final CI and deployment remain pending at this record's preparation.
 The batch has not yet supplied a live secretary check or a release backup record.
 
 ## Uncertain and Remaining

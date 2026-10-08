@@ -56,7 +56,11 @@ func Open(ctx context.Context, url string) (*Store, error) {
 		pool.Close()
 		return nil, fmt.Errorf("database unavailable")
 	}
-	return &Store{pool: pool, secretarySlots: make(chan struct{}, config.MaxConns-1)}, nil
+	store := &Store{pool: pool, secretarySlots: make(chan struct{}, config.MaxConns-1)}
+	// Recovery reads already-paid results before provider availability. An
+	// opened store must support it even before application model wiring.
+	store.SetModels(nil)
+	return store, nil
 }
 
 func (s *Store) Close()                         { s.pool.Close() }

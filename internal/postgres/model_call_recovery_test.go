@@ -74,7 +74,6 @@ func TestAccountingRecoveryReusesOriginalPaidResultAfterRestart(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer peer.Close()
-	peer.SetModels(nil)
 	if err := peer.ProcessOrganize(ctx, j); err != nil {
 		t.Fatal(err)
 	}
@@ -150,7 +149,6 @@ func TestFailedCallAccountingRecoveryDoesNotApplyPartialOutput(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer peer.Close()
-	peer.SetModels(nil)
 	var jobErr *worker.JobError
 	err = peer.ProcessOrganize(ctx, j)
 	if !errors.As(err, &jobErr) || jobErr.Code != "model_call_failed" || calls.Load() != 1 {
@@ -247,7 +245,6 @@ func TestLegacyPaidResultRecoversWithoutInventedCallMetadata(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer peer.Close()
-	peer.SetModels(nil)
 	if err := peer.ProcessOrganize(ctx, j); err != nil {
 		t.Fatal(err)
 	}

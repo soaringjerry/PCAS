@@ -32,6 +32,19 @@ export interface ChecklistItem {
   done: boolean
 }
 
+/** Who made a thing that the user did not make by hand, and what it went on. */
+export interface Creation {
+  by: 'secretary' | 'background_extraction' | 'background_topic'
+  /** The words it was taken from. */
+  source?: SourceRef
+  /** The memories it rests on. */
+  memoryIds?: ID[]
+  /** The topic group a project grew out of; means nothing here. */
+  groupKey?: string
+  /** The recorded action that made it; undoing that takes the thing away again. */
+  actionId?: string
+}
+
 export type TaskStatus = 'todo' | 'doing' | 'waiting' | 'done' | 'cancelled'
 
 /** A combined event and time trigger (PRD §4). */
@@ -73,6 +86,7 @@ export interface Task {
   triggers: Trigger[]
   sources: SourceRef[]
   history: Revision[]
+  creation?: Creation
   createdAt: string
   updatedAt: string
 }
@@ -110,6 +124,7 @@ export interface Idea {
   remindersOn: boolean
   evolution: Revision[]
   sources: SourceRef[]
+  creation?: Creation
   createdAt: string
   updatedAt: string
 }
@@ -128,6 +143,8 @@ export interface Project {
   progress?: string
   /** @deprecated Retired in phase 3, like `progress`. */
   nextSteps?: string[]
+  creation?: Creation
+  createdAt?: string
   updatedAt: string
 }
 
@@ -252,6 +269,10 @@ export interface Candidate {
   source: SourceRef
   state: CandidateState
   resolvedInto?: ID
+  /** Why it was left for the user rather than made: reported, qualified, ai_suggestion, uncertain, historical, overflow. */
+  reasons?: string[]
+  /** The same, in words. */
+  reason?: string
   createdAt: string
 }
 
@@ -381,8 +402,8 @@ export interface TrainingSample {
 export interface Settings {
   /** IANA zone shared by the secretary, reminders and the hall. */
   timezone?: string
-  /** Accept high-confidence captures without asking. */
-  autoAccept: boolean
+  /** @deprecated Retired in phase 3.5: what is made outright goes by how it was said. Still sent, no longer read or written. */
+  autoAccept?: boolean
   /** Bring shelved ideas back when their conditions are met. */
   wakeIdeas: boolean
   /** Run follow-up reminders created from events. */

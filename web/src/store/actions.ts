@@ -61,4 +61,6 @@ export type Action =
   | { type: 'removeCondition'; ideaId: string; conditionId: string }
   | { type: 'deferTask'; id: string; days: number }
   | { type: 'updateSettings'; patch: Partial<Settings> }
+  /** Says a date in the table of deadlines was met; it is marked on the memory under it, and no to-do is made. */
+  | { type: 'completeDeadline'; id: string }
   | { type: 'undoAction'; id: string }

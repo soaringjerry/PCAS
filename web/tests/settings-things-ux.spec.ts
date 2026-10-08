@@ -158,7 +158,6 @@ test('each switch says what it does now, saves only its own field, and shows the
   const cases = [
     { label: '事项提醒', field: 'followUps', from: true, after: '现在：已停。到时间不再提醒，也不往设备和 Telegram 发；定好的时间都还留着。' },
     { label: '带回搁置的想法', field: 'wakeIdeas', from: true, after: '现在：已停。搁置的想法一直放着，直到你自己去翻。' },
-    { label: '资料里的明确待办直接创建', field: 'autoAccept', from: false, after: '现在：十分明确的直接创建，其余仍等你确认。你直接跟秘书说的不受影响。' },
   ] as const
   for (const c of cases) {
     const toggle = page.getByRole('switch', { name: c.label, exact: true })

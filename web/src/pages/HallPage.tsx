@@ -1,14 +1,18 @@
-import { useEffect, useState, type CSSProperties } from 'react'
+import { useEffect, useState, type CSSProperties, type ReactNode } from 'react'
 import { Link } from 'react-router'
-import { BellRing, ChevronDown, ChevronRight, X } from 'lucide-react'
+import { BellRing, CalendarClock, ChevronDown, ChevronRight, CircleAlert, CircleHelp, Repeat, X } from 'lucide-react'
+import { SideSheet } from '../components/Overlay'
 import { TimezoneHint } from '../components/TimezoneHint'
 import { Secretary } from '../components/Secretary'
-import { backgroundFeed, decisionQueue, ideaNote, ideaWall, projectCards, todayColumn, type NoticeRow as NoticeRowData, type TodayRow } from '../domain/hall'
+import { backgroundFeed, decisionQueue, firstRows, ideaNote, ideaWall, isDateRow, projectCards, todayColumn, type DateRow, type FeedItem, type NoticeRow as NoticeRowData, type TimeRow, type TodayRow } from '../domain/hall'
 import { projectStatusLabel } from '../domain/labels'
-import { clockTime, formatAgo, formatWhen } from '../domain/time'
+import { entryKindLabel, type ScheduleEntry } from '../domain/schedule'
+import { isOpenTask } from '../domain/things'
+import { clockTime, formatAgo, formatCivil, formatDateTime, formatWhen } from '../domain/time'
 import type { State } from '../domain/types'
 import { api } from '../store/api'
 import { useStore } from '../store/context'
+import { useInProgress, useSchedule } from '../store/schedule'
 import { useToast } from '../store/toast'
 
 const SEEN_KEY = 'pcas.hall.seen'
@@ -41,6 +45,104 @@ function TaskRow({ row, withTime }: { row: TodayRow; withTime?: boolean }) {
         <span className="h-note">{row.note}</span>
       </Link>
     </div>
+  )
+}
+
+const entryIcon = { deadline: CalendarClock, appointment: CalendarClock, recurring: Repeat, task: CalendarClock } as const
+
+/** The circle on a deadline that went by: it was met. That is marked on the memory under it; no to-do is made. */
+function FinishDate({ entry, children, onDone }: { entry: ScheduleEntry; children?: ReactNode; onDone?: () => void }) {
+  const { dispatchUndoable } = useStore()
+  return (
+    <button
+      type="button"
+      className={children ? 'hall-finish' : 'hall-check'}
+      aria-label={`做完了：${entry.title}`}
+      onClick={async () => {
+        if (await dispatchUndoable({ type: 'completeDeadline', id: entry.source.deadlineId ?? entry.id }, '做完了')) onDone?.()
+      }}
+    >
+      <span className="ring" />
+      {children}
+    </button>
+  )
+}
+
+/** A date from the table of deadlines. It opens onto what was said; a to-do opens its own page. */
+function DateRowView({ row, withTime, unclear, onOpen }: { row: DateRow; withTime?: boolean; unclear?: boolean; onOpen: (row: DateRow) => void }) {
+  const { entry } = row
+  const Icon = unclear ? CircleHelp : entryIcon[entry.kind]
+  const body = (
+    <>
+      <span className="h-title">{entry.title}</span>
+      <span className="h-note">{row.note}</span>
+    </>
+  )
+  return (
+    <div className={`hall-task${row.past ? ' past' : ''}`}>
+      {withTime && <span className="hall-time">{row.time}</span>}
+      {row.canFinish ? (
+        <FinishDate entry={entry} />
+      ) : (
+        <span className="hall-check hall-mark" aria-hidden="true">
+          <Icon size={15} />
+        </span>
+      )}
+      {entry.source.kind === 'task' && entry.source.itemId ? (
+        <Link to={`/t/${entry.source.itemId}`} className="hall-task-body">
+          {body}
+        </Link>
+      ) : (
+        <button type="button" className="hall-task-body" onClick={() => onOpen(row)}>
+          {body}
+        </button>
+      )}
+    </div>
+  )
+}
+
+/** What a date rests on: when it is, what was said, and the memory it was read from. */
+function DateSheet({ row, onClose }: { row: DateRow; onClose: () => void }) {
+  const timezone = useStore().state.settings.timezone ?? 'UTC'
+  const { entry } = row
+  const when = entry.at && !entry.dateOnly ? formatDateTime(entry.at, timezone) : entry.date ? formatCivil(entry.date, timezone) : '日期没说清'
+  return (
+    <SideSheet title={entry.title} onClose={onClose} top={<span className="tiny muted">{entryKindLabel[entry.kind]} · {when}</span>}>
+      <div className="stack">
+        {entry.timeNote && <p className="note">{entry.timeNote}</p>}
+        {entry.originalText && (
+          <div className="stack-sm">
+            <span className="tiny muted">原话</span>
+            <pre className="source-text">{entry.originalText}</pre>
+          </div>
+        )}
+        {row.canFinish && (
+          <FinishDate entry={entry} onDone={onClose}>
+            <span>做完了</span>
+          </FinishDate>
+        )}
+        {entry.source.memoryId && (
+          <Link to={`/library?m=${encodeURIComponent(entry.source.memoryId)}`} onClick={onClose}>
+            看这条记忆和它的来源
+          </Link>
+        )}
+      </div>
+    </SideSheet>
+  )
+}
+
+/** Rows of one kind that can run long: the first few, and the rest one click away. */
+function Capped<T>({ rows, children }: { rows: T[]; children: (row: T) => ReactNode }) {
+  const [all, setAll] = useState(false)
+  return (
+    <>
+      {(all ? rows : rows.slice(0, ROWS_SHOWN)).map(children)}
+      {rows.length > ROWS_SHOWN && (
+        <button type="button" className="link-btn hall-rest" aria-expanded={all} onClick={() => setAll((v) => !v)}>
+          {all ? '收起' : `还有 ${rows.length - ROWS_SHOWN} 条`}
+        </button>
+      )}
+    </>
   )
 }
 
@@ -114,6 +216,8 @@ function NowLine({ timezone }: { timezone: string }) {
 }
 
 const COMPACT_ROWS = 5
+/** Dates gone by and dates never pinned down can pile up over the years; this many show before 「还有 N 条」, as in the library's 眼下. */
+const ROWS_SHOWN = 5
 
 /**
  * 今天. On a phone it is the short version: what rang, who is waiting and
@@ -122,21 +226,19 @@ const COMPACT_ROWS = 5
 function TodayWall({ compact }: { compact: boolean }) {
   const { state } = useStore()
   const timezone = state.settings.timezone ?? 'UTC'
-  const full = todayColumn(state)
+  const schedule = useSchedule()
+  const full = todayColumn(state, schedule.value)
   const [all, setAll] = useState(false)
+  const [open, setOpen] = useState<DateRow>()
   const short = compact && !all
   const date = new Date().toLocaleDateString('zh-CN', { timeZone: timezone, month: 'long', day: 'numeric', weekday: 'long' })
 
-  // Short, rows are kept in this order: what rang, who waits, what cannot wait, what is still ahead today, then what already passed.
-  const cap = short ? COMPACT_ROWS : Infinity
-  const rang = full.rang.slice(0, cap)
-  const waiting = full.waiting.slice(0, cap - rang.length)
-  const urgent = full.urgent.slice(0, cap - rang.length - waiting.length)
-  const ahead = full.timeline.filter((r) => !r.past).slice(0, cap - rang.length - waiting.length - urgent.length)
-  const passed = full.timeline.filter((r) => r.past).slice(0, cap - rang.length - waiting.length - urgent.length - ahead.length)
+  const { rang, waiting, late, urgent, ahead, passed } = firstRows(full, short ? COMPACT_ROWS : Infinity)
   const soon = short ? [] : full.soon
-  const hidden = full.rang.length + full.waiting.length + full.urgent.length + full.timeline.length + full.soon.length - (rang.length + waiting.length + urgent.length + ahead.length + passed.length + soon.length)
-  const nothing = full.rang.length + full.waiting.length + full.urgent.length + full.timeline.length + full.soon.length === 0
+  const unclear = short ? [] : full.unclear
+  const total = full.rang.length + full.waiting.length + full.late.length + full.urgent.length + full.timeline.length + full.soon.length + full.unclear.length
+  const hidden = total - (rang.length + waiting.length + late.length + urgent.length + ahead.length + passed.length + soon.length + unclear.length)
+  const timed = (r: TimeRow) => (isDateRow(r) ? <DateRowView key={r.entry.id} row={r} withTime onOpen={setOpen} /> : <TaskRow key={r.task.id} row={r} withTime />)
 
   return (
     <section className={`hall-panel hall-today${compact ? ' compact' : ''}`} aria-labelledby="hall-today-title">
@@ -153,12 +255,13 @@ function TodayWall({ compact }: { compact: boolean }) {
             ))}
           </div>
         )}
-        {waiting.length > 0 && (
+        {waiting.length + late.length > 0 && (
           <div className="hall-group">
             <h2 className="hall-sub warn">在等你，或已经晚了</h2>
             {waiting.map((r) => (
               <TaskRow key={r.task.id} row={r} />
             ))}
+            <Capped rows={late}>{(r) => <DateRowView key={r.entry.id} row={r} onOpen={setOpen} />}</Capped>
           </div>
         )}
         {(!short || urgent.length + ahead.length + passed.length > 0 || full.timeline.length + full.urgent.length === 0) && (
@@ -167,32 +270,42 @@ function TodayWall({ compact }: { compact: boolean }) {
             {urgent.map((r) => (
               <TaskRow key={r.task.id} row={r} withTime />
             ))}
-            {passed.map((r) => (
-              <TaskRow key={r.task.id} row={r} withTime />
-            ))}
+            {passed.map(timed)}
             <NowLine timezone={timezone} />
-            {ahead.map((r) => (
-              <TaskRow key={r.task.id} row={r} withTime />
-            ))}
+            {ahead.map(timed)}
             {full.timeline.length + full.urgent.length === 0 && <p className="hall-empty">今天没有定了时间的事。</p>}
           </div>
         )}
-        {soon.length > 0 && (
+        {soon.length + unclear.length > 0 && (
           <div className="hall-group">
             <h2 className="hall-sub">这几天</h2>
-            {soon.map((r) => (
-              <TaskRow key={r.task.id} row={r} />
-            ))}
+            {soon.map((r) => (isDateRow(r) ? <DateRowView key={r.entry.id} row={r} onOpen={setOpen} /> : <TaskRow key={r.task.id} row={r} />))}
+            {unclear.length > 0 && (
+              <div className="hall-unclear" role="group" aria-label="日期没说清的">
+                <h3 className="hall-sub">日期没说清的</h3>
+                <Capped rows={unclear}>{(r) => <DateRowView key={r.entry.id} row={r} unclear onOpen={setOpen} />}</Capped>
+              </div>
+            )}
           </div>
+        )}
+        {schedule.phase === 'failed' && (
+          <p className="hall-problem" role="alert">
+            <CircleAlert size={14} />
+            <span>期限和固定安排没读出来，上面只有待办：{schedule.problem}</span>
+            <button type="button" className="link-btn" onClick={schedule.retry}>
+              重试
+            </button>
+          </p>
         )}
         {hidden > 0 ? (
           <button type="button" className="hall-more" onClick={() => setAll(true)}>
             还有 {hidden} 件
           </button>
         ) : (
-          !compact && <p className="hall-foot">{nothing ? '今天没有要你动手的事。' : '更远的事临近时会自己进来。'}</p>
+          !compact && <p className="hall-foot">{total === 0 ? '今天没有要你动手的事。' : '更远的事临近时会自己进来。'}</p>
         )}
       </div>
+      {open && <DateSheet row={open} onClose={() => setOpen(undefined)} />}
     </section>
   )
 }
@@ -237,6 +350,54 @@ function DecisionStrip() {
   )
 }
 
+function FeedRow({ item, fresh }: { item: FeedItem; fresh: boolean }) {
+  const { state, undo } = useStore()
+  const toast = useToast()
+  const [busy, setBusy] = useState(false)
+  const when = <span className="h-when">{formatAgo(item.at, state.settings.timezone ?? 'UTC')}</span>
+  const text = <span className={`h-text${item.failed ? ' failed' : ''}`}>{item.text}</span>
+  const dot = fresh && <span className="h-new" aria-label="新的" />
+  if (!item.actionId) {
+    const body = (
+      <>
+        {when}
+        {text}
+        {dot}
+      </>
+    )
+    return <li>{item.to ? <Link to={item.to}>{body}</Link> : <div>{body}</div>}</li>
+  }
+  const actionId = item.actionId
+  return (
+    <li>
+      <div>
+        {when}
+        {item.to ? (
+          <Link to={item.to} className="h-open">
+            {text}
+          </Link>
+        ) : (
+          text
+        )}
+        {dot}
+        <button
+          type="button"
+          className="hall-btn quiet hall-undo"
+          disabled={busy}
+          onClick={async () => {
+            setBusy(true)
+            // Undone, the thing is gone from the workspace and this line goes with it.
+            if (await undo(actionId)) toast.show('撤销了')
+            else setBusy(false)
+          }}
+        >
+          撤销
+        </button>
+      </div>
+    </li>
+  )
+}
+
 /** 你不在的时候: one line under the conversation, opened on demand. Hidden while there is nothing. */
 function AwayLine() {
   const { state } = useStore()
@@ -262,16 +423,9 @@ function AwayLine() {
       </button>
       {open && (
         <ol className="hall-feed-list">
-          {items.map((f) => {
-            const body = (
-              <>
-                <span className="h-when">{formatAgo(f.at, state.settings.timezone ?? 'UTC')}</span>
-                <span className={`h-text${f.failed ? ' failed' : ''}`}>{f.text}</span>
-                {new Date(f.at).getTime() > seen && <span className="h-new" aria-label="新的" />}
-              </>
-            )
-            return <li key={f.key}>{f.to ? <Link to={f.to}>{body}</Link> : <div>{body}</div>}</li>
-          })}
+          {items.map((f) => (
+            <FeedRow key={f.key} item={f} fresh={new Date(f.at).getTime() > seen} />
+          ))}
         </ol>
       )}
     </section>
@@ -319,6 +473,67 @@ function ProjectWall() {
           ))}
         </div>
       )}
+    </section>
+  )
+}
+
+/**
+ * 在推进: to-dos with no time. Nothing here reminds; what moved most recently
+ * is on top, and how many are listed is the server's to say.
+ */
+function ProgressWall() {
+  const { state, dispatchUndoable } = useStore()
+  const read = useInProgress()
+  const timezone = state.settings.timezone ?? 'UTC'
+  if (read.value === undefined) {
+    // Still being read, it takes no room; unread, it says why.
+    if (read.phase !== 'failed') return null
+    return (
+      <section className="hall-panel hall-progress" aria-labelledby="hall-progress-title">
+        <header className="hall-head small">
+          <h2 id="hall-progress-title">在推进</h2>
+        </header>
+        <p className="hall-problem" role="alert">
+          <CircleAlert size={14} />
+          <span>没读出来：{read.problem}</span>
+          <button type="button" className="link-btn" onClick={read.retry}>
+            重试
+          </button>
+        </p>
+      </section>
+    )
+  }
+  // One just finished here is gone at once, before the list is read again.
+  const items = read.value.items.filter((t) => isOpenTask(state.tasks.find((s) => s.id === t.id) ?? t))
+  if (items.length === 0 && read.value.remaining === 0) return null
+  return (
+    <section className="hall-panel hall-progress" aria-labelledby="hall-progress-title">
+      <header className="hall-head small">
+        <h2 id="hall-progress-title">在推进</h2>
+        <span>{items.length > 1 ? '最近有进展的在前' : ''}</span>
+      </header>
+      <div className="hall-scroll">
+        {items.map((task) => {
+          const project = state.projects.find((p) => p.id === task.projectId)?.name
+          return (
+            <div key={task.id} className="hall-task">
+              <button
+                type="button"
+                className="hall-check"
+                aria-label={`做完了：${task.title}`}
+                onClick={() => dispatchUndoable({ type: 'setTaskStatus', id: task.id, status: 'done' }, '做完了')}
+              >
+                <span className="ring" />
+              </button>
+              <Link to={`/t/${task.id}`} className="hall-task-body">
+                <span className="h-title">{task.title}</span>
+                <span className="h-note">{[project, formatAgo(task.updatedAt, timezone)].filter(Boolean).join(' · ')}</span>
+              </Link>
+            </div>
+          )
+        })}
+        {read.value.remaining > 0 && <p className="hall-foot">还有 {read.value.remaining} 件没列出来，在各自的项目里，搜索也能找到。</p>}
+      </div>
     </section>
   )
 }
@@ -398,6 +613,7 @@ export function HallPage() {
       <Desk compact={stacked} />
       <div className="hall-right">
         <ProjectWall />
+        <ProgressWall />
         <IdeaWall />
       </div>
     </div>

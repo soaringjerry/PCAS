@@ -816,3 +816,120 @@
   .timezone-hint > .btn-icon { grid-area: 1 / 2; margin-left: 0; }
 }
 
+
+/* ---------- Phase 3.5: dates from the table of deadlines, and 在推进 ---------- */
+
+/* A date opens a sheet rather than a page, so its row is a button that reads like the link beside it. */
+button.hall-task-body {
+  border: 0;
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.hall-mark {
+  color: var(--label-3);
+  cursor: default;
+}
+
+.hall-unclear {
+  margin-top: 8px;
+}
+
+.hall-unclear .h-note {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+.hall-rest {
+  margin: 2px 0 4px 38px;
+  font-size: 13px;
+}
+
+.hall-problem {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin: 10px 2px 4px;
+  color: var(--orange);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.hall-problem svg {
+  flex: none;
+  align-self: center;
+}
+
+.hall-problem .link-btn {
+  flex: none;
+}
+
+/* 做完了, inside the sheet a date opens. */
+.hall-finish {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  align-self: flex-start;
+  padding: 8px 12px 8px 10px;
+  border: 1px solid var(--sep-strong);
+  border-radius: 10px;
+  background: var(--elevated);
+  color: var(--label);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.hall-finish .ring {
+  width: 18px;
+  height: 18px;
+  box-sizing: border-box;
+  border: 1.5px solid var(--orange);
+  border-radius: 50%;
+}
+
+.hall-finish:hover .ring {
+  border-color: var(--blue);
+  background: var(--blue-soft);
+}
+
+/* Between the projects and the ideas; it never takes more than its rows need. */
+.hall-progress {
+  flex: 0 1 auto;
+  max-height: 42%;
+}
+
+.hall-ideas {
+  min-height: 160px;
+}
+
+/* A line that can be taken back: the text opens the thing, 撤销 sits at the end. */
+.hall-feed-list li > a,
+.hall-feed-list li > div {
+  grid-template-columns: 76px minmax(0, 1fr) auto auto;
+}
+
+.hall-feed-list .h-open {
+  color: inherit;
+}
+
+.hall-feed-list .hall-undo {
+  align-self: center;
+  height: 28px;
+  margin: -4px 0;
+  padding: 0 8px;
+}
+
+@media (max-width: 1180px) {
+  .hall-progress {
+    max-height: none;
+  }
+
+  .hall-ideas {
+    min-height: 0;
+  }
+}

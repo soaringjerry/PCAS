@@ -201,7 +201,8 @@ func TestR1R6SecretarySettlesOnlyItsReservation(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			var gate *b4ModelGate
-			if mode == "cancel" {
+			var firstReservation float64
+			if mode == "cancel" || mode == "success" {
 				gate = b4HoldModel(t, f)
 				defer gate.unblock()
 			}
@@ -210,11 +211,18 @@ func TestR1R6SecretarySettlesOnlyItsReservation(t *testing.T) {
 			if gate != nil {
 				select {
 				case <-gate.started:
-					cancel()
+					if mode == "cancel" {
+						cancel()
+					} else {
+						if err := s.pool.QueryRow(context.Background(), "SELECT sum(reserved_cost)-0.03 FROM background_usage WHERE owner_id=$1", string(scope.OwnerID)).Scan(&firstReservation); err != nil {
+							t.Fatal(err)
+						}
+						gate.unblock()
+					}
 				case <-time.After(10 * time.Second):
 					t.Fatal("model not started")
 				}
-				// Withhold the response until the canceled invocation ends.
+				// Only cancellation withholds the response until the invocation ends.
 			}
 			select {
 			case err := <-done:
@@ -247,7 +255,17 @@ func TestR1R6SecretarySettlesOnlyItsReservation(t *testing.T) {
 			}
 			// A new request under the remaining budget must actually reach the provider.
 			if mode == "success" {
-				workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: asJSON(map[string]any{"dailyBudget": 0.07})})
+				actual := want - 0.03
+				if firstReservation <= actual {
+					t.Fatal("fixture needs a reservation above actual usage", firstReservation, actual)
+				}
+				// C1 expanded the prompt: the old fixed 0.07 also blocked a
+				// correctly settled call. Keep half the released reservation as
+				// headroom for the next turn's history, while leaving insufficient
+				// budget if the first invocation's full reservation were retained.
+				nextBudget := want + firstReservation + (firstReservation-actual)/2
+				t.Logf("pending first reservation=%g settled=%g next budget=%g", firstReservation, actual, nextBudget)
+				workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: asJSON(map[string]any{"dailyBudget": nextBudget})})
 				before := len(f.all())
 				mustTurn(t, s, scope, turnRequest("R1 next question"))
 				if len(f.all()) != before+1 {

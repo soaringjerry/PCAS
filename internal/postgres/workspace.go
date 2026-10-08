@@ -201,7 +201,8 @@ func (s *Store) snapshotTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) (
 	if err = json.Unmarshal(data, &out.Settings); err != nil {
 		return out, err
 	}
-	items, err := queryDocuments[workspace.Item](ctx, tx, "SELECT document FROM work_items WHERE owner_id=$1 ORDER BY updated_at DESC,id", string(scope.OwnerID))
+	out.Settings.AutoAccept = false
+	items, err := queryDocuments[workspace.Item](ctx, tx, `SELECT document || CASE WHEN coalesce(document->>'createdAt','')='' THEN jsonb_build_object('createdAt',created_at) ELSE '{}'::jsonb END FROM work_items WHERE owner_id=$1 ORDER BY updated_at DESC,id`, string(scope.OwnerID))
 	if err != nil {
 		return out, err
 	}
@@ -654,7 +655,17 @@ func jobProblem(code string) string {
 // import reads as one line rather than a dozen stage names. Idea wakes and
 // finished runs are already on their own records and are added by the client.
 func activityTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, timezone string) ([]workspace.Activity, error) {
-	out := []workspace.Activity{}
+	// Automatic creation is presented once through the item and its creation
+	// actionId. A topic linked to an existing project has no new item receipt,
+	// so retain its activity while excluding all automatic creation activities.
+	out, err := queryDocuments[workspace.Activity](ctx, tx, `SELECT jsonb_build_object('id',a.id::text,'at',a.created_at,'text',a.summary,'to','/t/'||l.project_id::text)
+ FROM action_log a JOIN topic_project_links l ON(l.owner_id,l.action_id)=(a.owner_id,a.id)
+ WHERE a.owner_id=$1 AND a.source='background_topic' AND NOT l.created_project
+ AND a.undone_at IS NULL AND a.expired_at IS NULL AND a.created_at>=now()-interval '30 days'
+ ORDER BY a.created_at DESC,a.id`, string(scope.OwnerID))
+	if err != nil {
+		return nil, err
+	}
 	owner := string(scope.OwnerID)
 	rows, err := tx.Query(ctx, `WITH finished AS (
 		SELECT j.record_id,j.record_version,max(j.updated_at) AS at FROM memory_jobs j

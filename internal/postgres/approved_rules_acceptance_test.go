@@ -124,7 +124,9 @@ func TestApprovedRules_InvalidAliasesNeverFallBackToTHIS(t *testing.T) {
 		{"out-of-range", `{"actions":[{"op":"add_steps","ref":"N99","steps":["禁止"]}]}`, []int{0}, 1},
 		{"zero", `{"actions":[{"op":"add_steps","ref":"N0","steps":["禁止"]}]}`, []int{0}, 1},
 		{"non-create", `{"actions":[{"op":"update","ref":"THIS","set":{"title":"合法改名"}},{"op":"add_steps","ref":"N1","steps":["禁止"]}]}`, []int{1}, 1},
-		{"implicit-project", `{"actions":[{"op":"create_task","title":"新任务","project":"new:附带项目"},{"op":"create_task","title":"不得创建","project":"N1"}]}`, []int{1}, 2},
+		// Phase 3.5 C1 adds a distinct project receipt before the task; N1
+		// still refers to the original first task action, never its companion.
+		{"implicit-project", `{"actions":[{"op":"create_task","title":"新任务","project":"new:附带项目"},{"op":"create_task","title":"不得创建","project":"N1"}]}`, []int{2}, 2},
 		{"wrong-kind-project", `{"actions":[{"op":"create_idea","title":"想法"},{"op":"update","ref":"THIS","set":{"project":"N1"}}]}`, []int{1}, 1},
 		{"delegate-new", `{"actions":[{"op":"delegate","ref":"new","title":"附带任务","kind":"summary","prompt":"摘要"},{"op":"add_steps","ref":"N1","steps":["禁止"]}]}`, []int{1}, 2},
 	}
@@ -146,6 +148,12 @@ func TestApprovedRules_InvalidAliasesNeverFallBackToTHIS(t *testing.T) {
 			}
 			if tc.name == "forward" {
 				approvedRulesReceipt(t, out, 1, "done")
+			}
+			if tc.name == "implicit-project" {
+				approvedRulesReceipt(t, out, 1, "done")
+				if out.Turn.Receipts[0].Op != "create_project" || out.Turn.Receipts[1].Op != "create_task" || len(out.State.Projects) != 1 {
+					t.Fatal("companion project must not own an N alias", out.Turn.Receipts, out.State.Projects)
+				}
 			}
 			if tc.name == "non-create" || tc.name == "implicit-project" || tc.name == "wrong-kind-project" || tc.name == "delegate-new" {
 				approvedRulesReceipt(t, out, 0, "done")

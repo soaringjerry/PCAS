@@ -131,7 +131,7 @@ test('settings open with the current state and the everyday groups, and keep key
   // The rows that hold them still say where each one stands.
   await expect(page.getByRole('button', { name: /^按量计费接口/ })).toContainText('已填密钥 · gpt-fake · 向量还没填')
   await expect(page.getByRole('button', { name: /^Telegram/ })).toContainText('已连接')
-  await expect(page.getByRole('switch')).toHaveCount(6)
+  await expect(page.getByRole('switch')).toHaveCount(5)
   expect(m.commands).toEqual([])
   expect(m.errors).toEqual([])
 })
@@ -158,7 +158,6 @@ test('each switch says what it does now, saves only its own field, and shows the
   const cases = [
     { label: '事项提醒', field: 'followUps', from: true, after: '现在：已停。到时间不再提醒，也不往设备和 Telegram 发；定好的时间都还留着。' },
     { label: '带回搁置的想法', field: 'wakeIdeas', from: true, after: '现在：已停。搁置的想法一直放着，直到你自己去翻。' },
-    { label: '资料里的明确待办直接创建', field: 'autoAccept', from: false, after: '现在：十分明确的直接创建，其余仍等你确认。你直接跟秘书说的不受影响。' },
   ] as const
   for (const c of cases) {
     const toggle = page.getByRole('switch', { name: c.label, exact: true })
@@ -175,7 +174,7 @@ test('each switch says what it does now, saves only its own field, and shows the
     expect(m.commands.at(-1)).toMatchObject({ type: 'updateSettings', patch: { [c.field]: !c.from } })
     expect(Object.keys((m.commands.at(-1) as Extract<Command, { type: 'updateSettings' }>).patch)).toEqual([c.field])
   }
-  expect(m.commands).toHaveLength(3)
+  expect(m.commands).toHaveLength(2)
   // Nothing else moved: budget, review time, city and timezone are what they were.
   expect(m.state.settings).toMatchObject({ dailyBudget: 10, dailyReviewAt: '09:00', city: '上海', timezone: 'Asia/Shanghai' })
   // With task reminders off, the overview and the channel list both say reminders will not arrive.

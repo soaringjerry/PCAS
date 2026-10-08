@@ -12,6 +12,9 @@ async function mock(page: Page, failUpload = false) {
   const state = { version: 1, revision: 1, budgetUsage: 0, notices: [], settings: { timezone: 'Asia/Shanghai', city: '上海', dailyBudget: 10, autoAccept: false, wakeIdeas: true, followUps: true, dailyReviewAt: '09:00' }, tasks: [task], ideas: [], projects: [], agents: [{ id: 'fake', name: '模拟秘书', enabled: true, available: true, default: true, channel: 'api', note: '', inputPrice: 0, outputPrice: 0, maxOutput: 100, memoryKinds: ['fact'], includeInferred: false }], memories: [], candidates: [], docs: [], runs: [], samples: [], sources: [], jobs: [], activity: [], excludedMemories: {} }
   page.on('pageerror', (error) => errors.push(error.message))
   await page.route('**/v1/**', (route) => route.fulfill({ status: 500, json: { error: 'unexpected_mock_request' } }))
+  // The hall's own reads (phase 3.5): no dates and nothing under 在推进.
+  await page.route('**/v1/workspace/schedule?*', (route) => route.fulfill({ json: { days: [], unclear: [], overdue: [] } }))
+  await page.route('**/v1/workspace/in-progress', (route) => route.fulfill({ json: { items: [], total: 0, remaining: 0 } }))
   await page.route('**/v1/workspace', (route) => route.fulfill({ json: state }))
   await page.route('**/v1/desk/turns?*', (route) => route.fulfill({ json: { turns: [] } }))
   await page.route('**/v1/memory/summary*', (route) => route.fulfill({ json: { text: '', coverage: { gaps: [] }, dependencies: [] } }))

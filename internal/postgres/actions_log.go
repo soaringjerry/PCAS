@@ -78,12 +78,17 @@ func flushActionLog(ctx context.Context, tx pgx.Tx, scope memory.Scope) error {
 	return recordSmokeActionTx(ctx, tx, scope, log.id, entries)
 }
 func undoableCommand(t string) bool {
-	if t == "restoreMemory" {
+	if oneOf(t, "restoreMemory", "completeDeadline") {
 		return true
 	}
 	return oneOf(t, "addTask", "addIdea", "addProject", "updateTask", "updateProject", "setTaskStatus", "renameThing", "setNotes", "moveThing", "deferTask", "addCheck", "toggleCheck", "removeCheck", "ideaPromote", "ideaSnooze", "ideaShelve", "ideaDrop", "ideaContinue", "addCondition", "removeCondition", "adoptRun", "discardRun", "createDoc", "updateDoc", "deleteDoc", "bulkStatus", "bulkDefer", "bulkMove")
 }
 func commandSummary(ctx context.Context, tx pgx.Tx, scope memory.Scope, c workspace.Command) string {
+	if c.Type == "completeDeadline" {
+		var title string
+		_ = tx.QueryRow(ctx, "SELECT title FROM deadlines WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), c.ID).Scan(&title)
+		return "完成期限：" + title
+	}
 	title := c.Title
 	if title == "" {
 		title = c.Name
@@ -110,6 +115,9 @@ func commandSummary(ctx context.Context, tx pgx.Tx, scope memory.Scope, c worksp
 	return prefix + title
 }
 func (s *Store) undoActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, id string) error {
+	if handled, err := s.undoTopicProjectTx(ctx, tx, scope, id); handled {
+		return err
+	}
 	if handled, err := undoComparisonActionTx(ctx, tx, scope, id); handled {
 		return err
 	}
@@ -159,6 +167,12 @@ func (s *Store) undoActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 	// Lock all rows first. The owner lock serializes commands and undo; run locks
 	// fence the worker, which does not take the owner lock when claiming work.
 	for _, c := range changes {
+		if c.Table == "deadline_completion" {
+			if err := checkDeadlineCompletionTx(ctx, tx, scope, c); err != nil {
+				return err
+			}
+			continue
+		}
 		if c.Table == "source_attachments" {
 			var ref memory.Ref
 			if json.Unmarshal(c.Before, &ref) != nil || ref.Kind != memory.SourceKind || string(ref.ID) != c.ID || ref.Version < 1 {
@@ -227,6 +241,12 @@ func (s *Store) undoActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 	}
 	for i := len(changes) - 1; i >= 0; i-- {
 		c := changes[i]
+		if c.Table == "deadline_completion" {
+			if err := restoreDeadlineCompletionTx(ctx, tx, scope, c); err != nil {
+				return err
+			}
+			continue
+		}
 		if c.Table == "source_attachments" {
 			var ref memory.Ref
 			if err := json.Unmarshal(c.Before, &ref); err != nil {
@@ -244,7 +264,25 @@ func (s *Store) undoActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 					return err
 				}
 				if referenced {
-					return workspace.ErrChangedSince
+					project, e := getItem(ctx, tx, scope, c.ID)
+					if e != nil {
+						return e
+					}
+					if project.Kind != "project" || project.Creation == nil || project.Creation.By != "secretary" {
+						return workspace.ErrChangedSince
+					}
+					items, e := queryDocuments[workspace.Item](ctx, tx, "SELECT document FROM work_items WHERE owner_id=$1 AND project_id=$2 ORDER BY id FOR UPDATE", string(scope.OwnerID), c.ID)
+					if e != nil {
+						return e
+					}
+					for _, item := range items {
+						item.ProjectID = ""
+						item.Version++
+						item.UpdatedAt = stamp()
+						if e = s.saveAction(ctx, tx, scope, item, "撤销项目，事项回到无项目"); e != nil {
+							return e
+						}
+					}
 				}
 				// Removing queued rows releases their reserved_cost from the daily sum.
 				if _, err = tx.Exec(ctx, "DELETE FROM agent_runs WHERE owner_id=$1 AND thing_id=$2", string(scope.OwnerID), c.ID); err != nil {

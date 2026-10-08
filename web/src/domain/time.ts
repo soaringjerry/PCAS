@@ -28,6 +28,26 @@ export function dayOffset(iso: string, timeZone?: string): number {
   return calendarDay(new Date(iso), timeZone) - calendarDay(new Date(), timeZone)
 }
 
+/** The calendar date in the given zone, `days` from today, as YYYY-MM-DD. */
+export function civilDate(days = 0, timeZone?: string): string {
+  return new Date((calendarDay(new Date(), timeZone) + days) * DAY).toISOString().slice(0, 10)
+}
+
+/** Whole days from today in the given zone to a YYYY-MM-DD date. */
+export function civilOffset(date: string, timeZone?: string): number {
+  return Math.round(Date.parse(`${date}T00:00:00Z`) / DAY) - calendarDay(new Date(), timeZone)
+}
+
+/** "今天", "明天", "10月3日" for a YYYY-MM-DD date. */
+export function formatCivil(date: string, timeZone?: string): string {
+  const offset = civilOffset(date, timeZone)
+  if (offset === 0) return '今天'
+  if (offset === 1) return '明天'
+  if (offset === -1) return '昨天'
+  const [, month, day] = date.split('-').map(Number)
+  return `${month}月${day}日`
+}
+
 export function clockTime(iso: string, timeZone?: string): string {
   return new Date(iso).toLocaleTimeString('zh-CN', { timeZone, hour: '2-digit', minute: '2-digit', hour12: false })
 }

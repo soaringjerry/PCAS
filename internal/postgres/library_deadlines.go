@@ -25,6 +25,19 @@ func writeOrganizedDeadlinesTx(ctx context.Context, tx pgx.Tx, owner memory.ID, 
 		}
 		if d.Kind == "recurring" {
 			d.At = nil
+			if d.ScheduleRule != nil && !d.ScheduleRule.valid() {
+				return memory.ErrInvalid
+			}
+			if d.ScheduleRule == nil {
+				said, e := time.Parse(time.RFC3339Nano, m.ExpressedAt)
+				if e != nil {
+					said = time.Now()
+				}
+				rule, ok := legacyScheduleRule(d.Recurrence, said, loc)
+				if ok {
+					d.ScheduleRule = &rule
+				}
+			}
 			if strings.TrimSpace(d.Recurrence) == "" {
 				d.Kind = "unclear"
 				d.TimeNote = "未说明周期；" + d.TimeNote
@@ -51,14 +64,19 @@ func writeOrganizedDeadlinesTx(ctx context.Context, tx pgx.Tx, owner memory.ID, 
 				d.TimeNote = "日期无法校验；" + d.TimeNote
 			}
 		}
+		if d.DateOnly == nil && d.At != nil {
+			at, e := time.Parse(time.RFC3339Nano, *d.At)
+			only := e == nil && at.In(loc).Hour() == 0 && at.In(loc).Minute() == 0 && d.TimeNote != ""
+			d.DateOnly = &only
+		}
 		normalized = append(normalized, d)
 	}
 	if _, err := tx.Exec(ctx, "DELETE FROM deadlines WHERE owner_id=$1 AND claim_id=$2", string(owner), string(m.Ref.ID)); err != nil {
 		return err
 	}
 	for _, d := range normalized {
-		if _, err := tx.Exec(ctx, `INSERT INTO deadlines(owner_id,id,claim_id,claim_version,kind,at,recurrence,title,time_note,original_text)
- VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT(owner_id,id) DO NOTHING`, string(owner), organizedDeadlineID(owner, m, d), string(m.Ref.ID), m.Ref.Version, d.Kind, d.At, d.Recurrence, d.Title, d.TimeNote, m.Text); err != nil {
+		if _, err := tx.Exec(ctx, `INSERT INTO deadlines(owner_id,id,claim_id,claim_version,kind,at,recurrence,title,time_note,original_text,schedule_rule,date_only)
+ VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) ON CONFLICT(owner_id,id) DO NOTHING`, string(owner), organizedDeadlineID(owner, m, d), string(m.Ref.ID), m.Ref.Version, d.Kind, d.At, d.Recurrence, d.Title, d.TimeNote, m.Text, optionalScheduleRule(d.ScheduleRule), d.DateOnly != nil && *d.DateOnly); err != nil {
 			return err
 		}
 	}
@@ -68,4 +86,11 @@ func writeOrganizedDeadlinesTx(ctx context.Context, tx pgx.Tx, owner memory.ID, 
 func organizedDeadlineID(owner memory.ID, m cardMemory, d cardDeadline) string {
 	sum := sha256.Sum256([]byte(statusDeadlineID(owner, m, d) + "/" + d.Title + "/" + d.TimeNote))
 	return fmt.Sprintf("%x-%x-%x-%x-%x", sum[0:4], sum[4:6], sum[6:8], sum[8:10], sum[10:16])
+}
+
+func optionalScheduleRule(rule *scheduleRule) any {
+	if rule == nil {
+		return nil
+	}
+	return asJSON(rule)
 }

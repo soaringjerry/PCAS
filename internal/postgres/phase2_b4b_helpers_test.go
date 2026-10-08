@@ -274,7 +274,9 @@ func b4bRecord(t *testing.T, s *Store, scope memory.Scope, source memory.Ref, st
 	}
 	b2Equal(t, got, state)
 	b2Equal(t, count, items)
-	b2Equal(t, extractor, b4bSpec[b4bLimits](t, "limits").Extractor)
+	// Phase 3.5 B1 extends whole-conversation extraction to tasks and ideas;
+	// replay fences track the current extractor, not the historical gold version.
+	b2Equal(t, extractor, conversationExtractorVersion)
 }
 func b4bEvidence(t *testing.T, s *Store, scope memory.Scope, m workspace.Memory, source memory.Ref, quote string, at *time.Time) {
 	t.Helper()

@@ -26,8 +26,13 @@ func TestSecretaryHistoryOneEntryPerAction(t *testing.T) {
 	secretaryModel(t, s, func(w http.ResponseWriter, r *http.Request) { secretaryModelReply(w, output) })
 	req := turnRequest("周五下午三点给张三回邮件，提前半小时提醒")
 	created := mustTurn(t, s, scope, req)
-	if len(created.State.Tasks) != 1 || len(created.Turn.Receipts) != 1 {
+	if len(created.State.Tasks) != 1 || len(created.State.Projects) != 1 || len(created.Turn.Receipts) != 2 {
 		t.Fatal(created)
+	}
+	// Phase 3.5 C1 makes the companion project independently undoable.
+	projectReceipt, taskReceipt := created.Turn.Receipts[0], created.Turn.Receipts[1]
+	if projectReceipt.Op != "create_project" || taskReceipt.Op != "create_task" || projectReceipt.ActionID == nil || taskReceipt.ActionID == nil || !projectReceipt.Undoable || *projectReceipt.ActionID == *taskReceipt.ActionID || len(created.State.Projects[0].History) != 1 {
+		t.Fatal("separate project and task actions required", created.Turn.Receipts, created.State.Projects)
 	}
 	task := created.State.Tasks[0]
 	if len(task.History) != 1 || task.History[0].By != "secretary" || !strings.HasPrefix(task.History[0].Summary, "新建：") || !strings.Contains(task.History[0].Summary, "15:00 给张三回邮件 · A 项目 · 14:30 提醒") {
@@ -86,7 +91,7 @@ func TestSecretaryHistoryOneEntryPerAction(t *testing.T) {
 		}
 		t.Fatal("task absent from action log")
 	}
-	assertLog(created.Turn.Receipts[0], nil, 2) // task and implicit project
+	assertLog(taskReceipt, nil, 1) // Project has its own action and receipt.
 	output.Actions = []secretaryAction{{Op: "update", Ref: "THIS", Set: map[string]json.RawMessage{"due": asJSON(testsupport.DateFromToday(t, "Asia/Shanghai", 4, 10, 0).Format("2006-01-02T15:04"))}}}
 	req = turnRequest("改到周一十点")
 	req.ThingID = &task.ID
@@ -110,9 +115,13 @@ func TestSecretaryHistoryOneEntryPerAction(t *testing.T) {
 	if got.Due != task.Due || !reflect.DeepEqual(got.Triggers, task.Triggers) || got.Version <= changed.Version || len(got.History) != 2 || got.History[1].By != "user" || !strings.HasPrefix(got.History[1].Summary, "撤销：") {
 		t.Fatal("undo semantics changed", got)
 	}
-	removed, err := s.Undo(ctx, scope, *created.Turn.Receipts[0].ActionID)
+	removed, err := s.Undo(ctx, scope, *taskReceipt.ActionID)
+	if err != nil || len(removed.Tasks) != 0 || len(removed.Projects) != 1 {
+		t.Fatal("task undo must preserve independently created project", err, removed.Tasks, removed.Projects)
+	}
+	removed, err = s.Undo(ctx, scope, *projectReceipt.ActionID)
 	if err != nil || len(removed.Tasks) != 0 || len(removed.Projects) != 0 {
-		t.Fatal("undo creation after reschedule undo must remove task and implicit project", err, removed.Tasks, removed.Projects)
+		t.Fatal("project undo must remove the empty companion", err, removed.Tasks, removed.Projects)
 	}
 }
 

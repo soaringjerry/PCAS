@@ -43,6 +43,9 @@ async function mockBackend(
   const backend: Backend = { commands: [], turns: [], restores: [], errors: [], snapshot: workspace() }
   page.on('pageerror', (e) => backend.errors.push(e.message))
   await page.route('**/v1/**', (route) => route.fulfill({ status: 500, json: { error: 'unexpected_mock_request' } }))
+  // The hall's own reads (phase 3.5): no dates and nothing under 在推进.
+  await page.route('**/v1/workspace/schedule?*', (route) => route.fulfill({ json: { days: [], unclear: [], overdue: [] } }))
+  await page.route('**/v1/workspace/in-progress', (route) => route.fulfill({ json: { items: [], total: 0, remaining: 0 } }))
   await page.route((url) => url.pathname === '/v1/workspace', (route) => route.fulfill({ json: backend.snapshot }))
   await page.route((url) => url.pathname === '/v1/workspace/commands', async (route) => {
     const body = route.request().postDataJSON() as Command

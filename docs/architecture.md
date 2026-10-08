@@ -191,6 +191,28 @@ It retries result application without another paid call.
 An interruption during a call can leave an unknown outcome.
 Do not claim exactly-once provider execution without provider support for that guarantee.
 
+The coordinator selected bounded automatic recovery for unknown outcomes.
+Use the existing queue for backoff. Do not repeat generation inside a result-storage or accounting retry.
+Each replacement has a new invocation ID and identifies the interrupted invocation.
+Keep the interrupted outcome unknown. Record the recovery reason, attempt number, limit, and final pause reason.
+
+Retain its budget reservation when complete usage is unavailable. Do not classify missing usage as zero cost.
+
+For the shared background skeleton, one recovery chain permits five invocation attempts, including the first attempt.
+This limit uses the existing queue's five-attempt ceiling as its initial operational basis.
+It is not a measured optimum. Review recovery frequency and cost before changing it.
+
+Persistent background stages also obey this recovery limit.
+Restarts, lease changes, and budget deferrals cannot reset the recorded chain counter.
+Apply existing daily budgets and stage limits before each replacement.
+
+If the attempt limit or recovery budget is exhausted, pause with a recorded reason.
+Keep completed segments and accepted business data. Do not apply an unknown or partial response.
+
+An explicit owner retry can authorize another bounded allowance.
+Record the owner's request and link the new chain to the paused invocation. Keep historical counters and the original root.
+Automatic scheduling cannot supply this authorization.
+
 ## 6 Prompt Registry and Input Evidence
 
 Store production instructions and templates in `internal/prompts` using `go:embed`.
@@ -457,6 +479,35 @@ Check that event responses have one authoritative registration and use the exist
 Verify rollback, duplicate delivery, unchanged input, recursive triggers, overflow, and recovery on isolated data.
 Measure causal-chain model calls and cost as well as individual stage results.
 
+### Five Test Layers
+
+Complete all five layers within Phase 3.9. Passing one layer does not replace the others.
+Build architecture checks first. Build recorded before-and-after replay second, before the next business-domain migration.
+
+| Layer | Required checks and evidence |
+|---|---|
+| Architecture | Run on each commit. Resolve provider calls, registered instructions, and owner write boundaries. Include indirect writes and explicit temporary migration exceptions. |
+| Owner contracts | Use fake models. Check state transitions, version conflicts, one execution per request, undo, and explicit executed, skipped, or failed receipts. |
+| Recorded replay | Capture representative real requests, background tasks, and model replies on an isolated production-data copy. Replay before and after each refactor. Compare actions, receipts, and written data. |
+| Concurrency and ordering | Keep existing checks. Maintain fixed scenarios from the workflow's operation sequences, including random undo sequences and recorded reproduction seeds. |
+| Real-model evaluation | Run versioned recall and work-action datasets through the gateway nightly after gateway completion. Record score trends against the baseline. |
+
+Recorded replay uses the existing saved-model-result mechanism where suitable.
+Keep the same initial data, requests, task order, and recorded replies for both revisions.
+Replay must not silently call a live provider when a recorded reply is missing.
+Keep private data, credentials, actual prompts, and replies outside Git.
+Synthetic checks do not substitute for the required production-copy replay.
+
+When migrating a domain, replace its phase-coded tests with behavior-named owner contract tests.
+Remove prompt-wording assertions and copied earlier implementations from that migrated domain.
+Keep exact output-schema checks, including required field order.
+Record each removed check and its replacement or removal reason.
+
+Real-model evaluations require private credentials and an explicit resource budget.
+Run them in a trusted scheduled environment. Do not expose credentials through CI triggered by fork pull requests.
+Record dataset, revision, model, configuration, scores, resources, failures, and skipped cases for each run.
+Evaluation failures remain visible. They cannot overwrite good baseline results.
+
 ## 10 Foundation Acceptance
 
 The coordinator closes Phase 3.9 only after these conditions have evidence.
@@ -475,6 +526,7 @@ Passing CI alone does not close the phase.
 | Atomic event delivery | Committed changes, their events, and durable delivery state share a transaction. Rollback leaves no runnable change event. Duplicate delivery reuses operation identities. Recovery keeps pending work. |
 | Bounded causal work | Every event type has measured limits, overflow counts, and recovery. Recursive changes and retries cannot bypass root-chain call and cost limits. |
 | Reliable state | Affected transaction, version, lease, access, cancellation, deletion, replay, recovery, and undo checks show no migration regression. Existing defects stay separately recorded. |
+| Five test layers | Architecture, owner contracts, recorded replay, concurrency and ordering, and nightly real-model evaluation all have evidence under [Five Test Layers](#five-test-layers). |
 | Resource evidence | Calls, context, costs, duration, and progress have comparable baselines and results. Regressions have resolved causes or an explicit scope decision. |
 | Local repair | Investigations locate both an incorrect action and a missing expected action. Trace inputs, candidates, scheduling, decisions, validation, and actual writes. Identify the responsible boundary and its affected checks. |
 | Completed replacement | Replaced paths are removed. Necessary compatibility has supported callers and a removal condition. No unexplained parallel implementation remains. |

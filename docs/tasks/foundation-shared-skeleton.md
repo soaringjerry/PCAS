@@ -28,7 +28,11 @@ Keep business decisions, dependency validation, queue policy, and application tr
 | Documents | Update service paths, status, terminology, and the indexed acceptance record. |
 
 Do not move domain packages in this batch.
-Do not change project eligibility, timeline interpretation, task semantics, prompts, output schemas, or existing retry budgets.
+Do not change project eligibility, timeline interpretation, task semantics, prompts, output schemas, or existing daily and stage budgets.
+
+The coordinator approved bounded automatic recovery for unknown outcomes after reviewing the alternatives.
+Apply the [recovery contract](../architecture.md#5-model-gateway). This decision replaces the initial unconditional recovery block.
+
 Do not restore an intelligent event bus, policy router, or another queue.
 Do not retire callable legacy interfaces without their supported-client check.
 
@@ -69,7 +73,9 @@ Keep model calls outside transactions.
 Save paid output before retryable business application. Retry recording or application without repeating generation.
 Keep original input and invocation identities on recovery.
 
-An interrupted provider call can have an unknown outcome. Do not silently classify it as success or resubmit it.
+An interrupted provider call can have an unknown outcome. Do not classify it as success.
+Use bounded automatic recovery through the existing queue, with separate invocation records and explicit recovery links.
+Pause after the recovery attempt limit or an exhausted recovery budget.
 Keep accounting independent of caller cancellation and business transaction failure.
 Record failed paid attempts and unresolved accounting states.
 
@@ -91,6 +97,10 @@ Verify that prompt extraction preserves exact instruction bytes, whitespace, con
 Use a migration comparison artifact. Do not add permanent prompt-wording tests or duplicate the earlier implementation.
 Keep meaningful paid-result, cancellation, accounting, version, lease, and replay tests.
 Architecture checks use resolved dependencies and explicit migration exceptions.
+
+The [five test layers](../architecture.md#five-test-layers) must all be completed within Phase 3.9.
+This skeleton does not supply complete owner contracts, production-copy replay, or nightly evaluation.
+Build recorded replay before the next business-domain migration.
 
 Run the applicable code, PostgreSQL, and real-model checks before integration.
 Record each skipped or incomplete check and its reason.
@@ -125,14 +135,20 @@ Capture the unchanged real Codex baseline on isolated data before integration.
 Keep actual instructions and output formats unchanged.
 Implement the prompt registry, gateway interfaces, and bounded background integration.
 Use existing budget, usage, saved-result, and queue mechanisms.
+Apply the coordinator-approved bounded recovery contract for unknown outcomes.
+Record every attempt and pause at the attempt or recovery budget limit.
 Do not move business-domain packages in this batch.
 
 Keep data-owner, visible-outcome, and event constraints from docs/architecture.md.
 List incomplete input coverage, upstream causes, and remaining provider paths explicitly.
 Do not claim that model-call records explain all missing project creation.
+
 Do not restore an intelligent event bus or create another queue.
 
 Run the required code, storage, and real-model checks.
+Complete all five test layers within Phase 3.9 under docs/architecture.md.
+Build architecture checks first and production-copy replay second.
+Keep real-model credentials outside fork-triggered CI.
 Report incomplete checks and observed output differences honestly.
 Keep credentials, actual prompts, and raw model output outside Git.
 Communicate in Chinese. Write code, commits, and current specifications in English.

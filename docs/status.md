@@ -77,6 +77,11 @@ The [event contract](architecture.md#event-records-and-triggers) uses the existi
 Central event responses and chain limits remain targets.
 The shared skeleton does not implement them.
 
+The [five-layer test contract](architecture.md#five-test-layers) is required for Phase 3.9 acceptance.
+Architecture checks come first. Recorded production-copy replay comes second, before further business-domain migration.
+Owner contracts, fixed concurrency scenarios, and nightly real-model score trends remain required work.
+These requirements are not a claim that the five layers are complete.
+
 ## Documentation Changes
 
 Product requirements are merged into the whitepaper.

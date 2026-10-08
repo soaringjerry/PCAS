@@ -17,7 +17,17 @@ type paidModelResult = modelcall.PaidResult
 
 func (s *Store) paidModelResult(ctx context.Context, j worker.Job) (*paidModelResult, error) {
 	if pending, ok := s.pendingPaid.Load(j.ID); ok {
-		return pending.(*paidModelResult), nil
+		saved := pending.(*paidModelResult)
+		current := true
+		if saved.InvocationID != "" {
+			if err := s.pool.QueryRow(ctx, `SELECT recovery_state<>'replaced' FROM model_calls WHERE owner_id=$1 AND id=$2`, string(j.OwnerID), string(saved.InvocationID)).Scan(&current); err != nil {
+				return nil, err
+			}
+		}
+		if current {
+			return saved, nil
+		}
+		s.pendingPaid.CompareAndDelete(j.ID, saved)
 	}
 	r := &paidModelResult{}
 	err := s.pool.QueryRow(ctx, `SELECT b.prompt,b.output,b.reservation_id::text,b.provider_id,b.model,b.input_tokens,b.output_tokens,b.cost,b.refs,b.input_estimated,b.output_estimated,b.cost_estimated,b.duration_ms,coalesce(c.id::text,''),coalesce(c.error_code,''),coalesce((c.actual_mode->>'reservationEstimate')::double precision,0)
@@ -45,8 +55,15 @@ func (s *Store) generatePaid(ctx context.Context, j worker.Job, purpose, instruc
 	if errors.Is(err, modelcall.ErrNotAvailable) {
 		return nil, &worker.JobError{Code: "provider_unavailable", Until: time.Now().Add(time.Minute), NoAttempt: true}
 	}
+	if errors.Is(err, modelcall.ErrRetryExhausted) || errors.Is(err, modelcall.ErrRecoveryBudgetExhausted) {
+		code := modelcall.ErrRetryExhausted.Error()
+		if errors.Is(err, modelcall.ErrRecoveryBudgetExhausted) {
+			code = modelcall.ErrRecoveryBudgetExhausted.Error()
+		}
+		return nil, &worker.JobError{Code: code}
+	}
 	if errors.Is(err, modelcall.ErrOutcomeUnknown) {
-		return nil, &worker.JobError{Code: "provider_outcome_unknown"}
+		return nil, backgroundCalls{store: s}.UnknownRecovery(ctx, j)
 	}
 	var failed *modelcall.Failure
 	if errors.As(err, &failed) {

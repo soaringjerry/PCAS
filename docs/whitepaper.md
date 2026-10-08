@@ -291,6 +291,9 @@ Complete the architecture work before assigning their business repairs.
 Record existing defects separately from defects introduced by migration.
 An existing incorrect output is not a new product requirement.
 
+Complete the architecture, owner-contract, recorded-replay, concurrency, and real-model test layers within this phase.
+The [architecture test contract](architecture.md#five-test-layers) gives their order, evidence, and credential boundaries.
+
 Keep transaction, version, budget, recovery, access, and undo guarantees during migration.
 Use the same data and model configuration to compare calls, context size, cost, duration, and output quality.
 Investigate repeated processing, unnecessary calls, and scheduling delays from measured evidence.

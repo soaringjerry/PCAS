@@ -61,7 +61,15 @@ func (s *Store) reserveModelCostID(ctx context.Context, owner memory.ID, cost fl
 				return err
 			}
 			if exists && j.Attempts != 1 && cost > 0 && backgroundHourlyBudgets[backgroundStage(j.Stage)] == 0 {
-				return &worker.JobError{Code: "model_call_failed"}
+				// Only the journal's bounded, linked recovery can replace an
+				// unknown paid invocation. Existing known-failure policy stays.
+				var recovery bool
+				if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM model_calls WHERE owner_id=$1 AND execution_id=$2 AND stage=$3 AND outcome='prepared' AND retry_of_id IS NOT NULL AND attempt_number<=attempt_limit AND recovery_state='active')`, string(owner), string(j.ID), j.Stage).Scan(&recovery); err != nil {
+					return err
+				}
+				if !recovery {
+					return &worker.JobError{Code: "model_call_failed"}
+				}
 			}
 		}
 		settings, err := queryDocument[workspace.Settings](ctx, tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1", string(owner))

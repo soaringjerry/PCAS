@@ -9,7 +9,7 @@ Historical tasks, research, and evaluations are evidence. They do not assign new
 | Document | Purpose |
 |---|---|
 | [Product Whitepaper](whitepaper.md) | Product purpose, roles, memory, actions, [roadmap](whitepaper.md#10-roadmap), and acceptance. |
-| [System Architecture](architecture.md) | Phase 3.9 scope, domain ownership, model calls, prompts, events, activity, migration, and acceptance. |
+| [System Architecture](architecture.md) | Phase 3.9 scope, domain ownership, model calls, prompts, events, activity, five test layers, migration, and acceptance. |
 | [Memory Architecture](memory-architecture.md) | Memory objects, retrieval, current state, correction, and recovery. |
 | [Interface Principles](design/principles.md) | Daily presentation and observation controls. |
 | [Development Workflow](tasks/process.md) | Direction, execution, checks, merge, release, and history. |

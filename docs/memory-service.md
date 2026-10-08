@@ -52,9 +52,25 @@ Application failure does not repeat generation.
 Legacy saved responses can lack invocation metadata. Recovery does not invent it.
 
 The gateway pins the selected provider and rates before reservation.
-Lost responses and interrupted calls return `provider_outcome_unknown` and do not start an automatic replacement call.
-The existing queue records that visible failure. Resolution requires evidence through the responsible processing path.
-This batch does not add a recovery interface for unresolved calls.
+Lost responses and interrupted calls return `provider_outcome_unknown` and use the existing queue's bounded recovery.
+Each replacement has a new invocation ID, `retry_of_id`, attempt number, limit, and recovery reason.
+
+The initial ceiling is five attempts per recovery chain, including the first call.
+This applies to persistent background stages as well as ordinary extraction.
+The queue uses its existing backoff. Repeating a call within the same active lease cannot bypass it.
+
+Unknown calls retain their estimated budget reservations with accounting state `held`.
+Partial usage is recorded separately. It does not establish complete actual spending.
+
+After the attempt limit, the job returns `provider_recovery_exhausted` and pauses.
+If a budget cannot cover recovery, it returns `provider_recovery_budget_exhausted` and pauses.
+Records show the underlying limit reason. Neither state silently starts a new recovery chain.
+Already completed segments and accepted data remain available.
+
+The existing owner command `retryJob` can authorize a new bounded recovery allowance.
+The new chain links to the paused call and retains the owner's retry request ID.
+An automatic lease change cannot clear a terminal pause.
+This batch does not add a new manual recovery interface.
 
 ## 2 HTTP Interfaces
 

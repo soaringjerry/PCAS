@@ -9,7 +9,10 @@ The coordinator approved the call metadata table and migration before implementa
 Existing `generatePaid` background callers now use `internal/modelcall` for invocation, paid-result recovery, and accounting coordination.
 Explicit interfaces separate providers, accounting, saved results, and lifecycle records.
 The gateway does not import concrete PostgreSQL storage or apply business changes.
-The temporary job adapter retains existing selection, application, retry budgets, and transaction fences.
+The temporary job adapter retains existing selection, application, daily budgets, stage budgets, and transaction fences.
+
+The coordinator subsequently approved bounded automatic recovery for unknown outcomes.
+The existing queue supplies backoff. Durable attempt counters bound recovery even in persistent stages.
 
 Registered background instructions are embedded in `internal/prompts`.
 Shared extraction fragments have one copy. Final composed instructions have stable names and hashes.
@@ -21,7 +24,11 @@ It does not overwrite existing data or duplicate the token and cost ledger.
 Reservation links commit atomically with reservations.
 Returned or partial output commits atomically with its lifecycle status.
 Accounting recovery uses the original paid result, invocation, and reservation.
-Unknown outcomes remain visible and cannot silently cause another paid call.
+
+Unknown outcomes remain visible. Authorized replacements have separate identities and links to interrupted invocations.
+Unknown calls retain conservative budget reservations. Partial usage does not establish their complete actual spending.
+An exhausted attempt allowance or recovery budget pauses the job with a named reason.
+The existing explicit owner retry command can authorize another bounded allowance without erasing history.
 
 ## Real Model Baseline
 
@@ -57,9 +64,9 @@ The targeted PostgreSQL checks passed with the race detector:
 
 - A call record survives business application and keeps its unique usage link.
 - Accounting failure followed by restart reuses the paid result without a provider.
-- A started invocation without a response does not start another paid call.
+- One current lease cannot launch another invocation or replace an active invocation's status.
 - Failed-call accounting recovery does not apply partial output.
-- Disconnect and cancellation keep usage and an unknown outcome without another generation.
+- Disconnect and cancellation retain partial usage and wait for the next queue lease.
 - Legacy paid receipts recover without invented historical call metadata.
 - Existing organizer rollback recovery and comparison failure accounting remain valid.
 
@@ -85,11 +92,24 @@ The initialization repair passed the existing recovery checks without changing t
 The first [CI run](https://github.com/soaringjerry/PCAS/actions/runs/37846483143) completed with three failing PostgreSQL slices.
 One failure group is the repaired initialization defect.
 Another group expects automatic recovery after interrupting explicitly free model calls.
-That existing behavior conflicts with the draft's unconditional unknown-outcome block.
-The coordinator's recovery-policy decision is pending.
+The coordinator replaced the draft's unconditional block with bounded automatic recovery.
+This decision applies to metered calls as well as test providers. It is not a free-provider exception.
+
+New recovery checks cover metered extraction, restarts, persistent-stage limits, budget pauses, and explicit owner retry.
+A late-response check verifies that an interrupted original invocation cannot remove its replacement's paid result.
+Reservation-write failure also preserves the interrupted chain counter without another provider call.
+The final targeted recovery and migration group passed with the race detector in 21.568 seconds.
+It includes the existing killed-worker and paid-result restart scenarios without changing their expected values.
+
+Formatting, vet, build, provider-boundary, provider-selection, and worker checks passed after the final recovery refinement.
+Document links, anchors, index entries, and sentence-length checks passed.
+Two further local complete runs started before the final recovery refinements.
+Their owned test processes were stopped after those refinements. Neither run is a final complete-check pass.
+The exact committed revision must pass the existing complete CI slices before integration and release.
 
 Final CI and deployment remain pending at this record's preparation.
-The batch has not yet supplied a live secretary check or a release backup record.
+A preparation backup was verified for the initial skeleton revision.
+The final release backup and live secretary check remain pending.
 
 ## Uncertain and Remaining
 
@@ -103,6 +123,10 @@ Central event responses, chain limits, and the unified daily activity query rema
 
 Legacy saved results recover without fabricated prompt or causal metadata.
 An interrupted call without a saved result can require investigation.
-No new recovery interface or automatic accounting repair service is included.
+The existing retry control is reused. No new recovery interface or automatic accounting repair service is included.
+
+The complete [five-layer test contract](../architecture.md#five-test-layers) is required before Phase 3.9 closure.
+Production-copy replay, all owner boundaries, fixed cross-domain scenarios, and nightly evaluation are not delivered by this skeleton.
+
 This batch does not repair the reported project, timeline, or task defects.
 It does not close Phase 3.9 or Phase 4 acceptance.

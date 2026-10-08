@@ -14,9 +14,11 @@ import (
 )
 
 var (
-	ErrNotConfigured  = errors.New("provider_not_configured")
-	ErrNotAvailable   = errors.New("provider_unavailable")
-	ErrOutcomeUnknown = errors.New("provider_outcome_unknown")
+	ErrNotConfigured           = errors.New("provider_not_configured")
+	ErrNotAvailable            = errors.New("provider_unavailable")
+	ErrOutcomeUnknown          = errors.New("provider_outcome_unknown")
+	ErrRetryExhausted          = errors.New("provider_recovery_exhausted")
+	ErrRecoveryBudgetExhausted = errors.New("provider_recovery_budget_exhausted")
 )
 
 // Request separates execution identity from an individual paid invocation.
@@ -73,7 +75,7 @@ type Results interface {
 	// Save atomically stores the result and its returned/failed/unknown status.
 	// It must retain a pending result in this process if persistence fails.
 	Save(context.Context, Request, *PaidResult) error
-	Forget(context.Context, Request) error
+	Forget(context.Context, Request, *PaidResult) error
 }
 
 type Journal interface {
@@ -180,9 +182,15 @@ func (g *Gateway) Call(ctx context.Context, request Request) (*PaidResult, error
 	}
 	if saved.CallErrorCode != "" {
 		if saved.CallErrorCode == ErrOutcomeUnknown.Error() {
+			// The durable journal retains the unknown attempt and partial usage.
+			// Its response cannot be applied. A new queue lease may recover it
+			// only after the journal verifies the recorded limit and budget.
+			if err := g.results.Forget(ctx, request, saved); err != nil {
+				return nil, err
+			}
 			return nil, ErrOutcomeUnknown
 		}
-		if err := g.results.Forget(ctx, request); err != nil {
+		if err := g.results.Forget(ctx, request, saved); err != nil {
 			return nil, err
 		}
 		return nil, &Failure{Code: saved.CallErrorCode, ReservedCost: saved.ReservedCost, Reservation: saved.Reservation}

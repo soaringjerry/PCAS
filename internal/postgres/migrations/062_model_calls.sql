@@ -7,6 +7,12 @@ CREATE TABLE model_calls (
     execution_id uuid NOT NULL,
     root_execution_id uuid NOT NULL,
     causation_id uuid,
+    retry_of_id uuid,
+    attempt_number integer NOT NULL CHECK (attempt_number > 0),
+    attempt_limit integer NOT NULL CHECK (attempt_limit >= attempt_number),
+    recovery_state text NOT NULL DEFAULT 'active' CHECK
+        (recovery_state IN ('active','replaced','exhausted','budget_exhausted')),
+    recovery_reason text NOT NULL DEFAULT '',
     function_name text NOT NULL CHECK (function_name <> ''),
     stage text NOT NULL CHECK (stage <> ''),
     provider_id text NOT NULL CHECK (provider_id <> ''),
@@ -25,7 +31,7 @@ CREATE TABLE model_calls (
     usage_id uuid,
     result_receipt jsonb,
     accounting_state text NOT NULL CHECK
-        (accounting_state IN ('not_reserved','reserved','pending','settled','failed')),
+        (accounting_state IN ('not_reserved','reserved','pending','settled','failed','held')),
     created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
     started_at timestamptz,
     finished_at timestamptz,
@@ -53,12 +59,17 @@ CREATE INDEX model_calls_owner_execution ON model_calls (owner_id, execution_id,
 CREATE INDEX model_calls_owner_root ON model_calls (owner_id, root_execution_id, id);
 CREATE UNIQUE INDEX model_calls_owner_usage ON model_calls (owner_id, usage_id) WHERE usage_id IS NOT NULL;
 CREATE UNIQUE INDEX model_calls_owner_reservation ON model_calls (owner_id, reservation_id) WHERE reservation_id IS NOT NULL;
+CREATE UNIQUE INDEX model_calls_retry_successor ON model_calls (owner_id, retry_of_id) WHERE retry_of_id IS NOT NULL;
 
 CREATE UNIQUE INDEX model_calls_unresolved_execution ON model_calls (owner_id, execution_id, stage)
-    WHERE outcome IN ('prepared','started','unknown') OR accounting_state IN ('reserved','pending','failed');
+    WHERE recovery_state <> 'replaced' AND
+        (outcome IN ('prepared','started','unknown') OR accounting_state IN ('reserved','pending','failed','held')
+         OR (retry_of_id IS NOT NULL AND outcome='failed' AND accounting_state='not_reserved')
+         OR recovery_state IN ('exhausted','budget_exhausted'));
 
 -- IDs in input_manifest are references, not copies of sources or memory text.
 -- No foreign key to business records: deleting a source must not erase billing evidence.
 -- A returned invocation can still have pending or failed accounting.
--- An interrupted started invocation can become unknown; do not automatically repeat it.
+-- Unknown outcomes stay unknown after bounded, separately recorded recovery.
+-- Held reservations are budget protection, not asserted actual spending.
 -- Historical usage rows do not receive invented prompts, modes, or causal IDs.

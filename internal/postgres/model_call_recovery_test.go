@@ -93,7 +93,7 @@ func TestAccountingRecoveryReusesOriginalPaidResultAfterRestart(t *testing.T) {
 	}
 }
 
-func TestInterruptedInvocationDoesNotStartAnotherPaidCall(t *testing.T) {
+func TestActiveLeaseCannotStartAnotherInvocation(t *testing.T) {
 	s := testStore(t)
 	scope := owner()
 	var calls atomic.Int32
@@ -117,11 +117,11 @@ func TestInterruptedInvocationDoesNotStartAnotherPaidCall(t *testing.T) {
 	}
 	_, err = s.generatePaid(ctx, j, "organize", organizeInstructions, request.Prompt, nil)
 	var jobErr *worker.JobError
-	if !errors.As(err, &jobErr) || jobErr.Code != "provider_outcome_unknown" || jobErr.Retry || !jobErr.Until.IsZero() || calls.Load() != 0 {
+	if !errors.As(err, &jobErr) || jobErr.Code != "provider_outcome_unknown" || !jobErr.Retry || !jobErr.Until.IsZero() || calls.Load() != 0 {
 		t.Fatal(err, calls.Load())
 	}
 	var outcome string
-	if err := s.pool.QueryRow(ctx, "SELECT outcome FROM model_calls WHERE owner_id=$1 AND execution_id=$2", string(scope.OwnerID), string(j.ID)).Scan(&outcome); err != nil || outcome != "unknown" {
+	if err := s.pool.QueryRow(ctx, "SELECT outcome FROM model_calls WHERE owner_id=$1 AND execution_id=$2", string(scope.OwnerID), string(j.ID)).Scan(&outcome); err != nil || outcome != "started" {
 		t.Fatal(outcome, err)
 	}
 }
@@ -164,7 +164,7 @@ func TestFailedCallAccountingRecoveryDoesNotApplyPartialOutput(t *testing.T) {
 	}
 }
 
-func TestLostProviderResponseKeepsUsageAndDoesNotRepeatGeneration(t *testing.T) {
+func TestLostProviderResponseKeepsUsageAndWaitsForNextLease(t *testing.T) {
 	for _, mode := range []string{"disconnect", "cancel"} {
 		t.Run(mode, func(t *testing.T) {
 			s := testStore(t)
@@ -210,7 +210,7 @@ func TestLostProviderResponseKeepsUsageAndDoesNotRepeatGeneration(t *testing.T) 
 			}
 			var outcome, state string
 			var usages int
-			if err := s.pool.QueryRow(context.Background(), `SELECT c.outcome,c.accounting_state,(SELECT count(*) FROM model_usage u WHERE u.owner_id=c.owner_id AND u.id=c.usage_id) FROM model_calls c WHERE c.owner_id=$1 AND c.execution_id=$2`, string(scope.OwnerID), string(j.ID)).Scan(&outcome, &state, &usages); err != nil || outcome != "unknown" || state != "settled" || usages != 1 {
+			if err := s.pool.QueryRow(context.Background(), `SELECT c.outcome,c.accounting_state,(SELECT count(*) FROM model_usage u WHERE u.owner_id=c.owner_id AND u.id=c.usage_id) FROM model_calls c WHERE c.owner_id=$1 AND c.execution_id=$2`, string(scope.OwnerID), string(j.ID)).Scan(&outcome, &state, &usages); err != nil || outcome != "unknown" || state != "held" || usages != 1 {
 				t.Fatal(outcome, state, usages, err)
 			}
 		})

@@ -1,5 +1,9 @@
 # 稳定化与二阶段准备：执行分工
 
+> **Historical task record.** This text records an earlier phase or investigation.
+> Use the [current documentation](../../README.md) and [project status](../../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 2026-10-01。上位依据是 [白皮书](../../whitepaper.md)、[设计原则](../../design/principles.md)、[状态序列表](README.md) 和 [任务流程](../process.md)。本页安排执行，不把尚未完成的测试、PR 或部署写成已完成。
 
 ## 目标与角色

@@ -1,5 +1,9 @@
 # 任务 U2：记忆卡片上的人、地点、时间；按人按地点翻（前端）
 
+> **Historical task record.** This text records an earlier phase or investigation.
+> Use the [current documentation](../../../README.md) and [project status](../../../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 执行者 Opus 5.5。分支 `phase2/b2-U2-frontend`，从 `origin/phase2/batch2` 建；工作区 `/root/PCAS-wt/b2-U2`；Draft PR 的 base 是 `phase2/batch2`。
 
 先读 [并行方案与数据约定](../parallel.md) 第 3.3、5 节、[第 2 批契约](README.md) 的 R16、R22 和序列 U1–U4，以及 [界面与交互原则](../../../design/principles.md)。

@@ -1,5 +1,9 @@
 # T2：独立检验提醒与时间
 
+> **Historical task record.** This text records an earlier phase or investigation.
+> Use the [current documentation](../../README.md) and [project status](../../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 执行者：6.1 Sol，只写测试。先读 [执行分工](dispatch.md)、[状态序列表 §2.2](README.md) 和 [接口契约 §3、§4](../phase1/contracts.md)。基线是已合并 F6 的 main `c94b496`。
 
 ## 要做的事

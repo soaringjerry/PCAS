@@ -1,5 +1,9 @@
 # A1：稳定化集成审查与进入二阶段的判定
 
+> **Historical task record.** This text records an earlier phase or investigation.
+> Use the [current documentation](../../README.md) and [project status](../../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 执行者：Astra / high。后端修复已交付，先审查明确提交的跨模块行为；U1 已完成交接，执行一次完整候选验收。四个待裁定 U 叶不因此获准实现或宣称通过。
 
 ## 本轮精确候选与工作区

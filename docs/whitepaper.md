@@ -1,518 +1,211 @@
-# PCAS 白皮书
+# PCAS Product Whitepaper
 
-Personal Central AI System · 2.0 草案 · 2026 年 9 月 30 日（2026 年 10 月 4 日修订：记忆核心改为四层，新增现状层和自动整理的原则；2026 年 10 月 7 日修订：现状层去掉现状卡，期限和要求各有来源，新增后台整理的规矩；2026 年 10 月 8 日修订：工作室的现状块定为项目交接说明，第 3 阶段范围定稿）
+Current product specification. Updated 2026-10-08.
 
-> 本文是 PCAS 的上位文档。[产品需求](prd.md)、[界面与交互原则](design/principles.md)、[记忆架构](memory-architecture.md) 与后续开发批次以本文为准；冲突时先改本文，再改下游文档。英文版随中文定稿后提供。
+PCAS is a personal support team that works at all times. A shared memory core supports every member of the team.
+The user states a need. The team finds the necessary information, does the permitted work, and shows the result.
+PCAS is open source and self-hosted. The user owns the data.
 
----
+This document includes the former requirements in `prd.md`.
+[Project Status](status.md) separates delivered functions from targets.
+[Document Authority](README.md#document-authority) defines which requirements apply.
 
-## 0 摘要
+## 1 Product Purpose
 
-PCAS 是一支**围绕你一个人、全天候工作的支持团队**：前台秘书接住你说的每一句话，二把手替你拆解和排期，管家照看日常，每件大事有自己的工作室，观测台让你看清团队里每个成员在做什么。整个团队共用同一个**记忆核心**：你说过的话、做过的事、接入的每一份资料，都能被按时间、地点、人物和事情找回来，并且被整理成团队办事前就该知道的现状。
+PCAS connects information across conversations, applications, models, and tasks.
+The user can return to a task without giving the same background again.
+Conversation is an input method. Tasks, files, plans, and completed work remain available outside the conversation.
+The daily interface uses cards, timelines, and short receipts.
 
-PCAS 开源、自托管、非商业。数据留在你自己的机器上。
+The product supports three results:
 
-和 ChatGPT 这类 AI 聊天产品的区别：
+- Find a past statement with its source and later changes.
+- Prepare and do work with the user's current information.
+- Show what the team did, why it did that work, and what needs correction.
 
-| | AI 聊天 | PCAS |
+## 2 Team Roles
+
+| Role | Responsibility | Result |
 |---|---|---|
-| 做什么 | 回一段话 | 把事办了，并告诉你办了什么 |
-| 记忆 | 以会话为单位，换个窗口就忘 | 连续、结构化、可追溯，越用越懂你 |
-| 呈现 | 长文，"1. 2. 3." | 能可视化就可视化：卡片、时间轴、日程块 |
-| 主动性 | 你问它才答 | 到点提醒、条件满足时唤醒、看出苗头主动提议 |
-| 数据 | 在别人的服务器上 | 在你自己的机器上，可看、可改、可删、可导出、可用来训练自己的模型 |
+| Secretary | Understand the complete request. Answer, act, or delegate. | Sourced answers and action receipts. |
+| Deputy | Prepare plans, drafts, research, and revisions. Estimate work and suggest a start date. | Work in the applicable workspace. |
+| Butler | Learn habits. Help with daily choices, subscriptions, income, and expenses. | Useful suggestions with a stated reason. |
+| Workspace or Lab | Keep one project's information and work together. | Files, current status, plans, document versions, and deputy results. |
+| Observation panel | Show activity, memory use, model calls, cost, failures, and recovery. | Explanations and correction controls. |
 
----
+All roles use the same memory core and action system.
+A role defines a responsibility. It does not require a separate copy of the user's memory.
 
-## 1 问题
+## 3 Memory Core
 
-1. **事情被聊天滚走。** 线性对话里冒出的想法和待办，几页之后就找不到了；换一个会话或换一个 AI，又得从头交代背景。
-2. **数据散在各处。** 录音转录、邮件、各家 AI 的对话、IM、日历、账单，各在各的应用里，没有一处把它们连起来。
-3. **AI 只会说，不会做。** 回答得再好，建日程、设提醒、找资料、起草邮件还得自己动手。
-4. **两个极端。** 要么是黑盒，不知道它做了什么；要么是为了防它乱做，把每个决定都做成按钮推回给用户，结果用起来比自己做还累。PCAS 上一版就落进了后一个坑。
-5. **数据越多越贵。** 什么都塞进上下文让模型自己找，数据量一上来，成本和延迟都会爆炸。
+Memory is the foundation of PCAS. It preserves sources, meaning, time, and changes.
+The [Memory Architecture](memory-architecture.md) defines the technical requirements.
 
----
-
-## 2 定位：一支支持团队
-
-比喻：**秘书 + 公司二把手 + 管家**，再加上给每件大事准备的**工作室**，以及一个管理整个团队的**观测台**。它比你妈还了解你，是你的后盾：任何事、任何麻烦，只需要说一句，能干的马上就去干。
-
-```
-┌──────────────────── 观测台 / 管理面板（"HR"）────────────────────┐
-│    谁在做什么 · 花了多少 · 用了哪些记忆 · 权限 · 失败与恢复 · 数据集   │
-└─────────────────────────────────────────────────────────────────┘
-   前台秘书        二把手 / 参谋       管家            工作室（Lab）× N
-   一句话入口      拆解 · 估工作量     习惯 · 推荐      每件大事一个空间：
-   回答 + 执行     倒推开工 · 排优先    预算 · 订阅      文件 + 专属记忆 + 副手
-   卡片回执        发现冲突            收支 · 生活      可自动创建和备料
-         └───────────────┬───────────────┘
-            模型调度：大 / 小 · 本地 / 云端 · 有审查 / 无审查 · 自己训练的模型
-┌──────────────────────────── 记忆核心 ────────────────────────────┐
-│  上下文层（原文 · 转录 · 截图）  结构化层（人 · 地 · 时 · 事 · 习惯）  向量层  现状层  │
-│          工作室记忆 = 同一套记忆里的一个范围，不是另一套系统             │
-└─────────────────────────────────────────────────────────────────┘
-   接入：Yufolo 转录 · 邮件 · AI 对话 · IM · 日历 · 文件 · 账单 · 屏幕 · 手机 GPS / 麦克风
-```
-
-**它不是什么：**
-
-- 不是聊天机器人。对话只是入口，产出的是被安排好的事。
-- 不是应用搭建平台。PCAS 为一个人服务，不做通用工作流编排。
-- 不是商业服务。没有账号体系、没有云端托管、没有数据变现。
-
----
-
-## 3 产品原则
-
-| 原则 | 含义 | 反例（不这样做） |
-|---|---|---|
-| **一句话办事** | 用户说一句，系统理解整句意图，能做的都做掉：回答、建事项、设提醒、归项目、派副手，可以同时发生 | 先让用户选"问一下 / 记下来 / 交给副手" |
-| **先做后报，一键撤销** | 可以撤回的动作直接执行，回执说清做了什么，附【改】【撤销】 | 先生成候选，等用户逐条确认 |
-| **按钮只剩三种** | ① 完成打勾 ② 撤销 / 改 ③ 往外发送、删除、花钱之前的确认。其余的靠说或者系统自己判断 | 状态、截止、项目、副手、记忆全做成下拉框和勾选框 |
-| **能可视化就不写长文** | 日程用时间块，进展用时间轴，花费用图，找到的记忆用带来源的卡片 | "今天 1. … 2. … 3. …" |
-| **主动但会学** | 到点提醒、条件满足时唤醒、看出苗头就提议；被拒绝会记住，同类提议随之减少 | 固定频率唠叨 |
-| **全程可观测** | 每个动作、每次模型调用、每条被用到的记忆，都能在观测台找到 | 黑盒 |
-| **记忆自动整理，人只纠错** | 归类、合并重复、判断新旧、写出现状都由系统自己做，可撤销；你看到不对时说一句，它改掉并让相关的内容跟着更新 | 列一张待确认清单，等用户逐条审核 |
-| **数据归用户** | 自托管；可看、可改、可删、可导出；删除会传播到检索、摘要和训练集 | 删了界面上的，底下还留着 |
-
-系统内部概念（候选、推测、曝光度、证据类型、训练样本）不出现在日常界面，只在观测台里出现。
-
----
-
-## 4 团队角色
-
-每个角色 = 一组职责 + 能用的动作 + 默认模型策略 + 对应界面。所有角色共用记忆核心，也共用同一套动作和撤销机制。
-
-| 角色 | 职责 | 能做的动作（举例） | 默认模型 | 界面 |
-|---|---|---|---|---|
-| **前台秘书** | 接住每一句话；回答、执行、转派 | 建 / 改 / 完成事项，设提醒，归项目，记住一件事，查记忆，联网查，派给副手或工作室 | 快速的中等模型；高频简单意图交给自己训练的小模型 | 首页对话、每个工作室底部的输入框 |
-| **二把手 / 参谋** | 把大事变成可执行的计划 | 拆步骤，估工作量，从截止时间倒推开工时间，排优先级，发现日程冲突，提醒"该开始了" | 推理能力强的大模型，按需调用 | 工作室里的计划时间轴、首页"今天"里的建议块 |
-| **管家** | 照看日常生活 | 学习习惯，推荐（音乐、晚餐、活动），跟踪预算、订阅和收支，提醒续费和异常支出 | 本地小模型做统计和判断，大模型只在生成推荐文案时调用 | 首页轻提示、观测台的生活面板 |
-| **工作室（Lab）** | 为一件大事提供专门的空间 | 管理文件（云盘式），保存专属记忆，维护现状（结论 / 卡点 / 下一步），调度副手干活，文档出新版本并展示差异 | 按任务选择 | 工作室页 |
-| **对外联络** | 代你和外界打交道 | 起草邮件和消息；**你点一下才发出** | 中等模型 | 待发列表、首页回执 |
-| **观测台（"HR"）** | 管理整个团队 | 展示活动流、花费、模型调用、记忆使用、权限、失败与恢复、训练数据集 | 不调用模型 | 观测台 |
-
-**工作室举例：** 系统从学校邮件里发现一份新作业，7 天后截止。它自动建立工作室，放入作业要求和相关课件，从过往记忆中找到你写同类作业的平均用时，并在日程里建议："周三晚上开始，分两次做完。"你打开工作室时，这些都已经准备好了。
-
----
-
-## 5 记忆核心
-
-记忆核心是 PCAS 的地基，也是这个项目的重点。完整规格见 [记忆架构](memory-architecture.md)，这里只讲定位和新增的部分。
-
-### 5.1 四层结构，一套身份
-
-```
-                  ┌───────────────── 结构化层（重点）─────────────────┐
-  问题 ──理解──▶  │ 实体（人/地点/组织/物品） 经历 陈述 习惯/规律 证据 关系 │ ──精确定位──┐
-                  └──────────────────────────────────────────────────┘             │
-                  ┌───────────── 向量层 ─────────────┐                               ▼
-                  │ 原文片段 · 经历摘要 · 陈述文本    │ ──语义补漏──▶ 合并 · 核对原文与当前状态 ──▶ 少量、带来源的上下文
-                  └──────────────────────────────────┘                               ▲
-                  ┌───────────── 上下文层 ───────────┐                               │
-                  │ 消息 · 文件版本 · 转录 · 截图 · OCR │ ──────────── 原文核对 ─────────┘
-                  └──────────────────────────────────┘
-```
-
-- **上下文层**保存原件和当时的情境：消息、文件版本、转录、截图，以及前后相邻的对话。
-- **结构化层**维护系统对"现在是什么情况"的理解：谁、在哪、什么时候、说了什么、打算什么、后来怎么变了。允许存在未知、候选和分歧。
-- **向量层**负责措辞不同但意思相近的召回。所有向量都指回原始 ID 和版本，可以随时重建。
-- **现状层**把结构化层整理成团队办事前就该知道的样子：一份交接说明、一张期限表、一组对助手的要求。它只做整理，不产生新的事实（见 5.6）。
-- **工作室记忆**是同一套记忆按工作室划出的一个范围，不另起一套系统。
-
-四层的分工：
-
-| 层 | 回答的问题 | 什么时候用 |
-|---|---|---|
-| 上下文层 | 当时到底怎么说的 | 核对、展开原话 |
-| 结构化层 | 哪件事是真的，现在以哪条为准 | 按条件精确定位 |
-| 向量层 | 大概和哪些有关 | 指方向、补漏 |
-| 现状层 | 把这件事办好要先知道什么 | 办事之前先给 |
-
-上面的图画的是回忆一件事的路径。替你办一件事的路径不同，见 5.8。
-
-### 5.2 查询规划：先想清楚找什么，再去找
-
-一个问题先被翻译成结构化条件，用条件精确定位；向量只负责补漏；最后核对原文和当前状态。
-
-**例："我去年说去成都要干什么来着？"**
-
-| 步骤 | 做什么 | 结果 |
-|---|---|---|
-| ① 理解 | 时间 = 去年（按表达时间，2025-01-01 至 2025-12-31）；地点 = 实体「成都」（含别名）；性质 = 意向 / 计划；主体 = 我 | 结构化查询条件 |
-| ② 结构化定位 | 在陈述中查：主体为我，性质为意向或计划，关联实体为成都，表达时间落在去年 | 命中 3 条 |
-| ③ 语义补漏 | 在同一时间范围、同一经历里做向量检索，找回没直接写"成都"两个字的内容，比如同一次讨论里的"春熙路那家火锅" | 补回 2 条 |
-| ④ 核对 | 检查后来有没有更正、是否已经去过、是否已经不打算去 | 1 条已完成，4 条仍有效 |
-| ⑤ 呈现 | 回一张时间轴卡片：哪天说的、想做什么、现在的状态，每条都能展开看原话 | 不写长文 |
-
-交给模型的上下文只有这 5 条，而不是 50 段"可能相关"的片段。**结构化层越扎实，每次调用越便宜、越准。**
-
-### 5.3 成本原理
-
-| 做法 | 上下文里放什么 | 成本 | 准确性 |
-|---|---|---|---|
-| 全塞进去 | 最近 N 天的全部原文 | 随数据量线性增长 | 越多越容易被干扰 |
-| 纯向量 top-k | k 段相似片段 | 固定，但 k 小了会漏 | 时间、人物、否定、更正经常出错 |
-| **结构化优先** | 按条件命中的少量陈述，加上它们的原文出处 | 基本不随数据总量增长 | 可以核对、可以纠正 |
-
-### 5.4 新增：习惯与规律层
-
-"比你妈还了解你"靠的不是模型每次现猜，而是一层专门的统计：
-
-```
-事件（做了什么 · 何时 · 在哪 · 和谁 · 当时状态）
-  → 周期统计（频率 · 时段 · 前后因）
-  → 规律陈述：「近 12 周平均每周吃一次披萨」「下课后常去图书馆」「心情低落时常听歌」
-  → 用于推荐和预判；被反馈修正（拒绝一次就降权，连续拒绝就停）
-```
-
-规律陈述和其他陈述一样，带证据、有效时间和置信度，可以在观测台查看、纠正和删除。
-
-### 5.5 纠正、删除与遗忘
-
-沿用 [记忆架构](memory-architecture.md) 第 4、6 节的规定：
-- 纠正时保留修订依据；依赖它的旧回答和事项只标记「依据已更新」，不清除。
-- 删除会清理原文和所有派生副本，并阻止同样的内容被重新导入。
-- 活跃度按时间衰减，只影响默认的曝光程度，不会让任何东西被找不到。
-- 没完成的事情不会自动消失。
-- 一条记忆可不可信由证据决定，不由「有没有人确认过」决定（见 5.7）。
-
-### 5.6 现状层
-
-前三层回答的都是「有了问题再去找」。现状层是唯一一层不等提问就先给的：一个完全不认识你的助手，拿到它就应该能替你办事。
-
-| | 是什么 | 从哪来 | 什么时候给 |
-|---|---|---|---|
-| **交接说明** | 一段文字：你是谁、怎么跟你配合、手上的事、时间和节奏 | 模型读你的身份、目标、口味里重复说过和最近说的，加上全部要求和期限表后写成。输入变了才重写，最快每小时一次 | 每次都给，并写明它是什么时候写的 |
-| **期限表** | 有类型的数据：日期或周期、事情、状态、依据 | 每条记忆归类时由模型一并抽出。程序只校验日期能不能解析、是不是早于说话时间 | 每次都给 |
-| **对助手的要求** | 你对助手怎么做事的长期要求，每条标明不限范围还是只在某类事上适用 | 记忆归类时判断 | 不限范围的每次都给；限范围的在相关时由检索带出 |
-
-期限表里，过了期的留着并标明「已过期，不知是否完成」，日期没说清的留着并保留原话。没完成的事不会因为日子过了就自己消失。
-
-现状层守住四条：
-
-1. **只整理，不原创。** 每一条都能点回它依据的记忆，再点回原话。没有任何事实只存在于现状层。
-2. **纠错落在记忆上。** 你说「不对」，改的是底下那条记忆，期限表和交接说明跟着更新。
-3. **过期照常用。** 交接说明重写期间和重写失败时，给的是上一份，并写明写于何时，之后的变化以记忆为准。
-4. **失败不覆盖。** 模型没写出合格的结果时，原来那份留着。
-
-记忆只在资料库一个地方看和改。资料库顶部的「眼下」显示交接说明和期限表；人、项目、主题、领域和「关于你本人的某一类」是资料库的筛选条件，一条记忆可以属于多个分组。
-
-**工作室的现状块是项目交接说明。** 每个项目一份，和上面的交接说明同一套机制，只是范围缩到这个项目：输入是这个项目名下的当前记忆、事项和它们的状态、最新版本的文档、副手交回的结果、这个项目的期限；固定写成三段——结论、卡点、下一步——每句能点回依据。输入变了才重写，最快每小时一次；重写期间和失败时照用上一份并写明写于何时。隔两周打开，它已经是最新的。你说「不对」，改的是底下那条记忆或事项，块跟着重写；不提供直接改块里文字的入口（2026-10-08 定）。
-
-**为什么没有「现状卡」。** 最初的设计里每个分组还有一张现状卡：从这个分组的记忆里挑出一部分，按固定栏目摆好。上线后发现它不成立：卡片不产生新内容，只是把三分之一的记忆换个分组再存一遍；大的分组只看得到最近 300 条；一条记忆变了就要把整张卡重做。2026 年 10 月去掉了（经过见[问题清单](research/memory-status-layer-audit.md)）。按分组看记忆，资料库的筛选就够了。
-
-### 5.7 自动整理
-
-几万条记忆不会有人逐条确认，所以整理这件事不能等人。
-
-- **归类、合并重复、判断新旧、抽期限、写交接说明，全部自动**，都可以撤销。没有待确认清单，没有审核队列。
-- **可信度由证据决定**：你直接说的、不带「可能、考虑、如果」这类限定的，可以用；在不同场合说过多次的更可信；转述和 AI 的建议要标明是谁说的，不算你的决定；被新说法替代的退出当前视图，历史里仍然查得到；原话里找不到依据的不用。
-- **新记忆进来时就和旧的比**：和同一分组里已有的记忆对照，判成重复、补充或替代。大的分组分批比，批和批之间也要比到，很早说过和最近改口的两条有机会放在一起看。
-- **同一个东西的不同叫法合成一个**：由模型从名单里提出候选，再逐对确认。程序不靠「名字里有相同的字」这类规则下结论。
-- **质量靠四样东西保证**：原话永远留着，错了可以整批重做；用一套固定的任务衡量办事质量，改规则前后各跑一次；整理规则带版本，可以分批重做；整理时顺带发现重复和矛盾。
-
-后台整理守这几条规矩，都是吃过亏之后定的：
-
-| 规矩 | 意思 |
+| Layer | Responsibility |
 |---|---|
-| 上限要有依据和去向 | 任何条数、字数、时间上限，都写明为什么是这个数、超出的去了哪。超出的不许悄悄丢，要么分批做完，要么记数并在观测台看得到 |
-| 失败不覆盖 | 模型调用失败或输出不合格，不清掉已有的好结果，不把东西标成「已处理」 |
-| 模型结果不白花 | 模型调用成功后写入失败，重试写入，不重新调用模型 |
-| 一处变动不整份重做 | 一条记忆变了，只处理和它有关的部分 |
-| 判断交给模型，程序只校验 | 不用子串和关键词决定语义上的事。拿不准的留下并标明 |
-| 每个阶段有自己的调用预算 | 归类、比较、别名确认、名单扫描、交接说明各有每小时上限，互不挤占 |
-| 失败看得见 | 每个阶段最近一小时成功、推迟、失败的次数和原因，都在观测台 |
+| Context | Keep original messages, files, media, and surrounding conversation. |
+| Structured | Keep entities, statements, evidence, relationships, and time. |
+| Vector | Find related content when the wording is different. |
+| Current state | Derive handovers, dates, and applicable user requirements. |
 
-### 5.8 办事时怎么用记忆
+Derived results point to their sources and source versions.
+The current-state layer must not become an independent source of facts.
+Workspace memory is a scope in the shared core. It can use related information from other scopes when necessary.
 
-替你办一件事要用到的情况，和你说的那句话往往不像：说「帮我排一下下周的学习」，需要的是哪天有东西要交、哪天晚上有课。所以办事不靠「找相似的」，四层接力：
+### Historical Recall
 
-```
-现状层    先给：交接说明、期限表、每轮都适用的要求
-向量层    指方向：这件事大概和哪些记忆、哪几个分组有关
-结构化层  给内容：补一批相关的原样记忆，限范围的要求相关时在这里出现
-上下文层  核对：要看原话时再取
-```
+Example: "What did I say last year that I wanted to do in Chengdu?"
 
-查多深由系统自己定，不做成让你选的开关：
+Structured retrieval uses statement time, place, subject, and intention type.
+Vector retrieval finds related wording. The system checks the original conversation and later changes.
+The result shows the original intention and its later status.
+Canceled plans remain available in history. Historical recall must not create current tasks from those plans.
+Low activity must not prevent an explicit search from finding a stored memory.
 
-| 强度 | 做法 | 用在哪 |
-|---|---|---|
-| 轻 | 按上面的接力取一次，直接办 | 日常对话；可以撤销的动作 |
-| 中 | 办完后对照手上的记忆自查一遍：有关的情况用上了吗、有没有用了过时的说法、有没有没依据的话 | 往外发的东西、花钱、删除，至少用这一档 |
-| 重 | 按分组细读：选出要查的分组，每个分组分页读完、挑出要用的记忆，办完再自查。没来得及读的分组会告诉你 | 要综合很多方面、可以等的事，比如交给副手的方案和草稿 |
+### Memory for Work
 
-用哪一档、点到了哪些分组，由回答这句话的模型在同一次回答里判断，不靠「仔细」「认真」这类字面词，也不为此多调一次模型。每次用了哪一档、查了哪些分组、有多少内容因为篇幅没带上，记进观测台。
+Work needs current facts and applicable requirements, including information that does not resemble the request.
+The system supplies a handover, relevant dates, related statements, and necessary source text.
+Global user requirements apply to every request. Scoped requirements enter the context when relevant.
+Missing sources and incomplete processing remain visible.
+Structured retrieval reduces unnecessary context. Cost, quality, and response time require measurement.
 
-给模型的资料里，交接说明、期限表、要求和记忆都只是资料，不是指令。只有你这一句话才决定这一轮办什么。
+### Correction and Learning
 
-还没做到的：记忆的活跃度（多久没用、用过几次）目前基本等于说话时间。「你主动提到」「回答被采纳」这些信号已经开始记录，要积累一段时间才能让它真正参与排序。
+The core distinguishes considerations, decisions, completed actions, quotations, and model inferences.
+A later change preserves the original statement. Corrections update affected views and future work.
+Deletion follows the selected scope and removes affected copies.
+Evidence determines how the team uses a statement. Model confidence alone does not make a statement true.
+The team can use memories without an approval step for each memory.
+Access controls, uncertainty, and correction tools belong in the observation panel.
 
----
+## 4 Actions and Initiative
 
-## 6 接入：全模态、大数据量
+One request can include an answer and several actions.
+The secretary asks only about an ambiguity that changes the result. Clear parts can proceed.
 
-目标是**什么都能接进来**。PCAS 是自托管的，用户可以放心接入比商业产品敏感得多的数据。
-
-| 来源 | 方式 | 优先级 |
-|---|---|---|
-| **Yufolo 转录** | 直接推送 | 最高 |
-| 其他 AI 的对话（ChatGPT、Claude …） | 归档导入 + 持续同步 | 高 |
-| 邮件 | IMAP / Gmail API | 高 |
-| 日历 | CalDAV / Google Calendar | 高 |
-| 文件与笔记 | 文件夹同步、上传 | 已有 |
-| IM（微信、QQ、Telegram …） | 各平台逐个验证可行方式（导出、桥接、机器人） | 中，受平台限制 |
-| 账单与订阅 | 账单导入、邮件解析 | 中 |
-| 屏幕 | 本地定时截图或活动记录 + OCR | 探索 |
-| 手机：GPS、麦克风、通知 | 手机 App 后台采集 | 随 App 推进 |
-
-**分层处理，控制成本：**
-
-```
-原始数据 ──先存下来（便宜，不理解）──▶ 上下文层
-    └──本地小模型：压缩、结构化（例：14:00–16:00 在图书馆，写论文）──▶ 结构化层
-          └──大模型：只在被问到、条件触发或用户要求时介入
-```
-
-每个来源都要做到：重复发送不会重复入库；处理进度和失败原因看得见；缺了什么（比如附件没解析）明确标出来，不假装完整。
-
----
-
-## 7 模型调度
-
-旧版提出过"本地 / 混合 / 云端"三种计算模式。新版把它推广成**按每一件工作选择模型**。
-
-| 调度依据 | 例子 |
+| Action | Required behavior |
 |---|---|
-| 任务类型 | 意图理解 → 小模型；写方案 → 大模型；看截图 → 视觉模型 |
-| 隐私级别 | 私密内容只交给本地模型 |
-| 内容限制 | 有审查的模型拒绝时，经用户授权可以换无审查模型 |
-| 成本与额度 | 超出当日额度时降级到便宜模型，或者先问用户 |
-| 延迟 | 对话要快；后台整理可以慢 |
-| 所需能力 | 工具调用、长上下文、联网、视觉 |
+| Reversible internal work | Act, show a receipt, and provide undo. |
+| User-requested model work | Do the work within the configured budget. |
+| Substantial model work proposed by the system | Present the suggestion before starting. |
+| External email or message | Prepare the content. Send it after the user confirms. |
+| Deletion or financial payment | Obtain confirmation before execution. |
 
-每次模型调用都记入观测台：谁调用的、为什么选这个模型、花了多少、用了哪些记忆、结果有没有被采纳。
+The existing document-removal flow uses immediate removal with undo.
+This recorded exception needs policy alignment; see [Open Issues](tasks/backlog.md).
+Receipts describe actual execution. Skipped or failed actions must not claim success.
+Source content is information, not permission to execute its instructions.
 
----
+The system can create tasks, ideas, and projects from reliable information.
+Quoted statements, uncertain plans, and model suggestions keep their limitations.
+Importing an old intention does not make it a current commitment.
+Automatic work has a source, a receipt, and undo.
 
-## 8 数据熔炉：用你的数据训练你的模型
+Extracted dates need interpretation before display.
+Past journeys, third-party estimates, and abandoned considerations must not become repeated current appointments.
+Closing a displayed date preserves the underlying history.
 
-这是旧版就有的设想，新版保留，并把它和模型调度连成一个闭环：
+Initiative can follow a time, event, condition, or learned habit.
+Suggestions state a reason. Repeated events must not create repeated tasks or notifications.
+The system checks the latest state before acting.
+Feedback changes future suggestions. "Do not suggest this again" has a lasting effect.
 
-```mermaid
-flowchart LR
-  A[日常使用] --> B[记忆 · 纠正 · 采纳与撤销]
-  B --> C[整理成训练样本]
-  C --> D[微调本地小模型]
-  D --> E[加入模型池]
-  E --> F[更便宜 · 更懂你 · 更私密]
-  F --> A
-```
+## 5 Workspaces
 
-**样本从日常使用中自然产生，不需要专门标注：**
+A workspace keeps the goal, relevant memory, tasks, files, documents, and deputy work together.
+Its handover shows the conclusion, blockers, next action, sources, and update time.
+The user corrects the underlying information. The system updates the handover.
 
-| 信号 | 样本类型 |
+Document revisions retain the selected base version and produce a new version.
+The interface shows differences between versions.
+Files have a source and processing status.
+Work estimates support start-date suggestions. User estimates take precedence over later automatic estimates.
+
+Example target: a school email announces an assignment due in seven days.
+The team creates the workspace, connects the assignment and course material, and suggests when to start.
+The suggestion uses the requirements, available time, and relevant past work.
+This example does not establish current delivery.
+
+## 6 Inputs and Scale
+
+Target inputs include Yufolo transcripts, AI conversations, email, calendars, IM records, files, bills, and screen activity.
+A future phone application supplies location, microphone, and notification data within device permissions.
+Each platform needs a verified input method.
+
+The system stores original data before expensive interpretation.
+Processing is incremental and can continue after an interruption.
+Source identifiers and versions prevent duplicate import.
+Large inputs use batches, resumable work, and visible progress.
+Missing attachments and rejected content remain visible as coverage gaps.
+Each resource limit has a reason, an overflow path, and a count.
+
+## 7 Models and Personal Learning
+
+The target model pool includes local and cloud models with different size, cost, capability, and content restrictions.
+Selection uses task needs, user settings, privacy, latency, budget, and available capability.
+Changing a model does not create a separate memory system.
+Small models can handle frequent work. Larger models handle work that needs more capability.
+
+Corrections, accepted work, rejected suggestions, and undo supply learning signals.
+A retained action is not, by itself, proof of correctness.
+Training samples retain sources and versions. The user can select, edit, export, or remove samples.
+Corrections and deletions affect related samples and later exports.
+Personal models require evaluation before they join the active pool.
+
+## 8 Interfaces
+
+| Interface | Purpose |
 |---|---|
-| 秘书的动作被撤销 / 被保留 | 负样本 / 正样本 |
-| 草稿被你修改 | 偏好对（改前 → 改后） |
-| 抽取结果被纠正 | 纠错样本 |
-| 推荐被接受 / 被拒绝 | 偏好信号 |
-| 路由选对 / 选错模型 | 调度样本 |
+| Home | Secretary input, timed work, tasks, projects, ideas, and recent team activity. |
+| Workspace | Current status, plan timeline, files, document versions, deputy results, and secretary input. |
+| Observation panel | Activity, sources, corrections, model calls, cost, access, failures, and recovery. |
+| Phone application | Voice input, notifications, and configured device inputs. |
 
-**自己训练的模型先接手这些活：** 意图理解、记忆抽取、习惯判断、日常秘书对话。它们调用频繁、单次简单、隐私敏感，最适合本地小模型。
+The [Interface Principles](design/principles.md) define presentation.
+Daily work must not require approval of each memory or processing step.
 
-**质量底线：**
-- 每个样本都能追溯来源和版本。
-- 未确认的推测和过期状态不进训练集。
-- 支持脱敏。
-- 删除或纠正记忆时，受影响的样本同步更新或删除。
+## 9 Technical Boundaries
 
-观测台会展示数据集的规模和构成、每个模型版本的评测对比，以及上线和回滚记录。
+The current implementation uses Go, PostgreSQL, pgvector, and file storage.
+Source storage, interpretation, retrieval, actions, and background work have separate responsibilities.
+These responsibilities can share a deployment with explicit interfaces.
 
----
+Writes use request identities and version checks.
+The system checks affected dependencies before applying model output.
+Interactive work and background work must both make progress.
+Failed processing preserves the previous valid result.
+Saved model output can be retried for storage without another paid call.
 
-## 9 主动性
+The earlier event-bus design and Phase 2.0 are historical material.
+Phase 2.0 was rolled back. It is not the basis for new work.
 
-| 触发方式 | 例子 |
+## 10 Capability Direction
+
+The memory core supports reliable recall, correction, and current task context.
+The secretary and deputy use that core to produce work in a workspace.
+The observation panel explains this work and supports correction.
+Further inputs, model selection, phone functions, household support, and personal training extend these capabilities.
+This direction does not authorize a development batch.
+[Project Status](status.md) lists completed phases and remaining gaps.
+
+## 11 Product Acceptance
+
+Acceptance follows the complete input-to-result path with the applicable real model channel.
+Tests of individual functions support this check. They do not establish model quality on their own.
+
+| Scenario | Required result |
 |---|---|
-| 时间 | 到点提醒；截止前倒推，提醒"该开始了" |
-| 事件 | 收到邮件、导入资料、前置任务完成后，唤醒相关的想法或任务 |
-| 组合 | "收到邮件三天后仍未回复，就提醒" |
-| 规律 | "你通常这个点吃晚饭，楼下那家今天有你常点的" |
-| 状态 | "今天看起来不太顺，要听点歌吗？" |
+| Arrange work in one sentence | Time, project, and reminder agree. Refresh preserves the result. Undo removes the action. |
+| Answer while recording another need | Both parts succeed without a mode switch. |
+| Recall the Chengdu intention | Sources, statement time, and later changes are correct. |
+| Return to a workspace | The conclusion, blockers, and next action reflect project information. |
+| Revise an earlier document | A new version uses the requested base and shows the difference. |
+| Prepare an assignment | The workspace, material, deadline, and start suggestion agree. |
+| Send an email | The user sees the draft and confirms before sending. |
+| Learn a preference | Rejected suggestions affect later recommendations. |
+| Recover from failure | Previous work remains available. The failure has a reason and a recovery action. |
+| Inspect team work | The user can trace the action, sources, model call, and cost. |
+| Work without repeated background | A newly selected model receives the relevant current information. |
 
-规则：
-- **每次都说明原因。**
-- **冷却和去重**：同一件事不会反复提。
-- **说"不要再提"就真的不提。**
-- **从反馈学习**：被拒绝的同类提议会降权。
-- **执行前核对最新状态**：事情已经做完了，提醒就自动撤销。
-
----
-
-## 10 行动边界与信任
-
-| 动作类型 | 处理方式 |
-|---|---|
-| 可撤销的内部动作（建 / 改 / 完成事项、归档、设提醒、记住一件事） | 直接做，回执附【撤销】 |
-| 花 token 的重活（写方案、起草、查资料） | 用户明确要求就直接做，受每日额度约束；系统自己想做时只提建议 |
-| 往外发送（邮件、消息） | 起草好给用户看，**点一下才发** |
-| 删除、花钱 | 一律先问 |
-
-- **审计**：每个动作都记录是谁做的、依据是什么、能不能撤销。撤销本身也是动作，同样会被记录。
-- **权限**：团队默认共用全部记忆。用户可以在设置里收紧某个副手能看到的范围。往外发送、删除、花钱仍然先问。
-- **安全**：自托管不等于没有安全问题。需要做备份加密、设备丢失后吊销会话、限制对外发送的范围，并约定无审查模型的使用边界。
-
----
-
-## 11 界面
-
-| 界面 | 内容 |
-|---|---|
-| **首页** | 秘书对话，加上可视化的"今天"（日程块、现在线、在等你的事），以及项目和想法的概览 |
-| **工作室** | 现状（结论 / 卡点 / 下一步）、计划时间轴、文件区、文档与版本、副手的工作记录、底部秘书输入框 |
-| **观测台** | 活动流、花费图、模型调用、记忆浏览与纠正、权限、接入状态、训练数据集 |
-| **手机 App** | 语音输入、推送通知、常驻采集（定位、麦克风、通知） |
-
-**可视化形式：** 日程块、时间轴、进度环、关系图、花费趋势、习惯热力图、带来源的记忆卡片。文字只用于短回执和必要的解释。
-
----
-
-## 12 技术架构
-
-```mermaid
-flowchart TB
-  subgraph Clients[客户端]
-    Web[Web / PWA]
-    App[手机 App]
-    Bot[Telegram 等通知通道]
-  end
-  subgraph Server[自托管服务 · Go]
-    API[HTTP API]
-    Team[团队层：秘书 · 参谋 · 管家 · 工作室]
-    Router[模型调度]
-    Memory[记忆服务：recall / expand / commit]
-    Worker[后台 worker：抽取 · 索引 · 提醒 · 接入 · 训练]
-    Notify[通知分发]
-  end
-  subgraph Storage[存储]
-    PG[(PostgreSQL + pgvector)]
-    Blob[(文件 / 对象存储)]
-  end
-  subgraph Models[模型]
-    Cloud[云端 API]
-    Local[本地模型]
-    Own[自己训练的模型]
-  end
-  Clients --> API --> Team --> Memory --> PG
-  Team --> Router --> Models
-  Worker --> Memory
-  Worker --> Router
-  Notify --> Clients
-  Memory --> Blob
-```
-
-- 常用字段用明确的列和约束，扩展数据存 JSONB，语义索引用 pgvector。先用关系表做有限的图遍历，等测出瓶颈再引入独立组件。
-- 所有写入都要保证幂等，并带版本检查；派生数据（摘要、向量、缓存）在读取前核对依赖的版本。
-
----
-
-## 13 与旧版的关系
-
-PCAS 最初作为 DreamHub 的底层引擎提出，现在作为独立项目成立。
-
-| 旧版理念 | 新版处理 |
-|---|---|
-| 数据绝对私有，本地优先 | **保留**：自托管，数据归用户 |
-| 计算灵活调度（本地 / 混合 / 云端） | **保留并推广**：细化到按每件工作调度模型（第 7 章） |
-| 数据熔炉：用私有数据训练个人模型 | **保留并闭环**：自己的模型回到模型池（第 8 章） |
-| 回执式 UI、可解释的决策日志 | **保留**：体现为回执、撤销和观测台 |
-| 智能事件总线 + D-App 生态 | **暂缓**：先把一个人的体验做好，接入只走简单的推送和拉取协议 |
-| 成为开放标准 | **暂缓**：等系统本身站稳后再说 |
-
-旧版的教训见 [旧版经验记录](legacy-lessons.md)。
-
----
-
-## 14 风险与对策
-
-| 风险 | 对策 |
-|---|---|
-| 成本失控 | 结构化优先检索；分层处理接入数据；每日额度；小模型和自己训练的模型接手高频工作 |
-| 主动变成打扰 | 冷却、去重、说明原因、"不要再提"；按反馈降权 |
-| 黑盒 | 观测台；回执；每个动作都能追溯依据 |
-| 错误的自动执行 | 只自动执行可撤销的动作；往外发送、删除、花钱一律先问；撤销信号同时用于训练 |
-| 防护过度，变回一堆按钮 | 坚持"按钮只剩三种"；防护放到后台和观测台，不推到日常界面 |
-| 数据量带来的性能问题 | 过滤条件在检索阶段生效；有预算限制；用场景回放实测，不预先承诺未经验证的性能 |
-| 平台接入受限（微信、QQ） | 逐个平台验证；优先使用导出和桥接；做不到的就明确标为缺口 |
-| iOS 后台限制（定位、麦克风） | Android 先行；iOS 使用系统允许的方式（显著位置变化、快捷指令、前台录音） |
-| 隐私与安全 | 备份加密；最小授权；对外发送白名单；敏感内容只交给本地模型 |
-| 开发方向偏离体验 | 每个阶段都用黄金路径验收（第 17 章）；黄金路径不通过，就不算完成 |
-
----
-
-## 15 现状对照（2026-10-03，第 2 阶段上线后）
-
-| 能力 | 状态 | 说明 |
-|---|---|---|
-| 原文、陈述、向量三层存储 | ✅ 已有 | PostgreSQL + pgvector；来源、版本和证据可追溯 |
-| 现状层：交接说明、期限表、对助手的要求 | ✅ 已有 | 2026-10-05 上线，2026-10-07 返工（2.6）：去掉现状卡，期限和要求在归类时抽出，交接说明按新输入重写；在资料库顶部的「眼下」可以看、可以点回原话 |
-| 记忆的分组、新旧比较、自动定可信度 | ✅ 已有 | 2026-10-05 上线。记忆归到项目、主题、领域并标类型；分组内合并重复、标出被替代的，都可恢复；可信度按证据算，不再有「待确认」；同一个人的不同叫法可以合并 |
-| 办事时按强度用记忆、办完自查 | ✅ 已有 | 2026-10-05 上线。秘书默认轻档，副手默认重档；在真实数据上的效果还在量 |
-| 纠正与删除传播、活跃度衰减 | ✅ 已有 | |
-| 实体、别名、经历 | 🟡 部分 | 第 2 阶段：从原话里抽出人、地点、机构和事情发生的时间，同名同类型算同一个对象。别名合并和经历还没有系统处理 |
-| 查询规划（问题 → 结构化条件） | ✅ 已有 | 第 2 阶段：问话先拆成时间、人、地点、性质，按条件在记忆里定位，再用原话补漏；回答带时间轴卡片。用真实模型的回忆评测和基线还没做 |
-| 习惯与规律层 | ⬜ 未开始 | |
-| 接入：Webhook、定时拉取、文件夹、AI 对话归档、附件与音频转录 | ✅ 已有 | 第 2 阶段：聊天记录导入有预览、进度、暂停和继续；可以先存着以后再整理；按整段对话整理，一段只调一次模型 |
-| 接入：Telegram（文字、语音、图片、文件） | ✅ 已有 | 第 1 阶段 C2；手机上的临时秘书入口 |
-| 接入：邮件、日历、其他 IM、账单、屏幕、手机 | ⬜ 未开始 | |
-| 事项自动产生 | ✅ | 2026-10-08 上线（第 3.5 阶段）：后台抽出的待办和想法按可信度直接建，转述的、带保留的、AI 建议的留作候选并写明理由，没有「自动采纳」开关；秘书听出一件大事就建项目并把待办归进去，后台某个主题积累到位也建；期限表进首页「今天 / 这几天」；没时间的待办进「在推进」。自动建的都有回执和撤销 |
-| 前台秘书 | ✅ 已有 | 一句话同时回答并执行：建/改事项、时间、项目、提醒、派副手；卡片式回复；只对真正的歧义追问；首页、事项页、Telegram 共用 |
-| 撤销 | ✅ 已有 | 秘书动作、界面操作、副手自动采纳都可撤销；快照保留 30 天，删除会传播；撤销与保留记录留作训练信号 |
-| 提醒 | ✅ 已有 | 秘书自动设置；首页置顶、Web Push（PWA）、Telegram 三个通道；发送前核对状态。真机通知弹出仍待用户验收 |
-| 工作室 | ✅ 已有 | 2026-10-08 上线（第 3 阶段）：项目页顶部是现状块（项目交接说明，三段每句能点回依据）；文档每次写入留版本、任选两版看差异、「把第二版的预算改保守一点」出第三版；文件区（上传、列出、页内打开、确认删除，文件进来源层带项目范围）；每步估工作量、从截止倒推开工日、计划时间轴、到开工日提「该开始了」；派副手带对话。还没有：日程冲突（要日历）、做法沉淀、完成条件裁判 |
-| 观测台 | 🟡 零散 | 作业、提醒记录、预算分散在资料库和设置里，没有可视化。第 2 阶段起每次模型调用都有花费记录，还没有界面。待确认内容、训练数据、后台任务这些内部概念目前还露在资料库里，等观测台做出来再搬过去 |
-| 模型接入 | 🟡 部分 | 支持 OpenAI 兼容接口、Responses、Anthropic、ChatGPT 订阅（Codex 登录和官方授权两种）和手动交接；要按事项手动选模型，没有自动调度 |
-| 训练数据 | 🟡 部分 | 有样本记录、筛选和导出；还没有训练和回灌 |
-| 对外联络、生活管家、财务 | ⬜ 未开始 | |
-| 手机 App | ⬜ 未开始 | |
-
----
-
-## 16 路线图
-
-每个阶段都要交付当天就能用的东西。**用得越多，数据越多**，后面的阶段才有材料可用。
-
-| 阶段 | 交付 | 验收场景 |
-|---|---|---|
-| **1 秘书前台** ✅ 2026-10-01 上线 | 修复现有硬伤；导办台改为秘书，一句话就能执行动作；撤销；提醒通道（首页置顶、Web Push、Telegram）；事项页按钮削减 | 说"周五下午三点给张三回邮件"，到点在手机上收到提醒；撤销有效 |
-| **1.5 稳定化** | 先推演状态，再由不写实现的执行者做找茬测试，修复发现的问题，最后线上实测 + 用户试用一天。见 [稳定化](tasks/stabilization/README.md) | 所有序列测试通过、线上实测 11/11、试用一天没有阻碍使用的问题 |
-| **2 记忆核心：查询规划** ✅ 2026-10-03 上线 | 实体、地点、时间的系统抽取；查询规划；带干扰项的回忆评测集 | 能答出"去年说去成都干什么"，并附原话；评测集召回率达到约定线 |
-| **2.5 记忆整理** ✅ 2026-10-05 上线 | 记忆按项目、主题、人和「关于你的某一类」分组；新旧比较和合并重复；现状层（交接说明、期限表、对助手的要求；现状卡已在 2.6 去掉）；办事时按强度用记忆并自查；整理规则带版本、可分批重做。先把评测任务集扩大并加人工抽查 | 把交接说明和期限表交给一个不认识你的模型，它能不追问、不踩雷地把事办对；评测任务集上的办事得分达到约定线 |
-| **3 工作室** ✅ 2026-10-08 上线 | 两批。第 1 批：现状块（项目交接说明）、文档版本与差异、在某一版上改一部分出新版、派副手带对话。第 2 批：文件区（上传、列出、打开、删除；文件进来源层，记忆带项目范围）、每步估工作量、从截止倒推开工、计划时间轴、到开工日提「该开始了」。不做：日程冲突（要日历，第 5 阶段）、做法沉淀和完成条件裁判（记入待办）。见 [第 3 阶段入口](tasks/phase3/README.md) | 打开一个项目，10 秒内知道结论、卡点和下一步；黄金路径 4、5 |
-| **3.5 事项自动产生** ✅ 2026-10-08 上线 | 期限表进首页「今天 / 近几天」；后台抽出的待办和想法按可信度直接建、不设开关；项目自动产生（秘书听出一件大事就建并归入；后台某个主题积累到位也建）；没时间的待办进「在推进」。都先做后报、附撤销 | 说一句「下周三下午和导师过方案」，当天首页上就有它；导入一段聊天，里面明说的待办自己出现在首页并能撤销；说一件要做好几步的事，它建成项目并把步骤归进去 |
-| **3.6 秘书会收拾** ✅ 2026-10-08 上线 | 时间线只放有时间的；每条日程能了结（做完了、不要了、转成待办），跟秘书说一句就办；后台自己把过了期和不作数的日程收起来、把其实是待办的建成待办，先做后报、能放回去 | 说一句「晚课那个别再提了」，它从首页和「眼下」消失，回执能撤销；一条几个月前的行程不用人管，自己不再出现，「你不在的时候」里有一行「收拾了日程」 |
-| **4 观测台** | 活动流、花费、模型调用、记忆管理、权限、接入状态，全部可视化 | 能回答"它昨天替我做了什么、花了多少、为什么" |
-| **5 入口与接入 + 模型调度** | 邮件、日历、Yufolo 持续推送、IM 试点；手机 App（语音输入、推送、定位和麦克风采集）；按任务自动选模型。分批做，接入和 App 并行 | 学校作业邮件进来后自动建工作室并备好资料；下课后到达图书馆，自动出现"今天该写论文"的建议 |
-| **6 管家** | 习惯层、生活推荐、预算、订阅、收支、对外联络起草 | 拒绝两次披萨推荐后，推荐频率明显下降 |
-| **7 训练与回灌** | 训练集整理、本地小模型微调、评测对比、上线与回滚。放在最后：使用越久，训练材料越多 | 自己的模型接手意图理解，成本下降且准确率不降 |
-
----
-
-## 17 验收场景（黄金路径）
-
-每条都在真实部署上端到端跑通才算数。这些场景用来检验"用起来对不对"，不能被单元测试或接口测试替代。
-
-1. **一句话安排**：说"周五下午三点和张三对方案，算在 A 项目里"，任务的时间、项目和提醒一次到位；刷新后仍在；撤销后消失。
-2. **边问边记**：问答进行到一半，顺口说一句"顺便记下明天交电费"，两件事都被正确处理，不用切换任何模式。
-3. **模糊回忆**：问"我去年说去成都要干什么来着"，回答是一张时间轴卡片，每条都能展开看原话，已经完成的会标出来。
-4. **续做项目**：隔了两周打开一个工作室，现状块已经写好结论、卡点和下一步。
-5. **持续加工**：说"把第二版方案里的预算部分改保守一点"，生成第三版，并展示和第二版的差异。
-6. **作业自动备料**：一封作业邮件进来，工作室被自动建立，资料已放好，日程里出现开工建议。
-7. **对外发送**：说"回邮件告诉他周一可以"，看到起草好的邮件，点一下发出。
-8. **习惯学习**：拒绝两次披萨推荐后，同类推荐减少；观测台里能看到这条规律被修正。
-9. **失败恢复**：副手失败时，原地就能重试或换一个模型，不需要跳到别的页面。
-10. **看得见**：在观测台能回答"它昨天替我做了什么、花了多少、用了哪些记忆"。
-11. **不用交代背景**：说"帮我排一下下周的安排"，它用上了你的期限、固定安排和你对助手的要求，没有用已经过时的说法；换一个从没聊过的模型来做，结果一样靠谱。
+Some scenarios need future functions. Inclusion in this table does not mean that a scenario has passed.

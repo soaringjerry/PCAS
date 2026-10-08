@@ -1,5 +1,9 @@
 # 任务 U4：导入 ChatGPT 历史的界面（前端）
 
+> **Historical task record.** This text records an earlier phase or investigation.
+> Use the [current documentation](../../../README.md) and [project status](../../../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 执行者 Opus 5.5。分支 `phase2/b4-U4-frontend`，从 `origin/phase2/batch4` 建；工作区 `/root/PCAS-wt/b4-U4`；Draft PR 的 base 是 `phase2/batch4`。
 
 先读 [并行方案与数据约定](../parallel.md) 第 5 节、[第 4 批契约](README.md) 的 R1、R3–R5、R10、R20 和序列 W1–W4，以及 [界面与交互原则](../../../design/principles.md)。

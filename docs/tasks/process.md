@@ -1,78 +1,128 @@
-# 任务流程规则
+# PCAS Development Workflow
 
-适用于所有阶段。第 1 阶段上线后的教训（见 [上线后问题复盘](../evaluations/2026-10-01-phase1-postlaunch.md)）已经写进下面各条。阶段内的共同规则（分支、归属、环境、禁止事项）仍以各阶段 README 为准。
+Current workflow. Updated 2026-10-08.
 
-## 1 写契约之前，先推演状态
+This workflow applies to development, review, and release.
+Product decisions come from the [Whitepaper](../whitepaper.md).
+The [Documentation Index](../README.md) separates current specifications from historical material.
 
-凡是有状态的功能（撤销、提醒、对话、采纳、删除传播、外部渠道），协调者写契约之前，先列出**操作序列表**，逐条写清预期结果，再据此定规则。序列至少要覆盖：
+## 1 Direction and Scope
 
-- **连续操作**：A → B → 撤 B → 撤 A
-- **跳着操作**：A → B → 撤 A
-- **被插队**：A → 用户 / 后台改了同一对象 → 撤 A
-- **重复和重放**：同一请求发两次、外部渠道重复投递
-- **并发**：两个请求同时针对同一对象
-- **时间边界**：已经过点、夏令时切换、改时区
-- **跨渠道**：网页里做的事，在 Telegram 里撤销，或者反过来
-- **数据被删除后**再操作
+Discuss a product or architecture change before assigning its implementation.
+Update the whitepaper when the agreed direction changes.
+Then prepare the applicable batch scope and complete window prompts.
+Use established window names. Send instructions only to windows that have work.
+Give each executor the goal, behavior, interfaces, ownership, checks, and delivery conditions.
+Let executors select implementation details within that scope.
 
-契约里的每一条规则，都要在序列表里有对应的用例。两条规则放在一起会互相矛盾的（例如「撤销后版本号加 1」和「用整个文档的指纹判断有没有被改过」），推演时就要暴露出来。
+The coordinator handles integration, small tasks, and product-direction corrections.
+Independent batches can proceed in parallel when their responsibilities and shared interfaces are clear.
+A historical window assignment does not authorize current work.
 
-## 2 测试和实现分开写
+## 2 State and Dependencies
 
-有状态的功能，**由另一个执行者只看契约和序列表来写测试**，不参考实现。原因：代码和测试照着同一份文档写，会有同样的盲区。
+Before changing state behavior, describe the affected operation sequences and expected results.
+Use the sequences that apply to the change:
 
-- 测试执行者不改产品代码。没通过的用例用 `t.Skip("finding S-x")` 标出来，同时写进发现清单；由协调者分派修复，修复者再把 skip 去掉。
-- 撤销这类可逆操作，要加**随机序列测试**：随机做一串操作，再按逆序全部撤销，最后的状态必须和开始时完全一致。
+- Consecutive actions and reverse undo.
+- Undo after a later action on the same object.
+- User or background changes during generation.
+- Duplicate requests and replay.
+- Concurrent changes to the same object.
+- Time boundaries and time-zone changes.
+- Actions across web and external channels.
+- Source deletion or loss of access.
 
-## 3 验收走真实配置
+Check related rules together for contradictions.
+Separate product behavior from internal implementation details.
+Keep required dependencies explicit.
 
-- 真实模型走查，必须走用户的**默认通道**（目前是 ChatGPT 订阅 / Codex）。
-- 时区、语言、外部渠道（Telegram、推送），都按用户的实际配置来验收。实验室里的默认值不能代替真实配置。
+## 3 Verification
 
-## 4 部署后必须冒烟测试
+Select checks for the affected behavior and risk.
+For significant state changes, use independent acceptance against the agreed behavior.
+Use random operation sequences when their invariants provide useful coverage.
+Avoid duplicate checks that only repeat the implementation.
+Historical fixtures must not create an unsupported production compatibility requirement.
 
-部署后，在线上用默认通道对秘书说三句话：一个问题、一句带时间的安排、一句修改。然后撤销测试产生的数据。回执、事项、日志都正常，才算部署完成。大版本部署后，跑完整的线上实测清单。
+Record each finding and its reason.
+If a finding temporarily skips a test, keep the finding visible.
+Remove the skip after repair. Do not report a skipped finding as passed.
 
-## 5 出错要说清楚
+Use the actual default model channel for model acceptance. The recorded default is Codex.
+Use representative data volume, group sizes, language, time zone, and concurrency.
+Check the generated content and executed action, not only whether an output exists.
+When model inputs or output formats change, inspect the real prompt and raw output on an isolated data copy.
+When live model behavior fails, collect that evidence before changing the program.
+Protect private prompts and outputs. Public examples and reports use synthetic data.
 
-每个失败都要有具体原因、对用户的处理建议，以及一条不含正文和密钥的日志（写明环节和错误类型）。契约里不允许出现「所有失败统一返回某个错误」这种写法。
+## 4 Resource and Failure Rules
 
-## 6 控制并行度
+For each limit that affects results, state its reason, overflow path, and omitted count.
+Keep budgets for background stages explicit.
+Show deferred, failed, and completed work separately.
+Preserve valid data after a failure. Leave incomplete work incomplete.
+If a saved model result cannot be stored, retry storage without another paid call.
+Process only the affected data when possible.
+Keep semantic decisions in the model path. Use the program to validate structured results.
+Do not write business data through read interfaces.
+Preserve required model-output structure and field order.
+Do not assume that all providers accept the same parameters or supply the same capabilities.
 
-同一个批次里最多 3 个执行者在做同一块产品代码。多个批次并行时，前提是文件归属互不相交、共用的数据约定和接缝先由一个骨架任务定死（例子见 [第二阶段第 2–4 批的并行方案](phase2/parallel.md)）。每合并一个 PR，协调者都对照契约审查；修改涉及状态规则的，要回到第 1 条重新推演。
+## 5 Review and Merge
 
-## 7 文档只有一个入口
+Describe the final behavior, implementation effect, checks, and known gaps in the PR.
+Review the affected rules, data paths, and dependencies.
+The coordinator can merge an executor's PR when review has no unresolved findings and CI passes.
+A passing CI result does not establish real-model quality or live deployment status.
 
-所有文档从 [文档总入口](../README.md) 找。新增、移动或作废文档时，在同一个改动里更新总入口；每个阶段的任务包和验收记录，都要能从该阶段的 `README.md` 找到。作废的方案不留在 `docs/` 里，需要保留的打成 git 标签，并在阶段入口写明位置。放在哪个目录，按总入口第 3 节的约定。
+## 6 Release
 
-## 8 后台处理和模型输出的规矩
+Release authorized work after merge and passing CI. No additional routine release confirmation is necessary.
 
-第 2.5 阶段上线后查出 42 个设计问题和 16 个故障（[问题清单](../research/memory-status-layer-audit.md)），2.6 阶段上线当天秘书又坏了两个小时。下面各条由此而来，契约和验收照着查。
+1. Confirm the approved revision and deployment target.
+2. Back up the database with `pg_dump`.
+3. Check that the backup completed successfully.
+4. Preserve required file and private configuration backups.
+5. Apply migrations and deploy the approved revision.
+6. Check readiness, logs, and the affected functions.
+7. Test the live secretary through the real default Codex channel.
+8. Check each action, receipt, and error.
+9. Clean only the test records identified by request or source ID.
+10. Check claim counts and related test sources after cleanup.
+11. Record the result and any remaining failure.
 
-**契约里必须写明：**
+Keep errors visible. Do not replace product behavior with manually written production content.
+The check-only `smokeId` path has limited capabilities; see [Deployment](../deployment.md#live-checks).
+It does not establish success for skipped memory actions.
+Claims can change during background work. Count changes require source or request attribution.
+Never select production cleanup records by creation time.
 
-- 每一个条数、字数、时间上限的依据，以及超出部分的去向。超出的不许悄悄丢：要么分批做完，要么记数并能在观测台看到。
-- 每个后台阶段每小时的模型调用预算，以及「一条记忆变动最多触发几次模型调用」。
-- 失败时的行为：不覆盖已有的好结果，不标成已处理，记下原因和次数。
-- 模型调用成功而写入失败时，重试写入，不重新调用模型。
+## 7 Test Environment
 
-**设计上不许做的：**
+Use isolated test databases and your own test services.
+Stop a test process by its PID. Do not use host-wide `pkill` by process name.
+Run Playwright and Chromium with `env -u DISPLAY`.
+Keep production credentials and data out of public test artifacts.
 
-- 用子串、相邻字、关键词表决定语义上的事。交给模型判断，程序只做合理性校验。
-- 一处变动就整份重做。
-- 读接口里写数据。
-- 把「全部交给模型自己挑」当成默认做法。先算一遍线上规模下会给模型多少字：2.6 把 335 条要求每轮都带上，占了 8 万字资料的一半。
-- 把模型服务方会强制执行的输出格式说明解开再重新拼装。键的顺序会被打乱，模型能输出的内容随之改变。格式说明原样手写，并用测试按原文核对顺序。
+## 8 Documentation and History
 
-**验收：**
+Write current specifications in English under the [Writing Guide](../writing-guide.md).
+Write code and commit messages in English. Communicate with the user in Chinese.
+List every repository document in the documentation index.
+Update links and status in the same change as a merge, move, or retirement.
+Keep one authoritative location for each rule.
+Link to that rule instead of copying it into each batch.
+Separate product targets, code support, deployment records, and open findings.
+Preserve historical conclusions. Mark superseded material so it cannot govern new work.
+Do not restore the rolled-back Phase 2.0 design.
 
-- 用线上规模的夹具：五千条记忆、三百个分组、最大的分组过千条，中文和英文各半。
-- 验内容，不只验有没有：抽出来多少条、带上了多少条、分布是不是合理。
-- 每个后台阶段都要有「排班、处理、用户请求同时跑」的并发验收。
-- 假模型看不到提示词和输出格式的问题。凡是改了给模型的资料或输出格式，上线前用真实模型在线上数据的副本上跑一次典型请求，看原始输出。
+## 9 Maintenance
 
-**上线后：**
-
-- 第 4 节的三句话，建事项的那一句连说几遍，逐次核对回执的动作类型和对象，不只看回复的文字。
-- 线上的模型行为不对时，先在备份的副本上抓出实际发给模型的资料和模型的原始输出，再决定改哪里。2.6 上线当天，前两个修复是照猜测改的，都没有修好。
-
+Check whether a defect comes from implementation, conflicting rules, or a structural dependency.
+When replacing a function, identify its old entry points, configuration, prompts, and tests.
+Remove obsolete parts when their real use and upgrade dependencies permit removal.
+For retained compatibility, state the supported data or caller and the condition for removal.
+Keep query fields in storage. Apply scope filters during retrieval.
+Finish pending writes before closing storage.
+Keep generated binaries and private indexes out of version control.

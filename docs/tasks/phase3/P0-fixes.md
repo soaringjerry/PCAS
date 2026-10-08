@@ -1,5 +1,9 @@
 # P0 第 3 阶段开工前的六项修复
 
+> **Historical task record.** This text records an earlier phase or investigation.
+> Use the [current documentation](../../README.md) and [project status](../../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 2026-10-08。执行者 6.1 Sol。分支从 `origin/main` 建，工作区 `/root/PCAS-wt/p3-P0`；**每项一个分支、一个 Draft PR**，base 都是 `main`，做完一项就交，不要攒。迁移编号从 046 起。上位依据：[白皮书](../../whitepaper.md) 5.7、[记忆架构](../../memory-architecture.md) 第 4 节、[任务流程规则](../process.md) 第 5 和第 8 节。
 
 这六项都来自 [待办清单](../backlog.md)，编号照待办。它们和工作室的代码没有交集，先修完，第 3 阶段才有干净的基线。

@@ -1,5 +1,9 @@
 # 任务 S0：骨架（迁移、共用字段、接缝）
 
+> **Historical task record.** This text records an earlier phase or investigation.
+> Use the [current documentation](../../README.md) and [project status](../../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 执行者 6.1 Sol。分支 `phase2/s0-skeleton`，**从 `origin/main` 建**；工作区 `/root/PCAS-wt/s0`；PR 的 base 是 **`main`**。
 
 先读 [并行方案与数据约定](parallel.md) 全文。你做的是第 2–4 批共用的地基：十个执行者在等它，所以它要小、要快、要**不改变任何现有行为**。合入之后别人才开工。

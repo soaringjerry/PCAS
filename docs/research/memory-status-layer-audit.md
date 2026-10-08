@@ -1,5 +1,9 @@
 # 现状层问题清单（2026-10-06，待审计）
 
+> **Historical research.** This text records an earlier phase or investigation.
+> Use the [current documentation](../README.md) and [project status](../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 2026-10-06 复查线上 2.5 阶段现状层（交接说明、现状卡、期限表、「关于你」页面）时发现的设计问题和故障。第一到第五节只列事实、证据和当前状态，供逐条审计；怎么改还没有定。第六节是协调者建议的处理思路，未批准。
 
 数字取自 2026-10-06 02:00–04:00 UTC 的线上实例（只读查询）和 2026-10-05 18:00 UTC 备份的临时恢复库。当时线上有效记忆 5,217 条，现状卡 288 张（已建 286 张）。

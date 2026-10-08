@@ -1,65 +1,65 @@
-# 待办清单
+# PCAS Open Issues
 
-第 1 阶段验收和审查中发现、但没有在第 1 阶段处理的事项，以及 2.0 回滚后审查发现的事项。排新阶段任务时从这里取，处理完就删掉对应条目。
+Recorded findings, reviewed for document organization on 2026-10-08.
 
-| # | 事项 | 来源 | 建议阶段 |
+This list does not claim a fresh reproduction of each defect.
+An assigned task, passing CI, or implemented hook does not establish closure.
+Check the current code path and recorded result before assigning or closing an item.
+[Resolved Issue History](../history/resolved-issues.md) retains the original completed rows.
+[Project Status](../status.md) separates targets, code, and delivery evidence.
+
+## Recorded Open Findings
+
+| ID | Finding | Required evidence or decision | Source |
 |---|---|---|---|
-| 1 | **真机验收通知**：手机主屏幕 PWA 收到推送并弹出系统通知；Telegram 真实客户端收到提醒。自动化只证明了后端发出了推送请求 | E 验收报告遗留 3 | 部署后由用户完成 |
-| 2 | **失败原因分类太粗**：副手失败常显示「出了点问题」。需要后端给稳定的错误码（登录失效、额度、服务异常、超时），前端按错误码显示，重试逻辑不变 | E 验收报告遗留 2 | 第 2 阶段 |
-| 3 | **撤销采纳后，记忆的「强化」没有撤回**：采纳时用到的记忆会被 `recordUseTx` 强化，撤销不会回退 | D1 审查 | 第 2 阶段（记忆核心） |
-| 4 | **撤销采纳后 `adopted_artifacts` 记录残留**：在重新采纳前会被清理，平时只会造成偏保守的保护，不会泄露 | D1 审查 | 第 2 阶段 |
-| 6 | **Jev 分流代码保留但已不调用**：等确定没有用途再删，或者用作便宜的前置判断 | 第 1 阶段决定 | 第 5 阶段（模型调度）时决定 |
-| 7 | **`/v1/desk/answer` 旧问答接口保留**：前端已不调用 | 第 1 阶段决定 | 与 6 一起决定 |
-| 8 | **秘书回复只写一句结论**目前靠提示词约束，真实模型走查通过，但没有硬性校验 | B1 补充 | 观察，出问题再加服务端截断 |
-| 9 | **资料库、设置里的内部概念和按钮仍然很多**：计划并入观测台 | 设计原则 | 第 4 阶段（观测台） |
-| 10 | **事项的 JSON 收据也会被分段、向量化和摘要**：`actions` 来源会跳过抽取，但其他环节照常处理，导致检索里混入 JSON 碎片，还有少量向量费用 | 上线后复盘问题 5 | 第 2 阶段（记忆核心） |
-| 11 | **「稍后会自动整理」和实际不符**：模型失败时回执这样写，但「自动采纳」默认关闭，待办类内容只会留在「拿不准」里等用户处理。线上现有 8 条这样的原话。要么改文案，要么先定自动采纳的默认值 | 上线后复盘问题 6；2.0 回滚后审查 | **已上线（2026-10-08）**：第 3.5 阶段去掉「自动采纳」开关，按可信度直接建，见 [契约](phase3_5/README.md) B |
-| 12 | **撤销秘书建的事项，不会撤掉从同一句话里抽出来的记忆**：说「周五三点和张三对方案」再撤销，事项没了，这条计划记忆还在，秘书之后仍可能提起 | 2.0 回滚后的线上验证 | **已完成**：第 2 阶段第 1 批（R9），2026-10-02 上线 |
-| 13 | **首页只显示三天内到期的事项**：刚安排的事如果在三天以后，建好后首页看不到，只能在项目里找到 | 2.0 回滚后审查 | **已上线（2026-10-08）**：第 3.5 阶段没时间的待办进「在推进」，见 [契约](phase3_5/README.md) D |
-| 14 | **经在线连接进来的旧内容没有「历史」判断**：上传归档已经不会变成当前待办（PR #49），在线连接补送的旧内容仍然会 | PR #49 遗留 | 接在线连接时再定 |
-| 15 | **旧话里的计划被记成不带时间的计划**：导入 2025 年的「明天交旅行计划」，会留下一条没有「这是 2025 年说的」信息的计划记忆 | PR #49 遗留 | 第 2 阶段（表达时间） |
-| 16 | **线上数据库留有 2.0 的迁移 022–025**：6 张空表和 5 个新增列，当前程序不使用 | 2.0 回滚 | **已完成**：迁移 026，2026-10-02 上线时执行 |
-| 17 | **稳定化的入口条件没有做**：线上实测 11 项、用户试用一天 | [稳定化](stabilization/README.md) | 线上实测由协调者做；试用一天不作为前提（第二阶段入口决定 6） |
-| 18 | **秘书和后台同时使用 Codex 时，抽取偶尔失败**：原因没有确认。2026-10-02 上线验证时又出现一次，并且看到一个新细节：第一次失败（模型输出不合格）后重试，重试时通道暂时不可用，被判成「通道未配置」，任务就此停住不再重试，这句话的记忆就永远抽不出来了。暂时不可用应当继续重试，只有真的没配置才停。现在会自动重试（PR #48），日志里有失败类别，再出现时按类别排查 | 回滚后的冒烟测试 | **已完成**：第 2 阶段第 2 批，2026-10-03 上线 |
-| 19 | **撤销连带撤掉记忆时，之前用到它的回答被整条清空**：说「周五三点和张三对方案」，再问「这周有什么安排」，回头撤销第一句，第二句的回答整条变成「（这条回答依据的记忆已变更）」，不相干的内容也一起没了 | 第 2 阶段第 1 批审查 | **已完成**：第 2 阶段第 2 批，2026-10-03 上线 |
-| 20 | **从对话里点开原话，标题可能是后端生成的内部写法**：例如「照片.jpg · ocr」。面板照数据显示，没有改写 | 第 2 阶段第 1 批任务 C2 | 第 2 阶段第 2 批（抽取时一并整理资料标题） |
-| 21 | **后来才启用的副手看不到之前的记忆**：记忆在创建时只对当时已启用的副手打开，之后启用的副手对旧记忆默认是关着的（按 R2a，它出自的原话也跟着不给）。和「团队默认共用全部记忆」不一致 | 第 2 阶段第 1 批审查 | **已完成**：第 2 阶段第 2 批，2026-10-03 上线 |
-| 22 | **测试里写死的日期到期后失败**：2026-10-02 起四项旧测试失败，同样写法还有多处 | 第 2 阶段第 1 批 | **已完成**：PR #74 |
-| 23 | **秘书把事交给副手时，不带这段对话的来龙去脉**：秘书的 `delegate` 动作只把一句要求交给副手，对话里之前聊过的内容不带过去（用户手动转交时可以带） | 第 2 阶段第 1 批验收（I-A2） | **已完成**：P0（PR #270），秘书派副手自动带最近 6 轮对话，2026-10-08 随第 3 阶段上线 |
-| 24 | **把一段对话转交给副手时，检索只按这次的要求和事项找资料**：对话里之前问过什么不参与检索，所以「接着刚才聊的做」这类要求常常找不到相关资料 | 第 2 阶段第 1 批验收（F-T2 的定位） | **已完成**：P0（PR #270），历史轮次进检索 query，上限 4000 字节、超出记数 |
-| 25 | **一条旧测试偶发失败**：`TestSecretaryRejectsStaleRowsAndKeepsOriginalOnCancellation` 的 `timeout` 子用例偶尔超时，重跑就过。第 1 批时在未改动的基线上也复现过，和具体改动无关 | 第 2 阶段多次 CI | 交给第 2 批的验收执行者定位：是测试里的时限太紧，还是产品在取消时真的有竞态 |
-| 26 | **记忆超过 200 条后，设置里记忆活跃度那个下拉只列得出最近 200 条** | 第 2 阶段第 2 批任务 U2 | 第 4 阶段（观测台），下拉改成边输边搜 |
-| 27 | **后台一次只整理一条**：导入几万条聊天记录时，整理成记忆的速度被模型的单次耗时卡住（估计每小时 350–450 条）。可以改成同时处理几条 | 2026-10-03 用户问导入要多久 | 第 4 批上线、看到实际速度和通道有没有限速之后再定。改动小，风险是并发调用触发订阅限速、和秘书抢通道 |
-| 28 | **导入的聊天记录按一条消息调一次模型**：改成按整段对话整理，调用次数可以降到十分之一左右，一万条消息一两个小时 | 2026-10-03 用户问导入要多久 | 已派工：第 2 阶段补充批 4b（[任务 E4](phase2/batch4/E4-conversation-extraction.md)） |
-| 31 | **内部概念还露在资料库里**：待确认内容、训练数据、「原话有据 / 推测」、几个 AI 能看、后台任务。白皮书要求这些只在观测台出现 | 2026-10-03 对照白皮书检查 | 第 4 阶段（观测台）做出来时搬过去；在那之前不单独处理 |
-| 32 | **两条迁移测试依赖别的测试先跑**：`TestPhase2B1_G2`、`G3` 在一个干净的库里单独跑会失败（`model_usage` 不存在），只有默认 schema 已经迁移过才通过。CI 分片时发现，CI 里先迁移一次绕过去了 | 2026-10-03 CI 分片 | 让这两条测试自己准备好前提；修好后去掉 CI 里那一步 |
-| 33 | **用真实模型的回忆评测和基线没有做**：评测工具和两档题目都在，只用假模型跑通过 | 第 2 阶段第 4 批 R18、R19 | 协调者用真实通道跑一遍三种做法的对比，定下召回率基线 |
-| 34 | **Sign in with ChatGPT 的完整验收还没做**：2026-10-03 用户已用真实账户在网页上登录成功，手动填的 `gpt-6.1-sol` 能生成并带回 token 数。还没做 `chatgpt-verify`（会撤销一次登录、通过后改变默认通道），也没比较它和 Codex 做后台整理的速度和质量。另有小问题：花费记录里这个通道的模型名是空的 | 2026-10-03 | 等用户决定是否让后台整理改走这个通道 |
-| 35 | **首页的「今天」还是列表**：白皮书写的是日程块加现在线。现在线有了，日程块没有 | 2026-10-03 对照白皮书检查 | 第 3 阶段（工作室）或第 4 阶段一起做可视化时处理 |
-| 36 | **导入的聊天记录里的图片和语音没有解析**：只导入文字，图片语音不上传（2026-10-03 决定，理由见 U1）。有些对话的关键信息只在图里 | 任务 U1 | 第 5 阶段多模态接入：按需对单条消息解析，不整批解析 |
-| 37 | **「先存着」或暂停的大批导入会让后台领取任务变慢**：领取任务先看队列最前面的几百个，都被压着时才检查整个队列（每次要一两秒）。只影响导入相关的后台任务，新说的话不受影响 | 2026-10-03 修领取任务慢的问题时留下 | 给被压着的任务单独做标记，领取时直接跳过 |
-| 38 | **文档删除要不要先问**：现在删完给「撤销」，不问（第 1 阶段定的）。白皮书另一处写「删除一律先问」。检查报告把它列为规范偏差 | 2026-10-03 检查报告第 9 条 | 等用户定：维持现状并改白皮书的措辞，或加确认框 |
-| 39 | **回忆查询还是对每条记录逐词比对**：2.7 万条时约 2 秒（原来 60 秒以上）。资料到十万条量级会再次变慢 | 任务 P1 | 先用全文或三元组索引、向量索引筛出候选，再打分；要求结果逐字节不变 |
-| 40 | **只有 Codex 通道能联网搜索**：Sign in with ChatGPT 通道和按量计费接口不带搜索，秘书或副手用这些通道时只能离线回答 | 任务 W1 | 第 5 阶段模型调度：按各接口的搜索工具分别接上 |
-| 41 | **评测任务太少、没有人工标注**：记忆查找的两轮实验只有 12 个任务，出题、判定、打分是同一个模型，约 10 项检查项本身有问题，最好的几组之间已经分不出高下 | 2026-10-04 实验 | 先做：扩到一百个以上，覆盖直接回忆、间接用到、跨分组、旧事实更新、无关记忆干扰，由用户抽查。见 [讨论稿](../research/memory-next-direction.md) 第 10 节 |
-| 43 | **混合检索把两种分数直接相加**：问话被切成两个字一组，每命中一组加 1 分，向量相似度整体只有 0–1 分，排序基本由常见词决定 | 2026-10-04 实验 | 可单独修：改成各出一个排名再按名次融合。实验里这样做的基础线和线上检索在办事得分上差不多（56% 对 54%），收益不大，随检索改造一起做 |
-| 44 | **导入的聊天只整理了三个月**：2025-12 至 2026-06 的 4400 多条用户消息还没有整理成记忆 | 2026-10-04 查线上数据 | 后台队列在跑，观察进度；长期停着再查 |
-| 45 | **同一段对话的分支被各整理了一遍**：ChatGPT 里开过分支的对话，共同部分被重复整理，一项作业有 190 多条记忆 | 2026-10-04 实验 | 导入时认出分支，共同部分只整理一次；见讨论稿第 5 节 |
-| 46 | **秘书回一句话 27–36 秒**：记忆涨到 5254 条后变慢，一轮里约八成时间在数据库上（每条记忆算一次当前版本、每轮读出全部记忆、快照统计） | 2026-10-05 上线检查 | **已完成**：[P2](improvements/P2-turn-speed.md)，2026-10-05 上线，线上实测 12–20 秒 |
-| 47 | **大批导入期间，整理会一直排在后面**：整理任务的优先级低于导入对话的抽取（契约 R12 这样定的）。导入几万条时，新记忆要等导入全部抽完才会被归类 | 2026-10-05 审 O1b | 下次有大批导入之前处理：让整理和导入的抽取轮流，或给新输入的记忆单独一条快路 |
-| 48 | **评测集里「无关记忆干扰」一类量不出差别**：三种对照两轮都是满分 | V2、V2b 交付报告 | 换思路重做这一类 |
-| 49 | **连着说话时秘书偶尔「模型没有响应」**：后台在抽取上一句时，下一句的模型调用约 9 秒后失败，事项没建出来。五轮里出现两次 | 2026-10-05 P2 上线后的检查 | 已派工：[Q5](improvements/Q5-secretary-model-error-under-background-load.md) |
-| 51 | **上线后第一句话超时过一次**：服务刚启动、后台同时开始比较和建卡时，秘书的第一次模型调用 30 秒超时，同一秒后台一个建卡任务也失败；之后连说六句都正常 | 2026-10-05 第 2–4 批上线检查 | 观察；再出现就查服务刚启动时的模型进程 |
-| 52 | **快照里统计已整理条数的查询偏慢**：一万条记忆的虚构库上约 0.76 秒，是一轮对话里最大的一项 | 2026-10-05 上线前的速度核对 | 顺手优化 |
-| 54 | **「被取代」判得偏激进**：2.6 上线后人工看了全部 37 条被取代的记忆，7 条明显判错（互不冲突的两条被判成替代；只是称呼变了，内容没被推翻），6 条有争议。判成重复的抽 39 条没有明显错的 | 2026-10-07 上线后抽查 | **已完成**：P0（PR #261），提示词加「并存」出口、称呼变化不算推翻；比较规则升到 2；线上只重判当前「被取代」的记忆，用 `cmd/pcas-rejudge`，上线后由协调者执行并抽查 |
-| 55 | **一次性的请求被归成「对助手的要求」**：「明天下午三点提醒我交电费」这类句子被归到要求一类，并被抽成期限。2.6 上线后每轮不再整批带限范围的要求，影响已经压住，归类本身没改 | 2026-10-07 上线故障的排查 | **已完成**：P0（PR #268），rule 限于长期要求；归类规则升到 3，只重归 category=rule 的记忆，用 `cmd/pcas-reorganize`，上线后由协调者执行 |
-| 56 | **类型里「看法」占四成**（问题清单 D27）：2.6 没有动 | 问题清单 | 和 55 一起看归类 |
-| 57 | **活跃度还没有真正起作用**：「用户主动提及」「回答被采纳」的信号 2.6 才开始记，积累之前排序基本等于说话时间 | 问题清单 D29 | 积累一个月后看排序对比 |
-| 58 | **分组接口不支持搜索和叠加条件**：多选分组或叠加搜字时，页面把这几组读完再筛，最大的分组要连读十一页 | 2.6 界面第二块 | 后端给分组接口加搜索、类型、可信度条件 |
-| 59 | **「后台给前台让路」在观测台里算作排班失败**：验收冻结的预期如此。用得频繁时这个数会显眼，但无害 | 2.6 验收发现项 002、003 | 单列成「让路」，和真正的失败分开 |
-| 60 | **秘书一轮偏慢的请求**：2.6 上线后在线上跑 26 道私有题，一轮 15–74 秒；带自查或按分组细读的轮次明显更慢 | 2026-10-07 线上实测 | **已完成（只加测量）**：P0（PR #272），`model_usage.duration_ms` 和每轮分段耗时（准备、回答、自查、写回）；线上跑一周后再定档位策略 |
-| 61 | **办事评测工具还按建卡流程准备数据**：`cmd/pcas-eval` 的分档评测在准备阶段会跑建卡，2.6 之后建卡已经没有了 | 2.6 收尾 | **已完成**：P0（PR #260），评测工具按归类完成和交接说明准备数据，不再依赖建卡 |
-| 62 | **迁移到 021 的旧夹具要求产品代码在旧库上跑得起来**：`TestPhase2B1_G2/G3` 先用 001–021 建库再跑产品代码，于是每个加到旧表上的新列都得用「单独 UPDATE 或 savepoint 写、`to_jsonb(row)->>` 读」绕过去（046 的 `duration_ms`、053 的 `undo_of` 都是这样处理的），而且在干净库上本来就挂（待办 32）。应改成先全量迁移再回填 022–025 的遗留表，产品代码不再背这个包袱 | 第 3 阶段验收收尾 | 第 4 阶段前顺手改 |
-| 63 | **做法沉淀、完成条件裁判**（hermes 笔记里标第 3 阶段的两条）没有进第 3 阶段 | 第 3 阶段契约第 2 节第 5 条 | 工作室跑顺之后再定 |
-| 64 | **冒烟组之外动过冒烟建的事项，整组就清不掉**：上线检查时用普通的 `undoAction` 撤销了冒烟轮建的项目，之后 `DELETE /v1/desk/smoke/{id}` 一直返回 `changed_since`（按设计：组外操作碰过的记录不覆盖），事项只能逐条 `deleteThing`，组的临时记录（3 条请求、4 条动作）留在库里关不掉 | 第 3.5 阶段上线记录第 4 节 | 未定。两个方向：清理入口认「组外操作只是撤销本组动作」这种情形；或者给一个放弃整组的入口。在这之前，冒烟里要验撤销就在同一个 `smokeId` 里说一句「撤销」 |
-| 65 | **候选上还没有「留作候选的理由」的存量**：线上 22 条旧候选都没有 `reason`（3.5 之前产生的），新候选才有 | 第 3.5 阶段上线记录第 5 节 | 不补：旧候选的理由没有记录，不猜 |
+| 1 | Physical-device notifications lack complete acceptance. | Check phone display and actual Telegram delivery. | Phase 1 acceptance. |
+| 2 | Deputy failures use overly general messages. | Check stable error categories and recovery guidance. | Phase 1 acceptance. |
+| 3 | Undo of adoption does not reverse memory reinforcement. | Decide and verify the activity effect of undo. | Phase 1 review. |
+| 4 | Adoption records remain after undo. | Check cleanup and any protection effect. | Phase 1 review. |
+| 6, 7 | Unused Jev routing and the old answer API remain. | Establish remaining callers and removal conditions. | [Service reference](../memory-service.md). |
+| 8 | The one-sentence card reply relies on the prompt. | Observe real replies before adding a program limit. | Secretary acceptance. |
+| 9, 31 | Internal controls remain in library and settings. | Move applicable controls when the observation panel is delivered. | [Interface principles](../design/principles.md). |
+| 10 | Action receipt sources enter indexing and summaries. | Check retrieval interference and actual processing use. | Postlaunch review. |
+| 14 | Old content from connected inputs can lack historical classification. | Check the connector-to-extraction path before enabling another native input. | Archive-import review. |
+| 15 | Imported relative plans can lose their original statement time. | Verify statement time and event time separately. | Archive-import review. |
+| 17 | Historical stabilization live checks are incomplete in the record. | Confirm remaining scope. The old one-day trial is not a new development prerequisite. | [Stabilization entry](stabilization/README.md). |
+| 20 | Source titles can expose generated internal labels. | Check titles through the actual source-view path. | Phase 2 source-view acceptance. |
+| 25 | A cancellation test has an intermittent timeout. | Distinguish a timing-sensitive test from a product race. | Phase 2 CI record. |
+| 26 | The activity selector lists only recent memories. | Check search and pagination when moving it to the observation panel. | Phase 2 interface acceptance. |
+| 27 | Bulk extraction concurrency limits throughput. | Measure call capacity, rate limits, and secretary interference before changing concurrency. | Import review. |
+| 28 | The old task requested conversation-level extraction. | Phase 2 batch 4b reports delivery. Verify the disposition before closing this stale row. | [Batch 4b acceptance](../evaluations/2026-10-03-phase2-batch4b-acceptance.md). |
+| 32, 62 | Old migration fixtures impose compatibility branches on current production writes. | Check isolated migration coverage and remove unsupported fixture dependencies. | [Migration tests](../../internal/postgres/phase2_b1_migration_test.go). |
+| 33 | The real-model recall evaluation and baseline remain unrecorded. | Run the defined comparison on the actual channel. | Phase 2 evaluation task. |
+| 34 | The direct account lacks full lifecycle acceptance. | Verify generation, refresh, generation after refresh, and revocation. | [Deployment](../deployment.md#4-chatgpt-direct-channel). |
+| 35 | The home schedule lacks the complete date-block presentation. | Check the current layout against the interface specification. | Product review. |
+| 36 | Imported conversation media is not fully parsed. | Define and verify selective attachment parsing. | Archive input decision. |
+| 37 | Deferred bulk imports can slow job selection. | Measure queue selection with many deferred records. | Import queue review. |
+| 38 | Document removal uses undo while the general deletion policy requires confirmation. | Resolve the scope of the recorded document-removal exception. | [Phase 3 decision](phase3/README.md). |
+| 39 | Recall scoring can scan large record sets. | Measure current retrieval at representative scale before changing its ranking. | [Retrieval path](../../internal/postgres/retrieval.go). |
+| 40 | Web search is channel-dependent. | Establish which configured providers supply search and show capability gaps. | Search task. |
+| 41, 48 | Evaluation coverage and human review are insufficient in some categories. | Review current datasets and discriminatory value. Do not reuse early experiment claims as a baseline. | [Memory evaluation](../evaluations/2026-10-04-phase2_5-v2-doing.md). |
+| 43 | Public and team retrieval use different lexical/vector ranking paths. | Check rank fusion and fallback behavior before making a unified ranking claim. | [Service reference](../memory-service.md). |
+| 44 | A historical import still had unprocessed messages. | Check current progress by import/source identity. The old count is not a current count. | Import progress record. |
+| 45 | Common conversation-branch content can be extracted more than once. | Verify shared-message identity and duplicate evidence handling. | Import evaluation. |
+| 47 | Bulk extraction can delay memory organization. | Verify progress for new input and existing background work under sustained import. | Organization review. |
+| 49 | Concurrent secretary and background model use had failures. | Check current retry behavior and real-channel failure evidence before treating the old report as current. | [Q5 task](improvements/Q5-secretary-model-error-under-background-load.md). |
+| 51 | A first request timed out during startup. | Reproduce and inspect the provider process if this recurs. | Startup rollout record. |
+| 52 | Snapshot organization statistics were slow. | Measure the current query and dataset. | Turn-speed review. |
+| 56 | The classification distribution was dominated by opinions. | Review labeled samples with the current rule version. | Memory audit. |
+| 57 | Activity signals need enough real use to affect ranking. | Compare ranking after sufficient observed use. | Memory audit. |
+| 58 | Group filters require multiple page reads. | Verify server-side search and combined filters. | Phase 2.6 interface review. |
+| 59 | Background deferral appears as scheduling failure. | Separate deferral and error in observation data. | Phase 2.6 acceptance. |
+| 63 | Reusable methods and completion judging are deferred targets. | Discuss scope after workspace behavior is reliable. | Phase 3 scope. |
+| 64 | Outside changes can prevent check-group cleanup. | Define safe handling without overwriting user work. | [Phase 3.5 rollout](../evaluations/2026-10-08-phase3_5-rollout.md). |
+| 65 | Old candidates have no recorded reason. | Preserve the missing reason. Do not invent a historical justification. | Phase 3.5 rollout. |
+
+## Latest Recorded Follow-up
+
+The [Phase 3.6 rollout](../evaluations/2026-10-08-phase3_6-rollout.md) retains these follow-ups:
+
+- Check completed background date-review decisions and user restorations.
+- Review automatic topic projects for past events mistaken as current work.
+- Correct the check-mode reply when the memory action is skipped.
+- Verify the date-review activity row through the actual live interface.
+
+These findings are separate from the future requests to change date times, review all historic intentions, and extend the observation panel.

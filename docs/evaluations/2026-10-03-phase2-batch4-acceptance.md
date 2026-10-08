@@ -76,7 +76,7 @@
 
 前端 npm ci/lint/type-check/build 通过；最终定位器改动另行 lint/type-check 通过。最终工作区复用初次同产品基线的 node_modules 与 dist，前端产品代码未改变。本机 Node 20.19.5，npm 有 package 要求 >=22.12 的 engine 警告，不影响本轮已执行检查。
 
-原始产物：[完整 Go](/tmp/pcas-b4-c093e0a-final-go-sy1iPK/make-check.log)、[模拟浏览器](/tmp/pcas-b4-c093e0a-final-browser-eKrLwf/mocked.log)、[真实 W4](/tmp/pcas-b4-c093e0a-final-w4-0FkRMl/w4.log)。浏览器截图/失败轨迹策略产物在最终固定工作区 `web/test-results/phase2-b4-c093e0a-final-mocked`、`web/test-results/phase2-b4-c093e0a-final-real`；成功用例的截图与 JSON 保留。主测试计数、子用例和逐序列结果已从完整原始输出逐项核对。
+原始产物：完整 Go（历史临时日志未保存在仓库：`/tmp/pcas-b4-c093e0a-final-go-sy1iPK/make-check.log`）、模拟浏览器（历史临时日志未保存在仓库：`/tmp/pcas-b4-c093e0a-final-browser-eKrLwf/mocked.log`）、真实 W4（历史临时日志未保存在仓库：`/tmp/pcas-b4-c093e0a-final-w4-0FkRMl/w4.log`）。浏览器截图/失败轨迹策略产物在最终固定工作区 `web/test-results/phase2-b4-c093e0a-final-mocked`、`web/test-results/phase2-b4-c093e0a-final-real`；成功用例的截图与 JSON 保留。主测试计数、子用例和逐序列结果已从完整原始输出逐项核对。
 
 ## 以下为 §13 裁定轮和此前历史
 
@@ -144,13 +144,13 @@ Go 命令：`make fmt-check lint`；`go test -race -count=1 -v -timeout 30m ./cm
 
 模拟浏览器统一运行：**7 通过、2 失败**，0 跳过、0 重试、0 flaky。W1 两条、W2 importing/paused、W3、W5 两条通过；W2 done 已到达数量/进度/禁词检查，失败在旧的「完成|已导入」匹配，实际「已存好」；W2 failed 已到达人话错误，失败在旧定位器未匹配「接着导」。W4 统一运行的真实预览计数 2000 通过，随后旧定位器不识别「导入 2,000 条」，120 秒超时，没有导入 POST。这三处后续更改和复核各自记录，不把统一运行结果改为通过。
 
-统一运行产物：[Go](/tmp/pcas-b4-ruling-go-zmQ2W6/make-check.log)、[模拟浏览器](/tmp/pcas-b4-ruling-browser-CyYjdD/mocked.log)、[W4](/tmp/pcas-b4-ruling-w4-nIBd4g/w4.log)。失败截图和轨迹位于固定工作区的 `web/test-results/phase2-b4-ruling-mocked` 与 `web/test-results/phase2-b4-ruling-real`。
+统一运行产物：Go（历史临时日志未保存在仓库：`/tmp/pcas-b4-ruling-go-zmQ2W6/make-check.log`）、模拟浏览器（历史临时日志未保存在仓库：`/tmp/pcas-b4-ruling-browser-CyYjdD/mocked.log`）、W4（历史临时日志未保存在仓库：`/tmp/pcas-b4-ruling-w4-nIBd4g/w4.log`）。失败截图和轨迹位于固定工作区的 `web/test-results/phase2-b4-ruling-mocked` 与 `web/test-results/phase2-b4-ruling-real`。
 
 ### 明确改变测试后的补充复核
 
-`4424ca8` 只修正标签定位：W2 failed 单独通过；W4 已通过实际暂停、继续和最终 2000/2000，随后失败在「完成|已导入」文案，资料库检查尚未到达。保留该轮 [W2](/tmp/pcas-b4-labels-browser-jCJKh1/mocked.log)、[W4](/tmp/pcas-b4-labels-w4-ChnI0R/w4.log) 和该固定工作区 `/root/PCAS-wt/b4-T4-browser-label-run` 的截图/轨迹。
+`4424ca8` 只修正标签定位：W2 failed 单独通过；W4 已通过实际暂停、继续和最终 2000/2000，随后失败在「完成|已导入」文案，资料库检查尚未到达。保留该轮 W2（历史临时日志未保存在仓库：`/tmp/pcas-b4-labels-browser-jCJKh1/mocked.log`）、W4（历史临时日志未保存在仓库：`/tmp/pcas-b4-labels-w4-ChnI0R/w4.log`） 和该固定工作区 `/root/PCAS-wt/b4-T4-browser-label-run` 的截图/轨迹。
 
-`fedafac5a463ae0ca5b3015552f5fc50fa18a302` 按新增裁定加入「已存好」后：**9 条模拟浏览器全部通过，真实后端 W4 通过**，均 0 跳过、0 重试、0 flaky。W4 耗时 41.5 秒（Playwright 总耗时 46.0 秒）：两千条预览、确认后真实导入、当前小批后暂停、五次实际读取时 stored 稳定、继续到 stored=total=2000、资料库打开「合成历史0」原话、390px 无溢出和无 pageerror 全部通过，没有人为延时。使用固定工作区 `/root/PCAS-wt/b4-T4-followup-run`，npm 依赖和前端产物复用统一工作区；产品前端未变。补充复核输出：[模拟浏览器](/tmp/pcas-b4-followup-browser-hdzpiU/mocked.log)、[W4](/tmp/pcas-b4-followup-w4-NsmWJR/w4.log)，截图在该工作区 `web/test-results/phase2-b4-followup-mocked`、`web/test-results/phase2-b4-followup-real`。
+`fedafac5a463ae0ca5b3015552f5fc50fa18a302` 按新增裁定加入「已存好」后：**9 条模拟浏览器全部通过，真实后端 W4 通过**，均 0 跳过、0 重试、0 flaky。W4 耗时 41.5 秒（Playwright 总耗时 46.0 秒）：两千条预览、确认后真实导入、当前小批后暂停、五次实际读取时 stored 稳定、继续到 stored=total=2000、资料库打开「合成历史0」原话、390px 无溢出和无 pageerror 全部通过，没有人为延时。使用固定工作区 `/root/PCAS-wt/b4-T4-followup-run`，npm 依赖和前端产物复用统一工作区；产品前端未变。补充复核输出：模拟浏览器（历史临时日志未保存在仓库：`/tmp/pcas-b4-followup-browser-hdzpiU/mocked.log`）、W4（历史临时日志未保存在仓库：`/tmp/pcas-b4-followup-w4-NsmWJR/w4.log`），截图在该工作区 `web/test-results/phase2-b4-followup-mocked`、`web/test-results/phase2-b4-followup-real`。
 
 前端 npm ci/lint/type-check/build 通过，最新修改另行 lint/type-check 通过；本机 Node 20.19.5，npm 仍给出 package 要求 >=22.12 的 engine 警告。L8 最新 cancel 修改仅作 Go 编译检查（`go test -run '^$' ./internal/postgres`），没有执行该用例。L8 独立花费事务的核心可见性预期、I15 now 对照、I17、I6 保留，等协调者通知后端修复合入再专项重跑。补充复核不当作新提交上的 Go 全量通过，本批尚未宣布通过。
 
@@ -178,11 +178,11 @@ Go 命令：`make fmt-check lint`；`go test -race -count=1 -v -timeout 30m ./cm
 
 I16 抓另一段秘书对话的真实 HTTP 请求；I17 通过 HTTP 释放 hold，并验证真实抽取及优先级 10；I18 用真实秘书入口记录新原话；I19 在解析 goroutine 正在逐批提交时真实暂停、继续，再走归档删除闭包。W5 在既有模拟浏览器文件中，随已有 CI 文件入口自动包含。
 
-本次 Go 被测提交 `8e904ad2481eba06cf184c4bc2f26058eb7105a3`（41902ca + 变基后的 T4 测试）：`go test -race -count=1 -v -timeout 10m -run '^TestPhase2B4_I(1[5-9]|20)_' ./internal/postgres`。7 个主测试：**4 通过、3 失败、0 跳过**，包耗时 6.453 秒，退出 1，没有重复运行。数据库为自有 tmpfs pgvector 容器，已清理；模型和向量为本地假服务。原始输出：[deferred.log](/tmp/pcas-b4-deferred-41902ca-MHnm08/deferred.log)。I15 now 与 I17 的 fake 返回非空 JSON（items 空数组），实际各有 3 次调用；R4 将 organized 定义为已经处理过抽取的条数，本测试要求它增长，未把空 items 当作放宽计数的理由。交 I 核对处理完成后的计数；报告只陈述观察，不推断实现根因。
+本次 Go 被测提交 `8e904ad2481eba06cf184c4bc2f26058eb7105a3`（41902ca + 变基后的 T4 测试）：`go test -race -count=1 -v -timeout 10m -run '^TestPhase2B4_I(1[5-9]|20)_' ./internal/postgres`。7 个主测试：**4 通过、3 失败、0 跳过**，包耗时 6.453 秒，退出 1，没有重复运行。数据库为自有 tmpfs pgvector 容器，已清理；模型和向量为本地假服务。原始输出：deferred.log（历史临时日志未保存在仓库：`/tmp/pcas-b4-deferred-41902ca-MHnm08/deferred.log`）。I15 now 与 I17 的 fake 返回非空 JSON（items 空数组），实际各有 3 次调用；R4 将 organized 定义为已经处理过抽取的条数，本测试要求它增长，未把空 items 当作放宽计数的理由。交 I 核对处理完成后的计数；报告只陈述观察，不推断实现根因。
 
-W5 使用同一产品基线的前端构建产物，npm ci/lint/type-check/build 均通过；本机 Node 20.19.5，仍有 package 的 >=22.12 engine 警告。初次筛选 `--grep '^W5 '` 未选中用例，属运行夹具，不计测试结果。改正筛选后 `8e904ad` 上的两条 W5 均超时：默认「先存着」已显示，但测试寻找「确认导入/开始导入/确认」按钮，页面实际可访问标签是「导入 6 条」；now 用例寻找「现在整理」等文案，实际是「现在就整理」。轨迹只有 preview，没有确认导入 POST，后续行为未验到。首轮日志/JSON：[mocked.log](/tmp/pcas-b4-w5-41902ca-UwFGBc/mocked.log)、[mocked.json](/tmp/pcas-b4-w5-41902ca-UwFGBc/mocked.json)。
+W5 使用同一产品基线的前端构建产物，npm ci/lint/type-check/build 均通过；本机 Node 20.19.5，仍有 package 的 >=22.12 engine 警告。初次筛选 `--grep '^W5 '` 未选中用例，属运行夹具，不计测试结果。改正筛选后 `8e904ad` 上的两条 W5 均超时：默认「先存着」已显示，但测试寻找「确认导入/开始导入/确认」按钮，页面实际可访问标签是「导入 6 条」；now 用例寻找「现在整理」等文案，实际是「现在就整理」。轨迹只有 preview，没有确认导入 POST，后续行为未验到。首轮日志/JSON：mocked.log（历史临时日志未保存在仓库：`/tmp/pcas-b4-w5-41902ca-UwFGBc/mocked.log`）、mocked.json（历史临时日志未保存在仓库：`/tmp/pcas-b4-w5-41902ca-UwFGBc/mocked.json`）。
 
-T4 在 `25dadd66a79a0161f13a73d29cfe2621b3b5cc59` 只补 W5 定位器对上述标签的匹配；冻结条目及行为断言不变，W1 等旧用例不改。在该明确修正后的提交执行 `npx playwright test tests/phase2-batch4.spec.ts --grep 'W5 ' --retries=0 --reporter=list,json`，**2 通过、0 失败、0 跳过、0 重试、0 flaky**：默认 later、实际 multipart 字段、存完的人话状态、开始整理 HTTP 与进度增长、可选 now 及实际字段、390px 无溢出和无 pageerror 均通过。复核输出：[mocked.log](/tmp/pcas-b4-w5-41902ca-FzMeDA/mocked.log)、[mocked.json](/tmp/pcas-b4-w5-41902ca-FzMeDA/mocked.json)。截图在当前工作区 `web/test-results/phase2-b4-w5-41902ca`；首次轨迹目录被同名输出覆盖，仅保留首轮日志/JSON及本段已核对的观察。修正后 lint/type-check 另行检查也通过。此次是新增序列专项运行，未在 41902ca 重跑原轮或宣称全量通过。
+T4 在 `25dadd66a79a0161f13a73d29cfe2621b3b5cc59` 只补 W5 定位器对上述标签的匹配；冻结条目及行为断言不变，W1 等旧用例不改。在该明确修正后的提交执行 `npx playwright test tests/phase2-batch4.spec.ts --grep 'W5 ' --retries=0 --reporter=list,json`，**2 通过、0 失败、0 跳过、0 重试、0 flaky**：默认 later、实际 multipart 字段、存完的人话状态、开始整理 HTTP 与进度增长、可选 now 及实际字段、390px 无溢出和无 pageerror 均通过。复核输出：mocked.log（历史临时日志未保存在仓库：`/tmp/pcas-b4-w5-41902ca-FzMeDA/mocked.log`）、mocked.json（历史临时日志未保存在仓库：`/tmp/pcas-b4-w5-41902ca-FzMeDA/mocked.json`）。截图在当前工作区 `web/test-results/phase2-b4-w5-41902ca`；首次轨迹目录被同名输出覆盖，仅保留首轮日志/JSON及本段已核对的观察。修正后 lint/type-check 另行检查也通过。此次是新增序列专项运行，未在 41902ca 重跑原轮或宣称全量通过。
 
 ## 三处待协调者确认的口径
 
@@ -249,4 +249,4 @@ Go 全量已完成：`make check` 返回 2，失败发生在测试步骤；fmt-c
 
 构建模式截图、轨迹和原始输出保留在固定验收工作区的 `web/test-results/phase2-b4-original-mocked`、`web/test-results/phase2-b4-original-real`，以及各自临时运行目录；全是合成资料。除已明确修改夹具并复核的 L2/L9 外，失败未作重复试跑；后续测试修改或产品修复需要在新的明确提交上重新统一验收，不能把本轮未到达的断言当作通过。
 
-原轮 Go 原始输出：[make-check.log](/tmp/pcas-b4-original-go-gBFB0Y/make-check.log)。模型花费独立事务及所有失败的原始断言均保留；本轮只报告观察到的现象，不根据 I/L/U4 实现反推或放宽预期。
+原轮 Go 原始输出：make-check.log（历史临时日志未保存在仓库：`/tmp/pcas-b4-original-go-gBFB0Y/make-check.log`）。模型花费独立事务及所有失败的原始断言均保留；本轮只报告观察到的现象，不根据 I/L/U4 实现反推或放宽预期。

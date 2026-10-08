@@ -1,5 +1,9 @@
 # 任务 V：回忆评测集和三种做法的对比
 
+> **Historical task record.** This text records an earlier phase or investigation.
+> Use the [current documentation](../../../README.md) and [project status](../../../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 执行者 6.1 Sol，**不能是做任何实现任务的执行者**。分支 `phase2/b4-V-eval`，从 `origin/main` 建（不用等 S0，评测集可以先写）；工作区 `/root/PCAS-wt/b4-V`；Draft PR 的 base 是 `phase2/batch4`（协调者建好后告诉你）。
 
 先读 [并行方案与数据约定](../parallel.md)、[第 4 批契约](README.md) 的 R16–R19，以及三批契约各自的第 1 节（知道产品要做到什么）。你的工作决定了以后怎么判断「回忆准不准」，所以评测集的预期必须从资料本身标出来，不能看着实现的输出反推。

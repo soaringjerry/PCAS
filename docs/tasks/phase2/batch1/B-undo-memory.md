@@ -1,5 +1,9 @@
 # 任务 B：撤销连带记忆、清理 2.0 遗留
 
+> **Historical task record.** This text records an earlier phase or investigation.
+> Use the [current documentation](../../../README.md) and [project status](../../../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 执行者 6.1 Sol / high。分支 `phase2/b1-B-undo-memory`，工作区 `/root/PCAS-wt/b1-B`，PR base `phase2/batch1`。
 
 先读 [本批总览与契约](README.md)。本任务实现其中的 R9、R10。规则、文件归属以总览为准。

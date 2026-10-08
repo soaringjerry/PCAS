@@ -1,5 +1,9 @@
 # F10：撤销有效期与资料删除后的明确拒绝
 
+> **Historical task record.** This text records an earlier phase or investigation.
+> Use the [current documentation](../../README.md) and [project status](../../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 执行者：6.1 Sol / high，`f10_expired_undo`，不能是 T1 测试作者。T1 已交付 #26 / `6d0c27e` 并停止写入，F9 已释放 `actions_log.go`，可以启动。依据正式契约的 `expired` 规则及 T1-U12/U13、T3-D3 的独立证据。`newer_action` 的重叠语义仍待用户裁定，不在本次实现范围。
 
 ## 问题与要求

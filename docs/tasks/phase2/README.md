@@ -1,5 +1,9 @@
 # 第二阶段：任务入口
 
+> **Historical task record.** This text records an earlier phase or investigation.
+> Use the [current documentation](../../README.md) and [project status](../../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 第二阶段方向已定，**第 1 批已上线（2026-10-02）**；第 2 批已上线（2026-10-03，[验收报告](../../evaluations/2026-10-02-phase2-batch2-acceptance.md)）；第 3 批、第 4 批和补充批 4b 在 2026-10-03 一起上线（[第 3 批验收](../../evaluations/2026-10-02-phase2-batch3-acceptance.md)、[第 4 批验收](../../evaluations/2026-10-03-phase2-batch4-acceptance.md)、[4b 验收](../../evaluations/2026-10-03-phase2-batch4b-acceptance.md)、[并行方案与数据约定](parallel.md)）。还没做的：用真实模型跑回忆评测并定基线（[任务总览与契约](batch1/README.md)、[验收报告](../../evaluations/2026-10-02-phase2-batch1-acceptance.md)）。它的第一次尝试（2.0）在 2026-10-01 合并、部署后当天回滚，main 上没有它的代码。开始任何第二阶段工作之前先读本页。
 
 其他文档从 [文档总入口](../../README.md) 找。

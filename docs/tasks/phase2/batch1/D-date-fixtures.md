@@ -1,5 +1,9 @@
 # 任务 D：旧测试里写死的日期（测试夹具）
 
+> **Historical task record.** This text records an earlier phase or investigation.
+> Use the [current documentation](../../../README.md) and [project status](../../../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 执行者 6.1 Sol（做任务 B 的执行者）。分支 `fix/test-fixed-dates`，**从 `origin/main` 建**；工作区 `/root/PCAS-wt/fix-dates`；PR base 是 **`main`**（不是集成分支）。
 
 这不是第 1 批的功能，而是主干上的旧问题，但它挡住了第 1 批：不修，`make check` 从 2026-10-02 起在任何分支上都不会全绿。

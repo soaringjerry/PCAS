@@ -1,5 +1,9 @@
 # E4 记忆保留原对话上下文
 
+> **Historical task record.** This text records an earlier phase or investigation.
+> Use the [current documentation](../../README.md) and [project status](../../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 2026-10-03 记忆摘要中的人物、对象和原因可能依赖原对话，使用时需要沿证据补读上下文。用户要求统一优化并补充文档；本文及公开测试仅使用虚构示例。
 
 ## 操作序列与契约

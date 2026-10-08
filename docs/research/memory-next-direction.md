@@ -1,5 +1,9 @@
 # 讨论稿：记忆下一步怎么做
 
+> **Historical research.** This text records an earlier phase or investigation.
+> Use the [current documentation](../README.md) and [project status](../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 2026-10-04 · 状态：**方向已由用户确认（2026-10-04）**，已写入 [白皮书](../whitepaper.md) 5.1、5.6–5.8、第 15–17 章和 [记忆架构](../memory-architecture.md) 1.2。两者与本文不一致时以它们为准。本文保留作为依据和细节的记录。实现没有开始；任务包还没有拆。
 
 依据的实验：[第一轮](../evaluations/2026-10-04-memory-lookup-experiment.md) · [第二轮](../evaluations/2026-10-04-memory-lookup-round2.md)。各办法的具体做法：[看目录、分头细读](memory-navigate-and-read.md) · [用途标注与事先备料](memory-use-phrases-and-packets.md) · [现状卡、期限表与自查](memory-status-cards-and-self-check.md)。

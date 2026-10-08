@@ -1,5 +1,9 @@
 # 任务 T2：第 2 批独立验收
 
+> **Historical task record.** This text records an earlier phase or investigation.
+> Use the [current documentation](../../../README.md) and [project status](../../../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 执行者 6.1 Sol，**不能是做 S0、E1、E2、M 的执行者**。分支 `phase2/b2-T2-acceptance`，从 `origin/phase2/batch2` 建（集成分支建好之前先从 `origin/main` 建，之后变基）；工作区 `/root/PCAS-wt/b2-T2`；Draft PR 的 base 是 `phase2/batch2`。
 
 先读 [并行方案与数据约定](../parallel.md) 和 [第 2 批契约](README.md)。你只看契约写测试，不看实现的做法；测试写在实现合入之前，实现合入后再跑。

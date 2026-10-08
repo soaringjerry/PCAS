@@ -1,5 +1,9 @@
 # 任务 L1：资料库的「来源」按出处合并
 
+> **Historical task record.** This text records an earlier phase or investigation.
+> Use the [current documentation](../../README.md) and [project status](../../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 2026-10-03 用户提出（「资料库里面乱七八糟」）、确认方案。由协调者直接实现。
 
 ## 之前的问题

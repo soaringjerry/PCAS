@@ -1,5 +1,9 @@
 # M0：记忆核心与二阶段准备（方案待审）
 
+> **Historical task record.** This text records an earlier phase or investigation.
+> Use the [current documentation](../../README.md) and [project status](../../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 > **状态（2026-10-01）**：这是第二阶段 2.0 之前做的调查稿。代码现状的调查部分可以当地图用；其中的方案、字段、接口和阈值都没有被批准。2.0 已回滚，第二阶段从 [任务入口](README.md) 开始。
 
 调查日期：2026-10-01。调查提交：`c94b49617764a90841a72bb88adb847ab8f51f33`（main，含 F6 / PR #19）；调度依据为协调分支 `c348e3f` 的 M0 任务包与 dispatch。本次仅静态读代码、类型、迁移及已有报告；没有连接生产、读取秘密、调用模型、运行回放或大规模 benchmark。文中的新增字段、接口、任务边界和阈值均为**待审提案**，没有修改正式契约。

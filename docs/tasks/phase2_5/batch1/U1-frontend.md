@@ -1,5 +1,9 @@
 # 任务 U1：资料库按分组翻记忆（界面）
 
+> **Historical task record.** This text records an earlier phase or investigation.
+> Use the [current documentation](../../../README.md) and [project status](../../../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 执行者 Opus 5.5。分支 `phase2_5/b1-U1-frontend`，从合入 O1a 之后的 `origin/phase2_5/batch1` 建；工作区 `/root/PCAS-wt/p25-U1`；Draft PR 的 base 是 `phase2_5/batch1`。
 
 先读 [第 1 批契约](README.md) 的 2.3、2.4 和 R17–R19，以及 [界面与交互原则](../../../design/principles.md)。

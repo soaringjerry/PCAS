@@ -1,5 +1,9 @@
 # 稳定化（第 1 阶段之后、第 2 阶段之前）
 
+> **Historical task record.** This text records an earlier phase or investigation.
+> Use the [current documentation](../../README.md) and [project status](../../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 **目标**：在继续加新功能之前，把第 1 阶段做出来的功能打稳，不再出现"修一个冒一个"。
 
 > **状态（2026-10-01）**：序列测试和修复已合并（PR #32、#39，之后又有 #48、#49）。进入第 2 阶段的条件 2（线上实测 11/11）和条件 3（用户试用一天）**还没有做**。第二阶段的第一次尝试在这两项完成前开工并上线，当天回滚，见 [回滚记录](../../evaluations/2026-10-01-phase2-0-rollback.md)。M1、M2 两项调查的产出没有合并，归档为标签 `archive/phase2-0/context-audit` 和 `archive/phase2-0/scope-review`。

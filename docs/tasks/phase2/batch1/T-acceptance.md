@@ -1,5 +1,9 @@
 # 任务 T：独立验收
 
+> **Historical task record.** This text records an earlier phase or investigation.
+> Use the [current documentation](../../../README.md) and [project status](../../../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 执行者 6.1 Sol / high，**不能是做 A 或 B 的那个执行者**。分支 `phase2/b1-T-acceptance`，工作区 `/root/PCAS-wt/b1-T`，PR base `phase2/batch1`。
 
 先读 [本批总览与契约](README.md)。你的依据只有总览里的规则（第 3 节）和操作序列（第 4 节）。**不要读 A、B、C 的实现来决定预期**；预期从契约来。原因见 [任务流程规则](../../process.md) 第 2 条：实现和测试照着同一份代码写，会有同样的盲区。上一次失败的经过见 [回滚记录](../../../evaluations/2026-10-01-phase2-0-rollback.md)。

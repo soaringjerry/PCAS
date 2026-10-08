@@ -1,5 +1,9 @@
 # 任务 R1：2026-10-03 检查报告里的九个问题
 
+> **Historical task record.** This text records an earlier phase or investigation.
+> Use the [current documentation](../../README.md) and [project status](../../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 一次独立检查在 main `f256999` 上复现了九个问题（独立数据库、假模型、浏览器故障注入）。复现记录在检查者的临时目录里，没有进仓库。这里记下每一条的处理。
 
 ## 协调者已修（同一个 PR）

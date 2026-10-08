@@ -1,5 +1,9 @@
 # U1：首页、事项页与记忆回执的体验打磨
 
+> **Historical task record.** This text records an earlier phase or investigation.
+> Use the [current documentation](../../README.md) and [project status](../../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 执行者：Opus 5.5 / high，经本机已登录 Claude CLI 执行。`opus` 别名的只读探测实际返回 `claude-opus-5-5`，可调用；不使用 Opus 承担普通后端循环。先读 [白皮书](../../whitepaper.md) 的产品/界面部分、[设计原则](../../design/principles.md)、[执行分工](dispatch.md)。
 
 F8 已交付最终 `2e6ebc1abe4fde92a7ceabdc41b7704ba56ac5de` 并停止写入，U1 可在此候选上开始，不等待 main 合并。工作区 `/root/PCAS-wt/U1`，分支 `stabilization/U1-ux-polish`，PR base `fix/timezone-displays`，明确依赖 #23；不向 main 合并。每批只处理少量有证据的高影响界面问题，复用 F8 截图避免重读全仓库。

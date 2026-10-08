@@ -1,5 +1,9 @@
 # 任务 O1：整理后端
 
+> **Historical task record.** This text records an earlier phase or investigation.
+> Use the [current documentation](../../../README.md) and [project status](../../../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 执行者 6.1 Sol。工作区 `/root/PCAS-wt/p25-O1`。分两个 PR，base 都是 `phase2_5/batch1`：
 
 - **O1a 骨架**，分支 `phase2_5/b1-O1a-skeleton`：迁移、类型、接口字段。行为不变。先交，十分钟能审完的大小。

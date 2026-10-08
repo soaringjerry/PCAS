@@ -1,5 +1,9 @@
 # 第 2.5 阶段：记忆整理（任务入口）
 
+> **Historical task record.** This text records an earlier phase or investigation.
+> Use the [current documentation](../../README.md) and [project status](../../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 2026-10-04。依据：[白皮书](../../whitepaper.md) 5.1、5.6–5.8 和第 16 章，[记忆架构](../../memory-architecture.md) 1.2。来龙去脉和实验数字见 [讨论稿](../../research/memory-next-direction.md)。流程规则见 [任务流程规则](../process.md)。
 
 ## 1 要交付什么

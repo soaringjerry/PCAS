@@ -1,5 +1,9 @@
 # 旧版经验记录
 
+> **Historical implementation lessons.** This text records an earlier phase or investigation.
+> Use the [current documentation](README.md) and [project status](status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 旧版 PCAS（事件总线 + 策略路由 + SQLite/HNSW 记忆）已整体归档在 `legacy` 分支，
 v0.0.1 到 v0.1.2 的版本标签保持不变。新版不复用旧代码，只保留下面这些经验。
 

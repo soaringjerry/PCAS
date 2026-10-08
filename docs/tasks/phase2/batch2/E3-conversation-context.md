@@ -1,5 +1,9 @@
 # 任务 E3：对秘书说的话，整理时带上这段对话的上文（后端）
 
+> **Historical task record.** This text records an earlier phase or investigation.
+> Use the [current documentation](../../../README.md) and [project status](../../../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 执行者 6.1 Sol（做第 2 批后端的执行者）。分支 `phase2/b2-E3-conversation-context`，**从 `origin/main` 建**（第 2 批已经在 main 上）；工作区 `/root/PCAS-wt/b2-E3`；Draft PR 的 base 是 `main`。
 
 先读 [第 2 批契约](README.md) 第 13 节（R23 和序列 X19–X22）。

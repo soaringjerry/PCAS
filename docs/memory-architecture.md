@@ -1,134 +1,179 @@
-# PCAS 记忆架构设计方案
+# PCAS Memory Architecture
 
-架构定稿 1.1 · 2026 年 9 月 30 日
+Current memory specification. Updated 2026-10-08.
 
-> 1.1 按 [白皮书](whitepaper.md) 第 5 章补充：习惯与规律对象、查询规划、工作室范围，以及与黄金路径的关系。
->
-> 1.2（2026 年 10 月 4 日）按白皮书 5.6–5.8 补充：现状层、分组、自动整理、办事时的用法。新增部分已在 2.5 和 2.6 阶段实现；依据见 [讨论稿](research/memory-next-direction.md)。
->
-> 1.3（2026 年 10 月 7 日）第 2.6 阶段返工：去掉现状卡；期限和对助手的要求各有来源；后台分阶段预算、失败不覆盖、失败可见。契约见 [第 2.6 阶段](tasks/phase2_6/README.md)。
+The core preserves sources, interprets changes, retrieves information, and supplies current context to the team.
+Product requirements are in the [Whitepaper](whitepaper.md#3-memory-core).
+Code paths and HTTP interfaces are in the [Service Reference](memory-service.md).
+[Project Status](status.md) lists implementation gaps.
 
-建立覆盖工作、生活及临时交流的个人连续记忆。采用上下文、结构化、向量、现状四层，通过统一记忆服务协作。用户自然交流，系统自动找回相关背景；资料有出处，理解可纠正，长期未提的内容仍可追溯。
+## 1 Layers and Identity
 
-## 1 从使用体验确定边界
-
-普通交流自动补齐必要背景；明确回忆时深入查找；要求完整历史时按时期与来源扩大覆盖。记忆可先保存为不完整线索，无需创建项目或填表。存在会影响答案的歧义时，给出少量候选或只问一个必要问题。
-
-回答中使用记忆、展示来源、主动提醒是三个独立出口。默认界面显示记忆摘要，展开可看原文、历史与关系；支持纠正、固定保留、暂缓提醒和删除。资料未接入、附件失败或仍在处理中，应标明缺口。
-
-## 2 四层记忆共用一套身份与证据
-
-- **上下文层**：保存消息、文件版本、图片、转录及相邻对话，支持恢复当时情境。OCR、摘要与原件分别标识。
-- **结构化层**：维护实体、经历、陈述、关系、适用时间和证据。系统对当前状态的理解在此维护，允许未知、候选和分歧。
-- **向量层**：索引原文片段、经历摘要和陈述的文本表达，引用原始 ID 与版本；可由保留的资料重建。
-
-- **现状层**：把结构化层整理成办事前就该知道的内容，包括一份交接说明、一张期限表、一组对助手的要求。期限和要求在陈述归类时抽出，每行指向它依据的陈述；交接说明由模型读身份、目标、口味、全部要求和期限表写成。它是派生视图：只整理不原创；纠错落在记忆上；重写期间和失败时沿用上一份并标明写于何时；带整理规则版本，可分批重做。1.3（2026 年 10 月 7 日）去掉了每个分组一张的现状卡，原因见 [问题清单](research/memory-status-layer-audit.md)。1.4（2026 年 10 月 8 日）每个项目另有一份项目交接说明，作为工作室的现状块：同一套派生视图机制，输入限于该项目名下的陈述、事项、文档最新版本、副手结果和期限，固定写成结论、卡点、下一步三段；依赖的输入变了才重写，失败沿用上一份。
-
-每次交给 AI 的工作上下文由四层按需组装。摘要和缓存保存其依赖版本；事实修正后重建或读取时补正。它们属于派生视图，不增加一套独立事实来源。
-
-## 3 结构化记忆的最小模型
-
-| 对象 | 职责 |
-|---|---|
-| 实体 | 人、组织、地点、店、物品、项目的稳定 ID 与别名；同名对象保留消歧线索。 |
-| 经历或讨论 | 把相关消息、附件、行动和决定组织起来；可跨应用，一场聊天可包含多个经历。 |
-| 陈述 | 可独立修正的事实、偏好、意愿、计划或决定；保存主体、属性、值、范围和表达性质。 |
-| 证据 | 指向原文位置或执行记录，区分直接表达、转述、推断及支持或反驳。 |
-| 关系 | 有证据的归属、依赖、原因、后续、替代和纠正；语义相似度在检索时计算。 |
-| 分组 | 记忆「关于什么」：项目、主题、生活领域、人，以及关于本人的某一类（身份、口味、对助手的要求、目标）。项目、主题、领域与人一样是有稳定 ID 和别名的对象，一条陈述可以连到多个。 |
-| 类型与长期性 | 每条陈述的类型（身份、口味、对助手的要求、目标、进展、一次性事件、看法、关于他人）和「是否长期成立」。一次性的不进现状层。 |
-| 期限与固定安排 | 截止、预约、周期性安排，存成有类型的数据（日期或周期、状态、依据），由程序计算，不让模型从句子里读。 |
-| 对助手的要求 | 单独维护，标明适用于哪类事，在对应的事情上始终生效。 |
-| 习惯与规律 | 从经历和事件的时间序列统计出的频率、时段、地点与前后因，例如“近 12 周平均每周吃一次披萨”；作为陈述保存，带证据、统计窗口、有效时间和置信度；用户接受或拒绝相关推荐时修正。 |
-
-项目与工作室记忆是同一套记录上的范围标记，不另建存储；工作室内检索优先其范围，必要时扩展到全局。
-
-五组常用信息为内容、对象、依据、时间、状态。时间地点人物起因经过结果作为经历的可选扩展，有证据才填；内容类型与获得方式、记忆确认状态与事项执行状态分别保存。十二个描述维度用于检查覆盖，不要求每条全部具备。
-
-## 4 写入和修正
-
-**先保留**：原文、来源标识与待处理事件事务入库；按来源 ID 和版本去重。OCR、抽取、向量生成异步执行并支持幂等重试。当前对话直接参与上下文；跨会话按处理进度补读尚未索引的近期相关原文，大批导入返回处理状态与覆盖缺口。
-
-**再理解**：结合相邻内容解析指代、否定、引用、假设和时间；匹配实体，提取原子陈述，按需组织经历。每项陈述及关系关联证据。低歧义内容自动采用，不确定内容保留候选。
-
-**维护变化**：比较已有记录，区分重复证据、补充、真实变化和纠错。真实变化保留前后有效时间；纠错记录被修正的内容及依据。按主体、属性、范围和有效时间形成当前视图，允许多条记录并存。
-
-比较的做法：新陈述只和同一分组、同一对象下的已有陈述比，不和全部记忆比；「是不是同一件事」由分组加模型判断，不靠属性文字相等。判为重复的并成一条陈述的多份证据；判为替代的，旧的一条退出当前视图、保留在历史里。导入的对话有分支时，共同的部分只整理一次。超过一次调用装得下的分组按固定大小分块，块内和每两块之间都要比到；「比过没有」按「陈述 × 分组」记录。别名候选由模型从名单里提出，再逐对确认。
-
-**自动定可信度**：不设待确认清单。直接表达且不带限定的可用；多处出现的更可信；转述和 AI 的建议标明出处，不算本人决定；被替代的退出当前视图；原话中找不到依据的不用。模型作出的归类、合并和替代判断都标为推断、可撤销，原话始终保留。
-
-**整理规则版本**：每条陈述记录它被第几版整理规则处理过（归类、新旧比较），交接说明同样带版本。规则变更后，版本落后的分批重做，受预算约束；剩余工作就是「版本落后的记录」，中断后自然接续，不重复处理。需要重新读原文的升级沿用按原文记录的抽取规则版本。
-
-**一致提交**：陈述、修订、关系与待更新事件事务提交，检查并发版本。纠错保留修订依据；向量、摘要、缓存异步更新，读取前核对有效版本、撤回、删除与访问范围。删除按指定范围清理原文和派生副本，仅留无正文的最小阻断标记；纠错与删除均约束重导入。
-
-保留发生或有效时间、表达时间与系统记录时间，支持未知日期和时间区间。旧资料晚导入不会覆盖新的现实状态；用户自述与外部回执保留各自证据类型。
-
-## 5 检索与上下文组装
-
-| 检索目的 | 执行策略 |
-|---|---|
-| 日常交流与续接 | 当前对象和事项优先，补齐相关约束、进度、原文入口；控制上下文预算。 |
-| 模糊回忆 | 属性、全文与向量并行召回；模糊时间作软线索，允许低活跃历史进入候选。 |
-| 完整历史 | 枚举已关联材料和版本，再用混合检索补漏；按时期、来源及方案分支整理，报告覆盖缺口。 |
-
-**查询规划**：检索先把问题解析为结构化条件，包括发生或表达的时间范围、人物、地点与其他实体、陈述性质（事实、偏好、意向、计划、决定）及主体，在结构化层精确定位；向量检索在同一条件范围内补漏；最后核对原文、后续更正与当前状态。工作上下文只放命中的少量陈述及其出处，而不是大量相似片段。结构化优先是控制成本的主要手段：上下文占用基本不随数据总量增长。例如“我去年说去成都要干什么来着”解析为表达时间 = 去年、地点实体 = 成都、性质 = 意向或计划、主体 = 用户。条件无法解析或结构化命中为空时，退回全文与向量检索并放宽模糊线索。
-
-**办事类请求**：替用户办一件事所需的情况，与请求本身往往字面和语义都不相近，按相似度召回不足以找到。这类请求由四层接力：全文与向量各出一个排名、按名次融合（不把两种分数相加），用来找相关的陈述和分组；交接说明、期限表和每轮都适用的要求每次都带，限范围的要求相关时随检索带出；需要时取原文核对。用哪一档深度、点到哪些分组，由回答的模型在同一次回答里给出，不靠字面匹配。交给模型的是原样的陈述及其日期，概括性的文字只作背景。
-
-| 强度 | 做法 | 适用 |
+| Layer | Stores or produces | Identity |
 |---|---|---|
-| 轻 | 上述接力取一次，一次作答 | 日常对话、可撤销的动作 |
-| 中 | 作答后再对照手上的记忆自查并修订一次：有关的情况是否用上、是否用了过时说法、是否有无依据的断言 | 往外发送、花钱、删除至少用这一档 |
-| 重 | 模型先看分组目录选出分组，每个分组由一次独立调用细读并挑出要用的陈述，作答后自查 | 要综合多方面、可以等待的任务 |
+| Context | Original messages, files, media, and conversation context. | Source ID and version. |
+| Structured | Entities, statements, evidence, relationships, and time. | Record ID and version. |
+| Vector | Semantic indexes of stored text. | Record reference, provider, model, and dimension. |
+| Current state | Handovers, dates, and user requirements. | Source dependencies and processing-rule version. |
 
-强度由服务端按办错的代价、用户是否在等、涉及面来定，优先依据确定的信号（动作是否可撤销、是否为副手任务）；轻的不够时再升档。每次请求用的强度、读过的分组计入花费记录。
+Original media and parsed representations remain distinct.
+Vectors, summaries, and handovers are derived data. They must not create an independent fact store.
+A workspace defines a scope in the shared core. Relevant retrieval can extend outside that scope.
 
-检索流程为识别目标、规划查询、召回候选、合并重排、有限关系展开、核对原文与状态、组装工作上下文。关系默认展开一跳，按需要扩大；候选数、边数和 token 数均设预算。找不到时放宽不确定线索，并保留原文检索通道。
+## 2 Structured Objects
 
-实体与别名索引解决对象定位；属性和时间索引支持条件查询；分词后的原文、标题及 OCR 建全文索引；语义索引补足措辞变化；关系按两端 ID 建索引。身份不明、抽取未完成的内容仍可从原文进入候选。
-
-统一调用 `recall(query, context, mode, budget)` 返回摘要、记忆与证据引用、未决问题、覆盖情况及继续查询线索；`expand(ids, evidence, history)` 按需展开。用户范围由服务端绑定，多 AI 共享授权内的同一记忆。
-
-常见查询先返回可靠候选，全面回溯可逐步扩大覆盖。缓存按相关版本失效；不能用固定 top-k 代表全部历史。延迟和召回率通过场景回放测量，不预先承诺未验证的瞬时响应。
-
-摘要中的人物、对象、原因和限定可能依赖原对话。检索到陈述后沿证据补读有界的来源上下文，保留角色、表达时间和版本依赖；用户可从引用原话继续分页展开同一会话。缺少上下文或读到的范围不足时说明缺口，不用摘要补猜。模糊称呼不用于跨对话合并实体，历史旁支不混入当前分支。具体读取预算和规则见 [服务契约](memory-service.md#记忆摘要与原对话)。
-
-## 6 遗忘和主动唤醒
-
-活跃度采用可配置半衰期的时间衰减，由最近有效使用时间、稳定度与固定保留设置计算。用户主动提及、确认或实际采用后进行有限强化；系统自行检索、展示和复述不算强化。查询时计算分值，无需每日重写全部记忆。
-
-衰减用于默认曝光、一般排序和缓存优先级。明确回忆历史时弱化衰减；低活跃不作为候选硬过滤。可信度、现实有效期、业务状态和活跃度分别维护。适用的长期约束继续生效，未解决事项的时间或条件触发器继续运行。
-
-新话题、相关事件或到期时间可以激活旧记忆。主动提醒独立设置冷却、去重、暂缓和停止选项，说明本次唤醒原因；执行前核对当前状态。重复事件与重试不得产生重复任务或通知。
-
-## 7 实现与产品边界
-
-首版采用 Go 记忆服务和后台 worker，PostgreSQL 保存规范记录、JSONB 扩展及关系表，pgvector 提供语义索引，附件保存在文件或对象存储。常用字段使用明确列和约束；扩展数据按类型校验。先用关系表实现有限遍历，基于实测瓶颈再增加独立组件。
-
-存储对象包括 sources/chunks、entities/aliases、episodes、claims/revisions、evidence、relations；另维护 activity、派生摘要、处理状态与事务事件队列。现状层的交接说明和项目交接说明沿用派生视图，记录各自依赖的输入版本；工作室的文档每次写入留一个版本（谁写的、基于哪一版、来自哪次副手工作），差异在读取时计算，不另存；期限与固定安排、对助手的要求及其适用范围、陈述的类型和整理规则版本各有自己的表。后台另有：各阶段的调用预算和事件记录、已付费模型结果的暂存（写入失败时重试写入而不重调模型）、「判过了」一类标记的专用表（不放在任务队列里）。当前视图按时间和范围计算，支持追溯当时情况及系统后来如何修正理解。[^1][^2][^3]
-
-TODO、日程、提醒及执行状态以行动模块为准，结果回写记忆；意向或约束变化时，重新核验受影响的待执行项。明确指令可按规则创建任务，愿望和脑洞保留为意向。Prompt 交接引用上下文和版本；训练导出另行筛选采纳、纠正与来源信息，保存样本清单。
-
-## 8 第一版交付与验收
-
-先交付导入与证据追溯、实体和陈述、三种检索模式、刚写即读、纠正传播及基础衰减。同步制作自然对话、来源展开、记忆纠正、经历时间线和提醒列表的 UI。随后完善跨应用自动接入与条件唤醒；个性化遗忘参数和远距离多跳联想依据评测再增加。
-
-| 核心回放 | 通过要求 |
+| Object | Meaning |
 |---|---|
-| 沉睡愿望 | 只出现一次的旧店铺意向，凭模糊描述找回；混入日期记错、同名店与无关资料。 |
-| 自然续接 | 定位作业当前版本、批注和修改约定；局部例外不污染长期偏好。 |
-| 完整脉络 | 合并 PCAS 跨应用历史，区分旧方案和 AI 补充；原图缺失明确标注。 |
-| 状态与纠错 | 区分考虑、决定、已完成及他人意愿；旧资料重导入后纠正仍然有效。 |
-| 衰减与触发 | 日常减少重复曝光，明确询问仍找得到；暂缓提醒不改变事实和任务状态。 |
-| 时间地点回忆 | “去年说去成都要干什么”凭时间、地点与意向定位，找回未直接出现地名的同一经历内容，并标出已完成或已放弃的部分。 |
-| 办事不用交代背景 | 只带交接说明、期限表和要求，模型排出的安排用上了期限、固定安排和对助手的要求；不使用已被替代的说法。 |
-| 新旧替代 | 先后说过两个不同的期限，当前视图和期限表只显示后一个；前一个在历史中可查；删除或纠正后一个时期限表随之更新。 |
-| 习惯修正 | 推荐被连续拒绝后，对应规律的置信度下降，同类推荐减少；规律可查看与纠正。 |
+| Entity | A person, place, organization, object, or project with a stable ID. |
+| Alias | Another name for an entity, supported by evidence. |
+| Episode | A related experience or discussion with linked messages and files. |
+| Statement | An independently correctable fact, preference, intention, plan, or decision. |
+| Evidence | A source location or execution record that supports or contradicts a statement. |
+| Relationship | An evidenced connection, such as membership, dependency, change, or correction. |
+| Group | A scope for a person, project, topic, domain, or type of personal information. |
+| Date entry | A deadline, appointment, recurring arrangement, or unresolved date with a source. |
+| User requirement | A lasting instruction about team behavior, with an applicable scope. |
+| Habit | A pattern with evidence, a statistical period, uncertainty, and applicable time. |
 
-将上述场景扩成带干扰项的固定回放集，测量证据召回、对象与状态错误、纠正传播、上下文占用和端到端延迟；依据失败环节调整抽取、检索或衰减策略。本表是记忆层的回放；产品端到端验收以白皮书第 17 章的黄金路径为准，两者都通过才算完成。
+One statement can belong to several groups.
+Similar names do not prove that two entities are the same.
+Statements keep their subject, value, scope, expression type, evidence, and time.
+Memory confidence, activity, and task status are separate properties.
+Habit statistics and advanced episode association remain targets where the code does not supply them.
 
-## 实现依据
+## 3 Time and Change
 
-[^1]: [PostgreSQL：索引类型](https://www.postgresql.org/docs/current/indexes-types.html)
-[^2]: [PostgreSQL：事务](https://www.postgresql.org/docs/current/tutorial-transactions.html)
-[^3]: [pgvector](https://github.com/pgvector/pgvector)
+The core distinguishes three time axes:
+
+- Event or validity time: when an event occurs or a statement applies.
+- Statement time: when the source expresses the information.
+- Record time: when PCAS stores the information.
+
+Unknown times and time ranges remain explicit.
+A late import must not replace newer information solely because its record time is later.
+New information can repeat, supplement, change, or correct an earlier statement.
+Compatible statements can coexist. Repeated evidence can strengthen one statement.
+A replaced statement leaves the current view but remains available in history.
+A correction preserves its reason and source.
+Quotation, uncertainty, negation, and speaker identity remain part of the meaning.
+An AI reply can explain context. It does not become the user's decision.
+
+## 4 Input and Processing
+
+The system first saves the source, its identity, its version, and the required work event.
+The source write and work event use one transaction.
+Parsing, chunking, extraction, indexing, and vector generation can proceed asynchronously.
+Duplicate source versions do not create duplicate records.
+Unprocessed sources remain available for retrieval with a visible coverage gap.
+
+Extraction uses surrounding conversation when necessary. Each statement and relationship has evidence.
+Branches and speaker roles remain distinct. Shared branch content needs duplicate control.
+Comparison selects candidates from related scopes and entities.
+The model determines semantic repetition, compatibility, replacement, and alias identity.
+The program validates identities, types, dates, references, and output structure.
+String similarity alone must not determine a semantic decision.
+
+Processing rules have versions. Rule changes identify affected records for bounded reprocessing.
+An interruption must not lose the remaining work or require a complete restart.
+
+## 5 Retrieval
+
+| Purpose | Context requirements |
+|---|---|
+| Continue work | Current objects, applicable requirements, task state, and related sources. |
+| Recall a past statement | Statement time, entities, expression type, original context, and later changes. |
+| Read complete history | Linked sources and versions, branches, pagination, and coverage gaps. |
+
+The query plan separates explicit conditions from uncertain hints.
+Structured retrieval uses reliable conditions. Text and vector retrieval supplement the result.
+Uncertain conditions can be relaxed with a visible explanation.
+The system checks source text and current versions before supplying working context.
+
+For the Chengdu example, "last year" describes statement time when the user asks what they said last year.
+Place, subject, and intention type select relevant statements.
+Related conversation can supply content that does not repeat the place name.
+Completed and canceled intentions remain visible as history.
+
+Lexical and vector scores have different scales.
+The team path combines their ranks where rank fusion applies.
+The public fallback path must not claim the same ranking without a code check.
+
+Retrieval limits cover candidates, relation edges, context size, and traversal depth.
+Each limit has a reason, an overflow path, and a count.
+A fixed candidate count must not claim complete historical coverage.
+Activity affects exposure and ranking. It does not exclude a memory from explicit recall.
+
+## 6 Context for Work
+
+Applicable requests receive the global handover, relevant dates, and global requirements within the declared limits.
+Scoped requirements enter through relevant retrieval.
+A handover includes its update time. Newer source information takes precedence over an older handover.
+Source content and remembered requirements do not authorize unrelated work.
+
+Context depth uses the cost of an error, task scope, user needs, and available time.
+The existing light, medium, and heavy modes support different amounts of retrieval and review.
+The service records the mode, groups read, omitted content, and failed reads.
+
+The system can expand evidence into nearby conversation.
+It preserves speaker roles, statement time, source version, and branch identity.
+An excerpt is not a complete conversation. Missing context must not be filled with invented details.
+
+The team shares the core by default. User access controls remain available.
+External principals use explicit grants.
+The system checks access, scope, and affected versions before applying generated work.
+
+## 7 Current State and Dates
+
+Current state comprises global and project handovers, a date table, and scoped user requirements.
+It does not use the removed per-group status cards.
+Project handovers use current memory, tasks, dates, current document versions, and deputy results.
+Each handover statement has a source.
+Affected changes invalidate the applicable view. Unchanged input does not trigger an unnecessary rewrite.
+During regeneration or failure, the previous valid handover remains available with its update time.
+Corrections apply to the underlying memory or task.
+
+Date storage and date display have separate responsibilities.
+An extracted date can describe a past event, quotation, consideration, or active commitment.
+The home schedule displays applicable timed work.
+Unresolved dates and arrangements without a usable time remain outside the home timeline.
+Closing a date marks the applicable memory version as done, dropped, or transferred to a task.
+The original memory remains available. Undo restores date state when its dependencies permit restoration.
+Background date review records its decision and reason. Uncertain results preserve the previous state.
+
+## 8 Consistency and Recovery
+
+Structured writes use version checks and atomic events.
+Workers use leases and fencing tokens. A worker that loses its lease cannot commit.
+Generated work is checked against affected dependencies before application.
+An unrelated change must not invalidate the complete request without a relevant dependency.
+
+Each model stage has its own call budget.
+The system records deferred work and the reason for deferral.
+Interactive and background work must both continue to make progress.
+Failed calls or invalid output must not overwrite valid data or mark unfinished work as complete.
+Saved model results can be retried for storage without another model call.
+
+Deletion clears selected records and affected copies, including training exports where applicable.
+A source outside the selected deletion scope remains stored.
+Minimal markers prevent blocked content from returning through import.
+Corrected data must not revert when an old archive is imported again.
+
+## 9 Activity and Learning
+
+User mention, confirmation, and adoption can strengthen activity within configured limits.
+System retrieval, display, and repetition do not count as user adoption.
+Decay affects exposure. It does not delete a fact or complete a task.
+Reminder state is separate from memory activity.
+Habit statements retain evidence and a statistical period.
+User feedback can revise a habit. A lack of undo is not an automatic correctness label.
+Training samples retain sources and versions.
+
+## 10 Verification
+
+Verify recall, current work, and correction as complete paths.
+Use wrong dates, similar names, quotations, later changes, missing media, and unrelated content as interference.
+Measure evidence recall, object errors, state errors, correction effects, context size, and response time.
+Use representative group sizes and concurrent input, scheduling, and user requests.
+Inspect real model output when a change affects context, prompts, or output format.
+The [Whitepaper](whitepaper.md#11-product-acceptance) defines product scenarios.
+Existing reports establish their recorded scope only.

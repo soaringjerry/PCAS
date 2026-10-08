@@ -512,3 +512,68 @@ func phase35TopicControls(t *testing.T) *phase35Fixture {
 	phase26Exec(t, f.phase26LoadedFixture, `INSERT INTO deadlines(owner_id,id,claim_id,claim_version,kind,at,title,original_text) VALUES($1,$2,$3,1,'deadline',now()+interval '1 day','虚构目标期限','虚构期限原话')`, scope.OwnerID, memory.NewID(), f.Claims[1400])
 	return f
 }
+
+// What becomes a project on the home page (after the live review of
+// 2026-10-08): a group nobody has spoken of for 45 days does not; the model may
+// say a group is not a project and is not asked again on the same evidence;
+// what the user calls a project keeps the user's name and gets its goal filled.
+func TestTopicProjectOnlyWhatIsStillBeingWorkedOn(t *testing.T) {
+	f := phase35TopicLoad(t)
+	s, ctx := f.Store, f.Context
+	topic := strings.TrimPrefix(f.Topics[0], "entity:")
+	// A scheduling pass may yield its bounded write and leave the rest to the
+	// next one, so each look here is four passes.
+	jobs := func() (n int) {
+		t.Helper()
+		for pass := 0; pass < 4; pass++ {
+			if _, err := s.ScheduleStatus(ctx, time.Now()); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if err := s.pool.QueryRow(ctx, `SELECT count(*) FROM memory_jobs WHERE owner_id=$1 AND record_id=$2 AND stage LIKE 'memory.topic_project:%'`, f.Scope.OwnerID, topic).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	said := func(ago string) {
+		t.Helper()
+		phase26Exec(t, f.phase26LoadedFixture, `UPDATE record_versions rv SET expressed_at=now()-$3::interval FROM claim_mentions cm WHERE cm.owner_id=$1 AND cm.entity_id=$2 AND rv.owner_id=cm.owner_id AND rv.record_id=cm.claim_id`, f.Scope.OwnerID, topic, ago)
+	}
+	reply := `{"decision":"skip","projectId":null,"name":"","goal":"","reason":"虚构：这是一次已经过去的行程"}`
+	calls := phase35Model(t, s, func(w http.ResponseWriter, r *http.Request) { secretaryModelReply(w, reply) })
+	said("60 days")
+	if n := jobs(); n != 0 {
+		t.Fatalf("a group last spoken of 60 days ago was queued: %d", n)
+	}
+	said("2 days")
+	if n := jobs(); n != 1 {
+		t.Fatalf("spoken of two days ago, queued=%d", n)
+	}
+	if err := phase35ProcessTopic(t, s, ctx, phase35TopicJob(t, f, 0)); err != nil {
+		t.Fatal(err)
+	}
+	if phase35TopicLink(t, f, 0) != "" || len(phase35Snapshot(t, s, f.Scope).Projects) != 0 {
+		t.Fatal("a group judged not to be a project was made one")
+	}
+	if n := jobs(); n != 1 {
+		t.Fatalf("the same evidence was queued again after skip: jobs=%d", n)
+	}
+	// Called a project by the user: the name is the user's, the goal is filled.
+	phase26Exec(t, f.phase26LoadedFixture, `UPDATE entity_versions SET entity_type='project',name='虚构声音档案' WHERE owner_id=$1 AND entity_id=$2`, f.Scope.OwnerID, topic)
+	phase26Exec(t, f.phase26LoadedFixture, `DELETE FROM topic_project_checks WHERE owner_id=$1 AND topic_id=$2`, f.Scope.OwnerID, topic)
+	phase26Exec(t, f.phase26LoadedFixture, `DELETE FROM memory_jobs WHERE owner_id=$1 AND record_id=$2 AND stage LIKE 'memory.topic_project:%'`, f.Scope.OwnerID, topic)
+	if n := jobs(); n != 1 {
+		t.Fatalf("what the user calls a project was not queued: %d", n)
+	}
+	reply = `{"decision":"new","projectId":null,"name":"虚构的声音档案整理与长期保存计划","goal":"虚构：把旧录音整理成可检索的档案","reason":"虚构：用户最近还在推进"}`
+	if err := phase35ProcessTopic(t, s, ctx, phase35TopicJob(t, f, 0)); err != nil {
+		t.Fatal(err)
+	}
+	st := phase35Snapshot(t, s, f.Scope)
+	if len(st.Projects) != 1 || st.Projects[0].Title != "虚构声音档案" || st.Projects[0].Goal != "虚构：把旧录音整理成可检索的档案" {
+		t.Fatalf("project=%s", asJSON(st.Projects))
+	}
+	if calls.Load() < 2 {
+		t.Fatalf("model calls=%d", calls.Load())
+	}
+}

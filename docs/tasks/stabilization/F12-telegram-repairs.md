@@ -1,5 +1,9 @@
 # F12：Telegram 身份隔离、按钮绑定与语音重试
 
+> **Historical task record.** This text records an earlier phase or investigation.
+> Use the [current documentation](../../README.md) and [project status](../../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 执行者：6.1 Sol / high，`f12_telegram_repairs`，不是 T3 作者。T3 与 F10 均已停止写入，F10 已释放 `poller.go` / `poller_test.go`，可以启动。
 
 在 `/root/PCAS-wt/F12` 从 F10 / #28 `8d2a70df721dd433d45d2232b0405280f0156ca7` 与 T3 / #27 `071e87dc3dd40f08c834797900e68842180d41f9` 无冲突集成 `stabilization/telegram-candidate`，记录并推 SHA，再创建 `stabilization/F12-telegram-repairs`，PR base 为该候选。冲突先报告；F11 在独立候选修 PostgreSQL/AI 模块，之后再做整合验收，不混写。

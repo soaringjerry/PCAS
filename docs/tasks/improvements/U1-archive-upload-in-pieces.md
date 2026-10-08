@@ -1,5 +1,9 @@
 # 任务 U1：大的归档分片上传
 
+> **Historical task record.** This text records an earlier phase or investigation.
+> Use the [current documentation](../../README.md) and [project status](../../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 2026-10-03 用户反馈：上传 ChatGPT 导出文件一直提示「网络连接中断，读取这个文件没有完成」。由协调者直接实现。
 
 ## 原因

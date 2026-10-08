@@ -1,5 +1,9 @@
 # Q2：连续输入顺序独立验收
 
+> **Historical task record.** This text records an earlier phase or investigation.
+> Use the [current documentation](../../README.md) and [project status](../../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 Sol / high，由发现 Q1 问题且未写实现的执行者承担。独立 `/root/PCAS-wt/Q2` / `test/Q2-conversation-order`，初始基线 `210144a`。F15 独占产品，T4 独占 A1 集成/完整验收，U2 独占页面；本任务只新增 `internal/postgres/conversation_order_acceptance_test.go` 和 `docs/evaluations/2026-10-01-conversation-order-acceptance.md`，不改共享 helper 或任何产品/旧测试。不要把旧 Q1 诊断分支合入新分支，以免无关 opt-in skip 混进默认验收。
 
 先按 [正式契约](../phase1/contracts.md#211-服务端内部调用) 与 [F15任务](F15-conversation-order.md) 写独立预期。可读类型、现有 fixture 和 migration 中可观察的接受票据，不照抄 F15 新自测。产品实现可为独立审查读取，不能从算法反推通过条件。等待作者最终 SHA 后 root 指定集成到此 worktree；产品冲突归作者，不擅改。

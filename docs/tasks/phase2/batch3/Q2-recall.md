@@ -1,5 +1,9 @@
 # 任务 Q2：按条件找记忆，接进秘书和副手（后端）
 
+> **Historical task record.** This text records an earlier phase or investigation.
+> Use the [current documentation](../../../README.md) and [project status](../../../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 执行者 6.1 Sol。分支 `phase2/b3-Q2-recall`，从 `origin/phase2/batch3` 建；工作区 `/root/PCAS-wt/b3-Q2`；Draft PR 的 base 是 `phase2/batch3`。Q1 的 `PlanQuery` 合进集成分支后再接它；在那之前可以先按契约 R1 的形状写。
 
 先读 [并行方案与数据约定](../parallel.md) 和 [第 3 批契约](README.md) 的 R5–R13 和序列 S1–S13。这是这一批最核心的一块。

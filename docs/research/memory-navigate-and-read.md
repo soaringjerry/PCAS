@@ -1,5 +1,9 @@
 # 研究笔记：看目录、分头细读
 
+> **Historical research.** This text records an earlier phase or investigation.
+> Use the [current documentation](../README.md) and [project status](../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 2026-10-04 · 状态：**候选技术，未批准**。这是一次线下实验的记录，不是契约。要采用它，先改 [白皮书](../whitepaper.md) 第 5 章和 [记忆架构](../memory-architecture.md)，再拆任务。
 
 本文只写方法和数字。实验用的是线上的真实记忆，内容留在部署主机本地，没有进仓库；文中的例子都是虚构的。

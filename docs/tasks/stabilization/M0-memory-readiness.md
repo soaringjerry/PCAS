@@ -1,5 +1,9 @@
 # M0：记忆核心现状与二阶段最小交付
 
+> **Historical task record.** This text records an earlier phase or investigation.
+> Use the [current documentation](../../README.md) and [project status](../../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 执行者：6.1 Sol。调查与方案任务，不写产品代码或修改正式契约。先读 [白皮书 §5、§15–17](../../whitepaper.md)、[记忆架构](../../memory-architecture.md)、[服务说明](../../memory-service.md)、[待办清单](../backlog.md) 和 [执行分工](dispatch.md)。
 
 ## 目标

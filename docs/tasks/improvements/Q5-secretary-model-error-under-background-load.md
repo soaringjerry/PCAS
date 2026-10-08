@@ -1,5 +1,9 @@
 # Q5 后台在用模型时，秘书偶尔「模型没有响应」
 
+> **Historical task record.** This text records an earlier phase or investigation.
+> Use the [current documentation](../../README.md) and [project status](../../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 2026-10-05。执行者 6.1 Sol。分支 `fix/q5-secretary-model-error`，从 `origin/main` 建；工作区 `/root/PCAS-wt/q5`；Draft PR 的 base 是 `main`。
 
 ## 现象

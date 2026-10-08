@@ -1,5 +1,9 @@
 # 第 3.5 阶段：事项自动产生（入口与契约）
 
+> **Historical task record.** This text records an earlier phase or investigation.
+> Use the [current documentation](../../README.md) and [project status](../../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 2026-10-08。上位依据：[白皮书](../../whitepaper.md) §3「一句话办事」「先做后报」「记忆自动整理，人只纠错」、§5.7「可信度由证据决定」、§16 第 3.5 阶段；[界面与交互原则](../../design/principles.md)「谁来做决定」「两条推进线」；[任务流程规则](../process.md)。本页是第 3.5 阶段的唯一契约，三个窗口同时开发；和上位文档冲突时以本页为准。**所有执行者先读完本页再动手。**
 
 ## 0 为什么有这一期

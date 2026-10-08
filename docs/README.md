@@ -1,216 +1,306 @@
-# 文档总入口
+# PCAS Documentation
 
-PCAS 的所有文档都从这一页找。新增或移动文档时，同时改这一页。
+Start with the current specification for the work you need to do.
+Use project status to distinguish a target from an implemented or deployed function.
+Historical tasks, research, and evaluations are evidence. They do not assign new work.
 
-## 1 现在做到哪了
+## Current Documents
 
-| 阶段 | 状态 | 入口 |
-|---|---|---|
-| 第 1 阶段：秘书前台 | 已上线（2026-10-01） | [任务总览](tasks/phase1/README.md) |
-| 第 1.5 阶段：稳定化 | 修复已合并；线上实测 11 项和试用一天还没做 | [稳定化计划](tasks/stabilization/README.md) |
-| 第 2 阶段：记忆核心 | 分四批，**全部已上线**：第 1 批 2026-10-02，第 2 批 2026-10-03，第 3 批、第 4 批和补充批 4b（按整段对话整理）2026-10-03 一起上线。还没做的：用真实模型跑回忆评测并定基线。第一次尝试（2.0）已回滚 | [任务入口](tasks/phase2/README.md) · [方向稿](tasks/phase2/direction.md) · [第 1 批](tasks/phase2/batch1/README.md) · [第 2–4 批并行方案](tasks/phase2/parallel.md) |
-| 第 2.5 阶段：记忆整理 | 方向已定（2026-10-04）。分四批加一个评测集；**四批全部已上线（2026-10-05）**：分组和类型、新旧比较、现状层、办事时用上。现状卡已在 2.6 去掉。待办：验收的两条限速测试（F-B2-8、F-B3-9）、评测的三档数字、真实题上的前后对比 | [任务入口](tasks/phase2_5/README.md) · [第 1 批契约](tasks/phase2_5/batch1/README.md) · [讨论稿](research/memory-next-direction.md) |
-| 第 2.6 阶段：现状层返工 | **已上线（2026-10-07）**。去掉现状卡，「关于你」并入资料库；期限表和对助手的要求在归类时抽出；后台分阶段预算、失败不覆盖、失败可见。遗留事项在待办 54–61 | [契约](tasks/phase2_6/README.md) · [问题清单](research/memory-status-layer-audit.md) · [上线记录](evaluations/2026-10-07-phase2_6-rollout.md) |
-| 第 3 阶段：工作室 | **已上线（2026-10-08）**，两批一起：现状块（项目交接说明）、文档版本与差异与改写、派副手带对话；文件区、工作量与开工日、计划时间轴。独立验收 44/44，黄金路径 4、5 真后端回放通过。待办：评测基线 E、上线后一周的耗时数字 | [入口与契约](tasks/phase3/README.md) · [开工前修复 P0](tasks/phase3/P0-fixes.md) · [上线记录](evaluations/2026-10-08-phase3-rollout.md) |
-| 第 3.5 阶段：事项自动产生 | **已上线（2026-10-08，主干 `2095a11`）**：期限表进首页、待办和想法按可信度直接建（去掉「自动采纳」开关）、项目自动产生、没时间的待办进「在推进」 | [入口与契约](tasks/phase3_5/README.md)、[上线记录](evaluations/2026-10-08-phase3_5-rollout.md) |
-| 第 3.6 阶段：秘书会收拾 | **已上线（2026-10-08）**：时间线只放有时间的；每条日程能了结（做完了 / 不要了 / 转成待办），跟秘书说一句就办；后台自己收拾过期和不作数的日程，先做后报、能放回去 | [入口与规则](tasks/phase3_6/README.md)、[上线记录](evaluations/2026-10-08-phase3_6-rollout.md) |
-| 第 4 阶段及以后 | 未开始；第 3 阶段记入待办的：做法沉淀、完成条件裁判 | [白皮书 §16 路线图](whitepaper.md) |
-
-还没处理的问题统一记在 [待办清单](tasks/backlog.md)。
-
-## 2 按目的找
-
-**想知道产品要做成什么**
-
-| 文档 | 内容 |
+| Document | Purpose |
 |---|---|
-| [白皮书](whitepaper.md) | 定位、团队角色、记忆核心、路线图、黄金路径。上位文档，其他文档与它冲突时以它为准 |
-| [界面与交互原则](design/principles.md) | 先做后报、按钮只剩三种、出错要说清楚等界面和后台都要遵守的规则 |
-| [记忆架构](memory-architecture.md) | 四层记忆的完整设计 |
-| [产品需求](prd.md) | 需求清单 |
-| [旧版经验记录](legacy-lessons.md) | 上一版踩过的坑 |
+| [Product Whitepaper](whitepaper.md) | Product purpose, roles, memory, actions, and acceptance. |
+| [Memory Architecture](memory-architecture.md) | Memory objects, retrieval, current state, correction, and recovery. |
+| [Interface Principles](design/principles.md) | Daily presentation and observation controls. |
+| [Development Workflow](tasks/process.md) | Direction, execution, checks, merge, release, and history. |
+| [Writing Guide](writing-guide.md) | STE100 rules and project terminology. |
+| [Project Status](status.md) | Code support, recorded delivery, targets, and gaps. |
+| [Service Reference](memory-service.md) | HTTP interfaces, code paths, and current processing values. |
+| [Deployment](deployment.md) | Setup, models, account login, backup, and live checks. |
+| [Input Reference](connectors.md) | Record format, archives, polling, folders, and implemented limits. |
+| [Open Issues](tasks/backlog.md) | Recorded unresolved and uncertain findings. |
+| [Historical Records](history/README.md) | Retired designs and interpretation of past records. |
 
-**要开始做任务**
+## Document Authority
 
-| 文档 | 内容 |
-|---|---|
-| [任务流程规则](tasks/process.md) | 所有阶段通用：先推演状态、测试和实现分开、真实配置验收、部署后冒烟测试 |
-| 第 1 节里对应阶段的入口 | 该阶段的范围、任务包、契约 |
-| [待办清单](tasks/backlog.md) | 已知但没处理的问题，排任务时从这里取 |
-| [H1 说了「尽快」的事排进首页时间线](tasks/improvements/H1-urgent-in-timeline.md) | 阶段之间的小改进：规则、验收序列、上线记录（2026-10-03 已上线） |
-| [L1 资料库的「来源」按出处合并](tasks/improvements/L1-library-sources-by-origin.md) | 阶段之间的小改进：之前的问题、规则、数据、测试（2026-10-03 用户确认） |
-| [D1 待办、想法、项目可以删除](tasks/improvements/D1-delete-a-thing.md) | 阶段之间的小改进：规则、数据、测试（2026-10-03） |
-| [T1 Telegram 里的回复不再缺斤少两](tasks/improvements/T1-telegram-replies.md) | 阶段之间的小改进：交办回执、链接、副手做完后把结果发回来（2026-10-03） |
-| [U1 归档上传：分片，压缩包只传对话文件](tasks/improvements/U1-archive-upload-in-pieces.md) | 阶段之间的小改进：上传失败的原因、分片规则、只取对话文件、图片不解析的决定（2026-10-03） |
-| [Q3 历史对话及时进入记忆提取](tasks/improvements/Q3-conversation-dispatch.md) | 修复旧入口阻塞领取、记忆提取排在索引之后的问题（2026-10-03） |
-| [Q4 后台进程回收与索引持续推进](tasks/improvements/Q4-process-cleanup-and-index-lane.md) | 修复残留 Codex 子进程耗尽内存，增加独立索引通道（2026-10-03） |
-| [E4 记忆保留原对话上下文](tasks/improvements/E4-memory-evidence-context.md) | 来源展开原对话、模型补读证据上下文、模糊指代核对（2026-10-03） |
-| [M1 秘书看得见图片](tasks/improvements/M1-images-for-the-secretary.md) | 待做：模型看图、发给秘书的图片当成说的话、网页输入框带附件（2026-10-03 用户提出） |
-| [M1 image acceptance expectations](tasks/improvements/M1-images-expectations.md) | V1–V10 expectations written before implementation; synthetic fixtures only |
-| [M1 image validation](evaluations/2026-10-03-m1-images.md) | Rule coverage, Codex protocol evidence and synthetic desktop/mobile screenshots |
-| [R1 检查报告里的九个问题](tasks/improvements/R1-review-1003-fixes.md) | 2026-10-03 独立检查发现的问题：已修的四条、交给执行者的四条规则、没改的一条 |
-| [P1 资料多了以后，秘书回话不能变慢](tasks/improvements/P1-recall-speed.md) | 导入 2.7 万条后秘书回一句话要 46 秒：量出的原因、改法、前后对比（2026-10-03） |
-| [P2 记忆多了以后，秘书回一句话又变慢了](tasks/improvements/P2-turn-speed.md) · [交付记录](evaluations/2026-10-05-p2-turn-speed.md) | 已上线（2026-10-05）：5254 条记忆时一轮从 27–36 秒降到 12–20 秒；虚构库一万条记忆时数据库部分 1.6 秒 |
-| [Q5 后台在用模型时，秘书偶尔「模型没有响应」](tasks/improvements/Q5-secretary-model-error-under-background-load.md) | 待做：连着说话时第二句偶尔失败；现象、已知结构、要交付什么（2026-10-05） |
-| [W1 副手能联网查资料](tasks/improvements/W1-deputy-web-search.md) | 副手查不了网的原因、改法、哪些角色和通道能联网（2026-10-03） |
+1. The user's explicit decisions govern the requested work.
+2. The whitepaper defines current product behavior.
+3. Memory and interface specifications define their respective responsibilities.
+4. The workflow defines development and release procedures.
+5. Implementation references describe code and operating procedures.
+6. New batch scopes use these specifications. They cannot silently override them.
 
-**要部署、接模型、接数据**
+If a proposed change conflicts with a current specification, resolve the direction and update that specification before implementation.
+Historical precedence statements do not apply to new work.
+Code support does not establish product quality. A deployment record does not establish a new live check.
 
-| 文档 | 内容 |
-|---|---|
-| [部署与模型接入](deployment.md) | 部署方式、模型配置 |
-| [Sign in with ChatGPT 套餐授权](chatgpt-plan-auth.md) | ChatGPT 订阅直连通道 |
-| [通用资料接入](connectors.md) | 连接器、归档导入、摘要 |
-| [统一记忆与工作台服务](memory-service.md) | 后端接口、配置、验证边界 |
-| [前端说明](../web/README.md) | 前端开发和浏览器测试 |
+## Document Maintenance
 
-线上实例的发布目录和操作说明不在仓库里，在部署主机的 `/root/PCAS-deploy/current/`。
+Current specifications use English under the [Writing Guide](writing-guide.md).
+Keep one authoritative location for a requirement. Link to it from related documents.
+Keep completed tasks and past results separate from open issues.
+Update this index when adding, merging, moving, or retiring a document.
+Preserve historical conclusions and source references.
+Keep Phase 2.0 archived.
 
-**要查某次验收或评测的证据**：见第 4 节。
+## Repository Guides
 
-## 3 目录约定
+- [Repository entry](../README.md).
+- [Frontend development and browser checks](../web/README.md).
+- [Memory and workspace code](../internal/).
+- [Configuration example](../config/models.example.json).
 
-| 目录 | 放什么 |
-|---|---|
-| `docs/` 顶层 | 长期有效的说明：白皮书、架构、需求、部署、接入 |
-| `docs/design/` | 界面与交互原则 |
-| `docs/tasks/<阶段>/` | 该阶段的任务包和契约。每个阶段有一个 `README.md` 作为入口 |
-| `docs/tasks/` 顶层 | 跨阶段的流程规则和待办清单 |
-| `docs/evaluations/` | 验收、评测、复盘记录。文件名以日期开头，写完之后不再改写结论 |
-| `docs/research/` | 外部方案的研究笔记 |
+## Complete Document Catalog
 
-- 依据的先后：白皮书 → 交互原则、记忆架构、产品需求 → 阶段契约 → 任务包。下游与上游冲突时先改上游。
-- 执行者不修改白皮书和记忆架构，除非用户明确要求。
-- 每份验收记录都要能从它所属阶段的入口或本页找到。
-- 作废的方案不留在 `docs/` 里当作可用文档；需要保留的，打成 git 标签并在阶段入口里写明位置。
+Every Markdown document under `docs/` is listed below or in the current-document table.
+The catalog retains original historical titles for source identification.
+The groups below contain historical material and link-compatibility files, not additional current specifications.
 
-## 4 全部文档
+<details>
+<summary>Merged document links</summary>
 
-### 第 1 阶段
+- [ChatGPT Account Instructions Location](chatgpt-plan-auth.md)
+- [Product Requirements Location](prd.md)
 
-入口：[任务总览](tasks/phase1/README.md) · [接口契约](tasks/phase1/contracts.md) · [上线后修复与线上实测清单](tasks/phase1/postlaunch.md)
+</details>
 
-| 任务包 | 说明 |
-|---|---|
-| [A](tasks/phase1/A-fixes.md) | 修三个硬伤 |
-| [B1](tasks/phase1/B1-secretary-backend.md) · [B2](tasks/phase1/B2-secretary-frontend.md) | 撤销基础设施和秘书后端；秘书前端 |
-| [C1](tasks/phase1/C1-notify.md) · [C2](tasks/phase1/C2-telegram-inbound.md) | 提醒通道；Telegram 双向对话 |
-| [D1](tasks/phase1/D1-auto-adopt-backend.md) · [D2](tasks/phase1/D2-buttons-frontend.md) | 副手结果自动采纳；删按钮 |
-| [E](tasks/phase1/E-acceptance.md) | 黄金路径验收与收尾 |
+<details>
+<summary>Evaluations and deployment records</summary>
 
-验收和评测记录：
+- [2026-09-29 连续记忆验收](evaluations/2026-09-29.md)
+- [Memory and permission boundary repair — 2026-09-30](evaluations/2026-09-30-memory-boundaries.md)
+- [第 1 阶段黄金路径验收（任务 E）](evaluations/2026-09-30-phase1-acceptance.md)
+- [已批准规则的独立验收](evaluations/2026-10-01-approved-rules-acceptance.md)
+- [F13：已批准的同事项逆序撤销](evaluations/2026-10-01-approved-undo.md)
+- [Parallel real-backend CI evaluation](evaluations/2026-10-01-ci-parallel-real-backend.md)
+- [Q2：连续输入顺序独立验收](evaluations/2026-10-01-conversation-order-acceptance.md)
+- [F15：按服务端接受顺序处理秘书轮次](evaluations/2026-10-01-conversation-order-repair.md)
+- [F10 撤销有效期修复评测](evaluations/2026-10-01-expired-undo.md)
+- [第 1 阶段上线后问题复盘](evaluations/2026-10-01-phase1-postlaunch.md)
+- [第二阶段 2.0 回滚记录](evaluations/2026-10-01-phase2-0-rollback.md)
+- [第 2 阶段第 1 批独立验收：首交付记录（待集成验收）](evaluations/2026-10-01-phase2-batch1-acceptance.md)
+- [F9 提醒边界与失败日志修复（2026-10-01）](evaluations/2026-10-01-reminder-repairs.md)
+- [F14：同轮新建并继续操作](evaluations/2026-10-01-same-turn-actions.md)
+- [F11：秘书轮次串行、失败说明与删除复核](evaluations/2026-10-01-secretary-repairs.md)
+- [设置控件实际行为核对（S1，2026-10-01）](evaluations/2026-10-01-settings-control-audit.md)
+- [U2：设置、待确认内容与事项页的日常使用体验](evaluations/2026-10-01-settings-things-ux.md)
+- [A1 稳定化集成审查与候选验收](evaluations/2026-10-01-stabilization-acceptance.md)
+- [T3：秘书、Telegram 与删除传播独立测试](evaluations/2026-10-01-stabilization-secretary.md)
+- [T2 提醒与时间独立测试（2026-10-01）](evaluations/2026-10-01-stabilization-time.md)
+- [T1 撤销与动作序列独立评测](evaluations/2026-10-01-stabilization-undo.md)
+- [F12：Telegram 身份、回调绑定与语音恢复](evaluations/2026-10-01-telegram-repairs.md)
+- [F8：跨页面工作区时区显示验收](evaluations/2026-10-01-timezone-displays.md)
+- [U1：首页、事项页与回执的体验打磨](evaluations/2026-10-01-ux-polish.md)
+- [UX regression repairs after PR #1](evaluations/2026-10-01-ux-repairs.md)
+- [第 2 阶段第 1 批：38a8956 裁定后统一全量验收](evaluations/2026-10-02-phase2-batch1-acceptance.md)
+- [第 2 批独立验收：浏览器复核完成](evaluations/2026-10-02-phase2-batch2-acceptance.md)
+- [第 3 批独立验收：第 2 批进 main 后的整库结果](evaluations/2026-10-02-phase2-batch3-acceptance.md)
+- [第 4 批独立验收：测试预先交付（2026-10-02）](evaluations/2026-10-02-phase2-batch4-acceptance.md)
+- [第二阶段任务 V：合成回忆评测与假模型流程验证](evaluations/2026-10-02-phase2-eval.md)
+- [M1 image validation](evaluations/2026-10-03-m1-images.md)
+- [第 2 批补充验收：R23 秘书原话的对话上文](evaluations/2026-10-03-phase2-batch2-conversation-context-acceptance.md)
+- [第 4 批 T4：最终分支的整段协议夹具迁移通过（2026-10-03）](evaluations/2026-10-03-phase2-batch4-acceptance.md)
+- [第 4b 批 T2 独立验收（2026-10-03）](evaluations/2026-10-03-phase2-batch4b-acceptance.md)
+- [记忆查找办法的对比实验](evaluations/2026-10-04-memory-lookup-experiment.md)
+- [记忆查找与使用：第二轮对比实验](evaluations/2026-10-04-memory-lookup-round2.md)
+- [V2 虚构实验数字产物](evaluations/2026-10-04-phase2_5-v2-artifacts/README.md)
+- [Phase 2.5 doing evaluation](evaluations/2026-10-04-phase2_5-v2-artifacts/result.md)
+- [第 2.5 阶段 V2：虚构办事题集与基线](evaluations/2026-10-04-phase2_5-v2-doing.md)
+- [V2b 数字产物与重算](evaluations/2026-10-04-phase2_5-v2b-artifacts/README.md)
+- [evaluations/2026-10-04-phase2_5-v2b-artifacts/all168-categories.md](evaluations/2026-10-04-phase2_5-v2b-artifacts/all168-categories.md)
+- [Phase 2.5 doing evaluation](evaluations/2026-10-04-phase2_5-v2b-artifacts/all168.md)
+- [evaluations/2026-10-04-phase2_5-v2b-artifacts/chain-table.md](evaluations/2026-10-04-phase2_5-v2b-artifacts/chain-table.md)
+- [evaluations/2026-10-04-phase2_5-v2b-artifacts/disagreements-table.md](evaluations/2026-10-04-phase2_5-v2b-artifacts/disagreements-table.md)
+- [evaluations/2026-10-04-phase2_5-v2b-artifacts/new48-categories.md](evaluations/2026-10-04-phase2_5-v2b-artifacts/new48-categories.md)
+- [Phase 2.5 doing evaluation](evaluations/2026-10-04-phase2_5-v2b-artifacts/new48.md)
+- [evaluations/2026-10-04-phase2_5-v2b-artifacts/noise-table.md](evaluations/2026-10-04-phase2_5-v2b-artifacts/noise-table.md)
+- [evaluations/2026-10-04-phase2_5-v2b-artifacts/old120-categories.md](evaluations/2026-10-04-phase2_5-v2b-artifacts/old120-categories.md)
+- [Phase 2.5 doing evaluation](evaluations/2026-10-04-phase2_5-v2b-artifacts/old120.md)
+- [evaluations/2026-10-04-phase2_5-v2b-artifacts/overall-table.md](evaluations/2026-10-04-phase2_5-v2b-artifacts/overall-table.md)
+- [P2 秘书一轮对话的数据库耗时](evaluations/2026-10-05-p2-turn-speed.md)
+- [第 2.5 阶段第 1 批：独立验收最终一轮](evaluations/2026-10-05-phase2_5-batch1-acceptance.md)
+- [第 2.5 阶段第 2–4 批独立验收：最终一轮及上线并发补验](evaluations/2026-10-05-phase2_5-batch234-acceptance.md)
+- [第 2.5 阶段第 4 批：上下文接力、三档与自查](evaluations/2026-10-05-phase2_5-batch4-use.md)
+- [第 2.6 阶段上线记录（2026-10-07）](evaluations/2026-10-07-phase2_6-rollout.md)
+- [第 3 阶段上线记录（2026-10-08）](evaluations/2026-10-08-phase3-rollout.md)
+- [第 3.5 阶段上线记录（2026-10-08）](evaluations/2026-10-08-phase3_5-rollout.md)
+- [第 3.6 阶段上线记录（2026-10-08）](evaluations/2026-10-08-phase3_6-rollout.md)
 
-| 记录 | 内容 |
-|---|---|
-| [第 1 阶段黄金路径验收](evaluations/2026-09-30-phase1-acceptance.md) | 任务 E 的验收报告（截图在同名目录） |
-| [第 1 阶段上线后问题复盘](evaluations/2026-10-01-phase1-postlaunch.md) | 上线后暴露的问题和原因 |
-| [连续记忆验收](evaluations/2026-09-29.md) | 固定场景的真实模型验收（数据在 `2026-09-29-continuity.json`） |
-| [记忆与权限边界修复](evaluations/2026-09-30-memory-boundaries.md) | 2026-09-30 的边界修复 |
-| [界面回归修复](evaluations/2026-10-01-ux-repairs.md) | PR #1 之后的界面回归 |
+</details>
 
-### 稳定化
+<details>
+<summary>Historical source records</summary>
 
-入口：[稳定化计划](tasks/stabilization/README.md)（状态序列表和进入第 2 阶段的条件）· [执行分工](tasks/stabilization/dispatch.md)
+- [Historical ChatGPT Account Record](history/chatgpt-plan-auth.md)
+- [Resolved Issue History](history/resolved-issues.md)
 
-| 任务包 | 说明 | 验收记录 |
-|---|---|---|
-| [F8](tasks/stabilization/F8-timezone-displays.md)（[补验](tasks/stabilization/F8-ci-followup.md)） | 各页面按工作区时区显示 | [时区显示验收](evaluations/2026-10-01-timezone-displays.md) |
-| [F9](tasks/stabilization/F9-reminder-repairs.md) | 提醒边界与失败日志 | [提醒修复](evaluations/2026-10-01-reminder-repairs.md) |
-| [F10](tasks/stabilization/F10-expired-undo.md) | 撤销有效期 | [撤销有效期评测](evaluations/2026-10-01-expired-undo.md) |
-| [F11](tasks/stabilization/F11-secretary-repairs.md) | 对话串行、删除传播、失败说明 | [秘书修复](evaluations/2026-10-01-secretary-repairs.md) |
-| [F12](tasks/stabilization/F12-telegram-repairs.md) | Telegram 身份、按钮绑定、语音重试 | [Telegram 修复](evaluations/2026-10-01-telegram-repairs.md) |
-| [F13](tasks/stabilization/F13-approved-undo.md) | 逆序撤销规则 | [逆序撤销](evaluations/2026-10-01-approved-undo.md) |
-| [F14](tasks/stabilization/F14-same-turn-actions.md) | 一句话新建并继续操作 | [同轮动作](evaluations/2026-10-01-same-turn-actions.md) |
-| [F15](tasks/stabilization/F15-conversation-order.md) | 连续输入按接受顺序执行 | [顺序修复](evaluations/2026-10-01-conversation-order-repair.md) |
-| [Q1](tasks/stabilization/Q1-conversation-order-audit.md) · [Q2](tasks/stabilization/Q2-conversation-order-acceptance.md) | 连续输入顺序的复现和独立验收 | [顺序独立验收](evaluations/2026-10-01-conversation-order-acceptance.md) |
-| [T1](tasks/stabilization/T1-undo-tests.md) | 独立检验撤销与动作序列 | [撤销序列评测](evaluations/2026-10-01-stabilization-undo.md) |
-| [T2](tasks/stabilization/T2-time-tests.md) | 独立检验提醒与时间 | [时间测试](evaluations/2026-10-01-stabilization-time.md) |
-| [T3](tasks/stabilization/T3-secretary-tests.md) | 独立检验秘书、Telegram、删除传播 | [秘书测试](evaluations/2026-10-01-stabilization-secretary.md) |
-| [T4](tasks/stabilization/T4-approved-rules-acceptance.md) | 独立验证四个已确认用例 | [已批准规则验收](evaluations/2026-10-01-approved-rules-acceptance.md) |
-| [U1](tasks/stabilization/U1-ux-polish.md) | 首页、事项页、回执的体验 | [体验打磨](evaluations/2026-10-01-ux-polish.md) |
-| [U2](tasks/stabilization/U2-settings-things-ux.md) | 设置和事项的日常使用体验 | [设置与事项体验](evaluations/2026-10-01-settings-things-ux.md) |
-| [S1](tasks/stabilization/S1-settings-audit.md) | 设置开关实际作用清单 | [设置控件核对](evaluations/2026-10-01-settings-control-audit.md) |
-| [A1](tasks/stabilization/A1-acceptance.md) | 集成审查与进入第 2 阶段的判定 | [集成审查与候选验收](evaluations/2026-10-01-stabilization-acceptance.md) |
-| [C1](tasks/stabilization/C1-ci-parallel-real-backend.md) | 真实后端浏览器测试并行 | [并行 CI 评测](evaluations/2026-10-01-ci-parallel-real-backend.md) |
-| [M0](tasks/stabilization/M0-memory-readiness.md) · [M1](tasks/stabilization/M1-context-path-audit.md) · [M2](tasks/stabilization/M2-phase2-scope-review.md) | 第 2 阶段开工前的三项调查 | M0 的产出是 [记忆核心调查](tasks/phase2/readiness.md)；M1、M2 的产出没有合并，见第 2 阶段入口第 6 节 |
+</details>
 
-### 第 2 阶段
+<details>
+<summary>Earlier implementation records</summary>
 
-| 文档 | 内容 |
-|---|---|
-| [任务入口](tasks/phase2/README.md) | 要交付什么、用户已经定下的事、约束、现在的基线、可参考的归档 |
-| [方向稿](tasks/phase2/direction.md) | 分四批怎么做、每批上线后能感受到什么。用户已确认 |
-| [2.0 回滚记录](evaluations/2026-10-01-phase2-0-rollback.md) | 第一次尝试做了什么、为什么回滚、回滚后的状态 |
-| [记忆核心调查](tasks/phase2/readiness.md) | 2.0 之前的代码现状调查。方案部分未批准 |
+- [旧版经验记录](legacy-lessons.md)
 
-第 1 批：原话直达。入口：[任务总览与契约](tasks/phase2/batch1/README.md)
+</details>
 
-| 任务包 | 说明 | 执行者 |
-|---|---|---|
-| [A](tasks/phase2/batch1/A-raw-text.md) | 原话供给、依赖校验、依据标记、依据卡片（后端） | 6.1 Sol |
-| [B](tasks/phase2/batch1/B-undo-memory.md) | 撤销连带记忆、抽取跳过、清理 2.0 遗留 | 6.1 Sol |
-| [C](tasks/phase2/batch1/C-frontend.md) | 依据卡片里的原话、「依据已更新」标记（前端） | Opus 5.5 |
-| [C2](tasks/phase2/batch1/C2-source-sheet.md) | 从依据卡片点开，直接看到当时那句话（前端） | Opus 5.5 |
-| [D](tasks/phase2/batch1/D-date-fixtures.md) | 旧测试里写死的日期（从 main 修） | 6.1 Sol |
-| [T](tasks/phase2/batch1/T-acceptance.md) | 独立验收 | 6.1 Sol（另一个执行者） |
+<details>
+<summary>Research and audits</summary>
 
-第 1 批的验收报告：[最终一轮（38 条序列全部通过）](evaluations/2026-10-02-phase2-batch1-acceptance.md) · [首次交付时的基线记录](evaluations/2026-10-01-phase2-batch1-acceptance.md)
+- [研究笔记：Hermes Agent](research/hermes-agent.md)
+- [研究笔记：看目录、分头细读](research/memory-navigate-and-read.md)
+- [讨论稿：记忆下一步怎么做](research/memory-next-direction.md)
+- [研究笔记：现状卡、期限表与自查](research/memory-status-cards-and-self-check.md)
+- [现状层问题清单（2026-10-06，待审计）](research/memory-status-layer-audit.md)
+- [研究笔记：用途标注与事先备料](research/memory-use-phrases-and-packets.md)
 
-第 2–4 批（并行开发，2026-10-02 起）。入口：[并行方案与数据约定](tasks/phase2/parallel.md)
+</details>
 
-| 批 | 契约 | 任务包 |
-|---|---|---|
-| 共用 | [并行方案与数据约定](tasks/phase2/parallel.md) | [S0 骨架](tasks/phase2/S0-skeleton.md) |
-| 第 2 批：结构化抽取 | [契约](tasks/phase2/batch2/README.md) | [E1 抽取](tasks/phase2/batch2/E1-extraction.md) · [E2 队列与补做](tasks/phase2/batch2/E2-backfill.md) · [M 记忆库](tasks/phase2/batch2/M-memory-store.md) · [U2 前端](tasks/phase2/batch2/U2-frontend.md) · [E3 秘书对话上文](tasks/phase2/batch2/E3-conversation-context.md) · [T2 验收](tasks/phase2/batch2/T2-acceptance.md) · [验收报告](evaluations/2026-10-02-phase2-batch2-acceptance.md) |
-| 第 3 批：查询规划和时间轴 | [契约](tasks/phase2/batch3/README.md) | [Q1 拆条件](tasks/phase2/batch3/Q1-planner.md) · [Q2 按条件找](tasks/phase2/batch3/Q2-recall.md) · [K 时间轴](tasks/phase2/batch3/K-timeline.md) · [U3 前端](tasks/phase2/batch3/U3-frontend.md) · [T3 验收](tasks/phase2/batch3/T3-acceptance.md) |
-| 第 4 批：评测、花费、导入 | [契约](tasks/phase2/batch4/README.md) | [I 导入](tasks/phase2/batch4/I-import.md) · [L 花费记录](tasks/phase2/batch4/L-usage.md) · [U4 前端](tasks/phase2/batch4/U4-frontend.md) · [V 评测](tasks/phase2/batch4/V-eval.md) · [T4 验收](tasks/phase2/batch4/T4-acceptance.md) · [E4 按整段对话整理](tasks/phase2/batch4/E4-conversation-extraction.md) |
+<details>
+<summary>Earlier improvement tasks</summary>
 
-第 2–4 批的验收和评测报告：[第 2 批](evaluations/2026-10-02-phase2-batch2-acceptance.md) · [第 2 批补充：秘书原话带对话上文](evaluations/2026-10-03-phase2-batch2-conversation-context-acceptance.md) · [第 3 批](evaluations/2026-10-02-phase2-batch3-acceptance.md) · [第 4 批](evaluations/2026-10-03-phase2-batch4-acceptance.md)（[准备阶段的记录](evaluations/2026-10-02-phase2-batch4-acceptance.md)） · [4b：按整段对话整理](evaluations/2026-10-03-phase2-batch4b-acceptance.md) · [回忆评测](evaluations/2026-10-02-phase2-eval.md)
+- [任务 D1：待办、想法、项目可以删除](tasks/improvements/D1-delete-a-thing.md)
+- [E4 记忆保留原对话上下文](tasks/improvements/E4-memory-evidence-context.md)
+- [任务 H1：说了「尽快」的事排进首页时间线](tasks/improvements/H1-urgent-in-timeline.md)
+- [任务 L1：资料库的「来源」按出处合并](tasks/improvements/L1-library-sources-by-origin.md)
+- [M1 image acceptance expectations](tasks/improvements/M1-images-expectations.md)
+- [任务 M1：秘书看得见图片](tasks/improvements/M1-images-for-the-secretary.md)
+- [任务 P1：资料多了以后，秘书回话不能变慢](tasks/improvements/P1-recall-speed.md)
+- [P2 记忆多了以后，秘书回一句话又变慢了](tasks/improvements/P2-turn-speed.md)
+- [Q3 历史对话及时进入记忆提取](tasks/improvements/Q3-conversation-dispatch.md)
+- [Q4 后台进程回收与索引持续推进](tasks/improvements/Q4-process-cleanup-and-index-lane.md)
+- [Q5 后台在用模型时，秘书偶尔「模型没有响应」](tasks/improvements/Q5-secretary-model-error-under-background-load.md)
+- [任务 R1：2026-10-03 检查报告里的九个问题](tasks/improvements/R1-review-1003-fixes.md)
+- [任务 T1：Telegram 里的回复不再缺斤少两](tasks/improvements/T1-telegram-replies.md)
+- [任务 U1：大的归档分片上传](tasks/improvements/U1-archive-upload-in-pieces.md)
+- [任务 W1：副手能联网查资料](tasks/improvements/W1-deputy-web-search.md)
 
-2.0 的代码和研究稿不在 `docs/` 里，归档为 git 标签 `archive/phase2-0/*`，位置和用法见任务入口第 6 节。
+</details>
 
-### 第 2.5 阶段
+<details>
+<summary>Earlier phase1 tasks</summary>
 
-| 文档 | 内容 |
-|---|---|
-| [任务入口](tasks/phase2_5/README.md) | 要交付什么、用户定下的事、分几批、约束 |
-| [第 1 批契约：分组和类型](tasks/phase2_5/batch1/README.md) | 数据约定、规则、操作序列、文件归属 |
-| [O1 整理后端](tasks/phase2_5/batch1/O1-organize-backend.md) · [T1 独立验收](tasks/phase2_5/batch1/T1-acceptance.md) · [U1 界面](tasks/phase2_5/batch1/U1-frontend.md) | 第 1 批的任务包 |
-| [第 2.5 阶段第 1 批独立验收](evaluations/2026-10-05-phase2_5-batch1-acceptance.md) | X1–X22、80 步随机序列和并发专项全部通过；F-B1-1–8 关闭 |
-| [第 4 批后端实现与耗时](evaluations/2026-10-05-phase2_5-batch4-use.md) | 四层接力、三档、自查、虚构库回归与同库耗时 |
-| [第 2–4 批并行方案与契约](tasks/phase2_5/parallel.md) | 新旧比较、现状层、办事时用上：数据约定、规则、序列，三批同时开发 |
-| [第 2.6 阶段契约：现状层返工与后台可靠性](tasks/phase2_6/README.md) | 修完问题清单里的全部问题再开第三阶段：去掉现状卡、期限表和要求各有来源、后台分预算和失败不覆盖；分工、规则、验收，以及上线后的修订 |
-| [第 2.6 阶段上线记录](evaluations/2026-10-07-phase2_6-rollout.md) | 2026-10-07 上线过程（秘书坏了两小时的原因和三次修复）、上线后的核对、比较结果的人工抽查、26 道私有题在线上的结果 |
-| [第 3 阶段入口与契约](tasks/phase3/README.md) | 定下的六件事、三个窗口、批次间接口、H/D/S/F/P/U/T 规则、预算、验收与上线 |
-| [第 3 阶段上线记录](evaluations/2026-10-08-phase3-rollout.md) | 开工前修复、集成、独立验收的 15 项发现（产品问题和适配器问题各自的修法）、全套验收、上线过程与核对 |
-| [第 3.5 阶段上线记录](evaluations/2026-10-08-phase3_5-rollout.md) | 五个 PR 怎么合的、协调者的两处裁定、验收 31 条和浏览器回放的结果（6 条适配器问题）、上线过程、冒烟和上线后核对（日程对期限表、自动建的条数、候选理由）、留下的事 |
-| [第 3.6 阶段上线记录](evaluations/2026-10-08-phase3_6-rollout.md) | 用户当天指出的四个问题和原因、手工替用户建的 11 条、真实通道在线上副本上的逐条判定、3.5 之后排班一直让步的修复、上线和核对 |
-| [第 3.5 阶段入口与契约](tasks/phase3_5/README.md) | 为什么有这一期（三条旧规则叠在一起）、定下的六件事、日程接口、A 期限进首页、B 按可信度建、C 项目自动产生、D 没时间的待办、验收 |
-| [第 3.5 阶段独立验收](tasks/phase3_5/phase3_5_acceptance.md) | T1–T5 冻结的预期、接缝、发现清单 S-P35-001–010 和各次复验的证据；集成后 31 条和 4 个浏览器场景全过，发现项的跳过门已打开 |
-| [第 3.6 阶段入口与规则](tasks/phase3_6/README.md) | 为什么有这一期（3.5 把期限表原样倒上首页）、定下的五件事、`close_date` 和后台收拾日程的规则、预算和依据、没做的 |
-| [第 3.5 阶段交接（2026-10-08）](tasks/phase3_5/handover-2026-10-08.md) | 协调者窗口结束时的状态：五个 PR 在哪、协调者在后端分支上改了什么、CI 还红的原因线索、接缝、下一步顺序、环境 |
-| [第 3 阶段开工前修复 P0](tasks/phase3/P0-fixes.md) | 待办 61、54、55、23、24、60 的定位和修法：评测工具去掉建卡、比较和归类的提示词先抓原始输出再改并只重判受影响的记忆、派副手带对话、一轮分段耗时只测不改 |
-| [第 2.5 阶段第 2–4 批独立验收](evaluations/2026-10-05-phase2_5-batch234-acceptance.md) | 历史序列及随机验收；建卡并发复现 F-B3-10，F-B2-8 待裁定；F-B3-9 预算原因确认 |
-| [V2 办事评测集](tasks/phase2_5/V2-eval-set.md) | 一百个以上的办事任务、固定的跑法和打分、真实数据上的人工抽查 |
-| [V2 办事题集与基线](evaluations/2026-10-04-phase2_5-v2-doing.md) | 671 条虚构记忆、120 题、真实通道三次结果/波动、私有抽查流程 |
-| [V2b 独立任务增补](evaluations/2026-10-04-phase2_5-v2-doing.md#6-v2b独立任务增补2026-10-04-起) | 48 个独立任务、10 条四次改动链，旧/新/合并分别报告 |
+- [任务 A：修三个硬伤](tasks/phase1/A-fixes.md)
+- [任务 B1：撤销基础设施 + 秘书后端](tasks/phase1/B1-secretary-backend.md)
+- [任务 B2：秘书前端](tasks/phase1/B2-secretary-frontend.md)
+- [任务 C1：提醒通道](tasks/phase1/C1-notify.md)
+- [任务 C2：Telegram 双向对话](tasks/phase1/C2-telegram-inbound.md)
+- [任务 D1：副手结果自动采纳](tasks/phase1/D1-auto-adopt-backend.md)
+- [任务 D2：删按钮](tasks/phase1/D2-buttons-frontend.md)
+- [任务 E：黄金路径验收与收尾](tasks/phase1/E-acceptance.md)
+- [第 1 阶段：秘书前台 · 任务总览](tasks/phase1/README.md)
+- [第 1 阶段接口契约](tasks/phase1/contracts.md)
+- [第 1 阶段上线后修复](tasks/phase1/postlaunch.md)
 
-### 研究
+</details>
 
-| 文档 | 内容 |
-|---|---|
-| [研究笔记：Hermes Agent](research/hermes-agent.md) | 外部方案调研 |
+<details>
+<summary>Earlier phase2 tasks</summary>
 
-### 记忆整理与查找（2026-10-04 的讨论和实验）
+- [第二阶段：任务入口](tasks/phase2/README.md)
+- [任务 S0：骨架（迁移、共用字段、接缝）](tasks/phase2/S0-skeleton.md)
+- [任务 A：原话供给、依赖校验、依据标记（后端）](tasks/phase2/batch1/A-raw-text.md)
+- [任务 B：撤销连带记忆、清理 2.0 遗留](tasks/phase2/batch1/B-undo-memory.md)
+- [任务 C：依据卡片里的原话、「依据已更新」标记（前端）](tasks/phase2/batch1/C-frontend.md)
+- [任务 C2：从依据卡片点开，直接看到当时那句话（前端）](tasks/phase2/batch1/C2-source-sheet.md)
+- [任务 D：旧测试里写死的日期（测试夹具）](tasks/phase2/batch1/D-date-fixtures.md)
+- [第 2 阶段第 1 批：原话直达 · 任务总览与契约](tasks/phase2/batch1/README.md)
+- [任务 T：独立验收](tasks/phase2/batch1/T-acceptance.md)
+- [任务 E1：抽取出人、地点、时间（后端）](tasks/phase2/batch2/E1-extraction.md)
+- [任务 E2：后台队列的优先级、重试和旧资料补做（后端）](tasks/phase2/batch2/E2-backfill.md)
+- [任务 E3：对秘书说的话，整理时带上这段对话的上文（后端）](tasks/phase2/batch2/E3-conversation-context.md)
+- [任务 M：记忆库（列表、撤销只标记、副手补开、删除收尾）](tasks/phase2/batch2/M-memory-store.md)
+- [第 2 批：结构化抽取（契约）](tasks/phase2/batch2/README.md)
+- [任务 T2：第 2 批独立验收](tasks/phase2/batch2/T2-acceptance.md)
+- [任务 U2：记忆卡片上的人、地点、时间；按人按地点翻（前端）](tasks/phase2/batch2/U2-frontend.md)
+- [任务 K：时间轴卡片的内容和「后来怎样了」（后端）](tasks/phase2/batch3/K-timeline.md)
+- [任务 Q1：把一句问话拆成条件（纯函数）](tasks/phase2/batch3/Q1-planner.md)
+- [任务 Q2：按条件找记忆，接进秘书和副手（后端）](tasks/phase2/batch3/Q2-recall.md)
+- [第 3 批：查询规划和时间轴（契约）](tasks/phase2/batch3/README.md)
+- [任务 T3：第 3 批独立验收](tasks/phase2/batch3/T3-acceptance.md)
+- [任务 U3：时间轴卡片的界面（前端）](tasks/phase2/batch3/U3-frontend.md)
+- [任务 E4：导入的聊天记录按整段对话整理（后端）](tasks/phase2/batch4/E4-conversation-extraction.md)
+- [任务 I：ChatGPT 历史导入（后端）](tasks/phase2/batch4/I-import.md)
+- [任务 L：记下每次调用用了哪些记忆、花了多少（后端）](tasks/phase2/batch4/L-usage.md)
+- [第 4 批：评测、花费记录和 ChatGPT 历史导入（契约）](tasks/phase2/batch4/README.md)
+- [任务 T4：第 4 批独立验收](tasks/phase2/batch4/T4-acceptance.md)
+- [任务 U4：导入 ChatGPT 历史的界面（前端）](tasks/phase2/batch4/U4-frontend.md)
+- [任务 V：回忆评测集和三种做法的对比](tasks/phase2/batch4/V-eval.md)
+- [第二阶段方向稿](tasks/phase2/direction.md)
+- [第 2–4 批：并行方案与数据约定](tasks/phase2/parallel.md)
+- [M0：记忆核心与二阶段准备（方案待审）](tasks/phase2/readiness.md)
 
-方向已写入白皮书 5.6–5.8 和记忆架构 1.2。下面是依据和细节；研究笔记里的各办法仍是候选技术。建议按这个顺序读：
+</details>
 
-| 顺序 | 文档 | 内容 |
-|---|---|---|
-| 1 | [讨论稿：记忆下一步怎么做](research/memory-next-direction.md) | 总览，方向已确认。四层记忆（新增现状层）、全自动整理的原则、结构化层要补什么、办事时的三档、实验否掉的办法、没解决的问题、建议的顺序 |
-| 2 | [研究笔记：现状卡、期限表与自查](research/memory-status-cards-and-self-check.md) | 2.5 阶段采用的做法：每个分组一张放原样记忆的现状卡、一张期限表、办完后对照记忆自查一次。现状卡上线后不成立，2.6 已去掉（见[问题清单](research/memory-status-layer-audit.md)）；期限表和自查保留 |
-| 3 | [研究笔记：看目录、分头细读](research/memory-navigate-and-read.md) | 质量最高但最慢的做法：模型先看分组目录，再分组细读挑出要用的记忆 |
-| 4 | [研究笔记：用途标注与事先备料](research/memory-use-phrases-and-packets.md) | 两种没有显出优势的做法，以及原因 |
-| 5 | [评测记录：第一轮](evaluations/2026-10-04-memory-lookup-experiment.md) | 十一种做法、12 个任务的设计和数字；丢分在办事那一步的发现 |
-| 6 | [评测记录：第二轮](evaluations/2026-10-04-memory-lookup-round2.md) | 固定办事方式、调强基础线后重测二十多种组合；丢分归因 |
-| 7 | [现状层问题清单](research/memory-status-layer-audit.md) | 2026-10-06 复查线上现状层查出的 42 个设计问题和 16 个故障，逐条附证据和状态；待审计。末尾有协调者建议的处理思路，未批准 |
+<details>
+<summary>Earlier phase2 5 tasks</summary>
+
+- [第 2.5 阶段：记忆整理（任务入口）](tasks/phase2_5/README.md)
+- [任务 V2：办事评测集](tasks/phase2_5/V2-eval-set.md)
+- [任务 O1：整理后端](tasks/phase2_5/batch1/O1-organize-backend.md)
+- [第 2.5 阶段第 1 批：分组和类型（契约）](tasks/phase2_5/batch1/README.md)
+- [任务 T1：第 1 批独立验收](tasks/phase2_5/batch1/T1-acceptance.md)
+- [任务 U1：资料库按分组翻记忆（界面）](tasks/phase2_5/batch1/U1-frontend.md)
+- [第 2.5 阶段第 2–4 批：并行方案与契约](tasks/phase2_5/parallel.md)
+
+</details>
+
+<details>
+<summary>Earlier phase2 6 tasks</summary>
+
+- [第 2.6 阶段：现状层返工与后台可靠性（契约）](tasks/phase2_6/README.md)
+
+</details>
+
+<details>
+<summary>Earlier phase3 tasks</summary>
+
+- [P0 第 3 阶段开工前的六项修复](tasks/phase3/P0-fixes.md)
+- [第 3 阶段：工作室（入口与契约）](tasks/phase3/README.md)
+
+</details>
+
+<details>
+<summary>Earlier phase3 5 tasks</summary>
+
+- [第 3.5 阶段：事项自动产生（入口与契约）](tasks/phase3_5/README.md)
+- [第 3.5 阶段交接（2026-10-08，协调者窗口结束时写）](tasks/phase3_5/handover-2026-10-08.md)
+- [第 3.5 阶段独立验收](tasks/phase3_5/phase3_5_acceptance.md)
+
+</details>
+
+<details>
+<summary>Earlier phase3 6 tasks</summary>
+
+- [第 3.6 阶段：秘书会收拾（入口与规则）](tasks/phase3_6/README.md)
+
+</details>
+
+<details>
+<summary>Earlier stabilization tasks</summary>
+
+- [A1：稳定化集成审查与进入二阶段的判定](tasks/stabilization/A1-acceptance.md)
+- [C1: parallel real-backend CI](tasks/stabilization/C1-ci-parallel-real-backend.md)
+- [F10：撤销有效期与资料删除后的明确拒绝](tasks/stabilization/F10-expired-undo.md)
+- [F11：对话串行、删除传播与失败说明](tasks/stabilization/F11-secretary-repairs.md)
+- [F12：Telegram 身份隔离、按钮绑定与语音重试](tasks/stabilization/F12-telegram-repairs.md)
+- [F13：落实已确认的逆序撤销规则](tasks/stabilization/F13-approved-undo.md)
+- [F14：一句话新建任务并继续加步骤](tasks/stabilization/F14-same-turn-actions.md)
+- [F15：连续改时间按服务端接受顺序执行](tasks/stabilization/F15-conversation-order.md)
+- [F8 补验：完整真实后端浏览器套件](tasks/stabilization/F8-ci-followup.md)
+- [F8：各页面按工作区时区显示](tasks/stabilization/F8-timezone-displays.md)
+- [F9：按独立发现修复提醒边界与失败日志](tasks/stabilization/F9-reminder-repairs.md)
+- [M0：记忆核心现状与二阶段最小交付](tasks/stabilization/M0-memory-readiness.md)
+- [M1：独立调查在最新候选上的代码与最小复现](tasks/stabilization/M1-context-path-audit.md)
+- [M2：二阶段范围、透明度与验收评审](tasks/stabilization/M2-phase2-scope-review.md)
+- [Q1：快速连续修改的顺序复现](tasks/stabilization/Q1-conversation-order-audit.md)
+- [Q2：连续输入顺序独立验收](tasks/stabilization/Q2-conversation-order-acceptance.md)
+- [稳定化（第 1 阶段之后、第 2 阶段之前）](tasks/stabilization/README.md)
+- [S1：设置开关实际作用清单](tasks/stabilization/S1-settings-audit.md)
+- [T1：独立检验撤销与动作序列](tasks/stabilization/T1-undo-tests.md)
+- [T2：独立检验提醒与时间](tasks/stabilization/T2-time-tests.md)
+- [T3：独立检验秘书、Telegram 与删除传播](tasks/stabilization/T3-secretary-tests.md)
+- [T4：独立验证四个已确认用例并汇总](tasks/stabilization/T4-approved-rules-acceptance.md)
+- [U1：首页、事项页与记忆回执的体验打磨](tasks/stabilization/U1-ux-polish.md)
+- [U2：设置和事项的日常使用体验](tasks/stabilization/U2-settings-things-ux.md)
+- [稳定化与二阶段准备：执行分工](tasks/stabilization/dispatch.md)
+
+</details>

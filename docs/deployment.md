@@ -1,151 +1,204 @@
-# PCAS 部署与模型接入
+# PCAS Deployment
 
-服务由 `api`、`worker`、一次性 `migrate` 和 PostgreSQL/pgvector 组成。默认使用 OpenAI 向量 API，本地 CPU 向量服务作为可选 profile 保留。镜像包含前端、Go 程序、官方 Codex CLI 0.159.0、PDF 文本解析、中文/英文 OCR 与音频时长读取工具。服务使用非 root 用户运行。
+Current operating instructions. Updated 2026-10-08.
 
-## 域名与鉴权
+The Compose deployment contains PostgreSQL, migration, API, and worker services.
+The image includes the frontend, Go program, Codex CLI, PDF tools, OCR, and audio tools.
+The [Dockerfile](../Dockerfile) defines installed versions.
+The [Compose file](../compose.yml) defines services, volumes, and default values.
 
-本机部署地址为 `pcas.coyumelabs.com`，源站端口为 `12352`。对应私有 `.env` 配置：
+## 1 Initial Setup
 
-```dotenv
-PCAS_BIND_ADDRESS=0.0.0.0
-PCAS_PORT=12352
-PCAS_PUBLIC_URL=https://pcas.coyumelabs.com
-```
-
-域名代理负责 HTTPS。`PCAS_PUBLIC_URL` 必须与浏览器实际访问的 origin 完全一致；认证不会信任任意 `X-Forwarded-Host`。登录成功后使用 HttpOnly、SameSite=Strict 的七天 Cookie；HTTPS 部署始终设置 Secure。退出立即撤销会话，API 重启后需重新登录。所有 `/v1` 业务接口需要认证；静态登录页和健康检查公开。
-
-浏览器输入 `PCAS_API_TOKEN` 登录，它不写入前端配置、localStorage 或 Git。外部调用使用 `Authorization: Bearer ...`。原生部署可设置 `PCAS_AGENT_TOKENS_FILE` 为 JSON 数组 `[{"principal":"external-ai","token_env":"MY_AGENT_TOKEN"}]`；令牌引用环境变量，owner 由服务端固定。外部 AI 只能读取授予其 principal 的记录，不能调用工作台管理接口。
-
-初始化与更新：
+1. Copy `.env.example` to `.env`.
+2. Set a separate database password.
+3. Set the owner UUID.
+4. Set a random API token with at least 32 characters.
+5. Set the file mode to `0600`.
+6. Build and start the services.
+7. Check readiness and logs.
 
 ```sh
 cp .env.example .env
-# 编辑并生成独立秘密：openssl rand -hex 32；owner：cat /proc/sys/kernel/random/uuid
 chmod 600 .env
 docker compose build api
 docker compose up -d --no-build
 docker compose ps
+curl -fsS http://127.0.0.1:12352/readyz
+docker compose logs --tail=50 api worker migrate
 ```
 
-迁移带校验和且可重复执行；不要修改已经部署的 migration 文件。镜像更新后先完成迁移，再启动 API/worker。`docker compose logs --tail=50 api worker migrate` 可检查服务状态，日志不输出原文、令牌或模型请求正文。
+Edit `.env` before starting services. Do not commit private settings.
+The default address is `http://127.0.0.1:12352`.
+For a public deployment, set the bind address and exact HTTPS origin:
 
-## ChatGPT 订阅
-
-目前继续使用 Codex App Server 订阅通道。新增的 [Sign in with ChatGPT 套餐授权](chatgpt-plan-auth.md) 默认关闭；只有设置 `PCAS_CHATGPT_DIRECT_ENABLED=true` 才开启开发验证入口。该通道直接调用公开 Responses API，完成真实生命周期验收并重新连接后才成为默认，旧凭据不自动迁移。个人远程 Docker／VM 按上述文档在本机 OAuth 后安全转移凭据。以下为当前使用的 Codex App Server 通道。
-
-暂缓直连的原因是远程授权步骤过于繁琐，当前 Codex 设备登录更方便；详见[暂缓原因与当前决策](chatgpt-plan-auth.md#暂缓原因与当前决策2026-09-29)。
-
-1. 登录 PCAS，进入「设置 → Codex App Server」。
-2. 点击登录，在官方验证页面输入设备验证码。必要时在 ChatGPT 安全设置启用设备登录。
-3. 页面显示账户后可选择「ChatGPT 订阅」副手。项目固定使用 `gpt-6.1-sol`，默认抽取也使用该模型，不再随 Codex 的默认模型变化；之前因为未登录而阻塞的作业可在资料库中重试。
-
-PCAS 使用 [官方 Codex app-server](https://learn.chatgpt.com/docs/app-server) 管理登录、额度查询和文本生成。认证资料位于独立的 `/var/lib/pcas/codex`，不会借用开发者已有的 Codex 账户或复制浏览器 Cookie。文本线程临时、只读，工具执行、网络搜索和审批请求均关闭。后台 worker 每次调用后释放进程，下次调用重新读取共享登录状态。
-
-[ChatGPT 登录与 API 密钥](https://learn.chatgpt.com/docs/auth) 是不同的使用方式，账户可用模型与额度以官方返回为准。这里通过官方 Codex 使用订阅，不把订阅当作通用 OpenAI API 密钥。订阅不提供本服务所需的独立向量或音频转录端点。
-
-## 通用 API 模型
-
-「设置 → API 与向量接入」可直接填写文本 API 的 Base URL（包含 `/v1`）、API Key、模型和预算单价。默认模型是 `gpt-6.1-sol`，采用 OpenAI 兼容的 Chat Completions 协议。勾选「作为默认副手与后台抽取入口」后，默认入口改为该 API；不勾选则继续使用 ChatGPT 订阅。
-
-向量 API 独立配置，默认是 `https://api.openai.com/v1` / `text-embedding-3-small`。文本供应商与向量供应商可分别使用不同的地址和密钥。空白密钥只在地址不变时保留旧值，更换地址需填写新密钥。设置页价格是每日预算估算的初始值，不代表供应商报价，使用前按实际价格调整。
-
-Compose 将设置保存在 `memory-files` 卷的 `/var/lib/pcas/model-api.json`，文件权限为 `0600`。原生部署设置 `PCAS_MODEL_SETTINGS_FILE=data/model-api.json`。密钥不返回前端，不写入浏览器存储；API 与 worker 每次读取最新设置，保存后无需重启。文件配置仍可使用下述方式，设置页只覆盖 `openai-api`、`openai-embedding` 两个固定入口，不修改其他供应商。
-
-复制 `config/models.example.json` 为被 Git 忽略的 `config/models.json`，在 `.env` 设置 `PCAS_MODELS_PATH=./config/models.json`。密钥只通过环境变量提供。Compose 已传入 `OPENAI_API_KEY`、`ANTHROPIC_API_KEY`、`PCAS_MODEL_API_KEY`；其他命名需自行增加服务环境映射。
-
-下例展示配置结构，`YOUR_*` 和价格须按实际服务填写；示例价格不代表报价：
-
-```json
-{
-  "providers": [
-    {
-      "id": "general", "name": "通用模型", "protocol": "openai",
-      "base_url": "https://YOUR_PROVIDER/v1", "key_env": "PCAS_MODEL_API_KEY",
-      "model": "YOUR_TEXT_MODEL", "max_output_tokens": 4096,
-      "input_cny_per_million": 1, "output_cny_per_million": 4
-    },
-    {
-      "id": "vector", "name": "向量模型", "protocol": "openai", "embedding": true,
-      "base_url": "https://YOUR_PROVIDER/v1", "key_env": "PCAS_MODEL_API_KEY",
-      "model": "YOUR_EMBEDDING_MODEL", "input_cny_per_million": 1
-    },
-    {
-      "id": "speech", "name": "音频转录", "protocol": "openai", "transcription": true,
-      "base_url": "https://YOUR_PROVIDER/v1", "key_env": "PCAS_MODEL_API_KEY",
-      "model": "YOUR_TRANSCRIPTION_MODEL", "audio_cny_per_minute": 0.1
-    }
-  ],
-  "extraction_provider": "general",
-  "embedding_provider": "vector",
-  "transcription_provider": "speech"
-}
+```dotenv
+PCAS_BIND_ADDRESS=0.0.0.0
+PCAS_PORT=12352
+PCAS_PUBLIC_URL=https://YOUR_HOST
 ```
 
-文本协议可设 `openai`（`/chat/completions`）、`responses`（`/responses`）或 `anthropic`（`/messages`）。本地 HTTP 服务也可接入。确实免费的服务显式设置 `cost_mode:"free"`。每个副手可以独立设置可见的记忆种类与是否包含推断；服务端再次校验实际授权。
+The domain proxy supplies HTTPS. The public URL must match the browser origin.
+The owner signs in with `PCAS_API_TOKEN`.
+The service uses an HttpOnly session cookie. It does not save the token in browser storage.
+Business routes need authentication, with the applicable connector-token exception.
+Health routes and the login page are public.
+External AI tokens use `PCAS_AGENT_TOKENS_FILE` and explicit record grants in a native deployment.
 
-配置更新后重建服务容器，使配置与密钥生效：`docker compose up -d --force-recreate api worker`。模型凭据不会发给前端。API 执行、后台抽取、向量查询/索引、音频转录共同受每日预算约束；订阅按账户限额使用。价格为运营者配置的预算估算，不替代供应商账单。未知用量保留预留额；失败调用不会自动反复付费重试。
+## 2 Codex Channel
 
-## OpenAI 向量与旧资料补建
+1. Sign in to PCAS.
+2. Open the Codex account settings.
+3. Start device login.
+4. Enter the displayed code on the supplied verification page.
+5. Check the account status.
+6. Select the subscription agent when necessary.
 
-默认使用 `text-embedding-3-small`，1536 维，通过 `/embeddings` 请求浮点向量。密钥可在设置页填写，也可在 `.env` 设置 `OPENAI_API_KEY` 后重建 API/worker 容器。订阅登录不能代替向量 API Key。参考 [OpenAI 向量文档](https://developers.openai.com/api/docs/guides/embeddings)。
+The configured default text model is `gpt-6.1-sol`.
+PCAS keeps its Codex account in `PCAS_CODEX_HOME`, separate from developer accounts.
+Compose uses `/var/lib/pcas/codex` in the persistent file volume.
+The model thread is temporary and read-only. Shell and local file tools remain disabled.
+Explicit search-capable turns can use web search. Background generation uses the applicable generation path.
+See [Codex Adapter](../internal/ai/codex.go).
+Subscription login does not configure vector or audio APIs.
 
-切换后点击「补建现有资料向量」，系统为当前有效的记忆和已有分段补建新模型缺失的向量。任务按每日预算处理，不重复排队已经排队或处理中的同模型任务；已完成向量不重复收费重建。旧向量保留以支持回滚，查询仅比较同一提供者、模型和维度；无需更改数据库列维度。未配置密钥或尚未完成补建时，原文检索仍可使用。
+## 3 API Models and Embeddings
 
-本地 FastEmbed / `BAAI/bge-small-zh-v1.5` 服务仍可选：用 `docker compose --profile local-embeddings up -d embeddings` 启动，再将私有模型配置的向量提供者改为该服务。默认部署不再下载本地模型权重。
+Configure the text URL, key, model, and accounting prices in the API settings.
+The text URL includes the provider's `/v1` path when the protocol requires it.
+Select the default text provider separately from the embedding provider.
+Configured prices support budget estimates. They are not provider quotations.
 
-## 秘书（导办台）
+Compose stores settings in `/var/lib/pcas/model-api.json` with mode `0600`.
+Native deployments use `PCAS_MODEL_SETTINGS_FILE`.
+The API and worker read updated settings without a service restart.
+A blank key preserves the old key only when the provider address is unchanged.
 
-首页和事项页的输入框都是秘书，调用 `POST /v1/desk/turn`：一次模型调用理解整句话，服务端校验后执行建事项、改时间、设提醒、派副手等动作，并返回可撤销的回执。秘书使用工作区的默认 agent（需要可直连的模型；手动交接无法驱动秘书）。模型不可用、超时或超出额度时，原话照常保存为资料，不会丢失。
-
-TypeSafe Jev 分流（`/v1/desk/route`、设置页的 Jev 密钥、`TYPESAFE_API_KEY`）仍然保留，但秘书不再调用它。
-
-### 上线检查的临时对话
-
-自动化检查可在 `POST /v1/desk/turn` 的 JSON 中增加 `smokeId`（调用方生成的新 UUID）。同一次检查的几句话使用同一个 `smokeId`、各自不同的 `requestId`；省略 `conversationId`，或令其等于 `smokeId`。只接受主人令牌的 `Authorization: Bearer …`，网页登录 cookie 和副手令牌不能使用该标记或清理入口。网页及 Telegram 不发送标记，普通对话的保存、抽取和整理照旧。
-
-检查轮仍调用模型、校验并真实执行事项动作；但原话仅临时保存在这组对话历史里，不创建原话来源、动作记忆来源、抽取任务或兜底候选，也不进入后续抽取、整理和摘要。标记随副手任务传递，自动采纳结果也不创建记忆来源。此入口只检查文字对话，不接受附件；已经上传的附件有自己的生命周期，不能靠轮次标记消除。
-
-一个请求示例（编号和内容均虚构）：
-
-```json
-{
-  "requestId": "11111111-1111-4111-8111-111111111111",
-  "smokeId": "22222222-2222-4222-8222-222222222222",
-  "text": "明天下午三点晾虚构窄边纸"
-}
-```
-
-检查完用同一主人令牌调用 `DELETE /v1/desk/smoke/{smokeId}`，成功返回 `200 {"cleaned":true}`。该调用在一个事务内删除整组临时原话、事项、动作历史、副手运行、产物、样本及通知，恢复检查临时修改的既有事项；版本号仍向前增加。清理与当前检查轮串行，副手晚到的结果不能重建已删除的数据。重复清理成功返回相同结果；关闭后的新请求和旧请求重试返回 409。未知组返回 404，不能用普通对话的编号清理它。
-
-若普通操作后来修改了同一事项、产物或关联了组外数据，整批清理返回 409，保留全部数据，不覆盖正常操作。检查的真实模型用量/预算记账和不含正文的关闭组、请求编号保留；临时回滚快照清掉。事项动作真实发生，清理不会撤回已送达的外部通知。协调者应在检查结束后立即清理，并检查返回结果。过去已经混入的线上记忆不属于这些新标记组，仍须由协调者另行处理。
-
-## 提醒通道
-
-秘书为带时间的事自动设置提醒（默认提前 30 分钟；只有日期时当天 09:00），需要设置里的「跟进提醒」保持开启。到点后：
-
-- **首页**：「今天」最上方置顶「到点了」。
-- **本设备推送**：设置页打开「在这台设备上接收提醒」。站点必须通过 HTTPS 访问；iPhone 需要先「添加到主屏幕」并从主屏幕打开。VAPID 密钥首次使用时自动生成。
-- **Telegram**：用 BotFather 创建 bot，在设置页填 token，先给 bot 发一句话再保存（自动检测 chat ID），保存时会发一条测试消息。之后直接给 bot 发文字或语音，就等于对秘书说话；回执里的按钮可以撤销。只接受这个私聊的消息。语音需要配置转录模型。
-
-VAPID 密钥、Telegram token、轮询进度保存在与 `model-api.json` 同目录的 `notify.json`（Compose 下为 `/var/lib/pcas/notify.json`，权限 `0600`），可用 `PCAS_NOTIFY_SETTINGS_FILE` 覆盖路径；不返回前端。
-
-## 升级
-
-升级前先备份数据库，再构建并重启；`migrate` 服务会在 api 和 worker 启动前执行新的迁移：
+File-based provider definitions use `PCAS_MODELS_PATH` in Compose.
+See [Model Configuration Example](../config/models.example.json).
+The implementation supports OpenAI-compatible Chat Completions, Responses, and Anthropic Messages.
+Local HTTP providers can use a supported protocol.
+For file or environment changes, recreate the API and worker services.
 
 ```sh
-docker exec pcas-db-1 pg_dump -U pcas -d pcas -Fc > pcas-$(date -u +%Y%m%dT%H%M%SZ).dump
-docker compose build api
-docker compose up -d
-curl -fsS http://127.0.0.1:${PCAS_PORT:-12352}/readyz
+docker compose up -d --force-recreate api worker
 ```
 
-通用连接器配置和格式见 [资料接入](connectors.md)。
+Embeddings use a separate key and provider.
+The default embedding model is `text-embedding-3-small`; see the configuration example for the current dimension.
+Use the rebuild control to queue missing vectors after a provider change.
+Queries compare compatible provider, model, and dimension values.
+Text retrieval remains available when vectors are missing.
 
-## 附件与备份
+The optional local service uses the `local-embeddings` profile:
 
-附件上限 20 MiB。PDF 最多 100 页，优先逐页提取文字，扫描页使用 OCR；图片使用中文/英文 OCR；音频需要已配置的转录服务。原件和解析文本分开保存，通过版本化来源关联。超出限制、缺少模型、解析失败都会保留原件并显示缺口。
+```sh
+docker compose --profile local-embeddings up -d embeddings
+```
 
-`memory-db` 保存数据库，`memory-files` 保存原件和私有 Codex 登录。资料库的 JSON 导出包含规范记录、版本、证据、授权和删除阻断标记，但不包含二进制附件或模型凭据。完整灾难恢复须同时备份数据库、文件卷、私有模型配置、`model-api.json`、`notify.json` 和 `.env`，并将备份置于单独的受保护位置。训练导出只包括用户选中的非过期样本，记录对应清单。
+Then select that service in the private embedding configuration.
+Audio transcription also needs its own configured provider.
 
-登录密码轮换：生成新的 `PCAS_API_TOKEN` 后重建 API 容器，旧登录会话失效。不要执行 `docker compose down -v`，除非明确要销毁数据库与附件。
+## 4 ChatGPT Direct Channel
+
+The direct channel is optional. Compose disables it unless `PCAS_CHATGPT_DIRECT_ENABLED=true`.
+Codex remains the recorded default until the direct account meets the verification conditions.
+The direct channel keeps separate credentials in `PCAS_CHATGPT_DIR`.
+It does not reuse Codex authentication files.
+
+For local login, use the direct-account control in settings.
+The default callback is `http://127.0.0.1:1455/auth/callback`.
+For remote login, the browser callback points to the user's computer.
+The implemented settings flow accepts that complete callback address and finishes the pending login on the server.
+See [Callback Handler](../internal/ai/siwc/manager.go) and [HTTP Routes](../internal/httpapi/chatgpt_direct.go).
+The old statement that callback paste is unimplemented no longer applies.
+
+If the model list does not contain a usable model, enter its name manually.
+The selected account and provider determine whether the model can run.
+Manual selection does not prove account capability.
+
+A local helper and secure credential import remain alternatives:
+
+```sh
+go build -o bin/pcas ./cmd/pcas
+./bin/pcas chatgpt-login --dir data/chatgpt --port 1455
+./bin/pcas chatgpt-import --dir /YOUR/PRIVATE/chatgpt /YOUR/PRIVATE/transfer.json
+```
+
+Transfer credentials through a protected channel. Preserve private file permissions.
+Do not expose access tokens or refresh tokens in browser responses, chat, or logs.
+Do not revoke a transferred session on the helper machine while the server still needs it.
+
+Complete lifecycle verification requires generation, refresh, generation after refresh, and remote revocation:
+
+```sh
+./bin/pcas chatgpt-verify --dir data/chatgpt
+# Compose alternative:
+docker compose exec -T api pcas chatgpt-verify --dir /var/lib/pcas/chatgpt
+```
+
+**This command revokes the account session. Reconnect after successful verification.**
+If refresh is not yet permitted, use the next time reported by the command.
+The existing record includes login and generation, but not complete real-account lifecycle verification.
+The [Historical Account Record](history/chatgpt-plan-auth.md) preserves earlier decisions and test details.
+
+## 5 Notifications and Attachments
+
+Configure reminders in settings.
+Web Push needs the applicable browser permission and HTTPS deployment.
+Configure the Telegram bot and send it a private message before linking the chat.
+Telegram voice input needs transcription configuration.
+Notification credentials are in `notify.json`; `PCAS_NOTIFY_SETTINGS_FILE` can select another private path.
+A server send result does not establish that a phone displayed the notification.
+
+Ordinary attachments and archives have different size limits.
+See the [Input Reference](connectors.md#implemented-limits).
+Parsing preserves the original and exposes missing or failed representations.
+A JSON export does not include binary attachments or model credentials.
+
+## 6 Upgrade and Backup
+
+Before an authorized release, check the target revision and backup location.
+
+1. Create a database backup.
+2. Check that the command succeeded and the backup file is nonempty.
+3. Preserve the required file-volume and private-configuration backups.
+4. Build the approved revision.
+5. Start services after migration succeeds.
+6. Check readiness and logs.
+7. Complete the live checks.
+
+```sh
+docker compose exec -T db pg_dump -U pcas -d pcas -Fc > pcas-backup.dump
+test -s pcas-backup.dump
+docker compose build api
+docker compose up -d
+curl -fsS http://127.0.0.1:12352/readyz
+docker compose logs --tail=50 api worker migrate
+```
+
+Use a unique backup filename for each release. Keep backups in a protected location.
+Preserve both database and file volumes, private model settings, notification settings, account files, and `.env`.
+Do not edit migrations that have been deployed.
+Do not run `docker compose down -v` during an upgrade.
+For token rotation, change `PCAS_API_TOKEN` and recreate the API service.
+
+## 7 Live Checks
+
+Test the secretary through the real default Codex channel after deployment.
+Use an answer, an arrangement, and a change when those actions apply to the release.
+Check the executed objects, receipts, and errors.
+Record claim counts before and after cleanup. Attribute test records by request or source ID.
+Do not select production cleanup records by creation time.
+
+The owner Bearer token can use a new `smokeId` for a check-only conversation.
+Use distinct request IDs within that group. Ordinary browser sessions and agent tokens cannot use this marker.
+The check executes supported item actions without creating normal memory sources.
+Attachments are not supported. Memory date closure is skipped in check mode.
+A skipped action does not prove normal-mode behavior.
+
+Clean the group with `DELETE /v1/desk/smoke/{smokeId}`.
+Check the response. A group changed by outside work can return `409` without cleanup.
+Existing production memory is outside the group's cleanup scope.
+Check usage records and relevant sources as well as counts.
+External notifications that were delivered cannot be undone by local cleanup.
+The [Phase 3.6 Record](evaluations/2026-10-08-phase3_6-rollout.md) describes the known check-mode reply discrepancy.

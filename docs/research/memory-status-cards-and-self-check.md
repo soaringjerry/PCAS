@@ -1,5 +1,9 @@
 # 研究笔记：现状卡、期限表与自查
 
+> **Historical research.** This text records an earlier phase or investigation.
+> Use the [current documentation](../README.md) and [project status](../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 2026-10-04 · 状态：**2.5 阶段采用，现状卡部分已在 2.6 阶段（2026-10-07）去掉**——卡片不产生新内容、大分组只看得到最近 300 条、一条记忆变了要整张重做，经过见 [现状层问题清单](memory-status-layer-audit.md)；期限表和自查保留。本文保留为当时的设计依据。数字见 [第二轮对比实验](../evaluations/2026-10-04-memory-lookup-round2.md)。同一轮实验里的其他办法见 [看目录、分头细读](memory-navigate-and-read.md) 和 [用途标注与事先备料](memory-use-phrases-and-packets.md)。文中例子是虚构的。
 
 ## 1 要解决的问题

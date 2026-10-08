@@ -1,5 +1,9 @@
 # 第 4 批：评测、花费记录和 ChatGPT 历史导入（契约）
 
+> **Historical task record.** This text records an earlier phase or investigation.
+> Use the [current documentation](../../../README.md) and [project status](../../../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 **先读 [并行方案与数据约定](../parallel.md)，再读本页，最后读自己的任务包。** 本页和任务包冲突时以本页为准，并立刻告诉协调者。
 
 ## 1 这一批做什么

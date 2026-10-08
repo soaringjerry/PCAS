@@ -18,6 +18,18 @@ import (
 // Business selection, job retry policy, and result application stay with callers.
 type backgroundCalls struct{ store *Store }
 
+// Queue and action owners submit recovery changes to the journal adapter.
+// Their existing transaction keeps the job, receipt, and metadata atomic.
+func (a backgroundCalls) authorizeRecoveryTx(ctx context.Context, tx pgx.Tx, owner, execution memory.ID, requestID string) error {
+	_, err := tx.Exec(ctx, `UPDATE model_calls SET recovery_state='replaced',recovery_reason='explicit_user_retry',actual_mode=actual_mode||jsonb_build_object('recoveryRequestId',$3::text,'previousRecoveryReason',recovery_reason),updated_at=clock_timestamp() WHERE owner_id=$1 AND execution_id=$2 AND recovery_state IN ('exhausted','budget_exhausted')`, string(owner), string(execution), requestID)
+	return err
+}
+
+func (a backgroundCalls) exhaustRecoveryTx(ctx context.Context, tx pgx.Tx, job worker.Job) error {
+	_, err := tx.Exec(ctx, `UPDATE model_calls SET outcome=CASE WHEN outcome='prepared' THEN 'failed' ELSE 'unknown' END,error_code=CASE WHEN outcome='prepared' THEN 'provider_not_started' ELSE 'provider_outcome_unknown' END,finished_at=coalesce(finished_at,clock_timestamp()),recovery_state='exhausted',recovery_reason='queue_attempts_exhausted',accounting_state=CASE WHEN reservation_id IS NOT NULL THEN 'held' ELSE accounting_state END,updated_at=clock_timestamp() WHERE owner_id=$1 AND execution_id=$2 AND recovery_state='active' AND outcome IN ('prepared','started','unknown')`, string(job.OwnerID), string(job.ID))
+	return err
+}
+
 func (a backgroundCalls) Load(ctx context.Context, request modelcall.Request) (*modelcall.PaidResult, error) {
 	return a.store.paidModelResult(ctx, request.Policy.(worker.Job))
 }

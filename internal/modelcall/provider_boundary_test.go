@@ -3,6 +3,7 @@ package modelcall_test
 import (
 	"encoding/json"
 	"go/ast"
+	"go/constant"
 	"go/importer"
 	"go/parser"
 	"go/token"
@@ -11,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -67,6 +69,7 @@ func TestProductionProviderCallsUseDeclaredMigrationBoundaries(t *testing.T) {
 		}
 	}
 	methods := map[string]bool{"Generate": true, "GenerateProvider": true, "GenerateSchema": true, "GenerateWithSearch": true, "GenerateWithSearchSchema": true, "Embed": true, "EmbedQuery": true, "EmbedProvider": true, "EmbedProviderUsage": true, "Transcribe": true, "TranscribeUsage": true, "Vision": true, "Route": true}
+	journalWrite := regexp.MustCompile(`(?i)\b(?:INSERT\s+INTO|UPDATE|DELETE\s+FROM)\s+"?model_calls"?\b`)
 	for _, p := range packages {
 		if strings.Contains(p.ImportPath, "/internal/ai") || strings.Contains(p.ImportPath, "/cmd/pcas-eval") {
 			continue
@@ -87,7 +90,7 @@ func TestProductionProviderCallsUseDeclaredMigrationBoundaries(t *testing.T) {
 			}
 			files = append(files, f)
 		}
-		info := &types.Info{Uses: map[*ast.Ident]types.Object{}}
+		info := &types.Info{Uses: map[*ast.Ident]types.Object{}, Types: map[ast.Expr]types.TypeAndValue{}}
 		config := types.Config{Importer: importer.ForCompiler(fs, "gc", func(path string) (io.ReadCloser, error) { return os.Open(exports[path]) })}
 		if _, err := config.Check(p.ImportPath, fs, files, info); err != nil {
 			t.Fatal(err)
@@ -109,10 +112,23 @@ func TestProductionProviderCallsUseDeclaredMigrationBoundaries(t *testing.T) {
 						return true
 					}
 					method, ok := info.Uses[selector.Sel].(*types.Func)
-					if !ok || method.Pkg() == nil || !methods[method.Name()] {
+					if !ok || method.Pkg() == nil {
 						return true
 					}
 					path := method.Pkg().Path()
+					if strings.HasPrefix(path, "github.com/jackc/pgx/") && (method.Name() == "Exec" || method.Name() == "Query" || method.Name() == "QueryRow") && len(call.Args) > 1 {
+						// This first table guard covers resolved constant SQL,
+						// including named constants and constant concatenation.
+						// Complete domain and dynamic-SQL ownership remains in
+						// the foundation's later owner-boundary migration.
+						value := info.Types[call.Args[1]].Value
+						if value != nil && value.Kind() == constant.String && journalWrite.MatchString(constant.StringVal(value)) && filepath.ToSlash(name) != "internal/postgres/model_calls.go" {
+							t.Errorf("call journal mutation outside its storage owner: %s:%s", name, fn.Name.Name)
+						}
+					}
+					if !methods[method.Name()] {
+						return true
+					}
 					if !strings.Contains(path, "/internal/ai") && path != "github.com/soaringjerry/PCAS/internal/modelcall" && !(path == "github.com/soaringjerry/PCAS/internal/telegram" && method.Name() == "Transcribe") {
 						return true
 					}

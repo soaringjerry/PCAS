@@ -413,11 +413,7 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 		}
 		// Only this explicit owner command releases a terminal recovery pause.
 		// Keep its old attempt records and link the next bounded chain to them.
-		_, err = tx.Exec(ctx, `UPDATE model_calls SET recovery_state='replaced',recovery_reason='explicit_user_retry',actual_mode=actual_mode||jsonb_build_object('recoveryRequestId',$3::text,'previousRecoveryReason',recovery_reason),updated_at=clock_timestamp() WHERE owner_id=$1 AND execution_id=$2 AND recovery_state IN ('exhausted','budget_exhausted')`, string(scope.OwnerID), c.ID, c.RequestID)
-		if err != nil {
-			return err
-		}
-		return nil
+		return (backgroundCalls{store: s}).authorizeRecoveryTx(ctx, tx, scope.OwnerID, memory.ID(c.ID), c.RequestID)
 	case "deleteThing":
 		return s.deleteThingTx(ctx, tx, scope, c.ID)
 	}

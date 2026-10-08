@@ -182,7 +182,7 @@ func (s *Store) expireExhaustedJobs(ctx context.Context) error {
 			if tag.RowsAffected() == 1 {
 				// A last-attempt crash has no next lease to finalize its journal.
 				// Keep the unknown reservation and show why recovery stopped.
-				if _, err := tx.Exec(ctx, `UPDATE model_calls SET outcome=CASE WHEN outcome='prepared' THEN 'failed' ELSE 'unknown' END,error_code=CASE WHEN outcome='prepared' THEN 'provider_not_started' ELSE 'provider_outcome_unknown' END,finished_at=coalesce(finished_at,clock_timestamp()),recovery_state='exhausted',recovery_reason='queue_attempts_exhausted',accounting_state=CASE WHEN reservation_id IS NOT NULL THEN 'held' ELSE accounting_state END,updated_at=clock_timestamp() WHERE owner_id=$1 AND execution_id=$2 AND recovery_state='active' AND outcome IN ('prepared','started','unknown')`, string(j.OwnerID), string(j.ID)); err != nil {
+				if err := (backgroundCalls{store: s}).exhaustRecoveryTx(ctx, tx, j); err != nil {
 					return err
 				}
 			}

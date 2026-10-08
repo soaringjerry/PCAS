@@ -98,6 +98,9 @@ Use a migration comparison artifact. Do not add permanent prompt-wording tests o
 Keep meaningful paid-result, cancellation, accounting, version, lease, and replay tests.
 Architecture checks use resolved dependencies and explicit migration exceptions.
 
+The first storage guard confines constant SQL mutations of `model_calls` to its journal adapter.
+Complete domain ownership and dynamic SQL checks remain required for Phase 3.9.
+
 The [five test layers](../architecture.md#five-test-layers) must all be completed within Phase 3.9.
 This skeleton does not supply complete owner contracts, production-copy replay, or nightly evaluation.
 Build recorded replay before the next business-domain migration.

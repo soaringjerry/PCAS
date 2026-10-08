@@ -117,7 +117,13 @@ No test was removed. A migration comparison verified unchanged bodies except the
 That contract now checks the original reservation, the unknown outcome, held accounting, and incomplete usage explicitly.
 The moved contracts and recovery cases passed together with the race detector in 36.486 seconds.
 
-Final CI and deployment remain pending at this record's preparation.
+The [accounting-contract CI run](https://github.com/soaringjerry/PCAS/actions/runs/37853762451) passed all thirteen jobs at revision `1ad763d`.
+Final review then centralized retry and lease-expiry journal writes in their storage adapter.
+A resolved constant-SQL guard checks that first table boundary. Complete domain ownership remains outstanding.
+The affected recovery group passed with the race detector in 16.400 seconds.
+
+The final owner-boundary revision still requires complete CI before integration.
+Deployment remains pending at this record's preparation.
 A preparation backup was verified for the initial skeleton revision.
 The final release backup and live secretary check remain pending.
 

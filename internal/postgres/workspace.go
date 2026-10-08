@@ -656,8 +656,16 @@ func jobProblem(code string) string {
 // finished runs are already on their own records and are added by the client.
 func activityTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, timezone string) ([]workspace.Activity, error) {
 	// Automatic creation is presented once through the item and its creation
-	// actionId. Keep the action audit without duplicating that receipt here.
-	out := []workspace.Activity{}
+	// actionId. A topic linked to an existing project has no new item receipt,
+	// so retain its activity while excluding all automatic creation activities.
+	out, err := queryDocuments[workspace.Activity](ctx, tx, `SELECT jsonb_build_object('id',a.id::text,'at',a.created_at,'text',a.summary,'to','/t/'||l.project_id::text)
+ FROM action_log a JOIN topic_project_links l ON(l.owner_id,l.action_id)=(a.owner_id,a.id)
+ WHERE a.owner_id=$1 AND a.source='background_topic' AND NOT l.created_project
+ AND a.undone_at IS NULL AND a.expired_at IS NULL AND a.created_at>=now()-interval '30 days'
+ ORDER BY a.created_at DESC,a.id`, string(scope.OwnerID))
+	if err != nil {
+		return nil, err
+	}
 	owner := string(scope.OwnerID)
 	rows, err := tx.Query(ctx, `WITH finished AS (
 		SELECT j.record_id,j.record_version,max(j.updated_at) AS at FROM memory_jobs j

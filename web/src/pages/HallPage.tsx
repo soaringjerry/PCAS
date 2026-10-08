@@ -68,6 +68,29 @@ function FinishDate({ entry, children, onDone }: { entry: ScheduleEntry; childre
   )
 }
 
+/**
+ * The × on a date from the table of deadlines: not wanted here. It is marked on
+ * the memory under it, like 做完了, so every day it would fall on goes with it;
+ * the memory itself stays, and the toast takes it back.
+ */
+function DropDate({ entry, onDone }: { entry: ScheduleEntry; onDone?: () => void }) {
+  const { dispatchUndoable } = useStore()
+  if (entry.source.kind !== 'deadline' || !(entry.source.deadlineId ?? entry.id)) return null
+  return (
+    <button
+      type="button"
+      className="hall-drop"
+      aria-label={`不要了：${entry.title}`}
+      title="不要了，别再显示"
+      onClick={async () => {
+        if (await dispatchUndoable({ type: 'completeDeadline', id: entry.source.deadlineId ?? entry.id, memoryId: entry.source.memoryId }, '不再显示了')) onDone?.()
+      }}
+    >
+      <X size={14} />
+    </button>
+  )
+}
+
 /** A date from the table of deadlines. It opens onto what was said; a to-do opens its own page. */
 function DateRowView({ row, withTime, unclear, onOpen }: { row: DateRow; withTime?: boolean; unclear?: boolean; onOpen: (row: DateRow) => void }) {
   const { entry } = row
@@ -97,6 +120,7 @@ function DateRowView({ row, withTime, unclear, onOpen }: { row: DateRow; withTim
           {body}
         </button>
       )}
+      <DropDate entry={entry} />
     </div>
   )
 }

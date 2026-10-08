@@ -868,6 +868,30 @@ button.hall-task-body {
   flex: none;
 }
 
+/* The × at the end of a date's row: not wanted, stop showing it. */
+.hall-drop {
+  flex: none;
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin-right: 2px;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--label-3, var(--label));
+  opacity: 0.55;
+  cursor: pointer;
+}
+
+.hall-drop:hover,
+.hall-drop:focus-visible {
+  opacity: 1;
+  background: var(--fill);
+}
+
 /* 做完了, inside the sheet a date opens. */
 .hall-finish {
   display: inline-flex;

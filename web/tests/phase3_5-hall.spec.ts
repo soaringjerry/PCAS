@@ -133,7 +133,7 @@ test('the next three days list deadlines and appointments, and end with the date
   await expect(unclear.locator('.h-title')).toHaveText(['去看林栖的新店'])
   await expect(unclear.locator('.h-note')).toHaveText('原话：说好了找个时间去看林栖的新店')
   // It opens onto what was said and the memory under it.
-  await unclear.getByRole('button', { name: /去看林栖的新店/ }).click()
+  await unclear.getByRole('button', { name: /^去看林栖的新店/ }).click()
   const sheet = page.getByRole('dialog')
   await expect(sheet.getByRole('heading', { name: '去看林栖的新店' })).toBeVisible()
   await expect(sheet).toContainText('预约 · 日期没说清')
@@ -169,6 +169,11 @@ test('a deadline that went by unmet looks like 已过截止 and can be said to b
   await page.getByRole('button', { name: '撤销' }).click()
   await expect.poll(() => mock.commands.at(-1)).toMatchObject({ type: 'undoAction', id: done })
   expect(mock.state.tasks).toEqual([])
+  // Any date can simply be dropped with its ×, done or not, and that too can be taken back.
+  await late.getByRole('button', { name: '不要了：旧期限 5' }).click()
+  await expect.poll(() => mock.commands.at(-1)).toMatchObject({ type: 'completeDeadline', id: 'd-old-4' })
+  await expect(late.locator('.h-title').filter({ hasText: '旧期限 5' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: '撤销' })).toBeVisible()
   expect(mock.errors).toEqual([])
 })
 

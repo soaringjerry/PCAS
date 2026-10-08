@@ -1,11 +1,14 @@
 package postgres
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
 	"io"
 	"mime"
+	"net/http"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -54,6 +57,17 @@ func (s *Store) UploadProjectFile(ctx context.Context, scope memory.Scope, item,
 		media = parsed
 	} else {
 		media = "application/octet-stream"
+	}
+	peek := bufio.NewReader(input)
+	input = peek
+	if media == "application/octet-stream" || media == "" {
+		if byExt, _, err := mime.ParseMediaType(mime.TypeByExtension(strings.ToLower(filepath.Ext(name)))); err == nil && byExt != "" {
+			media = byExt
+		} else if head, _ := peek.Peek(512); len(head) > 0 {
+			if sniffed, _, err := mime.ParseMediaType(http.DetectContentType(head)); err == nil && sniffed != "application/octet-stream" {
+				media = sniffed
+			}
+		}
 	}
 	// Validate the destination before writing a blob, then recheck in the commit.
 	if err := pgx.BeginTxFunc(ctx, s.pool, pgx.TxOptions{AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error { _, err := studioFileProjectTx(ctx, tx, scope, item); return err }); err != nil {
@@ -142,9 +156,14 @@ func projectFileTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, id string
 		if err = rows.Scan(&job, &stage, &state, &code); err != nil {
 			return out, err
 		}
+		if out.JobID == nil {
+			latest := job
+			out.JobID = &latest
+		}
 		if (state == "failed" || state == "blocked") && out.Status != "failed" {
 			out.Status = "failed"
-			out.JobID = &job
+			failed := job
+			out.JobID = &failed
 			out.FailureReason = fileProcessingReason(code)
 		}
 		if state != "done" {

@@ -3,6 +3,7 @@ package postgres
 import (
 	"fmt"
 	"math/rand"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -169,7 +170,13 @@ func TestPhase3D5ContinuousSkipAndInsertedUndoSequences(t *testing.T) {
 				if cur.Body != av.Body {
 					t.Fatal("same request toggled more than once")
 				}
-				phase3Undo(t, h, f, b)
+				// Restoring B means undoing the recorded undo (the existing
+				// mechanism: an undo is itself an action), not undoing B again.
+				var restore string
+				if err := f.Store.pool.QueryRow(f.Context, `SELECT id::text FROM action_log WHERE owner_id=$1 AND undone_at IS NULL ORDER BY action_order DESC LIMIT 1`, f.Scope.OwnerID).Scan(&restore); err != nil {
+					t.Fatal(err)
+				}
+				phase3Undo(t, h, f, restore)
 				_, cur = phase3CurrentDoc(t, h, f, d.ID)
 				if cur.Body != bv.Body {
 					t.Fatal("second explicit undo did not restore B")
@@ -261,10 +268,17 @@ func TestPhase3D6SecretaryDelegatesExactVersionOrOnlyAsksAmbiguousField(t *testi
 				if stage != "secretary" {
 					return out
 				}
+				input := m.LastPrompt["secretary"]
 				if ambiguous {
 					return `{"reply":"需要明确哪一份方案","actions":[],"used":[],"links":[],"show":[],"remember":false,"missingKeyInfo":true,"ask":{"question":"哪一份虚构方案？","options":[]},"memoryPlan":{"depth":"light","groups":[]}}`
 				}
-				return string(asJSON(map[string]any{"reply": "已派副手从第二版改虚构预算。", "actions": []any{map[string]any{"op": "delegate", "ref": "THIS", "kind": "revise", "documentId": d.ID, "baseVersion": 2, "prompt": "只改虚构第二版预算。"}}, "used": []any{}, "links": []any{}, "show": []any{}, "remember": false, "missingKeyInfo": false, "ask": nil, "memoryPlan": map[string]any{"depth": "light", "groups": []any{}}}))
+				// The secretary refers to documents by the D* alias the server
+				// printed in its catalog, never by UUID (published D interface).
+				alias := regexp.MustCompile(`(?m)^(D\d+)：` + regexp.QuoteMeta(d.Title) + `（`).FindStringSubmatch(input)
+				if alias == nil {
+					return `{"reply":"目录里没有这份文档","actions":[],"used":[],"links":[],"show":[],"remember":false,"missingKeyInfo":true,"ask":null,"memoryPlan":{"depth":"light","groups":[]}}`
+				}
+				return string(asJSON(map[string]any{"reply": "已派副手从第二版改虚构预算。", "actions": []any{map[string]any{"op": "delegate", "ref": "THIS", "kind": "revise", "documentId": alias[1], "baseVersion": 2, "prompt": "只改虚构第二版预算。"}}, "used": []any{}, "links": []any{}, "show": []any{}, "remember": false, "missingKeyInfo": false, "ask": nil, "memoryPlan": map[string]any{"depth": "light", "groups": []any{}}}))
 			}
 			m.mu.Unlock()
 			code, raw, err := h.call(f.Context, "POST", "/v1/desk/turn", workspace.DeskTurnRequest{RequestID: string(memory.NewID()), ThingID: &p.ID, AgentID: "phase3", Text: "把第二版方案里的预算部分改保守一点"})

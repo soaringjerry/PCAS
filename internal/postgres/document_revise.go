@@ -194,3 +194,34 @@ func reviseUndoActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, id s
 	err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM action_log a CROSS JOIN LATERAL jsonb_array_elements(a.changes) c JOIN agent_runs r ON r.owner_id=a.owner_id AND r.id::text=c->>'id' WHERE a.owner_id=$1 AND a.id=$2 AND c->>'table'='agent_runs' AND r.document->>'kind'='revise')`, string(scope.OwnerID), id).Scan(&ok)
 	return ok, err
 }
+
+// A pasted revision has no model-side complete flag, so the program checks the
+// obvious structural defects only (contract D4): empty, identical to the base or
+// the current version, or shorter than a quarter of the base — a revision that
+// keeps every unrequested paragraph cannot shrink that far. Wording is left to
+// the model/user.
+func manualReviseReasonTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run workspace.Run, text string) (string, error) {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return "改写正文为空", nil
+	}
+	base, err := documentVersionTx(ctx, tx, scope, run.DocumentID, run.BaseVersion)
+	if err != nil {
+		return "基准文档已删除或版本不存在", nil
+	}
+	doc, err := queryDocument[workspace.Doc](ctx, tx, "SELECT document FROM work_documents WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), run.DocumentID)
+	if err != nil {
+		return "", err
+	}
+	baseBody := strings.TrimSpace(base.Body)
+	if text == baseBody {
+		return "改写正文与基准完全相同", nil
+	}
+	if text == strings.TrimSpace(doc.Body) {
+		return "改写正文与当前版本完全相同", nil
+	}
+	if len([]rune(baseBody)) >= 40 && len([]rune(text))*4 < len([]rune(baseBody)) {
+		return "改写正文明显短于基准，疑似截断；未存为新版本", nil
+	}
+	return "", nil
+}

@@ -7,6 +7,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/worker"
 )
@@ -51,6 +52,12 @@ func backgroundResultTx(ctx context.Context, db interface {
 		err = backgroundWriteTx(ctx, db, owner, write)
 		var busy *worker.JobError
 		if !errors.As(err, &busy) || busy.Code != "background_write_busy" {
+			return err
+		}
+		// pgx closes a connection whose query was cancelled by the write
+		// deadline; a dedicated connection cannot be retried in-process. Yield
+		// the job and let the next claim open a fresh one.
+		if dedicated, ok := db.(*pgxpool.Conn); ok && dedicated.Conn().IsClosed() {
 			return err
 		}
 		select {

@@ -25,7 +25,7 @@ const (
 	OrganizeStage              = "memory.organize"
 	OrganizePriority           = 4
 	organizeBatchLimit         = 40
-	organizeCompareHourlyLimit = 120
+	organizeCompareHourlyLimit = 140 // contract 4.1: 118 across the 2.6 stages + 10 project_handover + 10 effort, 2 unassigned
 )
 
 var organizeAreas = []string{"学业", "工作", "创业", "技术", "健康", "财务", "居住", "饮食", "出行", "关系", "兴趣"}

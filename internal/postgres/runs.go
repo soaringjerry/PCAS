@@ -438,9 +438,26 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 	}
 	switch c.Type {
 	case "pasteRunResult":
-		if run.Status != "waiting" || run.StaleContext || requireText(c.Output) != nil {
+		if run.Status != "waiting" || run.StaleContext {
 			return memory.ErrConflict
 		}
+		if run.Kind == "revise" {
+			reason, err := manualReviseReasonTx(ctx, tx, scope, run, c.Output)
+			if err != nil {
+				return err
+			}
+			if reason != "" {
+				run.Error = reason
+				if err := stageEventTx(ctx, tx, scope.OwnerID, "deputy", "failure", "revise_invalid_output", 1); err != nil {
+					return err
+				}
+				_, err = tx.Exec(ctx, "UPDATE agent_runs SET document=$3 WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), run.ID, asJSON(run))
+				return err
+			}
+		} else if requireText(c.Output) != nil {
+			return memory.ErrConflict
+		}
+		run.Error = ""
 		run.Status = "done"
 		run.Output = c.Output
 		run.FinishedAt = stamp()

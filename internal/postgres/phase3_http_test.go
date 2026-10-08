@@ -76,7 +76,7 @@ type phase3HTTP struct {
 func phase3NewHTTP(t *testing.T, f *phase3LoadedFixture) *phase3HTTP {
 	t.Helper()
 	s := f.Store
-	api := httpapi.New(s, s, b1Auth{f.Scope}, s.Ping, slog.New(slog.NewTextHandler(io.Discard, nil)), httpapi.Options{Workspace: s, Editor: s, Writer: s})
+	api := httpapi.New(s, s, b1Auth{f.Scope}, s.Ping, slog.New(slog.NewTextHandler(io.Discard, nil)), httpapi.Options{Workspace: s, Editor: s, Writer: s, Attachments: s})
 	server := httptest.NewServer(api)
 	t.Cleanup(server.Close)
 	return &phase3HTTP{server.URL, server.Client()}

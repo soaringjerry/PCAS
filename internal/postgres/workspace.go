@@ -455,6 +455,9 @@ func (s *Store) Execute(ctx context.Context, scope memory.Scope, in workspace.Co
 		}
 		if recordAction {
 			ctx = withActionLog(ctx, in.RequestID, "command", "", commandSummary(ctx, tx, scope, in))
+			if in.Type == "undoAction" {
+				ctx = withUndoOf(ctx, in.ID)
+			}
 			if err := beginActionLogTx(ctx, tx); err != nil {
 				return err
 			}

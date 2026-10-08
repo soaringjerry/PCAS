@@ -27,11 +27,14 @@ type phase3Model struct {
 	Calls    map[string][]phase26Call
 	Before   func(context.Context, string)
 	Override func(string, string) string
+	// The prompt of the call currently being answered, by logical stage, so an
+	// Override can read server-issued aliases (D*, M*) from it.
+	LastPrompt map[string]string
 }
 
 func phase3NewModel(t *testing.T, f *phase3LoadedFixture) *phase3Model {
 	t.Helper()
-	m := &phase3Model{Calls: map[string][]phase26Call{}}
+	m := &phase3Model{Calls: map[string][]phase26Call{}, LastPrompt: map[string]string{}}
 	baseline := &phase26Model{f: f.phase26LoadedFixture}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
@@ -63,6 +66,7 @@ func phase3NewModel(t *testing.T, f *phase3LoadedFixture) *phase3Model {
 			logical = "project_handover"
 		}
 		m.mu.Lock()
+		m.LastPrompt[logical] = prompt
 		before, override := m.Before, m.Override
 		m.mu.Unlock()
 		if before != nil {
@@ -88,7 +92,7 @@ func phase3NewModel(t *testing.T, f *phase3LoadedFixture) *phase3Model {
 			items := []any{}
 			for _, it := range p.Items {
 				if it.Due != "" {
-					items = append(items, map[string]any{"id": it.ID, "estimatedHours": 8, "hours": 8, "reason": "虚构步骤需要两个半天，每天可投入四小时。"})
+					items = append(items, map[string]any{"itemId": it.ID, "id": it.ID, "estimatedHours": 8, "hours": 8, "reason": "虚构步骤需要两个半天，每天可投入四小时。"})
 				}
 			}
 			out = string(asJSON(map[string]any{"items": items}))
@@ -267,7 +271,7 @@ func TestPhase3H3T2CoalescesEditsAndDoneStopsRewrite(t *testing.T) {
 			t.Fatal(err)
 		}
 		var ready int
-		if err := f.Store.pool.QueryRow(f.Context, `SELECT count(*) FROM memory_jobs WHERE owner_id=$1 AND dedupe_key LIKE $2 AND state='queued' AND available_at<=$3`, f.Scope.OwnerID, stage+":%", at).Scan(&ready); err != nil {
+		if err := f.Store.pool.QueryRow(f.Context, `SELECT count(*) FROM memory_jobs WHERE owner_id=$1 AND stage LIKE $2 AND state='queued' AND available_at<=$3`, f.Scope.OwnerID, stage+":%", at).Scan(&ready); err != nil {
 			t.Fatal(err)
 		}
 		if offset < time.Hour && ready != 0 {
@@ -283,7 +287,7 @@ func TestPhase3H3T2CoalescesEditsAndDoneStopsRewrite(t *testing.T) {
 	// Advance only owned fixture clocks; now execute the queued rewrite. Testing
 	// scheduling alone would fail to detect a processor that repeatedly calls.
 	phase3AgeHandoverClock(t, f)
-	phase26Exec(t, f.phase26LoadedFixture, `UPDATE memory_jobs SET available_at=now()-interval '1 second' WHERE owner_id=$1 AND dedupe_key LIKE $2 AND state='queued'`, f.Scope.OwnerID, stage+":%")
+	phase26Exec(t, f.phase26LoadedFixture, `UPDATE memory_jobs SET available_at=now()-interval '1 second' WHERE owner_id=$1 AND stage LIKE $2 AND state='queued'`, f.Scope.OwnerID, stage+":%")
 	job := phase26ClaimStage(t, f.phase26LoadedFixture, stage)
 	if err := phase3Process(f.Store, f.Context, "project_handover", job); err != nil {
 		t.Fatal(err)
@@ -298,7 +302,7 @@ func TestPhase3H3T2CoalescesEditsAndDoneStopsRewrite(t *testing.T) {
 		t.Fatal(err)
 	}
 	var ready int
-	if err := f.Store.pool.QueryRow(f.Context, `SELECT count(*) FROM memory_jobs WHERE owner_id=$1 AND dedupe_key LIKE $2 AND state='queued' AND available_at<=now()`, f.Scope.OwnerID, stage+":%").Scan(&ready); err != nil || ready != 0 {
+	if err := f.Store.pool.QueryRow(f.Context, `SELECT count(*) FROM memory_jobs WHERE owner_id=$1 AND stage LIKE $2 AND state='queued' AND available_at<=now()`, f.Scope.OwnerID, stage+":%").Scan(&ready); err != nil || ready != 0 {
 		t.Fatal("done project has ready rewrite", ready, err)
 	}
 	t.Logf("T4 single project edits=5 handover_calls=%d (initial=1, coalesced=1)", m.count("project_handover"))

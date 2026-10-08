@@ -11,7 +11,7 @@ import (
 )
 
 type actionLogKey struct{}
-type actionLog struct{ id, source, turnID, summary string }
+type actionLog struct{ id, source, turnID, summary, undoOf string }
 type actionChange struct {
 	Table     string          `json:"table"`
 	ID        string          `json:"id"`
@@ -20,7 +20,18 @@ type actionChange struct {
 }
 
 func withActionLog(ctx context.Context, id, source, turnID, summary string) context.Context {
-	return context.WithValue(ctx, actionLogKey{}, actionLog{id, source, turnID, summary})
+	return context.WithValue(ctx, actionLogKey{}, actionLog{id: id, source: source, turnID: turnID, summary: summary})
+}
+
+// withUndoOf marks the pending action-log entry as the undo of another action;
+// such entries never count as newer actions for the actions they sit on.
+func withUndoOf(ctx context.Context, undone string) context.Context {
+	log, ok := ctx.Value(actionLogKey{}).(actionLog)
+	if !ok {
+		return ctx
+	}
+	log.undoOf = undone
+	return context.WithValue(ctx, actionLogKey{}, log)
 }
 func beginActionLogTx(ctx context.Context, tx pgx.Tx) error {
 	if ctx.Value(actionLogKey{}) == nil {
@@ -53,7 +64,7 @@ func flushActionLog(ctx context.Context, tx pgx.Tx, scope memory.Scope) error {
 	if len(entries) == 0 {
 		return nil
 	}
-	_, err := tx.Exec(ctx, "INSERT INTO action_log(owner_id,id,source,turn_id,summary,changes) VALUES($1,$2,$3,$4,$5,$6)", string(scope.OwnerID), log.id, log.source, nullString(log.turnID), log.summary, changes)
+	_, err := tx.Exec(ctx, "INSERT INTO action_log(owner_id,id,source,turn_id,summary,changes,undo_of) VALUES($1,$2,$3,$4,$5,$6,$7)", string(scope.OwnerID), log.id, log.source, nullString(log.turnID), log.summary, changes, nullString(log.undoOf))
 	if err != nil {
 		return err
 	}
@@ -338,7 +349,7 @@ func (s *Store) deleteUndoneTurnMemoriesTx(ctx context.Context, tx pgx.Tx, scope
 // can prove order. An unresolved tie refuses safely as changed_since.
 func checkActionSuccessors(ctx context.Context, tx pgx.Tx, scope memory.Scope, id string, changes []byte, created time.Time, order *int64, source string, turnID *string) error {
 	rows, err := tx.Query(ctx, `SELECT later.id::text,later.created_at,later.action_order,later.source,later.turn_id::text
-	 FROM action_log later WHERE later.owner_id=$1 AND later.id<>$2 AND later.undone_at IS NULL
+	 FROM action_log later WHERE later.owner_id=$1 AND later.id<>$2 AND later.undone_at IS NULL AND later.undo_of IS NULL
 	 AND (($3::bigint IS NOT NULL AND later.action_order>$3)
 	   OR ($3::bigint IS NULL AND (later.action_order IS NOT NULL OR later.created_at>=$4)))
 	 AND EXISTS(SELECT 1 FROM jsonb_array_elements(later.changes) l

@@ -152,7 +152,7 @@ func (s *Server) studioRoutes(mux *http.ServeMux) {
 				case "DELETE":
 					err = reader.DeleteProjectFile(r.Context(), scope, r.PathValue("id"), r.PathValue("sourceId"), r.URL.Query().Get("confirmed") == "true")
 					if err == nil {
-						w.WriteHeader(http.StatusNoContent)
+						writeJSON(w, http.StatusOK, map[string]any{"deleted": true})
 						return
 					}
 				}

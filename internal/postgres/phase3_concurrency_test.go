@@ -176,7 +176,7 @@ func phase3ReflectCall(s *Store, name string, args ...any) ([]reflect.Value, err
 	return out, nil
 }
 func phase3Schedule(s *Store, ctx context.Context, logical string, now time.Time) error {
-	name := map[string]string{"project_handover": "ScheduleStatus", "effort": "ScheduleEffort"}[logical]
+	name := map[string]string{"project_handover": "ScheduleStatus", "effort": "ScheduleStatus"}[logical]
 	_, err := phase3ReflectCall(s, name, ctx, now)
 	return err
 }

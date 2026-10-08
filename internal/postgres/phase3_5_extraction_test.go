@@ -115,9 +115,33 @@ func TestPhase35B1B2B6G5TrustMatrix(t *testing.T) {
 				t.Fatal(err)
 			}
 			calls := phase35Model(t, s, func(w http.ResponseWriter, r *http.Request) {
-				secretaryModelReply(w, extracted{Items: []extractedItem{it}})
+				if tc.branch == "archive" {
+					var item map[string]any
+					_ = json.Unmarshal(asJSON(it), &item)
+					item["message_index"] = 1
+					secretaryModelReply(w, map[string]any{"items": []any{item}})
+				} else {
+					secretaryModelReply(w, extracted{Items: []extractedItem{it}})
+				}
 			})
 			phase35Extract(t, s, scope, ref)
+			if tc.branch == "archive" {
+				for step := 0; step < 8; step++ {
+					var record memory.ID
+					var version int
+					var stage string
+					err := s.pool.QueryRow(ctx, `SELECT record_id::text,record_version,stage FROM memory_jobs WHERE owner_id=$1 AND state='queued' AND stage LIKE 'source.extract:conversation:%' ORDER BY created_at LIMIT 1`, scope.OwnerID).Scan(&record, &version, &stage)
+					if errors.Is(err, pgx.ErrNoRows) {
+						break
+					}
+					if err != nil {
+						t.Fatal(err)
+					}
+					if err := s.ProcessExtraction(ctx, leaseStage(t, s, scope, memory.Ref{ID: record, Version: version, Kind: memory.SourceKind}, stage)); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
 			st := phase35Snapshot(t, s, scope)
 			work := phase35Work(st)
 			want := 0

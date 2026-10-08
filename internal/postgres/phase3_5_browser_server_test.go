@@ -38,13 +38,8 @@ func TestPhase35BrowserOwnedServer(t *testing.T) {
 	phase26Exec(t, f.phase26LoadedFixture, `UPDATE claims SET organized=$2 WHERE owner_id=$1`, f.Scope.OwnerID, OrganizeVersion)
 	phase26Exec(t, f.phase26LoadedFixture, `UPDATE memory_jobs SET available_at=now()+interval '1 day' WHERE owner_id=$1`, f.Scope.OwnerID)
 	now := time.Now().UTC()
-	delta := (int(time.Wednesday) - int(now.Weekday()) + 7) % 7
-	if delta == 0 {
-		delta = 7
-	}
-	if delta < 7 {
-		delta += 7
-	}
+	// Chinese civil week starts Monday; 下周三 is Wednesday in the next week.
+	delta := 9 - (int(now.Weekday())+6)%7
 	day := time.Date(now.Year(), now.Month(), now.Day()+delta, 15, 0, 0, 0, time.UTC)
 	appointmentText := "下周三下午和导师过虚构青岚方案"
 	taskText := "我要给虚构青岚书店寄陶瓷标本"
@@ -111,6 +106,18 @@ func TestPhase35BrowserOwnedServer(t *testing.T) {
 	finish := make(chan struct{})
 	var once sync.Once
 	key := string(memory.NewID())
+	completionState := func() (map[string]string, error) {
+		result := map[string]string{}
+		var target string
+		err := s.pool.QueryRow(ctx, `SELECT md5(to_jsonb(r)::text||to_jsonb(cl)::text||to_jsonb(cr)::text) FROM memory_records r JOIN claims cl ON(cl.owner_id,cl.id)=(r.owner_id,r.id) JOIN claim_revisions cr ON(cr.owner_id,cr.claim_id,cr.version)=(r.owner_id,r.id,r.version) WHERE r.owner_id=$1 AND r.id=$2`, f.Scope.OwnerID, f.Deadlines[1].Claim).Scan(&target)
+		if err != nil {
+			return result, err
+		}
+		result["memoryDigest"] = target
+		err = s.pool.QueryRow(ctx, `SELECT md5(string_agg(to_jsonb(v)::text,'|' ORDER BY v.source_id,v.version)) FROM source_versions v WHERE owner_id=$1`, f.Scope.OwnerID).Scan(&target)
+		result["originalSourcesDigest"] = target
+		return result, err
+	}
 	control := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/phase35-finish" {
 			if r.URL.Query().Get("key") != key {
@@ -121,6 +128,16 @@ func TestPhase35BrowserOwnedServer(t *testing.T) {
 			w.WriteHeader(204)
 			return
 		}
+		if r.URL.Path == "/phase35-completion-state" && r.Method == "GET" {
+			state, err := completionState()
+			if err != nil {
+				http.Error(w, err.Error(), 500)
+				return
+			}
+			_ = json.NewEncoder(w).Encode(state)
+			return
+		}
+
 		if r.URL.Path == "/phase35-current-chat" && r.Method == "POST" {
 			src, err := s.Ingest(ctx, f.Scope, memory.IngestRequest{Connector: "capture", ExternalID: string(memory.NewID()), ExternalVersion: "1", Title: "虚构当前聊天接入", Text: taskText})
 			if err == nil {
@@ -163,7 +180,7 @@ func TestPhase35BrowserOwnedServer(t *testing.T) {
 		_, _ = io.Copy(w, response.Body)
 	}))
 	defer control.Close()
-	manifest := map[string]any{"ownedDisposable": true, "backendURL": control.URL, "finishKey": key, "appointmentText": appointmentText, "appointmentAt": day.Format(time.RFC3339), "appointmentDay": day.Format("2006-01-02"), "taskText": taskText}
+	manifest := map[string]any{"ownedDisposable": true, "backendURL": control.URL, "finishKey": key, "appointmentText": appointmentText, "appointmentAt": day.Format(time.RFC3339), "appointmentDay": day.Format("2006-01-02"), "taskText": taskText, "overdueTitle": "虚构期限 " + f.Deadlines[1].ID, "overdueId": f.Deadlines[1].ID}
 	raw, _ := json.Marshal(manifest)
 	if err := os.WriteFile(path, raw, 0600); err != nil {
 		t.Fatal(err)

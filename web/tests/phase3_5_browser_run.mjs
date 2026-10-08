@@ -9,7 +9,7 @@ import { setTimeout as delay } from 'node:timers/promises'
 const cwd = resolve(import.meta.dirname, '..'), repo = resolve(cwd, '..')
 const temporary = await mkdtemp(join(tmpdir(), 'phase3_5-browser-'))
 const manifestPath = join(temporary, 'manifest.json')
-const real = true, boundary = false
+console.log(`phase3.5 owned artifacts: ${temporary}`)
 const localURL = 'http://127.0.0.1:18495'
 const spawnChild = (command, args, cwd, env, log) => {
   const child = spawn(command, args, { cwd, env, stdio: ['ignore', 'pipe', 'pipe'] })
@@ -24,9 +24,9 @@ const spawnChild = (command, args, cwd, env, log) => {
 }
 let controller, vite, manifest
 try {
-  if (real) {
+  {
     controller = spawnChild('go', ['test', '-tags', 'phase35_browser', './internal/postgres', '-run', '^TestPhase35BrowserOwnedServer$', '-count=1', '-timeout', '10m', '-v'], repo,
-      { ...process.env, GOCACHE: process.env.GOCACHE ?? '/tmp/pcas-p35-acceptance-go', PCAS_PHASE35_RUN_FINDINGS: '1', PCAS_PHASE35_BROWSER_MANIFEST: manifestPath }, 'backend.log')
+      { ...process.env, PCAS_PHASE35_RUN_FINDINGS: '1', PCAS_PHASE35_BROWSER_MANIFEST: manifestPath }, 'backend.log')
     const deadline = Date.now() + 240000
     while (Date.now() < deadline) {
       if (controller.exitCode !== null) throw new Error('Owned controller did not become ready; inspect its finding or failure above')
@@ -35,9 +35,8 @@ try {
     }
     if (!manifest?.ownedDisposable || new URL(manifest.backendURL).hostname !== '127.0.0.1') throw new Error('No valid owned disposable controller manifest')
   }
-  // Pre-bundle dependencies first: a cold dev server re-optimizes them on the
-  // first page request, which is build time, not the open-to-readable time
-  // the golden paths measure.
+  // Pre-bundle dependencies so a cold Vite build does not consume the browser
+  // interaction timeout.
   spawnSync(process.execPath, ['node_modules/vite/bin/vite.js', 'optimize'], { cwd, env: process.env, stdio: 'ignore' })
   vite = spawnChild(process.execPath, ['node_modules/vite/bin/vite.js', '--host', '127.0.0.1', '--port', '18495', '--strictPort'], cwd, process.env, 'vite.log')
   const deadline = Date.now() + 30000
@@ -48,10 +47,8 @@ try {
   }
   const env = { ...process.env, PCAS_TEST_BASE_URL: localURL }
   delete env.PCAS_PHASE35_BROWSER_MANIFEST
-  delete env.PCAS_PHASE35_BROWSER_BOUNDARY
-  if (real) Object.assign(env, { PCAS_PHASE35_RUN_FINDINGS: '1', PCAS_PHASE35_BROWSER_MANIFEST: manifestPath })
-  if (boundary) Object.assign(env, { PCAS_PHASE35_RUN_FINDINGS: '1', PCAS_PHASE35_BROWSER_BOUNDARY: '1' })
-  const browser = spawnChild(process.execPath, ['node_modules/@playwright/test/cli.js', 'test', 'phase3_5_acceptance.spec.ts', ...(boundary ? ['--grep', 'T5 boundary'] : [])], cwd, env, 'browser.log')
+  Object.assign(env, { PCAS_PHASE35_RUN_FINDINGS: '1', PCAS_PHASE35_BROWSER_MANIFEST: manifestPath })
+  const browser = spawnChild(process.execPath, ['node_modules/@playwright/test/cli.js', 'test', 'phase3_5_acceptance.spec.ts', '--output', join(temporary, 'playwright-results'), ...process.argv.slice(2)], cwd, env, 'browser.log')
   process.exitCode = await browser.done
 } finally {
   if (manifest) await fetch(`${manifest.backendURL}/phase35-finish?key=${manifest.finishKey}`, { method: 'POST' }).catch(() => {})

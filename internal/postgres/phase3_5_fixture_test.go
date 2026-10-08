@@ -89,14 +89,16 @@ func phase35Load(t *testing.T) *phase35Fixture {
 			d.At = &at
 		case 2:
 			d.Kind = "recurring"
-			d.Recurrence = "daily 09:00"
+			d.Recurrence = "每天 09:00"
 			at = time.Date(2026, 1, 1, 9, 0, 0, 0, time.UTC)
 			d.At = &at
 		case 3:
+			d.Kind = "unclear"
 			d.At = nil
 		}
 		if i == 0 {
 			d.Claim = string(f.Claims[1400])
+			d.Original = f.Corpus.Memories[1400].Text
 		} // qualifying topic's deadline input
 		f.Deadlines = append(f.Deadlines, d)
 	}

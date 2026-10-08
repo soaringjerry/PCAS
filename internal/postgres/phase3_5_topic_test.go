@@ -42,10 +42,33 @@ func phase35TopicJob(t *testing.T, f *phase35Fixture, topic int) worker.Job {
 	t.Helper()
 	var stage string
 	id := strings.TrimPrefix(f.Topics[topic], "entity:")
-	err := f.Store.pool.QueryRow(f.Context, `SELECT stage FROM memory_jobs WHERE owner_id=$1 AND record_id=$2 AND stage LIKE 'memory.topic_project:%' AND state='queued' ORDER BY created_at,stage LIMIT 1`, f.Scope.OwnerID, id).Scan(&stage)
-	if err != nil {
-		t.Fatal("eligible topic was not scheduled", err)
+	var err error
+	for attempt := 0; attempt < 4; attempt++ {
+		err = f.Store.pool.QueryRow(f.Context, `SELECT stage FROM memory_jobs WHERE owner_id=$1 AND record_id=$2 AND stage LIKE 'memory.topic_project:%' AND state='queued' ORDER BY created_at,stage LIMIT 1`, f.Scope.OwnerID, id).Scan(&stage)
+		if err == nil {
+			break
+		}
+		if !errors.Is(err, pgx.ErrNoRows) {
+			t.Fatal(err)
+		}
+		// A scheduler can explicitly yield its bounded transaction. This is a
+		// pending outcome, not proof that eligibility failed. Verify the observable
+		// reason/count before replaying that real scheduler operation.
+		var deferred int
+		e := f.Store.pool.QueryRow(f.Context, `SELECT coalesce(sum(count),0) FROM background_stage_events WHERE owner_id=$1 AND stage=$2 AND outcome='failure' AND reason LIKE 'schedule_%' AND at>now()-interval '1 minute'`, f.Scope.OwnerID, HandoverStage).Scan(&deferred)
+		if e != nil || deferred == 0 {
+			t.Fatalf("eligible topic has no task and no observable scheduling deferral: %v count=%d err=%v", err, deferred, e)
+		}
+		if attempt == 3 {
+			phase35Finding(t, "S-P35-009")
+			t.Fatalf("four consecutive scheduler yields, topic still unscheduled; counted=%d", deferred)
+		}
+		t.Logf("scale scheduler yielded visibly count=%d; replaying pending schedule operation", deferred)
+		if _, e := f.Store.ScheduleStatus(f.Context, time.Now()); e != nil {
+			t.Fatal(e)
+		}
 	}
+
 	return leaseStage(t, f.Store, f.Scope, memory.Ref{ID: memory.ID(id), Version: 1, Kind: memory.EntityKind}, stage)
 }
 func phase35TopicMemoryDigest(t *testing.T, f *phase35Fixture) string {
@@ -153,7 +176,7 @@ func TestPhase35C2C4G1T4EligibleTopicLinksReceiptsUndoAndReplay(t *testing.T) {
 }
 func TestPhase35C2G7T4DailyCapDefersToLocalNextDayReusesPaidOutput(t *testing.T) {
 	phase35Finding(t, "S-P35-004")
-	f := phase35TopicLoad(t)
+	f := phase35TopicControls(t)
 	s, ctx := f.Store, f.Context
 	phase26Exec(t, f.phase26LoadedFixture, `UPDATE workspace_owners SET settings=settings||'{"timezone":"America/New_York"}'::jsonb WHERE owner_id=$1`, f.Scope.OwnerID)
 	for i := 0; i < 4; i++ {
@@ -198,7 +221,7 @@ func TestPhase35C2G7T4DailyCapDefersToLocalNextDayReusesPaidOutput(t *testing.T)
 }
 func TestPhase35C3G5ExistingProjectBeyondFirstPage(t *testing.T) {
 	phase35Finding(t, "S-P35-004")
-	f := phase35TopicLoad(t)
+	f := phase35TopicControls(t)
 	s, ctx := f.Store, f.Context
 	target := ""
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
@@ -260,7 +283,7 @@ func TestPhase35C2G2UncertainAndInvalidKeepPending(t *testing.T) {
 	phase35Finding(t, "S-P35-004")
 	for _, output := range []string{`{"decision":"uncertain","projectId":null,"name":"","reason":"证据不够"}`, `{"decision":"new","projectId":null,"name":"","reason":""}`} {
 		t.Run(output, func(t *testing.T) {
-			f := phase35TopicLoad(t)
+			f := phase35TopicControls(t)
 			before := phase35TopicMemoryDigest(t, f)
 			phase35Model(t, f.Store, func(w http.ResponseWriter, r *http.Request) { secretaryModelReply(w, output) })
 			if _, err := f.Store.ScheduleStatus(f.Context, time.Now()); err != nil {
@@ -288,7 +311,7 @@ func TestPhase35C2G2UncertainAndInvalidKeepPending(t *testing.T) {
 }
 func TestPhase35C2G4SingleMemoryChangesOnlyAffectedTopic(t *testing.T) {
 	phase35Finding(t, "S-P35-004")
-	f := phase35TopicLoad(t)
+	f := phase35TopicControls(t)
 	s, ctx := f.Store, f.Context
 	phase35Model(t, s, func(w http.ResponseWriter, r *http.Request) {
 		secretaryModelReply(w, `{"decision":"new","projectId":null,"name":"虚构主题","reason":"虚构理由"}`)
@@ -320,7 +343,7 @@ func TestPhase35C2G4SingleMemoryChangesOnlyAffectedTopic(t *testing.T) {
 
 func TestPhase35C2G3TopicPaidRetryAfterWriteFailure(t *testing.T) {
 	phase35Finding(t, "S-P35-004")
-	f := phase35TopicLoad(t)
+	f := phase35TopicControls(t)
 	s, ctx := f.Store, f.Context
 	calls := phase35Model(t, s, func(w http.ResponseWriter, r *http.Request) {
 		secretaryModelReply(w, `{"decision":"new","projectId":null,"name":"虚构只写入重试的主题项目","reason":"虚构主题目标成熟"}`)
@@ -385,7 +408,7 @@ func TestPhase35C2G7IndependentHourlyAndNoBorrowing(t *testing.T) {
 }
 func TestPhase35C2ConcurrentTopicProcessorSchedulerAndUserHTTP(t *testing.T) {
 	phase35Finding(t, "S-P35-004")
-	f := phase35TopicLoad(t)
+	f := phase35TopicControls(t)
 	s, ctx := f.Store, f.Context
 	entered := make(chan struct{})
 	release := make(chan struct{})
@@ -456,4 +479,44 @@ func TestPhase35C2ConcurrentTopicProcessorSchedulerAndUserHTTP(t *testing.T) {
 	if calls.Load() != 1 || phase35TopicLink(t, f, 0) == "" || len(phase35Snapshot(t, s, f.Scope).Tasks) != 1 {
 		t.Fatal("concurrent topic/user result lost or duplicated")
 	}
+}
+
+// Boundary/fault controls use the same three topic inputs in a small independent
+// DB. The scale test above still certifies the 5,000-memory scheduling path;
+// a scale scheduler failure cannot prevent exercising processor state branches.
+func phase35TopicControls(t *testing.T) *phase35Fixture {
+	t.Helper()
+	if _, ok := any(&Store{}).(phase35TopicProcessor); !ok {
+		t.Fatal("#278 ProcessTopicProject seam not yet integrated")
+	}
+	s, ctx := phase26DisposableStore(t)
+	scope := owner()
+	phase35Snapshot(t, s, scope)
+	f := &phase35Fixture{phase26LoadedFixture: &phase26LoadedFixture{Store: s, Context: ctx, Scope: scope, Claims: make([]memory.ID, 1436)}}
+	all := []extractedItem{}
+	for i := 0; i < 36; i++ {
+		all = append(all, phase35Direct(fmt.Sprintf("虚构主题控制记忆%02d", i), "memory"))
+	}
+	ref := phase35Source(t, s, scope, all)
+	for j := 0; j < 3; j++ {
+		entity := memory.NewID()
+		_, err := s.Commit(ctx, scope, memory.CommitRequest{RequestID: memory.NewID(), Entities: []memory.Entity{{Revision: memory.Revision{Ref: memory.Ref{ID: entity, Version: 1, Kind: memory.EntityKind}, State: "active"}, Type: "topic", Name: fmt.Sprintf("虚构控制主题%02d", j)}}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		f.Topics = append(f.Topics, "entity:"+string(entity))
+		for k := 0; k < 12; k++ {
+			i := j*12 + k
+			claim := rememberExtractedForTest(t, s, scope, ref, all[i].Text)
+			f.Claims[1400+i] = claim.ID
+			category := "progress"
+			if j != 1 && k == 0 {
+				category = "goal"
+			}
+			phase26Exec(t, f.phase26LoadedFixture, `UPDATE claim_revisions SET category=$3,durable=true WHERE owner_id=$1 AND claim_id=$2`, scope.OwnerID, claim.ID, category)
+			phase26Exec(t, f.phase26LoadedFixture, `INSERT INTO claim_mentions(owner_id,claim_id,claim_version,entity_id,role) VALUES($1,$2,1,$3,'topic')`, scope.OwnerID, claim.ID, entity)
+		}
+	}
+	phase26Exec(t, f.phase26LoadedFixture, `INSERT INTO deadlines(owner_id,id,claim_id,claim_version,kind,at,title,original_text) VALUES($1,$2,$3,1,'deadline',now()+interval '1 day','虚构目标期限','虚构期限原话')`, scope.OwnerID, memory.NewID(), f.Claims[1400])
+	return f
 }

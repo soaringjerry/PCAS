@@ -80,6 +80,9 @@ function scheduleRows(state: State, schedule: Schedule, timezone: string, now: n
     const offset = civilOffset(day.date, timezone)
     for (const entry of day.items.filter(mine)) {
       const timed = entry.at && !entry.dateOnly ? entry.at : undefined
+      // A habit with no hour is not an event of the day. The line of time is for
+      // what has a time; it stays in the library's 眼下.
+      if (entry.kind === 'recurring' && !timed) continue
       if (offset === 0) {
         const past = !!timed && new Date(timed).getTime() < now
         const late = past && entry.kind === 'deadline'
@@ -95,7 +98,9 @@ function scheduleRows(state: State, schedule: Schedule, timezone: string, now: n
     .filter(mine)
     .map((entry) => ({ entry, note: withNote(`已过截止 · ${dated(entry, timezone) || '日期没说清'}`, entry), at: entry.at ?? undefined, canFinish: entry.source.kind === 'deadline' }))
     .sort((a, b) => (b.at ?? b.entry.date ?? '').localeCompare(a.at ?? a.entry.date ?? ''))
-  const unclear: DateRow[] = schedule.unclear.filter(mine).map((entry) => ({ entry, note: entry.originalText ? `原话：${entry.originalText}` : entry.timeNote || '日期没说清' }))
+  // Dates that were never pinned down are not on the line of time either: with
+  // no day to stand on they only pile up. They stay in the library's 眼下.
+  const unclear: DateRow[] = []
   return { timeline, soon, late, unclear }
 }
 

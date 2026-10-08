@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"reflect"
 	"strings"
 	"sync"
@@ -186,6 +187,12 @@ func phase3Process(s *Store, ctx context.Context, logical string, job worker.Job
 	return err
 }
 func TestPhase3G1G2G3G4G5ExistingPipelineRegressions(t *testing.T) {
+	// Every test below also runs on its own in this package; the wrapper is
+	// kept for the acceptance record and costs ten minutes, so CI leaves it to
+	// the explicit full regression run.
+	if os.Getenv("PCAS_FULL_REGRESSION") == "" {
+		t.Skip("set PCAS_FULL_REGRESSION=1 to rerun the 2.6 assertions as one group")
+	}
 	// Reuse the independently frozen 2.6 assertions, not new implementation-shaped
 	// unit tests. All helpers unconditionally create their own disposable container.
 	for _, tc := range []struct {

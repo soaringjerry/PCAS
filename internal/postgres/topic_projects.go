@@ -256,12 +256,15 @@ func enqueueTopicProjectsTx(ctx context.Context, tx pgx.Tx, owner memory.ID, now
 		}
 		dues = append(dues, due{topic, input})
 	}
-	// Only a few projects are made a day, so what was spoken of last goes first.
+	// Only a few projects are made a day and two groups are judged an hour, so
+	// what was spoken of last goes first. Jobs due at the same instant are taken
+	// in the order they were made, which is why each is made a moment after the
+	// one before; being put off for the hour's budget does not shuffle them.
 	sort.SliceStable(dues, func(i, j int) bool { return dues[i].input.Latest.After(dues[j].input.Latest) })
 	for i, d := range dues {
 		topic, input := d.topic, d.input
 		stage := TopicProjectStage + ":" + topic + ":" + input.Hash + ":0"
-		tag, err := tx.Exec(ctx, `INSERT INTO memory_jobs(id,owner_id,record_id,record_version,stage,priority,available_at) VALUES($1,$2,$3,$4,$5,9,$6) ON CONFLICT(owner_id,record_id,record_version,stage) DO NOTHING`, string(memory.NewID()), string(owner), topic, input.Version, stage, now.Add(time.Duration(i)*time.Millisecond))
+		tag, err := tx.Exec(ctx, `INSERT INTO memory_jobs(id,owner_id,record_id,record_version,stage,priority,available_at,created_at) VALUES($1,$2,$3,$4,$5,9,$6,clock_timestamp()+$7*interval '1 millisecond') ON CONFLICT(owner_id,record_id,record_version,stage) DO NOTHING`, string(memory.NewID()), string(owner), topic, input.Version, stage, now, i)
 		if err != nil {
 			return count, err
 		}
@@ -426,7 +429,7 @@ func (s *Store) ProcessTopicProject(ctx context.Context, j worker.Job) error {
 			now := time.Now().In(loc)
 			midnight := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
 			var count int
-			if e = tx.QueryRow(ctx, "SELECT count(*) FROM topic_project_links WHERE owner_id=$1 AND created_project AND created_at>=$2", string(j.OwnerID), midnight).Scan(&count); e != nil {
+			if e = tx.QueryRow(ctx, "SELECT count(*) FROM topic_project_links WHERE owner_id=$1 AND created_project AND undone_at IS NULL AND created_at>=$2", string(j.OwnerID), midnight).Scan(&count); e != nil {
 				return e
 			}
 			if count >= topicProjectDailyLimit {

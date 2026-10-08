@@ -122,8 +122,8 @@ func phase35Load(t *testing.T) *phase35Fixture {
 				if _, err := tx.Exec(f.Context, `UPDATE claim_revisions SET category=$3 WHERE owner_id=$1 AND claim_id=$2;`, f.Scope.OwnerID, claim, category); err != nil {
 					return err
 				}
-				// Spoken of this week: a group nobody has mentioned for 45 days is not made a project.
-				if _, err := tx.Exec(f.Context, `UPDATE record_versions SET expressed_at=now()-interval '2 days' WHERE owner_id=$1 AND record_id=$2`, f.Scope.OwnerID, claim); err != nil {
+				// Spoken of a minute ago: a group nobody has mentioned for 45 days is not made a project, and of the rest the two spoken of last are queued first.
+				if _, err := tx.Exec(f.Context, `UPDATE record_versions SET expressed_at=now()-interval '1 minute' WHERE owner_id=$1 AND record_id=$2`, f.Scope.OwnerID, claim); err != nil {
 					return err
 				}
 				if _, err := tx.Exec(f.Context, `INSERT INTO claim_mentions(owner_id,claim_id,claim_version,entity_id,role) VALUES($1,$2,1,$3,'topic')`, f.Scope.OwnerID, claim, id); err != nil {

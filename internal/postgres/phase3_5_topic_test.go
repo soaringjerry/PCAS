@@ -545,9 +545,9 @@ func TestTopicProjectOnlyWhatIsStillBeingWorkedOn(t *testing.T) {
 	if n := jobs(); n != 0 {
 		t.Fatalf("a group last spoken of 60 days ago was queued: %d", n)
 	}
-	said("2 days")
+	said("1 minute")
 	if n := jobs(); n != 1 {
-		t.Fatalf("spoken of two days ago, queued=%d", n)
+		t.Fatalf("spoken of a minute ago, queued=%d", n)
 	}
 	if err := phase35ProcessTopic(t, s, ctx, phase35TopicJob(t, f, 0)); err != nil {
 		t.Fatal(err)

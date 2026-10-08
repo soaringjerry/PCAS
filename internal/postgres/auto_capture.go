@@ -66,6 +66,13 @@ func (s *Store) captureActionTx(ctx context.Context, tx pgx.Tx, scope memory.Sco
 			}
 		}
 	}
+	if len(v.Reasons) == 0 && len(v.Text) > 2000 {
+		v.Reasons = append(v.Reasons, "overflow")
+		v.Reason = "事项标题超过既有2000字节上限，完整内容保留为候选"
+		if err := stageEventTx(ctx, tx, scope.OwnerID, "source.extract", "overflow", "automatic_title_bytes", len(v.Text)-2000); err != nil {
+			return err
+		}
+	}
 	if len(v.Reasons) == 0 {
 		item := newItem(v.Kind, v.Text)
 		item.ProjectID = project

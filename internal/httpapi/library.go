@@ -36,6 +36,14 @@ func (s *Server) libraryRoutes(mux *http.ServeMux) {
 			return health.BackgroundHealth(r.Context(), scope)
 		}))
 	}
+	if schedule, ok := s.options.Workspace.(workspace.ScheduleReader); ok {
+		mux.HandleFunc("GET /v1/workspace/schedule", ownerRead(func(r *http.Request, scope memory.Scope) (any, error) {
+			return schedule.ListSchedule(r.Context(), scope, workspace.ScheduleQuery{From: r.URL.Query().Get("from"), To: r.URL.Query().Get("to")})
+		}))
+		mux.HandleFunc("GET /v1/workspace/in-progress", ownerRead(func(r *http.Request, scope memory.Scope) (any, error) {
+			return schedule.ListInProgress(r.Context(), scope)
+		}))
+	}
 	mux.HandleFunc("GET /v1/workspace/handover", ownerRead(func(r *http.Request, scope memory.Scope) (any, error) {
 		return reader.ReadHandover(r.Context(), scope)
 	}))

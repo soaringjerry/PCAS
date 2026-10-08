@@ -50,7 +50,54 @@ type topicProjectOutput struct {
 	Reason    string  `json:"reason"`
 }
 
+// topicMembersCTE is one topic's current memories, the same rows the
+// status_current_members view gives for its key. The view computes every
+// group of every kind before it filters (about 200 ms on a 100,000-memory
+// library); read per topic inside the scheduler's two-second write window,
+// 35 eligible topics could never finish and every scheduling pass yielded.
+// This goes from the topic's own mentions and subjects through the indexes.
+const topicMembersCTE = `WITH ids AS(
+ SELECT cm.claim_id,cm.claim_version FROM claim_mentions cm WHERE cm.owner_id=$1 AND cm.entity_id=$2::uuid
+ UNION SELECT c.claim_id,c.version FROM claim_revisions c WHERE c.owner_id=$1 AND c.subject_id=$2::uuid),
+ m AS(SELECT r.owner_id,r.id AS claim_id,r.version AS claim_version FROM ids i
+ JOIN memory_records r ON r.owner_id=$1 AND(r.id,r.version)=(i.claim_id,i.claim_version) AND r.state='active'
+ JOIN claims cl ON(cl.owner_id,cl.id)=(r.owner_id,r.id) AND cl.retired=''
+ JOIN record_versions rv ON(rv.owner_id,rv.record_id,rv.version)=(r.owner_id,r.id,r.version) AND rv.state='active'
+ WHERE claim_source_is_current(r.owner_id,r.id,r.version,now()))`
+
+// topicProjectShared is what every topic of one owner is compared against. One
+// scheduling pass reads it once instead of once per topic.
+type topicProjectShared struct {
+	projects []topicProjectSummary
+	clipped  int
+}
+
+func topicProjectSharedTx(ctx context.Context, tx pgx.Tx, owner memory.ID) (*topicProjectShared, error) {
+	projects, err := queryDocuments[topicProjectSummary](ctx, tx, `SELECT jsonb_build_object('id',id::text,'name',title,'goal',coalesce(nullif(document->>'goal',''),document->'creation'->'source'->>'excerpt',''),'status',status) FROM work_items WHERE owner_id=$1 AND kind='project' ORDER BY id`, string(owner))
+	if err != nil {
+		return nil, err
+	}
+	goals, err := projectGoalEvidenceTx(ctx, tx, owner)
+	if err != nil {
+		return nil, err
+	}
+	shared := &topicProjectShared{projects: projects}
+	for i := range projects {
+		projects[i].Goal = projectMeaning(projects[i].Goal, "", goals[projects[i].ID])
+		goal := []rune(projects[i].Goal)
+		if len(goal) > topicProjectGoalCharacters {
+			shared.clipped += len(goal) - topicProjectGoalCharacters
+			projects[i].Goal = string(goal[:topicProjectGoalCharacters]) + "（目标还有内容）"
+		}
+	}
+	return shared, nil
+}
+
 func topicProjectInputTx(ctx context.Context, tx pgx.Tx, owner memory.ID, topic string) (topicProjectInput, []memory.Ref, error) {
+	return topicProjectInputSharedTx(ctx, tx, owner, topic, nil)
+}
+
+func topicProjectInputSharedTx(ctx context.Context, tx pgx.Tx, owner memory.ID, topic string, shared *topicProjectShared) (topicProjectInput, []memory.Ref, error) {
 	out := topicProjectInput{Key: "entity:" + topic, Memories: []map[string]any{}, Projects: []topicProjectSummary{}}
 	err := tx.QueryRow(ctx, `SELECT ev.name,r.version FROM memory_records r JOIN entity_versions ev ON(ev.owner_id,ev.entity_id,ev.version)=(r.owner_id,r.id,r.version) WHERE r.owner_id=$1 AND r.id=$2 AND r.state='active' AND ev.entity_type='topic' AND coalesce(ev.disambiguation->>'work_item_id','')=''`, string(owner), topic).Scan(&out.Topic, &out.Version)
 	if err != nil {
@@ -61,10 +108,10 @@ func topicProjectInputTx(ctx context.Context, tx pgx.Tx, owner memory.ID, topic 
 		return out, nil, err
 	}
 	out.Timezone = settings.Timezone
-	rows, err := tx.Query(ctx, `SELECT m.claim_id::text,m.claim_version,c.value #>> '{}',c.category,EXISTS(SELECT 1 FROM deadlines d WHERE(d.owner_id,d.claim_id,d.claim_version)=(m.owner_id,m.claim_id,m.claim_version) AND NOT(coalesce(c.scope->>'deadline_completed','false')='true' AND coalesce(c.scope->>'deadline_completed_version','')=c.version::text)),rv.expressed_at,c.acquisition,c.confirmation,coalesce((SELECT jsonb_agg(jsonb_build_object('kind',d.kind,'at',d.at,'recurrence',d.recurrence,'title',d.title,'timeNote',d.time_note) ORDER BY d.id) FROM deadlines d WHERE(d.owner_id,d.claim_id,d.claim_version)=(m.owner_id,m.claim_id,m.claim_version)),'[]'::jsonb)
- FROM status_current_members m JOIN claim_revisions c ON(c.owner_id,c.claim_id,c.version)=(m.owner_id,m.claim_id,m.claim_version)
+	rows, err := tx.Query(ctx, topicMembersCTE+` SELECT m.claim_id::text,m.claim_version,c.value #>> '{}',c.category,EXISTS(SELECT 1 FROM deadlines d WHERE(d.owner_id,d.claim_id,d.claim_version)=(m.owner_id,m.claim_id,m.claim_version) AND NOT(coalesce(c.scope->>'deadline_completed','false')='true' AND coalesce(c.scope->>'deadline_completed_version','')=c.version::text)),rv.expressed_at,c.acquisition,c.confirmation,coalesce((SELECT jsonb_agg(jsonb_build_object('kind',d.kind,'at',d.at,'recurrence',d.recurrence,'title',d.title,'timeNote',d.time_note) ORDER BY d.id) FROM deadlines d WHERE(d.owner_id,d.claim_id,d.claim_version)=(m.owner_id,m.claim_id,m.claim_version)),'[]'::jsonb)
+ FROM m JOIN claim_revisions c ON(c.owner_id,c.claim_id,c.version)=(m.owner_id,m.claim_id,m.claim_version)
  JOIN record_versions rv ON(rv.owner_id,rv.record_id,rv.version)=(m.owner_id,m.claim_id,m.claim_version)
- WHERE m.owner_id=$1 AND m.key=$2 ORDER BY (c.category='goal') DESC NULLS LAST,EXISTS(SELECT 1 FROM deadlines d WHERE(d.owner_id,d.claim_id,d.claim_version)=(m.owner_id,m.claim_id,m.claim_version) AND NOT(coalesce(c.scope->>'deadline_completed','false')='true' AND coalesce(c.scope->>'deadline_completed_version','')=c.version::text)) DESC,rv.expressed_at DESC NULLS LAST,m.claim_id`, string(owner), out.Key)
+ ORDER BY (c.category='goal') DESC NULLS LAST,EXISTS(SELECT 1 FROM deadlines d WHERE(d.owner_id,d.claim_id,d.claim_version)=(m.owner_id,m.claim_id,m.claim_version) AND NOT(coalesce(c.scope->>'deadline_completed','false')='true' AND coalesce(c.scope->>'deadline_completed_version','')=c.version::text)) DESC,rv.expressed_at DESC NULLS LAST,m.claim_id`, string(owner), topic)
 	if err != nil {
 		return out, nil, err
 	}
@@ -128,22 +175,13 @@ func topicProjectInputTx(ctx context.Context, tx pgx.Tx, owner memory.ID, topic 
 	}
 	base := sha256.Sum256(asJSON([]any{out.Topic, manifest, out.Memories, out.Timezone}))
 	out.EvidenceHash = fmt.Sprintf("%x", base)
-	projects, err := queryDocuments[topicProjectSummary](ctx, tx, `SELECT jsonb_build_object('id',id::text,'name',title,'goal',coalesce(nullif(document->>'goal',''),document->'creation'->'source'->>'excerpt',''),'status',status) FROM work_items WHERE owner_id=$1 AND kind='project' ORDER BY id`, string(owner))
-	if err != nil {
-		return out, nil, err
-	}
-	goals, err := projectGoalEvidenceTx(ctx, tx, owner)
-	if err != nil {
-		return out, nil, err
-	}
-	for i := range projects {
-		projects[i].Goal = projectMeaning(projects[i].Goal, "", goals[projects[i].ID])
-		goal := []rune(projects[i].Goal)
-		if len(goal) > topicProjectGoalCharacters {
-			out.ClippedCharacters += len(goal) - topicProjectGoalCharacters
-			projects[i].Goal = string(goal[:topicProjectGoalCharacters]) + "（目标还有内容）"
+	if shared == nil {
+		if shared, err = topicProjectSharedTx(ctx, tx, owner); err != nil {
+			return out, nil, err
 		}
 	}
+	projects := shared.projects
+	out.ClippedCharacters += shared.clipped
 	out.Projects = projects
 	sum := sha256.Sum256(asJSON([]any{out.Topic, manifest, out.Memories, projects, out.Timezone}))
 	out.Hash = fmt.Sprintf("%x", sum)
@@ -156,8 +194,14 @@ func enqueueTopicProjectsTx(ctx context.Context, tx pgx.Tx, owner memory.ID, now
 		return 0, err
 	}
 	count := 0
+	var shared *topicProjectShared
 	for _, topic := range topics {
-		input, _, err := topicProjectInputTx(ctx, tx, owner, topic)
+		if shared == nil {
+			if shared, err = topicProjectSharedTx(ctx, tx, owner); err != nil {
+				return count, err
+			}
+		}
+		input, _, err := topicProjectInputSharedTx(ctx, tx, owner, topic, shared)
 		if errors.Is(err, pgx.ErrNoRows) {
 			continue
 		}

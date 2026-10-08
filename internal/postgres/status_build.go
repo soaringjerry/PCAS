@@ -122,6 +122,11 @@ func (s *Store) ScheduleStatus(ctx context.Context, now time.Time) (int, error) 
 				return err
 			}
 			count += topicCount
+			tidyCount, err := enqueueDateTidyTx(ctx, tx, owner, now)
+			if err != nil {
+				return err
+			}
+			count += tidyCount
 			n, err := enqueueStatusHandoversTx(ctx, tx, map[memory.ID]memory.Ref{owner: anchor}, now)
 			if err != nil {
 				return err

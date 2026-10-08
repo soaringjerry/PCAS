@@ -962,3 +962,41 @@ button.hall-task-body {
     min-height: 0;
   }
 }
+
+/* One line for several things the background did; opened, each has why and its own undo. */
+.hall-group-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.hall-feed-items {
+  list-style: none;
+  margin: 4px 0 6px;
+  padding: 0 0 0 12px;
+  border-left: 2px solid var(--sep-strong);
+}
+
+.hall-feed-items li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 3px 0;
+  font-size: 13px;
+}
+
+.hall-feed-items .h-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.hall-feed-items .h-why {
+  color: var(--label-2);
+}

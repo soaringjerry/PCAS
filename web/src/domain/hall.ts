@@ -1,7 +1,7 @@
 import { entryKindLabel, type Schedule, type ScheduleEntry } from './schedule'
 import { isOpenTask } from './things'
 import { civilOffset, clockTime, dayOffset, formatCivil, formatWhen } from './time'
-import type { Creation, Idea, Notice, Project, Run, State, Task } from './types'
+import type { ActivityItem, Creation, Idea, Notice, Project, Run, State, Task } from './types'
 
 // The home screen is a service hall (docs/design/principles.md): today on the
 // left, projects and ideas on the right, one desk in the middle. These
@@ -264,12 +264,15 @@ export interface FeedItem {
   failed?: boolean
   /** The recorded action behind the line, when it can be taken back. */
   actionId?: string
+  /** Several things done at once under one line; it opens onto them, each with its own undo. */
+  items?: ActivityItem[]
 }
 
 const madeWhat = { task: '待办', idea: '想法', project: '项目' } as const
 
 /** One line for a thing the background made on its own: who made it, and on what. */
 function madeLine(kind: keyof typeof madeWhat, title: string, creation: Creation): string {
+  if (creation.by === 'background_tidy') return `收拾日程时，把没定时间的一件事建成了${madeWhat[kind]}「${title}」`
   if (creation.by === 'background_topic') {
     const n = creation.memoryIds?.length ?? 0
     return `后台看这个主题${n > 0 ? `攒了 ${n} 条记忆` : '聊得多了'}，建了${madeWhat[kind]}「${title}」`
@@ -285,7 +288,7 @@ export function backgroundFeed(state: State, since = Date.now() - 2 * DAY): Feed
   const recent = (iso?: string) => Boolean(iso) && new Date(iso!).getTime() >= since
   // Processing, reminders and daily reviews arrive already folded and worded by the server.
   for (const a of state.activity ?? []) {
-    if (recent(a.at)) items.push({ key: `a-${a.id}`, at: a.at, text: a.text, to: a.to, failed: a.failed })
+    if (recent(a.at)) items.push({ key: `a-${a.id}`, at: a.at, text: a.text, to: a.to, failed: a.failed, items: a.items })
   }
   // What the background made outright: one line each, which can be taken back. What the secretary made has its receipt in the conversation.
   const made = (kind: keyof typeof madeWhat, id: string, title: string, at: string, creation?: Creation) => {

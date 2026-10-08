@@ -329,6 +329,15 @@ type Activity struct {
 	Text   string `json:"text"`
 	To     string `json:"to,omitempty"`
 	Failed bool   `json:"failed,omitempty"`
+	// What one line stands for when it reports several things done at once
+	// (the dates the background stopped showing); each can be taken back.
+	Items []ActivityItem `json:"items,omitempty"`
+}
+
+type ActivityItem struct {
+	Text     string `json:"text"`
+	Note     string `json:"note,omitempty"`
+	ActionID string `json:"actionId"`
 }
 type Organize struct {
 	Done    int `json:"done"`

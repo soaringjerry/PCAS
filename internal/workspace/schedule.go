@@ -42,7 +42,7 @@ type ScheduleSource struct {
 	DeadlineID string `json:"deadlineId,omitempty"`
 }
 type ItemCreation struct {
-	By        string     `json:"by"` // secretary, background_extraction, background_topic
+	By        string     `json:"by"` // secretary, background_extraction, background_topic, background_tidy
 	ActionID  string     `json:"actionId,omitempty"`
 	Source    *SourceRef `json:"source,omitempty"`
 	MemoryIDs []string   `json:"memoryIds,omitempty"`

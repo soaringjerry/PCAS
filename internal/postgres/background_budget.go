@@ -19,6 +19,7 @@ var backgroundHourlyBudgets = map[string]int{
 	ProjectHandoverStage:  10,
 	EffortStage:           10,
 	TopicProjectStage:     2,
+	DateTidyStage:         dateTidyHourly,
 }
 
 func backgroundStage(stage string) string { return strings.SplitN(stage, ":", 2)[0] }

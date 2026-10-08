@@ -182,8 +182,10 @@ function NoticeRow({ row }: { row: NoticeRowData }) {
   const [busy, setBusy] = useState(false)
   const { notice, task } = row
   // A result says how the work ended; only a reminder has a time it came due.
+  // The deputy handed something back; the to-do itself is not thereby done, so the row names what came back.
+  const back = notice.reason.split('\n').slice(1).map((l) => l.replace(/^[#>*\s-]+/, '').replace(/\*+/g, '').trim()).find(Boolean)
   const note = notice.result
-    ? `${notice.reason.split('\n')[0].replace(/：$/, '')} · ${formatWhen(notice.dueAt, state.settings.timezone ?? 'UTC')}`
+    ? `${back ? `副手交回：${back}` : '副手交回了结果'} · ${formatWhen(notice.dueAt, state.settings.timezone ?? 'UTC')}`
     : [notice.reason && notice.reason !== notice.title ? notice.reason : '', `${formatWhen(notice.dueAt, state.settings.timezone ?? 'UTC')} 到点`].filter(Boolean).join(' · ')
   return (
     <div className="hall-task hall-rang">
@@ -279,7 +281,7 @@ function TodayWall({ compact, schedule, full }: { compact: boolean; schedule: Re
       <div className="hall-scroll">
         {rang.length > 0 && (
           <div className="hall-group hall-rang-group">
-            <h2 className="hall-sub rang">{rang.every((r) => r.notice.result) ? '做完了，等你看' : '到点了'}</h2>
+            <h2 className="hall-sub rang">{rang.every((r) => r.notice.result) ? '副手交回了，等你看' : '到点了'}</h2>
             {rang.map((r) => (
               <NoticeRow key={r.notice.id} row={r} />
             ))}

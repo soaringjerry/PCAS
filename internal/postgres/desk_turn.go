@@ -115,7 +115,7 @@ func (s *Store) secretaryContextTx(ctx context.Context, tx pgx.Tx, scope memory.
 	out.Settings = settings
 	out.Tasks = tasks
 	out.Dependencies = deps
-	out.Projects, err = queryDocuments[workspace.Item](ctx, tx, "SELECT document FROM work_items WHERE owner_id=$1 AND kind='project' ORDER BY created_at,id", string(scope.OwnerID))
+	out.Projects, err = queryDocuments[workspace.Item](ctx, tx, "SELECT document FROM work_items WHERE owner_id=$1 AND kind='project' AND status='active' ORDER BY created_at,id LIMIT 50", string(scope.OwnerID))
 	if err != nil {
 		return out, err
 	}
@@ -1109,8 +1109,7 @@ func recordSecretaryOverflowTx(ctx context.Context, tx pgx.Tx, scope memory.Scop
 	if err != nil {
 		return err
 	}
-	// C3 supplies every project for semantic reuse; it is not omitted at 50.
-	for kind, limit := range map[string]int{"task": 40, "idea": 20} {
+	for kind, limit := range map[string]int{"task": 40, "project": 50, "idea": 20} {
 		if n := counts[kind] - limit; n > 0 {
 			if err := stageEventTx(ctx, tx, scope.OwnerID, "secretary", "overflow", kind+"_context_limit", n); err != nil {
 				return err

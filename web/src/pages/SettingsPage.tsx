@@ -346,14 +346,6 @@ export function SettingsPage() {
                   </Link>
                 </Setting>
               )}
-              <Toggle
-                title="资料里说得很明确的待办，直接创建待办"
-                label="资料里的明确待办直接创建"
-                checked={s.autoAccept}
-                on="现在：十分明确的直接创建，其余仍等你确认。你直接跟秘书说的不受影响。"
-                off="现在：资料里读到的待办都先等你确认。你直接跟秘书说的不受影响。"
-                save={(v) => set({ autoAccept: v })}
-              />
               <Setting title="每天几点数一次还有多少没确认" now="到点只记一笔数量，不会重新整理资料。" mark={reviewMark}>
                 <Select
                   label="每天汇总时间"

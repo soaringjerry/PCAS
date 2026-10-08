@@ -18,11 +18,11 @@ export interface Read<T> {
 }
 
 /**
- * Read again when a memory changes, and every few minutes while the page is in
- * sight. An earlier answer stays up when a later read fails.
+ * Read again when a memory changes (or `moved` does), and every few minutes
+ * while the page is in sight. An earlier answer stays up when a later read fails.
  */
-function useRead<T>(path: string, shape: (answer: unknown) => T): Read<T> {
-  const changed = useMemoryChange()
+export function useRead<T>(path: string, shape: (answer: unknown) => T, moved: string | number = ''): Read<T> {
+  const changed = `${useMemoryChange()}.${moved}`
   const [value, setValue] = useState<T>()
   const [problem, setProblem] = useState('')
   const [attempt, setAttempt] = useState(0)

@@ -12,6 +12,7 @@ Historical tasks, research, and evaluations are evidence. They do not assign new
 | [Memory Architecture](memory-architecture.md) | Memory objects, retrieval, current state, correction, and recovery. |
 | [Interface Principles](design/principles.md) | Daily presentation and observation controls. |
 | [Development Workflow](tasks/process.md) | Direction, execution, checks, merge, release, and history. |
+| [Executor Rules](../AGENTS.md) | Required reading, code checks, reuse, tests, freeze rules, and target structure. |
 | [Writing Guide](writing-guide.md) | STE100 rules and project terminology. |
 | [Project Status](status.md) | Code support, recorded delivery, targets, and gaps. |
 | [Service Reference](memory-service.md) | HTTP interfaces, code paths, and current processing values. |

@@ -4,7 +4,8 @@ Implementation snapshot for repository commit `c9ac3fd`. Recorded 2026-10-08.
 
 This page gives product targets, implemented functions, and recorded deployment evidence with different status labels.
 It does not report a new live check. Historical results apply to their stated data, channel, and date.
-The [Whitepaper](whitepaper.md) gives product requirements. [Open Issues](tasks/backlog.md) records unresolved findings.
+The [Whitepaper](whitepaper.md) gives product requirements.
+The [Roadmap](whitepaper.md#10-roadmap) gives the phase sequence, delivery scopes, and acceptance targets. [Open Issues](tasks/backlog.md) records unresolved findings.
 
 ## Capability Status
 

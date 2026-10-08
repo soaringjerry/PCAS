@@ -213,16 +213,61 @@ Saved model output can be retried for storage without a new paid call.
 The earlier event-bus design and Phase 2.0 are historical material.
 Phase 2.0 was rolled back. It is not the basis for new work.
 
-## 10 Capability Direction
+## 10 Roadmap
 
-The memory core supplies recall, correction, and current task context.
-The secretary and deputy use that core to produce work in a workspace.
-The observation panel shows this work and has correction controls.
-Further inputs, model selection, phone functions, household support, and personal training extend these capabilities.
-Personal-state models, digital twins, and decision assistance are long-term targets.
-This direction does not authorize a development batch.
+Each phase delivers usable work. Its acceptance scenarios test the complete product path.
+More use supplies more data for later phases.
+The sequence below keeps the earlier roadmap. It does not assign a new development batch.
+Its source is the [earlier whitepaper](https://github.com/soaringjerry/PCAS/blob/c9ac3fd/docs/whitepaper.md#16-路线图).
 
-[Project Status](status.md) lists completed phases and remaining gaps.
+[Project Status](status.md) gives release records, implemented functions, and known gaps.
+A recorded release does not close an unresolved quality finding.
+The roadmap's acceptance column states targets. It does not report fresh test results.
+
+```mermaid
+flowchart LR
+    A[1 Secretary] --> B[1.5 Stabilization]
+    B --> C[2 / 2.5 / 2.6 Memory core]
+    C --> D[3 / 3.5 / 3.6 Workspaces and actions]
+    D --> E[4 Observation panel]
+    E --> F[5 Inputs, phone, and model selection]
+    F --> G[6 Butler]
+    G --> H[7 Training and model feedback]
+```
+
+### Recorded Phases
+
+| Phase | Delivery scope | Acceptance target | Recorded state |
+|---|---|---|---|
+| 1 Secretary | One request executes actions. Undo, reminders, and notification channels are available. | Arrange a Friday meeting. The phone receives the reminder. Undo reverses the action. | Release recorded. Device checks have open findings. |
+| 1.5 Stabilization | Examine state sequences. A different reviewer tests behavior. Repair defects and test live use. | State sequences pass. Live scenarios pass. One day of user use has no blocking defect. | Fixes recorded. Live and device acceptance have gaps. |
+| 2 Memory query planning | Extract entities, places, and time. Plan retrieval. Use recall cases with conflicting or unrelated sources. | Recall the Chengdu intention with its source. Recall scores meet the agreed threshold. | Release recorded. The real-model recall baseline is open. |
+| 2.5 Memory organization | Group memory. Compare and combine statements. Produce current context. Use task-appropriate memory and output review. Use versioned rules and bounded reprocessing. Expand task datasets with human review. | A model without prior conversation completes work from the handover and dates. Doing scores meet the agreed threshold. | Release recorded. Quality evidence has scope limits. |
+| 2.6 Current-state correction | Remove per-group status cards. Keep sourced dates and requirements. Regenerate handovers from changed input. | Current context has sources. Changes update the applicable view. | Release recorded. This corrects Phase 2.5; it does not restore removed cards. |
+| 3 Workspaces | First batch: project handovers, document versions, differences, and deputy context. Second batch: files, effort estimates, start dates, and plan timelines. | In ten seconds, identify the project conclusion, blockers, and next action. Revise a selected document version with displayed differences. | Release recorded. The ten-second target is not a measured result here. |
+| 3.5 Automatic work | Create tasks, ideas, and projects from applicable sources. Show timed work and untimed progress. Give receipts and undo. | A meeting request appears on the home page. Imported tasks appear with undo. A substantial request becomes a project with steps. | Release recorded. Automatic project quality has open findings. |
+| 3.6 Secretary cleanup | Show applicable timed entries. Close dates. Review obsolete dates. Convert actionable dates to tasks. Record cleanup with undo. | A canceled class leaves the current view. An obsolete journey stops appearing. Cleanup has a receipt and can be reversed. | Release recorded. Background judgment and check-mode replies have open findings. |
+
+Phase 2.0 was rolled back. It is not Phase 2 query planning in this roadmap.
+Recorded phase scopes explain delivered work. Current product rules apply to future changes.
+Calendar conflicts belong to Phase 5. Reusable methods and completion judging stay in [Open Issues](tasks/backlog.md).
+
+### Planned Phases
+
+| Phase | Delivery scope | Acceptance target |
+|---|---|---|
+| 4 Observation panel | Visual activity, cost, model calls, memory management, access, input status, failures, and recovery. | Show yesterday's work, cost, and reasons. Trace a result to its source and model call. |
+| 5 Inputs and model selection | Email, calendar, continuous Yufolo input, and IM trials. Phone voice, notifications, location, and microphone inputs. Automatic model selection. | A school email creates a workspace with materials and a start suggestion. Library arrival produces an applicable study suggestion. |
+| 6 Butler | Habit memory, daily recommendations, budgets, subscriptions, income, expenses, and correspondence drafts. | After two pizza rejections, matching recommendations decrease. The observation panel shows the changed preference. |
+| 7 Training and model feedback | Prepare datasets. Fine-tune local models. Compare quality and cost. Deploy accepted models with rollback. | A personal model handles intent interpretation with lower cost and no accuracy loss. |
+
+Phase 5 uses separate batches. Input work and phone work can proceed in parallel.
+Each input needs platform verification. Phone collection uses device permissions.
+Calendar input supplies the basis for calendar conflict checks.
+
+Phase 7 follows accumulated use because training needs representative personal data.
+Its acceptance compares measured quality and cost against an agreed baseline.
+Personal-state models, digital twins, and decision assistance are long-term targets without an assigned phase.
 
 ## 11 Product Acceptance
 

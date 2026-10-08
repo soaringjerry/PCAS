@@ -57,7 +57,9 @@ The earlier implementation is on the `legacy` branch. These histories are not cu
 
 The agreed next phase is [Phase 3.9 Foundation](whitepaper.md#phase-39-foundation), before further business repairs and Phase 4.
 The [System Architecture](architecture.md) defines its scope and completion criteria.
-The foundation is not implemented or accepted by this documentation change.
+The foundation is not complete or accepted.
+The [shared skeleton](tasks/foundation-shared-skeleton.md) adds the first background gateway, prompt registry, and call metadata path.
+Its [acceptance record](evaluations/2026-10-08-foundation-shared-skeleton.md) separates checks from deployment and remaining work.
 
 The user reports incorrect projects, timelines, and tasks, with increasing model use, cost, and duration.
 These reports need attributed cases and measurements. They do not establish a measured trend or a single cause.
@@ -67,11 +69,13 @@ The architecture's code findings use revision `6b62f27`.
 They do not update this page's implementation snapshot or supply new deployment evidence.
 
 The [foundation inventory](evaluations/2026-10-08-foundation-inventory.md) records production paths and an existing-record baseline at code revision `4af34cd`.
-It includes exclusions before model calls and missing expected actions. No architecture code has changed.
+It includes exclusions before model calls and missing expected actions.
+At that inventory revision, no architecture code had changed.
 Controlled scenario baselines remain necessary before the corresponding production paths change.
 
 The [event contract](architecture.md#event-records-and-triggers) uses the existing queue for declared specialist processing and causal records.
-Central event responses and chain limits are targets. This documentation change does not implement them.
+Central event responses and chain limits remain targets.
+The shared skeleton does not implement them.
 
 ## Documentation Changes
 

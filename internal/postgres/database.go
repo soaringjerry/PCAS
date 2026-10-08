@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/soaringjerry/PCAS/internal/ai"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/modelcall"
 )
 
 //go:embed migrations/*.sql
@@ -25,10 +26,19 @@ type Store struct {
 	// DeskTurn also borrows a connection for Recall and budget reservation.
 	secretarySlots chan struct{}
 	models         *ai.Registry
+	calls          *modelcall.Gateway
 	blobs          memory.BlobStore
 }
 
-func (s *Store) SetModels(models *ai.Registry)   { s.models = models }
+func (s *Store) SetModels(models *ai.Registry) {
+	s.models = models
+	adapter := backgroundCalls{store: s}
+	var providers modelcall.Providers
+	if models != nil {
+		providers = models
+	}
+	s.calls = modelcall.New(providers, adapter, adapter, adapter)
+}
 func (s *Store) SetBlobs(blobs memory.BlobStore) { s.blobs = blobs }
 
 func Open(ctx context.Context, url string) (*Store, error) {

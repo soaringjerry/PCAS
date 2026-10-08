@@ -8,114 +8,61 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/modelcall"
+	"github.com/soaringjerry/PCAS/internal/prompts"
 	"github.com/soaringjerry/PCAS/internal/worker"
 )
 
-type paidModelResult struct {
-	DurationMS      *int64
-	Prompt          json.RawMessage
-	Output          string
-	Reservation     string
-	Provider        string
-	Model           string
-	InputTokens     int
-	OutputTokens    int
-	InputEstimated  bool
-	OutputEstimated bool
-	CostEstimated   bool
-	Cost            float64
-	Refs            []memory.Ref
-}
+type paidModelResult = modelcall.PaidResult
 
 func (s *Store) paidModelResult(ctx context.Context, j worker.Job) (*paidModelResult, error) {
 	if pending, ok := s.pendingPaid.Load(j.ID); ok {
 		return pending.(*paidModelResult), nil
 	}
 	r := &paidModelResult{}
-	err := s.pool.QueryRow(ctx, `SELECT prompt,output,reservation_id::text,provider_id,model,input_tokens,output_tokens,cost,refs,input_estimated,output_estimated,cost_estimated,duration_ms
- FROM background_model_results WHERE owner_id=$1 AND job_id=$2`, string(j.OwnerID), string(j.ID)).Scan(&r.Prompt, &r.Output, &r.Reservation, &r.Provider, &r.Model, &r.InputTokens, &r.OutputTokens, &r.Cost, &r.Refs, &r.InputEstimated, &r.OutputEstimated, &r.CostEstimated, &r.DurationMS)
+	err := s.pool.QueryRow(ctx, `SELECT b.prompt,b.output,b.reservation_id::text,b.provider_id,b.model,b.input_tokens,b.output_tokens,b.cost,b.refs,b.input_estimated,b.output_estimated,b.cost_estimated,b.duration_ms,coalesce(c.id::text,''),coalesce(c.error_code,''),coalesce((c.actual_mode->>'reservationEstimate')::double precision,0)
+ FROM background_model_results b LEFT JOIN model_calls c ON c.owner_id=b.owner_id AND c.reservation_id=b.reservation_id WHERE b.owner_id=$1 AND b.job_id=$2`, string(j.OwnerID), string(j.ID)).Scan(&r.Prompt, &r.Output, &r.Reservation, &r.Provider, &r.Model, &r.InputTokens, &r.OutputTokens, &r.Cost, &r.Refs, &r.InputEstimated, &r.OutputEstimated, &r.CostEstimated, &r.DurationMS, &r.InvocationID, &r.CallErrorCode, &r.ReservedCost)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
 	return r, err
 }
 
-// Retry the paid result, including its original input, before any business write.
-// A recovered job reuses this snapshot rather than generating against new input.
+// Temporary adapter for the existing background domain callers. Sol owns its
+// removal when those callers pass declared gateway requests directly.
 func (s *Store) generatePaid(ctx context.Context, j worker.Job, purpose, instructions string, prompt json.RawMessage, refs []memory.Ref) (*paidModelResult, error) {
-	saved, err := s.paidModelResult(ctx, j)
-	if err != nil {
-		return nil, err
+	definition, ok := prompts.FromText(instructions)
+	if !ok {
+		return nil, &worker.JobError{Code: "prompt_not_registered"}
 	}
-	if saved == nil {
-		p, ok := s.models.Get(s.models.ExtractionID())
-		if !ok {
-			return nil, &worker.JobError{Code: "provider_not_configured"}
-		}
-		if !s.models.Available(p.ID) {
-			return nil, &worker.JobError{Code: "provider_unavailable", Until: time.Now().Add(time.Minute), NoAttempt: true}
-		}
-		modelPrompt := string(prompt)
-		var wrapped struct {
-			RawPrompt string `json:"rawPrompt"`
-		}
-		if json.Unmarshal(prompt, &wrapped) == nil && wrapped.RawPrompt != "" {
-			modelPrompt = wrapped.RawPrompt
-		}
-		id, err := s.reserveModelCostID(ctx, j.OwnerID, p.Reserve(instructions+modelPrompt), &j)
-		if err != nil {
-			return nil, err
-		}
-		result, callErr := s.models.Generate(ctx, p.ID, instructions, modelPrompt)
-		if callErr != nil {
-			// Account even failed/partial calls; no call was made on unavailable providers.
-			if !errors.Is(callErr, memory.ErrUnavailable) {
-				if err := s.recordUsage(ctx, modelUsage{OwnerID: j.OwnerID, ID: memory.ID(id), Purpose: purpose, AgentID: p.ID, Model: p.Model, DurationMS: result.DurationMS, InputTokens: result.InputTokens, OutputTokens: result.OutputTokens, InputEstimated: result.InputEstimated, OutputEstimated: result.OutputEstimated, CostEstimated: result.CostEstimated, Cost: result.Cost, JobID: string(j.ID), MemoryRefs: refs}); err != nil {
+	if s.calls == nil {
+		return nil, &worker.JobError{Code: "provider_not_configured"}
+	}
+	result, err := s.calls.Call(ctx, modelcall.Request{OwnerID: j.OwnerID, ExecutionID: j.ID, RootExecutionID: j.ID, Function: purpose, Stage: j.Stage, Instructions: definition, Prompt: prompt, Refs: refs, Policy: j})
+	if errors.Is(err, modelcall.ErrNotConfigured) {
+		return nil, &worker.JobError{Code: "provider_not_configured"}
+	}
+	if errors.Is(err, modelcall.ErrNotAvailable) {
+		return nil, &worker.JobError{Code: "provider_unavailable", Until: time.Now().Add(time.Minute), NoAttempt: true}
+	}
+	if errors.Is(err, modelcall.ErrOutcomeUnknown) {
+		return nil, &worker.JobError{Code: "provider_outcome_unknown"}
+	}
+	var failed *modelcall.Failure
+	if errors.As(err, &failed) {
+		if backgroundHourlyBudgets[backgroundStage(j.Stage)] == 0 {
+			if failed.Code == "provider_unavailable" {
+				// The gateway settled this invocation before returning its failure.
+				if err := s.releaseUnavailableReservation(ctx, j, failed.Reservation); err != nil {
 					return nil, err
 				}
+				return nil, &worker.JobError{Code: "provider_unavailable", Retry: true}
 			}
-			if err := s.settleModelCost(ctx, j.OwnerID, id, result.Cost); err != nil {
-				return nil, err
-			}
-			if backgroundHourlyBudgets[backgroundStage(j.Stage)] == 0 {
-				if errors.Is(callErr, memory.ErrUnavailable) {
-					if err := s.releaseUnavailableReservation(ctx, j, id); err != nil {
-						return nil, err
-					}
-					return nil, &worker.JobError{Code: "provider_unavailable", Retry: true}
-				}
-				return nil, &worker.JobError{Code: "model_call_failed", Retry: p.Reserve(instructions+modelPrompt) == 0}
-			}
-			return nil, &worker.JobError{Code: "model_call_failed", Until: time.Now().Add(retryDelay(j.Attempts))}
+			return nil, &worker.JobError{Code: "model_call_failed", Retry: failed.ReservedCost == 0}
 		}
-		saved = &paidModelResult{Prompt: prompt, Output: result.Text, Reservation: id, Provider: p.ID, Model: p.Model, DurationMS: result.DurationMS, InputTokens: result.InputTokens, OutputTokens: result.OutputTokens, InputEstimated: result.InputEstimated, OutputEstimated: result.OutputEstimated, CostEstimated: result.CostEstimated, Cost: result.Cost, Refs: refs}
-		// A canceled lease can retry persistence in this process without losing
-		// the response. Once stored, restart recovery uses the durable snapshot.
-		s.pendingPaid.Store(j.ID, saved)
+		return nil, &worker.JobError{Code: "model_call_failed", Until: time.Now().Add(retryDelay(j.Attempts))}
 	}
-	for {
-		persistCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
-		_, err = s.pool.Exec(persistCtx, `INSERT INTO background_model_results(owner_id,job_id,purpose,prompt,output,reservation_id,provider_id,model,input_tokens,output_tokens,cost,refs,input_estimated,output_estimated,cost_estimated,duration_ms)
- VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) ON CONFLICT(job_id) DO NOTHING`, string(j.OwnerID), string(j.ID), purpose, saved.Prompt, saved.Output, saved.Reservation, saved.Provider, saved.Model, saved.InputTokens, saved.OutputTokens, saved.Cost, asJSON(saved.Refs), saved.InputEstimated, saved.OutputEstimated, saved.CostEstimated, saved.DurationMS)
-		cancel()
-		if err == nil {
-			s.pendingPaid.Delete(j.ID)
-			break
-		}
-		select {
-		case <-ctx.Done():
-			return nil, err
-		case <-time.After(time.Second):
-		}
-	}
-
-	if err := s.recordUsage(ctx, modelUsage{OwnerID: j.OwnerID, ID: memory.ID(saved.Reservation), Purpose: purpose, AgentID: saved.Provider, Model: saved.Model, DurationMS: saved.DurationMS, InputTokens: saved.InputTokens, OutputTokens: saved.OutputTokens, InputEstimated: saved.InputEstimated, OutputEstimated: saved.OutputEstimated, CostEstimated: saved.CostEstimated, Cost: saved.Cost, JobID: string(j.ID), MemoryRefs: saved.Refs}); err != nil {
-		return nil, err
-	}
-	if err := s.settleModelCost(ctx, j.OwnerID, saved.Reservation, saved.Cost); err != nil {
-		return nil, err
-	}
-	return saved, nil
+	return result, err
 }
 
 func discardPaidResultTx(ctx context.Context, tx pgx.Tx, j worker.Job) error {

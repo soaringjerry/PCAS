@@ -7,6 +7,10 @@ The [Whitepaper](whitepaper.md#phase-39-foundation) gives its product purpose an
 The target below is not an implemented structure.
 Execution scopes must follow [Executor Rules](../AGENTS.md) and the [Development Workflow](tasks/process.md).
 
+The [shared skeleton scope](tasks/foundation-shared-skeleton.md) starts implementation with existing background calls.
+Its [acceptance record](evaluations/2026-10-08-foundation-shared-skeleton.md) lists actual coverage, checks, and remaining paths.
+The complete target below is not the delivery claim for that batch.
+
 ## 1 Foundation Scope
 
 Examine all existing production paths, including HTTP, Telegram, connectors, imports, background work, and provider connection tests.

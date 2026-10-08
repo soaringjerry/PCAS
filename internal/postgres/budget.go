@@ -23,7 +23,7 @@ func (s *Store) reserveModelCost(ctx context.Context, owner memory.ID, cost floa
 }
 
 // Each invocation settles its own row, including concurrent calls without a job.
-func (s *Store) reserveModelCostID(ctx context.Context, owner memory.ID, cost float64, j *worker.Job) (string, error) {
+func (s *Store) reserveModelCostID(ctx context.Context, owner memory.ID, cost float64, j *worker.Job, receipts ...func(context.Context, pgx.Tx, string) error) (string, error) {
 	var id string
 	if cost < 0 || math.IsNaN(cost) || math.IsInf(cost, 0) {
 		return "", memory.ErrInvalid
@@ -95,9 +95,19 @@ func (s *Store) reserveModelCostID(ctx context.Context, owner memory.ID, cost fl
 			return err
 		}
 		if !staged {
-			return tx.QueryRow(ctx, "INSERT INTO background_usage(owner_id,job_id,reserved_cost) VALUES($1,$2,$3) RETURNING id::text", string(owner), jobID, cost).Scan(&id)
+			err = tx.QueryRow(ctx, "INSERT INTO background_usage(owner_id,job_id,reserved_cost) VALUES($1,$2,$3) RETURNING id::text", string(owner), jobID, cost).Scan(&id)
+		} else {
+			err = tx.QueryRow(ctx, "INSERT INTO background_usage(owner_id,job_id,reserved_cost,stage) VALUES($1,$2,$3,$4) RETURNING id::text", string(owner), jobID, cost, stage).Scan(&id)
 		}
-		return tx.QueryRow(ctx, "INSERT INTO background_usage(owner_id,job_id,reserved_cost,stage) VALUES($1,$2,$3,$4) RETURNING id::text", string(owner), jobID, cost, stage).Scan(&id)
+		if err != nil {
+			return err
+		}
+		for _, receipt := range receipts {
+			if err := receipt(ctx, tx, id); err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 	return id, err
 }

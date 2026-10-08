@@ -20,6 +20,7 @@ Historical tasks, research, and evaluations are evidence. They do not assign new
 | [Deployment](deployment.md) | Setup, models, account login, backup, and live checks. |
 | [Input Reference](connectors.md) | Record format, archives, polling, folders, and implemented limits. |
 | [Open Issues](tasks/backlog.md) | Recorded unresolved and uncertain findings. |
+| [Foundation Shared Skeleton](tasks/foundation-shared-skeleton.md) | Sol's first implementation scope, migration proposal, guarantees, and baseline checks. |
 | [Historical Records](history/README.md) | Retired designs and interpretation of past records. |
 
 ## Document Authority
@@ -88,6 +89,7 @@ The groups below contain historical material and link-compatibility files, not a
 <summary>Evaluations and deployment records</summary>
 
 - [Phase 3.9 existing paths and baseline evidence](evaluations/2026-10-08-foundation-inventory.md)
+- [Foundation shared model skeleton checks](evaluations/2026-10-08-foundation-shared-skeleton.md)
 - [2026-09-29 连续记忆验收](evaluations/2026-09-29.md)
 - [Memory and permission boundary repair — 2026-09-30](evaluations/2026-09-30-memory-boundaries.md)
 - [第 1 阶段黄金路径验收（任务 E）](evaluations/2026-09-30-phase1-acceptance.md)

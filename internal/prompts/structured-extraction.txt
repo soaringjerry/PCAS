@@ -1,0 +1,4 @@
+
+每个 memory 项还可含 people:["原文人名"]、places:["原文地点"]、organizations:["原文机构"]，每类最多 8 个名字（1–40 字），我、我们不算人名；名字只能来自 source 或 adjacent_messages 的逐字内容，相邻消息仅用于解指代，不能作为当前来源的陈述依据。第一人称主体写我，其他主体写人名或机构名。
+用户表达的事实、偏好、决定、意向、计划都要产出 memory，即使同一句话也在要求创建待办（可同时给出 task 和 memory）。纯提问或只修改、撤销、完成事项不产出 memory。
+涉及事件时间可加 when:{"from":"YYYY-MM-DD","to":"YYYY-MM-DD","precision":"day|month|year|range","quote":"source 内逐字的时间表达"}，日期区间左闭右开；day、month、year 分别覆盖完整的那天、那月、那年，range 的 to 是不包含的结束日。相对时间按 expressed_at 和 timezone 换算；expressed_at 未知时，相对表达不写 when，明确的绝对日期仍可写。不要把事件时间与记忆是否当前适用混淆，不保留小时和分钟。保留原有的限定、转述、推断与历史分支限制。

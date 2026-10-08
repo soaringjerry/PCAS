@@ -19,6 +19,7 @@ The [Memory Architecture](memory-architecture.md) gives behavior requirements.
 | Secretary preparation, model work, and execution | [Desk turn](../internal/postgres/desk_turn.go) and [actions](../internal/postgres/desk_actions.go). |
 | Commands and undo | [Commands](../internal/postgres/commands.go) and [action log](../internal/postgres/actions_log.go). |
 | Background queue coordination | [Worker](../internal/worker/worker.go). |
+| Migrated background model calls | [Gateway](../internal/modelcall/gateway.go), [storage adapter](../internal/postgres/model_calls.go), and [prompt registry](../internal/prompts/registry.go). |
 | Date closure and review | [Date completion](../internal/postgres/deadline_completion.go) and [date review](../internal/postgres/date_tidy.go). |
 | Project creation and planning | [Topic projects](../internal/postgres/topic_projects.go) and [effort](../internal/postgres/effort.go). |
 
@@ -26,6 +27,34 @@ Many business operations stay in the PostgreSQL package.
 An application-service boundary must have explicit interfaces in addition to a package name.
 The public retrieval path and team retrieval path have different inputs and ranking options.
 Query hints currently use deterministic text rules. These rules are not complete natural-language interpretation.
+
+The foundation adds a gateway for the existing `generatePaid` background callers.
+The [shared skeleton scope](tasks/foundation-shared-skeleton.md) defines this addition to the earlier implementation snapshot.
+Other provider entry points remain explicit migration exceptions in the [boundary check](../internal/modelcall/provider_boundary_test.go).
+Business workflows remain in PostgreSQL during this batch.
+
+### Background Call Evidence
+
+Migration `062_model_calls.sql` adds call metadata without replacing existing cost or result records.
+`model_calls` links each invocation to its execution, registered instructions, input references, reservation, usage, and result receipt.
+The input manifest records missing source coverage and upstream causal information explicitly.
+The current adapter uses the job as its local root. It does not reconstruct the upstream event chain.
+
+`model_usage` remains authoritative for recorded tokens, estimated costs, and duration.
+`background_usage` remains the budget reservation and settlement record.
+Do not add its totals to usage spending.
+Join usage by owner and usage identity. A missing usage row does not mean zero cost.
+
+The reservation and invocation link commit in one transaction.
+The output and returned, failed, or unknown status also commit together.
+Accounting failures retain the paid response for recovery.
+Application failure does not repeat generation.
+Legacy saved responses can lack invocation metadata. Recovery does not invent it.
+
+The gateway pins the selected provider and rates before reservation.
+Lost responses and interrupted calls return `provider_outcome_unknown` and do not start an automatic replacement call.
+The existing queue records that visible failure. Resolution requires evidence through the responsible processing path.
+This batch does not add a recovery interface for unresolved calls.
 
 ## 2 HTTP Interfaces
 

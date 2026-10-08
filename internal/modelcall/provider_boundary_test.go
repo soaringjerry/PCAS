@@ -1,0 +1,135 @@
+package modelcall_test
+
+import (
+	"encoding/json"
+	"go/ast"
+	"go/importer"
+	"go/parser"
+	"go/token"
+	"go/types"
+	"io"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+// These are migration exceptions, not permitted new model entry points.
+// Remove each exception when its complete workflow enters the gateway.
+func TestProductionProviderCallsUseDeclaredMigrationBoundaries(t *testing.T) {
+	allowed := map[string]int{
+		"internal/modelcall/gateway.go:Call:GenerateProvider":                                            1,
+		"internal/httpapi/model_settings.go:modelSettingsRoutes:Route":                                   1,
+		"internal/httpapi/workspace.go:workspaceRoutes:Route":                                            1,
+		"internal/postgres/attachments.go:parseAttachment:TranscribeUsage":                               1,
+		"internal/postgres/desk.go:AnswerDesk:GenerateWithSearch":                                        1,
+		"internal/postgres/desk_model_retry.go:generateSecretaryModelWithRetry:GenerateWithSearchSchema": 1,
+		"internal/postgres/memory_use_model.go:useModelCall:GenerateSchema":                              1,
+		"internal/postgres/memory_use_model.go:useModelCall:Generate":                                    1,
+		"internal/postgres/processing.go:ProcessEmbedding:EmbedProviderUsage":                            1,
+		"internal/postgres/retrieval.go:Recall:EmbedProviderUsage":                                       1,
+		"internal/postgres/runs.go:runAgentOnce:GenerateWithSearchSchema":                                1,
+		"internal/postgres/runs.go:runAgentOnce:GenerateWithSearch":                                      1,
+		"internal/postgres/status_build.go:statusGenerate:Generate":                                      1,
+		"internal/postgres/vision.go:readImage:Vision":                                                   1,
+		"internal/telegram/poller.go:handle:Transcribe":                                                  1,
+	}
+	root, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	command := exec.Command("go", "list", "-deps", "-export", "-json", "./cmd/...", "./internal/...")
+	command.Dir = root
+	output, err := command.Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	type pkg struct {
+		ImportPath, Export, Dir string
+		GoFiles, Imports        []string
+	}
+	decoder := json.NewDecoder(strings.NewReader(string(output)))
+	exports := map[string]string{}
+	var packages []pkg
+	for {
+		var p pkg
+		err := decoder.Decode(&p)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		exports[p.ImportPath] = p.Export
+		if strings.HasPrefix(p.ImportPath, "github.com/soaringjerry/PCAS/") {
+			packages = append(packages, p)
+		}
+	}
+	methods := map[string]bool{"Generate": true, "GenerateProvider": true, "GenerateSchema": true, "GenerateWithSearch": true, "GenerateWithSearchSchema": true, "Embed": true, "EmbedQuery": true, "EmbedProvider": true, "EmbedProviderUsage": true, "Transcribe": true, "TranscribeUsage": true, "Vision": true, "Route": true}
+	for _, p := range packages {
+		if strings.Contains(p.ImportPath, "/internal/ai") || strings.Contains(p.ImportPath, "/cmd/pcas-eval") {
+			continue
+		}
+		if strings.HasSuffix(p.ImportPath, "/internal/modelcall") || strings.HasSuffix(p.ImportPath, "/internal/prompts") {
+			for _, path := range p.Imports {
+				if strings.HasSuffix(path, "/internal/postgres") {
+					t.Error("gateway and registry cannot import concrete storage")
+				}
+			}
+		}
+		fs := token.NewFileSet()
+		var files []*ast.File
+		for _, name := range p.GoFiles {
+			f, err := parser.ParseFile(fs, filepath.Join(p.Dir, name), nil, 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			files = append(files, f)
+		}
+		info := &types.Info{Uses: map[*ast.Ident]types.Object{}}
+		config := types.Config{Importer: importer.ForCompiler(fs, "gc", func(path string) (io.ReadCloser, error) { return os.Open(exports[path]) })}
+		if _, err := config.Check(p.ImportPath, fs, files, info); err != nil {
+			t.Fatal(err)
+		}
+		for _, file := range files {
+			name, _ := filepath.Rel(root, fs.Position(file.Pos()).Filename)
+			for _, decl := range file.Decls {
+				fn, ok := decl.(*ast.FuncDecl)
+				if !ok || fn.Body == nil {
+					continue
+				}
+				ast.Inspect(fn.Body, func(node ast.Node) bool {
+					call, ok := node.(*ast.CallExpr)
+					if !ok {
+						return true
+					}
+					selector, ok := call.Fun.(*ast.SelectorExpr)
+					if !ok {
+						return true
+					}
+					method, ok := info.Uses[selector.Sel].(*types.Func)
+					if !ok || method.Pkg() == nil || !methods[method.Name()] {
+						return true
+					}
+					path := method.Pkg().Path()
+					if !strings.Contains(path, "/internal/ai") && path != "github.com/soaringjerry/PCAS/internal/modelcall" && !(path == "github.com/soaringjerry/PCAS/internal/telegram" && method.Name() == "Transcribe") {
+						return true
+					}
+					key := filepath.ToSlash(name) + ":" + fn.Name.Name + ":" + method.Name()
+					if allowed[key] == 0 {
+						t.Errorf("unapproved provider entry: %s", key)
+					} else {
+						allowed[key]--
+					}
+					return true
+				})
+			}
+		}
+	}
+	for site, count := range allowed {
+		if count != 0 {
+			t.Errorf("remove or update stale migration exception: %s (%d)", site, count)
+		}
+	}
+}

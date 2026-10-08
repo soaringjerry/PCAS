@@ -270,9 +270,22 @@ func (r *Registry) GenerateSchema(ctx context.Context, id, system, prompt string
 func (r *Registry) Generate(ctx context.Context, id, system, prompt string) (Result, error) {
 	return r.generate(ctx, id, system, prompt, nil)
 }
-func (r *Registry) generate(ctx context.Context, id, system, prompt string, image *Image) (outcome Result, callErr error) {
+func (r *Registry) generate(ctx context.Context, id, system, prompt string, image *Image) (Result, error) {
 	p, ok := r.Get(id)
-	if !ok || !r.providerAvailable(p) || p.Embedding || p.Transcription {
+	if !ok {
+		return Result{}, memory.ErrUnavailable
+	}
+	return r.generateProvider(ctx, p, system, prompt, image)
+}
+
+// GenerateProvider uses the gateway's selected provider snapshot. Settings
+// changes during reservation cannot change the recorded model or its rates.
+func (r *Registry) GenerateProvider(ctx context.Context, p Provider, system, prompt string) (Result, error) {
+	return r.generateProvider(ctx, p, system, prompt, nil)
+}
+
+func (r *Registry) generateProvider(ctx context.Context, p Provider, system, prompt string, image *Image) (outcome Result, callErr error) {
+	if !r.providerAvailable(p) || p.Embedding || p.Transcription {
 		return Result{}, memory.ErrUnavailable
 	}
 	defer measureInvocation(ctx, &outcome)()
@@ -468,13 +481,16 @@ func (r *Registry) call(ctx context.Context, p Provider, path string, body, out 
 		if errors.Is(err, context.Canceled) {
 			return context.Canceled
 		}
-		return fmt.Errorf("model provider unreachable")
+		return &ProviderError{OutcomeUnknown: true, Cause: err}
 	}
 	defer response.Body.Close()
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return fmt.Errorf("model provider HTTP %d", response.StatusCode)
+		return &ProviderError{HTTPStatus: response.StatusCode}
 	}
-	return json.NewDecoder(io.LimitReader(response.Body, 8<<20)).Decode(out)
+	if err := json.NewDecoder(io.LimitReader(response.Body, 8<<20)).Decode(out); err != nil {
+		return &ProviderError{OutcomeUnknown: true, Cause: err}
+	}
+	return nil
 }
 
 // Duration spans the channel invocation (including transport/startup and a

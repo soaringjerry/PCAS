@@ -4,7 +4,7 @@ import type { InProgress, Schedule, ScheduleEntry } from '../src/domain/schedule
 import type { Creation, Idea, Project, State, Task } from '../src/domain/types'
 
 // Phase 3.5, the hall: dates from the table of deadlines on 今天 and 这几天,
-// to-dos with no time under 在推进, and what the background made on its own
+// to-dos with no time under 待办, and what the background made on its own
 // under 你不在的时候. Everything here is made up: the person, the shop, what was said.
 test.use({ timezoneId: 'Asia/Shanghai', viewport: { width: 1440, height: 1000 } })
 const now = '2031-03-05T04:00:00Z' // Wednesday noon in Shanghai.
@@ -40,7 +40,7 @@ function schedule(): Schedule {
     ],
     unclear: [entry('visit', 'appointment', '去看林栖的新店', { timeNote: '没说哪天', originalText: '说好了找个时间去看林栖的新店' })],
     overdue: [
-      entry('warranty', 'deadline', '给烤箱续保', { date: '2031-02-10', at: '2031-02-10T02:00:00Z', originalText: '烤箱的保修二月十号到期，要问一下续保' }),
+      entry('warranty', 'deadline', '给烤箱续保', { date: '2031-03-02', at: '2031-03-02T02:00:00Z', originalText: '烤箱的保修三月二号到期，要问一下续保' }),
       ...Array.from({ length: 6 }, (_, i) => entry(`old-${i}`, 'deadline', `旧期限 ${i + 1}`, { date: `2031-01-0${i + 1}`, at: `2031-01-0${i + 1}T02:00:00Z` })),
     ],
   }
@@ -119,7 +119,7 @@ test('the day reads the schedule: appointments, deadlines, fixed arrangements an
   await expect(flour.getByRole('button', { name: '做完了：给面粉供应商回话' })).toBeVisible()
   await expect(line.locator('.hall-task').filter({ hasText: '看牙' }).locator('.h-note')).toHaveText('预约')
   await expect(line.locator('.hall-task').filter({ hasText: '裱花课' }).locator('.h-note')).toHaveText('固定安排')
-  await expect(line.locator('.hall-task').filter({ hasText: '交摊位申请表' }).locator('.h-note')).toHaveText('截止 · 没说几点')
+  await expect(line.locator('.hall-task').filter({ hasText: '交摊位申请表' }).locator('.h-note')).toHaveText('截止')
   // Only what can be finished has a circle.
   await expect(line.locator('.hall-task').filter({ hasText: '看牙' }).getByRole('button', { name: /做完了/ })).toHaveCount(0)
   expect(mock.errors).toEqual([])
@@ -143,16 +143,17 @@ test('the next three days list deadlines and appointments; dates that were never
 test('a deadline that went by unmet looks like 已过截止 and can be said to be done, from the row or once opened', async ({ page }) => {
   const mock = await backend(page)
   await page.goto('/')
-  const late = today(page).locator('.hall-group').filter({ has: page.getByRole('heading', { name: '在等你，或已经晚了' }) })
-  // The latest first; years of them do not flood the column.
-  await expect(late.locator('.h-title')).toHaveText(['给烤箱续保', '旧期限 6', '旧期限 5', '旧期限 4', '旧期限 3'])
-  await expect(late.locator('.hall-task').first().locator('.h-note')).toHaveText('已过截止 · 2月10日')
-  await late.getByRole('button', { name: '还有 2 条' }).click()
-  await expect(late.locator('.h-title')).toHaveCount(7)
+  const late = today(page).locator('.hall-group').filter({ has: page.getByRole('heading', { name: '之前没了结的' }) })
+  // Under today, not over it. The last week's by name; older ones wait behind one line, the latest first.
+  await expect(today(page).locator('.hall-group').last()).toContainText('之前没了结的')
+  await expect(late.locator('.h-title')).toHaveText(['给烤箱续保'])
+  await expect(late.locator('.hall-task').first().locator('.h-note')).toContainText('已过截止 · ')
+  await late.getByRole('button', { name: '更早的 6 条' }).click()
+  await expect(late.locator('.h-title')).toHaveText(['给烤箱续保', '旧期限 6', '旧期限 5', '旧期限 4', '旧期限 3', '旧期限 2', '旧期限 1'])
 
   await late.getByRole('button', { name: /^给烤箱续保/ }).click()
   const sheet = page.getByRole('dialog')
-  await expect(sheet.locator('.source-text')).toHaveText('烤箱的保修二月十号到期，要问一下续保')
+  await expect(sheet.locator('.source-text')).toHaveText('烤箱的保修三月二号到期，要问一下续保')
   await sheet.getByRole('button', { name: '做完了：给烤箱续保' }).click()
   // It is marked on the memory's deadline; no to-do is made.
   await expect.poll(() => mock.commands.map((c) => [c.type, c.id])).toEqual([['completeDeadline', 'd-warranty']])
@@ -166,7 +167,8 @@ test('a deadline that went by unmet looks like 已过截止 and can be said to b
   await page.getByRole('button', { name: '撤销' }).click()
   await expect.poll(() => mock.commands.at(-1)).toMatchObject({ type: 'undoAction', id: done })
   expect(mock.state.tasks).toEqual([])
-  // Any date can simply be dropped with its ×, done or not, and that too can be taken back.
+  // Any date can simply be dropped with 不要了, done or not, and that too can be taken back. The word is on the button.
+  await expect(late.getByRole('button', { name: '不要了：旧期限 5' })).toContainText('不要了')
   await late.getByRole('button', { name: '不要了：旧期限 5' }).click()
   await expect.poll(() => mock.commands.at(-1)).toMatchObject({ type: 'completeDeadline', id: 'd-old-4', reason: 'dropped' })
   await expect(late.locator('.h-title').filter({ hasText: '旧期限 5' })).toHaveCount(0)
@@ -187,37 +189,39 @@ test('when the schedule cannot be read the to-dos still show, and the column say
   await expect(today(page).getByRole('alert')).toHaveCount(0)
 })
 
-test('to-dos with no time are under 在推进, in the order and number the server gives', async ({ page }) => {
+test('to-dos with no time are under 待办: urgent ones first, the background\'s own last and marked', async ({ page }) => {
   const menu = task('menu', '重写春季菜单', { projectId: 'spring', updatedAt: '2031-03-05T01:00:00Z' })
   const sign = task('sign', '换门口的招牌', { updatedAt: '2031-03-02T04:00:00Z' })
+  const flyer = task('flyer', '印新传单', { updatedAt: '2031-03-01T04:00:00Z', urgent: true })
+  const filter = task('filter', '换净水器滤芯', { updatedAt: '2031-03-05T02:00:00Z', creation: { by: 'background_tidy', actionId: 'a-filter' } })
   const mock = await backend(page, {
-    tasks: [sign, menu],
+    tasks: [sign, menu, flyer, filter],
     projects: [{ id: 'spring', name: '春季上新', goal: '', status: 'active', updatedAt: '2031-03-01T00:00:00Z' }],
-    progress: { items: [menu, sign], total: 9, remaining: 7 },
+    progress: { items: [filter, menu, sign, flyer], total: 11, remaining: 7 },
   })
   await page.goto('/')
-  const wall = page.getByRole('region', { name: '在推进' })
-  await expect(wall.locator('.h-title')).toHaveText(['重写春季菜单', '换门口的招牌'])
-  await expect(wall.locator('.h-note')).toHaveText(['春季上新 · 3 小时前', '3 天前'])
+  const wall = page.getByRole('region', { name: '待办' })
+  await expect(wall.locator('.h-title')).toHaveText(['印新传单', '重写春季菜单', '换门口的招牌', '换净水器滤芯'])
+  await expect(wall.locator('.h-note')).toHaveText(['你说过要尽快 · 4 天前', '春季上新 · 3 小时前', '3 天前', '后台建的 · 2 小时前'])
   await expect(wall).toContainText('还有 7 件没列出来，在各自的项目里，搜索也能找到。')
   // They are not on the line of time.
   await expect(today(page).getByText('重写春季菜单')).toHaveCount(0)
   await wall.getByRole('button', { name: '做完了：换门口的招牌' }).click()
   await expect.poll(() => mock.commands.at(-1)).toMatchObject({ type: 'setTaskStatus', id: 'sign', status: 'done' })
-  await expect(wall.locator('.h-title')).toHaveText(['重写春季菜单'])
+  await expect(wall.locator('.h-title')).toHaveText(['印新传单', '重写春季菜单', '换净水器滤芯'])
   await expect(wall.getByRole('link', { name: /重写春季菜单/ })).toHaveAttribute('href', '/t/menu')
   expect(mock.errors).toEqual([])
 })
 
-test('在推进 takes no room while there is nothing in it, and says why when it cannot be read', async ({ page }) => {
+test('待办 takes no room while there is nothing in it, and says why when it cannot be read', async ({ page }) => {
   const mock = await backend(page)
   await page.goto('/')
   await expect(page.getByRole('region', { name: '项目' })).toBeVisible()
   await expect.poll(() => mock.asked).toContain('/v1/workspace/in-progress')
-  await expect(page.getByRole('region', { name: '在推进' })).toHaveCount(0)
+  await expect(page.getByRole('region', { name: '待办' })).toHaveCount(0)
   mock.failing.add('/v1/workspace/in-progress')
   await page.reload()
-  await expect(page.getByRole('region', { name: '在推进' }).getByRole('alert')).toContainText('没读出来：服务器出错了（错误 503，storage_unavailable）')
+  await expect(page.getByRole('region', { name: '待办' }).getByRole('alert')).toContainText('没读出来：服务器出错了（错误 503，storage_unavailable）')
 })
 
 test('what the background made on its own is under 你不在的时候, one line each with who, on what, and 撤销', async ({ page }) => {
@@ -324,7 +328,7 @@ test('on a phone the short column keeps its five rows, dates and to-dos together
   const mock = await backend(page)
   await page.goto('/')
   // Today comes before the deadlines of earlier days, however many of those there are.
-  await expect(today(page).locator('.hall-task .h-title')).toHaveText(['给烤箱续保', '交摊位申请表', '看牙', '给烤箱除垢', '裱花课'])
+  await expect(today(page).locator('.hall-task .h-title')).toHaveText(['给面粉供应商回话', '交摊位申请表', '看牙', '给烤箱除垢', '裱花课'])
   await today(page).getByRole('button', { name: /^还有 \d+ 件$/ }).click()
   await expect(today(page).getByRole('group', { name: '日期没说清的' })).toHaveCount(0)
   await expect(page.getByRole('region', { name: '今天', exact: true })).toBeVisible()

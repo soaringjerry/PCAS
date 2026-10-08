@@ -1,5 +1,9 @@
 # 任务 E4：导入的聊天记录按整段对话整理（后端）
 
+> **Historical task record.** This text records an earlier phase or investigation.
+> Use the [current documentation](../../../README.md) and [project status](../../../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 执行者 6.1 Sol（做第 2 批后端的执行者，做完 E3 之后做）。分支 `phase2/b4b-E4-conversation-extraction`，从 `origin/phase2/batch4b` 建；工作区 `/root/PCAS-wt/b4b-E4`；Draft PR 的 base 是 `phase2/batch4b`。
 
 先读 [并行方案与数据约定](../parallel.md)、[第 2 批契约](../batch2/README.md) 的 R1–R10、[第 4 批契约](README.md) 第 11、12 节（R21–R29 和序列 C1–C9）。

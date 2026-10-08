@@ -1,5 +1,9 @@
 # F14：一句话新建任务并继续加步骤
 
+> **Historical task record.** This text records an earlier phase or investigation.
+> Use the [current documentation](../../README.md) and [project status](../../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 执行者 Sol / high。用户于 2026-10-01 确认：一句话「建交作业任务，再给它加查资料、写提纲两个步骤」应指向本轮刚建的任务并一次办完。基线 `59e25daa67df7447f0a09b7f0bd9e5d65edab65e`；工作区 `/root/PCAS-wt/F14`，分支 `stabilization/F14-same-turn-actions`；PR base `stabilization/acceptance-candidate`。
 
 ## 首先审查内部引用方案

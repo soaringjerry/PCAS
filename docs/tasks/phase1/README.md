@@ -1,5 +1,9 @@
 # 第 1 阶段：秘书前台 · 任务总览
 
+> **Historical task record.** This text records an earlier phase or investigation.
+> Use the [current documentation](../../README.md) and [project status](../../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 上位依据：[白皮书](../../whitepaper.md) 第 3、4、10、16、17 章，[界面与交互原则](../../design/principles.md)。
 接口约定：[contracts.md](contracts.md)。**所有执行者开工前必须读完本页和 contracts.md。**
 

@@ -1,5 +1,9 @@
 # C1: parallel real-backend CI
 
+> **Historical task record.** This text records an earlier phase or investigation.
+> Use the [current documentation](../../README.md) and [project status](../../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 Status: implemented and locally verified; independent draft PR matrix verification pending, 2026-10-01. See `docs/evaluations/2026-10-01-ci-parallel-real-backend.md`; final remote evidence will be recorded in the draft PR body without a report-only CI rerun.
 
 ## Ownership and base

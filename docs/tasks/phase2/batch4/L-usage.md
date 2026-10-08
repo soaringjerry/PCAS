@@ -1,5 +1,9 @@
 # 任务 L：记下每次调用用了哪些记忆、花了多少（后端）
 
+> **Historical task record.** This text records an earlier phase or investigation.
+> Use the [current documentation](../../../README.md) and [project status](../../../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 执行者 6.1 Sol。分支 `phase2/b4-L-usage`，从 `origin/phase2/batch4` 建；工作区 `/root/PCAS-wt/b4-L`；Draft PR 的 base 是 `phase2/batch4`。
 
 先读 [并行方案与数据约定](../parallel.md) 第 3.1、3.5 节和 [第 4 批契约](README.md) 的 R12–R15 和序列 L1–L9。这是一个小任务。

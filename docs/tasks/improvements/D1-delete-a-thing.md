@@ -1,5 +1,9 @@
 # 任务 D1：待办、想法、项目可以删除
 
+> **Historical task record.** This text records an earlier phase or investigation.
+> Use the [current documentation](../../README.md) and [project status](../../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 2026-10-03 对照白皮书检查时发现，用户同意后由协调者直接实现。
 
 ## 之前的问题

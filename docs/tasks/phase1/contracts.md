@@ -1,5 +1,9 @@
 # 第 1 阶段接口契约
 
+> **Historical task record.** This text records an earlier phase or investigation.
+> Use the [current documentation](../../README.md) and [project status](../../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 本文件固定各任务之间的接口。**实现方必须按这里实现，使用方可以在对方合并前按这里写代码和 mock。**
 要改契约，先在 PR 描述里提出，由用户确认后改本文件，再改代码。
 

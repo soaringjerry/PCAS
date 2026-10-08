@@ -1,5 +1,9 @@
 # 第二阶段方向稿
 
+> **Historical task record.** This text records an earlier phase or investigation.
+> Use the [current documentation](../../README.md) and [project status](../../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 2026-10-01。**用户已确认**（2026-10-01）。用户的决定和约束见 [任务入口](README.md)。每一批开工前由协调者写任务包和验收预期。
 
 ## 1 目标

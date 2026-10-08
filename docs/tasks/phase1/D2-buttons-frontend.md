@@ -1,5 +1,9 @@
 # 任务 D2：删按钮
 
+> **Historical task record.** This text records an earlier phase or investigation.
+> Use the [current documentation](../../README.md) and [project status](../../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 执行者：**Opus 5.5** · 分支：`phase1/D2-buttons` · 依赖：**B2 和 C1 已合并**；D1 按契约第 5 节并行，用 mock 数据开发
 开工前读：[README.md](README.md)、[contracts.md](contracts.md) 第 3、4、5、6 节、[界面与交互原则](../../design/principles.md) 中的「按钮只剩三种」和「谁来做决定」。
 

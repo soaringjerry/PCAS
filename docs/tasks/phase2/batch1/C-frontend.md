@@ -1,5 +1,9 @@
 # 任务 C：依据卡片里的原话、「依据已更新」标记（前端）
 
+> **Historical task record.** This text records an earlier phase or investigation.
+> Use the [current documentation](../../../README.md) and [project status](../../../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 执行者 Opus 5.5。分支 `phase2/b1-C-frontend`，工作区 `/root/PCAS-wt/b1-C`，PR base `phase2/batch1`。
 
 先读 [本批总览与契约](README.md) 的第 1、3（R7、R8）、5、7、8 节，以及 [界面与交互原则](../../../design/principles.md)。这是一个小任务：两处界面变化，不新增页面、按钮和设置项。

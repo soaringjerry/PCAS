@@ -1,5 +1,9 @@
 # F15：连续改时间按服务端接受顺序执行
 
+> **Historical task record.** This text records an earlier phase or investigation.
+> Use the [current documentation](../../README.md) and [project status](../../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 执行者 Sol / high。用户要求完成阶段一打磨，并授权无冲突并行；Q1 已实际复现三轮改时间倒置，root 安排修复。root 不写产品或测试。本任务不是开始第二阶段。
 
 基线后端组合 `210144a93753bed736d2d5561a454f8d07185eb0`，工作区 `/root/PCAS-wt/F15`，分支 `stabilization/F15-conversation-order`。先读 Q1 独立证据 `/root/PCAS-wt/Q1/docs/evaluations/2026-10-01-conversation-order-audit.md`（98b9a01）、正式契约、F11 与其真实并发测试。Q1 已停，不与其共写；U2 独占页面，T4 独占集成候选与独立 UX 测试。

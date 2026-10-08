@@ -1,5 +1,9 @@
 # 任务 Q1：把一句问话拆成条件（纯函数）
 
+> **Historical task record.** This text records an earlier phase or investigation.
+> Use the [current documentation](../../../README.md) and [project status](../../../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 执行者 6.1 Sol。分支 `phase2/b3-Q1-planner`，从 `origin/main` 建（不用等 S0）；工作区 `/root/PCAS-wt/b3-Q1`；Draft PR 的 base 是 `phase2/batch3`（协调者建好后告诉你，在那之前先在自己的分支上做）。
 
 先读 [并行方案与数据约定](../parallel.md) 第 4、5 节和 [第 3 批契约](README.md) 的 R1–R4 和序列 P1–P7。

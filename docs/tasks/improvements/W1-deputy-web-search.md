@@ -1,5 +1,9 @@
 # 任务 W1：副手能联网查资料
 
+> **Historical task record.** This text records an earlier phase or investigation.
+> Use the [current documentation](../../README.md) and [project status](../../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 2026-10-03 用户反馈：让副手调查 yufolo 的公开资料，报告里写「直接访问失败」「站内域名搜索无结果」，没有任何网上查到的内容。由协调者直接修。
 
 ## 原因

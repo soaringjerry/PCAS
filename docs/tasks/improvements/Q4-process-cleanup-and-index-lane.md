@@ -1,5 +1,9 @@
 # Q4 后台进程回收与索引持续推进
 
+> **Historical task record.** This text records an earlier phase or investigation.
+> Use the [current documentation](../../README.md) and [project status](../../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 2026-10-03 用户要求火速修复服务器间歇性卡死及导入索引长时间不动。
 
 ## 规则与操作序列

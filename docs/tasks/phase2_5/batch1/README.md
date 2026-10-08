@@ -1,5 +1,9 @@
 # 第 2.5 阶段第 1 批：分组和类型（契约）
 
+> **Historical task record.** This text records an earlier phase or investigation.
+> Use the [current documentation](../../../README.md) and [project status](../../../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 2026-10-04。所有执行者先读完本页，再读自己的任务包。本页和任务包冲突时以本页为准，并立刻告诉协调者。上位文档：[阶段入口](../README.md)、[记忆架构](../../../memory-architecture.md) 第 3、4 节。
 
 ## 1 这一批做什么

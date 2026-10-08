@@ -1,5 +1,9 @@
 # T3：独立检验秘书、Telegram 与删除传播
 
+> **Historical task record.** This text records an earlier phase or investigation.
+> Use the [current documentation](../../README.md) and [project status](../../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 执行者：6.1 Sol / high，`t3_secretary_tests`，只写测试。依据 [执行分工](dispatch.md)、[序列表 §2.3–2.5](README.md) 与 [秘书契约](../phase1/contracts.md)。基线 F7 / `e63ee5e`，工作区 `/root/PCAS-wt/T3`；分支 `stabilization/T3-secretary-tests`，PR base `fix/undo-chain`，明确依赖 #20，合并后须重验 main。
 
 ## 覆盖

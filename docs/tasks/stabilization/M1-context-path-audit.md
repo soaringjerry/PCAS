@@ -1,5 +1,9 @@
 # M1：独立调查在最新候选上的代码与最小复现
 
+> **Historical task record.** This text records an earlier phase or investigation.
+> Use the [current documentation](../../README.md) and [project status](../../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 执行者：6.1 Sol / high。用户新提交一份基于 a3adb4b 的独立调查，要求评估二阶段范围、已有实现、需复现修补和后续实验。此任务只审查与验证，不开始二阶段产品实现。
 
 基线：A1 已组装产品候选 7aae834d34b3749bdceaf0a2b704b79e837a391e（含 F11 d38、F12 ae9、U1 b038、M0 21fa）；与旧 a3adb4bd0b453e2119c76a64d398dccb7f0652d7 对照。A1 仍在自己实例验收，不修改它的分支/文件/环境。工作区 /root/PCAS-wt/M1-audit，分支 review/phase2-context-audit，PR base stabilization/acceptance-candidate；候选尚未推送时先本地交付等待，不改 main。

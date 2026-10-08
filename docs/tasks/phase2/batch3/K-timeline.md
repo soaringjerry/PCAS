@@ -1,5 +1,9 @@
 # 任务 K：时间轴卡片的内容和「后来怎样了」（后端）
 
+> **Historical task record.** This text records an earlier phase or investigation.
+> Use the [current documentation](../../../README.md) and [project status](../../../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 执行者 6.1 Sol。分支 `phase2/b3-K-timeline`，从 `origin/phase2/batch3` 建；工作区 `/root/PCAS-wt/b3-K`；Draft PR 的 base 是 `phase2/batch3`。
 
 先读 [并行方案与数据约定](../parallel.md) 第 3.4 节和 [第 3 批契约](README.md) 的 R14–R16 和序列 K1–K11。

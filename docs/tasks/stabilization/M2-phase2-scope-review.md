@@ -1,5 +1,9 @@
 # M2：二阶段范围、透明度与验收评审
 
+> **Historical task record.** This text records an earlier phase or investigation.
+> Use the [current documentation](../../README.md) and [project status](../../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 执行者：6.1 Sol / high。用户提交的独立调查是评审输入，不是已经在最新版本复现的缺陷清单，也不授权开始二阶段产品实现。
 
 工作区 /root/PCAS-wt/M2-review，分支 docs/phase2-scope-review，从 7aae834d34b3749bdceaf0a2b704b79e837a391e 创建。PR base stabilization/acceptance-candidate；A1正运行稳定化验收，不能改其工作区或分支。M0已停止，现把 docs/tasks/phase2/readiness.md 唯一写入权交给你，直接完善现有计划；可新增配套 docs/tasks/phase2/acceptance.md，不另造第二套总路线。产品、测试、其他任务文档及M1报告只读。

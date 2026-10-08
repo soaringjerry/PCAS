@@ -1,5 +1,9 @@
 # 任务 C1：提醒通道
 
+> **Historical task record.** This text records an earlier phase or investigation.
+> Use the [current documentation](../../README.md) and [project status](../../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 执行者：**6.1 Sol** · 分支：`phase1/C1-notify` · 依赖：A 已合并；与 B1、B2 并行
 开工前读：[README.md](README.md)、[contracts.md](contracts.md) 第 3、4 节、[白皮书](../../whitepaper.md) 第 9、10 章。
 

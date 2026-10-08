@@ -1,5 +1,9 @@
 # 研究笔记：用途标注与事先备料
 
+> **Historical research.** This text records an earlier phase or investigation.
+> Use the [current documentation](../README.md) and [project status](../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 2026-10-04 · 状态：**候选技术，未批准**。和 [看目录、分头细读](memory-navigate-and-read.md) 是同一轮线下实验里测的另外两种办法。数字见 [对比实验记录](../evaluations/2026-10-04-memory-lookup-experiment.md)。文中例子都是虚构的。
 
 > **2026-10-04 补充**：[第二轮实验](../evaluations/2026-10-04-memory-lookup-round2.md) 固定了办事方式并调强了基础线之后，用途标注在办事得分上和基础线的差别落在波动范围内（58% 对 56%），只在「找到多少条」上明显更多；事先备料即使理想选包也只有 54%。本文第 2、3、5 节里用途标注相对现有检索的优势要按这个结果打折看。

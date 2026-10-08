@@ -1,5 +1,9 @@
 # 第 2 阶段第 1 批：原话直达 · 任务总览与契约
 
+> **Historical task record.** This text records an earlier phase or investigation.
+> Use the [current documentation](../../../README.md) and [project status](../../../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 上位依据：[白皮书](../../../whitepaper.md) §3、§5、§10、§17，[界面与交互原则](../../../design/principles.md)，[第二阶段任务入口](../README.md)（用户的决定），[方向稿](../direction.md)，[任务流程规则](../../process.md)。
 
 **所有执行者开工前读完本页，再读自己的任务包。** 本页是这一批的契约：规则、操作序列、数据形状、文件归属都以这里为准。任务包只补充各自的做法。本页和任务包冲突时以本页为准，并立刻告诉协调者。

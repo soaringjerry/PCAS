@@ -1,5 +1,9 @@
 # 任务 A：修三个硬伤
 
+> **Historical task record.** This text records an earlier phase or investigation.
+> Use the [current documentation](../../README.md) and [project status](../../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 执行者：**6.1 Sol** · 分支：`phase1/A-fixes` · 依赖：无 · 后续任务都在 A 合并后开始，所以请**尽快、只做本文件列出的内容**。
 
 开工前读：[README.md](README.md)（规则、环境、文件归属）。

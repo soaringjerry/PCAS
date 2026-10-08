@@ -1,5 +1,9 @@
 # 研究笔记：Hermes Agent
 
+> **Historical research.** This text records an earlier phase or investigation.
+> Use the [current documentation](../README.md) and [project status](../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 - 项目：[NousResearch/hermes-agent](https://github.com/NousResearch/hermes-agent)（MIT；阅读时的 commit 为 `3294d683`，2026-09-30）
 - 阅读时间：2026-09-30
 - 结论：学思路，不搬代码。它是 Python 写的通用 AI 代理，强在消息入口、自我学习闭环和长任务执行；记忆很薄。PCAS 的差异化仍然是记忆核心。

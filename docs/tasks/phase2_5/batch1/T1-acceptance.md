@@ -1,5 +1,9 @@
 # 任务 T1：第 1 批独立验收
 
+> **Historical task record.** This text records an earlier phase or investigation.
+> Use the [current documentation](../../../README.md) and [project status](../../../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 执行者 6.1 Sol（不做本批实现的那一位）。分支 `phase2_5/b1-T1-acceptance`，从合入 O1a 之后的 `origin/phase2_5/batch1` 建；工作区 `/root/PCAS-wt/p25-T1`；Draft PR 的 base 是 `phase2_5/batch1`。
 
 只读 [阶段入口](../README.md) 和 [第 1 批契约](README.md)。**不看 O1b 的实现，不参考它的测试。** 你和实现照着同一份契约各写各的，这样才能发现契约没说清或者实现理解错的地方。

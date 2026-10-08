@@ -1,5 +1,9 @@
 # 任务 E：黄金路径验收与收尾
 
+> **Historical task record.** This text records an earlier phase or investigation.
+> Use the [current documentation](../../README.md) and [project status](../../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 执行者：**Astra** · 分支：`phase1/E-acceptance` · 依赖：A、B1、B2、C1、D1、D2 全部合并
 开工前读：[README.md](README.md)、[contracts.md](contracts.md)、[白皮书](../../whitepaper.md) 第 17 章。
 

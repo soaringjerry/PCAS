@@ -1,5 +1,9 @@
 # U2：设置和事项的日常使用体验
 
+> **Historical task record.** This text records an earlier phase or investigation.
+> Use the [current documentation](../../README.md) and [project status](../../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 2026-10-01 用户追加要求：「把设置界面和任务事项界面变得更符合人性化，UX 更好用」，并明确优先痛点：「主要是设置里一堆乱七八糟的东西，不知道是干什么的，主要是那些功能开关」。这是实际设计与实现任务，不止给建议。协调者不写产品与测试。
 
 ## 执行分工与基线

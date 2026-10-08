@@ -1,5 +1,9 @@
 # 第 3.5 阶段独立验收
 
+> **Historical task record.** This text records an earlier phase or investigation.
+> Use the [current documentation](../../README.md) and [project status](../../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 ## 冻结（实现阅读前）
 
 依据：本期唯一契约 §4 T1–T5、2.6 §4 G1–G7、process §1–2。

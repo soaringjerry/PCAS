@@ -1,5 +1,9 @@
 # 任务 V2：办事评测集
 
+> **Historical task record.** This text records an earlier phase or investigation.
+> Use the [current documentation](../../README.md) and [project status](../../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 执行者 6.1 Sol（不做任何实现的那一位）。分支 `phase2_5/V2-eval-set`，**从 `origin/main` 建**；工作区 `/root/PCAS-wt/p25-V2`；Draft PR 的 base 是 `main`。和第 1 批并行，文件不相交。
 
 先读 [讨论稿](../../research/memory-next-direction.md) 第 10 节，和两份评测记录的「局限」：[第一轮](../../evaluations/2026-10-04-memory-lookup-experiment.md)、[第二轮](../../evaluations/2026-10-04-memory-lookup-round2.md)。那两轮实验只有 12 个任务，出题、判定、打分是同一个模型，最好的几种做法之间已经分不出高下。你的任务是把尺子做准。

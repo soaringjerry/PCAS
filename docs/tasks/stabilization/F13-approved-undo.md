@@ -1,5 +1,9 @@
 # F13：落实已确认的逆序撤销规则
 
+> **Historical task record.** This text records an earlier phase or investigation.
+> Use the [current documentation](../../README.md) and [project status](../../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 执行者 Sol / high。用户于 2026-10-01 确认：同一事项从最后一次修改往回撤销。协调者负责契约与任务文档，不写产品或测试。基线为汇总候选 `59e25daa67df7447f0a09b7f0bd9e5d65edab65e`，工作区 `/root/PCAS-wt/F13`，分支 `stabilization/F13-approved-undo`；PR base 为 `stabilization/acceptance-candidate`。
 
 ## 行为与范围

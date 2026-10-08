@@ -1,5 +1,9 @@
 # 第 2.6 阶段：现状层返工与后台可靠性（契约）
 
+> **Historical task record.** This text records an earlier phase or investigation.
+> Use the [current documentation](../../README.md) and [project status](../../status.md) for new work.
+> Its old assignments, limits, and precedence statements do not govern current development.
+
 2026-10-06。用户决定：[现状层问题清单](../../research/memory-status-layer-audit.md) 里的问题全部修完，再开第三阶段。本页是这次返工的唯一契约，三个窗口同时开发、一起上线。**所有执行者先读完本页和问题清单，再动手。** 本页里的 D、B 编号都指问题清单里的条目。
 
 上位文档：白皮书 5.5–5.8、记忆架构 1.2、[任务流程规则](../process.md)。本页和它们冲突时以本页为准，冲突处由协调者在收尾时改上位文档。

@@ -7,7 +7,6 @@ import (
 	"io"
 	"log/slog"
 	"net/http/httptest"
-	"os"
 	"reflect"
 	"strings"
 	"testing"

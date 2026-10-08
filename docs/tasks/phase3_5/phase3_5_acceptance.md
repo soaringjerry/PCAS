@@ -69,3 +69,14 @@ S-P35-008 未分配。S-P35-009 的初步“规模排班一次无任务”结论
 执行：`go test ./internal/postgres -run '^TestPhase35' -count=1 -v -timeout 15m`；浏览器：`node web/tests/phase3_5_browser_run.mjs`（自起 Go controller + Vite，所有 /v1 走真实服务）。控制器没有生产 DSN/URL 输入，每次调用现有一次性容器 helper 创建新库；清理只删那个名字的容器。
 
 线上项目/全局交接说明收尾由协调者报告，本验收没有读取线上资料或容器。
+
+## 集成后的结论（协调者，2026-10-08）
+
+集成分支 `phase3_5/main` 合入界面 #282、验收 #280、后端 #284（含 #277、#278、#281）之后，在 `acbccd6` 上强制跑：
+
+- `PCAS_PHASE35_RUN_FINDINGS=1 go test ./internal/postgres -run '^TestPhase35'`：31 条里 25 条通过、6 条失败，6 条是同一个原因——验收适配器在工作区快照的 `activity` 里找自动创建的回执。发布的接缝是：回执就是事项自己的 `creation`（带 `actionId`，撤销用它），同一个动作不再往 `activity` 里写第二行（这正是 S-P35-010 要的「只有一条」）。定性为适配器问题，预期没改：断言改成「`creation.actionId` 等于这次创建的操作编号，且 `activity` 里没有同一编号的行」。改后 6 条重跑全过，合计 31 / 31。
+- 真后端浏览器回放 `node web/tests/phase3_5_browser_run.mjs`：T5 三个场景和 A3 共 4 条全过（12.4 秒）。
+- S-P35-001–007、010 全部解除。`phase35Finding` 的跳过门已打开，这些用例默认就跑。
+
+跑浏览器回放时不要改 `TMPDIR`：控制器只认系统临时目录下自己建的清单路径。
+

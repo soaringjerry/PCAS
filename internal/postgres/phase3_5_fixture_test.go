@@ -19,13 +19,10 @@ import (
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
-// Findings are explicit non-passes. Forced runs retain exactly the same oracle.
-func phase35Finding(t *testing.T, id string) {
-	t.Helper()
-	if os.Getenv("PCAS_PHASE35_RUN_FINDINGS") != "1" {
-		t.Skip("finding " + id)
-	}
-}
+// Every finding was resolved on the integration branch (2026-10-08, see
+// docs/tasks/phase3_5/phase3_5_acceptance.md), so the gate is open: these run
+// by default. The id stays at each call site as the record of what it guards.
+func phase35Finding(t *testing.T, id string) { t.Helper() }
 
 type phase35Deadline struct {
 	ID, Claim, Kind, Original, Recurrence string

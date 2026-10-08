@@ -133,15 +133,7 @@ func TestPhase35C2C4G1T4EligibleTopicLinksReceiptsUndoAndReplay(t *testing.T) {
 	if err := s.pool.QueryRow(ctx, `SELECT action_id::text FROM topic_project_links WHERE owner_id=$1 AND topic_id=$2 AND undone_at IS NULL`, f.Scope.OwnerID, strings.TrimPrefix(f.Topics[0], "entity:")).Scan(&action); err != nil {
 		t.Fatal(err)
 	}
-	found := false
-	for _, a := range st.Activity {
-		if a.ID == action {
-			found = true
-		}
-	}
-	if !found {
-		t.Fatal("topic project no away receipt")
-	}
+	phase35RequireSingleReceipt(t, st, asJSON(st.Projects[0]), action)
 	if _, err := s.ScheduleStatus(ctx, time.Now()); err != nil {
 		t.Fatal(err)
 	}

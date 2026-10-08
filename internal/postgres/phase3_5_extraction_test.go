@@ -45,6 +45,21 @@ func phase35Action(t *testing.T, s *Store, scope memory.Scope, item string) stri
 func phase35Direct(text, kind string) extractedItem {
 	return extractedItem{Kind: kind, Text: text, Quote: text, Nature: "intention", Subject: "我", Predicate: "虚构目标", Explicit: true, Confidence: 1, Acquisition: "direct", Qualification: "asserted"}
 }
+func phase35RequireSingleReceipt(t *testing.T, st workspace.State, item []byte, action string) {
+	t.Helper()
+	var wire struct{ Creation *struct{ ActionID string } }
+	if err := json.Unmarshal(item, &wire); err != nil {
+		t.Fatal(err)
+	}
+	if wire.Creation == nil || wire.Creation.ActionID != action {
+		t.Fatalf("no away receipt for action %s", action)
+	}
+	for _, a := range st.Activity {
+		if a.ID == action {
+			t.Fatalf("action %s has a second receipt in activity", action)
+		}
+	}
+}
 func phase35Work(st workspace.State) []workspace.Item {
 	out := append([]workspace.Item{}, st.Tasks...)
 	return append(out, st.Ideas...)
@@ -64,16 +79,10 @@ func phase35RequireCreation(t *testing.T, s *Store, scope memory.Scope, it works
 		t.Fatalf("automatic work lost actor/evidence provenance %+v", it)
 	}
 	action := phase35Action(t, s, scope, it.ID)
-	st := phase35Snapshot(t, s, scope)
-	found := false
-	for _, a := range st.Activity {
-		if a.ID == action {
-			found = true
-		}
-	}
-	if !found {
-		t.Fatalf("no away receipt for action %s", action)
-	}
+	// Published seam (#284): the away receipt is the item's own creation marker
+	// carrying the undoable action; the same action is not repeated as an
+	// activity row (S-P35-010: exactly one receipt).
+	phase35RequireSingleReceipt(t, phase35Snapshot(t, s, scope), asJSON(it), action)
 	return action
 }
 func TestPhase35B1B2B6G5TrustMatrix(t *testing.T) {

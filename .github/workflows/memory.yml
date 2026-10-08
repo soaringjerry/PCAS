@@ -7,6 +7,13 @@ on:
   pull_request:
     paths: ["cmd/**", "internal/**", "services/**", "config/**", "go.mod", "go.sum", "Makefile", "Dockerfile", "compose.yml", "scripts/test-shard.sh", ".github/workflows/memory.yml"]
 
+
+# One run per branch at a time: a newer push on the same branch cancels the
+# run it supersedes, so the account's concurrent-job slots go to the latest
+# commits instead of to results nobody will read.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 jobs:
   # Formatting, vet, build and every package except the PostgreSQL one.
   check:

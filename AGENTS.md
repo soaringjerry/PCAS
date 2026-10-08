@@ -28,6 +28,7 @@ Do not select one of the two rules yourself.
 | Document | Read it for |
 |---|---|
 | [Whitepaper](docs/whitepaper.md) | Product requirements. |
+| [System Architecture](docs/architecture.md) | Phase 3.9 scope, domain responsibilities, dependencies, and acceptance. |
 | [Project Status](docs/status.md) | Implemented functions, targets, and gaps. |
 | [Development Workflow](docs/tasks/process.md) | Checks, review, merge, and release. |
 | [Writing Guide](docs/writing-guide.md) | Terms and English documentation rules. |
@@ -176,4 +177,4 @@ Do not make these packages before the coordinator assigns the skeleton task.
 | Activity stream | One query answers what PCAS did, its cost, and its reason. |
 | Domain packages | Business operations move out of `internal/postgres`. Storage only reads and writes data. |
 
-The architecture document will give the complete plan.
+The [System Architecture](docs/architecture.md) gives the boundaries and completion criteria.

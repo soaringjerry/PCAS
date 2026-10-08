@@ -9,6 +9,7 @@ Historical tasks, research, and evaluations are evidence. They do not assign new
 | Document | Purpose |
 |---|---|
 | [Product Whitepaper](whitepaper.md) | Product purpose, roles, memory, actions, [roadmap](whitepaper.md#10-roadmap), and acceptance. |
+| [System Architecture](architecture.md) | Phase 3.9 scope, domain boundaries, model calls, prompts, activity, migration, and acceptance. |
 | [Memory Architecture](memory-architecture.md) | Memory objects, retrieval, current state, correction, and recovery. |
 | [Interface Principles](design/principles.md) | Daily presentation and observation controls. |
 | [Development Workflow](tasks/process.md) | Direction, execution, checks, merge, release, and history. |
@@ -25,7 +26,7 @@ Historical tasks, research, and evaluations are evidence. They do not assign new
 
 1. The user's explicit decisions govern the requested work.
 2. The whitepaper gives current product requirements.
-3. Memory and interface specifications give their respective requirements.
+3. System architecture, memory, and interface specifications give their respective requirements.
 4. The workflow gives development and release procedures.
 5. Implementation references give code information and operating procedures.
 6. New batch scopes use these specifications. They cannot silently override them.

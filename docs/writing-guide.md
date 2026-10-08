@@ -64,6 +64,13 @@ Code names and literal UI labels keep their existing spelling.
 | Fencing token | The identity that prevents an expired worker from committing. |
 | Rank fusion | Combination of retrieval rankings calculated independently. |
 | Prompt | The instructions and context supplied to a model. |
+| Prompt registry | The catalog of model instructions, templates, and their content hashes. |
+| Model gateway | The application entry for provider calls, accounting, capability checks, and call records. |
+| Domain | A group of business responsibilities with explicit interfaces. |
+| Invocation | One attempted model call, with its own identity and outcome. |
+| Execution | One business request or background operation that can contain several invocations and actions. |
+| Input manifest | The recorded identities, versions, and processing details for data supplied to a model. |
+| Read model | A query representation of stored records for a specific reading purpose. |
 | Model token | A text unit counted by the selected model. |
 | API token | A credential for API authentication. |
 | Database schema | The structure of database objects. |

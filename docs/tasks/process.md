@@ -20,6 +20,10 @@ The coordinator handles integration, small tasks, and product-direction correcti
 Independent batches can proceed in parallel when their responsibilities and shared interfaces are clear.
 A historical window assignment does not authorize current work.
 
+Use a separate Git worktree for each concurrent executor.
+Before a Git commit, examine the staged diff. Stage only the files assigned to your scope.
+Do not switch branches in another executor's worktree.
+
 ## 2 State and Dependencies
 
 Before changing state behavior, record the affected operation sequences and expected results.

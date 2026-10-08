@@ -53,6 +53,19 @@ The earlier implementation is on the `legacy` branch. These histories are not cu
 - The latest home layout is a design direction. This document has no deployment evidence for that layout.
 - The direct ChatGPT channel has a recorded login and generation check, but no complete real-account lifecycle acceptance.
 
+## Current Architecture Direction
+
+The agreed next phase is [Phase 3.9 Foundation](whitepaper.md#phase-39-foundation), before further business repairs and Phase 4.
+The [System Architecture](architecture.md) defines its scope and completion criteria.
+The foundation is not implemented or accepted by this documentation change.
+
+The user reports incorrect projects, timelines, and tasks, with increasing model use, cost, and duration.
+These reports need attributed cases and measurements. They do not establish a measured trend or a single cause.
+Keep the cases for diagnosis through the new architecture.
+
+The architecture's code findings use revision `6b62f27`.
+They do not update this page's implementation snapshot or supply new deployment evidence.
+
 ## Documentation Changes
 
 Product requirements are merged into the whitepaper.

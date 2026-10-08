@@ -203,6 +203,7 @@ Daily work must proceed without approval of each memory or processing step.
 The current implementation uses Go, PostgreSQL, pgvector, and file storage.
 Source storage, interpretation, retrieval, actions, and background work have different responsibilities.
 These responsibilities can share a deployment with explicit interfaces.
+The [System Architecture](architecture.md) gives domain responsibilities and the Phase 3.9 completion criteria.
 
 Writes use request identities and version checks.
 The system checks affected dependencies before applying model output.
@@ -217,8 +218,9 @@ Phase 2.0 was rolled back. It is not the basis for new work.
 
 Each phase delivers usable work. Its acceptance scenarios test the complete product path.
 More use supplies more data for later phases.
-The sequence below keeps the earlier roadmap. It does not assign a new development batch.
-Its source is the [earlier whitepaper](https://github.com/soaringjerry/PCAS/blob/c9ac3fd/docs/whitepaper.md#16-路线图).
+The sequence keeps the earlier roadmap and adds Phase 3.9 before Phase 4.
+It does not assign a new development batch.
+The earlier phases come from the [earlier whitepaper](https://github.com/soaringjerry/PCAS/blob/c9ac3fd/docs/whitepaper.md#16-路线图).
 
 [Project Status](status.md) gives release records, implemented functions, and known gaps.
 A recorded release does not close an unresolved quality finding.
@@ -229,7 +231,8 @@ flowchart LR
     A[1 Secretary] --> B[1.5 Stabilization]
     B --> C[2 / 2.5 / 2.6 Memory core]
     C --> D[3 / 3.5 / 3.6 Workspaces and actions]
-    D --> E[4 Observation panel]
+    D --> I[3.9 Foundation]
+    I --> E[4 Observation panel]
     E --> F[5 Inputs, phone, and model selection]
     F --> G[6 Butler]
     G --> H[7 Training and model feedback]
@@ -256,10 +259,34 @@ Calendar conflicts belong to Phase 5. Reusable methods and completion judging st
 
 | Phase | Delivery scope | Acceptance target |
 |---|---|---|
+| 3.9 Foundation | System architecture, domain boundaries, model gateway, prompt registry, activity queries, and removal of obsolete paths. | Locate a result error in its business path. Change that path within its declared boundaries. Recover failed writes. Measure calls, cost, and duration. |
 | 4 Observation panel | Visual activity, cost, model calls, memory management, access, input status, failures, and recovery. | Show yesterday's work, cost, and reasons. Trace a result to its source and model call. |
 | 5 Inputs and model selection | Email, calendar, continuous Yufolo input, and IM trials. Phone voice, notifications, location, and microphone inputs. Automatic model selection. | A school email creates a workspace with materials and a start suggestion. Library arrival produces an applicable study suggestion. |
 | 6 Butler | Habit memory, daily recommendations, budgets, subscriptions, income, expenses, and correspondence drafts. | After two pizza rejections, matching recommendations decrease. The observation panel shows the changed preference. |
 | 7 Training and model feedback | Prepare datasets. Fine-tune local models. Compare quality and cost. Deploy accepted models with rollback. | A personal model handles intent interpretation with lower cost and no accuracy loss. |
+
+### Phase 3.9 Foundation
+
+Phase 3.9 makes the existing system understandable and changeable before further product repairs.
+Its scope covers existing production paths, their dependencies, tests, and documents.
+Business workflows leave the storage package. Each operation and rule has a responsible domain.
+Model calls, prompts, actions, and costs have traceable identities.
+Obsolete interfaces, duplicate implementations, and unsupported compatibility branches have explicit removal decisions.
+
+During this phase, stop feature expansion and separate symptom patches.
+Keep reported project, timeline, and task errors as investigation cases with their sources and observed results.
+Complete the architecture work before assigning their business repairs.
+Record existing defects separately from defects introduced by migration.
+An existing incorrect output is not a new product requirement.
+
+Keep transaction, version, budget, recovery, access, and undo guarantees during migration.
+Use the same data and model configuration to compare calls, context size, cost, duration, and output quality.
+Investigate repeated processing, unnecessary calls, and scheduling delays from measured evidence.
+Set numerical targets from that baseline. Keep estimated costs and missing measurements explicit.
+
+The [System Architecture](architecture.md#10-foundation-acceptance) gives the complete acceptance criteria.
+Its activity query supplies the basis for Phase 4.
+Phase 4 still includes visual explanations, management, and recovery controls.
 
 Phase 5 uses separate batches. Input work and phone work can proceed in parallel.
 Each input needs platform verification. Phone collection uses device permissions.

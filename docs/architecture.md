@@ -1,0 +1,314 @@
+# PCAS System Architecture
+
+Current architecture direction. Updated 2026-10-08.
+
+Phase 3.9 makes business responsibilities explicit and business paths traceable before further repairs.
+The [Whitepaper](whitepaper.md#phase-39-foundation) gives its product purpose and sequence.
+The target below is not an implemented structure.
+Execution scopes must follow [Executor Rules](../AGENTS.md) and the [Development Workflow](tasks/process.md).
+
+## 1 Foundation Scope
+
+Examine all existing production paths, including HTTP, Telegram, connectors, imports, background work, and provider connection tests.
+Include their configuration, dependencies, prompts, storage, tests, and current documents.
+Move business workflows out of `internal/postgres` in complete paths.
+Give each business rule and operation one responsible domain.
+
+Stop feature expansion and separate symptom patches during the foundation.
+Keep project, timeline, and task errors as cases with sources and observed results.
+Complete the foundation before assigning further business repairs.
+Keep known defects separate from migration regressions.
+Existing defects do not become required behavior merely because the migration keeps them unchanged.
+
+Keep Go, PostgreSQL, pgvector, and file storage.
+Keep one application deployment with explicit internal interfaces.
+Phase 3.9 keeps Phase 2.0 and its event-bus design archived.
+The [Memory Architecture](memory-architecture.md) remains authoritative for memory behavior.
+
+## 2 Code Findings
+
+These findings come from repository revision `6b62f27`. They are code observations, not live quality measurements.
+
+| Finding | Evidence | Required architecture result |
+|---|---|---|
+| Storage also owns business orchestration and providers. | [Store](../internal/postgres/database.go), [application setup](../cmd/pcas/main.go). | Domains own workflows. Storage owns persistence. Application setup connects their interfaces. |
+| Model calls use different accounting and recovery paths. | [Background calls](../internal/postgres/background_model.go), [memory use](../internal/postgres/memory_use_model.go), [secretary retries](../internal/postgres/desk_model_retry.go). | One gateway covers calls while keeping applicable recovery and retry policies. |
+| Deputy generation, saved results, revision, and review share a large workflow. | [Deputy](../internal/postgres/runs.go), [revision recovery](../internal/postgres/document_revise.go). | A deputy execution links its stages, calls, results, and final writes. |
+| Telegram transcription bypasses application accounting. | [Telegram poller](../internal/telegram/poller.go), [transcription adapter](../internal/ai/transcription.go). | Channel adapters use the gateway. Every attempted call has an outcome and accounting status. |
+| Legacy routing sends input through an independent provider path. | [Jev adapter](../internal/ai/jev.go), [routes](../internal/httpapi/workspace.go), [connection test](../internal/httpapi/model_settings.go). | Retire the path or bring it under the same call contract. |
+| Legacy answer handling remains callable. | [Answer workflow](../internal/postgres/desk.go), [HTTP route](../internal/httpapi/workspace.go). | Make an explicit support or retirement decision. |
+| Removed cards leave unused generation code. | `statusGenerate` and `cardInstructions` in [status code](../internal/postgres/status_build.go). | Remove unused generation. Keep necessary current-state scheduling and upgrade handling. |
+| Non-Codex schema calls return to ordinary generation. | [Provider adapter](../internal/ai/provider.go). | Give capability information and record the selected output mode. Necessary capabilities cannot silently disappear. |
+| Use records already contain memory identities and versions. | [Usage records](../internal/postgres/usage_log.go). | Complete coverage and link calls to inputs and actions. Do not replace existing evidence with assumptions. |
+| Reference previews show current text beside recorded version identities. | [Usage query](../internal/postgres/usage_log.go). | Distinguish current previews from the input supplied at call time. |
+
+Refresh entry points and callers before each migration scope.
+Do not select a domain from reference counts alone.
+Reference counts need a revision, file classification, symbol resolution, and counting method.
+
+## 3 Target Dependencies
+
+```mermaid
+flowchart TD
+    Entry[HTTP, Telegram, connectors, and workers] --> App[Application coordination]
+    App --> Memory[Memory domains]
+    App --> Secretary[Secretary and deputy]
+    App --> Workspace[Workspace and action services]
+    Secretary --> Memory
+    Secretary --> Workspace
+    Workspace --> Memory
+    Memory --> Gateway[Model gateway]
+    Secretary --> Gateway
+    Workspace --> Gateway
+    Prompts[Prompt registry] --> Gateway
+    Gateway --> Providers[Provider adapters]
+    Memory --> Storage[Storage interfaces]
+    Workspace --> Storage
+    Secretary --> Storage
+    Gateway --> Storage
+    Storage --> Data[PostgreSQL and files]
+    Observe[Observation queries] --> Data
+```
+
+The arrows show application dependencies, not database foreign keys or new runtime services.
+Application setup constructs the components and supplies their interfaces.
+Business packages must not import the concrete PostgreSQL adapter.
+Storage implementations must not call business orchestration or model providers.
+The gateway uses explicit accounting and result-storage interfaces. It must not import the concrete PostgreSQL adapter.
+
+Keep shared identities and interface types separate from orchestration.
+Examine existing package imports before selecting target package names.
+Avoid cycles through the existing memory, workspace, and worker packages.
+
+## 4 Domain Responsibilities
+
+These are logical boundaries. One package per table or per existing file prefix is not necessary.
+
+| Domain or service | Owns | Main interfaces and dependencies |
+|---|---|---|
+| Input | Source reception, identity, import progress, parsing, and attachment processing. | Writes through source storage. Submits work through the existing queue. Uses the gateway for interpretation. |
+| Memory interpretation | Extraction, classification, comparison, entity identity, evidence, and correction workflows. | Uses source and memory storage, the gateway, and versioned processing rules. |
+| Memory retrieval | Structured, lexical, and vector retrieval; evidence expansion; scope and coverage information. | Reads versioned memory and source data. Uses the gateway for query embeddings. |
+| Current state | Global handovers, memory dates, and scoped user requirements. | Uses memory interfaces and dependent storage. Does not own project commands or channel handling. |
+| Secretary | Request preparation, context assembly, proposed-action validation, reply, and delegation. | Uses memory, workspace commands, the deputy service, the gateway, and execution storage. |
+| Deputy | Work generation, review, revision, result adoption, and recovery. | Uses memory and workspace interfaces, the gateway, and saved-result storage. |
+| Workspace | Projects, tasks, ideas, files, document versions, effort, plans, and project handovers. | Uses shared memory for evidence. Owns workspace operations and their invariants. |
+| Actions | Request identity, command application, receipts, dependency checks, and undo. | Coordinates affected domains within one transaction boundary. Does not make semantic decisions from text similarity. |
+| Background coordination | Scheduling, leases, priorities, deferral, and handler dispatch. | Uses the existing queue. Calls domain services without private queues. |
+| Observation | Activity, call, cost, reason, and failure read models. | Reads authoritative records. Recovery commands return through the responsible business service. |
+
+These services share source identities and versioned evidence in one memory core.
+Workspace scope does not create another fact database.
+The AI team has shared memory access by default.
+Capability records and diagnostic labels do not create additional memory approval gates.
+
+Application coordination handles work across domains, including automatic project and task creation.
+It uses explicit commands instead of making the memory core depend on workspace orchestration.
+Storage keeps SQL, persistence constraints, and transaction implementation.
+Each consumer supplies the smallest interface for its necessary operation.
+Do not create generic CRUD interfaces that split an atomic business operation.
+
+## 5 Model Gateway
+
+All production application model calls enter one gateway.
+This includes generation, readers, review, embeddings, vision, transcription, routing, and connection checks that invoke a model.
+Provider adapters implement transport and provider-specific parameters below that boundary.
+Evaluation tools use isolated data and accounting. List their permitted entry points explicitly.
+
+| Record group | Required information |
+|---|---|
+| Identity | Owner, execution, parent execution where applicable, invocation, attempt, function, and stage. |
+| Prompt | Registry name, instruction hash, template hash, and output schema identity and hash. |
+| Input | Versioned memory and source references, context builder version, scope, coverage gaps, and omitted counts. |
+| Provider | Selected provider, model, required capabilities, and actual output and tool modes. |
+| Resources | Input and output model tokens, context size, cost, currency, duration, and estimation flags. |
+| Outcome | Started, returned, failed, or unknown; stable error category; saved-result identity where applicable. |
+| Accounting | Reservation identity, settlement state, and usage-record state. |
+
+Audio processing records duration and its billing basis when model tokens do not describe its cost.
+Fields that do not apply stay explicitly absent. Embedding calls do not need fabricated instructions or output schemas.
+An unavailable cost remains unknown or estimated. Do not replace it with an asserted zero.
+
+Budget reservations and settled usage are different records. They must not become additive spending totals.
+Use a stable invocation identity for accounting retries and duplicate control.
+
+The gateway owns provider invocation, call records, and the mechanics of reservation and settlement.
+Business services supply their applicable budgets, deadlines, retry policy, and dependency checks.
+Keep provider-specific capabilities and output schema structure explicit.
+If a capability is necessary for a function, an unsupported provider returns a clear error before the call.
+A function can permit a weaker mode only through an explicit contract that records the mode and validates the output.
+
+Keep retries within the original applicable deadline.
+Record each attempted invocation separately from the business execution.
+Failed or partial calls can incur cost.
+Accounting must survive caller cancellation and business-write failure.
+Do not retry generation merely because accounting or result storage failed.
+
+Saved-result recovery must keep the original input identities and invocation identity.
+It retries result application without another paid call.
+An interruption during a call can leave an unknown outcome.
+Do not claim exactly-once provider execution without provider support for that guarantee.
+
+## 6 Prompt Registry and Input Evidence
+
+Store production instructions and templates in `internal/prompts` using `go:embed`.
+Give each registered prompt a stable name and content hash.
+Keep one authoritative copy of each shared rule.
+Hash the final composed instructions as well as their registered components.
+Keep output schema identity, exact structure, and field order with the prompt contract.
+Dynamic source content remains data supplied by the context builder.
+
+During prompt migration, keep the actual instruction bytes, context order, output schema, and applicable field order unchanged.
+Examine final requests, including whitespace and embedded-file newlines.
+Move inline instruction fragments and conditional instruction templates into the registry.
+Ordinary serialization of source data stays in the context builder.
+Change shared instruction meaning only in a separately assigned scope with the required real-model evidence.
+
+An input manifest identifies what the model received and how the application assembled it.
+Memory identifiers and prompt hashes alone do not reproduce a complete request.
+Keep historical input references distinct from current source previews.
+Use private diagnostic snapshots when reconstruction cannot supply the required evidence.
+Snapshot retention, access, deletion, and size rules must follow the memory and workflow specifications.
+They must not create an independent fact store.
+
+Record the trigger, supplied evidence, model-declared reason, and application decision separately.
+A model-declared reason is not proof of its internal reasoning.
+Historical missing information stays marked as missing.
+
+## 7 Activity and Cost Queries
+
+Provide one documented SQL query over a stable read model for an owner's work during a specified local day.
+It must answer what happened, what it cost, and the recorded reasons.
+Keep the underlying records authoritative. A common view does not require one universal write table.
+
+```mermaid
+flowchart LR
+    Trigger[Request or background trigger] --> Execution[Business execution]
+    Execution --> Calls[Invocations and attempts]
+    Calls --> Validation[Application validation]
+    Validation --> Action[Executed, skipped, or failed action]
+    Calls --> Usage[Settled usage or unknown cost]
+    Execution --> View[Activity read model]
+    Action --> View
+    Usage --> View
+```
+
+| Existing record | Meaning and use |
+|---|---|
+| `action_log` | Actual recorded changes and undo metadata. Link to the execution and calls. |
+| `agent_runs` | Deputy work state and results. A run can contain several calls. |
+| `model_usage` | Recorded invocation usage. Complete missing coverage through the gateway. |
+| `background_usage` | Reservation and settlement data used by budget policy. Keep it distinct from usage aggregation. |
+| `background_stage_events` | Processing outcomes, failures, deferrals, and overflow. Link them without duplicating business work. |
+| `date_tidy_checks` and other domain decisions | Recorded decisions and reasons. Include both changed and unchanged outcomes where applicable. |
+| `activity` and `use_events` | Memory activity and reinforcement. These are not the general team activity stream. |
+| `workspace_library_events` | Library version-change counts. They do not describe the work or its reason. |
+| `desk_smoke_actions` | Test cleanup associations. They do not supply normal business activity. |
+
+Read each table's migrations before mapping its fields.
+The query includes execution identity, event identity, time, function, outcome, summary, reason, evidence, calls, and cost.
+Use owner scope and explicit time-zone boundaries.
+Keep reversals linked to their original actions.
+Keep attempted work, completed work, and deferred work distinguishable.
+
+Aggregate costs by unique invocation before joining actions.
+One call used by several actions must not multiply its cost.
+Keep retries, partial results, no-change decisions, and unknown outcomes visible.
+The view cannot reconstruct reasons or input content that were never recorded.
+
+Early read-only queries can expose existing evidence while the gateway is being migrated.
+Mark gaps explicitly. Do not fabricate links from similar timestamps.
+Phase 4 uses this read model for visual explanations, management, and recovery.
+
+## 8 State and Recovery Boundaries
+
+Keep model calls outside database transactions.
+Prepare versioned input, release the transaction, call the model, and validate affected dependencies before application.
+Save paid results before retryable business writes where the existing workflow needs this.
+
+The applicable mutation, action receipt, dependency update, and job acknowledgement complete within one fenced transaction.
+Keep an explicit unit-of-work interface for operations that touch several domains.
+The storage adapter implements its transaction. The business service supplies the operation and its checks.
+Lease loss prevents commit. Unrelated changes must not invalidate an operation without an affected dependency.
+
+Result recovery keeps owner scope, source access, versions, request identity, and undo rules.
+Do not apply a saved result merely because it exists.
+Failures keep accepted data. Failed and incomplete work cannot become completed work.
+Keep interactive and background progress during scheduling and storage contention.
+
+## 9 Migration and Evidence
+
+Before assigning implementation, record current entry points, dependencies, model paths, writes, recovery paths, tests, and known defects.
+Use the architecture to define domain boundaries before selecting a pilot.
+A low incoming reference count is only one risk indicator.
+The pilot must exercise input, generation, accounting, validation, application, and recovery.
+
+Migrate complete business paths in bounded scopes.
+Prompt registration and gateway integration proceed together for each model path.
+Complete the pilot pattern, then apply it to the remaining production workflows.
+Each migrated path removes its replaced entry points and wrappers.
+Temporary adapters need named callers, a responsible maintainer, and a removal condition.
+
+Remove confirmed unused code and duplicate implementations.
+For old HTTP interfaces, examine supported clients before retirement.
+Keep necessary upgrade migrations and handling for outstanding queue work.
+Test upgrade paths in isolated fixtures instead of imposing unsupported old-schema behavior on current production writes.
+Place shared functions by responsibility. Do not move unrelated helpers into a general utility package.
+
+Use the same representative data, provider configuration, model, and operation sequences for migration comparisons.
+Record the revision, processing-rule versions, input sizes, concurrency, and time zone.
+Account for model output variation. Compare state, evidence, actions, and quality rather than requiring identical generated wording.
+
+| Measure | Evidence needed |
+|---|---|
+| Calls | Invocation count by function and stage, retries, recovery reuse, and duplicate processing. |
+| Context | Input size, included records, expanded sources, clipping, and omissions. |
+| Cost | Settled invocation cost, estimated or unknown values, and budget reservation differences. |
+| Duration | Preparation, retrieval, queue wait, model time, result writes, and total duration. |
+| Progress | Interactive response and background completion under representative concurrent input. |
+| Quality | Versioned input, raw output, validation result, executed action, and separate known-defect cases. |
+
+Set numerical acceptance targets from measured baselines before each affected scope.
+Do not invent reduction percentages or treat increasing cost as a proven structural cause without evidence.
+Correct repeated work or avoidable calls in their responsible mechanism when the measurements establish them.
+Semantic project, timeline, and task repairs follow foundation completion.
+
+Select tests for changed behavior and invariants.
+Separate unit checks from database, browser, and real-model acceptance.
+Keep their scope, dependencies, and skipped coverage explicit.
+
+Keep useful concurrency, cancellation, version, deletion, undo, and recovery coverage.
+Remove obsolete or duplicate implementation assertions with recorded reasons.
+Use architecture checks for forbidden dependencies and provider entry points, not spelling checks for a field name.
+Do not copy obsolete implementations into permanent tests or add prompt-wording assertions.
+
+## 10 Foundation Acceptance
+
+The coordinator closes Phase 3.9 only after these conditions have evidence.
+Passing CI alone does not close the phase.
+
+| Condition | Required proof |
+|---|---|
+| Whole-system coverage | Every existing production workflow has a responsible domain, an entry point, and declared dependencies. Include calls outside `internal/postgres`. |
+| Storage boundary | Production business orchestration and prompts have left `internal/postgres`. Storage implements persistence and transactions without provider calls. |
+| Gateway coverage | All production application model invocations use the gateway. Explicit checks cover adapters, connection tests, and permitted evaluation paths. |
+| Prompt identity | Calls resolve registered instructions and templates with hashes. Schema identity and context builder version are available. |
+| Traceable work | One owner-scoped SQL query answers yesterday's work, costs, and recorded reasons. It handles duplicates, reversals, retries, and missing history. |
+| Reliable state | Affected transaction, version, lease, access, cancellation, deletion, replay, recovery, and undo checks show no migration regression. Existing defects stay separately recorded. |
+| Resource evidence | Calls, context, costs, duration, and progress have comparable baselines and results. Regressions have resolved causes or an explicit scope decision. |
+| Local repair | A project, timeline, or task investigation locates the failing responsibility from input through actual writes. Its dependencies and affected checks are explicit. |
+| Completed replacement | Replaced paths are removed. Necessary compatibility has supported callers and a removal condition. No unexplained parallel implementation remains. |
+| Honest quality status | Known business defects remain open with evidence. Architecture acceptance does not claim that those defects are repaired. |
+| Current documents | The whitepaper, architecture, service reference, status, and executor rules agree. Every document is indexed. |
+
+Test the complete relevant paths through the real default model channel on an isolated data copy.
+Follow the workflow's release and live-check rules for each authorized code release.
+After foundation completion, use the captured cases to assign business repairs within these boundaries.
+
+## 11 Assignment Boundaries
+
+This specification gives the target and acceptance. It does not assign the skeleton task or authorize a database migration.
+The coordinator supplies concrete scopes after this direction is recorded.
+Each scope identifies its permitted changes, interfaces, recovery guarantees, checks, and obsolete paths to remove.
+Only an assigned foundation scope can replace a frozen mechanism under [Executor Rules](../AGENTS.md#6-freeze-until-the-foundation-phase).
+The [stop conditions](../AGENTS.md#9-stop-and-ask) still apply to unassigned changes.

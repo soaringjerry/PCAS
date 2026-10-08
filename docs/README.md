@@ -87,6 +87,7 @@ The groups below contain historical material and link-compatibility files, not a
 <details>
 <summary>Evaluations and deployment records</summary>
 
+- [Phase 3.9 existing paths and baseline evidence](evaluations/2026-10-08-foundation-inventory.md)
 - [2026-09-29 连续记忆验收](evaluations/2026-09-29.md)
 - [Memory and permission boundary repair — 2026-09-30](evaluations/2026-09-30-memory-boundaries.md)
 - [第 1 阶段黄金路径验收（任务 E）](evaluations/2026-09-30-phase1-acceptance.md)

@@ -66,6 +66,10 @@ Keep the cases for diagnosis through the new architecture.
 The architecture's code findings use revision `6b62f27`.
 They do not update this page's implementation snapshot or supply new deployment evidence.
 
+The [foundation inventory](evaluations/2026-10-08-foundation-inventory.md) records production paths and an existing-record baseline at code revision `4af34cd`.
+It includes exclusions before model calls and missing expected actions. No architecture code has changed.
+Controlled scenario baselines remain necessary before the corresponding production paths change.
+
 ## Documentation Changes
 
 Product requirements are merged into the whitepaper.

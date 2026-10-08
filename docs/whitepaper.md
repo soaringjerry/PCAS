@@ -271,6 +271,13 @@ Phase 3.9 makes the existing system understandable and changeable before further
 Its scope covers existing production paths, their dependencies, tests, and documents.
 Business workflows leave the storage package. Each operation and rule has a responsible domain.
 Model calls, prompts, actions, and costs have traceable identities.
+
+Each business object has one owner. Other domains request changes and receive executed, skipped, or failed receipts.
+Model stages supply proposals. The responsible domain validates and applies them.
+Home and timeline queries only read business data. Skips, deferrals, and fallbacks have visible states and reasons.
+
+The system explains both an incorrect action and a missing expected action.
+This includes why an expected project was not created, from source processing through candidate selection and execution.
 Obsolete interfaces, duplicate implementations, and unsupported compatibility branches have explicit removal decisions.
 
 During this phase, stop feature expansion and separate symptom patches.

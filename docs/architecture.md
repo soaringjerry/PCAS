@@ -108,6 +108,37 @@ Storage keeps SQL, persistence constraints, and transaction implementation.
 Each consumer supplies the smallest interface for its necessary operation.
 Do not create generic CRUD interfaces that split an atomic business operation.
 
+### Data Ownership and Proposals
+
+Give each authoritative business object one responsible domain.
+Only that domain authorizes changes to the object. Other domains submit commands through its interface.
+The PostgreSQL adapter executes the SQL through the responsible domain's storage interface.
+Physical table location does not determine business ownership.
+
+Model stages supply proposals and their evidence. They do not directly apply changes to another domain's business objects.
+The responsible domain checks identity, access, versions, constraints, and duplicate requests before applying a proposal.
+Return an executed, skipped, or failed receipt, with the applicable reason and resulting identities.
+Link the receipt to its request, proposal, dependencies, and model invocation where applicable.
+The application coordinator combines owner commands within the applicable unit of work.
+
+| Data | Responsible domain | Other consumers |
+|---|---|---|
+| Projects, tasks, ideas, and their plans | Workspace. | Secretary, deputy, extraction, date review, and reminders submit commands. |
+| Sources, statements, evidence, and versions | The applicable memory domain. | Workspace and team services request reads or changes through memory interfaces. |
+| Extracted dates and requirements | Current-state interpretation, with memory version checks. | Schedule views read these records. Date completion uses the responsible memory command. |
+| Command application and undo receipts | Actions, with the affected data owners. | Channels and observation read receipts or submit recovery commands. |
+| Provider calls and usage | Gateway accounting and result-storage interfaces. | Domains supply call policy and consume outcomes. |
+
+Table ownership must follow the complete business object, including constraints and dependent records.
+Do not create independent writers for different columns of one object merely to match existing file groups.
+Record physical write locations and shared transaction participants before assigning each migration.
+Undo, deletion, and test cleanup must also use owner operations instead of becoming additional business writers.
+
+Timeline and home presentation are read models. They do not own projects, tasks, or extracted dates.
+Opening or refreshing a read interface must not create, reschedule, complete, or retire those objects.
+User controls submit explicit commands to the responsible domain.
+Persisted derived data needs a responsible processing service separate from the presentation query.
+
 ## 5 Model Gateway
 
 All production application model calls enter one gateway.
@@ -137,6 +168,10 @@ Business services supply their applicable budgets, deadlines, retry policy, and 
 Keep provider-specific capabilities and output schema structure explicit.
 If a capability is necessary for a function, an unsupported provider returns a clear error before the call.
 A function can permit a weaker mode only through an explicit contract that records the mode and validates the output.
+
+Use the applicable mechanics in `generatePaid` as a migration reference: reservation, saved input/output, idempotent usage, and settlement.
+Do not copy its job-specific cache key and queue policy into every call type.
+The gateway must also cover interactive calls, several stages in one execution, embeddings, images, and audio.
 
 Keep retries within the original applicable deadline.
 Record each attempted invocation separately from the business execution.
@@ -174,6 +209,12 @@ They must not create an independent fact store.
 Record the trigger, supplied evidence, model-declared reason, and application decision separately.
 A model-declared reason is not proof of its internal reasoning.
 Historical missing information stays marked as missing.
+
+Trace work that did not produce an action, including input that did not become a candidate.
+For automatic projects, follow source processing, candidate selection, scheduling, budget checks, model decisions, validation, and application.
+Keep each exclusion, deferral, unchanged decision, and failure distinct, with its rule version and applicable evidence.
+An absent model call or action does not establish why the system did nothing.
+Record completed scan coverage and processing progress to distinguish exclusion from work that has not run.
 
 ## 7 Activity and Cost Queries
 
@@ -219,6 +260,19 @@ The view cannot reconstruct reasons or input content that were never recorded.
 Early read-only queries can expose existing evidence while the gateway is being migrated.
 Mark gaps explicitly. Do not fabricate links from similar timestamps.
 Phase 4 uses this read model for visual explanations, management, and recovery.
+
+### Visible Skips and Fallbacks
+
+A skip or fallback must not silently become success.
+Record the selected mode, reason, affected stage, dependencies, and applicable coverage loss.
+Return that state in the operation outcome and make it available to the relevant status interface.
+Keep machine-readable states separate from detailed diagnostic text.
+
+Retrieval without vectors, OCR after vision failure, and an unchanged draft after self-check failure are distinct outcomes.
+Queue deferral must remain visible as waiting work. It is not completion.
+Unsupported necessary capabilities fail before the call. An authorized weaker mode must remain visible in the returned outcome.
+
+Use visual status and short explanations for users. Do not turn every fallback into a long conversation message.
 
 ## 8 State and Recovery Boundaries
 
@@ -282,6 +336,15 @@ Remove obsolete or duplicate implementation assertions with recorded reasons.
 Use architecture checks for forbidden dependencies and provider entry points, not spelling checks for a field name.
 Do not copy obsolete implementations into permanent tests or add prompt-wording assertions.
 
+Check resolved provider calls and imports, including channel interfaces and registered diagnostic paths.
+Check that business mutations enter their owner's commands and declared storage interfaces.
+Physical SQL writes stay in the mapped persistence adapters.
+Include direct SQL, database functions, undo, deletion, and cleanup in the write-location inventory.
+Text searches alone cannot prove ownership for dynamic SQL or indirect calls.
+Use isolated database checks for affected read paths and cross-domain transactions.
+
+Temporary migration exceptions need named callers, a responsible maintainer, and a removal condition.
+
 ## 10 Foundation Acceptance
 
 The coordinator closes Phase 3.9 only after these conditions have evidence.
@@ -291,12 +354,14 @@ Passing CI alone does not close the phase.
 |---|---|
 | Whole-system coverage | Every existing production workflow has a responsible domain, an entry point, and declared dependencies. Include calls outside `internal/postgres`. |
 | Storage boundary | Production business orchestration and prompts have left `internal/postgres`. Storage implements persistence and transactions without provider calls. |
+| Data ownership | Each business object has one owner. Cross-domain changes use owner commands and receipts. Home and timeline reads cannot mutate their underlying business data. |
 | Gateway coverage | All production application model invocations use the gateway. Explicit checks cover adapters, connection tests, and permitted evaluation paths. |
 | Prompt identity | Calls resolve registered instructions and templates with hashes. Schema identity and context builder version are available. |
 | Traceable work | One owner-scoped SQL query answers yesterday's work, costs, and recorded reasons. It handles duplicates, reversals, retries, and missing history. |
+| Visible outcomes | Skips, deferrals, rejected proposals, and authorized fallbacks have recorded reasons and visible returned states. Capability loss cannot silently become success. |
 | Reliable state | Affected transaction, version, lease, access, cancellation, deletion, replay, recovery, and undo checks show no migration regression. Existing defects stay separately recorded. |
 | Resource evidence | Calls, context, costs, duration, and progress have comparable baselines and results. Regressions have resolved causes or an explicit scope decision. |
-| Local repair | A project, timeline, or task investigation locates the failing responsibility from input through actual writes. Its dependencies and affected checks are explicit. |
+| Local repair | Investigations locate both an incorrect action and a missing expected action. Trace inputs, candidates, scheduling, decisions, validation, and actual writes. Identify the responsible boundary and its affected checks. |
 | Completed replacement | Replaced paths are removed. Necessary compatibility has supported callers and a removal condition. No unexplained parallel implementation remains. |
 | Honest quality status | Known business defects remain open with evidence. Architecture acceptance does not claim that those defects are repaired. |
 | Current documents | The whitepaper, architecture, service reference, status, and executor rules agree. Every document is indexed. |

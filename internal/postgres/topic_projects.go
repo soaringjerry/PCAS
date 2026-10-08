@@ -61,10 +61,10 @@ func topicProjectInputTx(ctx context.Context, tx pgx.Tx, owner memory.ID, topic 
 		return out, nil, err
 	}
 	out.Timezone = settings.Timezone
-	rows, err := tx.Query(ctx, `SELECT m.claim_id::text,m.claim_version,c.value #>> '{}',c.category,EXISTS(SELECT 1 FROM deadlines d WHERE(d.owner_id,d.claim_id,d.claim_version)=(m.owner_id,m.claim_id,m.claim_version)),rv.expressed_at,c.acquisition,c.confirmation,coalesce((SELECT jsonb_agg(jsonb_build_object('kind',d.kind,'at',d.at,'recurrence',d.recurrence,'title',d.title,'timeNote',d.time_note) ORDER BY d.id) FROM deadlines d WHERE(d.owner_id,d.claim_id,d.claim_version)=(m.owner_id,m.claim_id,m.claim_version)),'[]'::jsonb)
+	rows, err := tx.Query(ctx, `SELECT m.claim_id::text,m.claim_version,c.value #>> '{}',c.category,EXISTS(SELECT 1 FROM deadlines d WHERE(d.owner_id,d.claim_id,d.claim_version)=(m.owner_id,m.claim_id,m.claim_version) AND NOT(coalesce(c.scope->>'deadline_completed','false')='true' AND coalesce(c.scope->>'deadline_completed_version','')=c.version::text)),rv.expressed_at,c.acquisition,c.confirmation,coalesce((SELECT jsonb_agg(jsonb_build_object('kind',d.kind,'at',d.at,'recurrence',d.recurrence,'title',d.title,'timeNote',d.time_note) ORDER BY d.id) FROM deadlines d WHERE(d.owner_id,d.claim_id,d.claim_version)=(m.owner_id,m.claim_id,m.claim_version)),'[]'::jsonb)
  FROM status_current_members m JOIN claim_revisions c ON(c.owner_id,c.claim_id,c.version)=(m.owner_id,m.claim_id,m.claim_version)
  JOIN record_versions rv ON(rv.owner_id,rv.record_id,rv.version)=(m.owner_id,m.claim_id,m.claim_version)
- WHERE m.owner_id=$1 AND m.key=$2 ORDER BY (c.category='goal') DESC NULLS LAST,EXISTS(SELECT 1 FROM deadlines d WHERE(d.owner_id,d.claim_id,d.claim_version)=(m.owner_id,m.claim_id,m.claim_version)) DESC,rv.expressed_at DESC NULLS LAST,m.claim_id`, string(owner), out.Key)
+ WHERE m.owner_id=$1 AND m.key=$2 ORDER BY (c.category='goal') DESC NULLS LAST,EXISTS(SELECT 1 FROM deadlines d WHERE(d.owner_id,d.claim_id,d.claim_version)=(m.owner_id,m.claim_id,m.claim_version) AND NOT(coalesce(c.scope->>'deadline_completed','false')='true' AND coalesce(c.scope->>'deadline_completed_version','')=c.version::text)) DESC,rv.expressed_at DESC NULLS LAST,m.claim_id`, string(owner), out.Key)
 	if err != nil {
 		return out, nil, err
 	}
@@ -145,7 +145,7 @@ func topicProjectInputTx(ctx context.Context, tx pgx.Tx, owner memory.ID, topic 
 	return out, refs, nil
 }
 func enqueueTopicProjectsTx(ctx context.Context, tx pgx.Tx, owner memory.ID, now time.Time) (int, error) {
-	topics, err := queryDocuments[string](ctx, tx, `WITH eligible AS MATERIALIZED(SELECT m.key FROM status_current_members m JOIN claim_revisions c ON(c.owner_id,c.claim_id,c.version)=(m.owner_id,m.claim_id,m.claim_version) WHERE m.owner_id=$1 AND m.kind='topic' GROUP BY m.key HAVING count(*)>=10 AND bool_or(c.category='goal') AND bool_or(EXISTS(SELECT 1 FROM deadlines d WHERE(d.owner_id,d.claim_id,d.claim_version)=(m.owner_id,m.claim_id,m.claim_version))))
+	topics, err := queryDocuments[string](ctx, tx, `WITH eligible AS MATERIALIZED(SELECT m.key FROM status_current_members m JOIN claim_revisions c ON(c.owner_id,c.claim_id,c.version)=(m.owner_id,m.claim_id,m.claim_version) WHERE m.owner_id=$1 AND m.kind='topic' GROUP BY m.key HAVING count(*)>=10 AND bool_or(c.category='goal') AND bool_or(EXISTS(SELECT 1 FROM deadlines d WHERE(d.owner_id,d.claim_id,d.claim_version)=(m.owner_id,m.claim_id,m.claim_version) AND NOT(coalesce(c.scope->>'deadline_completed','false')='true' AND coalesce(c.scope->>'deadline_completed_version','')=c.version::text))))
  SELECT to_jsonb(r.id::text) FROM eligible g JOIN memory_records r ON r.owner_id=$1 AND 'entity:'||r.id::text=g.key JOIN entity_versions ev ON(ev.owner_id,ev.entity_id,ev.version)=(r.owner_id,r.id,r.version) WHERE r.state='active' AND ev.entity_type='topic' AND coalesce(ev.disambiguation->>'work_item_id','')='' ORDER BY r.id`, string(owner))
 	if err != nil {
 		return 0, err

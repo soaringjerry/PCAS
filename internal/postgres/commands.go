@@ -16,6 +16,32 @@ import (
 
 func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c workspace.Command) error {
 	switch c.Type {
+	case "completeDeadline":
+		if !memory.ID(c.ID).Valid() {
+			return memory.ErrInvalid
+		}
+		var claim string
+		var version int
+		if err := tx.QueryRow(ctx, "SELECT claim_id::text,claim_version FROM deadlines WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), c.ID).Scan(&claim, &version); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return memory.ErrNotFound
+			}
+			return err
+		}
+		if c.MemoryID != "" && c.MemoryID != claim {
+			return memory.ErrInvalid
+		}
+		if err := activeClaim(ctx, tx, scope, claim); err != nil {
+			return err
+		}
+		tag, err := tx.Exec(ctx, `UPDATE claim_revisions c SET scope=c.scope||jsonb_build_object('deadline_completed',true,'deadline_completed_version',c.version,'deadline_completed_at',clock_timestamp()) FROM memory_records r WHERE(c.owner_id,c.claim_id,c.version)=(r.owner_id,r.id,r.version) AND c.owner_id=$1 AND c.claim_id=$2 AND c.version=$3`, string(scope.OwnerID), claim, version)
+		if err != nil {
+			return err
+		}
+		if tag.RowsAffected() != 1 {
+			return memory.ErrConflict
+		}
+		return nil
 	case "restoreMemory":
 		return restoreMemoryTx(ctx, tx, scope, c.ID)
 	case "undoEntityMerge":
@@ -408,7 +434,7 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 	summary := c.Summary
 	switch c.Type {
 	case "updateTask":
-		if err := patchAllowed(&item, c.Patch, "title", "notes", "status", "projectId", "due", "scheduled", "waitingFor", "owedTo", "urgent", "dependsOn", "estimatedHours", "remindersOn"); err != nil {
+		if err := patchAllowed(&item, c.Patch, "title", "notes", "status", "projectId", "due", "dueDateOnly", "scheduled", "waitingFor", "owedTo", "urgent", "dependsOn", "estimatedHours", "remindersOn"); err != nil {
 			return err
 		}
 		var fields map[string]json.RawMessage
@@ -418,6 +444,10 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 				item.EffortReason = "用户设定"
 			}
 			if _, changed := fields["due"]; changed {
+				if _, known := fields["dueDateOnly"]; !known {
+					value := false
+					item.DueDateOnly = &value
+				}
 				settings, err := queryDocument[workspace.Settings](ctx, tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1", string(scope.OwnerID))
 				if err != nil {
 					return err

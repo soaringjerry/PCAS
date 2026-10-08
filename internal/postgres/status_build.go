@@ -43,12 +43,14 @@ type cardRule struct {
 	AppliesTo string `json:"appliesTo"`
 }
 type cardDeadline struct {
-	N          int     `json:"n"`
-	Kind       string  `json:"kind"`
-	At         *string `json:"at"`
-	Recurrence string  `json:"recurrence"`
-	Title      string  `json:"title"`
-	TimeNote   string  `json:"timeNote"`
+	ScheduleRule *scheduleRule `json:"scheduleRule,omitempty"`
+	DateOnly     *bool         `json:"dateOnly,omitempty"`
+	N            int           `json:"n"`
+	Kind         string        `json:"kind"`
+	At           *string       `json:"at"`
+	Recurrence   string        `json:"recurrence"`
+	Title        string        `json:"title"`
+	TimeNote     string        `json:"timeNote"`
 }
 type cardOutput struct {
 	Fields    map[string][]int `json:"fields"`

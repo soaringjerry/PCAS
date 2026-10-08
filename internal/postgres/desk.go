@@ -363,6 +363,9 @@ func memoryPromptSuffix(m workspace.Memory, loc *time.Location) string {
 		loc = time.UTC
 	}
 	var suffix strings.Builder
+	if m.Completed {
+		suffix.WriteString(" / 已标完成（依据记忆的期限事项已办完）")
+	}
 	if at, err := time.Parse(time.RFC3339Nano, m.ExpressedAt); err == nil {
 		fmt.Fprintf(&suffix, " / 说于 %s", at.In(loc).Format("2006-01-02"))
 	}

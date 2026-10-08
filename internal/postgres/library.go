@@ -30,7 +30,7 @@ func (s *Store) libraryDeadlinesTx(ctx context.Context, tx pgx.Tx, scope memory.
  FROM deadlines d JOIN memory_records r ON(r.owner_id,r.id,r.version)=(d.owner_id,d.claim_id,d.claim_version)
  JOIN claims cl ON(cl.owner_id,cl.id)=(r.owner_id,r.id)
  JOIN claim_revisions c ON(c.owner_id,c.claim_id,c.version)=(d.owner_id,d.claim_id,d.claim_version)
- WHERE d.owner_id=$1 AND r.state='active' AND cl.retired='' AND claim_source_is_current(r.owner_id,r.id,r.version,now())
+ WHERE d.owner_id=$1 AND r.state='active' AND cl.retired='' AND NOT(coalesce(c.scope->>'deadline_completed','false')='true' AND c.scope->>'deadline_completed_version'=c.version::text) AND claim_source_is_current(r.owner_id,r.id,r.version,now())
  AND ($2::boolean IS NULL OR coalesce(d.at<now(),false)=$2)
  ORDER BY CASE WHEN d.kind='recurring' THEN 0 WHEN d.at IS NULL THEN 2 ELSE 1 END,d.at NULLS LAST,d.id`, string(scope.OwnerID), q.Expired)
 	if err != nil {

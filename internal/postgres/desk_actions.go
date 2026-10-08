@@ -353,6 +353,7 @@ func (s *Store) executeSecretaryActionTx(ctx context.Context, tx pgx.Tx, scope m
 				dateOnly = date
 				if ok {
 					patch["due"] = due
+					patch["dueDateOnly"] = date
 				} else {
 					note = " · 时间没看懂"
 				}
@@ -426,6 +427,7 @@ func (s *Store) executeSecretaryActionTx(ctx context.Context, tx pgx.Tx, scope m
 			dateOnly = date
 			if valid {
 				patch["due"] = parsed
+				patch["dueDateOnly"] = date
 				dueChanged = true
 			} else {
 				note = " · 时间没看懂"

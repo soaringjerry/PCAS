@@ -2,7 +2,7 @@ import { test, expect, type Page } from '@playwright/test'
 import { readFileSync } from 'node:fs'
 
 // Frozen before implementation: whitepaper §16 phase3.5's three scenarios.
-// Selector/API adapters align to #276/#277/#278 and the rendered UI. Never
+// Selector/API adapters align to #276/#277/#278/#281/#282 and the rendered UI. Never
 // replace these results with values returned by the backend under acceptance.
 const manifestPath = process.env.PCAS_PHASE35_BROWSER_MANIFEST
 const manifest = manifestPath ? JSON.parse(readFileSync(manifestPath, 'utf8')) : null
@@ -58,7 +58,7 @@ test('T5 scene 1: spoken next-Wednesday appointment appears in that day home tim
 })
 
 test('T5 scene 2: current chat direct task appears automatically with receipt and undo', async ({ page }) => {
-  test.skip(!force, 'finding S-P35-005')
+  test.skip(!force, 'finding S-P35-010')
   const api = await realAPI(page)
   // Contract B2: this is an attached CURRENT conversation; old archive import
   // must not create today's work (covered independently by B2 Go tests).
@@ -68,6 +68,7 @@ test('T5 scene 2: current chat direct task appears automatically with receipt an
   const away = page.getByRole('region', { name: '你不在的时候', exact: true })
   await away.getByRole('button').first().click()
   const receipt = away.locator('li', { hasText: manifest.taskText })
+  await expect(receipt).toHaveCount(1)
   await expect(receipt.getByRole('button', { name: '撤销', exact: true })).toBeVisible()
   await receipt.getByRole('button', { name: '撤销', exact: true }).click()
   await expect.poll(async () => (await state(page)).tasks.filter((x: { title: string }) => x.title === manifest.taskText).length).toBe(0)
@@ -101,8 +102,12 @@ test('A3 overdue completion changes source memory and preserves original speech 
   const beforeWork = await state(page)
   const before = await (await page.request.get(`${manifest.backendURL}/phase35-completion-state`)).json()
   await page.goto('/')
-  await page.getByText(manifest.overdueTitle, { exact: true }).first().click()
-  await page.getByRole('button', { name: '做完了', exact: true }).click()
+  const late = page.getByRole('region', { name: '今天', exact: true }).locator('.hall-group').filter({ has: page.getByRole('heading', { name: '在等你，或已经晚了', exact: true }) })
+  await expect(late).toBeVisible()
+  const expand = late.getByRole('button', { name: /^还有 \d+ 条/ })
+  if (await expand.count()) await expand.click()
+  await late.getByText(manifest.overdueTitle, { exact: true }).click()
+  await page.getByRole('dialog').getByRole('button', { name: `做完了：${manifest.overdueTitle}`, exact: true }).click()
   await expect.poll(async () => {
     const response = await page.request.get(`${manifest.backendURL}/v1/workspace/schedule?from=${manifest.appointmentDay}&to=${manifest.appointmentDay}`)
     expect(response.status()).toBe(200)

@@ -199,6 +199,31 @@ func phase35BrowserLease(ctx context.Context, s *Store, scope memory.Scope, ref 
 	return j
 }
 func phase35BrowserDrain(ctx context.Context, s *Store, scope memory.Scope) error {
+	// Ingest publishes source.chunk first; that real handler creates the extract
+	// job. Drain both published stages instead of assuming extraction is first.
+	chunks, err := s.pool.Query(ctx, `SELECT j.record_id::text,j.record_version,j.stage FROM memory_jobs j JOIN sources so ON(so.owner_id,so.id)=(j.owner_id,j.record_id) WHERE j.owner_id=$1 AND j.stage='source.chunk' AND j.state='queued' AND so.connector='desk'`, scope.OwnerID)
+	if err != nil {
+		return err
+	}
+	chunkJobs := []worker.Job{}
+	for chunks.Next() {
+		j := worker.Job{Record: memory.Ref{Kind: memory.SourceKind}}
+		if err := chunks.Scan(&j.Record.ID, &j.Record.Version, &j.Stage); err != nil {
+			chunks.Close()
+			return err
+		}
+		chunkJobs = append(chunkJobs, j)
+	}
+	err = chunks.Err()
+	chunks.Close()
+	if err != nil {
+		return err
+	}
+	for _, j := range chunkJobs {
+		if err := s.ProcessChunks(ctx, phase35BrowserLease(ctx, s, scope, j.Record, j.Stage)); err != nil {
+			return err
+		}
+	}
 	rows, err := s.pool.Query(ctx, `SELECT j.record_id::text,j.record_version,j.stage FROM memory_jobs j JOIN sources so ON(so.owner_id,so.id)=(j.owner_id,j.record_id) WHERE j.owner_id=$1 AND j.stage='source.extract' AND j.state='queued' AND so.connector='desk'`, scope.OwnerID)
 	if err != nil {
 		return err

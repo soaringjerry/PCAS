@@ -11,7 +11,7 @@ import (
 )
 
 type actionLogKey struct{}
-type actionLog struct{ id, source, turnID, summary string }
+type actionLog struct{ id, source, turnID, summary, undoOf string }
 type actionChange struct {
 	Table     string          `json:"table"`
 	ID        string          `json:"id"`
@@ -20,7 +20,18 @@ type actionChange struct {
 }
 
 func withActionLog(ctx context.Context, id, source, turnID, summary string) context.Context {
-	return context.WithValue(ctx, actionLogKey{}, actionLog{id, source, turnID, summary})
+	return context.WithValue(ctx, actionLogKey{}, actionLog{id: id, source: source, turnID: turnID, summary: summary})
+}
+
+// withUndoOf marks the pending action-log entry as the undo of another action;
+// such entries never count as newer actions for the actions they sit on.
+func withUndoOf(ctx context.Context, undone string) context.Context {
+	log, ok := ctx.Value(actionLogKey{}).(actionLog)
+	if !ok {
+		return ctx
+	}
+	log.undoOf = undone
+	return context.WithValue(ctx, actionLogKey{}, log)
 }
 func beginActionLogTx(ctx context.Context, tx pgx.Tx) error {
 	if ctx.Value(actionLogKey{}) == nil {
@@ -56,6 +67,13 @@ func flushActionLog(ctx context.Context, tx pgx.Tx, scope memory.Scope) error {
 	_, err := tx.Exec(ctx, "INSERT INTO action_log(owner_id,id,source,turn_id,summary,changes) VALUES($1,$2,$3,$4,$5,$6)", string(scope.OwnerID), log.id, log.source, nullString(log.turnID), log.summary, changes)
 	if err != nil {
 		return err
+	}
+	// Written separately so the pre-053 legacy fixtures keep inserting the
+	// columns they have; only an undo carries the marker.
+	if log.undoOf != "" {
+		if _, err := tx.Exec(ctx, "UPDATE action_log SET undo_of=$3 WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), log.id, log.undoOf); err != nil {
+			return err
+		}
 	}
 	return recordSmokeActionTx(ctx, tx, scope, log.id, entries)
 }
@@ -254,7 +272,7 @@ func (s *Store) undoActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 			case "work_documents":
 				var doc workspace.Doc
 				if err = json.Unmarshal(c.Before, &doc); err == nil {
-					err = saveDoc(ctx, tx, scope, doc)
+					err = restoreDocumentTx(ctx, tx, scope, doc)
 				}
 			case "agent_runs":
 				var run workspace.Run
@@ -274,10 +292,29 @@ func (s *Store) undoActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 	if err := refreshSmokeChangesTx(ctx, tx, scope, changes); err != nil {
 		return err
 	}
+	if err := s.deleteUndoneAdoptionSourcesTx(ctx, tx, scope, id); err != nil {
+		return err
+	}
 	if source != "desk" || turnID == nil {
 		return nil
 	}
 	return s.deleteUndoneTurnMemoriesTx(ctx, tx, scope, *turnID)
+}
+
+// A project adoption (phase 3 H7) remembers the deputy's text through a source
+// of its own. Undoing the adoption deletes that source, which takes the memory
+// it was the only evidence for out of the current view; the deputy result
+// itself stays and can be adopted again under a new action.
+func (s *Store) deleteUndoneAdoptionSourcesTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, actionID string) error {
+	sources, err := queryDocuments[string](ctx, tx, "SELECT to_jsonb(source_id::text) FROM project_adoption_sources WHERE owner_id=$1 AND action_id=$2", string(scope.OwnerID), actionID)
+	if err != nil || len(sources) == 0 {
+		return err
+	}
+	targets := []memory.Ref{}
+	for _, id := range sources {
+		targets = append(targets, memory.Ref{ID: memory.ID(id), Kind: memory.SourceKind})
+	}
+	return s.deleteTx(context.WithValue(ctx, retainUndoneAnswersKey{}, true), tx, scope, memory.DeleteRequest{Targets: targets})
 }
 
 func (s *Store) deleteUndoneTurnMemoriesTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, turnID string) error {
@@ -338,7 +375,7 @@ func (s *Store) deleteUndoneTurnMemoriesTx(ctx context.Context, tx pgx.Tx, scope
 // can prove order. An unresolved tie refuses safely as changed_since.
 func checkActionSuccessors(ctx context.Context, tx pgx.Tx, scope memory.Scope, id string, changes []byte, created time.Time, order *int64, source string, turnID *string) error {
 	rows, err := tx.Query(ctx, `SELECT later.id::text,later.created_at,later.action_order,later.source,later.turn_id::text
-	 FROM action_log later WHERE later.owner_id=$1 AND later.id<>$2 AND later.undone_at IS NULL
+	 FROM action_log later WHERE later.owner_id=$1 AND later.id<>$2 AND later.undone_at IS NULL AND later.undo_of IS NULL
 	 AND (($3::bigint IS NOT NULL AND later.action_order>$3)
 	   OR ($3::bigint IS NULL AND (later.action_order IS NOT NULL OR later.created_at>=$4)))
 	 AND EXISTS(SELECT 1 FROM jsonb_array_elements(later.changes) l

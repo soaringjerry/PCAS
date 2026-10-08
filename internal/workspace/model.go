@@ -68,23 +68,28 @@ type Owed struct {
 // Item is action-module data. Kind-specific input validation precedes writes;
 // frequently queried fields have explicit SQL columns and constraints.
 type Item struct {
-	HasRetainedWriting bool   `json:"hasRetainedWriting,omitempty"`
-	ID                 string `json:"id"`
-	Kind               string `json:"itemKind"`
-	Version            int    `json:"recordVersion"`
-	Title              string `json:"title"`
-	Name               string `json:"name"`
-	Status             string `json:"status"`
-	Notes              string `json:"notes,omitempty"`
-	Body               string `json:"body"`
-	Goal               string `json:"goal"`
-	Progress           string `json:"progress"`
-	ProjectID          string `json:"projectId,omitempty"`
-	IdeaID             string `json:"ideaId,omitempty"`
-	Due                string `json:"due,omitempty"`
-	Scheduled          string `json:"scheduled,omitempty"`
-	WaitingFor         string `json:"waitingFor,omitempty"`
-	OwedTo             *Owed  `json:"owedTo,omitempty"`
+	EstimatedHours     *float64         `json:"estimatedHours"`
+	StartDate          *string          `json:"startDate"`
+	EffortReason       string           `json:"effortReason,omitempty"`
+	EffortSource       string           `json:"effortSource,omitempty"`
+	ProjectHandover    *ProjectHandover `json:"projectHandover,omitempty"`
+	HasRetainedWriting bool             `json:"hasRetainedWriting,omitempty"`
+	ID                 string           `json:"id"`
+	Kind               string           `json:"itemKind"`
+	Version            int              `json:"recordVersion"`
+	Title              string           `json:"title"`
+	Name               string           `json:"name"`
+	Status             string           `json:"status"`
+	Notes              string           `json:"notes,omitempty"`
+	Body               string           `json:"body"`
+	Goal               string           `json:"goal"`
+	Progress           string           `json:"progress"`
+	ProjectID          string           `json:"projectId,omitempty"`
+	IdeaID             string           `json:"ideaId,omitempty"`
+	Due                string           `json:"due,omitempty"`
+	Scheduled          string           `json:"scheduled,omitempty"`
+	WaitingFor         string           `json:"waitingFor,omitempty"`
+	OwedTo             *Owed            `json:"owedTo,omitempty"`
 	// Urgent marks a to-do the user said cannot wait; while it has no time it
 	// leads the home timeline.
 	Urgent        bool        `json:"urgent,omitempty"`
@@ -210,6 +215,8 @@ type Settings struct {
 	City string `json:"city,omitempty"`
 }
 type Doc struct {
+	Version   int    `json:"version"`
+	BasedOn   *int   `json:"basedOn"`
 	ID        string `json:"id"`
 	ThingID   string `json:"thingId"`
 	Title     string `json:"title"`
@@ -227,22 +234,26 @@ type Adoption struct {
 	Edited   bool   `json:"edited"`
 }
 type Run struct {
-	TargetHash         string       `json:"targetHash,omitempty"`
-	MemoryContextRange *[2]int      `json:"memoryContextRange,omitempty"`
-	MemoryTier         string       `json:"memoryTier,omitempty"`
-	MemoryGroups       []string     `json:"memoryGroups,omitempty"`
-	SmokeID            string       `json:"smokeId,omitempty"`
-	Outdated           bool         `json:"outdated,omitempty"`
-	ID                 string       `json:"id"`
-	ThingID            string       `json:"thingId"`
-	AgentID            string       `json:"agentId"`
-	Kind               string       `json:"kind"`
-	Prompt             string       `json:"prompt"`
-	Brief              string       `json:"brief"`
-	ContextMemoryIDs   []string     `json:"contextMemoryIds"`
-	ContextVersions    []memory.Ref `json:"contextVersions"`
-	Status             string       `json:"status"`
-	Output             string       `json:"output,omitempty"`
+	DocumentID               string               `json:"documentId,omitempty"`
+	BaseVersion              int                  `json:"baseVersion,omitempty"`
+	DocumentVersions         []RunDocumentVersion `json:"documentVersions"`
+	ProjectHandoverWrittenAt *string              `json:"projectHandoverWrittenAt"`
+	TargetHash               string               `json:"targetHash,omitempty"`
+	MemoryContextRange       *[2]int              `json:"memoryContextRange,omitempty"`
+	MemoryTier               string               `json:"memoryTier,omitempty"`
+	MemoryGroups             []string             `json:"memoryGroups,omitempty"`
+	SmokeID                  string               `json:"smokeId,omitempty"`
+	Outdated                 bool                 `json:"outdated,omitempty"`
+	ID                       string               `json:"id"`
+	ThingID                  string               `json:"thingId"`
+	AgentID                  string               `json:"agentId"`
+	Kind                     string               `json:"kind"`
+	Prompt                   string               `json:"prompt"`
+	Brief                    string               `json:"brief"`
+	ContextMemoryIDs         []string             `json:"contextMemoryIds"`
+	ContextVersions          []memory.Ref         `json:"contextVersions"`
+	Status                   string               `json:"status"`
+	Output                   string               `json:"output,omitempty"`
 	// Searches are the web searches the agent made for this result.
 	Searches      []string        `json:"searches,omitempty"`
 	Error         string          `json:"error,omitempty"`
@@ -346,6 +357,8 @@ type State struct {
 
 // Commands are validated on the server; callers never submit an entire state.
 type Command struct {
+	DocumentID       string          `json:"documentId,omitempty"`
+	BaseVersion      int             `json:"baseVersion,omitempty"`
 	DeskTurnIDs      []string        `json:"deskTurnIds,omitempty"`
 	IncludeSources   bool            `json:"includeSources,omitempty"`
 	RequestID        string          `json:"requestId"`

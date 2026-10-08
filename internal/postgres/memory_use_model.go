@@ -64,7 +64,7 @@ func constrainSecretaryCheck(before, after secretaryOutput) secretaryOutput {
 			actions[i].selfcheckDropped = true
 			continue
 		}
-		if old.Op == "delegate" && old.Kind != a.Kind || old.Op == "add_steps" && len(a.Steps) > len(old.Steps) {
+		if old.Op == "delegate" && (old.Kind != a.Kind || pointerValue(old.DocumentID) != pointerValue(a.DocumentID) || intPointerValue(old.BaseVersion) != intPointerValue(a.BaseVersion)) || old.Op == "add_steps" && len(a.Steps) > len(old.Steps) {
 			continue
 		}
 		if old.parseErr != nil || a.parseErr != nil || old.Op != a.Op || old.Ref != a.Ref || pointerValue(old.Project) != pointerValue(a.Project) {
@@ -188,11 +188,11 @@ func writeReaderMemories(ms []workspace.Memory, loc *time.Location) string {
 // written schema as text: decoding and re-encoding it would sort the keys and
 // change what a schema-constrained provider can emit (see desk_schema.go).
 var secretaryCheckSchema = func() json.RawMessage {
-	const lastAction = `"required": ["op", "ref", "title", "kind", "prompt"],
+	const lastAction = `"required": ["op", "ref", "title", "kind", "prompt", "documentId", "baseVersion"],
             "additionalProperties": false
           }
         ]`
-	skip := `"required": ["op", "ref", "title", "kind", "prompt"],
+	skip := `"required": ["op", "ref", "title", "kind", "prompt", "documentId", "baseVersion"],
             "additionalProperties": false
           },
           {
@@ -208,3 +208,10 @@ var secretaryCheckSchema = func() json.RawMessage {
 	}
 	return json.RawMessage(strings.Replace(raw, lastAction, skip, 1))
 }()
+
+func intPointerValue(v *int) int {
+	if v == nil {
+		return 0
+	}
+	return *v
+}

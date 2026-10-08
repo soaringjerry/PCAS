@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"github.com/jackc/pgx/v5/pgconn"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -57,13 +58,31 @@ func recordUsageTx(ctx context.Context, tx pgx.Tx, usage modelUsage) error {
 		usage.At = time.Now().UTC()
 	}
 	// Persist only validated group keys; arbitrary plan text never reaches storage.
-	_, err := tx.Exec(ctx, `INSERT INTO model_usage
- (owner_id,id,at,purpose,agent_id,model,input_tokens,output_tokens,cost,turn_id,run_id,job_id,memory_refs,tier,plan,input_estimated,output_estimated,cost_estimated,duration_ms)
- VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
+	tag, err := tx.Exec(ctx, `INSERT INTO model_usage
+ (owner_id,id,at,purpose,agent_id,model,input_tokens,output_tokens,cost,turn_id,run_id,job_id,memory_refs,tier,plan,input_estimated,output_estimated,cost_estimated)
+ VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
  ON CONFLICT (owner_id,id) DO NOTHING`, string(usage.OwnerID), string(usage.ID), usage.At,
 		usage.Purpose, nullString(usage.AgentID), usage.Model, usage.InputTokens, usage.OutputTokens,
-		usage.Cost, nullString(usage.TurnID), nullString(usage.RunID), nullString(usage.JobID), asJSON(refs), usage.Tier, safeUsePlan(usage.Plan), usage.InputEstimated, usage.OutputEstimated, usage.CostEstimated, usage.DurationMS)
-	return err
+		usage.Cost, nullString(usage.TurnID), nullString(usage.RunID), nullString(usage.JobID), asJSON(refs), usage.Tier, safeUsePlan(usage.Plan), usage.InputEstimated, usage.OutputEstimated, usage.CostEstimated)
+	if err != nil || tag.RowsAffected() == 0 || usage.DurationMS == nil {
+		return err
+	}
+	// The measurement column (046) is written in its own savepoint: a schema
+	// that predates it (the legacy migration fixtures) keeps the usage row and
+	// just has no measurement.
+	sp, err := tx.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	if _, err := sp.Exec(ctx, "UPDATE model_usage SET duration_ms=$3 WHERE owner_id=$1 AND id=$2", string(usage.OwnerID), string(usage.ID), *usage.DurationMS); err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "42703" {
+			return sp.Rollback(ctx)
+		}
+		_ = sp.Rollback(ctx)
+		return err
+	}
+	return sp.Commit(ctx)
 }
 
 // UsageSummary groups calls using calendar dates in the owner's stored zone.
@@ -93,8 +112,8 @@ func (s *Store) UsageSummary(ctx context.Context, scope memory.Scope, from, to s
  sum(input_tokens) AS input,sum(output_tokens) AS output,sum(cost) AS cost,
  count(*) FILTER(WHERE input_estimated OR output_estimated) AS estimated_tokens,
  count(*) FILTER(WHERE cost_estimated) AS estimated_cost,
- count(duration_ms) AS measured_calls,
- percentile_cont(0.5) WITHIN GROUP(ORDER BY duration_ms) AS duration_median,max(duration_ms) AS duration_max
+ count((to_jsonb(model_usage)->>'duration_ms')::bigint) AS measured_calls,
+ percentile_cont(0.5) WITHIN GROUP(ORDER BY (to_jsonb(model_usage)->>'duration_ms')::bigint) AS duration_median,max((to_jsonb(model_usage)->>'duration_ms')::bigint) AS duration_max
  FROM model_usage WHERE owner_id=$1 AND at >= $3 AND at < $4 GROUP BY 1,2
  ), days AS (
  SELECT day,jsonb_agg(jsonb_build_object('purpose',purpose,'calls',calls,
@@ -220,7 +239,7 @@ func (s *Store) UsageCalls(ctx context.Context, scope memory.Scope, limit int, b
 	next := ""
 	err = pgx.BeginTxFunc(ctx, s.pool, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx, `SELECT u.id::text,u.at,u.purpose,u.agent_id,u.model,u.input_tokens,u.output_tokens,u.cost,
- u.turn_id::text,u.run_id::text,u.job_id::text,u.memory_refs,u.tier,u.plan,u.input_estimated,u.output_estimated,u.cost_estimated,u.duration_ms,
+ u.turn_id::text,u.run_id::text,u.job_id::text,u.memory_refs,u.tier,u.plan,u.input_estimated,u.output_estimated,u.cost_estimated,(to_jsonb(u)->>'duration_ms')::bigint,
  CASE WHEN e.id IS NOT NULL THEN jsonb_build_object('kind',e.kind,'tier',e.tier,'prepareMs',e.prepare_ms,'answerMs',e.answer_ms,'selfcheckMs',e.selfcheck_ms,'writebackMs',e.writeback_ms,'modelMs',e.model_ms,'totalMs',e.total_ms,'otherMs',e.other_ms) END
  FROM model_usage u LEFT JOIN execution_timings e ON e.owner_id=u.owner_id AND e.id=coalesce(u.turn_id,u.run_id)
  AND e.kind=CASE WHEN u.turn_id IS NOT NULL THEN 'secretary' ELSE 'deputy' END

@@ -11,7 +11,10 @@ import (
 )
 
 func TestEditedArtifactRetainsFieldProvenance(t *testing.T) {
-	for _, kind := range []string{"task", "idea", "project"} {
+	// Projects no longer carry adopted text in a field (phase 3 H7): their
+	// adoption becomes a project memory with its own source, covered by the
+	// project handover tests.
+	for _, kind := range []string{"task", "idea"} {
 		t.Run(kind, func(t *testing.T) {
 			s := testStore(t)
 			scope := owner()

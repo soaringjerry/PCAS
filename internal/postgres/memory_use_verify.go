@@ -41,6 +41,15 @@ func (s *Store) checkSecretaryActionTargetsTx(ctx context.Context, tx pgx.Tx, sc
 		if action.selfcheckDropped {
 			continue
 		}
+		if action.Op == "delegate" && action.Kind == "revise" {
+			doc, ok := c.Documents[pointerValue(action.DocumentID)]
+			if ok {
+				current, e := queryDocument[workspace.Doc](ctx, tx, "SELECT document FROM work_documents WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), doc.ID)
+				if e != nil || current.Version != doc.Version {
+					return memory.ErrConflict
+				}
+			}
+		}
 		refs := []string{action.Ref}
 		if action.Project != nil {
 			refs = append(refs, *action.Project)

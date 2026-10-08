@@ -640,7 +640,7 @@ test('a result waiting to be used is offered by where it will go', async ({ page
 
   await page.goto('/t/project')
   await expect(row('拆成几步').getByRole('button')).toHaveText(['创建 3 件待办', '看结果'])
-  await expect(row('总结项目').getByRole('button')).toHaveText(['更新项目进度', '看结果'])
+  await expect(row('总结项目').getByRole('button')).toHaveText(['记进项目记忆', '看结果'])
   await row('拆成几步').getByRole('button', { name: '创建 3 件待办' }).click()
   await expect.poll(() => m.commands.at(-1)).toMatchObject({ type: 'adoptRun', id: 'p-steps', as: 'subtasks' })
   expect(m.commands).toHaveLength(3)

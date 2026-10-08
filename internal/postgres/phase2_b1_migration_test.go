@@ -127,6 +127,9 @@ func b1DatabaseRows(t *testing.T, s *Store, ignoreLegacy bool) map[string]string
 				expr += "-'" + col + "'"
 			}
 		}
+		for _, key := range b1MigrationAddedKeys[name] {
+			expr += " #- '" + key + "'"
+		}
 		sql := "SELECT coalesce(jsonb_agg(v ORDER BY v::text),'[]')::text FROM (SELECT " + expr + " AS v FROM " + pgx.Identifier{name}.Sanitize() + " t) data"
 		var data string
 		if err := s.pool.QueryRow(ctx, sql).Scan(&data); err != nil {
@@ -168,6 +171,10 @@ func b1DatabaseColumns(t *testing.T, s *Store, before map[string]string) map[str
 	return columns
 }
 
+// Keys that later migrations add inside a retained JSON column: 051 marks
+// every pre-existing document as version 1. The rows are otherwise unchanged.
+var b1MigrationAddedKeys = map[string][]string{"work_documents": {"{document,version}", "{document,basedOn}"}}
+
 func b1DatabaseRowsAtColumns(t *testing.T, s *Store, columns map[string][]string) map[string]string {
 	t.Helper()
 	out := map[string]string{}
@@ -176,9 +183,13 @@ func b1DatabaseRowsAtColumns(t *testing.T, s *Store, columns map[string][]string
 		for i, name := range names {
 			quoted[i] = pgx.Identifier{name}.Sanitize()
 		}
+		expr := "to_jsonb(t)"
+		for _, key := range b1MigrationAddedKeys[table] {
+			expr += " #- '" + key + "'"
+		}
 		// Selecting the captured columns also fails if an old table or column
 		// disappeared. Ordered JSON arrays retain every row, including duplicates.
-		sql := "SELECT coalesce(jsonb_agg(v ORDER BY v::text),'[]')::text FROM (SELECT to_jsonb(t) AS v FROM (SELECT " + strings.Join(quoted, ",") + " FROM " + pgx.Identifier{table}.Sanitize() + ") t) data"
+		sql := "SELECT coalesce(jsonb_agg(v ORDER BY v::text),'[]')::text FROM (SELECT " + expr + " AS v FROM (SELECT " + strings.Join(quoted, ",") + " FROM " + pgx.Identifier{table}.Sanitize() + ") t) data"
 		var data string
 		if err := s.pool.QueryRow(context.Background(), sql).Scan(&data); err != nil {
 			t.Fatal(table, err)

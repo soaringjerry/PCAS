@@ -42,9 +42,10 @@ type Revision struct {
 }
 
 type Source struct {
-	Representation    string `json:"representation"`
-	AttachmentMissing bool   `json:"attachment_missing"`
-	HasAttachment     bool   `json:"has_attachment"`
+	Scope             map[string]json.RawMessage `json:"scope"`
+	Representation    string                     `json:"representation"`
+	AttachmentMissing bool                       `json:"attachment_missing"`
+	HasAttachment     bool                       `json:"has_attachment"`
 	Revision
 	Connector       string `json:"connector"`
 	ExternalID      string `json:"external_id"`

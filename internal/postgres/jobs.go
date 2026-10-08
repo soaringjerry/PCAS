@@ -17,8 +17,8 @@ func persistentBackgroundStage(stage string) bool {
 	return ok
 }
 
-const persistentJobStageSQL = "j.stage ~ '^memory\\.(organize|compare|entity_compare|entity_candidates|handover):'"
-const persistentStageSQL = "stage ~ '^memory\\.(organize|compare|entity_compare|entity_candidates|handover):'"
+const persistentJobStageSQL = "j.stage ~ '^memory\\.(organize|compare|entity_compare|entity_candidates|handover|project_handover|effort):'"
+const persistentStageSQL = "stage ~ '^memory\\.(organize|compare|entity_compare|entity_candidates|handover|project_handover|effort):'"
 
 const maxAttempts = 5
 

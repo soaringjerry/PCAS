@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strconv"
 	"strings"
@@ -481,7 +482,19 @@ func (s *Store) ProcessExtraction(ctx context.Context, j worker.Job) (err error)
 	if err != nil {
 		return err
 	}
-	prompt := string(asJSON(map[string]any{"source": source.Source.Text, "source_context": source.Context, "expressed_at": sourceExpressedAt(source), "timezone": modelSettings.Timezone, "adjacent_messages": adjacent, "pending_conditions": conditions}))
+	sourceProject := ""
+	if raw := source.Source.Scope["project_id"]; raw != nil {
+		if json.Unmarshal(raw, &sourceProject) != nil {
+			return memory.ErrInvalid
+		}
+	}
+	if source.Source.Connector == "desk" {
+		err = s.pool.QueryRow(ctx, `SELECT coalesce(CASE WHEN w.kind='project' THEN w.id::text ELSE w.project_id::text END,'') FROM desk_turns t JOIN work_items w ON(w.owner_id,w.id)=(t.owner_id,t.thing_id) WHERE t.owner_id=$1 AND t.request_id::text=$2`, string(scope.OwnerID), source.Source.ExternalID).Scan(&sourceProject)
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return err
+		}
+	}
+	prompt := string(asJSON(map[string]any{"source_project_id": sourceProject, "source": source.Source.Text, "source_context": source.Context, "expressed_at": sourceExpressedAt(source), "timezone": modelSettings.Timezone, "adjacent_messages": adjacent, "pending_conditions": conditions}))
 	mentionText := groundingText
 	for _, message := range adjacent {
 		if text, ok := message["text"].(string); ok {
@@ -494,6 +507,19 @@ func (s *Store) ProcessExtraction(ctx context.Context, j worker.Job) (err error)
 	if err != nil {
 		return err
 	}
+	var paidPrompt struct {
+		RawPrompt string `json:"rawPrompt"`
+	}
+	if err = json.Unmarshal(result.Prompt, &paidPrompt); err != nil {
+		return err
+	}
+	var paidScope struct {
+		ProjectID string `json:"source_project_id"`
+	}
+	if err = json.Unmarshal([]byte(paidPrompt.RawPrompt), &paidScope); err != nil {
+		return err
+	}
+	sourceProject = paidScope.ProjectID
 	free := p.Reserve(structuredExtractionInstructions+prompt) == 0
 	text := strings.TrimSpace(result.Output)
 	text = strings.TrimPrefix(text, "```json")
@@ -587,7 +613,7 @@ func (s *Store) ProcessExtraction(ctx context.Context, j worker.Job) (err error)
 					if imported {
 						confirmation = "candidate"
 					}
-					in := statement{Text: item.Text, Nature: item.Nature, Subject: item.Subject, Predicate: item.Predicate, Confirmation: confirmation, Acquisition: item.Acquisition, Actor: "ai", Quote: item.Quote, Source: j.Record, Structured: true, ExpressedAt: sourceExpressedAt(source)}
+					in := statement{ProjectID: sourceProject, Text: item.Text, Nature: item.Nature, Subject: item.Subject, Predicate: item.Predicate, Confirmation: confirmation, Acquisition: item.Acquisition, Actor: "ai", Quote: item.Quote, Source: j.Record, Structured: true, ExpressedAt: sourceExpressedAt(source)}
 					// The model can extract several independent memories from one
 					// quotation. Later siblings must not overwrite the first item.
 					quoteKey := string(in.Source.ID) + "/" + in.Quote

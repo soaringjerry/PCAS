@@ -89,6 +89,8 @@ func applyDueReminderAt(item *workspace.Item, remind string, loc *time.Location,
 // Model actions never accept database identifiers. Refs resolve exclusively
 // through server-owned context aliases and earlier committed N creation aliases.
 type secretaryAction struct {
+	DocumentID       *string `json:"documentId"`
+	BaseVersion      *int    `json:"baseVersion"`
 	selfcheckDropped bool
 	parseErr         error
 	Op               string                     `json:"op"`
@@ -291,6 +293,12 @@ func (s *Store) executeSecretaryActionTx(ctx context.Context, tx pgx.Tx, scope m
 		id = string(memory.NewID())
 		project := ""
 		var err error
+		if a.Op != "create_project" && a.Project == nil {
+			project, err = currentStudioProjectTx(ctx, tx, scope, currentThingID)
+			if err != nil {
+				return receipt, err
+			}
+		}
 		if a.Project != nil {
 			project, err = s.secretaryProjectTx(ctx, tx, scope, *a.Project, aliases)
 			if err != nil {
@@ -335,6 +343,9 @@ func (s *Store) executeSecretaryActionTx(ctx context.Context, tx pgx.Tx, scope m
 				return receipt, err
 			}
 			applyDueReminder(&item, reminderValue(a.Remind, dateOnly), loc)
+			if a.Remind != nil {
+				item.RemindersOn = *a.Remind != "none"
+			}
 			if err = saveItem(ctx, tx, scope, item); err != nil {
 				return receipt, err
 			}
@@ -390,6 +401,16 @@ func (s *Store) executeSecretaryActionTx(ctx context.Context, tx pgx.Tx, scope m
 			if string(raw) != "null" && json.Unmarshal(raw, &urgent) == nil && urgent != item.Urgent {
 				patch["urgent"] = urgent
 			}
+		}
+		if raw, ok := a.Set["estimatedHours"]; ok && string(raw) != "null" && item.Kind == "task" {
+			var h float64
+			if json.Unmarshal(raw, &h) != nil {
+				return skippedReceipt(a.Op, "工作量不是有效小时数"), nil
+			}
+			if _, err = taskStartDate(item.Due, &h, loc); err != nil {
+				return skippedReceipt(a.Op, "工作量须为非负小时数，并能计算有效开工日"), nil
+			}
+			patch["estimatedHours"] = h
 		}
 		if len(patch) > 0 {
 			if err = call(workspace.Command{Type: "updateTask", ID: id, Patch: asJSON(patch)}); err != nil {
@@ -455,6 +476,9 @@ func (s *Store) executeSecretaryActionTx(ctx context.Context, tx pgx.Tx, scope m
 				}
 			}
 			applyDueReminder(&item, remind, loc)
+			if hasRemind {
+				item.RemindersOn = remind != "none"
+			}
 			if _, recorded := history.summaries[id]; !recorded {
 				item.Version++
 				item.UpdatedAt = stamp()
@@ -506,10 +530,27 @@ func (s *Store) executeSecretaryActionTx(ctx context.Context, tx pgx.Tx, scope m
 			receipt.Text = fmt.Sprintf("加了 %d 步", len(a.Steps))
 		}
 	case "delegate":
-		if !oneOf(a.Kind, "plan", "draft", "breakdown", "summary", "ask") || strings.TrimSpace(a.Prompt) == "" {
+		if !oneOf(a.Kind, "plan", "draft", "breakdown", "summary", "ask", "revise") || strings.TrimSpace(a.Prompt) == "" {
 			return skippedReceipt(a.Op, "没说清要交给副手做什么"), nil
 		}
 		c := workspace.Command{Type: "requestRun", ThingID: id, AgentID: agent.ID, Kind: a.Kind, Prompt: a.Prompt}
+		if a.Kind == "revise" {
+			docs, _ := ctx.Value(secretaryDocumentsKey{}).(map[string]workspace.Doc)
+			doc, ok := docs[pointerValue(a.DocumentID)]
+			if !ok {
+				return skippedReceipt(a.Op, "目标文档不明确"), nil
+			}
+			if a.BaseVersion == nil || *a.BaseVersion < 1 {
+				return skippedReceipt(a.Op, "基准版本不明确"), nil
+			}
+			c.DocumentID = doc.ID
+			c.BaseVersion = *a.BaseVersion
+			c.ThingID = doc.ThingID
+			id = doc.ThingID
+			if a.Ref == "new" {
+				return skippedReceipt(a.Op, "改写不能新建事项"), nil
+			}
+		}
 		if history, ok := ctx.Value(delegateHistoryKey{}).(delegateHistoryContext); ok {
 			c.DeskTurnIDs = append([]string{}, history.IDs...)
 		}
@@ -521,6 +562,11 @@ func (s *Store) executeSecretaryActionTx(ctx context.Context, tx pgx.Tx, scope m
 			c.Type = "delegateTask"
 			c.ID = id
 			c.Title = strings.TrimSpace(a.Title)
+			var err error
+			c.ProjectID, err = currentStudioProjectTx(ctx, tx, scope, currentThingID)
+			if err != nil {
+				return receipt, err
+			}
 		}
 		if err := call(c); err != nil {
 			return receipt, err

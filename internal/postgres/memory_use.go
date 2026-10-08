@@ -41,6 +41,8 @@ func containsAny(text string, words ...string) bool {
 
 type useCoverage struct{ Skipped []string }
 type useContext struct {
+	ProjectHandover        *workspace.ProjectHandover
+	ProjectGroup           string
 	Tier                   string
 	Location               *time.Location
 	Handover               workspace.Handover
@@ -175,6 +177,42 @@ func (s *Store) finishUseContextTx(ctx context.Context, tx pgx.Tx, scope memory.
 		return err
 	}
 	u.Index = visible
+	if thing != nil {
+		installed, e := studioInstalledTx(ctx, tx)
+		if e != nil {
+			return e
+		}
+		if installed {
+			item, e := getItem(ctx, tx, scope, *thing)
+			if e != nil {
+				return e
+			}
+			projectID := item.ProjectID
+			if item.Kind == "project" {
+				projectID = item.ID
+			}
+			if projectID != "" {
+				h, e := projectHandoverTx(ctx, tx, scope, projectID)
+				if e != nil {
+					return e
+				}
+				u.ProjectHandover = &h
+				u.Ready = u.Ready || h.WrittenAt != nil
+				keys, e := queryDocuments[string](ctx, tx, `SELECT to_jsonb('entity:'||ev.entity_id::text) FROM entity_versions ev JOIN memory_records r ON(r.owner_id,r.id,r.version)=(ev.owner_id,ev.entity_id,ev.version) WHERE ev.owner_id=$1 AND ev.disambiguation->>'work_item_id'=$2 ORDER BY ev.entity_id`, string(scope.OwnerID), projectID)
+				if e != nil {
+					return e
+				}
+				for _, key := range keys {
+					for _, g := range visible {
+						if g.Key == key {
+							u.ProjectGroup = key
+							break
+						}
+					}
+				}
+			}
+		}
+	}
 	requirements, err := s.assistantRequirementsTx(ctx, tx, scope)
 	if err != nil {
 		return err
@@ -278,10 +316,14 @@ func (s *Store) finishUseContextTx(ctx context.Context, tx pgx.Tx, scope memory.
 		}
 	}
 	u.Groups = chooseUseGroups(text, u.Index, ranked, nil, len(u.Index), false)
+	if u.ProjectGroup != "" {
+		u.Groups = append([]string{u.ProjectGroup}, u.Groups...)
+	}
 	u.Dependencies = uniqueRefs(u.Dependencies)
 	return nil
 }
 func writeUseContext(b *strings.Builder, u useContext, loc *time.Location, write func(workspace.Memory)) {
+	writeProjectHandover(b, u.ProjectHandover)
 	if !u.Ready && len(u.Rules) == 0 && len(u.Deadlines) == 0 {
 		for _, m := range u.Supplemental {
 			write(m)

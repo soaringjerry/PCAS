@@ -608,6 +608,12 @@ func (s *Store) deleteRecordsTx(ctx context.Context, tx pgx.Tx, scope memory.Sco
 				kept = append(kept, source)
 			}
 		}
+		// The words a thing was made from (phase 3.5 creation marker) are a copy
+		// of the source too; they go with it.
+		if item.Creation != nil && item.Creation.Source != nil && deleted[item.Creation.Source.SourceID] {
+			item.Creation.Source = nil
+			changed = true
+		}
 		for i := range item.Conditions {
 			if item.Conditions[i].MetBy != nil && deleted[item.Conditions[i].MetBy.SourceID] {
 				item.Conditions[i].MetBy = nil

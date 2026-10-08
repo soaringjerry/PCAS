@@ -46,6 +46,8 @@ type ItemCreation struct {
 	Source    *SourceRef `json:"source,omitempty"`
 	MemoryIDs []string   `json:"memoryIds,omitempty"`
 	GroupKey  string     `json:"groupKey,omitempty"`
+	// The recorded action that made it; undoing that takes the thing away again.
+	ActionID string `json:"actionId,omitempty"`
 }
 type InProgress struct {
 	Items     []Item `json:"items"`

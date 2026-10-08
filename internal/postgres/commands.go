@@ -167,6 +167,9 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 		item := newItem(kind, title)
 		if original, ok := ctx.Value(secretaryCreationKey{}).(workspace.SourceRef); ok {
 			item.Creation = &workspace.ItemCreation{By: "secretary", Source: &original}
+			if log, ok := ctx.Value(actionLogKey{}).(actionLog); ok {
+				item.Creation.ActionID = log.id
+			}
 			if original.SourceID != "" {
 				item.Sources = append(item.Sources, original)
 			}
@@ -313,10 +316,14 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 		if json.Unmarshal(c.Patch, &fields) != nil {
 			return memory.ErrInvalid
 		}
+		// The retired auto-accept switch is ignored, not refused (phase 3.5 B6);
+		// a patch that only carried it changes nothing.
 		delete(fields, "autoAccept")
 		c.Patch = asJSON(fields)
-		if err := patchAllowed(&settings, c.Patch, "wakeIdeas", "followUps", "dailyReviewAt", "dailyBudget", "timezone", "city"); err != nil {
-			return err
+		if len(fields) > 0 {
+			if err := patchAllowed(&settings, c.Patch, "wakeIdeas", "followUps", "dailyReviewAt", "dailyBudget", "timezone", "city"); err != nil {
+				return err
+			}
 		}
 		settings.AutoAccept = false
 		settings.City = strings.TrimSpace(settings.City)

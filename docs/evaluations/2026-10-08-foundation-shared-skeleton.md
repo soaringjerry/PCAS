@@ -107,6 +107,16 @@ Two further local complete runs started before the final recovery refinements.
 Their owned test processes were stopped after those refinements. Neither run is a final complete-check pass.
 The exact committed revision must pass the existing complete CI slices before integration and release.
 
+The [bounded-recovery CI run](https://github.com/soaringjerry/PCAS/actions/runs/37852612035) found an older cancellation-budget assertion.
+It expected an interrupted extraction to release its reservation down to partial estimated usage.
+The approved recovery contract retains that reservation because unobserved work can still consume resources.
+Completed calls and known failures retain their earlier settlement rules.
+
+All thirteen tests in the touched coded review file moved to behavior-named dependency, accounting, and notification files.
+No test was removed. A migration comparison verified unchanged bodies except the cancellation-budget contract.
+That contract now checks the original reservation, the unknown outcome, held accounting, and incomplete usage explicitly.
+The moved contracts and recovery cases passed together with the race detector in 36.486 seconds.
+
 Final CI and deployment remain pending at this record's preparation.
 A preparation backup was verified for the initial skeleton revision.
 The final release backup and live secretary check remain pending.

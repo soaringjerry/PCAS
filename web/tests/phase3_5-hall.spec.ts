@@ -91,6 +91,8 @@ async function backend(page: Page, options: Options = {}) {
       state.projects = state.projects.filter((p) => !made(p.creation))
       state.tasks = state.tasks.filter((t) => !made(t.creation)).map((t) => (t.projectId && gone.includes(t.projectId) ? { ...t, projectId: undefined } : t))
       state.ideas = state.ideas.filter((i) => !made(i.creation))
+      // A date the background put away comes back, and leaves the line that reported it.
+      state.activity = (state.activity ?? []).map((a) => (a.items ? { ...a, items: a.items.filter((it) => it.actionId !== command.id) } : a)).filter((a) => !a.items || a.items.length > 0)
     }
     state.revision++
     return route.fulfill({ json: state })
@@ -166,7 +168,7 @@ test('a deadline that went by unmet looks like 已过截止 and can be said to b
   expect(mock.state.tasks).toEqual([])
   // Any date can simply be dropped with its ×, done or not, and that too can be taken back.
   await late.getByRole('button', { name: '不要了：旧期限 5' }).click()
-  await expect.poll(() => mock.commands.at(-1)).toMatchObject({ type: 'completeDeadline', id: 'd-old-4' })
+  await expect.poll(() => mock.commands.at(-1)).toMatchObject({ type: 'completeDeadline', id: 'd-old-4', reason: 'dropped' })
   await expect(late.locator('.h-title').filter({ hasText: '旧期限 5' })).toHaveCount(0)
   await expect(page.getByRole('button', { name: '撤销' })).toBeVisible()
   expect(mock.errors).toEqual([])
@@ -250,6 +252,32 @@ test('what the background made on its own is under 你不在的时候, one line 
   await away.getByRole('listitem').filter({ hasText: '把发票寄给老周' }).getByRole('button', { name: '撤销' }).click()
   await expect.poll(() => mock.commands.at(-1)).toMatchObject({ type: 'undoAction', id: 'act-task' })
   await expect(away.locator('.h-text')).toHaveText(['后台整理时建了想法「夏天试试冷萃」 · 依据「三月进货单」'])
+  expect(mock.errors).toEqual([])
+})
+
+test('dates the background put away are one line under 你不在的时候; opened, each has why and can be put back', async ({ page }) => {
+  const at = '2031-03-05T02:30:00Z'
+  const mock = await backend(page, {
+    tasks: [task('bolts', '把雨棚的螺丝补齐', { createdAt: at, creation: { by: 'background_tidy', memoryIds: ['m-bolts'], actionId: 'act-bolts' } })],
+  })
+  mock.state.activity = [{ id: 'date-tidy', at, text: '收拾了日程：2 条过了期或不作数的，不再显示', items: [
+    { text: '和木匠看料', note: '上个月的预约，已经过去', actionId: 'act-wood' },
+    { text: '网站四小时内恢复', note: '是合同条款，不是要办的事', actionId: 'act-site' },
+  ] }]
+  await page.goto('/')
+  const away = page.getByRole('region', { name: '你不在的时候' })
+  await away.getByRole('button', { name: /你不在的时候：2 件/ }).click()
+  // Two lines, not one per date: what was made, and what was put away.
+  await expect(away.locator('.hall-feed-list > li > div .h-text')).toHaveText([
+    '收拾了日程：2 条过了期或不作数的，不再显示',
+    '收拾日程时，把没定时间的一件事建成了待办「把雨棚的螺丝补齐」',
+  ])
+  await away.getByRole('button', { name: /收拾了日程/ }).click()
+  await expect(away.locator('.hall-feed-items li')).toHaveText([/和木匠看料 · 上个月的预约，已经过去/, /网站四小时内恢复 · 是合同条款，不是要办的事/])
+  await away.getByRole('button', { name: '放回去：和木匠看料' }).click()
+  await expect.poll(() => mock.commands.at(-1)).toMatchObject({ type: 'undoAction', id: 'act-wood' })
+  await expect(away.locator('.hall-feed-items li')).toHaveCount(1)
+  await expect(page.getByText('放回去了', { exact: true })).toBeVisible()
   expect(mock.errors).toEqual([])
 })
 

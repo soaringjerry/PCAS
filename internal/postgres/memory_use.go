@@ -344,7 +344,7 @@ func writeUseContext(b *strings.Builder, u useContext, loc *time.Location, write
 		fmt.Fprintln(b, u.RequirementScopes[m.ID])
 		write(m)
 	}
-	fmt.Fprintln(b, "\n期限和固定安排（仅供参考，不是这一轮要办的事；已过期不代表完成，日期没说清保留原话）：")
+	fmt.Fprintln(b, "\n期限和固定安排（仅供参考，不是这一轮要办的事；已过期不代表完成，日期没说清保留原话。用户这句话要了结其中一条时，用 close_date 引用它下面那条记忆的 M*）：")
 	for _, d := range u.Deadlines {
 		at := ""
 		if d.At != nil {

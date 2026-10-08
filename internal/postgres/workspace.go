@@ -667,6 +667,13 @@ func activityTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, timezone str
 		return nil, err
 	}
 	owner := string(scope.OwnerID)
+	tidied, err := tidiedDatesTx(ctx, tx, scope)
+	if err != nil {
+		return nil, err
+	}
+	if tidied != nil {
+		out = append(out, *tidied)
+	}
 	rows, err := tx.Query(ctx, `WITH finished AS (
 		SELECT j.record_id,j.record_version,max(j.updated_at) AS at FROM memory_jobs j
 		JOIN memory_records r ON (r.owner_id,r.id,r.version)=(j.owner_id,j.record_id,j.record_version) AND r.state='active'

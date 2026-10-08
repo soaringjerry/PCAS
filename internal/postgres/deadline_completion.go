@@ -12,11 +12,24 @@ import (
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
-// Completion is an annotation on one memory version. Record only its three
-// keys so undo never restores unrelated scope fields or the memory's contents.
+// Completion is an annotation on one memory version: the date is closed and no
+// longer listed. deadline_closed_as says how — "done" (it was met), "dropped"
+// (not wanted any more) or "task" (it became a to-do) — and is absent on marks
+// written before it existed, which were all "done". Record only these keys so
+// undo never restores unrelated scope fields or the memory's contents.
 type deadlineCompletion struct {
 	Version int                        `json:"version"`
 	Mark    map[string]json.RawMessage `json:"mark"`
+}
+
+var deadlineCompletionKeys = []string{"deadline_completed", "deadline_completed_version", "deadline_completed_at", "deadline_closed_as"}
+
+// validDeadlineClose normalises how a date is closed; empty means it was met.
+func validDeadlineClose(as string) (string, bool) {
+	if as == "" {
+		return "done", true
+	}
+	return as, oneOf(as, "done", "dropped", "task")
 }
 
 func deadlineCompletionFromScope(version int, data []byte) (deadlineCompletion, error) {
@@ -25,7 +38,7 @@ func deadlineCompletionFromScope(version int, data []byte) (deadlineCompletion, 
 		return deadlineCompletion{}, err
 	}
 	out := deadlineCompletion{Version: version, Mark: map[string]json.RawMessage{}}
-	for _, key := range []string{"deadline_completed", "deadline_completed_version", "deadline_completed_at"} {
+	for _, key := range deadlineCompletionKeys {
 		if v, ok := fields[key]; ok {
 			out.Mark[key] = v
 		}
@@ -49,7 +62,11 @@ func (v deadlineCompletion) hash() string {
 	return fmt.Sprintf("%x", sha256.Sum256(asJSON(v)))
 }
 
-func completeDeadlineTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, claim string, version int) error {
+func completeDeadlineTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, claim string, version int, as string) error {
+	as, ok := validDeadlineClose(as)
+	if !ok {
+		return memory.ErrInvalid
+	}
 	before, err := deadlineCompletionTx(ctx, tx, scope, claim)
 	if err != nil {
 		return err
@@ -62,8 +79,8 @@ func completeDeadlineTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, clai
 	}
 	var data []byte
 	if err = tx.QueryRow(ctx, `UPDATE claim_revisions SET scope=scope||jsonb_build_object(
- 'deadline_completed',true,'deadline_completed_version',version,'deadline_completed_at',clock_timestamp())
- WHERE owner_id=$1 AND claim_id=$2 AND version=$3 RETURNING scope`, string(scope.OwnerID), claim, version).Scan(&data); err != nil {
+ 'deadline_completed',true,'deadline_completed_version',version,'deadline_completed_at',clock_timestamp(),'deadline_closed_as',$4::text)
+ WHERE owner_id=$1 AND claim_id=$2 AND version=$3 RETURNING scope`, string(scope.OwnerID), claim, version, as).Scan(&data); err != nil {
 		return err
 	}
 	after, err := deadlineCompletionFromScope(version, data)
@@ -104,7 +121,7 @@ func restoreDeadlineCompletionTx(ctx context.Context, tx pgx.Tx, scope memory.Sc
 		return err
 	}
 	_, err := tx.Exec(ctx, `UPDATE claim_revisions SET scope=(scope-
- ARRAY['deadline_completed','deadline_completed_version','deadline_completed_at'])||$4::jsonb
+ ARRAY['deadline_completed','deadline_completed_version','deadline_completed_at','deadline_closed_as'])||$4::jsonb
  WHERE owner_id=$1 AND claim_id=$2 AND version=$3`, string(scope.OwnerID), change.ID, before.Version, asJSON(before.Mark))
 	return err
 }

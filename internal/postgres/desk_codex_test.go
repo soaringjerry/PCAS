@@ -51,7 +51,7 @@ for line in sys.stdin:
    assert set(props)=={'reply','used','links','show','remember','missingKeyInfo','actions','ask','memoryPlan'}
    assert set(schema['required'])==set(props) and schema['additionalProperties']==False
    variants=props['actions']['items']['anyOf']
-   assert {v['properties']['op']['enum'][0] for v in variants}=={'create_task','update','create_idea','create_project','add_steps','delegate'}
+   assert {v['properties']['op']['enum'][0] for v in variants}=={'create_task','update','create_idea','create_project','add_steps','close_date','delegate'}
    value={'reply':'安排好了。','used':[],'links':[],'show':[],'remember':False,'actions':[{'op':'create_task','title':'给张三回邮件','due':'%s','remind':None,'project':None,'notes':None,'owedTo':None,'waitingFor':None}],'ask':None}
   elif '导办台' in system:
    assert web and 'outputSchema' not in p

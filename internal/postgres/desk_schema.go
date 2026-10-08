@@ -89,6 +89,16 @@ var secretaryOutputSchema = json.RawMessage(`{
           {
             "type": "object",
             "properties": {
+              "op": {"type": "string", "enum": ["close_date"]},
+              "ref": {"type": "string"},
+              "as": {"type": "string", "enum": ["done", "dropped", "task"]}
+            },
+            "required": ["op", "ref", "as"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
               "op": {"type": "string", "enum": ["delegate"]},
               "ref": {"type": "string"},
               "title": {"type": "string"},

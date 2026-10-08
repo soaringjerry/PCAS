@@ -34,7 +34,7 @@ export interface ChecklistItem {
 
 /** Who made a thing that the user did not make by hand, and what it went on. */
 export interface Creation {
-  by: 'secretary' | 'background_extraction' | 'background_topic'
+  by: 'secretary' | 'background_extraction' | 'background_topic' | 'background_tidy'
   /** The words it was taken from. */
   source?: SourceRef
   /** The memories it rests on. */
@@ -423,6 +423,15 @@ export interface Activity {
   text: string
   to?: string
   failed?: boolean
+  /** What the line stands for when it reports several things at once; each can be taken back. */
+  items?: ActivityItem[]
+}
+
+export interface ActivityItem {
+  text: string
+  /** Why, in a sentence. */
+  note?: string
+  actionId: ID
 }
 
 export interface Notice {

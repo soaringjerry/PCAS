@@ -83,7 +83,7 @@ function DropDate({ entry, onDone }: { entry: ScheduleEntry; onDone?: () => void
       aria-label={`不要了：${entry.title}`}
       title="不要了，别再显示"
       onClick={async () => {
-        if (await dispatchUndoable({ type: 'completeDeadline', id: entry.source.deadlineId ?? entry.id, memoryId: entry.source.memoryId }, '不再显示了')) onDone?.()
+        if (await dispatchUndoable({ type: 'completeDeadline', id: entry.source.deadlineId ?? entry.id, memoryId: entry.source.memoryId, reason: 'dropped' }, '不再显示了')) onDone?.()
       }}
     >
       <X size={14} />
@@ -381,6 +381,7 @@ function FeedRow({ item, fresh }: { item: FeedItem; fresh: boolean }) {
   const when = <span className="h-when">{formatAgo(item.at, state.settings.timezone ?? 'UTC')}</span>
   const text = <span className={`h-text${item.failed ? ' failed' : ''}`}>{item.text}</span>
   const dot = fresh && <span className="h-new" aria-label="新的" />
+  if (item.items?.length) return <FeedGroup item={item} when={when} dot={dot} />
   if (!item.actionId) {
     const body = (
       <>
@@ -418,6 +419,51 @@ function FeedRow({ item, fresh }: { item: FeedItem; fresh: boolean }) {
           撤销
         </button>
       </div>
+    </li>
+  )
+}
+
+/** One line for several things done at once (the dates put away); it opens onto each, with why and its own undo. */
+function FeedGroup({ item, when, dot }: { item: FeedItem; when: ReactNode; dot: ReactNode }) {
+  const { undo } = useStore()
+  const toast = useToast()
+  const [open, setOpen] = useState(false)
+  const [busy, setBusy] = useState('')
+  return (
+    <li>
+      <div>
+        {when}
+        <button type="button" className="h-open hall-group-toggle" aria-expanded={open} onClick={() => setOpen(!open)}>
+          <span className="h-text">{item.text}</span>
+          {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+        </button>
+        {dot}
+      </div>
+      {open && (
+        <ul className="hall-feed-items">
+          {item.items!.map((it) => (
+            <li key={it.actionId}>
+              <span className="h-text">
+                {it.text}
+                {it.note && <span className="h-why"> · {it.note}</span>}
+              </span>
+              <button
+                type="button"
+                className="hall-btn quiet hall-undo"
+                disabled={busy === it.actionId}
+                aria-label={`放回去：${it.text}`}
+                onClick={async () => {
+                  setBusy(it.actionId)
+                  if (await undo(it.actionId)) toast.show('放回去了')
+                  else setBusy('')
+                }}
+              >
+                放回去
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
     </li>
   )
 }

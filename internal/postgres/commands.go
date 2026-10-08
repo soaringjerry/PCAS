@@ -139,6 +139,12 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 			title = c.Name
 		}
 		item := newItem(kind, title)
+		if original, ok := ctx.Value(secretaryCreationKey{}).(workspace.SourceRef); ok {
+			item.Creation = &workspace.ItemCreation{By: "secretary", Source: &original}
+			if original.SourceID != "" {
+				item.Sources = append(item.Sources, original)
+			}
+		}
 		item.History[0].By = actorFromContext(ctx)
 		item.Evolution[0].By = actorFromContext(ctx)
 		if ctx.Value(secretaryHistoryKey{}) != nil {

@@ -655,7 +655,7 @@ func jobProblem(code string) string {
 // import reads as one line rather than a dozen stage names. Idea wakes and
 // finished runs are already on their own records and are added by the client.
 func activityTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, timezone string) ([]workspace.Activity, error) {
-	out, err := queryDocuments[workspace.Activity](ctx, tx, `SELECT jsonb_build_object('id',id::text,'at',created_at,'text',summary,'to','/t/'||coalesce((changes->0->>'id'),'')) FROM action_log WHERE owner_id=$1 AND source IN('background_extraction','background_topic') AND undone_at IS NULL AND expired_at IS NULL AND created_at>=now()-interval '30 days' ORDER BY created_at DESC,id`, string(scope.OwnerID))
+	out, err := queryDocuments[workspace.Activity](ctx, tx, `SELECT jsonb_build_object('id',id::text,'at',created_at,'text',summary,'to','/t/'||coalesce((changes->0->>'id'),(SELECT project_id::text FROM topic_project_links l WHERE(l.owner_id,l.action_id)=(action_log.owner_id,action_log.id)),'')) FROM action_log WHERE owner_id=$1 AND source IN('background_extraction','background_topic') AND undone_at IS NULL AND expired_at IS NULL AND created_at>=now()-interval '30 days' ORDER BY created_at DESC,id`, string(scope.OwnerID))
 	if err != nil {
 		return nil, err
 	}

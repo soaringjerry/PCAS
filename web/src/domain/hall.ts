@@ -177,9 +177,10 @@ export function todayColumn(state: State, schedule?: Schedule): TodayColumn {
 }
 
 /**
- * The first `cap` rows of the column above 「这几天」, kept in this order: what
- * rang, who waits, what went by unmet, what cannot wait, what is still ahead
- * today, then what already passed.
+ * The first `cap` rows of the column above 「这几天」. Kept in this order: what
+ * rang, who waits, what cannot wait, what is still ahead today, deadlines of
+ * earlier days nobody said were met, then what already passed today. Old
+ * deadlines pile up over the years, so they do not get to crowd today out.
  */
 export function firstRows(full: TodayColumn, cap: number) {
   let left = cap
@@ -188,14 +189,13 @@ export function firstRows(full: TodayColumn, cap: number) {
     left -= taken.length
     return taken
   }
-  return {
-    rang: take(full.rang),
-    waiting: take(full.waiting),
-    late: take(full.late),
-    urgent: take(full.urgent),
-    ahead: take(full.timeline.filter((r) => !r.past)),
-    passed: take(full.timeline.filter((r) => r.past)),
-  }
+  const rang = take(full.rang)
+  const waiting = take(full.waiting)
+  const urgent = take(full.urgent)
+  const ahead = take(full.timeline.filter((r) => !r.past))
+  const late = take(full.late)
+  const passed = take(full.timeline.filter((r) => r.past))
+  return { rang, waiting, late, urgent, ahead, passed }
 }
 
 export interface QueueItem {

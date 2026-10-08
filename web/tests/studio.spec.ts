@@ -109,6 +109,9 @@ async function mockBackend(page: Page, start: Partial<Pick<Backend, 'handover' |
   })
   await page.route((url) => url.pathname === '/v1/workspace', (route) => route.fulfill({ json: backend.snapshot }))
   await page.route((url) => url.pathname === '/v1/desk/turns', (route) => route.fulfill({ json: { turns: [] } }))
+  // The hall's own reads (phase 3.5): no dates and nothing under 在推进.
+  await page.route((url) => url.pathname === '/v1/workspace/schedule', (route) => route.fulfill({ json: { days: [], unclear: [], overdue: [] } }))
+  await page.route((url) => url.pathname === '/v1/workspace/in-progress', (route) => route.fulfill({ json: { items: [], total: 0, remaining: 0 } }))
   await page.route((url) => /^\/v1\/workspace\/projects\/[^/]+\/handover$/.test(url.pathname), (route) => {
     const id = new URL(route.request().url()).pathname.split('/')[4]
     if (backend.handover === 'broken') return route.fulfill({ status: 503, json: { error: 'unavailable' } })

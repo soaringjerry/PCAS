@@ -295,7 +295,8 @@ test('on a phone the short column keeps its five rows, dates and to-dos together
   await page.setViewportSize({ width: 390, height: 844 })
   const mock = await backend(page)
   await page.goto('/')
-  await expect(today(page).locator('.hall-task')).toHaveCount(5)
+  // Today comes before the deadlines of earlier days, however many of those there are.
+  await expect(today(page).locator('.hall-task .h-title')).toHaveText(['给烤箱续保', '交摊位申请表', '看牙', '给烤箱除垢', '裱花课'])
   await today(page).getByRole('button', { name: /^还有 \d+ 件$/ }).click()
   await expect(today(page).getByRole('group', { name: '日期没说清的' })).toBeVisible()
   await expect(page.getByRole('region', { name: '今天', exact: true })).toBeVisible()

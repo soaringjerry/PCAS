@@ -915,10 +915,11 @@ test('finished agent work is pinned on the home page as a result, not as a remin
   }))
   await page.goto('/')
   const today = page.getByRole('region', { name: '今天' })
-  await expect(today.getByRole('heading', { name: '做完了，等你看' })).toBeVisible()
+  await expect(today.getByRole('heading', { name: '副手交回了，等你看' })).toBeVisible()
   const row = today.locator('.hall-rang')
   await expect(row).toContainText('研究 PCAS')
-  await expect(row).toContainText('副手做完了')
+  // The row names what came back; it does not say the to-do is done.
+  await expect(row).toContainText('副手交回：研究结论：三层记忆已经落地。')
   await expect(row).not.toContainText('到点')
 })
 

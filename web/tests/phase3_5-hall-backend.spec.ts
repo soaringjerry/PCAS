@@ -19,7 +19,7 @@ test.afterEach(async ({ page }, info) => { await evidence(page, info, 'phase3_5-
 
 // Everything here is made up. The memories and their dates go straight into the
 // schema, as the sorting would have left them; what is under test is the hall
-// reading the real schedule and 在推进, and 做完了 landing on the memory.
+// reading the real schedule and 待办, and 做完了 landing on the memory.
 const seeder = `package main
 import("context";"encoding/json";"os";"github.com/jackc/pgx/v5")
 func main(){
@@ -55,7 +55,7 @@ func main(){
  if err=tx.Commit(ctx);err!=nil{panic(err)}
 }`
 
-test('大厅读真实后端：日程进「今天」和「这几天」，做完了落在记忆上，没时间的待办在「在推进」', async ({ page }) => {
+test('大厅读真实后端：日程进「今天」和「这几天」，做完了落在记忆上，没时间的待办在「待办」', async ({ page }) => {
   test.setTimeout(3 * 60_000)
   await login(page)
   await command(page, { type: 'updateSettings', patch: { timezone: 'Asia/Shanghai' } })
@@ -114,11 +114,11 @@ test('大厅读真实后端：日程进「今天」和「这几天」，做完�
   await expect(page.locator('.hall-task').filter({ hasText: '喂酸面团' })).toHaveCount(0)
   await expect(group('这几天').locator('.h-title')).toHaveText(['交房租', '去市集办续约'])
   await expect(page.getByRole('group', { name: '日期没说清的' })).toHaveCount(0)
-  await expect(page.getByRole('region', { name: '在推进' }).locator('.h-title')).toHaveText(['重写春季菜单'])
+  await expect(page.getByRole('region', { name: '待办' }).locator('.h-title')).toHaveText(['重写春季菜单'])
   await expect(page.getByRole('alert')).toHaveCount(0)
 
   // It opens onto what was said, and from there onto the memory.
-  const late = group('在等你，或已经晚了')
+  const late = group('之前没了结的')
   await late.getByRole('button', { name: /^给烤箱续保/ }).click()
   const sheet = page.getByRole('dialog')
   await expect(sheet.locator('.source-text')).toHaveText(texts[1])
@@ -135,7 +135,7 @@ test('大厅读真实后端：日程进「今天」和「这几天」，做完�
   await expect(late.getByText('给烤箱续保')).toBeVisible()
   expect((await read<{ items: Deadline[] }>('deadlines?expired=true')).items.map((d) => d.title)).toEqual(['给烤箱续保'])
 
-  // A to-do with no time is finished from 在推进.
-  await page.getByRole('region', { name: '在推进' }).getByRole('button', { name: '做完了：重写春季菜单' }).click()
-  await expect(page.getByRole('region', { name: '在推进' })).toHaveCount(0)
+  // A to-do with no time is finished from 待办.
+  await page.getByRole('region', { name: '待办' }).getByRole('button', { name: '做完了：重写春季菜单' }).click()
+  await expect(page.getByRole('region', { name: '待办' })).toHaveCount(0)
 })

@@ -3,9 +3,9 @@ import { isOpenTask } from './things'
 import { civilOffset, clockTime, dayOffset, formatCivil, formatWhen } from './time'
 import type { ActivityItem, Creation, Idea, Notice, Project, Run, State, Task } from './types'
 
-// The home screen is a service hall (docs/design/principles.md): today on the
-// left, projects and ideas on the right, one desk in the middle. These
-// selectors decide what each wall shows; none of them spend money.
+// The home screen (docs/design/principles.md): the one thing that matters most
+// and the desk on top, then what has a time, what has none, and projects and
+// ideas. These selectors decide what each part shows; none of them spend money.
 
 const HOUR = 60 * 60 * 1000
 const DAY = 24 * HOUR
@@ -73,7 +73,8 @@ function dated(entry: ScheduleEntry, timezone: string): string {
 function scheduleRows(state: State, schedule: Schedule, timezone: string, now: number) {
   const known = new Set(state.tasks.map((t) => t.id))
   const mine = (e: ScheduleEntry) => !(e.source.kind === 'task' && e.source.itemId && known.has(e.source.itemId))
-  const withNote = (text: string, e: ScheduleEntry) => [text, e.timeNote].filter(Boolean).join(' · ')
+  // What the reader of the memory was unsure of (`timeNote`) is not the user's
+  // to resolve from a row, so no row carries it; it is with what was said, one click in.
   const timeline: DateRow[] = []
   const soon: DateRow[] = []
   for (const day of schedule.days) {
@@ -86,17 +87,17 @@ function scheduleRows(state: State, schedule: Schedule, timezone: string, now: n
       if (offset === 0) {
         const past = !!timed && new Date(timed).getTime() < now
         const late = past && entry.kind === 'deadline'
-        timeline.push({ entry, note: withNote(late ? '过了截止时间' : entryKindLabel[entry.kind], entry), time: timed ? clockTime(timed, timezone) : '今天', at: timed, past, canFinish: late })
+        timeline.push({ entry, note: late ? '过了截止时间' : entryKindLabel[entry.kind], time: timed ? clockTime(timed, timezone) : '今天', at: timed, past, canFinish: late })
       } else if (offset > 0 && (entry.kind === 'deadline' || entry.kind === 'appointment')) {
         // A fixed arrangement shows on its own day; listing every one ahead would bury the dates that are news.
         const when = entry.kind === 'deadline' ? `${formatCivil(day.date, timezone)}截止` : `${dated(entry, timezone)} 预约`
-        soon.push({ entry, note: withNote(when, entry), at: timed })
+        soon.push({ entry, note: when, at: timed })
       }
     }
   }
   const late: DateRow[] = schedule.overdue
     .filter(mine)
-    .map((entry) => ({ entry, note: withNote(`已过截止 · ${dated(entry, timezone) || '日期没说清'}`, entry), at: entry.at ?? undefined, canFinish: entry.source.kind === 'deadline' }))
+    .map((entry) => ({ entry, note: `已过截止 · ${dated(entry, timezone) || '日期没说清'}`, at: entry.at ?? undefined, canFinish: entry.source.kind === 'deadline' }))
     .sort((a, b) => (b.at ?? b.entry.date ?? '').localeCompare(a.at ?? a.entry.date ?? ''))
   // Dates that were never pinned down are not on the line of time either: with
   // no day to stand on they only pile up. They stay in the library's 眼下.
@@ -183,8 +184,8 @@ export function todayColumn(state: State, schedule?: Schedule): TodayColumn {
 
 /**
  * The first `cap` rows of the column above 「这几天」. Kept in this order: what
- * rang, who waits, what cannot wait, what is still ahead today, deadlines of
- * earlier days nobody said were met, then what already passed today. Old
+ * rang, who waits, what cannot wait, what is still ahead today, what already
+ * passed today, then deadlines of earlier days nobody said were met. Old
  * deadlines pile up over the years, so they do not get to crowd today out.
  */
 export function firstRows(full: TodayColumn, cap: number) {
@@ -198,9 +199,56 @@ export function firstRows(full: TodayColumn, cap: number) {
   const waiting = take(full.waiting)
   const urgent = take(full.urgent)
   const ahead = take(full.timeline.filter((r) => !r.past))
-  const late = take(full.late)
   const passed = take(full.timeline.filter((r) => r.past))
+  const late = take(full.late)
   return { rang, waiting, late, urgent, ahead, passed }
+}
+
+/** Days a deadline of an earlier day stays listed by name; older ones fold into one line. */
+export const LATE_DAYS = 7
+
+/** Deadlines of earlier days: the last week's by name, the older ones behind one line. */
+export function splitLate(late: DateRow[], timezone: string): { recent: DateRow[]; older: DateRow[] } {
+  const age = (r: DateRow) => (r.entry.date ? -civilOffset(r.entry.date, timezone) : r.at ? -dayOffset(r.at, timezone) : Infinity)
+  return { recent: late.filter((r) => age(r) <= LATE_DAYS), older: late.filter((r) => age(r) > LATE_DAYS) }
+}
+
+export interface Lead {
+  /** Why this one leads: a reminder went off, someone waits, it cannot wait, or it is the next time today. */
+  kind: 'rang' | 'waiting' | 'urgent' | 'next'
+  title: string
+  note: string
+  /** The instant it is due, when it has one. */
+  at?: string
+  to?: string
+  row?: DateRow
+}
+
+/**
+ * The one thing to look at first. A reminder that went off, then the next
+ * time still ahead today, then who is waiting, then what was said to be urgent.
+ * A result waiting to be read and deadlines of earlier days never lead.
+ */
+export function leadOf(full: TodayColumn): Lead | undefined {
+  const rang = full.rang.find((r) => !r.notice.result)
+  if (rang) return { kind: 'rang', title: rang.notice.title, note: '到点了', at: rang.notice.dueAt, to: `/t/${rang.notice.thingId}` }
+  const next = full.timeline.find((r) => !r.past && r.at)
+  if (next) return isDateRow(next) ? { kind: 'next', title: next.entry.title, note: next.note, at: next.at, to: next.entry.source.kind === 'task' && next.entry.source.itemId ? `/t/${next.entry.source.itemId}` : undefined, row: next } : { kind: 'next', title: next.task.title, note: next.note, at: next.at, to: `/t/${next.task.id}` }
+  const waiting = full.waiting[0]
+  if (waiting) return { kind: 'waiting', title: waiting.task.title, note: waiting.note, to: `/t/${waiting.task.id}` }
+  const urgent = full.urgent[0]
+  if (urgent) return { kind: 'urgent', title: urgent.task.title, note: urgent.note, to: `/t/${urgent.task.id}` }
+  return undefined
+}
+
+/**
+ * To-dos with no time, in the order they matter: what the user said cannot
+ * wait, then what the user or the secretary put down, then what the background
+ * made on its own; inside each, the one that moved most recently first.
+ */
+export function todoOrder(items: Task[]): Task[] {
+  const rank = (t: Task) => (t.urgent ? 0 : t.creation && t.creation.by !== 'secretary' ? 2 : 1)
+  return [...items].sort((a, b) => rank(a) - rank(b) || b.updatedAt.localeCompare(a.updatedAt))
 }
 
 export interface QueueItem {

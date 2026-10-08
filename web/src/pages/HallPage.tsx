@@ -4,14 +4,15 @@ import { BellRing, CalendarClock, ChevronDown, ChevronRight, CircleAlert, Circle
 import { SideSheet } from '../components/Overlay'
 import { TimezoneHint } from '../components/TimezoneHint'
 import { Secretary } from '../components/Secretary'
-import { backgroundFeed, decisionQueue, firstRows, ideaNote, ideaWall, isDateRow, projectCards, todayColumn, type DateRow, type FeedItem, type NoticeRow as NoticeRowData, type TimeRow, type TodayRow } from '../domain/hall'
+import { backgroundFeed, decisionQueue, firstRows, ideaNote, ideaWall, isDateRow, leadOf, projectCards, splitLate, todayColumn, todoOrder, type DateRow, type FeedItem, type NoticeRow as NoticeRowData, type TimeRow, type TodayColumn, type TodayRow } from '../domain/hall'
 import { projectStatusLabel } from '../domain/labels'
-import { entryKindLabel, type ScheduleEntry } from '../domain/schedule'
+import { entryKindLabel, type Schedule, type ScheduleEntry } from '../domain/schedule'
 import { isOpenTask } from '../domain/things'
 import { clockTime, formatAgo, formatCivil, formatDateTime, formatWhen } from '../domain/time'
 import type { State } from '../domain/types'
 import { api } from '../store/api'
 import { useStore } from '../store/context'
+import type { Read } from '../store/now'
 import { useInProgress, useSchedule } from '../store/schedule'
 import { useToast } from '../store/toast'
 
@@ -36,6 +37,7 @@ function TaskRow({ row, withTime }: { row: TodayRow; withTime?: boolean }) {
         type="button"
         className="hall-check"
         aria-label={`做完了：${row.task.title}`}
+        title="做完了"
         onClick={() => dispatchUndoable({ type: 'setTaskStatus', id: row.task.id, status: 'done' }, '做完了')}
       >
         <span className="ring" />
@@ -58,6 +60,7 @@ function FinishDate({ entry, children, onDone }: { entry: ScheduleEntry; childre
       type="button"
       className={children ? 'hall-finish' : 'hall-check'}
       aria-label={`做完了：${entry.title}`}
+      title="做完了"
       onClick={async () => {
         if (await dispatchUndoable({ type: 'completeDeadline', id: entry.source.deadlineId ?? entry.id, memoryId: entry.source.memoryId }, '做完了')) onDone?.()
       }}
@@ -69,9 +72,10 @@ function FinishDate({ entry, children, onDone }: { entry: ScheduleEntry; childre
 }
 
 /**
- * The × on a date from the table of deadlines: not wanted here. It is marked on
- * the memory under it, like 做完了, so every day it would fall on goes with it;
- * the memory itself stays, and the toast takes it back.
+ * 不要了, at the end of a date from the table of deadlines. The circle says it
+ * was done; this says it is not wanted here, and the row says so in words when
+ * pointed at. It is marked on the memory under it, like 做完了, so every day it
+ * would fall on goes with it; the memory itself stays, and the toast takes it back.
  */
 function DropDate({ entry, onDone }: { entry: ScheduleEntry; onDone?: () => void }) {
   const { dispatchUndoable } = useStore()
@@ -86,6 +90,7 @@ function DropDate({ entry, onDone }: { entry: ScheduleEntry; onDone?: () => void
         if (await dispatchUndoable({ type: 'completeDeadline', id: entry.source.deadlineId ?? entry.id, memoryId: entry.source.memoryId, reason: 'dropped' }, '不再显示了')) onDone?.()
       }}
     >
+      <span className="h-word">不要了</span>
       <X size={14} />
     </button>
   )
@@ -177,8 +182,10 @@ function NoticeRow({ row }: { row: NoticeRowData }) {
   const [busy, setBusy] = useState(false)
   const { notice, task } = row
   // A result says how the work ended; only a reminder has a time it came due.
+  // The deputy handed something back; the to-do itself is not thereby done, so the row names what came back.
+  const back = notice.reason.split('\n').slice(1).map((l) => l.replace(/^[#>*\s-]+/, '').replace(/\*+/g, '').trim()).find(Boolean)
   const note = notice.result
-    ? `${notice.reason.split('\n')[0].replace(/：$/, '')} · ${formatWhen(notice.dueAt, state.settings.timezone ?? 'UTC')}`
+    ? `${back ? `副手交回：${back}` : '副手交回了结果'} · ${formatWhen(notice.dueAt, state.settings.timezone ?? 'UTC')}`
     : [notice.reason && notice.reason !== notice.title ? notice.reason : '', `${formatWhen(notice.dueAt, state.settings.timezone ?? 'UTC')} 到点`].filter(Boolean).join(' · ')
   return (
     <div className="hall-task hall-rang">
@@ -247,17 +254,18 @@ const ROWS_SHOWN = 5
  * 今天. On a phone it is the short version: what rang, who is waiting and
  * today's timeline, at most five rows; the rest is one tap away.
  */
-function TodayWall({ compact }: { compact: boolean }) {
+function TodayWall({ compact, schedule, full }: { compact: boolean; schedule: Read<Schedule>; full: TodayColumn }) {
   const { state } = useStore()
   const timezone = state.settings.timezone ?? 'UTC'
-  const schedule = useSchedule()
-  const full = todayColumn(state, schedule.value)
   const [all, setAll] = useState(false)
+  const [old, setOld] = useState(false)
   const [open, setOpen] = useState<DateRow>()
   const short = compact && !all
   const date = new Date().toLocaleDateString('zh-CN', { timeZone: timezone, month: 'long', day: 'numeric', weekday: 'long' })
 
   const { rang, waiting, late, urgent, ahead, passed } = firstRows(full, short ? COMPACT_ROWS : Infinity)
+  // A deadline from more than a week back is no longer news; it waits behind one line.
+  const { recent, older } = splitLate(late, timezone)
   const soon = short ? [] : full.soon
   const unclear = short ? [] : full.unclear
   const total = full.rang.length + full.waiting.length + full.late.length + full.urgent.length + full.timeline.length + full.soon.length + full.unclear.length
@@ -273,19 +281,18 @@ function TodayWall({ compact }: { compact: boolean }) {
       <div className="hall-scroll">
         {rang.length > 0 && (
           <div className="hall-group hall-rang-group">
-            <h2 className="hall-sub rang">{rang.every((r) => r.notice.result) ? '做完了，等你看' : '到点了'}</h2>
+            <h2 className="hall-sub rang">{rang.every((r) => r.notice.result) ? '副手交回了，等你看' : '到点了'}</h2>
             {rang.map((r) => (
               <NoticeRow key={r.notice.id} row={r} />
             ))}
           </div>
         )}
-        {waiting.length + late.length > 0 && (
+        {waiting.length > 0 && (
           <div className="hall-group">
-            <h2 className="hall-sub warn">在等你，或已经晚了</h2>
+            <h2 className="hall-sub warn">在等你</h2>
             {waiting.map((r) => (
               <TaskRow key={r.task.id} row={r} />
             ))}
-            <Capped rows={late}>{(r) => <DateRowView key={r.entry.id} row={r} onOpen={setOpen} />}</Capped>
           </div>
         )}
         {(!short || urgent.length + ahead.length + passed.length > 0 || full.timeline.length + full.urgent.length === 0) && (
@@ -310,6 +317,18 @@ function TodayWall({ compact }: { compact: boolean }) {
                 <Capped rows={unclear}>{(r) => <DateRowView key={r.entry.id} row={r} unclear onOpen={setOpen} />}</Capped>
               </div>
             )}
+          </div>
+        )}
+        {late.length > 0 && (
+          <div className="hall-group hall-late">
+            <h2 className="hall-sub">之前没了结的</h2>
+            <Capped rows={recent}>{(r) => <DateRowView key={r.entry.id} row={r} onOpen={setOpen} />}</Capped>
+            {older.length > 0 && (
+              <button type="button" className="link-btn hall-rest" aria-expanded={old} onClick={() => setOld((v) => !v)}>
+                {old ? '收起更早的' : `更早的 ${older.length} 条`}
+              </button>
+            )}
+            {old && older.map((r) => <DateRowView key={r.entry.id} row={r} onOpen={setOpen} />)}
           </div>
         )}
         {schedule.phase === 'failed' && (
@@ -468,7 +487,10 @@ function FeedGroup({ item, when, dot }: { item: FeedItem; when: ReactNode; dot: 
   )
 }
 
-/** 你不在的时候: one line under the conversation, opened on demand. Hidden while there is nothing. */
+/** How many lines of 你不在的时候 show before it is opened. */
+const AWAY_SHOWN = 3
+
+/** 你不在的时候: right under the desk, its newest lines showing; the rest opens. Hidden while there is nothing. */
 function AwayLine() {
   const { state } = useStore()
   const [seen] = useState(readSeen)
@@ -489,24 +511,74 @@ function AwayLine() {
       <button type="button" className="hall-away-bar" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
         <span>你不在的时候：{items.length} 件</span>
         {fresh && <span className="h-new" aria-label="有新的" />}
-        <span className="h-toggle">{open ? <ChevronDown size={15} /> : <ChevronRight size={15} />}</span>
+        {items.length > AWAY_SHOWN && <span className="h-toggle">{open ? <ChevronDown size={15} /> : <ChevronRight size={15} />}</span>}
       </button>
-      {open && (
-        <ol className="hall-feed-list">
-          {items.map((f) => (
-            <FeedRow key={f.key} item={f} fresh={new Date(f.at).getTime() > seen} />
-          ))}
-        </ol>
-      )}
+      <ol className="hall-feed-list">
+        {(open ? items : items.slice(0, AWAY_SHOWN)).map((f) => (
+          <FeedRow key={f.key} item={f} fresh={new Date(f.at).getTime() > seen} />
+        ))}
+      </ol>
     </section>
   )
 }
 
-function Desk({ compact }: { compact: boolean }) {
+/** How long until an instant, in the words a person would use. */
+function untilText(at: string, now: number): string {
+  const minutes = Math.round((new Date(at).getTime() - now) / 60_000)
+  if (minutes <= 0) return '到点了'
+  if (minutes < 60) return `还有 ${minutes} 分钟`
+  const hours = Math.floor(minutes / 60)
+  return hours < 24 ? `还有 ${hours} 小时` : ''
+}
+
+/** 最要紧: the one thing to look at first, in the middle of the page above the input. */
+function LeadCard({ full }: { full: TodayColumn }) {
+  const timezone = useStore().state.settings.timezone ?? 'UTC'
+  const [now, setNow] = useState(() => Date.now())
+  const [open, setOpen] = useState<DateRow>()
+  useEffect(() => {
+    const t = window.setInterval(() => setNow(Date.now()), 60_000)
+    return () => window.clearInterval(t)
+  }, [])
+  const lead = leadOf(full)
+  const date = new Date(now).toLocaleDateString('zh-CN', { timeZone: timezone, month: 'long', day: 'numeric', weekday: 'long' })
+  if (!lead) {
+    return (
+      <section className="hall-lead quiet" aria-label="最要紧">
+        <span className="h-day">{date}</span>
+        <p className="h-title">今天没有赶时间的事。</p>
+      </section>
+    )
+  }
+  const body = (
+    <>
+      <span className="h-title">{lead.title}</span>
+      <span className="h-note">{[lead.at && lead.kind === 'next' ? `今天 ${clockTime(lead.at, timezone)}` : '', lead.note, lead.at && lead.kind === 'next' ? untilText(lead.at, now) : ''].filter(Boolean).join(' · ')}</span>
+    </>
+  )
+  return (
+    <section className={`hall-lead ${lead.kind}`} aria-label="最要紧">
+      <span className="h-day">{date} · 最要紧</span>
+      {lead.to ? (
+        <Link to={lead.to} className="h-body">
+          {body}
+        </Link>
+      ) : (
+        <button type="button" className="h-body" onClick={() => lead.row && setOpen(lead.row)}>
+          {body}
+        </button>
+      )}
+      {open && <DateSheet row={open} onClose={() => setOpen(undefined)} />}
+    </section>
+  )
+}
+
+function Desk({ compact, full }: { compact: boolean; full: TodayColumn }) {
   return (
     <section className="hall-desk">
+      <LeadCard full={full} />
       <DecisionStrip />
-      {/* On a wide screen the conversation fills the column in full; stacked, only its latest turn shows. */}
+      {/* On a wide screen the conversation shows in full above the input, up to a height; stacked, only its latest turn shows. */}
       <Secretary variant={compact ? 'latest' : undefined} />
       <AwayLine />
     </section>
@@ -515,20 +587,24 @@ function Desk({ compact }: { compact: boolean }) {
 
 /* ---------- Projects and ideas ---------- */
 
+/** Project cards that show before 「还有 N 个」; they wrap, nothing is scrolled sideways. */
+const PROJECTS_SHOWN = 6
+
 function ProjectWall() {
   const { state } = useStore()
   const cards = projectCards(state)
+  const [all, setAll] = useState(false)
   return (
     <section className="hall-panel hall-projects" aria-labelledby="hall-projects-title">
       <header className="hall-head small">
         <h2 id="hall-projects-title">项目</h2>
-        <span>{cards.length > 2 ? '有新进展的在前，横划看更多' : ''}</span>
+        <span>{cards.length > 1 ? '有新进展的在前' : ''}</span>
       </header>
       {cards.length === 0 ? (
         <p className="hall-empty">还没有项目。几件事聚在一起时，后台会提议合成一个。</p>
       ) : (
         <div className="hall-cards" role="list">
-          {cards.map((c) => (
+          {(all ? cards : cards.slice(0, PROJECTS_SHOWN)).map((c) => (
             <Link key={c.project.id} to={`/t/${c.project.id}`} className={`hall-card${c.fresh ? ' fresh' : ''}`} role="listitem">
               <span className="h-name">
                 {c.project.name}
@@ -541,6 +617,11 @@ function ProjectWall() {
               {c.next ? <span className="h-last">下一步：{c.next}</span> : c.goal && <span className="h-last">{c.goal}</span>}
             </Link>
           ))}
+          {cards.length > PROJECTS_SHOWN && (
+            <button type="button" className="link-btn hall-rest" aria-expanded={all} onClick={() => setAll((v) => !v)}>
+              {all ? '收起' : `还有 ${cards.length - PROJECTS_SHOWN} 个`}
+            </button>
+          )}
         </div>
       )}
     </section>
@@ -548,8 +629,9 @@ function ProjectWall() {
 }
 
 /**
- * 在推进: to-dos with no time. Nothing here reminds; what moved most recently
- * is on top, and how many are listed is the server's to say.
+ * 待办: to-dos with no time; whatever has a time is under 今天. Nothing here
+ * reminds. What the user said cannot wait is on top, what the background made
+ * on its own is last and says so; how many are listed is the server's to say.
  */
 function ProgressWall() {
   const { state, dispatchUndoable } = useStore()
@@ -561,7 +643,7 @@ function ProgressWall() {
     return (
       <section className="hall-panel hall-progress" aria-labelledby="hall-progress-title">
         <header className="hall-head small">
-          <h2 id="hall-progress-title">在推进</h2>
+          <h2 id="hall-progress-title">待办</h2>
         </header>
         <p className="hall-problem" role="alert">
           <CircleAlert size={14} />
@@ -574,13 +656,13 @@ function ProgressWall() {
     )
   }
   // One just finished here is gone at once, before the list is read again.
-  const items = read.value.items.filter((t) => isOpenTask(state.tasks.find((s) => s.id === t.id) ?? t))
+  const items = todoOrder(read.value.items.filter((t) => isOpenTask(state.tasks.find((s) => s.id === t.id) ?? t)))
   if (items.length === 0 && read.value.remaining === 0) return null
   return (
     <section className="hall-panel hall-progress" aria-labelledby="hall-progress-title">
       <header className="hall-head small">
-        <h2 id="hall-progress-title">在推进</h2>
-        <span>{items.length > 1 ? '最近有进展的在前' : ''}</span>
+        <h2 id="hall-progress-title">待办</h2>
+        <span>没定时间的</span>
       </header>
       <div className="hall-scroll">
         {items.map((task) => {
@@ -591,13 +673,14 @@ function ProgressWall() {
                 type="button"
                 className="hall-check"
                 aria-label={`做完了：${task.title}`}
+                title="做完了"
                 onClick={() => dispatchUndoable({ type: 'setTaskStatus', id: task.id, status: 'done' }, '做完了')}
               >
                 <span className="ring" />
               </button>
               <Link to={`/t/${task.id}`} className="hall-task-body">
                 <span className="h-title">{task.title}</span>
-                <span className="h-note">{[project, formatAgo(task.updatedAt, timezone)].filter(Boolean).join(' · ')}</span>
+                <span className="h-note">{[task.urgent ? '你说过要尽快' : '', project, task.creation && task.creation.by !== 'secretary' ? '后台建的' : '', formatAgo(task.updatedAt, timezone)].filter(Boolean).join(' · ')}</span>
               </Link>
             </div>
           )
@@ -660,7 +743,7 @@ function IdeaWall() {
   )
 }
 
-/** Below this width the hall stacks into one column (hall.css). */
+/** Below this width the three columns under the desk stack into one (hall.css). */
 const STACKED = '(max-width: 1180px)'
 
 function useStacked(): boolean {
@@ -676,15 +759,22 @@ function useStacked(): boolean {
 
 export function HallPage() {
   const stacked = useStacked()
+  const { state } = useStore()
+  // Read once: the lead on top and the column of today stand on the same days.
+  const schedule = useSchedule()
+  const full = todayColumn(state, schedule.value)
   return (
     <div className="hall">
       <TimezoneHint />
-      <TodayWall compact={stacked} />
-      <Desk compact={stacked} />
-      <div className="hall-right">
-        <ProjectWall />
+      <Desk compact={stacked} full={full} />
+      {/* Side by side on a wide screen; a part with nothing in it takes no column. */}
+      <div className="hall-below">
+        <TodayWall compact={stacked} schedule={schedule} full={full} />
         <ProgressWall />
-        <IdeaWall />
+        <div className="hall-right">
+          <ProjectWall />
+          <IdeaWall />
+        </div>
       </div>
     </div>
   )

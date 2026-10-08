@@ -655,6 +655,11 @@ func (s *Store) executeSecretaryActionTx(ctx context.Context, tx pgx.Tx, scope m
 // secretary is shown; the memory stays and the action can be undone.
 func (s *Store) closeDateActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, a secretaryAction) (workspace.DeskReceipt, error) {
 	receipt := workspace.DeskReceipt{Op: a.Op, Status: "done"}
+	if smokeID(ctx) != "" {
+		// A check-only turn is cleaned up by restoring item documents; a mark on
+		// a memory is outside what that cleanup can put back, so it is not made.
+		return skippedReceipt(a.Op, "检查模式下不改记忆上的日期"), nil
+	}
 	as, ok := validDeadlineClose(a.As)
 	if !ok {
 		return skippedReceipt(a.Op, "没说清是做完了还是不要了"), nil

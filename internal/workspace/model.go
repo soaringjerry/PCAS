@@ -68,6 +68,7 @@ type Owed struct {
 // Item is action-module data. Kind-specific input validation precedes writes;
 // frequently queried fields have explicit SQL columns and constraints.
 type Item struct {
+	Creation           *ItemCreation    `json:"creation,omitempty"`
 	EstimatedHours     *float64         `json:"estimatedHours"`
 	StartDate          *string          `json:"startDate"`
 	EffortReason       string           `json:"effortReason,omitempty"`
@@ -108,6 +109,8 @@ type Item struct {
 	UpdatedAt     string      `json:"updatedAt"`
 }
 type Candidate struct {
+	Reasons      []string  `json:"reasons,omitempty"`
+	Reason       string    `json:"reason,omitempty"`
 	ID           string    `json:"id"`
 	Kind         string    `json:"kind"`
 	Text         string    `json:"text"`

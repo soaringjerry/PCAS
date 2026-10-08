@@ -3,7 +3,7 @@
 import { mkdtemp, readFile, access, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { spawn } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import { setTimeout as delay } from 'node:timers/promises'
 
 const cwd = resolve(import.meta.dirname, '..'), repo = resolve(cwd, '..')
@@ -35,6 +35,10 @@ try {
     }
     if (!manifest?.ownedDisposable || new URL(manifest.backendURL).hostname !== '127.0.0.1') throw new Error('No valid owned disposable controller manifest')
   }
+  // Pre-bundle dependencies first: a cold dev server re-optimizes them on the
+  // first page request, which is build time, not the open-to-readable time
+  // the golden paths measure.
+  spawnSync(process.execPath, ['node_modules/vite/bin/vite.js', 'optimize'], { cwd, env: process.env, stdio: 'ignore' })
   vite = spawnChild(process.execPath, ['node_modules/vite/bin/vite.js', '--host', '127.0.0.1', '--port', '18493', '--strictPort'], cwd, process.env, 'vite.log')
   const deadline = Date.now() + 30000
   while (Date.now() < deadline) {

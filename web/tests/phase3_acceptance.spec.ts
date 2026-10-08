@@ -40,7 +40,10 @@ async function isolatedAPI(page: Page, mode: 'real' | 'boundary' = 'real') {
     if (!['127.0.0.1', 'localhost'].includes(url.hostname)) return route.abort()
     if (!url.pathname.startsWith('/v1/')) return route.continue()
     requests.push(url.pathname + url.search)
-    if (mode === 'real') return route.fulfill({ response: await route.fetch({ url: manifest.backendURL + url.pathname + url.search }) })
+    // The page runs on the Vite origin and the controller on another port; a
+    // bearer header stands in for the same-origin session the real deployment
+    // has, so the controller's CSRF check does not refuse the page's writes.
+    if (mode === 'real') return route.fulfill({ response: await route.fetch({ url: manifest.backendURL + url.pathname + url.search, headers: { ...route.request().headers(), authorization: 'Bearer phase3-browser-acceptance' } }) })
     const path = url.pathname
     if (path === '/v1/workspace') return route.fulfill({ json: state })
     if (path.endsWith('/handover')) return route.fulfill({ json: path.includes('/projects/') ? handover : { body: '虚构全局交接资料', builtAt: stamp, stale: false } })
@@ -86,8 +89,13 @@ test('T5 golden path 4: resume a two-week-old project through the real API', asy
   await expect(page.getByText(/写于/).first()).toBeVisible()
   await expect(page.getByRole('textbox', { name: /结论|卡点|下一步|进展/ })).toHaveCount(0)
   expect(api.requests.some(p => p.endsWith('/handover'))).toBe(true)
+  // A sentence opens its evidence list; the document-version entry is the
+  // link that opens that exact version.
   await page.getByText('虚构项目当前方案为第2版，预算200虚构单位。', { exact: true }).click()
-  await expect.poll(() => api.requests.some(p => p.includes(`/documents/${manifest.documentId}/versions/2`))).toBe(true)
+  await page.getByRole('link', { name: /第\s*2\s*版/ }).first().click()
+  // Opening a version reads it alone, or as the diff against the version it
+  // was written on; either is that exact version being read.
+  await expect.poll(() => api.requests.some(p => p.includes(`/documents/${manifest.documentId}/versions/2`) || (p.includes(`/documents/${manifest.documentId}/diff`) && /[?&]to=2(&|$)/.test(p)))).toBe(true)
   await expect(page.getByText('预算：200虚构单位。', { exact: true }).first()).toBeVisible()
   expect(api.failures).toEqual([])
 })
@@ -103,14 +111,17 @@ test('T5 golden path 5: request a revision of version two, inspect version three
     const response = await page.request.get(`${manifest.backendURL}/v1/workspace/documents/${manifest.documentId}/versions`)
     return (await response.json()).currentVersion
   }, { timeout: 30000 }).toBe(3)
-  await page.getByRole('button', { name: /虚构方案 00-00/ }).click()
+  // The row's open button and its "更多操作" button both carry the title; the open button comes first.
+  await page.getByRole('button', { name: /虚构方案 00-00/ }).first().click()
   await page.getByRole('button', { name: /版本/ }).first().click()
   await expect(page.getByText(/第\s*3\s*版|版本\s*3/).first()).toBeVisible()
-  await page.getByRole('button', { name: /差异|比较/ }).first().click()
+  // Opening the versions already compares the latest with the one before it; there is no separate diff button.
   await expect(page.getByText('预算：200虚构单位。', { exact: true })).toBeVisible()
   await expect(page.getByText('预算：80虚构单位。', { exact: true })).toBeVisible()
   expect(api.requests.some(p => p.includes('/diff'))).toBe(true)
-  await page.getByRole('button', { name: '撤销', exact: true }).last().click()
+  // Undo the adoption itself: the 撤销 on the deputy record line ("副手结果：…"), not the
+  // secretary receipt's 撤销 for the delegation, whose order in the DOM depends on render timing.
+  await page.locator('li', { hasText: '已存为新版本' }).getByRole('button', { name: '撤销', exact: true }).first().click()
   await expect.poll(async () => {
     const response = await page.request.get(`${manifest.backendURL}/v1/workspace/documents/${manifest.documentId}/versions`)
     return (await response.json()).currentVersion

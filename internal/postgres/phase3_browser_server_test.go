@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -38,6 +39,9 @@ func TestPhase3BrowserOwnedServer(t *testing.T) {
 	f.Context = ctx
 	m := phase3NewModel(t, f)
 	p := f.Gold.Projects[0]
+	// The page picks the enabled default agent for its secretary; make that
+	// the controlled phase3 model, as the Go flows name it explicitly.
+	phase26Exec(t, f.phase26LoadedFixture, `UPDATE workspace_agents SET document=document||jsonb_build_object('default',id='phase3','enabled',CASE WHEN id='phase3' THEN true ELSE (document->>'enabled')::boolean END) WHERE owner_id=$1`, f.Scope.OwnerID)
 	phase3OnlyProject(t, f, p.ID)
 	phase3ProcessOne(t, f, "project_handover", time.Now())
 	// Secretary/deputy requests are real code. Only model output is controlled.
@@ -45,16 +49,23 @@ func TestPhase3BrowserOwnedServer(t *testing.T) {
 	m.mu.Lock()
 	m.Override = func(stage, out string) string {
 		if stage == "secretary" {
-			return string(asJSON(map[string]any{"reply": "副手会从第二版改虚构预算。", "actions": []any{map[string]any{"op": "delegate", "ref": "THIS", "kind": "revise", "agentId": "phase3", "documentId": p.Documents[0].ID, "baseVersion": 2, "prompt": "把虚构第二版预算改为80单位，其他段落保持。"}}, "used": []any{}, "links": []any{}, "show": []any{}, "ask": nil, "memoryPlan": map[string]any{"depth": "light", "groups": []any{}}}))
+			// The secretary names documents by the D* alias from the server's
+			// catalog, never by UUID (published D interface).
+			alias := regexp.MustCompile(`(?m)^(D\d+)：` + regexp.QuoteMeta(p.Documents[0].Title) + `（`).FindStringSubmatch(m.LastPrompt["secretary"])
+			if alias == nil {
+				return `{"reply":"目录里没有这份文档","actions":[],"used":[],"links":[],"show":[],"remember":false,"missingKeyInfo":true,"ask":null,"memoryPlan":{"depth":"light","groups":[]}}`
+			}
+			return string(asJSON(map[string]any{"reply": "副手会从第二版改虚构预算。", "actions": []any{map[string]any{"op": "delegate", "ref": "THIS", "kind": "revise", "agentId": "phase3", "documentId": alias[1], "baseVersion": 2, "prompt": "把虚构第二版预算改为80单位，其他段落保持。"}}, "used": []any{}, "links": []any{}, "show": []any{}, "ask": nil, "memoryPlan": map[string]any{"depth": "light", "groups": []any{}}}))
 		}
 		if stage == "deputy" {
-			return strings.ReplaceAll(p.Documents[0].Versions[1].Body, "200虚构单位", "80虚构单位")
+			// A revise deputy answers in the published output shape.
+			return string(asJSON(map[string]any{"body": strings.ReplaceAll(p.Documents[0].Versions[1].Body, "200虚构单位", "80虚构单位"), "complete": true}))
 		}
 		return out
 	}
 	m.mu.Unlock()
 	s := f.Store
-	api := httpapi.New(s, s, b1Auth{f.Scope}, s.Ping, slog.New(slog.NewTextHandler(io.Discard, nil)), httpapi.Options{Workspace: s, Editor: s, Writer: s})
+	api := httpapi.New(s, s, b1Auth{f.Scope}, s.Ping, slog.New(slog.NewTextHandler(io.Discard, nil)), httpapi.Options{Workspace: s, Editor: s, Writer: s, Attachments: s})
 	finished := make(chan struct{})
 	var once sync.Once
 	key := string(memory.NewID())

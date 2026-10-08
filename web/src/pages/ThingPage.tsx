@@ -556,7 +556,7 @@ function DocRow({ doc, fresh, asked }: { doc: Doc; fresh: boolean; asked?: numbe
           <FileText size={15} />
           <span className="doc-name">{doc.title}</span>
           <span className="doc-meta">
-            {doc.by === 'ai' ? '副手写的' : '你写的'}
+            {doc.by === 'ai' || doc.by === 'deputy' ? '副手写的' : doc.by === 'secretary' ? '秘书写的' : '你写的'}
             {doc.version ? ` · 第 ${doc.version} 版` : ''} · {formatAgo(doc.updatedAt, state.settings.timezone ?? 'UTC')}
           </span>
         </button>

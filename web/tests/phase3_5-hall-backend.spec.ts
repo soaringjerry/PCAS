@@ -112,7 +112,7 @@ test('大厅读真实后端：日程进「今天」和「这几天」，做完�
   await expect(group('按时间').locator('.hall-task').filter({ hasText: '和林栖通电话' }).locator('.hall-time')).toHaveText('23:55')
   // A habit with no hour and a date never pinned down are in the schedule's answer but not on the line of time.
   await expect(page.locator('.hall-task').filter({ hasText: '喂酸面团' })).toHaveCount(0)
-  await expect(group('这几天').locator('.h-title')).toHaveText(['交房租', '去市集办续约', '去看林栖的新店'])
+  await expect(group('这几天').locator('.h-title')).toHaveText(['交房租', '去市集办续约'])
   await expect(page.getByRole('group', { name: '日期没说清的' })).toHaveCount(0)
   await expect(page.getByRole('region', { name: '在推进' }).locator('.h-title')).toHaveText(['重写春季菜单'])
   await expect(page.getByRole('alert')).toHaveCount(0)

@@ -117,6 +117,9 @@ Saved-result recovery and exact application links are implemented there. Filtere
 The ordinary recording rejects replay after a deadline crossed its actual-time boundary.
 
 Complete CI passes through `acfb01a`. The unmodified earlier program reproduces the same rejected input.
+
+The coordinator approved fixed deadline display classification and its expiry filter on diagnostic copies.
+Source validity and execution clocks remain actual. Filtered repository and pgvector integration checks pass for this extension.
 Final replay and release remain outstanding.
 This batch has not been released and does not complete Phase 3.9.
 

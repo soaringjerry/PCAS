@@ -33,7 +33,7 @@ type Store struct {
 	businessClock  func() time.Time
 }
 
-// SetBusinessClock sets business input, date interpretation, and retrieval decay time.
+// SetBusinessClock sets business input, dates, retrieval decay, and deadline display time.
 // Configure it before operations start. Nil restores actual time. Lease expiry,
 // access checks, retries, operational quotas, and accounting use actual time.
 func (s *Store) SetBusinessClock(now func() time.Time) { s.businessClock = now }

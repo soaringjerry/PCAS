@@ -69,7 +69,10 @@ It does not start the continuous deputy worker.
 The existing offline tier override can fix the tier when the diagnostic command admits a run.
 Record and replay must use the same tier. Report the selected tier with each result.
 Keep the existing instruction bytes, brief construction, search mode, and applicable model deadlines.
-Use the approved business clock for deputy date interpretation and retrieval activity decay.
+Use the approved business clock for deputy date interpretation, retrieval activity decay, and deadline display classification.
+The deadline expiry filter must use the same classification time.
+Keep source validity, access, leases, quotas, and accounting on actual time.
+Production without a diagnostic clock retains database transaction time for deadline classification.
 Record new ordinary and revision baselines with the same fixed business time before gateway migration.
 Preserve the earlier recordings and their failed replay evidence.
 Do not change project selection, task meaning, document revision meaning, or automatic adoption rules.
@@ -245,8 +248,15 @@ These fixture changes keep correction, usage, and budget assertions. Their filte
 They include architecture, deputy, revision, adoption, undo, and interactive accounting contracts.
 The ordinary recording rejects the migrated replay because one displayed deadline state changed from upcoming to expired.
 The input difference is confined to that state label. Original prompts and failed replay evidence remain private.
-`libraryDeadlinesTx` calculates this label with actual database time. The diagnostic business clock does not currently fix that calculation.
-The coordinator must confirm an additional classification clock or a new recording before final transport acceptance.
+The original `libraryDeadlinesTx` calculated this label with actual database time. The diagnostic business clock did not fix that calculation.
+The coordinator approved the additional deadline classification clock on 2026-10-09 UTC.
+This extension applies only when the diagnostic clock is configured.
+It must not change source validity or permit expired execution rights.
+The extension is implemented. Filtered repository and pgvector integration checks pass.
+They check expiry labels, expiry filtering, recurring dates, unclear dates, and restoration of the default clock.
+Future and withdrawn source evidence remains unavailable under the diagnostic clock.
+The first fixture lacked its required synthetic role and failed. The corrected fixture keeps the same assertions.
+Final transport acceptance remains outstanding.
 The failed replay started no live provider. It cannot certify successful generation or complete state equivalence.
 [Complete CI for `8088abc`](https://github.com/soaringjerry/PCAS/actions/runs/37934650717) passed every job.
 [Complete CI for `acfb01a`](https://github.com/soaringjerry/PCAS/actions/runs/37936200710) also passed every job, including each storage partition.
@@ -272,7 +282,8 @@ Reuse the existing gateway, prompt registry, worker pass, and storage adapters.
 Complete reservation support before switching main deputy generation.
 Record ordinary and revision runs on a verified isolated production-data copy first.
 Keep the original instructions, schema bytes, brief construction, and applicable deadlines.
-Use the approved business clock for deputy dates and retrieval decay. Keep execution clocks actual.
+Use the approved business clock for deputy dates, retrieval decay, and deadline display classification.
+Use that classification time for the deadline expiry filter. Keep execution clocks actual.
 Record new fixed-clock ordinary and revision baselines before gateway migration.
 Preserve admission budget ownership and all saved-result recovery paths.
 Keep review separate from generation. Record visible skipped and failed outcomes.

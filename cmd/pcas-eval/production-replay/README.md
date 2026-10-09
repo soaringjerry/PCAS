@@ -81,7 +81,8 @@ Snapshots retain every field. Compression does not change their contents.
 The report keeps model resources separate from resources used to execute a replay.
 It records business time and each operation's actual start time separately.
 The fixed clock supplies secretary date interpretation and current-time input, date-tidy judgment, effort input, and topic-project input.
-It also supplies deputy date interpretation and retrieval activity decay.
+It also supplies deputy date interpretation, retrieval activity decay, and deadline display classification.
+The deadline expiry filter uses the same classification time. Source validity continues to use actual time.
 Lease expiry, access checks, retries, timeouts, operational quotas, and accounting use actual time.
 Database timestamps and other execution metadata remain actual. This is not a global clock replacement.
 Recorded usage is not new replay spending.

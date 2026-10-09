@@ -25,14 +25,21 @@ func (s *Store) ReadHandover(ctx context.Context, scope memory.Scope) (workspace
 
 func (s *Store) libraryDeadlinesTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, q workspace.DeadlineQuery) (workspace.DeadlineList, error) {
 	out := workspace.DeadlineList{Items: []workspace.LibraryDeadline{}}
+	// Fix display classification only on a diagnostic copy. Source validity
+	// keeps actual time, and production retains the transaction's now().
+	var classificationAt *time.Time
+	if s.businessClock != nil {
+		at := s.businessNow()
+		classificationAt = &at
+	}
 	rows, err := tx.Query(ctx, `SELECT d.id::text,d.kind,d.at,d.recurrence,d.title,d.time_note,d.claim_id::text,
- coalesce(nullif(d.original_text,''),c.value #>> '{}'),d.at<now()
+ coalesce(nullif(d.original_text,''),c.value #>> '{}'),d.at<coalesce($3::timestamptz,now())
  FROM deadlines d JOIN memory_records r ON(r.owner_id,r.id,r.version)=(d.owner_id,d.claim_id,d.claim_version)
  JOIN claims cl ON(cl.owner_id,cl.id)=(r.owner_id,r.id)
  JOIN claim_revisions c ON(c.owner_id,c.claim_id,c.version)=(d.owner_id,d.claim_id,d.claim_version)
  WHERE d.owner_id=$1 AND r.state='active' AND cl.retired='' AND NOT(coalesce(c.scope->>'deadline_completed','false')='true' AND c.scope->>'deadline_completed_version'=c.version::text) AND claim_source_is_current(r.owner_id,r.id,r.version,now())
- AND ($2::boolean IS NULL OR coalesce(d.at<now(),false)=$2)
- ORDER BY CASE WHEN d.kind='recurring' THEN 0 WHEN d.at IS NULL THEN 2 ELSE 1 END,d.at NULLS LAST,d.id`, string(scope.OwnerID), q.Expired)
+ AND ($2::boolean IS NULL OR coalesce(d.at<coalesce($3::timestamptz,now()),false)=$2)
+ ORDER BY CASE WHEN d.kind='recurring' THEN 0 WHEN d.at IS NULL THEN 2 ELSE 1 END,d.at NULLS LAST,d.id`, string(scope.OwnerID), q.Expired, classificationAt)
 	if err != nil {
 		return out, err
 	}

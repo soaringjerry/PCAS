@@ -53,7 +53,7 @@ Four output schemas now use registered, immutable content and hashes.
 Their bytes and field order match the preceding source.
 The assigned fixed instructions and shared components also use registered assets with unchanged bytes.
 The interactive storage adapter and input binding now have an initial implementation.
-Caller migration, complete recovery acceptance, replay, and release remain pending.
+Complete recovery acceptance, strict replay, and release remain pending.
 
 | Local check | Observed result |
 |---|---|
@@ -260,6 +260,28 @@ The fake private product evaluation also passed with its original business and a
 Formatting, vet, build, architecture, and non-PostgreSQL package race checks passed.
 Complete candidate CI, strict replay, actual default Codex acceptance, and release remain outstanding.
 Non-fake evaluation bridge mode forwarding remains separate work. Fake evaluation does not prove that path.
+
+### Whole-System Contract Findings
+
+[Secretary-generation CI](https://github.com/soaringjerry/PCAS/actions/runs/37890712840) found additional synthetic provider setup gaps at `819bc4a`.
+Image, Telegram, project, same-turn, and retrieval contracts still used ordinary HTTP models without declared required modes.
+Their candidate setup now uses the existing provider port with explicit synthetic capabilities.
+Production capability checks remain unchanged. The affected historical files and tests now have behavior names.
+
+The concurrent cancellation contract previously treated partial usage as a settled bill.
+It now checks the canceled call's linked hold and the other call's separate settled usage.
+A deletion check also found a receipt-category regression. The secretary now retains the gateway rejection and the existing context-change receipt.
+Affected same-turn, image, Telegram, retrieval, project, deletion, and cancellation checks passed locally with synthetic models.
+Audio, scanned-document, accounting, and recovery checks also passed with their final behavior names. Complete revised CI remains required.
+
+Strict replay of the old clock-controlled secretary recording rejected the candidate input.
+No recorded Codex response was consumed. No live Codex provider started.
+The complete starting owner-data fingerprint matched the recorded baseline.
+The only provider-input difference was the handover's stale flag, from false to true.
+Its SQL membership and source-validity checks use actual current time. The injected business clock does not freeze those checks.
+This evidence does not establish a migration regression or successful replay.
+Keep the rejected recording and complete snapshots. Record a new preceding-revision baseline before comparing the candidate again.
+Do not remove the stale flag or relax exact input matching.
 
 ## Call Contract
 

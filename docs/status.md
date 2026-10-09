@@ -138,6 +138,11 @@ The candidate fixes synthetic provider declarations and preserves production dea
 Secretary answer calls now link reservations and usage by identity. Unknown outcomes remain visible and retain their reservations.
 Complete candidate CI, strict replay, and real default-channel acceptance remain outstanding.
 
+Whole-system candidate CI found more synthetic provider setup gaps and accounting-contract differences.
+The candidate preserves the deletion receipt and measures a canceled hold separately from settled spending.
+The old strict secretary recording was rejected because its handover stale flag differed. No live Codex call occurred.
+A new preceding-revision recording and complete revised CI remain required.
+
 These changes remain foundation candidates. They have not been deployed.
 
 ## Documentation Changes

@@ -80,6 +80,11 @@ func (s *Store) generateSecretaryModelWithRetry(workCtx context.Context, scope m
 				if errors.Is(outcome.err, memory.ErrConflict) || errors.Is(outcome.err, memory.ErrForbidden) || errors.Is(outcome.err, modelcall.ErrNotApplicable) {
 					stage = "verify"
 				}
+				if errors.Is(outcome.err, modelcall.ErrNotApplicable) {
+					// Input access was lost after submission. Keep the existing
+					// context-change receipt and retain the gateway rejection cause.
+					return ai.Result{}, errors.Join(memory.ErrForbidden, outcome.err)
+				}
 				var failure *modelcall.Failure
 				if errors.As(outcome.err, &failure) && retryableSecretaryModelError(outcome.err) && failure.InvocationID.Valid() {
 					policy.RetryOf = failure.InvocationID

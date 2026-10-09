@@ -25,6 +25,7 @@ func phase35Model(t *testing.T, s *Store, reply func(http.ResponseWriter, *http.
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { calls.Add(1); reply(w, r) }))
 	t.Cleanup(srv.Close)
 	s.SetModels(&ai.Registry{HTTP: srv.Client(), Config: ai.Configuration{Extraction: "model", Providers: []ai.Provider{{ID: "model", Name: "虚构青岚验收", Protocol: "openai", BaseURL: srv.URL, Model: "phase35-fiction", CostMode: "free", MaxOutput: 8192}}}})
+	useSyntheticGateway(s)
 	return calls
 }
 func phase35Extract(t *testing.T, s *Store, scope memory.Scope, ref memory.Ref) {
@@ -85,7 +86,7 @@ func phase35RequireCreation(t *testing.T, s *Store, scope memory.Scope, it works
 	phase35RequireSingleReceipt(t, phase35Snapshot(t, s, scope), asJSON(it), action)
 	return action
 }
-func TestPhase35B1B2B6G5TrustMatrix(t *testing.T) {
+func TestStructuredExtractionUsesTrustMatrix(t *testing.T) {
 	phase35Finding(t, "S-P35-003")
 	s, ctx := phase26DisposableStore(t)
 	for _, tc := range []struct {
@@ -197,7 +198,7 @@ func TestPhase35B1B2B6G5TrustMatrix(t *testing.T) {
 		})
 	}
 }
-func TestPhase35B5G1OverflowPreservedAndObservable(t *testing.T) {
+func TestStructuredExtractionOverflowPreservedAndObservable(t *testing.T) {
 	phase35Finding(t, "S-P35-003")
 	s, ctx := phase26DisposableStore(t)
 	scope := owner()
@@ -235,7 +236,7 @@ func TestPhase35B5G1OverflowPreservedAndObservable(t *testing.T) {
 		t.Fatal("extra model call for confidence", calls.Load())
 	}
 }
-func TestPhase35B3B4T2UndoAndReplaySequences(t *testing.T) {
+func TestStructuredExtractionUndoAndReplaySequences(t *testing.T) {
 	phase35Finding(t, "S-P35-003")
 	s, ctx := phase26DisposableStore(t)
 	for _, sequence := range []string{"continuous", "jump", "interleaved", "deleted", "replay", "cross-channel"} {
@@ -313,7 +314,7 @@ func TestPhase35B3B4T2UndoAndReplaySequences(t *testing.T) {
 		})
 	}
 }
-func TestPhase35G2ExtractionFailurePreservesGoodResultAndCounts(t *testing.T) {
+func TestExtractionFailurePreservesGoodResultAndCounts(t *testing.T) {
 	s, ctx := phase26DisposableStore(t)
 	scope := owner()
 	phase35Snapshot(t, s, scope)
@@ -362,7 +363,7 @@ func TestPhase35G2ExtractionFailurePreservesGoodResultAndCounts(t *testing.T) {
 		})
 	}
 }
-func TestPhase35G3PaidExtractionRetryAfterPersistenceFailure(t *testing.T) {
+func TestExtractionRetriesPaidResultAfterPersistenceFailure(t *testing.T) {
 	phase35Finding(t, "S-P35-003")
 	s, ctx := phase26DisposableStore(t)
 	scope := owner()
@@ -402,7 +403,7 @@ func TestPhase35G3PaidExtractionRetryAfterPersistenceFailure(t *testing.T) {
 		t.Fatalf("G3 provider attempts=%d", calls.Load())
 	}
 }
-func TestPhase35G4SingleSourceChangeLeavesUnrelatedPaidResult(t *testing.T) {
+func TestSingleSourceChangeLeavesUnrelatedPaidResult(t *testing.T) {
 	s, ctx := phase26DisposableStore(t)
 	scope := owner()
 	phase35Snapshot(t, s, scope)
@@ -438,7 +439,7 @@ func TestPhase35G4SingleSourceChangeLeavesUnrelatedPaidResult(t *testing.T) {
 }
 
 // New topic-stage budgets are certified separately once their skeleton is published.
-func TestPhase35G7ExistingIndependentStageBudgets(t *testing.T) {
+func TestMemoryStagesHaveIndependentBudgets(t *testing.T) {
 	s, ctx := phase26DisposableStore(t)
 	scope := owner()
 	phase35Snapshot(t, s, scope)
@@ -463,7 +464,7 @@ func TestPhase35G7ExistingIndependentStageBudgets(t *testing.T) {
 	}
 }
 
-func TestPhase35B6LegacySettingWriteIsIgnored(t *testing.T) {
+func TestLegacyExtractionSettingWriteIsIgnored(t *testing.T) {
 	phase35Finding(t, "S-P35-007")
 	s, ctx := phase26DisposableStore(t)
 	scope := owner()
@@ -477,7 +478,7 @@ func TestPhase35B6LegacySettingWriteIsIgnored(t *testing.T) {
 	}
 }
 
-func TestPhase35T1T2ThirtyTrustInputsAtScale(t *testing.T) {
+func TestStructuredExtractionTrustInputsAtScale(t *testing.T) {
 	phase35Finding(t, "S-P35-003")
 	f := phase35Load(t)
 	s := f.Store

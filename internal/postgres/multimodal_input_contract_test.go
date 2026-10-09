@@ -87,6 +87,7 @@ func m1Setup(t *testing.T) (*Store, memory.Scope, *m1Model) {
 	}))
 	t.Cleanup(model.Close)
 	s.SetModels(&ai.Registry{HTTP: model.Client(), Config: ai.Configuration{Extraction: "model", Providers: []ai.Provider{{ID: "model", Name: "Fake secretary", Protocol: "openai", BaseURL: model.URL, Model: "fake", MaxOutput: 100, CostMode: "free"}}}})
+	useSyntheticGateway(s)
 	// A deterministic legacy OCR executable; no installed language packs needed.
 	bin := t.TempDir()
 	if err := os.WriteFile(filepath.Join(bin, "tesseract"), []byte("#!/bin/sh\nprintf 'legacy OCR text\\n'\n"), 0700); err != nil {
@@ -131,7 +132,7 @@ func m1Usage(t *testing.T, s *Store, scope memory.Scope, want int) {
 	}
 }
 
-func TestM1V1V2ImageSecretaryAndReplay(t *testing.T) {
+func TestImageSecretaryAndReplay(t *testing.T) {
 	for _, caption := range []string{m1Caption, ""} {
 		t.Run(fmt.Sprintf("caption=%t", caption != ""), func(t *testing.T) {
 			s, scope, f := m1Setup(t)
@@ -183,7 +184,7 @@ func TestM1V1V2ImageSecretaryAndReplay(t *testing.T) {
 	}
 }
 
-func TestM1V4V5FailuresRetainImageAndUseCaption(t *testing.T) {
+func TestImageFailuresRetainOriginalAndUseCaption(t *testing.T) {
 	for _, mode := range []string{"no-vision", "500", "budget"} {
 		t.Run(mode, func(t *testing.T) {
 			s, scope, f := m1Setup(t)
@@ -222,7 +223,7 @@ func TestM1V4V5FailuresRetainImageAndUseCaption(t *testing.T) {
 	}
 }
 
-func TestM1V6BackgroundImageUsesVisionOnce(t *testing.T) {
+func TestBackgroundImageUsesVisionOnce(t *testing.T) {
 	s, scope, f := m1Setup(t)
 	ref := m1Upload(t, s, scope)
 	job := leaseStage(t, s, scope, ref, "source.parse")
@@ -236,7 +237,7 @@ func TestM1V6BackgroundImageUsesVisionOnce(t *testing.T) {
 	}
 }
 
-func TestM1V7ImageUndoPreservesTaskAndReplay(t *testing.T) {
+func TestImageUndoPreservesTaskAndReplay(t *testing.T) {
 	s, scope, f := m1Setup(t)
 	ref := m1Upload(t, s, scope)
 	req := turnRequest("帮我记一下")
@@ -272,7 +273,7 @@ func TestM1V7ImageUndoPreservesTaskAndReplay(t *testing.T) {
 
 // Randomized sequences exercise independent source/task receipts over multiple
 // turns, then reverse every reversible operation back to the initial contents.
-func TestM1RandomizedReverseUndoRestoresContents(t *testing.T) {
+func TestRandomizedReverseUndoRestoresContents(t *testing.T) {
 	s, scope, _ := m1Setup(t)
 	ctx := context.Background()
 	initial, err := s.Snapshot(ctx, scope)
@@ -311,7 +312,7 @@ func TestM1RandomizedReverseUndoRestoresContents(t *testing.T) {
 	}
 }
 
-func TestM1V8ImageTextCannotGroundUserMemory(t *testing.T) {
+func TestImageTextCannotGroundUserMemory(t *testing.T) {
 	s, scope, f := m1Setup(t)
 	ref := m1Upload(t, s, scope)
 	req := turnRequest(m1Caption)
@@ -337,7 +338,7 @@ func TestM1V8ImageTextCannotGroundUserMemory(t *testing.T) {
 	}
 }
 
-func TestM1V1ExistingUploadAndDeskHTTP(t *testing.T) {
+func TestExistingUploadAndDeskHTTP(t *testing.T) {
 	s, scope, _ := m1Setup(t)
 	handler := httpapi.New(memory.NewService(s), s, httpapi.NewOwnerToken("synthetic-token", scope.OwnerID), s.Ping, slog.New(slog.NewTextHandler(io.Discard, nil)), httpapi.Options{Attachments: s, Workspace: s})
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -388,7 +389,7 @@ func TestM1V1ExistingUploadAndDeskHTTP(t *testing.T) {
 	}
 }
 
-func TestM1AttachmentIsolationAndRebinding(t *testing.T) {
+func TestAttachmentIsolationAndRebinding(t *testing.T) {
 	s, scope, _ := m1Setup(t)
 	ref := m1Upload(t, s, scope)
 	foreign := turnRequest("帮我记一下")
@@ -405,7 +406,7 @@ func TestM1AttachmentIsolationAndRebinding(t *testing.T) {
 	}
 }
 
-func TestM1ConcurrentSameImageRequestIsProcessedOnce(t *testing.T) {
+func TestConcurrentSameImageRequestIsProcessedOnce(t *testing.T) {
 	s, scope, f := m1Setup(t)
 	ref := m1Upload(t, s, scope)
 	req := turnRequest("帮我记一下")
@@ -429,7 +430,7 @@ func TestM1ConcurrentSameImageRequestIsProcessedOnce(t *testing.T) {
 	}
 }
 
-func TestM1ScannedPDFPagesPreferVision(t *testing.T) {
+func TestScannedPDFPagesPreferVision(t *testing.T) {
 	s, scope, f := m1Setup(t)
 	bin := t.TempDir()
 	scripts := map[string]string{"pdfinfo": "printf 'Pages: 2\\n'", "pdftotext": "exit 0", "pdftoppm": "for arg; do last=\"$arg\"; done\nprintf 'synthetic image' > \"$last.png\""}
@@ -456,7 +457,7 @@ func TestM1ScannedPDFPagesPreferVision(t *testing.T) {
 	}
 }
 
-func TestM1WebAudioUsesExistingTranscription(t *testing.T) {
+func TestWebAudioUsesExistingTranscription(t *testing.T) {
 	s, scope, _ := m1Setup(t)
 	probe := t.TempDir()
 	if err := os.WriteFile(filepath.Join(probe, "ffprobe"), []byte("#!/bin/sh\nprintf '2\\n'\n"), 0700); err != nil {
@@ -492,7 +493,7 @@ func TestM1WebAudioUsesExistingTranscription(t *testing.T) {
 	}
 }
 
-func TestM1ExternallyDeletedImageExpiresUndoAndClearsContext(t *testing.T) {
+func TestExternallyDeletedImageExpiresUndoAndClearsContext(t *testing.T) {
 	s, scope, _ := m1Setup(t)
 	ref := m1Upload(t, s, scope)
 	req := turnRequest("帮我记一下")
@@ -511,7 +512,7 @@ func TestM1ExternallyDeletedImageExpiresUndoAndClearsContext(t *testing.T) {
 	}
 }
 
-func TestM1ParsedLegacyImagesAreNotReread(t *testing.T) {
+func TestParsedLegacyImagesAreNotReread(t *testing.T) {
 	s, scope, f := m1Setup(t)
 	ref := m1Upload(t, s, scope)
 	s.models.Config.Providers[0].Protocol = "text-only-fixture"

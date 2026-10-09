@@ -10,6 +10,35 @@ import (
 	"time"
 )
 
+func secretaryCancellationHold(t *testing.T, s *Store, scope memory.Scope, requestID string) (float64, float64) {
+	t.Helper()
+	var retainedEstimate float64
+	// A canceled submitted call has unknown actual usage. Wait for its
+	// accounting receipt, then check the hold by invocation identity.
+	waitCtx, stop := context.WithTimeout(t.Context(), 5*time.Second)
+	defer stop()
+	ticker := time.NewTicker(5 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		var held bool
+		var partialCost float64
+		err := s.pool.QueryRow(waitCtx, `SELECT c.outcome='unknown' AND c.accounting_state='held'
+ AND NOT (c.actual_mode->>'usageComplete')::boolean AND c.usage_id=c.reservation_id
+ AND EXISTS(SELECT 1 FROM model_usage u WHERE u.owner_id=c.owner_id AND u.id=c.usage_id),
+ (c.actual_mode->>'reservationEstimate')::double precision,
+ (SELECT u.cost FROM model_usage u WHERE u.owner_id=c.owner_id AND u.id=c.usage_id)
+ FROM model_calls c WHERE c.owner_id=$1 AND c.execution_id=$2 AND c.stage='answer'`, string(scope.OwnerID), requestID).Scan(&held, &retainedEstimate, &partialCost)
+		if err == nil && held {
+			return retainedEstimate, partialCost
+		}
+		select {
+		case <-ticker.C:
+		case <-waitCtx.Done():
+			t.Fatal("canceled invocation lost its original accounting hold", err)
+		}
+	}
+}
+
 func TestSecretarySettlesOnlyItsReservation(t *testing.T) {
 	for _, mode := range []string{"success", "invalid", "failure", "cancel"} {
 		t.Run(mode, func(t *testing.T) {
@@ -64,28 +93,7 @@ func TestSecretarySettlesOnlyItsReservation(t *testing.T) {
 			}
 			var retainedEstimate float64
 			if mode == "cancel" {
-				// A canceled submitted call has unknown actual usage. Wait for its
-				// accounting receipt, then check the hold by invocation identity.
-				waitCtx, stop := context.WithTimeout(t.Context(), 5*time.Second)
-				defer stop()
-				ticker := time.NewTicker(5 * time.Millisecond)
-				defer ticker.Stop()
-				for {
-					var held bool
-					err := s.pool.QueryRow(waitCtx, `SELECT c.outcome='unknown' AND c.accounting_state='held'
- AND NOT (c.actual_mode->>'usageComplete')::boolean AND c.usage_id=c.reservation_id
- AND EXISTS(SELECT 1 FROM model_usage u WHERE u.owner_id=c.owner_id AND u.id=c.usage_id),
- (c.actual_mode->>'reservationEstimate')::double precision
- FROM model_calls c WHERE c.owner_id=$1 AND c.execution_id=$2 AND c.stage='answer'`, string(scope.OwnerID), request.RequestID).Scan(&held, &retainedEstimate)
-					if err == nil && held {
-						break
-					}
-					select {
-					case <-ticker.C:
-					case <-waitCtx.Done():
-						t.Fatal("canceled invocation lost its original accounting hold", err)
-					}
-				}
+				retainedEstimate, _ = secretaryCancellationHold(t, s, scope, request.RequestID)
 			}
 			var reserved float64
 			if err := s.pool.QueryRow(context.Background(), "SELECT sum(reserved_cost) FROM background_usage WHERE owner_id=$1", string(scope.OwnerID)).Scan(&reserved); err != nil {
@@ -248,7 +256,8 @@ func TestConcurrentSecretaryReservationsAreIndependent(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	done := make(chan error, 1)
-	go func() { _, err := s.DeskTurn(ctx, scope, turnRequest("R1 first conversation")); done <- err }()
+	request := turnRequest("R1 first conversation")
+	go func() { _, err := s.DeskTurn(ctx, scope, request); done <- err }()
 	select {
 	case <-gate.started:
 	case <-time.After(10 * time.Second):
@@ -270,8 +279,12 @@ func TestConcurrentSecretaryReservationsAreIndependent(t *testing.T) {
 	case <-time.After(30 * time.Second):
 		t.Fatal("first call did not stop")
 	}
+	estimate, partial := secretaryCancellationHold(t, s, scope, request.RequestID)
 	rows := b4Usage(t, s, scope)
-	want := 0.0
+	if len(rows) != 2 {
+		t.Fatal("concurrent invocations lost distinct usage receipts", rows)
+	}
+	want := estimate - partial
 	for _, row := range rows {
 		want += row.Cost
 	}

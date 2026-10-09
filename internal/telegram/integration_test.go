@@ -56,7 +56,7 @@ func TestIntegrationDeskTurnReplayAndUndo(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": map[string]string{"content": content}}}})
 	}))
 	defer model.Close()
-	s.SetModels(&ai.Registry{HTTP: model.Client(), Config: ai.Configuration{Extraction: "model", Providers: []ai.Provider{{ID: "model", Name: "测试秘书", Protocol: "openai", BaseURL: model.URL, Model: "test", MaxOutput: 1000, CostMode: "free"}}}})
+	configureSyntheticGateway(s, &ai.Registry{HTTP: model.Client(), Config: ai.Configuration{Extraction: "model", Providers: []ai.Provider{{ID: "model", Name: "测试秘书", Protocol: "openai", BaseURL: model.URL, Model: "test", MaxOutput: 1000, CostMode: "free"}}}})
 	b.enqueue(textUpdate(1, "周五下午三点开会"))
 	b.failSend = true
 	if err := p.step(context.Background(), "fixture", "123"); err == nil {

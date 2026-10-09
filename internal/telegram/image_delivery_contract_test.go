@@ -18,7 +18,7 @@ import (
 
 // V3 runs the actual Telegram adapter and the same PostgreSQL DeskTurn used by
 // the web. Both model and Telegram network endpoints are local fake servers.
-func TestM1V3TelegramImageUsesSharedDeskTurn(t *testing.T) {
+func TestTelegramImageUsesSharedDeskTurn(t *testing.T) {
 	for _, caption := range []string{"帮我记一下", ""} {
 		t.Run(fmt.Sprint(caption != ""), func(t *testing.T) {
 			s := integrationStore(t)
@@ -52,7 +52,7 @@ func TestM1V3TelegramImageUsesSharedDeskTurn(t *testing.T) {
 				_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": map[string]string{"content": content}}}})
 			}))
 			defer model.Close()
-			s.SetModels(&ai.Registry{HTTP: model.Client(), Config: ai.Configuration{Extraction: "model", Providers: []ai.Provider{{ID: "model", Name: "Synthetic model", Protocol: "openai", BaseURL: model.URL, Model: "fake", MaxOutput: 100, CostMode: "free"}}}})
+			configureSyntheticGateway(s, &ai.Registry{HTTP: model.Client(), Config: ai.Configuration{Extraction: "model", Providers: []ai.Provider{{ID: "model", Name: "Synthetic model", Protocol: "openai", BaseURL: model.URL, Model: "fake", MaxOutput: 100, CostMode: "free"}}}})
 			photo := textUpdate(1, "")
 			photo.Message.Photo = []file{{ID: "photo", MIME: "image/png"}}
 			photo.Message.Caption = caption

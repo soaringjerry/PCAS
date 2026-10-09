@@ -27,7 +27,7 @@ func stabilizationSecretaryModel(t *testing.T, s *postgres.Store) *atomic.Int32 
 		_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": map[string]string{"content": `{"reply":"安排好了","actions":[{"op":"create_task","title":"Telegram事项"}]}`}}}})
 	}))
 	t.Cleanup(server.Close)
-	s.SetModels(&ai.Registry{HTTP: server.Client(), Config: ai.Configuration{Extraction: "model", Providers: []ai.Provider{{ID: "model", Name: "测试秘书", Protocol: "openai", BaseURL: server.URL, Model: "test", MaxOutput: 1000, CostMode: "free"}}}})
+	configureSyntheticGateway(s, &ai.Registry{HTTP: server.Client(), Config: ai.Configuration{Extraction: "model", Providers: []ai.Provider{{ID: "model", Name: "测试秘书", Protocol: "openai", BaseURL: server.URL, Model: "test", MaxOutput: 1000, CostMode: "free"}}}})
 	return calls
 }
 
@@ -40,7 +40,7 @@ func stabilizationSecretarySnapshot(t *testing.T, s *postgres.Store, p *poller, 
 	return st
 }
 
-func TestStabilizationTelegramT1_DuplicateUpdateExecutesOnce(t *testing.T) {
+func TestTelegramDuplicateUpdateExecutesOnce(t *testing.T) {
 	s := integrationStore(t)
 	p, _, b := fixture(t)
 	p.store = s
@@ -62,7 +62,7 @@ func TestStabilizationTelegramT1_DuplicateUpdateExecutesOnce(t *testing.T) {
 	}
 }
 
-func TestStabilizationTelegramT1_DuplicateUndoCallbackExecutesOnce(t *testing.T) {
+func TestTelegramDuplicateUndoCallbackExecutesOnce(t *testing.T) {
 	s := integrationStore(t)
 	p, _, b := fixture(t)
 	p.store = s
@@ -85,7 +85,7 @@ func TestStabilizationTelegramT1_DuplicateUndoCallbackExecutesOnce(t *testing.T)
 	}
 }
 
-func TestStabilizationS6_TelegramOptionContinuesSameObject(t *testing.T) {
+func TestTelegramTelegramOptionContinuesSameObject(t *testing.T) {
 	s := integrationStore(t)
 	p, _, b := fixture(t)
 	p.store = s
@@ -98,7 +98,7 @@ func TestStabilizationS6_TelegramOptionContinuesSameObject(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": map[string]string{"content": content}}}})
 	}))
 	defer server.Close()
-	s.SetModels(&ai.Registry{HTTP: server.Client(), Config: ai.Configuration{Extraction: "model", Providers: []ai.Provider{{ID: "model", Name: "测试秘书", Protocol: "openai", BaseURL: server.URL, Model: "test", MaxOutput: 1000, CostMode: "free"}}}})
+	configureSyntheticGateway(s, &ai.Registry{HTTP: server.Client(), Config: ai.Configuration{Extraction: "model", Providers: []ai.Provider{{ID: "model", Name: "测试秘书", Protocol: "openai", BaseURL: server.URL, Model: "test", MaxOutput: 1000, CostMode: "free"}}}})
 	b.enqueue(textUpdate(1, "安排会议"))
 	step(t, p)
 	first := stabilizationSecretarySnapshot(t, s, p, 1)
@@ -127,7 +127,7 @@ func TestStabilizationS6_TelegramOptionContinuesSameObject(t *testing.T) {
 	}
 }
 
-func TestStabilizationTelegramT2_NewBotResetsProgressAndConversation(t *testing.T) {
+func TestTelegramNewBotResetsProgressAndConversation(t *testing.T) {
 	for _, oldID := range []int64{100, 1} {
 		t.Run(map[int64]string{100: "lower_update_id", 1: "colliding_message_id"}[oldID], func(t *testing.T) {
 			s := integrationStore(t)
@@ -169,7 +169,7 @@ func TestStabilizationTelegramT2_NewBotResetsProgressAndConversation(t *testing.
 	}
 }
 
-func TestStabilizationTelegramT3_UnauthorizedAndForgedCallbacksHaveNoEffects(t *testing.T) {
+func TestTelegramUnauthorizedAndForgedCallbacksHaveNoEffects(t *testing.T) {
 	for _, mode := range []string{"other_chat", "group", "spoofed_sender", "malformed_callback", "forged_receipt"} {
 		t.Run(mode, func(t *testing.T) {
 			s := integrationStore(t)
@@ -226,7 +226,7 @@ func (s stabilizationSecretaryLongStore) DeskTurn(ctx context.Context, scope mem
 	return out, err
 }
 
-func TestStabilizationTelegramT4_LongReplyFitsBotLimit(t *testing.T) {
+func TestTelegramLongReplyFitsBotLimit(t *testing.T) {
 	p, s, b := fixture(t)
 	p.store = stabilizationSecretaryLongStore{s}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -254,7 +254,7 @@ func TestStabilizationTelegramT4_LongReplyFitsBotLimit(t *testing.T) {
 	}
 }
 
-func TestStabilizationTelegramT5_UnconfiguredTranscriptionPreservesAudio(t *testing.T) {
+func TestTelegramUnconfiguredTranscriptionPreservesAudio(t *testing.T) {
 	s := integrationStore(t)
 	p, _, b := fixture(t)
 	p.store = s
@@ -293,7 +293,7 @@ func TestStabilizationTelegramT5_UnconfiguredTranscriptionPreservesAudio(t *test
 	}
 }
 
-func TestStabilizationTelegramT6_RestartAfterCommittedTurnBeforeDelivery(t *testing.T) {
+func TestTelegramRestartAfterCommittedTurnBeforeDelivery(t *testing.T) {
 	for _, mode := range []string{"text", "voice"} {
 		t.Run(mode, func(t *testing.T) {
 			s := integrationStore(t)

@@ -153,9 +153,22 @@ Production keeps actual time by default. Leases, access, quotas, and accounting 
 The extension is implemented. Filtered repository and integration checks pass with pgvector.
 They check lexical and fusion ordering, future applicability, withdrawn access, and actual admission time.
 The first new fixture lacked required evidence and failed. The corrected fixture keeps the same assertions.
-The new actual Codex revision recording completed and applied exactly the requested edit.
-Its registered output schema matches the original bytes. Strict replay and the ordinary case remain outstanding.
+New ordinary and revision recordings completed through actual Codex.
+The revision applied exactly the requested edit. Its registered output schema matches the original bytes.
+Both recordings passed strict offline transport replay with unchanged inputs, memory references, and output.
+Replay started no live provider. Claim counts remain unchanged in each recording and replay.
+The recorded runtime files match `892b2b3`. Private manifests identify the complete captured source tree.
 Keep the original failed evidence after this repair.
+
+Complete owner snapshots and every raw field difference remain private.
+The comparison retains execution times, generated identities, and unpaired rows. It does not certify complete state equivalence.
+Ordinary overflow events also differ in insertion order because their existing writer iterates a map.
+Their stage, outcome, reason, and count multisets match. Their original identity and time differences remain in the report.
+Do not remove these fields or claim that every remaining difference has been resolved.
+
+One private snapshot archive was interrupted with exit 137. Its complete original snapshot survived.
+Serial archival later verified every original byte before removing the extra compressed copy.
+Archives, failed replay evidence, prompts, and raw outputs remain outside Git.
 
 ### Result Retention Preparation
 
@@ -190,7 +203,8 @@ Final filtered `make check` and `make test-integration` pass after the shared-re
 They cover input durability, failed input writes, interruption, and related gateway contracts.
 [Complete CI for `d0269cc`](https://github.com/soaringjerry/PCAS/actions/runs/37919071697) passed every job.
 That revision certifies input receipts. It does not certify the later business-clock extension.
-Complete CI on the business-clock extension remains required before integration.
+[Complete CI for `892b2b3`](https://github.com/soaringjerry/PCAS/actions/runs/37920723056) passed every job.
+That revision certifies the business-clock extension. Main deputy gateway migration and final batch acceptance remain outstanding.
 
 ## Sol Window Prompt
 

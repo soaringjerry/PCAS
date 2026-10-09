@@ -131,8 +131,12 @@ func (a backgroundCalls) Prepare(ctx context.Context, request modelcall.Request,
 		}
 		manifest := map[string]any{"version": "background-input-v1", "memoryRefs": refs, "inputHash": fmt.Sprintf("%x", sha256.Sum256(request.Prompt)), "inputBytes": len(request.Prompt), "coverage": "legacy_context_builder", "gaps": []string{"source_manifest", "selection_coverage", "upstream_root_and_cause"}}
 		mode := map[string]any{"output": "text", "search": false, "schema": "none", "leaseToken": string(job.LeaseToken), "usageComplete": false}
-		_, err = tx.Exec(ctx, `INSERT INTO model_calls(owner_id,id,execution_id,root_execution_id,causation_id,function_name,stage,provider_id,model,prompt_name,instruction_hash,context_builder_version,input_manifest,required_capabilities,actual_mode,outcome,accounting_state,retry_of_id,attempt_number,attempt_limit)
- VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'legacy-background-v1',$12,'["text_generation"]',$13,'prepared','not_reserved',$14,$15,$16)`, string(request.OwnerID), string(id), string(request.ExecutionID), string(request.RootExecutionID), nullString(string(request.CausationID)), request.Function, request.Stage, provider.ID, provider.Model, request.Instructions.Name(), request.Instructions.Hash(), asJSON(manifest), asJSON(mode), nullString(string(unfinished)), attempt, limit)
+		builderVersion := request.ContextBuilderVersion
+		if builderVersion == "" {
+			builderVersion = "legacy-background-v1"
+		}
+		_, err = tx.Exec(ctx, `INSERT INTO model_calls(owner_id,id,execution_id,root_execution_id,causation_id,function_name,stage,provider_id,model,prompt_name,instruction_hash,context_builder_version,input_manifest,required_capabilities,actual_mode,outcome,accounting_state,retry_of_id,attempt_number,attempt_limit,schema_name,schema_hash)
+ VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$19,$12,$20,$13,'prepared','not_reserved',$14,$15,$16,$17,$18)`, string(request.OwnerID), string(id), string(request.ExecutionID), string(request.RootExecutionID), nullString(string(request.CausationID)), request.Function, request.Stage, provider.ID, provider.Model, request.Instructions.Name(), request.Instructions.Hash(), asJSON(manifest), asJSON(mode), nullString(string(unfinished)), attempt, limit, nullString(request.Schema.Name()), nullString(request.Schema.Hash()), builderVersion, asJSON(request.RequiredCapabilities()))
 		return err
 	})
 	if err == nil && id == "" {
@@ -146,7 +150,14 @@ func (a backgroundCalls) Start(ctx context.Context, request modelcall.Request, s
 		if err := lockJob(ctx, tx, request.Policy.(worker.Job)); err != nil {
 			return err
 		}
-		tag, err := tx.Exec(ctx, `UPDATE model_calls SET reservation_id=$3,outcome='started',started_at=clock_timestamp(),updated_at=clock_timestamp(),accounting_state='reserved',actual_mode=actual_mode||jsonb_build_object('reservationEstimate',$4::double precision) WHERE owner_id=$1 AND id=$2 AND outcome='prepared' AND recovery_state='active'`, string(request.OwnerID), string(saved.InvocationID), saved.Reservation, saved.ReservedCost)
+		mode := map[string]any{}
+		if request.Search || request.Schema.Name() != "" {
+			mode["search"] = request.Search
+			if request.Schema.Name() != "" {
+				mode["output"], mode["schema"] = "structured", request.Schema.Name()
+			}
+		}
+		tag, err := tx.Exec(ctx, `UPDATE model_calls SET reservation_id=$3,outcome='started',started_at=clock_timestamp(),updated_at=clock_timestamp(),accounting_state='reserved',actual_mode=actual_mode||jsonb_build_object('reservationEstimate',$4::double precision)||$5::jsonb WHERE owner_id=$1 AND id=$2 AND outcome='prepared' AND recovery_state='active'`, string(request.OwnerID), string(saved.InvocationID), saved.Reservation, saved.ReservedCost, asJSON(mode))
 		if err == nil && tag.RowsAffected() != 1 {
 			return modelcall.ErrOutcomeUnknown
 		}
@@ -154,8 +165,18 @@ func (a backgroundCalls) Start(ctx context.Context, request modelcall.Request, s
 	})
 }
 
-func (a backgroundCalls) ReservationFailed(ctx context.Context, request modelcall.Request, id memory.ID, cause error) error {
+func (a backgroundCalls) PreparationFailed(ctx context.Context, request modelcall.Request, id memory.ID, cause error) error {
 	code := "reservation_failed"
+	mode := map[string]any{}
+	if errors.Is(cause, ai.ErrUnsupportedCapability) {
+		code = ai.ErrUnsupportedCapability.Error()
+		var capability *ai.CapabilityError
+		if errors.As(cause, &capability) {
+			mode["unsupportedCapability"] = capability.Capability
+		}
+	} else if errors.Is(cause, memory.ErrUnavailable) {
+		code = modelcall.ErrNotAvailable.Error()
+	}
 	var jobErr *worker.JobError
 	if errors.As(cause, &jobErr) {
 		code = jobErr.Code
@@ -164,7 +185,7 @@ func (a backgroundCalls) ReservationFailed(ctx context.Context, request modelcal
 	persist, cancel := context.WithTimeout(context.WithoutCancel(ctx), modelcall.PersistenceTimeout)
 	defer cancel()
 	var recovery string
-	err := a.store.pool.QueryRow(persist, `UPDATE model_calls SET outcome='failed',error_code=$3,finished_at=clock_timestamp(),updated_at=clock_timestamp(),recovery_state=CASE WHEN retry_of_id IS NOT NULL AND $4 THEN 'budget_exhausted' ELSE recovery_state END,recovery_reason=CASE WHEN retry_of_id IS NOT NULL AND $4 THEN $3 ELSE recovery_reason END WHERE owner_id=$1 AND id=$2 AND outcome='prepared' RETURNING recovery_state`, string(request.OwnerID), string(id), code, budgetExhausted).Scan(&recovery)
+	err := a.store.pool.QueryRow(persist, `UPDATE model_calls SET outcome='failed',error_code=$3,finished_at=clock_timestamp(),updated_at=clock_timestamp(),actual_mode=actual_mode||$5::jsonb,recovery_state=CASE WHEN retry_of_id IS NOT NULL AND $4 THEN 'budget_exhausted' ELSE recovery_state END,recovery_reason=CASE WHEN retry_of_id IS NOT NULL AND $4 THEN $3 ELSE recovery_reason END WHERE owner_id=$1 AND id=$2 AND outcome='prepared' RETURNING recovery_state`, string(request.OwnerID), string(id), code, budgetExhausted, asJSON(mode)).Scan(&recovery)
 	if err == nil && recovery == "budget_exhausted" {
 		return modelcall.ErrRecoveryBudgetExhausted
 	}
@@ -207,6 +228,9 @@ func (a backgroundCalls) Save(ctx context.Context, request modelcall.Request, sa
 				usage = nil
 			}
 			receipt := map[string]any{"kind": "background_model_results", "jobId": string(request.ExecutionID), "reservationId": saved.Reservation}
+			if len(saved.Searches) > 0 {
+				receipt["searches"] = saved.Searches
+			}
 			if !current {
 				receipt = map[string]any{"kind": "late_response", "availableForApplication": false}
 			}

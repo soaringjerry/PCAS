@@ -11,6 +11,7 @@ import (
 
 	"github.com/soaringjerry/PCAS/internal/ai"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/prompts"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -163,8 +164,8 @@ const heavyUseTimeout = 3 * time.Minute
 const heavyReaderBudget = 90 * time.Second
 const useReaderInstructions = assistantInstructions + "\n你是只读的记忆读者。围绕这件事挑出有关的记忆；同一件事只选最新的，被替代的不选。只返回提供的编号，不创造事实，不执行动作。"
 
-var useGroupsSchema = json.RawMessage(`{"type":"object","properties":{"groups":{"type":"array","items":{"type":"string"}}},"required":["groups"],"additionalProperties":false}`)
-var useReaderSchema = json.RawMessage(`{"type":"object","properties":{"used":{"type":"array","items":{"type":"string"}}},"required":["used"],"additionalProperties":false}`)
+var useGroupsSchema = prompts.MustSchema("use-groups").Bytes()
+var useReaderSchema = prompts.MustSchema("use-reader").Bytes()
 
 func memoryRefs(ms []workspace.Memory) []memory.Ref {
 	refs := []memory.Ref{}
@@ -184,30 +185,8 @@ func writeReaderMemories(ms []workspace.Memory, loc *time.Location) string {
 	return b.String()
 }
 
-// The self-check may also skip an action. The extra form is spliced into the
-// written schema as text: decoding and re-encoding it would sort the keys and
-// change what a schema-constrained provider can emit (see desk_schema.go).
-var secretaryCheckSchema = func() json.RawMessage {
-	const lastAction = `"required": ["op", "ref", "title", "kind", "prompt", "documentId", "baseVersion"],
-            "additionalProperties": false
-          }
-        ]`
-	skip := `"required": ["op", "ref", "title", "kind", "prompt", "documentId", "baseVersion"],
-            "additionalProperties": false
-          },
-          {
-            "type": "object",
-            "properties": {"op": {"type": "string", "enum": ["skip"]}},
-            "required": ["op"],
-            "additionalProperties": false
-          }
-        ]`
-	raw := string(secretaryOutputSchema)
-	if strings.Count(raw, lastAction) != 1 {
-		panic("secretary schema: action list not found")
-	}
-	return json.RawMessage(strings.Replace(raw, lastAction, skip, 1))
-}()
+// Registered bytes retain the skip-action slot and original field order.
+var secretaryCheckSchema = prompts.MustSchema("secretary-check").Bytes()
 
 func intPointerValue(v *int) int {
 	if v == nil {

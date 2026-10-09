@@ -1,9 +1,9 @@
-# Foundation: Interactive Gateway Proposal
+# Foundation: Interactive Gateway
 
-Status: proposal for coordinator review. Base: `b39a9eab41a1b8015c4f9fdd016582fce322b09f`.
-Executor: Sol. This proposal is not an implementation assignment.
-The existing recorded-replay scope does not assign this gateway extension.
-No source or database change has been made for this proposal.
+Status: assigned by coordinator approval on 2026-10-09. Base: `b39a9eab41a1b8015c4f9fdd016582fce322b09f`.
+Executor: Sol. Implement the complete delivery order below.
+The approval assigns this gateway extension separately from the recorded-replay scope.
+Implementation and acceptance evidence remain incomplete.
 
 ## Goal
 
@@ -40,6 +40,34 @@ Do not infer reservation correspondence from equal costs or similar timestamps.
 
 No domain package moves occur in this scope.
 No project, task, timeline, memory-selection, or semantic decision rule is repaired here.
+
+### Implementation State
+
+The first implementation extends the existing gateway request and provider adapter.
+It declares provider selection, registered schema, search requirements, and context-builder version.
+Unsupported required capabilities get a failed call record before reservation or invocation.
+The background default keeps ordinary generation. Existing interactive callers still use their legacy wrappers.
+
+Four output schemas now use registered, immutable content and hashes.
+Their bytes and field order match the preceding source. Instruction migration remains pending.
+The interactive journal, caller migration, complete input binding, replay acceptance, and release remain pending.
+
+| Local check | Observed result |
+|---|---|
+| Provider and gateway contracts | Required-mode rejection, selected-provider retention, mode isolation, and paid-result persistence recovery passed. |
+| Schema contracts | Registry mutation protection and secretary action-field order passed. |
+| PostgreSQL checks | Required-mode failure without spending and successful Codex mode records passed with synthetic models. Existing call accounting and restart-recovery checks passed. |
+| Build and architecture | Formatting, vet, build, resolved provider boundaries, and affected package race checks passed. |
+
+Database checks used a new empty database on the verified owned copy container.
+No production data was copied into this test database. The existing replay copy remained unchanged.
+Two initial fixture failures were retained in private logs: an unavailable fixture principal and an unset extraction-provider reference.
+The corrected fixture uses its declared memory principal and explicit Codex provider. The same checks then passed.
+
+The complete serial local `make check` and `make test-integration` were not repeated.
+Previous full serial runs exceeded the local scale-fixture time or storage limits.
+Targeted database and package checks do not replace complete exact-revision CI.
+CI, real default-channel acceptance, and deployment of this extension are not yet certified.
 
 ## Call Contract
 

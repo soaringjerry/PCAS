@@ -1,0 +1,1 @@
+{"type":"object","properties":{"used":{"type":"array","items":{"type":"string"}}},"required":["used"],"additionalProperties":false}

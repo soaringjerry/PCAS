@@ -30,8 +30,8 @@ func (s *Store) paidModelResult(ctx context.Context, j worker.Job) (*paidModelRe
 		s.pendingPaid.CompareAndDelete(j.ID, saved)
 	}
 	r := &paidModelResult{}
-	err := s.pool.QueryRow(ctx, `SELECT b.prompt,b.output,b.reservation_id::text,b.provider_id,b.model,b.input_tokens,b.output_tokens,b.cost,b.refs,b.input_estimated,b.output_estimated,b.cost_estimated,b.duration_ms,coalesce(c.id::text,''),coalesce(c.error_code,''),coalesce((c.actual_mode->>'reservationEstimate')::double precision,0)
- FROM background_model_results b LEFT JOIN model_calls c ON c.owner_id=b.owner_id AND c.reservation_id=b.reservation_id WHERE b.owner_id=$1 AND b.job_id=$2`, string(j.OwnerID), string(j.ID)).Scan(&r.Prompt, &r.Output, &r.Reservation, &r.Provider, &r.Model, &r.InputTokens, &r.OutputTokens, &r.Cost, &r.Refs, &r.InputEstimated, &r.OutputEstimated, &r.CostEstimated, &r.DurationMS, &r.InvocationID, &r.CallErrorCode, &r.ReservedCost)
+	err := s.pool.QueryRow(ctx, `SELECT b.prompt,b.output,b.reservation_id::text,b.provider_id,b.model,b.input_tokens,b.output_tokens,b.cost,b.refs,b.input_estimated,b.output_estimated,b.cost_estimated,b.duration_ms,coalesce(c.id::text,''),coalesce(c.error_code,''),coalesce((c.actual_mode->>'reservationEstimate')::double precision,0),coalesce(c.result_receipt->'searches','[]'::jsonb)
+ FROM background_model_results b LEFT JOIN model_calls c ON c.owner_id=b.owner_id AND c.reservation_id=b.reservation_id WHERE b.owner_id=$1 AND b.job_id=$2`, string(j.OwnerID), string(j.ID)).Scan(&r.Prompt, &r.Output, &r.Reservation, &r.Provider, &r.Model, &r.InputTokens, &r.OutputTokens, &r.Cost, &r.Refs, &r.InputEstimated, &r.OutputEstimated, &r.CostEstimated, &r.DurationMS, &r.InvocationID, &r.CallErrorCode, &r.ReservedCost, &r.Searches)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}

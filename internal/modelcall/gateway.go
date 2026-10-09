@@ -24,16 +24,31 @@ var (
 // Request separates execution identity from an individual paid invocation.
 // Policy is an opaque adapter value; the gateway does not interpret queue rules.
 type Request struct {
-	OwnerID         memory.ID
-	ExecutionID     memory.ID
-	RootExecutionID memory.ID
-	CausationID     memory.ID
-	Function        string
-	Stage           string
-	Instructions    prompts.Definition
-	Prompt          json.RawMessage
-	Refs            []memory.Ref
-	Policy          any
+	OwnerID               memory.ID
+	ExecutionID           memory.ID
+	RootExecutionID       memory.ID
+	CausationID           memory.ID
+	Function              string
+	Stage                 string
+	ProviderID            string
+	Instructions          prompts.Definition
+	Schema                prompts.Schema
+	Search                bool
+	ContextBuilderVersion string
+	Prompt                json.RawMessage
+	Refs                  []memory.Ref
+	Policy                any
+}
+
+func (r Request) RequiredCapabilities() []string {
+	capabilities := []string{"text_generation"}
+	if r.Schema.Name() != "" {
+		capabilities = append(capabilities, "output_schema")
+	}
+	if r.Search {
+		capabilities = append(capabilities, "web_search")
+	}
+	return capabilities
 }
 
 // PaidResult retains the original input and billing identity on every retry.
@@ -42,6 +57,7 @@ type PaidResult struct {
 	InvocationID    memory.ID `json:"invocationId,omitempty"`
 	CallErrorCode   string    `json:"callErrorCode,omitempty"`
 	ReservedCost    float64   `json:"reservedCost,omitempty"`
+	Searches        []string  `json:"searches,omitempty"`
 	DurationMS      *int64
 	Prompt          json.RawMessage
 	Output          string
@@ -61,7 +77,8 @@ type Providers interface {
 	Get(string) (ai.Provider, bool)
 	ExtractionID() string
 	Available(string) bool
-	GenerateProvider(context.Context, ai.Provider, string, string) (ai.Result, error)
+	CheckGeneration(ai.Provider, ai.GenerationMode) error
+	GenerateProvider(context.Context, ai.Provider, string, string, ...ai.GenerationMode) (ai.Result, error)
 }
 
 type Accounting interface {
@@ -81,7 +98,7 @@ type Results interface {
 type Journal interface {
 	Prepare(context.Context, Request, ai.Provider) (memory.ID, error)
 	Start(context.Context, Request, *PaidResult) error
-	ReservationFailed(context.Context, Request, memory.ID, error) error
+	PreparationFailed(context.Context, Request, memory.ID, error) error
 	AccountingState(context.Context, Request, *PaidResult, string) error
 }
 
@@ -117,7 +134,11 @@ func (g *Gateway) Call(ctx context.Context, request Request) (*PaidResult, error
 		if g.providers == nil {
 			return nil, ErrNotConfigured
 		}
-		provider, ok := g.providers.Get(g.providers.ExtractionID())
+		providerID := request.ProviderID
+		if providerID == "" {
+			providerID = g.providers.ExtractionID()
+		}
+		provider, ok := g.providers.Get(providerID)
 		if !ok {
 			return nil, ErrNotConfigured
 		}
@@ -127,6 +148,10 @@ func (g *Gateway) Call(ctx context.Context, request Request) (*PaidResult, error
 		invocation, err := g.journal.Prepare(ctx, request, provider)
 		if err != nil {
 			return nil, err
+		}
+		mode := ai.GenerationMode{Search: request.Search, Schema: request.Schema.Bytes()}
+		if err := g.providers.CheckGeneration(provider, mode); err != nil {
+			return nil, errors.Join(err, g.journal.PreparationFailed(ctx, request, invocation, err))
 		}
 		modelPrompt := string(request.Prompt)
 		var wrapped struct {
@@ -138,7 +163,7 @@ func (g *Gateway) Call(ctx context.Context, request Request) (*PaidResult, error
 		saved = &PaidResult{InvocationID: invocation, Prompt: request.Prompt, Provider: provider.ID, Model: provider.Model, Refs: request.Refs, ReservedCost: provider.Reserve(request.Instructions.Text() + modelPrompt)}
 		reservation, err := g.accounting.Reserve(ctx, request, saved.ReservedCost)
 		if err != nil {
-			if journalErr := g.journal.ReservationFailed(ctx, request, invocation, err); journalErr != nil {
+			if journalErr := g.journal.PreparationFailed(ctx, request, invocation, err); journalErr != nil {
 				return nil, errors.Join(err, journalErr)
 			}
 			return nil, err
@@ -149,8 +174,9 @@ func (g *Gateway) Call(ctx context.Context, request Request) (*PaidResult, error
 			// a failed lifecycle write or starting an unrecorded invocation.
 			return nil, errors.Join(err, g.accounting.Settle(ctx, request, saved))
 		}
-		result, callErr := g.providers.GenerateProvider(ctx, provider, request.Instructions.Text(), modelPrompt)
+		result, callErr := g.providers.GenerateProvider(ctx, provider, request.Instructions.Text(), modelPrompt, mode)
 		saved.Output, saved.DurationMS = result.Text, result.DurationMS
+		saved.Searches = result.Searches
 		saved.InputTokens, saved.OutputTokens = result.InputTokens, result.OutputTokens
 		saved.InputEstimated, saved.OutputEstimated, saved.CostEstimated = result.InputEstimated, result.OutputEstimated, result.CostEstimated
 		saved.Cost = result.Cost

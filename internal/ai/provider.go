@@ -280,8 +280,26 @@ func (r *Registry) generate(ctx context.Context, id, system, prompt string, imag
 
 // GenerateProvider uses the gateway's selected provider snapshot. Settings
 // changes during reservation cannot change the recorded model or its rates.
-func (r *Registry) GenerateProvider(ctx context.Context, p Provider, system, prompt string) (Result, error) {
-	return r.generateProvider(ctx, p, system, prompt, nil)
+func (r *Registry) GenerateProvider(ctx context.Context, p Provider, system, prompt string, modes ...GenerationMode) (outcome Result, callErr error) {
+	if len(modes) > 1 {
+		return Result{}, memory.ErrInvalid
+	}
+	var mode GenerationMode
+	if len(modes) == 1 {
+		mode = modes[0]
+	}
+	if err := r.CheckGeneration(p, mode); err != nil {
+		return Result{}, err
+	}
+	if !mode.Search && len(mode.Schema) == 0 {
+		return r.generateProvider(ctx, p, system, prompt, nil)
+	}
+	defer measureInvocation(ctx, &outcome)()
+	if r.ReloadSubscription {
+		defer r.Codex.Close()
+	}
+	result, err := r.Codex.generateResult(ctx, p.Model, system, prompt, mode.Search, mode.Schema, nil)
+	return p.account(result, system+prompt, nil), err
 }
 
 func (r *Registry) generateProvider(ctx context.Context, p Provider, system, prompt string, image *Image) (outcome Result, callErr error) {

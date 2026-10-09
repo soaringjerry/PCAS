@@ -127,7 +127,7 @@ func (a interactiveCalls) recoverAccountingReceipt(ctx context.Context) (bool, e
 	if err := a.store.calls.RecoverAccounting(ctx, request, paid); err != nil {
 		return false, err
 	}
-	_, err = a.store.pool.Exec(ctx, `UPDATE model_calls c SET result_receipt=jsonb_set(result_receipt,'{availableForApplication}','false'::jsonb),updated_at=clock_timestamp() WHERE owner_id=$1 AND id=$2 AND (`+inactiveInteractiveExecutionSQL+`)`, string(row.OwnerID), string(row.ID))
+	_, err = a.store.pool.Exec(ctx, `UPDATE model_calls c SET result_receipt=jsonb_set(result_receipt,'{availableForApplication}','false'::jsonb),updated_at=clock_timestamp() WHERE owner_id=$1 AND id=$2 AND input_manifest->>'budgetOwner' IS DISTINCT FROM 'deputy_run' AND (`+inactiveInteractiveExecutionSQL+`)`, string(row.OwnerID), string(row.ID))
 	return err == nil, err
 }
 

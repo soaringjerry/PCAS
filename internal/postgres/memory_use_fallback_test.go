@@ -93,7 +93,7 @@ func TestSecretarySelfcheckKeepsUnbuiltMemoryContextAndActionAuthority(t *testin
 	}
 }
 
-func TestB4UnbuiltDeputyUsesMediumExceptExplicitLight(t *testing.T) {
+func TestDeputyWithoutBuiltMemoryUsesMediumUnlessExplicitlyLight(t *testing.T) {
 	for _, mode := range []string{"default", "light", "medium", "heavy", "queued_heavy"} {
 		t.Run(mode, func(t *testing.T) {
 			s, scope := testStore(t), owner()

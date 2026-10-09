@@ -506,6 +506,15 @@ func (a interactiveCalls) Save(ctx context.Context, r modelcall.Request, paid *m
 	for {
 		persist, cancel := context.WithTimeout(context.WithoutCancel(ctx), modelcall.PersistenceTimeout)
 		err := pgx.BeginFunc(persist, a.store.pool, func(tx pgx.Tx) error {
+			p := r.Policy.(interactiveCallPolicy)
+			mainDeputy := p.BudgetOwner == "deputy_run"
+			if mainDeputy {
+				// Owners lock before journal rows when deleting an execution or
+				// its inputs. No model call occurs in this transaction.
+				if _, err := tx.Exec(persist, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(r.OwnerID)); err != nil {
+					return err
+				}
+			}
 			var manifestHash, provider, model, reservation string
 			var prior interactiveReceipt
 			if err := tx.QueryRow(persist, `SELECT input_manifest->>'bindingHash',provider_id,model,coalesce(reservation_id::text,''),coalesce(result_receipt,'{}'::jsonb) FROM model_calls WHERE owner_id=$1 AND id=$2 FOR UPDATE`, string(r.OwnerID), string(paid.InvocationID)).Scan(&manifestHash, &provider, &model, &reservation, &prior); err != nil {
@@ -544,17 +553,16 @@ func (a interactiveCalls) Save(ctx context.Context, r modelcall.Request, paid *m
 			for _, row := range rows {
 				versions[row.ID] = row.Version
 			}
-			p := r.Policy.(interactiveCallPolicy)
 			for _, ref := range paid.Refs {
 				version, ok := versions[string(ref.ID)]
-				if !ok || p.InputPolicy != "current_access" && version != ref.Version {
+				if !ok || !mainDeputy && p.InputPolicy != "current_access" && version != ref.Version {
 					accessible = false
 					break
 				}
 			}
 			if accessible {
 				verify := verifyRunTx
-				if p.InputPolicy == "current_access" {
+				if mainDeputy || p.InputPolicy == "current_access" {
 					verify = verifyRunAccessTx
 				}
 				err := verify(persist, tx, memory.Scope{OwnerID: r.OwnerID, PrincipalID: p.AgentID}, workspace.Run{AgentID: p.AgentID, ThingID: p.ThingID, ContextVersions: paid.Refs})
@@ -567,7 +575,18 @@ func (a interactiveCalls) Save(ctx context.Context, r modelcall.Request, paid *m
 				}
 			}
 			available := accessible
-			if err := interactiveFence(persist, tx, r); err != nil {
+			if mainDeputy {
+				// A known answer can survive lease expiry for write recovery.
+				// The application transaction must acquire its own current lease.
+				var original bool
+				if err := tx.QueryRow(persist, `SELECT EXISTS(SELECT 1 FROM agent_runs WHERE owner_id=$1 AND id=$2 AND document->>'createdAt'=$3 AND agent_id=$4 AND thing_id=$5 AND status IN ('queued','running'))`, string(r.OwnerID), string(r.ExecutionID), p.Origin, p.AgentID, p.ThingID).Scan(&original); err != nil {
+					return err
+				}
+				available = available && original
+				// An expired lease retains the original execution's result. A
+				// deleted or replaced execution cannot retain its private body.
+				accessible = accessible && original
+			} else if err := interactiveFence(persist, tx, r); err != nil {
 				if errors.Is(err, modelcall.ErrNotApplicable) {
 					available = false
 				} else {

@@ -70,6 +70,11 @@ Keep the existing instruction bytes, brief bytes, search mode, and applicable mo
 Do not change project selection, task meaning, document revision meaning, or automatic adoption rules.
 No new production database migration is assigned.
 
+An expired lease does not erase a known main-generation result from the same execution.
+Keep that result only while its original run and input access remain valid.
+A new lease must still authorize application. Result retention cannot authorize a business write.
+Keep the stricter lease rule for readers and self-checks.
+
 ## Checks and Acceptance
 
 - Run architecture checks on each commit.
@@ -113,12 +118,47 @@ The synthetic main answer delayed its response by 100 milliseconds.
 The original self-check budget follows the elapsed main-answer phase.
 Under CI load, self-check preparation exceeded that allowance before provider submission.
 The fixture now matches the existing 500-millisecond allowance in the same file.
-Its assertions and the production deadline remain unchanged. Final CI remains required.
+Its assertions and the production deadline remain unchanged.
+[CI for `1a260dd`](https://github.com/soaringjerry/PCAS/actions/runs/37909270227) passed every job, including each storage partition.
+That result certifies the preparation commit. It does not certify later changes or the complete batch.
 
 The affected tier contract passes with pgvector after this fixture change.
 The later local `make check` was interrupted when the host filesystem became full.
 That command had no PostgreSQL URL. It cannot certify the database-dependent contracts.
 Do not report that interruption or the incomplete local integration run as passed.
+
+### Replay Finding
+
+The ordinary baseline completed strict offline replay without a live provider call.
+The revision baseline failed strict offline replay before main generation changed.
+The prompt contains the same complete lines, but their order differs.
+The failed input, recorded response, and complete owner snapshots remain private.
+Do not report this replay as passed. Do not remove differences from its input comparison.
+
+Retrieval uses actual database time to calculate activity decay.
+A read-only calculation used the original query and recorded vector response.
+It reproduced the changed order at the recording and replay times.
+The calculation uses the qualified provider model identity from the existing embedding adapter.
+Earlier calculations with an unqualified model identity did not establish the cause.
+
+The existing business clock does not fix this retrieval input.
+Extending that clock requires a separate scope decision before implementation.
+The proposed scope fixes deputy date interpretation and retrieval decay on the diagnostic copy.
+Production keeps actual time by default. Leases, access, quotas, and accounting continue to use actual time.
+Approval and new copy checks remain pending. Keep the original failed evidence after any repair.
+
+### Result Retention Preparation
+
+The main-generation storage port retains known output after lease expiry or replacement.
+It requires the same original execution and current input access.
+Correction preserves the original input identities and output. Application still requires a current lease and validation.
+Deletion or execution replacement prevents private output retention. Original billing remains recoverable.
+These adapter changes do not switch production deputy generation to the gateway.
+Filtered `make check` and `make test-integration` pass with pgvector.
+The filter selects deputy, interactive, gateway, provider-boundary, and registered-schema contracts.
+Formatting, static analysis, and the service build also pass.
+These filtered checks do not certify the full suite. Complete CI on this change remains required.
+The host filesystem has insufficient space for the large local fixtures.
 
 ## Sol Window Prompt
 

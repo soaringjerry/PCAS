@@ -105,6 +105,7 @@ Start nightly evaluation after complete gateway coverage under the architecture'
 The coordinator approved the [interactive gateway scope](tasks/foundation-interactive-gateway.md) before owner extraction.
 Its complete migration, replay, and acceptance remain pending.
 The first extension declares required model modes and registers four unchanged output schemas.
+The assigned fixed instructions now use registered assets and preserve their original bytes.
 Secretary, reader, and self-check calls still use their legacy wrappers until the assigned migration is complete.
 
 The replay diagnostic now [reports signed row changes and precise field differences](evaluations/2026-10-08-foundation-recorded-replay.md#signed-difference-verification).

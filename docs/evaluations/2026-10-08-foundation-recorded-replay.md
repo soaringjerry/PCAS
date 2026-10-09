@@ -159,4 +159,6 @@ No Go runtime source or frontend source changed.
 The full local `make check` was not repeated for this Python and documentation change.
 Its unchanged Go source has the complete exact-revision CI results above; the previous local scale-fixture limitations remain recorded.
 CI verification for this extension is separate from those earlier runtime results.
+The [diagnostic CI](https://github.com/soaringjerry/PCAS/actions/runs/37875830826) passed all 13 jobs at `1165496` on main.
+This extension changes offline diagnostics. The deployed runtime remains `b39a9ea`.
 The coordinator approved the separate interactive gateway scope. This diagnostic change does not implement that migration.

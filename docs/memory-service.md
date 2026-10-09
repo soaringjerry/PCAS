@@ -36,6 +36,8 @@ Business workflows remain in PostgreSQL during this batch.
 The assigned [interactive extension](tasks/foundation-interactive-gateway.md) adds explicit provider, schema, search, and context-version declarations.
 The gateway records unsupported required modes before budget reservation. It does not select an ordinary-generation fallback for those requests.
 Four secretary and reader output schemas now come from the registry with unchanged bytes and field order.
+Secretary, reader, and self-check instructions also use registered assets. Shared instruction components have one copy.
+
 The existing interactive callers have not yet migrated. Their legacy provider behavior remains an open boundary.
 
 ### Background Call Evidence

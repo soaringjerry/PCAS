@@ -27,6 +27,14 @@ func load() map[string]Definition {
 	components := map[string][]string{
 		"structured-extraction":   {"extraction-base", "reference-extraction", "structured-extraction"},
 		"conversation-extraction": {"conversation-extraction", "reference-extraction"},
+		"assistant":               {"assistant", "memory-trust"},
+		"deputy":                  {"assistant", "memory-trust", "deputy"},
+		"secretary":               {"assistant", "memory-trust", "line-break", "recall-date", "secretary"},
+		"memory-reader":           {"assistant", "memory-trust", "memory-reader"},
+		"document-revise":         {"assistant", "memory-trust", "deputy", "document-revise"},
+		"desk-legacy":             {"assistant", "memory-trust", "desk-legacy"},
+		"secretary-selfcheck":     {"assistant", "memory-trust", "line-break", "recall-date", "secretary", "secretary-selfcheck"},
+		"deputy-selfcheck":        {"assistant", "memory-trust", "deputy", "deputy-selfcheck"},
 	}
 	entries, err := files.ReadDir(".")
 	if err != nil {

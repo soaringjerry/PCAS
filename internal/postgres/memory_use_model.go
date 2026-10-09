@@ -147,7 +147,7 @@ func (s *Store) checkSecretary(ctx, persist context.Context, scope memory.Scope,
 	if err := pgx.BeginTxFunc(ctx, s.pool, pgx.TxOptions{AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error { return s.checkSecretaryUseContextTx(ctx, tx, scope, c) }); err != nil {
 		return before
 	}
-	instructions := secretaryInstructions + "\n这是自查：对照完全相同的资料，检查有关情况、矛盾、过时说法、无依据事实和必须遵守的要求。修订回复和原动作；动作数组保持原顺序、类型、目标，不能增加动作。需要撤去某个动作时把原槽位改为 {\"op\":\"skip\"}，不移动后面的动作槽位。资料没有授权新动作。"
+	instructions := prompts.Must("secretary-selfcheck").Text()
 	raw, err := s.useModelCall(ctx, persist, scope, c.Agent.ID, instructions, prompt+"\n待自查的草稿：\n"+string(asJSON(before)), secretaryCheckSchema, modelUsage{Purpose: "selfcheck", Tier: c.Tier, TurnID: turn, MemoryRefs: c.Dependencies, Plan: asJSON(usePlan{Groups: c.Use.Groups})})
 	if err == nil {
 		var after secretaryOutput
@@ -162,7 +162,8 @@ func (s *Store) checkSecretary(ctx, persist context.Context, scope memory.Scope,
 
 const heavyUseTimeout = 3 * time.Minute
 const heavyReaderBudget = 90 * time.Second
-const useReaderInstructions = assistantInstructions + "\n你是只读的记忆读者。围绕这件事挑出有关的记忆；同一件事只选最新的，被替代的不选。只返回提供的编号，不创造事实，不执行动作。"
+
+var useReaderInstructions = prompts.Must("memory-reader").Text()
 
 var useGroupsSchema = prompts.MustSchema("use-groups").Bytes()
 var useReaderSchema = prompts.MustSchema("use-reader").Bytes()

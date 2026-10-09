@@ -11,14 +11,11 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/prompts"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
-const deskInstructions = assistantInstructions + `
-你在导办台回答用户随口问的一句话。给你的记录是按字面检索出来的，很多可能与问题无关：只用真正回答了问题的记录，无关的一律忽略，不要硬凑。
-记录里没有答案时直说没有记录。天气、新闻、行情等实时或公开信息，能联网就上网查，查到了注明来自网络；查不了就直说，不要编。常识问题可以简短回答，但要说明不是来自记录。
-搜索词会离开这次对话：只写公开信息需要的关键词，绝不能把记录或事项里的人名、数字、私事放进搜索词。
-回答简短直接，像当面回话，用纯文本，不要 Markdown，网址不要写进回答而是放进 links。只输出 JSON：{"answer":"回答","used":["记录ID"],"links":["网址"]}。used 只列回答里真正用到的记录 ID；links 只列回答用到的网页，最多 3 个；没有就给空数组。`
+var deskInstructions = prompts.Must("desk-legacy").Text()
 
 // AnswerDesk has the chosen assistant answer one desk question from the
 // memories it may see, the open tasks and, where the provider offers it, the web. It is synchronous and short, unlike
@@ -355,7 +352,8 @@ func (s *Store) deskNow(loc *time.Location) string {
 }
 
 const recallTimeRelaxed = "按这个时间没有找到，下面是其他时间说的，回答时说明实际日期"
-const recallDateInstructions = "回忆类的问题按给出的日期回答；看到按时间没有找到的说明时，要说明实际是哪天说的。"
+
+var recallDateInstructions = prompts.Must("recall-date").Text()
 
 // Append only supplied metadata; old memory lines stay byte-for-byte intact.
 func memoryPromptSuffix(m workspace.Memory, loc *time.Location) string {

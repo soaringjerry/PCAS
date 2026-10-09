@@ -49,7 +49,8 @@ Unsupported required capabilities get a failed call record before reservation or
 The background default keeps ordinary generation. Existing interactive callers still use their legacy wrappers.
 
 Four output schemas now use registered, immutable content and hashes.
-Their bytes and field order match the preceding source. Instruction migration remains pending.
+Their bytes and field order match the preceding source.
+The assigned fixed instructions and shared components also use registered assets with unchanged bytes.
 The interactive journal, caller migration, complete input binding, replay acceptance, and release remain pending.
 
 | Local check | Observed result |
@@ -67,7 +68,20 @@ The corrected fixture uses its declared memory principal and explicit Codex prov
 The complete serial local `make check` and `make test-integration` were not repeated.
 Previous full serial runs exceeded the local scale-fixture time or storage limits.
 Targeted database and package checks do not replace complete exact-revision CI.
-CI, real default-channel acceptance, and deployment of this extension are not yet certified.
+The [complete foundation CI](https://github.com/soaringjerry/PCAS/actions/runs/37877218889) passed all 13 jobs at `eae0260`.
+That revision covers the mode contract and schema registration. It does not cover the subsequent instruction transfer.
+Real default-channel acceptance and deployment of this extension remain pending.
+
+### Instruction Transfer
+
+Secretary, reader, secretary self-check, and deputy self-check instructions now come from the registry.
+Shared assistant and memory-trust components have one copy. Registry composition preserves the complete original input.
+Legacy desk and document revision aliases retain their shared instruction dependencies without changing their provider paths.
+The compiled registry hashes match every preceding instruction byte, including separators and self-check suffixes.
+
+Formatting, vet, build, registry and provider race checks, resolved architecture checks, and targeted database checks passed.
+The database checks also covered secretary transient retries, deadline preservation, failure classification, and request idempotency.
+The complete instruction-transfer CI result remains pending.
 
 ## Call Contract
 

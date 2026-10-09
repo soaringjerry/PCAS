@@ -136,8 +136,6 @@ func retirementDependencyAllowed(ctx context.Context, status claimStatus) bool {
 	return status.Retired == "" || status.Retired == "duplicate" && status.KeeperCurrent
 }
 
-const memoryTrustInstructions = "\n记忆的可信度以 trust 为准：stated 本人直接表达，repeated 在不同对话或资料中重复表达，tentative 带保留，reported 转述，inferred 出自 AI 或推断。前四种都可以作为依据，保留限定和归属；旧 confirmation/epistemic 不是拒绝使用它们的条件。"
-
 func dependencyMemorySQL(owner, id string) string {
 	return fmt.Sprintf(`EXISTS(SELECT 1 FROM claims status WHERE status.owner_id=%[1]s AND status.id=%[2]s
  AND (coalesce(to_jsonb(status)->>'retired','')='' OR to_jsonb(status)->>'retired'='duplicate' AND EXISTS(

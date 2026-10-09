@@ -54,7 +54,12 @@ Each selection or page has its own stage identity. Later requested reading canno
 
 Secretary self-check fallback returns an existing skipped receipt. Group selection fallback returns an existing notice or receipt.
 Dependency checks use batch reads without changing access or current-version rules.
-Secretary generation still uses its legacy provider wrapper.
+
+Secretary generation now uses the gateway. Its existing orchestration function keeps the deadline and retry policy.
+The answer retains sent reference versions while checking current access after a memory correction.
+Readers and self-checks still require their exact input versions.
+A result-write or accounting failure cannot authorize another model call.
+Unknown outcomes retain the reservation and return a visible incomplete-operation receipt.
 
 This candidate adapter has synthetic checks. Complete replay and real default-channel acceptance remain pending.
 

@@ -6,7 +6,9 @@ import (
 	"errors"
 	"strings"
 
+	"github.com/soaringjerry/PCAS/internal/ai"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/modelcall"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -64,6 +66,10 @@ func secretaryErrorType(stage string, err error) string {
 	var fieldErr *json.UnmarshalTypeError
 	var syntaxErr *json.SyntaxError
 	switch {
+	case errors.Is(err, ai.ErrUnsupportedCapability):
+		return "unsupported_capability"
+	case errors.Is(err, modelcall.ErrOutcomeUnknown):
+		return "unknown_outcome"
 	case errors.Is(err, context.DeadlineExceeded):
 		return "timeout"
 	case errors.Is(err, context.Canceled):
@@ -88,6 +94,12 @@ func secretaryErrorType(stage string, err error) string {
 }
 
 func secretaryCaptureText(stage string, err error) string {
+	if errors.Is(err, ai.ErrUnsupportedCapability) {
+		return "已记下原话；当前模型不支持所需的输出格式或搜索能力"
+	}
+	if errors.Is(err, modelcall.ErrOutcomeUnknown) {
+		return "已记下原话；模型结果尚未确认，本轮操作未完成"
+	}
 	reason := "模型没有响应"
 	switch stage {
 	case "context":

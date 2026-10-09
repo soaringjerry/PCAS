@@ -45,12 +45,19 @@ func (s *Store) businessNow() time.Time {
 }
 
 func (s *Store) SetModels(models *ai.Registry) {
-	s.models = models
-	adapter := modelCallStorage{backgroundCalls{store: s}, interactiveCalls{store: s}}
 	var providers modelcall.Providers
 	if models != nil {
 		providers = models
 	}
+	s.SetModelsWithGatewayProviders(models, providers)
+}
+
+// SetModelsWithGatewayProviders keeps storage ports real while a contract
+// fixture supplies synthetic generation. Configure it before operations start.
+// Production configuration uses SetModels and the actual registry capabilities.
+func (s *Store) SetModelsWithGatewayProviders(models *ai.Registry, providers modelcall.Providers) {
+	s.models = models
+	adapter := modelCallStorage{backgroundCalls{store: s}, interactiveCalls{store: s}}
 	s.calls = modelcall.New(providers, adapter, adapter, adapter)
 }
 func (s *Store) SetBlobs(blobs memory.BlobStore) { s.blobs = blobs }

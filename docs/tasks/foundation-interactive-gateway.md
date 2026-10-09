@@ -47,7 +47,7 @@ The first implementation extends the existing gateway request and provider adapt
 It declares provider selection, registered schema, search requirements, and context-builder version.
 Unsupported required capabilities get a failed call record before reservation or invocation.
 The background default keeps ordinary generation. Deputy self-check now uses the gateway.
-Secretary and reader calls still use their legacy wrappers.
+Candidate secretary generation and readers now use the gateway through their existing orchestration functions.
 
 Four output schemas now use registered, immutable content and hashes.
 Their bytes and field order match the preceding source.
@@ -212,6 +212,54 @@ Affected gateway, reader, self-check, recovery, access, trust, order, and undo c
 Query-count contracts verify that database round trips do not grow with the number of dependency memories.
 Formatting, vet, build, resolved architecture checks, and non-PostgreSQL package race checks passed.
 Complete serial local checks remain omitted for the resource limits described above. Complete exact-revision CI is still required.
+
+### Secretary Generation
+
+The candidate main secretary answer now uses the existing gateway.
+Its admitted request supplies the execution identity. The original presentation turn remains in usage metadata.
+The existing orchestration function keeps two attempts, one 30-second deadline, and a 500-millisecond wait.
+It does not reserve, invoke, record usage, or settle outside the gateway.
+Each attempted call links its reservation and usage by identity. Unknown outcomes retain their reservations and visible status.
+
+The answer retains the original sent references and payload binding.
+Its existing dependency contract permits memory corrections while enforcing current access, exclusions, source existence, and destination rules.
+Readers and self-checks retain strict reference-version checks.
+Only the secretary answer can declare this current-access policy. Its manifest records the policy explicitly.
+
+Result-write and accounting errors have a distinct persistence classification.
+They abort application without authorizing another model invocation.
+Main generation and self-check keep separate application outcomes and visible failure receipts.
+Unsupported required modes return a visible receipt without reserving budget or invoking a provider.
+
+[Shared-reader CI](https://github.com/soaringjerry/PCAS/actions/runs/37888108261) failed at `17cfc36`.
+Eleven PostgreSQL jobs passed. The package check and one PostgreSQL job failed.
+The fake evaluation bridge did not declare schema capability. A self-check fixture exhausted its deadline during dependency preparation.
+The candidate declares synthetic providers explicitly through the existing gateway provider port.
+Real provider configuration retains capability checks. Synthetic checks do not establish real-provider support.
+
+The secretary self-check and fake evaluation bridge now simulate a 500-millisecond main reply.
+This fixture duration gives the existing duration-bounded check time to run. It does not change production deadlines.
+A broader local check found that peer stores also needed the declared synthetic provider.
+That failed check and its stopped process remain recorded. Revised peer fixtures keep the original business assertions.
+The revised broader check also found a budget-category regression. The existing port returned unavailable for exhausted budget.
+The adapter now preserves that cause and declares budget exhaustion. It does not change the budget calculation.
+The cancellation contract checks a linked unknown-outcome hold rather than treating partial usage as the settled bill.
+Order, source deletion, request replay, and fixed seeded undo scenarios passed in the broader check.
+Its budget and cancellation failures remain recorded. The corrected focused contracts passed with the affected gateway and recovery contracts.
+
+Affected tests now have behavior names, including secretary behavior and foreground concurrency contracts.
+The unused frozen secretary implementation was removed from `memory_use_before_test.go`.
+`TestB4SameDatabaseTurnSpeed` was replaced with `TestSecretaryTurnUsesCompleteLargeContext`.
+The new version checks current complete-context behavior without retaining an old implementation.
+Its large opt-in fixture has not run locally in this batch.
+
+The initial unknown-outcome fixture expected the previous generic failure text.
+Its corrected assertion checks the approved visible unknown state and retained reservation.
+Targeted gateway, retry, dependency, self-check, capability, and recovery checks passed with synthetic models.
+The fake private product evaluation also passed with its original business and accounting assertions.
+Formatting, vet, build, architecture, and non-PostgreSQL package race checks passed.
+Complete candidate CI, strict replay, actual default Codex acceptance, and release remain outstanding.
+Non-fake evaluation bridge mode forwarding remains separate work. Fake evaluation does not prove that path.
 
 ## Call Contract
 

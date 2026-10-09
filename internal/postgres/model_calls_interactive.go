@@ -28,6 +28,7 @@ type interactiveCallPolicy struct {
 	ThingID     string
 	Usage       modelUsage
 	RetryOf     memory.ID
+	InputPolicy string
 }
 
 // An admitted request or committed deputy lease supplies this identity.
@@ -164,6 +165,9 @@ func interactiveBinding(r modelcall.Request) (string, error) {
 	if p.Kind == "secretary" && (len(p.RequestHash) != sha256.Size || p.Origin != fmt.Sprintf("%x", p.RequestHash)) {
 		return "", memory.ErrInvalid
 	}
+	if p.InputPolicy != "" && (p.InputPolicy != "current_access" || p.Kind != "secretary" || r.Stage != "answer") {
+		return "", memory.ErrInvalid
+	}
 	refs := r.Refs
 	if refs == nil {
 		refs = []memory.Ref{}
@@ -180,7 +184,8 @@ func interactiveBinding(r modelcall.Request) (string, error) {
 		InputHash                                                                            string
 		Refs                                                                                 []memory.Ref
 		Kind, Origin, Agent, Thing                                                           string
-	}{r.OwnerID, r.ExecutionID, r.RootExecutionID, r.CausationID, r.Function, r.Stage, r.ProviderID, r.Instructions.Name(), r.Instructions.Hash(), r.Schema.Name(), r.Schema.Hash(), r.ContextBuilderVersion, r.Search, fmt.Sprintf("%x", sha256.Sum256(r.Prompt)), refs, p.Kind, p.Origin, p.AgentID, p.ThingID}
+		InputPolicy                                                                          string `json:"inputPolicy,omitempty"`
+	}{r.OwnerID, r.ExecutionID, r.RootExecutionID, r.CausationID, r.Function, r.Stage, r.ProviderID, r.Instructions.Name(), r.Instructions.Hash(), r.Schema.Name(), r.Schema.Hash(), r.ContextBuilderVersion, r.Search, fmt.Sprintf("%x", sha256.Sum256(r.Prompt)), refs, p.Kind, p.Origin, p.AgentID, p.ThingID, p.InputPolicy}
 	return fmt.Sprintf("%x", sha256.Sum256(asJSON(binding))), nil
 }
 
@@ -294,7 +299,11 @@ func (a interactiveCalls) Prepare(ctx context.Context, r modelcall.Request, prov
 		if err := interactiveFence(ctx, tx, r); err != nil {
 			return err
 		}
-		if err := verifyRunTx(ctx, tx, memory.Scope{OwnerID: r.OwnerID, PrincipalID: p.AgentID}, workspace.Run{AgentID: p.AgentID, ThingID: p.ThingID, ContextVersions: r.Refs}); err != nil {
+		verify := verifyRunTx
+		if p.InputPolicy == "current_access" {
+			verify = verifyRunAccessTx
+		}
+		if err := verify(ctx, tx, memory.Scope{OwnerID: r.OwnerID, PrincipalID: p.AgentID}, workspace.Run{AgentID: p.AgentID, ThingID: p.ThingID, ContextVersions: r.Refs}); err != nil {
 			return err
 		}
 		previous, err := latestInteractiveCall(ctx, tx, r)
@@ -341,7 +350,7 @@ func (a interactiveCalls) Prepare(ctx context.Context, r modelcall.Request, prov
 		if refs == nil {
 			refs = []memory.Ref{}
 		}
-		manifest := map[string]any{"version": "interactive-input-v1", "bindingHash": hash, "inputHash": fmt.Sprintf("%x", sha256.Sum256(r.Prompt)), "inputBytes": len(r.Prompt), "memoryRefs": refs, "executionKind": p.Kind, "origin": p.Origin, "agentId": p.AgentID, "thingId": p.ThingID}
+		manifest := map[string]any{"version": "interactive-input-v1", "bindingHash": hash, "inputHash": fmt.Sprintf("%x", sha256.Sum256(r.Prompt)), "inputBytes": len(r.Prompt), "memoryRefs": refs, "executionKind": p.Kind, "origin": p.Origin, "agentId": p.AgentID, "thingId": p.ThingID, "inputValidation": p.InputPolicy}
 		mode := map[string]any{"output": "text", "schema": "none", "search": false, "executionToken": p.Token, "originalUsage": usage, "usageComplete": false}
 		_, err = tx.Exec(ctx, `INSERT INTO model_calls(owner_id,id,execution_id,root_execution_id,causation_id,retry_of_id,attempt_number,attempt_limit,function_name,stage,provider_id,model,prompt_name,instruction_hash,schema_name,schema_hash,context_builder_version,input_manifest,required_capabilities,actual_mode,outcome,accounting_state) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,'prepared','not_reserved')`, string(r.OwnerID), string(id), string(r.ExecutionID), string(r.RootExecutionID), nullString(string(r.CausationID)), nullString(string(p.RetryOf)), attempt, limit, r.Function, r.Stage, provider.ID, provider.Model, r.Instructions.Name(), r.Instructions.Hash(), nullString(r.Schema.Name()), nullString(r.Schema.Hash()), r.ContextBuilderVersion, asJSON(manifest), asJSON(r.RequiredCapabilities()), asJSON(mode))
 		return err
@@ -350,7 +359,7 @@ func (a interactiveCalls) Prepare(ctx context.Context, r modelcall.Request, prov
 }
 
 func (a interactiveCalls) Reserve(ctx context.Context, r modelcall.Request, cost float64) (string, error) {
-	return a.store.reserveModelCostID(ctx, r.OwnerID, cost, nil, func(ctx context.Context, tx pgx.Tx, id string) error {
+	id, err := a.store.reserveModelCostID(ctx, r.OwnerID, cost, nil, func(ctx context.Context, tx pgx.Tx, id string) error {
 		if err := interactiveFence(ctx, tx, r); err != nil {
 			return err
 		}
@@ -360,6 +369,12 @@ func (a interactiveCalls) Reserve(ctx context.Context, r modelcall.Request, cost
 		}
 		return err
 	})
+	// The existing foreground budget port uses ErrUnavailable for exhaustion.
+	// Keep that cause, and identify the budget failure for gateway callers.
+	if errors.Is(err, memory.ErrUnavailable) {
+		return id, errors.Join(workspace.ErrBudget, err)
+	}
+	return id, err
 }
 
 func (a interactiveCalls) Start(ctx context.Context, r modelcall.Request, paid *modelcall.PaidResult) error {
@@ -428,16 +443,20 @@ func (a interactiveCalls) Save(ctx context.Context, r modelcall.Request, paid *m
 			for _, row := range rows {
 				versions[row.ID] = row.Version
 			}
+			p := r.Policy.(interactiveCallPolicy)
 			for _, ref := range paid.Refs {
 				version, ok := versions[string(ref.ID)]
-				if !ok || version != ref.Version {
+				if !ok || p.InputPolicy != "current_access" && version != ref.Version {
 					accessible = false
 					break
 				}
 			}
-			p := r.Policy.(interactiveCallPolicy)
 			if accessible {
-				err := verifyRunTx(persist, tx, memory.Scope{OwnerID: r.OwnerID, PrincipalID: p.AgentID}, workspace.Run{AgentID: p.AgentID, ThingID: p.ThingID, ContextVersions: paid.Refs})
+				verify := verifyRunTx
+				if p.InputPolicy == "current_access" {
+					verify = verifyRunAccessTx
+				}
+				err := verify(persist, tx, memory.Scope{OwnerID: r.OwnerID, PrincipalID: p.AgentID}, workspace.Run{AgentID: p.AgentID, ThingID: p.ThingID, ContextVersions: paid.Refs})
 				if err != nil {
 					if errors.Is(err, memory.ErrConflict) || errors.Is(err, memory.ErrForbidden) || errors.Is(err, memory.ErrNotFound) {
 						accessible = false

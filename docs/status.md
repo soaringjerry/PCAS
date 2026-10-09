@@ -107,7 +107,7 @@ Its complete migration, replay, and acceptance remain pending.
 The first extension declares required model modes and registers four unchanged output schemas.
 The assigned fixed instructions now use registered assets and preserve their original bytes.
 
-Secretary generation still uses its legacy wrapper.
+Candidate secretary generation now uses the gateway with its original deadline and two-attempt retry policy.
 Candidate heavy readers and secretary self-check now use the gateway through the existing memory-use wrapper.
 The candidate deputy self-check now uses the gateway with its original run and lease.
 
@@ -132,7 +132,12 @@ Candidate batch reads preserve dependency rules and the original deadline. The a
 
 Reader stage identities distinguish selection, groups, pages, and later requested reading.
 Secretary self-check failures and selection fallback use existing visible receipts or notices.
+
+Shared-reader CI failed at `17cfc36`: the fake bridge lacked declared capability, and a self-check fixture exhausted its deadline.
+The candidate fixes synthetic provider declarations and preserves production deadlines.
+Secretary answer calls now link reservations and usage by identity. Unknown outcomes remain visible and retain their reservations.
 Complete candidate CI, strict replay, and real default-channel acceptance remain outstanding.
+
 These changes remain foundation candidates. They have not been deployed.
 
 ## Documentation Changes

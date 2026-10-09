@@ -6,7 +6,6 @@ import (
 
 	"github.com/soaringjerry/PCAS/internal/ai"
 	"github.com/soaringjerry/PCAS/internal/memory"
-	"github.com/soaringjerry/PCAS/internal/modelcall"
 )
 
 // A business-contract model can produce prescribed or invalid decisions in
@@ -28,8 +27,7 @@ func (m syntheticGatewayModel) GenerateProvider(ctx context.Context, provider ai
 }
 
 func useSyntheticGateway(s *Store) {
-	adapter := modelCallStorage{backgroundCalls{store: s}, interactiveCalls{store: s}}
-	s.calls = modelcall.New(syntheticGatewayModel{s.models}, adapter, adapter, adapter)
+	s.SetModelsWithGatewayProviders(s.models, syntheticGatewayModel{s.models})
 }
 
 // UseSyntheticGatewayForTest exposes the same test-only model to external

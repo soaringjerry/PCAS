@@ -19,6 +19,7 @@ import (
 
 func phase26HTTPUserRequests(t *testing.T, f *phase26LoadedFixture, s *Store) map[string]func(context.Context) error {
 	t.Helper()
+	useSyntheticGateway(s)
 	api := httpapi.New(s, s, b1Auth{f.Scope}, s.Ping, slog.New(slog.NewTextHandler(io.Discard, nil)), httpapi.Options{Workspace: s, Editor: s, Writer: s})
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Keep the same declared light-tier foreground profile as the Store matrix.
@@ -72,11 +73,11 @@ func phase26HTTPUserRequests(t *testing.T, f *phase26LoadedFixture, s *Store) ma
 		},
 	}
 }
-func TestPhase26T2T4EachStageConcurrentHTTPScale(t *testing.T) {
+func TestBackgroundStagesAllowConcurrentHTTPScale(t *testing.T) {
 	for _, stage := range []string{OrganizeStage, CompareStage, EntityCompareStage, EntityCandidatesStage, HandoverStage} {
 		t.Run(stage, func(t *testing.T) { phase26ConcurrentCase(t, stage, false, true) })
 	}
 }
-func TestPhase26T2T4LargeMergeConcurrentHTTPScale(t *testing.T) {
+func TestLargeEntityMergeAllowsConcurrentHTTPScale(t *testing.T) {
 	phase26ConcurrentCase(t, EntityCompareStage, true, true)
 }

@@ -633,6 +633,7 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 		var answer secretaryOutput
 		var selfcheckErr error
 		selfcheckAttempted := false
+		generationAttempted := false
 		sent := map[string]workspace.Memory{}
 		if contextErr == nil {
 			var prompt string
@@ -671,8 +672,9 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 				timing.finishPrepare()
 				modelStarted := time.Now()
 				workCtx, cancel := context.WithTimeout(requestCtx, secretaryModelTimeout)
-				workCtx = context.WithValue(workCtx, secretaryUsageKey{}, secretaryUsageMeta{AllCalls: true, Usage: modelUsage{Tier: c.Tier, TurnID: out.Turn.ID, MemoryRefs: c.Dependencies, Plan: asJSON(usePlan{Groups: c.Use.Groups})}})
-				result, modelStage, err := s.generateSecretaryModelWithRetry(workCtx, ctx, scope, c.Agent.ID, prompt, func(callCtx context.Context) error {
+				workCtx = context.WithValue(workCtx, secretaryUsageKey{}, secretaryUsageMeta{Usage: modelUsage{Tier: c.Tier, TurnID: out.Turn.ID, MemoryRefs: c.Dependencies, Plan: asJSON(usePlan{Groups: c.Use.Groups})}})
+				generationAttempted = true
+				result, modelStage, err := s.generateSecretaryModelWithRetry(workCtx, scope, c.Agent.ID, prompt, func(callCtx context.Context) error {
 					return s.checkSecretaryUseContextTx(callCtx, tx, scope, c)
 				})
 				failureStage = modelStage
@@ -775,6 +777,15 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 				application = "not_applicable"
 			}
 			if err := (interactiveCalls{store: s}).recordApplicationTx(ctx, tx, scope.OwnerID, memory.ID(req.RequestID), "selfcheck", application, reason); err != nil {
+				return err
+			}
+		}
+		if generationAttempted {
+			application, reason := "applied", ""
+			if contextErr != nil {
+				application, reason = "not_applicable", secretaryErrorType(failureStage, contextErr)
+			}
+			if err := (interactiveCalls{store: s}).recordApplicationTx(ctx, tx, scope.OwnerID, memory.ID(req.RequestID), "answer", application, reason); err != nil {
 				return err
 			}
 		}

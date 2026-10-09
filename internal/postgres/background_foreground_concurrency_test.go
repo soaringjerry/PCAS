@@ -22,6 +22,7 @@ func phase26Proposal(t *testing.T, f *phase26LoadedFixture, a, b int) {
 	phase26Exec(t, f, `INSERT INTO entity_alias_candidates(owner_id,left_id,right_id,name_hash,rule,source_marker) VALUES($1,least($2::uuid,$3::uuid),greatest($2::uuid,$3::uuid),entity_name_hash($1,$2,$3),2,'fictitious model proposal') ON CONFLICT DO NOTHING`, f.Scope.OwnerID, f.Entities[a], f.Entities[b])
 }
 func phase26UserRequests(f *phase26LoadedFixture, s *Store) map[string]func(context.Context) error {
+	useSyntheticGateway(s)
 	return map[string]func(context.Context) error{
 		"snapshot": func(ctx context.Context) error { _, err := s.Snapshot(ctx, f.Scope); return err },
 		"library": func(ctx context.Context) error {
@@ -302,20 +303,20 @@ func phase26ConcurrentCase(t *testing.T, stage string, merge bool, overHTTP ...b
 		}
 	}
 }
-func TestPhase26T2T4EachStageConcurrentScale(t *testing.T) {
+func TestBackgroundStagesAllowConcurrentForegroundScale(t *testing.T) {
 	for _, stage := range []string{OrganizeStage, CompareStage, EntityCompareStage, EntityCandidatesStage, HandoverStage} {
 		t.Run(strings.TrimPrefix(stage, "memory."), func(t *testing.T) {
 			phase26ConcurrentCase(t, stage, false)
 		})
 	}
 }
-func TestPhase26T2T4LargeMergeConcurrentScale(t *testing.T) {
+func TestLargeEntityMergeAllowsConcurrentForegroundScale(t *testing.T) {
 	phase26ConcurrentCase(t, EntityCompareStage, true)
 }
 
 // The real processors share a session call fence. A parallel attempt must
 // yield without charging/attempt consumption, then succeed after the fence clears.
-func TestPhase26T2IndependentStagesYieldSharedCallFence(t *testing.T) {
+func TestIndependentBackgroundStagesYieldSharedCallFence(t *testing.T) {
 	f := phase26LoadFixture(t)
 	m := phase26NewModel(t, f)
 	phase26Isolate(t, f, OrganizeStage)

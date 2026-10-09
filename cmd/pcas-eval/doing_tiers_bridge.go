@@ -8,10 +8,13 @@ import (
 	"net/http/httptest"
 	"strings"
 	"sync"
+	"time"
 	"unicode/utf8"
 
 	"github.com/soaringjerry/PCAS/cmd/pcas-eval/doing"
 	"github.com/soaringjerry/PCAS/internal/ai"
+	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres"
 )
 
 // This semaphore covers ALL real model calls, including parallel product
@@ -74,6 +77,30 @@ func (b *tierBridge) metrics() (doing.TierUsage, int, int) {
 }
 func (b *tierBridge) registry() *ai.Registry {
 	return &ai.Registry{HTTP: b.server.Client(), Config: ai.Configuration{Extraction: "v2-tiers", Providers: []ai.Provider{{ID: "v2-tiers", Name: "档位评测", Protocol: "openai", BaseURL: b.server.URL, Model: "v2-tiers", CostMode: "free"}}}}
+}
+
+// Synthetic evaluation supplies prescribed decisions in every requested mode.
+// Its HTTP oracle does not establish capabilities for an actual provider.
+type fakeTierProviders struct{ *ai.Registry }
+
+func (p fakeTierProviders) CheckGeneration(_ ai.Provider, mode ai.GenerationMode) error {
+	if len(mode.Schema) > 0 && !json.Valid(mode.Schema) {
+		return memory.ErrInvalid
+	}
+	return nil
+}
+
+func (p fakeTierProviders) GenerateProvider(ctx context.Context, provider ai.Provider, instructions, prompt string, _ ...ai.GenerationMode) (ai.Result, error) {
+	return p.Registry.GenerateProvider(ctx, provider, instructions, prompt)
+}
+
+func (b *tierBridge) configure(store *postgres.Store) {
+	registry := b.registry()
+	if b.fake {
+		store.SetModelsWithGatewayProviders(registry, fakeTierProviders{registry})
+		return
+	}
+	store.SetModels(registry)
 }
 
 func tierContextSections(prompt string) (string, error) {
@@ -164,6 +191,18 @@ func (b *tierBridge) serve(w http.ResponseWriter, r *http.Request) {
 	var raw string
 	var err error
 	if b.fake {
+		if main {
+			// The production self-check budget follows answer duration. A fake
+			// instant response must not reduce that budget to transport noise.
+			// Fake evaluation duration is not a real-model performance measurement.
+			timer := time.NewTimer(500 * time.Millisecond)
+			defer timer.Stop()
+			select {
+			case <-timer.C:
+			case <-r.Context().Done():
+				return
+			}
+		}
 		onStart()
 		raw, err = tierFakeReply(purpose, prompt)
 	} else if limited, ok := b.model.(*tierLimitedModel); ok {

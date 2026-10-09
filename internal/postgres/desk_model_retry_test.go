@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/ai"
+	"github.com/soaringjerry/PCAS/internal/modelcall"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -38,7 +39,7 @@ func TestSecretaryModelRetryClassification(t *testing.T) {
 			t.Errorf("retried terminal category %s", category)
 		}
 	}
-	for _, err := range []error{context.Canceled, context.DeadlineExceeded, errors.New("unclassified"), &ai.CodexError{Category: "serverOverloaded", Cause: context.Canceled}} {
+	for _, err := range []error{context.Canceled, context.DeadlineExceeded, errors.New("unclassified"), &ai.CodexError{Category: "serverOverloaded", Cause: context.Canceled}, &modelcall.PersistenceError{Err: &ai.CodexError{Category: "serverOverloaded"}}} {
 		if retryableSecretaryModelError(err) {
 			t.Errorf("retried cancellation/unknown error %v", err)
 		}
@@ -176,8 +177,14 @@ func TestSecretaryModelRetryOutcomeAndIdempotency(t *testing.T) {
 				if out.Turn.Reply != "安排好了。" || len(out.Turn.Receipts) != 1 || out.Turn.Receipts[0].Op != "create_task" || strings.Contains(logs.String(), "secretary capture fallback") {
 					t.Fatal("intermediate failure reached the user", out.Turn)
 				}
-			} else if len(out.Turn.Receipts) != 1 || out.Turn.Receipts[0].Op != "capture" || out.Turn.Receipts[0].Text != "已记下原话；模型没有响应，稍后会自动整理" {
-				t.Fatal("changed final fallback", out.Turn)
+			} else {
+				fallback := "已记下原话；模型没有响应，稍后会自动整理"
+				if tt.category == "other" {
+					fallback = "已记下原话；模型结果尚未确认，本轮操作未完成"
+				}
+				if len(out.Turn.Receipts) != 1 || out.Turn.Receipts[0].Op != "capture" || out.Turn.Receipts[0].Text != fallback {
+					t.Fatal("changed final fallback", out.Turn)
+				}
 			}
 			assertRows := func() {
 				t.Helper()
@@ -202,8 +209,22 @@ func TestSecretaryModelRetryOutcomeAndIdempotency(t *testing.T) {
 				if err := s.pool.QueryRow(context.Background(), "SELECT sum(reserved_cost) FROM background_usage WHERE owner_id=$1", string(scope.OwnerID)).Scan(&cost); err != nil || cost <= 0 {
 					t.Fatal("subscription calls bypassed daily accounting", cost, err)
 				}
-				if err := s.pool.QueryRow(context.Background(), "SELECT sum(cost) FROM model_usage WHERE owner_id=$1", string(scope.OwnerID)).Scan(&measured); err != nil || math.Abs(cost-measured) > 1e-9 {
-					t.Fatal("usage and reservation settlement differ", cost, measured, err)
+				if err := s.pool.QueryRow(context.Background(), "SELECT sum(cost) FROM model_usage WHERE owner_id=$1", string(scope.OwnerID)).Scan(&measured); err != nil {
+					t.Fatal(err)
+				}
+				if tt.category == "other" {
+					var outcome, accounting string
+					var estimate float64
+					var complete bool
+					if err := s.pool.QueryRow(context.Background(), `SELECT outcome,accounting_state,(actual_mode->>'reservationEstimate')::double precision,(actual_mode->>'usageComplete')::boolean FROM model_calls WHERE owner_id=$1 AND execution_id=$2 AND stage='answer'`, string(scope.OwnerID), req.RequestID).Scan(&outcome, &accounting, &estimate, &complete); err != nil || outcome != "unknown" || accounting != "held" || complete || math.Abs(cost-estimate) > 1e-9 {
+						t.Fatal("unknown result lost its original reservation or claimed complete usage", outcome, accounting, cost, estimate, complete, err)
+					}
+				} else if math.Abs(cost-measured) > 1e-9 {
+					t.Fatal("usage and reservation settlement differ", cost, measured)
+				}
+				var linked int
+				if err := s.pool.QueryRow(context.Background(), `SELECT count(*) FROM model_calls c JOIN model_usage u ON (u.owner_id,u.id)=(c.owner_id,c.usage_id) JOIN background_usage b ON (b.owner_id,b.id)=(c.owner_id,c.reservation_id) WHERE c.owner_id=$1 AND c.execution_id=$2 AND c.root_execution_id=c.execution_id AND c.stage='answer' AND c.usage_id=c.reservation_id AND u.purpose='secretary'`, string(scope.OwnerID), req.RequestID).Scan(&linked); err != nil || linked != tt.calls {
+					t.Fatal("secretary invocation lost its original execution and billing links", linked, tt.calls, err)
 				}
 			}
 			assertRows()

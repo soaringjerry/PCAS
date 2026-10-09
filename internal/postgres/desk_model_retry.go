@@ -4,71 +4,92 @@ import (
 	"context"
 	"errors"
 	"log/slog"
-	"strings"
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/ai"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/modelcall"
+	"github.com/soaringjerry/PCAS/internal/prompts"
+	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
 // Accounting failures abort the result transaction, as they did before retries.
 type secretaryAccountingError struct{ error }
 type secretaryUsageKey struct{}
 type secretaryUsageMeta struct {
-	Usage    modelUsage
-	AllCalls bool
+	Usage modelUsage
 }
 
-func (s *Store) generateSecretaryModelWithRetry(workCtx, persistCtx context.Context, scope memory.Scope, agentID, prompt string, verify func(context.Context) error) (ai.Result, string, error) {
-	stage := "model"
+func (s *Store) generateSecretaryModelWithRetry(workCtx context.Context, scope memory.Scope, agentID, prompt string, verify func(context.Context) error) (ai.Result, string, error) {
+	request, ok := workCtx.Value(interactiveExecutionKey{}).(modelcall.Request)
+	meta, hasUsage := workCtx.Value(secretaryUsageKey{}).(secretaryUsageMeta)
+	if !ok || !hasUsage || request.OwnerID != scope.OwnerID {
+		return ai.Result{}, "verify", memory.ErrInvalid
+	}
+	policy, ok := request.Policy.(interactiveCallPolicy)
+	if !ok || policy.Kind != "secretary" {
+		return ai.Result{}, "verify", memory.ErrInvalid
+	}
+	policy.AgentID, policy.Usage = agentID, meta.Usage
+	policy.Usage.Purpose = "secretary"
+	// A memory correction can make the reply stale, but cannot discard it.
+	// Current grants, exclusions, source existence, and destination rules still apply.
+	policy.InputPolicy = "current_access"
+	request.Policy, request.Stage, request.ProviderID = policy, "answer", agentID
+	request.Instructions, request.Schema = prompts.Must("secretary"), prompts.MustSchema("secretary-output")
+	request.Search, request.ContextBuilderVersion = true, "secretary-answer-v1"
+	request.Prompt = asJSON(map[string]string{"rawPrompt": prompt})
+	request.Refs = uniqueRefs(meta.Usage.MemoryRefs)
+	stage, attempt := "model", 0
 	var accountingErr error
-	attempt := 0
 	result, err := retrySecretaryModel(workCtx, func(callCtx context.Context) (ai.Result, error) {
 		attempt++
 		if attempt > 1 {
-			// Never resubmit context whose versions or access changed in the wait.
 			stage = "verify"
 			if err := verify(callCtx); err != nil {
 				return ai.Result{}, err
 			}
 		}
-		stage = "budget"
-		p, _ := s.models.Get(agentID)
-		reservationID, err := s.reserveModelCostID(callCtx, scope.OwnerID, p.Reserve(secretaryInstructions+prompt), nil)
-		if err != nil {
-			if callCtx.Err() != nil {
-				stage = "model"
-				err = callCtx.Err()
-			}
-			return ai.Result{}, err
-		}
 		stage = "model"
-		result, err := s.models.GenerateWithSearchSchema(executionCallContext(callCtx, "answer"), agentID, secretaryInstructions, prompt, secretaryOutputSchema)
-		// HTTP providers may hide cancellation behind an unreachable error.
-		if callCtx.Err() != nil {
-			err = callCtx.Err()
+		type returned struct {
+			paid *modelcall.PaidResult
+			err  error
 		}
-		cost := result.Cost
-		accountingErr = s.settleModelCost(persistCtx, scope.OwnerID, reservationID, cost)
-		if accountingErr != nil {
-			return result, accountingErr
-		}
-		if meta, ok := workCtx.Value(secretaryUsageKey{}).(secretaryUsageMeta); ok && (meta.AllCalls || strings.TrimSpace(result.Text) != "") {
-			usage := meta.Usage
-			usage.OwnerID = scope.OwnerID
-			usage.Purpose = "secretary"
-			usage.AgentID = agentID
-			usage.Model = p.Model
-			usage.DurationMS = result.DurationMS
-			usage.InputTokens = result.InputTokens
-			usage.OutputTokens = result.OutputTokens
-			usage.InputEstimated, usage.OutputEstimated, usage.CostEstimated = result.InputEstimated, result.OutputEstimated, result.CostEstimated
-			usage.Cost = cost
-			if accountingErr = s.recordUsage(persistCtx, usage); accountingErr != nil {
-				return result, accountingErr
+		finished := make(chan returned, 1)
+		bound := request
+		go func() {
+			paid, err := s.calls.Call(executionCallContext(callCtx, "answer"), bound)
+			finished <- returned{paid, err}
+		}()
+		select {
+		case <-callCtx.Done():
+			return ai.Result{}, callCtx.Err()
+		case outcome := <-finished:
+			var persistenceErr *modelcall.PersistenceError
+			if errors.As(outcome.err, &persistenceErr) {
+				accountingErr = outcome.err
+				return ai.Result{}, outcome.err
 			}
+			if callCtx.Err() != nil {
+				return ai.Result{}, callCtx.Err()
+			}
+			if outcome.err != nil {
+				if errors.Is(outcome.err, workspace.ErrBudget) {
+					stage = "budget"
+				}
+				if errors.Is(outcome.err, memory.ErrConflict) || errors.Is(outcome.err, memory.ErrForbidden) || errors.Is(outcome.err, modelcall.ErrNotApplicable) {
+					stage = "verify"
+				}
+				var failure *modelcall.Failure
+				if errors.As(outcome.err, &failure) && retryableSecretaryModelError(outcome.err) && failure.InvocationID.Valid() {
+					policy.RetryOf = failure.InvocationID
+					request.Policy = policy
+				}
+				return ai.Result{}, outcome.err
+			}
+			paid := outcome.paid
+			return ai.Result{Text: paid.Output, Searches: paid.Searches, DurationMS: paid.DurationMS, InputTokens: paid.InputTokens, OutputTokens: paid.OutputTokens, InputEstimated: paid.InputEstimated, OutputEstimated: paid.OutputEstimated, CostEstimated: paid.CostEstimated, Cost: paid.Cost}, nil
 		}
-		return result, err
 	})
 	if accountingErr != nil {
 		return result, stage, &secretaryAccountingError{accountingErr}
@@ -85,6 +106,10 @@ const (
 // Retry only identified transient Codex failures. Authentication, refusal,
 // exhausted quotas, unknown failures and unclassified providers stay terminal.
 func retryableSecretaryModelError(err error) bool {
+	var persistenceErr *modelcall.PersistenceError
+	if errors.As(err, &persistenceErr) {
+		return false
+	}
 	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 		return false
 	}

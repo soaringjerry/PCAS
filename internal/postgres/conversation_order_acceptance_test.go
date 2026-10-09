@@ -141,7 +141,7 @@ func q2Peer(t *testing.T, s *Store) *Store {
 	if err != nil {
 		t.Fatal(err)
 	}
-	peer.SetModels(s.models)
+	peer.SetModelsWithGatewayProviders(s.models, syntheticGatewayModel{s.models})
 	t.Cleanup(peer.Close)
 	return peer
 }

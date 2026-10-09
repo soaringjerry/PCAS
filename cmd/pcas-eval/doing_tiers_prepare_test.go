@@ -26,7 +26,7 @@ func TestTierPreparationAndRestoreValidateLibraryState(t *testing.T) {
 	}}
 	bridge := newTierBridge(doing.FakeModel{}, true)
 	defer bridge.server.Close()
-	store.SetModels(bridge.registry())
+	bridge.configure(store)
 	seeded, err := seedTierSuite(ctx, store, pool, suite)
 	if err != nil {
 		t.Fatal(err)

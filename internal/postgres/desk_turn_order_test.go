@@ -111,7 +111,7 @@ func TestSecretaryOrderCommittedFIFOAcrossStores(t *testing.T) {
 			http.Error(w, "unexpected fixture", 500)
 		}
 	})
-	peer.SetModels(s.models)
+	peer.SetModelsWithGatewayProviders(s.models, syntheticGatewayModel{s.models})
 	requests := []workspace.DeskTurnRequest{turnRequest("三点开会"), turnRequest("改四点"), turnRequest("最后改五点")}
 	for i := range requests {
 		requests[i].ConversationID = &conversation
@@ -189,7 +189,7 @@ func TestSecretaryOrderWaitingUsesNoSlots(t *testing.T) {
 		}
 		secretaryModelReply(w, `{"actions":[{"op":"create_task","title":"ordered task"}]}`)
 	})
-	peer.SetModels(s.models)
+	peer.SetModelsWithGatewayProviders(s.models, syntheticGatewayModel{s.models})
 	req := turnRequest("held")
 	req.ConversationID = &conversation
 	results := []<-chan orderedTurnResult{orderedTurnStart(s, context.Background(), scope, req)}
@@ -244,7 +244,7 @@ func TestSecretaryOrderDuplicateCancellationDoesNotCancelCreator(t *testing.T) {
 		<-release
 		secretaryModelReply(w, `{"actions":[{"op":"create_task","title":"only once"}]}`)
 	})
-	peer.SetModels(s.models)
+	peer.SetModelsWithGatewayProviders(s.models, syntheticGatewayModel{s.models})
 	req := turnRequest("same request with null conversation")
 	original := orderedTurnStart(s, context.Background(), scope, req)
 	select {
@@ -507,7 +507,7 @@ func TestSecretaryOrderConnectionLossThenNewStoreContinues(t *testing.T) {
 		}
 		secretaryModelReply(w, fmt.Sprintf(`{"actions":[{"op":"update","ref":"THIS","set":{"due":"%s"}}]}`, testsupport.DateFromToday(t, "UTC", 1, 17, 0).Format("2006-01-02T15:04")))
 	})
-	peer.SetModels(s.models)
+	peer.SetModelsWithGatewayProviders(s.models, syntheticGatewayModel{s.models})
 	req := turnRequest("old failed update")
 	req.ConversationID = &conversation
 	req.ThingID = &id
@@ -532,7 +532,7 @@ func TestSecretaryOrderConnectionLossThenNewStoreContinues(t *testing.T) {
 	}
 	orderedTicketStatus(t, s, scope, req.RequestID, "failed")
 	restarted := orderedPeer(t, s)
-	restarted.SetModels(s.models)
+	restarted.SetModelsWithGatewayProviders(s.models, syntheticGatewayModel{s.models})
 	next := turnRequest("newest update")
 	next.ConversationID = &conversation
 	next.ThingID = &id

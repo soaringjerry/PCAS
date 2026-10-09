@@ -17,9 +17,9 @@ import (
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
-func TestB4SameDatabaseTurnSpeed(t *testing.T) {
+func TestSecretaryTurnUsesCompleteLargeContext(t *testing.T) {
 	if os.Getenv("PCAS_B4_PERF") == "" {
-		t.Skip("set PCAS_B4_PERF for same fictional database before/after speed")
+		t.Skip("set PCAS_B4_PERF for complete secretary context at scale")
 	}
 	s, scope := p2Fixture(t, 10000)
 	// Four full cards, twelve rules and fifteen deadlines exercise the largest
@@ -81,14 +81,6 @@ func TestB4SameDatabaseTurnSpeed(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		trace.resetAll()
 		start := time.Now()
-		before, err := s.b4BeforeDeskTurn(context.Background(), scope, turnRequest("霜叶的季度汇报准备得怎么样？"))
-		oldTime := time.Since(start)
-		if err != nil {
-			t.Fatal(err)
-		}
-		t.Logf("before queries: %+v", trace.times)
-		trace.resetAll()
-		start = time.Now()
 		after, err := s.DeskTurn(ctx, scope, turnRequest("霜叶的季度汇报准备得怎么样？"))
 		newTime := time.Since(start)
 		t.Logf("after queries: %+v", trace.times)
@@ -104,10 +96,10 @@ func TestB4SameDatabaseTurnSpeed(t *testing.T) {
 		if !strings.Contains(modelPrompt, "虚构要求12") || !strings.Contains(modelPrompt, "第1455项截止") {
 			t.Fatal("speed fixture omitted rules or deadlines")
 		}
-		if before.Turn.Reply != after.Turn.Reply {
-			t.Fatal(before, after)
+		if after.Turn.Reply != "虚构季度汇报已准备。" {
+			t.Fatal(after.Turn)
 		}
-		t.Logf("same fictional database: memories=10000 originals=30000 sample=%d before=%s after_light=%s ratio=%.3f", i, oldTime, newTime, float64(newTime)/float64(oldTime))
+		t.Logf("fictional current context: memories=10000 originals=30000 sample=%d elapsed=%s", i, newTime)
 	}
 }
 

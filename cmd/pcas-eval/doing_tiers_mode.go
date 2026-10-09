@@ -179,7 +179,7 @@ func runDoingTiers(args []string) error {
 		defer cleanup()
 		bridge := newTierBridge(model, *fake)
 		defer bridge.server.Close()
-		store.SetModels(bridge.registry())
+		bridge.configure(store)
 		seeded, err := seedTierSuite(ctx, store, pool, s)
 		if err != nil {
 			return fmt.Errorf("tier_seed_failed")

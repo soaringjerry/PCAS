@@ -84,7 +84,7 @@ func cloneTierDatabases(ctx context.Context, preparedDSN string, scope memory.Sc
 			return nil, func() {}, fmt.Errorf("clone_pool_failed")
 		}
 		d.bridge = newTierBridge(model, fake)
-		d.store.SetModels(d.bridge.registry())
+		d.bridge.configure(d.store)
 		ready <- d
 	}
 	return ready, cleanup, nil

@@ -133,6 +133,13 @@ func (e *Failure) Is(target error) bool {
 
 func (e *Failure) Unwrap() error { return e.Details.cause() }
 
+// PersistenceError identifies an unsaved result or incomplete accounting.
+// Callers must not replace the paid invocation to repair this failure.
+type PersistenceError struct{ Err error }
+
+func (e *PersistenceError) Error() string { return e.Err.Error() }
+func (e *PersistenceError) Unwrap() error { return e.Err }
+
 func (g *Gateway) Call(ctx context.Context, request Request) (*PaidResult, error) {
 	if request.OwnerID == "" || request.ExecutionID == "" || request.RootExecutionID == "" || request.Function == "" || request.Stage == "" || request.Instructions.Name() == "" {
 		return nil, memory.ErrInvalid
@@ -209,10 +216,10 @@ func (g *Gateway) Call(ctx context.Context, request Request) (*PaidResult, error
 		}
 	}
 	if err := g.results.Save(ctx, request, saved); err != nil {
-		return nil, err
+		return nil, &PersistenceError{Err: err}
 	}
 	if err := g.finishAccounting(ctx, request, saved); err != nil {
-		return nil, err
+		return nil, &PersistenceError{Err: err}
 	}
 	if saved.CallErrorCode != "" {
 		if err := g.results.Forget(ctx, request, saved); err != nil {

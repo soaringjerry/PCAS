@@ -36,7 +36,8 @@ func TestSecretarySettlesOnlyItsReservation(t *testing.T) {
 				defer gate.unblock()
 			}
 			done := make(chan error, 1)
-			go func() { _, err := s.DeskTurn(ctx, scope, turnRequest("R1 budget question")); done <- err }()
+			request := turnRequest("R1 budget question")
+			go func() { _, err := s.DeskTurn(ctx, scope, request); done <- err }()
 			if gate != nil {
 				select {
 				case <-gate.started:
@@ -61,6 +62,31 @@ func TestSecretarySettlesOnlyItsReservation(t *testing.T) {
 			case <-time.After(60 * time.Second):
 				t.Fatal("secretary did not finish")
 			}
+			var retainedEstimate float64
+			if mode == "cancel" {
+				// A canceled submitted call has unknown actual usage. Wait for its
+				// accounting receipt, then check the hold by invocation identity.
+				waitCtx, stop := context.WithTimeout(t.Context(), 5*time.Second)
+				defer stop()
+				ticker := time.NewTicker(5 * time.Millisecond)
+				defer ticker.Stop()
+				for {
+					var held bool
+					err := s.pool.QueryRow(waitCtx, `SELECT c.outcome='unknown' AND c.accounting_state='held'
+ AND NOT (c.actual_mode->>'usageComplete')::boolean AND c.usage_id=c.reservation_id
+ AND EXISTS(SELECT 1 FROM model_usage u WHERE u.owner_id=c.owner_id AND u.id=c.usage_id),
+ (c.actual_mode->>'reservationEstimate')::double precision
+ FROM model_calls c WHERE c.owner_id=$1 AND c.execution_id=$2 AND c.stage='answer'`, string(scope.OwnerID), request.RequestID).Scan(&held, &retainedEstimate)
+					if err == nil && held {
+						break
+					}
+					select {
+					case <-ticker.C:
+					case <-waitCtx.Done():
+						t.Fatal("canceled invocation lost its original accounting hold", err)
+					}
+				}
+			}
 			var reserved float64
 			if err := s.pool.QueryRow(context.Background(), "SELECT sum(reserved_cost) FROM background_usage WHERE owner_id=$1", string(scope.OwnerID)).Scan(&reserved); err != nil {
 				t.Fatal(err)
@@ -71,7 +97,14 @@ func TestSecretarySettlesOnlyItsReservation(t *testing.T) {
 				if len(rows) != 1 {
 					t.Fatal(rows)
 				}
-				want += rows[0].Cost
+				if mode == "cancel" {
+					if retainedEstimate < rows[0].Cost {
+						t.Fatal("held estimate fell below recorded partial usage", retainedEstimate, rows)
+					}
+					want += retainedEstimate
+				} else {
+					want += rows[0].Cost
+				}
 				if rows[0].InputTokens <= 0 || rows[0].Cost <= 0 {
 					t.Fatal("submitted secretary call lacks accounted input usage", rows)
 				}
@@ -80,7 +113,7 @@ func TestSecretarySettlesOnlyItsReservation(t *testing.T) {
 				}
 			}
 			if math.Abs(reserved-want) > 1e-9 {
-				t.Errorf("budget reserved=%g want actual=%g", reserved, want)
+				t.Errorf("budget reserved=%g want applicable settlement=%g", reserved, want)
 			}
 			// A new request under the remaining budget must actually reach the provider.
 			if mode == "success" {

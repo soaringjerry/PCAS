@@ -31,7 +31,7 @@ func stabilizationSecretaryTasks(t *testing.T, s *Store, scope memory.Scope, wan
 	}
 }
 
-func TestStabilizationS1_ConcurrentConversationSeesPreviousObject(t *testing.T) {
+func TestSecretaryConcurrentConversationSeesPreviousObject(t *testing.T) {
 	s := testStore(t)
 	scope := owner()
 	workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: asJSON(map[string]string{"timezone": "UTC"})})
@@ -110,7 +110,7 @@ func TestStabilizationS1_ConcurrentConversationSeesPreviousObject(t *testing.T) 
 	stabilizationSecretaryTasks(t, s, scope, 1)
 }
 
-func TestStabilizationS2_NoThisDoesNotCompleteArbitraryTask(t *testing.T) {
+func TestSecretaryNoThisDoesNotCompleteArbitraryTask(t *testing.T) {
 	s, scope := testStore(t), owner()
 	workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "S2甲"})
 	workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "S2乙"})
@@ -129,7 +129,7 @@ func TestStabilizationS2_NoThisDoesNotCompleteArbitraryTask(t *testing.T) {
 	stabilizationSecretaryTasks(t, s, scope, 2)
 }
 
-func TestStabilizationS3_InvalidReferencesDoNotBlockLegalAction(t *testing.T) {
+func TestSecretaryInvalidReferencesDoNotBlockLegalAction(t *testing.T) {
 	s, scope := testStore(t), owner()
 	st := workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "S3保持原状"})
 	id := st.Tasks[0].ID
@@ -157,7 +157,7 @@ func TestStabilizationS3_InvalidReferencesDoNotBlockLegalAction(t *testing.T) {
 	stabilizationSecretaryTasks(t, s, scope, 2)
 }
 
-func TestStabilizationS4_IdempotencyAndFreshRequest(t *testing.T) {
+func TestSecretaryIdempotencyAndFreshRequest(t *testing.T) {
 	s, scope := testStore(t), owner()
 	var calls atomic.Int32
 	secretaryModel(t, s, func(w http.ResponseWriter, r *http.Request) {
@@ -194,7 +194,7 @@ func TestStabilizationS4_IdempotencyAndFreshRequest(t *testing.T) {
 	}
 }
 
-func TestStabilizationS5_AskAndActionsBothSurvive(t *testing.T) {
+func TestSecretaryAskAndActionsBothSurvive(t *testing.T) {
 	s, scope := testStore(t), owner()
 	secretaryModel(t, s, func(w http.ResponseWriter, r *http.Request) {
 		secretaryModelReply(w, `{"reply":"已建事项，请确认地点","actions":[{"op":"create_task","title":"S5开会"}],"ask":{"question":"在哪里？","options":["办公室","线上"]}}`)
@@ -206,7 +206,7 @@ func TestStabilizationS5_AskAndActionsBothSurvive(t *testing.T) {
 	stabilizationSecretaryTasks(t, s, scope, 1)
 }
 
-func TestStabilizationS6_AnswerOptionContinuesPreviousObject(t *testing.T) {
+func TestSecretaryAnswerOptionContinuesPreviousObject(t *testing.T) {
 	s, scope := testStore(t), owner()
 	var calls atomic.Int32
 	var prompt string
@@ -229,7 +229,7 @@ func TestStabilizationS6_AnswerOptionContinuesPreviousObject(t *testing.T) {
 	stabilizationSecretaryTasks(t, s, scope, 1)
 }
 
-func TestStabilizationS7_ItemPageUsesOnlyCurrentThing(t *testing.T) {
+func TestSecretaryItemPageUsesOnlyCurrentThing(t *testing.T) {
 	s, scope := testStore(t), owner()
 	st := workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "S7当前"})
 	id := st.Tasks[0].ID
@@ -255,7 +255,7 @@ func TestStabilizationS7_ItemPageUsesOnlyCurrentThing(t *testing.T) {
 	stabilizationSecretaryTasks(t, s, scope, 2)
 }
 
-func TestStabilizationS8_FailureCategoriesKeepOriginalAndPrivateLogs(t *testing.T) {
+func TestSecretaryFailureCategoriesKeepOriginalAndPrivateLogs(t *testing.T) {
 	for _, mode := range []string{"budget", "timeout", "500", "plain"} {
 		t.Run(mode, func(t *testing.T) {
 			s, scope := testStore(t), owner()
@@ -288,6 +288,7 @@ func TestStabilizationS8_FailureCategoriesKeepOriginalAndPrivateLogs(t *testing.
 				workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: asJSON(map[string]any{"dailyBudget": 0})})
 			}
 			s.SetModels(&ai.Registry{HTTP: client, Config: ai.Configuration{Providers: []ai.Provider{provider}}})
+			useSyntheticGateway(s)
 			req := turnRequest("原话-private-T3")
 			out := mustTurn(t, s, scope, req)
 			if rendered := string(asJSON(out.Turn)); strings.Contains(rendered, "key-secret-T3") || strings.Contains(rendered, "model-secret-T3") {
@@ -301,7 +302,7 @@ func TestStabilizationS8_FailureCategoriesKeepOriginalAndPrivateLogs(t *testing.
 					t.Fatal("over-budget request reached model")
 				}
 			case "timeout":
-				errorType = "timeout"
+				errorType = "unknown_outcome"
 			case "plain":
 				stage, errorType, connector = "parse", "no_json_object", "desk"
 			}
@@ -334,7 +335,7 @@ func TestStabilizationS8_FailureCategoriesKeepOriginalAndPrivateLogs(t *testing.
 					want = "超过今天的额度"
 				}
 				if mode == "timeout" {
-					want = "超时"
+					want = "尚未确认"
 				}
 				if !strings.Contains(out.Turn.Receipts[0].Text, want) {
 					t.Error("wrong failure advice", out.Turn.Receipts)
@@ -354,7 +355,7 @@ func TestStabilizationS8_FailureCategoriesKeepOriginalAndPrivateLogs(t *testing.
 	}
 }
 
-func TestStabilizationS9_LongReplyPreservesBodyAndActions(t *testing.T) {
+func TestSecretaryLongReplyPreservesBodyAndActions(t *testing.T) {
 	s, scope := testStore(t), owner()
 	secretaryModel(t, s, func(w http.ResponseWriter, r *http.Request) {
 		secretaryModelReply(w, map[string]any{"reply": strings.Repeat("长", 2500), "actions": []any{map[string]string{"op": "create_task", "title": "S9仍执行"}}})
@@ -387,7 +388,7 @@ func TestStabilizationS9_LongReplyPreservesBodyAndActions(t *testing.T) {
 }
 
 // A second Store has its own pool: only PostgreSQL can serialize these turns.
-func TestStabilizationS1_CrossInstanceQueueAllowsOtherConversations(t *testing.T) {
+func TestSecretaryCrossInstanceQueueAllowsOtherConversations(t *testing.T) {
 	s, scope := testStore(t), owner()
 	peer, err := Open(context.Background(), s.pool.Config().ConnString())
 	if err != nil {
@@ -407,7 +408,7 @@ func TestStabilizationS1_CrossInstanceQueueAllowsOtherConversations(t *testing.T
 		}
 		secretaryModelReply(w, `{"actions":[{"op":"create_task","title":"F11-task"}]}`)
 	})
-	peer.SetModels(s.models)
+	peer.SetModelsWithGatewayProviders(s.models, syntheticGatewayModel{s.models})
 	conversation := string(memory.NewID())
 	first := turnRequest("F11-held-first")
 	first.ConversationID = &conversation
@@ -458,7 +459,7 @@ func TestStabilizationS1_CrossInstanceQueueAllowsOtherConversations(t *testing.T
 	stabilizationSecretaryTasks(t, s, scope, 18)
 }
 
-func TestStabilizationS1_DifferentConversationPoolCapacity(t *testing.T) {
+func TestSecretaryDifferentConversationPoolCapacity(t *testing.T) {
 	s, scope := testStore(t), owner()
 	entered, release := make(chan struct{}, 12), make(chan struct{})
 	var once sync.Once
@@ -509,7 +510,7 @@ func TestStabilizationS1_DifferentConversationPoolCapacity(t *testing.T) {
 	}
 }
 
-func TestStabilizationS1_CancelFailureAndIdempotentRetryReleaseLocks(t *testing.T) {
+func TestSecretaryCancelFailureAndIdempotentRetryReleaseLocks(t *testing.T) {
 	for _, mode := range []string{"cancel", "failure"} {
 		t.Run(mode, func(t *testing.T) {
 			s, scope := testStore(t), owner()
@@ -588,7 +589,7 @@ func TestStabilizationS1_CancelFailureAndIdempotentRetryReleaseLocks(t *testing.
 	}
 }
 
-func TestStabilizationS1_ConcurrentRetryAcrossInstancesExecutesOnce(t *testing.T) {
+func TestSecretaryConcurrentRetryAcrossInstancesExecutesOnce(t *testing.T) {
 	s, scope := testStore(t), owner()
 	peer, err := Open(context.Background(), s.pool.Config().ConnString())
 	if err != nil {
@@ -608,7 +609,7 @@ func TestStabilizationS1_ConcurrentRetryAcrossInstancesExecutesOnce(t *testing.T
 		}
 		secretaryModelReply(w, `{"actions":[{"op":"create_task","title":"once"}]}`)
 	})
-	peer.SetModels(s.models)
+	peer.SetModelsWithGatewayProviders(s.models, syntheticGatewayModel{s.models})
 	req := turnRequest("once")
 	conversation := string(memory.NewID())
 	req.ConversationID = &conversation

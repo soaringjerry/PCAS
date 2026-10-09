@@ -14,7 +14,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
-func TestB4UnbuiltSecretarySelfchecksSameLegacyContext(t *testing.T) {
+func TestSecretarySelfcheckKeepsUnbuiltMemoryContextAndActionAuthority(t *testing.T) {
 	for _, mode := range []string{"keyword", "missing", "medium", "heavy", "failure", "timeout", "extra_action"} {
 		t.Run(mode, func(t *testing.T) {
 			s, scope := testStore(t), owner()
@@ -30,7 +30,9 @@ func TestB4UnbuiltSecretarySelfchecksSameLegacyContext(t *testing.T) {
 					if !strings.Contains(prompt, "虚构旧资料的汇报每页三行") || strings.Contains(prompt, "相关的现状卡") {
 						t.Error("legacy retrieval changed", prompt)
 					}
-					time.Sleep(100 * time.Millisecond)
+					// Context and action authority are the contract here. Give the
+					// synthetic answer a useful original self-check budget under CI load.
+					time.Sleep(500 * time.Millisecond)
 					secretaryModelReply(w, map[string]any{"reply": "虚构初稿", "missingKeyInfo": mode == "missing", "memoryPlan": map[string]any{"depth": "medium", "groups": []string{}}, "actions": []map[string]any{{"op": "create_task", "title": "虚构原任务"}}})
 					return
 				}

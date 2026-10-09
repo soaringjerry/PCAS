@@ -75,7 +75,10 @@ Complete replay equivalence remains incomplete. Other provider entry points stil
 Unused card instructions and generation were removed at `6411b4e`.
 The old card queue acknowledgement and current-state helpers retain their behavior.
 The [cleanup delivery record](tasks/foundation-unused-generation.md#release-verification) gives CI and release evidence.
-Query embedding still calls its provider directly. Its [migration scope](tasks/foundation-query-embedding.md) defines the next complete recall-path work.
+
+The unreleased [query embedding migration](tasks/foundation-query-embedding.md) submits recall vectors through the existing gateway.
+Standalone reads use an actual session fence. Nested reads inherit their secretary or deputy execution.
+The earlier production release still uses the direct query-provider path.
 
 ### Background Call Evidence
 

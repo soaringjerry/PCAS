@@ -113,14 +113,17 @@ This scope does not complete Phase 3.9 or the background embedding path.
 The unchanged complete secretary path passes recorded replay at `6411b4e`.
 The original ordered model inputs match the recorded case. Replay completes two Codex calls and one embedding HTTP request.
 Replay starts no live provider. The complete starting owner data matches the original row multiset.
-Implementation, migration acceptance, complete CI, integration, and release remain outstanding.
-The admission mechanism still needs a mixed-load check against existing connection consumers.
+The query path now enters the existing gateway in the executor worktree. It is not released.
+Focused gateway and PostgreSQL contracts pass, including mixed foreground capacity and inherited execution identities.
+Strict migration replay and complete owner-data difference review pass on the isolated copy.
+Real default-channel acceptance, complete CI, independent review, integration, and release remain outstanding.
 Baseline work must preserve non-root disk space for production recovery and retain complete comparison evidence.
+The old inactive source fixture is retired. Its complete verified database archive supplies future isolated copies.
 
 ### Baseline Evidence
 
 The baseline uses the original production-copy data, recorded request, provider replies, and fixed business time.
-It starts no service or continuous worker loop. The changed production query path has not been implemented.
+It starts no service or continuous worker loop. The baseline was recorded before changing the query path. Production still uses the earlier release.
 
 | Check | Observed result |
 |---|---|
@@ -136,6 +139,98 @@ It starts no service or continuous worker loop. The changed production query pat
 
 Private manifests, model replies, input cassettes, snapshots, and initial check failures remain outside Git.
 
+## Implementation Evidence
+
+The existing gateway now accepts query embeddings through `Call`.
+The provider adapter receives the original ordered text, prefix, and selected provider snapshot.
+Saved vectors keep their model identity and float32 values. Text-generation defaults remain unchanged.
+
+| Boundary | Current implementation and checks |
+|---|---|
+| Standalone read | Actual read identity and PostgreSQL session lock. No transaction remains open across the model call. |
+| Nested read | Actual secretary or deputy fence. Query billing uses a separate reservation and does not replace the deputy admission hold. |
+| Capacity | The existing shared foreground slots retain the verified connection margin. Nested requests do not acquire another slot. Waiting reads can cancel. |
+| Known output | Original input and returned vector use existing private result storage. Persistence recovery starts no replacement provider call. |
+| Billing restart | The existing worker recovers the original immutable receipt without model credentials. It removes inactive private query bodies. |
+| Interruption | An inactive started read remains unknown with its reservation held. Late known billing cannot restore an expired query body. |
+| Access and deletion | Retrieval checks current scope after the provider returns. Deleting a secretary source invalidates its cached query while retaining billing. |
+| Capability and fallback | Unsupported or unavailable semantic mode remains visible. Preflight failure makes no reservation. Existing lexical fallback remains permitted. |
+
+The first cancellation fixture did not consume its HTTP request body. Its fake server could not observe the disconnect.
+The interrupted run and diagnostic stack remain recorded. The corrected fixture reads the body and has bounded cleanup.
+Focused checks pass after that correction. This failure does not establish a production transport defect.
+
+### Migration Replay
+
+The migration replay uses the unchanged baseline's complete starting snapshot, request, business time, and recorded provider replies.
+Strict transport checks pass with two Codex calls and one embedding request. Replay starts no live provider.
+Query billing keeps its original token counts and cost. The new invocation links that billing to the actual secretary execution.
+
+Complete snapshots retain every original field. The comparison identifies twenty-three replaced rows and twenty-five added rows.
+Two additional rows hold the embedding invocation and its private vector result.
+Other differences contain execution clocks, measured durations, generated identities, and their links.
+The query usage plan changes from absent metadata to an empty group list through the existing accounting adapter.
+Claims, work items, and deadlines have identical complete row multisets.
+Reply text, action receipts, errors, and source content keep their original values.
+
+The original case's self-check fails before and after migration. Its failed receipt and event remain visible.
+This case proves input and migration behavior. It does not establish general model quality or exact whole-state equality.
+Private archives preserve complete snapshots, differences, field classification, and the initial failed diagnostic checks.
+
+### Required Local Checks
+
+Formatting and focused contracts pass. No check was deleted or disabled.
+The complete serial `make check` reaches the PostgreSQL package's thirty-minute total timeout.
+The timeout occurs during an existing comparison-scale test. It does not identify an individual assertion failure.
+The stack and complete failure log remain recorded. This run is not a passed check.
+The unfiltered integration command runs separately. Complete integration-branch CI remains required.
+
+### Remaining Evidence Gaps
+
+The input manifest records the prepared query and its actual caller scope.
+It does not establish complete upstream source coverage. Missing query-source references remain explicit.
+Waiting and preflight counters use the existing stage-event table. That table lacks complete root and causal links.
+The event and unified-activity scopes must complete those links. This migration does not certify the final activity query.
+
+The accounting recovery counter includes inactive query-body cleanup that accompanies a completed billing receipt.
+This work does not add spending or repeat model invocation. Its remaining count uses the same selection condition.
+No test was deleted. Existing phase-coded files outside this scope remain unchanged.
+
+Duplicate diagnostic backups now use verified Zstandard reference archives. Their complete original bytes remain recoverable.
+An initial decoder-window failure left its source untouched. The corrected window passes complete checksum checks.
+Identical snapshot aliases were hard links. Replacing them did not recover the initially expected disk space.
+The old source database used an owned memory mount. Its retirement needed an explicit unmount after container removal.
+Those preparation failures remain recorded. Original production backups and private model evidence remain retained.
+
+## Claude Review Window Prompt
+
+```text
+Window: Claude
+Review Sol's query embedding migration under docs/tasks/foundation-query-embedding.md.
+Read AGENTS.md, the scope, architecture, workflow, and service reference first.
+Review /root/PCAS-worktrees/foundation-deputy-main without changing or staging its files.
+Do not switch /root/PCAS or another executor's worktree.
+Use Chinese for findings and English for any requested repository correction.
+Verify the exact revision and source hash recorded with the private acceptance evidence.
+Check complete provider input, vector precision, retrieval ordering, access, and lexical fallback.
+Check actual secretary, deputy, and standalone execution identities and their fences.
+Check query reservations independently from deputy admission holds.
+Check shared foreground capacity, caller cancellation, and accounting connection progress.
+Check saved output, billing restart, dropped sessions, late responses, and private-body deletion.
+Verify that persistence recovery does not call a provider again.
+Verify explicit absent prompt metadata and the declared missing upstream source coverage.
+Inspect model-call boundary tests and the existing migration exceptions.
+Review all owner-data differences. Do not exclude fields or normalize evidence.
+Use the owned synthetic database and recorded provider replies for independent checks.
+Inspect recorded real default-model acceptance. Do not start additional paid calls without an assigned budget.
+Keep raw prompts, private replies, credentials, and database URLs outside Git and public findings.
+Report each defect with its code path, reproduction, expected behavior, and observed behavior.
+Separate new regressions from existing findings and fixture failures.
+Report unchecked coverage and uncertain judgments explicitly.
+Do not approve merge or release while a material finding remains unresolved.
+Do not create a PR, change package structure, or repair unrelated business symptoms.
+```
+
 ## Sol Window Prompt
 
 ```text
@@ -143,6 +238,7 @@ Window: Sol
 Continue Phase 3.9 under docs/tasks/foundation-query-embedding.md.
 Read AGENTS.md, this scope, and its current specification links first.
 Use your isolated worktree. Do not switch or stage /root/PCAS.
+Use verified owned source archives. Do not reuse retired container identities.
 Use Chinese for user replies and English for code, commits, and current documents.
 Verify the current recall, embedding, accounting, execution, and cleanup paths.
 Establish a strict unchanged baseline on a verified production-data copy before migration.

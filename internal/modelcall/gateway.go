@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"math"
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/ai"
@@ -39,9 +40,16 @@ type Request struct {
 	Prompt                json.RawMessage
 	Refs                  []memory.Ref
 	Policy                any
+	// Empty operation retains the existing text-generation contract.
+	Operation           string
+	ProviderSnapshot    *ai.Provider
+	ReservationEstimate *float64
 }
 
 func (r Request) RequiredCapabilities() []string {
+	if r.Operation == "embedding" {
+		return []string{"embedding"}
+	}
 	capabilities := []string{"text_generation"}
 	if r.Schema.Name() != "" {
 		capabilities = append(capabilities, "output_schema")
@@ -82,6 +90,12 @@ type Providers interface {
 	Available(string) bool
 	CheckGeneration(ai.Provider, ai.GenerationMode) error
 	GenerateProvider(context.Context, ai.Provider, string, string, ...ai.GenerationMode) (ai.Result, error)
+}
+
+// EmbeddingProviders uses the same gateway entry and accounting lifecycle.
+// Text-only contract fixtures need not implement an embedding transport.
+type EmbeddingProviders interface {
+	EmbedProviderUsage(context.Context, ai.Provider, []string) ([]memory.Embedding, ai.Result, error)
 }
 
 // Reservation describes the amount actually held. An admitted execution can
@@ -148,7 +162,19 @@ func (e *PersistenceError) Error() string { return e.Err.Error() }
 func (e *PersistenceError) Unwrap() error { return e.Err }
 
 func (g *Gateway) Call(ctx context.Context, request Request) (*PaidResult, error) {
-	if request.OwnerID == "" || request.ExecutionID == "" || request.RootExecutionID == "" || request.Function == "" || request.Stage == "" || request.Instructions.Name() == "" {
+	embedding := request.Operation == "embedding"
+	if request.OwnerID == "" || request.ExecutionID == "" || request.RootExecutionID == "" || request.Function == "" || request.Stage == "" || (!embedding && request.Instructions.Name() == "") || (request.Operation != "" && !embedding) {
+		return nil, memory.ErrInvalid
+	}
+	var texts []string
+	if embedding {
+		if request.ProviderID == "" || request.ProviderSnapshot == nil || request.ProviderSnapshot.ID != request.ProviderID || request.ProviderSnapshot.Model == "" || request.ReservationEstimate == nil || *request.ReservationEstimate < 0 || math.IsNaN(*request.ReservationEstimate) || math.IsInf(*request.ReservationEstimate, 0) || request.Instructions.Name() != "" || request.Schema.Name() != "" || request.Search || json.Unmarshal(request.Prompt, &texts) != nil || len(texts) == 0 {
+			return nil, memory.ErrInvalid
+		}
+		provider, estimate := *request.ProviderSnapshot, *request.ReservationEstimate
+		request.ProviderSnapshot, request.ReservationEstimate = &provider, &estimate
+		request.Prompt = append(json.RawMessage(nil), request.Prompt...)
+	} else if request.ProviderSnapshot != nil || request.ReservationEstimate != nil {
 		return nil, memory.ErrInvalid
 	}
 	saved, err := g.results.Load(ctx, request)
@@ -164,10 +190,13 @@ func (g *Gateway) Call(ctx context.Context, request Request) (*PaidResult, error
 			providerID = g.providers.ExtractionID()
 		}
 		provider, ok := g.providers.Get(providerID)
+		if embedding {
+			provider, ok = *request.ProviderSnapshot, true
+		}
 		if !ok {
 			return nil, ErrNotConfigured
 		}
-		if !g.providers.Available(provider.ID) {
+		if !embedding && !g.providers.Available(provider.ID) {
 			return nil, ErrNotAvailable
 		}
 		invocation, err := g.journal.Prepare(ctx, request, provider)
@@ -175,7 +204,19 @@ func (g *Gateway) Call(ctx context.Context, request Request) (*PaidResult, error
 			return nil, err
 		}
 		mode := ai.GenerationMode{Search: request.Search, Schema: request.Schema.Bytes()}
-		if err := g.providers.CheckGeneration(provider, mode); err != nil {
+		var capabilityErr error
+		if embedding {
+			if !provider.Embedding {
+				capabilityErr = &ai.CapabilityError{Capability: "embedding"}
+			} else if _, ok := g.providers.(EmbeddingProviders); !ok {
+				capabilityErr = &ai.CapabilityError{Capability: "embedding"}
+			} else if !g.providers.Available(provider.ID) {
+				capabilityErr = memory.ErrUnavailable
+			}
+		} else {
+			capabilityErr = g.providers.CheckGeneration(provider, mode)
+		}
+		if err := capabilityErr; err != nil {
 			return nil, errors.Join(err, g.journal.PreparationFailed(ctx, request, invocation, err))
 		}
 		modelPrompt := string(request.Prompt)
@@ -185,7 +226,12 @@ func (g *Gateway) Call(ctx context.Context, request Request) (*PaidResult, error
 		if json.Unmarshal(request.Prompt, &wrapped) == nil && wrapped.RawPrompt != "" {
 			modelPrompt = wrapped.RawPrompt
 		}
-		saved = &PaidResult{InvocationID: invocation, Prompt: request.Prompt, Provider: provider.ID, Model: provider.Model, Refs: request.Refs, ReservedCost: provider.Reserve(request.Instructions.Text() + modelPrompt)}
+		saved = &PaidResult{InvocationID: invocation, Prompt: request.Prompt, Provider: provider.ID, Model: provider.Model, Refs: request.Refs}
+		if embedding {
+			saved.ReservedCost = *request.ReservationEstimate
+		} else {
+			saved.ReservedCost = provider.Reserve(request.Instructions.Text() + modelPrompt)
+		}
 		reservation, err := g.accounting.Reserve(ctx, request, saved.ReservedCost)
 		if err != nil {
 			if journalErr := g.journal.PreparationFailed(ctx, request, invocation, err); journalErr != nil {
@@ -206,7 +252,19 @@ func (g *Gateway) Call(ctx context.Context, request Request) (*PaidResult, error
 			}
 			return nil, errors.Join(err, journalErr, settleErr, g.journal.AccountingState(ctx, request, saved, state))
 		}
-		result, callErr := g.providers.GenerateProvider(ctx, provider, request.Instructions.Text(), modelPrompt, mode)
+		var result ai.Result
+		var callErr error
+		if embedding {
+			var vectors []memory.Embedding
+			vectors, result, callErr = g.providers.(EmbeddingProviders).EmbedProviderUsage(ctx, provider, texts)
+			if callErr == nil {
+				data, encodeErr := json.Marshal(vectors)
+				result.Text = string(data)
+				callErr = encodeErr
+			}
+		} else {
+			result, callErr = g.providers.GenerateProvider(ctx, provider, request.Instructions.Text(), modelPrompt, mode)
+		}
 		saved.Output, saved.DurationMS = result.Text, result.DurationMS
 		saved.Searches = result.Searches
 		saved.InputTokens, saved.OutputTokens = result.InputTokens, result.OutputTokens

@@ -128,7 +128,12 @@ Backup, readiness, live default Codex accounting, and cleanup checks pass. Claim
 The next [query embedding scope](tasks/foundation-query-embedding.md) covers the complete recall call, execution identity, accounting recovery, and visible fallback.
 Its unchanged secretary-path replay passes at `6411b4e`, with exact recorded provider inputs and no live provider starts.
 Complete starting owner data matches the original row multiset. Both complete raw snapshots remain reconstructable without field exclusions.
-The initial row-order assertion and fixture preparation failures remain recorded. Implementation and migration acceptance are outstanding.
+
+The query migration is implemented in Sol's isolated worktree and remains unreleased.
+Strict migration replay preserves provider inputs and original query spending. Complete owner-data differences are retained and classified.
+The recorded self-check failure remains present before and after migration. Real-model acceptance, independent review, complete CI, and release remain outstanding.
+
+The full local serial check reaches its thirty-minute package timeout during an existing comparison-scale test. Its failure remains recorded.
 
 Registered instructions and four output schemas preserve their original bytes and field order.
 The secretary keeps its original shared deadline and two-attempt retry policy.

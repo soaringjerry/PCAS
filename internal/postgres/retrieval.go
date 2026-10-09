@@ -13,9 +13,12 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/soaringjerry/PCAS/internal/ai"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/modelcall"
+	"github.com/soaringjerry/PCAS/internal/prompts"
 )
+
+type recallCommandOriginKey struct{}
 
 func normalizedBudget(b memory.Budget) (memory.Budget, error) {
 	if b.Candidates < 0 || b.Candidates > 1000 || b.Edges < 0 || b.Edges > 1000 || b.Tokens < 0 || b.Tokens > 32000 || b.Hops < 0 || b.Hops > 3 {
@@ -38,8 +41,8 @@ func normalizedBudget(b memory.Budget) (memory.Budget, error) {
 func coverage() memory.Coverage {
 	return memory.Coverage{Complete: true, Gaps: []string{}, PendingSources: []memory.ID{}}
 }
-func (s *Store) Recall(ctx context.Context, scope memory.Scope, in memory.RecallRequest) (memory.RecallResult, error) {
-	out := memory.RecallResult{Memories: []memory.Ref{}, Evidence: []memory.Evidence{}, Unresolved: []string{}, Coverage: coverage(), FollowUps: []string{}}
+func (s *Store) Recall(ctx context.Context, scope memory.Scope, in memory.RecallRequest) (out memory.RecallResult, err error) {
+	out = memory.RecallResult{Memories: []memory.Ref{}, Evidence: []memory.Evidence{}, Unresolved: []string{}, Coverage: coverage(), FollowUps: []string{}}
 	if !scope.Valid() {
 		return out, memory.ErrForbidden
 	}
@@ -91,28 +94,84 @@ func (s *Store) Recall(ctx context.Context, scope memory.Scope, in memory.Recall
 	// Query-time embedding is optional. Missing semantic coverage is explicit.
 	var vector []byte
 	var model string
+	var invocation memory.ID
+	var readExecution *modelcall.Request
+	var releaseRead func() error
 	if query != "" && s.models != nil && s.models.EmbeddingID() != "" {
 		provider, _ := s.models.Get(s.models.EmbeddingID())
 		var embeddings []memory.Embedding
 		var e error
-		var reservationID string
 		reserved := float64(len(query)+16) * provider.InputPerMillion / 1e6
-		if !s.models.Available(provider.ID) {
-			e = memory.ErrUnavailable
-		} else {
-			reservationID, e = s.reserveModelCostID(ctx, scope.OwnerID, reserved, nil)
+		request, hasParent := ctx.Value(interactiveExecutionKey{}).(modelcall.Request)
+		if hasParent && request.OwnerID != scope.OwnerID {
+			return out, memory.ErrForbidden
+		}
+		if !hasParent {
+			request, releaseRead, e = (interactiveCalls{store: s}).beginRecall(ctx, scope)
+		}
+		if releaseRead != nil {
+			defer func() {
+				if releaseErr := releaseRead(); releaseErr != nil {
+					err = errors.Join(err, releaseErr, s.recordRecallFailure(ctx, scope.OwnerID, "read_session_release", releaseErr))
+				}
+			}()
 		}
 		if e == nil {
-			var usage ai.Result
-			embeddings, usage, e = s.models.EmbedProviderUsage(ctx, provider, []string{provider.EmbeddingQueryPrefix + query})
-			reserved = usage.Cost
-			if usage.InputTokens > 0 {
-				if err := s.recordUsage(ctx, modelUsage{OwnerID: scope.OwnerID, ID: memory.ID(reservationID), Purpose: "query_embedding", AgentID: provider.ID, Model: provider.Model, DurationMS: usage.DurationMS, InputTokens: usage.InputTokens, InputEstimated: usage.InputEstimated, Cost: usage.Cost, CostEstimated: usage.CostEstimated}); err != nil {
-					return out, err
+			policy, ok := request.Policy.(interactiveCallPolicy)
+			if !ok {
+				return out, memory.ErrInvalid
+			}
+			policy.RecallScope, policy.BudgetOwner, policy.InputPolicy, policy.RetryOf = &scope, "", "", ""
+			if policy.AgentID == "" {
+				policy.AgentID = scope.PrincipalID
+			}
+			policy.Usage = modelUsage{Purpose: "query_embedding"}
+			if policy.Kind == "deputy" {
+				policy.Usage.RunID = string(request.ExecutionID)
+			}
+			if origin, ok := ctx.Value(recallCommandOriginKey{}).(string); ok {
+				policy.CommandOrigin = origin
+			}
+			request.Policy = policy
+			request.Function, request.Stage = "query_embedding", fmt.Sprintf("query:%x", sha256.Sum256(asJSON(map[string]any{"query": query, "scope": recallScopeManifest(scope)})))
+			request.Operation, request.ProviderID, request.ProviderSnapshot, request.ReservationEstimate = "embedding", provider.ID, &provider, &reserved
+			request.Instructions, request.Schema, request.Search = prompts.Definition{}, prompts.Schema{}, false
+			request.ContextBuilderVersion = "recall-query-v1"
+			request.Prompt, request.Refs = asJSON([]string{provider.EmbeddingQueryPrefix + query}), nil
+			readExecution = &request
+			type returned struct {
+				paid *modelcall.PaidResult
+				err  error
+			}
+			finished := make(chan returned, 1)
+			go func() {
+				paid, err := s.calls.Call(executionCallContext(ctx, "query_embedding"), request)
+				finished <- returned{paid, err}
+			}()
+			select {
+			case <-ctx.Done():
+				e = ctx.Err()
+			case result := <-finished:
+				e = result.err
+				var failure *modelcall.Failure
+				if errors.As(e, &failure) {
+					invocation = failure.InvocationID
+				}
+				if result.paid != nil {
+					invocation = result.paid.InvocationID
+				}
+				if e == nil {
+					e = json.Unmarshal([]byte(result.paid.Output), &embeddings)
 				}
 			}
-			if err := s.settleModelCost(ctx, scope.OwnerID, reservationID, reserved); err != nil {
-				return out, err
+			var persistence *modelcall.PersistenceError
+			if errors.As(e, &persistence) {
+				return out, e
+			}
+		}
+		if e != nil {
+			if recordErr := s.recordRecallFailure(ctx, scope.OwnerID, "semantic_fallback", e); recordErr != nil {
+				return out, errors.Join(e, recordErr)
 			}
 		}
 		if e == nil && len(embeddings) == 1 {
@@ -123,10 +182,28 @@ func (s *Store) Recall(ctx context.Context, scope memory.Scope, in memory.Recall
 		}
 	} else {
 		out.Coverage.Gaps = append(out.Coverage.Gaps, "未配置语义索引；模糊措辞的覆盖尚不完整")
+		reason := "provider_not_configured"
+		if query == "" {
+			reason = "empty_query"
+		}
+		if err := s.recordRecallEvent(ctx, scope.OwnerID, "deferred", reason); err != nil {
+			return out, err
+		}
 	}
 	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		return s.recallTx(ctx, tx, scope, in, b, query, fts, vector, model, offset, fingerprint, tokens, &out)
 	})
+	if readExecution != nil && invocation != "" {
+		outcome, reason := "used", "query_vector_used"
+		if err != nil {
+			outcome, reason = "not_applicable", "retrieval_failed"
+		} else if vector == nil {
+			outcome, reason = "not_applicable", "semantic_fallback"
+		}
+		if finishErr := (interactiveCalls{store: s}).finishRecall(ctx, *readExecution, invocation, outcome, reason); finishErr != nil {
+			return out, errors.Join(err, finishErr)
+		}
+	}
 	if len(out.Coverage.PendingSources) > 0 {
 		out.Coverage.Gaps = append(out.Coverage.Gaps, "部分资料尚未完成索引或抽取；可通过原文继续追溯")
 	}

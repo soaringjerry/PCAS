@@ -112,7 +112,8 @@ func (s *Store) prepareRunContext(ctx context.Context, scope memory.Scope, c wor
 	if projectID != "" {
 		request.Context.Objects = []memory.ID{memory.ID(projectID)}
 	}
-	result, err := s.Recall(ctx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: c.AgentID, Team: true}, request)
+	queryCtx := context.WithValue(ctx, recallCommandOriginKey{}, c.RequestID)
+	result, err := s.Recall(queryCtx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: c.AgentID, Team: true}, request)
 	if err != nil {
 		return ctx, err
 	}

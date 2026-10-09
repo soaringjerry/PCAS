@@ -22,12 +22,12 @@ import (
 func TestProductionProviderCallsUseDeclaredMigrationBoundaries(t *testing.T) {
 	allowed := map[string]int{
 		"internal/modelcall/gateway.go:Call:GenerateProvider":                 1,
+		"internal/modelcall/gateway.go:Call:EmbedProviderUsage":               1,
 		"internal/httpapi/model_settings.go:modelSettingsRoutes:Route":        1,
 		"internal/httpapi/workspace.go:workspaceRoutes:Route":                 1,
 		"internal/postgres/attachments.go:parseAttachment:TranscribeUsage":    1,
 		"internal/postgres/desk.go:AnswerDesk:GenerateWithSearch":             1,
 		"internal/postgres/processing.go:ProcessEmbedding:EmbedProviderUsage": 1,
-		"internal/postgres/retrieval.go:Recall:EmbedProviderUsage":            1,
 		"internal/postgres/vision.go:readImage:Vision":                        1,
 		"internal/telegram/poller.go:handle:Transcribe":                       1,
 	}

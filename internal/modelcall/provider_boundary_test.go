@@ -28,7 +28,6 @@ func TestProductionProviderCallsUseDeclaredMigrationBoundaries(t *testing.T) {
 		"internal/postgres/desk.go:AnswerDesk:GenerateWithSearch":             1,
 		"internal/postgres/processing.go:ProcessEmbedding:EmbedProviderUsage": 1,
 		"internal/postgres/retrieval.go:Recall:EmbedProviderUsage":            1,
-		"internal/postgres/status_build.go:statusGenerate:Generate":           1,
 		"internal/postgres/vision.go:readImage:Vision":                        1,
 		"internal/telegram/poller.go:handle:Transcribe":                       1,
 	}

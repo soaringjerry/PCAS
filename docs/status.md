@@ -120,6 +120,11 @@ Claim counts remain unchanged after cleanup by the check's identities.
 The first release attempt failed during a disk-space incident. The delivery record retains that failure, recovery, and the corrected release space check.
 This delivery does not complete Phase 3.9.
 
+The next [unused generation cleanup](tasks/foundation-unused-generation.md) removes confirmed unused card instructions and their generation method.
+Old card queue acknowledgement and current-state workflows remain in scope for preservation checks.
+The removal is implemented in the executor branch. Filtered repository and pgvector integration checks pass.
+Complete CI, integration, and release remain outstanding.
+
 Registered instructions and four output schemas preserve their original bytes and field order.
 The secretary keeps its original shared deadline and two-attempt retry policy.
 

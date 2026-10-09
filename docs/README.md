@@ -24,6 +24,7 @@ Historical tasks, research, and evaluations are evidence. They do not assign new
 | [Foundation Recorded Replay](tasks/foundation-recorded-replay.md) | Sol's production-copy capture, replay, comparison, isolation, and acceptance scope. |
 | [Foundation Interactive Gateway](tasks/foundation-interactive-gateway.md) | Delivered secretary, reader, and self-check migration, release checks, and remaining replay limitations. |
 | [Foundation Deputy Gateway](tasks/foundation-deputy-gateway.md) | Main deputy generation, revision recovery, reservation reuse, and application tracing. |
+| [Foundation Unused Generation Cleanup](tasks/foundation-unused-generation.md) | Unused card generation removal, surviving queue compatibility, checks, and delivery scope. |
 | [Historical Records](history/README.md) | Retired designs and interpretation of past records. |
 
 ## Document Authority

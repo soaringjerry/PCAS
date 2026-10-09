@@ -49,6 +49,13 @@ Interrupted started calls retain unknown outcomes and reservations until their a
 Deputy self-check now uses the gateway with its existing run and lease.
 Its existing result notice identifies incomplete checks and rejected output. The draft remains available after fallback.
 
+Main deputy generation and revision also use the gateway, released at `f0ee817` on 2026-10-09.
+The main call uses the original run reservation. Reader and review stages keep their separate accounting identities.
+
+Known results survive retryable writes without another provider call. Application checks the current lease and original execution.
+The applied document links to the actual selected invocation, including a saved revision result.
+The [deputy delivery record](tasks/foundation-deputy-gateway.md#release-verification) gives replay, Codex, CI, backup, and live evidence.
+
 Heavy readers and secretary self-check now use the same gateway through `useModelCall`.
 Each selection or page has its own stage identity. Later requested reading cannot reuse an initial reader's result slot.
 
@@ -64,6 +71,11 @@ Unknown outcomes retain the reservation and return a visible incomplete-operatio
 This extension was released at `022a912` on 2026-10-09.
 Its [acceptance record](tasks/foundation-interactive-gateway.md#final-acceptance) includes complete CI, strict replay, real default Codex, backup, and live cleanup.
 Complete replay equivalence remains incomplete. Other provider entry points still have declared migration exceptions.
+
+Unused card instructions and generation were removed at `6411b4e`.
+The old card queue acknowledgement and current-state helpers retain their behavior.
+The [cleanup delivery record](tasks/foundation-unused-generation.md#release-verification) gives CI and release evidence.
+Query embedding still calls its provider directly. Its [migration scope](tasks/foundation-query-embedding.md) defines the next complete recall-path work.
 
 ### Background Call Evidence
 

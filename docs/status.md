@@ -125,6 +125,11 @@ The [unused generation cleanup](tasks/foundation-unused-generation.md#release-ve
 The old card queue handler retains its original bytes. Current-state contracts and complete branch and main CI pass.
 Backup, readiness, live default Codex accounting, and cleanup checks pass. Claim counts remain unchanged.
 
+The next [query embedding scope](tasks/foundation-query-embedding.md) covers the complete recall call, execution identity, accounting recovery, and visible fallback.
+Its unchanged secretary-path replay passes at `6411b4e`, with exact recorded provider inputs and no live provider starts.
+Complete starting owner data matches the original row multiset. Both complete raw snapshots remain reconstructable without field exclusions.
+The initial row-order assertion and fixture preparation failures remain recorded. Implementation and migration acceptance are outstanding.
+
 Registered instructions and four output schemas preserve their original bytes and field order.
 The secretary keeps its original shared deadline and two-attempt retry policy.
 

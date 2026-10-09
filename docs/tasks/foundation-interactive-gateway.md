@@ -51,7 +51,8 @@ The background default keeps ordinary generation. Existing interactive callers s
 Four output schemas now use registered, immutable content and hashes.
 Their bytes and field order match the preceding source.
 The assigned fixed instructions and shared components also use registered assets with unchanged bytes.
-The interactive journal, caller migration, complete input binding, replay acceptance, and release remain pending.
+The interactive storage adapter and input binding now have an initial implementation.
+Caller migration, complete recovery acceptance, replay, and release remain pending.
 
 | Local check | Observed result |
 |---|---|
@@ -81,7 +82,44 @@ The compiled registry hashes match every preceding instruction byte, including s
 
 Formatting, vet, build, registry and provider race checks, resolved architecture checks, and targeted database checks passed.
 The database checks also covered secretary transient retries, deadline preservation, failure classification, and request idempotency.
-The complete instruction-transfer CI result remains pending.
+The [complete instruction-transfer CI](https://github.com/soaringjerry/PCAS/actions/runs/37878140730) passed all 13 jobs at `6a78a0d`.
+
+### Interactive Storage Adapter
+
+The existing gateway now selects storage adapters for leased background jobs or interactive executions.
+The interactive policy identifies an admitted secretary request or an existing deputy lease.
+The adapter does not create queue jobs. No production caller uses the interactive adapter yet.
+
+Each interactive invocation has its own result key, reservation, usage link, and safe failure metadata.
+Input binding includes execution, stage, provider, instruction, schema, mode, context version, payload hash, and references.
+Recovered accounting uses the original usage identity, presentation turn, tier, plan, and time.
+The adapter does not need an available provider to recover a stored result.
+Recovery validates the originally recorded provider and model. It does not replace them with current settings.
+
+Secretary admission checks read the committed fence without acquiring its long-held transaction lock.
+Late or invalidated results finish accounting before application rejection.
+The existing source-deletion transaction removes interactive bodies through their storage owner.
+It preserves accounting metadata and marks the input deleted. A later response cannot restore those bodies.
+
+Unknown results retain their reservations and safe provider error classification.
+Only an explicit, applicable secretary transient retry can replace an invocation.
+The counter keeps the existing two-attempt limit. Reader and self-check stages have no new retry allowance.
+The caller still owns the shared deadline and retry wait.
+
+Synthetic database checks cover independent concurrent pages, admission-lock compatibility, input changes, and accounting recovery after restart.
+They also cover result-write recovery, deleted inputs, late responses, and bounded unknown-outcome retry.
+Existing background recovery checks still pass. Package race checks, formatting, vet, and build remain required before delivery.
+
+The first unknown-outcome fixture omitted its required output schema.
+Its protocol helper then failed before producing the requested model failure.
+The private log retains that finding. The corrected fixture uses the actual secretary output mode; the checks then passed.
+
+A later check found that JSON `null` in an unavailable receipt was incorrectly compared with the original payload.
+Recovery now clears that body-free marker before input validation. The deletion contract verifies the rejection and retained accounting.
+
+Complete exact-revision CI, migrated deputy and secretary state checks, strict replay, and real default-channel acceptance remain outstanding.
+This adapter implementation does not establish complete recovery after every possible process crash.
+A process can lose an unsaved response during a database outage; its started invocation must not be silently submitted again.
 
 ## Call Contract
 

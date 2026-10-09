@@ -38,7 +38,12 @@ The gateway records unsupported required modes before budget reservation. It doe
 Four secretary and reader output schemas now come from the registry with unchanged bytes and field order.
 Secretary, reader, and self-check instructions also use registered assets. Shared instruction components have one copy.
 
+The [interactive storage adapter](../internal/postgres/model_calls_interactive.go) now implements the same gateway ports for admitted requests and deputy leases.
+It keeps separate invocation result keys, complete input binding, original accounting identities, and safe failure classifications.
+The source owner removes those private result bodies in its existing deletion transaction. Billing metadata remains available.
+
 The existing interactive callers have not yet migrated. Their legacy provider behavior remains an open boundary.
+This candidate adapter has synthetic checks. Complete replay and real default-channel acceptance remain pending.
 
 ### Background Call Evidence
 

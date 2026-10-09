@@ -21,8 +21,9 @@ import (
 var migrations embed.FS
 
 type Store struct {
-	pool        *pgxpool.Pool
-	pendingPaid sync.Map
+	pool               *pgxpool.Pool
+	pendingPaid        sync.Map
+	pendingInteractive sync.Map
 	// DeskTurn also borrows a connection for Recall and budget reservation.
 	secretarySlots chan struct{}
 	models         *ai.Registry
@@ -45,7 +46,7 @@ func (s *Store) businessNow() time.Time {
 
 func (s *Store) SetModels(models *ai.Registry) {
 	s.models = models
-	adapter := backgroundCalls{store: s}
+	adapter := modelCallStorage{backgroundCalls{store: s}, interactiveCalls{store: s}}
 	var providers modelcall.Providers
 	if models != nil {
 		providers = models

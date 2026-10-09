@@ -13,7 +13,7 @@ type CodexError struct {
 	Category   string
 	RPCCode    int
 	HTTPStatus int
-	Cause      error
+	Cause      error `json:"-"`
 }
 
 func (e *CodexError) Error() string {
@@ -21,6 +21,25 @@ func (e *CodexError) Error() string {
 }
 
 func (e *CodexError) Unwrap() error { return e.Cause }
+
+// SafeMetadata retains machine classification without diagnostic causes or text.
+func (e *CodexError) SafeMetadata() *CodexError {
+	out := &CodexError{Category: codexErrorCategory(e.Category), RPCCode: e.RPCCode}
+	switch e.Category {
+	case "refresh_token_reused", "refresh_token_expired", "refresh_token_invalidated",
+		"sign_in_required", "transport_error", "timeout", "canceled", "event_buffer_exceeded",
+		"turn_failed", "turn_interrupted", "empty_output", "invalid_thread", "invalid_turn":
+		out.Category = e.Category
+	}
+	switch e.Operation {
+	case "initialize", "account/read", "thread/start", "turn/start", "turn/completed":
+		out.Operation = e.Operation
+	}
+	if e.HTTPStatus >= 100 && e.HTTPStatus <= 599 {
+		out.HTTPStatus = e.HTTPStatus
+	}
+	return out
+}
 
 type codexTurnError struct {
 	Info    json.RawMessage `json:"codexErrorInfo"`

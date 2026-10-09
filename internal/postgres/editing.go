@@ -553,6 +553,9 @@ func (s *Store) deleteRecordsTx(ctx context.Context, tx pgx.Tx, scope memory.Sco
 			}
 		}
 	}
+	if err := (interactiveCalls{store: s}).scrubInputsTx(ctx, tx, scope.OwnerID, ids); err != nil {
+		return err
+	}
 	for _, sql := range []string{
 		`INSERT INTO blob_cleanup_jobs(owner_id,blob_key) SELECT owner_id,blob_key FROM source_versions WHERE owner_id=$1 AND source_id=ANY($2::uuid[]) AND blob_key IS NOT NULL ON CONFLICT DO NOTHING`,
 		// Retain only the opaque owner/agent-bound ID as a deletion tombstone.

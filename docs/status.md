@@ -111,6 +111,11 @@ Secretary, reader, and self-check calls still use their legacy wrappers until th
 The replay diagnostic now [reports signed row changes and precise field differences](evaluations/2026-10-08-foundation-recorded-replay.md#signed-difference-verification).
 The existing extraction and secretary cases retain their unresolved findings. This does not close the replay layer.
 
+The interactive storage adapter now uses the existing gateway ports and storage tables.
+Synthetic contracts cover accounting recovery, stage separation, input binding, deletion, and late-response rejection.
+Instruction-transfer CI passed at `6a78a0d`. Caller migration and complete interactive acceptance remain outstanding.
+These changes remain foundation candidates. They have not been deployed.
+
 ## Documentation Changes
 
 Product requirements are merged into the whitepaper.

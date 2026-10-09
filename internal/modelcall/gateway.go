@@ -19,6 +19,7 @@ var (
 	ErrOutcomeUnknown          = errors.New("provider_outcome_unknown")
 	ErrRetryExhausted          = errors.New("provider_recovery_exhausted")
 	ErrRecoveryBudgetExhausted = errors.New("provider_recovery_budget_exhausted")
+	ErrNotApplicable           = errors.New("paid_result_not_applicable")
 )
 
 // Request separates execution identity from an individual paid invocation.
@@ -54,10 +55,12 @@ func (r Request) RequiredCapabilities() []string {
 // PaidResult retains the original input and billing identity on every retry.
 // Legacy receipts can lack InvocationID; do not invent historical metadata.
 type PaidResult struct {
-	InvocationID    memory.ID `json:"invocationId,omitempty"`
-	CallErrorCode   string    `json:"callErrorCode,omitempty"`
-	ReservedCost    float64   `json:"reservedCost,omitempty"`
-	Searches        []string  `json:"searches,omitempty"`
+	InvocationID    memory.ID       `json:"invocationId,omitempty"`
+	CallErrorCode   string          `json:"callErrorCode,omitempty"`
+	FailureDetails  *FailureDetails `json:"failureDetails,omitempty"`
+	NotApplicable   bool            `json:"notApplicable,omitempty"`
+	ReservedCost    float64         `json:"reservedCost,omitempty"`
+	Searches        []string        `json:"searches,omitempty"`
 	DurationMS      *int64
 	Prompt          json.RawMessage
 	Output          string
@@ -116,11 +119,19 @@ func New(providers Providers, accounting Accounting, results Results, journal Jo
 // Failure gives the calling workflow the facts needed for its existing policy.
 type Failure struct {
 	Code         string
+	InvocationID memory.ID
+	Details      *FailureDetails
 	ReservedCost float64
 	Reservation  string
 }
 
 func (e *Failure) Error() string { return e.Code }
+
+func (e *Failure) Is(target error) bool {
+	return target == ErrOutcomeUnknown && e.Code == ErrOutcomeUnknown.Error()
+}
+
+func (e *Failure) Unwrap() error { return e.Details.cause() }
 
 func (g *Gateway) Call(ctx context.Context, request Request) (*PaidResult, error) {
 	if request.OwnerID == "" || request.ExecutionID == "" || request.RootExecutionID == "" || request.Function == "" || request.Stage == "" || request.Instructions.Name() == "" {
@@ -172,7 +183,13 @@ func (g *Gateway) Call(ctx context.Context, request Request) (*PaidResult, error
 		if err := g.journal.Start(ctx, request, saved); err != nil {
 			// No provider call occurred. Release the reservation, without masking
 			// a failed lifecycle write or starting an unrecorded invocation.
-			return nil, errors.Join(err, g.accounting.Settle(ctx, request, saved))
+			journalErr := g.journal.PreparationFailed(ctx, request, invocation, err)
+			settleErr := g.accounting.Settle(ctx, request, saved)
+			state := "settled"
+			if settleErr != nil {
+				state = "failed"
+			}
+			return nil, errors.Join(err, journalErr, settleErr, g.journal.AccountingState(ctx, request, saved, state))
 		}
 		result, callErr := g.providers.GenerateProvider(ctx, provider, request.Instructions.Text(), modelPrompt, mode)
 		saved.Output, saved.DurationMS = result.Text, result.DurationMS
@@ -181,6 +198,7 @@ func (g *Gateway) Call(ctx context.Context, request Request) (*PaidResult, error
 		saved.InputEstimated, saved.OutputEstimated, saved.CostEstimated = result.InputEstimated, result.OutputEstimated, result.CostEstimated
 		saved.Cost = result.Cost
 		if callErr != nil {
+			saved.FailureDetails = failureDetails(callErr)
 			saved.CallErrorCode = "model_call_failed"
 			if errors.Is(callErr, memory.ErrUnavailable) {
 				saved.CallErrorCode = "provider_unavailable"
@@ -214,12 +232,15 @@ func (g *Gateway) Call(ctx context.Context, request Request) (*PaidResult, error
 			if err := g.results.Forget(ctx, request, saved); err != nil {
 				return nil, err
 			}
-			return nil, ErrOutcomeUnknown
+			return nil, &Failure{Code: saved.CallErrorCode, InvocationID: saved.InvocationID, Details: saved.FailureDetails, ReservedCost: saved.ReservedCost, Reservation: saved.Reservation}
 		}
 		if err := g.results.Forget(ctx, request, saved); err != nil {
 			return nil, err
 		}
-		return nil, &Failure{Code: saved.CallErrorCode, ReservedCost: saved.ReservedCost, Reservation: saved.Reservation}
+		return nil, &Failure{Code: saved.CallErrorCode, InvocationID: saved.InvocationID, Details: saved.FailureDetails, ReservedCost: saved.ReservedCost, Reservation: saved.Reservation}
+	}
+	if saved.NotApplicable {
+		return nil, ErrNotApplicable
 	}
 	return saved, nil
 }

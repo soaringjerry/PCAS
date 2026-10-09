@@ -12,20 +12,21 @@ import (
 )
 
 type generationFixture struct {
-	provider      ai.Provider
-	called        ai.Provider
-	prepared      Request
-	mode          ai.GenerationMode
-	paid          *PaidResult
-	failAt        string
-	capabilityErr error
-	failure       error
-	afterReserve  func()
-	calls         int
-	reservations  int
-	records       int
-	settlements   int
-	estimate      float64
+	provider        ai.Provider
+	called          ai.Provider
+	prepared        Request
+	mode            ai.GenerationMode
+	paid            *PaidResult
+	failAt          string
+	capabilityErr   error
+	failure         error
+	generationError error
+	afterReserve    func()
+	calls           int
+	reservations    int
+	records         int
+	settlements     int
+	estimate        float64
 }
 
 func (f *generationFixture) Get(id string) (ai.Provider, bool) {
@@ -45,7 +46,7 @@ func (f *generationFixture) GenerateProvider(_ context.Context, p ai.Provider, _
 	if f.mode.Search {
 		result.Searches = []string{"Fictitious public query."}
 	}
-	return result, nil
+	return result, f.generationError
 }
 func (f *generationFixture) Reserve(_ context.Context, _ Request, estimate float64) (string, error) {
 	f.reservations++

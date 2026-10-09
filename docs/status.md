@@ -38,6 +38,7 @@ The [Roadmap](whitepaper.md#10-roadmap) gives the phase sequence, delivery scope
 | Phase 3.5 | Automatic-item release on 2026-10-08. | [Rollout](evaluations/2026-10-08-phase3_5-rollout.md). |
 | Phase 3.6 | Date-review release on 2026-10-08. | [Rollout](evaluations/2026-10-08-phase3_6-rollout.md). |
 | Phase 3.9 shared skeleton | First background scope released at `935ad5b`. Phase 3.9 remains incomplete. | [Acceptance and live check](evaluations/2026-10-08-foundation-shared-skeleton.md). |
+| Phase 3.9 recorded replay | Diagnostics and approved business-clock extension released at `b39a9ea` on 2026-10-09. Complete state equivalence remains incomplete. | [Replay and release evidence](evaluations/2026-10-08-foundation-recorded-replay.md#release-verification). |
 
 Phase 2.0 was rolled back on 2026-10-01.
 Its design is stored under the recorded `archive/phase2-0/*` tags.
@@ -93,13 +94,15 @@ The [architecture acceptance](architecture.md#10-foundation-acceptance) governs 
 |---|---|---|
 | First | Architecture documents, responsibilities, and existing-path inventory. | Initial direction and inventory recorded. Refresh affected paths before each migration. |
 | Second | Shared gateway, registered prompts, and architecture checks. | First background skeleton released at `935ad5b`. Complete provider and owner coverage remains outstanding. |
-| Third | Recorded production-copy replay. | [Evidence](evaluations/2026-10-08-foundation-recorded-replay.md) recorded. Background and secretary transport replay work without live calls. Business-clock control passed. Complete state equivalence remains incomplete. |
+| Third | Recorded production-copy replay. | [Diagnostics and clock extension released](evaluations/2026-10-08-foundation-recorded-replay.md#release-verification) at `b39a9ea`. Background and secretary transport replay work without live calls. Complete state equivalence remains incomplete. |
 | Fourth | Owner pilot, then complete business paths and remaining model calls. | Domain extraction has not started. Keep temporary adapters until their named callers migrate. |
 | Fifth | Unified activity queries, declared event responses, and causal-chain limits. | Targets. Existing records and queue supply their starting mechanisms. |
 | Sixth | Complete five-layer and whole-system acceptance. | Outstanding. Include resource comparisons and traces for incorrect and missing expected actions. |
 
 The order identifies dependencies. Compatible scopes can proceed together after their prerequisites are established.
 Start nightly evaluation after complete gateway coverage under the architecture's [test contract](architecture.md#five-test-layers).
+The [interactive gateway proposal](tasks/foundation-interactive-gateway.md) defines a bounded next scope before owner extraction.
+It requires coordinator assignment and has no implemented source changes.
 
 ## Documentation Changes
 

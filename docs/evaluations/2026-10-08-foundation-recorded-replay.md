@@ -19,7 +19,8 @@ Snapshot hashes cover uncompressed bytes. The comparator uses row multisets, not
 An early uncompressed snapshot was compressed and checked against its original hash before removing the duplicate file.
 Identical starting snapshots share storage only after their complete compressed fingerprints match.
 
-A redundant database-archive attempt exhausted available host storage and failed.
+A redundant database-archive procedure exhausted available host storage and failed during cleanup.
+The archive itself completed and passed its restore-list check before that failure.
 The completed case snapshots and model transcripts remained intact.
 The temporary archive was removed after the procedure failed.
 Only the two verified owned clock-case databases were removed after checking complete evidence and no active connections.
@@ -96,8 +97,33 @@ The full `make test-integration` attempt did not pass.
 Four existing Phase 3 tests reported PostgreSQL storage-exhaustion errors during the host-space incident.
 The package then reached its 30-minute timeout while loading the Phase 2.6 priority fixture.
 After space recovery, the four affected tests and both clock checks passed together with the race detector.
-Complete integration coverage still requires the existing CI slices.
+The exact-revision CI slices subsequently passed, as recorded below.
 No frontend file changed.
-No production migration or release occurred for this diagnostic work.
-The released API and worker remain on `935ad5b`.
-Full CI and direct integration remain outstanding for the diagnostic implementation.
+No production migration was added for this diagnostic work.
+
+## Release Verification
+
+Released revision: `b39a9eab41a1b8015c4f9fdd016582fce322b09f`, on 2026-10-09 UTC.
+This release includes the diagnostics and approved business-clock extension.
+It does not certify complete state equivalence or close Phase 3.9.
+
+| Check | Observed result |
+|---|---|
+| [Phase CI](https://github.com/soaringjerry/PCAS/actions/runs/37868807375) | All thirteen jobs passed for the released revision. |
+| [Main CI](https://github.com/soaringjerry/PCAS/actions/runs/37870089363) | All thirteen jobs passed for the same revision after direct integration. |
+| Other main evaluation workflows | The doing and independent evaluation workflows passed for the same revision. |
+| Backup | Custom-format `pg_dump` and complete file-volume archive completed. Restore-list checks passed. Private configuration was backed up. Both archives have recorded fingerprints. |
+| Existing data | Owner memory, claim, source, and work-item counts were unchanged during deployment migration verification. No new migration was necessary. |
+| Runtime | API and worker use the pinned release image. Source contents and image revision were verified. Readiness passed. |
+| Real default channel | Codex used `gpt-6.1-sol`. The reply was the requested deployment-check answer, with measured input and output tokens. No notices or unexpected actions were returned. |
+| Own-request cleanup | Cleanup succeeded. No source for the test request remained. Total and active claims each remained at 5253. |
+
+Actual requests, replies, accounting details, backup locations, and release logs remain in private evidence outside Git.
+The local timeout and storage-exhaustion findings above remain recorded failures; CI success does not change those historical results.
+
+The follow-up documentation check attempted `env -u PCAS_TEST_DATABASE_URL make check`.
+The older scale fixtures start their own databases even without that variable.
+The executor stopped the verified check process tree and removed its database after checking the test process's connections.
+This attempt remains incomplete. It is not a passing full local check.
+The documentation commit changes no runtime source. Storage coverage comes from the exact-revision CI above.
+Formatting, vet, build, and document index, link, anchor, and writing checks passed separately.

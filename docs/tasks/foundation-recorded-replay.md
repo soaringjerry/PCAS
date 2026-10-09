@@ -97,7 +97,10 @@ The coordinator approved the business-clock extension after a strict replay reje
 The new secretary recording and strict offline replay passed with the same fixed business time.
 
 The original preparation record changed documents only. Its runtime remained at released revision `935ad5b`.
-The approved clock extension now changes runtime source. Current full checks and direct integration remain outstanding.
+The approved clock extension changes runtime source and was released at `b39a9ea` on 2026-10-09 UTC.
+Phase and main CI each passed all thirteen checks for that exact revision.
+The release followed verified database, file, and private configuration backups.
+The live default Codex check passed. Claims remained at 5253 after own-request cleanup.
 Earlier interrupted or timed-out full local attempts remain incomplete, as recorded in the acceptance reports.
 
 ## Sol Window Prompt

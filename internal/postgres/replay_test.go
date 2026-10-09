@@ -157,6 +157,7 @@ func TestAsyncRunInvalidatesDuringGenerationAndBudget(t *testing.T) {
 	}))
 	defer server.Close()
 	s.SetModels(&ai.Registry{HTTP: server.Client(), Config: ai.Configuration{Providers: []ai.Provider{{ID: "model", Name: "模型", Protocol: "openai", BaseURL: server.URL, Model: "test", MaxOutput: 100, InputPerMillion: 1, OutputPerMillion: 2}}}})
+	useSyntheticGateway(s)
 	st := workspaceCommand(t, s, scope, workspace.Command{Type: "capture", Text: "旧依据"})
 	st = workspaceCommand(t, s, scope, workspace.Command{Type: "acceptCandidate", ID: st.Candidates[0].ID, Kind: "memory", MemoryKind: "fact", Text: "旧依据"})
 	mem := st.Memories[0]

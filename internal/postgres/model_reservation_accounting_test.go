@@ -181,10 +181,8 @@ func TestFailedInvocationsUseApplicableBudgetSettlement(t *testing.T) {
 			if gate != nil {
 				select {
 				case <-gate.started:
-					if kind == "cancel-extraction" {
-						if err := s.pool.QueryRow(context.Background(), `SELECT sum(reserved_cost) FROM background_usage WHERE owner_id=$1`, string(scope.OwnerID)).Scan(&originalReservation); err != nil {
-							t.Fatal(err)
-						}
+					if err := s.pool.QueryRow(context.Background(), `SELECT coalesce((SELECT sum(reserved_cost) FROM agent_runs WHERE owner_id=$1),0)+coalesce((SELECT sum(reserved_cost) FROM background_usage WHERE owner_id=$1),0)`, string(scope.OwnerID)).Scan(&originalReservation); err != nil {
+						t.Fatal(err)
 					}
 					cancel()
 				case <-time.After(10 * time.Second):
@@ -218,9 +216,9 @@ func TestFailedInvocationsUseApplicableBudgetSettlement(t *testing.T) {
 					r1RequireEstimatedInput(t, s, scope)
 				}
 			}
-			if kind == "cancel-extraction" {
-				// This migrated path permits bounded automatic recovery. Partial
-				// returned usage cannot release its unobserved budget remainder.
+			if strings.HasPrefix(kind, "cancel-") {
+				// Partial usage cannot release the unobserved reservation.
+				// Deputy keeps its admitted hold; extraction keeps its own hold.
 				if originalReservation <= want {
 					t.Fatal("fixture must distinguish unknown budget from partial usage", originalReservation, want)
 				}

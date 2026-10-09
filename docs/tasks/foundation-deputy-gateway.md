@@ -234,6 +234,10 @@ Initial fixture defects remain in the private check records.
 An empty provider response tested provider failure instead of structural rejection. The fixture now returns a valid checklist with mismatched item count.
 A cancellation fixture waited on an unread HTTP connection. Captured stacks identified that fixture wait; its handler now returns after cancellation.
 Final filtered repository and pgvector integration checks pass for main migration.
+Additional checks found an old deputy cancellation assertion that treated partial usage as complete spending.
+The deputy now uses the existing extraction contract for unknown outcomes, incomplete usage, and retained reservation.
+The asynchronous correction fixture uses the synthetic gateway instead of a provider without required search capability.
+These fixture changes keep correction, usage, and budget assertions. Their filtered repository and pgvector integration checks pass.
 They include architecture, deputy, revision, adoption, undo, and interactive accounting contracts.
 The ordinary recording rejects the migrated replay because one displayed deadline state changed from upcoming to expired.
 The input difference is confined to that state label. Original prompts and failed replay evidence remain private.

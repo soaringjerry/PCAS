@@ -115,7 +115,9 @@ Complete owner data differences remain recorded.
 Main generation and revision now use the gateway in the deputy branch.
 Saved-result recovery and exact application links are implemented there. Filtered repository and integration checks pass.
 The ordinary recording rejects replay after a deadline crossed its actual-time boundary.
-Final replay and complete CI remain outstanding.
+
+Complete CI passes through `acfb01a`. The unmodified earlier program reproduces the same rejected input.
+Final replay and release remain outstanding.
 This batch has not been released and does not complete Phase 3.9.
 
 Registered instructions and four output schemas preserve their original bytes and field order.

@@ -108,7 +108,7 @@ Clean only this batch's test records by request or source ID.
 | Admission reservation adapter | Implemented. Reservation, cancellation, duplicate accounting, deletion, and origin-conflict contracts pass with synthetic providers. Production deputy generation does not use it yet. |
 | Revision schema registration | Original bytes match. The registered asset preserves field order and contains no added newline. |
 | Bounded deputy replay operation | Implemented through the existing worker pass. Manifest checks and existing deputy contracts pass. Ordinary and revision baselines use actual Codex on an isolated production-data copy. Final migration replay remains outstanding. |
-| Main generation and application | Ordinary generation and revision now use the gateway in this branch. Known-result recovery and exact application links are implemented. Final replay, complete CI, and release remain outstanding. |
+| Main generation and application | Ordinary generation and revision now use the gateway in this branch. Known-result recovery and exact application links are implemented. Complete CI passes. Final replay and release remain outstanding. |
 | Complete batch acceptance and release | Not complete. |
 
 The initial repository check failed when evaluation and storage tests shared a database.
@@ -248,6 +248,15 @@ The input difference is confined to that state label. Original prompts and faile
 `libraryDeadlinesTx` calculates this label with actual database time. The diagnostic business clock does not currently fix that calculation.
 The coordinator must confirm an additional classification clock or a new recording before final transport acceptance.
 The failed replay started no live provider. It cannot certify successful generation or complete state equivalence.
+[Complete CI for `8088abc`](https://github.com/soaringjerry/PCAS/actions/runs/37934650717) passed every job.
+[Complete CI for `acfb01a`](https://github.com/soaringjerry/PCAS/actions/runs/37936200710) also passed every job, including each storage partition.
+The earlier `c78f3d4` run was superseded and cancelled. It does not certify the complete suite.
+The unmodified pre-migration program now rejects the same recording.
+Its rejected provider input equals the migrated program's rejected input exactly.
+This control establishes a temporal replay difference, not a prompt change introduced by the gateway.
+Both failed replay reports, original inputs, and complete raw owner snapshots remain private.
+Each failed case started no live provider. Claim counts remain unchanged. Their owned disposable clones were removed after snapshot verification.
+Main migration has not been released. Final transport replay, real-channel acceptance, and complete state comparison remain outstanding.
 Final checks and replay evidence must identify the tested source revision.
 Do not claim complete CI, release, or full state equivalence from filtered checks.
 

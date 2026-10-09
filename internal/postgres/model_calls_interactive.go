@@ -1016,3 +1016,10 @@ func (a interactiveCalls) recordDeputyApplicationTx(ctx context.Context, tx pgx.
 	}
 	return nil
 }
+
+// The deputy owner has already closed these executions after an interruption.
+// This observation links the skipped application; it cannot resume generation.
+func (a interactiveCalls) recordInterruptedDeputyApplications(ctx context.Context) error {
+	_, err := a.store.pool.Exec(ctx, `UPDATE model_calls c SET actual_mode=actual_mode||jsonb_build_object('applicationOutcome','not_applicable','applicationReason','deputy_execution_interrupted'),updated_at=clock_timestamp() WHERE c.function_name='deputy' AND c.stage='answer' AND c.input_manifest->>'budgetOwner'='deputy_run' AND NOT(c.actual_mode ? 'applicationOutcome') AND EXISTS(SELECT 1 FROM agent_runs r WHERE r.owner_id=c.owner_id AND r.id=c.execution_id AND r.document->>'createdAt'=c.input_manifest->>'origin' AND r.status='failed' AND r.document->>'error'='进程中断，结果和用量未确认；未自动重试')`)
+	return err
+}

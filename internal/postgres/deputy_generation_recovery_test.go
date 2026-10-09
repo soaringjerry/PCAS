@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/modelcall"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -187,8 +188,48 @@ func TestDeputyInterruptedSubmissionRetainsHoldAndNeverRetries(t *testing.T) {
 		t.Fatal(err)
 	}
 	var status, outcome, accounting string
+	var application, reason string
 	var held float64
-	if err := s.pool.QueryRow(context.Background(), `SELECT r.status,r.reserved_cost::double precision,c.outcome,c.accounting_state FROM agent_runs r JOIN model_calls c ON(c.owner_id,c.execution_id)=(r.owner_id,r.id) WHERE r.owner_id=$1 AND r.id=$2 AND c.stage='answer'`, string(scope.OwnerID), run.ID).Scan(&status, &held, &outcome, &accounting); err != nil || status != "failed" || outcome != "unknown" || accounting != "held" || held < run.Cost || held <= 0 || calls.Load() != 1 {
-		t.Fatal(status, held, outcome, accounting, calls.Load(), err)
+	if err := s.pool.QueryRow(context.Background(), `SELECT r.status,r.reserved_cost::double precision,c.outcome,c.accounting_state,c.actual_mode->>'applicationOutcome',c.actual_mode->>'applicationReason' FROM agent_runs r JOIN model_calls c ON(c.owner_id,c.execution_id)=(r.owner_id,r.id) WHERE r.owner_id=$1 AND r.id=$2 AND c.stage='answer'`, string(scope.OwnerID), run.ID).Scan(&status, &held, &outcome, &accounting, &application, &reason); err != nil || status != "failed" || outcome != "unknown" || accounting != "held" || held < run.Cost || held <= 0 || calls.Load() != 1 || application != "not_applicable" || reason != "provider_outcome_unknown" {
+		t.Fatal(status, held, outcome, accounting, application, reason, calls.Load(), err)
+	}
+}
+
+func TestDeputyAbandonedInputRecordsSkippedApplication(t *testing.T) {
+	s, scope := testStore(t), owner()
+	var calls atomic.Int32
+	secretaryModel(t, s, func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		t.Error("abandoned input cannot start generation")
+	})
+	request := leasedDeputyAnswer(t, s, scope)
+	ctx := context.Background()
+	adapter := interactiveCalls{store: s}
+	provider, _ := s.models.Get(request.ProviderID)
+	id, err := adapter.Prepare(ctx, request, provider)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reservation, err := adapter.Reserve(ctx, request, 0.01)
+	if err != nil {
+		t.Fatal(err)
+	}
+	paid := &modelcall.PaidResult{InvocationID: id, Reservation: reservation.ID, ReservedCost: reservation.Cost, Provider: provider.ID, Model: provider.Model, Prompt: request.Prompt}
+	if err := adapter.Start(ctx, request, paid); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.pool.Exec(ctx, `UPDATE agent_runs SET lease_until=clock_timestamp()-interval '1 second' WHERE owner_id=$1 AND id=$2`, string(scope.OwnerID), string(request.ExecutionID)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := adapter.recordInterruptedExecution(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.RunDeputyOnce(ctx); err != nil {
+		t.Fatal(err)
+	}
+	var status, application, reason, outcome, accounting string
+	var held float64
+	if err := s.pool.QueryRow(ctx, `SELECT r.status,r.reserved_cost::double precision,c.outcome,c.accounting_state,c.actual_mode->>'applicationOutcome',c.actual_mode->>'applicationReason' FROM agent_runs r JOIN model_calls c ON(c.owner_id,c.execution_id)=(r.owner_id,r.id) WHERE r.owner_id=$1 AND c.id=$2`, string(scope.OwnerID), string(id)).Scan(&status, &held, &outcome, &accounting, &application, &reason); err != nil || status != "failed" || held != 0.17 || outcome != "unknown" || accounting != "held" || application != "not_applicable" || reason != "deputy_execution_interrupted" || calls.Load() != 0 {
+		t.Fatal(status, held, outcome, accounting, application, reason, calls.Load(), err)
 	}
 }

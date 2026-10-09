@@ -817,6 +817,9 @@ func (s *Store) runAgentOnce(ctx context.Context) (resultErr error) {
 	if err != nil {
 		return err
 	}
+	if err := (interactiveCalls{store: s}).recordInterruptedDeputyApplications(ctx); err != nil {
+		return err
+	}
 	if _, err := s.pool.Exec(ctx, `UPDATE agent_runs SET status='queued',lease_until=NULL,lease_token=NULL WHERE status='running' AND lease_until<now() AND (`+recoverableSQL+`)`); err != nil {
 		return err
 	}
@@ -1176,6 +1179,9 @@ func (s *Store) runAgentOnce(ctx context.Context) (resultErr error) {
 		application, why := "applied", ""
 		if current.Status != "done" || current.StaleContext {
 			application, why = "not_applicable", "run_failed_or_stale"
+		}
+		if generationErr != nil && savedRow != nil && savedRow.ErrorCode != "" {
+			why = savedRow.ErrorCode
 		}
 		if err := (interactiveCalls{store: s}).recordDeputyApplicationTx(ctx, tx, scope.OwnerID, current, mainInvocation, application, why); err != nil {
 			return err

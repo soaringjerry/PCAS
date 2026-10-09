@@ -224,6 +224,10 @@ A review without a saved decision remains incomplete. Recovery keeps the draft a
 A failed selection write retains the decision in the current process for persistence recovery.
 
 Application records use the original invocation, owner, run, and creation origin.
+Interrupted input without a returned response receives an inapplicable application record after its owner closes the execution.
+A saved unknown billing receipt keeps its original provider outcome as the application reason.
+The first interruption-reason assertion expected the same reason for both cases and failed.
+Separate contracts now check abandoned input and saved unknown billing. Filtered repository and integration checks pass for both.
 They identify applied, skipped, or inapplicable results and the existing adoption receipt.
 Legacy revision caches keep their recovery path without fabricated invocation metadata.
 The obsolete cache writer is removed. New revisions use invocation-keyed results.

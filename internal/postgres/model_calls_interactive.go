@@ -14,6 +14,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/ai"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/modelcall"
+	"github.com/soaringjerry/PCAS/internal/prompts"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -144,6 +145,7 @@ type interactiveCallRow struct {
 	Reservation     string    `json:"reservation_id"`
 	Manifest        struct {
 		BindingHash string       `json:"bindingHash"`
+		InputHash   string       `json:"inputHash"`
 		Version     string       `json:"version"`
 		Refs        []memory.Ref `json:"memoryRefs"`
 		Kind        string       `json:"executionKind"`
@@ -153,10 +155,11 @@ type interactiveCallRow struct {
 		ThingID     string       `json:"thingId"`
 	} `json:"input_manifest"`
 	Mode struct {
-		Usage       modelUsage `json:"originalUsage"`
-		Token       string     `json:"executionToken"`
-		Unsupported string     `json:"unsupportedCapability"`
-		Reserved    float64    `json:"reservationEstimate"`
+		Usage           modelUsage             `json:"originalUsage"`
+		Token           string                 `json:"executionToken"`
+		Unsupported     string                 `json:"unsupportedCapability"`
+		Reserved        float64                `json:"reservationEstimate"`
+		DeputySelection *deputyResultSelection `json:"deputySelection,omitempty"`
 	} `json:"actual_mode"`
 	Receipt interactiveReceipt `json:"result_receipt"`
 }
@@ -206,6 +209,13 @@ func latestInteractiveCall(ctx context.Context, q interface {
 	QueryRow(context.Context, string, ...any) pgx.Row
 }, r modelcall.Request) (*interactiveCallRow, error) {
 	var row interactiveCallRow
+	if p, ok := r.Policy.(interactiveCallPolicy); ok && p.BudgetOwner == "deputy_run" {
+		err := q.QueryRow(ctx, `SELECT to_jsonb(c) FROM model_calls c WHERE owner_id=$1 AND execution_id=$2 AND stage=$3 AND input_manifest->>'origin'=$4 AND input_manifest->>'budgetOwner'='deputy_run' ORDER BY created_at DESC,id DESC LIMIT 1`, string(r.OwnerID), string(r.ExecutionID), r.Stage, p.Origin).Scan(&row)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
+		return &row, err
+	}
 	err := q.QueryRow(ctx, `SELECT to_jsonb(c) FROM model_calls c WHERE owner_id=$1 AND execution_id=$2 AND stage=$3 ORDER BY created_at DESC,id DESC LIMIT 1`, string(r.OwnerID), string(r.ExecutionID), r.Stage).Scan(&row)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
@@ -744,6 +754,12 @@ func (a interactiveCalls) Record(ctx context.Context, r modelcall.Request, paid 
 	usage.InputEstimated = paid.InputEstimated
 	usage.OutputEstimated = paid.OutputEstimated
 	usage.CostEstimated = paid.CostEstimated
+	if r.Policy.(interactiveCallPolicy).BudgetOwner == "deputy_run" {
+		var snapshot reviseSnapshot
+		if json.Unmarshal(r.Prompt, &snapshot) == nil && snapshot.Run.Kind != "revise" && !snapshot.MemoryReady {
+			return a.store.recordReturnedUsage(persist, paid.Output, usage)
+		}
+	}
 	return a.store.recordUsage(persist, usage)
 }
 func (a interactiveCalls) Settle(ctx context.Context, r modelcall.Request, paid *modelcall.PaidResult) error {
@@ -837,4 +853,166 @@ func cloneInteractiveRequest(request modelcall.Request) modelcall.Request {
 	policy.Usage.MemoryRefs = append([]memory.Ref(nil), policy.Usage.MemoryRefs...)
 	copy.Policy = policy
 	return copy
+}
+
+// Selection records the workflow's decision, not another provider result.
+// It contains identities and hashes only; private text remains in result storage.
+type deputyResultSelection struct {
+	Main       memory.ID `json:"main"`
+	Output     memory.ID `json:"output"`
+	OutputHash string    `json:"outputHash"`
+	Review     memory.ID `json:"review,omitempty"`
+	Fallback   string    `json:"fallback,omitempty"`
+}
+
+func deputyAnswerRequest(owner memory.ID, token string, snapshot reviseSnapshot) modelcall.Request {
+	run := snapshot.Run
+	instruction := prompts.Must("deputy")
+	var schema prompts.Schema
+	if run.Kind == "revise" {
+		instruction = prompts.Must("document-revise")
+		schema = prompts.MustSchema("document-revise-output")
+	}
+	return modelcall.Request{
+		OwnerID: owner, ExecutionID: memory.ID(run.ID), RootExecutionID: memory.ID(run.ID), Function: "deputy", Stage: "answer",
+		ProviderID: run.AgentID, Instructions: instruction, Schema: schema, Search: true, ContextBuilderVersion: "deputy-answer-v1",
+		Prompt: asJSON(snapshot), Refs: run.ContextVersions,
+		Policy: interactiveCallPolicy{Kind: "deputy", Token: token, Origin: run.CreatedAt, AgentID: run.AgentID, ThingID: run.ThingID, BudgetOwner: "deputy_run",
+			Usage: modelUsage{Purpose: "deputy", RunID: run.ID, Tier: run.MemoryTier, Plan: asJSON(usePlan{Groups: run.MemoryGroups})}},
+	}
+}
+
+// Resume reads the original prepared input. It never reconstructs a new brief
+// from current memory, and an input-only receipt is never treated as output.
+func (a interactiveCalls) deputyInput(ctx context.Context, q interface {
+	QueryRow(context.Context, string, ...any) pgx.Row
+}, owner memory.ID, run workspace.Run) (*interactiveCallRow, *reviseSnapshot, error) {
+	var row interactiveCallRow
+	err := q.QueryRow(ctx, `SELECT to_jsonb(c) FROM model_calls c WHERE owner_id=$1 AND execution_id=$2 AND stage='answer' AND function_name='deputy' AND input_manifest->>'budgetOwner'='deputy_run' AND input_manifest->>'origin'=$3 ORDER BY created_at DESC,id DESC LIMIT 1`, string(owner), run.ID, run.CreatedAt).Scan(&row)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil, nil
+	}
+	if err != nil {
+		return nil, nil, err
+	}
+	if value, ok := a.store.pendingInteractive.Load(row.ID); ok {
+		entry := value.(*pendingInteractiveResult)
+		var snapshot reviseSnapshot
+		if err := json.Unmarshal(entry.request.Prompt, &snapshot); err != nil {
+			return nil, nil, err
+		}
+		if snapshot.Run.ID != run.ID || snapshot.Run.CreatedAt != run.CreatedAt || snapshot.RawPrompt != snapshot.Run.Brief {
+			return nil, nil, memory.ErrConflict
+		}
+		return &row, &snapshot, nil
+	}
+	if row.Reservation == "" {
+		return &row, nil, nil
+	}
+	var snapshot reviseSnapshot
+	err = q.QueryRow(ctx, `SELECT prompt FROM background_model_results WHERE owner_id=$1 AND job_id=$2 AND reservation_id=$3 AND provider_id=$4 AND model=$5`, string(owner), string(row.ID), row.Reservation, row.Provider, row.Model).Scan(&snapshot)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return &row, nil, nil
+	}
+	if err != nil {
+		return nil, nil, err
+	}
+	if snapshot.Run.ID != run.ID || snapshot.Run.CreatedAt != run.CreatedAt || snapshot.Run.AgentID != run.AgentID || snapshot.Run.ThingID != run.ThingID || snapshot.RawPrompt == "" || snapshot.RawPrompt != snapshot.Run.Brief {
+		return nil, nil, memory.ErrConflict
+	}
+	// Typed serialization restores the exact original envelope after jsonb storage.
+	request := deputyAnswerRequest(owner, string(memory.NewID()), snapshot)
+	hash, err := interactiveBinding(request)
+	if err != nil || hash != row.Manifest.BindingHash || fmt.Sprintf("%x", sha256.Sum256(request.Prompt)) != row.Manifest.InputHash {
+		return nil, nil, memory.ErrConflict
+	}
+	return &row, &snapshot, nil
+}
+
+func (a interactiveCalls) deputySelection(ctx context.Context, owner memory.ID, run workspace.Run, main memory.ID) (*deputyResultSelection, string, error) {
+	var row interactiveCallRow
+	if err := a.store.pool.QueryRow(ctx, `SELECT to_jsonb(c) FROM model_calls c WHERE owner_id=$1 AND id=$2 AND execution_id=$3 AND input_manifest->>'origin'=$4 AND input_manifest->>'budgetOwner'='deputy_run'`, string(owner), string(main), run.ID, run.CreatedAt).Scan(&row); err != nil {
+		return nil, "", err
+	}
+	selection := row.Mode.DeputySelection
+	if value, ok := a.store.pendingDeputySelections.Load(main); ok && selection == nil {
+		copy := value.(deputyResultSelection)
+		selection = &copy
+	}
+	if selection == nil {
+		return nil, "", nil
+	}
+	if selection.Main != main || (selection.Output != main && selection.Output != selection.Review) {
+		return nil, "", memory.ErrConflict
+	}
+	var output string
+	var receipt interactiveReceipt
+	var stage string
+	err := a.store.pool.QueryRow(ctx, `SELECT b.output,c.result_receipt,c.stage FROM model_calls c JOIN background_model_results b ON b.owner_id=c.owner_id AND b.job_id=c.id AND b.reservation_id=c.reservation_id AND b.provider_id=c.provider_id AND b.model=c.model WHERE c.owner_id=$1 AND c.id=$2 AND c.execution_id=$3 AND c.input_manifest->>'origin'=$4 AND NOT coalesce((c.actual_mode->>'inputDeleted')::boolean,false) AND c.outcome='returned'`, string(owner), string(selection.Output), run.ID, run.CreatedAt).Scan(&output, &receipt, &stage)
+	if err != nil {
+		return nil, "", err
+	}
+	if (selection.Output == main && stage != "answer") || (selection.Output != main && stage != "selfcheck") || selection.OutputHash != receipt.OutputHash || selection.OutputHash != fmt.Sprintf("%x", sha256.Sum256([]byte(output))) {
+		return nil, "", memory.ErrConflict
+	}
+	return selection, output, nil
+}
+
+func (a interactiveCalls) saveDeputySelection(ctx context.Context, r modelcall.Request, selection deputyResultSelection) error {
+	a.store.pendingDeputySelections.Store(selection.Main, selection)
+	persist, cancel := context.WithTimeout(context.WithoutCancel(ctx), modelcall.PersistenceTimeout)
+	defer cancel()
+	err := pgx.BeginFunc(persist, a.store.pool, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(persist, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(r.OwnerID)); err != nil {
+			return err
+		}
+		if err := interactiveFence(persist, tx, r); err != nil {
+			return err
+		}
+		if selection.Main == "" || selection.Output == "" || (selection.Output != selection.Main && selection.Output != selection.Review) {
+			return memory.ErrInvalid
+		}
+		var valid bool
+		if err := tx.QueryRow(persist, `SELECT EXISTS(SELECT 1 FROM model_calls c JOIN background_model_results b ON(b.owner_id,b.job_id)=(c.owner_id,c.id) WHERE c.owner_id=$1 AND c.id=$2 AND c.execution_id=$3 AND c.input_manifest->>'origin'=$4 AND c.input_manifest->>'executionKind'='deputy' AND c.stage=$5 AND c.outcome='returned' AND c.result_receipt->>'outputHash'=$6 AND NOT coalesce((c.actual_mode->>'inputDeleted')::boolean,false) AND b.reservation_id=c.reservation_id AND b.provider_id=c.provider_id AND b.model=c.model)`, string(r.OwnerID), string(selection.Output), string(r.ExecutionID), r.Policy.(interactiveCallPolicy).Origin, func() string {
+			if selection.Output == selection.Main {
+				return "answer"
+			}
+			return "selfcheck"
+		}(), selection.OutputHash).Scan(&valid); err != nil {
+			return err
+		}
+		if !valid {
+			return modelcall.ErrNotApplicable
+		}
+		var original *deputyResultSelection
+		if err := tx.QueryRow(persist, `SELECT actual_mode->'deputySelection' FROM model_calls WHERE owner_id=$1 AND id=$2 AND execution_id=$3 AND input_manifest->>'origin'=$4 AND input_manifest->>'budgetOwner'='deputy_run' FOR UPDATE`, string(r.OwnerID), string(selection.Main), string(r.ExecutionID), r.Policy.(interactiveCallPolicy).Origin).Scan(&original); err != nil {
+			return err
+		}
+		if original != nil {
+			if !bytes.Equal(asJSON(original), asJSON(selection)) {
+				return memory.ErrConflict
+			}
+			return nil
+		}
+		_, err := tx.Exec(persist, `UPDATE model_calls SET actual_mode=actual_mode||jsonb_build_object('deputySelection',$3::jsonb),updated_at=clock_timestamp() WHERE owner_id=$1 AND id=$2`, string(r.OwnerID), string(selection.Main), asJSON(selection))
+		return err
+	})
+	if err == nil {
+		a.store.pendingDeputySelections.Delete(selection.Main)
+	}
+	return err
+}
+
+func (a interactiveCalls) recordDeputyApplicationTx(ctx context.Context, tx pgx.Tx, owner memory.ID, run workspace.Run, invocation memory.ID, outcome, reason string) error {
+	if invocation == "" {
+		return nil
+	}
+	tag, err := tx.Exec(ctx, `UPDATE model_calls SET actual_mode=actual_mode||jsonb_build_object('applicationOutcome',$5::text,'applicationReason',$6::text,'applicationAdoption',$7::jsonb),updated_at=clock_timestamp() WHERE owner_id=$1 AND id=$2 AND execution_id=$3 AND input_manifest->>'origin'=$4 AND input_manifest->>'executionKind'='deputy'`, string(owner), string(invocation), run.ID, run.CreatedAt, outcome, reason, asJSON(run.Adopted))
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() != 1 {
+		return memory.ErrConflict
+	}
+	return nil
 }

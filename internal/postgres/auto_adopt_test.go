@@ -138,6 +138,7 @@ func autoAdoptModel(t *testing.T, s *Store, output string, during func()) {
 	}))
 	t.Cleanup(server.Close)
 	s.SetModels(&ai.Registry{HTTP: server.Client(), Config: ai.Configuration{Providers: []ai.Provider{{ID: "auto-model", Name: "Auto model", Protocol: "openai", BaseURL: server.URL, Model: "test", MaxOutput: 200, InputPerMillion: 1, OutputPerMillion: 2}}}})
+	useSyntheticGateway(s)
 }
 
 func autoAdoptItem(st workspace.State, id string) workspace.Item {

@@ -110,8 +110,13 @@ Secretary generation, heavy readers, secretary self-check, and deputy self-check
 
 The [deputy batch](tasks/foundation-deputy-gateway.md) has reservation and durable-input preparation through CI-tested revision `892b2b3`.
 Its fixed-clock ordinary and revision recordings pass strict offline transport replay.
-Complete owner data differences remain recorded. Main deputy generation still uses its original direct paths.
-This preparation has not been released and does not complete Phase 3.9.
+Complete owner data differences remain recorded.
+
+Main generation and revision now use the gateway in the deputy branch.
+Saved-result recovery and exact application links are implemented there. Filtered repository and integration checks pass.
+The ordinary recording rejects replay after a deadline crossed its actual-time boundary.
+Final replay and complete CI remain outstanding.
+This batch has not been released and does not complete Phase 3.9.
 
 Registered instructions and four output schemas preserve their original bytes and field order.
 The secretary keeps its original shared deadline and two-attempt retry policy.

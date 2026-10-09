@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -787,38 +788,48 @@ func (s *Store) RunDeputyOnce(ctx context.Context) error {
 	return s.runAgentOnce(ctx)
 }
 
-func (s *Store) runAgentOnce(ctx context.Context) error {
+func (s *Store) runAgentOnce(ctx context.Context) (resultErr error) {
 	started := time.Now()
 	ctx, timing := newExecutionTimer(ctx, "deputy", started)
 	ctx, persistCancel := context.WithDeadline(ctx, started.Add(heavyUseTimeout))
 	defer persistCancel()
-	if s.models == nil {
-		return nil
-	}
 	s.pendingPaid.Range(func(key, value any) bool {
 		var snap reviseSnapshot
 		paid, ok := value.(*paidModelResult)
 		if !ok || json.Unmarshal(paid.Prompt, &snap) != nil || snap.Run.Kind != "revise" {
 			return true
 		}
-		_, _ = s.pool.Exec(ctx, `UPDATE agent_runs SET status='queued',lease_token=NULL,lease_until=NULL WHERE id=$1 AND status='running' AND lease_until<clock_timestamp()`, string(key.(memory.ID)))
+		_, _ = s.pool.Exec(ctx, `UPDATE agent_runs SET status='queued',lease_token=NULL,lease_until=NULL WHERE id=$1 AND document->>'createdAt'=$2 AND agent_id=$3 AND thing_id=$4 AND status='running' AND lease_until<clock_timestamp()`, string(key.(memory.ID)), snap.Run.CreatedAt, snap.Run.AgentID, snap.Run.ThingID)
 		return true
 	})
-	_, err := s.pool.Exec(ctx, `UPDATE agent_runs SET status='failed',lease_until=NULL,lease_token=NULL,document=document||jsonb_build_object('status','failed','error','进程中断，结果和用量未确认；未自动重试','finishedAt',now()) WHERE status='running' AND lease_until<now() AND NOT EXISTS(SELECT 1 FROM background_model_results b WHERE b.owner_id=agent_runs.owner_id AND b.job_id=agent_runs.id)`)
+	// A durable returned result, or a recorded pre-submission failure, can resume.
+	// Input-only started calls cannot authorize another paid submission.
+	s.pendingInteractive.Range(func(_, value any) bool {
+		entry := value.(*pendingInteractiveResult)
+		policy := entry.request.Policy.(interactiveCallPolicy)
+		if policy.BudgetOwner == "deputy_run" {
+			_, _ = s.pool.Exec(ctx, `UPDATE agent_runs SET status='queued',lease_token=NULL,lease_until=NULL WHERE owner_id=$1 AND id=$2 AND document->>'createdAt'=$3 AND status='running' AND lease_until<clock_timestamp()`, string(entry.request.OwnerID), string(entry.request.ExecutionID), policy.Origin)
+		}
+		return true
+	})
+	recoverableSQL := `EXISTS(SELECT 1 FROM background_model_results b WHERE b.owner_id=agent_runs.owner_id AND b.job_id=agent_runs.id AND b.purpose='revise') OR EXISTS(SELECT 1 FROM model_calls c WHERE c.owner_id=agent_runs.owner_id AND c.execution_id=agent_runs.id AND c.stage='answer' AND c.input_manifest->>'budgetOwner'='deputy_run' AND c.input_manifest->>'origin'=agent_runs.document->>'createdAt' AND ((c.result_receipt->'billing' IS NOT NULL AND c.result_receipt->'billing'<>'null'::jsonb) OR (c.outcome='failed' AND c.accounting_state IN ('not_reserved','settled'))))`
+	_, err := s.pool.Exec(ctx, `UPDATE agent_runs SET status='failed',lease_until=NULL,lease_token=NULL,document=document||jsonb_build_object('status','failed','error','进程中断，结果和用量未确认；未自动重试','finishedAt',now()) WHERE status='running' AND lease_until<now() AND NOT (`+recoverableSQL+`)`)
 	if err != nil {
 		return err
 	}
-	if _, err := s.pool.Exec(ctx, `UPDATE agent_runs SET status='queued',lease_until=NULL,lease_token=NULL WHERE status='running' AND lease_until<now() AND EXISTS(SELECT 1 FROM background_model_results b WHERE b.owner_id=agent_runs.owner_id AND b.job_id=agent_runs.id)`); err != nil {
+	if _, err := s.pool.Exec(ctx, `UPDATE agent_runs SET status='queued',lease_until=NULL,lease_token=NULL WHERE status='running' AND lease_until<now() AND (`+recoverableSQL+`)`); err != nil {
 		return err
 	}
 	var cached *paidModelResult
 	var run workspace.Run
 	var scope memory.Scope
 	var token string
+	var savedRow *interactiveCallRow
+	var savedInput *reviseSnapshot
 	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		var ownerID, id string
 		var data []byte
-		err := tx.QueryRow(ctx, "SELECT owner_id::text,id::text,document FROM agent_runs WHERE status='queued' ORDER BY created_at FOR UPDATE SKIP LOCKED LIMIT 1").Scan(&ownerID, &id, &data)
+		err := tx.QueryRow(ctx, `SELECT owner_id::text,id::text,document FROM agent_runs WHERE status='queued' AND ($1::boolean OR (`+recoverableSQL+`)) ORDER BY created_at FOR UPDATE SKIP LOCKED LIMIT 1`, s.models != nil).Scan(&ownerID, &id, &data)
 		if err != nil {
 			return err
 		}
@@ -834,8 +845,18 @@ func (s *Store) runAgentOnce(ctx context.Context) error {
 			if err != nil {
 				return err
 			}
+			if cached != nil {
+				var original reviseSnapshot
+				if json.Unmarshal(cached.Prompt, &original) != nil || original.Run.ID != run.ID || original.Run.CreatedAt != run.CreatedAt || original.Run.AgentID != run.AgentID || original.Run.ThingID != run.ThingID {
+					cached = nil
+				}
+			}
 		}
-		if cached == nil {
+		savedRow, savedInput, err = (interactiveCalls{store: s}).deputyInput(ctx, tx, scope.OwnerID, run)
+		if err != nil {
+			return err
+		}
+		if cached == nil && savedRow == nil {
 			if err := checkQueuedUseRunPromptTx(ctx, tx, scope, run); err != nil {
 				run.Status = "failed"
 				run.Cost = 0
@@ -844,7 +865,7 @@ func (s *Store) runAgentOnce(ctx context.Context) error {
 				return err
 			}
 		}
-		if run.Kind == "revise" && cached == nil {
+		if run.Kind == "revise" && cached == nil && savedRow == nil {
 			if err := validateReviseTargetTx(ctx, tx, scope, run); err != nil {
 				run.Status = "failed"
 				run.Error = "目标文档已改变或不存在，请重新发起修改"
@@ -868,102 +889,157 @@ func (s *Store) runAgentOnce(ctx context.Context) error {
 	if cached != nil && run.Kind == "revise" {
 		return s.finishPaidRevise(ctx, scope, run, token, cached)
 	}
+	// A write failure makes only the saved execution available for the next pass.
+	defer func() {
+		if resultErr == nil {
+			return
+		}
+		persist, cancel := context.WithTimeout(context.WithoutCancel(ctx), modelcall.PersistenceTimeout)
+		defer cancel()
+		_, _ = s.pool.Exec(persist, `UPDATE agent_runs SET lease_until=clock_timestamp(),document=document||jsonb_build_object('error','处理未完成；已保存的模型结果将复用，不会自动重复生成') WHERE owner_id=$1 AND id=$2 AND document->>'createdAt'=$3 AND lease_token=$4 AND status='running'`, string(scope.OwnerID), run.ID, run.CreatedAt, token)
+	}()
 	execution := modelcall.Request{OwnerID: scope.OwnerID, ExecutionID: memory.ID(run.ID), RootExecutionID: memory.ID(run.ID), Function: "deputy", Policy: interactiveCallPolicy{Kind: "deputy", Token: token, Origin: run.CreatedAt, AgentID: run.AgentID, ThingID: run.ThingID}}
 	ctx = context.WithValue(ctx, interactiveExecutionKey{}, execution)
 	workCtx, cancel := context.WithDeadline(ctx, started.Add(heavyUseTimeout-10*time.Second))
 	defer cancel()
-	if s.models.ReloadSubscription && s.models.Codex != nil {
+	if s.models != nil && s.models.ReloadSubscription && s.models.Codex != nil {
 		defer s.models.Codex.Close()
 	}
-	timing.beginPrepare()
-	u, agent, useErr := s.deputyUseContext(workCtx, scope, &run)
-	if useErr == nil {
-		run.MemoryTier = memoryTierForStatus(run.MemoryTier, u.Ready)
+	var u useContext
+	var useErr error
+	if savedInput != nil {
+		run = savedInput.Run
+		u.Ready = savedInput.MemoryReady
+		u.Coverage = savedInput.Coverage
 	}
-	if useErr == nil && u.Ready {
-		run.ProjectHandoverWrittenAt = nil
-		if u.ProjectHandover != nil {
-			run.ProjectHandoverWrittenAt = u.ProjectHandover.WrittenAt
+	if savedRow == nil {
+		timing.beginPrepare()
+		prepared, agent, prepareErr := s.deputyUseContext(workCtx, scope, &run)
+		u, useErr = prepared, prepareErr
+		if useErr == nil {
+			run.MemoryTier = memoryTierForStatus(run.MemoryTier, u.Ready)
 		}
-		if run.MemoryTier == "heavy" {
-			taskText := run.Prompt
-			if bounds := run.MemoryContextRange; bounds != nil && bounds[0] >= 0 && bounds[0] <= len(run.Brief) {
-				taskText += "\n" + run.Brief[:bounds[0]]
+		if useErr == nil && u.Ready {
+			run.ProjectHandoverWrittenAt = nil
+			if u.ProjectHandover != nil {
+				run.ProjectHandoverWrittenAt = u.ProjectHandover.WrittenAt
 			}
-			readerCtx, readerCancel := context.WithDeadline(workCtx, started.Add(heavyReaderBudget))
-			picked, refs, keys := s.heavyUse(readerCtx, ctx, scope, agent, &run.ThingID, taskText, u, "", run.ID, "reader:prepare")
-			readerCancel()
-			run.MemoryGroups = keys
-			run.ContextVersions = uniqueRefs(append(run.ContextVersions, refs...))
-			u.Cards = nil
-			u.Supplemental = picked
-		}
-		run.ContextVersions = uniqueRefs(append(run.ContextVersions, u.Dependencies...))
-		var section strings.Builder
-		writeUseContext(&section, u, u.Location, func(m workspace.Memory) {
-			fmt.Fprintf(&section, "[%s@%d / trust=%s] %s\n", m.ID, m.Version, m.Trust, m.Text+memoryPromptSuffix(m, u.Location))
-		})
-		// Use server-owned byte boundaries. Task text, discussion and memory
-		// values may contain the same headings, so never locate them by text.
-		if bounds := run.MemoryContextRange; bounds != nil && bounds[0] >= 0 && bounds[1] >= bounds[0] && bounds[1] <= len(run.Brief) {
-			run.Brief = run.Brief[:bounds[0]] + section.String() + run.Brief[bounds[1]:]
-			run.MemoryContextRange = &[2]int{bounds[0], bounds[0] + section.Len()}
-		} else {
-			// A job queued before cards existed has the legacy interleaved
-			// discussion layout. Preserve it when adding reader results.
-			run.Brief += section.String()
+			if run.MemoryTier == "heavy" {
+				taskText := run.Prompt
+				if bounds := run.MemoryContextRange; bounds != nil && bounds[0] >= 0 && bounds[0] <= len(run.Brief) {
+					taskText += "\n" + run.Brief[:bounds[0]]
+				}
+				readerCtx, readerCancel := context.WithDeadline(workCtx, started.Add(heavyReaderBudget))
+				picked, refs, keys := s.heavyUse(readerCtx, ctx, scope, agent, &run.ThingID, taskText, u, "", run.ID, "reader:prepare")
+				readerCancel()
+				run.MemoryGroups = keys
+				run.ContextVersions = uniqueRefs(append(run.ContextVersions, refs...))
+				u.Cards = nil
+				u.Supplemental = picked
+			}
+			run.ContextVersions = uniqueRefs(append(run.ContextVersions, u.Dependencies...))
+			var section strings.Builder
+			writeUseContext(&section, u, u.Location, func(m workspace.Memory) {
+				fmt.Fprintf(&section, "[%s@%d / trust=%s] %s\n", m.ID, m.Version, m.Trust, m.Text+memoryPromptSuffix(m, u.Location))
+			})
+			// Use server-owned byte boundaries. Task text, discussion and memory
+			// values may contain the same headings, so never locate them by text.
+			if bounds := run.MemoryContextRange; bounds != nil && bounds[0] >= 0 && bounds[1] >= bounds[0] && bounds[1] <= len(run.Brief) {
+				run.Brief = run.Brief[:bounds[0]] + section.String() + run.Brief[bounds[1]:]
+				run.MemoryContextRange = &[2]int{bounds[0], bounds[0] + section.Len()}
+			} else {
+				// A job queued before cards existed has the legacy interleaved
+				// discussion layout. Preserve it when adding reader results.
+				run.Brief += section.String()
+			}
 		}
 	}
 	verifyErr := useErr
-	if verifyErr == nil {
+	if verifyErr == nil && savedRow == nil {
 		verifyErr = pgx.BeginFunc(workCtx, s.pool, func(tx pgx.Tx) error { return checkUseRunPromptTx(workCtx, tx, scope, run) })
 	}
 	result := ai.Result{}
 	timing.finishPrepare()
 	answerStarted := time.Now()
 	generationErr := verifyErr
-	if verifyErr == nil {
-		// Reserve an answer and selfcheck slice even if some readers miss their cutoff.
-		answerCtx, answerCancel := context.WithTimeout(workCtx, 60*time.Second)
-		if run.Kind == "revise" {
-			result, generationErr = s.models.GenerateWithSearchSchema(executionCallContext(answerCtx, "answer"), run.AgentID, reviseInstructions, run.Brief, reviseOutputSchema)
-		} else {
-			result, generationErr = s.models.GenerateWithSearch(executionCallContext(answerCtx, "answer"), run.AgentID, deputyInstructions, run.Brief)
+	var mainPaid *modelcall.PaidResult
+	var mainInvocation memory.ID
+	request := deputyAnswerRequest(scope.OwnerID, token, reviseSnapshot{Run: run, RawPrompt: run.Brief, Coverage: u.Coverage, MemoryReady: u.Ready})
+	if savedRow != nil && savedInput == nil {
+		mainInvocation = savedRow.ID
+		generationErr = &modelcall.Failure{Code: savedRow.ErrorCode, InvocationID: savedRow.ID}
+		if savedRow.ErrorCode == "" {
+			generationErr = modelcall.ErrNotApplicable
 		}
+	} else if verifyErr == nil {
+		answerCtx, answerCancel := context.WithTimeout(workCtx, 60*time.Second)
+		mainPaid, generationErr = s.calls.Call(executionCallContext(answerCtx, "answer"), request)
 		answerCancel()
-	}
-
-	if run.Kind == "revise" && generationErr == nil {
-		paid, err := s.cacheReviseResult(ctx, scope, run, result)
+		var persistence *modelcall.PersistenceError
+		if errors.As(generationErr, &persistence) {
+			return generationErr
+		}
+		if mainPaid != nil {
+			mainInvocation = mainPaid.InvocationID
+			result = ai.Result{Text: mainPaid.Output, Searches: mainPaid.Searches, Cost: mainPaid.Cost}
+		}
+		row, err := latestInteractiveCall(ctx, s.pool, request)
 		if err != nil {
 			return err
 		}
-		return s.finishPaidRevise(ctx, scope, run, token, paid)
+		if row != nil {
+			savedRow = row
+			mainInvocation = row.ID
+		}
+	}
+	if run.Kind == "revise" && generationErr == nil && mainPaid != nil {
+		return s.finishPaidRevise(ctx, scope, run, token, mainPaid)
 	}
 	cost := result.Cost
-	if err := s.settleRunCost(ctx, scope.OwnerID, run, cost); err != nil {
-		return err
+	if savedRow != nil {
+		if savedRow.Receipt.Billing != nil {
+			cost = savedRow.Receipt.Billing.Cost
+		}
+		if savedRow.Outcome == "unknown" {
+			cost = max(cost, savedRow.Mode.Reserved)
+		}
 	}
-	if verifyErr == nil {
-		p, _ := s.models.Get(run.AgentID)
-		usage := modelUsage{
-			OwnerID: scope.OwnerID, ID: memory.NewID(), At: time.Now().UTC(),
-			Purpose: "deputy", AgentID: run.AgentID, Model: p.Model,
-			DurationMS: result.DurationMS, InputTokens: result.InputTokens, OutputTokens: result.OutputTokens, InputEstimated: result.InputEstimated, OutputEstimated: result.OutputEstimated, CostEstimated: result.CostEstimated, Cost: cost,
-			RunID: run.ID, MemoryRefs: run.ContextVersions, Tier: run.MemoryTier, Plan: asJSON(usePlan{Groups: run.MemoryGroups}),
-		}
-		var usageErr error
-		if u.Ready {
-			usageErr = s.recordUsage(ctx, usage)
-		} else {
-			usageErr = s.recordReturnedUsage(ctx, result.Text, usage)
-		}
-		if usageErr != nil {
-			return usageErr
+	// Only an unused admission without a linked reservation is settled here.
+	// The gateway already owns every linked reservation and usage record.
+	if savedRow == nil || savedRow.Reservation == "" {
+		if err := s.settleRunCost(ctx, scope.OwnerID, run, cost); err != nil {
+			return err
 		}
 	}
 	selfcheckFallback := ""
-	if generationErr == nil && run.MemoryTier != "light" {
+	var selection *deputyResultSelection
+	var reviewInvocation memory.ID
+	if generationErr == nil && mainPaid != nil {
+		var selected string
+		selection, selected, err = (interactiveCalls{store: s}).deputySelection(ctx, scope.OwnerID, run, mainInvocation)
+		if err != nil {
+			return err
+		}
+		if selection != nil {
+			result.Text = selected
+			selfcheckFallback = selection.Fallback
+			reviewInvocation = selection.Review
+		}
+	}
+	// A prior review without a durable decision is incomplete. Keep the draft.
+	// Never repeat its paid call or reinterpret a late response as a new decision.
+	reviewAlreadyAttempted := false
+	if selection == nil && generationErr == nil && run.MemoryTier != "light" {
+		readErr := s.pool.QueryRow(ctx, `SELECT id::text FROM model_calls WHERE owner_id=$1 AND execution_id=$2 AND stage='selfcheck' AND input_manifest->>'origin'=$3 ORDER BY created_at DESC,id DESC LIMIT 1`, string(scope.OwnerID), run.ID, run.CreatedAt).Scan(&reviewInvocation)
+		if readErr != nil && !errors.Is(readErr, pgx.ErrNoRows) {
+			return readErr
+		}
+		reviewAlreadyAttempted = readErr == nil
+		if reviewAlreadyAttempted {
+			selfcheckFallback = "selfcheck_interrupted"
+		}
+	}
+	if selection == nil && !reviewAlreadyAttempted && generationErr == nil && run.MemoryTier != "light" {
 		checkBudget := min(time.Since(answerStarted), 30*time.Second)
 		checkCtx, checkCancel := context.WithTimeout(workCtx, checkBudget)
 		checkedText := ""
@@ -983,6 +1059,16 @@ func (s *Store) runAgentOnce(ctx context.Context) error {
 			}
 			var paid *modelcall.PaidResult
 			paid, err = s.calls.Call(executionCallContext(checkCtx, "selfcheck"), request)
+			readCtx, readCancel := context.WithTimeout(context.WithoutCancel(checkCtx), modelcall.PersistenceTimeout)
+			row, readErr := latestInteractiveCall(readCtx, s.pool, request)
+			readCancel()
+			if readErr != nil {
+				checkCancel()
+				return readErr
+			}
+			if row != nil {
+				reviewInvocation = row.ID
+			}
 			if err == nil {
 				checkedText = paid.Output
 				err = checkCtx.Err()
@@ -999,6 +1085,18 @@ func (s *Store) runAgentOnce(ctx context.Context) error {
 			slog.WarnContext(ctx, "memory selfcheck fallback", "stage", "selfcheck", "error_type", secretaryErrorType("selfcheck", err))
 		}
 	}
+	if generationErr == nil && mainPaid != nil {
+		if selection == nil {
+			selected := mainInvocation
+			if selfcheckFallback == "" && reviewInvocation != "" {
+				selected = reviewInvocation
+			}
+			selection = &deputyResultSelection{Main: mainInvocation, Output: selected, OutputHash: fmt.Sprintf("%x", sha256.Sum256([]byte(result.Text))), Review: reviewInvocation, Fallback: selfcheckFallback}
+		}
+		if err := (interactiveCalls{store: s}).saveDeputySelection(ctx, request, *selection); err != nil {
+			return err
+		}
+	}
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
@@ -1007,7 +1105,7 @@ func (s *Store) runAgentOnce(ctx context.Context) error {
 		if _, err := tx.Exec(ctx, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(scope.OwnerID)); err != nil {
 			return err
 		}
-		current, err := queryDocument[workspace.Run](ctx, tx, "SELECT document FROM agent_runs WHERE owner_id=$1 AND id=$2 AND lease_token=$3 AND lease_until>now() FOR UPDATE", string(scope.OwnerID), run.ID, token)
+		current, err := queryDocument[workspace.Run](ctx, tx, "SELECT document FROM agent_runs WHERE owner_id=$1 AND id=$2 AND lease_token=$3 AND lease_until>now() AND document->>'createdAt'=$4 FOR UPDATE", string(scope.OwnerID), run.ID, token, run.CreatedAt)
 		if errors.Is(err, memory.ErrNotFound) {
 			return nil
 		}
@@ -1039,6 +1137,10 @@ func (s *Store) runAgentOnce(ctx context.Context) error {
 			if verifyErr != nil {
 				current.Error = "生成前记忆或授权已变化，请重新生成"
 			}
+			var capability *ai.CapabilityError
+			if errors.As(generationErr, &capability) {
+				current.Error = "模型通道不支持必需能力：" + capability.Capability
+			}
 			var provider *siwc.ProviderError
 			if errors.As(generationErr, &provider) {
 				current.Error = provider.Message()
@@ -1055,7 +1157,7 @@ func (s *Store) runAgentOnce(ctx context.Context) error {
 			current.Output = ""
 			current.Error = "生成期间授权已撤回或资料已删除，请重新生成"
 		}
-		if u.Coverage != nil && len(u.Coverage.Skipped) > 0 {
+		if current.Output != "" && u.Coverage != nil && len(u.Coverage.Skipped) > 0 {
 			current.Output += "\n这几组没来得及看：" + strings.Join(u.Coverage.Skipped, "、")
 		}
 
@@ -1071,6 +1173,13 @@ func (s *Store) runAgentOnce(ctx context.Context) error {
 		if current.Status == "done" && u.Coverage != nil && len(u.Coverage.Notices) > 0 {
 			noticeReason += "\n" + strings.Join(u.Coverage.Notices, "\n")
 		}
+		application, why := "applied", ""
+		if current.Status != "done" || current.StaleContext {
+			application, why = "not_applicable", "run_failed_or_stale"
+		}
+		if err := (interactiveCalls{store: s}).recordDeputyApplicationTx(ctx, tx, scope.OwnerID, current, mainInvocation, application, why); err != nil {
+			return err
+		}
 		if generationErr == nil && run.MemoryTier != "light" {
 			application := "applied"
 			if selfcheckFallback != "" {
@@ -1079,7 +1188,7 @@ func (s *Store) runAgentOnce(ctx context.Context) error {
 			if current.Status != "done" {
 				application = "not_applicable"
 			}
-			if err := (interactiveCalls{store: s}).recordApplicationTx(ctx, tx, scope.OwnerID, memory.ID(run.ID), "selfcheck", application, selfcheckFallback); err != nil {
+			if err := (interactiveCalls{store: s}).recordDeputyApplicationTx(ctx, tx, scope.OwnerID, current, reviewInvocation, application, selfcheckFallback); err != nil {
 				return err
 			}
 		}

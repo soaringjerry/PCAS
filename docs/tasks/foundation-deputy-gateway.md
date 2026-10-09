@@ -108,7 +108,7 @@ Clean only this batch's test records by request or source ID.
 | Admission reservation adapter | Implemented. Reservation, cancellation, duplicate accounting, deletion, and origin-conflict contracts pass with synthetic providers. Production deputy generation does not use it yet. |
 | Revision schema registration | Original bytes match. The registered asset preserves field order and contains no added newline. |
 | Bounded deputy replay operation | Implemented through the existing worker pass. Manifest checks and existing deputy contracts pass. Ordinary and revision baselines use actual Codex on an isolated production-data copy. Final migration replay remains outstanding. |
-| Main generation and application | Not migrated. The existing direct-call exceptions remain. |
+| Main generation and application | Ordinary generation and revision now use the gateway in this branch. Known-result recovery and exact application links are implemented. Final replay, complete CI, and release remain outstanding. |
 | Complete batch acceptance and release | Not complete. |
 
 The initial repository check failed when evaluation and storage tests shared a database.
@@ -205,6 +205,43 @@ They cover input durability, failed input writes, interruption, and related gate
 That revision certifies input receipts. It does not certify the later business-clock extension.
 [Complete CI for `892b2b3`](https://github.com/soaringjerry/PCAS/actions/runs/37920723056) passed every job.
 That revision certifies the business-clock extension. Main deputy gateway migration and final batch acceptance remain outstanding.
+
+### Main Generation Migration
+
+Ordinary generation and revision use the existing gateway with their original instructions, schema, brief, search mode, and deadlines.
+The request contains the original run and coverage snapshot. The provider receives only the original brief.
+Recovery uses that snapshot instead of constructing another prompt from current memory.
+
+The gateway reuses the admitted reservation and records usage once.
+Unknown outcomes retain the hold. Required capabilities cannot silently fall back.
+An unsupported capability fails before submission and has a visible run error.
+An empty, unmeasured ordinary response keeps the original usage-record guard.
+
+Before business writes, ordinary generation saves the result-selection identities and output hash.
+This record distinguishes the original draft from the accepted self-check result.
+A new process restores a saved decision without another model call.
+A review without a saved decision remains incomplete. Recovery keeps the draft and records the visible fallback.
+A failed selection write retains the decision in the current process for persistence recovery.
+
+Application records use the original invocation, owner, run, and creation origin.
+They identify applied, skipped, or inapplicable results and the existing adoption receipt.
+Legacy revision caches keep their recovery path without fabricated invocation metadata.
+The obsolete cache writer is removed. New revisions use invocation-keyed results.
+
+The recovery contracts inject failures into selection and business writes.
+They check ordinary output, accepted and rejected review, process restart, revision, interrupted calls, and unsupported search.
+Initial fixture defects remain in the private check records.
+An empty provider response tested provider failure instead of structural rejection. The fixture now returns a valid checklist with mismatched item count.
+A cancellation fixture waited on an unread HTTP connection. Captured stacks identified that fixture wait; its handler now returns after cancellation.
+Final filtered repository and pgvector integration checks pass for main migration.
+They include architecture, deputy, revision, adoption, undo, and interactive accounting contracts.
+The ordinary recording rejects the migrated replay because one displayed deadline state changed from upcoming to expired.
+The input difference is confined to that state label. Original prompts and failed replay evidence remain private.
+`libraryDeadlinesTx` calculates this label with actual database time. The diagnostic business clock does not currently fix that calculation.
+The coordinator must confirm an additional classification clock or a new recording before final transport acceptance.
+The failed replay started no live provider. It cannot certify successful generation or complete state equivalence.
+Final checks and replay evidence must identify the tested source revision.
+Do not claim complete CI, release, or full state equivalence from filtered checks.
 
 ## Sol Window Prompt
 

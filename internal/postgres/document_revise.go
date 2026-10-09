@@ -4,21 +4,18 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/jackc/pgx/v5"
-	"github.com/soaringjerry/PCAS/internal/ai"
 	"github.com/soaringjerry/PCAS/internal/memory"
-	"github.com/soaringjerry/PCAS/internal/prompts"
 	"github.com/soaringjerry/PCAS/internal/worker"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 	"strings"
 	"time"
 )
 
-var reviseInstructions = prompts.Must("document-revise").Text()
-
-var reviseOutputSchema = prompts.MustSchema("document-revise-output").Bytes()
-
 type reviseSnapshot struct {
-	Run workspace.Run `json:"run"`
+	Run         workspace.Run `json:"run"`
+	RawPrompt   string        `json:"rawPrompt,omitempty"`
+	Coverage    *useCoverage  `json:"coverage,omitempty"`
+	MemoryReady bool          `json:"memoryReady,omitempty"`
 }
 
 func validateReviseTargetTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run workspace.Run) error {
@@ -58,29 +55,6 @@ func (s *Store) adoptReviseDocumentTx(ctx context.Context, tx pgx.Tx, scope memo
 	return saveDoc(ctx, tx, scope, doc)
 }
 
-// Results are held in memory before any post-call write, then in the same
-// durable receipt store as the background stages. A recovered run writes the
-// cached output; it never repeats generation or selfcheck.
-func (s *Store) cacheReviseResult(ctx context.Context, scope memory.Scope, run workspace.Run, result ai.Result) (*paidModelResult, error) {
-	p, _ := s.models.Get(run.AgentID)
-	paid := &paidModelResult{Prompt: asJSON(reviseSnapshot{Run: run}), Output: result.Text, Reservation: string(memory.NewID()), Provider: p.ID, Model: p.Model, InputTokens: result.InputTokens, OutputTokens: result.OutputTokens, InputEstimated: result.InputEstimated, OutputEstimated: result.OutputEstimated, CostEstimated: result.CostEstimated, Cost: result.Cost, Refs: run.ContextVersions}
-	key := memory.ID(run.ID)
-	s.pendingPaid.Store(key, paid)
-	for {
-		persist, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
-		_, err := s.pool.Exec(persist, `INSERT INTO background_model_results(owner_id,job_id,purpose,prompt,output,reservation_id,provider_id,model,input_tokens,output_tokens,cost,refs,input_estimated,output_estimated,cost_estimated) VALUES($1,$2,'revise',$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) ON CONFLICT(job_id) DO NOTHING`, string(scope.OwnerID), run.ID, paid.Prompt, paid.Output, paid.Reservation, paid.Provider, paid.Model, paid.InputTokens, paid.OutputTokens, paid.Cost, asJSON(paid.Refs), paid.InputEstimated, paid.OutputEstimated, paid.CostEstimated)
-		cancel()
-		if err == nil {
-			s.pendingPaid.Delete(key)
-			return paid, nil
-		}
-		select {
-		case <-ctx.Done():
-			return nil, err
-		case <-time.After(time.Second):
-		}
-	}
-}
 func (s *Store) finishPaidRevise(ctx context.Context, scope memory.Scope, current workspace.Run, token string, paid *paidModelResult) (resultErr error) {
 	defer func() {
 		if resultErr == nil {
@@ -113,18 +87,20 @@ func (s *Store) finishPaidRevise(ctx context.Context, scope memory.Scope, curren
 	} else if result.Complete == nil || !*result.Complete {
 		reason = "副手未输出完整正文（截断或未完成）"
 	}
-	if err := s.recordUsage(ctx, modelUsage{OwnerID: scope.OwnerID, ID: memory.ID(paid.Reservation), Purpose: "deputy", AgentID: paid.Provider, Model: paid.Model, InputTokens: paid.InputTokens, OutputTokens: paid.OutputTokens, InputEstimated: paid.InputEstimated, OutputEstimated: paid.OutputEstimated, CostEstimated: paid.CostEstimated, Cost: paid.Cost, RunID: run.ID, MemoryRefs: paid.Refs, Tier: run.MemoryTier}); err != nil {
-		return err
-	}
-	if err := s.settleRunCost(ctx, scope.OwnerID, run, paid.Cost); err != nil {
-		return err
+	if paid.InvocationID == "" {
+		if err := s.recordUsage(ctx, modelUsage{OwnerID: scope.OwnerID, ID: memory.ID(paid.Reservation), Purpose: "deputy", AgentID: paid.Provider, Model: paid.Model, InputTokens: paid.InputTokens, OutputTokens: paid.OutputTokens, InputEstimated: paid.InputEstimated, OutputEstimated: paid.OutputEstimated, CostEstimated: paid.CostEstimated, Cost: paid.Cost, RunID: run.ID, MemoryRefs: paid.Refs, Tier: run.MemoryTier}); err != nil {
+			return err
+		}
+		if err := s.settleRunCost(ctx, scope.OwnerID, run, paid.Cost); err != nil {
+			return err
+		}
 	}
 	return backgroundResultTx(ctx, s.pool, scope.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(scope.OwnerID)); err != nil {
 			return err
 		}
 		var active bool
-		if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM agent_runs WHERE owner_id=$1 AND id=$2 AND lease_token=$3 AND lease_until>clock_timestamp() AND status='running')`, string(scope.OwnerID), current.ID, token).Scan(&active); err != nil {
+		if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM agent_runs WHERE owner_id=$1 AND id=$2 AND lease_token=$3 AND lease_until>clock_timestamp() AND status='running' AND document->>'createdAt'=$4)`, string(scope.OwnerID), current.ID, token, run.CreatedAt).Scan(&active); err != nil {
 			return err
 		}
 		if !active {
@@ -177,6 +153,13 @@ func (s *Store) finishPaidRevise(ctx context.Context, scope memory.Scope, curren
 		}
 		if _, err := tx.Exec(ctx, `INSERT INTO workspace_notices(owner_id,thing_id,trigger_id,due_at,reason) VALUES($1,$2,$3,clock_timestamp(),$4) ON CONFLICT DO NOTHING`, string(scope.OwnerID), run.ThingID, runNoticePrefix+run.ID, runNoticeReason(run)); err != nil {
 			return err
+		}
+		if paid.InvocationID != "" {
+			outcome, why := "applied", ""
+			if run.Status != "done" || run.StaleContext {
+				outcome, why = "not_applicable", "revision_not_adopted"
+			}
+			return (interactiveCalls{store: s}).recordDeputyApplicationTx(ctx, tx, scope.OwnerID, run, paid.InvocationID, outcome, why)
 		}
 		return discardPaidResultTx(ctx, tx, worker.Job{OwnerID: scope.OwnerID, ID: memory.ID(run.ID)})
 	})

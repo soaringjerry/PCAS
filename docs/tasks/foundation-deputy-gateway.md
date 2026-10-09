@@ -300,6 +300,14 @@ Code-path review corrected those assumptions. Application code did not change to
 Private findings retain the failed checks and their reasons.
 Main integration, backup, release, and live checks remain outstanding.
 
+Main integration at `2c79466` exposed two additional synthetic evaluation workflow failures.
+Their local capture providers did not declare the gateway's required capabilities.
+The evaluator now uses its existing synthetic gateway adapter for local capture and explicit fake mode.
+Real generation continues to use the actual provider's capabilities. Production adapters and model inputs remain unchanged.
+Original failed workflow logs remain private.
+Tool unit tests, filtered repository checks, and the primary synthetic suite pass locally.
+Independent-suite checks, replacement CI, and release remain outstanding.
+
 ## Sol Window Prompt
 
 ```text

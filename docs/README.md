@@ -22,7 +22,7 @@ Historical tasks, research, and evaluations are evidence. They do not assign new
 | [Open Issues](tasks/backlog.md) | Recorded unresolved and uncertain findings. |
 | [Foundation Shared Skeleton](tasks/foundation-shared-skeleton.md) | Sol's first implementation scope, migration proposal, guarantees, and baseline checks. |
 | [Foundation Recorded Replay](tasks/foundation-recorded-replay.md) | Sol's production-copy capture, replay, comparison, isolation, and acceptance scope. |
-| [Foundation Interactive Gateway](tasks/foundation-interactive-gateway.md) | Assigned scope for secretary, reader, and self-check calls. Implementation and acceptance remain incomplete. |
+| [Foundation Interactive Gateway](tasks/foundation-interactive-gateway.md) | Delivered secretary, reader, and self-check migration, release checks, and remaining replay limitations. |
 | [Historical Records](history/README.md) | Retired designs and interpretation of past records. |
 
 ## Document Authority

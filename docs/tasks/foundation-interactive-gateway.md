@@ -1,9 +1,10 @@
 # Foundation: Interactive Gateway
 
-Status: assigned by coordinator approval on 2026-10-09. Base: `b39a9eab41a1b8015c4f9fdd016582fce322b09f`.
-Executor: Sol. Implement the complete delivery order below.
-The approval assigns this gateway extension separately from the recorded-replay scope.
-Implementation and acceptance evidence remain incomplete.
+Status: delivered on 2026-10-09 at `022a912`. Coordinator approval assigned this scope on the same date.
+Base: `b39a9eab41a1b8015c4f9fdd016582fce322b09f`. Executor: Sol.
+The retained assignment describes this gateway extension. It does not assign the remaining foundation work.
+The [final acceptance](#final-acceptance) gives its checks, release, and remaining replay limitations.
+Phase 3.9 and complete replay equivalence remain incomplete.
 
 ## Goal
 
@@ -41,7 +42,9 @@ Do not infer reservation correspondence from equal costs or similar timestamps.
 No domain package moves occur in this scope.
 No project, task, timeline, memory-selection, or semantic decision rule is repaired here.
 
-### Implementation State
+### Preceding Candidate Records
+
+These records retain the earlier candidate findings. Final Acceptance gives the current delivery state.
 
 The first implementation extends the existing gateway request and provider adapter.
 It declares provider selection, registered schema, search requirements, and context-builder version.
@@ -282,6 +285,54 @@ Its SQL membership and source-validity checks use actual current time. The injec
 This evidence does not establish a migration regression or successful replay.
 Keep the rejected recording and complete snapshots. Record a new preceding-revision baseline before comparing the candidate again.
 Do not remove the stale flag or relax exact input matching.
+
+## Final Acceptance
+
+The code was integrated directly into `main`. No PR was created for this delivery.
+API and worker services now use the pinned image for `022a912`.
+
+| Check | Observed result |
+|---|---|
+| Complete CI | [Integration branch](https://github.com/soaringjerry/PCAS/actions/runs/37892297621) and [main](https://github.com/soaringjerry/PCAS/actions/runs/37896258997) passed all 13 jobs at the released revision. |
+| Secretary recording | A fresh `17cfc36` production-copy recording completed two Codex invocations. The second invocation reached its self-check deadline. |
+| Strict secretary replay | `022a912` matched both recorded inputs and consumed both replies. No live provider started. |
+| Strict extraction replay | `022a912` matched the original extraction input and consumed its reply. No live provider started. |
+| Complete state comparison | Both comparisons retained every owner column. They checked the complete starting snapshot of 1,006,988 rows and both resulting snapshots. |
+| Real default Codex | A request without `agentId` completed on the isolated copy. The registered schema and field order reached Codex, with search enabled. |
+| Accounting | The real copy request and live request each linked the invocation, reservation, and usage by identity. Both answer calls settled. |
+| Copy behavior | The real read-only request returned without notices, clarification, or action receipts. Its claim count remained 5,253. |
+| Backup and release | `pg_dump`, archive validation, files, and private configuration completed before the service switch. Existing record counts did not change during migration. |
+| Live default Codex | The secretary returned the requested check reply in 17.9 seconds. Its gateway record showed the registered schema and settled usage. |
+| Live cleanup | Cleanup selected the executor's smoke request IDs. Claims remained 5,253 before and after cleanup. The request had no remaining source. |
+
+Private evidence retains the actual requests, raw replies, complete snapshots, signed differences, and their review.
+The copied databases and comparison mounts were retired after their evidence was validated.
+
+### Remaining Replay Limitations
+
+The comparisons do not certify complete state equivalence.
+The fresh secretary reply, cards, clarification, and receipt statuses matched. No claims, projects, tasks, or deadlines changed.
+The new answer journal and saved result are intentional additions.
+
+The transport does not reproduce elapsed waiting time.
+The recorded self-check timed out and retained an unknown outcome and reservation.
+Instant replay returned the captured interrupted turn, recorded a failed outcome, and settled its measured usage.
+The receipt reason, budget hold, and resulting snapshot notification differ. The reports retain each difference.
+
+The old answer reservation lacks an explicit historical usage link. The comparison does not pair it through equal costs.
+The extraction case retains its earlier clock findings, including capture-candidate creation and source timestamps.
+Its claim, entity, evidence, version, token, and measured-cost fields matched after declared identity mapping.
+No new extraction difference paths appeared beyond the preceding recorded findings.
+
+### Local Check Limit
+
+Formatting, vet, build, architecture, targeted database contracts, and affected package race checks passed.
+An additional serial `make check` was interrupted in the existing F-B2-8 pipeline after complete CI passed.
+Its retained stack showed `snapshotTx` awaiting a query during `compareEntityFixture`. The cause remains unconfirmed.
+Only the executor's test PID was stopped. This serial check is not reported as passed.
+Complete local `make test-integration` and the large opt-in context fixture were not repeated.
+The complete integration-branch and main CI runs supply the full sharded database checks.
+No frontend source changed, so separate local frontend checks were not required.
 
 ## Call Contract
 

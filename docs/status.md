@@ -1,9 +1,10 @@
 # PCAS Project Status
 
-Implementation snapshot for repository commit `c9ac3fd`. Recorded 2026-10-08.
+Capability snapshot base: repository commit `c9ac3fd`, recorded 2026-10-08.
+Foundation delivery records updated 2026-10-09.
 
 This page gives product targets, implemented functions, and recorded deployment evidence with different status labels.
-It does not report a new live check. Historical results apply to their stated data, channel, and date.
+Each delivery record identifies its checks. Historical results apply to their stated data, channel, and date.
 The [Whitepaper](whitepaper.md) gives product requirements.
 The [Roadmap](whitepaper.md#10-roadmap) gives the phase sequence, delivery scopes, and acceptance targets. [Open Issues](tasks/backlog.md) records unresolved findings.
 
@@ -39,6 +40,7 @@ The [Roadmap](whitepaper.md#10-roadmap) gives the phase sequence, delivery scope
 | Phase 3.6 | Date-review release on 2026-10-08. | [Rollout](evaluations/2026-10-08-phase3_6-rollout.md). |
 | Phase 3.9 shared skeleton | First background scope released at `935ad5b`. Phase 3.9 remains incomplete. | [Acceptance and live check](evaluations/2026-10-08-foundation-shared-skeleton.md). |
 | Phase 3.9 recorded replay | Diagnostics and approved business-clock extension released at `b39a9ea` on 2026-10-09. Complete state equivalence remains incomplete. | [Replay and release evidence](evaluations/2026-10-08-foundation-recorded-replay.md#release-verification). |
+| Phase 3.9 interactive gateway | Secretary, readers, and self-checks released at `022a912` on 2026-10-09. Phase 3.9 remains incomplete. | [Complete CI, replay, real Codex, and live checks](tasks/foundation-interactive-gateway.md#final-acceptance). |
 
 Phase 2.0 was rolled back on 2026-10-01.
 Its design is stored under the recorded `archive/phase2-0/*` tags.
@@ -93,7 +95,7 @@ The [architecture acceptance](architecture.md#10-foundation-acceptance) governs 
 | Order | Delivery | Current state |
 |---|---|---|
 | First | Architecture documents, responsibilities, and existing-path inventory. | Initial direction and inventory recorded. Refresh affected paths before each migration. |
-| Second | Shared gateway, registered prompts, and architecture checks. | First background skeleton released at `935ad5b`. Complete provider and owner coverage remains outstanding. |
+| Second | Shared gateway, registered prompts, and architecture checks. | Background skeleton released at `935ad5b`; interactive calls released at `022a912`. Complete provider and owner coverage remains outstanding. |
 | Third | Recorded production-copy replay. | [Diagnostics and clock extension released](evaluations/2026-10-08-foundation-recorded-replay.md#release-verification) at `b39a9ea`. Background and secretary transport replay work without live calls. Complete state equivalence remains incomplete. |
 | Fourth | Owner pilot, then complete business paths and remaining model calls. | Domain extraction has not started. Keep temporary adapters until their named callers migrate. |
 | Fifth | Unified activity queries, declared event responses, and causal-chain limits. | Targets. Existing records and queue supply their starting mechanisms. |
@@ -103,47 +105,23 @@ The order identifies dependencies. Compatible scopes can proceed together after 
 Start nightly evaluation after complete gateway coverage under the architecture's [test contract](architecture.md#five-test-layers).
 
 The coordinator approved the [interactive gateway scope](tasks/foundation-interactive-gateway.md) before owner extraction.
-Its complete migration, replay, and acceptance remain pending.
-The first extension declares required model modes and registers four unchanged output schemas.
-The assigned fixed instructions now use registered assets and preserve their original bytes.
+Its [final acceptance](tasks/foundation-interactive-gateway.md#final-acceptance) records release at `022a912`.
+Secretary generation, heavy readers, secretary self-check, and deputy self-check now use the existing gateway.
+Registered instructions and four output schemas preserve their original bytes and field order.
+The secretary keeps its original shared deadline and two-attempt retry policy.
 
-Candidate secretary generation now uses the gateway with its original deadline and two-attempt retry policy.
-Candidate heavy readers and secretary self-check now use the gateway through the existing memory-use wrapper.
-The candidate deputy self-check now uses the gateway with its original run and lease.
+Invocations link their inputs, results, reservations, usage, and application outcomes.
+Unknown outcomes remain visible and retain their reservations. Accounting recovery uses the existing worker without another provider call.
+Each reader page has its own stage identity. Failed checks preserve accepted draft data and show their incomplete state.
 
-The replay diagnostic now [reports signed row changes and precise field differences](evaluations/2026-10-08-foundation-recorded-replay.md#signed-difference-verification).
-The existing extraction and secretary cases retain their unresolved findings. This does not close the replay layer.
+Complete integration-branch and main CI passed. Strict secretary and extraction replay started no live provider.
+The comparisons retained all owner columns. Remaining timing, capture timestamp, and legacy identity findings prevent a complete equivalence claim.
 
-The interactive storage adapter now uses the existing gateway ports and storage tables.
-Synthetic contracts cover accounting recovery, stage separation, input binding, deletion, and late-response rejection.
-Initial-adapter CI passed at `14d4b67`.
+Real default Codex passed on the isolated copy and after release. Backup, live claim counts, and own-request cleanup passed.
+The additional local serial check was interrupted in an existing snapshot query; its cause remains unconfirmed.
 
-The next candidate adds accounting continuation through the existing worker, without another model invocation.
-Synthetic checks cover restart, deleted inputs, interrupted executions, and late replies after a deputy lease changes.
-Continuation CI passed at `cd59876` after a failed source-budget fixture job passed on repetition.
-Its initial request-body EOF cause remains unconfirmed. Caller migration and complete interactive acceptance remain outstanding.
-
-Deputy self-check now retains a separate call and application outcome.
-Its result notice identifies a failed check or rejected output while preserving the original draft.
-Synthetic checks cover successful checks, provider failures, empty output, and accounting recovery without a repeated call.
-
-Complete deputy self-check CI failed at `2e83fb7`: dependency preparation consumed the existing self-check deadline.
-Candidate batch reads preserve dependency rules and the original deadline. The affected parallel-reader case passed locally.
-
-Reader stage identities distinguish selection, groups, pages, and later requested reading.
-Secretary self-check failures and selection fallback use existing visible receipts or notices.
-
-Shared-reader CI failed at `17cfc36`: the fake bridge lacked declared capability, and a self-check fixture exhausted its deadline.
-The candidate fixes synthetic provider declarations and preserves production deadlines.
-Secretary answer calls now link reservations and usage by identity. Unknown outcomes remain visible and retain their reservations.
-Complete candidate CI, strict replay, and real default-channel acceptance remain outstanding.
-
-Whole-system candidate CI found more synthetic provider setup gaps and accounting-contract differences.
-The candidate preserves the deletion receipt and measures a canceled hold separately from settled spending.
-The old strict secretary recording was rejected because its handover stale flag differed. No live Codex call occurred.
-A new preceding-revision recording and complete revised CI remain required.
-
-These changes remain foundation candidates. They have not been deployed.
+Full deputy generation, audio, vision, embeddings, routing, and legacy entry points still need complete migration or retirement.
+Domain extraction, unified activity, event responses, and the remaining test layers stay outstanding.
 
 ## Documentation Changes
 

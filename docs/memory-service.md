@@ -61,7 +61,9 @@ Readers and self-checks still require their exact input versions.
 A result-write or accounting failure cannot authorize another model call.
 Unknown outcomes retain the reservation and return a visible incomplete-operation receipt.
 
-This candidate adapter has synthetic checks. Complete replay and real default-channel acceptance remain pending.
+This extension was released at `022a912` on 2026-10-09.
+Its [acceptance record](tasks/foundation-interactive-gateway.md#final-acceptance) includes complete CI, strict replay, real default Codex, backup, and live cleanup.
+Complete replay equivalence remains incomplete. Other provider entry points still have declared migration exceptions.
 
 ### Background Call Evidence
 

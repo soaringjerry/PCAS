@@ -41,6 +41,7 @@ The [Roadmap](whitepaper.md#10-roadmap) gives the phase sequence, delivery scope
 | Phase 3.9 shared skeleton | First background scope released at `935ad5b`. Phase 3.9 remains incomplete. | [Acceptance and live check](evaluations/2026-10-08-foundation-shared-skeleton.md). |
 | Phase 3.9 recorded replay | Diagnostics and approved business-clock extension released at `b39a9ea` on 2026-10-09. Complete state equivalence remains incomplete. | [Replay and release evidence](evaluations/2026-10-08-foundation-recorded-replay.md#release-verification). |
 | Phase 3.9 interactive gateway | Secretary, readers, and self-checks released at `022a912` on 2026-10-09. Phase 3.9 remains incomplete. | [Complete CI, replay, real Codex, and live checks](tasks/foundation-interactive-gateway.md#final-acceptance). |
+| Phase 3.9 deputy gateway | Main deputy generation and revision released at `f0ee817` on 2026-10-09. Phase 3.9 remains incomplete. | [Replay, real Codex, CI, backup, and live checks](tasks/foundation-deputy-gateway.md#release-verification). |
 
 Phase 2.0 was rolled back on 2026-10-01.
 Its design is stored under the recorded `archive/phase2-0/*` tags.
@@ -95,7 +96,7 @@ The [architecture acceptance](architecture.md#10-foundation-acceptance) governs 
 | Order | Delivery | Current state |
 |---|---|---|
 | First | Architecture documents, responsibilities, and existing-path inventory. | Initial direction and inventory recorded. Refresh affected paths before each migration. |
-| Second | Shared gateway, registered prompts, and architecture checks. | Background skeleton released at `935ad5b`; interactive calls released at `022a912`. Complete provider and owner coverage remains outstanding. |
+| Second | Shared gateway, registered prompts, and architecture checks. | Background skeleton released at `935ad5b`; interactive calls at `022a912`; main deputy generation and revision at `f0ee817`. Complete provider and owner coverage remains outstanding. |
 | Third | Recorded production-copy replay. | [Diagnostics and clock extension released](evaluations/2026-10-08-foundation-recorded-replay.md#release-verification) at `b39a9ea`. Background and secretary transport replay work without live calls. Complete state equivalence remains incomplete. |
 | Fourth | Owner pilot, then complete business paths and remaining model calls. | Domain extraction has not started. Keep temporary adapters until their named callers migrate. |
 | Fifth | Unified activity queries, declared event responses, and causal-chain limits. | Targets. Existing records and queue supply their starting mechanisms. |
@@ -108,25 +109,16 @@ The coordinator approved the [interactive gateway scope](tasks/foundation-intera
 Its [final acceptance](tasks/foundation-interactive-gateway.md#final-acceptance) records release at `022a912`.
 Secretary generation, heavy readers, secretary self-check, and deputy self-check now use the existing gateway.
 
-The [deputy batch](tasks/foundation-deputy-gateway.md) has reservation and durable-input preparation through CI-tested revision `892b2b3`.
-Its fixed-clock ordinary and revision recordings pass strict offline transport replay.
-Complete owner data differences remain recorded.
+The [deputy batch](tasks/foundation-deputy-gateway.md#release-verification) was integrated and released at `f0ee817`.
+Main generation and revision use the gateway, preserve saved results, and link application to the original invocation.
+Ordinary and revision replay pass strict input checks without live provider calls.
+Every observed owner-data difference remains recorded and reviewed. Exact equality of complete owner state is not established.
+Actual Codex generation and the requested revision pass on isolated production-data copies.
 
-Main generation and revision now use the gateway in the deputy branch.
-Saved-result recovery and exact application links are implemented there. Filtered repository and integration checks pass.
-The ordinary recording rejects replay after a deadline crossed its actual-time boundary.
-
-The unmodified earlier program reproduces the same rejected input.
-
-The coordinator approved fixed deadline display classification and its expiry filter on diagnostic copies.
-Source validity and execution clocks remain actual. Filtered repository and pgvector integration checks pass for this extension.
-
-After this extension, ordinary and revision replay pass strict input checks without live provider calls.
-Complete owner differences remain recorded and reviewed. The new gateway records and existing metadata explain the observed differences.
-Actual Codex generation and the exact requested revision also pass on isolated production-data copies.
-
-Complete CI passes through `bef1d53`. Main integration and release remain outstanding.
-This batch has not been released and does not complete Phase 3.9.
+Main CI and both synthetic evaluation workflows pass. Backup, release, and live default Codex checks pass.
+Claim counts remain unchanged after cleanup by the check's identities.
+The first release attempt failed during a disk-space incident. The delivery record retains that failure, recovery, and the corrected release space check.
+This delivery does not complete Phase 3.9.
 
 Registered instructions and four output schemas preserve their original bytes and field order.
 The secretary keeps its original shared deadline and two-attempt retry policy.
@@ -141,7 +133,7 @@ The comparisons retained all owner columns. Remaining timing, capture timestamp,
 Real default Codex passed on the isolated copy and after release. Backup, live claim counts, and own-request cleanup passed.
 The additional local serial check was interrupted in an existing snapshot query; its cause remains unconfirmed.
 
-Full deputy generation, audio, vision, embeddings, routing, and legacy entry points still need complete migration or retirement.
+Audio, vision, embeddings, routing, and legacy entry points still need complete migration or retirement.
 Domain extraction, unified activity, event responses, and the remaining test layers stay outstanding.
 
 ## Documentation Changes

@@ -4,7 +4,7 @@ Executor: Sol. Scope prepared 2026-10-09 from `fa09f48`.
 
 This batch continues the approved [foundation direction](../architecture.md).
 The [interactive gateway batch](foundation-interactive-gateway.md) already migrated deputy self-check.
-Main deputy generation and document revision still bypass the gateway.
+At batch start, main deputy generation and document revision bypassed the gateway.
 
 ## Goal
 
@@ -108,11 +108,11 @@ Clean only this batch's test records by request or source ID.
 
 | Step | Current evidence |
 |---|---|
-| Admission reservation adapter | Deputy generation uses it in this branch. Reservation, cancellation, duplicate accounting, deletion, and origin-conflict contracts pass with synthetic providers. |
+| Admission reservation adapter | Released at `f0ee817`. Reservation, cancellation, duplicate accounting, deletion, and origin-conflict contracts pass with synthetic providers. |
 | Revision schema registration | Original bytes match. The registered asset preserves field order and contains no added newline. |
 | Bounded deputy replay operation | Implemented through the existing worker pass. Manifest checks and deputy contracts pass. Ordinary and revision replay pass strict input checks after migration. |
-| Main generation and application | Ordinary generation and revision use the gateway in this branch. Known-result recovery and exact application links pass contracts, strict replay, and actual Codex checks. |
-| Complete batch acceptance and release | Pre-release acceptance passes. Main integration and release remain outstanding. |
+| Main generation and application | Released at `f0ee817`. Known-result recovery and exact application links pass contracts, strict replay, and actual Codex checks. |
+| Complete batch acceptance and release | Main CI, both synthetic evaluation workflows, backup, release, and live default Codex checks pass. Phase 3.9 remains incomplete. |
 
 The initial repository check failed when evaluation and storage tests shared a database.
 The evaluation tool correctly refused nonempty data. Non-storage checks passed with a separate empty database.
@@ -298,15 +298,52 @@ Claim counts remain unchanged in each recording and replay.
 Initial private checkers assumed an incorrect completion label, body-only source hashes, and complete spending fields in original usage metadata.
 Code-path review corrected those assumptions. Application code did not change to satisfy those checkers.
 Private findings retain the failed checks and their reasons.
-Main integration, backup, release, and live checks remain outstanding.
+At this acceptance point, main integration, backup, release, and live checks remained outstanding.
 
 Main integration at `2c79466` exposed two additional synthetic evaluation workflow failures.
 Their local capture providers did not declare the gateway's required capabilities.
 The evaluator now uses its existing synthetic gateway adapter for local capture and explicit fake mode.
 Real generation continues to use the actual provider's capabilities. Production adapters and model inputs remain unchanged.
 Original failed workflow logs remain private.
-Tool unit tests, filtered repository checks, and the primary synthetic suite pass locally.
-Independent-suite checks, replacement CI, and release remain outstanding.
+Tool unit tests, filtered repository checks, and both complete synthetic suites pass locally.
+These synthetic suites check the evaluation pipelines. They do not measure real-model quality.
+
+### Release Verification
+
+The batch was integrated directly into `main` and released at `f0ee817` on 2026-10-09 UTC.
+[Main CI](https://github.com/soaringjerry/PCAS/actions/runs/37945461260) passed every job, including each storage partition.
+[Doing evaluation](https://github.com/soaringjerry/PCAS/actions/runs/37945461200) and [independent evaluation](https://github.com/soaringjerry/PCAS/actions/runs/37945461142) also passed.
+The duplicate integration-branch workflow was cancelled. It does not supply passing-check evidence.
+
+The first release attempt found PostgreSQL in repeated recovery because its user had no available disk space.
+The initial space check had measured root-writable space only. The rollback start also failed while the database remained unavailable.
+No migration or new deployment occurred in that attempt. Private records retain both failures and the original database logs.
+
+Lossless reference archives reduced duplicate storage for this executor's earlier diagnostic snapshots.
+Each archive reconstructs every original byte and passes the recorded row count and SHA-256 checks before duplicate storage is removed.
+Failed checks remain failed. Their prompts, raw responses, snapshots, and findings remain private.
+Production data, shared caches, and filesystem reserve settings were not changed during cleanup.
+The database and prior service revision recovered before the next release attempt.
+
+The release now checks non-root available space before stopping services.
+Its space allowance includes the previous database and file backup size, plus the same amount for recovery and rollback.
+Insufficient space stops release before service shutdown. The private release record contains the measured and required byte counts.
+
+The next attempt completed `pg_dump`, restore-list validation, complete file-volume backup, and private configuration backup.
+Existing migrations were verified. No new production migration was added.
+Owner record counts before and after migration were equal. API and worker revision checks and readiness passed.
+
+The live secretary check omitted an agent override and used the real default Codex channel.
+It returned the requested reply without notices, clarification, or failed or mutating receipts.
+The invocation, original reservation, measured usage, instruction hash, schema hash, and selected search mode passed verification.
+Claim and active-claim counts were both 5253 before and after cleanup.
+Cleanup selected only the check's smoke and request identities. No source remained for that request.
+
+The final documentation update passed formatting, static analysis, the service build, and filtered architecture and schema checks.
+The document checker passed links, anchors, index coverage, sentence length, and paragraph limits.
+These filtered checks do not replace the completed runtime CI.
+
+This delivery completes the deputy gateway batch. It does not complete Phase 3.9 or establish exact equality of complete owner state.
 
 ## Sol Window Prompt
 

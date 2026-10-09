@@ -116,11 +116,16 @@ Main generation and revision now use the gateway in the deputy branch.
 Saved-result recovery and exact application links are implemented there. Filtered repository and integration checks pass.
 The ordinary recording rejects replay after a deadline crossed its actual-time boundary.
 
-Complete CI passes through `acfb01a`. The unmodified earlier program reproduces the same rejected input.
+The unmodified earlier program reproduces the same rejected input.
 
 The coordinator approved fixed deadline display classification and its expiry filter on diagnostic copies.
 Source validity and execution clocks remain actual. Filtered repository and pgvector integration checks pass for this extension.
-Final replay and release remain outstanding.
+
+After this extension, ordinary and revision replay pass strict input checks without live provider calls.
+Complete owner differences remain recorded and reviewed. The new gateway records and existing metadata explain the observed differences.
+Actual Codex generation and the exact requested revision also pass on isolated production-data copies.
+
+Complete CI passes through `bef1d53`. Main integration and release remain outstanding.
 This batch has not been released and does not complete Phase 3.9.
 
 Registered instructions and four output schemas preserve their original bytes and field order.

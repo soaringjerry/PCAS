@@ -108,11 +108,11 @@ Clean only this batch's test records by request or source ID.
 
 | Step | Current evidence |
 |---|---|
-| Admission reservation adapter | Implemented. Reservation, cancellation, duplicate accounting, deletion, and origin-conflict contracts pass with synthetic providers. Production deputy generation does not use it yet. |
+| Admission reservation adapter | Deputy generation uses it in this branch. Reservation, cancellation, duplicate accounting, deletion, and origin-conflict contracts pass with synthetic providers. |
 | Revision schema registration | Original bytes match. The registered asset preserves field order and contains no added newline. |
-| Bounded deputy replay operation | Implemented through the existing worker pass. Manifest checks and existing deputy contracts pass. Ordinary and revision baselines use actual Codex on an isolated production-data copy. Final migration replay remains outstanding. |
-| Main generation and application | Ordinary generation and revision now use the gateway in this branch. Known-result recovery and exact application links are implemented. Complete CI passes. Final replay and release remain outstanding. |
-| Complete batch acceptance and release | Not complete. |
+| Bounded deputy replay operation | Implemented through the existing worker pass. Manifest checks and deputy contracts pass. Ordinary and revision replay pass strict input checks after migration. |
+| Main generation and application | Ordinary generation and revision use the gateway in this branch. Known-result recovery and exact application links pass contracts, strict replay, and actual Codex checks. |
+| Complete batch acceptance and release | Pre-release acceptance passes. Main integration and release remain outstanding. |
 
 The initial repository check failed when evaluation and storage tests shared a database.
 The evaluation tool correctly refused nonempty data. Non-storage checks passed with a separate empty database.
@@ -256,7 +256,8 @@ The extension is implemented. Filtered repository and pgvector integration check
 They check expiry labels, expiry filtering, recurring dates, unclear dates, and restoration of the default clock.
 Future and withdrawn source evidence remains unavailable under the diagnostic clock.
 The first fixture lacked its required synthetic role and failed. The corrected fixture keeps the same assertions.
-Final transport acceptance remains outstanding.
+Ordinary and revision recordings now pass strict offline replay after gateway migration.
+Both replays start no live provider. Claim counts remain unchanged.
 The failed replay started no live provider. It cannot certify successful generation or complete state equivalence.
 [Complete CI for `8088abc`](https://github.com/soaringjerry/PCAS/actions/runs/37934650717) passed every job.
 [Complete CI for `acfb01a`](https://github.com/soaringjerry/PCAS/actions/runs/37936200710) also passed every job, including each storage partition.
@@ -266,9 +267,38 @@ Its rejected provider input equals the migrated program's rejected input exactly
 This control establishes a temporal replay difference, not a prompt change introduced by the gateway.
 Both failed replay reports, original inputs, and complete raw owner snapshots remain private.
 Each failed case started no live provider. Claim counts remain unchanged. Their owned disposable clones were removed after snapshot verification.
-Main migration has not been released. Final transport replay, real-channel acceptance, and complete state comparison remain outstanding.
+Main migration has not been released. The completed checks are recorded below.
 Final checks and replay evidence must identify the tested source revision.
 Do not claim complete CI, release, or full state equivalence from filtered checks.
+
+### Pre-release Acceptance
+
+[Complete CI for `bef1d53`](https://github.com/soaringjerry/PCAS/actions/runs/37939951727) passed every job, including each storage partition.
+Private source manifests identify the complete captured source tree and binary hash.
+Every captured runtime Go file matches `bef1d53`. The later differences contain fixture and documentation changes.
+
+Ordinary and revision replay use the original recordings and identical complete starting owner data.
+Both pass strict provider-input checks and preserve output, memory references, and original costs.
+Complete raw snapshots, row differences, and field differences remain private. No comparison removes a field.
+Actual execution times, generated identities, measured durations, and their derived source and action fingerprints remain different.
+Existing source request hashing and the database action fingerprint function verify those fingerprints against their original data.
+
+The gateway adds an invocation and its saved result to each workflow.
+Their owner, original execution, reservation, private input, output hash, usage, and adoption receipt links pass verification.
+Revision usage now records its existing admission plan and provider duration. The old revision writer omitted those fields.
+The existing usage table rounds cost to six decimal places. The original saved cost and run cost remain in the evidence.
+These observations establish the checked behavior. They do not establish exact equality of complete owner state.
+
+Actual Codex checks also pass on isolated copies of production data.
+Ordinary generation produces the requested two-sentence explanation.
+Revision changes only the requested phrase and preserves the other paragraph exactly.
+Both workflows finish, settle their original reservations, and record applied results.
+Claim counts remain unchanged in each recording and replay.
+
+Initial private checkers assumed an incorrect completion label, body-only source hashes, and complete spending fields in original usage metadata.
+Code-path review corrected those assumptions. Application code did not change to satisfy those checkers.
+Private findings retain the failed checks and their reasons.
+Main integration, backup, release, and live checks remain outstanding.
 
 ## Sol Window Prompt
 

@@ -106,7 +106,8 @@ The coordinator approved the [interactive gateway scope](tasks/foundation-intera
 Its complete migration, replay, and acceptance remain pending.
 The first extension declares required model modes and registers four unchanged output schemas.
 The assigned fixed instructions now use registered assets and preserve their original bytes.
-Secretary, reader, and self-check calls still use their legacy wrappers until the assigned migration is complete.
+Secretary, reader, and secretary self-check calls still use their legacy wrappers.
+The candidate deputy self-check now uses the gateway with its original run and lease.
 
 The replay diagnostic now [reports signed row changes and precise field differences](evaluations/2026-10-08-foundation-recorded-replay.md#signed-difference-verification).
 The existing extraction and secretary cases retain their unresolved findings. This does not close the replay layer.
@@ -117,7 +118,12 @@ Initial-adapter CI passed at `14d4b67`.
 
 The next candidate adds accounting continuation through the existing worker, without another model invocation.
 Synthetic checks cover restart, deleted inputs, interrupted executions, and late replies after a deputy lease changes.
-Exact-revision CI for that continuation, caller migration, and complete interactive acceptance remain outstanding.
+Continuation CI passed at `cd59876` after a failed source-budget fixture job passed on repetition.
+Its initial request-body EOF cause remains unconfirmed. Caller migration and complete interactive acceptance remain outstanding.
+
+Deputy self-check now retains a separate call and application outcome.
+Its result notice identifies a failed check or rejected output while preserving the original draft.
+Synthetic checks cover successful checks, provider failures, empty output, and accounting recovery without a repeated call.
 These changes remain foundation candidates. They have not been deployed.
 
 ## Documentation Changes

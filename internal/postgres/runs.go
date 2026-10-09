@@ -15,6 +15,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/ai"
 	"github.com/soaringjerry/PCAS/internal/ai/siwc"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/modelcall"
 	"github.com/soaringjerry/PCAS/internal/prompts"
 	"github.com/soaringjerry/PCAS/internal/worker"
 	"github.com/soaringjerry/PCAS/internal/workspace"
@@ -906,18 +907,40 @@ func (s *Store) runAgentOnce(ctx context.Context) error {
 			return usageErr
 		}
 	}
+	selfcheckFallback := ""
 	if generationErr == nil && run.MemoryTier != "light" {
 		checkBudget := min(time.Since(answerStarted), 30*time.Second)
 		checkCtx, checkCancel := context.WithTimeout(workCtx, checkBudget)
-		checked := ai.Result{}
+		checkedText := ""
 		err := s.checkDeputySelfcheckContext(checkCtx, scope, run, token)
 		if err == nil {
-			checked, err = s.useModelCall(checkCtx, ctx, scope, run.AgentID, prompts.Must("deputy-selfcheck").Text(), run.Brief+"\n待自查草稿：\n"+result.Text, nil, modelUsage{Purpose: "selfcheck", Tier: run.MemoryTier, RunID: run.ID, MemoryRefs: run.ContextVersions, Plan: asJSON(usePlan{Groups: run.MemoryGroups})})
+			usage := modelUsage{Purpose: "selfcheck", Tier: run.MemoryTier, RunID: run.ID, MemoryRefs: run.ContextVersions, Plan: asJSON(usePlan{Groups: run.MemoryGroups})}
+			request := modelcall.Request{
+				OwnerID: scope.OwnerID, ExecutionID: memory.ID(run.ID), RootExecutionID: memory.ID(run.ID),
+				Function: "deputy", Stage: "selfcheck", ProviderID: run.AgentID,
+				Instructions: prompts.Must("deputy-selfcheck"), ContextBuilderVersion: "deputy-selfcheck-v1",
+				Prompt: asJSON(map[string]string{"rawPrompt": run.Brief + "\n待自查草稿：\n" + result.Text}),
+				Refs:   run.ContextVersions,
+				Policy: interactiveCallPolicy{
+					Kind: "deputy", Token: token, Origin: run.CreatedAt,
+					AgentID: run.AgentID, ThingID: run.ThingID, Usage: usage,
+				},
+			}
+			var paid *modelcall.PaidResult
+			paid, err = s.calls.Call(executionCallContext(checkCtx, "selfcheck"), request)
+			if err == nil {
+				checkedText = paid.Output
+				err = checkCtx.Err()
+			}
 		}
 		checkCancel()
-		if err == nil && strings.TrimSpace(checked.Text) != "" && len(parseRunChecklist(checked.Text)) == len(parseRunChecklist(result.Text)) {
-			result.Text = checked.Text
+		if err == nil && strings.TrimSpace(checkedText) != "" && len(parseRunChecklist(checkedText)) == len(parseRunChecklist(result.Text)) {
+			result.Text = checkedText
 		} else {
+			selfcheckFallback = secretaryErrorType("selfcheck", err)
+			if err == nil {
+				selfcheckFallback = "selfcheck_output_rejected"
+			}
 			slog.WarnContext(ctx, "memory selfcheck fallback", "stage", "selfcheck", "error_type", secretaryErrorType("selfcheck", err))
 		}
 	}
@@ -989,8 +1012,33 @@ func (s *Store) runAgentOnce(ctx context.Context) error {
 		}
 		// Work handed off is reported back where reminders go, so the person who
 		// asked from their phone hears how it ended without opening the page.
+		noticeReason := runNoticeReason(current)
+		if generationErr == nil && run.MemoryTier != "light" {
+			application := "applied"
+			if selfcheckFallback != "" {
+				application = "skipped"
+			}
+			if current.Status != "done" {
+				application = "not_applicable"
+			}
+			if err := (interactiveCalls{store: s}).recordApplicationTx(ctx, tx, scope.OwnerID, memory.ID(run.ID), "selfcheck", application, selfcheckFallback); err != nil {
+				return err
+			}
+		}
+		if selfcheckFallback != "" {
+			if err := stageEventTx(ctx, tx, scope.OwnerID, "selfcheck", "failure", selfcheckFallback, 1); err != nil {
+				return err
+			}
+			if current.Status == "done" {
+				if selfcheckFallback == "selfcheck_output_rejected" {
+					noticeReason += "\n自查结果未采用，保留了原稿。"
+				} else {
+					noticeReason += "\n自查未完成，保留了原稿。"
+				}
+			}
+		}
 		if _, err := tx.Exec(ctx, `INSERT INTO workspace_notices(owner_id,thing_id,trigger_id,due_at,reason) VALUES($1,$2,$3,now(),$4) ON CONFLICT DO NOTHING`,
-			string(scope.OwnerID), current.ThingID, runNoticePrefix+current.ID, runNoticeReason(current)); err != nil {
+			string(scope.OwnerID), current.ThingID, runNoticePrefix+current.ID, noticeReason); err != nil {
 			return err
 		}
 		// Delivery triggers expose background results without changing the

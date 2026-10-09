@@ -46,7 +46,10 @@ The [accounting continuation](../internal/postgres/model_calls_interactive_recov
 It saves retained responses and settles recorded usage without invoking a provider or applying business actions.
 Interrupted started calls retain unknown outcomes and reservations until their actual usage becomes available.
 
-The existing interactive callers have not yet migrated. Their legacy provider behavior remains an open boundary.
+Deputy self-check now uses the gateway with its existing run and lease.
+Its existing result notice identifies incomplete checks and rejected output. The draft remains available after fallback.
+Secretary and reader calls still use their legacy wrappers. Their provider behavior remains an open boundary.
+
 This candidate adapter has synthetic checks. Complete replay and real default-channel acceptance remain pending.
 
 ### Background Call Evidence

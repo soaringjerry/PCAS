@@ -46,7 +46,8 @@ No project, task, timeline, memory-selection, or semantic decision rule is repai
 The first implementation extends the existing gateway request and provider adapter.
 It declares provider selection, registered schema, search requirements, and context-builder version.
 Unsupported required capabilities get a failed call record before reservation or invocation.
-The background default keeps ordinary generation. Existing interactive callers still use their legacy wrappers.
+The background default keeps ordinary generation. Deputy self-check now uses the gateway.
+Secretary and reader calls still use their legacy wrappers.
 
 Four output schemas now use registered, immutable content and hashes.
 Their bytes and field order match the preceding source.
@@ -88,7 +89,7 @@ The [complete instruction-transfer CI](https://github.com/soaringjerry/PCAS/acti
 
 The existing gateway now selects storage adapters for leased background jobs or interactive executions.
 The interactive policy identifies an admitted secretary request or an existing deputy lease.
-The adapter does not create queue jobs. No production caller uses the interactive adapter yet.
+The adapter does not create queue jobs. The candidate deputy self-check is its first application caller.
 
 Each interactive invocation has its own result key, reservation, usage link, and safe failure metadata.
 Input binding includes execution, stage, provider, instruction, schema, mode, context version, payload hash, and references.
@@ -125,7 +126,7 @@ A process can lose an unsaved response during a database outage; its started inv
 
 ### Accounting Continuation
 
-Status: candidate implementation. Complete exact-revision CI and caller migration remain pending.
+Status: candidate implementation. Complete continuation CI passed. Caller migration and complete interactive acceptance remain pending.
 The existing deputy worker now continues interactive persistence and accounting without a repeated user request.
 Recovery can save a retained response or finish an existing billing receipt. It cannot invoke a provider or apply business results.
 
@@ -149,6 +150,31 @@ They also verify late-response accounting, repeated recovery, and rejection afte
 An initial late-response check found that the old held state prevented settlement of returned usage.
 The adapter now returns that receipt to pending accounting. The same contract then passed.
 These checks use synthetic providers and an empty owned test database. They do not establish live caller acceptance.
+
+The first complete continuation CI at `cd59876` failed one existing source-budget sequence with an unexpected request-body EOF.
+The other 12 jobs passed. The failing sequence passed ten local repetitions on both `14d4b67` and the current candidate.
+The repeated job passed without changes to its assertions or error reporting. Its initial failure cause remains unconfirmed.
+The [complete continuation CI](https://github.com/soaringjerry/PCAS/actions/runs/37883992486) passed at `cd59876`.
+That result does not cover the later deputy self-check migration.
+
+### Deputy Self-Check Migration
+
+Deputy self-check now calls the existing gateway with its original run, lease token, agent, item, and memory versions.
+The registered instructions, original draft context, ordinary output mode, and shared deadline remain unchanged.
+Its call record links the reservation and usage to that run.
+The workflow records application separately from provider success and accounting.
+
+If self-check fails or accounting remains pending, the deputy keeps the original draft.
+If returned output is empty or changes checklist authority, the deputy also keeps the original draft.
+The existing result notice identifies incomplete self-check or rejected output. The stage record retains the failure reason.
+These notices do not change the draft body or authorize extra actions.
+Stored accounting can continue after the run finishes, without another provider call.
+
+Synthetic contracts cover accepted checks, provider failures, empty output, and interrupted accounting.
+Existing deputy tier, context, result notice, and interactive recovery contracts also pass.
+An initial fallback check rejected an unsupported event status. The implementation now uses the existing failure status.
+Complete exact-revision CI and real default-channel acceptance remain pending for this migration.
+Heavy readers, secretary self-check, secretary generation, and full deputy generation still need their assigned migrations.
 
 ## Call Contract
 

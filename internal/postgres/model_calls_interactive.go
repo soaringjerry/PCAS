@@ -557,6 +557,13 @@ func (a interactiveCalls) Forget(context.Context, modelcall.Request, *modelcall.
 	return nil
 }
 
+// The workflow reports its decision separately from provider and billing
+// outcomes. This write records that decision; it cannot authorize an action.
+func (a interactiveCalls) recordApplicationTx(ctx context.Context, tx pgx.Tx, owner, execution memory.ID, stage, outcome, reason string) error {
+	_, err := tx.Exec(ctx, `UPDATE model_calls SET actual_mode=actual_mode||jsonb_build_object('applicationOutcome',$4::text,'applicationReason',$5::text),updated_at=clock_timestamp() WHERE owner_id=$1 AND execution_id=$2 AND stage=$3 AND input_manifest->>'version'='interactive-input-v1' AND recovery_state='active'`, string(owner), string(execution), stage, outcome, reason)
+	return err
+}
+
 // The data owner calls this in its existing deletion transaction. Keep billing
 // metadata, but remove interactive bodies and invalidate their application receipt.
 func (a interactiveCalls) scrubInputsTx(ctx context.Context, tx pgx.Tx, owner memory.ID, ids []string) error {

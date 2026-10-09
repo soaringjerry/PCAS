@@ -101,8 +101,12 @@ The [architecture acceptance](architecture.md#10-foundation-acceptance) governs 
 
 The order identifies dependencies. Compatible scopes can proceed together after their prerequisites are established.
 Start nightly evaluation after complete gateway coverage under the architecture's [test contract](architecture.md#five-test-layers).
+
 The [interactive gateway proposal](tasks/foundation-interactive-gateway.md) defines a bounded next scope before owner extraction.
 It requires coordinator assignment and has no implemented source changes.
+
+The replay diagnostic now [reports signed row changes and precise field differences](evaluations/2026-10-08-foundation-recorded-replay.md#signed-difference-verification).
+The existing extraction and secretary cases retain their unresolved findings. This does not close the replay layer.
 
 ## Documentation Changes
 

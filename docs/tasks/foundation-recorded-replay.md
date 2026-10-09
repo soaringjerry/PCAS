@@ -103,6 +103,11 @@ The release followed verified database, file, and private configuration backups.
 The live default Codex check passed. Claims remained at 5253 after own-request cleanup.
 Earlier interrupted or timed-out full local attempts remain incomplete, as recorded in the acceptance reports.
 
+The next diagnostic change exports signed row differences and reports exact field paths.
+It includes removed rows, duplicate occurrences, historical references, and explicit unpaired records.
+It uses existing private recordings and makes no additional model calls.
+This diagnostic work does not assign the proposed interactive gateway migration.
+
 ## Sol Window Prompt
 
 ```text

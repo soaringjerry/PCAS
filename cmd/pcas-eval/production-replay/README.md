@@ -13,7 +13,17 @@ python3 scripts/foundation_replay_compare.py \
   --left-after /private/record/after.jsonl.gz \
   --right-before /private/replay/before.jsonl.gz \
   --right-after /private/replay/after.jsonl.gz \
-  --output /private/comparison.json
+  --output /private/comparison.json \
+  --delta-output /private/delta.json \
+  --schema-evidence /private/catalog.json
+python3 scripts/foundation_replay_identity.py \
+  --delta-rows /private/delta.json \
+  --exact-comparison /private/comparison.json \
+  --initial-snapshot /private/record/before.jsonl.gz \
+  --left-after /private/record/after.jsonl.gz \
+  --right-before /private/replay/before.jsonl.gz \
+  --right-after /private/replay/after.jsonl.gz \
+  --output /private/fields.json
 ```
 
 Keep the manifest and all evidence outside Git. Use private directories and files.
@@ -85,12 +95,34 @@ Different starting data cannot pass comparison.
 A mismatch is not proof of a business regression; inspect the retained raw data.
 The current comparator cannot certify refactors that produce different random identities or runtime metadata.
 
-`scripts/foundation_replay_identity.py` establishes declared identity correspondence for added-row differences.
-It requires an exact comparison with equal starting data, complete delta rows, database column types, and the original starting snapshot.
-It pins historical UUIDs and rejects ambiguous keys or conflicting mappings.
+`--delta-output` exports original row differences with their signed changes and snapshot fingerprints.
+Removed rows come from the before snapshot. Added rows come from the after snapshot.
+Updates can contain both. Duplicate occurrences remain separate.
+Export checks every snapshot again, including phases without a difference.
+Changed evidence cannot produce a completed export.
+New evidence files are published only after complete writes. Existing results cannot be replaced.
+
+`--schema-evidence` supplies a private JSON object with a `schema` array.
+Capture this metadata from the same verified copy catalog. Do not manufacture it from object names or observed values.
+Each column has `table`, `column`, `type`, and boolean `primary_key` fields.
+Include every column in every owner-scoped table, including tables without changed rows.
+Column metadata must agree with the raw snapshots.
+
+`scripts/foundation_replay_identity.py` establishes declared identity correspondence and reports field differences.
+It requires an exact comparison with equal starting data, complete signed delta rows, column metadata, and the original starting snapshot.
+It pins historical UUID columns and declared JSON references, including references without a surviving object.
+It rejects ambiguous keys or conflicting mappings.
 It maps typed UUID columns and declared entity, memory, receipt, capture, and secretary references.
 It does not replace UUID-like text. Every field remains in the resulting comparison.
-Its output keeps unresolved keys, unmapped object identities, and runtime differences visible.
+Rows pair only through unique declared primary keys after reference mapping.
+Field paths retain nested keys, array positions, scalar types, decimal precision, and missing-versus-null distinctions.
+Unpaired records and missing primary keys remain explicit findings.
+Its output keeps unresolved identities, runtime fields, and both before and after differences visible.
+Older manually collected deltas retain a legacy binding label. Missing historical column coverage remains a finding.
+Supply the complete snapshot set to check mappings against all owner data, including rows absent from the changed-row export.
+The additional three paths are optional as a group. Incomplete groups fail validation.
+The full comparison retains every field and verifies the original snapshot fingerprints.
+Without these paths, `full_owner_data_checked` is false. A field report alone cannot establish complete mapping coverage.
 It does not certify state equivalence. Missing reservation-to-usage links cannot be inferred from equal amounts.
 
 The first secretary recording exposed a changing business clock in its prompt.

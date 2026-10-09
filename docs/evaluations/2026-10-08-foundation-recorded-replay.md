@@ -127,3 +127,36 @@ The executor stopped the verified check process tree and removed its database af
 This attempt remains incomplete. It is not a passing full local check.
 The documentation commit changes no runtime source. Storage coverage comes from the exact-revision CI above.
 Formatting, vet, build, and document index, link, anchor, and writing checks passed separately.
+
+## Signed Difference Verification
+
+The diagnostic extension uses the existing recordings and snapshots. It makes no additional model calls or database writes.
+Signed export keeps removed rows, added rows, and duplicate occurrences.
+It binds the raw delta to the exact report and rechecks every snapshot's bytes and row count.
+Field analysis pairs rows by unique declared primary keys after reference mapping.
+It preserves all fields, array positions, scalar types, decimal precision, and missing-versus-null distinctions.
+Historical pinning includes declared JSON references whose original object no longer exists.
+
+The column inventory came from the verified owned copy in a read-only transaction.
+All 55 applied migration checksums matched the repository.
+It contains 665 columns in 94 owner-scoped tables. Both cases have complete historical column coverage.
+Private verification records the comparison source fingerprints.
+
+| Existing case | Observed field report | Remaining finding |
+|---|---|---|
+| Extraction | 20 identities correspond. All 51 changed rows pair. Field differences remain in 28 rows. | Dates, capture source-display timestamps, and measured duration remain visible. Complete equivalence is not certified. |
+| Secretary with fixed business clock | Six identities correspond. Fifteen rows pair; thirteen contain field differences. | Two unmatched reservation groups remain, one per side. The legacy secretary usage link is still absent. Complete equivalence is not certified. |
+
+The synthetic state suite passed all 25 checks. The transport suite passed all eight checks.
+Checks cover signed deletion, changed versions and dependencies, duplicate rows, stale snapshots, exact values, incomplete metadata, and preserved earlier results.
+An additional whole-owner comparison checks references in otherwise identical rows.
+Changed-row inspection alone does not establish complete mapping coverage.
+Both complete snapshot sets passed source binding and historical coverage checks.
+After identity mapping, extraction retains 56 differing row fingerprints. The secretary case retains 28.
+These are comparison findings, not certified state equivalence or newly observed business regressions.
+Formatting, vet, build, diagnostic race checks, resolved architecture checks, and document checks passed.
+No Go runtime source or frontend source changed.
+The full local `make check` was not repeated for this Python and documentation change.
+Its unchanged Go source has the complete exact-revision CI results above; the previous local scale-fixture limitations remain recorded.
+CI verification for this extension is separate from those earlier runtime results.
+The coordinator approved the separate interactive gateway scope. This diagnostic change does not implement that migration.

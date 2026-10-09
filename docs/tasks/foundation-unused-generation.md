@@ -43,12 +43,34 @@ This scope does not complete Phase 3.9 or establish complete gateway coverage.
 
 ## Status
 
-The unused instructions, generation method, and matching architecture exception are removed in the executor branch.
+The unused instructions, generation method, and matching architecture exception were removed and released at `6411b4e`.
 The old queue handler's complete bytes match the baseline.
 Formatting, static analysis, service build, filtered repository checks, and filtered pgvector integration checks pass.
 The selected contracts cover current-state writes, frozen cards, scheduling without a model, timeline reads, and background contention.
 The document checker passes index coverage, links, anchors, sentence length, and paragraph limits.
-Complete CI, direct integration, backup, release, and live checks remain outstanding.
+Complete branch and main CI pass. Direct integration, backup, release, and live checks are complete.
+
+## Release Verification
+
+Release `6411b4e` completed on 2026-10-09.
+The production code change removes only the two unused declarations and their provider-boundary exception.
+The old queue handler retains its complete original bytes. No table, migration, active prompt, or provider behavior changed.
+
+| Check | Observed result |
+|---|---|
+| Local checks | Formatting, static analysis, service build, and selected repository and pgvector contracts pass. Local test runs were filtered. |
+| Complete CI | [Branch run](https://github.com/soaringjerry/PCAS/actions/runs/37949753042) and [main run](https://github.com/soaringjerry/PCAS/actions/runs/37951395475) each pass all 13 jobs. |
+| Database and files | `pg_dump`, archive listing, complete file backup, and private configuration backup pass before deployment. |
+| Existing records | Owner memory, claim, source, and work-item counts remain equal before and after migration checks. |
+| Runtime | API and worker run the pinned revision. Readiness and the existing call-metadata migration checksum pass. |
+| Default live channel | The actual default Codex secretary uses `gpt-6.1-sol` and replies with the requested deployment-check phrase. |
+| Call accounting | The answer invocation links its instructions, output schema, reservation, and measured usage. Accounting is settled. |
+| Own-request cleanup | Cleanup by the check's identities passes. Claim and active-claim counts remain 5253. The request has no remaining source. |
+
+No additional model evaluation ran for this unused-code removal.
+The earlier deputy evaluation results retain their original revision and scope.
+Private backup records, complete CI results, live replies, and cleanup evidence remain outside Git.
+This release does not complete Phase 3.9 or prove complete gateway coverage.
 
 ## Sol Window Prompt
 

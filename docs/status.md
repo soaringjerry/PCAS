@@ -42,6 +42,7 @@ The [Roadmap](whitepaper.md#10-roadmap) gives the phase sequence, delivery scope
 | Phase 3.9 recorded replay | Diagnostics and approved business-clock extension released at `b39a9ea` on 2026-10-09. Complete state equivalence remains incomplete. | [Replay and release evidence](evaluations/2026-10-08-foundation-recorded-replay.md#release-verification). |
 | Phase 3.9 interactive gateway | Secretary, readers, and self-checks released at `022a912` on 2026-10-09. Phase 3.9 remains incomplete. | [Complete CI, replay, real Codex, and live checks](tasks/foundation-interactive-gateway.md#final-acceptance). |
 | Phase 3.9 deputy gateway | Main deputy generation and revision released at `f0ee817` on 2026-10-09. Phase 3.9 remains incomplete. | [Replay, real Codex, CI, backup, and live checks](tasks/foundation-deputy-gateway.md#release-verification). |
+| Phase 3.9 unused generation cleanup | Unused card instructions and generation removed and released at `6411b4e` on 2026-10-09. | [CI, backup, release, and live checks](tasks/foundation-unused-generation.md#release-verification). |
 
 Phase 2.0 was rolled back on 2026-10-01.
 Its design is stored under the recorded `archive/phase2-0/*` tags.
@@ -120,10 +121,9 @@ Claim counts remain unchanged after cleanup by the check's identities.
 The first release attempt failed during a disk-space incident. The delivery record retains that failure, recovery, and the corrected release space check.
 This delivery does not complete Phase 3.9.
 
-The next [unused generation cleanup](tasks/foundation-unused-generation.md) removes confirmed unused card instructions and their generation method.
-Old card queue acknowledgement and current-state workflows remain in scope for preservation checks.
-The removal is implemented in the executor branch. Filtered repository and pgvector integration checks pass.
-Complete CI, integration, and release remain outstanding.
+The [unused generation cleanup](tasks/foundation-unused-generation.md#release-verification) was integrated and released at `6411b4e`.
+The old card queue handler retains its original bytes. Current-state contracts and complete branch and main CI pass.
+Backup, readiness, live default Codex accounting, and cleanup checks pass. Claim counts remain unchanged.
 
 Registered instructions and four output schemas preserve their original bytes and field order.
 The secretary keeps its original shared deadline and two-attempt retry policy.

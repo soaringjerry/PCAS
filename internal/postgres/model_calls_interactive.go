@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -29,6 +30,7 @@ type interactiveCallPolicy struct {
 	Usage       modelUsage
 	RetryOf     memory.ID
 	InputPolicy string
+	BudgetOwner string
 }
 
 // An admitted request or committed deputy lease supplies this identity.
@@ -70,7 +72,7 @@ func (a modelCallStorage) Forget(ctx context.Context, r modelcall.Request, p *mo
 	}
 	return a.background.Forget(ctx, r, p)
 }
-func (a modelCallStorage) Reserve(ctx context.Context, r modelcall.Request, cost float64) (string, error) {
+func (a modelCallStorage) Reserve(ctx context.Context, r modelcall.Request, cost float64) (modelcall.Reservation, error) {
 	if _, ok := r.Policy.(interactiveCallPolicy); ok {
 		return a.interactive.Reserve(ctx, r, cost)
 	}
@@ -146,6 +148,7 @@ type interactiveCallRow struct {
 		Refs        []memory.Ref `json:"memoryRefs"`
 		Kind        string       `json:"executionKind"`
 		Origin      string       `json:"origin"`
+		BudgetOwner string       `json:"budgetOwner"`
 		AgentID     string       `json:"agentId"`
 		ThingID     string       `json:"thingId"`
 	} `json:"input_manifest"`
@@ -153,6 +156,7 @@ type interactiveCallRow struct {
 		Usage       modelUsage `json:"originalUsage"`
 		Token       string     `json:"executionToken"`
 		Unsupported string     `json:"unsupportedCapability"`
+		Reserved    float64    `json:"reservationEstimate"`
 	} `json:"actual_mode"`
 	Receipt interactiveReceipt `json:"result_receipt"`
 }
@@ -167,6 +171,14 @@ func interactiveBinding(r modelcall.Request) (string, error) {
 	}
 	if p.InputPolicy != "" && (p.InputPolicy != "current_access" || p.Kind != "secretary" || r.Stage != "answer") {
 		return "", memory.ErrInvalid
+	}
+	if p.BudgetOwner != "" {
+		if p.BudgetOwner != "deputy_run" || p.Kind != "deputy" || r.Function != "deputy" || r.Stage != "answer" || p.Usage.ID != "" || p.Usage.RunID != string(r.ExecutionID) {
+			return "", memory.ErrInvalid
+		}
+		if _, err := time.Parse(time.RFC3339Nano, p.Origin); err != nil {
+			return "", memory.ErrInvalid
+		}
 	}
 	refs := r.Refs
 	if refs == nil {
@@ -185,7 +197,8 @@ func interactiveBinding(r modelcall.Request) (string, error) {
 		Refs                                                                                 []memory.Ref
 		Kind, Origin, Agent, Thing                                                           string
 		InputPolicy                                                                          string `json:"inputPolicy,omitempty"`
-	}{r.OwnerID, r.ExecutionID, r.RootExecutionID, r.CausationID, r.Function, r.Stage, r.ProviderID, r.Instructions.Name(), r.Instructions.Hash(), r.Schema.Name(), r.Schema.Hash(), r.ContextBuilderVersion, r.Search, fmt.Sprintf("%x", sha256.Sum256(r.Prompt)), refs, p.Kind, p.Origin, p.AgentID, p.ThingID, p.InputPolicy}
+		BudgetOwner                                                                          string `json:"budgetOwner,omitempty"`
+	}{r.OwnerID, r.ExecutionID, r.RootExecutionID, r.CausationID, r.Function, r.Stage, r.ProviderID, r.Instructions.Name(), r.Instructions.Hash(), r.Schema.Name(), r.Schema.Hash(), r.ContextBuilderVersion, r.Search, fmt.Sprintf("%x", sha256.Sum256(r.Prompt)), refs, p.Kind, p.Origin, p.AgentID, p.ThingID, p.InputPolicy, p.BudgetOwner}
 	return fmt.Sprintf("%x", sha256.Sum256(asJSON(binding))), nil
 }
 
@@ -351,6 +364,9 @@ func (a interactiveCalls) Prepare(ctx context.Context, r modelcall.Request, prov
 			refs = []memory.Ref{}
 		}
 		manifest := map[string]any{"version": "interactive-input-v1", "bindingHash": hash, "inputHash": fmt.Sprintf("%x", sha256.Sum256(r.Prompt)), "inputBytes": len(r.Prompt), "memoryRefs": refs, "executionKind": p.Kind, "origin": p.Origin, "agentId": p.AgentID, "thingId": p.ThingID, "inputValidation": p.InputPolicy}
+		if p.BudgetOwner != "" {
+			manifest["budgetOwner"] = p.BudgetOwner
+		}
 		mode := map[string]any{"output": "text", "schema": "none", "search": false, "executionToken": p.Token, "originalUsage": usage, "usageComplete": false}
 		_, err = tx.Exec(ctx, `INSERT INTO model_calls(owner_id,id,execution_id,root_execution_id,causation_id,retry_of_id,attempt_number,attempt_limit,function_name,stage,provider_id,model,prompt_name,instruction_hash,schema_name,schema_hash,context_builder_version,input_manifest,required_capabilities,actual_mode,outcome,accounting_state) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,'prepared','not_reserved')`, string(r.OwnerID), string(id), string(r.ExecutionID), string(r.RootExecutionID), nullString(string(r.CausationID)), nullString(string(p.RetryOf)), attempt, limit, r.Function, r.Stage, provider.ID, provider.Model, r.Instructions.Name(), r.Instructions.Hash(), nullString(r.Schema.Name()), nullString(r.Schema.Hash()), r.ContextBuilderVersion, asJSON(manifest), asJSON(r.RequiredCapabilities()), asJSON(mode))
 		return err
@@ -358,7 +374,10 @@ func (a interactiveCalls) Prepare(ctx context.Context, r modelcall.Request, prov
 	return id, err
 }
 
-func (a interactiveCalls) Reserve(ctx context.Context, r modelcall.Request, cost float64) (string, error) {
+func (a interactiveCalls) Reserve(ctx context.Context, r modelcall.Request, cost float64) (modelcall.Reservation, error) {
+	if r.Policy.(interactiveCallPolicy).BudgetOwner == "deputy_run" {
+		return a.reserveDeputyRun(ctx, r, cost)
+	}
 	id, err := a.store.reserveModelCostID(ctx, r.OwnerID, cost, nil, func(ctx context.Context, tx pgx.Tx, id string) error {
 		if err := interactiveFence(ctx, tx, r); err != nil {
 			return err
@@ -372,9 +391,91 @@ func (a interactiveCalls) Reserve(ctx context.Context, r modelcall.Request, cost
 	// The existing foreground budget port uses ErrUnavailable for exhaustion.
 	// Keep that cause, and identify the budget failure for gateway callers.
 	if errors.Is(err, memory.ErrUnavailable) {
-		return id, errors.Join(workspace.ErrBudget, err)
+		return modelcall.Reservation{ID: id, Cost: cost}, errors.Join(workspace.ErrBudget, err)
 	}
-	return id, err
+	return modelcall.Reservation{ID: id, Cost: cost}, err
+}
+
+// Admission already reserved the main deputy generation in agent_runs. Link
+// that hold atomically; readers and review keep their separate reservations.
+func (a interactiveCalls) reserveDeputyRun(ctx context.Context, r modelcall.Request, estimate float64) (modelcall.Reservation, error) {
+	var reservation modelcall.Reservation
+	if estimate < 0 || math.IsNaN(estimate) || math.IsInf(estimate, 0) {
+		return reservation, memory.ErrInvalid
+	}
+	if _, err := interactiveBinding(r); err != nil {
+		return reservation, err
+	}
+	p := r.Policy.(interactiveCallPolicy)
+	err := pgx.BeginFunc(ctx, a.store.pool, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(r.OwnerID)); err != nil {
+			return err
+		}
+		if err := interactiveFence(ctx, tx, r); err != nil {
+			return err
+		}
+		if err := tx.QueryRow(ctx, `SELECT md5(owner_id::text||':'||id::text||':'||$3::text)::uuid::text,reserved_cost::double precision FROM agent_runs WHERE owner_id=$1 AND id=$2 AND document->>'createdAt'=$3 FOR UPDATE`, string(r.OwnerID), string(r.ExecutionID), p.Origin).Scan(&reservation.ID, &reservation.Cost); err != nil {
+			return err
+		}
+		tag, err := tx.Exec(ctx, `UPDATE model_calls SET reservation_id=$4,accounting_state='reserved',actual_mode=actual_mode||jsonb_build_object('reservationEstimate',$5::double precision,'generationEstimate',$6::double precision),updated_at=clock_timestamp() WHERE owner_id=$1 AND execution_id=$2 AND stage=$3 AND outcome='prepared' AND recovery_state='active' AND actual_mode->>'executionToken'=$7 AND input_manifest->>'budgetOwner'='deputy_run' AND input_manifest->>'origin'=$8`, string(r.OwnerID), string(r.ExecutionID), r.Stage, reservation.ID, reservation.Cost, estimate, p.Token, p.Origin)
+		if err == nil && tag.RowsAffected() != 1 {
+			return modelcall.ErrOutcomeUnknown
+		}
+		return err
+	})
+	return reservation, err
+}
+
+// The durable journal proves which admitted hold this response can settle.
+// A late response can settle its original hold after deletion, never a reused run.
+func (a interactiveCalls) settleDeputyRun(ctx context.Context, r modelcall.Request, paid *modelcall.PaidResult) error {
+	if paid.Cost < 0 || math.IsNaN(paid.Cost) || math.IsInf(paid.Cost, 0) {
+		return memory.ErrInvalid
+	}
+	persist, cancel := context.WithTimeout(context.WithoutCancel(ctx), modelcall.PersistenceTimeout)
+	defer cancel()
+	return pgx.BeginFunc(persist, a.store.pool, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(persist, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(r.OwnerID)); err != nil {
+			return err
+		}
+		return a.settleDeputyRunTx(persist, tx, r, paid)
+	})
+}
+
+func (a interactiveCalls) settleDeputyRunTx(ctx context.Context, tx pgx.Tx, r modelcall.Request, paid *modelcall.PaidResult) error {
+	var origin, reservation string
+	var held float64
+	err := tx.QueryRow(ctx, `SELECT input_manifest->>'origin',reservation_id::text,(actual_mode->>'reservationEstimate')::double precision FROM model_calls WHERE owner_id=$1 AND id=$2 AND execution_id=$3 AND reservation_id=$4 AND provider_id=$5 AND model=$6 AND function_name='deputy' AND stage='answer' AND input_manifest->>'executionKind'='deputy' AND input_manifest->>'budgetOwner'='deputy_run' AND reservation_id=md5(owner_id::text||':'||execution_id::text||':'||(input_manifest->>'origin'))::uuid`, string(r.OwnerID), string(paid.InvocationID), string(r.ExecutionID), paid.Reservation, paid.Provider, paid.Model).Scan(&origin, &reservation, &held)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return memory.ErrConflict
+	}
+	if err != nil {
+		return err
+	}
+	if origin != r.Policy.(interactiveCallPolicy).Origin || paid.ReservedCost != held {
+		return memory.ErrConflict
+	}
+	cost := paid.Cost
+	if paid.CallErrorCode == modelcall.ErrOutcomeUnknown.Error() {
+		cost = max(cost, held)
+	}
+	tag, err := tx.Exec(ctx, `UPDATE agent_runs SET reserved_cost=$4,document=jsonb_set(document,'{cost}',to_jsonb($4::numeric)) WHERE owner_id=$1 AND id=$2 AND document->>'createdAt'=$3`, string(r.OwnerID), string(r.ExecutionID), origin, cost)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 1 {
+		// Undo can restore the original run after a deletion transfer. Its
+		// budget has one active location, while model_usage keeps actual cost.
+		_, err := tx.Exec(ctx, `UPDATE background_usage SET reserved_cost=0 WHERE owner_id=$1 AND id=$2 AND job_id IS NULL AND created_at=$3::timestamptz`, string(r.OwnerID), reservation, origin)
+		return err
+	}
+	// Existing deletion paths use this exact reservation identity. When no
+	// transfer survived, preserve billing without restoring the business row.
+	tag, err = tx.Exec(ctx, `INSERT INTO background_usage(owner_id,id,job_id,reserved_cost,created_at) VALUES($1,$2,NULL,$3,$4::timestamptz) ON CONFLICT(id) DO UPDATE SET reserved_cost=EXCLUDED.reserved_cost WHERE background_usage.owner_id=EXCLUDED.owner_id AND background_usage.job_id IS NULL AND background_usage.created_at=EXCLUDED.created_at`, string(r.OwnerID), reservation, cost, origin)
+	if err == nil && tag.RowsAffected() != 1 {
+		return memory.ErrConflict
+	}
+	return err
 }
 
 func (a interactiveCalls) Start(ctx context.Context, r modelcall.Request, paid *modelcall.PaidResult) error {
@@ -575,6 +676,9 @@ func (a interactiveCalls) Record(ctx context.Context, r modelcall.Request, paid 
 	return a.store.recordUsage(persist, usage)
 }
 func (a interactiveCalls) Settle(ctx context.Context, r modelcall.Request, paid *modelcall.PaidResult) error {
+	if r.Policy.(interactiveCallPolicy).BudgetOwner == "deputy_run" {
+		return a.settleDeputyRun(ctx, r, paid)
+	}
 	return (backgroundCalls{store: a.store}).Settle(ctx, r, paid)
 }
 func (a interactiveCalls) AccountingState(ctx context.Context, r modelcall.Request, paid *modelcall.PaidResult, state string) error {

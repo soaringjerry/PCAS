@@ -112,7 +112,7 @@ func TestActiveLeaseCannotStartAnotherInvocation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := adapter.Start(ctx, request, &modelcall.PaidResult{InvocationID: invocation, Reservation: reservation}); err != nil {
+	if err := adapter.Start(ctx, request, &modelcall.PaidResult{InvocationID: invocation, Reservation: reservation.ID}); err != nil {
 		t.Fatal(err)
 	}
 	_, err = s.generatePaid(ctx, j, "organize", organizeInstructions, request.Prompt, nil)

@@ -45,7 +45,7 @@ func TestDeputySelfcheckUsesOriginalRunAndReportsFallback(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			if err := s.runAgentOnce(ctx); err != nil {
+			if err := s.RunDeputyOnce(ctx); err != nil {
 				t.Fatal(err)
 			}
 			state, err := s.Snapshot(ctx, scope)

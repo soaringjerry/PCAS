@@ -34,9 +34,9 @@ func (a backgroundCalls) Load(ctx context.Context, request modelcall.Request) (*
 	return a.store.paidModelResult(ctx, request.Policy.(worker.Job))
 }
 
-func (a backgroundCalls) Reserve(ctx context.Context, request modelcall.Request, estimate float64) (string, error) {
+func (a backgroundCalls) Reserve(ctx context.Context, request modelcall.Request, estimate float64) (modelcall.Reservation, error) {
 	j := request.Policy.(worker.Job)
-	return a.store.reserveModelCostID(ctx, request.OwnerID, estimate, &j, func(ctx context.Context, tx pgx.Tx, id string) error {
+	id, err := a.store.reserveModelCostID(ctx, request.OwnerID, estimate, &j, func(ctx context.Context, tx pgx.Tx, id string) error {
 		// The reservation and its invocation link commit together. A crash
 		// before Start must not leave an unlinked budget reservation.
 		tag, err := tx.Exec(ctx, `UPDATE model_calls SET reservation_id=$3,accounting_state='reserved',actual_mode=actual_mode||jsonb_build_object('reservationEstimate',$4::double precision),updated_at=clock_timestamp() WHERE owner_id=$1 AND id=(SELECT id FROM model_calls WHERE owner_id=$1 AND execution_id=$2 AND stage=$5 AND outcome='prepared')`, string(request.OwnerID), string(request.ExecutionID), id, estimate, request.Stage)
@@ -45,6 +45,7 @@ func (a backgroundCalls) Reserve(ctx context.Context, request modelcall.Request,
 		}
 		return err
 	})
+	return modelcall.Reservation{ID: id, Cost: estimate}, err
 }
 
 func (a backgroundCalls) Record(ctx context.Context, request modelcall.Request, saved *modelcall.PaidResult) error {

@@ -48,13 +48,13 @@ func (f *generationFixture) GenerateProvider(_ context.Context, p ai.Provider, _
 	}
 	return result, f.generationError
 }
-func (f *generationFixture) Reserve(_ context.Context, _ Request, estimate float64) (string, error) {
+func (f *generationFixture) Reserve(_ context.Context, _ Request, estimate float64) (Reservation, error) {
 	f.reservations++
 	f.estimate = estimate
 	if f.afterReserve != nil {
 		f.afterReserve()
 	}
-	return "reservation", nil
+	return Reservation{ID: "reservation", Cost: estimate}, nil
 }
 func (f *generationFixture) Record(context.Context, Request, *PaidResult) error {
 	f.records++

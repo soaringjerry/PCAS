@@ -780,6 +780,13 @@ func (s *Store) RunAgents(ctx context.Context, logger *slog.Logger) error {
 		}
 	}
 }
+
+// RunDeputyOnce exposes the existing single worker pass for bounded evaluation.
+// Selection, leases, generation, and application remain in the normal workflow.
+func (s *Store) RunDeputyOnce(ctx context.Context) error {
+	return s.runAgentOnce(ctx)
+}
+
 func (s *Store) runAgentOnce(ctx context.Context) error {
 	started := time.Now()
 	ctx, timing := newExecutionTimer(ctx, "deputy", started)

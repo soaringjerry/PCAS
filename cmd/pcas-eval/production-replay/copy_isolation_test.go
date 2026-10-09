@@ -64,6 +64,47 @@ func TestCaseValidationRejectsUnknownRequestsAndUnboundJobs(t *testing.T) {
 	}
 }
 
+func TestDeputyReplayRequiresOneExplicitRunWithoutOtherOperations(t *testing.T) {
+	base := caseManifest{Version: 1, CaseID: "fictional", Mode: "record", CallLimit: 1, RealBinary: "fictional", Operations: []operation{{ID: "draft", Kind: "deputy", RunID: memory.NewID()}}}
+	if err := validateCase(base); err != nil {
+		t.Fatal(err)
+	}
+	for _, op := range []operation{
+		{ID: "draft", Kind: "deputy"},
+		{ID: "draft", Kind: "deputy", RunID: memory.ID("invalid")},
+		{ID: "draft", Kind: "deputy", RunID: memory.NewID(), Request: []byte(`{}`)},
+		{ID: "draft", Kind: "deputy", RunID: memory.NewID(), JobID: memory.NewID()},
+		{ID: "draft", Kind: "deputy", RunID: memory.NewID(), LeaseToken: memory.NewID()},
+		{ID: "draft", Kind: "secretary", RunID: memory.NewID(), Request: []byte(`{"text":"fictional"}`)},
+		{ID: "draft", Kind: "deputy", RunID: memory.NewID(), MemoryTier: "light"},
+	} {
+		base.Operations = []operation{op}
+		if err := validateCase(base); err == nil {
+			t.Fatal("deputy replay accepted an unbound operation", op.Kind)
+		}
+	}
+}
+
+func TestReplayTierOverrideUsesExistingAdmissionModes(t *testing.T) {
+	base := caseManifest{Version: 1, CaseID: "fictional", Mode: "record", CallLimit: 1, RealBinary: "fictional"}
+	for _, tier := range []string{"light", "medium", "heavy"} {
+		base.Operations = []operation{{ID: "admit", Kind: "command", MemoryTier: tier, Request: []byte(`{"type":"requestRun","thingId":"fictional","agentId":"model","kind":"draft","prompt":"fictional"}`)}}
+		if err := validateCase(base); err != nil {
+			t.Fatal(tier, err)
+		}
+	}
+	for _, op := range []operation{
+		{ID: "admit", Kind: "command", MemoryTier: "light", Request: []byte(`{"type":"addTask","title":"fictional"}`)},
+		{ID: "admit", Kind: "secretary", MemoryTier: "invalid", Request: []byte(`{"text":"fictional"}`)},
+		{ID: "admit", Kind: "ingest", MemoryTier: "light", Request: []byte(`{}`)},
+	} {
+		base.Operations = []operation{op}
+		if err := validateCase(base); err == nil {
+			t.Fatal("irrelevant or unknown tier was accepted")
+		}
+	}
+}
+
 // Private local evidence only. Ordinary CI has no production-copy manifest.
 func TestOwnedCopyRejectsArtifactsOutsideItsActualContainerMount(t *testing.T) {
 	path := os.Getenv("PCAS_REPLAY_PRIVATE_MANIFEST")

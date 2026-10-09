@@ -23,6 +23,7 @@ Historical tasks, research, and evaluations are evidence. They do not assign new
 | [Foundation Shared Skeleton](tasks/foundation-shared-skeleton.md) | Sol's first implementation scope, migration proposal, guarantees, and baseline checks. |
 | [Foundation Recorded Replay](tasks/foundation-recorded-replay.md) | Sol's production-copy capture, replay, comparison, isolation, and acceptance scope. |
 | [Foundation Interactive Gateway](tasks/foundation-interactive-gateway.md) | Delivered secretary, reader, and self-check migration, release checks, and remaining replay limitations. |
+| [Foundation Deputy Gateway](tasks/foundation-deputy-gateway.md) | Main deputy generation, revision recovery, reservation reuse, and application tracing. |
 | [Historical Records](history/README.md) | Retired designs and interpretation of past records. |
 
 ## Document Authority

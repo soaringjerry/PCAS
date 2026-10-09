@@ -110,7 +110,7 @@ func TestInteractiveWorkerRejectsResponseFromReplacedDeputyLease(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	paid := &modelcall.PaidResult{InvocationID: invocation, Reservation: reservation, ReservedCost: 0.02, Provider: provider.ID, Model: provider.Model, Prompt: request.Prompt, Cost: 0.001, Output: "Fictitious late deputy response."}
+	paid := &modelcall.PaidResult{InvocationID: invocation, Reservation: reservation.ID, ReservedCost: 0.02, Provider: provider.ID, Model: provider.Model, Prompt: request.Prompt, Cost: 0.001, Output: "Fictitious late deputy response."}
 	if err := adapter.Start(ctx, request, paid); err != nil {
 		t.Fatal(err)
 	}
@@ -209,7 +209,7 @@ func TestInteractiveWorkerClassifiesInterruptedCallsWithoutResubmission(t *testi
 			if err != nil {
 				t.Fatal(err)
 			}
-			paid := &modelcall.PaidResult{InvocationID: invocation, Reservation: reservation, ReservedCost: 0.02, Provider: provider.ID, Model: provider.Model, Prompt: request.Prompt, Cost: 0.001}
+			paid := &modelcall.PaidResult{InvocationID: invocation, Reservation: reservation.ID, ReservedCost: 0.02, Provider: provider.ID, Model: provider.Model, Prompt: request.Prompt, Cost: 0.001}
 			if stage == "started" {
 				if err := adapter.Start(ctx, request, paid); err != nil {
 					t.Fatal(err)

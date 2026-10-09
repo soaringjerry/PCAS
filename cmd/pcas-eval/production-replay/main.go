@@ -35,6 +35,8 @@ type operation struct {
 	SourceFrom string          `json:"source_from,omitempty"`
 	Stage      string          `json:"stage,omitempty"`
 	LeaseToken memory.ID       `json:"lease_token,omitempty"`
+	RunID      memory.ID       `json:"run_id,omitempty"`
+	MemoryTier string          `json:"memory_tier,omitempty"`
 }
 
 type caseManifest struct {
@@ -260,6 +262,9 @@ func run(ctx context.Context, args []string) (runErr error) {
 		// This allowance matches Worker.RunOnce. Lease fencing still uses real
 		// database time; no complete worker loop runs in this diagnostic command.
 		work, cancel := context.WithTimeout(ctx, 4*time.Minute)
+		if op.MemoryTier != "" {
+			work = postgres.WithMemoryTier(work, op.MemoryTier)
+		}
 		var opErr error
 		switch op.Kind {
 		case "secretary":
@@ -285,6 +290,8 @@ func run(ctx context.Context, args []string) (runErr error) {
 			if opErr == nil {
 				result.Result, opErr = store.Execute(work, scope, request)
 			}
+		case "deputy":
+			result.Result, opErr = processDeputy(work, store, pool, copy.Owner, op.RunID)
 		case "background":
 			var ref memory.Ref
 			if op.SourceFrom != "" {
@@ -383,8 +390,20 @@ func validateCase(m caseManifest) error {
 			return errors.New("case_operation_identity_invalid")
 		}
 		identifiers[op.ID] = true
-		if op.Kind != "secretary" && op.Kind != "ingest" && op.Kind != "command" && op.Kind != "background" {
+		if op.MemoryTier != "" && (op.MemoryTier != "light" && op.MemoryTier != "medium" && op.MemoryTier != "heavy" || op.Kind != "secretary" && op.Kind != "command") {
+			return errors.New("case_memory_tier_invalid")
+		}
+		if op.Kind != "secretary" && op.Kind != "ingest" && op.Kind != "command" && op.Kind != "background" && op.Kind != "deputy" {
 			return errors.New("case_operation_unknown")
+		}
+		if op.Kind == "deputy" {
+			if !op.RunID.Valid() || len(op.Request) != 0 || op.JobID != "" || op.SourceFrom != "" || op.Stage != "" || op.LeaseToken != "" {
+				return errors.New("case_deputy_identity_invalid")
+			}
+			continue
+		}
+		if op.RunID != "" {
+			return errors.New("case_deputy_identity_unexpected")
 		}
 		if op.Kind == "background" && (!op.LeaseToken.Valid() || (op.JobID == "" && op.SourceFrom == "") || op.Stage == "") {
 			return errors.New("case_job_identity_required")
@@ -412,6 +431,9 @@ func validateCase(m caseManifest) error {
 		decoder.DisallowUnknownFields()
 		if err := decoder.Decode(request); err != nil {
 			return errors.New("case_request_invalid")
+		}
+		if command, ok := request.(*workspace.Command); ok && op.MemoryTier != "" && command.Type != "requestRun" {
+			return errors.New("case_memory_tier_invalid")
 		}
 		if err := decoder.Decode(new(any)); err != io.EOF {
 			return errors.New("case_request_trailing_data")

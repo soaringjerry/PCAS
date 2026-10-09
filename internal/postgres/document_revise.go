@@ -15,7 +15,7 @@ import (
 
 var reviseInstructions = prompts.Must("document-revise").Text()
 
-var reviseOutputSchema = json.RawMessage(`{"type":"object","properties":{"body":{"type":"string"},"complete":{"type":"boolean"}},"required":["body","complete"],"additionalProperties":false}`)
+var reviseOutputSchema = prompts.MustSchema("document-revise-output").Bytes()
 
 type reviseSnapshot struct {
 	Run workspace.Run `json:"run"`

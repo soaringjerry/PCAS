@@ -84,8 +84,15 @@ type Providers interface {
 	GenerateProvider(context.Context, ai.Provider, string, string, ...ai.GenerationMode) (ai.Result, error)
 }
 
+// Reservation describes the amount actually held. An admitted execution can
+// already own a reservation whose amount differs from the current estimate.
+type Reservation struct {
+	ID   string
+	Cost float64
+}
+
 type Accounting interface {
-	Reserve(context.Context, Request, float64) (string, error)
+	Reserve(context.Context, Request, float64) (Reservation, error)
 	Record(context.Context, Request, *PaidResult) error
 	Settle(context.Context, Request, *PaidResult) error
 }
@@ -186,7 +193,8 @@ func (g *Gateway) Call(ctx context.Context, request Request) (*PaidResult, error
 			}
 			return nil, err
 		}
-		saved.Reservation = reservation
+		saved.Reservation = reservation.ID
+		saved.ReservedCost = reservation.Cost
 		if err := g.journal.Start(ctx, request, saved); err != nil {
 			// No provider call occurred. Release the reservation, without masking
 			// a failed lifecycle write or starting an unrecorded invocation.

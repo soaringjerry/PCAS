@@ -56,6 +56,12 @@ The JSON manifest uses version `1`. Unknown fields and trailing data fail valida
 An operation has an `id` and a `kind`.
 The kinds `secretary`, `ingest`, and `command` accept their existing application request as `request`.
 A `background` operation requires `stage`, `lease_token`, and either `job_id` or `source_from`.
+A `deputy` operation requires `run_id` for the copy owner's only queued deputy run.
+It refuses other queued or running deputy work and uses one normal worker pass.
+It does not start the continuous deputy worker.
+For secretary requests and `requestRun` commands, optional `memory_tier` selects the existing offline evaluation tier.
+Allowed values are `light`, `medium`, and `heavy`.
+Record and replay must use the same tier. An absent value keeps the normal application selection.
 `source_from` names an earlier ingest operation.
 For a new ordinary source, select `source.chunk` before `source.extract`.
 The fixture cannot lease completed, failed, blocked, or active jobs.

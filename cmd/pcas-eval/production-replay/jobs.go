@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"log/slog"
@@ -12,6 +13,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres"
 	"github.com/soaringjerry/PCAS/internal/worker"
+	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
 // Only an explicitly selected queued job in the verified disposable copy is
@@ -75,4 +77,32 @@ func processNamed(ctx context.Context, s *postgres.Store, job worker.Job) error 
 	w := worker.New(queue, map[string]worker.Handler{strings.SplitN(job.Stage, ":", 2)[0]: wrapped}, slog.New(slog.NewJSONHandler(io.Discard, nil)))
 	_, err := w.RunOnce(ctx)
 	return errors.Join(observed, err)
+}
+
+// The production worker chooses its next queued run. Refuse competing work
+// rather than changing the copy's queue or exposing another model submission.
+func processDeputy(ctx context.Context, s *postgres.Store, pool *pgxpool.Pool, owner, runID memory.ID) (workspace.Run, error) {
+	var run workspace.Run
+	var selected bool
+	var pending int
+	if err := pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM agent_runs WHERE owner_id=$1 AND id=$2 AND status='queued'),(SELECT count(*) FROM agent_runs WHERE status IN ('queued','running'))`, string(owner), string(runID)).Scan(&selected, &pending); err != nil {
+		return run, err
+	}
+	if !selected || pending != 1 {
+		return run, errors.New("replay_deputy_queue_not_exclusive")
+	}
+	if err := s.RunDeputyOnce(ctx); err != nil {
+		return run, err
+	}
+	var body json.RawMessage
+	if err := pool.QueryRow(ctx, `SELECT document FROM agent_runs WHERE owner_id=$1 AND id=$2`, string(owner), string(runID)).Scan(&body); err != nil {
+		return run, err
+	}
+	if err := json.Unmarshal(body, &run); err != nil {
+		return run, err
+	}
+	if run.Status != "done" {
+		return run, errors.New("replay_deputy_not_completed")
+	}
+	return run, nil
 }

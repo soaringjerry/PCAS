@@ -39,7 +39,7 @@ func containsAny(text string, words ...string) bool {
 	return false
 }
 
-type useCoverage struct{ Skipped []string }
+type useCoverage struct{ Skipped, Notices []string }
 type useContext struct {
 	ProjectHandover        *workspace.ProjectHandover
 	ProjectGroup           string

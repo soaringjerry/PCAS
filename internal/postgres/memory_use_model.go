@@ -11,6 +11,7 @@ import (
 
 	"github.com/soaringjerry/PCAS/internal/ai"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/modelcall"
 	"github.com/soaringjerry/PCAS/internal/prompts"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
@@ -38,7 +39,7 @@ func safeUsePlan(raw json.RawMessage) any {
 	if !oneOf(p.Depth, "light", "medium", "heavy") {
 		p.Depth = ""
 	}
-	return asJSON(usePlan{Groups: keys, Depth: p.Depth})
+	return json.RawMessage(asJSON(usePlan{Groups: keys, Depth: p.Depth}))
 }
 func secretaryNeedsCheck(out secretaryOutput) bool {
 	for _, a := range out.Actions {
@@ -82,91 +83,70 @@ func constrainSecretaryCheck(before, after secretaryOutput) secretaryOutput {
 	after.Remember = before.Remember
 	return after
 }
-func (s *Store) useModelCall(ctx, persist context.Context, scope memory.Scope, agent, instructions, prompt string, schema json.RawMessage, usage modelUsage) (ai.Result, error) {
-	p, _ := s.models.Get(agent)
-	reservation, err := s.reserveModelCostID(ctx, scope.OwnerID, p.Reserve(instructions+prompt), nil)
-	if err != nil {
-		return ai.Result{}, err
+func (s *Store) useModelCall(ctx, persist context.Context, scope memory.Scope, agent, stage string, instructions prompts.Definition, prompt string, schema prompts.Schema, usage modelUsage) (ai.Result, error) {
+	request, ok := ctx.Value(interactiveExecutionKey{}).(modelcall.Request)
+	if !ok || request.OwnerID != scope.OwnerID || !request.ExecutionID.Valid() {
+		return ai.Result{}, memory.ErrInvalid
 	}
-	ctx = executionCallContext(ctx, usage.Purpose)
-	var result ai.Result
-	if schema != nil {
-		result, err = s.models.GenerateSchema(ctx, agent, instructions, prompt, schema)
-	} else {
-		result, err = s.models.Generate(ctx, agent, instructions, prompt)
+	policy, ok := request.Policy.(interactiveCallPolicy)
+	if !ok {
+		return ai.Result{}, memory.ErrInvalid
 	}
-	cost := result.Cost
-	// Accounting survives the model deadline, but does not extend the answer's
-	// budget. Late calls finish their own ledger write without holding the turn.
-	billed := make(chan error, 1)
+	policy.AgentID, policy.Usage = agent, usage
+	request.Policy, request.Stage, request.ProviderID = policy, stage, agent
+	request.Instructions, request.Schema = instructions, schema
+	request.ContextBuilderVersion = "memory-use-v1"
+	request.Prompt = asJSON(map[string]string{"rawPrompt": prompt})
+	request.Refs = uniqueRefs(usage.MemoryRefs)
+	type returned struct {
+		paid *modelcall.PaidResult
+		err  error
+	}
+	// The buffered result cannot hold the answer past its original deadline.
+	// The gateway continues durable persistence and accounting after cancellation.
+	finished := make(chan returned, 1)
 	go func() {
-		accountingCtx, accountingCancel := context.WithTimeout(context.WithoutCancel(persist), 20*time.Second)
-		defer accountingCancel()
-		report := func(err error) {
-			if err != nil {
-				slog.ErrorContext(accountingCtx, "model accounting failed", "stage", usage.Purpose, "error_type", backgroundFailureReason(err))
-			}
-			billed <- err
+		paid, err := s.calls.Call(executionCallContext(ctx, usage.Purpose), request)
+		if err != nil {
+			slog.WarnContext(persist, "memory model stage failed", "stage", stage, "error_type", secretaryErrorType(usage.Purpose, err))
 		}
-		if e := s.settleModelCost(accountingCtx, scope.OwnerID, reservation, cost); e != nil {
-			report(e)
-			return
-		}
-		usage.OwnerID = scope.OwnerID
-		usage.AgentID = agent
-		usage.Model = p.Model
-		usage.DurationMS = result.DurationMS
-		usage.InputTokens = result.InputTokens
-		usage.OutputTokens = result.OutputTokens
-		usage.InputEstimated, usage.OutputEstimated, usage.CostEstimated = result.InputEstimated, result.OutputEstimated, result.CostEstimated
-		usage.Cost = cost
-		if e := s.recordUsage(accountingCtx, usage); e != nil {
-			report(e)
-			return
-		}
-		report(nil)
+		finished <- returned{paid, err}
 	}()
 	select {
-	case e := <-billed:
-		if e != nil {
-			return result, e
-		}
 	case <-ctx.Done():
-		return result, ctx.Err()
+		return ai.Result{}, ctx.Err()
+	case outcome := <-finished:
+		if ctx.Err() != nil {
+			return ai.Result{}, ctx.Err()
+		}
+		if outcome.err != nil {
+			return ai.Result{}, outcome.err
+		}
+		paid := outcome.paid
+		return ai.Result{Text: paid.Output, Searches: paid.Searches, DurationMS: paid.DurationMS, InputTokens: paid.InputTokens, OutputTokens: paid.OutputTokens, InputEstimated: paid.InputEstimated, OutputEstimated: paid.OutputEstimated, CostEstimated: paid.CostEstimated, Cost: paid.Cost}, nil
 	}
-	if ctx.Err() != nil {
-		return result, ctx.Err()
-	}
-
-	return result, err
 }
-func (s *Store) checkSecretary(ctx, persist context.Context, scope memory.Scope, c secretaryContext, prompt string, before secretaryOutput, turn string) secretaryOutput {
+func (s *Store) checkSecretary(ctx, persist context.Context, scope memory.Scope, c secretaryContext, prompt string, before secretaryOutput, turn string) (secretaryOutput, error) {
 	if ctx.Err() != nil {
-		return before
+		return before, ctx.Err()
 	}
 	if err := pgx.BeginTxFunc(ctx, s.pool, pgx.TxOptions{AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error { return s.checkSecretaryUseContextTx(ctx, tx, scope, c) }); err != nil {
-		return before
+		return before, err
 	}
-	instructions := prompts.Must("secretary-selfcheck").Text()
-	raw, err := s.useModelCall(ctx, persist, scope, c.Agent.ID, instructions, prompt+"\n待自查的草稿：\n"+string(asJSON(before)), secretaryCheckSchema, modelUsage{Purpose: "selfcheck", Tier: c.Tier, TurnID: turn, MemoryRefs: c.Dependencies, Plan: asJSON(usePlan{Groups: c.Use.Groups})})
+	raw, err := s.useModelCall(ctx, persist, scope, c.Agent.ID, "selfcheck", prompts.Must("secretary-selfcheck"), prompt+"\n待自查的草稿：\n"+string(asJSON(before)), prompts.MustSchema("secretary-check"), modelUsage{Purpose: "selfcheck", Tier: c.Tier, TurnID: turn, MemoryRefs: c.Dependencies, Plan: asJSON(usePlan{Groups: c.Use.Groups})})
 	if err == nil {
 		var after secretaryOutput
 		after, err = parseSecretaryOutput(raw.Text)
 		if err == nil {
-			return constrainSecretaryCheck(before, after)
+			return constrainSecretaryCheck(before, after), nil
 		}
 	}
 	slog.WarnContext(persist, "memory selfcheck fallback", "stage", "selfcheck", "error_type", secretaryErrorType("selfcheck", err))
-	return before
+	return before, err
 }
 
 const heavyUseTimeout = 3 * time.Minute
 const heavyReaderBudget = 90 * time.Second
-
-var useReaderInstructions = prompts.Must("memory-reader").Text()
-
-var useGroupsSchema = prompts.MustSchema("use-groups").Bytes()
-var useReaderSchema = prompts.MustSchema("use-reader").Bytes()
 
 func memoryRefs(ms []workspace.Memory) []memory.Ref {
 	refs := []memory.Ref{}

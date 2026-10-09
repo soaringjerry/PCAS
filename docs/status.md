@@ -106,7 +106,9 @@ The coordinator approved the [interactive gateway scope](tasks/foundation-intera
 Its complete migration, replay, and acceptance remain pending.
 The first extension declares required model modes and registers four unchanged output schemas.
 The assigned fixed instructions now use registered assets and preserve their original bytes.
-Secretary, reader, and secretary self-check calls still use their legacy wrappers.
+
+Secretary generation still uses its legacy wrapper.
+Candidate heavy readers and secretary self-check now use the gateway through the existing memory-use wrapper.
 The candidate deputy self-check now uses the gateway with its original run and lease.
 
 The replay diagnostic now [reports signed row changes and precise field differences](evaluations/2026-10-08-foundation-recorded-replay.md#signed-difference-verification).
@@ -124,6 +126,13 @@ Its initial request-body EOF cause remains unconfirmed. Caller migration and com
 Deputy self-check now retains a separate call and application outcome.
 Its result notice identifies a failed check or rejected output while preserving the original draft.
 Synthetic checks cover successful checks, provider failures, empty output, and accounting recovery without a repeated call.
+
+Complete deputy self-check CI failed at `2e83fb7`: dependency preparation consumed the existing self-check deadline.
+Candidate batch reads preserve dependency rules and the original deadline. The affected parallel-reader case passed locally.
+
+Reader stage identities distinguish selection, groups, pages, and later requested reading.
+Secretary self-check failures and selection fallback use existing visible receipts or notices.
+Complete candidate CI, strict replay, and real default-channel acceptance remain outstanding.
 These changes remain foundation candidates. They have not been deployed.
 
 ## Documentation Changes

@@ -10,12 +10,13 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/prompts"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
 // Model calls are outside each reader's database transaction. A buffered channel
 // lets late readers finish accounting without blocking the answer at its cutoff.
-func (s *Store) heavyUse(ctx, persist context.Context, scope memory.Scope, agent workspace.Agent, thing *string, text string, u useContext, turn, run string) ([]workspace.Memory, []memory.Ref, []string) {
+func (s *Store) heavyUse(ctx, persist context.Context, scope memory.Scope, agent workspace.Agent, thing *string, text string, u useContext, turn, run, phase string) ([]workspace.Memory, []memory.Ref, []string) {
 	readCtx, cancel := context.WithTimeout(ctx, heavyReaderBudget)
 	defer cancel()
 	var catalog strings.Builder
@@ -33,7 +34,7 @@ func (s *Store) heavyUse(ctx, persist context.Context, scope memory.Scope, agent
 	}
 	var err error
 	if !u.Selected {
-		choice, e := s.useModelCall(readCtx, persist, scope, agent.ID, useReaderInstructions, catalog.String(), useGroupsSchema, modelUsage{ID: selectionID, Purpose: "reader", Tier: "heavy", TurnID: turn, RunID: run, MemoryRefs: u.Dependencies, Plan: asJSON(usePlan{Groups: u.Groups})})
+		choice, e := s.useModelCall(readCtx, persist, scope, agent.ID, phase+":catalog", prompts.Must("memory-reader"), catalog.String(), prompts.MustSchema("use-groups"), modelUsage{ID: selectionID, Purpose: "reader", Tier: "heavy", TurnID: turn, RunID: run, MemoryRefs: u.Dependencies, Plan: asJSON(usePlan{Groups: u.Groups})})
 		err = e
 		if err == nil {
 			var p usePlan
@@ -43,6 +44,15 @@ func (s *Store) heavyUse(ctx, persist context.Context, scope memory.Scope, agent
 	}
 	if err != nil || len(requested) == 0 {
 		requested = append(requested, u.Groups...)
+		if !u.Selected && u.Coverage != nil {
+			note := "记忆分组选择未完成，本次沿用已有分组。"
+			if err == nil {
+				note = "记忆分组选择没有返回分组，本次沿用已有分组。"
+			}
+			if !oneOf(note, u.Coverage.Notices...) {
+				u.Coverage.Notices = append(u.Coverage.Notices, note)
+			}
+		}
 	}
 	omitted := []string{}
 	for _, key := range requested {
@@ -98,7 +108,7 @@ func (s *Store) heavyUse(ctx, persist context.Context, scope memory.Scope, agent
 					continue
 				}
 				batchRefs := memoryRefs(ms)
-				raw, e := s.useModelCall(readCtx, persist, scope, agent.ID, useReaderInstructions, "这件事："+text+"\n分组："+key+"\n"+writeReaderMemories(ms, u.Location)+`只输出 JSON：{"used":["上面的记忆ID"]}。`, useReaderSchema, modelUsage{Purpose: "reader", Tier: "heavy", TurnID: turn, RunID: run, MemoryRefs: batchRefs, Plan: asJSON(usePlan{Groups: []string{key}})})
+				raw, e := s.useModelCall(readCtx, persist, scope, agent.ID, fmt.Sprintf("%s:group:%s:%d", phase, key, offset), prompts.Must("memory-reader"), "这件事："+text+"\n分组："+key+"\n"+writeReaderMemories(ms, u.Location)+`只输出 JSON：{"used":["上面的记忆ID"]}。`, prompts.MustSchema("use-reader"), modelUsage{Purpose: "reader", Tier: "heavy", TurnID: turn, RunID: run, MemoryRefs: batchRefs, Plan: asJSON(usePlan{Groups: []string{key}})})
 				err = e
 				if err != nil {
 					break

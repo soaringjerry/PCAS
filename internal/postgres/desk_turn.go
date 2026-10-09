@@ -14,7 +14,9 @@ import (
 	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/soaringjerry/PCAS/internal/ai"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/modelcall"
 	"github.com/soaringjerry/PCAS/internal/prompts"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
@@ -565,6 +567,9 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 		return out, err
 	}
 	conversationID = ticket.conversation
+	execution := modelcall.Request{OwnerID: scope.OwnerID, ExecutionID: memory.ID(req.RequestID), RootExecutionID: memory.ID(req.RequestID), Function: "secretary", Policy: interactiveCallPolicy{Kind: "secretary", Token: ticket.creator, Origin: fmt.Sprintf("%x", hash), RequestHash: hash[:], ThingID: pointerValue(req.ThingID)}}
+	requestCtx = context.WithValue(requestCtx, interactiveExecutionKey{}, execution)
+	ctx = context.WithValue(ctx, interactiveExecutionKey{}, execution)
 	var attachments []deskAttachment
 	if !ticket.legacy && len(req.Attachments) > 0 {
 		attachmentStarted := time.Now()
@@ -626,6 +631,8 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 		}
 		out.Turn.Agent = c.Agent.Name
 		var answer secretaryOutput
+		var selfcheckErr error
+		selfcheckAttempted := false
 		sent := map[string]workspace.Memory{}
 		if contextErr == nil {
 			var prompt string
@@ -641,7 +648,7 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 					if item, ok := c.Aliases["THIS"]; ok {
 						taskText += "\n事项：" + item.Title + "\n" + item.Notes + "\n" + item.Body + "\n目标：" + item.Goal
 					}
-					picked, refs, keys := s.heavyUse(heavyCtx, ctx, scope, c.Agent, req.ThingID, taskText, c.Use, out.Turn.ID, "")
+					picked, refs, keys := s.heavyUse(heavyCtx, ctx, scope, c.Agent, req.ThingID, taskText, c.Use, out.Turn.ID, "", "reader:prepare")
 					heavyCancel()
 					c.Use.Groups = keys
 					c.Dependencies = uniqueRefs(append(c.Dependencies, refs...))
@@ -699,7 +706,7 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 								}
 								c.Use.Selected = true
 								readingStarted := time.Now()
-								picked, refs, keys := s.heavyUse(requestCtx, ctx, scope, c.Agent, req.ThingID, req.Text, c.Use, out.Turn.ID, "")
+								picked, refs, keys := s.heavyUse(requestCtx, ctx, scope, c.Agent, req.ThingID, req.Text, c.Use, out.Turn.ID, "", "reader:plan")
 								timing.addPrepare(time.Since(readingStarted))
 								c.Use.Groups = keys
 								c.Dependencies = uniqueRefs(append(c.Dependencies, refs...))
@@ -730,7 +737,8 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 								modelStarted = time.Now().Add(-remaining)
 							}
 							checkCtx, checkCancel := context.WithTimeout(requestCtx, min(time.Since(modelStarted), secretaryModelTimeout))
-							answer = s.checkSecretary(checkCtx, ctx, scope, c, prompt, answer, out.Turn.ID)
+							selfcheckAttempted = true
+							answer, selfcheckErr = s.checkSecretary(checkCtx, ctx, scope, c, prompt, answer, out.Turn.ID)
 							checkCancel()
 							if _, err := tx.Exec(ctx, "UPDATE model_usage SET tier=$3 WHERE owner_id=$1 AND turn_id=$2 AND purpose='secretary'", string(scope.OwnerID), out.Turn.ID, c.Tier); err != nil {
 								return err
@@ -747,6 +755,28 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 		if contextErr == nil {
 			failureStage = "verify"
 			contextErr = s.checkSecretaryActionTargetsTx(ctx, tx, scope, c, answer)
+		}
+		if selfcheckAttempted {
+			application, reason := "applied", ""
+			if selfcheckErr != nil {
+				application, reason = "skipped", secretaryErrorType("selfcheck", selfcheckErr)
+				if err := stageEventTx(ctx, tx, scope.OwnerID, "selfcheck", "failure", reason, 1); err != nil {
+					return err
+				}
+				if contextErr == nil {
+					text := "自查未完成，保留了原稿。"
+					if errors.Is(selfcheckErr, ai.ErrUnsupportedCapability) {
+						text = "当前模型不支持自查所需的输出格式，保留了原稿。"
+					}
+					out.Turn.Receipts = append(out.Turn.Receipts, workspace.DeskReceipt{Op: "selfcheck", Text: text, Status: "skipped", Reason: reason})
+				}
+			}
+			if contextErr != nil {
+				application = "not_applicable"
+			}
+			if err := (interactiveCalls{store: s}).recordApplicationTx(ctx, tx, scope.OwnerID, memory.ID(req.RequestID), "selfcheck", application, reason); err != nil {
+				return err
+			}
 		}
 		dependencies := []memory.Ref{}
 		if contextErr != nil {
@@ -782,6 +812,11 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 			out.Turn.Reply = secretaryReply(answer.Reply)
 			if c.Use.Coverage != nil && len(c.Use.Coverage.Skipped) > 0 {
 				out.Turn.Reply += "\n这几组没来得及看：" + strings.Join(c.Use.Coverage.Skipped, "、")
+			}
+			if c.Use.Coverage != nil {
+				for _, note := range c.Use.Coverage.Notices {
+					out.Turn.Receipts = append(out.Turn.Receipts, workspace.DeskReceipt{Op: "reader", Text: note, Status: "skipped"})
+				}
 			}
 			if answer.MemoryPlan != nil && len(c.History) > 0 {
 				last := c.History[len(c.History)-1]

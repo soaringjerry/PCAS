@@ -13,7 +13,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
-func TestPhase26C4HeavyReaderPagesAll1200AndDisclosesSkippedGroups(t *testing.T) {
+func TestHeavyReaderPagesAllMembersAndDisclosesSkippedGroups(t *testing.T) {
 	f := phase26LoadFixture(t)
 	m := phase26NewModel(t, f)
 	phase26Exec(t, f, `INSERT INTO record_grants(owner_id,record_id,principal_id) SELECT owner_id,id,'phase26' FROM memory_records WHERE owner_id=$1 ON CONFLICT DO NOTHING`, f.Scope.OwnerID)
@@ -31,7 +31,9 @@ func TestPhase26C4HeavyReaderPagesAll1200AndDisclosesSkippedGroups(t *testing.T)
 	u := useContext{Location: time.UTC, Ready: true, Selected: true, RequiredGroups: []string{key}, Coverage: &useCoverage{}, Index: []workspace.StatusCardRef{{Key: key, Name: f.Corpus.Groups[0].Name, Kind: "person", Count: 1200}}}
 	agent := workspace.Agent{ID: "phase26", MemoryKinds: []string{"fact", "preference", "decision", "intention", "plan"}}
 	start := time.Now()
-	picked, refs, keys := f.Store.heavyUse(f.Context, f.Context, f.Scope, agent, nil, "Inspect this fictitious archive completely", u, string(memory.NewID()), "")
+	execution := admittedInteractiveRequest(t, f.Store, f.Scope, agent.ID)
+	readCtx := context.WithValue(f.Context, interactiveExecutionKey{}, execution)
+	picked, refs, keys := f.Store.heavyUse(readCtx, f.Context, f.Scope, agent, nil, "Inspect this fictitious archive completely", u, string(memory.NewID()), "", "reader:prepare")
 	seen := map[memory.ID]bool{}
 	for _, r := range refs {
 		seen[r.ID] = true
@@ -61,9 +63,9 @@ func TestPhase26C4HeavyReaderPagesAll1200AndDisclosesSkippedGroups(t *testing.T)
 		u.RequiredGroups = append(u.RequiredGroups, k)
 		u.Index = append(u.Index, workspace.StatusCardRef{Key: k, Name: f.Corpus.Groups[g].Name})
 	}
-	canceled, cancel := context.WithCancel(f.Context)
+	canceled, cancel := context.WithCancel(readCtx)
 	cancel()
-	_, _, _ = f.Store.heavyUse(canceled, f.Context, f.Scope, agent, nil, "Fictitious exhausted deadline", u, string(memory.NewID()), "")
+	_, _, _ = f.Store.heavyUse(canceled, f.Context, f.Scope, agent, nil, "Fictitious exhausted deadline", u, string(memory.NewID()), "", "reader:plan")
 	if len(u.Coverage.Skipped) != 13 {
 		t.Errorf("skipped names=%d expected13", len(u.Coverage.Skipped))
 	}
@@ -83,7 +85,7 @@ func TestPhase26C4HeavyReaderPagesAll1200AndDisclosesSkippedGroups(t *testing.T)
 	}
 }
 
-func TestPhase26C5OnlyChangedActionTargetInvalidatesAnswer(t *testing.T) {
+func TestOnlyChangedActionTargetInvalidatesAnswer(t *testing.T) {
 	f := phase26LoadFixture(t)
 	m := phase26NewModel(t, f)
 	phase26Exec(t, f, `INSERT INTO record_grants(owner_id,record_id,principal_id) SELECT owner_id,id,'phase26' FROM memory_records WHERE owner_id=$1 ON CONFLICT DO NOTHING`, f.Scope.OwnerID)

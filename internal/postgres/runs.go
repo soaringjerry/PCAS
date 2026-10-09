@@ -636,9 +636,11 @@ func verifyRunForItemTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run 
 			return err
 		}
 	}
-	claimIDs := []string{}
-	for _, ref := range run.ContextVersions {
-		if ref.Kind != memory.SourceKind {
+	claimIDs, sourceIDs := []string{}, []string{}
+	for _, ref := range uniqueRefs(run.ContextVersions) {
+		if ref.Kind == memory.SourceKind {
+			sourceIDs = append(sourceIDs, string(ref.ID))
+		} else {
 			claimIDs = append(claimIDs, string(ref.ID))
 		}
 	}
@@ -646,14 +648,50 @@ func verifyRunForItemTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run 
 	if err != nil {
 		return err
 	}
+	type dependency struct {
+		ID                  string
+		Version             int
+		Nature, Acquisition string
+		Scope               map[string]json.RawMessage
+	}
+	claims := map[string]dependency{}
+	if len(claimIDs) > 0 {
+		// Resolve applicable versions once. Preserve the original readClaim grant,
+		// revision, nature, inference, and project checks for every supplied identity.
+		rows, err := queryDocuments[dependency](ctx, tx, `WITH applicable AS MATERIALIZED (
+ SELECT claim_id,version FROM applicable_claim_versions($1,now(),now()) WHERE claim_id=ANY($2::uuid[])
+) SELECT jsonb_build_object('id',r.id,'version',c.version,'nature',c.nature,'acquisition',c.acquisition,'scope',c.scope)
+ FROM applicable a JOIN memory_records r ON r.owner_id=$1 AND r.id=a.claim_id
+ JOIN claim_revisions c ON (c.owner_id,c.claim_id,c.version)=(r.owner_id,r.id,a.version)
+ JOIN record_versions rv ON (rv.owner_id,rv.record_id,rv.version)=(c.owner_id,c.claim_id,c.version)
+ WHERE r.state='active' AND EXISTS(SELECT 1 FROM record_grants g WHERE g.owner_id=r.owner_id AND g.record_id=r.id AND g.principal_id=$3)`, string(scope.OwnerID), claimIDs, run.AgentID)
+		if err != nil {
+			return err
+		}
+		for _, claim := range rows {
+			claims[claim.ID] = claim
+		}
+	}
+	sources := map[string]int{}
+	if len(sourceIDs) > 0 {
+		var thingID *string
+		if item != nil && item.ID != "" {
+			thingID = &item.ID
+		}
+		rows, err := queryDocuments[dependency](ctx, tx, `SELECT jsonb_build_object('id',r.id,'version',r.version)
+ FROM memory_records r JOIN record_versions v ON (v.owner_id,v.record_id,v.version)=(r.owner_id,r.id,r.version)
+ WHERE r.owner_id=$1 AND r.id=ANY($2::uuid[]) AND r.kind='source' AND r.state='active' AND v.state='active' AND `+teamSourceVisibleSQL("$1", "r.id", "$3", "$4"), string(scope.OwnerID), sourceIDs, run.AgentID, thingID)
+		if err != nil {
+			return err
+		}
+		for _, source := range rows {
+			sources[source.ID] = source.Version
+		}
+	}
 	for _, ref := range uniqueRefs(run.ContextVersions) {
 		if ref.Kind == memory.SourceKind {
-			var thingID *string
-			if item != nil && item.ID != "" {
-				thingID = &item.ID
-			}
-			var currentVersion int
-			if err := tx.QueryRow(ctx, "SELECT r.version FROM memory_records r JOIN record_versions v ON (v.owner_id,v.record_id,v.version)=(r.owner_id,r.id,r.version) WHERE r.owner_id=$1 AND r.id=$2 AND r.kind='source' AND r.state='active' AND v.state='active' AND "+teamSourceVisibleSQL("$1", "r.id", "$3", "$4"), string(scope.OwnerID), string(ref.ID), run.AgentID, thingID).Scan(&currentVersion); err != nil || currentVersion != ref.Version {
+			version, ok := sources[string(ref.ID)]
+			if !ok || version != ref.Version {
 				return memory.ErrConflict
 			}
 			continue
@@ -661,15 +699,8 @@ func verifyRunForItemTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run 
 		if !retirementDependencyAllowed(ctx, statuses[string(ref.ID)]) {
 			return memory.ErrConflict
 		}
-		var currentVersion int
-		if err := tx.QueryRow(ctx, "SELECT version FROM applicable_claim_versions($1,now(),now()) WHERE claim_id=$2", string(scope.OwnerID), string(ref.ID)).Scan(&currentVersion); err != nil || currentVersion != ref.Version {
-			return memory.ErrConflict
-		}
-		claim, err := readClaim(ctx, tx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: run.AgentID}, ref.ID, ref.Version)
-		if err != nil {
-			return memory.ErrConflict
-		}
-		if claim.Version != ref.Version || !oneOf(claim.Nature, agent.MemoryKinds...) || !agent.IncludeInferred && (claim.Acquisition == "inferred" || statuses[string(ref.ID)].AI) {
+		claim, ok := claims[string(ref.ID)]
+		if !ok || claim.Version != ref.Version || !oneOf(claim.Nature, agent.MemoryKinds...) || !agent.IncludeInferred && (claim.Acquisition == "inferred" || statuses[string(ref.ID)].AI) {
 			return memory.ErrConflict
 		}
 		if item != nil {
@@ -691,9 +722,24 @@ func verifyRunForItemTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run 
 func verifyRunAccessTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run workspace.Run) error {
 	ctx = context.WithValue(ctx, retirementAccessKey{}, true)
 	run.ContextVersions = append([]memory.Ref(nil), run.ContextVersions...)
+	ids := make([]string, len(run.ContextVersions))
 	for i, ref := range run.ContextVersions {
-		var version int
-		if err := tx.QueryRow(ctx, "SELECT version FROM memory_records WHERE owner_id=$1 AND id=$2 AND state='active'", string(scope.OwnerID), string(ref.ID)).Scan(&version); err != nil {
+		ids[i] = string(ref.ID)
+	}
+	rows, err := queryDocuments[struct {
+		ID      string
+		Version int
+	}](ctx, tx, `SELECT jsonb_build_object('id',id,'version',version) FROM memory_records WHERE owner_id=$1 AND id=ANY($2::uuid[]) AND state='active'`, string(scope.OwnerID), ids)
+	if err != nil {
+		return err
+	}
+	versions := map[string]int{}
+	for _, row := range rows {
+		versions[row.ID] = row.Version
+	}
+	for i, ref := range run.ContextVersions {
+		version, ok := versions[string(ref.ID)]
+		if !ok {
 			return memory.ErrConflict
 		}
 		run.ContextVersions[i].Version = version
@@ -815,6 +861,8 @@ func (s *Store) runAgentOnce(ctx context.Context) error {
 	if cached != nil && run.Kind == "revise" {
 		return s.finishPaidRevise(ctx, scope, run, token, cached)
 	}
+	execution := modelcall.Request{OwnerID: scope.OwnerID, ExecutionID: memory.ID(run.ID), RootExecutionID: memory.ID(run.ID), Function: "deputy", Policy: interactiveCallPolicy{Kind: "deputy", Token: token, Origin: run.CreatedAt, AgentID: run.AgentID, ThingID: run.ThingID}}
+	ctx = context.WithValue(ctx, interactiveExecutionKey{}, execution)
 	workCtx, cancel := context.WithDeadline(ctx, started.Add(heavyUseTimeout-10*time.Second))
 	defer cancel()
 	if s.models.ReloadSubscription && s.models.Codex != nil {
@@ -836,7 +884,7 @@ func (s *Store) runAgentOnce(ctx context.Context) error {
 				taskText += "\n" + run.Brief[:bounds[0]]
 			}
 			readerCtx, readerCancel := context.WithDeadline(workCtx, started.Add(heavyReaderBudget))
-			picked, refs, keys := s.heavyUse(readerCtx, ctx, scope, agent, &run.ThingID, taskText, u, "", run.ID)
+			picked, refs, keys := s.heavyUse(readerCtx, ctx, scope, agent, &run.ThingID, taskText, u, "", run.ID, "reader:prepare")
 			readerCancel()
 			run.MemoryGroups = keys
 			run.ContextVersions = uniqueRefs(append(run.ContextVersions, refs...))
@@ -1013,6 +1061,9 @@ func (s *Store) runAgentOnce(ctx context.Context) error {
 		// Work handed off is reported back where reminders go, so the person who
 		// asked from their phone hears how it ended without opening the page.
 		noticeReason := runNoticeReason(current)
+		if current.Status == "done" && u.Coverage != nil && len(u.Coverage.Notices) > 0 {
+			noticeReason += "\n" + strings.Join(u.Coverage.Notices, "\n")
+		}
 		if generationErr == nil && run.MemoryTier != "light" {
 			application := "applied"
 			if selfcheckFallback != "" {

@@ -25,6 +25,14 @@ import (
 
 func secretaryModel(t *testing.T, s *Store, handler http.HandlerFunc) {
 	t.Helper()
+	ordinarySecretaryModel(t, s, handler)
+	useSyntheticGateway(s)
+}
+
+// Provider-capability checks use the unwrapped registry. Business contracts
+// use secretaryModel's synthetic model and the real journal/accounting owners.
+func ordinarySecretaryModel(t *testing.T, s *Store, handler http.HandlerFunc) {
+	t.Helper()
 	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
 	s.SetModels(&ai.Registry{HTTP: server.Client(), Config: ai.Configuration{Extraction: "model", Providers: []ai.Provider{{ID: "model", Name: "测试秘书", Protocol: "openai", BaseURL: server.URL, Model: "test", MaxOutput: 100, CostMode: "free"}}}})

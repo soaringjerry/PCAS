@@ -173,8 +173,45 @@ Stored accounting can continue after the run finishes, without another provider 
 Synthetic contracts cover accepted checks, provider failures, empty output, and interrupted accounting.
 Existing deputy tier, context, result notice, and interactive recovery contracts also pass.
 An initial fallback check rejected an unsupported event status. The implementation now uses the existing failure status.
-Complete exact-revision CI and real default-channel acceptance remain pending for this migration.
-Heavy readers, secretary self-check, secretary generation, and full deputy generation still need their assigned migrations.
+Complete deputy self-check CI failed at `2e83fb7`. Its parallel-reader case exhausted the check deadline before model submission.
+The other 12 jobs passed. Candidate dependency checks now read references in batches, with the same access and version rules.
+The original self-check deadline remains unchanged. Complete candidate CI and real default-channel acceptance remain pending.
+Secretary generation and full deputy generation still need their assigned migrations.
+
+### Shared Readers and Secretary Self-Check
+
+Status: candidate implementation. Targeted local checks passed. Complete CI and real default-channel acceptance remain pending.
+The existing memory-use wrapper now calls the gateway. It does not reserve, invoke, or account through a separate provider path.
+Committed secretary admission or a committed deputy lease supplies each execution identity.
+Selection and page reads use separate stage names. Initial reading and later requested reading also use separate stages.
+The original selection usage identity and validated group plan remain available in `model_usage`.
+
+Secretary self-check uses its registered instructions and schema, with the original draft and deadline.
+If the check fails, the secretary keeps its original draft and returns an existing skipped receipt.
+The receipt identifies unsupported output modes when applicable. The workflow also records the separate application outcome.
+If group selection fails or returns no groups, existing group fallback remains available and has a visible notice.
+These notices do not change model instructions or grant extra action authority.
+
+The dependency verifier now reads claim versions, grants, and source visibility in batches.
+It preserves nature, inference, retirement, project, exclusion, and current-version checks.
+Returned-result retention locks input identities in one ordered batch before checking access.
+Missing identities remain conflicts, including references with a zero version.
+
+Business acceptance fixtures use an explicit synthetic model through the gateway.
+Their ordinary HTTP decision oracle does not establish production provider capability.
+Actual capability rejection and Codex transport checks retain the production registry.
+Changed historical fixture files now have behavior names. Their existing semantic assertions remain in place.
+
+Initial checks found an incorrectly encoded stored group plan. The candidate keeps the validated plan as a JSON object.
+The parallel-reader case then passed, with its original call and usage assertions.
+Some other local checks failed when the verification host exhausted its disk space.
+Those findings remain recorded. The affected checks passed after the owned test copy received bounded WAL retention.
+Two new dependency fixtures initially omitted their model principal. The corrected fixtures passed without changing their assertions.
+
+Affected gateway, reader, self-check, recovery, access, trust, order, and undo checks passed with synthetic models.
+Query-count contracts verify that database round trips do not grow with the number of dependency memories.
+Formatting, vet, build, resolved architecture checks, and non-PostgreSQL package race checks passed.
+Complete serial local checks remain omitted for the resource limits described above. Complete exact-revision CI is still required.
 
 ## Call Contract
 

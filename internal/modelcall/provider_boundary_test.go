@@ -27,8 +27,6 @@ func TestProductionProviderCallsUseDeclaredMigrationBoundaries(t *testing.T) {
 		"internal/postgres/attachments.go:parseAttachment:TranscribeUsage":                               1,
 		"internal/postgres/desk.go:AnswerDesk:GenerateWithSearch":                                        1,
 		"internal/postgres/desk_model_retry.go:generateSecretaryModelWithRetry:GenerateWithSearchSchema": 1,
-		"internal/postgres/memory_use_model.go:useModelCall:GenerateSchema":                              1,
-		"internal/postgres/memory_use_model.go:useModelCall:Generate":                                    1,
 		"internal/postgres/processing.go:ProcessEmbedding:EmbedProviderUsage":                            1,
 		"internal/postgres/retrieval.go:Recall:EmbedProviderUsage":                                       1,
 		"internal/postgres/runs.go:runAgentOnce:GenerateWithSearchSchema":                                1,

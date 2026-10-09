@@ -48,7 +48,13 @@ Interrupted started calls retain unknown outcomes and reservations until their a
 
 Deputy self-check now uses the gateway with its existing run and lease.
 Its existing result notice identifies incomplete checks and rejected output. The draft remains available after fallback.
-Secretary and reader calls still use their legacy wrappers. Their provider behavior remains an open boundary.
+
+Heavy readers and secretary self-check now use the same gateway through `useModelCall`.
+Each selection or page has its own stage identity. Later requested reading cannot reuse an initial reader's result slot.
+
+Secretary self-check fallback returns an existing skipped receipt. Group selection fallback returns an existing notice or receipt.
+Dependency checks use batch reads without changing access or current-version rules.
+Secretary generation still uses its legacy provider wrapper.
 
 This candidate adapter has synthetic checks. Complete replay and real default-channel acceptance remain pending.
 

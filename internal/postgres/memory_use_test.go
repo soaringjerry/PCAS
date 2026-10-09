@@ -456,7 +456,9 @@ func TestB4HeavyCutoffUsesFinishedReaders(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	start := time.Now()
-	picked, _, chosen := s.heavyUse(ctx, context.Background(), scope, agent, nil, "虚构请求", u, "", "")
+	execution := admittedInteractiveRequest(t, s, scope, agent.ID)
+	ctx = context.WithValue(ctx, interactiveExecutionKey{}, execution)
+	picked, _, chosen := s.heavyUse(ctx, context.Background(), scope, agent, nil, "虚构请求", u, "", "", "reader:prepare")
 	if len(picked) != 2 || len(chosen) != 3 || time.Since(start) > 1500*time.Millisecond {
 		t.Fatal(len(picked), chosen, time.Since(start))
 	}
@@ -496,13 +498,17 @@ func TestB4RankFusionKeepsStructuredMatchesFirst(t *testing.T) {
 	}
 }
 
-func TestB4RuleScopeRequiresModelAndPlansAreSafe(t *testing.T) {
+func TestRuleScopeRequiresModelAndUsagePlansRemainReadable(t *testing.T) {
 	if ruleRelevance("起草邮件", "帮我写一封邮件") != 0 || ruleRelevance("", "虚构杂事") == 0 || ruleRelevance("盆栽浇水", "起草邮件") != 0 {
 		t.Fatal("rule applicability")
 	}
 	raw := safeUsePlan(json.RawMessage(`{"groups":["secret text","self:rule"],"question":"private text"}`))
 	if strings.Contains(string(asJSON(raw)), "private") || strings.Contains(string(asJSON(raw)), "secret") {
 		t.Fatal("usage plan leaked text")
+	}
+	var plan usePlan
+	if err := json.Unmarshal(asJSON(raw), &plan); err != nil || len(plan.Groups) != 1 || plan.Groups[0] != "self:rule" {
+		t.Fatal("safe plan must remain a readable group object", plan, err)
 	}
 }
 

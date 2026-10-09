@@ -30,6 +30,10 @@ type interactiveCallPolicy struct {
 	RetryOf     memory.ID
 }
 
+// An admitted request or committed deputy lease supplies this identity.
+// Child stages inherit it; they cannot create an execution from a turn ID.
+type interactiveExecutionKey struct{}
+
 type interactiveCalls struct{ store *Store }
 
 // Each retained response also keeps its bound request. Recovery cannot rebuild
@@ -409,17 +413,24 @@ func (a interactiveCalls) Save(ctx context.Context, r modelcall.Request, paid *m
 			accessible = accessible && !deleted
 			// Share locks serialize raw-result retention with the source owner's deletion.
 			// The model has already returned; no provider call occurs inside this transaction.
+			ids := make([]string, len(paid.Refs))
+			for i, ref := range paid.Refs {
+				ids[i] = string(ref.ID)
+			}
+			rows, err := queryDocuments[struct {
+				ID      string
+				Version int
+			}](persist, tx, `SELECT jsonb_build_object('id',id,'version',version) FROM memory_records WHERE owner_id=$1 AND id=ANY($2::uuid[]) AND state='active' ORDER BY id FOR SHARE`, string(r.OwnerID), ids)
+			if err != nil {
+				return err
+			}
+			versions := map[string]int{}
+			for _, row := range rows {
+				versions[row.ID] = row.Version
+			}
 			for _, ref := range paid.Refs {
-				var version int
-				err := tx.QueryRow(persist, `SELECT version FROM memory_records WHERE owner_id=$1 AND id=$2 AND state='active' FOR SHARE`, string(r.OwnerID), string(ref.ID)).Scan(&version)
-				if errors.Is(err, pgx.ErrNoRows) {
-					accessible = false
-					break
-				}
-				if err != nil {
-					return err
-				}
-				if version != ref.Version {
+				version, ok := versions[string(ref.ID)]
+				if !ok || version != ref.Version {
 					accessible = false
 					break
 				}

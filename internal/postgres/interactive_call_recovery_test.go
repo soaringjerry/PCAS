@@ -23,7 +23,7 @@ func admittedInteractiveRequest(t *testing.T, s *Store, scope memory.Scope, prov
 	workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: asJSON(map[string]string{"timezone": "UTC"})})
 	execution := memory.NewID()
 	hash := sha256.Sum256([]byte("Fictitious admitted request."))
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), heavyUseTimeout)
 	defer cancel()
 	ticket, err := s.admitSecretaryTurn(ctx, ctx, string(scope.OwnerID), string(execution), string(memory.NewID()), hash[:])
 	if err != nil || !ticket.own {

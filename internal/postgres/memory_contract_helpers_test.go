@@ -319,6 +319,7 @@ func b4Model(t *testing.T, s *Store, withVectors ...bool) *b4Fake {
 		config.Providers = append(config.Providers, ai.Provider{ID: "b4-vector", Name: "验收本地向量", Protocol: "openai", BaseURL: server.URL, Model: "b4-vector", Embedding: true, CostMode: "free"})
 	}
 	s.SetModels(&ai.Registry{HTTP: server.Client(), Config: config})
+	useSyntheticGateway(s)
 	return f
 }
 func (f *b4Fake) set(reply string, status int) {

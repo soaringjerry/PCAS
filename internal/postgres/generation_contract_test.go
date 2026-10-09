@@ -16,7 +16,7 @@ import (
 func TestUnsupportedRequiredSchemaHasCallRecordWithoutSpending(t *testing.T) {
 	s, scope := testStore(t), owner()
 	var invocations atomic.Int32
-	secretaryModel(t, s, func(http.ResponseWriter, *http.Request) { invocations.Add(1) })
+	ordinarySecretaryModel(t, s, func(http.ResponseWriter, *http.Request) { invocations.Add(1) })
 	organizeTestMemory(t, s, scope, "Fictitious unfinished report.")
 	job := organizeTestJob(t, s, scope)
 	request := modelcall.Request{OwnerID: scope.OwnerID, ExecutionID: job.ID, RootExecutionID: job.ID, Function: "organize", Stage: job.Stage, ProviderID: s.models.ExtractionID(), Instructions: prompts.Must("organize"), Schema: prompts.MustSchema("use-groups"), ContextBuilderVersion: "fictitious-context-v1", Prompt: asJSON(map[string]string{"rawPrompt": "Fictitious input."}), Policy: job}

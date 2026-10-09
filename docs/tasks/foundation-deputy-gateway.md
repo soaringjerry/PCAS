@@ -34,6 +34,8 @@ This origin identifies the execution. It is not a record-selection time range.
 |---|---|
 | A queued run starts generation. | Link its existing reservation to one invocation. Do not add another reservation row. |
 | A reader or self-check runs. | Keep its separate reservation and usage. Do not use the main-generation reservation. |
+| Main generation is ready for submission. | Save its original private input and started journal in one transaction before the provider call. |
+| The private input cannot be stored. | Prevent provider submission. Release the unused admission hold and record the failure without fabricated usage. |
 | Generation returns. | Save the result before application. Record original usage once and settle the existing reservation. |
 | The response is interrupted. | Record an unknown outcome. Retain the existing hold and partial usage. Do not assert zero spending. |
 | Usage or output persistence fails. | Continue persistence through the existing recovery path. Do not repeat generation. |
@@ -159,6 +161,26 @@ The filter selects deputy, interactive, gateway, provider-boundary, and register
 Formatting, static analysis, and the service build also pass.
 These filtered checks do not certify the full suite. Complete CI on this change remains required.
 The host filesystem has insufficient space for the large local fixtures.
+[Complete CI for `c02617e`](https://github.com/soaringjerry/PCAS/actions/runs/37916251593) passed every job.
+That revision certifies result retention. It does not certify the later input-receipt changes.
+
+### Input Receipt Preparation
+
+The main-generation port saves private input under the invocation ID before provider submission.
+It uses the existing private result relation. The journal remains free of private prompt text.
+The input receipt and started journal commit in one transaction after the current lease and input checks.
+An input-only receipt has purpose `deputy_input`. It is not a returned result or a usage record.
+Its required numeric fields are placeholders. They do not assert actual spending or complete usage.
+The shared result reader excludes this receipt type.
+
+A returned response completes that same receipt after its invocation and original input identities match.
+Deletion or lost access removes the private input instead of restoring inaccessible content.
+Interrupted processing keeps its unknown outcome and admission hold. Input alone cannot authorize application.
+The main worker still uses its original generation path. Complete migration and final replay remain outstanding.
+
+Final filtered `make check` and `make test-integration` pass after the shared-reader exclusion.
+They cover input durability, failed input writes, interruption, and related gateway contracts.
+Complete CI on these input-receipt changes remains required before integration.
 
 ## Sol Window Prompt
 

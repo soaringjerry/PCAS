@@ -479,11 +479,43 @@ func (a interactiveCalls) settleDeputyRunTx(ctx context.Context, tx pgx.Tx, r mo
 }
 
 func (a interactiveCalls) Start(ctx context.Context, r modelcall.Request, paid *modelcall.PaidResult) error {
+	mainDeputy := r.Policy.(interactiveCallPolicy).BudgetOwner == "deputy_run"
+	var binding string
+	if mainDeputy {
+		var err error
+		binding, err = interactiveBinding(r)
+		if err != nil {
+			return err
+		}
+	}
 	return pgx.BeginFunc(ctx, a.store.pool, func(tx pgx.Tx) error {
+		if mainDeputy {
+			if _, err := tx.Exec(ctx, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(r.OwnerID)); err != nil {
+				return err
+			}
+		}
 		if err := interactiveFence(ctx, tx, r); err != nil {
 			return err
 		}
 		mode := map[string]any{"search": r.Search}
+		if mainDeputy {
+			p := r.Policy.(interactiveCallPolicy)
+			if err := verifyRunTx(ctx, tx, memory.Scope{OwnerID: r.OwnerID, PrincipalID: p.AgentID}, workspace.Run{AgentID: p.AgentID, ThingID: p.ThingID, ContextVersions: r.Refs}); err != nil {
+				return err
+			}
+			// Input-only rows are not paid results. Commit the original private
+			// input and its started journal together before provider submission.
+			tag, err := tx.Exec(ctx, `INSERT INTO background_model_results(owner_id,job_id,purpose,prompt,output,reservation_id,provider_id,model,input_tokens,output_tokens,cost,refs)
+ SELECT owner_id,id,'deputy_input',$4::jsonb,'',reservation_id,provider_id,model,0,0,0,$5::jsonb FROM model_calls
+ WHERE owner_id=$1 AND id=$2 AND reservation_id=$3 AND outcome='prepared' AND recovery_state='active' AND input_manifest->>'bindingHash'=$6`, string(r.OwnerID), string(paid.InvocationID), paid.Reservation, r.Prompt, asJSON(r.Refs), binding)
+			if err != nil {
+				return err
+			}
+			if tag.RowsAffected() != 1 {
+				return memory.ErrConflict
+			}
+			mode["inputPayload"] = "input_saved"
+		}
 		if r.Schema.Name() != "" {
 			mode["schema"] = r.Schema.Name()
 			mode["output"] = "structured"
@@ -595,8 +627,21 @@ func (a interactiveCalls) Save(ctx context.Context, r modelcall.Request, paid *m
 			}
 			paid.NotApplicable = paid.NotApplicable || !available
 			if accessible {
-				_, err = tx.Exec(persist, `INSERT INTO background_model_results(owner_id,job_id,purpose,prompt,output,reservation_id,provider_id,model,input_tokens,output_tokens,cost,refs,input_estimated,output_estimated,cost_estimated,duration_ms) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) ON CONFLICT(job_id) DO NOTHING`, string(r.OwnerID), string(paid.InvocationID), r.Function, paid.Prompt, paid.Output, paid.Reservation, paid.Provider, paid.Model, paid.InputTokens, paid.OutputTokens, paid.Cost, asJSON(paid.Refs), paid.InputEstimated, paid.OutputEstimated, paid.CostEstimated, paid.DurationMS)
+				conflict := " ON CONFLICT(job_id) DO NOTHING"
+				if mainDeputy {
+					conflict = ` ON CONFLICT(job_id) DO UPDATE SET purpose=EXCLUDED.purpose,output=EXCLUDED.output,input_tokens=EXCLUDED.input_tokens,output_tokens=EXCLUDED.output_tokens,cost=EXCLUDED.cost,input_estimated=EXCLUDED.input_estimated,output_estimated=EXCLUDED.output_estimated,cost_estimated=EXCLUDED.cost_estimated,duration_ms=EXCLUDED.duration_ms
+ WHERE background_model_results.purpose='deputy_input' AND background_model_results.owner_id=EXCLUDED.owner_id AND background_model_results.reservation_id=EXCLUDED.reservation_id AND background_model_results.provider_id=EXCLUDED.provider_id AND background_model_results.model=EXCLUDED.model AND background_model_results.prompt=EXCLUDED.prompt AND background_model_results.refs=EXCLUDED.refs`
+				}
+				tag, writeErr := tx.Exec(persist, `INSERT INTO background_model_results(owner_id,job_id,purpose,prompt,output,reservation_id,provider_id,model,input_tokens,output_tokens,cost,refs,input_estimated,output_estimated,cost_estimated,duration_ms) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`+conflict, string(r.OwnerID), string(paid.InvocationID), r.Function, paid.Prompt, paid.Output, paid.Reservation, paid.Provider, paid.Model, paid.InputTokens, paid.OutputTokens, paid.Cost, asJSON(paid.Refs), paid.InputEstimated, paid.OutputEstimated, paid.CostEstimated, paid.DurationMS)
+				err = writeErr
 				if err != nil {
+					return err
+				}
+				if mainDeputy && prior.Billing == nil && tag.RowsAffected() != 1 {
+					return memory.ErrConflict
+				}
+			} else if mainDeputy {
+				if _, err := tx.Exec(persist, `DELETE FROM background_model_results WHERE owner_id=$1 AND job_id=$2 AND reservation_id=$3`, string(r.OwnerID), string(paid.InvocationID), paid.Reservation); err != nil {
 					return err
 				}
 			}
@@ -651,7 +696,14 @@ func (a interactiveCalls) Save(ctx context.Context, r modelcall.Request, paid *m
 			if paid.CallErrorCode == "provider_unavailable" {
 				usage = nil
 			}
-			_, err = tx.Exec(persist, `UPDATE model_calls SET outcome=$3,error_code=$4,finished_at=coalesce(finished_at,clock_timestamp()),updated_at=clock_timestamp(),usage_id=$5,result_receipt=$6,actual_mode=actual_mode||jsonb_build_object('usageComplete',$7::boolean),accounting_state=CASE WHEN accounting_state='settled' THEN 'settled' WHEN accounting_state='held' AND $3='unknown' AND EXISTS(SELECT 1 FROM model_usage u WHERE u.owner_id=model_calls.owner_id AND u.id=model_calls.usage_id) THEN 'held' ELSE 'pending' END WHERE owner_id=$1 AND id=$2`, string(r.OwnerID), string(paid.InvocationID), outcome, paid.CallErrorCode, usage, asJSON(receipt), outcome != "unknown")
+			mode := map[string]any{"usageComplete": outcome != "unknown"}
+			if mainDeputy {
+				mode["inputPayload"] = "discarded"
+				if accessible {
+					mode["inputPayload"] = "result_saved"
+				}
+			}
+			_, err = tx.Exec(persist, `UPDATE model_calls SET outcome=$3,error_code=$4,finished_at=coalesce(finished_at,clock_timestamp()),updated_at=clock_timestamp(),usage_id=$5,result_receipt=$6,actual_mode=actual_mode||$7::jsonb,accounting_state=CASE WHEN accounting_state='settled' THEN 'settled' WHEN accounting_state='held' AND $3='unknown' AND EXISTS(SELECT 1 FROM model_usage u WHERE u.owner_id=model_calls.owner_id AND u.id=model_calls.usage_id) THEN 'held' ELSE 'pending' END WHERE owner_id=$1 AND id=$2`, string(r.OwnerID), string(paid.InvocationID), outcome, paid.CallErrorCode, usage, asJSON(receipt), asJSON(mode))
 			return err
 		})
 		cancel()

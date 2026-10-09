@@ -108,6 +108,18 @@ The storage package exceeded the aggregate 30-minute test deadline. Complete sto
 Complete storage checks and final checks on the completed batch remain required.
 This batch does not complete Phase 3.9.
 
+CI for `d539922` passed twelve jobs and failed the unbuilt-deputy medium-tier case.
+The synthetic main answer delayed its response by 100 milliseconds.
+The original self-check budget follows the elapsed main-answer phase.
+Under CI load, self-check preparation exceeded that allowance before provider submission.
+The fixture now matches the existing 500-millisecond allowance in the same file.
+Its assertions and the production deadline remain unchanged. Final CI remains required.
+
+The affected tier contract passes with pgvector after this fixture change.
+The later local `make check` was interrupted when the host filesystem became full.
+That command had no PostgreSQL URL. It cannot certify the database-dependent contracts.
+Do not report that interruption or the incomplete local integration run as passed.
+
 ## Sol Window Prompt
 
 ```text

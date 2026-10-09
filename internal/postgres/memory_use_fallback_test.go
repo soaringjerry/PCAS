@@ -109,7 +109,10 @@ func TestB4UnbuiltDeputyUsesMediumExceptExplicitLight(t *testing.T) {
 					promptMu.Lock()
 					draftPrompt = prompt
 					promptMu.Unlock()
-					time.Sleep(100 * time.Millisecond)
+					// This contract checks tier selection and shared context, not
+					// timeout fallback. Match the existing synthetic answer allowance
+					// above so journal writes fit the original self-check budget.
+					time.Sleep(500 * time.Millisecond)
 					secretaryModelReply(w, "虚构副手初稿")
 					return
 				}

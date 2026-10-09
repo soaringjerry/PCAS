@@ -135,10 +135,23 @@ The recorded self-check failure remains present before and after migration.
 Candidate `1b6f7c8` passes real default-model acceptance and complete branch CI.
 A later contract confirms missing history-source links in query input. The correction passes focused deletion and handoff contracts.
 Corrected-source strict replay and real default Codex acceptance pass on isolated copies.
-Complete CI, independent review, integration, and release remain outstanding for that correction.
+Corrected revision `9f80205` also passes complete branch CI.
+Independent review, integration, and release remain outstanding for that correction.
 
 The full local serial check reaches its thirty-minute package timeout during an existing comparison-scale test. Its failure remains recorded.
 The local unfiltered integration run also exceeds its disposable database's temporary storage capacity. That run does not pass.
+
+The corrected source's later unfiltered integration run reaches the package timeout on a larger disposable database.
+An old upgrade fixture also fails because the default schema was not initialized.
+After the same initialization used by CI, that isolated upgrade check passes without a source change.
+Both original local failures remain recorded. Complete branch CI does not erase these local results.
+
+The [background embedding scope](tasks/foundation-background-embedding.md) follows query embedding migration.
+Its initial fake-provider contract confirms repeated paid batches after the final vector-write transaction fails.
+Its controlled production-copy source recording and strict offline replay pass with exact original chunk input.
+This case uses a new copy-only source identity. It does not claim capture of the original wire request.
+Complete admission, saved batch results, deletion, and atomic application are its required boundaries.
+Background embedding production code has not changed.
 
 Registered instructions and four output schemas preserve their original bytes and field order.
 The secretary keeps its original shared deadline and two-attempt retry policy.

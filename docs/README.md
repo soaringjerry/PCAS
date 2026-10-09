@@ -26,6 +26,7 @@ Historical tasks, research, and evaluations are evidence. They do not assign new
 | [Foundation Deputy Gateway](tasks/foundation-deputy-gateway.md) | Main deputy generation, revision recovery, reservation reuse, and application tracing. |
 | [Foundation Unused Generation Cleanup](tasks/foundation-unused-generation.md) | Unused card generation removal, surviving queue compatibility, checks, and delivery scope. |
 | [Foundation Query Embedding Gateway](tasks/foundation-query-embedding.md) | Recall embedding calls, read execution identities, accounting recovery, visible fallback, and acceptance scope. |
+| [Foundation Background Embedding Gateway](tasks/foundation-background-embedding.md) | Complete job admission, saved batch results, accounting recovery, deletion, and atomic index application. |
 | [Historical Records](history/README.md) | Retired designs and interpretation of past records. |
 
 ## Document Authority

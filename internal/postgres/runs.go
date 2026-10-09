@@ -141,7 +141,7 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 			return err
 		}
 		loc := deskLocation(settings)
-		plan := memory.PlanQuery(c.Prompt, time.Now(), loc)
+		plan := memory.PlanQuery(c.Prompt, s.businessNow(), loc)
 		if prepared, ok := ctx.Value(runContextKey{}).(preparedRunContext); ok {
 			plan = prepared.Plan
 		}

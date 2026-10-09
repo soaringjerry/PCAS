@@ -29,7 +29,8 @@ Do not change the shared `/root/PCAS` worktree.
 Do not move business-domain packages, change business rules, or add production database migrations in this batch.
 Do not change production instructions or output schemas.
 Keep lease expiry, access checks, timeouts, retries, usage timestamps, and budget settlement on actual time.
-Do not replace database `now()` with the business clock.
+Keep database `now()` for execution and access decisions.
+The approved deputy extension uses business time only for retrieval activity decay and deputy date interpretation.
 Keep operational quotas on actual time. A fixed business date cannot reset a spending or call limit.
 
 ## Isolation and Evidence

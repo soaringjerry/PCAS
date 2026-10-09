@@ -502,6 +502,9 @@ Business time is an explicit dependency for date interpretation and model input.
 Production uses actual time by default. A replay copy can use a fixed case time.
 Recording and replay must use the same business time. Preserve the complete input match.
 
+Business time also supplies retrieval activity decay.
+Access and applicable-version checks retain their existing execution clocks.
+
 Lease expiry, access checks, timeouts, retries, operational quotas, usage timestamps, and budget settlement use actual time.
 Database `now()` remains an execution clock. Record business time and execution time separately.
 

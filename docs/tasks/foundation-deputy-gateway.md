@@ -68,7 +68,10 @@ Its deputy operation uses the existing lease, generation, billing, and applicati
 It does not start the continuous deputy worker.
 The existing offline tier override can fix the tier when the diagnostic command admits a run.
 Record and replay must use the same tier. Report the selected tier with each result.
-Keep the existing instruction bytes, brief bytes, search mode, and applicable model deadlines.
+Keep the existing instruction bytes, brief construction, search mode, and applicable model deadlines.
+Use the approved business clock for deputy date interpretation and retrieval activity decay.
+Record new ordinary and revision baselines with the same fixed business time before gateway migration.
+Preserve the earlier recordings and their failed replay evidence.
 Do not change project selection, task meaning, document revision meaning, or automatic adoption rules.
 No new production database migration is assigned.
 
@@ -143,11 +146,16 @@ It reproduced the changed order at the recording and replay times.
 The calculation uses the qualified provider model identity from the existing embedding adapter.
 Earlier calculations with an unqualified model identity did not establish the cause.
 
-The existing business clock does not fix this retrieval input.
-Extending that clock requires a separate scope decision before implementation.
-The proposed scope fixes deputy date interpretation and retrieval decay on the diagnostic copy.
+The original business clock did not fix this retrieval input.
+The coordinator approved its extension on 2026-10-09 UTC.
+The approved scope fixes deputy date interpretation and retrieval decay on the diagnostic copy.
 Production keeps actual time by default. Leases, access, quotas, and accounting continue to use actual time.
-Approval and new copy checks remain pending. Keep the original failed evidence after any repair.
+The extension is implemented. Filtered repository and integration checks pass with pgvector.
+They check lexical and fusion ordering, future applicability, withdrawn access, and actual admission time.
+The first new fixture lacked required evidence and failed. The corrected fixture keeps the same assertions.
+The new actual Codex revision recording completed and applied exactly the requested edit.
+Its registered output schema matches the original bytes. Strict replay and the ordinary case remain outstanding.
+Keep the original failed evidence after this repair.
 
 ### Result Retention Preparation
 
@@ -180,7 +188,9 @@ The main worker still uses its original generation path. Complete migration and 
 
 Final filtered `make check` and `make test-integration` pass after the shared-reader exclusion.
 They cover input durability, failed input writes, interruption, and related gateway contracts.
-Complete CI on these input-receipt changes remains required before integration.
+[Complete CI for `d0269cc`](https://github.com/soaringjerry/PCAS/actions/runs/37919071697) passed every job.
+That revision certifies input receipts. It does not certify the later business-clock extension.
+Complete CI on the business-clock extension remains required before integration.
 
 ## Sol Window Prompt
 
@@ -193,7 +203,9 @@ Keep user replies in Chinese. Use English for code, commits, and current documen
 Reuse the existing gateway, prompt registry, worker pass, and storage adapters.
 Complete reservation support before switching main deputy generation.
 Record ordinary and revision runs on a verified isolated production-data copy first.
-Keep the original instructions, schema bytes, brief bytes, and applicable deadlines.
+Keep the original instructions, schema bytes, brief construction, and applicable deadlines.
+Use the approved business clock for deputy dates and retrieval decay. Keep execution clocks actual.
+Record new fixed-clock ordinary and revision baselines before gateway migration.
 Preserve admission budget ownership and all saved-result recovery paths.
 Keep review separate from generation. Record visible skipped and failed outcomes.
 Preserve stale output after correction. Prevent application after deletion or lost access.

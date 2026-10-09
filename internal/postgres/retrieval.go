@@ -164,7 +164,7 @@ func (s *Store) recallTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in 
 	// returned. Choosing a passage for every match, and joins the planner ran
 	// as a scan per row, made this take a minute or more over tens of
 	// thousands of records.
-	querySQL := `WITH applicable AS MATERIALIZED (SELECT claim_id,version FROM applicable_claim_versions($1,coalesce($9,now()),coalesce($10,now())) WHERE $6!='history'), linked AS (SELECT m.member_id FROM episode_members m JOIN memory_records e ON(e.owner_id,e.id,e.version)=(m.owner_id,m.episode_id,m.episode_version) JOIN episodes ep ON(ep.owner_id,ep.id,ep.version)=(e.owner_id,e.id,e.version) WHERE m.owner_id=$1 AND e.state='active' AND (m.episode_id=ANY($8::uuid[]) OR ($6='history' AND $4!='' AND position(lower($4) in lower(ep.title))>0)) AND ($2 OR ($17 AND e.kind='source') OR EXISTS(SELECT 1 FROM record_grants g WHERE g.owner_id=e.owner_id AND g.record_id=e.id AND g.principal_id=$3))), hits AS (
+	querySQL := `WITH ranking_clock AS (SELECT coalesce($18::timestamptz,now()) AS at), applicable AS MATERIALIZED (SELECT claim_id,version FROM applicable_claim_versions($1,coalesce($9,now()),coalesce($10,now())) WHERE $6!='history'), linked AS (SELECT m.member_id FROM episode_members m JOIN memory_records e ON(e.owner_id,e.id,e.version)=(m.owner_id,m.episode_id,m.episode_version) JOIN episodes ep ON(ep.owner_id,ep.id,ep.version)=(e.owner_id,e.id,e.version) WHERE m.owner_id=$1 AND e.state='active' AND (m.episode_id=ANY($8::uuid[]) OR ($6='history' AND $4!='' AND position(lower($4) in lower(ep.title))>0)) AND ($2 OR ($17 AND e.kind='source') OR EXISTS(SELECT 1 FROM record_grants g WHERE g.owner_id=e.owner_id AND g.record_id=e.id AND g.principal_id=$3))), hits AS (
  SELECT t.id::text AS id,t.id AS uid,t.version,r.kind,
 		 (CASE WHEN $4='' THEN 0 WHEN position(lower($4) in lb.body)>0 THEN 5 ELSE 0 END
 		 +CASE WHEN $5='' THEN 0 ELSE coalesce(ts_rank_cd(rs.search_vector,to_tsquery('simple',$5)),0) END
@@ -216,7 +216,7 @@ func (s *Store) recallTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in 
 	querySQL = strings.Replace(querySQL, "WHERE t.owner_id=$1 AND r.state=", "WHERE t.owner_id=$1 AND (r.kind<>'claim' OR "+currentMemorySQL("r.owner_id", "r.id")+") AND r.state=", 1)
 	// Only explicit effective-use events activate the prior. Legacy activity
 	// timestamps populated from expression time carry no retrieval weight.
-	activityTerm := `CASE WHEN a.pinned THEN 1 WHEN EXISTS(SELECT 1 FROM use_events ue WHERE ue.owner_id=t.owner_id AND ue.record_id=t.id AND ue.kind IN ('user_mention','confirmation','adoption')) THEN coalesce(exp(-0.693147*greatest(0,extract(epoch from(now()-a.last_effective_use_at)))/nullif(a.half_life_seconds*a.stability,0)),0) ELSE 0 END`
+	activityTerm := `CASE WHEN a.pinned THEN 1 WHEN EXISTS(SELECT 1 FROM use_events ue WHERE ue.owner_id=t.owner_id AND ue.record_id=t.id AND ue.kind IN ('user_mention','confirmation','adoption')) THEN coalesce(exp(-0.693147*greatest(0,extract(epoch from((SELECT at FROM ranking_clock)-a.last_effective_use_at)))/nullif(a.half_life_seconds*a.stability,0)),0) ELSE 0 END`
 	if enabled, ok := ctx.Value(activityRankingKey{}).(bool); ok && !enabled {
 		activityTerm = "0::float"
 	}
@@ -235,7 +235,7 @@ func (s *Store) recallTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in 
 		querySQL += `, hits AS (SELECT *, CASE WHEN lexical_score>0 THEN 1.0/(60+row_number() OVER (ORDER BY lexical_score DESC,uid,version)) ELSE 0 END + CASE WHEN vector_score>0 THEN 1.0/(60+row_number() OVER (ORDER BY vector_score DESC,uid,version)) ELSE 0 END + 0.002*activity_score AS score FROM scored)`
 	}
 	if len(structured) > 0 {
-		querySQL = strings.Replace(querySQL, "AND ($4='' OR lb.body LIKE ANY", "AND (t.id=ANY($18::uuid[]) OR $4='' OR lb.body LIKE ANY", 1)
+		querySQL = strings.Replace(querySQL, "AND ($4='' OR lb.body LIKE ANY", "AND (t.id=ANY($19::uuid[]) OR $4='' OR lb.body LIKE ANY", 1)
 	}
 	// Team source excerpts have their own candidate/token allowance. They must
 	// not displace the existing claim and graph budgets. Public recall retains
@@ -243,9 +243,17 @@ func (s *Store) recallTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in 
 	const hitColumns = "id,version,kind,body,score,role,branch,gaps,excerpt,title,connector,external_id,expressed_at,recorded_at,readable,total_count"
 	hitOrder := "CASE WHEN $6='history' THEN recorded_at END,explicit DESC,score DESC,id::uuid,version"
 	args := []any{string(scope.OwnerID), scope.IsOwner, scope.PrincipalID, query, fts, string(in.Mode), "", in.Context.Objects, in.Context.ValidAt, in.Context.KnownAt, nullString(string(vector)), model, embeddingDimensions(vector), b.Candidates + 1, offset, tokens, scope.Team}
+	// A diagnostic clock fixes decay only. Production retains the transaction's
+	// now(), and applicable versions, permissions, and usage keep actual time.
+	var activityAt *time.Time
+	if s.businessClock != nil {
+		at := s.businessNow()
+		activityAt = &at
+	}
+	args = append(args, activityAt)
 	if len(structured) > 0 {
 		args = append(args, structuredIDs)
-		hitOrder = "array_position($18::uuid[],id::uuid) ASC NULLS LAST," + hitOrder
+		hitOrder = "array_position($19::uuid[],id::uuid) ASC NULLS LAST," + hitOrder
 	}
 	if scope.Team && in.Team != nil && in.Team.Plan.Time != nil {
 		slot := len(args) + 1

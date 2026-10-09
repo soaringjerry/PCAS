@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
@@ -70,7 +69,7 @@ func (s *Store) prepareRunContext(ctx context.Context, scope memory.Scope, c wor
 		if err != nil {
 			return err
 		}
-		plan = memory.PlanQuery(c.Prompt, time.Now(), deskLocation(settings))
+		plan = memory.PlanQuery(c.Prompt, s.businessNow(), deskLocation(settings))
 		u, err := s.startUseContextTx(ctx, tx, scope)
 		if err != nil {
 			return err

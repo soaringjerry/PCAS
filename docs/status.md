@@ -131,9 +131,14 @@ Complete starting owner data matches the original row multiset. Both complete ra
 
 The query migration is implemented in Sol's isolated worktree and remains unreleased.
 Strict migration replay preserves provider inputs and original query spending. Complete owner-data differences are retained and classified.
-The recorded self-check failure remains present before and after migration. Real-model acceptance, independent review, complete CI, and release remain outstanding.
+The recorded self-check failure remains present before and after migration.
+Candidate `1b6f7c8` passes real default-model acceptance and complete branch CI.
+A later contract confirms missing history-source links in query input. The correction passes focused deletion and handoff contracts.
+Corrected-source strict replay and real default Codex acceptance pass on isolated copies.
+Complete CI, independent review, integration, and release remain outstanding for that correction.
 
 The full local serial check reaches its thirty-minute package timeout during an existing comparison-scale test. Its failure remains recorded.
+The local unfiltered integration run also exceeds its disposable database's temporary storage capacity. That run does not pass.
 
 Registered instructions and four output schemas preserve their original bytes and field order.
 The secretary keeps its original shared deadline and two-attempt retry policy.

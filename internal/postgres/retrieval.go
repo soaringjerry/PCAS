@@ -19,6 +19,7 @@ import (
 )
 
 type recallCommandOriginKey struct{}
+type recallInputRefsKey struct{}
 
 func normalizedBudget(b memory.Budget) (memory.Budget, error) {
 	if b.Candidates < 0 || b.Candidates > 1000 || b.Edges < 0 || b.Edges > 1000 || b.Tokens < 0 || b.Tokens > 32000 || b.Hops < 0 || b.Hops > 3 {
@@ -137,7 +138,9 @@ func (s *Store) Recall(ctx context.Context, scope memory.Scope, in memory.Recall
 			request.Operation, request.ProviderID, request.ProviderSnapshot, request.ReservationEstimate = "embedding", provider.ID, &provider, &reserved
 			request.Instructions, request.Schema, request.Search = prompts.Definition{}, prompts.Schema{}, false
 			request.ContextBuilderVersion = "recall-query-v1"
-			request.Prompt, request.Refs = asJSON([]string{provider.EmbeddingQueryPrefix + query}), nil
+			request.Prompt = asJSON([]string{provider.EmbeddingQueryPrefix + query})
+			inputRefs, _ := ctx.Value(recallInputRefsKey{}).([]memory.Ref)
+			request.Refs = uniqueRefs(append([]memory.Ref(nil), inputRefs...))
 			readExecution = &request
 			type returned struct {
 				paid *modelcall.PaidResult

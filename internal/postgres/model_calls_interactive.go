@@ -510,6 +510,9 @@ func (a interactiveCalls) Prepare(ctx context.Context, r modelcall.Request, prov
 			manifest["callerScope"], manifest["commandOrigin"] = recallScopeManifest(*p.RecallScope), p.CommandOrigin
 			manifest["inputValidation"] = "caller_scope"
 			manifest["sourceCoverage"] = "prepared_query_only"
+			if len(r.Refs) > 0 {
+				manifest["sourceCoverage"] = "prepared_query_with_caller_refs"
+			}
 			mode["operation"], mode["output"], mode["resultEncoding"] = "embedding", "vector", "memory-embedding-json-v1"
 			mode["inputRate"], mode["costMode"] = provider.InputPerMillion, provider.CostMode
 			mode["pricingKnown"] = provider.InputPerMillion > 0 || provider.CostMode == "free"
@@ -648,6 +651,17 @@ func (a interactiveCalls) Start(ctx context.Context, r modelcall.Request, paid *
 			return err
 		}
 		mode := map[string]any{"search": r.Search}
+		if r.Operation == "embedding" {
+			versions, err := activeModelInputVersionsTx(ctx, tx, r.OwnerID, r.Refs)
+			if err != nil {
+				return err
+			}
+			for _, ref := range r.Refs {
+				if _, ok := versions[string(ref.ID)]; !ok {
+					return modelcall.ErrNotApplicable
+				}
+			}
+		}
 		if mainDeputy {
 			p := r.Policy.(interactiveCallPolicy)
 			if err := verifyRunTx(ctx, tx, memory.Scope{OwnerID: r.OwnerID, PrincipalID: p.AgentID}, workspace.Run{AgentID: p.AgentID, ThingID: p.ThingID, ContextVersions: r.Refs}); err != nil {
@@ -731,24 +745,17 @@ func (a interactiveCalls) Save(ctx context.Context, r modelcall.Request, paid *m
 			accessible = accessible && !deleted
 			// Share locks serialize raw-result retention with the source owner's deletion.
 			// The model has already returned; no provider call occurs inside this transaction.
-			ids := make([]string, len(paid.Refs))
-			for i, ref := range paid.Refs {
-				ids[i] = string(ref.ID)
-			}
-			rows, err := queryDocuments[struct {
-				ID      string
-				Version int
-			}](persist, tx, `SELECT jsonb_build_object('id',id,'version',version) FROM memory_records WHERE owner_id=$1 AND id=ANY($2::uuid[]) AND state='active' ORDER BY id FOR SHARE`, string(r.OwnerID), ids)
+			versions, err := activeModelInputVersionsTx(persist, tx, r.OwnerID, paid.Refs)
 			if err != nil {
 				return err
 			}
-			versions := map[string]int{}
-			for _, row := range rows {
-				versions[row.ID] = row.Version
-			}
 			for _, ref := range paid.Refs {
 				version, ok := versions[string(ref.ID)]
-				if !ok || !mainDeputy && p.InputPolicy != "current_access" && version != ref.Version {
+				// Query references describe the supplied lookup text. Retrieval
+				// still checks current access and versions after embedding returns.
+				// An edit must not turn an otherwise valid historical query into
+				// lexical fallback; deletion still removes its private body.
+				if !ok || p.RecallScope == nil && !mainDeputy && p.InputPolicy != "current_access" && version != ref.Version {
 					accessible = false
 					break
 				}
@@ -889,6 +896,26 @@ func (a interactiveCalls) Save(ctx context.Context, r modelcall.Request, paid *m
 		case <-time.After(time.Second):
 		}
 	}
+}
+
+// Share locks serialize private input writes with the source owner's deletion.
+func activeModelInputVersionsTx(ctx context.Context, tx pgx.Tx, owner memory.ID, refs []memory.Ref) (map[string]int, error) {
+	ids := make([]string, len(refs))
+	for i, ref := range refs {
+		ids[i] = string(ref.ID)
+	}
+	rows, err := queryDocuments[struct {
+		ID      string
+		Version int
+	}](ctx, tx, `SELECT jsonb_build_object('id',id,'version',version) FROM memory_records WHERE owner_id=$1 AND id=ANY($2::uuid[]) AND state='active' ORDER BY id FOR SHARE`, string(owner), ids)
+	if err != nil {
+		return nil, err
+	}
+	versions := map[string]int{}
+	for _, row := range rows {
+		versions[row.ID] = row.Version
+	}
+	return versions, nil
 }
 
 func (a interactiveCalls) Record(ctx context.Context, r modelcall.Request, paid *modelcall.PaidResult) error {

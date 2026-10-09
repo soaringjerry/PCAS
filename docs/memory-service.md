@@ -78,6 +78,8 @@ The [cleanup delivery record](tasks/foundation-unused-generation.md#release-veri
 
 The unreleased [query embedding migration](tasks/foundation-query-embedding.md) submits recall vectors through the existing gateway.
 Standalone reads use an actual session fence. Nested reads inherit their secretary or deputy execution.
+Query manifests carry verified question and handoff references for the existing source deletion mechanism.
+Original question references keep their original versions. Missing source coverage remains explicit.
 The earlier production release still uses the direct query-provider path.
 
 ### Background Call Evidence

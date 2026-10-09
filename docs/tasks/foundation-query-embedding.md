@@ -89,6 +89,8 @@ Check mixed secretary, standalone recall, and recovery work before selecting the
 
 The shared recovery path must preserve known billing after caller cancellation or private-result removal.
 Source deletion, lost access, and cleanup must not restore inaccessible upstream text.
+Query input can contain earlier questions and handoff context. Carry their verified source references into the existing deletion boundary.
+Resolve original question versions through their recorded external version. Do not substitute a later edited source version.
 Private query input and vector retention follow the existing execution and owner cleanup rules.
 Where an input has no source identity, record its actual caller origin. Do not invent source references.
 
@@ -116,7 +118,9 @@ Replay starts no live provider. The complete starting owner data matches the ori
 The query path now enters the existing gateway in the executor worktree. It is not released.
 Focused gateway and PostgreSQL contracts pass, including mixed foreground capacity and inherited execution identities.
 Strict migration replay and complete owner-data difference review pass on the isolated copy.
-Real default-channel acceptance, complete CI, independent review, integration, and release remain outstanding.
+Candidate `1b6f7c8` passes real default-channel acceptance and complete branch CI.
+The history erasure correction passes new strict replay and real default-channel checks on isolated copies.
+Corrected-source branch CI, independent review, integration, and release remain outstanding.
 Baseline work must preserve non-root disk space for production recovery and retain complete comparison evidence.
 The old inactive source fixture is retired. Its complete verified database archive supplies future isolated copies.
 
@@ -183,7 +187,76 @@ Formatting and focused contracts pass. No check was deleted or disabled.
 The complete serial `make check` reaches the PostgreSQL package's thirty-minute total timeout.
 The timeout occurs during an existing comparison-scale test. It does not identify an individual assertion failure.
 The stack and complete failure log remain recorded. This run is not a passed check.
-The unfiltered integration command runs separately. Complete integration-branch CI remains required.
+The unfiltered integration command fails after its disposable database exhausts the temporary data mount.
+PostgreSQL reports that it cannot extend a data file. Later tests cannot connect to that stopped fixture.
+This fixture failure is not a passed check. Its complete logs remain retained.
+Complete integration-branch CI passes for `1b6f7c8`. The corrected candidate needs a new complete run.
+
+### History Erasure Finding
+
+Candidate `1b6f7c8` passes complete integration-branch CI. It is not approved for integration or release.
+An additional complete-path contract finds a private query body after deleting a question from the previous turn.
+The query includes that question, but its invocation has no reference to the question's original source.
+The existing source owner cannot select the later query body for erasure.
+
+Use the existing source deletion mechanism. The query must carry actual history and handoff source references.
+Keep the original query bytes, retrieval rules, provider input, and billing.
+Repeat deletion and late-response checks. Then repeat strict replay and complete CI for the corrected candidate.
+The first reproduction could not connect to its test database. That failure is separate from the confirmed erasure finding.
+
+The correction uses a query-only context. It does not change generation dependencies or provider input.
+Secretary history supplies its actual question sources. Deputy preparation also supplies accepted history, item, and document references.
+Original sources retain their recorded original versions. Missing legacy identities remain missing.
+References can cover material omitted by the existing query tail. They do not establish exact source spans.
+The manifest distinguishes prepared query input with caller references from input without them.
+
+Eighteen query contracts pass with the race detector on the corrected source.
+New checks cover deletion after another turn, deletion during provider execution, original source versions, and deputy handoff sources.
+Late billing survives deletion. Late private query bodies do not return.
+Deletion before submission starts no provider call and releases the reservation.
+No provider retry or database migration is added.
+
+The first correction treated an edited question source as an obsolete query dependency.
+A contract reproduces the resulting semantic fallback. Its failed result remains recorded.
+Query references now describe the supplied lookup text. Retrieval keeps its existing current access and version checks.
+An active edited source does not invalidate its original question input. Source deletion remains a private-result boundary.
+Existing interaction and deputy document contracts pass after this correction.
+
+### Corrected-Source Acceptance
+
+The final production source has tracked difference hash `3b5103618fd6d9569973518524c4fdc02169737195d4c47c7d166bd44edb2116` from `1b6f7c8`.
+Private evidence also records each production file's hash and the new test file's hash.
+The replay binary has hash `e2f57e3eb7ef71410ed46a66ef9f2cbf136321e1b777c21f42a7766ce6f43f7f`.
+These checks apply to the corrected executor source. They are not a release record.
+
+| Check | Result and limit |
+|---|---|
+| Strict transport replay | Two Codex calls and one embedding request match recorded inputs. No live provider starts. |
+| Complete owner data | Every snapshot byte is verified. All changed fields are retained and classified. Exact whole-state equality is not claimed. |
+| Existing failure | The recorded self-check failure remains visible before and after migration. |
+| Real query | The configured `text-embedding-3-small` call returns, is used, and links to its settled billing. |
+| Real secretary | Default Codex `gpt-6.1-sol` answer and self-check return with linked billing and no invocation error. |
+| Generated content | The reply answers the original difficulty question. It distinguishes a prototype from stable operation and names recovery concerns. |
+| Actions and copy claims | No action receipt, card, or confirmation request is produced. The copy retains 5253 claims. |
+| Local code checks | Formatting, static checks, non-PostgreSQL tests, replay-tool tests, and affected PostgreSQL contracts pass. |
+| Independent acceptance | Outstanding. Sol reviewed the generated content; a different reviewer must check acceptance. |
+
+Production-copy databases are retired only after complete snapshot verification.
+Raw prompts, replies, billing links, and recoverable snapshots remain private.
+The original failed reproduction, source-edit contract, archive incident, and fixture failures remain recorded.
+
+### Diagnostic Archive Incident
+
+An archive copy followed temporary Codex executable links and copied the installed executable four times.
+The copies exhausted non-root disk space. This was an executor error.
+Each duplicate matched the original executable's complete checksum before removal.
+Only those owned duplicate files were replaced with their original symbolic links.
+Future archive copies preserve symbolic links.
+
+Production API, worker, and database containers remained running. Readiness returned success after recovery.
+The retained service logs show no disk-write failure across the observed incident interval.
+These observations do not prove that the incident had no other effect.
+Original production backups, raw model replies, and complete recoverable snapshots remain retained.
 
 ### Remaining Evidence Gaps
 
@@ -218,6 +291,10 @@ Check query reservations independently from deputy admission holds.
 Check shared foreground capacity, caller cancellation, and accounting connection progress.
 Check saved output, billing restart, dropped sessions, late responses, and private-body deletion.
 Verify that persistence recovery does not call a provider again.
+Check deletion of a previous question after a later turn and during provider execution.
+Check deletion before submission. It must start no provider and release the reservation.
+Check edited question sources. Their original versions stay recorded without forcing lexical fallback.
+Check deputy handoff, adopted item, and document provenance. Do not claim exact source-span coverage.
 Verify explicit absent prompt metadata and the declared missing upstream source coverage.
 Inspect model-call boundary tests and the existing migration exceptions.
 Review all owner-data differences. Do not exclude fields or normalize evidence.

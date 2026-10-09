@@ -724,6 +724,9 @@ func (s *Store) RunAgents(ctx context.Context, logger *slog.Logger) error {
 		case <-ctx.Done():
 			return nil
 		case <-ticker.C:
+			if recovery, err := s.recoverInteractiveCallsOnce(ctx); err != nil && ctx.Err() == nil {
+				logger.Warn("interactive accounting recovery failed", "error_type", fmt.Sprintf("%T", err), "pending_results", recovery.PendingResults, "pending_accounting", recovery.PendingAccounting, "interrupted_calls", recovery.Interrupted, "counts_known", recovery.CountsKnown)
+			}
 			if err := s.runAgentOnce(ctx); err != nil && ctx.Err() == nil {
 				logger.Warn("agent job failed", "error_type", fmt.Sprintf("%T", err))
 			}

@@ -60,3 +60,19 @@ func TestInapplicablePaidResultFinishesAccountingBeforeRejection(t *testing.T) {
 		t.Fatal(paid, err, fixture)
 	}
 }
+
+func TestAccountingContinuationDoesNotNeedAProviderOrAnApplicationResult(t *testing.T) {
+	fixture := &generationFixture{failAt: "record"}
+	request := generationRequest()
+	paid := &PaidResult{InvocationID: "original", Reservation: "original-reservation", Provider: "original-provider", Model: "original-model", NotApplicable: true, Cost: 0.01}
+	gateway := New(nil, fixture, fixture, fixture)
+	if err := gateway.RecoverAccounting(context.Background(), request, paid); err == nil {
+		t.Fatal("accounting failure was hidden")
+	}
+	if err := gateway.RecoverAccounting(context.Background(), request, paid); err != nil {
+		t.Fatal(err)
+	}
+	if fixture.calls != 0 || fixture.reservations != 0 || fixture.paid != nil || fixture.prepared.ExecutionID != "" || fixture.records != 2 || fixture.settlements != 1 {
+		t.Fatal("accounting continuation invoked or replaced work", fixture)
+	}
+}

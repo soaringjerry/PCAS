@@ -122,7 +122,7 @@ func TestProductionProviderCallsUseDeclaredMigrationBoundaries(t *testing.T) {
 						// Complete domain and dynamic-SQL ownership remains in
 						// the foundation's later owner-boundary migration.
 						value := info.Types[call.Args[1]].Value
-						if value != nil && value.Kind() == constant.String && journalWrite.MatchString(constant.StringVal(value)) && filepath.ToSlash(name) != "internal/postgres/model_calls.go" && filepath.ToSlash(name) != "internal/postgres/model_calls_interactive.go" {
+						if value != nil && value.Kind() == constant.String && journalWrite.MatchString(constant.StringVal(value)) && filepath.ToSlash(name) != "internal/postgres/model_calls.go" && filepath.ToSlash(name) != "internal/postgres/model_calls_interactive.go" && filepath.ToSlash(name) != "internal/postgres/model_calls_interactive_recovery.go" {
 							t.Errorf("call journal mutation outside its storage owner: %s:%s", name, fn.Name.Name)
 						}
 					}

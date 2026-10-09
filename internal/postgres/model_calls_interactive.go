@@ -32,6 +32,14 @@ type interactiveCallPolicy struct {
 
 type interactiveCalls struct{ store *Store }
 
+// Each retained response also keeps its bound request. Recovery cannot rebuild
+// exact original input bytes from a reformatted jsonb body or current settings.
+type pendingInteractiveResult struct {
+	request     modelcall.Request
+	paid        *modelcall.PaidResult
+	attemptedAt time.Time
+}
+
 // modelCallStorage routes the existing gateway ports to their execution owner.
 // It never invokes providers or makes business decisions.
 type modelCallStorage struct {
@@ -110,21 +118,35 @@ type interactiveReceipt struct {
 }
 
 type interactiveCallRow struct {
-	ID          memory.ID `json:"id"`
-	Provider    string    `json:"provider_id"`
-	Model       string    `json:"model"`
-	Outcome     string    `json:"outcome"`
-	ErrorCode   string    `json:"error_code"`
-	Accounting  string    `json:"accounting_state"`
-	Recovery    string    `json:"recovery_state"`
-	Attempt     int       `json:"attempt_number"`
-	Limit       int       `json:"attempt_limit"`
-	Reservation string    `json:"reservation_id"`
-	Manifest    struct {
-		BindingHash string `json:"bindingHash"`
+	OwnerID         memory.ID `json:"owner_id"`
+	ExecutionID     memory.ID `json:"execution_id"`
+	RootExecutionID memory.ID `json:"root_execution_id"`
+	CausationID     memory.ID `json:"causation_id"`
+	Function        string    `json:"function_name"`
+	Stage           string    `json:"stage"`
+	UsageID         memory.ID `json:"usage_id"`
+	ID              memory.ID `json:"id"`
+	Provider        string    `json:"provider_id"`
+	Model           string    `json:"model"`
+	Outcome         string    `json:"outcome"`
+	ErrorCode       string    `json:"error_code"`
+	Accounting      string    `json:"accounting_state"`
+	Recovery        string    `json:"recovery_state"`
+	Attempt         int       `json:"attempt_number"`
+	Limit           int       `json:"attempt_limit"`
+	Reservation     string    `json:"reservation_id"`
+	Manifest        struct {
+		BindingHash string       `json:"bindingHash"`
+		Version     string       `json:"version"`
+		Refs        []memory.Ref `json:"memoryRefs"`
+		Kind        string       `json:"executionKind"`
+		Origin      string       `json:"origin"`
+		AgentID     string       `json:"agentId"`
+		ThingID     string       `json:"thingId"`
 	} `json:"input_manifest"`
 	Mode struct {
 		Usage       modelUsage `json:"originalUsage"`
+		Token       string     `json:"executionToken"`
 		Unsupported string     `json:"unsupportedCapability"`
 	} `json:"actual_mode"`
 	Receipt interactiveReceipt `json:"result_receipt"`
@@ -208,13 +230,18 @@ func (a interactiveCalls) Load(ctx context.Context, r modelcall.Request) (*model
 		return nil, nil
 	}
 	if value, ok := a.store.pendingInteractive.Load(row.ID); ok {
-		return cloneInteractivePaid(value.(*modelcall.PaidResult)), nil
+		entry := value.(*pendingInteractiveResult)
+		cachedHash, err := interactiveBinding(entry.request)
+		if err != nil || cachedHash != hash || entry.paid.Provider != row.Provider || entry.paid.Model != row.Model || entry.paid.Reservation != row.Reservation {
+			return nil, memory.ErrConflict
+		}
+		return cloneInteractivePaid(entry.paid), nil
 	}
 	if row.Receipt.Billing == nil {
 		if row.Mode.Unsupported != "" {
 			return nil, &ai.CapabilityError{Capability: row.Mode.Unsupported}
 		}
-		if row.Outcome == "failed" && row.Accounting == "not_reserved" {
+		if row.Outcome == "failed" && (row.Accounting == "not_reserved" || row.Accounting == "settled") {
 			return nil, &modelcall.Failure{Code: row.ErrorCode, InvocationID: row.ID}
 		}
 		return nil, modelcall.ErrOutcomeUnknown
@@ -354,7 +381,8 @@ func (a interactiveCalls) PreparationFailed(ctx context.Context, r modelcall.Req
 }
 
 func (a interactiveCalls) Save(ctx context.Context, r modelcall.Request, paid *modelcall.PaidResult) error {
-	a.store.pendingInteractive.Store(paid.InvocationID, cloneInteractivePaid(paid))
+	entry := &pendingInteractiveResult{request: cloneInteractiveRequest(r), paid: cloneInteractivePaid(paid), attemptedAt: time.Now().UTC()}
+	a.store.pendingInteractive.Store(paid.InvocationID, entry)
 	for {
 		persist, cancel := context.WithTimeout(context.WithoutCancel(ctx), modelcall.PersistenceTimeout)
 		err := pgx.BeginFunc(persist, a.store.pool, func(tx pgx.Tx) error {
@@ -473,15 +501,16 @@ func (a interactiveCalls) Save(ctx context.Context, r modelcall.Request, paid *m
 			if paid.CallErrorCode == "provider_unavailable" {
 				usage = nil
 			}
-			_, err = tx.Exec(persist, `UPDATE model_calls SET outcome=$3,error_code=$4,finished_at=coalesce(finished_at,clock_timestamp()),updated_at=clock_timestamp(),usage_id=$5,result_receipt=$6,actual_mode=actual_mode||jsonb_build_object('usageComplete',$7::boolean),accounting_state=CASE WHEN accounting_state IN ('settled','held') THEN accounting_state ELSE 'pending' END WHERE owner_id=$1 AND id=$2`, string(r.OwnerID), string(paid.InvocationID), outcome, paid.CallErrorCode, usage, asJSON(receipt), outcome != "unknown")
+			_, err = tx.Exec(persist, `UPDATE model_calls SET outcome=$3,error_code=$4,finished_at=coalesce(finished_at,clock_timestamp()),updated_at=clock_timestamp(),usage_id=$5,result_receipt=$6,actual_mode=actual_mode||jsonb_build_object('usageComplete',$7::boolean),accounting_state=CASE WHEN accounting_state='settled' THEN 'settled' WHEN accounting_state='held' AND $3='unknown' AND EXISTS(SELECT 1 FROM model_usage u WHERE u.owner_id=model_calls.owner_id AND u.id=model_calls.usage_id) THEN 'held' ELSE 'pending' END WHERE owner_id=$1 AND id=$2`, string(r.OwnerID), string(paid.InvocationID), outcome, paid.CallErrorCode, usage, asJSON(receipt), outcome != "unknown")
 			return err
 		})
 		cancel()
 		if err == nil {
-			a.store.pendingInteractive.Delete(paid.InvocationID)
+			a.store.pendingInteractive.CompareAndDelete(paid.InvocationID, entry)
 			return nil
 		}
 		if errors.Is(err, memory.ErrConflict) || errors.Is(err, memory.ErrInvalid) {
+			a.store.pendingInteractive.CompareAndDelete(paid.InvocationID, entry)
 			return err
 		}
 		select {
@@ -584,4 +613,16 @@ func cloneInteractivePaid(paid *modelcall.PaidResult) *modelcall.PaidResult {
 		copy.DurationMS = &duration
 	}
 	return &copy
+}
+
+func cloneInteractiveRequest(request modelcall.Request) modelcall.Request {
+	copy := request
+	copy.Prompt = append(json.RawMessage(nil), request.Prompt...)
+	copy.Refs = append([]memory.Ref(nil), request.Refs...)
+	policy := request.Policy.(interactiveCallPolicy)
+	policy.RequestHash = append([]byte(nil), policy.RequestHash...)
+	policy.Usage.Plan = append(json.RawMessage(nil), policy.Usage.Plan...)
+	policy.Usage.MemoryRefs = append([]memory.Ref(nil), policy.Usage.MemoryRefs...)
+	copy.Policy = policy
+	return copy
 }

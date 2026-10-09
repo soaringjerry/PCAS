@@ -113,7 +113,11 @@ The existing extraction and secretary cases retain their unresolved findings. Th
 
 The interactive storage adapter now uses the existing gateway ports and storage tables.
 Synthetic contracts cover accounting recovery, stage separation, input binding, deletion, and late-response rejection.
-Instruction-transfer CI passed at `6a78a0d`. Caller migration and complete interactive acceptance remain outstanding.
+Initial-adapter CI passed at `14d4b67`.
+
+The next candidate adds accounting continuation through the existing worker, without another model invocation.
+Synthetic checks cover restart, deleted inputs, interrupted executions, and late replies after a deputy lease changes.
+Exact-revision CI for that continuation, caller migration, and complete interactive acceptance remain outstanding.
 These changes remain foundation candidates. They have not been deployed.
 
 ## Documentation Changes

@@ -117,9 +117,38 @@ The private log retains that finding. The corrected fixture uses the actual secr
 A later check found that JSON `null` in an unavailable receipt was incorrectly compared with the original payload.
 Recovery now clears that body-free marker before input validation. The deletion contract verifies the rejection and retained accounting.
 
-Complete exact-revision CI, migrated deputy and secretary state checks, strict replay, and real default-channel acceptance remain outstanding.
+The [complete initial-adapter CI](https://github.com/soaringjerry/PCAS/actions/runs/37880846484) passed at `14d4b67`.
+That revision does not include the worker accounting continuation below.
+Migrated deputy and secretary state checks, strict replay, and real default-channel acceptance remain outstanding.
 This adapter implementation does not establish complete recovery after every possible process crash.
 A process can lose an unsaved response during a database outage; its started invocation must not be silently submitted again.
+
+### Accounting Continuation
+
+Status: candidate implementation. Complete exact-revision CI and caller migration remain pending.
+The existing deputy worker now continues interactive persistence and accounting without a repeated user request.
+Recovery can save a retained response or finish an existing billing receipt. It cannot invoke a provider or apply business results.
+
+| Sequence | Required result |
+|---|---|
+| Result storage fails, then the caller leaves. | The worker saves the retained response and finishes its original accounting. |
+| Accounting fails after result storage, then the process restarts. | The worker uses the existing receipt without a provider or original body. |
+| Input deletion occurs before accounting recovery. | Billing completes without restoring private bodies or applying the result. |
+| An execution ends while its call remains prepared. | Record that the provider did not start. Release any linked reservation. |
+| An execution ends while its call remains started. | Record an unknown outcome and retain its reservation. Do not submit a replacement. |
+| A response arrives after interruption. | Keep the interruption evidence, record the returned usage, and reject business application. |
+| Recovery repeats or runs concurrently. | Preserve one usage row, the original identities, and the existing invocation counter. |
+
+Recovery uses the existing worker's single-item scheduling discipline and the existing five-second persistence boundary.
+Remaining work stays pending in its cache or durable records. No item is dropped because another item was selected.
+Recovery results expose pending counts and identify whether those counts are complete.
+Background-job and interactive recovery policies remain separate.
+
+Synthetic contracts verify actual worker recovery after restart, input deletion, canceled persistence, and interrupted execution classification.
+They also verify late-response accounting, repeated recovery, and rejection after a deputy lease changes.
+An initial late-response check found that the old held state prevented settlement of returned usage.
+The adapter now returns that receipt to pending accounting. The same contract then passed.
+These checks use synthetic providers and an empty owned test database. They do not establish live caller acceptance.
 
 ## Call Contract
 

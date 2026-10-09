@@ -42,6 +42,10 @@ The [interactive storage adapter](../internal/postgres/model_calls_interactive.g
 It keeps separate invocation result keys, complete input binding, original accounting identities, and safe failure classifications.
 The source owner removes those private result bodies in its existing deletion transaction. Billing metadata remains available.
 
+The [accounting continuation](../internal/postgres/model_calls_interactive_recovery.go) uses the existing deputy worker.
+It saves retained responses and settles recorded usage without invoking a provider or applying business actions.
+Interrupted started calls retain unknown outcomes and reservations until their actual usage becomes available.
+
 The existing interactive callers have not yet migrated. Their legacy provider behavior remains an open boundary.
 This candidate adapter has synthetic checks. Complete replay and real default-channel acceptance remain pending.
 

@@ -211,29 +211,10 @@ func (g *Gateway) Call(ctx context.Context, request Request) (*PaidResult, error
 	if err := g.results.Save(ctx, request, saved); err != nil {
 		return nil, err
 	}
-	// An unavailable adapter made no invocation. All other attempts retain
-	// returned or partial usage even if their output cannot be applied.
-	if saved.CallErrorCode != "provider_unavailable" {
-		if err := g.accounting.Record(ctx, request, saved); err != nil {
-			return nil, g.accountingError(ctx, request, saved, err)
-		}
-	}
-	if err := g.accounting.Settle(ctx, request, saved); err != nil {
-		return nil, g.accountingError(ctx, request, saved, err)
-	}
-	if err := g.journal.AccountingState(ctx, request, saved, "settled"); err != nil {
+	if err := g.finishAccounting(ctx, request, saved); err != nil {
 		return nil, err
 	}
 	if saved.CallErrorCode != "" {
-		if saved.CallErrorCode == ErrOutcomeUnknown.Error() {
-			// The durable journal retains the unknown attempt and partial usage.
-			// Its response cannot be applied. A new queue lease may recover it
-			// only after the journal verifies the recorded limit and budget.
-			if err := g.results.Forget(ctx, request, saved); err != nil {
-				return nil, err
-			}
-			return nil, &Failure{Code: saved.CallErrorCode, InvocationID: saved.InvocationID, Details: saved.FailureDetails, ReservedCost: saved.ReservedCost, Reservation: saved.Reservation}
-		}
 		if err := g.results.Forget(ctx, request, saved); err != nil {
 			return nil, err
 		}
@@ -243,6 +224,30 @@ func (g *Gateway) Call(ctx context.Context, request Request) (*PaidResult, error
 		return nil, ErrNotApplicable
 	}
 	return saved, nil
+}
+
+// RecoverAccounting finishes a verified stored receipt. It never selects a
+// provider, reserves a new budget, or submits a model call. Storage supplies the
+// original invocation and verifies its durable owner and billing links first.
+func (g *Gateway) RecoverAccounting(ctx context.Context, request Request, saved *PaidResult) error {
+	if request.OwnerID == "" || request.ExecutionID == "" || saved == nil || saved.InvocationID == "" || saved.Reservation == "" || saved.Provider == "" || saved.Model == "" {
+		return memory.ErrInvalid
+	}
+	return g.finishAccounting(ctx, request, saved)
+}
+
+func (g *Gateway) finishAccounting(ctx context.Context, request Request, saved *PaidResult) error {
+	// An unavailable adapter made no invocation. All other attempts retain
+	// returned or partial usage even if their output cannot be applied.
+	if saved.CallErrorCode != "provider_unavailable" {
+		if err := g.accounting.Record(ctx, request, saved); err != nil {
+			return g.accountingError(ctx, request, saved, err)
+		}
+	}
+	if err := g.accounting.Settle(ctx, request, saved); err != nil {
+		return g.accountingError(ctx, request, saved, err)
+	}
+	return g.journal.AccountingState(ctx, request, saved, "settled")
 }
 
 func outcomeUnknown(err error) bool {

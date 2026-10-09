@@ -28,6 +28,19 @@ type Store struct {
 	models         *ai.Registry
 	calls          *modelcall.Gateway
 	blobs          memory.BlobStore
+	businessClock  func() time.Time
+}
+
+// SetBusinessClock sets the time used for business input and date interpretation.
+// Configure it before operations start. Nil restores actual time. Lease expiry,
+// access checks, retries, operational quotas, and accounting use actual time.
+func (s *Store) SetBusinessClock(now func() time.Time) { s.businessClock = now }
+
+func (s *Store) businessNow() time.Time {
+	if s.businessClock != nil {
+		return s.businessClock()
+	}
+	return time.Now()
 }
 
 func (s *Store) SetModels(models *ai.Registry) {

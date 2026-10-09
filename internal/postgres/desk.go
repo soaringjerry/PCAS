@@ -99,7 +99,7 @@ func (s *Store) AnswerDesk(ctx context.Context, scope memory.Scope, agentID, que
 	}
 	loc := deskLocation(settings)
 	var prompt strings.Builder
-	prompt.WriteString(deskNow(loc))
+	prompt.WriteString(s.deskNow(loc))
 	if settings.City != "" {
 		fmt.Fprintf(&prompt, "用户所在城市：%s（问天气、附近等没说地点时默认用它）\n", settings.City)
 	} else {
@@ -349,8 +349,8 @@ func deskLocation(settings workspace.Settings) *time.Location {
 	}
 	return loc
 }
-func deskNow(loc *time.Location) string {
-	now := time.Now().In(loc)
+func (s *Store) deskNow(loc *time.Location) string {
+	now := s.businessNow().In(loc)
 	return fmt.Sprintf("现在：%s 星期%s（%s）\n", now.Format("2006-01-02 15:04"), []string{"日", "一", "二", "三", "四", "五", "六"}[now.Weekday()], loc)
 }
 

@@ -319,9 +319,9 @@ func (s *Store) ProcessTopicProject(ctx context.Context, j worker.Job) error {
 	promptInput := input
 	promptInput.Projects = input.Projects[start:end]
 	if loc, e := time.LoadLocation(input.Timezone); e == nil {
-		promptInput.Now = time.Now().In(loc).Format("2006-01-02")
+		promptInput.Now = s.businessNow().In(loc).Format("2006-01-02")
 	} else {
-		promptInput.Now = time.Now().UTC().Format("2006-01-02")
+		promptInput.Now = s.businessNow().UTC().Format("2006-01-02")
 	}
 	result, err := s.generatePaid(ctx, j, "topic_project", topicProjectInstructions, asJSON(promptInput), refs)
 	if err != nil {

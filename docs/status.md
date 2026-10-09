@@ -93,7 +93,7 @@ The [architecture acceptance](architecture.md#10-foundation-acceptance) governs 
 |---|---|---|
 | First | Architecture documents, responsibilities, and existing-path inventory. | Initial direction and inventory recorded. Refresh affected paths before each migration. |
 | Second | Shared gateway, registered prompts, and architecture checks. | First background skeleton released at `935ad5b`. Complete provider and owner coverage remains outstanding. |
-| Third | Recorded production-copy replay. | [Assigned scope](tasks/foundation-recorded-replay.md) in progress before business-domain migration. Not delivered. |
+| Third | Recorded production-copy replay. | [Evidence](evaluations/2026-10-08-foundation-recorded-replay.md) recorded. Background and secretary transport replay work without live calls. Business-clock control passed. Complete state equivalence remains incomplete. |
 | Fourth | Owner pilot, then complete business paths and remaining model calls. | Domain extraction has not started. Keep temporary adapters until their named callers migrate. |
 | Fifth | Unified activity queries, declared event responses, and causal-chain limits. | Targets. Existing records and queue supply their starting mechanisms. |
 | Sixth | Complete five-layer and whole-system acceptance. | Outstanding. Include resource comparisons and traces for incorrect and missing expected actions. |

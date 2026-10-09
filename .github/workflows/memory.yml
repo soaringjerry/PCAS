@@ -3,9 +3,9 @@ name: memory
 on:
   push:
     branches: [main, "phase*/main"]
-    paths: ["cmd/**", "internal/**", "services/**", "config/**", "go.mod", "go.sum", "Makefile", "Dockerfile", "compose.yml", "scripts/test-shard.sh", ".github/workflows/memory.yml"]
+    paths: ["cmd/**", "internal/**", "services/**", "config/**", "go.mod", "go.sum", "Makefile", "Dockerfile", "compose.yml", "scripts/test-shard.sh", "scripts/foundation_model_replay.py", "scripts/model_replay_test.py", "scripts/foundation_replay_compare.py", "scripts/foundation_replay_identity.py", "scripts/replay_state_test.py", ".github/workflows/memory.yml"]
   pull_request:
-    paths: ["cmd/**", "internal/**", "services/**", "config/**", "go.mod", "go.sum", "Makefile", "Dockerfile", "compose.yml", "scripts/test-shard.sh", ".github/workflows/memory.yml"]
+    paths: ["cmd/**", "internal/**", "services/**", "config/**", "go.mod", "go.sum", "Makefile", "Dockerfile", "compose.yml", "scripts/test-shard.sh", "scripts/foundation_model_replay.py", "scripts/model_replay_test.py", "scripts/foundation_replay_compare.py", "scripts/foundation_replay_identity.py", "scripts/replay_state_test.py", ".github/workflows/memory.yml"]
 
 
 # One run per branch at a time: a newer push on the same branch cancels the
@@ -39,6 +39,8 @@ jobs:
           cache: true
       - run: go mod download
       - run: make fmt-check lint build
+      - run: python3 scripts/model_replay_test.py
+      - run: python3 scripts/replay_state_test.py
       - run: go test -race -timeout 30m $(go list ./cmd/... ./internal/... | grep -v '/internal/postgres$')
 
   # The PostgreSQL integration tests take most of the time, so they run in

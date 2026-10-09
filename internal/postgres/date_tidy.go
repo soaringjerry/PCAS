@@ -212,7 +212,7 @@ func (s *Store) ProcessDateTidy(ctx context.Context, j worker.Job) error {
 		return memory.ErrInvalid
 	}
 	class := parts[1]
-	now := time.Now()
+	now := s.businessNow()
 	var input dateTidyInput
 	var open bool
 	var clipped int

@@ -127,7 +127,7 @@ func (s *Store) ProcessEffort(ctx context.Context, j worker.Job) error {
 	if err != nil {
 		return err
 	}
-	input := effortInput{DailyHours: dailyWorkHours, At: time.Now().UTC(), Items: []workspace.Item{}}
+	input := effortInput{DailyHours: dailyWorkHours, At: s.businessNow().UTC(), Items: []workspace.Item{}}
 	skip := false
 	err = pgx.BeginTxFunc(ctx, s.pool, pgx.TxOptions{IsoLevel: pgx.RepeatableRead}, func(tx pgx.Tx) error {
 		if err := lockJob(ctx, tx, j); err != nil {

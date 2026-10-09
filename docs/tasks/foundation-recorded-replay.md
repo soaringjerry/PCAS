@@ -21,12 +21,16 @@ A replay cannot call a live provider when a recording is absent or does not matc
 | Recording | Capture application requests, selected jobs, actual provider input and output, outcomes, usage, and resulting state. |
 | Replay | Exercise existing application paths with recorded provider replies. Reuse paid-result storage for application-recovery scenarios. |
 | Comparison | Compare owner data, receipts, effects, and invocation selection. Report differences and unavailable coverage explicitly. |
+| Business clock | The coordinator approved this extension. Add an injectable clock for business input and date interpretation. Production uses actual time by default. The copy uses the same fixed case time for recording and replay. |
 | Documents | Index the scope and acceptance report. Update the milestone state only after evidence exists. |
 
 Use `/root/PCAS-worktrees/foundation-recorded-replay` on branch `foundation/recorded-replay`.
 Do not change the shared `/root/PCAS` worktree.
 Do not move business-domain packages, change business rules, or add production database migrations in this batch.
 Do not change production instructions or output schemas.
+Keep lease expiry, access checks, timeouts, retries, usage timestamps, and budget settlement on actual time.
+Do not replace database `now()` with the business clock.
+Keep operational quotas on actual time. A fixed business date cannot reset a spending or call limit.
 
 ## Isolation and Evidence
 
@@ -57,6 +61,7 @@ Missing, duplicate, or unused replies produce explicit failed or incomplete resu
 
 Raw snapshots retain all fields. Comparison rules identify each excluded runtime field and its reason.
 Time changes and generated identities must not hide different business decisions, version checks, relationships, deadlines, or writes.
+Record the case business time and each operation's actual start time separately.
 When deterministic matching is unavailable, report that case as incomplete.
 Do not replace a strict match with arbitrary text stripping or response lookup by request order alone.
 
@@ -85,12 +90,15 @@ The owner migration, activity query, event limits, and remaining test layers sti
 The owned database and file copy was restored from the verified shared-skeleton release backup.
 Migration `062_model_calls.sql` was applied only to that copy during preparation.
 No ordinary API or worker loop was started on the copy.
-Actual model capture and before-and-after replay remain incomplete.
+[Initial real-model recordings](../evaluations/2026-10-08-foundation-recorded-replay.md) now exist.
+Background and secretary transport replay completed without live calls.
+Strict state equivalence remains incomplete.
+The coordinator approved the business-clock extension after a strict replay rejected a changed current-minute input.
+The new secretary recording and strict offline replay passed with the same fixed business time.
 
-Formatting, vet, build, resolved architecture, and documentation checks passed for this scope record.
-The runtime source is unchanged from released revision `935ad5b`, which passed complete CI.
-Full local commands were not repeated for this documentation-only record.
-Earlier interrupted full local attempts remain incomplete, as recorded in the shared-skeleton acceptance.
+The original preparation record changed documents only. Its runtime remained at released revision `935ad5b`.
+The approved clock extension now changes runtime source. Current full checks and direct integration remain outstanding.
+Earlier interrupted or timed-out full local attempts remain incomplete, as recorded in the acceptance reports.
 
 ## Sol Window Prompt
 
@@ -108,6 +116,9 @@ Use an explicitly owned disposable production-data copy and private artifacts ou
 Keep existing synthetic evaluation contracts unchanged.
 Do not move domain packages or change production prompts, schemas, or business rules.
 Do not add a production migration in this batch.
+Configure the approved business clock before operations start.
+Use the same fixed case time for recording and replay.
+Keep leases, access checks, retries, timeouts, operational quotas, and accounting on actual time.
 
 Record real requests, selected background operations, and actual default Codex replies.
 Replay through existing application paths with no live-provider fallback.

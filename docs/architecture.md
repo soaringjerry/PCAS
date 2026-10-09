@@ -498,6 +498,13 @@ Replay must not silently call a live provider when a recorded reply is missing.
 Keep private data, credentials, actual prompts, and replies outside Git.
 Synthetic checks do not substitute for the required production-copy replay.
 
+Business time is an explicit dependency for date interpretation and model input.
+Production uses actual time by default. A replay copy can use a fixed case time.
+Recording and replay must use the same business time. Preserve the complete input match.
+
+Lease expiry, access checks, timeouts, retries, operational quotas, usage timestamps, and budget settlement use actual time.
+Database `now()` remains an execution clock. Record business time and execution time separately.
+
 When migrating a domain, replace its phase-coded tests with behavior-named owner contract tests.
 Remove prompt-wording assertions and copied earlier implementations from that migrated domain.
 Keep exact output-schema checks, including required field order.

@@ -59,6 +59,7 @@ Keep Phase 2.0 archived.
 
 - [Backend acceptance runner](../web/tests/support/README.md).
 - [Doing evaluation tool](../cmd/pcas-eval/doing/README.md).
+- [Production-copy replay diagnostic](../cmd/pcas-eval/production-replay/README.md).
 - [Recall evaluation dataset](../testdata/phase2/eval/README.md).
 - [Hard recall dataset](../testdata/phase2/eval/hard/README.md).
 - [Doing dataset](../testdata/phase2_5/doing/README.md).
@@ -91,6 +92,7 @@ The groups below contain historical material and link-compatibility files, not a
 
 - [Phase 3.9 existing paths and baseline evidence](evaluations/2026-10-08-foundation-inventory.md)
 - [Foundation shared model skeleton checks](evaluations/2026-10-08-foundation-shared-skeleton.md)
+- [Foundation recorded replay initial evidence](evaluations/2026-10-08-foundation-recorded-replay.md)
 - [2026-09-29 连续记忆验收](evaluations/2026-09-29.md)
 - [Memory and permission boundary repair — 2026-09-30](evaluations/2026-09-30-memory-boundaries.md)
 - [第 1 阶段黄金路径验收（任务 E）](evaluations/2026-09-30-phase1-acceptance.md)

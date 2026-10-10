@@ -25,7 +25,6 @@ func phase35Model(t *testing.T, s *Store, reply func(http.ResponseWriter, *http.
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { calls.Add(1); reply(w, r) }))
 	t.Cleanup(srv.Close)
 	s.SetModels(&ai.Registry{HTTP: srv.Client(), Config: ai.Configuration{Extraction: "model", Providers: []ai.Provider{{ID: "model", Name: "虚构青岚验收", Protocol: "openai", BaseURL: srv.URL, Model: "phase35-fiction", CostMode: "free", MaxOutput: 8192}}}})
-	useSyntheticGateway(s)
 	return calls
 }
 func phase35Extract(t *testing.T, s *Store, scope memory.Scope, ref memory.Ref) {

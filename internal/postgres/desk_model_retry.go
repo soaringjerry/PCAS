@@ -37,7 +37,8 @@ func (s *Store) generateSecretaryModelWithRetry(workCtx context.Context, scope m
 	policy.InputPolicy = "current_access"
 	request.Policy, request.Stage, request.ProviderID = policy, "answer", agentID
 	request.Instructions, request.Schema = prompts.Must("secretary"), prompts.MustSchema("secretary-output")
-	request.Search, request.ContextBuilderVersion = true, "secretary-answer-v1"
+	// The reply parser validates the output, so an ordinary provider can answer.
+	request.Search, request.ModeFallback, request.ContextBuilderVersion = true, true, "secretary-answer-v1"
 	request.Prompt = asJSON(map[string]string{"rawPrompt": prompt})
 	request.Refs = uniqueRefs(meta.Usage.MemoryRefs)
 	stage, attempt := "model", 0

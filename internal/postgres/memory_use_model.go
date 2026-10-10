@@ -94,7 +94,7 @@ func (s *Store) useModelCall(ctx, persist context.Context, scope memory.Scope, a
 	}
 	policy.AgentID, policy.Usage = agent, usage
 	request.Policy, request.Stage, request.ProviderID = policy, stage, agent
-	request.Instructions, request.Schema = instructions, schema
+	request.Instructions, request.Schema, request.ModeFallback = instructions, schema, true
 	request.ContextBuilderVersion = "memory-use-v1"
 	request.Prompt = asJSON(map[string]string{"rawPrompt": prompt})
 	request.Refs = uniqueRefs(usage.MemoryRefs)

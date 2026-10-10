@@ -21,15 +21,11 @@ import (
 // Remove each exception when its complete workflow enters the gateway.
 func TestProductionProviderCallsUseDeclaredMigrationBoundaries(t *testing.T) {
 	allowed := map[string]int{
-		"internal/modelcall/gateway.go:Call:GenerateProvider":                 1,
-		"internal/modelcall/gateway.go:Call:EmbedProviderUsage":               1,
-		"internal/httpapi/model_settings.go:modelSettingsRoutes:Route":        1,
-		"internal/httpapi/workspace.go:workspaceRoutes:Route":                 1,
-		"internal/postgres/attachments.go:parseAttachment:TranscribeUsage":    1,
-		"internal/postgres/desk.go:AnswerDesk:GenerateWithSearch":             1,
-		"internal/postgres/processing.go:ProcessEmbedding:EmbedProviderUsage": 1,
-		"internal/postgres/vision.go:readImage:Vision":                        1,
-		"internal/telegram/poller.go:handle:Transcribe":                       1,
+		"internal/modelcall/gateway.go:Call:GenerateProvider":              1,
+		"internal/postgres/attachments.go:parseAttachment:TranscribeUsage": 1,
+		"internal/modelcall/embedding.go:CallEmbedding:EmbedProviderUsage": 1,
+		"internal/postgres/vision.go:readImage:Vision":                     1,
+		"internal/telegram/poller.go:handle:Transcribe":                    1,
 	}
 	root, err := filepath.Abs("../..")
 	if err != nil {
@@ -116,7 +112,7 @@ func TestProductionProviderCallsUseDeclaredMigrationBoundaries(t *testing.T) {
 						// Complete domain and dynamic-SQL ownership remains in
 						// the foundation's later owner-boundary migration.
 						value := info.Types[call.Args[1]].Value
-						if value != nil && value.Kind() == constant.String && journalWrite.MatchString(constant.StringVal(value)) && filepath.ToSlash(name) != "internal/postgres/model_calls.go" && filepath.ToSlash(name) != "internal/postgres/model_calls_interactive.go" && filepath.ToSlash(name) != "internal/postgres/model_calls_interactive_recovery.go" {
+						if value != nil && value.Kind() == constant.String && journalWrite.MatchString(constant.StringVal(value)) && filepath.ToSlash(name) != "internal/postgres/model_calls.go" && filepath.ToSlash(name) != "internal/postgres/model_calls_interactive.go" && filepath.ToSlash(name) != "internal/postgres/model_calls_interactive_recovery.go" && filepath.ToSlash(name) != "internal/postgres/model_calls_embedding.go" {
 							t.Errorf("call journal mutation outside its storage owner: %s:%s", name, fn.Name.Name)
 						}
 					}

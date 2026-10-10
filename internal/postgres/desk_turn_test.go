@@ -26,7 +26,6 @@ import (
 func secretaryModel(t *testing.T, s *Store, handler http.HandlerFunc) {
 	t.Helper()
 	ordinarySecretaryModel(t, s, handler)
-	useSyntheticGateway(s)
 }
 
 // Provider-capability checks use the unwrapped registry. Business contracts

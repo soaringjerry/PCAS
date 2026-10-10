@@ -95,30 +95,34 @@ func TestPhase25B2_X2_12_ImportedUserStatementUsableWithoutConfirmation(t *testi
 	if m.Trust != "stated" || m.Confirmation != "unknown" {
 		t.Errorf("archive trust/legacy=%s/%s", m.Trust, m.Confirmation)
 	}
-	// First query the unknown item alone, ruling out text de-duplication as
-	// a reason for its later absence beside the otherwise identical control.
-	soloModel := f.model(t, func(_ *http.Request, _ int, _ phase25B234ModelRequest) phase25B234ModelReply {
-		out, _ := json.Marshal(map[string]any{"answer": "虚构本人原话回答。", "used": []string{string(ref.ID)}})
-		return phase25B234ModelReply{content: string(out)}
-	})
-	soloAgent := f.answerAgent(t)
-	f.index(t)
-	soloAnswer, err := f.store.AnswerDesk(f.ctx, f.scope, soloAgent, "AcceptanceArchive", nil)
-	if err != nil {
-		t.Fatal(err)
+	// The secretary is the consumer. The retired legacy answer interface had
+	// this role before. Each used alias must become a stored dependency.
+	dependencies := func(turn workspace.DeskTurnResponse) []memory.Ref {
+		t.Helper()
+		var refs []memory.Ref
+		var data []byte
+		if err := f.db.QueryRow(f.ctx, `SELECT dependencies FROM desk_turns WHERE owner_id=$1 AND id=$2`, f.scope.OwnerID, turn.Turn.ID).Scan(&data); err != nil || json.Unmarshal(data, &refs) != nil {
+			t.Fatal(err)
+		}
+		return refs
 	}
-	if len(soloAnswer.Used) != 1 {
-		t.Errorf("unconfirmed item alone not usable: %+v", soloAnswer.Used)
-	}
-	soloVisible := false
-	for _, request := range soloModel.calls() {
-		for _, msg := range request.Messages {
-			var content string
-			_ = json.Unmarshal(msg.Content, &content)
-			if strings.Contains(content, string(ref.ID)) {
-				soloVisible = true
+	has := func(refs []memory.Ref, want memory.Ref) bool {
+		for _, r := range refs {
+			if r.ID == want.ID {
+				return true
 			}
 		}
+		return false
+	}
+	// First query the unknown item alone, ruling out text de-duplication as
+	// a reason for its later absence beside the otherwise identical control.
+	soloVisible := false
+	f.model(t, func(_ *http.Request, _ int, r phase25B234ModelRequest) phase25B234ModelReply {
+		soloVisible = soloVisible || strings.Contains(phase25B4Prompt(r), "白鹭月报先写结论")
+		return phase25B4ReplyJSON(phase25B4Reply{text: "虚构本人原话回答。", used: []string{"M1"}}, false)
+	})
+	if solo := dependencies(f.secretaryTurn(t, "AcceptanceArchive", "")); !has(solo, ref) {
+		t.Errorf("unconfirmed item alone not usable: %+v", solo)
 	}
 	if !soloVisible {
 		t.Error("unconfirmed item alone absent from model input")
@@ -131,38 +135,15 @@ func TestPhase25B2_X2_12_ImportedUserStatementUsableWithoutConfirmation(t *testi
 	if _, err := f.store.Commit(f.ctx, f.scope, memory.CommitRequest{RequestID: memory.NewID(), Claims: []memory.Claim{{Revision: memory.Revision{Ref: confirmed, State: "active"}, SubjectID: subject, Predicate: "acceptance_note", Value: value, Nature: "fact", Acquisition: "direct", Confirmation: "confirmed", Evidence: []memory.ID{confirmedEvidence}}}, Evidence: []memory.Evidence{{ID: confirmedEvidence, Source: source, Target: confirmed, Acquisition: "direct", Stance: "supports", Locator: map[string]json.RawMessage{"role": json.RawMessage(`"user"`)}}}}); err != nil {
 		t.Fatal(err)
 	}
-	f.index(t)
-	agent := f.answerAgent(t)
-	model := f.model(t, func(_ *http.Request, _ int, r phase25B234ModelRequest) phase25B234ModelReply {
-		data, _ := json.Marshal(map[string]any{"answer": "虚构回复：月报先写结论。", "used": []string{string(ref.ID), string(confirmed.ID)}})
-		return phase25B234ModelReply{content: string(data)}
+	f.model(t, func(_ *http.Request, _ int, _ phase25B234ModelRequest) phase25B234ModelReply {
+		return phase25B4ReplyJSON(phase25B4Reply{text: "虚构回复：月报先写结论。", used: []string{"M1", "M2"}}, false)
 	})
-	answer, err := f.store.AnswerDesk(f.ctx, f.scope, agent, "AcceptanceArchive", nil)
-	if err != nil {
-		t.Fatal(err)
+	both := dependencies(f.secretaryTurn(t, "AcceptanceArchive", ""))
+	if !has(both, confirmed) {
+		t.Fatal("confirmed same-source positive control absent from the secretary's memories")
 	}
-	if len(answer.Used) != 2 {
-		t.Errorf("unconfirmed direct memory not usable: %+v", answer.Used)
-	}
-	contains := false
-	controlVisible := false
-	for _, r := range model.calls() {
-		for _, msg := range r.Messages {
-			var content string
-			_ = json.Unmarshal(msg.Content, &content)
-			if strings.Contains(content, string(ref.ID)) {
-				contains = true
-			}
-			if strings.Contains(content, string(confirmed.ID)) {
-				controlVisible = true
-			}
-		}
-	}
-	if !controlVisible {
-		t.Fatal("confirmed same-source positive control absent from secretary prompt")
-	}
-	if !contains {
-		t.Error("unconfirmed same-source user statement ID absent from secretary prompt")
+	if !has(both, ref) {
+		t.Error("unconfirmed same-source user statement absent from the secretary's memories")
 	}
 	f.assertRevisions(t, ref, confirmed)
 }

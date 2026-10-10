@@ -167,15 +167,8 @@ func run(ctx context.Context, args []string, logger *slog.Logger) error {
 	if err != nil {
 		return err
 	}
-	// A key saved in Settings wins; the environment key is the fallback.
-	router := ai.NewRouter(func() string {
-		if key := models.DecisionKey(); key != "" {
-			return key
-		}
-		return os.Getenv("TYPESAFE_API_KEY")
-	})
 	notifier := postgres.NewNotifier(db, notify.Settings{Path: notify.SettingsPath()}, cfg.PublicURL)
-	api := httpapi.New(memory.NewService(db), db, httpapi.NewSessions(credentials, cfg.PublicURL), db.Ping, logger, httpapi.Options{Continuity: db, Connectors: db, Attachments: db, Writer: db, Workspace: notifier, Editor: db, Activity: db, Models: models, Router: router, WebDir: webDir})
+	api := httpapi.New(memory.NewService(db), db, httpapi.NewSessions(credentials, cfg.PublicURL), db.Ping, logger, httpapi.Options{Continuity: db, Connectors: db, Attachments: db, Writer: db, Workspace: notifier, Editor: db, Activity: db, Models: models, WebDir: webDir})
 	workCtx, stopWorkers := context.WithCancel(ctx)
 	defer stopWorkers()
 	go func() { _ = db.RunAgents(workCtx, logger) }()

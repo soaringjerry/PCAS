@@ -11,7 +11,9 @@ import (
 	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/soaringjerry/PCAS/internal/ai"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/modelcall"
 	"github.com/soaringjerry/PCAS/internal/prompts"
 	"github.com/soaringjerry/PCAS/internal/worker"
 	"github.com/soaringjerry/PCAS/internal/workspace"
@@ -188,33 +190,21 @@ func (s *Store) ProcessEmbedding(ctx context.Context, j worker.Job) (err error) 
 	for _, text := range texts {
 		cost += float64(len(text)+16) * provider.InputPerMillion / 1e6
 	}
-	reservationID, err := s.reserveModelCostID(ctx, j.OwnerID, cost, &j)
-	if err != nil {
+	// The call is its own execution. Its root and cause name the paying job.
+	vectors, err := s.calls.CallEmbedding(ctx, modelcall.EmbeddingRequest{OwnerID: j.OwnerID, ExecutionID: memory.NewID(), RootExecutionID: j.ID, CausationID: j.ID, Function: "embedding", Stage: j.Stage, Provider: provider, Texts: texts, Refs: refs, Estimate: cost, Job: &j})
+	var failure *modelcall.Failure
+	var persistence *modelcall.PersistenceError
+	switch {
+	case err == nil:
+	case errors.As(err, &persistence):
 		return err
-	}
-	actualCost := 0.0
-	defer func() {
-		if settleErr := s.settleModelCost(ctx, j.OwnerID, reservationID, actualCost); settleErr != nil {
-			err = errors.Join(err, settleErr)
-		}
-	}()
-	vectors := []memory.Embedding{}
-	for start := 0; start < len(texts); start += 32 {
-		v, usage, err := s.models.EmbedProviderUsage(ctx, provider, texts[start:min(start+32, len(texts))])
-		if errors.Is(err, memory.ErrUnavailable) && start == 0 {
-			if err := s.releaseUnavailableReservation(ctx, j, reservationID); err != nil {
-				return err
-			}
-			return errors.Join(memory.ErrUnavailable, &worker.JobError{Code: "provider_unavailable", Retry: true})
-		}
-		actualCost += usage.Cost
-		if err := s.recordUsage(ctx, modelUsage{OwnerID: j.OwnerID, ID: memory.NewID(), Purpose: "embedding", AgentID: provider.ID, Model: provider.Model, DurationMS: usage.DurationMS, InputTokens: usage.InputTokens, InputEstimated: usage.InputEstimated, Cost: usage.Cost, CostEstimated: usage.CostEstimated, JobID: string(j.ID), MemoryRefs: refs[start:min(start+32, len(refs))]}); err != nil {
-			return err
-		}
-		if err != nil {
-			return &worker.JobError{Code: "model_call_failed", Retry: cost == 0}
-		}
-		vectors = append(vectors, v...)
+	case errors.Is(err, modelcall.ErrNotAvailable), errors.Is(err, ai.ErrUnsupportedCapability), errors.As(err, &failure) && failure.Code == modelcall.ErrNotAvailable.Error():
+		return errors.Join(memory.ErrUnavailable, &worker.JobError{Code: "provider_unavailable", Retry: true})
+	case errors.As(err, &failure):
+		// A paid call is not submitted again. A free call can use the queue's retry.
+		return &worker.JobError{Code: "model_call_failed", Retry: cost == 0}
+	default:
+		return err
 	}
 	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		if err := lockJob(ctx, tx, j); err != nil {

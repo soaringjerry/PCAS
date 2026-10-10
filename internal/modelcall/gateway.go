@@ -39,6 +39,13 @@ type Request struct {
 	Prompt                json.RawMessage
 	Refs                  []memory.Ref
 	Policy                any
+	// ModeFallback states that the caller validates the output itself.
+	// When the selected provider lacks schema or search, the gateway submits
+	// ordinary generation and names the missing capabilities in Unsupported.
+	// Without it, a missing capability fails before submission.
+	ModeFallback bool
+	// Unsupported is set by the gateway for the journal. Callers leave it empty.
+	Unsupported []string
 }
 
 func (r Request) RequiredCapabilities() []string {
@@ -172,11 +179,20 @@ func (g *Gateway) Call(ctx context.Context, request Request) (*PaidResult, error
 		if !g.providers.Available(provider.ID) {
 			return nil, ErrNotAvailable
 		}
+		mode := ai.GenerationMode{Search: request.Search, Schema: request.Schema.Bytes()}
+		request.Unsupported = nil
+		if request.ModeFallback {
+			if len(mode.Schema) > 0 && errors.Is(g.providers.CheckGeneration(provider, ai.GenerationMode{Schema: mode.Schema}), ai.ErrUnsupportedCapability) {
+				mode.Schema, request.Unsupported = nil, append(request.Unsupported, "output_schema")
+			}
+			if mode.Search && errors.Is(g.providers.CheckGeneration(provider, ai.GenerationMode{Search: true}), ai.ErrUnsupportedCapability) {
+				mode.Search, request.Unsupported = false, append(request.Unsupported, "web_search")
+			}
+		}
 		invocation, err := g.journal.Prepare(ctx, request, provider)
 		if err != nil {
 			return nil, err
 		}
-		mode := ai.GenerationMode{Search: request.Search, Schema: request.Schema.Bytes()}
 		if err := g.providers.CheckGeneration(provider, mode); err != nil {
 			return nil, errors.Join(err, g.journal.PreparationFailed(ctx, request, invocation, err))
 		}

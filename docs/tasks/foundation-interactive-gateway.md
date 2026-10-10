@@ -334,6 +334,21 @@ Complete local `make test-integration` and the large opt-in context fixture were
 The complete integration-branch and main CI runs supply the full sharded database checks.
 No frontend source changed, so separate local frontend checks were not required.
 
+## Correction 2026-10-10
+
+The release at `022a912` made output schema and web search necessary for the secretary, the readers, the self-checks, and the deputy.
+An OpenAI-compatible provider has neither capability. On such a provider, each of these functions failed before submission.
+Before that release, the same provider answered with ordinary generation, and the caller validated the output.
+
+The live default channel is Codex, so the live check did not show the failure.
+The browser regression workflow shows it. That workflow runs only for pull requests, and the Phase 3.9 commits were pushed without one.
+The storage tests did not show it, because their fixtures replaced the capability check with one that accepted every mode.
+
+The correction adds an explicit declaration to the gateway request.
+A caller that validates its own output declares a mode fallback. The gateway then submits ordinary generation and records the missing capabilities.
+A request without the declaration still fails before submission.
+The fixtures that accepted every mode are removed. The tests use the actual capability check.
+
 ## Call Contract
 
 Extend `modelcall.Request` instead of adding another application model wrapper.
@@ -345,6 +360,7 @@ Required capabilities and actual modes must agree.
 Keep model adapters under the existing `internal/ai` boundary.
 Add mode support to that provider boundary without permitting application callbacks to invoke models elsewhere.
 Unsupported required schema or search capability returns an explicit recorded failure before submission.
+The [2026-10-10 correction](#correction-2026-10-10) restores ordinary generation for callers that validate their own output.
 Do not implement a new provider protocol or silently select another model in this batch.
 Existing optional modes need a declared fallback contract before they can be used.
 

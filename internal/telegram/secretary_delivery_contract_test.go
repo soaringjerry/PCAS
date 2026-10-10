@@ -27,7 +27,7 @@ func stabilizationSecretaryModel(t *testing.T, s *postgres.Store) *atomic.Int32 
 		_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": map[string]string{"content": `{"reply":"安排好了","actions":[{"op":"create_task","title":"Telegram事项"}]}`}}}})
 	}))
 	t.Cleanup(server.Close)
-	configureSyntheticGateway(s, &ai.Registry{HTTP: server.Client(), Config: ai.Configuration{Extraction: "model", Providers: []ai.Provider{{ID: "model", Name: "测试秘书", Protocol: "openai", BaseURL: server.URL, Model: "test", MaxOutput: 1000, CostMode: "free"}}}})
+	s.SetModels(&ai.Registry{HTTP: server.Client(), Config: ai.Configuration{Extraction: "model", Providers: []ai.Provider{{ID: "model", Name: "测试秘书", Protocol: "openai", BaseURL: server.URL, Model: "test", MaxOutput: 1000, CostMode: "free"}}}})
 	return calls
 }
 
@@ -98,7 +98,7 @@ func TestTelegramTelegramOptionContinuesSameObject(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": map[string]string{"content": content}}}})
 	}))
 	defer server.Close()
-	configureSyntheticGateway(s, &ai.Registry{HTTP: server.Client(), Config: ai.Configuration{Extraction: "model", Providers: []ai.Provider{{ID: "model", Name: "测试秘书", Protocol: "openai", BaseURL: server.URL, Model: "test", MaxOutput: 1000, CostMode: "free"}}}})
+	s.SetModels(&ai.Registry{HTTP: server.Client(), Config: ai.Configuration{Extraction: "model", Providers: []ai.Provider{{ID: "model", Name: "测试秘书", Protocol: "openai", BaseURL: server.URL, Model: "test", MaxOutput: 1000, CostMode: "free"}}}})
 	b.enqueue(textUpdate(1, "安排会议"))
 	step(t, p)
 	first := stabilizationSecretarySnapshot(t, s, p, 1)

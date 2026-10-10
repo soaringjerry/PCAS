@@ -144,26 +144,27 @@ func TestDeputyGenerationRecoversWritesWithoutRepeatingPaidWork(t *testing.T) {
 	}
 }
 
-func TestDeputyRequiredSearchFailsBeforeSubmission(t *testing.T) {
+// A deputy on a provider without web search still completes its run. The
+// journal records that search was not submitted.
+func TestDeputyOnAProviderWithoutSearchCompletesAndRecordsTheFallback(t *testing.T) {
 	s, scope := testStore(t), owner()
 	var calls atomic.Int32
 	ordinarySecretaryModel(t, s, func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
-		secretaryModelReply(w, "Unexpected response.")
+		secretaryModelReply(w, "Fictitious draft result.")
 	})
-	state := workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "Fictitious unsupported search"})
-	state = workspaceCommand(t, s, scope, workspace.Command{Type: "requestRun", ThingID: state.Tasks[0].ID, AgentID: "model", Kind: "draft", Prompt: "Fictitious draft."})
-	if err := s.RunDeputyOnce(context.Background()); err != nil {
+	state := workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "Fictitious ordinary deputy"})
+	workspaceCommand(t, s, scope, workspace.Command{Type: "requestRun", ThingID: state.Tasks[0].ID, AgentID: "model", Kind: "draft", Prompt: "Fictitious draft."})
+	if err := s.RunDeputyOnce(WithMemoryTier(context.Background(), "light")); err != nil {
 		t.Fatal(err)
 	}
 	state, err := s.Snapshot(context.Background(), scope)
-	if err != nil || state.Runs[0].Status != "failed" || !strings.Contains(state.Runs[0].Error, "web_search") || calls.Load() != 0 {
+	if err != nil || state.Runs[0].Status != "done" || !strings.Contains(state.Runs[0].Output, "Fictitious draft result.") || calls.Load() == 0 {
 		t.Fatal(state.Runs, calls.Load(), err)
 	}
-	var held float64
-	var usages int
-	if err := s.pool.QueryRow(context.Background(), `SELECT reserved_cost::double precision,(SELECT count(*) FROM model_usage WHERE owner_id=$1) FROM agent_runs WHERE owner_id=$1 AND id=$2`, string(scope.OwnerID), state.Runs[0].ID).Scan(&held, &usages); err != nil || held != 0 || usages != 0 {
-		t.Fatal(held, usages, err)
+	var search, fallback string
+	if err := s.pool.QueryRow(context.Background(), `SELECT actual_mode->>'search',actual_mode->>'unsupportedFallback' FROM model_calls WHERE owner_id=$1 AND execution_id=$2 AND stage='answer' AND outcome='returned'`, string(scope.OwnerID), state.Runs[0].ID).Scan(&search, &fallback); err != nil || search != "false" || fallback != `["web_search"]` {
+		t.Fatal("the journal did not record the submitted mode", search, fallback, err)
 	}
 }
 

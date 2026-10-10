@@ -56,7 +56,6 @@ func sameTurnFakeModel(t *testing.T, s *Store, output string) *sameTurnModel {
 	server.Start()
 	t.Cleanup(server.Close)
 	s.SetModels(&ai.Registry{HTTP: server.Client(), Config: ai.Configuration{Extraction: "model", Providers: []ai.Provider{{ID: "model", Name: "F14假秘书", Protocol: "openai", BaseURL: server.URL, Model: "test", MaxOutput: 2048, CostMode: "free"}}}})
-	useSyntheticGateway(s)
 	return fake
 }
 

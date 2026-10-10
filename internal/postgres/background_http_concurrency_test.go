@@ -19,7 +19,6 @@ import (
 
 func phase26HTTPUserRequests(t *testing.T, f *phase26LoadedFixture, s *Store) map[string]func(context.Context) error {
 	t.Helper()
-	useSyntheticGateway(s)
 	api := httpapi.New(s, s, b1Auth{f.Scope}, s.Ping, slog.New(slog.NewTextHandler(io.Discard, nil)), httpapi.Options{Workspace: s, Editor: s, Writer: s})
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Keep the same declared light-tier foreground profile as the Store matrix.

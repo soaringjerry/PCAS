@@ -19,6 +19,7 @@ type generationFixture struct {
 	paid            *PaidResult
 	failAt          string
 	capabilityErr   error
+	ordinaryOnly    bool
 	failure         error
 	generationError error
 	afterReserve    func()
@@ -36,6 +37,14 @@ func (f *generationFixture) ExtractionID() string  { return "default" }
 func (f *generationFixture) Available(string) bool { return true }
 func (f *generationFixture) CheckGeneration(_ ai.Provider, mode ai.GenerationMode) error {
 	f.mode = mode
+	if f.ordinaryOnly {
+		if len(mode.Schema) > 0 {
+			return &ai.CapabilityError{Capability: "output_schema"}
+		}
+		if mode.Search {
+			return &ai.CapabilityError{Capability: "web_search"}
+		}
+	}
 	return f.capabilityErr
 }
 func (f *generationFixture) GenerateProvider(_ context.Context, p ai.Provider, _, _ string, modes ...ai.GenerationMode) (ai.Result, error) {
@@ -152,5 +161,24 @@ func TestBackgroundDefaultKeepsOrdinaryGenerationMode(t *testing.T) {
 	paid, err := New(fixture, fixture, fixture, fixture).Call(context.Background(), request)
 	if err != nil || paid.Provider != "default" || fixture.mode.Search || fixture.mode.Schema != nil || !reflect.DeepEqual(request.RequiredCapabilities(), []string{"text_generation"}) {
 		t.Fatalf("paid=%+v mode=%+v error=%v", paid, fixture.mode, err)
+	}
+}
+
+func TestModeFallbackSubmitsOrdinaryGenerationAndNamesMissingCapabilities(t *testing.T) {
+	fixture := &generationFixture{provider: ai.Provider{ID: "default", Model: "fictitious-model"}, ordinaryOnly: true}
+	request := generationRequest()
+	request.Schema, request.Search, request.ModeFallback = prompts.MustSchema("use-groups"), true, true
+	paid, err := New(fixture, fixture, fixture, fixture).Call(context.Background(), request)
+	if err != nil || paid == nil || fixture.calls != 1 || fixture.mode.Search || len(fixture.mode.Schema) != 0 {
+		t.Fatalf("paid=%+v mode=%+v error=%v", paid, fixture.mode, err)
+	}
+	if len(fixture.prepared.Unsupported) != 2 || fixture.prepared.Unsupported[0] != "output_schema" || fixture.prepared.Unsupported[1] != "web_search" || fixture.prepared.Schema.Name() != "use-groups" {
+		t.Fatal("the journal request did not name the missing capabilities", fixture.prepared.Unsupported)
+	}
+	// The same provider without the caller's declaration fails before submission.
+	strict := &generationFixture{provider: ai.Provider{ID: "default", Model: "fictitious-model"}, ordinaryOnly: true}
+	request.ModeFallback = false
+	if _, err := New(strict, strict, strict, strict).Call(context.Background(), request); !errors.Is(err, ai.ErrUnsupportedCapability) || strict.calls != 0 {
+		t.Fatal(err, strict.calls)
 	}
 }

@@ -87,7 +87,6 @@ func m1Setup(t *testing.T) (*Store, memory.Scope, *m1Model) {
 	}))
 	t.Cleanup(model.Close)
 	s.SetModels(&ai.Registry{HTTP: model.Client(), Config: ai.Configuration{Extraction: "model", Providers: []ai.Provider{{ID: "model", Name: "Fake secretary", Protocol: "openai", BaseURL: model.URL, Model: "fake", MaxOutput: 100, CostMode: "free"}}}})
-	useSyntheticGateway(s)
 	// A deterministic legacy OCR executable; no installed language packs needed.
 	bin := t.TempDir()
 	if err := os.WriteFile(filepath.Join(bin, "tesseract"), []byte("#!/bin/sh\nprintf 'legacy OCR text\\n'\n"), 0700); err != nil {

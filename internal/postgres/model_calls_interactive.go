@@ -508,6 +508,16 @@ func (a interactiveCalls) Start(ctx context.Context, r modelcall.Request, paid *
 			return err
 		}
 		mode := map[string]any{"search": r.Search}
+		if len(r.Unsupported) > 0 {
+			// The provider lacks these capabilities. The caller validates the
+			// ordinary output. Record the mode that was actually submitted.
+			mode["unsupportedFallback"] = r.Unsupported
+			for _, capability := range r.Unsupported {
+				if capability == "web_search" {
+					mode["search"] = false
+				}
+			}
+		}
 		if mainDeputy {
 			p := r.Policy.(interactiveCallPolicy)
 			if err := verifyRunTx(ctx, tx, memory.Scope{OwnerID: r.OwnerID, PrincipalID: p.AgentID}, workspace.Run{AgentID: p.AgentID, ThingID: p.ThingID, ContextVersions: r.Refs}); err != nil {
@@ -875,7 +885,7 @@ func deputyAnswerRequest(owner memory.ID, token string, snapshot reviseSnapshot)
 	}
 	return modelcall.Request{
 		OwnerID: owner, ExecutionID: memory.ID(run.ID), RootExecutionID: memory.ID(run.ID), Function: "deputy", Stage: "answer",
-		ProviderID: run.AgentID, Instructions: instruction, Schema: schema, Search: true, ContextBuilderVersion: "deputy-answer-v1",
+		ProviderID: run.AgentID, Instructions: instruction, Schema: schema, Search: true, ModeFallback: true, ContextBuilderVersion: "deputy-answer-v1",
 		Prompt: asJSON(snapshot), Refs: run.ContextVersions,
 		Policy: interactiveCallPolicy{Kind: "deputy", Token: token, Origin: run.CreatedAt, AgentID: run.AgentID, ThingID: run.ThingID, BudgetOwner: "deputy_run",
 			Usage: modelUsage{Purpose: "deputy", RunID: run.ID, Tier: run.MemoryTier, Plan: asJSON(usePlan{Groups: run.MemoryGroups})}},

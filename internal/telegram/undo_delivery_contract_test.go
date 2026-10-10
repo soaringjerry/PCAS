@@ -30,7 +30,7 @@ func TestTelegramWebThenTelegramAlreadyUndone(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": map[string]string{"content": `{"reply":"安排好了","actions":[{"op":"create_task","title":"T1 cross-channel"}]}`}}}})
 	}))
 	t.Cleanup(model.Close)
-	configureSyntheticGateway(s, &ai.Registry{HTTP: model.Client(), Config: ai.Configuration{Extraction: "model", Providers: []ai.Provider{{ID: "model", Name: "T1 local", Protocol: "openai", BaseURL: model.URL, Model: "test", MaxOutput: 1000, CostMode: "free"}}}})
+	s.SetModels(&ai.Registry{HTTP: model.Client(), Config: ai.Configuration{Extraction: "model", Providers: []ai.Provider{{ID: "model", Name: "T1 local", Protocol: "openai", BaseURL: model.URL, Model: "test", MaxOutput: 1000, CostMode: "free"}}}})
 	bot.enqueue(textUpdate(1, "创建跨渠道撤销事项"))
 	step(t, p)
 	sent := bot.of("sendMessage")

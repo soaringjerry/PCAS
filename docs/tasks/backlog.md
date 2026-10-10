@@ -16,7 +16,6 @@ Examine the current code path and recorded result before assigning or closing an
 | 2 | Deputy failures use overly general messages. | Examine stable error categories and recovery guidance. | Phase 1 acceptance. |
 | 3 | Undo of adoption does not reverse memory reinforcement. | Record the intended activity effect of undo. Test that effect. | Phase 1 review. |
 | 4 | Adoption records stay after undo. | Examine cleanup and any protection effect. | Phase 1 review. |
-| 6, 7 | Unused Jev routing and the previous answer API stay. | Identify remaining callers and removal conditions. | [Service reference](../memory-service.md). |
 | 8 | The one-sentence card reply relies on the prompt. | Observe real replies before adding a program limit. | Secretary acceptance. |
 | 9, 31 | Internal controls stay in library and settings. | Move applicable controls when the observation panel is delivered. | [Interface principles](../design/principles.md). |
 | 10 | Action receipt sources enter indexing and summaries. | Examine retrieval interference and actual processing use. | Postlaunch review. |

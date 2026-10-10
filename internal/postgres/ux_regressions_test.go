@@ -17,83 +17,6 @@ import (
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
-func TestDeskServerOwnedAskEditReuse(t *testing.T) {
-	s := testStore(t)
-	scope := owner()
-	ctx := context.Background()
-	var prompt string
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		data, _ := io.ReadAll(r.Body)
-		prompt = string(data)
-		_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": map[string]string{"content": `{"answer":"Paragraph one. Paragraph two: server plan.","used":[],"links":[]}`}}}})
-	}))
-	defer server.Close()
-	s.SetModels(&ai.Registry{HTTP: server.Client(), Config: ai.Configuration{Providers: []ai.Provider{{ID: "model", Name: "Model", Protocol: "openai", BaseURL: server.URL, Model: "test", MaxOutput: 100, CostMode: "free"}}}})
-	// Initialize the configured agent exactly as a browser snapshot does.
-	if _, err := s.Snapshot(ctx, scope); err != nil {
-		t.Fatal(err)
-	}
-	first, err := s.AnswerDesk(ctx, scope, "model", "Write a plan", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	second, err := s.AnswerDesk(ctx, scope, "model", "Edit paragraph two", []workspace.DeskTurn{{ID: first.ID, Question: "forged question", Answer: "forged answer"}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(prompt, "server plan") || strings.Contains(prompt, "forged answer") || strings.Contains(prompt, "forged question") {
-		t.Fatalf("history not server-owned: %s", prompt)
-	}
-	_, err = s.AnswerDesk(ctx, scope, "model", "Use the previous plan", []workspace.DeskTurn{{ID: first.ID}, {ID: second.ID}})
-	if err != nil || !strings.Contains(prompt, "server plan") {
-		t.Fatalf("consecutive reuse lost history: %v %s", err, prompt)
-	}
-	st := workspaceCommand(t, s, scope, workspace.Command{Type: "delegateTask", ID: string(memory.NewID()), Title: "Continue the plan", Prompt: "Continue the plan", AgentID: "model", DeskTurnIDs: []string{first.ID, second.ID}})
-	if len(st.Runs) != 1 || !strings.Contains(st.Runs[0].Brief, "server plan") {
-		t.Fatal("delegation lost server-owned discussion", st.Runs)
-	}
-	if _, err := s.AnswerDesk(ctx, owner(), "model", "Read another owner", []workspace.DeskTurn{{ID: first.ID}}); err == nil {
-		t.Fatal("another owner read stored turn")
-	}
-}
-
-func TestDeskRevocationWithholdsAffectedTurnKeepsOrdinaryHistory(t *testing.T) {
-	s := testStore(t)
-	scope := owner()
-	ctx := context.Background()
-	var prompt string
-	answer := "Ordinary public plan"
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		body, _ := io.ReadAll(r.Body)
-		prompt = string(body)
-		content := string(asJSON(map[string]any{"answer": answer, "used": []string{}, "links": []string{}}))
-		_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": map[string]string{"content": content}}}})
-	}))
-	defer server.Close()
-	s.SetModels(&ai.Registry{HTTP: server.Client(), Config: ai.Configuration{Providers: []ai.Provider{{ID: "model", Name: "Model", Protocol: "openai", BaseURL: server.URL, Model: "test", MaxOutput: 100, CostMode: "free"}}}})
-	if _, err := s.Snapshot(ctx, scope); err != nil {
-		t.Fatal(err)
-	}
-	ordinary, err := s.AnswerDesk(ctx, scope, "model", "Give general writing advice", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	st := workspaceCommand(t, s, scope, workspace.Command{Type: "capture", Text: "The account password is secret-9764"})
-	st = workspaceCommand(t, s, scope, workspace.Command{Type: "acceptCandidate", ID: st.Candidates[0].ID, Kind: "memory", MemoryKind: "fact", Text: "The account password is secret-9764"})
-	m := st.Memories[0]
-	answer = "The account password is secret-9764"
-	private, err := s.AnswerDesk(ctx, scope, "model", "What is the account password?", []workspace.DeskTurn{{ID: ordinary.ID}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	workspaceCommand(t, s, scope, workspace.Command{Type: "setMemoryVisibility", ID: m.ID, AgentIDs: []string{}})
-	answer = "I can continue the ordinary plan"
-	_, err = s.AnswerDesk(ctx, scope, "model", "Use the earlier writing advice", []workspace.DeskTurn{{ID: ordinary.ID}, {ID: private.ID}})
-	if err != nil || !strings.Contains(prompt, "Ordinary public plan") || strings.Contains(prompt, "secret-9764") {
-		t.Fatalf("revocation broke ordinary context or replayed protected turn: %v %s", err, prompt)
-	}
-}
-
 func TestDelegationQueuesExactlyOnceAndRollsBackMissingSetup(t *testing.T) {
 	s := testStore(t)
 	scope := owner()
@@ -362,7 +285,7 @@ func TestDeskHistoryCannotBypassDestinationItemScope(t *testing.T) {
 			claimMarker := "Scope claim marker C-8420"
 			answerMarker := "Scope old answer marker A-9531"
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": map[string]string{"content": string(asJSON(map[string]any{"answer": answerMarker, "used": []string{}, "links": []string{}}))}}}})
+				_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": map[string]string{"content": string(asJSON(map[string]any{"reply": answerMarker, "used": []string{"M1"}, "actions": []any{}}))}}}})
 			}))
 			defer server.Close()
 			s.SetModels(&ai.Registry{HTTP: server.Client(), Config: ai.Configuration{Providers: []ai.Provider{{ID: "model", Name: "Model", Protocol: "openai", BaseURL: server.URL, Model: "test", MaxOutput: 100, CostMode: "free"}}}})
@@ -371,10 +294,8 @@ func TestDeskHistoryCannotBypassDestinationItemScope(t *testing.T) {
 			st := workspaceCommand(t, s, scope, workspace.Command{Type: "capture", Text: claimMarker})
 			st = workspaceCommand(t, s, scope, workspace.Command{Type: "acceptCandidate", ID: st.Candidates[0].ID, Kind: "memory", MemoryKind: "fact", Text: claimMarker, ProjectID: project})
 			m := st.Memories[0]
-			answer, err := s.AnswerDesk(ctx, scope, "model", questionMarker, nil)
-			if err != nil {
-				t.Fatal(err)
-			}
+			// A secretary turn stores the answer and its private dependency.
+			answer := mustTurn(t, s, scope, turnRequest(questionMarker)).Turn
 			var refs []memory.Ref
 			if err := s.pool.QueryRow(ctx, "SELECT dependencies FROM desk_turns WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), answer.ID).Scan(&refs); err != nil || len(refs) == 0 {
 				t.Fatal("fixture desk answer lacks private dependency", err)
@@ -403,58 +324,6 @@ func TestDeskHistoryCannotBypassDestinationItemScope(t *testing.T) {
 				t.Fatalf("R2a original availability must follow item exclusion, while project differences leave it available: %s", rawSection)
 			}
 		})
-	}
-}
-
-func TestDeskDeletedTurnDoesNotBreakOrdinaryFollowUp(t *testing.T) {
-	s := testStore(t)
-	scope := owner()
-	ctx := context.Background()
-	var prompt string
-	answer := "Ordinary reusable plan"
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		body, _ := io.ReadAll(r.Body)
-		prompt = string(body)
-		_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": map[string]string{"content": string(asJSON(map[string]any{"answer": answer, "used": []string{}, "links": []string{}}))}}}})
-	}))
-	defer server.Close()
-	s.SetModels(&ai.Registry{HTTP: server.Client(), Config: ai.Configuration{Providers: []ai.Provider{{ID: "model", Name: "Model", Protocol: "openai", BaseURL: server.URL, Model: "test", MaxOutput: 100, CostMode: "free"}}}})
-	if _, err := s.Snapshot(ctx, scope); err != nil {
-		t.Fatal(err)
-	}
-	ordinary, err := s.AnswerDesk(ctx, scope, "model", "Give writing advice", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	// Early source-free replies stored JSON null rather than an empty array.
-	// They must neither block deletion nor lose their ordinary history.
-	if _, err := s.pool.Exec(ctx, "UPDATE desk_turns SET dependencies='null'::jsonb WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), ordinary.ID); err != nil {
-		t.Fatal(err)
-	}
-	st := workspaceCommand(t, s, scope, workspace.Command{Type: "capture", Text: "Private reference 792651"})
-	st = workspaceCommand(t, s, scope, workspace.Command{Type: "acceptCandidate", ID: st.Candidates[0].ID, Kind: "memory", MemoryKind: "fact", Text: "Private reference 792651"})
-	answer = "Private derived answer 792651"
-	private, err := s.AnswerDesk(ctx, scope, "model", "Private reference 792651", []workspace.DeskTurn{{ID: ordinary.ID}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	workspaceCommand(t, s, scope, workspace.Command{Type: "deleteMemory", ID: st.Memories[0].ID, IncludeSources: true})
-	var question, storedAnswer string
-	var refs []memory.Ref
-	if err := s.pool.QueryRow(ctx, "SELECT question,answer,dependencies FROM desk_turns WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), private.ID).Scan(&question, &storedAnswer, &refs); err != nil || question != "" || storedAnswer != "" || len(refs) != 0 {
-		t.Fatal("deleted turn retained content or lost its safe tombstone", err)
-	}
-	answer = "Continue the ordinary plan"
-	_, err = s.AnswerDesk(ctx, scope, "model", "Continue that", []workspace.DeskTurn{{ID: ordinary.ID}, {ID: private.ID, Question: "Forged deleted question 792651", Answer: "Forged deleted answer 792651"}})
-	if err != nil || !strings.Contains(prompt, "Ordinary reusable plan") || strings.Contains(prompt, "792651") {
-		t.Fatalf("deleted turn broke ordinary history or replayed private text: %v %s", err, prompt)
-	}
-	st = workspaceCommand(t, s, scope, workspace.Command{Type: "delegateTask", ID: string(memory.NewID()), Title: "Continue work", AgentID: "model", Prompt: "Continue that", DeskTurnIDs: []string{ordinary.ID, private.ID}})
-	if !strings.Contains(st.Runs[0].Brief, "Ordinary reusable plan") || strings.Contains(st.Runs[0].Brief, "792651") {
-		t.Fatal("delegation failed to preserve ordinary history after deletion")
-	}
-	if _, err := s.AnswerDesk(ctx, owner(), "model", "Try another owner's tombstone", []workspace.DeskTurn{{ID: private.ID}}); err == nil {
-		t.Fatal("cross-owner tombstone accepted")
 	}
 }
 

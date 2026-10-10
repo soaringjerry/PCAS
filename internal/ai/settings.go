@@ -24,14 +24,12 @@ type Connection struct {
 }
 
 type connectionFile struct {
-	Text      *Connection  `json:"text,omitempty"`
-	Embedding *Connection  `json:"embedding,omitempty"`
-	Decision  *DecisionKey `json:"decision,omitempty"`
-}
-
-// DecisionKey is the Jev key for desk routing, kept beside the model keys.
-type DecisionKey struct {
-	APIKey string `json:"api_key"`
+	Text      *Connection `json:"text,omitempty"`
+	Embedding *Connection `json:"embedding,omitempty"`
+	// RetiredDecision accepts the key of the removed desk-routing interface so
+	// that an existing settings file still loads. It is never used or written.
+	// Remove this field when no deployed settings file contains "decision".
+	RetiredDecision json.RawMessage `json:"decision,omitempty"`
 }
 
 type ConnectionStatus struct {
@@ -59,6 +57,7 @@ func (r *Registry) readSettings() (connectionFile, error) {
 	d := json.NewDecoder(io.LimitReader(f, 64<<10))
 	d.DisallowUnknownFields()
 	err = d.Decode(&settings)
+	settings.RetiredDecision = nil
 	return settings, err
 }
 
@@ -177,37 +176,6 @@ func (r *Registry) SaveConnection(role string, c Connection) error {
 		settings.Text = &c
 	} else {
 		settings.Embedding = &c
-	}
-	return r.writeSettings(settings)
-}
-
-// DecisionKey returns the Jev key saved in Settings, or "" when none is.
-func (r *Registry) DecisionKey() string {
-	settings, err := r.readSettings()
-	if err != nil || settings.Decision == nil {
-		return ""
-	}
-	return settings.Decision.APIKey
-}
-
-// SaveDecisionKey stores the Jev key; an empty key removes it.
-func (r *Registry) SaveDecisionKey(key string) error {
-	if r == nil || r.SettingsPath == "" {
-		return memory.ErrUnavailable
-	}
-	key = strings.TrimSpace(key)
-	if len(key) > 8192 || strings.ContainsAny(key, "\r\n") {
-		return memory.ErrInvalid
-	}
-	r.settingsMu.Lock()
-	defer r.settingsMu.Unlock()
-	settings, err := r.readSettings()
-	if err != nil {
-		return err
-	}
-	settings.Decision = nil
-	if key != "" {
-		settings.Decision = &DecisionKey{APIKey: key}
 	}
 	return r.writeSettings(settings)
 }

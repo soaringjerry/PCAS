@@ -30,11 +30,6 @@ func TestPhase25B1_X02_DependentAnswerAndAgentRunRemainCurrent(t *testing.T) {
 	f.scope.Team = true
 	refs := []memory.Ref{f.claim(t, "虚构规则 AcceptanceTitle 青色标题。"), f.claim(t, "虚构规则 AcceptanceTitle 先列结论。"), f.claim(t, "虚构规则 AcceptanceTitle 三张插图。")}
 	project := f.project(t, "虚构季度汇报", "active")
-	reply, err := json.Marshal(map[string]any{"answer": "虚构回答：青色标题、结论和插图。", "used": []string{string(refs[0].ID), string(refs[1].ID), string(refs[2].ID)}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	f.model(t, string(reply))
 	agentID := "phase25-b1-fake"
 	routing, err := json.Marshal(workspace.Agent{ID: agentID, Name: "虚构副手", Channel: agentID, Enabled: true, MemoryInitialized: true, MemoryKinds: []string{"fact", "preference", "plan", "decision", "intention"}})
 	if err != nil {
@@ -46,37 +41,23 @@ func TestPhase25B1_X02_DependentAnswerAndAgentRunRemainCurrent(t *testing.T) {
 	for _, principal := range []string{agentID, "agent:" + agentID} {
 		f.exec(t, `INSERT INTO record_grants(owner_id,record_id,principal_id) SELECT owner_id,id,$2 FROM memory_records WHERE owner_id=$1 ON CONFLICT DO NOTHING`, f.scope.OwnerID, principal)
 	}
-	for i := 0; i < 20; i++ {
-		j, err := f.store.ClaimIndex(f.ctx, 30*time.Second)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if j == nil {
-			break
-		}
-		if err := f.store.ProcessIndex(f.ctx, *j); err != nil {
-			t.Fatal(err)
-		}
-	}
-	answer, err := f.store.AnswerDesk(f.ctx, f.scope, agentID, "AcceptanceTitle", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(answer.Used) != 3 {
-		t.Fatalf("dependent answer used %d memories, want 3", len(answer.Used))
-	}
-	conversation, turnID, runID := memory.NewID(), memory.ID(answer.ID), memory.NewID()
+	// The stored answer depends on the three records. The retired legacy answer
+	// interface wrote this row before; a secretary turn stores the same form.
+	answerText := "虚构回答：青色标题、结论和插图。"
+	conversation, turnID, runID := memory.NewID(), memory.NewID(), memory.NewID()
 	state, err := f.store.Snapshot(f.ctx, f.scope)
 	if err != nil {
 		t.Fatal(err)
 	}
-	turnJSON, err := json.Marshal(workspace.DeskTurnResponse{ConversationID: string(conversation), Turn: workspace.SecretaryTurn{ID: string(turnID), Text: "AcceptanceTitle", Reply: answer.Answer, Agent: agentID, CreatedAt: time.Now().UTC().Format(time.RFC3339Nano)}, State: state})
+	turnJSON, err := json.Marshal(workspace.DeskTurnResponse{ConversationID: string(conversation), Turn: workspace.SecretaryTurn{ID: string(turnID), Text: "AcceptanceTitle", Reply: answerText, Agent: agentID, CreatedAt: time.Now().UTC().Format(time.RFC3339Nano)}, State: state})
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Attach the real stored answer to the current conversation read interface;
-	// its dependency payload is created by AnswerDesk, never guessed here.
-	f.exec(t, `UPDATE desk_turns SET conversation_id=$3,response=$4,request_id=$5 WHERE owner_id=$1 AND id=$2`, f.scope.OwnerID, turnID, conversation, turnJSON, memory.NewID())
+	dependencies, err := json.Marshal(refs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.exec(t, `INSERT INTO desk_turns(owner_id,id,agent_id,question,answer,dependencies,conversation_id,request_id,response) VALUES($1,$2,$3,'AcceptanceTitle',$4,$5,$6,$7,$8)`, f.scope.OwnerID, turnID, agentID, answerText, dependencies, conversation, memory.NewID(), turnJSON)
 	agentJSON, err := json.Marshal(workspace.Agent{ID: "fictitious-agent", Name: "虚构副手", Enabled: true})
 	if err != nil {
 		t.Fatal(err)

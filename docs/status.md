@@ -125,7 +125,12 @@ The [unused generation cleanup](tasks/foundation-unused-generation.md#release-ve
 The old card queue handler retains its original bytes. Current-state contracts and complete branch and main CI pass.
 Backup, readiness, live default Codex accounting, and cleanup checks pass. Claim counts remain unchanged.
 
-The coordinator reviewed the Phase 3.9 work on 2026-10-10 and replaced the query embedding candidate `9f80205`.
+The coordinator reviewed the Phase 3.9 work on 2026-10-10.
+The review found a regression in the released interactive gateway: the secretary and the deputy failed on every provider without output schema or web search.
+The [correction](tasks/foundation-interactive-gateway.md#correction-2026-10-10) restores ordinary generation for callers that validate their own output and records the submitted mode.
+The review also removed the unused legacy routing and answer interfaces.
+
+The review replaced the query embedding candidate `9f80205`.
 That candidate saved query text and vectors for recovery. It was not merged or released.
 The [revised query embedding path](tasks/foundation-query-embedding.md) keeps the call record and the accounting only.
 Its gateway and storage contracts pass on an isolated database.

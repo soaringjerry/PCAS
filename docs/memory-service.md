@@ -34,7 +34,9 @@ Other provider entry points remain explicit migration exceptions in the [boundar
 Business workflows remain in PostgreSQL during this batch.
 
 The assigned [interactive extension](tasks/foundation-interactive-gateway.md) adds explicit provider, schema, search, and context-version declarations.
-The gateway records unsupported required modes before budget reservation. It does not select an ordinary-generation fallback for those requests.
+A caller that validates its own output declares a mode fallback. The secretary, the readers, the self-checks, and the deputy declare it.
+When their provider has no output schema or web search, the gateway submits ordinary generation. The journal row names the missing capabilities in `actual_mode.unsupportedFallback`.
+A request without that declaration fails before budget reservation when a necessary capability is missing.
 Four secretary and reader output schemas now come from the registry with unchanged bytes and field order.
 Secretary, reader, and self-check instructions also use registered assets. Shared instruction components have one copy.
 
@@ -160,7 +162,7 @@ Connector tokens can write only to their connector.
 Full route methods and optional interfaces are in the [HTTP package](../internal/httpapi/).
 Command types are in [Frontend Actions](../web/src/store/actions.ts).
 `expectedRevision` is not a universal lock for each command. Examine the command's actual validation path.
-Legacy `/v1/desk/answer` and `/v1/desk/route` stay in code; the current secretary does not use them.
+Legacy `/v1/desk/answer`, `/v1/desk/route`, and `/v1/models/decision` were removed on 2026-10-10. The secretary uses `/v1/desk/turn`.
 
 ## 3 Execution and Evidence
 

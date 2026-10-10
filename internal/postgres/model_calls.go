@@ -185,6 +185,15 @@ func (a backgroundCalls) PreparationFailed(ctx context.Context, request modelcal
 	budgetExhausted := jobErr != nil && (jobErr.NoAttempt || !jobErr.Until.IsZero())
 	persist, cancel := context.WithTimeout(context.WithoutCancel(ctx), modelcall.PersistenceTimeout)
 	defer cancel()
+	if jobErr != nil && jobErr.NoAttempt {
+		// A deferral submits nothing. The queue keeps its reason and next time.
+		// A journal row here would report a limit as a failed model call.
+		// A recovery replacement keeps its row, because it pauses the chain.
+		tag, err := a.store.pool.Exec(persist, `DELETE FROM model_calls WHERE owner_id=$1 AND id=$2 AND outcome='prepared' AND retry_of_id IS NULL`, string(request.OwnerID), string(id))
+		if err != nil || tag.RowsAffected() == 1 {
+			return err
+		}
+	}
 	var recovery string
 	err := a.store.pool.QueryRow(persist, `UPDATE model_calls SET outcome='failed',error_code=$3,finished_at=clock_timestamp(),updated_at=clock_timestamp(),actual_mode=actual_mode||$5::jsonb,recovery_state=CASE WHEN retry_of_id IS NOT NULL AND $4 THEN 'budget_exhausted' ELSE recovery_state END,recovery_reason=CASE WHEN retry_of_id IS NOT NULL AND $4 THEN $3 ELSE recovery_reason END WHERE owner_id=$1 AND id=$2 AND outcome='prepared' RETURNING recovery_state`, string(request.OwnerID), string(id), code, budgetExhausted, asJSON(mode)).Scan(&recovery)
 	if err == nil && recovery == "budget_exhausted" {

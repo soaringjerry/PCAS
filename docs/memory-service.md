@@ -76,11 +76,10 @@ Unused card instructions and generation were removed at `6411b4e`.
 The old card queue acknowledgement and current-state helpers retain their behavior.
 The [cleanup delivery record](tasks/foundation-unused-generation.md#release-verification) gives CI and release evidence.
 
-The unreleased [query embedding migration](tasks/foundation-query-embedding.md) submits recall vectors through the existing gateway.
-Standalone reads use an actual session fence. Nested reads inherit their secretary or deputy execution.
-Query manifests carry verified question and handoff references for the existing source deletion mechanism.
-Original question references keep their original versions. Missing source coverage remains explicit.
-The earlier production release still uses the direct query-provider path.
+The revised [query embedding path](tasks/foundation-query-embedding.md) requests recall vectors through the gateway entry `CallEmbedding`.
+Each call has one `model_calls` row with its provider, model, input size, outcome, and accounting state.
+The row does not hold the query text or the vector. A lost vector is requested again.
+A query inside a secretary or deputy execution records that execution as its cause.
 
 ### Background Call Evidence
 

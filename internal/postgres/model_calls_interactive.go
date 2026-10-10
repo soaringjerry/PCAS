@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log/slog"
 	"math"
 	"time"
 
@@ -23,20 +22,16 @@ import (
 // Token is an execution fence, not a fabricated queue lease. Origin survives
 // reacquisition and excludes transient presentation-turn and usage identities.
 type interactiveCallPolicy struct {
-	Kind          string
-	Token         string
-	Origin        string
-	RequestHash   []byte
-	AgentID       string
-	ThingID       string
-	Usage         modelUsage
-	RetryOf       memory.ID
-	InputPolicy   string
-	BudgetOwner   string
-	RecallScope   *memory.Scope
-	ReadPID       int32
-	ReadLock      int64
-	CommandOrigin string
+	Kind        string
+	Token       string
+	Origin      string
+	RequestHash []byte
+	AgentID     string
+	ThingID     string
+	Usage       modelUsage
+	RetryOf     memory.ID
+	InputPolicy string
+	BudgetOwner string
 }
 
 // An admitted request or committed deputy lease supplies this identity.
@@ -44,105 +39,6 @@ type interactiveCallPolicy struct {
 type interactiveExecutionKey struct{}
 
 type interactiveCalls struct{ store *Store }
-
-// Standalone recall holds a session lock, not a transaction or business lease.
-// Sharing existing foreground capacity leaves a connection for call writes.
-func (a interactiveCalls) beginRecall(ctx context.Context, scope memory.Scope) (modelcall.Request, func() error, error) {
-	var request modelcall.Request
-	select {
-	case a.store.secretarySlots <- struct{}{}:
-	default:
-		if err := a.store.recordRecallEvent(ctx, scope.OwnerID, "deferred", "foreground_capacity_wait"); err != nil {
-			return request, nil, err
-		}
-		select {
-		case a.store.secretarySlots <- struct{}{}:
-		case <-ctx.Done():
-			return request, nil, ctx.Err()
-		}
-	}
-	conn, err := a.store.pool.Acquire(ctx)
-	if err != nil {
-		<-a.store.secretarySlots
-		return request, nil, err
-	}
-	request = modelcall.Request{OwnerID: scope.OwnerID, ExecutionID: memory.NewID(), Function: "query_embedding"}
-	request.RootExecutionID = request.ExecutionID
-	policy := interactiveCallPolicy{Kind: "recall", Token: string(memory.NewID()), Origin: string(request.ExecutionID), AgentID: scope.PrincipalID, RecallScope: &scope}
-	if err := conn.QueryRow(ctx, `SELECT pg_backend_pid(),hashtextextended(current_database()||':'||current_schema()||':recall:'||$1||':'||$2||':'||$3,0)`, string(scope.OwnerID), string(request.ExecutionID), policy.Token).Scan(&policy.ReadPID, &policy.ReadLock); err != nil {
-		conn.Release()
-		<-a.store.secretarySlots
-		return modelcall.Request{}, nil, err
-	}
-	if _, err := conn.Exec(ctx, `SELECT pg_advisory_lock($1)`, policy.ReadLock); err != nil {
-		clean, cancel := context.WithTimeout(context.WithoutCancel(ctx), modelcall.PersistenceTimeout)
-		defer cancel()
-		_ = conn.Conn().Close(clean)
-		conn.Release()
-		<-a.store.secretarySlots
-		return modelcall.Request{}, nil, err
-	}
-	request.Policy = policy
-	release := func() error {
-		clean, cancel := context.WithTimeout(context.WithoutCancel(ctx), modelcall.PersistenceTimeout)
-		defer cancel()
-		var unlocked bool
-		err := conn.QueryRow(clean, `SELECT pg_advisory_unlock($1)`, policy.ReadLock).Scan(&unlocked)
-		if err != nil || !unlocked {
-			err = errors.Join(err, fmt.Errorf("recall_session_unlock_failed"))
-			err = errors.Join(err, conn.Conn().Close(clean))
-		}
-		conn.Release()
-		<-a.store.secretarySlots
-		return err
-	}
-	return request, release, nil
-}
-
-func (s *Store) recordRecallEvent(ctx context.Context, owner memory.ID, outcome, reason string) error {
-	persist, cancel := context.WithTimeout(context.WithoutCancel(ctx), modelcall.PersistenceTimeout)
-	defer cancel()
-	return pgx.BeginFunc(persist, s.pool, func(tx pgx.Tx) error { return stageEventTx(persist, tx, owner, "query_embedding", outcome, reason, 1) })
-}
-
-func (s *Store) recordRecallFailure(ctx context.Context, owner memory.ID, stage string, cause error) error {
-	reason := backgroundFailureReason(cause)
-	var failure *modelcall.Failure
-	if errors.As(cause, &failure) {
-		reason = failure.Code
-	}
-	if errors.Is(cause, modelcall.ErrNotApplicable) {
-		reason = "paid_result_not_applicable"
-	}
-	if errors.Is(cause, memory.ErrUnavailable) {
-		reason = "provider_unavailable"
-	}
-	slog.WarnContext(ctx, "recall semantic mode incomplete", "stage", stage, "reason", reason)
-	return s.recordRecallEvent(ctx, owner, "failure", reason)
-}
-
-// Retrieval reports use only after its original read transaction completes.
-// Standalone bodies are no longer needed after this read; billing remains.
-func (a interactiveCalls) finishRecall(ctx context.Context, r modelcall.Request, invocation memory.ID, outcome, reason string) error {
-	persist, cancel := context.WithTimeout(context.WithoutCancel(ctx), modelcall.PersistenceTimeout)
-	defer cancel()
-	return pgx.BeginFunc(persist, a.store.pool, func(tx pgx.Tx) error {
-		tag, err := tx.Exec(persist, `UPDATE model_calls SET actual_mode=actual_mode||jsonb_build_object('applicationOutcome',$4::text,'applicationReason',$5::text),updated_at=clock_timestamp() WHERE owner_id=$1 AND id=$2 AND execution_id=$3 AND actual_mode->>'operation'='embedding'`, string(r.OwnerID), string(invocation), string(r.ExecutionID), outcome, reason)
-		if err != nil {
-			return err
-		}
-		if tag.RowsAffected() != 1 {
-			return memory.ErrConflict
-		}
-		if r.Policy.(interactiveCallPolicy).Kind == "recall" {
-			if _, err := tx.Exec(persist, `DELETE FROM background_model_results WHERE owner_id=$1 AND job_id=$2`, string(r.OwnerID), string(invocation)); err != nil {
-				return err
-			}
-			_, err = tx.Exec(persist, `UPDATE model_calls SET result_receipt=jsonb_set(result_receipt,'{availableForApplication}','false'::jsonb),actual_mode=actual_mode||'{"inputPayload":"discarded"}'::jsonb WHERE owner_id=$1 AND id=$2`, string(r.OwnerID), string(invocation))
-		}
-		return err
-	})
-}
 
 // Each retained response also keeps its bound request. Recovery cannot rebuild
 // exact original input bytes from a reformatted jsonb body or current settings.
@@ -264,22 +160,13 @@ type interactiveCallRow struct {
 		Unsupported     string                 `json:"unsupportedCapability"`
 		Reserved        float64                `json:"reservationEstimate"`
 		DeputySelection *deputyResultSelection `json:"deputySelection,omitempty"`
-		ReadPID         int32                  `json:"readSessionPID,omitempty"`
-		ReadLock        int64                  `json:"readSessionLock,omitempty"`
 	} `json:"actual_mode"`
 	Receipt interactiveReceipt `json:"result_receipt"`
 }
 
 func interactiveBinding(r modelcall.Request) (string, error) {
 	p, ok := r.Policy.(interactiveCallPolicy)
-	if !ok || !r.OwnerID.Valid() || !r.ExecutionID.Valid() || !r.RootExecutionID.Valid() || !memory.ID(p.Token).Valid() || p.Origin == "" || p.AgentID == "" || r.ProviderID == "" || r.ContextBuilderVersion == "" || p.Usage.JobID != "" || !json.Valid(r.Prompt) || (p.Kind != "secretary" && p.Kind != "deputy" && p.Kind != "recall") {
-		return "", memory.ErrInvalid
-	}
-	if r.Operation == "embedding" {
-		if p.RecallScope == nil || !p.RecallScope.Valid() || p.RecallScope.OwnerID != r.OwnerID || r.ProviderSnapshot == nil || r.ProviderSnapshot.ID != r.ProviderID || p.BudgetOwner != "" || p.InputPolicy != "" || (p.Kind == "recall" && (p.ReadPID <= 0 || p.ReadLock == 0)) {
-			return "", memory.ErrInvalid
-		}
-	} else if p.RecallScope != nil || p.Kind == "recall" {
+	if !ok || !r.OwnerID.Valid() || !r.ExecutionID.Valid() || !r.RootExecutionID.Valid() || !memory.ID(p.Token).Valid() || p.Origin == "" || p.AgentID == "" || r.ProviderID == "" || r.ContextBuilderVersion == "" || p.Usage.JobID != "" || !json.Valid(r.Prompt) || (p.Kind != "secretary" && p.Kind != "deputy") {
 		return "", memory.ErrInvalid
 	}
 	if p.Kind == "secretary" && (len(p.RequestHash) != sha256.Size || p.Origin != fmt.Sprintf("%x", p.RequestHash)) {
@@ -315,16 +202,7 @@ func interactiveBinding(r modelcall.Request) (string, error) {
 		InputPolicy                                                                          string `json:"inputPolicy,omitempty"`
 		BudgetOwner                                                                          string `json:"budgetOwner,omitempty"`
 	}{r.OwnerID, r.ExecutionID, r.RootExecutionID, r.CausationID, r.Function, r.Stage, r.ProviderID, r.Instructions.Name(), r.Instructions.Hash(), r.Schema.Name(), r.Schema.Hash(), r.ContextBuilderVersion, r.Search, fmt.Sprintf("%x", sha256.Sum256(r.Prompt)), refs, p.Kind, p.Origin, p.AgentID, p.ThingID, p.InputPolicy, p.BudgetOwner}
-	if r.Operation == "embedding" {
-		return fmt.Sprintf("%x", sha256.Sum256(asJSON(map[string]any{"execution": binding, "operation": r.Operation, "caller": recallScopeManifest(*p.RecallScope), "providerModel": r.ProviderSnapshot.Model, "commandOrigin": p.CommandOrigin}))), nil
-	}
 	return fmt.Sprintf("%x", sha256.Sum256(asJSON(binding))), nil
-}
-
-// Scope.Team is intentionally absent from public request JSON. The private
-// binding still needs it so owner, granted-principal, and team reads differ.
-func recallScopeManifest(scope memory.Scope) map[string]any {
-	return map[string]any{"ownerId": scope.OwnerID, "principalId": scope.PrincipalID, "owner": scope.IsOwner, "team": scope.Team}
 }
 
 func latestInteractiveCall(ctx context.Context, q interface {
@@ -353,12 +231,8 @@ func interactiveFence(ctx context.Context, tx pgx.Tx, r modelcall.Request) error
 	var err error
 	if p.Kind == "secretary" {
 		err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM desk_turn_order WHERE owner_id=$1 AND request_id=$2 AND creator_id=$3 AND request_hash=$4 AND status='pending' AND expires_at>clock_timestamp())`, string(r.OwnerID), string(r.ExecutionID), p.Token, p.RequestHash).Scan(&allowed)
-	} else if p.Kind == "deputy" {
-		err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM agent_runs WHERE owner_id=$1 AND id=$2 AND lease_token=$3 AND document->>'createdAt'=$4 AND status='running' AND lease_until>clock_timestamp() AND agent_id=$5 AND thing_id=$6)`, string(r.OwnerID), string(r.ExecutionID), p.Token, p.Origin, p.AgentID, p.ThingID).Scan(&allowed)
-	} else if p.Kind == "recall" {
-		err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM pg_locks l WHERE l.locktype='advisory' AND l.pid=$1 AND l.database=(SELECT oid FROM pg_database WHERE datname=current_database()) AND l.classid=(($2::bigint>>32)&4294967295)::oid AND l.objid=($2::bigint&4294967295)::oid AND l.objsubid=1 AND l.mode='ExclusiveLock' AND l.granted)`, p.ReadPID, p.ReadLock).Scan(&allowed)
 	} else {
-		return memory.ErrInvalid
+		err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM agent_runs WHERE owner_id=$1 AND id=$2 AND lease_token=$3 AND document->>'createdAt'=$4 AND status='running' AND lease_until>clock_timestamp() AND agent_id=$5 AND thing_id=$6)`, string(r.OwnerID), string(r.ExecutionID), p.Token, p.Origin, p.AgentID, p.ThingID).Scan(&allowed)
 	}
 	if err != nil {
 		return err
@@ -452,10 +326,8 @@ func (a interactiveCalls) Prepare(ctx context.Context, r modelcall.Request, prov
 		if p.InputPolicy == "current_access" {
 			verify = verifyRunAccessTx
 		}
-		if p.RecallScope == nil {
-			if err := verify(ctx, tx, memory.Scope{OwnerID: r.OwnerID, PrincipalID: p.AgentID}, workspace.Run{AgentID: p.AgentID, ThingID: p.ThingID, ContextVersions: r.Refs}); err != nil {
-				return err
-			}
+		if err := verify(ctx, tx, memory.Scope{OwnerID: r.OwnerID, PrincipalID: p.AgentID}, workspace.Run{AgentID: p.AgentID, ThingID: p.ThingID, ContextVersions: r.Refs}); err != nil {
+			return err
 		}
 		previous, err := latestInteractiveCall(ctx, tx, r)
 		if err != nil {
@@ -506,21 +378,7 @@ func (a interactiveCalls) Prepare(ctx context.Context, r modelcall.Request, prov
 			manifest["budgetOwner"] = p.BudgetOwner
 		}
 		mode := map[string]any{"output": "text", "schema": "none", "search": false, "executionToken": p.Token, "originalUsage": usage, "usageComplete": false}
-		if r.Operation == "embedding" {
-			manifest["callerScope"], manifest["commandOrigin"] = recallScopeManifest(*p.RecallScope), p.CommandOrigin
-			manifest["inputValidation"] = "caller_scope"
-			manifest["sourceCoverage"] = "prepared_query_only"
-			if len(r.Refs) > 0 {
-				manifest["sourceCoverage"] = "prepared_query_with_caller_refs"
-			}
-			mode["operation"], mode["output"], mode["resultEncoding"] = "embedding", "vector", "memory-embedding-json-v1"
-			mode["inputRate"], mode["costMode"] = provider.InputPerMillion, provider.CostMode
-			mode["pricingKnown"] = provider.InputPerMillion > 0 || provider.CostMode == "free"
-			if p.Kind == "recall" {
-				mode["readSessionPID"], mode["readSessionLock"] = p.ReadPID, p.ReadLock
-			}
-		}
-		_, err = tx.Exec(ctx, `INSERT INTO model_calls(owner_id,id,execution_id,root_execution_id,causation_id,retry_of_id,attempt_number,attempt_limit,function_name,stage,provider_id,model,prompt_name,instruction_hash,schema_name,schema_hash,context_builder_version,input_manifest,required_capabilities,actual_mode,outcome,accounting_state) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,'prepared','not_reserved')`, string(r.OwnerID), string(id), string(r.ExecutionID), string(r.RootExecutionID), nullString(string(r.CausationID)), nullString(string(p.RetryOf)), attempt, limit, r.Function, r.Stage, provider.ID, provider.Model, nullString(r.Instructions.Name()), nullString(r.Instructions.Hash()), nullString(r.Schema.Name()), nullString(r.Schema.Hash()), r.ContextBuilderVersion, asJSON(manifest), asJSON(r.RequiredCapabilities()), asJSON(mode))
+		_, err = tx.Exec(ctx, `INSERT INTO model_calls(owner_id,id,execution_id,root_execution_id,causation_id,retry_of_id,attempt_number,attempt_limit,function_name,stage,provider_id,model,prompt_name,instruction_hash,schema_name,schema_hash,context_builder_version,input_manifest,required_capabilities,actual_mode,outcome,accounting_state) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,'prepared','not_reserved')`, string(r.OwnerID), string(id), string(r.ExecutionID), string(r.RootExecutionID), nullString(string(r.CausationID)), nullString(string(p.RetryOf)), attempt, limit, r.Function, r.Stage, provider.ID, provider.Model, r.Instructions.Name(), r.Instructions.Hash(), nullString(r.Schema.Name()), nullString(r.Schema.Hash()), r.ContextBuilderVersion, asJSON(manifest), asJSON(r.RequiredCapabilities()), asJSON(mode))
 		return err
 	})
 	return id, err
@@ -632,9 +490,8 @@ func (a interactiveCalls) settleDeputyRunTx(ctx context.Context, tx pgx.Tx, r mo
 
 func (a interactiveCalls) Start(ctx context.Context, r modelcall.Request, paid *modelcall.PaidResult) error {
 	mainDeputy := r.Policy.(interactiveCallPolicy).BudgetOwner == "deputy_run"
-	inputSaved := mainDeputy || r.Operation == "embedding"
 	var binding string
-	if inputSaved {
+	if mainDeputy {
 		var err error
 		binding, err = interactiveBinding(r)
 		if err != nil {
@@ -651,34 +508,16 @@ func (a interactiveCalls) Start(ctx context.Context, r modelcall.Request, paid *
 			return err
 		}
 		mode := map[string]any{"search": r.Search}
-		if r.Operation == "embedding" {
-			versions, err := activeModelInputVersionsTx(ctx, tx, r.OwnerID, r.Refs)
-			if err != nil {
-				return err
-			}
-			for _, ref := range r.Refs {
-				if _, ok := versions[string(ref.ID)]; !ok {
-					return modelcall.ErrNotApplicable
-				}
-			}
-		}
 		if mainDeputy {
 			p := r.Policy.(interactiveCallPolicy)
 			if err := verifyRunTx(ctx, tx, memory.Scope{OwnerID: r.OwnerID, PrincipalID: p.AgentID}, workspace.Run{AgentID: p.AgentID, ThingID: p.ThingID, ContextVersions: r.Refs}); err != nil {
 				return err
 			}
-		}
-		if inputSaved {
-			inputPurpose := "deputy_input"
-			if r.Operation == "embedding" {
-				inputPurpose = "query_embedding_input"
-				mode["operation"], mode["output"] = "embedding", "vector"
-			}
 			// Input-only rows are not paid results. Commit the original private
 			// input and its started journal together before provider submission.
 			tag, err := tx.Exec(ctx, `INSERT INTO background_model_results(owner_id,job_id,purpose,prompt,output,reservation_id,provider_id,model,input_tokens,output_tokens,cost,refs)
- SELECT owner_id,id,$7::text,$4::jsonb,'',reservation_id,provider_id,model,0,0,0,$5::jsonb FROM model_calls
- WHERE owner_id=$1 AND id=$2 AND reservation_id=$3 AND outcome='prepared' AND recovery_state='active' AND input_manifest->>'bindingHash'=$6`, string(r.OwnerID), string(paid.InvocationID), paid.Reservation, r.Prompt, asJSON(r.Refs), binding, inputPurpose)
+ SELECT owner_id,id,'deputy_input',$4::jsonb,'',reservation_id,provider_id,model,0,0,0,$5::jsonb FROM model_calls
+ WHERE owner_id=$1 AND id=$2 AND reservation_id=$3 AND outcome='prepared' AND recovery_state='active' AND input_manifest->>'bindingHash'=$6`, string(r.OwnerID), string(paid.InvocationID), paid.Reservation, r.Prompt, asJSON(r.Refs), binding)
 			if err != nil {
 				return err
 			}
@@ -734,10 +573,6 @@ func (a interactiveCalls) Save(ctx context.Context, r modelcall.Request, paid *m
 				return memory.ErrConflict
 			}
 			accessible := !paid.NotApplicable
-			if r.Operation == "embedding" && paid.CallErrorCode != "" {
-				// Failed vectors are never reusable. Keep their body-free billing.
-				accessible = false
-			}
 			var deleted bool
 			if err := tx.QueryRow(persist, `SELECT coalesce((actual_mode->>'inputDeleted')::boolean,false) FROM model_calls WHERE owner_id=$1 AND id=$2`, string(r.OwnerID), string(paid.InvocationID)).Scan(&deleted); err != nil {
 				return err
@@ -745,22 +580,29 @@ func (a interactiveCalls) Save(ctx context.Context, r modelcall.Request, paid *m
 			accessible = accessible && !deleted
 			// Share locks serialize raw-result retention with the source owner's deletion.
 			// The model has already returned; no provider call occurs inside this transaction.
-			versions, err := activeModelInputVersionsTx(persist, tx, r.OwnerID, paid.Refs)
+			ids := make([]string, len(paid.Refs))
+			for i, ref := range paid.Refs {
+				ids[i] = string(ref.ID)
+			}
+			rows, err := queryDocuments[struct {
+				ID      string
+				Version int
+			}](persist, tx, `SELECT jsonb_build_object('id',id,'version',version) FROM memory_records WHERE owner_id=$1 AND id=ANY($2::uuid[]) AND state='active' ORDER BY id FOR SHARE`, string(r.OwnerID), ids)
 			if err != nil {
 				return err
 			}
+			versions := map[string]int{}
+			for _, row := range rows {
+				versions[row.ID] = row.Version
+			}
 			for _, ref := range paid.Refs {
 				version, ok := versions[string(ref.ID)]
-				// Query references describe the supplied lookup text. Retrieval
-				// still checks current access and versions after embedding returns.
-				// An edit must not turn an otherwise valid historical query into
-				// lexical fallback; deletion still removes its private body.
-				if !ok || p.RecallScope == nil && !mainDeputy && p.InputPolicy != "current_access" && version != ref.Version {
+				if !ok || !mainDeputy && p.InputPolicy != "current_access" && version != ref.Version {
 					accessible = false
 					break
 				}
 			}
-			if accessible && p.RecallScope == nil {
+			if accessible {
 				verify := verifyRunTx
 				if mainDeputy || p.InputPolicy == "current_access" {
 					verify = verifyRunAccessTx
@@ -789,9 +631,6 @@ func (a interactiveCalls) Save(ctx context.Context, r modelcall.Request, paid *m
 			} else if err := interactiveFence(persist, tx, r); err != nil {
 				if errors.Is(err, modelcall.ErrNotApplicable) {
 					available = false
-					if r.Operation == "embedding" {
-						accessible = false
-					}
 				} else {
 					return err
 				}
@@ -799,23 +638,19 @@ func (a interactiveCalls) Save(ctx context.Context, r modelcall.Request, paid *m
 			paid.NotApplicable = paid.NotApplicable || !available
 			if accessible {
 				conflict := " ON CONFLICT(job_id) DO NOTHING"
-				if mainDeputy || r.Operation == "embedding" {
-					inputPurpose := "deputy_input"
-					if r.Operation == "embedding" {
-						inputPurpose = "query_embedding_input"
-					}
+				if mainDeputy {
 					conflict = ` ON CONFLICT(job_id) DO UPDATE SET purpose=EXCLUDED.purpose,output=EXCLUDED.output,input_tokens=EXCLUDED.input_tokens,output_tokens=EXCLUDED.output_tokens,cost=EXCLUDED.cost,input_estimated=EXCLUDED.input_estimated,output_estimated=EXCLUDED.output_estimated,cost_estimated=EXCLUDED.cost_estimated,duration_ms=EXCLUDED.duration_ms
- WHERE background_model_results.purpose='` + inputPurpose + `' AND background_model_results.owner_id=EXCLUDED.owner_id AND background_model_results.reservation_id=EXCLUDED.reservation_id AND background_model_results.provider_id=EXCLUDED.provider_id AND background_model_results.model=EXCLUDED.model AND background_model_results.prompt=EXCLUDED.prompt AND background_model_results.refs=EXCLUDED.refs`
+ WHERE background_model_results.purpose='deputy_input' AND background_model_results.owner_id=EXCLUDED.owner_id AND background_model_results.reservation_id=EXCLUDED.reservation_id AND background_model_results.provider_id=EXCLUDED.provider_id AND background_model_results.model=EXCLUDED.model AND background_model_results.prompt=EXCLUDED.prompt AND background_model_results.refs=EXCLUDED.refs`
 				}
 				tag, writeErr := tx.Exec(persist, `INSERT INTO background_model_results(owner_id,job_id,purpose,prompt,output,reservation_id,provider_id,model,input_tokens,output_tokens,cost,refs,input_estimated,output_estimated,cost_estimated,duration_ms) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`+conflict, string(r.OwnerID), string(paid.InvocationID), r.Function, paid.Prompt, paid.Output, paid.Reservation, paid.Provider, paid.Model, paid.InputTokens, paid.OutputTokens, paid.Cost, asJSON(paid.Refs), paid.InputEstimated, paid.OutputEstimated, paid.CostEstimated, paid.DurationMS)
 				err = writeErr
 				if err != nil {
 					return err
 				}
-				if (mainDeputy || r.Operation == "embedding") && prior.Billing == nil && tag.RowsAffected() != 1 {
+				if mainDeputy && prior.Billing == nil && tag.RowsAffected() != 1 {
 					return memory.ErrConflict
 				}
-			} else if mainDeputy || r.Operation == "embedding" {
+			} else if mainDeputy {
 				if _, err := tx.Exec(persist, `DELETE FROM background_model_results WHERE owner_id=$1 AND job_id=$2 AND reservation_id=$3`, string(r.OwnerID), string(paid.InvocationID), paid.Reservation); err != nil {
 					return err
 				}
@@ -872,7 +707,7 @@ func (a interactiveCalls) Save(ctx context.Context, r modelcall.Request, paid *m
 				usage = nil
 			}
 			mode := map[string]any{"usageComplete": outcome != "unknown"}
-			if mainDeputy || r.Operation == "embedding" {
+			if mainDeputy {
 				mode["inputPayload"] = "discarded"
 				if accessible {
 					mode["inputPayload"] = "result_saved"
@@ -896,26 +731,6 @@ func (a interactiveCalls) Save(ctx context.Context, r modelcall.Request, paid *m
 		case <-time.After(time.Second):
 		}
 	}
-}
-
-// Share locks serialize private input writes with the source owner's deletion.
-func activeModelInputVersionsTx(ctx context.Context, tx pgx.Tx, owner memory.ID, refs []memory.Ref) (map[string]int, error) {
-	ids := make([]string, len(refs))
-	for i, ref := range refs {
-		ids[i] = string(ref.ID)
-	}
-	rows, err := queryDocuments[struct {
-		ID      string
-		Version int
-	}](ctx, tx, `SELECT jsonb_build_object('id',id,'version',version) FROM memory_records WHERE owner_id=$1 AND id=ANY($2::uuid[]) AND state='active' ORDER BY id FOR SHARE`, string(owner), ids)
-	if err != nil {
-		return nil, err
-	}
-	versions := map[string]int{}
-	for _, row := range rows {
-		versions[row.ID] = row.Version
-	}
-	return versions, nil
 }
 
 func (a interactiveCalls) Record(ctx context.Context, r modelcall.Request, paid *modelcall.PaidResult) error {
@@ -1037,19 +852,6 @@ func cloneInteractiveRequest(request modelcall.Request) modelcall.Request {
 	policy.Usage.Plan = append(json.RawMessage(nil), policy.Usage.Plan...)
 	policy.Usage.MemoryRefs = append([]memory.Ref(nil), policy.Usage.MemoryRefs...)
 	copy.Policy = policy
-	if policy.RecallScope != nil {
-		scope := *policy.RecallScope
-		policy.RecallScope = &scope
-		copy.Policy = policy
-	}
-	if request.ProviderSnapshot != nil {
-		provider := *request.ProviderSnapshot
-		copy.ProviderSnapshot = &provider
-	}
-	if request.ReservationEstimate != nil {
-		estimate := *request.ReservationEstimate
-		copy.ReservationEstimate = &estimate
-	}
 	return copy
 }
 

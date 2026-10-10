@@ -29,7 +29,6 @@ type interactiveRecoveryStatus struct {
 const inactiveInteractiveExecutionSQL = `NOT CASE c.input_manifest->>'executionKind'
  WHEN 'secretary' THEN EXISTS(SELECT 1 FROM desk_turn_order t WHERE t.owner_id=c.owner_id AND t.request_id=c.execution_id AND t.creator_id::text=c.actual_mode->>'executionToken' AND encode(t.request_hash,'hex')=c.input_manifest->>'origin' AND t.status='pending' AND t.expires_at>clock_timestamp())
  WHEN 'deputy' THEN EXISTS(SELECT 1 FROM agent_runs r WHERE r.owner_id=c.owner_id AND r.id=c.execution_id AND r.lease_token::text=c.actual_mode->>'executionToken' AND r.document->>'createdAt'=c.input_manifest->>'origin' AND r.agent_id=c.input_manifest->>'agentId' AND r.thing_id::text=c.input_manifest->>'thingId' AND r.status='running' AND r.lease_until>clock_timestamp())
- WHEN 'recall' THEN EXISTS(SELECT 1 FROM pg_locks l WHERE l.locktype='advisory' AND l.pid=(c.actual_mode->>'readSessionPID')::integer AND l.database=(SELECT oid FROM pg_database WHERE datname=current_database()) AND l.classid=(((c.actual_mode->>'readSessionLock')::bigint>>32)&4294967295)::oid AND l.objid=((c.actual_mode->>'readSessionLock')::bigint&4294967295)::oid AND l.objsubid=1 AND l.mode='ExclusiveLock' AND l.granted)
  ELSE true END`
 
 func (s *Store) recoverInteractiveCallsOnce(ctx context.Context) (interactiveRecoveryStatus, error) {
@@ -82,10 +81,15 @@ func (s *Store) recoverInteractiveCallsOnce(ctx context.Context) (interactiveRec
 			status.Interrupted = 1
 		}
 	}
+	if persist.Err() == nil {
+		if err := (embeddingCalls{store: s}).recordInterrupted(persist); err != nil {
+			failures = append(failures, err)
+		}
+	}
 	s.pendingInteractive.Range(func(_, _ any) bool { status.PendingResults++; return true })
 	if persist.Err() == nil {
 		err := s.pool.QueryRow(persist, `SELECT
- count(*) FILTER(WHERE result_receipt->'billing' IS NOT NULL AND result_receipt->'billing'<>'null'::jsonb AND (accounting_state IN ('pending','failed','reserved') OR (actual_mode->>'operation'='embedding' AND actual_mode->>'inputPayload'='result_saved' AND (`+inactiveInteractiveExecutionSQL+`)))),
+ count(*) FILTER(WHERE accounting_state IN ('pending','failed','reserved') AND result_receipt->'billing' IS NOT NULL AND result_receipt->'billing'<>'null'::jsonb),
  count(*) FILTER(WHERE outcome IN ('prepared','started') AND (`+inactiveInteractiveExecutionSQL+`))
  FROM model_calls c WHERE input_manifest->>'version'='interactive-input-v1'`).Scan(&status.PendingAccounting, &status.PendingInterrupted)
 		if err != nil {
@@ -104,7 +108,7 @@ func (s *Store) recoverInteractiveCallsOnce(ctx context.Context) (interactiveRec
 // can remove every private body without preventing original usage settlement.
 func (a interactiveCalls) recoverAccountingReceipt(ctx context.Context) (bool, error) {
 	var row interactiveCallRow
-	err := a.store.pool.QueryRow(ctx, `SELECT to_jsonb(c) FROM model_calls c WHERE input_manifest->>'version'='interactive-input-v1' AND result_receipt->'billing' IS NOT NULL AND result_receipt->'billing'<>'null'::jsonb AND (accounting_state IN ('pending','failed','reserved') OR (actual_mode->>'operation'='embedding' AND actual_mode->>'inputPayload'='result_saved' AND (`+inactiveInteractiveExecutionSQL+`))) ORDER BY updated_at,id LIMIT 1`).Scan(&row)
+	err := a.store.pool.QueryRow(ctx, `SELECT to_jsonb(c) FROM model_calls c WHERE input_manifest->>'version'='interactive-input-v1' AND accounting_state IN ('pending','failed','reserved') AND result_receipt->'billing' IS NOT NULL AND result_receipt->'billing'<>'null'::jsonb ORDER BY updated_at,id LIMIT 1`).Scan(&row)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return false, nil
 	}
@@ -125,12 +129,10 @@ func (a interactiveCalls) recoverAccountingReceipt(ctx context.Context) (bool, e
 		return false, errors.Join(fmt.Errorf("interactive_billing_receipt_invalid: %w", memory.ErrConflict), markErr)
 	}
 	request := modelcall.Request{OwnerID: row.OwnerID, ExecutionID: row.ExecutionID, RootExecutionID: row.RootExecutionID, CausationID: row.CausationID, Function: row.Function, Stage: row.Stage, ProviderID: row.Provider, Policy: interactiveCallPolicy{Kind: row.Manifest.Kind, Origin: row.Manifest.Origin, BudgetOwner: row.Manifest.BudgetOwner, Usage: row.Mode.Usage}}
-	if row.Accounting != "settled" && row.Accounting != "held" {
-		if err := a.store.calls.RecoverAccounting(ctx, request, paid); err != nil {
-			return false, err
-		}
+	if err := a.store.calls.RecoverAccounting(ctx, request, paid); err != nil {
+		return false, err
 	}
-	_, err = a.store.pool.Exec(ctx, `WITH discarded AS (UPDATE model_calls c SET result_receipt=jsonb_set(result_receipt,'{availableForApplication}','false'::jsonb),actual_mode=CASE WHEN actual_mode->>'operation'='embedding' THEN actual_mode||'{"inputPayload":"discarded"}'::jsonb ELSE actual_mode END,updated_at=clock_timestamp() WHERE owner_id=$1 AND id=$2 AND input_manifest->>'budgetOwner' IS DISTINCT FROM 'deputy_run' AND (`+inactiveInteractiveExecutionSQL+`) RETURNING owner_id,id,actual_mode) DELETE FROM background_model_results b USING discarded c WHERE (b.owner_id,b.job_id)=(c.owner_id,c.id) AND c.actual_mode->>'operation'='embedding'`, string(row.OwnerID), string(row.ID))
+	_, err = a.store.pool.Exec(ctx, `UPDATE model_calls c SET result_receipt=jsonb_set(result_receipt,'{availableForApplication}','false'::jsonb),updated_at=clock_timestamp() WHERE owner_id=$1 AND id=$2 AND input_manifest->>'budgetOwner' IS DISTINCT FROM 'deputy_run' AND (`+inactiveInteractiveExecutionSQL+`)`, string(row.OwnerID), string(row.ID))
 	return err == nil, err
 }
 
@@ -182,9 +184,6 @@ func (a interactiveCalls) recordInterruptedExecution(ctx context.Context) (bool,
 			}
 		}
 		_, err = tx.Exec(ctx, `UPDATE model_calls SET outcome=$3,error_code=$4,accounting_state=$5,finished_at=coalesce(finished_at,clock_timestamp()),actual_mode=actual_mode||jsonb_build_object('interruptedOutcome',$3::text,'interruptedAt',clock_timestamp(),'usageComplete',$6::boolean,'providerSubmitted',$7::boolean,'interruptedReason','execution_not_active'),updated_at=clock_timestamp() WHERE owner_id=$1 AND id=$2`, string(row.OwnerID), string(row.ID), outcome, code, accounting, outcome != "unknown", row.Outcome == "started")
-		if err == nil {
-			_, err = tx.Exec(ctx, `WITH discarded AS (UPDATE model_calls SET actual_mode=actual_mode||'{"inputPayload":"discarded"}'::jsonb WHERE owner_id=$1 AND id=$2 AND actual_mode->>'operation'='embedding' RETURNING owner_id,id) DELETE FROM background_model_results b USING discarded c WHERE (b.owner_id,b.job_id)=(c.owner_id,c.id)`, string(row.OwnerID), string(row.ID))
-		}
 		recorded = err == nil
 		return err
 	})

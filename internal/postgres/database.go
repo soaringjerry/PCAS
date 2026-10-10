@@ -60,6 +60,9 @@ func (s *Store) SetModelsWithGatewayProviders(models *ai.Registry, providers mod
 	s.models = models
 	adapter := modelCallStorage{backgroundCalls{store: s}, interactiveCalls{store: s}}
 	s.calls = modelcall.New(providers, adapter, adapter, adapter)
+	if models != nil {
+		s.calls.WithEmbeddings(models, embeddingCalls{store: s})
+	}
 }
 func (s *Store) SetBlobs(blobs memory.BlobStore) { s.blobs = blobs }
 

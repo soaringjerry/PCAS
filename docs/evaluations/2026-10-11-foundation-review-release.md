@@ -155,6 +155,24 @@ Neither log has an error, and no container restarted.
 
 The storage package has 25,307 lines without tests at this revision. It had 28,355 lines at the review.
 
+## Eleventh Release on the Same Day
+
+Released revision: `5fa573fb01f5d6c03225b34854ebff3f519619d9`. Earlier revision: `8196ddc`.
+Pull requests #340, #342, and #343 give the changes: the assembly of the deputy's model input left the storage package, and the live check got a turn that delegates one run to the deputy.
+
+The release had no database migration. The backup was validated, and the record counts are equal before and after the start: 5,253 claims and 27 work items.
+The two work items more than at the tenth release are projects that the topic project job made at 13:00 UTC. They are not from a check.
+
+The live check on the real default Codex channel passed with four turns: an answer, an arrangement (`create_task`, done), a change (`update`, done), and a delegation (`delegate`, done).
+The delegated run finished as done in 42 seconds from the start of its turn. Its deputy call was returned and settled. The cleanup succeeded and the record counts are equal.
+This was the first deputy run in a live check. The brief of that run was built by the moved code on the owner's real memory.
+The run recorded that six source excerpts and four source contexts did not fit the brief. These counts are a reading of the brief limit against the real amount of retrieved material; they are kept as a business case and are not changed in this phase.
+Neither log has an error, and no container restarted.
+
+Since the seventh release, the live instance ran handover, project handover, and topic project jobs. It ran no organize, extraction, or attachment job, because no new input arrived.
+
+The storage package has 25,217 lines without tests at this revision. It had 28,355 lines at the review.
+
 ## Host Cleanup
 
 The owner approved removal of leftover data on 2026-10-11.

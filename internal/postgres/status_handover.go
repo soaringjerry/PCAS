@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -114,7 +115,7 @@ func statusTrustTx(ctx context.Context, tx pgx.Tx, owner memory.ID, m workspace.
 	if acquisition == "reported" {
 		return "reported", nil
 	}
-	if qualifiedCapture(m.Text) {
+	if extraction.QualifiedCapture(m.Text) {
 		return "tentative", nil
 	}
 	if distinct >= 2 {

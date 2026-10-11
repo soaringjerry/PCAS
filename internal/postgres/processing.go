@@ -4,11 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
 	"strconv"
 	"strings"
 	"time"
-	"unicode"
-	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/ai"
@@ -228,92 +227,12 @@ func (s *Store) ProcessEmbedding(ctx context.Context, j worker.Job) (err error) 
 	})
 }
 
-type extractedItem struct {
-	People        []string       `json:"people,omitempty"`
-	Places        []string       `json:"places,omitempty"`
-	Organizations []string       `json:"organizations,omitempty"`
-	When          *extractedWhen `json:"when,omitempty"`
-	Qualification string         `json:"qualification,omitempty"`
-	Kind          string         `json:"kind"`
-	Text          string         `json:"text"`
-	Nature        string         `json:"nature"`
-	Subject       string         `json:"subject"`
-	Predicate     string         `json:"predicate"`
-	Quote         string         `json:"quote"`
-	Confidence    float64        `json:"confidence"`
-	Explicit      bool           `json:"explicit"`
-	Acquisition   string         `json:"acquisition"`
-}
-
-type extracted struct {
-	Signals []conditionSignal `json:"signals"`
-	Items   []extractedItem   `json:"items"`
-}
+type (
+	extractedItem = extraction.Item
+	extracted     = extraction.Output
+)
 
 var structuredExtractionInstructions = prompts.Must("structured-extraction").Text()
-
-// Direct user expressions are source-backed, not user-confirmed. Imports,
-// quotations, tentative statements and model inferences still require review.
-func extractionConfirmation(source memory.SourceResult, item extractedItem) string {
-	if item.Qualification != "" && item.Qualification != "asserted" || qualifiedCapture(qualificationContext(source.Source.Text, item.Quote)) {
-		return "candidate"
-	}
-	currentInput := oneOf(source.Source.Connector, "capture", "desk", "telegram", "desk-incomplete") &&
-		(source.Context == nil || source.Context.Role == "user" && source.Context.Branch != "historical")
-	if currentInput && item.Acquisition == "direct" && item.Confidence >= 0.8 {
-		return "adopted"
-	}
-	return "candidate"
-}
-
-func qualificationContext(source, quote string) string {
-	at := strings.Index(source, quote)
-	if at < 0 || quote == "" {
-		return quote
-	}
-	// Inspect the surrounding statement so extraction cannot drop its leading
-	// qualifier, without making an unrelated tentative sentence on the same
-	// line add a confirmation burden to a direct assertion.
-	const boundaries = "\n.!?。！？;；"
-	start := strings.LastIndexAny(source[:at], boundaries)
-	if start < 0 {
-		start = 0
-	} else {
-		// The boundary can be multibyte; only the following statement matters.
-		_, size := utf8.DecodeRuneInString(source[start:])
-		start += size
-	}
-	end := at + len(quote)
-	last, _ := utf8.DecodeLastRuneInString(strings.TrimSpace(quote))
-	if strings.ContainsRune(boundaries, last) {
-		return source[start:end]
-	}
-	if boundary := strings.IndexAny(source[end:], boundaries); boundary >= 0 {
-		end += boundary
-	} else {
-		end = len(source)
-	}
-	return source[start:end]
-}
-
-var qualifiedCaptureMarkers = []string{"可能", "也许", "大概", "不确定", "考虑", "假如", "假设", "如果", "据说", "听说", "他说", "她说", "更正", "纠正", "不再", "原以为", "暂时", "试试", "“", "”", "\""}
-var qualifiedCaptureWords = []string{"maybe", "perhaps", "probably", "possibly", "likely", "might", "could", "not sure", "i think", "considering", "if", "said", "correction", "actually", "no longer"}
-
-func qualifiedCapture(text string) bool {
-	lower := strings.ToLower(text)
-	for _, marker := range qualifiedCaptureMarkers {
-		if strings.Contains(lower, marker) {
-			return true
-		}
-	}
-	words := " " + strings.Join(strings.FieldsFunc(lower, func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsNumber(r) }), " ") + " "
-	for _, marker := range qualifiedCaptureWords {
-		if strings.Contains(words, " "+marker+" ") {
-			return true
-		}
-	}
-	return false
-}
 
 func currentExtractionSource(ctx context.Context, tx pgx.Tx, j worker.Job) (bool, error) {
 	var version int
@@ -396,9 +315,8 @@ func (s *Store) ProcessExtraction(ctx context.Context, j worker.Job) (err error)
 		return &worker.JobError{Code: "provider_not_configured"}
 	}
 	// Long imports are separate fenced jobs with overlapping context windows.
-	const window, step = 12000, 11000
 	runes := []rune(source.Source.Text)
-	if len(runes) > window && j.Stage == "source.extract" {
+	if starts := extraction.WindowStarts(len(runes)); len(starts) > 0 && j.Stage == "source.extract" {
 		return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 			if err := extractionOwnerLock(ctx, tx, j.OwnerID); err != nil {
 				return err
@@ -413,12 +331,9 @@ func (s *Store) ProcessExtraction(ctx context.Context, j worker.Job) (err error)
 			if !current {
 				return acknowledge(ctx, tx, j)
 			}
-			for start := 0; start < len(runes); start += step {
+			for _, start := range starts {
 				if err := enqueue(ctx, tx, j.OwnerID, j.Record.ID, j.Record.Version, "source.extract:"+strconv.Itoa(start)); err != nil {
 					return err
-				}
-				if start+window >= len(runes) {
-					break
 				}
 			}
 			if _, err := tx.Exec(ctx, `UPDATE memory_jobs SET priority=CASE WHEN $4 THEN 10 ELSE (SELECT priority FROM memory_jobs WHERE id=$5) END
@@ -430,10 +345,13 @@ func (s *Store) ProcessExtraction(ctx context.Context, j worker.Job) (err error)
 	}
 	if parts := strings.SplitN(j.Stage, ":", 2); len(parts) == 2 {
 		start, err := strconv.Atoi(parts[1])
-		if err != nil || start < 0 || start >= len(runes) {
+		if err != nil {
 			return memory.ErrInvalid
 		}
-		source.Source.Text = string(runes[start:min(start+window, len(runes))])
+		var ok bool
+		if source.Source.Text, ok = extraction.WindowText(runes, start); !ok {
+			return memory.ErrInvalid
+		}
 	}
 	p, ok := s.models.Get(s.models.ExtractionID())
 	if !ok || p.Embedding || p.Transcription {
@@ -477,7 +395,7 @@ func (s *Store) ProcessExtraction(ctx context.Context, j worker.Job) (err error)
 			return err
 		}
 	}
-	prompt := string(asJSON(map[string]any{"source_project_id": sourceProject, "source": source.Source.Text, "source_context": source.Context, "expressed_at": sourceExpressedAt(source), "timezone": modelSettings.Timezone, "adjacent_messages": adjacent, "pending_conditions": conditions}))
+	prompt := string(asJSON(map[string]any{"source_project_id": sourceProject, "source": source.Source.Text, "source_context": source.Context, "expressed_at": extraction.ExpressedAt(source), "timezone": modelSettings.Timezone, "adjacent_messages": adjacent, "pending_conditions": conditions}))
 	mentionText := groundingText
 	for _, message := range adjacent {
 		if text, ok := message["text"].(string); ok {
@@ -504,12 +422,8 @@ func (s *Store) ProcessExtraction(ctx context.Context, j worker.Job) (err error)
 	}
 	sourceProject = paidScope.ProjectID
 	free := p.Reserve(structuredExtractionInstructions+prompt) == 0
-	text := strings.TrimSpace(result.Output)
-	text = strings.TrimPrefix(text, "```json")
-	text = strings.TrimPrefix(text, "```")
-	text = strings.TrimSuffix(text, "```")
-	var extraction extracted
-	if modelcall.DecodeStrict([]byte(strings.TrimSpace(text)), &extraction) != nil {
+	output, valid := extraction.ParseOutput(result.Output)
+	if !valid {
 		if err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error { return discardPaidResultTx(ctx, tx, j) }); err != nil {
 			return err
 		}
@@ -558,26 +472,16 @@ func (s *Store) ProcessExtraction(ctx context.Context, j worker.Job) (err error)
 		accepted := 0
 		seenOutputQuotes := map[string]bool{}
 		// Thirty items per write chunk bounds local work; every returned chunk is consumed.
-		for start := 0; start < len(extraction.Items); start += 30 {
-			for _, item := range extraction.Items[start:min(start+30, len(extraction.Items))] {
+		for start := 0; start < len(output.Items); start += 30 {
+			for _, item := range output.Items[start:min(start+30, len(output.Items))] {
 				if fullyUndone && item.Kind == "memory" && (oneOf(item.Nature, "plan", "intention") || !remembered) {
 					continue
 				}
 				if source.Source.Connector == "desk" && oneOf(item.Kind, "task", "idea") {
 					continue
 				}
-				if !oneOf(item.Acquisition, "direct", "reported", "inferred") {
-					item.Acquisition = "inferred"
-				}
-				if source.Context != nil && (source.Context.Role == "assistant" || source.Context.Role == "system" || source.Context.Role == "tool" || source.Context.Branch == "historical") {
-					item.Explicit = false
-					item.Acquisition = "inferred"
-					if source.Context.Role != "user" {
-						item.Subject = "AI 或工具（非用户）"
-						item.Text = "AI 或工具当时的表达：" + item.Text
-					}
-				}
-				if requireText(item.Text) != nil || item.Quote == "" || !strings.Contains(source.Source.Text, item.Quote) || !oneOf(item.Kind, "memory", "task", "idea", "unknown") || item.Confidence < 0 || item.Confidence > 1 {
+				item = extraction.Normalize(item, source.Context)
+				if !extraction.Grounded(item, source.Source.Text) {
 					continue
 				}
 				if oneOf(item.Kind, "task", "idea") {
@@ -595,23 +499,23 @@ func (s *Store) ProcessExtraction(ctx context.Context, j worker.Job) (err error)
 					continue
 				}
 				v := workspace.Candidate{ID: string(memory.NewID()), Kind: item.Kind, Text: item.Text, MemoryKind: item.Nature, Confidence: item.Confidence, Source: workspace.SourceRef{SourceID: string(j.Record.ID), Version: j.Record.Version, Label: source.Source.Title, Excerpt: item.Quote, At: stamp()}, State: "pending", CreatedAt: stamp()}
-				if item.Kind == "memory" && oneOf(item.Nature, "fact", "preference", "decision", "intention", "plan") {
-					confirmation := extractionConfirmation(source, item)
+				if extraction.Statement(item) {
+					confirmation := extraction.Confirmation(source, item)
 					if imported {
 						confirmation = "candidate"
 					}
-					in := statement{ProjectID: sourceProject, Text: item.Text, Nature: item.Nature, Subject: item.Subject, Predicate: item.Predicate, Confirmation: confirmation, Acquisition: item.Acquisition, Actor: "ai", Quote: item.Quote, Source: j.Record, Structured: true, ExpressedAt: sourceExpressedAt(source)}
+					in := statement{ProjectID: sourceProject, Text: item.Text, Nature: item.Nature, Subject: item.Subject, Predicate: item.Predicate, Confirmation: confirmation, Acquisition: item.Acquisition, Actor: "ai", Quote: item.Quote, Source: j.Record, Structured: true, ExpressedAt: extraction.ExpressedAt(source)}
 					// The model can extract several independent memories from one
 					// quotation. Later siblings must not overwrite the first item.
 					quoteKey := string(in.Source.ID) + "/" + in.Quote
 					in.AllowNewAtQuote = seenOutputQuotes[quoteKey]
 					seenOutputQuotes[quoteKey] = true
-					in.EventFrom, in.EventTo, in.EventPrecision = extractionEvent(item.When, source, loc)
+					in.EventFrom, in.EventTo, in.EventPrecision = extraction.Event(item.When, source, loc)
 					in.Mentions = append(in.Mentions, groundedMentions(item.People, "person", mentionText)...)
 					in.Mentions = append(in.Mentions, groundedMentions(item.Places, "place", mentionText)...)
 					in.Mentions = append(in.Mentions, groundedMentions(item.Organizations, "organization", mentionText)...)
 					if source.Context == nil || source.Context.Role == "user" {
-						if oneOf(strings.TrimSpace(item.Subject), "我", "我们", "用户", "本人", "用户本人") {
+						if extraction.SelfSubject(item.Subject) {
 							in.SubjectType = "self"
 						} else if names := groundedMentions([]string{item.Subject}, "person", mentionText); len(names) > 0 {
 							in.Subject, in.SubjectType = names[0].Name, "person"
@@ -645,9 +549,9 @@ func (s *Store) ProcessExtraction(ctx context.Context, j worker.Job) (err error)
 		}
 		if settings.WakeIdeas {
 			if imported || source.Context != nil && (source.Context.Role != "user" || source.Context.Branch == "historical") {
-				extraction.Signals = nil
+				output.Signals = nil
 			}
-			if err := s.applySignalsTx(ctx, tx, scope, source.Source, extraction.Signals); err != nil {
+			if err := s.applySignalsTx(ctx, tx, scope, source.Source, output.Signals); err != nil {
 				return err
 			}
 		}

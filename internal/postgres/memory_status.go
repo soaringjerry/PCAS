@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"fmt"
+	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
@@ -96,7 +97,7 @@ func memoryTrust(text, acquisition string, status claimStatus) string {
 	if acquisition == "reported" {
 		return "reported"
 	}
-	if qualifiedCapture(text) {
+	if extraction.QualifiedCapture(text) {
 		return "tentative"
 	}
 	if status.EvidenceGroups >= 2 {

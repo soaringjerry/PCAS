@@ -80,7 +80,8 @@ Storage implements `Workspace` in the action's transaction. It keeps the command
 Behavior tests run the actions against a workspace in memory. They need no database.
 `RenderWorkspace` writes the workspace part of the model input: the projects, the tasks, the ideas, the conversation history, and the items of the conversation. Storage reads the facts and records each cut of a long project evidence. A contract test fixes the bytes.
 `RenderMemories`, `RenderExcerpts`, and `RenderEvidence` write the memory part of the model input and give each memory and each source its alias. Storage reads in two steps: first the recall and the current state, then the source context of the memories that were given an alias.
-The turn itself and its context are still in `internal/postgres/desk_turn.go`. They are the largest part of the phase that remains.
+The rules for applying an answer are in the same package: ten actions in one turn at most, the receipt of an action whose fields were not read, the receipt of an action that did not finish, the alias of an item that an earlier action of the turn made, and which shown memories the owner took up or mentioned.
+The order of the turn, its transactions, its model call, and its context are still in `internal/postgres/desk_turn.go`. They are the largest part of the phase that remains.
 
 The context builder is `internal/contextbuilder`. It serializes memory and current state for the model input of an agent turn: the handover, the requirements, the dates, the memories with their metadata, and the lines of a source context. The secretary and the deputy use the same rules.
 It needs no storage. The caller reads the data and gives each memory its alias. The reads of the memory part are still in storage. The deputy still assigns its labels and its budgets in storage.

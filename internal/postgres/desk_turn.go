@@ -685,49 +685,26 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 				original.SourceID = string(ref.ID)
 				original.Version = ref.Version
 			}
-			out.Turn.Reply = secretaryReply(answer.Reply)
-			if c.Use.Coverage != nil && len(c.Use.Coverage.Skipped) > 0 {
-				out.Turn.Reply += "\n这几组没来得及看：" + strings.Join(c.Use.Coverage.Skipped, "、")
+			var notRead []string
+			if c.Use.Coverage != nil {
+				notRead = c.Use.Coverage.Skipped
 			}
+			out.Turn.Reply = secretary.Reply(answer.Reply, notRead)
 			if c.Use.Coverage != nil {
 				for _, note := range c.Use.Coverage.Notices {
 					out.Turn.Receipts = append(out.Turn.Receipts, workspace.DeskReceipt{Op: "reader", Text: note, Status: "skipped"})
 				}
 			}
-			if answer.MemoryPlan != nil && len(c.History) > 0 {
-				last := c.History[len(c.History)-1]
-				for _, alias := range answer.MemoryPlan.Adopted {
-					m, ok := sent[alias]
-					if !ok {
-						continue
-					}
-					referenced := false
-					for _, card := range last.Cards {
-						if card.Kind == "sources" {
-							var items []workspace.DeskSourceItem
-							if json.Unmarshal(asJSON(card.Items), &items) == nil {
-								for _, item := range items {
-									if item.MemoryID == m.ID {
-										referenced = true
-									}
-								}
-							}
-						}
-					}
-					if !referenced {
-						continue
-					}
-					if err := recordContextUseTx(ctx, tx, scope, memory.UseEvent{Ref: memory.Ref{ID: memory.ID(m.ID), Version: m.Version, Kind: memory.ClaimKind}, EventID: out.Turn.ID + ":adopt:" + m.ID, Kind: "adoption", At: time.Now()}); err != nil && !errors.Is(err, memory.ErrConflict) && !errors.Is(err, memory.ErrNotFound) {
-						return err
-					}
-				}
+			var last *workspace.SecretaryTurn
+			if len(c.History) > 0 {
+				last = &c.History[len(c.History)-1]
 			}
-			if answer.MemoryPlan != nil {
-				for _, alias := range answer.MemoryPlan.Mentioned {
-					if m, ok := sent[alias]; ok {
-						if err := recordContextUseTx(ctx, tx, scope, memory.UseEvent{Ref: memory.Ref{ID: memory.ID(m.ID), Version: m.Version, Kind: memory.ClaimKind}, EventID: out.Turn.ID + ":mention:" + m.ID, Kind: "user_mention", At: time.Now()}); err != nil && !errors.Is(err, memory.ErrConflict) && !errors.Is(err, memory.ErrNotFound) {
-							return err
-						}
+			used := map[string][]workspace.Memory{"adoption": secretary.Adopted(answer.MemoryPlan, sent, last), "user_mention": secretary.Mentioned(answer.MemoryPlan, sent)}
+			for _, kind := range []string{"adoption", "user_mention"} {
+				label := map[string]string{"adoption": ":adopt:", "user_mention": ":mention:"}[kind]
+				for _, m := range used[kind] {
+					if err := recordContextUseTx(ctx, tx, scope, memory.UseEvent{Ref: memory.Ref{ID: memory.ID(m.ID), Version: m.Version, Kind: memory.ClaimKind}, EventID: out.Turn.ID + label + m.ID, Kind: kind, At: time.Now()}); err != nil && !errors.Is(err, memory.ErrConflict) && !errors.Is(err, memory.ErrNotFound) {
+						return err
 					}
 				}
 			}
@@ -742,26 +719,19 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 			for alias, item := range c.Aliases {
 				actionAliases[alias] = item
 			}
-			for i, a := range answer.Actions {
-				if a.SelfcheckDropped {
-					continue
+			steps, overLimit := secretary.PlanActions(answer.Actions)
+			if overLimit > 0 {
+				if err := stageEventTx(ctx, tx, scope.OwnerID, "secretary", "overflow", "action_limit", overLimit); err != nil {
+					return err
 				}
-				if i >= 10 {
-					extra := 0
-					for _, rest := range answer.Actions[i:] {
-						if !rest.SelfcheckDropped {
-							extra++
-						}
+			}
+			for _, step := range steps {
+				i, a := step.Index, step.Action
+				if step.Skipped != nil {
+					if a.ParseErr != nil && i < secretary.ActionLimit {
+						slog.WarnContext(ctx, "secretary action skipped", "stage", "parse", "error_type", secretary.ErrorType("parse", a.ParseErr))
 					}
-					out.Turn.Receipts = append(out.Turn.Receipts, secretary.Skipped(a.Op, "一次太多了，只做了前 10 件"))
-					if err := stageEventTx(ctx, tx, scope.OwnerID, "secretary", "overflow", "action_limit", extra); err != nil {
-						return err
-					}
-					break
-				}
-				if a.ParseErr != nil {
-					slog.WarnContext(ctx, "secretary action skipped", "stage", "parse", "error_type", secretary.ErrorType("parse", a.ParseErr))
-					out.Turn.Receipts = append(out.Turn.Receipts, secretary.Skipped(a.Op, "动作字段没看懂"))
+					out.Turn.Receipts = append(out.Turn.Receipts, *step.Skipped)
 					continue
 				}
 				actionID := string(memory.NewID())
@@ -789,11 +759,7 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 					if err = actionTx.Rollback(ctx); err != nil {
 						return err
 					}
-					if errors.Is(actionErr, workspace.ErrBudget) {
-						receipt = secretary.Skipped(a.Op, "超过今天的额度")
-					} else if actionErr != nil && receipt.Reason == "" {
-						receipt = secretary.Skipped(a.Op, "这件事暂时办不了")
-					}
+					receipt = secretary.Unfinished(a.Op, receipt, actionErr)
 				} else {
 					// The summary and receipt describe the actual persisted result.
 					actionCtx = withActionLog(actionCtx, actionID, "desk", out.Turn.ID, receipt.Text)
@@ -810,18 +776,18 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 						receipt.ActionID = &actionID
 						receipt.Undoable = true
 					} else {
-						receipt = secretary.Skipped(a.Op, "没有可执行的修改")
+						receipt = secretary.NothingChanged(a.Op)
 					}
 					out.Turn.Receipts = append(out.Turn.Receipts, projectReceipts...)
 					if err = actionTx.Commit(ctx); err != nil {
 						return err
 					}
-					if receipt.Status == "done" && receipt.ThingID != nil && oneOf(a.Op, "create_task", "create_idea", "create_project") {
+					if alias := secretary.CreatedAlias(a.Op, i); alias != "" && receipt.Status == "done" && receipt.ThingID != nil {
 						item, err := getItem(ctx, tx, scope, *receipt.ThingID)
 						if err != nil {
 							return err
 						}
-						actionAliases[fmt.Sprintf("N%d", i+1)] = item
+						actionAliases[alias] = item
 					}
 				}
 				out.Turn.Receipts = append(out.Turn.Receipts, receipt)

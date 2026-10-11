@@ -13,6 +13,7 @@ import (
 
 	"github.com/soaringjerry/PCAS/internal/worker"
 	"github.com/soaringjerry/PCAS/internal/workspace/effort"
+	"github.com/soaringjerry/PCAS/internal/workspace/projecthandover"
 )
 
 // Each old stage is rerun with the EXTENDED phase3 fixture, real HTTP user
@@ -139,7 +140,7 @@ func TestPhase3T2T4EachExistingStageConcurrentHTTPScale(t *testing.T) {
 // This is only an adapter for implementation-defined phase names/signatures.
 // It never infers expected results from the implementation. Until these stages
 // exist, S-P3-001/005 remain explicit blockers; no fake scheduler certifies them.
-// H adapter follows published PR #264: ScheduleStatus -> ProcessProjectHandover.
+// H adapter follows published PR #264: ScheduleStatus -> the project handover service.
 // The effort adapter must be aligned with the published P signatures when available.
 func phase3StageName(t *testing.T, logical string) string {
 	t.Helper()
@@ -187,8 +188,7 @@ func phase3Process(s *Store, ctx context.Context, logical string, job worker.Job
 		// The effort service is composed here as application setup composes it.
 		return effort.Service{Store: s.EffortStore(), Generator: s, Now: s.BusinessNow}.Process(ctx, job)
 	}
-	_, err := phase3ReflectCall(s, "ProcessProjectHandover", ctx, job)
-	return err
+	return projecthandover.Service{Store: s.ProjectHandoverStore(), Generator: s}.Process(ctx, job)
 }
 func TestPhase3G1G2G3G4G5ExistingPipelineRegressions(t *testing.T) {
 	// Every test below also runs on its own in this package; the wrapper is

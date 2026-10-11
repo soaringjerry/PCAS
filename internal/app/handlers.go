@@ -7,6 +7,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/postgres"
 	"github.com/soaringjerry/PCAS/internal/worker"
 	"github.com/soaringjerry/PCAS/internal/workspace/effort"
+	"github.com/soaringjerry/PCAS/internal/workspace/projecthandover"
 	"github.com/soaringjerry/PCAS/internal/workspace/topicproject"
 )
 
@@ -25,6 +26,11 @@ func DateReview(db *postgres.Store) datereview.Service {
 	return datereview.Service{Store: db.DateReviewStore(), Generator: db}
 }
 
+// ProjectHandover connects the project handover service to storage and generation.
+func ProjectHandover(db *postgres.Store) projecthandover.Service {
+	return projecthandover.Service{Store: db.ProjectHandoverStore(), Generator: db}
+}
+
 // Handlers gives the background worker one handler for each queue stage.
 // A stage whose domain has left the storage package uses its service here.
 // The other stages still call the storage package directly.
@@ -34,7 +40,7 @@ func Handlers(db *postgres.Store) map[string]worker.Handler {
 		"memory.entity_compare":    db.ProcessEntityCompare,
 		"memory.entity_candidates": db.ProcessEntityCandidates,
 		"memory.handover":          db.ProcessHandover,
-		"memory.project_handover":  db.ProcessProjectHandover,
+		projecthandover.Stage:      ProjectHandover(db).Process,
 		effort.Stage:               Effort(db).Process,
 		topicproject.Stage:         TopicProject(db).Process,
 		datereview.Stage:           DateReview(db).Process,

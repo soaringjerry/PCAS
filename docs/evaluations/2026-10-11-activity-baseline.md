@@ -2,7 +2,8 @@
 
 The [day activity query](../memory-service.md#day-activity) ran read-only on the live database on 2026-10-11.
 It returned counts and totals only. No event text left the database.
-The live revision was `a5c1483`. The days are local days in the owner's time zone.
+The live revision was `a5c1483`. Each day in this reading runs from 00:00 to 24:00 at UTC+8.
+The owner's configured time zone is Australia/Sydney, so these are not the owner's local days. The interface uses the owner's time zone.
 
 ## Readings
 

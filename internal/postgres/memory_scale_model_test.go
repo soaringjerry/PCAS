@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/soaringjerry/PCAS/internal/currentstate/handover"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -287,7 +288,7 @@ func phase26Process(ctx context.Context, s *Store, j worker.Job) error {
 	case EntityCandidatesStage:
 		return s.ProcessEntityCandidates(ctx, j)
 	case HandoverStage:
-		return s.ProcessHandover(ctx, j)
+		return (handover.Service{Store: s.HandoverStore(), Generator: s}).Process(ctx, j)
 	}
 	return fmt.Errorf("unknown test stage %s", j.Stage)
 }

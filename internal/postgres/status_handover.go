@@ -4,29 +4,21 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/soaringjerry/PCAS/internal/currentstate/handover"
 	"github.com/soaringjerry/PCAS/internal/memory"
-	"github.com/soaringjerry/PCAS/internal/prompts"
 	"github.com/soaringjerry/PCAS/internal/worker"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
-var handoverTitles = []string{"他是谁和现在的处境", "怎么跟他配合", "现在手上的事", "时间和节奏", "资源和限制", "口味和标准", "重要的人", "他的叫法", "他看重什么"}
+var handoverTitles = handover.Titles
 
-var handoverInstructions = prompts.Must("handover").Text()
+// The input assembly below is the context builder of the global handover service.
+type handoverSection = handover.Section
+type handoverOutput = handover.Output
 
-type handoverSection struct {
-	Title string `json:"title"`
-	Body  string `json:"body"`
-	Refs  []int  `json:"refs"`
-}
-type handoverOutput struct {
-	Sections []handoverSection `json:"sections"`
-}
 type handoverDependency struct {
 	Key     string `json:"key"`
 	BuiltAt string `json:"builtAt"`
@@ -185,118 +177,78 @@ func (s *Store) handoverInputTx(ctx context.Context, tx pgx.Tx, scope memory.Sco
 }
 
 func parseHandover(text string, memories []cardMemory) (string, bool) {
-	var output handoverOutput
-	if json.Unmarshal([]byte(text), &output) != nil || len(output.Sections) != 9 {
-		return "", false
+	trusts := make([]string, len(memories))
+	for i, m := range memories {
+		trusts[i] = m.Trust
 	}
-	sections := []string{}
-	for i, section := range output.Sections {
-		if section.Title != handoverTitles[i] {
-			return "", false
-		}
-		body := strings.TrimSpace(section.Body)
-		grounded := len(section.Refs) > 0
-		for _, n := range section.Refs {
-			if n < 1 || n > len(memories) {
-				grounded = false
-				break
-			}
-			m := memories[n-1]
-			if m.Trust == "inferred" {
-				grounded = false
-				break
-			}
-		}
-		if !grounded {
-			if body != "（暂无依据）" || len(section.Refs) != 0 {
-				return "", false
-			}
-		} else if body == "" {
-			return "", false
-		}
-		sections = append(sections, "## "+handoverTitles[i]+"\n"+body)
-	}
-	body := strings.Join(sections, "\n\n")
-	if utf8.RuneCountInString(body) > 1800 {
-		return "", false
-	}
-	return body, true
+	return handover.Parse(text, trusts)
 }
-func emptyHandover() string {
-	sections := []string{}
-	for _, title := range handoverTitles {
-		sections = append(sections, "## "+title+"\n（暂无依据）")
-	}
-	return strings.Join(sections, "\n\n")
+func emptyHandover() string { return handover.Empty() }
+
+// HandoverStore gives the global handover service its reads and writes.
+func (s *Store) HandoverStore() handover.Store { return handoverStore{s} }
+
+type handoverStore struct{ store *Store }
+
+func (a handoverStore) Exclusive(ctx context.Context) (func(), error) {
+	return statusCallLock(ctx, a.store)
 }
 
-func (s *Store) ProcessHandover(ctx context.Context, j worker.Job) error {
-	unlock, err := statusCallLock(ctx, s)
-	if err != nil {
-		return err
-	}
-	defer unlock()
-	cached, err := s.paidModelResult(ctx, j)
-	if err != nil {
-		return err
-	}
-	scope := memory.Scope{OwnerID: j.OwnerID, PrincipalID: "worker", IsOwner: true}
-	var input handoverInput
-	var refs []memory.Ref
-	if cached == nil {
-		err = pgx.BeginTxFunc(ctx, s.pool, pgx.TxOptions{IsoLevel: pgx.RepeatableRead}, func(tx pgx.Tx) error {
-			if err := lockJob(ctx, tx, j); err != nil {
-				return err
-			}
-			var built *time.Time
-			if err := tx.QueryRow(ctx, "SELECT (SELECT built_at FROM handovers WHERE owner_id=$1)", string(j.OwnerID)).Scan(&built); err != nil {
-				return err
-			}
-			if built != nil && time.Now().Before(built.Add(time.Hour)) {
-				return &worker.JobError{Code: "handover_interval", Until: built.Add(time.Hour), NoAttempt: true}
-			}
-			var err error
-			input, _, refs, err = s.handoverInputTx(ctx, tx, scope)
-			return err
-		})
-		if err != nil {
-			return err
-		}
-	}
-	result, err := s.generatePaid(ctx, j, "handover", handoverInstructions, asJSON(map[string]any{"input": input, "refs": refs, "memories": input.Memories, "requirements": input.Requirements, "deadlines": input.Deadlines}), refs)
-	if err != nil {
-		return err
-	}
-	var snapshot struct {
-		Input handoverInput `json:"input"`
-		Refs  []memory.Ref  `json:"refs"`
-	}
-	if err := json.Unmarshal(result.Prompt, &snapshot); err != nil {
-		return err
-	}
-	input = snapshot.Input
-	refs = snapshot.Refs
-	body, valid := parseHandover(result.Output, input.Memories)
-	if !valid {
-		if err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error { return discardPaidResultTx(ctx, tx, j) }); err != nil {
-			return err
-		}
-		return &worker.JobError{Code: "handover_invalid_output", Until: time.Now().Add(retryDelay(j.Attempts)), NoAttempt: false}
-	}
-	return backgroundResultTx(ctx, s.pool, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
+func (a handoverStore) Read(ctx context.Context, j worker.Job, fn func(handover.Reader) error) error {
+	return pgx.BeginTxFunc(ctx, a.store.pool, pgx.TxOptions{IsoLevel: pgx.RepeatableRead}, func(tx pgx.Tx) error {
 		if err := lockJob(ctx, tx, j); err != nil {
 			return err
 		}
-		// If input changed during generation, keep this valid snapshot available and
-		// leave it stale so the next hourly update can catch up without discarding it.
-		if _, err := tx.Exec(ctx, `INSERT INTO handovers(owner_id,body,rule,built_at,stale,depends,input_hash)
- VALUES($1,$2,$3,clock_timestamp(),$4 IS DISTINCT FROM library_handover_hash($1),'[]',$4)
- ON CONFLICT(owner_id) DO UPDATE SET body=excluded.body,rule=excluded.rule,built_at=excluded.built_at,stale=excluded.stale,depends='[]',input_hash=excluded.input_hash`, string(j.OwnerID), body, HandoverVersion, input.InputHash); err != nil {
-			return err
-		}
-		if err := discardPaidResultTx(ctx, tx, j); err != nil {
-			return err
-		}
-		return acknowledge(ctx, tx, j)
+		return fn(handoverUnit{ctx: ctx, tx: tx, job: j, store: a.store})
 	})
 }
+
+func (a handoverStore) DiscardResult(ctx context.Context, j worker.Job) error {
+	return pgx.BeginFunc(ctx, a.store.pool, func(tx pgx.Tx) error { return discardPaidResultTx(ctx, tx, j) })
+}
+
+func (a handoverStore) RetryLater(j worker.Job, code string) error {
+	return &worker.JobError{Code: code, Until: time.Now().Add(retryDelay(j.Attempts)), NoAttempt: false}
+}
+
+func (a handoverStore) Apply(ctx context.Context, j worker.Job, fn func(handover.Unit) error) error {
+	return backgroundResultTx(ctx, a.store.pool, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
+		if err := lockJob(ctx, tx, j); err != nil {
+			return err
+		}
+		return fn(handoverUnit{ctx: ctx, tx: tx, job: j, store: a.store})
+	})
+}
+
+type handoverUnit struct {
+	ctx   context.Context
+	tx    pgx.Tx
+	job   worker.Job
+	store *Store
+}
+
+func (u handoverUnit) WrittenAt() (*time.Time, error) {
+	var built *time.Time
+	err := u.tx.QueryRow(u.ctx, "SELECT (SELECT built_at FROM handovers WHERE owner_id=$1)", string(u.job.OwnerID)).Scan(&built)
+	return built, err
+}
+
+func (u handoverUnit) Input() (json.RawMessage, []memory.Ref, error) {
+	input, _, refs, err := u.store.handoverInputTx(u.ctx, u.tx, memory.Scope{OwnerID: u.job.OwnerID, PrincipalID: "worker", IsOwner: true})
+	if err != nil {
+		return nil, nil, err
+	}
+	return asJSON(map[string]any{"input": input, "refs": refs, "memories": input.Memories, "requirements": input.Requirements, "deadlines": input.Deadlines}), refs, nil
+}
+
+// If the input changed during generation, the valid text is kept and marked
+// stale, so that the next hourly update can catch up without discarding it.
+func (u handoverUnit) SaveHandover(body, inputHash string) error {
+	_, err := u.tx.Exec(u.ctx, `INSERT INTO handovers(owner_id,body,rule,built_at,stale,depends,input_hash)
+ VALUES($1,$2,$3,clock_timestamp(),$4 IS DISTINCT FROM library_handover_hash($1),'[]',$4)
+ ON CONFLICT(owner_id) DO UPDATE SET body=excluded.body,rule=excluded.rule,built_at=excluded.built_at,stale=excluded.stale,depends='[]',input_hash=excluded.input_hash`, string(u.job.OwnerID), body, HandoverVersion, inputHash)
+	return err
+}
+
+func (u handoverUnit) DiscardResult() error { return discardPaidResultTx(u.ctx, u.tx, u.job) }
+func (u handoverUnit) Acknowledge() error   { return acknowledge(u.ctx, u.tx, u.job) }

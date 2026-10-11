@@ -3,6 +3,7 @@ package postgres_test
 import (
 	"encoding/json"
 	"errors"
+	"github.com/soaringjerry/PCAS/internal/currentstate/handover"
 	"net/http"
 	"strings"
 	"testing"
@@ -69,7 +70,7 @@ func (f *phase25B234Fixture) statusJob(t *testing.T) string {
 		if priority != 14 {
 			t.Errorf("handover priority=%d, want 14", priority)
 		}
-		processErr = f.store.ProcessHandover(f.ctx, *j)
+		processErr = (handover.Service{Store: f.store.HandoverStore(), Generator: f.store}).Process(f.ctx, *j)
 	} else {
 		t.Fatalf("unrelated job claimed: %s", j.Stage)
 	}

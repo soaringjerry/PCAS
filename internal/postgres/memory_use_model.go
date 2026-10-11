@@ -38,48 +38,6 @@ func safeUsePlan(raw json.RawMessage) any {
 	}
 	return json.RawMessage(asJSON(usePlan{Groups: keys, Depth: p.Depth}))
 }
-func secretaryNeedsCheck(out secretaryOutput) bool {
-	for _, a := range out.Actions {
-		if containsAny(a.Op, "delete", "send") {
-			return true
-		}
-	}
-	return false
-}
-
-// Slots stay in their original order so N references cannot be rebound. A
-// rejected revision keeps the original slot; the checker cannot add authority.
-func constrainSecretaryCheck(before, after secretaryOutput) secretaryOutput {
-	actions := append([]secretaryAction{}, before.Actions...)
-	for i := len(after.Actions); i < len(actions); i++ {
-		actions[i].SelfcheckDropped = true
-	}
-	for i, a := range after.Actions {
-		if i >= len(actions) {
-			break
-		}
-		old := before.Actions[i]
-		if a.Op == "skip" {
-			actions[i].SelfcheckDropped = true
-			continue
-		}
-		if old.Op == "delegate" && (old.Kind != a.Kind || pointerValue(old.DocumentID) != pointerValue(a.DocumentID) || intPointerValue(old.BaseVersion) != intPointerValue(a.BaseVersion)) || old.Op == "add_steps" && len(a.Steps) > len(old.Steps) || old.Op == "close_date" && old.As != a.As {
-			continue
-		}
-		if old.ParseErr != nil || a.ParseErr != nil || old.Op != a.Op || old.Ref != a.Ref || pointerValue(old.Project) != pointerValue(a.Project) {
-			continue
-		}
-		// Changing a project in an update redirects the action to another object.
-		if string(old.Set["project"]) != string(a.Set["project"]) {
-			continue
-		}
-		actions[i] = a
-	}
-	after.Actions = actions
-	after.MemoryPlan = before.MemoryPlan
-	after.Remember = before.Remember
-	return after
-}
 func (s *Store) useModelCall(ctx, persist context.Context, scope memory.Scope, agent, stage string, instructions prompts.Definition, prompt string, schema prompts.Schema, usage modelUsage) (ai.Result, error) {
 	request, ok := ctx.Value(interactiveExecutionKey{}).(modelcall.Request)
 	if !ok || request.OwnerID != scope.OwnerID || !request.ExecutionID.Valid() {
@@ -135,7 +93,7 @@ func (s *Store) checkSecretary(ctx, persist context.Context, scope memory.Scope,
 		var after secretaryOutput
 		after, err = secretary.ParseOutput(raw.Text)
 		if err == nil {
-			return constrainSecretaryCheck(before, after), nil
+			return secretary.ConstrainCheck(before, after), nil
 		}
 	}
 	slog.WarnContext(persist, "memory selfcheck fallback", "stage", "selfcheck", "error_type", secretary.ErrorType("selfcheck", err))
@@ -165,10 +123,3 @@ func writeReaderMemories(ms []workspace.Memory, loc *time.Location) string {
 
 // Registered bytes retain the skip-action slot and original field order.
 var secretaryCheckSchema = prompts.MustSchema("secretary-check").Bytes()
-
-func intPointerValue(v *int) int {
-	if v == nil {
-		return 0
-	}
-	return *v
-}

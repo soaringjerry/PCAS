@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 	"net/http"
 	"strings"
 	"sync/atomic"
@@ -193,7 +194,7 @@ func TestB4MediumCannotAddActionsAndFallsBack(t *testing.T) {
 func TestB4SelfcheckPreservesSlotAuthority(t *testing.T) {
 	before := secretaryOutput{Actions: []secretaryAction{{Op: "create_task", Title: "原任务"}, {Op: "add_steps", Ref: "N1", Steps: []string{"原步骤"}}}}
 	after := secretaryOutput{Actions: []secretaryAction{{Op: "delete", Ref: "T1"}, {Op: "add_steps", Ref: "T2", Steps: []string{"别的目标"}}, {Op: "create_task", Title: "额外任务"}}}
-	got := constrainSecretaryCheck(before, after)
+	got := secretary.ConstrainCheck(before, after)
 	if string(asJSON(got.Actions)) != string(asJSON(before.Actions)) {
 		t.Fatal(got)
 	}

@@ -12,10 +12,8 @@ import (
 	"log/slog"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/soaringjerry/PCAS/internal/ai"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/modelcall"
 	"github.com/soaringjerry/PCAS/internal/prompts"
@@ -365,30 +363,14 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 	if err := requireOwner(scope); err != nil {
 		return out, err
 	}
+	req, err := secretary.CheckRequest(req)
+	if err != nil {
+		return out, err
+	}
 	if req.SmokeID != "" {
-		if !memory.ID(req.SmokeID).Valid() || len(req.Attachments) != 0 || (req.ConversationID != nil && !strings.EqualFold(*req.ConversationID, req.SmokeID)) {
-			return out, memory.ErrInvalid
-		}
-		req.SmokeID = strings.ToLower(req.SmokeID)
-		req.ConversationID = &req.SmokeID
 		ctx = withSmoke(ctx, req.SmokeID)
 	}
 	text := strings.TrimSpace(req.Text)
-	if !memory.ID(req.RequestID).Valid() || (text == "" && len(req.Attachments) == 0) || len(req.Attachments) > 4 || utf8.RuneCountInString(text) > 4000 {
-		return out, memory.ErrInvalid
-	}
-	seenAttachments := map[memory.ID]bool{}
-	for _, ref := range req.Attachments {
-		if !ref.ID.Valid() || ref.Version < 1 || ref.Kind != memory.SourceKind || seenAttachments[ref.ID] {
-			return out, memory.ErrInvalid
-		}
-		seenAttachments[ref.ID] = true
-	}
-	for _, id := range []*string{req.ConversationID, req.ThingID} {
-		if id != nil && !memory.ID(*id).Valid() {
-			return out, memory.ErrInvalid
-		}
-	}
 	// Finish accepted input durably even when the caller disconnects. Model
 	// generation still observes the caller cancellation below.
 	requestCtx := ctx
@@ -510,29 +492,16 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 			if contextErr == nil {
 				if c.Tier == "heavy" && c.Use.Ready {
 					heavyCtx, heavyCancel := context.WithDeadline(requestCtx, turnStarted.Add(heavyReaderBudget))
-					taskText := req.Text
+					var this *workspace.Item
 					if item, ok := c.Aliases["THIS"]; ok {
-						taskText += "\n事项：" + item.Title + "\n" + item.Notes + "\n" + item.Body + "\n目标：" + item.Goal
+						this = &item
 					}
+					taskText := secretary.HeavyTaskText(req.Text, this)
 					picked, refs, keys := s.heavyUse(heavyCtx, ctx, scope, c.Agent, req.ThingID, taskText, c.Use, out.Turn.ID, "", "reader:prepare")
 					heavyCancel()
 					c.Use.Groups = keys
 					c.Dependencies = uniqueRefs(append(c.Dependencies, refs...))
-					for _, m := range picked {
-						alias := fmt.Sprintf("M%d", len(sent)+1)
-						exists := false
-						for _, v := range sent {
-							if v.ID == m.ID {
-								exists = true
-								break
-							}
-						}
-						if exists {
-							continue
-						}
-						sent[alias] = m
-						prompt += fmt.Sprintf("\n重档读者补充 [%s / trust=%s] %s\n", alias, m.Trust, m.Text+contextbuilder.MemorySuffix(m, deskLocation(c.Settings)))
-					}
+					prompt += secretary.AddRead(sent, picked, deskLocation(c.Settings), true)
 				}
 				timing.finishPrepare()
 				modelStarted := time.Now()
@@ -563,38 +532,17 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 							readHeavy := c.Tier != "heavy"
 							c.Tier = memoryTierForStatus(answer.MemoryPlan.Depth, c.Use.Ready)
 							if c.Tier == "heavy" && readHeavy {
-								c.Use.RequiredGroups = []string{}
-								for _, key := range answer.MemoryPlan.Groups {
-									for i, g := range c.Use.Index {
-										if key == fmt.Sprintf("G%d", i+1) {
-											c.Use.RequiredGroups = append(c.Use.RequiredGroups, g.Key)
-										}
-									}
-								}
+								c.Use.RequiredGroups = secretary.PlannedGroups(answer.MemoryPlan.Groups, c.Use.Index)
 								c.Use.Selected = true
 								readingStarted := time.Now()
 								picked, refs, keys := s.heavyUse(requestCtx, ctx, scope, c.Agent, req.ThingID, req.Text, c.Use, out.Turn.ID, "", "reader:plan")
 								timing.addPrepare(time.Since(readingStarted))
 								c.Use.Groups = keys
 								c.Dependencies = uniqueRefs(append(c.Dependencies, refs...))
-								for _, m := range picked {
-									exists := false
-									for _, old := range sent {
-										if old.ID == m.ID {
-											exists = true
-											break
-										}
-									}
-									if exists {
-										continue
-									}
-									alias := fmt.Sprintf("M%d", len(sent)+1)
-									sent[alias] = m
-									prompt += fmt.Sprintf("\n重读补充 [%s] %s\n", alias, m.Text)
-								}
+								prompt += secretary.AddRead(sent, picked, deskLocation(c.Settings), false)
 							}
 						}
-						if c.Tier == "light" && (answer.MissingKeyInfo || secretaryNeedsCheck(answer)) {
+						if c.Tier == "light" && (answer.MissingKeyInfo || secretary.NeedsCheck(answer)) {
 							c.Tier = "medium"
 						}
 						if c.Tier != "light" {
@@ -624,32 +572,21 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 			contextErr = s.checkSecretaryActionTargetsTx(ctx, tx, scope, c, answer)
 		}
 		if selfcheckAttempted {
-			application, reason := "applied", ""
+			application, reason := secretary.SelfcheckApplication(selfcheckErr, contextErr)
 			if selfcheckErr != nil {
-				application, reason = "skipped", secretary.ErrorType("selfcheck", selfcheckErr)
 				if err := stageEventTx(ctx, tx, scope.OwnerID, "selfcheck", "failure", reason, 1); err != nil {
 					return err
 				}
 				if contextErr == nil {
-					text := "自查未完成，保留了原稿。"
-					if errors.Is(selfcheckErr, ai.ErrUnsupportedCapability) {
-						text = "当前模型不支持自查所需的输出格式，保留了原稿。"
-					}
-					out.Turn.Receipts = append(out.Turn.Receipts, workspace.DeskReceipt{Op: "selfcheck", Text: text, Status: "skipped", Reason: reason})
+					out.Turn.Receipts = append(out.Turn.Receipts, secretary.SelfcheckSkipped(selfcheckErr))
 				}
-			}
-			if contextErr != nil {
-				application = "not_applicable"
 			}
 			if err := (interactiveCalls{store: s}).recordApplicationTx(ctx, tx, scope.OwnerID, memory.ID(req.RequestID), "selfcheck", application, reason); err != nil {
 				return err
 			}
 		}
 		if generationAttempted {
-			application, reason := "applied", ""
-			if contextErr != nil {
-				application, reason = "not_applicable", secretary.ErrorType(failureStage, contextErr)
-			}
+			application, reason := secretary.AnswerApplication(failureStage, contextErr)
 			if err := (interactiveCalls{store: s}).recordApplicationTx(ctx, tx, scope.OwnerID, memory.ID(req.RequestID), "answer", application, reason); err != nil {
 				return err
 			}
@@ -657,21 +594,17 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 		dependencies := []memory.Ref{}
 		if contextErr != nil {
 			slog.WarnContext(ctx, "secretary capture fallback", "stage", failureStage, "error_type", secretary.ErrorType(failureStage, contextErr))
-			receiptText := secretary.CaptureText(failureStage, contextErr)
+			receiptText := secretary.CaptureReceipt(failureStage, contextErr, captureOnly, text != "")
 			if captureOnly {
 				if text != "" && req.SmokeID == "" {
 					if err := s.captureIncompleteSecretaryTurn(ctx, tx, scope, req.RequestID, req.Text); err != nil {
 						return err
 					}
 				}
-				receiptText = "已记下原话；这轮操作未完成，为避免覆盖后续改动，请重新说明要做的事"
 			} else if text != "" && req.SmokeID == "" {
 				if err := s.commandTx(ctx, tx, scope, workspace.Command{Type: "capture", RequestID: req.RequestID, Text: req.Text}); err != nil {
 					return err
 				}
-			}
-			if text == "" {
-				receiptText = strings.Replace(receiptText, "已记下原话", "附件已存好", 1)
 			}
 			out.Turn.Receipts = append(out.Turn.Receipts, workspace.DeskReceipt{Op: "capture", Text: receiptText, Status: "done"})
 		} else {

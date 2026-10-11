@@ -55,3 +55,25 @@ Each turn has one settled `secretary` call and one settled `query_embedding` cal
 
 Not checked on the live instance: a voice message, an image, and an audio file through the new recorded entries. No such input arrived during the check.
 The stage deferral counts need a later reading, after the queue has passed several hourly windows on this revision.
+
+## Third Release on the Same Day
+
+Released revision: `a893628069f2e7b0f643f8c270be70f795cfc894`. Earlier revision: `6dc2363`.
+Pull requests #303, #304, and #305 give the changes: the date review rules and the project handover rules left the storage package.
+
+| Step | Result |
+|---|---|
+| CI before merge | #305: all checks pass, including the browser suite. |
+| Database migration | None. |
+| Backup | Validated, under `/root/pcas-backups` with the prefix `foundation-review-a893628`. |
+| Record counts before and after start | Equal: 5,253 claims and 25 work items. |
+| Start and readiness | API and worker run the released image. No container restarted. Neither log has an error. |
+
+The live check used the real default Codex channel: an answer, an arrangement (`create_task`, done), and a change (`update`, done), between 15 and 19 seconds each.
+Each turn has one settled `secretary` call and one settled `query_embedding` call. Cleanup succeeded and the record counts are equal.
+
+## Reading After the Second Release
+
+In the first 68 minutes on `6dc2363`, the topic project stage made two calls that reached the provider, and the call journal holds those two rows only.
+The stage recorded one hourly-limit deferral. Five topic project jobs were queued in that time.
+The queue was much shorter than on 2026-10-09, so this reading does not measure the reduction at that scale.

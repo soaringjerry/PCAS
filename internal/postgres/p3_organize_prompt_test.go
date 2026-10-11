@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/soaringjerry/PCAS/internal/ai"
+	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/prompts"
 	"os"
 	"testing"
 	"time"
@@ -46,8 +48,8 @@ func TestP3OrganizePromptLive(t *testing.T) {
 	defer cancel()
 	input := p3OrganizePrompt()
 	start := time.Now()
-	result, e := r.Generate(ctx, "live", organizeInstructions, input)
-	raw, _ := json.MarshalIndent(map[string]any{"instructions": organizeInstructions, "input": json.RawMessage(input), "output": result.Text, "elapsed_ms": time.Since(start).Milliseconds()}, "", "  ")
+	result, e := r.Generate(ctx, "live", prompts.Must("organize").Text(), input)
+	raw, _ := json.MarshalIndent(map[string]any{"instructions": prompts.Must("organize").Text(), "input": json.RawMessage(input), "output": result.Text, "elapsed_ms": time.Since(start).Milliseconds()}, "", "  ")
 	if e2 := os.WriteFile(path, raw, 0600); e2 != nil {
 		t.Fatal(e2)
 	}
@@ -58,7 +60,7 @@ func TestP3OrganizePromptLive(t *testing.T) {
 	if os.Getenv("PCAS_P3_PROMPT_PHASE") == "before" {
 		return
 	}
-	items, _ := parseOrganizeOutput(result.Text, len(p3RuleCases))
+	items, _ := organize.ParseOutput(result.Text, len(p3RuleCases))
 	for i, c := range p3RuleCases {
 		if items[i+1].Category != c.Category {
 			t.Errorf("case %d got=%s want=%s", i+1, items[i+1].Category, c.Category)

@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -269,7 +270,7 @@ func phase35BrowserDrain(ctx context.Context, s *Store, scope memory.Scope) erro
 		return err
 	}
 	for _, j := range jobs {
-		if err := s.ProcessOrganize(ctx, phase35BrowserLease(ctx, s, scope, j.Record, j.Stage)); err != nil {
+		if err := (organize.Service{Store: s.OrganizeStore(), Generator: s, Version: OrganizeVersion}).Process(ctx, phase35BrowserLease(ctx, s, scope, j.Record, j.Stage)); err != nil {
 			return fmt.Errorf("organize: %w", err)
 		}
 	}

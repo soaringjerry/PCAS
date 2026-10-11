@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"errors"
+	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 	"log/slog"
 	"strings"
 	"time"
@@ -35,16 +36,7 @@ type cardRule struct {
 	N         int    `json:"n"`
 	AppliesTo string `json:"appliesTo"`
 }
-type cardDeadline struct {
-	ScheduleRule *scheduleRule `json:"scheduleRule,omitempty"`
-	DateOnly     *bool         `json:"dateOnly,omitempty"`
-	N            int           `json:"n"`
-	Kind         string        `json:"kind"`
-	At           *string       `json:"at"`
-	Recurrence   string        `json:"recurrence"`
-	Title        string        `json:"title"`
-	TimeNote     string        `json:"timeNote"`
-}
+type cardDeadline = organize.Deadline
 type cardOutput struct {
 	Fields    map[string][]int `json:"fields"`
 	Rules     []cardRule       `json:"rules"`

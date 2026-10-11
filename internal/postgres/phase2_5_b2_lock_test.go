@@ -3,6 +3,7 @@ package postgres_test
 import (
 	"errors"
 	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
+	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 	"github.com/soaringjerry/PCAS/internal/postgres"
 	"github.com/soaringjerry/PCAS/internal/worker"
 	"github.com/soaringjerry/PCAS/internal/workspace"
@@ -69,7 +70,9 @@ func TestPhase25B2_CompareDoesNotCallModelDuringOrganize(t *testing.T) {
 		t.Fatalf("wrong organize stage=%s", org.Stage)
 	}
 	orgDone := make(chan error, 1)
-	go func() { orgDone <- f.store.ProcessOrganize(f.ctx, *org) }()
+	go func() {
+		orgDone <- (organize.Service{Store: f.store.OrganizeStore(), Generator: f.store, Version: postgres.OrganizeVersion}).Process(f.ctx, *org)
+	}()
 	select {
 	case <-entered:
 	case <-f.ctx.Done():

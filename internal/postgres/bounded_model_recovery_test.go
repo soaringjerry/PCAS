@@ -3,6 +3,8 @@ package postgres
 import (
 	"context"
 	"errors"
+	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
+	"github.com/soaringjerry/PCAS/internal/prompts"
 	"net/http"
 	"sync/atomic"
 	"testing"
@@ -120,7 +122,7 @@ func TestPersistentStagePausesAtRecordedRecoveryLimitAfterRestart(t *testing.T) 
 			t.Fatal(err)
 		}
 		peer.SetModels(s.models)
-		err = peer.ProcessOrganize(context.Background(), j)
+		err = (organize.Service{Store: peer.OrganizeStore(), Generator: peer, Version: OrganizeVersion}).Process(context.Background(), j)
 		peer.Close()
 		if attempt == maxAttempts {
 			requireRecoveryFailure(t, err, modelcall.ErrRetryExhausted.Error(), false)
@@ -155,7 +157,7 @@ func TestPersistentStagePausesAtRecordedRecoveryLimitAfterRestart(t *testing.T) 
 	if err != nil || retried == nil || retried.ID != j.ID || retried.Attempts != 1 {
 		t.Fatal(retried, err)
 	}
-	if err := s.ProcessOrganize(context.Background(), *retried); err != nil {
+	if err := (organize.Service{Store: s.OrganizeStore(), Generator: s, Version: OrganizeVersion}).Process(context.Background(), *retried); err != nil {
 		t.Fatal(err)
 	}
 	var authorization, oldReason string
@@ -177,18 +179,18 @@ func TestUnknownRecoveryPausesWhenBudgetCannotCoverReplacement(t *testing.T) {
 	s.models.Config.Providers[0].OutputPerMillion = 1
 	organizeTestMemory(t, s, scope, "Fictitious report with a limited budget.")
 	j := organizeTestJob(t, s, scope)
-	requireRecoveryFailure(t, s.ProcessOrganize(context.Background(), j), modelcall.ErrOutcomeUnknown.Error(), true)
+	requireRecoveryFailure(t, (organize.Service{Store: s.OrganizeStore(), Generator: s, Version: OrganizeVersion}).Process(context.Background(), j), modelcall.ErrOutcomeUnknown.Error(), true)
 	if _, err := s.pool.Exec(context.Background(), `UPDATE workspace_owners SET settings=jsonb_set(settings,'{dailyBudget}','0') WHERE owner_id=$1`, string(scope.OwnerID)); err != nil {
 		t.Fatal(err)
 	}
 	j = nextModelRecoveryLease(t, s, j)
-	requireRecoveryFailure(t, s.ProcessOrganize(context.Background(), j), modelcall.ErrRecoveryBudgetExhausted.Error(), false)
+	requireRecoveryFailure(t, (organize.Service{Store: s.OrganizeStore(), Generator: s, Version: OrganizeVersion}).Process(context.Background(), j), modelcall.ErrRecoveryBudgetExhausted.Error(), false)
 	var state, reason string
 	var held float64
 	if err := s.pool.QueryRow(context.Background(), `SELECT c.recovery_state,c.recovery_reason,(SELECT sum(reserved_cost) FROM background_usage WHERE owner_id=$1) FROM model_calls c WHERE owner_id=$1 AND recovery_state='budget_exhausted'`, string(scope.OwnerID)).Scan(&state, &reason, &held); err != nil || reason != "budget_deferred" || held <= 0 || calls.Load() != 1 {
 		t.Fatal(state, reason, held, calls.Load(), err)
 	}
-	requireRecoveryFailure(t, s.ProcessOrganize(context.Background(), j), modelcall.ErrRecoveryBudgetExhausted.Error(), false)
+	requireRecoveryFailure(t, (organize.Service{Store: s.OrganizeStore(), Generator: s, Version: OrganizeVersion}).Process(context.Background(), j), modelcall.ErrRecoveryBudgetExhausted.Error(), false)
 	if calls.Load() != 1 {
 		t.Fatal("budget pause must not silently become a replacement")
 	}
@@ -210,20 +212,20 @@ func TestReservationWriteFailureDoesNotResetUnknownRecoveryCounter(t *testing.T)
 	organizeTestMemory(t, s, scope, "Fictitious report with an interrupted reservation write.")
 	j := organizeTestJob(t, s, scope)
 	ctx := context.Background()
-	requireRecoveryFailure(t, s.ProcessOrganize(ctx, j), modelcall.ErrOutcomeUnknown.Error(), true)
+	requireRecoveryFailure(t, (organize.Service{Store: s.OrganizeStore(), Generator: s, Version: OrganizeVersion}).Process(ctx, j), modelcall.ErrOutcomeUnknown.Error(), true)
 	j = nextModelRecoveryLease(t, s, j)
 	if _, err := s.pool.Exec(ctx, `CREATE FUNCTION reject_test_reservation() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'synthetic reservation failure'; END $$;
  CREATE TRIGGER reject_test_reservation BEFORE INSERT ON background_usage FOR EACH ROW EXECUTE FUNCTION reject_test_reservation()`); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.ProcessOrganize(ctx, j); err == nil || calls.Load() != 1 {
+	if err := (organize.Service{Store: s.OrganizeStore(), Generator: s, Version: OrganizeVersion}).Process(ctx, j); err == nil || calls.Load() != 1 {
 		t.Fatal("failed reservation must not invoke the provider", err, calls.Load())
 	}
 	if _, err := s.pool.Exec(ctx, `DROP TRIGGER reject_test_reservation ON background_usage`); err != nil {
 		t.Fatal(err)
 	}
 	j = nextModelRecoveryLease(t, s, j)
-	if err := s.ProcessOrganize(ctx, j); err != nil {
+	if err := (organize.Service{Store: s.OrganizeStore(), Generator: s, Version: OrganizeVersion}).Process(ctx, j); err != nil {
 		t.Fatal(err)
 	}
 	var attempt, failedAttempt int
@@ -254,7 +256,7 @@ func TestLateInterruptedCallCannotDeleteReplacementPaidResult(t *testing.T) {
 	}
 	done := make(chan error, 1)
 	go func() {
-		_, err := s.generatePaid(ctx, j, "organize", organizeInstructions, asJSON(map[string]any{"fictitious": true}), nil)
+		_, err := s.generatePaid(ctx, j, "organize", prompts.Must("organize").Text(), asJSON(map[string]any{"fictitious": true}), nil)
 		done <- err
 	}()
 	select {
@@ -284,7 +286,7 @@ func TestLateInterruptedCallCannotDeleteReplacementPaidResult(t *testing.T) {
 	}
 	defer peer.Close()
 	peer.SetModels(s.models)
-	if err := peer.ProcessOrganize(ctx, *replacement); err == nil {
+	if err := (organize.Service{Store: peer.OrganizeStore(), Generator: peer, Version: OrganizeVersion}).Process(ctx, *replacement); err == nil {
 		t.Fatal("expected isolated business-write failure")
 	}
 	close(release)
@@ -298,7 +300,7 @@ func TestLateInterruptedCallCannotDeleteReplacementPaidResult(t *testing.T) {
 	if _, err := s.pool.Exec(ctx, `DROP TRIGGER reject_test_application ON claim_revisions`); err != nil {
 		t.Fatal(err)
 	}
-	if err := peer.ProcessOrganize(ctx, *replacement); err != nil {
+	if err := (organize.Service{Store: peer.OrganizeStore(), Generator: peer, Version: OrganizeVersion}).Process(ctx, *replacement); err != nil {
 		t.Fatal(err)
 	}
 	m, err := s.GetMemory(ctx, scope, string(ref.ID))

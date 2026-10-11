@@ -62,7 +62,7 @@ If you do not run a check, write that in the PR. Give the reason.
 | `internal/memory`, `internal/workspace` | Memory and workspace types. |
 | `internal/workspace/effort`, `internal/workspace/topicproject`, `internal/workspace/projecthandover` | Workspace domain packages outside storage: effort estimation, topic projects, and project handovers. |
 | `internal/currentstate/datereview`, `internal/currentstate/handover` | Current-state domain packages outside storage: the review of remembered dates and the global handover. |
-| `internal/interpretation/aliasscan` | Memory interpretation domain package outside storage: the scan for names of one entity. |
+| `internal/interpretation/aliasscan`, `internal/interpretation/comparison`, `internal/interpretation/organize` | Memory interpretation domain packages outside storage: the scan for names of one entity, statement and entity comparison, and the organizing of statements with the schedule rule of a date. |
 | `internal/app` | Application setup: service construction and the worker handler table. |
 | `internal/modelcall`, `internal/prompts` | Model gateway and prompt registry. |
 | `internal/ai` | Model provider adapters. |

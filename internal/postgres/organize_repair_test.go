@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"encoding/json"
+	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"net/http"
 	"testing"
@@ -81,7 +82,7 @@ func TestP3ReorganizeTenCasesOnlyRulesAndWithdrawalCounts(t *testing.T) {
 		t.Fatal(n, e)
 	}
 	job := organizeTestJob(t, s, scope)
-	if e := s.ProcessOrganize(ctx, job); e != nil {
+	if e := (organize.Service{Store: s.OrganizeStore(), Generator: s, Version: OrganizeVersion}).Process(ctx, job); e != nil {
 		t.Fatal(e)
 	}
 	for i, ref := range refs {
@@ -144,7 +145,7 @@ func TestP3RuleReorganizeFailureKeepsGoodLabelsAndTables(t *testing.T) {
 		t.Fatal(e)
 	}
 	job := organizeTestJob(t, s, scope)
-	if e := s.ProcessOrganize(ctx, job); e != nil {
+	if e := (organize.Service{Store: s.OrganizeStore(), Generator: s, Version: OrganizeVersion}).Process(ctx, job); e != nil {
 		t.Fatal(e)
 	}
 	var category string

@@ -225,6 +225,12 @@ func (s *Store) RunCompare(ctx context.Context, logger *slog.Logger) {
 // Share the organizer's session lock across the model call. No owner lock is
 // held while generating, so corrections and deletions can still proceed.
 func (s *Store) comparisonConnection(ctx context.Context) (*pgxpool.Conn, func(), error) {
+	return s.organizeCallConnection(ctx, "compare_busy", CompareInterval)
+}
+
+// One organize, comparison, or entity scan call runs at a time. busy is the
+// deferral code of the caller that finds the lock held.
+func (s *Store) organizeCallConnection(ctx context.Context, busy string, wait time.Duration) (*pgxpool.Conn, func(), error) {
 	conn, err := s.pool.Acquire(ctx)
 	if err != nil {
 		return nil, nil, err
@@ -235,7 +241,7 @@ func (s *Store) comparisonConnection(ctx context.Context) (*pgxpool.Conn, func()
 		if err != nil {
 			return nil, nil, err
 		}
-		return nil, nil, &worker.JobError{Code: "compare_busy", Until: time.Now().Add(CompareInterval), NoAttempt: true}
+		return nil, nil, &worker.JobError{Code: busy, Until: time.Now().Add(wait), NoAttempt: true}
 	}
 	return conn, func() {
 		cleanup, cancel := context.WithTimeout(context.Background(), 5*time.Second)

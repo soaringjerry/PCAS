@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
 	"strings"
 	"testing"
 	"unicode/utf8"
@@ -25,7 +26,7 @@ func TestConversationFullTextCoverage(t *testing.T) {
 		sources = append(sources, memory.SourceResult{Source: memory.Source{Text: text}, Context: &memory.SourceContext{Role: role, Branch: "current"}})
 	}
 	visible := map[int]string{}
-	for _, segment := range splitConversation(sources) {
+	for _, segment := range extraction.SplitConversation(sources) {
 		seen := map[int]bool{}
 		for _, message := range segment.Messages {
 			if seen[message.Index] {
@@ -55,7 +56,7 @@ func TestConversationLongAIContextReachesFollowingAgreement(t *testing.T) {
 		{Source: memory.Source{Text: proposal}, Context: &memory.SourceContext{Role: "assistant"}},
 		{Source: memory.Source{Text: "就按这个方案。"}, Context: &memory.SourceContext{Role: "user"}},
 	}
-	for _, segment := range splitConversation(sources) {
+	for _, segment := range extraction.SplitConversation(sources) {
 		for _, message := range segment.Messages {
 			if message.Index != 3 {
 				continue

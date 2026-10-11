@@ -177,7 +177,7 @@ func TestConversationDispatchUpgradePreservesPendingSegments(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = enqueueConversationTx(context.Background(), tx, scope.OwnerID, a.Sources[0], conversationRun(sources), 0, 1); err != nil {
+	if err = enqueueConversationTx(context.Background(), tx, scope.OwnerID, a.Sources[0], extraction.ConversationRun(sources), 0, 1); err != nil {
 		t.Fatal(err)
 	}
 	if err = tx.Commit(context.Background()); err != nil {

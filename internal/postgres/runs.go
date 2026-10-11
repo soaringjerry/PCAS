@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/soaringjerry/PCAS/internal/contextbuilder"
 	"github.com/soaringjerry/PCAS/internal/workspace/deputy"
 	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 	"log/slog"
@@ -208,7 +209,7 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 			}
 		}
 		if recall.TimeRelaxed {
-			fmt.Fprintln(&brief, recallTimeRelaxed)
+			fmt.Fprintln(&brief, contextbuilder.RecallTimeRelaxed)
 		}
 		excerpts := recall.Excerpts
 		historyRequests := []string{}
@@ -256,7 +257,7 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 			seenRanked := map[string]bool{}
 			addRanked := func(refs []memory.Ref) {
 				for _, ref := range refs {
-					if m, ok := byID[string(ref.ID)]; ok && m.Version == ref.Version && !seenRanked[m.ID] && useMemoryAllowed(m, agent) {
+					if m, ok := byID[string(ref.ID)]; ok && m.Version == ref.Version && !seenRanked[m.ID] && contextbuilder.MemoryAllowed(m, agent) {
 						ranked = append(ranked, m)
 						seenRanked[m.ID] = true
 					}
@@ -281,8 +282,8 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 		if u.Ready || u.ProjectHandover != nil || len(u.Rules) > 0 || len(u.Deadlines) > 0 {
 			// Keep handoff discussion outside the replaceable memory section.
 			fmt.Fprintln(&brief, "相关记忆（引用 ID 与版本；长期约束继续适用）：")
-			writeUseContext(&brief, u, loc, func(m workspace.Memory) {
-				fmt.Fprintf(&brief, "[%s@%d / trust=%s] %s%s\n", m.ID, m.Version, m.Trust, m.Text, memoryPromptSuffix(m, loc))
+			contextbuilder.WriteUse(&brief, u, loc, func(m workspace.Memory) {
+				fmt.Fprintf(&brief, "[%s@%d / trust=%s] %s%s\n", m.ID, m.Version, m.Trust, m.Text, contextbuilder.MemorySuffix(m, loc))
 				run.ContextMemoryIDs = append(run.ContextMemoryIDs, m.ID)
 				contextClaims = append(contextClaims, evidenceContextClaim{Label: m.ID, Ref: memory.Ref{ID: memory.ID(m.ID), Version: m.Version, Kind: memory.ClaimKind}, Text: m.Text})
 			})
@@ -291,7 +292,7 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 			// R12a: select against the brief without annotations. Keep their byte
 			// count separate so they cannot displace later memories or raw excerpts.
 			for _, m := range u.Supplemental {
-				if !useMemoryAllowed(m, agent) {
+				if !contextbuilder.MemoryAllowed(m, agent) {
 					continue
 				}
 				if brief.Len()-annotationBytes+len(m.Text) > 30000 {
@@ -300,7 +301,7 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 					}
 					continue
 				}
-				suffix := memoryPromptSuffix(m, loc)
+				suffix := contextbuilder.MemorySuffix(m, loc)
 				fmt.Fprintf(&brief, "[%s@%d / %s / trust=%s / confirmation=%s / acquisition=%s] %s%s\n", m.ID, m.Version, m.Epistemic, m.Trust, m.Confirmation, m.Acquisition, m.Text, suffix)
 				annotationBytes += len(suffix) + len("trust="+m.Trust+" / ")
 				run.ContextMemoryIDs = append(run.ContextMemoryIDs, m.ID)
@@ -313,14 +314,14 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 		if u.Ready {
 			run.MemoryContextRange = &[2]int{memoryStart, brief.Len()}
 		}
-		orderTeamExcerpts(excerpts, plan)
+		contextbuilder.OrderExcerpts(excerpts, plan)
 		fmt.Fprintln(&brief, "\n相关原话：")
 		sources, err := teamSourceExcerptsTx(ctx, tx, scope, agent.ID, &item.ID, excerpts, historyRequests, 8, 4000)
 		if err != nil {
 			return err
 		}
 		for _, source := range sources {
-			at, label := sourceExcerptTime(source)
+			at, label := contextbuilder.ExcerptTime(source)
 			line := fmt.Sprintf("[source:%s@%d / %s / %s %s] %s\n", source.ID, source.Version, source.Title, label, at.In(loc).Format("2006-01-02"), source.Text)
 			if brief.Len()-annotationBytes+len(line) > 30000 {
 				if err := stageEventTx(ctx, tx, scope.OwnerID, "deputy", "overflow", "source_excerpt_char_budget", 1); err != nil {
@@ -342,15 +343,15 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 			return err
 		}
 		if len(groups) > 0 || len(gaps) > 0 {
-			fmt.Fprintln(&brief, "\n记忆的来源上下文：\n"+evidenceContextInstructions)
+			fmt.Fprintln(&brief, "\n记忆的来源上下文：\n"+contextbuilder.EvidenceInstructions)
 		}
 		for _, group := range groups {
 			var section strings.Builder
 			fmt.Fprintf(&section, "[%s] 的原对话片段：\n", group.Label)
 			for _, message := range group.Window.Messages {
-				section.WriteString(contextMessageLine(fmt.Sprintf("source:%s@%d", message.ID, message.Version), message, loc))
+				section.WriteString(contextbuilder.MessageLine(fmt.Sprintf("source:%s@%d", message.ID, message.Version), message, loc))
 			}
-			writeContextGaps(&section, group.Label, group.Window.Gaps)
+			contextbuilder.WriteGaps(&section, group.Label, group.Window.Gaps)
 			if brief.Len()-annotationBytes+section.Len() > 30000 {
 				if err := stageEventTx(ctx, tx, scope.OwnerID, "deputy", "overflow", "evidence_context_char_budget", 1); err != nil {
 					return err
@@ -368,7 +369,7 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 				run.ContextVersions = append(run.ContextVersions, message.Ref)
 			}
 		}
-		writeContextGaps(&brief, "范围提示", gaps)
+		contextbuilder.WriteGaps(&brief, "范围提示", gaps)
 		// Derived copies carry input dependencies even when their source memories
 		// fall outside this run's text budget.
 		for _, ref := range artifactRefs {
@@ -936,8 +937,8 @@ func (s *Store) runAgentOnce(ctx context.Context) (resultErr error) {
 			}
 			run.ContextVersions = uniqueRefs(append(run.ContextVersions, u.Dependencies...))
 			var section strings.Builder
-			writeUseContext(&section, u, u.Location, func(m workspace.Memory) {
-				fmt.Fprintf(&section, "[%s@%d / trust=%s] %s\n", m.ID, m.Version, m.Trust, m.Text+memoryPromptSuffix(m, u.Location))
+			contextbuilder.WriteUse(&section, u, u.Location, func(m workspace.Memory) {
+				fmt.Fprintf(&section, "[%s@%d / trust=%s] %s\n", m.ID, m.Version, m.Trust, m.Text+contextbuilder.MemorySuffix(m, u.Location))
 			})
 			// Use server-owned byte boundaries. Task text, discussion and memory
 			// values may contain the same headings, so never locate them by text.

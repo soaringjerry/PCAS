@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/jackc/pgx/v5"
+	"github.com/soaringjerry/PCAS/internal/contextbuilder"
 	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 	"log/slog"
 	"strings"
@@ -157,7 +158,7 @@ func writeReaderMemories(ms []workspace.Memory, loc *time.Location) string {
 	}
 	var b strings.Builder
 	for _, m := range ms {
-		fmt.Fprintf(&b, "[%s@%d / trust=%s] %s\n", m.ID, m.Version, m.Trust, m.Text+memoryPromptSuffix(m, loc))
+		fmt.Fprintf(&b, "[%s@%d / trust=%s] %s\n", m.ID, m.Version, m.Trust, m.Text+contextbuilder.MemorySuffix(m, loc))
 	}
 	return b.String()
 }

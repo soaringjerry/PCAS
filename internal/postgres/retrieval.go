@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -754,13 +753,6 @@ func teamSourceExcerptsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, pr
 	return selected, nil
 }
 
-func sourceExcerptTime(excerpt memory.RecallExcerpt) (time.Time, string) {
-	if excerpt.ExpressedAt != nil {
-		return *excerpt.ExpressedAt, "说于"
-	}
-	return excerpt.RecordedAt, "记录于"
-}
-
 // Enumerate only the alias lengths present for this owner, then probe the
 // existing (owner_id, lower(alias)) index with exact substrings. The lateral
 // boundary keeps probes parameterized instead of scanning all active entities. We never run
@@ -877,20 +869,6 @@ func structuredRecallTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, hint
 	err = rows.Err()
 	rows.Close()
 	return refs, relaxed, err
-}
-
-func orderTeamExcerpts(excerpts []memory.RecallExcerpt, plan memory.QueryPlan) {
-	if plan.Time == nil {
-		return
-	}
-	inTime := func(e memory.RecallExcerpt) bool {
-		at := e.ExpressedAt
-		if at == nil && oneOf(e.Connector, "desk", "capture", "telegram", "desk-incomplete") {
-			at = &e.RecordedAt
-		}
-		return at != nil && !at.Before(plan.Time.From) && at.Before(plan.Time.To)
-	}
-	sort.SliceStable(excerpts, func(i, j int) bool { return inTime(excerpts[i]) && !inTime(excerpts[j]) })
 }
 
 type activityRankingKey struct{}

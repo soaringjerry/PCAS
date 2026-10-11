@@ -286,7 +286,7 @@ func phase26Process(ctx context.Context, s *Store, j worker.Job) error {
 	case CompareStage:
 		return (comparison.Service{Store: s.CompareStore(), Generator: s, Version: CompareVersion}).Process(ctx, j)
 	case EntityCompareStage:
-		return s.ProcessEntityCompare(ctx, j)
+		return (comparison.EntityService{Store: s.EntityCompareStore(), Generator: s, Version: EntityCompareVersion}).Process(ctx, j)
 	case EntityCandidatesStage:
 		return (aliasscan.Service{Store: s.AliasScanStore(), Generator: s}).Process(ctx, j)
 	case HandoverStage:

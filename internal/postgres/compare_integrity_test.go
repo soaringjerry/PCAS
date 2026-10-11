@@ -82,7 +82,7 @@ func TestCompareEntityUndoAfterUserEditRefusesAtomically(t *testing.T) {
 	keep, b := compareEntityFixture(t, s, scope, "陈亮", "陈亮就是小陈，负责虚构松林项目")
 	compareEntityGroup(t, s, scope, "project", "虚构松林项目", a, b)
 	j := compareJob(t, s, scope, true, CompareVersion)
-	if err := s.ProcessEntityCompare(context.Background(), j); err != nil {
+	if err := (comparison.EntityService{Store: s.EntityCompareStore(), Generator: s, Version: EntityCompareVersion}).Process(context.Background(), j); err != nil {
 		t.Fatal(err)
 	}
 	b1Correct(t, s, scope, a, "陈亮现在负责虚构云海项目")

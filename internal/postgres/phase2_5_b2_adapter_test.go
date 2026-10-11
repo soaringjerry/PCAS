@@ -51,7 +51,7 @@ func phase25B2DefaultAdapter(f *phase25B234Fixture) phase25B2Adapter {
 				return (comparison.Service{Store: f.store.CompareStore(), Generator: f.store, Version: postgres.CompareVersion}).Process(ctx, j)
 			}
 			if strings.HasPrefix(j.Stage, "memory.entity_compare:") {
-				return f.store.ProcessEntityCompare(ctx, j)
+				return (comparison.EntityService{Store: f.store.EntityCompareStore(), Generator: f.store, Version: postgres.EntityCompareVersion}).Process(ctx, j)
 			}
 			return fmt.Errorf("unexpected comparison stage %s", j.Stage)
 		},

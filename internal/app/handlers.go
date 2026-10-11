@@ -48,3 +48,8 @@ func AliasScan(db *postgres.Store) aliasscan.Service {
 func Compare(db *postgres.Store) comparison.Service {
 	return comparison.Service{Store: db.CompareStore(), Generator: db, Version: postgres.CompareVersion}
 }
+
+// EntityCompare connects the entity comparison service to storage and generation.
+func EntityCompare(db *postgres.Store) comparison.EntityService {
+	return comparison.EntityService{Store: db.EntityCompareStore(), Generator: db, Version: postgres.EntityCompareVersion}
+}

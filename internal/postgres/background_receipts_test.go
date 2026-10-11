@@ -36,7 +36,9 @@ func TestPaidBackgroundResultsSurviveBusinessWriteFailureAndRestart(t *testing.T
 				b, _ := compareEntityFixture(t, s, scope, "虚构齐鹤", "虚构齐鹤负责盆栽")
 				aliasProposalFixture(t, s, scope, a, b, EntityCompareVersion)
 				job = compareJob(t, s, scope, true, EntityCompareVersion)
-				process = (*Store).ProcessEntityCompare
+				process = func(s *Store, ctx context.Context, j worker.Job) error {
+					return (comparison.EntityService{Store: s.EntityCompareStore(), Generator: s, Version: EntityCompareVersion}).Process(ctx, j)
+				}
 				table = "entity_alias_receipts"
 				response = `{"same":false,"keep":null}`
 			case EntityCandidatesStage:

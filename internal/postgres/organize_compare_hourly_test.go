@@ -43,7 +43,7 @@ func TestOrganizeCompareIndependentHourlyCalls(t *testing.T) {
 				_, b := compareEntityFixture(t, s, scope, "虚构额度同名", "虚构人物乙")
 				compareEntityGroup(t, s, scope, "project", "虚构额度项目", a, b)
 				job = compareJob(t, s, scope, true, CompareVersion)
-				process = s.ProcessEntityCompare
+				process = (comparison.EntityService{Store: s.EntityCompareStore(), Generator: s, Version: EntityCompareVersion}).Process
 			}
 			for stage, limit := range map[string]int{OrganizeStage: 40, CompareStage: 40, EntityCompareStage: 30, EntityCandidatesStage: 6, HandoverStage: 2} {
 				if stage == kind {

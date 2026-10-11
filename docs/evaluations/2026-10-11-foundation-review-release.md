@@ -186,6 +186,19 @@ The cleanup succeeded and the record counts are equal. Neither log has an error,
 
 The storage package has 25,082 lines without tests at this revision. It had 28,355 lines at the review.
 
+## Thirteenth Release on the Same Day
+
+Released revision: `68c80ea91c9737cd8380136561d2ed751e161c96`. Earlier revision: `a0ef58e`.
+Pull requests #348, #350, #351, and #352 give the changes: the deputy's self-check and cost rules, the registered instruction sentences of the context builder, and the rules of a statement before its write.
+
+One check of #351 failed on its first run: the plan test of the mocked browser suite. The run was in the first minutes after midnight of the workspace zone of the fixture, where the end of an overdue bar and the now line are on the same pixel. The test required a strict difference. It now requires that the bar does not pass now, and the check passed.
+
+The release had no database migration. The backup was validated, and the record counts are equal before and after the start: 5,253 claims and 28 work items.
+The live check on the real default Codex channel passed with four turns: an answer, an arrangement (`create_task`, done), a change (`update`, done), and a delegation (`delegate`, done) whose deputy run finished as done with a settled call.
+The cleanup succeeded and the record counts are equal. Neither log has an error, and no container restarted.
+
+The storage package has 25,027 lines without tests at this revision. It had 28,355 lines at the review.
+
 ## Host Cleanup
 
 The owner approved removal of leftover data on 2026-10-11.

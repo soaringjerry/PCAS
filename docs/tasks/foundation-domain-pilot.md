@@ -89,7 +89,8 @@ It needs no storage. The caller reads the data and gives each memory its alias. 
 
 The rules that change one task, idea, or project by one command are in `internal/workspace/itemcommand`. `Apply` checks that the command fits the kind of the item, changes the item, and returns the summary for its history. Storage reads the item and saves it.
 The same package holds three more sets of rules. `New` makes the item of a creation command and says who made it. `ReviewCandidate` applies the owner's decision to a candidate: accept, ignore, restore, or merge. `Expand` turns a bulk command into one command for each distinct item and refuses more than 100 items.
-The commands for documents, settings, and agents stay in `internal/postgres/commands.go`. Each of them is a patch and a write.
+The rules for a change of the owner's settings and of an agent's settings are in `internal/workspace/settings`: the fields that can change, their limits, and when the task plans need a new calculation.
+The commands for documents stay in `internal/postgres/commands.go`. Each of them is a patch and a write.
 
 The G4 browser test failed once with `version_conflict`, and the cause is not established. One lead: the undo button sends its command again one time after a conflict, and two background writes in a row would make the second try conflict too. No log of the failure is kept, so this lead is not confirmed.
 

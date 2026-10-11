@@ -97,6 +97,8 @@ The deputy's rules that need no storage are in `internal/workspace/deputy`: the 
 `Memories`, `Excerpts`, `Evidence`, `Derived`, and `Request` write the rest of the brief. They hold the limit of the brief: metadata on a memory line does not count, so that it cannot push out a later memory or source. Each method returns the count of parts that did not fit, and storage records one event with that count. Before, storage recorded one event for each part; the sums are equal.
 The reads for the brief, the run itself, and the run commands are still in `internal/postgres/runs.go`.
 
+The rules of a statement that is about to be written as a memory are in `internal/interpretation/claim`. `Normalize` checks that the statement has text, a known nature, and a source version, and it gives each absent field its one meaning. The write itself, with the quotation check against the source, the reimport block, and the versions, is still in `internal/postgres/claims.go`.
+
 The chunk, index, embedding, and summary jobs stay in storage. They hold no interpretation rule: the text split is `memory.SplitText`, the embedding call is the gateway's, and the summary is a memory read. The card job only acknowledges queue slots from before an upgrade.
 
 ## Pattern for the Next Paths

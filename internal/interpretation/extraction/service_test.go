@@ -208,7 +208,7 @@ func TestDecisionRules(t *testing.T) {
 		t.Fatalf("%+v", d)
 	}
 	other := Item{Kind: "memory", Nature: "fact", Text: "陈松在松木公司", Subject: "陈松", Quote: "陈松在松木公司", Confidence: 0.9, Acquisition: "direct", People: []string{"陈松", "不存在的人"}, Organizations: []string{"松木公司"}}
-	if d := Decide(other, capture); d.SubjectType != "person" || d.Subject != "陈松" || !reflect.DeepEqual(d.Mentions, []Mention{{"陈松", "person"}, {"松木公司", "organization"}}) {
+	if d := Decide(other, capture); d.SubjectType != "person" || d.Subject != "陈松" || !reflect.DeepEqual(d.Mentions, []Mention{{Name: "陈松", Role: "person"}, {Name: "松木公司", Role: "organization"}}) {
 		t.Fatalf("%+v", d)
 	}
 	if d := Decide(Item{Kind: "unknown", Text: "虚构", Quote: "我喜欢茶", Confidence: 0.2}, capture); d.Action != Candidate {

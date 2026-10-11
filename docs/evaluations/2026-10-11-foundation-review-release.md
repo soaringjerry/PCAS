@@ -133,6 +133,16 @@ Neither log has an error, and no container restarted.
 
 No real input arrived between the seventh release and this release. The organize, extraction, and attachment paths still have no live job.
 
+## Ninth Release on the Same Day
+
+Released revision: `81f4c9e0e72c4d721391adf317b99a14bccc16ea`. Earlier revision: `a729396`.
+Pull requests #333 and #335 give the changes: the rules that change one item by one command left the storage package, and the evaluation runner names the product's fixed errors in a failure.
+
+The release had no database migration. The backup was validated, and the record counts are equal before and after the start: 5,253 claims and 25 work items.
+The live check on the real default Codex channel passed: an answer, an arrangement (`create_task`, done), and a change (`update`, done), between 16 and 18 seconds each, with settled calls and a clean group cleanup.
+The two actions sent their item commands through the moved rules. The receipts name the due time, the reminder 30 minutes before, and the new date.
+Neither log has an error, and no container restarted.
+
 ## Host Cleanup
 
 The owner approved removal of leftover data on 2026-10-11.

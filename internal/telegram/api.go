@@ -120,10 +120,12 @@ type chat struct {
 	Type string `json:"type"`
 }
 type file struct {
-	ID   string `json:"file_id"`
-	Size int64  `json:"file_size"`
-	Name string `json:"file_name"`
-	MIME string `json:"mime_type"`
+	// Duration is the length in seconds of a voice or audio message.
+	Duration int    `json:"duration"`
+	ID       string `json:"file_id"`
+	Size     int64  `json:"file_size"`
+	Name     string `json:"file_name"`
+	MIME     string `json:"mime_type"`
 }
 type message struct {
 	ID       int64  `json:"message_id"`

@@ -38,7 +38,7 @@ The journal row holds memory references and sizes. It does not hold text or vect
 | Vectors returned | The handler writes them and acknowledges the job in one transaction. |
 | Provider not usable before the first request | No call and no reservation. The job retries with `provider_unavailable`. |
 | Provider rejects a request | The call is `failed`. A paid job stops with `model_call_failed`. A job with no cost retries. |
-| Outcome not known | The call is `unknown` and its reservation stays held. The job follows the same rule as a rejected request. |
+| Outcome not known | The call is `unknown`. Its estimated usage is recorded as an estimate. The job follows the same rule as a rejected request. |
 | Accounting write fails | The handler returns the error and does not write the vectors. |
 
 ## Known Limits

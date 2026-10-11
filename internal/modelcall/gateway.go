@@ -124,12 +124,12 @@ type Journal interface {
 }
 
 type Gateway struct {
-	providers  Providers
-	accounting Accounting
-	results    Results
-	journal    Journal
-	embedder   Embedder
-	embeddings EmbeddingJournal
+	providers     Providers
+	accounting    Accounting
+	results       Results
+	journal       Journal
+	direct        DirectProviders
+	directJournal DirectJournal
 }
 
 func New(providers Providers, accounting Accounting, results Results, journal Journal) *Gateway {

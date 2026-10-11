@@ -37,7 +37,7 @@ The gateway entry `CallEmbedding` is the only caller of the embedding provider f
 | Before the provider call | One transaction reserves the estimate and inserts a `model_calls` row with outcome `started`. |
 | After a returned call | One transaction records usage, settles the reservation to the reported cost, and sets outcome `returned`. |
 | After a rejected call | The same transaction sets outcome `failed`. Reported or estimated usage is recorded as before this change. |
-| After a canceled or interrupted call | The outcome is `unknown`. The reservation stays held. No usage row asserts a cost. |
+| After a canceled call | The outcome is `unknown`. The adapter's estimated usage is recorded as an estimate, and the reservation is settled to it. This is the rule before the gateway. |
 
 The second transaction does not use the caller's context. A canceled read still records its call.
 If the second transaction fails, `Recall` returns the error and does not use the vector.

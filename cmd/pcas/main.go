@@ -175,7 +175,7 @@ func run(ctx context.Context, args []string, logger *slog.Logger) error {
 	go func() { _ = db.RunAgents(workCtx, logger) }()
 	go func() { _ = db.RunReminders(workCtx, logger) }()
 	go func() { _ = db.RunNotify(workCtx, logger, notifier.Channels) }()
-	go telegram.Run(workCtx, db, models, notifier.Settings, cfg.OwnerID, logger)
+	go telegram.Run(workCtx, db, db, notifier.Settings, cfg.OwnerID, logger)
 	go func() { _ = db.RunConnectors(workCtx, logger) }()
 	server := &http.Server{Addr: cfg.HTTPAddress, Handler: api, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16 << 10}
 	stopped := make(chan error, 1)

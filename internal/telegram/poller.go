@@ -29,8 +29,10 @@ type store interface {
 	Undo(context.Context, memory.Scope, string) (workspace.State, error)
 	IngestAttachment(context.Context, memory.Scope, memory.IngestRequest, io.Reader) (memory.IngestResult, error)
 }
+
+// The transcriber records the call and its cost for the owner.
 type transcriber interface {
-	Transcribe(context.Context, io.Reader, string) (string, error)
+	TranscribeVoice(ctx context.Context, scope memory.Scope, audio io.Reader, name string, seconds float64) (string, error)
 }
 
 // Pending input is transient only; committed turns are recovered from DeskTurns.
@@ -298,7 +300,7 @@ func (p *poller) handle(ctx context.Context, c notify.Credentials, st *state, u 
 			if p.models == nil {
 				err = memory.ErrUnavailable
 			} else {
-				transcript, err = p.models.Transcribe(ctx, bytes.NewReader(data), name)
+				transcript, err = p.models.TranscribeVoice(ctx, p.scope, bytes.NewReader(data), name, float64(f.Duration))
 			}
 			if err == nil {
 				text = strings.TrimSpace(transcript)

@@ -86,7 +86,7 @@ func TestIntegrationUnconfiguredVoicePreservesOriginal(t *testing.T) {
 	p, _, b := fixture(t)
 	p.store = s
 	u := textUpdate(1, "")
-	u.Message.Voice = &file{ID: "voice"}
+	u.Message.Voice = &file{ID: "voice", Duration: 3}
 	b.enqueue(u)
 	step(t, p)
 	st, err := s.Snapshot(context.Background(), p.scope)

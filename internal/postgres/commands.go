@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/soaringjerry/PCAS/internal/workspace/itemcommand"
-	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -84,124 +83,21 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 		if err != nil {
 			return err
 		}
-		switch c.Type {
-		case "acceptCandidate":
-			if v.State != "pending" {
-				return memory.ErrConflict
-			}
-			if err := requireText(c.Text); err != nil {
-				return err
-			}
-			v.Kind = c.Kind
-			v.Text = c.Text
-			v.ProjectID = c.ProjectID
-			v.MemoryKind = c.MemoryKind
-			v.Due = c.Due
-			if c.Kind == "memory" {
-				kind := c.MemoryKind
-				if kind == "" {
-					kind = "fact"
-				}
-				ref, err := s.rememberTx(ctx, tx, scope, statement{Text: c.Text, Nature: kind, ProjectID: c.ProjectID, Source: memory.Ref{ID: memory.ID(v.Source.SourceID), Version: v.Source.Version, Kind: memory.SourceKind}})
-				if err != nil {
-					return err
-				}
-				v.ResolvedInto = string(ref.ID)
-			} else if oneOf(c.Kind, "task", "idea") {
-				item := workspace.NewItem(c.Kind, c.Text)
-				item.ProjectID = c.ProjectID
-				item.Due = c.Due
-				item.Sources = append(item.Sources, v.Source)
-				if err := saveItem(ctx, tx, scope, item); err != nil {
-					return err
-				}
-				v.ResolvedInto = item.ID
-			} else {
-				return memory.ErrInvalid
-			}
-			v.State = "accepted"
-		case "ignoreCandidate":
-			if v.State != "pending" {
-				return memory.ErrConflict
-			}
-			v.State = "ignored"
-		case "restoreCandidate":
-			if v.State != "ignored" {
-				return memory.ErrConflict
-			}
-			v.State = "pending"
-		case "mergeCandidate":
-			if v.State != "pending" {
-				return memory.ErrConflict
-			}
-			item, err := getItem(ctx, tx, scope, c.TargetID)
-			if err != nil {
-				return err
-			}
-			item.Sources = append(item.Sources, v.Source)
-			if item.Kind == "task" {
-				item.Notes += "\n" + v.Text
-			} else {
-				item.Body += "\n" + v.Text
-			}
-			item.Version++
-			item.UpdatedAt = stamp()
-			if err := saveItem(ctx, tx, scope, item); err != nil {
-				return err
-			}
-			v.State = "merged"
-			v.ResolvedInto = item.ID
+		if err := itemcommand.ReviewCandidate(ctx, &v, c, candidateWrites{store: s, tx: tx, scope: scope}); err != nil {
+			return err
 		}
 		return saveCandidate(ctx, tx, scope, v)
 	case "addTask", "addIdea", "addProject":
-		kind := map[string]string{"addTask": "task", "addIdea": "idea", "addProject": "project"}[c.Type]
-		title := c.Title
-		if kind == "project" {
-			title = c.Name
-		}
-		item := workspace.NewItem(kind, title)
+		origin := itemcommand.Origin{Actor: actorFromContext(ctx), Collected: ctx.Value(secretaryHistoryKey{}) != nil}
 		if original, ok := ctx.Value(secretaryCreationKey{}).(workspace.SourceRef); ok {
-			item.Creation = &workspace.ItemCreation{By: "secretary", Source: &original}
+			origin.SecretarySource = &original
 			if log, ok := ctx.Value(actionLogKey{}).(actionLog); ok {
-				item.Creation.ActionID = log.id
-			}
-			if original.SourceID != "" {
-				item.Sources = append(item.Sources, original)
+				origin.ActionID = log.id
 			}
 		}
-		item.History[0].By = actorFromContext(ctx)
-		item.Evolution[0].By = actorFromContext(ctx)
-		if ctx.Value(secretaryHistoryKey{}) != nil {
-			// The secretary publishes one creation revision after all fields
-			// and reminders have been applied by its internal commands.
-			item.History = []workspace.Revision{}
-			item.Evolution = []workspace.Revision{}
-		} else if item.Creation != nil && item.Creation.By == "secretary" {
-			// A companion project has its own action, outside the task's history
-			// collector. saveAction publishes its single creation revision.
-			item.History = []workspace.Revision{}
-		}
-		if kind == "task" && c.Text != "" {
-			if err := requireText(c.Text); err != nil {
-				return err
-			}
-			item.Notes = c.Text
-		}
-		item.ProjectID = c.ProjectID
-		if kind == "task" && c.Due != "" {
-			if _, err := time.Parse(time.RFC3339, c.Due); err != nil {
-				return memory.ErrInvalid
-			}
-			item.Due = c.Due
-			settings, err := queryDocument[workspace.Settings](ctx, tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1", string(scope.OwnerID))
-			if err != nil {
-				return err
-			}
-			loc, err := time.LoadLocation(settings.Timezone)
-			if err != nil {
-				loc = time.UTC
-			}
-			secretary.ApplyDueReminder(&item, "", loc)
+		item, err := itemcommand.New(ctx, c, origin, itemEffects{tx: tx, scope: scope})
+		if err != nil {
+			return err
 		}
 		id, err := uuidOrNew(c.ID)
 		if err != nil {
@@ -217,30 +113,13 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 		}
 		return s.saveAction(ctx, tx, scope, item, "创建")
 	case "bulkStatus", "bulkDefer", "bulkMove", "bulkAccept", "bulkIgnore":
-		if len(c.IDs) == 0 || len(c.IDs) > 100 {
-			return memory.ErrInvalid
+		commands, err := itemcommand.Expand(c, func(id string) (workspace.Candidate, error) {
+			return queryDocument[workspace.Candidate](ctx, tx, "SELECT document FROM capture_candidates WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), id)
+		})
+		if err != nil {
+			return err
 		}
-		seen := map[string]bool{}
-		for _, id := range c.IDs {
-			if seen[id] {
-				continue
-			}
-			seen[id] = true
-			next := c
-			next.ID = id
-			next.IDs = nil
-			next.Type = map[string]string{"bulkStatus": "setTaskStatus", "bulkDefer": "deferTask", "bulkMove": "moveThing", "bulkAccept": "acceptCandidate", "bulkIgnore": "ignoreCandidate"}[c.Type]
-			if c.Type == "bulkAccept" {
-				v, err := queryDocument[workspace.Candidate](ctx, tx, "SELECT document FROM capture_candidates WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), id)
-				if err != nil {
-					return err
-				}
-				next.Kind = v.Kind
-				next.Text = v.Text
-				next.MemoryKind = v.MemoryKind
-				next.ProjectID = v.ProjectID
-				next.Due = v.Due
-			}
+		for _, next := range commands {
 			if err := s.commandTx(ctx, tx, scope, next); err != nil {
 				return err
 			}
@@ -429,6 +308,26 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 		return err
 	}
 	return s.saveAction(ctx, tx, scope, item, summary)
+}
+
+// candidateWrites gives the review of a candidate its writes.
+type candidateWrites struct {
+	store *Store
+	tx    pgx.Tx
+	scope memory.Scope
+}
+
+func (w candidateWrites) Remember(ctx context.Context, text, nature, projectID string, source workspace.SourceRef) (string, error) {
+	ref, err := w.store.rememberTx(ctx, w.tx, w.scope, statement{Text: text, Nature: nature, ProjectID: projectID, Source: memory.Ref{ID: memory.ID(source.SourceID), Version: source.Version, Kind: memory.SourceKind}})
+	return string(ref.ID), err
+}
+
+func (w candidateWrites) Item(ctx context.Context, id string) (workspace.Item, error) {
+	return getItem(ctx, w.tx, w.scope, id)
+}
+
+func (w candidateWrites) SaveItem(ctx context.Context, item workspace.Item) error {
+	return saveItem(ctx, w.tx, w.scope, item)
 }
 
 // itemEffects gives an item command the owner's time zone and the writes of

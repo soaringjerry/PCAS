@@ -11,9 +11,9 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
 	"github.com/soaringjerry/PCAS/internal/memory"
-	"github.com/soaringjerry/PCAS/internal/modelcall"
 	"github.com/soaringjerry/PCAS/internal/prompts"
 	"github.com/soaringjerry/PCAS/internal/worker"
 )
@@ -164,106 +164,105 @@ func pairNameHash(pair *comparisonEntityPair) string {
 	return fmt.Sprintf("%x", md5.Sum([]byte(a.Name+"\n"+b.Name)))
 }
 
-func (s *Store) ProcessEntityCompare(ctx context.Context, j worker.Job) error {
-	return s.processEntityCompareVersion(ctx, j, EntityCompareVersion)
+// EntityCompareStore gives the entity comparison service its reads and writes.
+func (s *Store) EntityCompareStore() comparison.EntityStore { return entityCompareStore{s} }
+
+type entityCompareStore struct{ store *Store }
+
+func (a entityCompareStore) RetryLater(j worker.Job, code string) error {
+	return &worker.JobError{Code: code, Until: time.Now().Add(retryDelay(j.Attempts))}
 }
 
-// A queued stage can predate a program rule bump. Stamp the rules actually
-// implemented by this worker, rather than trusting a queue string as an epoch.
-func (s *Store) processEntityCompareVersion(ctx context.Context, j worker.Job, version int) error {
-	if _, err := compareJobVersion(j); err != nil || version < 1 {
-		return memory.ErrInvalid
-	}
-	conn, release, err := s.comparisonConnection(ctx)
+func (a entityCompareStore) Session(ctx context.Context) (comparison.EntitySession, func(), error) {
+	conn, release, err := a.store.comparisonConnection(ctx)
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
-	defer release()
-	cached, err := s.paidModelResult(ctx, j)
-	if err != nil {
-		return err
-	}
-	var pair *comparisonEntityPair
-	if cached == nil {
-		if s.models == nil {
-			return &worker.JobError{Code: "provider_unavailable", Until: time.Now().Add(CompareInterval), NoAttempt: true}
-		}
-		p, ok := s.models.Get(s.models.ExtractionID())
-		if !ok || p.Embedding || p.Transcription || !s.models.Available(p.ID) {
-			return &worker.JobError{Code: "provider_unavailable", Until: time.Now().Add(CompareInterval), NoAttempt: true}
-		}
-		pair, err = s.nextEntityPair(ctx, j.OwnerID, version)
-		if err != nil {
-			return err
-		}
-		if pair == nil {
-			return backgroundWriteTx(ctx, conn, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
-				if err := lockJob(ctx, tx, j); err != nil {
-					return err
-				}
-				return acknowledge(ctx, tx, j)
-			})
-		}
+	return entityCompareSession{store: a.store, conn: conn}, release, nil
+}
+
+type entityCompareSession struct {
+	store *Store
+	conn  *pgxpool.Conn
+}
+
+func (a entityCompareSession) Ready() error {
+	return compareSession{store: a.store, conn: a.conn}.Ready()
+}
+
+func (a entityCompareSession) NextPair(ctx context.Context, j worker.Job, version int) (json.RawMessage, []memory.Ref, bool, error) {
+	pair, err := a.store.nextEntityPair(ctx, j.OwnerID, version)
+	if err != nil || pair == nil {
+		return nil, nil, false, err
 	}
 	refs := []memory.Ref{}
-	if pair != nil {
-		for _, e := range pair.Entities {
-			refs = append(refs, e.Ref)
-			for _, m := range e.Memories {
-				refs = append(refs, m.Ref)
-			}
+	omitted := 0
+	for _, e := range pair.Entities {
+		refs = append(refs, e.Ref)
+		for _, m := range e.Memories {
+			refs = append(refs, m.Ref)
+		}
+		omitted += max(0, e.MemoryCount-len(e.Memories))
+	}
+	if omitted > 0 {
+		if _, err := a.store.pool.Exec(ctx, "INSERT INTO background_stage_events(owner_id,stage,outcome,reason,count) VALUES($1,$2,'overflow','identity_sample_memory_limit',$3)", string(j.OwnerID), EntityCompareStage, omitted); err != nil {
+			return nil, nil, false, err
 		}
 	}
-	if cached == nil {
-		omitted := 0
-		for _, e := range pair.Entities {
-			omitted += max(0, e.MemoryCount-len(e.Memories))
-		}
-		if omitted > 0 {
-			if _, err := s.pool.Exec(ctx, "INSERT INTO background_stage_events(owner_id,stage,outcome,reason,count) VALUES($1,$2,'overflow','identity_sample_memory_limit',$3)", string(j.OwnerID), EntityCompareStage, omitted); err != nil {
-				return err
-			}
-		}
-	}
+	return asJSON(pair), refs, true, nil
+}
 
-	saved, err := s.generatePaid(ctx, j, "alias_confirm", entityCompareInstructions, asJSON(pair), refs)
-	if err != nil {
-		return err
-	}
-	if err := json.Unmarshal(saved.Prompt, &pair); err != nil || pair == nil {
-		return memory.ErrInvalid
+func (a entityCompareSession) Finish(ctx context.Context, j worker.Job) error {
+	return backgroundWriteTx(ctx, a.conn, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
+		if err := lockJob(ctx, tx, j); err != nil {
+			return err
+		}
+		return acknowledge(ctx, tx, j)
+	})
+}
+
+// The saved record has no record identities. They come from the saved
+// result's references, in the order of the entities and their memories.
+func entityPairFromRecord(record json.RawMessage, refs []memory.Ref) (*comparisonEntityPair, error) {
+	var pair *comparisonEntityPair
+	if err := json.Unmarshal(record, &pair); err != nil || pair == nil {
+		return nil, memory.ErrInvalid
 	}
 	cursor := 0
 	for i := range pair.Entities {
-		if cursor >= len(saved.Refs) {
-			return memory.ErrInvalid
+		if cursor >= len(refs) {
+			return nil, memory.ErrInvalid
 		}
-		pair.Entities[i].Ref = saved.Refs[cursor]
+		pair.Entities[i].Ref = refs[cursor]
 		cursor++
 		for k := range pair.Entities[i].Memories {
-			if cursor >= len(saved.Refs) {
-				return memory.ErrInvalid
+			if cursor >= len(refs) {
+				return nil, memory.ErrInvalid
 			}
-			pair.Entities[i].Memories[k].Ref = saved.Refs[cursor]
+			pair.Entities[i].Memories[k].Ref = refs[cursor]
 			cursor++
 		}
 	}
-	var answer struct {
-		Same *bool `json:"same"`
-		Keep *int  `json:"keep"`
+	return pair, nil
+}
+
+func (a entityCompareSession) RecordInvalid(ctx context.Context, j worker.Job, version int, record json.RawMessage, refs []memory.Ref, output string) error {
+	pair, err := entityPairFromRecord(record, refs)
+	if err != nil {
+		return err
 	}
-	valid := modelcall.DecodeStrict([]byte(saved.Output), &answer) == nil && answer.Same != nil && (!*answer.Same || answer.Keep != nil && (*answer.Keep == 1 || *answer.Keep == 2))
-	if !valid {
-		err = pgx.BeginFunc(ctx, conn, func(tx pgx.Tx) error {
-			if err := discardPaidResultTx(ctx, tx, j); err != nil {
-				return err
-			}
-			return writeAliasReceiptTx(ctx, tx, j.OwnerID, version, pair, nil, saved.Output)
-		})
-		if err != nil {
+	return pgx.BeginFunc(ctx, a.conn, func(tx pgx.Tx) error {
+		if err := discardPaidResultTx(ctx, tx, j); err != nil {
 			return err
 		}
-		return &worker.JobError{Code: "invalid_entity_compare_output", Until: time.Now().Add(retryDelay(j.Attempts))}
+		return writeAliasReceiptTx(ctx, tx, j.OwnerID, version, pair, nil, output)
+	})
+}
+
+func (a entityCompareSession) Apply(ctx context.Context, j worker.Job, version int, record json.RawMessage, refs []memory.Ref, merge bool, fn func(comparison.EntityUnit) error) error {
+	pair, err := entityPairFromRecord(record, refs)
+	if err != nil {
+		return err
 	}
 	write := func(ctx context.Context, tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended(current_database()||':'||current_schema()||':queue:'||$1||':'||$2,0))", string(j.OwnerID), EntityCompareStage); err != nil {
@@ -272,74 +271,78 @@ func (s *Store) processEntityCompareVersion(ctx context.Context, j worker.Job, v
 		if err := lockJob(ctx, tx, j); err != nil {
 			return err
 		}
-		var hash *string
-		if err := tx.QueryRow(ctx, "SELECT entity_name_hash($1,$2,$3)", string(j.OwnerID), string(pair.Entities[0].Ref.ID), string(pair.Entities[1].Ref.ID)).Scan(&hash); err != nil {
-			return err
-		}
-		if hash != nil && *hash == pairNameHash(pair) {
-			if *answer.Same {
-				// Positive identity decisions require the sampled memories to remain current;
-				// negative decisions persist by name only and ignore memory-count changes.
-				current := true
-				for _, ref := range saved.Refs {
-					if ref.Kind != memory.ClaimKind {
-						continue
-					}
-					var live bool
-					if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM memory_records r JOIN claims c ON(c.owner_id,c.id)=(r.owner_id,r.id) WHERE r.owner_id=$1 AND r.id=$2 AND r.version=$3 AND r.state='active' AND c.retired='' AND claim_source_is_current(r.owner_id,r.id,r.version,now()))", string(j.OwnerID), string(ref.ID), ref.Version).Scan(&live); err != nil {
-						return err
-					}
-					if !live {
-						current = false
-					}
-				}
-				if current {
-					for i := range pair.Entities {
-						if err := tx.QueryRow(ctx, "SELECT version FROM memory_records WHERE owner_id=$1 AND id=$2 AND state='active' FOR UPDATE", string(j.OwnerID), string(pair.Entities[i].Ref.ID)).Scan(&pair.Entities[i].Ref.Version); err != nil {
-							return err
-						}
-					}
-					var currentHash string
-					if err := tx.QueryRow(ctx, "SELECT entity_name_hash($1,$2,$3)", string(j.OwnerID), string(pair.Entities[0].Ref.ID), string(pair.Entities[1].Ref.ID)).Scan(&currentHash); err != nil {
-						return err
-					}
-					if currentHash != pairNameHash(pair) {
-						if err := stageEventTx(ctx, tx, j.OwnerID, EntityCompareStage, "deferred", "identity_name_changed", 1); err != nil {
-							return err
-						}
-						if err := discardPaidResultTx(ctx, tx, j); err != nil {
-							return err
-						}
-						return acknowledge(ctx, tx, j)
-					}
-					keep := entityPairKeepIndex(pair, *answer.Keep-1)
-					if err := mergeEntityTx(ctx, tx, j.OwnerID, pair.Entities[1-keep].Ref, pair.Entities[keep].Ref, version); err != nil {
-						return err
-					}
-				} else {
-					if err := stageEventTx(ctx, tx, j.OwnerID, EntityCompareStage, "deferred", "identity_input_changed", 1); err != nil {
-						return err
-					}
-					if err := discardPaidResultTx(ctx, tx, j); err != nil {
-						return err
-					}
-					return acknowledge(ctx, tx, j)
-				}
-			}
-			if err := writeAliasReceiptTx(ctx, tx, j.OwnerID, version, pair, answer.Same, saved.Output); err != nil {
-				return err
-			}
-		}
-		if err := discardPaidResultTx(ctx, tx, j); err != nil {
-			return err
-		}
-		return acknowledge(ctx, tx, j)
+		return fn(entityCompareUnit{ctx: ctx, tx: tx, job: j, version: version, pair: pair, refs: refs})
 	}
-	if *answer.Same {
-		return backgroundMergeResultTx(ctx, conn, j.OwnerID, write)
+	if merge {
+		return backgroundMergeResultTx(ctx, a.conn, j.OwnerID, write)
 	}
-	return backgroundResultTx(ctx, conn, j.OwnerID, write)
+	return backgroundResultTx(ctx, a.conn, j.OwnerID, write)
 }
+
+type entityCompareUnit struct {
+	ctx     context.Context
+	tx      pgx.Tx
+	job     worker.Job
+	version int
+	pair    *comparisonEntityPair
+	refs    []memory.Ref
+}
+
+func (u entityCompareUnit) owner() string { return string(u.job.OwnerID) }
+
+func (u entityCompareUnit) NamesUnchanged() (bool, error) {
+	var hash *string
+	err := u.tx.QueryRow(u.ctx, "SELECT entity_name_hash($1,$2,$3)", u.owner(), string(u.pair.Entities[0].Ref.ID), string(u.pair.Entities[1].Ref.ID)).Scan(&hash)
+	return err == nil && hash != nil && *hash == pairNameHash(u.pair), err
+}
+
+// Positive identity decisions require the sampled memories to remain current.
+// Negative decisions persist by name only and ignore memory-count changes.
+func (u entityCompareUnit) EvidenceCurrent() (bool, error) {
+	current := true
+	for _, ref := range u.refs {
+		if ref.Kind != memory.ClaimKind {
+			continue
+		}
+		var live bool
+		if err := u.tx.QueryRow(u.ctx, "SELECT EXISTS(SELECT 1 FROM memory_records r JOIN claims c ON(c.owner_id,c.id)=(r.owner_id,r.id) WHERE r.owner_id=$1 AND r.id=$2 AND r.version=$3 AND r.state='active' AND c.retired='' AND claim_source_is_current(r.owner_id,r.id,r.version,now()))", u.owner(), string(ref.ID), ref.Version).Scan(&live); err != nil {
+			return false, err
+		}
+		if !live {
+			current = false
+		}
+	}
+	return current, nil
+}
+
+func (u entityCompareUnit) LockEntities() (bool, error) {
+	for i := range u.pair.Entities {
+		if err := u.tx.QueryRow(u.ctx, "SELECT version FROM memory_records WHERE owner_id=$1 AND id=$2 AND state='active' FOR UPDATE", u.owner(), string(u.pair.Entities[i].Ref.ID)).Scan(&u.pair.Entities[i].Ref.Version); err != nil {
+			return false, err
+		}
+	}
+	var currentHash string
+	if err := u.tx.QueryRow(u.ctx, "SELECT entity_name_hash($1,$2,$3)", u.owner(), string(u.pair.Entities[0].Ref.ID), string(u.pair.Entities[1].Ref.ID)).Scan(&currentHash); err != nil {
+		return false, err
+	}
+	return currentHash == pairNameHash(u.pair), nil
+}
+
+func (u entityCompareUnit) Merge(keep int) error {
+	return mergeEntityTx(u.ctx, u.tx, u.job.OwnerID, u.pair.Entities[1-keep].Ref, u.pair.Entities[keep].Ref, u.version)
+}
+
+func (u entityCompareUnit) Event(outcome, reason string, count int) error {
+	return stageEventTx(u.ctx, u.tx, u.job.OwnerID, EntityCompareStage, outcome, reason, count)
+}
+
+func (u entityCompareUnit) Receipt(same *bool, output string) error {
+	return writeAliasReceiptTx(u.ctx, u.tx, u.job.OwnerID, u.version, u.pair, same, output)
+}
+
+func (u entityCompareUnit) DiscardResult() error { return discardPaidResultTx(u.ctx, u.tx, u.job) }
+func (u entityCompareUnit) Acknowledge() error   { return acknowledge(u.ctx, u.tx, u.job) }
+
 func writeAliasReceiptTx(ctx context.Context, tx pgx.Tx, owner memory.ID, rule int, pair *comparisonEntityPair, same *bool, output string) error {
 	a, b := pair.Entities[0].Ref.ID, pair.Entities[1].Ref.ID
 	if a > b {

@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"encoding/json"
+	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
 	"net/http"
 	"testing"
 	"time"
@@ -57,7 +58,7 @@ func TestCompareEntityMergeAliasesAndUndo(t *testing.T) {
 	keep, b := compareEntityFixture(t, s, scope, "陈亮", "陈亮就是负责松林项目的小陈")
 	compareEntityGroup(t, s, scope, "project", "虚构松林项目", a, b)
 	j := compareJob(t, s, scope, true, CompareVersion)
-	if err := s.ProcessEntityCompare(context.Background(), j); err != nil {
+	if err := (comparison.EntityService{Store: s.EntityCompareStore(), Generator: s, Version: EntityCompareVersion}).Process(context.Background(), j); err != nil {
 		t.Fatal(err)
 	}
 	var p comparisonEntityPair
@@ -121,7 +122,7 @@ func TestCompareEntityNegativeAndAmbiguousNames(t *testing.T) {
 	compareEntityFixture(t, s, scope, "老王", "老王经营虚构云朵面包店")
 	compareEntityFixture(t, s, scope, "那个王先生", "那个王先生来自虚构岚谷")
 	j := compareJob(t, s, scope, true, CompareVersion)
-	if err := s.ProcessEntityCompare(context.Background(), j); err != nil {
+	if err := (comparison.EntityService{Store: s.EntityCompareStore(), Generator: s, Version: EntityCompareVersion}).Process(context.Background(), j); err != nil {
 		t.Fatal(err)
 	}
 	var n int
@@ -176,7 +177,7 @@ func TestCompareEntityCandidatesRequireModelProposalForEveryContext(t *testing.T
 				t.Fatal(err)
 			}
 			j := compareJob(t, s, scope, true, CompareVersion)
-			if err := s.ProcessEntityCompare(context.Background(), j); err != nil {
+			if err := (comparison.EntityService{Store: s.EntityCompareStore(), Generator: s, Version: EntityCompareVersion}).Process(context.Background(), j); err != nil {
 				t.Fatal(err)
 			}
 			if len(f.all()) != 1 {
@@ -206,7 +207,9 @@ func TestCompareEntityInputMemoryChangedDuringCallDoesNotMerge(t *testing.T) {
 	})
 	j := compareJob(t, s, scope, true, CompareVersion)
 	done := make(chan error, 1)
-	go func() { done <- s.ProcessEntityCompare(ctx, j) }()
+	go func() {
+		done <- (comparison.EntityService{Store: s.EntityCompareStore(), Generator: s, Version: EntityCompareVersion}).Process(ctx, j)
+	}()
 	select {
 	case <-entered:
 	case <-time.After(5 * time.Second):

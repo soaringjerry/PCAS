@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"fmt"
+	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
 	"github.com/soaringjerry/PCAS/internal/worker"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 	"testing"
@@ -45,7 +46,7 @@ func TestP3RejudgeOnlySupersededAndReusesPaidWrite(t *testing.T) {
  CREATE TRIGGER fictional_rejudge_failure BEFORE INSERT ON background_markers FOR EACH ROW EXECUTE FUNCTION fictional_rejudge_failure()`); e != nil {
 		t.Fatal(e)
 	}
-	if e = s.ProcessCompare(ctx, job); e == nil {
+	if e = (comparison.Service{Store: s.CompareStore(), Generator: s, Version: CompareVersion}).Process(ctx, job); e == nil {
 		t.Fatal("expected write failure")
 	}
 	var retired string
@@ -60,7 +61,7 @@ func TestP3RejudgeOnlySupersededAndReusesPaidWrite(t *testing.T) {
 		t.Fatal(e)
 	}
 	defer reopened.Close()
-	if e = reopened.ProcessCompare(ctx, job); e != nil {
+	if e = (comparison.Service{Store: reopened.CompareStore(), Generator: reopened, Version: CompareVersion}).Process(ctx, job); e != nil {
 		t.Fatal(e)
 	}
 	if len(fake.all()) != 1 {
@@ -100,7 +101,7 @@ func TestP3RejudgeRejectsFailureAndChangedPair(t *testing.T) {
 			if scenario == "target_changed" {
 				b1Correct(t, s, scope, refs[1], "虚构本人改过的新要求")
 			}
-			err := s.ProcessCompare(ctx, job)
+			err := (comparison.Service{Store: s.CompareStore(), Generator: s, Version: CompareVersion}).Process(ctx, job)
 			if scenario == "invalid" {
 				if err == nil {
 					t.Fatal("accepted invalid output")
@@ -185,7 +186,7 @@ func TestP3RejudgeTwelveFixedPairs(t *testing.T) {
 			response = `{"duplicates":[],"superseded":[{"old":1,"new":2}]}`
 		}
 		fake.set(response)
-		if e := s.ProcessCompare(ctx, job); e != nil {
+		if e := (comparison.Service{Store: s.CompareStore(), Generator: s, Version: CompareVersion}).Process(ctx, job); e != nil {
 			t.Fatal(e)
 		}
 	}

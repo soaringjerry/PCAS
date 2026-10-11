@@ -3,6 +3,7 @@ package postgres_test
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
 	"net/http"
 	"strings"
 	"testing"
@@ -121,9 +122,9 @@ func (f *phase25B234Fixture) compareJob(t *testing.T) string {
 		t.Errorf("compare priority=%d, want 8", priority)
 	}
 	if strings.HasPrefix(j.Stage, "memory.compare:") {
-		err = f.store.ProcessCompare(f.ctx, *j)
+		err = (comparison.Service{Store: f.store.CompareStore(), Generator: f.store, Version: postgres.CompareVersion}).Process(f.ctx, *j)
 	} else if strings.HasPrefix(j.Stage, "memory.entity_compare:") {
-		err = f.store.ProcessEntityCompare(f.ctx, *j)
+		err = (comparison.EntityService{Store: f.store.EntityCompareStore(), Generator: f.store, Version: postgres.EntityCompareVersion}).Process(f.ctx, *j)
 	} else {
 		t.Fatalf("unexpected claimed stage=%s", j.Stage)
 	}
@@ -310,7 +311,9 @@ func TestPhase25B2_X2_7_ConcurrentChangeDiscardsOnlyRelatedResult(t *testing.T) 
 				t.Fatalf("unexpected stage=%s", j.Stage)
 			}
 			done := make(chan error, 1)
-			go func() { done <- f.store.ProcessCompare(f.ctx, *j) }()
+			go func() {
+				done <- (comparison.Service{Store: f.store.CompareStore(), Generator: f.store, Version: postgres.CompareVersion}).Process(f.ctx, *j)
+			}()
 			select {
 			case <-entered:
 			case <-f.ctx.Done():

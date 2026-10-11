@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/soaringjerry/PCAS/internal/interpretation/aliasscan"
+	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
 	"net/http"
 	"strings"
 	"testing"
@@ -116,7 +117,7 @@ func TestEntityCandidatesTranslationAbbreviationKeepAndUndo(t *testing.T) {
 			// and the Chinese-name tie break, not the model.
 			f.set(`{"same":true,"keep":1}`)
 			j = compareJob(t, s, scope, true, EntityCompareVersion)
-			if err := s.ProcessEntityCompare(ctx, j); err != nil {
+			if err := (comparison.EntityService{Store: s.EntityCompareStore(), Generator: s, Version: EntityCompareVersion}).Process(ctx, j); err != nil {
 				t.Fatal(err)
 			}
 			keep, merged := b, a
@@ -160,7 +161,7 @@ func TestEntityCandidatesNearbyNamesStillRequirePairConfirmation(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.set(`{"same":false,"keep":null}`)
-	if err := s.ProcessEntityCompare(ctx, compareJob(t, s, scope, true, EntityCompareVersion)); err != nil {
+	if err := (comparison.EntityService{Store: s.EntityCompareStore(), Generator: s, Version: EntityCompareVersion}).Process(ctx, compareJob(t, s, scope, true, EntityCompareVersion)); err != nil {
 		t.Fatal(err)
 	}
 	aliasAssertSubjects(t, s, scope, ar, a.ID)
@@ -193,7 +194,7 @@ func TestEntityCandidatesCrossTypeAndGroupBookmarks(t *testing.T) {
 					}
 					f.set(`{"same":true,"keep":2}`)
 				}
-				if err := s.ProcessEntityCompare(ctx, compareJob(t, s, scope, true, EntityCompareVersion)); err != nil {
+				if err := (comparison.EntityService{Store: s.EntityCompareStore(), Generator: s, Version: EntityCompareVersion}).Process(ctx, compareJob(t, s, scope, true, EntityCompareVersion)); err != nil {
 					t.Fatal(err)
 				}
 				all := append(append([]memory.Ref{}, ar...), br...)
@@ -408,12 +409,12 @@ func TestEntityCandidatesRuleUpgradeRechecksEntitiesOnly(t *testing.T) {
 	compareEntityFixture(t, s, scope, "虚构星岚", "虚构星岚负责同一份器材")
 	compareEntityFixture(t, s, scope, "虚构星岚女士", "虚构星岚女士是器材负责人的完整称呼")
 	j := compareJob(t, s, scope, true, 1)
-	if err := s.processEntityCompareVersion(ctx, j, 1); err != nil {
+	if err := (comparison.EntityService{Store: s.EntityCompareStore(), Generator: s, Version: 1}).Process(ctx, j); err != nil {
 		t.Fatal(err)
 	}
 	f.set(`{"same":true,"keep":2}`)
 	j = compareJob(t, s, scope, true, EntityCompareVersion)
-	if err := s.ProcessEntityCompare(ctx, j); err != nil {
+	if err := (comparison.EntityService{Store: s.EntityCompareStore(), Generator: s, Version: EntityCompareVersion}).Process(ctx, j); err != nil {
 		t.Fatal(err)
 	}
 	var rule, claimRule int
@@ -436,7 +437,7 @@ func TestEntityCandidatesThreeNamesKeepChineseAndUndoInReverse(t *testing.T) {
 	}
 	f.set(`{"same":true,"keep":2}`)
 	for range 2 {
-		if err := s.ProcessEntityCompare(ctx, compareJob(t, s, scope, true, EntityCompareVersion)); err != nil {
+		if err := (comparison.EntityService{Store: s.EntityCompareStore(), Generator: s, Version: EntityCompareVersion}).Process(ctx, compareJob(t, s, scope, true, EntityCompareVersion)); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -493,7 +494,7 @@ func TestEntityCandidatesAndConfirmationCallsLeaveRowsUnlocked(t *testing.T) {
 					t.Fatal(err)
 				}
 				j = compareJob(t, s, scope, true, EntityCompareVersion)
-				process = s.ProcessEntityCompare
+				process = (comparison.EntityService{Store: s.EntityCompareStore(), Generator: s, Version: EntityCompareVersion}).Process
 				reply = `{"same":true,"keep":1}`
 			}
 			entered, release := make(chan struct{}), make(chan struct{})
@@ -556,7 +557,7 @@ func TestEntityCompareCompletedResultSurvivesBusyFollowupScheduling(t *testing.T
 	}
 	// Result writes do not need the scheduler lock. After they commit, a busy
 	// opportunistic follow-up must not try to defer the completed lease.
-	if err := s.ProcessEntityCompare(ctx, j); err != nil {
+	if err := (comparison.EntityService{Store: s.EntityCompareStore(), Generator: s, Version: EntityCompareVersion}).Process(ctx, j); err != nil {
 		t.Errorf("completed result returned scheduling failure: %v", err)
 	}
 	var state string

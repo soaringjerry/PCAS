@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/worker"
 	"testing"
@@ -35,14 +36,14 @@ func TestOrganizeCompareIndependentHourlyCalls(t *testing.T) {
 				fake.set(`{"duplicates":[],"superseded":[]}`)
 				compareFixture(t, s, scope, "虚构独立额度比较便签甲", "虚构独立额度比较便签乙")
 				job = compareJob(t, s, scope, false, CompareVersion)
-				process = s.ProcessCompare
+				process = (comparison.Service{Store: s.CompareStore(), Generator: s, Version: CompareVersion}).Process
 			case EntityCompareStage:
 				fake.set(`{"same":false,"keep":null}`)
 				_, a := compareEntityFixture(t, s, scope, "虚构额度同名", "虚构人物甲")
 				_, b := compareEntityFixture(t, s, scope, "虚构额度同名", "虚构人物乙")
 				compareEntityGroup(t, s, scope, "project", "虚构额度项目", a, b)
 				job = compareJob(t, s, scope, true, CompareVersion)
-				process = s.ProcessEntityCompare
+				process = (comparison.EntityService{Store: s.EntityCompareStore(), Generator: s, Version: EntityCompareVersion}).Process
 			}
 			for stage, limit := range map[string]int{OrganizeStage: 40, CompareStage: 40, EntityCompareStage: 30, EntityCandidatesStage: 6, HandoverStage: 2} {
 				if stage == kind {

@@ -7,6 +7,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/currentstate/datereview"
 	"github.com/soaringjerry/PCAS/internal/currentstate/handover"
 	"github.com/soaringjerry/PCAS/internal/interpretation/aliasscan"
+	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
 	"github.com/soaringjerry/PCAS/internal/postgres"
 	"github.com/soaringjerry/PCAS/internal/workspace/effort"
 	"github.com/soaringjerry/PCAS/internal/workspace/projecthandover"
@@ -41,4 +42,14 @@ func Handover(db *postgres.Store) handover.Service {
 // AliasScan connects the alias scan service to storage and generation.
 func AliasScan(db *postgres.Store) aliasscan.Service {
 	return aliasscan.Service{Store: db.AliasScanStore(), Generator: db}
+}
+
+// Compare connects the statement comparison service to storage and generation.
+func Compare(db *postgres.Store) comparison.Service {
+	return comparison.Service{Store: db.CompareStore(), Generator: db, Version: postgres.CompareVersion}
+}
+
+// EntityCompare connects the entity comparison service to storage and generation.
+func EntityCompare(db *postgres.Store) comparison.EntityService {
+	return comparison.EntityService{Store: db.EntityCompareStore(), Generator: db, Version: postgres.EntityCompareVersion}
 }

@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"github.com/soaringjerry/PCAS/internal/currentstate/handover"
+	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
 	"net/http"
 	"testing"
 	"time"
@@ -20,7 +21,7 @@ func backgroundFixture(t *testing.T, stage string) (*Store, memory.Scope, worker
 	case "compare":
 		compareFixture(t, s, scope, "虚构进展甲。", "虚构进展乙。", "虚构进展丙。")
 		j := compareJob(t, s, scope, false, CompareVersion)
-		return s, scope, j, s.ProcessCompare, func(w http.ResponseWriter, _ *http.Request) {
+		return s, scope, j, (comparison.Service{Store: s.CompareStore(), Generator: s, Version: CompareVersion}).Process, func(w http.ResponseWriter, _ *http.Request) {
 			secretaryModelReply(w, map[string]any{"duplicates": []any{}, "superseded": []any{}})
 		}
 	case "handover":

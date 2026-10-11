@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"errors"
+	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
 	"net/http"
 	"testing"
 	"time"
@@ -50,7 +51,9 @@ func TestCompareLostLeaseCannotWriteRetirementOrProgress(t *testing.T) {
 	})
 	j := compareJob(t, s, scope, false, CompareVersion)
 	done := make(chan error, 1)
-	go func() { done <- s.ProcessCompare(context.Background(), j) }()
+	go func() {
+		done <- (comparison.Service{Store: s.CompareStore(), Generator: s, Version: CompareVersion}).Process(context.Background(), j)
+	}()
 	select {
 	case <-entered:
 	case <-time.After(5 * time.Second):
@@ -79,7 +82,7 @@ func TestCompareEntityUndoAfterUserEditRefusesAtomically(t *testing.T) {
 	keep, b := compareEntityFixture(t, s, scope, "陈亮", "陈亮就是小陈，负责虚构松林项目")
 	compareEntityGroup(t, s, scope, "project", "虚构松林项目", a, b)
 	j := compareJob(t, s, scope, true, CompareVersion)
-	if err := s.ProcessEntityCompare(context.Background(), j); err != nil {
+	if err := (comparison.EntityService{Store: s.EntityCompareStore(), Generator: s, Version: EntityCompareVersion}).Process(context.Background(), j); err != nil {
 		t.Fatal(err)
 	}
 	b1Correct(t, s, scope, a, "陈亮现在负责虚构云海项目")
@@ -166,7 +169,7 @@ func TestCompareRetirementPreservesFrozenCards(t *testing.T) {
 	if _, err := s.pool.Exec(ctx, "INSERT INTO handovers(owner_id,body,rule,built_at,stale) VALUES($1,'虚构旧交接',1,now(),false)", string(scope.OwnerID)); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.ProcessCompare(ctx, j); err != nil {
+	if err := (comparison.Service{Store: s.CompareStore(), Generator: s, Version: CompareVersion}).Process(ctx, j); err != nil {
 		t.Fatal(err)
 	}
 	var stale bool

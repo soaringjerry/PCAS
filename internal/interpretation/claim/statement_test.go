@@ -2,6 +2,7 @@ package claim
 
 import (
 	"testing"
+	"time"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
 )
@@ -43,5 +44,42 @@ func TestAStatementNeedsTextAKnownNatureAndASourceVersion(t *testing.T) {
 	}
 	if _, err := Normalize(Statement{Text: "执行了一步", Nature: "fact", Acquisition: "execution", Source: source}); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestAStatementRestsOnItsQuotationOrOnTheWholeSource(t *testing.T) {
+	text := "虚构的云杉喜欢茶。她住在虚构城。"
+	if start, end, ok := QuoteSpan(text, "喜欢茶"); !ok || start != 5 || end != 8 {
+		t.Fatal(start, end, ok)
+	}
+	if start, end, ok := QuoteSpan(text, ""); !ok || start != 0 || end != 16 {
+		t.Fatal(start, end, ok)
+	}
+	if _, _, ok := QuoteSpan(text, "喜欢咖啡"); ok {
+		t.Fatal("a quotation that the source does not contain is not valid")
+	}
+}
+
+func TestTheSameAssertionHasTheSameKeyAndItsOwnTime(t *testing.T) {
+	a := Statement{Subject: "我", Predicate: "喜欢", Text: "喜欢茶"}
+	if Key(a) != Key(Statement{Subject: "我", Predicate: "喜欢", Text: "喜欢茶", Quote: "别的引文"}) || Key(a) == Key(Statement{Subject: "我", Predicate: "喜欢", Text: "喜欢咖啡"}) {
+		t.Fatal("key")
+	}
+	said, recorded := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC), time.Date(2026, 3, 9, 0, 0, 0, 0, time.UTC)
+	if got := ExpressedAt(&said, nil, recorded, "archive"); got != &said {
+		t.Fatal("the statement's own time")
+	}
+	if got := ExpressedAt(nil, &said, recorded, "archive"); got != &said {
+		t.Fatal("the time of the source")
+	}
+	if got := ExpressedAt(nil, nil, recorded, "desk"); got == nil || !got.Equal(recorded) {
+		t.Fatal("the record time of the owner's own input")
+	}
+	if ExpressedAt(nil, nil, recorded, "archive") != nil {
+		t.Fatal("an import without a time has none")
+	}
+	scope := Scope(Statement{ProjectID: "p1", ExtractionRun: "run", ExtractionRef: 4})
+	if scope["project_id"] != "p1" || scope["conversation_extraction"] != "run" || scope["conversation_ref"] != "4" || len(Scope(Statement{})) != 0 {
+		t.Fatalf("%v", scope)
 	}
 }

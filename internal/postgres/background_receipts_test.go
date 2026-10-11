@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/jackc/pgx/v5"
+	"github.com/soaringjerry/PCAS/internal/interpretation/aliasscan"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"net/http"
 	"testing"
@@ -39,7 +40,9 @@ func TestPaidBackgroundResultsSurviveBusinessWriteFailureAndRestart(t *testing.T
 				aliasEntityFixture(t, s, scope, "person", "Al", 1)
 				aliasEntityFixture(t, s, scope, "person", "虚构齐鹤", 1)
 				job = aliasNamesJob(t, s, scope)
-				process = (*Store).ProcessEntityCandidates
+				process = func(s *Store, ctx context.Context, j worker.Job) error {
+					return (aliasscan.Service{Store: s.AliasScanStore(), Generator: s}).Process(ctx, j)
+				}
 				table = "entity_alias_candidates"
 				response = `{"groups":[[1,2]]}`
 			}

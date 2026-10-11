@@ -38,6 +38,7 @@ flowchart LR
 | Date review | `internal/currentstate/datereview` | `internal/postgres/date_tidy.go` | The input assembly, the scheduler, and the home page's list of reviewed dates. |
 | Project handover | `internal/workspace/projecthandover` | `internal/postgres/project_handover.go` | The input assembly, the evidence check queries, the scheduler, and the reader for the project page. |
 | Global handover | `internal/currentstate/handover` | `internal/postgres/status_handover.go` | The input assembly, the scheduler, and the stale rule in SQL. |
+| Alias scan | `internal/interpretation/aliasscan` | `internal/postgres/entity_candidates.go` | The batch selection, the name checks of a proposed pair, and the scheduler. |
 
 The topic project service holds the proposal rules: a match must name a project that the model saw, a new project waits until the model has seen every project, an existing name attaches instead of creating, the user's own name for a project is kept, and four projects are created in one local day at most.
 Its input assembly reads memory and clips evidence in one function with SQL. That function stays in storage until memory retrieval has its own interface.

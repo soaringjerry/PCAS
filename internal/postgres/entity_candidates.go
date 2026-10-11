@@ -10,13 +10,14 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/soaringjerry/PCAS/internal/interpretation/aliasscan"
 	"github.com/soaringjerry/PCAS/internal/memory"
-	"github.com/soaringjerry/PCAS/internal/modelcall"
 	"github.com/soaringjerry/PCAS/internal/prompts"
 	"github.com/soaringjerry/PCAS/internal/worker"
 )
 
-const EntityCandidatesStage = "memory.entity_candidates"
+const EntityCandidatesStage = aliasscan.Stage
 
 var entityCandidatesInstructions = prompts.Must("entity-candidates").Text()
 
@@ -75,12 +76,7 @@ func entityCandidateNamesTx(ctx context.Context, tx pgx.Tx, owner memory.ID, ver
 	return out, rows.Err()
 }
 
-func entityPairTypesAllowed(a, b string) bool {
-	if a == b {
-		return oneOf(a, "person", "place", "organization", "topic", "project")
-	}
-	return a == "topic" && oneOf(b, "place", "organization") || b == "topic" && oneOf(a, "place", "organization")
-}
+func entityPairTypesAllowed(a, b string) bool { return aliasscan.PairTypesAllowed(a, b) }
 
 // Up to 200 names are sent together. Larger lists use every pair of 100-name
 // blocks, so EVERY pair can meet, even across languages or distant positions.
@@ -363,141 +359,132 @@ func (s *Store) ScheduleEntityCandidates(ctx context.Context, now time.Time) (in
 	return count, nil
 }
 
-func (s *Store) ProcessEntityCandidates(ctx context.Context, j worker.Job) error {
-	if _, err := compareJobVersion(j); err != nil || !strings.HasPrefix(j.Stage, EntityCandidatesStage+":") {
-		return memory.ErrInvalid
-	}
-	conn, release, err := s.comparisonConnection(ctx)
+// AliasScanStore gives the alias scan service its reads and writes.
+func (s *Store) AliasScanStore() aliasscan.Store { return aliasScanStore{s} }
+
+// GenerateWithRefs is GenerateForJob for a caller that also needs the records
+// that the saved result names. It has the same temporary status.
+func (s *Store) GenerateWithRefs(ctx context.Context, j worker.Job, purpose string, instructions prompts.Definition, record json.RawMessage, refs []memory.Ref) (json.RawMessage, string, []memory.Ref, error) {
+	paid, err := s.generatePaid(ctx, j, purpose, instructions.Text(), record, refs)
 	if err != nil {
-		return err
+		return nil, "", nil, err
 	}
-	defer release()
-	cached, err := s.paidModelResult(ctx, j)
+	return paid.Prompt, paid.Output, paid.Refs, nil
+}
+
+type aliasScanStore struct{ store *Store }
+
+func (a aliasScanStore) RetryLater(j worker.Job, code string) error {
+	return &worker.JobError{Code: code, Until: time.Now().Add(retryDelay(j.Attempts))}
+}
+
+func (a aliasScanStore) Session(ctx context.Context) (aliasscan.Session, func(), error) {
+	conn, release, err := a.store.comparisonConnection(ctx)
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
+	return aliasScanSession{store: a.store, conn: conn}, release, nil
+}
+
+type aliasScanSession struct {
+	store *Store
+	conn  *pgxpool.Conn
+}
+
+func (a aliasScanSession) Ready() error {
+	if a.store.models == nil {
+		return &worker.JobError{Code: "provider_unavailable", Until: time.Now().Add(CompareInterval), NoAttempt: true}
+	}
+	return nil
+}
+
+func (a aliasScanSession) NextBatch(ctx context.Context, j worker.Job) (json.RawMessage, []memory.Ref, bool, error) {
 	var batch *entityCandidateBatch
-	if cached == nil {
-		if s.models == nil {
-			return &worker.JobError{Code: "provider_unavailable", Until: time.Now().Add(CompareInterval), NoAttempt: true}
-		}
-		err = pgx.BeginFunc(ctx, conn, func(tx pgx.Tx) error {
-			var e error
-			batch, e = nextEntityCandidateBatchTx(ctx, tx, j.OwnerID, EntityCompareVersion)
-			return e
-		})
-		if err != nil {
-			return err
-		}
-		if batch == nil {
-			return backgroundWriteTx(ctx, conn, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
-				if err := lockJob(ctx, tx, j); err != nil {
-					return err
-				}
-				return acknowledge(ctx, tx, j)
-			})
-		}
+	err := pgx.BeginFunc(ctx, a.conn, func(tx pgx.Tx) error {
+		var e error
+		batch, e = nextEntityCandidateBatchTx(ctx, tx, j.OwnerID, EntityCompareVersion)
+		return e
+	})
+	if err != nil || batch == nil {
+		return nil, nil, false, err
 	}
 	refs := []memory.Ref{}
-	marker := ""
-	if batch != nil {
-		marker = batch.Marker
-		for _, e := range batch.Entities {
-			refs = append(refs, e.Ref)
-		}
+	for _, e := range batch.Entities {
+		refs = append(refs, e.Ref)
 	}
-	saved, err := s.generatePaid(ctx, j, "alias_scan", entityCandidatesInstructions, asJSON(struct {
+	return asJSON(struct {
 		*entityCandidateBatch
 		Marker string `json:"marker"`
-	}{batch, marker}), refs)
-	if err != nil {
-		return err
-	}
+	}{batch, batch.Marker}), refs, true, nil
+}
+
+func (a aliasScanSession) Finish(ctx context.Context, j worker.Job) error {
+	return backgroundWriteTx(ctx, a.conn, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
+		if err := lockJob(ctx, tx, j); err != nil {
+			return err
+		}
+		return acknowledge(ctx, tx, j)
+	})
+}
+
+func (a aliasScanSession) DiscardResult(ctx context.Context, j worker.Job) error {
+	return pgx.BeginFunc(ctx, a.conn, func(tx pgx.Tx) error { return discardPaidResultTx(ctx, tx, j) })
+}
+
+func (a aliasScanSession) Apply(ctx context.Context, j worker.Job, record json.RawMessage, refs []memory.Ref, fn func(aliasscan.Unit) error) error {
 	var input struct {
 		entityCandidateBatch
 		Marker string `json:"marker"`
 	}
-	if err := json.Unmarshal(saved.Prompt, &input); err != nil {
+	if err := json.Unmarshal(record, &input); err != nil || len(refs) != len(input.Entities) {
 		return memory.ErrInvalid
 	}
-	batch = &input.entityCandidateBatch
+	batch := input.entityCandidateBatch
 	batch.Marker = input.Marker
-	if len(saved.Refs) != len(batch.Entities) {
-		return memory.ErrInvalid
-	}
 	for i := range batch.Entities {
-		batch.Entities[i].Ref = saved.Refs[i]
+		batch.Entities[i].Ref = refs[i]
 	}
-	var answer struct {
-		Groups [][]int `json:"groups"`
-	}
-	valid := modelcall.DecodeStrict([]byte(saved.Output), &answer) == nil && answer.Groups != nil
-	for _, group := range answer.Groups {
-		for _, n := range group {
-			if n < 1 || n > len(batch.Entities) {
-				valid = false
-			}
-		}
-	}
-	if !valid {
-		if err := pgx.BeginFunc(ctx, conn, func(tx pgx.Tx) error { return discardPaidResultTx(ctx, tx, j) }); err != nil {
-			return err
-		}
-		return &worker.JobError{Code: "invalid_entity_candidates_output", Until: time.Now().Add(retryDelay(j.Attempts))}
-	}
-
-	err = backgroundResultTx(ctx, conn, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
+	return backgroundResultTx(ctx, a.conn, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended(current_database()||':'||current_schema()||':scan-queue:'||$1,0))", string(j.OwnerID)); err != nil {
 			return err
 		}
 		if err := lockJob(ctx, tx, j); err != nil {
 			return err
 		}
-		for _, raw := range answer.Groups {
-			for i, a := range raw {
-				for _, b := range raw[i+1:] {
-					if a == b {
-						continue
-					}
-					x, y := batch.Entities[a-1], batch.Entities[b-1]
-					if !entityPairTypesAllowed(x.Type, y.Type) {
-						continue
-					}
-					if x.Ref.ID > y.Ref.ID {
-						x, y = y, x
-					}
-					var hash *string
-					if err := tx.QueryRow(ctx, "SELECT entity_name_hash($1,$2,$3)", string(j.OwnerID), string(x.Ref.ID), string(y.Ref.ID)).Scan(&hash); err != nil {
-						return err
-					}
-					if hash == nil {
-						continue
-					}
-					// Names changed during generation invalidate only these candidates.
-					var matches bool
-					if err := tx.QueryRow(ctx, `SELECT count(*)=2 FROM entity_versions ev JOIN memory_records r ON(r.owner_id,r.id,r.version)=(ev.owner_id,ev.entity_id,ev.version) WHERE ev.owner_id=$1 AND ((ev.entity_id=$2 AND ev.name=$3 AND ev.entity_type=$4) OR (ev.entity_id=$5 AND ev.name=$6 AND ev.entity_type=$7))`, string(j.OwnerID), string(x.Ref.ID), x.Name, x.Type, string(y.Ref.ID), y.Name, y.Type).Scan(&matches); err != nil {
-						return err
-					}
-					if !matches {
-						continue
-					}
-					if _, err := tx.Exec(ctx, `INSERT INTO entity_alias_candidates(owner_id,left_id,right_id,name_hash,rule,source_marker) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT DO NOTHING`, string(j.OwnerID), string(x.Ref.ID), string(y.Ref.ID), *hash, EntityCompareVersion, batch.Marker); err != nil {
-						return err
-					}
-				}
-			}
-		}
-		if _, err := tx.Exec(ctx, `INSERT INTO background_markers(owner_id,record_id,record_version,stage) VALUES($1,$2,$3,$4) ON CONFLICT DO NOTHING`, string(j.OwnerID), string(j.Record.ID), j.Record.Version, batch.Marker); err != nil {
-			return err
-		}
-		if err := discardPaidResultTx(ctx, tx, j); err != nil {
-			return err
-		}
-		return acknowledge(ctx, tx, j)
+		return fn(aliasScanUnit{ctx: ctx, tx: tx, job: j, batch: batch})
 	})
-	if err != nil {
+}
+
+type aliasScanUnit struct {
+	ctx   context.Context
+	tx    pgx.Tx
+	job   worker.Job
+	batch entityCandidateBatch
+}
+
+func (u aliasScanUnit) ProposePair(a, b int) error {
+	x, y := u.batch.Entities[a-1], u.batch.Entities[b-1]
+	if x.Ref.ID > y.Ref.ID {
+		x, y = y, x
+	}
+	owner := string(u.job.OwnerID)
+	var hash *string
+	if err := u.tx.QueryRow(u.ctx, "SELECT entity_name_hash($1,$2,$3)", owner, string(x.Ref.ID), string(y.Ref.ID)).Scan(&hash); err != nil || hash == nil {
 		return err
 	}
-	// The next timer tick queues only genuinely remaining work, never a phantom slot.
-	return nil
+	// Names changed during generation invalidate only these candidates.
+	var matches bool
+	if err := u.tx.QueryRow(u.ctx, `SELECT count(*)=2 FROM entity_versions ev JOIN memory_records r ON(r.owner_id,r.id,r.version)=(ev.owner_id,ev.entity_id,ev.version) WHERE ev.owner_id=$1 AND ((ev.entity_id=$2 AND ev.name=$3 AND ev.entity_type=$4) OR (ev.entity_id=$5 AND ev.name=$6 AND ev.entity_type=$7))`, owner, string(x.Ref.ID), x.Name, x.Type, string(y.Ref.ID), y.Name, y.Type).Scan(&matches); err != nil || !matches {
+		return err
+	}
+	_, err := u.tx.Exec(u.ctx, `INSERT INTO entity_alias_candidates(owner_id,left_id,right_id,name_hash,rule,source_marker) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT DO NOTHING`, owner, string(x.Ref.ID), string(y.Ref.ID), *hash, EntityCompareVersion, u.batch.Marker)
+	return err
 }
+
+func (u aliasScanUnit) MarkScanned() error {
+	_, err := u.tx.Exec(u.ctx, `INSERT INTO background_markers(owner_id,record_id,record_version,stage) VALUES($1,$2,$3,$4) ON CONFLICT DO NOTHING`, string(u.job.OwnerID), string(u.job.Record.ID), u.job.Record.Version, u.batch.Marker)
+	return err
+}
+
+func (u aliasScanUnit) DiscardResult() error { return discardPaidResultTx(u.ctx, u.tx, u.job) }
+func (u aliasScanUnit) Acknowledge() error   { return acknowledge(u.ctx, u.tx, u.job) }

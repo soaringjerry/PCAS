@@ -20,7 +20,6 @@ import (
 	"github.com/soaringjerry/PCAS/internal/modelcall"
 	"github.com/soaringjerry/PCAS/internal/prompts"
 	"github.com/soaringjerry/PCAS/internal/workspace"
-	"github.com/soaringjerry/PCAS/internal/workspace/effort"
 )
 
 var secretaryInstructions = prompts.Must("secretary").Text()
@@ -232,76 +231,37 @@ func (s *Store) secretaryPrompt(ctx context.Context, tx pgx.Tx, scope memory.Sco
 		return "", nil, docErr
 	}
 	prompt.WriteString(docCatalog)
-	fmt.Fprintf(&prompt, "用户所在城市：%s\n时区：%s\n\n项目列表：\n", c.Settings.City, loc)
-	projectNames := map[string]string{}
-	for _, p := range c.Projects {
-		projectNames[p.ID] = p.Title
-	}
-	for i, p := range c.Projects {
-		evidence := p.Goal
-		if p.Creation != nil && p.Creation.Source != nil && evidence != p.Creation.Source.Excerpt {
-			evidence += "\n" + p.Creation.Source.Excerpt
-		}
-		runes := []rune(evidence)
-		if len(runes) > 400 {
-			evidence = string(runes[:400]) + "（项目依据还有内容）"
-			if err := stageEventTx(ctx, tx, scope.OwnerID, "secretary", "overflow", "project_evidence_characters", len(runes)-400); err != nil {
-				return "", nil, err
-			}
-		}
-		fmt.Fprintf(&prompt, "P%d：%s（未完成 %d；状态 %s；目标与依据：%s）\n", i+1, p.Title, c.Counts[p.ID], p.Status, evidence)
-	}
-	fmt.Fprintln(&prompt, "\n未完成任务：")
-	for i, t := range c.Tasks {
-		// Effort and start date only appear once they exist; every other task
-		// line stays byte-identical to the pre-phase-3 prompt.
-		plan := ""
-		if t.EstimatedHours != nil {
-			plan = fmt.Sprintf("；估计工作量 %s小时；开工日 %s", effort.FormatHours(*t.EstimatedHours), pointerValue(t.StartDate))
-		}
-		fmt.Fprintf(&prompt, "T%d：%s（%s；截止 %s；项目 %s%s）\n", i+1, t.Title, t.Status, t.Due, projectNames[t.ProjectID], plan)
-	}
-	fmt.Fprintln(&prompt, "\n想法：")
-	for i, t := range c.Ideas {
-		fmt.Fprintf(&prompt, "I%d：%s（%s）\n", i+1, t.Title, t.Status)
-	}
-	fmt.Fprintln(&prompt, "\n本对话历史：")
+	view := secretary.WorkspaceView{City: c.Settings.City, Location: loc, Projects: c.Projects, OpenCounts: c.Counts, Tasks: c.Tasks, Ideas: c.Ideas, Recent: c.Recent}
 	earlier := ""
 	for _, t := range c.History {
-		reply := t.Reply
-		if t.Outdated {
-			reply = outdatedDeskAnswer
-		}
-		fmt.Fprintf(&prompt, "问：%s\n答：%s\n", t.Text, reply)
+		turn := secretary.HistoryTurn{Text: t.Text, Reply: t.Reply, Outdated: t.Outdated}
 		earlier += t.Text + " "
-		if t.Text != "" {
-			for _, receipt := range t.Receipts {
-				if receipt.ThingID != nil {
-					item, err := getItem(ctx, tx, scope, *receipt.ThingID)
-					if err != nil {
-						continue
-					}
+		for _, receipt := range t.Receipts {
+			line := secretary.HistoryReceipt{Text: receipt.Text, Undone: receipt.Undone}
+			// A receipt of an item that the agent may not read now is hidden.
+			if t.Text != "" && receipt.ThingID != nil {
+				if item, err := getItem(ctx, tx, scope, *receipt.ThingID); err == nil {
 					permitted, _, err := sanitizeItemTx(ctx, tx, scope, c.Agent.ID, item)
 					if err != nil {
 						return "", nil, err
 					}
-					if permitted.Title != item.Title {
-						fmt.Fprintln(&prompt, "（先前事项内容按当前权限隐藏）")
-						continue
-					}
-				}
-				if receipt.Undone {
-					fmt.Fprintln(&prompt, "（已撤销）"+receipt.Text)
+					line.Hidden = permitted.Title != item.Title
 				} else {
-					fmt.Fprintln(&prompt, receipt.Text)
+					// An item that no longer exists gives no line.
+					continue
 				}
 			}
+			turn.Receipts = append(turn.Receipts, line)
+		}
+		view.History = append(view.History, turn)
+	}
+	workspaceText, clipped := secretary.RenderWorkspace(view)
+	for _, characters := range clipped {
+		if err := stageEventTx(ctx, tx, scope.OwnerID, "secretary", "overflow", "project_evidence_characters", characters); err != nil {
+			return "", nil, err
 		}
 	}
-	fmt.Fprintln(&prompt, "本对话的事项：")
-	for i, t := range c.Recent {
-		fmt.Fprintf(&prompt, "R%d：%s（%s；截止 %s）\n", i+1, t.Title, t.Status, t.Due)
-	}
+	prompt.WriteString(workspaceText)
 	c.Tier = memoryTier(ctx, req.Text, "light")
 	var err error
 	c.Use, err = s.startUseContextTx(ctx, tx, scope)
@@ -1062,7 +1022,7 @@ func (s *Store) deskTurnsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, 
 	return out, nil
 }
 
-const outdatedDeskAnswer = "（先前回答的依据已更新，请按现在的资料回答）"
+const outdatedDeskAnswer = secretary.OutdatedAnswer
 
 // Erasure keeps its existing placeholders; changed dependencies preserve the
 // owner's exchange and are replaced only when assembling model history.

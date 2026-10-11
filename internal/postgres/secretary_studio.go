@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/soaringjerry/PCAS/internal/contextbuilder"
+	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
@@ -73,7 +74,7 @@ func (s *Store) secretaryHandoverEvidenceTx(ctx context.Context, tx pgx.Tx, scop
 					c.Dependencies = append(c.Dependencies, refs...)
 				}
 				labels[e.ID] = alias
-				fmt.Fprintf(b, "\n交接说明依据事项 %s：%s（当前状态 %s；截止 %s）；说明：%s\n", alias, item.Title, item.Status, item.Due, itemNotes(item))
+				fmt.Fprintf(b, "\n交接说明依据事项 %s：%s（当前状态 %s；截止 %s）；说明：%s\n", alias, item.Title, item.Status, item.Due, secretary.Notes(item))
 			}
 		}
 	}

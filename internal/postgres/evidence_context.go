@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"errors"
+	"github.com/soaringjerry/PCAS/internal/contextbuilder"
 	"slices"
 	"strings"
 	"time"
@@ -222,15 +223,10 @@ func conversationWindowTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in
 	return finish()
 }
 
-type evidenceContextClaim struct {
-	Label string
-	Ref   memory.Ref
-	Text  string
-}
-type evidenceContextGroup struct {
-	Label  string
-	Window memory.ConversationResult
-}
+type (
+	evidenceContextClaim = contextbuilder.Claim
+	evidenceContextGroup = contextbuilder.EvidenceGroup
+)
 
 func evidenceContextsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, principal string, thingID *string, claims []evidenceContextClaim) ([]evidenceContextGroup, []string, error) {
 	groups := []evidenceContextGroup{}

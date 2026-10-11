@@ -2,7 +2,7 @@ package postgres
 
 import (
 	"context"
-	"fmt"
+	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -78,8 +78,7 @@ func deskLocation(settings workspace.Settings) *time.Location {
 	return loc
 }
 func (s *Store) deskNow(loc *time.Location) string {
-	now := s.businessNow().In(loc)
-	return fmt.Sprintf("现在：%s 星期%s（%s）\n", now.Format("2006-01-02 15:04"), []string{"日", "一", "二", "三", "四", "五", "六"}[now.Weekday()], loc)
+	return secretary.Now(s.businessNow(), loc)
 }
 
 var recallDateInstructions = prompts.Must("recall-date").Text()

@@ -51,6 +51,19 @@ type UseContext struct {
 	Selected               bool
 }
 
+// Claim is a memory that a turn showed, with the label that the model uses.
+type Claim struct {
+	Label string
+	Ref   memory.Ref
+	Text  string
+}
+
+// EvidenceGroup is the part of the source conversation around one memory.
+type EvidenceGroup struct {
+	Label  string
+	Window memory.ConversationResult
+}
+
 // MemoryAllowed reports whether an agent may be given a memory: the memory is
 // not retired, its kind is one of the agent's kinds, and an inferred memory
 // needs the agent's consent.

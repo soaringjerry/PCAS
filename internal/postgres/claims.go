@@ -2,12 +2,9 @@ package postgres
 
 import (
 	"context"
-	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"github.com/soaringjerry/PCAS/internal/interpretation/claim"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -39,22 +36,12 @@ func (s *Store) rememberTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, i
 		WHERE v.owner_id=$1 AND v.source_id=$2 AND v.version=$3`, string(scope.OwnerID), string(in.Source.ID), in.Source.Version).Scan(&original, &connector, &expressed, &recorded); err != nil {
 		return result, err
 	}
-	if in.ExpressedAt == nil {
-		in.ExpressedAt = expressed
-		if in.ExpressedAt == nil && oneOf(connector, "desk", "capture", "telegram", "desk-incomplete") {
-			in.ExpressedAt = &recorded
-		}
+	in.ExpressedAt = claim.ExpressedAt(in.ExpressedAt, expressed, recorded, connector)
+	start, end, found := claim.QuoteSpan(original, in.Quote)
+	if !found {
+		return result, memory.ErrInvalid
 	}
-	start, end := 0, len([]rune(original))
-	if in.Quote != "" {
-		at := strings.Index(original, in.Quote)
-		if at < 0 {
-			return result, memory.ErrInvalid
-		}
-		start = len([]rune(original[:at]))
-		end = start + len([]rune(in.Quote))
-	}
-	key := sha256.Sum256([]byte(in.Subject + "\x00" + in.Predicate + "\x00" + in.Text))
+	key := claim.Key(in)
 	var blocked bool
 	if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM claim_reimport_blocks WHERE owner_id=$1 AND key_hash=$2)", string(scope.OwnerID), key[:]).Scan(&blocked); err != nil {
 		return result, err
@@ -168,15 +155,7 @@ func (s *Store) rememberTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, i
 		return result, err
 	}
 	value, _ := json.Marshal(in.Text)
-	claimScope := map[string]string{}
-	if in.ProjectID != "" {
-		claimScope["project_id"] = in.ProjectID
-	}
-	if in.ExtractionRun != "" {
-		claimScope["conversation_extraction"] = in.ExtractionRun
-		claimScope["conversation_ref"] = strconv.Itoa(in.ExtractionRef)
-	}
-	scopeJSON, _ := json.Marshal(claimScope)
+	scopeJSON, _ := json.Marshal(claim.Scope(in))
 	acquisition := in.Acquisition
 	if _, err := tx.Exec(ctx, `INSERT INTO claim_revisions(owner_id,claim_id,version,subject_id,predicate,value,scope,nature,acquisition,confirmation,change_type)
 		VALUES($1,$2,1,$3,$4,$5,$6,$7,$8,$9,'initial')`, string(scope.OwnerID), string(id), subject, in.Predicate, value, scopeJSON, in.Nature, acquisition, in.Confirmation); err != nil {

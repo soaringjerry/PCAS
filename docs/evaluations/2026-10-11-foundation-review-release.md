@@ -119,6 +119,20 @@ The check-only turns do not save a source, so they start no extraction job. Pull
 In the first twelve minutes after the start, one global handover job ran and its call was settled. No organize, extraction, or attachment job ran.
 The moved paths therefore have their CI results and no live result in this record. The next real input of the owner is their first live use.
 
+## Eighth Release on the Same Day
+
+Released revision: `a729396989512d6bd6871c6d3f9ca402192ed3e4`. Earlier revision: `43f3df8`.
+Pull requests #325, #327, #329, #330, #331, and #332 give the changes: the rules of the secretary and of the deputy that need no storage left the storage package, with the rules of the secretary's actions and the workspace part of its model input.
+
+One check of #332 failed once: `TestDoingTiersPrivateProductPipeline`, with the class `model_error`, which hides the cause. The second run passed, and eight local runs passed. The cause is not known. Pull request #333 makes the next failure readable.
+
+The release had no database migration. The backup was validated, and the record counts are equal before and after the start: 5,253 claims and 25 work items.
+The live check on the real default Codex channel passed: an answer, an arrangement (`create_task`, done), and a change (`update`, done), between 15 and 17 seconds each, with settled calls and a clean group cleanup.
+The two receipts came from the moved action rules: the first names the due time and the reminder 30 minutes before, and the second names the new date.
+Neither log has an error, and no container restarted.
+
+No real input arrived between the seventh release and this release. The organize, extraction, and attachment paths still have no live job.
+
 ## Host Cleanup
 
 The owner approved removal of leftover data on 2026-10-11.

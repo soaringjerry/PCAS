@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/soaringjerry/PCAS/internal/workspace/itemcommand"
 	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 	"strings"
 	"time"
@@ -419,210 +420,43 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 		return s.deleteThingTx(ctx, tx, scope, c.ID)
 	}
 	// Remaining commands operate on a single action record.
-	id := c.ID
-	if c.TaskID != "" {
-		id = c.TaskID
-	}
-	if c.IdeaID != "" {
-		id = c.IdeaID
-	}
-	item, err := getItem(ctx, tx, scope, id)
+	item, err := getItem(ctx, tx, scope, itemcommand.Target(c))
 	if err != nil {
 		return err
 	}
-	if oneOf(c.Type, "updateTask", "setTaskStatus", "toggleTrigger", "addCheck", "toggleCheck", "removeCheck", "deferTask") && item.Kind != "task" {
-		return memory.ErrInvalid
-	}
-	if (strings.HasPrefix(c.Type, "idea") || oneOf(c.Type, "addCondition", "removeCondition")) && item.Kind != "idea" {
-		return memory.ErrInvalid
-	}
-	summary := c.Summary
-	switch c.Type {
-	case "updateTask":
-		if err := patchAllowed(&item, c.Patch, "title", "notes", "status", "projectId", "due", "dueDateOnly", "scheduled", "waitingFor", "owedTo", "urgent", "dependsOn", "estimatedHours", "remindersOn"); err != nil {
-			return err
-		}
-		var fields map[string]json.RawMessage
-		if json.Unmarshal(c.Patch, &fields) == nil {
-			if _, changed := fields["estimatedHours"]; changed {
-				item.EffortSource = "user"
-				item.EffortReason = "用户设定"
-			}
-			if _, changed := fields["due"]; changed {
-				if _, known := fields["dueDateOnly"]; !known {
-					value := false
-					item.DueDateOnly = &value
-				}
-				settings, err := queryDocument[workspace.Settings](ctx, tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1", string(scope.OwnerID))
-				if err != nil {
-					return err
-				}
-				loc, err := time.LoadLocation(settings.Timezone)
-				if err != nil {
-					loc = time.UTC
-				}
-				secretary.ApplyDueReminder(&item, "", loc)
-			}
-		}
-	case "updateProject":
-		if item.Kind != "project" {
-			return memory.ErrInvalid
-		}
-		if err := patchAllowed(&item, c.Patch, "name", "goal", "status"); err != nil {
-			return err
-		}
-		item.Title = item.Name
-	case "setTaskStatus":
-		item.Status = c.Status
-		summary = "状态改为 " + c.Status
-	case "renameThing":
-		item.Title = c.Title
-		if item.Kind == "project" {
-			item.Name = c.Title
-		}
-		summary = "更改名称"
-	case "setNotes":
-		if item.Kind == "task" {
-			item.Notes = c.Text
-		} else if item.Kind == "idea" {
-			item.Body = c.Text
-		} else {
-			item.Goal = c.Text
-		}
-		summary = "更新说明"
-	case "moveThing":
-		item.ProjectID = c.ProjectID
-		summary = "移动项目"
-	case "deferTask":
-		if c.Days < 1 || c.Days > 3650 {
-			return memory.ErrInvalid
-		}
-		item.Scheduled = time.Now().AddDate(0, 0, c.Days).UTC().Format(time.RFC3339)
-		summary = "推迟处理"
-	case "toggleTrigger":
-		found := false
-		for i := range item.Triggers {
-			if item.Triggers[i].ID == c.TriggerID {
-				item.Triggers[i].Active = !item.Triggers[i].Active
-				found = true
-			}
-		}
-		if !found {
-			return memory.ErrNotFound
-		}
-		summary = "调整提醒"
-	case "addCheck":
-		if err := requireText(c.Text); err != nil {
-			return err
-		}
-		item.Checklist = append(item.Checklist, workspace.Check{ID: string(memory.NewID()), Text: c.Text})
-		summary = "添加子步骤"
-	case "toggleCheck", "removeCheck":
-		found := false
-		for i := range item.Checklist {
-			if item.Checklist[i].ID == c.ItemID {
-				found = true
-				if c.Type == "removeCheck" {
-					item.Checklist = append(item.Checklist[:i], item.Checklist[i+1:]...)
-				} else {
-					item.Checklist[i].Done = !item.Checklist[i].Done
-				}
-				break
-			}
-		}
-		if !found {
-			return memory.ErrNotFound
-		}
-		summary = "更新子步骤"
-	case "ideaContinue":
-		item.Status = "active"
-		item.Wake = nil
-		summary = "继续考虑"
-	case "ideaPromote":
-		if item.Status == "promoted" {
-			return memory.ErrConflict
-		}
-		task := workspace.NewItem("task", item.Title)
-		task.Notes = item.Body
-		task.ProjectID = item.ProjectID
-		task.IdeaID = item.ID
-		task.Sources = item.Sources
-		if err := saveItem(ctx, tx, scope, task); err != nil {
-			return err
-		}
-		if err := promoteArtifactsTx(ctx, tx, scope, item.ID, task.ID); err != nil {
-			return err
-		}
-		item.Status = "promoted"
-		item.Wake = nil
-		summary = "转为待办"
-	case "ideaSnooze":
-		if c.Days < 1 || c.Days > 3650 {
-			return memory.ErrInvalid
-		}
-		if item.Wake == nil {
-			return memory.ErrConflict
-		}
-		item.Wake.SnoozedUntil = time.Now().AddDate(0, 0, c.Days).UTC().Format(time.RFC3339)
-		summary = "暂缓提醒"
-	case "ideaStopReminders":
-		item.RemindersOn = false
-		summary = "停止提醒"
-	case "ideaShelve":
-		item.Status = "shelved"
-		item.ShelvedReason = c.Reason
-		item.Wake = nil
-		if strings.TrimSpace(c.Condition) != "" {
-			item.Conditions = append(item.Conditions, workspace.Condition{ID: string(memory.NewID()), Kind: "event", Description: c.Condition})
-		}
-		summary = "搁置：" + c.Reason
-	case "ideaDrop":
-		item.Status = "dropped"
-		item.RemindersOn = false
-		item.Wake = nil
-		summary = "放下想法"
-	case "ideaNote":
-		if err := requireText(c.Note); err != nil {
-			return err
-		}
-		item.Body += "\n" + c.Note
-		summary = c.Note
-	case "addCondition":
-		if err := requireText(c.Description); err != nil {
-			return err
-		}
-		kind := "event"
-		if c.Due != "" {
-			if _, err := time.Parse(time.RFC3339, c.Due); err != nil {
-				return memory.ErrInvalid
-			}
-			kind = "time"
-		}
-		item.Conditions = append(item.Conditions, workspace.Condition{ID: string(memory.NewID()), Kind: kind, Description: c.Description, DueAt: c.Due})
-		summary = "新增唤醒条件"
-	case "removeCondition":
-		found := false
-		for i := range item.Conditions {
-			if item.Conditions[i].ID == c.ConditionID {
-				item.Conditions = append(item.Conditions[:i], item.Conditions[i+1:]...)
-				found = true
-				break
-			}
-		}
-		if !found {
-			return memory.ErrNotFound
-		}
-		summary = "移除唤醒条件"
-	default:
-		return memory.ErrInvalid
-	}
-	item.Version++
-	item.UpdatedAt = stamp()
-	if summary == "" {
-		summary = "更新"
+	summary, err := itemcommand.Apply(ctx, &item, c, itemEffects{tx: tx, scope: scope})
+	if err != nil {
+		return err
 	}
 	return s.saveAction(ctx, tx, scope, item, summary)
 }
+
+// itemEffects gives an item command the owner's time zone and the writes of
+// an idea that becomes a task.
+type itemEffects struct {
+	tx    pgx.Tx
+	scope memory.Scope
+}
+
+func (e itemEffects) Location(ctx context.Context) (*time.Location, error) {
+	settings, err := queryDocument[workspace.Settings](ctx, e.tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1", string(e.scope.OwnerID))
+	if err != nil {
+		return nil, err
+	}
+	loc, err := time.LoadLocation(settings.Timezone)
+	if err != nil {
+		loc = time.UTC
+	}
+	return loc, nil
+}
+
+func (e itemEffects) PromoteIdea(ctx context.Context, ideaID string, task workspace.Item) error {
+	if err := saveItem(ctx, e.tx, e.scope, task); err != nil {
+		return err
+	}
+	return promoteArtifactsTx(ctx, e.tx, e.scope, ideaID, task.ID)
+}
+
 func saveCandidate(ctx context.Context, tx pgx.Tx, scope memory.Scope, v workspace.Candidate) error {
 	_, err := tx.Exec(ctx, `INSERT INTO capture_candidates(owner_id,id,source_id,source_version,state,document) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(owner_id,id) DO UPDATE SET state=excluded.state,document=excluded.document`, string(scope.OwnerID), v.ID, v.Source.SourceID, v.Source.Version, v.State, asJSON(v))
 	return err

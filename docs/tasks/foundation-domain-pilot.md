@@ -81,7 +81,10 @@ Behavior tests run the actions against a workspace in memory. They need no datab
 `RenderWorkspace` writes the workspace part of the model input: the projects, the tasks, the ideas, the conversation history, and the items of the conversation. Storage reads the facts and records each cut of a long project evidence. A contract test fixes the bytes.
 The memory part of the model input, the turn itself, and its context are still in `internal/postgres/desk_turn.go`. The memory part waits for an interface to memory retrieval. They are the largest part of the phase that remains.
 
-The deputy's rules that need no storage are in `internal/workspace/deputy`: the checklist of an output, how an output is adopted, and the notice of a finished run.
+The rules that change one task, idea, or project by one command are in `internal/workspace/itemcommand`. `Apply` checks that the command fits the kind of the item, changes the item, and returns the summary for its history. Storage reads the item and saves it.
+The other commands of `internal/postgres/commands.go` stay in storage for now: creation, candidates, documents, settings, agents, and bulk changes. Each of them is mostly a write.
+
+The deputy's rules that need no storage are in `internal/workspace/deputy`: the checklist of an output, how an output is adopted, the notice of a finished run, and the output format of a revision and a breakdown.
 The run itself, its context, and the run commands are still in `internal/postgres/runs.go`.
 
 The chunk, index, embedding, and summary jobs stay in storage. They hold no interpretation rule: the text split is `memory.SplitText`, the embedding call is the gateway's, and the summary is a memory read. The card job only acknowledges queue slots from before an upgrade.

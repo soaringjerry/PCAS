@@ -51,6 +51,7 @@ The [Roadmap](whitepaper.md#10-roadmap) gives the phase sequence, delivery scope
 | Phase 3.9 comparison job flows | Released at `2036c14` on 2026-10-11. Eight background paths are outside the storage package. Phase 3.9 remains incomplete. | [Release and live check](evaluations/2026-10-11-foundation-review-release.md#sixth-release-on-the-same-day). |
 | Phase 3.9 organize, attachment parsing, and extraction | Released at `43f3df8` on 2026-10-11. Eleven background paths are outside the storage package. The moved paths have no live job yet. Phase 3.9 remains incomplete. | [Release and live check](evaluations/2026-10-11-foundation-review-release.md#seventh-release-on-the-same-day). |
 | Phase 3.9 secretary and deputy rules | Released at `a729396` on 2026-10-11. The rules of the secretary's actions and the workspace part of its model input are outside the storage package. The memory part of the model input, the turn, and the deputy run remain in storage. Phase 3.9 remains incomplete. | [Release and live check](evaluations/2026-10-11-foundation-review-release.md#eighth-release-on-the-same-day). |
+| Phase 3.9 item command rules | Released at `81f4c9e` on 2026-10-11. The storage package has 25,574 lines without tests; it had 28,355 lines at the review. Phase 3.9 remains incomplete. | [Release and live check](evaluations/2026-10-11-foundation-review-release.md#ninth-release-on-the-same-day). |
 
 Phase 2.0 was rolled back on 2026-10-01.
 Its design is stored under the recorded `archive/phase2-0/*` tags.

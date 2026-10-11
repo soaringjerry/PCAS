@@ -240,6 +240,20 @@ Neither log has an error, and no container restarted.
 
 The storage package has 24,828 lines without tests at this revision. It had 28,355 lines at the review.
 
+## Seventeenth Release
+
+Released revision: `afac27eb7f8ca6f303ad6fadd946d19b08ba2fa1`, on 2026-10-12 UTC. Earlier revision: `9f19097`.
+Pull requests #364, #365, #366, and #367 give the changes: the rules of the deputy run commands and of memory retrieval left the storage package, and an archive import that was stopped is no longer recorded as a storage failure.
+
+The first run of #366 failed on `TestPhase2B4_I2_PartialImportOriginalReachesNewSecretaryConversation` with `import_storage_failed`. The test cancels its import at the end. The classification of an import failure looked at the error only, and the database driver can return an error that does not wrap the context's error. Pull request #367 lets the context decide, with a regression test. The failure was not reproduced on this host; the second run passed with the correction.
+
+The release had no database migration. The backup was validated, and the record counts are equal before and after the start: 5,253 claims and 29 work items.
+The work items that are new since 12:00 UTC on 2026-10-11 were made by the live instance itself (4 made by background_topic). They are not from a check.
+The live check on the real default Codex channel passed with four turns: an answer, an arrangement (`create_task`, done), a change (`update`, done), and a delegation (`delegate`, done) whose deputy run finished as done with a settled call.
+The cleanup succeeded and the record counts are equal. Neither log has an error, and no container restarted.
+
+The storage package has 24,641 lines without tests at this revision. It had 28,355 lines at the review.
+
 ## Host Cleanup
 
 The owner approved removal of leftover data on 2026-10-11.

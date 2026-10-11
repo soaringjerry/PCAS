@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -560,10 +561,10 @@ func TestR2_MorningAfternoonAndRescheduleKeepClockPreference(t *testing.T) {
 				t.Fatal(err)
 			}
 			task := workspace.Item{Title: "日期偏好", Due: "2099-01-05T15:59:00Z"}
-			applyDueReminderAt(&task, "09:00", loc, now)
+			secretary.ApplyDueReminderAt(&task, "09:00", loc, now)
 			stabilizationTimeReminder(t, task, "2099-01-05T15:59:00Z", fixture.next, "09:00")
 			task.Due = "2099-01-06T15:59:00Z"
-			applyDueReminderAt(&task, "", loc, now)
+			secretary.ApplyDueReminderAt(&task, "", loc, now)
 			stabilizationTimeReminder(t, task, "2099-01-06T15:59:00Z", "2099-01-06T01:00:00Z", "09:00")
 		})
 	}

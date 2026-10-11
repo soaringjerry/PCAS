@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 	"log/slog"
 	"regexp"
 	"strings"
@@ -1081,11 +1082,11 @@ func (s *Store) runAgentOnce(ctx context.Context) (resultErr error) {
 		if err == nil && strings.TrimSpace(checkedText) != "" && len(parseRunChecklist(checkedText)) == len(parseRunChecklist(result.Text)) {
 			result.Text = checkedText
 		} else {
-			selfcheckFallback = secretaryErrorType("selfcheck", err)
+			selfcheckFallback = secretary.ErrorType("selfcheck", err)
 			if err == nil {
 				selfcheckFallback = "selfcheck_output_rejected"
 			}
-			slog.WarnContext(ctx, "memory selfcheck fallback", "stage", "selfcheck", "error_type", secretaryErrorType("selfcheck", err))
+			slog.WarnContext(ctx, "memory selfcheck fallback", "stage", "selfcheck", "error_type", secretary.ErrorType("selfcheck", err))
 		}
 	}
 	if generationErr == nil && mainPaid != nil {

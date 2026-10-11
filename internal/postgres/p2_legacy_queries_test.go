@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 	"log/slog"
 	"math"
 	"regexp"
@@ -1237,9 +1238,9 @@ func (s *Store) p2LegacyDeskTurn(ctx context.Context, scope memory.Scope, req wo
 						return err
 					}
 					var parseErr error
-					answer, parseErr = parseSecretaryOutput(result.Text)
+					answer, parseErr = secretary.ParseOutput(result.Text)
 					if parseErr != nil {
-						slog.WarnContext(ctx, "secretary output fallback", "stage", "parse", "error_type", secretaryErrorType("parse", parseErr))
+						slog.WarnContext(ctx, "secretary output fallback", "stage", "parse", "error_type", secretary.ErrorType("parse", parseErr))
 						// A completed model call still answered. Keep it as text, with
 						// no actions, citations or questions from a partial decode.
 						answer = secretaryOutput{Reply: strings.TrimSpace(result.Text)}
@@ -1258,8 +1259,8 @@ func (s *Store) p2LegacyDeskTurn(ctx context.Context, scope memory.Scope, req wo
 		}
 		dependencies := []memory.Ref{}
 		if contextErr != nil {
-			slog.WarnContext(ctx, "secretary capture fallback", "stage", failureStage, "error_type", secretaryErrorType(failureStage, contextErr))
-			receiptText := secretaryCaptureText(failureStage, contextErr)
+			slog.WarnContext(ctx, "secretary capture fallback", "stage", failureStage, "error_type", secretary.ErrorType(failureStage, contextErr))
+			receiptText := secretary.CaptureText(failureStage, contextErr)
 			if captureOnly {
 				if text != "" {
 					if err := s.captureIncompleteSecretaryTurn(ctx, tx, scope, req.RequestID, req.Text); err != nil {
@@ -1299,8 +1300,8 @@ func (s *Store) p2LegacyDeskTurn(ctx context.Context, scope memory.Scope, req wo
 					out.Turn.Receipts = append(out.Turn.Receipts, skippedReceipt(a.Op, "一次太多了，只做了前 10 件"))
 					break
 				}
-				if a.parseErr != nil {
-					slog.WarnContext(ctx, "secretary action skipped", "stage", "parse", "error_type", secretaryErrorType("parse", a.parseErr))
+				if a.ParseErr != nil {
+					slog.WarnContext(ctx, "secretary action skipped", "stage", "parse", "error_type", secretary.ErrorType("parse", a.ParseErr))
 					out.Turn.Receipts = append(out.Turn.Receipts, skippedReceipt(a.Op, "动作字段没看懂"))
 					continue
 				}

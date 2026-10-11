@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"fmt"
+	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 	"log/slog"
 	"strings"
 
@@ -48,7 +49,7 @@ func (s *Store) prepareDeskAttachments(ctx context.Context, scope memory.Scope, 
 		parsed, parseErr := s.readAttachment(ctx, scope, ref, nil)
 		image := strings.HasPrefix(a.Media, "image/")
 		if parseErr != nil || image && parsed.Representation != "vision" {
-			slog.WarnContext(ctx, "secretary attachment retained", "stage", "parse", "error_type", secretaryErrorType("model", parseErr))
+			slog.WarnContext(ctx, "secretary attachment retained", "stage", "parse", "error_type", secretary.ErrorType("model", parseErr))
 			if image {
 				a.Warning = "图片存好了，但我现在看不了图；请检查模型通道，或把要办的内容写成文字。"
 			} else {

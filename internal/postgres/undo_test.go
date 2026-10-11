@@ -8,6 +8,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/testsupport"
 	"github.com/soaringjerry/PCAS/internal/workspace"
+	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -174,7 +175,7 @@ func TestDueReminderTracksCommandDue(t *testing.T) {
 			return err
 		}
 		item.Due = testsupport.DateFromToday(t, "Asia/Shanghai", 1, 15, 0).UTC().Format(time.RFC3339)
-		applyDueReminder(&item, "-30m", loc)
+		secretary.ApplyDueReminder(&item, "-30m", loc)
 		return saveItem(ctx, tx, scope, item)
 	})
 	if err != nil {
@@ -193,15 +194,15 @@ func TestDueReminderOffsets(t *testing.T) {
 	loc, _ := time.LoadLocation("Asia/Shanghai")
 	for _, tc := range []struct{ offset, next string }{{"-2h", testsupport.DateFromToday(t, "Asia/Shanghai", 1, 15, 0).Add(-2 * time.Hour).UTC().Format(time.RFC3339)}, {"at", testsupport.DateFromToday(t, "Asia/Shanghai", 1, 15, 0).UTC().Format(time.RFC3339)}, {"09:00", testsupport.DateFromToday(t, "Asia/Shanghai", 1, 9, 0).UTC().Format(time.RFC3339)}} {
 		item := workspace.Item{Title: "邮件", Due: testsupport.DateFromToday(t, "Asia/Shanghai", 1, 15, 0).UTC().Format(time.RFC3339), Triggers: []workspace.Trigger{{ID: "other"}}}
-		applyDueReminder(&item, tc.offset, loc)
+		secretary.ApplyDueReminder(&item, tc.offset, loc)
 		if len(item.Triggers) != 2 || item.Triggers[1].NextAt != tc.next || item.Triggers[1].Offset != tc.offset {
 			t.Fatal(item.Triggers)
 		}
-		applyDueReminder(&item, "", loc)
+		secretary.ApplyDueReminder(&item, "", loc)
 		if item.Triggers[1].Offset != tc.offset {
 			t.Fatal("lost offset")
 		}
-		applyDueReminder(&item, "none", loc)
+		secretary.ApplyDueReminder(&item, "none", loc)
 		if len(item.Triggers) != 1 || item.Triggers[0].ID != "other" {
 			t.Fatal(item.Triggers)
 		}

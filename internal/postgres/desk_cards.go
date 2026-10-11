@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 	"net/url"
 	"sort"
 	"time"
@@ -57,8 +58,8 @@ func (s *Store) secretaryCardsTx(ctx context.Context, tx pgx.Tx, scope memory.Sc
 		}
 		sources = append(sources, source)
 		entry := workspace.DeskTimelineItem{
-			At: secretaryTimelineAt(meta.Memory.ExpressedAt, meta.Source), Text: m.Text,
-			Status: secretaryTimelineStatus(meta.Tasks, meta.Changed), MemoryID: stringPointer(m.ID),
+			At: secretary.TimelineAt(meta.Memory.ExpressedAt, meta.Source), Text: m.Text,
+			Status: secretary.TimelineStatus(meta.Tasks, meta.Changed), MemoryID: stringPointer(m.ID),
 			EventFrom: meta.Memory.EventFrom, EventTo: meta.Memory.EventTo,
 			EventPrecision: meta.Memory.EventPrecision, Mentions: meta.Memory.Mentions,
 		}
@@ -80,8 +81,8 @@ func (s *Store) secretaryCardsTx(ctx context.Context, tx pgx.Tx, scope memory.Sc
 	if len(links) > 0 {
 		cards = append(cards, workspace.DeskCard{Kind: "links", Items: links})
 	}
-	if secretaryTimelineVisible(timeline, recall) {
-		sort.SliceStable(timeline, func(i, j int) bool { return secretaryTimelineBefore(timeline[i], timeline[j]) })
+	if secretary.TimelineVisible(timeline, recall) {
+		sort.SliceStable(timeline, func(i, j int) bool { return secretary.TimelineBefore(timeline[i], timeline[j]) })
 		cards = append(cards, workspace.DeskCard{Kind: "timeline", Title: "相关记录", Items: timeline})
 	}
 	tasks := []workspace.DeskTaskItem{}
@@ -114,11 +115,6 @@ func (s *Store) secretaryCardsTx(ctx context.Context, tx pgx.Tx, scope memory.Sc
 	return cards, nil
 }
 
-type secretaryTimelineTask struct {
-	ID     string
-	Status string
-}
-
 type secretaryTimelineMetadata struct {
 	Memory  workspace.Memory
 	Source  secretaryTimelineSource
@@ -126,11 +122,10 @@ type secretaryTimelineMetadata struct {
 	Changed bool
 }
 
-type secretaryTimelineSource struct {
-	workspace.SourceRef
-	ExpressedAt string
-	Connector   string
-}
+type (
+	secretaryTimelineTask   = secretary.TimelineTask
+	secretaryTimelineSource = secretary.TimelineSource
+)
 
 // Resolve metadata and the creating turn's surviving items in one batch. Source
 // provenance belongs only to the owner's cards, never to the model's prompt.
@@ -183,58 +178,4 @@ FROM cited c`, string(scope.OwnerID), asJSON(refs))
 		result[row.Memory.ID] = row
 	}
 	return result, nil
-}
-
-// Follow batch 2 R5 for old memories; an import's recorded_at is not its date.
-func secretaryTimelineAt(expressed string, source secretaryTimelineSource) *string {
-	if expressed != "" {
-		return stringPointer(expressed)
-	}
-	if source.ExpressedAt != "" {
-		return stringPointer(source.ExpressedAt)
-	}
-	if oneOf(source.Connector, "desk", "capture", "telegram", "desk-incomplete") {
-		return stringPointer(source.At)
-	}
-	return nil
-}
-
-func secretaryTimelineStatus(tasks []secretaryTimelineTask, changed bool) string {
-	if len(tasks) == 0 {
-		if changed {
-			return "changed"
-		}
-		return "open"
-	}
-	done, dropped := true, true
-	for _, task := range tasks {
-		done = done && task.Status == "done"
-		dropped = dropped && oneOf(task.Status, "cancelled", "dropped")
-	}
-	if done {
-		return "done"
-	}
-	if dropped {
-		return "dropped"
-	}
-	return "open"
-}
-
-func secretaryTimelineVisible(items []workspace.DeskTimelineItem, recall bool) bool {
-	if len(items) >= 2 {
-		return true
-	}
-	return recall && len(items) == 1 && items[0].At != nil
-}
-
-func secretaryTimelineBefore(a, b workspace.DeskTimelineItem) bool {
-	if a.At == nil {
-		return false
-	}
-	if b.At == nil {
-		return true
-	}
-	left, _ := time.Parse(time.RFC3339Nano, *a.At)
-	right, _ := time.Parse(time.RFC3339Nano, *b.At)
-	return left.Before(right)
 }

@@ -9,124 +9,19 @@ import (
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 	"github.com/soaringjerry/PCAS/internal/workspace/effort"
+	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 	"strings"
 	"time"
 )
 
-// applyDueReminder maintains the one fixed reminder independently of other triggers.
-// An empty remind preserves the existing offset; the secretary supplies defaults.
-func applyDueReminder(item *workspace.Item, remind string, loc *time.Location) {
-	applyDueReminderAt(item, remind, loc, time.Now())
-}
-
-func applyDueReminderAt(item *workspace.Item, remind string, loc *time.Location, now time.Time) {
-	if loc == nil {
-		loc = time.UTC
-	}
-	existing := -1
-	for i, t := range item.Triggers {
-		if t.ID == "due-reminder" {
-			existing = i
-			if remind == "" {
-				remind = t.Offset
-			}
-			break
-		}
-	}
-	remove := func() {
-		if existing >= 0 {
-			item.Triggers = append(item.Triggers[:existing], item.Triggers[existing+1:]...)
-		}
-	}
-	if item.Due == "" || remind == "none" {
-		remove()
-		return
-	}
-	if remind == "" {
-		return
-	}
-	due, err := time.Parse(time.RFC3339, item.Due)
-	if err != nil {
-		return
-	}
-	next := due
-	switch {
-	case remind == "at":
-	case strings.HasPrefix(remind, "-"):
-		if !strings.HasSuffix(remind, "m") && !strings.HasSuffix(remind, "h") {
-			return
-		}
-		offset, err := time.ParseDuration(remind)
-		if err != nil || offset >= 0 {
-			return
-		}
-		next = due.Add(offset)
-	default:
-		clock, err := time.Parse("15:04", remind)
-		if err != nil {
-			return
-		}
-		d := due.In(loc)
-		next = time.Date(d.Year(), d.Month(), d.Day(), clock.Hour(), clock.Minute(), 0, 0, loc)
-	}
-	trigger := workspace.Trigger{ID: "due-reminder", Kind: "time", Description: item.Title, Offset: remind}
-	if due.After(now) {
-		if !next.After(now) {
-			next = due
-		}
-		trigger.Active = true
-		trigger.NextAt = next.UTC().Format(time.RFC3339)
-	}
-	// An elapsed due has no effective reminder, but retains its preference so
-	// a later reschedule can reactivate the same offset. Clearing due removes it.
-	if existing < 0 {
-		item.Triggers = append(item.Triggers, trigger)
-	} else {
-		item.Triggers[existing] = trigger
-	}
-}
-
-// Model actions never accept database identifiers. Refs resolve exclusively
-// through server-owned context aliases and earlier committed N creation aliases.
-type secretaryAction struct {
-	DocumentID       *string `json:"documentId"`
-	BaseVersion      *int    `json:"baseVersion"`
-	selfcheckDropped bool
-	parseErr         error
-	Op               string                     `json:"op"`
-	Ref              string                     `json:"ref"`
-	Title            string                     `json:"title"`
-	Name             string                     `json:"name"`
-	Due              *string                    `json:"due"`
-	Remind           *string                    `json:"remind"`
-	Project          *string                    `json:"project"`
-	Notes            *string                    `json:"notes"`
-	OwedTo           *string                    `json:"owedTo"`
-	WaitingFor       *string                    `json:"waitingFor"`
-	Urgent           *bool                      `json:"urgent"`
-	Condition        *string                    `json:"condition"`
-	ConditionDue     *string                    `json:"conditionDue"`
-	Set              map[string]json.RawMessage `json:"set"`
-	Steps            []string                   `json:"steps"`
-	Kind             string                     `json:"kind"`
-	Prompt           string                     `json:"prompt"`
-	As               string                     `json:"as"`
-}
+type (
+	secretaryAction = secretary.Action
+	secretaryOutput = secretary.Output
+)
 
 // The memories this turn's prompt showed, by their M* alias; close_date
 // resolves its ref through them and nothing else.
 type secretaryMemoriesKey struct{}
-type secretaryOutput struct {
-	MemoryPlan     *usePlan           `json:"memoryPlan,omitempty"`
-	MissingKeyInfo bool               `json:"missingKeyInfo"`
-	Reply          string             `json:"reply"`
-	Used           []string           `json:"used"`
-	Links          []string           `json:"links"`
-	Show           []string           `json:"show"`
-	Remember       bool               `json:"remember"`
-	Actions        []secretaryAction  `json:"actions"`
-	Ask            *workspace.DeskAsk `json:"ask"`
-}
 
 // Internal commands still persist in order for validation and undo collection.
 // Publish history and its memory source only after the whole secretary action,
@@ -146,42 +41,6 @@ func (h *secretaryHistory) record(id, summary string) {
 	}
 }
 
-func textField(fields map[string]json.RawMessage, key string) (string, bool) {
-	raw, ok := fields[key]
-	if !ok || string(raw) == "null" {
-		return "", false
-	}
-	var v string
-	if json.Unmarshal(raw, &v) != nil {
-		return "", false
-	}
-	return v, true
-}
-func deskDue(value string, loc *time.Location) (string, bool, bool) {
-	if value == "" {
-		return "", false, true
-	}
-	var at time.Time
-	var err error
-	dateOnly := len(value) == 10
-	switch {
-	case dateOnly:
-		at, err = time.ParseInLocation("2006-01-02", value, loc)
-		if err == nil {
-			// The end of that calendar day where the user is. Adding hours to
-			// midnight lands on the wrong day when the clocks change.
-			at = time.Date(at.Year(), at.Month(), at.Day(), 23, 59, 0, 0, loc)
-		}
-	case len(value) == 16:
-		at, err = time.ParseInLocation("2006-01-02T15:04", value, loc)
-	default:
-		at, err = time.Parse(time.RFC3339, value)
-	}
-	if err != nil || at.Before(time.Now().In(loc).AddDate(-1, 0, 0)) {
-		return "", dateOnly, false
-	}
-	return at.UTC().Format(time.RFC3339), dateOnly, true
-}
 func skippedReceipt(op, reason string) workspace.DeskReceipt {
 	return workspace.DeskReceipt{Op: op, Text: reason, Status: "skipped", Reason: reason}
 }
@@ -235,42 +94,10 @@ func (s *Store) secretaryProjectTx(ctx context.Context, tx pgx.Tx, scope memory.
 	}
 	return "", memory.ErrInvalid
 }
-func reminderValue(remind *string, dateOnly bool) string {
-	if remind != nil {
-		return *remind
-	}
-	if dateOnly {
-		return "09:00"
-	}
-	return "-30m"
-}
-func localDeskDate(due string, loc *time.Location) string {
-	at, err := time.Parse(time.RFC3339, due)
-	if err != nil {
-		return ""
-	}
-	at = at.In(loc)
-	now := time.Now().In(loc)
-	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
-	day := time.Date(at.Year(), at.Month(), at.Day(), 0, 0, 0, 0, loc)
-	label := fmt.Sprintf("%d 月 %d 日", at.Month(), at.Day())
-	monday := today.AddDate(0, 0, -(int(today.Weekday())+6)%7)
-	if day.Equal(today) {
-		label = "今天"
-	} else if day.Equal(today.AddDate(0, 0, 1)) {
-		label = "明天"
-	} else if !day.Before(monday) && day.Before(monday.AddDate(0, 0, 7)) {
-		label = "周" + []string{"日", "一", "二", "三", "四", "五", "六"}[at.Weekday()]
-	}
-	if at.Hour() != 23 || at.Minute() != 59 {
-		label += " " + at.Format("15:04")
-	}
-	return label
-}
 func taskReceiptText(ctx context.Context, tx pgx.Tx, scope memory.Scope, item workspace.Item, loc *time.Location) string {
 	parts := []string{}
 	if item.Due != "" {
-		parts = append(parts, localDeskDate(item.Due, loc)+" "+item.Title)
+		parts = append(parts, secretary.LocalDate(item.Due, loc)+" "+item.Title)
 	} else {
 		parts = append(parts, item.Title)
 	}
@@ -353,7 +180,7 @@ func (s *Store) executeSecretaryActionTx(ctx context.Context, tx pgx.Tx, scope m
 			patch := map[string]any{}
 			dateOnly := false
 			if a.Due != nil {
-				due, date, ok := deskDue(*a.Due, loc)
+				due, date, ok := secretary.Due(*a.Due, loc)
 				dateOnly = date
 				if ok {
 					patch["due"] = due
@@ -383,7 +210,7 @@ func (s *Store) executeSecretaryActionTx(ctx context.Context, tx pgx.Tx, scope m
 			if err != nil {
 				return receipt, err
 			}
-			applyDueReminder(&item, reminderValue(a.Remind, dateOnly), loc)
+			secretary.ApplyDueReminder(&item, secretary.ReminderValue(a.Remind, dateOnly), loc)
 			if a.Remind != nil {
 				item.RemindersOn = *a.Remind != "none"
 			}
@@ -397,7 +224,7 @@ func (s *Store) executeSecretaryActionTx(ctx context.Context, tx pgx.Tx, scope m
 				due := ""
 				if a.ConditionDue != nil {
 					var ok bool
-					due, _, ok = deskDue(*a.ConditionDue, loc)
+					due, _, ok = secretary.Due(*a.ConditionDue, loc)
 					if !ok {
 						note = " · 时间没看懂"
 					}
@@ -415,7 +242,7 @@ func (s *Store) executeSecretaryActionTx(ctx context.Context, tx pgx.Tx, scope m
 		if err != nil {
 			return receipt, err
 		}
-		if title, ok := textField(a.Set, "title"); ok {
+		if title, ok := secretary.TextField(a.Set, "title"); ok {
 			if !workspace.ValidTitle(title) {
 				return skippedReceipt(a.Op, "标题为空或太长"), nil
 			}
@@ -426,8 +253,8 @@ func (s *Store) executeSecretaryActionTx(ctx context.Context, tx pgx.Tx, scope m
 		patch := map[string]any{}
 		dateOnly := false
 		dueChanged := false
-		if due, ok := textField(a.Set, "due"); ok && item.Kind == "task" {
-			parsed, date, valid := deskDue(due, loc)
+		if due, ok := secretary.TextField(a.Set, "due"); ok && item.Kind == "task" {
+			parsed, date, valid := secretary.Due(due, loc)
 			dateOnly = date
 			if valid {
 				patch["due"] = parsed
@@ -459,7 +286,7 @@ func (s *Store) executeSecretaryActionTx(ctx context.Context, tx pgx.Tx, scope m
 				return receipt, err
 			}
 		}
-		if status, ok := textField(a.Set, "status"); ok {
+		if status, ok := secretary.TextField(a.Set, "status"); ok {
 			if item.Kind == "task" && oneOf(status, "todo", "doing", "waiting", "done", "cancelled") {
 				if err = call(workspace.Command{Type: "setTaskStatus", ID: id, Status: status}); err != nil {
 					return receipt, err
@@ -471,7 +298,7 @@ func (s *Store) executeSecretaryActionTx(ctx context.Context, tx pgx.Tx, scope m
 				}
 			}
 		}
-		if project, ok := textField(a.Set, "project"); ok && item.Kind != "project" {
+		if project, ok := secretary.TextField(a.Set, "project"); ok && item.Kind != "project" {
 			pid, err := s.secretaryProjectTx(ctx, tx, scope, project, aliases)
 			if err != nil {
 				return skippedReceipt(a.Op, "找不到所属项目"), err
@@ -480,7 +307,7 @@ func (s *Store) executeSecretaryActionTx(ctx context.Context, tx pgx.Tx, scope m
 				return receipt, err
 			}
 		}
-		if appendText, ok := textField(a.Set, "notesAppend"); ok && strings.TrimSpace(appendText) != "" {
+		if appendText, ok := secretary.TextField(a.Set, "notesAppend"); ok && strings.TrimSpace(appendText) != "" {
 			current, err := getItem(ctx, tx, scope, id)
 			if err != nil {
 				return receipt, err
@@ -504,7 +331,7 @@ func (s *Store) executeSecretaryActionTx(ctx context.Context, tx pgx.Tx, scope m
 		if err != nil {
 			return receipt, err
 		}
-		remind, hasRemind := textField(a.Set, "remind")
+		remind, hasRemind := secretary.TextField(a.Set, "remind")
 		if item.Kind == "task" && (dueChanged || hasRemind) {
 			if dueChanged && !hasRemind {
 				hasExisting := false
@@ -514,10 +341,10 @@ func (s *Store) executeSecretaryActionTx(ctx context.Context, tx pgx.Tx, scope m
 					}
 				}
 				if !hasExisting {
-					remind = reminderValue(nil, dateOnly)
+					remind = secretary.ReminderValue(nil, dateOnly)
 				}
 			}
-			applyDueReminder(&item, remind, loc)
+			secretary.ApplyDueReminder(&item, remind, loc)
 			if hasRemind {
 				item.RemindersOn = remind != "none"
 			}
@@ -540,9 +367,9 @@ func (s *Store) executeSecretaryActionTx(ctx context.Context, tx pgx.Tx, scope m
 			}
 		} else if dueChanged && item.Due != "" {
 			if strings.EqualFold(id, currentThingID) {
-				receipt.Text += "：→ " + localDeskDate(item.Due, loc)
+				receipt.Text += "：→ " + secretary.LocalDate(item.Due, loc)
 			} else {
-				receipt.Text += " → " + localDeskDate(item.Due, loc)
+				receipt.Text += " → " + secretary.LocalDate(item.Due, loc)
 			}
 		}
 		if item.Kind == "task" && (dueChanged || hasRemind) {

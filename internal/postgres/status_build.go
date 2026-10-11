@@ -149,27 +149,8 @@ func statusCardPriority(key string) int {
 }
 
 func statusCallLock(ctx context.Context, s *Store) (func(), error) {
-	conn, err := s.pool.Acquire(ctx)
-	if err != nil {
-		return nil, err
-	}
-	var locked bool
-	err = conn.QueryRow(ctx, "SELECT pg_try_advisory_lock(hashtextextended(current_database() || ':' || current_schema() || ':organize-call',0))").Scan(&locked)
-	if err != nil || !locked {
-		conn.Release()
-		if err != nil {
-			return nil, err
-		}
-		return nil, &worker.JobError{Code: "status_busy", Until: time.Now().Add(StatusInterval), NoAttempt: true}
-	}
-	return func() {
-		clean, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		if _, err := conn.Exec(clean, "SELECT pg_advisory_unlock(hashtextextended(current_database() || ':' || current_schema() || ':organize-call',0))"); err != nil {
-			_ = conn.Conn().Close(clean)
-		}
-		conn.Release()
-	}, nil
+	_, release, err := s.organizeCallConnection(ctx, "status_busy", StatusInterval)
+	return release, err
 }
 
 // Kept as a compatibility handler for pre-upgrade queue slots. Cards are frozen.

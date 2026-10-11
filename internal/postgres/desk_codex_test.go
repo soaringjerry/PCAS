@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -120,7 +121,7 @@ func exerciseCodexFormats(t *testing.T, binary, home string, live bool) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		parsed, err := parseSecretaryOutput(raw.Text)
+		parsed, err := secretary.ParseOutput(raw.Text)
 		if !json.Valid([]byte(raw.Text)) || err != nil || len(parsed.Actions) != 1 || parsed.Actions[0].Op != "create_task" {
 			t.Fatal("live output was not a JSON task")
 		}

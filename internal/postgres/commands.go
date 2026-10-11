@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -199,7 +200,7 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 			if err != nil {
 				loc = time.UTC
 			}
-			applyDueReminder(&item, "", loc)
+			secretary.ApplyDueReminder(&item, "", loc)
 		}
 		id, err := uuidOrNew(c.ID)
 		if err != nil {
@@ -460,7 +461,7 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 				if err != nil {
 					loc = time.UTC
 				}
-				applyDueReminder(&item, "", loc)
+				secretary.ApplyDueReminder(&item, "", loc)
 			}
 		}
 	case "updateProject":

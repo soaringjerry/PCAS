@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 	"log/slog"
 	"regexp"
 	"strings"
@@ -687,9 +688,9 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 				contextErr = err
 				if contextErr == nil {
 					var parseErr error
-					answer, parseErr = parseSecretaryOutput(result.Text)
+					answer, parseErr = secretary.ParseOutput(result.Text)
 					if parseErr != nil {
-						slog.WarnContext(ctx, "secretary output fallback", "stage", "parse", "error_type", secretaryErrorType("parse", parseErr))
+						slog.WarnContext(ctx, "secretary output fallback", "stage", "parse", "error_type", secretary.ErrorType("parse", parseErr))
 						// A completed model call still answered. Keep it as text, with
 						// no actions, citations or questions from a partial decode.
 						answer = secretaryOutput{Reply: strings.TrimSpace(result.Text)}
@@ -762,7 +763,7 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 		if selfcheckAttempted {
 			application, reason := "applied", ""
 			if selfcheckErr != nil {
-				application, reason = "skipped", secretaryErrorType("selfcheck", selfcheckErr)
+				application, reason = "skipped", secretary.ErrorType("selfcheck", selfcheckErr)
 				if err := stageEventTx(ctx, tx, scope.OwnerID, "selfcheck", "failure", reason, 1); err != nil {
 					return err
 				}
@@ -784,7 +785,7 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 		if generationAttempted {
 			application, reason := "applied", ""
 			if contextErr != nil {
-				application, reason = "not_applicable", secretaryErrorType(failureStage, contextErr)
+				application, reason = "not_applicable", secretary.ErrorType(failureStage, contextErr)
 			}
 			if err := (interactiveCalls{store: s}).recordApplicationTx(ctx, tx, scope.OwnerID, memory.ID(req.RequestID), "answer", application, reason); err != nil {
 				return err
@@ -792,8 +793,8 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 		}
 		dependencies := []memory.Ref{}
 		if contextErr != nil {
-			slog.WarnContext(ctx, "secretary capture fallback", "stage", failureStage, "error_type", secretaryErrorType(failureStage, contextErr))
-			receiptText := secretaryCaptureText(failureStage, contextErr)
+			slog.WarnContext(ctx, "secretary capture fallback", "stage", failureStage, "error_type", secretary.ErrorType(failureStage, contextErr))
+			receiptText := secretary.CaptureText(failureStage, contextErr)
 			if captureOnly {
 				if text != "" && req.SmokeID == "" {
 					if err := s.captureIncompleteSecretaryTurn(ctx, tx, scope, req.RequestID, req.Text); err != nil {
@@ -879,13 +880,13 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 				actionAliases[alias] = item
 			}
 			for i, a := range answer.Actions {
-				if a.selfcheckDropped {
+				if a.SelfcheckDropped {
 					continue
 				}
 				if i >= 10 {
 					extra := 0
 					for _, rest := range answer.Actions[i:] {
-						if !rest.selfcheckDropped {
+						if !rest.SelfcheckDropped {
 							extra++
 						}
 					}
@@ -895,8 +896,8 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 					}
 					break
 				}
-				if a.parseErr != nil {
-					slog.WarnContext(ctx, "secretary action skipped", "stage", "parse", "error_type", secretaryErrorType("parse", a.parseErr))
+				if a.ParseErr != nil {
+					slog.WarnContext(ctx, "secretary action skipped", "stage", "parse", "error_type", secretary.ErrorType("parse", a.ParseErr))
 					out.Turn.Receipts = append(out.Turn.Receipts, skippedReceipt(a.Op, "动作字段没看懂"))
 					continue
 				}

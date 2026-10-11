@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 	"strings"
 	"time"
 
@@ -37,7 +38,7 @@ func (s *Store) checkSecretaryActionTargetsTx(ctx context.Context, tx pgx.Tx, sc
 	}
 	seen := map[string]bool{}
 	for _, action := range out.Actions {
-		if action.selfcheckDropped {
+		if action.SelfcheckDropped {
 			continue
 		}
 		if action.Op == "delegate" && action.Kind == "revise" {
@@ -53,7 +54,7 @@ func (s *Store) checkSecretaryActionTargetsTx(ctx context.Context, tx pgx.Tx, sc
 		if action.Project != nil {
 			refs = append(refs, *action.Project)
 		}
-		if project, ok := textField(action.Set, "project"); ok {
+		if project, ok := secretary.TextField(action.Set, "project"); ok {
 			refs = append(refs, project)
 		}
 		for _, ref := range refs {

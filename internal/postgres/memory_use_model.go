@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/jackc/pgx/v5"
+	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 	"log/slog"
 	"strings"
 	"time"
@@ -16,12 +17,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
-type usePlan struct {
-	Depth     string   `json:"depth,omitempty"`
-	Mentioned []string `json:"mentioned,omitempty"`
-	Adopted   []string `json:"adopted,omitempty"`
-	Groups    []string `json:"groups"`
-}
+type usePlan = secretary.UsePlan
 
 func safeUsePlan(raw json.RawMessage) any {
 	var p usePlan
@@ -55,7 +51,7 @@ func secretaryNeedsCheck(out secretaryOutput) bool {
 func constrainSecretaryCheck(before, after secretaryOutput) secretaryOutput {
 	actions := append([]secretaryAction{}, before.Actions...)
 	for i := len(after.Actions); i < len(actions); i++ {
-		actions[i].selfcheckDropped = true
+		actions[i].SelfcheckDropped = true
 	}
 	for i, a := range after.Actions {
 		if i >= len(actions) {
@@ -63,13 +59,13 @@ func constrainSecretaryCheck(before, after secretaryOutput) secretaryOutput {
 		}
 		old := before.Actions[i]
 		if a.Op == "skip" {
-			actions[i].selfcheckDropped = true
+			actions[i].SelfcheckDropped = true
 			continue
 		}
 		if old.Op == "delegate" && (old.Kind != a.Kind || pointerValue(old.DocumentID) != pointerValue(a.DocumentID) || intPointerValue(old.BaseVersion) != intPointerValue(a.BaseVersion)) || old.Op == "add_steps" && len(a.Steps) > len(old.Steps) || old.Op == "close_date" && old.As != a.As {
 			continue
 		}
-		if old.parseErr != nil || a.parseErr != nil || old.Op != a.Op || old.Ref != a.Ref || pointerValue(old.Project) != pointerValue(a.Project) {
+		if old.ParseErr != nil || a.ParseErr != nil || old.Op != a.Op || old.Ref != a.Ref || pointerValue(old.Project) != pointerValue(a.Project) {
 			continue
 		}
 		// Changing a project in an update redirects the action to another object.
@@ -108,7 +104,7 @@ func (s *Store) useModelCall(ctx, persist context.Context, scope memory.Scope, a
 	go func() {
 		paid, err := s.calls.Call(executionCallContext(ctx, usage.Purpose), request)
 		if err != nil {
-			slog.WarnContext(persist, "memory model stage failed", "stage", stage, "error_type", secretaryErrorType(usage.Purpose, err))
+			slog.WarnContext(persist, "memory model stage failed", "stage", stage, "error_type", secretary.ErrorType(usage.Purpose, err))
 		}
 		finished <- returned{paid, err}
 	}()
@@ -136,12 +132,12 @@ func (s *Store) checkSecretary(ctx, persist context.Context, scope memory.Scope,
 	raw, err := s.useModelCall(ctx, persist, scope, c.Agent.ID, "selfcheck", prompts.Must("secretary-selfcheck"), prompt+"\n待自查的草稿：\n"+string(asJSON(before)), prompts.MustSchema("secretary-check"), modelUsage{Purpose: "selfcheck", Tier: c.Tier, TurnID: turn, MemoryRefs: c.Dependencies, Plan: asJSON(usePlan{Groups: c.Use.Groups})})
 	if err == nil {
 		var after secretaryOutput
-		after, err = parseSecretaryOutput(raw.Text)
+		after, err = secretary.ParseOutput(raw.Text)
 		if err == nil {
 			return constrainSecretaryCheck(before, after), nil
 		}
 	}
-	slog.WarnContext(persist, "memory selfcheck fallback", "stage", "selfcheck", "error_type", secretaryErrorType("selfcheck", err))
+	slog.WarnContext(persist, "memory selfcheck fallback", "stage", "selfcheck", "error_type", secretary.ErrorType("selfcheck", err))
 	return before, err
 }
 

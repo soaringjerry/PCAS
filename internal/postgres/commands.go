@@ -2,13 +2,11 @@ package postgres
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/soaringjerry/PCAS/internal/workspace/itemcommand"
-	"strings"
+	"github.com/soaringjerry/PCAS/internal/workspace/settings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
@@ -178,77 +176,39 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 		doc.UpdatedAt = stamp()
 		return saveDoc(ctx, tx, scope, doc)
 	case "updateSettings":
-		var fields map[string]json.RawMessage
-		if json.Unmarshal(c.Patch, &fields) == nil {
-			if raw, present := fields["timezone"]; present {
-				var zone string
-				if json.Unmarshal(raw, &zone) != nil || workspace.ValidateTimezone(zone) != nil {
-					return workspace.ErrTimezone
-				}
-			}
+		if err := settings.CheckZone(c.Patch); err != nil {
+			return err
 		}
-		settings, err := queryDocument[workspace.Settings](ctx, tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1", string(scope.OwnerID))
+		current, err := queryDocument[workspace.Settings](ctx, tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1", string(scope.OwnerID))
 		if err != nil {
 			return err
 		}
-		if json.Unmarshal(c.Patch, &fields) != nil || len(fields) == 0 {
-			return memory.ErrInvalid
-		}
-		delete(fields, "autoAccept")
-		c.Patch = asJSON(fields)
-		if len(fields) != 0 {
-			if err := patchAllowed(&settings, c.Patch, "wakeIdeas", "followUps", "dailyReviewAt", "dailyBudget", "timezone", "city"); err != nil {
-				return err
-			}
-		}
-		settings.AutoAccept = false
-		settings.City = strings.TrimSpace(settings.City)
-		if utf8.RuneCountInString(settings.City) > 60 || strings.ContainsAny(settings.City, "\r\n") {
-			return memory.ErrInvalid
-		}
-		if settings.DailyBudget < 0 || settings.DailyBudget > 1e6 {
-			return memory.ErrInvalid
-		}
-		if _, err := time.Parse("15:04", settings.DailyReviewAt); err != nil {
-			return memory.ErrInvalid
-		}
-		if err := workspace.ValidateTimezone(settings.Timezone); err != nil {
-			return err
-		}
-		_, err = tx.Exec(ctx, "UPDATE workspace_owners SET settings=$2 WHERE owner_id=$1", string(scope.OwnerID), asJSON(settings))
+		next, replan, err := settings.Apply(current, c.Patch)
 		if err != nil {
 			return err
 		}
-		if _, zone := fields["timezone"]; zone {
-			return refreshTaskPlansTx(ctx, tx, scope)
+		if _, err = tx.Exec(ctx, "UPDATE workspace_owners SET settings=$2 WHERE owner_id=$1", string(scope.OwnerID), asJSON(next)); err != nil {
+			return err
 		}
-		if _, clock := fields["dailyReviewAt"]; clock {
+		if replan {
 			return refreshTaskPlansTx(ctx, tx, scope)
 		}
 		return nil
 	case "updateAgent":
-		a, err := queryDocument[workspace.Agent](ctx, tx, "SELECT document FROM workspace_agents WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), c.ID)
+		current, err := queryDocument[workspace.Agent](ctx, tx, "SELECT document FROM workspace_agents WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), c.ID)
 		if err != nil {
 			return err
 		}
-		if err := patchAllowed(&a, c.Patch, "enabled", "memoryKinds", "includeInferred", "note", "name"); err != nil {
+		a, initialize, err := settings.ApplyAgent(current, c.Patch)
+		if err != nil {
 			return err
 		}
-		if err := requireText(a.Name); err != nil {
-			return err
-		}
-		for _, kind := range a.MemoryKinds {
-			if !oneOf(kind, "fact", "preference", "decision", "intention", "plan") {
-				return memory.ErrInvalid
-			}
-		}
-		if a.Enabled && !a.MemoryInitialized {
+		if initialize {
 			if err := initializeAgentMemoriesTx(ctx, tx, scope.OwnerID, a.ID); err != nil {
 				return err
 			}
 			a.MemoryInitialized = true
 		}
-
 		_, err = tx.Exec(ctx, "UPDATE workspace_agents SET document=$3 WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), c.ID, asJSON(a))
 		return err
 	case "toggleContextMemory":

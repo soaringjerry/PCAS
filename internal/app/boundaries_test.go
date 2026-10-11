@@ -11,6 +11,7 @@ import (
 // Add each package here when its domain leaves the storage package.
 var domainPackages = []string{
 	"./internal/workspace/...",
+	"./internal/currentstate/...",
 	"./internal/modelcall",
 	"./internal/prompts",
 }

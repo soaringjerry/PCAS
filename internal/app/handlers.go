@@ -3,6 +3,7 @@
 package app
 
 import (
+	"github.com/soaringjerry/PCAS/internal/currentstate/datereview"
 	"github.com/soaringjerry/PCAS/internal/postgres"
 	"github.com/soaringjerry/PCAS/internal/worker"
 	"github.com/soaringjerry/PCAS/internal/workspace/effort"
@@ -19,6 +20,11 @@ func TopicProject(db *postgres.Store) topicproject.Service {
 	return topicproject.Service{Store: db.TopicProjectStore(), Generator: db, Now: db.BusinessNow}
 }
 
+// DateReview connects the date review service to storage and generation.
+func DateReview(db *postgres.Store) datereview.Service {
+	return datereview.Service{Store: db.DateReviewStore(), Generator: db}
+}
+
 // Handlers gives the background worker one handler for each queue stage.
 // A stage whose domain has left the storage package uses its service here.
 // The other stages still call the storage package directly.
@@ -31,7 +37,7 @@ func Handlers(db *postgres.Store) map[string]worker.Handler {
 		"memory.project_handover":  db.ProcessProjectHandover,
 		effort.Stage:               Effort(db).Process,
 		topicproject.Stage:         TopicProject(db).Process,
-		"memory.date_tidy":         db.ProcessDateTidy,
+		datereview.Stage:           DateReview(db).Process,
 		"memory.card":              db.ProcessCard,
 		"memory.organize":          db.ProcessOrganize,
 		"memory.summary":           db.ProcessSummary,

@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/soaringjerry/PCAS/internal/currentstate/datereview"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/worker"
 	"github.com/soaringjerry/PCAS/internal/workspace"
@@ -68,7 +69,8 @@ func (f *dateTidyFixture) run(t *testing.T, ref memory.Ref, stage string) error 
 		t.Fatal(err)
 	}
 	j.ID = memory.ID(id)
-	return f.store.ProcessDateTidy(f.ctx, j)
+	// The date review service is composed here as application setup composes it.
+	return datereview.Service{Store: f.store.DateReviewStore(), Generator: f.store}.Process(f.ctx, j)
 }
 
 func (f *dateTidyFixture) open(t *testing.T, ref memory.Ref) bool {

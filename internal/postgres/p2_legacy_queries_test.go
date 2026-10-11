@@ -31,6 +31,9 @@ const p2LegacyMemoryJoins = ` FROM memory_records r JOIN claim_revisions c ON (c
  JOIN record_versions rv ON (rv.owner_id,rv.record_id,rv.version)=(c.owner_id,c.claim_id,c.version)
  LEFT JOIN activity a ON (a.owner_id,a.record_id)=(r.owner_id,r.id)`
 
+// The legacy copy of the prompt keeps its own pattern for identifiers.
+var deskUUID = regexp.MustCompile(`(?i)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}`)
+
 func p2LegacyMemoryWhere(scope memory.Scope, currentOnly bool, opts memoryReadOptions) (string, []any) {
 	args := []any{string(scope.OwnerID), scope.IsOwner, scope.PrincipalID, currentOnly}
 	clauses := []string{`r.owner_id=$1 AND r.state='active' AND claim_source_is_current($1,c.claim_id,c.version,now())

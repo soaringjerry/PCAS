@@ -211,6 +211,18 @@ The live check changes no setting, so the moved settings rules have their CI res
 
 The storage package has 24,987 lines without tests at this revision. It had 28,355 lines at the review.
 
+## Fifteenth Release on the Same Day
+
+Released revision: `85e7d2681d3018dbf250ad06b4f599fd1d48285c`. Earlier revision: `7b43012`.
+Pull requests #356 and #358 give the change: the key, quotation, time, and scope rules of a memory write left the storage package.
+
+The release had no database migration. The backup was validated, and the record counts are equal before and after the start: 5,253 claims and 28 work items.
+The live check on the real default Codex channel passed with four turns: an answer, an arrangement (`create_task`, done), a change (`update`, done), and a delegation (`delegate`, done) whose deputy run finished as done with a settled call.
+The cleanup succeeded and the record counts are equal. Neither log has an error, and no container restarted.
+The live check writes no memory, so the moved rules of a memory write have their CI results and no live result in this record.
+
+The storage package has 24,966 lines without tests at this revision. It had 28,355 lines at the review.
+
 ## Host Cleanup
 
 The owner approved removal of leftover data on 2026-10-11.

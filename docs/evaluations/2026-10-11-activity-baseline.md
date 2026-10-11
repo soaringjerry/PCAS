@@ -47,3 +47,10 @@ Largest groups of background stage events on 2026-10-09:
 - Two days are not a trend.
 - The usage rows without a call record on 2026-10-09 were written by paths that entered the gateway on that day or later.
 - The query cannot show reasons that were never recorded. Its response lists these gaps.
+
+## First Correction From These Readings
+
+A stage limit applies to every job of the stage. Each waiting job was taken and deferred in turn at every window.
+When one job is deferred for an hourly or daily stage limit, the other queued jobs of that stage now move to the same window in the same step.
+They stay queued and keep their order. The limit is recorded once for each window.
+Read the deferral counts again after this correction is released.

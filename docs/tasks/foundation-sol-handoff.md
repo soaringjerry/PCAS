@@ -34,7 +34,8 @@ Phase 3.9 is incomplete. The [delivery milestones](../status.md#foundation-deliv
 | Legacy routing and answer removal | Released at `a5c1483` on 2026-10-11. |
 | Transcription and image interpretation through the gateway | File transcription, image interpretation, and Telegram voice transcription use recorded gateway entries. Not released when this page was written. |
 | Data-owner boundaries and domain extraction | The [pilot](foundation-domain-pilot.md) moved workspace effort estimation. The other paths remain in the storage package. |
-| Activity queries, declared event responses, and causal limits | Not started. |
+| Activity queries | The [day activity query](../memory-service.md#day-activity) answers one local day's work, cost, and reasons. Its response lists the links that the records do not contain. |
+| Declared event responses and causal limits | Not started. The [first live readings](../evaluations/2026-10-11-activity-baseline.md) measure the repeated deferrals that these limits must address. |
 | Five test layers and nightly evaluation trends | Not started as a complete set. |
 
 Do not derive a completion percentage from these unequal work items.

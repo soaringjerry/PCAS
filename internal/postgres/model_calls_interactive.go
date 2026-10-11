@@ -38,6 +38,9 @@ type interactiveCallPolicy struct {
 // Child stages inherit it; they cannot create an execution from a turn ID.
 type interactiveExecutionKey struct{}
 
+// CallPolicy marks an admitted execution as the execution policy of a model call.
+func (interactiveCallPolicy) CallPolicy() {}
+
 type interactiveCalls struct{ store *Store }
 
 // Each retained response also keeps its bound request. Recovery cannot rebuild
@@ -48,72 +51,55 @@ type pendingInteractiveResult struct {
 	attemptedAt time.Time
 }
 
-// modelCallStorage routes the existing gateway ports to their execution owner.
-// It never invokes providers or makes business decisions.
+// modelCallStorage routes the gateway ports to the journal of the call's
+// execution policy. It never invokes providers or makes business decisions.
 type modelCallStorage struct {
 	background  backgroundCalls
 	interactive interactiveCalls
 }
 
-func (a modelCallStorage) Load(ctx context.Context, r modelcall.Request) (*modelcall.PaidResult, error) {
+type callJournal interface {
+	modelcall.Accounting
+	modelcall.Results
+	modelcall.Journal
+}
+
+func (a modelCallStorage) of(r modelcall.Request) callJournal {
 	if _, ok := r.Policy.(interactiveCallPolicy); ok {
-		return a.interactive.Load(ctx, r)
+		return a.interactive
 	}
-	return a.background.Load(ctx, r)
+	return a.background
+}
+
+func (a modelCallStorage) Load(ctx context.Context, r modelcall.Request) (*modelcall.PaidResult, error) {
+	return a.of(r).Load(ctx, r)
 }
 func (a modelCallStorage) Save(ctx context.Context, r modelcall.Request, p *modelcall.PaidResult) error {
-	if _, ok := r.Policy.(interactiveCallPolicy); ok {
-		return a.interactive.Save(ctx, r, p)
-	}
-	return a.background.Save(ctx, r, p)
+	return a.of(r).Save(ctx, r, p)
 }
 func (a modelCallStorage) Forget(ctx context.Context, r modelcall.Request, p *modelcall.PaidResult) error {
-	if _, ok := r.Policy.(interactiveCallPolicy); ok {
-		return a.interactive.Forget(ctx, r, p)
-	}
-	return a.background.Forget(ctx, r, p)
+	return a.of(r).Forget(ctx, r, p)
 }
 func (a modelCallStorage) Reserve(ctx context.Context, r modelcall.Request, cost float64) (modelcall.Reservation, error) {
-	if _, ok := r.Policy.(interactiveCallPolicy); ok {
-		return a.interactive.Reserve(ctx, r, cost)
-	}
-	return a.background.Reserve(ctx, r, cost)
+	return a.of(r).Reserve(ctx, r, cost)
 }
 func (a modelCallStorage) Record(ctx context.Context, r modelcall.Request, p *modelcall.PaidResult) error {
-	if _, ok := r.Policy.(interactiveCallPolicy); ok {
-		return a.interactive.Record(ctx, r, p)
-	}
-	return a.background.Record(ctx, r, p)
+	return a.of(r).Record(ctx, r, p)
 }
 func (a modelCallStorage) Settle(ctx context.Context, r modelcall.Request, p *modelcall.PaidResult) error {
-	if _, ok := r.Policy.(interactiveCallPolicy); ok {
-		return a.interactive.Settle(ctx, r, p)
-	}
-	return a.background.Settle(ctx, r, p)
+	return a.of(r).Settle(ctx, r, p)
 }
 func (a modelCallStorage) Prepare(ctx context.Context, r modelcall.Request, p ai.Provider) (memory.ID, error) {
-	if _, ok := r.Policy.(interactiveCallPolicy); ok {
-		return a.interactive.Prepare(ctx, r, p)
-	}
-	return a.background.Prepare(ctx, r, p)
+	return a.of(r).Prepare(ctx, r, p)
 }
 func (a modelCallStorage) Start(ctx context.Context, r modelcall.Request, p *modelcall.PaidResult) error {
-	if _, ok := r.Policy.(interactiveCallPolicy); ok {
-		return a.interactive.Start(ctx, r, p)
-	}
-	return a.background.Start(ctx, r, p)
+	return a.of(r).Start(ctx, r, p)
 }
 func (a modelCallStorage) PreparationFailed(ctx context.Context, r modelcall.Request, id memory.ID, err error) error {
-	if _, ok := r.Policy.(interactiveCallPolicy); ok {
-		return a.interactive.PreparationFailed(ctx, r, id, err)
-	}
-	return a.background.PreparationFailed(ctx, r, id, err)
+	return a.of(r).PreparationFailed(ctx, r, id, err)
 }
 func (a modelCallStorage) AccountingState(ctx context.Context, r modelcall.Request, p *modelcall.PaidResult, state string) error {
-	if _, ok := r.Policy.(interactiveCallPolicy); ok {
-		return a.interactive.AccountingState(ctx, r, p, state)
-	}
-	return a.background.AccountingState(ctx, r, p, state)
+	return a.of(r).AccountingState(ctx, r, p, state)
 }
 
 type interactiveReceipt struct {

@@ -80,6 +80,9 @@ Storage implements `Workspace` in the action's transaction. It keeps the command
 Behavior tests run the actions against a workspace in memory. They need no database.
 The turn itself, its context, and its prompt are still in `internal/postgres/desk_turn.go`. They are the largest part of the phase that remains.
 
+The deputy's rules that need no storage are in `internal/workspace/deputy`: the checklist of an output, how an output is adopted, and the notice of a finished run.
+The run itself, its context, and the run commands are still in `internal/postgres/runs.go`.
+
 The chunk, index, embedding, and summary jobs stay in storage. They hold no interpretation rule: the text split is `memory.SplitText`, the embedding call is the gateway's, and the summary is a memory read. The card job only acknowledges queue slots from before an upgrade.
 
 ## Pattern for the Next Paths

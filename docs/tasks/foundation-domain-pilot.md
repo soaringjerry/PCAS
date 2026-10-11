@@ -86,7 +86,10 @@ The context builder is `internal/contextbuilder`. It serializes memory and curre
 It needs no storage. The caller reads the data and gives each memory its alias. The reads of the memory part are still in storage. The deputy still assigns its labels and its budgets in storage.
 
 The rules that change one task, idea, or project by one command are in `internal/workspace/itemcommand`. `Apply` checks that the command fits the kind of the item, changes the item, and returns the summary for its history. Storage reads the item and saves it.
-The other commands of `internal/postgres/commands.go` stay in storage for now: creation, candidates, documents, settings, agents, and bulk changes. Each of them is mostly a write.
+The same package holds three more sets of rules. `New` makes the item of a creation command and says who made it. `ReviewCandidate` applies the owner's decision to a candidate: accept, ignore, restore, or merge. `Expand` turns a bulk command into one command for each distinct item and refuses more than 100 items.
+The commands for documents, settings, and agents stay in `internal/postgres/commands.go`. Each of them is a patch and a write.
+
+The G4 browser test failed once with `version_conflict`, and the cause is not established. One lead: the undo button sends its command again one time after a conflict, and two background writes in a row would make the second try conflict too. No log of the failure is kept, so this lead is not confirmed.
 
 The deputy's rules that need no storage are in `internal/workspace/deputy`: the checklist of an output, how an output is adopted, the notice of a finished run, and the output format of a revision and a breakdown.
 `deputy.Brief` builds the model input of a run. It writes the item with its project and its steps, the document that a revision starts from, and the current documents up to the limit of the brief. It counts each document that was cut or left out; storage records the count.

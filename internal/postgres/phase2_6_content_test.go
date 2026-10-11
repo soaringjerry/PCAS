@@ -3,6 +3,7 @@ package postgres
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/soaringjerry/PCAS/internal/currentstate/handover"
 	"reflect"
 	"strings"
 	"testing"
@@ -148,7 +149,7 @@ func TestPhase26G6B3B7B8LibraryAndC1C2Content(t *testing.T) {
 	}
 	phase26Isolate(t, f, HandoverStage)
 	j := phase26ClaimStage(t, f, HandoverStage)
-	if err := s.ProcessHandover(ctx, j); err != nil {
+	if err := (handover.Service{Store: s.HandoverStore(), Generator: s}).Process(ctx, j); err != nil {
 		t.Fatal(err)
 	}
 	calls := model.calls(HandoverStage)

@@ -61,7 +61,7 @@ If you do not run a check, write that in the PR. Give the reason.
 | `internal/postgres/migrations` | Database migrations. |
 | `internal/memory`, `internal/workspace` | Memory and workspace types. |
 | `internal/workspace/effort`, `internal/workspace/topicproject`, `internal/workspace/projecthandover` | Workspace domain packages outside storage: effort estimation, topic projects, and project handovers. |
-| `internal/currentstate/datereview` | Current-state domain package outside storage: the review of remembered dates. |
+| `internal/currentstate/datereview`, `internal/currentstate/handover` | Current-state domain packages outside storage: the review of remembered dates and the global handover. |
 | `internal/app` | Application setup: service construction and the worker handler table. |
 | `internal/modelcall`, `internal/prompts` | Model gateway and prompt registry. |
 | `internal/ai` | Model provider adapters. |

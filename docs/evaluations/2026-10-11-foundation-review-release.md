@@ -223,6 +223,23 @@ The live check writes no memory, so the moved rules of a memory write have their
 
 The storage package has 24,966 lines without tests at this revision. It had 28,355 lines at the review.
 
+## Sixteenth Release on the Same Day
+
+Released revision: `9f190973b59aaabcb4eaaf141c5e0cd39fa82f7d`. Earlier revision: `85e7d26`.
+Pull requests #360, #361, and #362 give the changes: more rules of the secretary turn and the rules of adopting a deputy result left the storage package.
+
+The release had no database migration. The backup was validated, and the record counts are equal before and after the start: 5,253 claims and 28 work items.
+
+The first live check failed on its fourth turn. The Codex generation of that turn did not finish in the secretary's limit of 30 seconds (29.3 seconds at the provider adapter).
+The product did what it does for a timeout: the call is recorded with the outcome `unknown` and a held reservation, and the owner's sentence was kept with a capture receipt. No run was requested.
+The first three turns of that check passed, and its cleanup succeeded with equal record counts.
+The second live check passed with four turns: an answer, an arrangement (`create_task`, done), a change (`update`, done), and a delegation (`delegate`, done) whose deputy run finished as done with a settled call.
+In the 30 hours before this record the live instance made 58 secretary answer calls. This timeout is the only one that did not return.
+The release was not rolled back: the failure is a provider timeout, and the changed rules ran in the turns that passed.
+Neither log has an error, and no container restarted.
+
+The storage package has 24,828 lines without tests at this revision. It had 28,355 lines at the review.
+
 ## Host Cleanup
 
 The owner approved removal of leftover data on 2026-10-11.

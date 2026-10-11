@@ -71,7 +71,10 @@ The storage code still holds its transaction open while the parser makes its cal
 The extraction rules are in `internal/interpretation/extraction`: the windows of a long source, the strict reading of the answer, the rules of the source's speaker, the quotation that each item needs, the confirmation level of a statement, and the event time.
 The extraction job's flow is in the same package: which sources have nothing to extract, the split of a long source, the model input, and the handling of an answer that is not valid.
 `Decide` gives the action for each item: nothing, a task or an idea, a candidate for review, or a statement. Storage applies the action. It no longer decides it.
-The conversation path of an import, the reads for the model input, and the writes are still in storage.
+The reads for the model input and the writes are still in storage.
+The conversation path of an import has its rules in the same package: the split of a conversation into segments, the identity of a run, the stage of a segment job, and the decision for each item. Its job flow is still in `internal/postgres/conversation_extract.go`, because each step of that flow is a queue write.
+
+The chunk, index, embedding, and summary jobs stay in storage. They hold no interpretation rule: the text split is `memory.SplitText`, the embedding call is the gateway's, and the summary is a memory read. The card job only acknowledges queue slots from before an upgrade.
 
 ## Pattern for the Next Paths
 

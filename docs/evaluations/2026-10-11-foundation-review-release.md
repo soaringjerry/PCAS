@@ -143,6 +143,18 @@ The live check on the real default Codex channel passed: an answer, an arrangeme
 The two actions sent their item commands through the moved rules. The receipts name the due time, the reminder 30 minutes before, and the new date.
 Neither log has an error, and no container restarted.
 
+## Tenth Release on the Same Day
+
+Released revision: `8196ddcc757f4b05a7983fb5dd57bea9f8f56f41`. Earlier revision: `81f4c9e`.
+Pull requests #336, #338, and #339 give the changes: the context builder and the assembly of the secretary's model input left the storage package.
+
+The release had no database migration. The backup was validated, and the record counts are equal before and after the start: 5,253 claims and 25 work items.
+The live check on the real default Codex channel passed: an answer, an arrangement (`create_task`, done), and a change (`update`, done), between 17 and 19 seconds each, with settled calls and a clean group cleanup.
+The three turns used the moved input assembly on the owner's real memory. The change turn named the task of the turn before it by its alias, and the correct task was changed.
+Neither log has an error, and no container restarted.
+
+The storage package has 25,307 lines without tests at this revision. It had 28,355 lines at the review.
+
 ## Host Cleanup
 
 The owner approved removal of leftover data on 2026-10-11.

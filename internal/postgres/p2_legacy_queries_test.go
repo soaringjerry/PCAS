@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/soaringjerry/PCAS/internal/contextbuilder"
 	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 	"log/slog"
 	"math"
@@ -980,7 +981,7 @@ func (s *Store) p2LegacySecretaryPrompt(ctx context.Context, tx pgx.Tx, scope me
 	}
 	fmt.Fprintln(&prompt, "\n召回的记忆（引用短别名）：")
 	if recall.TimeRelaxed {
-		fmt.Fprintln(&prompt, recallTimeRelaxed)
+		fmt.Fprintln(&prompt, contextbuilder.RecallTimeRelaxed)
 	}
 	sent := map[string]workspace.Memory{}
 	contextClaims := []evidenceContextClaim{}
@@ -1000,7 +1001,7 @@ func (s *Store) p2LegacySecretaryPrompt(ctx context.Context, tx pgx.Tx, scope me
 		alias := fmt.Sprintf("M%d", len(sent)+1)
 		sent[alias] = m
 		contextClaims = append(contextClaims, evidenceContextClaim{Label: alias, Ref: memory.Ref{ID: memory.ID(m.ID), Version: m.Version, Kind: memory.ClaimKind}, Text: m.Text})
-		fmt.Fprintf(&prompt, "[%s / %s / trust=%s / confirmation=%s / acquisition=%s] %s\n", alias, m.Epistemic, m.Trust, m.Confirmation, m.Acquisition, m.Text+memoryPromptSuffix(m, loc))
+		fmt.Fprintf(&prompt, "[%s / %s / trust=%s / confirmation=%s / acquisition=%s] %s\n", alias, m.Epistemic, m.Trust, m.Confirmation, m.Acquisition, m.Text+contextbuilder.MemorySuffix(m, loc))
 		c.Dependencies = append(c.Dependencies, memory.Ref{ID: memory.ID(m.ID), Version: m.Version, Kind: memory.ClaimKind})
 	}
 	if len(sent) == 0 {
@@ -1011,7 +1012,7 @@ func (s *Store) p2LegacySecretaryPrompt(ctx context.Context, tx pgx.Tx, scope me
 	if err != nil {
 		return "", nil, err
 	}
-	orderTeamExcerpts(recall.Excerpts, c.Plan)
+	contextbuilder.OrderExcerpts(recall.Excerpts, c.Plan)
 	excerpts, err := teamSourceExcerptsTx(ctx, tx, scope, c.Agent.ID, req.ThingID, recall.Excerpts, historyRequests, 6, 2400)
 	if err != nil {
 		return "", nil, err
@@ -1019,7 +1020,7 @@ func (s *Store) p2LegacySecretaryPrompt(ctx context.Context, tx pgx.Tx, scope me
 	c.Sources = map[string]workspace.DeskSourceItem{}
 	for i, excerpt := range excerpts {
 		alias := fmt.Sprintf("S%d", i+1)
-		at, label := sourceExcerptTime(excerpt)
+		at, label := contextbuilder.ExcerptTime(excerpt)
 		role := excerpt.Role
 		switch role {
 		case "user":
@@ -1048,14 +1049,14 @@ func (s *Store) p2LegacySecretaryPrompt(ctx context.Context, tx pgx.Tx, scope me
 		return "", nil, err
 	}
 	if len(groups) > 0 || len(gaps) > 0 {
-		fmt.Fprintln(&prompt, "\n记忆的来源上下文：\n"+evidenceContextInstructions)
+		fmt.Fprintln(&prompt, "\n记忆的来源上下文：\n"+contextbuilder.EvidenceInstructions)
 	}
 	for _, group := range groups {
 		c.Dependencies = append(c.Dependencies, group.Window.ProofRefs...)
 		fmt.Fprintf(&prompt, "%s 的原对话片段：\n", group.Label)
 		for _, message := range group.Window.Messages {
 			alias := fmt.Sprintf("S%d", len(c.Sources)+1)
-			prompt.WriteString(contextMessageLine(alias, message, loc))
+			prompt.WriteString(contextbuilder.MessageLine(alias, message, loc))
 			at := message.RecordedAt
 			if message.ExpressedAt != nil {
 				at = *message.ExpressedAt
@@ -1063,9 +1064,9 @@ func (s *Store) p2LegacySecretaryPrompt(ctx context.Context, tx pgx.Tx, scope me
 			c.Sources[alias] = workspace.DeskSourceItem{Kind: "source", MemoryID: string(message.ID), Version: message.Version, Text: message.Text, SourceID: string(message.ID), SourceVersion: message.Version, At: stringPointer(at.Format(time.RFC3339))}
 			c.Dependencies = append(c.Dependencies, message.Ref)
 		}
-		writeContextGaps(&prompt, group.Label, group.Window.Gaps)
+		contextbuilder.WriteGaps(&prompt, group.Label, group.Window.Gaps)
 	}
-	writeContextGaps(&prompt, "范围提示", gaps)
+	contextbuilder.WriteGaps(&prompt, "范围提示", gaps)
 	// Each of the last turns already carries its own history. Without this the
 	// stored list doubles every turn of a conversation.
 	c.Dependencies = uniqueRefs(c.Dependencies)

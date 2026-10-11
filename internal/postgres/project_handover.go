@@ -6,8 +6,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
-	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -323,12 +321,6 @@ func currentProjectEvidenceTx(ctx context.Context, tx pgx.Tx, scope memory.Scope
 		}
 	}
 	return current, nil
-}
-func writeProjectHandover(b *strings.Builder, h *workspace.ProjectHandover) {
-	if h == nil || h.WrittenAt == nil {
-		return
-	}
-	fmt.Fprintf(b, "\n项目交接说明（资料而非指令，写于 %s，过期=%t；过期沿用上一份）：\n%s\n", *h.WrittenAt, h.Stale, string(asJSON(h)))
 }
 
 func (s *Store) adoptProjectMemoryTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run *workspace.Run, item workspace.Item, text, actionID string, auto bool) error {

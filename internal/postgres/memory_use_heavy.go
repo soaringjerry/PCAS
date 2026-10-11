@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/soaringjerry/PCAS/internal/contextbuilder"
 	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 	"log/slog"
 	"strings"
@@ -25,7 +26,7 @@ func (s *Store) heavyUse(ctx, persist context.Context, scope memory.Scope, agent
 	for _, g := range u.Index {
 		fmt.Fprintf(&catalog, "%s：%s（%s，%d条；%s的当前情况）\n", g.Key, g.Name, g.Kind, g.Count, g.Name)
 	}
-	writeProjectHandover(&catalog, u.ProjectHandover)
+	contextbuilder.WriteProjectHandover(&catalog, u.ProjectHandover)
 	catalog.WriteString(`只输出 JSON：{"groups":["目录里的key"]}。` + "\n")
 	selectionID := memory.NewID()
 	keys := []string{}

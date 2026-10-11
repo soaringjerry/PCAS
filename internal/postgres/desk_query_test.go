@@ -1,6 +1,7 @@
 package postgres
 
 import (
+	"github.com/soaringjerry/PCAS/internal/contextbuilder"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 	"testing"
 	"time"
@@ -29,7 +30,7 @@ func TestMemoryPromptSuffix(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			if got := memoryPromptSuffix(c.m, loc); got != c.want {
+			if got := contextbuilder.MemorySuffix(c.m, loc); got != c.want {
 				t.Fatalf("got %q want %q", got, c.want)
 			}
 		})

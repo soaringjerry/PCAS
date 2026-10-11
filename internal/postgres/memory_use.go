@@ -2,7 +2,7 @@ package postgres
 
 import (
 	"context"
-	"fmt"
+	"github.com/soaringjerry/PCAS/internal/contextbuilder"
 	"sort"
 	"strings"
 	"time"
@@ -39,28 +39,10 @@ func containsAny(text string, words ...string) bool {
 	return false
 }
 
-type useCoverage struct{ Skipped, Notices []string }
-type useContext struct {
-	ProjectHandover        *workspace.ProjectHandover
-	ProjectGroup           string
-	Tier                   string
-	Location               *time.Location
-	Handover               workspace.Handover
-	Index                  []workspace.StatusCardRef // Compatibility DTO; populated from the live directory, never cards.
-	Cards                  []workspace.StatusCard    // Retained for old offline fixtures only.
-	Rules                  []workspace.Memory
-	RequirementScopes      map[string]string
-	DeadlineMemories       map[string]workspace.Memory
-	Deadlines              []workspace.Deadline
-	DeadlineStates         map[string]string
-	Supplemental           []workspace.Memory
-	Groups, RequiredGroups []string
-	Dependencies           []memory.Ref
-	Installed              bool
-	Ready                  bool
-	Coverage               *useCoverage
-	Selected               bool
-}
+type (
+	useCoverage = contextbuilder.Coverage
+	useContext  = contextbuilder.UseContext
+)
 
 func (s *Store) startUseContextTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) (useContext, error) {
 	u := useContext{Coverage: &useCoverage{}}
@@ -128,9 +110,6 @@ func chooseUseGroups(text string, index []workspace.StatusCardRef, ranked []work
 	}
 	return out
 }
-func useMemoryAllowed(m workspace.Memory, a workspace.Agent) bool {
-	return m.Retired == "" && oneOf(m.Kind, a.MemoryKinds...) && (a.IncludeInferred || m.Trust != "inferred" && m.Acquisition != "inferred")
-}
 
 // Access, exclusions and destination scope are checked in one set, not per memory.
 func (s *Store) useMemoriesTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, agent workspace.Agent, thing *string, ids []string) ([]workspace.Memory, error) {
@@ -151,7 +130,7 @@ func (s *Store) useMemoriesTx(ctx context.Context, tx pgx.Tx, scope memory.Scope
 	}
 	out := []workspace.Memory{}
 	for _, m := range ms {
-		if useMemoryAllowed(m, agent) {
+		if contextbuilder.MemoryAllowed(m, agent) {
 			out = append(out, m)
 		}
 	}
@@ -321,50 +300,6 @@ func (s *Store) finishUseContextTx(ctx context.Context, tx pgx.Tx, scope memory.
 	}
 	u.Dependencies = uniqueRefs(u.Dependencies)
 	return nil
-}
-func writeUseContext(b *strings.Builder, u useContext, loc *time.Location, write func(workspace.Memory)) {
-	writeProjectHandover(b, u.ProjectHandover)
-	if !u.Ready && len(u.Rules) == 0 && len(u.Deadlines) == 0 {
-		for _, m := range u.Supplemental {
-			write(m)
-		}
-		return
-	}
-	if u.Handover.Body != "" {
-		fmt.Fprintf(b, "\n交接说明（写于 %s，过期=%t；重写期间照常参考上一份）：\n%s\n", u.Handover.BuiltAt, u.Handover.Stale, u.Handover.Body)
-	}
-	if u.Coverage != nil && len(u.Coverage.Skipped) > 0 {
-		fmt.Fprintln(b, "这几组没来得及看："+strings.Join(u.Coverage.Skipped, "、"))
-	}
-	// A requirement shapes how this sentence is answered. Left unsaid, the model
-	// carried out old one-off requests filed as requirements and edited unrelated items.
-	fmt.Fprintln(b, "\n对助手的要求（每轮都落实）：")
-	fmt.Fprintln(b, "这些要求只约束你怎么回应「这句话」，本身不是这一轮要办的事：不得因为某条要求去新建、修改或完成任何事项。要求里如果是过去某一次的具体请求（例如某天几点提醒做某事），已不适用，忽略。")
-	for _, m := range u.Rules {
-		fmt.Fprintln(b, u.RequirementScopes[m.ID])
-		write(m)
-	}
-	fmt.Fprintln(b, "\n期限和固定安排（仅供参考，不是这一轮要办的事；已过期不代表完成，日期没说清保留原话。用户这句话要了结其中一条时，用 close_date 引用它下面那条记忆的 M*）：")
-	for _, d := range u.Deadlines {
-		at := ""
-		if d.At != nil {
-			at = *d.At
-		}
-		fmt.Fprintf(b, "%s：%s %s %s %s（%s）\n", u.DeadlineStates[d.ID], d.Kind, at, d.Recurrence, d.Title, d.TimeNote)
-		if m, ok := u.DeadlineMemories[d.MemoryID]; ok {
-			write(m)
-		}
-	}
-	fmt.Fprintln(b, "\n补充记忆：")
-	for _, m := range u.Supplemental {
-		write(m)
-	}
-	if u.Ready {
-		fmt.Fprintln(b, "\n分组目录（在本次输出 memoryPlan 判断点名分组、所需深度和用户主动提及的记忆；不要凭字面匹配）：")
-		for i, g := range u.Index {
-			fmt.Fprintf(b, "G%d：%s（%s，%d条）\n", i+1, g.Name, g.Kind, g.Count)
-		}
-	}
 }
 
 // Compatibility helper; semantic applicability is exclusively model-owned.

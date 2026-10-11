@@ -173,6 +173,19 @@ Since the seventh release, the live instance ran handover, project handover, and
 
 The storage package has 25,217 lines without tests at this revision. It had 28,355 lines at the review.
 
+## Twelfth Release on the Same Day
+
+Released revision: `a0ef58e6aac805f092e4b5903301608d9b29812c`. Earlier revision: `5fa573f`.
+Pull requests #345, #346, and #347 give the changes: the rules of creation, candidate review, and bulk commands left the storage package, with the rules for applying a secretary answer.
+
+The release had no database migration. The backup was validated, and the record counts are equal before and after the start: 5,253 claims and 28 work items.
+The one work item more than at the eleventh release was made by the live instance itself (project by background_topic at 14:02). It is not from a check.
+
+The live check on the real default Codex channel passed with four turns: an answer, an arrangement (`create_task`, done), a change (`update`, done), and a delegation (`delegate`, done) whose deputy run finished as done with a settled call.
+The cleanup succeeded and the record counts are equal. Neither log has an error, and no container restarted.
+
+The storage package has 25,082 lines without tests at this revision. It had 28,355 lines at the review.
+
 ## Host Cleanup
 
 The owner approved removal of leftover data on 2026-10-11.

@@ -90,7 +90,8 @@ The other commands of `internal/postgres/commands.go` stay in storage for now: c
 
 The deputy's rules that need no storage are in `internal/workspace/deputy`: the checklist of an output, how an output is adopted, the notice of a finished run, and the output format of a revision and a breakdown.
 `deputy.Brief` builds the model input of a run. It writes the item with its project and its steps, the document that a revision starts from, and the current documents up to the limit of the brief. It counts each document that was cut or left out; storage records the count.
-The memory part of the brief, the run itself, and the run commands are still in `internal/postgres/runs.go`.
+`Memories`, `Excerpts`, `Evidence`, `Derived`, and `Request` write the rest of the brief. They hold the limit of the brief: metadata on a memory line does not count, so that it cannot push out a later memory or source. Each method returns the count of parts that did not fit, and storage records one event with that count. Before, storage recorded one event for each part; the sums are equal.
+The reads for the brief, the run itself, and the run commands are still in `internal/postgres/runs.go`.
 
 The chunk, index, embedding, and summary jobs stay in storage. They hold no interpretation rule: the text split is `memory.SplitText`, the embedding call is the gateway's, and the summary is a memory read. The card job only acknowledges queue slots from before an upgrade.
 

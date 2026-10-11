@@ -196,12 +196,13 @@ The repository has the scripts for a host that keeps pinned releases under `/roo
 ```sh
 python3 scripts/release.py prepare <main revision>   # export the source and build the image
 python3 scripts/release.py deploy <main revision>    # stop, back up, migrate, start, check readiness
-python3 scripts/live_check.py <main revision>        # three check-only secretary turns, then cleanup
+python3 scripts/live_check.py <main revision>        # four check-only turns with one deputy run, then cleanup
 ```
 
 `deploy` stops the API and the worker before the backup. It compares record counts before and after migration.
 It starts the earlier release again if a step after the stop fails.
 `live_check.py` uses one smoke group on the real default channel and cleans that group only.
+Its last turn delegates the check task to the deputy. The script waits for that run and reads its call record before the cleanup.
 It fails if a call is unfinished, a receipt failed, or a record count differs after cleanup.
 
 For token rotation, change `PCAS_API_TOKEN` and recreate the API service.

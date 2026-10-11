@@ -7,6 +7,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/workspace"
+	"github.com/soaringjerry/PCAS/internal/workspace/effort"
 )
 
 func refreshTaskPlansTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) error {
@@ -31,7 +32,7 @@ func refreshTaskPlansTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) erro
 	return nil
 }
 func (s *Store) ReadProjectTimeline(ctx context.Context, scope memory.Scope, project string) (workspace.ProjectTimeline, error) {
-	out := workspace.ProjectTimeline{ProjectID: project, DailyHours: dailyWorkHours, Items: []workspace.TimelineItem{}, WithoutDue: []workspace.Item{}}
+	out := workspace.ProjectTimeline{ProjectID: project, DailyHours: effort.DailyHours, Items: []workspace.TimelineItem{}, WithoutDue: []workspace.Item{}}
 	if err := requireOwner(scope); err != nil {
 		return out, err
 	}
@@ -57,7 +58,7 @@ func (s *Store) ReadProjectTimeline(ctx context.Context, scope memory.Scope, pro
 		now := time.Now()
 		for _, item := range items {
 			if item.Kind == "task" {
-				item.StartDate, err = taskStartDate(item.Due, item.EstimatedHours, deskLocation(settings))
+				item.StartDate, err = effort.StartDate(item.Due, item.EstimatedHours, deskLocation(settings))
 				if err != nil {
 					return err
 				}

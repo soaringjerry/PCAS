@@ -45,7 +45,7 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 		if !agent.Enabled {
 			return memory.ErrForbidden
 		}
-		targetHash := itemHash(item)
+		targetHash := workspace.ContentHash(item)
 		item, artifactRefs, err := sanitizeItemTx(ctx, tx, scope, agent.ID, item)
 		if err != nil {
 			return err

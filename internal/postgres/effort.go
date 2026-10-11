@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"math"
-	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -13,49 +11,10 @@ import (
 	"github.com/soaringjerry/PCAS/internal/prompts"
 	"github.com/soaringjerry/PCAS/internal/worker"
 	"github.com/soaringjerry/PCAS/internal/workspace"
+	"github.com/soaringjerry/PCAS/internal/workspace/effort"
 )
 
-const dailyWorkHours = 4.0
-const startWorkTrigger = "start-work"
-
-func taskStartDate(due string, hours *float64, loc *time.Location) (*string, error) {
-	if hours != nil && (math.IsNaN(*hours) || math.IsInf(*hours, 0) || *hours < 0 || math.Ceil(*hours/dailyWorkHours) > 366*9999) {
-		return nil, memory.ErrInvalid
-	}
-	if hours == nil || due == "" {
-		return nil, nil
-	}
-	end, err := time.Parse(time.RFC3339, due)
-	if err != nil {
-		return nil, memory.ErrInvalid
-	}
-	end = end.In(loc)
-	day := time.Date(end.Year(), end.Month(), end.Day(), 0, 0, 0, 0, loc)
-	days := int(math.Ceil(*hours / dailyWorkHours))
-	if days == 0 {
-		for day.Weekday() == time.Saturday || day.Weekday() == time.Sunday {
-			day = day.AddDate(0, 0, -1)
-		}
-	} else {
-		// Weekend deadlines use the next Monday as the subtraction anchor, so the
-		// first counted workday is the preceding Friday, not an extra week earlier.
-		for day.Weekday() == time.Saturday || day.Weekday() == time.Sunday {
-			day = day.AddDate(0, 0, 1)
-		}
-		day = day.AddDate(0, 0, -7*(days/5))
-		for left := days % 5; left > 0; {
-			day = day.AddDate(0, 0, -1)
-			if day.Weekday() != time.Saturday && day.Weekday() != time.Sunday {
-				left--
-			}
-		}
-	}
-	if day.Year() < 1 || day.Year() > 9999 {
-		return nil, memory.ErrInvalid
-	}
-	text := day.Format("2006-01-02")
-	return &text, nil
-}
+// Every item save applies the workspace plan rule with the owner's settings.
 func maintainTaskPlanTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, item *workspace.Item) error {
 	if item.Kind != "task" {
 		return nil
@@ -64,41 +23,7 @@ func maintainTaskPlanTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, item
 	if err != nil {
 		return err
 	}
-	loc := deskLocation(settings)
-	item.StartDate, err = taskStartDate(item.Due, item.EstimatedHours, loc)
-	if err != nil {
-		return err
-	}
-	kept := []workspace.Trigger{}
-	for _, t := range item.Triggers {
-		if t.ID != startWorkTrigger {
-			kept = append(kept, t)
-		}
-	}
-	item.Triggers = kept
-	if item.StartDate != nil {
-		date, err := time.ParseInLocation("2006-01-02", *item.StartDate, loc)
-		if err != nil {
-			return err
-		}
-		clock, err := time.Parse("15:04", settings.DailyReviewAt)
-		if err != nil {
-			return err
-		}
-		at := time.Date(date.Year(), date.Month(), date.Day(), clock.Hour(), clock.Minute(), 0, 0, loc)
-		item.Triggers = append(item.Triggers, workspace.Trigger{ID: startWorkTrigger, Kind: "time", NextAt: at.UTC().Format(time.RFC3339), Active: item.RemindersOn && oneOf(item.Status, "todo", "waiting"), Guard: item.Status, Description: "该开始了：按约" + formatHours(*item.EstimatedHours) + "小时、每天4小时从截止倒推，开工日是" + *item.StartDate})
-	}
-	return nil
-}
-func formatHours(h float64) string { return strings.TrimSpace(string(asJSON(h))) }
-
-var effortInstructions = prompts.Must("effort").Text()
-
-type effortInput struct {
-	Project    workspace.Item   `json:"project"`
-	Items      []workspace.Item `json:"items"`
-	DailyHours float64          `json:"dailyHours"`
-	At         time.Time        `json:"at"`
+	return effort.PlanTask(item, settings, deskLocation(settings))
 }
 
 func enqueueEffortTx(ctx context.Context, tx pgx.Tx, owner memory.ID, anchor memory.Ref, now time.Time) (int, error) {
@@ -117,161 +42,104 @@ func enqueueEffortTx(ctx context.Context, tx pgx.Tx, owner memory.ID, anchor mem
 	}
 	return len(ids), nil
 }
-func (s *Store) ProcessEffort(ctx context.Context, j worker.Job) error {
-	parts := strings.Split(j.Stage, ":")
-	if len(parts) != 3 || parts[0] != EffortStage || !memory.ID(parts[1]).Valid() {
-		return memory.ErrInvalid
-	}
-	scope := memory.Scope{OwnerID: j.OwnerID, PrincipalID: "worker", IsOwner: true}
+
+// EffortStore gives the effort service its workspace reads and writes.
+func (s *Store) EffortStore() effort.Store { return effortStore{s} }
+
+// BusinessNow is the business clock that model input uses.
+func (s *Store) BusinessNow() time.Time { return s.businessNow() }
+
+// HasSavedResult reports whether the job already has a paid result to apply.
+func (s *Store) HasSavedResult(ctx context.Context, j worker.Job) (bool, error) {
 	saved, err := s.paidModelResult(ctx, j)
+	return saved != nil, err
+}
+
+// GenerateForJob submits a background job's model call with the queue's
+// failure policy. A saved result returns without another call.
+// Temporary adapter for extracted background domains. Callers: the effort
+// service. Remove it when background coordination owns this policy.
+func (s *Store) GenerateForJob(ctx context.Context, j worker.Job, purpose string, instructions prompts.Definition, _ string, record json.RawMessage, refs []memory.Ref) (json.RawMessage, string, error) {
+	paid, err := s.generatePaid(ctx, j, purpose, instructions.Text(), record, refs)
 	if err != nil {
-		return err
+		return nil, "", err
 	}
-	input := effortInput{DailyHours: dailyWorkHours, At: s.businessNow().UTC(), Items: []workspace.Item{}}
-	skip := false
-	err = pgx.BeginTxFunc(ctx, s.pool, pgx.TxOptions{IsoLevel: pgx.RepeatableRead}, func(tx pgx.Tx) error {
+	return paid.Prompt, paid.Output, nil
+}
+
+type effortStore struct{ store *Store }
+
+func (a effortStore) Load(ctx context.Context, j worker.Job, project string, wantTasks bool) (item workspace.Item, tasks []workspace.Item, done bool, err error) {
+	scope := memory.Scope{OwnerID: j.OwnerID, PrincipalID: "worker", IsOwner: true}
+	err = pgx.BeginTxFunc(ctx, a.store.pool, pgx.TxOptions{IsoLevel: pgx.RepeatableRead}, func(tx pgx.Tx) error {
 		if err := lockJob(ctx, tx, j); err != nil {
 			return err
 		}
 		var err error
-		input.Project, err = getItem(ctx, tx, scope, parts[1])
+		item, err = getItem(ctx, tx, scope, project)
 		if errors.Is(err, memory.ErrNotFound) {
-			skip = true
+			done = true
 			return acknowledge(ctx, tx, j)
 		}
+		if err != nil || !wantTasks {
+			return err
+		}
+		tasks, err = queryDocuments[workspace.Item](ctx, tx, `SELECT document FROM work_items WHERE owner_id=$1 AND project_id=$2 AND kind='task' AND due_at IS NOT NULL AND document->>'estimatedHours' IS NULL AND coalesce(document->>'effortSource','')<>'user' ORDER BY due_at,id`, string(scope.OwnerID), project)
 		if err != nil {
 			return err
 		}
-		if saved != nil {
-			return nil
-		}
-		input.Items, err = queryDocuments[workspace.Item](ctx, tx, `SELECT document FROM work_items WHERE owner_id=$1 AND project_id=$2 AND kind='task' AND due_at IS NOT NULL AND document->>'estimatedHours' IS NULL AND coalesce(document->>'effortSource','')<>'user' ORDER BY due_at,id`, string(scope.OwnerID), parts[1])
-		if err != nil {
-			return err
-		}
-		if len(input.Items) == 0 {
-			skip = true
+		if len(tasks) == 0 {
+			done = true
 			return acknowledge(ctx, tx, j)
 		}
 		return nil
 	})
-	if err != nil || skip {
-		return err
-	}
-	modelItems := []map[string]any{}
-	for _, item := range input.Items {
-		modelItems = append(modelItems, map[string]any{"id": item.ID, "title": item.Title, "notes": item.Notes, "body": item.Body, "due": item.Due, "status": item.Status, "checklist": item.Checklist, "dependsOn": item.DependsOn})
-	}
-	modelInput := asJSON(map[string]any{"project": map[string]any{"id": input.Project.ID, "title": input.Project.Title, "goal": input.Project.Goal, "status": input.Project.Status}, "items": modelItems, "dailyHours": input.DailyHours, "at": input.At})
-	paid, err := s.generatePaid(ctx, j, "effort", effortInstructions, asJSON(map[string]any{"rawPrompt": string(modelInput), "snapshot": input}), nil)
-	if err != nil {
-		return err
-	}
-	var receipt struct {
-		Snapshot effortInput `json:"snapshot"`
-	}
-	if err = json.Unmarshal(paid.Prompt, &receipt); err != nil {
-		return err
-	}
-	input = receipt.Snapshot
-	var output struct {
-		Items []struct {
-			ItemID string   `json:"itemId"`
-			Hours  *float64 `json:"hours"`
-			Reason string   `json:"reason"`
-		} `json:"items"`
-	}
-	validJSON := json.Unmarshal([]byte(paid.Output), &output) == nil && output.Items != nil
-	if !validJSON {
-		output.Items = nil
-	}
-	return backgroundResultTx(ctx, s.pool, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
+	return item, tasks, done, err
+}
+
+func (a effortStore) Apply(ctx context.Context, j worker.Job, fn func(effort.Unit) error) error {
+	return backgroundResultTx(ctx, a.store.pool, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(j.OwnerID)); err != nil {
 			return err
 		}
 		if err := lockJob(ctx, tx, j); err != nil {
 			return err
 		}
-		originals := map[string]workspace.Item{}
-		for _, v := range input.Items {
-			originals[v.ID] = v
-		}
-		seen := map[string]bool{}
-		missing := 0
-		invalid := 0
-		unresolved := false
-		settings, err := queryDocument[workspace.Settings](ctx, tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1", string(scope.OwnerID))
-		if err != nil {
-			return err
-		}
-		for _, v := range output.Items {
-			before, ok := originals[v.ItemID]
-			if !ok || seen[v.ItemID] || v.Hours == nil || strings.TrimSpace(v.Reason) == "" {
-				invalid++
-				continue
-			}
-			if _, err = taskStartDate(before.Due, v.Hours, deskLocation(settings)); err != nil {
-				invalid++
-				continue
-			}
-			seen[v.ItemID] = true
-			current, err := getItem(ctx, tx, scope, v.ItemID)
-			if errors.Is(err, memory.ErrNotFound) {
-				continue
-			}
-			if err != nil {
-				return err
-			}
-			// Only this item's unchanged input can be updated; a user estimate or
-			// concurrent edit is never overwritten by this older paid snapshot.
-			if current.ProjectID != input.Project.ID || current.EstimatedHours != nil || current.EffortSource == "user" || itemHash(current) != itemHash(before) {
-				continue
-			}
-			current.EstimatedHours = v.Hours
-			current.EffortSource = "model"
-			current.EffortReason = v.Reason
-			current.Version++
-			current.UpdatedAt = stamp()
-			current.History = append(current.History, workspace.Revision{At: stamp(), By: "system", Summary: "估计工作量：" + formatHours(*v.Hours) + "小时；" + v.Reason})
-			if err = saveItem(ctx, tx, scope, current); err != nil {
-				return err
-			}
-		}
-		for _, v := range input.Items {
-			if !seen[v.ID] {
-				missing++
-				current, err := getItem(ctx, tx, scope, v.ID)
-				if errors.Is(err, memory.ErrNotFound) {
-					continue
-				}
-				if err != nil {
-					return err
-				}
-				if current.ProjectID == input.Project.ID && current.EstimatedHours == nil && current.EffortSource != "user" && current.Due != "" {
-					unresolved = true
-				}
-			}
-		}
-		if missing > 0 {
-			if err = stageEventTx(ctx, tx, j.OwnerID, EffortStage, "overflow", "effort_missing_items", missing); err != nil {
-				return err
-			}
-		}
-		if invalid > 0 {
-			if err = stageEventTx(ctx, tx, j.OwnerID, EffortStage, "overflow", "effort_invalid_items", invalid); err != nil {
-				return err
-			}
-		}
-		if err = discardPaidResultTx(ctx, tx, j); err != nil {
-			return err
-		}
-		if !validJSON || unresolved {
-			if err = stageEventTx(ctx, tx, j.OwnerID, EffortStage, "failure", "effort_incomplete_output", 1); err != nil {
-				return err
-			}
-			_, err = tx.Exec(ctx, `UPDATE memory_jobs SET state='queued',error_code='effort_incomplete_output',available_at=clock_timestamp()+$3*interval '1 second',lease_token=NULL,lease_until=NULL WHERE id=$1 AND lease_token=$2`, string(j.ID), string(j.LeaseToken), retryDelay(j.Attempts).Seconds())
-			return err
-		}
-		return acknowledge(ctx, tx, j)
+		return fn(effortUnit{ctx: ctx, tx: tx, job: j, scope: memory.Scope{OwnerID: j.OwnerID, PrincipalID: "worker", IsOwner: true}})
 	})
 }
+
+type effortUnit struct {
+	ctx   context.Context
+	tx    pgx.Tx
+	job   worker.Job
+	scope memory.Scope
+}
+
+func (u effortUnit) Location() (*time.Location, error) {
+	settings, err := queryDocument[workspace.Settings](u.ctx, u.tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1", string(u.scope.OwnerID))
+	return deskLocation(settings), err
+}
+
+func (u effortUnit) Task(id string) (workspace.Item, bool, error) {
+	item, err := getItem(u.ctx, u.tx, u.scope, id)
+	if errors.Is(err, memory.ErrNotFound) {
+		return item, false, nil
+	}
+	return item, err == nil, err
+}
+
+func (u effortUnit) SaveTask(item workspace.Item) error { return saveItem(u.ctx, u.tx, u.scope, item) }
+
+func (u effortUnit) Event(outcome, reason string, count int) error {
+	return stageEventTx(u.ctx, u.tx, u.job.OwnerID, EffortStage, outcome, reason, count)
+}
+
+func (u effortUnit) DiscardResult() error { return discardPaidResultTx(u.ctx, u.tx, u.job) }
+
+func (u effortUnit) Requeue(code string) error {
+	_, err := u.tx.Exec(u.ctx, `UPDATE memory_jobs SET state='queued',error_code=$4,available_at=clock_timestamp()+$3*interval '1 second',lease_token=NULL,lease_until=NULL WHERE id=$1 AND lease_token=$2`, string(u.job.ID), string(u.job.LeaseToken), retryDelay(u.job.Attempts).Seconds(), code)
+	return err
+}
+
+func (u effortUnit) Acknowledge() error { return acknowledge(u.ctx, u.tx, u.job) }

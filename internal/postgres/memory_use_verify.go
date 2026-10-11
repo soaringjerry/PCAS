@@ -2,7 +2,6 @@ package postgres
 
 import (
 	"context"
-	"crypto/sha256"
 	"errors"
 	"fmt"
 	"strings"
@@ -141,22 +140,10 @@ func checkUseRunPromptTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run
 	if err != nil {
 		return err
 	}
-	if run.TargetHash != "" && itemHash(item) != run.TargetHash {
+	if run.TargetHash != "" && workspace.ContentHash(item) != run.TargetHash {
 		return memory.ErrConflict
 	}
 	return nil
-}
-func itemHash(item workspace.Item) string {
-	// Provenance and audit writes in the admitting turn do not change the
-	// destination's business content or invalidate an otherwise current prompt.
-	item.Version = 0
-	item.Sources = nil
-	item.History = nil
-	item.Evolution = nil
-	item.CreatedAt = ""
-	item.UpdatedAt = ""
-	item.HasRetainedWriting = false
-	return fmt.Sprintf("%x", sha256.Sum256(asJSON(item)))
 }
 
 // A changed destination or lost worker lease prevents further model work.

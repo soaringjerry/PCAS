@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/soaringjerry/PCAS/internal/app"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres"
 	"github.com/soaringjerry/PCAS/internal/worker"
@@ -64,7 +65,12 @@ func (q *selectedQueue) Claim(context.Context, time.Duration) (*worker.Job, erro
 }
 
 func processNamed(ctx context.Context, s *postgres.Store, job worker.Job) error {
-	handlers := map[string]worker.Handler{"source.chunk": s.ProcessChunks, "source.extract": s.ProcessExtraction, "source.tokenize": s.ProcessIndex, "source.embed": s.ProcessEmbedding, "memory.organize": s.ProcessOrganize, "memory.compare": s.ProcessCompare, "memory.entity_candidates": s.ProcessEntityCandidates, "memory.entity_compare": s.ProcessEntityCompare, "memory.handover": s.ProcessHandover, "memory.project_handover": s.ProcessProjectHandover, "memory.topic_project": s.ProcessTopicProject, "memory.date_tidy": s.ProcessDateTidy, "memory.effort": s.ProcessEffort}
+	// Replay supports the stages below. Each one uses the production handler.
+	handlers := map[string]worker.Handler{}
+	production := app.Handlers(s)
+	for _, stage := range []string{"source.chunk", "source.extract", "source.tokenize", "source.embed", "memory.organize", "memory.compare", "memory.entity_candidates", "memory.entity_compare", "memory.handover", "memory.project_handover", "memory.topic_project", "memory.date_tidy", "memory.effort"} {
+		handlers[stage] = production[stage]
+	}
 	handler, ok := handlers[strings.SplitN(job.Stage, ":", 2)[0]]
 	if !ok {
 		return errors.New("replay_handler_not_supported")

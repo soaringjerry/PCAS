@@ -213,7 +213,7 @@ func (s *Store) expireExhaustedJobs(ctx context.Context) error {
 func (s *Store) ProcessChunks(ctx context.Context, job worker.Job) error {
 	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		var valid bool
-		err := tx.QueryRow(ctx, `SELECT true FROM memory_jobs WHERE id=$1 AND owner_id=$2 AND record_id=$3 AND record_version=$4
+		err := tx.QueryRow(ctx, `SELECT set_config('pcas.cause_job',id::text,true) IS NOT NULL FROM memory_jobs WHERE id=$1 AND owner_id=$2 AND record_id=$3 AND record_version=$4
 			AND lease_token=$5 AND state='leased' AND stage='source.chunk' AND lease_until>clock_timestamp() FOR UPDATE`,
 			string(job.ID), string(job.OwnerID), string(job.Record.ID), job.Record.Version, string(job.LeaseToken)).Scan(&valid)
 		if errors.Is(err, pgx.ErrNoRows) {

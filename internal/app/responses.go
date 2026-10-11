@@ -8,6 +8,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/currentstate/handover"
 	"github.com/soaringjerry/PCAS/internal/interpretation/aliasscan"
 	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
+	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
 	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 	"github.com/soaringjerry/PCAS/internal/postgres"
 	"github.com/soaringjerry/PCAS/internal/worker"
@@ -39,7 +40,7 @@ const jobKey = "owner, record, record version, stage"
 var Responses = []Response{
 	{"source.parse", "Source version accepted, with an attachment", "Input", "Attachment processor", jobKey, func(db *postgres.Store) worker.Handler { return db.ProcessAttachment }},
 	{"source.chunk", "Source version accepted, with text", "Input", "Text processor", jobKey, func(db *postgres.Store) worker.Handler { return db.ProcessChunks }},
-	{"source.extract", "Source text available", "Input", "Memory extraction specialist", jobKey, func(db *postgres.Store) worker.Handler { return db.ProcessExtraction }},
+	{extraction.Stage, "Source text available", "Input", "Memory extraction specialist", jobKey, func(db *postgres.Store) worker.Handler { return Extraction(db).Process }},
 	{"source.tokenize", "Search input changed for a source", "Input", "Search index processor", jobKey, func(db *postgres.Store) worker.Handler { return db.ProcessIndex }},
 	{"memory.index", "Search input changed for a memory", "Memory", "Search index processor", jobKey, func(db *postgres.Store) worker.Handler { return db.ProcessIndex }},
 	{"source.embed", "Embedding input changed for a source", "Input", "Vector index processor", jobKey, func(db *postgres.Store) worker.Handler { return db.ProcessEmbedding }},

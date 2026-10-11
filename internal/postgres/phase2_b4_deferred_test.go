@@ -3,6 +3,7 @@ package postgres
 // Section 11 oracles were frozen in 631ab49 before these tests were written.
 import (
 	"context"
+	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
 	"io"
 	"log/slog"
 	"os"
@@ -40,7 +41,7 @@ func b4DrainQueue(t *testing.T, s *Store) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	w := worker.New(s, map[string]worker.Handler{"source.parse": s.ProcessAttachment, "source.chunk": s.ProcessChunks, "source.tokenize": s.ProcessIndex, "source.extract": s.ProcessExtraction, "source.embed": s.ProcessEmbedding, "claim.embed": s.ProcessEmbedding}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	w := worker.New(s, map[string]worker.Handler{"source.parse": s.ProcessAttachment, "source.chunk": s.ProcessChunks, "source.tokenize": s.ProcessIndex, "source.extract": (extraction.Service{Store: s.ExtractionStore(), Generator: s, MaxAttempts: MaxJobAttempts}).Process, "source.embed": s.ProcessEmbedding, "claim.embed": s.ProcessEmbedding}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	for range 1000 {
 		worked, err := w.RunOnce(ctx)
 		if err != nil {

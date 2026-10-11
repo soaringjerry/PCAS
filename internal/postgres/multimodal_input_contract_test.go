@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
 	"io"
 	"log/slog"
 	"math/rand"
@@ -322,7 +323,7 @@ func TestImageTextCannotGroundUserMemory(t *testing.T) {
 		map[string]any{"kind": "memory", "text": "要交物业费 800 元", "nature": "fact", "subject": "我", "predicate": "缴费", "quote": m1Notice, "confidence": 0.99, "acquisition": "direct", "qualification": "asserted"},
 		map[string]any{"kind": "memory", "text": "我喜欢喝茶", "nature": "preference", "subject": "我", "predicate": "偏好", "quote": "我喜欢喝茶", "confidence": 0.99, "acquisition": "direct", "qualification": "asserted"},
 	}}))
-	if err := s.ProcessExtraction(context.Background(), leaseStage(t, s, scope, source, "source.extract")); err != nil {
+	if err := (extraction.Service{Store: s.ExtractionStore(), Generator: s, MaxAttempts: MaxJobAttempts}).Process(context.Background(), leaseStage(t, s, scope, source, "source.extract")); err != nil {
 		t.Fatal(err)
 	}
 	var n int

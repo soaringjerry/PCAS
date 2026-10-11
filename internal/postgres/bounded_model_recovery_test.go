@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"errors"
+	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
 	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 	"github.com/soaringjerry/PCAS/internal/prompts"
 	"net/http"
@@ -74,7 +75,7 @@ func TestMeteredExtractionRecoversLostResponsesWithSeparateCalls(t *testing.T) {
 		t.Fatal(j, err)
 	}
 	for range 2 {
-		requireRecoveryFailure(t, s.ProcessExtraction(context.Background(), *j), modelcall.ErrOutcomeUnknown.Error(), true)
+		requireRecoveryFailure(t, (extraction.Service{Store: s.ExtractionStore(), Generator: s, MaxAttempts: MaxJobAttempts}).Process(context.Background(), *j), modelcall.ErrOutcomeUnknown.Error(), true)
 		state := b2Snapshot(t, s, scope)
 		if len(state.Memories) != 0 {
 			t.Fatal("unknown output must not create memories")
@@ -82,7 +83,7 @@ func TestMeteredExtractionRecoversLostResponsesWithSeparateCalls(t *testing.T) {
 		next := nextModelRecoveryLease(t, s, *j)
 		j = &next
 	}
-	if err := s.ProcessExtraction(context.Background(), *j); err != nil {
+	if err := (extraction.Service{Store: s.ExtractionStore(), Generator: s, MaxAttempts: MaxJobAttempts}).Process(context.Background(), *j); err != nil {
 		t.Fatal(err)
 	}
 	var unknown, returned, links, usage int

@@ -3,6 +3,7 @@ package postgres
 import (
 	"errors"
 	"fmt"
+	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
 	"math/rand"
 	"net/http"
 	"reflect"
@@ -116,8 +117,12 @@ func TestPhase35T2ConcurrentExtractionSchedulerAndUserHTTP(t *testing.T) {
 		}
 	})
 	result := make(chan error, 2)
-	go func() { result <- s.ProcessExtraction(ctx, a) }()
-	go func() { result <- s.ProcessExtraction(ctx, b) }()
+	go func() {
+		result <- (extraction.Service{Store: s.ExtractionStore(), Generator: s, MaxAttempts: MaxJobAttempts}).Process(ctx, a)
+	}()
+	go func() {
+		result <- (extraction.Service{Store: s.ExtractionStore(), Generator: s, MaxAttempts: MaxJobAttempts}).Process(ctx, b)
+	}()
 	for i := 0; i < 2; i++ {
 		select {
 		case <-entered:

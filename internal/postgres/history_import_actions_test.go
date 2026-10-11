@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"encoding/json"
+	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -91,7 +92,7 @@ func TestImportedHistoryNeverBecomesCurrentAction(t *testing.T) {
 				b4bOperation(t, s, scope, memory.ID(batch), "organize")
 				b4bOnlyArchiveJobs(t, s, scope, memory.Ref{ID: memory.ID(archive), Kind: memory.SourceKind})
 			}
-			if err := s.ProcessExtraction(ctx, leaseStage(t, s, scope, source, "source.extract")); err != nil {
+			if err := (extraction.Service{Store: s.ExtractionStore(), Generator: s, MaxAttempts: MaxJobAttempts}).Process(ctx, leaseStage(t, s, scope, source, "source.extract")); err != nil {
 				t.Fatal(err)
 			}
 			if tc.imported {

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
 	"io"
 	"log/slog"
 	"net/http"
@@ -282,7 +283,7 @@ func TestEvidenceContextBudgetAndUnresolvedNames(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got := groundedMentions([]string{"那位同事", "对方", "测试人物甲"}, "person", "那位同事是对方，测试人物甲在上文出现。")
+	got := extraction.GroundedMentions([]string{"那位同事", "对方", "测试人物甲"}, "person", "那位同事是对方，测试人物甲在上文出现。")
 	if len(got) != 1 || got[0].Name != "测试人物甲" {
 		t.Fatal("ambiguous label became a person entity")
 	}

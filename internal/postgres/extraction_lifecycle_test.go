@@ -95,7 +95,7 @@ func TestDirectCaptureEntersDefaultRunAsSourceBacked(t *testing.T) {
 	st := workspaceCommand(t, s, scope, workspace.Command{Type: "capture", Text: text})
 	src := st.Candidates[0].Source
 	ref := memory.Ref{ID: memory.ID(src.SourceID), Version: src.Version, Kind: memory.SourceKind}
-	if err := s.ProcessExtraction(ctx, leaseStage(t, s, scope, ref, "source.extract")); err != nil {
+	if err := (extraction.Service{Store: s.ExtractionStore(), Generator: s, MaxAttempts: MaxJobAttempts}).Process(ctx, leaseStage(t, s, scope, ref, "source.extract")); err != nil {
 		t.Fatal(err)
 	}
 	st, err := s.Snapshot(ctx, scope)
@@ -236,7 +236,9 @@ func TestSupersededExtractionDoesNotCommitOrCallProvider(t *testing.T) {
 			job := leaseStage(t, s, scope, src.Ref, "source.extract")
 			done := make(chan error, 1)
 			if duringCall {
-				go func() { done <- s.ProcessExtraction(ctx, job) }()
+				go func() {
+					done <- (extraction.Service{Store: s.ExtractionStore(), Generator: s, MaxAttempts: MaxJobAttempts}).Process(ctx, job)
+				}()
 				select {
 				case <-started:
 				case <-time.After(5 * time.Second):
@@ -251,7 +253,7 @@ func TestSupersededExtractionDoesNotCommitOrCallProvider(t *testing.T) {
 				if err := <-done; err != nil {
 					t.Fatal(err)
 				}
-			} else if err := s.ProcessExtraction(ctx, job); err != nil {
+			} else if err := (extraction.Service{Store: s.ExtractionStore(), Generator: s, MaxAttempts: MaxJobAttempts}).Process(ctx, job); err != nil {
 				t.Fatal(err)
 			}
 			wantCalls := int32(0)

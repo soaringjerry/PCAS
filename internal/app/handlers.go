@@ -8,6 +8,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/currentstate/handover"
 	"github.com/soaringjerry/PCAS/internal/interpretation/aliasscan"
 	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
+	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
 	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 	"github.com/soaringjerry/PCAS/internal/postgres"
 	"github.com/soaringjerry/PCAS/internal/workspace/effort"
@@ -48,6 +49,11 @@ func AliasScan(db *postgres.Store) aliasscan.Service {
 // Compare connects the statement comparison service to storage and generation.
 func Compare(db *postgres.Store) comparison.Service {
 	return comparison.Service{Store: db.CompareStore(), Generator: db, Version: postgres.CompareVersion}
+}
+
+// Extraction connects the extraction service to storage and generation.
+func Extraction(db *postgres.Store) extraction.Service {
+	return extraction.Service{Store: db.ExtractionStore(), Generator: db, MaxAttempts: postgres.MaxJobAttempts}
 }
 
 // Organize connects the organize service to storage and generation.

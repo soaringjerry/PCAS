@@ -431,7 +431,10 @@ func phase26DisposableStore(t *testing.T) (*Store, context.Context) {
 	name := "pcas-phase2_6-t-" + string(memory.NewID())
 	// Real PostgreSQL WAL may approach 1 GiB during repeated scale writes.
 	// Allow 2 GiB of ephemeral storage; allocation follows actual use.
-	out, err := docker(ctx, "run", "--detach", "--rm", "--name", name, "--label", "pcas.acceptance=phase2_6-T", "--tmpfs", "/var/lib/postgresql/data:rw,size=2g", "--env", "POSTGRES_PASSWORD=fictitious-test-password", "--publish", "127.0.0.1::5432", "pgvector/pgvector:0.8.2-pg16")
+	out, err := docker(ctx, "run", "--detach", "--rm", "--name", name, "--label", "pcas.acceptance=phase2_6-T", "--tmpfs", "/var/lib/postgresql/data:rw,size=2g", "--env", "POSTGRES_PASSWORD=fictitious-test-password", "--publish", "127.0.0.1::5432",
+		// A killed test process runs no cleanup. The container stops itself after
+		// two hours and is then removed; a complete package run takes less than one.
+		"--entrypoint", "timeout", "pgvector/pgvector:0.8.2-pg16", "7200", "docker-entrypoint.sh", "postgres")
 	if err != nil {
 		t.Fatalf("create owned test container: %v: %s", err, out)
 	}

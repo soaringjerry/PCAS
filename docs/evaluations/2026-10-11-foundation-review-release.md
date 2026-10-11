@@ -77,3 +77,12 @@ Each turn has one settled `secretary` call and one settled `query_embedding` cal
 In the first 68 minutes on `6dc2363`, the topic project stage made two calls that reached the provider, and the call journal holds those two rows only.
 The stage recorded one hourly-limit deferral. Five topic project jobs were queued in that time.
 The queue was much shorter than on 2026-10-09, so this reading does not measure the reduction at that scale.
+
+## Fourth Release on the Same Day
+
+Released revision: `218ea5b0a0874704b1b796f6c2c7efdd13f5b96a`. Earlier revision: `a893628`.
+Pull requests #307, #308, #309, and #310 give the changes: the global handover rules left the storage package, one response table drives worker registration, and the gateway request has a declared policy type.
+
+The release had no database migration. The backup was validated, and the claim count is equal before and after the start.
+The live check on the real default Codex channel passed: an answer, an arrangement (`create_task`, done), and a change (`update`, done), each about 17 seconds, with settled calls and a clean group cleanup.
+Neither log has an error, and no container restarted.

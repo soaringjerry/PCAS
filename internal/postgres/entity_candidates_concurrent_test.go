@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/soaringjerry/PCAS/internal/interpretation/aliasscan"
 	"net/http"
 	"strings"
 	"sync"
@@ -249,7 +250,7 @@ func TestEntityCandidatesConcurrentSchedulerWorkerAndUserRequests(t *testing.T) 
 			}
 			switch {
 			case strings.HasPrefix(job.Stage, "memory.entity_candidates:"):
-				err = f.store.ProcessEntityCandidates(runCtx, *job)
+				err = (aliasscan.Service{Store: f.store.AliasScanStore(), Generator: f.store}).Process(runCtx, *job)
 			case strings.HasPrefix(job.Stage, "memory.compare:"):
 				err = f.store.ProcessCompare(runCtx, *job)
 			case strings.HasPrefix(job.Stage, "memory.entity_compare:"):

@@ -9,9 +9,9 @@ import (
 	"fmt"
 	"sort"
 	"time"
-	"unicode"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/modelcall"
 	"github.com/soaringjerry/PCAS/internal/prompts"
@@ -360,35 +360,10 @@ func writeAliasReceiptTx(ctx context.Context, tx pgx.Tx, owner memory.ID, rule i
 
 func entityPairKeepIndex(pair *comparisonEntityPair, fallback int) int {
 	a, b := pair.Entities[0], pair.Entities[1]
-	if a.Type != b.Type {
-		if a.Type == "topic" {
-			return 1
-		}
-		return 0
-	}
-	if a.MemoryCount != b.MemoryCount {
-		if a.MemoryCount > b.MemoryCount {
-			return 0
-		}
-		return 1
-	}
-	if chineseEntityName(a.Name) != chineseEntityName(b.Name) {
-		if chineseEntityName(a.Name) {
-			return 0
-		}
-		return 1
-	}
-	return fallback
+	return comparison.KeepIndex(comparison.NamedEntity{Type: a.Type, Name: a.Name, MemoryCount: a.MemoryCount}, comparison.NamedEntity{Type: b.Type, Name: b.Name, MemoryCount: b.MemoryCount}, fallback)
 }
 
-func chineseEntityName(s string) bool {
-	for _, r := range s {
-		if unicode.Is(unicode.Han, r) {
-			return true
-		}
-	}
-	return false
-}
+func chineseEntityName(s string) bool { return comparison.HasChinese(s) }
 
 type entitySubjectChange struct {
 	ID      string `json:"id"`

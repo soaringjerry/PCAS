@@ -6,6 +6,7 @@ package app
 import (
 	"github.com/soaringjerry/PCAS/internal/currentstate/datereview"
 	"github.com/soaringjerry/PCAS/internal/currentstate/handover"
+	"github.com/soaringjerry/PCAS/internal/interpretation/aliasscan"
 	"github.com/soaringjerry/PCAS/internal/postgres"
 	"github.com/soaringjerry/PCAS/internal/workspace/effort"
 	"github.com/soaringjerry/PCAS/internal/workspace/projecthandover"
@@ -35,4 +36,9 @@ func ProjectHandover(db *postgres.Store) projecthandover.Service {
 // Handover connects the global handover service to storage and generation.
 func Handover(db *postgres.Store) handover.Service {
 	return handover.Service{Store: db.HandoverStore(), Generator: db}
+}
+
+// AliasScan connects the alias scan service to storage and generation.
+func AliasScan(db *postgres.Store) aliasscan.Service {
+	return aliasscan.Service{Store: db.AliasScanStore(), Generator: db}
 }

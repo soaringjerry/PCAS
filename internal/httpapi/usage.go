@@ -14,9 +14,45 @@ type usageReader interface {
 	UsageCalls(context.Context, memory.Scope, int, string) (json.RawMessage, error)
 }
 
+type dayActivityReader interface {
+	DayActivity(context.Context, memory.Scope, string, int, int) (json.RawMessage, error)
+}
+
 func (s *Server) usageRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /v1/workspace/usage", s.authorize(s.usageSummary))
 	mux.HandleFunc("GET /v1/workspace/usage/calls", s.authorize(s.usageCalls))
+	// One local day of recorded work: events, cost, and reasons.
+	mux.HandleFunc("GET /v1/workspace/activity/day", s.authorize(func(w http.ResponseWriter, r *http.Request, scope memory.Scope) {
+		reader, ok := s.options.Workspace.(dayActivityReader)
+		if !scope.IsOwner {
+			s.fail(w, memory.ErrForbidden)
+			return
+		}
+		if !ok {
+			s.fail(w, memory.ErrUnavailable)
+			return
+		}
+		limit, offset := 0, 0
+		for name, target := range map[string]*int{"limit": &limit, "offset": &offset} {
+			if raw := r.URL.Query().Get(name); raw != "" {
+				value, err := strconv.Atoi(raw)
+				if err != nil || value < 0 {
+					s.fail(w, memory.ErrInvalid)
+					return
+				}
+				*target = value
+			}
+		}
+		// One response holds at most 2000 events. The response reports the
+		// number that it leaves out, and offset reads them.
+		limit = min(limit, 2000)
+		out, err := reader.DayActivity(r.Context(), scope, r.URL.Query().Get("date"), limit, offset)
+		if err != nil {
+			s.fail(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, out)
+	}))
 }
 
 func (s *Server) usageReader(w http.ResponseWriter, scope memory.Scope) (usageReader, bool) {

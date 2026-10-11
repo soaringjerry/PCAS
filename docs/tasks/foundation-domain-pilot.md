@@ -86,7 +86,6 @@ The saved input record keeps its form, so a result that was paid before the rele
 |---|---|
 | Owner contracts in `internal/workspace/effort` | Pass without a database, in less than one second. |
 | Domain boundary test in `internal/app` | Pass. |
-| Phase 3 planning acceptance tests with `PCAS_PHASE3_RUN_FINDINGS=1` | Pass: user estimate, start dates, start reminder, timeline, paid-result recovery, and stage budgets. |
+| Phase 3 planning acceptance tests | Pass: user estimate, start dates, start reminder, timeline, paid-result recovery, and stage budgets. |
 
-These acceptance tests are skipped in a default run, because each test names a finding code.
-The [handoff and review record](foundation-sol-handoff.md) gives that finding.
+These acceptance tests ran only with a switch when the pilot was written. The switch is removed, and they run in every complete run.

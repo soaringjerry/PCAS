@@ -144,6 +144,16 @@ func (s *Store) Defer(ctx context.Context, job worker.Job, code string, until ti
 	if tag.RowsAffected() != 1 {
 		return worker.ErrLeaseLost
 	}
+	if noAttempt && (strings.HasSuffix(code, "_hourly_limit") || strings.HasSuffix(code, "_daily_limit")) {
+		// A stage limit applies to every job of the stage. Without this, each
+		// waiting job is taken and deferred in turn at every window: the live
+		// instance recorded about 1,400 such deferrals on 2026-10-09 for two
+		// stages. The other jobs stay queued and keep their order; only their
+		// earliest time moves to the window that this deferral found.
+		if _, err := s.pool.Exec(ctx, `UPDATE memory_jobs SET available_at=$2,updated_at=now() WHERE state='queued' AND split_part(stage,':',1)=split_part($1,':',1) AND available_at<$2`, job.Stage, until); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

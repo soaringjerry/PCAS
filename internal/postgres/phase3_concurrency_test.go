@@ -297,7 +297,9 @@ func TestPhase3G7ExistingStagesActualFinalSlotAndExhaustion(t *testing.T) {
 }
 func TestPhase3G7AllSevenFrozenCeilingsAndGlobal140(t *testing.T) {
 	phase3Finding(t, "S-P3-001")
-	expected := map[string]int{OrganizeStage: 40, CompareStage: 40, EntityCompareStage: 30, EntityCandidatesStage: 6, HandoverStage: 2, phase3StageName(t, "project_handover"): 10, phase3StageName(t, "effort"): 10}
+	// Phase 3 fixed seven ceilings. Phase 3.5 added topic projects at two calls
+	// in one hour, and phase 3.6 added the date review with its own ceiling.
+	expected := map[string]int{OrganizeStage: 40, CompareStage: 40, EntityCompareStage: 30, EntityCandidatesStage: 6, HandoverStage: 2, phase3StageName(t, "project_handover"): 10, phase3StageName(t, "effort"): 10, TopicProjectStage: 2, DateTidyStage: dateTidyHourly}
 	if !reflect.DeepEqual(backgroundHourlyBudgets, expected) {
 		t.Fatal("stage ceilings differ from contract", backgroundHourlyBudgets)
 	}

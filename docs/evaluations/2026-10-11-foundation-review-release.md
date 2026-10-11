@@ -86,3 +86,19 @@ Pull requests #307, #308, #309, and #310 give the changes: the global handover r
 The release had no database migration. The backup was validated, and the claim count is equal before and after the start.
 The live check on the real default Codex channel passed: an answer, an arrangement (`create_task`, done), and a change (`update`, done), each about 17 seconds, with settled calls and a clean group cleanup.
 Neither log has an error, and no container restarted.
+
+## Fifth Release on the Same Day
+
+Released revision: `3695c595eea3fa33f3ac4096a31de0919903d7c2`. Earlier revision: `218ea5b`.
+Pull requests #312, #313, and #314 give the changes: the alias scan rules, the statement comparison rules, and the entity keeper rule left the storage package.
+
+The release had no database migration. The backup was validated, and the claim count is equal before and after the start.
+The live check on the real default Codex channel passed: an answer, an arrangement (`create_task`, done), and a change (`update`, done), each about 16 seconds, with settled calls and a clean group cleanup.
+Neither log has an error, and no container restarted.
+
+## Host Cleanup
+
+The owner approved removal of leftover data on 2026-10-11.
+Removed: 19 disposable test containers, 13 unreferenced volumes, 57 older image tags, 64 older release directories, deploy backups before `20261008T192836Z-6b62f27`, five older foundation backups, and 41 worktrees that were clean and fully merged.
+Kept: the images and release directories of the last five releases, the four full backups of this day and the backup before `6411b4e`, each worktree with unmerged or uncommitted work, and the private evidence directory.
+Free space on the root filesystem went from 7 GB to 39 GB. The API stayed ready during the cleanup.

@@ -323,67 +323,6 @@ func TestPhase2B4_L8_ReturnedButInvalidSecretaryStillRecordsUsage(t *testing.T) 
 	}
 }
 
-func TestPhase2B4_L9_IdenticalLegacyRequestsMakeTwoCallsAndTwoUsageRows(t *testing.T) {
-	s, scope := b4Store(t), owner()
-	f := b4Model(t, s)
-	// Initialize the configured legacy agent as a browser snapshot does.
-	b4OK(t, b4HTTP(t, s, scope, "GET", "/v1/workspace", nil))
-	f.set(`{"answer":"合成回答：今天整理青玉罗盘。","used":[],"links":[]}`, 200)
-	question := b4UsageAmendment(t)["legacyQuestion"]
-	if question == "" {
-		t.Fatal("missing frozen legacy question")
-	}
-	first, err := s.AnswerDesk(context.Background(), scope, "model", question, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	firstRows := b4Usage(t, s, scope)
-	if len(firstRows) != 1 {
-		t.Fatalf("first legacy request rows=%d", len(firstRows))
-	}
-	second, err := s.AnswerDesk(context.Background(), scope, "model", question, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	requests := f.all()
-	if len(requests) != 2 {
-		t.Fatalf("identical legacy requests must invoke model twice; got %d", len(requests))
-	}
-	for _, request := range requests {
-		b1Contains(t, request.Prompt, question)
-	}
-	if first.ID == "" || second.ID == "" || first.ID == second.ID {
-		t.Errorf("legacy requests must create independent answers: %q/%q", first.ID, second.ID)
-	}
-	rows := b4Usage(t, s, scope)
-	if len(rows) != 2 {
-		t.Fatalf("identical legacy requests must record two returned calls; got %d", len(rows))
-	}
-	if !reflect.DeepEqual(firstRows[0], rows[0]) {
-		t.Error("second legacy request changed the first usage row")
-	}
-	if rows[0].ID == rows[1].ID {
-		t.Error("two returned legacy calls share a usage identity")
-	}
-	turns := map[string]bool{first.ID: false, second.ID: false}
-	for _, row := range rows {
-		b4UsageNumbers(t, row)
-		if row.Purpose != "answer" || row.AgentID != "model" || row.TurnID == nil {
-			t.Errorf("legacy usage correlation: %+v", row)
-			continue
-		}
-		if seen, exists := turns[*row.TurnID]; !exists || seen {
-			t.Errorf("duplicate or wrong legacy turnId: %s", *row.TurnID)
-		}
-		turns[*row.TurnID] = true
-	}
-	for turn, seen := range turns {
-		if !seen {
-			t.Errorf("legacy answer %s has no usage row", turn)
-		}
-	}
-}
-
 func TestPhase2B4_L1_SecretaryRecordsExactNumbersAndDependencies(t *testing.T) {
 	s, scope := b4Store(t), owner()
 	f := b4Model(t, s)
@@ -409,7 +348,7 @@ func TestPhase2B4_L1_SecretaryRecordsExactNumbersAndDependencies(t *testing.T) {
 	b4SameRefs(t, row.MemoryRefs, refs)
 }
 
-func TestPhase2B4_L2_DeputyLegacyAnswerExtractionEachRecordTheirCall(t *testing.T) {
+func TestDeputyAndExtractionEachRecordTheirCall(t *testing.T) {
 	t.Run("deputy", func(t *testing.T) {
 		s, scope := b4Store(t), owner()
 		f := b4Model(t, s)
@@ -437,28 +376,6 @@ func TestPhase2B4_L2_DeputyLegacyAnswerExtractionEachRecordTheirCall(t *testing.
 		b4UsageNumbers(t, row)
 		if row.Purpose != "deputy" || row.RunID == nil || *row.RunID != run.ID || row.AgentID != "model" {
 			t.Errorf("deputy correlation: %+v", row)
-		}
-	})
-	t.Run("legacy answer", func(t *testing.T) {
-		s, scope := b4Store(t), owner()
-		f := b4Model(t, s)
-		b4OK(t, b4HTTP(t, s, scope, "GET", "/v1/workspace", nil))
-		f.set(`{"answer":"没有安排。","used":[],"links":[]}`, 200)
-		out, err := s.AnswerDesk(context.Background(), scope, "model", "今天有哪些安排", nil)
-		if err != nil {
-			t.Fatal(err)
-		}
-		rows := b4Usage(t, s, scope)
-		if len(rows) != 1 {
-			t.Fatalf("legacy answer usage rows=%d", len(rows))
-		}
-		row := rows[0]
-		b4UsageNumbers(t, row)
-		if row.Purpose != "answer" || row.AgentID != "model" {
-			t.Errorf("legacy answer purpose/agent: %+v", row)
-		}
-		if row.TurnID == nil || *row.TurnID != out.ID {
-			t.Errorf("legacy answer turn correlation: %+v, turn=%s", row, out.ID)
 		}
 	})
 	t.Run("extraction", func(t *testing.T) {
@@ -735,14 +652,16 @@ func TestPhase2B4_L5_CurrentUnicodeExcerptDeletedRefAndEveryColumnPrivacy(t *tes
 	b4NoProse(t, s, scope, gold.PrivateMemory, gold.PrivateSource, text, updated)
 }
 
-func TestPhase2B4_L4_SummarySeparatesPurposesAndOmitsEmptyDays(t *testing.T) {
+func TestUsageSummarySeparatesPurposesAndOmitsEmptyDays(t *testing.T) {
 	s, scope := b4Store(t), owner()
 	f := b4Model(t, s)
 	workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: asJSON(map[string]string{"timezone": "Asia/Shanghai"})})
 	f.set(`{"reply":"秘书回答。","used":[],"actions":[]}`, 200)
 	mustTurn(t, s, scope, turnRequest("自然日用途汇总"))
-	f.set(`{"answer":"导办台回答。","used":[],"links":[]}`, 200)
-	if _, err := s.AnswerDesk(context.Background(), scope, "model", "自然日用途汇总", nil); err != nil {
+	// Rows of the retired legacy answer interface stay in stored usage. The
+	// summary must still report their purpose separately.
+	if _, err := s.pool.Exec(context.Background(), `INSERT INTO model_usage(owner_id,id,at,purpose,agent_id,model,input_tokens,output_tokens,cost,memory_refs,tier,plan,input_estimated,output_estimated,cost_estimated)
+ SELECT owner_id,gen_random_uuid(),at,'answer',agent_id,model,input_tokens,output_tokens,cost,memory_refs,tier,plan,input_estimated,output_estimated,cost_estimated FROM model_usage WHERE owner_id=$1`, string(scope.OwnerID)); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.pool.Exec(context.Background(), `UPDATE model_usage SET at='2025-01-02T04:00:00Z' WHERE owner_id=$1`, string(scope.OwnerID)); err != nil {

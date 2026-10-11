@@ -184,7 +184,7 @@ func runDoingObserved(args []string, captured func(doing.Task, doing.Evidence, f
 	registry := &ai.Registry{HTTP: &http.Client{Transport: observed}, Config: ai.Configuration{Providers: []ai.Provider{{ID: "v2-capture", Name: "虚构检索捕获", Protocol: "openai", BaseURL: server.URL, Model: "v2-capture", CostMode: "free"}}}}
 	// This registry only serves the local capture fixture, including when
 	// separate answer and judge models use a real evaluation channel.
-	store.SetModelsWithGatewayProviders(registry, fakeTierProviders{registry})
+	store.SetModels(registry)
 	asof, _ := time.Parse(time.RFC3339, s.AsOf)
 	anchor := time.Date(asof.Year(), asof.Month(), asof.Day(), 0, 0, 0, 0, time.UTC)
 	c := fixture.Corpus{SchemaVersion: 1, Persona: s.Persona, Timezone: s.Timezone}

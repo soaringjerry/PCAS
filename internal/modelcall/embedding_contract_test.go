@@ -2,97 +2,108 @@ package modelcall
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"reflect"
 	"testing"
 
 	"github.com/soaringjerry/PCAS/internal/ai"
 	"github.com/soaringjerry/PCAS/internal/memory"
-	"github.com/soaringjerry/PCAS/internal/prompts"
 )
 
 type embeddingFixture struct {
-	*generationFixture
-	texts   []string
-	vectors []memory.Embedding
-	err     error
+	unavailable       bool
+	calls             int
+	texts             []string
+	vectors           []memory.Embedding
+	err, finishErr    error
+	events            []string
+	finished          error
+	finishedWithUsage ai.Result
 }
 
-func (f *embeddingFixture) EmbedProviderUsage(_ context.Context, p ai.Provider, texts []string) ([]memory.Embedding, ai.Result, error) {
+func (f *embeddingFixture) Available(string) bool { return !f.unavailable }
+func (f *embeddingFixture) EmbedProviderUsage(_ context.Context, _ ai.Provider, texts []string) ([]memory.Embedding, ai.Result, error) {
 	f.calls++
-	f.called = p
-	f.texts = append([]string(nil), texts...)
+	f.events = append(f.events, "provider")
+	f.texts = texts
 	return f.vectors, ai.Result{InputTokens: 7, Cost: 0.000014}, f.err
 }
-
-func embeddingRequest() Request {
-	p := ai.Provider{ID: "vector", Model: "original-model", Embedding: true, InputPerMillion: 2}
-	estimate := 0.00008
-	return Request{OwnerID: "owner", ExecutionID: "read", RootExecutionID: "read", Function: "query_embedding", Stage: "query", ProviderID: p.ID, Operation: "embedding", ProviderSnapshot: &p, ReservationEstimate: &estimate, Prompt: json.RawMessage(`["Original prefix:原始查询"]`)}
+func (f *embeddingFixture) Begin(context.Context, EmbeddingRequest) (EmbeddingCall, error) {
+	f.events = append(f.events, "begin")
+	return EmbeddingCall{InvocationID: "call", Reservation: "reservation"}, nil
+}
+func (f *embeddingFixture) Finish(_ context.Context, _ EmbeddingRequest, _ EmbeddingCall, usage ai.Result, callErr error) error {
+	f.events = append(f.events, "finish")
+	f.finished, f.finishedWithUsage = callErr, usage
+	return f.finishErr
 }
 
-func TestEmbeddingGatewayPreservesInputsVectorsAndSelectedProvider(t *testing.T) {
-	f := &embeddingFixture{generationFixture: &generationFixture{provider: ai.Provider{ID: "vector", Model: "changed-model"}}, vectors: []memory.Embedding{{Model: "vector:original-model", Values: []float32{0.12345679, -1, 0}}}}
+func embeddingRequest() EmbeddingRequest {
+	return EmbeddingRequest{OwnerID: "owner", ExecutionID: "read", RootExecutionID: "read", Function: "query_embedding", Stage: "query", Provider: ai.Provider{ID: "vector", Model: "model", Embedding: true}, Texts: []string{"query: 旧书店"}, Estimate: 0.00008}
+}
+
+func embeddingGateway(f *embeddingFixture) *Gateway {
+	return New(nil, nil, nil, nil).WithEmbeddings(f, f)
+}
+
+func TestEmbeddingRecordsBeforeAndAfterTheProviderCall(t *testing.T) {
+	f := &embeddingFixture{vectors: []memory.Embedding{{Model: "vector:model", Values: []float32{0.5, -1}}}}
+	vectors, err := embeddingGateway(f).CallEmbedding(context.Background(), embeddingRequest())
+	if err != nil || !reflect.DeepEqual(vectors, f.vectors) || !reflect.DeepEqual(f.texts, []string{"query: 旧书店"}) {
+		t.Fatal(vectors, f.texts, err)
+	}
+	if !reflect.DeepEqual(f.events, []string{"begin", "provider", "finish"}) || f.finishedWithUsage.InputTokens != 7 {
+		t.Fatal(f.events, f.finishedWithUsage)
+	}
+}
+
+func TestEmbeddingWithoutCapabilityOrAvailabilityStartsNothing(t *testing.T) {
+	f := &embeddingFixture{}
 	r := embeddingRequest()
-	f.afterReserve = func() { f.provider.Model = "changed-again"; r.ProviderSnapshot.Model = "changed-after-reservation" }
-	paid, err := New(f, f, f, f).Call(context.Background(), r)
-	if err != nil {
+	r.Provider.Embedding = false
+	if _, err := embeddingGateway(f).CallEmbedding(context.Background(), r); !errors.Is(err, ai.ErrUnsupportedCapability) {
 		t.Fatal(err)
 	}
-	var restored []memory.Embedding
-	if err := json.Unmarshal([]byte(paid.Output), &restored); err != nil {
+	f.unavailable = true
+	if _, err := embeddingGateway(f).CallEmbedding(context.Background(), embeddingRequest()); !errors.Is(err, ErrNotAvailable) {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(restored, f.vectors) || !reflect.DeepEqual(f.texts, []string{"Original prefix:原始查询"}) || f.called.Model != "original-model" || paid.Model != "original-model" {
-		t.Fatal("embedding input, selected model, or vector changed", paid, f.called, restored)
-	}
-	if f.estimate != 0.00008 || f.prepared.Instructions.Name() != "" || f.prepared.Schema.Name() != "" || !reflect.DeepEqual(f.prepared.RequiredCapabilities(), []string{"embedding"}) || f.mode.Schema != nil {
-		t.Fatal("embedding received text-generation metadata or a different reservation", f.prepared, f.estimate)
+	if len(f.events) != 0 {
+		t.Fatal(f.events)
 	}
 }
 
-func TestEmbeddingPersistenceRecoveryDoesNotRepeatProvider(t *testing.T) {
-	for _, stage := range []string{"save", "record", "settle"} {
-		t.Run(stage, func(t *testing.T) {
-			f := &embeddingFixture{generationFixture: &generationFixture{provider: *embeddingRequest().ProviderSnapshot, failAt: stage}, vectors: []memory.Embedding{{Model: "vector:original-model", Values: []float32{1, 2}}}}
-			r := embeddingRequest()
-			_, err := New(f, f, f, f).Call(context.Background(), r)
-			var persistence *PersistenceError
-			if !errors.As(err, &persistence) {
-				t.Fatal("persistence failure hidden", err)
-			}
-			paid, err := New(nil, f, f, f).Call(context.Background(), r)
-			if err != nil || paid == nil || f.calls != 1 || f.reservations != 1 {
-				t.Fatal("recovery repeated an embedding", paid, err, f.calls, f.reservations)
-			}
-		})
+func TestEmbeddingFailureIsRecordedAndReportsUnknownOutcome(t *testing.T) {
+	f := &embeddingFixture{err: context.Canceled}
+	_, err := embeddingGateway(f).CallEmbedding(context.Background(), embeddingRequest())
+	var failure *Failure
+	if !errors.As(err, &failure) || failure.Code != ErrOutcomeUnknown.Error() || failure.InvocationID != "call" || !errors.Is(f.finished, context.Canceled) {
+		t.Fatal(err, f.finished)
+	}
+	f = &embeddingFixture{err: errors.New("rejected")}
+	_, err = embeddingGateway(f).CallEmbedding(context.Background(), embeddingRequest())
+	if !errors.As(err, &failure) || failure.Code != "model_call_failed" || f.calls != 1 {
+		t.Fatal(err, f.calls)
 	}
 }
 
-func TestEmbeddingCapabilityFailureRecordsBeforeReservation(t *testing.T) {
-	f := &generationFixture{provider: *embeddingRequest().ProviderSnapshot}
-	_, err := New(f, f, f, f).Call(context.Background(), embeddingRequest())
-	if !errors.Is(err, ai.ErrUnsupportedCapability) || f.failure == nil || f.reservations != 0 || f.calls != 0 || f.prepared.Operation != "embedding" {
-		t.Fatal(err, f)
+func TestEmbeddingAccountingFailureWithholdsTheVectors(t *testing.T) {
+	f := &embeddingFixture{vectors: []memory.Embedding{{Values: []float32{1}}}, finishErr: errors.New("storage")}
+	vectors, err := embeddingGateway(f).CallEmbedding(context.Background(), embeddingRequest())
+	var persistence *PersistenceError
+	if vectors != nil || !errors.As(err, &persistence) {
+		t.Fatal(vectors, err)
 	}
 }
 
-func TestEmbeddingDoesNotAcceptGenerationInstructionsOrSchema(t *testing.T) {
-	for _, change := range []func(*Request){func(r *Request) { r.Instructions = prompts.Must("organize") }, func(r *Request) { r.Schema = prompts.MustSchema("secretary-output") }, func(r *Request) { r.Search = true }} {
-		r := embeddingRequest()
-		change(&r)
-		f := &generationFixture{}
-		if _, err := New(f, f, f, f).Call(context.Background(), r); !errors.Is(err, memory.ErrInvalid) || f.prepared.ExecutionID != "" || f.reservations != 0 {
-			t.Fatal("invalid embedding started work", err, f)
-		}
+func TestEmbeddingSubmitsLargeInputsInOrderedRequestsAndRecordsTotalUsage(t *testing.T) {
+	f := &embeddingFixture{}
+	r := embeddingRequest()
+	r.Texts = make([]string, 70)
+	if _, err := embeddingGateway(f).CallEmbedding(context.Background(), r); err != nil {
+		t.Fatal(err)
 	}
-}
-
-func TestEmbeddingInterruptionKeepsUnknownOutcome(t *testing.T) {
-	f := &embeddingFixture{generationFixture: &generationFixture{provider: *embeddingRequest().ProviderSnapshot}, err: context.DeadlineExceeded}
-	_, err := New(f, f, f, f).Call(context.Background(), embeddingRequest())
-	if !errors.Is(err, ErrOutcomeUnknown) || !errors.Is(err, context.DeadlineExceeded) || f.calls != 1 || f.records != 1 || f.settlements != 1 {
-		t.Fatal(err, f)
+	if f.calls != 3 || len(f.texts) != 6 || f.finishedWithUsage.InputTokens != 21 || !reflect.DeepEqual(f.events, []string{"begin", "provider", "provider", "provider", "finish"}) {
+		t.Fatal(f.calls, len(f.texts), f.finishedWithUsage, f.events)
 	}
 }

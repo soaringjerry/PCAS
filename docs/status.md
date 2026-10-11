@@ -125,33 +125,19 @@ The [unused generation cleanup](tasks/foundation-unused-generation.md#release-ve
 The old card queue handler retains its original bytes. Current-state contracts and complete branch and main CI pass.
 Backup, readiness, live default Codex accounting, and cleanup checks pass. Claim counts remain unchanged.
 
-The next [query embedding scope](tasks/foundation-query-embedding.md) covers the complete recall call, execution identity, accounting recovery, and visible fallback.
-Its unchanged secretary-path replay passes at `6411b4e`, with exact recorded provider inputs and no live provider starts.
-Complete starting owner data matches the original row multiset. Both complete raw snapshots remain reconstructable without field exclusions.
+The coordinator reviewed the Phase 3.9 work on 2026-10-10.
+The review found a regression in the released interactive gateway: the secretary and the deputy failed on every provider without output schema or web search.
+The [correction](tasks/foundation-interactive-gateway.md#correction-2026-10-10) restores ordinary generation for callers that validate their own output and records the submitted mode.
+The review also removed the unused legacy routing and answer interfaces.
 
-The query migration is implemented in Sol's isolated worktree and remains unreleased.
-Strict migration replay preserves provider inputs and original query spending. Complete owner-data differences are retained and classified.
-The recorded self-check failure remains present before and after migration.
-Candidate `1b6f7c8` passes real default-model acceptance and complete branch CI.
-A later contract confirms missing history-source links in query input. The correction passes focused deletion and handoff contracts.
-Corrected-source strict replay and real default Codex acceptance pass on isolated copies.
-Corrected revision `9f80205` also passes complete branch CI.
-Independent review, integration, and release remain outstanding for that correction.
+The review replaced the query embedding candidate `9f80205`.
+That candidate saved query text and vectors for recovery. It was not merged or released.
+The [revised query embedding path](tasks/foundation-query-embedding.md) keeps the call record and the accounting only.
+Its gateway and storage contracts pass on an isolated database.
 
-The full local serial check reaches its thirty-minute package timeout during an existing comparison-scale test. Its failure remains recorded.
-The local unfiltered integration run also exceeds its disposable database's temporary storage capacity. That run does not pass.
-
-The corrected source's later unfiltered integration run reaches the package timeout on a larger disposable database.
-An old upgrade fixture also fails because the default schema was not initialized.
-After the same initialization used by CI, that isolated upgrade check passes without a source change.
-Both original local failures remain recorded. Complete branch CI does not erase these local results.
-
-The [background embedding scope](tasks/foundation-background-embedding.md) follows query embedding migration.
-Its initial fake-provider contract confirms repeated paid batches after the final vector-write transaction fails.
-Its controlled production-copy source recording and strict offline replay pass with exact original chunk input.
-This case uses a new copy-only source identity. It does not claim capture of the original wire request.
-Complete admission, saved batch results, deletion, and atomic application are its required boundaries.
-Background embedding production code has not changed.
+The [revised background embedding path](tasks/foundation-background-embedding.md) uses the same gateway entry with the leased job.
+It replaces the earlier scope. The partial implementation in Sol's worktree did not compile and is not used.
+The existing queue rule already refuses a second paid attempt, so this revision adds no saved batch results.
 
 Registered instructions and four output schemas preserve their original bytes and field order.
 The secretary keeps its original shared deadline and two-attempt retry policy.

@@ -213,11 +213,7 @@ func run() error {
 		return err
 	}
 	defer cleanup()
-	if *fake {
-		store.SetModelsWithGatewayProviders(models, fakeTierProviders{models})
-	} else {
-		store.SetModels(models)
-	}
+	store.SetModels(models)
 	seeded, err := fixture.Seed(ctx, store, pool, c, anchor, "eval", !*rawOnly)
 	if err != nil {
 		return err

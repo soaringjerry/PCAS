@@ -11,8 +11,7 @@ interface Connection {
   default: boolean
   key_configured: boolean
 }
-interface Decision { key_configured: boolean; saved: boolean; working?: boolean }
-interface Configuration { editable: boolean; text: Connection; embedding: Connection; decision: Decision }
+interface Configuration { editable: boolean; text: Connection; embedding: Connection }
 
 function ConnectionForm({ role, value, editable, onSaved }: {
   role: 'text' | 'embedding'; value: Connection; editable: boolean; onSaved: () => Promise<void>
@@ -81,43 +80,6 @@ function ConnectionForm({ role, value, editable, onSaved }: {
     </form>
 }
 
-/** The key for the old /v1/desk/route endpoint. The secretary and Telegram no longer call it. */
-function DecisionForm({ value, editable, onSaved }: { value: Decision; editable: boolean; onSaved: () => Promise<void> }) {
-  const [key, setKey] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState('')
-  const [notice, setNotice] = useState('')
-  async function save() {
-    setBusy(true); setError(''); setNotice('')
-    try {
-      const saved = await api<Decision>('/v1/models/decision', { api_key: key })
-      setKey('')
-      setNotice(saved.working ? '已保存，试调用成功。' : '已保存，但试调用没成功：检查密钥是否正确、是否已开通 Jev。')
-      await onSaved()
-    } catch (e) { setError(e instanceof Error ? e.message : '保存失败') }
-    finally { setBusy(false) }
-  }
-  async function remove() {
-    setBusy(true); setError(''); setNotice('')
-    try { await api('/v1/models/decision', undefined, 'DELETE'); setNotice('已移除这里保存的密钥。服务器环境里若另配了密钥，旧接口仍会用它。'); await onSaved() }
-    catch (e) { setError(e instanceof Error ? e.message : '移除失败') }
-    finally { setBusy(false) }
-  }
-  return <form className="stack-sm conn-form" onSubmit={e => { e.preventDefault(); void save() }}>
-      <p className="small muted">旧的分流接口用 TypeSafe 的 Jev 判断一句话是要问、要记，还是交给副手。现在的秘书和 Telegram 都不经过它，只有仍在调用旧接口的外部程序会用到。</p>
-      <label className="stack-sm small">Jev API Key
-        <input className="input" aria-label="Jev API Key" value={key} onChange={e => setKey(e.target.value)} type="password" autoComplete="new-password" placeholder={value.saved ? '填写新密钥以替换' : '在 console.typesafe.ai 创建'} required disabled={!editable || busy} />
-      </label>
-      <p className="tiny muted">外部程序调用旧接口时，那句原文会发给 TypeSafe。密钥只存在服务端。</p>
-      {error && <p className="form-error" role="alert">{error}</p>}
-      {notice && <p className="callout" role="status">{notice}</p>}
-      <div className="row">
-        <Button type="submit" size="sm" disabled={!editable || busy || !key.trim()}>{busy ? '处理中…' : '保存并试调用'}</Button>
-        {value.saved && <Button type="button" size="sm" disabled={busy} onClick={() => void remove()}>移除密钥</Button>}
-      </div>
-    </form>
-}
-
 export function OpenAIConnection() {
   const [configuration, setConfiguration] = useState<Configuration | null>(null)
   const [error, setError] = useState('')
@@ -132,7 +94,6 @@ export function OpenAIConnection() {
   // A saved key is not a tested connection, so the summary only says what has been filled in.
   const summary = error ? '读取失败' : !configuration ? '正在读取…'
     : text?.key_configured ? `已填密钥 · ${text.model}${configuration.embedding.key_configured ? '' : ' · 向量还没填'}` : '还没填密钥'
-  const decision = configuration?.decision
   return <Fold title="按量计费接口" summary={summary} tone={error ? 'danger' : undefined}>
     <div className="stack-sm">
       <h3 className="fold-name">API 与向量接入</h3>
@@ -140,9 +101,6 @@ export function OpenAIConnection() {
       {configuration && <>
         <ConnectionForm role="text" value={configuration.text} editable={configuration.editable} onSaved={refresh} />
         <ConnectionForm role="embedding" value={configuration.embedding} editable={configuration.editable} onSaved={refresh} />
-        <Fold title="旧版分流接口的密钥" summary={`现在的秘书不使用 · ${decision?.saved ? '已保存密钥' : decision?.key_configured ? '使用服务端环境变量' : '未配置'}`}>
-          <DecisionForm value={configuration.decision} editable={configuration.editable} onSaved={refresh} />
-        </Fold>
       </>}
     </div>
   </Fold>

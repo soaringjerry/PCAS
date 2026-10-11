@@ -41,7 +41,6 @@ func (s *Store) prepareRunContext(ctx context.Context, scope memory.Scope, c wor
 		return ctx, memory.ErrInvalid
 	}
 	history := []storedDeskContext{}
-	queryRefs := []memory.Ref{}
 	query := c.Prompt
 	projectID := c.ProjectID
 	var plan memory.QueryPlan
@@ -80,37 +79,20 @@ func (s *Store) prepareRunContext(ctx context.Context, scope memory.Scope, c wor
 		if err != nil {
 			return err
 		}
-		historyRequests := []string{}
-		for _, turn := range history {
-			if turn.RequestID != "" {
-				historyRequests = append(historyRequests, turn.RequestID)
-			}
-			if !turn.Outdated {
-				queryRefs = append(queryRefs, turn.Refs...)
-			}
-		}
-		originals, err := queryHistorySourceRefsTx(ctx, tx, scope.OwnerID, nil, historyRequests)
-		if err != nil {
-			return err
-		}
-		queryRefs = append(queryRefs, originals...)
 		if c.Type == "requestRun" {
-			var itemRefs []memory.Ref
-			item, itemRefs, err = sanitizeItemTx(ctx, tx, scope, c.AgentID, item)
+			item, _, err = sanitizeItemTx(ctx, tx, scope, c.AgentID, item)
 			if err != nil {
 				return err
 			}
-			queryRefs = append(queryRefs, itemRefs...)
 			projectID = item.ProjectID
 			if item.Kind == "project" {
 				projectID = item.ID
 			}
 			query += " " + item.Title + " " + item.Notes + " " + item.Body + " " + item.Goal
-			docs, docRefs, err := currentRunDocsTx(ctx, tx, scope, item, c.AgentID)
+			docs, _, err := currentRunDocsTx(ctx, tx, scope, item, c.AgentID)
 			if err != nil {
 				return err
 			}
-			queryRefs = append(queryRefs, docRefs...)
 			for _, doc := range docs {
 				query += " " + doc.Title + " " + tail(doc.Body, delegateContextBytes)
 			}
@@ -130,27 +112,11 @@ func (s *Store) prepareRunContext(ctx context.Context, scope memory.Scope, c wor
 	if projectID != "" {
 		request.Context.Objects = []memory.ID{memory.ID(projectID)}
 	}
-	queryCtx := context.WithValue(ctx, recallCommandOriginKey{}, c.RequestID)
-	queryCtx = context.WithValue(queryCtx, recallInputRefsKey{}, uniqueRefs(queryRefs))
-	result, err := s.Recall(queryCtx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: c.AgentID, Team: true}, request)
+	result, err := s.Recall(ctx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: c.AgentID, Team: true}, request)
 	if err != nil {
 		return ctx, err
 	}
 	return context.WithValue(ctx, runContextKey{}, preparedRunContext{Plan: plan, Refs: result.Memories, Excerpts: result.Excerpts}), nil
-}
-
-// Original desk/capture input uses external version "1". Resolve that stored
-// version instead of claiming that later source edits supplied the old question.
-func queryHistorySourceRefsTx(ctx context.Context, tx pgx.Tx, owner memory.ID, turnIDs, requestIDs []string) ([]memory.Ref, error) {
-	if len(turnIDs) == 0 && len(requestIDs) == 0 {
-		return nil, nil
-	}
-	return queryDocuments[memory.Ref](ctx, tx, `SELECT jsonb_build_object('kind','source','id',s.id,'version',v.version)
- FROM desk_turns t JOIN sources s ON s.owner_id=t.owner_id AND lower(s.external_id)=t.request_id::text
- JOIN source_versions v ON(v.owner_id,v.source_id)=(s.owner_id,s.id) AND v.external_version='1'
- JOIN memory_records r ON(r.owner_id,r.id)=(s.owner_id,s.id) AND r.state='active'
- WHERE t.owner_id=$1 AND s.connector IN ('desk','capture','desk-incomplete')
- AND (t.id=ANY($2::uuid[]) OR t.request_id::text=ANY($3::text[])) ORDER BY s.id,v.version`, string(owner), turnIDs, requestIDs)
 }
 
 // Documents are read again inside runCommandTx. A prepared retrieval snapshot

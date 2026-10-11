@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/soaringjerry/PCAS/internal/ai"
-	"github.com/soaringjerry/PCAS/internal/postgres"
 )
 
 // Standard local transport, independent of compare/card/answer JSON formats.
@@ -71,6 +70,5 @@ func (f *phase25B234Fixture) model(t *testing.T, reply func(*http.Request, int, 
 	t.Setenv("PCAS_P25_T234_FICTITIOUS_KEY", "fictitious-only-key")
 	p := ai.Provider{ID: "phase25-b234-fake", Name: "虚构验收通道", Protocol: "openai", BaseURL: server.URL + "/v1", KeyEnv: "PCAS_P25_T234_FICTITIOUS_KEY", Model: "fictitious-model", CostMode: "free", MaxOutput: 4096}
 	f.store.SetModels(&ai.Registry{HTTP: server.Client(), Config: ai.Configuration{Extraction: p.ID, Providers: []ai.Provider{p}}})
-	postgres.UseSyntheticGatewayForTest(f.store)
 	return m
 }

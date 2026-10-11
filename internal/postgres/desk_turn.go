@@ -315,18 +315,7 @@ func (s *Store) secretaryPrompt(ctx context.Context, tx pgx.Tx, scope memory.Sco
 		candidates = 40
 		tokens = 12000
 	}
-	historyIDs := []string{}
-	for _, turn := range c.History {
-		if turn.Text != "" {
-			historyIDs = append(historyIDs, turn.ID)
-		}
-	}
-	queryRefs, err := queryHistorySourceRefsTx(ctx, tx, scope.OwnerID, historyIDs, nil)
-	if err != nil {
-		return "", nil, err
-	}
-	queryCtx := context.WithValue(ctx, recallInputRefsKey{}, queryRefs)
-	recall, err := s.Recall(queryCtx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: c.Agent.ID, Team: true}, memory.RecallRequest{Team: &memory.TeamRecall{Text: req.Text, Plan: c.Plan, ThingID: req.ThingID, ProjectID: projectID, Candidates: 20, RankFusion: c.Use.Ready}, Query: tail(earlier+req.Text, 4000), Mode: "remember", Context: memory.WorkingContext{Objects: []memory.ID{}}, Budget: memory.Budget{Candidates: candidates, Tokens: tokens, Edges: 15, Hops: 1}})
+	recall, err := s.Recall(ctx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: c.Agent.ID, Team: true}, memory.RecallRequest{Team: &memory.TeamRecall{Text: req.Text, Plan: c.Plan, ThingID: req.ThingID, ProjectID: projectID, Candidates: 20, RankFusion: c.Use.Ready}, Query: tail(earlier+req.Text, 4000), Mode: "remember", Context: memory.WorkingContext{Objects: []memory.ID{}}, Budget: memory.Budget{Candidates: candidates, Tokens: tokens, Edges: 15, Hops: 1}})
 	if err != nil {
 		return "", nil, err
 	}

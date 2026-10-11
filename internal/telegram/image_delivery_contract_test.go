@@ -52,7 +52,7 @@ func TestTelegramImageUsesSharedDeskTurn(t *testing.T) {
 				_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": map[string]string{"content": content}}}})
 			}))
 			defer model.Close()
-			configureSyntheticGateway(s, &ai.Registry{HTTP: model.Client(), Config: ai.Configuration{Extraction: "model", Providers: []ai.Provider{{ID: "model", Name: "Synthetic model", Protocol: "openai", BaseURL: model.URL, Model: "fake", MaxOutput: 100, CostMode: "free"}}}})
+			s.SetModels(&ai.Registry{HTTP: model.Client(), Config: ai.Configuration{Extraction: "model", Providers: []ai.Provider{{ID: "model", Name: "Synthetic model", Protocol: "openai", BaseURL: model.URL, Model: "fake", MaxOutput: 100, CostMode: "free"}}}})
 			photo := textUpdate(1, "")
 			photo.Message.Photo = []file{{ID: "photo", MIME: "image/png"}}
 			photo.Message.Caption = caption

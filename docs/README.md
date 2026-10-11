@@ -25,9 +25,9 @@ Historical tasks, research, and evaluations are evidence. They do not assign new
 | [Foundation Interactive Gateway](tasks/foundation-interactive-gateway.md) | Delivered secretary, reader, and self-check migration, release checks, and remaining replay limitations. |
 | [Foundation Deputy Gateway](tasks/foundation-deputy-gateway.md) | Main deputy generation, revision recovery, reservation reuse, and application tracing. |
 | [Foundation Unused Generation Cleanup](tasks/foundation-unused-generation.md) | Unused card generation removal, surviving queue compatibility, checks, and delivery scope. |
-| [Foundation Query Embedding Gateway](tasks/foundation-query-embedding.md) | Recall embedding calls, read execution identities, accounting recovery, visible fallback, and acceptance scope. |
-| [Foundation Background Embedding Gateway](tasks/foundation-background-embedding.md) | Complete job admission, saved batch results, accounting recovery, deletion, and atomic index application. |
-| [Sol Foundation Handoff](tasks/foundation-sol-handoff.md) | Verified delivery state, unfinished local code, private evidence, remaining scope, and the complete continuation prompt. |
+| [Foundation Query Embedding Gateway](tasks/foundation-query-embedding.md) | Revised recall embedding path: one call record, accounting, visible fallback, and no saved query or vector. |
+| [Foundation Background Embedding Gateway](tasks/foundation-background-embedding.md) | Revised background embedding path: one call record for each job, existing job budget rules, and known limits. |
+| [Phase 3.9 Handoff and Review Record](tasks/foundation-sol-handoff.md) | Review findings with evidence, delivery state, remaining provider exceptions, private evidence, and the release rule. |
 | [Historical Records](history/README.md) | Retired designs and interpretation of past records. |
 
 ## Document Authority

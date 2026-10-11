@@ -495,19 +495,32 @@ var _ interface {
 	OrganizeImport(context.Context, memory.Scope, memory.ID) (connectors.ImportBatch, error)
 } = (*Store)(nil)
 
-// The initial attachment open can fail before parsing begins, so it shares the
-// same durable status update as failures between chunks.
-func (s *Store) recordImportFailure(ctx context.Context, j worker.Job, err error) error {
-	if err == nil || errors.Is(err, worker.ErrLeaseLost) || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-		return err
+// importFailureCode names the failure of an archive import. failed is false
+// when the import did not fail: it lost its lease, or its own context ended.
+// A stopped worker ends the context, and the database driver can then return
+// an error that does not wrap the context's error. Such an import is tried
+// again; it is not a storage failure.
+func importFailureCode(contextErr, err error) (code string, failed bool) {
+	if err == nil || contextErr != nil || errors.Is(err, worker.ErrLeaseLost) || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return "", false
 	}
-	code := "import_storage_failed"
+	code = "import_storage_failed"
 	var failure *connectors.ArchiveError
 	if errors.As(err, &failure) {
 		code = failure.Code
 	}
 	if errors.Is(err, memory.ErrNotFound) {
 		code = "import_source_missing"
+	}
+	return code, true
+}
+
+// The initial attachment open can fail before parsing begins, so it shares the
+// same durable status update as failures between chunks.
+func (s *Store) recordImportFailure(ctx context.Context, j worker.Job, err error) error {
+	code, failed := importFailureCode(ctx.Err(), err)
+	if !failed {
+		return err
 	}
 	slog.WarnContext(ctx, "archive import failed", "stage", "import_records", "error_type", code, "job_id", j.ID)
 	failureCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)

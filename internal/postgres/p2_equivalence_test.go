@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/md5"
 	"fmt"
+	"github.com/soaringjerry/PCAS/internal/retrieval"
 	"math/rand"
 	"os"
 	"strings"
@@ -116,7 +117,7 @@ func p2AssertReads(t *testing.T, s *Store, scope memory.Scope) {
 						}
 					}
 					fts := strings.Join(terms, " | ")
-					a := memory.RecallResult{Memories: []memory.Ref{}, Evidence: []memory.Evidence{}, Coverage: coverage()}
+					a := memory.RecallResult{Memories: []memory.Ref{}, Evidence: []memory.Evidence{}, Coverage: retrieval.NewCoverage()}
 					b := a
 					if err := s.p2LegacyRecallTx(ctx, tx, rs, in, budget, q, fts, nil, "", 0, "same-snapshot", tokens, &a); err != nil {
 						return err
@@ -379,7 +380,7 @@ func TestP2RandomVisibilityAndSourceSequence(t *testing.T) {
 			}
 			request := memory.RecallRequest{Query: "云杉", Mode: memory.Remember, Context: memory.WorkingContext{Objects: []memory.ID{}}}
 			budget := memory.Budget{Candidates: 10, Tokens: 4000, Edges: 10, Hops: 1}
-			oldRecall := memory.RecallResult{Coverage: coverage()}
+			oldRecall := memory.RecallResult{Coverage: retrieval.NewCoverage()}
 			newRecall := oldRecall
 			sc := memory.Scope{OwnerID: scope.OwnerID, PrincipalID: "model", Team: true}
 			if err := s.p2LegacyRecallTx(ctx, tx, sc, request, budget, "云杉", "'云杉'", nil, "", 0, "random-sequence", []string{"云杉"}, &oldRecall); err != nil {
@@ -435,7 +436,7 @@ func TestP2LargeResultsAreByteIdentical(t *testing.T) {
 		in := memory.RecallRequest{Query: "霜叶的季度汇报准备得怎么样？", Mode: memory.Remember}
 		budget := memory.Budget{Candidates: 20, Tokens: 4000, Edges: 20, Hops: 1}
 		tokens := memory.SearchTokens(in.Query)
-		ra := memory.RecallResult{Memories: []memory.Ref{}, Evidence: []memory.Evidence{}, Coverage: coverage()}
+		ra := memory.RecallResult{Memories: []memory.Ref{}, Evidence: []memory.Evidence{}, Coverage: retrieval.NewCoverage()}
 		rb := ra
 		rs := memory.Scope{OwnerID: scope.OwnerID, PrincipalID: "model", Team: true}
 		if err := s.p2LegacyRecallTx(ctx, tx, rs, in, budget, in.Query, "", nil, "", 0, "large-oracle", tokens, &ra); err != nil {
@@ -481,7 +482,7 @@ func TestP2RecallTemporalAndVectorBytes(t *testing.T) {
 					in := memory.RecallRequest{Query: "云杉", Mode: mode, Context: memory.WorkingContext{ValidAt: times[0], KnownAt: times[1]}}
 					budget := memory.Budget{Candidates: 10, Tokens: 3000, Edges: 10, Hops: 1}
 					rs := memory.Scope{OwnerID: scope.OwnerID, PrincipalID: "model", Team: true}
-					a := memory.RecallResult{Memories: []memory.Ref{}, Evidence: []memory.Evidence{}, Coverage: coverage()}
+					a := memory.RecallResult{Memories: []memory.Ref{}, Evidence: []memory.Evidence{}, Coverage: retrieval.NewCoverage()}
 					b := a
 					if err := s.p2LegacyRecallTx(ctx, tx, rs, in, budget, in.Query, "'云杉'", []byte("[1,0]"), "p2-fictional-vector", offset, "temporal-vector", memory.SearchTokens(in.Query), &a); err != nil {
 						return err

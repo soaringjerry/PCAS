@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"github.com/soaringjerry/PCAS/internal/retrieval"
 	"net/http"
 	"testing"
 	"time"
@@ -143,7 +144,7 @@ func TestRetrievalBusinessDecayKeepsActualEligibilityAndAccess(t *testing.T) {
 			}
 			recall := func(want memory.ID, count int, ranking bool) {
 				t.Helper()
-				out := memory.RecallResult{Coverage: coverage()}
+				out := memory.RecallResult{Coverage: retrieval.NewCoverage()}
 				c := context.WithValue(ctx, activityRankingKey{}, ranking)
 				err := pgx.BeginFunc(c, s.pool, func(tx pgx.Tx) error {
 					return s.recallTx(c, tx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: "model", Team: true}, memory.RecallRequest{Mode: memory.Continue, Team: &memory.TeamRecall{RankFusion: fusion}}, memory.Budget{Candidates: 10, Tokens: 4000}, "Fictitious clock record", "", nil, "", 0, "", nil, &out)

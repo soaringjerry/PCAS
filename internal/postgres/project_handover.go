@@ -12,41 +12,26 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
-	"github.com/soaringjerry/PCAS/internal/prompts"
 	"github.com/soaringjerry/PCAS/internal/worker"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 	"github.com/soaringjerry/PCAS/internal/workspace/effort"
+	"github.com/soaringjerry/PCAS/internal/workspace/projecthandover"
 )
 
-const ProjectHandoverStage = "memory.project_handover"
+const ProjectHandoverStage = projecthandover.Stage
 const EffortStage = effort.Stage
 
-// Five short sentences per section keep the three-section overview readable
-// in ten seconds. Excess and ungrounded sentences are counted, never silent.
-const projectSectionSentences = 5
-
-var projectHandoverInstructions = prompts.Must("project-handover").Text()
-
-type projectInputPart struct {
-	Evidence workspace.ProjectEvidence `json:"evidence"`
-	Content  any                       `json:"content"`
-}
-type projectHandoverInput struct {
-	Project   workspace.Item              `json:"project"`
-	Parts     []projectInputPart          `json:"parts"`
-	Deadlines []workspace.LibraryDeadline `json:"deadlines"`
-	Events    int64                       `json:"events"`
-	Hash      string                      `json:"hash"`
-}
+// The input assembly below is the context builder of the project handover service.
+type projectInputPart = projecthandover.Part
+type projectHandoverInput = projecthandover.Input
 
 func studioInstalledTx(ctx context.Context, tx pgx.Tx) (bool, error) {
 	var ok bool
 	err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname=current_schema() AND c.relname='project_handovers')`).Scan(&ok)
 	return ok, err
 }
-func emptyProjectHandover(id string) workspace.ProjectHandover {
-	return workspace.ProjectHandover{ProjectID: id, Conclusion: []workspace.ProjectSentence{}, Blockers: []workspace.ProjectSentence{}, NextSteps: []workspace.ProjectSentence{}}
-}
+func emptyProjectHandover(id string) workspace.ProjectHandover { return projecthandover.Empty(id) }
+
 func projectHandoverTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, id string) (workspace.ProjectHandover, error) {
 	out := emptyProjectHandover(id)
 	var raw json.RawMessage
@@ -158,7 +143,7 @@ func (s *Store) projectHandoverInputTx(ctx context.Context, tx pgx.Tx, scope mem
 		item.Progress = ""
 		item.NextSteps = nil
 		item.ProjectHandover = nil
-		out.Parts = append(out.Parts, projectInputPart{workspace.ProjectEvidence{Kind: "item", ID: item.ID}, item})
+		out.Parts = append(out.Parts, projectInputPart{Evidence: workspace.ProjectEvidence{Kind: "item", ID: item.ID}, Content: item})
 	}
 	docs, err := queryDocuments[workspace.Doc](ctx, tx, `SELECT d.document FROM work_documents d JOIN work_items w ON(w.owner_id,w.id)=(d.owner_id,d.thing_id) WHERE d.owner_id=$1 AND (w.id=$2 OR w.project_id=$2) ORDER BY d.id`, string(scope.OwnerID), id)
 	if err != nil {
@@ -169,7 +154,7 @@ func (s *Store) projectHandoverInputTx(ctx context.Context, tx pgx.Tx, scope mem
 		if version == 0 {
 			version = 1
 		}
-		out.Parts = append(out.Parts, projectInputPart{workspace.ProjectEvidence{Kind: "documentVersion", ID: doc.ID, Version: version}, doc})
+		out.Parts = append(out.Parts, projectInputPart{Evidence: workspace.ProjectEvidence{Kind: "documentVersion", ID: doc.ID, Version: version}, Content: doc})
 	}
 	runs, err := queryDocuments[workspace.Run](ctx, tx, `SELECT document FROM (SELECT a.document,a.created_at,a.id,row_number() OVER(ORDER BY a.created_at DESC,a.id DESC) AS ordinal FROM agent_runs a JOIN work_items w ON(w.owner_id,w.id)=(a.owner_id,a.thing_id) WHERE a.owner_id=$1 AND (w.id=$2 OR w.project_id=$2) AND a.status='done') r ORDER BY created_at,id`, string(scope.OwnerID), id)
 	if err != nil {
@@ -183,7 +168,7 @@ func (s *Store) projectHandoverInputTx(ctx context.Context, tx pgx.Tx, scope mem
 	}
 	for _, run := range runs {
 		if run.Adopted != nil || run.ID == latest {
-			out.Parts = append(out.Parts, projectInputPart{workspace.ProjectEvidence{Kind: "run", ID: run.ID}, map[string]any{"output": run.Output, "adopted": run.Adopted, "createdAt": run.CreatedAt, "finishedAt": run.FinishedAt}})
+			out.Parts = append(out.Parts, projectInputPart{Evidence: workspace.ProjectEvidence{Kind: "run", ID: run.ID}, Content: map[string]any{"output": run.Output, "adopted": run.Adopted, "createdAt": run.CreatedAt, "finishedAt": run.FinishedAt}})
 		}
 	}
 	ids, err := queryDocuments[string](ctx, tx, `SELECT to_jsonb(r.id::text) FROM memory_records r JOIN claims cl ON(cl.owner_id,cl.id)=(r.owner_id,r.id) JOIN claim_revisions c ON(c.owner_id,c.claim_id,c.version)=(r.owner_id,r.id,r.version)
@@ -201,7 +186,7 @@ func (s *Store) projectHandoverInputTx(ctx context.Context, tx pgx.Tx, scope mem
 	}
 	refs := []memory.Ref{}
 	for _, m := range memories {
-		out.Parts = append(out.Parts, projectInputPart{workspace.ProjectEvidence{Kind: "memory", ID: m.ID, Version: m.Version}, m})
+		out.Parts = append(out.Parts, projectInputPart{Evidence: workspace.ProjectEvidence{Kind: "memory", ID: m.ID, Version: m.Version}, Content: m})
 		refs = append(refs, memory.Ref{ID: memory.ID(m.ID), Version: m.Version, Kind: memory.ClaimKind})
 	}
 	deadlines, err := s.libraryDeadlinesTx(ctx, tx, scope, workspace.DeadlineQuery{})
@@ -221,180 +206,80 @@ func (s *Store) projectHandoverInputTx(ctx context.Context, tx pgx.Tx, scope mem
 	out.Hash = hex.EncodeToString(hash[:])
 	return out, refs, nil
 }
-func parseProjectHandover(text string, input projectHandoverInput) (workspace.ProjectHandover, int, int, bool) {
-	out := emptyProjectHandover(input.Project.ID)
-	var raw map[string]json.RawMessage
-	if json.Unmarshal([]byte(text), &raw) != nil {
-		return out, 0, 0, false
-	}
-	allowed := map[workspace.ProjectEvidence]bool{}
-	for _, p := range input.Parts {
-		allowed[p.Evidence] = true
-	}
-	invalid, overflow := 0, 0
-	for _, section := range []struct {
-		key    string
-		target *[]workspace.ProjectSentence
-	}{{"conclusion", &out.Conclusion}, {"blockers", &out.Blockers}, {"nextSteps", &out.NextSteps}} {
-		var sentences []workspace.ProjectSentence
-		if string(raw[section.key]) == "null" || json.Unmarshal(raw[section.key], &sentences) != nil {
-			return out, invalid, overflow, false
-		}
-		for _, sentence := range sentences {
-			valid := strings.TrimSpace(sentence.Text) != "" && len(sentence.Evidence) > 0
-			for _, ref := range sentence.Evidence {
-				if !allowed[ref] {
-					valid = false
-				}
-			}
-			if !valid {
-				invalid++
-				continue
-			}
-			if len(*section.target) >= projectSectionSentences {
-				overflow++
-				continue
-			}
-			*section.target = append(*section.target, sentence)
-		}
-	}
-	return out, invalid, overflow, len(out.Conclusion)+len(out.Blockers)+len(out.NextSteps) > 0
+
+// ProjectHandoverStore gives the project handover service its reads and writes.
+func (s *Store) ProjectHandoverStore() projecthandover.Store { return projectHandoverStore{s} }
+
+type projectHandoverStore struct{ store *Store }
+
+func (a projectHandoverStore) Exclusive(ctx context.Context) (func(), error) {
+	return statusCallLock(ctx, a.store)
 }
-func (s *Store) ProcessProjectHandover(ctx context.Context, j worker.Job) error {
-	unlock, err := statusCallLock(ctx, s)
-	if err != nil {
-		return err
-	}
-	defer unlock()
-	parts := strings.Split(j.Stage, ":")
-	if len(parts) < 2 || !memory.ID(parts[1]).Valid() {
-		return memory.ErrInvalid
-	}
-	id := parts[1]
-	scope := memory.Scope{OwnerID: j.OwnerID, PrincipalID: "worker", IsOwner: true}
-	cached, err := s.paidModelResult(ctx, j)
-	if err != nil {
-		return err
-	}
-	var input projectHandoverInput
-	var refs []memory.Ref
-	skip := false
-	err = pgx.BeginTxFunc(ctx, s.pool, pgx.TxOptions{IsoLevel: pgx.RepeatableRead}, func(tx pgx.Tx) error {
+
+func (a projectHandoverStore) RetryLater(j worker.Job, code string) error {
+	return &worker.JobError{Code: code, Until: time.Now().Add(retryDelay(j.Attempts)), NoAttempt: false}
+}
+
+func (a projectHandoverStore) Read(ctx context.Context, j worker.Job, fn func(projecthandover.Reader) error) error {
+	return pgx.BeginTxFunc(ctx, a.store.pool, pgx.TxOptions{IsoLevel: pgx.RepeatableRead}, func(tx pgx.Tx) error {
 		if err := lockJob(ctx, tx, j); err != nil {
 			return err
 		}
-		item, err := getItem(ctx, tx, scope, id)
-		if errors.Is(err, memory.ErrNotFound) || err == nil && item.Status == "done" {
-			skip = true
-			return acknowledge(ctx, tx, j)
-		}
-		if err != nil {
-			return err
-		}
-		h, err := projectHandoverTx(ctx, tx, scope, id)
-		if err != nil {
-			return err
-		}
-		if cached == nil {
-			if !h.Stale && h.WrittenAt != nil {
-				skip = true
-				return acknowledge(ctx, tx, j)
-			}
-			if h.WrittenAt != nil {
-				written, err := time.Parse(time.RFC3339Nano, *h.WrittenAt)
-				if err != nil {
-					return err
-				}
-				if time.Now().Before(written.Add(time.Hour)) {
-					return &worker.JobError{Code: "project_handover_interval", Until: written.Add(time.Hour), NoAttempt: true}
-				}
-			}
-			input, refs, err = s.projectHandoverInputTx(ctx, tx, scope, id)
-			return err
-		}
-		return nil
+		return fn(projectHandoverUnit{ctx: ctx, tx: tx, job: j, store: a.store, scope: memory.Scope{OwnerID: j.OwnerID, PrincipalID: "worker", IsOwner: true}})
 	})
-	if err != nil || skip {
-		return err
-	}
-	result, err := s.generatePaid(ctx, j, "project_handover", projectHandoverInstructions, asJSON(input), refs)
-	if err != nil {
-		return err
-	}
-	if err = json.Unmarshal(result.Prompt, &input); err != nil {
-		return err
-	}
-	invalidOutput := false
-	err = backgroundResultTx(ctx, s.pool, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
+}
+
+func (a projectHandoverStore) Apply(ctx context.Context, j worker.Job, fn func(projecthandover.Unit) error) error {
+	return backgroundResultTx(ctx, a.store.pool, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(j.OwnerID)); err != nil {
 			return err
 		}
 		if err := lockJob(ctx, tx, j); err != nil {
 			return err
 		}
-		// Check the paid snapshot first, then only its referenced records at write
-		// time. Deleted or superseded evidence cannot become a new saved sentence.
-		out, invalid, overflow, valid := parseProjectHandover(result.Output, input)
-		if valid {
-			current, err := currentProjectEvidenceTx(ctx, tx, scope, input, out)
-			if err != nil {
-				return err
-			}
-			var removed int
-			out, removed, _, valid = parseProjectHandover(string(asJSON(out)), current)
-			invalid += removed
-			if valid && len(out.Conclusion)+len(out.Blockers)+len(out.NextSteps) == 0 {
-				valid = false
-			}
-		}
-		if invalid > 0 {
-			if err := stageEventTx(ctx, tx, j.OwnerID, ProjectHandoverStage, "overflow", "ungrounded_sentences", invalid); err != nil {
-				return err
-			}
-		}
-		if overflow > 0 {
-			if err := stageEventTx(ctx, tx, j.OwnerID, ProjectHandoverStage, "overflow", "section_sentence_limit", overflow); err != nil {
-				return err
-			}
-		}
-		if !valid {
-			if err := discardPaidResultTx(ctx, tx, j); err != nil {
-				return err
-			}
-			if err := stageEventTx(ctx, tx, j.OwnerID, ProjectHandoverStage, "failure", "project_handover_invalid_output", 1); err != nil {
-				return err
-			}
-			// Commit the discarded output and the failure count; the retry with
-			// backoff is signalled to the worker below, as the 2.6 handover does.
-			invalidOutput = true
-			return nil
-		}
-		item, err := getItem(ctx, tx, scope, id)
-		if errors.Is(err, memory.ErrNotFound) || err == nil && item.Status == "done" {
-			if err := discardPaidResultTx(ctx, tx, j); err != nil {
-				return err
-			}
-			return acknowledge(ctx, tx, j)
-		}
-		if err != nil {
-			return err
-		}
-		if _, err = tx.Exec(ctx, `INSERT INTO project_handovers(owner_id,project_id,body,written_at,input_events,input_hash) VALUES($1,$2,$3,clock_timestamp(),$4,$5) ON CONFLICT(owner_id,project_id) DO UPDATE SET body=excluded.body,written_at=excluded.written_at,input_events=excluded.input_events,input_hash=excluded.input_hash`, string(j.OwnerID), id, asJSON(out), input.Events, input.Hash); err != nil {
-			return err
-		}
-		if err := discardPaidResultTx(ctx, tx, j); err != nil {
-			return err
-		}
-		return acknowledge(ctx, tx, j)
+		return fn(projectHandoverUnit{ctx: ctx, tx: tx, job: j, store: a.store, scope: memory.Scope{OwnerID: j.OwnerID, PrincipalID: "worker", IsOwner: true}})
 	})
-	if err != nil {
-		return err
-	}
-	if invalidOutput {
-		return &worker.JobError{Code: "project_handover_invalid_output", Until: time.Now().Add(retryDelay(j.Attempts)), NoAttempt: false}
-	}
-	return nil
 }
+
+type projectHandoverUnit struct {
+	ctx   context.Context
+	tx    pgx.Tx
+	job   worker.Job
+	store *Store
+	scope memory.Scope
+}
+
+func (u projectHandoverUnit) Project(id string) (workspace.Item, bool, error) {
+	item, err := getItem(u.ctx, u.tx, u.scope, id)
+	if errors.Is(err, memory.ErrNotFound) {
+		return item, false, nil
+	}
+	return item, err == nil, err
+}
+
+func (u projectHandoverUnit) Handover(project string) (workspace.ProjectHandover, error) {
+	return projectHandoverTx(u.ctx, u.tx, u.scope, project)
+}
+
+func (u projectHandoverUnit) Input(project string) (projecthandover.Input, []memory.Ref, error) {
+	return u.store.projectHandoverInputTx(u.ctx, u.tx, u.scope, project)
+}
+
+func (u projectHandoverUnit) CurrentEvidence(input projecthandover.Input, handover workspace.ProjectHandover) (projecthandover.Input, error) {
+	return currentProjectEvidenceTx(u.ctx, u.tx, u.scope, input, handover)
+}
+
+func (u projectHandoverUnit) Event(outcome, reason string, count int) error {
+	return stageEventTx(u.ctx, u.tx, u.job.OwnerID, ProjectHandoverStage, outcome, reason, count)
+}
+
+func (u projectHandoverUnit) SaveHandover(project string, handover workspace.ProjectHandover, input projecthandover.Input) error {
+	_, err := u.tx.Exec(u.ctx, `INSERT INTO project_handovers(owner_id,project_id,body,written_at,input_events,input_hash) VALUES($1,$2,$3,clock_timestamp(),$4,$5) ON CONFLICT(owner_id,project_id) DO UPDATE SET body=excluded.body,written_at=excluded.written_at,input_events=excluded.input_events,input_hash=excluded.input_hash`, string(u.job.OwnerID), project, asJSON(handover), input.Events, input.Hash)
+	return err
+}
+
+func (u projectHandoverUnit) DiscardResult() error { return discardPaidResultTx(u.ctx, u.tx, u.job) }
+func (u projectHandoverUnit) Acknowledge() error   { return acknowledge(u.ctx, u.tx, u.job) }
 
 func currentProjectEvidenceTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, input projectHandoverInput, out workspace.ProjectHandover) (projectHandoverInput, error) {
 	current := projectHandoverInput{Project: input.Project, Parts: []projectInputPart{}}

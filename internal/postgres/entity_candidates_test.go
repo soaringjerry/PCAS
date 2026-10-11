@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/soaringjerry/PCAS/internal/interpretation/aliasscan"
 	"net/http"
 	"strings"
 	"testing"
@@ -89,7 +90,7 @@ func TestEntityCandidatesTranslationAbbreviationKeepAndUndo(t *testing.T) {
 			a, ar := aliasEntityFixture(t, s, scope, tc.kind, tc.a, tc.an)
 			b, br := aliasEntityFixture(t, s, scope, tc.kind, tc.b, tc.bn)
 			j := aliasNamesJob(t, s, scope)
-			if err := s.ProcessEntityCandidates(ctx, j); err != nil {
+			if err := (aliasscan.Service{Store: s.AliasScanStore(), Generator: s}).Process(ctx, j); err != nil {
 				t.Fatal(err)
 			}
 			var input entityCandidateBatch
@@ -155,7 +156,7 @@ func TestEntityCandidatesNearbyNamesStillRequirePairConfirmation(t *testing.T) {
 	f := b1Model(t, s, `{"groups":[[1,2]]}`)
 	a, ar := aliasEntityFixture(t, s, scope, "organization", "云杉工坊", 1)
 	b, br := aliasEntityFixture(t, s, scope, "organization", "云杉实验室", 1)
-	if err := s.ProcessEntityCandidates(ctx, aliasNamesJob(t, s, scope)); err != nil {
+	if err := (aliasscan.Service{Store: s.AliasScanStore(), Generator: s}).Process(ctx, aliasNamesJob(t, s, scope)); err != nil {
 		t.Fatal(err)
 	}
 	f.set(`{"same":false,"keep":null}`)
@@ -187,7 +188,7 @@ func TestEntityCandidatesCrossTypeAndGroupBookmarks(t *testing.T) {
 				old, br := aliasEntityFixture(t, s, scope, "topic", topicName, 2)
 				if translated {
 					f.set(`{"groups":[[1,2]]}`)
-					if err := s.ProcessEntityCandidates(ctx, aliasNamesJob(t, s, scope)); err != nil {
+					if err := (aliasscan.Service{Store: s.AliasScanStore(), Generator: s}).Process(ctx, aliasNamesJob(t, s, scope)); err != nil {
 						t.Fatal(err)
 					}
 					f.set(`{"same":true,"keep":2}`)
@@ -320,7 +321,7 @@ func TestEntityCandidatesHourlyBudgetAndRuleRecheck(t *testing.T) {
 	if _, err := s.pool.Exec(ctx, `INSERT INTO background_usage(owner_id,job_id,reserved_cost,stage) SELECT $1,id,0,'memory.entity_candidates' FROM memory_jobs CROSS JOIN generate_series(1,6) WHERE owner_id=$1 AND stage='memory.organize:1:quota-seed'`, scope.OwnerID); err != nil {
 		t.Fatal(err)
 	}
-	err := s.ProcessEntityCandidates(ctx, j)
+	err := (aliasscan.Service{Store: s.AliasScanStore(), Generator: s}).Process(ctx, j)
 	var quota *worker.JobError
 	if !errors.As(err, &quota) || quota.Code != "entity_candidates_hourly_limit" || !quota.NoAttempt || len(f.all()) != 0 {
 		t.Fatal("catalogue bypassed independent six-call cap", err, len(f.all()))
@@ -328,7 +329,7 @@ func TestEntityCandidatesHourlyBudgetAndRuleRecheck(t *testing.T) {
 	if _, err := s.pool.Exec(ctx, `UPDATE background_usage SET created_at=now()-interval '2 hours'`); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.ProcessEntityCandidates(ctx, j); err != nil {
+	if err := (aliasscan.Service{Store: s.AliasScanStore(), Generator: s}).Process(ctx, j); err != nil {
 		t.Fatal(err)
 	}
 	if len(f.all()) != 1 {
@@ -370,7 +371,7 @@ func TestEntityCandidatesModelCallDoesNotHoldOwnerLock(t *testing.T) {
 	})
 	j := aliasNamesJob(t, s, scope)
 	done := make(chan error, 1)
-	go func() { done <- s.ProcessEntityCandidates(ctx, j) }()
+	go func() { done <- (aliasscan.Service{Store: s.AliasScanStore(), Generator: s}).Process(ctx, j) }()
 	select {
 	case <-entered:
 	case <-time.After(5 * time.Second):
@@ -430,7 +431,7 @@ func TestEntityCandidatesThreeNamesKeepChineseAndUndoInReverse(t *testing.T) {
 	a, ar := aliasEntityFixture(t, s, scope, "place", "蓝沙湾", 1)
 	b, br := aliasEntityFixture(t, s, scope, "place", "Azure Quay", 1)
 	c, cr := aliasEntityFixture(t, s, scope, "place", "LanSha Harbour", 1)
-	if err := s.ProcessEntityCandidates(ctx, aliasNamesJob(t, s, scope)); err != nil {
+	if err := (aliasscan.Service{Store: s.AliasScanStore(), Generator: s}).Process(ctx, aliasNamesJob(t, s, scope)); err != nil {
 		t.Fatal(err)
 	}
 	f.set(`{"same":true,"keep":2}`)
@@ -485,7 +486,7 @@ func TestEntityCandidatesAndConfirmationCallsLeaveRowsUnlocked(t *testing.T) {
 			aliasEntityFixture(t, s, scope, "place", "蓝沙湾", 1)
 			aliasEntityFixture(t, s, scope, "place", "Azure Quay", 1)
 			j := aliasNamesJob(t, s, scope)
-			process := s.ProcessEntityCandidates
+			process := (aliasscan.Service{Store: s.AliasScanStore(), Generator: s}).Process
 			reply := `{"groups":[[1,2]]}`
 			if stage == "confirmation" {
 				if err := process(ctx, j); err != nil {
@@ -540,7 +541,7 @@ func TestEntityCompareCompletedResultSurvivesBusyFollowupScheduling(t *testing.T
 	for _, name := range []string{"蓝沙湾", "Azure Quay", "Fictitious Azure Waterfront"} {
 		aliasEntityFixture(t, s, scope, "place", name, 1)
 	}
-	if err := s.ProcessEntityCandidates(ctx, aliasNamesJob(t, s, scope)); err != nil {
+	if err := (aliasscan.Service{Store: s.AliasScanStore(), Generator: s}).Process(ctx, aliasNamesJob(t, s, scope)); err != nil {
 		t.Fatal(err)
 	}
 	j := compareJob(t, s, scope, true, EntityCompareVersion)

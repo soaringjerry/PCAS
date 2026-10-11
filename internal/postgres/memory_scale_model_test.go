@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/soaringjerry/PCAS/internal/currentstate/handover"
+	"github.com/soaringjerry/PCAS/internal/interpretation/aliasscan"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -286,7 +287,7 @@ func phase26Process(ctx context.Context, s *Store, j worker.Job) error {
 	case EntityCompareStage:
 		return s.ProcessEntityCompare(ctx, j)
 	case EntityCandidatesStage:
-		return s.ProcessEntityCandidates(ctx, j)
+		return (aliasscan.Service{Store: s.AliasScanStore(), Generator: s}).Process(ctx, j)
 	case HandoverStage:
 		return (handover.Service{Store: s.HandoverStore(), Generator: s}).Process(ctx, j)
 	}

@@ -124,7 +124,7 @@ func (f *phase25B234Fixture) compareJob(t *testing.T) string {
 	if strings.HasPrefix(j.Stage, "memory.compare:") {
 		err = (comparison.Service{Store: f.store.CompareStore(), Generator: f.store, Version: postgres.CompareVersion}).Process(f.ctx, *j)
 	} else if strings.HasPrefix(j.Stage, "memory.entity_compare:") {
-		err = f.store.ProcessEntityCompare(f.ctx, *j)
+		err = (comparison.EntityService{Store: f.store.EntityCompareStore(), Generator: f.store, Version: postgres.EntityCompareVersion}).Process(f.ctx, *j)
 	} else {
 		t.Fatalf("unexpected claimed stage=%s", j.Stage)
 	}

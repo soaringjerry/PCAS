@@ -46,7 +46,7 @@ var Responses = []Response{
 	{"memory.organize", "Statement interpretation input changed", "Memory", "Organization specialist", jobKey, func(db *postgres.Store) worker.Handler { return db.ProcessOrganize }},
 	{comparison.Stage, "Statement interpretation input changed", "Memory", "Statement comparison specialist", jobKey + "; the stage names the comparison batch", func(db *postgres.Store) worker.Handler { return Compare(db).Process }},
 	{aliasscan.Stage, "Entity comparison input changed", "Memory", "Entity candidate specialist", jobKey, func(db *postgres.Store) worker.Handler { return AliasScan(db).Process }},
-	{"memory.entity_compare", "Entity comparison input changed", "Memory", "Entity comparison specialist", jobKey, func(db *postgres.Store) worker.Handler { return db.ProcessEntityCompare }},
+	{comparison.EntityStage, "Entity comparison input changed", "Memory", "Entity comparison specialist", jobKey, func(db *postgres.Store) worker.Handler { return EntityCompare(db).Process }},
 	{"memory.summary", "Episode summary input changed", "Memory", "Summary specialist", jobKey, func(db *postgres.Store) worker.Handler { return db.ProcessSummary }},
 	{"memory.card", "Queued card work from before cards were removed", "Current state", "Queue acknowledgement only", jobKey, func(db *postgres.Store) worker.Handler { return db.ProcessCard }},
 	{handover.Stage, "Scheduled freshness check: global handover input changed", "Current state", "Global handover specialist", jobKey, func(db *postgres.Store) worker.Handler { return Handover(db).Process }},

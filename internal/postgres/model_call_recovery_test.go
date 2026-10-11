@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"errors"
+	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 	"net/http"
 	"sync/atomic"
 	"testing"
@@ -19,7 +20,7 @@ func TestModelCallSurvivesApplicationAndKeepsUsageLink(t *testing.T) {
 	ref := organizeTestMemory(t, s, scope, "Fictitious plan for a garden report.")
 	j := organizeTestJob(t, s, scope)
 	ctx := context.Background()
-	if err := s.ProcessOrganize(ctx, j); err != nil {
+	if err := (organize.Service{Store: s.OrganizeStore(), Generator: s, Version: OrganizeVersion}).Process(ctx, j); err != nil {
 		t.Fatal(err)
 	}
 	var calls, usages, receipts int
@@ -56,7 +57,7 @@ func TestAccountingRecoveryReusesOriginalPaidResultAfterRestart(t *testing.T) {
  CREATE TRIGGER reject_test_usage BEFORE INSERT ON model_usage FOR EACH ROW EXECUTE FUNCTION reject_test_usage()`); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.ProcessOrganize(ctx, j); err == nil {
+	if err := (organize.Service{Store: s.OrganizeStore(), Generator: s, Version: OrganizeVersion}).Process(ctx, j); err == nil {
 		t.Fatal("expected accounting failure")
 	}
 	var invocation, reservation string
@@ -74,7 +75,7 @@ func TestAccountingRecoveryReusesOriginalPaidResultAfterRestart(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer peer.Close()
-	if err := peer.ProcessOrganize(ctx, j); err != nil {
+	if err := (organize.Service{Store: peer.OrganizeStore(), Generator: peer, Version: OrganizeVersion}).Process(ctx, j); err != nil {
 		t.Fatal(err)
 	}
 	var callCount, usageCount int
@@ -115,7 +116,7 @@ func TestActiveLeaseCannotStartAnotherInvocation(t *testing.T) {
 	if err := adapter.Start(ctx, request, &modelcall.PaidResult{InvocationID: invocation, Reservation: reservation.ID}); err != nil {
 		t.Fatal(err)
 	}
-	_, err = s.generatePaid(ctx, j, "organize", organizeInstructions, request.Prompt, nil)
+	_, err = s.generatePaid(ctx, j, "organize", prompts.Must("organize").Text(), request.Prompt, nil)
 	var jobErr *worker.JobError
 	if !errors.As(err, &jobErr) || jobErr.Code != "provider_outcome_unknown" || !jobErr.Retry || !jobErr.Until.IsZero() || calls.Load() != 0 {
 		t.Fatal(err, calls.Load())
@@ -138,7 +139,7 @@ func TestFailedCallAccountingRecoveryDoesNotApplyPartialOutput(t *testing.T) {
  CREATE TRIGGER reject_test_usage BEFORE INSERT ON model_usage FOR EACH ROW EXECUTE FUNCTION reject_test_usage()`); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.ProcessOrganize(ctx, j); err == nil {
+	if err := (organize.Service{Store: s.OrganizeStore(), Generator: s, Version: OrganizeVersion}).Process(ctx, j); err == nil {
 		t.Fatal("expected accounting failure")
 	}
 	if _, err := s.pool.Exec(ctx, "DROP TRIGGER reject_test_usage ON model_usage"); err != nil {
@@ -150,7 +151,7 @@ func TestFailedCallAccountingRecoveryDoesNotApplyPartialOutput(t *testing.T) {
 	}
 	defer peer.Close()
 	var jobErr *worker.JobError
-	err = peer.ProcessOrganize(ctx, j)
+	err = (organize.Service{Store: peer.OrganizeStore(), Generator: peer, Version: OrganizeVersion}).Process(ctx, j)
 	if !errors.As(err, &jobErr) || jobErr.Code != "model_call_failed" || calls.Load() != 1 {
 		t.Fatal(err, calls.Load())
 	}
@@ -193,19 +194,21 @@ func TestLostProviderResponseKeepsUsageAndWaitsForNextLease(t *testing.T) {
 			var err error
 			if mode == "cancel" {
 				done := make(chan error, 1)
-				go func() { done <- s.ProcessOrganize(ctx, j) }()
+				go func() {
+					done <- (organize.Service{Store: s.OrganizeStore(), Generator: s, Version: OrganizeVersion}).Process(ctx, j)
+				}()
 				<-entered
 				cancel()
 				close(release)
 				err = <-done
 			} else {
-				err = s.ProcessOrganize(ctx, j)
+				err = (organize.Service{Store: s.OrganizeStore(), Generator: s, Version: OrganizeVersion}).Process(ctx, j)
 			}
 			var jobErr *worker.JobError
 			if !errors.As(err, &jobErr) || jobErr.Code != "provider_outcome_unknown" {
 				t.Fatal(err)
 			}
-			if err = s.ProcessOrganize(context.Background(), j); !errors.As(err, &jobErr) || jobErr.Code != "provider_outcome_unknown" || calls.Load() != 1 {
+			if err = (organize.Service{Store: s.OrganizeStore(), Generator: s, Version: OrganizeVersion}).Process(context.Background(), j); !errors.As(err, &jobErr) || jobErr.Code != "provider_outcome_unknown" || calls.Load() != 1 {
 				t.Fatal(err, calls.Load())
 			}
 			var outcome, state string
@@ -229,7 +232,7 @@ func TestLegacyPaidResultRecoversWithoutInventedCallMetadata(t *testing.T) {
  CREATE TRIGGER reject_test_application BEFORE UPDATE OF category ON claim_revisions FOR EACH ROW EXECUTE FUNCTION reject_test_application()`); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.ProcessOrganize(ctx, j); err == nil {
+	if err := (organize.Service{Store: s.OrganizeStore(), Generator: s, Version: OrganizeVersion}).Process(ctx, j); err == nil {
 		t.Fatal("expected application failure")
 	}
 	// The persisted result has the old table shape. Remove only this fixture's
@@ -245,7 +248,7 @@ func TestLegacyPaidResultRecoversWithoutInventedCallMetadata(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer peer.Close()
-	if err := peer.ProcessOrganize(ctx, j); err != nil {
+	if err := (organize.Service{Store: peer.OrganizeStore(), Generator: peer, Version: OrganizeVersion}).Process(ctx, j); err != nil {
 		t.Fatal(err)
 	}
 	state, err := s.Snapshot(ctx, scope)

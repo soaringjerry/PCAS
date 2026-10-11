@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"encoding/json"
+	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 	"net/http"
 	"testing"
 
@@ -34,7 +35,7 @@ func TestStatusDeadlineWritesDeduplicateAndDelete(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if err := s.ProcessOrganize(context.Background(), organizeTestJob(t, s, scope)); err != nil {
+	if err := (organize.Service{Store: s.OrganizeStore(), Generator: s, Version: OrganizeVersion}).Process(context.Background(), organizeTestJob(t, s, scope)); err != nil {
 		t.Fatal(err)
 	}
 

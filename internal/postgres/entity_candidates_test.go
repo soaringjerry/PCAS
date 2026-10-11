@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/soaringjerry/PCAS/internal/interpretation/aliasscan"
 	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
+	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 	"net/http"
 	"strings"
 	"testing"
@@ -341,7 +342,7 @@ func TestEntityCandidatesHourlyBudgetAndRuleRecheck(t *testing.T) {
 	organizeTestMemory(t, s, scope, "虚构名单调用后的整理哨兵")
 	organizeJob := leaseStage(t, s, scope, j.Record, fmt.Sprintf("%s:%d:%s", OrganizeStage, OrganizeVersion, memory.NewID()))
 	f.set(`{"items":[{"n":1,"category":"event","durable":false,"deadlines":[]}]}`)
-	if err := s.ProcessOrganize(ctx, organizeJob); err != nil || len(f.all()) != 2 {
+	if err := (organize.Service{Store: s.OrganizeStore(), Generator: s, Version: OrganizeVersion}).Process(ctx, organizeJob); err != nil || len(f.all()) != 2 {
 		t.Fatal("scan must not consume classification capacity", err, len(f.all()))
 	}
 	if err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {

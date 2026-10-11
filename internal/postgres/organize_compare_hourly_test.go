@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
+	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/worker"
 	"testing"
@@ -31,7 +32,7 @@ func TestOrganizeCompareIndependentHourlyCalls(t *testing.T) {
 			case OrganizeStage:
 				organizeTestMemory(t, s, scope, "虚构独立额度整理便签")
 				job = organizeTestJob(t, s, scope)
-				process = s.ProcessOrganize
+				process = (organize.Service{Store: s.OrganizeStore(), Generator: s, Version: OrganizeVersion}).Process
 			case CompareStage:
 				fake.set(`{"duplicates":[],"superseded":[]}`)
 				compareFixture(t, s, scope, "虚构独立额度比较便签甲", "虚构独立额度比较便签乙")

@@ -78,7 +78,7 @@ func (s *Store) ListSchedule(ctx context.Context, scope memory.Scope, q workspac
 			e.Source.Kind = "deadline"
 			if e.Kind == "recurring" {
 				var rule scheduleRule
-				valid := len(ruleJSON) > 0 && json.Unmarshal(ruleJSON, &rule) == nil && rule.valid()
+				valid := len(ruleJSON) > 0 && json.Unmarshal(ruleJSON, &rule) == nil && rule.Valid()
 				if !valid {
 					rule, valid = legacyScheduleRule(recurrence, expressed, loc)
 				}
@@ -90,7 +90,7 @@ func (s *Store) ListSchedule(ctx context.Context, scope memory.Scope, q workspac
 					continue
 				}
 				for day := from; !day.After(to); day = day.AddDate(0, 0, 1) {
-					if !rule.occurs(day) {
+					if !rule.Occurs(day) {
 						continue
 					}
 					instance := e

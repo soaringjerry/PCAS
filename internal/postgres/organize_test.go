@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 	"net/http"
 	"os"
 	"reflect"
@@ -85,7 +86,7 @@ func TestOrganizeSkeletonUpgradePreservesData(t *testing.T) {
 }
 
 func TestOrganizeParserFirstWinsAndGroupsAreIndependent(t *testing.T) {
-	items, _ := parseOrganizeOutput(`{
+	items, _ := organize.ParseOutput(`{
  "items": [
   {
    "category": "rule",
@@ -143,12 +144,12 @@ func TestOrganizeParserFirstWinsAndGroupsAreIndependent(t *testing.T) {
 	if len(items) != 0 {
 		t.Fatal("malformed output must leave the batch pending, without partial labels", items)
 	}
-	valid, _ := parseOrganizeOutput(`{"items":[{"n":3,"category":"event","durable":false,"topics":["季度汇报","第三个主题"],"area":"虚构新增领域","deadlines":[]}],"new":[]}`, 5)
+	valid, _ := organize.ParseOutput(`{"items":[{"n":3,"category":"event","durable":false,"topics":["季度汇报","第三个主题"],"area":"虚构新增领域","deadlines":[]}],"new":[]}`, 5)
 	if len(valid) != 1 || valid[3].Category != "event" || valid[3].Durable == nil || *valid[3].Durable || len(valid[3].Groups) != 3 {
 		t.Fatal("valid output lost labels/groups", valid)
 	}
 	for _, invalid := range []string{"not JSON", `{"items":[`, `null`, `{"items":[]}`} {
-		got, _ := parseOrganizeOutput(invalid, 3)
+		got, _ := organize.ParseOutput(invalid, 3)
 		if len(got) != 0 {
 			t.Fatal(invalid, got)
 		}
@@ -217,7 +218,7 @@ func TestOrganizeBatchesReadFiltersAndCorrection(t *testing.T) {
 	workspaceCommand(t, s, scope, workspace.Command{Type: "addProject", Name: "流萤项目"})
 	for range 2 {
 		j := organizeTestJob(t, s, scope)
-		if err := s.ProcessOrganize(ctx, j); err != nil {
+		if err := (organize.Service{Store: s.OrganizeStore(), Generator: s, Version: OrganizeVersion}).Process(ctx, j); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -286,7 +287,7 @@ func TestOrganizeBadOutputAndExhaustion(t *testing.T) {
 			t.Fatal(err)
 		}
 		j := organizeTestJob(t, s, scope)
-		if err := s.ProcessOrganize(ctx, j); err != nil {
+		if err := (organize.Service{Store: s.OrganizeStore(), Generator: s, Version: OrganizeVersion}).Process(ctx, j); err != nil {
 			t.Fatal(err)
 		}
 		var got, version int
@@ -325,13 +326,15 @@ func TestOrganizeConcurrentInvocationAndDeletion(t *testing.T) {
 	erased = organizeTestMemory(t, s, scope, "虚构云杉的季度汇报第一项记录。")
 	kept := organizeTestMemory(t, s, scope, "虚构云杉的季度汇报第二项记录。")
 	j := organizeTestJob(t, s, scope)
-	go func() { done <- s.ProcessOrganize(ctx, j) }()
+	go func() {
+		done <- (organize.Service{Store: s.OrganizeStore(), Generator: s, Version: OrganizeVersion}).Process(ctx, j)
+	}()
 	select {
 	case <-entered:
 	case <-time.After(5 * time.Second):
 		t.Fatal("model did not start")
 	}
-	err := s.ProcessOrganize(ctx, j)
+	err := (organize.Service{Store: s.OrganizeStore(), Generator: s, Version: OrganizeVersion}).Process(ctx, j)
 	var failure *worker.JobError
 	if !errors.As(err, &failure) || failure.Code != "organize_busy" || !failure.NoAttempt {
 		close(release)
@@ -366,7 +369,7 @@ func TestOrganizeTransactionRollbackAndRecovery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := s.ProcessOrganize(ctx, j); err == nil {
+	if err := (organize.Service{Store: s.OrganizeStore(), Generator: s, Version: OrganizeVersion}).Process(ctx, j); err == nil {
 		t.Fatal("expected failure")
 	}
 	for _, ref := range []memory.Ref{first, second} {
@@ -380,7 +383,7 @@ func TestOrganizeTransactionRollbackAndRecovery(t *testing.T) {
 	}
 	// Reprocessing the same fenced task reuses its paid output and recovers
 	// all still-outdated claims after the result transaction rolls back.
-	if err := s.ProcessOrganize(ctx, j); err != nil {
+	if err := (organize.Service{Store: s.OrganizeStore(), Generator: s, Version: OrganizeVersion}).Process(ctx, j); err != nil {
 		t.Fatal(err)
 	}
 	for _, ref := range []memory.Ref{first, second} {
@@ -420,7 +423,7 @@ func TestOrganizeConfiguredChannelAndHourlyLimit(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	err := s.ProcessOrganize(ctx, j)
+	err := (organize.Service{Store: s.OrganizeStore(), Generator: s, Version: OrganizeVersion}).Process(ctx, j)
 	var failure *worker.JobError
 	if !errors.As(err, &failure) || failure.Code != "organize_hourly_limit" || failure.Until.IsZero() || !failure.NoAttempt {
 		t.Fatal(err)
@@ -428,7 +431,7 @@ func TestOrganizeConfiguredChannelAndHourlyLimit(t *testing.T) {
 	if _, err := s.pool.Exec(ctx, "UPDATE background_usage SET created_at=now()-interval '2 hours'"); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.ProcessOrganize(ctx, j); err != nil {
+	if err := (organize.Service{Store: s.OrganizeStore(), Generator: s, Version: OrganizeVersion}).Process(ctx, j); err != nil {
 		t.Fatal(err)
 	}
 	if m, err := s.GetMemory(ctx, scope, string(ref.ID)); err != nil || m.Category != "taste" {
@@ -485,7 +488,7 @@ func TestOrganizeMissingInvalidAndUnknownNumbers(t *testing.T) {
 		organizeTestMemory(t, s, scope, fmt.Sprintf("虚构霜叶的第%d条盆栽观察。", i))
 	}
 	j := organizeTestJob(t, s, scope)
-	if err := s.ProcessOrganize(ctx, j); err != nil {
+	if err := (organize.Service{Store: s.OrganizeStore(), Generator: s, Version: OrganizeVersion}).Process(ctx, j); err != nil {
 		t.Fatal(err)
 	}
 	rows, err := s.pool.Query(ctx, `SELECT cl.organized,cl.organize_attempts,c.category FROM claims cl
@@ -586,7 +589,7 @@ func TestOrganizeModelDeclaredGroupsHaveNoLexicalOrThreeGroupLimit(t *testing.T)
 		organizeTestMemory(t, s, scope, "虚构霜叶的季度汇报、盆栽观察、书店走访、蓝杯计划和阅读记录都在推进。")
 	}
 	j := organizeTestJob(t, s, scope)
-	if err := s.ProcessOrganize(ctx, j); err != nil {
+	if err := (organize.Service{Store: s.OrganizeStore(), Generator: s, Version: OrganizeVersion}).Process(ctx, j); err != nil {
 		t.Fatal(err)
 	}
 	var names []string
@@ -624,7 +627,7 @@ func TestOrganizeUnavailableDoesNotConsumeAttemptsAndBudgetDefers(t *testing.T) 
 	s.models.Config.Providers[0].KeyEnv = channelKey
 	j := organizeTestJob(t, s, scope)
 	for range 2 {
-		err := s.ProcessOrganize(ctx, j)
+		err := (organize.Service{Store: s.OrganizeStore(), Generator: s, Version: OrganizeVersion}).Process(ctx, j)
 		var failure *worker.JobError
 		if !errors.As(err, &failure) || failure.Code != "provider_unavailable" || !failure.NoAttempt {
 			t.Fatal(err)
@@ -642,7 +645,7 @@ func TestOrganizeUnavailableDoesNotConsumeAttemptsAndBudgetDefers(t *testing.T) 
 	if _, err := s.pool.Exec(ctx, `UPDATE workspace_owners SET settings=jsonb_set(settings,'{dailyBudget}','0') WHERE owner_id=$1`, string(scope.OwnerID)); err != nil {
 		t.Fatal(err)
 	}
-	err := s.ProcessOrganize(ctx, j)
+	err := (organize.Service{Store: s.OrganizeStore(), Generator: s, Version: OrganizeVersion}).Process(ctx, j)
 	var failure *worker.JobError
 	if !errors.As(err, &failure) || failure.Code != "budget_deferred" || failure.Until.Before(time.Now()) || !failure.NoAttempt {
 		t.Fatal(err)
@@ -650,7 +653,7 @@ func TestOrganizeUnavailableDoesNotConsumeAttemptsAndBudgetDefers(t *testing.T) 
 	if _, err := s.pool.Exec(ctx, `UPDATE workspace_owners SET settings=jsonb_set(settings,'{dailyBudget}','10') WHERE owner_id=$1`, string(scope.OwnerID)); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.ProcessOrganize(ctx, j); err != nil {
+	if err := (organize.Service{Store: s.OrganizeStore(), Generator: s, Version: OrganizeVersion}).Process(ctx, j); err != nil {
 		t.Fatal(err)
 	}
 	if m, err := s.GetMemory(ctx, scope, string(ref.ID)); err != nil || m.Category != "taste" {
@@ -673,7 +676,7 @@ func TestOrganizeCorrectionDuringCallSkipsOnlyCorrectedVersion(t *testing.T) {
 		t.Fatal(err)
 	}
 	j := organizeTestJob(t, s, scope)
-	if err := s.ProcessOrganize(ctx, j); err != nil {
+	if err := (organize.Service{Store: s.OrganizeStore(), Generator: s, Version: OrganizeVersion}).Process(ctx, j); err != nil {
 		t.Fatal(err)
 	}
 	m, err := s.GetMemory(ctx, scope, string(corrected.ID))
@@ -728,7 +731,7 @@ func TestOrganizeLiveSynthetic(t *testing.T) {
 			break
 		}
 		j := organizeTestJob(t, s, scope)
-		if err := s.ProcessOrganize(ctx, j); err != nil {
+		if err := (organize.Service{Store: s.OrganizeStore(), Generator: s, Version: OrganizeVersion}).Process(ctx, j); err != nil {
 			t.Fatal(err)
 		}
 	}

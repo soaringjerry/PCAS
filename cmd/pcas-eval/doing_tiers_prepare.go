@@ -62,7 +62,7 @@ func prepareTierSuite(ctx context.Context, store *postgres.Store, pool *pgxpool.
 		schedule func(context.Context, time.Time) (int, error)
 		handlers map[string]worker.Handler
 	}{
-		{"organize", store.ScheduleOrganize, map[string]worker.Handler{postgres.OrganizeStage: store.ProcessOrganize}},
+		{"organize", store.ScheduleOrganize, map[string]worker.Handler{postgres.OrganizeStage: app.Organize(store).Process}},
 		{"compare", store.ScheduleCompare, map[string]worker.Handler{postgres.CompareStage: app.Compare(store).Process, postgres.EntityCompareStage: app.EntityCompare(store).Process}},
 		{"status", store.ScheduleStatus, map[string]worker.Handler{postgres.HandoverStage: app.Handover(store).Process}},
 	}

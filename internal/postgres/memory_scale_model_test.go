@@ -8,6 +8,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/currentstate/handover"
 	"github.com/soaringjerry/PCAS/internal/interpretation/aliasscan"
 	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
+	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -282,7 +283,7 @@ func phase26Schedule(ctx context.Context, s *Store, stage string) (int, error) {
 func phase26Process(ctx context.Context, s *Store, j worker.Job) error {
 	switch strings.SplitN(j.Stage, ":", 2)[0] {
 	case OrganizeStage:
-		return s.ProcessOrganize(ctx, j)
+		return (organize.Service{Store: s.OrganizeStore(), Generator: s, Version: OrganizeVersion}).Process(ctx, j)
 	case CompareStage:
 		return (comparison.Service{Store: s.CompareStore(), Generator: s, Version: CompareVersion}).Process(ctx, j)
 	case EntityCompareStage:

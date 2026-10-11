@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 	"math"
 	"strings"
 	"time"
@@ -334,7 +335,7 @@ func validateMemoryQuery(q *workspace.MemoryQuery) error {
 	if q.Entity != "" && !memory.ID(q.Entity).Valid() || q.Project != "" && !memory.ID(q.Project).Valid() || q.Group != "" && !memory.ID(q.Group).Valid() {
 		return memory.ErrInvalid
 	}
-	if q.Category != "" && !validMemoryCategory(q.Category) {
+	if q.Category != "" && !organize.ValidCategory(q.Category) {
 		return memory.ErrInvalid
 	}
 	if q.Nature != "" && !oneOf(q.Nature, "fact", "preference", "decision", "intention", "plan") {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
+	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 	"io"
 	"log/slog"
 	"strings"
@@ -55,7 +56,7 @@ func TestOrganizeCompareHourlyPipelineRetainsCompletedHistory(t *testing.T) {
 	}
 	for i := range 40 {
 		organizeTestMemory(t, s, scope, fmt.Sprintf("虚构分期整理便签%03d。", i))
-		if err := s.ProcessOrganize(ctx, claim(OrganizeStage)); err != nil {
+		if err := (organize.Service{Store: s.OrganizeStore(), Generator: s, Version: OrganizeVersion}).Process(ctx, claim(OrganizeStage)); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -104,7 +105,7 @@ func TestOrganizeCompareHourlyPipelineRetainsCompletedHistory(t *testing.T) {
 		if err := s.Defer(ctx, job, "", time.Now(), true); err != nil {
 			t.Fatal(err)
 		}
-		runner := worker.New(s, map[string]worker.Handler{OrganizeStage: s.ProcessOrganize, CompareStage: (comparison.Service{Store: s.CompareStore(), Generator: s, Version: CompareVersion}).Process, EntityCompareStage: (comparison.EntityService{Store: s.EntityCompareStore(), Generator: s, Version: EntityCompareVersion}).Process}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+		runner := worker.New(s, map[string]worker.Handler{OrganizeStage: (organize.Service{Store: s.OrganizeStore(), Generator: s, Version: OrganizeVersion}).Process, CompareStage: (comparison.Service{Store: s.CompareStore(), Generator: s, Version: CompareVersion}).Process, EntityCompareStage: (comparison.EntityService{Store: s.EntityCompareStore(), Generator: s, Version: EntityCompareVersion}).Process}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 		if ran, err := runner.RunOnce(ctx); err != nil || !ran {
 			t.Fatal("quota worker", stage, ran, err)
 		}

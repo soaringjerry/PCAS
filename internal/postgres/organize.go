@@ -3,7 +3,6 @@ package postgres
 import (
 	"context"
 	"crypto/rand"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -12,8 +11,9 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 	"github.com/soaringjerry/PCAS/internal/memory"
-	"github.com/soaringjerry/PCAS/internal/prompts"
 	"github.com/soaringjerry/PCAS/internal/worker"
 )
 
@@ -23,138 +23,16 @@ var OrganizeVersion = 3
 
 const (
 	OrganizeInterval           = time.Minute
-	OrganizeStage              = "memory.organize"
+	OrganizeStage              = organize.Stage
 	OrganizePriority           = 4
 	organizeBatchLimit         = 40
 	organizeCompareHourlyLimit = 140 // contract 4.1: 118 across the 2.6 stages + 10 project_handover + 10 effort, 2 topic_project
 )
 
-var organizeAreas = []string{"学业", "工作", "创业", "技术", "健康", "财务", "居住", "饮食", "出行", "关系", "兴趣"}
-
-var organizeInstructions = prompts.Must("organize").Text()
-
-type organizeMemory struct {
-	N           int        `json:"n"`
-	Text        string     `json:"text"`
-	ExpressedAt *time.Time `json:"expressedAt"`
-	Ref         memory.Ref `json:"-"`
-}
-
-type organizeGroup struct {
-	Type        string    `json:"type"`
-	Name        string    `json:"name"`
-	Description string    `json:"desc"`
-	ID          memory.ID `json:"-"`
-}
-
-type organizeItem struct {
-	Category     string
-	Durable      *bool
-	Groups       []organizeGroup
-	Deadlines    []cardDeadline
-	Unrestricted bool
-	Scope        string
-}
-
-func validMemoryCategory(category string) bool {
-	return oneOf(category, "identity", "taste", "rule", "goal", "progress", "event", "opinion", "other_person", "unknown")
-}
-
-// Validate the whole item before replacing existing labels, membership, or dates.
-// The first occurrence of a known n wins even when that occurrence is invalid.
-func parseOrganizeOutput(text string, size int) (map[int]organizeItem, []organizeGroup) {
-	items := map[int]organizeItem{}
-	var envelope map[string]json.RawMessage
-	if json.Unmarshal([]byte(text), &envelope) != nil {
-		return items, nil
-	}
-	var entries []json.RawMessage
-	_ = json.Unmarshal(envelope["items"], &entries)
-	seen := map[int]bool{}
-	for _, entry := range entries {
-		var fields map[string]json.RawMessage
-		if json.Unmarshal(entry, &fields) != nil {
-			continue
-		}
-		var n int
-		if json.Unmarshal(fields["n"], &n) != nil || n < 1 || n > size || seen[n] {
-			continue
-		}
-		seen[n] = true
-		var item organizeItem
-		if json.Unmarshal(fields["category"], &item.Category) != nil || !validMemoryCategory(item.Category) {
-			continue
-		}
-		if json.Unmarshal(fields["durable"], &item.Durable) != nil || item.Durable == nil {
-			continue
-		}
-		validGroups := true
-		for _, kind := range []string{"project", "area"} {
-			var name string
-			if len(fields[kind]) > 0 && json.Unmarshal(fields[kind], &name) != nil {
-				validGroups = false
-				break
-			}
-			if strings.TrimSpace(name) != "" {
-				item.Groups = append(item.Groups, organizeGroup{Type: kind, Name: strings.TrimSpace(name)})
-			}
-		}
-		var topics []string
-		if len(fields["topics"]) > 0 && (string(fields["topics"]) == "null" || json.Unmarshal(fields["topics"], &topics) != nil) {
-			validGroups = false
-		}
-		for _, name := range topics {
-			if strings.TrimSpace(name) != "" {
-				item.Groups = append(item.Groups, organizeGroup{Type: "topic", Name: strings.TrimSpace(name)})
-			}
-		}
-		if !validGroups {
-			continue
-		}
-
-		if len(fields["deadlines"]) == 0 || string(fields["deadlines"]) == "null" || json.Unmarshal(fields["deadlines"], &item.Deadlines) != nil {
-			continue
-		}
-		if item.Category == "rule" {
-			var unrestricted *bool
-			if json.Unmarshal(fields["unrestricted"], &unrestricted) != nil || unrestricted == nil || json.Unmarshal(fields["scope"], &item.Scope) != nil {
-				continue
-			}
-			item.Unrestricted = *unrestricted
-			if !item.Unrestricted && strings.TrimSpace(item.Scope) == "" {
-				continue
-			}
-			if item.Unrestricted {
-				item.Scope = ""
-			}
-		}
-		validDeadlines := true
-		for _, d := range item.Deadlines {
-			if !oneOf(d.Kind, "deadline", "appointment", "recurring", "unclear") || strings.TrimSpace(d.Title) == "" || d.ScheduleRule != nil && !d.ScheduleRule.valid() {
-				validDeadlines = false
-			}
-		}
-		if !validDeadlines {
-			continue
-		}
-		items[n] = item
-	}
-	var declarations []json.RawMessage
-	_ = json.Unmarshal(envelope["new"], &declarations)
-	groups := []organizeGroup{}
-	for _, entry := range declarations {
-		var fields map[string]json.RawMessage
-		if json.Unmarshal(entry, &fields) != nil {
-			continue
-		}
-		var group organizeGroup
-		_ = json.Unmarshal(fields["type"], &group.Type)
-		_ = json.Unmarshal(fields["name"], &group.Name)
-		_ = json.Unmarshal(fields["desc"], &group.Description)
-		groups = append(groups, group)
-	}
-	return items, groups
-}
+type (
+	organizeMemory = organize.Memory
+	organizeGroup  = organize.Group
+)
 
 // An area is a stable queue anchor; deleting/correcting any claim in a model
 // batch cannot cascade-delete the job and prevent the other claims from writing.
@@ -168,7 +46,7 @@ func seedOrganizeGroupsTx(ctx context.Context, tx pgx.Tx, owner memory.ID) (memo
 	if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended(current_database() || ':' || current_schema() || ':background-anchor:' || $1::text,0))", string(owner)); err != nil {
 		return anchor, err
 	}
-	for _, name := range organizeAreas {
+	for _, name := range organize.Areas {
 		id, err := entityTx(ctx, tx, owner, "area", name)
 		if err != nil {
 			return anchor, err
@@ -348,124 +226,86 @@ func organizeCompareHourlyTx(ctx context.Context, tx pgx.Tx, code string) error 
 	return backgroundHourlyTx(ctx, tx, stage, code)
 }
 
-func (s *Store) ProcessOrganize(ctx context.Context, j worker.Job) error {
-	// Hold a dedicated session lock over generation, not the user's row lock:
-	// corrections/deletions can proceed, but a recovered lease cannot race a call.
-	conn, err := s.pool.Acquire(ctx)
+// OrganizeStore gives the organize service its reads and writes.
+func (s *Store) OrganizeStore() organize.Store { return organizeStore{s} }
+
+type organizeStore struct{ store *Store }
+
+// Hold a dedicated session lock over generation, not the user's row lock:
+// corrections/deletions can proceed, but a recovered lease cannot race a call.
+func (a organizeStore) Session(ctx context.Context) (organize.Session, func(), error) {
+	conn, release, err := a.store.organizeCallConnection(ctx, "organize_busy", OrganizeInterval)
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
-	defer conn.Release()
-	var locked bool
-	if err := conn.QueryRow(ctx, "SELECT pg_try_advisory_lock(hashtextextended(current_database() || ':' || current_schema() || ':organize-call',0))").Scan(&locked); err != nil {
-		return err
+	return organizeSession{store: a.store, conn: conn}, release, nil
+}
+
+type organizeSession struct {
+	store *Store
+	conn  *pgxpool.Conn
+}
+
+func (a organizeSession) Ready() error {
+	p, ok := a.store.models.Get(a.store.models.ExtractionID())
+	if !ok || p.Embedding || p.Transcription || !a.store.models.Available(p.ID) {
+		return &worker.JobError{Code: "provider_unavailable", Until: time.Now().Add(OrganizeInterval), NoAttempt: true}
 	}
-	if !locked {
-		return &worker.JobError{Code: "organize_busy", Until: time.Now().Add(OrganizeInterval), NoAttempt: true}
-	}
-	defer func() {
-		unlockCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		if _, err := conn.Exec(unlockCtx, "SELECT pg_advisory_unlock(hashtextextended(current_database() || ':' || current_schema() || ':organize-call',0))"); err != nil {
-			_ = conn.Conn().Close(unlockCtx)
+	return nil
+}
+
+func (a organizeSession) NextBatch(ctx context.Context, j worker.Job, version int) (organize.Batch, bool, error) {
+	batch := organize.Batch{Memories: []organizeMemory{}}
+	found := false
+	err := pgx.BeginFunc(ctx, a.conn, func(tx pgx.Tx) error {
+		if err := extractionOwnerLock(ctx, tx, j.OwnerID); err != nil {
+			return err
 		}
-	}()
-	cached, err := s.paidModelResult(ctx, j)
-	if err != nil {
-		return err
-	}
-	p, ok := s.models.Get(s.models.ExtractionID())
-	if cached == nil && (!ok || p.Embedding || p.Transcription) {
-		return &worker.JobError{Code: "provider_unavailable", Until: time.Now().Add(OrganizeInterval), NoAttempt: true}
-	}
-	if cached == nil && !s.models.Available(p.ID) {
-		return &worker.JobError{Code: "provider_unavailable", Until: time.Now().Add(OrganizeInterval), NoAttempt: true}
-	}
-	version := OrganizeVersion
-	batch := []organizeMemory{}
-	var vocabulary []organizeGroup
-	prepared := false
-	timezone := "UTC"
-	if cached == nil {
-		err = pgx.BeginFunc(ctx, conn, func(tx pgx.Tx) error {
-			if err := extractionOwnerLock(ctx, tx, j.OwnerID); err != nil {
-				return err
-			}
-			if err := lockJob(ctx, tx, j); err != nil {
-				return err
-			}
-			if _, err := seedOrganizeGroupsTx(ctx, tx, j.OwnerID); err != nil {
-				return err
-			}
-			rows, err := tx.Query(ctx, `SELECT r.id::text,r.version,c.value #>> '{}',rv.expressed_at`+organizeEligible+`
+		if err := lockJob(ctx, tx, j); err != nil {
+			return err
+		}
+		if _, err := seedOrganizeGroupsTx(ctx, tx, j.OwnerID); err != nil {
+			return err
+		}
+		rows, err := tx.Query(ctx, `SELECT r.id::text,r.version,c.value #>> '{}',rv.expressed_at`+organizeEligible+`
  AND cl.owner_id=$2 ORDER BY EXISTS(SELECT 1 FROM evidence e JOIN archive_entries ae ON(ae.owner_id,ae.source_id,ae.source_version)=(e.owner_id,e.source_id,e.source_version)
  WHERE (e.owner_id,e.target_id,e.target_version)=(c.owner_id,c.claim_id,c.version)),r.created_at DESC,r.id LIMIT $3`, version, string(j.OwnerID), organizeBatchLimit)
-			if err != nil {
-				return err
-			}
-			for rows.Next() {
-				m := organizeMemory{N: len(batch) + 1, Ref: memory.Ref{Kind: memory.ClaimKind}}
-				if err := rows.Scan(&m.Ref.ID, &m.Ref.Version, &m.Text, &m.ExpressedAt); err != nil {
-					rows.Close()
-					return err
-				}
-				batch = append(batch, m)
-			}
-			err = rows.Err()
-			rows.Close()
-			if err != nil {
-				return err
-			}
-			if len(batch) == 0 {
-				return acknowledge(ctx, tx, j)
-			}
-			if err := organizeCompareHourlyTx(ctx, tx, "organize_hourly_limit"); err != nil {
-				return err
-			}
-			if err := tx.QueryRow(ctx, "SELECT settings->>'timezone' FROM workspace_owners WHERE owner_id=$1", string(j.OwnerID)).Scan(&timezone); err != nil {
-				return err
-			}
-			vocabulary, err = organizeVocabularyTx(ctx, tx, j.OwnerID)
-			prepared = err == nil
-			return err
-		})
-		if err != nil || !prepared {
+		if err != nil {
 			return err
 		}
-	}
-	refs := []memory.Ref{}
-	for _, m := range batch {
-		refs = append(refs, m.Ref)
-	}
-	result, err := s.generatePaid(ctx, j, "organize", organizeInstructions, asJSON(map[string]any{"memories": batch, "groups": vocabulary, "timezone": timezone, "refs": refs, "rule": version}), refs)
-	if err != nil {
+		for rows.Next() {
+			m := organizeMemory{N: len(batch.Memories) + 1, Ref: memory.Ref{Kind: memory.ClaimKind}}
+			if err := rows.Scan(&m.Ref.ID, &m.Ref.Version, &m.Text, &m.ExpressedAt); err != nil {
+				rows.Close()
+				return err
+			}
+			batch.Memories = append(batch.Memories, m)
+		}
+		err = rows.Err()
+		rows.Close()
+		if err != nil {
+			return err
+		}
+		if len(batch.Memories) == 0 {
+			return acknowledge(ctx, tx, j)
+		}
+		if err := organizeCompareHourlyTx(ctx, tx, "organize_hourly_limit"); err != nil {
+			return err
+		}
+		if err := tx.QueryRow(ctx, "SELECT settings->>'timezone' FROM workspace_owners WHERE owner_id=$1", string(j.OwnerID)).Scan(&batch.Timezone); err != nil {
+			return err
+		}
+		batch.Groups, err = organizeVocabularyTx(ctx, tx, j.OwnerID)
+		found = err == nil
 		return err
-	}
-	var snapshot struct {
-		Memories []organizeMemory `json:"memories"`
-		Timezone string           `json:"timezone"`
-		Refs     []memory.Ref     `json:"refs"`
-		Rule     int              `json:"rule"`
-	}
-	if err := json.Unmarshal(result.Prompt, &snapshot); err != nil {
-		return err
-	}
-	if snapshot.Rule == 0 {
-		snapshot.Rule = 2
-	} // pre-upgrade paid results retain their rule
-	version = snapshot.Rule
-	batch = snapshot.Memories
-	timezone = snapshot.Timezone
-	if len(batch) != len(snapshot.Refs) {
-		return memory.ErrInvalid
-	}
-	for i := range batch {
-		batch[i].Ref = snapshot.Refs[i]
-	}
-	items, declarations := parseOrganizeOutput(result.Output, len(batch))
+	})
+	return batch, found, err
+}
+
+func (a organizeSession) Apply(ctx context.Context, j worker.Job, result organize.Result) (organize.Applied, error) {
+	version, batch, items, timezone := result.Version, result.Memories, result.Items, result.Timezone
 	exhausted := []memory.ID{}
-	ungrounded := 0
-	err = backgroundResultTx(ctx, conn, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
+	err := backgroundResultTx(ctx, a.conn, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
 		if err := extractionOwnerLock(ctx, tx, j.OwnerID); err != nil {
 			return err
 		}
@@ -485,11 +325,10 @@ func (s *Store) ProcessOrganize(ctx context.Context, j worker.Job) error {
 			}
 			eligible[m.N] = true
 		}
-		groups, dropped, err := resolveOrganizeGroupsTx(ctx, tx, j.OwnerID, batch, items, declarations, eligible)
+		groups, err := resolveOrganizeGroupsTx(ctx, tx, j.OwnerID, items, organize.UsedDeclarations(result.Declared, items, eligible), eligible)
 		if err != nil {
 			return err
 		}
-		ungrounded = dropped
 		for _, m := range batch {
 			if !eligible[m.N] {
 				continue
@@ -515,11 +354,9 @@ func (s *Store) ProcessOrganize(ctx context.Context, j worker.Job) error {
 			if _, err := tx.Exec(ctx, "DELETE FROM claim_mentions WHERE owner_id=$1 AND claim_id=$2 AND claim_version=$3 AND role IN('project','topic','area')", string(j.OwnerID), string(m.Ref.ID), m.Ref.Version); err != nil {
 				return err
 			}
-			if valid {
-				for _, g := range groups[m.N] {
-					if _, err := tx.Exec(ctx, "INSERT INTO claim_mentions(owner_id,claim_id,claim_version,entity_id,role) VALUES($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING", string(j.OwnerID), string(m.Ref.ID), m.Ref.Version, string(g.ID), g.Type); err != nil {
-						return err
-					}
+			for _, g := range groups[m.N] {
+				if _, err := tx.Exec(ctx, "INSERT INTO claim_mentions(owner_id,claim_id,claim_version,entity_id,role) VALUES($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING", string(j.OwnerID), string(m.Ref.ID), m.Ref.Version, string(g.ID), g.Type); err != nil {
+					return err
 				}
 			}
 			cm := cardMemory{N: 1, Text: m.Text, Ref: m.Ref}
@@ -573,15 +410,10 @@ func (s *Store) ProcessOrganize(ctx context.Context, j worker.Job) error {
 		_, err = enqueueOrganizeTx(ctx, tx, j.OwnerID, time.Now(), OrganizeVersion)
 		return err
 	})
-	if err == nil {
-		if ungrounded > 0 {
-			slog.InfoContext(ctx, "memory groups discarded", "stage", "organize", "error_type", "ungrounded_group", "count", ungrounded)
-		}
-		for _, id := range exhausted {
-			slog.WarnContext(ctx, "memory organization deferred after invalid output", "stage", "organize", "error_type", "invalid_output", "memory_id", id)
-		}
+	if err != nil {
+		return organize.Applied{}, err
 	}
-	return err
+	return organize.Applied{Deferred: exhausted}, nil
 }
 
 // Organizing retries are automatic, including transaction recovery. Reserve a
@@ -628,11 +460,6 @@ func (s *Store) reserveOrganizeCost(ctx context.Context, j worker.Job, cost floa
 	return id, nil
 }
 
-func validOrganizeName(name string) bool { return strings.TrimSpace(name) != "" }
-
-// Grounding and semantic identity are decided by the organizing model.
-func groundedOrganizeName(name string, batch []organizeMemory) bool { return validOrganizeName(name) }
-
 func findOrganizeGroupTx(ctx context.Context, tx pgx.Tx, owner memory.ID, kind, name string) (memory.ID, error) {
 	var id memory.ID
 	err := tx.QueryRow(ctx, `SELECT ev.entity_id::text FROM entity_versions ev JOIN memory_records r ON(r.owner_id,r.id,r.version)=(ev.owner_id,ev.entity_id,ev.version)
@@ -647,50 +474,28 @@ func findOrganizeGroupTx(ctx context.Context, tx pgx.Tx, owner memory.ID, kind, 
 	return resolveMergedEntityTx(ctx, tx, owner, id)
 }
 
-func resolveOrganizeGroupsTx(ctx context.Context, tx pgx.Tx, owner memory.ID, batch []organizeMemory, items map[int]organizeItem, declarations []organizeGroup, eligible map[int]bool) (map[int][]organizeGroup, int, error) {
+// declarations are the declared groups that a current statement uses.
+func resolveOrganizeGroupsTx(ctx context.Context, tx pgx.Tx, owner memory.ID, items map[int]organize.Item, declarations []organizeGroup, eligible map[int]bool) (map[int][]organizeGroup, error) {
 	out := map[int][]organizeGroup{}
 	// Take the same alias-creation lock as entityTx before resolving any names.
 	if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended($1,0))", string(owner)+":entities"); err != nil {
-		return nil, 0, err
+		return nil, err
 	}
-	ungrounded := 0
 	for _, g := range declarations {
-		g.Name = strings.TrimSpace(g.Name)
-		if !oneOf(g.Type, "topic", "project", "area") {
-			continue
-		}
 		id, err := findOrganizeGroupTx(ctx, tx, owner, g.Type, g.Name)
 		if err != nil {
-			return nil, 0, err
+			return nil, err
 		}
-		if id != "" || !validOrganizeName(g.Name) {
-			continue
-		}
-		if !groundedOrganizeName(g.Name, batch) {
-			ungrounded++
-			continue
-		}
-		// Do not create unattached concepts from discarded/corrected items.
-		used := false
-		for n, item := range items {
-			if eligible[n] {
-				for _, ref := range item.Groups {
-					if ref.Type == g.Type && strings.EqualFold(ref.Name, g.Name) {
-						used = true
-					}
-				}
-			}
-		}
-		if !used {
+		if id != "" {
 			continue
 		}
 		id, err = entityTx(ctx, tx, owner, g.Type, g.Name)
 		if err != nil {
-			return nil, 0, err
+			return nil, err
 		}
 		if g.Description != "" {
 			if _, err := tx.Exec(ctx, "UPDATE entity_versions SET disambiguation=disambiguation || jsonb_build_object('description',$3::text) WHERE owner_id=$1 AND entity_id=$2 AND version=1", string(owner), string(id), g.Description); err != nil {
-				return nil, 0, err
+				return nil, err
 			}
 		}
 	}
@@ -699,10 +504,9 @@ func resolveOrganizeGroupsTx(ctx context.Context, tx pgx.Tx, owner memory.ID, ba
 			continue
 		}
 		for _, g := range item.Groups {
-
 			id, err := findOrganizeGroupTx(ctx, tx, owner, g.Type, g.Name)
 			if err != nil {
-				return nil, 0, err
+				return nil, err
 			}
 			if id != "" {
 				g.ID = id
@@ -710,7 +514,7 @@ func resolveOrganizeGroupsTx(ctx context.Context, tx pgx.Tx, owner memory.ID, ba
 			}
 		}
 	}
-	return out, ungrounded, nil
+	return out, nil
 }
 
 // Preserve the classifications unaffected by v3; v1 still owes the v2 deadline

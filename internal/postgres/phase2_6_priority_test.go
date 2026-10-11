@@ -1,6 +1,7 @@
 package postgres
 
 import (
+	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 	"strings"
 	"testing"
 	"time"
@@ -31,7 +32,7 @@ func TestPhase26A3ClassificationClaimsBeforeAllOtherBackgroundStages(t *testing.
 	if err != nil || j == nil || !strings.HasPrefix(j.Stage, OrganizeStage+":") {
 		t.Fatalf("classification not dispatched first among all five due stages: %+v %v", j, err)
 	}
-	if err := f.Store.ProcessOrganize(f.Context, *j); err != nil {
+	if err := (organize.Service{Store: f.Store.OrganizeStore(), Generator: f.Store, Version: OrganizeVersion}).Process(f.Context, *j); err != nil {
 		t.Fatal(err)
 	}
 	if len(m.calls(OrganizeStage)) != 1 || len(m.calls(CompareStage))+len(m.calls(EntityCompareStage))+len(m.calls(EntityCandidatesStage))+len(m.calls(HandoverStage)) != 0 {

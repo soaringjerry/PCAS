@@ -2,6 +2,8 @@ package postgres_test
 
 import (
 	"fmt"
+	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
+	"github.com/soaringjerry/PCAS/internal/postgres"
 	"log/slog"
 	"testing"
 	"time"
@@ -25,7 +27,8 @@ func TestPhase25B1_R12_FortyClassificationBatchesPerHour(t *testing.T) {
 		if err := f.db.QueryRow(f.ctx, `SELECT stage FROM memory_jobs WHERE owner_id=$1 AND stage LIKE 'memory.organize:%' AND state='queued'`, f.scope.OwnerID).Scan(&stage); err != nil {
 			t.Fatal(err)
 		}
-		runner := worker.New(f.store, map[string]worker.Handler{stage: f.store.ProcessOrganize, "memory.organize": f.store.ProcessOrganize}, slog.Default())
+		organizeJob := (organize.Service{Store: f.store.OrganizeStore(), Generator: f.store, Version: postgres.OrganizeVersion}).Process
+		runner := worker.New(f.store, map[string]worker.Handler{stage: organizeJob, "memory.organize": organizeJob}, slog.Default())
 		if _, err := runner.RunOnce(f.ctx); err != nil {
 			t.Fatal(err)
 		}
@@ -69,7 +72,8 @@ func TestPhase25B1_R13_DailyBudgetDefersWithoutAttempts(t *testing.T) {
 		if err := f.db.QueryRow(f.ctx, `SELECT stage FROM memory_jobs WHERE owner_id=$1 AND stage LIKE 'memory.organize:%' AND state='queued'`, f.scope.OwnerID).Scan(&stage); err != nil {
 			t.Fatal(err)
 		}
-		runner := worker.New(f.store, map[string]worker.Handler{stage: f.store.ProcessOrganize, "memory.organize": f.store.ProcessOrganize}, slog.Default())
+		organizeJob := (organize.Service{Store: f.store.OrganizeStore(), Generator: f.store, Version: postgres.OrganizeVersion}).Process
+		runner := worker.New(f.store, map[string]worker.Handler{stage: organizeJob, "memory.organize": organizeJob}, slog.Default())
 		worked, err := runner.RunOnce(f.ctx)
 		if err != nil {
 			t.Fatal(err)

@@ -366,6 +366,37 @@ Concrete registrations must follow the verified input dependencies of each exist
 | Scheduled freshness check | Background coordination. | The specialist named by the applicable registration. | Existing scheduling and backfill paths. |
 | Operation executed, skipped, deferred, or failed | The responsible service. | Activity recording. No business response by default. | Receipts and recorded outcomes. |
 
+#### Registered Responses
+
+The table below is the registered table, `Responses` in [application setup](../internal/app/responses.go).
+The worker's handler table comes from the same rows, and a test keeps this page equal to them.
+A stage without a row has no handler. The limit column comes from the stage budgets in storage.
+
+| Stage | Trigger | Producing owner | Named response | Calls in one hour | Duplicate key |
+|---|---|---|---|---|---|
+| `source.parse` | Source version accepted, with an attachment. | Input. | Attachment processor. | No stage limit | owner, record, record version, stage. |
+| `source.chunk` | Source version accepted, with text. | Input. | Text processor. | No stage limit | owner, record, record version, stage. |
+| `source.extract` | Source text available. | Input. | Memory extraction specialist. | No stage limit | owner, record, record version, stage. |
+| `source.tokenize` | Search input changed for a source. | Input. | Search index processor. | No stage limit | owner, record, record version, stage. |
+| `memory.index` | Search input changed for a memory. | Memory. | Search index processor. | No stage limit | owner, record, record version, stage. |
+| `source.embed` | Embedding input changed for a source. | Input. | Vector index processor. | No stage limit | owner, record, record version, stage. |
+| `memory.embed` | Embedding input changed for a memory. | Memory. | Vector index processor. | No stage limit | owner, record, record version, stage. |
+| `memory.organize` | Statement interpretation input changed. | Memory. | Organization specialist. | 40 | owner, record, record version, stage. |
+| `memory.compare` | Statement interpretation input changed. | Memory. | Statement comparison specialist. | 40 | owner, record, record version, stage; the stage names the comparison batch. |
+| `memory.entity_candidates` | Entity comparison input changed. | Memory. | Entity candidate specialist. | 6 | owner, record, record version, stage. |
+| `memory.entity_compare` | Entity comparison input changed. | Memory. | Entity comparison specialist. | 30 | owner, record, record version, stage. |
+| `memory.summary` | Episode summary input changed. | Memory. | Summary specialist. | No stage limit | owner, record, record version, stage. |
+| `memory.card` | Queued card work from before cards were removed. | Current state. | Queue acknowledgement only. | No stage limit | owner, record, record version, stage. |
+| `memory.handover` | Scheduled freshness check: global handover input changed. | Current state. | Global handover specialist. | 2 | owner, record, record version, stage. |
+| `memory.date_tidy` | Scheduled freshness check: a remembered date is not a time to show. | Current state. | Date review specialist. | 30 | owner, record, record version, stage; the stage names the class of the date. |
+| `memory.project_handover` | Scheduled freshness check: project input changed. | Workspace. | Project handover specialist. | 10 | owner, record, record version, stage; the stage names the project. |
+| `memory.effort` | Scheduled freshness check: a project has tasks without an estimate. | Workspace. | Effort specialist. | 10 | owner, record, record version, stage; the stage names the project. |
+| `memory.topic_project` | Scheduled freshness check: a topic's evidence changed. | Workspace. | Project candidate specialist. | 2 | owner, record, record version, stage; the stage names the topic, its input hash, and the project page. |
+
+These rows name the responses that exist. They do not yet give each trigger a recorded event with causal identities.
+The freshness checks still find their work by comparing stored hashes on a schedule, not from a recorded change event.
+Limits for a causal chain and for one event's responses are target work.
+
 Multiple named responses are explicit registrations, not a broadcast to every specialist.
 Changes to derived fields cannot trigger all responses merely because an object's version increased.
 The responsible service checks the response's declared input dependencies before scheduling work.

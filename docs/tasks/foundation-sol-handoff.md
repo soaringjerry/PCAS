@@ -35,7 +35,8 @@ Phase 3.9 is incomplete. The [delivery milestones](../status.md#foundation-deliv
 | Transcription and image interpretation through the gateway | Released at `6dc2363` on 2026-10-11. |
 | Data-owner boundaries and domain extraction | Four background paths have their rules in domain packages: effort estimation, topic projects, date review, and project handover. The [pilot page](foundation-domain-pilot.md) lists them and what each leaves in storage. The secretary, the deputy, workspace commands, memory interpretation, and input remain in the storage package. |
 | Activity queries | The [day activity query](../memory-service.md#day-activity) answers one local day's work, cost, and reasons. Its response lists the links that the records do not contain. |
-| Declared event responses and causal limits | Not started. The [first live readings](../evaluations/2026-10-11-activity-baseline.md) measure the repeated deferrals that these limits must address. |
+| Declared event responses | One [registered table](../architecture.md#registered-responses) names each stage's trigger, producer, specialist, hourly limit, and duplicate key. The worker registers its handlers from it. Triggers are not yet recorded events with causal identities. |
+| Causal limits | Not started. The [first live readings](../evaluations/2026-10-11-activity-baseline.md) measure the repeated deferrals that these limits must address. |
 | Five test layers and nightly evaluation trends | Not started as a complete set. |
 
 Do not derive a completion percentage from these unequal work items.

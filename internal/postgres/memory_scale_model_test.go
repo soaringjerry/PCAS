@@ -74,7 +74,6 @@ func phase26NewModel(t *testing.T, f *phase26LoadedFixture) *phase26Model {
 	t.Cleanup(server.Close)
 	m.URL = server.URL
 	f.Store.SetModels(&ai.Registry{HTTP: server.Client(), Config: ai.Configuration{Extraction: "phase26", Providers: []ai.Provider{{ID: "phase26", Name: "Fictitious acceptance model", Protocol: "openai", BaseURL: server.URL, Model: "fictitious", MaxOutput: 8192, CostMode: "free"}}}})
-	useSyntheticGateway(f.Store)
 	return m
 }
 func phase26ModelStage(system string) string {

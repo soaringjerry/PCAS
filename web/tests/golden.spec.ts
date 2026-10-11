@@ -108,7 +108,10 @@ test('G5 失败恢复：副手首请求报错，原地重试成功', async ({ pa
   await expect(page.locator('.activity')).toContainText('没做成：')
   await retry.click()
   await expect(page.locator('.activity')).toContainText('已加入 3 个子任务', { timeout: 20000 })
-  expect((await events(page)).filter(e => e.kind === 'model' && e.role === 'assistant')).toHaveLength(2)
+  // One failed generation and one retried generation. The deputy's self-check
+  // is a separate call whose time budget equals the answer's duration, so
+  // whether it is sent depends on timing and is not part of this contract.
+  expect((await events(page)).filter(e => e.kind === 'model' && e.role === 'assistant' && !String(e.prompt ?? '').includes('待自查草稿'))).toHaveLength(2)
 })
 
 test('G6 提醒送达：真实等待一分钟、首页、Web Push、Telegram', async ({ page, context }) => {

@@ -22,7 +22,6 @@ func phase26Proposal(t *testing.T, f *phase26LoadedFixture, a, b int) {
 	phase26Exec(t, f, `INSERT INTO entity_alias_candidates(owner_id,left_id,right_id,name_hash,rule,source_marker) VALUES($1,least($2::uuid,$3::uuid),greatest($2::uuid,$3::uuid),entity_name_hash($1,$2,$3),2,'fictitious model proposal') ON CONFLICT DO NOTHING`, f.Scope.OwnerID, f.Entities[a], f.Entities[b])
 }
 func phase26UserRequests(f *phase26LoadedFixture, s *Store) map[string]func(context.Context) error {
-	useSyntheticGateway(s)
 	return map[string]func(context.Context) error{
 		"snapshot": func(ctx context.Context) error { _, err := s.Snapshot(ctx, f.Scope); return err },
 		"library": func(ctx context.Context) error {

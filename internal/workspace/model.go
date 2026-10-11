@@ -417,28 +417,6 @@ type API interface {
 	Export(context.Context, memory.Scope, bool, bool) ([]byte, error)
 }
 
-// DeskAnswer is the assistant's reply to a desk question, with only the
-// records it says it used.
-type DeskAnswer struct {
-	ID       string       `json:"id"`
-	Answer   string       `json:"answer"`
-	Agent    string       `json:"agent"`
-	Used     []DeskSource `json:"used"`
-	Searches []string     `json:"searches"`
-	Links    []string     `json:"links"`
-}
-
-// DeskTurn is an earlier exchange on the same answer card.
-type DeskTurn struct {
-	ID       string `json:"id,omitempty"`
-	Question string `json:"q"`
-	Answer   string `json:"a"`
-}
-type DeskSource struct {
-	Ref  memory.Ref `json:"ref"`
-	Text string     `json:"text"`
-}
-
 // MemoryQuery combines list filters; cursors keep a stable insertion boundary.
 type MemoryQuery struct {
 	Trust     string

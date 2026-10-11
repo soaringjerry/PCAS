@@ -13,8 +13,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/soaringjerry/PCAS/internal/ai"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/modelcall"
 )
 
 func normalizedBudget(b memory.Budget) (memory.Budget, error) {
@@ -95,25 +95,18 @@ func (s *Store) Recall(ctx context.Context, scope memory.Scope, in memory.Recall
 		provider, _ := s.models.Get(s.models.EmbeddingID())
 		var embeddings []memory.Embedding
 		var e error
-		var reservationID string
 		reserved := float64(len(query)+16) * provider.InputPerMillion / 1e6
-		if !s.models.Available(provider.ID) {
-			e = memory.ErrUnavailable
-		} else {
-			reservationID, e = s.reserveModelCostID(ctx, scope.OwnerID, reserved, nil)
+		// A query inside a secretary or deputy execution keeps that root.
+		// Its own execution identity lets concurrent queries stay separate.
+		request := modelcall.EmbeddingRequest{OwnerID: scope.OwnerID, ExecutionID: memory.NewID(), Function: "query_embedding", Stage: "query", Provider: provider, Texts: []string{provider.EmbeddingQueryPrefix + query}, Estimate: reserved}
+		request.RootExecutionID = request.ExecutionID
+		if parent, ok := ctx.Value(interactiveExecutionKey{}).(modelcall.Request); ok && parent.OwnerID == scope.OwnerID {
+			request.RootExecutionID, request.CausationID = parent.RootExecutionID, parent.ExecutionID
 		}
-		if e == nil {
-			var usage ai.Result
-			embeddings, usage, e = s.models.EmbedProviderUsage(ctx, provider, []string{provider.EmbeddingQueryPrefix + query})
-			reserved = usage.Cost
-			if usage.InputTokens > 0 {
-				if err := s.recordUsage(ctx, modelUsage{OwnerID: scope.OwnerID, ID: memory.ID(reservationID), Purpose: "query_embedding", AgentID: provider.ID, Model: provider.Model, DurationMS: usage.DurationMS, InputTokens: usage.InputTokens, InputEstimated: usage.InputEstimated, Cost: usage.Cost, CostEstimated: usage.CostEstimated}); err != nil {
-					return out, err
-				}
-			}
-			if err := s.settleModelCost(ctx, scope.OwnerID, reservationID, reserved); err != nil {
-				return out, err
-			}
+		embeddings, e = s.calls.CallEmbedding(ctx, request)
+		var persistence *modelcall.PersistenceError
+		if errors.As(e, &persistence) {
+			return out, e
 		}
 		if e == nil && len(embeddings) == 1 {
 			vector = asJSON(embeddings[0].Values)

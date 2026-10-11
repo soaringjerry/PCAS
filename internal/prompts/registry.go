@@ -32,7 +32,6 @@ func load() map[string]Definition {
 		"secretary":               {"assistant", "memory-trust", "line-break", "recall-date", "secretary"},
 		"memory-reader":           {"assistant", "memory-trust", "memory-reader"},
 		"document-revise":         {"assistant", "memory-trust", "deputy", "document-revise"},
-		"desk-legacy":             {"assistant", "memory-trust", "desk-legacy"},
 		"secretary-selfcheck":     {"assistant", "memory-trust", "line-break", "recall-date", "secretary", "secretary-selfcheck"},
 		"deputy-selfcheck":        {"assistant", "memory-trust", "deputy", "deputy-selfcheck"},
 	}

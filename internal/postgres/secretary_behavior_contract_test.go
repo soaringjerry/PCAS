@@ -288,7 +288,6 @@ func TestSecretaryFailureCategoriesKeepOriginalAndPrivateLogs(t *testing.T) {
 				workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: asJSON(map[string]any{"dailyBudget": 0})})
 			}
 			s.SetModels(&ai.Registry{HTTP: client, Config: ai.Configuration{Providers: []ai.Provider{provider}}})
-			useSyntheticGateway(s)
 			req := turnRequest("原话-private-T3")
 			out := mustTurn(t, s, scope, req)
 			if rendered := string(asJSON(out.Turn)); strings.Contains(rendered, "key-secret-T3") || strings.Contains(rendered, "model-secret-T3") {
@@ -408,7 +407,7 @@ func TestSecretaryCrossInstanceQueueAllowsOtherConversations(t *testing.T) {
 		}
 		secretaryModelReply(w, `{"actions":[{"op":"create_task","title":"F11-task"}]}`)
 	})
-	peer.SetModelsWithGatewayProviders(s.models, syntheticGatewayModel{s.models})
+	peer.SetModels(s.models)
 	conversation := string(memory.NewID())
 	first := turnRequest("F11-held-first")
 	first.ConversationID = &conversation
@@ -609,7 +608,7 @@ func TestSecretaryConcurrentRetryAcrossInstancesExecutesOnce(t *testing.T) {
 		}
 		secretaryModelReply(w, `{"actions":[{"op":"create_task","title":"once"}]}`)
 	})
-	peer.SetModelsWithGatewayProviders(s.models, syntheticGatewayModel{s.models})
+	peer.SetModels(s.models)
 	req := turnRequest("once")
 	conversation := string(memory.NewID())
 	req.ConversationID = &conversation

@@ -81,6 +81,11 @@ func (s *Store) recoverInteractiveCallsOnce(ctx context.Context) (interactiveRec
 			status.Interrupted = 1
 		}
 	}
+	if persist.Err() == nil {
+		if err := (embeddingCalls{store: s}).recordInterrupted(persist); err != nil {
+			failures = append(failures, err)
+		}
+	}
 	s.pendingInteractive.Range(func(_, _ any) bool { status.PendingResults++; return true })
 	if persist.Err() == nil {
 		err := s.pool.QueryRow(persist, `SELECT

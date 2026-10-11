@@ -27,7 +27,6 @@ type Options struct {
 	Editor      memory.Editor
 	Activity    memory.Activity
 	Models      *ai.Registry
-	Router      *ai.Router
 	WebDir      string
 }
 
@@ -348,36 +347,6 @@ func (s *Server) workspaceRoutes(mux *http.ServeMux) {
 		}
 		writeJSON(w, 200, map[string]any{"providers": out, "chatgptEnabled": s.options.Models != nil && s.options.Models.Codex != nil, "chatgptDirectEnabled": s.options.Models != nil && s.options.Models.ChatGPT != nil})
 	}))
-	// The desk asks where an entry should go. 501 means no decision model is
-	// configured and the page falls back to its own rule.
-	mux.HandleFunc("POST /v1/desk/route", s.authorize(func(w http.ResponseWriter, r *http.Request, scope memory.Scope) {
-		if !scope.IsOwner {
-			s.fail(w, memory.ErrForbidden)
-			return
-		}
-		var in struct {
-			Text string `json:"text"`
-		}
-		if !decode(w, r, &in) {
-			return
-		}
-		text := strings.TrimSpace(in.Text)
-		if text == "" || len(text) > 8000 {
-			s.fail(w, memory.ErrInvalid)
-			return
-		}
-		if !s.options.Router.Configured() {
-			s.fail(w, memory.ErrUnavailable)
-			return
-		}
-		out, err := s.options.Router.Route(r.Context(), text)
-		if err != nil {
-			s.logger.Warn("desk routing failed", "error", err.Error())
-			s.fail(w, memory.ErrUnavailable)
-			return
-		}
-		writeJSON(w, 200, out)
-	}))
 	mux.HandleFunc("POST /v1/desk/turn", s.authorize(func(w http.ResponseWriter, r *http.Request, scope memory.Scope) {
 		desk, ok := s.options.Workspace.(interface {
 			DeskTurn(context.Context, memory.Scope, workspace.DeskTurnRequest) (workspace.DeskTurnResponse, error)
@@ -413,31 +382,6 @@ func (s *Server) workspaceRoutes(mux *http.ServeMux) {
 			return
 		}
 		out, err := desk.DeskTurns(r.Context(), scope, r.URL.Query().Get("conversationId"))
-		if err != nil {
-			s.fail(w, err)
-			return
-		}
-		writeJSON(w, 200, out)
-	}))
-	// Answering can take a model call, longer than the server's default write timeout.
-	mux.HandleFunc("POST /v1/desk/answer", s.authorize(func(w http.ResponseWriter, r *http.Request, scope memory.Scope) {
-		desk, ok := s.options.Workspace.(interface {
-			AnswerDesk(context.Context, memory.Scope, string, string, []workspace.DeskTurn) (workspace.DeskAnswer, error)
-		})
-		if !ok {
-			s.fail(w, memory.ErrUnavailable)
-			return
-		}
-		var in struct {
-			Question string               `json:"question"`
-			AgentID  string               `json:"agentId"`
-			History  []workspace.DeskTurn `json:"history"`
-		}
-		if !decode(w, r, &in) {
-			return
-		}
-		_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(2 * time.Minute))
-		out, err := desk.AnswerDesk(r.Context(), scope, in.AgentID, in.Question, in.History)
 		if err != nil {
 			s.fail(w, err)
 			return

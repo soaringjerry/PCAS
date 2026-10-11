@@ -125,10 +125,19 @@ The [unused generation cleanup](tasks/foundation-unused-generation.md#release-ve
 The old card queue handler retains its original bytes. Current-state contracts and complete branch and main CI pass.
 Backup, readiness, live default Codex accounting, and cleanup checks pass. Claim counts remain unchanged.
 
-The next [query embedding scope](tasks/foundation-query-embedding.md) covers the complete recall call, execution identity, accounting recovery, and visible fallback.
-Its unchanged secretary-path replay passes at `6411b4e`, with exact recorded provider inputs and no live provider starts.
-Complete starting owner data matches the original row multiset. Both complete raw snapshots remain reconstructable without field exclusions.
-The initial row-order assertion and fixture preparation failures remain recorded. Implementation and migration acceptance are outstanding.
+The coordinator reviewed the Phase 3.9 work on 2026-10-10.
+The review found a regression in the released interactive gateway: the secretary and the deputy failed on every provider without output schema or web search.
+The [correction](tasks/foundation-interactive-gateway.md#correction-2026-10-10) restores ordinary generation for callers that validate their own output and records the submitted mode.
+The review also removed the unused legacy routing and answer interfaces.
+
+The review replaced the query embedding candidate `9f80205`.
+That candidate saved query text and vectors for recovery. It was not merged or released.
+The [revised query embedding path](tasks/foundation-query-embedding.md) keeps the call record and the accounting only.
+Its gateway and storage contracts pass on an isolated database.
+
+The [revised background embedding path](tasks/foundation-background-embedding.md) uses the same gateway entry with the leased job.
+It replaces the earlier scope. The partial implementation in Sol's worktree did not compile and is not used.
+The existing queue rule already refuses a second paid attempt, so this revision adds no saved batch results.
 
 Registered instructions and four output schemas preserve their original bytes and field order.
 The secretary keeps its original shared deadline and two-attempt retry policy.

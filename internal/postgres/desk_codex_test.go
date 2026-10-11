@@ -4,10 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"log/slog"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -17,7 +13,6 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/ai"
-	"github.com/soaringjerry/PCAS/internal/httpapi"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/testsupport"
 	"github.com/soaringjerry/PCAS/internal/workspace"
@@ -158,20 +153,6 @@ func exerciseCodexFormats(t *testing.T, binary, home string, live bool) {
 		}
 		t.Logf("weather: reply_nonempty=true actions=0 capture=0 seconds=%.1f", time.Since(start).Seconds())
 	}
-	// Exercise the actual legacy HTTP route; it must keep its own answer JSON shape.
-	token := strings.Repeat("f5-test-", 5)
-	api := httpapi.New(s, s, httpapi.NewOwnerToken(token, scope.OwnerID), func(context.Context) error { return nil }, slog.New(slog.NewTextHandler(io.Discard, nil)), httpapi.Options{Workspace: s})
-	r := httptest.NewRequest(http.MethodPost, "/v1/desk/answer", strings.NewReader(string(asJSON(map[string]any{"agentId": "chatgpt", "question": "记录里有报销政策吗", "history": []workspace.DeskTurn{}}))))
-	r = r.WithContext(ctx)
-	r.Header.Set("Authorization", "Bearer "+token)
-	r.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-	api.ServeHTTP(w, r)
-	var answer workspace.DeskAnswer
-	if w.Code != http.StatusOK || json.Unmarshal(w.Body.Bytes(), &answer) != nil || strings.TrimSpace(answer.Answer) == "" {
-		t.Fatal("legacy answer route failed", w.Code)
-	}
-	t.Log("legacy /v1/desk/answer: status=200 answer_nonempty=true")
 	for _, format := range []string{"纯文本", "JSON 对象，包含 draft 字符串字段"} {
 		st := workspaceCommand(t, s, scope, workspace.Command{Type: "requestRun", ThingID: task.ID, AgentID: "chatgpt", Kind: "draft", Prompt: "起草一句礼貌邮件，只输出" + format})
 		runID := st.Runs[0].ID

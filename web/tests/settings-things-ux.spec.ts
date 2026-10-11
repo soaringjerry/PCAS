@@ -267,12 +267,9 @@ test('the pay-per-use API opens from its row, saves what was typed, and no longe
   expect(m.posts[0]).toMatchObject({ path: '/v1/models/openai/text', body: { base_url: 'https://other.example.test/v1', api_key: 'fake-text-key', model: 'gpt-fake', default: false } })
   await expect(page.getByLabel('文本 API API Key', { exact: true })).toHaveValue('')
   await expect(page.getByLabel('向量 Base URL', { exact: true })).toBeVisible()
-  // The legacy key is one more level down and says the secretary does not use it.
+  // The retired routing key has no form here.
   await expect(page.getByLabel('Jev API Key')).toHaveCount(0)
-  const legacy = page.getByRole('button', { name: /^旧版分流接口的密钥/ })
-  await expect(legacy).toContainText('现在的秘书不使用')
-  await legacy.click()
-  await expect(page.getByText('现在的秘书和 Telegram 都不经过它，只有仍在调用旧接口的外部程序会用到。')).toBeVisible()
+  await expect(page.getByRole('button', { name: /^旧版分流接口的密钥/ })).toHaveCount(0)
   await expect(page.getByText('由 Jev 判断去向')).toHaveCount(0)
   expect(m.errors).toEqual([])
 })

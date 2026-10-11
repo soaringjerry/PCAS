@@ -3,7 +3,6 @@ package postgres
 import (
 	"context"
 	"fmt"
-	"strings"
 	"testing"
 	"time"
 
@@ -71,23 +70,6 @@ func TestCompareTrustAtEveryMemoryConsumer(t *testing.T) {
 					if i == 99 {
 						t.Fatal("index queue did not drain")
 					}
-				}
-				// Legacy answer: record IDs in the prompt and returned citations.
-				f.set(map[string]any{"answer": "虚构问答回答。", "used": []string{string(ref.ID)}})
-				answer, err := s.AnswerDesk(ctx, scope, "model", "FictionalTrust", nil)
-				if err != nil {
-					t.Fatal(err)
-				}
-				used := []memory.Ref{}
-				for _, citation := range answer.Used {
-					used = append(used, citation.Ref)
-				}
-				b1HasRef(t, used, ref, tc.allowed)
-				if got := strings.Contains(f.last(t).Prompt, "["+string(ref.ID)+" / "); got != tc.allowed {
-					t.Errorf("AnswerDesk sent=%v want=%v", got, tc.allowed)
-				}
-				if tc.allowed && !strings.Contains(f.last(t).Prompt, "trust="+tc.trust) {
-					t.Error("legacy answer omitted trust")
 				}
 				// Secretary: aliases and actual stored dependency references.
 				f.set(`{"reply":"虚构秘书回答。","used":["M1"],"actions":[]}`)

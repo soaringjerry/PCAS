@@ -41,6 +41,12 @@ func (s *Store) paidModelResult(ctx context.Context, j worker.Job) (*paidModelRe
 // Temporary adapter for the existing background domain callers. Sol owns its
 // removal when those callers pass declared gateway requests directly.
 func (s *Store) generatePaid(ctx context.Context, j worker.Job, purpose, instructions string, prompt json.RawMessage, refs []memory.Ref) (*paidModelResult, error) {
+	return s.generatePaidInput(ctx, j, purpose, instructions, "", prompt, refs)
+}
+
+// generatePaidInput sends modelInput to the provider and saves record with the
+// result. An empty modelInput sends the record itself.
+func (s *Store) generatePaidInput(ctx context.Context, j worker.Job, purpose, instructions, modelInput string, prompt json.RawMessage, refs []memory.Ref) (*paidModelResult, error) {
 	definition, ok := prompts.FromText(instructions)
 	if !ok {
 		return nil, &worker.JobError{Code: "prompt_not_registered"}
@@ -48,7 +54,7 @@ func (s *Store) generatePaid(ctx context.Context, j worker.Job, purpose, instruc
 	if s.calls == nil {
 		return nil, &worker.JobError{Code: "provider_not_configured"}
 	}
-	result, err := s.calls.Call(ctx, modelcall.Request{OwnerID: j.OwnerID, ExecutionID: j.ID, RootExecutionID: j.ID, Function: purpose, Stage: j.Stage, Instructions: definition, Prompt: prompt, Refs: refs, Policy: j})
+	result, err := s.calls.Call(ctx, modelcall.Request{OwnerID: j.OwnerID, ExecutionID: j.ID, RootExecutionID: j.ID, Function: purpose, Stage: j.Stage, Instructions: definition, Prompt: prompt, ModelInput: modelInput, Refs: refs, Policy: j})
 	if errors.Is(err, modelcall.ErrNotConfigured) {
 		return nil, &worker.JobError{Code: "provider_not_configured"}
 	}

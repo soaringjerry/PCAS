@@ -486,7 +486,7 @@ func (s *Store) ProcessExtraction(ctx context.Context, j worker.Job) (err error)
 	}
 	// Reserve before submitting a background generation. Repeated processing can
 	// retry DB work, but an ambiguous costly request requires explicit user retry.
-	result, err := s.generatePaid(ctx, j, "extraction", structuredExtractionInstructions, asJSON(map[string]any{"rawPrompt": prompt}), []memory.Ref{j.Record})
+	result, err := s.generatePaidInput(ctx, j, "extraction", structuredExtractionInstructions, prompt, asJSON(map[string]any{"rawPrompt": prompt}), []memory.Ref{j.Record})
 	if err != nil {
 		return err
 	}

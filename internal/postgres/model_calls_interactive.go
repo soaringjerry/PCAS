@@ -886,7 +886,7 @@ func deputyAnswerRequest(owner memory.ID, token string, snapshot reviseSnapshot)
 	return modelcall.Request{
 		OwnerID: owner, ExecutionID: memory.ID(run.ID), RootExecutionID: memory.ID(run.ID), Function: "deputy", Stage: "answer",
 		ProviderID: run.AgentID, Instructions: instruction, Schema: schema, Search: true, ModeFallback: true, ContextBuilderVersion: "deputy-answer-v1",
-		Prompt: asJSON(snapshot), Refs: run.ContextVersions,
+		Prompt: asJSON(snapshot), ModelInput: snapshot.RawPrompt, Refs: run.ContextVersions,
 		Policy: interactiveCallPolicy{Kind: "deputy", Token: token, Origin: run.CreatedAt, AgentID: run.AgentID, ThingID: run.ThingID, BudgetOwner: "deputy_run",
 			Usage: modelUsage{Purpose: "deputy", RunID: run.ID, Tier: run.MemoryTier, Plan: asJSON(usePlan{Groups: run.MemoryGroups})}},
 	}

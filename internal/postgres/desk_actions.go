@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/workspace"
+	"github.com/soaringjerry/PCAS/internal/workspace/effort"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -452,7 +453,7 @@ func (s *Store) executeSecretaryActionTx(ctx context.Context, tx pgx.Tx, scope m
 			if json.Unmarshal(raw, &h) != nil {
 				return skippedReceipt(a.Op, "工作量不是有效小时数"), nil
 			}
-			if _, err = taskStartDate(item.Due, &h, loc); err != nil {
+			if _, err = effort.StartDate(item.Due, &h, loc); err != nil {
 				return skippedReceipt(a.Op, "工作量须为非负小时数，并能计算有效开工日"), nil
 			}
 			patch["estimatedHours"] = h

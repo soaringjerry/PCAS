@@ -15,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/workspace"
+	"github.com/soaringjerry/PCAS/internal/workspace/effort"
 )
 
 func requireOwner(scope memory.Scope) error {
@@ -220,7 +221,7 @@ func (s *Store) snapshotTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) (
 		}
 		switch item.Kind {
 		case "task":
-			item.StartDate, err = taskStartDate(item.Due, item.EstimatedHours, deskLocation(out.Settings))
+			item.StartDate, err = effort.StartDate(item.Due, item.EstimatedHours, deskLocation(out.Settings))
 			if err != nil {
 				return out, err
 			}

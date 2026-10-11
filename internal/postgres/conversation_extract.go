@@ -297,7 +297,7 @@ func (s *Store) processConversationExtraction(ctx context.Context, j worker.Job,
 		for _, item := range earlier {
 			refs = append(refs, item.Claim)
 		}
-		result, err := s.generatePaid(ctx, j, "extraction", conversationExtractionInstructions, asJSON(map[string]any{"rawPrompt": prompt}), refs)
+		result, err := s.generatePaidInput(ctx, j, "extraction", conversationExtractionInstructions, prompt, asJSON(map[string]any{"rawPrompt": prompt}), refs)
 		if err != nil {
 			return err
 		}

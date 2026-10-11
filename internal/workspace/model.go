@@ -4,8 +4,10 @@ package workspace
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
+	"fmt"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
 )
@@ -455,4 +457,19 @@ type MemoryFacets struct {
 	Groups []MemoryGroupFacet `json:"groups"`
 	People []MemoryFacet      `json:"people"`
 	Places []MemoryFacet      `json:"places"`
+}
+
+// ContentHash identifies an item's business content. Provenance, history, and
+// audit fields do not change it, so a write of those fields alone does not
+// make an earlier reading of the item out of date.
+func ContentHash(item Item) string {
+	item.Version = 0
+	item.Sources = nil
+	item.History = nil
+	item.Evolution = nil
+	item.CreatedAt = ""
+	item.UpdatedAt = ""
+	item.HasRetainedWriting = false
+	data, _ := json.Marshal(item)
+	return fmt.Sprintf("%x", sha256.Sum256(data))
 }

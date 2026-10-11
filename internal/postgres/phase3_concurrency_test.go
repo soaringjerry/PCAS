@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/worker"
+	"github.com/soaringjerry/PCAS/internal/workspace/effort"
 )
 
 // Each old stage is rerun with the EXTENDED phase3 fixture, real HTTP user
@@ -182,8 +183,11 @@ func phase3Schedule(s *Store, ctx context.Context, logical string, now time.Time
 	return err
 }
 func phase3Process(s *Store, ctx context.Context, logical string, job worker.Job) error {
-	name := map[string]string{"project_handover": "ProcessProjectHandover", "effort": "ProcessEffort"}[logical]
-	_, err := phase3ReflectCall(s, name, ctx, job)
+	if logical == "effort" {
+		// The effort service is composed here as application setup composes it.
+		return effort.Service{Store: s.EffortStore(), Generator: s, Now: s.BusinessNow}.Process(ctx, job)
+	}
+	_, err := phase3ReflectCall(s, "ProcessProjectHandover", ctx, job)
 	return err
 }
 func TestPhase3G1G2G3G4G5ExistingPipelineRegressions(t *testing.T) {

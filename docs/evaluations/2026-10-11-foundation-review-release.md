@@ -96,6 +96,16 @@ The release had no database migration. The backup was validated, and the claim c
 The live check on the real default Codex channel passed: an answer, an arrangement (`create_task`, done), and a change (`update`, done), each about 16 seconds, with settled calls and a clean group cleanup.
 Neither log has an error, and no container restarted.
 
+## Sixth Release on the Same Day
+
+Released revision: `2036c14a2d7a5ae40923242e1f82b751b8a4c814`. Earlier revision: `3695c59`.
+Pull requests #316, #317, and #318 give the changes: the job flows of statement comparison and entity comparison left the storage package.
+
+The release had no database migration. The backup was validated, and the record counts are equal before and after the start: 5,253 claims and 25 work items.
+The live check on the real default Codex channel passed: an answer, an arrangement (`create_task`, done), and a change (`update`, done), each about 17 seconds, with settled calls and a clean group cleanup.
+Neither log has an error, and no container restarted.
+No comparison job ran in the first eight minutes after the start, so this record does not show a comparison call on the live instance.
+
 ## Host Cleanup
 
 The owner approved removal of leftover data on 2026-10-11.

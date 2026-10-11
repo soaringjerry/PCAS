@@ -36,9 +36,13 @@ type Request struct {
 	Schema                prompts.Schema
 	Search                bool
 	ContextBuilderVersion string
-	Prompt                json.RawMessage
-	Refs                  []memory.Ref
-	Policy                any
+	// Prompt is the input record that is saved with the result.
+	Prompt json.RawMessage
+	// ModelInput is the text that the provider receives. When it is empty the
+	// provider receives Prompt.
+	ModelInput string
+	Refs       []memory.Ref
+	Policy     any
 	// ModeFallback states that the caller validates the output itself.
 	// When the selected provider lacks schema or search, the gateway submits
 	// ordinary generation and names the missing capabilities in Unsupported.
@@ -120,12 +124,12 @@ type Journal interface {
 }
 
 type Gateway struct {
-	providers  Providers
-	accounting Accounting
-	results    Results
-	journal    Journal
-	embedder   Embedder
-	embeddings EmbeddingJournal
+	providers     Providers
+	accounting    Accounting
+	results       Results
+	journal       Journal
+	direct        DirectProviders
+	directJournal DirectJournal
 }
 
 func New(providers Providers, accounting Accounting, results Results, journal Journal) *Gateway {
@@ -196,12 +200,9 @@ func (g *Gateway) Call(ctx context.Context, request Request) (*PaidResult, error
 		if err := g.providers.CheckGeneration(provider, mode); err != nil {
 			return nil, errors.Join(err, g.journal.PreparationFailed(ctx, request, invocation, err))
 		}
-		modelPrompt := string(request.Prompt)
-		var wrapped struct {
-			RawPrompt string `json:"rawPrompt"`
-		}
-		if json.Unmarshal(request.Prompt, &wrapped) == nil && wrapped.RawPrompt != "" {
-			modelPrompt = wrapped.RawPrompt
+		modelPrompt := request.ModelInput
+		if modelPrompt == "" {
+			modelPrompt = string(request.Prompt)
 		}
 		saved = &PaidResult{InvocationID: invocation, Prompt: request.Prompt, Provider: provider.ID, Model: provider.Model, Refs: request.Refs, ReservedCost: provider.Reserve(request.Instructions.Text() + modelPrompt)}
 		reservation, err := g.accounting.Reserve(ctx, request, saved.ReservedCost)

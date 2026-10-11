@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,7 +13,9 @@ import (
 	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/soaringjerry/PCAS/internal/ai"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/modelcall"
 	"github.com/soaringjerry/PCAS/internal/worker"
 )
 
@@ -257,32 +258,23 @@ func (s *Store) parseAttachment(ctx context.Context, scope memory.Scope, ref mem
 		if seconds > 4*3600 {
 			return parsed, &worker.JobError{Code: "file_audio_duration_limit"}
 		}
-		reservationID, reserveErr := s.reserveModelCostID(ctx, scope.OwnerID, (seconds+1)/60*provider.AudioPerMinute, job)
-		if reserveErr != nil {
-			return parsed, reserveErr
-		}
 		audio, err := os.Open(path)
 		if err != nil {
-			if settleErr := s.settleModelCost(ctx, scope.OwnerID, reservationID, 0); settleErr != nil {
-				return parsed, settleErr
-			}
 			return parsed, err
 		}
-		var durationMS *int64
-		text, durationMS, err = s.models.TranscribeUsage(ctx, audio, title)
-		audio.Close()
-		// This adapter reports text, not billing. Use the measured duration
-		// rather than the extra second held during reservation.
-		cost := seconds / 60 * provider.AudioPerMinute
-		if err != nil && strings.TrimSpace(text) == "" {
-			cost = 0
+		// The reservation holds one more second than the measured length.
+		request := modelcall.DirectRequest{OwnerID: scope.OwnerID, ExecutionID: memory.NewID(), Function: "transcription", Stage: "audio", Provider: provider, Estimate: (seconds + 1) / 60 * provider.AudioPerMinute, Refs: []memory.Ref{ref}, Job: job}
+		request.RootExecutionID = request.ExecutionID
+		if job != nil {
+			request.RootExecutionID, request.CausationID = job.ID, job.ID
 		}
+		var usage ai.Result
+		var call modelcall.DirectCall
+		text, usage, call, err = s.calls.CallTranscription(ctx, request, audio, title, seconds)
+		audio.Close()
 		if err == nil {
-			paid := &paidModelResult{Output: text, Reservation: reservationID, Provider: provider.ID, Model: provider.Model, InputTokens: int(math.Ceil(seconds * 50)), OutputTokens: len([]rune(text)), InputEstimated: true, OutputEstimated: true, Cost: cost, CostEstimated: provider.CostMode != "free"}
+			paid := &paidModelResult{Output: text, Reservation: call.Reservation, Provider: provider.ID, Model: provider.Model, InputTokens: usage.InputTokens, OutputTokens: usage.OutputTokens, InputEstimated: true, OutputEstimated: true, Cost: usage.Cost, CostEstimated: usage.CostEstimated}
 			if writeErr := s.saveAttachmentReceipt(ctx, scope, ref, "transcript", paid); writeErr != nil {
-				return parsed, writeErr
-			}
-			if writeErr := s.accountAttachmentReceipt(ctx, scope, ref, paid, "transcription", job); writeErr != nil {
 				return parsed, writeErr
 			}
 			parsed.Text, parsed.Representation = text, "transcript"
@@ -291,22 +283,13 @@ func (s *Store) parseAttachment(ctx context.Context, scope memory.Scope, ref mem
 			}
 			return parsed, nil
 		}
-		if settleErr := s.settleModelCost(ctx, scope.OwnerID, reservationID, cost); settleErr != nil {
-			return parsed, settleErr
-		}
-		callErr := err
-		refs := []memory.Ref{ref}
-		usage := modelUsage{OwnerID: scope.OwnerID, ID: memory.ID(reservationID), Purpose: "transcription", DurationMS: durationMS, AgentID: provider.ID, Model: provider.Model, InputTokens: int(math.Ceil(seconds * 50)), OutputTokens: len([]rune(text)), InputEstimated: true, OutputEstimated: true, Cost: cost, CostEstimated: provider.CostMode != "free", MemoryRefs: refs}
-		if job != nil {
-			usage.JobID = string(job.ID)
-		}
-		if err := s.recordUsage(ctx, usage); err != nil {
-			return parsed, err
-		}
-		if callErr != nil {
+		// A submitted call is recorded with its usage. Other errors come from
+		// the reservation or the accounting write and keep their own meaning.
+		var failure *modelcall.Failure
+		if errors.As(err, &failure) || errors.Is(err, modelcall.ErrNotAvailable) || errors.Is(err, ai.ErrUnsupportedCapability) {
 			return parsed, memory.ErrUnavailable
 		}
-		representation = "transcript"
+		return parsed, err
 	} else if media == "application/pdf" {
 		text, representation, err = parsePDFWithReader(ctx, dir, path, func(ctx context.Context, path string) (string, string, error) {
 			return s.readImage(ctx, scope, ref, path, "image/png", job)
@@ -445,4 +428,25 @@ func (s *Store) CleanupBlobs(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+// TranscribeVoice transcribes a channel's voice message of a known length.
+// The call is recorded with its cost. The audio and the text are not stored here.
+// A missing provider or capability returns memory.ErrUnavailable.
+func (s *Store) TranscribeVoice(ctx context.Context, scope memory.Scope, audio io.Reader, name string, seconds float64) (string, error) {
+	if s.models == nil || s.calls == nil {
+		return "", memory.ErrUnavailable
+	}
+	provider, ok := s.models.Get(s.models.Config.Transcription)
+	if !ok {
+		return "", memory.ErrUnavailable
+	}
+	request := modelcall.DirectRequest{OwnerID: scope.OwnerID, ExecutionID: memory.NewID(), Function: "transcription", Stage: "voice", Provider: provider, Estimate: (seconds + 1) / 60 * provider.AudioPerMinute}
+	request.RootExecutionID = request.ExecutionID
+	text, _, _, err := s.calls.CallTranscription(ctx, request, audio, name, seconds)
+	var failure *modelcall.Failure
+	if errors.Is(err, modelcall.ErrNotAvailable) || errors.Is(err, ai.ErrUnsupportedCapability) || errors.As(err, &failure) && failure.Code == modelcall.ErrNotAvailable.Error() {
+		return "", memory.ErrUnavailable
+	}
+	return text, err
 }

@@ -8,7 +8,7 @@ Phase 3.9 is incomplete. The [delivery milestones](../status.md#foundation-deliv
 
 | Finding | Evidence | Result |
 |---|---|---|
-| The storage package grew during a phase that must reduce it. | Non-test code in `internal/postgres` went from 26,455 to 28,355 lines between `4af34cd` and `25eef6f`. | Open. Domain extraction has not started. |
+| The storage package grew during a phase that must reduce it. | Non-test code in `internal/postgres` went from 26,455 to 28,355 lines between `4af34cd` and `25eef6f`. | Open. The [pilot](foundation-domain-pilot.md) gives the extraction pattern. |
 | The released interactive gateway failed on every provider without output schema or web search. | The browser regression suite fails at `25eef6f`. The secretary returned an unsupported-capability receipt for an OpenAI-compatible provider. | Corrected. See the [correction](foundation-interactive-gateway.md#correction-2026-10-10). |
 | Storage test fixtures replaced the capability check with one that accepted every mode. | `syntheticGatewayModel` in the storage, Telegram, and evaluation fixtures. | Removed. Tests use the actual check. |
 | The released batches had no pull request and no acceptance by a different reviewer. | No merge commit on main after `4af34cd`. The browser regression workflow runs only for pull requests. | The coordinator's review is the first independent check. Later work uses pull requests. |
@@ -18,6 +18,8 @@ Phase 3.9 is incomplete. The [delivery milestones](../status.md#foundation-deliv
 | The legacy routing and answer interfaces had no client. | The web client and Telegram do not call them. | Removed. |
 | The recorded-replay tools compare every field of every row. | About 2,700 lines in Go and Python. Each record states that complete state equivalence is not established. | Open. The architecture requires comparison of state, evidence, actions, and quality. |
 | The gateway request carries an untyped policy value, and three storage adapters repeat one lifecycle. | `Policy any` in `internal/modelcall/gateway.go`; `modelCallStorage` in `internal/postgres`. | Open. This belongs to domain extraction. |
+| The phase 3 acceptance tests were skipped in a default run after phase 3 was released. | `phase3Finding` skipped each test that named a finding of the baseline before the implementation. The switches of phases 2.6 and 3.5 were already removed. | Corrected. With the switch off, 64 tests passed and one failed because its budget table predated phases 3.5 and 3.6. The switch is removed and that table is current. |
+| Disposable test databases stay on the host after an interrupted run. | 22 containers named `pcas-phase2_6-t-*` used about 3 GB of memory on 2026-10-11. | Open. The fixture needs cleanup that does not depend on a normal test exit. |
 | The complete local check exceeds its thirty-minute package limit. | `make check` and `make test-integration` on the development host. | Open. Four parallel slices on one database complete the package. |
 
 ## 2 Delivery State
@@ -27,21 +29,18 @@ Phase 3.9 is incomplete. The [delivery milestones](../status.md#foundation-deliv
 | Shared model gateway and prompt registry | Released for background generation, the secretary, the readers, the self-checks, and the deputy. |
 | Recorded replay diagnostics | Released. Complete state equivalence is not established. |
 | Unused card generation cleanup | Released at `6411b4e`. |
-| Query and background embedding through the gateway | On the review branch. Not released when this page was written. |
-| Mode fallback correction for providers without schema or search | On the review branch. Not released when this page was written. |
-| Legacy routing and answer removal | On the review branch. Not released when this page was written. |
-| Transcription and image interpretation through the gateway | Not started. Both keep a declared provider boundary exception. |
-| Data-owner boundaries and domain extraction | Not started. |
-| Activity queries, declared event responses, and causal limits | Not started. |
+| Query and background embedding through the gateway | Released at `a5c1483` on 2026-10-11. |
+| Mode fallback correction for providers without schema or search | Released at `a5c1483` on 2026-10-11. |
+| Legacy routing and answer removal | Released at `a5c1483` on 2026-10-11. |
+| Transcription and image interpretation through the gateway | File transcription, image interpretation, and Telegram voice transcription use recorded gateway entries. Not released when this page was written. |
+| Data-owner boundaries and domain extraction | The [pilot](foundation-domain-pilot.md) moved workspace effort estimation. The other paths remain in the storage package. |
+| Activity queries | The [day activity query](../memory-service.md#day-activity) answers one local day's work, cost, and reasons. Its response lists the links that the records do not contain. |
+| Declared event responses and causal limits | Not started. The [first live readings](../evaluations/2026-10-11-activity-baseline.md) measure the repeated deferrals that these limits must address. |
 | Five test layers and nightly evaluation trends | Not started as a complete set. |
 
 Do not derive a completion percentage from these unequal work items.
 
-The provider boundary test declares these remaining direct-call exceptions:
-
-- File transcription in `internal/postgres/attachments.go`.
-- Image interpretation in `internal/postgres/vision.go`.
-- Telegram transcription in `internal/telegram/poller.go`.
+The provider boundary test declares no direct-call exception. Each production provider call is inside `internal/modelcall`.
 
 ## 3 Sol's Worktree
 

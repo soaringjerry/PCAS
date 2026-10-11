@@ -98,12 +98,12 @@ func (s *Store) Recall(ctx context.Context, scope memory.Scope, in memory.Recall
 		reserved := float64(len(query)+16) * provider.InputPerMillion / 1e6
 		// A query inside a secretary or deputy execution keeps that root.
 		// Its own execution identity lets concurrent queries stay separate.
-		request := modelcall.EmbeddingRequest{OwnerID: scope.OwnerID, ExecutionID: memory.NewID(), Function: "query_embedding", Stage: "query", Provider: provider, Texts: []string{provider.EmbeddingQueryPrefix + query}, Estimate: reserved}
+		request := modelcall.DirectRequest{OwnerID: scope.OwnerID, ExecutionID: memory.NewID(), Function: "query_embedding", Stage: "query", Provider: provider, Estimate: reserved}
 		request.RootExecutionID = request.ExecutionID
 		if parent, ok := ctx.Value(interactiveExecutionKey{}).(modelcall.Request); ok && parent.OwnerID == scope.OwnerID {
 			request.RootExecutionID, request.CausationID = parent.RootExecutionID, parent.ExecutionID
 		}
-		embeddings, e = s.calls.CallEmbedding(ctx, request)
+		embeddings, e = s.calls.CallEmbedding(ctx, request, []string{provider.EmbeddingQueryPrefix + query})
 		var persistence *modelcall.PersistenceError
 		if errors.As(e, &persistence) {
 			return out, e

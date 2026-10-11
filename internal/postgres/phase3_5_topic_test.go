@@ -13,29 +13,21 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/worker"
+	"github.com/soaringjerry/PCAS/internal/workspace"
+	"github.com/soaringjerry/PCAS/internal/workspace/topicproject"
 )
 
-// Published #278: ScheduleStatus / ProcessTopicProject; memory.topic_project,
+// Published #278: ScheduleStatus / the topic project service; memory.topic_project,
 // entity_versions.disambiguation.work_item_id, topic_project_links/checks.
 const phase35TopicStage = "memory.topic_project"
 
-type phase35TopicProcessor interface {
-	ProcessTopicProject(context.Context, worker.Job) error
-}
-
+// The topic project service is composed here as application setup composes it.
 func phase35ProcessTopic(t *testing.T, s *Store, ctx context.Context, j worker.Job) error {
 	t.Helper()
-	p, ok := any(s).(phase35TopicProcessor)
-	if !ok {
-		t.Fatal("#278 ProcessTopicProject seam not yet integrated")
-	}
-	return p.ProcessTopicProject(ctx, j)
+	return topicproject.Service{Store: s.TopicProjectStore(), Generator: s, Now: s.BusinessNow}.Process(ctx, j)
 }
 func phase35TopicLoad(t *testing.T) *phase35Fixture {
 	t.Helper()
-	if _, ok := any(&Store{}).(phase35TopicProcessor); !ok {
-		t.Fatal("#278 ProcessTopicProject seam not yet integrated")
-	}
 	return phase35Load(t)
 }
 func phase35TopicJob(t *testing.T, f *phase35Fixture, topic int) worker.Job {
@@ -219,7 +211,7 @@ func TestPhase35C3G5ExistingProjectBeyondFirstPage(t *testing.T) {
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		for i := 0; i < 21; i++ {
 			id := fmt.Sprintf("35000000-0035-4000-8000-%012d", i)
-			it := newItem("project", fmt.Sprintf("虚构目录项目%02d", i))
+			it := workspace.NewItem("project", fmt.Sprintf("虚构目录项目%02d", i))
 			it.ID = id
 			it.Goal = "虚构不同名字的陶瓷声音手册目标"
 			if err := saveItem(ctx, tx, f.Scope, it); err != nil {
@@ -425,12 +417,7 @@ func TestPhase35C2ConcurrentTopicProcessorSchedulerAndUserHTTP(t *testing.T) {
 	j := phase35TopicJob(t, f, 0)
 	result := make(chan error, 1)
 	go func() {
-		p, ok := any(s).(phase35TopicProcessor)
-		if !ok {
-			result <- errors.New("published ProcessTopicProject missing")
-			return
-		}
-		result <- p.ProcessTopicProject(ctx, j)
+		result <- phase35ProcessTopic(t, s, ctx, j)
 	}()
 	select {
 	case <-entered:
@@ -478,9 +465,6 @@ func TestPhase35C2ConcurrentTopicProcessorSchedulerAndUserHTTP(t *testing.T) {
 // a scale scheduler failure cannot prevent exercising processor state branches.
 func phase35TopicControls(t *testing.T) *phase35Fixture {
 	t.Helper()
-	if _, ok := any(&Store{}).(phase35TopicProcessor); !ok {
-		t.Fatal("#278 ProcessTopicProject seam not yet integrated")
-	}
 	s, ctx := phase26DisposableStore(t)
 	scope := owner()
 	phase35Snapshot(t, s, scope)

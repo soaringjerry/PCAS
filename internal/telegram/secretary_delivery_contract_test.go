@@ -259,7 +259,7 @@ func TestTelegramUnconfiguredTranscriptionPreservesAudio(t *testing.T) {
 	p, _, b := fixture(t)
 	p.store = s
 	u := textUpdate(1, "")
-	u.Message.Voice = &file{ID: "voice"}
+	u.Message.Voice = &file{ID: "voice", Duration: 3}
 	b.enqueue(u)
 	step(t, p)
 	st, err := s.Snapshot(context.Background(), p.scope)
@@ -303,7 +303,7 @@ func TestTelegramRestartAfterCommittedTurnBeforeDelivery(t *testing.T) {
 			u := textUpdate(10, "重启中途安排")
 			if mode == "voice" {
 				u.Message.Text = ""
-				u.Message.Voice = &file{ID: "voice"}
+				u.Message.Voice = &file{ID: "voice", Duration: 3}
 				p.models = &changingTranscriber{}
 			}
 			b.enqueue(u)
@@ -440,7 +440,7 @@ func TestTelegramLegacyRecoveryRequiresUnchangedConversationAnchor(t *testing.T)
 			transcript := &changingTranscriber{}
 			if mode == "voice" {
 				u.Message.Text = ""
-				u.Message.Voice = &file{ID: "voice"}
+				u.Message.Voice = &file{ID: "voice", Duration: 3}
 				p.models = transcript
 			}
 			b.enqueue(u)
@@ -476,7 +476,7 @@ func TestTelegramCommittedVoiceRecoveryRespectsDeletionAndOwner(t *testing.T) {
 	calls := stabilizationSecretaryModel(t, s)
 	p.models = &changingTranscriber{}
 	u := textUpdate(10, "")
-	u.Message.Voice = &file{ID: "voice"}
+	u.Message.Voice = &file{ID: "voice", Duration: 3}
 	b.enqueue(u)
 	b.failSend = true
 	if err := p.step(context.Background(), "fixture", "123"); err == nil {

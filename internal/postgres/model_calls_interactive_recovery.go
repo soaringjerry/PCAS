@@ -82,7 +82,7 @@ func (s *Store) recoverInteractiveCallsOnce(ctx context.Context) (interactiveRec
 		}
 	}
 	if persist.Err() == nil {
-		if err := (embeddingCalls{store: s}).recordInterrupted(persist); err != nil {
+		if err := (directCalls{store: s}).recordInterrupted(persist); err != nil {
 			failures = append(failures, err)
 		}
 	}

@@ -45,7 +45,7 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 		if !agent.Enabled {
 			return memory.ErrForbidden
 		}
-		targetHash := itemHash(item)
+		targetHash := workspace.ContentHash(item)
 		item, artifactRefs, err := sanitizeItemTx(ctx, tx, scope, agent.ID, item)
 		if err != nil {
 			return err
@@ -562,7 +562,7 @@ func (s *Store) adoptRunTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, r
 					return err
 				}
 			} else {
-				task := newItem("task", line)
+				task := workspace.NewItem("task", line)
 				task.History[0].By = actorFromContext(ctx)
 				task.Evolution[0].By = actorFromContext(ctx)
 				if item.Kind == "project" {
@@ -706,7 +706,7 @@ func verifyRunForItemTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run 
 		}
 		if item != nil {
 			var claimProject string
-			if raw, ok := claim.Scope["project_id"]; ok && strictJSON(raw, &claimProject) != nil {
+			if raw, ok := claim.Scope["project_id"]; ok && modelcall.DecodeStrict(raw, &claimProject) != nil {
 				return memory.ErrConflict
 			}
 			if oneOf(string(ref.ID), excluded...) || claimProject != "" && claimProject != projectID {
@@ -837,7 +837,7 @@ func (s *Store) runAgentOnce(ctx context.Context) (resultErr error) {
 			return err
 		}
 		scope = memory.Scope{OwnerID: memory.ID(ownerID), PrincipalID: "owner", IsOwner: true}
-		if err := strictJSON(data, &run); err != nil {
+		if err := modelcall.DecodeStrict(data, &run); err != nil {
 			return err
 		}
 		if !oneOf(run.MemoryTier, "light", "medium", "heavy") {
@@ -1053,8 +1053,8 @@ func (s *Store) runAgentOnce(ctx context.Context) (resultErr error) {
 				OwnerID: scope.OwnerID, ExecutionID: memory.ID(run.ID), RootExecutionID: memory.ID(run.ID),
 				Function: "deputy", Stage: "selfcheck", ProviderID: run.AgentID,
 				Instructions: prompts.Must("deputy-selfcheck"), ContextBuilderVersion: "deputy-selfcheck-v1",
-				Prompt: asJSON(map[string]string{"rawPrompt": run.Brief + "\n待自查草稿：\n" + result.Text}),
-				Refs:   run.ContextVersions,
+				Prompt: asJSON(map[string]string{"rawPrompt": run.Brief + "\n待自查草稿：\n" + result.Text}), ModelInput: run.Brief + "\n待自查草稿：\n" + result.Text,
+				Refs: run.ContextVersions,
 				Policy: interactiveCallPolicy{
 					Kind: "deputy", Token: token, Origin: run.CreatedAt,
 					AgentID: run.AgentID, ThingID: run.ThingID, Usage: usage,

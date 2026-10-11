@@ -106,7 +106,7 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 				}
 				v.ResolvedInto = string(ref.ID)
 			} else if oneOf(c.Kind, "task", "idea") {
-				item := newItem(c.Kind, c.Text)
+				item := workspace.NewItem(c.Kind, c.Text)
 				item.ProjectID = c.ProjectID
 				item.Due = c.Due
 				item.Sources = append(item.Sources, v.Source)
@@ -157,7 +157,7 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 		if kind == "project" {
 			title = c.Name
 		}
-		item := newItem(kind, title)
+		item := workspace.NewItem(kind, title)
 		if original, ok := ctx.Value(secretaryCreationKey{}).(workspace.SourceRef); ok {
 			item.Creation = &workspace.ItemCreation{By: "secretary", Source: &original}
 			if log, ok := ctx.Value(actionLogKey{}).(actionLog); ok {
@@ -541,7 +541,7 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 		if item.Status == "promoted" {
 			return memory.ErrConflict
 		}
-		task := newItem("task", item.Title)
+		task := workspace.NewItem("task", item.Title)
 		task.Notes = item.Body
 		task.ProjectID = item.ProjectID
 		task.IdeaID = item.ID

@@ -191,7 +191,7 @@ func (s *Store) ProcessEmbedding(ctx context.Context, j worker.Job) (err error) 
 		cost += float64(len(text)+16) * provider.InputPerMillion / 1e6
 	}
 	// The call is its own execution. Its root and cause name the paying job.
-	vectors, err := s.calls.CallEmbedding(ctx, modelcall.EmbeddingRequest{OwnerID: j.OwnerID, ExecutionID: memory.NewID(), RootExecutionID: j.ID, CausationID: j.ID, Function: "embedding", Stage: j.Stage, Provider: provider, Texts: texts, Refs: refs, Estimate: cost, Job: &j})
+	vectors, err := s.calls.CallEmbedding(ctx, modelcall.DirectRequest{OwnerID: j.OwnerID, ExecutionID: memory.NewID(), RootExecutionID: j.ID, CausationID: j.ID, Function: "embedding", Stage: j.Stage, Provider: provider, Refs: refs, Estimate: cost, Job: &j}, texts)
 	var failure *modelcall.Failure
 	var persistence *modelcall.PersistenceError
 	switch {
@@ -486,7 +486,7 @@ func (s *Store) ProcessExtraction(ctx context.Context, j worker.Job) (err error)
 	}
 	// Reserve before submitting a background generation. Repeated processing can
 	// retry DB work, but an ambiguous costly request requires explicit user retry.
-	result, err := s.generatePaid(ctx, j, "extraction", structuredExtractionInstructions, asJSON(map[string]any{"rawPrompt": prompt}), []memory.Ref{j.Record})
+	result, err := s.generatePaidInput(ctx, j, "extraction", structuredExtractionInstructions, prompt, asJSON(map[string]any{"rawPrompt": prompt}), []memory.Ref{j.Record})
 	if err != nil {
 		return err
 	}
@@ -509,7 +509,7 @@ func (s *Store) ProcessExtraction(ctx context.Context, j worker.Job) (err error)
 	text = strings.TrimPrefix(text, "```")
 	text = strings.TrimSuffix(text, "```")
 	var extraction extracted
-	if strictJSON([]byte(strings.TrimSpace(text)), &extraction) != nil {
+	if modelcall.DecodeStrict([]byte(strings.TrimSpace(text)), &extraction) != nil {
 		if err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error { return discardPaidResultTx(ctx, tx, j) }); err != nil {
 			return err
 		}

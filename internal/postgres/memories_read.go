@@ -11,6 +11,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/modelcall"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -382,7 +383,7 @@ func (s *Store) ListMemories(ctx context.Context, scope memory.Scope, q workspac
 			return out, memory.ErrInvalid
 		}
 		var cursor memoryCursor
-		if strictJSON(data, &cursor) != nil || !memory.ID(cursor.ID).Valid() || cursor.At.IsZero() || cursor.Snapshot.IsZero() {
+		if modelcall.DecodeStrict(data, &cursor) != nil || !memory.ID(cursor.ID).Valid() || cursor.At.IsZero() || cursor.Snapshot.IsZero() {
 			return out, memory.ErrInvalid
 		}
 		opts.before = &cursor

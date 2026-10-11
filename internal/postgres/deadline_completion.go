@@ -9,6 +9,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/modelcall"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -99,7 +100,7 @@ func completeDeadlineTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, clai
 
 func checkDeadlineCompletionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, change actionChange) error {
 	var before deadlineCompletion
-	if !memory.ID(change.ID).Valid() || strictJSON(change.Before, &before) != nil || before.Version < 1 || before.Mark == nil || change.AfterHash == nil {
+	if !memory.ID(change.ID).Valid() || modelcall.DecodeStrict(change.Before, &before) != nil || before.Version < 1 || before.Mark == nil || change.AfterHash == nil {
 		return memory.ErrInvalid
 	}
 	current, err := deadlineCompletionTx(ctx, tx, scope, change.ID)

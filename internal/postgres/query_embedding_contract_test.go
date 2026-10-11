@@ -161,7 +161,7 @@ func TestQueryEmbeddingRejectedCallIsRecordedAndRecallUsesTextSearch(t *testing.
 	}
 }
 
-func TestQueryEmbeddingCanceledCallStaysUnknownAndKeepsItsReservation(t *testing.T) {
+func TestQueryEmbeddingCanceledCallStaysUnknownAndRecordsItsEstimate(t *testing.T) {
 	s, scope := testStore(t), owner()
 	mustIngest(t, s, scope, input())
 	started := make(chan struct{})
@@ -184,7 +184,9 @@ func TestQueryEmbeddingCanceledCallStaysUnknownAndKeepsItsReservation(t *testing
 		t.Fatal(calls, count.Load())
 	}
 	c := calls[0]
-	if c.Outcome != "unknown" || c.Code != modelcall.ErrOutcomeUnknown.Error() || c.Accounting != "held" || c.UsageTokens != nil || c.Reserved == nil || *c.Reserved <= 0 {
+	// The outcome stays unknown. The adapter's estimated usage is recorded, and
+	// the reservation is settled to that estimate.
+	if c.Outcome != "unknown" || c.Code != modelcall.ErrOutcomeUnknown.Error() || c.Accounting != "settled" || c.UsageTokens == nil || *c.UsageTokens <= 0 || c.Reserved == nil || c.Cost == nil || *c.Reserved != *c.Cost {
 		t.Fatalf("%+v", c)
 	}
 }
@@ -194,9 +196,9 @@ func TestQueryEmbeddingInterruptedProcessLeavesAnUnknownHeldCall(t *testing.T) {
 	mustIngest(t, s, scope, input())
 	queryEmbeddingModel(t, s, queryEmbeddingReply)
 	provider, _ := s.models.Get("vector")
-	request := modelcall.EmbeddingRequest{OwnerID: scope.OwnerID, ExecutionID: memory.NewID(), Function: "query_embedding", Stage: "query", Provider: provider, Texts: []string{"query: 旧书店"}, Estimate: 0.00005}
+	request := modelcall.DirectRequest{OwnerID: scope.OwnerID, ExecutionID: memory.NewID(), Function: "query_embedding", Stage: "query", Provider: provider, Estimate: 0.00005, Operation: "embedding", Inputs: 1, Bytes: 16}
 	request.RootExecutionID = request.ExecutionID
-	adapter := embeddingCalls{store: s}
+	adapter := directCalls{store: s}
 	for range 2 {
 		request.ExecutionID = memory.NewID()
 		if _, err := adapter.Begin(context.Background(), request); err != nil {

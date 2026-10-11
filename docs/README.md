@@ -27,6 +27,7 @@ Historical tasks, research, and evaluations are evidence. They do not assign new
 | [Foundation Unused Generation Cleanup](tasks/foundation-unused-generation.md) | Unused card generation removal, surviving queue compatibility, checks, and delivery scope. |
 | [Foundation Query Embedding Gateway](tasks/foundation-query-embedding.md) | Revised recall embedding path: one call record, accounting, visible fallback, and no saved query or vector. |
 | [Foundation Background Embedding Gateway](tasks/foundation-background-embedding.md) | Revised background embedding path: one call record for each job, existing job budget rules, and known limits. |
+| [Foundation Domain Pilot](tasks/foundation-domain-pilot.md) | First business path outside the storage package, its structure, the pattern for later paths, and temporary parts. |
 | [Phase 3.9 Handoff and Review Record](tasks/foundation-sol-handoff.md) | Review findings with evidence, delivery state, remaining provider exceptions, private evidence, and the release rule. |
 | [Historical Records](history/README.md) | Retired designs and interpretation of past records. |
 
@@ -157,6 +158,8 @@ The groups below contain historical material and link-compatibility files, not a
 - [第 3 阶段上线记录（2026-10-08）](evaluations/2026-10-08-phase3-rollout.md)
 - [第 3.5 阶段上线记录（2026-10-08）](evaluations/2026-10-08-phase3_5-rollout.md)
 - [第 3.6 阶段上线记录（2026-10-08）](evaluations/2026-10-08-phase3_6-rollout.md)
+- [Phase 3.9 review corrections: release record (2026-10-11)](evaluations/2026-10-11-foundation-review-release.md)
+- [Day activity query: first live readings (2026-10-11)](evaluations/2026-10-11-activity-baseline.md)
 
 </details>
 

@@ -13,6 +13,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/modelcall"
 	"github.com/soaringjerry/PCAS/internal/prompts"
 	"github.com/soaringjerry/PCAS/internal/worker"
 )
@@ -251,7 +252,7 @@ func (s *Store) processEntityCompareVersion(ctx context.Context, j worker.Job, v
 		Same *bool `json:"same"`
 		Keep *int  `json:"keep"`
 	}
-	valid := strictJSON([]byte(saved.Output), &answer) == nil && answer.Same != nil && (!*answer.Same || answer.Keep != nil && (*answer.Keep == 1 || *answer.Keep == 2))
+	valid := modelcall.DecodeStrict([]byte(saved.Output), &answer) == nil && answer.Same != nil && (!*answer.Same || answer.Keep != nil && (*answer.Keep == 1 || *answer.Keep == 2))
 	if !valid {
 		err = pgx.BeginFunc(ctx, conn, func(tx pgx.Tx) error {
 			if err := discardPaidResultTx(ctx, tx, j); err != nil {

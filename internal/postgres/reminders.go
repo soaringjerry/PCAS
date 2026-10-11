@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/workspace"
+	"github.com/soaringjerry/PCAS/internal/workspace/effort"
 )
 
 // A reminder occurrence is valid only while its trigger still names the same
@@ -116,12 +117,12 @@ func (s *Store) CheckReminders(ctx context.Context, now time.Time) error {
 						if trigger.Guard != "" && trigger.Guard != item.Status {
 							continue
 						}
-						if trigger.ID == startWorkTrigger {
+						if trigger.ID == effort.StartTrigger {
 							if !item.RemindersOn || !oneOf(item.Status, "todo", "waiting") {
 								continue
 							}
 							var once bool
-							if err = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM workspace_notices WHERE owner_id=$1 AND thing_id=$2 AND trigger_id=$3)", string(id), item.ID, startWorkTrigger).Scan(&once); err != nil {
+							if err = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM workspace_notices WHERE owner_id=$1 AND thing_id=$2 AND trigger_id=$3)", string(id), item.ID, effort.StartTrigger).Scan(&once); err != nil {
 								return err
 							}
 							if once {

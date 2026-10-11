@@ -19,6 +19,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/modelcall"
 	"github.com/soaringjerry/PCAS/internal/prompts"
 	"github.com/soaringjerry/PCAS/internal/workspace"
+	"github.com/soaringjerry/PCAS/internal/workspace/effort"
 )
 
 var secretaryInstructions = prompts.Must("secretary").Text()
@@ -253,11 +254,11 @@ func (s *Store) secretaryPrompt(ctx context.Context, tx pgx.Tx, scope memory.Sco
 	for i, t := range c.Tasks {
 		// Effort and start date only appear once they exist; every other task
 		// line stays byte-identical to the pre-phase-3 prompt.
-		effort := ""
+		plan := ""
 		if t.EstimatedHours != nil {
-			effort = fmt.Sprintf("；估计工作量 %s小时；开工日 %s", formatHours(*t.EstimatedHours), pointerValue(t.StartDate))
+			plan = fmt.Sprintf("；估计工作量 %s小时；开工日 %s", effort.FormatHours(*t.EstimatedHours), pointerValue(t.StartDate))
 		}
-		fmt.Fprintf(&prompt, "T%d：%s（%s；截止 %s；项目 %s%s）\n", i+1, t.Title, t.Status, t.Due, projectNames[t.ProjectID], effort)
+		fmt.Fprintf(&prompt, "T%d：%s（%s；截止 %s；项目 %s%s）\n", i+1, t.Title, t.Status, t.Due, projectNames[t.ProjectID], plan)
 	}
 	fmt.Fprintln(&prompt, "\n想法：")
 	for i, t := range c.Ideas {

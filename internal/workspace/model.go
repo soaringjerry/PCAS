@@ -4,8 +4,13 @@ package workspace
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"strings"
+	"time"
+	"unicode/utf8"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
 )
@@ -455,4 +460,36 @@ type MemoryFacets struct {
 	Groups []MemoryGroupFacet `json:"groups"`
 	People []MemoryFacet      `json:"people"`
 	Places []MemoryFacet      `json:"places"`
+}
+
+// ContentHash identifies an item's business content. Provenance, history, and
+// audit fields do not change it, so a write of those fields alone does not
+// make an earlier reading of the item out of date.
+func ContentHash(item Item) string {
+	item.Version = 0
+	item.Sources = nil
+	item.History = nil
+	item.Evolution = nil
+	item.CreatedAt = ""
+	item.UpdatedAt = ""
+	item.HasRetainedWriting = false
+	data, _ := json.Marshal(item)
+	return fmt.Sprintf("%x", sha256.Sum256(data))
+}
+
+// ValidTitle reports whether a title is not empty and has at most 200 characters.
+func ValidTitle(title string) bool {
+	return strings.TrimSpace(title) != "" && utf8.RuneCountInString(title) <= 200
+}
+
+// NewItem makes a project, task, or idea with the initial values of its kind.
+// The first history entries name the user. A caller that creates the item for
+// the user changes them.
+func NewItem(kind, title string) Item {
+	at := time.Now().UTC().Format(time.RFC3339Nano)
+	status := "active"
+	if kind == "task" {
+		status = "todo"
+	}
+	return Item{ID: string(memory.NewID()), Kind: kind, Version: 1, Title: title, Name: title, Status: status, DependsOn: []string{}, Checklist: []Check{}, Triggers: []Trigger{}, Sources: []SourceRef{}, History: []Revision{{At: at, By: "user", Summary: "创建"}}, Evolution: []Revision{{At: at, By: "user", Summary: "提出"}}, Conditions: []Condition{}, RemindersOn: true, NextSteps: []string{}, CreatedAt: at, UpdatedAt: at}
 }

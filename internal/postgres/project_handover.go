@@ -15,10 +15,11 @@ import (
 	"github.com/soaringjerry/PCAS/internal/prompts"
 	"github.com/soaringjerry/PCAS/internal/worker"
 	"github.com/soaringjerry/PCAS/internal/workspace"
+	"github.com/soaringjerry/PCAS/internal/workspace/effort"
 )
 
 const ProjectHandoverStage = "memory.project_handover"
-const EffortStage = "memory.effort"
+const EffortStage = effort.Stage
 
 // Five short sentences per section keep the three-section overview readable
 // in ten seconds. Excess and ungrounded sentences are counted, never silent.

@@ -9,6 +9,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/modelcall"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -133,7 +134,7 @@ func (s *Store) ListGroupMemories(ctx context.Context, scope memory.Scope, key s
 	cursor := groupMemoryCursor{Key: key}
 	if q.Cursor != "" {
 		raw, err := base64.RawURLEncoding.DecodeString(q.Cursor)
-		if err != nil || strictJSON(raw, &cursor) != nil || cursor.Key != key || !memory.ID(cursor.ID).Valid() || cursor.At.IsZero() || cursor.Snapshot.IsZero() {
+		if err != nil || modelcall.DecodeStrict(raw, &cursor) != nil || cursor.Key != key || !memory.ID(cursor.ID).Valid() || cursor.At.IsZero() || cursor.Snapshot.IsZero() {
 			return out, memory.ErrInvalid
 		}
 	}

@@ -106,6 +106,19 @@ The live check on the real default Codex channel passed: an answer, an arrangeme
 Neither log has an error, and no container restarted.
 No comparison job ran in the first eight minutes after the start, so this record does not show a comparison call on the live instance.
 
+## Seventh Release on the Same Day
+
+Released revision: `43f3df86610dce75d36e698a786cfd66b047d567`. Earlier revision: `2036c14`.
+Pull requests #319, #321, #322, #323, #324, and #326 give the changes: organize, attachment parsing, extraction, and the rules of conversation extraction left the storage package.
+
+The release had no database migration. The backup was validated, and the record counts are equal before and after the start: 5,253 claims and 25 work items.
+The live check on the real default Codex channel passed: an answer, an arrangement (`create_task`, done), and a change (`update`, done), between 16 and 21 seconds each, with settled calls and a clean group cleanup.
+Neither log has an error, and no container restarted.
+
+The check-only turns do not save a source, so they start no extraction job. Pull request #326 said that they do. That statement was wrong.
+In the first twelve minutes after the start, one global handover job ran and its call was settled. No organize, extraction, or attachment job ran.
+The moved paths therefore have their CI results and no live result in this record. The next real input of the owner is their first live use.
+
 ## Host Cleanup
 
 The owner approved removal of leftover data on 2026-10-11.

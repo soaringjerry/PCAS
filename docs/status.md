@@ -49,6 +49,7 @@ The [Roadmap](whitepaper.md#10-roadmap) gives the phase sequence, delivery scope
 | Phase 3.9 global handover path, response table, and typed call policy | Released at `218ea5b` on 2026-10-11. Five background paths are outside the storage package. Phase 3.9 remains incomplete. | [Release and live check](evaluations/2026-10-11-foundation-review-release.md#fourth-release-on-the-same-day). |
 | Phase 3.9 alias scan path and comparison rules | Released at `3695c59` on 2026-10-11. Six background paths and the comparison rules are outside the storage package. Phase 3.9 remains incomplete. | [Release and live check](evaluations/2026-10-11-foundation-review-release.md#fifth-release-on-the-same-day). |
 | Phase 3.9 comparison job flows | Released at `2036c14` on 2026-10-11. Eight background paths are outside the storage package. Phase 3.9 remains incomplete. | [Release and live check](evaluations/2026-10-11-foundation-review-release.md#sixth-release-on-the-same-day). |
+| Phase 3.9 organize, attachment parsing, and extraction | Released at `43f3df8` on 2026-10-11. Eleven background paths are outside the storage package. The moved paths have no live job yet. Phase 3.9 remains incomplete. | [Release and live check](evaluations/2026-10-11-foundation-review-release.md#seventh-release-on-the-same-day). |
 
 Phase 2.0 was rolled back on 2026-10-01.
 Its design is stored under the recorded `archive/phase2-0/*` tags.

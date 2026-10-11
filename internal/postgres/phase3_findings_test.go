@@ -2,7 +2,6 @@ package postgres
 
 import (
 	"encoding/json"
-	"os"
 	"testing"
 )
 
@@ -55,27 +54,13 @@ import (
 //
 // Reserved ceilings sum to 138; 140 is the global ceiling, with the same two
 // unassigned calls from 2.6. Spare global capacity never permits borrowing.
+// The findings above described the baseline before phase 3 was implemented.
+// With the skip switch off on 2026-10-11, every test that names a finding
+// passed against the released code, so the switch is removed and these tests
+// run as ordinary regressions.
 func phase3Finding(t *testing.T, id string) {
 	t.Helper()
-	if os.Getenv("PCAS_PHASE3_RUN_FINDINGS") == "1" {
-		return
-	}
-	switch id {
-	case "S-P3-001":
-		t.Skip("finding S-P3-001")
-	case "S-P3-002":
-		t.Skip("finding S-P3-002")
-	case "S-P3-003":
-		t.Skip("finding S-P3-003")
-	case "S-P3-004":
-		t.Skip("finding S-P3-004")
-	case "S-P3-005":
-		t.Skip("finding S-P3-005")
-	case "S-P3-006":
-		t.Skip("finding S-P3-006")
-	default:
-		t.Fatalf("unknown finding %s", id)
-	}
+	_ = id
 }
 func decodePhase3(t *testing.T, raw []byte, out any) {
 	t.Helper()

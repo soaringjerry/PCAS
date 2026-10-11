@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"encoding/json"
+	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -63,7 +64,7 @@ func TestExtractionConfirmationRequiresCurrentVerbatimCapture(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := extractionConfirmation(tc.source, tc.item); got != tc.want {
+			if got := extraction.Confirmation(tc.source, tc.item); got != tc.want {
 				t.Fatalf("confirmation = %q, want %q", got, tc.want)
 			}
 		})

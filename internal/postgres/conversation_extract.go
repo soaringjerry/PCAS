@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"errors"
+	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
 	"io"
 	"strconv"
 	"strings"
@@ -83,7 +84,7 @@ func splitConversation(sources []memory.SourceResult) []conversationSegment {
 	for i, source := range sources {
 		text := source.Source.Text
 		count := utf8.RuneCountInString(text)
-		message := conversationMessage{Index: i + 1, Role: source.Context.Role, Text: text, ExpressedAt: sourceExpressedAt(source)}
+		message := conversationMessage{Index: i + 1, Role: source.Context.Role, Text: text, ExpressedAt: extraction.ExpressedAt(source)}
 		if source.Context.Role == "user" && count > conversationSegmentCharacters {
 			flush()
 			runes := []rune(text)
@@ -130,7 +131,7 @@ func conversationRun(sources []memory.SourceResult) string {
 	hash := sha256.New()
 	io.WriteString(hash, "conversation-extraction-v"+strconv.Itoa(conversationExtractorVersion)+"\n")
 	for _, source := range sources {
-		hash.Write(asJSON(input{source.Source.Ref, source.Context, sourceExpressedAt(source)}))
+		hash.Write(asJSON(input{source.Source.Ref, source.Context, extraction.ExpressedAt(source)}))
 		// Stream originals into the digest without another whole-conversation
 		// JSON copy. Length framing keeps record boundaries unambiguous.
 		io.WriteString(hash, strconv.Itoa(len(source.Source.Text))+":")
@@ -392,13 +393,13 @@ func (s *Store) processConversationExtraction(ctx context.Context, j worker.Job,
 					}
 					continue
 				}
-				in := statement{Text: item.Text, Nature: item.Nature, Subject: item.Subject, Predicate: item.Predicate, Confirmation: "candidate", Acquisition: item.Acquisition, Actor: "ai", Quote: item.Quote, Source: source.Source.Ref, Structured: true, ExpressedAt: sourceExpressedAt(source), ExtractionRun: run, ExtractionRef: next}
+				in := statement{Text: item.Text, Nature: item.Nature, Subject: item.Subject, Predicate: item.Predicate, Confirmation: "candidate", Acquisition: item.Acquisition, Actor: "ai", Quote: item.Quote, Source: source.Source.Ref, Structured: true, ExpressedAt: extraction.ExpressedAt(source), ExtractionRun: run, ExtractionRef: next}
 				// The model can extract several independent memories from one
 				// quotation. Later siblings must not overwrite the first item.
 				quoteKey := string(in.Source.ID) + "/" + in.Quote
 				in.AllowNewAtQuote = seenOutputQuotes[quoteKey]
 				seenOutputQuotes[quoteKey] = true
-				in.EventFrom, in.EventTo, in.EventPrecision = extractionEvent(item.When, source, loc)
+				in.EventFrom, in.EventTo, in.EventPrecision = extraction.Event(item.When, source, loc)
 				in.Mentions = append(in.Mentions, groundedMentions(item.People, "person", grounding)...)
 				in.Mentions = append(in.Mentions, groundedMentions(item.Places, "place", grounding)...)
 				in.Mentions = append(in.Mentions, groundedMentions(item.Organizations, "organization", grounding)...)

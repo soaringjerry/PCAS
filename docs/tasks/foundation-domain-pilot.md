@@ -67,6 +67,9 @@ The attachment parser reads an original file by its media type. It holds the lim
 Storage gives it the paid calls through one interface and keeps each paid result with the file. The storage package no longer starts an external processor.
 The storage code still holds its transaction open while the parser makes its calls. This order did not change.
 
+The extraction rules are in `internal/interpretation/extraction`: the windows of a long source, the strict reading of the answer, the rules of the source's speaker, the quotation that each item needs, the confirmation level of a statement, and the event time.
+The extraction job's flow, its input assembly, and its writes are still in `internal/postgres/processing.go`. That flow is the next step of this path.
+
 ## Pattern for the Next Paths
 
 1. Put each business rule in the domain package as a function that needs no database.

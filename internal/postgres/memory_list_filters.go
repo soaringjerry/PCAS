@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/jackc/pgx/v5"
+	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"strings"
 	"unicode"
@@ -40,8 +41,8 @@ var captureWordClass = func() string {
 func sqlTextLiteral(s string) string { return "'" + strings.ReplaceAll(s, "'", "''") + "'" }
 
 func qualifiedCaptureSQL(text string) string {
-	clauses := make([]string, 0, len(qualifiedCaptureMarkers)+1)
-	for _, marker := range qualifiedCaptureMarkers {
+	clauses := make([]string, 0, len(extraction.QualificationMarkers)+1)
+	for _, marker := range extraction.QualificationMarkers {
 		clauses = append(clauses, "strpos("+text+","+sqlTextLiteral(marker)+")>0")
 	}
 	// C orders Unicode range endpoints by code point; lower() uses the normal
@@ -50,12 +51,12 @@ func qualifiedCaptureSQL(text string) string {
 	// Cheap ASCII boundaries are a superset of the Go Unicode boundaries.
 	// Most memories contain no candidate English marker; avoid expensive Unicode
 	// normalization for them without introducing a false negative.
-	candidates := make([]string, len(qualifiedCaptureWords))
-	for i, word := range qualifiedCaptureWords {
+	candidates := make([]string, len(extraction.QualificationWords))
+	for i, word := range extraction.QualificationWords {
 		candidates[i] = strings.ReplaceAll(word, " ", "[^a-z0-9]+")
 	}
 	fast := sqlTextLiteral("(^|[^a-z0-9])(" + strings.Join(candidates, "|") + ")([^a-z0-9]|$)")
-	precise := words + " ~ " + sqlTextLiteral(" ("+strings.Join(qualifiedCaptureWords, "|")+") ")
+	precise := words + " ~ " + sqlTextLiteral(" ("+strings.Join(extraction.QualificationWords, "|")+") ")
 	clauses = append(clauses, "CASE WHEN lower("+text+") COLLATE \"C\" ~ "+fast+" THEN "+precise+" ELSE false END")
 	return "(" + strings.Join(clauses, " OR ") + ")"
 }

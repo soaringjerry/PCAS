@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"errors"
+	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
@@ -10,13 +11,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
-type conditionSignal struct {
-	IdeaID      string  `json:"idea_id"`
-	ConditionID string  `json:"condition_id"`
-	Quote       string  `json:"quote"`
-	Explanation string  `json:"explanation"`
-	Confidence  float64 `json:"confidence"`
-}
+type conditionSignal = extraction.Signal
 
 func (s *Store) pendingConditions(ctx context.Context, scope memory.Scope) ([]map[string]string, error) {
 	rows, err := s.pool.Query(ctx, `SELECT i.document FROM work_items i JOIN workspace_owners w USING(owner_id) WHERE i.owner_id=$1 AND i.kind='idea' AND i.status='shelved' AND (i.document->>'remindersOn')::boolean AND (w.settings->>'wakeIdeas')::boolean ORDER BY i.updated_at DESC LIMIT 20`, string(scope.OwnerID))

@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"fmt"
+	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
 	"testing"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
@@ -43,7 +44,7 @@ func TestCompareRestoreMarkerCompatibilityAndRuleScope(t *testing.T) {
 			// A restoration of this record version survives a comparison rule upgrade.
 			workspaceCommand(t, s, scope, workspace.Command{Type: "restoreMemory", ID: string(refs[0].ID)})
 			j := compareJob(t, s, scope, false, CompareVersion+1)
-			if err := s.processCompareVersion(ctx, j, CompareVersion+1); err != nil {
+			if err := (comparison.Service{Store: s.CompareStore(), Generator: s, Version: CompareVersion + 1}).Process(ctx, j); err != nil {
 				t.Fatal(err)
 			}
 			compareState(t, s, scope, refs, []string{"", ""}, CompareVersion+1)

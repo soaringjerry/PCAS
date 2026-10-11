@@ -12,6 +12,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/prompts"
 	"github.com/soaringjerry/PCAS/internal/worker"
@@ -262,81 +263,84 @@ func compareHourlyTx(ctx context.Context, tx pgx.Tx) error {
 	return organizeCompareHourlyTx(ctx, tx, "compare_hourly_limit")
 }
 
-func (s *Store) ProcessCompare(ctx context.Context, j worker.Job) error {
-	if strings.Contains(j.Stage, ":rejudge:") {
-		return s.processSupersededRejudge(ctx, j)
-	}
-	return s.processCompareVersion(ctx, j, CompareVersion)
+// CompareStore gives the statement comparison service its reads and writes.
+func (s *Store) CompareStore() comparison.Store { return compareStore{s} }
+
+type compareStore struct{ store *Store }
+
+func (a compareStore) Rejudge(ctx context.Context, j worker.Job) error {
+	return a.store.processSupersededRejudge(ctx, j)
 }
 
-// A queued stage can predate a program rule bump. Stamp the rules actually
-// implemented by this worker, rather than trusting a queue string as an epoch.
-func (s *Store) processCompareVersion(ctx context.Context, j worker.Job, version int) error {
-	if _, err := compareJobVersion(j); err != nil {
-		return err
+func (a compareStore) Reschedule(ctx context.Context) {
+	if _, err := a.store.ScheduleCompare(ctx, time.Now()); err != nil {
+		a.store.recordScheduleFailure(ctx, CompareStage, err)
 	}
-	if version < 1 {
-		return memory.ErrInvalid
-	}
-	conn, release, err := s.comparisonConnection(ctx)
+}
+
+func (a compareStore) Session(ctx context.Context) (comparison.Session, func(), error) {
+	conn, release, err := a.store.comparisonConnection(ctx)
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
-	defer release()
+	return compareSession{store: a.store, conn: conn}, release, nil
+}
+
+type compareSession struct {
+	store *Store
+	conn  *pgxpool.Conn
+}
+
+func (a compareSession) Ready() error {
+	unavailable := &worker.JobError{Code: "provider_unavailable", Until: time.Now().Add(CompareInterval), NoAttempt: true}
+	if a.store.models == nil {
+		return unavailable
+	}
+	p, ok := a.store.models.Get(a.store.models.ExtractionID())
+	if !ok || p.Embedding || p.Transcription || !a.store.models.Available(p.ID) {
+		return unavailable
+	}
+	return nil
+}
+
+func (a compareSession) NextBatch(ctx context.Context, j worker.Job, version int) (json.RawMessage, []memory.Ref, bool, error) {
 	var input *comparisonBatch
-	cached, err := s.paidModelResult(ctx, j)
-	if err != nil {
-		return err
-	}
-	if cached == nil {
-		if s.models == nil {
-			return &worker.JobError{Code: "provider_unavailable", Until: time.Now().Add(CompareInterval), NoAttempt: true}
-		}
-		p, ok := s.models.Get(s.models.ExtractionID())
-		if !ok || p.Embedding || p.Transcription || !s.models.Available(p.ID) {
-			return &worker.JobError{Code: "provider_unavailable", Until: time.Now().Add(CompareInterval), NoAttempt: true}
-		}
-		err = pgx.BeginFunc(ctx, conn, func(tx pgx.Tx) error {
-			if err := lockJob(ctx, tx, j); err != nil {
-				return err
-			}
-			var err error
-			input, err = nextComparisonBatchTx(ctx, tx, j.OwnerID, version)
-			if err != nil {
-				return err
-			}
-			if input == nil {
-				return acknowledge(ctx, tx, j)
-			}
-			return backgroundHourlyTx(ctx, tx, CompareStage, "compare_hourly_limit")
-		})
-		if err != nil || input == nil {
+	err := pgx.BeginFunc(ctx, a.conn, func(tx pgx.Tx) error {
+		if err := lockJob(ctx, tx, j); err != nil {
 			return err
 		}
+		var err error
+		input, err = nextComparisonBatchTx(ctx, tx, j.OwnerID, version)
+		if err != nil {
+			return err
+		}
+		if input == nil {
+			return acknowledge(ctx, tx, j)
+		}
+		return backgroundHourlyTx(ctx, tx, CompareStage, "compare_hourly_limit")
+	})
+	if err != nil || input == nil {
+		return nil, nil, false, err
 	}
-	refs := []memory.Ref{}
-	if input != nil {
-		refs = input.Refs
-	}
-	result, err := s.generatePaid(ctx, j, "compare", compareInstructions, asJSON(input), refs)
-	if err != nil {
+	return asJSON(input), input.Refs, true, nil
+}
+
+func (a compareSession) Apply(ctx context.Context, j worker.Job, record json.RawMessage, edges []comparison.Edge, valid bool) error {
+	var input comparisonBatch
+	if err := json.Unmarshal(record, &input); err != nil {
 		return err
 	}
-	if err := json.Unmarshal(result.Prompt, &input); err != nil {
-		return err
-	}
+	// A result that was paid before rule versions were saved used rule one.
 	if input.Rule == 0 {
 		input.Rule = 1
-	} // pre-upgrade durable paid input
-	version = input.Rule
+	}
 	if len(input.Memories) != len(input.Refs) {
 		return memory.ErrInvalid
 	}
 	for i := range input.Memories {
 		input.Memories[i].Ref = input.Refs[i]
 	}
-	edges, valid := parseCompareOutput(result.Output, len(input.Memories))
-	err = backgroundResultTx(ctx, conn, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
+	return backgroundResultTx(ctx, a.conn, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended(current_database()||':'||current_schema()||':queue:'||$1||':'||$2,0))", string(j.OwnerID), CompareStage); err != nil {
 			return err
 		}
@@ -344,28 +348,18 @@ func (s *Store) processCompareVersion(ctx context.Context, j worker.Job, version
 			return err
 		}
 		if valid {
-			if err := s.writeComparisonTx(ctx, tx, j.OwnerID, version, input.Memories, edges, true); err != nil {
+			if err := a.store.writeComparisonTx(ctx, tx, j.OwnerID, input.Rule, input.Memories, edges, true); err != nil {
 				return err
 			}
 		}
-		if err := writeComparisonReceiptTx(ctx, tx, j.OwnerID, version, *input, valid); err != nil {
+		if err := writeComparisonReceiptTx(ctx, tx, j.OwnerID, input.Rule, input, valid); err != nil {
 			return err
 		}
 		if err := discardPaidResultTx(ctx, tx, j); err != nil {
 			return err
 		}
-		if err := acknowledge(ctx, tx, j); err != nil {
-			return err
-		}
-		return nil
+		return acknowledge(ctx, tx, j)
 	})
-	if err != nil {
-		return err
-	}
-	if _, err := s.ScheduleCompare(ctx, time.Now()); err != nil {
-		s.recordScheduleFailure(ctx, CompareStage, err)
-	}
-	return nil
 }
 
 func (s *Store) writeComparisonTx(ctx context.Context, tx pgx.Tx, owner memory.ID, version int, batch []compareMemory, edges []compareEdge, valid bool) error {

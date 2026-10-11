@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/interpretation/aliasscan"
+	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"net/http"
 	"testing"
@@ -25,7 +26,9 @@ func TestPaidBackgroundResultsSurviveBusinessWriteFailureAndRestart(t *testing.T
 			case CompareStage:
 				compareFixture(t, s, scope, "虚构研究记录甲", "虚构研究记录乙")
 				job = compareJob(t, s, scope, false, CompareVersion)
-				process = (*Store).ProcessCompare
+				process = func(s *Store, ctx context.Context, j worker.Job) error {
+					return (comparison.Service{Store: s.CompareStore(), Generator: s, Version: CompareVersion}).Process(ctx, j)
+				}
 				table = "memory_comparison_batches"
 				response = `{"duplicates":[],"superseded":[]}`
 			case EntityCompareStage:
@@ -106,7 +109,7 @@ func TestPersistentBackgroundFailureKeepsIncreasingAttempts(t *testing.T) {
 		if _, err := s.pool.Exec(ctx, "UPDATE memory_jobs SET state='leased',attempts=$2,lease_token=$3,lease_until=now()+interval '5 minutes' WHERE id=$1", job.ID, attempt, job.LeaseToken); err != nil {
 			t.Fatal(err)
 		}
-		err := s.ProcessCompare(ctx, job)
+		err := (comparison.Service{Store: s.CompareStore(), Generator: s, Version: CompareVersion}).Process(ctx, job)
 		failure, ok := err.(*worker.JobError)
 		if !ok || failure.Code != "model_call_failed" || failure.NoAttempt || failure.Until.IsZero() {
 			t.Fatal("model failure did not count", err)

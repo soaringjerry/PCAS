@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
 	"net/http"
 	"strings"
 	"testing"
@@ -99,7 +100,7 @@ func compareProcess(t *testing.T, s *Store, scope memory.Scope) {
 	t.Helper()
 	j := compareJob(t, s, scope, false, CompareVersion)
 	for attempt := 0; attempt < 5; attempt++ {
-		err := s.ProcessCompare(context.Background(), j)
+		err := (comparison.Service{Store: s.CompareStore(), Generator: s, Version: CompareVersion}).Process(context.Background(), j)
 		if err == nil {
 			return
 		}
@@ -256,7 +257,7 @@ func TestCompareRestoreUndoAndVersionBump(t *testing.T) {
 	f.set(`{"duplicates":[],"superseded":[]}`)
 	compareFixture(t, s, scope, "虚构规则升级后新增的当前记忆")
 	j := compareJob(t, s, scope, false, CompareVersion+1)
-	if err = s.processCompareVersion(context.Background(), j, CompareVersion+1); err != nil {
+	if err = (comparison.Service{Store: s.CompareStore(), Generator: s, Version: CompareVersion + 1}).Process(context.Background(), j); err != nil {
 		t.Fatal(err)
 	}
 	var compared int
@@ -282,7 +283,9 @@ func TestCompareConcurrentChangesSkipOnlyAffectedEdges(t *testing.T) {
 			})
 			j := compareJob(t, s, scope, false, CompareVersion)
 			done := make(chan error, 1)
-			go func() { done <- s.ProcessCompare(context.Background(), j) }()
+			go func() {
+				done <- (comparison.Service{Store: s.CompareStore(), Generator: s, Version: CompareVersion}).Process(context.Background(), j)
+			}()
 			select {
 			case <-entered:
 			case <-time.After(5 * time.Second):

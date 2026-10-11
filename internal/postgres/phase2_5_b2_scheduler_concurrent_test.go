@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
 	"net/http"
 	"strings"
 	"sync"
@@ -239,7 +240,7 @@ func phase25B12ConcurrentScheduler(t *testing.T, kind string) {
 			case kind == "organize" && strings.HasPrefix(job.Stage, "memory.organize:"):
 				err = f.store.ProcessOrganize(runCtx, *job)
 			case kind == "compare" && strings.HasPrefix(job.Stage, "memory.compare:"):
-				err = f.store.ProcessCompare(runCtx, *job)
+				err = (comparison.Service{Store: f.store.CompareStore(), Generator: f.store, Version: postgres.CompareVersion}).Process(runCtx, *job)
 			case kind == "compare" && strings.HasPrefix(job.Stage, "memory.entity_compare:"):
 				err = f.store.ProcessEntityCompare(runCtx, *job)
 			case job.Stage == "memory.index":

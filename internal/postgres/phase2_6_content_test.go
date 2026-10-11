@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/soaringjerry/PCAS/internal/currentstate/handover"
+	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
 	"reflect"
 	"strings"
 	"testing"
@@ -315,7 +316,7 @@ func TestPhase26G4A6A10ComparisonCoverageAndUnchangedScheduling(t *testing.T) {
 		}
 		phase26Isolate(t, f, CompareStage)
 		j := phase26ClaimStage(t, f, CompareStage)
-		if err := s.ProcessCompare(ctx, j); err != nil {
+		if err := (comparison.Service{Store: s.CompareStore(), Generator: s, Version: CompareVersion}).Process(ctx, j); err != nil {
 			t.Fatal(err)
 		}
 	}

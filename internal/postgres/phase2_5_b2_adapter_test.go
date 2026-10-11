@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
+	"github.com/soaringjerry/PCAS/internal/postgres"
 	"strings"
 	"time"
 
@@ -46,7 +48,7 @@ func phase25B2DefaultAdapter(f *phase25B234Fixture) phase25B2Adapter {
 		schedule: f.store.ScheduleCompare,
 		process: func(ctx context.Context, j worker.Job) error {
 			if strings.HasPrefix(j.Stage, "memory.compare:") {
-				return f.store.ProcessCompare(ctx, j)
+				return (comparison.Service{Store: f.store.CompareStore(), Generator: f.store, Version: postgres.CompareVersion}).Process(ctx, j)
 			}
 			if strings.HasPrefix(j.Stage, "memory.entity_compare:") {
 				return f.store.ProcessEntityCompare(ctx, j)

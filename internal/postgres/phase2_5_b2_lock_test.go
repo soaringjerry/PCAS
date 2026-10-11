@@ -2,6 +2,8 @@ package postgres_test
 
 import (
 	"errors"
+	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
+	"github.com/soaringjerry/PCAS/internal/postgres"
 	"github.com/soaringjerry/PCAS/internal/worker"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 	"net/http"
@@ -96,7 +98,9 @@ func TestPhase25B2_CompareDoesNotCallModelDuringOrganize(t *testing.T) {
 			t.Fatalf("unexpected parallel job=%s", cmp.Stage)
 		}
 		cmpDone = make(chan error, 1)
-		go func() { cmpDone <- f.store.ProcessCompare(f.ctx, *cmp) }()
+		go func() {
+			cmpDone <- (comparison.Service{Store: f.store.CompareStore(), Generator: f.store, Version: postgres.CompareVersion}).Process(f.ctx, *cmp)
+		}()
 	}
 	select {
 	case <-time.After(200 * time.Millisecond):

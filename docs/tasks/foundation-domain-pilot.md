@@ -39,6 +39,7 @@ flowchart LR
 | Project handover | `internal/workspace/projecthandover` | `internal/postgres/project_handover.go` | The input assembly, the evidence check queries, the scheduler, and the reader for the project page. |
 | Global handover | `internal/currentstate/handover` | `internal/postgres/status_handover.go` | The input assembly, the scheduler, and the stale rule in SQL. |
 | Alias scan | `internal/interpretation/aliasscan` | `internal/postgres/entity_candidates.go` | The batch selection, the name checks of a proposed pair, and the scheduler. |
+| Statement comparison | `internal/interpretation/comparison` | `internal/postgres/compare.go` | The batch plan, the write of accepted edges with its eligibility checks, the receipt, the scheduler, and the rejudge path. |
 
 The topic project service holds the proposal rules: a match must name a project that the model saw, a new project waits until the model has seen every project, an existing name attaches instead of creating, the user's own name for a project is kept, and four projects are created in one local day at most.
 Its input assembly reads memory and clips evidence in one function with SQL. That function stays in storage until memory retrieval has its own interface.
@@ -52,7 +53,7 @@ It also holds the preparation rules: no handover for a finished project, no rewr
 
 Rules that need no storage can move before their path's orchestration.
 The statement comparison rules are in `internal/interpretation/comparison`: reading the model's duplicate and superseded proposals, and following chains of proposals to their final keeper without accepting a cycle.
-The comparison job itself is still in `internal/postgres/compare.go`.
+The comparison job's flow is in the same package. Its write of accepted edges is still in `internal/postgres/compare.go`.
 
 ## Pattern for the Next Paths
 

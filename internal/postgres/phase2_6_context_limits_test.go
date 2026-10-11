@@ -23,7 +23,7 @@ func TestPhase26G1C6SecretaryContextAndActionOverflowRemainVisible(t *testing.T)
 	if err := pgx.BeginFunc(f.Context, f.Store.pool, func(tx pgx.Tx) error {
 		for kind, n := range map[string]int{"task": 55, "project": 60, "idea": 30} {
 			for i := 0; i < n; i++ {
-				item := newItem(kind, fmt.Sprintf("Fictitious %s overflow %03d", kind, i))
+				item := workspace.NewItem(kind, fmt.Sprintf("Fictitious %s overflow %03d", kind, i))
 				if err := saveItem(f.Context, tx, f.Scope, item); err != nil {
 					return err
 				}

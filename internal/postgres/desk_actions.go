@@ -11,7 +11,6 @@ import (
 	"github.com/soaringjerry/PCAS/internal/workspace/effort"
 	"strings"
 	"time"
-	"unicode/utf8"
 )
 
 // applyDueReminder maintains the one fixed reminder independently of other triggers.
@@ -158,9 +157,6 @@ func textField(fields map[string]json.RawMessage, key string) (string, bool) {
 	}
 	return v, true
 }
-func validDeskTitle(title string) bool {
-	return strings.TrimSpace(title) != "" && utf8.RuneCountInString(title) <= 200
-}
 func deskDue(value string, loc *time.Location) (string, bool, bool) {
 	if value == "" {
 		return "", false, true
@@ -198,7 +194,7 @@ func (s *Store) secretaryProjectTx(ctx context.Context, tx pgx.Tx, scope memory.
 	}
 	if strings.HasPrefix(value, "new:") {
 		name := strings.TrimSpace(strings.TrimPrefix(value, "new:"))
-		if !validDeskTitle(name) {
+		if !workspace.ValidTitle(name) {
 			return "", memory.ErrInvalid
 		}
 		var id string
@@ -321,7 +317,7 @@ func (s *Store) executeSecretaryActionTx(ctx context.Context, tx pgx.Tx, scope m
 		if a.Op == "create_project" {
 			title = strings.TrimSpace(a.Name)
 		}
-		if !validDeskTitle(title) {
+		if !workspace.ValidTitle(title) {
 			return skippedReceipt(a.Op, "标题为空或太长"), nil
 		}
 		if a.Op == "create_project" {
@@ -420,7 +416,7 @@ func (s *Store) executeSecretaryActionTx(ctx context.Context, tx pgx.Tx, scope m
 			return receipt, err
 		}
 		if title, ok := textField(a.Set, "title"); ok {
-			if !validDeskTitle(title) {
+			if !workspace.ValidTitle(title) {
 				return skippedReceipt(a.Op, "标题为空或太长"), nil
 			}
 			if err = call(workspace.Command{Type: "renameThing", ID: id, Title: strings.TrimSpace(title)}); err != nil {
@@ -564,7 +560,7 @@ func (s *Store) executeSecretaryActionTx(ctx context.Context, tx pgx.Tx, scope m
 			return skippedReceipt(a.Op, "这件事不能加这些步骤"), nil
 		}
 		for _, step := range a.Steps {
-			if !validDeskTitle(step) {
+			if !workspace.ValidTitle(step) {
 				return skippedReceipt(a.Op, "步骤为空或太长"), nil
 			}
 			if err = call(workspace.Command{Type: "addCheck", ID: id, Text: strings.TrimSpace(step)}); err != nil {
@@ -601,7 +597,7 @@ func (s *Store) executeSecretaryActionTx(ctx context.Context, tx pgx.Tx, scope m
 			c.DeskTurnIDs = append([]string{}, history.IDs...)
 		}
 		if a.Ref == "new" {
-			if !validDeskTitle(a.Title) {
+			if !workspace.ValidTitle(a.Title) {
 				return skippedReceipt(a.Op, "标题为空或太长"), nil
 			}
 			id = string(memory.NewID())

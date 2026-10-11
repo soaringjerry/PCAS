@@ -509,7 +509,7 @@ func (s *Store) ProcessExtraction(ctx context.Context, j worker.Job) (err error)
 	text = strings.TrimPrefix(text, "```")
 	text = strings.TrimSuffix(text, "```")
 	var extraction extracted
-	if strictJSON([]byte(strings.TrimSpace(text)), &extraction) != nil {
+	if modelcall.DecodeStrict([]byte(strings.TrimSpace(text)), &extraction) != nil {
 		if err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error { return discardPaidResultTx(ctx, tx, j) }); err != nil {
 			return err
 		}

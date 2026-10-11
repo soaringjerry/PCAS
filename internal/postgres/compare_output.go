@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"encoding/json"
+	"github.com/soaringjerry/PCAS/internal/modelcall"
 )
 
 type compareEdge struct {
@@ -17,7 +18,7 @@ func parseCompareOutput(text string, count int) ([]compareEdge, bool) {
 		Duplicates json.RawMessage `json:"duplicates"`
 		Superseded json.RawMessage `json:"superseded"`
 	}
-	if strictJSON([]byte(text), &envelope) != nil {
+	if modelcall.DecodeStrict([]byte(text), &envelope) != nil {
 		return nil, false
 	}
 	var duplicates, superseded []json.RawMessage
@@ -49,7 +50,7 @@ func parseCompareOutput(text string, count int) ([]compareEdge, bool) {
 			continue
 		}
 		var keep int
-		good := strictJSON(raw, &group) == nil && json.Unmarshal(group.Keep, &keep) == nil && valid(keep)
+		good := modelcall.DecodeStrict(raw, &group) == nil && json.Unmarshal(group.Keep, &keep) == nil && valid(keep)
 		members := []int{}
 		for _, member := range group.Members {
 			var old int
@@ -82,7 +83,7 @@ func parseCompareOutput(text string, count int) ([]compareEdge, bool) {
 		if json.Unmarshal(pair.Old, &old) != nil {
 			continue
 		}
-		if strictJSON(raw, &pair) != nil || json.Unmarshal(pair.New, &new) != nil {
+		if modelcall.DecodeStrict(raw, &pair) != nil || json.Unmarshal(pair.New, &new) != nil {
 			new = 0
 		}
 		if old == new && valid(old) {

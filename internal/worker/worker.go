@@ -36,6 +36,9 @@ type Job struct {
 	LeaseToken memory.ID
 }
 
+// CallPolicy marks a leased job as the execution policy of a model call.
+func (Job) CallPolicy() {}
+
 type Queue interface {
 	Claim(context.Context, time.Duration) (*Job, error)
 	Block(context.Context, Job, string) error

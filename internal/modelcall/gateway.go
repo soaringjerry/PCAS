@@ -22,8 +22,12 @@ var (
 	ErrNotApplicable           = errors.New("paid_result_not_applicable")
 )
 
+// Policy is the execution policy that the journal applies to a call: a leased
+// background job or an admitted interactive execution. The gateway carries it
+// and does not interpret it. Only a declared policy type can be passed.
+type Policy interface{ CallPolicy() }
+
 // Request separates execution identity from an individual paid invocation.
-// Policy is an opaque adapter value; the gateway does not interpret queue rules.
 type Request struct {
 	OwnerID               memory.ID
 	ExecutionID           memory.ID
@@ -42,7 +46,7 @@ type Request struct {
 	// provider receives Prompt.
 	ModelInput string
 	Refs       []memory.Ref
-	Policy     any
+	Policy     Policy
 	// ModeFallback states that the caller validates the output itself.
 	// When the selected provider lacks schema or search, the gateway submits
 	// ordinary generation and names the missing capabilities in Unsupported.

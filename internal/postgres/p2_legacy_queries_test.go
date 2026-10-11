@@ -1075,7 +1075,7 @@ func (s *Store) p2LegacySecretaryPrompt(ctx context.Context, tx pgx.Tx, scope me
 	c.Dependencies = uniqueRefs(c.Dependencies)
 	fmt.Fprintln(&prompt, "\nTHIS：")
 	if t, ok := c.Aliases["THIS"]; ok {
-		fmt.Fprintf(&prompt, "%s（%s；截止 %s）\n说明：%s\n", t.Title, t.Status, t.Due, itemNotes(t))
+		fmt.Fprintf(&prompt, "%s（%s；截止 %s）\n说明：%s\n", t.Title, t.Status, t.Due, secretary.Notes(t))
 		for _, check := range t.Checklist {
 			fmt.Fprintf(&prompt, "子任务：%s（完成 %t）\n", check.Text, check.Done)
 		}

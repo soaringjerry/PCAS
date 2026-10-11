@@ -33,3 +33,25 @@ The API log has no error after the release.
 
 - A provider without output schema or web search. The live default is Codex. The browser suite and the storage tests cover the corrected fallback.
 - Background embedding of a new source. No source was added by the check.
+
+## Second Release on the Same Day
+
+Released revision: `6dc23638196ec697b13aaabeb038e9ce140430c3`. Earlier revision: `a5c1483`.
+Pull requests #298, #299, #300, #301, and #302 give the changes and their checks.
+
+| Step | Result |
+|---|---|
+| CI before merge | #302: 33 checks pass, including the browser suite and the phase 3 acceptance tests that were skipped before. |
+| Database migration | None. |
+| Backup | Database 374.8 MB, files 166.4 MB, under `/root/pcas-backups` with the prefix `foundation-review-6dc2363`. |
+| Record counts before and after start | Equal. |
+| Start and readiness | API and worker run the released image. No container restarted. The API log has no error. |
+| Release tool | `scripts/release.py` and `scripts/live_check.py` from the repository. |
+
+The live check used the real default Codex channel: an answer, an arrangement (`create_task`, done), and a change (`update`, done), each between 16 and 17 seconds.
+Each turn has one settled `secretary` call and one settled `query_embedding` call. Cleanup succeeded, and the record counts are equal to the counts before the check.
+
+`GET /v1/workspace/activity/day` answered in 0.05 seconds for the current local day: 423 events, 158 invocations, and a settled cost of 0.00721.
+
+Not checked on the live instance: a voice message, an image, and an audio file through the new recorded entries. No such input arrived during the check.
+The stage deferral counts need a later reading, after the queue has passed several hourly windows on this revision.

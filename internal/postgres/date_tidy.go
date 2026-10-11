@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/soaringjerry/PCAS/internal/currentstate/datereview"
 	"github.com/soaringjerry/PCAS/internal/memory"
-	"github.com/soaringjerry/PCAS/internal/modelcall"
 	"github.com/soaringjerry/PCAS/internal/prompts"
 	"github.com/soaringjerry/PCAS/internal/worker"
 	"github.com/soaringjerry/PCAS/internal/workspace"
@@ -21,7 +21,7 @@ import (
 // stage judges each such date once per memory version and acts — keep it, stop
 // showing it, or make it the to-do or idea it really is — with an undoable
 // action for everything it changes.
-const DateTidyStage = "memory.date_tidy"
+const DateTidyStage = datereview.Stage
 
 // One small call per date. Thirty an hour clears a backlog of a few hundred
 // rows within a day without holding the provider; a normal day adds a handful.
@@ -46,39 +46,10 @@ const dateTidyPastAfter = 24 * time.Hour
 
 var dateTidyInstructions = prompts.Must("date-tidy").Text()
 
-type dateTidyEntry struct {
-	Kind         string `json:"kind"`
-	Title        string `json:"title"`
-	At           string `json:"at"`
-	Recurrence   string `json:"recurrence"`
-	TimeNote     string `json:"timeNote"`
-	OriginalText string `json:"originalText"`
-	Memory       string `json:"memory"`
-	SaidOn       string `json:"saidOn"`
-	Acquisition  string `json:"acquisition"`
-}
-
-type dateTidyInput struct {
-	Now       string         `json:"now"`
-	Timezone  string         `json:"timezone"`
-	Class     string         `json:"class"`
-	Entry     dateTidyEntry  `json:"entry"`
-	SameTitle []dateTidySame `json:"sameTitle"`
-	OpenTasks []string       `json:"openTasks"`
-	Ideas     []string       `json:"ideas"`
-}
-
-type dateTidySame struct {
-	At           string `json:"at"`
-	SaidOn       string `json:"saidOn"`
-	OriginalText string `json:"originalText"`
-}
-
-type dateTidyOutput struct {
-	Decision string `json:"decision"`
-	Title    string `json:"title"`
-	Reason   string `json:"reason"`
-}
+// The input assembly below is the context builder of the date review service.
+type dateTidyEntry = datereview.Entry
+type dateTidyInput = datereview.Input
+type dateTidySame = datereview.Same
 
 // dateTidyEligible lists the dates that are open and are not a time to show:
 // never pinned down, a fixed arrangement with no hour, or over for a day. A
@@ -206,118 +177,101 @@ func dateTidyInputTx(ctx context.Context, tx pgx.Tx, j worker.Job, class string,
 	return in, true, left, nil
 }
 
-// ProcessDateTidy judges one date and carries the verdict out.
-func (s *Store) ProcessDateTidy(ctx context.Context, j worker.Job) error {
-	parts := strings.Split(j.Stage, ":")
-	if len(parts) != 2 || !oneOf(parts[1], "unclear", "habit", "past") {
-		return memory.ErrInvalid
-	}
-	class := parts[1]
-	now := s.businessNow()
-	var input dateTidyInput
-	var open bool
-	var clipped int
-	err := pgx.BeginTxFunc(ctx, s.pool, pgx.TxOptions{AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
+// DateReviewStore gives the date review service its reads and writes.
+func (s *Store) DateReviewStore() datereview.Store { return dateReviewStore{s} }
+
+type dateReviewStore struct{ store *Store }
+
+func (a dateReviewStore) Input(ctx context.Context, j worker.Job, class string) (input datereview.Input, open bool, clipped int, err error) {
+	now := a.store.businessNow()
+	err = pgx.BeginTxFunc(ctx, a.store.pool, pgx.TxOptions{AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
 		var e error
 		input, open, clipped, e = dateTidyInputTx(ctx, tx, j, class, now)
 		return e
 	})
-	if err != nil {
-		return err
-	}
-	done := func() error {
-		return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-			if e := lockJob(ctx, tx, j); e != nil {
-				return e
-			}
-			if e := discardPaidResultTx(ctx, tx, j); e != nil {
-				return e
-			}
-			return acknowledge(ctx, tx, j)
-		})
-	}
-	if !open { // Closed, retired, edited or already judged since it was queued.
-		return done()
-	}
-	ref := memory.Ref{ID: j.Record.ID, Version: j.Record.Version, Kind: memory.ClaimKind}
-	result, err := s.generatePaid(ctx, j, "date_tidy", dateTidyInstructions, asJSON(input), []memory.Ref{ref})
-	if err != nil {
-		return err
-	}
-	var output dateTidyOutput
-	valid := modelcall.DecodeStrict([]byte(strings.TrimSpace(result.Output)), &output) == nil && oneOf(output.Decision, "keep", "drop", "task", "idea") && strings.TrimSpace(output.Reason) != ""
-	output.Title = strings.TrimSpace(output.Title)
-	if oneOf(output.Decision, "task", "idea") {
-		valid = valid && workspace.ValidTitle(output.Title)
-	}
-	if !valid {
-		if err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error { return discardPaidResultTx(ctx, tx, j) }); err != nil {
-			return err
-		}
-		return &worker.JobError{Code: "date_tidy_output_invalid", Until: time.Now().Add(retryDelay(j.Attempts))}
-	}
-	scope := memory.Scope{OwnerID: j.OwnerID, PrincipalID: "owner", IsOwner: true}
-	return backgroundResultTx(ctx, s.pool, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
+	return input, open, clipped, err
+}
+
+func (a dateReviewStore) Drop(ctx context.Context, j worker.Job) error {
+	return pgx.BeginFunc(ctx, a.store.pool, func(tx pgx.Tx) error {
 		if err := lockJob(ctx, tx, j); err != nil {
 			return err
 		}
-		fresh, still, _, err := dateTidyInputTx(ctx, tx, j, class, now)
-		if err != nil {
-			return err
-		}
-		if !still || fresh.Entry != input.Entry {
-			// The date changed while the model was thinking; its verdict was about
-			// something else. The next scheduling pass queues the new version.
-			if err = discardPaidResultTx(ctx, tx, j); err != nil {
-				return err
-			}
-			return acknowledge(ctx, tx, j)
-		}
-		if clipped > 0 {
-			if err = stageEventTx(ctx, tx, j.OwnerID, DateTidyStage, "overflow", "date_tidy_characters_left_in_memory", clipped); err != nil {
-				return err
-			}
-		}
-		var actionID, itemID *string
-		if output.Decision != "keep" {
-			id := string(memory.NewID())
-			actionID = &id
-			label := map[string]string{"drop": "不再显示：" + input.Entry.Title, "task": "建了待办「" + output.Title + "」", "idea": "建了想法「" + output.Title + "」"}[output.Decision]
-			actionCtx := withActionLog(withActor(ctx, "ai"), id, "background_tidy", "", label)
-			if err = beginActionLogTx(actionCtx, tx); err != nil {
-				return err
-			}
-			as := "dropped"
-			if output.Decision != "drop" {
-				as = "task"
-				item := workspace.NewItem(output.Decision, output.Title)
-				item.History[0].By = "ai"
-				item.Evolution[0].By = "ai"
-				if output.Decision == "task" && input.Entry.OriginalText != "" {
-					item.Notes = "你在 " + input.Entry.SaidOn + " 说过：" + input.Entry.OriginalText
-				}
-				item.Creation = &workspace.ItemCreation{By: "background_tidy", ActionID: id, MemoryIDs: []string{string(j.Record.ID)}}
-				if err = saveItem(actionCtx, tx, scope, item); err != nil {
-					return err
-				}
-				itemID = &item.ID
-			}
-			if err = completeDeadlineTx(actionCtx, tx, scope, string(j.Record.ID), j.Record.Version, as); err != nil {
-				return err
-			}
-			if err = flushActionLog(actionCtx, tx, scope); err != nil {
-				return err
-			}
-		}
-		if _, err = tx.Exec(ctx, `INSERT INTO date_tidy_checks(owner_id,claim_id,claim_version,class,decision,reason,entry_title,title,item_id,action_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-			string(j.OwnerID), string(j.Record.ID), j.Record.Version, class, output.Decision, strings.TrimSpace(output.Reason), input.Entry.Title, output.Title, itemID, actionID); err != nil {
-			return err
-		}
-		if err = discardPaidResultTx(ctx, tx, j); err != nil {
+		if err := discardPaidResultTx(ctx, tx, j); err != nil {
 			return err
 		}
 		return acknowledge(ctx, tx, j)
 	})
+}
+
+func (a dateReviewStore) DiscardResult(ctx context.Context, j worker.Job) error {
+	return pgx.BeginFunc(ctx, a.store.pool, func(tx pgx.Tx) error { return discardPaidResultTx(ctx, tx, j) })
+}
+
+func (a dateReviewStore) RetryLater(j worker.Job, code string) error {
+	return &worker.JobError{Code: code, Until: time.Now().Add(retryDelay(j.Attempts))}
+}
+
+func (a dateReviewStore) Apply(ctx context.Context, j worker.Job, fn func(datereview.Unit) error) error {
+	now := a.store.businessNow()
+	return backgroundResultTx(ctx, a.store.pool, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
+		if err := lockJob(ctx, tx, j); err != nil {
+			return err
+		}
+		return fn(dateReviewUnit{ctx: ctx, tx: tx, job: j, now: now, scope: memory.Scope{OwnerID: j.OwnerID, PrincipalID: "owner", IsOwner: true}})
+	})
+}
+
+type dateReviewUnit struct {
+	ctx   context.Context
+	tx    pgx.Tx
+	job   worker.Job
+	now   time.Time
+	scope memory.Scope
+}
+
+func (u dateReviewUnit) Input(class string) (datereview.Input, bool, error) {
+	input, open, _, err := dateTidyInputTx(u.ctx, u.tx, u.job, class, u.now)
+	return input, open, err
+}
+
+func (u dateReviewUnit) Event(outcome, reason string, count int) error {
+	return stageEventTx(u.ctx, u.tx, u.job.OwnerID, DateTidyStage, outcome, reason, count)
+}
+
+func (u dateReviewUnit) Act(label string, fn func(datereview.Action) error) (string, error) {
+	id := string(memory.NewID())
+	actionCtx := withActionLog(withActor(u.ctx, "ai"), id, "background_tidy", "", label)
+	if err := beginActionLogTx(actionCtx, u.tx); err != nil {
+		return "", err
+	}
+	if err := fn(dateReviewAction{ctx: actionCtx, unit: u, id: id}); err != nil {
+		return "", err
+	}
+	return id, flushActionLog(actionCtx, u.tx, u.scope)
+}
+
+func (u dateReviewUnit) RecordDecision(class string, input datereview.Input, output datereview.Output, itemID, actionID *string) error {
+	_, err := u.tx.Exec(u.ctx, `INSERT INTO date_tidy_checks(owner_id,claim_id,claim_version,class,decision,reason,entry_title,title,item_id,action_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+		string(u.job.OwnerID), string(u.job.Record.ID), u.job.Record.Version, class, output.Decision, strings.TrimSpace(output.Reason), input.Entry.Title, output.Title, itemID, actionID)
+	return err
+}
+
+func (u dateReviewUnit) DiscardResult() error { return discardPaidResultTx(u.ctx, u.tx, u.job) }
+func (u dateReviewUnit) Acknowledge() error   { return acknowledge(u.ctx, u.tx, u.job) }
+
+type dateReviewAction struct {
+	ctx  context.Context
+	unit dateReviewUnit
+	id   string
+}
+
+func (a dateReviewAction) ID() string { return a.id }
+func (a dateReviewAction) SaveItem(item workspace.Item) error {
+	return saveItem(a.ctx, a.unit.tx, a.unit.scope, item)
+}
+func (a dateReviewAction) CloseDate(as string) error {
+	return completeDeadlineTx(a.ctx, a.unit.tx, a.unit.scope, string(a.unit.job.Record.ID), a.unit.job.Record.Version, as)
 }
 
 // tidiedDatesTx is the home page's one line for the dates the background

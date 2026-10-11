@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/soaringjerry/PCAS/internal/workspace/deputy"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -44,16 +45,14 @@ func TestAdoptionMatchesFrontend(t *testing.T) {
 		{"line separators", "draft", "- [ ] a\u2028b\n- [ ] c\u2029", "doc", []string{}},
 	}
 	for _, tc := range cases {
-		for _, itemKind := range []string{"task", "idea", "project"} {
-			t.Run(tc.Name+"/"+itemKind, func(t *testing.T) {
-				if got := adoptionFor(workspace.Item{Kind: itemKind}, workspace.Run{Kind: tc.Kind}, tc.Output); got != tc.As {
-					t.Fatalf("as=%q want %q", got, tc.As)
-				}
-				if got := parseRunChecklist(tc.Output); !reflect.DeepEqual(got, tc.Lines) {
-					t.Fatalf("lines=%q want %q", got, tc.Lines)
-				}
-			})
-		}
+		t.Run(tc.Name, func(t *testing.T) {
+			if got := deputy.AdoptionFor(workspace.Run{Kind: tc.Kind}, tc.Output); got != tc.As {
+				t.Fatalf("as=%q want %q", got, tc.As)
+			}
+			if got := deputy.Checklist(tc.Output); !reflect.DeepEqual(got, tc.Lines) {
+				t.Fatalf("lines=%q want %q", got, tc.Lines)
+			}
+		})
 	}
 	// Execute the actual frontend function bodies and their source dependency. Only erase TypeScript syntax;
 	// do not maintain a second copy of the frontend routing or regex in this test.
@@ -210,7 +209,7 @@ func TestAutoAdoptDestinationsAndUndo(t *testing.T) {
 				switch tc.as {
 				case "subtasks":
 					if tc.itemKind == "task" {
-						want := parseRunChecklist(tc.output)
+						want := deputy.Checklist(tc.output)
 						if len(item.Checklist) != 3 {
 							t.Fatalf("checks=%+v", item.Checklist)
 						}

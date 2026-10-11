@@ -7,6 +7,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/worker"
 	"github.com/soaringjerry/PCAS/internal/workspace"
+	"github.com/soaringjerry/PCAS/internal/workspace/deputy"
 	"strings"
 	"time"
 )
@@ -151,7 +152,7 @@ func (s *Store) finishPaidRevise(ctx context.Context, scope memory.Scope, curren
 				return err
 			}
 		}
-		if _, err := tx.Exec(ctx, `INSERT INTO workspace_notices(owner_id,thing_id,trigger_id,due_at,reason) VALUES($1,$2,$3,clock_timestamp(),$4) ON CONFLICT DO NOTHING`, string(scope.OwnerID), run.ThingID, runNoticePrefix+run.ID, runNoticeReason(run)); err != nil {
+		if _, err := tx.Exec(ctx, `INSERT INTO workspace_notices(owner_id,thing_id,trigger_id,due_at,reason) VALUES($1,$2,$3,clock_timestamp(),$4) ON CONFLICT DO NOTHING`, string(scope.OwnerID), run.ThingID, runNoticePrefix+run.ID, deputy.NoticeReason(run)); err != nil {
 			return err
 		}
 		if paid.InvocationID != "" {

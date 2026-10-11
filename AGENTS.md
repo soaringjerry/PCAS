@@ -60,7 +60,7 @@ If you do not run a check, write that in the PR. Give the reason.
 | `internal/postgres` | Storage. It also contains many business operations, prompts, and model calls. |
 | `internal/postgres/migrations` | Database migrations. |
 | `internal/memory`, `internal/workspace` | Memory and workspace types. |
-| `internal/workspace/effort`, `internal/workspace/topicproject`, `internal/workspace/projecthandover`, `internal/workspace/secretary` | Workspace domain packages outside storage: effort estimation, topic projects, project handovers, and the secretary's rules that need no storage. |
+| `internal/workspace/effort`, `internal/workspace/topicproject`, `internal/workspace/projecthandover`, `internal/workspace/secretary`, `internal/workspace/deputy` | Workspace domain packages outside storage: effort estimation, topic projects, project handovers, the secretary's rules and actions, and the deputy's output rules. |
 | `internal/currentstate/datereview`, `internal/currentstate/handover` | Current-state domain packages outside storage: the review of remembered dates and the global handover. |
 | `internal/interpretation/aliasscan`, `internal/interpretation/comparison`, `internal/interpretation/organize`, `internal/interpretation/extraction` | Memory interpretation domain packages outside storage: the scan for names of one entity, statement and entity comparison, the organizing of statements with the schedule rule of a date, and the reading of statements, tasks, and ideas from a source. |
 | `internal/input/attachment` | Input domain package outside storage: the parsing of an original file into text. |

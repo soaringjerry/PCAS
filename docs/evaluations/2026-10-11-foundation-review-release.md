@@ -199,6 +199,18 @@ The cleanup succeeded and the record counts are equal. Neither log has an error,
 
 The storage package has 25,027 lines without tests at this revision. It had 28,355 lines at the review.
 
+## Fourteenth Release on the Same Day
+
+Released revision: `7b430126faee6fa764be959538cdd5aa4f295444`. Earlier revision: `68c80ea`.
+Pull requests #353 and #355 give the change: the rules for a change of the owner's settings and of an agent's settings left the storage package.
+
+The release had no database migration. The backup was validated, and the record counts are equal before and after the start: 5,253 claims and 28 work items.
+The live check on the real default Codex channel passed with four turns: an answer, an arrangement (`create_task`, done), a change (`update`, done), and a delegation (`delegate`, done) whose deputy run finished as done with a settled call.
+The cleanup succeeded and the record counts are equal. Neither log has an error, and no container restarted.
+The live check changes no setting, so the moved settings rules have their CI results and no live result in this record.
+
+The storage package has 24,987 lines without tests at this revision. It had 28,355 lines at the review.
+
 ## Host Cleanup
 
 The owner approved removal of leftover data on 2026-10-11.

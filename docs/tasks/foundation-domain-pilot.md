@@ -78,7 +78,8 @@ The secretary's rules that need no storage are in `internal/workspace/secretary`
 The rules of each action are in the same package. `Execute` does one action through the `Workspace` interface: it resolves the alias, checks the fields, sends the workspace commands, sets the reminder, and writes the receipt that the owner reads.
 Storage implements `Workspace` in the action's transaction. It keeps the commands, the history collection, the companion project of a task, and the closing of a remembered date.
 Behavior tests run the actions against a workspace in memory. They need no database.
-The turn itself, its context, and its prompt are still in `internal/postgres/desk_turn.go`. They are the largest part of the phase that remains.
+`RenderWorkspace` writes the workspace part of the model input: the projects, the tasks, the ideas, the conversation history, and the items of the conversation. Storage reads the facts and records each cut of a long project evidence. A contract test fixes the bytes.
+The memory part of the model input, the turn itself, and its context are still in `internal/postgres/desk_turn.go`. The memory part waits for an interface to memory retrieval. They are the largest part of the phase that remains.
 
 The deputy's rules that need no storage are in `internal/workspace/deputy`: the checklist of an output, how an output is adopted, and the notice of a finished run.
 The run itself, its context, and the run commands are still in `internal/postgres/runs.go`.

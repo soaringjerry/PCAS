@@ -1,19 +1,25 @@
-package postgres
+// Package comparison owns the memory interpretation rules for the model's
+// comparison of statements: which statement repeats another and which one
+// replaces another. The rules here need no storage.
+package comparison
 
 import (
 	"encoding/json"
 	"github.com/soaringjerry/PCAS/internal/modelcall"
 )
 
-type compareEdge struct {
+// Edge proposes that statement Old is retired in favor of statement New.
+// Kind is "duplicate" or "superseded". The numbers are local to one batch.
+type Edge struct {
 	Old, New int
 	Kind     string
 }
 
+// ParseOutput reads the model's answer for a batch of count statements.
 // Numbers are local to the supplied batch, never database identifiers. Invalid
 // suggestions are discarded independently; the first suggestion for an old
 // memory wins. A malformed envelope is a failed comparison of the whole batch.
-func parseCompareOutput(text string, count int) ([]compareEdge, bool) {
+func ParseOutput(text string, count int) ([]Edge, bool) {
 	var envelope struct {
 		Duplicates json.RawMessage `json:"duplicates"`
 		Superseded json.RawMessage `json:"superseded"`
@@ -28,7 +34,7 @@ func parseCompareOutput(text string, count int) ([]compareEdge, bool) {
 	}
 	valid := func(n int) bool { return n > 0 && n <= count }
 	seen := map[int]bool{}
-	edges := []compareEdge{}
+	edges := []Edge{}
 	add := func(old, new int, kind string) {
 		if !valid(old) || old == new || seen[old] {
 			return
@@ -37,7 +43,7 @@ func parseCompareOutput(text string, count int) ([]compareEdge, bool) {
 		if !valid(new) {
 			return
 		}
-		edges = append(edges, compareEdge{Old: old, New: new, Kind: kind})
+		edges = append(edges, Edge{Old: old, New: new, Kind: kind})
 	}
 	for _, raw := range duplicates {
 		var group struct {
@@ -96,15 +102,16 @@ func parseCompareOutput(text string, count int) ([]compareEdge, bool) {
 	return edges, true
 }
 
+// ResolveEdges follows chains of proposals to their final keeper.
 // Resolve the full proposed graph before dropping protected/changed rows. A
 // cycle invalidates every suggestion leading into it; dropping one edge must
 // never turn a cyclic proposal into an accepted one-way retirement.
-func resolveCompareEdges(edges []compareEdge, eligible, protected map[int]bool) []compareEdge {
-	graph := map[int]compareEdge{}
+func ResolveEdges(edges []Edge, eligible, protected map[int]bool) []Edge {
+	graph := map[int]Edge{}
 	for _, edge := range edges {
 		graph[edge.Old] = edge
 	}
-	resolved := []compareEdge{}
+	resolved := []Edge{}
 	for _, edge := range edges {
 		if !eligible[edge.Old] || protected[edge.Old] {
 			continue
@@ -145,7 +152,7 @@ func resolveCompareEdges(edges []compareEdge, eligible, protected map[int]bool) 
 			node = next.New
 		}
 		if valid {
-			resolved = append(resolved, compareEdge{Old: edge.Old, New: at, Kind: kind})
+			resolved = append(resolved, Edge{Old: edge.Old, New: at, Kind: kind})
 		}
 	}
 	return resolved

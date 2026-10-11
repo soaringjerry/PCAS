@@ -45,6 +45,7 @@ The [Roadmap](whitepaper.md#10-roadmap) gives the phase sequence, delivery scope
 | Phase 3.9 unused generation cleanup | Unused card instructions and generation removed and released at `6411b4e` on 2026-10-09. | [CI, backup, release, and live checks](tasks/foundation-unused-generation.md#release-verification). |
 | Phase 3.9 review corrections | Mode fallback regression fix, embeddings through the gateway, journal deferral fix, and legacy interface removal released at `a5c1483` on 2026-10-11. Phase 3.9 remains incomplete. | [Release and live check](evaluations/2026-10-11-foundation-review-release.md). |
 | Phase 3.9 gateway coverage, activity query, and first domain paths | Recorded entries for transcription and images, the day activity query, stage limit deferrals in one step, and the effort and topic project services released at `6dc2363` on 2026-10-11. Phase 3.9 remains incomplete. | [Release and live check](evaluations/2026-10-11-foundation-review-release.md#second-release-on-the-same-day). |
+| Phase 3.9 date review and project handover paths | Both services released at `a893628` on 2026-10-11. Four background paths are outside the storage package. Phase 3.9 remains incomplete. | [Release and live check](evaluations/2026-10-11-foundation-review-release.md#third-release-on-the-same-day). |
 
 Phase 2.0 was rolled back on 2026-10-01.
 Its design is stored under the recorded `archive/phase2-0/*` tags.

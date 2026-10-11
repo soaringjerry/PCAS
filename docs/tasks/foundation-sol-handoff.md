@@ -32,8 +32,8 @@ Phase 3.9 is incomplete. The [delivery milestones](../status.md#foundation-deliv
 | Query and background embedding through the gateway | Released at `a5c1483` on 2026-10-11. |
 | Mode fallback correction for providers without schema or search | Released at `a5c1483` on 2026-10-11. |
 | Legacy routing and answer removal | Released at `a5c1483` on 2026-10-11. |
-| Transcription and image interpretation through the gateway | File transcription, image interpretation, and Telegram voice transcription use recorded gateway entries. Not released when this page was written. |
-| Data-owner boundaries and domain extraction | The [pilot](foundation-domain-pilot.md) moved workspace effort estimation. The other paths remain in the storage package. |
+| Transcription and image interpretation through the gateway | Released at `6dc2363` on 2026-10-11. |
+| Data-owner boundaries and domain extraction | Four background paths have their rules in domain packages: effort estimation, topic projects, date review, and project handover. The [pilot page](foundation-domain-pilot.md) lists them and what each leaves in storage. The secretary, the deputy, workspace commands, memory interpretation, and input remain in the storage package. |
 | Activity queries | The [day activity query](../memory-service.md#day-activity) answers one local day's work, cost, and reasons. Its response lists the links that the records do not contain. |
 | Declared event responses and causal limits | Not started. The [first live readings](../evaluations/2026-10-11-activity-baseline.md) measure the repeated deferrals that these limits must address. |
 | Five test layers and nightly evaluation trends | Not started as a complete set. |

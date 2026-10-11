@@ -32,8 +32,8 @@ var deputyInstructions = prompts.Must("deputy").Text()
 
 func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c workspace.Command) error {
 	if c.Type == "requestRun" {
-		if !oneOf(c.Kind, "plan", "breakdown", "summary", "draft", "ask", "revise") || requireText(c.Prompt) != nil {
-			return memory.ErrInvalid
+		if err := deputy.CheckRequest(c.Kind, c.Prompt); err != nil {
+			return err
 		}
 		item, err := getItem(ctx, tx, scope, c.ThingID)
 		if err != nil {
@@ -170,32 +170,15 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 				}
 			}
 		}
-		byID := map[string]workspace.Memory{}
-		for _, m := range memories {
-			byID[m.ID] = m
-		}
-		ordered := []workspace.Memory{}
-		selected := map[string]bool{}
-		// Structured matches precede handoff history and long-term constraints.
-		for _, ref := range recall.Structured {
-			if m, ok := byID[string(ref.ID)]; ok && m.Version == ref.Version && !selected[m.ID] {
-				ordered = append(ordered, m)
-				selected[m.ID] = true
-			}
-		}
 		if recall.TimeRelaxed {
 			fmt.Fprintln(&brief, contextbuilder.RecallTimeRelaxed)
 		}
 		excerpts := recall.Excerpts
+		var preparedRefs []memory.Ref
 		historyRequests := []string{}
 		if prepared, ok := ctx.Value(runContextKey{}).(preparedRunContext); ok {
 			excerpts = append(append([]memory.RecallExcerpt{}, prepared.Excerpts...), excerpts...)
-			for _, ref := range prepared.Refs {
-				if m, ok := byID[string(ref.ID)]; ok && m.Version == ref.Version && !selected[m.ID] {
-					ordered = append(ordered, m)
-					selected[m.ID] = true
-				}
-			}
+			preparedRefs = prepared.Refs
 		}
 		for _, turn := range history {
 			historyRequests = append(historyRequests, turn.RequestID)
@@ -210,39 +193,12 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 			}
 		}
 		brief.WriteString(tail(historyText, delegateContextBytes))
-		// Explicit long-term constraints must remain applicable even when the
-		// task vocabulary does not repeat them.
-		for _, m := range memories {
-			if (m.Kind == "preference" || m.Kind == "decision") && !selected[m.ID] {
-				ordered = append(ordered, m)
-				selected[m.ID] = true
-			}
-		}
-		for _, ref := range recall.Memories {
-			if m, ok := byID[string(ref.ID)]; ok && !selected[m.ID] {
-				ordered = append(ordered, m)
-				selected[m.ID] = true
-			}
-		}
+		ordered := deputy.OrderMemories(memories, recall.Structured, preparedRefs, recall.Memories)
 		run.MemoryTier = memoryTierForStatus(memoryTier(ctx, c.Prompt, "heavy"), u.Ready)
 		u.Tier = run.MemoryTier
 		ranked := ordered
 		if u.Ready {
-			ranked = []workspace.Memory{}
-			seenRanked := map[string]bool{}
-			addRanked := func(refs []memory.Ref) {
-				for _, ref := range refs {
-					if m, ok := byID[string(ref.ID)]; ok && m.Version == ref.Version && !seenRanked[m.ID] && contextbuilder.MemoryAllowed(m, agent) {
-						ranked = append(ranked, m)
-						seenRanked[m.ID] = true
-					}
-				}
-			}
-			addRanked(recall.Structured)
-			if prepared, ok := ctx.Value(runContextKey{}).(preparedRunContext); ok {
-				addRanked(prepared.Refs)
-			}
-			addRanked(recall.Memories)
+			ranked = deputy.RankMemories(memories, agent, recall.Structured, preparedRefs, recall.Memories)
 		}
 		if err = s.finishUseContextTx(ctx, tx, scope, agent, &item.ID, c.Prompt, ranked, &u); err != nil {
 			return err
@@ -344,8 +300,8 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 	}
 	switch c.Type {
 	case "pasteRunResult":
-		if run.Status != "waiting" || run.StaleContext {
-			return memory.ErrConflict
+		if err := deputy.CanPaste(run); err != nil {
+			return err
 		}
 		if run.Kind == "revise" {
 			reason, err := manualReviseReasonTx(ctx, tx, scope, run, c.Output)
@@ -360,20 +316,14 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 				_, err = tx.Exec(ctx, "UPDATE agent_runs SET document=$3 WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), run.ID, asJSON(run))
 				return err
 			}
-		} else if requireText(c.Output) != nil {
-			return memory.ErrConflict
 		}
-		run.Error = ""
-		run.Status = "done"
-		run.Output = c.Output
-		run.FinishedAt = stamp()
+		if err := deputy.Paste(&run, c.Output, time.Now()); err != nil {
+			return err
+		}
 	case "discardRun":
-		if run.Status == "running" {
-			return memory.ErrConflict
+		if err := deputy.Discard(&run, time.Now()); err != nil {
+			return err
 		}
-		run.Status = "failed"
-		run.Error = "已弃用"
-		run.FinishedAt = stamp()
 	case "adoptRun":
 		if err := s.adoptRunTx(ctx, tx, scope, &run, c.As, c.Text, c.RequestID, false); err != nil {
 			return err

@@ -30,14 +30,6 @@ func memoryTierForStatus(tier string, ready bool) string {
 	}
 	return tier
 }
-func containsAny(text string, words ...string) bool {
-	for _, w := range words {
-		if strings.Contains(text, w) {
-			return true
-		}
-	}
-	return false
-}
 
 type (
 	useCoverage = contextbuilder.Coverage

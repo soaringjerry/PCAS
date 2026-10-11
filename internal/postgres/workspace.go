@@ -7,7 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"reflect"
+	"github.com/soaringjerry/PCAS/internal/workspace/itemcommand"
 	"strings"
 	"time"
 
@@ -71,34 +71,7 @@ func queryDocuments[T any](ctx context.Context, tx pgx.Tx, sql string, args ...a
 	return out, rows.Err()
 }
 func patchAllowed(dst any, patch json.RawMessage, keys ...string) error {
-	var fields map[string]json.RawMessage
-	if len(patch) == 0 || json.Unmarshal(patch, &fields) != nil || len(fields) == 0 {
-		return memory.ErrInvalid
-	}
-	for k := range fields {
-		if !oneOf(k, keys...) {
-			return memory.ErrInvalid
-		}
-	}
-	var merged map[string]json.RawMessage
-	if json.Unmarshal(asJSON(dst), &merged) != nil {
-		return memory.ErrInvalid
-	}
-	for k, v := range fields {
-		if string(v) == "null" {
-			delete(merged, k)
-		} else {
-			merged[k] = v
-		}
-	}
-	replacement := reflect.New(reflect.TypeOf(dst).Elem())
-	decoder := json.NewDecoder(bytes.NewReader(asJSON(merged)))
-	decoder.DisallowUnknownFields()
-	if decoder.Decode(replacement.Interface()) != nil {
-		return memory.ErrInvalid
-	}
-	reflect.ValueOf(dst).Elem().Set(replacement.Elem())
-	return nil
+	return itemcommand.Patch(dst, patch, keys...)
 }
 func (s *Store) ensureOwner(ctx context.Context, tx pgx.Tx, scope memory.Scope) error {
 	settings := workspace.Settings{WakeIdeas: true, FollowUps: true, DailyReviewAt: "09:00", DailyBudget: 10, Timezone: workspace.InitialTimezone(ctx)}

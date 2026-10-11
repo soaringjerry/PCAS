@@ -50,6 +50,10 @@ A kept date is recorded too, so that it is not reviewed again unchanged. A date 
 The project handover service holds the grounding rules: a sentence is kept only when its evidence was in the input and still exists at the time of the write, a section keeps five sentences, and an output without a grounded sentence leaves the earlier handover in place.
 It also holds the preparation rules: no handover for a finished project, no rewrite of a current handover, and one rewrite of a stale handover in one hour at most.
 
+Rules that need no storage can move before their path's orchestration.
+The statement comparison rules are in `internal/interpretation/comparison`: reading the model's duplicate and superseded proposals, and following chains of proposals to their final keeper without accepting a cycle.
+The comparison job itself is still in `internal/postgres/compare.go`.
+
 ## Pattern for the Next Paths
 
 1. Put each business rule in the domain package as a function that needs no database.

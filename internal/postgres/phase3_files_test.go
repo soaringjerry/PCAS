@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
 	"github.com/soaringjerry/PCAS/internal/worker"
 	"io"
 	"mime/multipart"
@@ -255,7 +256,7 @@ func TestPhase3F2T2FileExtractionConcurrentWithSchedulingAndUser(t *testing.T) {
 	m.mu.Unlock()
 	// Keep real source pipeline ordering; postpone only unrelated fixture jobs.
 	phase26Exec(t, f.phase26LoadedFixture, `UPDATE memory_jobs SET available_at=now()+interval '1 day' WHERE state='queued' AND record_id<>$1`, uploaded.File.SourceID)
-	var extraction worker.Job
+	var extractJob worker.Job
 	found := false
 	for i := 0; i < 12; i++ {
 		j, err := f.Store.Claim(f.Context, 5*time.Minute)
@@ -268,7 +269,7 @@ func TestPhase3F2T2FileExtractionConcurrentWithSchedulingAndUser(t *testing.T) {
 		case "source.chunk":
 			err = f.Store.ProcessChunks(f.Context, *j)
 		case "source.extract":
-			extraction = *j
+			extractJob = *j
 			found = true
 		default:
 			err = f.Store.Defer(f.Context, *j, "phase3_unrelated_source_stage", time.Now().Add(time.Hour), true)
@@ -284,7 +285,9 @@ func TestPhase3F2T2FileExtractionConcurrentWithSchedulingAndUser(t *testing.T) {
 		t.Fatal("uploaded source did not reach real extraction")
 	}
 	done := make(chan error, 1)
-	go func() { done <- f.Store.ProcessExtraction(f.Context, extraction) }()
+	go func() {
+		done <- (extraction.Service{Store: f.Store.ExtractionStore(), Generator: f.Store, MaxAttempts: MaxJobAttempts}).Process(f.Context, extractJob)
+	}()
 	select {
 	case <-entered:
 	case err := <-done:

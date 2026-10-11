@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"fmt"
+	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
 	"log/slog"
 	"os"
 	"os/exec"
@@ -127,7 +128,7 @@ func TestQ5BackgroundProcess(t *testing.T) {
 			t.Fatal(err)
 		}
 		started := time.Now()
-		err := s.ProcessExtraction(ctx, job)
+		err := (extraction.Service{Store: s.ExtractionStore(), Generator: s, MaxAttempts: MaxJobAttempts}).Process(ctx, job)
 		if ctx.Err() != nil {
 			break
 		}

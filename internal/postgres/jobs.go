@@ -22,6 +22,9 @@ const persistentStageSQL = "stage ~ '^memory\\.(organize|compare|entity_compare|
 
 const maxAttempts = 5
 
+// MaxJobAttempts is the attempt limit of one queue job.
+const MaxJobAttempts = maxAttempts
+
 func (s *Store) Claim(ctx context.Context, lease time.Duration) (*worker.Job, error) {
 	return s.claim(ctx, lease, false)
 }

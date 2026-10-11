@@ -7,13 +7,11 @@ import (
 	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/ai"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/modelcall"
-	"github.com/soaringjerry/PCAS/internal/prompts"
 	"github.com/soaringjerry/PCAS/internal/worker"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
@@ -232,8 +230,6 @@ type (
 	extracted     = extraction.Output
 )
 
-var structuredExtractionInstructions = prompts.Must("structured-extraction").Text()
-
 func currentExtractionSource(ctx context.Context, tx pgx.Tx, j worker.Job) (bool, error) {
 	var version int
 	err := tx.QueryRow(ctx, "SELECT version FROM memory_records WHERE owner_id=$1 AND id=$2 AND state='active' FOR SHARE", string(j.OwnerID), string(j.Record.ID)).Scan(&version)
@@ -243,23 +239,49 @@ func currentExtractionSource(ctx context.Context, tx pgx.Tx, j worker.Job) (bool
 	return version == j.Record.Version, err
 }
 
-func (s *Store) ProcessExtraction(ctx context.Context, j worker.Job) (err error) {
-	defer func() {
-		var failure *worker.JobError
-		if errors.As(err, &failure) && failure.Code != "budget_deferred" && (!failure.Retry || j.Attempts >= maxAttempts) {
-			if persistErr := s.extractionFailed(ctx, j); persistErr != nil {
-				err = persistErr
-			}
-		}
-	}()
-	scope := memory.Scope{OwnerID: j.OwnerID, PrincipalID: "worker", IsOwner: true}
-	source, err := s.GetSource(ctx, scope, j.Record.ID, j.Record.Version)
+// ExtractionStore gives the extraction service its reads and writes.
+func (s *Store) ExtractionStore() extraction.Store { return extractionStore{s} }
+
+type extractionStore struct{ store *Store }
+
+func workerScope(owner memory.ID) memory.Scope {
+	return memory.Scope{OwnerID: owner, PrincipalID: "worker", IsOwner: true}
+}
+
+func (a extractionStore) Source(ctx context.Context, j worker.Job) (memory.SourceResult, bool, error) {
+	source, err := a.store.GetSource(ctx, workerScope(j.OwnerID), j.Record.ID, j.Record.Version)
 	if err != nil {
-		return err
+		return source, false, err
 	}
-	groundingText := source.Source.Text
-	var superseded bool
-	if err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	var imported bool
+	err = a.store.pool.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM archive_entries WHERE owner_id=$1 AND source_id=$2 AND source_version=$3)", string(j.OwnerID), string(j.Record.ID), j.Record.Version).Scan(&imported)
+	return source, imported, err
+}
+
+func (a extractionStore) Current(ctx context.Context, j worker.Job) (bool, error) {
+	var current bool
+	err := pgx.BeginFunc(ctx, a.store.pool, func(tx pgx.Tx) error {
+		if err := lockJob(ctx, tx, j); err != nil {
+			return err
+		}
+		var err error
+		current, err = currentExtractionSource(ctx, tx, j)
+		if err != nil || current {
+			return err
+		}
+		return acknowledge(ctx, tx, j)
+	})
+	return current, err
+}
+
+// extractionTx runs write under the owner lock and the job's lease. It
+// acknowledges the job without the write when the source version is no
+// longer current.
+func (a extractionStore) extractionTx(ctx context.Context, j worker.Job, write func(pgx.Tx) error) error {
+	return pgx.BeginFunc(ctx, a.store.pool, func(tx pgx.Tx) error {
+		if err := extractionOwnerLock(ctx, tx, j.OwnerID); err != nil {
+			return err
+		}
 		if err := lockJob(ctx, tx, j); err != nil {
 			return err
 		}
@@ -267,168 +289,105 @@ func (s *Store) ProcessExtraction(ctx context.Context, j worker.Job) (err error)
 		if err != nil {
 			return err
 		}
-		superseded = !current
-		if superseded {
+		if !current {
 			return acknowledge(ctx, tx, j)
 		}
-		return nil
-	}); err != nil || superseded {
-		return err
-	}
-	if oneOf(source.Source.Connector, "actions", "corrections", "memory-input") {
-		return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-			if err := extractionOwnerLock(ctx, tx, j.OwnerID); err != nil {
+		return write(tx)
+	})
+}
+
+func (a extractionStore) FinishEmpty(ctx context.Context, j worker.Job) error {
+	return a.extractionTx(ctx, j, func(tx pgx.Tx) error { return completeExtractionTx(ctx, tx, j, "empty") })
+}
+
+func (a extractionStore) Conversation(ctx context.Context, j worker.Job, conversation string) error {
+	return a.store.processConversationExtraction(ctx, j, conversation)
+}
+
+func (a extractionStore) SplitWindows(ctx context.Context, j worker.Job, starts []int, imported bool) error {
+	return a.extractionTx(ctx, j, func(tx pgx.Tx) error {
+		for _, start := range starts {
+			if err := enqueue(ctx, tx, j.OwnerID, j.Record.ID, j.Record.Version, "source.extract:"+strconv.Itoa(start)); err != nil {
 				return err
 			}
-			if err := lockJob(ctx, tx, j); err != nil {
-				return err
-			}
-			return completeExtractionTx(ctx, tx, j, "empty")
-		})
-	}
-	var imported bool
-	if err := s.pool.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM archive_entries WHERE owner_id=$1 AND source_id=$2 AND source_version=$3)", string(j.OwnerID), string(j.Record.ID), j.Record.Version).Scan(&imported); err != nil {
-		return err
-	}
-	if imported && source.Context != nil && source.Context.Conversation != "" {
-		return s.processConversationExtraction(ctx, j, source.Context.Conversation)
-	}
-	if imported && source.Context != nil && oneOf(source.Context.Role, "assistant", "system", "tool") {
-		return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-			if err := extractionOwnerLock(ctx, tx, j.OwnerID); err != nil {
-				return err
-			}
-			if err := lockJob(ctx, tx, j); err != nil {
-				return err
-			}
-			current, err := currentExtractionSource(ctx, tx, j)
-			if err != nil {
-				return err
-			}
-			if !current {
-				return acknowledge(ctx, tx, j)
-			}
-			return completeExtractionTx(ctx, tx, j, "empty")
-		})
-	}
-	if s.models == nil || s.models.ExtractionID() == "" {
+		}
+		if _, err := tx.Exec(ctx, `UPDATE memory_jobs SET priority=CASE WHEN $4 THEN 10 ELSE (SELECT priority FROM memory_jobs WHERE id=$5) END
+				WHERE owner_id=$1 AND record_id=$2 AND record_version=$3 AND stage LIKE 'source.extract:%'`, string(j.OwnerID), string(j.Record.ID), j.Record.Version, imported, string(j.ID)); err != nil {
+			return err
+		}
+		return completeExtractionTx(ctx, tx, j, "")
+	})
+}
+
+func (a extractionStore) Configured() error {
+	if a.store.models == nil || a.store.models.ExtractionID() == "" {
 		return &worker.JobError{Code: "provider_not_configured"}
 	}
-	// Long imports are separate fenced jobs with overlapping context windows.
-	runes := []rune(source.Source.Text)
-	if starts := extraction.WindowStarts(len(runes)); len(starts) > 0 && j.Stage == "source.extract" {
-		return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-			if err := extractionOwnerLock(ctx, tx, j.OwnerID); err != nil {
-				return err
-			}
-			if err := lockJob(ctx, tx, j); err != nil {
-				return err
-			}
-			current, err := currentExtractionSource(ctx, tx, j)
-			if err != nil {
-				return err
-			}
-			if !current {
-				return acknowledge(ctx, tx, j)
-			}
-			for _, start := range starts {
-				if err := enqueue(ctx, tx, j.OwnerID, j.Record.ID, j.Record.Version, "source.extract:"+strconv.Itoa(start)); err != nil {
-					return err
-				}
-			}
-			if _, err := tx.Exec(ctx, `UPDATE memory_jobs SET priority=CASE WHEN $4 THEN 10 ELSE (SELECT priority FROM memory_jobs WHERE id=$5) END
-				WHERE owner_id=$1 AND record_id=$2 AND record_version=$3 AND stage LIKE 'source.extract:%'`, string(j.OwnerID), string(j.Record.ID), j.Record.Version, imported, string(j.ID)); err != nil {
-				return err
-			}
-			return completeExtractionTx(ctx, tx, j, "")
-		})
-	}
-	if parts := strings.SplitN(j.Stage, ":", 2); len(parts) == 2 {
-		start, err := strconv.Atoi(parts[1])
-		if err != nil {
-			return memory.ErrInvalid
-		}
-		var ok bool
-		if source.Source.Text, ok = extraction.WindowText(runes, start); !ok {
-			return memory.ErrInvalid
-		}
-	}
-	p, ok := s.models.Get(s.models.ExtractionID())
+	return nil
+}
+
+func (a extractionStore) Ready() error {
+	p, ok := a.store.models.Get(a.store.models.ExtractionID())
 	if !ok || p.Embedding || p.Transcription {
 		return &worker.JobError{Code: "provider_not_configured"}
 	}
-	if !s.models.Available(p.ID) {
+	if !a.store.models.Available(p.ID) {
 		return &worker.JobError{Code: "provider_unavailable", Retry: true}
 	}
-	conditions, err := s.pendingConditions(ctx, scope)
-	if err != nil {
-		return err
+	return nil
+}
+
+func (a extractionStore) Unpaid(text string) bool {
+	p, ok := a.store.models.Get(a.store.models.ExtractionID())
+	return ok && p.Reserve(text) == 0
+}
+
+func (a extractionStore) Input(ctx context.Context, j worker.Job, source memory.SourceResult) (extraction.Input, error) {
+	s, scope := a.store, workerScope(j.OwnerID)
+	var in extraction.Input
+	var err error
+	if in.Conditions, err = s.pendingConditions(ctx, scope); err != nil {
+		return in, err
 	}
-	adjacent, err := s.adjacentContext(ctx, scope, source)
-	if err != nil {
-		return err
+	if in.Adjacent, err = s.adjacentContext(ctx, scope, source); err != nil {
+		return in, err
 	}
-	var modelSettings workspace.Settings
+	var settings workspace.Settings
 	if err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		if err := s.ensureOwner(ctx, tx, scope); err != nil {
 			return err
 		}
 		var err error
-		modelSettings, err = queryDocument[workspace.Settings](ctx, tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1", string(j.OwnerID))
+		settings, err = queryDocument[workspace.Settings](ctx, tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1", string(j.OwnerID))
 		return err
 	}); err != nil {
-		return err
+		return in, err
 	}
-	loc, err := time.LoadLocation(modelSettings.Timezone)
-	if err != nil {
-		return err
-	}
-	sourceProject := ""
+	in.Timezone = settings.Timezone
 	if raw := source.Source.Scope["project_id"]; raw != nil {
-		if json.Unmarshal(raw, &sourceProject) != nil {
-			return memory.ErrInvalid
+		if json.Unmarshal(raw, &in.Project) != nil {
+			return in, memory.ErrInvalid
 		}
 	}
 	if source.Source.Connector == "desk" {
-		err = s.pool.QueryRow(ctx, `SELECT coalesce(CASE WHEN w.kind='project' THEN w.id::text ELSE w.project_id::text END,'') FROM desk_turns t JOIN work_items w ON(w.owner_id,w.id)=(t.owner_id,t.thing_id) WHERE t.owner_id=$1 AND t.request_id::text=$2`, string(scope.OwnerID), source.Source.ExternalID).Scan(&sourceProject)
+		err = s.pool.QueryRow(ctx, `SELECT coalesce(CASE WHEN w.kind='project' THEN w.id::text ELSE w.project_id::text END,'') FROM desk_turns t JOIN work_items w ON(w.owner_id,w.id)=(t.owner_id,t.thing_id) WHERE t.owner_id=$1 AND t.request_id::text=$2`, string(scope.OwnerID), source.Source.ExternalID).Scan(&in.Project)
 		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-			return err
+			return in, err
 		}
 	}
-	prompt := string(asJSON(map[string]any{"source_project_id": sourceProject, "source": source.Source.Text, "source_context": source.Context, "expressed_at": extraction.ExpressedAt(source), "timezone": modelSettings.Timezone, "adjacent_messages": adjacent, "pending_conditions": conditions}))
-	mentionText := groundingText
-	for _, message := range adjacent {
-		if text, ok := message["text"].(string); ok {
-			mentionText += "\n" + text
-		}
-	}
-	// Reserve before submitting a background generation. Repeated processing can
-	// retry DB work, but an ambiguous costly request requires explicit user retry.
-	result, err := s.generatePaidInput(ctx, j, "extraction", structuredExtractionInstructions, prompt, asJSON(map[string]any{"rawPrompt": prompt}), []memory.Ref{j.Record})
-	if err != nil {
-		return err
-	}
-	var paidPrompt struct {
-		RawPrompt string `json:"rawPrompt"`
-	}
-	if err = json.Unmarshal(result.Prompt, &paidPrompt); err != nil {
-		return err
-	}
-	var paidScope struct {
-		ProjectID string `json:"source_project_id"`
-	}
-	if err = json.Unmarshal([]byte(paidPrompt.RawPrompt), &paidScope); err != nil {
-		return err
-	}
-	sourceProject = paidScope.ProjectID
-	free := p.Reserve(structuredExtractionInstructions+prompt) == 0
-	output, valid := extraction.ParseOutput(result.Output)
-	if !valid {
-		if err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error { return discardPaidResultTx(ctx, tx, j) }); err != nil {
-			return err
-		}
-		return &worker.JobError{Code: "model_output_invalid", Retry: free}
-	}
+	return in, nil
+}
+
+func (a extractionStore) DiscardResult(ctx context.Context, j worker.Job) error {
+	return pgx.BeginFunc(ctx, a.store.pool, func(tx pgx.Tx) error { return discardPaidResultTx(ctx, tx, j) })
+}
+
+func (a extractionStore) Failed(ctx context.Context, j worker.Job) error {
+	return a.store.extractionFailed(ctx, j)
+}
+
+func (a extractionStore) Apply(ctx context.Context, j worker.Job, result extraction.Result) error {
+	s, scope, source := a.store, workerScope(j.OwnerID), result.Source
 	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(j.OwnerID)); err != nil {
 			return err
@@ -443,16 +402,16 @@ func (s *Store) ProcessExtraction(ctx context.Context, j worker.Job) (err error)
 		if !current {
 			return acknowledge(ctx, tx, j)
 		}
+		facts := extraction.Facts{Source: source, MentionText: result.MentionText, Location: result.Location}
 		// Recheck under the same owner lock used by undo, after generation: an
 		// undo during the model call must not resurrect the extracted memories.
-		var fullyUndone, remembered bool
 		if source.Source.Connector == "desk" {
-			fullyUndone, err = deskTurnFullyUndoneTx(ctx, tx, j.OwnerID, source.Source.ExternalID)
+			facts.Undone, err = deskTurnFullyUndoneTx(ctx, tx, j.OwnerID, source.Source.ExternalID)
 			if err != nil {
 				return err
 			}
-			if fullyUndone {
-				remembered, err = deskTurnRememberedTx(ctx, tx, j.OwnerID, source.Source.ExternalID)
+			if facts.Undone {
+				facts.Remembered, err = deskTurnRememberedTx(ctx, tx, j.OwnerID, source.Source.ExternalID)
 				if err != nil {
 					return err
 				}
@@ -465,93 +424,61 @@ func (s *Store) ProcessExtraction(ctx context.Context, j worker.Job) (err error)
 		// An uploaded archive is a history migration. What it says becomes memory
 		// and reviewable candidates, never a present-day task or a woken idea:
 		// "明天" in a 2025 conversation is not tomorrow.
-		var imported bool
-		if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM archive_entries WHERE owner_id=$1 AND source_id=$2 AND source_version=$3)", string(j.OwnerID), string(j.Record.ID), j.Record.Version).Scan(&imported); err != nil {
+		if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM archive_entries WHERE owner_id=$1 AND source_id=$2 AND source_version=$3)", string(j.OwnerID), string(j.Record.ID), j.Record.Version).Scan(&facts.Imported); err != nil {
 			return err
 		}
 		accepted := 0
 		seenOutputQuotes := map[string]bool{}
-		// Thirty items per write chunk bounds local work; every returned chunk is consumed.
-		for start := 0; start < len(output.Items); start += 30 {
-			for _, item := range output.Items[start:min(start+30, len(output.Items))] {
-				if fullyUndone && item.Kind == "memory" && (oneOf(item.Nature, "plan", "intention") || !remembered) {
-					continue
-				}
-				if source.Source.Connector == "desk" && oneOf(item.Kind, "task", "idea") {
-					continue
-				}
-				item = extraction.Normalize(item, source.Context)
-				if !extraction.Grounded(item, source.Source.Text) {
-					continue
-				}
-				if oneOf(item.Kind, "task", "idea") {
-					if err := s.captureActionTx(ctx, tx, scope, source, item, imported, sourceProject); err != nil {
-						return err
-					}
-					accepted++
-					continue
-				}
-				var duplicate bool
-				if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM capture_candidates WHERE owner_id=$1 AND source_id=$2 AND source_version=$3 AND document->>'text'=$4 AND document->>'kind'=$5)", string(j.OwnerID), string(j.Record.ID), j.Record.Version, item.Text, item.Kind).Scan(&duplicate); err != nil {
-					return err
-				}
-				if duplicate && item.Kind != "memory" {
-					continue
-				}
-				v := workspace.Candidate{ID: string(memory.NewID()), Kind: item.Kind, Text: item.Text, MemoryKind: item.Nature, Confidence: item.Confidence, Source: workspace.SourceRef{SourceID: string(j.Record.ID), Version: j.Record.Version, Label: source.Source.Title, Excerpt: item.Quote, At: stamp()}, State: "pending", CreatedAt: stamp()}
-				if extraction.Statement(item) {
-					confirmation := extraction.Confirmation(source, item)
-					if imported {
-						confirmation = "candidate"
-					}
-					in := statement{ProjectID: sourceProject, Text: item.Text, Nature: item.Nature, Subject: item.Subject, Predicate: item.Predicate, Confirmation: confirmation, Acquisition: item.Acquisition, Actor: "ai", Quote: item.Quote, Source: j.Record, Structured: true, ExpressedAt: extraction.ExpressedAt(source)}
-					// The model can extract several independent memories from one
-					// quotation. Later siblings must not overwrite the first item.
-					quoteKey := string(in.Source.ID) + "/" + in.Quote
-					in.AllowNewAtQuote = seenOutputQuotes[quoteKey]
-					seenOutputQuotes[quoteKey] = true
-					in.EventFrom, in.EventTo, in.EventPrecision = extraction.Event(item.When, source, loc)
-					in.Mentions = append(in.Mentions, groundedMentions(item.People, "person", mentionText)...)
-					in.Mentions = append(in.Mentions, groundedMentions(item.Places, "place", mentionText)...)
-					in.Mentions = append(in.Mentions, groundedMentions(item.Organizations, "organization", mentionText)...)
-					if source.Context == nil || source.Context.Role == "user" {
-						if extraction.SelfSubject(item.Subject) {
-							in.SubjectType = "self"
-						} else if names := groundedMentions([]string{item.Subject}, "person", mentionText); len(names) > 0 {
-							in.Subject, in.SubjectType = names[0].Name, "person"
-							for _, org := range in.Mentions {
-								if org.Role == "organization" && strings.EqualFold(org.Name, in.Subject) {
-									in.SubjectType = "organization"
-								}
-							}
-						}
-					}
-					ref, err := s.rememberTx(ctx, tx, scope, in)
-					if errors.Is(err, memory.ErrBlocked) {
-						continue
-					}
-					if err != nil {
-						return err
-					}
-					v.ResolvedInto = string(ref.ID)
-					v.State = "accepted"
-				}
-				if duplicate {
-					accepted++
-					continue
-				}
-				if err := saveCandidate(ctx, tx, scope, v); err != nil {
+		for _, raw := range result.Output.Items {
+			decision := extraction.Decide(raw, facts)
+			item := decision.Item
+			if decision.Action == extraction.Skip {
+				continue
+			}
+			if decision.Action == extraction.Capture {
+				if err := s.captureActionTx(ctx, tx, scope, source, item, facts.Imported, result.Project); err != nil {
 					return err
 				}
 				accepted++
-
+				continue
 			}
+			var duplicate bool
+			if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM capture_candidates WHERE owner_id=$1 AND source_id=$2 AND source_version=$3 AND document->>'text'=$4 AND document->>'kind'=$5)", string(j.OwnerID), string(j.Record.ID), j.Record.Version, item.Text, item.Kind).Scan(&duplicate); err != nil {
+				return err
+			}
+			if duplicate && item.Kind != "memory" {
+				continue
+			}
+			v := workspace.Candidate{ID: string(memory.NewID()), Kind: item.Kind, Text: item.Text, MemoryKind: item.Nature, Confidence: item.Confidence, Source: workspace.SourceRef{SourceID: string(j.Record.ID), Version: j.Record.Version, Label: source.Source.Title, Excerpt: item.Quote, At: stamp()}, State: "pending", CreatedAt: stamp()}
+			if decision.Action == extraction.Remember {
+				in := statement{ProjectID: result.Project, Text: item.Text, Nature: item.Nature, Subject: decision.Subject, SubjectType: decision.SubjectType, Predicate: item.Predicate, Confirmation: decision.Confirmation, Acquisition: item.Acquisition, Actor: "ai", Quote: item.Quote, Source: j.Record, Structured: true, ExpressedAt: extraction.ExpressedAt(source),
+					EventFrom: decision.EventFrom, EventTo: decision.EventTo, EventPrecision: decision.EventPrecision, Mentions: decision.Mentions}
+				// The model can extract several independent memories from one
+				// quotation. Later siblings must not overwrite the first item.
+				quoteKey := string(in.Source.ID) + "/" + in.Quote
+				in.AllowNewAtQuote = seenOutputQuotes[quoteKey]
+				seenOutputQuotes[quoteKey] = true
+				ref, err := s.rememberTx(ctx, tx, scope, in)
+				if errors.Is(err, memory.ErrBlocked) {
+					continue
+				}
+				if err != nil {
+					return err
+				}
+				v.ResolvedInto = string(ref.ID)
+				v.State = "accepted"
+			}
+			if duplicate {
+				accepted++
+				continue
+			}
+			if err := saveCandidate(ctx, tx, scope, v); err != nil {
+				return err
+			}
+			accepted++
 		}
 		if settings.WakeIdeas {
-			if imported || source.Context != nil && (source.Context.Role != "user" || source.Context.Branch == "historical") {
-				output.Signals = nil
-			}
-			if err := s.applySignalsTx(ctx, tx, scope, source.Source, output.Signals); err != nil {
+			if err := s.applySignalsTx(ctx, tx, scope, source.Source, extraction.UsableSignals(result.Output, source, facts.Imported)); err != nil {
 				return err
 			}
 		}

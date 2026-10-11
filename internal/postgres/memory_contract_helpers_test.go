@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
 	"io"
 	"log/slog"
 	"math"
@@ -692,7 +693,7 @@ func b4QueueWorker(t *testing.T, s *Store) (context.CancelFunc, chan error) {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
-	w := worker.New(s, map[string]worker.Handler{"source.parse": s.ProcessAttachment, "source.chunk": s.ProcessChunks, "source.tokenize": s.ProcessIndex, "source.extract": s.ProcessExtraction, "source.embed": s.ProcessEmbedding, "claim.embed": s.ProcessEmbedding}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	w := worker.New(s, map[string]worker.Handler{"source.parse": s.ProcessAttachment, "source.chunk": s.ProcessChunks, "source.tokenize": s.ProcessIndex, "source.extract": (extraction.Service{Store: s.ExtractionStore(), Generator: s, MaxAttempts: MaxJobAttempts}).Process, "source.embed": s.ProcessEmbedding, "claim.embed": s.ProcessEmbedding}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	go func() {
 		for ctx.Err() == nil {
 			worked, err := w.RunOnce(ctx)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
 	"io"
 	"net/http"
 	"strings"
@@ -392,7 +393,7 @@ func TestPhase2B2_X14_AllLongSourceSegmentsAndOverlapDeduplicated(t *testing.T) 
 		}
 		secretaryModelReply(w, map[string]any{"items": items})
 	})
-	if err := s.ProcessExtraction(context.Background(), leaseStage(t, s, scope, src, "source.extract")); err != nil {
+	if err := (extraction.Service{Store: s.ExtractionStore(), Generator: s, MaxAttempts: MaxJobAttempts}).Process(context.Background(), leaseStage(t, s, scope, src, "source.extract")); err != nil {
 		t.Fatal(err)
 	}
 	for n := 0; n < spec.Requests; n++ {
@@ -404,7 +405,7 @@ func TestPhase2B2_X14_AllLongSourceSegmentsAndOverlapDeduplicated(t *testing.T) 
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err = s.ProcessExtraction(context.Background(), leaseStage(t, s, scope, src, stage)); err != nil {
+		if err = (extraction.Service{Store: s.ExtractionStore(), Generator: s, MaxAttempts: MaxJobAttempts}).Process(context.Background(), leaseStage(t, s, scope, src, stage)); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -469,7 +470,9 @@ func TestPhase2B2_X16_DeleteOrReplaceDuringActualModelCall(t *testing.T) {
 			src := b2Source(t, s, scope, "capture", "user", b2Fixture(t, "trip", "text"), &at)
 			job := leaseStage(t, s, scope, src, "source.extract")
 			done := make(chan error, 1)
-			go func() { done <- s.ProcessExtraction(context.Background(), job) }()
+			go func() {
+				done <- (extraction.Service{Store: s.ExtractionStore(), Generator: s, MaxAttempts: MaxJobAttempts}).Process(context.Background(), job)
+			}()
 			select {
 			case <-started:
 			case <-time.After(5 * time.Second):
@@ -527,7 +530,7 @@ func TestPhase2B2_X18_ArchiveAssistantSkippedButAvailableAsNeighborAndRaw(t *tes
 	_, user, assistant := b2Archive(t, s, scope, at, b2Fixture(t, "archive_user", ""), b2Fixture(t, "archive_assistant", ""))
 	b4bEnableSourceImport(t, s, scope, assistant)
 	before := len(f.all())
-	if err = s.ProcessExtraction(context.Background(), leaseStage(t, s, scope, assistant, "source.extract")); err != nil {
+	if err = (extraction.Service{Store: s.ExtractionStore(), Generator: s, MaxAttempts: MaxJobAttempts}).Process(context.Background(), leaseStage(t, s, scope, assistant, "source.extract")); err != nil {
 		t.Fatal(err)
 	}
 	b2Equal(t, len(f.all())-before, b2Want[int](t, "X18", "assistant_calls"))

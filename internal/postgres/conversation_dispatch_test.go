@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
 	"os"
 	"strings"
 	"sync"
@@ -26,7 +27,7 @@ func TestConversationDispatchRetiresEntrancesBeforeModelAndIndexes(t *testing.T)
 	b4bOperation(t, s, scope, a.Batch, "organize")
 	// An index that was queued hours ago must not delay the ready conversation.
 	b2Exec(t, s, `INSERT INTO memory_jobs(id,owner_id,record_id,record_version,stage,available_at,created_at) VALUES(gen_random_uuid(),$1,$2,1,'source.tokenize',now()-interval '2 hours',now()-interval '2 hours')`, string(scope.OwnerID), string(a.Sources[0].ID))
-	if err := s.ProcessExtraction(context.Background(), leaseStage(t, s, scope, a.Sources[0], "source.extract")); err != nil {
+	if err := (extraction.Service{Store: s.ExtractionStore(), Generator: s, MaxAttempts: MaxJobAttempts}).Process(context.Background(), leaseStage(t, s, scope, a.Sources[0], "source.extract")); err != nil {
 		t.Fatal(err)
 	}
 	b2Equal(t, len(f.all()), 0)
@@ -36,7 +37,7 @@ func TestConversationDispatchRetiresEntrancesBeforeModelAndIndexes(t *testing.T)
 	if err != nil || job == nil || !strings.HasPrefix(job.Stage, conversationExtractionPrefix) {
 		t.Fatal("index delayed conversation", job, err)
 	}
-	if err = s.ProcessExtraction(context.Background(), *job); err != nil {
+	if err = (extraction.Service{Store: s.ExtractionStore(), Generator: s, MaxAttempts: MaxJobAttempts}).Process(context.Background(), *job); err != nil {
 		t.Fatal(err)
 	}
 	b2Equal(t, len(f.all()), 1)
@@ -50,7 +51,7 @@ func TestClaimPagesPastCoalescedEntrancesAndPausedHistory(t *testing.T) {
 			a := b4bImport(t, s, scope, b4bMessages(t, []string{"user"}, []string{"合成的等待资料。"}))
 			if !held {
 				b4bOperation(t, s, scope, a.Batch, "organize")
-				if err := s.ProcessExtraction(context.Background(), leaseStage(t, s, scope, a.Sources[0], "source.extract")); err != nil {
+				if err := (extraction.Service{Store: s.ExtractionStore(), Generator: s, MaxAttempts: MaxJobAttempts}).Process(context.Background(), leaseStage(t, s, scope, a.Sources[0], "source.extract")); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -131,7 +132,7 @@ func TestImportProgressSeparatesPreparationModelAndSearch(t *testing.T) {
 		t.Fatal("preparation was mistaken for extraction", p)
 	}
 	b4bOperation(t, s, scope, a.Batch, "organize")
-	if err := s.ProcessExtraction(context.Background(), leaseStage(t, s, scope, a.Sources[0], "source.extract")); err != nil {
+	if err := (extraction.Service{Store: s.ExtractionStore(), Generator: s, MaxAttempts: MaxJobAttempts}).Process(context.Background(), leaseStage(t, s, scope, a.Sources[0], "source.extract")); err != nil {
 		t.Fatal(err)
 	}
 	p = b4bProgress(t, s, scope, a.Batch)
@@ -147,7 +148,7 @@ func TestImportProgressSeparatesPreparationModelAndSearch(t *testing.T) {
 	if p.Activity != "organizing" || p.Organized != 0 {
 		t.Fatal("active model phase missing", p)
 	}
-	if err = s.ProcessExtraction(context.Background(), *j); err != nil {
+	if err = (extraction.Service{Store: s.ExtractionStore(), Generator: s, MaxAttempts: MaxJobAttempts}).Process(context.Background(), *j); err != nil {
 		t.Fatal(err)
 	}
 	p = b4bProgress(t, s, scope, a.Batch)
@@ -197,7 +198,7 @@ func TestConversationDispatchUpgradePreservesPendingSegments(t *testing.T) {
 	if err != nil || j == nil || !strings.HasPrefix(j.Stage, conversationExtractionPrefix) {
 		t.Fatal("upgrade lost or delayed pending segment", j, err)
 	}
-	if err = s.ProcessExtraction(context.Background(), *j); err != nil {
+	if err = (extraction.Service{Store: s.ExtractionStore(), Generator: s, MaxAttempts: MaxJobAttempts}).Process(context.Background(), *j); err != nil {
 		t.Fatal(err)
 	}
 	b2Equal(t, len(f.all()), 1)
@@ -208,7 +209,7 @@ func TestConversationDispatchLargeQueueUsesBoundedIndexPage(t *testing.T) {
 	s, scope := testStore(t), owner()
 	a := b4bImport(t, s, scope, b4bMessages(t, []string{"user"}, []string{"合成性能验收原文。"}))
 	b4bOperation(t, s, scope, a.Batch, "organize")
-	if err := s.ProcessExtraction(context.Background(), leaseStage(t, s, scope, a.Sources[0], "source.extract")); err != nil {
+	if err := (extraction.Service{Store: s.ExtractionStore(), Generator: s, MaxAttempts: MaxJobAttempts}).Process(context.Background(), leaseStage(t, s, scope, a.Sources[0], "source.extract")); err != nil {
 		t.Fatal(err)
 	}
 	// Populate a realistic reference-only queue, without importing or exposing

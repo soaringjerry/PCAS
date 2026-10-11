@@ -400,12 +400,12 @@ func (s *Store) processConversationExtraction(ctx context.Context, j worker.Job,
 				in.AllowNewAtQuote = seenOutputQuotes[quoteKey]
 				seenOutputQuotes[quoteKey] = true
 				in.EventFrom, in.EventTo, in.EventPrecision = extraction.Event(item.When, source, loc)
-				in.Mentions = append(in.Mentions, groundedMentions(item.People, "person", grounding)...)
-				in.Mentions = append(in.Mentions, groundedMentions(item.Places, "place", grounding)...)
-				in.Mentions = append(in.Mentions, groundedMentions(item.Organizations, "organization", grounding)...)
+				in.Mentions = append(in.Mentions, extraction.GroundedMentions(item.People, "person", grounding)...)
+				in.Mentions = append(in.Mentions, extraction.GroundedMentions(item.Places, "place", grounding)...)
+				in.Mentions = append(in.Mentions, extraction.GroundedMentions(item.Organizations, "organization", grounding)...)
 				if oneOf(strings.TrimSpace(item.Subject), "我", "我们", "用户", "本人", "用户本人") {
 					in.SubjectType = "self"
-				} else if names := groundedMentions([]string{item.Subject}, "person", grounding); len(names) > 0 {
+				} else if names := extraction.GroundedMentions([]string{item.Subject}, "person", grounding); len(names) > 0 {
 					in.Subject, in.SubjectType = names[0].Name, "person"
 					for _, mention := range in.Mentions {
 						if mention.Role == "organization" && strings.EqualFold(mention.Name, in.Subject) {

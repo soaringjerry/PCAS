@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"fmt"
+	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
 	"math/rand"
 	"reflect"
 	"testing"
@@ -15,7 +16,7 @@ import (
 func b1Extract(t *testing.T, s *Store, scope memory.Scope, f *b1Fake, source memory.Ref, items ...map[string]any) []workspace.Memory {
 	t.Helper()
 	f.set(map[string]any{"items": items})
-	if err := s.ProcessExtraction(context.Background(), leaseStage(t, s, scope, source, "source.extract")); err != nil {
+	if err := (extraction.Service{Store: s.ExtractionStore(), Generator: s, MaxAttempts: MaxJobAttempts}).Process(context.Background(), leaseStage(t, s, scope, source, "source.extract")); err != nil {
 		t.Fatal(err)
 	}
 	st, err := s.Snapshot(context.Background(), scope)

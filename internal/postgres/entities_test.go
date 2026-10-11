@@ -14,11 +14,11 @@ import (
 
 func TestGroundedMentionsBoundsAndLiteralNames(t *testing.T) {
 	names := []string{" 我 ", "我们", "杜撰", strings.Repeat("长", 41), " 成都 ", "成都", "一", "二", "三", "四", "五", "六", "七", "八", "九"}
-	got := groundedMentions(names, "person", "我和我们在成都。一二三四五六七八九"+strings.Repeat("长", 41))
+	got := extraction.GroundedMentions(names, "person", "我和我们在成都。一二三四五六七八九"+strings.Repeat("长", 41))
 	if len(got) != 8 || got[0].Name != "成都" || got[7].Name != "七" {
 		t.Fatalf("unexpected grounded mentions: %#v", got)
 	}
-	if got := groundedMentions([]string{"Alice"}, "person", "alice"); len(got) != 0 {
+	if got := extraction.GroundedMentions([]string{"Alice"}, "person", "alice"); len(got) != 0 {
 		t.Fatal("grounding must be verbatim even though identity is case insensitive")
 	}
 }

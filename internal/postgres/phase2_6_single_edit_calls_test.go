@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"encoding/json"
+	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
 	"testing"
 	"time"
 
@@ -67,7 +68,7 @@ func TestPhase26G4T4OneMemoryEditRunsOnlyIts40AffectedComparisonCalls(t *testing
 		}
 		phase26Isolate(t, f, CompareStage)
 		j := phase26ClaimStage(t, f, CompareStage)
-		if err := f.Store.ProcessCompare(ctx, j); err != nil {
+		if err := (comparison.Service{Store: f.Store.CompareStore(), Generator: f.Store, Version: CompareVersion}).Process(ctx, j); err != nil {
 			t.Fatal(err)
 		}
 		if (i+1)%10 == 0 {

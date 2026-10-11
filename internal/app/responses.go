@@ -7,6 +7,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/currentstate/datereview"
 	"github.com/soaringjerry/PCAS/internal/currentstate/handover"
 	"github.com/soaringjerry/PCAS/internal/interpretation/aliasscan"
+	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
 	"github.com/soaringjerry/PCAS/internal/postgres"
 	"github.com/soaringjerry/PCAS/internal/worker"
 	"github.com/soaringjerry/PCAS/internal/workspace/effort"
@@ -43,7 +44,7 @@ var Responses = []Response{
 	{"source.embed", "Embedding input changed for a source", "Input", "Vector index processor", jobKey, func(db *postgres.Store) worker.Handler { return db.ProcessEmbedding }},
 	{"memory.embed", "Embedding input changed for a memory", "Memory", "Vector index processor", jobKey, func(db *postgres.Store) worker.Handler { return db.ProcessEmbedding }},
 	{"memory.organize", "Statement interpretation input changed", "Memory", "Organization specialist", jobKey, func(db *postgres.Store) worker.Handler { return db.ProcessOrganize }},
-	{"memory.compare", "Statement interpretation input changed", "Memory", "Statement comparison specialist", jobKey + "; the stage names the comparison batch", func(db *postgres.Store) worker.Handler { return db.ProcessCompare }},
+	{comparison.Stage, "Statement interpretation input changed", "Memory", "Statement comparison specialist", jobKey + "; the stage names the comparison batch", func(db *postgres.Store) worker.Handler { return Compare(db).Process }},
 	{aliasscan.Stage, "Entity comparison input changed", "Memory", "Entity candidate specialist", jobKey, func(db *postgres.Store) worker.Handler { return AliasScan(db).Process }},
 	{"memory.entity_compare", "Entity comparison input changed", "Memory", "Entity comparison specialist", jobKey, func(db *postgres.Store) worker.Handler { return db.ProcessEntityCompare }},
 	{"memory.summary", "Episode summary input changed", "Memory", "Summary specialist", jobKey, func(db *postgres.Store) worker.Handler { return db.ProcessSummary }},

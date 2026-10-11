@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/soaringjerry/PCAS/internal/interpretation/aliasscan"
+	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
 	"net/http"
 	"strings"
 	"sync"
@@ -252,7 +253,7 @@ func TestEntityCandidatesConcurrentSchedulerWorkerAndUserRequests(t *testing.T) 
 			case strings.HasPrefix(job.Stage, "memory.entity_candidates:"):
 				err = (aliasscan.Service{Store: f.store.AliasScanStore(), Generator: f.store}).Process(runCtx, *job)
 			case strings.HasPrefix(job.Stage, "memory.compare:"):
-				err = f.store.ProcessCompare(runCtx, *job)
+				err = (comparison.Service{Store: f.store.CompareStore(), Generator: f.store, Version: postgres.CompareVersion}).Process(runCtx, *job)
 			case strings.HasPrefix(job.Stage, "memory.entity_compare:"):
 				err = f.store.ProcessEntityCompare(runCtx, *job)
 			case job.Stage == "memory.index":

@@ -84,6 +84,7 @@ The rules for applying an answer are in the same package: ten actions in one tur
 The order of the turn, its transactions, its model call, and its context are still in `internal/postgres/desk_turn.go`. They are the largest part of the phase that remains.
 
 The context builder is `internal/contextbuilder`. It serializes memory and current state for the model input of an agent turn: the handover, the requirements, the dates, the memories with their metadata, and the lines of a source context. The secretary and the deputy use the same rules.
+Its five instruction sentences are registered prompts: `context-requirements`, `context-dates`, `context-groups`, `context-evidence`, and `context-recall-relaxed`. Its headings and data lines are serialization and stay in the package. A test fixes the bytes of the sentences.
 It needs no storage. The caller reads the data and gives each memory its alias. The reads of the memory part are still in storage. The deputy still assigns its labels and its budgets in storage.
 
 The rules that change one task, idea, or project by one command are in `internal/workspace/itemcommand`. `Apply` checks that the command fits the kind of the item, changes the item, and returns the summary for its history. Storage reads the item and saves it.

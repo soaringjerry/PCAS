@@ -65,6 +65,7 @@ If you do not run a check, write that in the PR. Give the reason.
 | `internal/interpretation/aliasscan`, `internal/interpretation/comparison`, `internal/interpretation/organize`, `internal/interpretation/extraction`, `internal/interpretation/claim` | Memory interpretation domain packages outside storage: the scan for names of one entity, statement and entity comparison, the organizing of statements with the schedule rule of a date, the reading of statements, tasks, and ideas from a source, and the rules of a statement before it is written. |
 | `internal/input/attachment` | Input domain package outside storage: the parsing of an original file into text. |
 | `internal/contextbuilder` | Serialization of memory and current state for the model input of an agent turn. The secretary and the deputy share it. |
+| `internal/retrieval` | Memory retrieval rules outside storage: the budget of a recall and the excerpt of a source. |
 | `internal/app` | Application setup: service construction and the worker handler table. |
 | `internal/modelcall`, `internal/prompts` | Model gateway and prompt registry. |
 | `internal/ai` | Model provider adapters. |

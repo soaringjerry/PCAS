@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/soaringjerry/PCAS/internal/retrieval"
 	"strconv"
 	"strings"
 	"time"
@@ -16,36 +17,15 @@ import (
 	"github.com/soaringjerry/PCAS/internal/modelcall"
 )
 
-func normalizedBudget(b memory.Budget) (memory.Budget, error) {
-	if b.Candidates < 0 || b.Candidates > 1000 || b.Edges < 0 || b.Edges > 1000 || b.Tokens < 0 || b.Tokens > 32000 || b.Hops < 0 || b.Hops > 3 {
-		return b, memory.ErrInvalid
-	}
-	if b.Candidates == 0 {
-		b.Candidates = 30
-	}
-	if b.Edges == 0 {
-		b.Edges = 30
-	}
-	if b.Tokens == 0 {
-		b.Tokens = 4000
-	}
-	if b.Hops == 0 {
-		b.Hops = 1
-	}
-	return b, nil
-}
-func coverage() memory.Coverage {
-	return memory.Coverage{Complete: true, Gaps: []string{}, PendingSources: []memory.ID{}}
-}
 func (s *Store) Recall(ctx context.Context, scope memory.Scope, in memory.RecallRequest) (memory.RecallResult, error) {
-	out := memory.RecallResult{Memories: []memory.Ref{}, Evidence: []memory.Evidence{}, Unresolved: []string{}, Coverage: coverage(), FollowUps: []string{}}
+	out := memory.RecallResult{Memories: []memory.Ref{}, Evidence: []memory.Evidence{}, Unresolved: []string{}, Coverage: retrieval.NewCoverage(), FollowUps: []string{}}
 	if !scope.Valid() {
 		return out, memory.ErrForbidden
 	}
 	if len(in.Query) > 4000 || !oneOf(string(in.Mode), "continue", "remember", "history") {
 		return out, memory.ErrInvalid
 	}
-	b, err := normalizedBudget(in.Budget)
+	b, err := retrieval.NormalizeBudget(in.Budget)
 	if err != nil {
 		return out, err
 	}
@@ -293,7 +273,7 @@ func (s *Store) recallTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in 
 		_ = score
 		excerpt.Ref, excerpt.Role = ref, role
 		if ref.Kind == memory.SourceKind {
-			excerpt.Text = sourceExcerpt(strings.TrimSpace(excerpt.Text), query, tokens, 600)
+			excerpt.Text = retrieval.SourceExcerpt(strings.TrimSpace(excerpt.Text), query, tokens, 600)
 		}
 		if scope.Team && ref.Kind == memory.SourceKind {
 			if len(teamSources) < b.Candidates {
@@ -319,7 +299,7 @@ func (s *Store) recallTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in 
 			continue
 		}
 		if len([]rune(text)) > b.Tokens {
-			text = matchedExcerpt(text, query, tokens, b.Tokens)
+			text = retrieval.MatchedExcerpt(text, query, tokens, b.Tokens)
 			out.Coverage.Gaps = append(out.Coverage.Gaps, "部分原文超出上下文预算，请展开来源")
 		}
 		fmt.Fprintf(&summary, "[%s@%d] %s\n", ref.ID, ref.Version, text)
@@ -416,11 +396,11 @@ func evidenceTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, ref memory.R
 	return result, rows.Err()
 }
 func (s *Store) Expand(ctx context.Context, scope memory.Scope, in memory.ExpandRequest) (memory.ExpandResult, error) {
-	out := memory.ExpandResult{Entities: []memory.Entity{}, Episodes: []memory.Episode{}, Sources: []memory.Source{}, Claims: []memory.Claim{}, Relations: []memory.Relation{}, Evidence: []memory.Evidence{}, Coverage: coverage()}
+	out := memory.ExpandResult{Entities: []memory.Entity{}, Episodes: []memory.Episode{}, Sources: []memory.Source{}, Claims: []memory.Claim{}, Relations: []memory.Relation{}, Evidence: []memory.Evidence{}, Coverage: retrieval.NewCoverage()}
 	if !scope.Valid() {
 		return out, memory.ErrForbidden
 	}
-	b, err := normalizedBudget(in.Budget)
+	b, err := retrieval.NormalizeBudget(in.Budget)
 	if err != nil || len(in.Refs) == 0 || len(in.Refs) > 100 {
 		return out, memory.ErrInvalid
 	}
@@ -521,138 +501,6 @@ func (s *Store) Expand(ctx context.Context, scope memory.Scope, in memory.Expand
 		returnOutErr = memory.ErrNotFound
 	}
 	return out, returnOutErr
-}
-
-// matchedExcerpt keeps the answer-bearing span even while chunking is pending.
-func matchedExcerpt(text, query string, tokens []string, limit int) string {
-	start, end := matchedExcerptRange(text, query, tokens, limit)
-	return string([]rune(text)[start:end])
-}
-
-func matchedExcerptRange(text, query string, tokens []string, limit int) (int, int) {
-	runes := []rune(text)
-	if len(runes) <= limit {
-		return 0, len(runes)
-	}
-	lower := strings.ToLower(text)
-	at := -1
-	if query != "" {
-		at = strings.Index(lower, strings.ToLower(query))
-	}
-	if at < 0 {
-		for _, token := range tokens {
-			if len([]rune(token)) > 1 {
-				if i := strings.Index(lower, strings.ToLower(token)); i >= 0 {
-					at = i
-					break
-				}
-			}
-		}
-	}
-	start := 0
-	if at >= 0 {
-		start = len([]rune(lower[:at])) - min(200, limit/4)
-		if start < 0 {
-			start = 0
-		}
-	}
-	if start+limit > len(runes) {
-		start = len(runes) - limit
-	}
-	return start, start + limit
-}
-
-// Leave room for the truncation mark within the per-excerpt rune budget.
-func sourceExcerpt(text, query string, tokens []string, limit int) string {
-	runes := []rune(text)
-	if len(runes) <= limit {
-		return text
-	}
-	start, end := sourceExcerptRange(text, query, tokens, limit-2)
-	excerpt := string(runes[start:end])
-	if start > 0 {
-		excerpt = "…" + excerpt
-	}
-	if end < len(runes) {
-		excerpt += "…"
-	}
-	return excerpt
-}
-
-// Score windows anchored before each hit by distinct query words. Merge each word's
-// matching window intervals so repeated occurrences only contribute one vote.
-func sourceExcerptRange(text, query string, tokens []string, limit int) (int, int) {
-	lower := strings.ToLower(text)
-	if query != "" && strings.Contains(lower, strings.ToLower(query)) {
-		return matchedExcerptRange(text, query, tokens, limit)
-	}
-	length := len([]rune(text))
-	if length <= limit {
-		return 0, length
-	}
-	// Substring searches use bytes; all window bounds use Unicode characters.
-	positions := make([]int, len(lower)+1)
-	character := 0
-	for byteIndex := range lower {
-		positions[byteIndex] = character
-		character++
-	}
-	positions[len(lower)] = character
-	lastStart := length - limit
-	votes := make([]int, lastStart+2)
-	candidates := make([]bool, lastStart+1)
-	prefix := min(200, limit/4)
-	seen := map[string]bool{}
-	matches := 0
-	for _, token := range tokens {
-		token = strings.ToLower(token)
-		width := len([]rune(token))
-		if width <= 1 || seen[token] {
-			continue
-		}
-		seen[token] = true
-		left, right := -1, -1
-		for offset := 0; offset < len(lower); {
-			found := strings.Index(lower[offset:], token)
-			if found < 0 {
-				break
-			}
-			at := offset + found
-			offset = at + 1
-			matches++
-			candidates[min(max(0, positions[at]-prefix), lastStart)] = true
-			first := max(0, positions[at]+width-limit)
-			last := min(positions[at], lastStart)
-			if first > last {
-				continue
-			}
-			if left < 0 {
-				left, right = first, last
-			} else if first <= right+1 {
-				right = max(right, last)
-			} else {
-				votes[left]++
-				votes[right+1]--
-				left, right = first, last
-			}
-		}
-		if left >= 0 {
-			votes[left]++
-			votes[right+1]--
-		}
-	}
-	// Keep the existing amount of preceding context for a single hit.
-	if matches == 1 {
-		return matchedExcerptRange(text, query, tokens, limit)
-	}
-	start, best, score := 0, -1, 0
-	for candidate := 0; candidate <= lastStart; candidate++ {
-		score += votes[candidate]
-		if candidates[candidate] && score > best {
-			start, best = candidate, score
-		}
-	}
-	return start, start + limit
 }
 
 // teamSourceVisibleSQL follows explicit visibility and item exclusions on any

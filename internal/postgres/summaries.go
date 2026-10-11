@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/retrieval"
 	"github.com/soaringjerry/PCAS/internal/worker"
 	"strings"
 )
@@ -27,7 +28,7 @@ func (s *Store) Summarize(ctx context.Context, scope memory.Scope, in memory.Sum
 	return out, err
 }
 func (s *Store) summarizeTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in memory.SummaryRequest) (memory.SummaryResult, error) {
-	out := memory.SummaryResult{Coverage: coverage(), Dependencies: []memory.Ref{}}
+	out := memory.SummaryResult{Coverage: retrieval.NewCoverage(), Dependencies: []memory.Ref{}}
 	out.Root.ID = in.ID
 	err := tx.QueryRow(ctx, `SELECT version,kind FROM memory_records r WHERE owner_id=$1 AND id=$2 AND state='active' AND kind IN ('source','entity','episode','claim') AND ($3 OR EXISTS(SELECT 1 FROM record_grants g WHERE g.owner_id=r.owner_id AND g.record_id=r.id AND g.principal_id=$4)) FOR SHARE`, string(scope.OwnerID), string(in.ID), scope.IsOwner, scope.PrincipalID).Scan(&out.Root.Version, &out.Root.Kind)
 	if errors.Is(err, pgx.ErrNoRows) {

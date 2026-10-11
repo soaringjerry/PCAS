@@ -1297,12 +1297,12 @@ func (s *Store) p2LegacyDeskTurn(ctx context.Context, scope memory.Scope, req wo
 			}
 			for i, a := range answer.Actions {
 				if i >= 10 {
-					out.Turn.Receipts = append(out.Turn.Receipts, skippedReceipt(a.Op, "一次太多了，只做了前 10 件"))
+					out.Turn.Receipts = append(out.Turn.Receipts, secretary.Skipped(a.Op, "一次太多了，只做了前 10 件"))
 					break
 				}
 				if a.ParseErr != nil {
 					slog.WarnContext(ctx, "secretary action skipped", "stage", "parse", "error_type", secretary.ErrorType("parse", a.ParseErr))
-					out.Turn.Receipts = append(out.Turn.Receipts, skippedReceipt(a.Op, "动作字段没看懂"))
+					out.Turn.Receipts = append(out.Turn.Receipts, secretary.Skipped(a.Op, "动作字段没看懂"))
 					continue
 				}
 				actionID := string(memory.NewID())
@@ -1321,9 +1321,9 @@ func (s *Store) p2LegacyDeskTurn(ctx context.Context, scope memory.Scope, req wo
 						return err
 					}
 					if errors.Is(actionErr, workspace.ErrBudget) {
-						receipt = skippedReceipt(a.Op, "超过今天的额度")
+						receipt = secretary.Skipped(a.Op, "超过今天的额度")
 					} else if actionErr != nil && receipt.Reason == "" {
-						receipt = skippedReceipt(a.Op, "这件事暂时办不了")
+						receipt = secretary.Skipped(a.Op, "这件事暂时办不了")
 					}
 				} else {
 					// The summary and receipt describe the actual persisted result.
@@ -1341,7 +1341,7 @@ func (s *Store) p2LegacyDeskTurn(ctx context.Context, scope memory.Scope, req wo
 						receipt.ActionID = &actionID
 						receipt.Undoable = true
 					} else {
-						receipt = skippedReceipt(a.Op, "没有可执行的修改")
+						receipt = secretary.Skipped(a.Op, "没有可执行的修改")
 					}
 					if err = actionTx.Commit(ctx); err != nil {
 						return err

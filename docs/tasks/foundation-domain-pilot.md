@@ -75,7 +75,10 @@ The reads for the model input and the writes are still in storage.
 The conversation path of an import has its rules in the same package: the split of a conversation into segments, the identity of a run, the stage of a segment job, and the decision for each item. Its job flow is still in `internal/postgres/conversation_extract.go`, because each step of that flow is a queue write.
 
 The secretary's rules that need no storage are in `internal/workspace/secretary`: the reading of the answer, where one invalid action keeps its name and does not reject the others; the fixed classes of a failure; what the owner reads when a turn did not finish; and the due time and reminder of a task.
-The turn itself, its context, its prompt, and its actions are still in `internal/postgres/desk_turn.go` and `internal/postgres/desk_actions.go`. They are the largest part of the phase that remains.
+The rules of each action are in the same package. `Execute` does one action through the `Workspace` interface: it resolves the alias, checks the fields, sends the workspace commands, sets the reminder, and writes the receipt that the owner reads.
+Storage implements `Workspace` in the action's transaction. It keeps the commands, the history collection, the companion project of a task, and the closing of a remembered date.
+Behavior tests run the actions against a workspace in memory. They need no database.
+The turn itself, its context, and its prompt are still in `internal/postgres/desk_turn.go`. They are the largest part of the phase that remains.
 
 The chunk, index, embedding, and summary jobs stay in storage. They hold no interpretation rule: the text split is `memory.SplitText`, the embedding call is the gateway's, and the summary is a memory read. The card job only acknowledges queue slots from before an upgrade.
 

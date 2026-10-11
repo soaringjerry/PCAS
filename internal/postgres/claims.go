@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"errors"
+	"github.com/soaringjerry/PCAS/internal/interpretation/claim"
 	"strconv"
 	"strings"
 	"time"
@@ -13,28 +14,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/memory"
 )
 
-type statement struct {
-	ExtractionRun   string
-	ExtractionRef   int
-	AllowNewAtQuote bool
-	Structured      bool
-	SubjectType     string
-	Mentions        []claimMention
-	ExpressedAt     *time.Time
-	EventFrom       *time.Time
-	EventTo         *time.Time
-	EventPrecision  string
-	Text            string
-	Nature          string
-	ProjectID       string
-	Subject         string
-	Predicate       string
-	Confirmation    string
-	Acquisition     string
-	Actor           string
-	Quote           string
-	Source          memory.Ref
-}
+type statement = claim.Statement
 
 func createRecord(ctx context.Context, tx pgx.Tx, owner memory.ID, id memory.ID, kind memory.Kind, actor string) error {
 	if _, err := tx.Exec(ctx, "INSERT INTO memory_records(owner_id,id,kind,version) VALUES($1,$2,$3,1)", string(owner), string(id), string(kind)); err != nil {
@@ -46,39 +26,9 @@ func createRecord(ctx context.Context, tx pgx.Tx, owner memory.ID, id memory.ID,
 
 func (s *Store) rememberTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in statement) (memory.Ref, error) {
 	var result memory.Ref
-	if strings.TrimSpace(in.Text) == "" || len(in.Text) > 1<<20 {
-		return result, memory.ErrInvalid
-	}
-	if in.Structured && memory.AmbiguousEntityName(in.Subject) {
-		in.Subject = ""
-		in.SubjectType = ""
-	}
-	if !oneOf(in.Nature, "fact", "preference", "intention", "plan", "decision") {
-		return result, memory.ErrInvalid
-	}
-	if in.Subject == "" {
-		in.Subject = "未解析主体"
-	}
-	if in.Predicate == "" {
-		in.Predicate = "描述"
-	}
-	if in.Actor == "" {
-		in.Actor = "user"
-	}
-	if in.Confirmation == "" {
-		in.Confirmation = "confirmed"
-	}
-	if in.Acquisition == "" {
-		in.Acquisition = "direct"
-		if in.Actor == "ai" {
-			in.Acquisition = "inferred"
-		}
-	}
-	if !oneOf(in.Acquisition, "direct", "reported", "inferred", "execution") {
-		return result, memory.ErrInvalid
-	}
-	if !in.Source.ID.Valid() || in.Source.Version < 1 {
-		return result, memory.ErrInvalid
+	in, err := claim.Normalize(in)
+	if err != nil {
+		return result, err
 	}
 	var original, connector string
 	var expressed *time.Time
@@ -113,7 +63,7 @@ func (s *Store) rememberTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, i
 		return result, memory.ErrBlocked
 	}
 	var redirected string
-	err := tx.QueryRow(ctx, "SELECT k.claim_id::text,r.version FROM claim_key_redirects k JOIN memory_records r ON (r.owner_id,r.id)=(k.owner_id,k.claim_id) WHERE k.owner_id=$1 AND k.key_hash=$2 AND r.state='active'", string(scope.OwnerID), key[:]).Scan(&redirected, &result.Version)
+	err = tx.QueryRow(ctx, "SELECT k.claim_id::text,r.version FROM claim_key_redirects k JOIN memory_records r ON (r.owner_id,r.id)=(k.owner_id,k.claim_id) WHERE k.owner_id=$1 AND k.key_hash=$2 AND r.state='active'", string(scope.OwnerID), key[:]).Scan(&redirected, &result.Version)
 	if err == nil {
 		result.ID = memory.ID(redirected)
 		result.Kind = memory.ClaimKind

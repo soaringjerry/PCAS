@@ -5,14 +5,12 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/soaringjerry/PCAS/internal/interpretation/claim"
 	"github.com/soaringjerry/PCAS/internal/memory"
 )
 
 // Mention is an entity that a statement names.
-type Mention struct {
-	Name string
-	Role string
-}
+type Mention = claim.Mention
 
 // GroundedMentions keeps the names that the text contains. It drops a name
 // that is empty, longer than 40 characters, repeated, or ambiguous, and it

@@ -157,9 +157,10 @@ test('the plan draws each dated item from its start day to its due day, with a l
   await expect(row(page, '催印厂报价')).toContainText('已过截止')
   await expect(row(page, '报名书展')).toHaveClass(/cancelled/)
   await expect(row(page, '报名书展')).toContainText('已取消')
-  // The overdue bar ends left of now; the done one before that.
+  // The overdue bar does not pass now. It was due yesterday, so its bar ends at
+  // the start of today; in the first minutes of a day now is on that same pixel.
   const late = (await row(page, '催印厂报价').locator('.plan-bar').boundingBox())!
-  expect(late.x + late.width).toBeLessThan(now.x)
+  expect(late.x + late.width).toBeLessThanOrEqual(now.x)
   // With no estimate there is no start day: only the due day is drawn.
   await expect(row(page, '选纸').locator('.plan-bar')).toHaveClass(/due-only/)
   const dueOnly = (await row(page, '选纸').locator('.plan-bar').boundingBox())!

@@ -84,6 +84,7 @@ The rules for applying an answer are in the same package: ten actions in one tur
 The order of the turn, its transactions, its model call, and its context are still in `internal/postgres/desk_turn.go`. They are the largest part of the phase that remains.
 
 The context builder is `internal/contextbuilder`. It serializes memory and current state for the model input of an agent turn: the handover, the requirements, the dates, the memories with their metadata, and the lines of a source context. The secretary and the deputy use the same rules.
+Its five instruction sentences are registered prompts: `context-requirements`, `context-dates`, `context-groups`, `context-evidence`, and `context-recall-relaxed`. Its headings and data lines are serialization and stay in the package. A test fixes the bytes of the sentences.
 It needs no storage. The caller reads the data and gives each memory its alias. The reads of the memory part are still in storage. The deputy still assigns its labels and its budgets in storage.
 
 The rules that change one task, idea, or project by one command are in `internal/workspace/itemcommand`. `Apply` checks that the command fits the kind of the item, changes the item, and returns the summary for its history. Storage reads the item and saves it.
@@ -95,7 +96,10 @@ The G4 browser test failed once with `version_conflict`, and the cause is not es
 The deputy's rules that need no storage are in `internal/workspace/deputy`: the checklist of an output, how an output is adopted, the notice of a finished run, and the output format of a revision and a breakdown.
 `deputy.Brief` builds the model input of a run. It writes the item with its project and its steps, the document that a revision starts from, and the current documents up to the limit of the brief. It counts each document that was cut or left out; storage records the count.
 `Memories`, `Excerpts`, `Evidence`, `Derived`, and `Request` write the rest of the brief. They hold the limit of the brief: metadata on a memory line does not count, so that it cannot push out a later memory or source. Each method returns the count of parts that did not fit, and storage records one event with that count. Before, storage recorded one event for each part; the sums are equal.
-The reads for the brief, the run itself, and the run commands are still in `internal/postgres/runs.go`.
+The rules of the self-check are in the same package: a light run does not check its draft, the check gets the time of the answer and 30 seconds at most, and the checked text replaces the draft only when it kept the count of checklist entries. `SettledCost` gives the cost of an answer call whose outcome is not known.
+The reads for the brief, the order of the run with its calls and recovery, and the run commands are still in `internal/postgres/runs.go`.
+
+The rules of a statement that is about to be written as a memory are in `internal/interpretation/claim`. `Normalize` checks that the statement has text, a known nature, and a source version, and it gives each absent field its one meaning. The write itself, with the quotation check against the source, the reimport block, and the versions, is still in `internal/postgres/claims.go`.
 
 The chunk, index, embedding, and summary jobs stay in storage. They hold no interpretation rule: the text split is `memory.SplitText`, the embedding call is the gateway's, and the summary is a memory read. The card job only acknowledges queue slots from before an upgrade.
 

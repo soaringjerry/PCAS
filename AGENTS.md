@@ -63,6 +63,7 @@ If you do not run a check, write that in the PR. Give the reason.
 | `internal/workspace/effort`, `internal/workspace/topicproject`, `internal/workspace/projecthandover` | Workspace domain packages outside storage: effort estimation, topic projects, and project handovers. |
 | `internal/currentstate/datereview`, `internal/currentstate/handover` | Current-state domain packages outside storage: the review of remembered dates and the global handover. |
 | `internal/interpretation/aliasscan`, `internal/interpretation/comparison`, `internal/interpretation/organize` | Memory interpretation domain packages outside storage: the scan for names of one entity, statement and entity comparison, and the organizing of statements with the schedule rule of a date. |
+| `internal/input/attachment` | Input domain package outside storage: the parsing of an original file into text. |
 | `internal/app` | Application setup: service construction and the worker handler table. |
 | `internal/modelcall`, `internal/prompts` | Model gateway and prompt registry. |
 | `internal/ai` | Model provider adapters. |

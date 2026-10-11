@@ -42,6 +42,7 @@ flowchart LR
 | Statement comparison | `internal/interpretation/comparison` | `internal/postgres/compare.go` | The batch plan, the write of accepted edges with its eligibility checks, the receipt, the scheduler, and the rejudge path. |
 | Entity comparison | `internal/interpretation/comparison` | `internal/postgres/compare_entities.go` | The pair selection, the name and evidence checks, the merge, the receipt, and the scheduler. |
 | Organize | `internal/interpretation/organize` | `internal/postgres/organize.go` | The batch selection, the write of labels, groups, dates and rule scope for each statement that is still current, and the scheduler. |
+| Attachment parsing | `internal/input/attachment` | `internal/postgres/attachments.go` | The job, the lock of one original, the write of the derived text, and the receipts of paid readings. The archive import is not moved. |
 
 The topic project service holds the proposal rules: a match must name a project that the model saw, a new project waits until the model has seen every project, an existing name attaches instead of creating, the user's own name for a project is kept, and four projects are created in one local day at most.
 Its input assembly reads memory and clips evidence in one function with SQL. That function stays in storage until memory retrieval has its own interface.
@@ -61,6 +62,10 @@ The organize service builds the model input from the batch that storage reads, a
 An item is accepted only when the whole item is valid. A declared group is created only when a statement that is still current uses it.
 The package also holds the schedule rule of a recurring date. The schedule reader and the status dates use the same type.
 The old code counted declared groups that were "ungrounded". The check could not fail, so the count was always zero. It is removed.
+
+The attachment parser reads an original file by its media type. It holds the limits of a file, the page rule of a PDF file, and the fallback from a model reading to character recognition.
+Storage gives it the paid calls through one interface and keeps each paid result with the file. The storage package no longer starts an external processor.
+The storage code still holds its transaction open while the parser makes its calls. This order did not change.
 
 ## Pattern for the Next Paths
 

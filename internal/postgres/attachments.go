@@ -6,16 +6,15 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
-	"path/filepath"
-	"strconv"
 	"strings"
-	"unicode/utf8"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/ai"
+	"github.com/soaringjerry/PCAS/internal/input/attachment"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/modelcall"
+	"github.com/soaringjerry/PCAS/internal/prompts"
 	"github.com/soaringjerry/PCAS/internal/worker"
 )
 
@@ -115,7 +114,7 @@ func (s *Store) ProcessAttachment(ctx context.Context, j worker.Job) error {
 	})
 }
 
-type parsedAttachment struct{ Text, Representation, Title, Media string }
+type parsedAttachment = attachment.Parsed
 
 // Serialize parsing per original across API and worker processes. Existing OCR
 // derivatives are reused, never upgraded or reread by this change.
@@ -184,209 +183,121 @@ func (s *Store) readAttachment(ctx context.Context, scope memory.Scope, ref memo
 	return parsed, err
 }
 func (s *Store) parseAttachment(ctx context.Context, scope memory.Scope, ref memory.Ref, job *worker.Job) (parsedAttachment, error) {
-	var parsed parsedAttachment
 	file, title, media, err := s.OpenAttachment(ctx, scope, ref.ID, ref.Version)
 	if err != nil {
-		return parsed, err
+		return parsedAttachment{}, err
 	}
 	defer file.Close()
-	parsed.Title, parsed.Media = title, media
-	dir, err := os.MkdirTemp("", "pcas-parse-")
-	if err != nil {
-		return parsed, err
-	}
-	defer os.RemoveAll(dir)
-	path := filepath.Join(dir, "original")
-	input, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY, 0600)
-	if err != nil {
-		return parsed, err
-	}
-	_, err = io.Copy(input, file)
-	closeErr := input.Close()
-	if err != nil {
-		return parsed, err
-	}
-	if closeErr != nil {
-		return parsed, closeErr
-	}
-	var text, representation string
-	if strings.HasPrefix(media, "text/") || oneOf(media, "application/json", "application/xml") {
-		data, readErr := os.ReadFile(path)
-		if readErr != nil {
-			return parsed, readErr
-		}
-		if len(data) > 1<<20 {
-			return parsed, &worker.JobError{Code: "file_text_too_large"}
-		}
-		if !utf8.Valid(data) || strings.TrimSpace(string(data)) == "" {
-			return parsed, &worker.JobError{Code: "file_text_invalid"}
-		}
-		text, representation = string(data), "extracted"
-	} else if strings.HasPrefix(media, "audio/") {
-		if s.models == nil {
-			return parsed, memory.ErrUnavailable
-		}
-		saved, cacheErr := s.attachmentReceipt(ctx, scope, ref, "transcript")
-		if cacheErr != nil {
-			return parsed, cacheErr
-		}
-		if saved != nil {
-			if err := s.accountAttachmentReceipt(ctx, scope, ref, saved, "transcription", job); err != nil {
-				return parsed, err
-			}
-			if len(saved.Output) > 1<<20 {
-				return parsed, &worker.JobError{Code: "file_text_too_large"}
-			}
-			if strings.TrimSpace(saved.Output) == "" {
-				return parsed, &worker.JobError{Code: "file_text_invalid"}
-			}
-			parsed.Text, parsed.Representation = saved.Output, "transcript"
-			return parsed, nil
-		}
-		provider, ok := s.models.Get(s.models.Config.Transcription)
-		if !ok {
-			return parsed, memory.ErrUnavailable
-		}
-		durationText, durationErr := parserOutput(ctx, "ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", path)
-		if durationErr != nil {
-			return parsed, memory.ErrUnavailable
-		}
-		seconds, durationErr := strconv.ParseFloat(strings.TrimSpace(durationText), 64)
-		if durationErr != nil || seconds <= 0 {
-			return parsed, &worker.JobError{Code: "file_audio_probe_failed"}
-		}
-		if seconds > 4*3600 {
-			return parsed, &worker.JobError{Code: "file_audio_duration_limit"}
-		}
-		audio, err := os.Open(path)
-		if err != nil {
-			return parsed, err
-		}
-		// The reservation holds one more second than the measured length.
-		request := modelcall.DirectRequest{OwnerID: scope.OwnerID, ExecutionID: memory.NewID(), Function: "transcription", Stage: "audio", Provider: provider, Estimate: (seconds + 1) / 60 * provider.AudioPerMinute, Refs: []memory.Ref{ref}, Job: job}
-		request.RootExecutionID = request.ExecutionID
-		if job != nil {
-			request.RootExecutionID, request.CausationID = job.ID, job.ID
-		}
-		var usage ai.Result
-		var call modelcall.DirectCall
-		text, usage, call, err = s.calls.CallTranscription(ctx, request, audio, title, seconds)
-		audio.Close()
-		if err == nil {
-			paid := &paidModelResult{Output: text, Reservation: call.Reservation, Provider: provider.ID, Model: provider.Model, InputTokens: usage.InputTokens, OutputTokens: usage.OutputTokens, InputEstimated: true, OutputEstimated: true, Cost: usage.Cost, CostEstimated: usage.CostEstimated}
-			if writeErr := s.saveAttachmentReceipt(ctx, scope, ref, "transcript", paid); writeErr != nil {
-				return parsed, writeErr
-			}
-			parsed.Text, parsed.Representation = text, "transcript"
-			if strings.TrimSpace(text) == "" || len(text) > 1<<20 {
-				return parsed, &worker.JobError{Code: "file_text_too_large"}
-			}
-			return parsed, nil
-		}
-		// A submitted call is recorded with its usage. Other errors come from
-		// the reservation or the accounting write and keep their own meaning.
-		var failure *modelcall.Failure
-		if errors.As(err, &failure) || errors.Is(err, modelcall.ErrNotAvailable) || errors.Is(err, ai.ErrUnsupportedCapability) {
-			return parsed, memory.ErrUnavailable
-		}
-		return parsed, err
-	} else if media == "application/pdf" {
-		text, representation, err = parsePDFWithReader(ctx, dir, path, func(ctx context.Context, path string) (string, string, error) {
-			return s.readImage(ctx, scope, ref, path, "image/png", job)
-		})
-	} else if oneOf(media, "image/png", "image/jpeg", "image/webp", "image/tiff", "image/gif", "image/bmp") {
-		text, representation, err = s.readImage(ctx, scope, ref, path, media, job)
-	} else {
-		return parsed, &worker.JobError{Code: "file_parser_unsupported"}
-	}
-	if err != nil {
-		return parsed, err
-	}
-	if strings.TrimSpace(text) == "" || len(text) > 1<<20 {
-		return parsed, &worker.JobError{Code: "file_text_too_large"}
-	}
-	parsed.Text, parsed.Representation = text, representation
-	return parsed, nil
+	return attachment.Parser{Calls: attachmentCalls{store: s, scope: scope, ref: ref, job: job}}.Parse(ctx, file, title, media)
 }
-func parserOutput(ctx context.Context, name string, args ...string) (string, error) {
-	if _, err := exec.LookPath(name); err != nil {
+
+// attachmentCalls makes the paid calls of one original file and keeps their
+// receipts with the file.
+type attachmentCalls struct {
+	store *Store
+	scope memory.Scope
+	ref   memory.Ref
+	job   *worker.Job
+}
+
+func (a attachmentCalls) SavedTranscript(ctx context.Context) (string, bool, error) {
+	if a.store.models == nil {
+		return "", false, memory.ErrUnavailable
+	}
+	saved, err := a.store.attachmentReceipt(ctx, a.scope, a.ref, "transcript")
+	if err != nil {
+		return "", false, err
+	}
+	if saved != nil {
+		if err := a.store.accountAttachmentReceipt(ctx, a.scope, a.ref, saved, "transcription", a.job); err != nil {
+			return "", false, err
+		}
+		return saved.Output, true, nil
+	}
+	if _, ok := a.store.models.Get(a.store.models.Config.Transcription); !ok {
+		return "", false, memory.ErrUnavailable
+	}
+	return "", false, nil
+}
+
+func (a attachmentCalls) Transcribe(ctx context.Context, audio io.Reader, title string, seconds float64) (string, error) {
+	provider, ok := a.store.models.Get(a.store.models.Config.Transcription)
+	if !ok {
 		return "", memory.ErrUnavailable
 	}
-	cmd := exec.CommandContext(ctx, name, args...)
-	cmd.Stderr = io.Discard
-	var out boundedOutput
-	cmd.Stdout = &out
-	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("attachment parser failed")
+	// The reservation holds one more second than the measured length.
+	request := modelcall.DirectRequest{OwnerID: a.scope.OwnerID, ExecutionID: memory.NewID(), Function: "transcription", Stage: "audio", Provider: provider, Estimate: (seconds + 1) / 60 * provider.AudioPerMinute, Refs: []memory.Ref{a.ref}, Job: a.job}
+	request.RootExecutionID = request.ExecutionID
+	if a.job != nil {
+		request.RootExecutionID, request.CausationID = a.job.ID, a.job.ID
 	}
-	return out.String(), nil
+	text, usage, call, err := a.store.calls.CallTranscription(ctx, request, audio, title, seconds)
+	if err == nil {
+		paid := &paidModelResult{Output: text, Reservation: call.Reservation, Provider: provider.ID, Model: provider.Model, InputTokens: usage.InputTokens, OutputTokens: usage.OutputTokens, InputEstimated: true, OutputEstimated: true, Cost: usage.Cost, CostEstimated: usage.CostEstimated}
+		return text, a.store.saveAttachmentReceipt(ctx, a.scope, a.ref, "transcript", paid)
+	}
+	// A submitted call is recorded with its usage. Other errors come from
+	// the reservation or the accounting write and keep their own meaning.
+	var failure *modelcall.Failure
+	if errors.As(err, &failure) || errors.Is(err, modelcall.ErrNotAvailable) || errors.Is(err, ai.ErrUnsupportedCapability) {
+		return "", memory.ErrUnavailable
+	}
+	return "", err
 }
 
-type boundedOutput struct{ strings.Builder }
+func (a attachmentCalls) SavedReading(ctx context.Context, component string) (string, bool, error) {
+	saved, err := a.store.attachmentReceipt(ctx, a.scope, a.ref, component)
+	if err != nil || saved == nil {
+		return "", false, err
+	}
+	if err := a.store.accountAttachmentReceipt(ctx, a.scope, a.ref, saved, "vision", a.job); err != nil {
+		return "", false, err
+	}
+	return saved.Output, true, nil
+}
 
-func (b *boundedOutput) Write(data []byte) (int, error) {
-	if b.Len()+len(data) > 1<<20 {
-		return 0, memory.ErrInvalid
-	}
-	return b.Builder.Write(data)
+func (a attachmentCalls) CanReadImages() bool {
+	_, ok := a.store.models.VisionProvider()
+	return ok
 }
-func ocrImage(ctx context.Context, path string) (string, error) {
-	return parserOutput(ctx, "tesseract", path, "stdout", "-l", "chi_sim+eng")
+
+func (a attachmentCalls) ReadImage(ctx context.Context, component string, image ai.Image) (string, error) {
+	p, ok := a.store.models.VisionProvider()
+	if !ok {
+		return "", &attachment.Fallback{Stage: "select", Kind: "unavailable"}
+	}
+	// The image's job is named in the usage record. Its queue budget rules
+	// do not apply, because one file can need a call for each page.
+	instructions := prompts.Must("vision")
+	request := modelcall.DirectRequest{OwnerID: a.scope.OwnerID, ExecutionID: memory.NewID(), Function: "vision", Stage: "image", Provider: p, Estimate: p.ReserveVision(instructions.Text(), image), Instructions: instructions, Refs: []memory.Ref{a.ref}}
+	request.RootExecutionID = request.ExecutionID
+	if a.job != nil {
+		request.RootExecutionID, request.CausationID, request.UsageJob = a.job.ID, a.job.ID, a.job.ID
+	}
+	work, cancel := context.WithTimeout(ctx, 45*time.Second)
+	result, call, err := a.store.calls.CallVision(work, request, image)
+	cancel()
+	if err == nil {
+		paid := &paidModelResult{Output: result.Text, Reservation: call.Reservation, Provider: p.ID, Model: p.Model, InputTokens: result.InputTokens, OutputTokens: result.OutputTokens, InputEstimated: result.InputEstimated, OutputEstimated: result.OutputEstimated, CostEstimated: result.CostEstimated, Cost: result.Cost}
+		if err = a.store.saveAttachmentReceipt(ctx, a.scope, a.ref, component, paid); err != nil {
+			return "", err
+		}
+		return paid.Output, nil
+	}
+	var persistence *modelcall.PersistenceError
+	if errors.As(err, &persistence) {
+		return "", err
+	}
+	// The gateway recorded a submitted call and its usage. A reservation
+	// that failed submitted nothing.
+	stage := "budget"
+	var failure *modelcall.Failure
+	if errors.As(err, &failure) {
+		stage = "model"
+	}
+	return "", &attachment.Fallback{Stage: stage, Kind: secretaryErrorType(stage, err)}
 }
-func parsePDF(ctx context.Context, dir, path string) (string, string, error) {
-	return parsePDFWithReader(ctx, dir, path, func(ctx context.Context, path string) (string, string, error) {
-		text, err := ocrImage(ctx, path)
-		return text, "ocr", err
-	})
-}
-func parsePDFWithReader(ctx context.Context, dir, path string, read func(context.Context, string) (string, string, error)) (string, string, error) {
-	info, err := parserOutput(ctx, "pdfinfo", path)
-	if err != nil {
-		return "", "", err
-	}
-	pages := 0
-	for _, line := range strings.Split(info, "\n") {
-		if strings.HasPrefix(line, "Pages:") {
-			pages, _ = strconv.Atoi(strings.TrimSpace(strings.TrimPrefix(line, "Pages:")))
-		}
-	}
-	if pages < 1 {
-		return "", "", errors.Join(memory.ErrUnavailable, &worker.JobError{Code: "file_pdf_invalid"})
-	}
-	if pages > 100 {
-		return "", "", errors.Join(memory.ErrUnavailable, &worker.JobError{Code: "file_pdf_page_limit"})
-	}
-	var out strings.Builder
-	representation := "extracted"
-	for page := 1; page <= pages; page++ {
-		n := strconv.Itoa(page)
-		text, err := parserOutput(ctx, "pdftotext", "-f", n, "-l", n, "-layout", path, "-")
-		if err != nil {
-			return "", "", err
-		}
-		if strings.TrimSpace(text) == "" {
-			prefix := filepath.Join(dir, "page-"+n)
-			if _, err := parserOutput(ctx, "pdftoppm", "-f", n, "-l", n, "-singlefile", "-scale-to", "1800", "-png", path, prefix); err != nil {
-				return "", "", err
-			}
-			var pageRepresentation string
-			text, pageRepresentation, err = read(ctx, prefix+".png")
-			if err != nil {
-				return "", "", err
-			}
-			if pageRepresentation == "ocr" {
-				representation = "ocr"
-			} else if representation != "ocr" {
-				representation = pageRepresentation
-			}
-		}
-		fmt.Fprintf(&out, "\n[第 %d 页]\n%s", page, text)
-		if out.Len() > 1<<20 {
-			return "", "", &worker.JobError{Code: "file_text_too_large"}
-		}
-	}
-	return out.String(), representation, nil
-}
+
 func (s *Store) CleanupBlobs(ctx context.Context) error {
 	if s.blobs == nil {
 		return nil

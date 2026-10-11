@@ -44,3 +44,17 @@ func TestNoticeOfAFinishedRunIsShort(t *testing.T) {
 		t.Fatal(len([]rune(long)))
 	}
 }
+
+// The format that a breakdown is asked for is the format that becomes subtasks.
+func TestBreakdownFormatIsTheFormatThatIsAdopted(t *testing.T) {
+	format := OutputFormat("breakdown")
+	if !strings.Contains(format, "- [ ] ") || !strings.Contains(format, "不要编号") {
+		t.Fatal(format)
+	}
+	if AdoptionFor(workspace.Run{Kind: "breakdown"}, "- [ ] 按格式写的一步") != "subtasks" {
+		t.Fatal("an answer in the asked format becomes subtasks")
+	}
+	if !strings.Contains(OutputFormat("revise"), `{"body":"整份新正文","complete":true}`) || OutputFormat("plan") != "" || OutputFormat("summary") != "" {
+		t.Fatal("only a revision and a breakdown have a format")
+	}
+}

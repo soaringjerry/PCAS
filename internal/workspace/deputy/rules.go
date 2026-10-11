@@ -85,3 +85,17 @@ func NoticeReason(run workspace.Run) string {
 	}
 	return "副手做完了：\n" + text
 }
+
+// OutputFormat is the format that a run of this kind must answer in. It is
+// the last part of the model input. Other kinds have no format.
+func OutputFormat(kind string) string {
+	switch kind {
+	case "revise":
+		return "\n输出格式：只输出 JSON：{\"body\":\"整份新正文\",\"complete\":true}。complete 必须如实表明全文是否完整、未截断；没有写完填 false。不要在 body 之外补说明，不输出省略占位文字。正文不得和基准完全相同。"
+	case "breakdown":
+		// Automatic adoption turns "- [ ]" lines into subtasks. Real models
+		// otherwise answer with a numbered list, which is filed as a document.
+		return "\n输出格式：每个步骤单独一行，写成「- [ ] 步骤」；不要编号，不要加粗，步骤之外不写别的内容。"
+	}
+	return ""
+}

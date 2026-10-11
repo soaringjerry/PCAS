@@ -376,9 +376,10 @@ func TestVoiceTranscriptionAndFallback(t *testing.T) {
 			if !unavailable {
 				r.Config = ai.Configuration{Transcription: "asr", Providers: []ai.Provider{{ID: "asr", Transcription: true, Protocol: "openai", BaseURL: model.URL, Model: "test", CostMode: "free"}}}
 			}
-			p.models = r
+			voice := &voiceTranscriber{registry: r}
+			p.models = voice
 			u := textUpdate(1, "")
-			u.Message.Voice = &file{ID: "voice"}
+			u.Message.Voice = &file{ID: "voice", Duration: 3}
 			b.enqueue(u)
 			step(t, p)
 			text := decode[string](b.of("sendMessage")[0].body["text"])
@@ -386,7 +387,7 @@ func TestVoiceTranscriptionAndFallback(t *testing.T) {
 				if calls != 0 || len(s.requests) != 0 || len(s.attachments) != 1 || s.attachments[0].MediaType != "audio/ogg" || s.data[0] != "audio-bytes" || text != "还没有配置语音转写，先发文字吧" {
 					t.Fatal(text, s.attachments)
 				}
-			} else if calls != 1 || len(s.requests) != 1 || s.requests[0].Text != "明天下午三点开会" || !strings.HasPrefix(text, "🎤 听到：明天下午三点开会\n") {
+			} else if calls != 1 || voice.seconds != 3 || len(s.requests) != 1 || s.requests[0].Text != "明天下午三点开会" || !strings.HasPrefix(text, "🎤 听到：明天下午三点开会\n") {
 				t.Fatal(text, s.requests)
 			}
 		})
@@ -434,7 +435,7 @@ func TestFailedReplyDoesNotAdvanceOffset(t *testing.T) {
 
 type changingTranscriber struct{ calls int }
 
-func (m *changingTranscriber) Transcribe(context.Context, io.Reader, string) (string, error) {
+func (m *changingTranscriber) TranscribeVoice(context.Context, memory.Scope, io.Reader, string, float64) (string, error) {
 	m.calls++
 	if m.calls == 1 {
 		return "明天下午三点开会", nil
@@ -447,7 +448,7 @@ func TestVoiceReplyRetryKeepsOriginalRequest(t *testing.T) {
 	model := &changingTranscriber{}
 	p.models = model
 	u := textUpdate(1, "")
-	u.Message.Voice = &file{ID: "voice"}
+	u.Message.Voice = &file{ID: "voice", Duration: 3}
 	b.enqueue(u)
 	b.failSend = true
 	if err := p.step(context.Background(), "fixture", "123"); err == nil {
@@ -594,4 +595,15 @@ func TestConfigurationRequiresChatAndRestartsOnTokenChange(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("supervisor did not stop")
 	}
+}
+
+// voiceTranscriber stands for the store's recorded transcription entry.
+type voiceTranscriber struct {
+	registry *ai.Registry
+	seconds  float64
+}
+
+func (v *voiceTranscriber) TranscribeVoice(ctx context.Context, _ memory.Scope, audio io.Reader, name string, seconds float64) (string, error) {
+	v.seconds = seconds
+	return v.registry.Transcribe(ctx, audio, name)
 }

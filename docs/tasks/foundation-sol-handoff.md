@@ -29,21 +29,17 @@ Phase 3.9 is incomplete. The [delivery milestones](../status.md#foundation-deliv
 | Shared model gateway and prompt registry | Released for background generation, the secretary, the readers, the self-checks, and the deputy. |
 | Recorded replay diagnostics | Released. Complete state equivalence is not established. |
 | Unused card generation cleanup | Released at `6411b4e`. |
-| Query and background embedding through the gateway | On the review branch. Not released when this page was written. |
-| Mode fallback correction for providers without schema or search | On the review branch. Not released when this page was written. |
-| Legacy routing and answer removal | On the review branch. Not released when this page was written. |
-| Transcription and image interpretation through the gateway | Not started. Both keep a declared provider boundary exception. |
+| Query and background embedding through the gateway | Released at `a5c1483` on 2026-10-11. |
+| Mode fallback correction for providers without schema or search | Released at `a5c1483` on 2026-10-11. |
+| Legacy routing and answer removal | Released at `a5c1483` on 2026-10-11. |
+| Transcription and image interpretation through the gateway | File transcription, image interpretation, and Telegram voice transcription use recorded gateway entries. Not released when this page was written. |
 | Data-owner boundaries and domain extraction | The [pilot](foundation-domain-pilot.md) moved workspace effort estimation. The other paths remain in the storage package. |
 | Activity queries, declared event responses, and causal limits | Not started. |
 | Five test layers and nightly evaluation trends | Not started as a complete set. |
 
 Do not derive a completion percentage from these unequal work items.
 
-The provider boundary test declares these remaining direct-call exceptions:
-
-- File transcription in `internal/postgres/attachments.go`.
-- Image interpretation in `internal/postgres/vision.go`.
-- Telegram transcription in `internal/telegram/poller.go`.
+The provider boundary test declares no direct-call exception. Each production provider call is inside `internal/modelcall`.
 
 ## 3 Sol's Worktree
 

@@ -158,6 +158,7 @@ The groups below contain historical material and link-compatibility files, not a
 - [第 3 阶段上线记录（2026-10-08）](evaluations/2026-10-08-phase3-rollout.md)
 - [第 3.5 阶段上线记录（2026-10-08）](evaluations/2026-10-08-phase3_5-rollout.md)
 - [第 3.6 阶段上线记录（2026-10-08）](evaluations/2026-10-08-phase3_6-rollout.md)
+- [Phase 3.9 review corrections: release record (2026-10-11)](evaluations/2026-10-11-foundation-review-release.md)
 
 </details>
 

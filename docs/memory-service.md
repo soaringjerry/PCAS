@@ -83,6 +83,12 @@ Each call has one `model_calls` row with its provider, model, input size, outcom
 The row does not hold the query text or the vector. A lost vector is requested again.
 A query inside a secretary or deputy execution records that execution as its cause.
 
+Image interpretation and transcription use the same recorded entry as embeddings: `CallVision` and `CallTranscription`.
+The image instructions are the registered prompt `vision`.
+A transcription's recorded cost is the audio length at the provider's price for one minute, and its token counts are estimates.
+Telegram voice messages use `Store.TranscribeVoice`, which records the call for the owner. Before this change that call had no record and no cost.
+No production code outside `internal/modelcall` calls a provider.
+
 ### Background Call Evidence
 
 Migration `062_model_calls.sql` adds call metadata without replacing existing cost or result records.

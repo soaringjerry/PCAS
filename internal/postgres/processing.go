@@ -191,7 +191,7 @@ func (s *Store) ProcessEmbedding(ctx context.Context, j worker.Job) (err error) 
 		cost += float64(len(text)+16) * provider.InputPerMillion / 1e6
 	}
 	// The call is its own execution. Its root and cause name the paying job.
-	vectors, err := s.calls.CallEmbedding(ctx, modelcall.EmbeddingRequest{OwnerID: j.OwnerID, ExecutionID: memory.NewID(), RootExecutionID: j.ID, CausationID: j.ID, Function: "embedding", Stage: j.Stage, Provider: provider, Texts: texts, Refs: refs, Estimate: cost, Job: &j})
+	vectors, err := s.calls.CallEmbedding(ctx, modelcall.DirectRequest{OwnerID: j.OwnerID, ExecutionID: memory.NewID(), RootExecutionID: j.ID, CausationID: j.ID, Function: "embedding", Stage: j.Stage, Provider: provider, Refs: refs, Estimate: cost, Job: &j}, texts)
 	var failure *modelcall.Failure
 	var persistence *modelcall.PersistenceError
 	switch {

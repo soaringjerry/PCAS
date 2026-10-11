@@ -43,6 +43,7 @@ The [Roadmap](whitepaper.md#10-roadmap) gives the phase sequence, delivery scope
 | Phase 3.9 interactive gateway | Secretary, readers, and self-checks released at `022a912` on 2026-10-09. Phase 3.9 remains incomplete. | [Complete CI, replay, real Codex, and live checks](tasks/foundation-interactive-gateway.md#final-acceptance). |
 | Phase 3.9 deputy gateway | Main deputy generation and revision released at `f0ee817` on 2026-10-09. Phase 3.9 remains incomplete. | [Replay, real Codex, CI, backup, and live checks](tasks/foundation-deputy-gateway.md#release-verification). |
 | Phase 3.9 unused generation cleanup | Unused card instructions and generation removed and released at `6411b4e` on 2026-10-09. | [CI, backup, release, and live checks](tasks/foundation-unused-generation.md#release-verification). |
+| Phase 3.9 review corrections | Mode fallback regression fix, embeddings through the gateway, journal deferral fix, and legacy interface removal released at `a5c1483` on 2026-10-11. Phase 3.9 remains incomplete. | [Release and live check](evaluations/2026-10-11-foundation-review-release.md). |
 
 Phase 2.0 was rolled back on 2026-10-01.
 Its design is stored under the recorded `archive/phase2-0/*` tags.

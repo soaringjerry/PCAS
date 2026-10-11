@@ -102,7 +102,7 @@ func (f *generationFixture) fail(stage string) error {
 	return nil
 }
 func generationRequest() Request {
-	return Request{OwnerID: "owner", ExecutionID: "execution", RootExecutionID: "execution", Function: "fictitious", Stage: "answer", Instructions: prompts.Must("organize"), Prompt: []byte(`{"rawPrompt":"Fictitious input."}`)}
+	return Request{OwnerID: "owner", ExecutionID: "execution", RootExecutionID: "execution", Function: "fictitious", Stage: "answer", Instructions: prompts.Must("organize"), Prompt: []byte(`{"rawPrompt":"Fictitious input."}`), ModelInput: "Fictitious input."}
 }
 
 func TestGatewayPinsExplicitProviderBeforeReservation(t *testing.T) {

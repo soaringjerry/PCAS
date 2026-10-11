@@ -59,8 +59,8 @@ func (s *Store) HasSavedResult(ctx context.Context, j worker.Job) (bool, error) 
 // failure policy. A saved result returns without another call.
 // Temporary adapter for extracted background domains. Callers: the effort
 // service. Remove it when background coordination owns this policy.
-func (s *Store) GenerateForJob(ctx context.Context, j worker.Job, purpose string, instructions prompts.Definition, _ string, record json.RawMessage, refs []memory.Ref) (json.RawMessage, string, error) {
-	paid, err := s.generatePaid(ctx, j, purpose, instructions.Text(), record, refs)
+func (s *Store) GenerateForJob(ctx context.Context, j worker.Job, purpose string, instructions prompts.Definition, modelInput string, record json.RawMessage, refs []memory.Ref) (json.RawMessage, string, error) {
+	paid, err := s.generatePaidInput(ctx, j, purpose, instructions.Text(), modelInput, record, refs)
 	if err != nil {
 		return nil, "", err
 	}

@@ -96,7 +96,7 @@ func (s *Store) useModelCall(ctx, persist context.Context, scope memory.Scope, a
 	request.Policy, request.Stage, request.ProviderID = policy, stage, agent
 	request.Instructions, request.Schema, request.ModeFallback = instructions, schema, true
 	request.ContextBuilderVersion = "memory-use-v1"
-	request.Prompt = asJSON(map[string]string{"rawPrompt": prompt})
+	request.Prompt, request.ModelInput = asJSON(map[string]string{"rawPrompt": prompt}), prompt
 	request.Refs = uniqueRefs(usage.MemoryRefs)
 	type returned struct {
 		paid *modelcall.PaidResult

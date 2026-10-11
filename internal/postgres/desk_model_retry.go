@@ -39,7 +39,7 @@ func (s *Store) generateSecretaryModelWithRetry(workCtx context.Context, scope m
 	request.Instructions, request.Schema = prompts.Must("secretary"), prompts.MustSchema("secretary-output")
 	// The reply parser validates the output, so an ordinary provider can answer.
 	request.Search, request.ModeFallback, request.ContextBuilderVersion = true, true, "secretary-answer-v1"
-	request.Prompt = asJSON(map[string]string{"rawPrompt": prompt})
+	request.Prompt, request.ModelInput = asJSON(map[string]string{"rawPrompt": prompt}), prompt
 	request.Refs = uniqueRefs(meta.Usage.MemoryRefs)
 	stage, attempt := "model", 0
 	var accountingErr error

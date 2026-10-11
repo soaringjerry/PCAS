@@ -1053,8 +1053,8 @@ func (s *Store) runAgentOnce(ctx context.Context) (resultErr error) {
 				OwnerID: scope.OwnerID, ExecutionID: memory.ID(run.ID), RootExecutionID: memory.ID(run.ID),
 				Function: "deputy", Stage: "selfcheck", ProviderID: run.AgentID,
 				Instructions: prompts.Must("deputy-selfcheck"), ContextBuilderVersion: "deputy-selfcheck-v1",
-				Prompt: asJSON(map[string]string{"rawPrompt": run.Brief + "\n待自查草稿：\n" + result.Text}),
-				Refs:   run.ContextVersions,
+				Prompt: asJSON(map[string]string{"rawPrompt": run.Brief + "\n待自查草稿：\n" + result.Text}), ModelInput: run.Brief + "\n待自查草稿：\n" + result.Text,
+				Refs: run.ContextVersions,
 				Policy: interactiveCallPolicy{
 					Kind: "deputy", Token: token, Origin: run.CreatedAt,
 					AgentID: run.AgentID, ThingID: run.ThingID, Usage: usage,

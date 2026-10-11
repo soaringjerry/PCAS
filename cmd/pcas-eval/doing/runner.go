@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/soaringjerry/PCAS/internal/memory"
 	"io"
 	"os"
 	"path/filepath"
@@ -116,6 +117,13 @@ func modelErrorType(err error) string {
 	}
 	if errors.Is(err, context.Canceled) {
 		return "canceled"
+	}
+	// The fixed errors of the product carry no private text. Naming them makes
+	// a failure of the product pipeline readable without its error message.
+	for name, fixed := range map[string]error{"conflict": memory.ErrConflict, "unavailable": memory.ErrUnavailable, "invalid": memory.ErrInvalid, "forbidden": memory.ErrForbidden, "not_found": memory.ErrNotFound, "blocked": memory.ErrBlocked} {
+		if errors.Is(err, fixed) {
+			return name
+		}
 	}
 	value := err.Error()
 	if strings.Contains(value, "sign-in") {

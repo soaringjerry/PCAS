@@ -2,7 +2,7 @@ package postgres
 
 import (
 	"context"
-	"fmt"
+	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -78,49 +78,7 @@ func deskLocation(settings workspace.Settings) *time.Location {
 	return loc
 }
 func (s *Store) deskNow(loc *time.Location) string {
-	now := s.businessNow().In(loc)
-	return fmt.Sprintf("现在：%s 星期%s（%s）\n", now.Format("2006-01-02 15:04"), []string{"日", "一", "二", "三", "四", "五", "六"}[now.Weekday()], loc)
+	return secretary.Now(s.businessNow(), loc)
 }
-
-const recallTimeRelaxed = "按这个时间没有找到，下面是其他时间说的，回答时说明实际日期"
 
 var recallDateInstructions = prompts.Must("recall-date").Text()
-
-// Append only supplied metadata; old memory lines stay byte-for-byte intact.
-func memoryPromptSuffix(m workspace.Memory, loc *time.Location) string {
-	if loc == nil {
-		loc = time.UTC
-	}
-	var suffix strings.Builder
-	if m.Completed {
-		suffix.WriteString(" / 已标完成（依据记忆的期限事项已办完）")
-	}
-	if at, err := time.Parse(time.RFC3339Nano, m.ExpressedAt); err == nil {
-		fmt.Fprintf(&suffix, " / 说于 %s", at.In(loc).Format("2006-01-02"))
-	}
-	if from, err := time.Parse(time.RFC3339Nano, m.EventFrom); err == nil {
-		from = from.In(loc)
-		date := ""
-		switch m.EventPrecision {
-		case "day":
-			date = from.Format("2006-01-02")
-		case "month":
-			date = from.Format("2006-01")
-		case "year":
-			date = from.Format("2006")
-		case "range":
-			if to, err := time.Parse(time.RFC3339Nano, m.EventTo); err == nil && to.After(from) {
-				date = from.Format("2006-01-02") + " 至 " + to.Add(-time.Nanosecond).In(loc).Format("2006-01-02")
-			}
-		}
-		if date != "" {
-			fmt.Fprintf(&suffix, " / 事件 %s", date)
-		}
-	}
-	for _, mention := range m.Mentions {
-		if oneOf(mention.Role, "place", "person") && strings.TrimSpace(mention.Name) != "" {
-			fmt.Fprintf(&suffix, " / %s", mention.Name)
-		}
-	}
-	return suffix.String()
-}

@@ -79,7 +79,11 @@ The rules of each action are in the same package. `Execute` does one action thro
 Storage implements `Workspace` in the action's transaction. It keeps the commands, the history collection, the companion project of a task, and the closing of a remembered date.
 Behavior tests run the actions against a workspace in memory. They need no database.
 `RenderWorkspace` writes the workspace part of the model input: the projects, the tasks, the ideas, the conversation history, and the items of the conversation. Storage reads the facts and records each cut of a long project evidence. A contract test fixes the bytes.
-The memory part of the model input, the turn itself, and its context are still in `internal/postgres/desk_turn.go`. The memory part waits for an interface to memory retrieval. They are the largest part of the phase that remains.
+`RenderMemories`, `RenderExcerpts`, and `RenderEvidence` write the memory part of the model input and give each memory and each source its alias. Storage reads in two steps: first the recall and the current state, then the source context of the memories that were given an alias.
+The turn itself and its context are still in `internal/postgres/desk_turn.go`. They are the largest part of the phase that remains.
+
+The context builder is `internal/contextbuilder`. It serializes memory and current state for the model input of an agent turn: the handover, the requirements, the dates, the memories with their metadata, and the lines of a source context. The secretary and the deputy use the same rules.
+It needs no storage. The caller reads the data and gives each memory its alias. The reads of the memory part are still in storage. The deputy still assigns its labels and its budgets in storage.
 
 The rules that change one task, idea, or project by one command are in `internal/workspace/itemcommand`. `Apply` checks that the command fits the kind of the item, changes the item, and returns the summary for its history. Storage reads the item and saves it.
 The other commands of `internal/postgres/commands.go` stay in storage for now: creation, candidates, documents, settings, agents, and bulk changes. Each of them is mostly a write.

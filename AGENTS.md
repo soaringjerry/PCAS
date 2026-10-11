@@ -64,6 +64,7 @@ If you do not run a check, write that in the PR. Give the reason.
 | `internal/currentstate/datereview`, `internal/currentstate/handover` | Current-state domain packages outside storage: the review of remembered dates and the global handover. |
 | `internal/interpretation/aliasscan`, `internal/interpretation/comparison`, `internal/interpretation/organize`, `internal/interpretation/extraction` | Memory interpretation domain packages outside storage: the scan for names of one entity, statement and entity comparison, the organizing of statements with the schedule rule of a date, and the reading of statements, tasks, and ideas from a source. |
 | `internal/input/attachment` | Input domain package outside storage: the parsing of an original file into text. |
+| `internal/contextbuilder` | Serialization of memory and current state for the model input of an agent turn. The secretary and the deputy share it. |
 | `internal/app` | Application setup: service construction and the worker handler table. |
 | `internal/modelcall`, `internal/prompts` | Model gateway and prompt registry. |
 | `internal/ai` | Model provider adapters. |

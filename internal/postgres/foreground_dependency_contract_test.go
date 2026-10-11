@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/soaringjerry/PCAS/internal/contextbuilder"
 	"regexp"
 	"strings"
 	"testing"
@@ -70,7 +71,7 @@ func TestHeavyReaderPagesAllMembersAndDisclosesSkippedGroups(t *testing.T) {
 		t.Errorf("skipped names=%d expected13", len(u.Coverage.Skipped))
 	}
 	var b strings.Builder
-	writeUseContext(&b, u, time.UTC, func(workspace.Memory) {})
+	contextbuilder.WriteUse(&b, u, time.UTC, func(workspace.Memory) {})
 	for _, g := range u.Index {
 		if !strings.Contains(b.String(), g.Name) {
 			t.Errorf("user coverage disclosure omitted %s", g.Name)

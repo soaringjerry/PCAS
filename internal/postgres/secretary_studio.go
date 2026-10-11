@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/soaringjerry/PCAS/internal/contextbuilder"
+	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
@@ -72,7 +74,7 @@ func (s *Store) secretaryHandoverEvidenceTx(ctx context.Context, tx pgx.Tx, scop
 					c.Dependencies = append(c.Dependencies, refs...)
 				}
 				labels[e.ID] = alias
-				fmt.Fprintf(b, "\n交接说明依据事项 %s：%s（当前状态 %s；截止 %s）；说明：%s\n", alias, item.Title, item.Status, item.Due, itemNotes(item))
+				fmt.Fprintf(b, "\n交接说明依据事项 %s：%s（当前状态 %s；截止 %s）；说明：%s\n", alias, item.Title, item.Status, item.Due, secretary.Notes(item))
 			}
 		}
 	}
@@ -96,7 +98,7 @@ func (s *Store) secretaryHandoverEvidenceTx(ctx context.Context, tx pgx.Tx, scop
 			if alias == "" {
 				alias = fmt.Sprintf("M%d", len(sent)+1)
 				sent[alias] = m
-				fmt.Fprintf(b, "\n交接说明依据当前记忆 [%s / trust=%s] %s\n", alias, m.Trust, m.Text+memoryPromptSuffix(m, deskLocation(c.Settings)))
+				fmt.Fprintf(b, "\n交接说明依据当前记忆 [%s / trust=%s] %s\n", alias, m.Trust, m.Text+contextbuilder.MemorySuffix(m, deskLocation(c.Settings)))
 			}
 			labels[m.ID] = alias
 			c.Dependencies = append(c.Dependencies, memory.Ref{ID: memory.ID(m.ID), Version: m.Version, Kind: memory.ClaimKind})

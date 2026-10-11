@@ -3,6 +3,7 @@ package postgres
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/soaringjerry/PCAS/internal/contextbuilder"
 	"github.com/soaringjerry/PCAS/internal/currentstate/handover"
 	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
 	"reflect"
@@ -133,7 +134,7 @@ func TestPhase26G6B3B7B8LibraryAndC1C2Content(t *testing.T) {
 			t.Errorf("per-turn content rules=%d unrestricted=%d deadlines=%d", len(u.Rules), unrestricted, len(u.Deadlines))
 		}
 		var b strings.Builder
-		writeUseContext(&b, u, time.UTC, func(m workspace.Memory) { b.WriteString(m.Text); b.WriteByte('\n') })
+		contextbuilder.WriteUse(&b, u, time.UTC, func(m workspace.Memory) { b.WriteString(m.Text); b.WriteByte('\n') })
 		prompt := b.String()
 		if !strings.Contains(prompt, old.Body) || !strings.Contains(prompt, old.BuiltAt) || !strings.Contains(prompt, "过期=true") {
 			t.Error("stale handover body/timestamp/staleness absent from every-turn context")

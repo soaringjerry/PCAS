@@ -393,11 +393,8 @@ func (s *Store) adoptRunTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, r
 	if run.SmokeID != "" {
 		ctx = withSmoke(ctx, run.SmokeID)
 	}
-	if run.Status != "done" || run.Adopted != nil || run.StaleContext {
-		return memory.ErrConflict
-	}
-	if requireText(text) != nil || !oneOf(as, "doc", "subtasks", "progress") || run.Kind == "revise" && as != "doc" {
-		return memory.ErrInvalid
+	if err := deputy.CheckAdoption(*run, as, text); err != nil {
+		return err
 	}
 	// A completed draft can be adopted again after undo, whose audit/version
 	// changes do not alter its content. Generation fences the destination;
@@ -447,19 +444,11 @@ func (s *Store) adoptRunTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, r
 			}
 		}
 	case "subtasks":
-		lines := deputy.AdoptionLines(text)
-		count := 0
+		lines, err := deputy.Subtasks(text)
+		if err != nil {
+			return err
+		}
 		for _, line := range lines {
-			if line == "" {
-				continue
-			}
-			if len(line) > 2000 {
-				return memory.ErrInvalid
-			}
-			count++
-			if count > 100 {
-				return memory.ErrInvalid
-			}
 			if item.Kind == "task" {
 				check := workspace.Check{ID: string(memory.NewID()), Text: line}
 				item.Checklist = append(item.Checklist, check)
@@ -483,9 +472,6 @@ func (s *Store) adoptRunTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, r
 					return err
 				}
 			}
-		}
-		if count == 0 {
-			return memory.ErrInvalid
 		}
 	}
 	item.Version++

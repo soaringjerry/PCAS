@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"github.com/soaringjerry/PCAS/internal/currentstate/handover"
 	"net/http"
 	"testing"
 	"time"
@@ -26,7 +27,7 @@ func backgroundFixture(t *testing.T, stage string) (*Store, memory.Scope, worker
 		statusTestMemories(t, s, scope, 3)
 
 		j := handoverTestJob(t, s, scope)
-		return s, scope, j, s.ProcessHandover, func(w http.ResponseWriter, r *http.Request) { handoverFakeReply(t, w, r) }
+		return s, scope, j, (handover.Service{Store: s.HandoverStore(), Generator: s}).Process, func(w http.ResponseWriter, r *http.Request) { handoverFakeReply(t, w, r) }
 	default:
 		statusTestMemories(t, s, scope, 3)
 		j := statusTestJob(t, s, scope)

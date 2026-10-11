@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/soaringjerry/PCAS/internal/currentstate/handover"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres"
 	"github.com/soaringjerry/PCAS/internal/worker"
@@ -36,7 +37,7 @@ func phase25B3DefaultAdapter(f *phase25B234Fixture) phase25B3Adapter {
 				return f.store.ProcessCard(ctx, j)
 			}
 			if strings.HasPrefix(j.Stage, "memory.handover:") {
-				return f.store.ProcessHandover(ctx, j)
+				return (handover.Service{Store: f.store.HandoverStore(), Generator: f.store}).Process(ctx, j)
 			}
 			return fmt.Errorf("unexpected status stage %s", j.Stage)
 		},

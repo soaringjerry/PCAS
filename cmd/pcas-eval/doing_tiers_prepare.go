@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/soaringjerry/PCAS/internal/app"
 	"io"
 	"log/slog"
 	"strings"
@@ -63,7 +64,7 @@ func prepareTierSuite(ctx context.Context, store *postgres.Store, pool *pgxpool.
 	}{
 		{"organize", store.ScheduleOrganize, map[string]worker.Handler{postgres.OrganizeStage: store.ProcessOrganize}},
 		{"compare", store.ScheduleCompare, map[string]worker.Handler{postgres.CompareStage: store.ProcessCompare, postgres.EntityCompareStage: store.ProcessEntityCompare}},
-		{"status", store.ScheduleStatus, map[string]worker.Handler{postgres.HandoverStage: store.ProcessHandover}},
+		{"status", store.ScheduleStatus, map[string]worker.Handler{postgres.HandoverStage: app.Handover(store).Process}},
 	}
 	for _, stage := range stages {
 		at := time.Now()

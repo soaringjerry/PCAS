@@ -22,6 +22,16 @@ var backgroundHourlyBudgets = map[string]int{
 	DateTidyStage:         dateTidyHourly,
 }
 
+// StageHourlyLimits returns the number of calls that each limited stage can
+// reserve in one hour. A stage that is absent has no stage limit.
+func StageHourlyLimits() map[string]int {
+	out := make(map[string]int, len(backgroundHourlyBudgets))
+	for stage, limit := range backgroundHourlyBudgets {
+		out[stage] = limit
+	}
+	return out
+}
+
 func backgroundStage(stage string) string { return strings.SplitN(stage, ":", 2)[0] }
 
 func backgroundHourlyTx(ctx context.Context, tx pgx.Tx, stage, code string) error {

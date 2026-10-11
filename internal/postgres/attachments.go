@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 	"io"
 	"os"
 	"strings"
@@ -295,7 +296,7 @@ func (a attachmentCalls) ReadImage(ctx context.Context, component string, image 
 	if errors.As(err, &failure) {
 		stage = "model"
 	}
-	return "", &attachment.Fallback{Stage: stage, Kind: secretaryErrorType(stage, err)}
+	return "", &attachment.Fallback{Stage: stage, Kind: secretary.ErrorType(stage, err)}
 }
 
 func (s *Store) CleanupBlobs(ctx context.Context) error {

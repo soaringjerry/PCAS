@@ -1,4 +1,4 @@
-package postgres
+package secretary
 
 import (
 	"sort"
@@ -25,11 +25,11 @@ func TestSecretaryTimelineStatus(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			items := []secretaryTimelineTask{}
+			items := []TimelineTask{}
 			for _, status := range tc.statuses {
-				items = append(items, secretaryTimelineTask{Status: status})
+				items = append(items, TimelineTask{Status: status})
 			}
-			if got := secretaryTimelineStatus(items, tc.changed); got != tc.want {
+			if got := TimelineStatus(items, tc.changed); got != tc.want {
 				t.Fatalf("got %s, want %s", got, tc.want)
 			}
 		})
@@ -44,7 +44,7 @@ func TestSecretaryTimelineOrderAndVisibility(t *testing.T) {
 		{Text: "same instant", At: stringPointer("2026-09-30T22:00:00Z")},
 		{Text: "unknown second"},
 	}
-	sort.SliceStable(items, func(i, j int) bool { return secretaryTimelineBefore(items[i], items[j]) })
+	sort.SliceStable(items, func(i, j int) bool { return TimelineBefore(items[i], items[j]) })
 	for i, text := range []string{"earlier", "same instant", "later", "unknown first", "unknown second"} {
 		if items[i].Text != text {
 			t.Fatalf("wrong order at %d: %+v", i, items)
@@ -61,7 +61,7 @@ func TestSecretaryTimelineOrderAndVisibility(t *testing.T) {
 		{items[3:4], true, false},
 		{items, false, true},
 	} {
-		if got := secretaryTimelineVisible(tc.items, tc.recall); got != tc.want {
+		if got := TimelineVisible(tc.items, tc.recall); got != tc.want {
 			t.Fatalf("visibility for %d items, recall=%v: got %v", len(tc.items), tc.recall, got)
 		}
 	}
@@ -83,10 +83,10 @@ func TestSecretaryTimelineTimeFallback(t *testing.T) {
 		{"unknown origin", "", "", "manual", ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			source := secretaryTimelineSource{
+			source := TimelineSource{
 				SourceRef: workspace.SourceRef{At: recorded}, ExpressedAt: tc.sourceExpressed, Connector: tc.connector,
 			}
-			got := secretaryTimelineAt(tc.expressed, source)
+			got := TimelineAt(tc.expressed, source)
 			if tc.want == "" {
 				if got != nil {
 					t.Fatalf("import date substituted: %s", *got)
@@ -97,3 +97,5 @@ func TestSecretaryTimelineTimeFallback(t *testing.T) {
 		})
 	}
 }
+
+func stringPointer(v string) *string { return &v }

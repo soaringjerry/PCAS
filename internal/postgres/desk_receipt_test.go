@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"encoding/json"
+	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 	"net/http"
 	"strings"
 	"testing"
@@ -45,7 +46,7 @@ func TestSecretaryReceiptsOmitOnlyCurrentThingTitle(t *testing.T) {
 			if tc.ref == "T2" {
 				title = "另一件安排"
 			}
-			date := localDeskDate(testsupport.DateFromToday(t, "Asia/Shanghai", 4, 10, 0).UTC().Format(time.RFC3339), loc)
+			date := secretary.LocalDate(testsupport.DateFromToday(t, "Asia/Shanghai", 4, 10, 0).UTC().Format(time.RFC3339), loc)
 			want := []string{"给「" + title + "」加了 3 步", "已改：" + title + " → " + date, "已完成：" + title}
 			if tc.short {
 				want = []string{"加了 3 步", "已改：→ " + date, "已完成"}

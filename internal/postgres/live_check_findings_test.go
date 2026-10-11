@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"github.com/soaringjerry/PCAS/internal/workspace/deputy"
 	"net/http"
 	"strings"
 	"testing"
@@ -38,10 +39,10 @@ func TestBreakdownRequestStatesTheStepFormat(t *testing.T) {
 	// What the instruction asks for is what adoption turns into subtasks; the
 	// numbered list a real model produced without it is not.
 	run := workspace.Run{Kind: "breakdown"}
-	if got := adoptionFor(task, run, "- [ ] 确认出行信息\n- [ ] 整理准备清单\n- [ ] 出发前检查"); got != "subtasks" {
+	if got := deputy.AdoptionFor(run, "- [ ] 确认出行信息\n- [ ] 整理准备清单\n- [ ] 出发前检查"); got != "subtasks" {
 		t.Fatal(got)
 	}
-	if got := adoptionFor(task, run, "1. **确认出行信息**：…\n2. **整理准备清单**：…"); got != "doc" {
+	if got := deputy.AdoptionFor(run, "1. **确认出行信息**：…\n2. **整理准备清单**：…"); got != "doc" {
 		t.Fatal("numbered lists are still filed as a document; the format instruction is what prevents them", got)
 	}
 }

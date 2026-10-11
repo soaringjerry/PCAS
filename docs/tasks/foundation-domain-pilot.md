@@ -74,6 +74,16 @@ The extraction job's flow is in the same package: which sources have nothing to 
 The reads for the model input and the writes are still in storage.
 The conversation path of an import has its rules in the same package: the split of a conversation into segments, the identity of a run, the stage of a segment job, and the decision for each item. Its job flow is still in `internal/postgres/conversation_extract.go`, because each step of that flow is a queue write.
 
+The secretary's rules that need no storage are in `internal/workspace/secretary`: the reading of the answer, where one invalid action keeps its name and does not reject the others; the fixed classes of a failure; what the owner reads when a turn did not finish; and the due time and reminder of a task.
+The rules of each action are in the same package. `Execute` does one action through the `Workspace` interface: it resolves the alias, checks the fields, sends the workspace commands, sets the reminder, and writes the receipt that the owner reads.
+Storage implements `Workspace` in the action's transaction. It keeps the commands, the history collection, the companion project of a task, and the closing of a remembered date.
+Behavior tests run the actions against a workspace in memory. They need no database.
+`RenderWorkspace` writes the workspace part of the model input: the projects, the tasks, the ideas, the conversation history, and the items of the conversation. Storage reads the facts and records each cut of a long project evidence. A contract test fixes the bytes.
+The memory part of the model input, the turn itself, and its context are still in `internal/postgres/desk_turn.go`. The memory part waits for an interface to memory retrieval. They are the largest part of the phase that remains.
+
+The deputy's rules that need no storage are in `internal/workspace/deputy`: the checklist of an output, how an output is adopted, and the notice of a finished run.
+The run itself, its context, and the run commands are still in `internal/postgres/runs.go`.
+
 The chunk, index, embedding, and summary jobs stay in storage. They hold no interpretation rule: the text split is `memory.SplitText`, the embedding call is the gateway's, and the summary is a memory read. The card job only acknowledges queue slots from before an upgrade.
 
 ## Pattern for the Next Paths

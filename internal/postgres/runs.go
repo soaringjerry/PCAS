@@ -6,8 +6,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/soaringjerry/PCAS/internal/workspace/deputy"
+	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 	"log/slog"
-	"regexp"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -380,14 +381,7 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 		if plan.Recall || recall.TimeRelaxed {
 			fmt.Fprintln(&brief, "\n"+recallDateInstructions)
 		}
-		if c.Kind == "revise" {
-			brief.WriteString("\n输出格式：只输出 JSON：{\"body\":\"整份新正文\",\"complete\":true}。complete 必须如实表明全文是否完整、未截断；没有写完填 false。不要在 body 之外补说明，不输出省略占位文字。正文不得和基准完全相同。")
-		}
-		if c.Kind == "breakdown" {
-			// Automatic adoption turns "- [ ]" lines into subtasks. Real models
-			// otherwise answer with a numbered list, which is filed as a document.
-			brief.WriteString("\n输出格式：每个步骤单独一行，写成「- [ ] 步骤」；不要编号，不要加粗，步骤之外不写别的内容。")
-		}
+		brief.WriteString(deputy.OutputFormat(c.Kind))
 		run.ContextVersions = uniqueRefs(run.ContextVersions)
 		run.Brief = brief.String()
 		dbStatus := "queued"
@@ -542,7 +536,7 @@ func (s *Store) adoptRunTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, r
 			}
 		}
 	case "subtasks":
-		lines := adoptionLines(text)
+		lines := deputy.AdoptionLines(text)
 		count := 0
 		for _, line := range lines {
 			if line == "" {
@@ -1078,14 +1072,14 @@ func (s *Store) runAgentOnce(ctx context.Context) (resultErr error) {
 			}
 		}
 		checkCancel()
-		if err == nil && strings.TrimSpace(checkedText) != "" && len(parseRunChecklist(checkedText)) == len(parseRunChecklist(result.Text)) {
+		if err == nil && strings.TrimSpace(checkedText) != "" && len(deputy.Checklist(checkedText)) == len(deputy.Checklist(result.Text)) {
 			result.Text = checkedText
 		} else {
-			selfcheckFallback = secretaryErrorType("selfcheck", err)
+			selfcheckFallback = secretary.ErrorType("selfcheck", err)
 			if err == nil {
 				selfcheckFallback = "selfcheck_output_rejected"
 			}
-			slog.WarnContext(ctx, "memory selfcheck fallback", "stage", "selfcheck", "error_type", secretaryErrorType("selfcheck", err))
+			slog.WarnContext(ctx, "memory selfcheck fallback", "stage", "selfcheck", "error_type", secretary.ErrorType("selfcheck", err))
 		}
 	}
 	if generationErr == nil && mainPaid != nil {
@@ -1172,7 +1166,7 @@ func (s *Store) runAgentOnce(ctx context.Context) (resultErr error) {
 		}
 		// Work handed off is reported back where reminders go, so the person who
 		// asked from their phone hears how it ended without opening the page.
-		noticeReason := runNoticeReason(current)
+		noticeReason := deputy.NoticeReason(current)
 		if current.Status == "done" && u.Coverage != nil && len(u.Coverage.Notices) > 0 {
 			noticeReason += "\n" + strings.Join(u.Coverage.Notices, "\n")
 		}
@@ -1220,60 +1214,8 @@ func (s *Store) runAgentOnce(ctx context.Context) (resultErr error) {
 	})
 }
 
-// Match the frontend parseChecklist, including ECMAScript whitespace and line terminators.
-const checklistSpace = "\\t\\n\\v\\f\\r \u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff"
-
-var checklistLine = regexp.MustCompile("^[" + checklistSpace + "]*- \\[[ x]\\][" + checklistSpace + "]+([^\r\n\u2028\u2029]+)$")
-
-func trimChecklist(text string) string {
-	return strings.TrimFunc(text, func(r rune) bool {
-		return strings.ContainsRune("\t\n\v\f\r \u00a0\u1680\u2028\u2029\u202f\u205f\u3000\ufeff", r) || r >= '\u2000' && r <= '\u200a'
-	})
-}
-
-func parseRunChecklist(output string) []string {
-	lines := []string{}
-	for _, line := range strings.Split(output, "\n") {
-		if match := checklistLine.FindStringSubmatch(line); match != nil {
-			if text := trimChecklist(match[1]); text != "" {
-				lines = append(lines, text)
-			}
-		}
-	}
-	return lines
-}
-
-func adoptionFor(item workspace.Item, run workspace.Run, output string) string {
-	if run.Kind == "revise" {
-		return "doc"
-	}
-	if len(parseRunChecklist(output)) > 0 {
-		return "subtasks"
-	}
-	if run.Kind == "summary" {
-		return "progress"
-	}
-	return "doc"
-}
-
-// Plain lists remain supported by the manual command. Markdown checklists use
-// only their parsed entries, preserving their text and excluding surrounding prose.
-func adoptionLines(text string) []string {
-	if lines := parseRunChecklist(text); len(lines) > 0 {
-		return lines
-	}
-	lines := []string{}
-	for _, line := range strings.Split(text, "\n") {
-		line = strings.TrimLeft(strings.TrimSpace(line), "-*•0123456789.)、 \t")
-		if line != "" {
-			lines = append(lines, line)
-		}
-	}
-	return lines
-}
-
 func (s *Store) autoAdoptRunTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run *workspace.Run) error {
-	if run.Status != "done" || run.StaleContext || run.Adopted != nil || trimChecklist(run.Output) == "" {
+	if run.Status != "done" || run.StaleContext || run.Adopted != nil || deputy.TrimChecklist(run.Output) == "" {
 		return nil
 	}
 	// Completion and billing are already saved in the outer transaction. Only
@@ -1310,7 +1252,7 @@ func (s *Store) autoAdoptResultTx(ctx context.Context, tx pgx.Tx, scope memory.S
 	if err != nil {
 		return err
 	}
-	as := adoptionFor(item, *run, run.Output)
+	as := deputy.AdoptionFor(*run, run.Output)
 	summary := "副手结果：存成文档"
 	if as == "progress" {
 		summary = "副手结果：写进进度"
@@ -1319,7 +1261,7 @@ func (s *Store) autoAdoptResultTx(ctx context.Context, tx pgx.Tx, scope memory.S
 		}
 	}
 	if as == "subtasks" {
-		summary = fmt.Sprintf("副手结果：加了 %d 个子任务", len(parseRunChecklist(run.Output)))
+		summary = fmt.Sprintf("副手结果：加了 %d 个子任务", len(deputy.Checklist(run.Output)))
 	}
 	id := string(memory.NewID())
 	ctx = withActor(ctx, "assistant")
@@ -1339,17 +1281,3 @@ func (s *Store) autoAdoptResultTx(ctx context.Context, tx pgx.Tx, scope memory.S
 // runNoticePrefix marks a notice that reports how handed-off work ended,
 // as opposed to a reminder that came due.
 const runNoticePrefix = "run:"
-
-func runNoticeReason(run workspace.Run) string {
-	if run.Status != "done" {
-		return "副手没做成：" + run.Error
-	}
-	text := strings.TrimSpace(run.Output)
-	if utf8.RuneCountInString(text) > 600 {
-		text = string([]rune(text)[:600]) + "…"
-	}
-	if text == "" {
-		return "副手做完了。"
-	}
-	return "副手做完了：\n" + text
-}

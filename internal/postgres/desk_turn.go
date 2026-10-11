@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 	"log/slog"
 	"regexp"
 	"strings"
@@ -19,7 +20,6 @@ import (
 	"github.com/soaringjerry/PCAS/internal/modelcall"
 	"github.com/soaringjerry/PCAS/internal/prompts"
 	"github.com/soaringjerry/PCAS/internal/workspace"
-	"github.com/soaringjerry/PCAS/internal/workspace/effort"
 )
 
 var secretaryInstructions = prompts.Must("secretary").Text()
@@ -231,76 +231,37 @@ func (s *Store) secretaryPrompt(ctx context.Context, tx pgx.Tx, scope memory.Sco
 		return "", nil, docErr
 	}
 	prompt.WriteString(docCatalog)
-	fmt.Fprintf(&prompt, "用户所在城市：%s\n时区：%s\n\n项目列表：\n", c.Settings.City, loc)
-	projectNames := map[string]string{}
-	for _, p := range c.Projects {
-		projectNames[p.ID] = p.Title
-	}
-	for i, p := range c.Projects {
-		evidence := p.Goal
-		if p.Creation != nil && p.Creation.Source != nil && evidence != p.Creation.Source.Excerpt {
-			evidence += "\n" + p.Creation.Source.Excerpt
-		}
-		runes := []rune(evidence)
-		if len(runes) > 400 {
-			evidence = string(runes[:400]) + "（项目依据还有内容）"
-			if err := stageEventTx(ctx, tx, scope.OwnerID, "secretary", "overflow", "project_evidence_characters", len(runes)-400); err != nil {
-				return "", nil, err
-			}
-		}
-		fmt.Fprintf(&prompt, "P%d：%s（未完成 %d；状态 %s；目标与依据：%s）\n", i+1, p.Title, c.Counts[p.ID], p.Status, evidence)
-	}
-	fmt.Fprintln(&prompt, "\n未完成任务：")
-	for i, t := range c.Tasks {
-		// Effort and start date only appear once they exist; every other task
-		// line stays byte-identical to the pre-phase-3 prompt.
-		plan := ""
-		if t.EstimatedHours != nil {
-			plan = fmt.Sprintf("；估计工作量 %s小时；开工日 %s", effort.FormatHours(*t.EstimatedHours), pointerValue(t.StartDate))
-		}
-		fmt.Fprintf(&prompt, "T%d：%s（%s；截止 %s；项目 %s%s）\n", i+1, t.Title, t.Status, t.Due, projectNames[t.ProjectID], plan)
-	}
-	fmt.Fprintln(&prompt, "\n想法：")
-	for i, t := range c.Ideas {
-		fmt.Fprintf(&prompt, "I%d：%s（%s）\n", i+1, t.Title, t.Status)
-	}
-	fmt.Fprintln(&prompt, "\n本对话历史：")
+	view := secretary.WorkspaceView{City: c.Settings.City, Location: loc, Projects: c.Projects, OpenCounts: c.Counts, Tasks: c.Tasks, Ideas: c.Ideas, Recent: c.Recent}
 	earlier := ""
 	for _, t := range c.History {
-		reply := t.Reply
-		if t.Outdated {
-			reply = outdatedDeskAnswer
-		}
-		fmt.Fprintf(&prompt, "问：%s\n答：%s\n", t.Text, reply)
+		turn := secretary.HistoryTurn{Text: t.Text, Reply: t.Reply, Outdated: t.Outdated}
 		earlier += t.Text + " "
-		if t.Text != "" {
-			for _, receipt := range t.Receipts {
-				if receipt.ThingID != nil {
-					item, err := getItem(ctx, tx, scope, *receipt.ThingID)
-					if err != nil {
-						continue
-					}
+		for _, receipt := range t.Receipts {
+			line := secretary.HistoryReceipt{Text: receipt.Text, Undone: receipt.Undone}
+			// A receipt of an item that the agent may not read now is hidden.
+			if t.Text != "" && receipt.ThingID != nil {
+				if item, err := getItem(ctx, tx, scope, *receipt.ThingID); err == nil {
 					permitted, _, err := sanitizeItemTx(ctx, tx, scope, c.Agent.ID, item)
 					if err != nil {
 						return "", nil, err
 					}
-					if permitted.Title != item.Title {
-						fmt.Fprintln(&prompt, "（先前事项内容按当前权限隐藏）")
-						continue
-					}
-				}
-				if receipt.Undone {
-					fmt.Fprintln(&prompt, "（已撤销）"+receipt.Text)
+					line.Hidden = permitted.Title != item.Title
 				} else {
-					fmt.Fprintln(&prompt, receipt.Text)
+					// An item that no longer exists gives no line.
+					continue
 				}
 			}
+			turn.Receipts = append(turn.Receipts, line)
+		}
+		view.History = append(view.History, turn)
+	}
+	workspaceText, clipped := secretary.RenderWorkspace(view)
+	for _, characters := range clipped {
+		if err := stageEventTx(ctx, tx, scope.OwnerID, "secretary", "overflow", "project_evidence_characters", characters); err != nil {
+			return "", nil, err
 		}
 	}
-	fmt.Fprintln(&prompt, "本对话的事项：")
-	for i, t := range c.Recent {
-		fmt.Fprintf(&prompt, "R%d：%s（%s；截止 %s）\n", i+1, t.Title, t.Status, t.Due)
-	}
+	prompt.WriteString(workspaceText)
 	c.Tier = memoryTier(ctx, req.Text, "light")
 	var err error
 	c.Use, err = s.startUseContextTx(ctx, tx, scope)
@@ -687,9 +648,9 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 				contextErr = err
 				if contextErr == nil {
 					var parseErr error
-					answer, parseErr = parseSecretaryOutput(result.Text)
+					answer, parseErr = secretary.ParseOutput(result.Text)
 					if parseErr != nil {
-						slog.WarnContext(ctx, "secretary output fallback", "stage", "parse", "error_type", secretaryErrorType("parse", parseErr))
+						slog.WarnContext(ctx, "secretary output fallback", "stage", "parse", "error_type", secretary.ErrorType("parse", parseErr))
 						// A completed model call still answered. Keep it as text, with
 						// no actions, citations or questions from a partial decode.
 						answer = secretaryOutput{Reply: strings.TrimSpace(result.Text)}
@@ -762,7 +723,7 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 		if selfcheckAttempted {
 			application, reason := "applied", ""
 			if selfcheckErr != nil {
-				application, reason = "skipped", secretaryErrorType("selfcheck", selfcheckErr)
+				application, reason = "skipped", secretary.ErrorType("selfcheck", selfcheckErr)
 				if err := stageEventTx(ctx, tx, scope.OwnerID, "selfcheck", "failure", reason, 1); err != nil {
 					return err
 				}
@@ -784,7 +745,7 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 		if generationAttempted {
 			application, reason := "applied", ""
 			if contextErr != nil {
-				application, reason = "not_applicable", secretaryErrorType(failureStage, contextErr)
+				application, reason = "not_applicable", secretary.ErrorType(failureStage, contextErr)
 			}
 			if err := (interactiveCalls{store: s}).recordApplicationTx(ctx, tx, scope.OwnerID, memory.ID(req.RequestID), "answer", application, reason); err != nil {
 				return err
@@ -792,8 +753,8 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 		}
 		dependencies := []memory.Ref{}
 		if contextErr != nil {
-			slog.WarnContext(ctx, "secretary capture fallback", "stage", failureStage, "error_type", secretaryErrorType(failureStage, contextErr))
-			receiptText := secretaryCaptureText(failureStage, contextErr)
+			slog.WarnContext(ctx, "secretary capture fallback", "stage", failureStage, "error_type", secretary.ErrorType(failureStage, contextErr))
+			receiptText := secretary.CaptureText(failureStage, contextErr)
 			if captureOnly {
 				if text != "" && req.SmokeID == "" {
 					if err := s.captureIncompleteSecretaryTurn(ctx, tx, scope, req.RequestID, req.Text); err != nil {
@@ -879,25 +840,25 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 				actionAliases[alias] = item
 			}
 			for i, a := range answer.Actions {
-				if a.selfcheckDropped {
+				if a.SelfcheckDropped {
 					continue
 				}
 				if i >= 10 {
 					extra := 0
 					for _, rest := range answer.Actions[i:] {
-						if !rest.selfcheckDropped {
+						if !rest.SelfcheckDropped {
 							extra++
 						}
 					}
-					out.Turn.Receipts = append(out.Turn.Receipts, skippedReceipt(a.Op, "一次太多了，只做了前 10 件"))
+					out.Turn.Receipts = append(out.Turn.Receipts, secretary.Skipped(a.Op, "一次太多了，只做了前 10 件"))
 					if err := stageEventTx(ctx, tx, scope.OwnerID, "secretary", "overflow", "action_limit", extra); err != nil {
 						return err
 					}
 					break
 				}
-				if a.parseErr != nil {
-					slog.WarnContext(ctx, "secretary action skipped", "stage", "parse", "error_type", secretaryErrorType("parse", a.parseErr))
-					out.Turn.Receipts = append(out.Turn.Receipts, skippedReceipt(a.Op, "动作字段没看懂"))
+				if a.ParseErr != nil {
+					slog.WarnContext(ctx, "secretary action skipped", "stage", "parse", "error_type", secretary.ErrorType("parse", a.ParseErr))
+					out.Turn.Receipts = append(out.Turn.Receipts, secretary.Skipped(a.Op, "动作字段没看懂"))
 					continue
 				}
 				actionID := string(memory.NewID())
@@ -926,9 +887,9 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 						return err
 					}
 					if errors.Is(actionErr, workspace.ErrBudget) {
-						receipt = skippedReceipt(a.Op, "超过今天的额度")
+						receipt = secretary.Skipped(a.Op, "超过今天的额度")
 					} else if actionErr != nil && receipt.Reason == "" {
-						receipt = skippedReceipt(a.Op, "这件事暂时办不了")
+						receipt = secretary.Skipped(a.Op, "这件事暂时办不了")
 					}
 				} else {
 					// The summary and receipt describe the actual persisted result.
@@ -946,7 +907,7 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 						receipt.ActionID = &actionID
 						receipt.Undoable = true
 					} else {
-						receipt = skippedReceipt(a.Op, "没有可执行的修改")
+						receipt = secretary.Skipped(a.Op, "没有可执行的修改")
 					}
 					out.Turn.Receipts = append(out.Turn.Receipts, projectReceipts...)
 					if err = actionTx.Commit(ctx); err != nil {
@@ -1061,7 +1022,7 @@ func (s *Store) deskTurnsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, 
 	return out, nil
 }
 
-const outdatedDeskAnswer = "（先前回答的依据已更新，请按现在的资料回答）"
+const outdatedDeskAnswer = secretary.OutdatedAnswer
 
 // Erasure keeps its existing placeholders; changed dependencies preserve the
 // owner's exchange and are replaced only when assembling model history.

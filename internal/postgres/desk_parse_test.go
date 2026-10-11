@@ -8,8 +8,6 @@ import (
 	"net/http"
 	"strings"
 	"testing"
-
-	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
 func secretaryLogs(t *testing.T) *bytes.Buffer {
@@ -109,31 +107,5 @@ func TestSecretaryModelOutputRecovery(t *testing.T) {
 				t.Fatal("replayed model/action or changed saved reply", replay)
 			}
 		})
-	}
-}
-
-func TestParseSecretaryFirstObjectAndQuotedBraces(t *testing.T) {
-	for _, text := range []string{
-		`前言 {不是 JSON} {"reply":"括号 } { 和引号 \"","actions":[{"op":"create_task","title":"第一个"}]} 后文 {"actions":[{"op":"create_task","title":"不执行第二个"}]}`,
-		"说明\n```JSON\n" + `{"reply":"括号 } { 和引号 \"","actions":[{"op":"create_task","title":"第一个"}]}` + "\n```\n后文",
-	} {
-		out, err := parseSecretaryOutput(text)
-		if err != nil || out.Reply != "括号 } { 和引号 \"" || len(out.Actions) != 1 || out.Actions[0].Title != "第一个" {
-			t.Fatal(err, out)
-		}
-	}
-	// Invalid fields in the first object cannot be replaced by a later object.
-	out, err := parseSecretaryOutput(`{"reply":42} {"actions":[{"op":"create_task","title":"不能执行"}]}`)
-	if err == nil || len(out.Actions) != 0 {
-		t.Fatal(err, out)
-	}
-}
-
-func TestSecretaryCaptureReasonForBudgetInfrastructure(t *testing.T) {
-	if secretaryCaptureText("budget", context.DeadlineExceeded) != "已记下原话；暂时无法检查额度，稍后会自动整理" {
-		t.Fatal("budget infrastructure timeout mislabeled as quota exhaustion")
-	}
-	if secretaryErrorType("budget", workspace.ErrBudget) != "budget_exceeded" {
-		t.Fatal("budget error not categorized")
 	}
 }

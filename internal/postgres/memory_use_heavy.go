@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 	"log/slog"
 	"strings"
 	"time"
@@ -131,7 +132,7 @@ func (s *Store) heavyUse(ctx, persist context.Context, scope memory.Scope, agent
 				}
 			}
 			if err != nil {
-				slog.WarnContext(persist, "memory reader skipped", "stage", "reader", "error_type", secretaryErrorType("reader", err))
+				slog.WarnContext(persist, "memory reader skipped", "stage", "reader", "error_type", secretary.ErrorType("reader", err))
 			}
 			results <- readerResult{key: key, memories: selected, refs: refs, complete: err == nil}
 

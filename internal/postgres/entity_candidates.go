@@ -11,6 +11,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/modelcall"
 	"github.com/soaringjerry/PCAS/internal/prompts"
 	"github.com/soaringjerry/PCAS/internal/worker"
 )
@@ -430,7 +431,7 @@ func (s *Store) ProcessEntityCandidates(ctx context.Context, j worker.Job) error
 	var answer struct {
 		Groups [][]int `json:"groups"`
 	}
-	valid := strictJSON([]byte(saved.Output), &answer) == nil && answer.Groups != nil
+	valid := modelcall.DecodeStrict([]byte(saved.Output), &answer) == nil && answer.Groups != nil
 	for _, group := range answer.Groups {
 		for _, n := range group {
 			if n < 1 || n > len(batch.Entities) {

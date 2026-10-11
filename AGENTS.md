@@ -60,7 +60,7 @@ If you do not run a check, write that in the PR. Give the reason.
 | `internal/postgres` | Storage. It also contains many business operations, prompts, and model calls. |
 | `internal/postgres/migrations` | Database migrations. |
 | `internal/memory`, `internal/workspace` | Memory and workspace types. |
-| `internal/workspace/effort` | Workspace effort rules and the estimation service. The first domain package outside storage. |
+| `internal/workspace/effort`, `internal/workspace/topicproject` | Workspace domain packages outside storage: effort estimation and topic projects. |
 | `internal/app` | Application setup: service construction and the worker handler table. |
 | `internal/modelcall`, `internal/prompts` | Model gateway and prompt registry. |
 | `internal/ai` | Model provider adapters. |

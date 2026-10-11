@@ -9,6 +9,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/modelcall"
 	"github.com/soaringjerry/PCAS/internal/worker"
 )
 
@@ -228,7 +229,7 @@ func parseRejudgeOutput(text string) ([]compareEdge, bool) {
 		Duplicates []json.RawMessage `json:"duplicates"`
 		Superseded []json.RawMessage `json:"superseded"`
 	}
-	if strictJSON([]byte(text), &e) != nil || e.Duplicates == nil || e.Superseded == nil || len(e.Duplicates)+len(e.Superseded) > 1 {
+	if modelcall.DecodeStrict([]byte(text), &e) != nil || e.Duplicates == nil || e.Superseded == nil || len(e.Duplicates)+len(e.Superseded) > 1 {
 		return nil, false
 	}
 	if len(e.Superseded) == 1 {
@@ -236,7 +237,7 @@ func parseRejudgeOutput(text string) ([]compareEdge, bool) {
 			Old int `json:"old"`
 			New int `json:"new"`
 		}
-		if strictJSON(e.Superseded[0], &p) != nil || p.Old != 1 || p.New != 2 {
+		if modelcall.DecodeStrict(e.Superseded[0], &p) != nil || p.Old != 1 || p.New != 2 {
 			return nil, false
 		}
 	}
@@ -245,7 +246,7 @@ func parseRejudgeOutput(text string) ([]compareEdge, bool) {
 			Keep    int   `json:"keep"`
 			Members []int `json:"members"`
 		}
-		if strictJSON(e.Duplicates[0], &p) != nil || p.Keep != 2 || len(p.Members) != 2 || !((p.Members[0] == 1 && p.Members[1] == 2) || (p.Members[0] == 2 && p.Members[1] == 1)) {
+		if modelcall.DecodeStrict(e.Duplicates[0], &p) != nil || p.Keep != 2 || len(p.Members) != 2 || !((p.Members[0] == 1 && p.Members[1] == 2) || (p.Members[0] == 2 && p.Members[1] == 1)) {
 			return nil, false
 		}
 	}

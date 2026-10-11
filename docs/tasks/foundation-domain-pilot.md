@@ -29,6 +29,16 @@ flowchart LR
 | `internal/postgres/effort.go` | The adapter. It holds the SQL, the job lease, the owner lock, and the transactions. It decides nothing about a task. |
 | `internal/app` | Application setup. It constructs the service and holds the worker's handler table. The server and the replay tool use the same table. |
 
+## Paths Outside the Storage Package
+
+| Path | Domain package | Storage adapter | Still in storage |
+|---|---|---|---|
+| Effort estimation | `internal/workspace/effort` | `internal/postgres/effort.go` | The scheduler query and the plan rule's call from item saves. |
+| Topic projects | `internal/workspace/topicproject` | `internal/postgres/topic_projects.go` | The input assembly, the scheduler, and undo. |
+
+The topic project service holds the proposal rules: a match must name a project that the model saw, a new project waits until the model has seen every project, an existing name attaches instead of creating, the user's own name for a project is kept, and four projects are created in one local day at most.
+Its input assembly reads memory and clips evidence in one function with SQL. That function stays in storage until memory retrieval has its own interface.
+
 ## Pattern for the Next Paths
 
 1. Put each business rule in the domain package as a function that needs no database.

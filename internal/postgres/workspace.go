@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"reflect"
 	"strings"
 	"time"
@@ -530,14 +529,6 @@ func (s *Store) Export(ctx context.Context, scope memory.Scope, training, confir
 	return data, err
 }
 
-func newItem(kind, title string) workspace.Item {
-	at := stamp()
-	status := "active"
-	if kind == "task" {
-		status = "todo"
-	}
-	return workspace.Item{ID: string(memory.NewID()), Kind: kind, Version: 1, Title: title, Name: title, Status: status, DependsOn: []string{}, Checklist: []workspace.Check{}, Triggers: []workspace.Trigger{}, Sources: []workspace.SourceRef{}, History: []workspace.Revision{{At: at, By: "user", Summary: "创建"}}, Evolution: []workspace.Revision{{At: at, By: "user", Summary: "提出"}}, Conditions: []workspace.Condition{}, RemindersOn: true, NextSteps: []string{}, CreatedAt: at, UpdatedAt: at}
-}
 func getItem(ctx context.Context, tx pgx.Tx, scope memory.Scope, id string) (workspace.Item, error) {
 	if !memory.ID(id).Valid() {
 		return workspace.Item{}, memory.ErrInvalid
@@ -588,17 +579,6 @@ func saveItem(ctx context.Context, tx pgx.Tx, scope memory.Scope, item workspace
 	_, err := tx.Exec(ctx, `INSERT INTO work_items(owner_id,id,kind,title,status,project_id,due_at,scheduled_at,version,document,created_at,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
 		ON CONFLICT(owner_id,id) DO UPDATE SET title=excluded.title,status=excluded.status,project_id=excluded.project_id,due_at=excluded.due_at,scheduled_at=excluded.scheduled_at,version=excluded.version,document=excluded.document,updated_at=excluded.updated_at`, string(scope.OwnerID), item.ID, item.Kind, item.Title, item.Status, nullString(item.ProjectID), nullString(item.Due), nullString(item.Scheduled), item.Version, asJSON(item), item.CreatedAt, item.UpdatedAt)
 	return err
-}
-func strictJSON(data []byte, v any) error {
-	d := json.NewDecoder(bytes.NewReader(data))
-	d.DisallowUnknownFields()
-	if d.Decode(v) != nil {
-		return memory.ErrInvalid
-	}
-	if err := d.Decode(new(any)); err != io.EOF {
-		return memory.ErrInvalid
-	}
-	return nil
 }
 func uuidOrNew(id string) (string, error) {
 	if id == "" {

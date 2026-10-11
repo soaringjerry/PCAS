@@ -562,7 +562,7 @@ func (s *Store) adoptRunTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, r
 					return err
 				}
 			} else {
-				task := newItem("task", line)
+				task := workspace.NewItem("task", line)
 				task.History[0].By = actorFromContext(ctx)
 				task.Evolution[0].By = actorFromContext(ctx)
 				if item.Kind == "project" {
@@ -706,7 +706,7 @@ func verifyRunForItemTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run 
 		}
 		if item != nil {
 			var claimProject string
-			if raw, ok := claim.Scope["project_id"]; ok && strictJSON(raw, &claimProject) != nil {
+			if raw, ok := claim.Scope["project_id"]; ok && modelcall.DecodeStrict(raw, &claimProject) != nil {
 				return memory.ErrConflict
 			}
 			if oneOf(string(ref.ID), excluded...) || claimProject != "" && claimProject != projectID {
@@ -837,7 +837,7 @@ func (s *Store) runAgentOnce(ctx context.Context) (resultErr error) {
 			return err
 		}
 		scope = memory.Scope{OwnerID: memory.ID(ownerID), PrincipalID: "owner", IsOwner: true}
-		if err := strictJSON(data, &run); err != nil {
+		if err := modelcall.DecodeStrict(data, &run); err != nil {
 			return err
 		}
 		if !oneOf(run.MemoryTier, "light", "medium", "heavy") {

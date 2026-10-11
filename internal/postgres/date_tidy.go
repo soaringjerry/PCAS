@@ -9,6 +9,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/modelcall"
 	"github.com/soaringjerry/PCAS/internal/prompts"
 	"github.com/soaringjerry/PCAS/internal/worker"
 	"github.com/soaringjerry/PCAS/internal/workspace"
@@ -244,10 +245,10 @@ func (s *Store) ProcessDateTidy(ctx context.Context, j worker.Job) error {
 		return err
 	}
 	var output dateTidyOutput
-	valid := strictJSON([]byte(strings.TrimSpace(result.Output)), &output) == nil && oneOf(output.Decision, "keep", "drop", "task", "idea") && strings.TrimSpace(output.Reason) != ""
+	valid := modelcall.DecodeStrict([]byte(strings.TrimSpace(result.Output)), &output) == nil && oneOf(output.Decision, "keep", "drop", "task", "idea") && strings.TrimSpace(output.Reason) != ""
 	output.Title = strings.TrimSpace(output.Title)
 	if oneOf(output.Decision, "task", "idea") {
-		valid = valid && validDeskTitle(output.Title)
+		valid = valid && workspace.ValidTitle(output.Title)
 	}
 	if !valid {
 		if err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error { return discardPaidResultTx(ctx, tx, j) }); err != nil {
@@ -289,7 +290,7 @@ func (s *Store) ProcessDateTidy(ctx context.Context, j worker.Job) error {
 			as := "dropped"
 			if output.Decision != "drop" {
 				as = "task"
-				item := newItem(output.Decision, output.Title)
+				item := workspace.NewItem(output.Decision, output.Title)
 				item.History[0].By = "ai"
 				item.Evolution[0].By = "ai"
 				if output.Decision == "task" && input.Entry.OriginalText != "" {

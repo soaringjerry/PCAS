@@ -74,7 +74,7 @@ func (s *Store) captureActionTx(ctx context.Context, tx pgx.Tx, scope memory.Sco
 		}
 	}
 	if len(v.Reasons) == 0 {
-		item := newItem(v.Kind, v.Text)
+		item := workspace.NewItem(v.Kind, v.Text)
 		item.History[0].By = "ai"
 		item.Evolution[0].By = "ai"
 		item.ProjectID = project

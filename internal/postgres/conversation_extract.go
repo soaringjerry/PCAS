@@ -12,6 +12,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/modelcall"
 	"github.com/soaringjerry/PCAS/internal/prompts"
 	"github.com/soaringjerry/PCAS/internal/worker"
 	"github.com/soaringjerry/PCAS/internal/workspace"
@@ -306,7 +307,7 @@ func (s *Store) processConversationExtraction(ctx context.Context, j worker.Job,
 		text = strings.TrimPrefix(text, "```json")
 		text = strings.TrimPrefix(text, "```")
 		text = strings.TrimSuffix(text, "```")
-		if strictJSON([]byte(strings.TrimSpace(text)), &output) != nil {
+		if modelcall.DecodeStrict([]byte(strings.TrimSpace(text)), &output) != nil {
 			if err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error { return discardPaidResultTx(ctx, tx, j) }); err != nil {
 				return err
 			}

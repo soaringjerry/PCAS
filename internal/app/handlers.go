@@ -6,11 +6,17 @@ import (
 	"github.com/soaringjerry/PCAS/internal/postgres"
 	"github.com/soaringjerry/PCAS/internal/worker"
 	"github.com/soaringjerry/PCAS/internal/workspace/effort"
+	"github.com/soaringjerry/PCAS/internal/workspace/topicproject"
 )
 
 // Effort connects the workspace effort service to storage and generation.
 func Effort(db *postgres.Store) effort.Service {
 	return effort.Service{Store: db.EffortStore(), Generator: db, Now: db.BusinessNow}
+}
+
+// TopicProject connects the topic project service to storage and generation.
+func TopicProject(db *postgres.Store) topicproject.Service {
+	return topicproject.Service{Store: db.TopicProjectStore(), Generator: db, Now: db.BusinessNow}
 }
 
 // Handlers gives the background worker one handler for each queue stage.
@@ -24,7 +30,7 @@ func Handlers(db *postgres.Store) map[string]worker.Handler {
 		"memory.handover":          db.ProcessHandover,
 		"memory.project_handover":  db.ProcessProjectHandover,
 		effort.Stage:               Effort(db).Process,
-		"memory.topic_project":     db.ProcessTopicProject,
+		topicproject.Stage:         TopicProject(db).Process,
 		"memory.date_tidy":         db.ProcessDateTidy,
 		"memory.card":              db.ProcessCard,
 		"memory.organize":          db.ProcessOrganize,

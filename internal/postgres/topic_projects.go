@@ -8,59 +8,30 @@ import (
 	"fmt"
 	"sort"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
-	"github.com/soaringjerry/PCAS/internal/prompts"
 	"github.com/soaringjerry/PCAS/internal/worker"
 	"github.com/soaringjerry/PCAS/internal/workspace"
+	"github.com/soaringjerry/PCAS/internal/workspace/topicproject"
 )
 
-const TopicProjectStage = "memory.topic_project"
+const TopicProjectStage = topicproject.Stage
 const topicProjectMinimum = 10
-const topicProjectDailyLimit = 4
-const topicProjectPageSize = 20
 const topicProjectEvidenceLimit = 10
 const topicProjectMemoryCharacters = 1200
-const topicProjectGoalCharacters = 400
+const topicProjectGoalCharacters = topicproject.GoalCharacters
 
 // A group nobody has spoken of for this long is not something being worked
 // on now. A trip in June or an exam in spring has memories, a goal and a date,
 // and made a project all the same; this is what keeps them out.
 const topicProjectAlive = 45 * 24 * time.Hour
 
-var topicProjectInstructions = prompts.Must("topic-project").Text()
-
-type topicProjectInput struct {
-	ClippedCharacters int                   `json:"-"`
-	EvidenceHash      string                `json:"-"`
-	Topic             string                `json:"topic"`
-	Kind              string                `json:"kind"`
-	Now               string                `json:"now"`
-	Key               string                `json:"key"`
-	Hash              string                `json:"-"`
-	Latest            time.Time             `json:"-"`
-	Version           int                   `json:"-"`
-	Count             int                   `json:"memoryCount"`
-	Memories          []map[string]any      `json:"memories"`
-	Projects          []topicProjectSummary `json:"projects"`
-	Timezone          string                `json:"timezone"`
-}
-type topicProjectSummary struct {
-	ID     string `json:"id"`
-	Name   string `json:"name"`
-	Goal   string `json:"goal"`
-	Status string `json:"status"`
-}
-type topicProjectOutput struct {
-	Decision  string  `json:"decision"`
-	ProjectID *string `json:"projectId"`
-	Name      string  `json:"name"`
-	Goal      string  `json:"goal"`
-	Reason    string  `json:"reason"`
-}
+// The input assembly below is the context builder of the topic project
+// service. It stays here until memory retrieval has its own interface.
+type topicProjectInput = topicproject.Input
+type topicProjectSummary = topicproject.Summary
 
 // topicMembersCTE is one topic's current memories, the same rows the
 // status_current_members view gives for its key. The view computes every
@@ -281,187 +252,118 @@ func enqueueTopicProjectsTx(ctx context.Context, tx pgx.Tx, owner memory.ID, now
 	}
 	return count, nil
 }
-func (s *Store) ProcessTopicProject(ctx context.Context, j worker.Job) error {
-	parts := strings.Split(j.Stage, ":")
-	if len(parts) != 4 {
-		return memory.ErrInvalid
-	}
-	page, err := strconv.Atoi(parts[3])
-	if err != nil || page < 0 || !memory.ID(parts[1]).Valid() {
-		return memory.ErrInvalid
-	}
-	var input topicProjectInput
-	var refs []memory.Ref
-	err = pgx.BeginTxFunc(ctx, s.pool, pgx.TxOptions{AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
+
+// TopicProjectStore gives the topic project service its reads and writes.
+func (s *Store) TopicProjectStore() topicproject.Store { return topicProjectStore{s} }
+
+type topicProjectStore struct{ store *Store }
+
+func (a topicProjectStore) Input(ctx context.Context, owner memory.ID, topic string) (input topicproject.Input, refs []memory.Ref, found bool, err error) {
+	err = pgx.BeginTxFunc(ctx, a.store.pool, pgx.TxOptions{AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
 		var e error
-		input, refs, e = topicProjectInputTx(ctx, tx, j.OwnerID, parts[1])
+		input, refs, e = topicProjectInputTx(ctx, tx, owner, topic)
 		return e
 	})
-	if errors.Is(err, pgx.ErrNoRows) || err == nil && input.Hash != parts[2] {
-		return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-			if e := lockJob(ctx, tx, j); e != nil {
-				return e
-			}
-			if e := discardPaidResultTx(ctx, tx, j); e != nil {
-				return e
-			}
-			return acknowledge(ctx, tx, j)
-		})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return input, nil, false, nil
 	}
-	if err != nil {
-		return err
-	}
-	start := page * topicProjectPageSize
-	if start > len(input.Projects) {
-		return memory.ErrInvalid
-	}
-	end := min(start+topicProjectPageSize, len(input.Projects))
-	promptInput := input
-	promptInput.Projects = input.Projects[start:end]
-	if loc, e := time.LoadLocation(input.Timezone); e == nil {
-		promptInput.Now = s.businessNow().In(loc).Format("2006-01-02")
-	} else {
-		promptInput.Now = s.businessNow().UTC().Format("2006-01-02")
-	}
-	result, err := s.generatePaid(ctx, j, "topic_project", topicProjectInstructions, asJSON(promptInput), refs)
-	if err != nil {
-		return err
-	}
-	var output topicProjectOutput
-	valid := strictJSON([]byte(strings.TrimSpace(result.Output)), &output) == nil && oneOf(output.Decision, "match", "new", "skip", "uncertain") && strings.TrimSpace(output.Reason) != ""
-	if output.Decision == "match" {
-		found := false
-		if output.ProjectID != nil {
-			for _, p := range promptInput.Projects {
-				found = found || p.ID == *output.ProjectID
-			}
-		}
-		valid = valid && found
-	} else {
-		valid = valid && output.ProjectID == nil
-	}
-	// What the user calls a project keeps the user's name for it.
-	if output.Decision == "new" && input.Kind == "project" && validDeskTitle(input.Topic) {
-		output.Name = input.Topic
-	}
-	if output.Decision == "new" {
-		valid = valid && validDeskTitle(output.Name)
-	}
-	if !valid || output.Decision == "uncertain" {
-		if err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error { return discardPaidResultTx(ctx, tx, j) }); err != nil {
-			return err
-		}
-		code := "topic_project_output_invalid"
-		if valid {
-			code = "topic_project_uncertain"
-		}
-		return &worker.JobError{Code: code, Until: time.Now().Add(retryDelay(j.Attempts))}
-	}
-	scope := memory.Scope{OwnerID: j.OwnerID, PrincipalID: "owner", IsOwner: true}
-	return backgroundResultTx(ctx, s.pool, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
+	return input, refs, err == nil, err
+}
+
+func (a topicProjectStore) Drop(ctx context.Context, j worker.Job) error {
+	return pgx.BeginFunc(ctx, a.store.pool, func(tx pgx.Tx) error {
 		if err := lockJob(ctx, tx, j); err != nil {
 			return err
 		}
-		fresh, _, err := topicProjectInputTx(ctx, tx, j.OwnerID, parts[1])
-		if errors.Is(err, pgx.ErrNoRows) || err == nil && fresh.Hash != input.Hash {
-			if err = discardPaidResultTx(ctx, tx, j); err != nil {
-				return err
-			}
-			return acknowledge(ctx, tx, j)
-		}
-		if err != nil {
-			return err
-		}
-		if _, err = tx.Exec(ctx, `INSERT INTO topic_project_checks(owner_id,topic_id,input_hash,page,output,evidence_hash) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT DO NOTHING`, string(j.OwnerID), parts[1], input.Hash, page, asJSON(output), input.EvidenceHash); err != nil {
-			return err
-		}
-		// Not a project: the verdict is kept with the evidence it was given on,
-		// so the group is asked about again only when what is said of it changes.
-		if output.Decision == "skip" {
-			if err = discardPaidResultTx(ctx, tx, j); err != nil {
-				return err
-			}
-			return acknowledge(ctx, tx, j)
-		}
-		if output.Decision == "new" && end < len(input.Projects) {
-			if _, err = tx.Exec(ctx, `INSERT INTO memory_jobs(id,owner_id,record_id,record_version,stage,priority) VALUES($1,$2,$3,$4,$5,9) ON CONFLICT(owner_id,record_id,record_version,stage) DO NOTHING`, string(memory.NewID()), string(j.OwnerID), parts[1], input.Version, TopicProjectStage+":"+parts[1]+":"+input.Hash+":"+strconv.Itoa(page+1)); err != nil {
-				return err
-			}
-			if err = discardPaidResultTx(ctx, tx, j); err != nil {
-				return err
-			}
-			return acknowledge(ctx, tx, j)
-		}
-		created := output.Decision == "new"
-		project := ""
-		if output.ProjectID != nil {
-			project = *output.ProjectID
-		}
-		if created { // Same-name equality is only a uniqueness guard, after model matching all pages.
-			e := tx.QueryRow(ctx, "SELECT id::text FROM work_items WHERE owner_id=$1 AND kind='project' AND lower(btrim(title))=lower($2) ORDER BY id LIMIT 1", string(j.OwnerID), strings.TrimSpace(output.Name)).Scan(&project)
-			if e == nil {
-				created = false
-			} else if !errors.Is(e, pgx.ErrNoRows) {
-				return e
-			}
-		}
-		actionID := string(memory.NewID())
-		summary := "归入已有项目「"
-		if created {
-			summary = "建了项目「"
-		}
-		name := output.Name
-		if !created {
-			p, e := getItem(ctx, tx, scope, project)
-			if e != nil {
-				return e
-			}
-			name = p.Title
-		}
-		if created {
-			loc, e := time.LoadLocation(input.Timezone)
-			if e != nil {
-				return e
-			}
-			now := time.Now().In(loc)
-			midnight := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
-			var count int
-			if e = tx.QueryRow(ctx, "SELECT count(*) FROM topic_project_links WHERE owner_id=$1 AND created_project AND undone_at IS NULL AND created_at>=$2", string(j.OwnerID), midnight).Scan(&count); e != nil {
-				return e
-			}
-			if count >= topicProjectDailyLimit {
-				return &worker.JobError{Code: "topic_project_daily_limit", Until: midnight.AddDate(0, 0, 1), NoAttempt: true}
-			}
-			item := newItem("project", strings.TrimSpace(output.Name))
-			item.Goal, _ = clipRunes(strings.TrimSpace(output.Goal), topicProjectGoalCharacters)
-			item.History[0].By = "ai"
-			item.Evolution[0].By = "ai"
-			project = item.ID
-			ids := []string{}
-			for _, ref := range refs {
-				ids = append(ids, string(ref.ID))
-			}
-			item.Creation = &workspace.ItemCreation{By: "background_topic", ActionID: actionID, MemoryIDs: ids, GroupKey: input.Key}
-			if err = saveItem(ctx, tx, scope, item); err != nil {
-				return err
-			}
-		}
-		if _, err = tx.Exec(ctx, `UPDATE entity_versions SET disambiguation=jsonb_set(disambiguation,'{work_item_id}',to_jsonb($3::text)) WHERE owner_id=$1 AND entity_id=$2 AND version=$4`, string(j.OwnerID), parts[1], project, input.Version); err != nil {
-			return err
-		}
-		if _, err = tx.Exec(ctx, `INSERT INTO topic_project_links(owner_id,topic_id,input_hash,project_id,action_id,created_project,evidence_hash) VALUES($1,$2,$3,$4,$5,$6,$7)`, string(j.OwnerID), parts[1], input.Hash, project, actionID, created, input.EvidenceHash); err != nil {
-			return err
-		}
-		if _, err = tx.Exec(ctx, `INSERT INTO action_log(owner_id,id,source,summary,changes) VALUES($1,$2,'background_topic',$3,'[]')`, string(j.OwnerID), actionID, summary+name+"」"); err != nil {
-			return err
-		}
-
-		if err = discardPaidResultTx(ctx, tx, j); err != nil {
+		if err := discardPaidResultTx(ctx, tx, j); err != nil {
 			return err
 		}
 		return acknowledge(ctx, tx, j)
 	})
 }
+
+func (a topicProjectStore) DiscardResult(ctx context.Context, j worker.Job) error {
+	return pgx.BeginFunc(ctx, a.store.pool, func(tx pgx.Tx) error { return discardPaidResultTx(ctx, tx, j) })
+}
+
+func (a topicProjectStore) RetryLater(j worker.Job, code string) error {
+	return &worker.JobError{Code: code, Until: time.Now().Add(retryDelay(j.Attempts))}
+}
+
+func (a topicProjectStore) Apply(ctx context.Context, j worker.Job, fn func(topicproject.Unit) error) error {
+	return backgroundResultTx(ctx, a.store.pool, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
+		if err := lockJob(ctx, tx, j); err != nil {
+			return err
+		}
+		return fn(topicProjectUnit{ctx: ctx, tx: tx, job: j, scope: memory.Scope{OwnerID: j.OwnerID, PrincipalID: "owner", IsOwner: true}})
+	})
+}
+
+type topicProjectUnit struct {
+	ctx   context.Context
+	tx    pgx.Tx
+	job   worker.Job
+	scope memory.Scope
+}
+
+func (u topicProjectUnit) owner() string { return string(u.job.OwnerID) }
+
+func (u topicProjectUnit) Input(topic string) (topicproject.Input, bool, error) {
+	input, _, err := topicProjectInputTx(u.ctx, u.tx, u.job.OwnerID, topic)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return input, false, nil
+	}
+	return input, err == nil, err
+}
+
+func (u topicProjectUnit) RecordCheck(topic string, input topicproject.Input, page int, output topicproject.Output) error {
+	_, err := u.tx.Exec(u.ctx, `INSERT INTO topic_project_checks(owner_id,topic_id,input_hash,page,output,evidence_hash) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT DO NOTHING`, u.owner(), topic, input.Hash, page, asJSON(output), input.EvidenceHash)
+	return err
+}
+
+func (u topicProjectUnit) EnqueuePage(topic string, input topicproject.Input, page int) error {
+	_, err := u.tx.Exec(u.ctx, `INSERT INTO memory_jobs(id,owner_id,record_id,record_version,stage,priority) VALUES($1,$2,$3,$4,$5,9) ON CONFLICT(owner_id,record_id,record_version,stage) DO NOTHING`, string(memory.NewID()), u.owner(), topic, input.Version, TopicProjectStage+":"+topic+":"+input.Hash+":"+strconv.Itoa(page))
+	return err
+}
+
+func (u topicProjectUnit) ProjectByName(name string) (string, bool, error) {
+	var id string
+	err := u.tx.QueryRow(u.ctx, "SELECT id::text FROM work_items WHERE owner_id=$1 AND kind='project' AND lower(btrim(title))=lower($2) ORDER BY id LIMIT 1", u.owner(), name).Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", false, nil
+	}
+	return id, err == nil, err
+}
+
+func (u topicProjectUnit) Project(id string) (workspace.Item, error) {
+	return getItem(u.ctx, u.tx, u.scope, id)
+}
+
+func (u topicProjectUnit) ProjectsCreatedSince(at time.Time) (int, error) {
+	var count int
+	err := u.tx.QueryRow(u.ctx, "SELECT count(*) FROM topic_project_links WHERE owner_id=$1 AND created_project AND undone_at IS NULL AND created_at>=$2", u.owner(), at).Scan(&count)
+	return count, err
+}
+
+func (u topicProjectUnit) SaveProject(item workspace.Item) error {
+	return saveItem(u.ctx, u.tx, u.scope, item)
+}
+
+func (u topicProjectUnit) LinkTopic(topic string, input topicproject.Input, project, actionID string, created bool) error {
+	if _, err := u.tx.Exec(u.ctx, `UPDATE entity_versions SET disambiguation=jsonb_set(disambiguation,'{work_item_id}',to_jsonb($3::text)) WHERE owner_id=$1 AND entity_id=$2 AND version=$4`, u.owner(), topic, project, input.Version); err != nil {
+		return err
+	}
+	_, err := u.tx.Exec(u.ctx, `INSERT INTO topic_project_links(owner_id,topic_id,input_hash,project_id,action_id,created_project,evidence_hash) VALUES($1,$2,$3,$4,$5,$6,$7)`, u.owner(), topic, input.Hash, project, actionID, created, input.EvidenceHash)
+	return err
+}
+
+func (u topicProjectUnit) LogAction(actionID, summary string) error {
+	_, err := u.tx.Exec(u.ctx, `INSERT INTO action_log(owner_id,id,source,summary,changes) VALUES($1,$2,'background_topic',$3,'[]')`, u.owner(), actionID, summary)
+	return err
+}
+
+func (u topicProjectUnit) DiscardResult() error { return discardPaidResultTx(u.ctx, u.tx, u.job) }
+func (u topicProjectUnit) Acknowledge() error   { return acknowledge(u.ctx, u.tx, u.job) }
 
 func (s *Store) undoTopicProjectTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, id string) (bool, error) {
 	if !memory.ID(id).Valid() {

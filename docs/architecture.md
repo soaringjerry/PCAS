@@ -393,9 +393,12 @@ A stage without a row has no handler. The limit column comes from the stage budg
 | `memory.effort` | Scheduled freshness check: a project has tasks without an estimate. | Workspace. | Effort specialist. | 10 | owner, record, record version, stage; the stage names the project. |
 | `memory.topic_project` | Scheduled freshness check: a topic's evidence changed. | Workspace. | Project candidate specialist. | 2 | owner, record, record version, stage; the stage names the topic, its input hash, and the project page. |
 
-These rows name the responses that exist. They do not yet give each trigger a recorded event with causal identities.
-The freshness checks still find their work by comparing stored hashes on a schedule, not from a recorded change event.
-Limits for a causal chain and for one event's responses are target work.
+These rows name the responses that exist.
+Each new piece of queued work is a recorded event in `recorded_events`, with its owner, stage, object identity and version, time, trigger source, root, immediate cause, and depth in its chain.
+The queue sets these identities itself. A job that a handler queues under its lease keeps the root of the handler's job and is one step deeper. Work that a schedule or a request queues starts a chain.
+A queue write that meets an existing job adds no event, and a rollback leaves neither the work nor its event.
+The freshness checks still find their work by comparing stored hashes on a schedule, not from a recorded change event. A chain therefore ends where a schedule takes over.
+Limits for a causal chain and for one event's responses are target work. Their values need the depths that the live instance records.
 
 Multiple named responses are explicit registrations, not a broadcast to every specialist.
 Changes to derived fields cannot trigger all responses merely because an object's version increased.
@@ -431,7 +434,7 @@ Index progress and interactive work keep their declared capacity while other eve
 
 The existing [queue schema](../internal/postgres/migrations/001_memory.sql), [enqueue helper](../internal/postgres/sources.go), and [worker](../internal/worker/worker.go) supply the starting mechanism.
 The [handler map](../cmd/pcas/main.go) already names stage responses.
-Causal identities, centralized producer mappings, and chain limits are target work, not existing guarantees.
+Causal identities of queued work exist since migration `063_recorded_events.sql`. Events for committed data changes, centralized producer mappings, and chain limits are target work, not existing guarantees.
 
 ## 8 State and Recovery Boundaries
 

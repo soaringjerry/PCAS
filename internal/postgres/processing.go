@@ -18,7 +18,9 @@ import (
 
 func lockJob(ctx context.Context, tx pgx.Tx, j worker.Job) error {
 	var valid bool
-	err := tx.QueryRow(ctx, `SELECT true FROM memory_jobs WHERE id=$1 AND owner_id=$2 AND record_id=$3 AND record_version=$4 AND lease_token=$5 AND state='leased' AND lease_until>clock_timestamp() FOR UPDATE`, string(j.ID), string(j.OwnerID), string(j.Record.ID), j.Record.Version, string(j.LeaseToken)).Scan(&valid)
+	// The same statement names this job as the cause of the work that the
+	// transaction queues. The queue records the root and the depth from it.
+	err := tx.QueryRow(ctx, `SELECT set_config('pcas.cause_job',id::text,true) IS NOT NULL FROM memory_jobs WHERE id=$1 AND owner_id=$2 AND record_id=$3 AND record_version=$4 AND lease_token=$5 AND state='leased' AND lease_until>clock_timestamp() FOR UPDATE`, string(j.ID), string(j.OwnerID), string(j.Record.ID), j.Record.Version, string(j.LeaseToken)).Scan(&valid)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return worker.ErrLeaseLost
 	}

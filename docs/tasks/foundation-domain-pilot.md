@@ -105,6 +105,8 @@ The reads for the brief and the order of the run with its leases, its calls, and
 
 The rules of a statement that is about to be written as a memory are in `internal/interpretation/claim`. `Normalize` checks that the statement has text, a known nature, and a source version, and it gives each absent field its one meaning. The same package gives the key of an assertion, the place of its quotation in the source, the time at which it was said, and the scope of the new memory. The write itself, with the reimport block, the evidence, the subject entity, and the versions, is still in `internal/postgres/claims.go`.
 
+The memory retrieval rules that need no storage are in `internal/retrieval`: the budget of a recall with its defaults and limits, and the choice of the part of a source text that answers a query. The recall itself, with its structured, lexical, and vector reads and its access rules, is SQL and stays in `internal/postgres/retrieval.go`.
+
 The chunk, index, embedding, and summary jobs stay in storage. They hold no interpretation rule: the text split is `memory.SplitText`, the embedding call is the gateway's, and the summary is a memory read. The card job only acknowledges queue slots from before an upgrade.
 
 ## Pattern for the Next Paths

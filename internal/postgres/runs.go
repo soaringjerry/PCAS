@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/soaringjerry/PCAS/internal/contextbuilder"
+	"github.com/soaringjerry/PCAS/internal/retrieval"
 	"github.com/soaringjerry/PCAS/internal/workspace/deputy"
 	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 	"log/slog"
@@ -154,7 +155,7 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 				terms = append(terms, "'"+strings.ReplaceAll(token, "'", "''")+"'")
 			}
 		}
-		recall := memory.RecallResult{Coverage: coverage()}
+		recall := memory.RecallResult{Coverage: retrieval.NewCoverage()}
 		request := memory.RecallRequest{Team: &memory.TeamRecall{Text: query, Plan: plan, ThingID: &item.ID, ProjectID: &projectID, RankFusion: u.Ready}, Query: query, Mode: memory.Remember, Context: memory.WorkingContext{Objects: []memory.ID{}}}
 		if projectID != "" {
 			request.Context.Objects = append(request.Context.Objects, memory.ID(projectID))

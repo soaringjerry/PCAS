@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/soaringjerry/PCAS/internal/contextbuilder"
+	"github.com/soaringjerry/PCAS/internal/retrieval"
 	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 	"log/slog"
 	"math"
@@ -510,7 +511,7 @@ func (s *Store) p2LegacyRecallTx(ctx context.Context, tx pgx.Tx, scope memory.Sc
 		_ = score
 		excerpt.Ref, excerpt.Role = ref, role
 		if ref.Kind == memory.SourceKind {
-			excerpt.Text = sourceExcerpt(strings.TrimSpace(excerpt.Text), query, tokens, 600)
+			excerpt.Text = retrieval.SourceExcerpt(strings.TrimSpace(excerpt.Text), query, tokens, 600)
 		}
 		if scope.Team && ref.Kind == memory.SourceKind {
 			if len(teamSources) < b.Candidates {
@@ -536,7 +537,7 @@ func (s *Store) p2LegacyRecallTx(ctx context.Context, tx pgx.Tx, scope memory.Sc
 			continue
 		}
 		if len([]rune(text)) > b.Tokens {
-			text = matchedExcerpt(text, query, tokens, b.Tokens)
+			text = retrieval.MatchedExcerpt(text, query, tokens, b.Tokens)
 			out.Coverage.Gaps = append(out.Coverage.Gaps, "部分原文超出上下文预算，请展开来源")
 		}
 		fmt.Fprintf(&summary, "[%s@%d] %s\n", ref.ID, ref.Version, text)
@@ -1411,14 +1412,14 @@ func (s *Store) p2LegacySnapshot(ctx context.Context, scope memory.Scope) (works
 }
 
 func (s *Store) p2LegacyRecall(ctx context.Context, scope memory.Scope, in memory.RecallRequest) (memory.RecallResult, error) {
-	out := memory.RecallResult{Memories: []memory.Ref{}, Evidence: []memory.Evidence{}, Unresolved: []string{}, Coverage: coverage(), FollowUps: []string{}}
+	out := memory.RecallResult{Memories: []memory.Ref{}, Evidence: []memory.Evidence{}, Unresolved: []string{}, Coverage: retrieval.NewCoverage(), FollowUps: []string{}}
 	if !scope.Valid() {
 		return out, memory.ErrForbidden
 	}
 	if len(in.Query) > 4000 || !oneOf(string(in.Mode), "continue", "remember", "history") {
 		return out, memory.ErrInvalid
 	}
-	b, err := normalizedBudget(in.Budget)
+	b, err := retrieval.NormalizeBudget(in.Budget)
 	if err != nil {
 		return out, err
 	}

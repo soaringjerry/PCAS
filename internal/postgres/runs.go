@@ -905,12 +905,11 @@ func (s *Store) runAgentOnce(ctx context.Context) (resultErr error) {
 	}
 	cost := result.Cost
 	if savedRow != nil {
+		var billed *float64
 		if savedRow.Receipt.Billing != nil {
-			cost = savedRow.Receipt.Billing.Cost
+			billed = &savedRow.Receipt.Billing.Cost
 		}
-		if savedRow.Outcome == "unknown" {
-			cost = max(cost, savedRow.Mode.Reserved)
-		}
+		cost = deputy.SettledCost(result.Cost, billed, savedRow.Outcome == "unknown", savedRow.Mode.Reserved)
 	}
 	// Only an unused admission without a linked reservation is settled here.
 	// The gateway already owns every linked reservation and usage record.
@@ -937,7 +936,7 @@ func (s *Store) runAgentOnce(ctx context.Context) (resultErr error) {
 	// A prior review without a durable decision is incomplete. Keep the draft.
 	// Never repeat its paid call or reinterpret a late response as a new decision.
 	reviewAlreadyAttempted := false
-	if selection == nil && generationErr == nil && run.MemoryTier != "light" {
+	if selection == nil && generationErr == nil && deputy.Selfchecks(run.MemoryTier) {
 		readErr := s.pool.QueryRow(ctx, `SELECT id::text FROM model_calls WHERE owner_id=$1 AND execution_id=$2 AND stage='selfcheck' AND input_manifest->>'origin'=$3 ORDER BY created_at DESC,id DESC LIMIT 1`, string(scope.OwnerID), run.ID, run.CreatedAt).Scan(&reviewInvocation)
 		if readErr != nil && !errors.Is(readErr, pgx.ErrNoRows) {
 			return readErr
@@ -947,8 +946,8 @@ func (s *Store) runAgentOnce(ctx context.Context) (resultErr error) {
 			selfcheckFallback = "selfcheck_interrupted"
 		}
 	}
-	if selection == nil && !reviewAlreadyAttempted && generationErr == nil && run.MemoryTier != "light" {
-		checkBudget := min(time.Since(answerStarted), 30*time.Second)
+	if selection == nil && !reviewAlreadyAttempted && generationErr == nil && deputy.Selfchecks(run.MemoryTier) {
+		checkBudget := deputy.SelfcheckBudget(time.Since(answerStarted))
 		checkCtx, checkCancel := context.WithTimeout(workCtx, checkBudget)
 		checkedText := ""
 		err := s.checkDeputySelfcheckContext(checkCtx, scope, run, token)
@@ -958,7 +957,7 @@ func (s *Store) runAgentOnce(ctx context.Context) (resultErr error) {
 				OwnerID: scope.OwnerID, ExecutionID: memory.ID(run.ID), RootExecutionID: memory.ID(run.ID),
 				Function: "deputy", Stage: "selfcheck", ProviderID: run.AgentID,
 				Instructions: prompts.Must("deputy-selfcheck"), ContextBuilderVersion: "deputy-selfcheck-v1",
-				Prompt: asJSON(map[string]string{"rawPrompt": run.Brief + "\n待自查草稿：\n" + result.Text}), ModelInput: run.Brief + "\n待自查草稿：\n" + result.Text,
+				Prompt: asJSON(map[string]string{"rawPrompt": deputy.SelfcheckInput(run.Brief, result.Text)}), ModelInput: deputy.SelfcheckInput(run.Brief, result.Text),
 				Refs: run.ContextVersions,
 				Policy: interactiveCallPolicy{
 					Kind: "deputy", Token: token, Origin: run.CreatedAt,
@@ -983,13 +982,9 @@ func (s *Store) runAgentOnce(ctx context.Context) (resultErr error) {
 			}
 		}
 		checkCancel()
-		if err == nil && strings.TrimSpace(checkedText) != "" && len(deputy.Checklist(checkedText)) == len(deputy.Checklist(result.Text)) {
-			result.Text = checkedText
-		} else {
-			selfcheckFallback = secretary.ErrorType("selfcheck", err)
-			if err == nil {
-				selfcheckFallback = "selfcheck_output_rejected"
-			}
+		var fallback string
+		if result.Text, fallback = deputy.AcceptSelfcheck(result.Text, checkedText, err); fallback != "" {
+			selfcheckFallback = fallback
 			slog.WarnContext(ctx, "memory selfcheck fallback", "stage", "selfcheck", "error_type", secretary.ErrorType("selfcheck", err))
 		}
 	}

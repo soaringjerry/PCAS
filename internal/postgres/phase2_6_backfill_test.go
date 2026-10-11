@@ -3,6 +3,7 @@ package postgres
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 	"reflect"
 	"testing"
 	"time"
@@ -22,7 +23,7 @@ func TestPhase26T3T4ScaleBackfillAndReadOnlyContent(t *testing.T) {
 			t.Fatal(err)
 		}
 		j := phase26ClaimStage(t, f, OrganizeStage)
-		err := s.ProcessOrganize(ctx, j)
+		err := (organize.Service{Store: s.OrganizeStore(), Generator: s, Version: OrganizeVersion}).Process(ctx, j)
 		if err != nil {
 			t.Logf("backfill diagnostic: successful=%d actual_provider_calls=%d process_error=%T %v context=%v", completed, len(m.calls(OrganizeStage)), err, err, ctx.Err())
 			e := phase26FinishError(t, f, j, err)

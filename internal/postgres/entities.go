@@ -3,8 +3,8 @@ package postgres
 import (
 	"context"
 	"errors"
+	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
 	"strings"
-	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
@@ -12,10 +12,7 @@ import (
 
 const entityWhitespace = " \t\n\r\v\f\u0085\u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000"
 
-type claimMention struct {
-	Name string
-	Role string
-}
+type claimMention = extraction.Mention
 
 // Serialize entity lookup and creation per owner, including all aliases. This
 // protects self and typed names even when callers do not hold the owner row lock.
@@ -57,24 +54,6 @@ func entityTx(ctx context.Context, tx pgx.Tx, owner memory.ID, kind, name string
 
 func selfEntityTx(ctx context.Context, tx pgx.Tx, owner memory.ID) (memory.ID, error) {
 	return entityTx(ctx, tx, owner, "self", "我")
-}
-
-func groundedMentions(names []string, role, text string) []claimMention {
-	out := []claimMention{}
-	seen := map[string]bool{}
-	for _, name := range names {
-		name = strings.TrimSpace(name)
-		key := strings.ToLower(name)
-		if name == "" || utf8.RuneCountInString(name) > 40 || seen[key] || !strings.Contains(text, name) || memory.AmbiguousEntityName(name) || role == "person" && oneOf(name, "我", "我们") {
-			continue
-		}
-		seen[key] = true
-		out = append(out, claimMention{Name: name, Role: role})
-		if len(out) == 8 {
-			break
-		}
-	}
-	return out
 }
 
 func mentionsTx(ctx context.Context, tx pgx.Tx, owner memory.ID, ref memory.Ref, mentions []claimMention) error {

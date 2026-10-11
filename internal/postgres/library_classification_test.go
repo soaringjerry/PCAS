@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/soaringjerry/PCAS/internal/currentstate/handover"
+	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 	"net/http"
 	"sync/atomic"
 	"testing"
@@ -43,7 +44,7 @@ func TestLibraryDeadlinesUseModelDatesAndRetainUncertainty(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if err := s.ProcessOrganize(ctx, organizeTestJob(t, s, scope)); err != nil {
+	if err := (organize.Service{Store: s.OrganizeStore(), Generator: s, Version: OrganizeVersion}).Process(ctx, organizeTestJob(t, s, scope)); err != nil {
 		t.Fatal(err)
 	}
 	dates, err := s.ListDeadlines(ctx, scope, workspace.DeadlineQuery{})

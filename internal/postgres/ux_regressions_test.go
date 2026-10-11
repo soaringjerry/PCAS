@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -103,16 +104,16 @@ func TestUncertainAndCorrectedCaptureRemainsQualified(t *testing.T) {
 	source := memory.SourceResult{Source: memory.Source{Connector: "capture"}}
 	for _, text := range []string{"Maybe I will move to Berlin", "Probably I will move to Berlin", "我可能喜欢这个计划", "他说：“我要去上海。”", "更正：我不再想去上海", "I think the deadline might be Friday"} {
 		item := directExtractedItem(text)
-		if got := extractionConfirmation(source, item); got != "candidate" {
+		if got := extraction.Confirmation(source, item); got != "candidate" {
 			t.Fatalf("uncertainty adopted as settled: %s: %s", text, got)
 		}
 	}
 	item := directExtractedItem("My preferred writing language is English")
-	if extractionConfirmation(source, item) != "adopted" {
+	if extraction.Confirmation(source, item) != "adopted" {
 		t.Fatal("ordinary direct assertion got a blanket confirmation burden")
 	}
 	fragment := directExtractedItem("I will move to Berlin")
-	if extractionConfirmation(memory.SourceResult{Source: memory.Source{Connector: "capture", Text: "Maybe I will move to Berlin"}}, fragment) != "candidate" {
+	if extraction.Confirmation(memory.SourceResult{Source: memory.Source{Connector: "capture", Text: "Maybe I will move to Berlin"}}, fragment) != "candidate" {
 		t.Fatal("qualifier stripped by extraction was silently accepted")
 	}
 	for _, sourceText := range []string{
@@ -120,19 +121,19 @@ func TestUncertainAndCorrectedCaptureRemainsQualified(t *testing.T) {
 		"Maybe I will learn German. My preferred writing language is English.",
 		"我可能会学习德语。My preferred writing language is English。也许以后再改。",
 	} {
-		if extractionConfirmation(memory.SourceResult{Source: memory.Source{Connector: "capture", Text: sourceText}}, item) != "adopted" {
+		if extraction.Confirmation(memory.SourceResult{Source: memory.Source{Connector: "capture", Text: sourceText}}, item) != "adopted" {
 			t.Fatalf("unrelated tentative sentence added a confirmation burden: %s", sourceText)
 		}
 	}
 	completeSentence := directExtractedItem("My preferred writing language is English.")
-	if extractionConfirmation(memory.SourceResult{Source: memory.Source{Connector: "capture", Text: completeSentence.Text + " Maybe I will learn German."}}, completeSentence) != "adopted" {
+	if extraction.Confirmation(memory.SourceResult{Source: memory.Source{Connector: "capture", Text: completeSentence.Text + " Maybe I will learn German."}}, completeSentence) != "adopted" {
 		t.Fatal("complete quoted sentence inherited the next sentence's uncertainty")
 	}
-	if extractionConfirmation(source, directExtractedItem("My surname is Ifield")) != "adopted" {
+	if extraction.Confirmation(source, directExtractedItem("My surname is Ifield")) != "adopted" {
 		t.Fatal("qualifier substring demoted an ordinary assertion")
 	}
 	item.Qualification = "tentative"
-	if extractionConfirmation(source, item) != "candidate" {
+	if extraction.Confirmation(source, item) != "candidate" {
 		t.Fatal("structured qualification ignored")
 	}
 	if !strings.Contains(assistantInstructions, "confirmation=adopted") || !strings.Contains(assistantInstructions, "confirmation=confirmed") {

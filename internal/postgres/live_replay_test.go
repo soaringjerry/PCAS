@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"github.com/soaringjerry/PCAS/internal/ai"
 	"github.com/soaringjerry/PCAS/internal/connectors"
+	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"os"
 	"strings"
@@ -82,7 +83,7 @@ func TestLiveContinuityReplay(t *testing.T) {
 	claims := 0
 	for _, key := range []string{"old-bookstore", "homework-v3", "pcas-final", "pcas-ai", "state", "wake"} {
 		start := time.Now()
-		if err = s.ProcessExtraction(ctx, leaseStage(t, s, scope, refs[key], "source.extract")); err != nil {
+		if err = (extraction.Service{Store: s.ExtractionStore(), Generator: s, MaxAttempts: MaxJobAttempts}).Process(ctx, leaseStage(t, s, scope, refs[key], "source.extract")); err != nil {
 			t.Fatalf("live extraction %s: %v", key, err)
 		}
 		extractionTimes[key] = time.Since(start).Milliseconds()

@@ -1,6 +1,7 @@
 package postgres
 
 import (
+	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
 	"strings"
 	"testing"
 	"unicode/utf8"
@@ -19,7 +20,7 @@ func TestConversationSegmentBoundaries(t *testing.T) {
 		makeSource("user", strings.Repeat("丁", 15000)),
 		makeSource("user", "最后一句"),
 	}
-	segments := splitConversation(sources)
+	segments := extraction.SplitConversation(sources)
 	if len(segments) != 5 || len(segments[0].Messages) != 2 {
 		t.Fatalf("message boundaries: %+v", segments)
 	}
@@ -43,7 +44,7 @@ func TestConversationOverlapDoesNotConsumeBodyBudget(t *testing.T) {
 	for _, count := range []int{7000, 5000, 6000, 6000} {
 		sources = append(sources, memory.SourceResult{Source: memory.Source{Text: strings.Repeat("字", count)}, Context: &memory.SourceContext{Role: "user"}})
 	}
-	segments := splitConversation(sources)
+	segments := extraction.SplitConversation(sources)
 	if len(segments) != 2 || len(segments[1].Messages) != 2 || len(segments[1].Context) != 2 || segments[1].Messages[0].Index != 3 {
 		t.Fatal("overlap consumed the 12000-character body budget")
 	}
@@ -52,7 +53,7 @@ func TestConversationOverlapDoesNotConsumeBodyBudget(t *testing.T) {
 func TestConversationManifestFencesInputChanges(t *testing.T) {
 	source := memory.SourceResult{Source: memory.Source{Text: "去成都"}, Context: &memory.SourceContext{Role: "user", Branch: "current"}}
 	source.Source.ID, source.Source.Version = memory.NewID(), 1
-	run := conversationRun([]memory.SourceResult{source})
+	run := extraction.ConversationRun([]memory.SourceResult{source})
 	for _, mutate := range []func(*memory.SourceResult){
 		func(s *memory.SourceResult) { s.Source.Version++ },
 		func(s *memory.SourceResult) { s.Source.Text = "去大理" },
@@ -60,7 +61,7 @@ func TestConversationManifestFencesInputChanges(t *testing.T) {
 	} {
 		changed := source
 		mutate(&changed)
-		if run == conversationRun([]memory.SourceResult{changed}) {
+		if run == extraction.ConversationRun([]memory.SourceResult{changed}) {
 			t.Fatal("changed input retained the same manifest")
 		}
 	}

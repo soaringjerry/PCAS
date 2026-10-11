@@ -25,7 +25,7 @@ func writeOrganizedDeadlinesTx(ctx context.Context, tx pgx.Tx, owner memory.ID, 
 		}
 		if d.Kind == "recurring" {
 			d.At = nil
-			if d.ScheduleRule != nil && !d.ScheduleRule.valid() {
+			if d.ScheduleRule != nil && !d.ScheduleRule.Valid() {
 				return memory.ErrInvalid
 			}
 			if d.ScheduleRule == nil {

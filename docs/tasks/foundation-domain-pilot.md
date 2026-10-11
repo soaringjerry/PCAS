@@ -41,6 +41,9 @@ flowchart LR
 | Alias scan | `internal/interpretation/aliasscan` | `internal/postgres/entity_candidates.go` | The batch selection, the name checks of a proposed pair, and the scheduler. |
 | Statement comparison | `internal/interpretation/comparison` | `internal/postgres/compare.go` | The batch plan, the write of accepted edges with its eligibility checks, the receipt, the scheduler, and the rejudge path. |
 | Entity comparison | `internal/interpretation/comparison` | `internal/postgres/compare_entities.go` | The pair selection, the name and evidence checks, the merge, the receipt, and the scheduler. |
+| Organize | `internal/interpretation/organize` | `internal/postgres/organize.go` | The batch selection, the write of labels, groups, dates and rule scope for each statement that is still current, and the scheduler. |
+| Attachment parsing | `internal/input/attachment` | `internal/postgres/attachments.go` | The job, the lock of one original, the write of the derived text, and the receipts of paid readings. The archive import is not moved. |
+| Extraction | `internal/interpretation/extraction` | `internal/postgres/processing.go` | The reads for the model input, the write of each decided item, the state of the source, and the conversation path of an import. |
 
 The topic project service holds the proposal rules: a match must name a project that the model saw, a new project waits until the model has seen every project, an existing name attaches instead of creating, the user's own name for a project is kept, and four projects are created in one local day at most.
 Its input assembly reads memory and clips evidence in one function with SQL. That function stays in storage until memory retrieval has its own interface.
@@ -55,6 +58,23 @@ It also holds the preparation rules: no handover for a finished project, no rewr
 Rules that need no storage can move before their path's orchestration.
 The statement comparison rules are in `internal/interpretation/comparison`: reading the model's duplicate and superseded proposals, and following chains of proposals to their final keeper without accepting a cycle.
 The comparison job's flow is in the same package. Its write of accepted edges is still in `internal/postgres/compare.go`.
+
+The organize service builds the model input from the batch that storage reads, and it reads the answer.
+An item is accepted only when the whole item is valid. A declared group is created only when a statement that is still current uses it.
+The package also holds the schedule rule of a recurring date. The schedule reader and the status dates use the same type.
+The old code counted declared groups that were "ungrounded". The check could not fail, so the count was always zero. It is removed.
+
+The attachment parser reads an original file by its media type. It holds the limits of a file, the page rule of a PDF file, and the fallback from a model reading to character recognition.
+Storage gives it the paid calls through one interface and keeps each paid result with the file. The storage package no longer starts an external processor.
+The storage code still holds its transaction open while the parser makes its calls. This order did not change.
+
+The extraction rules are in `internal/interpretation/extraction`: the windows of a long source, the strict reading of the answer, the rules of the source's speaker, the quotation that each item needs, the confirmation level of a statement, and the event time.
+The extraction job's flow is in the same package: which sources have nothing to extract, the split of a long source, the model input, and the handling of an answer that is not valid.
+`Decide` gives the action for each item: nothing, a task or an idea, a candidate for review, or a statement. Storage applies the action. It no longer decides it.
+The reads for the model input and the writes are still in storage.
+The conversation path of an import has its rules in the same package: the split of a conversation into segments, the identity of a run, the stage of a segment job, and the decision for each item. Its job flow is still in `internal/postgres/conversation_extract.go`, because each step of that flow is a queue write.
+
+The chunk, index, embedding, and summary jobs stay in storage. They hold no interpretation rule: the text split is `memory.SplitText`, the embedding call is the gateway's, and the summary is a memory read. The card job only acknowledges queue slots from before an upgrade.
 
 ## Pattern for the Next Paths
 

@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
 	"net/url"
 	"testing"
 	"unicode"
@@ -13,8 +14,8 @@ import (
 func TestMemoryListFiltersQualifiedCaptureSQLMatchesGo(t *testing.T) {
 	s := testStore(t)
 	texts := []string{"虚构人物云杉喜欢松林。", "MAYBE virtual cedar", "somewhere perhaps", "certainly not-sure", "I\tthink it works", "if_only", "gift", "saidness", "unqualified", "我不确定虚构计划", "He COULD go", "no\nlonger", "İF virtual", "maybe青松", "青松if", "if\U0001f600cedar", "if½cedar", "if\u0301cedar"}
-	texts = append(texts, qualifiedCaptureMarkers...)
-	texts = append(texts, qualifiedCaptureWords...)
+	texts = append(texts, extraction.QualificationMarkers...)
+	texts = append(texts, extraction.QualificationWords...)
 	// Range boundaries exercise the actual Unicode tokenizer, including Chinese,
 	// non-ASCII numbers and astral letters without relying on PostgreSQL locale.
 	for _, table := range []*unicode.RangeTable{unicode.L, unicode.N} {
@@ -36,7 +37,7 @@ func TestMemoryListFiltersQualifiedCaptureSQLMatchesGo(t *testing.T) {
 		if err := rows.Scan(&text, &got); err != nil {
 			t.Fatal(err)
 		}
-		if want := qualifiedCapture(text); got != want {
+		if want := extraction.QualifiedCapture(text); got != want {
 			t.Errorf("SQL=%v Go=%v for %q", got, want, text)
 		}
 	}

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
 	"math"
 	"net/http"
 	"net/http/httptest"
@@ -275,7 +276,7 @@ func TestPhase2B4_L8_ReturnedButInvalidExtractionStillRecordsUsage(t *testing.T)
 	text := "合成L8抽取原话：我喜欢在清晨整理青玉罗盘。"
 	source := b1Source(t, s, scope, "L8抽取样例", text, "manual")
 	job := leaseStage(t, s, scope, source, "source.extract")
-	err := s.ProcessExtraction(context.Background(), job)
+	err := (extraction.Service{Store: s.ExtractionStore(), Generator: s, MaxAttempts: MaxJobAttempts}).Process(context.Background(), job)
 	var failure *worker.JobError
 	if !errors.As(err, &failure) || failure.Code != "model_output_invalid" {
 		t.Errorf("fixture did not reach format rejection: %v", err)
@@ -384,7 +385,7 @@ func TestDeputyAndExtractionEachRecordTheirCall(t *testing.T) {
 		f.set(`{"items":[]}`, 200)
 		source := b1Source(t, s, scope, "合成笔记", "我喜欢在清晨整理蓝塔笔记。", "manual")
 		job := leaseStage(t, s, scope, source, "source.extract")
-		if err := s.ProcessExtraction(context.Background(), job); err != nil {
+		if err := (extraction.Service{Store: s.ExtractionStore(), Generator: s, MaxAttempts: MaxJobAttempts}).Process(context.Background(), job); err != nil {
 			t.Fatal(err)
 		}
 		rows := b4Usage(t, s, scope)

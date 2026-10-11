@@ -2,51 +2,29 @@ package postgres
 
 import (
 	"context"
-	"crypto/sha256"
 	"errors"
-	"io"
+	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
 	"strconv"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
-	"github.com/soaringjerry/PCAS/internal/modelcall"
 	"github.com/soaringjerry/PCAS/internal/prompts"
 	"github.com/soaringjerry/PCAS/internal/worker"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
-const conversationExtractionPrefix = "source.extract:conversation:"
-const conversationExtractorVersion = 4
-const conversationSegmentCharacters = 12000
+const conversationExtractionPrefix = extraction.ConversationPrefix
+const conversationExtractorVersion = extraction.ConversationVersion
 
 var conversationExtractionInstructions = prompts.Must("conversation-extraction").Text()
 
-type conversationMessage struct {
-	Index       int        `json:"message_index"`
-	Role        string     `json:"role"`
-	Text        string     `json:"text"`
-	ExpressedAt *time.Time `json:"expressed_at"`
-	Part        int        `json:"part,omitempty"`
-	Parts       int        `json:"parts,omitempty"`
-}
-
-type conversationSegment struct {
-	Messages []conversationMessage
-	Context  []conversationMessage
-}
-
-type conversationItem struct {
-	extractedItem
-	MessageIndex int `json:"message_index"`
-}
-
-type conversationOutput struct {
-	Items    []conversationItem `json:"items"`
-	Withdraw []int              `json:"withdraw,omitempty"`
-}
+type (
+	conversationMessage = extraction.ConversationMessage
+	conversationSegment = extraction.ConversationSegment
+	conversationOutput  = extraction.ConversationOutput
+)
 
 type earlierConversationMemory struct {
 	Ref   int        `json:"ref"`
@@ -54,112 +32,10 @@ type earlierConversationMemory struct {
 	Claim memory.Ref `json:"-"`
 }
 
-func conversationSources(sources []memory.SourceResult) []memory.SourceResult {
-	out := []memory.SourceResult{}
-	for _, source := range sources {
-		if source.Context.Branch != "historical" {
-			out = append(out, source)
-		}
-	}
-	return out
-}
-
-// Ordinary messages stay intact. Oversized user messages are supplied in full
-// through consecutive bounded fragments, with their original index and time.
-// AI proposals remain intact, including in the following user's context.
-func splitConversation(sources []memory.SourceResult) []conversationSegment {
-	segments := []conversationSegment{}
-	segment := conversationSegment{Messages: []conversationMessage{}, Context: []conversationMessage{}}
-	length := 0
-	flush := func() {
-		if len(segment.Messages) == 0 {
-			return
-		}
-		segments = append(segments, segment)
-		previous := append(append([]conversationMessage{}, segment.Context...), segment.Messages...)
-		segment = conversationSegment{Messages: []conversationMessage{}, Context: conversationOverlap(previous)}
-		length = 0
-	}
-	for i, source := range sources {
-		text := source.Source.Text
-		count := utf8.RuneCountInString(text)
-		message := conversationMessage{Index: i + 1, Role: source.Context.Role, Text: text, ExpressedAt: sourceExpressedAt(source)}
-		if source.Context.Role == "user" && count > conversationSegmentCharacters {
-			flush()
-			runes := []rune(text)
-			parts := (count + conversationSegmentCharacters - 1) / conversationSegmentCharacters
-			for start, part := 0, 1; start < count; start, part = start+conversationSegmentCharacters, part+1 {
-				fragment := message
-				fragment.Text = string(runes[start:min(start+conversationSegmentCharacters, count)])
-				fragment.Part, fragment.Parts = part, parts
-				segment.Messages = append(segment.Messages, fragment)
-				flush()
-			}
-			continue
-		}
-		if length+count > conversationSegmentCharacters {
-			flush()
-		}
-		segment.Messages = append(segment.Messages, message)
-		length += count
-	}
-	flush()
-	return segments
-}
-
-func conversationOverlap(messages []conversationMessage) []conversationMessage {
-	out := []conversationMessage{}
-	seen := map[int]bool{}
-	for i := len(messages) - 1; i >= 0 && len(out) < 2; i-- {
-		if !seen[messages[i].Index] {
-			seen[messages[i].Index] = true
-			out = append([]conversationMessage{messages[i]}, out...)
-		}
-	}
-	return out
-}
-
-func conversationRun(sources []memory.SourceResult) string {
-	// Source identity/version, branch, role, order and time fence the whole input.
-	// Including text also protects redactions that preserve source version.
-	type input struct {
-		Ref     memory.Ref
-		Context *memory.SourceContext
-		At      *time.Time
-	}
-	hash := sha256.New()
-	io.WriteString(hash, "conversation-extraction-v"+strconv.Itoa(conversationExtractorVersion)+"\n")
-	for _, source := range sources {
-		hash.Write(asJSON(input{source.Source.Ref, source.Context, sourceExpressedAt(source)}))
-		// Stream originals into the digest without another whole-conversation
-		// JSON copy. Length framing keeps record boundaries unambiguous.
-		io.WriteString(hash, strconv.Itoa(len(source.Source.Text))+":")
-		io.WriteString(hash, source.Source.Text)
-	}
-	return stringHex(hash.Sum(nil))
-}
-
-func conversationStage(run string, segment, nextRef int) string {
-	return conversationExtractionPrefix + run + ":" + strconv.Itoa(segment) + ":" + strconv.Itoa(nextRef)
-}
-
-func parseConversationStage(stage string) (string, int, int, error) {
-	parts := strings.Split(strings.TrimPrefix(stage, conversationExtractionPrefix), ":")
-	if len(parts) != 3 || len(parts[0]) != 64 {
-		return "", 0, 0, memory.ErrInvalid
-	}
-	segment, err := strconv.Atoi(parts[1])
-	next, nextErr := strconv.Atoi(parts[2])
-	if err != nil || nextErr != nil || segment < 0 || next < 1 {
-		return "", 0, 0, memory.ErrInvalid
-	}
-	return parts[0], segment, next, nil
-}
-
 func enqueueConversationTx(ctx context.Context, tx pgx.Tx, owner memory.ID, anchor memory.Ref, run string, segment, next int) error {
 	_, err := tx.Exec(ctx, `INSERT INTO memory_jobs(id,owner_id,record_id,record_version,stage,priority)
  VALUES($1,$2,$3,$4,$5,9) ON CONFLICT(owner_id,record_id,record_version,stage) DO NOTHING`,
-		string(memory.NewID()), string(owner), string(anchor.ID), anchor.Version, conversationStage(run, segment, next))
+		string(memory.NewID()), string(owner), string(anchor.ID), anchor.Version, extraction.ConversationStage(run, segment, next))
 	return err
 }
 
@@ -207,9 +83,9 @@ func (s *Store) processConversationExtraction(ctx context.Context, j worker.Job,
 		if err != nil {
 			return err
 		}
-		current = conversationSources(sources)
-		segments = splitConversation(current)
-		run = conversationRun(sources)
+		current = extraction.CurrentBranch(sources)
+		segments = extraction.SplitConversation(current)
+		run = extraction.ConversationRun(sources)
 		if !strings.HasPrefix(j.Stage, conversationExtractionPrefix) {
 			if len(segments) == 0 {
 				if err := s.replaceConversationMemoriesTx(ctx, tx, scope, sources); err != nil {
@@ -244,7 +120,7 @@ func (s *Store) processConversationExtraction(ctx context.Context, j worker.Job,
 			}
 			return acknowledge(ctx, tx, j)
 		}
-		jobRun, segment, nextRef, err := parseConversationStage(j.Stage)
+		jobRun, segment, nextRef, err := extraction.ParseConversationStage(j.Stage)
 		if err != nil {
 			return err
 		}
@@ -303,11 +179,8 @@ func (s *Store) processConversationExtraction(ctx context.Context, j worker.Job,
 			return err
 		}
 		reserve := provider.Reserve(conversationExtractionInstructions + prompt)
-		text := strings.TrimSpace(result.Output)
-		text = strings.TrimPrefix(text, "```json")
-		text = strings.TrimPrefix(text, "```")
-		text = strings.TrimSuffix(text, "```")
-		if modelcall.DecodeStrict([]byte(strings.TrimSpace(text)), &output) != nil {
+		var valid bool
+		if output, valid = extraction.ParseConversationOutput(result.Output); !valid {
 			if err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error { return discardPaidResultTx(ctx, tx, j) }); err != nil {
 				return err
 			}
@@ -329,9 +202,9 @@ func (s *Store) processConversationExtraction(ctx context.Context, j worker.Job,
 		if err != nil {
 			return err
 		}
-		if conversationRun(fresh) != run {
-			if live := conversationSources(fresh); len(live) > 0 {
-				if err := enqueueConversationTx(ctx, tx, j.OwnerID, live[0].Source.Ref, conversationRun(fresh), 0, 1); err != nil {
+		if extraction.ConversationRun(fresh) != run {
+			if live := extraction.CurrentBranch(fresh); len(live) > 0 {
+				if err := enqueueConversationTx(ctx, tx, j.OwnerID, live[0].Source.Ref, extraction.ConversationRun(fresh), 0, 1); err != nil {
 					return err
 				}
 			}
@@ -369,63 +242,42 @@ func (s *Store) processConversationExtraction(ctx context.Context, j worker.Job,
 			grounding += "\n" + message.Text
 		}
 		seenOutputQuotes := map[string]bool{}
-		// Thirty items per write chunk bounds local work; every returned chunk is consumed.
-		for start := 0; start < len(output.Items); start += 30 {
-			for _, item := range output.Items[start:min(start+30, len(output.Items))] {
-				message, ok := allowed[item.MessageIndex]
-				if !ok || message.Role != "user" || item.Quote == "" || !strings.Contains(message.Text, item.Quote) || requireText(item.Text) != nil || !oneOf(item.Kind, "memory", "task", "idea") || item.Kind == "memory" && !oneOf(item.Nature, "fact", "preference", "decision", "intention", "plan") || item.Confidence < 0 || item.Confidence > 1 {
-					continue
-				}
-				if !oneOf(item.Acquisition, "direct", "reported", "inferred") {
-					item.Acquisition = "inferred"
-				}
-				source := current[item.MessageIndex-1]
-				// Validate event quotations against only the visible user original.
-				source.Source.Text = message.Text
-				if oneOf(item.Kind, "task", "idea") {
-					var imported bool
-					if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM archive_entries WHERE owner_id=$1 AND source_id=$2)", string(j.OwnerID), string(source.Source.Ref.ID)).Scan(&imported); err != nil {
-						return err
-					}
-					if err := s.captureActionTx(ctx, tx, scope, source, item.extractedItem, imported, ""); err != nil {
-						return err
-					}
-					continue
-				}
-				in := statement{Text: item.Text, Nature: item.Nature, Subject: item.Subject, Predicate: item.Predicate, Confirmation: "candidate", Acquisition: item.Acquisition, Actor: "ai", Quote: item.Quote, Source: source.Source.Ref, Structured: true, ExpressedAt: sourceExpressedAt(source), ExtractionRun: run, ExtractionRef: next}
-				// The model can extract several independent memories from one
-				// quotation. Later siblings must not overwrite the first item.
-				quoteKey := string(in.Source.ID) + "/" + in.Quote
-				in.AllowNewAtQuote = seenOutputQuotes[quoteKey]
-				seenOutputQuotes[quoteKey] = true
-				in.EventFrom, in.EventTo, in.EventPrecision = extractionEvent(item.When, source, loc)
-				in.Mentions = append(in.Mentions, groundedMentions(item.People, "person", grounding)...)
-				in.Mentions = append(in.Mentions, groundedMentions(item.Places, "place", grounding)...)
-				in.Mentions = append(in.Mentions, groundedMentions(item.Organizations, "organization", grounding)...)
-				if oneOf(strings.TrimSpace(item.Subject), "我", "我们", "用户", "本人", "用户本人") {
-					in.SubjectType = "self"
-				} else if names := groundedMentions([]string{item.Subject}, "person", grounding); len(names) > 0 {
-					in.Subject, in.SubjectType = names[0].Name, "person"
-					for _, mention := range in.Mentions {
-						if mention.Role == "organization" && strings.EqualFold(mention.Name, in.Subject) {
-							in.SubjectType = "organization"
-						}
-					}
-				}
-				ref, err := s.rememberTx(ctx, tx, scope, in)
-				if errors.Is(err, memory.ErrBlocked) {
-					continue
-				}
-				if err != nil {
+		for _, raw := range output.Items {
+			decision, source := extraction.DecideConversation(raw, allowed, current, grounding, loc)
+			item := decision.Item
+			if decision.Action == extraction.Skip {
+				continue
+			}
+			if decision.Action == extraction.Capture {
+				var imported bool
+				if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM archive_entries WHERE owner_id=$1 AND source_id=$2)", string(j.OwnerID), string(source.Source.Ref.ID)).Scan(&imported); err != nil {
 					return err
 				}
-				var assigned bool
-				if err := tx.QueryRow(ctx, `SELECT coalesce(scope->>'conversation_extraction'=$4 AND scope->>'conversation_ref'=$5,false) FROM claim_revisions WHERE owner_id=$1 AND claim_id=$2 AND version=$3`, string(j.OwnerID), string(ref.ID), ref.Version, run, strconv.Itoa(next)).Scan(&assigned); err != nil {
+				if err := s.captureActionTx(ctx, tx, scope, source, item, imported, ""); err != nil {
 					return err
 				}
-				if assigned {
-					next++
-				}
+				continue
+			}
+			in := statement{Text: item.Text, Nature: item.Nature, Subject: decision.Subject, SubjectType: decision.SubjectType, Predicate: item.Predicate, Confirmation: decision.Confirmation, Acquisition: item.Acquisition, Actor: "ai", Quote: item.Quote, Source: source.Source.Ref, Structured: true, ExpressedAt: extraction.ExpressedAt(source), ExtractionRun: run, ExtractionRef: next,
+				EventFrom: decision.EventFrom, EventTo: decision.EventTo, EventPrecision: decision.EventPrecision, Mentions: decision.Mentions}
+			// The model can extract several independent memories from one
+			// quotation. Later siblings must not overwrite the first item.
+			quoteKey := string(in.Source.ID) + "/" + in.Quote
+			in.AllowNewAtQuote = seenOutputQuotes[quoteKey]
+			seenOutputQuotes[quoteKey] = true
+			ref, err := s.rememberTx(ctx, tx, scope, in)
+			if errors.Is(err, memory.ErrBlocked) {
+				continue
+			}
+			if err != nil {
+				return err
+			}
+			var assigned bool
+			if err := tx.QueryRow(ctx, `SELECT coalesce(scope->>'conversation_extraction'=$4 AND scope->>'conversation_ref'=$5,false) FROM claim_revisions WHERE owner_id=$1 AND claim_id=$2 AND version=$3`, string(j.OwnerID), string(ref.ID), ref.Version, run, strconv.Itoa(next)).Scan(&assigned); err != nil {
+				return err
+			}
+			if assigned {
+				next++
 			}
 		}
 		processed := []memory.SourceResult{}
@@ -507,12 +359,12 @@ func conversationExtractionStateTx(ctx context.Context, tx pgx.Tx, j worker.Job,
 	if err != nil {
 		return err
 	}
-	run, ordinal, _, err := parseConversationStage(j.Stage)
-	if err != nil || run != conversationRun(sources) {
+	run, ordinal, _, err := extraction.ParseConversationStage(j.Stage)
+	if err != nil || run != extraction.ConversationRun(sources) {
 		return err
 	}
-	current := conversationSources(sources)
-	segments := splitConversation(current)
+	current := extraction.CurrentBranch(sources)
+	segments := extraction.SplitConversation(current)
 	if ordinal >= len(segments) {
 		return nil
 	}

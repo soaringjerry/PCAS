@@ -582,7 +582,7 @@ func (s *Deputy) RunAgent(ctx context.Context, steps deputy.Steps) (resultErr er
 	if err != nil || token == "" {
 		return err
 	}
-	timing.Id = run.ID
+	timing.ID = run.ID
 	timing.Tier = run.MemoryTier
 	defer s.FinishExecutionTiming(ctx, scope.OwnerID, timing)
 	if cached != nil && run.Kind == "revise" {

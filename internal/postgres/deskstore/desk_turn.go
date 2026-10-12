@@ -473,7 +473,7 @@ func (a deskStore) Turn(ctx context.Context, scope memory.Scope, req workspace.D
 		}
 		out.ConversationID = conversationID
 		out.Turn = workspace.SecretaryTurn{ID: string(memory.NewID()), Text: req.Text, Cards: []workspace.DeskCard{}, Receipts: []workspace.DeskReceipt{}, CreatedAt: kernel.Stamp()}
-		timing.Id = out.Turn.ID
+		timing.ID = out.Turn.ID
 		if req.ThingID != nil && !captureOnly {
 			if _, err := itemstore.GetItem(ctx, tx, scope, *req.ThingID); err != nil {
 				return err

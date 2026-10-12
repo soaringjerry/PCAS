@@ -1,0 +1,64 @@
+package callstore
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"time"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/postgres/usagelog"
+	"github.com/soaringjerry/PCAS/internal/worker"
+)
+
+func attachmentReceiptKey(scope memory.Scope, ref memory.Ref, component string) string {
+	return fmt.Sprintf("attachment:%s:%s:%d:%s", scope.OwnerID, ref.ID, ref.Version, component)
+}
+func (s *Calls) AttachmentReceipt(ctx context.Context, scope memory.Scope, ref memory.Ref, component string) (*PaidModelResult, error) {
+	if v, ok := s.PendingPaid.Load(attachmentReceiptKey(scope, ref, component)); ok {
+		return v.(*PaidModelResult), nil
+	}
+	var out PaidModelResult
+	err := s.Pool.QueryRow(ctx, `SELECT body FROM attachment_model_results WHERE owner_id=$1 AND source_id=$2 AND source_version=$3 AND component=$4`, string(scope.OwnerID), string(ref.ID), ref.Version, component).Scan(&out)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	return &out, err
+}
+
+// Preserve each successful page/image/transcript before any billing or derived
+// source write. Failed storage reuses this exact response, including after a
+// restart once the durable receipt exists.
+func (s *Calls) SaveAttachmentReceipt(ctx context.Context, scope memory.Scope, ref memory.Ref, component string, paid *PaidModelResult) error {
+	key := attachmentReceiptKey(scope, ref, component)
+	s.PendingPaid.Store(key, paid)
+	for {
+		persist, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		tag, err := s.Pool.Exec(persist, `INSERT INTO attachment_model_results(owner_id,source_id,source_version,component,body) SELECT $1,$2,$3,$4,$5 FROM memory_records r WHERE r.owner_id=$1 AND r.id=$2 AND r.version=$3 AND r.state='active' FOR SHARE OF r ON CONFLICT(owner_id,source_id,source_version,component) DO UPDATE SET body=attachment_model_results.body`, string(scope.OwnerID), string(ref.ID), ref.Version, component, kernel.JSON(paid))
+		cancel()
+		if err == nil {
+			s.PendingPaid.Delete(key)
+			if tag.RowsAffected() == 0 {
+				return memory.ErrNotFound
+			}
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return err
+		case <-time.After(time.Second):
+		}
+	}
+}
+func (s *Calls) AccountAttachmentReceipt(ctx context.Context, scope memory.Scope, ref memory.Ref, paid *PaidModelResult, purpose string, job *worker.Job) error {
+	usage := usagelog.ModelUsage{OwnerID: scope.OwnerID, ID: memory.ID(paid.Reservation), Purpose: purpose, AgentID: paid.Provider, Model: paid.Model, InputTokens: paid.InputTokens, OutputTokens: paid.OutputTokens, InputEstimated: paid.InputEstimated, OutputEstimated: paid.OutputEstimated, CostEstimated: paid.CostEstimated, Cost: paid.Cost, MemoryRefs: []memory.Ref{ref}}
+	if job != nil {
+		usage.JobID = string(job.ID)
+	}
+	if err := s.RecordUsage(ctx, usage); err != nil {
+		return err
+	}
+	return s.SettleModelCost(ctx, scope.OwnerID, paid.Reservation, paid.Cost)
+}

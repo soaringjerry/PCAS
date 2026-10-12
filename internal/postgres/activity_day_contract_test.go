@@ -10,6 +10,7 @@ import (
 
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/modelcall"
+	"github.com/soaringjerry/PCAS/internal/postgres/callstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
@@ -81,7 +82,7 @@ func TestDayActivityAnswersWhatHappenedItsCostAndItsReasons(t *testing.T) {
 	provider, _ := s.Models.Get("model")
 	pending := modelcall.DirectRequest{OwnerID: scope.OwnerID, ExecutionID: memory.NewID(), Function: "vision", Stage: "image", Provider: provider, Estimate: 0.02, Operation: "vision", Inputs: 1}
 	pending.RootExecutionID = pending.ExecutionID
-	if _, err := (directCalls{store: s}).Begin(ctx, pending); err != nil {
+	if _, err := (callstore.DirectCalls{Store: s.Calls}).Begin(ctx, pending); err != nil {
 		t.Fatal(err)
 	}
 	// Work on the earlier local day stays out: 23:59 in Shanghai is 15:59 UTC.

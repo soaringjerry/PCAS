@@ -10,6 +10,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/ai"
 	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/interpstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/prompts"
 )
@@ -29,11 +30,11 @@ var p3RuleCases = []struct{ Text, Category string }{
 
 func p3OrganizePrompt() string {
 	at := time.Date(2026, 10, 7, 9, 0, 0, 0, time.UTC)
-	memories := []organizeMemory{}
+	memories := []interpstore.OrganizeMemory{}
 	for i, c := range p3RuleCases {
-		memories = append(memories, organizeMemory{N: i + 1, Text: c.Text, ExpressedAt: &at})
+		memories = append(memories, interpstore.OrganizeMemory{N: i + 1, Text: c.Text, ExpressedAt: &at})
 	}
-	return string(kernel.JSON(map[string]any{"memories": memories, "groups": []organizeGroup{}, "timezone": "Asia/Shanghai", "refs": []memory.Ref{}, "rule": OrganizeVersion}))
+	return string(kernel.JSON(map[string]any{"memories": memories, "groups": []interpstore.OrganizeGroup{}, "timezone": "Asia/Shanghai", "refs": []memory.Ref{}, "rule": kernel.OrganizeVersion}))
 }
 func TestP3OrganizePromptLive(t *testing.T) {
 	home, path := os.Getenv("PCAS_P3_CODEX_HOME"), os.Getenv("PCAS_P3_RAW_REPORT")

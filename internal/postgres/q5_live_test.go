@@ -130,7 +130,7 @@ func TestQ5BackgroundProcess(t *testing.T) {
 			t.Fatal(err)
 		}
 		started := time.Now()
-		err := (extraction.Service{Store: s.ExtractionStore(), Generator: jobCalls(s), MaxAttempts: MaxJobAttempts}).Process(ctx, job)
+		err := (extraction.Service{Store: s.ExtractionStore(), Generator: jobCalls(s), MaxAttempts: kernel.MaxJobAttempts}).Process(ctx, job)
 		if ctx.Err() != nil {
 			break
 		}

@@ -14,6 +14,8 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
+	"github.com/soaringjerry/PCAS/internal/postgres/intakestore"
+	"github.com/soaringjerry/PCAS/internal/postgres/interpstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/soaringjerry/PCAS/internal/ai"
@@ -32,7 +34,7 @@ func phase35Model(t *testing.T, s *Store, reply func(http.ResponseWriter, *http.
 }
 func phase35Extract(t *testing.T, s *Store, scope memory.Scope, ref memory.Ref) {
 	t.Helper()
-	if err := (extraction.Service{Store: s.ExtractionStore(), Generator: jobCalls(s), MaxAttempts: MaxJobAttempts}).Process(context.Background(), leaseStage(t, s, scope, ref, "source.extract")); err != nil {
+	if err := (extraction.Service{Store: s.ExtractionStore(), Generator: jobCalls(s), MaxAttempts: kernel.MaxJobAttempts}).Process(context.Background(), leaseStage(t, s, scope, ref, "source.extract")); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -45,8 +47,8 @@ func phase35Action(t *testing.T, s *Store, scope memory.Scope, item string) stri
 	}
 	return id
 }
-func phase35Direct(text, kind string) extractedItem {
-	return extractedItem{Kind: kind, Text: text, Quote: text, Nature: "intention", Subject: "我", Predicate: "虚构目标", Explicit: true, Confidence: 1, Acquisition: "direct", Qualification: "asserted"}
+func phase35Direct(text, kind string) intakestore.ExtractedItem {
+	return intakestore.ExtractedItem{Kind: kind, Text: text, Quote: text, Nature: "intention", Subject: "我", Predicate: "虚构目标", Explicit: true, Confidence: 1, Acquisition: "direct", Qualification: "asserted"}
 }
 func phase35RequireSingleReceipt(t *testing.T, st workspace.State, item []byte, action string) {
 	t.Helper()
@@ -119,7 +121,7 @@ func TestStructuredExtractionUsesTrustMatrix(t *testing.T) {
 			it.Qualification = tc.qualification
 			it.Confidence = tc.confidence
 			it.Explicit = tc.explicit
-			ref := phase35Source(t, s, scope, []extractedItem{it})
+			ref := phase35Source(t, s, scope, []intakestore.ExtractedItem{it})
 			if tc.branch == "archive" {
 				archive := b4bImport(t, s, scope, b4bMessages(t, []string{"user"}, []string{it.Quote}))
 				ref = archive.Sources[0]
@@ -133,7 +135,7 @@ func TestStructuredExtractionUsesTrustMatrix(t *testing.T) {
 					item["message_index"] = 1
 					secretaryModelReply(w, map[string]any{"items": []any{item}})
 				} else {
-					secretaryModelReply(w, extracted{Items: []extractedItem{it}})
+					secretaryModelReply(w, intakestore.Extracted{Items: []intakestore.ExtractedItem{it}})
 				}
 			})
 			phase35Extract(t, s, scope, ref)
@@ -149,7 +151,7 @@ func TestStructuredExtractionUsesTrustMatrix(t *testing.T) {
 					if err != nil {
 						t.Fatal(err)
 					}
-					if err := (extraction.Service{Store: s.ExtractionStore(), Generator: jobCalls(s), MaxAttempts: MaxJobAttempts}).Process(ctx, leaseStage(t, s, scope, memory.Ref{ID: record, Version: version, Kind: memory.SourceKind}, stage)); err != nil {
+					if err := (extraction.Service{Store: s.ExtractionStore(), Generator: jobCalls(s), MaxAttempts: kernel.MaxJobAttempts}).Process(ctx, leaseStage(t, s, scope, memory.Ref{ID: record, Version: version, Kind: memory.SourceKind}, stage)); err != nil {
 						t.Fatal(err)
 					}
 				}
@@ -205,12 +207,14 @@ func TestStructuredExtractionOverflowPreservedAndObservable(t *testing.T) {
 	s, ctx := phase26DisposableStore(t)
 	scope := owner()
 	phase35Snapshot(t, s, scope)
-	items := []extractedItem{}
+	items := []intakestore.ExtractedItem{}
 	for i := 0; i < 25; i++ {
 		items = append(items, phase35Direct(fmt.Sprintf("虚构独立待办 %02d", i), "task"))
 	}
 	ref := phase35Source(t, s, scope, items)
-	calls := phase35Model(t, s, func(w http.ResponseWriter, r *http.Request) { secretaryModelReply(w, extracted{Items: items}) })
+	calls := phase35Model(t, s, func(w http.ResponseWriter, r *http.Request) {
+		secretaryModelReply(w, intakestore.Extracted{Items: items})
+	})
 	phase35Extract(t, s, scope, ref)
 	st := phase35Snapshot(t, s, scope)
 	pending := []workspace.Candidate{}
@@ -245,9 +249,11 @@ func TestStructuredExtractionUndoAndReplaySequences(t *testing.T) {
 		t.Run(sequence, func(t *testing.T) {
 			scope := owner()
 			phase35Snapshot(t, s, scope)
-			items := []extractedItem{phase35Direct("虚构做一本青岚声音手册", "idea"), phase35Direct("虚构给青岚书店寄陶瓷标本", "task")}
+			items := []intakestore.ExtractedItem{phase35Direct("虚构做一本青岚声音手册", "idea"), phase35Direct("虚构给青岚书店寄陶瓷标本", "task")}
 			ref := phase35Source(t, s, scope, items)
-			phase35Model(t, s, func(w http.ResponseWriter, r *http.Request) { secretaryModelReply(w, extracted{Items: items}) })
+			phase35Model(t, s, func(w http.ResponseWriter, r *http.Request) {
+				secretaryModelReply(w, intakestore.Extracted{Items: items})
+			})
 			phase35Extract(t, s, scope, ref)
 			st := phase35Snapshot(t, s, scope)
 			if len(st.Tasks) != 1 || len(st.Ideas) != 1 {
@@ -327,7 +333,7 @@ func TestExtractionFailurePreservesGoodResultAndCounts(t *testing.T) {
 	before := phase35Work(phase35Snapshot(t, s, scope))
 	for _, mode := range []string{"model failure", "invalid output"} {
 		t.Run(mode, func(t *testing.T) {
-			ref := phase35Source(t, s, scope, []extractedItem{phase35Direct("虚构待办失败保留", "task")})
+			ref := phase35Source(t, s, scope, []intakestore.ExtractedItem{phase35Direct("虚构待办失败保留", "task")})
 			phase35Model(t, s, func(w http.ResponseWriter, r *http.Request) {
 				if mode == "model failure" {
 					w.WriteHeader(500)
@@ -341,7 +347,7 @@ func TestExtractionFailurePreservesGoodResultAndCounts(t *testing.T) {
 				if _, err := s.Pool.Exec(ctx, `UPDATE memory_jobs SET attempts=$2 WHERE id=$1`, j.ID, attempt); err != nil {
 					t.Fatal(err)
 				}
-				err := (extraction.Service{Store: s.ExtractionStore(), Generator: jobCalls(s), MaxAttempts: MaxJobAttempts}).Process(ctx, j)
+				err := (extraction.Service{Store: s.ExtractionStore(), Generator: jobCalls(s), MaxAttempts: kernel.MaxJobAttempts}).Process(ctx, j)
 				var je *worker.JobError
 				if !errors.As(err, &je) || je.Code == "" {
 					t.Fatalf("failure not named: %v", err)
@@ -371,17 +377,17 @@ func TestExtractionRetriesPaidResultAfterPersistenceFailure(t *testing.T) {
 	scope := owner()
 	phase35Snapshot(t, s, scope)
 	it := phase35Direct("虚构只付费一次的自动待办", "task")
-	ref := phase35Source(t, s, scope, []extractedItem{it})
+	ref := phase35Source(t, s, scope, []intakestore.ExtractedItem{it})
 	j := leaseStage(t, s, scope, ref, "source.extract")
 	calls := phase35Model(t, s, func(w http.ResponseWriter, r *http.Request) {
-		secretaryModelReply(w, extracted{Items: []extractedItem{it}})
+		secretaryModelReply(w, intakestore.Extracted{Items: []intakestore.ExtractedItem{it}})
 	})
 	// Injection targets only the owned DB business row, AFTER paid result storage.
 	_, err := s.Pool.Exec(ctx, `CREATE FUNCTION phase35_reject_work() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'phase35 injected business write failure'; END $$; CREATE TRIGGER phase35_reject_work BEFORE INSERT ON work_items FOR EACH ROW EXECUTE FUNCTION phase35_reject_work()`)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = (extraction.Service{Store: s.ExtractionStore(), Generator: jobCalls(s), MaxAttempts: MaxJobAttempts}).Process(ctx, j)
+	err = (extraction.Service{Store: s.ExtractionStore(), Generator: jobCalls(s), MaxAttempts: kernel.MaxJobAttempts}).Process(ctx, j)
 	if err == nil {
 		t.Fatal("write fault did not reach real business transaction")
 	}
@@ -398,7 +404,7 @@ func TestExtractionRetriesPaidResultAfterPersistenceFailure(t *testing.T) {
 	}
 	defer peer.Close()
 	peer.SetModels(s.Models)
-	if err := (extraction.Service{Store: peer.ExtractionStore(), Generator: jobCalls(peer), MaxAttempts: MaxJobAttempts}).Process(ctx, j); err != nil {
+	if err := (extraction.Service{Store: peer.ExtractionStore(), Generator: jobCalls(peer), MaxAttempts: kernel.MaxJobAttempts}).Process(ctx, j); err != nil {
 		t.Fatal("durable retry", err)
 	}
 	if calls.Load() != 1 || len(phase35Snapshot(t, s, scope).Tasks) != 1 {
@@ -411,10 +417,10 @@ func TestSingleSourceChangeLeavesUnrelatedPaidResult(t *testing.T) {
 	phase35Snapshot(t, s, scope)
 	refs := []memory.Ref{}
 	for _, text := range []string{"虚构独立原话A", "虚构独立原话B"} {
-		refs = append(refs, phase35Source(t, s, scope, []extractedItem{phase35Direct(text, "task")}))
+		refs = append(refs, phase35Source(t, s, scope, []intakestore.ExtractedItem{phase35Direct(text, "task")}))
 	}
 	calls := phase35Model(t, s, func(w http.ResponseWriter, r *http.Request) {
-		secretaryModelReply(w, extracted{Items: []extractedItem{}})
+		secretaryModelReply(w, intakestore.Extracted{Items: []intakestore.ExtractedItem{}})
 	})
 	phase35Extract(t, s, scope, refs[0])
 	phase35Extract(t, s, scope, refs[1])
@@ -445,7 +451,7 @@ func TestMemoryStagesHaveIndependentBudgets(t *testing.T) {
 	s, ctx := phase26DisposableStore(t)
 	scope := owner()
 	phase35Snapshot(t, s, scope)
-	for stage, want := range map[string]int{OrganizeStage: 40, CompareStage: 40, EntityCompareStage: 30, EntityCandidatesStage: 6, HandoverStage: 2} {
+	for stage, want := range map[string]int{kernel.OrganizeStage: 40, kernel.CompareStage: 40, kernel.EntityCompareStage: 30, interpstore.EntityCandidatesStage: 6, kernel.HandoverStage: 2} {
 		if kernel.HourlyBudgets[stage] != want {
 			t.Fatalf("%s budget=%d want=%d", stage, kernel.HourlyBudgets[stage], want)
 		}
@@ -485,7 +491,9 @@ func TestStructuredExtractionTrustInputsAtScale(t *testing.T) {
 	f := phase35Load(t)
 	s := f.Store
 	ref := phase35Source(t, s, f.Scope, f.Inputs)
-	calls := phase35Model(t, s, func(w http.ResponseWriter, r *http.Request) { secretaryModelReply(w, extracted{Items: f.Inputs}) })
+	calls := phase35Model(t, s, func(w http.ResponseWriter, r *http.Request) {
+		secretaryModelReply(w, intakestore.Extracted{Items: f.Inputs})
+	})
 	phase35Extract(t, s, f.Scope, ref)
 	st := phase35Snapshot(t, s, f.Scope)
 	work := phase35Work(st)

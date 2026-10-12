@@ -12,8 +12,10 @@ import (
 
 	"github.com/soaringjerry/PCAS/internal/modelcall"
 	"github.com/soaringjerry/PCAS/internal/postgres/claimstore"
+	"github.com/soaringjerry/PCAS/internal/postgres/deskstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/usagelog"
+	"github.com/soaringjerry/PCAS/internal/postgres/usestore"
 	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 
 	"github.com/jackc/pgx/v5"
@@ -197,8 +199,8 @@ func TestB4MediumCannotAddActionsAndFallsBack(t *testing.T) {
 	}
 }
 func TestB4SelfcheckPreservesSlotAuthority(t *testing.T) {
-	before := secretaryOutput{Actions: []secretaryAction{{Op: "create_task", Title: "原任务"}, {Op: "add_steps", Ref: "N1", Steps: []string{"原步骤"}}}}
-	after := secretaryOutput{Actions: []secretaryAction{{Op: "delete", Ref: "T1"}, {Op: "add_steps", Ref: "T2", Steps: []string{"别的目标"}}, {Op: "create_task", Title: "额外任务"}}}
+	before := deskstore.SecretaryOutput{Actions: []deskstore.SecretaryAction{{Op: "create_task", Title: "原任务"}, {Op: "add_steps", Ref: "N1", Steps: []string{"原步骤"}}}}
+	after := deskstore.SecretaryOutput{Actions: []deskstore.SecretaryAction{{Op: "delete", Ref: "T1"}, {Op: "add_steps", Ref: "T2", Steps: []string{"别的目标"}}, {Op: "create_task", Title: "额外任务"}}}
 	got := secretary.ConstrainCheck(before, after)
 	if string(kernel.JSON(got.Actions)) != string(kernel.JSON(before.Actions)) {
 		t.Fatal(got)
@@ -455,7 +457,7 @@ func TestB4HeavyCutoffUsesFinishedReaders(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	u := useContext{Ready: true}
+	u := usestore.UseContext{Ready: true}
 	for _, key := range keys {
 		u.Index = append(u.Index, workspace.StatusCardRef{Key: key, Name: "虚构限时组", Count: 3})
 	}
@@ -497,7 +499,7 @@ func TestB4RankFusionKeepsStructuredMatchesFirst(t *testing.T) {
 	}
 	var result memory.RecallResult
 	err = pgx.BeginFunc(context.Background(), s.Pool, func(tx pgx.Tx) error {
-		return s.recallTx(context.Background(), tx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: "model", Team: true}, memory.RecallRequest{Team: &memory.TeamRecall{Text: "虚构璃风", RankFusion: true}, Mode: memory.Remember}, memory.Budget{Candidates: 40, Tokens: 12000}, "虚构璃风", "'虚构璃风'", []byte("[1,0]"), "b4-fictional-vector", 0, "", memory.SearchTokens("虚构璃风"), &result)
+		return s.RecallTx(context.Background(), tx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: "model", Team: true}, memory.RecallRequest{Team: &memory.TeamRecall{Text: "虚构璃风", RankFusion: true}, Mode: memory.Remember}, memory.Budget{Candidates: 40, Tokens: 12000}, "虚构璃风", "'虚构璃风'", []byte("[1,0]"), "b4-fictional-vector", 0, "", memory.SearchTokens("虚构璃风"), &result)
 	})
 	if err != nil || len(result.Memories) < 2 || string(result.Memories[0].ID) != exact.ID {
 		t.Fatal(result, err)
@@ -505,7 +507,7 @@ func TestB4RankFusionKeepsStructuredMatchesFirst(t *testing.T) {
 }
 
 func TestRuleScopeRequiresModelAndUsagePlansRemainReadable(t *testing.T) {
-	if ruleRelevance("起草邮件", "帮我写一封邮件") != 0 || ruleRelevance("", "虚构杂事") == 0 || ruleRelevance("盆栽浇水", "起草邮件") != 0 {
+	if usestore.RuleRelevance("起草邮件", "帮我写一封邮件") != 0 || usestore.RuleRelevance("", "虚构杂事") == 0 || usestore.RuleRelevance("盆栽浇水", "起草邮件") != 0 {
 		t.Fatal("rule applicability")
 	}
 	raw := usagelog.SafeUsePlan(json.RawMessage(`{"groups":["secret text","self:rule"],"question":"private text"}`))
@@ -583,7 +585,7 @@ func TestB4RetrievalGroupProposalsIgnoreLiteralNames(t *testing.T) {
 	}
 	aliases := map[string][]string{index[9].Key: {"虚构第九别名"}}
 	for _, text := range []string{"虚构组8和虚构第九别名", "虚构组0", "虚构完全不同请求"} {
-		selected := chooseUseGroups(text, index, ranked, aliases, 6, false)
+		selected := usestore.ChooseUseGroups(text, index, ranked, aliases, 6, false)
 		if len(selected) != 6 {
 			t.Fatal(selected)
 		}
@@ -593,7 +595,7 @@ func TestB4RetrievalGroupProposalsIgnoreLiteralNames(t *testing.T) {
 			}
 		}
 	}
-	if selected := chooseUseGroups("虚构组0 虚构第九别名", index, ranked, aliases, 12, true); len(selected) != 0 {
+	if selected := usestore.ChooseUseGroups("虚构组0 虚构第九别名", index, ranked, aliases, 12, true); len(selected) != 0 {
 		t.Fatal("semantic naming must await the existing model call", selected)
 	}
 }

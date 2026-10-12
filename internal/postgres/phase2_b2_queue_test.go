@@ -31,7 +31,7 @@ import (
 )
 
 func b2Worker(s *Store) *worker.Worker {
-	return worker.New(s, map[string]worker.Handler{"source.extract": (extraction.Service{Store: s.ExtractionStore(), Generator: jobCalls(s), MaxAttempts: MaxJobAttempts}).Process}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	return worker.New(s, map[string]worker.Handler{"source.extract": (extraction.Service{Store: s.ExtractionStore(), Generator: jobCalls(s), MaxAttempts: kernel.MaxJobAttempts}).Process}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 }
 func b2OnlyExtraction(t *testing.T, s *Store, scope memory.Scope, ref memory.Ref, priority int) {
 	t.Helper()
@@ -453,7 +453,7 @@ func TestPhase2B2WorkerChild(t *testing.T) {
 	if err = os.WriteFile(os.Getenv("PCAS_B2_WORKER_JOB"), data, 0600); err != nil {
 		t.Fatal(err)
 	}
-	if err = (extraction.Service{Store: s.ExtractionStore(), Generator: jobCalls(s), MaxAttempts: MaxJobAttempts}).Process(context.Background(), *job); err != nil {
+	if err = (extraction.Service{Store: s.ExtractionStore(), Generator: jobCalls(s), MaxAttempts: kernel.MaxJobAttempts}).Process(context.Background(), *job); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -527,11 +527,11 @@ func TestPhase2B2_F7_KilledWorkerRecoversLeaseAndFencesOldCommit(t *testing.T) {
 	b2Equal(t, replacement.ID, old.ID)
 	b2Equal(t, replacement.Attempts, b2Want[int](t, "F7", "reclaimed_attempts"))
 	s.SetModels(&ai.Registry{HTTP: server.Client(), Config: ai.Configuration{Extraction: "model", Providers: []ai.Provider{{ID: "model", Protocol: "openai", BaseURL: server.URL, Model: "test", MaxOutput: 100, CostMode: "free"}}}})
-	if err = (extraction.Service{Store: s.ExtractionStore(), Generator: jobCalls(s), MaxAttempts: MaxJobAttempts}).Process(context.Background(), *replacement); err != nil {
+	if err = (extraction.Service{Store: s.ExtractionStore(), Generator: jobCalls(s), MaxAttempts: kernel.MaxJobAttempts}).Process(context.Background(), *replacement); err != nil {
 		t.Fatal(err)
 	}
 	b2Equal(t, len(b2Snapshot(t, s, scope).Memories), b2Want[int](t, "F7", "memories"))
-	if err = (extraction.Service{Store: s.ExtractionStore(), Generator: jobCalls(s), MaxAttempts: MaxJobAttempts}).Process(context.Background(), old); !errors.Is(err, worker.ErrLeaseLost) {
+	if err = (extraction.Service{Store: s.ExtractionStore(), Generator: jobCalls(s), MaxAttempts: kernel.MaxJobAttempts}).Process(context.Background(), old); !errors.Is(err, worker.ErrLeaseLost) {
 		t.Errorf("killed worker's token must be fenced: %v", err)
 	}
 	b2Equal(t, len(b2Snapshot(t, s, scope).Memories), 1)

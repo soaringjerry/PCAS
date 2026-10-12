@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/ai"
+	"github.com/soaringjerry/PCAS/internal/postgres/interpstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 )
 
@@ -32,19 +33,19 @@ var p3SupersessionCases = []supersessionCase{
 	{"虚构石溪项目的预算上限是三万元。", "虚构石溪项目的预算上限调整为五万元，三万元的上限作废。", true},
 }
 
-func p3ComparePrompt() (string, []compareEdge) {
-	memories := []compareMemory{}
-	expected := []compareEdge{}
+func p3ComparePrompt() (string, []interpstore.CompareEdge) {
+	memories := []interpstore.CompareMemory{}
+	expected := []interpstore.CompareEdge{}
 	for i, c := range p3SupersessionCases {
 		for j, text := range []string{c.Old, c.New} {
 			at := time.Date(2026, 10, 7, 9+j, 0, i, 0, time.UTC)
-			memories = append(memories, compareMemory{organizeMemory: organizeMemory{N: len(memories) + 1, Text: text, ExpressedAt: &at}})
+			memories = append(memories, interpstore.CompareMemory{OrganizeMemory: interpstore.OrganizeMemory{N: len(memories) + 1, Text: text, ExpressedAt: &at}})
 		}
 		if c.Superseded {
-			expected = append(expected, compareEdge{Old: 2*i + 1, New: 2*i + 2, Kind: "superseded"})
+			expected = append(expected, interpstore.CompareEdge{Old: 2*i + 1, New: 2*i + 2, Kind: "superseded"})
 		}
 	}
-	return string(kernel.JSON(comparisonBatch{Rule: CompareVersion, Group: compareGroup{Key: "topic:fictional", Kind: "topic", Name: "虚构项目记录"}, Memories: memories})), expected
+	return string(kernel.JSON(interpstore.ComparisonBatch{Rule: kernel.CompareVersion, Group: interpstore.CompareGroup{Key: "topic:fictional", Kind: "topic", Name: "虚构项目记录"}, Memories: memories})), expected
 }
 
 // Opt-in only; uses the executor's login and invented memories. Before changing
@@ -65,15 +66,15 @@ func TestP3ComparePromptLive(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 	at := time.Now()
-	result, err := r.Generate(ctx, "live", compareInstructions, input)
-	raw, _ := json.MarshalIndent(map[string]any{"instructions": compareInstructions, "input": json.RawMessage(input), "output": result.Text, "elapsed_ms": time.Since(at).Milliseconds()}, "", "  ")
+	result, err := r.Generate(ctx, "live", interpstore.CompareInstructions, input)
+	raw, _ := json.MarshalIndent(map[string]any{"instructions": interpstore.CompareInstructions, "input": json.RawMessage(input), "output": result.Text, "elapsed_ms": time.Since(at).Milliseconds()}, "", "  ")
 	if e := os.WriteFile(path, raw, 0600); e != nil {
 		t.Fatal(e)
 	}
 	if err != nil {
 		t.Fatal(err)
 	}
-	edges, valid := parseCompareOutput(result.Text, 24)
+	edges, valid := interpstore.ParseCompareOutput(result.Text, 24)
 	t.Logf("raw output: %s", result.Text)
 	if os.Getenv("PCAS_P3_PROMPT_PHASE") != "before" && (!valid || !reflect.DeepEqual(edges, expected)) {
 		t.Fatalf("12-pair regression: got=%+v want=%+v valid=%v", edges, expected, valid)

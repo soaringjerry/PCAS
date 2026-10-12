@@ -14,6 +14,8 @@ import (
 
 	"github.com/soaringjerry/PCAS/internal/interpretation/aliasscan"
 	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/postgres/usestore"
 
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/soaringjerry/PCAS/internal/memory"
@@ -39,7 +41,7 @@ func TestEntityCandidatesConcurrentSchedulerWorkerAndUserRequests(t *testing.T) 
 		for _, name := range pair {
 			f.subject = f.entity(t, "place", name)
 			r := f.claim(t, "虚构并发地理便签："+name+"的演练记录。")
-			f.labels(t, r, "progress", true, postgres.OrganizeVersion, g, workspace.MemoryGroup{EntityID: string(f.subject), Type: "place"})
+			f.labels(t, r, "progress", true, kernel.OrganizeVersion, g, workspace.MemoryGroup{EntityID: string(f.subject), Type: "place"})
 			refs = append(refs, r)
 		}
 	}
@@ -53,7 +55,7 @@ func TestEntityCandidatesConcurrentSchedulerWorkerAndUserRequests(t *testing.T) 
 		if err := f.db.QueryRow(ctx, "SELECT count(*) FROM entity_merges WHERE owner_id=$1 AND undone_at IS NULL", f.scope.OwnerID).Scan(&merges); err != nil {
 			return 0, 0, err
 		}
-		err := f.db.QueryRow(ctx, `SELECT (SELECT count(*) FROM memory_jobs WHERE owner_id=$1 AND (stage LIKE 'memory.entity_candidates:%' OR stage LIKE 'memory.entity_compare:%' OR stage LIKE 'memory.compare:%') AND (state='leased' OR (state='queued' AND available_at<=now()))) + (SELECT count(*) FROM claims WHERE owner_id=$1 AND id=ANY($2::uuid[]) AND compared<$3)`, f.scope.OwnerID, ids, postgres.CompareVersion).Scan(&pending)
+		err := f.db.QueryRow(ctx, `SELECT (SELECT count(*) FROM memory_jobs WHERE owner_id=$1 AND (stage LIKE 'memory.entity_candidates:%' OR stage LIKE 'memory.entity_compare:%' OR stage LIKE 'memory.compare:%') AND (state='leased' OR (state='queued' AND available_at<=now()))) + (SELECT count(*) FROM claims WHERE owner_id=$1 AND id=ANY($2::uuid[]) AND compared<$3)`, f.scope.OwnerID, ids, kernel.CompareVersion).Scan(&pending)
 		return merges, pending, err
 	}
 	agent := f.answerAgent(t)
@@ -158,7 +160,7 @@ func TestEntityCandidatesConcurrentSchedulerWorkerAndUserRequests(t *testing.T) 
 			return err
 		}},
 		{"secretary", func(ctx context.Context) error {
-			turn, err := userStore.DeskTurn(postgres.WithMemoryTier(ctx, "light"), f.scope, workspace.DeskTurnRequest{RequestID: string(memory.NewID()), Text: "处理虚构普通事项", AgentID: agent})
+			turn, err := userStore.DeskTurn(usestore.WithMemoryTier(ctx, "light"), f.scope, workspace.DeskTurnRequest{RequestID: string(memory.NewID()), Text: "处理虚构普通事项", AgentID: agent})
 			if err == nil && turn.Turn.Reply != "虚构并发办事回复。" {
 				return fmt.Errorf("unexpected secretary reply %q", turn.Turn.Reply)
 			}
@@ -254,9 +256,9 @@ func TestEntityCandidatesConcurrentSchedulerWorkerAndUserRequests(t *testing.T) 
 			case strings.HasPrefix(job.Stage, "memory.entity_candidates:"):
 				err = (aliasscan.Service{Store: f.store.AliasScanStore(), Generator: jobCalls(f.store)}).Process(runCtx, *job)
 			case strings.HasPrefix(job.Stage, "memory.compare:"):
-				err = (comparison.Service{Store: f.store.CompareStore(), Generator: jobCalls(f.store), Version: postgres.CompareVersion}).Process(runCtx, *job)
+				err = (comparison.Service{Store: f.store.CompareStore(), Generator: jobCalls(f.store), Version: kernel.CompareVersion}).Process(runCtx, *job)
 			case strings.HasPrefix(job.Stage, "memory.entity_compare:"):
-				err = (comparison.EntityService{Store: f.store.EntityCompareStore(), Generator: jobCalls(f.store), Version: postgres.EntityCompareVersion}).Process(runCtx, *job)
+				err = (comparison.EntityService{Store: f.store.EntityCompareStore(), Generator: jobCalls(f.store), Version: kernel.EntityCompareVersion}).Process(runCtx, *job)
 			case job.Stage == "memory.index":
 				err = f.store.ProcessIndex(runCtx, *job)
 			default:

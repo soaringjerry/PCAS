@@ -542,7 +542,7 @@ func TestStabilizationUndoU13_ExactThirtyDayBoundary(t *testing.T) {
 				if _, err := tx.Exec(context.Background(), "UPDATE action_log SET created_at=now()-$3::interval WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), action, tc.age); err != nil {
 					return err
 				}
-				return s.undoActionTx(context.Background(), tx, scope, action)
+				return s.UndoActionTx(context.Background(), tx, scope, action)
 			})
 			if tc.expired {
 				if !errors.Is(err, workspace.ErrExpired) {

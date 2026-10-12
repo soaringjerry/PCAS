@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/postgres/accessstore"
+	"github.com/soaringjerry/PCAS/internal/postgres/deskstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/memoryread"
@@ -59,7 +60,7 @@ func p2AssertReads(t *testing.T, s *Store, scope memory.Scope) {
 	err := pgx.BeginTxFunc(ctx, s.Pool, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
 		tx = p2ReadOnlyTx{tx}
 		for _, principal := range []string{"model", "ungranted"} {
-			for _, thing := range []*string{nil, stringPointer(p2ID("task", 4))} {
+			for _, thing := range []*string{nil, deskstore.StringPointer(p2ID("task", 4))} {
 				read := func(predicate string) ([]byte, error) {
 					var out []byte
 					err := tx.QueryRow(ctx, "SELECT coalesce(jsonb_agg(jsonb_build_object('id',r.id,'allowed',"+predicate+") ORDER BY r.id),'[]') FROM memory_records r WHERE r.owner_id=$1 AND r.kind='source'", scope.OwnerID, principal, thing).Scan(&out)
@@ -127,7 +128,7 @@ func p2AssertReads(t *testing.T, s *Store, scope memory.Scope) {
 					if err := s.p2LegacyRecallTx(ctx, tx, rs, in, budget, q, fts, nil, "", 0, "same-snapshot", tokens, &a); err != nil {
 						return err
 					}
-					if err := s.recallTx(ctx, tx, rs, in, budget, q, fts, nil, "", 0, "same-snapshot", tokens, &b); err != nil {
+					if err := s.RecallTx(ctx, tx, rs, in, budget, q, fts, nil, "", 0, "same-snapshot", tokens, &b); err != nil {
 						return err
 					}
 					p2Bytes(t, "recall rank/text/context/cursor", a, b)
@@ -138,7 +139,7 @@ func p2AssertReads(t *testing.T, s *Store, scope memory.Scope) {
 		if err != nil {
 			return err
 		}
-		got, err := s.snapshotTx(ctx, tx, scope)
+		got, err := s.SnapshotTx(ctx, tx, scope)
 		if err != nil {
 			return err
 		}
@@ -153,7 +154,7 @@ func p2AssertReads(t *testing.T, s *Store, scope memory.Scope) {
 			if err != nil {
 				return err
 			}
-			newContext, err := s.secretaryContextTx(ctx, tx, scope, req, oldContext.ConversationID)
+			newContext, err := s.SecretaryContextTx(ctx, tx, scope, req, oldContext.ConversationID)
 			if err != nil {
 				return err
 			}
@@ -161,7 +162,7 @@ func p2AssertReads(t *testing.T, s *Store, scope memory.Scope) {
 			if err != nil {
 				return err
 			}
-			np, nm, err := s.secretaryPrompt(ctx, tx, scope, req, &newContext, s.Recall)
+			np, nm, err := s.SecretaryPrompt(ctx, tx, scope, req, &newContext, s.Recall)
 			if err != nil {
 				return err
 			}
@@ -350,7 +351,7 @@ func TestP2RandomVisibilityAndSourceSequence(t *testing.T) {
 							wanted = append(wanted, m)
 						}
 					}
-					got, err := s.ReadMemoriesTx(ctx, tx, sc, current, memoryread.MemoryReadOptions{Ids: []string{claim}})
+					got, err := s.ReadMemoriesTx(ctx, tx, sc, current, memoryread.MemoryReadOptions{IDs: []string{claim}})
 					if err != nil {
 						return err
 					}
@@ -391,7 +392,7 @@ func TestP2RandomVisibilityAndSourceSequence(t *testing.T) {
 			if err := s.p2LegacyRecallTx(ctx, tx, sc, request, budget, "云杉", "'云杉'", nil, "", 0, "random-sequence", []string{"云杉"}, &oldRecall); err != nil {
 				return err
 			}
-			if err := s.recallTx(ctx, tx, sc, request, budget, "云杉", "'云杉'", nil, "", 0, "random-sequence", []string{"云杉"}, &newRecall); err != nil {
+			if err := s.RecallTx(ctx, tx, sc, request, budget, "云杉", "'云杉'", nil, "", 0, "random-sequence", []string{"云杉"}, &newRecall); err != nil {
 				return err
 			}
 			p2Bytes(t, "random recall", oldRecall, newRecall)
@@ -417,7 +418,7 @@ func TestP2LargeResultsAreByteIdentical(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		b, err := s.snapshotTx(ctx, tx, scope)
+		b, err := s.SnapshotTx(ctx, tx, scope)
 		if err != nil {
 			return err
 		}
@@ -427,7 +428,7 @@ func TestP2LargeResultsAreByteIdentical(t *testing.T) {
 			return err
 		}
 		ids := []string{p2ID("claim", 5), p2ID("claim", 97), p2ID("claim", 9991)}
-		selected, err := s.ReadMemoriesTx(ctx, tx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: "model"}, true, memoryread.MemoryReadOptions{Ids: ids})
+		selected, err := s.ReadMemoriesTx(ctx, tx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: "model"}, true, memoryread.MemoryReadOptions{IDs: ids})
 		if err != nil {
 			return err
 		}
@@ -447,7 +448,7 @@ func TestP2LargeResultsAreByteIdentical(t *testing.T) {
 		if err := s.p2LegacyRecallTx(ctx, tx, rs, in, budget, in.Query, "", nil, "", 0, "large-oracle", tokens, &ra); err != nil {
 			return err
 		}
-		if err := s.recallTx(ctx, tx, rs, in, budget, in.Query, "", nil, "", 0, "large-oracle", tokens, &rb); err != nil {
+		if err := s.RecallTx(ctx, tx, rs, in, budget, in.Query, "", nil, "", 0, "large-oracle", tokens, &rb); err != nil {
 			return err
 		}
 		p2Bytes(t, "10,000-claim recall", ra, rb)
@@ -492,7 +493,7 @@ func TestP2RecallTemporalAndVectorBytes(t *testing.T) {
 					if err := s.p2LegacyRecallTx(ctx, tx, rs, in, budget, in.Query, "'云杉'", []byte("[1,0]"), "p2-fictional-vector", offset, "temporal-vector", memory.SearchTokens(in.Query), &a); err != nil {
 						return err
 					}
-					if err := s.recallTx(ctx, tx, rs, in, budget, in.Query, "'云杉'", []byte("[1,0]"), "p2-fictional-vector", offset, "temporal-vector", memory.SearchTokens(in.Query), &b); err != nil {
+					if err := s.RecallTx(ctx, tx, rs, in, budget, in.Query, "'云杉'", []byte("[1,0]"), "p2-fictional-vector", offset, "temporal-vector", memory.SearchTokens(in.Query), &b); err != nil {
 						return err
 					}
 					p2Bytes(t, "historical/valid-time/vector/pagination", a, b)

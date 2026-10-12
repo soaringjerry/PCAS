@@ -7,18 +7,22 @@ import (
 	"embed"
 	"fmt"
 	"sort"
-	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/soaringjerry/PCAS/internal/ai"
 	"github.com/soaringjerry/PCAS/internal/memory"
-	"github.com/soaringjerry/PCAS/internal/modelcall"
 	"github.com/soaringjerry/PCAS/internal/postgres/activitystore"
 	"github.com/soaringjerry/PCAS/internal/postgres/budgetstore"
+	"github.com/soaringjerry/PCAS/internal/postgres/callstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/claimstore"
+	"github.com/soaringjerry/PCAS/internal/postgres/commandstore"
+	"github.com/soaringjerry/PCAS/internal/postgres/deputystore"
+	"github.com/soaringjerry/PCAS/internal/postgres/deskstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/evidencestore"
+	"github.com/soaringjerry/PCAS/internal/postgres/intakestore"
+	"github.com/soaringjerry/PCAS/internal/postgres/interpstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/memoryread"
@@ -28,6 +32,8 @@ import (
 	"github.com/soaringjerry/PCAS/internal/postgres/sourcestore"
 	"github.com/soaringjerry/PCAS/internal/postgres/statestore"
 	"github.com/soaringjerry/PCAS/internal/postgres/usagelog"
+	"github.com/soaringjerry/PCAS/internal/postgres/usestore"
+	"github.com/soaringjerry/PCAS/internal/postgres/workspacestore"
 	"github.com/soaringjerry/PCAS/internal/postgres/workstore"
 )
 
@@ -38,6 +44,14 @@ var migrations embed.FS
 // storage packages share.
 type Store struct {
 	*kernel.DB
+	*deskstore.Desk
+	*commandstore.Commands
+	*deputystore.Deputy
+	*usestore.Use
+	*interpstore.Interp
+	*workspacestore.Workspace
+	*intakestore.Intake
+	*callstore.Calls
 	*statestore.State
 	*evidencestore.Evidence
 	*workstore.Work
@@ -51,34 +65,12 @@ type Store struct {
 	*usagelog.Usage
 	*memorystore.Memory
 	*memoryread.Reader
-	pendingPaid             sync.Map
-	pendingInteractive      sync.Map
-	pendingDeputySelections sync.Map
-	// DeskTurn also borrows a connection for Recall and budget reservation.
-	secretarySlots chan struct{}
 }
 
 // SetModels gives the store the configured models. The store reads their
 // configuration and availability. It makes no model call: the application
 // builds the gateway over CallRecords.
 func (s *Store) SetModels(models *ai.Registry) { s.Models = models }
-
-// CallRecords are the records of the gateway's calls in storage.
-type CallRecords interface {
-	modelcall.Accounting
-	modelcall.Results
-	modelcall.Journal
-}
-
-// CallRecords gives the gateway its reservations, its paid results, and its
-// call journal.
-func (s *Store) CallRecords() CallRecords {
-	return modelCallStorage{backgroundCalls{store: s}, interactiveCalls{store: s}}
-}
-
-// DirectCallRecords gives the gateway the journal of its embedding, image,
-// and audio calls.
-func (s *Store) DirectCallRecords() modelcall.DirectJournal { return directCalls{store: s} }
 
 func (s *Store) SetBlobs(blobs memory.BlobStore) { s.Blobs = blobs }
 
@@ -98,9 +90,8 @@ func Open(ctx context.Context, url string) (*Store, error) {
 		return nil, fmt.Errorf("database unavailable")
 	}
 	db := &kernel.DB{Pool: pool}
-	store := newStore(db)
-	store.secretarySlots = make(chan struct{}, config.MaxConns-1)
-	return store, nil
+	db.Slots = make(chan struct{}, config.MaxConns-1)
+	return newStore(db), nil
 }
 
 func (s *Store) Close()                         { s.Pool.Close() }
@@ -191,7 +182,49 @@ var _ memory.Repository = (*Store)(nil)
 // newStore composes the store over its core. Each storage package works on
 // the same core; a package that needs another one holds it.
 func newStore(db *kernel.DB) *Store {
-	sources := &sourcestore.Sources{DB: db}
-	owners := &ownerstore.Owners{DB: db}
-	return &Store{DB: db, State: &statestore.State{DB: db}, Evidence: &evidencestore.Evidence{DB: db}, Work: &workstore.Work{DB: db}, Budgets: &budgetstore.Budgets{DB: db, Owners: owners}, Claims: &claimstore.Claims{DB: db, Sources: sources}, Sources: sources, Items: &itemstore.Items{DB: db}, Owners: owners, Activity: &activitystore.Activity{DB: db}, Schedules: &schedulestore.Schedules{DB: db}, Usage: &usagelog.Usage{DB: db}, Memory: &memorystore.Memory{DB: db}, Reader: &memoryread.Reader{DB: db}}
+	activityPart := &activitystore.Activity{DB: db}
+	ownersPart := &ownerstore.Owners{DB: db}
+	budgetsPart := &budgetstore.Budgets{DB: db, Owners: ownersPart}
+	usagePart := &usagelog.Usage{DB: db}
+	callsPart := &callstore.Calls{DB: db, Usage: usagePart, Budgets: budgetsPart}
+	sourcesPart := &sourcestore.Sources{DB: db}
+	claimsPart := &claimstore.Claims{DB: db, Sources: sourcesPart}
+	readerPart := &memoryread.Reader{DB: db}
+	workPart := &workstore.Work{DB: db}
+	intakePart := &intakestore.Intake{DB: db, Sources: sourcesPart, Owners: ownersPart, Calls: callsPart, Claims: claimsPart, Reader: readerPart, Work: workPart}
+	statePart := &statestore.State{DB: db, Reader: readerPart}
+	usePart := &usestore.Use{DB: db, Reader: readerPart, Owners: ownersPart, State: statePart}
+	workspacePart := &workspacestore.Workspace{DB: db, Claims: claimsPart, Intake: intakePart, Reader: readerPart, Owners: ownersPart, Sources: sourcesPart, State: statePart}
+	deputyPart := &deputystore.Deputy{DB: db, Budgets: budgetsPart, Intake: intakePart, Reader: readerPart, Usage: usagePart, Use: usePart, Workspace: workspacePart}
+	commandsPart := &commandstore.Commands{DB: db, Claims: claimsPart, Owners: ownersPart, Deputy: deputyPart, Intake: intakePart, Sources: sourcesPart, Workspace: workspacePart}
+	deskPart := &deskstore.Desk{DB: db, Budgets: budgetsPart, Commands: commandsPart, Intake: intakePart, Reader: readerPart, Sources: sourcesPart, Use: usePart, Workspace: workspacePart}
+	evidencePart := &evidencestore.Evidence{DB: db}
+	interpPart := &interpstore.Interp{DB: db, Budgets: budgetsPart, Owners: ownersPart}
+	itemsPart := &itemstore.Items{DB: db}
+	memoryPart := &memorystore.Memory{DB: db}
+	schedulesPart := &schedulestore.Schedules{DB: db}
+	return &Store{
+		DB:        db,
+		Desk:      deskPart,
+		Commands:  commandsPart,
+		Deputy:    deputyPart,
+		Use:       usePart,
+		Interp:    interpPart,
+		Workspace: workspacePart,
+		Intake:    intakePart,
+		Calls:     callsPart,
+		State:     statePart,
+		Evidence:  evidencePart,
+		Work:      workPart,
+		Budgets:   budgetsPart,
+		Claims:    claimsPart,
+		Sources:   sourcesPart,
+		Items:     itemsPart,
+		Owners:    ownersPart,
+		Activity:  activityPart,
+		Schedules: schedulesPart,
+		Usage:     usagePart,
+		Memory:    memoryPart,
+		Reader:    readerPart,
+	}
 }

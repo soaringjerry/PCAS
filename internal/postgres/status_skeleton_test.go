@@ -8,6 +8,8 @@ import (
 
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/postgres/statestore"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -89,7 +91,7 @@ func TestStatusSkeletonEmptyOwnerAPI(t *testing.T) {
 	if response.Code != 200 || json.Unmarshal(response.Body.Bytes(), &page) != nil || page.Items == nil || len(page.Items) != 0 || page.Total != 0 {
 		t.Fatal("retired skeleton returned current memories", response.Code, response.Body.String())
 	}
-	if CompareVersion < 1 || CardVersion < 1 || HandoverVersion < 1 {
+	if kernel.CompareVersion < 1 || kernel.CardVersion < 1 || statestore.HandoverVersion < 1 {
 		t.Fatal("initial rule versions must be one")
 	}
 }

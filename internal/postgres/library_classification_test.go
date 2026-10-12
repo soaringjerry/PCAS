@@ -10,7 +10,9 @@ import (
 
 	"github.com/soaringjerry/PCAS/internal/currentstate/handover"
 	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
+	"github.com/soaringjerry/PCAS/internal/postgres/interpstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/postgres/statestore"
 
 	"github.com/soaringjerry/PCAS/internal/worker"
 	"github.com/soaringjerry/PCAS/internal/workspace"
@@ -46,7 +48,7 @@ func TestLibraryDeadlinesUseModelDatesAndRetainUncertainty(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if err := (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: OrganizeVersion}).Process(ctx, organizeTestJob(t, s, scope)); err != nil {
+	if err := (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: kernel.OrganizeVersion}).Process(ctx, organizeTestJob(t, s, scope)); err != nil {
 		t.Fatal(err)
 	}
 	dates, err := s.ListDeadlines(ctx, scope, workspace.DeadlineQuery{})
@@ -82,14 +84,14 @@ func TestLibraryDeadlinesUseModelDatesAndRetainUncertainty(t *testing.T) {
 
 func TestHandoverUsesIndependentRollingLimit(t *testing.T) {
 	s, scope, ctx := testStore(t), owner(), context.Background()
-	sections := []handoverSection{}
-	for _, title := range handoverTitles {
-		sections = append(sections, handoverSection{Title: title, Body: "虚构交接内容", Refs: []int{1}})
+	sections := []statestore.HandoverSection{}
+	for _, title := range statestore.HandoverTitles {
+		sections = append(sections, statestore.HandoverSection{Title: title, Body: "虚构交接内容", Refs: []int{1}})
 	}
-	fake := b1Model(t, s, string(kernel.JSON(handoverOutput{Sections: sections})))
+	fake := b1Model(t, s, string(kernel.JSON(statestore.HandoverOutput{Sections: sections})))
 	statusTestMemories(t, s, scope, 3)
 	job := handoverTestJob(t, s, scope)
-	seedStageUsage(t, s, scope, HandoverStage, 2)
+	seedStageUsage(t, s, scope, kernel.HandoverStage, 2)
 	err := (handover.Service{Store: s.HandoverStore(), Generator: jobCalls(s)}).Process(ctx, job)
 	failure, ok := err.(*worker.JobError)
 	if !ok || failure.Code != "memory.handover_hourly_limit" || !failure.NoAttempt || len(fake.all()) != 0 {
@@ -98,7 +100,7 @@ func TestHandoverUsesIndependentRollingLimit(t *testing.T) {
 	if _, err := s.Pool.Exec(ctx, `UPDATE background_usage SET created_at=now()-interval '61 minutes' WHERE id=(SELECT id FROM background_usage WHERE stage='memory.handover' ORDER BY id LIMIT 1)`); err != nil {
 		t.Fatal(err)
 	}
-	for stage, limit := range map[string]int{OrganizeStage: 40, CompareStage: 40, EntityCompareStage: 30, EntityCandidatesStage: 6} {
+	for stage, limit := range map[string]int{kernel.OrganizeStage: 40, kernel.CompareStage: 40, kernel.EntityCompareStage: 30, interpstore.EntityCandidatesStage: 6} {
 		seedStageUsage(t, s, scope, stage, limit)
 	}
 	if err := (handover.Service{Store: s.HandoverStore(), Generator: jobCalls(s)}).Process(ctx, job); err != nil || len(fake.all()) != 1 {

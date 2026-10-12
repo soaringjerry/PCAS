@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
 )
@@ -18,7 +19,7 @@ func TestStatusDeadlineWritesDeduplicateAndDelete(t *testing.T) {
 			Messages []struct{ Role, Content string }
 		}
 		_ = json.NewDecoder(r.Body).Decode(&req)
-		var prompt struct{ Memories []cardMemory }
+		var prompt struct{ Memories []kernel.CardMemory }
 		for _, m := range req.Messages {
 			if m.Role == "user" {
 				_ = json.Unmarshal([]byte(m.Content), &prompt)
@@ -26,7 +27,7 @@ func TestStatusDeadlineWritesDeduplicateAndDelete(t *testing.T) {
 		}
 		items := []any{}
 		for _, m := range prompt.Memories {
-			items = append(items, map[string]any{"n": m.N, "category": "rule", "durable": true, "unrestricted": true, "scope": "", "deadlines": []cardDeadline{{Kind: "recurring", Recurrence: "每周二7点", Title: "虚构课程", TimeNote: "未说明上午还是下午"}, {Kind: "recurring", Recurrence: "每周二7点", Title: "虚构课程", TimeNote: "未说明上午还是下午"}}})
+			items = append(items, map[string]any{"n": m.N, "category": "rule", "durable": true, "unrestricted": true, "scope": "", "deadlines": []kernel.CardDeadline{{Kind: "recurring", Recurrence: "每周二7点", Title: "虚构课程", TimeNote: "未说明上午还是下午"}, {Kind: "recurring", Recurrence: "每周二7点", Title: "虚构课程", TimeNote: "未说明上午还是下午"}}})
 		}
 		secretaryModelReply(w, map[string]any{"items": items})
 	})
@@ -36,7 +37,7 @@ func TestStatusDeadlineWritesDeduplicateAndDelete(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if err := (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: OrganizeVersion}).Process(context.Background(), organizeTestJob(t, s, scope)); err != nil {
+	if err := (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: kernel.OrganizeVersion}).Process(context.Background(), organizeTestJob(t, s, scope)); err != nil {
 		t.Fatal(err)
 	}
 

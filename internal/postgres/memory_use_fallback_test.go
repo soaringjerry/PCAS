@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/usestore"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -63,7 +64,7 @@ func TestSecretarySelfcheckKeepsUnbuiltMemoryContextAndActionAuthority(t *testin
 				if mode == "heavy" {
 					tier = "heavy"
 				}
-				ctx = WithMemoryTier(ctx, tier)
+				ctx = usestore.WithMemoryTier(ctx, tier)
 			}
 			out, err := s.DeskTurn(ctx, scope, turnRequest(text))
 			wantReply := "虚构修订"
@@ -135,7 +136,7 @@ func TestDeputyWithoutBuiltMemoryUsesMediumUnlessExplicitlyLight(t *testing.T) {
 				if mode == "queued_heavy" {
 					tier = "heavy"
 				}
-				ctx = WithMemoryTier(ctx, tier)
+				ctx = usestore.WithMemoryTier(ctx, tier)
 			}
 			_, err := s.Execute(ctx, scope, workspace.Command{RequestID: string(memory.NewID()), ExpectedRevision: state.Revision, Type: "requestRun", ThingID: state.Tasks[0].ID, AgentID: "model", Kind: "plan", Prompt: "整理虚构旧资料汇报"})
 			if err != nil {

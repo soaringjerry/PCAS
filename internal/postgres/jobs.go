@@ -8,23 +8,14 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/callstore"
+	"github.com/soaringjerry/PCAS/internal/postgres/intakestore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/worker"
 )
 
-// These stages keep paid snapshots and retry until success or changed inputs.
-func persistentBackgroundStage(stage string) bool {
-	_, ok := kernel.HourlyBudgets[kernel.BaseStage(stage)]
-	return ok
-}
-
 const persistentJobStageSQL = "j.stage ~ '^memory\\.(organize|compare|entity_compare|entity_candidates|handover|project_handover|effort|topic_project|date_tidy):'"
 const persistentStageSQL = "stage ~ '^memory\\.(organize|compare|entity_compare|entity_candidates|handover|project_handover|effort|topic_project|date_tidy):'"
-
-const maxAttempts = 5
-
-// MaxJobAttempts is the attempt limit of one queue job.
-const MaxJobAttempts = maxAttempts
 
 func (s *Store) Claim(ctx context.Context, lease time.Duration) (*worker.Job, error) {
 	return s.claim(ctx, lease, false)
@@ -58,7 +49,7 @@ func (s *Store) claim(ctx context.Context, lease time.Duration, indexOnly bool) 
 		query, cursorQuery = claimIndexWindowed, claimIndexFirstCursor
 		nextQuery, nextCursorQuery = claimIndexNextWindow, claimIndexNextCursor
 	}
-	args := []any{lease.Seconds(), leaseToken, maxAttempts}
+	args := []any{lease.Seconds(), leaseToken, kernel.MaxAttempts}
 	for {
 		err = s.Pool.QueryRow(ctx, query, args...).Scan(&id, &ownerID, &recordID, &job.Record.Version, &job.Stage, &job.Attempts, &token, &kind)
 		if !errors.Is(err, pgx.ErrNoRows) {
@@ -67,7 +58,7 @@ func (s *Store) claim(ctx context.Context, lease time.Duration, indexOnly bool) 
 		var priority int
 		var available, created time.Time
 		var lastID string
-		cursorArgs := []any{maxAttempts}
+		cursorArgs := []any{kernel.MaxAttempts}
 		if len(args) > 3 {
 			cursorArgs = append(cursorArgs, args[3:]...)
 		}
@@ -79,7 +70,7 @@ func (s *Store) claim(ctx context.Context, lease time.Duration, indexOnly bool) 
 			return nil, err
 		}
 		query, cursorQuery = nextQuery, nextCursorQuery
-		args = []any{lease.Seconds(), leaseToken, maxAttempts, priority, available, created, lastID}
+		args = []any{lease.Seconds(), leaseToken, kernel.MaxAttempts, priority, available, created, lastID}
 	}
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
@@ -98,7 +89,7 @@ func (s *Store) Block(ctx context.Context, job worker.Job, code string) error {
 
 func (s *Store) Retry(ctx context.Context, job worker.Job, code string) error {
 	state := "queued"
-	if job.Attempts >= maxAttempts && !persistentBackgroundStage(job.Stage) {
+	if job.Attempts >= kernel.MaxAttempts && !kernel.PersistentBackgroundStage(job.Stage) {
 		state = "failed"
 	}
 	return s.finishAttempt(ctx, job, state, code, kernel.RetryDelay(job.Attempts))
@@ -120,7 +111,7 @@ func (s *Store) finishAttempt(ctx context.Context, job worker.Job, state, code s
 			return err
 		}
 		if (state == "blocked" || state == "failed") && strings.HasPrefix(job.Stage, "source.extract") {
-			return extractionStateTx(ctx, tx, job, "failed")
+			return intakestore.ExtractionStateTx(ctx, tx, job, "failed")
 		}
 		return nil
 	})
@@ -158,7 +149,7 @@ func (s *Store) Defer(ctx context.Context, job worker.Job, code string, until ti
 
 func (s *Store) expireExhaustedJobs(ctx context.Context) error {
 	rows, err := s.Pool.Query(ctx, `SELECT id::text,owner_id::text,record_id::text,record_version,stage,lease_token::text FROM memory_jobs
-        WHERE state='leased' AND lease_until<now() AND attempts >= $1 AND NOT (`+persistentStageSQL+`)`, maxAttempts)
+        WHERE state='leased' AND lease_until<now() AND attempts >= $1 AND NOT (`+persistentStageSQL+`)`, kernel.MaxAttempts)
 	if err != nil {
 		return err
 	}
@@ -184,19 +175,19 @@ func (s *Store) expireExhaustedJobs(ctx context.Context) error {
 				}
 			}
 			tag, err := tx.Exec(ctx, `UPDATE memory_jobs SET state='failed',lease_until=NULL,lease_token=NULL,error_code='attempts_exhausted',updated_at=now()
-                WHERE id=$1 AND lease_token=$2 AND state='leased' AND lease_until<now() AND attempts >= $3`, string(j.ID), string(j.LeaseToken), maxAttempts)
+                WHERE id=$1 AND lease_token=$2 AND state='leased' AND lease_until<now() AND attempts >= $3`, string(j.ID), string(j.LeaseToken), kernel.MaxAttempts)
 			if err != nil {
 				return err
 			}
 			if tag.RowsAffected() == 1 {
 				// A last-attempt crash has no next lease to finalize its journal.
 				// Keep the unknown reservation and show why recovery stopped.
-				if err := (backgroundCalls{store: s}).exhaustRecoveryTx(ctx, tx, j); err != nil {
+				if err := (callstore.BackgroundCalls{Store: s.Calls}).ExhaustRecoveryTx(ctx, tx, j); err != nil {
 					return err
 				}
 			}
 			if tag.RowsAffected() == 1 && strings.HasPrefix(j.Stage, "source.extract") {
-				return extractionStateTx(ctx, tx, j, "failed")
+				return intakestore.ExtractionStateTx(ctx, tx, j, "failed")
 			}
 			return nil
 		}); err != nil {

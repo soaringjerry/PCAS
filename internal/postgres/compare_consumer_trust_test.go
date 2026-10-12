@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres/accessstore"
+	"github.com/soaringjerry/PCAS/internal/postgres/intakestore"
 	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
@@ -94,7 +95,7 @@ func TestCompareTrustAtEveryMemoryConsumer(t *testing.T) {
 					}
 					from := time.Date(2026, 9, 12, 0, 0, 0, 0, time.UTC)
 					hints := memory.TeamRecall{Plan: memory.QueryPlan{Time: &memory.PlanTime{From: from, To: from.Add(24 * time.Hour), Axis: "said"}}}
-					refs, _, err := structuredRecallTx(ctx, tx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: "model"}, hints, 20)
+					refs, _, err := intakestore.StructuredRecallTx(ctx, tx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: "model"}, hints, 20)
 					if err != nil {
 						return err
 					}

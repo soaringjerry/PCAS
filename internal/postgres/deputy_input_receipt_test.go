@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/soaringjerry/PCAS/internal/modelcall"
+	"github.com/soaringjerry/PCAS/internal/postgres/callstore"
 	"github.com/soaringjerry/PCAS/internal/worker"
 )
 
@@ -89,7 +90,7 @@ func TestDeputyInterruptedInputCannotBecomeARecoveredResult(t *testing.T) {
 	})
 	request := leasedDeputyAnswer(t, s, scope)
 	provider, _ := s.Models.Get("model")
-	adapter := interactiveCalls{store: s}
+	adapter := callstore.InteractiveCalls{Store: s.Calls}
 	invocation, err := adapter.Prepare(ctx, request, provider)
 	if err != nil {
 		t.Fatal(err)
@@ -109,14 +110,14 @@ func TestDeputyInterruptedInputCannotBecomeARecoveredResult(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer peer.Close()
-	status, err := peer.recoverInteractiveCallsOnce(ctx)
+	status, err := peer.RecoverInteractiveCallsOnce(ctx)
 	if err != nil || status.Interrupted != 1 {
 		t.Fatal(status, err)
 	}
 	if _, err := peer.Gateway().Call(ctx, request); !errors.Is(err, modelcall.ErrOutcomeUnknown) {
 		t.Fatal("an input-only receipt became a usable result", err)
 	}
-	if paid, err := peer.paidModelResult(ctx, worker.Job{OwnerID: scope.OwnerID, ID: invocation}); err != nil || paid != nil {
+	if paid, err := peer.PaidModelResult(ctx, worker.Job{OwnerID: scope.OwnerID, ID: invocation}); err != nil || paid != nil {
 		t.Fatal("the shared result reader treated input as a paid result", paid, err)
 	}
 	var outcome, state, purpose, output string

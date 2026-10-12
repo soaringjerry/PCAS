@@ -117,7 +117,7 @@ func TestRunNoticeDoesNotRequireReminderTrigger(t *testing.T) {
 	s, scope := testStore(t), owner()
 	now := time.Now().Add(time.Second)
 	st := workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "Result"})
-	_, err := s.Pool.Exec(context.Background(), "INSERT INTO workspace_notices(owner_id,thing_id,trigger_id,due_at,reason) VALUES($1,$2,$3,$4,'Done')", string(scope.OwnerID), st.Tasks[0].ID, runNoticePrefix+string(memory.NewID()), now)
+	_, err := s.Pool.Exec(context.Background(), "INSERT INTO workspace_notices(owner_id,thing_id,trigger_id,due_at,reason) VALUES($1,$2,$3,$4,'Done')", string(scope.OwnerID), st.Tasks[0].ID, kernel.RunNoticePrefix+string(memory.NewID()), now)
 	if err != nil {
 		t.Fatal(err)
 	}

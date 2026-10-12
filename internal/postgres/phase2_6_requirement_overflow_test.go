@@ -25,11 +25,11 @@ func TestPhase26C2C6GlobalRequirementsOverflowIsVisibleAndPrioritized(t *testing
 	}
 	var kept, global, totalRunes int
 	err := pgx.BeginFunc(f.Context, f.Store.Pool, func(tx pgx.Tx) error {
-		u, err := f.Store.startUseContextTx(f.Context, tx, f.Scope)
+		u, err := f.Store.StartUseContextTx(f.Context, tx, f.Scope)
 		if err != nil {
 			return err
 		}
-		if err := f.Store.finishUseContextTx(f.Context, tx, f.Scope, workspace.Agent{ID: "phase26", MemoryKinds: []string{"fact", "preference", "decision", "intention", "plan"}}, nil, "Fictitious unrelated context", nil, &u); err != nil {
+		if err := f.Store.FinishUseContextTx(f.Context, tx, f.Scope, workspace.Agent{ID: "phase26", MemoryKinds: []string{"fact", "preference", "decision", "intention", "plan"}}, nil, "Fictitious unrelated context", nil, &u); err != nil {
 			return err
 		}
 		seen := map[memory.ID]bool{}

@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/postgres/workspacestore"
 	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 
 	webpush "github.com/SherClockHolmes/webpush-go"
@@ -736,7 +737,7 @@ func TestR5_StrictHourBoundaryAndOnlyCompletionRestoration(t *testing.T) {
 			current.Status, restored.Status = fixture.from, fixture.to
 			restored.Triggers = []workspace.Trigger{{ID: "due-reminder", NextAt: now.Add(-fixture.elapsed).Format(time.RFC3339), Active: fixture.active}}
 			if err := pgx.BeginFunc(context.Background(), s.Pool, func(tx pgx.Tx) error {
-				return suppressRestoredRemindersTx(context.Background(), tx, scope, current, restored, now)
+				return workspacestore.SuppressRestoredRemindersTx(context.Background(), tx, scope, current, restored, now)
 			}); err != nil {
 				t.Fatal(err)
 			}

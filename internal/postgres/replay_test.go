@@ -65,7 +65,7 @@ func TestExtractionEvidenceSignalAndReminderDeletion(t *testing.T) {
 	defer server.Close()
 	s.SetModels(&ai.Registry{HTTP: server.Client(), Config: ai.Configuration{Extraction: "model", Providers: []ai.Provider{{ID: "model", Name: "模型", Protocol: "openai", BaseURL: server.URL, Model: "test", MaxOutput: 100, InputPerMillion: 1, OutputPerMillion: 2}}}})
 	j := leaseStage(t, s, scope, source.Ref, "source.extract")
-	if err := (extraction.Service{Store: s.ExtractionStore(), Generator: jobCalls(s), MaxAttempts: MaxJobAttempts}).Process(ctx, j); err != nil {
+	if err := (extraction.Service{Store: s.ExtractionStore(), Generator: jobCalls(s), MaxAttempts: kernel.MaxJobAttempts}).Process(ctx, j); err != nil {
 		t.Fatal(err)
 	}
 	st, err := s.Snapshot(ctx, scope)
@@ -78,7 +78,7 @@ func TestExtractionEvidenceSignalAndReminderDeletion(t *testing.T) {
 	if !strings.Contains(st.Ideas[0].Wake.Reason, "待核验") || calls != 1 {
 		t.Fatal("uncertainty or call count")
 	}
-	if err := (extraction.Service{Store: s.ExtractionStore(), Generator: jobCalls(s), MaxAttempts: MaxJobAttempts}).Process(ctx, j); !errors.Is(err, worker.ErrLeaseLost) {
+	if err := (extraction.Service{Store: s.ExtractionStore(), Generator: jobCalls(s), MaxAttempts: kernel.MaxJobAttempts}).Process(ctx, j); !errors.Is(err, worker.ErrLeaseLost) {
 		t.Fatal("completed job called again", err)
 	}
 	if calls != 1 {
@@ -206,7 +206,7 @@ func TestLongExtractionSchedulesEveryWindow(t *testing.T) {
 	in.Text = strings.Repeat("原", 36000) + "尾部线索"
 	src := mustIngest(t, s, scope, in)
 	job := leaseStage(t, s, scope, src.Ref, "source.extract")
-	if err := (extraction.Service{Store: s.ExtractionStore(), Generator: jobCalls(s), MaxAttempts: MaxJobAttempts}).Process(ctx, job); err != nil {
+	if err := (extraction.Service{Store: s.ExtractionStore(), Generator: jobCalls(s), MaxAttempts: kernel.MaxJobAttempts}).Process(ctx, job); err != nil {
 		t.Fatal(err)
 	}
 	var count int

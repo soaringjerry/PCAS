@@ -7,20 +7,22 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
+	"github.com/soaringjerry/PCAS/internal/postgres/intakestore"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 )
 
 func TestIndexDispatchRunsAlongsideConversationAndHonorsPause(t *testing.T) {
 	s, scope := testStore(t), owner()
 	a := b4bImport(t, s, scope, b4bMessages(t, []string{"user", "assistant"}, []string{"合成原文。", "合成上下文。"}))
 	b4bOperation(t, s, scope, a.Batch, "organize")
-	if err := (extraction.Service{Store: s.ExtractionStore(), Generator: jobCalls(s), MaxAttempts: MaxJobAttempts}).Process(context.Background(), leaseStage(t, s, scope, a.Sources[0], "source.extract")); err != nil {
+	if err := (extraction.Service{Store: s.ExtractionStore(), Generator: jobCalls(s), MaxAttempts: kernel.MaxJobAttempts}).Process(context.Background(), leaseStage(t, s, scope, a.Sources[0], "source.extract")); err != nil {
 		t.Fatal(err)
 	}
 	for _, stage := range []string{"source.tokenize", "source.embed"} {
 		b2Exec(t, s, `INSERT INTO memory_jobs(id,owner_id,record_id,record_version,stage) VALUES(gen_random_uuid(),$1,$2,1,$3)`, string(scope.OwnerID), string(a.Sources[0].ID), stage)
 	}
 	conversation, err := s.Claim(context.Background(), time.Minute)
-	if err != nil || conversation == nil || !strings.HasPrefix(conversation.Stage, conversationExtractionPrefix) {
+	if err != nil || conversation == nil || !strings.HasPrefix(conversation.Stage, intakestore.ConversationExtractionPrefix) {
 		t.Fatal("expected leased conversation", conversation, err)
 	}
 	job, err := s.ClaimIndex(context.Background(), time.Minute)

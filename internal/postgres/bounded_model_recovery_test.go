@@ -77,7 +77,7 @@ func TestMeteredExtractionRecoversLostResponsesWithSeparateCalls(t *testing.T) {
 		t.Fatal(j, err)
 	}
 	for range 2 {
-		requireRecoveryFailure(t, (extraction.Service{Store: s.ExtractionStore(), Generator: jobCalls(s), MaxAttempts: MaxJobAttempts}).Process(context.Background(), *j), modelcall.ErrOutcomeUnknown.Error(), true)
+		requireRecoveryFailure(t, (extraction.Service{Store: s.ExtractionStore(), Generator: jobCalls(s), MaxAttempts: kernel.MaxJobAttempts}).Process(context.Background(), *j), modelcall.ErrOutcomeUnknown.Error(), true)
 		state := b2Snapshot(t, s, scope)
 		if len(state.Memories) != 0 {
 			t.Fatal("unknown output must not create memories")
@@ -85,7 +85,7 @@ func TestMeteredExtractionRecoversLostResponsesWithSeparateCalls(t *testing.T) {
 		next := nextModelRecoveryLease(t, s, *j)
 		j = &next
 	}
-	if err := (extraction.Service{Store: s.ExtractionStore(), Generator: jobCalls(s), MaxAttempts: MaxJobAttempts}).Process(context.Background(), *j); err != nil {
+	if err := (extraction.Service{Store: s.ExtractionStore(), Generator: jobCalls(s), MaxAttempts: kernel.MaxJobAttempts}).Process(context.Background(), *j); err != nil {
 		t.Fatal(err)
 	}
 	var unknown, returned, links, usage int
@@ -119,15 +119,15 @@ func TestPersistentStagePausesAtRecordedRecoveryLimitAfterRestart(t *testing.T) 
 		t.Fatal(err)
 	}
 	j := organizeTestJob(t, s, scope)
-	for attempt := 1; attempt <= maxAttempts; attempt++ {
+	for attempt := 1; attempt <= kernel.MaxAttempts; attempt++ {
 		peer, err := Open(context.Background(), s.Pool.Config().ConnConfig.ConnString())
 		if err != nil {
 			t.Fatal(err)
 		}
 		peer.SetModels(s.Models)
-		err = (organize.Service{Store: peer.OrganizeStore(), Generator: jobCalls(peer), Version: OrganizeVersion}).Process(context.Background(), j)
+		err = (organize.Service{Store: peer.OrganizeStore(), Generator: jobCalls(peer), Version: kernel.OrganizeVersion}).Process(context.Background(), j)
 		peer.Close()
-		if attempt == maxAttempts {
+		if attempt == kernel.MaxAttempts {
 			requireRecoveryFailure(t, err, modelcall.ErrRetryExhausted.Error(), false)
 			break
 		}
@@ -143,13 +143,13 @@ func TestPersistentStagePausesAtRecordedRecoveryLimitAfterRestart(t *testing.T) 
 		t.Fatal(err)
 	}
 	m, err := s.GetMemory(context.Background(), scope, string(ref.ID))
-	if err != nil || m.Category != before.Category || m.Text != before.Text || m.Version != before.Version || calls.Load() != int32(maxAttempts) || count != maxAttempts || lastAttempt != maxAttempts || state != "exhausted" || reason != modelcall.ErrRetryExhausted.Error() || jobState != "blocked" || jobReason != reason {
+	if err != nil || m.Category != before.Category || m.Text != before.Text || m.Version != before.Version || calls.Load() != int32(kernel.MaxAttempts) || count != kernel.MaxAttempts || lastAttempt != kernel.MaxAttempts || state != "exhausted" || reason != modelcall.ErrRetryExhausted.Error() || jobState != "blocked" || jobReason != reason {
 		t.Fatal(m, err, calls.Load(), count, lastAttempt, state, reason, jobState, jobReason)
 	}
 	if _, err := s.Claim(context.Background(), time.Minute); err != nil {
 		t.Fatal(err)
 	}
-	if calls.Load() != int32(maxAttempts) {
+	if calls.Load() != int32(kernel.MaxAttempts) {
 		t.Fatal("blocked recovery must not call again")
 	}
 	// The existing owner retry control grants another bounded allowance.
@@ -160,12 +160,12 @@ func TestPersistentStagePausesAtRecordedRecoveryLimitAfterRestart(t *testing.T) 
 	if err != nil || retried == nil || retried.ID != j.ID || retried.Attempts != 1 {
 		t.Fatal(retried, err)
 	}
-	if err := (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: OrganizeVersion}).Process(context.Background(), *retried); err != nil {
+	if err := (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: kernel.OrganizeVersion}).Process(context.Background(), *retried); err != nil {
 		t.Fatal(err)
 	}
 	var authorization, oldReason string
 	var newAttempt, oldAttempt int
-	if err := s.Pool.QueryRow(context.Background(), `SELECT next.attempt_number,prior.attempt_number,prior.actual_mode->>'recoveryRequestId',prior.actual_mode->>'previousRecoveryReason' FROM model_calls next JOIN model_calls prior ON prior.owner_id=next.owner_id AND prior.id=next.retry_of_id WHERE next.owner_id=$1 AND next.execution_id=$2 AND next.outcome='returned'`, string(scope.OwnerID), string(j.ID)).Scan(&newAttempt, &oldAttempt, &authorization, &oldReason); err != nil || newAttempt != 1 || oldAttempt != maxAttempts || authorization == "" || oldReason != modelcall.ErrRetryExhausted.Error() || calls.Load() != int32(maxAttempts+1) {
+	if err := s.Pool.QueryRow(context.Background(), `SELECT next.attempt_number,prior.attempt_number,prior.actual_mode->>'recoveryRequestId',prior.actual_mode->>'previousRecoveryReason' FROM model_calls next JOIN model_calls prior ON prior.owner_id=next.owner_id AND prior.id=next.retry_of_id WHERE next.owner_id=$1 AND next.execution_id=$2 AND next.outcome='returned'`, string(scope.OwnerID), string(j.ID)).Scan(&newAttempt, &oldAttempt, &authorization, &oldReason); err != nil || newAttempt != 1 || oldAttempt != kernel.MaxAttempts || authorization == "" || oldReason != modelcall.ErrRetryExhausted.Error() || calls.Load() != int32(kernel.MaxAttempts+1) {
 		t.Fatal(newAttempt, oldAttempt, authorization, oldReason, calls.Load(), err)
 	}
 }
@@ -182,18 +182,18 @@ func TestUnknownRecoveryPausesWhenBudgetCannotCoverReplacement(t *testing.T) {
 	s.Models.Config.Providers[0].OutputPerMillion = 1
 	organizeTestMemory(t, s, scope, "Fictitious report with a limited budget.")
 	j := organizeTestJob(t, s, scope)
-	requireRecoveryFailure(t, (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: OrganizeVersion}).Process(context.Background(), j), modelcall.ErrOutcomeUnknown.Error(), true)
+	requireRecoveryFailure(t, (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: kernel.OrganizeVersion}).Process(context.Background(), j), modelcall.ErrOutcomeUnknown.Error(), true)
 	if _, err := s.Pool.Exec(context.Background(), `UPDATE workspace_owners SET settings=jsonb_set(settings,'{dailyBudget}','0') WHERE owner_id=$1`, string(scope.OwnerID)); err != nil {
 		t.Fatal(err)
 	}
 	j = nextModelRecoveryLease(t, s, j)
-	requireRecoveryFailure(t, (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: OrganizeVersion}).Process(context.Background(), j), modelcall.ErrRecoveryBudgetExhausted.Error(), false)
+	requireRecoveryFailure(t, (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: kernel.OrganizeVersion}).Process(context.Background(), j), modelcall.ErrRecoveryBudgetExhausted.Error(), false)
 	var state, reason string
 	var held float64
 	if err := s.Pool.QueryRow(context.Background(), `SELECT c.recovery_state,c.recovery_reason,(SELECT sum(reserved_cost) FROM background_usage WHERE owner_id=$1) FROM model_calls c WHERE owner_id=$1 AND recovery_state='budget_exhausted'`, string(scope.OwnerID)).Scan(&state, &reason, &held); err != nil || reason != "budget_deferred" || held <= 0 || calls.Load() != 1 {
 		t.Fatal(state, reason, held, calls.Load(), err)
 	}
-	requireRecoveryFailure(t, (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: OrganizeVersion}).Process(context.Background(), j), modelcall.ErrRecoveryBudgetExhausted.Error(), false)
+	requireRecoveryFailure(t, (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: kernel.OrganizeVersion}).Process(context.Background(), j), modelcall.ErrRecoveryBudgetExhausted.Error(), false)
 	if calls.Load() != 1 {
 		t.Fatal("budget pause must not silently become a replacement")
 	}
@@ -215,20 +215,20 @@ func TestReservationWriteFailureDoesNotResetUnknownRecoveryCounter(t *testing.T)
 	organizeTestMemory(t, s, scope, "Fictitious report with an interrupted reservation write.")
 	j := organizeTestJob(t, s, scope)
 	ctx := context.Background()
-	requireRecoveryFailure(t, (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: OrganizeVersion}).Process(ctx, j), modelcall.ErrOutcomeUnknown.Error(), true)
+	requireRecoveryFailure(t, (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: kernel.OrganizeVersion}).Process(ctx, j), modelcall.ErrOutcomeUnknown.Error(), true)
 	j = nextModelRecoveryLease(t, s, j)
 	if _, err := s.Pool.Exec(ctx, `CREATE FUNCTION reject_test_reservation() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'synthetic reservation failure'; END $$;
  CREATE TRIGGER reject_test_reservation BEFORE INSERT ON background_usage FOR EACH ROW EXECUTE FUNCTION reject_test_reservation()`); err != nil {
 		t.Fatal(err)
 	}
-	if err := (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: OrganizeVersion}).Process(ctx, j); err == nil || calls.Load() != 1 {
+	if err := (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: kernel.OrganizeVersion}).Process(ctx, j); err == nil || calls.Load() != 1 {
 		t.Fatal("failed reservation must not invoke the provider", err, calls.Load())
 	}
 	if _, err := s.Pool.Exec(ctx, `DROP TRIGGER reject_test_reservation ON background_usage`); err != nil {
 		t.Fatal(err)
 	}
 	j = nextModelRecoveryLease(t, s, j)
-	if err := (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: OrganizeVersion}).Process(ctx, j); err != nil {
+	if err := (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: kernel.OrganizeVersion}).Process(ctx, j); err != nil {
 		t.Fatal(err)
 	}
 	var attempt, failedAttempt int
@@ -289,7 +289,7 @@ func TestLateInterruptedCallCannotDeleteReplacementPaidResult(t *testing.T) {
 	}
 	defer peer.Close()
 	peer.SetModels(s.Models)
-	if err := (organize.Service{Store: peer.OrganizeStore(), Generator: jobCalls(peer), Version: OrganizeVersion}).Process(ctx, *replacement); err == nil {
+	if err := (organize.Service{Store: peer.OrganizeStore(), Generator: jobCalls(peer), Version: kernel.OrganizeVersion}).Process(ctx, *replacement); err == nil {
 		t.Fatal("expected isolated business-write failure")
 	}
 	close(release)
@@ -303,7 +303,7 @@ func TestLateInterruptedCallCannotDeleteReplacementPaidResult(t *testing.T) {
 	if _, err := s.Pool.Exec(ctx, `DROP TRIGGER reject_test_application ON claim_revisions`); err != nil {
 		t.Fatal(err)
 	}
-	if err := (organize.Service{Store: peer.OrganizeStore(), Generator: jobCalls(peer), Version: OrganizeVersion}).Process(ctx, *replacement); err != nil {
+	if err := (organize.Service{Store: peer.OrganizeStore(), Generator: jobCalls(peer), Version: kernel.OrganizeVersion}).Process(ctx, *replacement); err != nil {
 		t.Fatal(err)
 	}
 	m, err := s.GetMemory(ctx, scope, string(ref.ID))

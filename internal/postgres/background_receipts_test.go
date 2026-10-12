@@ -10,12 +10,14 @@ import (
 	"github.com/soaringjerry/PCAS/internal/interpretation/aliasscan"
 	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/interpstore"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/soaringjerry/PCAS/internal/worker"
 )
 
 func TestPaidBackgroundResultsSurviveBusinessWriteFailureAndRestart(t *testing.T) {
-	for _, stage := range []string{CompareStage, EntityCompareStage, EntityCandidatesStage} {
+	for _, stage := range []string{kernel.CompareStage, kernel.EntityCompareStage, interpstore.EntityCandidatesStage} {
 		t.Run(stage, func(t *testing.T) {
 			s, scope, ctx := testStore(t), owner(), context.Background()
 			fake := b1Model(t, s, `{}`)
@@ -24,25 +26,25 @@ func TestPaidBackgroundResultsSurviveBusinessWriteFailureAndRestart(t *testing.T
 			table := ""
 			response := ""
 			switch stage {
-			case CompareStage:
+			case kernel.CompareStage:
 				compareFixture(t, s, scope, "虚构研究记录甲", "虚构研究记录乙")
-				job = compareJob(t, s, scope, false, CompareVersion)
+				job = compareJob(t, s, scope, false, kernel.CompareVersion)
 				process = func(s *Store, ctx context.Context, j worker.Job) error {
-					return (comparison.Service{Store: s.CompareStore(), Generator: jobCalls(s), Version: CompareVersion}).Process(ctx, j)
+					return (comparison.Service{Store: s.CompareStore(), Generator: jobCalls(s), Version: kernel.CompareVersion}).Process(ctx, j)
 				}
 				table = "memory_comparison_batches"
 				response = `{"duplicates":[],"superseded":[]}`
-			case EntityCompareStage:
+			case kernel.EntityCompareStage:
 				a, _ := compareEntityFixture(t, s, scope, "Al", "虚构阿蓝负责器材")
 				b, _ := compareEntityFixture(t, s, scope, "虚构齐鹤", "虚构齐鹤负责盆栽")
-				aliasProposalFixture(t, s, scope, a, b, EntityCompareVersion)
-				job = compareJob(t, s, scope, true, EntityCompareVersion)
+				aliasProposalFixture(t, s, scope, a, b, kernel.EntityCompareVersion)
+				job = compareJob(t, s, scope, true, kernel.EntityCompareVersion)
 				process = func(s *Store, ctx context.Context, j worker.Job) error {
-					return (comparison.EntityService{Store: s.EntityCompareStore(), Generator: jobCalls(s), Version: EntityCompareVersion}).Process(ctx, j)
+					return (comparison.EntityService{Store: s.EntityCompareStore(), Generator: jobCalls(s), Version: kernel.EntityCompareVersion}).Process(ctx, j)
 				}
 				table = "entity_alias_receipts"
 				response = `{"same":false,"keep":null}`
-			case EntityCandidatesStage:
+			case interpstore.EntityCandidatesStage:
 				aliasEntityFixture(t, s, scope, "person", "Al", 1)
 				aliasEntityFixture(t, s, scope, "person", "虚构齐鹤", 1)
 				job = aliasNamesJob(t, s, scope)
@@ -106,13 +108,13 @@ func TestPersistentBackgroundFailureKeepsIncreasingAttempts(t *testing.T) {
 	s, scope, ctx := testStore(t), owner(), context.Background()
 	secretaryModel(t, s, func(w http.ResponseWriter, r *http.Request) { http.Error(w, "fictional unavailable", 503) })
 	compareFixture(t, s, scope, "虚构需持续比较甲", "虚构需持续比较乙")
-	job := compareJob(t, s, scope, false, CompareVersion)
+	job := compareJob(t, s, scope, false, kernel.CompareVersion)
 	for _, attempt := range []int{1, 3, 8} {
 		job.Attempts = attempt
 		if _, err := s.Pool.Exec(ctx, "UPDATE memory_jobs SET state='leased',attempts=$2,lease_token=$3,lease_until=now()+interval '5 minutes' WHERE id=$1", job.ID, attempt, job.LeaseToken); err != nil {
 			t.Fatal(err)
 		}
-		err := (comparison.Service{Store: s.CompareStore(), Generator: jobCalls(s), Version: CompareVersion}).Process(ctx, job)
+		err := (comparison.Service{Store: s.CompareStore(), Generator: jobCalls(s), Version: kernel.CompareVersion}).Process(ctx, job)
 		failure, ok := err.(*worker.JobError)
 		if !ok || failure.Code != "model_call_failed" || failure.NoAttempt || failure.Until.IsZero() {
 			t.Fatal("model failure did not count", err)
@@ -120,7 +122,7 @@ func TestPersistentBackgroundFailureKeepsIncreasingAttempts(t *testing.T) {
 		if err := s.Defer(ctx, job, failure.Code, failure.Until, failure.NoAttempt); err != nil {
 			t.Fatal(err)
 		}
-		if !persistentBackgroundStage(job.Stage) {
+		if !kernel.PersistentBackgroundStage(job.Stage) {
 			t.Fatal("background failure can exhaust")
 		}
 	}
@@ -140,16 +142,16 @@ func TestPersistentBackgroundFailureKeepsIncreasingAttempts(t *testing.T) {
 }
 
 func TestNameScanKeepsUnaffectedBlocksAcrossCapacityBoundary(t *testing.T) {
-	names := make([]entityCandidateName, 200)
+	names := make([]interpstore.EntityCandidateName, 200)
 	for i := range names {
-		names[i] = entityCandidateName{Type: "person", Name: fmt.Sprintf("Fictitious person %03d", i), Ref: memory.Ref{Kind: memory.EntityKind, ID: memory.NewID(), Version: 1}, MemoryCount: 1, Positions: map[string]int64{"person": int64(i)}}
+		names[i] = interpstore.EntityCandidateName{Type: "person", Name: fmt.Sprintf("Fictitious person %03d", i), Ref: memory.Ref{Kind: memory.EntityKind, ID: memory.NewID(), Version: 1}, MemoryCount: 1, Positions: map[string]int64{"person": int64(i)}}
 	}
-	before := entityCandidateBatches(names, EntityCompareVersion)
+	before := interpstore.EntityCandidateBatches(names, kernel.EntityCompareVersion)
 	if len(before) != 3 {
 		t.Fatal("self and cross blocks missing", len(before))
 	}
-	names = append(names, entityCandidateName{Type: "person", Name: "Fictitious person 200", Ref: memory.Ref{Kind: memory.EntityKind, ID: memory.NewID(), Version: 1}, MemoryCount: 1, Positions: map[string]int64{"person": 200}})
-	after := entityCandidateBatches(names, EntityCompareVersion)
+	names = append(names, interpstore.EntityCandidateName{Type: "person", Name: "Fictitious person 200", Ref: memory.Ref{Kind: memory.EntityKind, ID: memory.NewID(), Version: 1}, MemoryCount: 1, Positions: map[string]int64{"person": 200}})
+	after := interpstore.EntityCandidateBatches(names, kernel.EntityCompareVersion)
 	markers := map[string]bool{}
 	for _, b := range after {
 		markers[b.Marker] = true
@@ -163,7 +165,7 @@ func TestNameScanKeepsUnaffectedBlocksAcrossCapacityBoundary(t *testing.T) {
 		names[i].MemoryCount += 10
 		names[i].Ref.Version++
 	}
-	counted := entityCandidateBatches(names, EntityCompareVersion)
+	counted := interpstore.EntityCandidateBatches(names, kernel.EntityCompareVersion)
 	for _, b := range counted {
 		if !markers[b.Marker] {
 			t.Fatal("memory counts or audit versions invalidated name receipt")
@@ -177,18 +179,18 @@ func TestLegacyNameScanReceiptTransfersWithoutAnotherModelCall(t *testing.T) {
 	a, _ := aliasEntityFixture(t, s, scope, "person", "Fictitious Azure", 1)
 	aliasEntityFixture(t, s, scope, "person", "虚构齐鹤", 1)
 	if err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
-		names, err := entityCandidateNamesTx(ctx, tx, scope.OwnerID, EntityCompareVersion)
+		names, err := interpstore.EntityCandidateNamesTx(ctx, tx, scope.OwnerID, kernel.EntityCompareVersion)
 		if err != nil {
 			return err
 		}
-		old := entityCandidateBatchesFor(names, EntityCompareVersion, true)
+		old := interpstore.EntityCandidateBatchesFor(names, kernel.EntityCompareVersion, true)
 		if len(old) != 1 {
 			t.Fatal("legacy fixture", len(old))
 		}
 		if _, err := tx.Exec(ctx, "INSERT INTO background_markers(owner_id,record_id,record_version,stage) VALUES($1,$2,1,$3)", scope.OwnerID, a.ID, old[0].Marker); err != nil {
 			return err
 		}
-		next, err := nextEntityCandidateBatchTx(ctx, tx, scope.OwnerID, EntityCompareVersion)
+		next, err := interpstore.NextEntityCandidateBatchTx(ctx, tx, scope.OwnerID, kernel.EntityCompareVersion)
 		if err == nil && next != nil {
 			t.Fatal("paid legacy scan became pending", next)
 		}

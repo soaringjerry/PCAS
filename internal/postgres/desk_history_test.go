@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/postgres/actionlog"
+	"github.com/soaringjerry/PCAS/internal/postgres/deskstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/testsupport"
 	"github.com/soaringjerry/PCAS/internal/workspace"
@@ -20,10 +21,10 @@ func TestSecretaryHistoryOneEntryPerAction(t *testing.T) {
 	scope := owner()
 	ctx := context.Background()
 	workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: kernel.JSON(map[string]string{"timezone": "Asia/Shanghai"})})
-	output := secretaryOutput{Actions: []secretaryAction{{
-		Op: "create_task", Title: "给张三回邮件", Due: stringPointer(testsupport.DateFromToday(t, "Asia/Shanghai", 1, 15, 0).Format("2006-01-02T15:04")),
-		Project: stringPointer("new:A"), Notes: stringPointer("核对附件"),
-		OwedTo: stringPointer("张三"), WaitingFor: stringPointer("确认方案"),
+	output := deskstore.SecretaryOutput{Actions: []deskstore.SecretaryAction{{
+		Op: "create_task", Title: "给张三回邮件", Due: deskstore.StringPointer(testsupport.DateFromToday(t, "Asia/Shanghai", 1, 15, 0).Format("2006-01-02T15:04")),
+		Project: deskstore.StringPointer("new:A"), Notes: deskstore.StringPointer("核对附件"),
+		OwedTo: deskstore.StringPointer("张三"), WaitingFor: deskstore.StringPointer("确认方案"),
 	}}}
 	secretaryModel(t, s, func(w http.ResponseWriter, r *http.Request) { secretaryModelReply(w, output) })
 	req := turnRequest("周五下午三点给张三回邮件，提前半小时提醒")
@@ -94,7 +95,7 @@ func TestSecretaryHistoryOneEntryPerAction(t *testing.T) {
 		t.Fatal("task absent from action log")
 	}
 	assertLog(taskReceipt, nil, 1) // Project has its own action and receipt.
-	output.Actions = []secretaryAction{{Op: "update", Ref: "THIS", Set: map[string]json.RawMessage{"due": kernel.JSON(testsupport.DateFromToday(t, "Asia/Shanghai", 4, 10, 0).Format("2006-01-02T15:04"))}}}
+	output.Actions = []deskstore.SecretaryAction{{Op: "update", Ref: "THIS", Set: map[string]json.RawMessage{"due": kernel.JSON(testsupport.DateFromToday(t, "Asia/Shanghai", 4, 10, 0).Format("2006-01-02T15:04"))}}}
 	req = turnRequest("改到周一十点")
 	req.ThingID = &task.ID
 	updated := mustTurn(t, s, scope, req)
@@ -130,19 +131,19 @@ func TestSecretaryHistoryOneEntryPerAction(t *testing.T) {
 func TestSecretaryHistoryBatchesOnlyWithinOneAction(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
-		create secretaryAction
-		update secretaryAction
+		create deskstore.SecretaryAction
+		update deskstore.SecretaryAction
 		kind   string
 	}{
-		{"plain task and steps", secretaryAction{Op: "create_task", Title: "任务"}, secretaryAction{Op: "add_steps", Ref: "THIS", Steps: []string{"核对", "准备", "发送"}}, "task"},
-		{"reminder only", secretaryAction{Op: "create_task", Title: "提醒", Due: stringPointer(testsupport.DateFromToday(t, "Asia/Shanghai", 1, 15, 0).Format("2006-01-02T15:04"))}, secretaryAction{Op: "update", Ref: "THIS", Set: map[string]json.RawMessage{"remind": kernel.JSON("-1h")}}, "task"},
-		{"idea with condition", secretaryAction{Op: "create_idea", Title: "想法", Condition: stringPointer("下周再看"), ConditionDue: stringPointer(testsupport.DateFromToday(t, "Asia/Shanghai", 4, 23, 59).Format("2006-01-02"))}, secretaryAction{Op: "update", Ref: "THIS", Set: map[string]json.RawMessage{"title": kernel.JSON("新想法"), "notesAppend": kernel.JSON("补充")}}, "idea"},
-		{"project", secretaryAction{Op: "create_project", Name: "项目"}, secretaryAction{Op: "update", Ref: "THIS", Set: map[string]json.RawMessage{"title": kernel.JSON("新项目"), "notesAppend": kernel.JSON("目标")}}, "project"},
+		{"plain task and steps", deskstore.SecretaryAction{Op: "create_task", Title: "任务"}, deskstore.SecretaryAction{Op: "add_steps", Ref: "THIS", Steps: []string{"核对", "准备", "发送"}}, "task"},
+		{"reminder only", deskstore.SecretaryAction{Op: "create_task", Title: "提醒", Due: deskstore.StringPointer(testsupport.DateFromToday(t, "Asia/Shanghai", 1, 15, 0).Format("2006-01-02T15:04"))}, deskstore.SecretaryAction{Op: "update", Ref: "THIS", Set: map[string]json.RawMessage{"remind": kernel.JSON("-1h")}}, "task"},
+		{"idea with condition", deskstore.SecretaryAction{Op: "create_idea", Title: "想法", Condition: deskstore.StringPointer("下周再看"), ConditionDue: deskstore.StringPointer(testsupport.DateFromToday(t, "Asia/Shanghai", 4, 23, 59).Format("2006-01-02"))}, deskstore.SecretaryAction{Op: "update", Ref: "THIS", Set: map[string]json.RawMessage{"title": kernel.JSON("新想法"), "notesAppend": kernel.JSON("补充")}}, "idea"},
+		{"project", deskstore.SecretaryAction{Op: "create_project", Name: "项目"}, deskstore.SecretaryAction{Op: "update", Ref: "THIS", Set: map[string]json.RawMessage{"title": kernel.JSON("新项目"), "notesAppend": kernel.JSON("目标")}}, "project"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			s := testStore(t)
 			scope := owner()
-			output := secretaryOutput{Actions: []secretaryAction{tc.create}}
+			output := deskstore.SecretaryOutput{Actions: []deskstore.SecretaryAction{tc.create}}
 			secretaryModel(t, s, func(w http.ResponseWriter, r *http.Request) { secretaryModelReply(w, output) })
 			find := func(st workspace.State) workspace.Item {
 				t.Helper()
@@ -158,7 +159,7 @@ func TestSecretaryHistoryBatchesOnlyWithinOneAction(t *testing.T) {
 				t.Fatal("duplicate creation history", item)
 			}
 			// Two independent actions in one turn must remain two revisions.
-			output.Actions = []secretaryAction{tc.update, {Op: "update", Ref: "THIS", Set: map[string]json.RawMessage{"notesAppend": kernel.JSON("另一动作")}}}
+			output.Actions = []deskstore.SecretaryAction{tc.update, {Op: "update", Ref: "THIS", Set: map[string]json.RawMessage{"notesAppend": kernel.JSON("另一动作")}}}
 			req := turnRequest("修改，再补一条说明")
 			req.ThingID = &item.ID
 			updated := mustTurn(t, s, scope, req)
@@ -170,7 +171,7 @@ func TestSecretaryHistoryBatchesOnlyWithinOneAction(t *testing.T) {
 				t.Fatal("reminder-only edit was lost", changed)
 			}
 			// A separate creation can still be removed completely by undo.
-			output.Actions = []secretaryAction{tc.create}
+			output.Actions = []deskstore.SecretaryAction{tc.create}
 			another := mustTurn(t, s, scope, turnRequest("再新建"))
 			if _, err := s.Undo(context.Background(), scope, *another.Turn.Receipts[0].ActionID); err != nil {
 				t.Fatal("creation undo failed", err)

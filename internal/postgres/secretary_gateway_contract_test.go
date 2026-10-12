@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"sync/atomic"
 	"testing"
+
+	"github.com/soaringjerry/PCAS/internal/postgres/usestore"
 )
 
 // An OpenAI-compatible provider has no output schema and no web search. The
@@ -17,7 +19,7 @@ func TestSecretaryOnAProviderWithoutSchemaOrSearchAnswersAndRecordsTheFallback(t
 		secretaryModelReply(w, `{"reply":"Fictitious reply.","actions":[{"op":"create_task","title":"Fictitious task"}]}`)
 	})
 	request := turnRequest("Fictitious ordinary-provider check.")
-	out, err := s.DeskTurn(WithMemoryTier(context.Background(), "light"), scope, request)
+	out, err := s.DeskTurn(usestore.WithMemoryTier(context.Background(), "light"), scope, request)
 	if err != nil || calls.Load() != 1 || out.Turn.Reply != "Fictitious reply." || len(out.State.Tasks) != 1 {
 		t.Fatal("an ordinary provider did not answer and act", out.Turn, calls.Load(), err)
 	}

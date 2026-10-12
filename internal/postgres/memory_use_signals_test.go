@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/intakestore"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -45,7 +46,7 @@ func TestActivityRankingUsesEffectiveSignals(t *testing.T) {
 		b1Claim(t, s, scope, "Fictitious ranking record "+strings.Repeat("x", i+1), "fact", "confirmed", source)
 	}
 	req := memory.RecallRequest{Query: "Fictitious", Mode: memory.Remember, Budget: memory.Budget{Candidates: 15, Tokens: 4000, Edges: 15, Hops: 1}}
-	off, err := s.Recall(WithActivityRanking(ctx, false), scope, req)
+	off, err := s.Recall(intakestore.WithActivityRanking(ctx, false), scope, req)
 	if err != nil || len(off.Memories) != 8 {
 		t.Fatal(off, err)
 	}
@@ -53,11 +54,11 @@ func TestActivityRankingUsesEffectiveSignals(t *testing.T) {
 	if err := s.RecordUse(ctx, scope, memory.UseEvent{Ref: target, EventID: "fictional-effective-use", Kind: "user_mention", At: time.Now()}); err != nil {
 		t.Fatal(err)
 	}
-	on, err := s.Recall(WithActivityRanking(ctx, true), scope, req)
+	on, err := s.Recall(intakestore.WithActivityRanking(ctx, true), scope, req)
 	if err != nil || len(on.Memories) != 8 || on.Memories[0].ID != target.ID {
 		t.Fatal("effective-use signal failed to affect ordering", on, err)
 	}
-	offAgain, err := s.Recall(WithActivityRanking(ctx, false), scope, req)
+	offAgain, err := s.Recall(intakestore.WithActivityRanking(ctx, false), scope, req)
 	if err != nil || offAgain.Memories[7].ID != target.ID {
 		t.Fatal("disabled effective-use ranking changed ordering", offAgain, err)
 	}

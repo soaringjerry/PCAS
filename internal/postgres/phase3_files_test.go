@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/worker"
 )
 
@@ -287,7 +288,7 @@ func TestPhase3F2T2FileExtractionConcurrentWithSchedulingAndUser(t *testing.T) {
 	}
 	done := make(chan error, 1)
 	go func() {
-		done <- (extraction.Service{Store: f.Store.ExtractionStore(), Generator: jobCalls(f.Store), MaxAttempts: MaxJobAttempts}).Process(f.Context, extractJob)
+		done <- (extraction.Service{Store: f.Store.ExtractionStore(), Generator: jobCalls(f.Store), MaxAttempts: kernel.MaxJobAttempts}).Process(f.Context, extractJob)
 	}()
 	select {
 	case <-entered:

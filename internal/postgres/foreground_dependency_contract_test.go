@@ -11,6 +11,7 @@ import (
 
 	"github.com/soaringjerry/PCAS/internal/contextbuilder"
 	"github.com/soaringjerry/PCAS/internal/modelcall"
+	"github.com/soaringjerry/PCAS/internal/postgres/usestore"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/workspace"
@@ -31,7 +32,7 @@ func TestHeavyReaderPagesAllMembersAndDisclosesSkippedGroups(t *testing.T) {
 	}
 	m.mu.Unlock()
 	key := "entity:" + string(f.Entities[0])
-	u := useContext{Location: time.UTC, Ready: true, Selected: true, RequiredGroups: []string{key}, Coverage: &useCoverage{}, Index: []workspace.StatusCardRef{{Key: key, Name: f.Corpus.Groups[0].Name, Kind: "person", Count: 1200}}}
+	u := usestore.UseContext{Location: time.UTC, Ready: true, Selected: true, RequiredGroups: []string{key}, Coverage: &usestore.UseCoverage{}, Index: []workspace.StatusCardRef{{Key: key, Name: f.Corpus.Groups[0].Name, Kind: "person", Count: 1200}}}
 	agent := workspace.Agent{ID: "phase26", MemoryKinds: []string{"fact", "preference", "decision", "intention", "plan"}}
 	start := time.Now()
 	execution := admittedInteractiveRequest(t, f.Store, f.Scope, agent.ID)
@@ -60,7 +61,7 @@ func TestHeavyReaderPagesAllMembersAndDisclosesSkippedGroups(t *testing.T) {
 	// coverage/overflow reporting; it is not a user-latency benchmark.
 	u.RequiredGroups = nil
 	u.Index = nil
-	u.Coverage = &useCoverage{}
+	u.Coverage = &usestore.UseCoverage{}
 	for g := 0; g < 13; g++ {
 		k := "entity:" + string(f.Entities[g])
 		u.RequiredGroups = append(u.RequiredGroups, k)
@@ -122,7 +123,7 @@ func TestOnlyChangedActionTargetInvalidatesAnswer(t *testing.T) {
 			}
 			done := make(chan result, 1)
 			go func() {
-				out, err := f.Store.DeskTurn(WithMemoryTier(f.Context, "light"), f.Scope, workspace.DeskTurnRequest{AgentID: "phase26", RequestID: string(memory.NewID()), Text: "Answer this fictitious question and update the fictitious task if asked."})
+				out, err := f.Store.DeskTurn(usestore.WithMemoryTier(f.Context, "light"), f.Scope, workspace.DeskTurnRequest{AgentID: "phase26", RequestID: string(memory.NewID()), Text: "Answer this fictitious question and update the fictitious task if asked."})
 				done <- result{out, err}
 			}()
 			select {

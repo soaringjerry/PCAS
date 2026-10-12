@@ -11,6 +11,7 @@ import (
 
 	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
 	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/worker"
@@ -35,10 +36,10 @@ func TestOrganizeCompareHourlyPipelineRetainsCompletedHistory(t *testing.T) {
 	claim := func(stage string) worker.Job {
 		t.Helper()
 		var err error
-		if stage == EntityCompareStage {
-			return compareJob(t, s, scope, true, EntityCompareVersion)
+		if stage == kernel.EntityCompareStage {
+			return compareJob(t, s, scope, true, kernel.EntityCompareVersion)
 		}
-		if stage == OrganizeStage {
+		if stage == kernel.OrganizeStage {
 			_, err = s.ScheduleOrganize(ctx, time.Now())
 		} else {
 			_, err = s.ScheduleCompare(ctx, time.Now())
@@ -57,7 +58,7 @@ func TestOrganizeCompareHourlyPipelineRetainsCompletedHistory(t *testing.T) {
 	}
 	for i := range 40 {
 		organizeTestMemory(t, s, scope, fmt.Sprintf("虚构分期整理便签%03d。", i))
-		if err := (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: OrganizeVersion}).Process(ctx, claim(OrganizeStage)); err != nil {
+		if err := (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: kernel.OrganizeVersion}).Process(ctx, claim(kernel.OrganizeStage)); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -65,7 +66,7 @@ func TestOrganizeCompareHourlyPipelineRetainsCompletedHistory(t *testing.T) {
 	for i := range 40 {
 		compareFixture(t, s, scope, fmt.Sprintf("虚构分期比较便签%03d甲。", i))
 		compareFixture(t, s, scope, fmt.Sprintf("虚构分期比较便签%03d乙。", i))
-		if err := (comparison.Service{Store: s.CompareStore(), Generator: jobCalls(s), Version: CompareVersion}).Process(ctx, claim(CompareStage)); err != nil {
+		if err := (comparison.Service{Store: s.CompareStore(), Generator: jobCalls(s), Version: kernel.CompareVersion}).Process(ctx, claim(kernel.CompareStage)); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -74,8 +75,8 @@ func TestOrganizeCompareHourlyPipelineRetainsCompletedHistory(t *testing.T) {
 		name := fmt.Sprintf("虚构分期人物%03d", i)
 		a, _ := compareEntityFixture(t, s, scope, name, "虚构人物在海岚工坊负责文具")
 		b, _ := compareEntityFixture(t, s, scope, name, "虚构人物在杉木实验室负责器材")
-		aliasProposalFixture(t, s, scope, a, b, EntityCompareVersion)
-		if err := (comparison.EntityService{Store: s.EntityCompareStore(), Generator: jobCalls(s), Version: EntityCompareVersion}).Process(ctx, claim(EntityCompareStage)); err != nil {
+		aliasProposalFixture(t, s, scope, a, b, kernel.EntityCompareVersion)
+		if err := (comparison.EntityService{Store: s.EntityCompareStore(), Generator: jobCalls(s), Version: kernel.EntityCompareVersion}).Process(ctx, claim(kernel.EntityCompareStage)); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -89,16 +90,16 @@ func TestOrganizeCompareHourlyPipelineRetainsCompletedHistory(t *testing.T) {
 	if runtime != 110 || billed != 110 || orphaned != 0 || len(f.all()) != 110 {
 		t.Fatal("phase history lost", runtime, billed, orphaned, len(f.all()))
 	}
-	for _, stage := range []string{CompareStage, EntityCompareStage, OrganizeStage} {
+	for _, stage := range []string{kernel.CompareStage, kernel.EntityCompareStage, kernel.OrganizeStage} {
 		var sentinel memory.Ref
 		switch stage {
-		case CompareStage:
+		case kernel.CompareStage:
 			compareFixture(t, s, scope, "虚构额度已满比较哨兵")
-		case EntityCompareStage:
+		case kernel.EntityCompareStage:
 			a, _ := compareEntityFixture(t, s, scope, "虚构额度已满同名", "虚构人物分别负责书籍")
 			b, _ := compareEntityFixture(t, s, scope, "虚构额度已满同名", "虚构人物分别负责盆栽")
-			aliasProposalFixture(t, s, scope, a, b, EntityCompareVersion)
-		case OrganizeStage:
+			aliasProposalFixture(t, s, scope, a, b, kernel.EntityCompareVersion)
+		case kernel.OrganizeStage:
 			sentinel = organizeTestMemory(t, s, scope, "虚构额度已满整理哨兵")
 		}
 		job := claim(stage)
@@ -106,7 +107,7 @@ func TestOrganizeCompareHourlyPipelineRetainsCompletedHistory(t *testing.T) {
 		if err := s.Defer(ctx, job, "", time.Now(), true); err != nil {
 			t.Fatal(err)
 		}
-		runner := worker.New(s, map[string]worker.Handler{OrganizeStage: (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: OrganizeVersion}).Process, CompareStage: (comparison.Service{Store: s.CompareStore(), Generator: jobCalls(s), Version: CompareVersion}).Process, EntityCompareStage: (comparison.EntityService{Store: s.EntityCompareStore(), Generator: jobCalls(s), Version: EntityCompareVersion}).Process}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+		runner := worker.New(s, map[string]worker.Handler{kernel.OrganizeStage: (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: kernel.OrganizeVersion}).Process, kernel.CompareStage: (comparison.Service{Store: s.CompareStore(), Generator: jobCalls(s), Version: kernel.CompareVersion}).Process, kernel.EntityCompareStage: (comparison.EntityService{Store: s.EntityCompareStore(), Generator: jobCalls(s), Version: kernel.EntityCompareVersion}).Process}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 		if ran, err := runner.RunOnce(ctx); err != nil || !ran {
 			t.Fatal("quota worker", stage, ran, err)
 		}
@@ -117,16 +118,16 @@ func TestOrganizeCompareHourlyPipelineRetainsCompletedHistory(t *testing.T) {
 			t.Fatal(err)
 		}
 		want := "compare_hourly_limit"
-		if stage == EntityCompareStage {
+		if stage == kernel.EntityCompareStage {
 			want = "entity_compare_hourly_limit"
 		}
-		if stage == OrganizeStage {
+		if stage == kernel.OrganizeStage {
 			want = "organize_hourly_limit"
 		}
 		if state != "queued" || code != want || attempts != 0 || !due.After(time.Now()) || len(f.all()) != 110 {
 			t.Fatal("worker quota deferral", stage, state, code, attempts, due, len(f.all()))
 		}
-		if stage == OrganizeStage {
+		if stage == kernel.OrganizeStage {
 			var organized, tries int
 			if err := s.Pool.QueryRow(ctx, `SELECT organized,organize_attempts FROM claims WHERE owner_id=$1 AND id=$2`, scope.OwnerID, sentinel.ID).Scan(&organized, &tries); err != nil || organized != 0 || tries != 0 {
 				t.Fatal("sentinel changed", organized, tries, err)
@@ -154,7 +155,7 @@ func TestOrganizeCompareHourlyPipelineRetainsCompletedHistory(t *testing.T) {
 			if len(f.all()) != 111 {
 				t.Fatal("next-hour call count", len(f.all()))
 			}
-			if err := s.Pool.QueryRow(ctx, `SELECT organized FROM claims WHERE owner_id=$1 AND id=$2`, scope.OwnerID, sentinel.ID).Scan(&organized); err != nil || organized != OrganizeVersion {
+			if err := s.Pool.QueryRow(ctx, `SELECT organized FROM claims WHERE owner_id=$1 AND id=$2`, scope.OwnerID, sentinel.ID).Scan(&organized); err != nil || organized != kernel.OrganizeVersion {
 				t.Fatal("next-hour sentinel", organized, err)
 			}
 		}

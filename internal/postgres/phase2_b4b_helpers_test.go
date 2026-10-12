@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
+	"github.com/soaringjerry/PCAS/internal/postgres/intakestore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/soaringjerry/PCAS/internal/blob"
@@ -279,7 +280,7 @@ func b4bRecord(t *testing.T, s *Store, scope memory.Scope, source memory.Ref, st
 	b2Equal(t, count, items)
 	// Phase 3.5 B1 extends whole-conversation extraction to tasks and ideas;
 	// replay fences track the current extractor, not the historical gold version.
-	b2Equal(t, extractor, conversationExtractorVersion)
+	b2Equal(t, extractor, intakestore.ConversationExtractorVersion)
 }
 func b4bEvidence(t *testing.T, s *Store, scope memory.Scope, m workspace.Memory, source memory.Ref, quote string, at *time.Time) {
 	t.Helper()
@@ -308,7 +309,7 @@ func b4bLegacyExtract(t *testing.T, s *Store, scope memory.Scope, f *b1Fake, sou
 	root := b4bEnableSourceImport(t, s, scope, source)
 	b4bOnlyArchiveJobs(t, s, scope, root)
 	f.set(map[string]any{"items": items})
-	if err := (extraction.Service{Store: s.ExtractionStore(), Generator: jobCalls(s), MaxAttempts: MaxJobAttempts}).Process(context.Background(), leaseStage(t, s, scope, source, "source.extract")); err != nil {
+	if err := (extraction.Service{Store: s.ExtractionStore(), Generator: jobCalls(s), MaxAttempts: kernel.MaxJobAttempts}).Process(context.Background(), leaseStage(t, s, scope, source, "source.extract")); err != nil {
 		t.Fatal(err)
 	}
 	b4bDrain(t, s)

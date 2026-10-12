@@ -11,6 +11,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/soaringjerry/PCAS/internal/ai"
+	"github.com/soaringjerry/PCAS/internal/postgres/interpstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 )
 
@@ -63,7 +64,7 @@ func TestPhase26A9EstimatedSubscriptionDailyBudgetAndHealth(t *testing.T) {
 	// Leave one real classification batch and a modeled alias proposal pending.
 	phase26Exec(t, f, `UPDATE claims SET organized=0 WHERE owner_id=$1 AND id=ANY($2::uuid[])`, owner, []string{string(f.Claims[4998]), string(f.Claims[4999])})
 	phase26Proposal(t, f, 0, 4)
-	stages := []string{OrganizeStage, CompareStage, EntityCompareStage, EntityCandidatesStage, HandoverStage}
+	stages := []string{kernel.OrganizeStage, kernel.CompareStage, kernel.EntityCompareStage, interpstore.EntityCandidatesStage, kernel.HandoverStage}
 	total := 0.0
 	for _, stage := range stages {
 		phase26Isolate(t, f, stage)

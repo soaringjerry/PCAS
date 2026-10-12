@@ -9,9 +9,9 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
-	"github.com/soaringjerry/PCAS/internal/postgres"
 	"github.com/soaringjerry/PCAS/internal/worker"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
@@ -66,7 +66,7 @@ func TestPhase25B1_X03_FortyThenFive(t *testing.T) {
 	if j == nil {
 		t.Fatal("continuation was not enqueued")
 	}
-	if err := (organize.Service{Store: f.store.OrganizeStore(), Generator: jobCalls(f.store), Version: postgres.OrganizeVersion}).Process(f.ctx, *j); err != nil {
+	if err := (organize.Service{Store: f.store.OrganizeStore(), Generator: jobCalls(f.store), Version: kernel.OrganizeVersion}).Process(f.ctx, *j); err != nil {
 		t.Fatal(err)
 	}
 	batches := f.usages(t)
@@ -321,7 +321,7 @@ func TestPhase25B1_X12_TransactionRollsBackAndRetries(t *testing.T) {
 	if j == nil {
 		t.Fatal("missing job")
 	}
-	if err := (organize.Service{Store: f.store.OrganizeStore(), Generator: jobCalls(f.store), Version: postgres.OrganizeVersion}).Process(f.ctx, *j); err == nil {
+	if err := (organize.Service{Store: f.store.OrganizeStore(), Generator: jobCalls(f.store), Version: kernel.OrganizeVersion}).Process(f.ctx, *j); err == nil {
 		t.Fatal("injected write failure was swallowed")
 	}
 	var ordinal int
@@ -357,7 +357,7 @@ func TestPhase25B1_X12_TransactionRollsBackAndRetries(t *testing.T) {
 	if next == nil {
 		t.Fatal("retry not claimable")
 	}
-	if err := (organize.Service{Store: f.store.OrganizeStore(), Generator: jobCalls(f.store), Version: postgres.OrganizeVersion}).Process(f.ctx, *next); err != nil {
+	if err := (organize.Service{Store: f.store.OrganizeStore(), Generator: jobCalls(f.store), Version: kernel.OrganizeVersion}).Process(f.ctx, *next); err != nil {
 		t.Fatal(err)
 	}
 	for _, ref := range refs {
@@ -376,8 +376,8 @@ func TestPhase25B1_X12_TransactionRollsBackAndRetries(t *testing.T) {
 }
 
 func TestPhase25B1_X14_RuleUpgradePreservesLabels(t *testing.T) {
-	oldVersion := postgres.OrganizeVersion
-	defer func() { postgres.OrganizeVersion = oldVersion }()
+	oldVersion := kernel.OrganizeVersion
+	defer func() { kernel.OrganizeVersion = oldVersion }()
 	f := phase25B1NewFixture(t)
 	topic := workspace.MemoryGroup{EntityID: string(f.entity(t, "topic", "虚构月报")), Name: "虚构月报", Type: "topic"}
 	refs := []memory.Ref{f.claim(t, "虚构月报先列结论。"), f.claim(t, "虚构月报用青色标题。")}
@@ -387,10 +387,10 @@ func TestPhase25B1_X14_RuleUpgradePreservesLabels(t *testing.T) {
 	}
 	f.model(t, phase25B1ModelJSON(t, first))
 	f.batch(t)
-	postgres.OrganizeVersion = oldVersion + 1
+	kernel.OrganizeVersion = oldVersion + 1
 	var state workspace.State
 	f.get(t, "/v1/workspace", &state)
-	if state.Organize != (workspace.Organize{Done: 0, Total: 2, Version: postgres.OrganizeVersion}) {
+	if state.Organize != (workspace.Organize{Done: 0, Total: 2, Version: kernel.OrganizeVersion}) {
 		t.Errorf("upgraded progress = %+v", state.Organize)
 	}
 	for _, ref := range refs {
@@ -403,10 +403,10 @@ func TestPhase25B1_X14_RuleUpgradePreservesLabels(t *testing.T) {
 	f.model(t, phase25B1ModelJSON(t, phase25B1Items(2, "goal", false)))
 	f.batch(t)
 	for _, ref := range refs {
-		f.checkClaim(t, ref, "goal", postgres.OrganizeVersion, 0)
+		f.checkClaim(t, ref, "goal", kernel.OrganizeVersion, 0)
 	}
 	f.get(t, "/v1/workspace", &state)
-	if state.Organize != (workspace.Organize{Done: 2, Total: 2, Version: postgres.OrganizeVersion}) {
+	if state.Organize != (workspace.Organize{Done: 2, Total: 2, Version: kernel.OrganizeVersion}) {
 		t.Errorf("redone progress = %+v", state.Organize)
 	}
 }
@@ -421,7 +421,7 @@ func TestPhase25B1_X16_NoModelThenConfigured(t *testing.T) {
 	}
 	var state workspace.State
 	f.get(t, "/v1/workspace", &state)
-	if state.Organize != (workspace.Organize{Done: 0, Total: 1, Version: postgres.OrganizeVersion}) {
+	if state.Organize != (workspace.Organize{Done: 0, Total: 1, Version: kernel.OrganizeVersion}) {
 		t.Errorf("unconfigured progress = %+v", state.Organize)
 	}
 	fake := f.model(t, phase25B1ModelJSON(t, phase25B1Items(1, "identity", true)))
@@ -451,7 +451,7 @@ func TestPhase25B1_X17_ChannelUnavailableTwiceThenRecovers(t *testing.T) {
 		if err := f.db.QueryRow(f.ctx, `SELECT stage FROM memory_jobs WHERE owner_id=$1 AND stage LIKE 'memory.organize:%' AND state='queued'`, f.scope.OwnerID).Scan(&stage); err != nil {
 			t.Fatal(err)
 		}
-		runner := worker.New(f.store, map[string]worker.Handler{stage: (organize.Service{Store: f.store.OrganizeStore(), Generator: jobCalls(f.store), Version: postgres.OrganizeVersion}).Process, "memory.organize": (organize.Service{Store: f.store.OrganizeStore(), Generator: jobCalls(f.store), Version: postgres.OrganizeVersion}).Process}, slog.Default())
+		runner := worker.New(f.store, map[string]worker.Handler{stage: (organize.Service{Store: f.store.OrganizeStore(), Generator: jobCalls(f.store), Version: kernel.OrganizeVersion}).Process, "memory.organize": (organize.Service{Store: f.store.OrganizeStore(), Generator: jobCalls(f.store), Version: kernel.OrganizeVersion}).Process}, slog.Default())
 		worked, err := runner.RunOnce(f.ctx)
 		if err != nil {
 			t.Fatal(err)
@@ -537,7 +537,7 @@ func (f *phase25B1Fixture) claimOrganize(t *testing.T) *worker.Job {
 		t.Fatal(err)
 	}
 	if j != nil {
-		if !strings.HasPrefix(j.Stage, fmt.Sprintf("memory.organize:%d:", postgres.OrganizeVersion)) {
+		if !strings.HasPrefix(j.Stage, fmt.Sprintf("memory.organize:%d:", kernel.OrganizeVersion)) {
 			t.Fatalf("unexpected queue stage %s", j.Stage)
 		}
 		var priority int
@@ -558,7 +558,7 @@ func (f *phase25B1Fixture) batch(t *testing.T) {
 	if j == nil {
 		t.Fatal("no organize job claimed")
 	}
-	if err := (organize.Service{Store: f.store.OrganizeStore(), Generator: jobCalls(f.store), Version: postgres.OrganizeVersion}).Process(f.ctx, *j); err != nil {
+	if err := (organize.Service{Store: f.store.OrganizeStore(), Generator: jobCalls(f.store), Version: kernel.OrganizeVersion}).Process(f.ctx, *j); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -566,7 +566,7 @@ func (f *phase25B1Fixture) batch(t *testing.T) {
 func (f *phase25B1Fixture) checkClaim(t *testing.T, ref memory.Ref, category string, organized, attempts int) {
 	t.Helper()
 	if organized == 1 {
-		organized = postgres.OrganizeVersion
+		organized = kernel.OrganizeVersion
 	}
 	var gotCategory string
 	var gotOrganized, gotAttempts, version, revisions int

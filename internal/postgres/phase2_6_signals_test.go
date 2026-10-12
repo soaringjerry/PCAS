@@ -9,7 +9,9 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/intakestore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/postgres/usestore"
 	"github.com/soaringjerry/PCAS/internal/worker"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
@@ -34,7 +36,7 @@ func TestPhase26C7EffectiveSignalsChangeRankingAtScale(t *testing.T) {
 	}
 	phase26Exec(t, f, `ANALYZE record_search`)
 	req := memory.RecallRequest{Query: "FictitiousSignalRank", Mode: memory.Remember, Budget: memory.Budget{Candidates: 15, Tokens: 4000, Edges: 15, Hops: 1}}
-	off, err := f.Store.Recall(WithActivityRanking(f.Context, false), f.Scope, req)
+	off, err := f.Store.Recall(intakestore.WithActivityRanking(f.Context, false), f.Scope, req)
 	if err != nil || len(off.Memories) != 8 {
 		t.Fatalf("ranking control=%+v err=%v", off.Memories, err)
 	}
@@ -44,11 +46,11 @@ func TestPhase26C7EffectiveSignalsChangeRankingAtScale(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	on, err := f.Store.Recall(WithActivityRanking(f.Context, true), f.Scope, req)
+	on, err := f.Store.Recall(intakestore.WithActivityRanking(f.Context, true), f.Scope, req)
 	if err != nil || len(on.Memories) != 8 || on.Memories[0].ID != target.ID {
 		t.Fatalf("signals did not rank last control item first: on=%+v err=%v", on.Memories, err)
 	}
-	again, err := f.Store.Recall(WithActivityRanking(f.Context, false), f.Scope, req)
+	again, err := f.Store.Recall(intakestore.WithActivityRanking(f.Context, false), f.Scope, req)
 	if err != nil || len(again.Memories) != 8 || again.Memories[7].ID != target.ID {
 		t.Fatal("ranking disabled did not restore baseline")
 	}
@@ -107,15 +109,15 @@ func TestPhase26C7EffectiveSignalsChangeRankingAtScale(t *testing.T) {
 	}
 	m.mu.Unlock()
 	firstReq := workspace.DeskTurnRequest{AgentID: "phase26", RequestID: string(memory.NewID()), Text: "Please explain " + note}
-	first, err := f.Store.DeskTurn(WithMemoryTier(f.Context, "light"), f.Scope, firstReq)
+	first, err := f.Store.DeskTurn(usestore.WithMemoryTier(f.Context, "light"), f.Scope, firstReq)
 	if err != nil || first.Turn.Reply != "Fictitious accepted signal answer." {
 		t.Fatalf("actual mention turn failed: %v %+v", err, first.Turn)
 	}
 	secondReq := workspace.DeskTurnRequest{AgentID: "phase26", RequestID: string(memory.NewID()), ConversationID: &first.ConversationID, Text: "I accept the previous answer about " + note}
-	if _, err := f.Store.DeskTurn(WithMemoryTier(f.Context, "light"), f.Scope, secondReq); err != nil {
+	if _, err := f.Store.DeskTurn(usestore.WithMemoryTier(f.Context, "light"), f.Scope, secondReq); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.Store.DeskTurn(WithMemoryTier(f.Context, "light"), f.Scope, firstReq); err != nil {
+	if _, err := f.Store.DeskTurn(usestore.WithMemoryTier(f.Context, "light"), f.Scope, firstReq); err != nil {
 		t.Fatal(err)
 	}
 	if err := f.Store.Pool.QueryRow(f.Context, `SELECT count(*) FILTER(WHERE kind='user_mention'),count(*) FILTER(WHERE kind='adoption') FROM use_events WHERE owner_id=$1 AND record_id=$2`, f.Scope.OwnerID, target.ID).Scan(&mentions, &adoptions); err != nil || mentions != 2 || adoptions != 2 || len(m.calls("secretary")) != 2 {

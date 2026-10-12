@@ -9,6 +9,8 @@ import (
 
 	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/interpstore"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 )
 
 func TestP3ReorganizeTenCasesOnlyRulesAndWithdrawalCounts(t *testing.T) {
@@ -25,7 +27,7 @@ func TestP3ReorganizeTenCasesOnlyRulesAndWithdrawalCounts(t *testing.T) {
 			return
 		}
 		var input struct {
-			Memories []organizeMemory `json:"memories"`
+			Memories []interpstore.OrganizeMemory `json:"memories"`
 		}
 		if e := json.Unmarshal([]byte(req.Messages[1].Content), &input); e != nil {
 			t.Error(e)
@@ -83,7 +85,7 @@ func TestP3ReorganizeTenCasesOnlyRulesAndWithdrawalCounts(t *testing.T) {
 		t.Fatal(n, e)
 	}
 	job := organizeTestJob(t, s, scope)
-	if e := (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: OrganizeVersion}).Process(ctx, job); e != nil {
+	if e := (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: kernel.OrganizeVersion}).Process(ctx, job); e != nil {
 		t.Fatal(e)
 	}
 	for i, ref := range refs {
@@ -121,7 +123,7 @@ func TestP3ReorganizeTenCasesOnlyRulesAndWithdrawalCounts(t *testing.T) {
 	}
 	found := false
 	for _, stage := range h.Stages {
-		if stage.Stage == OrganizeStage {
+		if stage.Stage == kernel.OrganizeStage {
 			found = stage.Withdrawn.Deadlines == 10 && stage.Withdrawn.Requirements == 5
 		}
 	}
@@ -146,7 +148,7 @@ func TestP3RuleReorganizeFailureKeepsGoodLabelsAndTables(t *testing.T) {
 		t.Fatal(e)
 	}
 	job := organizeTestJob(t, s, scope)
-	if e := (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: OrganizeVersion}).Process(ctx, job); e != nil {
+	if e := (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: kernel.OrganizeVersion}).Process(ctx, job); e != nil {
 		t.Fatal(e)
 	}
 	var category string

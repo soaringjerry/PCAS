@@ -14,6 +14,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/ai"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/modelcall"
+	"github.com/soaringjerry/PCAS/internal/postgres/callstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/usagelog"
 	"github.com/soaringjerry/PCAS/internal/prompts"
@@ -28,11 +29,11 @@ func admittedInteractiveRequest(t *testing.T, s *Store, scope memory.Scope, prov
 	hash := sha256.Sum256([]byte("Fictitious admitted request."))
 	ctx, cancel := context.WithTimeout(context.Background(), secretary.TurnTimeout)
 	defer cancel()
-	ticket, err := s.admitSecretaryTurn(ctx, ctx, string(scope.OwnerID), string(execution), string(memory.NewID()), hash[:])
-	if err != nil || !ticket.own {
+	ticket, err := s.AdmitSecretaryTurn(ctx, ctx, string(scope.OwnerID), string(execution), string(memory.NewID()), hash[:])
+	if err != nil || !ticket.Own {
 		t.Fatal(ticket, err)
 	}
-	policy := interactiveCallPolicy{Kind: "secretary", Token: ticket.creator, Origin: fmt.Sprintf("%x", hash), RequestHash: hash[:], AgentID: provider, Usage: usagelog.ModelUsage{ID: memory.NewID(), Tier: "heavy", Purpose: "reader", TurnID: string(memory.NewID()), Plan: kernel.JSON(usagelog.UsePlan{Groups: []string{"self:rule"}})}}
+	policy := callstore.InteractiveCallPolicy{Kind: "secretary", Token: ticket.Creator, Origin: fmt.Sprintf("%x", hash), RequestHash: hash[:], AgentID: provider, Usage: usagelog.ModelUsage{ID: memory.NewID(), Tier: "heavy", Purpose: "reader", TurnID: string(memory.NewID()), Plan: kernel.JSON(usagelog.UsePlan{Groups: []string{"self:rule"}})}}
 	return modelcall.Request{OwnerID: scope.OwnerID, ExecutionID: execution, RootExecutionID: execution, Function: "reader", Stage: "catalog", ProviderID: provider, Instructions: prompts.Must("memory-reader"), ContextBuilderVersion: "fictitious-reader-v1", Prompt: kernel.JSON(map[string]string{"rawPrompt": "Fictitious catalog input."}), Policy: policy}
 }
 
@@ -60,7 +61,7 @@ func TestInteractiveStagesKeepDistinctResultsWithoutAdmissionLockDeadlock(t *tes
 	for _, stage := range []string{"group:self:rule:0", "group:self:rule:100"} {
 		r := request
 		r.Stage = stage
-		p := r.Policy.(interactiveCallPolicy)
+		p := r.Policy.(callstore.InteractiveCallPolicy)
 		p.Usage.ID = memory.NewID()
 		r.Policy = p
 		wg.Add(1)
@@ -98,7 +99,7 @@ func TestInteractiveAccountingRecoveryKeepsOriginalUsageIdentity(t *testing.T) {
 		secretaryModelReply(w, "Fictitious reply.")
 	})
 	request := admittedInteractiveRequest(t, s, scope, "model")
-	original := request.Policy.(interactiveCallPolicy).Usage
+	original := request.Policy.(callstore.InteractiveCallPolicy).Usage
 	ctx := context.Background()
 	if _, err := s.Pool.Exec(ctx, `CREATE FUNCTION reject_interactive_usage() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'synthetic usage failure'; END $$; CREATE TRIGGER reject_interactive_usage BEFORE INSERT ON model_usage FOR EACH ROW EXECUTE FUNCTION reject_interactive_usage()`); err != nil {
 		t.Fatal(err)
@@ -114,7 +115,7 @@ func TestInteractiveAccountingRecoveryKeepsOriginalUsageIdentity(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer peer.Close()
-	p := request.Policy.(interactiveCallPolicy)
+	p := request.Policy.(callstore.InteractiveCallPolicy)
 	p.Usage.ID = memory.NewID()
 	p.Usage.TurnID = string(memory.NewID())
 	p.Usage.Tier = "light"
@@ -197,7 +198,7 @@ func TestInteractiveDeletedInputCannotRestorePaidBody(t *testing.T) {
 	if err := s.Delete(ctx, scope, memory.DeleteRequest{Targets: []memory.Ref{ref}}); err != nil {
 		t.Fatal(err)
 	}
-	if err := (interactiveCalls{store: s}).Save(ctx, request, paid); err != nil {
+	if err := (callstore.InteractiveCalls{Store: s.Calls}).Save(ctx, request, paid); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.Gateway().Call(ctx, request); !errors.Is(err, modelcall.ErrNotApplicable) {
@@ -218,7 +219,7 @@ func TestInteractiveUnknownFailureKeepsBudgetAndBoundedRetry(t *testing.T) {
 	request.Schema = prompts.MustSchema("secretary-output")
 	request.Search = true
 	request.Stage = "answer"
-	p := request.Policy.(interactiveCallPolicy)
+	p := request.Policy.(callstore.InteractiveCallPolicy)
 	p.Usage.ID = ""
 	request.Policy = p
 	ctx := context.Background()
@@ -278,7 +279,7 @@ func TestInteractiveResultWriteFailureReusesPendingResponse(t *testing.T) {
 	go func() { _, err := s.Gateway().Call(limited, request); done <- err }()
 	pending := false
 	for !pending {
-		s.pendingInteractive.Range(func(_, value any) bool { pending = true; return false })
+		s.PendingInteractive.Range(func(_, value any) bool { pending = true; return false })
 		if !pending {
 			select {
 			case <-limited.Done():

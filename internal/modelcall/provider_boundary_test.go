@@ -65,7 +65,7 @@ func TestProductionProviderCallsUseDeclaredMigrationBoundaries(t *testing.T) {
 		}
 		if strings.HasSuffix(p.ImportPath, "/internal/modelcall") || strings.HasSuffix(p.ImportPath, "/internal/prompts") {
 			for _, path := range p.Imports {
-				if strings.HasSuffix(path, "/internal/postgres") {
+				if strings.HasSuffix(path, "/internal/postgres") || strings.Contains(path, "/internal/postgres/") {
 					t.Error("gateway and registry cannot import concrete storage")
 				}
 			}
@@ -111,7 +111,7 @@ func TestProductionProviderCallsUseDeclaredMigrationBoundaries(t *testing.T) {
 						// Complete domain and dynamic-SQL ownership remains in
 						// the foundation's later owner-boundary migration.
 						value := info.Types[call.Args[1]].Value
-						if value != nil && value.Kind() == constant.String && journalWrite.MatchString(constant.StringVal(value)) && filepath.ToSlash(name) != "internal/postgres/model_calls.go" && filepath.ToSlash(name) != "internal/postgres/model_calls_interactive.go" && filepath.ToSlash(name) != "internal/postgres/model_calls_interactive_recovery.go" && filepath.ToSlash(name) != "internal/postgres/model_calls_direct.go" {
+						if value != nil && value.Kind() == constant.String && journalWrite.MatchString(constant.StringVal(value)) && !strings.HasPrefix(filepath.ToSlash(name), "internal/postgres/callstore/") {
 							t.Errorf("call journal mutation outside its storage owner: %s:%s", name, fn.Name.Name)
 						}
 					}

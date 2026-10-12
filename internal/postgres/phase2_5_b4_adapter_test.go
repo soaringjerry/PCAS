@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
-	"github.com/soaringjerry/PCAS/internal/postgres"
+	"github.com/soaringjerry/PCAS/internal/postgres/usestore"
 )
 
 type phase25B4Reply struct {
@@ -24,7 +24,7 @@ type phase25B4Adapter struct {
 	deputy          func(context.Context, string) error
 }
 
-var phase25B4TierContext = postgres.WithMemoryTier
+var phase25B4TierContext = usestore.WithMemoryTier
 
 func phase25B4DefaultAdapter() phase25B4Adapter {
 	encode := func(result phase25B4Reply) (string, error) {

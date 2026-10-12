@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/currentstate/handover"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/postgres/usestore"
 
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/soaringjerry/PCAS/internal/memory"
@@ -99,7 +101,7 @@ func phase25B3ConcurrentStatus(t *testing.T, rebuilding bool) {
 			return err
 		}},
 		{"secretary", func(ctx context.Context) error {
-			turn, err := userStore.DeskTurn(postgres.WithMemoryTier(ctx, "light"), f.scope, workspace.DeskTurnRequest{RequestID: string(memory.NewID()), Text: "处理虚构普通事项", AgentID: agent})
+			turn, err := userStore.DeskTurn(usestore.WithMemoryTier(ctx, "light"), f.scope, workspace.DeskTurnRequest{RequestID: string(memory.NewID()), Text: "处理虚构普通事项", AgentID: agent})
 			if err == nil && turn.Turn.Reply != "虚构并发办事回复。" {
 				return fmt.Errorf("unexpected secretary reply %q", turn.Turn.Reply)
 			}
@@ -311,7 +313,7 @@ func phase25B3ConcurrentStatus(t *testing.T, rebuilding bool) {
 		}
 	}
 	var fresh, pending int
-	if err := f.db.QueryRow(f.ctx, `SELECT count(*) FROM status_cards WHERE owner_id=$1 AND NOT stale AND rule=$2`, f.scope.OwnerID, postgres.CardVersion).Scan(&fresh); err != nil {
+	if err := f.db.QueryRow(f.ctx, `SELECT count(*) FROM status_cards WHERE owner_id=$1 AND NOT stale AND rule=$2`, f.scope.OwnerID, kernel.CardVersion).Scan(&fresh); err != nil {
 		t.Fatal(err)
 	}
 	if err := f.db.QueryRow(f.ctx, `SELECT count(*) FROM memory_jobs WHERE owner_id=$1 AND (stage LIKE 'memory.card:%' OR stage LIKE 'memory.handover:%') AND state<>'done'`, f.scope.OwnerID).Scan(&pending); err != nil {

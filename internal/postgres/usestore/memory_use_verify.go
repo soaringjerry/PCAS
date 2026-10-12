@@ -1,0 +1,119 @@
+package usestore
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"strings"
+	"time"
+
+	"github.com/soaringjerry/PCAS/internal/postgres/accessstore"
+	"github.com/soaringjerry/PCAS/internal/postgres/intakestore"
+	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/workspace"
+)
+
+// PostgreSQL now() is frozen at transaction start. The ordered turn keeps its
+// transaction across the model call, so completion checks must see revisions
+// committed during generation. Only this read-only verifier uses wall time.
+type UseClockTx struct {
+	pgx.Tx
+	At time.Time
+}
+
+func (tx UseClockTx) queryAt(sql string, args []any) (string, []any) {
+	if !strings.Contains(sql, "now()") {
+		return sql, args
+	}
+	args = append(append([]any{}, args...), tx.At)
+	return strings.ReplaceAll(sql, "now()", fmt.Sprintf("$%d::timestamptz", len(args))), args
+}
+func (tx UseClockTx) Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error) {
+	sql, args = tx.queryAt(sql, args)
+	return tx.Tx.Query(ctx, sql, args...)
+}
+func (tx UseClockTx) QueryRow(ctx context.Context, sql string, args ...any) pgx.Row {
+	sql, args = tx.queryAt(sql, args)
+	return tx.Tx.QueryRow(ctx, sql, args...)
+}
+
+// A queued prompt has not been sent yet. Preserve the existing access/currentness
+// fence before the first paid call; later input changes do not discard a draft.
+func CheckQueuedUseRunPromptTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run workspace.Run) error {
+	if err := accessstore.VerifyRunTx(ctx, tx, scope, run); err != nil {
+		return err
+	}
+	ids := []string{}
+	for _, ref := range run.ContextVersions {
+		if ref.Kind != memory.SourceKind {
+			ids = append(ids, string(ref.ID))
+		}
+	}
+	var retired bool
+	if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM claims WHERE owner_id=$1 AND id=ANY($2::uuid[]) AND coalesce(to_jsonb(claims)->>'retired','')!='')", string(scope.OwnerID), ids).Scan(&retired); err != nil {
+		return err
+	}
+	if retired {
+		return memory.ErrConflict
+	}
+	return CheckUseRunPromptTx(ctx, tx, scope, run)
+}
+
+// A run writes its destination item. Other input memories may change while
+// its paid draft is generated; their revision is not an abort condition.
+func CheckUseRunPromptTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run workspace.Run) error {
+	agent, err := kernel.QueryDocument[workspace.Agent](ctx, tx, "SELECT document FROM workspace_agents WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), run.AgentID)
+	if err != nil {
+		return err
+	}
+	if !agent.Enabled {
+		return memory.ErrForbidden
+	}
+	item, err := itemstore.GetItem(ctx, tx, scope, run.ThingID)
+	if err != nil {
+		return err
+	}
+	if run.TargetHash != "" && workspace.ContentHash(item) != run.TargetHash {
+		return memory.ErrConflict
+	}
+	return nil
+}
+
+// A changed destination or lost worker lease prevents further model work.
+func (s *Use) CheckDeputySelfcheckContext(ctx context.Context, scope memory.Scope, run workspace.Run, token string) error {
+	return pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
+		var leased bool
+		if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM agent_runs WHERE owner_id=$1 AND id=$2 AND status='running' AND lease_token=$3 AND lease_until>now())", string(scope.OwnerID), run.ID, token).Scan(&leased); err != nil {
+			return err
+		}
+		if !leased {
+			return memory.ErrConflict
+		}
+		if err := CheckUseRunPromptTx(ctx, tx, scope, run); err != nil {
+			return err
+		}
+		return accessstore.VerifyRunAccessTx(ctx, UseClockTx{Tx: tx, At: time.Now()}, scope, run)
+	})
+}
+
+// Context-derived events refer to an identity already supplied to the model.
+// A concurrent revision can update that identity without invalidating the answer.
+func RecordContextUseTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, event memory.UseEvent) error {
+	if event.Kind != "user_mention" && event.Kind != "adoption" {
+		return memory.ErrInvalid
+	}
+	var current int
+	err := tx.QueryRow(ctx, "SELECT version FROM memory_records WHERE owner_id=$1 AND id=$2 AND state='active'", string(scope.OwnerID), string(event.Ref.ID)).Scan(&current)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return memory.ErrNotFound
+	}
+	if err != nil {
+		return err
+	}
+	event.Ref.Version = current
+	return intakestore.RecordUseTx(ctx, tx, scope, event)
+}

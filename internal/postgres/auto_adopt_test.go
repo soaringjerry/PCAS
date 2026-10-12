@@ -395,7 +395,7 @@ func TestAutoAdoptSkipsStaleAndEmpty(t *testing.T) {
 				if _, err := tx.Exec(ctx, "UPDATE agent_runs SET status='done',document=$3 WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), run.ID, kernel.JSON(run)); err != nil {
 					return err
 				}
-				return s.autoAdoptRunTx(ctx, tx, scope, &run)
+				return s.AutoAdoptRunTx(ctx, tx, scope, &run)
 			})
 			if err != nil {
 				t.Fatal(err)

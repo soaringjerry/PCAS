@@ -28,7 +28,7 @@ type ExecutionTimer struct {
 	started        time.Time
 	prepareStarted time.Time
 	writeStarted   time.Time
-	Id             string
+	ID             string
 }
 
 func NewExecutionTimer(ctx context.Context, kind string, started time.Time) (context.Context, *ExecutionTimer) {
@@ -79,7 +79,7 @@ func (timer *ExecutionTimer) BeginWrite(tier string) {
 // are observable but cannot invalidate an already committed answer or action.
 // Replays never assign a new timer ID and cannot replace a good measurement.
 func (s *Budgets) FinishExecutionTiming(ctx context.Context, owner memory.ID, timer *ExecutionTimer) {
-	if timer.Id == "" {
+	if timer.ID == "" {
 		return
 	}
 	timer.FinishPrepare()
@@ -94,7 +94,7 @@ func (s *Budgets) FinishExecutionTiming(ctx context.Context, owner memory.ID, ti
 	persist, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 	defer cancel()
 	_, err := s.Pool.Exec(persist, `INSERT INTO execution_timings(owner_id,id,kind,tier,at,prepare_ms,answer_ms,selfcheck_ms,writeback_ms,model_ms,total_ms,other_ms)
- VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) ON CONFLICT(owner_id,kind,id) DO NOTHING`, owner, timer.Id, row.Kind, row.Tier, timer.started, row.PrepareMS, row.AnswerMS, row.SelfcheckMS, row.WritebackMS, row.ModelMS, row.TotalMS, row.OtherMS)
+ VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) ON CONFLICT(owner_id,kind,id) DO NOTHING`, owner, timer.ID, row.Kind, row.Tier, timer.started, row.PrepareMS, row.AnswerMS, row.SelfcheckMS, row.WritebackMS, row.ModelMS, row.TotalMS, row.OtherMS)
 	if err != nil {
 		slog.ErrorContext(persist, "execution measurement failed", "kind", row.Kind, "error_type", BackgroundFailureReason(err))
 	}

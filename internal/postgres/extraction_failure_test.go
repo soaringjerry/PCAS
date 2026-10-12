@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/soaringjerry/PCAS/internal/ai"
 	"github.com/soaringjerry/PCAS/internal/memory"
@@ -50,7 +51,7 @@ func TestExtractionFailureIsNamedAndRetriedOnlyWhenFree(t *testing.T) {
 			}
 			s.SetModels(&ai.Registry{HTTP: server.Client(), Config: ai.Configuration{Extraction: "model", Providers: []ai.Provider{provider}}})
 			source := mustIngest(t, s, scope, memory.IngestRequest{Connector: "desk", ExternalID: string(memory.NewID()), ExternalVersion: "1", Title: "秘书原话", Text: "偏好清晨工作", MediaType: "text/plain"})
-			err := (extraction.Service{Store: s.ExtractionStore(), Generator: jobCalls(s), MaxAttempts: MaxJobAttempts}).Process(context.Background(), leaseStage(t, s, scope, source.Ref, "source.extract"))
+			err := (extraction.Service{Store: s.ExtractionStore(), Generator: jobCalls(s), MaxAttempts: kernel.MaxJobAttempts}).Process(context.Background(), leaseStage(t, s, scope, source.Ref, "source.extract"))
 			var failure *worker.JobError
 			if !errors.As(err, &failure) {
 				t.Fatalf("want a named job failure, got %v", err)
@@ -83,7 +84,7 @@ func TestExtractionWithoutModelStaysNotConfigured(t *testing.T) {
 	}
 	var handlerErr error
 	w := worker.New(s, map[string]worker.Handler{"source.extract": func(ctx context.Context, job worker.Job) error {
-		handlerErr = (extraction.Service{Store: s.ExtractionStore(), Generator: jobCalls(s), MaxAttempts: MaxJobAttempts}).Process(ctx, job)
+		handlerErr = (extraction.Service{Store: s.ExtractionStore(), Generator: jobCalls(s), MaxAttempts: kernel.MaxJobAttempts}).Process(ctx, job)
 		return handlerErr
 	}}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if worked, err := w.RunOnce(ctx); err != nil || !worked {

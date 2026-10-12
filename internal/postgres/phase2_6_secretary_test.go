@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/usestore"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -28,7 +29,7 @@ func TestPhase26C1C8SecretaryScaleBaseline(t *testing.T) {
 	done := make(chan result, 1)
 	start := time.Now()
 	go func() {
-		out, err := f.Store.DeskTurn(WithMemoryTier(runCtx, "light"), f.Scope, workspace.DeskTurnRequest{RequestID: string(memory.NewID()), AgentID: "phase26", Text: "Please answer this fictitious ordinary question."})
+		out, err := f.Store.DeskTurn(usestore.WithMemoryTier(runCtx, "light"), f.Scope, workspace.DeskTurnRequest{RequestID: string(memory.NewID()), AgentID: "phase26", Text: "Please answer this fictitious ordinary question."})
 		done <- result{out, err}
 	}()
 	ticker := time.NewTicker(time.Second)

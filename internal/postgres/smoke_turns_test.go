@@ -19,6 +19,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/httpapi"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres/actionlog"
+	"github.com/soaringjerry/PCAS/internal/postgres/deskstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/testsupport"
 	"github.com/soaringjerry/PCAS/internal/workspace"
@@ -47,13 +48,13 @@ func TestSmokeThreeSentencesLeaveNothing(t *testing.T) {
 	secretaryModel(t, s, func(w http.ResponseWriter, r *http.Request) {
 		switch calls.Add(1) {
 		case 1, 2:
-			secretaryModelReply(w, secretaryOutput{Reply: "5。", Remember: true})
+			secretaryModelReply(w, deskstore.SecretaryOutput{Reply: "5。", Remember: true})
 		case 3:
-			secretaryModelReply(w, secretaryOutput{Reply: "安排好了。", Remember: true, Actions: []secretaryAction{{Op: "create_task", Title: "虚构栀岑晾纸", Due: &due}}})
+			secretaryModelReply(w, deskstore.SecretaryOutput{Reply: "安排好了。", Remember: true, Actions: []deskstore.SecretaryAction{{Op: "create_task", Title: "虚构栀岑晾纸", Due: &due}}})
 		case 4:
-			secretaryModelReply(w, secretaryOutput{Reply: "改好了。", Remember: true, Actions: []secretaryAction{{Op: "update", Ref: "THIS", Set: map[string]json.RawMessage{"due": kernel.JSON(later)}}}})
+			secretaryModelReply(w, deskstore.SecretaryOutput{Reply: "改好了。", Remember: true, Actions: []deskstore.SecretaryAction{{Op: "update", Ref: "THIS", Set: map[string]json.RawMessage{"due": kernel.JSON(later)}}}})
 		default:
-			secretaryModelReply(w, secretaryOutput{Reply: "正常对话。"})
+			secretaryModelReply(w, deskstore.SecretaryOutput{Reply: "正常对话。"})
 		}
 	})
 	// Nonempty ordinary memory, original, item and candidate must all survive.
@@ -190,7 +191,7 @@ func TestSmokeCannotClaimNormalConversationOrRequest(t *testing.T) {
 	s := testStore(t)
 	scope := owner()
 	secretaryModel(t, s, func(w http.ResponseWriter, r *http.Request) {
-		secretaryModelReply(w, secretaryOutput{Reply: "普通答复。"})
+		secretaryModelReply(w, deskstore.SecretaryOutput{Reply: "普通答复。"})
 	})
 	req := turnRequest("虚构普通对话")
 	out := mustTurn(t, s, scope, req)
@@ -218,7 +219,7 @@ func TestSmokeRestoresOrdinaryItemAndRejectsLaterOrdinaryEdit(t *testing.T) {
 			s := testStore(t)
 			scope := owner()
 			secretaryModel(t, s, func(w http.ResponseWriter, r *http.Request) {
-				secretaryModelReply(w, secretaryOutput{Reply: "改好了。", Actions: []secretaryAction{{Op: "update", Ref: "THIS", Set: map[string]json.RawMessage{"notesAppend": kernel.JSON("虚构检查时的临时文字")}}}})
+				secretaryModelReply(w, deskstore.SecretaryOutput{Reply: "改好了。", Actions: []deskstore.SecretaryAction{{Op: "update", Ref: "THIS", Set: map[string]json.RawMessage{"notesAppend": kernel.JSON("虚构检查时的临时文字")}}}})
 			})
 			state := workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "虚构正常档案"})
 			original := state.Tasks[0]
@@ -283,7 +284,7 @@ func TestSmokeDeputyCompletionAndLateResultCannotLeaveMemory(t *testing.T) {
 			var calls atomic.Int32
 			secretaryModel(t, s, func(w http.ResponseWriter, r *http.Request) {
 				if calls.Add(1) == 1 {
-					secretaryModelReply(w, secretaryOutput{Reply: "交给副手了。", Actions: []secretaryAction{{Op: "delegate", Ref: ref, Title: "虚构折纸检查", Kind: "breakdown", Prompt: "列出虚构薄纸的两个对折步骤"}}})
+					secretaryModelReply(w, deskstore.SecretaryOutput{Reply: "交给副手了。", Actions: []deskstore.SecretaryAction{{Op: "delegate", Ref: ref, Title: "虚构折纸检查", Kind: "breakdown", Prompt: "列出虚构薄纸的两个对折步骤"}}})
 					return
 				}
 				close(started)
@@ -363,7 +364,7 @@ func TestSmokeCleanupSerializesWithAcceptedTurn(t *testing.T) {
 	secretaryModel(t, s, func(w http.ResponseWriter, r *http.Request) {
 		close(started)
 		<-release
-		secretaryModelReply(w, secretaryOutput{Reply: "已建。", Actions: []secretaryAction{{Op: "create_task", Title: "虚构并发检查事项"}}})
+		secretaryModelReply(w, deskstore.SecretaryOutput{Reply: "已建。", Actions: []deskstore.SecretaryAction{{Op: "create_task", Title: "虚构并发检查事项"}}})
 	})
 	if _, err := s.Snapshot(context.Background(), scope); err != nil {
 		t.Fatal(err)
@@ -413,11 +414,11 @@ func TestSmokeRetiredTicketCannotCreateIncompleteCandidate(t *testing.T) {
 	req.ConversationID = &req.SmokeID
 	ctx, cancel := context.WithTimeout(actionlog.WithSmoke(context.Background(), req.SmokeID), 10*time.Second)
 	defer cancel()
-	if err := s.registerSmokeRequest(ctx, scope, req); err != nil {
+	if err := s.RegisterSmokeRequest(ctx, scope, req); err != nil {
 		t.Fatal(err)
 	}
 	hash := sha256.Sum256(kernel.JSON(req))
-	if _, err := s.admitSecretaryTurn(ctx, ctx, string(scope.OwnerID), req.RequestID, req.SmokeID, hash[:]); err != nil {
+	if _, err := s.AdmitSecretaryTurn(ctx, ctx, string(scope.OwnerID), req.RequestID, req.SmokeID, hash[:]); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.Pool.Exec(ctx, "UPDATE desk_turn_order SET expires_at=now()-interval '1 minute' WHERE owner_id=$1 AND request_id=$2", string(scope.OwnerID), req.RequestID); err != nil {
@@ -442,7 +443,7 @@ func TestSmokeUndoAndOldCheckCleanup(t *testing.T) {
 			s := testStore(t)
 			scope := owner()
 			secretaryModel(t, s, func(w http.ResponseWriter, r *http.Request) {
-				secretaryModelReply(w, secretaryOutput{Reply: "已建。", Actions: []secretaryAction{{Op: "create_task", Title: "虚构旧检查事项"}}})
+				secretaryModelReply(w, deskstore.SecretaryOutput{Reply: "已建。", Actions: []deskstore.SecretaryAction{{Op: "create_task", Title: "虚构旧检查事项"}}})
 			})
 			if _, err := s.Snapshot(context.Background(), scope); err != nil {
 				t.Fatal(err)

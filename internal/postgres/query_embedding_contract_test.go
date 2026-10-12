@@ -14,6 +14,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/ai"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/modelcall"
+	"github.com/soaringjerry/PCAS/internal/postgres/callstore"
 )
 
 func queryEmbeddingModel(t *testing.T, s *Store, handler http.HandlerFunc) *atomic.Int32 {
@@ -198,7 +199,7 @@ func TestQueryEmbeddingInterruptedProcessLeavesAnUnknownHeldCall(t *testing.T) {
 	provider, _ := s.Models.Get("vector")
 	request := modelcall.DirectRequest{OwnerID: scope.OwnerID, ExecutionID: memory.NewID(), Function: "query_embedding", Stage: "query", Provider: provider, Estimate: 0.00005, Operation: "embedding", Inputs: 1, Bytes: 16}
 	request.RootExecutionID = request.ExecutionID
-	adapter := directCalls{store: s}
+	adapter := callstore.DirectCalls{Store: s.Calls}
 	for range 2 {
 		request.ExecutionID = memory.NewID()
 		if _, err := adapter.Begin(context.Background(), request); err != nil {
@@ -211,7 +212,7 @@ func TestQueryEmbeddingInterruptedProcessLeavesAnUnknownHeldCall(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if _, err := s.recoverInteractiveCallsOnce(ctx); err != nil {
+	if _, err := s.RecoverInteractiveCallsOnce(ctx); err != nil {
 		t.Fatal(err)
 	}
 	calls := queryCalls(t, s, scope)

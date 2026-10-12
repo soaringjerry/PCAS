@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
+	"github.com/soaringjerry/PCAS/internal/postgres/usestore"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -48,7 +49,7 @@ func TestPhase26G1C6SecretaryContextAndActionOverflowRemainVisible(t *testing.T)
 	}
 	m.mu.Unlock()
 	start := time.Now()
-	out, err := f.Store.DeskTurn(WithMemoryTier(f.Context, "light"), f.Scope, workspace.DeskTurnRequest{RequestID: string(memory.NewID()), AgentID: "phase26", Text: "Please arrange the fictitious ceramic specimens."})
+	out, err := f.Store.DeskTurn(usestore.WithMemoryTier(f.Context, "light"), f.Scope, workspace.DeskTurnRequest{RequestID: string(memory.NewID()), AgentID: "phase26", Text: "Please arrange the fictitious ceramic specimens."})
 	if err != nil {
 		t.Fatal(err)
 	}

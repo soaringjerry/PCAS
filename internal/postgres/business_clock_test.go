@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/soaringjerry/PCAS/internal/postgres/deputystore"
+	"github.com/soaringjerry/PCAS/internal/postgres/intakestore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/retrieval"
 
@@ -15,10 +17,10 @@ import (
 )
 
 // Existing replay helpers use the production default clock through this adapter.
-func deskNow(loc *time.Location) string { return (&Store{DB: &kernel.DB{}}).deskNow(loc) }
+func deskNow(loc *time.Location) string { return newStore(&kernel.DB{}).DeskNow(loc) }
 
 func TestBusinessClockDefaultsToActualTimeAndCanBeRestored(t *testing.T) {
-	s := &Store{DB: &kernel.DB{}}
+	s := newStore(&kernel.DB{})
 	before := time.Now()
 	actual := s.BusinessNow()
 	after := time.Now()
@@ -53,11 +55,11 @@ func TestSecretaryUsesBusinessDateAndActualUsageTime(t *testing.T) {
 	req.ConversationID = &conversationID
 	ctx := context.Background()
 	err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
-		c, err := s.secretaryContextTx(ctx, tx, scope, req, conversationID)
+		c, err := s.SecretaryContextTx(ctx, tx, scope, req, conversationID)
 		if err != nil {
 			return err
 		}
-		if _, _, err := s.secretaryPrompt(ctx, tx, scope, req, &c, s.Recall); err != nil {
+		if _, _, err := s.SecretaryPrompt(ctx, tx, scope, req, &c, s.Recall); err != nil {
 			return err
 		}
 		loc := kernel.Location(c.Settings)
@@ -92,11 +94,11 @@ func TestDeputyUsesBusinessDateAndActualAdmissionTime(t *testing.T) {
 	workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: kernel.JSON(map[string]string{"timezone": "Asia/Shanghai"})})
 	state := workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "Fictitious dated request"})
 	command := workspace.Command{Type: "requestRun", ThingID: state.Tasks[0].ID, AgentID: "model", Kind: "draft", Prompt: "昨天说过什么来着"}
-	ctx, err := s.prepareRunContext(context.Background(), scope, command, s.recaller().Embed)
+	ctx, err := s.PrepareRunContext(context.Background(), scope, command, s.recaller().Embed)
 	if err != nil {
 		t.Fatal(err)
 	}
-	prepared := ctx.Value(runContextKey{}).(preparedRunContext)
+	prepared := ctx.Value(deputystore.RunContextKey{}).(deputystore.PreparedRunContext)
 	loc, err := time.LoadLocation("Asia/Shanghai")
 	if err != nil {
 		t.Fatal(err)
@@ -129,7 +131,7 @@ func TestRetrievalBusinessDecayKeepsActualEligibilityAndAccess(t *testing.T) {
 			now := time.Now().UTC()
 			if err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 				for _, ref := range []memory.Ref{fast, slow} {
-					if err := recordUseTx(ctx, tx, scope, memory.UseEvent{Ref: ref, EventID: string(ref.ID), Kind: "confirmation", At: now}); err != nil {
+					if err := intakestore.RecordUseTx(ctx, tx, scope, memory.UseEvent{Ref: ref, EventID: string(ref.ID), Kind: "confirmation", At: now}); err != nil {
 						return err
 					}
 				}
@@ -147,9 +149,9 @@ func TestRetrievalBusinessDecayKeepsActualEligibilityAndAccess(t *testing.T) {
 			recall := func(want memory.ID, count int, ranking bool) {
 				t.Helper()
 				out := memory.RecallResult{Coverage: retrieval.NewCoverage()}
-				c := context.WithValue(ctx, activityRankingKey{}, ranking)
+				c := context.WithValue(ctx, intakestore.ActivityRankingKey{}, ranking)
 				err := pgx.BeginFunc(c, s.Pool, func(tx pgx.Tx) error {
-					return s.recallTx(c, tx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: "model", Team: true}, memory.RecallRequest{Mode: memory.Continue, Team: &memory.TeamRecall{RankFusion: fusion}}, memory.Budget{Candidates: 10, Tokens: 4000}, "Fictitious clock record", "", nil, "", 0, "", nil, &out)
+					return s.RecallTx(c, tx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: "model", Team: true}, memory.RecallRequest{Mode: memory.Continue, Team: &memory.TeamRecall{RankFusion: fusion}}, memory.Budget{Candidates: 10, Tokens: 4000}, "Fictitious clock record", "", nil, "", 0, "", nil, &out)
 				})
 				if err != nil || len(out.Memories) != count || want != "" && out.Memories[0].ID != want {
 					t.Fatal("decay ordering, eligibility, or access changed", out.Memories, err)

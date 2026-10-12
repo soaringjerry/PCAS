@@ -13,6 +13,7 @@ import (
 
 	"github.com/soaringjerry/PCAS/internal/httpapi"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/deskstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
@@ -102,7 +103,7 @@ func TestSecretaryOriginalSourceDeletionScrubsHistoryAndReplay(t *testing.T) {
 				}
 				for i, receipt := range turn.Receipts {
 					original := first.Turn.Receipts[i]
-					if receipt.Text != "（内容已删除）" || pointerValue(receipt.ActionID) != pointerValue(original.ActionID) || receipt.Op != original.Op || receipt.Status != original.Status {
+					if receipt.Text != "（内容已删除）" || deskstore.PointerValue(receipt.ActionID) != deskstore.PointerValue(original.ActionID) || receipt.Op != original.Op || receipt.Status != original.Status {
 						t.Fatal("receipt not scrubbed or audit metadata lost", receipt, original)
 					}
 				}

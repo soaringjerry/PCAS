@@ -17,6 +17,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/httpapi"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -234,7 +235,7 @@ func (f *phase25B234Fixture) claimWith(t *testing.T, text, acquisition, confirma
 func (f *phase25B234Fixture) labels(t *testing.T, ref memory.Ref, category string, durable bool, organized int, groups ...workspace.MemoryGroup) {
 	t.Helper()
 	if organized == 1 {
-		organized = postgres.OrganizeVersion
+		organized = kernel.OrganizeVersion
 	}
 	f.exec(t, `UPDATE claim_revisions SET category=$4,durable=$5 WHERE owner_id=$1 AND claim_id=$2 AND version=$3`, f.scope.OwnerID, ref.ID, ref.Version, category, durable)
 	f.exec(t, `UPDATE claims SET organized=$3 WHERE owner_id=$1 AND id=$2`, f.scope.OwnerID, ref.ID, organized)

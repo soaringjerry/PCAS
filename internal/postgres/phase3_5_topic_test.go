@@ -12,6 +12,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/intakestore"
 	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/worker"
@@ -49,7 +50,7 @@ func phase35TopicJob(t *testing.T, f *phase35Fixture, topic int) worker.Job {
 		// pending outcome, not proof that eligibility failed. Verify the observable
 		// reason/count before replaying that real scheduler operation.
 		var deferred int
-		e := f.Store.Pool.QueryRow(f.Context, `SELECT coalesce(sum(count),0) FROM background_stage_events WHERE owner_id=$1 AND stage=$2 AND outcome='failure' AND reason LIKE 'schedule_%' AND at>now()-interval '1 minute'`, f.Scope.OwnerID, HandoverStage).Scan(&deferred)
+		e := f.Store.Pool.QueryRow(f.Context, `SELECT coalesce(sum(count),0) FROM background_stage_events WHERE owner_id=$1 AND stage=$2 AND outcome='failure' AND reason LIKE 'schedule_%' AND at>now()-interval '1 minute'`, f.Scope.OwnerID, kernel.HandoverStage).Scan(&deferred)
 		if e != nil || deferred == 0 {
 			t.Fatalf("eligible topic has no task and no observable scheduling deferral: %v count=%d err=%v", err, deferred, e)
 		}
@@ -471,7 +472,7 @@ func phase35TopicControls(t *testing.T) *phase35Fixture {
 	scope := owner()
 	phase35Snapshot(t, s, scope)
 	f := &phase35Fixture{phase26LoadedFixture: &phase26LoadedFixture{Store: s, Context: ctx, Scope: scope, Claims: make([]memory.ID, 1436)}}
-	all := []extractedItem{}
+	all := []intakestore.ExtractedItem{}
 	for i := 0; i < 36; i++ {
 		all = append(all, phase35Direct(fmt.Sprintf("虚构主题控制记忆%02d", i), "memory"))
 	}

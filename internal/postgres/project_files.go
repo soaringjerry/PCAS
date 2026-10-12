@@ -15,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/blob"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/intakestore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
@@ -34,7 +35,7 @@ func studioFileProjectTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, ite
 	if !memory.ID(item).Valid() {
 		return "", memory.ErrInvalid
 	}
-	project, err := currentStudioProjectTx(ctx, tx, scope, item)
+	project, err := intakestore.CurrentStudioProjectTx(ctx, tx, scope, item)
 	if err != nil {
 		return "", err
 	}
@@ -117,7 +118,7 @@ func (s *Store) UploadProjectFile(ctx context.Context, scope memory.Scope, item,
 			return err
 		}
 		in := memory.IngestRequest{Connector: "project-file", ExternalID: project + ":" + hash, ExternalVersion: "1", Title: name, MediaType: media, Text: "[附件原件；正文尚未解析。校验标识：" + hash + "]"}
-		result, err := s.ingestAttachmentTx(ctx, tx, scope, in, key)
+		result, err := s.IngestAttachmentTx(ctx, tx, scope, in, key)
 		if err != nil {
 			return err
 		}
@@ -259,7 +260,7 @@ func (s *Store) DeleteProjectFile(ctx context.Context, scope memory.Scope, item,
 		if err != nil {
 			return err
 		}
-		if err = s.deleteTx(ctx, tx, scope, memory.DeleteRequest{BlockReimport: true, Targets: []memory.Ref{{ID: memory.ID(source), Version: version, Kind: memory.SourceKind}}}); err != nil {
+		if err = s.DeleteTx(ctx, tx, scope, memory.DeleteRequest{BlockReimport: true, Targets: []memory.Ref{{ID: memory.ID(source), Version: version, Kind: memory.SourceKind}}}); err != nil {
 			return err
 		}
 		_, err = tx.Exec(ctx, "UPDATE workspace_owners SET revision=revision+1 WHERE owner_id=$1", string(scope.OwnerID))

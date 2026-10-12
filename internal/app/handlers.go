@@ -13,6 +13,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 	"github.com/soaringjerry/PCAS/internal/modelcall/jobcall"
 	"github.com/soaringjerry/PCAS/internal/postgres"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/retrieval"
 	"github.com/soaringjerry/PCAS/internal/workspace/effort"
 	"github.com/soaringjerry/PCAS/internal/workspace/projecthandover"
@@ -57,22 +58,22 @@ func AliasScan(db *postgres.Store) aliasscan.Service {
 
 // Compare connects the statement comparison service to storage and generation.
 func Compare(db *postgres.Store) comparison.Service {
-	return comparison.Service{Store: db.CompareStore(), Generator: JobCalls(db), Version: postgres.CompareVersion}
+	return comparison.Service{Store: db.CompareStore(), Generator: JobCalls(db), Version: kernel.CompareVersion}
 }
 
 // Extraction connects the extraction service to storage and generation.
 func Extraction(db *postgres.Store) extraction.Service {
-	return extraction.Service{Store: db.ExtractionStore(), Generator: JobCalls(db), MaxAttempts: postgres.MaxJobAttempts}
+	return extraction.Service{Store: db.ExtractionStore(), Generator: JobCalls(db), MaxAttempts: kernel.MaxJobAttempts}
 }
 
 // Organize connects the organize service to storage and generation.
 func Organize(db *postgres.Store) organize.Service {
-	return organize.Service{Store: db.OrganizeStore(), Generator: JobCalls(db), Version: postgres.OrganizeVersion}
+	return organize.Service{Store: db.OrganizeStore(), Generator: JobCalls(db), Version: kernel.OrganizeVersion}
 }
 
 // EntityCompare connects the entity comparison service to storage and generation.
 func EntityCompare(db *postgres.Store) comparison.EntityService {
-	return comparison.EntityService{Store: db.EntityCompareStore(), Generator: JobCalls(db), Version: postgres.EntityCompareVersion}
+	return comparison.EntityService{Store: db.EntityCompareStore(), Generator: JobCalls(db), Version: kernel.EntityCompareVersion}
 }
 
 // Embedding returns the service of the vector index stages.

@@ -74,7 +74,7 @@ func TestDeputySelfcheckUsesOriginalRunAndReportsFallback(t *testing.T) {
 				}
 			}
 			s.SetModels(nil)
-			recovered, err := s.recoverInteractiveCallsOnce(ctx)
+			recovered, err := s.RecoverInteractiveCallsOnce(ctx)
 			if err != nil || calls.Load() != 2 || (mode == "accounting_failure" && recovered.Accounting != 1) {
 				t.Fatal("selfcheck accounting resubmitted a model", recovered, calls.Load(), err)
 			}

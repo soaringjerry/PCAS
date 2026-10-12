@@ -52,7 +52,7 @@ func TestDeputyKnownAnswerSurvivesLeaseChangeButNotExecutionReplacement(t *testi
 				t.Fatal(err)
 			}
 			defer peer.Close()
-			if _, err := peer.recoverInteractiveCallsOnce(ctx); err != nil {
+			if _, err := peer.RecoverInteractiveCallsOnce(ctx); err != nil {
 				t.Fatal(err)
 			}
 			if retained {

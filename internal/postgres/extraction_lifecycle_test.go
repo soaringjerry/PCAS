@@ -14,6 +14,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
 	"github.com/soaringjerry/PCAS/internal/postgres/accessstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/claimstore"
+	"github.com/soaringjerry/PCAS/internal/postgres/intakestore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/jackc/pgx/v5"
@@ -22,8 +23,8 @@ import (
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
-func directExtractedItem(text string) extractedItem {
-	return extractedItem{Kind: "memory", Text: text, Nature: "fact", Subject: "用户", Predicate: "交付约定", Quote: text, Confidence: 0.99, Acquisition: "direct"}
+func directExtractedItem(text string) intakestore.ExtractedItem {
+	return intakestore.ExtractedItem{Kind: "memory", Text: text, Nature: "fact", Subject: "用户", Predicate: "交付约定", Quote: text, Confidence: 0.99, Acquisition: "direct"}
 }
 
 func TestExtractionConfirmationRequiresCurrentVerbatimCapture(t *testing.T) {
@@ -32,7 +33,7 @@ func TestExtractionConfirmationRequiresCurrentVerbatimCapture(t *testing.T) {
 	tests := []struct {
 		name   string
 		source memory.SourceResult
-		item   extractedItem
+		item   intakestore.ExtractedItem
 		want   string
 	}{
 		{"direct capture without task explicit", baseSource, baseItem, "adopted"},
@@ -44,25 +45,25 @@ func TestExtractionConfirmationRequiresCurrentVerbatimCapture(t *testing.T) {
 	}
 	for _, change := range []struct {
 		name string
-		edit func(*extractedItem)
+		edit func(*intakestore.ExtractedItem)
 		want string
 	}{
-		{"inference", func(i *extractedItem) { i.Acquisition = "inferred" }, "candidate"},
-		{"reported speech", func(i *extractedItem) { i.Acquisition = "reported" }, "candidate"},
-		{"missing provenance", func(i *extractedItem) { i.Acquisition = "" }, "candidate"},
-		{"low confidence", func(i *extractedItem) { i.Confidence = 0.5 }, "candidate"},
-		{"confidence 0.79", func(i *extractedItem) { i.Confidence = 0.79 }, "candidate"},
-		{"confidence 0.8", func(i *extractedItem) { i.Confidence = 0.8 }, "adopted"},
-		{"unresolved subject", func(i *extractedItem) { i.Subject = "" }, "adopted"},
-		{"unresolved predicate", func(i *extractedItem) { i.Predicate = "" }, "adopted"},
-		{"paraphrased assertion", func(i *extractedItem) { i.Text = "月光列车已经交付" }, "adopted"},
+		{"inference", func(i *intakestore.ExtractedItem) { i.Acquisition = "inferred" }, "candidate"},
+		{"reported speech", func(i *intakestore.ExtractedItem) { i.Acquisition = "reported" }, "candidate"},
+		{"missing provenance", func(i *intakestore.ExtractedItem) { i.Acquisition = "" }, "candidate"},
+		{"low confidence", func(i *intakestore.ExtractedItem) { i.Confidence = 0.5 }, "candidate"},
+		{"confidence 0.79", func(i *intakestore.ExtractedItem) { i.Confidence = 0.79 }, "candidate"},
+		{"confidence 0.8", func(i *intakestore.ExtractedItem) { i.Confidence = 0.8 }, "adopted"},
+		{"unresolved subject", func(i *intakestore.ExtractedItem) { i.Subject = "" }, "adopted"},
+		{"unresolved predicate", func(i *intakestore.ExtractedItem) { i.Predicate = "" }, "adopted"},
+		{"paraphrased assertion", func(i *intakestore.ExtractedItem) { i.Text = "月光列车已经交付" }, "adopted"},
 	} {
 		item := baseItem
 		change.edit(&item)
 		tests = append(tests, struct {
 			name   string
 			source memory.SourceResult
-			item   extractedItem
+			item   intakestore.ExtractedItem
 			want   string
 		}{change.name, baseSource, item, change.want})
 	}
@@ -82,8 +83,8 @@ func extractionTestModel(t *testing.T, s *Store, handler http.HandlerFunc) {
 	s.SetModels(&ai.Registry{HTTP: server.Client(), Config: ai.Configuration{Extraction: "model", Providers: []ai.Provider{{ID: "model", Name: "测试模型", Protocol: "openai", BaseURL: server.URL, Model: "test", MaxOutput: 100, CostMode: "free"}}}})
 }
 
-func writeExtractionResponse(w http.ResponseWriter, item extractedItem) {
-	_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": map[string]string{"content": string(kernel.JSON(extracted{Items: []extractedItem{item}}))}}}, "usage": map[string]int{"prompt_tokens": 100, "completion_tokens": 30}})
+func writeExtractionResponse(w http.ResponseWriter, item intakestore.ExtractedItem) {
+	_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": map[string]string{"content": string(kernel.JSON(intakestore.Extracted{Items: []intakestore.ExtractedItem{item}}))}}}, "usage": map[string]int{"prompt_tokens": 100, "completion_tokens": 30}})
 }
 
 func TestDirectCaptureEntersDefaultRunAsSourceBacked(t *testing.T) {
@@ -99,7 +100,7 @@ func TestDirectCaptureEntersDefaultRunAsSourceBacked(t *testing.T) {
 	st := workspaceCommand(t, s, scope, workspace.Command{Type: "capture", Text: text})
 	src := st.Candidates[0].Source
 	ref := memory.Ref{ID: memory.ID(src.SourceID), Version: src.Version, Kind: memory.SourceKind}
-	if err := (extraction.Service{Store: s.ExtractionStore(), Generator: jobCalls(s), MaxAttempts: MaxJobAttempts}).Process(ctx, leaseStage(t, s, scope, ref, "source.extract")); err != nil {
+	if err := (extraction.Service{Store: s.ExtractionStore(), Generator: jobCalls(s), MaxAttempts: kernel.MaxJobAttempts}).Process(ctx, leaseStage(t, s, scope, ref, "source.extract")); err != nil {
 		t.Fatal(err)
 	}
 	st, err := s.Snapshot(ctx, scope)
@@ -241,7 +242,7 @@ func TestSupersededExtractionDoesNotCommitOrCallProvider(t *testing.T) {
 			done := make(chan error, 1)
 			if duringCall {
 				go func() {
-					done <- (extraction.Service{Store: s.ExtractionStore(), Generator: jobCalls(s), MaxAttempts: MaxJobAttempts}).Process(ctx, job)
+					done <- (extraction.Service{Store: s.ExtractionStore(), Generator: jobCalls(s), MaxAttempts: kernel.MaxJobAttempts}).Process(ctx, job)
 				}()
 				select {
 				case <-started:
@@ -257,7 +258,7 @@ func TestSupersededExtractionDoesNotCommitOrCallProvider(t *testing.T) {
 				if err := <-done; err != nil {
 					t.Fatal(err)
 				}
-			} else if err := (extraction.Service{Store: s.ExtractionStore(), Generator: jobCalls(s), MaxAttempts: MaxJobAttempts}).Process(ctx, job); err != nil {
+			} else if err := (extraction.Service{Store: s.ExtractionStore(), Generator: jobCalls(s), MaxAttempts: kernel.MaxJobAttempts}).Process(ctx, job); err != nil {
 				t.Fatal(err)
 			}
 			wantCalls := int32(0)

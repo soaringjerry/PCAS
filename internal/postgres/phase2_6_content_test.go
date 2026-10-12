@@ -11,6 +11,8 @@ import (
 	"github.com/soaringjerry/PCAS/internal/contextbuilder"
 	"github.com/soaringjerry/PCAS/internal/currentstate/handover"
 	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
+	"github.com/soaringjerry/PCAS/internal/postgres/interpstore"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
@@ -107,11 +109,11 @@ func TestPhase26G6B3B7B8LibraryAndC1C2Content(t *testing.T) {
 	}
 	err = pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		agent := workspace.Agent{ID: "phase26", MemoryKinds: []string{"fact", "preference", "decision", "intention", "plan"}}
-		u, err := s.startUseContextTx(ctx, tx, f.Scope)
+		u, err := s.StartUseContextTx(ctx, tx, f.Scope)
 		if err != nil {
 			return err
 		}
-		if err = s.finishUseContextTx(ctx, tx, f.Scope, agent, nil, "A fictitious question with no scope keywords", nil, &u); err != nil {
+		if err = s.FinishUseContextTx(ctx, tx, f.Scope, agent, nil, "A fictitious question with no scope keywords", nil, &u); err != nil {
 			return err
 		}
 		unrestricted := 0
@@ -146,16 +148,16 @@ func TestPhase26G6B3B7B8LibraryAndC1C2Content(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	phase26Isolate(t, f, HandoverStage)
+	phase26Isolate(t, f, kernel.HandoverStage)
 	if _, err := s.ScheduleStatus(ctx, time.Now()); err != nil {
 		t.Fatal(err)
 	}
-	phase26Isolate(t, f, HandoverStage)
-	j := phase26ClaimStage(t, f, HandoverStage)
+	phase26Isolate(t, f, kernel.HandoverStage)
+	j := phase26ClaimStage(t, f, kernel.HandoverStage)
 	if err := (handover.Service{Store: s.HandoverStore(), Generator: jobCalls(s)}).Process(ctx, j); err != nil {
 		t.Fatal(err)
 	}
-	calls := model.calls(HandoverStage)
+	calls := model.calls(kernel.HandoverStage)
 	if len(calls) != 1 {
 		t.Fatal("handover made extra provider calls")
 	}
@@ -206,7 +208,7 @@ func TestPhase26G6B3B7B8LibraryAndC1C2Content(t *testing.T) {
 		t.Fatal(err)
 	}
 	phase26Exec(t, f, `UPDATE claim_revisions SET value=to_jsonb('Fictitious changed requirement'::text) WHERE owner_id=$1 AND claim_id=$2`, f.Scope.OwnerID, f.Claims[2])
-	phase26Isolate(t, f, HandoverStage)
+	phase26Isolate(t, f, kernel.HandoverStage)
 	if n, err := s.ScheduleStatus(ctx, time.Now()); err != nil || n != 1 {
 		t.Fatalf("changed requirement not queued for hourly update: %d %v", n, err)
 	}
@@ -223,15 +225,15 @@ func TestPhase26G6B3B7B8LibraryAndC1C2Content(t *testing.T) {
 func TestPhase26G4A6A10ComparisonCoverageAndUnchangedScheduling(t *testing.T) {
 	f := phase26LoadFixture(t)
 	phase26NewModel(t, f)
-	phase26Exec(t, f, `UPDATE claims SET organized=$2 WHERE owner_id=$1`, f.Scope.OwnerID, OrganizeVersion)
+	phase26Exec(t, f, `UPDATE claims SET organized=$2 WHERE owner_id=$1`, f.Scope.OwnerID, kernel.OrganizeVersion)
 	s, ctx := f.Store, f.Context
-	var first, second []comparisonBatch
+	var first, second []interpstore.ComparisonBatch
 	err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
-		if err := syncComparisonMembersTx(ctx, tx, f.Scope.OwnerID); err != nil {
+		if err := interpstore.SyncComparisonMembersTx(ctx, tx, f.Scope.OwnerID); err != nil {
 			return err
 		}
 		var err error
-		first, err = comparisonPlanTx(ctx, tx, f.Scope.OwnerID, CompareVersion)
+		first, err = interpstore.ComparisonPlanTx(ctx, tx, f.Scope.OwnerID, kernel.CompareVersion)
 		return err
 	})
 	if err != nil {
@@ -266,14 +268,14 @@ func TestPhase26G4A6A10ComparisonCoverageAndUnchangedScheduling(t *testing.T) {
 	if largestCalls != 78 || len(pairs) != 3 {
 		t.Fatalf("1200-member opportunity coverage calls=%d expected78 goldpairs=%d expected3", largestCalls, len(pairs))
 	}
-	for _, stage := range []string{OrganizeStage, CompareStage, EntityCandidatesStage, HandoverStage} {
+	for _, stage := range []string{kernel.OrganizeStage, kernel.CompareStage, interpstore.EntityCandidatesStage, kernel.HandoverStage} {
 		if _, err := phase26Schedule(ctx, s, stage); err != nil {
 			t.Fatal(err)
 		}
 	}
 	tables := []string{"memory_comparison_members", "memory_group_progress", "memory_jobs", "claims", "entity_versions"}
 	before := phase26Digest(t, f, tables)
-	for _, stage := range []string{OrganizeStage, CompareStage, EntityCandidatesStage, HandoverStage} {
+	for _, stage := range []string{kernel.OrganizeStage, kernel.CompareStage, interpstore.EntityCandidatesStage, kernel.HandoverStage} {
 		if _, err := phase26Schedule(ctx, s, stage); err != nil {
 			t.Fatal(err)
 		}
@@ -287,7 +289,7 @@ func TestPhase26G4A6A10ComparisonCoverageAndUnchangedScheduling(t *testing.T) {
 	phase26Exec(t, f, `UPDATE claim_revisions SET value=to_jsonb('Fictitious edited note'::text) WHERE owner_id=$1 AND claim_id=$2`, f.Scope.OwnerID, changed)
 	err = pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		var err error
-		second, err = comparisonPlanTx(ctx, tx, f.Scope.OwnerID, CompareVersion)
+		second, err = interpstore.ComparisonPlanTx(ctx, tx, f.Scope.OwnerID, kernel.CompareVersion)
 		return err
 	})
 	if err != nil {
@@ -311,14 +313,14 @@ func TestPhase26G4A6A10ComparisonCoverageAndUnchangedScheduling(t *testing.T) {
 	}
 	t.Logf("complete plan batches=%d largest_group_calls=%d single_memory_affected_calls=%d; plan coverage is not actual provider billing", len(first), largestCalls, affected)
 	phase26LibraryPrecondition(t, f)
-	phase26Isolate(t, f, CompareStage)
+	phase26Isolate(t, f, kernel.CompareStage)
 	for i := 0; i < 4; i++ {
 		if _, err := s.ScheduleCompare(ctx, time.Now()); err != nil {
 			t.Fatal(err)
 		}
-		phase26Isolate(t, f, CompareStage)
-		j := phase26ClaimStage(t, f, CompareStage)
-		if err := (comparison.Service{Store: s.CompareStore(), Generator: jobCalls(s), Version: CompareVersion}).Process(ctx, j); err != nil {
+		phase26Isolate(t, f, kernel.CompareStage)
+		j := phase26ClaimStage(t, f, kernel.CompareStage)
+		if err := (comparison.Service{Store: s.CompareStore(), Generator: jobCalls(s), Version: kernel.CompareVersion}).Process(ctx, j); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -345,11 +347,11 @@ func TestPhase26G4A6A10ComparisonCoverageAndUnchangedScheduling(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
-		u, err := s.startUseContextTx(ctx, tx, f.Scope)
+		u, err := s.StartUseContextTx(ctx, tx, f.Scope)
 		if err != nil {
 			return err
 		}
-		if err := s.finishUseContextTx(ctx, tx, f.Scope, workspace.Agent{ID: "phase26", MemoryKinds: []string{"fact", "preference", "decision", "intention", "plan"}}, nil, "Fictitious request after requirement deduplication", nil, &u); err != nil {
+		if err := s.FinishUseContextTx(ctx, tx, f.Scope, workspace.Agent{ID: "phase26", MemoryKinds: []string{"fact", "preference", "decision", "intention", "plan"}}, nil, "Fictitious request after requirement deduplication", nil, &u); err != nil {
 			return err
 		}
 		unrestricted := 0

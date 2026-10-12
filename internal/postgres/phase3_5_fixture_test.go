@@ -15,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/httpapi"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/intakestore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
@@ -33,11 +34,11 @@ type phase35Fixture struct {
 	*phase26LoadedFixture
 	Deadlines []phase35Deadline
 	Topics    []string
-	Inputs    []extractedItem
+	Inputs    []intakestore.ExtractedItem
 }
 
-func phase35Items(n int) []extractedItem {
-	out := []extractedItem{}
+func phase35Items(n int) []intakestore.ExtractedItem {
+	out := []intakestore.ExtractedItem{}
 	for i := 0; i < n; i++ {
 		kind := "task"
 		if i%2 == 1 {
@@ -47,7 +48,7 @@ func phase35Items(n int) []extractedItem {
 		if i%2 == 1 {
 			text = fmt.Sprintf("Fictitious Azure idea %02d: compile an independent sound atlas.", i)
 		}
-		it := extractedItem{Kind: kind, Text: text, Quote: text, Nature: "intention", Subject: "我", Predicate: "虚构事项", Explicit: true, Confidence: 1, Acquisition: "direct", Qualification: "asserted"}
+		it := intakestore.ExtractedItem{Kind: kind, Text: text, Quote: text, Nature: "intention", Subject: "我", Predicate: "虚构事项", Explicit: true, Confidence: 1, Acquisition: "direct", Qualification: "asserted"}
 		switch i % 6 {
 		case 2:
 			it.Acquisition = "reported"
@@ -142,7 +143,7 @@ func phase35Load(t *testing.T) *phase35Fixture {
 	err = pgx.BeginFunc(f.Context, f.Store.Pool, func(tx pgx.Tx) error {
 		for _, it := range f.Inputs {
 			v := workspace.Candidate{ID: string(memory.NewID()), Kind: it.Kind, Text: it.Text, Confidence: it.Confidence, State: "pending", CreatedAt: kernel.Stamp(), Source: workspace.SourceRef{SourceID: string(src.ID), Version: src.Version, Excerpt: it.Quote, Label: "虚构抽取候选", At: kernel.Stamp()}}
-			if err := saveCandidate(f.Context, tx, f.Scope, v); err != nil {
+			if err := intakestore.SaveCandidate(f.Context, tx, f.Scope, v); err != nil {
 				return err
 			}
 		}
@@ -153,7 +154,7 @@ func phase35Load(t *testing.T) *phase35Fixture {
 	}
 	return f
 }
-func phase35Source(t *testing.T, s *Store, scope memory.Scope, items []extractedItem) memory.Ref {
+func phase35Source(t *testing.T, s *Store, scope memory.Scope, items []intakestore.ExtractedItem) memory.Ref {
 	t.Helper()
 	texts := []string{}
 	for _, it := range items {

@@ -50,7 +50,7 @@ func (s *Reader) listRetiredMemories(ctx context.Context, scope memory.Scope, q 
 		}
 		if q.Trust != "" {
 			var err error
-			out.Total, opts.Ids, err = trustedMemoryIDsTx(ctx, tx, scope, opts)
+			out.Total, opts.IDs, err = trustedMemoryIDsTx(ctx, tx, scope, opts)
 			if err != nil {
 				return err
 			}

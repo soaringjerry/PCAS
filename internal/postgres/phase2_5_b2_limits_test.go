@@ -9,9 +9,9 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
-	"github.com/soaringjerry/PCAS/internal/postgres"
 	"github.com/soaringjerry/PCAS/internal/worker"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
@@ -59,7 +59,7 @@ func TestPhase25B2_AllStableBlocksEventuallyCompared(t *testing.T) {
 		}
 	}
 	var marked int
-	if err := f.db.QueryRow(f.ctx, `SELECT count(*) FROM claims WHERE owner_id=$1 AND compared=$2`, f.scope.OwnerID, postgres.CompareVersion).Scan(&marked); err != nil {
+	if err := f.db.QueryRow(f.ctx, `SELECT count(*) FROM claims WHERE owner_id=$1 AND compared=$2`, f.scope.OwnerID, kernel.CompareVersion).Scan(&marked); err != nil {
 		t.Fatal(err)
 	}
 	if marked != 205 {
@@ -97,7 +97,7 @@ func TestPhase25B2_IndependentHourlyLimitsRetainHistory(t *testing.T) {
 		if err != nil || j == nil {
 			t.Fatal(j, err)
 		}
-		if err := (organize.Service{Store: f.store.OrganizeStore(), Generator: jobCalls(f.store), Version: postgres.OrganizeVersion}).Process(f.ctx, *j); err != nil {
+		if err := (organize.Service{Store: f.store.OrganizeStore(), Generator: jobCalls(f.store), Version: kernel.OrganizeVersion}).Process(f.ctx, *j); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -120,7 +120,7 @@ func TestPhase25B2_IndependentHourlyLimitsRetainHistory(t *testing.T) {
 	if err != nil || j == nil {
 		t.Fatal(j, err)
 	}
-	err = (organize.Service{Store: f.store.OrganizeStore(), Generator: jobCalls(f.store), Version: postgres.OrganizeVersion}).Process(f.ctx, *j)
+	err = (organize.Service{Store: f.store.OrganizeStore(), Generator: jobCalls(f.store), Version: kernel.OrganizeVersion}).Process(f.ctx, *j)
 	var quota *worker.JobError
 	if !errors.As(err, &quota) || quota.Code != "organize_hourly_limit" || !quota.NoAttempt {
 		t.Fatal("classification borrowed comparison quota", err)
@@ -130,7 +130,7 @@ func TestPhase25B2_IndependentHourlyLimitsRetainHistory(t *testing.T) {
 		t.Fatal("queue cleanup removed completed history", orphaned, err)
 	}
 	f.exec(t, `UPDATE background_usage SET created_at=now()-interval '61 minutes' WHERE owner_id=$1 AND stage='memory.organize'`, f.scope.OwnerID)
-	if err := (organize.Service{Store: f.store.OrganizeStore(), Generator: jobCalls(f.store), Version: postgres.OrganizeVersion}).Process(f.ctx, *j); err != nil {
+	if err := (organize.Service{Store: f.store.OrganizeStore(), Generator: jobCalls(f.store), Version: kernel.OrganizeVersion}).Process(f.ctx, *j); err != nil {
 		t.Fatal("released classification slot blocked", err)
 	}
 	if len(model.calls()) != 42 {

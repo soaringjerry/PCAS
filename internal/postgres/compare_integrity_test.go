@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
+	"github.com/soaringjerry/PCAS/internal/postgres/interpstore"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
@@ -50,10 +52,10 @@ func TestCompareLostLeaseCannotWriteRetirementOrProgress(t *testing.T) {
 		<-release
 		secretaryModelReply(w, `{"duplicates":[],"superseded":[{"old":1,"new":2}]}`)
 	})
-	j := compareJob(t, s, scope, false, CompareVersion)
+	j := compareJob(t, s, scope, false, kernel.CompareVersion)
 	done := make(chan error, 1)
 	go func() {
-		done <- (comparison.Service{Store: s.CompareStore(), Generator: jobCalls(s), Version: CompareVersion}).Process(context.Background(), j)
+		done <- (comparison.Service{Store: s.CompareStore(), Generator: jobCalls(s), Version: kernel.CompareVersion}).Process(context.Background(), j)
 	}()
 	select {
 	case <-entered:
@@ -82,8 +84,8 @@ func TestCompareEntityUndoAfterUserEditRefusesAtomically(t *testing.T) {
 	old, a := compareEntityFixture(t, s, scope, "小陈", "小陈负责虚构松林项目")
 	keep, b := compareEntityFixture(t, s, scope, "陈亮", "陈亮就是小陈，负责虚构松林项目")
 	compareEntityGroup(t, s, scope, "project", "虚构松林项目", a, b)
-	j := compareJob(t, s, scope, true, CompareVersion)
-	if err := (comparison.EntityService{Store: s.EntityCompareStore(), Generator: jobCalls(s), Version: EntityCompareVersion}).Process(context.Background(), j); err != nil {
+	j := compareJob(t, s, scope, true, kernel.CompareVersion)
+	if err := (comparison.EntityService{Store: s.EntityCompareStore(), Generator: jobCalls(s), Version: kernel.EntityCompareVersion}).Process(context.Background(), j); err != nil {
 		t.Fatal(err)
 	}
 	b1Correct(t, s, scope, a, "陈亮现在负责虚构云海项目")
@@ -144,7 +146,7 @@ func TestCompareRestoreProtectionSurvivesActionSnapshotExpiry(t *testing.T) {
 		t.Fatal(err)
 	}
 	compareProcess(t, s, scope)
-	compareState(t, s, scope, refs, []string{"", ""}, CompareVersion)
+	compareState(t, s, scope, refs, []string{"", ""}, kernel.CompareVersion)
 }
 
 // Verify the real migration-037 trigger, not a Go-side stale flag helper. The
@@ -155,7 +157,7 @@ func TestCompareRetirementPreservesFrozenCards(t *testing.T) {
 	ctx := context.Background()
 	b1Model(t, s, `{"duplicates":[],"superseded":[{"old":1,"new":4}]}`)
 	refs := compareFixture(t, s, scope, "虚构旧期限周三", "虚构现状甲", "虚构现状乙", "虚构新期限周五")
-	j := compareJob(t, s, scope, false, CompareVersion)
+	j := compareJob(t, s, scope, false, kernel.CompareVersion)
 	var key string
 	if err := s.Pool.QueryRow(ctx, "SELECT 'entity:'||entity_id::text FROM claim_mentions WHERE owner_id=$1 AND claim_id=$2 AND role='topic'", string(scope.OwnerID), string(refs[0].ID)).Scan(&key); err != nil {
 		t.Fatal(err)
@@ -170,7 +172,7 @@ func TestCompareRetirementPreservesFrozenCards(t *testing.T) {
 	if _, err := s.Pool.Exec(ctx, "INSERT INTO handovers(owner_id,body,rule,built_at,stale) VALUES($1,'虚构旧交接',1,now(),false)", string(scope.OwnerID)); err != nil {
 		t.Fatal(err)
 	}
-	if err := (comparison.Service{Store: s.CompareStore(), Generator: jobCalls(s), Version: CompareVersion}).Process(ctx, j); err != nil {
+	if err := (comparison.Service{Store: s.CompareStore(), Generator: jobCalls(s), Version: kernel.CompareVersion}).Process(ctx, j); err != nil {
 		t.Fatal(err)
 	}
 	var stale bool
@@ -206,12 +208,12 @@ func TestCompareRetirementPreservesFrozenSecondaryCard(t *testing.T) {
 	if _, err := s.Pool.Exec(ctx, "INSERT INTO status_card_items(owner_id,key,field,position,claim_id,claim_version) VALUES($1,$2,'status',0,$3,1)", string(scope.OwnerID), key, string(secondary[0].ID)); err != nil {
 		t.Fatal(err)
 	}
-	batch := []compareMemory{}
+	batch := []interpstore.CompareMemory{}
 	for i, ref := range refs {
-		batch = append(batch, compareMemory{organizeMemory: organizeMemory{N: i + 1, Ref: ref}})
+		batch = append(batch, interpstore.CompareMemory{OrganizeMemory: interpstore.OrganizeMemory{N: i + 1, Ref: ref}})
 	}
 	if err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
-		return s.writeComparisonTx(ctx, tx, scope.OwnerID, CompareVersion, batch, []compareEdge{{Old: 1, New: 4, Kind: "superseded"}}, true)
+		return s.WriteComparisonTx(ctx, tx, scope.OwnerID, kernel.CompareVersion, batch, []interpstore.CompareEdge{{Old: 1, New: 4, Kind: "superseded"}}, true)
 	}); err != nil {
 		t.Fatal(err)
 	}

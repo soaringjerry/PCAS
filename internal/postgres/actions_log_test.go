@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/deskstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/testsupport"
 	"github.com/soaringjerry/PCAS/internal/workspace"
@@ -141,7 +142,7 @@ func TestUndoRejectsReminderChange(t *testing.T) {
 	s := testStore(t)
 	scope := owner()
 	secretaryModel(t, s, func(w http.ResponseWriter, r *http.Request) {
-		secretaryModelReply(w, secretaryOutput{Actions: []secretaryAction{{Op: "create_task", Title: "提醒", Due: stringPointer(testsupport.DateFromToday(t, "Asia/Shanghai", 1, 15, 0).Format("2006-01-02T15:04"))}}})
+		secretaryModelReply(w, deskstore.SecretaryOutput{Actions: []deskstore.SecretaryAction{{Op: "create_task", Title: "提醒", Due: deskstore.StringPointer(testsupport.DateFromToday(t, "Asia/Shanghai", 1, 15, 0).Format("2006-01-02T15:04"))}}})
 	})
 	created := mustTurn(t, s, scope, turnRequest("新建提醒"))
 	task := created.State.Tasks[0]

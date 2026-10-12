@@ -304,7 +304,7 @@ func TestPhase2B4b_C6_ReplacesOnlyUntouchedSystemMemoriesAndMarksHistory(t *test
 	}
 	b2Equal(t, newCount, 1)
 	// A completed replay must not duplicate memories or replace protected records.
-	if err := (extraction.Service{Store: s.ExtractionStore(), Generator: jobCalls(s), MaxAttempts: MaxJobAttempts}).Process(context.Background(), leaseStage(t, s, scope, a.Sources[0], "source.extract")); err != nil {
+	if err := (extraction.Service{Store: s.ExtractionStore(), Generator: jobCalls(s), MaxAttempts: kernel.MaxJobAttempts}).Process(context.Background(), leaseStage(t, s, scope, a.Sources[0], "source.extract")); err != nil {
 		t.Fatal(err)
 	}
 	b4bDrain(t, s)
@@ -358,7 +358,7 @@ func TestPhase2B4b_C8_HoldPauseIncompleteBatchAndFreshInputPriority(t *testing.T
 		t.Fatal("resumed archive claim", err)
 	}
 	b2Equal(t, b2Count(t, s, `SELECT priority FROM memory_jobs WHERE id=$1`, string(job.ID)), b4bSpec[b4bLimits](t, "limits").Priority)
-	if err = (extraction.Service{Store: s.ExtractionStore(), Generator: jobCalls(s), MaxAttempts: MaxJobAttempts}).Process(context.Background(), *job); err != nil {
+	if err = (extraction.Service{Store: s.ExtractionStore(), Generator: jobCalls(s), MaxAttempts: kernel.MaxJobAttempts}).Process(context.Background(), *job); err != nil {
 		t.Fatal(err)
 	}
 	b4bDrain(t, s)

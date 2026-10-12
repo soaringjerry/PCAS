@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
+	"github.com/soaringjerry/PCAS/internal/postgres/interpstore"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 )
 
 func TestPhase26A3ClassificationClaimsBeforeAllOtherBackgroundStages(t *testing.T) {
@@ -13,9 +15,9 @@ func TestPhase26A3ClassificationClaimsBeforeAllOtherBackgroundStages(t *testing.
 	m := phase26NewModel(t, f)
 	// Forty already classified rows supply comparison/handover inputs; the other
 	// 4960 rows still need classification. No quotas or paid history are cleared.
-	phase26Exec(t, f, `UPDATE claims SET organized=$3 WHERE owner_id=$1 AND id=ANY($2::uuid[])`, f.Scope.OwnerID, f.Claims[:40], OrganizeVersion)
+	phase26Exec(t, f, `UPDATE claims SET organized=$3 WHERE owner_id=$1 AND id=ANY($2::uuid[])`, f.Scope.OwnerID, f.Claims[:40], kernel.OrganizeVersion)
 	phase26Proposal(t, f, 0, 4)
-	for _, stage := range []string{CompareStage, EntityCompareStage, EntityCandidatesStage, HandoverStage, OrganizeStage} {
+	for _, stage := range []string{kernel.CompareStage, kernel.EntityCompareStage, interpstore.EntityCandidatesStage, kernel.HandoverStage, kernel.OrganizeStage} {
 		if _, err := phase26Schedule(f.Context, f.Store, stage); err != nil {
 			t.Fatal(err)
 		}
@@ -23,20 +25,20 @@ func TestPhase26A3ClassificationClaimsBeforeAllOtherBackgroundStages(t *testing.
 	// Input ingestion/indexing is an external prerequisite, not one of the five
 	// stage budgets being ordered here. Leave their rows intact but not due.
 	phase26Exec(t, f, `UPDATE memory_jobs SET available_at=now()+interval '1 day' WHERE state='queued' AND NOT(stage LIKE 'memory.organize:%' OR stage LIKE 'memory.compare:%' OR stage LIKE 'memory.entity_compare:%' OR stage LIKE 'memory.entity_candidates:%' OR stage LIKE 'memory.handover:%')`)
-	for _, stage := range []string{OrganizeStage, CompareStage, EntityCompareStage, EntityCandidatesStage, HandoverStage} {
+	for _, stage := range []string{kernel.OrganizeStage, kernel.CompareStage, kernel.EntityCompareStage, interpstore.EntityCandidatesStage, kernel.HandoverStage} {
 		var pending int
 		if err := f.Store.Pool.QueryRow(f.Context, `SELECT count(*) FROM memory_jobs WHERE state='queued' AND stage LIKE $1 AND available_at<=now()`, stage+":%").Scan(&pending); err != nil || pending == 0 {
 			t.Fatalf("stage %s not simultaneously eligible pending=%d err=%v", stage, pending, err)
 		}
 	}
 	j, err := f.Store.Claim(f.Context, time.Minute)
-	if err != nil || j == nil || !strings.HasPrefix(j.Stage, OrganizeStage+":") {
+	if err != nil || j == nil || !strings.HasPrefix(j.Stage, kernel.OrganizeStage+":") {
 		t.Fatalf("classification not dispatched first among all five due stages: %+v %v", j, err)
 	}
-	if err := (organize.Service{Store: f.Store.OrganizeStore(), Generator: jobCalls(f.Store), Version: OrganizeVersion}).Process(f.Context, *j); err != nil {
+	if err := (organize.Service{Store: f.Store.OrganizeStore(), Generator: jobCalls(f.Store), Version: kernel.OrganizeVersion}).Process(f.Context, *j); err != nil {
 		t.Fatal(err)
 	}
-	if len(m.calls(OrganizeStage)) != 1 || len(m.calls(CompareStage))+len(m.calls(EntityCompareStage))+len(m.calls(EntityCandidatesStage))+len(m.calls(HandoverStage)) != 0 {
+	if len(m.calls(kernel.OrganizeStage)) != 1 || len(m.calls(kernel.CompareStage))+len(m.calls(kernel.EntityCompareStage))+len(m.calls(interpstore.EntityCandidatesStage))+len(m.calls(kernel.HandoverStage)) != 0 {
 		t.Fatal("classification priority made unrelated provider calls")
 	}
 	t.Log("all five background stages simultaneously due; actual Claim dispatches classification first and executes one classification call")

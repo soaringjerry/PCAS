@@ -152,28 +152,35 @@ Tests in the storage package compose the same services in `internal/postgres/com
 
 ## Storage Packages
 
-The PostgreSQL adapter is being split by domain into storage packages over a shared kernel. The declarations of `internal/postgres` have no cycle among them, so a domain can leave in one behavior-neutral change when the kernel holds what it shares.
-Each storage package has a type over the kernel's `DB`, and `Store` embeds that type, so a caller of the store keeps its entry. A group of files leaves only when it needs nothing that stays behind.
+The PostgreSQL adapter is split by domain into storage packages over a shared kernel.
+Each storage package has a type over the kernel's `DB`. `Store` in `internal/postgres` embeds each type, so a caller of the store keeps its entry. A package that needs a lower package holds it; `newStore` composes them, and the test `TestComposedStoreHoldsEveryStoragePackage` fails when a held package is absent.
+A storage package depends only on the packages below it in this table. Go forbids an import cycle, so the order is enforced by the compiler.
 
-| Package | Content | State |
-|---|---|---|
-| `internal/postgres/kernel` | `DB`, the core of the store: the connection pool, the configured models, the file store, and the business clock. Also the encoding of a document, the checks of a request, the reads of document rows, the lease and the queueing of a job, and the owner lock. Also the hourly budget of each limited stage and the owner's time zone. Also what each background job shares: the record of a stage outcome, the transaction of a derived write that yields to a user write, the removal of a saved paid result, and the author of a revision in the context. No business rule and no table of one domain. | Since 2026-10-12. |
-| `internal/postgres/memoryread` | The reads of memories: the owner's list and one memory, the memories that a turn or a run is given, the filters of a list, and the status of a statement. `Reader` works on the kernel's `DB`; the store embeds it. | Since 2026-10-12. |
-| `internal/postgres/memorystore` | Derived memory material that needs no other storage code: the summaries, the groups of sources, the graph around a record, the expansion of a reference, and the backfill jobs. More of the memory storage joins this package when it needs nothing that stays behind. | Since 2026-10-12. |
-| `internal/postgres/usagelog` | The usage records of model calls, the owner's view of them, and the validated plan that a record keeps. | Since 2026-10-12. |
-| `internal/postgres/schedulestore` | The owner's schedule view and the rule of a repeating date. | Since 2026-10-12. |
-| `internal/postgres/activitystore` | The query of one day's activity. | Since 2026-10-12. |
-| `internal/postgres/itemstore` | The owner of the work items. `SaveItem` is the one write of an item; `DeleteItem`, `RemoveItemDependency`, and `DeleteUnusedCreatedItem` are the three removals. It also holds the blocks of the text that a deputy wrote into an item. The test `TestOnlyTheItemOwnerWritesTheItemsTable` forbids a statement that writes `work_items` in each other storage package. | Since 2026-10-12. |
-| `internal/postgres/ownerstore` | The first rows of an owner: the workspace settings and the agents of the configured models. | Since 2026-10-12. |
-| `internal/postgres/actionlog` | The record of one action: the changes that it made, kept for undo, and the mark of a check-only turn. | Since 2026-10-12. |
-| `internal/postgres/sourcestore` | The ingestion of a source version, the read of one source, and the invalidation of what was derived from a version. | Since 2026-10-12. |
-| `internal/postgres/claimstore` | The write of a memory: the statement with its evidence, its record, and the entities that it names. It holds the source package. | Since 2026-10-12. |
-| `internal/postgres/accessstore` | The access checks of an agent: what a run may still use, which sources a team reader sees, and what an item shows to an agent. | Since 2026-10-12. |
-| `internal/postgres/budgetstore` | The reservation of the cost of a call against the daily budget, the health of the background stages, and the timing record of an execution. It holds the owner package. | Since 2026-10-12. |
-| `internal/postgres/workstore` | The workspace storage that needs no command: the completion of a deadline, the signals of an item, the timeline of a project, and the deputy's text in an item. | Since 2026-10-12. |
-| `internal/postgres/evidencestore` | The source text around a statement that a turn or a run is given. | Since 2026-10-12. |
-| `internal/postgres/statestore` | The review of a remembered date. More of the current-state storage joins it. | Since 2026-10-12. |
-| `internal/postgres` | Everything else, and the composition of the store in `newStore`. `Store` embeds the kernel's `DB` and the type of each storage package. A storage package that needs another one holds it. | Each domain leaves in its own change. The deputy's storage leaves last. |
+| Package | Content |
+|---|---|
+| `kernel` | `DB`: the connection pool, the configured models, the file store, the business clock, and the connection slots. The encoding of a document, the checks of a request, the reads of document rows, the lease and the queueing of a job, the owner lock, the hourly budget of each limited stage, the stage names and the rule versions, the record of a stage outcome, the transaction of a derived write, and the connection of a serialized call. No business rule and no table of one domain. |
+| `memoryread`, `memorystore`, `usagelog`, `schedulestore`, `activitystore`, `ownerstore`, `itemstore`, `actionlog`, `sourcestore`, `accessstore`, `evidencestore` | Leaves: the reads of memories, derived memory material, usage records, the schedule view, the day activity, the first rows of an owner, the items table, the record of an action, sources, access checks, and evidence text. |
+| `claimstore` | The write of a memory with its evidence and its entities. |
+| `budgetstore` | The reservation of a call's cost, the health of the background stages, the timing record. |
+| `workstore` | Workspace storage that needs no command: deadline completion, item signals, project timeline, the deputy's text in an item. |
+| `statestore` | The current state: handover, deadlines, the library reads, the review of a remembered date. |
+| `callstore` | The records of model calls: reservations, paid results, the three call journals, and the recovery of their accounting. |
+| `intakestore` | What comes in and its upkeep: attachments, connectors, archive imports, the processing jobs of a source, the edits and deletions of memory, and the recall. |
+| `workspacestore` | The snapshot, the action log's undo helpers, documents and versions, reminders, topic projects, the project handover. |
+| `interpstore` | Organizing, the alias scan, and the comparison of statements and entities. |
+| `usestore` | The memory that a turn or a run is given, and its checks. |
+| `deputystore` | The preparation of a run, the run with its leases, its recovery and the selection of its result, and the revision of a document. The order of a run is here; the model steps come from `deputy.Steps`. |
+| `commandstore` | The dispatch of a workspace command, the undo of an action, and the entry that executes a command. |
+| `deskstore` | The secretary: admission and order of a turn, the turn in its transaction, attachments of a request, and the cleanup of a check-only turn. |
+| `internal/postgres` | The composition of the store, the migrations, the queue, the schedulers, the notification channels, and five small adapters (about 2,000 lines). |
+
+The items table has one owner. `itemstore.SaveItem` is the one write of an item; `DeleteItem`, `RemoveItemDependency`, and `DeleteUnusedCreatedItem` are the three removals. The test `TestOnlyTheItemOwnerWritesTheItemsTable` forbids a statement that writes `work_items` in each other storage package.
+
+Known limits of this split:
+
+- The split followed the dependencies of the code. Some names came from the tool that made the move, for example `intakestore.Intake` for a package that also holds editing and recall. A later change can divide such a package.
+- The tests of the storage packages are still in `internal/postgres`. They run each package through the composed store.
+- A type of a storage package is exported when another storage package uses it. The domain boundary test keeps each domain package away from every storage package.
 
 ## Pattern for the Next Paths
 

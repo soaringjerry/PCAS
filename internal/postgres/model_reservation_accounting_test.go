@@ -172,7 +172,7 @@ func TestFailedInvocationsUseApplicableBudgetSettlement(t *testing.T) {
 				source := mustIngest(t, s, scope, memory.IngestRequest{Connector: "manual", ExternalID: "r1", ExternalVersion: "1", Title: "R1", Text: "R1 source", MediaType: "text/plain"})
 				job := leaseStage(t, s, scope, source.Ref, "source.extract")
 				call = func() error {
-					return (extraction.Service{Store: s.ExtractionStore(), Generator: jobCalls(s), MaxAttempts: MaxJobAttempts}).Process(ctx, job)
+					return (extraction.Service{Store: s.ExtractionStore(), Generator: jobCalls(s), MaxAttempts: kernel.MaxJobAttempts}).Process(ctx, job)
 				}
 			}
 			done := make(chan error, 1)
@@ -374,7 +374,7 @@ func TestUnavailableRetryKeepsPreviouslyReturnedCost(t *testing.T) {
 	f.set("R1 invalid returned extraction", 200)
 	source := mustIngest(t, s, scope, memory.IngestRequest{Connector: "manual", ExternalID: "r1-retry", ExternalVersion: "1", Title: "R1 retry", Text: "R1 retry source", MediaType: "text/plain"})
 	job := leaseStage(t, s, scope, source.Ref, "source.extract")
-	if err := (extraction.Service{Store: s.ExtractionStore(), Generator: jobCalls(s), MaxAttempts: MaxJobAttempts}).Process(context.Background(), job); err == nil {
+	if err := (extraction.Service{Store: s.ExtractionStore(), Generator: jobCalls(s), MaxAttempts: kernel.MaxJobAttempts}).Process(context.Background(), job); err == nil {
 		t.Fatal("expected invalid returned extraction")
 	}
 	usage := b4Usage(t, s, scope)
@@ -387,7 +387,7 @@ func TestUnavailableRetryKeepsPreviouslyReturnedCost(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := s.releaseUnavailableReservation(context.Background(), job, reservationID); err != nil {
+	if err := s.ReleaseUnavailableReservation(context.Background(), job, reservationID); err != nil {
 		t.Fatal(err)
 	}
 	state, err := s.Snapshot(context.Background(), scope)

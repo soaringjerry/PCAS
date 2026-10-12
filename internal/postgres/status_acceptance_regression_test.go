@@ -8,9 +8,10 @@ import (
 	"testing"
 
 	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 )
 
-func statusRegressionInput(t *testing.T, r *http.Request) (string, []cardMemory) {
+func statusRegressionInput(t *testing.T, r *http.Request) (string, []kernel.CardMemory) {
 	t.Helper()
 	var req struct {
 		Messages []struct{ Role, Content string }
@@ -23,7 +24,7 @@ func statusRegressionInput(t *testing.T, r *http.Request) (string, []cardMemory)
 		if message.Role == "user" {
 			var prompt struct {
 				Key      string
-				Memories []cardMemory
+				Memories []kernel.CardMemory
 			}
 			if err := json.Unmarshal([]byte(message.Content), &prompt); err != nil {
 				t.Error(err)
@@ -43,11 +44,11 @@ func TestStatusRecurringSpacedHourKeepsSpecificAmbiguity(t *testing.T) {
 		_, memories := statusRegressionInput(t, r)
 		items := []any{}
 		for _, m := range memories {
-			d := cardDeadline{N: m.N, Kind: "recurring", Recurrence: strings.TrimSuffix(m.Text, "有课"), Title: "虚构课表"}
+			d := kernel.CardDeadline{N: m.N, Kind: "recurring", Recurrence: strings.TrimSuffix(m.Text, "有课"), Title: "虚构课表"}
 			if m.Text == texts[0] {
 				d.TimeNote = "没说上午还是下午"
 			}
-			items = append(items, map[string]any{"n": m.N, "category": "rule", "durable": true, "unrestricted": true, "scope": "", "deadlines": []cardDeadline{d}})
+			items = append(items, map[string]any{"n": m.N, "category": "rule", "durable": true, "unrestricted": true, "scope": "", "deadlines": []kernel.CardDeadline{d}})
 		}
 		secretaryModelReply(w, map[string]any{"items": items})
 	})
@@ -57,7 +58,7 @@ func TestStatusRecurringSpacedHourKeepsSpecificAmbiguity(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if err := (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: OrganizeVersion}).Process(ctx, organizeTestJob(t, s, scope)); err != nil {
+	if err := (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: kernel.OrganizeVersion}).Process(ctx, organizeTestJob(t, s, scope)); err != nil {
 		t.Fatal(err)
 	}
 

@@ -16,6 +16,8 @@ import (
 	"github.com/soaringjerry/PCAS/internal/interpretation/aliasscan"
 	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
 	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
+	"github.com/soaringjerry/PCAS/internal/postgres/interpstore"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/soaringjerry/PCAS/internal/ai"
 	"github.com/soaringjerry/PCAS/internal/memory"
@@ -84,15 +86,15 @@ func phase26NewModel(t *testing.T, f *phase26LoadedFixture) *phase26Model {
 func phase26ModelStage(system string) string {
 	switch {
 	case strings.Contains(system, "每条记忆标类型"):
-		return OrganizeStage
+		return kernel.OrganizeStage
 	case strings.Contains(system, "写交接说明"):
-		return HandoverStage
+		return kernel.HandoverStage
 	case strings.Contains(system, "只提出候选"):
-		return EntityCandidatesStage
+		return interpstore.EntityCandidatesStage
 	case strings.Contains(system, "同一个人") || strings.Contains(system, "同一实体") || strings.Contains(system, "same"):
-		return EntityCompareStage
+		return kernel.EntityCompareStage
 	case strings.Contains(system, "duplicates"):
-		return CompareStage
+		return kernel.CompareStage
 	default:
 		return "secretary"
 	}
@@ -110,7 +112,7 @@ func (m *phase26Model) calls(stage string) []phase26Call {
 }
 func (m *phase26Model) goldReply(call phase26Call) string {
 	switch call.Stage {
-	case OrganizeStage:
+	case kernel.OrganizeStage:
 		var prompt struct {
 			Memories []struct {
 				N    int
@@ -178,7 +180,7 @@ func (m *phase26Model) goldReply(call phase26Call) string {
 		}
 		b, _ := json.Marshal(map[string]any{"items": items, "new": []any{}})
 		return string(b)
-	case CompareStage:
+	case kernel.CompareStage:
 		var prompt struct {
 			Memories []struct{ N int }
 			Refs     []memory.Ref
@@ -204,11 +206,11 @@ func (m *phase26Model) goldReply(call phase26Call) string {
 		}
 		b, _ := json.Marshal(map[string]any{"duplicates": duplicates, "superseded": superseded})
 		return string(b)
-	case EntityCompareStage:
+	case kernel.EntityCompareStage:
 		return `{"same":false,"keep":null}`
-	case EntityCandidatesStage:
+	case interpstore.EntityCandidatesStage:
 		return `{"groups":[]}`
-	case HandoverStage:
+	case kernel.HandoverStage:
 		var prompt struct {
 			Memories []struct {
 				N        int
@@ -270,28 +272,28 @@ func phase26Isolate(t *testing.T, f *phase26LoadedFixture, stage string) {
 }
 func phase26Schedule(ctx context.Context, s *Store, stage string) (int, error) {
 	switch stage {
-	case OrganizeStage:
+	case kernel.OrganizeStage:
 		return s.ScheduleOrganize(ctx, time.Now())
-	case CompareStage, EntityCompareStage:
+	case kernel.CompareStage, kernel.EntityCompareStage:
 		return s.ScheduleCompare(ctx, time.Now())
-	case EntityCandidatesStage:
+	case interpstore.EntityCandidatesStage:
 		return s.ScheduleEntityCandidates(ctx, time.Now())
-	case HandoverStage:
+	case kernel.HandoverStage:
 		return s.ScheduleStatus(ctx, time.Now())
 	}
 	return 0, fmt.Errorf("unknown test stage %s", stage)
 }
 func phase26Process(ctx context.Context, s *Store, j worker.Job) error {
 	switch strings.SplitN(j.Stage, ":", 2)[0] {
-	case OrganizeStage:
-		return (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: OrganizeVersion}).Process(ctx, j)
-	case CompareStage:
-		return (comparison.Service{Store: s.CompareStore(), Generator: jobCalls(s), Version: CompareVersion}).Process(ctx, j)
-	case EntityCompareStage:
-		return (comparison.EntityService{Store: s.EntityCompareStore(), Generator: jobCalls(s), Version: EntityCompareVersion}).Process(ctx, j)
-	case EntityCandidatesStage:
+	case kernel.OrganizeStage:
+		return (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: kernel.OrganizeVersion}).Process(ctx, j)
+	case kernel.CompareStage:
+		return (comparison.Service{Store: s.CompareStore(), Generator: jobCalls(s), Version: kernel.CompareVersion}).Process(ctx, j)
+	case kernel.EntityCompareStage:
+		return (comparison.EntityService{Store: s.EntityCompareStore(), Generator: jobCalls(s), Version: kernel.EntityCompareVersion}).Process(ctx, j)
+	case interpstore.EntityCandidatesStage:
 		return (aliasscan.Service{Store: s.AliasScanStore(), Generator: jobCalls(s)}).Process(ctx, j)
-	case HandoverStage:
+	case kernel.HandoverStage:
 		return (handover.Service{Store: s.HandoverStore(), Generator: jobCalls(s)}).Process(ctx, j)
 	}
 	return fmt.Errorf("unknown test stage %s", j.Stage)

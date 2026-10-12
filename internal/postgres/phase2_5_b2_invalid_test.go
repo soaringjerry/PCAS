@@ -8,7 +8,7 @@ import (
 
 	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
 	"github.com/soaringjerry/PCAS/internal/memory"
-	"github.com/soaringjerry/PCAS/internal/postgres"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 )
 
 func TestPhase25B2_MalformedOrMissingArraysDoNotWriteResults(t *testing.T) {
@@ -30,7 +30,7 @@ func TestPhase25B2_MalformedOrMissingArraysDoNotWriteResults(t *testing.T) {
 			}
 			// Handler acknowledgement style is not part of the contract. The
 			// observable requirement is no derived results or compared advancement.
-			_ = (comparison.Service{Store: f.store.CompareStore(), Generator: jobCalls(f.store), Version: postgres.CompareVersion}).Process(f.ctx, *j)
+			_ = (comparison.Service{Store: f.store.CompareStore(), Generator: jobCalls(f.store), Version: kernel.CompareVersion}).Process(f.ctx, *j)
 			for _, r := range refs {
 				f.assertRetirement(t, r, "", memory.Ref{})
 			}

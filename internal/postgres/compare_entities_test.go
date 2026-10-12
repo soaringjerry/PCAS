@@ -9,6 +9,7 @@ import (
 
 	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
 	"github.com/soaringjerry/PCAS/internal/postgres/claimstore"
+	"github.com/soaringjerry/PCAS/internal/postgres/interpstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/jackc/pgx/v5"
@@ -25,7 +26,7 @@ func compareEntityFixture(t *testing.T, s *Store, scope memory.Scope, name, text
 		t.Fatal(err)
 	}
 	workspaceCommand(t, s, scope, workspace.Command{Type: "setMemoryVisibility", ID: string(claim.ID), AgentIDs: []string{"model", "manual"}})
-	if _, err := s.Pool.Exec(context.Background(), "UPDATE claims SET organized=$3 WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), string(claim.ID), OrganizeVersion); err != nil {
+	if _, err := s.Pool.Exec(context.Background(), "UPDATE claims SET organized=$3 WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), string(claim.ID), kernel.OrganizeVersion); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.Pool.Exec(context.Background(), "INSERT INTO claim_mentions(owner_id,claim_id,claim_version,entity_id,role) VALUES($1,$2,1,$3,'person')", string(scope.OwnerID), string(claim.ID), string(entity.ID)); err != nil {
@@ -60,11 +61,11 @@ func TestCompareEntityMergeAliasesAndUndo(t *testing.T) {
 	old, a := compareEntityFixture(t, s, scope, "小陈", "小陈负责虚构松林项目")
 	keep, b := compareEntityFixture(t, s, scope, "陈亮", "陈亮就是负责松林项目的小陈")
 	compareEntityGroup(t, s, scope, "project", "虚构松林项目", a, b)
-	j := compareJob(t, s, scope, true, CompareVersion)
-	if err := (comparison.EntityService{Store: s.EntityCompareStore(), Generator: jobCalls(s), Version: EntityCompareVersion}).Process(context.Background(), j); err != nil {
+	j := compareJob(t, s, scope, true, kernel.CompareVersion)
+	if err := (comparison.EntityService{Store: s.EntityCompareStore(), Generator: jobCalls(s), Version: kernel.EntityCompareVersion}).Process(context.Background(), j); err != nil {
 		t.Fatal(err)
 	}
-	var p comparisonEntityPair
+	var p interpstore.ComparisonEntityPair
 	if err := json.Unmarshal([]byte(f.last(t).Prompt), &p); err != nil || len(p.Entities[0].Memories) != 1 || len(p.Entities[1].Memories) != 1 {
 		t.Fatal(err, p)
 	}
@@ -124,8 +125,8 @@ func TestCompareEntityNegativeAndAmbiguousNames(t *testing.T) {
 	compareEntityFixture(t, s, scope, "老王", "老王在虚构松林学校教书")
 	compareEntityFixture(t, s, scope, "老王", "老王经营虚构云朵面包店")
 	compareEntityFixture(t, s, scope, "那个王先生", "那个王先生来自虚构岚谷")
-	j := compareJob(t, s, scope, true, CompareVersion)
-	if err := (comparison.EntityService{Store: s.EntityCompareStore(), Generator: jobCalls(s), Version: EntityCompareVersion}).Process(context.Background(), j); err != nil {
+	j := compareJob(t, s, scope, true, kernel.CompareVersion)
+	if err := (comparison.EntityService{Store: s.EntityCompareStore(), Generator: jobCalls(s), Version: kernel.EntityCompareVersion}).Process(context.Background(), j); err != nil {
 		t.Fatal(err)
 	}
 	var n int
@@ -179,8 +180,8 @@ func TestCompareEntityCandidatesRequireModelProposalForEveryContext(t *testing.T
 			if _, err := s.Pool.Exec(context.Background(), "UPDATE claims SET retired='',retired_by=NULL WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), string(a.ID)); err != nil {
 				t.Fatal(err)
 			}
-			j := compareJob(t, s, scope, true, CompareVersion)
-			if err := (comparison.EntityService{Store: s.EntityCompareStore(), Generator: jobCalls(s), Version: EntityCompareVersion}).Process(context.Background(), j); err != nil {
+			j := compareJob(t, s, scope, true, kernel.CompareVersion)
+			if err := (comparison.EntityService{Store: s.EntityCompareStore(), Generator: jobCalls(s), Version: kernel.EntityCompareVersion}).Process(context.Background(), j); err != nil {
 				t.Fatal(err)
 			}
 			if len(f.all()) != 1 {
@@ -208,10 +209,10 @@ func TestCompareEntityInputMemoryChangedDuringCallDoesNotMerge(t *testing.T) {
 		<-release
 		secretaryModelReply(w, `{"same":true,"keep":2}`)
 	})
-	j := compareJob(t, s, scope, true, CompareVersion)
+	j := compareJob(t, s, scope, true, kernel.CompareVersion)
 	done := make(chan error, 1)
 	go func() {
-		done <- (comparison.EntityService{Store: s.EntityCompareStore(), Generator: jobCalls(s), Version: EntityCompareVersion}).Process(ctx, j)
+		done <- (comparison.EntityService{Store: s.EntityCompareStore(), Generator: jobCalls(s), Version: kernel.EntityCompareVersion}).Process(ctx, j)
 	}()
 	select {
 	case <-entered:

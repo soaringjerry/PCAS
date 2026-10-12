@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
+	"github.com/soaringjerry/PCAS/internal/postgres/intakestore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/soaringjerry/PCAS/internal/ai"
@@ -604,9 +605,9 @@ func b4ImportAction(t *testing.T, s *Store, scope memory.Scope, id, action strin
 }
 func b4SmallChunks(t *testing.T, size int) {
 	t.Helper()
-	old := ImportChunkSize
-	ImportChunkSize = size
-	t.Cleanup(func() { ImportChunkSize = old })
+	old := intakestore.ImportChunkSize
+	intakestore.ImportChunkSize = size
+	t.Cleanup(func() { intakestore.ImportChunkSize = old })
 }
 
 type b4Parsing struct {
@@ -695,7 +696,7 @@ func b4QueueWorker(t *testing.T, s *Store) (context.CancelFunc, chan error) {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
-	w := worker.New(s, map[string]worker.Handler{"source.parse": s.ProcessAttachment, "source.chunk": s.ProcessChunks, "source.tokenize": s.ProcessIndex, "source.extract": (extraction.Service{Store: s.ExtractionStore(), Generator: jobCalls(s), MaxAttempts: MaxJobAttempts}).Process, "source.embed": indexer(s).Process, "claim.embed": indexer(s).Process}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	w := worker.New(s, map[string]worker.Handler{"source.parse": s.ProcessAttachment, "source.chunk": s.ProcessChunks, "source.tokenize": s.ProcessIndex, "source.extract": (extraction.Service{Store: s.ExtractionStore(), Generator: jobCalls(s), MaxAttempts: kernel.MaxJobAttempts}).Process, "source.embed": indexer(s).Process, "claim.embed": indexer(s).Process}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	go func() {
 		for ctx.Err() == nil {
 			worked, err := w.RunOnce(ctx)

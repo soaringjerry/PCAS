@@ -12,6 +12,7 @@ import (
 
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/modelcall"
+	"github.com/soaringjerry/PCAS/internal/postgres/callstore"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -24,7 +25,7 @@ func TestInteractiveWorkerRecoversDeletedInputAccountingAfterRestart(t *testing.
 	})
 	request := admittedInteractiveRequest(t, s, scope, "model")
 	request.Refs = []memory.Ref{organizeTestMemory(t, s, scope, "Fictitious input for accounting recovery.")}
-	original := request.Policy.(interactiveCallPolicy).Usage
+	original := request.Policy.(callstore.InteractiveCallPolicy).Usage
 	ctx := context.Background()
 	if _, err := s.Pool.Exec(ctx, `CREATE FUNCTION reject_continuation_usage() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'synthetic usage failure'; END $$; CREATE TRIGGER reject_continuation_usage BEFORE INSERT ON model_usage FOR EACH ROW EXECUTE FUNCTION reject_continuation_usage()`); err != nil {
 		t.Fatal(err)
@@ -70,7 +71,7 @@ func TestInteractiveWorkerRecoversDeletedInputAccountingAfterRestart(t *testing.
 	if err := s.Pool.QueryRow(ctx, `SELECT c.usage_id::text,u.turn_id::text,u.tier,(c.result_receipt->>'availableForApplication')::boolean,(SELECT count(*) FROM background_model_results WHERE owner_id=$1),(SELECT count(*) FROM model_usage WHERE owner_id=$1) FROM model_calls c JOIN model_usage u ON u.owner_id=c.owner_id AND u.id=c.usage_id WHERE c.owner_id=$1 AND c.execution_id=$2`, string(scope.OwnerID), string(request.ExecutionID)).Scan(&usageID, &turn, &tier, &available, &bodies, &usages); err != nil || usageID != string(original.ID) || turn != original.TurnID || tier != original.Tier || available || bodies != 0 || usages != 1 || calls.Load() != 1 {
 		t.Fatal(usageID, turn, tier, available, bodies, usages, calls.Load(), err)
 	}
-	status, err := peer.recoverInteractiveCallsOnce(ctx)
+	status, err := peer.RecoverInteractiveCallsOnce(ctx)
 	if err != nil || status.Accounting != 0 || status.Results != 0 || status.Interrupted != 0 || status.PendingAccounting != 0 || !status.CountsKnown {
 		t.Fatal(status, err)
 	}
@@ -93,14 +94,14 @@ func TestInteractiveWorkerRejectsResponseFromReplacedDeputyLease(t *testing.T) {
 	if _, err := s.Pool.Exec(ctx, `UPDATE agent_runs SET status='running',lease_token=$3,lease_until=clock_timestamp()+interval '5 minutes' WHERE owner_id=$1 AND id=$2`, string(scope.OwnerID), run.ID, token); err != nil {
 		t.Fatal(err)
 	}
-	policy := request.Policy.(interactiveCallPolicy)
+	policy := request.Policy.(callstore.InteractiveCallPolicy)
 	policy.Kind, policy.Token, policy.Origin = "deputy", token, run.CreatedAt
 	policy.RequestHash = nil
 	policy.ThingID = run.ThingID
 	policy.Usage.RunID = run.ID
 	request.Policy = policy
 	request.ExecutionID, request.RootExecutionID = memory.ID(run.ID), memory.ID(run.ID)
-	adapter := interactiveCalls{store: s}
+	adapter := callstore.InteractiveCalls{Store: s.Calls}
 	provider, _ := s.Models.Get("model")
 	invocation, err := adapter.Prepare(ctx, request, provider)
 	if err != nil {
@@ -114,7 +115,7 @@ func TestInteractiveWorkerRejectsResponseFromReplacedDeputyLease(t *testing.T) {
 	if err := adapter.Start(ctx, request, paid); err != nil {
 		t.Fatal(err)
 	}
-	active, err := s.recoverInteractiveCallsOnce(ctx)
+	active, err := s.RecoverInteractiveCallsOnce(ctx)
 	if err != nil || active.Interrupted != 0 {
 		t.Fatal("active deputy was interrupted", active, err)
 	}
@@ -122,7 +123,7 @@ func TestInteractiveWorkerRejectsResponseFromReplacedDeputyLease(t *testing.T) {
 		t.Fatal(err)
 	}
 	s.SetModels(nil)
-	interrupted, err := s.recoverInteractiveCallsOnce(ctx)
+	interrupted, err := s.RecoverInteractiveCallsOnce(ctx)
 	if err != nil || interrupted.Interrupted != 1 {
 		t.Fatal(interrupted, err)
 	}
@@ -130,7 +131,7 @@ func TestInteractiveWorkerRejectsResponseFromReplacedDeputyLease(t *testing.T) {
 		t.Fatal("replaced deputy retained application rights", paid.NotApplicable, err)
 	}
 	for range 2 {
-		if _, err := s.recoverInteractiveCallsOnce(ctx); err != nil {
+		if _, err := s.RecoverInteractiveCallsOnce(ctx); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -161,7 +162,7 @@ func TestInteractiveWorkerSavesResponseWithoutRepeatingCanceledRequest(t *testin
 	go func() { _, err := s.Gateway().Call(work, request); done <- err }()
 	pending := false
 	for !pending {
-		s.pendingInteractive.Range(func(_, _ any) bool { pending = true; return false })
+		s.PendingInteractive.Range(func(_, _ any) bool { pending = true; return false })
 		if !pending {
 			select {
 			case <-work.Done():
@@ -178,7 +179,7 @@ func TestInteractiveWorkerSavesResponseWithoutRepeatingCanceledRequest(t *testin
 		t.Fatal(err)
 	}
 	s.SetModels(nil)
-	status, err := s.recoverInteractiveCallsOnce(ctx)
+	status, err := s.RecoverInteractiveCallsOnce(ctx)
 	if err != nil || status.Results != 1 || status.PendingResults != 0 || status.PendingAccounting != 0 || !status.CountsKnown || calls.Load() != 1 {
 		t.Fatal(status, err, calls.Load())
 	}
@@ -199,7 +200,7 @@ func TestInteractiveWorkerClassifiesInterruptedCallsWithoutResubmission(t *testi
 			secretaryModel(t, s, func(w http.ResponseWriter, r *http.Request) { calls.Add(1) })
 			request := admittedInteractiveRequest(t, s, scope, "model")
 			ctx := context.Background()
-			adapter := interactiveCalls{store: s}
+			adapter := callstore.InteractiveCalls{Store: s.Calls}
 			provider, _ := s.Models.Get("model")
 			invocation, err := adapter.Prepare(ctx, request, provider)
 			if err != nil {
@@ -217,7 +218,7 @@ func TestInteractiveWorkerClassifiesInterruptedCallsWithoutResubmission(t *testi
 			}
 			// A distant business clock cannot expire a real operational admission.
 			s.SetBusinessClock(func() time.Time { return time.Now().Add(365 * 24 * time.Hour) })
-			active, err := s.recoverInteractiveCallsOnce(ctx)
+			active, err := s.RecoverInteractiveCallsOnce(ctx)
 			if err != nil || active.Interrupted != 0 {
 				t.Fatal("active execution was declared interrupted", active, err)
 			}
@@ -225,7 +226,7 @@ func TestInteractiveWorkerClassifiesInterruptedCallsWithoutResubmission(t *testi
 				t.Fatal(err)
 			}
 			s.SetModels(nil)
-			status, err := s.recoverInteractiveCallsOnce(ctx)
+			status, err := s.RecoverInteractiveCallsOnce(ctx)
 			if err != nil || status.Interrupted != 1 || status.PendingInterrupted != 0 || !status.CountsKnown {
 				t.Fatal(status, err)
 			}
@@ -253,7 +254,7 @@ func TestInteractiveWorkerClassifiesInterruptedCallsWithoutResubmission(t *testi
 				if err := adapter.Save(ctx, request, paid); err != nil || !paid.NotApplicable {
 					t.Fatal(paid.NotApplicable, err)
 				}
-				recovered, err := s.recoverInteractiveCallsOnce(ctx)
+				recovered, err := s.RecoverInteractiveCallsOnce(ctx)
 				if err != nil || recovered.Accounting != 1 {
 					t.Fatal(recovered, err)
 				}

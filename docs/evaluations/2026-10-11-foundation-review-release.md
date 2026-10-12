@@ -282,6 +282,17 @@ The full CI run of #376 was the first with the new slices: the slowest PostgreSQ
 
 The storage package has 24,636 lines without tests at this revision. It had 28,355 lines at the review.
 
+## Twentieth Release
+
+Released revision: `1050c24473c1c061ce1574563525ec6f98a59daa`, on 2026-10-12 UTC. Earlier revision: `d0af154`.
+Pull requests #377 and #378 give the changes: one CI run for one change, and the refresh of a run's memory part outside the storage package. Both went by one pull request straight into `main`.
+
+The release had no database migration. The backup was validated, and the record counts are equal before and after the start: 5,253 claims and 29 work items.
+The live check on the real default Codex channel passed with four turns: an answer, an arrangement (`create_task`, done), a change (`update`, done), and a delegation (`delegate`, done) whose deputy run finished as done with a settled call. That run refreshed its memory part through the moved rule.
+The cleanup succeeded and the record counts are equal. The worker log has no error, and no container restarted.
+
+The storage package has 24,620 lines without tests at this revision. It had 28,355 lines at the review.
+
 ## Host Cleanup
 
 The owner approved removal of leftover data on 2026-10-11.

@@ -7,6 +7,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
@@ -31,7 +32,7 @@ func (s *Store) secretaryDocumentsTx(ctx context.Context, tx pgx.Tx, scope memor
 	for i, doc := range docs {
 		alias := fmt.Sprintf("D%d", i+1)
 		c.Documents[alias] = doc
-		item, err := getItem(ctx, tx, scope, doc.ThingID)
+		item, err := itemstore.GetItem(ctx, tx, scope, doc.ThingID)
 		if err != nil {
 			return "", err
 		}

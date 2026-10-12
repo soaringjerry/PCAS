@@ -9,6 +9,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/claimstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 )
 
@@ -22,7 +23,7 @@ func (s *Store) Commit(ctx context.Context, scope memory.Scope, in memory.Commit
 	}
 	hash := sha256.Sum256(kernel.JSON(in))
 	err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
-		if err := s.ensureOwner(ctx, tx, scope); err != nil {
+		if err := s.EnsureOwner(ctx, tx, scope); err != nil {
 			return err
 		}
 		if _, err := tx.Exec(ctx, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(scope.OwnerID)); err != nil {
@@ -76,7 +77,7 @@ func (s *Store) Commit(ctx context.Context, scope memory.Scope, in memory.Commit
 			if exists {
 				return memory.ErrConflict
 			}
-			if err := createRecord(ctx, tx, scope.OwnerID, v.ID, kind, "user"); err != nil {
+			if err := claimstore.CreateRecord(ctx, tx, scope.OwnerID, v.ID, kind, "user"); err != nil {
 				return err
 			}
 			precision := v.ValidTime.Precision

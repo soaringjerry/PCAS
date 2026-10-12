@@ -10,6 +10,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -24,7 +25,7 @@ func TestPhase26G1C6SecretaryContextAndActionOverflowRemainVisible(t *testing.T)
 		for kind, n := range map[string]int{"task": 55, "project": 60, "idea": 30} {
 			for i := 0; i < n; i++ {
 				item := workspace.NewItem(kind, fmt.Sprintf("Fictitious %s overflow %03d", kind, i))
-				if err := saveItem(f.Context, tx, f.Scope, item); err != nil {
+				if err := itemstore.SaveItem(f.Context, tx, f.Scope, item); err != nil {
 					return err
 				}
 			}

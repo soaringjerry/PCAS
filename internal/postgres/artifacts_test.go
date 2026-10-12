@@ -7,6 +7,8 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/accessstore"
+	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
@@ -41,11 +43,11 @@ func TestEditedArtifactRetainsFieldProvenance(t *testing.T) {
 			// Inspect the derived dependency separately from normal memory recall,
 			// which could otherwise mask a missing artifact dependency in a run.
 			err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
-				item, err := getItem(ctx, tx, scope, id)
+				item, err := itemstore.GetItem(ctx, tx, scope, id)
 				if err != nil {
 					return err
 				}
-				_, refs, err := sanitizeItemTx(ctx, tx, scope, "manual", item)
+				_, refs, err := accessstore.SanitizeItemTx(ctx, tx, scope, "manual", item)
 				if err == nil && !hasArtifactDependency(refs, mem.ID) {
 					t.Error("editing inside the field lost its dependency")
 				}

@@ -2,12 +2,11 @@ package postgres
 
 import (
 	"context"
-	"strings"
 	"time"
 	"unicode/utf8"
 
+	"github.com/soaringjerry/PCAS/internal/postgres/accessstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
-	"github.com/soaringjerry/PCAS/internal/postgres/usagelog"
 	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 
 	"github.com/jackc/pgx/v5"
@@ -15,17 +14,6 @@ import (
 	"github.com/soaringjerry/PCAS/internal/prompts"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
-
-func (s *Store) recordReturnedUsage(ctx context.Context, text string, usage usagelog.ModelUsage) error {
-	if strings.TrimSpace(text) == "" && usage.InputTokens+usage.OutputTokens == 0 && usage.DurationMS == nil {
-		return nil
-	}
-	persistCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
-	defer cancel()
-	return pgx.BeginFunc(persistCtx, s.Pool, func(tx pgx.Tx) error {
-		return usagelog.RecordUsageTx(persistCtx, tx, usage)
-	})
-}
 
 // tail keeps the last n bytes of s without splitting a character.
 func tail(s string, n int) string {
@@ -64,7 +52,7 @@ func (s *Store) deskItemsContextTx(ctx context.Context, tx pgx.Tx, scope memory.
 	dependencies := []memory.Ref{}
 	for i := range tasks {
 		var refs []memory.Ref
-		tasks[i], refs, err = sanitizeItemTx(ctx, tx, scope, agent.ID, tasks[i])
+		tasks[i], refs, err = accessstore.SanitizeItemTx(ctx, tx, scope, agent.ID, tasks[i])
 		if err != nil {
 			return nil, workspace.Settings{}, nil, err
 		}
@@ -72,13 +60,6 @@ func (s *Store) deskItemsContextTx(ctx context.Context, tx pgx.Tx, scope memory.
 	}
 	settings, err := kernel.QueryDocument[workspace.Settings](ctx, tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1", string(scope.OwnerID))
 	return tasks, settings, dependencies, err
-}
-func deskLocation(settings workspace.Settings) *time.Location {
-	loc, err := time.LoadLocation(settings.Timezone)
-	if err != nil {
-		return time.UTC
-	}
-	return loc
 }
 func (s *Store) deskNow(loc *time.Location) string {
 	return secretary.Now(s.BusinessNow(), loc)

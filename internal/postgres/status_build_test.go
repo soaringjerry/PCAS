@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/claimstore"
 	"github.com/soaringjerry/PCAS/internal/worker"
 )
 
@@ -23,7 +24,7 @@ func statusTestMemories(t *testing.T, s *Store, scope memory.Scope, n int) []mem
 		refs = append(refs, ref)
 	}
 	if err := pgx.BeginFunc(context.Background(), s.Pool, func(tx pgx.Tx) error {
-		id, err := entityTx(context.Background(), tx, scope.OwnerID, "project", "流萤项目")
+		id, err := claimstore.EntityTx(context.Background(), tx, scope.OwnerID, "project", "流萤项目")
 		if err != nil {
 			return err
 		}

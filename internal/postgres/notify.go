@@ -104,7 +104,7 @@ func (n *Notifier) SavePushSubscription(ctx context.Context, scope memory.Scope,
 		return memory.ErrInvalid
 	}
 	return pgx.BeginFunc(ctx, n.Pool, func(tx pgx.Tx) error {
-		if err := n.ensureOwner(ctx, tx, scope); err != nil {
+		if err := n.EnsureOwner(ctx, tx, scope); err != nil {
 			return err
 		}
 		_, err := tx.Exec(ctx, `INSERT INTO push_subscriptions(owner_id,endpoint,p256dh,auth) VALUES($1,$2,$3,$4)

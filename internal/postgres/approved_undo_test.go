@@ -13,6 +13,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/ai"
 	"github.com/soaringjerry/PCAS/internal/httpapi"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/actionlog"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
@@ -76,14 +77,14 @@ func TestApprovedUndoRecordedSources(t *testing.T) {
 			later := string(memory.NewID())
 			ctx := context.Background()
 			err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
-				ctx := withActionLog(ctx, later, source, "", "recorded update")
-				if err := beginActionLogTx(ctx, tx); err != nil {
+				ctx := actionlog.WithActionLog(ctx, later, source, "", "recorded update")
+				if err := actionlog.BeginActionLogTx(ctx, tx); err != nil {
 					return err
 				}
 				if err := s.commandTx(ctx, tx, scope, workspace.Command{Type: "renameThing", ID: id, Title: "later"}); err != nil {
 					return err
 				}
-				return flushActionLog(ctx, tx, scope)
+				return actionlog.FlushActionLog(ctx, tx, scope)
 			})
 			if err != nil {
 				t.Fatal(err)
@@ -129,14 +130,14 @@ func TestApprovedUndoSameTransactionOrder(t *testing.T) {
 	ctx := context.Background()
 	err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		for i, title := range []string{"first", "second", "first"} {
-			logged := withActionLog(ctx, actions[i], "desk", "", "same turn")
-			if err := beginActionLogTx(logged, tx); err != nil {
+			logged := actionlog.WithActionLog(ctx, actions[i], "desk", "", "same turn")
+			if err := actionlog.BeginActionLogTx(logged, tx); err != nil {
 				return err
 			}
 			if err := s.commandTx(logged, tx, scope, workspace.Command{Type: "renameThing", ID: id, Title: title}); err != nil {
 				return err
 			}
-			if err := flushActionLog(logged, tx, scope); err != nil {
+			if err := actionlog.FlushActionLog(logged, tx, scope); err != nil {
 				return err
 			}
 		}
@@ -276,14 +277,14 @@ func TestApprovedUndoProtectionPriority(t *testing.T) {
 	}
 	action, id := string(memory.NewID()), string(memory.NewID())
 	if err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
-		logged := withActionLog(ctx, action, "desk", "", "delegation")
-		if err := beginActionLogTx(logged, tx); err != nil {
+		logged := actionlog.WithActionLog(ctx, action, "desk", "", "delegation")
+		if err := actionlog.BeginActionLogTx(logged, tx); err != nil {
 			return err
 		}
 		if err := s.commandTx(logged, tx, scope, workspace.Command{Type: "delegateTask", ID: id, Title: "original", Prompt: "fixture", AgentID: "model"}); err != nil {
 			return err
 		}
-		return flushActionLog(logged, tx, scope)
+		return actionlog.FlushActionLog(logged, tx, scope)
 	}); err != nil {
 		t.Fatal(err)
 	}

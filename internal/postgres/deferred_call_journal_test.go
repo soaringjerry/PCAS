@@ -19,7 +19,7 @@ func TestHourlyLimitDeferralLeavesNoModelCallRecord(t *testing.T) {
 	secretaryModel(t, s, func(w http.ResponseWriter, _ *http.Request) { calls.Add(1); secretaryModelReply(w, "unused") })
 	organizeTestMemory(t, s, scope, "Fictitious unfinished report.")
 	j := organizeTestJob(t, s, scope)
-	if _, err := s.Pool.Exec(ctx, `INSERT INTO background_usage(id,owner_id,reserved_cost,stage) SELECT gen_random_uuid(),$1,0,$2 FROM generate_series(1,$3)`, string(scope.OwnerID), OrganizeStage, backgroundHourlyBudgets[OrganizeStage]); err != nil {
+	if _, err := s.Pool.Exec(ctx, `INSERT INTO background_usage(id,owner_id,reserved_cost,stage) SELECT gen_random_uuid(),$1,0,$2 FROM generate_series(1,$3)`, string(scope.OwnerID), OrganizeStage, kernel.HourlyBudgets[OrganizeStage]); err != nil {
 		t.Fatal(err)
 	}
 	_, err := jobCalls(s).Generate(ctx, j, "organize", prompts.Must("organize"), "", kernel.JSON(map[string]string{"test": "fictitious"}), nil)

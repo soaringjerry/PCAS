@@ -14,6 +14,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/budgetstore"
+	"github.com/soaringjerry/PCAS/internal/postgres/claimstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/memoryread"
 	"github.com/soaringjerry/PCAS/internal/worker"
@@ -49,7 +51,7 @@ func seedOrganizeGroupsTx(ctx context.Context, tx pgx.Tx, owner memory.ID) (memo
 		return anchor, err
 	}
 	for _, name := range organize.Areas {
-		id, err := entityTx(ctx, tx, owner, "area", name)
+		id, err := claimstore.EntityTx(ctx, tx, owner, "area", name)
 		if err != nil {
 			return anchor, err
 		}
@@ -80,7 +82,7 @@ func seedOrganizeGroupsTx(ctx context.Context, tx pgx.Tx, owner memory.ID) (memo
 		return anchor, err
 	}
 	for _, p := range projects {
-		id, err := entityTx(ctx, tx, owner, "project", p.name)
+		id, err := claimstore.EntityTx(ctx, tx, owner, "project", p.name)
 		if err != nil {
 			return anchor, err
 		}
@@ -159,7 +161,7 @@ func (s *Store) ScheduleOrganize(ctx context.Context, now time.Time) (int, error
 		}
 		for _, owner := range owners {
 			scope := memory.Scope{OwnerID: owner, PrincipalID: "worker", IsOwner: true}
-			if err := s.ensureOwner(ctx, tx, scope); err != nil {
+			if err := s.EnsureOwner(ctx, tx, scope); err != nil {
 				return err
 			}
 			if err := kernel.OwnerLock(ctx, tx, owner); err != nil {
@@ -186,7 +188,7 @@ func (s *Store) RunOrganize(ctx context.Context, logger *slog.Logger) {
 			return
 		}
 		if _, err := s.ScheduleOrganize(ctx, time.Now()); err != nil && ctx.Err() == nil {
-			s.recordScheduleFailure(ctx, OrganizeStage, err)
+			s.RecordScheduleFailure(ctx, OrganizeStage, err)
 		}
 		select {
 		case <-ctx.Done():
@@ -225,7 +227,7 @@ func organizeCompareHourlyTx(ctx context.Context, tx pgx.Tx, code string) error 
 	if strings.HasPrefix(code, "compare") {
 		stage = CompareStage
 	}
-	return backgroundHourlyTx(ctx, tx, stage, code)
+	return kernel.HourlyLimit(ctx, tx, stage, code)
 }
 
 // OrganizeStore gives the organize service its reads and writes.
@@ -423,7 +425,7 @@ func (a organizeSession) Apply(ctx context.Context, j worker.Job, result organiz
 // job. Each call's reservation ID also deduplicates its usage log.
 func (s *Store) reserveOrganizeCost(ctx context.Context, j worker.Job, cost float64) (string, error) {
 	reserveCtx, cancel := context.WithTimeout(ctx, kernel.BackgroundWriteTimeout)
-	id, err := s.reserveModelCostID(reserveCtx, j.OwnerID, cost, &j)
+	id, err := s.ReserveModelCostID(reserveCtx, j.OwnerID, cost, &j)
 	cancel()
 	if errors.Is(err, memory.ErrUnavailable) {
 		var timezone string
@@ -434,11 +436,11 @@ func (s *Store) reserveOrganizeCost(ctx context.Context, j worker.Job, cost floa
 		if err != nil {
 			return "", err
 		}
-		jitter, err := rand.Int(rand.Reader, big.NewInt(int64(budgetJitter)+1))
+		jitter, err := rand.Int(rand.Reader, big.NewInt(int64(budgetstore.BudgetJitter)+1))
 		if err != nil {
 			return "", err
 		}
-		return "", &worker.JobError{Code: "budget_deferred", Until: nextBudgetDay(time.Now(), loc).Add(time.Duration(jitter.Int64())), NoAttempt: true}
+		return "", &worker.JobError{Code: "budget_deferred", Until: budgetstore.NextBudgetDay(time.Now(), loc).Add(time.Duration(jitter.Int64())), NoAttempt: true}
 	}
 	if err != nil {
 		return "", kernel.BackgroundWriteError(ctx, err)
@@ -466,7 +468,7 @@ func findOrganizeGroupTx(ctx context.Context, tx pgx.Tx, owner memory.ID, kind, 
 	var id memory.ID
 	err := tx.QueryRow(ctx, `SELECT ev.entity_id::text FROM entity_versions ev JOIN memory_records r ON(r.owner_id,r.id,r.version)=(ev.owner_id,ev.entity_id,ev.version)
  WHERE ev.owner_id=$1 AND ev.entity_type=$2 AND r.state='active' AND EXISTS(SELECT 1 FROM aliases a WHERE a.owner_id=ev.owner_id AND a.entity_id=ev.entity_id AND lower(btrim(a.alias,$4))=lower($3))
- ORDER BY r.created_at,r.id LIMIT 1`, string(owner), kind, strings.TrimSpace(name), entityWhitespace).Scan(&id)
+ ORDER BY r.created_at,r.id LIMIT 1`, string(owner), kind, strings.TrimSpace(name), claimstore.EntityWhitespace).Scan(&id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", nil
 	}
@@ -491,7 +493,7 @@ func resolveOrganizeGroupsTx(ctx context.Context, tx pgx.Tx, owner memory.ID, it
 		if id != "" {
 			continue
 		}
-		id, err = entityTx(ctx, tx, owner, g.Type, g.Name)
+		id, err = claimstore.EntityTx(ctx, tx, owner, g.Type, g.Name)
 		if err != nil {
 			return nil, err
 		}

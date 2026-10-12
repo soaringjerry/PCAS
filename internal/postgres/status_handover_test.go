@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/currentstate/handover"
+	"github.com/soaringjerry/PCAS/internal/postgres/claimstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/jackc/pgx/v5"
@@ -171,7 +172,7 @@ func statusRichSynthetic80(t *testing.T, s *Store, scope memory.Scope) []memory.
 		}
 	}
 	if err := pgx.BeginFunc(context.Background(), s.Pool, func(tx pgx.Tx) error {
-		id, err := entityTx(context.Background(), tx, scope.OwnerID, "project", "流萤项目")
+		id, err := claimstore.EntityTx(context.Background(), tx, scope.OwnerID, "project", "流萤项目")
 		if err != nil {
 			return err
 		}

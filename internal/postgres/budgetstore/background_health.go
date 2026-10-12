@@ -1,4 +1,4 @@
-package postgres
+package budgetstore
 
 import (
 	"context"
@@ -15,7 +15,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/worker"
 )
 
-func backgroundFailureReason(err error) string {
+func BackgroundFailureReason(err error) string {
 	var job *worker.JobError
 	if errors.As(err, &job) && job.Code != "" {
 		return job.Code
@@ -36,33 +36,33 @@ func backgroundFailureReason(err error) string {
 // The owner's row is held while the user's own command commits. Scheduling
 // gives way and returns on the next tick, so one busy owner does not end the
 // pass; the missed tick is still recorded with its cause.
-func (s *Store) scheduleYielded(ctx context.Context, owner memory.ID, stage string, err error) bool {
+func (s *Budgets) ScheduleYielded(ctx context.Context, owner memory.ID, stage string, err error) bool {
 	if !statusScheduleBusy(err) {
 		return false
 	}
 	persist, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 	defer cancel()
 	if e := pgx.BeginFunc(persist, s.Pool, func(tx pgx.Tx) error {
-		return kernel.StageEvent(persist, tx, owner, stage, "failure", "schedule_"+backgroundFailureReason(err), 1)
+		return kernel.StageEvent(persist, tx, owner, stage, "failure", "schedule_"+BackgroundFailureReason(err), 1)
 	}); e != nil {
-		slog.ErrorContext(ctx, "background event storage failed", "stage", stage, "reason", backgroundFailureReason(e))
+		slog.ErrorContext(ctx, "background event storage failed", "stage", stage, "reason", BackgroundFailureReason(e))
 	}
 	return true
 }
 
-func (s *Store) recordScheduleFailure(ctx context.Context, stage string, err error) {
-	reason := backgroundFailureReason(err)
+func (s *Budgets) RecordScheduleFailure(ctx context.Context, stage string, err error) {
+	reason := BackgroundFailureReason(err)
 	slog.WarnContext(ctx, "background schedule failed", "stage", stage, "reason", reason)
 	persist, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 	defer cancel()
 	if e := pgx.BeginFunc(persist, s.Pool, func(tx pgx.Tx) error {
 		return kernel.StageEvent(persist, tx, "", stage, "failure", "schedule_"+reason, 1)
 	}); e != nil {
-		slog.ErrorContext(ctx, "background event storage failed", "stage", stage, "reason", backgroundFailureReason(e))
+		slog.ErrorContext(ctx, "background event storage failed", "stage", stage, "reason", BackgroundFailureReason(e))
 	}
 }
 
-func (s *Store) BackgroundHealth(ctx context.Context, scope memory.Scope) (json.RawMessage, error) {
+func (s *Budgets) BackgroundHealth(ctx context.Context, scope memory.Scope) (json.RawMessage, error) {
 	if err := kernel.RequireOwner(scope); err != nil {
 		return nil, err
 	}
@@ -81,11 +81,11 @@ func (s *Store) BackgroundHealth(ctx context.Context, scope memory.Scope) (json.
  'requirements',coalesce((SELECT sum(count) FROM background_stage_events e WHERE e.owner_id=$1 AND e.stage=s.stage AND e.reason='reorganize_requirements_withdrawn' AND e.at>now()-interval '1 hour'),0)),
  'calls',(SELECT count(*) FROM background_usage b WHERE b.stage=s.stage AND b.created_at>now()-interval '1 hour')) ORDER BY s.stage),'[]'::jsonb),
  'overflow',coalesce((SELECT jsonb_agg(jsonb_build_object('stage',stage,'reason',reason,'count',n)) FROM (
- SELECT stage,reason,sum(count) AS n FROM background_stage_events WHERE owner_id=$1 AND outcome='overflow' AND at>now()-interval '1 hour' GROUP BY stage,reason) excess),'[]'::jsonb)) FROM stages s`, string(scope.OwnerID), kernel.JSON(backgroundHourlyBudgets)).Scan(&out)
+ SELECT stage,reason,sum(count) AS n FROM background_stage_events WHERE owner_id=$1 AND outcome='overflow' AND at>now()-interval '1 hour' GROUP BY stage,reason) excess),'[]'::jsonb)) FROM stages s`, string(scope.OwnerID), kernel.JSON(kernel.HourlyBudgets)).Scan(&out)
 	return out, err
 }
 
-func (s *Store) warnLongDeferrals(ctx context.Context) error {
+func (s *Budgets) WarnLongDeferrals(ctx context.Context) error {
 	rows, err := s.Pool.Query(ctx, `UPDATE background_job_deferrals SET warned=true WHERE NOT warned AND started_at<now()-interval '30 minutes'
  RETURNING job_id::text,started_at`)
 	if err != nil {
@@ -101,4 +101,9 @@ func (s *Store) warnLongDeferrals(ctx context.Context) error {
 		slog.WarnContext(ctx, "background job deferred over 30 minutes", "job_id", id, "deferred_since", started)
 	}
 	return rows.Err()
+}
+
+func statusScheduleBusy(err error) bool {
+	var busy *worker.JobError
+	return errors.As(err, &busy) && busy.Code == "background_write_busy"
 }

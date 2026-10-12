@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
+	"github.com/soaringjerry/PCAS/internal/postgres/claimstore"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
@@ -26,11 +27,11 @@ func compareFixture(t *testing.T, s *Store, scope memory.Scope, texts ...string)
 		src := b1Source(t, s, scope, "虚构比较资料", text, "manual")
 		ref := b1Claim(t, s, scope, text, "fact", "candidate", src)
 		err := pgx.BeginFunc(context.Background(), s.Pool, func(tx pgx.Tx) error {
-			self, err := selfEntityTx(context.Background(), tx, scope.OwnerID)
+			self, err := claimstore.SelfEntityTx(context.Background(), tx, scope.OwnerID)
 			if err != nil {
 				return err
 			}
-			group, err := entityTx(context.Background(), tx, scope.OwnerID, "topic", "虚构汇报")
+			group, err := claimstore.EntityTx(context.Background(), tx, scope.OwnerID, "topic", "虚构汇报")
 			if err != nil {
 				return err
 			}

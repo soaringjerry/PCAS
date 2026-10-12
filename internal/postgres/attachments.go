@@ -45,7 +45,7 @@ func (s *Store) IngestAttachment(ctx context.Context, scope memory.Scope, in mem
 
 // ingestAttachmentTx lets archive creation and its batch share one transaction.
 func (s *Store) ingestAttachmentTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in memory.IngestRequest, key string) (memory.IngestResult, error) {
-	result, err := s.ingestTx(ctx, tx, scope, in)
+	result, err := s.IngestTx(ctx, tx, scope, in)
 	if err != nil {
 		return result, err
 	}
@@ -166,7 +166,7 @@ func (s *Store) readAttachmentWith(ctx context.Context, scope memory.Scope, ref 
 		if !active {
 			return memory.ErrNotFound
 		}
-		derived, err := s.ingestTx(ctx, tx, scope, memory.IngestRequest{Connector: "attachment-text", ExternalID: fmt.Sprintf("%s:%d", ref.ID, ref.Version), ExternalVersion: "parser-1", Title: parsed.Title + " · " + parsed.Representation, Text: parsed.Text, MediaType: "text/plain"})
+		derived, err := s.IngestTx(ctx, tx, scope, memory.IngestRequest{Connector: "attachment-text", ExternalID: fmt.Sprintf("%s:%d", ref.ID, ref.Version), ExternalVersion: "parser-1", Title: parsed.Title + " · " + parsed.Representation, Text: parsed.Text, MediaType: "text/plain"})
 		if err != nil {
 			return err
 		}

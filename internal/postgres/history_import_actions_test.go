@@ -9,6 +9,7 @@ import (
 
 	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/postgres/workstore"
 
 	"github.com/soaringjerry/PCAS/internal/ai"
 	"github.com/soaringjerry/PCAS/internal/blob"
@@ -51,7 +52,7 @@ func TestImportedHistoryNeverBecomesCurrentAction(t *testing.T) {
 				}
 				content := map[string]any{
 					"items":   []map[string]any{item},
-					"signals": []conditionSignal{{IdeaID: idea.ID, ConditionID: idea.Conditions[0].ID, Quote: said, Explanation: "写明要交旅行计划", Confidence: 0.99}},
+					"signals": []workstore.ConditionSignal{{IdeaID: idea.ID, ConditionID: idea.Conditions[0].ID, Quote: said, Explanation: "写明要交旅行计划", Confidence: 0.99}},
 				}
 				if tc.imported {
 					// Conversation output supports items and withdraw; live-entry

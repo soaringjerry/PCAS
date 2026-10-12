@@ -7,6 +7,8 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/accessstore"
+	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/retrieval"
 	"github.com/soaringjerry/PCAS/internal/workspace"
@@ -61,7 +63,7 @@ func (s *Store) prepareRunContext(ctx context.Context, scope memory.Scope, c wor
 		}
 		item := workspace.Item{ID: c.ID, Kind: "task", ProjectID: c.ProjectID}
 		if c.Type == "requestRun" {
-			item, err = getItem(ctx, tx, scope, c.ThingID)
+			item, err = itemstore.GetItem(ctx, tx, scope, c.ThingID)
 			if err != nil {
 				return err
 			}
@@ -71,7 +73,7 @@ func (s *Store) prepareRunContext(ctx context.Context, scope memory.Scope, c wor
 		if err != nil {
 			return err
 		}
-		plan = memory.PlanQuery(c.Prompt, s.BusinessNow(), deskLocation(settings))
+		plan = memory.PlanQuery(c.Prompt, s.BusinessNow(), kernel.Location(settings))
 		u, err := s.startUseContextTx(ctx, tx, scope)
 		if err != nil {
 			return err
@@ -82,7 +84,7 @@ func (s *Store) prepareRunContext(ctx context.Context, scope memory.Scope, c wor
 			return err
 		}
 		if c.Type == "requestRun" {
-			item, _, err = sanitizeItemTx(ctx, tx, scope, c.AgentID, item)
+			item, _, err = accessstore.SanitizeItemTx(ctx, tx, scope, c.AgentID, item)
 			if err != nil {
 				return err
 			}
@@ -144,7 +146,7 @@ func currentRunDocsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, item w
 				return nil, nil, err
 			}
 			run.AgentID = agent
-			if verifyRunForItemTx(ctx, tx, scope, run, &item) != nil {
+			if accessstore.VerifyRunForItemTx(ctx, tx, scope, run, &item) != nil {
 				continue
 			}
 			refs = append(refs, run.ContextVersions...)
@@ -185,7 +187,7 @@ func readRunHistoryTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c work
 		if turn.Question == "" && turn.Answer == "" {
 			continue
 		}
-		turn.Outdated = verifyRunForItemTx(ctx, tx, scope, workspace.Run{AgentID: c.AgentID, ContextVersions: turn.Refs}, &item) != nil
+		turn.Outdated = accessstore.VerifyRunForItemTx(ctx, tx, scope, workspace.Run{AgentID: c.AgentID, ContextVersions: turn.Refs}, &item) != nil
 		if turn.Outdated {
 			turn.Answer = outdatedDeskAnswer
 		}

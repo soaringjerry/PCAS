@@ -12,6 +12,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/worker"
 	"github.com/soaringjerry/PCAS/internal/workspace"
@@ -200,8 +201,8 @@ func TestPhase35C2G7T4DailyCapDefersToLocalNextDayReusesPaidOutput(t *testing.T)
 	if calls.Load() != 1 || phase35TopicLink(t, f, 0) == "" {
 		t.Fatalf("next-day calls=%d link=%s", calls.Load(), phase35TopicLink(t, f, 0))
 	}
-	if backgroundHourlyBudgets[phase35TopicStage] != 2 {
-		t.Fatalf("independent topic hourly budget=%d want=2", backgroundHourlyBudgets[phase35TopicStage])
+	if kernel.HourlyBudgets[phase35TopicStage] != 2 {
+		t.Fatalf("independent topic hourly budget=%d want=2", kernel.HourlyBudgets[phase35TopicStage])
 	}
 }
 func TestPhase35C3G5ExistingProjectBeyondFirstPage(t *testing.T) {
@@ -215,7 +216,7 @@ func TestPhase35C3G5ExistingProjectBeyondFirstPage(t *testing.T) {
 			it := workspace.NewItem("project", fmt.Sprintf("虚构目录项目%02d", i))
 			it.ID = id
 			it.Goal = "虚构不同名字的陶瓷声音手册目标"
-			if err := saveItem(ctx, tx, f.Scope, it); err != nil {
+			if err := itemstore.SaveItem(ctx, tx, f.Scope, it); err != nil {
 				return err
 			}
 			if i == 20 {
@@ -364,10 +365,10 @@ func TestPhase35C2G7IndependentHourlyAndNoBorrowing(t *testing.T) {
 	s, ctx := phase26DisposableStore(t)
 	scope := owner()
 	phase35Snapshot(t, s, scope)
-	if backgroundHourlyBudgets[phase35TopicStage] != 2 {
-		t.Fatalf("published topic budget=%d want 2", backgroundHourlyBudgets[phase35TopicStage])
+	if kernel.HourlyBudgets[phase35TopicStage] != 2 {
+		t.Fatalf("published topic budget=%d want 2", kernel.HourlyBudgets[phase35TopicStage])
 	}
-	for stage, limit := range backgroundHourlyBudgets {
+	for stage, limit := range kernel.HourlyBudgets {
 		if stage == phase35TopicStage {
 			continue
 		}
@@ -376,7 +377,7 @@ func TestPhase35C2G7IndependentHourlyAndNoBorrowing(t *testing.T) {
 		}
 	}
 	if err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
-		return backgroundHourlyTx(ctx, tx, phase35TopicStage, "phase35_topic_hourly_limit")
+		return kernel.HourlyLimit(ctx, tx, phase35TopicStage, "phase35_topic_hourly_limit")
 	}); err != nil {
 		t.Fatal("other stages consumed topic capacity", err)
 	}
@@ -384,7 +385,7 @@ func TestPhase35C2G7IndependentHourlyAndNoBorrowing(t *testing.T) {
 		t.Fatal(err)
 	}
 	err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
-		return backgroundHourlyTx(ctx, tx, phase35TopicStage, "phase35_topic_hourly_limit")
+		return kernel.HourlyLimit(ctx, tx, phase35TopicStage, "phase35_topic_hourly_limit")
 	})
 	var deferred *worker.JobError
 	if !errors.As(err, &deferred) || !deferred.NoAttempt || deferred.Until.IsZero() {

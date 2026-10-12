@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/accessstore"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -31,8 +32,8 @@ func TestDependencyVerificationQueriesDoNotGrowWithMemoryCount(t *testing.T) {
 	s.Pool = pool
 	t.Cleanup(func() { s.Pool = original; pool.Close() })
 	for name, verify := range map[string]func(context.Context, pgx.Tx, memory.Scope, workspace.Run) error{
-		"versions": verifyRunTx,
-		"access":   verifyRunAccessTx,
+		"versions": accessstore.VerifyRunTx,
+		"access":   accessstore.VerifyRunAccessTx,
 	} {
 		t.Run(name, func(t *testing.T) {
 			count := func(dependencies []memory.Ref) int64 {
@@ -60,7 +61,7 @@ func TestDependencyVerificationRejectsMissingZeroVersion(t *testing.T) {
 	for _, kind := range []memory.Kind{memory.SourceKind, memory.ClaimKind} {
 		t.Run(string(kind), func(t *testing.T) {
 			err := pgx.BeginFunc(t.Context(), s.Pool, func(tx pgx.Tx) error {
-				return verifyRunTx(t.Context(), tx, scope, workspace.Run{AgentID: "model", ContextVersions: []memory.Ref{{ID: memory.NewID(), Version: 0, Kind: kind}}})
+				return accessstore.VerifyRunTx(t.Context(), tx, scope, workspace.Run{AgentID: "model", ContextVersions: []memory.Ref{{ID: memory.NewID(), Version: 0, Kind: kind}}})
 			})
 			if !errors.Is(err, memory.ErrConflict) {
 				t.Fatalf("missing dependency must fail: %v", err)

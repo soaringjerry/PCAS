@@ -18,6 +18,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/connectors"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/postgres/sourcestore"
 	"github.com/soaringjerry/PCAS/internal/worker"
 )
 
@@ -106,7 +107,7 @@ func (s *Store) importArchiveReader(ctx context.Context, scope memory.Scope, nam
 	}
 	in := memory.IngestRequest{Connector: namespace, ExternalID: archive.Hash, ExternalVersion: "1", Title: name, MediaType: "application/x-pcas-archive", Text: "[附件原件；正文尚未解析。校验标识：" + archive.Hash + "]"}
 	err = pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
-		if err := s.ensureOwner(ctx, tx, scope); err != nil {
+		if err := s.EnsureOwner(ctx, tx, scope); err != nil {
 			return err
 		}
 		if _, err := tx.Exec(ctx, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(scope.OwnerID)); err != nil {
@@ -114,7 +115,7 @@ func (s *Store) importArchiveReader(ctx context.Context, scope memory.Scope, nam
 		}
 		// Serialize the file identity before rechecking. Concurrent uploads
 		// of the same bytes may have different names, but share one archive.
-		if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended($1,0))", fmt.Sprintf("%s:%x", scope.OwnerID, sourceKey(namespace, archive.Hash))); err != nil {
+		if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended($1,0))", fmt.Sprintf("%s:%x", scope.OwnerID, sourcestore.SourceKey(namespace, archive.Hash))); err != nil {
 			return err
 		}
 		var existing memory.Ref
@@ -386,7 +387,7 @@ func (s *Store) processArchiveImport(ctx context.Context, j worker.Job, title st
 		}
 		stopped := false
 		err = pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
-			if err := s.ensureOwner(ctx, tx, scope); err != nil {
+			if err := s.EnsureOwner(ctx, tx, scope); err != nil {
 				return err
 			}
 			if _, err := tx.Exec(ctx, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(j.OwnerID)); err != nil {
@@ -574,7 +575,7 @@ func classifyArchiveTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, names
 	keys := make([]key, len(identities))
 	allowed := make([]bool, len(identities))
 	for i, r := range identities {
-		keys[i] = key{Index: i, ID: r.ID, Version: r.Version, Hash: hex.EncodeToString(sourceKey(namespace, r.ID))}
+		keys[i] = key{Index: i, ID: r.ID, Version: r.Version, Hash: hex.EncodeToString(sourcestore.SourceKey(namespace, r.ID))}
 	}
 	rows, err := tx.Query(ctx, `SELECT k.idx,
   EXISTS(SELECT 1 FROM reimport_blocks b WHERE b.owner_id=$1 AND b.source_key_hash=decode(k.hash,'hex'))

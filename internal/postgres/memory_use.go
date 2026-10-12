@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/contextbuilder"
+	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/memoryread"
 
@@ -157,7 +158,7 @@ func (s *Store) finishUseContextTx(ctx context.Context, tx pgx.Tx, scope memory.
 			return e
 		}
 		if installed {
-			item, e := getItem(ctx, tx, scope, *thing)
+			item, e := itemstore.GetItem(ctx, tx, scope, *thing)
 			if e != nil {
 				return e
 			}
@@ -308,7 +309,7 @@ func ruleRelevance(applies, text string) int {
 func (s *Store) prepareUseOwner(ctx context.Context, scope memory.Scope) (bool, error) {
 	ready := false
 	err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
-		if err := s.ensureOwner(ctx, tx, scope); err != nil {
+		if err := s.EnsureOwner(ctx, tx, scope); err != nil {
 			return err
 		}
 		u, err := s.startUseContextTx(ctx, tx, scope)

@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/soaringjerry/PCAS/internal/postgres/budgetstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 )
 
@@ -20,13 +21,13 @@ func TestNextBudgetDayUsesLocalCalendar(t *testing.T) {
 		{time.October, 4, 23 * time.Hour}, {time.April, 5, 25 * time.Hour},
 	} {
 		start := time.Date(2026, tc.month, tc.day, 0, 0, 0, 0, loc)
-		next := nextBudgetDay(start, loc)
+		next := budgetstore.NextBudgetDay(start, loc)
 		if next.Sub(start) != tc.duration || next.In(loc).Hour() != 0 {
 			t.Fatalf("next=%v duration=%v", next, next.Sub(start))
 		}
 	}
 	utc := time.Date(2026, time.December, 31, 23, 59, 0, 0, time.UTC)
-	if got := nextBudgetDay(utc, time.UTC); !got.Equal(time.Date(2027, time.January, 1, 0, 0, 0, 0, time.UTC)) {
+	if got := budgetstore.NextBudgetDay(utc, time.UTC); !got.Equal(time.Date(2027, time.January, 1, 0, 0, 0, 0, time.UTC)) {
 		t.Fatal(got)
 	}
 }
@@ -55,7 +56,7 @@ func TestNextBudgetDayAtMidnightDSTJump(t *testing.T) {
 			t.Fatal(err)
 		}
 		now := time.Date(2026, tc.month, tc.day-1, 12, 0, 0, 0, loc)
-		next := nextBudgetDay(now, loc)
+		next := budgetstore.NextBudgetDay(now, loc)
 		if next.In(loc).Day() != tc.day || next.In(loc).Hour() != tc.hour || next.Add(-time.Nanosecond).In(loc).Day() == tc.day {
 			t.Fatalf("%s next=%v preceding=%v", tc.zone, next, next.Add(-time.Nanosecond).In(loc))
 		}

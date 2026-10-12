@@ -8,6 +8,8 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/accessstore"
+	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
@@ -85,7 +87,7 @@ func TestCompareTrustAtEveryMemoryConsumer(t *testing.T) {
 				b1HasRef(t, run.ContextVersions, ref, tc.allowed)
 				probe := workspace.Run{ID: run.ID, ThingID: task, AgentID: "model", ContextVersions: []memory.Ref{ref}}
 				if err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
-					for name, check := range map[string]func() error{"completion": func() error { return verifyRunTx(ctx, tx, scope, probe) }, "access": func() error { return verifyRunAccessTx(ctx, tx, scope, probe) }} {
+					for name, check := range map[string]func() error{"completion": func() error { return accessstore.VerifyRunTx(ctx, tx, scope, probe) }, "access": func() error { return accessstore.VerifyRunAccessTx(ctx, tx, scope, probe) }} {
 						if got := check(); (got == nil) != tc.allowed {
 							t.Errorf("%s allowed=%v want=%v error=%v", name, got == nil, tc.allowed, got)
 						}
@@ -104,12 +106,12 @@ func TestCompareTrustAtEveryMemoryConsumer(t *testing.T) {
 					if _, err = tx.Exec(ctx, `INSERT INTO adopted_artifacts(owner_id,run_id,thing_id,kind,artifact_id,body) VALUES($1,$2,$3,'notes','fictional','虚构采纳文本')`, string(scope.OwnerID), run.ID, task); err != nil {
 						return err
 					}
-					item, err := getItem(ctx, tx, scope, task)
+					item, err := itemstore.GetItem(ctx, tx, scope, task)
 					if err != nil {
 						return err
 					}
 					item.Notes = "虚构采纳文本"
-					sanitized, refs, err := sanitizeItemTx(ctx, tx, scope, "model", item)
+					sanitized, refs, err := accessstore.SanitizeItemTx(ctx, tx, scope, "model", item)
 					if err != nil {
 						return err
 					}

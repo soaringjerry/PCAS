@@ -14,6 +14,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/sourcestore"
 	"github.com/soaringjerry/PCAS/internal/worker"
 )
 
@@ -203,7 +204,7 @@ func TestPostgresScopeAndReimportBlock(t *testing.T) {
 	if _, err := s.Pool.Exec(ctx, "INSERT INTO record_grants(owner_id,record_id,principal_id) VALUES($1,$2,'agent')", string(b.OwnerID), string(x.ID)); err == nil {
 		t.Fatal("cross-owner reference accepted")
 	}
-	if _, err := s.Pool.Exec(ctx, "INSERT INTO reimport_blocks(owner_id,source_key_hash) VALUES($1,$2)", string(a.OwnerID), sourceKey(in.Connector, in.ExternalID)); err != nil {
+	if _, err := s.Pool.Exec(ctx, "INSERT INTO reimport_blocks(owner_id,source_key_hash) VALUES($1,$2)", string(a.OwnerID), sourcestore.SourceKey(in.Connector, in.ExternalID)); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.Ingest(ctx, a, in); !errors.Is(err, memory.ErrBlocked) {

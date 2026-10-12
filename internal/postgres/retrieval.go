@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/soaringjerry/PCAS/internal/postgres/accessstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/memoryread"
 	"github.com/soaringjerry/PCAS/internal/postgres/memorystore"
@@ -495,28 +496,6 @@ func (s *Store) Expand(ctx context.Context, scope memory.Scope, in memory.Expand
 	return out, returnOutErr
 }
 
-// teamSourceVisibleSQL follows explicit visibility and item exclusions on any
-// currently applicable claim evidenced by the source. Its arguments are trusted
-// SQL expressions, never request values; category and project filters do not apply.
-// Keep the temporal lookup correlated to this source's evidence targets.
-// Pulling it into a user-wide join repeated all current claims for each window
-// and each source dependency verification. OFFSET 0 preserves the bounded plan.
-func teamSourceVisibleSQL(ownerID, sourceID, principalID, thingID string) string {
-	return fmt.Sprintf(`NOT EXISTS (
- SELECT 1 FROM evidence source_evidence
- JOIN LATERAL (
- SELECT current_claim.claim_id,current_claim.version
- FROM applicable_claim_versions(%[1]s,now(),now()) current_claim
- WHERE current_claim.claim_id=source_evidence.target_id OFFSET 0
- ) source_claim ON source_claim.version=source_evidence.target_version
- WHERE source_evidence.owner_id=%[1]s AND source_evidence.source_id=%[2]s
- AND (NOT EXISTS (SELECT 1 FROM record_grants source_grant
-  WHERE source_grant.owner_id=source_evidence.owner_id AND source_grant.record_id=source_evidence.target_id AND source_grant.principal_id=%[3]s)
- OR EXISTS (SELECT 1 FROM context_exclusions source_exclusion
-  WHERE source_exclusion.owner_id=source_evidence.owner_id AND source_exclusion.memory_id=source_evidence.target_id AND source_exclusion.thing_id=%[4]s::uuid))
-)`, ownerID, sourceID, principalID, thingID)
-}
-
 // Pick one current, readable excerpt per source, preserving retrieval rank.
 // Recheck only record metadata here: the matched text is already in Recall.
 func teamSourceExcerptsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, principal string, thingID *string, excerpts []memory.RecallExcerpt, historyRequests []string, maxSegments, maxCharacters int) ([]memory.RecallExcerpt, error) {
@@ -533,7 +512,7 @@ func teamSourceExcerptsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, pr
 	rows, err := tx.Query(ctx, `SELECT r.id::text,r.version FROM memory_records r
  JOIN record_versions v ON (v.owner_id,v.record_id,v.version)=(r.owner_id,r.id,r.version)
  WHERE r.owner_id=$1 AND r.id=ANY($2::uuid[]) AND r.kind='source' AND r.state='active' AND v.state='active'
- AND `+teamSourceVisibleSQL("$1", "r.id", "$3", "$4"), string(scope.OwnerID), ids, principal, thingID)
+ AND `+accessstore.TeamSourceVisibleSQL("$1", "r.id", "$3", "$4"), string(scope.OwnerID), ids, principal, thingID)
 	if err != nil {
 		return nil, err
 	}

@@ -6,6 +6,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 
@@ -95,7 +96,7 @@ func (s *Store) secretaryCardsTx(ctx context.Context, tx pgx.Tx, scope memory.Sc
 			continue
 		}
 		seen[item.ID] = true
-		current, err := getItem(ctx, tx, scope, item.ID)
+		current, err := itemstore.GetItem(ctx, tx, scope, item.ID)
 		if err != nil {
 			return nil, err
 		}

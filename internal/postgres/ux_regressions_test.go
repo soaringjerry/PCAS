@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
+	"github.com/soaringjerry/PCAS/internal/postgres/accessstore"
+	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/jackc/pgx/v5"
@@ -78,11 +80,11 @@ func TestMixedWritingSurvivesArtifactRevocationAndDeletion(t *testing.T) {
 	workspaceCommand(t, s, scope, workspace.Command{Type: "setMemoryVisibility", ID: mem.ID, AgentIDs: []string{}})
 	err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		for _, id := range []string{idea.ID, task.ID} {
-			item, err := getItem(ctx, tx, scope, id)
+			item, err := itemstore.GetItem(ctx, tx, scope, id)
 			if err != nil {
 				return err
 			}
-			item, _, err = sanitizeItemTx(ctx, tx, scope, "manual", item)
+			item, _, err = accessstore.SanitizeItemTx(ctx, tx, scope, "manual", item)
 			if err != nil {
 				return err
 			}

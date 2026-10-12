@@ -1,4 +1,4 @@
-package postgres
+package workstore
 
 import (
 	"context"
@@ -6,19 +6,20 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 	"github.com/soaringjerry/PCAS/internal/workspace/effort"
 )
 
-func refreshTaskPlansTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) error {
+func RefreshTaskPlansTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) error {
 	items, err := kernel.QueryDocuments[workspace.Item](ctx, tx, `SELECT document FROM work_items WHERE owner_id=$1 AND kind='task' AND document->>'estimatedHours' IS NOT NULL ORDER BY id`, string(scope.OwnerID))
 	if err != nil {
 		return err
 	}
 	for _, item := range items {
 		before := string(kernel.JSON(item))
-		if err = maintainTaskPlanTx(ctx, tx, scope, &item); err != nil {
+		if err = itemstore.MaintainTaskPlanTx(ctx, tx, scope, &item); err != nil {
 			return err
 		}
 		if before == string(kernel.JSON(item)) {
@@ -26,13 +27,13 @@ func refreshTaskPlansTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) erro
 		}
 		item.Version++
 		item.UpdatedAt = kernel.Stamp()
-		if err = saveItem(ctx, tx, scope, item); err != nil {
+		if err = itemstore.SaveItem(ctx, tx, scope, item); err != nil {
 			return err
 		}
 	}
 	return nil
 }
-func (s *Store) ReadProjectTimeline(ctx context.Context, scope memory.Scope, project string) (workspace.ProjectTimeline, error) {
+func (s *Work) ReadProjectTimeline(ctx context.Context, scope memory.Scope, project string) (workspace.ProjectTimeline, error) {
 	out := workspace.ProjectTimeline{ProjectID: project, DailyHours: effort.DailyHours, Items: []workspace.TimelineItem{}, WithoutDue: []workspace.Item{}}
 	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err
@@ -41,7 +42,7 @@ func (s *Store) ReadProjectTimeline(ctx context.Context, scope memory.Scope, pro
 		return out, memory.ErrInvalid
 	}
 	err := pgx.BeginTxFunc(ctx, s.Pool, pgx.TxOptions{AccessMode: pgx.ReadOnly, IsoLevel: pgx.RepeatableRead}, func(tx pgx.Tx) error {
-		p, err := getItem(ctx, tx, scope, project)
+		p, err := itemstore.GetItem(ctx, tx, scope, project)
 		if err != nil {
 			return err
 		}
@@ -59,7 +60,7 @@ func (s *Store) ReadProjectTimeline(ctx context.Context, scope memory.Scope, pro
 		now := time.Now()
 		for _, item := range items {
 			if item.Kind == "task" {
-				item.StartDate, err = effort.StartDate(item.Due, item.EstimatedHours, deskLocation(settings))
+				item.StartDate, err = effort.StartDate(item.Due, item.EstimatedHours, kernel.Location(settings))
 				if err != nil {
 					return err
 				}

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
+	"github.com/soaringjerry/PCAS/internal/postgres/claimstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/jackc/pgx/v5"
@@ -37,7 +38,7 @@ func compareEntityGroup(t *testing.T, s *Store, scope memory.Scope, kind, name s
 	var group memory.ID
 	if err := pgx.BeginFunc(context.Background(), s.Pool, func(tx pgx.Tx) error {
 		var err error
-		group, err = entityTx(context.Background(), tx, scope.OwnerID, kind, name)
+		group, err = claimstore.EntityTx(context.Background(), tx, scope.OwnerID, kind, name)
 		if err != nil {
 			return err
 		}
@@ -75,7 +76,7 @@ func TestCompareEntityMergeAliasesAndUndo(t *testing.T) {
 	}
 	err := pgx.BeginFunc(context.Background(), s.Pool, func(tx pgx.Tx) error {
 		for _, name := range []string{"小陈", "陈亮"} {
-			id, err := entityTx(context.Background(), tx, scope.OwnerID, "person", name)
+			id, err := claimstore.EntityTx(context.Background(), tx, scope.OwnerID, "person", name)
 			if err != nil {
 				return err
 			}

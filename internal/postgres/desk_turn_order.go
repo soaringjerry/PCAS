@@ -9,6 +9,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/actionlog"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
@@ -68,7 +69,7 @@ func (s *Store) admitSecretaryTurn(ctx, callerCtx context.Context, owner, reques
 				return err
 			}
 			var smokeRequest bool
-			if smokeID(ctx) == "" {
+			if actionlog.SmokeID(ctx) == "" {
 				if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM desk_smoke_requests WHERE owner_id=$1 AND request_id=$2)", owner, request).Scan(&smokeRequest); err != nil {
 					return err
 				}
@@ -105,7 +106,7 @@ func (s *Store) admitSecretaryTurn(ctx, callerCtx context.Context, owner, reques
 			if err := secretaryTryLock(ctx, tx, "secretary-admission-conversation:"+owner+":"+ticket.conversation); err != nil {
 				return err
 			}
-			if smokeID(ctx) == "" {
+			if actionlog.SmokeID(ctx) == "" {
 				if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM desk_smoke_groups WHERE owner_id=$1 AND id=$2)", owner, ticket.conversation).Scan(&smokeRequest); err != nil {
 					return err
 				}
@@ -263,7 +264,7 @@ func (s *Store) withOrderedSecretaryTurn(ctx, callerCtx context.Context, owner, 
 // actions. Remove only this transaction's new, unpublished chunk job. Existing
 // sources/jobs must not be silently changed, even on an identity collision.
 func (s *Store) captureIncompleteSecretaryTurn(ctx context.Context, tx pgx.Tx, scope memory.Scope, request, text string) error {
-	in, err := s.ingestTx(ctx, tx, scope, memory.IngestRequest{Connector: "desk-incomplete", ExternalID: request, ExternalVersion: "1", Title: "未完成的秘书原话", Text: text, MediaType: "text/plain"})
+	in, err := s.IngestTx(ctx, tx, scope, memory.IngestRequest{Connector: "desk-incomplete", ExternalID: request, ExternalVersion: "1", Title: "未完成的秘书原话", Text: text, MediaType: "text/plain"})
 	if err != nil {
 		return err
 	}

@@ -20,6 +20,10 @@ import (
 	"unicode/utf8"
 
 	"github.com/soaringjerry/PCAS/internal/contextbuilder"
+	"github.com/soaringjerry/PCAS/internal/postgres/accessstore"
+	"github.com/soaringjerry/PCAS/internal/postgres/actionlog"
+	"github.com/soaringjerry/PCAS/internal/postgres/evidencestore"
+	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/memoryread"
 	"github.com/soaringjerry/PCAS/internal/postgres/memorystore"
@@ -279,20 +283,20 @@ func p2LegacySanitizeItemTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, 
 	// Older promotions retained ideaId but not artifact links. Repair that
 	// lineage before using their copied notes in a new provider request.
 	if item.Kind == "task" && item.IdeaID != "" {
-		if err := promoteArtifactsTx(ctx, tx, scope, item.IdeaID, item.ID); err != nil {
+		if err := accessstore.PromoteArtifactsTx(ctx, tx, scope, item.IdeaID, item.ID); err != nil {
 			return item, nil, err
 		}
 	}
 	dependencies := []memory.Ref{}
 	type fieldBlocks struct {
-		Field  string          `json:"field"`
-		Blocks []artifactBlock `json:"blocks"`
+		Field  string                    `json:"field"`
+		Blocks []itemstore.ArtifactBlock `json:"blocks"`
 	}
 	fields, err := kernel.QueryDocuments[fieldBlocks](ctx, tx, "SELECT jsonb_build_object('field',field,'blocks',blocks) FROM artifact_fields WHERE owner_id=$1 AND thing_id=$2", string(scope.OwnerID), item.ID)
 	if err != nil {
 		return item, nil, err
 	}
-	owned := map[string][]artifactBlock{}
+	owned := map[string][]itemstore.ArtifactBlock{}
 	for _, f := range fields {
 		owned[f.Field] = f.Blocks
 	}
@@ -333,7 +337,7 @@ func p2LegacySanitizeItemTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, 
 			field = "title"
 		}
 		if blocks, ok := owned[field]; ok {
-			kept := []artifactBlock{}
+			kept := []itemstore.ArtifactBlock{}
 			for _, block := range blocks {
 				dependent := kernel.OneOf(runID, block.Runs...)
 				used = used || dependent
@@ -385,11 +389,11 @@ func p2LegacySanitizeItemTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, 
 		}
 	}
 	for field, blocks := range owned {
-		text := blockText(blocks)
+		text := itemstore.BlockText(blocks)
 		if field == "title" && text == "" {
 			text = "事项内容需要重新授权或核验"
 		}
-		setField(&item, field, text)
+		itemstore.SetField(&item, field, text)
 	}
 	return item, dependencies, rows.Err()
 }
@@ -873,7 +877,7 @@ func (s *Store) p2LegacySecretaryContextTx(ctx context.Context, tx pgx.Tx, scope
 		}
 	}
 	if req.ThingID != nil {
-		item, err := getItem(ctx, tx, scope, *req.ThingID)
+		item, err := itemstore.GetItem(ctx, tx, scope, *req.ThingID)
 		if err != nil {
 			return out, err
 		}
@@ -917,11 +921,11 @@ func (s *Store) p2LegacySecretaryContextTx(ctx context.Context, tx pgx.Tx, scope
 
 func (s *Store) p2LegacySecretaryPrompt(ctx context.Context, tx pgx.Tx, scope memory.Scope, req workspace.DeskTurnRequest, c *secretaryContext) (string, map[string]workspace.Memory, error) {
 	var prompt strings.Builder
-	loc := deskLocation(c.Settings)
+	loc := kernel.Location(c.Settings)
 	c.Plan = memory.PlanQuery(req.Text, time.Now(), loc)
 	var projectID *string
 	if req.ThingID != nil {
-		item, err := getItem(ctx, tx, scope, *req.ThingID)
+		item, err := itemstore.GetItem(ctx, tx, scope, *req.ThingID)
 		if err != nil {
 			return "", nil, err
 		}
@@ -959,7 +963,7 @@ func (s *Store) p2LegacySecretaryPrompt(ctx context.Context, tx pgx.Tx, scope me
 		if t.Text != "" {
 			for _, receipt := range t.Receipts {
 				if receipt.ThingID != nil {
-					item, err := getItem(ctx, tx, scope, *receipt.ThingID)
+					item, err := itemstore.GetItem(ctx, tx, scope, *receipt.ThingID)
 					if err != nil {
 						continue
 					}
@@ -993,7 +997,7 @@ func (s *Store) p2LegacySecretaryPrompt(ctx context.Context, tx pgx.Tx, scope me
 		fmt.Fprintln(&prompt, contextbuilder.RecallTimeRelaxed)
 	}
 	sent := map[string]workspace.Memory{}
-	contextClaims := []evidenceContextClaim{}
+	contextClaims := []evidencestore.EvidenceContextClaim{}
 	seen := map[string]bool{}
 	for _, ref := range recall.Memories {
 		m, ok := c.Memories[string(ref.ID)]
@@ -1002,14 +1006,14 @@ func (s *Store) p2LegacySecretaryPrompt(ctx context.Context, tx pgx.Tx, scope me
 		}
 		if req.ThingID != nil {
 			ref := memory.Ref{ID: memory.ID(m.ID), Version: m.Version, Kind: memory.ClaimKind}
-			if verifyRunTx(ctx, tx, scope, workspace.Run{ThingID: *req.ThingID, AgentID: c.Agent.ID, ContextVersions: []memory.Ref{ref}}) != nil {
+			if accessstore.VerifyRunTx(ctx, tx, scope, workspace.Run{ThingID: *req.ThingID, AgentID: c.Agent.ID, ContextVersions: []memory.Ref{ref}}) != nil {
 				continue
 			}
 		}
 		seen[m.ID] = true
 		alias := fmt.Sprintf("M%d", len(sent)+1)
 		sent[alias] = m
-		contextClaims = append(contextClaims, evidenceContextClaim{Label: alias, Ref: memory.Ref{ID: memory.ID(m.ID), Version: m.Version, Kind: memory.ClaimKind}, Text: m.Text})
+		contextClaims = append(contextClaims, evidencestore.EvidenceContextClaim{Label: alias, Ref: memory.Ref{ID: memory.ID(m.ID), Version: m.Version, Kind: memory.ClaimKind}, Text: m.Text})
 		fmt.Fprintf(&prompt, "[%s / %s / trust=%s / confirmation=%s / acquisition=%s] %s\n", alias, m.Epistemic, m.Trust, m.Confirmation, m.Acquisition, m.Text+contextbuilder.MemorySuffix(m, loc))
 		c.Dependencies = append(c.Dependencies, memory.Ref{ID: memory.ID(m.ID), Version: m.Version, Kind: memory.ClaimKind})
 	}
@@ -1053,7 +1057,7 @@ func (s *Store) p2LegacySecretaryPrompt(ctx context.Context, tx pgx.Tx, scope me
 	if len(excerpts) == 0 {
 		fmt.Fprintln(&prompt, "（没有）")
 	}
-	groups, gaps, err := evidenceContextsTx(ctx, tx, scope, c.Agent.ID, req.ThingID, contextClaims)
+	groups, gaps, err := evidencestore.EvidenceContextsTx(ctx, tx, scope, c.Agent.ID, req.ThingID, contextClaims)
 	if err != nil {
 		return "", nil, err
 	}
@@ -1188,7 +1192,7 @@ func (s *Store) p2LegacyDeskTurn(ctx context.Context, scope memory.Scope, req wo
 		out.ConversationID = conversationID
 		out.Turn = workspace.SecretaryTurn{ID: string(memory.NewID()), Text: req.Text, Cards: []workspace.DeskCard{}, Receipts: []workspace.DeskReceipt{}, CreatedAt: kernel.Stamp()}
 		if req.ThingID != nil && !captureOnly {
-			if _, err := getItem(ctx, tx, scope, *req.ThingID); err != nil {
+			if _, err := itemstore.GetItem(ctx, tx, scope, *req.ThingID); err != nil {
 				return err
 			}
 		}
@@ -1218,7 +1222,7 @@ func (s *Store) p2LegacyDeskTurn(ctx context.Context, scope memory.Scope, req wo
 			if contextErr == nil {
 				failureStage = "budget"
 				p, _ := s.Models.Get(c.Agent.ID)
-				reservationID, contextErr = s.reserveModelCostID(ctx, scope.OwnerID, p.Reserve(secretaryInstructions+prompt), nil)
+				reservationID, contextErr = s.ReserveModelCostID(ctx, scope.OwnerID, p.Reserve(secretaryInstructions+prompt), nil)
 			}
 			if contextErr == nil {
 				failureStage = "model"
@@ -1233,7 +1237,7 @@ func (s *Store) p2LegacyDeskTurn(ctx context.Context, scope memory.Scope, req wo
 				if err != nil && strings.TrimSpace(result.Text) == "" {
 					cost = 0
 				}
-				if settleErr := s.settleModelCost(ctx, scope.OwnerID, reservationID, cost); settleErr != nil {
+				if settleErr := s.SettleModelCost(ctx, scope.OwnerID, reservationID, cost); settleErr != nil {
 					return settleErr
 				}
 				contextErr = err
@@ -1290,7 +1294,7 @@ func (s *Store) p2LegacyDeskTurn(ctx context.Context, scope memory.Scope, req wo
 		} else {
 			dependencies = c.Dependencies
 			if text != "" {
-				if _, err := s.ingestTx(ctx, tx, scope, memory.IngestRequest{Connector: "desk", ExternalID: req.RequestID, ExternalVersion: "1", Title: "秘书原话", Text: req.Text, MediaType: "text/plain"}); err != nil {
+				if _, err := s.IngestTx(ctx, tx, scope, memory.IngestRequest{Connector: "desk", ExternalID: req.RequestID, ExternalVersion: "1", Title: "秘书原话", Text: req.Text, MediaType: "text/plain"}); err != nil {
 					return err
 				}
 			}
@@ -1316,16 +1320,16 @@ func (s *Store) p2LegacyDeskTurn(ctx context.Context, scope memory.Scope, req wo
 					continue
 				}
 				actionID := string(memory.NewID())
-				actionCtx := withActionLog(kernel.WithActor(ctx, "secretary"), actionID, "desk", out.Turn.ID, "秘书："+a.Op)
+				actionCtx := actionlog.WithActionLog(kernel.WithActor(ctx, "secretary"), actionID, "desk", out.Turn.ID, "秘书："+a.Op)
 				actionTx, err := tx.Begin(ctx)
 				if err != nil {
 					return err
 				}
-				if err = beginActionLogTx(actionCtx, actionTx); err != nil {
+				if err = actionlog.BeginActionLogTx(actionCtx, actionTx); err != nil {
 					_ = actionTx.Rollback(ctx)
 					return err
 				}
-				receipt, actionErr := s.executeSecretaryActionTx(actionCtx, actionTx, scope, a, actionAliases, c.Agent, deskLocation(c.Settings), pointerValue(req.ThingID))
+				receipt, actionErr := s.executeSecretaryActionTx(actionCtx, actionTx, scope, a, actionAliases, c.Agent, kernel.Location(c.Settings), pointerValue(req.ThingID))
 				if actionErr != nil || receipt.Status == "skipped" {
 					if err = actionTx.Rollback(ctx); err != nil {
 						return err
@@ -1337,8 +1341,8 @@ func (s *Store) p2LegacyDeskTurn(ctx context.Context, scope memory.Scope, req wo
 					}
 				} else {
 					// The summary and receipt describe the actual persisted result.
-					actionCtx = withActionLog(actionCtx, actionID, "desk", out.Turn.ID, receipt.Text)
-					if err = flushActionLog(actionCtx, actionTx, scope); err != nil {
+					actionCtx = actionlog.WithActionLog(actionCtx, actionID, "desk", out.Turn.ID, receipt.Text)
+					if err = actionlog.FlushActionLog(actionCtx, actionTx, scope); err != nil {
 						_ = actionTx.Rollback(ctx)
 						return err
 					}
@@ -1357,7 +1361,7 @@ func (s *Store) p2LegacyDeskTurn(ctx context.Context, scope memory.Scope, req wo
 						return err
 					}
 					if receipt.Status == "done" && receipt.ThingID != nil && kernel.OneOf(a.Op, "create_task", "create_idea", "create_project") {
-						item, err := getItem(ctx, tx, scope, *receipt.ThingID)
+						item, err := itemstore.GetItem(ctx, tx, scope, *receipt.ThingID)
 						if err != nil {
 							return err
 						}
@@ -1369,7 +1373,7 @@ func (s *Store) p2LegacyDeskTurn(ctx context.Context, scope memory.Scope, req wo
 			if answer.Remember && text != "" {
 				out.Turn.Receipts = append(out.Turn.Receipts, workspace.DeskReceipt{Op: "remember", Text: "记下了，会整理进记忆", Status: "done"})
 			}
-			out.Turn.Cards, err = s.secretaryCardsTx(ctx, tx, scope, answer, sent, c.Sources, c.Aliases, deskLocation(c.Settings), c.Plan.Recall)
+			out.Turn.Cards, err = s.secretaryCardsTx(ctx, tx, scope, answer, sent, c.Sources, c.Aliases, kernel.Location(c.Settings), c.Plan.Recall)
 			if err != nil {
 				return err
 			}
@@ -1406,7 +1410,7 @@ func (s *Store) p2LegacySnapshot(ctx context.Context, scope memory.Scope) (works
 		return out, err
 	}
 	err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
-		if err := s.ensureOwner(ctx, tx, scope); err != nil {
+		if err := s.EnsureOwner(ctx, tx, scope); err != nil {
 			return err
 		}
 		var err error
@@ -1478,7 +1482,7 @@ func (s *Store) p2LegacyRecall(ctx context.Context, scope memory.Scope, in memor
 		if !s.Models.Available(provider.ID) {
 			e = memory.ErrUnavailable
 		} else {
-			reservationID, e = s.reserveModelCostID(ctx, scope.OwnerID, reserved, nil)
+			reservationID, e = s.ReserveModelCostID(ctx, scope.OwnerID, reserved, nil)
 		}
 		if e == nil {
 			embeddings, e = s.Models.EmbedProvider(ctx, provider, []string{provider.EmbeddingQueryPrefix + query})
@@ -1487,7 +1491,7 @@ func (s *Store) p2LegacyRecall(ctx context.Context, scope memory.Scope, in memor
 			if e != nil {
 				reserved = 0
 			}
-			if err := s.settleModelCost(ctx, scope.OwnerID, reservationID, reserved); err != nil {
+			if err := s.SettleModelCost(ctx, scope.OwnerID, reservationID, reserved); err != nil {
 				return out, err
 			}
 		}

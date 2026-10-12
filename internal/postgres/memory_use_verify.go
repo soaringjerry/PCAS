@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/soaringjerry/PCAS/internal/postgres/accessstore"
+	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 
@@ -29,7 +31,7 @@ func (s *Store) checkSecretaryUseContextTx(ctx context.Context, tx pgx.Tx, scope
 	if item, ok := c.Aliases["THIS"]; ok {
 		thing = item.ID
 	}
-	if err := verifyRunAccessTx(ctx, useClockTx{Tx: tx, at: time.Now()}, scope, workspace.Run{ThingID: thing, AgentID: c.Agent.ID, ContextVersions: c.Dependencies}); err != nil {
+	if err := accessstore.VerifyRunAccessTx(ctx, useClockTx{Tx: tx, at: time.Now()}, scope, workspace.Run{ThingID: thing, AgentID: c.Agent.ID, ContextVersions: c.Dependencies}); err != nil {
 		return fmt.Errorf("%w: input access changed", memory.ErrForbidden)
 	}
 	return nil
@@ -65,7 +67,7 @@ func (s *Store) checkSecretaryActionTargetsTx(ctx context.Context, tx pgx.Tx, sc
 				continue
 			}
 			seen[sent.ID] = true
-			current, err := getItem(ctx, tx, scope, sent.ID)
+			current, err := itemstore.GetItem(ctx, tx, scope, sent.ID)
 			if err != nil {
 				return memory.ErrConflict
 			}
@@ -110,7 +112,7 @@ func (tx useClockTx) QueryRow(ctx context.Context, sql string, args ...any) pgx.
 // A queued prompt has not been sent yet. Preserve the existing access/currentness
 // fence before the first paid call; later input changes do not discard a draft.
 func checkQueuedUseRunPromptTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run workspace.Run) error {
-	if err := verifyRunTx(ctx, tx, scope, run); err != nil {
+	if err := accessstore.VerifyRunTx(ctx, tx, scope, run); err != nil {
 		return err
 	}
 	ids := []string{}
@@ -139,7 +141,7 @@ func checkUseRunPromptTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run
 	if !agent.Enabled {
 		return memory.ErrForbidden
 	}
-	item, err := getItem(ctx, tx, scope, run.ThingID)
+	item, err := itemstore.GetItem(ctx, tx, scope, run.ThingID)
 	if err != nil {
 		return err
 	}
@@ -162,7 +164,7 @@ func (s *Store) checkDeputySelfcheckContext(ctx context.Context, scope memory.Sc
 		if err := checkUseRunPromptTx(ctx, tx, scope, run); err != nil {
 			return err
 		}
-		return verifyRunAccessTx(ctx, useClockTx{Tx: tx, at: time.Now()}, scope, run)
+		return accessstore.VerifyRunAccessTx(ctx, useClockTx{Tx: tx, at: time.Now()}, scope, run)
 	})
 }
 

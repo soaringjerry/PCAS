@@ -1,4 +1,4 @@
-package postgres
+package claimstore
 
 import (
 	"context"
@@ -13,13 +13,13 @@ import (
 	"github.com/soaringjerry/PCAS/internal/memory"
 )
 
-const entityWhitespace = " \t\n\r\v\f\u0085\u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000"
+const EntityWhitespace = " \t\n\r\v\f\u0085\u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000"
 
 type claimMention = extraction.Mention
 
 // Serialize entity lookup and creation per owner, including all aliases. This
 // protects self and typed names even when callers do not hold the owner row lock.
-func entityTx(ctx context.Context, tx pgx.Tx, owner memory.ID, kind, name string) (memory.ID, error) {
+func EntityTx(ctx context.Context, tx pgx.Tx, owner memory.ID, kind, name string) (memory.ID, error) {
 	name = strings.TrimSpace(name)
 	if name == "" || !kernel.OneOf(kind, "self", "person", "place", "organization", "thing", "project", "topic", "area") {
 		return "", memory.ErrInvalid
@@ -32,7 +32,7 @@ func entityTx(ctx context.Context, tx pgx.Tx, owner memory.ID, kind, name string
 		JOIN memory_records r ON (r.owner_id,r.id,r.version)=(e.owner_id,e.entity_id,e.version)
 		WHERE e.owner_id=$1 AND e.entity_type=$2 AND r.state='active'
 		AND ($2='self' OR EXISTS(SELECT 1 FROM aliases a WHERE a.owner_id=e.owner_id AND a.entity_id=e.entity_id
-		  AND lower(btrim(a.alias,$4))=lower($3))) ORDER BY r.created_at,r.id LIMIT 1`, string(owner), kind, name, entityWhitespace).Scan(&id)
+		  AND lower(btrim(a.alias,$4))=lower($3))) ORDER BY r.created_at,r.id LIMIT 1`, string(owner), kind, name, EntityWhitespace).Scan(&id)
 	if err == nil {
 		return memoryread.ResolveMergedEntityTx(ctx, tx, owner, memory.ID(id))
 	}
@@ -40,7 +40,7 @@ func entityTx(ctx context.Context, tx pgx.Tx, owner memory.ID, kind, name string
 		return "", err
 	}
 	ref := memory.NewID()
-	if err := createRecord(ctx, tx, owner, ref, memory.EntityKind, "ai"); err != nil {
+	if err := CreateRecord(ctx, tx, owner, ref, memory.EntityKind, "ai"); err != nil {
 		return "", err
 	}
 	if _, err := tx.Exec(ctx, "INSERT INTO entities(owner_id,id) VALUES($1,$2)", string(owner), string(ref)); err != nil {
@@ -55,13 +55,13 @@ func entityTx(ctx context.Context, tx pgx.Tx, owner memory.ID, kind, name string
 	return ref, nil
 }
 
-func selfEntityTx(ctx context.Context, tx pgx.Tx, owner memory.ID) (memory.ID, error) {
-	return entityTx(ctx, tx, owner, "self", "我")
+func SelfEntityTx(ctx context.Context, tx pgx.Tx, owner memory.ID) (memory.ID, error) {
+	return EntityTx(ctx, tx, owner, "self", "我")
 }
 
 func mentionsTx(ctx context.Context, tx pgx.Tx, owner memory.ID, ref memory.Ref, mentions []claimMention) error {
 	for _, mention := range mentions {
-		id, err := entityTx(ctx, tx, owner, mention.Role, mention.Name)
+		id, err := EntityTx(ctx, tx, owner, mention.Role, mention.Name)
 		if err != nil {
 			return err
 		}

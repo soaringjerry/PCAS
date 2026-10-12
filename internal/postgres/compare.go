@@ -15,6 +15,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/postgres/sourcestore"
 	"github.com/soaringjerry/PCAS/internal/prompts"
 	"github.com/soaringjerry/PCAS/internal/worker"
 )
@@ -168,7 +169,7 @@ func (s *Store) scheduleCompareVersion(ctx context.Context, now time.Time, versi
 				}
 			}
 			e := kernel.BackgroundResultTx(ctx, s.Pool, owner, func(ctx context.Context, tx pgx.Tx) error {
-				if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended(current_database()||':'||current_schema()||':queue:'||$1||':'||$2,0))", string(owner), backgroundStage(map[bool]string{false: CompareStage, true: EntityCompareStage}[entity])); err != nil {
+				if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended(current_database()||':'||current_schema()||':queue:'||$1||':'||$2,0))", string(owner), kernel.BaseStage(map[bool]string{false: CompareStage, true: EntityCompareStage}[entity])); err != nil {
 					return err
 				}
 				if input != nil {
@@ -191,7 +192,7 @@ func (s *Store) scheduleCompareVersion(ctx context.Context, now time.Time, versi
 				if entity {
 					stage = EntityCompareStage
 				}
-				if !s.scheduleYielded(ctx, owner, stage, e) {
+				if !s.ScheduleYielded(ctx, owner, stage, e) {
 					failed = e
 				}
 			}
@@ -210,10 +211,10 @@ func (s *Store) RunCompare(ctx context.Context, logger *slog.Logger) {
 			return
 		}
 		if _, err := s.ScheduleCompare(ctx, time.Now()); err != nil && ctx.Err() == nil {
-			s.recordScheduleFailure(ctx, CompareStage, err)
+			s.RecordScheduleFailure(ctx, CompareStage, err)
 		}
 		if _, err := s.ScheduleEntityCandidates(ctx, time.Now()); err != nil && ctx.Err() == nil {
-			s.recordScheduleFailure(ctx, EntityCandidatesStage, err)
+			s.RecordScheduleFailure(ctx, EntityCandidatesStage, err)
 		}
 		select {
 		case <-ctx.Done():
@@ -277,7 +278,7 @@ type compareStore struct{ store *Store }
 
 func (a compareStore) Reschedule(ctx context.Context) {
 	if _, err := a.store.ScheduleCompare(ctx, time.Now()); err != nil {
-		a.store.recordScheduleFailure(ctx, CompareStage, err)
+		a.store.RecordScheduleFailure(ctx, CompareStage, err)
 	}
 }
 
@@ -320,7 +321,7 @@ func (a compareSession) NextBatch(ctx context.Context, j worker.Job, version int
 		if input == nil {
 			return kernel.Acknowledge(ctx, tx, j)
 		}
-		return backgroundHourlyTx(ctx, tx, CompareStage, "compare_hourly_limit")
+		return kernel.HourlyLimit(ctx, tx, CompareStage, "compare_hourly_limit")
 	})
 	if err != nil || input == nil {
 		return nil, nil, false, err
@@ -424,7 +425,7 @@ func (s *Store) writeComparisonTx(ctx context.Context, tx pgx.Tx, owner memory.I
 			}
 			if edge.Kind == "superseded" {
 				for _, id := range append(ancestors, string(old.Ref.ID)) {
-					if err := invalidateTx(ctx, tx, memory.Scope{OwnerID: owner, IsOwner: true}, id); err != nil {
+					if err := sourcestore.InvalidateTx(ctx, tx, memory.Scope{OwnerID: owner, IsOwner: true}, id); err != nil {
 						return err
 					}
 				}

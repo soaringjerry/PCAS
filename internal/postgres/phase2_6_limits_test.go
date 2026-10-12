@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
@@ -73,7 +74,7 @@ func TestPhase26G7A3IndependentHourlyBudgets(t *testing.T) {
 		for i := 0; i < tc.limit; i++ {
 			phase26Exec(t, f, `INSERT INTO background_usage(id,owner_id,reserved_cost,stage) VALUES($1,$2,0,$3)`, memory.NewID(), f.Scope.OwnerID, tc.stage)
 		}
-		if err := pgx.BeginFunc(f.Context, f.Store.Pool, func(tx pgx.Tx) error { return backgroundHourlyTx(f.Context, tx, tc.stage, "phase26_limit") }); err == nil {
+		if err := pgx.BeginFunc(f.Context, f.Store.Pool, func(tx pgx.Tx) error { return kernel.HourlyLimit(f.Context, tx, tc.stage, "phase26_limit") }); err == nil {
 			t.Errorf("%s exceeded frozen hourly cap=%d", tc.stage, tc.limit)
 		}
 		// Other stage allowances remain usable until THEIR own independent cap.
@@ -86,7 +87,7 @@ func TestPhase26G7A3IndependentHourlyBudgets(t *testing.T) {
 				t.Fatal(err)
 			}
 			if n < other.limit {
-				if err := pgx.BeginFunc(f.Context, f.Store.Pool, func(tx pgx.Tx) error { return backgroundHourlyTx(f.Context, tx, other.stage, "phase26_limit") }); err != nil {
+				if err := pgx.BeginFunc(f.Context, f.Store.Pool, func(tx pgx.Tx) error { return kernel.HourlyLimit(f.Context, tx, other.stage, "phase26_limit") }); err != nil {
 					t.Errorf("%s borrowed/exhausted %s allowance: %v", tc.stage, other.stage, err)
 				}
 			}

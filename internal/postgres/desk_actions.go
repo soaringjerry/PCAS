@@ -8,6 +8,9 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/actionlog"
+	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
+	"github.com/soaringjerry/PCAS/internal/postgres/workstore"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 )
@@ -66,17 +69,17 @@ func (s *Store) secretaryProjectTx(ctx context.Context, tx pgx.Tx, scope memory.
 		if err = tx.QueryRow(ctx, "SELECT current_setting('pcas.action_changes',true)").Scan(&buffer); err != nil {
 			return "", err
 		}
-		log, _ := ctx.Value(actionLogKey{}).(actionLog)
+		log, _ := ctx.Value(actionlog.ActionLogKey{}).(actionlog.ActionLog)
 		actionID := string(memory.NewID())
-		projectCtx := withActionLog(ctx, actionID, "desk", log.turnID, "建了项目「"+name+"」")
+		projectCtx := actionlog.WithActionLog(ctx, actionID, "desk", log.TurnID, "建了项目「"+name+"」")
 		projectCtx = context.WithValue(projectCtx, secretaryHistoryKey{}, nil)
-		if err = beginActionLogTx(projectCtx, tx); err != nil {
+		if err = actionlog.BeginActionLogTx(projectCtx, tx); err != nil {
 			return "", err
 		}
 		if err = s.commandTx(projectCtx, tx, scope, workspace.Command{Type: "addProject", ID: id, Name: name}); err != nil {
 			return "", err
 		}
-		if err = flushActionLog(projectCtx, tx, scope); err != nil {
+		if err = actionlog.FlushActionLog(projectCtx, tx, scope); err != nil {
 			return "", err
 		}
 		if _, err = tx.Exec(ctx, "SELECT set_config('pcas.action_changes',$1,true)", buffer); err != nil {
@@ -124,11 +127,11 @@ func (w *secretaryWorkspace) Command(ctx context.Context, c workspace.Command) e
 }
 
 func (w *secretaryWorkspace) Item(ctx context.Context, id string) (workspace.Item, error) {
-	return getItem(ctx, w.tx, w.scope, id)
+	return itemstore.GetItem(ctx, w.tx, w.scope, id)
 }
 
 func (w *secretaryWorkspace) SaveItem(ctx context.Context, item workspace.Item) error {
-	return saveItem(ctx, w.tx, w.scope, item)
+	return itemstore.SaveItem(ctx, w.tx, w.scope, item)
 }
 
 func (w *secretaryWorkspace) NoteChange(ctx context.Context, item workspace.Item, summary string) error {
@@ -182,12 +185,12 @@ func (w *secretaryWorkspace) DelegateTurns() []string { return w.delegateTurns }
 
 func (s *Store) closeDateActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, a secretaryAction) (workspace.DeskReceipt, error) {
 	receipt := workspace.DeskReceipt{Op: a.Op, Status: "done"}
-	if smokeID(ctx) != "" {
+	if actionlog.SmokeID(ctx) != "" {
 		// A check-only turn is cleaned up by restoring item documents; a mark on
 		// a memory is outside what that cleanup can put back, so it is not made.
 		return secretary.Skipped(a.Op, "检查模式下不改记忆上的日期"), nil
 	}
-	as, ok := validDeadlineClose(a.As)
+	as, ok := workstore.ValidDeadlineClose(a.As)
 	if !ok {
 		return secretary.Skipped(a.Op, "没说清是做完了还是不要了"), nil
 	}
@@ -208,7 +211,7 @@ func (s *Store) closeDateActionTx(ctx context.Context, tx pgx.Tx, scope memory.S
 	if err = activeClaim(ctx, tx, scope, m.ID); err != nil {
 		return secretary.Skipped(a.Op, "这条记忆已经不在了"), nil
 	}
-	if err = completeDeadlineTx(ctx, tx, scope, m.ID, version, as); errors.Is(err, memory.ErrConflict) {
+	if err = workstore.CompleteDeadlineTx(ctx, tx, scope, m.ID, version, as); errors.Is(err, memory.ErrConflict) {
 		return secretary.Skipped(a.Op, "这条记忆刚改过，再说一遍"), nil
 	} else if err != nil {
 		return receipt, err

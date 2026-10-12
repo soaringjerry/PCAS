@@ -8,76 +8,22 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/actionlog"
+	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/postgres/workstore"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
-
-type actionLogKey struct{}
-type actionLog struct{ id, source, turnID, summary, undoOf string }
-type actionChange struct {
-	Table     string          `json:"table"`
-	ID        string          `json:"id"`
-	Before    json.RawMessage `json:"before"`
-	AfterHash *string         `json:"afterHash"`
-}
-
-func withActionLog(ctx context.Context, id, source, turnID, summary string) context.Context {
-	return context.WithValue(ctx, actionLogKey{}, actionLog{id: id, source: source, turnID: turnID, summary: summary})
-}
 
 // withUndoOf marks the pending action-log entry as the undo of another action;
 // such entries never count as newer actions for the actions they sit on.
 func withUndoOf(ctx context.Context, undone string) context.Context {
-	log, ok := ctx.Value(actionLogKey{}).(actionLog)
+	log, ok := ctx.Value(actionlog.ActionLogKey{}).(actionlog.ActionLog)
 	if !ok {
 		return ctx
 	}
-	log.undoOf = undone
-	return context.WithValue(ctx, actionLogKey{}, log)
-}
-func beginActionLogTx(ctx context.Context, tx pgx.Tx) error {
-	if ctx.Value(actionLogKey{}) == nil {
-		return nil
-	}
-	_, err := tx.Exec(ctx, "SELECT set_config('pcas.action_changes','[]',true)")
-	return err
-}
-func flushActionLog(ctx context.Context, tx pgx.Tx, scope memory.Scope) error {
-	// Retain the audit metadata, including undone_at, after the undo window.
-	// Run even when this transaction collected no new document changes.
-	if _, err := tx.Exec(ctx, "UPDATE action_log SET changes='[]'::jsonb,expired_at=now() WHERE owner_id=$1 AND expired_at IS NULL AND created_at<now()-interval '30 days'", string(scope.OwnerID)); err != nil {
-		return err
-	}
-	log, ok := ctx.Value(actionLogKey{}).(actionLog)
-	if !ok {
-		return nil
-	}
-	var changes []byte
-	if err := tx.QueryRow(ctx, "SELECT current_setting('pcas.action_changes')::jsonb").Scan(&changes); err != nil {
-		return err
-	}
-	var entries []actionChange
-	if err := json.Unmarshal(changes, &entries); err != nil {
-		return err
-	}
-	if _, err := tx.Exec(ctx, "SELECT set_config('pcas.action_changes','',true)"); err != nil {
-		return err
-	}
-	if len(entries) == 0 {
-		return nil
-	}
-	_, err := tx.Exec(ctx, "INSERT INTO action_log(owner_id,id,source,turn_id,summary,changes) VALUES($1,$2,$3,$4,$5,$6)", string(scope.OwnerID), log.id, log.source, kernel.NullString(log.turnID), log.summary, changes)
-	if err != nil {
-		return err
-	}
-	// Written separately so the pre-053 legacy fixtures keep inserting the
-	// columns they have; only an undo carries the marker.
-	if log.undoOf != "" {
-		if _, err := tx.Exec(ctx, "UPDATE action_log SET undo_of=$3 WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), log.id, log.undoOf); err != nil {
-			return err
-		}
-	}
-	return recordSmokeActionTx(ctx, tx, scope, log.id, entries)
+	log.UndoOf = undone
+	return context.WithValue(ctx, actionlog.ActionLogKey{}, log)
 }
 func undoableCommand(t string) bool {
 	if kernel.OneOf(t, "restoreMemory", "completeDeadline") {
@@ -103,7 +49,7 @@ func commandSummary(ctx context.Context, tx pgx.Tx, scope memory.Scope, c worksp
 		id = c.IdeaID
 	}
 	if title == "" && memory.ID(id).Valid() {
-		if item, err := getItem(ctx, tx, scope, id); err == nil {
+		if item, err := itemstore.GetItem(ctx, tx, scope, id); err == nil {
 			title = item.Title
 		}
 	}
@@ -145,7 +91,7 @@ func (s *Store) undoActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 	{
 		var checkID string
 		if e := tx.QueryRow(ctx, "SELECT smoke_id::text FROM desk_smoke_actions WHERE owner_id=$1 AND action_id=$2", string(scope.OwnerID), id).Scan(&checkID); e == nil {
-			ctx = withSmoke(ctx, checkID)
+			ctx = actionlog.WithSmoke(ctx, checkID)
 		} else if !errors.Is(e, pgx.ErrNoRows) {
 			return e
 		}
@@ -157,7 +103,7 @@ func (s *Store) undoActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 	if expired {
 		return workspace.ErrExpired
 	}
-	var changes []actionChange
+	var changes []actionlog.ActionChange
 	if err = json.Unmarshal(data, &changes); err != nil {
 		return err
 	}
@@ -170,7 +116,7 @@ func (s *Store) undoActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 	// fence the worker, which does not take the owner lock when claiming work.
 	for _, c := range changes {
 		if c.Table == "deadline_completion" {
-			if err := checkDeadlineCompletionTx(ctx, tx, scope, c); err != nil {
+			if err := workstore.CheckDeadlineCompletionTx(ctx, tx, scope, c); err != nil {
 				return err
 			}
 			continue
@@ -244,7 +190,7 @@ func (s *Store) undoActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 	for i := len(changes) - 1; i >= 0; i-- {
 		c := changes[i]
 		if c.Table == "deadline_completion" {
-			if err := restoreDeadlineCompletionTx(ctx, tx, scope, c); err != nil {
+			if err := workstore.RestoreDeadlineCompletionTx(ctx, tx, scope, c); err != nil {
 				return err
 			}
 			continue
@@ -266,7 +212,7 @@ func (s *Store) undoActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 					return err
 				}
 				if referenced {
-					project, e := getItem(ctx, tx, scope, c.ID)
+					project, e := itemstore.GetItem(ctx, tx, scope, c.ID)
 					if e != nil {
 						return e
 					}
@@ -291,7 +237,11 @@ func (s *Store) undoActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 					return err
 				}
 			}
-			_, err = tx.Exec(ctx, "DELETE FROM "+c.Table+" WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), c.ID)
+			if c.Table == "work_items" {
+				err = itemstore.DeleteItem(ctx, tx, scope.OwnerID, c.ID)
+			} else {
+				_, err = tx.Exec(ctx, "DELETE FROM "+c.Table+" WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), c.ID)
+			}
 		} else {
 			switch c.Table {
 			case "work_items":
@@ -299,7 +249,7 @@ func (s *Store) undoActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 				if err = json.Unmarshal(c.Before, &item); err != nil {
 					return err
 				}
-				current, e := getItem(ctx, tx, scope, c.ID)
+				current, e := itemstore.GetItem(ctx, tx, scope, c.ID)
 				if e != nil {
 					return e
 				}
@@ -534,7 +484,7 @@ func (s *Store) Undo(ctx context.Context, scope memory.Scope, actionID string) (
 		return out, err
 	}
 	err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
-		if err := s.ensureOwner(ctx, tx, scope); err != nil {
+		if err := s.EnsureOwner(ctx, tx, scope); err != nil {
 			return err
 		}
 		if _, err := tx.Exec(ctx, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(scope.OwnerID)); err != nil {

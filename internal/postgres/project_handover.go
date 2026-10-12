@@ -10,6 +10,8 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/claimstore"
+	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/memoryread"
 	"github.com/soaringjerry/PCAS/internal/worker"
@@ -66,7 +68,7 @@ func (s *Store) ReadProjectHandover(ctx context.Context, scope memory.Scope, id 
 		return out, memory.ErrInvalid
 	}
 	err := pgx.BeginTxFunc(ctx, s.Pool, pgx.TxOptions{AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
-		item, err := getItem(ctx, tx, scope, id)
+		item, err := itemstore.GetItem(ctx, tx, scope, id)
 		if err != nil {
 			return err
 		}
@@ -124,7 +126,7 @@ func enqueueProjectHandoversTx(ctx context.Context, tx pgx.Tx, owner memory.ID, 
 func (s *Store) projectHandoverInputTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, id string) (projectHandoverInput, []memory.Ref, error) {
 	out := projectHandoverInput{Parts: []projectInputPart{}, Deadlines: []workspace.LibraryDeadline{}}
 	var err error
-	out.Project, err = getItem(ctx, tx, scope, id)
+	out.Project, err = itemstore.GetItem(ctx, tx, scope, id)
 	if err != nil {
 		return out, nil, err
 	}
@@ -250,7 +252,7 @@ type projectHandoverUnit struct {
 }
 
 func (u projectHandoverUnit) Project(id string) (workspace.Item, bool, error) {
-	item, err := getItem(u.ctx, u.tx, u.scope, id)
+	item, err := itemstore.GetItem(u.ctx, u.tx, u.scope, id)
 	if errors.Is(err, memory.ErrNotFound) {
 		return item, false, nil
 	}
@@ -328,7 +330,7 @@ func currentProjectEvidenceTx(ctx context.Context, tx pgx.Tx, scope memory.Scope
 }
 
 func (s *Store) adoptProjectMemoryTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run *workspace.Run, item workspace.Item, text, actionID string, auto bool) error {
-	source, err := s.ingestTx(ctx, tx, scope, memory.IngestRequest{Connector: "capture", ExternalID: "project-adoption:" + run.ID + ":" + actionID, ExternalVersion: "1", Title: "采纳项目进展", Text: text, MediaType: "text/plain"})
+	source, err := s.IngestTx(ctx, tx, scope, memory.IngestRequest{Connector: "capture", ExternalID: "project-adoption:" + run.ID + ":" + actionID, ExternalVersion: "1", Title: "采纳项目进展", Text: text, MediaType: "text/plain"})
 	if err != nil {
 		return err
 	}
@@ -336,7 +338,7 @@ func (s *Store) adoptProjectMemoryTx(ctx context.Context, tx pgx.Tx, scope memor
 	if auto {
 		actor, acquisition, confirmation = "ai", "inferred", "adopted"
 	}
-	_, err = s.rememberTx(ctx, tx, scope, statement{Text: text, Nature: "fact", ProjectID: item.ID, Actor: actor, Acquisition: acquisition, Confirmation: confirmation, Source: source.Ref})
+	_, err = s.RememberTx(ctx, tx, scope, claimstore.Statement{Text: text, Nature: "fact", ProjectID: item.ID, Actor: actor, Acquisition: acquisition, Confirmation: confirmation, Source: source.Ref})
 	if err != nil {
 		return err
 	}

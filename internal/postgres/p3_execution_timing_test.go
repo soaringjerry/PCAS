@@ -11,6 +11,7 @@ import (
 
 	"github.com/soaringjerry/PCAS/internal/ai"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/budgetstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/usagelog"
 	"github.com/soaringjerry/PCAS/internal/prompts"
@@ -73,7 +74,7 @@ func TestP3ExecutionTimingRecordsSecretaryAndDeputy(t *testing.T) {
 					Purpose         string
 					DurationMS      *int64
 					TurnID, RunID   *string
-					ExecutionTiming *executionTiming
+					ExecutionTiming *budgetstore.ExecutionTiming
 				}
 			}
 			if err := json.Unmarshal(raw, &page); err != nil {

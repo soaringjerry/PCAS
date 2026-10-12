@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -45,7 +46,7 @@ func TestDomainPackagesDoNotDependOnThePostgreSQLAdapter(t *testing.T) {
 // model call: the domain package that owns a flow builds the request and
 // calls the gateway, and internal/app builds the gateway. Add each storage
 // package here when the PostgreSQL adapter is split.
-var storagePackages = []string{"../postgres", "../postgres/kernel", "../postgres/memoryread", "../postgres/activitystore", "../postgres/schedulestore", "../postgres/usagelog", "../postgres/memorystore"}
+var storagePackages = []string{"../postgres", "../postgres/kernel", "../postgres/memoryread", "../postgres/statestore", "../postgres/evidencestore", "../postgres/workstore", "../postgres/budgetstore", "../postgres/claimstore", "../postgres/accessstore", "../postgres/sourcestore", "../postgres/actionlog", "../postgres/itemstore", "../postgres/ownerstore", "../postgres/activitystore", "../postgres/schedulestore", "../postgres/usagelog", "../postgres/memorystore"}
 
 // gatewayCalls are the methods of the gateway that submit a model call.
 var gatewayCalls = map[string]bool{"Call": true, "CallEmbedding": true, "CallVision": true, "CallTranscription": true}
@@ -91,6 +92,40 @@ func TestStoragePackagesDoNotMakeModelCalls(t *testing.T) {
 				}
 				return true
 			})
+		}
+	}
+}
+
+// itemWrite matches an SQL statement that writes the items table.
+var itemWrite = regexp.MustCompile(`(?i)\b(insert\s+into|update|delete\s+from)\s+work_items\b`)
+
+// The items table has one owner: internal/postgres/itemstore. Each other
+// storage package changes an item through that package, so that the plan
+// rule, the text blocks, and the checks of an item apply to every write. A
+// statement that takes its table name from a variable is not seen by this
+// test; the two such statements send the items table to the owner.
+func TestOnlyTheItemOwnerWritesTheItemsTable(t *testing.T) {
+	for _, dir := range storagePackages {
+		if filepath.Base(dir) == "itemstore" {
+			continue
+		}
+		files, err := filepath.Glob(filepath.Join(dir, "*.go"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, file := range files {
+			if strings.HasSuffix(file, "_test.go") {
+				continue
+			}
+			source, err := os.ReadFile(file)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for number, line := range strings.Split(string(source), "\n") {
+				if itemWrite.MatchString(line) {
+					t.Errorf("%s:%d writes work_items outside the item owner", file, number+1)
+				}
+			}
 		}
 	}
 }

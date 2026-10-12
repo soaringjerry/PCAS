@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/soaringjerry/PCAS/internal/postgres/actionlog"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/testsupport"
 	"github.com/soaringjerry/PCAS/internal/workspace"
@@ -64,7 +65,7 @@ func TestSecretaryHistoryOneEntryPerAction(t *testing.T) {
 		if err := s.Pool.QueryRow(ctx, "SELECT source,summary,changes FROM action_log WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), *receipt.ActionID).Scan(&source, &summary, &raw); err != nil {
 			t.Fatal(err)
 		}
-		var changes []actionChange
+		var changes []actionlog.ActionChange
 		if err := json.Unmarshal(raw, &changes); err != nil || source != "desk" || summary != receipt.Text || len(changes) != count {
 			t.Fatal("action log changed", source, summary, string(raw), err)
 		}

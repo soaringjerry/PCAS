@@ -1,4 +1,4 @@
-package postgres
+package workstore
 
 import (
 	"context"
@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
+	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/jackc/pgx/v5"
@@ -13,9 +14,9 @@ import (
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
-type conditionSignal = extraction.Signal
+type ConditionSignal = extraction.Signal
 
-func (s *Store) pendingConditions(ctx context.Context, scope memory.Scope) ([]map[string]string, error) {
+func (s *Work) PendingConditions(ctx context.Context, scope memory.Scope) ([]map[string]string, error) {
 	rows, err := s.Pool.Query(ctx, `SELECT i.document FROM work_items i JOIN workspace_owners w USING(owner_id) WHERE i.owner_id=$1 AND i.kind='idea' AND i.status='shelved' AND (i.document->>'remindersOn')::boolean AND (w.settings->>'wakeIdeas')::boolean ORDER BY i.updated_at DESC LIMIT 20`, string(scope.OwnerID))
 	if err != nil {
 		return nil, err
@@ -35,7 +36,7 @@ func (s *Store) pendingConditions(ctx context.Context, scope memory.Scope) ([]ma
 	}
 	return result, rows.Err()
 }
-func (s *Store) applySignalsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, source memory.Source, signals []conditionSignal) error {
+func (s *Work) ApplySignalsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, source memory.Source, signals []ConditionSignal) error {
 	if len(signals) > 30 {
 		return memory.ErrInvalid
 	}
@@ -43,7 +44,7 @@ func (s *Store) applySignalsTx(ctx context.Context, tx pgx.Tx, scope memory.Scop
 		if signal.Confidence < 0.98 || signal.Confidence > 1 || signal.Quote == "" || !strings.Contains(source.Text, signal.Quote) || kernel.RequireText(signal.Explanation) != nil || len(signal.Explanation) > 2000 || !memory.ID(signal.IdeaID).Valid() {
 			continue
 		}
-		item, err := getItem(ctx, tx, scope, signal.IdeaID)
+		item, err := itemstore.GetItem(ctx, tx, scope, signal.IdeaID)
 		if errors.Is(err, memory.ErrNotFound) {
 			continue
 		}
@@ -73,7 +74,7 @@ func (s *Store) applySignalsTx(ctx context.Context, tx pgx.Tx, scope memory.Scop
 			item.Evolution = append(item.Evolution, workspace.Revision{At: kernel.Stamp(), By: "ai", Summary: reason, SourceID: string(source.ID)})
 			item.Version++
 			item.UpdatedAt = kernel.Stamp()
-			if err := saveItem(ctx, tx, scope, item); err != nil {
+			if err := itemstore.SaveItem(ctx, tx, scope, item); err != nil {
 				return err
 			}
 		}

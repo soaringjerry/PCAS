@@ -20,6 +20,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/httpapi"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/notify"
+	"github.com/soaringjerry/PCAS/internal/postgres/actionlog"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
@@ -573,7 +574,7 @@ func TestStabilizationUndoU11_AlreadyUndoneAfterExpiryKeepsReplay(t *testing.T) 
 				// Clear snapshots without changing the workspace; replay's State
 				// follows the current workspace, as the existing command API does.
 				if err := pgx.BeginFunc(context.Background(), s.Pool, func(tx pgx.Tx) error {
-					return flushActionLog(context.Background(), tx, scope)
+					return actionlog.FlushActionLog(context.Background(), tx, scope)
 				}); err != nil {
 					t.Fatal(err)
 				}

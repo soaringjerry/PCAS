@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
+	"github.com/soaringjerry/PCAS/internal/postgres/budgetstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/soaringjerry/PCAS/internal/ai"
@@ -220,7 +221,7 @@ func TestPhase2B2_F4_BudgetDefersWithoutAttemptAndCalendarHandlesDST(t *testing.
 			if state.Available.Before(expected) || state.Available.After(expected.Add(10*time.Minute)) {
 				t.Errorf("budget defer=%s want local midnight %s with <=10m jitter", state.Available, expected)
 			}
-			b2Equal(t, nextBudgetDay(start, loc), expected)
+			b2Equal(t, budgetstore.NextBudgetDay(start, loc), expected)
 			b2Exec(t, s, `UPDATE background_usage SET created_at=now()-interval '2 days' WHERE owner_id=$1`, string(scope.OwnerID))
 			b2Ready(t, s, scope, src)
 			b2RunOnce(t, b2Worker(s), true)
@@ -242,7 +243,7 @@ func TestPhase2B2_F4_BudgetDefersWithoutAttemptAndCalendarHandlesDST(t *testing.
 		}
 		now := b2ParseTime(t, spec.Now)
 		want := b2ParseTime(t, spec.Midnight)
-		got := nextBudgetDay(now, loc)
+		got := budgetstore.NextBudgetDay(now, loc)
 		if !got.Equal(want) {
 			t.Errorf("DST midnight %s want %s", got, want)
 		}

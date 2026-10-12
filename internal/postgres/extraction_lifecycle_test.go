@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
+	"github.com/soaringjerry/PCAS/internal/postgres/accessstore"
+	"github.com/soaringjerry/PCAS/internal/postgres/claimstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/jackc/pgx/v5"
@@ -119,7 +121,7 @@ func TestDirectCaptureEntersDefaultRunAsSourceBacked(t *testing.T) {
 	if !strings.Contains(run.Brief, text) || !kernel.OneOf(m.ID, run.ContextMemoryIDs...) {
 		t.Fatal("current direct capture missing from default assistant context", run.Brief)
 	}
-	if err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error { return verifyRunTx(ctx, tx, scope, run) }); err != nil {
+	if err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error { return accessstore.VerifyRunTx(ctx, tx, scope, run) }); err != nil {
 		t.Fatal("source-backed run rejected during validation", err)
 	}
 	if calls.Load() != 1 {
@@ -132,11 +134,11 @@ func rememberExtractedForTest(t *testing.T, s *Store, scope memory.Scope, source
 	ctx := context.Background()
 	var ref memory.Ref
 	err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
-		if err := s.ensureOwner(ctx, tx, scope); err != nil {
+		if err := s.EnsureOwner(ctx, tx, scope); err != nil {
 			return err
 		}
 		var err error
-		ref, err = s.rememberTx(ctx, tx, scope, statement{Text: text, Nature: "fact", Subject: "用户", Predicate: "交付约定", Confirmation: "candidate", Acquisition: "inferred", Actor: "ai", Quote: text, Source: source})
+		ref, err = s.RememberTx(ctx, tx, scope, claimstore.Statement{Text: text, Nature: "fact", Subject: "用户", Predicate: "交付约定", Confirmation: "candidate", Acquisition: "inferred", Actor: "ai", Quote: text, Source: source})
 		return err
 	})
 	if err != nil {

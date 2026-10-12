@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/modelcall"
+	"github.com/soaringjerry/PCAS/internal/postgres/claimstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/usagelog"
 	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
@@ -94,7 +95,7 @@ func TestB4StatusPromptAndDependencies(t *testing.T) {
 	recurring := b4Memory(t, s, scope, "虚构固定安排：每周二晚上有课")
 	var entity string
 	err := pgx.BeginFunc(context.Background(), s.Pool, func(tx pgx.Tx) error {
-		id, e := entityTx(context.Background(), tx, scope.OwnerID, "project", "星桥汇报")
+		id, e := claimstore.EntityTx(context.Background(), tx, scope.OwnerID, "project", "星桥汇报")
 		entity = string(id)
 		return e
 	})
@@ -294,7 +295,7 @@ func TestB4HeavyReadersAreConcurrentAndFailuresAreSkipped(t *testing.T) {
 		ids = append(ids, m.ID)
 		var eid string
 		err := pgx.BeginFunc(context.Background(), s.Pool, func(tx pgx.Tx) error {
-			id, err := entityTx(context.Background(), tx, scope.OwnerID, "topic", fmt.Sprintf("虚构分组%d", i))
+			id, err := claimstore.EntityTx(context.Background(), tx, scope.OwnerID, "topic", fmt.Sprintf("虚构分组%d", i))
 			eid = string(id)
 			return err
 		})
@@ -436,7 +437,7 @@ func TestB4HeavyCutoffUsesFinishedReaders(t *testing.T) {
 		ids = append(ids, m.ID)
 		var eid string
 		err := pgx.BeginFunc(context.Background(), s.Pool, func(tx pgx.Tx) error {
-			id, e := entityTx(context.Background(), tx, scope.OwnerID, "topic", fmt.Sprintf("虚构限时组%d", i))
+			id, e := claimstore.EntityTx(context.Background(), tx, scope.OwnerID, "topic", fmt.Sprintf("虚构限时组%d", i))
 			eid = string(id)
 			return e
 		})
@@ -479,7 +480,7 @@ func TestB4RankFusionKeepsStructuredMatchesFirst(t *testing.T) {
 	vector := b4Memory(t, s, scope, "虚构璃风的另一段安排")
 	var entity string
 	err := pgx.BeginFunc(context.Background(), s.Pool, func(tx pgx.Tx) error {
-		id, e := entityTx(context.Background(), tx, scope.OwnerID, "person", "虚构璃风")
+		id, e := claimstore.EntityTx(context.Background(), tx, scope.OwnerID, "person", "虚构璃风")
 		entity = string(id)
 		return e
 	})
@@ -609,7 +610,7 @@ func TestB4ProductionLiveDirectoryAndRequirementScopes(t *testing.T) {
 		var id memory.ID
 		if err := pgx.BeginFunc(context.Background(), s.Pool, func(tx pgx.Tx) error {
 			var e error
-			id, e = entityTx(context.Background(), tx, scope.OwnerID, "topic", name)
+			id, e = claimstore.EntityTx(context.Background(), tx, scope.OwnerID, "topic", name)
 			return e
 		}); err != nil {
 			t.Fatal(err)

@@ -16,6 +16,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/claimstore"
 )
 
 type p2QuerySpan struct {
@@ -162,7 +163,7 @@ func p2Fixture(t *testing.T, n int) (*Store, memory.Scope) {
 	}
 	err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		var self string
-		id, err := entityTx(ctx, tx, scope.OwnerID, "self", "虚构用户云杉")
+		id, err := claimstore.EntityTx(ctx, tx, scope.OwnerID, "self", "虚构用户云杉")
 		if err != nil {
 			return err
 		}

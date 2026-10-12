@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/postgres/statestore"
 	"github.com/soaringjerry/PCAS/internal/worker"
 	"github.com/soaringjerry/PCAS/internal/workspace/effort"
 	"github.com/soaringjerry/PCAS/internal/workspace/projecthandover"
@@ -145,7 +147,7 @@ func TestPhase3T2T4EachExistingStageConcurrentHTTPScale(t *testing.T) {
 func phase3StageName(t *testing.T, logical string) string {
 	t.Helper()
 	matches := []string{}
-	for stage := range backgroundHourlyBudgets {
+	for stage := range kernel.HourlyBudgets {
 		if logical == "project_handover" && strings.Contains(stage, "project") && strings.Contains(stage, "handover") || logical == "effort" && strings.Contains(stage, "effort") {
 			matches = append(matches, stage)
 		}
@@ -299,9 +301,9 @@ func TestPhase3G7AllSevenFrozenCeilingsAndGlobal140(t *testing.T) {
 	phase3Finding(t, "S-P3-001")
 	// Phase 3 fixed seven ceilings. Phase 3.5 added topic projects at two calls
 	// in one hour, and phase 3.6 added the date review with its own ceiling.
-	expected := map[string]int{OrganizeStage: 40, CompareStage: 40, EntityCompareStage: 30, EntityCandidatesStage: 6, HandoverStage: 2, phase3StageName(t, "project_handover"): 10, phase3StageName(t, "effort"): 10, TopicProjectStage: 2, DateTidyStage: dateTidyHourly}
-	if !reflect.DeepEqual(backgroundHourlyBudgets, expected) {
-		t.Fatal("stage ceilings differ from contract", backgroundHourlyBudgets)
+	expected := map[string]int{OrganizeStage: 40, CompareStage: 40, EntityCompareStage: 30, EntityCandidatesStage: 6, HandoverStage: 2, phase3StageName(t, "project_handover"): 10, phase3StageName(t, "effort"): 10, TopicProjectStage: 2, statestore.DateTidyStage: statestore.DateTidyHourly}
+	if !reflect.DeepEqual(kernel.HourlyBudgets, expected) {
+		t.Fatal("stage ceilings differ from contract", kernel.HourlyBudgets)
 	}
 	if organizeCompareHourlyLimit != 140 {
 		t.Fatal("global configured ceiling is not140", organizeCompareHourlyLimit)

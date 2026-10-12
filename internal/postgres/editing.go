@@ -12,9 +12,11 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/memoryread"
-	"github.com/soaringjerry/PCAS/internal/postgres/memorystore"
+	"github.com/soaringjerry/PCAS/internal/postgres/sourcestore"
+	"github.com/soaringjerry/PCAS/internal/postgres/workstore"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -50,7 +52,7 @@ func (s *Store) memoryCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Sco
 				return err
 			}
 		}
-		return invalidateTx(ctx, tx, scope, c.ID)
+		return sourcestore.InvalidateTx(ctx, tx, scope, c.ID)
 	}
 	claim, err := readClaim(ctx, tx, scope, memory.ID(c.ID), 0)
 	if err != nil {
@@ -99,7 +101,7 @@ func (s *Store) Correct(ctx context.Context, scope memory.Scope, in memory.Corre
 		return out, err
 	}
 	err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
-		if err := s.ensureOwner(ctx, tx, scope); err != nil {
+		if err := s.EnsureOwner(ctx, tx, scope); err != nil {
 			return err
 		}
 		if _, err := tx.Exec(ctx, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(scope.OwnerID)); err != nil {
@@ -195,7 +197,7 @@ func (s *Store) correctTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in
 		SELECT owner_id,gen_random_uuid(),source_id,source_version,target_id,$3,locator,acquisition,stance FROM evidence WHERE owner_id=$1 AND target_id=$2 AND target_version=$4`, string(scope.OwnerID), string(out.ID), version, prior.Version); err != nil {
 		return out, err
 	}
-	source, err := s.ingestTx(ctx, tx, scope, memory.IngestRequest{Connector: "corrections", ExternalID: string(out.ID), ExternalVersion: fmt.Sprint(version), Title: "用户纠正", Text: string(kernel.JSON(map[string]any{"before": prior.Value, "after": c.Value, "reason": in.Reason})), MediaType: "text/plain"})
+	source, err := s.IngestTx(ctx, tx, scope, memory.IngestRequest{Connector: "corrections", ExternalID: string(out.ID), ExternalVersion: fmt.Sprint(version), Title: "用户纠正", Text: string(kernel.JSON(map[string]any{"before": prior.Value, "after": c.Value, "reason": in.Reason})), MediaType: "text/plain"})
 	if err != nil {
 		return out, err
 	}
@@ -220,23 +222,10 @@ func (s *Store) correctTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in
 	if _, err := tx.Exec(ctx, "INSERT INTO claim_key_redirects(owner_id,key_hash,claim_id) SELECT owner_id,decode(claim_key,'hex'),claim_id FROM claim_source_keys WHERE owner_id=$1 AND claim_id=$2 ON CONFLICT(owner_id,key_hash) DO NOTHING", string(scope.OwnerID), string(out.ID)); err != nil {
 		return out, err
 	}
-	if err := invalidateTx(ctx, tx, scope, string(out.ID)); err != nil {
+	if err := sourcestore.InvalidateTx(ctx, tx, scope, string(out.ID)); err != nil {
 		return out, err
 	}
 	return out, kernel.Enqueue(ctx, tx, scope.OwnerID, out.ID, out.Version, "memory.index")
-}
-func invalidateTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, id string) error {
-	for _, sql := range []string{
-		`WITH RECURSIVE affected(id) AS (SELECT $2::uuid UNION SELECT d.view_id FROM derived_dependencies d JOIN affected a ON a.id=d.dependency_id WHERE d.owner_id=$1) UPDATE derived_views SET stale=true WHERE owner_id=$1 AND id IN (SELECT id FROM affected)`,
-		`UPDATE agent_runs SET document=jsonb_set(document,'{staleContext}','true') WHERE owner_id=$1 AND id IN (SELECT run_id FROM run_dependencies WHERE owner_id=$1 AND memory_id=$2)`,
-		`UPDATE training_samples SET stale=true WHERE owner_id=$1 AND (memory_id=$2 OR run_id IN (SELECT run_id FROM run_dependencies WHERE owner_id=$1 AND memory_id=$2))`,
-		`DELETE FROM embeddings WHERE owner_id=$1 AND record_id=$2`,
-	} {
-		if _, err := tx.Exec(ctx, sql, string(scope.OwnerID), id); err != nil {
-			return err
-		}
-	}
-	return memorystore.RefreshSummaryJobsTx(ctx, tx, scope.OwnerID, memory.ID(id))
 }
 func (s *Store) RecordUse(ctx context.Context, scope memory.Scope, in memory.UseEvent) error {
 	if err := kernel.RequireOwner(scope); err != nil {
@@ -277,7 +266,7 @@ func (s *Store) Delete(ctx context.Context, scope memory.Scope, in memory.Delete
 		return err
 	}
 	return pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
-		if err := s.ensureOwner(ctx, tx, scope); err != nil {
+		if err := s.EnsureOwner(ctx, tx, scope); err != nil {
 			return err
 		}
 		if _, err := tx.Exec(ctx, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(scope.OwnerID)); err != nil {
@@ -481,7 +470,7 @@ func (s *Store) deleteRecordsTx(ctx context.Context, tx pgx.Tx, scope memory.Sco
 	}
 	if retainAnswers {
 		for _, id := range ids {
-			if err := invalidateTx(ctx, tx, scope, id); err != nil {
+			if err := sourcestore.InvalidateTx(ctx, tx, scope, id); err != nil {
 				return err
 			}
 		}
@@ -498,7 +487,7 @@ func (s *Store) deleteRecordsTx(ctx context.Context, tx pgx.Tx, scope memory.Sco
 			return err
 		}
 	} else {
-		ids, err = purgeArtifactsTx(ctx, tx, scope, ids)
+		ids, err = workstore.PurgeArtifactsTx(ctx, tx, scope, ids)
 		if err != nil {
 			return err
 		}
@@ -515,7 +504,7 @@ func (s *Store) deleteRecordsTx(ctx context.Context, tx pgx.Tx, scope memory.Sco
 				rows.Close()
 				return err
 			}
-			keys = append(keys, sourceKey(connector, external))
+			keys = append(keys, sourcestore.SourceKey(connector, external))
 		}
 		err = rows.Err()
 		rows.Close()
@@ -656,7 +645,7 @@ func (s *Store) deleteRecordsTx(ctx context.Context, tx pgx.Tx, scope memory.Sco
 			item.Version++
 			item.UpdatedAt = kernel.Stamp()
 			item.Sources = kept
-			if err := saveItem(ctx, tx, scope, item); err != nil {
+			if err := itemstore.SaveItem(ctx, tx, scope, item); err != nil {
 				return err
 			}
 		}

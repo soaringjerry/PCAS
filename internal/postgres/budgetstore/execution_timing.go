@@ -1,4 +1,4 @@
-package postgres
+package budgetstore
 
 import (
 	"context"
@@ -10,7 +10,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/modelcall"
 )
 
-type executionTiming struct {
+type ExecutionTiming struct {
 	Kind        string `json:"kind"`
 	Tier        string `json:"tier"`
 	PrepareMS   int64  `json:"prepareMs"`
@@ -22,22 +22,22 @@ type executionTiming struct {
 	OtherMS     int64  `json:"otherMs"`
 }
 
-type executionTimer struct {
+type ExecutionTimer struct {
 	mu sync.Mutex
-	executionTiming
+	ExecutionTiming
 	started        time.Time
 	prepareStarted time.Time
 	writeStarted   time.Time
-	id             string
+	Id             string
 }
 
-func newExecutionTimer(ctx context.Context, kind string, started time.Time) (context.Context, *executionTimer) {
-	timer := &executionTimer{executionTiming: executionTiming{Kind: kind}, started: started}
+func NewExecutionTimer(ctx context.Context, kind string, started time.Time) (context.Context, *ExecutionTimer) {
+	timer := &ExecutionTimer{ExecutionTiming: ExecutionTiming{Kind: kind}, started: started}
 	return modelcall.Timed(modelcall.WithTimer(ctx, timer), "prepare"), timer
 }
 
 // AddModelTime adds the time of one provider invocation.
-func (timer *executionTimer) AddModelTime(purpose string, ms int64) {
+func (timer *ExecutionTimer) AddModelTime(purpose string, ms int64) {
 	timer.mu.Lock()
 	defer timer.mu.Unlock()
 	timer.ModelMS += ms
@@ -49,12 +49,12 @@ func (timer *executionTimer) AddModelTime(purpose string, ms int64) {
 	}
 }
 
-func (timer *executionTimer) beginPrepare() {
+func (timer *ExecutionTimer) BeginPrepare() {
 	timer.mu.Lock()
 	defer timer.mu.Unlock()
 	timer.prepareStarted = time.Now()
 }
-func (timer *executionTimer) finishPrepare() {
+func (timer *ExecutionTimer) FinishPrepare() {
 	timer.mu.Lock()
 	defer timer.mu.Unlock()
 	if !timer.prepareStarted.IsZero() {
@@ -62,13 +62,13 @@ func (timer *executionTimer) finishPrepare() {
 		timer.prepareStarted = time.Time{}
 	}
 }
-func (timer *executionTimer) addPrepare(elapsed time.Duration) {
+func (timer *ExecutionTimer) AddPrepare(elapsed time.Duration) {
 	timer.mu.Lock()
 	defer timer.mu.Unlock()
 	timer.PrepareMS += elapsed.Milliseconds()
 }
-func (timer *executionTimer) beginWrite(tier string) {
-	timer.finishPrepare()
+func (timer *ExecutionTimer) BeginWrite(tier string) {
+	timer.FinishPrepare()
 	timer.mu.Lock()
 	defer timer.mu.Unlock()
 	timer.Tier = tier
@@ -78,24 +78,24 @@ func (timer *executionTimer) beginWrite(tier string) {
 // Store once after the business transaction has finished. Measurement failures
 // are observable but cannot invalidate an already committed answer or action.
 // Replays never assign a new timer ID and cannot replace a good measurement.
-func (s *Store) finishExecutionTiming(ctx context.Context, owner memory.ID, timer *executionTimer) {
-	if timer.id == "" {
+func (s *Budgets) FinishExecutionTiming(ctx context.Context, owner memory.ID, timer *ExecutionTimer) {
+	if timer.Id == "" {
 		return
 	}
-	timer.finishPrepare()
+	timer.FinishPrepare()
 	timer.mu.Lock()
 	timer.TotalMS = time.Since(timer.started).Milliseconds()
 	if !timer.writeStarted.IsZero() {
 		timer.WritebackMS = time.Since(timer.writeStarted).Milliseconds()
 	}
 	timer.OtherMS = max(int64(0), timer.TotalMS-timer.PrepareMS-timer.AnswerMS-timer.SelfcheckMS-timer.WritebackMS)
-	row := timer.executionTiming
+	row := timer.ExecutionTiming
 	timer.mu.Unlock()
 	persist, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 	defer cancel()
 	_, err := s.Pool.Exec(persist, `INSERT INTO execution_timings(owner_id,id,kind,tier,at,prepare_ms,answer_ms,selfcheck_ms,writeback_ms,model_ms,total_ms,other_ms)
- VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) ON CONFLICT(owner_id,kind,id) DO NOTHING`, owner, timer.id, row.Kind, row.Tier, timer.started, row.PrepareMS, row.AnswerMS, row.SelfcheckMS, row.WritebackMS, row.ModelMS, row.TotalMS, row.OtherMS)
+ VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) ON CONFLICT(owner_id,kind,id) DO NOTHING`, owner, timer.Id, row.Kind, row.Tier, timer.started, row.PrepareMS, row.AnswerMS, row.SelfcheckMS, row.WritebackMS, row.ModelMS, row.TotalMS, row.OtherMS)
 	if err != nil {
-		slog.ErrorContext(persist, "execution measurement failed", "kind", row.Kind, "error_type", backgroundFailureReason(err))
+		slog.ErrorContext(persist, "execution measurement failed", "kind", row.Kind, "error_type", BackgroundFailureReason(err))
 	}
 }

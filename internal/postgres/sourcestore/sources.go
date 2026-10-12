@@ -1,4 +1,4 @@
-package postgres
+package sourcestore
 
 import (
 	"bytes"
@@ -13,25 +13,23 @@ import (
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 )
 
-var _ memory.Repository = (*Store)(nil)
-
-func sourceKey(connector, externalID string) []byte {
+func SourceKey(connector, externalID string) []byte {
 	key, _ := json.Marshal([]string{connector, externalID})
 	hash := sha256.Sum256(key)
 	return hash[:]
 }
 
-func (s *Store) Ingest(ctx context.Context, scope memory.Scope, in memory.IngestRequest) (memory.IngestResult, error) {
+func (s *Sources) Ingest(ctx context.Context, scope memory.Scope, in memory.IngestRequest) (memory.IngestResult, error) {
 	var result memory.IngestResult
 	err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		var err error
-		result, err = s.ingestTx(ctx, tx, scope, in)
+		result, err = s.IngestTx(ctx, tx, scope, in)
 		return err
 	})
 	return result, err
 }
 
-func (s *Store) ingestTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in memory.IngestRequest) (memory.IngestResult, error) {
+func (s *Sources) IngestTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in memory.IngestRequest) (memory.IngestResult, error) {
 	var result memory.IngestResult
 	if !scope.Valid() || !scope.IsOwner {
 		return result, memory.ErrForbidden
@@ -41,7 +39,7 @@ func (s *Store) ingestTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in 
 		return result, memory.ErrInvalid
 	}
 	hash := sha256.Sum256(body)
-	key := sourceKey(in.Connector, in.ExternalID)
+	key := SourceKey(in.Connector, in.ExternalID)
 	err = func() error {
 		// Serialize only this owner's source identity, including first insertion.
 		if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended($1,0))", fmt.Sprintf("%s:%x", scope.OwnerID, key)); err != nil {
@@ -99,7 +97,7 @@ func (s *Store) ingestTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in 
 			return err
 		}
 		if version > 1 {
-			if err := invalidateTx(ctx, tx, scope, id); err != nil {
+			if err := InvalidateTx(ctx, tx, scope, id); err != nil {
 				return err
 			}
 			// Invalidate outputs that consumed assertions extracted from an older
@@ -127,7 +125,7 @@ func (s *Store) ingestTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in 
 				return err
 			}
 			for _, claimID := range claims {
-				if err := invalidateTx(ctx, tx, scope, claimID); err != nil {
+				if err := InvalidateTx(ctx, tx, scope, claimID); err != nil {
 					return err
 				}
 			}
@@ -141,7 +139,7 @@ func (s *Store) ingestTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in 
 	return result, err
 }
 
-func (s *Store) GetSource(ctx context.Context, scope memory.Scope, id memory.ID, version int) (memory.SourceResult, error) {
+func (s *Sources) GetSource(ctx context.Context, scope memory.Scope, id memory.ID, version int) (memory.SourceResult, error) {
 	result := memory.SourceResult{Processing: make([]memory.Processing, 0), Derived: []memory.Ref{}}
 	if !scope.Valid() {
 		return result, memory.ErrForbidden

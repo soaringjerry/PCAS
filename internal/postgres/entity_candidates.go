@@ -351,7 +351,7 @@ func (s *Store) ScheduleEntityCandidates(ctx context.Context, now time.Time) (in
 			return err
 		})
 		if err != nil {
-			if s.scheduleYielded(ctx, owner, EntityCandidatesStage, err) {
+			if s.ScheduleYielded(ctx, owner, EntityCandidatesStage, err) {
 				continue
 			}
 			return count, err

@@ -13,6 +13,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/modelcall"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/postgres/memoryread"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -95,6 +96,7 @@ func TestDeputyGenerationRecoversWritesWithoutRepeatingPaidWork(t *testing.T) {
 			if mode != "selection_write" {
 				// A new process has no pending responses, model registry, or reviewer.
 				worker = &Store{DB: &kernel.DB{Pool: s.Pool}}
+				worker.Reader = &memoryread.Reader{DB: worker.DB}
 				worker.SetModels(nil)
 			}
 			if err := worker.RunDeputyOnce(ctx); err != nil {

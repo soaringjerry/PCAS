@@ -2,10 +2,12 @@ package postgres
 
 import (
 	"context"
-	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
 	"net/url"
 	"testing"
 	"unicode"
+
+	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
+	"github.com/soaringjerry/PCAS/internal/postgres/memoryread"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/workspace"
@@ -26,7 +28,7 @@ func TestMemoryListFiltersQualifiedCaptureSQLMatchesGo(t *testing.T) {
 			texts = append(texts, "if"+string(rune(r.Lo))+"cedar", "if"+string(rune(r.Hi))+"cedar")
 		}
 	}
-	rows, err := s.Pool.Query(context.Background(), "SELECT input,"+qualifiedCaptureSQL("input")+" FROM unnest($1::text[]) input", texts)
+	rows, err := s.Pool.Query(context.Background(), "SELECT input,"+memoryread.QualifiedCaptureSQL("input")+" FROM unnest($1::text[]) input", texts)
 	if err != nil {
 		t.Fatal(err)
 	}

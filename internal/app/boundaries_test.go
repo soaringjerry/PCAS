@@ -45,7 +45,7 @@ func TestDomainPackagesDoNotDependOnThePostgreSQLAdapter(t *testing.T) {
 // model call: the domain package that owns a flow builds the request and
 // calls the gateway, and internal/app builds the gateway. Add each storage
 // package here when the PostgreSQL adapter is split.
-var storagePackages = []string{"../postgres", "../postgres/kernel"}
+var storagePackages = []string{"../postgres", "../postgres/kernel", "../postgres/memoryread"}
 
 // gatewayCalls are the methods of the gateway that submit a model call.
 var gatewayCalls = map[string]bool{"Call": true, "CallEmbedding": true, "CallVision": true, "CallTranscription": true}

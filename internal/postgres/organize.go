@@ -15,6 +15,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/postgres/memoryread"
 	"github.com/soaringjerry/PCAS/internal/worker"
 )
 
@@ -472,7 +473,7 @@ func findOrganizeGroupTx(ctx context.Context, tx pgx.Tx, owner memory.ID, kind, 
 	if err != nil {
 		return "", err
 	}
-	return resolveMergedEntityTx(ctx, tx, owner, id)
+	return memoryread.ResolveMergedEntityTx(ctx, tx, owner, id)
 }
 
 // declarations are the declared groups that a current statement uses.

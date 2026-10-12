@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/postgres/memoryread"
 	"github.com/soaringjerry/PCAS/internal/retrieval"
 	"github.com/soaringjerry/PCAS/internal/workspace/itemcommand"
 
@@ -163,12 +164,12 @@ func (s *Store) snapshotTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) (
         WHERE n.owner_id=$1 AND (n.dismissed_at IS NOT NULL OR `+currentNoticeTriggerSQL+`) AND NOT (n.delivered @> '{"_suppressionOnly":true}'::jsonb) ORDER BY (n.dismissed_at IS NOT NULL),n.created_at DESC,n.id LIMIT 100`, string(scope.OwnerID)); err != nil {
 		return out, err
 	}
-	if out.Memories, err = s.readMemoriesTx(ctx, tx, scope, false, memoryReadOptions{limit: 200}); err != nil {
+	if out.Memories, err = s.ReadMemoriesTx(ctx, tx, scope, false, memoryread.MemoryReadOptions{Limit: 200}); err != nil {
 		return out, err
 	}
-	where, args := memoryWhere(scope, false, memoryReadOptions{})
+	where, args := memoryread.MemoryWhere(scope, false, memoryread.MemoryReadOptions{})
 	out.Organize.Version = OrganizeVersion
-	if err := tx.QueryRow(ctx, `SELECT count(*) FILTER (WHERE coalesce((to_jsonb(cl)->>'organized')::int,0) >= `+organizeRequiredSQL("coalesce(to_jsonb(c)->>'category','')", "$5")+`),count(*)`+memoryJoins+` JOIN claims cl ON(cl.owner_id,cl.id)=(r.owner_id,r.id)`+where,
+	if err := tx.QueryRow(ctx, `SELECT count(*) FILTER (WHERE coalesce((to_jsonb(cl)->>'organized')::int,0) >= `+organizeRequiredSQL("coalesce(to_jsonb(c)->>'category','')", "$5")+`),count(*)`+memoryread.MemoryJoins+` JOIN claims cl ON(cl.owner_id,cl.id)=(r.owner_id,r.id)`+where,
 		append(args, OrganizeVersion)...).Scan(&out.Organize.Done, &out.Organize.Total); err != nil {
 		return out, err
 	}

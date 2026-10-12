@@ -1,10 +1,11 @@
-package postgres
+package memoryread
 
 import (
 	"context"
 	"fmt"
-	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
 	"strings"
+
+	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
@@ -13,10 +14,10 @@ import (
 
 // These expressions are also valid in pre-037 migration fixtures. No database
 // functions or changes to the frozen migration are required.
-func currentMemorySQL(owner, id string) string {
+func CurrentMemorySQL(owner, id string) string {
 	return fmt.Sprintf(`EXISTS(SELECT 1 FROM claims status WHERE status.owner_id=%s AND status.id=%s AND coalesce(to_jsonb(status)->>'retired','') NOT IN ('superseded','duplicate'))`, owner, id)
 }
-func humanMemorySQL(claim string) string {
+func HumanMemorySQL(claim string) string {
 	return fmt.Sprintf(`(%[1]s.acquisition<>'inferred' AND NOT EXISTS(
  SELECT 1 FROM evidence trust_e JOIN sources trust_s ON (trust_s.owner_id,trust_s.id)=(trust_e.owner_id,trust_e.source_id)
  LEFT JOIN source_contexts trust_context ON (trust_context.owner_id,trust_context.source_id,trust_context.source_version)=(trust_e.owner_id,trust_e.source_id,trust_e.source_version)
@@ -32,7 +33,7 @@ type claimStatus struct {
 	KeeperCurrent  bool
 }
 
-func claimStatusesTx(ctx context.Context, tx pgx.Tx, owner memory.ID, ids []string) (map[string]claimStatus, error) {
+func ClaimStatusesTx(ctx context.Context, tx pgx.Tx, owner memory.ID, ids []string) (map[string]claimStatus, error) {
 	out := map[string]claimStatus{}
 	if len(ids) == 0 {
 		return out, nil
@@ -44,7 +45,7 @@ func claimStatusesTx(ctx context.Context, tx pgx.Tx, owner memory.ID, ids []stri
  GROUP BY (to_jsonb(merged)->>'retired_by')::uuid)
  SELECT cl.id::text,coalesce(to_jsonb(cl)->>'retired',''),coalesce(to_jsonb(cl)->>'retired_by',''),
  coalesce(merged_counts.n,0),
- NOT ` + humanMemorySQL("c") + `,
+ NOT ` + HumanMemorySQL("c") + `,
  (SELECT count(DISTINCT coalesce(nullif(sc.conversation_key,''),t.conversation_id::text,e.source_id::text))
  FROM evidence e LEFT JOIN source_contexts sc ON(sc.owner_id,sc.source_id,sc.source_version)=(e.owner_id,e.source_id,e.source_version)
  JOIN sources src ON(src.owner_id,src.id)=(e.owner_id,e.source_id)
@@ -106,12 +107,12 @@ func memoryTrust(text, acquisition string, status claimStatus) string {
 	return "stated"
 }
 
-func fillMemoryStatusesTx(ctx context.Context, tx pgx.Tx, owner memory.ID, memories []workspace.Memory) error {
+func FillMemoryStatusesTx(ctx context.Context, tx pgx.Tx, owner memory.ID, memories []workspace.Memory) error {
 	ids := make([]string, len(memories))
 	for i, m := range memories {
 		ids[i] = m.ID
 	}
-	statuses, err := claimStatusesTx(ctx, tx, owner, ids)
+	statuses, err := ClaimStatusesTx(ctx, tx, owner, ids)
 	if err != nil {
 		return err
 	}
@@ -126,18 +127,18 @@ func fillMemoryStatusesTx(ctx context.Context, tx pgx.Tx, owner memory.ID, memor
 	return nil
 }
 
-type retirementAccessKey struct{}
+type RetirementAccessKey struct{}
 
 // Existing answers may retain their original permissions and citations after
 // a duplicate merges. Supersession changes validity, not access to old text.
-func retirementDependencyAllowed(ctx context.Context, status claimStatus) bool {
-	if access, _ := ctx.Value(retirementAccessKey{}).(bool); access {
+func RetirementDependencyAllowed(ctx context.Context, status claimStatus) bool {
+	if access, _ := ctx.Value(RetirementAccessKey{}).(bool); access {
 		return true
 	}
 	return status.Retired == "" || status.Retired == "duplicate" && status.KeeperCurrent
 }
 
-func dependencyMemorySQL(owner, id string) string {
+func DependencyMemorySQL(owner, id string) string {
 	return fmt.Sprintf(`EXISTS(SELECT 1 FROM claims status WHERE status.owner_id=%[1]s AND status.id=%[2]s
  AND (coalesce(to_jsonb(status)->>'retired','')='' OR to_jsonb(status)->>'retired'='duplicate' AND EXISTS(
  SELECT 1 FROM claims keeper JOIN memory_records kr ON(kr.owner_id,kr.id)=(keeper.owner_id,keeper.id)
@@ -145,13 +146,13 @@ func dependencyMemorySQL(owner, id string) string {
  AND coalesce(to_jsonb(keeper)->>'retired','')='' AND EXISTS(SELECT 1 FROM applicable_claim_versions(status.owner_id,now(),now()) kv WHERE kv.claim_id=keeper.id AND kv.version=kr.version))))`, owner, id)
 }
 
-func entityMergeSchemaTx(ctx context.Context, tx pgx.Tx) (bool, error) {
+func EntityMergeSchemaTx(ctx context.Context, tx pgx.Tx) (bool, error) {
 	var exists bool
 	err := tx.QueryRow(ctx, "SELECT to_regclass('entity_merges') IS NOT NULL").Scan(&exists)
 	return exists, err
 }
-func resolveMergedEntityTx(ctx context.Context, tx pgx.Tx, owner memory.ID, id memory.ID) (memory.ID, error) {
-	available, err := entityMergeSchemaTx(ctx, tx)
+func ResolveMergedEntityTx(ctx context.Context, tx pgx.Tx, owner memory.ID, id memory.ID) (memory.ID, error) {
+	available, err := EntityMergeSchemaTx(ctx, tx)
 	if err != nil || !available {
 		return id, err
 	}
@@ -173,7 +174,7 @@ func resolveMergedEntityTx(ctx context.Context, tx pgx.Tx, owner memory.ID, id m
 	}
 }
 
-func resetComparisonTx(ctx context.Context, tx pgx.Tx, owner memory.ID, id string) error {
+func ResetComparisonTx(ctx context.Context, tx pgx.Tx, owner memory.ID, id string) error {
 	var supported bool
 	if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM pg_attribute WHERE attrelid='claims'::regclass AND attname='compared' AND NOT attisdropped)").Scan(&supported); err != nil {
 		return err

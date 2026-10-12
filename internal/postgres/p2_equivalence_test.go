@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/postgres/memoryread"
 	"github.com/soaringjerry/PCAS/internal/retrieval"
 
 	"github.com/jackc/pgx/v5"
@@ -75,12 +76,12 @@ func p2AssertReads(t *testing.T, s *Store, scope memory.Scope) {
 		}
 		for _, readerScope := range []memory.Scope{scope, {OwnerID: scope.OwnerID, PrincipalID: "model"}, {OwnerID: scope.OwnerID, PrincipalID: "ungranted"}} {
 			for _, current := range []bool{false, true} {
-				for _, opts := range []memoryReadOptions{{}, {limit: 17}, {id: p2ID("claim", 5)}, {query: workspace.MemoryQuery{Q: "季度", Nature: "fact", Category: "unknown"}}, {query: workspace.MemoryQuery{Agent: "model", Epistemic: "sourced"}}} {
+				for _, opts := range []memoryread.MemoryReadOptions{{}, {Limit: 17}, {ID: p2ID("claim", 5)}, {Query: workspace.MemoryQuery{Q: "季度", Nature: "fact", Category: "unknown"}}, {Query: workspace.MemoryQuery{Agent: "model", Epistemic: "sourced"}}} {
 					old, err := s.p2LegacyReadMemoriesTx(ctx, tx, readerScope, current, opts)
 					if err != nil {
 						return err
 					}
-					got, err := s.readMemoriesTx(ctx, tx, readerScope, current, opts)
+					got, err := s.ReadMemoriesTx(ctx, tx, readerScope, current, opts)
 					if err != nil {
 						return err
 					}
@@ -237,7 +238,7 @@ func TestP2IndexDoesNotChangeBytes(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		effective, err := s.p2LegacyReadMemoriesTx(ctx, tx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: "model"}, true, memoryReadOptions{})
+		effective, err := s.p2LegacyReadMemoriesTx(ctx, tx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: "model"}, true, memoryread.MemoryReadOptions{})
 		if err != nil {
 			return err
 		}
@@ -252,7 +253,7 @@ func TestP2IndexDoesNotChangeBytes(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		current, err := s.p2LegacyReadMemoriesTx(ctx, tx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: "model"}, true, memoryReadOptions{})
+		current, err := s.p2LegacyReadMemoriesTx(ctx, tx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: "model"}, true, memoryread.MemoryReadOptions{})
 		if err != nil {
 			return err
 		}
@@ -337,7 +338,7 @@ func TestP2RandomVisibilityAndSourceSequence(t *testing.T) {
 		err := pgx.BeginTxFunc(ctx, s.Pool, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
 			for _, current := range []bool{false, true} {
 				for _, sc := range []memory.Scope{scope, {OwnerID: scope.OwnerID, PrincipalID: "model"}} {
-					old, err := s.p2LegacyReadMemoriesTx(ctx, tx, sc, current, memoryReadOptions{})
+					old, err := s.p2LegacyReadMemoriesTx(ctx, tx, sc, current, memoryread.MemoryReadOptions{})
 					if err != nil {
 						return err
 					}
@@ -347,7 +348,7 @@ func TestP2RandomVisibilityAndSourceSequence(t *testing.T) {
 							wanted = append(wanted, m)
 						}
 					}
-					got, err := s.readMemoriesTx(ctx, tx, sc, current, memoryReadOptions{ids: []string{claim}})
+					got, err := s.ReadMemoriesTx(ctx, tx, sc, current, memoryread.MemoryReadOptions{Ids: []string{claim}})
 					if err != nil {
 						return err
 					}
@@ -419,12 +420,12 @@ func TestP2LargeResultsAreByteIdentical(t *testing.T) {
 			return err
 		}
 		p2Bytes(t, "10,000-claim full snapshot", a, b)
-		old, err := s.p2LegacyReadMemoriesTx(ctx, tx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: "model"}, true, memoryReadOptions{})
+		old, err := s.p2LegacyReadMemoriesTx(ctx, tx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: "model"}, true, memoryread.MemoryReadOptions{})
 		if err != nil {
 			return err
 		}
 		ids := []string{p2ID("claim", 5), p2ID("claim", 97), p2ID("claim", 9991)}
-		selected, err := s.readMemoriesTx(ctx, tx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: "model"}, true, memoryReadOptions{ids: ids})
+		selected, err := s.ReadMemoriesTx(ctx, tx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: "model"}, true, memoryread.MemoryReadOptions{Ids: ids})
 		if err != nil {
 			return err
 		}

@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/postgres/memoryread"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -119,7 +120,7 @@ func (s *Store) StatusCardsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope
 	if err != nil {
 		return out, err
 	}
-	memories, err := s.readMemoriesTx(ctx, tx, scope, false, memoryReadOptions{ids: ids})
+	memories, err := s.ReadMemoriesTx(ctx, tx, scope, false, memoryread.MemoryReadOptions{Ids: ids})
 	if err != nil {
 		return out, err
 	}

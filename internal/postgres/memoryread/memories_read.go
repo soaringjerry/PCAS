@@ -1,4 +1,4 @@
-package postgres
+package memoryread
 
 import (
 	"context"
@@ -18,30 +18,30 @@ import (
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
-type memoryReadOptions struct {
+type MemoryReadOptions struct {
 	useEntity     string
-	useCurrent    bool
+	UseCurrent    bool
 	groupAsEntity bool // a topic may have merged into a place/organization
-	legacy        bool
-	query         workspace.MemoryQuery
-	id            string
-	ids           []string // nil means unrestricted; an empty slice matches nothing
-	limit         int
-	snapshot      time.Time
-	before        *memoryCursor
+	Legacy        bool
+	Query         workspace.MemoryQuery
+	ID            string
+	Ids           []string // nil means unrestricted; an empty slice matches nothing
+	Limit         int
+	Snapshot      time.Time
+	Before        *MemoryCursor
 }
-type memoryCursor struct {
+type MemoryCursor struct {
 	At       time.Time `json:"at"`
 	ID       string    `json:"id"`
 	Snapshot time.Time `json:"snapshot"`
 }
 
-const memoryJoins = ` FROM memory_records r JOIN claim_revisions c ON (c.owner_id,c.claim_id)=(r.owner_id,r.id)
+const MemoryJoins = ` FROM memory_records r JOIN claim_revisions c ON (c.owner_id,c.claim_id)=(r.owner_id,r.id)
  AND c.version=CASE WHEN $4 THEN (SELECT v.version FROM applicable_claim_versions($1,now(),now()) v WHERE v.claim_id=r.id) ELSE r.version END
  JOIN record_versions rv ON (rv.owner_id,rv.record_id,rv.version)=(c.owner_id,c.claim_id,c.version)
  LEFT JOIN activity a ON (a.owner_id,a.record_id)=(r.owner_id,r.id)`
 
-func memoryWhere(scope memory.Scope, currentOnly bool, opts memoryReadOptions) (string, []any) {
+func MemoryWhere(scope memory.Scope, currentOnly bool, opts MemoryReadOptions) (string, []any) {
 	args := []any{string(scope.OwnerID), scope.IsOwner, scope.PrincipalID, currentOnly}
 	clauses := []string{`r.owner_id=$1 AND r.state='active' AND claim_source_is_current($1,c.claim_id,c.version,now())
  AND ($2 OR EXISTS(SELECT 1 FROM record_grants g WHERE g.owner_id=r.owner_id AND g.record_id=r.id AND g.principal_id=$3))`}
@@ -49,21 +49,21 @@ func memoryWhere(scope memory.Scope, currentOnly bool, opts memoryReadOptions) (
 		args = append(args, value)
 		clauses = append(clauses, fmt.Sprintf(expr, len(args)))
 	}
-	if opts.id != "" {
-		add("r.id=$%d::uuid", opts.id)
+	if opts.ID != "" {
+		add("r.id=$%d::uuid", opts.ID)
 	}
-	if opts.ids != nil {
-		add("r.id=ANY($%d::uuid[])", opts.ids)
+	if opts.Ids != nil {
+		add("r.id=ANY($%d::uuid[])", opts.Ids)
 	}
-	if opts.id == "" {
-		current := currentMemorySQL("r.owner_id", "r.id")
-		if opts.query.Retired {
+	if opts.ID == "" {
+		current := CurrentMemorySQL("r.owner_id", "r.id")
+		if opts.Query.Retired {
 			clauses = append(clauses, "NOT "+current)
 		} else {
 			clauses = append(clauses, current)
 		}
 	}
-	if opts.useCurrent {
+	if opts.UseCurrent {
 		clauses = append(clauses, "EXISTS(SELECT 1 FROM claims use_claim WHERE use_claim.owner_id=r.owner_id AND use_claim.id=r.id AND coalesce(to_jsonb(use_claim)->>'retired','')='')")
 	}
 	if opts.useEntity != "" {
@@ -71,7 +71,7 @@ func memoryWhere(scope memory.Scope, currentOnly bool, opts memoryReadOptions) (
 		slot := len(args)
 		clauses = append(clauses, fmt.Sprintf("(c.subject_id=$%d::uuid OR EXISTS(SELECT 1 FROM claim_mentions cm WHERE (cm.owner_id,cm.claim_id,cm.claim_version)=(c.owner_id,c.claim_id,c.version) AND cm.entity_id=$%d::uuid))", slot, slot))
 	}
-	q := opts.query
+	q := opts.Query
 	if q.RetiredBy != "" {
 		add("EXISTS(SELECT 1 FROM claims retired WHERE retired.owner_id=r.owner_id AND retired.id=r.id AND retired.retired_by=$%d::uuid)", q.RetiredBy)
 	}
@@ -111,11 +111,11 @@ func memoryWhere(scope memory.Scope, currentOnly bool, opts memoryReadOptions) (
 	if q.To != "" {
 		add("rv.expressed_at<$%d::timestamptz", q.To)
 	}
-	if !opts.snapshot.IsZero() {
-		add("r.created_at<=$%d", opts.snapshot)
+	if !opts.Snapshot.IsZero() {
+		add("r.created_at<=$%d", opts.Snapshot)
 	}
-	if opts.before != nil {
-		args = append(args, opts.before.At, opts.before.ID)
+	if opts.Before != nil {
+		args = append(args, opts.Before.At, opts.Before.ID)
 		// The established tie order is ascending id within descending update time.
 		clauses = append(clauses, fmt.Sprintf("(r.updated_at<$%d OR (r.updated_at=$%d AND r.id>$%d::uuid))", len(args)-1, len(args)-1, len(args)))
 	}
@@ -124,34 +124,34 @@ func memoryWhere(scope memory.Scope, currentOnly bool, opts memoryReadOptions) (
 
 // JSON field access also works before 027 has added event columns. Both
 // workspace cards and model callers need the same event metadata.
-func memoryEventColumns() string {
+func MemoryEventColumns() string {
 	return "(to_jsonb(c)->>'event_from')::timestamptz,(to_jsonb(c)->>'event_to')::timestamptz,coalesce(to_jsonb(c)->>'event_precision','unknown')"
 }
 
-func (s *Store) memoriesTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, effective ...bool) ([]workspace.Memory, error) {
-	return s.readMemoriesTx(ctx, tx, scope, len(effective) > 0 && effective[0], memoryReadOptions{})
+func (s *Reader) MemoriesTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, effective ...bool) ([]workspace.Memory, error) {
+	return s.ReadMemoriesTx(ctx, tx, scope, len(effective) > 0 && effective[0], MemoryReadOptions{})
 }
 
-func (s *Store) readMemoriesTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, currentOnly bool, opts memoryReadOptions) ([]workspace.Memory, error) {
+func (s *Reader) ReadMemoriesTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, currentOnly bool, opts MemoryReadOptions) ([]workspace.Memory, error) {
 	result := []workspace.Memory{}
-	where, args := memoryWhere(scope, currentOnly, opts)
+	where, args := MemoryWhere(scope, currentOnly, opts)
 	mentionsAvailable := "to_regclass('claim_mentions') IS NOT NULL"
 	query := `SELECT r.id::text,c.version,c.nature,c.value #>> '{}',c.confirmation,c.acquisition,coalesce(c.scope->>'project_id',''),
  coalesce(a.last_effective_use_at,r.created_at),coalesce(a.stability,1),coalesce(a.half_life_seconds,2592000),coalesce(a.pinned,false),coalesce(a.reinforcement_limit,8),
- rv.expressed_at,` + memoryEventColumns() + "," + mentionsAvailable + `,
- coalesce(to_jsonb(c)->>'category','unknown'),(to_jsonb(c)->>'durable')::boolean,coalesce(c.scope->>'deadline_completed','false')='true' AND coalesce(c.scope->>'deadline_completed_version','')=c.version::text` + memoryJoins + where + ` ORDER BY r.updated_at DESC,r.id`
-	if currentOnly && opts.useCurrent && opts.ids != nil {
+ rv.expressed_at,` + MemoryEventColumns() + "," + mentionsAvailable + `,
+ coalesce(to_jsonb(c)->>'category','unknown'),(to_jsonb(c)->>'durable')::boolean,coalesce(c.scope->>'deadline_completed','false')='true' AND coalesce(c.scope->>'deadline_completed_version','')=c.version::text` + MemoryJoins + where + ` ORDER BY r.updated_at DESC,r.id`
+	if currentOnly && opts.UseCurrent && opts.Ids != nil {
 		// Ready cards and completion checks supply bounded identities. Resolve
 		// their applicable versions once, then hydrate only that scoped set.
-		args = append(args, opts.ids)
+		args = append(args, opts.Ids)
 		joins := ` FROM memory_records r JOIN applicable use_av ON use_av.claim_id=r.id
  JOIN claim_revisions c ON (c.owner_id,c.claim_id,c.version)=(r.owner_id,r.id,use_av.version)
  JOIN record_versions rv ON (rv.owner_id,rv.record_id,rv.version)=(c.owner_id,c.claim_id,c.version)
  LEFT JOIN activity a ON (a.owner_id,a.record_id)=(r.owner_id,r.id)`
-		query = fmt.Sprintf("WITH applicable AS MATERIALIZED (SELECT claim_id,version FROM applicable_claim_versions($1,now(),now()) WHERE $4::boolean AND claim_id=ANY($%d::uuid[])) ", len(args)) + strings.Replace(query, memoryJoins, joins, 1)
+		query = fmt.Sprintf("WITH applicable AS MATERIALIZED (SELECT claim_id,version FROM applicable_claim_versions($1,now(),now()) WHERE $4::boolean AND claim_id=ANY($%d::uuid[])) ", len(args)) + strings.Replace(query, MemoryJoins, joins, 1)
 	}
-	if opts.limit > 0 {
-		args = append(args, opts.limit)
+	if opts.Limit > 0 {
+		args = append(args, opts.Limit)
 		query += fmt.Sprintf(" LIMIT $%d", len(args))
 	}
 	rows, err := tx.Query(ctx, query, args...)
@@ -172,7 +172,7 @@ func (s *Store) readMemoriesTx(ctx context.Context, tx pgx.Tx, scope memory.Scop
 			rows.Close()
 			return nil, err
 		}
-		opts.legacy = !hasMentions
+		opts.Legacy = !hasMentions
 		m.Epistemic = "inferred"
 		if m.Confirmation == "confirmed" {
 			m.Epistemic = "confirmed"
@@ -284,10 +284,10 @@ func (s *Store) readMemoriesTx(ctx context.Context, tx pgx.Tx, scope memory.Scop
 			return nil, err
 		}
 	}
-	if err := fillMemoryStatusesTx(ctx, tx, scope.OwnerID, result); err != nil {
+	if err := FillMemoryStatusesTx(ctx, tx, scope.OwnerID, result); err != nil {
 		return nil, err
 	}
-	if opts.legacy {
+	if opts.Legacy {
 		return result, nil
 	}
 
@@ -368,7 +368,7 @@ func validateMemoryQuery(q *workspace.MemoryQuery) error {
 	return nil
 }
 
-func (s *Store) ListMemories(ctx context.Context, scope memory.Scope, q workspace.MemoryQuery) (workspace.MemoryPage, error) {
+func (s *Reader) ListMemories(ctx context.Context, scope memory.Scope, q workspace.MemoryQuery) (workspace.MemoryPage, error) {
 	out := workspace.MemoryPage{Items: []workspace.Memory{}}
 	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err
@@ -379,18 +379,18 @@ func (s *Store) ListMemories(ctx context.Context, scope memory.Scope, q workspac
 	if q.Retired {
 		return s.listRetiredMemories(ctx, scope, q)
 	}
-	opts := memoryReadOptions{query: q, limit: q.Limit + 1}
+	opts := MemoryReadOptions{Query: q, Limit: q.Limit + 1}
 	if q.Cursor != "" {
 		data, err := base64.RawURLEncoding.DecodeString(q.Cursor)
 		if err != nil || len(data) > 1024 {
 			return out, memory.ErrInvalid
 		}
-		var cursor memoryCursor
+		var cursor MemoryCursor
 		if modelcall.DecodeStrict(data, &cursor) != nil || !memory.ID(cursor.ID).Valid() || cursor.At.IsZero() || cursor.Snapshot.IsZero() {
 			return out, memory.ErrInvalid
 		}
-		opts.before = &cursor
-		opts.snapshot = cursor.Snapshot
+		opts.Before = &cursor
+		opts.Snapshot = cursor.Snapshot
 	}
 	err := pgx.BeginTxFunc(ctx, s.Pool, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
 		if err := resolveMemoryEntityFiltersTx(ctx, tx, scope.OwnerID, &opts); err != nil {
@@ -403,27 +403,27 @@ func (s *Store) ListMemories(ctx context.Context, scope memory.Scope, q workspac
 				return err
 			}
 		}
-		if opts.snapshot.IsZero() {
-			if err := tx.QueryRow(ctx, "SELECT clock_timestamp()").Scan(&opts.snapshot); err != nil {
+		if opts.Snapshot.IsZero() {
+			if err := tx.QueryRow(ctx, "SELECT clock_timestamp()").Scan(&opts.Snapshot); err != nil {
 				return err
 			}
 		}
 		if q.Trust != "" {
 			var err error
-			out.Total, opts.ids, err = trustedMemoryIDsTx(ctx, tx, scope, opts)
+			out.Total, opts.Ids, err = trustedMemoryIDsTx(ctx, tx, scope, opts)
 			if err != nil {
 				return err
 			}
-			opts.query.Trust = ""
+			opts.Query.Trust = ""
 		} else {
 			countOpts := opts
-			countOpts.before = nil
-			where, args := memoryWhere(scope, false, countOpts)
-			if err := tx.QueryRow(ctx, "SELECT count(*)"+memoryJoins+where, args...).Scan(&out.Total); err != nil {
+			countOpts.Before = nil
+			where, args := MemoryWhere(scope, false, countOpts)
+			if err := tx.QueryRow(ctx, "SELECT count(*)"+MemoryJoins+where, args...).Scan(&out.Total); err != nil {
 				return err
 			}
 		}
-		items, err := s.readMemoriesTx(ctx, tx, scope, false, opts)
+		items, err := s.ReadMemoriesTx(ctx, tx, scope, false, opts)
 		if err != nil {
 			return err
 		}
@@ -434,7 +434,7 @@ func (s *Store) ListMemories(ctx context.Context, scope memory.Scope, q workspac
 			if err := tx.QueryRow(ctx, "SELECT updated_at FROM memory_records WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), last.ID).Scan(&at); err != nil {
 				return err
 			}
-			data, err := json.Marshal(memoryCursor{At: at, ID: last.ID, Snapshot: opts.snapshot})
+			data, err := json.Marshal(MemoryCursor{At: at, ID: last.ID, Snapshot: opts.Snapshot})
 			if err != nil {
 				return err
 			}
@@ -446,7 +446,7 @@ func (s *Store) ListMemories(ctx context.Context, scope memory.Scope, q workspac
 	return out, err
 }
 
-func (s *Store) GetMemory(ctx context.Context, scope memory.Scope, id string) (workspace.Memory, error) {
+func (s *Reader) GetMemory(ctx context.Context, scope memory.Scope, id string) (workspace.Memory, error) {
 	var out workspace.Memory
 	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err
@@ -455,7 +455,7 @@ func (s *Store) GetMemory(ctx context.Context, scope memory.Scope, id string) (w
 		return out, memory.ErrInvalid
 	}
 	err := pgx.BeginTxFunc(ctx, s.Pool, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
-		items, err := s.readMemoriesTx(ctx, tx, scope, false, memoryReadOptions{id: id})
+		items, err := s.ReadMemoriesTx(ctx, tx, scope, false, MemoryReadOptions{ID: id})
 		if err != nil {
 			return err
 		}
@@ -468,7 +468,7 @@ func (s *Store) GetMemory(ctx context.Context, scope memory.Scope, id string) (w
 	return out, err
 }
 
-func (s *Store) MemoryFacets(ctx context.Context, scope memory.Scope) (workspace.MemoryFacets, error) {
+func (s *Reader) MemoryFacets(ctx context.Context, scope memory.Scope) (workspace.MemoryFacets, error) {
 	out := workspace.MemoryFacets{People: []workspace.MemoryFacet{}, Places: []workspace.MemoryFacet{}, Groups: []workspace.MemoryGroupFacet{}}
 	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err
@@ -479,13 +479,13 @@ func (s *Store) MemoryFacets(ctx context.Context, scope memory.Scope) (workspace
  JOIN memory_records er ON(er.owner_id,er.id)=(cm.owner_id,cm.entity_id) AND er.state='active'
  JOIN entity_versions ev ON(ev.owner_id,ev.entity_id,ev.version)=(er.owner_id,er.id,er.version)
  WHERE cm.owner_id=$1 AND cm.role IN('person','place','project','topic','area') AND claim_source_is_current($1,cm.claim_id,cm.claim_version,now())
- AND `+currentMemorySQL("cm.owner_id", "cm.claim_id")+`
+ AND `+CurrentMemorySQL("cm.owner_id", "cm.claim_id")+`
  GROUP BY cm.entity_id,cm.role,ev.entity_type,ev.name), expanded AS(
  SELECT entity_id,role,name,CASE WHEN role='topic' AND entity_type IN('place','organization') THEN (
  SELECT count(*) FROM memory_records member JOIN claim_revisions revision
  ON(revision.owner_id,revision.claim_id,revision.version)=(member.owner_id,member.id,member.version)
  WHERE member.owner_id=$1 AND member.state='active' AND member.kind='claim'
- AND claim_source_is_current($1,member.id,member.version,now()) AND `+currentMemorySQL("member.owner_id", "member.id")+`
+ AND claim_source_is_current($1,member.id,member.version,now()) AND `+CurrentMemorySQL("member.owner_id", "member.id")+`
  AND (revision.subject_id=counts.entity_id OR EXISTS(SELECT 1 FROM claim_mentions mention
  WHERE (mention.owner_id,mention.claim_id,mention.claim_version)=(member.owner_id,member.id,member.version) AND mention.entity_id=counts.entity_id)))
  ELSE n END AS n FROM counts), ranked AS(

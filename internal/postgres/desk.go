@@ -41,7 +41,7 @@ func tail(s string, n int) string {
 // deskContextTx keeps the legacy answer and secretary on the same visibility
 // and derived-artifact rules. Stable ordering is used by the secretary cache.
 func (s *Store) deskContextTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, agent workspace.Agent, stable bool) ([]workspace.Memory, []workspace.Item, workspace.Settings, []memory.Ref, error) {
-	memories, err := s.memoriesTx(ctx, tx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: agent.ID}, true)
+	memories, err := s.MemoriesTx(ctx, tx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: agent.ID}, true)
 	if err != nil {
 		return nil, nil, workspace.Settings{}, nil, err
 	}

@@ -13,6 +13,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/contextbuilder"
 	"github.com/soaringjerry/PCAS/internal/contextbuilder/reader"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/postgres/memoryread"
 	"github.com/soaringjerry/PCAS/internal/retrieval"
 	"github.com/soaringjerry/PCAS/internal/workspace/deputy"
 	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
@@ -63,7 +64,7 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 		if err != nil {
 			return err
 		}
-		memories, err := s.readMemoriesTx(ctx, tx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: agent.ID}, true, memoryReadOptions{useCurrent: true})
+		memories, err := s.ReadMemoriesTx(ctx, tx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: agent.ID}, true, memoryread.MemoryReadOptions{UseCurrent: true})
 		if err != nil {
 			return err
 		}
@@ -490,7 +491,7 @@ func verifyRunForItemTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run 
 			claimIDs = append(claimIDs, string(ref.ID))
 		}
 	}
-	statuses, err := claimStatusesTx(ctx, tx, scope.OwnerID, claimIDs)
+	statuses, err := memoryread.ClaimStatusesTx(ctx, tx, scope.OwnerID, claimIDs)
 	if err != nil {
 		return err
 	}
@@ -542,7 +543,7 @@ func verifyRunForItemTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run 
 			}
 			continue
 		}
-		if !retirementDependencyAllowed(ctx, statuses[string(ref.ID)]) {
+		if !memoryread.RetirementDependencyAllowed(ctx, statuses[string(ref.ID)]) {
 			return memory.ErrConflict
 		}
 		claim, ok := claims[string(ref.ID)]
@@ -566,7 +567,7 @@ func verifyRunForItemTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run 
 // against its current version before deciding whether old content is safe to
 // retain; a removed grant or deleted dependency must dominate any correction.
 func verifyRunAccessTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run workspace.Run) error {
-	ctx = context.WithValue(ctx, retirementAccessKey{}, true)
+	ctx = context.WithValue(ctx, memoryread.RetirementAccessKey{}, true)
 	run.ContextVersions = append([]memory.Ref(nil), run.ContextVersions...)
 	ids := make([]string, len(run.ContextVersions))
 	for i, ref := range run.ContextVersions {

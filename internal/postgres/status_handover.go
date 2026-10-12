@@ -8,6 +8,7 @@ import (
 
 	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/postgres/memoryread"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/currentstate/handover"
@@ -150,7 +151,7 @@ func (s *Store) handoverInputTx(ctx context.Context, tx pgx.Tx, scope memory.Sco
 	if err != nil {
 		return out, nil, refs, err
 	}
-	memories, err := s.readMemoriesTx(ctx, tx, scope, false, memoryReadOptions{ids: ids})
+	memories, err := s.ReadMemoriesTx(ctx, tx, scope, false, memoryread.MemoryReadOptions{Ids: ids})
 	if err != nil {
 		return out, nil, refs, err
 	}

@@ -11,6 +11,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/modelcall"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/postgres/memoryread"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -117,7 +118,7 @@ func validLibraryKey(key string) bool {
 }
 
 type groupMemoryCursor struct {
-	memoryCursor
+	memoryread.MemoryCursor
 	Key string `json:"key"`
 }
 
@@ -165,11 +166,11 @@ func (s *Store) ListGroupMemories(ctx context.Context, scope memory.Scope, key s
 			return err
 		}
 		out.Total = len(ids)
-		opts := memoryReadOptions{ids: ids, snapshot: cursor.Snapshot, limit: q.Limit + 1}
+		opts := memoryread.MemoryReadOptions{Ids: ids, Snapshot: cursor.Snapshot, Limit: q.Limit + 1}
 		if q.Cursor != "" {
-			opts.before = &cursor.memoryCursor
+			opts.Before = &cursor.MemoryCursor
 		}
-		items, err := s.readMemoriesTx(ctx, tx, scope, false, opts)
+		items, err := s.ReadMemoriesTx(ctx, tx, scope, false, opts)
 		if err != nil {
 			return err
 		}

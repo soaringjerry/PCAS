@@ -21,6 +21,7 @@ import (
 
 	"github.com/soaringjerry/PCAS/internal/contextbuilder"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/postgres/memoryread"
 	"github.com/soaringjerry/PCAS/internal/retrieval"
 	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 
@@ -37,7 +38,7 @@ const p2LegacyMemoryJoins = ` FROM memory_records r JOIN claim_revisions c ON (c
 // The legacy copy of the prompt keeps its own pattern for identifiers.
 var deskUUID = regexp.MustCompile(`(?i)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}`)
 
-func p2LegacyMemoryWhere(scope memory.Scope, currentOnly bool, opts memoryReadOptions) (string, []any) {
+func p2LegacyMemoryWhere(scope memory.Scope, currentOnly bool, opts memoryread.MemoryReadOptions) (string, []any) {
 	args := []any{string(scope.OwnerID), scope.IsOwner, scope.PrincipalID, currentOnly}
 	clauses := []string{`r.owner_id=$1 AND r.state='active' AND claim_source_is_current($1,c.claim_id,c.version,now())
  AND ($2 OR EXISTS(SELECT 1 FROM record_grants g WHERE g.owner_id=r.owner_id AND g.record_id=r.id AND g.principal_id=$3))`}
@@ -45,10 +46,10 @@ func p2LegacyMemoryWhere(scope memory.Scope, currentOnly bool, opts memoryReadOp
 		args = append(args, value)
 		clauses = append(clauses, fmt.Sprintf(expr, len(args)))
 	}
-	if opts.id != "" {
-		add("r.id=$%d::uuid", opts.id)
+	if opts.ID != "" {
+		add("r.id=$%d::uuid", opts.ID)
 	}
-	q := opts.query
+	q := opts.Query
 	if q.Q != "" {
 		add("strpos(lower(c.value #>> '{}'),lower($%d))>0", q.Q)
 	}
@@ -79,11 +80,11 @@ func p2LegacyMemoryWhere(scope memory.Scope, currentOnly bool, opts memoryReadOp
 	if q.To != "" {
 		add("rv.expressed_at<$%d::timestamptz", q.To)
 	}
-	if !opts.snapshot.IsZero() {
-		add("r.created_at<=$%d", opts.snapshot)
+	if !opts.Snapshot.IsZero() {
+		add("r.created_at<=$%d", opts.Snapshot)
 	}
-	if opts.before != nil {
-		args = append(args, opts.before.At, opts.before.ID)
+	if opts.Before != nil {
+		args = append(args, opts.Before.At, opts.Before.ID)
 		// The established tie order is ascending id within descending update time.
 		clauses = append(clauses, fmt.Sprintf("(r.updated_at<$%d OR (r.updated_at=$%d AND r.id>$%d::uuid))", len(args)-1, len(args)-1, len(args)))
 	}
@@ -93,16 +94,16 @@ func p2LegacyMemoryWhere(scope memory.Scope, currentOnly bool, opts memoryReadOp
 // JSON field access also works before 027 has added event columns. Both
 // workspace cards and model callers need the same event metadata.
 
-func (s *Store) p2LegacyReadMemoriesTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, currentOnly bool, opts memoryReadOptions) ([]workspace.Memory, error) {
+func (s *Store) p2LegacyReadMemoriesTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, currentOnly bool, opts memoryread.MemoryReadOptions) ([]workspace.Memory, error) {
 	result := []workspace.Memory{}
 	where, args := p2LegacyMemoryWhere(scope, currentOnly, opts)
 	mentionsAvailable := "to_regclass('claim_mentions') IS NOT NULL"
 	query := `SELECT r.id::text,c.version,c.nature,c.value #>> '{}',c.confirmation,c.acquisition,coalesce(c.scope->>'project_id',''),
  coalesce(a.last_effective_use_at,r.created_at),coalesce(a.stability,1),coalesce(a.half_life_seconds,2592000),coalesce(a.pinned,false),coalesce(a.reinforcement_limit,8),
- rv.expressed_at,` + memoryEventColumns() + "," + mentionsAvailable + `,
+ rv.expressed_at,` + memoryread.MemoryEventColumns() + "," + mentionsAvailable + `,
  coalesce(to_jsonb(c)->>'category','unknown'),(to_jsonb(c)->>'durable')::boolean` + p2LegacyMemoryJoins + where + ` ORDER BY r.updated_at DESC,r.id`
-	if opts.limit > 0 {
-		args = append(args, opts.limit)
+	if opts.Limit > 0 {
+		args = append(args, opts.Limit)
 		query += fmt.Sprintf(" LIMIT $%d", len(args))
 	}
 	rows, err := tx.Query(ctx, query, args...)
@@ -122,7 +123,7 @@ func (s *Store) p2LegacyReadMemoriesTx(ctx context.Context, tx pgx.Tx, scope mem
 			rows.Close()
 			return nil, err
 		}
-		opts.legacy = !hasMentions
+		opts.Legacy = !hasMentions
 		m.Epistemic = "inferred"
 		if m.Confirmation == "confirmed" {
 			m.Epistemic = "confirmed"
@@ -236,10 +237,10 @@ func (s *Store) p2LegacyReadMemoriesTx(ctx context.Context, tx pgx.Tx, scope mem
 	}
 	// Share only the new 2.5 presentation semantics. The legacy SQL, temporal
 	// resolver and permission paths above remain the independent P2 oracle.
-	if err := fillMemoryStatusesTx(ctx, tx, scope.OwnerID, result); err != nil {
+	if err := memoryread.FillMemoryStatusesTx(ctx, tx, scope.OwnerID, result); err != nil {
 		return nil, err
 	}
-	if opts.legacy {
+	if opts.Legacy {
 		return result, nil
 	}
 
@@ -644,10 +645,10 @@ func (s *Store) p2LegacySnapshotTx(ctx context.Context, tx pgx.Tx, scope memory.
         WHERE n.owner_id=$1 AND (n.dismissed_at IS NOT NULL OR `+currentNoticeTriggerSQL+`) AND NOT (n.delivered @> '{"_suppressionOnly":true}'::jsonb) ORDER BY (n.dismissed_at IS NOT NULL),n.created_at DESC,n.id LIMIT 100`, string(scope.OwnerID)); err != nil {
 		return out, err
 	}
-	if out.Memories, err = s.p2LegacyReadMemoriesTx(ctx, tx, scope, false, memoryReadOptions{limit: 200}); err != nil {
+	if out.Memories, err = s.p2LegacyReadMemoriesTx(ctx, tx, scope, false, memoryread.MemoryReadOptions{Limit: 200}); err != nil {
 		return out, err
 	}
-	where, args := p2LegacyMemoryWhere(scope, false, memoryReadOptions{})
+	where, args := p2LegacyMemoryWhere(scope, false, memoryread.MemoryReadOptions{})
 	if err := tx.QueryRow(ctx, "SELECT count(*)"+p2LegacyMemoryJoins+where, args...).Scan(&out.MemoryTotal); err != nil {
 		return out, err
 	}
@@ -784,7 +785,7 @@ func (s *Store) p2LegacySnapshotTx(ctx context.Context, tx pgx.Tx, scope memory.
 }
 
 func (s *Store) p2LegacyDeskContextTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, agent workspace.Agent, stable bool) ([]workspace.Memory, []workspace.Item, workspace.Settings, []memory.Ref, error) {
-	memories, err := s.p2LegacyReadMemoriesTx(ctx, tx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: agent.ID}, true, memoryReadOptions{})
+	memories, err := s.p2LegacyReadMemoriesTx(ctx, tx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: agent.ID}, true, memoryread.MemoryReadOptions{})
 	if err != nil {
 		return nil, nil, workspace.Settings{}, nil, err
 	}

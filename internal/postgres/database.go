@@ -16,6 +16,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/modelcall"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/postgres/memoryread"
 )
 
 //go:embed migrations/*.sql
@@ -25,6 +26,7 @@ var migrations embed.FS
 // storage packages share.
 type Store struct {
 	*kernel.DB
+	*memoryread.Reader
 	pendingPaid             sync.Map
 	pendingInteractive      sync.Map
 	pendingDeputySelections sync.Map
@@ -71,7 +73,8 @@ func Open(ctx context.Context, url string) (*Store, error) {
 		pool.Close()
 		return nil, fmt.Errorf("database unavailable")
 	}
-	return &Store{DB: &kernel.DB{Pool: pool}, secretarySlots: make(chan struct{}, config.MaxConns-1)}, nil
+	db := &kernel.DB{Pool: pool}
+	return &Store{DB: db, Reader: &memoryread.Reader{DB: db}, secretarySlots: make(chan struct{}, config.MaxConns-1)}, nil
 }
 
 func (s *Store) Close()                         { s.Pool.Close() }

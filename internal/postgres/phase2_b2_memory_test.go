@@ -784,7 +784,7 @@ func TestPhase2B2_M14_ModelFacingMemoryCarriesTimePeoplePlaces(t *testing.T) {
 	var memories []workspace.Memory
 	err := pgx.BeginFunc(context.Background(), s.Pool, func(tx pgx.Tx) error {
 		var err error
-		memories, err = s.memoriesTx(context.Background(), tx, deputy, true)
+		memories, err = s.MemoriesTx(context.Background(), tx, deputy, true)
 		return err
 	})
 	if err != nil {

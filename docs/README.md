@@ -28,6 +28,7 @@ Historical tasks, research, and evaluations are evidence. They do not assign new
 | [Foundation Query Embedding Gateway](tasks/foundation-query-embedding.md) | Revised recall embedding path: one call record, accounting, visible fallback, and no saved query or vector. |
 | [Foundation Background Embedding Gateway](tasks/foundation-background-embedding.md) | Revised background embedding path: one call record for each job, existing job budget rules, and known limits. |
 | [Foundation Domain Pilot](tasks/foundation-domain-pilot.md) | First business path outside the storage package, its structure, the pattern for later paths, and temporary parts. |
+| [Foundation Nightly Evaluation](tasks/foundation-nightly-evaluation.md) | Nightly real-model evaluation on the Codex channel: what runs, the spending limit with its basis, the output, the rehearsal, and the schedule. |
 | [Phase 3.9 Handoff and Review Record](tasks/foundation-sol-handoff.md) | Review findings with evidence, delivery state, remaining provider exceptions, private evidence, and the release rule. |
 | [Historical Records](history/README.md) | Retired designs and interpretation of past records. |
 

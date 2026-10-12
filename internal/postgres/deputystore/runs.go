@@ -2,7 +2,6 @@ package deputystore
 
 import (
 	"context"
-	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,7 +10,6 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/contextbuilder"
-	"github.com/soaringjerry/PCAS/internal/contextbuilder/reader"
 	"github.com/soaringjerry/PCAS/internal/postgres/accessstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/actionlog"
 	"github.com/soaringjerry/PCAS/internal/postgres/budgetstore"
@@ -604,168 +602,105 @@ func (s *Deputy) RunAgent(ctx context.Context, steps deputy.Steps) (resultErr er
 	if s.Models != nil && s.Models.ReloadSubscription && s.Models.Codex != nil {
 		defer s.Models.Codex.Close()
 	}
-	var u usestore.UseContext
-	var useErr error
 	if savedInput != nil {
 		run = savedInput.Run
-		u.Ready = savedInput.MemoryReady
-		u.Coverage = savedInput.Coverage
 	}
-	if savedRow == nil {
-		timing.BeginPrepare()
-		prepared, agent, prepareErr := s.DeputyUseContext(workCtx, scope, &run)
-		u, useErr = prepared, prepareErr
-		if useErr == nil {
-			run.MemoryTier = usestore.MemoryTierForStatus(run.MemoryTier, u.Ready)
-		}
-		if useErr == nil && u.Ready {
-			run.ProjectHandoverWrittenAt = nil
-			if u.ProjectHandover != nil {
-				run.ProjectHandoverWrittenAt = u.ProjectHandover.WrittenAt
-			}
-			if run.MemoryTier == "heavy" {
-				taskText := deputy.HeavyTask(run)
-				readerCtx, readerCancel := context.WithDeadline(workCtx, started.Add(reader.Budget))
-				picked, refs, keys := steps.Reader.Read(readerCtx, ctx, reader.Task{Scope: scope, Agent: agent, Thing: &run.ThingID, Text: taskText, Run: run.ID, Phase: "reader:prepare"}, u)
-				readerCancel()
-				run.MemoryGroups = keys
-				run.ContextVersions = kernel.UniqueRefs(append(run.ContextVersions, refs...))
-				u.Cards = nil
-				u.Supplemental = picked
-			}
-			run.ContextVersions = kernel.UniqueRefs(append(run.ContextVersions, u.Dependencies...))
-			deputy.RefreshMemory(&run, u)
-		}
-	}
-	verifyErr := useErr
-	if verifyErr == nil && savedRow == nil {
-		verifyErr = pgx.BeginFunc(workCtx, s.Pool, func(tx pgx.Tx) error { return usestore.CheckUseRunPromptTx(workCtx, tx, scope, run) })
-	}
-	result := ai.Result{}
-	timing.FinishPrepare()
-	answerStarted := time.Now()
-	generationErr := verifyErr
-	var mainPaid *modelcall.PaidResult
-	var mainInvocation memory.ID
-	request := callstore.DeputyAnswerRequest(scope.OwnerID, token, deputy.Snapshot{Run: run, RawPrompt: run.Brief, Coverage: u.Coverage, MemoryReady: u.Ready})
-	if savedRow != nil && savedInput == nil {
-		mainInvocation = savedRow.ID
-		generationErr = &modelcall.Failure{Code: savedRow.ErrorCode, InvocationID: savedRow.ID}
-		if savedRow.ErrorCode == "" {
-			generationErr = modelcall.ErrNotApplicable
-		}
-	} else if verifyErr == nil {
-		answerCtx, answerCancel := context.WithTimeout(workCtx, 60*time.Second)
-		mainPaid, generationErr = steps.Calls.Answer(answerCtx, request)
-		answerCancel()
-		var persistence *modelcall.PersistenceError
-		if errors.As(generationErr, &persistence) {
-			return generationErr
-		}
-		if mainPaid != nil {
-			mainInvocation = mainPaid.InvocationID
-			result = ai.Result{Text: mainPaid.Output, Searches: mainPaid.Searches, Cost: mainPaid.Cost}
-		}
-		row, err := callstore.LatestInteractiveCall(ctx, s.Pool, request)
-		if err != nil {
-			return err
-		}
-		if row != nil {
-			savedRow = row
-			mainInvocation = row.ID
-		}
-	}
-	if run.Kind == "revise" && generationErr == nil && mainPaid != nil {
-		return s.finishPaidRevise(ctx, scope, run, token, mainPaid)
-	}
-	cost := result.Cost
+	session := &runSession{store: s, scope: scope, token: token, run: &run, started: started, timing: timing, savedInput: savedInput}
 	if savedRow != nil {
-		var billed *float64
-		if savedRow.Receipt.Billing != nil {
-			billed = &savedRow.Receipt.Billing.Cost
-		}
-		cost = deputy.SettledCost(result.Cost, billed, savedRow.Outcome == "unknown", savedRow.Mode.Reserved)
+		session.saved = callRecord(savedRow)
 	}
-	// Only an unused admission without a linked reservation is settled here.
-	// The gateway already owns every linked reservation and usage record.
-	if savedRow == nil || savedRow.Reservation == "" {
-		if err := s.SettleRunCost(ctx, scope.OwnerID, run, cost); err != nil {
-			return err
-		}
+	return deputy.Conduct(ctx, workCtx, session, steps, secretary.ErrorType)
+}
+
+// runSession is one leased run. The deputy's domain package conducts the
+// run through it.
+type runSession struct {
+	store      *Deputy
+	scope      memory.Scope
+	token      string
+	run        *workspace.Run
+	started    time.Time
+	timing     *budgetstore.ExecutionTimer
+	saved      *deputy.CallRecord
+	savedInput *deputy.Snapshot
+}
+
+func callRecord(row *callstore.InteractiveCallRow) *deputy.CallRecord {
+	if row == nil {
+		return nil
 	}
-	selfcheckFallback := ""
-	var selection *callstore.DeputyResultSelection
-	var reviewInvocation memory.ID
-	if generationErr == nil && mainPaid != nil {
-		var selected string
-		selection, selected, err = (callstore.InteractiveCalls{Store: s.Calls}).DeputySelection(ctx, scope.OwnerID, run, mainInvocation)
-		if err != nil {
-			return err
-		}
-		if selection != nil {
-			result.Text = selected
-			selfcheckFallback = selection.Fallback
-			reviewInvocation = selection.Review
-		}
+	record := &deputy.CallRecord{ID: row.ID, ErrorCode: row.ErrorCode, Unknown: row.Outcome == "unknown", Reservation: row.Reservation, Reserved: row.Mode.Reserved}
+	if row.Receipt.Billing != nil {
+		record.Billed = &row.Receipt.Billing.Cost
 	}
-	// A prior review without a durable decision is incomplete. Keep the draft.
-	// Never repeat its paid call or reinterpret a late response as a new decision.
-	reviewAlreadyAttempted := false
-	if selection == nil && generationErr == nil && deputy.Selfchecks(run.MemoryTier) {
-		readErr := s.Pool.QueryRow(ctx, `SELECT id::text FROM model_calls WHERE owner_id=$1 AND execution_id=$2 AND stage='selfcheck' AND input_manifest->>'origin'=$3 ORDER BY created_at DESC,id DESC LIMIT 1`, string(scope.OwnerID), run.ID, run.CreatedAt).Scan(&reviewInvocation)
-		if readErr != nil && !errors.Is(readErr, pgx.ErrNoRows) {
-			return readErr
-		}
-		reviewAlreadyAttempted = readErr == nil
-		if reviewAlreadyAttempted {
-			selfcheckFallback = "selfcheck_interrupted"
-		}
+	return record
+}
+
+func (r *runSession) Owner() memory.ID          { return r.scope.OwnerID }
+func (r *runSession) Token() string             { return r.token }
+func (r *runSession) Run() *workspace.Run       { return r.run }
+func (r *runSession) Started() time.Time        { return r.started }
+func (r *runSession) Saved() *deputy.CallRecord { return r.saved }
+func (r *runSession) InputSaved() bool          { return r.savedInput != nil }
+func (r *runSession) Preparing()                { r.timing.BeginPrepare() }
+func (r *runSession) Prepared()                 { r.timing.FinishPrepare() }
+
+func (r *runSession) SavedContext() (bool, *contextbuilder.Coverage) {
+	return r.savedInput.MemoryReady, r.savedInput.Coverage
+}
+
+func (r *runSession) Prepare(ctx context.Context) (contextbuilder.UseContext, workspace.Agent, error) {
+	return r.store.DeputyUseContext(ctx, r.scope, r.run)
+}
+
+func (r *runSession) VerifyPrompt(ctx context.Context) error {
+	return pgx.BeginFunc(ctx, r.store.Pool, func(tx pgx.Tx) error { return usestore.CheckUseRunPromptTx(ctx, tx, r.scope, *r.run) })
+}
+
+func (r *runSession) Call(ctx context.Context, request modelcall.Request) (*deputy.CallRecord, error) {
+	row, err := callstore.LatestInteractiveCall(ctx, r.store.Pool, request)
+	return callRecord(row), err
+}
+
+func (r *runSession) FinishRevision(ctx context.Context, paid *modelcall.PaidResult) error {
+	return r.store.finishPaidRevise(ctx, r.scope, *r.run, r.token, paid)
+}
+
+func (r *runSession) SettleCost(ctx context.Context, cost float64) error {
+	return r.store.SettleRunCost(ctx, r.scope.OwnerID, *r.run, cost)
+}
+
+func (r *runSession) Selection(ctx context.Context, answer memory.ID) (*deputy.Selection, string, error) {
+	return (callstore.InteractiveCalls{Store: r.store.Calls}).DeputySelection(ctx, r.scope.OwnerID, *r.run, answer)
+}
+
+func (r *runSession) ReviewAttempted(ctx context.Context) (memory.ID, bool, error) {
+	var review memory.ID
+	err := r.store.Pool.QueryRow(ctx, `SELECT id::text FROM model_calls WHERE owner_id=$1 AND execution_id=$2 AND stage='selfcheck' AND input_manifest->>'origin'=$3 ORDER BY created_at DESC,id DESC LIMIT 1`, string(r.scope.OwnerID), r.run.ID, r.run.CreatedAt).Scan(&review)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", false, nil
 	}
-	if selection == nil && !reviewAlreadyAttempted && generationErr == nil && deputy.Selfchecks(run.MemoryTier) {
-		checkBudget := deputy.SelfcheckBudget(time.Since(answerStarted))
-		checkCtx, checkCancel := context.WithTimeout(workCtx, checkBudget)
-		checkedText := ""
-		err := s.CheckDeputySelfcheckContext(checkCtx, scope, run, token)
-		if err == nil {
-			request := deputy.SelfcheckRequest(scope.OwnerID, token, run, result.Text)
-			var paid *modelcall.PaidResult
-			paid, err = steps.Calls.Selfcheck(checkCtx, request)
-			readCtx, readCancel := context.WithTimeout(context.WithoutCancel(checkCtx), modelcall.PersistenceTimeout)
-			row, readErr := callstore.LatestInteractiveCall(readCtx, s.Pool, request)
-			readCancel()
-			if readErr != nil {
-				checkCancel()
-				return readErr
-			}
-			if row != nil {
-				reviewInvocation = row.ID
-			}
-			if err == nil {
-				checkedText = paid.Output
-				err = checkCtx.Err()
-			}
-		}
-		checkCancel()
-		var fallback string
-		if result.Text, fallback = deputy.AcceptSelfcheck(result.Text, checkedText, err); fallback != "" {
-			selfcheckFallback = fallback
-			slog.WarnContext(ctx, "memory selfcheck fallback", "stage", "selfcheck", "error_type", secretary.ErrorType("selfcheck", err))
-		}
-	}
-	if generationErr == nil && mainPaid != nil {
-		if selection == nil {
-			selected := mainInvocation
-			if selfcheckFallback == "" && reviewInvocation != "" {
-				selected = reviewInvocation
-			}
-			selection = &callstore.DeputyResultSelection{Main: mainInvocation, Output: selected, OutputHash: fmt.Sprintf("%x", sha256.Sum256([]byte(result.Text))), Review: reviewInvocation, Fallback: selfcheckFallback}
-		}
-		if err := (callstore.InteractiveCalls{Store: s.Calls}).SaveDeputySelection(ctx, request, *selection); err != nil {
-			return err
-		}
-	}
-	if ctx.Err() != nil {
-		return ctx.Err()
+	return review, err == nil, err
+}
+
+func (r *runSession) VerifySelfcheck(ctx context.Context) error {
+	return r.store.CheckDeputySelfcheckContext(ctx, r.scope, *r.run, r.token)
+}
+
+func (r *runSession) SaveSelection(ctx context.Context, request modelcall.Request, selection deputy.Selection) error {
+	return (callstore.InteractiveCalls{Store: r.store.Calls}).SaveDeputySelection(ctx, request, selection)
+}
+
+// Finish writes the end of the run in one transaction under the owner lock.
+// A run whose lease was lost is left as it is.
+func (r *runSession) Finish(ctx context.Context, end deputy.End) error {
+	s, scope, run, token, timing, u := r.store, r.scope, *r.run, r.token, r.timing, end.Use
+	generationErr, verifyErr, cost, selfcheckFallback := end.GenerationErr, end.VerifyErr, end.Cost, end.SelfcheckFallback
+	mainInvocation, reviewInvocation := end.Answer, end.Review
+	result := ai.Result{Text: end.Text, Searches: end.Searches}
+	savedErrorCode := ""
+	if end.Saved != nil {
+		savedErrorCode = end.Saved.ErrorCode
 	}
 	timing.BeginWrite(run.MemoryTier)
 	return pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
@@ -844,8 +779,8 @@ func (s *Deputy) RunAgent(ctx context.Context, steps deputy.Steps) (resultErr er
 		if current.Status != "done" || current.StaleContext {
 			application, why = "not_applicable", "run_failed_or_stale"
 		}
-		if generationErr != nil && savedRow != nil && savedRow.ErrorCode != "" {
-			why = savedRow.ErrorCode
+		if generationErr != nil && savedErrorCode != "" {
+			why = savedErrorCode
 		}
 		if err := (callstore.InteractiveCalls{Store: s.Calls}).RecordDeputyApplicationTx(ctx, tx, scope.OwnerID, current, mainInvocation, application, why); err != nil {
 			return err

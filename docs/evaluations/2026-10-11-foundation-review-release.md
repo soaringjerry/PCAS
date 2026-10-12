@@ -254,6 +254,21 @@ The cleanup succeeded and the record counts are equal. Neither log has an error,
 
 The storage package has 24,641 lines without tests at this revision. It had 28,355 lines at the review.
 
+## Eighteenth Release
+
+Released revision: `f5a5fd6e75897bf1200d1892afb3e934e280197e`, on 2026-10-12 UTC. Earlier revision: `afac27e`.
+Pull requests #369, #370, and #371 give the changes: queued work has causal identities and is a recorded event, and the applying of a secretary answer is orchestrated outside the storage package.
+
+This release has a database migration, `063_recorded_events.sql`. The owner approved it on 2026-10-12.
+Before the release the migration ran on a copy of the live database from the latest backup: 0.13 seconds, with 166,049 job rows and 5,253 claims before and after. The copy was removed.
+On the live instance the backup was validated before the migration. The record counts are equal before and after it: 101,944 memory records, 5,253 claims, 27,478 sources, 29 work items, and 166,049 job rows. The schema is at `063_recorded_events.sql`.
+
+The live check on the real default Codex channel passed with four turns: an answer, an arrangement (`create_task`, done), a change (`update`, done), and a delegation (`delegate`, done) whose deputy run finished as done with a settled call.
+The cleanup succeeded and the record counts are equal. Neither log has an error, and no container restarted.
+`recorded_events` was empty after the check: the check-only turns queue no work. The first rows come with the next queued job.
+
+The storage package has 24,625 lines without tests at this revision. It had 28,355 lines at the review.
+
 ## Host Cleanup
 
 The owner approved removal of leftover data on 2026-10-11.

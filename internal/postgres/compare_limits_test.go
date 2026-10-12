@@ -20,7 +20,7 @@ func TestCompareUnavailableBudgetAndSharedOrganizeLock(t *testing.T) {
 	refs := compareFixture(t, s, scope, "合成限额检查记忆", "合成限额检查另一条记忆")
 	key := "PCAS_TEST_COMPARE_CHANNEL_AVAILABLE"
 	t.Setenv(key, "")
-	s.models.Config.Providers[0].KeyEnv = key
+	s.Models.Config.Providers[0].KeyEnv = key
 	j := compareJob(t, s, scope, false, CompareVersion)
 	assertDeferred := func(code string) {
 		t.Helper()
@@ -35,18 +35,18 @@ func TestCompareUnavailableBudgetAndSharedOrganizeLock(t *testing.T) {
 		t.Fatal("unavailable called provider")
 	}
 	t.Setenv(key, "fictional-key")
-	s.models.Config.Providers[0].InputPerMillion = 1
-	if _, err := s.pool.Exec(ctx, `UPDATE workspace_owners SET settings=jsonb_set(settings,'{dailyBudget}','0') WHERE owner_id=$1`, string(scope.OwnerID)); err != nil {
+	s.Models.Config.Providers[0].InputPerMillion = 1
+	if _, err := s.Pool.Exec(ctx, `UPDATE workspace_owners SET settings=jsonb_set(settings,'{dailyBudget}','0') WHERE owner_id=$1`, string(scope.OwnerID)); err != nil {
 		t.Fatal(err)
 	}
 	assertDeferred("budget_deferred")
 	if len(f.all()) != 0 {
 		t.Fatal("over-budget call")
 	}
-	if _, err := s.pool.Exec(ctx, `UPDATE workspace_owners SET settings=jsonb_set(settings,'{dailyBudget}','10') WHERE owner_id=$1`, string(scope.OwnerID)); err != nil {
+	if _, err := s.Pool.Exec(ctx, `UPDATE workspace_owners SET settings=jsonb_set(settings,'{dailyBudget}','10') WHERE owner_id=$1`, string(scope.OwnerID)); err != nil {
 		t.Fatal(err)
 	}
-	locker, err := s.pool.Acquire(ctx)
+	locker, err := s.Pool.Acquire(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,7 +74,7 @@ func TestCompareHourlyCapIsIndependent(t *testing.T) {
 	f := b1Model(t, s, `{"duplicates":[],"superseded":[]}`)
 	compareFixture(t, s, scope, "合成每小时上限记忆", "合成每小时另一条记忆")
 	j := compareJob(t, s, scope, false, CompareVersion)
-	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		for i := 0; i < 40; i++ {
 			record := j
 			switch i % 3 {
@@ -114,7 +114,7 @@ func TestClassificationDispatchPrecedesComparison(t *testing.T) {
 	ctx := context.Background()
 	b1Model(t, s, `{"duplicates":[],"superseded":[]}`)
 	refs := compareFixture(t, s, scope, "虚构已整理记忆", "虚构待整理记忆")
-	if _, err := s.pool.Exec(ctx, "UPDATE claims SET organized=0 WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), string(refs[1].ID)); err != nil {
+	if _, err := s.Pool.Exec(ctx, "UPDATE claims SET organized=0 WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), string(refs[1].ID)); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.ScheduleOrganize(ctx, time.Now()); err != nil {
@@ -123,7 +123,7 @@ func TestClassificationDispatchPrecedesComparison(t *testing.T) {
 	if _, err := s.ScheduleCompare(ctx, time.Now()); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.pool.Exec(ctx, "DELETE FROM memory_jobs WHERE owner_id=$1 AND stage NOT LIKE 'memory.organize:%' AND stage NOT LIKE 'memory.compare:%'", string(scope.OwnerID)); err != nil {
+	if _, err := s.Pool.Exec(ctx, "DELETE FROM memory_jobs WHERE owner_id=$1 AND stage NOT LIKE 'memory.organize:%' AND stage NOT LIKE 'memory.compare:%'", string(scope.OwnerID)); err != nil {
 		t.Fatal(err)
 	}
 	j, err := s.Claim(ctx, 5*time.Minute)
@@ -143,14 +143,14 @@ func TestCompareRuleEpochComesFromProgramNotQueueAndRemovedModelSkips(t *testing
 		t.Fatal(err)
 	}
 	compareState(t, s, scope, refs, []string{"", ""}, CompareVersion)
-	if _, err := s.pool.Exec(ctx, "UPDATE claims SET compared=0 WHERE owner_id=$1", string(scope.OwnerID)); err != nil {
+	if _, err := s.Pool.Exec(ctx, "UPDATE claims SET compared=0 WHERE owner_id=$1", string(scope.OwnerID)); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.pool.Exec(ctx, "DELETE FROM memory_comparison_batches WHERE owner_id=$1", scope.OwnerID); err != nil {
+	if _, err := s.Pool.Exec(ctx, "DELETE FROM memory_comparison_batches WHERE owner_id=$1", scope.OwnerID); err != nil {
 		t.Fatal(err)
 	}
 	j = compareJob(t, s, scope, false, CompareVersion)
-	s.models = nil
+	s.Models = nil
 	err := (comparison.Service{Store: s.CompareStore(), Generator: jobCalls(s), Version: CompareVersion}).Process(ctx, j)
 	var failure *worker.JobError
 	if !errors.As(err, &failure) || failure.Code != "provider_unavailable" || !failure.NoAttempt {
@@ -158,7 +158,7 @@ func TestCompareRuleEpochComesFromProgramNotQueueAndRemovedModelSkips(t *testing
 	}
 	compareState(t, s, scope, refs, []string{"", ""}, 0)
 	var state string
-	if err := s.pool.QueryRow(ctx, "SELECT state FROM memory_jobs WHERE id=$1", string(j.ID)).Scan(&state); err != nil || state != "leased" {
+	if err := s.Pool.QueryRow(ctx, "SELECT state FROM memory_jobs WHERE id=$1", string(j.ID)).Scan(&state); err != nil || state != "leased" {
 		t.Fatal(state, err)
 	}
 }

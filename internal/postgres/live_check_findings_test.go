@@ -66,7 +66,7 @@ func TestConversationSaysWhenTheOriginalWasDeleted(t *testing.T) {
 
 	var source memory.Ref
 	source.Kind = memory.SourceKind
-	if err := s.pool.QueryRow(ctx, `SELECT s.id::text,r.version FROM sources s JOIN memory_records r ON (r.owner_id,r.id)=(s.owner_id,s.id) WHERE s.owner_id=$1 AND s.connector='desk' AND lower(s.external_id)=$2`, string(scope.OwnerID), strings.ToLower(first.RequestID)).Scan(&source.ID, &source.Version); err != nil {
+	if err := s.Pool.QueryRow(ctx, `SELECT s.id::text,r.version FROM sources s JOIN memory_records r ON (r.owner_id,r.id)=(s.owner_id,s.id) WHERE s.owner_id=$1 AND s.connector='desk' AND lower(s.external_id)=$2`, string(scope.OwnerID), strings.ToLower(first.RequestID)).Scan(&source.ID, &source.Version); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.Delete(ctx, scope, memory.DeleteRequest{Targets: []memory.Ref{source}}); err != nil {

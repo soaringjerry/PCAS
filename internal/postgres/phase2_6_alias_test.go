@@ -54,7 +54,7 @@ func TestPhase26A7A8NegativeNamesAndScanReceiptsIgnoreMemoryCounts(t *testing.T)
 		t.Fatal(err)
 	}
 	var proposed int
-	if err := s.pool.QueryRow(ctx, `SELECT count(*) FROM entity_alias_candidates WHERE owner_id=$1 AND left_id=least($2::uuid,$3::uuid) AND right_id=greatest($2::uuid,$3::uuid)`, f.Scope.OwnerID, f.Entities[0], f.Entities[4]).Scan(&proposed); err != nil || proposed != 1 {
+	if err := s.Pool.QueryRow(ctx, `SELECT count(*) FROM entity_alias_candidates WHERE owner_id=$1 AND left_id=least($2::uuid,$3::uuid) AND right_id=greatest($2::uuid,$3::uuid)`, f.Scope.OwnerID, f.Entities[0], f.Entities[4]).Scan(&proposed); err != nil || proposed != 1 {
 		t.Fatalf("model-only candidate count=%d err=%v", proposed, err)
 	}
 	phase26Isolate(t, f, EntityCompareStage)
@@ -64,7 +64,7 @@ func TestPhase26A7A8NegativeNamesAndScanReceiptsIgnoreMemoryCounts(t *testing.T)
 	phase26Isolate(t, f, EntityCompareStage)
 	j := phase26ClaimStage(t, f, EntityCompareStage)
 	// A held legacy-card table lock must have no effect on a negative decision.
-	tx, err := s.pool.Begin(ctx)
+	tx, err := s.Pool.Begin(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,7 +85,7 @@ func TestPhase26A7A8NegativeNamesAndScanReceiptsIgnoreMemoryCounts(t *testing.T)
 		t.Fatal(err)
 	}
 	var pending int
-	if err := s.pool.QueryRow(ctx, `SELECT count(*) FROM memory_jobs WHERE owner_id=$1 AND stage LIKE 'memory.entity_compare:%' AND state IN('queued','leased')`, f.Scope.OwnerID).Scan(&pending); err != nil || pending != 0 {
+	if err := s.Pool.QueryRow(ctx, `SELECT count(*) FROM memory_jobs WHERE owner_id=$1 AND stage LIKE 'memory.entity_compare:%' AND state IN('queued','leased')`, f.Scope.OwnerID).Scan(&pending); err != nil || pending != 0 {
 		t.Fatalf("memory count invalidated negative decision pending=%d err=%v", pending, err)
 	}
 	after := phase26Digest(t, f, []string{"entity_alias_receipts", "background_markers"})
@@ -95,7 +95,7 @@ func TestPhase26A7A8NegativeNamesAndScanReceiptsIgnoreMemoryCounts(t *testing.T)
 		}
 	}
 	var batch *entityCandidateBatch
-	if err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	if err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		var err error
 		batch, err = nextEntityCandidateBatchTx(ctx, tx, f.Scope.OwnerID, EntityCompareVersion)
 		return err
@@ -103,7 +103,7 @@ func TestPhase26A7A8NegativeNamesAndScanReceiptsIgnoreMemoryCounts(t *testing.T)
 		t.Fatal(err)
 	}
 	var completed bool
-	if err := s.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM background_markers WHERE owner_id=$1 AND stage=$2)`, f.Scope.OwnerID, batch.Marker).Scan(&completed); err != nil {
+	if err := s.Pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM background_markers WHERE owner_id=$1 AND stage=$2)`, f.Scope.OwnerID, batch.Marker).Scan(&completed); err != nil {
 		t.Fatal(err)
 	}
 	if completed {

@@ -26,7 +26,7 @@ func TestSecretaryTurnUsesCompleteLargeContext(t *testing.T) {
 	// common light payload, rather than measuring only an almost empty card.
 	for g := 0; g < 4; g++ {
 		var eid string
-		err := pgx.BeginFunc(context.Background(), s.pool, func(tx pgx.Tx) error {
+		err := pgx.BeginFunc(context.Background(), s.Pool, func(tx pgx.Tx) error {
 			id, err := entityTx(context.Background(), tx, scope.OwnerID, "topic", fmt.Sprintf("虚构季度组%d", g))
 			eid = string(id)
 			return err
@@ -68,15 +68,15 @@ func TestSecretaryTurnUsesCompleteLargeContext(t *testing.T) {
 		_, modelPrompt = b4RequestBody(t, r)
 		secretaryModelReply(w, `{"reply":"虚构季度汇报已准备。","actions":[]}`)
 	})
-	cfg := s.pool.Config()
+	cfg := s.Pool.Config()
 	cfg.ConnConfig.Tracer = trace
 	tracedPool, err := pgxpool.NewWithConfig(context.Background(), cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
-	previous := s.pool
-	s.pool = tracedPool
-	t.Cleanup(func() { s.pool = previous; tracedPool.Close() })
+	previous := s.Pool
+	s.Pool = tracedPool
+	t.Cleanup(func() { s.Pool = previous; tracedPool.Close() })
 	ctx := b4Context(s)
 	for i := 0; i < 3; i++ {
 		trace.resetAll()

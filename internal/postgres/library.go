@@ -11,6 +11,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/modelcall"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/postgres/memoryread"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -21,7 +22,7 @@ func (s *Store) ReadHandover(ctx context.Context, scope memory.Scope) (workspace
 	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err
 	}
-	err := pgx.BeginTxFunc(ctx, s.pool, pgx.TxOptions{AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error { var err error; out, err = s.HandoverTx(ctx, tx, scope); return err })
+	err := pgx.BeginTxFunc(ctx, s.Pool, pgx.TxOptions{AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error { var err error; out, err = s.HandoverTx(ctx, tx, scope); return err })
 	return out, err
 }
 
@@ -30,8 +31,8 @@ func (s *Store) libraryDeadlinesTx(ctx context.Context, tx pgx.Tx, scope memory.
 	// Fix display classification only on a diagnostic copy. Source validity
 	// keeps actual time, and production retains the transaction's now().
 	var classificationAt *time.Time
-	if s.businessClock != nil {
-		at := s.businessNow()
+	if s.HasBusinessClock() {
+		at := s.BusinessNow()
 		classificationAt = &at
 	}
 	rows, err := tx.Query(ctx, `SELECT d.id::text,d.kind,d.at,d.recurrence,d.title,d.time_note,d.claim_id::text,
@@ -76,7 +77,7 @@ func (s *Store) ListDeadlines(ctx context.Context, scope memory.Scope, q workspa
 	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err
 	}
-	err := pgx.BeginTxFunc(ctx, s.pool, pgx.TxOptions{AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error { var err error; out, err = s.libraryDeadlinesTx(ctx, tx, scope, q); return err })
+	err := pgx.BeginTxFunc(ctx, s.Pool, pgx.TxOptions{AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error { var err error; out, err = s.libraryDeadlinesTx(ctx, tx, scope, q); return err })
 	return out, err
 }
 
@@ -105,7 +106,7 @@ func (s *Store) ListAssistantRequirements(ctx context.Context, scope memory.Scop
 	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err
 	}
-	err := pgx.BeginTxFunc(ctx, s.pool, pgx.TxOptions{AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error { var err error; out, err = s.assistantRequirementsTx(ctx, tx, scope); return err })
+	err := pgx.BeginTxFunc(ctx, s.Pool, pgx.TxOptions{AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error { var err error; out, err = s.assistantRequirementsTx(ctx, tx, scope); return err })
 	return out, err
 }
 
@@ -117,7 +118,7 @@ func validLibraryKey(key string) bool {
 }
 
 type groupMemoryCursor struct {
-	memoryCursor
+	memoryread.MemoryCursor
 	Key string `json:"key"`
 }
 
@@ -139,7 +140,7 @@ func (s *Store) ListGroupMemories(ctx context.Context, scope memory.Scope, key s
 			return out, memory.ErrInvalid
 		}
 	}
-	err := pgx.BeginTxFunc(ctx, s.pool, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
+	err := pgx.BeginTxFunc(ctx, s.Pool, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
 		if cursor.Snapshot.IsZero() {
 			if err := tx.QueryRow(ctx, "SELECT clock_timestamp()").Scan(&cursor.Snapshot); err != nil {
 				return err
@@ -165,11 +166,11 @@ func (s *Store) ListGroupMemories(ctx context.Context, scope memory.Scope, key s
 			return err
 		}
 		out.Total = len(ids)
-		opts := memoryReadOptions{ids: ids, snapshot: cursor.Snapshot, limit: q.Limit + 1}
+		opts := memoryread.MemoryReadOptions{Ids: ids, Snapshot: cursor.Snapshot, Limit: q.Limit + 1}
 		if q.Cursor != "" {
-			opts.before = &cursor.memoryCursor
+			opts.Before = &cursor.MemoryCursor
 		}
-		items, err := s.readMemoriesTx(ctx, tx, scope, false, opts)
+		items, err := s.ReadMemoriesTx(ctx, tx, scope, false, opts)
 		if err != nil {
 			return err
 		}
@@ -215,6 +216,6 @@ func (s *Store) ListMemoryGroups(ctx context.Context, scope memory.Scope) (works
 	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err
 	}
-	err := pgx.BeginTxFunc(ctx, s.pool, pgx.TxOptions{AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error { var err error; out, err = s.memoryGroupsTx(ctx, tx, scope); return err })
+	err := pgx.BeginTxFunc(ctx, s.Pool, pgx.TxOptions{AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error { var err error; out, err = s.memoryGroupsTx(ctx, tx, scope); return err })
 	return out, err
 }

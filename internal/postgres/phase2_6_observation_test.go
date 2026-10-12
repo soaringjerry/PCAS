@@ -17,7 +17,7 @@ func TestPhase26A2SchedulerReportsConcreteLockFailure(t *testing.T) {
 	f := phase26LoadFixture(t)
 	phase26NewModel(t, f)
 	phase26Exec(t, f, `UPDATE claims SET organized=2 WHERE owner_id=$1`, f.Scope.OwnerID)
-	lock, err := f.Store.pool.Begin(f.Context)
+	lock, err := f.Store.Pool.Begin(f.Context)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -31,7 +31,7 @@ func TestPhase26A2SchedulerReportsConcreteLockFailure(t *testing.T) {
 	go func() { defer close(done); f.Store.RunCompare(runCtx, slog.Default()) }()
 	reason := ""
 	for reason == "" && runCtx.Err() == nil {
-		if err := f.Store.pool.QueryRow(f.Context, `SELECT coalesce((SELECT reason FROM background_stage_events WHERE stage='memory.compare' AND outcome='failure' ORDER BY id DESC LIMIT 1),'')`).Scan(&reason); err != nil {
+		if err := f.Store.Pool.QueryRow(f.Context, `SELECT coalesce((SELECT reason FROM background_stage_events WHERE stage='memory.compare' AND outcome='failure' ORDER BY id DESC LIMIT 1),'')`).Scan(&reason); err != nil {
 			t.Fatal(err)
 		}
 		select {
@@ -97,7 +97,7 @@ func TestPhase26A2LongDeferralWarnsOnceAndResetsAfterCompletion(t *testing.T) {
 		t.Fatal(err)
 	}
 	var retained int
-	if err := f.Store.pool.QueryRow(f.Context, `SELECT count(*) FROM background_job_deferrals WHERE job_id=$1`, j.ID).Scan(&retained); err != nil {
+	if err := f.Store.Pool.QueryRow(f.Context, `SELECT count(*) FROM background_job_deferrals WHERE job_id=$1`, j.ID).Scan(&retained); err != nil {
 		t.Fatal(err)
 	}
 	if retained != 0 {

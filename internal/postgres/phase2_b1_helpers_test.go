@@ -146,7 +146,7 @@ func b1Trip(t *testing.T, s *Store, scope memory.Scope) memory.Ref {
 func b1ZeroClaims(t *testing.T, s *Store, scope memory.Scope) {
 	t.Helper()
 	var n int
-	if err := s.pool.QueryRow(context.Background(), "SELECT count(*) FROM claims WHERE owner_id=$1", string(scope.OwnerID)).Scan(&n); err != nil || n != 0 {
+	if err := s.Pool.QueryRow(context.Background(), "SELECT count(*) FROM claims WHERE owner_id=$1", string(scope.OwnerID)).Scan(&n); err != nil || n != 0 {
 		t.Fatal("fixture must have zero claims", n, err)
 	}
 }
@@ -159,7 +159,7 @@ func b1Delete(t *testing.T, s *Store, scope memory.Scope, ref memory.Ref) {
 func b1Refs(t *testing.T, s *Store, scope memory.Scope, req string) []memory.Ref {
 	t.Helper()
 	var data []byte
-	if err := s.pool.QueryRow(context.Background(), "SELECT dependencies FROM desk_turns WHERE owner_id=$1 AND request_id=$2", string(scope.OwnerID), req).Scan(&data); err != nil {
+	if err := s.Pool.QueryRow(context.Background(), "SELECT dependencies FROM desk_turns WHERE owner_id=$1 AND request_id=$2", string(scope.OwnerID), req).Scan(&data); err != nil {
 		t.Fatal(err)
 	}
 	var refs []memory.Ref
@@ -234,7 +234,7 @@ func b1Claim(t *testing.T, s *Store, scope memory.Scope, text, nature, confirmat
 func b1Active(t *testing.T, s *Store, scope memory.Scope, ref memory.Ref, want bool) {
 	t.Helper()
 	var active bool
-	if err := s.pool.QueryRow(context.Background(), "SELECT EXISTS(SELECT 1 FROM memory_records WHERE owner_id=$1 AND id=$2 AND state='active')", string(scope.OwnerID), string(ref.ID)).Scan(&active); err != nil {
+	if err := s.Pool.QueryRow(context.Background(), "SELECT EXISTS(SELECT 1 FROM memory_records WHERE owner_id=$1 AND id=$2 AND state='active')", string(scope.OwnerID), string(ref.ID)).Scan(&active); err != nil {
 		t.Fatal(err)
 	}
 	if active != want {
@@ -306,7 +306,7 @@ func b1History(t *testing.T, s *Store, scope memory.Scope, conversation string) 
 func b1TurnSource(t *testing.T, s *Store, scope memory.Scope, request string) memory.Ref {
 	t.Helper()
 	ref := memory.Ref{Kind: memory.SourceKind}
-	if err := s.pool.QueryRow(context.Background(), "SELECT s.id::text,r.version FROM sources s JOIN memory_records r ON (r.owner_id,r.id)=(s.owner_id,s.id) WHERE s.owner_id=$1 AND lower(s.external_id)=lower($2) AND s.connector IN ('desk','capture')", string(scope.OwnerID), request).Scan(&ref.ID, &ref.Version); err != nil {
+	if err := s.Pool.QueryRow(context.Background(), "SELECT s.id::text,r.version FROM sources s JOIN memory_records r ON (r.owner_id,r.id)=(s.owner_id,s.id) WHERE s.owner_id=$1 AND lower(s.external_id)=lower($2) AND s.connector IN ('desk','capture')", string(scope.OwnerID), request).Scan(&ref.ID, &ref.Version); err != nil {
 		t.Fatal(err)
 	}
 	return ref

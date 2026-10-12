@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/postgres/memoryread"
 	"github.com/soaringjerry/PCAS/internal/retrieval"
 
 	"github.com/jackc/pgx/v5"
@@ -86,7 +87,7 @@ func (s *Store) RecallWith(ctx context.Context, scope memory.Scope, in memory.Re
 	} else {
 		out.Coverage.Gaps = append(out.Coverage.Gaps, "未配置语义索引；模糊措辞的覆盖尚不完整")
 	}
-	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	err = pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		return s.recallTx(ctx, tx, scope, in, b, query, fts, vector, model, offset, fingerprint, tokens, &out)
 	})
 	if len(out.Coverage.PendingSources) > 0 {
@@ -175,7 +176,7 @@ func (s *Store) recallTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in 
         ) hit ON true
  LEFT JOIN source_versions sv ON (sv.owner_id,sv.source_id,sv.version)=($1,p.uid,p.version)
  LEFT JOIN source_contexts sc ON(sc.owner_id,sc.source_id,sc.source_version)=($1,p.uid,p.version)`
-	querySQL = strings.Replace(querySQL, "WHERE t.owner_id=$1 AND r.state=", "WHERE t.owner_id=$1 AND (r.kind<>'claim' OR "+currentMemorySQL("r.owner_id", "r.id")+") AND r.state=", 1)
+	querySQL = strings.Replace(querySQL, "WHERE t.owner_id=$1 AND r.state=", "WHERE t.owner_id=$1 AND (r.kind<>'claim' OR "+memoryread.CurrentMemorySQL("r.owner_id", "r.id")+") AND r.state=", 1)
 	// Only explicit effective-use events activate the prior. Legacy activity
 	// timestamps populated from expression time carry no retrieval weight.
 	activityTerm := `CASE WHEN a.pinned THEN 1 WHEN EXISTS(SELECT 1 FROM use_events ue WHERE ue.owner_id=t.owner_id AND ue.record_id=t.id AND ue.kind IN ('user_mention','confirmation','adoption')) THEN coalesce(exp(-0.693147*greatest(0,extract(epoch from((SELECT at FROM ranking_clock)-a.last_effective_use_at)))/nullif(a.half_life_seconds*a.stability,0)),0) ELSE 0 END`
@@ -208,8 +209,8 @@ func (s *Store) recallTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in 
 	// A diagnostic clock fixes decay only. Production retains the transaction's
 	// now(), and applicable versions, permissions, and usage keep actual time.
 	var activityAt *time.Time
-	if s.businessClock != nil {
-		at := s.businessNow()
+	if s.HasBusinessClock() {
+		at := s.BusinessNow()
 		activityAt = &at
 	}
 	args = append(args, activityAt)
@@ -402,7 +403,7 @@ func (s *Store) Expand(ctx context.Context, scope memory.Scope, in memory.Expand
 			return out, memory.ErrInvalid
 		}
 	}
-	returnOutErr := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	returnOutErr := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		refs := []memory.Ref{}
 		for _, ref := range in.Refs {
 			if !ref.ID.Valid() || ref.Version < 0 {
@@ -632,8 +633,8 @@ var teamStructuredSQL = `WITH candidates AS (
  WHERE r.state='active' AND v.state='active'
  AND EXISTS(SELECT 1 FROM record_grants g WHERE g.owner_id=$1 AND g.record_id=c.claim_id AND g.principal_id=$6)
  AND agent.document->'memoryKinds' ? c.nature
- AND ` + currentMemorySQL("r.owner_id", "r.id") + `
- AND (coalesce((agent.document->>'includeInferred')::boolean,false) OR ` + humanMemorySQL("c") + `)
+ AND ` + memoryread.CurrentMemorySQL("r.owner_id", "r.id") + `
+ AND (coalesce((agent.document->>'includeInferred')::boolean,false) OR ` + memoryread.HumanMemorySQL("c") + `)
  AND NOT EXISTS(SELECT 1 FROM context_exclusions ex WHERE ex.owner_id=$1 AND ex.thing_id=$7::uuid AND ex.memory_id=c.claim_id)
  AND ($8::text IS NULL OR coalesce(c.scope->>'project_id','')='' OR c.scope->>'project_id'=$8)
 ), timed AS (
@@ -651,7 +652,7 @@ LIMIT $10`
 func structuredRecallTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, hints memory.TeamRecall, limit int) ([]memory.Ref, bool, error) {
 	ids := []memory.ID{}
 	entitiesSQL := teamEntitiesSQL
-	mergesAvailable, err := entityMergeSchemaTx(ctx, tx)
+	mergesAvailable, err := memoryread.EntityMergeSchemaTx(ctx, tx)
 	if err != nil {
 		return nil, false, err
 	}

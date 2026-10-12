@@ -43,7 +43,7 @@ func TestPhase26C1C8SecretaryScaleBaseline(t *testing.T) {
 			}
 			return
 		case <-ticker.C:
-			rows, err := f.Store.pool.Query(f.Context, `SELECT coalesce(wait_event_type,'')||':'||coalesce(wait_event,''),query,pg_blocking_pids(pid)::text FROM pg_stat_activity WHERE datname=current_database() AND pid<>pg_backend_pid() AND (state='active' OR state='idle in transaction')`)
+			rows, err := f.Store.Pool.Query(f.Context, `SELECT coalesce(wait_event_type,'')||':'||coalesce(wait_event,''),query,pg_blocking_pids(pid)::text FROM pg_stat_activity WHERE datname=current_database() AND pid<>pg_backend_pid() AND (state='active' OR state='idle in transaction')`)
 			if err != nil {
 				t.Fatal(err)
 			}

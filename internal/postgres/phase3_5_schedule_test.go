@@ -224,7 +224,7 @@ func TestPhase35D1D2G1G6InProgressCapAndOrder(t *testing.T) {
 		}
 	}
 	// Stable progress timestamps; expected titles independent of returned order.
-	_, err := s.pool.Exec(ctx, `UPDATE work_items SET document=document||jsonb_build_object('updatedAt',to_char('2026-10-08T12:00:00Z'::timestamptz-(substring(title from '[0-9]+$')::int)*interval '1 hour','YYYY-MM-DD"T"HH24:MI:SS"Z"')) WHERE owner_id=$1 AND title LIKE '虚构推进%'`, scope.OwnerID)
+	_, err := s.Pool.Exec(ctx, `UPDATE work_items SET document=document||jsonb_build_object('updatedAt',to_char('2026-10-08T12:00:00Z'::timestamptz-(substring(title from '[0-9]+$')::int)*interval '1 hour','YYYY-MM-DD"T"HH24:MI:SS"Z"')) WHERE owner_id=$1 AND title LIKE '虚构推进%'`, scope.OwnerID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -259,7 +259,7 @@ func TestPhase35A3CompleteOverdueMemoryPreservesSourceAndReplay(t *testing.T) {
 	d := f.Deadlines[1]
 	before := phase35Snapshot(t, s, f.Scope)
 	var original []byte
-	if err := s.pool.QueryRow(ctx, `SELECT value FROM claim_revisions WHERE owner_id=$1 AND claim_id=$2 AND version=1`, f.Scope.OwnerID, d.Claim).Scan(&original); err != nil {
+	if err := s.Pool.QueryRow(ctx, `SELECT value FROM claim_revisions WHERE owner_id=$1 AND claim_id=$2 AND version=1`, f.Scope.OwnerID, d.Claim).Scan(&original); err != nil {
 		t.Fatal(err)
 	}
 	command := map[string]any{"type": "completeDeadline", "id": d.ID, "memoryId": d.Claim, "requestId": string(memory.NewID())}
@@ -271,12 +271,12 @@ func TestPhase35A3CompleteOverdueMemoryPreservesSourceAndReplay(t *testing.T) {
 	var completed bool
 	var version int
 	var text []byte
-	err := s.pool.QueryRow(ctx, `SELECT (scope->>'deadline_completed')::boolean,(scope->>'deadline_completed_version')::int,value FROM claim_revisions WHERE owner_id=$1 AND claim_id=$2 AND version=1`, f.Scope.OwnerID, d.Claim).Scan(&completed, &version, &text)
+	err := s.Pool.QueryRow(ctx, `SELECT (scope->>'deadline_completed')::boolean,(scope->>'deadline_completed_version')::int,value FROM claim_revisions WHERE owner_id=$1 AND claim_id=$2 AND version=1`, f.Scope.OwnerID, d.Claim).Scan(&completed, &version, &text)
 	if err != nil || !completed || version != 1 || string(text) != string(original) {
 		t.Fatalf("completion not on original current memory version completed=%t version=%d err=%v", completed, version, err)
 	}
 	var rows int
-	if err := s.pool.QueryRow(ctx, `SELECT count(*) FROM deadlines WHERE owner_id=$1`, f.Scope.OwnerID).Scan(&rows); err != nil || rows != 200 {
+	if err := s.Pool.QueryRow(ctx, `SELECT count(*) FROM deadlines WHERE owner_id=$1`, f.Scope.OwnerID).Scan(&rows); err != nil || rows != 200 {
 		t.Fatal("completion deleted deadline evidence", rows, err)
 	}
 	src := f.Sources[20]

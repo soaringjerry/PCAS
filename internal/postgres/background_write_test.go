@@ -72,7 +72,7 @@ func TestBackgroundContendedHandoverYieldsOwnerPromptly(t *testing.T) {
 	s, scope, j, process, reply := backgroundFixture(t, "handover")
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	tx, err := s.pool.Begin(ctx)
+	tx, err := s.Pool.Begin(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}

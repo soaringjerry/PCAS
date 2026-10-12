@@ -91,11 +91,11 @@ func TestLiveContinuityReplay(t *testing.T) {
 		extractionTimes[key] = time.Since(start).Milliseconds()
 		t.Logf("live extraction %s: %d ms", key, extractionTimes[key])
 	}
-	if err = s.pool.QueryRow(ctx, "SELECT count(*) FROM claims WHERE owner_id=$1", string(scope.OwnerID)).Scan(&claims); err != nil || claims < 3 {
+	if err = s.Pool.QueryRow(ctx, "SELECT count(*) FROM claims WHERE owner_id=$1", string(scope.OwnerID)).Scan(&claims); err != nil || claims < 3 {
 		t.Fatal("insufficient live extraction", claims, err)
 	}
 	var unsafe int
-	if err = s.pool.QueryRow(ctx, `SELECT count(*) FROM claim_revisions c JOIN evidence e ON(e.owner_id,e.target_id,e.target_version)=(c.owner_id,c.claim_id,c.version) WHERE c.owner_id=$1 AND e.source_id=$2 AND (c.confirmation IN ('confirmed','adopted') OR c.value #>> '{}' NOT LIKE 'AI 或工具当时的表达：%')`, string(scope.OwnerID), string(refs["pcas-ai"].ID)).Scan(&unsafe); err != nil || unsafe != 0 {
+	if err = s.Pool.QueryRow(ctx, `SELECT count(*) FROM claim_revisions c JOIN evidence e ON(e.owner_id,e.target_id,e.target_version)=(c.owner_id,c.claim_id,c.version) WHERE c.owner_id=$1 AND e.source_id=$2 AND (c.confirmation IN ('confirmed','adopted') OR c.value #>> '{}' NOT LIKE 'AI 或工具当时的表达：%')`, string(scope.OwnerID), string(refs["pcas-ai"].ID)).Scan(&unsafe); err != nil || unsafe != 0 {
 		t.Fatal("AI proposal attributed to user", unsafe, err)
 	}
 	rows := []map[string]any{}
@@ -145,7 +145,7 @@ func TestLiveContinuityReplay(t *testing.T) {
 	// Check correction propagation against a statement actually extracted by the model.
 	var claim memory.Ref
 	claim.Kind = memory.ClaimKind
-	err = s.pool.QueryRow(ctx, `SELECT c.claim_id::text,c.version FROM claim_revisions c JOIN evidence e ON(e.owner_id,e.target_id,e.target_version)=(c.owner_id,c.claim_id,c.version) WHERE c.owner_id=$1 AND e.source_id=$2 LIMIT 1`, string(scope.OwnerID), string(refs["state"].ID)).Scan(&claim.ID, &claim.Version)
+	err = s.Pool.QueryRow(ctx, `SELECT c.claim_id::text,c.version FROM claim_revisions c JOIN evidence e ON(e.owner_id,e.target_id,e.target_version)=(c.owner_id,c.claim_id,c.version) WHERE c.owner_id=$1 AND e.source_id=$2 LIMIT 1`, string(scope.OwnerID), string(refs["state"].ID)).Scan(&claim.ID, &claim.Version)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -128,7 +128,7 @@ func TestSecretarySchedulesAndUpdatesRecentTask(t *testing.T) {
 		t.Fatal(err, turns)
 	}
 	var candidates int
-	if err = s.pool.QueryRow(context.Background(), "SELECT count(*) FROM capture_candidates WHERE owner_id=$1", string(scope.OwnerID)).Scan(&candidates); err != nil || candidates != 0 {
+	if err = s.Pool.QueryRow(context.Background(), "SELECT count(*) FROM capture_candidates WHERE owner_id=$1", string(scope.OwnerID)).Scan(&candidates); err != nil || candidates != 0 {
 		t.Fatal("desk created candidates", err, candidates)
 	}
 }
@@ -184,8 +184,8 @@ func TestSecretaryFallbackPersistsOriginal(t *testing.T) {
 				s.SetModels(nil)
 			}
 			if mode == "budget" {
-				s.models.Config.Providers[0].InputPerMillion = 1
-				s.models.Config.Providers[0].CostMode = ""
+				s.Models.Config.Providers[0].InputPerMillion = 1
+				s.Models.Config.Providers[0].CostMode = ""
 				workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: kernel.JSON(map[string]any{"dailyBudget": 0})})
 			}
 			out := mustTurn(t, s, scope, req)
@@ -204,7 +204,7 @@ func TestSecretaryFallbackPersistsOriginal(t *testing.T) {
 			}
 			assertSecretaryLog(t, logs, "WARN", stage, errorType)
 			var text string
-			if err := s.pool.QueryRow(context.Background(), "SELECT body FROM source_versions v JOIN sources s ON (s.owner_id,s.id)=(v.owner_id,v.source_id) WHERE s.owner_id=$1 AND s.connector='capture' AND s.external_id=$2", string(scope.OwnerID), req.RequestID).Scan(&text); err != nil || text != req.Text {
+			if err := s.Pool.QueryRow(context.Background(), "SELECT body FROM source_versions v JOIN sources s ON (s.owner_id,s.id)=(v.owner_id,v.source_id) WHERE s.owner_id=$1 AND s.connector='capture' AND s.external_id=$2", string(scope.OwnerID), req.RequestID).Scan(&text); err != nil || text != req.Text {
 				t.Fatal(err, text)
 			}
 			replay := mustTurn(t, s, scope, req)
@@ -486,14 +486,14 @@ func TestSecretaryActionMappingAndDateDefaults(t *testing.T) {
 	if len(third.State.Runs) != 1 || third.State.Runs[0].Kind != "summary" || !third.Turn.Receipts[0].Undoable {
 		t.Fatal(third)
 	}
-	if _, err = s.pool.Exec(context.Background(), "UPDATE agent_runs SET status='running' WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), third.State.Runs[0].ID); err != nil {
+	if _, err = s.Pool.Exec(context.Background(), "UPDATE agent_runs SET status='running' WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), third.State.Runs[0].ID); err != nil {
 		t.Fatal(err)
 	}
 	if _, err = s.Undo(context.Background(), scope, *third.Turn.Receipts[0].ActionID); !errors.Is(err, workspace.ErrWorkStarted) {
 		t.Fatal(err)
 	}
 	var samples int
-	if err = s.pool.QueryRow(context.Background(), "SELECT count(*) FROM training_samples WHERE owner_id=$1", string(scope.OwnerID)).Scan(&samples); err != nil || samples != 0 {
+	if err = s.Pool.QueryRow(context.Background(), "SELECT count(*) FROM training_samples WHERE owner_id=$1", string(scope.OwnerID)).Scan(&samples); err != nil || samples != 0 {
 		t.Fatal("secretary wrote samples", err, samples)
 	}
 }
@@ -569,7 +569,7 @@ func TestSecretaryReplayUsesCurrentStateAndScrubbedTurn(t *testing.T) {
 		t.Fatal("fixture lacks used memory or receipt", first.Turn)
 	}
 	var response []byte
-	if err := s.pool.QueryRow(ctx, "SELECT response FROM desk_turns WHERE owner_id=$1 AND request_id=$2", string(scope.OwnerID), req.RequestID).Scan(&response); err != nil {
+	if err := s.Pool.QueryRow(ctx, "SELECT response FROM desk_turns WHERE owner_id=$1 AND request_id=$2", string(scope.OwnerID), req.RequestID).Scan(&response); err != nil {
 		t.Fatal(err)
 	}
 	var stored map[string]json.RawMessage
@@ -594,7 +594,7 @@ func TestSecretaryReplayUsesCurrentStateAndScrubbedTurn(t *testing.T) {
 	if replay.State.Revision != current.Revision || len(replay.State.Memories) != 0 {
 		t.Fatal("replay resurrected deleted state", replay.State)
 	}
-	if err := s.pool.QueryRow(ctx, "SELECT response FROM desk_turns WHERE owner_id=$1 AND request_id=$2", string(scope.OwnerID), req.RequestID).Scan(&response); err != nil {
+	if err := s.Pool.QueryRow(ctx, "SELECT response FROM desk_turns WHERE owner_id=$1 AND request_id=$2", string(scope.OwnerID), req.RequestID).Scan(&response); err != nil {
 		t.Fatal(err)
 	}
 	if strings.Contains(string(response), "蓝色灯塔") || strings.Contains(string(response), `"state"`) {
@@ -725,7 +725,7 @@ func TestSecretaryReceiptUndoneIsLiveOnHistoryAndReplay(t *testing.T) {
 	// The initial false flag remains in the stored turn. Reads derive true from
 	// action_log without mutating the idempotency record.
 	var stored storedSecretaryResponse
-	if err = s.pool.QueryRow(ctx, "SELECT response FROM desk_turns WHERE owner_id=$1 AND request_id=$2", string(scope.OwnerID), req.RequestID).Scan(&stored); err != nil {
+	if err = s.Pool.QueryRow(ctx, "SELECT response FROM desk_turns WHERE owner_id=$1 AND request_id=$2", string(scope.OwnerID), req.RequestID).Scan(&stored); err != nil {
 		t.Fatal(err)
 	}
 	if stored.Turn.Receipts[0].Undone {

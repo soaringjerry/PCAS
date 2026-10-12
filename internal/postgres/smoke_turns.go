@@ -29,7 +29,7 @@ func smokeLockTx(ctx context.Context, tx pgx.Tx, owner, id string) error {
 // Release the pool connection between retries, including while a model runs.
 func (s *Store) smokeTransaction(ctx context.Context, work func(pgx.Tx) error) error {
 	for {
-		err := pgx.BeginFunc(ctx, s.pool, work)
+		err := pgx.BeginFunc(ctx, s.Pool, work)
 		if !errors.Is(err, errSecretaryBusy) {
 			return err
 		}

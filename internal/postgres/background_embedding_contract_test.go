@@ -43,7 +43,7 @@ func largeEmbeddingJob(t *testing.T, s *Store, scope memory.Scope, price float64
 		t.Fatal(err)
 	}
 	var chunks int
-	if err := s.pool.QueryRow(ctx, "SELECT count(*) FROM chunks WHERE owner_id=$1 AND source_id=$2 AND source_version=$3", string(scope.OwnerID), string(ref.ID), ref.Version).Scan(&chunks); err != nil || chunks <= 32 {
+	if err := s.Pool.QueryRow(ctx, "SELECT count(*) FROM chunks WHERE owner_id=$1 AND source_id=$2 AND source_version=$3", string(scope.OwnerID), string(ref.ID), ref.Version).Scan(&chunks); err != nil || chunks <= 32 {
 		t.Fatal("fixture must need more than one provider request", chunks, err)
 	}
 	return leaseStage(t, s, scope, ref, "source.embed"), chunks, calls
@@ -52,12 +52,12 @@ func largeEmbeddingJob(t *testing.T, s *Store, scope memory.Scope, price float64
 func rejectEmbeddingWrites(t *testing.T, s *Store) func() {
 	t.Helper()
 	ctx := context.Background()
-	if _, err := s.pool.Exec(ctx, `CREATE FUNCTION reject_embedding_fixture_write() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'embedding_storage_fixture'; END $$;
+	if _, err := s.Pool.Exec(ctx, `CREATE FUNCTION reject_embedding_fixture_write() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'embedding_storage_fixture'; END $$;
 CREATE TRIGGER reject_embedding_fixture_write BEFORE INSERT OR UPDATE ON embeddings FOR EACH ROW EXECUTE FUNCTION reject_embedding_fixture_write()`); err != nil {
 		t.Fatal(err)
 	}
 	return func() {
-		if _, err := s.pool.Exec(ctx, "DROP TRIGGER reject_embedding_fixture_write ON embeddings"); err != nil {
+		if _, err := s.Pool.Exec(ctx, "DROP TRIGGER reject_embedding_fixture_write ON embeddings"); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -67,7 +67,7 @@ CREATE TRIGGER reject_embedding_fixture_write BEFORE INSERT OR UPDATE ON embeddi
 func nextEmbeddingAttempt(t *testing.T, s *Store, job worker.Job) worker.Job {
 	t.Helper()
 	job.Attempts, job.LeaseToken = job.Attempts+1, memory.NewID()
-	tag, err := s.pool.Exec(context.Background(), `UPDATE memory_jobs SET state='leased',attempts=$2,lease_token=$3,lease_until=now()+interval '5 minutes' WHERE id=$1`, string(job.ID), job.Attempts, string(job.LeaseToken))
+	tag, err := s.Pool.Exec(context.Background(), `UPDATE memory_jobs SET state='leased',attempts=$2,lease_token=$3,lease_until=now()+interval '5 minutes' WHERE id=$1`, string(job.ID), job.Attempts, string(job.LeaseToken))
 	if err != nil || tag.RowsAffected() != 1 {
 		t.Fatal(tag, err)
 	}
@@ -83,7 +83,7 @@ func TestBackgroundEmbeddingRecordsOneSettledCallForAJob(t *testing.T) {
 	requests := int32((chunks + 31) / 32)
 	var vectors, journal, usage, tokens int
 	var settled bool
-	if err := s.pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM embeddings WHERE owner_id=$1),
+	if err := s.Pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM embeddings WHERE owner_id=$1),
  (SELECT count(*) FROM model_calls WHERE owner_id=$1 AND function_name='embedding' AND outcome='returned' AND accounting_state='settled' AND root_execution_id=$2::uuid AND causation_id=$2::uuid AND jsonb_array_length(input_manifest->'memoryRefs')=$3),
  (SELECT count(*) FROM model_usage WHERE owner_id=$1 AND job_id::text=$4 AND purpose='embedding'),
  (SELECT coalesce(sum(input_tokens),0) FROM model_usage WHERE owner_id=$1 AND job_id::text=$4),
@@ -95,7 +95,7 @@ func TestBackgroundEmbeddingRecordsOneSettledCallForAJob(t *testing.T) {
 		t.Fatal(calls.Load(), requests, vectors, chunks, journal, usage, tokens, settled)
 	}
 	var journalText string
-	if err := s.pool.QueryRow(ctx, `SELECT to_jsonb(c)::text FROM model_calls c WHERE owner_id=$1`, string(scope.OwnerID)).Scan(&journalText); err != nil || strings.Contains(journalText, "aaaa") {
+	if err := s.Pool.QueryRow(ctx, `SELECT to_jsonb(c)::text FROM model_calls c WHERE owner_id=$1`, string(scope.OwnerID)).Scan(&journalText); err != nil || strings.Contains(journalText, "aaaa") {
 		t.Fatal("journal stored source text", err)
 	}
 }
@@ -129,7 +129,7 @@ func TestFreeEmbeddingJobRetriesAfterItsVectorWriteFails(t *testing.T) {
 		t.Fatal(err)
 	}
 	var vectors int
-	if err := s.pool.QueryRow(ctx, "SELECT count(*) FROM embeddings WHERE owner_id=$1", string(scope.OwnerID)).Scan(&vectors); err != nil || vectors != chunks || calls.Load() != 2*first {
+	if err := s.Pool.QueryRow(ctx, "SELECT count(*) FROM embeddings WHERE owner_id=$1", string(scope.OwnerID)).Scan(&vectors); err != nil || vectors != chunks || calls.Load() != 2*first {
 		t.Fatal(vectors, chunks, first, calls.Load(), err)
 	}
 }

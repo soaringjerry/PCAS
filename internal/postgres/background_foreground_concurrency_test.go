@@ -79,12 +79,12 @@ func phase26ConcurrentCase(t *testing.T, stage string, merge bool, overHTTP ...b
 		}
 	}
 	phase26Isolate(t, f, stage)
-	userStore, err := Open(f.Context, s.pool.Config().ConnString())
+	userStore, err := Open(f.Context, s.Pool.Config().ConnString())
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(userStore.Close)
-	userStore.SetModels(s.models)
+	userStore.SetModels(s.Models)
 	requests := phase26UserRequests(f, userStore)
 	if len(overHTTP) > 0 && overHTTP[0] {
 		requests = phase26HTTPUserRequests(t, f, userStore)
@@ -257,7 +257,7 @@ func phase26ConcurrentCase(t *testing.T, stage string, merge bool, overHTTP ...b
 	<-schedulerDone
 	report("processor", processErr)
 	var state string
-	if err := s.pool.QueryRow(f.Context, `SELECT state FROM memory_jobs WHERE id=$1`, job.ID).Scan(&state); err != nil {
+	if err := s.Pool.QueryRow(f.Context, `SELECT state FROM memory_jobs WHERE id=$1`, job.ID).Scan(&state); err != nil {
 		t.Fatal(err)
 	}
 	health, err := s.BackgroundHealth(f.Context, f.Scope)
@@ -282,7 +282,7 @@ func phase26ConcurrentCase(t *testing.T, stage string, merge bool, overHTTP ...b
 	}
 	if stage == EntityCompareStage {
 		var pending int
-		if err := s.pool.QueryRow(f.Context, `SELECT count(*) FROM memory_jobs WHERE owner_id=$1 AND stage LIKE 'memory.entity_compare:%' AND state IN('queued','leased')`, f.Scope.OwnerID).Scan(&pending); err != nil {
+		if err := s.Pool.QueryRow(f.Context, `SELECT count(*) FROM memory_jobs WHERE owner_id=$1 AND stage LIKE 'memory.entity_compare:%' AND state IN('queued','leased')`, f.Scope.OwnerID).Scan(&pending); err != nil {
 			t.Fatal(err)
 		}
 		if pending != 0 {
@@ -291,10 +291,10 @@ func phase26ConcurrentCase(t *testing.T, stage string, merge bool, overHTTP ...b
 	}
 	if merge {
 		var remaining, moved int
-		if err := s.pool.QueryRow(f.Context, `SELECT count(*) FROM claim_mentions WHERE owner_id=$1 AND entity_id=$2`, f.Scope.OwnerID, f.Entities[0]).Scan(&remaining); err != nil {
+		if err := s.Pool.QueryRow(f.Context, `SELECT count(*) FROM claim_mentions WHERE owner_id=$1 AND entity_id=$2`, f.Scope.OwnerID, f.Entities[0]).Scan(&remaining); err != nil {
 			t.Fatal(err)
 		}
-		if err := s.pool.QueryRow(f.Context, `SELECT count(*) FROM claim_mentions WHERE owner_id=$1 AND entity_id=$2`, f.Scope.OwnerID, f.Entities[4]).Scan(&moved); err != nil {
+		if err := s.Pool.QueryRow(f.Context, `SELECT count(*) FROM claim_mentions WHERE owner_id=$1 AND entity_id=$2`, f.Scope.OwnerID, f.Entities[4]).Scan(&moved); err != nil {
 			t.Fatal(err)
 		}
 		if remaining != 0 || moved != 1300 || elapsed >= time.Minute {

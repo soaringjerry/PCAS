@@ -1,13 +1,14 @@
-package postgres
+package memoryread
 
 import (
 	"context"
 	"fmt"
+	"strings"
+	"unicode"
+
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
 	"github.com/soaringjerry/PCAS/internal/memory"
-	"strings"
-	"unicode"
 )
 
 // Match FieldsFunc in qualifiedCapture exactly, independent of PostgreSQL's
@@ -40,7 +41,7 @@ var captureWordClass = func() string {
 
 func sqlTextLiteral(s string) string { return "'" + strings.ReplaceAll(s, "'", "''") + "'" }
 
-func qualifiedCaptureSQL(text string) string {
+func QualifiedCaptureSQL(text string) string {
 	clauses := make([]string, 0, len(extraction.QualificationMarkers)+1)
 	for _, marker := range extraction.QualificationMarkers {
 		clauses = append(clauses, "strpos("+text+","+sqlTextLiteral(marker)+")>0")
@@ -63,22 +64,22 @@ func qualifiedCaptureSQL(text string) string {
 
 // Aggregate evidence once for the SQL-scoped candidates rather than doing two
 // correlated evidence lookups for each memory before COUNT and LIMIT.
-func trustedMemoryIDsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, opts memoryReadOptions) (int, []string, error) {
-	trust := opts.query.Trust
+func trustedMemoryIDsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, opts MemoryReadOptions) (int, []string, error) {
+	trust := opts.Query.Trust
 	base := opts
-	base.query.Trust = ""
-	base.before = nil
-	where, args := memoryWhere(scope, false, base)
+	base.Query.Trust = ""
+	base.Before = nil
+	where, args := MemoryWhere(scope, false, base)
 	predicate := memoryTrustFilterSQL("c", "p", trust)
-	args = append(args, opts.limit)
+	args = append(args, opts.Limit)
 	limitSlot := len(args)
 	pageWhere := ""
-	if opts.before != nil {
-		args = append(args, opts.before.At, opts.before.ID)
+	if opts.Before != nil {
+		args = append(args, opts.Before.At, opts.Before.ID)
 		pageWhere = fmt.Sprintf(" WHERE (updated_at<$%d OR (updated_at=$%d AND claim_id>$%d::uuid))", len(args)-1, len(args)-1, len(args))
 	}
 	query := `WITH candidates AS MATERIALIZED (
- SELECT c.owner_id,c.claim_id,c.version,c.value,c.acquisition,r.updated_at` + memoryJoins + where + `),
+ SELECT c.owner_id,c.claim_id,c.version,c.value,c.acquisition,r.updated_at` + MemoryJoins + where + `),
  proofs AS MATERIALIZED (
  SELECT e.target_id,e.target_version,
  bool_or(sc.role IN ('assistant','system','tool') OR src.connector IN ('ai','assistant','system','tool','agent','actions')) AS ai,
@@ -112,7 +113,7 @@ func memoryTrustFilterSQL(claim, proof, trust string) string {
 	// Isolate the computed boolean: the planner otherwise combines many
 	// substring estimates into "almost every text is qualified", and chooses
 	// a quadratic nested loop for NOT qualified even when all texts are direct.
-	qualified := "(SELECT " + qualifiedCaptureSQL(claim+".value #>> '{}'") + " OFFSET 0)"
+	qualified := "(SELECT " + QualifiedCaptureSQL(claim+".value #>> '{}'") + " OFFSET 0)"
 	groups := "coalesce(" + proof + ".groups,0)"
 	switch trust {
 	case "tentative":

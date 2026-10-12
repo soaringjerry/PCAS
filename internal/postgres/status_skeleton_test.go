@@ -20,41 +20,41 @@ func TestStatusSkeletonMigrationDefaultsAndCascades(t *testing.T) {
 	var retired string
 	var by *string
 	var compared int
-	if err := s.pool.QueryRow(ctx, "SELECT retired,retired_by::text,compared FROM claims WHERE owner_id=$1 AND id=$2", scope.OwnerID, ref.ID).Scan(&retired, &by, &compared); err != nil || retired != "" || by != nil || compared != 0 {
+	if err := s.Pool.QueryRow(ctx, "SELECT retired,retired_by::text,compared FROM claims WHERE owner_id=$1 AND id=$2", scope.OwnerID, ref.ID).Scan(&retired, &by, &compared); err != nil || retired != "" || by != nil || compared != 0 {
 		t.Fatal("unexpected retirement defaults", retired, by, compared, err)
 	}
-	_, err := s.pool.Exec(ctx, "UPDATE claims SET retired='superseded' WHERE owner_id=$1 AND id=$2", scope.OwnerID, ref.ID)
+	_, err := s.Pool.Exec(ctx, "UPDATE claims SET retired='superseded' WHERE owner_id=$1 AND id=$2", scope.OwnerID, ref.ID)
 	var check *pgconn.PgError
 	if !errors.As(err, &check) || check.Code != "23514" {
 		t.Fatal("retirement accepted without target", err)
 	}
 	for _, purpose := range []string{"vision", "organize", "compare", "card", "handover", "reader", "selfcheck"} {
-		if _, err := s.pool.Exec(ctx, `INSERT INTO model_usage(owner_id,id,purpose,model,input_tokens,output_tokens,cost) VALUES($1,$2,$3,'fictional-model',0,0,0)`, scope.OwnerID, memory.NewID(), purpose); err != nil {
+		if _, err := s.Pool.Exec(ctx, `INSERT INTO model_usage(owner_id,id,purpose,model,input_tokens,output_tokens,cost) VALUES($1,$2,$3,'fictional-model',0,0,0)`, scope.OwnerID, memory.NewID(), purpose); err != nil {
 			t.Fatal(purpose, err)
 		}
 	}
 	var tiers int
-	if err := s.pool.QueryRow(ctx, "SELECT count(*) FROM model_usage WHERE owner_id=$1 AND tier=''", scope.OwnerID).Scan(&tiers); err != nil || tiers != 7 {
+	if err := s.Pool.QueryRow(ctx, "SELECT count(*) FROM model_usage WHERE owner_id=$1 AND tier=''", scope.OwnerID).Scan(&tiers); err != nil || tiers != 7 {
 		t.Fatal("default tier changed", tiers, err)
 	}
-	if _, err := s.pool.Exec(ctx, `INSERT INTO status_cards(owner_id,key,kind,name,rule) VALUES($1,'self:taste','self','虚构口味',1)`, scope.OwnerID); err != nil {
+	if _, err := s.Pool.Exec(ctx, `INSERT INTO status_cards(owner_id,key,kind,name,rule) VALUES($1,'self:taste','self','虚构口味',1)`, scope.OwnerID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.pool.Exec(ctx, `INSERT INTO status_card_items(owner_id,key,field,position,claim_id,claim_version) VALUES($1,'self:taste','preference',1,$2,$3)`, scope.OwnerID, ref.ID, ref.Version); err != nil {
+	if _, err := s.Pool.Exec(ctx, `INSERT INTO status_card_items(owner_id,key,field,position,claim_id,claim_version) VALUES($1,'self:taste','preference',1,$2,$3)`, scope.OwnerID, ref.ID, ref.Version); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.pool.Exec(ctx, `INSERT INTO deadlines(owner_id,id,claim_id,claim_version,kind,title) VALUES($1,$2,$3,$4,'recurring','虚构固定安排')`, scope.OwnerID, memory.NewID(), ref.ID, ref.Version); err != nil {
+	if _, err := s.Pool.Exec(ctx, `INSERT INTO deadlines(owner_id,id,claim_id,claim_version,kind,title) VALUES($1,$2,$3,$4,'recurring','虚构固定安排')`, scope.OwnerID, memory.NewID(), ref.ID, ref.Version); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.pool.Exec(ctx, `INSERT INTO handovers(owner_id,body,rule) VALUES($1,'',1)`, scope.OwnerID); err != nil {
+	if _, err := s.Pool.Exec(ctx, `INSERT INTO handovers(owner_id,body,rule) VALUES($1,'',1)`, scope.OwnerID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.pool.Exec(ctx, "DELETE FROM memory_records WHERE owner_id=$1 AND id=$2", scope.OwnerID, ref.ID); err != nil {
+	if _, err := s.Pool.Exec(ctx, "DELETE FROM memory_records WHERE owner_id=$1 AND id=$2", scope.OwnerID, ref.ID); err != nil {
 		t.Fatal(err)
 	}
 	for _, table := range []string{"status_card_items", "deadlines"} {
 		var count int
-		if err := s.pool.QueryRow(ctx, "SELECT count(*) FROM "+table+" WHERE owner_id=$1", scope.OwnerID).Scan(&count); err != nil || (table == "deadlines" && count != 0) || (table == "status_card_items" && count != 1) {
+		if err := s.Pool.QueryRow(ctx, "SELECT count(*) FROM "+table+" WHERE owner_id=$1", scope.OwnerID).Scan(&count); err != nil || (table == "deadlines" && count != 0) || (table == "status_card_items" && count != 1) {
 			t.Fatal("memory deletion left derived rows", table, count, err)
 		}
 	}

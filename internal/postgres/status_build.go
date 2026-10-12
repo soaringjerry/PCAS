@@ -75,12 +75,12 @@ func (s *Store) ScheduleStatus(ctx context.Context, now time.Time) (int, error) 
 	if now.IsZero() {
 		return 0, memory.ErrInvalid
 	}
-	p, ok := s.models.Get(s.models.ExtractionID())
+	p, ok := s.Models.Get(s.Models.ExtractionID())
 	if !ok || p.Embedding || p.Transcription {
 		return 0, nil
 	}
 	count := 0
-	rows, err := s.pool.Query(ctx, "SELECT owner_id::text FROM workspace_owners ORDER BY owner_id")
+	rows, err := s.Pool.Query(ctx, "SELECT owner_id::text FROM workspace_owners ORDER BY owner_id")
 	if err != nil {
 		return 0, err
 	}
@@ -99,7 +99,7 @@ func (s *Store) ScheduleStatus(ctx context.Context, now time.Time) (int, error) 
 		return count, err
 	}
 	for _, owner := range owners {
-		err := backgroundResultTx(ctx, s.pool, owner, func(ctx context.Context, tx pgx.Tx) error {
+		err := backgroundResultTx(ctx, s.Pool, owner, func(ctx context.Context, tx pgx.Tx) error {
 			anchor, err := seedOrganizeGroupsTx(ctx, tx, owner)
 			if err != nil {
 				return err
@@ -157,7 +157,7 @@ func statusCallLock(ctx context.Context, s *Store) (func(), error) {
 
 // Kept as a compatibility handler for pre-upgrade queue slots. Cards are frozen.
 func (s *Store) ProcessCard(ctx context.Context, j worker.Job) error {
-	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	return pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		if err := kernel.LockJob(ctx, tx, j); err != nil {
 			return err
 		}

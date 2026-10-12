@@ -27,7 +27,7 @@ import (
 func stabilizationSecretaryTasks(t *testing.T, s *Store, scope memory.Scope, want int) {
 	t.Helper()
 	var count int
-	if err := s.pool.QueryRow(context.Background(), "SELECT count(*) FROM work_items WHERE owner_id=$1 AND kind='task'", string(scope.OwnerID)).Scan(&count); err != nil || count != want {
+	if err := s.Pool.QueryRow(context.Background(), "SELECT count(*) FROM work_items WHERE owner_id=$1 AND kind='task'", string(scope.OwnerID)).Scan(&count); err != nil || count != want {
 		t.Fatalf("persisted task count: got %d, want %d, error %v", count, want, err)
 	}
 }
@@ -184,10 +184,10 @@ func TestSecretaryIdempotencyAndFreshRequest(t *testing.T) {
 	}
 	stabilizationSecretaryTasks(t, s, scope, 2)
 	var turns, actions int
-	if err := s.pool.QueryRow(context.Background(), "SELECT count(*) FROM desk_turns WHERE owner_id=$1", string(scope.OwnerID)).Scan(&turns); err != nil {
+	if err := s.Pool.QueryRow(context.Background(), "SELECT count(*) FROM desk_turns WHERE owner_id=$1", string(scope.OwnerID)).Scan(&turns); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.pool.QueryRow(context.Background(), "SELECT count(*) FROM action_log WHERE owner_id=$1", string(scope.OwnerID)).Scan(&actions); err != nil {
+	if err := s.Pool.QueryRow(context.Background(), "SELECT count(*) FROM action_log WHERE owner_id=$1", string(scope.OwnerID)).Scan(&actions); err != nil {
 		t.Fatal(err)
 	}
 	if turns != 2 || actions != 2 {
@@ -342,7 +342,7 @@ func TestSecretaryFailureCategoriesKeepOriginalAndPrivateLogs(t *testing.T) {
 				}
 			}
 			var saved string
-			if err := s.pool.QueryRow(context.Background(), "SELECT v.body FROM source_versions v JOIN sources s ON (s.owner_id,s.id)=(v.owner_id,v.source_id) WHERE s.owner_id=$1 AND s.connector=$2 AND s.external_id=$3", string(scope.OwnerID), connector, req.RequestID).Scan(&saved); err != nil || saved != req.Text {
+			if err := s.Pool.QueryRow(context.Background(), "SELECT v.body FROM source_versions v JOIN sources s ON (s.owner_id,s.id)=(v.owner_id,v.source_id) WHERE s.owner_id=$1 AND s.connector=$2 AND s.external_id=$3", string(scope.OwnerID), connector, req.RequestID).Scan(&saved); err != nil || saved != req.Text {
 				t.Fatal("original lost", err)
 			}
 			before := calls.Load()
@@ -374,7 +374,7 @@ func TestSecretaryLongReplyPreservesBodyAndActions(t *testing.T) {
 		State json.RawMessage         `json:"state"`
 	}
 	var body []byte
-	if err := s.pool.QueryRow(context.Background(), "SELECT response FROM desk_turns WHERE owner_id=$1 AND request_id=$2", string(scope.OwnerID), req.RequestID).Scan(&body); err != nil {
+	if err := s.Pool.QueryRow(context.Background(), "SELECT response FROM desk_turns WHERE owner_id=$1 AND request_id=$2", string(scope.OwnerID), req.RequestID).Scan(&body); err != nil {
 		t.Fatal(err)
 	}
 	if err := json.Unmarshal(body, &cached); err != nil || cached.State != nil || cached.Turn.Reply != out.Turn.Reply {
@@ -390,7 +390,7 @@ func TestSecretaryLongReplyPreservesBodyAndActions(t *testing.T) {
 // A second Store has its own pool: only PostgreSQL can serialize these turns.
 func TestSecretaryCrossInstanceQueueAllowsOtherConversations(t *testing.T) {
 	s, scope := testStore(t), owner()
-	peer, err := Open(context.Background(), s.pool.Config().ConnString())
+	peer, err := Open(context.Background(), s.Pool.Config().ConnString())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -408,7 +408,7 @@ func TestSecretaryCrossInstanceQueueAllowsOtherConversations(t *testing.T) {
 		}
 		secretaryModelReply(w, `{"actions":[{"op":"create_task","title":"F11-task"}]}`)
 	})
-	peer.SetModels(s.models)
+	peer.SetModels(s.Models)
 	conversation := string(memory.NewID())
 	first := turnRequest("F11-held-first")
 	first.ConversationID = &conversation
@@ -494,7 +494,7 @@ func TestSecretaryDifferentConversationPoolCapacity(t *testing.T) {
 		unblock()
 		t.Fatal("generation left no connection for unrelated short work", err)
 	}
-	if got := s.pool.Stat().AcquiredConns(); got > 9 {
+	if got := s.Pool.Stat().AcquiredConns(); got > 9 {
 		t.Fatalf("too many held generation connections: %d", got)
 	}
 	unblock()
@@ -582,7 +582,7 @@ func TestSecretaryCancelFailureAndIdempotentRetryReleaseLocks(t *testing.T) {
 				t.Fatal("next turn failed", out.Turn)
 			}
 			var count int
-			if err := s.pool.QueryRow(context.Background(), "SELECT count(*) FROM desk_turns WHERE owner_id=$1 AND request_id=$2", string(scope.OwnerID), queued.RequestID).Scan(&count); err != nil || count != 0 {
+			if err := s.Pool.QueryRow(context.Background(), "SELECT count(*) FROM desk_turns WHERE owner_id=$1 AND request_id=$2", string(scope.OwnerID), queued.RequestID).Scan(&count); err != nil || count != 0 {
 				t.Fatal("unadmitted canceled request persisted", err, count)
 			}
 		})
@@ -591,7 +591,7 @@ func TestSecretaryCancelFailureAndIdempotentRetryReleaseLocks(t *testing.T) {
 
 func TestSecretaryConcurrentRetryAcrossInstancesExecutesOnce(t *testing.T) {
 	s, scope := testStore(t), owner()
-	peer, err := Open(context.Background(), s.pool.Config().ConnString())
+	peer, err := Open(context.Background(), s.Pool.Config().ConnString())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -609,7 +609,7 @@ func TestSecretaryConcurrentRetryAcrossInstancesExecutesOnce(t *testing.T) {
 		}
 		secretaryModelReply(w, `{"actions":[{"op":"create_task","title":"once"}]}`)
 	})
-	peer.SetModels(s.models)
+	peer.SetModels(s.Models)
 	req := turnRequest("once")
 	conversation := string(memory.NewID())
 	req.ConversationID = &conversation

@@ -533,7 +533,7 @@ func (s *Store) Undo(ctx context.Context, scope memory.Scope, actionID string) (
 	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err
 	}
-	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		if err := s.ensureOwner(ctx, tx, scope); err != nil {
 			return err
 		}

@@ -77,7 +77,7 @@ func entityComparisonSamplesTx(ctx context.Context, tx pgx.Tx, owner memory.ID, 
 // write may hold the owner, so it runs outside that window.
 func (s *Store) nextEntityPair(ctx context.Context, owner memory.ID, version int) (*comparisonEntityPair, error) {
 	var pair *comparisonEntityPair
-	err := pgx.BeginTxFunc(ctx, s.pool, pgx.TxOptions{AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
+	err := pgx.BeginTxFunc(ctx, s.Pool, pgx.TxOptions{AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
 		var err error
 		pair, err = nextEntityPairTx(ctx, tx, owner, version)
 		return err
@@ -206,7 +206,7 @@ func (a entityCompareSession) NextPair(ctx context.Context, j worker.Job, versio
 		omitted += max(0, e.MemoryCount-len(e.Memories))
 	}
 	if omitted > 0 {
-		if _, err := a.store.pool.Exec(ctx, "INSERT INTO background_stage_events(owner_id,stage,outcome,reason,count) VALUES($1,$2,'overflow','identity_sample_memory_limit',$3)", string(j.OwnerID), EntityCompareStage, omitted); err != nil {
+		if _, err := a.store.Pool.Exec(ctx, "INSERT INTO background_stage_events(owner_id,stage,outcome,reason,count) VALUES($1,$2,'overflow','identity_sample_memory_limit',$3)", string(j.OwnerID), EntityCompareStage, omitted); err != nil {
 			return nil, nil, false, err
 		}
 	}

@@ -15,24 +15,24 @@ import (
 )
 
 // Existing replay helpers use the production default clock through this adapter.
-func deskNow(loc *time.Location) string { return (&Store{}).deskNow(loc) }
+func deskNow(loc *time.Location) string { return (&Store{DB: &kernel.DB{}}).deskNow(loc) }
 
 func TestBusinessClockDefaultsToActualTimeAndCanBeRestored(t *testing.T) {
-	s := &Store{}
+	s := &Store{DB: &kernel.DB{}}
 	before := time.Now()
-	actual := s.businessNow()
+	actual := s.BusinessNow()
 	after := time.Now()
 	if actual.Before(before) || actual.After(after) {
 		t.Fatal("the default clock must use actual time")
 	}
 	fixed := time.Date(2024, 12, 31, 16, 30, 0, 0, time.UTC)
 	s.SetBusinessClock(func() time.Time { return fixed })
-	if !s.businessNow().Equal(fixed) {
+	if !s.BusinessNow().Equal(fixed) {
 		t.Fatal("the configured business time was not used")
 	}
 	s.SetBusinessClock(nil)
 	before = time.Now()
-	actual = s.businessNow()
+	actual = s.BusinessNow()
 	after = time.Now()
 	if actual.Before(before) || actual.After(after) {
 		t.Fatal("nil must restore actual time")
@@ -52,7 +52,7 @@ func TestSecretaryUsesBusinessDateAndActualUsageTime(t *testing.T) {
 	conversationID := string(memory.NewID())
 	req.ConversationID = &conversationID
 	ctx := context.Background()
-	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		c, err := s.secretaryContextTx(ctx, tx, scope, req, conversationID)
 		if err != nil {
 			return err
@@ -74,7 +74,7 @@ func TestSecretaryUsesBusinessDateAndActualUsageTime(t *testing.T) {
 	out := mustTurn(t, s, scope, req)
 	after := time.Now()
 	var at time.Time
-	if err := s.pool.QueryRow(ctx, "SELECT at FROM model_usage WHERE owner_id=$1 AND turn_id=$2 ORDER BY at LIMIT 1", string(scope.OwnerID), out.Turn.ID).Scan(&at); err != nil {
+	if err := s.Pool.QueryRow(ctx, "SELECT at FROM model_usage WHERE owner_id=$1 AND turn_id=$2 ORDER BY at LIMIT 1", string(scope.OwnerID), out.Turn.ID).Scan(&at); err != nil {
 		t.Fatal(err)
 	}
 	if at.Before(before) || at.After(after) {
@@ -127,7 +127,7 @@ func TestRetrievalBusinessDecayKeepsActualEligibilityAndAccess(t *testing.T) {
 			slow := b1Claim(t, s, scope, "Fictitious clock record", "fact", "adopted", source)
 			future := b1Claim(t, s, scope, "Fictitious clock record", "fact", "adopted", source)
 			now := time.Now().UTC()
-			if err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+			if err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 				for _, ref := range []memory.Ref{fast, slow} {
 					if err := recordUseTx(ctx, tx, scope, memory.UseEvent{Ref: ref, EventID: string(ref.ID), Kind: "confirmation", At: now}); err != nil {
 						return err
@@ -148,7 +148,7 @@ func TestRetrievalBusinessDecayKeepsActualEligibilityAndAccess(t *testing.T) {
 				t.Helper()
 				out := memory.RecallResult{Coverage: retrieval.NewCoverage()}
 				c := context.WithValue(ctx, activityRankingKey{}, ranking)
-				err := pgx.BeginFunc(c, s.pool, func(tx pgx.Tx) error {
+				err := pgx.BeginFunc(c, s.Pool, func(tx pgx.Tx) error {
 					return s.recallTx(c, tx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: "model", Team: true}, memory.RecallRequest{Mode: memory.Continue, Team: &memory.TeamRecall{RankFusion: fusion}}, memory.Budget{Candidates: 10, Tokens: 4000}, "Fictitious clock record", "", nil, "", 0, "", nil, &out)
 				})
 				if err != nil || len(out.Memories) != count || want != "" && out.Memories[0].ID != want {
@@ -184,7 +184,7 @@ func TestDeadlineBusinessClockKeepsActualSourceValidity(t *testing.T) {
 		b1Claim(t, s, scope, "Fictitious unclear event", "fact", "adopted", source),
 		b1Claim(t, s, scope, "Fictitious future source event", "fact", "adopted", futureSource),
 	}
-	if err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	if err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		for i, ref := range refs {
 			kind := []string{"deadline", "recurring", "unclear", "deadline"}[i]
 			var at *time.Time
@@ -261,7 +261,7 @@ func TestDeadlineBusinessClockKeepsActualSourceValidity(t *testing.T) {
 	s.SetBusinessClock(nil)
 	check(true)
 	s.SetBusinessClock(func() time.Time { return fixed })
-	if _, err := s.pool.Exec(ctx, `UPDATE memory_records SET state='withdrawn' WHERE owner_id=$1 AND id=$2`, scope.OwnerID, source.ID); err != nil {
+	if _, err := s.Pool.Exec(ctx, `UPDATE memory_records SET state='withdrawn' WHERE owner_id=$1 AND id=$2`, scope.OwnerID, source.ID); err != nil {
 		t.Fatal(err)
 	}
 	out, err := s.ListDeadlines(ctx, scope, workspace.DeadlineQuery{})

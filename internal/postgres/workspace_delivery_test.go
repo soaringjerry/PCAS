@@ -62,10 +62,10 @@ func TestWorkspaceDeliveryVersionsAndConditionalRead(t *testing.T) {
 		t.Fatal("changed content needs body", changed.Code)
 	}
 	// Scheduler/progress bookkeeping affects delivery, never command or memory version.
-	if _, err := s.pool.Exec(ctx, "UPDATE claims SET organize_attempts=organize_attempts+1 WHERE owner_id=$1 AND id=$2", scope.OwnerID, ref.ID); err != nil {
+	if _, err := s.Pool.Exec(ctx, "UPDATE claims SET organize_attempts=organize_attempts+1 WHERE owner_id=$1 AND id=$2", scope.OwnerID, ref.ID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.pool.Exec(ctx, "UPDATE memory_jobs SET updated_at=clock_timestamp() WHERE id=$1", job.ID); err != nil {
+	if _, err := s.Pool.Exec(ctx, "UPDATE memory_jobs SET updated_at=clock_timestamp() WHERE id=$1", job.ID); err != nil {
 		t.Fatal(err)
 	}
 	progress, err := s.Snapshot(ctx, scope)
@@ -95,7 +95,7 @@ func TestWorkspaceDeliveryJournalDoesNotBlockBehindCommandOwner(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	foreground, err := s.pool.Begin(ctx)
+	foreground, err := s.Pool.Begin(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,7 +107,7 @@ func TestWorkspaceDeliveryJournalDoesNotBlockBehindCommandOwner(t *testing.T) {
 	// already holding the owner must remain free to cancel or inspect that job.
 	bounded, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
-	if _, err := s.pool.Exec(bounded, "UPDATE memory_jobs SET updated_at=clock_timestamp() WHERE id=$1", job.ID); err != nil {
+	if _, err := s.Pool.Exec(bounded, "UPDATE memory_jobs SET updated_at=clock_timestamp() WHERE id=$1", job.ID); err != nil {
 		t.Fatal("background delivery waits on foreground owner", err)
 	}
 	if _, err := foreground.Exec(bounded, "SELECT 1 FROM memory_jobs WHERE id=$1 FOR UPDATE", job.ID); err != nil {
@@ -127,7 +127,7 @@ func TestWorkspaceDeliveryJournalDoesNotBlockBehindCommandOwner(t *testing.T) {
 	commandVersion, libraryVersion := state.Revision, state.MemoryRevision
 	// A rolled-back event is invisible. A lower-ID event committed after a
 	// higher-ID event must still invalidate delivery (MAX(id) cannot do that).
-	early, err := s.pool.Begin(ctx)
+	early, err := s.Pool.Begin(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -135,7 +135,7 @@ func TestWorkspaceDeliveryJournalDoesNotBlockBehindCommandOwner(t *testing.T) {
 	if _, err := early.Exec(ctx, "INSERT INTO workspace_snapshot_events(owner_id) VALUES($1)", scope.OwnerID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.pool.Exec(ctx, "INSERT INTO workspace_snapshot_events(owner_id) VALUES($1)", scope.OwnerID); err != nil {
+	if _, err := s.Pool.Exec(ctx, "INSERT INTO workspace_snapshot_events(owner_id) VALUES($1)", scope.OwnerID); err != nil {
 		t.Fatal(err)
 	}
 	higher, err := s.SnapshotETag(ctx, scope)
@@ -149,7 +149,7 @@ func TestWorkspaceDeliveryJournalDoesNotBlockBehindCommandOwner(t *testing.T) {
 	if err != nil || later == higher {
 		t.Fatal("late commit was hidden", later, err)
 	}
-	rolledBack, err := s.pool.Begin(ctx)
+	rolledBack, err := s.Pool.Begin(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -302,14 +302,14 @@ func (s *Store) ScheduleEntityCandidates(ctx context.Context, now time.Time) (in
 	if now.IsZero() {
 		return 0, memory.ErrInvalid
 	}
-	if s.models == nil {
+	if s.Models == nil {
 		return 0, nil
 	}
-	p, ok := s.models.Get(s.models.ExtractionID())
+	p, ok := s.Models.Get(s.Models.ExtractionID())
 	if !ok || p.Embedding || p.Transcription {
 		return 0, nil
 	}
-	rows, err := s.pool.Query(ctx, `SELECT DISTINCT r.owner_id::text FROM memory_records r JOIN entity_versions ev ON(ev.owner_id,ev.entity_id,ev.version)=(r.owner_id,r.id,r.version) WHERE r.state='active' AND ev.entity_type IN('person','place','organization','topic','project')`)
+	rows, err := s.Pool.Query(ctx, `SELECT DISTINCT r.owner_id::text FROM memory_records r JOIN entity_versions ev ON(ev.owner_id,ev.entity_id,ev.version)=(r.owner_id,r.id,r.version) WHERE r.state='active' AND ev.entity_type IN('person','place','organization','topic','project')`)
 	if err != nil {
 		return 0, err
 	}
@@ -330,7 +330,7 @@ func (s *Store) ScheduleEntityCandidates(ctx context.Context, now time.Time) (in
 	count := 0
 	for _, owner := range owners {
 		var batch *entityCandidateBatch
-		if err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		if err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 			var e error
 			batch, e = nextEntityCandidateBatchTx(ctx, tx, owner, EntityCompareVersion)
 			return e
@@ -340,7 +340,7 @@ func (s *Store) ScheduleEntityCandidates(ctx context.Context, now time.Time) (in
 		if batch == nil {
 			continue
 		}
-		err := backgroundResultTx(ctx, s.pool, owner, func(ctx context.Context, tx pgx.Tx) error {
+		err := backgroundResultTx(ctx, s.Pool, owner, func(ctx context.Context, tx pgx.Tx) error {
 			if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended(current_database()||':'||current_schema()||':compare-schedule',0))"); err != nil {
 				return err
 			}
@@ -383,7 +383,7 @@ type aliasScanSession struct {
 }
 
 func (a aliasScanSession) Ready() error {
-	if a.store.models == nil {
+	if a.store.Models == nil {
 		return &worker.JobError{Code: "provider_unavailable", Until: time.Now().Add(CompareInterval), NoAttempt: true}
 	}
 	return nil

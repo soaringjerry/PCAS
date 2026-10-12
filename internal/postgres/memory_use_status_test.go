@@ -18,7 +18,7 @@ func TestB4StatusFastReadMatchesSharedContract(t *testing.T) {
 	scope := owner()
 	ctx := context.Background()
 	var eid string
-	if err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	if err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		id, err := entityTx(ctx, tx, scope.OwnerID, "person", "虚构人物晚杉")
 		eid = string(id)
 		return err
@@ -38,7 +38,7 @@ func TestB4StatusFastReadMatchesSharedContract(t *testing.T) {
 	b4Exec(t, s, `UPDATE source_contexts SET role='assistant' WHERE owner_id=$1 AND source_id=ANY(SELECT source_id FROM evidence WHERE owner_id=$1 AND target_id=$2)`, scope.OwnerID, ms[3].ID)
 	compare := func() {
 		t.Helper()
-		err := pgx.BeginTxFunc(ctx, s.pool, pgx.TxOptions{AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
+		err := pgx.BeginTxFunc(ctx, s.Pool, pgx.TxOptions{AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
 			original, err := s.StatusCardIndexTx(ctx, tx, scope)
 			if err != nil {
 				return err
@@ -130,7 +130,7 @@ func TestB4BatchedEvidencePreservesWindows(t *testing.T) {
 	}
 	// Same-anchor deduplication, then an unavailable anchor with an explicit gap.
 	claims = append(claims, claims[0], evidenceContextClaim{Label: "M_missing", Ref: memory.Ref{ID: memory.NewID(), Version: 1, Kind: memory.ClaimKind}, Text: "虚构那位同事"})
-	err := pgx.BeginTxFunc(ctx, s.pool, pgx.TxOptions{AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
+	err := pgx.BeginTxFunc(ctx, s.Pool, pgx.TxOptions{AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
 		a, ag, err := evidenceContextsTx(ctx, tx, scope, "", nil, claims)
 		if err != nil {
 			return err

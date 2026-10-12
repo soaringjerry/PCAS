@@ -77,7 +77,7 @@ func TestSecretarySelfcheckKeepsUnbuiltMemoryContextAndActionAuthority(t *testin
 			deadline := time.Now().Add(2 * time.Second)
 			for {
 				var good, bad, readers int
-				err = s.pool.QueryRow(context.Background(), `SELECT count(*) FILTER(WHERE purpose IN('secretary','selfcheck') AND tier='medium'),count(*) FILTER(WHERE tier!='medium'),count(*) FILTER(WHERE purpose='reader') FROM model_usage WHERE owner_id=$1`, scope.OwnerID).Scan(&good, &bad, &readers)
+				err = s.Pool.QueryRow(context.Background(), `SELECT count(*) FILTER(WHERE purpose IN('secretary','selfcheck') AND tier='medium'),count(*) FILTER(WHERE tier!='medium'),count(*) FILTER(WHERE purpose='reader') FROM model_usage WHERE owner_id=$1`, scope.OwnerID).Scan(&good, &bad, &readers)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -156,7 +156,7 @@ func TestDeputyWithoutBuiltMemoryUsesMediumUnlessExplicitlyLight(t *testing.T) {
 				t.Fatal(state.Runs, calls.Load(), err)
 			}
 			var got int
-			if err = s.pool.QueryRow(context.Background(), "SELECT count(*) FROM model_usage WHERE owner_id=$1 AND tier=$2 AND purpose IN('deputy','selfcheck')", scope.OwnerID, wantTier).Scan(&got); err != nil || got != int(wantCalls) {
+			if err = s.Pool.QueryRow(context.Background(), "SELECT count(*) FROM model_usage WHERE owner_id=$1 AND tier=$2 AND purpose IN('deputy','selfcheck')", scope.OwnerID, wantTier).Scan(&got); err != nil || got != int(wantCalls) {
 				t.Fatal(fmt.Sprint("usage ", got), err)
 			}
 		})

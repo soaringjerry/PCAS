@@ -231,10 +231,10 @@ func TestActivityFoldsProcessingIntoPlainLines(t *testing.T) {
 		}
 		refs = append(refs, result.Ref)
 	}
-	if _, err := s.pool.Exec(ctx, "UPDATE memory_jobs SET state='done' WHERE owner_id=$1 AND record_id=$2", string(scope.OwnerID), string(refs[0].ID)); err != nil {
+	if _, err := s.Pool.Exec(ctx, "UPDATE memory_jobs SET state='done' WHERE owner_id=$1 AND record_id=$2", string(scope.OwnerID), string(refs[0].ID)); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.pool.Exec(ctx, "UPDATE memory_jobs SET state='blocked',error_code='provider_not_configured' WHERE owner_id=$1 AND record_id=$2", string(scope.OwnerID), string(refs[1].ID)); err != nil {
+	if _, err := s.Pool.Exec(ctx, "UPDATE memory_jobs SET state='blocked',error_code='provider_not_configured' WHERE owner_id=$1 AND record_id=$2", string(scope.OwnerID), string(refs[1].ID)); err != nil {
 		t.Fatal(err)
 	}
 	state, err := s.Snapshot(ctx, scope)

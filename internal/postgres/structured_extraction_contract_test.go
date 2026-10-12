@@ -39,7 +39,7 @@ func phase35Extract(t *testing.T, s *Store, scope memory.Scope, ref memory.Ref) 
 func phase35Action(t *testing.T, s *Store, scope memory.Scope, item string) string {
 	t.Helper()
 	var id string
-	err := s.pool.QueryRow(context.Background(), `SELECT id::text FROM action_log WHERE owner_id=$1 AND EXISTS(SELECT 1 FROM jsonb_array_elements(changes) c WHERE c->>'table'='work_items' AND c->>'id'=$2) AND undone_at IS NULL ORDER BY created_at LIMIT 1`, scope.OwnerID, item).Scan(&id)
+	err := s.Pool.QueryRow(context.Background(), `SELECT id::text FROM action_log WHERE owner_id=$1 AND EXISTS(SELECT 1 FROM jsonb_array_elements(changes) c WHERE c->>'table'='work_items' AND c->>'id'=$2) AND undone_at IS NULL ORDER BY created_at LIMIT 1`, scope.OwnerID, item).Scan(&id)
 	if err != nil {
 		t.Fatal("automatic creation lacks undo action", err)
 	}
@@ -123,7 +123,7 @@ func TestStructuredExtractionUsesTrustMatrix(t *testing.T) {
 			if tc.branch == "archive" {
 				archive := b4bImport(t, s, scope, b4bMessages(t, []string{"user"}, []string{it.Quote}))
 				ref = archive.Sources[0]
-			} else if _, err := s.pool.Exec(ctx, `INSERT INTO source_contexts(owner_id,source_id,source_version,role,branch) VALUES($1,$2,1,$3,$4)`, scope.OwnerID, ref.ID, tc.role, tc.branch); err != nil {
+			} else if _, err := s.Pool.Exec(ctx, `INSERT INTO source_contexts(owner_id,source_id,source_version,role,branch) VALUES($1,$2,1,$3,$4)`, scope.OwnerID, ref.ID, tc.role, tc.branch); err != nil {
 				t.Fatal(err)
 			}
 			calls := phase35Model(t, s, func(w http.ResponseWriter, r *http.Request) {
@@ -142,7 +142,7 @@ func TestStructuredExtractionUsesTrustMatrix(t *testing.T) {
 					var record memory.ID
 					var version int
 					var stage string
-					err := s.pool.QueryRow(ctx, `SELECT record_id::text,record_version,stage FROM memory_jobs WHERE owner_id=$1 AND state='queued' AND stage LIKE 'source.extract:conversation:%' ORDER BY created_at LIMIT 1`, scope.OwnerID).Scan(&record, &version, &stage)
+					err := s.Pool.QueryRow(ctx, `SELECT record_id::text,record_version,stage FROM memory_jobs WHERE owner_id=$1 AND state='queued' AND stage LIKE 'source.extract:conversation:%' ORDER BY created_at LIMIT 1`, scope.OwnerID).Scan(&record, &version, &stage)
 					if errors.Is(err, pgx.ErrNoRows) {
 						break
 					}
@@ -174,7 +174,7 @@ func TestStructuredExtractionUsesTrustMatrix(t *testing.T) {
 					Reasons []string
 					Reason  string
 				}
-				r, err := s.pool.Query(ctx, `SELECT document FROM capture_candidates WHERE owner_id=$1 AND state='pending'`, scope.OwnerID)
+				r, err := s.Pool.Query(ctx, `SELECT document FROM capture_candidates WHERE owner_id=$1 AND state='pending'`, scope.OwnerID)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -230,7 +230,7 @@ func TestStructuredExtractionOverflowPreservedAndObservable(t *testing.T) {
 		}
 	}
 	var overflow int
-	err := s.pool.QueryRow(ctx, `SELECT coalesce(sum(count),0) FROM background_stage_events WHERE owner_id=$1 AND stage='source.extract' AND outcome='overflow' AND reason='automatic_task_limit'`, scope.OwnerID).Scan(&overflow)
+	err := s.Pool.QueryRow(ctx, `SELECT coalesce(sum(count),0) FROM background_stage_events WHERE owner_id=$1 AND stage='source.extract' AND outcome='overflow' AND reason='automatic_task_limit'`, scope.OwnerID).Scan(&overflow)
 	if err != nil || overflow != 5 {
 		t.Fatalf("observable overflow=%d err=%v", overflow, err)
 	}
@@ -338,7 +338,7 @@ func TestExtractionFailurePreservesGoodResultAndCounts(t *testing.T) {
 			for attempt := 1; attempt <= 3; attempt++ {
 				j := leaseStage(t, s, scope, ref, "source.extract")
 				j.Attempts = attempt
-				if _, err := s.pool.Exec(ctx, `UPDATE memory_jobs SET attempts=$2 WHERE id=$1`, j.ID, attempt); err != nil {
+				if _, err := s.Pool.Exec(ctx, `UPDATE memory_jobs SET attempts=$2 WHERE id=$1`, j.ID, attempt); err != nil {
 					t.Fatal(err)
 				}
 				err := (extraction.Service{Store: s.ExtractionStore(), Generator: jobCalls(s), MaxAttempts: MaxJobAttempts}).Process(ctx, j)
@@ -351,11 +351,11 @@ func TestExtractionFailurePreservesGoodResultAndCounts(t *testing.T) {
 				}
 				var recorded int
 				var reason string
-				if err := s.pool.QueryRow(ctx, `SELECT coalesce(sum(count),0),coalesce(max(reason),'') FROM background_stage_events WHERE owner_id=$1 AND stage='source.extract' AND outcome='failure'`, scope.OwnerID).Scan(&recorded, &reason); err != nil || recorded < attempt || reason == "" {
+				if err := s.Pool.QueryRow(ctx, `SELECT coalesce(sum(count),0),coalesce(max(reason),'') FROM background_stage_events WHERE owner_id=$1 AND stage='source.extract' AND outcome='failure'`, scope.OwnerID).Scan(&recorded, &reason); err != nil || recorded < attempt || reason == "" {
 					t.Fatalf("failure counts=%d reason=%s err=%v", recorded, reason, err)
 				}
 				var state string
-				if err := s.pool.QueryRow(ctx, `SELECT state FROM memory_jobs WHERE id=$1`, j.ID).Scan(&state); err != nil || state == "done" {
+				if err := s.Pool.QueryRow(ctx, `SELECT state FROM memory_jobs WHERE id=$1`, j.ID).Scan(&state); err != nil || state == "done" {
 					t.Fatalf("failed result marked processed state=%s err=%v", state, err)
 				}
 				if !reflect.DeepEqual(before, phase35Work(phase35Snapshot(t, s, scope))) {
@@ -377,7 +377,7 @@ func TestExtractionRetriesPaidResultAfterPersistenceFailure(t *testing.T) {
 		secretaryModelReply(w, extracted{Items: []extractedItem{it}})
 	})
 	// Injection targets only the owned DB business row, AFTER paid result storage.
-	_, err := s.pool.Exec(ctx, `CREATE FUNCTION phase35_reject_work() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'phase35 injected business write failure'; END $$; CREATE TRIGGER phase35_reject_work BEFORE INSERT ON work_items FOR EACH ROW EXECUTE FUNCTION phase35_reject_work()`)
+	_, err := s.Pool.Exec(ctx, `CREATE FUNCTION phase35_reject_work() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'phase35 injected business write failure'; END $$; CREATE TRIGGER phase35_reject_work BEFORE INSERT ON work_items FOR EACH ROW EXECUTE FUNCTION phase35_reject_work()`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -386,18 +386,18 @@ func TestExtractionRetriesPaidResultAfterPersistenceFailure(t *testing.T) {
 		t.Fatal("write fault did not reach real business transaction")
 	}
 	var n int
-	if err := s.pool.QueryRow(ctx, `SELECT count(*) FROM background_model_results WHERE job_id=$1`, j.ID).Scan(&n); err != nil || n != 1 {
+	if err := s.Pool.QueryRow(ctx, `SELECT count(*) FROM background_model_results WHERE job_id=$1`, j.ID).Scan(&n); err != nil || n != 1 {
 		t.Fatal("paid result not retained", n, err)
 	}
-	if _, err := s.pool.Exec(ctx, `DROP TRIGGER phase35_reject_work ON work_items; DROP FUNCTION phase35_reject_work()`); err != nil {
+	if _, err := s.Pool.Exec(ctx, `DROP TRIGGER phase35_reject_work ON work_items; DROP FUNCTION phase35_reject_work()`); err != nil {
 		t.Fatal(err)
 	}
-	peer, err := Open(ctx, s.pool.Config().ConnString())
+	peer, err := Open(ctx, s.Pool.Config().ConnString())
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer peer.Close()
-	peer.SetModels(s.models)
+	peer.SetModels(s.Models)
 	if err := (extraction.Service{Store: peer.ExtractionStore(), Generator: jobCalls(peer), MaxAttempts: MaxJobAttempts}).Process(ctx, j); err != nil {
 		t.Fatal("durable retry", err)
 	}
@@ -419,7 +419,7 @@ func TestSingleSourceChangeLeavesUnrelatedPaidResult(t *testing.T) {
 	phase35Extract(t, s, scope, refs[0])
 	phase35Extract(t, s, scope, refs[1])
 	var before string
-	if err := s.pool.QueryRow(ctx, `SELECT md5(to_jsonb(j)::text||xmin::text) FROM memory_jobs j WHERE owner_id=$1 AND record_id=$2 AND stage='source.extract'`, scope.OwnerID, refs[1].ID).Scan(&before); err != nil {
+	if err := s.Pool.QueryRow(ctx, `SELECT md5(to_jsonb(j)::text||xmin::text) FROM memory_jobs j WHERE owner_id=$1 AND record_id=$2 AND stage='source.extract'`, scope.OwnerID, refs[1].ID).Scan(&before); err != nil {
 		t.Fatal(err)
 	}
 	source, err := s.GetSource(ctx, scope, refs[0].ID, 1)
@@ -432,7 +432,7 @@ func TestSingleSourceChangeLeavesUnrelatedPaidResult(t *testing.T) {
 	}
 	phase35Extract(t, s, scope, r.Ref)
 	var after string
-	if err := s.pool.QueryRow(ctx, `SELECT md5(to_jsonb(j)::text||xmin::text) FROM memory_jobs j WHERE owner_id=$1 AND record_id=$2 AND stage='source.extract'`, scope.OwnerID, refs[1].ID).Scan(&after); err != nil {
+	if err := s.Pool.QueryRow(ctx, `SELECT md5(to_jsonb(j)::text||xmin::text) FROM memory_jobs j WHERE owner_id=$1 AND record_id=$2 AND stage='source.extract'`, scope.OwnerID, refs[1].ID).Scan(&after); err != nil {
 		t.Fatal(err)
 	}
 	if before != after || calls.Load() != 3 {
@@ -449,18 +449,18 @@ func TestMemoryStagesHaveIndependentBudgets(t *testing.T) {
 		if backgroundHourlyBudgets[stage] != want {
 			t.Fatalf("%s budget=%d want=%d", stage, backgroundHourlyBudgets[stage], want)
 		}
-		if _, err := s.pool.Exec(ctx, `INSERT INTO background_usage(id,owner_id,reserved_cost,stage) SELECT gen_random_uuid(),$1,0,$2 FROM generate_series(1,$3)`, scope.OwnerID, stage, want); err != nil {
+		if _, err := s.Pool.Exec(ctx, `INSERT INTO background_usage(id,owner_id,reserved_cost,stage) SELECT gen_random_uuid(),$1,0,$2 FROM generate_series(1,$3)`, scope.OwnerID, stage, want); err != nil {
 			t.Fatal(err)
 		}
-		err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error { return backgroundHourlyTx(ctx, tx, stage, "phase35_hourly_limit") })
+		err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error { return backgroundHourlyTx(ctx, tx, stage, "phase35_hourly_limit") })
 		var e *worker.JobError
 		if !errors.As(err, &e) || !e.NoAttempt || e.Until.IsZero() {
 			t.Fatalf("%s did not enforce independent budget: %v", stage, err)
 		}
-		if _, err := s.pool.Exec(ctx, `DELETE FROM background_usage WHERE owner_id=$1 AND stage=$2`, scope.OwnerID, stage); err != nil {
+		if _, err := s.Pool.Exec(ctx, `DELETE FROM background_usage WHERE owner_id=$1 AND stage=$2`, scope.OwnerID, stage); err != nil {
 			t.Fatal(err)
 		}
-		if err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error { return backgroundHourlyTx(ctx, tx, stage, "phase35_hourly_limit") }); err != nil {
+		if err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error { return backgroundHourlyTx(ctx, tx, stage, "phase35_hourly_limit") }); err != nil {
 			t.Fatal("unused own capacity unavailable", err)
 		}
 	}

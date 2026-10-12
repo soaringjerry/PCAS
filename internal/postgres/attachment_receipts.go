@@ -20,7 +20,7 @@ func (s *Store) attachmentReceipt(ctx context.Context, scope memory.Scope, ref m
 		return v.(*paidModelResult), nil
 	}
 	var out paidModelResult
-	err := s.pool.QueryRow(ctx, `SELECT body FROM attachment_model_results WHERE owner_id=$1 AND source_id=$2 AND source_version=$3 AND component=$4`, string(scope.OwnerID), string(ref.ID), ref.Version, component).Scan(&out)
+	err := s.Pool.QueryRow(ctx, `SELECT body FROM attachment_model_results WHERE owner_id=$1 AND source_id=$2 AND source_version=$3 AND component=$4`, string(scope.OwnerID), string(ref.ID), ref.Version, component).Scan(&out)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -35,7 +35,7 @@ func (s *Store) saveAttachmentReceipt(ctx context.Context, scope memory.Scope, r
 	s.pendingPaid.Store(key, paid)
 	for {
 		persist, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
-		tag, err := s.pool.Exec(persist, `INSERT INTO attachment_model_results(owner_id,source_id,source_version,component,body) SELECT $1,$2,$3,$4,$5 FROM memory_records r WHERE r.owner_id=$1 AND r.id=$2 AND r.version=$3 AND r.state='active' FOR SHARE OF r ON CONFLICT(owner_id,source_id,source_version,component) DO UPDATE SET body=attachment_model_results.body`, string(scope.OwnerID), string(ref.ID), ref.Version, component, kernel.JSON(paid))
+		tag, err := s.Pool.Exec(persist, `INSERT INTO attachment_model_results(owner_id,source_id,source_version,component,body) SELECT $1,$2,$3,$4,$5 FROM memory_records r WHERE r.owner_id=$1 AND r.id=$2 AND r.version=$3 AND r.state='active' FOR SHARE OF r ON CONFLICT(owner_id,source_id,source_version,component) DO UPDATE SET body=attachment_model_results.body`, string(scope.OwnerID), string(ref.ID), ref.Version, component, kernel.JSON(paid))
 		cancel()
 		if err == nil {
 			s.pendingPaid.Delete(key)

@@ -25,7 +25,7 @@ func TestPhase26C7EffectiveSignalsChangeRankingAtScale(t *testing.T) {
 			t.Fatal(err)
 		}
 		j := worker.Job{OwnerID: f.Scope.OwnerID, Record: ref, Stage: "memory.index", LeaseToken: memory.NewID()}
-		if err := f.Store.pool.QueryRow(f.Context, `UPDATE memory_jobs SET state='leased',lease_token=$4,lease_until=now()+interval '5 minutes',attempts=attempts+1 WHERE owner_id=$1 AND record_id=$2 AND record_version=1 AND stage=$3 RETURNING id,attempts`, j.OwnerID, ref.ID, j.Stage, j.LeaseToken).Scan(&j.ID, &j.Attempts); err != nil {
+		if err := f.Store.Pool.QueryRow(f.Context, `UPDATE memory_jobs SET state='leased',lease_token=$4,lease_until=now()+interval '5 minutes',attempts=attempts+1 WHERE owner_id=$1 AND record_id=$2 AND record_version=1 AND stage=$3 RETURNING id,attempts`, j.OwnerID, ref.ID, j.Stage, j.LeaseToken).Scan(&j.ID, &j.Attempts); err != nil {
 			t.Fatal(err)
 		}
 		if err := f.Store.ProcessIndex(f.Context, j); err != nil {
@@ -53,7 +53,7 @@ func TestPhase26C7EffectiveSignalsChangeRankingAtScale(t *testing.T) {
 		t.Fatal("ranking disabled did not restore baseline")
 	}
 	var mentions, adoptions int
-	if err := f.Store.pool.QueryRow(f.Context, `SELECT count(*) FILTER(WHERE kind='user_mention'),count(*) FILTER(WHERE kind='adoption') FROM use_events WHERE owner_id=$1 AND record_id=$2`, f.Scope.OwnerID, target.ID).Scan(&mentions, &adoptions); err != nil || mentions != 1 || adoptions != 1 {
+	if err := f.Store.Pool.QueryRow(f.Context, `SELECT count(*) FILTER(WHERE kind='user_mention'),count(*) FILTER(WHERE kind='adoption') FROM use_events WHERE owner_id=$1 AND record_id=$2`, f.Scope.OwnerID, target.ID).Scan(&mentions, &adoptions); err != nil || mentions != 1 || adoptions != 1 {
 		t.Fatalf("signal counts=%d/%d err=%v", mentions, adoptions, err)
 	}
 	t.Logf("same fictitious target ranks 8th with signals off, 1st with signals on; stored mentions=%d adoptions=%d", mentions, adoptions)
@@ -118,7 +118,7 @@ func TestPhase26C7EffectiveSignalsChangeRankingAtScale(t *testing.T) {
 	if _, err := f.Store.DeskTurn(WithMemoryTier(f.Context, "light"), f.Scope, firstReq); err != nil {
 		t.Fatal(err)
 	}
-	if err := f.Store.pool.QueryRow(f.Context, `SELECT count(*) FILTER(WHERE kind='user_mention'),count(*) FILTER(WHERE kind='adoption') FROM use_events WHERE owner_id=$1 AND record_id=$2`, f.Scope.OwnerID, target.ID).Scan(&mentions, &adoptions); err != nil || mentions != 2 || adoptions != 2 || len(m.calls("secretary")) != 2 {
+	if err := f.Store.Pool.QueryRow(f.Context, `SELECT count(*) FILTER(WHERE kind='user_mention'),count(*) FILTER(WHERE kind='adoption') FROM use_events WHERE owner_id=$1 AND record_id=$2`, f.Scope.OwnerID, target.ID).Scan(&mentions, &adoptions); err != nil || mentions != 2 || adoptions != 2 || len(m.calls("secretary")) != 2 {
 		t.Fatalf("actual turns/replay signal counts=%d/%d calls=%d err=%v", mentions, adoptions, len(m.calls("secretary")), err)
 	}
 	t.Log("actual secretary mention/adoption add exactly one signal each; request replay adds neither call nor signal")

@@ -40,7 +40,7 @@ func TestEditedArtifactRetainsFieldProvenance(t *testing.T) {
 			workspaceCommand(t, s, scope, edit)
 			// Inspect the derived dependency separately from normal memory recall,
 			// which could otherwise mask a missing artifact dependency in a run.
-			err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+			err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 				item, err := getItem(ctx, tx, scope, id)
 				if err != nil {
 					return err
@@ -89,11 +89,11 @@ func TestPromotedIdeaRetainsArtifactProvenance(t *testing.T) {
 	st = workspaceCommand(t, s, scope, workspace.Command{Type: "ideaPromote", ID: idea.ID})
 	task := st.Tasks[0]
 	var copied int
-	if err := s.pool.QueryRow(ctx, "SELECT count(*) FROM adopted_artifacts WHERE owner_id=$1 AND thing_id=$2 AND run_id=$3 AND kind='notes'", string(scope.OwnerID), task.ID, run.ID).Scan(&copied); err != nil || copied != 1 {
+	if err := s.Pool.QueryRow(ctx, "SELECT count(*) FROM adopted_artifacts WHERE owner_id=$1 AND thing_id=$2 AND run_id=$3 AND kind='notes'", string(scope.OwnerID), task.ID, run.ID).Scan(&copied); err != nil || copied != 1 {
 		t.Fatalf("promotion did not copy field provenance: %d %v", copied, err)
 	}
 	// Simulate a task promoted before provenance was copied by this release.
-	if _, err := s.pool.Exec(ctx, "DELETE FROM adopted_artifacts WHERE owner_id=$1 AND thing_id=$2", string(scope.OwnerID), task.ID); err != nil {
+	if _, err := s.Pool.Exec(ctx, "DELETE FROM adopted_artifacts WHERE owner_id=$1 AND thing_id=$2", string(scope.OwnerID), task.ID); err != nil {
 		t.Fatal(err)
 	}
 	workspaceCommand(t, s, scope, workspace.Command{Type: "setMemoryVisibility", ID: mem.ID, AgentIDs: []string{}})
@@ -101,11 +101,11 @@ func TestPromotedIdeaRetainsArtifactProvenance(t *testing.T) {
 	if strings.Contains(st.Runs[0].Brief, "私密事实") {
 		t.Fatal("promoted copy bypassed revocation")
 	}
-	if err := s.pool.QueryRow(ctx, "SELECT count(*) FROM adopted_artifacts WHERE owner_id=$1 AND thing_id=$2 AND run_id=$3 AND kind='notes'", string(scope.OwnerID), task.ID, run.ID).Scan(&copied); err != nil || copied != 1 {
+	if err := s.Pool.QueryRow(ctx, "SELECT count(*) FROM adopted_artifacts WHERE owner_id=$1 AND thing_id=$2 AND run_id=$3 AND kind='notes'", string(scope.OwnerID), task.ID, run.ID).Scan(&copied); err != nil || copied != 1 {
 		t.Fatalf("legacy promotion was not repaired before use: %d %v", copied, err)
 	}
 	// Deletion must repair old promotions independently of a later model run.
-	if _, err := s.pool.Exec(ctx, "DELETE FROM adopted_artifacts WHERE owner_id=$1 AND thing_id=$2", string(scope.OwnerID), task.ID); err != nil {
+	if _, err := s.Pool.Exec(ctx, "DELETE FROM adopted_artifacts WHERE owner_id=$1 AND thing_id=$2", string(scope.OwnerID), task.ID); err != nil {
 		t.Fatal(err)
 	}
 	workspaceCommand(t, s, scope, workspace.Command{Type: "deleteMemory", ID: mem.ID, IncludeSources: true})

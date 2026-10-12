@@ -534,7 +534,7 @@ func phase26LoadFixture(t *testing.T) *phase26LoadedFixture {
 	}
 	// SQL only establishes labels/memberships, not output under acceptance.
 	// Real migrations, constraints and triggers stay enabled.
-	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		batch := &pgx.Batch{}
 		for i, m := range f.Corpus.Memories {
 			batch.Queue(`UPDATE claim_revisions SET category=$3,durable=true WHERE owner_id=$1 AND claim_id=$2 AND version=1`, f.Scope.OwnerID, f.Claims[i], m.Category)
@@ -562,7 +562,7 @@ func phase26LoadFixture(t *testing.T) *phase26LoadedFixture {
 	}
 	// Fresh disposable databases otherwise lack production-scale planner statistics.
 	// Analyze only this owned synthetic database; retain all real indexes/triggers.
-	if _, err := s.pool.Exec(ctx, "ANALYZE"); err != nil {
+	if _, err := s.Pool.Exec(ctx, "ANALYZE"); err != nil {
 		t.Fatal(err)
 	}
 	return f
@@ -575,7 +575,7 @@ func TestPhase26T1LoadedScaleAndProvenance(t *testing.T) {
 	counts := map[string]int{}
 	for _, table := range []string{"claims", "entities", "evidence", "sources"} {
 		var n int
-		if err := s.pool.QueryRow(ctx, "SELECT count(*) FROM "+table+" WHERE owner_id=$1", owner).Scan(&n); err != nil {
+		if err := s.Pool.QueryRow(ctx, "SELECT count(*) FROM "+table+" WHERE owner_id=$1", owner).Scan(&n); err != nil {
 			t.Fatal(err)
 		}
 		counts[table] = n
@@ -583,7 +583,7 @@ func TestPhase26T1LoadedScaleAndProvenance(t *testing.T) {
 	if !reflect.DeepEqual(counts, map[string]int{"claims": 5000, "entities": 1000, "evidence": 5000, "sources": 50}) {
 		t.Fatalf("loaded scale=%v", counts)
 	}
-	rows, err := s.pool.Query(ctx, `SELECT r.id::text,r.state,cl.retired,c.category,c.value,rv.expressed_at FROM memory_records r JOIN claims cl ON (cl.owner_id,cl.id)=(r.owner_id,r.id) JOIN claim_revisions c ON (c.owner_id,c.claim_id,c.version)=(r.owner_id,r.id,r.version) JOIN record_versions rv ON (rv.owner_id,rv.record_id,rv.version)=(r.owner_id,r.id,r.version) WHERE r.owner_id=$1`, owner)
+	rows, err := s.Pool.Query(ctx, `SELECT r.id::text,r.state,cl.retired,c.category,c.value,rv.expressed_at FROM memory_records r JOIN claims cl ON (cl.owner_id,cl.id)=(r.owner_id,r.id) JOIN claim_revisions c ON (c.owner_id,c.claim_id,c.version)=(r.owner_id,r.id,r.version) JOIN record_versions rv ON (rv.owner_id,rv.record_id,rv.version)=(r.owner_id,r.id,r.version) WHERE r.owner_id=$1`, owner)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -621,7 +621,7 @@ func TestPhase26T1LoadedScaleAndProvenance(t *testing.T) {
 		t.Fatal("missing current memories")
 	}
 	var broken int
-	if err := s.pool.QueryRow(ctx, `SELECT count(*) FROM claims c WHERE c.owner_id=$1 AND NOT claim_source_is_current(c.owner_id,c.id,1,$2)`, owner, f.Corpus.Now).Scan(&broken); err != nil {
+	if err := s.Pool.QueryRow(ctx, `SELECT count(*) FROM claims c WHERE c.owner_id=$1 AND NOT claim_source_is_current(c.owner_id,c.id,1,$2)`, owner, f.Corpus.Now).Scan(&broken); err != nil {
 		t.Fatal(err)
 	}
 	if broken != 0 {
@@ -629,7 +629,7 @@ func TestPhase26T1LoadedScaleAndProvenance(t *testing.T) {
 	}
 	// The membership view is only the loading adapter. T2 must compare all new
 	// readers against the independent graph, not use this view as its oracle.
-	rows, err = s.pool.Query(ctx, `SELECT key,name,kind,claim_id::text FROM status_current_members WHERE owner_id=$1`, owner)
+	rows, err = s.Pool.Query(ctx, `SELECT key,name,kind,claim_id::text FROM status_current_members WHERE owner_id=$1`, owner)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -683,7 +683,7 @@ func TestPhase26T1LoadedScaleAndProvenance(t *testing.T) {
 		}
 	}
 	var results int
-	if err := s.pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM deadlines WHERE owner_id=$1)+(SELECT count(*) FROM model_usage WHERE owner_id=$1)`, owner).Scan(&results); err != nil {
+	if err := s.Pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM deadlines WHERE owner_id=$1)+(SELECT count(*) FROM model_usage WHERE owner_id=$1)`, owner).Scan(&results); err != nil {
 		t.Fatal(err)
 	}
 	if results != 0 {

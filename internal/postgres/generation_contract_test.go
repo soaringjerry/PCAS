@@ -20,7 +20,7 @@ func TestUnsupportedRequiredSchemaHasCallRecordWithoutSpending(t *testing.T) {
 	ordinarySecretaryModel(t, s, func(http.ResponseWriter, *http.Request) { invocations.Add(1) })
 	organizeTestMemory(t, s, scope, "Fictitious unfinished report.")
 	job := organizeTestJob(t, s, scope)
-	request := modelcall.Request{OwnerID: scope.OwnerID, ExecutionID: job.ID, RootExecutionID: job.ID, Function: "organize", Stage: job.Stage, ProviderID: s.models.ExtractionID(), Instructions: prompts.Must("organize"), Schema: prompts.MustSchema("use-groups"), ContextBuilderVersion: "fictitious-context-v1", Prompt: kernel.JSON(map[string]string{"rawPrompt": "Fictitious input."}), Policy: job}
+	request := modelcall.Request{OwnerID: scope.OwnerID, ExecutionID: job.ID, RootExecutionID: job.ID, Function: "organize", Stage: job.Stage, ProviderID: s.Models.ExtractionID(), Instructions: prompts.Must("organize"), Schema: prompts.MustSchema("use-groups"), ContextBuilderVersion: "fictitious-context-v1", Prompt: kernel.JSON(map[string]string{"rawPrompt": "Fictitious input."}), Policy: job}
 	ctx := context.Background()
 	if _, err := s.Gateway().Call(ctx, request); !errors.Is(err, ai.ErrUnsupportedCapability) {
 		t.Fatal("unsupported schema did not fail explicitly", err)
@@ -29,7 +29,7 @@ func TestUnsupportedRequiredSchemaHasCallRecordWithoutSpending(t *testing.T) {
 	var capabilities []string
 	var actualMode map[string]any
 	var reservations, usages int
-	err := s.pool.QueryRow(ctx, `SELECT outcome,error_code,accounting_state,schema_name,schema_hash,context_builder_version,required_capabilities,actual_mode,
+	err := s.Pool.QueryRow(ctx, `SELECT outcome,error_code,accounting_state,schema_name,schema_hash,context_builder_version,required_capabilities,actual_mode,
  (SELECT count(*) FROM background_usage WHERE owner_id=$1),
  (SELECT count(*) FROM model_usage WHERE owner_id=$1)
  FROM model_calls WHERE owner_id=$1 AND execution_id=$2`, string(scope.OwnerID), string(job.ID)).Scan(&outcome, &code, &accounting, &schemaName, &schemaHash, &builder, &capabilities, &actualMode, &reservations, &usages)
@@ -54,7 +54,7 @@ func TestSelectedCodexCallRecordsRegisteredModeAndExactUsageLink(t *testing.T) {
 	var outcome, accounting, schemaHash, model string
 	var mode map[string]any
 	var usageCount int
-	if err := s.pool.QueryRow(ctx, `SELECT outcome,accounting_state,schema_hash,model,actual_mode,
+	if err := s.Pool.QueryRow(ctx, `SELECT outcome,accounting_state,schema_hash,model,actual_mode,
  (SELECT count(*) FROM model_usage u WHERE u.owner_id=c.owner_id AND u.id=c.usage_id AND u.id=c.reservation_id)
  FROM model_calls c WHERE owner_id=$1 AND id=$2`, string(scope.OwnerID), string(paid.InvocationID)).Scan(&outcome, &accounting, &schemaHash, &model, &mode, &usageCount); err != nil {
 		t.Fatal(err)
@@ -67,7 +67,7 @@ func TestSelectedCodexCallRecordsRegisteredModeAndExactUsageLink(t *testing.T) {
 	if err := (backgroundCalls{store: s}).Save(ctx, request, paid); err != nil {
 		t.Fatal(err)
 	}
-	peer, err := Open(ctx, s.pool.Config().ConnConfig.ConnString())
+	peer, err := Open(ctx, s.Pool.Config().ConnConfig.ConnString())
 	if err != nil {
 		t.Fatal(err)
 	}

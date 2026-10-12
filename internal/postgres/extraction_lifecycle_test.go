@@ -119,7 +119,7 @@ func TestDirectCaptureEntersDefaultRunAsSourceBacked(t *testing.T) {
 	if !strings.Contains(run.Brief, text) || !kernel.OneOf(m.ID, run.ContextMemoryIDs...) {
 		t.Fatal("current direct capture missing from default assistant context", run.Brief)
 	}
-	if err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error { return verifyRunTx(ctx, tx, scope, run) }); err != nil {
+	if err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error { return verifyRunTx(ctx, tx, scope, run) }); err != nil {
 		t.Fatal("source-backed run rejected during validation", err)
 	}
 	if calls.Load() != 1 {
@@ -131,7 +131,7 @@ func rememberExtractedForTest(t *testing.T, s *Store, scope memory.Scope, source
 	t.Helper()
 	ctx := context.Background()
 	var ref memory.Ref
-	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		if err := s.ensureOwner(ctx, tx, scope); err != nil {
 			return err
 		}
@@ -148,7 +148,7 @@ func rememberExtractedForTest(t *testing.T, s *Store, scope memory.Scope, source
 func claimIsApplicable(t *testing.T, s *Store, scope memory.Scope, ref memory.Ref, known time.Time) bool {
 	t.Helper()
 	var exists bool
-	err := s.pool.QueryRow(context.Background(), "SELECT EXISTS(SELECT 1 FROM applicable_claim_versions($1,now(),$3) WHERE claim_id=$2)", string(scope.OwnerID), string(ref.ID), known).Scan(&exists)
+	err := s.Pool.QueryRow(context.Background(), "SELECT EXISTS(SELECT 1 FROM applicable_claim_versions($1,now(),$3) WHERE claim_id=$2)", string(scope.OwnerID), string(ref.ID), known).Scan(&exists)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -166,7 +166,7 @@ func TestSourceReplacementRetainsHistoryAndRefreshesRepeatedEvidence(t *testing.
 	old := rememberExtractedForTest(t, s, scope, src1.Ref, oldText)
 	stable := rememberExtractedForTest(t, s, scope, src1.Ref, stableText)
 	var knownBefore time.Time
-	if err := s.pool.QueryRow(ctx, "SELECT clock_timestamp()").Scan(&knownBefore); err != nil {
+	if err := s.Pool.QueryRow(ctx, "SELECT clock_timestamp()").Scan(&knownBefore); err != nil {
 		t.Fatal(err)
 	}
 	in.ExternalVersion = "v2"
@@ -191,11 +191,11 @@ func TestSourceReplacementRetainsHistoryAndRefreshesRepeatedEvidence(t *testing.
 		t.Fatal("current source evidence did not replace the old current view")
 	}
 	var count int
-	if err := s.pool.QueryRow(ctx, "SELECT count(*) FROM evidence WHERE owner_id=$1 AND target_id=$2 AND source_id=$3 AND source_version=$4", string(scope.OwnerID), string(stable.ID), string(src2.ID), src2.Version).Scan(&count); err != nil || count != 1 {
+	if err := s.Pool.QueryRow(ctx, "SELECT count(*) FROM evidence WHERE owner_id=$1 AND target_id=$2 AND source_id=$3 AND source_version=$4", string(scope.OwnerID), string(stable.ID), string(src2.ID), src2.Version).Scan(&count); err != nil || count != 1 {
 		t.Fatal("new source version missing exact supporting evidence", count, err)
 	}
 	rememberExtractedForTest(t, s, scope, src2.Ref, stableText)
-	if err := s.pool.QueryRow(ctx, "SELECT count(*) FROM evidence WHERE owner_id=$1 AND target_id=$2 AND source_id=$3 AND source_version=$4", string(scope.OwnerID), string(stable.ID), string(src2.ID), src2.Version).Scan(&count); err != nil || count != 1 {
+	if err := s.Pool.QueryRow(ctx, "SELECT count(*) FROM evidence WHERE owner_id=$1 AND target_id=$2 AND source_id=$3 AND source_version=$4", string(scope.OwnerID), string(stable.ID), string(src2.ID), src2.Version).Scan(&count); err != nil || count != 1 {
 		t.Fatal("evidence retry was not idempotent", count, err)
 	}
 	if out, err := s.Expand(ctx, scope, memory.ExpandRequest{Refs: []memory.Ref{old}, History: true, Evidence: true}); err != nil || len(out.Claims) != 1 {
@@ -266,11 +266,11 @@ func TestSupersededExtractionDoesNotCommitOrCallProvider(t *testing.T) {
 				t.Fatal("superseded job performed unexpected provider request", calls.Load())
 			}
 			var count int
-			if err := s.pool.QueryRow(ctx, "SELECT count(*) FROM claims WHERE owner_id=$1", string(scope.OwnerID)).Scan(&count); err != nil || count != 0 {
+			if err := s.Pool.QueryRow(ctx, "SELECT count(*) FROM claims WHERE owner_id=$1", string(scope.OwnerID)).Scan(&count); err != nil || count != 0 {
 				t.Fatal("stale extraction committed claims", count, err)
 			}
 			var state string
-			if err := s.pool.QueryRow(ctx, "SELECT state FROM memory_jobs WHERE id=$1", string(job.ID)).Scan(&state); err != nil || state != "done" {
+			if err := s.Pool.QueryRow(ctx, "SELECT state FROM memory_jobs WHERE id=$1", string(job.ID)).Scan(&state); err != nil || state != "done" {
 				t.Fatal("superseded extraction left retryable job", state, err)
 			}
 		})

@@ -48,7 +48,7 @@ func (s *Store) UploadProjectFile(ctx context.Context, scope memory.Scope, item,
 	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err
 	}
-	if s.blobs == nil {
+	if s.Blobs == nil {
 		return out, memory.ErrUnavailable
 	}
 	if strings.TrimSpace(name) == "" || len(name) > 2000 || input == nil {
@@ -71,11 +71,11 @@ func (s *Store) UploadProjectFile(ctx context.Context, scope memory.Scope, item,
 		}
 	}
 	// Validate the destination before writing a blob, then recheck in the commit.
-	if err := pgx.BeginTxFunc(ctx, s.pool, pgx.TxOptions{AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error { _, err := studioFileProjectTx(ctx, tx, scope, item); return err }); err != nil {
+	if err := pgx.BeginTxFunc(ctx, s.Pool, pgx.TxOptions{AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error { _, err := studioFileProjectTx(ctx, tx, scope, item); return err }); err != nil {
 		return out, err
 	}
 	count := &fileCountingReader{Reader: input}
-	key, err := s.blobs.Put(ctx, scope, count)
+	key, err := s.Blobs.Put(ctx, scope, count)
 	if count.n > blob.MaxBytes {
 		return out, workspace.ErrFileTooLarge
 	}
@@ -88,11 +88,11 @@ func (s *Store) UploadProjectFile(ctx context.Context, scope memory.Scope, item,
 	used := false
 	defer func() {
 		if !used {
-			_, _ = s.pool.Exec(context.WithoutCancel(ctx), "INSERT INTO blob_cleanup_jobs(owner_id,blob_key) VALUES($1,$2) ON CONFLICT DO NOTHING", string(scope.OwnerID), key)
+			_, _ = s.Pool.Exec(context.WithoutCancel(ctx), "INSERT INTO blob_cleanup_jobs(owner_id,blob_key) VALUES($1,$2) ON CONFLICT DO NOTHING", string(scope.OwnerID), key)
 		}
 	}()
 	hash := strings.Split(strings.Split(key, "/")[1], "-")[0]
-	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	err = pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(scope.OwnerID)); err != nil {
 			return err
 		}
@@ -213,7 +213,7 @@ func (s *Store) ListProjectFiles(ctx context.Context, scope memory.Scope, item s
 	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err
 	}
-	err := pgx.BeginTxFunc(ctx, s.pool, pgx.TxOptions{AccessMode: pgx.ReadOnly, IsoLevel: pgx.RepeatableRead}, func(tx pgx.Tx) error {
+	err := pgx.BeginTxFunc(ctx, s.Pool, pgx.TxOptions{AccessMode: pgx.ReadOnly, IsoLevel: pgx.RepeatableRead}, func(tx pgx.Tx) error {
 		project, err := studioFileProjectTx(ctx, tx, scope, item)
 		if err != nil {
 			return err
@@ -243,7 +243,7 @@ func (s *Store) DeleteProjectFile(ctx context.Context, scope memory.Scope, item,
 	if !memory.ID(source).Valid() {
 		return memory.ErrInvalid
 	}
-	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	return pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(scope.OwnerID)); err != nil {
 			return err
 		}

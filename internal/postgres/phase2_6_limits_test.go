@@ -37,7 +37,7 @@ func TestPhase26A11ExtractionKeepsAll65ItemsAtScale(t *testing.T) {
 	if err := (extraction.Service{Store: f.Store.ExtractionStore(), Generator: jobCalls(f.Store), MaxAttempts: MaxJobAttempts}).Process(f.Context, j); err != nil {
 		t.Fatal(err)
 	}
-	rows, err := f.Store.pool.Query(f.Context, `SELECT c.value #>> '{}' FROM evidence e JOIN claim_revisions c ON(c.owner_id,c.claim_id,c.version)=(e.owner_id,e.target_id,e.target_version) WHERE e.owner_id=$1 AND e.source_id=$2`, f.Scope.OwnerID, src.ID)
+	rows, err := f.Store.Pool.Query(f.Context, `SELECT c.value #>> '{}' FROM evidence e JOIN claim_revisions c ON(c.owner_id,c.claim_id,c.version)=(e.owner_id,e.target_id,e.target_version) WHERE e.owner_id=$1 AND e.source_id=$2`, f.Scope.OwnerID, src.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -72,7 +72,7 @@ func TestPhase26G7A3IndependentHourlyBudgets(t *testing.T) {
 		for i := 0; i < tc.limit; i++ {
 			phase26Exec(t, f, `INSERT INTO background_usage(id,owner_id,reserved_cost,stage) VALUES($1,$2,0,$3)`, memory.NewID(), f.Scope.OwnerID, tc.stage)
 		}
-		if err := pgx.BeginFunc(f.Context, f.Store.pool, func(tx pgx.Tx) error { return backgroundHourlyTx(f.Context, tx, tc.stage, "phase26_limit") }); err == nil {
+		if err := pgx.BeginFunc(f.Context, f.Store.Pool, func(tx pgx.Tx) error { return backgroundHourlyTx(f.Context, tx, tc.stage, "phase26_limit") }); err == nil {
 			t.Errorf("%s exceeded frozen hourly cap=%d", tc.stage, tc.limit)
 		}
 		// Other stage allowances remain usable until THEIR own independent cap.
@@ -81,11 +81,11 @@ func TestPhase26G7A3IndependentHourlyBudgets(t *testing.T) {
 				continue
 			}
 			var n int
-			if err := f.Store.pool.QueryRow(f.Context, `SELECT count(*) FROM background_usage WHERE stage=$1`, other.stage).Scan(&n); err != nil {
+			if err := f.Store.Pool.QueryRow(f.Context, `SELECT count(*) FROM background_usage WHERE stage=$1`, other.stage).Scan(&n); err != nil {
 				t.Fatal(err)
 			}
 			if n < other.limit {
-				if err := pgx.BeginFunc(f.Context, f.Store.pool, func(tx pgx.Tx) error { return backgroundHourlyTx(f.Context, tx, other.stage, "phase26_limit") }); err != nil {
+				if err := pgx.BeginFunc(f.Context, f.Store.Pool, func(tx pgx.Tx) error { return backgroundHourlyTx(f.Context, tx, other.stage, "phase26_limit") }); err != nil {
 					t.Errorf("%s borrowed/exhausted %s allowance: %v", tc.stage, other.stage, err)
 				}
 			}
@@ -124,7 +124,7 @@ func TestPhase26G2A5B5InvalidOutputsPreserveGoodData(t *testing.T) {
 		}
 	}
 	var marked int
-	if err := f.Store.pool.QueryRow(f.Context, `SELECT count(*) FROM claims WHERE owner_id=$1 AND organized>=2`, owner).Scan(&marked); err != nil {
+	if err := f.Store.Pool.QueryRow(f.Context, `SELECT count(*) FROM claims WHERE owner_id=$1 AND organized>=2`, owner).Scan(&marked); err != nil {
 		t.Fatal(err)
 	}
 	if marked != 0 || len(m.calls(OrganizeStage)) != 4 {

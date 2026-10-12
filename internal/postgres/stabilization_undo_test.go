@@ -38,7 +38,7 @@ func stabilizationUndoBusiness(t *testing.T, s *Store, scope memory.Scope, norma
 				expression = "to_jsonb(r)"
 			}
 		}
-		rows, err := s.pool.Query(context.Background(), "SELECT ("+expression+")::text FROM "+table+" r WHERE owner_id=$1 ORDER BY id", string(scope.OwnerID))
+		rows, err := s.Pool.Query(context.Background(), "SELECT ("+expression+")::text FROM "+table+" r WHERE owner_id=$1 ORDER BY id", string(scope.OwnerID))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -145,7 +145,7 @@ func TestStabilizationUndoU1_CreateDeletesReminderAndNotice(t *testing.T) {
 	before := stabilizationUndoBusiness(t, s, scope, true)
 	out, due := stabilizationUndoScheduled(t, s, scope)
 	id := out.State.Tasks[0].ID
-	_, err := s.pool.Exec(context.Background(), "INSERT INTO workspace_notices(owner_id,thing_id,trigger_id,due_at,reason) VALUES($1,$2,'due-reminder',$3,'fixture notice')", string(scope.OwnerID), id, due)
+	_, err := s.Pool.Exec(context.Background(), "INSERT INTO workspace_notices(owner_id,thing_id,trigger_id,due_at,reason) VALUES($1,$2,'due-reminder',$3,'fixture notice')", string(scope.OwnerID), id, due)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -186,7 +186,7 @@ func stabilizationUndoRefusal(t *testing.T, s *Store, scope memory.Scope, action
 		t.Fatal("refused undo changed revision")
 	}
 	var undone bool
-	if err := s.pool.QueryRow(context.Background(), "SELECT undone_at IS NOT NULL FROM action_log WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), action).Scan(&undone); err != nil || undone {
+	if err := s.Pool.QueryRow(context.Background(), "SELECT undone_at IS NOT NULL FROM action_log WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), action).Scan(&undone); err != nil || undone {
 		t.Fatal("refused action marked undone", err)
 	}
 	t.Logf("safety verified; observed HTTP %d %s", status, body)
@@ -223,7 +223,7 @@ func TestStabilizationUndoU4_UserAndBackendEdit(t *testing.T) {
 					t.Fatal("task survived reverse undo")
 				}
 			} else {
-				_, err := s.pool.Exec(context.Background(), "UPDATE work_items SET title='background change',document=jsonb_set(document,'{title}','\"background change\"') WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), id)
+				_, err := s.Pool.Exec(context.Background(), "UPDATE work_items SET title='background change',document=jsonb_set(document,'{title}','\"background change\"') WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), id)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -374,7 +374,7 @@ func TestStabilizationUndoU9_CheckChangeBlocksAdoptionUndo(t *testing.T) {
 					t.Fatal(st.Tasks, st.Runs, st.Samples)
 				}
 			} else {
-				_, err := s.pool.Exec(context.Background(), "UPDATE work_items SET document=jsonb_set(document,'{checklist,0,done}','true') WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), id)
+				_, err := s.Pool.Exec(context.Background(), "UPDATE work_items SET document=jsonb_set(document,'{checklist,0,done}','true') WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), id)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -431,7 +431,7 @@ func TestStabilizationUndoU10_CreateAndAddStepsSameTurn(t *testing.T) {
 		t.Fatal("actions share log ID")
 	}
 	var logs int
-	if err := s.pool.QueryRow(context.Background(), "SELECT count(*) FROM action_log WHERE owner_id=$1 AND turn_id=$2 AND source='desk'", string(scope.OwnerID), out.Turn.ID).Scan(&logs); err != nil || logs != 2 {
+	if err := s.Pool.QueryRow(context.Background(), "SELECT count(*) FROM action_log WHERE owner_id=$1 AND turn_id=$2 AND source='desk'", string(scope.OwnerID), out.Turn.ID).Scan(&logs); err != nil || logs != 2 {
 		t.Fatal(logs, err)
 	}
 	stabilizationUndoRefusal(t, s, scope, created, "newer_action")
@@ -480,13 +480,13 @@ func TestStabilizationUndoU12_DeletedSourceExpiresSnapshot(t *testing.T) {
 	st, _ = stabilizationUndoCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "affected item"})
 	id := st.Tasks[0].ID
 	source, _ := json.Marshal(candidate.Source)
-	if _, err := s.pool.Exec(context.Background(), "UPDATE work_items SET document=jsonb_set(document,'{sources}',jsonb_build_array($3::jsonb)) WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), id, string(source)); err != nil {
+	if _, err := s.Pool.Exec(context.Background(), "UPDATE work_items SET document=jsonb_set(document,'{sources}',jsonb_build_array($3::jsonb)) WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), id, string(source)); err != nil {
 		t.Fatal(err)
 	}
 	_, action := stabilizationUndoCommand(t, s, scope, workspace.Command{Type: "setNotes", ID: id, Text: "snapshot content"})
 	stabilizationUndoCommand(t, s, scope, workspace.Command{Type: "deleteMemory", ID: memoryID, IncludeSources: true})
 	var cleared bool
-	if err := s.pool.QueryRow(context.Background(), "SELECT changes='[]'::jsonb AND expired_at IS NOT NULL FROM action_log WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), action).Scan(&cleared); err != nil || !cleared {
+	if err := s.Pool.QueryRow(context.Background(), "SELECT changes='[]'::jsonb AND expired_at IS NOT NULL FROM action_log WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), action).Scan(&cleared); err != nil || !cleared {
 		t.Fatal("snapshot retained", err)
 	}
 	before := stabilizationUndoBusiness(t, s, scope, false)
@@ -505,7 +505,7 @@ func TestStabilizationUndoU13_ThirtyDayExpiry(t *testing.T) {
 			s := testStore(t)
 			scope := owner()
 			_, action := stabilizationUndoCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "old"})
-			_, err := s.pool.Exec(context.Background(), "UPDATE action_log SET created_at=now()-interval '31 days' WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), action)
+			_, err := s.Pool.Exec(context.Background(), "UPDATE action_log SET created_at=now()-interval '31 days' WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), action)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -537,7 +537,7 @@ func TestStabilizationUndoU13_ExactThirtyDayBoundary(t *testing.T) {
 			before := stabilizationUndoBusiness(t, s, scope, false)
 			// A single transaction fixes the database clock for both the age
 			// fixture and the undo entry, without sleeps or a production clock hook.
-			err := pgx.BeginFunc(context.Background(), s.pool, func(tx pgx.Tx) error {
+			err := pgx.BeginFunc(context.Background(), s.Pool, func(tx pgx.Tx) error {
 				if _, err := tx.Exec(context.Background(), "UPDATE action_log SET created_at=now()-$3::interval WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), action, tc.age); err != nil {
 					return err
 				}
@@ -566,19 +566,19 @@ func TestStabilizationUndoU11_AlreadyUndoneAfterExpiryKeepsReplay(t *testing.T) 
 			if err != nil {
 				t.Fatal(err)
 			}
-			if _, err := s.pool.Exec(context.Background(), "UPDATE action_log SET created_at=now()-interval '31 days' WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), action); err != nil {
+			if _, err := s.Pool.Exec(context.Background(), "UPDATE action_log SET created_at=now()-interval '31 days' WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), action); err != nil {
 				t.Fatal(err)
 			}
 			if flush {
 				// Clear snapshots without changing the workspace; replay's State
 				// follows the current workspace, as the existing command API does.
-				if err := pgx.BeginFunc(context.Background(), s.pool, func(tx pgx.Tx) error {
+				if err := pgx.BeginFunc(context.Background(), s.Pool, func(tx pgx.Tx) error {
 					return flushActionLog(context.Background(), tx, scope)
 				}); err != nil {
 					t.Fatal(err)
 				}
 				var cleared bool
-				if err := s.pool.QueryRow(context.Background(), "SELECT changes='[]'::jsonb AND expired_at IS NOT NULL AND undone_at IS NOT NULL FROM action_log WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), action).Scan(&cleared); err != nil || !cleared {
+				if err := s.Pool.QueryRow(context.Background(), "SELECT changes='[]'::jsonb AND expired_at IS NOT NULL AND undone_at IS NOT NULL FROM action_log WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), action).Scan(&cleared); err != nil || !cleared {
 					t.Fatal("already-undone snapshot not cleared", err)
 				}
 			}
@@ -610,22 +610,22 @@ func TestStabilizationUndoU14_QueuedAndStartedDelegation(t *testing.T) {
 			scope := owner()
 			payload := `{"actions":[{"op":"delegate","ref":"new","title":"delegated","kind":"plan","prompt":"make a plan"}]}`
 			stabilizationUndoModel(t, s, &payload)
-			s.models.Config.Providers[0].CostMode = "token"
-			s.models.Config.Providers[0].InputPerMillion = 2
-			s.models.Config.Providers[0].OutputPerMillion = 3
-			s.models.Config.Providers[0].MaxOutput = 200
+			s.Models.Config.Providers[0].CostMode = "token"
+			s.Models.Config.Providers[0].InputPerMillion = 2
+			s.Models.Config.Providers[0].OutputPerMillion = 3
+			s.Models.Config.Providers[0].MaxOutput = 200
 			stabilizationUndoSnapshot(t, s, scope)
 			before := stabilizationUndoBusiness(t, s, scope, true)
 			out := stabilizationUndoTurn(t, s, scope, "新建并派副手")
 			var queued bool
 			if len(out.State.Runs) == 1 {
-				if err := s.pool.QueryRow(context.Background(), "SELECT status='queued' AND reserved_cost>0 FROM agent_runs WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), out.State.Runs[0].ID).Scan(&queued); err != nil {
+				if err := s.Pool.QueryRow(context.Background(), "SELECT status='queued' AND reserved_cost>0 FROM agent_runs WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), out.State.Runs[0].ID).Scan(&queued); err != nil {
 					t.Fatal(err)
 				}
 			}
 			var reserved float64
 			if len(out.State.Runs) == 1 {
-				if err := s.pool.QueryRow(context.Background(), "SELECT reserved_cost FROM agent_runs WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), out.State.Runs[0].ID).Scan(&reserved); err != nil {
+				if err := s.Pool.QueryRow(context.Background(), "SELECT reserved_cost FROM agent_runs WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), out.State.Runs[0].ID).Scan(&reserved); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -633,7 +633,7 @@ func TestStabilizationUndoU14_QueuedAndStartedDelegation(t *testing.T) {
 				t.Fatal("no reserved queued run", out.State.Runs, out.State.BudgetUsage)
 			}
 			if started {
-				_, err := s.pool.Exec(context.Background(), "UPDATE agent_runs SET status='running',document=jsonb_set(document,'{status}','\"running\"') WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), out.State.Runs[0].ID)
+				_, err := s.Pool.Exec(context.Background(), "UPDATE agent_runs SET status='running',document=jsonb_set(document,'{status}','\"running\"') WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), out.State.Runs[0].ID)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -651,7 +651,7 @@ func TestStabilizationUndoU14_QueuedAndStartedDelegation(t *testing.T) {
 			}
 			stabilizationUndoEqual(t, s, scope, before, true)
 			var dependencies int
-			if err := s.pool.QueryRow(context.Background(), "SELECT count(*) FROM run_dependencies WHERE owner_id=$1", string(scope.OwnerID)).Scan(&dependencies); err != nil || dependencies != 0 {
+			if err := s.Pool.QueryRow(context.Background(), "SELECT count(*) FROM run_dependencies WHERE owner_id=$1", string(scope.OwnerID)).Scan(&dependencies); err != nil || dependencies != 0 {
 				t.Fatal("orphaned run dependencies", err, dependencies)
 			}
 		})
@@ -745,15 +745,15 @@ func TestStabilizationUndoLegacyActionLogCompatibility(t *testing.T) {
 			st, action := stabilizationUndoCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "legacy"})
 			id := st.Tasks[0].ID
 			// Migration 016 documents the historical full-document PostgreSQL hash.
-			_, err := s.pool.Exec(context.Background(), `UPDATE action_log SET changes=jsonb_set(changes,'{0,afterHash}',to_jsonb(encode(sha256(convert_to((SELECT document::text FROM work_items WHERE owner_id=$1 AND id=$3),'UTF8')),'hex'))) WHERE owner_id=$1 AND id=$2`, string(scope.OwnerID), action, id)
+			_, err := s.Pool.Exec(context.Background(), `UPDATE action_log SET changes=jsonb_set(changes,'{0,afterHash}',to_jsonb(encode(sha256(convert_to((SELECT document::text FROM work_items WHERE owner_id=$1 AND id=$3),'UTF8')),'hex'))) WHERE owner_id=$1 AND id=$2`, string(scope.OwnerID), action, id)
 			if err != nil {
 				t.Fatal(err)
 			}
 			if mode == "bookkeeping-change" {
-				_, err = s.pool.Exec(context.Background(), "UPDATE work_items SET version=version+1,document=jsonb_set(document,'{recordVersion}',to_jsonb(version+1)) WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), id)
+				_, err = s.Pool.Exec(context.Background(), "UPDATE work_items SET version=version+1,document=jsonb_set(document,'{recordVersion}',to_jsonb(version+1)) WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), id)
 			}
 			if mode == "business-change" {
-				_, err = s.pool.Exec(context.Background(), "UPDATE work_items SET title='real edit',document=jsonb_set(document,'{title}','\"real edit\"') WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), id)
+				_, err = s.Pool.Exec(context.Background(), "UPDATE work_items SET title='real edit',document=jsonb_set(document,'{title}','\"real edit\"') WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), id)
 			}
 			if err != nil {
 				t.Fatal(err)

@@ -264,7 +264,7 @@ func TestAutoAdoptDestinationsAndUndo(t *testing.T) {
 				}
 				var source, summary string
 				var changes []byte
-				if err := s.pool.QueryRow(ctx, "SELECT source,summary,changes FROM action_log WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), run.Adopted.ActionID).Scan(&source, &summary, &changes); err != nil {
+				if err := s.Pool.QueryRow(ctx, "SELECT source,summary,changes FROM action_log WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), run.Adopted.ActionID).Scan(&source, &summary, &changes); err != nil {
 					t.Fatal(err)
 				}
 				if source != "worker" || summary != tc.summary {
@@ -301,11 +301,11 @@ func TestAutoAdoptDestinationsAndUndo(t *testing.T) {
 					t.Fatal("completed run was not recorded by trigger")
 				}
 				var samples int
-				if err := s.pool.QueryRow(ctx, "SELECT count(*) FROM training_samples WHERE owner_id=$1 AND document->'origin'->>'runId'=$2", string(scope.OwnerID), runID).Scan(&samples); err != nil || samples != 1 {
+				if err := s.Pool.QueryRow(ctx, "SELECT count(*) FROM training_samples WHERE owner_id=$1 AND document->'origin'->>'runId'=$2", string(scope.OwnerID), runID).Scan(&samples); err != nil || samples != 1 {
 					t.Fatalf("samples=%d err=%v", samples, err)
 				}
 				st = workspaceCommand(t, s, scope, workspace.Command{Type: "undoAction", ID: run.Adopted.ActionID})
-				if err := s.pool.QueryRow(ctx, "SELECT count(*) FROM training_samples WHERE owner_id=$1 AND run_id=$2", string(scope.OwnerID), runID).Scan(&samples); err != nil || samples != 0 {
+				if err := s.Pool.QueryRow(ctx, "SELECT count(*) FROM training_samples WHERE owner_id=$1 AND run_id=$2", string(scope.OwnerID), runID).Scan(&samples); err != nil || samples != 0 {
 					t.Fatalf("auto adoption sample survived undo: samples=%d err=%v", samples, err)
 				}
 				restored := autoAdoptItem(st, id)
@@ -323,7 +323,7 @@ func TestAutoAdoptDestinationsAndUndo(t *testing.T) {
 				}
 				var reserved float64
 				var status string
-				if err := s.pool.QueryRow(ctx, "SELECT reserved_cost,status FROM agent_runs WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), runID).Scan(&reserved, &status); err != nil || reserved != run.Cost || status != "done" {
+				if err := s.Pool.QueryRow(ctx, "SELECT reserved_cost,status FROM agent_runs WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), runID).Scan(&reserved, &status); err != nil || reserved != run.Cost || status != "done" {
 					t.Fatalf("undo changed billing: cost=%f status=%s err=%v", reserved, status, err)
 				}
 				requestID := string(memory.NewID())
@@ -331,11 +331,11 @@ func TestAutoAdoptDestinationsAndUndo(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				if err := s.pool.QueryRow(ctx, "SELECT count(*) FROM training_samples WHERE owner_id=$1 AND run_id=$2", string(scope.OwnerID), runID).Scan(&samples); err != nil || samples != 1 {
+				if err := s.Pool.QueryRow(ctx, "SELECT count(*) FROM training_samples WHERE owner_id=$1 AND run_id=$2", string(scope.OwnerID), runID).Scan(&samples); err != nil || samples != 1 {
 					t.Fatalf("readoption duplicated samples: samples=%d err=%v", samples, err)
 				}
 				var readoptedSampleID string
-				if err := s.pool.QueryRow(ctx, "SELECT id::text FROM training_samples WHERE owner_id=$1 AND run_id=$2 AND document->>'kind'='adopted-result'", string(scope.OwnerID), runID).Scan(&readoptedSampleID); err != nil || readoptedSampleID == sampleID {
+				if err := s.Pool.QueryRow(ctx, "SELECT id::text FROM training_samples WHERE owner_id=$1 AND run_id=$2 AND document->>'kind'='adopted-result'", string(scope.OwnerID), runID).Scan(&readoptedSampleID); err != nil || readoptedSampleID == sampleID {
 					t.Fatalf("readoption reused undone sample: id=%s err=%v", readoptedSampleID, err)
 				}
 				readopted := autoAdoptItem(st, id)
@@ -346,7 +346,7 @@ func TestAutoAdoptDestinationsAndUndo(t *testing.T) {
 					t.Fatalf("manual adoption=%+v", got)
 				}
 				workspaceCommand(t, s, scope, workspace.Command{Type: "undoAction", ID: requestID})
-				if err := s.pool.QueryRow(ctx, "SELECT count(*) FROM training_samples WHERE owner_id=$1 AND run_id=$2", string(scope.OwnerID), runID).Scan(&samples); err != nil || samples != 0 {
+				if err := s.Pool.QueryRow(ctx, "SELECT count(*) FROM training_samples WHERE owner_id=$1 AND run_id=$2", string(scope.OwnerID), runID).Scan(&samples); err != nil || samples != 0 {
 					t.Fatalf("manual adoption sample survived undo: samples=%d err=%v", samples, err)
 				}
 			})
@@ -388,7 +388,7 @@ func TestAutoAdoptSkipsStaleAndEmpty(t *testing.T) {
 			st = workspaceCommand(t, s, scope, workspace.Command{Type: "requestRun", ThingID: st.Tasks[0].ID, AgentID: "manual", Kind: "draft", Prompt: "写文档"})
 			run := st.Runs[0]
 			run.Status, run.Output, run.StaleContext = "done", tc.output, tc.stale
-			err := pgx.BeginFunc(context.Background(), s.pool, func(tx pgx.Tx) error {
+			err := pgx.BeginFunc(context.Background(), s.Pool, func(tx pgx.Tx) error {
 				ctx := context.Background()
 				if _, err := tx.Exec(ctx, "UPDATE agent_runs SET status='done',document=$3 WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), run.ID, kernel.JSON(run)); err != nil {
 					return err
@@ -410,7 +410,7 @@ func TestAutoAdoptWorkerSkipsStaleFlag(t *testing.T) {
 	s := testStore(t)
 	scope := owner()
 	autoAdoptModel(t, s, "结果仍然存在", func() {
-		if _, err := s.pool.Exec(context.Background(), "UPDATE agent_runs SET document=document||'{\"staleContext\":true}'::jsonb WHERE owner_id=$1", string(scope.OwnerID)); err != nil {
+		if _, err := s.Pool.Exec(context.Background(), "UPDATE agent_runs SET document=document||'{\"staleContext\":true}'::jsonb WHERE owner_id=$1", string(scope.OwnerID)); err != nil {
 			t.Error(err)
 		}
 	})
@@ -458,7 +458,7 @@ func TestAutoAdoptFailurePreservesCompletedResult(t *testing.T) {
 					output, kind = privateText+" draft", "draft"
 					// Fail after doc, item, sample and adopted run writes. A real SQL error
 					// aborts the savepoint and must not poison the completed outer tx.
-					_, err := s.pool.Exec(ctx, `
+					_, err := s.Pool.Exec(ctx, `
 CREATE FUNCTION reject_worker_adoption() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN RAISE EXCEPTION 'private-result-729413'; END $$;
 CREATE TRIGGER reject_worker_adoption BEFORE INSERT ON action_log
@@ -511,12 +511,12 @@ FOR EACH ROW WHEN (NEW.source='worker') EXECUTE FUNCTION reject_worker_adoption(
 				}
 				for _, table := range []string{"adopted_artifacts", "artifact_fields", "training_samples"} {
 					var count int
-					if err := s.pool.QueryRow(ctx, "SELECT count(*) FROM "+table+" WHERE owner_id=$1", string(scope.OwnerID)).Scan(&count); err != nil || count != 0 {
+					if err := s.Pool.QueryRow(ctx, "SELECT count(*) FROM "+table+" WHERE owner_id=$1", string(scope.OwnerID)).Scan(&count); err != nil || count != 0 {
 						t.Fatalf("partial %s survived rollback: count=%d err=%v", table, count, err)
 					}
 				}
 				var workerActions int
-				if err := s.pool.QueryRow(ctx, "SELECT count(*) FROM action_log WHERE owner_id=$1 AND source='worker'", string(scope.OwnerID)).Scan(&workerActions); err != nil || workerActions != 0 {
+				if err := s.Pool.QueryRow(ctx, "SELECT count(*) FROM action_log WHERE owner_id=$1 AND source='worker'", string(scope.OwnerID)).Scan(&workerActions); err != nil || workerActions != 0 {
 					t.Fatalf("failed adoption was recorded: count=%d err=%v", workerActions, err)
 				}
 				log := warnings.String()
@@ -544,7 +544,7 @@ FOR EACH ROW WHEN (NEW.source='worker') EXECUTE FUNCTION reject_worker_adoption(
 				var rowCount int
 				var cost float64
 				var leased bool
-				if err := s.pool.QueryRow(ctx, "SELECT status,reserved_cost,lease_token IS NOT NULL OR lease_until IS NOT NULL FROM agent_runs WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), runID).Scan(&status, &cost, &leased); err != nil || status != "done" || cost != run.Cost || leased {
+				if err := s.Pool.QueryRow(ctx, "SELECT status,reserved_cost,lease_token IS NOT NULL OR lease_until IS NOT NULL FROM agent_runs WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), runID).Scan(&status, &cost, &leased); err != nil || status != "done" || cost != run.Cost || leased {
 					t.Fatalf("completion/billing not committed: status=%s cost=%f leased=%t err=%v", status, cost, leased, err)
 				}
 				expectedCalls := calls.Load()
@@ -565,7 +565,7 @@ FOR EACH ROW WHEN (NEW.source='worker') EXECUTE FUNCTION reject_worker_adoption(
 					t.Fatal(err)
 				}
 				var spent float64
-				if err := s.pool.QueryRow(ctx, "SELECT count(*),coalesce(sum(reserved_cost),0) FROM agent_runs WHERE owner_id=$1", string(scope.OwnerID)).Scan(&rowCount, &spent); err != nil || rowCount != 1 || spent != cost || calls.Load() != expectedCalls || warnings.String() != log {
+				if err := s.Pool.QueryRow(ctx, "SELECT count(*),coalesce(sum(reserved_cost),0) FROM agent_runs WHERE owner_id=$1", string(scope.OwnerID)).Scan(&rowCount, &spent); err != nil || rowCount != 1 || spent != cost || calls.Load() != expectedCalls || warnings.String() != log {
 					t.Fatalf("result regenerated or rebilled: rows=%d spent=%f calls=%d err=%v", rowCount, spent, calls.Load(), err)
 				}
 				again, err := s.Snapshot(ctx, scope)

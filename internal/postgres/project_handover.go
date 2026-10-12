@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/postgres/memoryread"
 	"github.com/soaringjerry/PCAS/internal/worker"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 	"github.com/soaringjerry/PCAS/internal/workspace/effort"
@@ -64,7 +65,7 @@ func (s *Store) ReadProjectHandover(ctx context.Context, scope memory.Scope, id 
 	if !memory.ID(id).Valid() {
 		return out, memory.ErrInvalid
 	}
-	err := pgx.BeginTxFunc(ctx, s.pool, pgx.TxOptions{AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
+	err := pgx.BeginTxFunc(ctx, s.Pool, pgx.TxOptions{AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
 		item, err := getItem(ctx, tx, scope, id)
 		if err != nil {
 			return err
@@ -179,7 +180,7 @@ func (s *Store) projectHandoverInputTx(ctx context.Context, tx pgx.Tx, scope mem
 	if ids == nil {
 		ids = []string{}
 	}
-	memories, err := s.readMemoriesTx(ctx, tx, scope, false, memoryReadOptions{ids: ids})
+	memories, err := s.ReadMemoriesTx(ctx, tx, scope, false, memoryread.MemoryReadOptions{Ids: ids})
 	if err != nil {
 		return out, nil, err
 	}
@@ -220,7 +221,7 @@ func (a projectHandoverStore) RetryLater(j worker.Job, code string) error {
 }
 
 func (a projectHandoverStore) Read(ctx context.Context, j worker.Job, fn func(projecthandover.Reader) error) error {
-	return pgx.BeginTxFunc(ctx, a.store.pool, pgx.TxOptions{IsoLevel: pgx.RepeatableRead}, func(tx pgx.Tx) error {
+	return pgx.BeginTxFunc(ctx, a.store.Pool, pgx.TxOptions{IsoLevel: pgx.RepeatableRead}, func(tx pgx.Tx) error {
 		if err := kernel.LockJob(ctx, tx, j); err != nil {
 			return err
 		}
@@ -229,7 +230,7 @@ func (a projectHandoverStore) Read(ctx context.Context, j worker.Job, fn func(pr
 }
 
 func (a projectHandoverStore) Apply(ctx context.Context, j worker.Job, fn func(projecthandover.Unit) error) error {
-	return backgroundResultTx(ctx, a.store.pool, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
+	return backgroundResultTx(ctx, a.store.Pool, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(j.OwnerID)); err != nil {
 			return err
 		}

@@ -13,6 +13,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/contextbuilder"
 	"github.com/soaringjerry/PCAS/internal/contextbuilder/reader"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/postgres/memoryread"
 	"github.com/soaringjerry/PCAS/internal/retrieval"
 	"github.com/soaringjerry/PCAS/internal/workspace/deputy"
 	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
@@ -63,7 +64,7 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 		if err != nil {
 			return err
 		}
-		memories, err := s.readMemoriesTx(ctx, tx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: agent.ID}, true, memoryReadOptions{useCurrent: true})
+		memories, err := s.ReadMemoriesTx(ctx, tx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: agent.ID}, true, memoryread.MemoryReadOptions{UseCurrent: true})
 		if err != nil {
 			return err
 		}
@@ -123,7 +124,7 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 			return err
 		}
 		loc := deskLocation(settings)
-		plan := memory.PlanQuery(c.Prompt, s.businessNow(), loc)
+		plan := memory.PlanQuery(c.Prompt, s.BusinessNow(), loc)
 		if prepared, ok := ctx.Value(runContextKey{}).(preparedRunContext); ok {
 			plan = prepared.Plan
 		}
@@ -260,10 +261,10 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 			run.Status = "waiting"
 			dbStatus = "waiting"
 		} else {
-			if s.models == nil || !s.models.Available(agent.ID) {
+			if s.Models == nil || !s.Models.Available(agent.ID) {
 				return memory.ErrUnavailable
 			}
-			p, _ := s.models.Get(agent.ID)
+			p, _ := s.Models.Get(agent.ID)
 			run.Cost = p.Reserve(deputyInstructions + run.Brief)
 			loc, err := time.LoadLocation(settings.Timezone)
 			if err != nil {
@@ -490,7 +491,7 @@ func verifyRunForItemTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run 
 			claimIDs = append(claimIDs, string(ref.ID))
 		}
 	}
-	statuses, err := claimStatusesTx(ctx, tx, scope.OwnerID, claimIDs)
+	statuses, err := memoryread.ClaimStatusesTx(ctx, tx, scope.OwnerID, claimIDs)
 	if err != nil {
 		return err
 	}
@@ -542,7 +543,7 @@ func verifyRunForItemTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run 
 			}
 			continue
 		}
-		if !retirementDependencyAllowed(ctx, statuses[string(ref.ID)]) {
+		if !memoryread.RetirementDependencyAllowed(ctx, statuses[string(ref.ID)]) {
 			return memory.ErrConflict
 		}
 		claim, ok := claims[string(ref.ID)]
@@ -566,7 +567,7 @@ func verifyRunForItemTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run 
 // against its current version before deciding whether old content is safe to
 // retain; a removed grant or deleted dependency must dominate any correction.
 func verifyRunAccessTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run workspace.Run) error {
-	ctx = context.WithValue(ctx, retirementAccessKey{}, true)
+	ctx = context.WithValue(ctx, memoryread.RetirementAccessKey{}, true)
 	run.ContextVersions = append([]memory.Ref(nil), run.ContextVersions...)
 	ids := make([]string, len(run.ContextVersions))
 	for i, ref := range run.ContextVersions {
@@ -630,7 +631,7 @@ func (s *Store) runAgent(ctx context.Context, steps deputy.Steps) (resultErr err
 		if !ok || json.Unmarshal(paid.Prompt, &snap) != nil || snap.Run.Kind != "revise" {
 			return true
 		}
-		_, _ = s.pool.Exec(ctx, `UPDATE agent_runs SET status='queued',lease_token=NULL,lease_until=NULL WHERE id=$1 AND document->>'createdAt'=$2 AND agent_id=$3 AND thing_id=$4 AND status='running' AND lease_until<clock_timestamp()`, string(key.(memory.ID)), snap.Run.CreatedAt, snap.Run.AgentID, snap.Run.ThingID)
+		_, _ = s.Pool.Exec(ctx, `UPDATE agent_runs SET status='queued',lease_token=NULL,lease_until=NULL WHERE id=$1 AND document->>'createdAt'=$2 AND agent_id=$3 AND thing_id=$4 AND status='running' AND lease_until<clock_timestamp()`, string(key.(memory.ID)), snap.Run.CreatedAt, snap.Run.AgentID, snap.Run.ThingID)
 		return true
 	})
 	// A durable returned result, or a recorded pre-submission failure, can resume.
@@ -639,19 +640,19 @@ func (s *Store) runAgent(ctx context.Context, steps deputy.Steps) (resultErr err
 		entry := value.(*pendingInteractiveResult)
 		policy := entry.request.Policy.(interactiveCallPolicy)
 		if policy.BudgetOwner == "deputy_run" {
-			_, _ = s.pool.Exec(ctx, `UPDATE agent_runs SET status='queued',lease_token=NULL,lease_until=NULL WHERE owner_id=$1 AND id=$2 AND document->>'createdAt'=$3 AND status='running' AND lease_until<clock_timestamp()`, string(entry.request.OwnerID), string(entry.request.ExecutionID), policy.Origin)
+			_, _ = s.Pool.Exec(ctx, `UPDATE agent_runs SET status='queued',lease_token=NULL,lease_until=NULL WHERE owner_id=$1 AND id=$2 AND document->>'createdAt'=$3 AND status='running' AND lease_until<clock_timestamp()`, string(entry.request.OwnerID), string(entry.request.ExecutionID), policy.Origin)
 		}
 		return true
 	})
 	recoverableSQL := `EXISTS(SELECT 1 FROM background_model_results b WHERE b.owner_id=agent_runs.owner_id AND b.job_id=agent_runs.id AND b.purpose='revise') OR EXISTS(SELECT 1 FROM model_calls c WHERE c.owner_id=agent_runs.owner_id AND c.execution_id=agent_runs.id AND c.stage='answer' AND c.input_manifest->>'budgetOwner'='deputy_run' AND c.input_manifest->>'origin'=agent_runs.document->>'createdAt' AND ((c.result_receipt->'billing' IS NOT NULL AND c.result_receipt->'billing'<>'null'::jsonb) OR (c.outcome='failed' AND c.accounting_state IN ('not_reserved','settled'))))`
-	_, err := s.pool.Exec(ctx, `UPDATE agent_runs SET status='failed',lease_until=NULL,lease_token=NULL,document=document||jsonb_build_object('status','failed','error','进程中断，结果和用量未确认；未自动重试','finishedAt',now()) WHERE status='running' AND lease_until<now() AND NOT (`+recoverableSQL+`)`)
+	_, err := s.Pool.Exec(ctx, `UPDATE agent_runs SET status='failed',lease_until=NULL,lease_token=NULL,document=document||jsonb_build_object('status','failed','error','进程中断，结果和用量未确认；未自动重试','finishedAt',now()) WHERE status='running' AND lease_until<now() AND NOT (`+recoverableSQL+`)`)
 	if err != nil {
 		return err
 	}
 	if err := (interactiveCalls{store: s}).recordInterruptedDeputyApplications(ctx); err != nil {
 		return err
 	}
-	if _, err := s.pool.Exec(ctx, `UPDATE agent_runs SET status='queued',lease_until=NULL,lease_token=NULL WHERE status='running' AND lease_until<now() AND (`+recoverableSQL+`)`); err != nil {
+	if _, err := s.Pool.Exec(ctx, `UPDATE agent_runs SET status='queued',lease_until=NULL,lease_token=NULL WHERE status='running' AND lease_until<now() AND (`+recoverableSQL+`)`); err != nil {
 		return err
 	}
 	var cached *paidModelResult
@@ -660,10 +661,10 @@ func (s *Store) runAgent(ctx context.Context, steps deputy.Steps) (resultErr err
 	var token string
 	var savedRow *interactiveCallRow
 	var savedInput *reviseSnapshot
-	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	err = pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		var ownerID, id string
 		var data []byte
-		err := tx.QueryRow(ctx, `SELECT owner_id::text,id::text,document FROM agent_runs WHERE status='queued' AND ($1::boolean OR (`+recoverableSQL+`)) ORDER BY created_at FOR UPDATE SKIP LOCKED LIMIT 1`, s.models != nil).Scan(&ownerID, &id, &data)
+		err := tx.QueryRow(ctx, `SELECT owner_id::text,id::text,document FROM agent_runs WHERE status='queued' AND ($1::boolean OR (`+recoverableSQL+`)) ORDER BY created_at FOR UPDATE SKIP LOCKED LIMIT 1`, s.Models != nil).Scan(&ownerID, &id, &data)
 		if err != nil {
 			return err
 		}
@@ -730,14 +731,14 @@ func (s *Store) runAgent(ctx context.Context, steps deputy.Steps) (resultErr err
 		}
 		persist, cancel := context.WithTimeout(context.WithoutCancel(ctx), modelcall.PersistenceTimeout)
 		defer cancel()
-		_, _ = s.pool.Exec(persist, `UPDATE agent_runs SET lease_until=clock_timestamp(),document=document||jsonb_build_object('error','处理未完成；已保存的模型结果将复用，不会自动重复生成') WHERE owner_id=$1 AND id=$2 AND document->>'createdAt'=$3 AND lease_token=$4 AND status='running'`, string(scope.OwnerID), run.ID, run.CreatedAt, token)
+		_, _ = s.Pool.Exec(persist, `UPDATE agent_runs SET lease_until=clock_timestamp(),document=document||jsonb_build_object('error','处理未完成；已保存的模型结果将复用，不会自动重复生成') WHERE owner_id=$1 AND id=$2 AND document->>'createdAt'=$3 AND lease_token=$4 AND status='running'`, string(scope.OwnerID), run.ID, run.CreatedAt, token)
 	}()
 	execution := modelcall.Request{OwnerID: scope.OwnerID, ExecutionID: memory.ID(run.ID), RootExecutionID: memory.ID(run.ID), Function: "deputy", Policy: interactiveCallPolicy{Kind: "deputy", Token: token, Origin: run.CreatedAt, AgentID: run.AgentID, ThingID: run.ThingID}}
 	ctx = modelcall.WithExecution(ctx, execution)
 	workCtx, cancel := context.WithDeadline(ctx, started.Add(heavyUseTimeout-10*time.Second))
 	defer cancel()
-	if s.models != nil && s.models.ReloadSubscription && s.models.Codex != nil {
-		defer s.models.Codex.Close()
+	if s.Models != nil && s.Models.ReloadSubscription && s.Models.Codex != nil {
+		defer s.Models.Codex.Close()
 	}
 	var u useContext
 	var useErr error
@@ -774,7 +775,7 @@ func (s *Store) runAgent(ctx context.Context, steps deputy.Steps) (resultErr err
 	}
 	verifyErr := useErr
 	if verifyErr == nil && savedRow == nil {
-		verifyErr = pgx.BeginFunc(workCtx, s.pool, func(tx pgx.Tx) error { return checkUseRunPromptTx(workCtx, tx, scope, run) })
+		verifyErr = pgx.BeginFunc(workCtx, s.Pool, func(tx pgx.Tx) error { return checkUseRunPromptTx(workCtx, tx, scope, run) })
 	}
 	result := ai.Result{}
 	timing.finishPrepare()
@@ -801,7 +802,7 @@ func (s *Store) runAgent(ctx context.Context, steps deputy.Steps) (resultErr err
 			mainInvocation = mainPaid.InvocationID
 			result = ai.Result{Text: mainPaid.Output, Searches: mainPaid.Searches, Cost: mainPaid.Cost}
 		}
-		row, err := latestInteractiveCall(ctx, s.pool, request)
+		row, err := latestInteractiveCall(ctx, s.Pool, request)
 		if err != nil {
 			return err
 		}
@@ -847,7 +848,7 @@ func (s *Store) runAgent(ctx context.Context, steps deputy.Steps) (resultErr err
 	// Never repeat its paid call or reinterpret a late response as a new decision.
 	reviewAlreadyAttempted := false
 	if selection == nil && generationErr == nil && deputy.Selfchecks(run.MemoryTier) {
-		readErr := s.pool.QueryRow(ctx, `SELECT id::text FROM model_calls WHERE owner_id=$1 AND execution_id=$2 AND stage='selfcheck' AND input_manifest->>'origin'=$3 ORDER BY created_at DESC,id DESC LIMIT 1`, string(scope.OwnerID), run.ID, run.CreatedAt).Scan(&reviewInvocation)
+		readErr := s.Pool.QueryRow(ctx, `SELECT id::text FROM model_calls WHERE owner_id=$1 AND execution_id=$2 AND stage='selfcheck' AND input_manifest->>'origin'=$3 ORDER BY created_at DESC,id DESC LIMIT 1`, string(scope.OwnerID), run.ID, run.CreatedAt).Scan(&reviewInvocation)
 		if readErr != nil && !errors.Is(readErr, pgx.ErrNoRows) {
 			return readErr
 		}
@@ -866,7 +867,7 @@ func (s *Store) runAgent(ctx context.Context, steps deputy.Steps) (resultErr err
 			var paid *modelcall.PaidResult
 			paid, err = steps.Calls.Selfcheck(checkCtx, request)
 			readCtx, readCancel := context.WithTimeout(context.WithoutCancel(checkCtx), modelcall.PersistenceTimeout)
-			row, readErr := latestInteractiveCall(readCtx, s.pool, request)
+			row, readErr := latestInteractiveCall(readCtx, s.Pool, request)
 			readCancel()
 			if readErr != nil {
 				checkCancel()
@@ -903,7 +904,7 @@ func (s *Store) runAgent(ctx context.Context, steps deputy.Steps) (resultErr err
 		return ctx.Err()
 	}
 	timing.beginWrite(run.MemoryTier)
-	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	return pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(scope.OwnerID)); err != nil {
 			return err
 		}

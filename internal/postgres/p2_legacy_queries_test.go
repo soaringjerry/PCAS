@@ -21,6 +21,7 @@ import (
 
 	"github.com/soaringjerry/PCAS/internal/contextbuilder"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/postgres/memoryread"
 	"github.com/soaringjerry/PCAS/internal/retrieval"
 	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 
@@ -37,7 +38,7 @@ const p2LegacyMemoryJoins = ` FROM memory_records r JOIN claim_revisions c ON (c
 // The legacy copy of the prompt keeps its own pattern for identifiers.
 var deskUUID = regexp.MustCompile(`(?i)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}`)
 
-func p2LegacyMemoryWhere(scope memory.Scope, currentOnly bool, opts memoryReadOptions) (string, []any) {
+func p2LegacyMemoryWhere(scope memory.Scope, currentOnly bool, opts memoryread.MemoryReadOptions) (string, []any) {
 	args := []any{string(scope.OwnerID), scope.IsOwner, scope.PrincipalID, currentOnly}
 	clauses := []string{`r.owner_id=$1 AND r.state='active' AND claim_source_is_current($1,c.claim_id,c.version,now())
  AND ($2 OR EXISTS(SELECT 1 FROM record_grants g WHERE g.owner_id=r.owner_id AND g.record_id=r.id AND g.principal_id=$3))`}
@@ -45,10 +46,10 @@ func p2LegacyMemoryWhere(scope memory.Scope, currentOnly bool, opts memoryReadOp
 		args = append(args, value)
 		clauses = append(clauses, fmt.Sprintf(expr, len(args)))
 	}
-	if opts.id != "" {
-		add("r.id=$%d::uuid", opts.id)
+	if opts.ID != "" {
+		add("r.id=$%d::uuid", opts.ID)
 	}
-	q := opts.query
+	q := opts.Query
 	if q.Q != "" {
 		add("strpos(lower(c.value #>> '{}'),lower($%d))>0", q.Q)
 	}
@@ -79,11 +80,11 @@ func p2LegacyMemoryWhere(scope memory.Scope, currentOnly bool, opts memoryReadOp
 	if q.To != "" {
 		add("rv.expressed_at<$%d::timestamptz", q.To)
 	}
-	if !opts.snapshot.IsZero() {
-		add("r.created_at<=$%d", opts.snapshot)
+	if !opts.Snapshot.IsZero() {
+		add("r.created_at<=$%d", opts.Snapshot)
 	}
-	if opts.before != nil {
-		args = append(args, opts.before.At, opts.before.ID)
+	if opts.Before != nil {
+		args = append(args, opts.Before.At, opts.Before.ID)
 		// The established tie order is ascending id within descending update time.
 		clauses = append(clauses, fmt.Sprintf("(r.updated_at<$%d OR (r.updated_at=$%d AND r.id>$%d::uuid))", len(args)-1, len(args)-1, len(args)))
 	}
@@ -93,16 +94,16 @@ func p2LegacyMemoryWhere(scope memory.Scope, currentOnly bool, opts memoryReadOp
 // JSON field access also works before 027 has added event columns. Both
 // workspace cards and model callers need the same event metadata.
 
-func (s *Store) p2LegacyReadMemoriesTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, currentOnly bool, opts memoryReadOptions) ([]workspace.Memory, error) {
+func (s *Store) p2LegacyReadMemoriesTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, currentOnly bool, opts memoryread.MemoryReadOptions) ([]workspace.Memory, error) {
 	result := []workspace.Memory{}
 	where, args := p2LegacyMemoryWhere(scope, currentOnly, opts)
 	mentionsAvailable := "to_regclass('claim_mentions') IS NOT NULL"
 	query := `SELECT r.id::text,c.version,c.nature,c.value #>> '{}',c.confirmation,c.acquisition,coalesce(c.scope->>'project_id',''),
  coalesce(a.last_effective_use_at,r.created_at),coalesce(a.stability,1),coalesce(a.half_life_seconds,2592000),coalesce(a.pinned,false),coalesce(a.reinforcement_limit,8),
- rv.expressed_at,` + memoryEventColumns() + "," + mentionsAvailable + `,
+ rv.expressed_at,` + memoryread.MemoryEventColumns() + "," + mentionsAvailable + `,
  coalesce(to_jsonb(c)->>'category','unknown'),(to_jsonb(c)->>'durable')::boolean` + p2LegacyMemoryJoins + where + ` ORDER BY r.updated_at DESC,r.id`
-	if opts.limit > 0 {
-		args = append(args, opts.limit)
+	if opts.Limit > 0 {
+		args = append(args, opts.Limit)
 		query += fmt.Sprintf(" LIMIT $%d", len(args))
 	}
 	rows, err := tx.Query(ctx, query, args...)
@@ -122,7 +123,7 @@ func (s *Store) p2LegacyReadMemoriesTx(ctx context.Context, tx pgx.Tx, scope mem
 			rows.Close()
 			return nil, err
 		}
-		opts.legacy = !hasMentions
+		opts.Legacy = !hasMentions
 		m.Epistemic = "inferred"
 		if m.Confirmation == "confirmed" {
 			m.Epistemic = "confirmed"
@@ -236,10 +237,10 @@ func (s *Store) p2LegacyReadMemoriesTx(ctx context.Context, tx pgx.Tx, scope mem
 	}
 	// Share only the new 2.5 presentation semantics. The legacy SQL, temporal
 	// resolver and permission paths above remain the independent P2 oracle.
-	if err := fillMemoryStatusesTx(ctx, tx, scope.OwnerID, result); err != nil {
+	if err := memoryread.FillMemoryStatusesTx(ctx, tx, scope.OwnerID, result); err != nil {
 		return nil, err
 	}
-	if opts.legacy {
+	if opts.Legacy {
 		return result, nil
 	}
 
@@ -644,10 +645,10 @@ func (s *Store) p2LegacySnapshotTx(ctx context.Context, tx pgx.Tx, scope memory.
         WHERE n.owner_id=$1 AND (n.dismissed_at IS NOT NULL OR `+currentNoticeTriggerSQL+`) AND NOT (n.delivered @> '{"_suppressionOnly":true}'::jsonb) ORDER BY (n.dismissed_at IS NOT NULL),n.created_at DESC,n.id LIMIT 100`, string(scope.OwnerID)); err != nil {
 		return out, err
 	}
-	if out.Memories, err = s.p2LegacyReadMemoriesTx(ctx, tx, scope, false, memoryReadOptions{limit: 200}); err != nil {
+	if out.Memories, err = s.p2LegacyReadMemoriesTx(ctx, tx, scope, false, memoryread.MemoryReadOptions{Limit: 200}); err != nil {
 		return out, err
 	}
-	where, args := p2LegacyMemoryWhere(scope, false, memoryReadOptions{})
+	where, args := p2LegacyMemoryWhere(scope, false, memoryread.MemoryReadOptions{})
 	if err := tx.QueryRow(ctx, "SELECT count(*)"+p2LegacyMemoryJoins+where, args...).Scan(&out.MemoryTotal); err != nil {
 		return out, err
 	}
@@ -664,10 +665,10 @@ func (s *Store) p2LegacySnapshotTx(ctx context.Context, tx pgx.Tx, scope memory.
 		if a.Channel == "manual" {
 			a.Available = true
 		}
-		if p, ok := s.models.Get(a.ID); ok {
-			a.Default = a.ID == s.models.ExtractionID()
+		if p, ok := s.Models.Get(a.ID); ok {
+			a.Default = a.ID == s.Models.ExtractionID()
 			a.Protocol = p.Protocol
-			a.Available = s.models.Available(a.ID)
+			a.Available = s.Models.Available(a.ID)
 			a.InputPrice = p.InputPerMillion
 			a.OutputPrice = p.OutputPerMillion
 			a.MaxOutput = p.MaxOutput
@@ -678,7 +679,7 @@ func (s *Store) p2LegacySnapshotTx(ctx context.Context, tx pgx.Tx, scope memory.
 			}
 		}
 	}
-	if s.models != nil && s.models.ChatGPT != nil && s.models.ChatGPT.DefaultReady() {
+	if s.Models != nil && s.Models.ChatGPT != nil && s.Models.ChatGPT.DefaultReady() {
 		// Preserve per-agent visibility/preferences; only reorder the default.
 		for i, a := range out.Agents {
 			if a.ID == "chatgpt-direct" {
@@ -784,7 +785,7 @@ func (s *Store) p2LegacySnapshotTx(ctx context.Context, tx pgx.Tx, scope memory.
 }
 
 func (s *Store) p2LegacyDeskContextTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, agent workspace.Agent, stable bool) ([]workspace.Memory, []workspace.Item, workspace.Settings, []memory.Ref, error) {
-	memories, err := s.p2LegacyReadMemoriesTx(ctx, tx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: agent.ID}, true, memoryReadOptions{})
+	memories, err := s.p2LegacyReadMemoriesTx(ctx, tx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: agent.ID}, true, memoryread.MemoryReadOptions{})
 	if err != nil {
 		return nil, nil, workspace.Settings{}, nil, err
 	}
@@ -813,9 +814,9 @@ func (s *Store) p2LegacySecretaryContextTx(ctx context.Context, tx pgx.Tx, scope
 	out := secretaryContext{ConversationID: conversationID, Aliases: map[string]workspace.Item{}, Memories: map[string]workspace.Memory{}, Counts: map[string]int{}}
 	agentID := req.AgentID
 	if agentID == "" {
-		agentID = s.models.ExtractionID()
+		agentID = s.Models.ExtractionID()
 	}
-	if s.models == nil {
+	if s.Models == nil {
 		return out, memory.ErrUnavailable
 	}
 	var err error
@@ -826,7 +827,7 @@ func (s *Store) p2LegacySecretaryContextTx(ctx context.Context, tx pgx.Tx, scope
 	if err != nil {
 		return out, err
 	}
-	if !out.Agent.Enabled || out.Agent.Channel == "manual" || !s.models.Available(out.Agent.ID) {
+	if !out.Agent.Enabled || out.Agent.Channel == "manual" || !s.Models.Available(out.Agent.ID) {
 		return out, memory.ErrUnavailable
 	}
 	memories, tasks, settings, deps, err := s.p2LegacyDeskContextTx(ctx, tx, scope, out.Agent, true)
@@ -1214,13 +1215,13 @@ func (s *Store) p2LegacyDeskTurn(ctx context.Context, scope memory.Scope, req wo
 			var reservationID string
 			if contextErr == nil {
 				failureStage = "budget"
-				p, _ := s.models.Get(c.Agent.ID)
+				p, _ := s.Models.Get(c.Agent.ID)
 				reservationID, contextErr = s.reserveModelCostID(ctx, scope.OwnerID, p.Reserve(secretaryInstructions+prompt), nil)
 			}
 			if contextErr == nil {
 				failureStage = "model"
 				workCtx, cancel := context.WithTimeout(requestCtx, 90*time.Second)
-				result, err := s.models.GenerateWithSearchSchema(workCtx, c.Agent.ID, secretaryInstructions, prompt, secretaryOutputSchema)
+				result, err := s.Models.GenerateWithSearchSchema(workCtx, c.Agent.ID, secretaryInstructions, prompt, secretaryOutputSchema)
 				// HTTP providers may hide cancellation behind an unreachable error.
 				if err != nil && workCtx.Err() != nil {
 					err = workCtx.Err()
@@ -1235,7 +1236,7 @@ func (s *Store) p2LegacyDeskTurn(ctx context.Context, scope memory.Scope, req wo
 				}
 				contextErr = err
 				if contextErr == nil {
-					p, _ := s.models.Get(c.Agent.ID)
+					p, _ := s.Models.Get(c.Agent.ID)
 					if err := s.recordReturnedUsage(ctx, result.Text, modelUsage{
 						OwnerID: scope.OwnerID, ID: memory.NewID(), At: time.Now().UTC(),
 						Purpose: "secretary", AgentID: c.Agent.ID, Model: p.Model,
@@ -1402,7 +1403,7 @@ func (s *Store) p2LegacySnapshot(ctx context.Context, scope memory.Scope) (works
 	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err
 	}
-	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		if err := s.ensureOwner(ctx, tx, scope); err != nil {
 			return err
 		}
@@ -1466,19 +1467,19 @@ func (s *Store) p2LegacyRecall(ctx context.Context, scope memory.Scope, in memor
 	// Query-time embedding is optional. Missing semantic coverage is explicit.
 	var vector []byte
 	var model string
-	if query != "" && s.models != nil && s.models.EmbeddingID() != "" {
-		provider, _ := s.models.Get(s.models.EmbeddingID())
+	if query != "" && s.Models != nil && s.Models.EmbeddingID() != "" {
+		provider, _ := s.Models.Get(s.Models.EmbeddingID())
 		var embeddings []memory.Embedding
 		var e error
 		var reservationID string
 		reserved := float64(len(query)+16) * provider.InputPerMillion / 1e6
-		if !s.models.Available(provider.ID) {
+		if !s.Models.Available(provider.ID) {
 			e = memory.ErrUnavailable
 		} else {
 			reservationID, e = s.reserveModelCostID(ctx, scope.OwnerID, reserved, nil)
 		}
 		if e == nil {
-			embeddings, e = s.models.EmbedProvider(ctx, provider, []string{provider.EmbeddingQueryPrefix + query})
+			embeddings, e = s.Models.EmbedProvider(ctx, provider, []string{provider.EmbeddingQueryPrefix + query})
 			// The embedding adapter exposes no token usage; keep its existing
 			// estimate for a returned vector, release it when nothing returned.
 			if e != nil {
@@ -1497,7 +1498,7 @@ func (s *Store) p2LegacyRecall(ctx context.Context, scope memory.Scope, in memor
 	} else {
 		out.Coverage.Gaps = append(out.Coverage.Gaps, "未配置语义索引；模糊措辞的覆盖尚不完整")
 	}
-	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	err = pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		tx = p2LegacySQLTx{tx}
 		return s.p2LegacyRecallTx(ctx, tx, scope, in, b, query, fts, vector, model, offset, fingerprint, tokens, &out)
 	})

@@ -44,7 +44,7 @@ func TestQ5LiveSecretaryUnderExtractionLoad(t *testing.T) {
 		}
 	}
 	background.Env = append(background.Env, "PCAS_Q5_CHILD=1", "PCAS_Q5_STATE="+dir,
-		"PCAS_Q5_DATABASE="+s.pool.Config().ConnString(), "PCAS_Q5_OWNER="+string(scope.OwnerID))
+		"PCAS_Q5_DATABASE="+s.Pool.Config().ConnString(), "PCAS_Q5_OWNER="+string(scope.OwnerID))
 	background.Stdout, background.Stderr = os.Stdout, os.Stderr
 	if err := background.Start(); err != nil {
 		t.Fatal(err)

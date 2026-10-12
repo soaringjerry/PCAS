@@ -23,7 +23,7 @@ func stabilizationDeletionAssertScrubbed(t *testing.T, s *Store, scope memory.Sc
 	t.Helper()
 	var question, answer string
 	var response []byte
-	if err := s.pool.QueryRow(context.Background(), "SELECT question,answer,response FROM desk_turns WHERE owner_id=$1 AND request_id=$2", string(scope.OwnerID), requestID).Scan(&question, &answer, &response); err != nil {
+	if err := s.Pool.QueryRow(context.Background(), "SELECT question,answer,response FROM desk_turns WHERE owner_id=$1 AND request_id=$2", string(scope.OwnerID), requestID).Scan(&question, &answer, &response); err != nil {
 		t.Fatal(err)
 	}
 	if question != "" || answer != "" || strings.Contains(string(response), secret) {
@@ -56,7 +56,7 @@ func TestStabilizationD1_ReferencedMemoryDeletionClearsWholeTurn(t *testing.T) {
 	}
 	var dependencies []memory.Ref
 	var rawDependencies []byte
-	if err := s.pool.QueryRow(context.Background(), "SELECT dependencies FROM desk_turns WHERE owner_id=$1 AND request_id=$2", string(scope.OwnerID), req.RequestID).Scan(&rawDependencies); err != nil {
+	if err := s.Pool.QueryRow(context.Background(), "SELECT dependencies FROM desk_turns WHERE owner_id=$1 AND request_id=$2", string(scope.OwnerID), req.RequestID).Scan(&rawDependencies); err != nil {
 		t.Fatal(err)
 	}
 	if err := json.Unmarshal(rawDependencies, &dependencies); err != nil {
@@ -78,7 +78,7 @@ func TestStabilizationD1_ReferencedMemoryDeletionClearsWholeTurn(t *testing.T) {
 		}
 	}
 	var retainedSource string
-	if err := s.pool.QueryRow(context.Background(), "SELECT body FROM source_versions WHERE owner_id=$1 AND source_id=$2 AND version=$3", string(scope.OwnerID), originalSource.SourceID, originalSource.Version).Scan(&retainedSource); err != nil || !strings.Contains(retainedSource, "银色森林") {
+	if err := s.Pool.QueryRow(context.Background(), "SELECT body FROM source_versions WHERE owner_id=$1 AND source_id=$2 AND version=$3", string(scope.OwnerID), originalSource.SourceID, originalSource.Version).Scan(&retainedSource); err != nil || !strings.Contains(retainedSource, "银色森林") {
 		t.Fatal("claim deletion removed independent source without authorization", err)
 	}
 	stabilizationDeletionAssertScrubbed(t, s, scope, req.RequestID, "银色森林")
@@ -107,7 +107,7 @@ func TestStabilizationD2_OriginalSourceDeletionClearsWholeTurn(t *testing.T) {
 	first := mustTurn(t, s, scope, req)
 	var sourceID string
 	var version int
-	if err := s.pool.QueryRow(context.Background(), "SELECT s.id::text,r.version FROM sources s JOIN memory_records r ON (r.owner_id,r.id)=(s.owner_id,s.id) WHERE s.owner_id=$1 AND s.connector='desk' AND s.external_id=$2", string(scope.OwnerID), req.RequestID).Scan(&sourceID, &version); err != nil {
+	if err := s.Pool.QueryRow(context.Background(), "SELECT s.id::text,r.version FROM sources s JOIN memory_records r ON (r.owner_id,r.id)=(s.owner_id,s.id) WHERE s.owner_id=$1 AND s.connector='desk' AND s.external_id=$2", string(scope.OwnerID), req.RequestID).Scan(&sourceID, &version); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.Delete(context.Background(), scope, memory.DeleteRequest{Targets: []memory.Ref{{ID: memory.ID(sourceID), Version: version, Kind: memory.SourceKind}}, BlockReimport: true}); err != nil {
@@ -139,7 +139,7 @@ func TestStabilizationD3_DeletedSourceExpiresRelatedUndoSnapshot(t *testing.T) {
 	}
 	var changes []byte
 	var expired bool
-	if err = s.pool.QueryRow(context.Background(), "SELECT changes,expired_at IS NOT NULL FROM action_log WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), action).Scan(&changes, &expired); err != nil || string(changes) != "[]" || !expired {
+	if err = s.Pool.QueryRow(context.Background(), "SELECT changes,expired_at IS NOT NULL FROM action_log WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), action).Scan(&changes, &expired); err != nil || string(changes) != "[]" || !expired {
 		t.Fatal("deleted snapshot retained", err, expired)
 	}
 	t.Run("expired_code", func(t *testing.T) {
@@ -193,7 +193,7 @@ func TestStabilizationD4_ReplayCannotRestoreDeletedOriginal(t *testing.T) {
 			}
 			var sourceID string
 			var version int
-			if err := s.pool.QueryRow(context.Background(), "SELECT s.id::text,r.version FROM sources s JOIN memory_records r ON (r.owner_id,r.id)=(s.owner_id,s.id) WHERE s.owner_id=$1 AND s.connector=$2 AND s.external_id=$3", string(scope.OwnerID), connector, req.RequestID).Scan(&sourceID, &version); err != nil {
+			if err := s.Pool.QueryRow(context.Background(), "SELECT s.id::text,r.version FROM sources s JOIN memory_records r ON (r.owner_id,r.id)=(s.owner_id,s.id) WHERE s.owner_id=$1 AND s.connector=$2 AND s.external_id=$3", string(scope.OwnerID), connector, req.RequestID).Scan(&sourceID, &version); err != nil {
 				t.Fatal(err)
 			}
 			if err := s.Delete(context.Background(), scope, memory.DeleteRequest{Targets: []memory.Ref{{ID: memory.ID(sourceID), Version: version, Kind: memory.SourceKind}}, BlockReimport: true}); err != nil {
@@ -265,7 +265,7 @@ func TestStabilizationD1_DeletionDuringGenerationCannotCommitDerivedText(t *test
 		t.Fatal("replay regenerated deleted content")
 	}
 	var cache []byte
-	if err := s.pool.QueryRow(context.Background(), "SELECT response FROM desk_turns WHERE owner_id=$1 AND request_id=$2", string(scope.OwnerID), req.RequestID).Scan(&cache); err != nil || strings.Contains(string(cache), "私密红色地平线") {
+	if err := s.Pool.QueryRow(context.Background(), "SELECT response FROM desk_turns WHERE owner_id=$1 AND request_id=$2", string(scope.OwnerID), req.RequestID).Scan(&cache); err != nil || strings.Contains(string(cache), "私密红色地平线") {
 		t.Fatal("derived text persisted after concurrent deletion", err)
 	}
 }

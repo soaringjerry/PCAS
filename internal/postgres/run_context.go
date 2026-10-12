@@ -48,7 +48,7 @@ func (s *Store) prepareRunContext(ctx context.Context, scope memory.Scope, c wor
 	var plan memory.QueryPlan
 	ready := false
 	var thingID string
-	if err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	if err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		agent, err := kernel.QueryDocument[workspace.Agent](ctx, tx, "SELECT document FROM workspace_agents WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), c.AgentID)
 		if err != nil {
 			return err
@@ -56,7 +56,7 @@ func (s *Store) prepareRunContext(ctx context.Context, scope memory.Scope, c wor
 		if !agent.Enabled {
 			return memory.ErrForbidden
 		}
-		if c.Type == "delegateTask" && (agent.Channel == "manual" || s.models == nil || !s.models.Available(agent.ID)) {
+		if c.Type == "delegateTask" && (agent.Channel == "manual" || s.Models == nil || !s.Models.Available(agent.ID)) {
 			return memory.ErrUnavailable
 		}
 		item := workspace.Item{ID: c.ID, Kind: "task", ProjectID: c.ProjectID}
@@ -71,7 +71,7 @@ func (s *Store) prepareRunContext(ctx context.Context, scope memory.Scope, c wor
 		if err != nil {
 			return err
 		}
-		plan = memory.PlanQuery(c.Prompt, s.businessNow(), deskLocation(settings))
+		plan = memory.PlanQuery(c.Prompt, s.BusinessNow(), deskLocation(settings))
 		u, err := s.startUseContextTx(ctx, tx, scope)
 		if err != nil {
 			return err

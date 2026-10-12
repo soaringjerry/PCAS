@@ -26,7 +26,7 @@ import (
 func TestOrganizeSkeletonUpgradePreservesData(t *testing.T) {
 	s := b1EmptyStore(t)
 	ctx := context.Background()
-	if _, err := s.pool.Exec(ctx, `CREATE TABLE schema_migrations (
+	if _, err := s.Pool.Exec(ctx, `CREATE TABLE schema_migrations (
  name text PRIMARY KEY,checksum text NOT NULL,applied_at timestamptz NOT NULL DEFAULT now())`); err != nil {
 		t.Fatal(err)
 	}
@@ -42,10 +42,10 @@ func TestOrganizeSkeletonUpgradePreservesData(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, err := s.pool.Exec(ctx, string(body)); err != nil {
+		if _, err := s.Pool.Exec(ctx, string(body)); err != nil {
 			t.Fatal(file.Name(), err)
 		}
-		if _, err := s.pool.Exec(ctx, "INSERT INTO schema_migrations(name,checksum) VALUES($1,$2)", file.Name(), fmt.Sprintf("%x", sha256.Sum256(body))); err != nil {
+		if _, err := s.Pool.Exec(ctx, "INSERT INTO schema_migrations(name,checksum) VALUES($1,$2)", file.Name(), fmt.Sprintf("%x", sha256.Sum256(body))); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -67,10 +67,10 @@ func TestOrganizeSkeletonUpgradePreservesData(t *testing.T) {
 		}
 	}
 	var organized, attempts, applied int
-	if err := s.pool.QueryRow(ctx, "SELECT organized,organize_attempts FROM claims WHERE owner_id=$1 AND id=$2", scope.OwnerID, ref.ID).Scan(&organized, &attempts); err != nil || organized != 0 || attempts != 0 {
+	if err := s.Pool.QueryRow(ctx, "SELECT organized,organize_attempts FROM claims WHERE owner_id=$1 AND id=$2", scope.OwnerID, ref.ID).Scan(&organized, &attempts); err != nil || organized != 0 || attempts != 0 {
 		t.Fatal("unexpected organization defaults", organized, attempts, err)
 	}
-	if err := s.pool.QueryRow(ctx, "SELECT count(*) FROM schema_migrations WHERE name='035_memory_organize.sql'").Scan(&applied); err != nil || applied != 1 {
+	if err := s.Pool.QueryRow(ctx, "SELECT count(*) FROM schema_migrations WHERE name='035_memory_organize.sql'").Scan(&applied); err != nil || applied != 1 {
 		t.Fatal("035 must be recorded once", applied, err)
 	}
 	m, err := s.GetMemory(ctx, scope, string(ref.ID))
@@ -171,7 +171,7 @@ func organizeTestJob(t *testing.T, s *Store, scope memory.Scope) worker.Job {
 	}
 	// Other stages are covered by their own suites. This fixture isolates the
 	// organizer while still leasing its real scheduled job through the queue.
-	if _, err := s.pool.Exec(context.Background(), "DELETE FROM memory_jobs WHERE owner_id=$1 AND state='queued' AND stage NOT LIKE 'memory.organize:%'", string(scope.OwnerID)); err != nil {
+	if _, err := s.Pool.Exec(context.Background(), "DELETE FROM memory_jobs WHERE owner_id=$1 AND state='queued' AND stage NOT LIKE 'memory.organize:%'", string(scope.OwnerID)); err != nil {
 		t.Fatal(err)
 	}
 	j, err := s.Claim(context.Background(), 5*time.Minute)
@@ -253,7 +253,7 @@ func TestOrganizeBatchesReadFiltersAndCorrection(t *testing.T) {
 		t.Fatal(page, err)
 	}
 	var domains, projects int
-	if err := s.pool.QueryRow(ctx, "SELECT count(*) FILTER(WHERE entity_type='area'),count(*) FILTER(WHERE entity_type='project') FROM entity_versions WHERE owner_id=$1", string(scope.OwnerID)).Scan(&domains, &projects); err != nil || domains != 11 || projects != 1 {
+	if err := s.Pool.QueryRow(ctx, "SELECT count(*) FILTER(WHERE entity_type='area'),count(*) FILTER(WHERE entity_type='project') FROM entity_versions WHERE owner_id=$1", string(scope.OwnerID)).Scan(&domains, &projects); err != nil || domains != 11 || projects != 1 {
 		t.Fatal(domains, projects, err)
 	}
 	before, err := s.GetMemory(ctx, scope, string(refs[0].ID))
@@ -285,7 +285,7 @@ func TestOrganizeBadOutputAndExhaustion(t *testing.T) {
 	b1Model(t, s, "not JSON")
 	ref := organizeTestMemory(t, s, scope, "虚构用户霜叶在周末散步。")
 	for attempt := 1; attempt <= 4; attempt++ {
-		if _, err := s.pool.Exec(ctx, "UPDATE claims SET organize_after=now() WHERE owner_id=$1", scope.OwnerID); err != nil {
+		if _, err := s.Pool.Exec(ctx, "UPDATE claims SET organize_after=now() WHERE owner_id=$1", scope.OwnerID); err != nil {
 			t.Fatal(err)
 		}
 		j := organizeTestJob(t, s, scope)
@@ -293,12 +293,12 @@ func TestOrganizeBadOutputAndExhaustion(t *testing.T) {
 			t.Fatal(err)
 		}
 		var got, version int
-		if err := s.pool.QueryRow(ctx, "SELECT organize_attempts,organized FROM claims WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), string(ref.ID)).Scan(&got, &version); err != nil || got != attempt || (version != 0) {
+		if err := s.Pool.QueryRow(ctx, "SELECT organize_attempts,organized FROM claims WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), string(ref.ID)).Scan(&got, &version); err != nil || got != attempt || (version != 0) {
 			t.Fatal(got, version, err)
 		}
 	}
 	var usages int
-	if err := s.pool.QueryRow(ctx, "SELECT count(*) FROM model_usage WHERE owner_id=$1 AND purpose='organize' AND memory_refs=$2::jsonb", string(scope.OwnerID), kernel.JSON([]memory.Ref{ref})).Scan(&usages); err != nil || usages != 4 {
+	if err := s.Pool.QueryRow(ctx, "SELECT count(*) FROM model_usage WHERE owner_id=$1 AND purpose='organize' AND memory_refs=$2::jsonb", string(scope.OwnerID), kernel.JSON([]memory.Ref{ref})).Scan(&usages); err != nil || usages != 4 {
 		t.Fatal(usages, err)
 	}
 	queued, err := s.ScheduleOrganize(ctx, time.Now())
@@ -366,7 +366,7 @@ func TestOrganizeTransactionRollbackAndRecovery(t *testing.T) {
 	first := organizeTestMemory(t, s, scope, "虚构云杉的季度汇报第一项。")
 	second := organizeTestMemory(t, s, scope, "虚构云杉的季度汇报第二项。")
 	j := organizeTestJob(t, s, scope)
-	_, err := s.pool.Exec(ctx, `CREATE FUNCTION organize_test_fail() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.claim_id='`+string(first.ID)+`'::uuid THEN RAISE EXCEPTION 'synthetic transaction failure'; END IF; RETURN NEW; END $$;
+	_, err := s.Pool.Exec(ctx, `CREATE FUNCTION organize_test_fail() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.claim_id='`+string(first.ID)+`'::uuid THEN RAISE EXCEPTION 'synthetic transaction failure'; END IF; RETURN NEW; END $$;
  CREATE TRIGGER organize_test_fail BEFORE UPDATE OF category ON claim_revisions FOR EACH ROW EXECUTE FUNCTION organize_test_fail()`)
 	if err != nil {
 		t.Fatal(err)
@@ -380,7 +380,7 @@ func TestOrganizeTransactionRollbackAndRecovery(t *testing.T) {
 			t.Fatal(m, err)
 		}
 	}
-	if _, err := s.pool.Exec(ctx, "DROP TRIGGER organize_test_fail ON claim_revisions"); err != nil {
+	if _, err := s.Pool.Exec(ctx, "DROP TRIGGER organize_test_fail ON claim_revisions"); err != nil {
 		t.Fatal(err)
 	}
 	// Reprocessing the same fenced task reuses its paid output and recovers
@@ -411,7 +411,7 @@ func TestOrganizeConfiguredChannelAndHourlyLimit(t *testing.T) {
  ]
 }`)
 	ref := organizeTestMemory(t, s, scope, "虚构霜叶喜欢蓝色的水杯。")
-	models := s.models
+	models := s.Models
 	s.SetModels(nil)
 	if n, err := s.ScheduleOrganize(ctx, time.Now()); err != nil || n != 0 {
 		t.Fatal(n, err)
@@ -421,7 +421,7 @@ func TestOrganizeConfiguredChannelAndHourlyLimit(t *testing.T) {
 	// Forty synthetic reservations fill classification's own rolling hour,
 	// including zero-cost subscription requests.
 	for range 40 {
-		if _, err := s.pool.Exec(ctx, "INSERT INTO background_usage(owner_id,job_id,reserved_cost,stage) VALUES($1,$2,0,'memory.organize')", string(scope.OwnerID), string(j.ID)); err != nil {
+		if _, err := s.Pool.Exec(ctx, "INSERT INTO background_usage(owner_id,job_id,reserved_cost,stage) VALUES($1,$2,0,'memory.organize')", string(scope.OwnerID), string(j.ID)); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -430,7 +430,7 @@ func TestOrganizeConfiguredChannelAndHourlyLimit(t *testing.T) {
 	if !errors.As(err, &failure) || failure.Code != "organize_hourly_limit" || failure.Until.IsZero() || !failure.NoAttempt {
 		t.Fatal(err)
 	}
-	if _, err := s.pool.Exec(ctx, "UPDATE background_usage SET created_at=now()-interval '2 hours'"); err != nil {
+	if _, err := s.Pool.Exec(ctx, "UPDATE background_usage SET created_at=now()-interval '2 hours'"); err != nil {
 		t.Fatal(err)
 	}
 	if err := (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: OrganizeVersion}).Process(ctx, j); err != nil {
@@ -493,7 +493,7 @@ func TestOrganizeMissingInvalidAndUnknownNumbers(t *testing.T) {
 	if err := (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: OrganizeVersion}).Process(ctx, j); err != nil {
 		t.Fatal(err)
 	}
-	rows, err := s.pool.Query(ctx, `SELECT cl.organized,cl.organize_attempts,c.category FROM claims cl
+	rows, err := s.Pool.Query(ctx, `SELECT cl.organized,cl.organize_attempts,c.category FROM claims cl
  JOIN memory_records r ON(r.owner_id,r.id)=(cl.owner_id,cl.id)
  JOIN claim_revisions c ON(c.owner_id,c.claim_id,c.version)=(r.owner_id,r.id,r.version)
  WHERE cl.owner_id=$1 ORDER BY r.created_at DESC,r.id`, string(scope.OwnerID))
@@ -595,7 +595,7 @@ func TestOrganizeModelDeclaredGroupsHaveNoLexicalOrThreeGroupLimit(t *testing.T)
 		t.Fatal(err)
 	}
 	var names []string
-	if err := s.pool.QueryRow(ctx, "SELECT array_agg(name ORDER BY name) FROM entity_versions WHERE owner_id=$1 AND entity_type='topic'", string(scope.OwnerID)).Scan(&names); err != nil || len(names) != 6 {
+	if err := s.Pool.QueryRow(ctx, "SELECT array_agg(name ORDER BY name) FROM entity_versions WHERE owner_id=$1 AND entity_type='topic'", string(scope.OwnerID)).Scan(&names); err != nil || len(names) != 6 {
 		t.Fatal(names, err)
 	}
 	for _, name := range []string{"季度汇报", "盆栽观察", "书店走访", "蓝杯计划", "阅读记录", "效率提升"} {
@@ -626,7 +626,7 @@ func TestOrganizeUnavailableDoesNotConsumeAttemptsAndBudgetDefers(t *testing.T) 
 	ref := organizeTestMemory(t, s, scope, "虚构霜叶喜欢蓝色水杯。")
 	channelKey := "PCAS_TEST_O1_CHANNEL_AVAILABLE"
 	t.Setenv(channelKey, "")
-	s.models.Config.Providers[0].KeyEnv = channelKey
+	s.Models.Config.Providers[0].KeyEnv = channelKey
 	j := organizeTestJob(t, s, scope)
 	for range 2 {
 		err := (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: OrganizeVersion}).Process(ctx, j)
@@ -636,15 +636,15 @@ func TestOrganizeUnavailableDoesNotConsumeAttemptsAndBudgetDefers(t *testing.T) 
 		}
 	}
 	var attempts, calls int
-	if err := s.pool.QueryRow(ctx, "SELECT organize_attempts FROM claims WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), string(ref.ID)).Scan(&attempts); err != nil || attempts != 0 {
+	if err := s.Pool.QueryRow(ctx, "SELECT organize_attempts FROM claims WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), string(ref.ID)).Scan(&attempts); err != nil || attempts != 0 {
 		t.Fatal(attempts, err)
 	}
-	if err := s.pool.QueryRow(ctx, "SELECT count(*) FROM background_usage WHERE owner_id=$1", string(scope.OwnerID)).Scan(&calls); err != nil || calls != 0 {
+	if err := s.Pool.QueryRow(ctx, "SELECT count(*) FROM background_usage WHERE owner_id=$1", string(scope.OwnerID)).Scan(&calls); err != nil || calls != 0 {
 		t.Fatal(calls, err)
 	}
 	t.Setenv(channelKey, "synthetic-channel-key")
-	s.models.Config.Providers[0].InputPerMillion = 1
-	if _, err := s.pool.Exec(ctx, `UPDATE workspace_owners SET settings=jsonb_set(settings,'{dailyBudget}','0') WHERE owner_id=$1`, string(scope.OwnerID)); err != nil {
+	s.Models.Config.Providers[0].InputPerMillion = 1
+	if _, err := s.Pool.Exec(ctx, `UPDATE workspace_owners SET settings=jsonb_set(settings,'{dailyBudget}','0') WHERE owner_id=$1`, string(scope.OwnerID)); err != nil {
 		t.Fatal(err)
 	}
 	err := (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: OrganizeVersion}).Process(ctx, j)
@@ -652,7 +652,7 @@ func TestOrganizeUnavailableDoesNotConsumeAttemptsAndBudgetDefers(t *testing.T) 
 	if !errors.As(err, &failure) || failure.Code != "budget_deferred" || failure.Until.Before(time.Now()) || !failure.NoAttempt {
 		t.Fatal(err)
 	}
-	if _, err := s.pool.Exec(ctx, `UPDATE workspace_owners SET settings=jsonb_set(settings,'{dailyBudget}','10') WHERE owner_id=$1`, string(scope.OwnerID)); err != nil {
+	if _, err := s.Pool.Exec(ctx, `UPDATE workspace_owners SET settings=jsonb_set(settings,'{dailyBudget}','10') WHERE owner_id=$1`, string(scope.OwnerID)); err != nil {
 		t.Fatal(err)
 	}
 	if err := (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: OrganizeVersion}).Process(ctx, j); err != nil {
@@ -674,7 +674,7 @@ func TestOrganizeCorrectionDuringCallSkipsOnlyCorrectedVersion(t *testing.T) {
 	})
 	corrected = organizeTestMemory(t, s, scope, "虚构云杉的季度汇报第一项材料。")
 	kept := organizeTestMemory(t, s, scope, "虚构云杉的季度汇报第二项材料。")
-	if _, err := s.pool.Exec(ctx, "UPDATE claim_revisions SET category='rule',durable=true WHERE owner_id=$1 AND claim_id=$2", string(scope.OwnerID), string(corrected.ID)); err != nil {
+	if _, err := s.Pool.Exec(ctx, "UPDATE claim_revisions SET category='rule',durable=true WHERE owner_id=$1 AND claim_id=$2", string(scope.OwnerID), string(corrected.ID)); err != nil {
 		t.Fatal(err)
 	}
 	j := organizeTestJob(t, s, scope)
@@ -686,7 +686,7 @@ func TestOrganizeCorrectionDuringCallSkipsOnlyCorrectedVersion(t *testing.T) {
 		t.Fatal(m, err)
 	}
 	var version int
-	if err := s.pool.QueryRow(ctx, "SELECT organized FROM claims WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), string(corrected.ID)).Scan(&version); err != nil || version != 0 {
+	if err := s.Pool.QueryRow(ctx, "SELECT organized FROM claims WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), string(corrected.ID)).Scan(&version); err != nil || version != 0 {
 		t.Fatal(version, err)
 	}
 	m, err = s.GetMemory(ctx, scope, string(kept.ID))
@@ -742,11 +742,11 @@ func TestOrganizeLiveSynthetic(t *testing.T) {
 		t.Fatal(state.Organize, err)
 	}
 	var calls int
-	if err := s.pool.QueryRow(ctx, "SELECT count(*) FROM model_usage WHERE owner_id=$1 AND purpose='organize'", string(scope.OwnerID)).Scan(&calls); err != nil {
+	if err := s.Pool.QueryRow(ctx, "SELECT count(*) FROM model_usage WHERE owner_id=$1 AND purpose='organize'", string(scope.OwnerID)).Scan(&calls); err != nil {
 		t.Fatal(err)
 	}
 	groups := []string{}
-	rows, err := s.pool.Query(ctx, "SELECT entity_type || ':' || name FROM entity_versions WHERE owner_id=$1 AND entity_type IN('project','topic') ORDER BY entity_type,name", string(scope.OwnerID))
+	rows, err := s.Pool.Query(ctx, "SELECT entity_type || ':' || name FROM entity_versions WHERE owner_id=$1 AND entity_type IN('project','topic') ORDER BY entity_type,name", string(scope.OwnerID))
 	if err != nil {
 		t.Fatal(err)
 	}

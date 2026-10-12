@@ -32,19 +32,19 @@ func testStore(t *testing.T) *Store {
 	}
 	t.Cleanup(admin.Close)
 	var encoding string
-	if err := admin.pool.QueryRow(ctx, "SHOW server_encoding").Scan(&encoding); err != nil || encoding != "UTF8" {
+	if err := admin.Pool.QueryRow(ctx, "SHOW server_encoding").Scan(&encoding); err != nil || encoding != "UTF8" {
 		t.Fatalf("integration tests require PostgreSQL UTF8, got %q (%v)", encoding, err)
 	}
-	if _, err := admin.pool.Exec(ctx, "CREATE EXTENSION IF NOT EXISTS vector WITH SCHEMA public"); err != nil {
+	if _, err := admin.Pool.Exec(ctx, "CREATE EXTENSION IF NOT EXISTS vector WITH SCHEMA public"); err != nil {
 		t.Fatal(err)
 	}
 	schema := "pcas_test_" + strings.ReplaceAll(string(memory.NewID()), "-", "")
 	quoted := pgx.Identifier{schema}.Sanitize()
-	if _, err := admin.pool.Exec(ctx, "CREATE SCHEMA "+quoted); err != nil {
+	if _, err := admin.Pool.Exec(ctx, "CREATE SCHEMA "+quoted); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		if _, err := admin.pool.Exec(context.Background(), "DROP SCHEMA "+quoted+" CASCADE"); err != nil {
+		if _, err := admin.Pool.Exec(context.Background(), "DROP SCHEMA "+quoted+" CASCADE"); err != nil {
 			t.Error(err)
 		}
 	})
@@ -90,7 +90,7 @@ func TestPostgresMigrations(t *testing.T) {
 	if err := s.CheckSchema(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.pool.Exec(ctx, "UPDATE schema_migrations SET checksum='modified'"); err != nil {
+	if _, err := s.Pool.Exec(ctx, "UPDATE schema_migrations SET checksum='modified'"); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.Migrate(ctx); err == nil {
@@ -134,7 +134,7 @@ func TestPostgresConcurrentIngestAndVersions(t *testing.T) {
 	}
 	for _, table := range []string{"sources", "source_versions", "memory_records", "record_versions", "memory_jobs"} {
 		var count int
-		if err := s.pool.QueryRow(ctx, "SELECT count(*) FROM "+table).Scan(&count); err != nil || count != 1 {
+		if err := s.Pool.QueryRow(ctx, "SELECT count(*) FROM "+table).Scan(&count); err != nil || count != 1 {
 			t.Fatalf("%s count=%d err=%v", table, count, err)
 		}
 	}
@@ -185,7 +185,7 @@ func TestPostgresScopeAndReimportBlock(t *testing.T) {
 	if _, err := s.GetSource(ctx, agent, x.ID, 0); !errors.Is(err, memory.ErrNotFound) {
 		t.Fatal("ungranted read", err)
 	}
-	if _, err := s.pool.Exec(ctx, "INSERT INTO record_grants(owner_id,record_id,principal_id) VALUES($1,$2,$3)", string(a.OwnerID), string(x.ID), agent.PrincipalID); err != nil {
+	if _, err := s.Pool.Exec(ctx, "INSERT INTO record_grants(owner_id,record_id,principal_id) VALUES($1,$2,$3)", string(a.OwnerID), string(x.ID), agent.PrincipalID); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.GetSource(ctx, agent, x.ID, 0); err != nil {
@@ -194,16 +194,16 @@ func TestPostgresScopeAndReimportBlock(t *testing.T) {
 	if _, err := s.Ingest(ctx, agent, in); !errors.Is(err, memory.ErrForbidden) {
 		t.Fatal("read grant permitted write", err)
 	}
-	if _, err := s.pool.Exec(ctx, "DELETE FROM record_grants WHERE owner_id=$1", string(a.OwnerID)); err != nil {
+	if _, err := s.Pool.Exec(ctx, "DELETE FROM record_grants WHERE owner_id=$1", string(a.OwnerID)); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.GetSource(ctx, agent, x.ID, 0); !errors.Is(err, memory.ErrNotFound) {
 		t.Fatal("grant revocation ineffective", err)
 	}
-	if _, err := s.pool.Exec(ctx, "INSERT INTO record_grants(owner_id,record_id,principal_id) VALUES($1,$2,'agent')", string(b.OwnerID), string(x.ID)); err == nil {
+	if _, err := s.Pool.Exec(ctx, "INSERT INTO record_grants(owner_id,record_id,principal_id) VALUES($1,$2,'agent')", string(b.OwnerID), string(x.ID)); err == nil {
 		t.Fatal("cross-owner reference accepted")
 	}
-	if _, err := s.pool.Exec(ctx, "INSERT INTO reimport_blocks(owner_id,source_key_hash) VALUES($1,$2)", string(a.OwnerID), sourceKey(in.Connector, in.ExternalID)); err != nil {
+	if _, err := s.Pool.Exec(ctx, "INSERT INTO reimport_blocks(owner_id,source_key_hash) VALUES($1,$2)", string(a.OwnerID), sourceKey(in.Connector, in.ExternalID)); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.Ingest(ctx, a, in); !errors.Is(err, memory.ErrBlocked) {
@@ -228,7 +228,7 @@ func TestPostgresWorkerRecoveryAndProcessing(t *testing.T) {
 	if err != nil || first == nil {
 		t.Fatal("claim", err)
 	}
-	if _, err := s.pool.Exec(ctx, "UPDATE memory_jobs SET lease_until=now()-interval '1 second' WHERE id=$1", string(first.ID)); err != nil {
+	if _, err := s.Pool.Exec(ctx, "UPDATE memory_jobs SET lease_until=now()-interval '1 second' WHERE id=$1", string(first.ID)); err != nil {
 		t.Fatal(err)
 	}
 	second, err := s.Claim(ctx, time.Minute)
@@ -247,7 +247,7 @@ func TestPostgresWorkerRecoveryAndProcessing(t *testing.T) {
 	if err := s.ProcessChunks(ctx, *second); !errors.Is(err, worker.ErrLeaseLost) {
 		t.Fatal("completed lease reused", err)
 	}
-	rows, err := s.pool.Query(ctx, "SELECT start_rune,end_rune,body FROM chunks ORDER BY ordinal")
+	rows, err := s.Pool.Query(ctx, "SELECT start_rune,end_rune,body FROM chunks ORDER BY ordinal")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -339,7 +339,7 @@ func TestPostgresConcurrentClaimsAndRetryLimit(t *testing.T) {
 		if err := s.Retry(ctx, *job, "temporary_failure"); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := s.pool.Exec(ctx, "UPDATE memory_jobs SET available_at=now() WHERE id=$1", string(job.ID)); err != nil {
+		if _, err := s.Pool.Exec(ctx, "UPDATE memory_jobs SET available_at=now() WHERE id=$1", string(job.ID)); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -352,7 +352,7 @@ func TestPostgresVersionMustExistAtCommit(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
 	scope := owner()
-	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		_, err := tx.Exec(ctx, "INSERT INTO memory_records(owner_id,id,kind,version) VALUES($1,$2,'claim',1)", string(scope.OwnerID), string(memory.NewID()))
 		return err
 	})
@@ -373,7 +373,7 @@ func TestPostgresCrashedWorkerExhaustsAttempts(t *testing.T) {
 			t.Fatal("crash recovery failed", err)
 		}
 		last = job
-		if _, err := s.pool.Exec(ctx, "UPDATE memory_jobs SET lease_until=now()-interval '1 second' WHERE id=$1", string(job.ID)); err != nil {
+		if _, err := s.Pool.Exec(ctx, "UPDATE memory_jobs SET lease_until=now()-interval '1 second' WHERE id=$1", string(job.ID)); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -381,7 +381,7 @@ func TestPostgresCrashedWorkerExhaustsAttempts(t *testing.T) {
 		t.Fatal("crashed job keeps retrying", err)
 	}
 	var state, code string
-	if err := s.pool.QueryRow(ctx, "SELECT state,error_code FROM memory_jobs WHERE id=$1", string(last.ID)).Scan(&state, &code); err != nil {
+	if err := s.Pool.QueryRow(ctx, "SELECT state,error_code FROM memory_jobs WHERE id=$1", string(last.ID)).Scan(&state, &code); err != nil {
 		t.Fatal(err)
 	}
 	if state != "failed" || code != "attempts_exhausted" {
@@ -392,7 +392,7 @@ func TestPostgresCrashedWorkerExhaustsAttempts(t *testing.T) {
 func TestPostgresQueueFailureRollsBackSource(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
-	_, err := s.pool.Exec(ctx, `CREATE FUNCTION reject_job() RETURNS trigger LANGUAGE plpgsql AS $$
+	_, err := s.Pool.Exec(ctx, `CREATE FUNCTION reject_job() RETURNS trigger LANGUAGE plpgsql AS $$
 		BEGIN RAISE EXCEPTION 'injected queue failure'; END $$;
 		CREATE TRIGGER reject_job BEFORE INSERT ON memory_jobs FOR EACH ROW EXECUTE FUNCTION reject_job()`)
 	if err != nil {
@@ -403,7 +403,7 @@ func TestPostgresQueueFailureRollsBackSource(t *testing.T) {
 	}
 	for _, table := range []string{"memory_records", "record_versions", "sources", "source_versions", "memory_jobs"} {
 		var count int
-		if err := s.pool.QueryRow(ctx, "SELECT count(*) FROM "+table).Scan(&count); err != nil || count != 0 {
+		if err := s.Pool.QueryRow(ctx, "SELECT count(*) FROM "+table).Scan(&count); err != nil || count != 0 {
 			t.Fatalf("partial commit in %s: count=%d err=%v", table, count, err)
 		}
 	}

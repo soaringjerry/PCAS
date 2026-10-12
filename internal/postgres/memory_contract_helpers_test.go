@@ -353,7 +353,7 @@ type b4UsageRow struct {
 
 func b4Usage(t *testing.T, s *Store, scope memory.Scope) []b4UsageRow {
 	t.Helper()
-	rows, err := s.pool.Query(context.Background(), `SELECT id::text,purpose,coalesce(agent_id,''),model,input_tokens,output_tokens,cost,turn_id::text,run_id::text,job_id::text,memory_refs FROM model_usage WHERE owner_id=$1 ORDER BY at,id`, string(scope.OwnerID))
+	rows, err := s.Pool.Query(context.Background(), `SELECT id::text,purpose,coalesce(agent_id,''),model,input_tokens,output_tokens,cost,turn_id::text,run_id::text,job_id::text,memory_refs FROM model_usage WHERE owner_id=$1 ORDER BY at,id`, string(scope.OwnerID))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -401,7 +401,7 @@ func b4SameRefs(t *testing.T, got, want []memory.Ref) {
 func b4NoProse(t *testing.T, s *Store, scope memory.Scope, forbidden ...string) {
 	t.Helper()
 	// to_jsonb(u) scans EVERY table column, including future columns and plan.
-	rows, err := s.pool.Query(context.Background(), `SELECT to_jsonb(u)::text FROM model_usage u WHERE owner_id=$1`, string(scope.OwnerID))
+	rows, err := s.Pool.Query(context.Background(), `SELECT to_jsonb(u)::text FROM model_usage u WHERE owner_id=$1`, string(scope.OwnerID))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -436,7 +436,7 @@ func b4Wait(t *testing.T, description string, predicate func() bool) {
 func b4SourceCount(t *testing.T, s *Store, scope memory.Scope) int {
 	t.Helper()
 	var n int
-	if err := s.pool.QueryRow(context.Background(), `SELECT count(*) FROM sources WHERE owner_id=$1`, string(scope.OwnerID)).Scan(&n); err != nil {
+	if err := s.Pool.QueryRow(context.Background(), `SELECT count(*) FROM sources WHERE owner_id=$1`, string(scope.OwnerID)).Scan(&n); err != nil {
 		t.Fatal(err)
 	}
 	return n
@@ -444,7 +444,7 @@ func b4SourceCount(t *testing.T, s *Store, scope memory.Scope) int {
 func b4SourceByText(t *testing.T, s *Store, scope memory.Scope, text string) memory.Ref {
 	t.Helper()
 	ref := memory.Ref{Kind: memory.SourceKind}
-	if err := s.pool.QueryRow(context.Background(), `SELECT source_id::text,version FROM source_versions WHERE owner_id=$1 AND body=$2`, string(scope.OwnerID), text).Scan(&ref.ID, &ref.Version); err != nil {
+	if err := s.Pool.QueryRow(context.Background(), `SELECT source_id::text,version FROM source_versions WHERE owner_id=$1 AND body=$2`, string(scope.OwnerID), text).Scan(&ref.ID, &ref.Version); err != nil {
 		t.Fatal(err)
 	}
 	return ref
@@ -453,7 +453,7 @@ func b4RoleAndTime(t *testing.T, s *Store, scope memory.Scope, ref memory.Ref, r
 	t.Helper()
 	var gotRole, gotBranch string
 	var gotTime time.Time
-	if err := s.pool.QueryRow(context.Background(), `SELECT c.role,c.branch,v.expressed_at FROM source_contexts c JOIN record_versions v ON (v.owner_id,v.record_id,v.version)=(c.owner_id,c.source_id,c.source_version) WHERE c.owner_id=$1 AND c.source_id=$2 AND c.source_version=$3`, string(scope.OwnerID), string(ref.ID), ref.Version).Scan(&gotRole, &gotBranch, &gotTime); err != nil {
+	if err := s.Pool.QueryRow(context.Background(), `SELECT c.role,c.branch,v.expressed_at FROM source_contexts c JOIN record_versions v ON (v.owner_id,v.record_id,v.version)=(c.owner_id,c.source_id,c.source_version) WHERE c.owner_id=$1 AND c.source_id=$2 AND c.source_version=$3`, string(scope.OwnerID), string(ref.ID), ref.Version).Scan(&gotRole, &gotBranch, &gotTime); err != nil {
 		t.Fatal(err)
 	}
 	if gotRole != role || !gotTime.Equal(at) || branch != "" && gotBranch != branch {
@@ -573,7 +573,7 @@ func b4ImportFile(t *testing.T, s *Store, scope memory.Scope, name string, data 
 	item := b4ImportItemFor(t, s, scope, result.BatchID)
 	ref := memory.Ref{ID: memory.ID(item.ArchiveID), Version: item.ArchiveVersion, Kind: memory.SourceKind}
 	var persistedID string
-	if err := s.pool.QueryRow(context.Background(), `SELECT archive_id::text FROM import_batches WHERE owner_id=$1 AND id=$2`, string(scope.OwnerID), result.BatchID).Scan(&persistedID); err != nil {
+	if err := s.Pool.QueryRow(context.Background(), `SELECT archive_id::text FROM import_batches WHERE owner_id=$1 AND id=$2`, string(scope.OwnerID), result.BatchID).Scan(&persistedID); err != nil {
 		t.Fatal(err)
 	}
 	if persistedID != item.ArchiveID {
@@ -682,7 +682,7 @@ func b4MessagesExactlyOnce(t *testing.T, s *Store, scope memory.Scope, conversat
 	for _, conversation := range conversations {
 		for _, message := range conversation.Messages {
 			var count int
-			if err := s.pool.QueryRow(context.Background(), `SELECT count(*) FROM source_versions WHERE owner_id=$1 AND body=$2`, string(scope.OwnerID), message.Text).Scan(&count); err != nil {
+			if err := s.Pool.QueryRow(context.Background(), `SELECT count(*) FROM source_versions WHERE owner_id=$1 AND body=$2`, string(scope.OwnerID), message.Text).Scan(&count); err != nil {
 				t.Fatal(err)
 			}
 			if count != 1 {

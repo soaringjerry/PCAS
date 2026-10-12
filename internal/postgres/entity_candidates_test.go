@@ -37,10 +37,10 @@ func aliasEntityFixture(t *testing.T, s *Store, scope memory.Scope, kind, name s
 			t.Fatal(err)
 		}
 		workspaceCommand(t, s, scope, workspace.Command{Type: "setMemoryVisibility", ID: string(claim.ID), AgentIDs: []string{"model", "manual"}})
-		if _, err := s.pool.Exec(context.Background(), `UPDATE claims SET organized=$3 WHERE owner_id=$1 AND id=$2`, string(scope.OwnerID), string(claim.ID), OrganizeVersion); err != nil {
+		if _, err := s.Pool.Exec(context.Background(), `UPDATE claims SET organized=$3 WHERE owner_id=$1 AND id=$2`, string(scope.OwnerID), string(claim.ID), OrganizeVersion); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := s.pool.Exec(context.Background(), `INSERT INTO claim_mentions(owner_id,claim_id,claim_version,entity_id,role) VALUES($1,$2,1,$3,$4)`, string(scope.OwnerID), string(claim.ID), string(entity.ID), kind); err != nil {
+		if _, err := s.Pool.Exec(context.Background(), `INSERT INTO claim_mentions(owner_id,claim_id,claim_version,entity_id,role) VALUES($1,$2,1,$3,$4)`, string(scope.OwnerID), string(claim.ID), string(entity.ID), kind); err != nil {
 			t.Fatal(err)
 		}
 		refs = append(refs, claim.Ref)
@@ -55,7 +55,7 @@ func aliasNamesJob(t *testing.T, s *Store, scope memory.Scope) worker.Job {
 		t.Fatal(err)
 	}
 	// Remove only pending unrelated jobs, never history used by quota gates.
-	if _, err := s.pool.Exec(ctx, `DELETE FROM memory_jobs WHERE owner_id=$1 AND state='queued' AND stage NOT LIKE $2`, string(scope.OwnerID), EntityCandidatesStage+":%"); err != nil {
+	if _, err := s.Pool.Exec(ctx, `DELETE FROM memory_jobs WHERE owner_id=$1 AND state='queued' AND stage NOT LIKE $2`, string(scope.OwnerID), EntityCandidatesStage+":%"); err != nil {
 		t.Fatal(err)
 	}
 	j, err := s.Claim(ctx, time.Minute)
@@ -69,7 +69,7 @@ func aliasAssertSubjects(t *testing.T, s *Store, scope memory.Scope, refs []memo
 	t.Helper()
 	for _, ref := range refs {
 		var got string
-		if err := s.pool.QueryRow(context.Background(), `SELECT subject_id::text FROM claim_revisions WHERE owner_id=$1 AND claim_id=$2 AND version=$3`, string(scope.OwnerID), string(ref.ID), ref.Version).Scan(&got); err != nil || got != string(entity) {
+		if err := s.Pool.QueryRow(context.Background(), `SELECT subject_id::text FROM claim_revisions WHERE owner_id=$1 AND claim_id=$2 AND version=$3`, string(scope.OwnerID), string(ref.ID), ref.Version).Scan(&got); err != nil || got != string(entity) {
 			t.Fatal("subject", got, entity, err)
 		}
 	}
@@ -113,7 +113,7 @@ func TestEntityCandidatesTranslationAbbreviationKeepAndUndo(t *testing.T) {
 				t.Fatal("name-list counts", counts)
 			}
 			var merges int
-			if err := s.pool.QueryRow(ctx, "SELECT count(*) FROM entity_merges").Scan(&merges); err != nil || merges != 0 {
+			if err := s.Pool.QueryRow(ctx, "SELECT count(*) FROM entity_merges").Scan(&merges); err != nil || merges != 0 {
 				t.Fatal("name list merged directly", merges, err)
 			}
 			// Deliberately recommend the wrong survivor: the writer owns counts
@@ -148,7 +148,7 @@ func TestEntityCandidatesTranslationAbbreviationKeepAndUndo(t *testing.T) {
 			aliasAssertSubjects(t, s, scope, ar, a.ID)
 			aliasAssertSubjects(t, s, scope, br, b.ID)
 			var copied int
-			if err := s.pool.QueryRow(ctx, `SELECT count(*) FROM aliases WHERE owner_id=$1 AND entity_id=$2 AND alias=$3`, string(scope.OwnerID), string(keep.ID), map[bool]string{true: tc.b, false: tc.a}[tc.keepA]).Scan(&copied); err != nil || copied != 0 {
+			if err := s.Pool.QueryRow(ctx, `SELECT count(*) FROM aliases WHERE owner_id=$1 AND entity_id=$2 AND alias=$3`, string(scope.OwnerID), string(keep.ID), map[bool]string{true: tc.b, false: tc.a}[tc.keepA]).Scan(&copied); err != nil || copied != 0 {
 				t.Fatal("undo alias", copied, err)
 			}
 		})
@@ -170,7 +170,7 @@ func TestEntityCandidatesNearbyNamesStillRequirePairConfirmation(t *testing.T) {
 	aliasAssertSubjects(t, s, scope, ar, a.ID)
 	aliasAssertSubjects(t, s, scope, br, b.ID)
 	var n int
-	if err := s.pool.QueryRow(ctx, "SELECT count(*) FROM entity_merges").Scan(&n); err != nil || n != 0 {
+	if err := s.Pool.QueryRow(ctx, "SELECT count(*) FROM entity_merges").Scan(&n); err != nil || n != 0 {
 		t.Fatal("negative confirmation merged", n, err)
 	}
 }
@@ -240,7 +240,7 @@ func TestEntityCandidatesCrossTypeAndGroupBookmarks(t *testing.T) {
 				if !found {
 					t.Fatal("original topic disappeared from facets", facets)
 				}
-				if err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+				if err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 					id, err := entityTx(ctx, tx, scope.OwnerID, "topic", topicName)
 					if err != nil || id != keep.ID {
 						return fmt.Errorf("old topic alias resolved to %s: %w", id, err)
@@ -306,7 +306,7 @@ func TestEntityCandidatesWrongPersonTypeCannotCrossMerge(t *testing.T) {
 		t.Fatal(err)
 	}
 	var n int
-	if err := s.pool.QueryRow(ctx, `SELECT count(*) FROM memory_jobs WHERE owner_id=$1 AND stage LIKE 'memory.entity_compare:%' AND state='queued'`, scope.OwnerID).Scan(&n); err != nil || n != 0 {
+	if err := s.Pool.QueryRow(ctx, `SELECT count(*) FROM memory_jobs WHERE owner_id=$1 AND stage LIKE 'memory.entity_compare:%' AND state='queued'`, scope.OwnerID).Scan(&n); err != nil || n != 0 {
 		t.Fatal("wrongly typed person cross candidate", n, err)
 	}
 	aliasAssertSubjects(t, s, scope, ar, a.ID)
@@ -319,10 +319,10 @@ func TestEntityCandidatesHourlyBudgetAndRuleRecheck(t *testing.T) {
 	aliasEntityFixture(t, s, scope, "place", "蓝沙湾", 1)
 	aliasEntityFixture(t, s, scope, "place", "Azure Quay", 1)
 	j := aliasNamesJob(t, s, scope)
-	if _, err := s.pool.Exec(ctx, `INSERT INTO memory_jobs(id,owner_id,record_id,record_version,stage,state) VALUES(gen_random_uuid(),$1,$2,$3,'memory.organize:1:quota-seed','done')`, scope.OwnerID, j.Record.ID, j.Record.Version); err != nil {
+	if _, err := s.Pool.Exec(ctx, `INSERT INTO memory_jobs(id,owner_id,record_id,record_version,stage,state) VALUES(gen_random_uuid(),$1,$2,$3,'memory.organize:1:quota-seed','done')`, scope.OwnerID, j.Record.ID, j.Record.Version); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.pool.Exec(ctx, `INSERT INTO background_usage(owner_id,job_id,reserved_cost,stage) SELECT $1,id,0,'memory.entity_candidates' FROM memory_jobs CROSS JOIN generate_series(1,6) WHERE owner_id=$1 AND stage='memory.organize:1:quota-seed'`, scope.OwnerID); err != nil {
+	if _, err := s.Pool.Exec(ctx, `INSERT INTO background_usage(owner_id,job_id,reserved_cost,stage) SELECT $1,id,0,'memory.entity_candidates' FROM memory_jobs CROSS JOIN generate_series(1,6) WHERE owner_id=$1 AND stage='memory.organize:1:quota-seed'`, scope.OwnerID); err != nil {
 		t.Fatal(err)
 	}
 	err := (aliasscan.Service{Store: s.AliasScanStore(), Generator: jobCalls(s)}).Process(ctx, j)
@@ -330,7 +330,7 @@ func TestEntityCandidatesHourlyBudgetAndRuleRecheck(t *testing.T) {
 	if !errors.As(err, &quota) || quota.Code != "entity_candidates_hourly_limit" || !quota.NoAttempt || len(f.all()) != 0 {
 		t.Fatal("catalogue bypassed independent six-call cap", err, len(f.all()))
 	}
-	if _, err := s.pool.Exec(ctx, `UPDATE background_usage SET created_at=now()-interval '2 hours'`); err != nil {
+	if _, err := s.Pool.Exec(ctx, `UPDATE background_usage SET created_at=now()-interval '2 hours'`); err != nil {
 		t.Fatal(err)
 	}
 	if err := (aliasscan.Service{Store: s.AliasScanStore(), Generator: jobCalls(s)}).Process(ctx, j); err != nil {
@@ -347,7 +347,7 @@ func TestEntityCandidatesHourlyBudgetAndRuleRecheck(t *testing.T) {
 	if err := (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: OrganizeVersion}).Process(ctx, organizeJob); err != nil || len(f.all()) != 2 {
 		t.Fatal("scan must not consume classification capacity", err, len(f.all()))
 	}
-	if err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	if err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		b, err := nextEntityCandidateBatchTx(ctx, tx, scope.OwnerID, EntityCompareVersion)
 		if err != nil || b != nil {
 			return fmt.Errorf("same rules repeated list: %+v %w", b, err)
@@ -382,7 +382,7 @@ func TestEntityCandidatesModelCallDoesNotHoldOwnerLock(t *testing.T) {
 		close(release)
 		t.Fatal("no list call")
 	}
-	lockErr := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	lockErr := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, "SELECT owner_id FROM workspace_owners WHERE owner_id=$1 FOR UPDATE NOWAIT", scope.OwnerID); err != nil {
 			return err
 		}
@@ -397,7 +397,7 @@ func TestEntityCandidatesModelCallDoesNotHoldOwnerLock(t *testing.T) {
 		t.Fatal("owner row held across list call", lockErr)
 	}
 	var hints int
-	if err := s.pool.QueryRow(ctx, `SELECT count(*) FROM entity_alias_candidates WHERE owner_id=$1`, scope.OwnerID).Scan(&hints); err != nil || hints != 1 {
+	if err := s.Pool.QueryRow(ctx, `SELECT count(*) FROM entity_alias_candidates WHERE owner_id=$1`, scope.OwnerID).Scan(&hints); err != nil || hints != 1 {
 		t.Fatal("name-stable list lost its modeled candidate after memory-count change", hints, err)
 	}
 }
@@ -406,7 +406,7 @@ func TestEntityCandidatesRuleUpgradeRechecksEntitiesOnly(t *testing.T) {
 	s, scope, ctx := testStore(t), owner(), context.Background()
 	f := b1Model(t, s, `{"same":false,"keep":null}`)
 	unrelated := compareFixture(t, s, scope, "虚构旧版比较已经完成的无关记忆")[0]
-	if _, err := s.pool.Exec(ctx, `UPDATE claims SET compared=$3 WHERE owner_id=$1 AND id=$2`, scope.OwnerID, unrelated.ID, CompareVersion); err != nil {
+	if _, err := s.Pool.Exec(ctx, `UPDATE claims SET compared=$3 WHERE owner_id=$1 AND id=$2`, scope.OwnerID, unrelated.ID, CompareVersion); err != nil {
 		t.Fatal(err)
 	}
 	compareEntityFixture(t, s, scope, "虚构星岚", "虚构星岚负责同一份器材")
@@ -421,10 +421,10 @@ func TestEntityCandidatesRuleUpgradeRechecksEntitiesOnly(t *testing.T) {
 		t.Fatal(err)
 	}
 	var rule, claimRule int
-	if err := s.pool.QueryRow(ctx, `SELECT rule FROM entity_merges WHERE owner_id=$1 AND undone_at IS NULL`, scope.OwnerID).Scan(&rule); err != nil || rule != EntityCompareVersion || len(f.all()) != 2 {
+	if err := s.Pool.QueryRow(ctx, `SELECT rule FROM entity_merges WHERE owner_id=$1 AND undone_at IS NULL`, scope.OwnerID).Scan(&rule); err != nil || rule != EntityCompareVersion || len(f.all()) != 2 {
 		t.Fatal("identity epoch", rule, len(f.all()), err)
 	}
-	if err := s.pool.QueryRow(ctx, `SELECT compared FROM claims WHERE owner_id=$1 AND id=$2`, scope.OwnerID, unrelated.ID).Scan(&claimRule); err != nil || claimRule != CompareVersion {
+	if err := s.Pool.QueryRow(ctx, `SELECT compared FROM claims WHERE owner_id=$1 AND id=$2`, scope.OwnerID, unrelated.ID).Scan(&claimRule); err != nil || claimRule != CompareVersion {
 		t.Fatal("unrelated claim epoch changed", claimRule, err)
 	}
 }
@@ -518,7 +518,7 @@ func TestEntityCandidatesAndConfirmationCallsLeaveRowsUnlocked(t *testing.T) {
 				close(release)
 				t.Fatal("no model call")
 			}
-			err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+			err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 				for _, table := range []string{"workspace_owners", "memory_records", "claims", "memory_jobs", "status_cards"} {
 					if _, err := tx.Exec(ctx, "SELECT 1 FROM "+table+" WHERE owner_id=$1 FOR UPDATE NOWAIT", scope.OwnerID); err != nil {
 						return fmt.Errorf("%s: %w", table, err)
@@ -550,7 +550,7 @@ func TestEntityCompareCompletedResultSurvivesBusyFollowupScheduling(t *testing.T
 	}
 	j := compareJob(t, s, scope, true, EntityCompareVersion)
 	model.set(`{"same":true,"keep":1}`)
-	blocker, err := s.pool.Begin(ctx)
+	blocker, err := s.Pool.Begin(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -565,10 +565,10 @@ func TestEntityCompareCompletedResultSurvivesBusyFollowupScheduling(t *testing.T
 	}
 	var state string
 	var merges int
-	if err := s.pool.QueryRow(ctx, "SELECT state FROM memory_jobs WHERE id=$1", j.ID).Scan(&state); err != nil {
+	if err := s.Pool.QueryRow(ctx, "SELECT state FROM memory_jobs WHERE id=$1", j.ID).Scan(&state); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.pool.QueryRow(ctx, "SELECT count(*) FROM entity_merges WHERE owner_id=$1 AND undone_at IS NULL", scope.OwnerID).Scan(&merges); err != nil {
+	if err := s.Pool.QueryRow(ctx, "SELECT count(*) FROM entity_merges WHERE owner_id=$1 AND undone_at IS NULL", scope.OwnerID).Scan(&merges); err != nil {
 		t.Fatal(err)
 	}
 	if state != "done" || merges != 1 {

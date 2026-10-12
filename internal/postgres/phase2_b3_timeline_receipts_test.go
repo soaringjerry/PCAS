@@ -86,7 +86,7 @@ func TestPhase2B3_K9_OldCreationReceiptSurvivesPurgedActionDetails(t *testing.T)
 	b3Exec(t, s, `UPDATE work_items SET created_at=$3,updated_at=$3,document=jsonb_set(jsonb_set(document,'{createdAt}',to_jsonb($4::text)),'{updatedAt}',to_jsonb($4::text)) WHERE owner_id=$1 AND id=$2`, scope.OwnerID, *receipt.ThingID, old, old.Format(time.RFC3339))
 	b3Exec(t, s, `UPDATE action_log SET created_at=$3 WHERE owner_id=$1 AND turn_id=$2`, scope.OwnerID, original.Turn.ID, old)
 	var details int
-	if err := s.pool.QueryRow(t.Context(), `SELECT jsonb_array_length(changes) FROM action_log WHERE owner_id=$1 AND id=$2`, scope.OwnerID, *receipt.ActionID).Scan(&details); err != nil || details == 0 {
+	if err := s.Pool.QueryRow(t.Context(), `SELECT jsonb_array_length(changes) FROM action_log WHERE owner_id=$1 AND id=$2`, scope.OwnerID, *receipt.ActionID).Scan(&details); err != nil || details == 0 {
 		t.Fatalf("creation action had no real details before retention: %d (%v)", details, err)
 	}
 	// An ordinary unrelated command invokes the existing retention path. The old
@@ -94,7 +94,7 @@ func TestPhase2B3_K9_OldCreationReceiptSurvivesPurgedActionDetails(t *testing.T)
 	workspaceCommand(t, s, scope, workspace.Command{Type: "addIdea", Title: "触发旧动作清理的独立想法"})
 	var changes []byte
 	var expired bool
-	if err := s.pool.QueryRow(t.Context(), `SELECT changes,expired_at IS NOT NULL FROM action_log WHERE owner_id=$1 AND id=$2`, scope.OwnerID, *receipt.ActionID).Scan(&changes, &expired); err != nil {
+	if err := s.Pool.QueryRow(t.Context(), `SELECT changes,expired_at IS NOT NULL FROM action_log WHERE owner_id=$1 AND id=$2`, scope.OwnerID, *receipt.ActionID).Scan(&changes, &expired); err != nil {
 		t.Fatal(err)
 	}
 	var decoded []any
@@ -107,7 +107,7 @@ func TestPhase2B3_K9_OldCreationReceiptSurvivesPurgedActionDetails(t *testing.T)
 	b3KeptCreationReceipt(t, s, scope, original, receipt, false)
 	workspaceCommand(t, s, scope, workspace.Command{Type: "setTaskStatus", ID: *receipt.ThingID, Status: "done"})
 	var status string
-	if err := s.pool.QueryRow(t.Context(), `SELECT status FROM work_items WHERE owner_id=$1 AND id=$2`, scope.OwnerID, *receipt.ThingID).Scan(&status); err != nil || status != "done" {
+	if err := s.Pool.QueryRow(t.Context(), `SELECT status FROM work_items WHERE owner_id=$1 AND id=$2`, scope.OwnerID, *receipt.ThingID).Scan(&status); err != nil || status != "done" {
 		t.Fatalf("old item did not complete after purge: %q (%v)", status, err)
 	}
 	b3KeptCreationReceipt(t, s, scope, original, receipt, false)
@@ -144,7 +144,7 @@ func TestPhase2B3_K10_UndoneCreationLeavesNoAssociatedItems(t *testing.T) {
 			_, original, source, receipt := b3ReceiptTurn(t, s, scope, f, gold.SourceText, gold.TaskTitle)
 			b1Undo(t, s, scope, *receipt.ActionID)
 			var count int
-			if err := s.pool.QueryRow(t.Context(), `SELECT count(*) FROM work_items WHERE owner_id=$1 AND id=$2`, scope.OwnerID, *receipt.ThingID).Scan(&count); err != nil || count != gold.ExistingItems {
+			if err := s.Pool.QueryRow(t.Context(), `SELECT count(*) FROM work_items WHERE owner_id=$1 AND id=$2`, scope.OwnerID, *receipt.ThingID).Scan(&count); err != nil || count != gold.ExistingItems {
 				t.Fatalf("undone item still exists: %d (%v)", count, err)
 			}
 			b3KeptCreationReceipt(t, s, scope, original, receipt, gold.ReceiptUndone)

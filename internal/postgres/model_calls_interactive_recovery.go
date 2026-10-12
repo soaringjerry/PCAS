@@ -37,7 +37,7 @@ func (s *Store) recoverInteractiveCallsOnce(ctx context.Context) (interactiveRec
 	persist, cancel := context.WithTimeout(ctx, modelcall.PersistenceTimeout)
 	defer cancel()
 	var exists bool
-	if err := s.pool.QueryRow(persist, "SELECT to_regclass('model_calls') IS NOT NULL").Scan(&exists); err != nil {
+	if err := s.Pool.QueryRow(persist, "SELECT to_regclass('model_calls') IS NOT NULL").Scan(&exists); err != nil {
 		return status, err
 	}
 	if !exists {
@@ -89,7 +89,7 @@ func (s *Store) recoverInteractiveCallsOnce(ctx context.Context) (interactiveRec
 	}
 	s.pendingInteractive.Range(func(_, _ any) bool { status.PendingResults++; return true })
 	if persist.Err() == nil {
-		err := s.pool.QueryRow(persist, `SELECT
+		err := s.Pool.QueryRow(persist, `SELECT
  count(*) FILTER(WHERE accounting_state IN ('pending','failed','reserved') AND result_receipt->'billing' IS NOT NULL AND result_receipt->'billing'<>'null'::jsonb),
  count(*) FILTER(WHERE outcome IN ('prepared','started') AND (`+inactiveInteractiveExecutionSQL+`))
  FROM model_calls c WHERE input_manifest->>'version'='interactive-input-v1'`).Scan(&status.PendingAccounting, &status.PendingInterrupted)
@@ -109,7 +109,7 @@ func (s *Store) recoverInteractiveCallsOnce(ctx context.Context) (interactiveRec
 // can remove every private body without preventing original usage settlement.
 func (a interactiveCalls) recoverAccountingReceipt(ctx context.Context) (bool, error) {
 	var row interactiveCallRow
-	err := a.store.pool.QueryRow(ctx, `SELECT to_jsonb(c) FROM model_calls c WHERE input_manifest->>'version'='interactive-input-v1' AND accounting_state IN ('pending','failed','reserved') AND result_receipt->'billing' IS NOT NULL AND result_receipt->'billing'<>'null'::jsonb ORDER BY updated_at,id LIMIT 1`).Scan(&row)
+	err := a.store.Pool.QueryRow(ctx, `SELECT to_jsonb(c) FROM model_calls c WHERE input_manifest->>'version'='interactive-input-v1' AND accounting_state IN ('pending','failed','reserved') AND result_receipt->'billing' IS NOT NULL AND result_receipt->'billing'<>'null'::jsonb ORDER BY updated_at,id LIMIT 1`).Scan(&row)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return false, nil
 	}
@@ -126,14 +126,14 @@ func (a interactiveCalls) recoverAccountingReceipt(ctx context.Context) (bool, e
 		valid = valid && row.UsageID == expectedUsage
 	}
 	if !valid {
-		_, markErr := a.store.pool.Exec(ctx, `UPDATE model_calls SET accounting_state='failed',actual_mode=actual_mode||'{"accountingRecoveryError":"invalid_receipt"}'::jsonb,updated_at=clock_timestamp() WHERE owner_id=$1 AND id=$2`, string(row.OwnerID), string(row.ID))
+		_, markErr := a.store.Pool.Exec(ctx, `UPDATE model_calls SET accounting_state='failed',actual_mode=actual_mode||'{"accountingRecoveryError":"invalid_receipt"}'::jsonb,updated_at=clock_timestamp() WHERE owner_id=$1 AND id=$2`, string(row.OwnerID), string(row.ID))
 		return false, errors.Join(fmt.Errorf("interactive_billing_receipt_invalid: %w", memory.ErrConflict), markErr)
 	}
 	request := modelcall.Request{OwnerID: row.OwnerID, ExecutionID: row.ExecutionID, RootExecutionID: row.RootExecutionID, CausationID: row.CausationID, Function: row.Function, Stage: row.Stage, ProviderID: row.Provider, Policy: interactiveCallPolicy{Kind: row.Manifest.Kind, Origin: row.Manifest.Origin, BudgetOwner: row.Manifest.BudgetOwner, Usage: row.Mode.Usage}}
 	if err := modelcall.SettleReceipt(ctx, a.store.CallRecords(), a.store.CallRecords(), request, paid); err != nil {
 		return false, err
 	}
-	_, err = a.store.pool.Exec(ctx, `UPDATE model_calls c SET result_receipt=jsonb_set(result_receipt,'{availableForApplication}','false'::jsonb),updated_at=clock_timestamp() WHERE owner_id=$1 AND id=$2 AND input_manifest->>'budgetOwner' IS DISTINCT FROM 'deputy_run' AND (`+inactiveInteractiveExecutionSQL+`)`, string(row.OwnerID), string(row.ID))
+	_, err = a.store.Pool.Exec(ctx, `UPDATE model_calls c SET result_receipt=jsonb_set(result_receipt,'{availableForApplication}','false'::jsonb),updated_at=clock_timestamp() WHERE owner_id=$1 AND id=$2 AND input_manifest->>'budgetOwner' IS DISTINCT FROM 'deputy_run' AND (`+inactiveInteractiveExecutionSQL+`)`, string(row.OwnerID), string(row.ID))
 	return err == nil, err
 }
 
@@ -142,14 +142,14 @@ func (a interactiveCalls) recoverAccountingReceipt(ctx context.Context) (bool, e
 func (a interactiveCalls) recordInterruptedExecution(ctx context.Context) (bool, error) {
 	recorded := false
 	var owner memory.ID
-	err := a.store.pool.QueryRow(ctx, `SELECT owner_id FROM model_calls c WHERE input_manifest->>'version'='interactive-input-v1' AND outcome IN ('prepared','started') AND (`+inactiveInteractiveExecutionSQL+`) ORDER BY updated_at,id LIMIT 1`).Scan(&owner)
+	err := a.store.Pool.QueryRow(ctx, `SELECT owner_id FROM model_calls c WHERE input_manifest->>'version'='interactive-input-v1' AND outcome IN ('prepared','started') AND (`+inactiveInteractiveExecutionSQL+`) ORDER BY updated_at,id LIMIT 1`).Scan(&owner)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return false, nil
 	}
 	if err != nil {
 		return false, err
 	}
-	err = pgx.BeginFunc(ctx, a.store.pool, func(tx pgx.Tx) error {
+	err = pgx.BeginFunc(ctx, a.store.Pool, func(tx pgx.Tx) error {
 		// Data-owner writes lock the owner before the journal. Keep that order
 		// when releasing an admitted deputy reservation after lease expiration.
 		if _, err := tx.Exec(ctx, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(owner)); err != nil {

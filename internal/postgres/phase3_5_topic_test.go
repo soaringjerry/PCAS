@@ -37,7 +37,7 @@ func phase35TopicJob(t *testing.T, f *phase35Fixture, topic int) worker.Job {
 	id := strings.TrimPrefix(f.Topics[topic], "entity:")
 	var err error
 	for attempt := 0; attempt < 4; attempt++ {
-		err = f.Store.pool.QueryRow(f.Context, `SELECT stage FROM memory_jobs WHERE owner_id=$1 AND record_id=$2 AND stage LIKE 'memory.topic_project:%' AND state='queued' ORDER BY created_at,stage LIMIT 1`, f.Scope.OwnerID, id).Scan(&stage)
+		err = f.Store.Pool.QueryRow(f.Context, `SELECT stage FROM memory_jobs WHERE owner_id=$1 AND record_id=$2 AND stage LIKE 'memory.topic_project:%' AND state='queued' ORDER BY created_at,stage LIMIT 1`, f.Scope.OwnerID, id).Scan(&stage)
 		if err == nil {
 			break
 		}
@@ -48,7 +48,7 @@ func phase35TopicJob(t *testing.T, f *phase35Fixture, topic int) worker.Job {
 		// pending outcome, not proof that eligibility failed. Verify the observable
 		// reason/count before replaying that real scheduler operation.
 		var deferred int
-		e := f.Store.pool.QueryRow(f.Context, `SELECT coalesce(sum(count),0) FROM background_stage_events WHERE owner_id=$1 AND stage=$2 AND outcome='failure' AND reason LIKE 'schedule_%' AND at>now()-interval '1 minute'`, f.Scope.OwnerID, HandoverStage).Scan(&deferred)
+		e := f.Store.Pool.QueryRow(f.Context, `SELECT coalesce(sum(count),0) FROM background_stage_events WHERE owner_id=$1 AND stage=$2 AND outcome='failure' AND reason LIKE 'schedule_%' AND at>now()-interval '1 minute'`, f.Scope.OwnerID, HandoverStage).Scan(&deferred)
 		if e != nil || deferred == 0 {
 			t.Fatalf("eligible topic has no task and no observable scheduling deferral: %v count=%d err=%v", err, deferred, e)
 		}
@@ -67,7 +67,7 @@ func phase35TopicJob(t *testing.T, f *phase35Fixture, topic int) worker.Job {
 func phase35TopicMemoryDigest(t *testing.T, f *phase35Fixture) string {
 	t.Helper()
 	var out string
-	err := f.Store.pool.QueryRow(f.Context, `SELECT md5(string_agg(to_jsonb(c)::text||c.xmin::text,'|' ORDER BY c.claim_id)) FROM claim_revisions c WHERE owner_id=$1`, f.Scope.OwnerID).Scan(&out)
+	err := f.Store.Pool.QueryRow(f.Context, `SELECT md5(string_agg(to_jsonb(c)::text||c.xmin::text,'|' ORDER BY c.claim_id)) FROM claim_revisions c WHERE owner_id=$1`, f.Scope.OwnerID).Scan(&out)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -76,7 +76,7 @@ func phase35TopicMemoryDigest(t *testing.T, f *phase35Fixture) string {
 func phase35TopicLink(t *testing.T, f *phase35Fixture, index int) string {
 	t.Helper()
 	var id string
-	err := f.Store.pool.QueryRow(f.Context, `SELECT coalesce(disambiguation->>'work_item_id','') FROM entity_versions WHERE owner_id=$1 AND entity_id=$2 AND version=1`, f.Scope.OwnerID, strings.TrimPrefix(f.Topics[index], "entity:")).Scan(&id)
+	err := f.Store.Pool.QueryRow(f.Context, `SELECT coalesce(disambiguation->>'work_item_id','') FROM entity_versions WHERE owner_id=$1 AND entity_id=$2 AND version=1`, f.Scope.OwnerID, strings.TrimPrefix(f.Topics[index], "entity:")).Scan(&id)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,7 +95,7 @@ func TestPhase35C2C4G1T4EligibleTopicLinksReceiptsUndoAndReplay(t *testing.T) {
 	}
 	for i := 1; i < 3; i++ {
 		var n int
-		err := s.pool.QueryRow(ctx, `SELECT count(*) FROM memory_jobs WHERE owner_id=$1 AND record_id=$2 AND stage LIKE 'memory.topic_project:%'`, f.Scope.OwnerID, strings.TrimPrefix(f.Topics[i], "entity:")).Scan(&n)
+		err := s.Pool.QueryRow(ctx, `SELECT count(*) FROM memory_jobs WHERE owner_id=$1 AND record_id=$2 AND stage LIKE 'memory.topic_project:%'`, f.Scope.OwnerID, strings.TrimPrefix(f.Topics[i], "entity:")).Scan(&n)
 		if err != nil || n != 0 {
 			t.Fatalf("topic missing prerequisite %d got jobs=%d err=%v", i, n, err)
 		}
@@ -123,7 +123,7 @@ func TestPhase35C2C4G1T4EligibleTopicLinksReceiptsUndoAndReplay(t *testing.T) {
 		t.Fatal("topic project lost evidence provenance")
 	}
 	var action string
-	if err := s.pool.QueryRow(ctx, `SELECT action_id::text FROM topic_project_links WHERE owner_id=$1 AND topic_id=$2 AND undone_at IS NULL`, f.Scope.OwnerID, strings.TrimPrefix(f.Topics[0], "entity:")).Scan(&action); err != nil {
+	if err := s.Pool.QueryRow(ctx, `SELECT action_id::text FROM topic_project_links WHERE owner_id=$1 AND topic_id=$2 AND undone_at IS NULL`, f.Scope.OwnerID, strings.TrimPrefix(f.Topics[0], "entity:")).Scan(&action); err != nil {
 		t.Fatal(err)
 	}
 	phase35RequireSingleReceipt(t, st, kernel.JSON(st.Projects[0]), action)
@@ -131,7 +131,7 @@ func TestPhase35C2C4G1T4EligibleTopicLinksReceiptsUndoAndReplay(t *testing.T) {
 		t.Fatal(err)
 	}
 	var scheduled int
-	if err := s.pool.QueryRow(ctx, `SELECT count(*) FROM memory_jobs WHERE owner_id=$1 AND stage LIKE 'memory.project_handover:%' AND state='queued'`, f.Scope.OwnerID).Scan(&scheduled); err != nil || scheduled == 0 {
+	if err := s.Pool.QueryRow(ctx, `SELECT count(*) FROM memory_jobs WHERE owner_id=$1 AND stage LIKE 'memory.project_handover:%' AND state='queued'`, f.Scope.OwnerID).Scan(&scheduled); err != nil || scheduled == 0 {
 		t.Fatal("C4 topic project not in handover schedule", err)
 	}
 	if _, err := s.Undo(ctx, f.Scope, action); err != nil {
@@ -147,14 +147,14 @@ func TestPhase35C2C4G1T4EligibleTopicLinksReceiptsUndoAndReplay(t *testing.T) {
 		t.Fatal(err)
 	}
 	var replay int
-	if err := s.pool.QueryRow(ctx, `SELECT count(*) FROM memory_jobs WHERE owner_id=$1 AND record_id=$2 AND stage LIKE 'memory.topic_project:%' AND state='queued'`, f.Scope.OwnerID, strings.TrimPrefix(f.Topics[0], "entity:")).Scan(&replay); err != nil || replay != 0 {
+	if err := s.Pool.QueryRow(ctx, `SELECT count(*) FROM memory_jobs WHERE owner_id=$1 AND record_id=$2 AND stage LIKE 'memory.topic_project:%' AND state='queued'`, f.Scope.OwnerID, strings.TrimPrefix(f.Topics[0], "entity:")).Scan(&replay); err != nil || replay != 0 {
 		t.Fatal("same evidence rescheduled after undo", replay, err)
 	}
 	if calls.Load() != 1 {
 		t.Fatalf("one eligible topic calls=%d want=1", calls.Load())
 	}
 	var excess int
-	if err := s.pool.QueryRow(ctx, `SELECT coalesce(sum(count),0) FROM background_stage_events WHERE owner_id=$1 AND reason='topic_project_evidence_left_in_group'`, f.Scope.OwnerID).Scan(&excess); err != nil || excess < 2 {
+	if err := s.Pool.QueryRow(ctx, `SELECT coalesce(sum(count),0) FROM background_stage_events WHERE owner_id=$1 AND reason='topic_project_evidence_left_in_group'`, f.Scope.OwnerID).Scan(&excess); err != nil || excess < 2 {
 		t.Fatalf("12 memories, 10 supplied: overflow=%d err=%v", excess, err)
 	}
 	t.Logf("T4 eligible topic provider_calls=%d; per-page ceiling=max(1,ceil(projects/20)); memories unchanged", calls.Load())
@@ -189,7 +189,7 @@ func TestPhase35C2G7T4DailyCapDefersToLocalNextDayReusesPaidOutput(t *testing.T)
 		t.Fatal("over-cap topic created partial project")
 	}
 	var paid int
-	if err := s.pool.QueryRow(ctx, `SELECT count(*) FROM background_model_results WHERE job_id=$1`, j.ID).Scan(&paid); err != nil || paid != 1 {
+	if err := s.Pool.QueryRow(ctx, `SELECT count(*) FROM background_model_results WHERE job_id=$1`, j.ID).Scan(&paid); err != nil || paid != 1 {
 		t.Fatal("daily deferral lost paid result", paid, err)
 	}
 	// Move only four prior synthetic quota rows into yesterday; do not rerun model.
@@ -209,7 +209,7 @@ func TestPhase35C3G5ExistingProjectBeyondFirstPage(t *testing.T) {
 	f := phase35TopicControls(t)
 	s, ctx := f.Store, f.Context
 	target := ""
-	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		for i := 0; i < 21; i++ {
 			id := fmt.Sprintf("35000000-0035-4000-8000-%012d", i)
 			it := workspace.NewItem("project", fmt.Sprintf("虚构目录项目%02d", i))
@@ -285,7 +285,7 @@ func TestPhase35C2G2UncertainAndInvalidKeepPending(t *testing.T) {
 			}
 			var state, reason string
 			var attempts int
-			if err := f.Store.pool.QueryRow(f.Context, `SELECT state,error_code,attempts FROM memory_jobs WHERE id=$1`, j.ID).Scan(&state, &reason, &attempts); err != nil || state != "queued" || reason == "" || attempts < 1 {
+			if err := f.Store.Pool.QueryRow(f.Context, `SELECT state,error_code,attempts FROM memory_jobs WHERE id=$1`, j.ID).Scan(&state, &reason, &attempts); err != nil || state != "queued" || reason == "" || attempts < 1 {
 				t.Fatalf("not retained pending %s reason=%s count=%d err=%v", state, reason, attempts, err)
 			}
 			if phase35TopicMemoryDigest(t, f) != before || phase35TopicLink(t, f, 0) != "" || len(phase35Snapshot(t, f.Store, f.Scope).Projects) != 0 {
@@ -310,7 +310,7 @@ func TestPhase35C2G4SingleMemoryChangesOnlyAffectedTopic(t *testing.T) {
 	}
 	digest := func() string {
 		var out string
-		err := s.pool.QueryRow(ctx, `SELECT md5(string_agg(to_jsonb(j)::text||xmin::text,'|' ORDER BY stage)) FROM memory_jobs j WHERE owner_id=$1 AND record_id=$2 AND stage LIKE 'memory.topic_project:%'`, f.Scope.OwnerID, strings.TrimPrefix(f.Topics[1], "entity:")).Scan(&out)
+		err := s.Pool.QueryRow(ctx, `SELECT md5(string_agg(to_jsonb(j)::text||xmin::text,'|' ORDER BY stage)) FROM memory_jobs j WHERE owner_id=$1 AND record_id=$2 AND stage LIKE 'memory.topic_project:%'`, f.Scope.OwnerID, strings.TrimPrefix(f.Topics[1], "entity:")).Scan(&out)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -342,16 +342,16 @@ func TestPhase35C2G3TopicPaidRetryAfterWriteFailure(t *testing.T) {
 		t.Fatal("topic business fault did not fail")
 	}
 	var paid int
-	if err := s.pool.QueryRow(ctx, `SELECT count(*) FROM background_model_results WHERE job_id=$1`, j.ID).Scan(&paid); err != nil || paid != 1 {
+	if err := s.Pool.QueryRow(ctx, `SELECT count(*) FROM background_model_results WHERE job_id=$1`, j.ID).Scan(&paid); err != nil || paid != 1 {
 		t.Fatal("paid topic output lost", paid, err)
 	}
 	phase26Exec(t, f.phase26LoadedFixture, `DROP TRIGGER phase35_reject_topic ON topic_project_links; DROP FUNCTION phase35_reject_topic()`)
-	peer, err := Open(ctx, s.pool.Config().ConnString())
+	peer, err := Open(ctx, s.Pool.Config().ConnString())
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer peer.Close()
-	peer.SetModels(s.models)
+	peer.SetModels(s.Models)
 	if err := phase35ProcessTopic(t, peer, ctx, j); err != nil {
 		t.Fatal("restart topic persist retry", err)
 	}
@@ -371,19 +371,19 @@ func TestPhase35C2G7IndependentHourlyAndNoBorrowing(t *testing.T) {
 		if stage == phase35TopicStage {
 			continue
 		}
-		if _, err := s.pool.Exec(ctx, `INSERT INTO background_usage(id,owner_id,reserved_cost,stage) SELECT gen_random_uuid(),$1,0,$2 FROM generate_series(1,$3)`, scope.OwnerID, stage, limit); err != nil {
+		if _, err := s.Pool.Exec(ctx, `INSERT INTO background_usage(id,owner_id,reserved_cost,stage) SELECT gen_random_uuid(),$1,0,$2 FROM generate_series(1,$3)`, scope.OwnerID, stage, limit); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	if err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		return backgroundHourlyTx(ctx, tx, phase35TopicStage, "phase35_topic_hourly_limit")
 	}); err != nil {
 		t.Fatal("other stages consumed topic capacity", err)
 	}
-	if _, err := s.pool.Exec(ctx, `INSERT INTO background_usage(id,owner_id,reserved_cost,stage) SELECT gen_random_uuid(),$1,0,$2 FROM generate_series(1,2)`, scope.OwnerID, phase35TopicStage); err != nil {
+	if _, err := s.Pool.Exec(ctx, `INSERT INTO background_usage(id,owner_id,reserved_cost,stage) SELECT gen_random_uuid(),$1,0,$2 FROM generate_series(1,2)`, scope.OwnerID, phase35TopicStage); err != nil {
 		t.Fatal(err)
 	}
-	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		return backgroundHourlyTx(ctx, tx, phase35TopicStage, "phase35_topic_hourly_limit")
 	})
 	var deferred *worker.JobError
@@ -515,7 +515,7 @@ func TestTopicProjectOnlyWhatIsStillBeingWorkedOn(t *testing.T) {
 				t.Fatal(err)
 			}
 		}
-		if err := s.pool.QueryRow(ctx, `SELECT count(*) FROM memory_jobs WHERE owner_id=$1 AND record_id=$2 AND stage LIKE 'memory.topic_project:%'`, f.Scope.OwnerID, topic).Scan(&n); err != nil {
+		if err := s.Pool.QueryRow(ctx, `SELECT count(*) FROM memory_jobs WHERE owner_id=$1 AND record_id=$2 AND stage LIKE 'memory.topic_project:%'`, f.Scope.OwnerID, topic).Scan(&n); err != nil {
 			t.Fatal(err)
 		}
 		return n

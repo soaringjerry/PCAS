@@ -2,10 +2,12 @@ package postgres
 
 import (
 	"context"
-	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
 	"net/url"
 	"testing"
 	"unicode"
+
+	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
+	"github.com/soaringjerry/PCAS/internal/postgres/memoryread"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/workspace"
@@ -26,7 +28,7 @@ func TestMemoryListFiltersQualifiedCaptureSQLMatchesGo(t *testing.T) {
 			texts = append(texts, "if"+string(rune(r.Lo))+"cedar", "if"+string(rune(r.Hi))+"cedar")
 		}
 	}
-	rows, err := s.pool.Query(context.Background(), "SELECT input,"+qualifiedCaptureSQL("input")+" FROM unnest($1::text[]) input", texts)
+	rows, err := s.Pool.Query(context.Background(), "SELECT input,"+memoryread.QualifiedCaptureSQL("input")+" FROM unnest($1::text[]) input", texts)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,13 +77,13 @@ func TestMemoryListFiltersTrustHTTPPaginationAndConjunction(t *testing.T) {
 		for _, group := range spec.groups {
 			src := b1Source(t, s, scope, "虚构筛选资料", spec.text, "archive")
 			sources = append(sources, src)
-			if _, err := s.pool.Exec(context.Background(), "INSERT INTO source_contexts(owner_id,source_id,source_version,conversation_key,role,branch) VALUES($1,$2,1,$3,$4,'active')", string(scope.OwnerID), string(src.ID), group, spec.role); err != nil {
+			if _, err := s.Pool.Exec(context.Background(), "INSERT INTO source_contexts(owner_id,source_id,source_version,conversation_key,role,branch) VALUES($1,$2,1,$3,$4,'active')", string(scope.OwnerID), string(src.ID), group, spec.role); err != nil {
 				t.Fatal(err)
 			}
 		}
 		ref := b1Claim(t, s, scope, spec.text, "fact", "candidate", sources...)
 		refs = append(refs, ref)
-		if _, err := s.pool.Exec(context.Background(), "UPDATE claim_revisions SET acquisition=$3,category='rule' WHERE owner_id=$1 AND claim_id=$2", string(scope.OwnerID), string(ref.ID), spec.acquisition); err != nil {
+		if _, err := s.Pool.Exec(context.Background(), "UPDATE claim_revisions SET acquisition=$3,category='rule' WHERE owner_id=$1 AND claim_id=$2", string(scope.OwnerID), string(ref.ID), spec.acquisition); err != nil {
 			t.Fatal(err)
 		}
 		if wants[spec.trust] == nil {
@@ -122,7 +124,7 @@ func TestMemoryListFiltersTrustHTTPPaginationAndConjunction(t *testing.T) {
 		t.Fatal("filters must intersect", page)
 	}
 	// Source role changes must affect the filter immediately; no stored trust.
-	if _, err := s.pool.Exec(context.Background(), "UPDATE source_contexts SET role='assistant' WHERE owner_id=$1 AND source_id IN(SELECT source_id FROM evidence WHERE owner_id=$1 AND target_id=$2)", string(scope.OwnerID), string(refs[0].ID)); err != nil {
+	if _, err := s.Pool.Exec(context.Background(), "UPDATE source_contexts SET role='assistant' WHERE owner_id=$1 AND source_id IN(SELECT source_id FROM evidence WHERE owner_id=$1 AND target_id=$2)", string(scope.OwnerID), string(refs[0].ID)); err != nil {
 		t.Fatal(err)
 	}
 	if page := b2List(t, s, scope, "?trust=stated"); page.Total != 2 {
@@ -147,7 +149,7 @@ func TestMemoryListFiltersRetiredByAndTrust(t *testing.T) {
 		i, target int
 		kind      string
 	}{{1, 0, "duplicate"}, {2, 0, "superseded"}, {3, 0, "duplicate"}, {5, 4, "duplicate"}} {
-		if _, err := s.pool.Exec(context.Background(), "UPDATE claims SET retired=$3,retired_by=$4,retired_at=now() WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), string(refs[spec.i].ID), spec.kind, string(refs[spec.target].ID)); err != nil {
+		if _, err := s.Pool.Exec(context.Background(), "UPDATE claims SET retired=$3,retired_by=$4,retired_at=now() WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), string(refs[spec.i].ID), spec.kind, string(refs[spec.target].ID)); err != nil {
 			t.Fatal(err)
 		}
 	}

@@ -32,7 +32,7 @@ func TestSecretaryConversationDependenciesStayASet(t *testing.T) {
 	assertSet := func(turnID string) {
 		t.Helper()
 		var refs []memory.Ref
-		if err := s.pool.QueryRow(ctx, "SELECT dependencies FROM desk_turns WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), turnID).Scan(&refs); err != nil {
+		if err := s.Pool.QueryRow(ctx, "SELECT dependencies FROM desk_turns WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), turnID).Scan(&refs); err != nil {
 			t.Fatal(err)
 		}
 		counts := map[memory.Ref]int{}
@@ -47,7 +47,7 @@ func TestSecretaryConversationDependenciesStayASet(t *testing.T) {
 	count := func(turnID string) int {
 		t.Helper()
 		var n int
-		if err := s.pool.QueryRow(ctx, "SELECT jsonb_array_length(dependencies) FROM desk_turns WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), turnID).Scan(&n); err != nil {
+		if err := s.Pool.QueryRow(ctx, "SELECT jsonb_array_length(dependencies) FROM desk_turns WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), turnID).Scan(&n); err != nil {
 			t.Fatal(err)
 		}
 		return n
@@ -64,7 +64,7 @@ func TestSecretaryConversationDependenciesStayASet(t *testing.T) {
 
 	// Rows written before the fix hold the same reference hundreds of times.
 	// They must still verify, and must not inflate the turns that follow them.
-	if _, err := s.pool.Exec(ctx, `UPDATE desk_turns SET dependencies=(SELECT jsonb_agg(t.dependencies->0) FROM desk_turns t, generate_series(1,600) WHERE t.owner_id=$1 AND t.id=$2) WHERE owner_id=$1 AND id=$2`, string(scope.OwnerID), last.Turn.ID); err != nil {
+	if _, err := s.Pool.Exec(ctx, `UPDATE desk_turns SET dependencies=(SELECT jsonb_agg(t.dependencies->0) FROM desk_turns t, generate_series(1,600) WHERE t.owner_id=$1 AND t.id=$2) WHERE owner_id=$1 AND id=$2`, string(scope.OwnerID), last.Turn.ID); err != nil {
 		t.Fatal(err)
 	}
 	if n := count(last.Turn.ID); n != 600 {

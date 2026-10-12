@@ -21,24 +21,24 @@ func (s *Store) IngestAttachment(ctx context.Context, scope memory.Scope, in mem
 	if err := kernel.RequireOwner(scope); err != nil {
 		return result, err
 	}
-	if s.blobs == nil {
+	if s.Blobs == nil {
 		return result, memory.ErrUnavailable
 	}
 	if !kernel.OneOf(in.MediaType, "application/x-pcas-archive", "application/pdf", "image/png", "image/jpeg", "image/webp", "image/tiff", "audio/mpeg", "audio/wav", "audio/mp4", "audio/ogg") || kernel.RequireText(in.Title) != nil || len(in.Title) > 2000 || in.Connector == "" || in.ExternalID == "" || in.ExternalVersion == "" {
 		return result, memory.ErrInvalid
 	}
-	key, err := s.blobs.Put(ctx, scope, r)
+	key, err := s.Blobs.Put(ctx, scope, r)
 	if err != nil {
 		return result, err
 	}
 	in.Text = "[附件原件；正文尚未解析。校验标识：" + strings.Split(strings.Split(key, "/")[1], "-")[0] + "]"
-	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	err = pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		var err error
 		result, err = s.ingestAttachmentTx(ctx, tx, scope, in, key)
 		return err
 	})
 	if err != nil { // An uncommitted upload is cleaned only when no committed source uses it.
-		_, _ = s.pool.Exec(context.WithoutCancel(ctx), "INSERT INTO blob_cleanup_jobs(owner_id,blob_key) VALUES($1,$2) ON CONFLICT DO NOTHING", string(scope.OwnerID), key)
+		_, _ = s.Pool.Exec(context.WithoutCancel(ctx), "INSERT INTO blob_cleanup_jobs(owner_id,blob_key) VALUES($1,$2) ON CONFLICT DO NOTHING", string(scope.OwnerID), key)
 	}
 	return result, err
 }
@@ -63,7 +63,7 @@ func (s *Store) ingestAttachmentTx(ctx context.Context, tx pgx.Tx, scope memory.
 	return result, err
 }
 func (s *Store) OpenAttachment(ctx context.Context, scope memory.Scope, id memory.ID, version int) (io.ReadCloser, string, string, error) {
-	if s.blobs == nil {
+	if s.Blobs == nil {
 		return nil, "", "", memory.ErrUnavailable
 	}
 	source, err := s.GetSource(ctx, scope, id, version)
@@ -71,13 +71,13 @@ func (s *Store) OpenAttachment(ctx context.Context, scope memory.Scope, id memor
 		return nil, "", "", err
 	}
 	var key *string
-	if err := s.pool.QueryRow(ctx, "SELECT blob_key FROM source_versions WHERE owner_id=$1 AND source_id=$2 AND version=$3", string(scope.OwnerID), string(id), source.Source.Version).Scan(&key); err != nil {
+	if err := s.Pool.QueryRow(ctx, "SELECT blob_key FROM source_versions WHERE owner_id=$1 AND source_id=$2 AND version=$3", string(scope.OwnerID), string(id), source.Source.Version).Scan(&key); err != nil {
 		return nil, "", "", err
 	}
 	if key == nil {
 		return nil, "", "", memory.ErrNotFound
 	}
-	file, err := s.blobs.Open(ctx, scope, *key)
+	file, err := s.Blobs.Open(ctx, scope, *key)
 	if os.IsNotExist(err) {
 		err = memory.ErrNotFound
 	}
@@ -107,7 +107,7 @@ func (s *Store) ProcessAttachmentWith(ctx context.Context, j worker.Job, read at
 		}
 		return &worker.JobError{Code: "file_parse_failed", Retry: true}
 	}
-	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	return pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		if err := kernel.LockJob(ctx, tx, j); err != nil {
 			return err
 		}
@@ -127,7 +127,7 @@ func (s *Store) readAttachmentWith(ctx context.Context, scope memory.Scope, ref 
 		return parsed, ctx.Err()
 	}
 	defer func() { <-s.secretarySlots }()
-	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended($1,0))", "attachment:"+string(scope.OwnerID)+":"+string(ref.ID)+fmt.Sprint(ref.Version)); err != nil {
 			return err
 		}
@@ -217,10 +217,10 @@ func (a attachmentReceipts) Save(ctx context.Context, component string, paid *mo
 }
 
 func (s *Store) CleanupBlobs(ctx context.Context) error {
-	if s.blobs == nil {
+	if s.Blobs == nil {
 		return nil
 	}
-	rows, err := s.pool.Query(ctx, "SELECT owner_id::text,blob_key FROM blob_cleanup_jobs ORDER BY created_at LIMIT 100")
+	rows, err := s.Pool.Query(ctx, "SELECT owner_id::text,blob_key FROM blob_cleanup_jobs ORDER BY created_at LIMIT 100")
 	if err != nil {
 		return err
 	}
@@ -244,15 +244,15 @@ func (s *Store) CleanupBlobs(ctx context.Context) error {
 	}
 	for _, job := range jobs {
 		var used bool
-		if err := s.pool.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM source_versions WHERE owner_id=$1 AND blob_key=$2)", string(job.Owner), job.Key).Scan(&used); err != nil {
+		if err := s.Pool.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM source_versions WHERE owner_id=$1 AND blob_key=$2)", string(job.Owner), job.Key).Scan(&used); err != nil {
 			return err
 		}
 		if !used {
-			if err := s.blobs.Delete(ctx, memory.Scope{OwnerID: job.Owner, PrincipalID: "worker", IsOwner: true}, job.Key); err != nil {
+			if err := s.Blobs.Delete(ctx, memory.Scope{OwnerID: job.Owner, PrincipalID: "worker", IsOwner: true}, job.Key); err != nil {
 				return err
 			}
 		}
-		if _, err := s.pool.Exec(ctx, "DELETE FROM blob_cleanup_jobs WHERE owner_id=$1 AND blob_key=$2", string(job.Owner), job.Key); err != nil {
+		if _, err := s.Pool.Exec(ctx, "DELETE FROM blob_cleanup_jobs WHERE owner_id=$1 AND blob_key=$2", string(job.Owner), job.Key); err != nil {
 			return err
 		}
 	}

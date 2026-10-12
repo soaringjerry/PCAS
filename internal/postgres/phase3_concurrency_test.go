@@ -30,12 +30,12 @@ func phase3ConcurrentStage(t *testing.T, stage string) {
 	if stage == EntityCompareStage {
 		phase26Proposal(t, f, 0, 4)
 	}
-	user, err := Open(ctx, s.pool.Config().ConnString())
+	user, err := Open(ctx, s.Pool.Config().ConnString())
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(user.Close)
-	user.SetModels(s.models)
+	user.SetModels(s.Models)
 	traffic := phase26HTTPUserRequests(t, f, user)
 	// Warm foreground setup before the zero-write/read and overlap measurements.
 	for name, run := range traffic {
@@ -116,7 +116,7 @@ func phase3ConcurrentStage(t *testing.T, stage string) {
 		t.Fatal("processor", processErr)
 	}
 	var state string
-	if err := s.pool.QueryRow(ctx, `SELECT state FROM memory_jobs WHERE id=$1`, job.ID).Scan(&state); err != nil {
+	if err := s.Pool.QueryRow(ctx, `SELECT state FROM memory_jobs WHERE id=$1`, job.ID).Scan(&state); err != nil {
 		t.Fatal(err)
 	}
 	if state != "done" || len(m.calls(stage)) != 1 {
@@ -254,7 +254,7 @@ func TestPhase3G3ClassificationAndGlobalHandoverPaidResultRecovery(t *testing.T)
 				close(release)
 				t.Fatal("provider barrier")
 			}
-			tx, err := s.pool.Begin(ctx)
+			tx, err := s.Pool.Begin(ctx)
 			if err != nil {
 				close(release)
 				t.Fatal(err)
@@ -271,18 +271,18 @@ func TestPhase3G3ClassificationAndGlobalHandoverPaidResultRecovery(t *testing.T)
 				t.Fatal("paid result write was not retained/deferred", err)
 			}
 			var saved int
-			if err := s.pool.QueryRow(ctx, `SELECT count(*) FROM background_model_results WHERE job_id=$1`, job.ID).Scan(&saved); err != nil || saved != 1 {
+			if err := s.Pool.QueryRow(ctx, `SELECT count(*) FROM background_model_results WHERE job_id=$1`, job.ID).Scan(&saved); err != nil || saved != 1 {
 				t.Fatal("paid result is not durable", saved, err)
 			}
 			if err := tx.Rollback(ctx); err != nil {
 				t.Fatal(err)
 			}
-			restarted, err := Open(ctx, s.pool.Config().ConnString())
+			restarted, err := Open(ctx, s.Pool.Config().ConnString())
 			if err != nil {
 				t.Fatal(err)
 			}
 			defer restarted.Close()
-			restarted.SetModels(s.models)
+			restarted.SetModels(s.Models)
 			if err := phase26Process(ctx, restarted, job); err != nil {
 				t.Fatal(err)
 			}

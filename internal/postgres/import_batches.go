@@ -68,7 +68,7 @@ func (s *Store) importArchiveReader(ctx context.Context, scope memory.Scope, nam
 	if strings.TrimSpace(name) == "" || len(name) > 2000 {
 		return out, memory.ErrInvalid
 	}
-	if s.blobs == nil {
+	if s.Blobs == nil {
 		return out, memory.ErrUnavailable
 	}
 	archive, err := connectors.OpenArchive(ctx, name, r)
@@ -86,7 +86,7 @@ func (s *Store) importArchiveReader(ctx context.Context, scope memory.Scope, nam
 	// Avoid even a redundant blob upload for an identical archive.
 	var ref memory.Ref
 	ref.Kind = memory.SourceKind
-	err = s.pool.QueryRow(ctx, `SELECT s.id::text,v.version,b.id::text FROM sources s
+	err = s.Pool.QueryRow(ctx, `SELECT s.id::text,v.version,b.id::text FROM sources s
   JOIN source_versions v ON v.owner_id=s.owner_id AND v.source_id=s.id AND v.external_version='1'
   JOIN import_batches b ON b.owner_id=s.owner_id AND b.archive_id=s.id
   JOIN memory_records r ON r.owner_id=s.owner_id AND r.id=s.id AND r.state='active'
@@ -105,7 +105,7 @@ func (s *Store) importArchiveReader(ctx context.Context, scope memory.Scope, nam
 		return out, err
 	}
 	in := memory.IngestRequest{Connector: namespace, ExternalID: archive.Hash, ExternalVersion: "1", Title: name, MediaType: "application/x-pcas-archive", Text: "[附件原件；正文尚未解析。校验标识：" + archive.Hash + "]"}
-	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	err = pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		if err := s.ensureOwner(ctx, tx, scope); err != nil {
 			return err
 		}
@@ -169,7 +169,7 @@ func (s *Store) importArchiveReader(ctx context.Context, scope memory.Scope, nam
 	if err != nil {
 		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 		defer cancel()
-		_, _ = s.pool.Exec(cleanupCtx, "INSERT INTO blob_cleanup_jobs(owner_id,blob_key) VALUES($1,$2) ON CONFLICT DO NOTHING", string(scope.OwnerID), key)
+		_, _ = s.Pool.Exec(cleanupCtx, "INSERT INTO blob_cleanup_jobs(owner_id,blob_key) VALUES($1,$2) ON CONFLICT DO NOTHING", string(scope.OwnerID), key)
 	}
 	out.Gaps = append(archive.Preview.Gaps, "原始归档已保留，记录正在后台解析；处理进度可在来源中查看")
 	return out, err
@@ -259,7 +259,7 @@ func (s *Store) ListImports(ctx context.Context, scope memory.Scope) ([]ImportBa
 	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err
 	}
-	rows, err := s.pool.Query(ctx, importBatchSelect+" WHERE b.owner_id=$1 ORDER BY b.created_at DESC,b.id DESC", string(scope.OwnerID))
+	rows, err := s.Pool.Query(ctx, importBatchSelect+" WHERE b.owner_id=$1 ORDER BY b.created_at DESC,b.id DESC", string(scope.OwnerID))
 	if err != nil {
 		return nil, err
 	}
@@ -286,7 +286,7 @@ func (s *Store) OrganizeImport(ctx context.Context, scope memory.Scope, id memor
 	if !id.Valid() {
 		return out, memory.ErrInvalid
 	}
-	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(scope.OwnerID)); err != nil {
 			return err
 		}
@@ -317,7 +317,7 @@ func (s *Store) changeImportState(ctx context.Context, scope memory.Scope, id me
 	if !id.Valid() {
 		return out, memory.ErrInvalid
 	}
-	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(scope.OwnerID)); err != nil {
 			return err
 		}
@@ -363,7 +363,7 @@ func (s *Store) processArchiveImport(ctx context.Context, j worker.Job, title st
 	defer archive.Close()
 	scope := memory.Scope{OwnerID: j.OwnerID, PrincipalID: "worker", IsOwner: true}
 	var connector string
-	if err = s.pool.QueryRow(ctx, "SELECT connector FROM sources WHERE owner_id=$1 AND id=$2", string(j.OwnerID), string(j.Record.ID)).Scan(&connector); err != nil {
+	if err = s.Pool.QueryRow(ctx, "SELECT connector FROM sources WHERE owner_id=$1 AND id=$2", string(j.OwnerID), string(j.Record.ID)).Scan(&connector); err != nil {
 		return err
 	}
 	namespace := "archive-records"
@@ -385,7 +385,7 @@ func (s *Store) processArchiveImport(ctx context.Context, j worker.Job, title st
 			return err
 		}
 		stopped := false
-		err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		err = pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 			if err := s.ensureOwner(ctx, tx, scope); err != nil {
 				return err
 			}
@@ -526,7 +526,7 @@ func (s *Store) recordImportFailure(ctx context.Context, j worker.Job, err error
 	slog.WarnContext(ctx, "archive import failed", "stage", "import_records", "error_type", code, "job_id", j.ID)
 	failureCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 	defer cancel()
-	tag, updateErr := s.pool.Exec(failureCtx, `UPDATE import_batches b SET state='failed',error_code=$4,updated_at=now()
+	tag, updateErr := s.Pool.Exec(failureCtx, `UPDATE import_batches b SET state='failed',error_code=$4,updated_at=now()
    WHERE b.owner_id=$1 AND b.archive_id=$2 AND b.state='importing'
    AND EXISTS(SELECT 1 FROM memory_jobs j WHERE j.owner_id=b.owner_id AND j.record_id=b.archive_id AND j.id=$3 AND j.lease_token=$5 AND j.state='leased')`, string(j.OwnerID), string(j.Record.ID), string(j.ID), code, string(j.LeaseToken))
 	if updateErr != nil {
@@ -541,17 +541,17 @@ func (s *Store) recordImportFailure(ctx context.Context, j worker.Job, err error
 // Implementations may offer the archive-specific limit without changing the
 // ordinary attachment port or widening other attachment uploads.
 func (s *Store) putArchiveBlob(ctx context.Context, scope memory.Scope, r io.Reader) (string, error) {
-	if store, ok := s.blobs.(interface {
+	if store, ok := s.Blobs.(interface {
 		PutArchive(context.Context, memory.Scope, io.Reader) (string, error)
 	}); ok {
 		return store.PutArchive(ctx, scope, r)
 	}
-	return s.blobs.Put(ctx, scope, r)
+	return s.Blobs.Put(ctx, scope, r)
 }
 
 func (s *Store) selectArchive(ctx context.Context, scope memory.Scope, namespace string, archive *connectors.Archive) error {
 	archive.Preview.AlreadyImported = 0
-	return pgx.BeginTxFunc(ctx, s.pool, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
+	return pgx.BeginTxFunc(ctx, s.Pool, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
 		return archive.Select(ctx, func(identities []connectors.ArchiveIdentity) ([]bool, error) {
 			allowed, imported, err := classifyArchiveTx(ctx, tx, scope, namespace, identities)
 			if err == nil {
@@ -697,7 +697,7 @@ func linkImportedArchiveTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, n
 }
 
 func (s *Store) pendingArchive(ctx context.Context, scope memory.Scope, namespace string, ref memory.Ref, archive *connectors.Archive) error {
-	return pgx.BeginTxFunc(ctx, s.pool, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
+	return pgx.BeginTxFunc(ctx, s.Pool, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
 		return archive.Filter(ctx, func(identities []connectors.ArchiveIdentity) ([]bool, error) {
 			type key struct {
 				Index   int    `json:"idx"`

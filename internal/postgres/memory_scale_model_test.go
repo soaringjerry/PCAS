@@ -258,7 +258,7 @@ func (m *phase26Model) goldReply(call phase26Call) string {
 }
 func phase26Exec(t *testing.T, f *phase26LoadedFixture, sql string, args ...any) {
 	t.Helper()
-	if _, err := f.Store.pool.Exec(f.Context, sql, args...); err != nil {
+	if _, err := f.Store.Pool.Exec(f.Context, sql, args...); err != nil {
 		t.Fatal(err)
 	}
 }

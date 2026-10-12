@@ -8,6 +8,7 @@ import (
 
 	"github.com/soaringjerry/PCAS/internal/contextbuilder"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/postgres/memoryread"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
@@ -118,7 +119,7 @@ func (s *Store) useMemoriesTx(ctx context.Context, tx pgx.Tx, scope memory.Scope
 	if allowed == nil {
 		allowed = []string{}
 	}
-	ms, err := s.readMemoriesTx(ctx, tx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: agent.ID}, true, memoryReadOptions{useCurrent: true, ids: allowed})
+	ms, err := s.ReadMemoriesTx(ctx, tx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: agent.ID}, true, memoryread.MemoryReadOptions{UseCurrent: true, Ids: allowed})
 	if err != nil {
 		return nil, err
 	}
@@ -306,7 +307,7 @@ func ruleRelevance(applies, text string) int {
 
 func (s *Store) prepareUseOwner(ctx context.Context, scope memory.Scope) (bool, error) {
 	ready := false
-	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		if err := s.ensureOwner(ctx, tx, scope); err != nil {
 			return err
 		}

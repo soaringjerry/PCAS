@@ -19,7 +19,7 @@ func TestImportedHistoryJobsAreQueuedBehindFreshOnes(t *testing.T) {
 	id, archive := b4ImportFile(t, s, scope, "window.zip", b4Zip(t, b4Export(conversations), false), map[string]string{"organize": "now"})
 	b4Complete(t, s, scope, id, archive)
 	var fresh, history int
-	if err := s.pool.QueryRow(ctx, `SELECT count(*) FILTER (WHERE priority<10),count(*) FILTER (WHERE priority>=10) FROM memory_jobs WHERE owner_id=$1 AND state='queued'`, string(scope.OwnerID)).Scan(&fresh, &history); err != nil {
+	if err := s.Pool.QueryRow(ctx, `SELECT count(*) FILTER (WHERE priority<10),count(*) FILTER (WHERE priority>=10) FROM memory_jobs WHERE owner_id=$1 AND state='queued'`, string(scope.OwnerID)).Scan(&fresh, &history); err != nil {
 		t.Fatal(err)
 	}
 	if fresh != 0 || history < 40 {
@@ -28,7 +28,7 @@ func TestImportedHistoryJobsAreQueuedBehindFreshOnes(t *testing.T) {
 	st := workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "刚说的事"})
 	_ = st
 	var said string
-	if err := s.pool.QueryRow(ctx, `SELECT j.record_id::text FROM memory_jobs j WHERE j.owner_id=$1 AND j.state='queued' AND j.priority<10 ORDER BY j.created_at DESC LIMIT 1`, string(scope.OwnerID)).Scan(&said); err != nil {
+	if err := s.Pool.QueryRow(ctx, `SELECT j.record_id::text FROM memory_jobs j WHERE j.owner_id=$1 AND j.state='queued' AND j.priority<10 ORDER BY j.created_at DESC LIMIT 1`, string(scope.OwnerID)).Scan(&said); err != nil {
 		t.Fatal("something said now queued no job ahead of the import", err)
 	}
 	job, err := s.Claim(ctx, time.Minute)
@@ -41,7 +41,7 @@ func TestImportedHistoryJobsAreQueuedBehindFreshOnes(t *testing.T) {
 	// The windowed claim and the whole-queue claim agree on what comes next.
 	var windowed, whole string
 	pick := func(query string) string {
-		tx, err := s.pool.Begin(ctx)
+		tx, err := s.Pool.Begin(ctx)
 		if err != nil {
 			t.Fatal(err)
 		}

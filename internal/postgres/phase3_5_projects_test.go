@@ -122,7 +122,7 @@ func TestPhase35C4AutomaticProjectEntersHandoverSchedule(t *testing.T) {
 		t.Fatal(err)
 	}
 	var n int
-	err := s.pool.QueryRow(ctx, `SELECT count(*) FROM memory_jobs WHERE owner_id=$1 AND stage LIKE 'memory.project_handover:%' AND state='queued'`, scope.OwnerID).Scan(&n)
+	err := s.Pool.QueryRow(ctx, `SELECT count(*) FROM memory_jobs WHERE owner_id=$1 AND stage LIKE 'memory.project_handover:%' AND state='queued'`, scope.OwnerID).Scan(&n)
 	if err != nil || n != 1 {
 		t.Fatalf("automatic project not scheduled: jobs=%d err=%v", n, err)
 	}

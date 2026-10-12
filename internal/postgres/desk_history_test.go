@@ -46,7 +46,7 @@ func TestSecretaryHistoryOneEntryPerAction(t *testing.T) {
 		t.Fatal("replay appended history", replay.State.Tasks[0].History)
 	}
 	var sourceBody string
-	if err := s.pool.QueryRow(ctx, `SELECT v.body FROM source_versions v JOIN sources s ON (s.owner_id,s.id)=(v.owner_id,v.source_id)
+	if err := s.Pool.QueryRow(ctx, `SELECT v.body FROM source_versions v JOIN sources s ON (s.owner_id,s.id)=(v.owner_id,v.source_id)
 		WHERE s.owner_id=$1 AND s.connector='actions' AND s.external_id=$2 ORDER BY v.version DESC LIMIT 1`, string(scope.OwnerID), task.ID).Scan(&sourceBody); err != nil {
 		t.Fatal(err)
 	}
@@ -61,7 +61,7 @@ func TestSecretaryHistoryOneEntryPerAction(t *testing.T) {
 		}
 		var raw []byte
 		var source, summary string
-		if err := s.pool.QueryRow(ctx, "SELECT source,summary,changes FROM action_log WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), *receipt.ActionID).Scan(&source, &summary, &raw); err != nil {
+		if err := s.Pool.QueryRow(ctx, "SELECT source,summary,changes FROM action_log WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), *receipt.ActionID).Scan(&source, &summary, &raw); err != nil {
 			t.Fatal(err)
 		}
 		var changes []actionChange
@@ -74,7 +74,7 @@ func TestSecretaryHistoryOneEntryPerAction(t *testing.T) {
 			}
 			if change.ID == task.ID {
 				var hash string
-				if err := s.pool.QueryRow(ctx, "SELECT action_document_hash(document) FROM work_items WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), task.ID).Scan(&hash); err != nil || hash != *change.AfterHash {
+				if err := s.Pool.QueryRow(ctx, "SELECT action_document_hash(document) FROM work_items WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), task.ID).Scan(&hash); err != nil || hash != *change.AfterHash {
 					t.Fatal("action log must hash the final content", hash, err)
 				}
 				if before == nil {

@@ -121,7 +121,7 @@ func (s *Store) DayActivity(ctx context.Context, scope memory.Scope, date string
 		return nil, memory.ErrInvalid
 	}
 	var out json.RawMessage
-	err := pgx.BeginTxFunc(ctx, s.pool, pgx.TxOptions{AccessMode: pgx.ReadOnly, IsoLevel: pgx.RepeatableRead}, func(tx pgx.Tx) error {
+	err := pgx.BeginTxFunc(ctx, s.Pool, pgx.TxOptions{AccessMode: pgx.ReadOnly, IsoLevel: pgx.RepeatableRead}, func(tx pgx.Tx) error {
 		settings, err := kernel.QueryDocument[workspace.Settings](ctx, tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1", string(scope.OwnerID))
 		if errors.Is(err, memory.ErrNotFound) {
 			settings.Timezone = "UTC"

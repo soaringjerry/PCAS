@@ -157,7 +157,7 @@ func TestPhase3H7AdoptProgressCreatesProjectMemoryAndUndo(t *testing.T) {
 	}
 	h.command(t, f.Context, map[string]any{"type": "adoptRun", "id": run.ID, "as": "progress", "text": run.Output, "requestId": action})
 	var n int
-	if err := f.Store.pool.QueryRow(f.Context, `SELECT count(*) FROM claim_revisions c JOIN claims cl ON(cl.owner_id,cl.id)=(c.owner_id,c.claim_id) WHERE c.owner_id=$1 AND c.scope->>'project_id'=$2 AND c.value #>> '{}'=$3 AND cl.retired=''`, f.Scope.OwnerID, p.ID, run.Output).Scan(&n); err != nil || n != 1 {
+	if err := f.Store.Pool.QueryRow(f.Context, `SELECT count(*) FROM claim_revisions c JOIN claims cl ON(cl.owner_id,cl.id)=(c.owner_id,c.claim_id) WHERE c.owner_id=$1 AND c.scope->>'project_id'=$2 AND c.value #>> '{}'=$3 AND cl.retired=''`, f.Scope.OwnerID, p.ID, run.Output).Scan(&n); err != nil || n != 1 {
 		t.Fatal("progress adoption is not one project memory", n, err)
 	}
 	after, err := f.Store.Snapshot(f.Context, f.Scope)
@@ -175,7 +175,7 @@ func TestPhase3H7AdoptProgressCreatesProjectMemoryAndUndo(t *testing.T) {
 	}
 	phase3Undo(t, h, f, action)
 	var still int
-	if err := f.Store.pool.QueryRow(f.Context, `SELECT count(*) FROM memory_records r JOIN claim_revisions c ON(c.owner_id,c.claim_id,c.version)=(r.owner_id,r.id,r.version) WHERE r.owner_id=$1 AND c.scope->>'project_id'=$2 AND c.value #>> '{}'=$3 AND r.state='active'`, f.Scope.OwnerID, p.ID, run.Output).Scan(&still); err != nil || still != 0 {
+	if err := f.Store.Pool.QueryRow(f.Context, `SELECT count(*) FROM memory_records r JOIN claim_revisions c ON(c.owner_id,c.claim_id,c.version)=(r.owner_id,r.id,r.version) WHERE r.owner_id=$1 AND c.scope->>'project_id'=$2 AND c.value #>> '{}'=$3 AND r.state='active'`, f.Scope.OwnerID, p.ID, run.Output).Scan(&still); err != nil || still != 0 {
 		t.Fatal("undo retained adopted active memory", still, err)
 	}
 }

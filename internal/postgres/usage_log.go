@@ -24,7 +24,7 @@ type modelUsage = modelcall.Usage
 func (s *Store) recordUsage(ctx context.Context, usage modelUsage) error {
 	usageCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 	defer cancel()
-	return pgx.BeginFunc(usageCtx, s.pool, func(tx pgx.Tx) error {
+	return pgx.BeginFunc(usageCtx, s.Pool, func(tx pgx.Tx) error {
 		return recordUsageTx(usageCtx, tx, usage)
 	})
 }
@@ -75,7 +75,7 @@ func (s *Store) UsageSummary(ctx context.Context, scope memory.Scope, from, to s
 		return nil, err
 	}
 	var out json.RawMessage
-	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		settings, err := kernel.QueryDocument[workspace.Settings](ctx, tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1", string(scope.OwnerID))
 		if errors.Is(err, memory.ErrNotFound) {
 			settings.Timezone = "UTC"
@@ -220,7 +220,7 @@ func (s *Store) UsageCalls(ctx context.Context, scope memory.Scope, limit int, b
 	}
 	items := []usageCall{}
 	next := ""
-	err = pgx.BeginTxFunc(ctx, s.pool, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
+	err = pgx.BeginTxFunc(ctx, s.Pool, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx, `SELECT u.id::text,u.at,u.purpose,u.agent_id,u.model,u.input_tokens,u.output_tokens,u.cost,
  u.turn_id::text,u.run_id::text,u.job_id::text,u.memory_refs,u.tier,u.plan,u.input_estimated,u.output_estimated,u.cost_estimated,(to_jsonb(u)->>'duration_ms')::bigint,
  CASE WHEN e.id IS NOT NULL THEN jsonb_build_object('kind',e.kind,'tier',e.tier,'prepareMs',e.prepare_ms,'answerMs',e.answer_ms,'selfcheckMs',e.selfcheck_ms,'writebackMs',e.writeback_ms,'modelMs',e.model_ms,'totalMs',e.total_ms,'otherMs',e.other_ms) END

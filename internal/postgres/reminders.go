@@ -50,7 +50,7 @@ func (s *Store) RunReminders(ctx context.Context, logger *slog.Logger) error {
 	}
 }
 func (s *Store) CheckReminders(ctx context.Context, now time.Time) error {
-	rows, err := s.pool.Query(ctx, "SELECT owner_id::text FROM workspace_owners")
+	rows, err := s.Pool.Query(ctx, "SELECT owner_id::text FROM workspace_owners")
 	if err != nil {
 		return err
 	}
@@ -70,7 +70,7 @@ func (s *Store) CheckReminders(ctx context.Context, now time.Time) error {
 	}
 	for _, id := range owners {
 		scope := memory.Scope{OwnerID: id, PrincipalID: "worker", IsOwner: true}
-		if err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		if err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 			if _, err := tx.Exec(ctx, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(id)); err != nil {
 				return err
 			}

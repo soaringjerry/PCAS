@@ -61,7 +61,7 @@ func b4OrganizingHeld(t *testing.T, s *Store, scope memory.Scope, id string, exp
 		t.Fatalf("organizeLater must be present and equal %t: %+v", expected, item)
 	}
 	var held bool
-	if err := s.pool.QueryRow(context.Background(), `SELECT hold_organizing FROM import_batches WHERE owner_id=$1 AND id=$2`, string(scope.OwnerID), id).Scan(&held); err != nil {
+	if err := s.Pool.QueryRow(context.Background(), `SELECT hold_organizing FROM import_batches WHERE owner_id=$1 AND id=$2`, string(scope.OwnerID), id).Scan(&held); err != nil {
 		t.Fatal(err)
 	}
 	if held != expected {
@@ -133,14 +133,14 @@ func b4AssertHeldAndIndexed(t *testing.T, x b4HeldFixture) {
 	for _, conv := range x.conversations {
 		source := b4SourceByText(t, x.s, x.scope, conv.Messages[0].Text)
 		var indexed bool
-		if err := x.s.pool.QueryRow(context.Background(), `SELECT EXISTS(SELECT 1 FROM chunks c JOIN embeddings e ON e.owner_id=c.owner_id AND e.record_id=c.id AND e.record_version=c.version WHERE c.owner_id=$1 AND c.source_id=$2 AND c.search_vector <> ''::tsvector)`, string(x.scope.OwnerID), string(source.ID)).Scan(&indexed); err != nil {
+		if err := x.s.Pool.QueryRow(context.Background(), `SELECT EXISTS(SELECT 1 FROM chunks c JOIN embeddings e ON e.owner_id=c.owner_id AND e.record_id=c.id AND e.record_version=c.version WHERE c.owner_id=$1 AND c.source_id=$2 AND c.search_vector <> ''::tsvector)`, string(x.scope.OwnerID), string(source.ID)).Scan(&indexed); err != nil {
 			t.Fatal(err)
 		}
 		if !indexed {
 			t.Errorf("held original %s lacks chunk/token/vector index", source.ID)
 		}
 		var pending int
-		if err := x.s.pool.QueryRow(context.Background(), `SELECT count(*) FROM memory_jobs WHERE owner_id=$1 AND record_id=$2 AND stage='source.extract' AND state='queued' AND attempts=0`, string(x.scope.OwnerID), string(source.ID)).Scan(&pending); err != nil {
+		if err := x.s.Pool.QueryRow(context.Background(), `SELECT count(*) FROM memory_jobs WHERE owner_id=$1 AND record_id=$2 AND stage='source.extract' AND state='queued' AND attempts=0`, string(x.scope.OwnerID), string(source.ID)).Scan(&pending); err != nil {
 			t.Fatal(err)
 		}
 		if pending != 1 {
@@ -200,7 +200,7 @@ func TestPhase2B4_I17_StartOrganizingReleasesRealPriorityTenExtraction(t *testin
 	for _, conv := range x.conversations {
 		source := b4SourceByText(t, x.s, x.scope, conv.Messages[0].Text)
 		var priority int
-		if err := x.s.pool.QueryRow(context.Background(), `SELECT priority FROM memory_jobs WHERE owner_id=$1 AND record_id=$2 AND stage='source.extract'`, string(x.scope.OwnerID), string(source.ID)).Scan(&priority); err != nil {
+		if err := x.s.Pool.QueryRow(context.Background(), `SELECT priority FROM memory_jobs WHERE owner_id=$1 AND record_id=$2 AND stage='source.extract'`, string(x.scope.OwnerID), string(source.ID)).Scan(&priority); err != nil {
 			t.Fatal(err)
 		}
 		if priority != 10 {
@@ -235,7 +235,7 @@ func TestPhase2B4_I18_NewSecretaryUtteranceExtractsWhileImportHeld(t *testing.T)
 	x.f.set(`{"items":[]}`, 200)
 	b4DrainQueue(t, x.s)
 	var extracted bool
-	if err := x.s.pool.QueryRow(context.Background(), `SELECT EXISTS(SELECT 1 FROM source_extractions WHERE owner_id=$1 AND source_id=$2 AND state IN ('done','empty'))`, string(x.scope.OwnerID), string(source.ID)).Scan(&extracted); err != nil {
+	if err := x.s.Pool.QueryRow(context.Background(), `SELECT EXISTS(SELECT 1 FROM source_extractions WHERE owner_id=$1 AND source_id=$2 AND state IN ('done','empty'))`, string(x.scope.OwnerID), string(source.ID)).Scan(&extracted); err != nil {
 		t.Fatal(err)
 	}
 	if !extracted {
@@ -294,7 +294,7 @@ func TestPhase2B4_I19_HeldImportPausesResumesAndDeletesItsClosure(t *testing.T) 
 		}
 	}
 	var messages int
-	if err := s.pool.QueryRow(context.Background(), `SELECT count(*) FROM source_versions WHERE owner_id=$1 AND body LIKE $2`, string(scope.OwnerID), "%held-pause-delete%").Scan(&messages); err != nil {
+	if err := s.Pool.QueryRow(context.Background(), `SELECT count(*) FROM source_versions WHERE owner_id=$1 AND body LIKE $2`, string(scope.OwnerID), "%held-pause-delete%").Scan(&messages); err != nil {
 		t.Fatal(err)
 	}
 	if messages != 0 {

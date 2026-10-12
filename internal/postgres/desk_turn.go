@@ -12,6 +12,7 @@ import (
 
 	"github.com/soaringjerry/PCAS/internal/contextbuilder"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/postgres/memoryread"
 	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 
 	"github.com/jackc/pgx/v5"
@@ -70,9 +71,9 @@ func (s *Store) secretaryContextTx(ctx context.Context, tx pgx.Tx, scope memory.
 	out := secretaryContext{TargetItems: map[string]workspace.Item{}, ConversationID: conversationID, Aliases: map[string]workspace.Item{}, Memories: map[string]workspace.Memory{}, Counts: map[string]int{}}
 	agentID := req.AgentID
 	if agentID == "" {
-		agentID = s.models.ExtractionID()
+		agentID = s.Models.ExtractionID()
 	}
-	if s.models == nil {
+	if s.Models == nil {
 		return out, memory.ErrUnavailable
 	}
 	var err error
@@ -83,7 +84,7 @@ func (s *Store) secretaryContextTx(ctx context.Context, tx pgx.Tx, scope memory.
 	if err != nil {
 		return out, err
 	}
-	if !out.Agent.Enabled || out.Agent.Channel == "manual" || !s.models.Available(out.Agent.ID) {
+	if !out.Agent.Enabled || out.Agent.Channel == "manual" || !s.Models.Available(out.Agent.ID) {
 		return out, memory.ErrUnavailable
 	}
 	tasks, settings, deps, err := s.deskItemsContextTx(ctx, tx, scope, out.Agent, true)
@@ -210,7 +211,7 @@ func (s *Store) checkDeskContextTx(ctx context.Context, tx pgx.Tx, scope memory.
 func (s *Store) secretaryPrompt(ctx context.Context, tx pgx.Tx, scope memory.Scope, req workspace.DeskTurnRequest, c *secretaryContext, search secretary.Recall) (string, map[string]workspace.Memory, error) {
 	var prompt strings.Builder
 	loc := deskLocation(c.Settings)
-	c.Plan = memory.PlanQuery(req.Text, s.businessNow(), loc)
+	c.Plan = memory.PlanQuery(req.Text, s.BusinessNow(), loc)
 	var projectID *string
 	if req.ThingID != nil {
 		item, err := getItem(ctx, tx, scope, *req.ThingID)
@@ -289,7 +290,7 @@ func (s *Store) secretaryPrompt(ctx context.Context, tx pgx.Tx, scope memory.Sco
 	for _, ref := range recall.Memories {
 		ids = append(ids, string(ref.ID))
 	}
-	memories, err := s.readMemoriesTx(ctx, tx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: c.Agent.ID}, true, memoryReadOptions{ids: ids, useCurrent: true})
+	memories, err := s.ReadMemoriesTx(ctx, tx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: c.Agent.ID}, true, memoryread.MemoryReadOptions{Ids: ids, UseCurrent: true})
 	if err != nil {
 		return "", nil, err
 	}
@@ -348,7 +349,7 @@ func (s *Store) secretaryPrompt(ctx context.Context, tx pgx.Tx, scope memory.Sco
 		return "", nil, err
 	}
 	c.Dependencies = kernel.UniqueRefs(c.Dependencies)
-	request := secretary.Request{Now: s.businessNow(), Location: loc, Text: req.Text, Attachments: c.AttachmentContext}
+	request := secretary.Request{Now: s.BusinessNow(), Location: loc, Text: req.Text, Attachments: c.AttachmentContext}
 	if t, ok := c.Aliases["THIS"]; ok {
 		request.This = &t
 	}
@@ -656,7 +657,7 @@ func (m *secretaryAsk) Verify(ctx context.Context, state *secretary.Asking) erro
 func (m *secretaryAsk) VerifyCurrent(ctx context.Context, state *secretary.Asking) error {
 	m.sync(state)
 	c := *m.c
-	return pgx.BeginTxFunc(ctx, m.store.pool, pgx.TxOptions{AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
+	return pgx.BeginTxFunc(ctx, m.store.Pool, pgx.TxOptions{AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
 		return m.store.checkSecretaryUseContextTx(ctx, tx, m.scope, c)
 	})
 }
@@ -759,7 +760,7 @@ func (s *Store) DeskTurns(ctx context.Context, scope memory.Scope, conversationI
 	if !memory.ID(conversationID).Valid() {
 		return out, memory.ErrInvalid
 	}
-	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		var err error
 		out, err = s.deskTurnsTx(ctx, tx, scope, conversationID, 50, "", nil, nil)
 		return err

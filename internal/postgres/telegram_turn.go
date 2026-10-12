@@ -23,7 +23,7 @@ func (s *Store) DeskTurnByRequest(ctx context.Context, scope memory.Scope, reque
 	if !memory.ID(requestID).Valid() {
 		return out, memory.ErrInvalid
 	}
-	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		var response []byte
 		var dependencies []byte
 		var agent string

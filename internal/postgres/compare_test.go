@@ -24,7 +24,7 @@ func compareFixture(t *testing.T, s *Store, scope memory.Scope, texts ...string)
 	for i, text := range texts {
 		src := b1Source(t, s, scope, "虚构比较资料", text, "manual")
 		ref := b1Claim(t, s, scope, text, "fact", "candidate", src)
-		err := pgx.BeginFunc(context.Background(), s.pool, func(tx pgx.Tx) error {
+		err := pgx.BeginFunc(context.Background(), s.Pool, func(tx pgx.Tx) error {
 			self, err := selfEntityTx(context.Background(), tx, scope.OwnerID)
 			if err != nil {
 				return err
@@ -54,7 +54,7 @@ func compareFixture(t *testing.T, s *Store, scope memory.Scope, texts ...string)
 }
 func aliasProposalFixture(t *testing.T, s *Store, scope memory.Scope, a, b memory.Ref, rule int) {
 	t.Helper()
-	if _, err := s.pool.Exec(context.Background(), `INSERT INTO entity_alias_candidates(owner_id,left_id,right_id,name_hash,rule,source_marker)
+	if _, err := s.Pool.Exec(context.Background(), `INSERT INTO entity_alias_candidates(owner_id,left_id,right_id,name_hash,rule,source_marker)
  VALUES($1,least($2::uuid,$3::uuid),greatest($2::uuid,$3::uuid),entity_name_hash($1,$2,$3),$4,'fictional model proposal') ON CONFLICT DO NOTHING`, scope.OwnerID, a.ID, b.ID, rule); err != nil {
 		t.Fatal(err)
 	}
@@ -67,7 +67,7 @@ func compareJob(t *testing.T, s *Store, scope memory.Scope, entity bool, version
 		// Older confirmation-only fixtures supply a modeled candidate explicitly.
 		// End-to-end scan tests retain their actual model-created candidates.
 		for _, candidateRule := range []int{version, EntityCompareVersion} {
-			if _, err := s.pool.Exec(ctx, `INSERT INTO entity_alias_candidates(owner_id,left_id,right_id,name_hash,rule,source_marker)
+			if _, err := s.Pool.Exec(ctx, `INSERT INTO entity_alias_candidates(owner_id,left_id,right_id,name_hash,rule,source_marker)
  SELECT $1,least(a.id,b.id),greatest(a.id,b.id),entity_name_hash($1,a.id,b.id),$2,'fictional model proposal'
  FROM memory_records a JOIN entity_versions av ON(av.owner_id,av.entity_id,av.version)=(a.owner_id,a.id,a.version)
  JOIN memory_records b ON b.owner_id=a.owner_id AND b.id<>a.id
@@ -87,7 +87,7 @@ func compareJob(t *testing.T, s *Store, scope memory.Scope, entity bool, version
 	if entity {
 		stage = EntityCompareStage
 	}
-	if _, err := s.pool.Exec(ctx, "DELETE FROM memory_jobs WHERE owner_id=$1 AND state='queued' AND stage NOT LIKE $2", string(scope.OwnerID), stage+":%"); err != nil {
+	if _, err := s.Pool.Exec(ctx, "DELETE FROM memory_jobs WHERE owner_id=$1 AND state='queued' AND stage NOT LIKE $2", string(scope.OwnerID), stage+":%"); err != nil {
 		t.Fatal(err)
 	}
 	j, err := s.Claim(ctx, 5*time.Minute)
@@ -125,7 +125,7 @@ func compareState(t *testing.T, s *Store, scope memory.Scope, refs []memory.Ref,
 	for i, ref := range refs {
 		var r string
 		var c, v int
-		if err := s.pool.QueryRow(context.Background(), "SELECT cl.retired,cl.compared,r.version FROM claims cl JOIN memory_records r ON(r.owner_id,r.id)=(cl.owner_id,cl.id) WHERE cl.owner_id=$1 AND cl.id=$2", string(scope.OwnerID), string(ref.ID)).Scan(&r, &c, &v); err != nil {
+		if err := s.Pool.QueryRow(context.Background(), "SELECT cl.retired,cl.compared,r.version FROM claims cl JOIN memory_records r ON(r.owner_id,r.id)=(cl.owner_id,cl.id) WHERE cl.owner_id=$1 AND cl.id=$2", string(scope.OwnerID), string(ref.ID)).Scan(&r, &c, &v); err != nil {
 			t.Fatal(err)
 		}
 		if r != retired[i] || c != compared || v != ref.Version {
@@ -181,7 +181,7 @@ func TestCompareSupersessionAndDependencyValidity(t *testing.T) {
 			out := mustTurn(t, s, scope, req)
 			b1HasRef(t, b1Refs(t, s, scope, req.RequestID), refs[0], true)
 			newer := compareFixture(t, s, scope, "虚构汇报期限改到周五")[0]
-			if _, err := s.pool.Exec(context.Background(), "UPDATE record_versions SET expressed_at=expressed_at+interval '1 day' WHERE owner_id=$1 AND record_id=$2", string(scope.OwnerID), string(newer.ID)); err != nil {
+			if _, err := s.Pool.Exec(context.Background(), "UPDATE record_versions SET expressed_at=expressed_at+interval '1 day' WHERE owner_id=$1 AND record_id=$2", string(scope.OwnerID), string(newer.ID)); err != nil {
 				t.Fatal(err)
 			}
 			if kind == "duplicate" {
@@ -218,16 +218,16 @@ func TestCompareProtectConfirmedEditedAndCycles(t *testing.T) {
 	scope := owner()
 	b1Model(t, s, `{"duplicates":[],"superseded":[{"old":1,"new":2},{"old":2,"new":1},{"old":3,"new":5},{"old":4,"new":5}]}`)
 	refs := compareFixture(t, s, scope, "甲旧说法", "乙旧说法", "本人确认的说法", "本人改过的说法", "新说法")
-	if _, err := s.pool.Exec(context.Background(), "UPDATE claim_revisions SET confirmation='confirmed' WHERE owner_id=$1 AND claim_id=$2", string(scope.OwnerID), string(refs[2].ID)); err != nil {
+	if _, err := s.Pool.Exec(context.Background(), "UPDATE claim_revisions SET confirmation='confirmed' WHERE owner_id=$1 AND claim_id=$2", string(scope.OwnerID), string(refs[2].ID)); err != nil {
 		t.Fatal(err)
 	}
 	b1Correct(t, s, scope, refs[3], "本人改过的说法")
 	refs[3].Version++
-	if _, err := s.pool.Exec(context.Background(), "UPDATE claims SET organized=$3 WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), string(refs[3].ID), OrganizeVersion); err != nil {
+	if _, err := s.Pool.Exec(context.Background(), "UPDATE claims SET organized=$3 WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), string(refs[3].ID), OrganizeVersion); err != nil {
 		t.Fatal(err)
 	}
 	// Preserve local fixture ordering across the new user revision.
-	if _, err := s.pool.Exec(context.Background(), "UPDATE record_versions SET expressed_at=$3 WHERE owner_id=$1 AND record_id=$2 AND version=2", string(scope.OwnerID), string(refs[3].ID), time.Date(2026, 9, 12, 9, 0, 3, 0, time.UTC)); err != nil {
+	if _, err := s.Pool.Exec(context.Background(), "UPDATE record_versions SET expressed_at=$3 WHERE owner_id=$1 AND record_id=$2 AND version=2", string(scope.OwnerID), string(refs[3].ID), time.Date(2026, 9, 12, 9, 0, 3, 0, time.UTC)); err != nil {
 		t.Fatal(err)
 	}
 	compareProcess(t, s, scope)
@@ -247,7 +247,7 @@ func TestCompareRestoreUndoAndVersionBump(t *testing.T) {
 	if _, err = s.Execute(context.Background(), scope, cmd); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = s.pool.Exec(context.Background(), "UPDATE claims SET compared=0 WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), string(refs[1].ID)); err != nil {
+	if _, err = s.Pool.Exec(context.Background(), "UPDATE claims SET compared=0 WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), string(refs[1].ID)); err != nil {
 		t.Fatal(err)
 	}
 	compareProcess(t, s, scope)
@@ -261,7 +261,7 @@ func TestCompareRestoreUndoAndVersionBump(t *testing.T) {
 		t.Fatal(err)
 	}
 	var compared int
-	if err = s.pool.QueryRow(context.Background(), "SELECT compared FROM claims WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), string(refs[1].ID)).Scan(&compared); err != nil || compared != CompareVersion+1 {
+	if err = s.Pool.QueryRow(context.Background(), "SELECT compared FROM claims WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), string(refs[1].ID)).Scan(&compared); err != nil || compared != CompareVersion+1 {
 		t.Fatal(compared, err)
 	}
 	if m := compareDetail(t, s, scope, refs[0]); m.Retired != "superseded" {
@@ -316,14 +316,14 @@ func TestCompareInvalidOutputAttemptsAndUsage(t *testing.T) {
 	f := b1Model(t, s, "not JSON")
 	refs := compareFixture(t, s, scope, "合成比较甲", "合成比较乙")
 	for i := 1; i <= 3; i++ {
-		if _, err := s.pool.Exec(context.Background(), "UPDATE memory_comparison_batches SET retry_after=now() WHERE owner_id=$1", scope.OwnerID); err != nil {
+		if _, err := s.Pool.Exec(context.Background(), "UPDATE memory_comparison_batches SET retry_after=now() WHERE owner_id=$1", scope.OwnerID); err != nil {
 			t.Fatal(err)
 		}
 		compareProcess(t, s, scope)
 		compareState(t, s, scope, refs, []string{"", ""}, 0)
 	}
 	var count int
-	if err := s.pool.QueryRow(context.Background(), "SELECT count(*) FROM model_usage WHERE owner_id=$1 AND purpose='compare'", string(scope.OwnerID)).Scan(&count); err != nil || count != 3 || len(f.all()) != 3 {
+	if err := s.Pool.QueryRow(context.Background(), "SELECT count(*) FROM model_usage WHERE owner_id=$1 AND purpose='compare'", string(scope.OwnerID)).Scan(&count); err != nil || count != 3 || len(f.all()) != 3 {
 		t.Fatal(count, err)
 	}
 }
@@ -332,12 +332,12 @@ func TestCompareWindowAndNoModel(t *testing.T) {
 	scope := owner()
 	b1Model(t, s, `{}`)
 	refs := compareFixture(t, s, scope, "初始虚构记忆")
-	s.models = nil
+	s.Models = nil
 	if n, err := s.ScheduleCompare(context.Background(), time.Now()); err != nil || n != 0 {
 		t.Fatal("unconfigured model queued", n, err)
 	}
 	// Bulk rows use the same synthetic source/subject/group as the first fixture.
-	if _, err := s.pool.Exec(context.Background(), `DO $$ DECLARE i int; identifier uuid; o uuid; subject uuid; grp uuid; BEGIN
+	if _, err := s.Pool.Exec(context.Background(), `DO $$ DECLARE i int; identifier uuid; o uuid; subject uuid; grp uuid; BEGIN
  SELECT owner_id,subject_id INTO o,subject FROM claim_revisions LIMIT 1;
  SELECT entity_id INTO grp FROM claim_mentions WHERE role='topic' LIMIT 1;
  FOR i IN 1..204 LOOP
@@ -360,7 +360,7 @@ func TestCompareWindowAndNoModel(t *testing.T) {
 		}
 	}
 	var n int
-	if err := s.pool.QueryRow(context.Background(), "SELECT count(*) FROM claims WHERE owner_id=$1 AND compared=$2", scope.OwnerID, CompareVersion).Scan(&n); err != nil || n != 205 {
+	if err := s.Pool.QueryRow(context.Background(), "SELECT count(*) FROM claims WHERE owner_id=$1 AND compared=$2", scope.OwnerID, CompareVersion).Scan(&n); err != nil || n != 205 {
 		t.Fatal("all memories must participate", n, err)
 	}
 

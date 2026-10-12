@@ -25,14 +25,14 @@ func TestSecretaryMentionSurvivesConcurrentMemoryRevision(t *testing.T) {
 		t.Fatal(out.Turn)
 	}
 	var events int
-	if err := s.pool.QueryRow(context.Background(), "SELECT count(*) FROM use_events WHERE owner_id=$1 AND record_id=$2 AND kind='user_mention'", scope.OwnerID, target.ID).Scan(&events); err != nil || events != 1 {
+	if err := s.Pool.QueryRow(context.Background(), "SELECT count(*) FROM use_events WHERE owner_id=$1 AND record_id=$2 AND kind='user_mention'", scope.OwnerID, target.ID).Scan(&events); err != nil || events != 1 {
 		t.Fatal("mention lost after unrelated revision", events, err)
 	}
 	replay := mustTurn(t, s, scope, req)
 	if replay.Turn.ID != out.Turn.ID {
 		t.Fatal("replay changed answer", replay.Turn)
 	}
-	if err := s.pool.QueryRow(context.Background(), "SELECT count(*) FROM use_events WHERE owner_id=$1 AND record_id=$2 AND kind='user_mention'", scope.OwnerID, target.ID).Scan(&events); err != nil || events != 1 {
+	if err := s.Pool.QueryRow(context.Background(), "SELECT count(*) FROM use_events WHERE owner_id=$1 AND record_id=$2 AND kind='user_mention'", scope.OwnerID, target.ID).Scan(&events); err != nil || events != 1 {
 		t.Fatal("replay duplicated mention", events, err)
 	}
 }

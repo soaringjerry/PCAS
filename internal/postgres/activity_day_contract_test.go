@@ -58,8 +58,8 @@ func TestDayActivityAnswersWhatHappenedItsCostAndItsReasons(t *testing.T) {
 	secretaryModel(t, s, func(w http.ResponseWriter, _ *http.Request) {
 		secretaryModelReply(w, `{"reply":"Fictitious reply.","actions":[{"op":"create_task","title":"Fictitious task one"},{"op":"create_task","title":"Fictitious task two"}]}`)
 	})
-	s.models.Config.Providers[0].CostMode = ""
-	s.models.Config.Providers[0].InputPerMillion, s.models.Config.Providers[0].OutputPerMillion = 2, 4
+	s.Models.Config.Providers[0].CostMode = ""
+	s.Models.Config.Providers[0].InputPerMillion, s.Models.Config.Providers[0].OutputPerMillion = 2, 4
 	workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: kernel.JSON(map[string]string{"timezone": "Asia/Shanghai"})})
 
 	// One paid call leads to two actions. One of them is reversed.
@@ -72,13 +72,13 @@ func TestDayActivityAnswersWhatHappenedItsCostAndItsReasons(t *testing.T) {
 		t.Fatal(err)
 	}
 	// A deferral, usage from before the call journal, and a call whose cost is not known.
-	if _, err := s.pool.Exec(ctx, `INSERT INTO background_stage_events(owner_id,stage,outcome,reason,count) VALUES($1,'memory.topic_project','deferred','topic_project_hourly_limit',3)`, string(scope.OwnerID)); err != nil {
+	if _, err := s.Pool.Exec(ctx, `INSERT INTO background_stage_events(owner_id,stage,outcome,reason,count) VALUES($1,'memory.topic_project','deferred','topic_project_hourly_limit',3)`, string(scope.OwnerID)); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.pool.Exec(ctx, `INSERT INTO model_usage(owner_id,id,purpose,agent_id,model,input_tokens,output_tokens,cost) VALUES($1,gen_random_uuid(),'extraction','model','fictitious',100,10,0.0005)`, string(scope.OwnerID)); err != nil {
+	if _, err := s.Pool.Exec(ctx, `INSERT INTO model_usage(owner_id,id,purpose,agent_id,model,input_tokens,output_tokens,cost) VALUES($1,gen_random_uuid(),'extraction','model','fictitious',100,10,0.0005)`, string(scope.OwnerID)); err != nil {
 		t.Fatal(err)
 	}
-	provider, _ := s.models.Get("model")
+	provider, _ := s.Models.Get("model")
 	pending := modelcall.DirectRequest{OwnerID: scope.OwnerID, ExecutionID: memory.NewID(), Function: "vision", Stage: "image", Provider: provider, Estimate: 0.02, Operation: "vision", Inputs: 1}
 	pending.RootExecutionID = pending.ExecutionID
 	if _, err := (directCalls{store: s}).Begin(ctx, pending); err != nil {
@@ -88,12 +88,12 @@ func TestDayActivityAnswersWhatHappenedItsCostAndItsReasons(t *testing.T) {
 	now := time.Now().In(time.FixedZone("CST", 8*3600))
 	today := now.Format(time.DateOnly)
 	earlier := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()).Add(-time.Minute)
-	if _, err := s.pool.Exec(ctx, `INSERT INTO model_usage(owner_id,id,at,purpose,agent_id,model,input_tokens,output_tokens,cost) VALUES($1,gen_random_uuid(),$2,'extraction','model','fictitious',100,10,9)`, string(scope.OwnerID), earlier); err != nil {
+	if _, err := s.Pool.Exec(ctx, `INSERT INTO model_usage(owner_id,id,at,purpose,agent_id,model,input_tokens,output_tokens,cost) VALUES($1,gen_random_uuid(),$2,'extraction','model','fictitious',100,10,9)`, string(scope.OwnerID), earlier); err != nil {
 		t.Fatal(err)
 	}
 
 	var secretaryCost float64
-	if err := s.pool.QueryRow(ctx, `SELECT cost::float8 FROM model_usage WHERE owner_id=$1 AND purpose='secretary'`, string(scope.OwnerID)).Scan(&secretaryCost); err != nil || secretaryCost <= 0 {
+	if err := s.Pool.QueryRow(ctx, `SELECT cost::float8 FROM model_usage WHERE owner_id=$1 AND purpose='secretary'`, string(scope.OwnerID)).Scan(&secretaryCost); err != nil || secretaryCost <= 0 {
 		t.Fatal(secretaryCost, err)
 	}
 	day := readDayActivity(t, s, scope, today, 0, 0)

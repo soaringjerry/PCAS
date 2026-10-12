@@ -98,7 +98,7 @@ func sameTurnReceipts(t *testing.T, s *Store, scope memory.Scope, out workspace.
 		done++
 		var source, turn, summary string
 		var changes []byte
-		if err := s.pool.QueryRow(context.Background(), "SELECT source,turn_id::text,summary,changes FROM action_log WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), *r.ActionID).Scan(&source, &turn, &summary, &changes); err != nil {
+		if err := s.Pool.QueryRow(context.Background(), "SELECT source,turn_id::text,summary,changes FROM action_log WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), *r.ActionID).Scan(&source, &turn, &summary, &changes); err != nil {
 			t.Fatal(err)
 		}
 		var rows []struct {
@@ -126,7 +126,7 @@ func sameTurnReceipts(t *testing.T, s *Store, scope memory.Scope, out workspace.
 		}
 	}
 	var count int
-	if err := s.pool.QueryRow(context.Background(), "SELECT count(*) FROM action_log WHERE owner_id=$1 AND turn_id=$2", string(scope.OwnerID), out.Turn.ID).Scan(&count); err != nil || count != done {
+	if err := s.Pool.QueryRow(context.Background(), "SELECT count(*) FROM action_log WHERE owner_id=$1 AND turn_id=$2", string(scope.OwnerID), out.Turn.ID).Scan(&count); err != nil || count != done {
 		t.Fatalf("logs=%d want=%d err=%v", count, done, err)
 	}
 }
@@ -195,7 +195,7 @@ func TestSameTurnFailedParseAndRolledBackCreationKeepArrayPositions(t *testing.T
 	old := workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "旧事项"}).Tasks[0]
 	// Fail the notes update after the new task's INSERT. This exercises a real
 	// savepoint rollback, rather than only title validation before any writes.
-	_, err := s.pool.Exec(context.Background(), `CREATE FUNCTION f14_fail_creation() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.document->>'title'='创建事务失败' THEN RAISE EXCEPTION 'F14 injected write failure'; END IF; RETURN NEW; END $$; CREATE TRIGGER f14_creation_failure BEFORE UPDATE ON work_items FOR EACH ROW EXECUTE FUNCTION f14_fail_creation()`)
+	_, err := s.Pool.Exec(context.Background(), `CREATE FUNCTION f14_fail_creation() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.document->>'title'='创建事务失败' THEN RAISE EXCEPTION 'F14 injected write failure'; END IF; RETURN NEW; END $$; CREATE TRIGGER f14_creation_failure BEFORE UPDATE ON work_items FOR EACH ROW EXECUTE FUNCTION f14_fail_creation()`)
 	if err != nil {
 		t.Fatal(err)
 	}

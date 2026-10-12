@@ -37,7 +37,7 @@ func workspaceCommand(t *testing.T, s *Store, scope memory.Scope, c workspace.Co
 func leaseStage(t *testing.T, s *Store, scope memory.Scope, ref memory.Ref, stage string) worker.Job {
 	t.Helper()
 	j := worker.Job{OwnerID: scope.OwnerID, Record: ref, Stage: stage, LeaseToken: memory.NewID(), Attempts: 1}
-	err := s.pool.QueryRow(context.Background(), `INSERT INTO memory_jobs(id,owner_id,record_id,record_version,stage,state,attempts,lease_token,lease_until) VALUES(gen_random_uuid(),$1,$2,$3,$4,'leased',1,$5,now()+interval '5 minutes') ON CONFLICT(owner_id,record_id,record_version,stage) DO UPDATE SET state='leased',attempts=1,lease_token=$5,lease_until=now()+interval '5 minutes' RETURNING id::text`, string(scope.OwnerID), string(ref.ID), ref.Version, stage, string(j.LeaseToken)).Scan(&j.ID)
+	err := s.Pool.QueryRow(context.Background(), `INSERT INTO memory_jobs(id,owner_id,record_id,record_version,stage,state,attempts,lease_token,lease_until) VALUES(gen_random_uuid(),$1,$2,$3,$4,'leased',1,$5,now()+interval '5 minutes') ON CONFLICT(owner_id,record_id,record_version,stage) DO UPDATE SET state='leased',attempts=1,lease_token=$5,lease_until=now()+interval '5 minutes' RETURNING id::text`, string(scope.OwnerID), string(ref.ID), ref.Version, stage, string(j.LeaseToken)).Scan(&j.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,7 +96,7 @@ func TestExtractionEvidenceSignalAndReminderDeletion(t *testing.T) {
 		t.Fatal("deleted wake evidence survived")
 	}
 	var cost float64
-	if err := s.pool.QueryRow(ctx, "SELECT coalesce(sum(reserved_cost),0) FROM background_usage WHERE owner_id=$1", string(scope.OwnerID)).Scan(&cost); err != nil || cost <= 0 {
+	if err := s.Pool.QueryRow(ctx, "SELECT coalesce(sum(reserved_cost),0) FROM background_usage WHERE owner_id=$1", string(scope.OwnerID)).Scan(&cost); err != nil || cost <= 0 {
 		t.Fatal("billing history lost", err)
 	}
 }
@@ -208,7 +208,7 @@ func TestLongExtractionSchedulesEveryWindow(t *testing.T) {
 		t.Fatal(err)
 	}
 	var count int
-	if err := s.pool.QueryRow(ctx, "SELECT count(*) FROM memory_jobs WHERE owner_id=$1 AND record_id=$2 AND stage LIKE 'source.extract:%'", string(scope.OwnerID), string(src.ID)).Scan(&count); err != nil || count != 4 {
+	if err := s.Pool.QueryRow(ctx, "SELECT count(*) FROM memory_jobs WHERE owner_id=$1 AND record_id=$2 AND stage LIKE 'source.extract:%'", string(scope.OwnerID), string(src.ID)).Scan(&count); err != nil || count != 4 {
 		t.Fatal("missing tail window", count, err)
 	}
 }
@@ -219,7 +219,7 @@ func TestExplicitTimeReminderIsIdempotent(t *testing.T) {
 	st := workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "跟进"})
 	item := st.Tasks[0]
 	item.Triggers = []workspace.Trigger{{ID: string(memory.NewID()), Kind: "time", NextAt: time.Now().Add(-time.Hour).UTC().Format(time.RFC3339), Active: true, Description: "到时间跟进", Guard: "todo"}}
-	if err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error { return saveItem(ctx, tx, scope, item) }); err != nil {
+	if err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error { return saveItem(ctx, tx, scope, item) }); err != nil {
 		t.Fatal(err)
 	}
 	for range 2 {
@@ -228,7 +228,7 @@ func TestExplicitTimeReminderIsIdempotent(t *testing.T) {
 		}
 	}
 	var count int
-	if err := s.pool.QueryRow(ctx, "SELECT count(*) FROM workspace_notices WHERE owner_id=$1", string(scope.OwnerID)).Scan(&count); err != nil || count != 1 {
+	if err := s.Pool.QueryRow(ctx, "SELECT count(*) FROM workspace_notices WHERE owner_id=$1", string(scope.OwnerID)).Scan(&count); err != nil || count != 1 {
 		t.Fatal("duplicate reminder", count, err)
 	}
 }
@@ -264,7 +264,7 @@ func TestTemporalChangeCorrectionAndHistoricalKnowledge(t *testing.T) {
 		version      int
 	}{{movedAt.Add(-time.Hour), time.Now(), 1}, {time.Now(), knownBefore, 1}, {time.Now(), knownChange, 2}, {time.Now(), time.Now(), corrected.Version}} {
 		var version int
-		if err := s.pool.QueryRow(ctx, "SELECT version FROM applicable_claim_versions($1,$2,$3) WHERE claim_id=$4", string(scope.OwnerID), test.valid, test.known, string(ref.ID)).Scan(&version); err != nil || version != test.version {
+		if err := s.Pool.QueryRow(ctx, "SELECT version FROM applicable_claim_versions($1,$2,$3) WHERE claim_id=$4", string(scope.OwnerID), test.valid, test.known, string(ref.ID)).Scan(&version); err != nil || version != test.version {
 			t.Fatal("temporal view", version, test.version, err)
 		}
 	}

@@ -24,10 +24,10 @@ func compareEntityFixture(t *testing.T, s *Store, scope memory.Scope, name, text
 		t.Fatal(err)
 	}
 	workspaceCommand(t, s, scope, workspace.Command{Type: "setMemoryVisibility", ID: string(claim.ID), AgentIDs: []string{"model", "manual"}})
-	if _, err := s.pool.Exec(context.Background(), "UPDATE claims SET organized=$3 WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), string(claim.ID), OrganizeVersion); err != nil {
+	if _, err := s.Pool.Exec(context.Background(), "UPDATE claims SET organized=$3 WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), string(claim.ID), OrganizeVersion); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.pool.Exec(context.Background(), "INSERT INTO claim_mentions(owner_id,claim_id,claim_version,entity_id,role) VALUES($1,$2,1,$3,'person')", string(scope.OwnerID), string(claim.ID), string(entity.ID)); err != nil {
+	if _, err := s.Pool.Exec(context.Background(), "INSERT INTO claim_mentions(owner_id,claim_id,claim_version,entity_id,role) VALUES($1,$2,1,$3,'person')", string(scope.OwnerID), string(claim.ID), string(entity.ID)); err != nil {
 		t.Fatal(err)
 	}
 	return entity.Ref, claim.Ref
@@ -35,7 +35,7 @@ func compareEntityFixture(t *testing.T, s *Store, scope memory.Scope, name, text
 func compareEntityGroup(t *testing.T, s *Store, scope memory.Scope, kind, name string, refs ...memory.Ref) memory.ID {
 	t.Helper()
 	var group memory.ID
-	if err := pgx.BeginFunc(context.Background(), s.pool, func(tx pgx.Tx) error {
+	if err := pgx.BeginFunc(context.Background(), s.Pool, func(tx pgx.Tx) error {
 		var err error
 		group, err = entityTx(context.Background(), tx, scope.OwnerID, kind, name)
 		if err != nil {
@@ -69,11 +69,11 @@ func TestCompareEntityMergeAliasesAndUndo(t *testing.T) {
 	}
 	for _, ref := range []memory.Ref{a, b} {
 		var subject string
-		if err := s.pool.QueryRow(context.Background(), "SELECT subject_id::text FROM claim_revisions WHERE owner_id=$1 AND claim_id=$2", string(scope.OwnerID), string(ref.ID)).Scan(&subject); err != nil || subject != string(keep.ID) {
+		if err := s.Pool.QueryRow(context.Background(), "SELECT subject_id::text FROM claim_revisions WHERE owner_id=$1 AND claim_id=$2", string(scope.OwnerID), string(ref.ID)).Scan(&subject); err != nil || subject != string(keep.ID) {
 			t.Fatal(subject, err)
 		}
 	}
-	err := pgx.BeginFunc(context.Background(), s.pool, func(tx pgx.Tx) error {
+	err := pgx.BeginFunc(context.Background(), s.Pool, func(tx pgx.Tx) error {
 		for _, name := range []string{"小陈", "陈亮"} {
 			id, err := entityTx(context.Background(), tx, scope.OwnerID, "person", name)
 			if err != nil {
@@ -104,12 +104,12 @@ func TestCompareEntityMergeAliasesAndUndo(t *testing.T) {
 	workspaceCommand(t, s, scope, workspace.Command{Type: "undoEntityMerge", ID: string(old.ID)})
 	for _, pair := range [][2]memory.Ref{{a, old}, {b, keep}} {
 		var subject string
-		if err := s.pool.QueryRow(context.Background(), "SELECT subject_id::text FROM claim_revisions WHERE owner_id=$1 AND claim_id=$2", string(scope.OwnerID), string(pair[0].ID)).Scan(&subject); err != nil || subject != string(pair[1].ID) {
+		if err := s.Pool.QueryRow(context.Background(), "SELECT subject_id::text FROM claim_revisions WHERE owner_id=$1 AND claim_id=$2", string(scope.OwnerID), string(pair[0].ID)).Scan(&subject); err != nil || subject != string(pair[1].ID) {
 			t.Fatal("undo subject", subject, err)
 		}
 	}
 	var remaining int
-	if err := s.pool.QueryRow(context.Background(), "SELECT count(*) FROM aliases WHERE owner_id=$1 AND entity_id=$2 AND alias='小陈'", string(scope.OwnerID), string(keep.ID)).Scan(&remaining); err != nil || remaining != 0 {
+	if err := s.Pool.QueryRow(context.Background(), "SELECT count(*) FROM aliases WHERE owner_id=$1 AND entity_id=$2 AND alias='小陈'", string(scope.OwnerID), string(keep.ID)).Scan(&remaining); err != nil || remaining != 0 {
 		t.Fatal("undo copied alias", remaining, err)
 	}
 	if n, err := s.ScheduleCompare(context.Background(), time.Now()); err != nil || n != 1 {
@@ -128,13 +128,13 @@ func TestCompareEntityNegativeAndAmbiguousNames(t *testing.T) {
 		t.Fatal(err)
 	}
 	var n int
-	if err := s.pool.QueryRow(context.Background(), "SELECT count(*) FROM entity_merges WHERE owner_id=$1", string(scope.OwnerID)).Scan(&n); err != nil || n != 0 {
+	if err := s.Pool.QueryRow(context.Background(), "SELECT count(*) FROM entity_merges WHERE owner_id=$1", string(scope.OwnerID)).Scan(&n); err != nil || n != 0 {
 		t.Fatal(n, err)
 	}
 	if _, err := s.ScheduleCompare(context.Background(), time.Now()); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.pool.QueryRow(context.Background(), "SELECT count(*) FROM memory_jobs WHERE owner_id=$1 AND stage LIKE 'memory.entity_compare:%' AND state='queued'", string(scope.OwnerID)).Scan(&n); err != nil || n != 0 || len(f.all()) != 1 {
+	if err := s.Pool.QueryRow(context.Background(), "SELECT count(*) FROM memory_jobs WHERE owner_id=$1 AND stage LIKE 'memory.entity_compare:%' AND state='queued'", string(scope.OwnerID)).Scan(&n); err != nil || n != 0 || len(f.all()) != 1 {
 		t.Fatal("negative pair repeatedly queued", n, len(f.all()), err)
 	}
 }
@@ -153,7 +153,7 @@ func TestCompareEntityCandidatesRequireModelProposalForEveryContext(t *testing.T
 					t.Fatal(err)
 				}
 				var n int
-				if err := s.pool.QueryRow(context.Background(), "SELECT count(*) FROM memory_jobs WHERE owner_id=$1 AND stage LIKE 'memory.entity_compare:%' AND state='queued'", string(scope.OwnerID)).Scan(&n); err != nil {
+				if err := s.Pool.QueryRow(context.Background(), "SELECT count(*) FROM memory_jobs WHERE owner_id=$1 AND stage LIKE 'memory.entity_compare:%' AND state='queued'", string(scope.OwnerID)).Scan(&n); err != nil {
 					t.Fatal(err)
 				}
 				return n
@@ -169,13 +169,13 @@ func TestCompareEntityCandidatesRequireModelProposalForEveryContext(t *testing.T
 				return
 			}
 			// A shared group containing a withdrawn claim is not sufficient.
-			if _, err := s.pool.Exec(context.Background(), "UPDATE claims SET retired='superseded',retired_by=$3 WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), string(a.ID), string(b.ID)); err != nil {
+			if _, err := s.Pool.Exec(context.Background(), "UPDATE claims SET retired='superseded',retired_by=$3 WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), string(a.ID), string(b.ID)); err != nil {
 				t.Fatal(err)
 			}
 			if n := pending(); n != 0 {
 				t.Fatal("retired shared membership queued", n)
 			}
-			if _, err := s.pool.Exec(context.Background(), "UPDATE claims SET retired='',retired_by=NULL WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), string(a.ID)); err != nil {
+			if _, err := s.Pool.Exec(context.Background(), "UPDATE claims SET retired='',retired_by=NULL WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), string(a.ID)); err != nil {
 				t.Fatal(err)
 			}
 			j := compareJob(t, s, scope, true, CompareVersion)
@@ -186,7 +186,7 @@ func TestCompareEntityCandidatesRequireModelProposalForEveryContext(t *testing.T
 				t.Fatal("shared group did not reach model", group, len(f.all()))
 			}
 			var n int
-			if err := s.pool.QueryRow(context.Background(), "SELECT count(*) FROM entity_merges WHERE owner_id=$1", string(scope.OwnerID)).Scan(&n); err != nil || n != 0 {
+			if err := s.Pool.QueryRow(context.Background(), "SELECT count(*) FROM entity_merges WHERE owner_id=$1", string(scope.OwnerID)).Scan(&n); err != nil || n != 0 {
 				t.Fatal("candidate must not merge without model agreement", n, err)
 			}
 		})
@@ -224,7 +224,7 @@ func TestCompareEntityInputMemoryChangedDuringCallDoesNotMerge(t *testing.T) {
 		t.Fatal(err)
 	}
 	var n int
-	if err := s.pool.QueryRow(ctx, "SELECT count(*) FROM entity_merges WHERE owner_id=$1", string(scope.OwnerID)).Scan(&n); err != nil || n != 0 {
+	if err := s.Pool.QueryRow(ctx, "SELECT count(*) FROM entity_merges WHERE owner_id=$1", string(scope.OwnerID)).Scan(&n); err != nil || n != 0 {
 		t.Fatal("changed context merged entities", n, err)
 	}
 }

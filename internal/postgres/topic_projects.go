@@ -260,7 +260,7 @@ func (s *Store) TopicProjectStore() topicproject.Store { return topicProjectStor
 type topicProjectStore struct{ store *Store }
 
 func (a topicProjectStore) Input(ctx context.Context, owner memory.ID, topic string) (input topicproject.Input, refs []memory.Ref, found bool, err error) {
-	err = pgx.BeginTxFunc(ctx, a.store.pool, pgx.TxOptions{AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
+	err = pgx.BeginTxFunc(ctx, a.store.Pool, pgx.TxOptions{AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
 		var e error
 		input, refs, e = topicProjectInputTx(ctx, tx, owner, topic)
 		return e
@@ -272,7 +272,7 @@ func (a topicProjectStore) Input(ctx context.Context, owner memory.ID, topic str
 }
 
 func (a topicProjectStore) Drop(ctx context.Context, j worker.Job) error {
-	return pgx.BeginFunc(ctx, a.store.pool, func(tx pgx.Tx) error {
+	return pgx.BeginFunc(ctx, a.store.Pool, func(tx pgx.Tx) error {
 		if err := kernel.LockJob(ctx, tx, j); err != nil {
 			return err
 		}
@@ -284,7 +284,7 @@ func (a topicProjectStore) Drop(ctx context.Context, j worker.Job) error {
 }
 
 func (a topicProjectStore) DiscardResult(ctx context.Context, j worker.Job) error {
-	return pgx.BeginFunc(ctx, a.store.pool, func(tx pgx.Tx) error { return discardPaidResultTx(ctx, tx, j) })
+	return pgx.BeginFunc(ctx, a.store.Pool, func(tx pgx.Tx) error { return discardPaidResultTx(ctx, tx, j) })
 }
 
 func (a topicProjectStore) RetryLater(j worker.Job, code string) error {
@@ -292,7 +292,7 @@ func (a topicProjectStore) RetryLater(j worker.Job, code string) error {
 }
 
 func (a topicProjectStore) Apply(ctx context.Context, j worker.Job, fn func(topicproject.Unit) error) error {
-	return backgroundResultTx(ctx, a.store.pool, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
+	return backgroundResultTx(ctx, a.store.Pool, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
 		if err := kernel.LockJob(ctx, tx, j); err != nil {
 			return err
 		}

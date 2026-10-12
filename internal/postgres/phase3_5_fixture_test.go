@@ -99,7 +99,7 @@ func phase35Load(t *testing.T) *phase35Fixture {
 		} // qualifying topic's deadline input
 		f.Deadlines = append(f.Deadlines, d)
 	}
-	err := pgx.BeginFunc(f.Context, f.Store.pool, func(tx pgx.Tx) error {
+	err := pgx.BeginFunc(f.Context, f.Store.Pool, func(tx pgx.Tx) error {
 		for _, d := range f.Deadlines {
 			if _, err := tx.Exec(f.Context, `INSERT INTO deadlines(owner_id,id,claim_id,claim_version,kind,at,recurrence,title,time_note,original_text) VALUES($1,$2,$3,1,$4,$5,$6,$7,$8,$9)`, f.Scope.OwnerID, d.ID, d.Claim, d.Kind, d.At, d.Recurrence, "虚构期限 "+d.ID, "虚构来源的时间说明", d.Original); err != nil {
 				return err
@@ -139,7 +139,7 @@ func phase35Load(t *testing.T) *phase35Fixture {
 	}
 	// T1 candidates are pre-existing extraction inputs, not fabricated work results.
 	src := phase35Source(t, f.Store, f.Scope, f.Inputs)
-	err = pgx.BeginFunc(f.Context, f.Store.pool, func(tx pgx.Tx) error {
+	err = pgx.BeginFunc(f.Context, f.Store.Pool, func(tx pgx.Tx) error {
 		for _, it := range f.Inputs {
 			v := workspace.Candidate{ID: string(memory.NewID()), Kind: it.Kind, Text: it.Text, Confidence: it.Confidence, State: "pending", CreatedAt: kernel.Stamp(), Source: workspace.SourceRef{SourceID: string(src.ID), Version: src.Version, Excerpt: it.Quote, Label: "虚构抽取候选", At: kernel.Stamp()}}
 			if err := saveCandidate(f.Context, tx, f.Scope, v); err != nil {
@@ -168,7 +168,7 @@ func phase35Source(t *testing.T, s *Store, scope memory.Scope, items []extracted
 func phase35HTTP(t *testing.T, s *Store, scope memory.Scope) *phase3HTTP {
 	t.Helper()
 	// Complete real route wiring, including endpoints used only on page mount.
-	api := httpapi.New(s, s, b1Auth{scope}, s.Ping, slog.New(slog.NewTextHandler(io.Discard, nil)), httpapi.Options{Workspace: s, Continuity: s, Connectors: s, Editor: s, Writer: s, Activity: s, Attachments: s, Models: s.models})
+	api := httpapi.New(s, s, b1Auth{scope}, s.Ping, slog.New(slog.NewTextHandler(io.Discard, nil)), httpapi.Options{Workspace: s, Continuity: s, Connectors: s, Editor: s, Writer: s, Activity: s, Attachments: s, Models: s.Models})
 	srv := httptest.NewServer(api)
 	t.Cleanup(srv.Close)
 	return &phase3HTTP{Base: srv.URL, Client: srv.Client()}
@@ -195,7 +195,7 @@ func TestPhase35T1FrozenInputsAndLoadedScale(t *testing.T) {
 	f := phase35Load(t)
 	for table, want := range map[string]int{"claims": 5000, "entities": 1000, "deadlines": 200, "capture_candidates": 30} {
 		var n int
-		if err := f.Store.pool.QueryRow(f.Context, "SELECT count(*) FROM "+pgx.Identifier{table}.Sanitize()+" WHERE owner_id=$1", f.Scope.OwnerID).Scan(&n); err != nil || n != want {
+		if err := f.Store.Pool.QueryRow(f.Context, "SELECT count(*) FROM "+pgx.Identifier{table}.Sanitize()+" WHERE owner_id=$1", f.Scope.OwnerID).Scan(&n); err != nil || n != want {
 			t.Fatalf("%s=%d want=%d err=%v", table, n, want, err)
 		}
 	}
@@ -206,7 +206,7 @@ func TestPhase35T1FrozenInputsAndLoadedScale(t *testing.T) {
 	}
 	for i, key := range f.Topics {
 		var n, goals, dates int
-		err := f.Store.pool.QueryRow(f.Context, `SELECT count(*),count(*) FILTER(WHERE cr.category='goal'),count(*) FILTER(WHERE EXISTS(SELECT 1 FROM deadlines d WHERE d.owner_id=m.owner_id AND d.claim_id=m.claim_id)) FROM status_current_members m JOIN claim_revisions cr ON (cr.owner_id,cr.claim_id,cr.version)=(m.owner_id,m.claim_id,m.claim_version) WHERE m.owner_id=$1 AND m.key=$2`, f.Scope.OwnerID, key).Scan(&n, &goals, &dates)
+		err := f.Store.Pool.QueryRow(f.Context, `SELECT count(*),count(*) FILTER(WHERE cr.category='goal'),count(*) FILTER(WHERE EXISTS(SELECT 1 FROM deadlines d WHERE d.owner_id=m.owner_id AND d.claim_id=m.claim_id)) FROM status_current_members m JOIN claim_revisions cr ON (cr.owner_id,cr.claim_id,cr.version)=(m.owner_id,m.claim_id,m.claim_version) WHERE m.owner_id=$1 AND m.key=$2`, f.Scope.OwnerID, key).Scan(&n, &goals, &dates)
 		if err != nil || n != 12 || (i == 1 && goals != 0) || (i == 2 && dates != 0) || (i == 0 && (goals != 1 || dates != 1)) {
 			t.Fatalf("topic %d members=%d goals=%d deadlines=%d err=%v", i, n, goals, dates, err)
 		}

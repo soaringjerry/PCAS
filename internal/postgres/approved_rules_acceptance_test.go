@@ -90,7 +90,7 @@ func TestApprovedRules_OriginalPositionsSurviveParseFailure(t *testing.T) {
 }
 func TestApprovedRules_CreationFailureDoesNotBindOrRenumber(t *testing.T) {
 	s, scope := testStore(t), owner()
-	_, err := s.pool.Exec(context.Background(), `CREATE FUNCTION t4_reject_creation() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.title='失败创建' THEN RAISE EXCEPTION 'T4 isolated rejection'; END IF; RETURN NEW; END $$; CREATE TRIGGER t4_reject_creation BEFORE INSERT ON work_items FOR EACH ROW EXECUTE FUNCTION t4_reject_creation()`)
+	_, err := s.Pool.Exec(context.Background(), `CREATE FUNCTION t4_reject_creation() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.title='失败创建' THEN RAISE EXCEPTION 'T4 isolated rejection'; END IF; RETURN NEW; END $$; CREATE TRIGGER t4_reject_creation BEFORE INSERT ON work_items FOR EACH ROW EXECUTE FUNCTION t4_reject_creation()`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -110,7 +110,7 @@ func TestApprovedRules_CreationFailureDoesNotBindOrRenumber(t *testing.T) {
 		t.Fatal(out.State.Tasks)
 	}
 	var logs int
-	if err := s.pool.QueryRow(context.Background(), "SELECT count(*) FROM action_log WHERE owner_id=$1 AND turn_id=$2", string(scope.OwnerID), out.Turn.ID).Scan(&logs); err != nil || logs != 2 {
+	if err := s.Pool.QueryRow(context.Background(), "SELECT count(*) FROM action_log WHERE owner_id=$1 AND turn_id=$2", string(scope.OwnerID), out.Turn.ID).Scan(&logs); err != nil || logs != 2 {
 		t.Fatal(logs, err)
 	}
 }

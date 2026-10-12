@@ -26,7 +26,7 @@ func (s *Store) Summarize(ctx context.Context, scope memory.Scope, in memory.Sum
 	if in.Tokens == 0 {
 		in.Tokens = 2000
 	}
-	err := pgx.BeginTxFunc(ctx, s.pool, pgx.TxOptions{IsoLevel: pgx.ReadCommitted}, func(tx pgx.Tx) error { var err error; out, err = s.summarizeTx(ctx, tx, scope, in); return err })
+	err := pgx.BeginTxFunc(ctx, s.Pool, pgx.TxOptions{IsoLevel: pgx.ReadCommitted}, func(tx pgx.Tx) error { var err error; out, err = s.summarizeTx(ctx, tx, scope, in); return err })
 	return out, err
 }
 func (s *Store) summarizeTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in memory.SummaryRequest) (memory.SummaryResult, error) {
@@ -175,7 +175,7 @@ func (s *Store) summarizeTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, 
 	return out, nil
 }
 func (s *Store) ProcessSummary(ctx context.Context, j worker.Job) error {
-	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	return pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		if err := kernel.LockJob(ctx, tx, j); err != nil {
 			return err
 		}
@@ -193,7 +193,7 @@ func (s *Store) ConfigureActivity(ctx context.Context, scope memory.Scope, in me
 	if !in.Ref.ID.Valid() || in.Ref.Version < 1 || in.HalfLifeDays < 1 || in.HalfLifeDays > 36500 || in.ReinforcementLimit < 1 || in.ReinforcementLimit > 100 {
 		return memory.ErrInvalid
 	}
-	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	return pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		var version int
 		if err := tx.QueryRow(ctx, "SELECT version FROM memory_records WHERE owner_id=$1 AND id=$2 AND state='active' FOR UPDATE", string(scope.OwnerID), string(in.Ref.ID)).Scan(&version); err != nil {
 			return memory.ErrNotFound

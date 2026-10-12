@@ -159,7 +159,7 @@ func TestPhase3F4ConfirmationDeletionPropagationAndBlockedReplay(t *testing.T) {
 		t.Fatal("deleted original still accessible", code, err)
 	}
 	var remains int
-	if err := f.Store.pool.QueryRow(f.Context, `SELECT (SELECT count(*) FROM source_versions WHERE owner_id=$1 AND (source_id=$2 OR derived_from_id=$2))+(SELECT count(*) FROM chunks WHERE owner_id=$1 AND source_id=$2)`, f.Scope.OwnerID, out.File.SourceID).Scan(&remains); err != nil || remains != 0 {
+	if err := f.Store.Pool.QueryRow(f.Context, `SELECT (SELECT count(*) FROM source_versions WHERE owner_id=$1 AND (source_id=$2 OR derived_from_id=$2))+(SELECT count(*) FROM chunks WHERE owner_id=$1 AND source_id=$2)`, f.Scope.OwnerID, out.File.SourceID).Scan(&remains); err != nil || remains != 0 {
 		t.Fatal("derived copies/original retained", remains, err)
 	}
 	code, _, err = h.upload(f, p.ID, "虚构重新导入.txt", data)
@@ -216,7 +216,7 @@ func TestPhase3F3F5FileStatusRetryAndInlineDisposition(t *testing.T) {
 	}
 	h.command(t, f.Context, map[string]any{"type": "retryJob", "id": *out.File.JobID})
 	var state string
-	if err := f.Store.pool.QueryRow(f.Context, `SELECT state FROM memory_jobs WHERE id=$1`, *out.File.JobID).Scan(&state); err != nil || state != "queued" {
+	if err := f.Store.Pool.QueryRow(f.Context, `SELECT state FROM memory_jobs WHERE id=$1`, *out.File.JobID).Scan(&state); err != nil || state != "queued" {
 		t.Fatal("retry changed identity/lost queue", state, err)
 	}
 }
@@ -310,7 +310,7 @@ func TestPhase3F2T2FileExtractionConcurrentWithSchedulingAndUser(t *testing.T) {
 		t.Fatal(err)
 	}
 	var count int
-	if err := f.Store.pool.QueryRow(f.Context, `SELECT count(*) FROM claim_revisions WHERE owner_id=$1 AND scope->>'project_id'=$2 AND value #>> '{}'=$3`, f.Scope.OwnerID, p.ID, text).Scan(&count); err != nil || count != 1 {
+	if err := f.Store.Pool.QueryRow(f.Context, `SELECT count(*) FROM claim_revisions WHERE owner_id=$1 AND scope->>'project_id'=$2 AND value #>> '{}'=$3`, f.Scope.OwnerID, p.ID, text).Scan(&count); err != nil || count != 1 {
 		t.Fatal("file text lost/duplicated/project scope absent", count, err)
 	}
 	var current phase3Handover

@@ -28,7 +28,7 @@ func TestModelCallSurvivesApplicationAndKeepsUsageLink(t *testing.T) {
 	var calls, usages, receipts int
 	var outcome, accounting, prompt, hash string
 	var manifest map[string]any
-	if err := s.pool.QueryRow(ctx, `SELECT c.outcome,c.accounting_state,c.prompt_name,c.instruction_hash,c.input_manifest,
+	if err := s.Pool.QueryRow(ctx, `SELECT c.outcome,c.accounting_state,c.prompt_name,c.instruction_hash,c.input_manifest,
  (SELECT count(*) FROM model_calls WHERE owner_id=$1),
  (SELECT count(*) FROM model_usage u WHERE u.owner_id=c.owner_id AND u.id=c.usage_id),
  (SELECT count(*) FROM background_model_results WHERE owner_id=$1)
@@ -55,7 +55,7 @@ func TestAccountingRecoveryReusesOriginalPaidResultAfterRestart(t *testing.T) {
 	ref := organizeTestMemory(t, s, scope, "Fictitious plan for a garden report.")
 	j := organizeTestJob(t, s, scope)
 	ctx := context.Background()
-	if _, err := s.pool.Exec(ctx, `CREATE FUNCTION reject_test_usage() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'synthetic accounting failure'; END $$;
+	if _, err := s.Pool.Exec(ctx, `CREATE FUNCTION reject_test_usage() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'synthetic accounting failure'; END $$;
  CREATE TRIGGER reject_test_usage BEFORE INSERT ON model_usage FOR EACH ROW EXECUTE FUNCTION reject_test_usage()`); err != nil {
 		t.Fatal(err)
 	}
@@ -64,15 +64,15 @@ func TestAccountingRecoveryReusesOriginalPaidResultAfterRestart(t *testing.T) {
 	}
 	var invocation, reservation string
 	var state string
-	if err := s.pool.QueryRow(ctx, `SELECT id::text,reservation_id::text,accounting_state FROM model_calls WHERE owner_id=$1 AND execution_id=$2`, string(scope.OwnerID), string(j.ID)).Scan(&invocation, &reservation, &state); err != nil || state != "failed" {
+	if err := s.Pool.QueryRow(ctx, `SELECT id::text,reservation_id::text,accounting_state FROM model_calls WHERE owner_id=$1 AND execution_id=$2`, string(scope.OwnerID), string(j.ID)).Scan(&invocation, &reservation, &state); err != nil || state != "failed" {
 		t.Fatal(state, err)
 	}
-	if _, err := s.pool.Exec(ctx, "DROP TRIGGER reject_test_usage ON model_usage"); err != nil {
+	if _, err := s.Pool.Exec(ctx, "DROP TRIGGER reject_test_usage ON model_usage"); err != nil {
 		t.Fatal(err)
 	}
 	// A new Store has no pending cache or configured provider. Recovery must
 	// read the durable original result rather than regenerate changed input.
-	peer, err := Open(ctx, s.pool.Config().ConnConfig.ConnString())
+	peer, err := Open(ctx, s.Pool.Config().ConnConfig.ConnString())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,7 +81,7 @@ func TestAccountingRecoveryReusesOriginalPaidResultAfterRestart(t *testing.T) {
 		t.Fatal(err)
 	}
 	var callCount, usageCount int
-	if err := s.pool.QueryRow(ctx, `SELECT accounting_state,
+	if err := s.Pool.QueryRow(ctx, `SELECT accounting_state,
  (SELECT count(*) FROM model_calls WHERE owner_id=$1),
  (SELECT count(*) FROM model_usage WHERE owner_id=$1 AND id=$3)
  FROM model_calls WHERE owner_id=$1 AND id=$2`, string(scope.OwnerID), invocation, reservation).Scan(&state, &callCount, &usageCount); err != nil {
@@ -104,7 +104,7 @@ func TestActiveLeaseCannotStartAnotherInvocation(t *testing.T) {
 	organizeTestMemory(t, s, scope, "Fictitious unfinished report.")
 	j := organizeTestJob(t, s, scope)
 	request := modelcall.Request{OwnerID: scope.OwnerID, ExecutionID: j.ID, RootExecutionID: j.ID, Function: "organize", Stage: j.Stage, Instructions: prompts.Must("organize"), Prompt: kernel.JSON(map[string]string{"test": "fictitious"}), Policy: j}
-	provider, _ := s.models.Get(s.models.ExtractionID())
+	provider, _ := s.Models.Get(s.Models.ExtractionID())
 	adapter := backgroundCalls{store: s}
 	ctx := context.Background()
 	invocation, err := adapter.Prepare(ctx, request, provider)
@@ -124,7 +124,7 @@ func TestActiveLeaseCannotStartAnotherInvocation(t *testing.T) {
 		t.Fatal(err, calls.Load())
 	}
 	var outcome string
-	if err := s.pool.QueryRow(ctx, "SELECT outcome FROM model_calls WHERE owner_id=$1 AND execution_id=$2", string(scope.OwnerID), string(j.ID)).Scan(&outcome); err != nil || outcome != "started" {
+	if err := s.Pool.QueryRow(ctx, "SELECT outcome FROM model_calls WHERE owner_id=$1 AND execution_id=$2", string(scope.OwnerID), string(j.ID)).Scan(&outcome); err != nil || outcome != "started" {
 		t.Fatal(outcome, err)
 	}
 }
@@ -137,17 +137,17 @@ func TestFailedCallAccountingRecoveryDoesNotApplyPartialOutput(t *testing.T) {
 	organizeTestMemory(t, s, scope, "Fictitious report with a failed provider.")
 	j := organizeTestJob(t, s, scope)
 	ctx := context.Background()
-	if _, err := s.pool.Exec(ctx, `CREATE FUNCTION reject_test_usage() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'synthetic accounting failure'; END $$;
+	if _, err := s.Pool.Exec(ctx, `CREATE FUNCTION reject_test_usage() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'synthetic accounting failure'; END $$;
  CREATE TRIGGER reject_test_usage BEFORE INSERT ON model_usage FOR EACH ROW EXECUTE FUNCTION reject_test_usage()`); err != nil {
 		t.Fatal(err)
 	}
 	if err := (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: OrganizeVersion}).Process(ctx, j); err == nil {
 		t.Fatal("expected accounting failure")
 	}
-	if _, err := s.pool.Exec(ctx, "DROP TRIGGER reject_test_usage ON model_usage"); err != nil {
+	if _, err := s.Pool.Exec(ctx, "DROP TRIGGER reject_test_usage ON model_usage"); err != nil {
 		t.Fatal(err)
 	}
-	peer, err := Open(ctx, s.pool.Config().ConnConfig.ConnString())
+	peer, err := Open(ctx, s.Pool.Config().ConnConfig.ConnString())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -162,7 +162,7 @@ func TestFailedCallAccountingRecoveryDoesNotApplyPartialOutput(t *testing.T) {
 		t.Fatal(state.Organize, err)
 	}
 	var callsRecorded, usageRecorded int
-	if err := s.pool.QueryRow(ctx, `SELECT count(*),(SELECT count(*) FROM model_usage WHERE owner_id=$1) FROM model_calls WHERE owner_id=$1 AND outcome='failed' AND accounting_state='settled'`, string(scope.OwnerID)).Scan(&callsRecorded, &usageRecorded); err != nil || callsRecorded != 1 || usageRecorded != 1 {
+	if err := s.Pool.QueryRow(ctx, `SELECT count(*),(SELECT count(*) FROM model_usage WHERE owner_id=$1) FROM model_calls WHERE owner_id=$1 AND outcome='failed' AND accounting_state='settled'`, string(scope.OwnerID)).Scan(&callsRecorded, &usageRecorded); err != nil || callsRecorded != 1 || usageRecorded != 1 {
 		t.Fatal(callsRecorded, usageRecorded, err)
 	}
 }
@@ -215,7 +215,7 @@ func TestLostProviderResponseKeepsUsageAndWaitsForNextLease(t *testing.T) {
 			}
 			var outcome, state string
 			var usages int
-			if err := s.pool.QueryRow(context.Background(), `SELECT c.outcome,c.accounting_state,(SELECT count(*) FROM model_usage u WHERE u.owner_id=c.owner_id AND u.id=c.usage_id) FROM model_calls c WHERE c.owner_id=$1 AND c.execution_id=$2`, string(scope.OwnerID), string(j.ID)).Scan(&outcome, &state, &usages); err != nil || outcome != "unknown" || state != "held" || usages != 1 {
+			if err := s.Pool.QueryRow(context.Background(), `SELECT c.outcome,c.accounting_state,(SELECT count(*) FROM model_usage u WHERE u.owner_id=c.owner_id AND u.id=c.usage_id) FROM model_calls c WHERE c.owner_id=$1 AND c.execution_id=$2`, string(scope.OwnerID), string(j.ID)).Scan(&outcome, &state, &usages); err != nil || outcome != "unknown" || state != "held" || usages != 1 {
 				t.Fatal(outcome, state, usages, err)
 			}
 		})
@@ -230,7 +230,7 @@ func TestLegacyPaidResultRecoversWithoutInventedCallMetadata(t *testing.T) {
 	organizeTestMemory(t, s, scope, "Fictitious report with a legacy paid receipt.")
 	j := organizeTestJob(t, s, scope)
 	ctx := context.Background()
-	if _, err := s.pool.Exec(ctx, `CREATE FUNCTION reject_test_application() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'synthetic application failure'; END $$;
+	if _, err := s.Pool.Exec(ctx, `CREATE FUNCTION reject_test_application() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'synthetic application failure'; END $$;
  CREATE TRIGGER reject_test_application BEFORE UPDATE OF category ON claim_revisions FOR EACH ROW EXECUTE FUNCTION reject_test_application()`); err != nil {
 		t.Fatal(err)
 	}
@@ -239,13 +239,13 @@ func TestLegacyPaidResultRecoversWithoutInventedCallMetadata(t *testing.T) {
 	}
 	// The persisted result has the old table shape. Remove only this fixture's
 	// new metadata to represent a receipt saved before migration 062.
-	if _, err := s.pool.Exec(ctx, "DELETE FROM model_calls WHERE owner_id=$1", string(scope.OwnerID)); err != nil {
+	if _, err := s.Pool.Exec(ctx, "DELETE FROM model_calls WHERE owner_id=$1", string(scope.OwnerID)); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.pool.Exec(ctx, "DROP TRIGGER reject_test_application ON claim_revisions"); err != nil {
+	if _, err := s.Pool.Exec(ctx, "DROP TRIGGER reject_test_application ON claim_revisions"); err != nil {
 		t.Fatal(err)
 	}
-	peer, err := Open(ctx, s.pool.Config().ConnConfig.ConnString())
+	peer, err := Open(ctx, s.Pool.Config().ConnConfig.ConnString())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -258,7 +258,7 @@ func TestLegacyPaidResultRecoversWithoutInventedCallMetadata(t *testing.T) {
 		t.Fatal(state.Organize, calls.Load(), err)
 	}
 	var metadata, usage int
-	if err := s.pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM model_calls WHERE owner_id=$1),(SELECT count(*) FROM model_usage WHERE owner_id=$1)`, string(scope.OwnerID)).Scan(&metadata, &usage); err != nil || metadata != 0 || usage != 1 {
+	if err := s.Pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM model_calls WHERE owner_id=$1),(SELECT count(*) FROM model_usage WHERE owner_id=$1)`, string(scope.OwnerID)).Scan(&metadata, &usage); err != nil || metadata != 0 || usage != 1 {
 		t.Fatal(metadata, usage, err)
 	}
 }

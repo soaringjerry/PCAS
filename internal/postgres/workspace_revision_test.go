@@ -49,7 +49,7 @@ func revisionCommandClient(t *testing.T, s *Store, scope memory.Scope) func(work
 func bumpBackgroundRevision(t *testing.T, s *Store, scope memory.Scope) {
 	t.Helper()
 	// Simulate an unrelated worker commit without changing the action's rows.
-	result, err := s.pool.Exec(context.Background(), "UPDATE workspace_owners SET revision=revision+1 WHERE owner_id=$1", string(scope.OwnerID))
+	result, err := s.Pool.Exec(context.Background(), "UPDATE workspace_owners SET revision=revision+1 WHERE owner_id=$1", string(scope.OwnerID))
 	if err != nil || result.RowsAffected() != 1 {
 		t.Fatalf("background revision: %v, rows=%d", err, result.RowsAffected())
 	}

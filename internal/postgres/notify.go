@@ -41,7 +41,7 @@ func NewNotifier(s *Store, settings notify.Settings, publicURL string) *Notifier
 var _ workspace.NotifyAPI = (*Notifier)(nil)
 
 func (s *Store) Subscriptions(ctx context.Context, owner string) ([]webpush.Subscription, error) {
-	rows, err := s.pool.Query(ctx, "SELECT endpoint,p256dh,auth FROM push_subscriptions WHERE owner_id=$1 ORDER BY created_at,endpoint", owner)
+	rows, err := s.Pool.Query(ctx, "SELECT endpoint,p256dh,auth FROM push_subscriptions WHERE owner_id=$1 ORDER BY created_at,endpoint", owner)
 	if err != nil {
 		return nil, err
 	}
@@ -57,7 +57,7 @@ func (s *Store) Subscriptions(ctx context.Context, owner string) ([]webpush.Subs
 	return out, rows.Err()
 }
 func (s *Store) DeleteSubscription(ctx context.Context, owner, endpoint string) error {
-	_, err := s.pool.Exec(ctx, "DELETE FROM push_subscriptions WHERE owner_id=$1 AND endpoint=$2", owner, endpoint)
+	_, err := s.Pool.Exec(ctx, "DELETE FROM push_subscriptions WHERE owner_id=$1 AND endpoint=$2", owner, endpoint)
 	return err
 }
 func (n *Notifier) NotifyConfig(ctx context.Context, scope memory.Scope) (workspace.NotifyConfig, error) {
@@ -70,7 +70,7 @@ func (n *Notifier) NotifyConfig(ctx context.Context, scope memory.Scope) (worksp
 		return out, err
 	}
 	out.WebPush.PublicKey = keys.VAPIDPublic
-	if err = n.pool.QueryRow(ctx, "SELECT count(*) FROM push_subscriptions WHERE owner_id=$1", string(scope.OwnerID)).Scan(&out.WebPush.Subscriptions); err != nil {
+	if err = n.Pool.QueryRow(ctx, "SELECT count(*) FROM push_subscriptions WHERE owner_id=$1", string(scope.OwnerID)).Scan(&out.WebPush.Subscriptions); err != nil {
 		return out, err
 	}
 	out.Telegram.Configured = keys.TelegramToken != "" && keys.TelegramChatID != ""
@@ -103,7 +103,7 @@ func (n *Notifier) SavePushSubscription(ctx context.Context, scope memory.Scope,
 	if err != nil || len(auth) != 16 {
 		return memory.ErrInvalid
 	}
-	return pgx.BeginFunc(ctx, n.pool, func(tx pgx.Tx) error {
+	return pgx.BeginFunc(ctx, n.Pool, func(tx pgx.Tx) error {
 		if err := n.ensureOwner(ctx, tx, scope); err != nil {
 			return err
 		}
@@ -189,7 +189,7 @@ func (n *Notifier) DismissNotice(ctx context.Context, scope memory.Scope, id str
 	if !memory.ID(id).Valid() {
 		return out, memory.ErrInvalid
 	}
-	err := pgx.BeginFunc(ctx, n.pool, func(tx pgx.Tx) error {
+	err := pgx.BeginFunc(ctx, n.Pool, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(scope.OwnerID)); err != nil {
 			return err
 		}
@@ -234,7 +234,7 @@ type deliveryState struct {
 // DispatchNotices uses a transaction advisory lock per notice to keep concurrent
 // dispatchers from sending it twice. READ COMMITTED rechecks state per channel.
 func (s *Store) DispatchNotices(ctx context.Context, now time.Time, channels []notify.Channel) error {
-	rows, err := s.pool.Query(ctx, `SELECT id::text FROM workspace_notices WHERE created_at>=$1 AND created_at<=$2 AND dismissed_at IS NULL AND NOT (delivered @> '{"_suppressed":true}'::jsonb) ORDER BY created_at,id`, now.Add(-24*time.Hour), now)
+	rows, err := s.Pool.Query(ctx, `SELECT id::text FROM workspace_notices WHERE created_at>=$1 AND created_at<=$2 AND dismissed_at IS NULL AND NOT (delivered @> '{"_suppressed":true}'::jsonb) ORDER BY created_at,id`, now.Add(-24*time.Hour), now)
 	if err != nil {
 		return err
 	}
@@ -253,7 +253,7 @@ func (s *Store) DispatchNotices(ctx context.Context, now time.Time, channels []n
 		return err
 	}
 	for _, id := range ids {
-		if err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		if err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 			var locked bool
 			if err := tx.QueryRow(ctx, "SELECT pg_try_advisory_xact_lock(hashtextextended($1,0))", "pcas-notice:"+id).Scan(&locked); err != nil {
 				return err

@@ -55,7 +55,7 @@ func (a directCalls) Finish(ctx context.Context, r modelcall.DirectRequest, call
 			outcome, code = "unknown", modelcall.ErrOutcomeUnknown.Error()
 		}
 	}
-	return pgx.BeginFunc(persist, a.store.pool, func(tx pgx.Tx) error {
+	return pgx.BeginFunc(persist, a.store.Pool, func(tx pgx.Tx) error {
 		var usageID any
 		var reservation any = call.Reservation
 		switch {
@@ -95,7 +95,7 @@ func (a directCalls) Finish(ctx context.Context, r modelcall.DirectRequest, call
 // process. The longest provider request lasts three minutes. Its outcome stays
 // unknown and its reservation stays held.
 func (a directCalls) recordInterrupted(ctx context.Context) error {
-	_, err := a.store.pool.Exec(ctx, `UPDATE model_calls SET outcome='unknown',error_code=$1,accounting_state='held',finished_at=clock_timestamp(),updated_at=clock_timestamp(),actual_mode=actual_mode||'{"interruptedReason":"process_interrupted"}'::jsonb
+	_, err := a.store.Pool.Exec(ctx, `UPDATE model_calls SET outcome='unknown',error_code=$1,accounting_state='held',finished_at=clock_timestamp(),updated_at=clock_timestamp(),actual_mode=actual_mode||'{"interruptedReason":"process_interrupted"}'::jsonb
  WHERE input_manifest->>'version' IN ('direct-input-v1','embedding-input-v1') AND outcome='started' AND started_at<clock_timestamp()-interval '10 minutes'`, modelcall.ErrOutcomeUnknown.Error())
 	return err
 }

@@ -156,8 +156,9 @@ The PostgreSQL adapter is being split by domain into storage packages over a sha
 
 | Package | Content | State |
 |---|---|---|
-| `internal/postgres/kernel` | The encoding of a document, the checks of a request, the reads of document rows, the lease and the queueing of a job, and the owner lock. No business rule and no table of one domain. | Since 2026-10-12. |
-| `internal/postgres` | Everything else, and the composition of the store. | Each domain leaves in its own change. The deputy's storage leaves last. |
+| `internal/postgres/kernel` | `DB`, the core of the store: the connection pool, the configured models, the file store, and the business clock. Also the encoding of a document, the checks of a request, the reads of document rows, the lease and the queueing of a job, and the owner lock. No business rule and no table of one domain. | Since 2026-10-12. |
+| `internal/postgres/memoryread` | The reads of memories: the owner's list and one memory, the memories that a turn or a run is given, the filters of a list, and the status of a statement. `Reader` works on the kernel's `DB`; the store embeds it. | Since 2026-10-12. |
+| `internal/postgres` | Everything else, and the composition of the store. `Store` embeds the kernel's `DB`. | Each domain leaves in its own change. The deputy's storage leaves last. |
 
 ## Pattern for the Next Paths
 

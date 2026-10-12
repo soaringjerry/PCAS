@@ -38,10 +38,10 @@ func TestMemoryListFiltersPerformance(t *testing.T) {
 		t.Logf("list 10000 memories trust=%q median=%s samples=%v", q.Trust, durations[1], durations)
 	}
 	var keeper string
-	if err := s.pool.QueryRow(context.Background(), "SELECT id::text FROM memory_records WHERE owner_id=$1 AND kind='claim' ORDER BY updated_at DESC,id LIMIT 1", string(scope.OwnerID)).Scan(&keeper); err != nil {
+	if err := s.Pool.QueryRow(context.Background(), "SELECT id::text FROM memory_records WHERE owner_id=$1 AND kind='claim' ORDER BY updated_at DESC,id LIMIT 1", string(scope.OwnerID)).Scan(&keeper); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.pool.Exec(context.Background(), `UPDATE claims SET retired='duplicate',retired_by=$2 WHERE owner_id=$1 AND id IN(
+	if _, err := s.Pool.Exec(context.Background(), `UPDATE claims SET retired='duplicate',retired_by=$2 WHERE owner_id=$1 AND id IN(
  SELECT id FROM memory_records WHERE owner_id=$1 AND kind='claim' AND id<>$2 ORDER BY updated_at DESC,id LIMIT 20)`, string(scope.OwnerID), keeper); err != nil {
 		t.Fatal(err)
 	}

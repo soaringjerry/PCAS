@@ -96,7 +96,7 @@ func (c *stabilizationTimeChannel) Send(_ context.Context, m notify.Message) err
 func stabilizationTimeCheck(t *testing.T, s *Store, at time.Time, channels ...notify.Channel) {
 	t.Helper()
 	var existing []string
-	rows, err := s.pool.Query(context.Background(), "SELECT id::text FROM workspace_notices")
+	rows, err := s.Pool.Query(context.Background(), "SELECT id::text FROM workspace_notices")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -121,7 +121,7 @@ func stabilizationTimeCheck(t *testing.T, s *Store, at time.Time, channels ...no
 	// The database DEFAULT now() uses wall time, whereas the checker accepts a
 	// synthetic clock. Align only newly inserted notice bookkeeping with that
 	// clock so dispatch observes the same time; no business fields are changed.
-	if _, err := s.pool.Exec(context.Background(), "UPDATE workspace_notices SET created_at=$1 WHERE NOT (id=ANY($2::uuid[]))", at, existing); err != nil {
+	if _, err := s.Pool.Exec(context.Background(), "UPDATE workspace_notices SET created_at=$1 WHERE NOT (id=ANY($2::uuid[]))", at, existing); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.DispatchNotices(context.Background(), at, channels); err != nil {
@@ -135,7 +135,7 @@ func stabilizationTimeSeedSchedule(t *testing.T, s *Store, scope memory.Scope, t
 	t.Helper()
 	task.Due = due.UTC().Format(time.RFC3339)
 	task.Triggers = []workspace.Trigger{{ID: "due-reminder", Kind: "time", Description: task.Title, Active: true, Offset: "at", NextAt: next.UTC().Format(time.RFC3339)}}
-	_, err := s.pool.Exec(context.Background(), "UPDATE work_items SET due_at=$3, document=$4 WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), task.ID, due, kernel.JSON(task))
+	_, err := s.Pool.Exec(context.Background(), "UPDATE work_items SET due_at=$3, document=$4 WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), task.ID, due, kernel.JSON(task))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -276,7 +276,7 @@ func TestR5_UndoCompletionAfterOneHourNeverCatchesUp(t *testing.T) {
 		t.Fatal(err)
 	}
 	// The action is a synthetic completion three hours ago; Undo remains public.
-	if _, err := s.pool.Exec(context.Background(), "UPDATE action_log SET created_at=$3 WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), actionID, now.Add(-3*time.Hour)); err != nil {
+	if _, err := s.Pool.Exec(context.Background(), "UPDATE action_log SET created_at=$3 WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), actionID, now.Add(-3*time.Hour)); err != nil {
 		t.Fatal(err)
 	}
 	channel := &stabilizationTimeChannel{}
@@ -401,7 +401,7 @@ func TestR9_RestartAndReentryNeverDuplicateNoticeOrSend(t *testing.T) {
 		t.Fatalf("initial notice/send missing: notices=%+v sends=%d", first.Notices, len(channel.calls))
 	}
 	// Close the pool and reopen the same test schema, retaining only DB state.
-	dsn := s.pool.Config().ConnString()
+	dsn := s.Pool.Config().ConnString()
 	s.Close()
 	restarted, err := Open(context.Background(), dsn)
 	if err != nil {
@@ -413,7 +413,7 @@ func TestR9_RestartAndReentryNeverDuplicateNoticeOrSend(t *testing.T) {
 	}
 	state = stabilizationTimeSnapshot(t, restarted, scope)
 	var count int
-	if err := restarted.pool.QueryRow(context.Background(), "SELECT count(*) FROM workspace_notices WHERE owner_id=$1 AND thing_id=$2", string(scope.OwnerID), task.ID).Scan(&count); err != nil {
+	if err := restarted.Pool.QueryRow(context.Background(), "SELECT count(*) FROM workspace_notices WHERE owner_id=$1 AND thing_id=$2", string(scope.OwnerID), task.ID).Scan(&count); err != nil {
 		t.Fatal(err)
 	}
 	if count != 1 || len(state.Notices) != 1 || state.Notices[0].ID != first.Notices[0].ID || len(channel.calls) != 1 {
@@ -601,7 +601,7 @@ func TestR5_SuppressionSurvivesRestartAndContinuousUndo(t *testing.T) {
 	if err != nil || stabilizationTimeTask(t, state, task.ID).Title != "原标题" {
 		t.Fatal("earlier content fingerprint invalidated by reminder suppression", err)
 	}
-	dsn := s.pool.Config().ConnString()
+	dsn := s.Pool.Config().ConnString()
 	s.Close()
 	restarted, err := Open(context.Background(), dsn)
 	if err != nil {
@@ -654,7 +654,7 @@ func TestR5_FutureAndRecentRemindersRestoreButOrdinaryLateTaskCatchesUp(t *testi
 					t.Fatal(err)
 				}
 			}
-			dsn := s.pool.Config().ConnString()
+			dsn := s.Pool.Config().ConnString()
 			s.Close()
 			restarted, err := Open(context.Background(), dsn)
 			if err != nil {
@@ -706,7 +706,7 @@ func TestR5_PreviousDeliveryAndDismissalRemainAuthoritative(t *testing.T) {
 			}
 			var delivered string
 			var hidden bool
-			if err := s.pool.QueryRow(context.Background(), `SELECT delivered->>'synthetic-mobile',delivered @> '{"_suppressionOnly":true}'::jsonb FROM workspace_notices WHERE id=$1`, original.ID).Scan(&delivered, &hidden); err != nil || delivered != at.Format(time.RFC3339) || hidden {
+			if err := s.Pool.QueryRow(context.Background(), `SELECT delivered->>'synthetic-mobile',delivered @> '{"_suppressionOnly":true}'::jsonb FROM workspace_notices WHERE id=$1`, original.ID).Scan(&delivered, &hidden); err != nil || delivered != at.Format(time.RFC3339) || hidden {
 				t.Fatalf("original delivery changed: timestamp=%q hidden=%v err=%v", delivered, hidden, err)
 			}
 		})
@@ -735,13 +735,13 @@ func TestR5_StrictHourBoundaryAndOnlyCompletionRestoration(t *testing.T) {
 			current, restored := task, task
 			current.Status, restored.Status = fixture.from, fixture.to
 			restored.Triggers = []workspace.Trigger{{ID: "due-reminder", NextAt: now.Add(-fixture.elapsed).Format(time.RFC3339), Active: fixture.active}}
-			if err := pgx.BeginFunc(context.Background(), s.pool, func(tx pgx.Tx) error {
+			if err := pgx.BeginFunc(context.Background(), s.Pool, func(tx pgx.Tx) error {
 				return suppressRestoredRemindersTx(context.Background(), tx, scope, current, restored, now)
 			}); err != nil {
 				t.Fatal(err)
 			}
 			var count int
-			if err := s.pool.QueryRow(context.Background(), "SELECT count(*) FROM workspace_notices WHERE owner_id=$1", string(scope.OwnerID)).Scan(&count); err != nil {
+			if err := s.Pool.QueryRow(context.Background(), "SELECT count(*) FROM workspace_notices WHERE owner_id=$1", string(scope.OwnerID)).Scan(&count); err != nil {
 				t.Fatal(err)
 			}
 			if (count == 1) != fixture.suppressed {
@@ -749,10 +749,10 @@ func TestR5_StrictHourBoundaryAndOnlyCompletionRestoration(t *testing.T) {
 			}
 			if fixture.suppressed {
 				// Existing item deletion cascades internal occurrences too.
-				if _, err := s.pool.Exec(context.Background(), "DELETE FROM work_items WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), task.ID); err != nil {
+				if _, err := s.Pool.Exec(context.Background(), "DELETE FROM work_items WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), task.ID); err != nil {
 					t.Fatal(err)
 				}
-				if err := s.pool.QueryRow(context.Background(), "SELECT count(*) FROM workspace_notices WHERE owner_id=$1", string(scope.OwnerID)).Scan(&count); err != nil || count != 0 {
+				if err := s.Pool.QueryRow(context.Background(), "SELECT count(*) FROM workspace_notices WHERE owner_id=$1", string(scope.OwnerID)).Scan(&count); err != nil || count != 0 {
 					t.Fatal("suppression record did not follow item deletion", err)
 				}
 			}
@@ -799,7 +799,7 @@ func TestR5_PendingFailedOccurrenceStopsWithoutLosingRetryData(t *testing.T) {
 		t.Fatal("old failed occurrence retried or existing notice lost")
 	}
 	var raw []byte
-	if err := s.pool.QueryRow(context.Background(), "SELECT delivered FROM workspace_notices WHERE id=$1", original.ID).Scan(&raw); err != nil {
+	if err := s.Pool.QueryRow(context.Background(), "SELECT delivered FROM workspace_notices WHERE id=$1", original.ID).Scan(&raw); err != nil {
 		t.Fatal(err)
 	}
 	var fields map[string]json.RawMessage

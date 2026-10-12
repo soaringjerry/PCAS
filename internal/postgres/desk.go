@@ -21,7 +21,7 @@ func (s *Store) recordReturnedUsage(ctx context.Context, text string, usage mode
 	}
 	persistCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
 	defer cancel()
-	return pgx.BeginFunc(persistCtx, s.pool, func(tx pgx.Tx) error {
+	return pgx.BeginFunc(persistCtx, s.Pool, func(tx pgx.Tx) error {
 		return recordUsageTx(persistCtx, tx, usage)
 	})
 }
@@ -41,7 +41,7 @@ func tail(s string, n int) string {
 // deskContextTx keeps the legacy answer and secretary on the same visibility
 // and derived-artifact rules. Stable ordering is used by the secretary cache.
 func (s *Store) deskContextTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, agent workspace.Agent, stable bool) ([]workspace.Memory, []workspace.Item, workspace.Settings, []memory.Ref, error) {
-	memories, err := s.memoriesTx(ctx, tx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: agent.ID}, true)
+	memories, err := s.MemoriesTx(ctx, tx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: agent.ID}, true)
 	if err != nil {
 		return nil, nil, workspace.Settings{}, nil, err
 	}
@@ -80,7 +80,7 @@ func deskLocation(settings workspace.Settings) *time.Location {
 	return loc
 }
 func (s *Store) deskNow(loc *time.Location) string {
-	return secretary.Now(s.businessNow(), loc)
+	return secretary.Now(s.BusinessNow(), loc)
 }
 
 var recallDateInstructions = prompts.Must("recall-date").Text()

@@ -28,16 +28,16 @@ func b1EmptyStore(t *testing.T) *Store {
 		t.Fatal(err)
 	}
 	t.Cleanup(admin.Close)
-	if _, err := admin.pool.Exec(context.Background(), "CREATE EXTENSION IF NOT EXISTS vector WITH SCHEMA public"); err != nil {
+	if _, err := admin.Pool.Exec(context.Background(), "CREATE EXTENSION IF NOT EXISTS vector WITH SCHEMA public"); err != nil {
 		t.Fatal(err)
 	}
 	schema := "pcas_b1_" + strings.ReplaceAll(string(memory.NewID()), "-", "")
 	quoted := pgx.Identifier{schema}.Sanitize()
-	if _, err := admin.pool.Exec(context.Background(), "CREATE SCHEMA "+quoted); err != nil {
+	if _, err := admin.Pool.Exec(context.Background(), "CREATE SCHEMA "+quoted); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		if _, err := admin.pool.Exec(context.Background(), "DROP SCHEMA "+quoted+" CASCADE"); err != nil {
+		if _, err := admin.Pool.Exec(context.Background(), "DROP SCHEMA "+quoted+" CASCADE"); err != nil {
 			t.Error(err)
 		}
 	})
@@ -73,23 +73,23 @@ func b1AssertClean(t *testing.T, s *Store) {
 	ctx := context.Background()
 	for _, name := range tables {
 		var count int
-		if err := s.pool.QueryRow(ctx, "SELECT count(*) FROM information_schema.tables WHERE table_schema=current_schema() AND table_name=$1", name).Scan(&count); err != nil || count != 0 {
+		if err := s.Pool.QueryRow(ctx, "SELECT count(*) FROM information_schema.tables WHERE table_schema=current_schema() AND table_name=$1", name).Scan(&count); err != nil || count != 0 {
 			t.Errorf("legacy table %s remains count=%d err=%v", name, count, err)
 		}
 	}
 	for table, cols := range columns {
 		for _, col := range cols {
 			var count int
-			if err := s.pool.QueryRow(ctx, "SELECT count(*) FROM information_schema.columns WHERE table_schema=current_schema() AND table_name=$1 AND column_name=$2", table, col).Scan(&count); err != nil || count != 0 {
+			if err := s.Pool.QueryRow(ctx, "SELECT count(*) FROM information_schema.columns WHERE table_schema=current_schema() AND table_name=$1 AND column_name=$2", table, col).Scan(&count); err != nil || count != 0 {
 				t.Errorf("legacy column %s.%s remains count=%d err=%v", table, col, count, err)
 			}
 		}
 	}
 	var n int
-	if err := s.pool.QueryRow(ctx, "SELECT count(*) FROM schema_migrations WHERE name=ANY($1::text[])", rows).Scan(&n); err != nil || n != 0 {
+	if err := s.Pool.QueryRow(ctx, "SELECT count(*) FROM schema_migrations WHERE name=ANY($1::text[])", rows).Scan(&n); err != nil || n != 0 {
 		t.Error("legacy migration rows remain", n, err)
 	}
-	if err := s.pool.QueryRow(ctx, "SELECT count(*) FROM schema_migrations WHERE name='026_drop_phase2_0_leftovers.sql'").Scan(&n); err != nil || n != 1 {
+	if err := s.Pool.QueryRow(ctx, "SELECT count(*) FROM schema_migrations WHERE name='026_drop_phase2_0_leftovers.sql'").Scan(&n); err != nil || n != 1 {
 		t.Error("cleanup migration not recorded", n, err)
 	}
 }
@@ -101,7 +101,7 @@ func b1DatabaseRows(t *testing.T, s *Store, ignoreLegacy bool) map[string]string
 	t.Helper()
 	tables, _, columns := b1Leftovers(t)
 	ctx := context.Background()
-	rows, err := s.pool.Query(ctx, "SELECT table_name FROM information_schema.tables WHERE table_schema=current_schema() AND table_type='BASE TABLE' ORDER BY table_name")
+	rows, err := s.Pool.Query(ctx, "SELECT table_name FROM information_schema.tables WHERE table_schema=current_schema() AND table_type='BASE TABLE' ORDER BY table_name")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -133,7 +133,7 @@ func b1DatabaseRows(t *testing.T, s *Store, ignoreLegacy bool) map[string]string
 		}
 		sql := "SELECT coalesce(jsonb_agg(v ORDER BY v::text),'[]')::text FROM (SELECT " + expr + " AS v FROM " + pgx.Identifier{name}.Sanitize() + " t) data"
 		var data string
-		if err := s.pool.QueryRow(ctx, sql).Scan(&data); err != nil {
+		if err := s.Pool.QueryRow(ctx, sql).Scan(&data); err != nil {
 			t.Fatal(name, err)
 		}
 		out[name] = data
@@ -146,7 +146,7 @@ func b1DatabaseRows(t *testing.T, s *Store, ignoreLegacy bool) map[string]string
 func b1DatabaseColumns(t *testing.T, s *Store, before map[string]string) map[string][]string {
 	t.Helper()
 	_, _, legacyColumns := b1Leftovers(t)
-	rows, err := s.pool.Query(context.Background(), "SELECT table_name,column_name FROM information_schema.columns WHERE table_schema=current_schema() ORDER BY table_name,ordinal_position")
+	rows, err := s.Pool.Query(context.Background(), "SELECT table_name,column_name FROM information_schema.columns WHERE table_schema=current_schema() ORDER BY table_name,ordinal_position")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -192,7 +192,7 @@ func b1DatabaseRowsAtColumns(t *testing.T, s *Store, columns map[string][]string
 		// disappeared. Ordered JSON arrays retain every row, including duplicates.
 		sql := "SELECT coalesce(jsonb_agg(v ORDER BY v::text),'[]')::text FROM (SELECT " + expr + " AS v FROM (SELECT " + strings.Join(quoted, ",") + " FROM " + pgx.Identifier{table}.Sanitize() + ") t) data"
 		var data string
-		if err := s.pool.QueryRow(context.Background(), sql).Scan(&data); err != nil {
+		if err := s.Pool.QueryRow(context.Background(), sql).Scan(&data); err != nil {
 			t.Fatal(table, err)
 		}
 		out[table] = data
@@ -204,7 +204,7 @@ func b1LegacyDatabase(t *testing.T) (*Store, map[string]string) {
 	t.Helper()
 	s := b1EmptyStore(t)
 	ctx := context.Background()
-	if _, err := s.pool.Exec(ctx, "CREATE TABLE schema_migrations(name text PRIMARY KEY,checksum text NOT NULL,applied_at timestamptz NOT NULL DEFAULT now())"); err != nil {
+	if _, err := s.Pool.Exec(ctx, "CREATE TABLE schema_migrations(name text PRIMARY KEY,checksum text NOT NULL,applied_at timestamptz NOT NULL DEFAULT now())"); err != nil {
 		t.Fatal(err)
 	}
 	files, err := migrations.ReadDir("migrations")
@@ -219,10 +219,10 @@ func b1LegacyDatabase(t *testing.T) (*Store, map[string]string) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, err := s.pool.Exec(ctx, string(body)); err != nil {
+		if _, err := s.Pool.Exec(ctx, string(body)); err != nil {
 			t.Fatal(file.Name(), err)
 		}
-		if _, err := s.pool.Exec(ctx, "INSERT INTO schema_migrations(name,checksum) VALUES($1,$2)", file.Name(), fmt.Sprintf("%x", sha256.Sum256(body))); err != nil {
+		if _, err := s.Pool.Exec(ctx, "INSERT INTO schema_migrations(name,checksum) VALUES($1,$2)", file.Name(), fmt.Sprintf("%x", sha256.Sum256(body))); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -232,10 +232,10 @@ func b1LegacyDatabase(t *testing.T) (*Store, map[string]string) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, err := s.pool.Exec(ctx, string(body)); err != nil {
+		if _, err := s.Pool.Exec(ctx, string(body)); err != nil {
 			t.Fatal(name, err)
 		}
-		if _, err := s.pool.Exec(ctx, "INSERT INTO schema_migrations(name,checksum) VALUES($1,$2)", name, fmt.Sprintf("%x", sha256.Sum256(body))); err != nil {
+		if _, err := s.Pool.Exec(ctx, "INSERT INTO schema_migrations(name,checksum) VALUES($1,$2)", name, fmt.Sprintf("%x", sha256.Sum256(body))); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -255,7 +255,7 @@ func b1LegacyDatabase(t *testing.T) (*Store, map[string]string) {
 		t.Fatal("no sentinel business data")
 	}
 	// Populate a retired object as well as live business tables.
-	if _, err := s.pool.Exec(ctx, "INSERT INTO source_scope_revisions(owner_id,source_id,revision) VALUES($1,$2,1)", string(scope.OwnerID), string(src.ID)); err != nil {
+	if _, err := s.Pool.Exec(ctx, "INSERT INTO source_scope_revisions(owner_id,source_id,revision) VALUES($1,$2,1)", string(scope.OwnerID), string(src.ID)); err != nil {
 		t.Fatal(err)
 	}
 	return s, b1DatabaseRows(t, s, true)
@@ -268,7 +268,7 @@ func TestPhase2B1_G1_FreshDatabaseMigratesWithoutLegacyObjects(t *testing.T) {
 	b1AssertClean(t, s)
 	for _, name := range []string{"sources", "claims", "desk_turns", "action_log", "agent_runs", "work_items"} {
 		var table *string
-		if err := s.pool.QueryRow(context.Background(), "SELECT to_regclass($1)::text", name).Scan(&table); err != nil || table == nil {
+		if err := s.Pool.QueryRow(context.Background(), "SELECT to_regclass($1)::text", name).Scan(&table); err != nil || table == nil {
 			t.Error("business table absent", name, err)
 		}
 	}
@@ -301,10 +301,10 @@ func TestPhase2B1_G3_SecondStartupMakesNoFurtherChanges(t *testing.T) {
 	before := b1DatabaseRows(t, s, false)
 	var migrationBefore, migrationAfter string
 	sql := "SELECT jsonb_agg(to_jsonb(m) ORDER BY name)::text FROM schema_migrations m"
-	if err := s.pool.QueryRow(context.Background(), sql).Scan(&migrationBefore); err != nil {
+	if err := s.Pool.QueryRow(context.Background(), sql).Scan(&migrationBefore); err != nil {
 		t.Fatal(err)
 	}
-	reopened, err := Open(context.Background(), s.pool.Config().ConnString())
+	reopened, err := Open(context.Background(), s.Pool.Config().ConnString())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -316,7 +316,7 @@ func TestPhase2B1_G3_SecondStartupMakesNoFurtherChanges(t *testing.T) {
 	if !reflect.DeepEqual(before, b1DatabaseRows(t, s, false)) {
 		t.Error("second startup changed business rows or tables")
 	}
-	if err := s.pool.QueryRow(context.Background(), sql).Scan(&migrationAfter); err != nil {
+	if err := s.Pool.QueryRow(context.Background(), sql).Scan(&migrationAfter); err != nil {
 		t.Fatal(err)
 	}
 	if migrationAfter != migrationBefore {

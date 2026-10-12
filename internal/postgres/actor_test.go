@@ -25,7 +25,7 @@ func TestSaveActionPersistsContextActor(t *testing.T) {
 				actionCtx = withActor(ctx, actor)
 			}
 			id := string(memory.NewID())
-			err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+			err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 				if err := s.commandTx(actionCtx, tx, scope, workspace.Command{Type: "addIdea", ID: id, Title: "记录修改者"}); err != nil {
 					return err
 				}

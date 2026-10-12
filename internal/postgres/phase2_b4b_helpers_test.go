@@ -183,7 +183,7 @@ func b4bImport(t *testing.T, s *Store, scope memory.Scope, messages []b4bMessage
 	}
 	for n, m := range messages {
 		ref := memory.Ref{Kind: memory.SourceKind}
-		if err = s.pool.QueryRow(context.Background(), `SELECT v.source_id::text,v.version FROM source_versions v JOIN archive_entries e ON(e.owner_id,e.source_id,e.source_version)=(v.owner_id,v.source_id,v.version) WHERE v.owner_id=$1 AND e.archive_id=$2 AND v.body=$3`, string(scope.OwnerID), string(a.Root.ID), m.Text).Scan(&ref.ID, &ref.Version); err != nil {
+		if err = s.Pool.QueryRow(context.Background(), `SELECT v.source_id::text,v.version FROM source_versions v JOIN archive_entries e ON(e.owner_id,e.source_id,e.source_version)=(v.owner_id,v.source_id,v.version) WHERE v.owner_id=$1 AND e.archive_id=$2 AND v.body=$3`, string(scope.OwnerID), string(a.Root.ID), m.Text).Scan(&ref.ID, &ref.Version); err != nil {
 			t.Fatal("imported fixture message missing", n, err)
 		}
 		a.Sources[n] = ref
@@ -272,7 +272,7 @@ func b4bRecord(t *testing.T, s *Store, scope memory.Scope, source memory.Ref, st
 	t.Helper()
 	var got string
 	var count, extractor int
-	if err := s.pool.QueryRow(context.Background(), `SELECT state,items,extractor FROM source_extractions WHERE owner_id=$1 AND source_id=$2 AND source_version=$3`, string(scope.OwnerID), string(source.ID), source.Version).Scan(&got, &count, &extractor); err != nil {
+	if err := s.Pool.QueryRow(context.Background(), `SELECT state,items,extractor FROM source_extractions WHERE owner_id=$1 AND source_id=$2 AND source_version=$3`, string(scope.OwnerID), string(source.ID), source.Version).Scan(&got, &count, &extractor); err != nil {
 		t.Fatal(err)
 	}
 	b2Equal(t, got, state)
@@ -292,7 +292,7 @@ func b4bEvidence(t *testing.T, s *Store, scope memory.Scope, m workspace.Memory,
 	// The public excerpt may include surrounding original text. Check the
 	// stored evidence locator itself for the exact quotation.
 	var evidenceQuote string
-	if err := s.pool.QueryRow(context.Background(), `SELECT substring(v.body FROM (e.locator->>'start_rune')::int+1 FOR (e.locator->>'end_rune')::int-(e.locator->>'start_rune')::int) FROM evidence e JOIN source_versions v ON(v.owner_id,v.source_id,v.version)=(e.owner_id,e.source_id,e.source_version) WHERE e.owner_id=$1 AND e.target_id=$2 AND e.target_version=$3 AND e.source_id=$4 AND e.source_version=$5`, string(scope.OwnerID), m.ID, m.Version, string(source.ID), source.Version).Scan(&evidenceQuote); err != nil {
+	if err := s.Pool.QueryRow(context.Background(), `SELECT substring(v.body FROM (e.locator->>'start_rune')::int+1 FOR (e.locator->>'end_rune')::int-(e.locator->>'start_rune')::int) FROM evidence e JOIN source_versions v ON(v.owner_id,v.source_id,v.version)=(e.owner_id,e.source_id,e.source_version) WHERE e.owner_id=$1 AND e.target_id=$2 AND e.target_version=$3 AND e.source_id=$4 AND e.source_version=$5`, string(scope.OwnerID), m.ID, m.Version, string(source.ID), source.Version).Scan(&evidenceQuote); err != nil {
 		t.Fatal(err)
 	}
 	b2Equal(t, evidenceQuote, quote)
@@ -317,7 +317,7 @@ func b4bLegacyExtract(t *testing.T, s *Store, scope memory.Scope, f *b1Fake, sou
 func b4bEnableSourceImport(t *testing.T, s *Store, scope memory.Scope, source memory.Ref) memory.Ref {
 	t.Helper()
 	var rootID, batch string
-	if err := s.pool.QueryRow(context.Background(), `SELECT e.archive_id::text,b.id::text FROM archive_entries e JOIN import_batches b ON(b.owner_id,b.archive_id)=(e.owner_id,e.archive_id) WHERE e.owner_id=$1 AND e.source_id=$2 AND e.source_version=$3`, string(scope.OwnerID), string(source.ID), source.Version).Scan(&rootID, &batch); err != nil {
+	if err := s.Pool.QueryRow(context.Background(), `SELECT e.archive_id::text,b.id::text FROM archive_entries e JOIN import_batches b ON(b.owner_id,b.archive_id)=(e.owner_id,e.archive_id) WHERE e.owner_id=$1 AND e.source_id=$2 AND e.source_version=$3`, string(scope.OwnerID), string(source.ID), source.Version).Scan(&rootID, &batch); err != nil {
 		t.Fatal(err)
 	}
 	b4bOperation(t, s, scope, memory.ID(batch), "organize")

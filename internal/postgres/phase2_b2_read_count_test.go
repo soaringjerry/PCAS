@@ -22,16 +22,16 @@ func TestPhase2B2_M1_ReadBatchQueryCountDoesNotGrowWithRows(t *testing.T) {
 	g := b2Library(t, s, scope, 130)
 	// Reopen this test's own schema with pgx's query tracer. The owner, database,
 	// handlers, HTTP API and queries are unchanged; no fake storage is involved.
-	config := s.pool.Config()
+	config := s.Pool.Config()
 	trace := &b2QueryTrace{}
 	config.ConnConfig.Tracer = trace
 	pool, err := pgxpool.NewWithConfig(context.Background(), config)
 	if err != nil {
 		t.Fatal(err)
 	}
-	original := s.pool
-	s.pool = pool
-	t.Cleanup(func() { s.pool = original; pool.Close() })
+	original := s.Pool
+	s.Pool = pool
+	t.Cleanup(func() { s.Pool = original; pool.Close() })
 	// Warm owner setup and lazy configuration before either counted read.
 	b2List(t, s, scope, "?limit=1")
 	trace.Count.Store(0)

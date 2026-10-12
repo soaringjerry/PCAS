@@ -21,7 +21,7 @@ func TestPhase26G4T4OneMemoryEditRunsOnlyIts40AffectedComparisonCalls(t *testing
 	// model calls. This test measures a single edit after an established library.
 	phase26Exec(t, f, `UPDATE claims SET organized=$2 WHERE owner_id=$1`, f.Scope.OwnerID, OrganizeVersion)
 	var prior []comparisonBatch
-	if err := pgx.BeginFunc(ctx, f.Store.pool, func(tx pgx.Tx) error {
+	if err := pgx.BeginFunc(ctx, f.Store.Pool, func(tx pgx.Tx) error {
 		if err := syncComparisonMembersTx(ctx, tx, f.Scope.OwnerID); err != nil {
 			return err
 		}
@@ -97,7 +97,7 @@ func TestPhase26G4T4OneMemoryEditRunsOnlyIts40AffectedComparisonCalls(t *testing
 		}
 		var fingerprint string
 		var completed time.Time
-		if err := f.Store.pool.QueryRow(ctx, `SELECT fingerprint,completed_at FROM memory_comparison_batches WHERE owner_id=$1 AND group_key=$2 AND block_a=$3 AND block_b=$4`, f.Scope.OwnerID, b.Group.Key, b.A, b.B).Scan(&fingerprint, &completed); err != nil || fingerprint != b.Fingerprint || completed.After(start) {
+		if err := f.Store.Pool.QueryRow(ctx, `SELECT fingerprint,completed_at FROM memory_comparison_batches WHERE owner_id=$1 AND group_key=$2 AND block_a=$3 AND block_b=$4`, f.Scope.OwnerID, b.Group.Key, b.A, b.B).Scan(&fingerprint, &completed); err != nil || fingerprint != b.Fingerprint || completed.After(start) {
 			t.Errorf("unrelated prior receipt rewritten %s %d/%d %v", b.Group.Key, b.A, b.B, err)
 		}
 	}

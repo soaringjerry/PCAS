@@ -12,7 +12,7 @@ import (
 
 func p3RejudgeJob(t *testing.T, s *Store) worker.Job {
 	t.Helper()
-	if _, e := s.pool.Exec(context.Background(), "DELETE FROM memory_jobs WHERE stage NOT LIKE '%:rejudge:%'"); e != nil {
+	if _, e := s.Pool.Exec(context.Background(), "DELETE FROM memory_jobs WHERE stage NOT LIKE '%:rejudge:%'"); e != nil {
 		t.Fatal(e)
 	}
 	j, e := s.Claim(context.Background(), 5*time.Minute)
@@ -30,7 +30,7 @@ func TestP3RejudgeOnlySupersededAndReusesPaidWrite(t *testing.T) {
 		if i == 2 {
 			kind = "duplicate"
 		}
-		if _, e := s.pool.Exec(ctx, "UPDATE claims SET retired=$3,retired_by=$4 WHERE owner_id=$1 AND id=$2", scope.OwnerID, refs[i].ID, kind, refs[i+1].ID); e != nil {
+		if _, e := s.Pool.Exec(ctx, "UPDATE claims SET retired=$3,retired_by=$4 WHERE owner_id=$1 AND id=$2", scope.OwnerID, refs[i].ID, kind, refs[i+1].ID); e != nil {
 			t.Fatal(e)
 		}
 	}
@@ -42,7 +42,7 @@ func TestP3RejudgeOnlySupersededAndReusesPaidWrite(t *testing.T) {
 		t.Fatal("duplicate queue", n, e)
 	}
 	job := p3RejudgeJob(t, s)
-	if _, e = s.pool.Exec(ctx, `CREATE FUNCTION fictional_rejudge_failure() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'fictional write failure'; END $$;
+	if _, e = s.Pool.Exec(ctx, `CREATE FUNCTION fictional_rejudge_failure() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'fictional write failure'; END $$;
  CREATE TRIGGER fictional_rejudge_failure BEFORE INSERT ON background_markers FOR EACH ROW EXECUTE FUNCTION fictional_rejudge_failure()`); e != nil {
 		t.Fatal(e)
 	}
@@ -50,13 +50,13 @@ func TestP3RejudgeOnlySupersededAndReusesPaidWrite(t *testing.T) {
 		t.Fatal("expected write failure")
 	}
 	var retired string
-	if e = s.pool.QueryRow(ctx, "SELECT retired FROM claims WHERE id=$1", refs[0].ID).Scan(&retired); e != nil || retired != "superseded" {
+	if e = s.Pool.QueryRow(ctx, "SELECT retired FROM claims WHERE id=$1", refs[0].ID).Scan(&retired); e != nil || retired != "superseded" {
 		t.Fatal("failure changed result", retired, e)
 	}
-	if _, e = s.pool.Exec(ctx, "DROP TRIGGER fictional_rejudge_failure ON background_markers"); e != nil {
+	if _, e = s.Pool.Exec(ctx, "DROP TRIGGER fictional_rejudge_failure ON background_markers"); e != nil {
 		t.Fatal(e)
 	}
-	reopened, e := Open(ctx, s.pool.Config().ConnString())
+	reopened, e := Open(ctx, s.Pool.Config().ConnString())
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -67,10 +67,10 @@ func TestP3RejudgeOnlySupersededAndReusesPaidWrite(t *testing.T) {
 	if len(fake.all()) != 1 {
 		t.Fatal("paid call repeated", len(fake.all()))
 	}
-	if e = s.pool.QueryRow(ctx, "SELECT retired FROM claims WHERE id=$1", refs[0].ID).Scan(&retired); e != nil || retired != "" {
+	if e = s.Pool.QueryRow(ctx, "SELECT retired FROM claims WHERE id=$1", refs[0].ID).Scan(&retired); e != nil || retired != "" {
 		t.Fatal(retired, e)
 	}
-	if e = s.pool.QueryRow(ctx, "SELECT retired FROM claims WHERE id=$1", refs[2].ID).Scan(&retired); e != nil || retired != "duplicate" {
+	if e = s.Pool.QueryRow(ctx, "SELECT retired FROM claims WHERE id=$1", refs[2].ID).Scan(&retired); e != nil || retired != "duplicate" {
 		t.Fatal("touched duplicate", retired, e)
 	}
 	if n, e = s.QueueSupersededRejudge(ctx, scope); e != nil || n != 0 {
@@ -83,7 +83,7 @@ func TestP3RejudgeRejectsFailureAndChangedPair(t *testing.T) {
 			s, scope, ctx := testStore(t), owner(), context.Background()
 			fake := b1Model(t, s, `{"duplicates":[],"superseded":[]}`)
 			refs := compareFixture(t, s, scope, "虚构旧要求", "虚构新要求")
-			if _, e := s.pool.Exec(ctx, "UPDATE claims SET retired='superseded',retired_by=$3 WHERE owner_id=$1 AND id=$2", scope.OwnerID, refs[0].ID, refs[1].ID); e != nil {
+			if _, e := s.Pool.Exec(ctx, "UPDATE claims SET retired='superseded',retired_by=$3 WHERE owner_id=$1 AND id=$2", scope.OwnerID, refs[0].ID, refs[1].ID); e != nil {
 				t.Fatal(e)
 			}
 			response := `{"duplicates":[],"superseded":[{"old":1,"new":2}]}`
@@ -110,7 +110,7 @@ func TestP3RejudgeRejectsFailureAndChangedPair(t *testing.T) {
 				t.Fatal(err)
 			}
 			var retired string
-			if e := s.pool.QueryRow(ctx, "SELECT retired FROM claims WHERE id=$1", refs[0].ID).Scan(&retired); e != nil {
+			if e := s.Pool.QueryRow(ctx, "SELECT retired FROM claims WHERE id=$1", refs[0].ID).Scan(&retired); e != nil {
 				t.Fatal(e)
 			}
 			want := "superseded"
@@ -131,7 +131,7 @@ func TestP3UpgradeDoesNotRecompareUnchangedBatches(t *testing.T) {
 	b1Model(t, s, `{"duplicates":[],"superseded":[]}`)
 	compareFixture(t, s, scope, "虚构云朵蓝色", "虚构窗帘绿色")
 	compareProcess(t, s, scope)
-	if _, e := s.pool.Exec(ctx, "UPDATE memory_comparison_batches SET rule=1; UPDATE memory_group_progress SET rule=1"); e != nil {
+	if _, e := s.Pool.Exec(ctx, "UPDATE memory_comparison_batches SET rule=1; UPDATE memory_group_progress SET rule=1"); e != nil {
 		t.Fatal(e)
 	}
 	if n, e := s.ScheduleCompare(ctx, time.Now()); e != nil || n != 0 {
@@ -143,7 +143,7 @@ func TestP3UpgradeDoesNotRecompareUnchangedBatches(t *testing.T) {
 	}
 	// Previous rule restoration, including legacy spelling, is visible to v2.
 	refs := compareFixture(t, s, scope, "虚构手动保留资料")
-	if _, e := s.pool.Exec(ctx, `INSERT INTO background_markers(owner_id,record_id,record_version,stage) VALUES($1,$2,1,$3)`, scope.OwnerID, refs[0].ID, fmt.Sprintf("memory.compare_restored:1:fictional")); e != nil {
+	if _, e := s.Pool.Exec(ctx, `INSERT INTO background_markers(owner_id,record_id,record_version,stage) VALUES($1,$2,1,$3)`, scope.OwnerID, refs[0].ID, fmt.Sprintf("memory.compare_restored:1:fictional")); e != nil {
 		t.Fatal(e)
 	}
 	batch, e := s.nextComparisonBatch(ctx, scope.OwnerID, CompareVersion)
@@ -167,7 +167,7 @@ func TestP3RejudgeTwelveFixedPairs(t *testing.T) {
 	expected := map[string]string{}
 	for _, c := range p3SupersessionCases {
 		refs := compareFixture(t, s, scope, c.Old, c.New)
-		if _, e := s.pool.Exec(ctx, "UPDATE claims SET retired='superseded',retired_by=$3 WHERE owner_id=$1 AND id=$2", scope.OwnerID, refs[0].ID, refs[1].ID); e != nil {
+		if _, e := s.Pool.Exec(ctx, "UPDATE claims SET retired='superseded',retired_by=$3 WHERE owner_id=$1 AND id=$2", scope.OwnerID, refs[0].ID, refs[1].ID); e != nil {
 			t.Fatal(e)
 		}
 		want := ""
@@ -192,7 +192,7 @@ func TestP3RejudgeTwelveFixedPairs(t *testing.T) {
 	}
 	for id, want := range expected {
 		var got string
-		if e := s.pool.QueryRow(ctx, "SELECT retired FROM claims WHERE id=$1", id).Scan(&got); e != nil || got != want {
+		if e := s.Pool.QueryRow(ctx, "SELECT retired FROM claims WHERE id=$1", id).Scan(&got); e != nil || got != want {
 			t.Fatal(id, got, want, e)
 		}
 	}

@@ -40,7 +40,7 @@ func approvedUndoHTTP(t *testing.T, s *Store, scope memory.Scope, action, code s
 		t.Fatal(err)
 	}
 	var wasUndone bool
-	if err := s.pool.QueryRow(ctx, "SELECT undone_at IS NOT NULL FROM action_log WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), action).Scan(&wasUndone); err != nil {
+	if err := s.Pool.QueryRow(ctx, "SELECT undone_at IS NOT NULL FROM action_log WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), action).Scan(&wasUndone); err != nil {
 		t.Fatal(err)
 	}
 	token := strings.Repeat("a", 64)
@@ -62,7 +62,7 @@ func approvedUndoHTTP(t *testing.T, s *Store, scope memory.Scope, action, code s
 		t.Fatal("refused undo changed state")
 	}
 	var undone bool
-	if err = s.pool.QueryRow(ctx, "SELECT undone_at IS NOT NULL FROM action_log WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), action).Scan(&undone); err != nil || undone != wasUndone {
+	if err = s.Pool.QueryRow(ctx, "SELECT undone_at IS NOT NULL FROM action_log WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), action).Scan(&undone); err != nil || undone != wasUndone {
 		t.Fatal("refused undo changed audit state", err)
 	}
 }
@@ -75,7 +75,7 @@ func TestApprovedUndoRecordedSources(t *testing.T) {
 			id := st.Tasks[0].ID
 			later := string(memory.NewID())
 			ctx := context.Background()
-			err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+			err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 				ctx := withActionLog(ctx, later, source, "", "recorded update")
 				if err := beginActionLogTx(ctx, tx); err != nil {
 					return err
@@ -115,7 +115,7 @@ func TestApprovedUndoUnloggedContentAndIndependentRows(t *testing.T) {
 	}
 	st, first = approvedUndoCommand(t, s, scope, workspace.Command{Type: "addTask", ID: string(memory.NewID()), Title: "first"})
 	id = st.Tasks[0].ID
-	if _, err := s.pool.Exec(context.Background(), `UPDATE work_items SET title='external',document=jsonb_set(document,'{title}','"external"') WHERE owner_id=$1 AND id=$2`, string(scope.OwnerID), id); err != nil {
+	if _, err := s.Pool.Exec(context.Background(), `UPDATE work_items SET title='external',document=jsonb_set(document,'{title}','"external"') WHERE owner_id=$1 AND id=$2`, string(scope.OwnerID), id); err != nil {
 		t.Fatal(err)
 	}
 	approvedUndoHTTP(t, s, scope, first, "changed_since")
@@ -127,7 +127,7 @@ func TestApprovedUndoSameTransactionOrder(t *testing.T) {
 	id := st.Tasks[0].ID
 	actions := []string{string(memory.NewID()), string(memory.NewID()), string(memory.NewID())}
 	ctx := context.Background()
-	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		for i, title := range []string{"first", "second", "first"} {
 			logged := withActionLog(ctx, actions[i], "desk", "", "same turn")
 			if err := beginActionLogTx(logged, tx); err != nil {
@@ -146,7 +146,7 @@ func TestApprovedUndoSameTransactionOrder(t *testing.T) {
 		t.Fatal(err)
 	}
 	var timestamps int
-	if err := s.pool.QueryRow(ctx, "SELECT count(DISTINCT created_at) FROM action_log WHERE owner_id=$1 AND id=ANY($2::uuid[])", string(scope.OwnerID), actions).Scan(&timestamps); err != nil {
+	if err := s.Pool.QueryRow(ctx, "SELECT count(DISTINCT created_at) FROM action_log WHERE owner_id=$1 AND id=ANY($2::uuid[])", string(scope.OwnerID), actions).Scan(&timestamps); err != nil {
 		t.Fatal(err)
 	}
 	if timestamps != 1 {
@@ -175,11 +175,11 @@ func TestApprovedUndoHistoricalOrder(t *testing.T) {
 			ctx := context.Background()
 			st, created := approvedUndoCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "original"})
 			_, later := approvedUndoCommand(t, s, scope, workspace.Command{Type: "renameThing", ID: st.Tasks[0].ID, Title: "later"})
-			if _, err := s.pool.Exec(ctx, "UPDATE action_log SET action_order=NULL WHERE owner_id=$1", string(scope.OwnerID)); err != nil {
+			if _, err := s.Pool.Exec(ctx, "UPDATE action_log SET action_order=NULL WHERE owner_id=$1", string(scope.OwnerID)); err != nil {
 				t.Fatal(err)
 			}
 			if mode != "timestamps" {
-				if _, err := s.pool.Exec(ctx, "UPDATE action_log SET created_at=now() WHERE owner_id=$1", string(scope.OwnerID)); err != nil {
+				if _, err := s.Pool.Exec(ctx, "UPDATE action_log SET created_at=now() WHERE owner_id=$1", string(scope.OwnerID)); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -193,10 +193,10 @@ func TestApprovedUndoHistoricalOrder(t *testing.T) {
 					receipts = append(receipts, map[string]string{"actionId": later})
 				}
 				response := kernel.JSON(map[string]any{"turn": map[string]any{"receipts": receipts}})
-				if _, err := s.pool.Exec(ctx, "INSERT INTO desk_turns(owner_id,id,agent_id,question,answer,response) VALUES($1,$2,'fixture','fixture','fixture',$3)", string(scope.OwnerID), turnID, response); err != nil {
+				if _, err := s.Pool.Exec(ctx, "INSERT INTO desk_turns(owner_id,id,agent_id,question,answer,response) VALUES($1,$2,'fixture','fixture','fixture',$3)", string(scope.OwnerID), turnID, response); err != nil {
 					t.Fatal(err)
 				}
-				if _, err := s.pool.Exec(ctx, "UPDATE action_log SET source='desk',turn_id=$2 WHERE owner_id=$1", string(scope.OwnerID), turnID); err != nil {
+				if _, err := s.Pool.Exec(ctx, "UPDATE action_log SET source='desk',turn_id=$2 WHERE owner_id=$1", string(scope.OwnerID), turnID); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -229,14 +229,14 @@ func TestApprovedUndoMigrationPreservesHistoricalAudit(t *testing.T) {
 	ctx := context.Background()
 	st, action := approvedUndoCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "historical"})
 	var before string
-	if err := s.pool.QueryRow(ctx, "SELECT (to_jsonb(a)-'action_order')::text FROM action_log a WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), action).Scan(&before); err != nil {
+	if err := s.Pool.QueryRow(ctx, "SELECT (to_jsonb(a)-'action_order')::text FROM action_log a WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), action).Scan(&before); err != nil {
 		t.Fatal(err)
 	}
 	// Reconstruct the 019 table, retaining real collected snapshots and audit data.
-	if _, err := s.pool.Exec(ctx, "ALTER TABLE action_log DROP COLUMN action_order CASCADE"); err != nil {
+	if _, err := s.Pool.Exec(ctx, "ALTER TABLE action_log DROP COLUMN action_order CASCADE"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.pool.Exec(ctx, "DELETE FROM schema_migrations WHERE name='020_action_order.sql'"); err != nil {
+	if _, err := s.Pool.Exec(ctx, "DELETE FROM schema_migrations WHERE name='020_action_order.sql'"); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.Migrate(ctx); err != nil {
@@ -247,7 +247,7 @@ func TestApprovedUndoMigrationPreservesHistoricalAudit(t *testing.T) {
 	}
 	var after string
 	var historicalOrder *int64
-	if err := s.pool.QueryRow(ctx, "SELECT (to_jsonb(a)-'action_order')::text,action_order FROM action_log a WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), action).Scan(&after, &historicalOrder); err != nil {
+	if err := s.Pool.QueryRow(ctx, "SELECT (to_jsonb(a)-'action_order')::text,action_order FROM action_log a WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), action).Scan(&after, &historicalOrder); err != nil {
 		t.Fatal(err)
 	}
 	if after != before || historicalOrder != nil {
@@ -255,7 +255,7 @@ func TestApprovedUndoMigrationPreservesHistoricalAudit(t *testing.T) {
 	}
 	_, later := approvedUndoCommand(t, s, scope, workspace.Command{Type: "renameThing", ID: st.Tasks[0].ID, Title: "new"})
 	var newOrder *int64
-	if err := s.pool.QueryRow(ctx, "SELECT action_order FROM action_log WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), later).Scan(&newOrder); err != nil || newOrder == nil {
+	if err := s.Pool.QueryRow(ctx, "SELECT action_order FROM action_log WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), later).Scan(&newOrder); err != nil || newOrder == nil {
 		t.Fatal("new order absent", err)
 	}
 	approvedUndoHTTP(t, s, scope, action, "newer_action")
@@ -275,7 +275,7 @@ func TestApprovedUndoProtectionPriority(t *testing.T) {
 		t.Fatal(err)
 	}
 	action, id := string(memory.NewID()), string(memory.NewID())
-	if err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	if err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		logged := withActionLog(ctx, action, "desk", "", "delegation")
 		if err := beginActionLogTx(logged, tx); err != nil {
 			return err
@@ -288,7 +288,7 @@ func TestApprovedUndoProtectionPriority(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, later := approvedUndoCommand(t, s, scope, workspace.Command{Type: "renameThing", ID: id, Title: "later"})
-	if _, err := s.pool.Exec(ctx, "UPDATE agent_runs SET status='running' WHERE owner_id=$1 AND thing_id=$2", string(scope.OwnerID), id); err != nil {
+	if _, err := s.Pool.Exec(ctx, "UPDATE agent_runs SET status='running' WHERE owner_id=$1 AND thing_id=$2", string(scope.OwnerID), id); err != nil {
 		t.Fatal(err)
 	}
 	approvedUndoHTTP(t, s, scope, action, "newer_action")
@@ -296,11 +296,11 @@ func TestApprovedUndoProtectionPriority(t *testing.T) {
 		t.Fatal(err)
 	}
 	approvedUndoHTTP(t, s, scope, action, "work_started")
-	if _, err := s.pool.Exec(ctx, "UPDATE action_log SET expired_at=now(),changes='[]' WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), action); err != nil {
+	if _, err := s.Pool.Exec(ctx, "UPDATE action_log SET expired_at=now(),changes='[]' WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), action); err != nil {
 		t.Fatal(err)
 	}
 	approvedUndoHTTP(t, s, scope, action, "expired")
-	if _, err := s.pool.Exec(ctx, "UPDATE action_log SET undone_at=now() WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), action); err != nil {
+	if _, err := s.Pool.Exec(ctx, "UPDATE action_log SET undone_at=now() WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), action); err != nil {
 		t.Fatal(err)
 	}
 	approvedUndoHTTP(t, s, scope, action, "already_undone")

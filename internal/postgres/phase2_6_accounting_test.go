@@ -83,10 +83,10 @@ func TestPhase26A9EstimatedSubscriptionDailyBudgetAndHealth(t *testing.T) {
 		var in, out int
 		var inputEstimated, outputEstimated, costEstimated bool
 		var cost, settled float64
-		if err := s.pool.QueryRow(ctx, `SELECT input_tokens,output_tokens,input_estimated,output_estimated,cost_estimated,cost FROM model_usage WHERE owner_id=$1 AND job_id=$2`, owner, j.ID).Scan(&in, &out, &inputEstimated, &outputEstimated, &costEstimated, &cost); err != nil {
+		if err := s.Pool.QueryRow(ctx, `SELECT input_tokens,output_tokens,input_estimated,output_estimated,cost_estimated,cost FROM model_usage WHERE owner_id=$1 AND job_id=$2`, owner, j.ID).Scan(&in, &out, &inputEstimated, &outputEstimated, &costEstimated, &cost); err != nil {
 			t.Fatal(err)
 		}
-		if err := s.pool.QueryRow(ctx, `SELECT reserved_cost FROM background_usage WHERE owner_id=$1 AND job_id=$2`, owner, j.ID).Scan(&settled); err != nil {
+		if err := s.Pool.QueryRow(ctx, `SELECT reserved_cost FROM background_usage WHERE owner_id=$1 AND job_id=$2`, owner, j.ID).Scan(&settled); err != nil {
 			t.Fatal(err)
 		}
 		wantIn, wantOut := utf8.RuneCountInString(call.System+call.Prompt), utf8.RuneCountInString(call.Output)

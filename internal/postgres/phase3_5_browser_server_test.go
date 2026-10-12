@@ -111,12 +111,12 @@ func TestPhase35BrowserOwnedServer(t *testing.T) {
 	completionState := func() (map[string]string, error) {
 		result := map[string]string{}
 		var target string
-		err := s.pool.QueryRow(ctx, `SELECT md5(to_jsonb(r)::text||to_jsonb(cl)::text||to_jsonb(cr)::text) FROM memory_records r JOIN claims cl ON(cl.owner_id,cl.id)=(r.owner_id,r.id) JOIN claim_revisions cr ON(cr.owner_id,cr.claim_id,cr.version)=(r.owner_id,r.id,r.version) WHERE r.owner_id=$1 AND r.id=$2`, f.Scope.OwnerID, f.Deadlines[1].Claim).Scan(&target)
+		err := s.Pool.QueryRow(ctx, `SELECT md5(to_jsonb(r)::text||to_jsonb(cl)::text||to_jsonb(cr)::text) FROM memory_records r JOIN claims cl ON(cl.owner_id,cl.id)=(r.owner_id,r.id) JOIN claim_revisions cr ON(cr.owner_id,cr.claim_id,cr.version)=(r.owner_id,r.id,r.version) WHERE r.owner_id=$1 AND r.id=$2`, f.Scope.OwnerID, f.Deadlines[1].Claim).Scan(&target)
 		if err != nil {
 			return result, err
 		}
 		result["memoryDigest"] = target
-		err = s.pool.QueryRow(ctx, `SELECT md5(string_agg(to_jsonb(v)::text,'|' ORDER BY v.source_id,v.version)) FROM source_versions v WHERE owner_id=$1`, f.Scope.OwnerID).Scan(&target)
+		err = s.Pool.QueryRow(ctx, `SELECT md5(string_agg(to_jsonb(v)::text,'|' ORDER BY v.source_id,v.version)) FROM source_versions v WHERE owner_id=$1`, f.Scope.OwnerID).Scan(&target)
 		result["originalSourcesDigest"] = target
 		return result, err
 	}
@@ -197,13 +197,13 @@ func phase35BrowserLease(ctx context.Context, s *Store, scope memory.Scope, ref 
 	j := worker.Job{OwnerID: scope.OwnerID, Record: ref, Stage: stage, LeaseToken: memory.NewID(), Attempts: 1}
 	// An invalid lease produces a normal processor error; never calls Fatal from
 	// an HTTP handler goroutine. The runner asserts every control response.
-	_ = s.pool.QueryRow(ctx, `INSERT INTO memory_jobs(id,owner_id,record_id,record_version,stage,state,attempts,lease_token,lease_until) VALUES(gen_random_uuid(),$1,$2,$3,$4,'leased',1,$5,now()+interval '5 minutes') ON CONFLICT(owner_id,record_id,record_version,stage) DO UPDATE SET state='leased',attempts=1,lease_token=$5,lease_until=now()+interval '5 minutes' RETURNING id::text`, scope.OwnerID, ref.ID, ref.Version, stage, j.LeaseToken).Scan(&j.ID)
+	_ = s.Pool.QueryRow(ctx, `INSERT INTO memory_jobs(id,owner_id,record_id,record_version,stage,state,attempts,lease_token,lease_until) VALUES(gen_random_uuid(),$1,$2,$3,$4,'leased',1,$5,now()+interval '5 minutes') ON CONFLICT(owner_id,record_id,record_version,stage) DO UPDATE SET state='leased',attempts=1,lease_token=$5,lease_until=now()+interval '5 minutes' RETURNING id::text`, scope.OwnerID, ref.ID, ref.Version, stage, j.LeaseToken).Scan(&j.ID)
 	return j
 }
 func phase35BrowserDrain(ctx context.Context, s *Store, scope memory.Scope) error {
 	// Ingest publishes source.chunk first; that real handler creates the extract
 	// job. Drain both published stages instead of assuming extraction is first.
-	chunks, err := s.pool.Query(ctx, `SELECT j.record_id::text,j.record_version,j.stage FROM memory_jobs j JOIN sources so ON(so.owner_id,so.id)=(j.owner_id,j.record_id) WHERE j.owner_id=$1 AND j.stage='source.chunk' AND j.state='queued' AND so.connector='desk'`, scope.OwnerID)
+	chunks, err := s.Pool.Query(ctx, `SELECT j.record_id::text,j.record_version,j.stage FROM memory_jobs j JOIN sources so ON(so.owner_id,so.id)=(j.owner_id,j.record_id) WHERE j.owner_id=$1 AND j.stage='source.chunk' AND j.state='queued' AND so.connector='desk'`, scope.OwnerID)
 	if err != nil {
 		return err
 	}
@@ -226,7 +226,7 @@ func phase35BrowserDrain(ctx context.Context, s *Store, scope memory.Scope) erro
 			return err
 		}
 	}
-	rows, err := s.pool.Query(ctx, `SELECT j.record_id::text,j.record_version,j.stage FROM memory_jobs j JOIN sources so ON(so.owner_id,so.id)=(j.owner_id,j.record_id) WHERE j.owner_id=$1 AND j.stage='source.extract' AND j.state='queued' AND so.connector='desk'`, scope.OwnerID)
+	rows, err := s.Pool.Query(ctx, `SELECT j.record_id::text,j.record_version,j.stage FROM memory_jobs j JOIN sources so ON(so.owner_id,so.id)=(j.owner_id,j.record_id) WHERE j.owner_id=$1 AND j.stage='source.extract' AND j.state='queued' AND so.connector='desk'`, scope.OwnerID)
 	if err != nil {
 		return err
 	}
@@ -252,7 +252,7 @@ func phase35BrowserDrain(ctx context.Context, s *Store, scope memory.Scope) erro
 	if _, err := s.ScheduleOrganize(ctx, time.Now()); err != nil {
 		return err
 	}
-	rows, err = s.pool.Query(ctx, `SELECT record_id::text,record_version,stage FROM memory_jobs WHERE owner_id=$1 AND stage LIKE 'memory.organize:%' AND state='queued' AND available_at<=now()`, scope.OwnerID)
+	rows, err = s.Pool.Query(ctx, `SELECT record_id::text,record_version,stage FROM memory_jobs WHERE owner_id=$1 AND stage LIKE 'memory.organize:%' AND state='queued' AND available_at<=now()`, scope.OwnerID)
 	if err != nil {
 		return err
 	}

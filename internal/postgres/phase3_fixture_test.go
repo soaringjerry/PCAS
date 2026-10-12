@@ -143,7 +143,7 @@ func phase3LoadFixture(t *testing.T) *phase3LoadedFixture {
 		t.Fatal(err)
 	}
 	s.SetBlobs(files)
-	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	err = pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		for _, p := range f.Gold.Projects {
 			project := workspace.Item{ID: p.ID, Kind: "project", Version: 1, Title: p.Name, Name: p.Name, Status: "active", Goal: "完成虚构青湾展览", CreatedAt: f.Gold.Base.Now.AddDate(0, 0, -14).Format(time.RFC3339), UpdatedAt: f.Gold.Base.Now.Format(time.RFC3339)}
 			if err := saveItem(ctx, tx, scope, project); err != nil {
@@ -233,11 +233,11 @@ func phase3LoadFixture(t *testing.T) *phase3LoadedFixture {
 			original.WriteString(m.Text)
 			original.WriteByte('\n')
 		}
-		if _, err := s.pool.Exec(ctx, `UPDATE source_versions SET body=$3,content_hash=sha256(convert_to($3,'UTF8')) WHERE owner_id=$1 AND source_id=$2 AND version=1`, scope.OwnerID, f.Sources[batch].ID, original.String()); err != nil {
+		if _, err := s.Pool.Exec(ctx, `UPDATE source_versions SET body=$3,content_hash=sha256(convert_to($3,'UTF8')) WHERE owner_id=$1 AND source_id=$2 AND version=1`, scope.OwnerID, f.Sources[batch].ID, original.String()); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if _, err := s.pool.Exec(ctx, "ANALYZE"); err != nil {
+	if _, err := s.Pool.Exec(ctx, "ANALYZE"); err != nil {
 		t.Fatal(err)
 	}
 	return f
@@ -292,7 +292,7 @@ func TestPhase3T1LoadedScale(t *testing.T) {
 	}
 	for table, want := range expected {
 		var n int
-		if err := f.Store.pool.QueryRow(f.Context, "SELECT count(*) FROM "+table+" WHERE owner_id=$1", f.Scope.OwnerID).Scan(&n); err != nil {
+		if err := f.Store.Pool.QueryRow(f.Context, "SELECT count(*) FROM "+table+" WHERE owner_id=$1", f.Scope.OwnerID).Scan(&n); err != nil {
 			t.Fatal(err)
 		}
 		if n != want {
@@ -303,7 +303,7 @@ func TestPhase3T1LoadedScale(t *testing.T) {
 		for _, d := range p.Documents {
 			var got workspace.Doc
 			raw := []byte{}
-			if err := f.Store.pool.QueryRow(f.Context, `SELECT document FROM work_documents WHERE owner_id=$1 AND id=$2`, f.Scope.OwnerID, d.ID).Scan(&raw); err != nil {
+			if err := f.Store.Pool.QueryRow(f.Context, `SELECT document FROM work_documents WHERE owner_id=$1 AND id=$2`, f.Scope.OwnerID, d.ID).Scan(&raw); err != nil {
 				t.Fatal(err)
 			}
 			decodePhase3(t, raw, &got)

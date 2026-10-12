@@ -23,7 +23,7 @@ func (s *Store) ListSchedule(ctx context.Context, scope memory.Scope, q workspac
 	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err
 	}
-	err := pgx.BeginTxFunc(ctx, s.pool, pgx.TxOptions{AccessMode: pgx.ReadOnly, IsoLevel: pgx.RepeatableRead}, func(tx pgx.Tx) error {
+	err := pgx.BeginTxFunc(ctx, s.Pool, pgx.TxOptions{AccessMode: pgx.ReadOnly, IsoLevel: pgx.RepeatableRead}, func(tx pgx.Tx) error {
 		settings, err := kernel.QueryDocument[workspace.Settings](ctx, tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1", string(scope.OwnerID))
 		if err != nil {
 			return err
@@ -220,7 +220,7 @@ func (s *Store) ListInProgress(ctx context.Context, scope memory.Scope) (workspa
 	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err
 	}
-	err := pgx.BeginTxFunc(ctx, s.pool, pgx.TxOptions{AccessMode: pgx.ReadOnly, IsoLevel: pgx.RepeatableRead}, func(tx pgx.Tx) error {
+	err := pgx.BeginTxFunc(ctx, s.Pool, pgx.TxOptions{AccessMode: pgx.ReadOnly, IsoLevel: pgx.RepeatableRead}, func(tx pgx.Tx) error {
 		items, err := kernel.QueryDocuments[workspace.Item](ctx, tx, `SELECT document FROM work_items WHERE owner_id=$1 AND kind='task' AND status NOT IN('done','cancelled') AND due_at IS NULL AND scheduled_at IS NULL AND NOT coalesce((document->>'urgent')::boolean,false) ORDER BY coalesce(nullif(document->>'updatedAt','')::timestamptz,updated_at) DESC,id`, string(scope.OwnerID))
 		if err != nil {
 			return err

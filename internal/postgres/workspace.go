@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/postgres/memoryread"
 	"github.com/soaringjerry/PCAS/internal/retrieval"
 	"github.com/soaringjerry/PCAS/internal/workspace/itemcommand"
 
@@ -29,8 +30,8 @@ func (s *Store) ensureOwner(ctx context.Context, tx pgx.Tx, scope memory.Scope) 
 		return err
 	}
 	agents := []workspace.Agent{{ID: "manual", Name: "手动交接", Channel: "manual", Enabled: true, MemoryKinds: []string{"fact", "preference", "decision", "intention", "plan"}, Note: "复制上下文到任意 AI，再粘贴结果"}}
-	if s.models != nil {
-		for _, p := range s.models.Providers() {
+	if s.Models != nil {
+		for _, p := range s.Models.Providers() {
 			if p.Embedding || p.Transcription {
 				continue
 			}
@@ -85,7 +86,7 @@ func (s *Store) Snapshot(ctx context.Context, scope memory.Scope) (workspace.Sta
 	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err
 	}
-	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		if err := s.ensureOwner(ctx, tx, scope); err != nil {
 			return err
 		}
@@ -163,12 +164,12 @@ func (s *Store) snapshotTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) (
         WHERE n.owner_id=$1 AND (n.dismissed_at IS NOT NULL OR `+currentNoticeTriggerSQL+`) AND NOT (n.delivered @> '{"_suppressionOnly":true}'::jsonb) ORDER BY (n.dismissed_at IS NOT NULL),n.created_at DESC,n.id LIMIT 100`, string(scope.OwnerID)); err != nil {
 		return out, err
 	}
-	if out.Memories, err = s.readMemoriesTx(ctx, tx, scope, false, memoryReadOptions{limit: 200}); err != nil {
+	if out.Memories, err = s.ReadMemoriesTx(ctx, tx, scope, false, memoryread.MemoryReadOptions{Limit: 200}); err != nil {
 		return out, err
 	}
-	where, args := memoryWhere(scope, false, memoryReadOptions{})
+	where, args := memoryread.MemoryWhere(scope, false, memoryread.MemoryReadOptions{})
 	out.Organize.Version = OrganizeVersion
-	if err := tx.QueryRow(ctx, `SELECT count(*) FILTER (WHERE coalesce((to_jsonb(cl)->>'organized')::int,0) >= `+organizeRequiredSQL("coalesce(to_jsonb(c)->>'category','')", "$5")+`),count(*)`+memoryJoins+` JOIN claims cl ON(cl.owner_id,cl.id)=(r.owner_id,r.id)`+where,
+	if err := tx.QueryRow(ctx, `SELECT count(*) FILTER (WHERE coalesce((to_jsonb(cl)->>'organized')::int,0) >= `+organizeRequiredSQL("coalesce(to_jsonb(c)->>'category','')", "$5")+`),count(*)`+memoryread.MemoryJoins+` JOIN claims cl ON(cl.owner_id,cl.id)=(r.owner_id,r.id)`+where,
 		append(args, OrganizeVersion)...).Scan(&out.Organize.Done, &out.Organize.Total); err != nil {
 		return out, err
 	}
@@ -184,10 +185,10 @@ func (s *Store) snapshotTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) (
 		if a.Channel == "manual" {
 			a.Available = true
 		}
-		if p, ok := s.models.Get(a.ID); ok {
-			a.Default = a.ID == s.models.ExtractionID()
+		if p, ok := s.Models.Get(a.ID); ok {
+			a.Default = a.ID == s.Models.ExtractionID()
 			a.Protocol = p.Protocol
-			a.Available = s.models.Available(a.ID)
+			a.Available = s.Models.Available(a.ID)
 			a.InputPrice = p.InputPerMillion
 			a.OutputPrice = p.OutputPerMillion
 			a.MaxOutput = p.MaxOutput
@@ -198,7 +199,7 @@ func (s *Store) snapshotTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) (
 			}
 		}
 	}
-	if s.models != nil && s.models.ChatGPT != nil && s.models.ChatGPT.DefaultReady() {
+	if s.Models != nil && s.Models.ChatGPT != nil && s.Models.ChatGPT.DefaultReady() {
 		// Preserve per-agent visibility/preferences; only reorder the default.
 		for i, a := range out.Agents {
 			if a.ID == "chatgpt-direct" {
@@ -320,7 +321,7 @@ func (s *Store) ExecuteWith(ctx context.Context, scope memory.Scope, in workspac
 		}
 		// Avoid a second embedding/budget reservation for a completed retry.
 		var prior []byte
-		err := s.pool.QueryRow(ctx, "SELECT request_hash FROM workspace_commands WHERE owner_id=$1 AND request_id=$2", string(scope.OwnerID), in.RequestID).Scan(&prior)
+		err := s.Pool.QueryRow(ctx, "SELECT request_hash FROM workspace_commands WHERE owner_id=$1 AND request_id=$2", string(scope.OwnerID), in.RequestID).Scan(&prior)
 		if err == nil {
 			if !bytes.Equal(prior, hash[:]) {
 				return out, memory.ErrConflict
@@ -332,7 +333,7 @@ func (s *Store) ExecuteWith(ctx context.Context, scope memory.Scope, in workspac
 		}
 		if in.Type == "delegateTask" {
 			var exists bool
-			if err := s.pool.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM work_items WHERE owner_id=$1 AND id=$2)", string(scope.OwnerID), in.ID).Scan(&exists); err != nil {
+			if err := s.Pool.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM work_items WHERE owner_id=$1 AND id=$2)", string(scope.OwnerID), in.ID).Scan(&exists); err != nil {
 				return out, err
 			}
 			if exists {
@@ -345,7 +346,7 @@ func (s *Store) ExecuteWith(ctx context.Context, scope memory.Scope, in workspac
 			return out, errPrepare
 		}
 	}
-	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		if err := s.ensureOwner(ctx, tx, scope); err != nil {
 			return err
 		}
@@ -410,7 +411,7 @@ func (s *Store) Export(ctx context.Context, scope memory.Scope, training, confir
 		return nil, err
 	}
 	var data []byte
-	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		if err := s.ensureOwner(ctx, tx, scope); err != nil {
 			return err
 		}
@@ -695,14 +696,14 @@ func (s *Store) SnapshotETag(ctx context.Context, scope memory.Scope) (string, e
 		return "", err
 	}
 	var revision, library, snapshot int64
-	err := s.pool.QueryRow(ctx, "SELECT revision,library_revision,snapshot_revision+(SELECT count(*) FROM workspace_snapshot_events WHERE owner_id=$1) FROM workspace_owners WHERE owner_id=$1", string(scope.OwnerID)).Scan(&revision, &library, &snapshot)
+	err := s.Pool.QueryRow(ctx, "SELECT revision,library_revision,snapshot_revision+(SELECT count(*) FROM workspace_snapshot_events WHERE owner_id=$1) FROM workspace_owners WHERE owner_id=$1", string(scope.OwnerID)).Scan(&revision, &library, &snapshot)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", nil
 	}
 	if err != nil {
 		return "", err
 	}
-	changes, err := libraryEvents(ctx, s.pool, scope.OwnerID)
+	changes, err := libraryEvents(ctx, s.Pool, scope.OwnerID)
 	if err != nil {
 		return "", err
 	}

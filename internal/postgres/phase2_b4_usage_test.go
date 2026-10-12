@@ -133,7 +133,7 @@ func TestPhase2B4_L8_UsageIsVisibleBeforeResultTransactionAndSurvivesRollback(t 
 			f.set(string(kernel.JSON(map[string]any{"reply": reply, "used": []string{}, "actions": []any{}})), 200)
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			lockKey := "b4-owned-result-gate-" + string(memory.NewID())
-			conn, err := s.pool.Acquire(ctx)
+			conn, err := s.Pool.Acquire(ctx)
 			if err != nil {
 				cancel()
 				t.Fatal(err)
@@ -169,7 +169,7 @@ func TestPhase2B4_L8_UsageIsVisibleBeforeResultTransactionAndSurvivesRollback(t 
 				// Cancellation permits normal answer persistence after this gate.
 				sql = strings.Replace(sql, "RAISE EXCEPTION 'b4 injected result rollback';", "RETURN NEW;", 1)
 			}
-			if _, err := s.pool.Exec(ctx, sql); err != nil {
+			if _, err := s.Pool.Exec(ctx, sql); err != nil {
 				t.Fatal(err)
 			}
 			req := turnRequest("合成L8独立事务样例 " + mode)
@@ -197,7 +197,7 @@ func TestPhase2B4_L8_UsageIsVisibleBeforeResultTransactionAndSurvivesRollback(t 
 				default:
 				}
 				var waiting bool
-				err := s.pool.QueryRow(context.Background(), `SELECT EXISTS(SELECT 1 FROM pg_locks waiting JOIN pg_locks held USING(locktype,database,classid,objid,objsubid) WHERE held.pid=$1 AND held.locktype='advisory' AND held.granted AND NOT waiting.granted)`, pid).Scan(&waiting)
+				err := s.Pool.QueryRow(context.Background(), `SELECT EXISTS(SELECT 1 FROM pg_locks waiting JOIN pg_locks held USING(locktype,database,classid,objid,objsubid) WHERE held.pid=$1 AND held.locktype='advisory' AND held.granted AND NOT waiting.granted)`, pid).Scan(&waiting)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -242,7 +242,7 @@ func TestPhase2B4_L8_UsageIsVisibleBeforeResultTransactionAndSurvivesRollback(t 
 			}
 			if mode == "rollback" {
 				var accepted bool
-				if err := s.pool.QueryRow(context.Background(), `SELECT EXISTS(SELECT 1 FROM desk_turns WHERE owner_id=$1 AND request_id=$2 AND answer=$3)`, string(scope.OwnerID), req.RequestID, reply).Scan(&accepted); err != nil {
+				if err := s.Pool.QueryRow(context.Background(), `SELECT EXISTS(SELECT 1 FROM desk_turns WHERE owner_id=$1 AND request_id=$2 AND answer=$3)`, string(scope.OwnerID), req.RequestID, reply).Scan(&accepted); err != nil {
 					t.Fatal(err)
 				}
 				if accepted {
@@ -415,7 +415,7 @@ func TestPhase2B4_L3_FailureKeepsUsageAndSuccessfulReplayDoesNotAddRows(t *testi
 		t.Fatalf("failed model call missing estimated input usage: %+v", rows)
 	}
 	var estimated bool
-	if err := s.pool.QueryRow(context.Background(), "SELECT input_estimated FROM model_usage WHERE owner_id=$1", scope.OwnerID).Scan(&estimated); err != nil || !estimated {
+	if err := s.Pool.QueryRow(context.Background(), "SELECT input_estimated FROM model_usage WHERE owner_id=$1", scope.OwnerID).Scan(&estimated); err != nil || !estimated {
 		t.Fatal("failure estimate not labeled", estimated, err)
 	}
 	f.set(`{"reply":"成功。","used":[],"actions":[]}`, 200)
@@ -549,7 +549,7 @@ func TestPhase2B4_L4_LocalDaysAndSydneyDSTHaveExactSummaries(t *testing.T) {
 				out := mustTurn(t, s, scope, turnRequest(fmt.Sprintf("时区验收第%d次调用", i)))
 				// Fixture clock: rewrite only the usage timestamp after a REAL call.
 				// Summary grouping remains the real HTTP path and real table.
-				if _, err := s.pool.Exec(context.Background(), `UPDATE model_usage SET at=$1 WHERE owner_id=$2 AND turn_id=$3`, b4Instant(t, instant), string(scope.OwnerID), out.Turn.ID); err != nil {
+				if _, err := s.Pool.Exec(context.Background(), `UPDATE model_usage SET at=$1 WHERE owner_id=$2 AND turn_id=$3`, b4Instant(t, instant), string(scope.OwnerID), out.Turn.ID); err != nil {
 					t.Fatal(err)
 				}
 				want[tc.Dates[i]]++
@@ -663,11 +663,11 @@ func TestUsageSummarySeparatesPurposesAndOmitsEmptyDays(t *testing.T) {
 	mustTurn(t, s, scope, turnRequest("自然日用途汇总"))
 	// Rows of the retired legacy answer interface stay in stored usage. The
 	// summary must still report their purpose separately.
-	if _, err := s.pool.Exec(context.Background(), `INSERT INTO model_usage(owner_id,id,at,purpose,agent_id,model,input_tokens,output_tokens,cost,memory_refs,tier,plan,input_estimated,output_estimated,cost_estimated)
+	if _, err := s.Pool.Exec(context.Background(), `INSERT INTO model_usage(owner_id,id,at,purpose,agent_id,model,input_tokens,output_tokens,cost,memory_refs,tier,plan,input_estimated,output_estimated,cost_estimated)
  SELECT owner_id,gen_random_uuid(),at,'answer',agent_id,model,input_tokens,output_tokens,cost,memory_refs,tier,plan,input_estimated,output_estimated,cost_estimated FROM model_usage WHERE owner_id=$1`, string(scope.OwnerID)); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.pool.Exec(context.Background(), `UPDATE model_usage SET at='2025-01-02T04:00:00Z' WHERE owner_id=$1`, string(scope.OwnerID)); err != nil {
+	if _, err := s.Pool.Exec(context.Background(), `UPDATE model_usage SET at='2025-01-02T04:00:00Z' WHERE owner_id=$1`, string(scope.OwnerID)); err != nil {
 		t.Fatal(err)
 	}
 	w := b4HTTP(t, s, scope, "GET", "/v1/workspace/usage?from=2025-01-01&to=2025-01-03", nil)

@@ -159,7 +159,7 @@ func phase3ValidateEvidence(t *testing.T, f *phase3LoadedFixture, h phase3Handov
 					t.Fatal("unknown evidence kind", e.Kind)
 				}
 				if query != "" {
-					if err := f.Store.pool.QueryRow(f.Context, query, args...).Scan(&exists); err != nil {
+					if err := f.Store.Pool.QueryRow(f.Context, query, args...).Scan(&exists); err != nil {
 						t.Fatal(err)
 					}
 				}
@@ -272,7 +272,7 @@ func TestPhase3H3T2CoalescesEditsAndDoneStopsRewrite(t *testing.T) {
 			t.Fatal(err)
 		}
 		var ready int
-		if err := f.Store.pool.QueryRow(f.Context, `SELECT count(*) FROM memory_jobs WHERE owner_id=$1 AND stage LIKE $2 AND state='queued' AND available_at<=$3`, f.Scope.OwnerID, stage+":%", at).Scan(&ready); err != nil {
+		if err := f.Store.Pool.QueryRow(f.Context, `SELECT count(*) FROM memory_jobs WHERE owner_id=$1 AND stage LIKE $2 AND state='queued' AND available_at<=$3`, f.Scope.OwnerID, stage+":%", at).Scan(&ready); err != nil {
 			t.Fatal(err)
 		}
 		if offset < time.Hour && ready != 0 {
@@ -303,7 +303,7 @@ func TestPhase3H3T2CoalescesEditsAndDoneStopsRewrite(t *testing.T) {
 		t.Fatal(err)
 	}
 	var ready int
-	if err := f.Store.pool.QueryRow(f.Context, `SELECT count(*) FROM memory_jobs WHERE owner_id=$1 AND stage LIKE $2 AND state='queued' AND available_at<=now()`, f.Scope.OwnerID, stage+":%").Scan(&ready); err != nil || ready != 0 {
+	if err := f.Store.Pool.QueryRow(f.Context, `SELECT count(*) FROM memory_jobs WHERE owner_id=$1 AND stage LIKE $2 AND state='queued' AND available_at<=now()`, f.Scope.OwnerID, stage+":%").Scan(&ready); err != nil || ready != 0 {
 		t.Fatal("done project has ready rewrite", ready, err)
 	}
 	t.Logf("T4 single project edits=5 handover_calls=%d (initial=1, coalesced=1)", m.count("project_handover"))
@@ -318,7 +318,7 @@ func TestPhase3G7T4NewStageIndependentBudgets(t *testing.T) {
 				t.Fatalf("%s budget=%d want10", stage, backgroundHourlyBudgets[stage])
 			}
 			phase26Exec(t, f.phase26LoadedFixture, `INSERT INTO background_usage(id,owner_id,reserved_cost,stage) SELECT gen_random_uuid(),$1,0,$2 FROM generate_series(1,10)`, f.Scope.OwnerID, stage)
-			err := pgx.BeginFunc(f.Context, f.Store.pool, func(tx pgx.Tx) error { return backgroundHourlyTx(f.Context, tx, stage, "phase3_limit") })
+			err := pgx.BeginFunc(f.Context, f.Store.Pool, func(tx pgx.Tx) error { return backgroundHourlyTx(f.Context, tx, stage, "phase3_limit") })
 			var deferred *worker.JobError
 			if !errors.As(err, &deferred) || !deferred.NoAttempt {
 				t.Fatal("exhausted independent stage borrowed capacity", err)
@@ -330,7 +330,7 @@ func TestPhase3G7T4NewStageIndependentBudgets(t *testing.T) {
 				if limit <= 0 {
 					t.Fatal("invalid stage limit")
 				}
-				if err := pgx.BeginFunc(f.Context, f.Store.pool, func(tx pgx.Tx) error { return backgroundHourlyTx(f.Context, tx, other, "phase3_limit") }); err != nil {
+				if err := pgx.BeginFunc(f.Context, f.Store.Pool, func(tx pgx.Tx) error { return backgroundHourlyTx(f.Context, tx, other, "phase3_limit") }); err != nil {
 					t.Errorf("%s consumed %s budget: %v", stage, other, err)
 				}
 			}
@@ -421,7 +421,7 @@ func TestPhase3T2T4NewStagesSchedulerProcessorUserOverlap(t *testing.T) {
 				t.Errorf("actual paid calls=%d want1", m.count(logical))
 			}
 			var state string
-			if err := f.Store.pool.QueryRow(ctx, `SELECT state FROM memory_jobs WHERE id=$1`, job.ID).Scan(&state); err != nil || state != "done" {
+			if err := f.Store.Pool.QueryRow(ctx, `SELECT state FROM memory_jobs WHERE id=$1`, job.ID).Scan(&state); err != nil || state != "done" {
 				t.Fatal("queue did not complete", state, err)
 			}
 			phase3Latency(t, stage+"/concurrent_workspace", readings)
@@ -434,7 +434,7 @@ func TestPhase3G3NewStagesPaidResultsRetryWriteWithoutNewModel(t *testing.T) {
 			f, m, _, job := phase3NewStageFixture(t, logical)
 			table := "work_items"
 			if logical == "project_handover" {
-				rows, err := f.Store.pool.Query(f.Context, `SELECT tablename FROM pg_tables WHERE schemaname='public' AND tablename LIKE '%project%handover%'`)
+				rows, err := f.Store.Pool.Query(f.Context, `SELECT tablename FROM pg_tables WHERE schemaname='public' AND tablename LIKE '%project%handover%'`)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -475,7 +475,7 @@ func TestPhase3G3NewStagesPaidResultsRetryWriteWithoutNewModel(t *testing.T) {
 				close(release)
 				t.Fatal("provider barrier")
 			}
-			tx, err := f.Store.pool.Begin(f.Context)
+			tx, err := f.Store.Pool.Begin(f.Context)
 			if err != nil {
 				close(release)
 				t.Fatal(err)
@@ -492,18 +492,18 @@ func TestPhase3G3NewStagesPaidResultsRetryWriteWithoutNewModel(t *testing.T) {
 				t.Fatal("write failure was not deferred", err)
 			}
 			var saved int
-			if err := f.Store.pool.QueryRow(f.Context, `SELECT count(*) FROM background_model_results WHERE job_id=$1`, job.ID).Scan(&saved); err != nil || saved != 1 {
+			if err := f.Store.Pool.QueryRow(f.Context, `SELECT count(*) FROM background_model_results WHERE job_id=$1`, job.ID).Scan(&saved); err != nil || saved != 1 {
 				t.Fatal("paid output not durable", saved, err)
 			}
 			if err := tx.Rollback(f.Context); err != nil {
 				t.Fatal(err)
 			}
-			restarted, err := Open(f.Context, f.Store.pool.Config().ConnString())
+			restarted, err := Open(f.Context, f.Store.Pool.Config().ConnString())
 			if err != nil {
 				t.Fatal(err)
 			}
 			defer restarted.Close()
-			restarted.SetModels(f.Store.models)
+			restarted.SetModels(f.Store.Models)
 			if err := phase3Process(restarted, f.Context, logical, job); err != nil {
 				t.Fatal(err)
 			}
@@ -530,7 +530,7 @@ func TestPhase3G7T2T4ExhaustionRetainsAndEventuallyDrainsThirtyProjects(t *testi
 				t.Fatal("provider called beyond budget")
 			}
 			var pending int
-			if err := f.Store.pool.QueryRow(f.Context, `SELECT count(*) FROM memory_jobs WHERE id=$1 AND state='queued'`, job.ID).Scan(&pending); err != nil || pending != 1 {
+			if err := f.Store.Pool.QueryRow(f.Context, `SELECT count(*) FROM memory_jobs WHERE id=$1 AND state='queued'`, job.ID).Scan(&pending); err != nil || pending != 1 {
 				t.Fatal("queued overflow disappeared", pending, err)
 			}
 			for hour := 0; hour < 4; hour++ {

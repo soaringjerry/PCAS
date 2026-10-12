@@ -79,7 +79,7 @@ func TestUndoDocumentsAndFirstBefore(t *testing.T) {
 		t.Fatal(err, st.Docs)
 	}
 	action := string(memory.NewID())
-	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	err = pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		logCtx := withActionLog(ctx, action, "desk", "", "两次更新")
 		if err := beginActionLogTx(logCtx, tx); err != nil {
 			return err
@@ -129,7 +129,7 @@ func TestUndoQueuedDelegationAndStartedWork(t *testing.T) {
 	for _, started := range []bool{false, true} {
 		id := string(memory.NewID())
 		action := string(memory.NewID())
-		err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 			logged := withActionLog(ctx, action, "desk", "", "写方案")
 			if err := beginActionLogTx(logged, tx); err != nil {
 				return err
@@ -143,7 +143,7 @@ func TestUndoQueuedDelegationAndStartedWork(t *testing.T) {
 			t.Fatal(err)
 		}
 		if started {
-			if _, err = s.pool.Exec(ctx, "UPDATE agent_runs SET status='running' WHERE owner_id=$1 AND thing_id=$2", string(scope.OwnerID), id); err != nil {
+			if _, err = s.Pool.Exec(ctx, "UPDATE agent_runs SET status='running' WHERE owner_id=$1 AND thing_id=$2", string(scope.OwnerID), id); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -158,7 +158,7 @@ func TestUndoQueuedDelegationAndStartedWork(t *testing.T) {
 			t.Fatal(err, st.Tasks, st.Runs, st.BudgetUsage)
 		}
 		var orphan int
-		if err = s.pool.QueryRow(ctx, "SELECT count(*) FROM run_dependencies WHERE owner_id=$1", string(scope.OwnerID)).Scan(&orphan); err != nil || orphan != 0 {
+		if err = s.Pool.QueryRow(ctx, "SELECT count(*) FROM run_dependencies WHERE owner_id=$1", string(scope.OwnerID)).Scan(&orphan); err != nil || orphan != 0 {
 			t.Fatal(err, orphan)
 		}
 	}
@@ -171,7 +171,7 @@ func TestDueReminderTracksCommandDue(t *testing.T) {
 	st := workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "回邮件"})
 	id := st.Tasks[0].ID
 	loc, _ := time.LoadLocation("Asia/Shanghai")
-	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		item, err := getItem(ctx, tx, scope, id)
 		if err != nil {
 			return err
@@ -222,7 +222,7 @@ func TestDeletionExpiresItemAndDocumentSnapshots(t *testing.T) {
 	st = workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "普通工作"})
 	itemID := st.Tasks[0].ID
 	// Retain a source preview on the item, as an accepted task normally does.
-	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		item, err := getItem(ctx, tx, scope, itemID)
 		if err != nil {
 			return err
@@ -247,7 +247,7 @@ func TestDeletionExpiresItemAndDocumentSnapshots(t *testing.T) {
 		t.Fatal("run fixture has no dependency", run)
 	}
 	docID, docAction := string(memory.NewID()), string(memory.NewID())
-	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	err = pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		logged := withActionLog(ctx, docAction, "worker", "", "文档审计摘要")
 		if err := beginActionLogTx(logged, tx); err != nil {
 			return err
@@ -274,7 +274,7 @@ func TestDeletionExpiresItemAndDocumentSnapshots(t *testing.T) {
 	for _, id := range []string{itemAction, docAction, docEdit} {
 		var changes, summary string
 		var expired bool
-		if err = s.pool.QueryRow(ctx, "SELECT changes::text,summary,expired_at IS NOT NULL FROM action_log WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), id).Scan(&changes, &summary, &expired); err != nil || changes != "[]" || !expired || summary == "" {
+		if err = s.Pool.QueryRow(ctx, "SELECT changes::text,summary,expired_at IS NOT NULL FROM action_log WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), id).Scan(&changes, &summary, &expired); err != nil || changes != "[]" || !expired || summary == "" {
 			t.Fatal("snapshot was retained", err, id, changes, summary, expired)
 		}
 		if _, err = s.Undo(ctx, scope, id); !errors.Is(err, workspace.ErrExpired) {
@@ -295,7 +295,7 @@ func TestDeletionExpiresItemAndDocumentSnapshots(t *testing.T) {
 		}
 	}
 	var expired bool
-	if err = s.pool.QueryRow(ctx, "SELECT expired_at IS NOT NULL FROM action_log WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), untouched).Scan(&expired); err != nil || expired {
+	if err = s.Pool.QueryRow(ctx, "SELECT expired_at IS NOT NULL FROM action_log WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), untouched).Scan(&expired); err != nil || expired {
 		t.Fatal("expired an unrelated action", err)
 	}
 	if _, err = s.Undo(ctx, scope, untouched); err != nil {
@@ -323,13 +323,13 @@ func TestActionSnapshotRetentionKeepsAuditMetadata(t *testing.T) {
 	if _, err = s.Undo(ctx, scope, edited); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = s.pool.Exec(ctx, "UPDATE action_log SET created_at=now()-interval '31 days' WHERE owner_id=$1 AND id=ANY($2::uuid[])", string(scope.OwnerID), []string{created, edited}); err != nil {
+	if _, err = s.Pool.Exec(ctx, "UPDATE action_log SET created_at=now()-interval '31 days' WHERE owner_id=$1 AND id=ANY($2::uuid[])", string(scope.OwnerID), []string{created, edited}); err != nil {
 		t.Fatal(err)
 	}
 	audit := map[string]string{}
 	for _, id := range []string{created, edited} {
 		var metadata string
-		if err = s.pool.QueryRow(ctx, "SELECT (to_jsonb(l)-'changes'-'expired_at')::text FROM action_log l WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), id).Scan(&metadata); err != nil {
+		if err = s.Pool.QueryRow(ctx, "SELECT (to_jsonb(l)-'changes'-'expired_at')::text FROM action_log l WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), id).Scan(&metadata); err != nil {
 			t.Fatal(err)
 		}
 		audit[id] = metadata
@@ -339,7 +339,7 @@ func TestActionSnapshotRetentionKeepsAuditMetadata(t *testing.T) {
 	if _, err = s.Execute(ctx, other, workspace.Command{Type: "addTask", Title: "别人的旧动作", RequestID: otherID, ExpectedRevision: otherState.Revision}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = s.pool.Exec(ctx, "UPDATE action_log SET created_at=now()-interval '31 days' WHERE owner_id=$1 AND id=$2", string(other.OwnerID), otherID); err != nil {
+	if _, err = s.Pool.Exec(ctx, "UPDATE action_log SET created_at=now()-interval '31 days' WHERE owner_id=$1 AND id=$2", string(other.OwnerID), otherID); err != nil {
 		t.Fatal(err)
 	}
 	recent := string(memory.NewID())
@@ -350,7 +350,7 @@ func TestActionSnapshotRetentionKeepsAuditMetadata(t *testing.T) {
 	for _, id := range []string{created, edited} {
 		var metadata, changes string
 		var expired bool
-		if err = s.pool.QueryRow(ctx, "SELECT (to_jsonb(l)-'changes'-'expired_at')::text,changes::text,expired_at IS NOT NULL FROM action_log l WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), id).Scan(&metadata, &changes, &expired); err != nil || metadata != audit[id] || changes != "[]" || !expired {
+		if err = s.Pool.QueryRow(ctx, "SELECT (to_jsonb(l)-'changes'-'expired_at')::text,changes::text,expired_at IS NOT NULL FROM action_log l WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), id).Scan(&metadata, &changes, &expired); err != nil || metadata != audit[id] || changes != "[]" || !expired {
 			t.Fatal("lost audit metadata or kept snapshot", id, err, metadata, changes, expired)
 		}
 		want := workspace.ErrExpired
@@ -362,7 +362,7 @@ func TestActionSnapshotRetentionKeepsAuditMetadata(t *testing.T) {
 		}
 	}
 	var undone bool
-	if err = s.pool.QueryRow(ctx, "SELECT undone_at IS NOT NULL FROM action_log WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), edited).Scan(&undone); err != nil || !undone {
+	if err = s.Pool.QueryRow(ctx, "SELECT undone_at IS NOT NULL FROM action_log WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), edited).Scan(&undone); err != nil || !undone {
 		t.Fatal("lost undone_at", err)
 	}
 	for _, entry := range []struct {
@@ -371,16 +371,16 @@ func TestActionSnapshotRetentionKeepsAuditMetadata(t *testing.T) {
 	}{{scope, recent}, {other, otherID}} {
 		var count int
 		var expired bool
-		if err = s.pool.QueryRow(ctx, "SELECT jsonb_array_length(changes),expired_at IS NOT NULL FROM action_log WHERE owner_id=$1 AND id=$2", string(entry.scope.OwnerID), entry.id).Scan(&count, &expired); err != nil || count == 0 || expired {
+		if err = s.Pool.QueryRow(ctx, "SELECT jsonb_array_length(changes),expired_at IS NOT NULL FROM action_log WHERE owner_id=$1 AND id=$2", string(entry.scope.OwnerID), entry.id).Scan(&count, &expired); err != nil || count == 0 || expired {
 			t.Fatal("expired recent/other-owner action", err, entry.id)
 		}
 	}
 	// A no-op collector flush still enforces the window without creating a log.
-	if _, err = s.pool.Exec(ctx, "UPDATE action_log SET created_at=now()-interval '31 days' WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), recent); err != nil {
+	if _, err = s.Pool.Exec(ctx, "UPDATE action_log SET created_at=now()-interval '31 days' WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), recent); err != nil {
 		t.Fatal(err)
 	}
 	noOp := string(memory.NewID())
-	if err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	if err = pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		logged := withActionLog(ctx, noOp, "desk", "", "无变更")
 		if err := beginActionLogTx(logged, tx); err != nil {
 			return err
@@ -390,11 +390,11 @@ func TestActionSnapshotRetentionKeepsAuditMetadata(t *testing.T) {
 		t.Fatal(err)
 	}
 	var cleaned bool
-	if err = s.pool.QueryRow(ctx, "SELECT changes='[]'::jsonb AND expired_at IS NOT NULL FROM action_log WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), recent).Scan(&cleaned); err != nil || !cleaned {
+	if err = s.Pool.QueryRow(ctx, "SELECT changes='[]'::jsonb AND expired_at IS NOT NULL FROM action_log WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), recent).Scan(&cleaned); err != nil || !cleaned {
 		t.Fatal(err, cleaned)
 	}
 	var logged bool
-	if err = s.pool.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM action_log WHERE owner_id=$1 AND id=$2)", string(scope.OwnerID), noOp).Scan(&logged); err != nil || logged {
+	if err = s.Pool.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM action_log WHERE owner_id=$1 AND id=$2)", string(scope.OwnerID), noOp).Scan(&logged); err != nil || logged {
 		t.Fatal("no-op flush created an action", err)
 	}
 }

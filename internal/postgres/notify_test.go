@@ -46,7 +46,7 @@ func dueNotice(t *testing.T, s *Store, scope memory.Scope, now time.Time) worksp
 	state := workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "提醒事项"})
 	item := state.Tasks[0]
 	item.Triggers = []workspace.Trigger{{ID: "due-reminder", Kind: "time", Description: "截止前提醒", NextAt: now.Add(-time.Minute).UTC().Format(time.RFC3339), Active: true}}
-	if err := pgx.BeginFunc(context.Background(), s.pool, func(tx pgx.Tx) error { return saveItem(context.Background(), tx, scope, item) }); err != nil {
+	if err := pgx.BeginFunc(context.Background(), s.Pool, func(tx pgx.Tx) error { return saveItem(context.Background(), tx, scope, item) }); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.CheckReminders(context.Background(), now); err != nil {
@@ -64,7 +64,7 @@ func dueNotice(t *testing.T, s *Store, scope memory.Scope, now time.Time) worksp
 func deliveredFor(t *testing.T, s *Store, id string) map[string]json.RawMessage {
 	t.Helper()
 	var raw []byte
-	if err := s.pool.QueryRow(context.Background(), "SELECT delivered FROM workspace_notices WHERE id=$1", id).Scan(&raw); err != nil {
+	if err := s.Pool.QueryRow(context.Background(), "SELECT delivered FROM workspace_notices WHERE id=$1", id).Scan(&raw); err != nil {
 		t.Fatal(err)
 	}
 	var out map[string]json.RawMessage
@@ -188,9 +188,9 @@ func TestNotifySkipsClosedOldCancelledAndDisabled(t *testing.T) {
 			var err error
 			switch condition {
 			case "dismissed":
-				_, err = s.pool.Exec(ctx, "UPDATE workspace_notices SET dismissed_at=now() WHERE id=$1", notice.ID)
+				_, err = s.Pool.Exec(ctx, "UPDATE workspace_notices SET dismissed_at=now() WHERE id=$1", notice.ID)
 			case "old":
-				_, err = s.pool.Exec(ctx, "UPDATE workspace_notices SET created_at=$2 WHERE id=$1", notice.ID, now.Add(-25*time.Hour))
+				_, err = s.Pool.Exec(ctx, "UPDATE workspace_notices SET created_at=$2 WHERE id=$1", notice.ID, now.Add(-25*time.Hour))
 			case "cancelled":
 				workspaceCommand(t, s, scope, workspace.Command{Type: "setTaskStatus", ID: notice.ThingID, Status: "cancelled"})
 			case "followUps":

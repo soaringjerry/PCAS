@@ -45,7 +45,7 @@ func TestPhase26G3A1PaidResultsSurviveWriteFailureAndRestart(t *testing.T) {
 			case <-time.After(15 * time.Second):
 				t.Fatal("provider barrier timeout")
 			}
-			tx, err := s.pool.Begin(ctx)
+			tx, err := s.Pool.Begin(ctx)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -60,7 +60,7 @@ func TestPhase26G3A1PaidResultsSurviveWriteFailureAndRestart(t *testing.T) {
 				t.Errorf("result write did not defer safely: %T %v", err, err)
 			}
 			var persisted int
-			if err := s.pool.QueryRow(ctx, `SELECT count(*) FROM background_model_results WHERE job_id=$1`, j.ID).Scan(&persisted); err != nil {
+			if err := s.Pool.QueryRow(ctx, `SELECT count(*) FROM background_model_results WHERE job_id=$1`, j.ID).Scan(&persisted); err != nil {
 				t.Fatal(err)
 			}
 			if persisted != 1 || len(m.calls(tc.stage)) != 1 {
@@ -69,18 +69,18 @@ func TestPhase26G3A1PaidResultsSurviveWriteFailureAndRestart(t *testing.T) {
 			if err := tx.Rollback(ctx); err != nil {
 				t.Fatal(err)
 			}
-			restarted, err := Open(ctx, s.pool.Config().ConnString())
+			restarted, err := Open(ctx, s.Pool.Config().ConnString())
 			if err != nil {
 				t.Fatal(err)
 			}
 			defer restarted.Close()
-			restarted.SetModels(s.models)
+			restarted.SetModels(s.Models)
 			// A new Store has no in-process paid-result cache. Same real leased job.
 			if err := phase26Process(ctx, restarted, j); err != nil {
 				t.Fatalf("restart result-only recovery: %v", err)
 			}
 			var state string
-			if err := s.pool.QueryRow(ctx, `SELECT state FROM memory_jobs WHERE id=$1`, j.ID).Scan(&state); err != nil {
+			if err := s.Pool.QueryRow(ctx, `SELECT state FROM memory_jobs WHERE id=$1`, j.ID).Scan(&state); err != nil {
 				t.Fatal(err)
 			}
 			if len(m.calls(tc.stage)) != 1 || state != "done" {

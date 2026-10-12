@@ -10,7 +10,7 @@ import (
 // store without models still gets a gateway: a job applies a result that was
 // paid before, and only a new call fails as not configured.
 func Gateway(db *postgres.Store) *modelcall.Gateway {
-	models := db.Models()
+	models := db.Models
 	var providers modelcall.Providers
 	if models != nil {
 		providers = models

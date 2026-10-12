@@ -21,7 +21,7 @@ func statusTestMemories(t *testing.T, s *Store, scope memory.Scope, n int) []mem
 		ref := organizeTestMemory(t, s, scope, fmt.Sprintf("虚构用户云杉在流萤项目中第%d项工作已准备。", i))
 		refs = append(refs, ref)
 	}
-	if err := pgx.BeginFunc(context.Background(), s.pool, func(tx pgx.Tx) error {
+	if err := pgx.BeginFunc(context.Background(), s.Pool, func(tx pgx.Tx) error {
 		id, err := entityTx(context.Background(), tx, scope.OwnerID, "project", "流萤项目")
 		if err != nil {
 			return err
@@ -49,7 +49,7 @@ func statusTestJob(t *testing.T, s *Store, scope memory.Scope) worker.Job {
 	if _, err := s.ScheduleStatus(context.Background(), time.Now()); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.pool.Exec(context.Background(), "DELETE FROM memory_jobs WHERE owner_id=$1 AND stage NOT LIKE 'memory.card:%'", scope.OwnerID); err != nil {
+	if _, err := s.Pool.Exec(context.Background(), "DELETE FROM memory_jobs WHERE owner_id=$1 AND stage NOT LIKE 'memory.card:%'", scope.OwnerID); err != nil {
 		t.Fatal(err)
 	}
 	j, err := s.Claim(context.Background(), 5*time.Minute)

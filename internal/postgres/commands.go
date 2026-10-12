@@ -50,7 +50,7 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 			return memory.ErrInvalid
 		}
 		agent, err := kernel.QueryDocument[workspace.Agent](ctx, tx, "SELECT document FROM workspace_agents WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), c.AgentID)
-		if err != nil || !agent.Enabled || agent.Channel == "manual" || s.models == nil || !s.models.Available(agent.ID) {
+		if err != nil || !agent.Enabled || agent.Channel == "manual" || s.Models == nil || !s.Models.Available(agent.ID) {
 			return memory.ErrUnavailable
 		}
 		create := c

@@ -35,7 +35,7 @@ func b4Memory(t *testing.T, s *Store, scope memory.Scope, text string) workspace
 }
 func b4Exec(t *testing.T, s *Store, sql string, args ...any) {
 	t.Helper()
-	if _, err := s.pool.Exec(context.Background(), sql, args...); err != nil {
+	if _, err := s.Pool.Exec(context.Background(), sql, args...); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -92,7 +92,7 @@ func TestB4StatusPromptAndDependencies(t *testing.T) {
 	rule := b4Memory(t, s, scope, "虚构要求：发出去之前先给我看")
 	recurring := b4Memory(t, s, scope, "虚构固定安排：每周二晚上有课")
 	var entity string
-	err := pgx.BeginFunc(context.Background(), s.pool, func(tx pgx.Tx) error {
+	err := pgx.BeginFunc(context.Background(), s.Pool, func(tx pgx.Tx) error {
 		id, e := entityTx(context.Background(), tx, scope.OwnerID, "project", "星桥汇报")
 		entity = string(id)
 		return e
@@ -128,7 +128,7 @@ func TestB4StatusPromptAndDependencies(t *testing.T) {
 		t.Fatal("section order")
 	}
 	var refs []memory.Ref
-	if err = s.pool.QueryRow(context.Background(), "SELECT dependencies FROM desk_turns WHERE owner_id=$1 AND id=$2", scope.OwnerID, out.Turn.ID).Scan(&refs); err != nil {
+	if err = s.Pool.QueryRow(context.Background(), "SELECT dependencies FROM desk_turns WHERE owner_id=$1 AND id=$2", scope.OwnerID, out.Turn.ID).Scan(&refs); err != nil {
 		t.Fatal(err)
 	}
 	// The scoped rule is no longer a standing input of every turn.
@@ -150,7 +150,7 @@ func TestB4StatusPromptAndDependencies(t *testing.T) {
 		t.Fatal("memory dependency did not stale", turns, err)
 	}
 	var calls int
-	if err = s.pool.QueryRow(context.Background(), "SELECT count(*) FROM model_usage WHERE owner_id=$1 AND tier='light'", scope.OwnerID).Scan(&calls); err != nil || calls != 1 {
+	if err = s.Pool.QueryRow(context.Background(), "SELECT count(*) FROM model_usage WHERE owner_id=$1 AND tier='light'", scope.OwnerID).Scan(&calls); err != nil || calls != 1 {
 		t.Fatal(calls, err)
 	}
 }
@@ -188,7 +188,7 @@ func TestB4MediumCannotAddActionsAndFallsBack(t *testing.T) {
 				t.Fatal(out)
 			}
 			var usage int
-			if err = s.pool.QueryRow(context.Background(), "SELECT count(*) FROM model_usage WHERE owner_id=$1 AND tier='medium' AND purpose IN ('secretary','selfcheck')", scope.OwnerID).Scan(&usage); err != nil || usage != 2 {
+			if err = s.Pool.QueryRow(context.Background(), "SELECT count(*) FROM model_usage WHERE owner_id=$1 AND tier='medium' AND purpose IN ('secretary','selfcheck')", scope.OwnerID).Scan(&usage); err != nil || usage != 2 {
 				t.Fatal(usage, err)
 			}
 		})
@@ -222,7 +222,7 @@ func TestB4MissingInformationEscalates(t *testing.T) {
 		t.Fatal(out, err, calls.Load())
 	}
 	var tier string
-	if err = s.pool.QueryRow(context.Background(), "SELECT tier FROM model_usage WHERE owner_id=$1 AND purpose='secretary'", scope.OwnerID).Scan(&tier); err != nil || tier != "medium" {
+	if err = s.Pool.QueryRow(context.Background(), "SELECT tier FROM model_usage WHERE owner_id=$1 AND purpose='secretary'", scope.OwnerID).Scan(&tier); err != nil || tier != "medium" {
 		t.Fatal(tier, err)
 	}
 }
@@ -292,7 +292,7 @@ func TestB4HeavyReadersAreConcurrentAndFailuresAreSkipped(t *testing.T) {
 		m := b4Memory(t, s, scope, text)
 		ids = append(ids, m.ID)
 		var eid string
-		err := pgx.BeginFunc(context.Background(), s.pool, func(tx pgx.Tx) error {
+		err := pgx.BeginFunc(context.Background(), s.Pool, func(tx pgx.Tx) error {
 			id, err := entityTx(context.Background(), tx, scope.OwnerID, "topic", fmt.Sprintf("虚构分组%d", i))
 			eid = string(id)
 			return err
@@ -324,7 +324,7 @@ func TestB4HeavyReadersAreConcurrentAndFailuresAreSkipped(t *testing.T) {
 		t.Fatal(state.Runs[0], peak.Load())
 	}
 	var calls int
-	if err = s.pool.QueryRow(context.Background(), "SELECT count(*) FROM model_usage WHERE owner_id=$1 AND tier='heavy'", scope.OwnerID).Scan(&calls); err != nil || calls != 8 {
+	if err = s.Pool.QueryRow(context.Background(), "SELECT count(*) FROM model_usage WHERE owner_id=$1 AND tier='heavy'", scope.OwnerID).Scan(&calls); err != nil || calls != 8 {
 		t.Fatal(calls, err)
 	}
 }
@@ -387,7 +387,7 @@ func TestB4MediumTimeoutUsesDraftWithoutRetry(t *testing.T) {
 	deadline := time.Now().Add(time.Second)
 	for {
 		var n int
-		if err := s.pool.QueryRow(context.Background(), "SELECT count(*) FROM model_usage WHERE owner_id=$1 AND turn_id=$2 AND purpose='selfcheck' AND tier='medium'", scope.OwnerID, out.Turn.ID).Scan(&n); err != nil {
+		if err := s.Pool.QueryRow(context.Background(), "SELECT count(*) FROM model_usage WHERE owner_id=$1 AND turn_id=$2 AND purpose='selfcheck' AND tier='medium'", scope.OwnerID, out.Turn.ID).Scan(&n); err != nil {
 			t.Fatal(err)
 		}
 		if n == 1 {
@@ -434,7 +434,7 @@ func TestB4HeavyCutoffUsesFinishedReaders(t *testing.T) {
 		m := b4Memory(t, s, scope, text)
 		ids = append(ids, m.ID)
 		var eid string
-		err := pgx.BeginFunc(context.Background(), s.pool, func(tx pgx.Tx) error {
+		err := pgx.BeginFunc(context.Background(), s.Pool, func(tx pgx.Tx) error {
 			id, e := entityTx(context.Background(), tx, scope.OwnerID, "topic", fmt.Sprintf("虚构限时组%d", i))
 			eid = string(id)
 			return e
@@ -446,7 +446,7 @@ func TestB4HeavyCutoffUsesFinishedReaders(t *testing.T) {
 		b4Exec(t, s, `INSERT INTO claim_mentions(owner_id,claim_id,claim_version,entity_id,role) VALUES($1,$2,$3,$4,'topic')`, scope.OwnerID, m.ID, m.Version, eid)
 	}
 	var agent workspace.Agent
-	if err := pgx.BeginFunc(context.Background(), s.pool, func(tx pgx.Tx) error {
+	if err := pgx.BeginFunc(context.Background(), s.Pool, func(tx pgx.Tx) error {
 		var err error
 		agent, err = kernel.QueryDocument[workspace.Agent](context.Background(), tx, "SELECT document FROM workspace_agents WHERE owner_id=$1 AND id='model'", scope.OwnerID)
 		return err
@@ -477,7 +477,7 @@ func TestB4RankFusionKeepsStructuredMatchesFirst(t *testing.T) {
 	exact := b4Memory(t, s, scope, "虚构人物的明确约束")
 	vector := b4Memory(t, s, scope, "虚构璃风的另一段安排")
 	var entity string
-	err := pgx.BeginFunc(context.Background(), s.pool, func(tx pgx.Tx) error {
+	err := pgx.BeginFunc(context.Background(), s.Pool, func(tx pgx.Tx) error {
 		id, e := entityTx(context.Background(), tx, scope.OwnerID, "person", "虚构璃风")
 		entity = string(id)
 		return e
@@ -494,7 +494,7 @@ func TestB4RankFusionKeepsStructuredMatchesFirst(t *testing.T) {
 		b4Exec(t, s, `INSERT INTO embeddings(owner_id,record_id,record_version,model,dimensions,embedding) VALUES($1,$2,$3,'b4-fictional-vector',2,$4::vector)`, scope.OwnerID, m.ID, m.Version, value)
 	}
 	var result memory.RecallResult
-	err = pgx.BeginFunc(context.Background(), s.pool, func(tx pgx.Tx) error {
+	err = pgx.BeginFunc(context.Background(), s.Pool, func(tx pgx.Tx) error {
 		return s.recallTx(context.Background(), tx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: "model", Team: true}, memory.RecallRequest{Team: &memory.TeamRecall{Text: "虚构璃风", RankFusion: true}, Mode: memory.Remember}, memory.Budget{Candidates: 40, Tokens: 12000}, "虚构璃风", "'虚构璃风'", []byte("[1,0]"), "b4-fictional-vector", 0, "", memory.SearchTokens("虚构璃风"), &result)
 	})
 	if err != nil || len(result.Memories) < 2 || string(result.Memories[0].ID) != exact.ID {
@@ -606,7 +606,7 @@ func TestB4ProductionLiveDirectoryAndRequirementScopes(t *testing.T) {
 	})
 	for _, name := range []string{"阿岚主题", "紫霁主题"} {
 		var id memory.ID
-		if err := pgx.BeginFunc(context.Background(), s.pool, func(tx pgx.Tx) error {
+		if err := pgx.BeginFunc(context.Background(), s.Pool, func(tx pgx.Tx) error {
 			var e error
 			id, e = entityTx(context.Background(), tx, scope.OwnerID, "topic", name)
 			return e
@@ -659,7 +659,7 @@ func TestB4LightDelegationInheritsAnswerDepth(t *testing.T) {
 	})
 	out := mustTurn(t, s, scope, turnRequest("给虚构工坊任务拆步骤"))
 	var run workspace.Run
-	if err := s.pool.QueryRow(context.Background(), "SELECT document FROM agent_runs WHERE owner_id=$1", scope.OwnerID).Scan(&run); err != nil {
+	if err := s.Pool.QueryRow(context.Background(), "SELECT document FROM agent_runs WHERE owner_id=$1", scope.OwnerID).Scan(&run); err != nil {
 		t.Fatal(err)
 	}
 	if run.MemoryTier != "light" {

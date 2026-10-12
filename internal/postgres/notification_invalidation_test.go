@@ -20,7 +20,7 @@ func TestRescheduledNoticeIsInvalidated(t *testing.T) {
 			notice := dueNotice(t, s, scope, now)
 			changeItem := func() {
 				if change == "due-command" {
-					err := pgx.BeginFunc(context.Background(), s.pool, func(tx pgx.Tx) error {
+					err := pgx.BeginFunc(context.Background(), s.Pool, func(tx pgx.Tx) error {
 						item, err := getItem(context.Background(), tx, scope, notice.ThingID)
 						if err != nil {
 							return err
@@ -34,7 +34,7 @@ func TestRescheduledNoticeIsInvalidated(t *testing.T) {
 					workspaceCommand(t, s, scope, workspace.Command{Type: "updateTask", ID: notice.ThingID, Patch: kernel.JSON(map[string]string{"due": now.Add(24 * time.Hour).UTC().Format(time.RFC3339)})})
 					return
 				}
-				err := pgx.BeginFunc(context.Background(), s.pool, func(tx pgx.Tx) error {
+				err := pgx.BeginFunc(context.Background(), s.Pool, func(tx pgx.Tx) error {
 					item, err := getItem(context.Background(), tx, scope, notice.ThingID)
 					if err != nil {
 						return err
@@ -87,7 +87,7 @@ func TestRescheduledNoticeIsInvalidated(t *testing.T) {
 				}
 			}
 			var dismissed bool
-			if err := s.pool.QueryRow(context.Background(), "SELECT dismissed_at IS NOT NULL FROM workspace_notices WHERE id=$1", notice.ID).Scan(&dismissed); err != nil || !dismissed {
+			if err := s.Pool.QueryRow(context.Background(), "SELECT dismissed_at IS NOT NULL FROM workspace_notices WHERE id=$1", notice.ID).Scan(&dismissed); err != nil || !dismissed {
 				t.Error("obsolete notice not durably invalidated", err)
 			}
 			if change == "reschedule" {
@@ -116,7 +116,7 @@ func TestRunNoticeDoesNotRequireReminderTrigger(t *testing.T) {
 	s, scope := testStore(t), owner()
 	now := time.Now().Add(time.Second)
 	st := workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "Result"})
-	_, err := s.pool.Exec(context.Background(), "INSERT INTO workspace_notices(owner_id,thing_id,trigger_id,due_at,reason) VALUES($1,$2,$3,$4,'Done')", string(scope.OwnerID), st.Tasks[0].ID, runNoticePrefix+string(memory.NewID()), now)
+	_, err := s.Pool.Exec(context.Background(), "INSERT INTO workspace_notices(owner_id,thing_id,trigger_id,due_at,reason) VALUES($1,$2,$3,$4,'Done')", string(scope.OwnerID), st.Tasks[0].ID, runNoticePrefix+string(memory.NewID()), now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -133,7 +133,7 @@ func TestEquivalentInstantKeepsCurrentNotice(t *testing.T) {
 	s, scope := testStore(t), owner()
 	now := time.Now().Add(time.Second)
 	notice := dueNotice(t, s, scope, now)
-	err := pgx.BeginFunc(context.Background(), s.pool, func(tx pgx.Tx) error {
+	err := pgx.BeginFunc(context.Background(), s.Pool, func(tx pgx.Tx) error {
 		item, err := getItem(context.Background(), tx, scope, notice.ThingID)
 		if err != nil {
 			return err
@@ -170,7 +170,7 @@ func TestNotificationInvalidationDoesNotLockOwnerDuringDelivery(t *testing.T) {
 	first := &fakeNotifyChannel{name: "first", before: func() {
 		workspaceCommand(t, s, scope, workspace.Command{Type: "toggleTrigger", ID: notice.ThingID, TriggerID: "due-reminder"})
 		var err error
-		ownerTx, err = s.pool.Begin(context.Background())
+		ownerTx, err = s.Pool.Begin(context.Background())
 		if err != nil {
 			t.Fatal(err)
 		}

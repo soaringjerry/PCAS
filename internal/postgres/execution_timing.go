@@ -93,7 +93,7 @@ func (s *Store) finishExecutionTiming(ctx context.Context, owner memory.ID, time
 	timer.mu.Unlock()
 	persist, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 	defer cancel()
-	_, err := s.pool.Exec(persist, `INSERT INTO execution_timings(owner_id,id,kind,tier,at,prepare_ms,answer_ms,selfcheck_ms,writeback_ms,model_ms,total_ms,other_ms)
+	_, err := s.Pool.Exec(persist, `INSERT INTO execution_timings(owner_id,id,kind,tier,at,prepare_ms,answer_ms,selfcheck_ms,writeback_ms,model_ms,total_ms,other_ms)
  VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) ON CONFLICT(owner_id,kind,id) DO NOTHING`, owner, timer.id, row.Kind, row.Tier, timer.started, row.PrepareMS, row.AnswerMS, row.SelfcheckMS, row.WritebackMS, row.ModelMS, row.TotalMS, row.OtherMS)
 	if err != nil {
 		slog.ErrorContext(persist, "execution measurement failed", "kind", row.Kind, "error_type", backgroundFailureReason(err))

@@ -11,7 +11,7 @@ import (
 
 func TestPhase26A4Migrates234FictitiousMarkersLosslessly(t *testing.T) {
 	f := phase26LoadFixture(t)
-	conn, err := f.Store.pool.Acquire(f.Context)
+	conn, err := f.Store.Pool.Acquire(f.Context)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -176,7 +176,7 @@ func TestEvidenceContextsKeepRestrictionsAndDependencies(t *testing.T) {
 		t.Helper()
 		var groups []evidenceContextGroup
 		var gaps []string
-		err := pgx.BeginFunc(t.Context(), s.pool, func(tx pgx.Tx) error {
+		err := pgx.BeginFunc(t.Context(), s.Pool, func(tx pgx.Tx) error {
 			var err error
 			groups, gaps, err = evidenceContextsTx(t.Context(), tx, scope, "model", nil, claims)
 			return err
@@ -195,7 +195,7 @@ func TestEvidenceContextsKeepRestrictionsAndDependencies(t *testing.T) {
 		deps = append(deps, m.Ref)
 	}
 	verify := func() error {
-		return pgx.BeginFunc(t.Context(), s.pool, func(tx pgx.Tx) error {
+		return pgx.BeginFunc(t.Context(), s.Pool, func(tx pgx.Tx) error {
 			return verifyRunTx(t.Context(), tx, scope, workspace.Run{AgentID: "model", ContextVersions: deps})
 		})
 	}
@@ -262,7 +262,7 @@ func TestEvidenceContextBudgetAndUnresolvedNames(t *testing.T) {
 	self := b3Entity(t, s, scope, "self", "我")
 	b3Exec(t, s, `UPDATE source_versions SET body=$3 WHERE owner_id=$1 AND source_id=$2`, scope.OwnerID, refs[5].ID, strings.Repeat("虚构长材料。", 1000))
 	claim := b3Claim(t, s, scope, b3ClaimSpec{Text: "那位同事的演示项目值得联系。", Subject: self, Source: refs[6]})
-	err := pgx.BeginFunc(t.Context(), s.pool, func(tx pgx.Tx) error {
+	err := pgx.BeginFunc(t.Context(), s.Pool, func(tx pgx.Tx) error {
 		groups, _, err := evidenceContextsTx(t.Context(), tx, scope, "model", nil, []evidenceContextClaim{{Label: "M1", Ref: claim, Text: "那位同事"}})
 		if err != nil {
 			return err
@@ -295,7 +295,7 @@ func TestEvidenceAmbiguousSubjectsStaySeparate(t *testing.T) {
 	for _, external := range []string{"fiction-subject-one", "fiction-subject-two"} {
 		text := "那位同事参与演示项目。"
 		source := mustIngest(t, s, scope, memory.IngestRequest{Connector: "archive-records", ExternalID: external, ExternalVersion: "1", Title: "虚构资料", Text: text, MediaType: "text/plain"}).Ref
-		err := pgx.BeginFunc(t.Context(), s.pool, func(tx pgx.Tx) error {
+		err := pgx.BeginFunc(t.Context(), s.Pool, func(tx pgx.Tx) error {
 			ref, err := s.rememberTx(t.Context(), tx, scope, statement{Text: text, Nature: "fact", Subject: "那位同事", SubjectType: "person", Structured: true, Actor: "ai", Confirmation: "candidate", Source: source, Quote: text})
 			if err != nil {
 				return err

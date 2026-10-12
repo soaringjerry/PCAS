@@ -26,7 +26,7 @@ func TestPhase2B1_P1_DeskTurnRawSourceAndDeletionControl(t *testing.T) {
 	source := b1TurnSource(t, s, scope, originalReq.RequestID)
 	// The frozen trip fixture has a known expression time; DeskTurn accepts no
 	// timestamp field, so attach this synthetic metadata before the recall step.
-	if _, err := s.pool.Exec(context.Background(), "UPDATE record_versions SET expressed_at=$1::timestamptz WHERE owner_id=$2 AND record_id=$3 AND version=$4", b1Text(t, "trip", "expressed_at"), string(scope.OwnerID), string(source.ID), source.Version); err != nil {
+	if _, err := s.Pool.Exec(context.Background(), "UPDATE record_versions SET expressed_at=$1::timestamptz WHERE owner_id=$2 AND record_id=$3 AND version=$4", b1Text(t, "trip", "expressed_at"), string(scope.OwnerID), string(source.ID), source.Version); err != nil {
 		t.Fatal(err)
 	}
 	b1ZeroClaims(t, s, scope)
@@ -84,7 +84,7 @@ func TestPhase2B1_P2_ActualDeputyRequestAndSourceDependencies(t *testing.T) {
 	b1Contains(t, f.last(t).Prompt, b1Text(t, "trip", "text"), "相关原话：", b1SourceLine("source", source), "说于 2026-09-12")
 	b1HasRef(t, run.ContextVersions, source, true)
 	var n int
-	if err := s.pool.QueryRow(context.Background(), "SELECT count(*) FROM run_dependencies WHERE owner_id=$1 AND run_id=$2 AND memory_id=$3 AND memory_version=$4", string(scope.OwnerID), run.ID, string(source.ID), source.Version).Scan(&n); err != nil || n != 1 {
+	if err := s.Pool.QueryRow(context.Background(), "SELECT count(*) FROM run_dependencies WHERE owner_id=$1 AND run_id=$2 AND memory_id=$3 AND memory_version=$4", string(scope.OwnerID), run.ID, string(source.ID), source.Version).Scan(&n); err != nil || n != 1 {
 		t.Error("run_dependencies missing source", n, err)
 	}
 	b1Delete(t, s, scope, source)
@@ -404,7 +404,7 @@ func TestPhase2B1_P12_MediaRequiresReadableTranscriptOrOCR(t *testing.T) {
 			repr = "ocr"
 		}
 		parsed := b1Source(t, s, scope, "快速记录", text, "attachment-text")
-		if _, err := s.pool.Exec(context.Background(), "UPDATE source_versions SET representation=$4,derived_from_id=$3,derived_from_version=1 WHERE owner_id=$1 AND source_id=$2", string(scope.OwnerID), string(parsed.ID), string(original.ID), repr); err != nil {
+		if _, err := s.Pool.Exec(context.Background(), "UPDATE source_versions SET representation=$4,derived_from_id=$3,derived_from_version=1 WHERE owner_id=$1 AND source_id=$2", string(scope.OwnerID), string(parsed.ID), string(original.ID), repr); err != nil {
 			t.Fatal(err)
 		}
 		req := turnRequest("成都青羊宫武侯祠媒体内容")
@@ -420,10 +420,10 @@ func TestPhase2B1_P13_AdoptedSourceContentSurvivesForUserButExpiresForModels(t *
 	s, scope := b1Store(t), owner()
 	marker := "采纳的成都方案独特内容"
 	f := b1Model(t, s, "- [ ] "+marker)
-	second := s.models.Config.Providers[0]
+	second := s.Models.Config.Providers[0]
 	second.ID = "model2"
 	second.Name = "另一个副手"
-	s.models.Config.Providers = append(s.models.Config.Providers, second)
+	s.Models.Config.Providers = append(s.Models.Config.Providers, second)
 	source := b1Trip(t, s, scope)
 	run := b1Run(t, s, scope, "model", "成都吃什么")
 	b1HasRef(t, run.ContextVersions, source, true)
@@ -467,7 +467,7 @@ func TestPhase2B1_P13_AdoptedSourceContentSurvivesForUserButExpiresForModels(t *
 	secretary(true)
 	deputy(true)
 	var external string
-	if err := s.pool.QueryRow(context.Background(), "SELECT external_id FROM sources WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), string(source.ID)).Scan(&external); err != nil {
+	if err := s.Pool.QueryRow(context.Background(), "SELECT external_id FROM sources WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), string(source.ID)).Scan(&external); err != nil {
 		t.Fatal(err)
 	}
 	mustIngest(t, s, scope, memory.IngestRequest{Connector: "manual", ExternalID: external, ExternalVersion: "2", Title: "秘书原话", Text: "成都新的原话资料宽窄巷子兔头", MediaType: "text/plain"})
@@ -671,9 +671,9 @@ func TestPhase2B1_P14_CapturedMemoryVisibilityClosesAndReopensOriginal(t *testin
 	s, scope := b1Store(t), owner()
 	fixture := b1R2aFixture(t, "P14")
 	f := b1Model(t, s, `{"reply":"R2a原回答固定标记","used":["S1"],"actions":[]}`)
-	second := s.models.Config.Providers[0]
+	second := s.Models.Config.Providers[0]
 	second.ID, second.Name = "model2", "仍然可见的副手"
-	s.models.Config.Providers = append(s.models.Config.Providers, second)
+	s.Models.Config.Providers = append(s.Models.Config.Providers, second)
 	// Capture and adoption use the same public workspace commands as the UI.
 	st := workspaceCommand(t, s, scope, workspace.Command{Type: "capture", Text: fixture["raw"]})
 	candidate := st.Candidates[0]
@@ -891,7 +891,7 @@ func TestPhase2B1_P3_BriefDateUsesWorkspaceTimezoneAcrossUTCDayBoundary(t *testi
 			source := mustIngest(t, s, scope, in).Ref
 			if !expressed {
 				// Recorded time is synthetic past metadata, never a future reminder.
-				if _, err := s.pool.Exec(context.Background(), "UPDATE record_versions SET recorded_at=$1 WHERE owner_id=$2 AND record_id=$3 AND version=$4", at, string(scope.OwnerID), string(source.ID), source.Version); err != nil {
+				if _, err := s.Pool.Exec(context.Background(), "UPDATE record_versions SET recorded_at=$1 WHERE owner_id=$2 AND record_id=$3 AND version=$4", at, string(scope.OwnerID), string(source.ID), source.Version); err != nil {
 					t.Fatal(err)
 				}
 			}

@@ -50,7 +50,7 @@ func (s *Store) DeskTurnByRequest(ctx context.Context, scope memory.Scope, reque
 		if err = refreshDeskReceiptUndoTx(ctx, tx, scope, []workspace.SecretaryTurn{out.Turn}); err != nil {
 			return err
 		}
-		out.State, err = s.snapshotTx(ctx, tx, scope)
+		out.State, err = s.SnapshotTx(ctx, tx, scope)
 		return err
 	})
 	return out, err

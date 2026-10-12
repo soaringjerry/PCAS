@@ -138,7 +138,7 @@ func p2AssertReads(t *testing.T, s *Store, scope memory.Scope) {
 		if err != nil {
 			return err
 		}
-		got, err := s.snapshotTx(ctx, tx, scope)
+		got, err := s.SnapshotTx(ctx, tx, scope)
 		if err != nil {
 			return err
 		}
@@ -417,7 +417,7 @@ func TestP2LargeResultsAreByteIdentical(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		b, err := s.snapshotTx(ctx, tx, scope)
+		b, err := s.SnapshotTx(ctx, tx, scope)
 		if err != nil {
 			return err
 		}

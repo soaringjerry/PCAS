@@ -12,12 +12,13 @@ import (
 	"github.com/soaringjerry/PCAS/internal/postgres/intakestore"
 	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/postgres/workspacestore"
 	"github.com/soaringjerry/PCAS/internal/postgres/workstore"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
 func (s *Store) undoActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, id string) error {
-	if handled, err := s.undoTopicProjectTx(ctx, tx, scope, id); handled {
+	if handled, err := s.UndoTopicProjectTx(ctx, tx, scope, id); handled {
 		return err
 	}
 	if handled, err := undoComparisonActionTx(ctx, tx, scope, id); handled {
@@ -63,7 +64,7 @@ func (s *Store) undoActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 	}
 	// Recorded successors take precedence over external fingerprint changes and
 	// work-start checks. The owner lock serializes all logged document writers.
-	if err = checkActionSuccessors(ctx, tx, scope, id, data, created, order, source, turnID); err != nil {
+	if err = workspacestore.CheckActionSuccessors(ctx, tx, scope, id, data, created, order, source, turnID); err != nil {
 		return err
 	}
 	// Lock all rows first. The owner lock serializes commands and undo; run locks
@@ -181,7 +182,7 @@ func (s *Store) undoActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 						item.ProjectID = ""
 						item.Version++
 						item.UpdatedAt = kernel.Stamp()
-						if e = s.saveAction(ctx, tx, scope, item, "撤销项目，事项回到无项目"); e != nil {
+						if e = s.SaveAction(ctx, tx, scope, item, "撤销项目，事项回到无项目"); e != nil {
 							return e
 						}
 					}
@@ -207,16 +208,16 @@ func (s *Store) undoActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 				if e != nil {
 					return e
 				}
-				if err = suppressRestoredRemindersTx(ctx, tx, scope, current, item, time.Now()); err != nil {
+				if err = workspacestore.SuppressRestoredRemindersTx(ctx, tx, scope, current, item, time.Now()); err != nil {
 					return err
 				}
 				item.Version = current.Version + 1
 				item.UpdatedAt = kernel.Stamp()
-				err = s.saveAction(ctx, tx, scope, item, "撤销："+summary)
+				err = s.SaveAction(ctx, tx, scope, item, "撤销："+summary)
 			case "work_documents":
 				var doc workspace.Doc
 				if err = json.Unmarshal(c.Before, &doc); err == nil {
-					err = restoreDocumentTx(ctx, tx, scope, doc)
+					err = workspacestore.RestoreDocumentTx(ctx, tx, scope, doc)
 				}
 			case "agent_runs":
 				var run workspace.Run
@@ -236,13 +237,13 @@ func (s *Store) undoActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 	if err := intakestore.RefreshSmokeChangesTx(ctx, tx, scope, changes); err != nil {
 		return err
 	}
-	if err := s.deleteUndoneAdoptionSourcesTx(ctx, tx, scope, id); err != nil {
+	if err := s.DeleteUndoneAdoptionSourcesTx(ctx, tx, scope, id); err != nil {
 		return err
 	}
 	if source != "desk" || turnID == nil {
 		return nil
 	}
-	return s.deleteUndoneTurnMemoriesTx(ctx, tx, scope, *turnID)
+	return s.DeleteUndoneTurnMemoriesTx(ctx, tx, scope, *turnID)
 }
 
 func (s *Store) Undo(ctx context.Context, scope memory.Scope, actionID string) (workspace.State, error) {
@@ -264,7 +265,7 @@ func (s *Store) Undo(ctx context.Context, scope memory.Scope, actionID string) (
 			return err
 		}
 		var err error
-		out, err = s.snapshotTx(ctx, tx, scope)
+		out, err = s.SnapshotTx(ctx, tx, scope)
 		return err
 	})
 	return out, err

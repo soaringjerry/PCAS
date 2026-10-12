@@ -121,7 +121,7 @@ func (w *secretaryWorkspace) SaveItem(ctx context.Context, item workspace.Item) 
 }
 
 func (w *secretaryWorkspace) NoteChange(ctx context.Context, item workspace.Item, summary string) error {
-	return w.store.saveAction(w.collecting(ctx), w.tx, w.scope, item, summary)
+	return w.store.SaveAction(w.collecting(ctx), w.tx, w.scope, item, summary)
 }
 
 func (w *secretaryWorkspace) Recorded(id string) bool {
@@ -138,7 +138,7 @@ func (w *secretaryWorkspace) Changed() []secretary.Change {
 }
 
 func (w *secretaryWorkspace) Publish(ctx context.Context, item workspace.Item, summary string) error {
-	return w.store.saveAction(ctx, w.tx, w.scope, item, summary)
+	return w.store.SaveAction(ctx, w.tx, w.scope, item, summary)
 }
 
 func (w *secretaryWorkspace) ProjectNamed(ctx context.Context, title string) (bool, error) {

@@ -13,6 +13,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/postgres/callstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/usagelog"
+	"github.com/soaringjerry/PCAS/internal/postgres/workspacestore"
 	"github.com/soaringjerry/PCAS/internal/worker"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 	"github.com/soaringjerry/PCAS/internal/workspace/deputy"
@@ -33,7 +34,7 @@ func (s *Store) adoptReviseDocumentTx(ctx context.Context, tx pgx.Tx, scope memo
 	if err := validateReviseTargetTx(ctx, tx, scope, run); err != nil {
 		return err
 	}
-	base, err := documentVersionTx(ctx, tx, scope, run.DocumentID, run.BaseVersion)
+	base, err := workspacestore.DocumentVersionTx(ctx, tx, scope, run.DocumentID, run.BaseVersion)
 	if err != nil {
 		return err
 	}
@@ -52,7 +53,7 @@ func (s *Store) adoptReviseDocumentTx(ctx context.Context, tx pgx.Tx, scope memo
 	doc.RunID = run.ID
 	doc.BasedOn = &run.BaseVersion
 	doc.UpdatedAt = kernel.Stamp()
-	return saveDoc(ctx, tx, scope, doc)
+	return workspacestore.SaveDoc(ctx, tx, scope, doc)
 }
 
 func (s *Store) finishPaidRevise(ctx context.Context, scope memory.Scope, current workspace.Run, token string, paid *callstore.PaidModelResult) (resultErr error) {
@@ -106,7 +107,7 @@ func (s *Store) finishPaidRevise(ctx context.Context, scope memory.Scope, curren
 		if !active {
 			return worker.ErrLeaseLost
 		}
-		base, err := documentVersionTx(ctx, tx, scope, run.DocumentID, run.BaseVersion)
+		base, err := workspacestore.DocumentVersionTx(ctx, tx, scope, run.DocumentID, run.BaseVersion)
 		if err != nil {
 			reason = "基准文档已删除或版本不存在"
 		} else if strings.TrimSpace(result.Body) == strings.TrimSpace(base.Body) {
@@ -186,7 +187,7 @@ func manualReviseReasonTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, ru
 	if text == "" {
 		return "改写正文为空", nil
 	}
-	base, err := documentVersionTx(ctx, tx, scope, run.DocumentID, run.BaseVersion)
+	base, err := workspacestore.DocumentVersionTx(ctx, tx, scope, run.DocumentID, run.BaseVersion)
 	if err != nil {
 		return "基准文档已删除或版本不存在", nil
 	}

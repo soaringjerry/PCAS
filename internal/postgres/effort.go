@@ -9,22 +9,23 @@ import (
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/postgres/workspacestore"
 	"github.com/soaringjerry/PCAS/internal/worker"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 	"github.com/soaringjerry/PCAS/internal/workspace/effort"
 )
 
 func enqueueEffortTx(ctx context.Context, tx pgx.Tx, owner memory.ID, anchor memory.Ref, now time.Time) (int, error) {
-	installed, err := studioInstalledTx(ctx, tx)
+	installed, err := workspacestore.StudioInstalledTx(ctx, tx)
 	if err != nil || !installed {
 		return 0, err
 	}
-	ids, err := kernel.QueryDocuments[string](ctx, tx, `SELECT to_jsonb(p.id::text) FROM work_items p WHERE p.owner_id=$1 AND p.kind='project' AND EXISTS(SELECT 1 FROM work_items w WHERE w.owner_id=p.owner_id AND w.project_id=p.id AND w.kind='task' AND w.due_at IS NOT NULL AND (w.document->>'estimatedHours') IS NULL AND coalesce(w.document->>'effortSource','')<>'user') AND NOT EXISTS(SELECT 1 FROM memory_jobs j WHERE j.owner_id=p.owner_id AND j.stage LIKE $2||':'||p.id::text||':%' AND j.state IN('queued','leased')) ORDER BY p.created_at,p.id`, string(owner), EffortStage)
+	ids, err := kernel.QueryDocuments[string](ctx, tx, `SELECT to_jsonb(p.id::text) FROM work_items p WHERE p.owner_id=$1 AND p.kind='project' AND EXISTS(SELECT 1 FROM work_items w WHERE w.owner_id=p.owner_id AND w.project_id=p.id AND w.kind='task' AND w.due_at IS NOT NULL AND (w.document->>'estimatedHours') IS NULL AND coalesce(w.document->>'effortSource','')<>'user') AND NOT EXISTS(SELECT 1 FROM memory_jobs j WHERE j.owner_id=p.owner_id AND j.stage LIKE $2||':'||p.id::text||':%' AND j.state IN('queued','leased')) ORDER BY p.created_at,p.id`, string(owner), workspacestore.EffortStage)
 	if err != nil {
 		return 0, err
 	}
 	for _, id := range ids {
-		if _, err = tx.Exec(ctx, `INSERT INTO memory_jobs(id,owner_id,record_id,record_version,stage,priority,available_at) VALUES($1,$2,$3,$4,$5,$6,$7)`, string(memory.NewID()), string(owner), string(anchor.ID), anchor.Version, EffortStage+":"+id+":"+string(memory.NewID()), kernel.HandoverPriority, now); err != nil {
+		if _, err = tx.Exec(ctx, `INSERT INTO memory_jobs(id,owner_id,record_id,record_version,stage,priority,available_at) VALUES($1,$2,$3,$4,$5,$6,$7)`, string(memory.NewID()), string(owner), string(anchor.ID), anchor.Version, workspacestore.EffortStage+":"+id+":"+string(memory.NewID()), kernel.HandoverPriority, now); err != nil {
 			return 0, err
 		}
 	}
@@ -101,7 +102,7 @@ func (u effortUnit) SaveTask(item workspace.Item) error {
 }
 
 func (u effortUnit) Event(outcome, reason string, count int) error {
-	return kernel.StageEvent(u.ctx, u.tx, u.job.OwnerID, EffortStage, outcome, reason, count)
+	return kernel.StageEvent(u.ctx, u.tx, u.job.OwnerID, workspacestore.EffortStage, outcome, reason, count)
 }
 
 func (u effortUnit) DiscardResult() error { return kernel.DiscardPaidResult(u.ctx, u.tx, u.job) }

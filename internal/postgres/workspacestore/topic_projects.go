@@ -1,4 +1,4 @@
-package postgres
+package workspacestore
 
 import (
 	"context"
@@ -62,13 +62,13 @@ func topicProjectSharedTx(ctx context.Context, tx pgx.Tx, owner memory.ID) (*top
 	if err != nil {
 		return nil, err
 	}
-	goals, err := projectGoalEvidenceTx(ctx, tx, owner)
+	goals, err := ProjectGoalEvidenceTx(ctx, tx, owner)
 	if err != nil {
 		return nil, err
 	}
 	shared := &topicProjectShared{projects: projects}
 	for i := range projects {
-		projects[i].Goal = projectMeaning(projects[i].Goal, "", goals[projects[i].ID])
+		projects[i].Goal = ProjectMeaning(projects[i].Goal, "", goals[projects[i].ID])
 		goal := []rune(projects[i].Goal)
 		if len(goal) > topicProjectGoalCharacters {
 			shared.clipped += len(goal) - topicProjectGoalCharacters
@@ -189,7 +189,7 @@ func topicProjectInputSharedTx(ctx context.Context, tx pgx.Tx, owner memory.ID, 
 	out.Latest = latest
 	return out, refs, nil
 }
-func enqueueTopicProjectsTx(ctx context.Context, tx pgx.Tx, owner memory.ID, now time.Time) (int, error) {
+func EnqueueTopicProjectsTx(ctx context.Context, tx pgx.Tx, owner memory.ID, now time.Time) (int, error) {
 	topics, err := kernel.QueryDocuments[string](ctx, tx, `WITH eligible AS MATERIALIZED(SELECT m.key FROM status_current_members m JOIN claim_revisions c ON(c.owner_id,c.claim_id,c.version)=(m.owner_id,m.claim_id,m.claim_version) WHERE m.owner_id=$1 AND m.kind IN('topic','project') GROUP BY m.key HAVING count(*)>=10 AND (bool_or(m.kind='project') OR bool_or(c.category='goal') AND bool_or(EXISTS(SELECT 1 FROM deadlines d WHERE(d.owner_id,d.claim_id,d.claim_version)=(m.owner_id,m.claim_id,m.claim_version) AND NOT(coalesce(c.scope->>'deadline_completed','false')='true' AND coalesce(c.scope->>'deadline_completed_version','')=c.version::text)))))
  SELECT to_jsonb(r.id::text) FROM eligible g JOIN memory_records r ON r.owner_id=$1 AND 'entity:'||r.id::text=g.key JOIN entity_versions ev ON(ev.owner_id,ev.entity_id,ev.version)=(r.owner_id,r.id,r.version) WHERE r.state='active' AND ev.entity_type IN('topic','project') AND coalesce(ev.disambiguation->>'work_item_id','')='' ORDER BY r.id`, string(owner))
 	if err != nil {
@@ -256,9 +256,9 @@ func enqueueTopicProjectsTx(ctx context.Context, tx pgx.Tx, owner memory.ID, now
 }
 
 // TopicProjectStore gives the topic project service its reads and writes.
-func (s *Store) TopicProjectStore() topicproject.Store { return topicProjectStore{s} }
+func (s *Workspace) TopicProjectStore() topicproject.Store { return topicProjectStore{s} }
 
-type topicProjectStore struct{ store *Store }
+type topicProjectStore struct{ store *Workspace }
 
 func (a topicProjectStore) Input(ctx context.Context, owner memory.ID, topic string) (input topicproject.Input, refs []memory.Ref, found bool, err error) {
 	err = pgx.BeginTxFunc(ctx, a.store.Pool, pgx.TxOptions{AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
@@ -367,7 +367,7 @@ func (u topicProjectUnit) LogAction(actionID, summary string) error {
 func (u topicProjectUnit) DiscardResult() error { return kernel.DiscardPaidResult(u.ctx, u.tx, u.job) }
 func (u topicProjectUnit) Acknowledge() error   { return kernel.Acknowledge(u.ctx, u.tx, u.job) }
 
-func (s *Store) undoTopicProjectTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, id string) (bool, error) {
+func (s *Workspace) UndoTopicProjectTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, id string) (bool, error) {
 	if !memory.ID(id).Valid() {
 		return false, nil
 	}

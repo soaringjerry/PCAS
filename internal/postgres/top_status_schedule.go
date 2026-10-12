@@ -8,6 +8,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/statestore"
+	"github.com/soaringjerry/PCAS/internal/postgres/workspacestore"
 )
 
 func (s *Store) ScheduleStatus(ctx context.Context, now time.Time) (int, error) {
@@ -43,7 +44,7 @@ func (s *Store) ScheduleStatus(ctx context.Context, now time.Time) (int, error) 
 			if err != nil {
 				return err
 			}
-			topicCount, err := enqueueTopicProjectsTx(ctx, tx, owner, now)
+			topicCount, err := workspacestore.EnqueueTopicProjectsTx(ctx, tx, owner, now)
 			if err != nil {
 				return err
 			}
@@ -58,7 +59,7 @@ func (s *Store) ScheduleStatus(ctx context.Context, now time.Time) (int, error) 
 				return err
 			}
 			count += n
-			n, err = enqueueProjectHandoversTx(ctx, tx, owner, anchor, now)
+			n, err = workspacestore.EnqueueProjectHandoversTx(ctx, tx, owner, anchor, now)
 			count += n
 			if err != nil {
 				return err

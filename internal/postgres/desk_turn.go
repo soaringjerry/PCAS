@@ -20,6 +20,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/memoryread"
+	"github.com/soaringjerry/PCAS/internal/postgres/workspacestore"
 	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 
 	"github.com/jackc/pgx/v5"
@@ -105,7 +106,7 @@ func (s *Store) secretaryContextTx(ctx context.Context, tx pgx.Tx, scope memory.
 	if err != nil {
 		return out, err
 	}
-	goals, err := projectGoalEvidenceTx(ctx, tx, scope.OwnerID)
+	goals, err := workspacestore.ProjectGoalEvidenceTx(ctx, tx, scope.OwnerID)
 	if err != nil {
 		return out, err
 	}
@@ -115,7 +116,7 @@ func (s *Store) secretaryContextTx(ctx context.Context, tx pgx.Tx, scope memory.
 		if p.Creation != nil && p.Creation.Source != nil {
 			excerpt = p.Creation.Source.Excerpt
 		}
-		p.Goal = projectMeaning(p.Goal, excerpt, goals[p.ID])
+		p.Goal = workspacestore.ProjectMeaning(p.Goal, excerpt, goals[p.ID])
 	}
 	out.Ideas, err = kernel.QueryDocuments[workspace.Item](ctx, tx, "SELECT document FROM (SELECT document,created_at,id FROM work_items WHERE owner_id=$1 AND kind='idea' ORDER BY created_at DESC,id DESC LIMIT 20) recent ORDER BY created_at,id", string(scope.OwnerID))
 	if err != nil {
@@ -460,7 +461,7 @@ func (a deskStore) Turn(ctx context.Context, scope memory.Scope, req workspace.D
 			if !erased {
 				refreshDeskTurnTx(ctx, tx, scope, &out.Turn, workspace.Run{AgentID: priorAgent, ContextVersions: refs}, false, false)
 			}
-			out.State, err = s.snapshotTx(ctx, tx, scope)
+			out.State, err = s.SnapshotTx(ctx, tx, scope)
 			if err != nil {
 				return err
 			}
@@ -511,7 +512,7 @@ func (a deskStore) Turn(ctx context.Context, scope memory.Scope, req workspace.D
 		if _, err := tx.Exec(ctx, "UPDATE workspace_owners SET revision=revision+1 WHERE owner_id=$1", string(scope.OwnerID)); err != nil {
 			return err
 		}
-		out.State, err = s.snapshotTx(ctx, tx, scope)
+		out.State, err = s.SnapshotTx(ctx, tx, scope)
 		if err != nil {
 			return err
 		}

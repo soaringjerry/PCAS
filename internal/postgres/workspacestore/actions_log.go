@@ -1,4 +1,4 @@
-package postgres
+package workspacestore
 
 import (
 	"context"
@@ -17,7 +17,7 @@ import (
 
 // withUndoOf marks the pending action-log entry as the undo of another action;
 // such entries never count as newer actions for the actions they sit on.
-func withUndoOf(ctx context.Context, undone string) context.Context {
+func WithUndoOf(ctx context.Context, undone string) context.Context {
 	log, ok := ctx.Value(actionlog.ActionLogKey{}).(actionlog.ActionLog)
 	if !ok {
 		return ctx
@@ -25,13 +25,13 @@ func withUndoOf(ctx context.Context, undone string) context.Context {
 	log.UndoOf = undone
 	return context.WithValue(ctx, actionlog.ActionLogKey{}, log)
 }
-func undoableCommand(t string) bool {
+func UndoableCommand(t string) bool {
 	if kernel.OneOf(t, "restoreMemory", "completeDeadline") {
 		return true
 	}
 	return kernel.OneOf(t, "addTask", "addIdea", "addProject", "updateTask", "updateProject", "setTaskStatus", "renameThing", "setNotes", "moveThing", "deferTask", "addCheck", "toggleCheck", "removeCheck", "ideaPromote", "ideaSnooze", "ideaShelve", "ideaDrop", "ideaContinue", "addCondition", "removeCondition", "adoptRun", "discardRun", "createDoc", "updateDoc", "deleteDoc", "bulkStatus", "bulkDefer", "bulkMove")
 }
-func commandSummary(ctx context.Context, tx pgx.Tx, scope memory.Scope, c workspace.Command) string {
+func CommandSummary(ctx context.Context, tx pgx.Tx, scope memory.Scope, c workspace.Command) string {
 	if c.Type == "completeDeadline" {
 		var title string
 		_ = tx.QueryRow(ctx, "SELECT title FROM deadlines WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), c.ID).Scan(&title)
@@ -67,7 +67,7 @@ func commandSummary(ctx context.Context, tx pgx.Tx, scope memory.Scope, c worksp
 // of its own. Undoing the adoption deletes that source, which takes the memory
 // it was the only evidence for out of the current view; the deputy result
 // itself stays and can be adopted again under a new action.
-func (s *Store) deleteUndoneAdoptionSourcesTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, actionID string) error {
+func (s *Workspace) DeleteUndoneAdoptionSourcesTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, actionID string) error {
 	sources, err := kernel.QueryDocuments[string](ctx, tx, "SELECT to_jsonb(source_id::text) FROM project_adoption_sources WHERE owner_id=$1 AND action_id=$2", string(scope.OwnerID), actionID)
 	if err != nil || len(sources) == 0 {
 		return err
@@ -79,7 +79,7 @@ func (s *Store) deleteUndoneAdoptionSourcesTx(ctx context.Context, tx pgx.Tx, sc
 	return s.DeleteTx(context.WithValue(ctx, intakestore.RetainUndoneAnswersKey{}, true), tx, scope, memory.DeleteRequest{Targets: targets})
 }
 
-func (s *Store) deleteUndoneTurnMemoriesTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, turnID string) error {
+func (s *Workspace) DeleteUndoneTurnMemoriesTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, turnID string) error {
 	var requestID string
 	err := tx.QueryRow(ctx, "SELECT request_id::text FROM desk_turns WHERE owner_id=$1 AND id=$2 AND request_id IS NOT NULL", string(scope.OwnerID), turnID).Scan(&requestID)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -135,7 +135,7 @@ func (s *Store) deleteUndoneTurnMemoriesTx(ctx context.Context, tx pgx.Tx, scope
 // New actions have a durable insertion order; historical rows deliberately do
 // not invent one. At a historical time tie, only complete unique desk receipts
 // can prove order. An unresolved tie refuses safely as changed_since.
-func checkActionSuccessors(ctx context.Context, tx pgx.Tx, scope memory.Scope, id string, changes []byte, created time.Time, order *int64, source string, turnID *string) error {
+func CheckActionSuccessors(ctx context.Context, tx pgx.Tx, scope memory.Scope, id string, changes []byte, created time.Time, order *int64, source string, turnID *string) error {
 	rows, err := tx.Query(ctx, `SELECT later.id::text,later.created_at,later.action_order,later.source,later.turn_id::text
 	 FROM action_log later WHERE later.owner_id=$1 AND later.id<>$2 AND later.undone_at IS NULL AND later.undo_of IS NULL
 	 AND (($3::bigint IS NOT NULL AND later.action_order>$3)

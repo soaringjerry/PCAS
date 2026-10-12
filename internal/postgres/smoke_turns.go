@@ -12,6 +12,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/postgres/actionlog"
 	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/postgres/workspacestore"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -216,7 +217,7 @@ func (s *Store) CleanupSmoke(ctx context.Context, scope memory.Scope, id string)
 				if err := json.Unmarshal(c.before, &before); err != nil {
 					return err
 				}
-				if err := saveDoc(ctx, tx, scope, before); err != nil {
+				if err := workspacestore.SaveDoc(ctx, tx, scope, before); err != nil {
 					return err
 				}
 			default:

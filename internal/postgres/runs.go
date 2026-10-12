@@ -21,6 +21,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/memoryread"
+	"github.com/soaringjerry/PCAS/internal/postgres/workspacestore"
 	"github.com/soaringjerry/PCAS/internal/postgres/workstore"
 	"github.com/soaringjerry/PCAS/internal/retrieval"
 	"github.com/soaringjerry/PCAS/internal/workspace/deputy"
@@ -68,7 +69,7 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 		if err != nil {
 			return err
 		}
-		id, err := uuidOrNew(c.ID)
+		id, err := workspacestore.UuidOrNew(c.ID)
 		if err != nil {
 			return err
 		}
@@ -109,7 +110,7 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 				return memory.ErrInvalid
 			}
 			reviseTarget = target.Version
-			base, e := documentVersionTx(ctx, tx, scope, c.DocumentID, c.BaseVersion)
+			base, e := workspacestore.DocumentVersionTx(ctx, tx, scope, c.DocumentID, c.BaseVersion)
 			if e != nil {
 				return e
 			}
@@ -387,12 +388,12 @@ func (s *Store) adoptRunTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, r
 			if err := s.adoptReviseDocumentTx(ctx, tx, scope, *run, text); err != nil {
 				return err
 			}
-		} else if err := saveDoc(ctx, tx, scope, workspace.Doc{ID: string(memory.NewID()), ThingID: item.ID, Title: item.Title + " · " + run.Kind, Body: text, By: "ai", RunID: run.ID, CreatedAt: kernel.Stamp(), UpdatedAt: kernel.Stamp()}); err != nil {
+		} else if err := workspacestore.SaveDoc(ctx, tx, scope, workspace.Doc{ID: string(memory.NewID()), ThingID: item.ID, Title: item.Title + " · " + run.Kind, Body: text, By: "ai", RunID: run.ID, CreatedAt: kernel.Stamp(), UpdatedAt: kernel.Stamp()}); err != nil {
 			return err
 		}
 	case "progress":
 		if item.Kind == "project" {
-			if err := s.adoptProjectMemoryTx(ctx, tx, scope, run, item, text, actionID, auto); err != nil {
+			if err := s.AdoptProjectMemoryTx(ctx, tx, scope, run, item, text, actionID, auto); err != nil {
 				return err
 			}
 		} else if item.Kind == "task" {
@@ -439,7 +440,7 @@ func (s *Store) adoptRunTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, r
 	}
 	item.Version++
 	item.UpdatedAt = kernel.Stamp()
-	if err := s.saveAction(ctx, tx, scope, item, "采纳副手结果"); err != nil {
+	if err := s.SaveAction(ctx, tx, scope, item, "采纳副手结果"); err != nil {
 		return err
 	}
 	run.Adopted = &workspace.Adoption{As: as, At: kernel.Stamp(), Edited: !auto && text != run.Output, Auto: auto, ActionID: actionID}

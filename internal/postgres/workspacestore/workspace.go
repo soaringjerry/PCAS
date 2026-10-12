@@ -1,4 +1,4 @@
-package postgres
+package workspacestore
 
 import (
 	"bytes"
@@ -21,10 +21,10 @@ import (
 	"github.com/soaringjerry/PCAS/internal/workspace/effort"
 )
 
-func patchAllowed(dst any, patch json.RawMessage, keys ...string) error {
+func PatchAllowed(dst any, patch json.RawMessage, keys ...string) error {
 	return itemcommand.Patch(dst, patch, keys...)
 }
-func (s *Store) Snapshot(ctx context.Context, scope memory.Scope) (workspace.State, error) {
+func (s *Workspace) Snapshot(ctx context.Context, scope memory.Scope) (workspace.State, error) {
 	var out workspace.State
 	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err
@@ -34,12 +34,12 @@ func (s *Store) Snapshot(ctx context.Context, scope memory.Scope) (workspace.Sta
 			return err
 		}
 		var err error
-		out, err = s.snapshotTx(ctx, tx, scope)
+		out, err = s.SnapshotTx(ctx, tx, scope)
 		return err
 	})
 	return out, err
 }
-func (s *Store) snapshotTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) (workspace.State, error) {
+func (s *Workspace) SnapshotTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) (workspace.State, error) {
 	out := workspace.State{Version: 1, Tasks: []workspace.Item{}, Ideas: []workspace.Item{}, Projects: []workspace.Item{}, Sources: []workspace.Source{}, Jobs: []workspace.Job{}, ExcludedMemories: map[string][]string{}}
 	var data []byte
 	err := tx.QueryRow(ctx, "SELECT revision,settings FROM workspace_owners WHERE owner_id=$1 FOR SHARE", string(scope.OwnerID)).Scan(&out.Revision, &data)
@@ -73,13 +73,13 @@ func (s *Store) snapshotTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) (
 	if err != nil {
 		return out, err
 	}
-	studioInstalled, err := studioInstalledTx(ctx, tx)
+	studioInstalled, err := StudioInstalledTx(ctx, tx)
 	if err != nil {
 		return out, err
 	}
 	for _, item := range items {
 		if studioInstalled && item.Kind == "project" {
-			h, e := projectHandoverTx(ctx, tx, scope, item.ID)
+			h, e := ProjectHandoverTx(ctx, tx, scope, item.ID)
 			if e != nil {
 				return out, e
 			}
@@ -104,7 +104,7 @@ func (s *Store) snapshotTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) (
         CASE WHEN n.trigger_id LIKE 'run:%' THEN '{"result":true}'::jsonb ELSE '{}'::jsonb END ||
         CASE WHEN n.dismissed_at IS NULL THEN '{}'::jsonb ELSE jsonb_build_object('dismissedAt',n.dismissed_at) END
         FROM workspace_notices n JOIN work_items w ON (w.owner_id,w.id)=(n.owner_id,n.thing_id)
-        WHERE n.owner_id=$1 AND (n.dismissed_at IS NOT NULL OR `+currentNoticeTriggerSQL+`) AND NOT (n.delivered @> '{"_suppressionOnly":true}'::jsonb) ORDER BY (n.dismissed_at IS NOT NULL),n.created_at DESC,n.id LIMIT 100`, string(scope.OwnerID)); err != nil {
+        WHERE n.owner_id=$1 AND (n.dismissed_at IS NOT NULL OR `+CurrentNoticeTriggerSQL+`) AND NOT (n.delivered @> '{"_suppressionOnly":true}'::jsonb) ORDER BY (n.dismissed_at IS NOT NULL),n.created_at DESC,n.id LIMIT 100`, string(scope.OwnerID)); err != nil {
 		return out, err
 	}
 	if out.Memories, err = s.ReadMemoriesTx(ctx, tx, scope, false, memoryread.MemoryReadOptions{Limit: 200}); err != nil {
@@ -189,7 +189,7 @@ func (s *Store) snapshotTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) (
 			rows.Close()
 			return out, err
 		}
-		j.Title = jobTitle(stage)
+		j.Title = JobTitle(stage)
 		j.Trigger = "资料处理"
 		j.Status = map[string]string{"done": "done", "queued": "queued", "leased": "running", "blocked": "failed", "failed": "failed"}[state]
 		var detail []string
@@ -197,7 +197,7 @@ func (s *Store) snapshotTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) (
 			detail = append(detail, "「"+source+"」")
 		}
 		if code != "" {
-			detail = append(detail, jobProblem(code))
+			detail = append(detail, JobProblem(code))
 		}
 		j.Detail = strings.Join(detail, " · ")
 		j.CreatedAt = at.Format(time.RFC3339Nano)
@@ -227,7 +227,7 @@ func (s *Store) snapshotTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) (
 		return out, err
 	}
 	out.Jobs = append(out.Jobs, reviews...)
-	if out.Activity, err = activityTx(ctx, tx, scope, out.Settings.Timezone); err != nil {
+	if out.Activity, err = ActivityTx(ctx, tx, scope, out.Settings.Timezone); err != nil {
 		return out, err
 	}
 	rows, err = tx.Query(ctx, "SELECT thing_id::text,memory_id::text FROM context_exclusions WHERE owner_id=$1", string(scope.OwnerID))
@@ -247,7 +247,7 @@ func (s *Store) snapshotTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) (
 	return out, err
 }
 
-func (s *Store) Export(ctx context.Context, scope memory.Scope, training, confirmedOnly bool) ([]byte, error) {
+func (s *Workspace) Export(ctx context.Context, scope memory.Scope, training, confirmedOnly bool) ([]byte, error) {
 	if err := kernel.RequireOwner(scope); err != nil {
 		return nil, err
 	}
@@ -256,7 +256,7 @@ func (s *Store) Export(ctx context.Context, scope memory.Scope, training, confir
 		if err := s.EnsureOwner(ctx, tx, scope); err != nil {
 			return err
 		}
-		state, err := s.snapshotTx(ctx, tx, scope)
+		state, err := s.SnapshotTx(ctx, tx, scope)
 		if err != nil {
 			return err
 		}
@@ -296,7 +296,7 @@ func (s *Store) Export(ctx context.Context, scope memory.Scope, training, confir
 	return data, err
 }
 
-func uuidOrNew(id string) (string, error) {
+func UuidOrNew(id string) (string, error) {
 	if id == "" {
 		return string(memory.NewID()), nil
 	}
@@ -309,7 +309,7 @@ func wrapInvalid(field string) error { return fmt.Errorf("%s: %w", field, memory
 
 // jobTitle and jobProblem put processing stages and error codes into the
 // user's words; the raw names stay in the database and logs.
-func jobTitle(stage string) string {
+func JobTitle(stage string) string {
 	switch strings.SplitN(stage, ":", 2)[0] {
 	case "source.parse":
 		return "读取附件"
@@ -327,7 +327,7 @@ func jobTitle(stage string) string {
 	return "后台整理"
 }
 
-func jobProblem(code string) string {
+func JobProblem(code string) string {
 	switch code {
 	case "provider_not_configured", "handler_not_configured":
 		return "还没配置处理它的模型"
@@ -351,7 +351,7 @@ func jobProblem(code string) string {
 // are folded per day into sources finished and problems by cause, so one
 // import reads as one line rather than a dozen stage names. Idea wakes and
 // finished runs are already on their own records and are added by the client.
-func activityTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, timezone string) ([]workspace.Activity, error) {
+func ActivityTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, timezone string) ([]workspace.Activity, error) {
 	// Automatic creation is presented once through the item and its creation
 	// actionId. A topic linked to an existing project has no new item receipt,
 	// so retain its activity while excluding all automatic creation activities.
@@ -417,7 +417,7 @@ func activityTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, timezone str
 			rows.Close()
 			return nil, err
 		}
-		reason := jobProblem(code)
+		reason := JobProblem(code)
 		counts[reason] += n
 		if at.After(latest[reason]) {
 			latest[reason] = at
@@ -472,7 +472,7 @@ func activityTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, timezone str
 
 // SnapshotETag reads only counters; matching polling requests never hydrate the
 // memory list. The token includes job/notices freshness as well as commands.
-func (s *Store) SnapshotETag(ctx context.Context, scope memory.Scope) (string, error) {
+func (s *Workspace) SnapshotETag(ctx context.Context, scope memory.Scope) (string, error) {
 	if err := kernel.RequireOwner(scope); err != nil {
 		return "", err
 	}

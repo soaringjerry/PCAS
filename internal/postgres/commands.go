@@ -13,6 +13,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/ownerstore"
+	"github.com/soaringjerry/PCAS/internal/postgres/workspacestore"
 	"github.com/soaringjerry/PCAS/internal/postgres/workstore"
 	"github.com/soaringjerry/PCAS/internal/workspace/itemcommand"
 	"github.com/soaringjerry/PCAS/internal/workspace/settings"
@@ -106,7 +107,7 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 		if err != nil {
 			return err
 		}
-		id, err := uuidOrNew(c.ID)
+		id, err := workspacestore.UuidOrNew(c.ID)
 		if err != nil {
 			return err
 		}
@@ -118,7 +119,7 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 		if exists {
 			return memory.ErrConflict
 		}
-		return s.saveAction(ctx, tx, scope, item, "创建")
+		return s.SaveAction(ctx, tx, scope, item, "创建")
 	case "bulkStatus", "bulkDefer", "bulkMove", "bulkAccept", "bulkIgnore":
 		commands, err := itemcommand.Expand(c, func(id string) (workspace.Candidate, error) {
 			return kernel.QueryDocument[workspace.Candidate](ctx, tx, "SELECT document FROM capture_candidates WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), id)
@@ -175,7 +176,7 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 			base := doc.Version
 			doc.BasedOn = &base
 			doc.By = kernel.ActorFromContext(ctx)
-			if err := patchAllowed(&doc, c.Patch, "title", "body"); err != nil {
+			if err := workspacestore.PatchAllowed(&doc, c.Patch, "title", "body"); err != nil {
 				return err
 			}
 		}
@@ -183,7 +184,7 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 			return err
 		}
 		doc.UpdatedAt = kernel.Stamp()
-		return saveDoc(ctx, tx, scope, doc)
+		return workspacestore.SaveDoc(ctx, tx, scope, doc)
 	case "updateSettings":
 		if err := settings.CheckZone(c.Patch); err != nil {
 			return err
@@ -276,7 +277,7 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 	if err != nil {
 		return err
 	}
-	return s.saveAction(ctx, tx, scope, item, summary)
+	return s.SaveAction(ctx, tx, scope, item, summary)
 }
 
 // candidateWrites gives the review of a candidate its writes.

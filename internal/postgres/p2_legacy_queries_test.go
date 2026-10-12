@@ -29,6 +29,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/postgres/memoryread"
 	"github.com/soaringjerry/PCAS/internal/postgres/memorystore"
 	"github.com/soaringjerry/PCAS/internal/postgres/usagelog"
+	"github.com/soaringjerry/PCAS/internal/postgres/workspacestore"
 	"github.com/soaringjerry/PCAS/internal/retrieval"
 	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 
@@ -649,7 +650,7 @@ func (s *Store) p2LegacySnapshotTx(ctx context.Context, tx pgx.Tx, scope memory.
         CASE WHEN n.trigger_id LIKE 'run:%' THEN '{"result":true}'::jsonb ELSE '{}'::jsonb END ||
         CASE WHEN n.dismissed_at IS NULL THEN '{}'::jsonb ELSE jsonb_build_object('dismissedAt',n.dismissed_at) END
         FROM workspace_notices n JOIN work_items w ON (w.owner_id,w.id)=(n.owner_id,n.thing_id)
-        WHERE n.owner_id=$1 AND (n.dismissed_at IS NOT NULL OR `+currentNoticeTriggerSQL+`) AND NOT (n.delivered @> '{"_suppressionOnly":true}'::jsonb) ORDER BY (n.dismissed_at IS NOT NULL),n.created_at DESC,n.id LIMIT 100`, string(scope.OwnerID)); err != nil {
+        WHERE n.owner_id=$1 AND (n.dismissed_at IS NOT NULL OR `+workspacestore.CurrentNoticeTriggerSQL+`) AND NOT (n.delivered @> '{"_suppressionOnly":true}'::jsonb) ORDER BY (n.dismissed_at IS NOT NULL),n.created_at DESC,n.id LIMIT 100`, string(scope.OwnerID)); err != nil {
 		return out, err
 	}
 	if out.Memories, err = s.p2LegacyReadMemoriesTx(ctx, tx, scope, false, memoryread.MemoryReadOptions{Limit: 200}); err != nil {
@@ -733,7 +734,7 @@ func (s *Store) p2LegacySnapshotTx(ctx context.Context, tx pgx.Tx, scope memory.
 			rows.Close()
 			return out, err
 		}
-		j.Title = jobTitle(stage)
+		j.Title = workspacestore.JobTitle(stage)
 		j.Trigger = "资料处理"
 		j.Status = map[string]string{"done": "done", "queued": "queued", "leased": "running", "blocked": "failed", "failed": "failed"}[state]
 		var detail []string
@@ -741,7 +742,7 @@ func (s *Store) p2LegacySnapshotTx(ctx context.Context, tx pgx.Tx, scope memory.
 			detail = append(detail, "「"+source+"」")
 		}
 		if code != "" {
-			detail = append(detail, jobProblem(code))
+			detail = append(detail, workspacestore.JobProblem(code))
 		}
 		j.Detail = strings.Join(detail, " · ")
 		j.CreatedAt = at.Format(time.RFC3339Nano)
@@ -771,7 +772,7 @@ func (s *Store) p2LegacySnapshotTx(ctx context.Context, tx pgx.Tx, scope memory.
 		return out, err
 	}
 	out.Jobs = append(out.Jobs, reviews...)
-	if out.Activity, err = activityTx(ctx, tx, scope, out.Settings.Timezone); err != nil {
+	if out.Activity, err = workspacestore.ActivityTx(ctx, tx, scope, out.Settings.Timezone); err != nil {
 		return out, err
 	}
 	rows, err = tx.Query(ctx, "SELECT thing_id::text,memory_id::text FROM context_exclusions WHERE owner_id=$1", string(scope.OwnerID))

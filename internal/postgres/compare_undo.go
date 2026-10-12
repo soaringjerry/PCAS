@@ -12,6 +12,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres/actionlog"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/postgres/workspacestore"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -143,7 +144,7 @@ func undoComparisonActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, 
 	if expired {
 		return true, workspace.ErrExpired
 	}
-	if err := checkActionSuccessors(ctx, tx, scope, id, data, created, order, source, turnID); err != nil {
+	if err := workspacestore.CheckActionSuccessors(ctx, tx, scope, id, data, created, order, source, turnID); err != nil {
 		return true, err
 	}
 	entry := entries[0]

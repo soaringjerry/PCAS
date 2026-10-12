@@ -9,13 +9,14 @@ import (
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/postgres/workspacestore"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
 type secretaryDocumentsKey struct{}
 
 func (s *Store) secretaryDocumentsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, req workspace.DeskTurnRequest, c *secretaryContext) (string, error) {
-	installed, err := studioInstalledTx(ctx, tx)
+	installed, err := workspacestore.StudioInstalledTx(ctx, tx)
 	if err != nil || !installed {
 		return "", err
 	}

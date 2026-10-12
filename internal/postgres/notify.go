@@ -20,6 +20,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/notify"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/postgres/workspacestore"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -203,7 +204,7 @@ func (n *Notifier) DismissNotice(ctx context.Context, scope memory.Scope, id str
 		if _, err := tx.Exec(ctx, "UPDATE workspace_owners SET revision=revision+1 WHERE owner_id=$1", string(scope.OwnerID)); err != nil {
 			return err
 		}
-		out, err = n.snapshotTx(ctx, tx, scope)
+		out, err = n.SnapshotTx(ctx, tx, scope)
 		return err
 	})
 	return out, err
@@ -261,11 +262,11 @@ func (s *Store) DispatchNotices(ctx context.Context, now time.Time, channels []n
 			if !locked {
 				return nil
 			}
-			if err := invalidateObsoleteNoticesTx(ctx, tx, "n.id=$1", id); err != nil {
+			if err := workspacestore.InvalidateObsoleteNoticesTx(ctx, tx, "n.id=$1", id); err != nil {
 				return err
 			}
 			for _, channel := range channels {
-				if err := invalidateObsoleteNoticesTx(ctx, tx, "n.id=$1", id); err != nil {
+				if err := workspacestore.InvalidateObsoleteNoticesTx(ctx, tx, "n.id=$1", id); err != nil {
 					return err
 				}
 				var owner, title, thing, reason, timezone, trigger string

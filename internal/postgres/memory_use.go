@@ -10,6 +10,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/memoryread"
+	"github.com/soaringjerry/PCAS/internal/postgres/workspacestore"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
@@ -153,7 +154,7 @@ func (s *Store) finishUseContextTx(ctx context.Context, tx pgx.Tx, scope memory.
 	}
 	u.Index = visible
 	if thing != nil {
-		installed, e := studioInstalledTx(ctx, tx)
+		installed, e := workspacestore.StudioInstalledTx(ctx, tx)
 		if e != nil {
 			return e
 		}
@@ -167,7 +168,7 @@ func (s *Store) finishUseContextTx(ctx context.Context, tx pgx.Tx, scope memory.
 				projectID = item.ID
 			}
 			if projectID != "" {
-				h, e := projectHandoverTx(ctx, tx, scope, projectID)
+				h, e := workspacestore.ProjectHandoverTx(ctx, tx, scope, projectID)
 				if e != nil {
 					return e
 				}

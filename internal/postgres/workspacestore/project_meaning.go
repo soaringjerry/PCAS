@@ -1,4 +1,4 @@
-package postgres
+package workspacestore
 
 import (
 	"context"
@@ -11,7 +11,7 @@ import (
 // Project matching sees source-backed goals even when the project was created
 // from a topic rather than a manually filled goal field. Association is by
 // stored IDs; semantic matching remains the model's decision.
-func projectGoalEvidenceTx(ctx context.Context, tx pgx.Tx, owner memory.ID) (map[string]string, error) {
+func ProjectGoalEvidenceTx(ctx context.Context, tx pgx.Tx, owner memory.ID) (map[string]string, error) {
 	var projects bool
 	if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM work_items WHERE owner_id=$1 AND kind='project')", string(owner)).Scan(&projects); err != nil {
 		return nil, err
@@ -19,7 +19,7 @@ func projectGoalEvidenceTx(ctx context.Context, tx pgx.Tx, owner memory.ID) (map
 	if !projects {
 		return map[string]string{}, nil
 	}
-	installed, err := studioInstalledTx(ctx, tx)
+	installed, err := StudioInstalledTx(ctx, tx)
 	if err != nil {
 		return nil, err
 	}
@@ -60,7 +60,7 @@ func projectGoalEvidenceTx(ctx context.Context, tx pgx.Tx, owner memory.ID) (map
 	}
 	return out, rows.Err()
 }
-func projectMeaning(goal string, excerpt string, evidence string) string {
+func ProjectMeaning(goal string, excerpt string, evidence string) string {
 	if strings.TrimSpace(goal) != "" {
 		return goal
 	}

@@ -1,4 +1,4 @@
-package postgres
+package workspacestore
 
 import (
 	"context"
@@ -12,13 +12,13 @@ import (
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
-func studioInstalledTx(ctx context.Context, tx pgx.Tx) (bool, error) {
+func StudioInstalledTx(ctx context.Context, tx pgx.Tx) (bool, error) {
 	var ok bool
 	err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname=current_schema() AND c.relname='project_handovers')`).Scan(&ok)
 	return ok, err
 }
 
-func projectHandoverTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, id string) (workspace.ProjectHandover, error) {
+func ProjectHandoverTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, id string) (workspace.ProjectHandover, error) {
 	out := kernel.EmptyProjectHandover(id)
 	var raw json.RawMessage
 	var written *time.Time

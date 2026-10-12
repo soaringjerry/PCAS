@@ -1,4 +1,4 @@
-package postgres
+package workspacestore
 
 import (
 	"context"
@@ -26,7 +26,7 @@ const EffortStage = effort.Stage
 type projectInputPart = projecthandover.Part
 type projectHandoverInput = projecthandover.Input
 
-func (s *Store) ReadProjectHandover(ctx context.Context, scope memory.Scope, id string) (workspace.ProjectHandover, error) {
+func (s *Workspace) ReadProjectHandover(ctx context.Context, scope memory.Scope, id string) (workspace.ProjectHandover, error) {
 	out := kernel.EmptyProjectHandover(id)
 	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err
@@ -42,13 +42,13 @@ func (s *Store) ReadProjectHandover(ctx context.Context, scope memory.Scope, id 
 		if item.Kind != "project" {
 			return memory.ErrInvalid
 		}
-		out, err = projectHandoverTx(ctx, tx, scope, id)
+		out, err = ProjectHandoverTx(ctx, tx, scope, id)
 		return err
 	})
 	return out, err
 }
-func enqueueProjectHandoversTx(ctx context.Context, tx pgx.Tx, owner memory.ID, anchor memory.Ref, now time.Time) (int, error) {
-	installed, err := studioInstalledTx(ctx, tx)
+func EnqueueProjectHandoversTx(ctx context.Context, tx pgx.Tx, owner memory.ID, anchor memory.Ref, now time.Time) (int, error) {
+	installed, err := StudioInstalledTx(ctx, tx)
 	if err != nil || !installed {
 		return 0, err
 	}
@@ -90,7 +90,7 @@ func enqueueProjectHandoversTx(ctx context.Context, tx pgx.Tx, owner memory.ID, 
 	}
 	return len(candidates), nil
 }
-func (s *Store) projectHandoverInputTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, id string) (projectHandoverInput, []memory.Ref, error) {
+func (s *Workspace) projectHandoverInputTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, id string) (projectHandoverInput, []memory.Ref, error) {
 	out := projectHandoverInput{Parts: []projectInputPart{}, Deadlines: []workspace.LibraryDeadline{}}
 	var err error
 	out.Project, err = itemstore.GetItem(ctx, tx, scope, id)
@@ -177,9 +177,9 @@ func (s *Store) projectHandoverInputTx(ctx context.Context, tx pgx.Tx, scope mem
 }
 
 // ProjectHandoverStore gives the project handover service its reads and writes.
-func (s *Store) ProjectHandoverStore() projecthandover.Store { return projectHandoverStore{s} }
+func (s *Workspace) ProjectHandoverStore() projecthandover.Store { return projectHandoverStore{s} }
 
-type projectHandoverStore struct{ store *Store }
+type projectHandoverStore struct{ store *Workspace }
 
 func (a projectHandoverStore) Exclusive(ctx context.Context) (func(), error) {
 	return kernel.StatusCallLock(ctx, a.store.DB)
@@ -214,7 +214,7 @@ type projectHandoverUnit struct {
 	ctx   context.Context
 	tx    pgx.Tx
 	job   worker.Job
-	store *Store
+	store *Workspace
 	scope memory.Scope
 }
 
@@ -227,7 +227,7 @@ func (u projectHandoverUnit) Project(id string) (workspace.Item, bool, error) {
 }
 
 func (u projectHandoverUnit) Handover(project string) (workspace.ProjectHandover, error) {
-	return projectHandoverTx(u.ctx, u.tx, u.scope, project)
+	return ProjectHandoverTx(u.ctx, u.tx, u.scope, project)
 }
 
 func (u projectHandoverUnit) Input(project string) (projecthandover.Input, []memory.Ref, error) {
@@ -296,7 +296,7 @@ func currentProjectEvidenceTx(ctx context.Context, tx pgx.Tx, scope memory.Scope
 	return current, nil
 }
 
-func (s *Store) adoptProjectMemoryTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run *workspace.Run, item workspace.Item, text, actionID string, auto bool) error {
+func (s *Workspace) AdoptProjectMemoryTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run *workspace.Run, item workspace.Item, text, actionID string, auto bool) error {
 	source, err := s.IngestTx(ctx, tx, scope, memory.IngestRequest{Connector: "capture", ExternalID: "project-adoption:" + run.ID + ":" + actionID, ExternalVersion: "1", Title: "采纳项目进展", Text: text, MediaType: "text/plain"})
 	if err != nil {
 		return err

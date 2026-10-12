@@ -11,6 +11,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres/actionlog"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/postgres/workspacestore"
 	"github.com/soaringjerry/PCAS/internal/retrieval"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
@@ -71,7 +72,7 @@ func (s *Store) ExecuteWith(ctx context.Context, scope memory.Scope, in workspac
 			if !bytes.Equal(prior, hash[:]) {
 				return memory.ErrConflict
 			}
-			out, err = s.snapshotTx(ctx, tx, scope)
+			out, err = s.SnapshotTx(ctx, tx, scope)
 			return err
 		}
 		if !errors.Is(err, pgx.ErrNoRows) {
@@ -83,7 +84,7 @@ func (s *Store) ExecuteWith(ctx context.Context, scope memory.Scope, in workspac
 		if (kernel.OneOf(in.Type, "toggleCheck", "toggleTrigger", "toggleContextMemory") || strings.HasPrefix(in.Type, "bulk")) && revision != in.ExpectedRevision {
 			return memory.ErrConflict
 		}
-		recordAction := undoableCommand(in.Type)
+		recordAction := workspacestore.UndoableCommand(in.Type)
 		if in.Type == "undoAction" {
 			var err error
 			recordAction, err = reviseUndoActionTx(ctx, tx, scope, in.ID)
@@ -92,9 +93,9 @@ func (s *Store) ExecuteWith(ctx context.Context, scope memory.Scope, in workspac
 			}
 		}
 		if recordAction {
-			ctx = actionlog.WithActionLog(ctx, in.RequestID, "command", "", commandSummary(ctx, tx, scope, in))
+			ctx = actionlog.WithActionLog(ctx, in.RequestID, "command", "", workspacestore.CommandSummary(ctx, tx, scope, in))
 			if in.Type == "undoAction" {
-				ctx = withUndoOf(ctx, in.ID)
+				ctx = workspacestore.WithUndoOf(ctx, in.ID)
 			}
 			if err := actionlog.BeginActionLogTx(ctx, tx); err != nil {
 				return err
@@ -112,7 +113,7 @@ func (s *Store) ExecuteWith(ctx context.Context, scope memory.Scope, in workspac
 		if _, err = tx.Exec(ctx, "INSERT INTO workspace_commands(owner_id,request_id,request_hash,revision) VALUES($1,$2,$3,$4)", string(scope.OwnerID), in.RequestID, hash[:], revision+1); err != nil {
 			return err
 		}
-		out, err = s.snapshotTx(ctx, tx, scope)
+		out, err = s.SnapshotTx(ctx, tx, scope)
 		return err
 	})
 	return out, err

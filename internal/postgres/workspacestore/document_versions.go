@@ -1,4 +1,4 @@
-package postgres
+package workspacestore
 
 import (
 	"context"
@@ -11,7 +11,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
-func documentVersionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, id string, version int) (workspace.DocumentVersion, error) {
+func DocumentVersionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, id string, version int) (workspace.DocumentVersion, error) {
 	out := workspace.DocumentVersion{DocumentID: id, Version: version}
 	var at time.Time
 	err := tx.QueryRow(ctx, `SELECT v.document->>'title',v.document->>'body',v.written_at,v.author,v.based_on,v.run_id::text FROM document_versions v JOIN work_documents d ON(d.owner_id,d.id)=(v.owner_id,v.document_id) WHERE v.owner_id=$1 AND v.document_id=$2 AND v.version=$3`, string(scope.OwnerID), id, version).Scan(&out.Title, &out.Body, &at, &out.Author, &out.BasedOn, &out.RunID)
@@ -21,7 +21,7 @@ func documentVersionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, id st
 	out.WrittenAt = at.UTC().Format(time.RFC3339Nano)
 	return out, err
 }
-func (s *Store) ReadDocumentVersion(ctx context.Context, scope memory.Scope, id string, version int) (workspace.DocumentVersion, error) {
+func (s *Workspace) ReadDocumentVersion(ctx context.Context, scope memory.Scope, id string, version int) (workspace.DocumentVersion, error) {
 	var out workspace.DocumentVersion
 	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err
@@ -31,12 +31,12 @@ func (s *Store) ReadDocumentVersion(ctx context.Context, scope memory.Scope, id 
 	}
 	err := pgx.BeginTxFunc(ctx, s.Pool, pgx.TxOptions{AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
 		var err error
-		out, err = documentVersionTx(ctx, tx, scope, id, version)
+		out, err = DocumentVersionTx(ctx, tx, scope, id, version)
 		return err
 	})
 	return out, err
 }
-func (s *Store) ListDocumentVersions(ctx context.Context, scope memory.Scope, id string) (workspace.DocumentVersionList, error) {
+func (s *Workspace) ListDocumentVersions(ctx context.Context, scope memory.Scope, id string) (workspace.DocumentVersionList, error) {
 	out := workspace.DocumentVersionList{Items: []workspace.DocumentVersionSummary{}}
 	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err
@@ -68,7 +68,7 @@ func (s *Store) ListDocumentVersions(ctx context.Context, scope memory.Scope, id
 	})
 	return out, err
 }
-func (s *Store) ReadDocumentDiff(ctx context.Context, scope memory.Scope, id string, from, to int) (workspace.DocumentDiff, error) {
+func (s *Workspace) ReadDocumentDiff(ctx context.Context, scope memory.Scope, id string, from, to int) (workspace.DocumentDiff, error) {
 	out := workspace.DocumentDiff{DocumentID: id, FromVersion: from, ToVersion: to, Changes: []workspace.ParagraphChange{}}
 	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err
@@ -87,11 +87,11 @@ func (s *Store) ReadDocumentDiff(ctx context.Context, scope memory.Scope, id str
 			to = current
 			from = max(1, to-1)
 		}
-		a, err := documentVersionTx(ctx, tx, scope, id, from)
+		a, err := DocumentVersionTx(ctx, tx, scope, id, from)
 		if err != nil {
 			return err
 		}
-		b, err := documentVersionTx(ctx, tx, scope, id, to)
+		b, err := DocumentVersionTx(ctx, tx, scope, id, to)
 		if err != nil {
 			return err
 		}
@@ -207,11 +207,11 @@ func paragraphDiff(before, after string) []workspace.ParagraphChange {
 	}
 	return out
 }
-func restoreDocumentTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, doc workspace.Doc) error {
+func RestoreDocumentTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, doc workspace.Doc) error {
 	if _, err := tx.Exec(ctx, `SELECT set_config('pcas.restore_document',$1,true)`, doc.ID); err != nil {
 		return err
 	}
-	err := saveDoc(ctx, tx, scope, doc)
+	err := SaveDoc(ctx, tx, scope, doc)
 	if err != nil {
 		return err
 	}

@@ -1,4 +1,4 @@
-package postgres
+package workspacestore
 
 import (
 	"context"
@@ -13,7 +13,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
-func saveDoc(ctx context.Context, tx pgx.Tx, scope memory.Scope, doc workspace.Doc) error {
+func SaveDoc(ctx context.Context, tx pgx.Tx, scope memory.Scope, doc workspace.Doc) error {
 	var exists bool
 	if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM work_documents WHERE owner_id=$1 AND id=$2)", string(scope.OwnerID), doc.ID).Scan(&exists); err != nil {
 		return err
@@ -26,7 +26,7 @@ func saveDoc(ctx context.Context, tx pgx.Tx, scope memory.Scope, doc workspace.D
 	return err
 }
 
-func (s *Store) saveAction(ctx context.Context, tx pgx.Tx, scope memory.Scope, item workspace.Item, summary string) error {
+func (s *Workspace) SaveAction(ctx context.Context, tx pgx.Tx, scope memory.Scope, item workspace.Item, summary string) error {
 	if history, ok := ctx.Value(kernel.SecretaryHistoryKey{}).(*intakestore.SecretaryHistory); ok {
 		history.Record(item.ID, summary)
 		return itemstore.SaveItem(ctx, tx, scope, item)

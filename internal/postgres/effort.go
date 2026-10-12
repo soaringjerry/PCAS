@@ -76,7 +76,7 @@ func (a effortStore) Load(ctx context.Context, j worker.Job, project string, wan
 }
 
 func (a effortStore) Apply(ctx context.Context, j worker.Job, fn func(effort.Unit) error) error {
-	return backgroundResultTx(ctx, a.store.Pool, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
+	return kernel.BackgroundResultTx(ctx, a.store.Pool, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(j.OwnerID)); err != nil {
 			return err
 		}
@@ -110,10 +110,10 @@ func (u effortUnit) Task(id string) (workspace.Item, bool, error) {
 func (u effortUnit) SaveTask(item workspace.Item) error { return saveItem(u.ctx, u.tx, u.scope, item) }
 
 func (u effortUnit) Event(outcome, reason string, count int) error {
-	return stageEventTx(u.ctx, u.tx, u.job.OwnerID, EffortStage, outcome, reason, count)
+	return kernel.StageEvent(u.ctx, u.tx, u.job.OwnerID, EffortStage, outcome, reason, count)
 }
 
-func (u effortUnit) DiscardResult() error { return discardPaidResultTx(u.ctx, u.tx, u.job) }
+func (u effortUnit) DiscardResult() error { return kernel.DiscardPaidResult(u.ctx, u.tx, u.job) }
 
 func (u effortUnit) Requeue(code string) error {
 	_, err := u.tx.Exec(u.ctx, `UPDATE memory_jobs SET state='queued',error_code=$4,available_at=clock_timestamp()+$3*interval '1 second',lease_token=NULL,lease_until=NULL WHERE id=$1 AND lease_token=$2`, string(u.job.ID), string(u.job.LeaseToken), kernel.RetryDelay(u.job.Attempts).Seconds(), code)

@@ -167,7 +167,7 @@ func (s *Store) scheduleCompareVersion(ctx context.Context, now time.Time, versi
 					continue
 				}
 			}
-			e := backgroundResultTx(ctx, s.Pool, owner, func(ctx context.Context, tx pgx.Tx) error {
+			e := kernel.BackgroundResultTx(ctx, s.Pool, owner, func(ctx context.Context, tx pgx.Tx) error {
 				if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended(current_database()||':'||current_schema()||':queue:'||$1||':'||$2,0))", string(owner), backgroundStage(map[bool]string{false: CompareStage, true: EntityCompareStage}[entity])); err != nil {
 					return err
 				}
@@ -343,7 +343,7 @@ func (a compareSession) Apply(ctx context.Context, j worker.Job, record json.Raw
 	for i := range input.Memories {
 		input.Memories[i].Ref = input.Refs[i]
 	}
-	return backgroundResultTx(ctx, a.conn, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
+	return kernel.BackgroundResultTx(ctx, a.conn, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended(current_database()||':'||current_schema()||':queue:'||$1||':'||$2,0))", string(j.OwnerID), CompareStage); err != nil {
 			return err
 		}
@@ -358,7 +358,7 @@ func (a compareSession) Apply(ctx context.Context, j worker.Job, record json.Raw
 		if err := writeComparisonReceiptTx(ctx, tx, j.OwnerID, input.Rule, input, valid); err != nil {
 			return err
 		}
-		if err := discardPaidResultTx(ctx, tx, j); err != nil {
+		if err := kernel.DiscardPaidResult(ctx, tx, j); err != nil {
 			return err
 		}
 		return kernel.Acknowledge(ctx, tx, j)

@@ -114,7 +114,7 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 		omittedDocs := brief.CurrentDocuments(docs, reviseID)
 		run.DocumentVersions = append(run.DocumentVersions, brief.Documents...)
 		if omittedDocs > 0 {
-			if err := stageEventTx(ctx, tx, scope.OwnerID, "deputy", "overflow", "document_char_budget", omittedDocs); err != nil {
+			if err := kernel.StageEvent(ctx, tx, scope.OwnerID, "deputy", "overflow", "document_char_budget", omittedDocs); err != nil {
 				return err
 			}
 		}
@@ -141,14 +141,14 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 		// request is made while the owner's transaction is locked.
 		query := runHistoryQuery(item.Title, history, c.Prompt)
 		if omitted := len(query) - len(tail(query, delegateContextBytes)); omitted > 0 {
-			if err := stageEventTx(ctx, tx, scope.OwnerID, "deputy", "overflow", "retrieval_query_bytes", omitted); err != nil {
+			if err := kernel.StageEvent(ctx, tx, scope.OwnerID, "deputy", "overflow", "retrieval_query_bytes", omitted); err != nil {
 				return err
 			}
 		}
 		query = tail(query, delegateContextBytes)
 		tokens := memory.SearchTokens(query)
 		if len(tokens) > 120 {
-			if err := stageEventTx(ctx, tx, scope.OwnerID, "deputy", "overflow", "retrieval_query_terms", len(tokens)-120); err != nil {
+			if err := kernel.StageEvent(ctx, tx, scope.OwnerID, "deputy", "overflow", "retrieval_query_terms", len(tokens)-120); err != nil {
 				return err
 			}
 			tokens = tokens[len(tokens)-120:]
@@ -170,7 +170,7 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 		}
 		for reason, n := range map[string]int{"recall_budget": recall.Coverage.Omitted, "source_recall_budget": recall.Coverage.OmittedSources} {
 			if n > 0 {
-				if err := stageEventTx(ctx, tx, scope.OwnerID, "deputy", "overflow", reason, n); err != nil {
+				if err := kernel.StageEvent(ctx, tx, scope.OwnerID, "deputy", "overflow", reason, n); err != nil {
 					return err
 				}
 			}
@@ -193,7 +193,7 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 		}
 		historyText := runHistoryText(history)
 		if omitted := len(historyText) - len(tail(historyText, delegateContextBytes)); omitted > 0 {
-			if err := stageEventTx(ctx, tx, scope.OwnerID, "deputy", "overflow", "delegate_history_bytes", omitted); err != nil {
+			if err := kernel.StageEvent(ctx, tx, scope.OwnerID, "deputy", "overflow", "delegate_history_bytes", omitted); err != nil {
 				return err
 			}
 		}
@@ -216,7 +216,7 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 			if count == 0 {
 				return nil
 			}
-			return stageEventTx(ctx, tx, scope.OwnerID, "deputy", "overflow", reason, count)
+			return kernel.StageEvent(ctx, tx, scope.OwnerID, "deputy", "overflow", reason, count)
 		}
 		memoryStart := brief.Len()
 		if err := overflow("memory_char_budget", brief.Memories(u, agent, loc)); err != nil {
@@ -315,7 +315,7 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 			}
 			if reason != "" {
 				run.Error = reason
-				if err := stageEventTx(ctx, tx, scope.OwnerID, "deputy", "failure", "revise_invalid_output", 1); err != nil {
+				if err := kernel.StageEvent(ctx, tx, scope.OwnerID, "deputy", "failure", "revise_invalid_output", 1); err != nil {
 					return err
 				}
 				_, err = tx.Exec(ctx, "UPDATE agent_runs SET document=$3 WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), run.ID, kernel.JSON(run))
@@ -412,8 +412,8 @@ func (s *Store) adoptRunTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, r
 				}
 			} else {
 				task := workspace.NewItem("task", line)
-				task.History[0].By = actorFromContext(ctx)
-				task.Evolution[0].By = actorFromContext(ctx)
+				task.History[0].By = kernel.ActorFromContext(ctx)
+				task.Evolution[0].By = kernel.ActorFromContext(ctx)
 				if item.Kind == "project" {
 					task.ProjectID = item.ID
 				} else {
@@ -999,7 +999,7 @@ func (s *Store) runAgent(ctx context.Context, steps deputy.Steps) (resultErr err
 			}
 		}
 		if selfcheckFallback != "" {
-			if err := stageEventTx(ctx, tx, scope.OwnerID, "selfcheck", "failure", selfcheckFallback, 1); err != nil {
+			if err := kernel.StageEvent(ctx, tx, scope.OwnerID, "selfcheck", "failure", selfcheckFallback, 1); err != nil {
 				return err
 			}
 			if current.Status == "done" {
@@ -1070,7 +1070,7 @@ func (s *Store) autoAdoptResultTx(ctx context.Context, tx pgx.Tx, scope memory.S
 		summary = fmt.Sprintf("副手结果：加了 %d 个子任务", len(deputy.Checklist(run.Output)))
 	}
 	id := string(memory.NewID())
-	ctx = withActor(ctx, "assistant")
+	ctx = kernel.WithActor(ctx, "assistant")
 	ctx = withActionLog(ctx, id, "worker", "", summary)
 	if err := beginActionLogTx(ctx, tx); err != nil {
 		return err

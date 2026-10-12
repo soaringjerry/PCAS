@@ -255,7 +255,7 @@ func (s *Store) secretaryPrompt(ctx context.Context, tx pgx.Tx, scope memory.Sco
 	}
 	workspaceText, clipped := secretary.RenderWorkspace(view)
 	for _, characters := range clipped {
-		if err := stageEventTx(ctx, tx, scope.OwnerID, "secretary", "overflow", "project_evidence_characters", characters); err != nil {
+		if err := kernel.StageEvent(ctx, tx, scope.OwnerID, "secretary", "overflow", "project_evidence_characters", characters); err != nil {
 			return "", nil, err
 		}
 	}
@@ -281,7 +281,7 @@ func (s *Store) secretaryPrompt(ctx context.Context, tx pgx.Tx, scope memory.Sco
 	}
 	for reason, n := range map[string]int{"recall_budget": recall.Coverage.Omitted, "source_recall_budget": recall.Coverage.OmittedSources} {
 		if n > 0 {
-			if err := stageEventTx(ctx, tx, scope.OwnerID, "secretary", "overflow", reason, n); err != nil {
+			if err := kernel.StageEvent(ctx, tx, scope.OwnerID, "secretary", "overflow", reason, n); err != nil {
 				return "", nil, err
 			}
 		}
@@ -593,7 +593,7 @@ func (t *secretarySession) VerifyTargets(ctx context.Context, answer secretaryOu
 
 func (t *secretarySession) CheckFailed(ctx context.Context, reason string) error {
 	s := t.secretaryAsk
-	return stageEventTx(ctx, s.tx, s.scope.OwnerID, "selfcheck", "failure", reason, 1)
+	return kernel.StageEvent(ctx, s.tx, s.scope.OwnerID, "selfcheck", "failure", reason, 1)
 }
 
 func (t *secretarySession) RecordApplication(ctx context.Context, stage, application, reason string) error {
@@ -695,7 +695,7 @@ func (t *secretaryTurn) RecordUse(ctx context.Context, m workspace.Memory, kind 
 }
 
 func (t *secretaryTurn) Overflow(ctx context.Context, reason string, count int) error {
-	return stageEventTx(ctx, t.tx, t.scope.OwnerID, "secretary", "overflow", reason, count)
+	return kernel.StageEvent(ctx, t.tx, t.scope.OwnerID, "secretary", "overflow", reason, count)
 }
 
 func (t *secretaryTurn) Item(ctx context.Context, id string) (workspace.Item, error) {
@@ -711,7 +711,7 @@ func (t *secretaryTurn) Cards(ctx context.Context, answer secretaryOutput, sent 
 func (t *secretaryTurn) Act(ctx context.Context, a secretaryAction, aliases map[string]workspace.Item) (secretary.ActionOutcome, error) {
 	s, c := t.store, t.c
 	out := secretary.ActionOutcome{ActionID: string(memory.NewID())}
-	actionCtx := withActionLog(withActor(WithMemoryTier(ctx, c.Tier), "secretary"), out.ActionID, "desk", t.turnID, "秘书："+a.Op)
+	actionCtx := withActionLog(kernel.WithActor(WithMemoryTier(ctx, c.Tier), "secretary"), out.ActionID, "desk", t.turnID, "秘书："+a.Op)
 	projectReceipts := []workspace.DeskReceipt{}
 	actionCtx = context.WithValue(actionCtx, secretaryCreationKey{}, t.original)
 	actionCtx = context.WithValue(actionCtx, secretaryProjectReceiptsKey{}, &projectReceipts)
@@ -882,7 +882,7 @@ func recordSecretaryOverflowTx(ctx context.Context, tx pgx.Tx, scope memory.Scop
 	}
 	for kind, limit := range map[string]int{"task": 40, "project": 50, "idea": 20} {
 		if n := counts[kind] - limit; n > 0 {
-			if err := stageEventTx(ctx, tx, scope.OwnerID, "secretary", "overflow", kind+"_context_limit", n); err != nil {
+			if err := kernel.StageEvent(ctx, tx, scope.OwnerID, "secretary", "overflow", kind+"_context_limit", n); err != nil {
 				return err
 			}
 		}
@@ -892,7 +892,7 @@ func recordSecretaryOverflowTx(ctx context.Context, tx pgx.Tx, scope memory.Scop
 		return err
 	}
 	if recent > 20 {
-		if err := stageEventTx(ctx, tx, scope.OwnerID, "secretary", "overflow", "recent_item_context_limit", recent-20); err != nil {
+		if err := kernel.StageEvent(ctx, tx, scope.OwnerID, "secretary", "overflow", "recent_item_context_limit", recent-20); err != nil {
 			return err
 		}
 	}
@@ -901,7 +901,7 @@ func recordSecretaryOverflowTx(ctx context.Context, tx pgx.Tx, scope memory.Scop
 		return err
 	}
 	if turns > 6 {
-		return stageEventTx(ctx, tx, scope.OwnerID, "secretary", "overflow", "history_context_limit", turns-6)
+		return kernel.StageEvent(ctx, tx, scope.OwnerID, "secretary", "overflow", "history_context_limit", turns-6)
 	}
 	return nil
 }

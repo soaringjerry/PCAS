@@ -340,7 +340,7 @@ func (s *Store) ScheduleEntityCandidates(ctx context.Context, now time.Time) (in
 		if batch == nil {
 			continue
 		}
-		err := backgroundResultTx(ctx, s.Pool, owner, func(ctx context.Context, tx pgx.Tx) error {
+		err := kernel.BackgroundResultTx(ctx, s.Pool, owner, func(ctx context.Context, tx pgx.Tx) error {
 			if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended(current_database()||':'||current_schema()||':compare-schedule',0))"); err != nil {
 				return err
 			}
@@ -410,7 +410,7 @@ func (a aliasScanSession) NextBatch(ctx context.Context, j worker.Job) (json.Raw
 }
 
 func (a aliasScanSession) Finish(ctx context.Context, j worker.Job) error {
-	return backgroundWriteTx(ctx, a.conn, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
+	return kernel.BackgroundWriteTx(ctx, a.conn, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
 		if err := kernel.LockJob(ctx, tx, j); err != nil {
 			return err
 		}
@@ -419,7 +419,7 @@ func (a aliasScanSession) Finish(ctx context.Context, j worker.Job) error {
 }
 
 func (a aliasScanSession) DiscardResult(ctx context.Context, j worker.Job) error {
-	return pgx.BeginFunc(ctx, a.conn, func(tx pgx.Tx) error { return discardPaidResultTx(ctx, tx, j) })
+	return pgx.BeginFunc(ctx, a.conn, func(tx pgx.Tx) error { return kernel.DiscardPaidResult(ctx, tx, j) })
 }
 
 func (a aliasScanSession) Apply(ctx context.Context, j worker.Job, record json.RawMessage, refs []memory.Ref, fn func(aliasscan.Unit) error) error {
@@ -435,7 +435,7 @@ func (a aliasScanSession) Apply(ctx context.Context, j worker.Job, record json.R
 	for i := range batch.Entities {
 		batch.Entities[i].Ref = refs[i]
 	}
-	return backgroundResultTx(ctx, a.conn, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
+	return kernel.BackgroundResultTx(ctx, a.conn, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended(current_database()||':'||current_schema()||':scan-queue:'||$1,0))", string(j.OwnerID)); err != nil {
 			return err
 		}
@@ -477,5 +477,5 @@ func (u aliasScanUnit) MarkScanned() error {
 	return err
 }
 
-func (u aliasScanUnit) DiscardResult() error { return discardPaidResultTx(u.ctx, u.tx, u.job) }
+func (u aliasScanUnit) DiscardResult() error { return kernel.DiscardPaidResult(u.ctx, u.tx, u.job) }
 func (u aliasScanUnit) Acknowledge() error   { return kernel.Acknowledge(u.ctx, u.tx, u.job) }

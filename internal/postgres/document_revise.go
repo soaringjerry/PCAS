@@ -66,7 +66,7 @@ func (s *Store) finishPaidRevise(ctx context.Context, scope memory.Scope, curren
 			if err != nil || tag.RowsAffected() == 0 {
 				return err
 			}
-			return stageEventTx(retryCtx, tx, scope.OwnerID, "deputy", "failure", "revise_result_write_"+backgroundFailureReason(resultErr), 1)
+			return kernel.StageEvent(retryCtx, tx, scope.OwnerID, "deputy", "failure", "revise_result_write_"+backgroundFailureReason(resultErr), 1)
 		})
 	}()
 	var snapshot reviseSnapshot
@@ -94,7 +94,7 @@ func (s *Store) finishPaidRevise(ctx context.Context, scope memory.Scope, curren
 			return err
 		}
 	}
-	return backgroundResultTx(ctx, s.Pool, scope.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
+	return kernel.BackgroundResultTx(ctx, s.Pool, scope.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(scope.OwnerID)); err != nil {
 			return err
 		}
@@ -118,7 +118,7 @@ func (s *Store) finishPaidRevise(ctx context.Context, scope memory.Scope, curren
 		if reason != "" {
 			run.Status = "failed"
 			run.Error = reason
-			if err := stageEventTx(ctx, tx, scope.OwnerID, "deputy", "failure", "revise_invalid_output", 1); err != nil {
+			if err := kernel.StageEvent(ctx, tx, scope.OwnerID, "deputy", "failure", "revise_invalid_output", 1); err != nil {
 				return err
 			}
 		}
@@ -160,7 +160,7 @@ func (s *Store) finishPaidRevise(ctx context.Context, scope memory.Scope, curren
 			}
 			return (interactiveCalls{store: s}).recordDeputyApplicationTx(ctx, tx, scope.OwnerID, run, paid.InvocationID, outcome, why)
 		}
-		return discardPaidResultTx(ctx, tx, worker.Job{OwnerID: scope.OwnerID, ID: memory.ID(run.ID)})
+		return kernel.DiscardPaidResult(ctx, tx, worker.Job{OwnerID: scope.OwnerID, ID: memory.ID(run.ID)})
 	})
 }
 

@@ -288,7 +288,7 @@ func TestStructuredExtractionUndoAndReplaySequences(t *testing.T) {
 			case "cross-channel":
 				// The Telegram callback uses this same Undo service; HTTP creation/reads
 				// and callback service reversal verify the state seam, not Telegram delivery.
-				if _, err := s.Undo(withActor(ctx, "telegram"), scope, b); err != nil {
+				if _, err := s.Undo(kernel.WithActor(ctx, "telegram"), scope, b); err != nil {
 					t.Fatal(err)
 				}
 				if _, err := s.Undo(ctx, scope, a); err != nil {

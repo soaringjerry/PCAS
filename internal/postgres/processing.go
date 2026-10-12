@@ -346,7 +346,7 @@ func (a extractionStore) Input(ctx context.Context, j worker.Job, source memory.
 }
 
 func (a extractionStore) DiscardResult(ctx context.Context, j worker.Job) error {
-	return pgx.BeginFunc(ctx, a.store.Pool, func(tx pgx.Tx) error { return discardPaidResultTx(ctx, tx, j) })
+	return pgx.BeginFunc(ctx, a.store.Pool, func(tx pgx.Tx) error { return kernel.DiscardPaidResult(ctx, tx, j) })
 }
 
 func (a extractionStore) Failed(ctx context.Context, j worker.Job) error {
@@ -455,7 +455,7 @@ func (a extractionStore) Apply(ctx context.Context, j worker.Job, result extract
 				return err
 			}
 		}
-		if err := discardPaidResultTx(ctx, tx, j); err != nil {
+		if err := kernel.DiscardPaidResult(ctx, tx, j); err != nil {
 			return err
 		}
 		return completeExtractionTx(ctx, tx, j, "")

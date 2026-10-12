@@ -88,7 +88,7 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 		}
 		return saveCandidate(ctx, tx, scope, v)
 	case "addTask", "addIdea", "addProject":
-		origin := itemcommand.Origin{Actor: actorFromContext(ctx), Collected: ctx.Value(secretaryHistoryKey{}) != nil}
+		origin := itemcommand.Origin{Actor: kernel.ActorFromContext(ctx), Collected: ctx.Value(secretaryHistoryKey{}) != nil}
 		if original, ok := ctx.Value(secretaryCreationKey{}).(workspace.SourceRef); ok {
 			origin.SecretarySource = &original
 			if log, ok := ctx.Value(actionLogKey{}).(actionLog); ok {
@@ -167,7 +167,7 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 			}
 			base := doc.Version
 			doc.BasedOn = &base
-			doc.By = actorFromContext(ctx)
+			doc.By = kernel.ActorFromContext(ctx)
 			if err := patchAllowed(&doc, c.Patch, "title", "body"); err != nil {
 				return err
 			}
@@ -339,7 +339,7 @@ func (s *Store) saveAction(ctx context.Context, tx pgx.Tx, scope memory.Scope, i
 		history.record(item.ID, summary)
 		return saveItem(ctx, tx, scope, item)
 	}
-	revision := workspace.Revision{At: kernel.Stamp(), By: actorFromContext(ctx), Summary: summary}
+	revision := workspace.Revision{At: kernel.Stamp(), By: kernel.ActorFromContext(ctx), Summary: summary}
 	item.History = append(item.History, revision)
 	if item.Kind == "idea" {
 		item.Evolution = append(item.Evolution, revision)

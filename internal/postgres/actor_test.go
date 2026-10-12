@@ -8,6 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -22,7 +23,7 @@ func TestSaveActionPersistsContextActor(t *testing.T) {
 		t.Run(actor, func(t *testing.T) {
 			actionCtx := ctx
 			if actor != "" {
-				actionCtx = withActor(ctx, actor)
+				actionCtx = kernel.WithActor(ctx, actor)
 			}
 			id := string(memory.NewID())
 			err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
@@ -92,7 +93,7 @@ func TestSecretaryHistoryActorAndUserUndo(t *testing.T) {
 	if len(history) != len(st.Tasks[0].History)+1 || history[len(history)-1].By != "secretary" || history[len(history)-2].By != "user" {
 		t.Fatal("nested secretary commands must share one revision and preserve earlier actors", history)
 	}
-	st, err := s.Undo(withActor(ctx, "assistant"), scope, *updated.Turn.Receipts[0].ActionID)
+	st, err := s.Undo(kernel.WithActor(ctx, "assistant"), scope, *updated.Turn.Receipts[0].ActionID)
 	if err != nil {
 		t.Fatal(err)
 	}

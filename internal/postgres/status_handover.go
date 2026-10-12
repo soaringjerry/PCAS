@@ -208,7 +208,7 @@ func (a handoverStore) Read(ctx context.Context, j worker.Job, fn func(handover.
 }
 
 func (a handoverStore) DiscardResult(ctx context.Context, j worker.Job) error {
-	return pgx.BeginFunc(ctx, a.store.Pool, func(tx pgx.Tx) error { return discardPaidResultTx(ctx, tx, j) })
+	return pgx.BeginFunc(ctx, a.store.Pool, func(tx pgx.Tx) error { return kernel.DiscardPaidResult(ctx, tx, j) })
 }
 
 func (a handoverStore) RetryLater(j worker.Job, code string) error {
@@ -216,7 +216,7 @@ func (a handoverStore) RetryLater(j worker.Job, code string) error {
 }
 
 func (a handoverStore) Apply(ctx context.Context, j worker.Job, fn func(handover.Unit) error) error {
-	return backgroundResultTx(ctx, a.store.Pool, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
+	return kernel.BackgroundResultTx(ctx, a.store.Pool, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
 		if err := kernel.LockJob(ctx, tx, j); err != nil {
 			return err
 		}
@@ -254,5 +254,5 @@ func (u handoverUnit) SaveHandover(body, inputHash string) error {
 	return err
 }
 
-func (u handoverUnit) DiscardResult() error { return discardPaidResultTx(u.ctx, u.tx, u.job) }
+func (u handoverUnit) DiscardResult() error { return kernel.DiscardPaidResult(u.ctx, u.tx, u.job) }
 func (u handoverUnit) Acknowledge() error   { return kernel.Acknowledge(u.ctx, u.tx, u.job) }

@@ -230,7 +230,7 @@ func (a projectHandoverStore) Read(ctx context.Context, j worker.Job, fn func(pr
 }
 
 func (a projectHandoverStore) Apply(ctx context.Context, j worker.Job, fn func(projecthandover.Unit) error) error {
-	return backgroundResultTx(ctx, a.store.Pool, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
+	return kernel.BackgroundResultTx(ctx, a.store.Pool, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(j.OwnerID)); err != nil {
 			return err
 		}
@@ -270,7 +270,7 @@ func (u projectHandoverUnit) CurrentEvidence(input projecthandover.Input, handov
 }
 
 func (u projectHandoverUnit) Event(outcome, reason string, count int) error {
-	return stageEventTx(u.ctx, u.tx, u.job.OwnerID, ProjectHandoverStage, outcome, reason, count)
+	return kernel.StageEvent(u.ctx, u.tx, u.job.OwnerID, ProjectHandoverStage, outcome, reason, count)
 }
 
 func (u projectHandoverUnit) SaveHandover(project string, handover workspace.ProjectHandover, input projecthandover.Input) error {
@@ -278,8 +278,10 @@ func (u projectHandoverUnit) SaveHandover(project string, handover workspace.Pro
 	return err
 }
 
-func (u projectHandoverUnit) DiscardResult() error { return discardPaidResultTx(u.ctx, u.tx, u.job) }
-func (u projectHandoverUnit) Acknowledge() error   { return kernel.Acknowledge(u.ctx, u.tx, u.job) }
+func (u projectHandoverUnit) DiscardResult() error {
+	return kernel.DiscardPaidResult(u.ctx, u.tx, u.job)
+}
+func (u projectHandoverUnit) Acknowledge() error { return kernel.Acknowledge(u.ctx, u.tx, u.job) }
 
 func currentProjectEvidenceTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, input projectHandoverInput, out workspace.ProjectHandover) (projectHandoverInput, error) {
 	current := projectHandoverInput{Project: input.Project, Parts: []projectInputPart{}}

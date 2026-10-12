@@ -18,6 +18,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/postgres/claimstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/memoryread"
+	"github.com/soaringjerry/PCAS/internal/postgres/statestore"
 	"github.com/soaringjerry/PCAS/internal/worker"
 )
 
@@ -351,11 +352,11 @@ func (a organizeSession) Apply(ctx context.Context, j worker.Job, result organiz
 					return err
 				}
 			}
-			cm := cardMemory{N: 1, Text: m.Text, Ref: m.Ref}
+			cm := kernel.CardMemory{N: 1, Text: m.Text, Ref: m.Ref}
 			if m.ExpressedAt != nil {
 				cm.ExpressedAt = m.ExpressedAt.Format(time.RFC3339Nano)
 			}
-			deadlines := append([]cardDeadline{}, item.Deadlines...)
+			deadlines := append([]kernel.CardDeadline{}, item.Deadlines...)
 			for i := range deadlines {
 				deadlines[i].N = 1
 			}
@@ -363,7 +364,7 @@ func (a organizeSession) Apply(ctx context.Context, j worker.Job, result organiz
 			if err := tx.QueryRow(ctx, "SELECT coalesce(array_agg(id::text),'{}') FROM deadlines WHERE owner_id=$1 AND claim_id=$2", string(j.OwnerID), string(m.Ref.ID)).Scan(&previousDates); err != nil {
 				return err
 			}
-			if err := writeOrganizedDeadlinesTx(ctx, tx, j.OwnerID, cm, deadlines, timezone); err != nil {
+			if err := statestore.WriteOrganizedDeadlinesTx(ctx, tx, j.OwnerID, cm, deadlines, timezone); err != nil {
 				return err
 			}
 			var withdrawnDates int

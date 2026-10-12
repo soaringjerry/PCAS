@@ -305,7 +305,7 @@ func (s *Store) DispatchNotices(ctx context.Context, now time.Time, channels []n
 				}
 				publicURL := strings.TrimRight(getPublicURL(), "/")
 				m := notify.Message{OwnerID: owner, NoticeID: id, ThingID: thing, Title: title, Body: due.In(loc).Format("2006-01-02 15:04 MST") + " · " + reason, URL: publicURL + "/t/" + thing}
-				if strings.HasPrefix(trigger, runNoticePrefix) {
+				if strings.HasPrefix(trigger, kernel.RunNoticePrefix) {
 					m.Result, m.Body = true, reason
 				}
 				err = channel.Send(ctx, m)

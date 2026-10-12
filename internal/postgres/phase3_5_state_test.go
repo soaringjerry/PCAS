@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/workspace"
@@ -119,10 +120,10 @@ func TestPhase35T2ConcurrentExtractionSchedulerAndUserHTTP(t *testing.T) {
 	})
 	result := make(chan error, 2)
 	go func() {
-		result <- (extraction.Service{Store: s.ExtractionStore(), Generator: jobCalls(s), MaxAttempts: MaxJobAttempts}).Process(ctx, a)
+		result <- (extraction.Service{Store: s.ExtractionStore(), Generator: jobCalls(s), MaxAttempts: kernel.MaxJobAttempts}).Process(ctx, a)
 	}()
 	go func() {
-		result <- (extraction.Service{Store: s.ExtractionStore(), Generator: jobCalls(s), MaxAttempts: MaxJobAttempts}).Process(ctx, b)
+		result <- (extraction.Service{Store: s.ExtractionStore(), Generator: jobCalls(s), MaxAttempts: kernel.MaxJobAttempts}).Process(ctx, b)
 	}()
 	for i := 0; i < 2; i++ {
 		select {

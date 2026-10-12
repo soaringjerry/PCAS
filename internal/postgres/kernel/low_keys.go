@@ -1,36 +1,35 @@
-package postgres
+package kernel
 
 import (
 	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 	"github.com/soaringjerry/PCAS/internal/memory"
-	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 )
 
 // Internal commands still persist in order for validation and undo collection.
 // Publish history and its memory source only after the whole secretary action,
 // including reminder changes, has reached its final state.
-type secretaryHistoryKey struct{}
+type SecretaryHistoryKey struct{}
 
-type secretaryCreationKey struct{}
+type SecretaryCreationKey struct{}
 
 // These stages keep paid snapshots and retry until success or changed inputs.
-func persistentBackgroundStage(stage string) bool {
-	_, ok := kernel.HourlyBudgets[kernel.BaseStage(stage)]
+func PersistentBackgroundStage(stage string) bool {
+	_, ok := HourlyBudgets[BaseStage(stage)]
 	return ok
 }
 
-const maxAttempts = 5
+const MaxAttempts = 5
 
 // MaxJobAttempts is the attempt limit of one queue job.
-const MaxJobAttempts = maxAttempts
+const MaxJobAttempts = MaxAttempts
 
-type delegateHistoryKey struct{}
+type DelegateHistoryKey struct{}
 
 // runNoticePrefix marks a notice that reports how handed-off work ended,
 // as opposed to a reminder that came due.
-const runNoticePrefix = "run:"
+const RunNoticePrefix = "run:"
 
-type cardMemory struct {
+type CardMemory struct {
 	AppliesTo   string     `json:"appliesTo,omitempty"`
 	N           int        `json:"n"`
 	Text        string     `json:"text"`
@@ -41,4 +40,4 @@ type cardMemory struct {
 	Ref         memory.Ref `json:"-"`
 }
 
-type cardDeadline = organize.Deadline
+type CardDeadline = organize.Deadline

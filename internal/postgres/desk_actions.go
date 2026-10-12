@@ -10,6 +10,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres/actionlog"
 	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/workstore"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
@@ -56,7 +57,7 @@ func (s *Store) secretaryProjectTx(ctx context.Context, tx pgx.Tx, scope memory.
 		log, _ := ctx.Value(actionlog.ActionLogKey{}).(actionlog.ActionLog)
 		actionID := string(memory.NewID())
 		projectCtx := actionlog.WithActionLog(ctx, actionID, "desk", log.TurnID, "建了项目「"+name+"」")
-		projectCtx = context.WithValue(projectCtx, secretaryHistoryKey{}, nil)
+		projectCtx = context.WithValue(projectCtx, kernel.SecretaryHistoryKey{}, nil)
 		if err = actionlog.BeginActionLogTx(projectCtx, tx); err != nil {
 			return "", err
 		}
@@ -83,7 +84,7 @@ func (s *Store) executeSecretaryActionTx(ctx context.Context, tx pgx.Tx, scope m
 	w := &secretaryWorkspace{store: s, tx: tx, scope: scope, history: &secretaryHistory{summaries: map[string]string{}}}
 	// The documents and the delegate history of the turn travel in its context.
 	w.documents, _ = ctx.Value(secretaryDocumentsKey{}).(map[string]workspace.Doc)
-	if history, ok := ctx.Value(delegateHistoryKey{}).(delegateHistoryContext); ok {
+	if history, ok := ctx.Value(kernel.DelegateHistoryKey{}).(delegateHistoryContext); ok {
 		w.delegateTurns = append([]string{}, history.IDs...)
 	}
 	return secretary.Execute(ctx, w, a, secretary.Env{Aliases: aliases, Agent: agent, Location: loc, CurrentThingID: currentThingID})
@@ -103,7 +104,7 @@ type secretaryWorkspace struct {
 
 // collecting returns a context in which item saves note their history here.
 func (w *secretaryWorkspace) collecting(ctx context.Context) context.Context {
-	return context.WithValue(ctx, secretaryHistoryKey{}, w.history)
+	return context.WithValue(ctx, kernel.SecretaryHistoryKey{}, w.history)
 }
 
 func (w *secretaryWorkspace) Command(ctx context.Context, c workspace.Command) error {

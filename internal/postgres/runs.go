@@ -871,7 +871,7 @@ func (s *Store) runAgent(ctx context.Context, steps deputy.Steps) (resultErr err
 			}
 		}
 		if _, err := tx.Exec(ctx, `INSERT INTO workspace_notices(owner_id,thing_id,trigger_id,due_at,reason) VALUES($1,$2,$3,now(),$4) ON CONFLICT DO NOTHING`,
-			string(scope.OwnerID), current.ThingID, runNoticePrefix+current.ID, noticeReason); err != nil {
+			string(scope.OwnerID), current.ThingID, kernel.RunNoticePrefix+current.ID, noticeReason); err != nil {
 			return err
 		}
 		// Delivery triggers expose background results without changing the

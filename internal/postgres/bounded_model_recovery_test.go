@@ -77,7 +77,7 @@ func TestMeteredExtractionRecoversLostResponsesWithSeparateCalls(t *testing.T) {
 		t.Fatal(j, err)
 	}
 	for range 2 {
-		requireRecoveryFailure(t, (extraction.Service{Store: s.ExtractionStore(), Generator: jobCalls(s), MaxAttempts: MaxJobAttempts}).Process(context.Background(), *j), modelcall.ErrOutcomeUnknown.Error(), true)
+		requireRecoveryFailure(t, (extraction.Service{Store: s.ExtractionStore(), Generator: jobCalls(s), MaxAttempts: kernel.MaxJobAttempts}).Process(context.Background(), *j), modelcall.ErrOutcomeUnknown.Error(), true)
 		state := b2Snapshot(t, s, scope)
 		if len(state.Memories) != 0 {
 			t.Fatal("unknown output must not create memories")
@@ -85,7 +85,7 @@ func TestMeteredExtractionRecoversLostResponsesWithSeparateCalls(t *testing.T) {
 		next := nextModelRecoveryLease(t, s, *j)
 		j = &next
 	}
-	if err := (extraction.Service{Store: s.ExtractionStore(), Generator: jobCalls(s), MaxAttempts: MaxJobAttempts}).Process(context.Background(), *j); err != nil {
+	if err := (extraction.Service{Store: s.ExtractionStore(), Generator: jobCalls(s), MaxAttempts: kernel.MaxJobAttempts}).Process(context.Background(), *j); err != nil {
 		t.Fatal(err)
 	}
 	var unknown, returned, links, usage int
@@ -119,7 +119,7 @@ func TestPersistentStagePausesAtRecordedRecoveryLimitAfterRestart(t *testing.T) 
 		t.Fatal(err)
 	}
 	j := organizeTestJob(t, s, scope)
-	for attempt := 1; attempt <= maxAttempts; attempt++ {
+	for attempt := 1; attempt <= kernel.MaxAttempts; attempt++ {
 		peer, err := Open(context.Background(), s.Pool.Config().ConnConfig.ConnString())
 		if err != nil {
 			t.Fatal(err)
@@ -127,7 +127,7 @@ func TestPersistentStagePausesAtRecordedRecoveryLimitAfterRestart(t *testing.T) 
 		peer.SetModels(s.Models)
 		err = (organize.Service{Store: peer.OrganizeStore(), Generator: jobCalls(peer), Version: kernel.OrganizeVersion}).Process(context.Background(), j)
 		peer.Close()
-		if attempt == maxAttempts {
+		if attempt == kernel.MaxAttempts {
 			requireRecoveryFailure(t, err, modelcall.ErrRetryExhausted.Error(), false)
 			break
 		}
@@ -143,13 +143,13 @@ func TestPersistentStagePausesAtRecordedRecoveryLimitAfterRestart(t *testing.T) 
 		t.Fatal(err)
 	}
 	m, err := s.GetMemory(context.Background(), scope, string(ref.ID))
-	if err != nil || m.Category != before.Category || m.Text != before.Text || m.Version != before.Version || calls.Load() != int32(maxAttempts) || count != maxAttempts || lastAttempt != maxAttempts || state != "exhausted" || reason != modelcall.ErrRetryExhausted.Error() || jobState != "blocked" || jobReason != reason {
+	if err != nil || m.Category != before.Category || m.Text != before.Text || m.Version != before.Version || calls.Load() != int32(kernel.MaxAttempts) || count != kernel.MaxAttempts || lastAttempt != kernel.MaxAttempts || state != "exhausted" || reason != modelcall.ErrRetryExhausted.Error() || jobState != "blocked" || jobReason != reason {
 		t.Fatal(m, err, calls.Load(), count, lastAttempt, state, reason, jobState, jobReason)
 	}
 	if _, err := s.Claim(context.Background(), time.Minute); err != nil {
 		t.Fatal(err)
 	}
-	if calls.Load() != int32(maxAttempts) {
+	if calls.Load() != int32(kernel.MaxAttempts) {
 		t.Fatal("blocked recovery must not call again")
 	}
 	// The existing owner retry control grants another bounded allowance.
@@ -165,7 +165,7 @@ func TestPersistentStagePausesAtRecordedRecoveryLimitAfterRestart(t *testing.T) 
 	}
 	var authorization, oldReason string
 	var newAttempt, oldAttempt int
-	if err := s.Pool.QueryRow(context.Background(), `SELECT next.attempt_number,prior.attempt_number,prior.actual_mode->>'recoveryRequestId',prior.actual_mode->>'previousRecoveryReason' FROM model_calls next JOIN model_calls prior ON prior.owner_id=next.owner_id AND prior.id=next.retry_of_id WHERE next.owner_id=$1 AND next.execution_id=$2 AND next.outcome='returned'`, string(scope.OwnerID), string(j.ID)).Scan(&newAttempt, &oldAttempt, &authorization, &oldReason); err != nil || newAttempt != 1 || oldAttempt != maxAttempts || authorization == "" || oldReason != modelcall.ErrRetryExhausted.Error() || calls.Load() != int32(maxAttempts+1) {
+	if err := s.Pool.QueryRow(context.Background(), `SELECT next.attempt_number,prior.attempt_number,prior.actual_mode->>'recoveryRequestId',prior.actual_mode->>'previousRecoveryReason' FROM model_calls next JOIN model_calls prior ON prior.owner_id=next.owner_id AND prior.id=next.retry_of_id WHERE next.owner_id=$1 AND next.execution_id=$2 AND next.outcome='returned'`, string(scope.OwnerID), string(j.ID)).Scan(&newAttempt, &oldAttempt, &authorization, &oldReason); err != nil || newAttempt != 1 || oldAttempt != kernel.MaxAttempts || authorization == "" || oldReason != modelcall.ErrRetryExhausted.Error() || calls.Load() != int32(kernel.MaxAttempts+1) {
 		t.Fatal(newAttempt, oldAttempt, authorization, oldReason, calls.Load(), err)
 	}
 }

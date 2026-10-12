@@ -7,13 +7,14 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 )
 
 func TestIndexDispatchRunsAlongsideConversationAndHonorsPause(t *testing.T) {
 	s, scope := testStore(t), owner()
 	a := b4bImport(t, s, scope, b4bMessages(t, []string{"user", "assistant"}, []string{"合成原文。", "合成上下文。"}))
 	b4bOperation(t, s, scope, a.Batch, "organize")
-	if err := (extraction.Service{Store: s.ExtractionStore(), Generator: jobCalls(s), MaxAttempts: MaxJobAttempts}).Process(context.Background(), leaseStage(t, s, scope, a.Sources[0], "source.extract")); err != nil {
+	if err := (extraction.Service{Store: s.ExtractionStore(), Generator: jobCalls(s), MaxAttempts: kernel.MaxJobAttempts}).Process(context.Background(), leaseStage(t, s, scope, a.Sources[0], "source.extract")); err != nil {
 		t.Fatal(err)
 	}
 	for _, stage := range []string{"source.tokenize", "source.embed"} {

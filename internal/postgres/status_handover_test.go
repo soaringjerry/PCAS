@@ -108,7 +108,7 @@ func TestStatusHandoverGroundingLimitsAndDeletion(t *testing.T) {
 
 }
 func TestStatusHandoverParser(t *testing.T) {
-	ms := []cardMemory{{N: 1, Text: "虚构规则", Category: "rule", Trust: "stated"}, {N: 2, Text: "可能参加一次活动", Category: "event", Trust: "tentative"}, {N: 3, Text: "推断", Trust: "inferred"}}
+	ms := []kernel.CardMemory{{N: 1, Text: "虚构规则", Category: "rule", Trust: "stated"}, {N: 2, Text: "可能参加一次活动", Category: "event", Trust: "tentative"}, {N: 3, Text: "推断", Trust: "inferred"}}
 	output := handoverOutput{}
 	for i, title := range handoverTitles {
 		ref := 2

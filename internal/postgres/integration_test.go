@@ -14,6 +14,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/sourcestore"
 	"github.com/soaringjerry/PCAS/internal/worker"
 )
@@ -332,7 +333,7 @@ func TestPostgresConcurrentClaimsAndRetryLimit(t *testing.T) {
 	in := input()
 	in.ExternalID = "retry"
 	mustIngest(t, s, scope, in)
-	for attempt := 1; attempt <= maxAttempts; attempt++ {
+	for attempt := 1; attempt <= kernel.MaxAttempts; attempt++ {
 		job, err := s.Claim(ctx, time.Minute)
 		if err != nil || job == nil || job.Attempts != attempt {
 			t.Fatal("retry claim", err)
@@ -368,7 +369,7 @@ func TestPostgresCrashedWorkerExhaustsAttempts(t *testing.T) {
 	scope := owner()
 	mustIngest(t, s, scope, input())
 	var last *worker.Job
-	for attempt := 1; attempt <= maxAttempts; attempt++ {
+	for attempt := 1; attempt <= kernel.MaxAttempts; attempt++ {
 		job, err := s.Claim(ctx, time.Minute)
 		if err != nil || job == nil || job.Attempts != attempt {
 			t.Fatal("crash recovery failed", err)

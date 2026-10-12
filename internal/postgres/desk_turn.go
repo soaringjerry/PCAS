@@ -718,7 +718,7 @@ func (t *secretaryTurn) Act(ctx context.Context, a secretaryAction, aliases map[
 	out := secretary.ActionOutcome{ActionID: string(memory.NewID())}
 	actionCtx := actionlog.WithActionLog(kernel.WithActor(WithMemoryTier(ctx, c.Tier), "secretary"), out.ActionID, "desk", t.turnID, "秘书："+a.Op)
 	projectReceipts := []workspace.DeskReceipt{}
-	actionCtx = context.WithValue(actionCtx, secretaryCreationKey{}, t.original)
+	actionCtx = context.WithValue(actionCtx, kernel.SecretaryCreationKey{}, t.original)
 	actionCtx = context.WithValue(actionCtx, secretaryProjectReceiptsKey{}, &projectReceipts)
 	actionCtx = context.WithValue(actionCtx, secretaryDocumentsKey{}, c.Documents)
 	actionCtx = context.WithValue(actionCtx, secretaryMemoriesKey{}, t.sent)
@@ -726,7 +726,7 @@ func (t *secretaryTurn) Act(ctx context.Context, a secretaryAction, aliases map[
 	for _, turn := range c.History {
 		history.IDs = append(history.IDs, turn.ID)
 	}
-	actionCtx = context.WithValue(actionCtx, delegateHistoryKey{}, history)
+	actionCtx = context.WithValue(actionCtx, kernel.DelegateHistoryKey{}, history)
 	actionTx, err := t.tx.Begin(ctx)
 	if err != nil {
 		return out, err

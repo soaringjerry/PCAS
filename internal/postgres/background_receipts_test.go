@@ -121,7 +121,7 @@ func TestPersistentBackgroundFailureKeepsIncreasingAttempts(t *testing.T) {
 		if err := s.Defer(ctx, job, failure.Code, failure.Until, failure.NoAttempt); err != nil {
 			t.Fatal(err)
 		}
-		if !persistentBackgroundStage(job.Stage) {
+		if !kernel.PersistentBackgroundStage(job.Stage) {
 			t.Fatal("background failure can exhaust")
 		}
 	}

@@ -695,7 +695,7 @@ func b4QueueWorker(t *testing.T, s *Store) (context.CancelFunc, chan error) {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
-	w := worker.New(s, map[string]worker.Handler{"source.parse": s.ProcessAttachment, "source.chunk": s.ProcessChunks, "source.tokenize": s.ProcessIndex, "source.extract": (extraction.Service{Store: s.ExtractionStore(), Generator: jobCalls(s), MaxAttempts: MaxJobAttempts}).Process, "source.embed": indexer(s).Process, "claim.embed": indexer(s).Process}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	w := worker.New(s, map[string]worker.Handler{"source.parse": s.ProcessAttachment, "source.chunk": s.ProcessChunks, "source.tokenize": s.ProcessIndex, "source.extract": (extraction.Service{Store: s.ExtractionStore(), Generator: jobCalls(s), MaxAttempts: kernel.MaxJobAttempts}).Process, "source.embed": indexer(s).Process, "claim.embed": indexer(s).Process}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	go func() {
 		for ctx.Err() == nil {
 			worked, err := w.RunOnce(ctx)

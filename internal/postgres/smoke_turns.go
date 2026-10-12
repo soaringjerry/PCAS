@@ -226,7 +226,7 @@ func (s *Store) CleanupSmoke(ctx context.Context, scope memory.Scope, id string)
 		// FK children first; a project can then be deleted after its check tasks.
 		if _, err := tx.Exec(ctx, `DELETE FROM workspace_notices n USING desk_smoke_changes c
  WHERE n.owner_id=c.owner_id AND c.owner_id=$1 AND c.smoke_id=$2 AND c.table_name='agent_runs'
- AND c.before_document='null'::jsonb AND n.trigger_id=$3 || c.record_id::text`, owner, id, runNoticePrefix); err != nil {
+ AND c.before_document='null'::jsonb AND n.trigger_id=$3 || c.record_id::text`, owner, id, kernel.RunNoticePrefix); err != nil {
 			return err
 		}
 		// A model invocation already started is real spending. Keep its opaque

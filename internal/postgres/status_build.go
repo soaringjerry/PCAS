@@ -17,9 +17,9 @@ type cardRule struct {
 	AppliesTo string `json:"appliesTo"`
 }
 type cardOutput struct {
-	Fields    map[string][]int `json:"fields"`
-	Rules     []cardRule       `json:"rules"`
-	Deadlines []cardDeadline   `json:"deadlines"`
+	Fields    map[string][]int      `json:"fields"`
+	Rules     []cardRule            `json:"rules"`
+	Deadlines []kernel.CardDeadline `json:"deadlines"`
 }
 type cardGroup struct {
 	Key, Kind, Name string

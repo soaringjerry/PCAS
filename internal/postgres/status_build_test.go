@@ -13,6 +13,7 @@ import (
 
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres/claimstore"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/worker"
 )
 
@@ -71,7 +72,7 @@ func statusFakeReply(t *testing.T, w http.ResponseWriter, r *http.Request) {
 	}
 	var prompt struct {
 		Key      string
-		Memories []cardMemory
+		Memories []kernel.CardMemory
 	}
 	for _, m := range req.Messages {
 		if m.Role == "user" {

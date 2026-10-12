@@ -63,7 +63,7 @@ func Compare(db *postgres.Store) comparison.Service {
 
 // Extraction connects the extraction service to storage and generation.
 func Extraction(db *postgres.Store) extraction.Service {
-	return extraction.Service{Store: db.ExtractionStore(), Generator: JobCalls(db), MaxAttempts: postgres.MaxJobAttempts}
+	return extraction.Service{Store: db.ExtractionStore(), Generator: JobCalls(db), MaxAttempts: kernel.MaxJobAttempts}
 }
 
 // Organize connects the organize service to storage and generation.

@@ -39,7 +39,7 @@ type handoverCard struct {
 }
 type handoverInput struct {
 	Cards        []handoverCard                   `json:"cards"`
-	Memories     []cardMemory                     `json:"memories"`
+	Memories     []kernel.CardMemory              `json:"memories"`
 	Deadlines    []workspace.LibraryDeadline      `json:"deadlines"`
 	Requirements []workspace.AssistantRequirement `json:"requirements"`
 	InputHash    string                           `json:"inputHash"`
@@ -128,7 +128,7 @@ func statusTrustTx(ctx context.Context, tx pgx.Tx, owner memory.ID, m workspace.
 }
 
 func (s *Store) handoverInputTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) (handoverInput, []handoverDependency, []memory.Ref, error) {
-	out := handoverInput{Cards: []handoverCard{}, Memories: []cardMemory{}, Deadlines: []workspace.LibraryDeadline{}, Requirements: []workspace.AssistantRequirement{}}
+	out := handoverInput{Cards: []handoverCard{}, Memories: []kernel.CardMemory{}, Deadlines: []workspace.LibraryDeadline{}, Requirements: []workspace.AssistantRequirement{}}
 	refs := []memory.Ref{}
 	if err := tx.QueryRow(ctx, "SELECT library_handover_hash($1)", string(scope.OwnerID)).Scan(&out.InputHash); err != nil {
 		return out, nil, refs, err
@@ -165,7 +165,7 @@ func (s *Store) handoverInputTx(ctx context.Context, tx pgx.Tx, scope memory.Sco
 		}
 		ref := memory.Ref{ID: memory.ID(m.ID), Version: m.Version, Kind: memory.ClaimKind}
 		refs = append(refs, ref)
-		out.Memories = append(out.Memories, cardMemory{N: len(out.Memories) + 1, Text: m.Text, Category: m.Category, Durable: m.Durable, Trust: trust, ExpressedAt: m.ExpressedAt, Ref: ref})
+		out.Memories = append(out.Memories, kernel.CardMemory{N: len(out.Memories) + 1, Text: m.Text, Category: m.Category, Durable: m.Durable, Trust: trust, ExpressedAt: m.ExpressedAt, Ref: ref})
 	}
 	deadlines, err := s.libraryDeadlinesTx(ctx, tx, scope, workspace.DeadlineQuery{})
 	if err != nil {
@@ -180,7 +180,7 @@ func (s *Store) handoverInputTx(ctx context.Context, tx pgx.Tx, scope memory.Sco
 	return out, []handoverDependency{}, refs, nil
 }
 
-func parseHandover(text string, memories []cardMemory) (string, bool) {
+func parseHandover(text string, memories []kernel.CardMemory) (string, bool) {
 	trusts := make([]string, len(memories))
 	for i, m := range memories {
 		trusts[i] = m.Trust

@@ -157,7 +157,7 @@ func readRunHistoryTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c work
 	if len(c.DeskTurnIDs) > delegateHistoryTurns {
 		return nil, memory.ErrInvalid
 	}
-	automatic, auto := ctx.Value(delegateHistoryKey{}).(delegateHistoryContext)
+	automatic, auto := ctx.Value(kernel.DelegateHistoryKey{}).(delegateHistoryContext)
 	history := []storedDeskContext{}
 	for _, id := range c.DeskTurnIDs {
 		if !memory.ID(id).Valid() {

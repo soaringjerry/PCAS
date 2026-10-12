@@ -1,4 +1,4 @@
-package postgres
+package statestore
 
 import (
 	"context"
@@ -13,12 +13,12 @@ import (
 
 // Program validation does not attempt to understand the original date language.
 // Unusable model dates are retained as unclear with their original wording.
-func writeOrganizedDeadlinesTx(ctx context.Context, tx pgx.Tx, owner memory.ID, m cardMemory, output []cardDeadline, timezone string) error {
+func WriteOrganizedDeadlinesTx(ctx context.Context, tx pgx.Tx, owner memory.ID, m kernel.CardMemory, output []kernel.CardDeadline, timezone string) error {
 	loc, err := time.LoadLocation(timezone)
 	if err != nil {
 		return err
 	}
-	normalized := []cardDeadline{}
+	normalized := []kernel.CardDeadline{}
 	for _, d := range output {
 		if !kernel.OneOf(d.Kind, "deadline", "appointment", "recurring", "unclear") || strings.TrimSpace(d.Title) == "" {
 			return memory.ErrInvalid

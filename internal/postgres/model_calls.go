@@ -76,7 +76,7 @@ func (a backgroundCalls) Prepare(ctx context.Context, request modelcall.Request,
 		}
 		var unfinished memory.ID
 		var outcome, accounting, lease, recovery, reservation string
-		attempt, limit := 1, maxAttempts
+		attempt, limit := 1, kernel.MaxAttempts
 		err := tx.QueryRow(ctx, `SELECT id::text,outcome,accounting_state,coalesce(actual_mode->>'leaseToken',''),recovery_state,attempt_number,attempt_limit,coalesce(reservation_id::text,'')
  FROM model_calls WHERE owner_id=$1 AND execution_id=$2 AND stage=$3 AND recovery_state<>'replaced' AND
  (outcome IN ('prepared','started','unknown') OR accounting_state IN ('reserved','pending','failed','held') OR (retry_of_id IS NOT NULL AND outcome='failed' AND accounting_state='not_reserved') OR recovery_state IN ('exhausted','budget_exhausted')) FOR UPDATE`, string(request.OwnerID), string(request.ExecutionID), request.Stage).Scan(&unfinished, &outcome, &accounting, &lease, &recovery, &attempt, &limit, &reservation)
@@ -292,10 +292,10 @@ func (a backgroundCalls) UnknownRecovery(ctx context.Context, job worker.Job) er
 		}
 		if recovery == "budget_exhausted" {
 			decision = &worker.JobError{Code: modelcall.ErrRecoveryBudgetExhausted.Error()}
-		} else if attempt >= limit || recovery == "exhausted" || job.Attempts >= maxAttempts && !persistentBackgroundStage(job.Stage) {
+		} else if attempt >= limit || recovery == "exhausted" || job.Attempts >= kernel.MaxAttempts && !kernel.PersistentBackgroundStage(job.Stage) {
 			decision = &worker.JobError{Code: modelcall.ErrRetryExhausted.Error()}
 			reason := modelcall.ErrRetryExhausted.Error()
-			if attempt < limit && job.Attempts >= maxAttempts {
+			if attempt < limit && job.Attempts >= kernel.MaxAttempts {
 				reason = "queue_attempts_exhausted"
 			}
 			_, err := tx.Exec(persist, `UPDATE model_calls SET recovery_state='exhausted',recovery_reason=$4,updated_at=clock_timestamp() WHERE owner_id=$1 AND execution_id=$2 AND stage=$3 AND outcome='unknown' AND recovery_state='active'`, string(job.OwnerID), string(job.ID), job.Stage, reason)

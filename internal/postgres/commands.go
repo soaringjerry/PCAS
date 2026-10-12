@@ -94,8 +94,8 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 		}
 		return saveCandidate(ctx, tx, scope, v)
 	case "addTask", "addIdea", "addProject":
-		origin := itemcommand.Origin{Actor: kernel.ActorFromContext(ctx), Collected: ctx.Value(secretaryHistoryKey{}) != nil}
-		if original, ok := ctx.Value(secretaryCreationKey{}).(workspace.SourceRef); ok {
+		origin := itemcommand.Origin{Actor: kernel.ActorFromContext(ctx), Collected: ctx.Value(kernel.SecretaryHistoryKey{}) != nil}
+		if original, ok := ctx.Value(kernel.SecretaryCreationKey{}).(workspace.SourceRef); ok {
 			origin.SecretarySource = &original
 			if log, ok := ctx.Value(actionlog.ActionLogKey{}).(actionlog.ActionLog); ok {
 				origin.ActionID = log.ID
@@ -337,7 +337,7 @@ func saveDoc(ctx context.Context, tx pgx.Tx, scope memory.Scope, doc workspace.D
 	return err
 }
 func (s *Store) saveAction(ctx context.Context, tx pgx.Tx, scope memory.Scope, item workspace.Item, summary string) error {
-	if history, ok := ctx.Value(secretaryHistoryKey{}).(*secretaryHistory); ok {
+	if history, ok := ctx.Value(kernel.SecretaryHistoryKey{}).(*secretaryHistory); ok {
 		history.record(item.ID, summary)
 		return itemstore.SaveItem(ctx, tx, scope, item)
 	}

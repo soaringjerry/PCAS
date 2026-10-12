@@ -1,4 +1,4 @@
-package postgres
+package usestore
 
 import (
 	"context"
@@ -20,30 +20,30 @@ import (
 // PostgreSQL now() is frozen at transaction start. The ordered turn keeps its
 // transaction across the model call, so completion checks must see revisions
 // committed during generation. Only this read-only verifier uses wall time.
-type useClockTx struct {
+type UseClockTx struct {
 	pgx.Tx
-	at time.Time
+	At time.Time
 }
 
-func (tx useClockTx) queryAt(sql string, args []any) (string, []any) {
+func (tx UseClockTx) queryAt(sql string, args []any) (string, []any) {
 	if !strings.Contains(sql, "now()") {
 		return sql, args
 	}
-	args = append(append([]any{}, args...), tx.at)
+	args = append(append([]any{}, args...), tx.At)
 	return strings.ReplaceAll(sql, "now()", fmt.Sprintf("$%d::timestamptz", len(args))), args
 }
-func (tx useClockTx) Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error) {
+func (tx UseClockTx) Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error) {
 	sql, args = tx.queryAt(sql, args)
 	return tx.Tx.Query(ctx, sql, args...)
 }
-func (tx useClockTx) QueryRow(ctx context.Context, sql string, args ...any) pgx.Row {
+func (tx UseClockTx) QueryRow(ctx context.Context, sql string, args ...any) pgx.Row {
 	sql, args = tx.queryAt(sql, args)
 	return tx.Tx.QueryRow(ctx, sql, args...)
 }
 
 // A queued prompt has not been sent yet. Preserve the existing access/currentness
 // fence before the first paid call; later input changes do not discard a draft.
-func checkQueuedUseRunPromptTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run workspace.Run) error {
+func CheckQueuedUseRunPromptTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run workspace.Run) error {
 	if err := accessstore.VerifyRunTx(ctx, tx, scope, run); err != nil {
 		return err
 	}
@@ -60,12 +60,12 @@ func checkQueuedUseRunPromptTx(ctx context.Context, tx pgx.Tx, scope memory.Scop
 	if retired {
 		return memory.ErrConflict
 	}
-	return checkUseRunPromptTx(ctx, tx, scope, run)
+	return CheckUseRunPromptTx(ctx, tx, scope, run)
 }
 
 // A run writes its destination item. Other input memories may change while
 // its paid draft is generated; their revision is not an abort condition.
-func checkUseRunPromptTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run workspace.Run) error {
+func CheckUseRunPromptTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run workspace.Run) error {
 	agent, err := kernel.QueryDocument[workspace.Agent](ctx, tx, "SELECT document FROM workspace_agents WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), run.AgentID)
 	if err != nil {
 		return err
@@ -84,7 +84,7 @@ func checkUseRunPromptTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run
 }
 
 // A changed destination or lost worker lease prevents further model work.
-func (s *Store) checkDeputySelfcheckContext(ctx context.Context, scope memory.Scope, run workspace.Run, token string) error {
+func (s *Use) CheckDeputySelfcheckContext(ctx context.Context, scope memory.Scope, run workspace.Run, token string) error {
 	return pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		var leased bool
 		if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM agent_runs WHERE owner_id=$1 AND id=$2 AND status='running' AND lease_token=$3 AND lease_until>now())", string(scope.OwnerID), run.ID, token).Scan(&leased); err != nil {
@@ -93,16 +93,16 @@ func (s *Store) checkDeputySelfcheckContext(ctx context.Context, scope memory.Sc
 		if !leased {
 			return memory.ErrConflict
 		}
-		if err := checkUseRunPromptTx(ctx, tx, scope, run); err != nil {
+		if err := CheckUseRunPromptTx(ctx, tx, scope, run); err != nil {
 			return err
 		}
-		return accessstore.VerifyRunAccessTx(ctx, useClockTx{Tx: tx, at: time.Now()}, scope, run)
+		return accessstore.VerifyRunAccessTx(ctx, UseClockTx{Tx: tx, At: time.Now()}, scope, run)
 	})
 }
 
 // Context-derived events refer to an identity already supplied to the model.
 // A concurrent revision can update that identity without invalidating the answer.
-func recordContextUseTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, event memory.UseEvent) error {
+func RecordContextUseTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, event memory.UseEvent) error {
 	if event.Kind != "user_mention" && event.Kind != "adoption" {
 		return memory.ErrInvalid
 	}

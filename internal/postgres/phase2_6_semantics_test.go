@@ -9,6 +9,7 @@ import (
 
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/postgres/usestore"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -83,7 +84,7 @@ func TestPhase26C3SemanticGroupAndDepthPiggybackPrimaryAnswer(t *testing.T) {
 	// Neither literal group name nor the old Chinese depth keywords occur here.
 	req := workspace.DeskTurnRequest{AgentID: "phase26", RequestID: string(memory.NewID()), Text: "Please examine the overlooked fictitious shelf more carefully."}
 	start := time.Now()
-	out, err := f.Store.DeskTurn(WithMemoryTier(f.Context, "light"), f.Scope, req)
+	out, err := f.Store.DeskTurn(usestore.WithMemoryTier(f.Context, "light"), f.Scope, req)
 	if err != nil {
 		t.Fatal(err)
 	}

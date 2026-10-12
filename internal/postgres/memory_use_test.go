@@ -14,6 +14,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/postgres/claimstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/usagelog"
+	"github.com/soaringjerry/PCAS/internal/postgres/usestore"
 	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 
 	"github.com/jackc/pgx/v5"
@@ -455,7 +456,7 @@ func TestB4HeavyCutoffUsesFinishedReaders(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	u := useContext{Ready: true}
+	u := usestore.UseContext{Ready: true}
 	for _, key := range keys {
 		u.Index = append(u.Index, workspace.StatusCardRef{Key: key, Name: "虚构限时组", Count: 3})
 	}
@@ -505,7 +506,7 @@ func TestB4RankFusionKeepsStructuredMatchesFirst(t *testing.T) {
 }
 
 func TestRuleScopeRequiresModelAndUsagePlansRemainReadable(t *testing.T) {
-	if ruleRelevance("起草邮件", "帮我写一封邮件") != 0 || ruleRelevance("", "虚构杂事") == 0 || ruleRelevance("盆栽浇水", "起草邮件") != 0 {
+	if usestore.RuleRelevance("起草邮件", "帮我写一封邮件") != 0 || usestore.RuleRelevance("", "虚构杂事") == 0 || usestore.RuleRelevance("盆栽浇水", "起草邮件") != 0 {
 		t.Fatal("rule applicability")
 	}
 	raw := usagelog.SafeUsePlan(json.RawMessage(`{"groups":["secret text","self:rule"],"question":"private text"}`))
@@ -583,7 +584,7 @@ func TestB4RetrievalGroupProposalsIgnoreLiteralNames(t *testing.T) {
 	}
 	aliases := map[string][]string{index[9].Key: {"虚构第九别名"}}
 	for _, text := range []string{"虚构组8和虚构第九别名", "虚构组0", "虚构完全不同请求"} {
-		selected := chooseUseGroups(text, index, ranked, aliases, 6, false)
+		selected := usestore.ChooseUseGroups(text, index, ranked, aliases, 6, false)
 		if len(selected) != 6 {
 			t.Fatal(selected)
 		}
@@ -593,7 +594,7 @@ func TestB4RetrievalGroupProposalsIgnoreLiteralNames(t *testing.T) {
 			}
 		}
 	}
-	if selected := chooseUseGroups("虚构组0 虚构第九别名", index, ranked, aliases, 12, true); len(selected) != 0 {
+	if selected := usestore.ChooseUseGroups("虚构组0 虚构第九别名", index, ranked, aliases, 12, true); len(selected) != 0 {
 		t.Fatal("semantic naming must await the existing model call", selected)
 	}
 }

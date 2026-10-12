@@ -21,6 +21,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/memoryread"
+	"github.com/soaringjerry/PCAS/internal/postgres/usestore"
 	"github.com/soaringjerry/PCAS/internal/postgres/workspacestore"
 	"github.com/soaringjerry/PCAS/internal/postgres/workstore"
 	"github.com/soaringjerry/PCAS/internal/retrieval"
@@ -137,7 +138,7 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 		if prepared, ok := ctx.Value(runContextKey{}).(preparedRunContext); ok {
 			plan = prepared.Plan
 		}
-		u, err := s.startUseContextTx(ctx, tx, scope)
+		u, err := s.StartUseContextTx(ctx, tx, scope)
 		if err != nil {
 			return err
 		}
@@ -149,12 +150,12 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 		// filling the prompt with globally recent memories. No nested model
 		// request is made while the owner's transaction is locked.
 		query := runHistoryQuery(item.Title, history, c.Prompt)
-		if omitted := len(query) - len(tail(query, delegateContextBytes)); omitted > 0 {
+		if omitted := len(query) - len(usestore.Tail(query, delegateContextBytes)); omitted > 0 {
 			if err := kernel.StageEvent(ctx, tx, scope.OwnerID, "deputy", "overflow", "retrieval_query_bytes", omitted); err != nil {
 				return err
 			}
 		}
-		query = tail(query, delegateContextBytes)
+		query = usestore.Tail(query, delegateContextBytes)
 		tokens := memory.SearchTokens(query)
 		if len(tokens) > 120 {
 			if err := kernel.StageEvent(ctx, tx, scope.OwnerID, "deputy", "overflow", "retrieval_query_terms", len(tokens)-120); err != nil {
@@ -201,20 +202,20 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 			}
 		}
 		historyText := runHistoryText(history)
-		if omitted := len(historyText) - len(tail(historyText, delegateContextBytes)); omitted > 0 {
+		if omitted := len(historyText) - len(usestore.Tail(historyText, delegateContextBytes)); omitted > 0 {
 			if err := kernel.StageEvent(ctx, tx, scope.OwnerID, "deputy", "overflow", "delegate_history_bytes", omitted); err != nil {
 				return err
 			}
 		}
-		brief.WriteString(tail(historyText, delegateContextBytes))
+		brief.WriteString(usestore.Tail(historyText, delegateContextBytes))
 		ordered := deputy.OrderMemories(memories, recall.Structured, preparedRefs, recall.Memories)
-		run.MemoryTier = memoryTierForStatus(memoryTier(ctx, c.Prompt, "heavy"), u.Ready)
+		run.MemoryTier = usestore.MemoryTierForStatus(usestore.MemoryTier(ctx, c.Prompt, "heavy"), u.Ready)
 		u.Tier = run.MemoryTier
 		ranked := ordered
 		if u.Ready {
 			ranked = deputy.RankMemories(memories, agent, recall.Structured, preparedRefs, recall.Memories)
 		}
-		if err = s.finishUseContextTx(ctx, tx, scope, agent, &item.ID, c.Prompt, ranked, &u); err != nil {
+		if err = s.FinishUseContextTx(ctx, tx, scope, agent, &item.ID, c.Prompt, ranked, &u); err != nil {
 			return err
 		}
 		if u.ProjectHandover != nil {
@@ -258,7 +259,7 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 		brief.Derived(artifactRefs)
 		recallDates := ""
 		if plan.Recall || recall.TimeRelaxed {
-			recallDates = recallDateInstructions
+			recallDates = usestore.RecallDateInstructions
 		}
 		brief.Request(c.Prompt, c.Kind, recallDates)
 		run.ContextMemoryIDs = append(run.ContextMemoryIDs, brief.MemoryIDs...)
@@ -370,7 +371,7 @@ func (s *Store) adoptRunTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, r
 	if !agent.Enabled {
 		return memory.ErrForbidden
 	}
-	if err := accessstore.VerifyRunAccessTx(ctx, useClockTx{Tx: tx, at: time.Now()}, scope, *run); err != nil {
+	if err := accessstore.VerifyRunAccessTx(ctx, usestore.UseClockTx{Tx: tx, At: time.Now()}, scope, *run); err != nil {
 		return err
 	}
 	item, err := itemstore.GetItem(ctx, tx, scope, run.ThingID)
@@ -555,7 +556,7 @@ func (s *Store) runAgent(ctx context.Context, steps deputy.Steps) (resultErr err
 			return err
 		}
 		if cached == nil && savedRow == nil {
-			if err := checkQueuedUseRunPromptTx(ctx, tx, scope, run); err != nil {
+			if err := usestore.CheckQueuedUseRunPromptTx(ctx, tx, scope, run); err != nil {
 				run.Status = "failed"
 				run.Cost = 0
 				run.Error = "记忆或授权已变化，请重新生成"
@@ -603,7 +604,7 @@ func (s *Store) runAgent(ctx context.Context, steps deputy.Steps) (resultErr err
 	if s.Models != nil && s.Models.ReloadSubscription && s.Models.Codex != nil {
 		defer s.Models.Codex.Close()
 	}
-	var u useContext
+	var u usestore.UseContext
 	var useErr error
 	if savedInput != nil {
 		run = savedInput.Run
@@ -612,10 +613,10 @@ func (s *Store) runAgent(ctx context.Context, steps deputy.Steps) (resultErr err
 	}
 	if savedRow == nil {
 		timing.BeginPrepare()
-		prepared, agent, prepareErr := s.deputyUseContext(workCtx, scope, &run)
+		prepared, agent, prepareErr := s.DeputyUseContext(workCtx, scope, &run)
 		u, useErr = prepared, prepareErr
 		if useErr == nil {
-			run.MemoryTier = memoryTierForStatus(run.MemoryTier, u.Ready)
+			run.MemoryTier = usestore.MemoryTierForStatus(run.MemoryTier, u.Ready)
 		}
 		if useErr == nil && u.Ready {
 			run.ProjectHandoverWrittenAt = nil
@@ -638,7 +639,7 @@ func (s *Store) runAgent(ctx context.Context, steps deputy.Steps) (resultErr err
 	}
 	verifyErr := useErr
 	if verifyErr == nil && savedRow == nil {
-		verifyErr = pgx.BeginFunc(workCtx, s.Pool, func(tx pgx.Tx) error { return checkUseRunPromptTx(workCtx, tx, scope, run) })
+		verifyErr = pgx.BeginFunc(workCtx, s.Pool, func(tx pgx.Tx) error { return usestore.CheckUseRunPromptTx(workCtx, tx, scope, run) })
 	}
 	result := ai.Result{}
 	timing.FinishPrepare()
@@ -724,7 +725,7 @@ func (s *Store) runAgent(ctx context.Context, steps deputy.Steps) (resultErr err
 		checkBudget := deputy.SelfcheckBudget(time.Since(answerStarted))
 		checkCtx, checkCancel := context.WithTimeout(workCtx, checkBudget)
 		checkedText := ""
-		err := s.checkDeputySelfcheckContext(checkCtx, scope, run, token)
+		err := s.CheckDeputySelfcheckContext(checkCtx, scope, run, token)
 		if err == nil {
 			request := deputy.SelfcheckRequest(scope.OwnerID, token, run, result.Text)
 			var paid *modelcall.PaidResult
@@ -814,7 +815,7 @@ func (s *Store) runAgent(ctx context.Context, steps deputy.Steps) (resultErr err
 			}
 		}
 		current.Cost = cost
-		if checkUseRunPromptTx(ctx, tx, scope, current) != nil {
+		if usestore.CheckUseRunPromptTx(ctx, tx, scope, current) != nil {
 			current.StaleContext = true
 		}
 		if accessstore.VerifyRunAccessTx(ctx, tx, scope, current) != nil {

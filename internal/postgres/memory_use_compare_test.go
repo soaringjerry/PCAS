@@ -11,6 +11,7 @@ import (
 
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/postgres/usestore"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -92,7 +93,7 @@ func TestB4ComparedRetirementAcrossSecretaryAndDeputy(t *testing.T) {
 			})
 			for _, tier := range []string{"light", "medium", "heavy"} {
 				req := turnRequest("虚构汇报期限是什么")
-				if _, err := s.DeskTurn(WithMemoryTier(context.Background(), tier), scope, req); err != nil {
+				if _, err := s.DeskTurn(usestore.WithMemoryTier(context.Background(), tier), scope, req); err != nil {
 					t.Fatal(tier, err)
 				}
 				b1HasRef(t, b1Refs(t, s, scope, req.RequestID), old, false)
@@ -194,7 +195,7 @@ func TestB4QueuedRetiredPromptNeverReachesModel(t *testing.T) {
 				old := compareFixture(t, s, scope, "虚构排队后退出的约束")[0]
 				b4Card(t, s, scope, "self:goal", "self", "虚构排队目标", compareDetail(t, s, scope, old))
 				state := workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "虚构排队目标"})
-				_, err := s.Execute(WithMemoryTier(context.Background(), tier), scope, workspace.Command{RequestID: string(memory.NewID()), ExpectedRevision: state.Revision, Type: "requestRun", ThingID: state.Tasks[0].ID, AgentID: "model", Kind: "plan", Prompt: "虚构排队目标"})
+				_, err := s.Execute(usestore.WithMemoryTier(context.Background(), tier), scope, workspace.Command{RequestID: string(memory.NewID()), ExpectedRevision: state.Revision, Type: "requestRun", ThingID: state.Tasks[0].ID, AgentID: "model", Kind: "plan", Prompt: "虚构排队目标"})
 				if err != nil {
 					t.Fatal(err)
 				}

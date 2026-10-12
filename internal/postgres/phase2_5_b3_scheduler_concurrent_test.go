@@ -13,6 +13,7 @@ import (
 
 	"github.com/soaringjerry/PCAS/internal/currentstate/handover"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/postgres/usestore"
 
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/soaringjerry/PCAS/internal/memory"
@@ -100,7 +101,7 @@ func phase25B3ConcurrentStatus(t *testing.T, rebuilding bool) {
 			return err
 		}},
 		{"secretary", func(ctx context.Context) error {
-			turn, err := userStore.DeskTurn(postgres.WithMemoryTier(ctx, "light"), f.scope, workspace.DeskTurnRequest{RequestID: string(memory.NewID()), Text: "处理虚构普通事项", AgentID: agent})
+			turn, err := userStore.DeskTurn(usestore.WithMemoryTier(ctx, "light"), f.scope, workspace.DeskTurnRequest{RequestID: string(memory.NewID()), Text: "处理虚构普通事项", AgentID: agent})
 			if err == nil && turn.Turn.Reply != "虚构并发办事回复。" {
 				return fmt.Errorf("unexpected secretary reply %q", turn.Turn.Reply)
 			}

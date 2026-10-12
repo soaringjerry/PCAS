@@ -20,6 +20,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/memoryread"
+	"github.com/soaringjerry/PCAS/internal/postgres/usestore"
 	"github.com/soaringjerry/PCAS/internal/postgres/workspacestore"
 	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 
@@ -58,7 +59,7 @@ type secretaryContext struct {
 	Counts            map[string]int
 	AttachmentContext string
 	Plan              memory.QueryPlan
-	Use               useContext
+	Use               usestore.UseContext
 	Tier              string
 }
 
@@ -95,7 +96,7 @@ func (s *Store) secretaryContextTx(ctx context.Context, tx pgx.Tx, scope memory.
 	if !out.Agent.Enabled || out.Agent.Channel == "manual" || !s.Models.Available(out.Agent.ID) {
 		return out, memory.ErrUnavailable
 	}
-	tasks, settings, deps, err := s.deskItemsContextTx(ctx, tx, scope, out.Agent, true)
+	tasks, settings, deps, err := s.DeskItemsContextTx(ctx, tx, scope, out.Agent, true)
 	if err != nil {
 		return out, err
 	}
@@ -268,10 +269,10 @@ func (s *Store) secretaryPrompt(ctx context.Context, tx pgx.Tx, scope memory.Sco
 		}
 	}
 	prompt.WriteString(workspaceText)
-	c.Tier = memoryTier(ctx, req.Text, "light")
+	c.Tier = usestore.MemoryTier(ctx, req.Text, "light")
 	var err error
-	c.Use, err = s.startUseContextTx(ctx, tx, scope)
-	c.Tier = memoryTierForStatus(c.Tier, c.Use.Ready)
+	c.Use, err = s.StartUseContextTx(ctx, tx, scope)
+	c.Tier = usestore.MemoryTierForStatus(c.Tier, c.Use.Ready)
 	c.Use.Location = loc
 	c.Use.Tier = c.Tier
 	if err != nil {
@@ -283,7 +284,7 @@ func (s *Store) secretaryPrompt(ctx context.Context, tx pgx.Tx, scope memory.Sco
 		candidates = 40
 		tokens = 12000
 	}
-	recall, err := search(ctx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: c.Agent.ID, Team: true}, memory.RecallRequest{Team: &memory.TeamRecall{Text: req.Text, Plan: c.Plan, ThingID: req.ThingID, ProjectID: projectID, Candidates: 20, RankFusion: c.Use.Ready}, Query: tail(earlier+req.Text, 4000), Mode: "remember", Context: memory.WorkingContext{Objects: []memory.ID{}}, Budget: memory.Budget{Candidates: candidates, Tokens: tokens, Edges: 15, Hops: 1}})
+	recall, err := search(ctx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: c.Agent.ID, Team: true}, memory.RecallRequest{Team: &memory.TeamRecall{Text: req.Text, Plan: c.Plan, ThingID: req.ThingID, ProjectID: projectID, Candidates: 20, RankFusion: c.Use.Ready}, Query: usestore.Tail(earlier+req.Text, 4000), Mode: "remember", Context: memory.WorkingContext{Objects: []memory.ID{}}, Budget: memory.Budget{Candidates: candidates, Tokens: tokens, Edges: 15, Hops: 1}})
 	if err != nil {
 		return "", nil, err
 	}
@@ -313,7 +314,7 @@ func (s *Store) secretaryPrompt(ctx context.Context, tx pgx.Tx, scope memory.Sco
 			ranked = append(ranked, m)
 		}
 	}
-	if err = s.finishUseContextTx(ctx, tx, scope, c.Agent, req.ThingID, req.Text, ranked, &c.Use); err != nil {
+	if err = s.FinishUseContextTx(ctx, tx, scope, c.Agent, req.ThingID, req.Text, ranked, &c.Use); err != nil {
 		return "", nil, err
 	}
 	given := secretary.Memories{Use: c.Use, Location: loc, Recalled: ranked, TimeRelaxed: recall.TimeRelaxed}
@@ -396,7 +397,7 @@ func (a deskStore) Turn(ctx context.Context, scope memory.Scope, req workspace.D
 	defer s.FinishExecutionTiming(ctx, scope.OwnerID, timing)
 	// The answer model may request heavy reading after its first response.
 	persistTimeout := secretary.TurnTimeout
-	if memoryTier(ctx, req.Text, "light") == "heavy" {
+	if usestore.MemoryTier(ctx, req.Text, "light") == "heavy" {
 		persistTimeout = secretary.TurnTimeout
 		var generationCancel context.CancelFunc
 		requestCtx, generationCancel = context.WithDeadline(requestCtx, turnStarted.Add(secretary.TurnTimeout-10*time.Second))
@@ -406,7 +407,7 @@ func (a deskStore) Turn(ctx context.Context, scope memory.Scope, req workspace.D
 	defer persistCancel()
 	hash := sha256.Sum256(kernel.JSON(req)) // The original body, before trimming, fences retries.
 	ownerPrepStarted := time.Now()
-	prepared, err := s.prepareUseOwner(ctx, scope)
+	prepared, err := s.PrepareUseOwner(ctx, scope)
 	if err != nil {
 		return out, err
 	}
@@ -695,7 +696,7 @@ type secretaryTurn struct {
 // to record.
 func (t *secretaryTurn) RecordUse(ctx context.Context, m workspace.Memory, kind string) error {
 	label := map[string]string{"adoption": ":adopt:", "user_mention": ":mention:"}[kind]
-	err := recordContextUseTx(ctx, t.tx, t.scope, memory.UseEvent{Ref: memory.Ref{ID: memory.ID(m.ID), Version: m.Version, Kind: memory.ClaimKind}, EventID: t.turnID + label + m.ID, Kind: kind, At: time.Now()})
+	err := usestore.RecordContextUseTx(ctx, t.tx, t.scope, memory.UseEvent{Ref: memory.Ref{ID: memory.ID(m.ID), Version: m.Version, Kind: memory.ClaimKind}, EventID: t.turnID + label + m.ID, Kind: kind, At: time.Now()})
 	if errors.Is(err, memory.ErrConflict) || errors.Is(err, memory.ErrNotFound) {
 		return nil
 	}
@@ -719,7 +720,7 @@ func (t *secretaryTurn) Cards(ctx context.Context, answer secretaryOutput, sent 
 func (t *secretaryTurn) Act(ctx context.Context, a secretaryAction, aliases map[string]workspace.Item) (secretary.ActionOutcome, error) {
 	s, c := t.store, t.c
 	out := secretary.ActionOutcome{ActionID: string(memory.NewID())}
-	actionCtx := actionlog.WithActionLog(kernel.WithActor(WithMemoryTier(ctx, c.Tier), "secretary"), out.ActionID, "desk", t.turnID, "秘书："+a.Op)
+	actionCtx := actionlog.WithActionLog(kernel.WithActor(usestore.WithMemoryTier(ctx, c.Tier), "secretary"), out.ActionID, "desk", t.turnID, "秘书："+a.Op)
 	projectReceipts := []workspace.DeskReceipt{}
 	actionCtx = context.WithValue(actionCtx, kernel.SecretaryCreationKey{}, t.original)
 	actionCtx = context.WithValue(actionCtx, secretaryProjectReceiptsKey{}, &projectReceipts)

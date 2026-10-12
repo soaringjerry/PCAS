@@ -15,6 +15,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres/interpstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/postgres/usestore"
 	"github.com/soaringjerry/PCAS/internal/worker"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
@@ -35,7 +36,7 @@ func phase26UserRequests(f *phase26LoadedFixture, s *Store) map[string]func(cont
 			return err
 		},
 		"secretary": func(ctx context.Context) error {
-			out, err := s.DeskTurn(WithMemoryTier(ctx, "light"), f.Scope, workspace.DeskTurnRequest{RequestID: string(memory.NewID()), AgentID: "phase26", Text: "Please answer this fictitious ordinary question."})
+			out, err := s.DeskTurn(usestore.WithMemoryTier(ctx, "light"), f.Scope, workspace.DeskTurnRequest{RequestID: string(memory.NewID()), AgentID: "phase26", Text: "Please answer this fictitious ordinary question."})
 			if err == nil && out.Turn.Reply != "Fictitious acceptance reply." {
 				return fmt.Errorf("unexpected secretary response %q", out.Turn.Reply)
 			}

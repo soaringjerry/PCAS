@@ -18,6 +18,7 @@ import (
 
 	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/postgres/usestore"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/worker"
@@ -358,7 +359,7 @@ func TestDeputyAndExtractionEachRecordTheirCall(t *testing.T) {
 		f.set(`{"summary":"完成。","output":"完成。","used":[],"actions":[]}`, 200)
 		st := workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "整理合成验收资料"})
 		// Isolate the one-call usage contract from medium's separate selfcheck.
-		ctx := WithMemoryTier(context.Background(), "light")
+		ctx := usestore.WithMemoryTier(context.Background(), "light")
 		_, err := s.Execute(ctx, scope, workspace.Command{RequestID: string(memory.NewID()), ExpectedRevision: st.Revision, Type: "requestRun", ThingID: st.Tasks[0].ID, AgentID: "model", Kind: "ask", Prompt: "整理合成验收资料"})
 		if err != nil {
 			t.Fatal(err)

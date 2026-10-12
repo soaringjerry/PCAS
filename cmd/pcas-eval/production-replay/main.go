@@ -24,6 +24,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/blob"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres"
+	"github.com/soaringjerry/PCAS/internal/postgres/usestore"
 	"github.com/soaringjerry/PCAS/internal/worker"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
@@ -264,7 +265,7 @@ func run(ctx context.Context, args []string) (runErr error) {
 		// database time; no complete worker loop runs in this diagnostic command.
 		work, cancel := context.WithTimeout(ctx, 4*time.Minute)
 		if op.MemoryTier != "" {
-			work = postgres.WithMemoryTier(work, op.MemoryTier)
+			work = usestore.WithMemoryTier(work, op.MemoryTier)
 		}
 		var opErr error
 		switch op.Kind {

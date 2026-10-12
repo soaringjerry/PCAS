@@ -14,6 +14,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/modelcall"
 	"github.com/soaringjerry/PCAS/internal/postgres/callstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/postgres/usestore"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -61,7 +62,7 @@ func TestDeputyGenerationRecoversWritesWithoutRepeatingPaidWork(t *testing.T) {
 			if mode == "ordinary" || mode == "revision" {
 				tier = "light"
 			}
-			response, err := s.Execute(WithMemoryTier(ctx, tier), scope, command)
+			response, err := s.Execute(usestore.WithMemoryTier(ctx, tier), scope, command)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -157,7 +158,7 @@ func TestDeputyOnAProviderWithoutSearchCompletesAndRecordsTheFallback(t *testing
 	})
 	state := workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "Fictitious ordinary deputy"})
 	workspaceCommand(t, s, scope, workspace.Command{Type: "requestRun", ThingID: state.Tasks[0].ID, AgentID: "model", Kind: "draft", Prompt: "Fictitious draft."})
-	if err := s.RunDeputyOnce(WithMemoryTier(context.Background(), "light")); err != nil {
+	if err := s.RunDeputyOnce(usestore.WithMemoryTier(context.Background(), "light")); err != nil {
 		t.Fatal(err)
 	}
 	state, err := s.Snapshot(context.Background(), scope)

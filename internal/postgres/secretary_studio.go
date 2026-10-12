@@ -73,7 +73,7 @@ func (s *Store) secretaryHandoverEvidenceTx(ctx context.Context, tx pgx.Tx, scop
 		thing = &item.ID
 	}
 	if len(memoryIDs) > 0 {
-		ms, err := s.useMemoriesTx(ctx, tx, scope, c.Agent, thing, memoryIDs)
+		ms, err := s.UseMemoriesTx(ctx, tx, scope, c.Agent, thing, memoryIDs)
 		if err != nil {
 			return err
 		}

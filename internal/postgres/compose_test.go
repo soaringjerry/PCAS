@@ -10,6 +10,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/modelcall"
 	"github.com/soaringjerry/PCAS/internal/modelcall/stagecall"
 	"github.com/soaringjerry/PCAS/internal/postgres/intakestore"
+	"github.com/soaringjerry/PCAS/internal/postgres/usestore"
 	"github.com/soaringjerry/PCAS/internal/retrieval"
 	"github.com/soaringjerry/PCAS/internal/worker"
 	"github.com/soaringjerry/PCAS/internal/workspace"
@@ -81,7 +82,7 @@ func (s *Store) RunDeputyOnce(ctx context.Context) error { return s.RunDeputy(ct
 
 func (s *Store) runAgentOnce(ctx context.Context) error { return s.runAgent(ctx, s.deputySteps()) }
 
-func (s *Store) heavyUse(ctx, persist context.Context, scope memory.Scope, agent workspace.Agent, thing *string, text string, u useContext, turn, run, phase string) ([]workspace.Memory, []memory.Ref, []string) {
+func (s *Store) heavyUse(ctx, persist context.Context, scope memory.Scope, agent workspace.Agent, thing *string, text string, u usestore.UseContext, turn, run, phase string) ([]workspace.Memory, []memory.Ref, []string) {
 	return s.memoryReader().Read(ctx, persist, reader.Task{Scope: scope, Agent: agent, Thing: thing, Text: text, Turn: turn, Run: run, Phase: phase}, u)
 }
 

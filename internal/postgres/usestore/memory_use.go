@@ -1,4 +1,4 @@
-package postgres
+package usestore
 
 import (
 	"context"
@@ -23,13 +23,13 @@ type memoryTierKey struct{}
 func WithMemoryTier(ctx context.Context, tier string) context.Context {
 	return context.WithValue(ctx, memoryTierKey{}, tier)
 }
-func memoryTier(ctx context.Context, text, fallback string) string {
+func MemoryTier(ctx context.Context, text, fallback string) string {
 	if tier, _ := ctx.Value(memoryTierKey{}).(string); kernel.OneOf(tier, "light", "medium", "heavy") {
 		return tier
 	}
 	return fallback
 }
-func memoryTierForStatus(tier string, ready bool) string {
+func MemoryTierForStatus(tier string, ready bool) string {
 	if tier == "heavy" && !ready {
 		return "medium"
 	}
@@ -37,12 +37,12 @@ func memoryTierForStatus(tier string, ready bool) string {
 }
 
 type (
-	useCoverage = contextbuilder.Coverage
-	useContext  = contextbuilder.UseContext
+	UseCoverage = contextbuilder.Coverage
+	UseContext  = contextbuilder.UseContext
 )
 
-func (s *Store) startUseContextTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) (useContext, error) {
-	u := useContext{Coverage: &useCoverage{}}
+func (s *Use) StartUseContextTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) (UseContext, error) {
+	u := UseContext{Coverage: &UseCoverage{}}
 	// Legacy migration fixtures have no live library columns in their schema.
 	// Do not accidentally resolve a newer view from the public search path.
 	if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM pg_attribute a JOIN pg_class c ON c.oid=a.attrelid JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname=current_schema() AND c.relname='claim_revisions' AND a.attname='category' AND NOT a.attisdropped)`).Scan(&u.Installed); err != nil {
@@ -69,7 +69,7 @@ func (s *Store) startUseContextTx(ctx context.Context, tx pgx.Tx, scope memory.S
 
 // Retrieval proposes groups by membership. Named groups and depth are selected
 // semantically in the existing secretary/reader model call.
-func chooseUseGroups(text string, index []workspace.StatusCardRef, ranked []workspace.Memory, aliases map[string][]string, limit int, namedOnly bool) []string {
+func ChooseUseGroups(text string, index []workspace.StatusCardRef, ranked []workspace.Memory, aliases map[string][]string, limit int, namedOnly bool) []string {
 	if namedOnly {
 		return []string{}
 	}
@@ -109,7 +109,7 @@ func chooseUseGroups(text string, index []workspace.StatusCardRef, ranked []work
 }
 
 // Access, exclusions and destination scope are checked in one set, not per memory.
-func (s *Store) useMemoriesTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, agent workspace.Agent, thing *string, ids []string) ([]workspace.Memory, error) {
+func (s *Use) UseMemoriesTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, agent workspace.Agent, thing *string, ids []string) ([]workspace.Memory, error) {
 	// Ungrouped retrieved claims use the same policy; the membership view is only
 	// used for group enumeration, not as an access condition.
 	allowed, err := kernel.QueryDocuments[string](ctx, tx, `SELECT to_jsonb(c.claim_id::text) FROM claim_revisions c JOIN memory_records r ON(r.owner_id,r.id,r.version)=(c.owner_id,c.claim_id,c.version)
@@ -135,7 +135,7 @@ func (s *Store) useMemoriesTx(ctx context.Context, tx pgx.Tx, scope memory.Scope
 }
 
 const globalRequirementRunes = 6000 // Dedicated space: about 3k Chinese tokens; overflow is counted.
-func (s *Store) finishUseContextTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, agent workspace.Agent, thing *string, text string, ranked []workspace.Memory, u *useContext) error {
+func (s *Use) FinishUseContextTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, agent workspace.Agent, thing *string, text string, ranked []workspace.Memory, u *UseContext) error {
 	if !u.Installed {
 		u.Supplemental = ranked
 		for _, m := range ranked {
@@ -207,7 +207,7 @@ func (s *Store) finishUseContextTx(ctx context.Context, tx pgx.Tx, scope memory.
 	for _, m := range ranked {
 		ids = append(ids, m.ID)
 	}
-	ms, err := s.useMemoriesTx(ctx, tx, scope, agent, thing, ids)
+	ms, err := s.UseMemoriesTx(ctx, tx, scope, agent, thing, ids)
 	if err != nil {
 		return err
 	}
@@ -291,7 +291,7 @@ func (s *Store) finishUseContextTx(ctx context.Context, tx pgx.Tx, scope memory.
 			accept(v)
 		}
 	}
-	u.Groups = chooseUseGroups(text, u.Index, ranked, nil, len(u.Index), false)
+	u.Groups = ChooseUseGroups(text, u.Index, ranked, nil, len(u.Index), false)
 	if u.ProjectGroup != "" {
 		u.Groups = append([]string{u.ProjectGroup}, u.Groups...)
 	}
@@ -300,20 +300,20 @@ func (s *Store) finishUseContextTx(ctx context.Context, tx pgx.Tx, scope memory.
 }
 
 // Compatibility helper; semantic applicability is exclusively model-owned.
-func ruleRelevance(applies, text string) int {
+func RuleRelevance(applies, text string) int {
 	if strings.TrimSpace(applies) == "" {
 		return 1
 	}
 	return 0
 }
 
-func (s *Store) prepareUseOwner(ctx context.Context, scope memory.Scope) (bool, error) {
+func (s *Use) PrepareUseOwner(ctx context.Context, scope memory.Scope) (bool, error) {
 	ready := false
 	err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		if err := s.EnsureOwner(ctx, tx, scope); err != nil {
 			return err
 		}
-		u, err := s.startUseContextTx(ctx, tx, scope)
+		u, err := s.StartUseContextTx(ctx, tx, scope)
 		if err != nil {
 			return err
 		}

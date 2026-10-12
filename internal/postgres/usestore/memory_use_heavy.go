@@ -1,4 +1,4 @@
-package postgres
+package usestore
 
 import (
 	"context"
@@ -14,9 +14,9 @@ import (
 )
 
 // ReaderStore gives the memory readers the memories of a group.
-func (s *Store) ReaderStore() reader.Store { return readerStore{s} }
+func (s *Use) ReaderStore() reader.Store { return readerStore{s} }
 
-type readerStore struct{ store *Store }
+type readerStore struct{ store *Use }
 
 func (a readerStore) GroupMembers(ctx context.Context, scope memory.Scope, key string) ([]string, error) {
 	ids := []string{}
@@ -32,7 +32,7 @@ func (a readerStore) Memories(ctx context.Context, scope memory.Scope, agent wor
 	var ms []workspace.Memory
 	err := pgx.BeginTxFunc(ctx, a.store.Pool, pgx.TxOptions{AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
 		var e error
-		ms, e = a.store.useMemoriesTx(ctx, tx, scope, agent, thing, ids)
+		ms, e = a.store.UseMemoriesTx(ctx, tx, scope, agent, thing, ids)
 		return e
 	})
 	return ms, err
@@ -42,8 +42,8 @@ func (a readerStore) Overflow(ctx context.Context, scope memory.Scope, reason st
 	a.store.recordUseOverflow(ctx, scope, reason, count)
 }
 
-func (s *Store) deputyUseContext(ctx context.Context, scope memory.Scope, run *workspace.Run) (useContext, workspace.Agent, error) {
-	var u useContext
+func (s *Use) DeputyUseContext(ctx context.Context, scope memory.Scope, run *workspace.Run) (UseContext, workspace.Agent, error) {
+	var u UseContext
 	var agent workspace.Agent
 	err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		var err error
@@ -51,7 +51,7 @@ func (s *Store) deputyUseContext(ctx context.Context, scope memory.Scope, run *w
 		if err != nil {
 			return err
 		}
-		u, err = s.startUseContextTx(ctx, tx, scope)
+		u, err = s.StartUseContextTx(ctx, tx, scope)
 		if err != nil {
 			return err
 		}
@@ -65,12 +65,12 @@ func (s *Store) deputyUseContext(ctx context.Context, scope memory.Scope, run *w
 		}
 		u.Location = kernel.Location(settings)
 		u.Tier = run.MemoryTier
-		return s.finishUseContextTx(ctx, tx, scope, agent, &run.ThingID, run.Prompt, ms, &u)
+		return s.FinishUseContextTx(ctx, tx, scope, agent, &run.ThingID, run.Prompt, ms, &u)
 	})
 	return u, agent, err
 }
 
-func (s *Store) recordUseOverflow(ctx context.Context, scope memory.Scope, reason string, count int) {
+func (s *Use) recordUseOverflow(ctx context.Context, scope memory.Scope, reason string, count int) {
 	persist, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 	defer cancel()
 	if _, err := s.Pool.Exec(persist, "INSERT INTO background_stage_events(owner_id,stage,outcome,reason,count) VALUES($1,'reader','overflow',$2,$3)", string(scope.OwnerID), reason, count); err != nil {

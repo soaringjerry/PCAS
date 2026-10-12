@@ -8,6 +8,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres/interpstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/postgres/usestore"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -46,7 +47,7 @@ func TestPhase26B1C8LegacyCardsFrozenUnreadAndFallbackAnswers(t *testing.T) {
 	ctx, cancel := context.WithTimeout(f.Context, 10*time.Second)
 	defer cancel()
 	go func() {
-		out, err := f.Store.DeskTurn(WithMemoryTier(ctx, "light"), f.Scope, workspace.DeskTurnRequest{AgentID: "phase26", RequestID: string(memory.NewID()), Text: "Please answer this fictitious question without a handover."})
+		out, err := f.Store.DeskTurn(usestore.WithMemoryTier(ctx, "light"), f.Scope, workspace.DeskTurnRequest{AgentID: "phase26", RequestID: string(memory.NewID()), Text: "Please answer this fictitious question without a handover."})
 		done <- result{out, err}
 	}()
 	select {

@@ -16,6 +16,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres/interpstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/postgres/usestore"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -24,7 +25,7 @@ func phase26HTTPUserRequests(t *testing.T, f *phase26LoadedFixture, s *Store) ma
 	api := httpapi.New(s, s, b1Auth{f.Scope}, s.Ping, slog.New(slog.NewTextHandler(io.Discard, nil)), httpapi.Options{Workspace: s, Editor: s, Writer: s})
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Keep the same declared light-tier foreground profile as the Store matrix.
-		api.ServeHTTP(w, r.WithContext(WithMemoryTier(r.Context(), "light")))
+		api.ServeHTTP(w, r.WithContext(usestore.WithMemoryTier(r.Context(), "light")))
 	}))
 	t.Cleanup(server.Close)
 	call := func(ctx context.Context, method, path string, body any, secretary bool) error {

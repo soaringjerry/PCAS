@@ -14,6 +14,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/app"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres"
+	"github.com/soaringjerry/PCAS/internal/postgres/usestore"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -117,7 +118,7 @@ func tierProvider(name string, databases chan *tierDatabase, categories map[stri
 		}
 		d.bridge.reset("", s, t, name)
 		request := workspace.DeskTurnRequest{RequestID: string(memory.NewID()), AgentID: "v2-tiers", Text: t.Request}
-		out, err := app.Secretary(d.store).DeskTurn(postgres.WithMemoryTier(ctx, name), d.scope, request)
+		out, err := app.Secretary(d.store).DeskTurn(usestore.WithMemoryTier(ctx, name), d.scope, request)
 		usage, inputChars, contextChars := d.bridge.metrics()
 		e := doing.Evidence{InputChars: inputChars, ContextChars: contextChars, Usage: &usage}
 		for _, n := range usage.Calls {

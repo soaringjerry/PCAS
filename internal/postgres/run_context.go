@@ -11,6 +11,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/postgres/intakestore"
 	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/postgres/usestore"
 	"github.com/soaringjerry/PCAS/internal/retrieval"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
@@ -69,7 +70,7 @@ func (s *Store) prepareRunContext(ctx context.Context, scope memory.Scope, c wor
 			return err
 		}
 		plan = memory.PlanQuery(c.Prompt, s.BusinessNow(), kernel.Location(settings))
-		u, err := s.startUseContextTx(ctx, tx, scope)
+		u, err := s.StartUseContextTx(ctx, tx, scope)
 		if err != nil {
 			return err
 		}
@@ -93,16 +94,16 @@ func (s *Store) prepareRunContext(ctx context.Context, scope memory.Scope, c wor
 				return err
 			}
 			for _, doc := range docs {
-				query += " " + doc.Title + " " + tail(doc.Body, delegateContextBytes)
+				query += " " + doc.Title + " " + usestore.Tail(doc.Body, delegateContextBytes)
 			}
 		}
 		query = runHistoryQuery(query, history, c.Prompt)
-		if omitted := len(query) - len(tail(query, delegateContextBytes)); omitted > 0 {
+		if omitted := len(query) - len(usestore.Tail(query, delegateContextBytes)); omitted > 0 {
 			if err := kernel.StageEvent(ctx, tx, scope.OwnerID, "deputy", "overflow", "retrieval_query_bytes", omitted); err != nil {
 				return err
 			}
 		}
-		query = tail(query, delegateContextBytes)
+		query = usestore.Tail(query, delegateContextBytes)
 		return nil
 	}); err != nil {
 		return ctx, err

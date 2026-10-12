@@ -10,6 +10,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/postgres/accessstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/postgres/usestore"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 )
@@ -28,7 +29,7 @@ func (s *Store) checkSecretaryUseContextTx(ctx context.Context, tx pgx.Tx, scope
 	if item, ok := c.Aliases["THIS"]; ok {
 		thing = item.ID
 	}
-	if err := accessstore.VerifyRunAccessTx(ctx, useClockTx{Tx: tx, at: time.Now()}, scope, workspace.Run{ThingID: thing, AgentID: c.Agent.ID, ContextVersions: c.Dependencies}); err != nil {
+	if err := accessstore.VerifyRunAccessTx(ctx, usestore.UseClockTx{Tx: tx, At: time.Now()}, scope, workspace.Run{ThingID: thing, AgentID: c.Agent.ID, ContextVersions: c.Dependencies}); err != nil {
 		return fmt.Errorf("%w: input access changed", memory.ErrForbidden)
 	}
 	return nil

@@ -109,11 +109,11 @@ func TestPhase26G6B3B7B8LibraryAndC1C2Content(t *testing.T) {
 	}
 	err = pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		agent := workspace.Agent{ID: "phase26", MemoryKinds: []string{"fact", "preference", "decision", "intention", "plan"}}
-		u, err := s.startUseContextTx(ctx, tx, f.Scope)
+		u, err := s.StartUseContextTx(ctx, tx, f.Scope)
 		if err != nil {
 			return err
 		}
-		if err = s.finishUseContextTx(ctx, tx, f.Scope, agent, nil, "A fictitious question with no scope keywords", nil, &u); err != nil {
+		if err = s.FinishUseContextTx(ctx, tx, f.Scope, agent, nil, "A fictitious question with no scope keywords", nil, &u); err != nil {
 			return err
 		}
 		unrestricted := 0
@@ -347,11 +347,11 @@ func TestPhase26G4A6A10ComparisonCoverageAndUnchangedScheduling(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
-		u, err := s.startUseContextTx(ctx, tx, f.Scope)
+		u, err := s.StartUseContextTx(ctx, tx, f.Scope)
 		if err != nil {
 			return err
 		}
-		if err := s.finishUseContextTx(ctx, tx, f.Scope, workspace.Agent{ID: "phase26", MemoryKinds: []string{"fact", "preference", "decision", "intention", "plan"}}, nil, "Fictitious request after requirement deduplication", nil, &u); err != nil {
+		if err := s.FinishUseContextTx(ctx, tx, f.Scope, workspace.Agent{ID: "phase26", MemoryKinds: []string{"fact", "preference", "decision", "intention", "plan"}}, nil, "Fictitious request after requirement deduplication", nil, &u); err != nil {
 			return err
 		}
 		unrestricted := 0

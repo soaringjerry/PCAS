@@ -13,6 +13,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/postgres/callstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/usagelog"
+	"github.com/soaringjerry/PCAS/internal/postgres/usestore"
 	"github.com/soaringjerry/PCAS/internal/postgres/workspacestore"
 	"github.com/soaringjerry/PCAS/internal/worker"
 	"github.com/soaringjerry/PCAS/internal/workspace"
@@ -128,7 +129,7 @@ func (s *Store) finishPaidRevise(ctx context.Context, scope memory.Scope, curren
 			if err := validateReviseTargetTx(ctx, tx, scope, run); err != nil {
 				run.StaleContext = true
 				run.Error = "目标文档在工作期间已改变；结果保留，未覆盖当前文档"
-			} else if checkUseRunPromptTx(ctx, tx, scope, run) != nil {
+			} else if usestore.CheckUseRunPromptTx(ctx, tx, scope, run) != nil {
 				run.StaleContext = true
 				run.Error = "事项在工作期间已改变；结果保留，未采纳"
 			}

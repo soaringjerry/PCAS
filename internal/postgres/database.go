@@ -29,6 +29,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/postgres/sourcestore"
 	"github.com/soaringjerry/PCAS/internal/postgres/statestore"
 	"github.com/soaringjerry/PCAS/internal/postgres/usagelog"
+	"github.com/soaringjerry/PCAS/internal/postgres/usestore"
 	"github.com/soaringjerry/PCAS/internal/postgres/workspacestore"
 	"github.com/soaringjerry/PCAS/internal/postgres/workstore"
 )
@@ -40,6 +41,7 @@ var migrations embed.FS
 // storage packages share.
 type Store struct {
 	*kernel.DB
+	*usestore.Use
 	*interpstore.Interp
 	*workspacestore.Workspace
 	*intakestore.Intake
@@ -191,9 +193,11 @@ func newStore(db *kernel.DB) *Store {
 	memoryPart := &memorystore.Memory{DB: db}
 	schedulesPart := &schedulestore.Schedules{DB: db}
 	statePart := &statestore.State{DB: db, Reader: readerPart}
+	usePart := &usestore.Use{DB: db, Reader: readerPart, Owners: ownersPart, State: statePart}
 	workspacePart := &workspacestore.Workspace{DB: db, Claims: claimsPart, Intake: intakePart, Reader: readerPart, Owners: ownersPart, Sources: sourcesPart, State: statePart}
 	return &Store{
 		DB:        db,
+		Use:       usePart,
 		Interp:    interpPart,
 		Workspace: workspacePart,
 		Intake:    intakePart,

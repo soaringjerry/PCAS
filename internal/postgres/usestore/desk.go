@@ -1,4 +1,4 @@
-package postgres
+package usestore
 
 import (
 	"context"
@@ -16,7 +16,7 @@ import (
 )
 
 // tail keeps the last n bytes of s without splitting a character.
-func tail(s string, n int) string {
+func Tail(s string, n int) string {
 	if len(s) <= n {
 		return s
 	}
@@ -29,18 +29,18 @@ func tail(s string, n int) string {
 
 // deskContextTx keeps the legacy answer and secretary on the same visibility
 // and derived-artifact rules. Stable ordering is used by the secretary cache.
-func (s *Store) deskContextTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, agent workspace.Agent, stable bool) ([]workspace.Memory, []workspace.Item, workspace.Settings, []memory.Ref, error) {
+func (s *Use) deskContextTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, agent workspace.Agent, stable bool) ([]workspace.Memory, []workspace.Item, workspace.Settings, []memory.Ref, error) {
 	memories, err := s.MemoriesTx(ctx, tx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: agent.ID}, true)
 	if err != nil {
 		return nil, nil, workspace.Settings{}, nil, err
 	}
-	tasks, settings, refs, err := s.deskItemsContextTx(ctx, tx, scope, agent, stable)
+	tasks, settings, refs, err := s.DeskItemsContextTx(ctx, tx, scope, agent, stable)
 	return memories, tasks, settings, refs, err
 }
 
 // Secretary recall supplies the memory identities later; the legacy answer
 // still needs its complete memory context. Share only the item/settings reads.
-func (s *Store) deskItemsContextTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, agent workspace.Agent, stable bool) ([]workspace.Item, workspace.Settings, []memory.Ref, error) {
+func (s *Use) DeskItemsContextTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, agent workspace.Agent, stable bool) ([]workspace.Item, workspace.Settings, []memory.Ref, error) {
 	order := "due_at NULLS LAST, updated_at DESC"
 	if stable {
 		order = "created_at,id"
@@ -61,8 +61,8 @@ func (s *Store) deskItemsContextTx(ctx context.Context, tx pgx.Tx, scope memory.
 	settings, err := kernel.QueryDocument[workspace.Settings](ctx, tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1", string(scope.OwnerID))
 	return tasks, settings, dependencies, err
 }
-func (s *Store) deskNow(loc *time.Location) string {
+func (s *Use) DeskNow(loc *time.Location) string {
 	return secretary.Now(s.BusinessNow(), loc)
 }
 
-var recallDateInstructions = prompts.Must("recall-date").Text()
+var RecallDateInstructions = prompts.Must("recall-date").Text()

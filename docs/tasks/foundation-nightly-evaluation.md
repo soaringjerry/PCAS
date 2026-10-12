@@ -9,9 +9,10 @@ The method is `current`: the product's recall route gives the context of each an
 One night runs 60 of the 120 tasks. The other 60 tasks run the next night, so that two nights cover the suite.
 Each task makes one answer call and two judge calls. The database is a disposable container that the run script owns and removes.
 
-The run uses a dedicated signed-in Codex home, not the home of the live service and not a personal home.
-The default path is `/root/PCAS-private/codex-eval`. `PCAS_EVAL_CODEX_HOME` gives another path.
-A night without that home makes no call. The script writes `skipped` with the reason and stops with status 2.
+The run needs a signed-in Codex home that is not the home of the live service.
+The script's default path is `/root/PCAS-private/codex-eval`. `PCAS_EVAL_CODEX_HOME` gives another path.
+The owner decided on 2026-10-12 to use the host's own Codex home, `/root/.codex`. The scheduled job sets `PCAS_EVAL_CODEX_HOME` to it. The evaluation therefore shares that login and its quota with the other uses of the host's Codex.
+A night without a signed-in home makes no call. The script writes `skipped` with the reason and stops with status 2.
 
 ## Spending Limit
 

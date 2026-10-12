@@ -17,10 +17,10 @@ import (
 )
 
 // Existing replay helpers use the production default clock through this adapter.
-func deskNow(loc *time.Location) string { return (&Store{DB: &kernel.DB{}}).DeskNow(loc) }
+func deskNow(loc *time.Location) string { return newStore(&kernel.DB{}).DeskNow(loc) }
 
 func TestBusinessClockDefaultsToActualTimeAndCanBeRestored(t *testing.T) {
-	s := &Store{DB: &kernel.DB{}}
+	s := newStore(&kernel.DB{})
 	before := time.Now()
 	actual := s.BusinessNow()
 	after := time.Now()

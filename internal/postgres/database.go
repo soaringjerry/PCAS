@@ -65,7 +65,6 @@ type Store struct {
 	*usagelog.Usage
 	*memorystore.Memory
 	*memoryread.Reader
-	callstore.CallPending
 }
 
 // SetModels gives the store the configured models. The store reads their

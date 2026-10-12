@@ -618,120 +618,19 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 				original.SourceID = string(ref.ID)
 				original.Version = ref.Version
 			}
-			var notRead []string
+			in := secretary.Answer{Output: answer, Sent: sent, Aliases: c.Aliases, KeepsSentence: text != "" && req.SmokeID == ""}
 			if c.Use.Coverage != nil {
-				notRead = c.Use.Coverage.Skipped
+				in.NotRead, in.ReaderNotices = c.Use.Coverage.Skipped, c.Use.Coverage.Notices
 			}
-			out.Turn.Reply = secretary.Reply(answer.Reply, notRead)
-			if c.Use.Coverage != nil {
-				for _, note := range c.Use.Coverage.Notices {
-					out.Turn.Receipts = append(out.Turn.Receipts, workspace.DeskReceipt{Op: "reader", Text: note, Status: "skipped"})
-				}
-			}
-			var last *workspace.SecretaryTurn
 			if len(c.History) > 0 {
-				last = &c.History[len(c.History)-1]
+				in.Last = &c.History[len(c.History)-1]
 			}
-			used := map[string][]workspace.Memory{"adoption": secretary.Adopted(answer.MemoryPlan, sent, last), "user_mention": secretary.Mentioned(answer.MemoryPlan, sent)}
-			for _, kind := range []string{"adoption", "user_mention"} {
-				label := map[string]string{"adoption": ":adopt:", "user_mention": ":mention:"}[kind]
-				for _, m := range used[kind] {
-					if err := recordContextUseTx(ctx, tx, scope, memory.UseEvent{Ref: memory.Ref{ID: memory.ID(m.ID), Version: m.Version, Kind: memory.ClaimKind}, EventID: out.Turn.ID + label + m.ID, Kind: kind, At: time.Now()}); err != nil && !errors.Is(err, memory.ErrConflict) && !errors.Is(err, memory.ErrNotFound) {
-						return err
-					}
-				}
-			}
-
-			out.Turn.Ask = answer.Ask
-			if out.Turn.Ask != nil && out.Turn.Ask.Options == nil {
-				out.Turn.Ask.Options = []string{}
-			}
-			// Keep execution-only N aliases out of the model's original context
-			// and cards. Array positions include skipped and malformed actions.
-			actionAliases := make(map[string]workspace.Item, len(c.Aliases)+10)
-			for alias, item := range c.Aliases {
-				actionAliases[alias] = item
-			}
-			steps, overLimit := secretary.PlanActions(answer.Actions)
-			if overLimit > 0 {
-				if err := stageEventTx(ctx, tx, scope.OwnerID, "secretary", "overflow", "action_limit", overLimit); err != nil {
-					return err
-				}
-			}
-			for _, step := range steps {
-				i, a := step.Index, step.Action
-				if step.Skipped != nil {
-					if a.ParseErr != nil && i < secretary.ActionLimit {
-						slog.WarnContext(ctx, "secretary action skipped", "stage", "parse", "error_type", secretary.ErrorType("parse", a.ParseErr))
-					}
-					out.Turn.Receipts = append(out.Turn.Receipts, *step.Skipped)
-					continue
-				}
-				actionID := string(memory.NewID())
-				actionCtx := withActionLog(withActor(WithMemoryTier(ctx, c.Tier), "secretary"), actionID, "desk", out.Turn.ID, "秘书："+a.Op)
-				projectReceipts := []workspace.DeskReceipt{}
-				actionCtx = context.WithValue(actionCtx, secretaryCreationKey{}, original)
-				actionCtx = context.WithValue(actionCtx, secretaryProjectReceiptsKey{}, &projectReceipts)
-				actionCtx = context.WithValue(actionCtx, secretaryDocumentsKey{}, c.Documents)
-				actionCtx = context.WithValue(actionCtx, secretaryMemoriesKey{}, sent)
-				history := delegateHistoryContext{ConversationID: c.ConversationID}
-				for _, turn := range c.History {
-					history.IDs = append(history.IDs, turn.ID)
-				}
-				actionCtx = context.WithValue(actionCtx, delegateHistoryKey{}, history)
-				actionTx, err := tx.Begin(ctx)
-				if err != nil {
-					return err
-				}
-				if err = beginActionLogTx(actionCtx, actionTx); err != nil {
-					_ = actionTx.Rollback(ctx)
-					return err
-				}
-				receipt, actionErr := s.executeSecretaryActionTx(actionCtx, actionTx, scope, a, actionAliases, c.Agent, deskLocation(c.Settings), pointerValue(req.ThingID))
-				if actionErr != nil || receipt.Status == "skipped" {
-					if err = actionTx.Rollback(ctx); err != nil {
-						return err
-					}
-					receipt = secretary.Unfinished(a.Op, receipt, actionErr)
-				} else {
-					// The summary and receipt describe the actual persisted result.
-					actionCtx = withActionLog(actionCtx, actionID, "desk", out.Turn.ID, receipt.Text)
-					if err = flushActionLog(actionCtx, actionTx, scope); err != nil {
-						_ = actionTx.Rollback(ctx)
-						return err
-					}
-					var logged bool
-					if err = actionTx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM action_log WHERE owner_id=$1 AND id=$2)", string(scope.OwnerID), actionID).Scan(&logged); err != nil {
-						_ = actionTx.Rollback(ctx)
-						return err
-					}
-					if logged {
-						receipt.ActionID = &actionID
-						receipt.Undoable = true
-					} else {
-						receipt = secretary.NothingChanged(a.Op)
-					}
-					out.Turn.Receipts = append(out.Turn.Receipts, projectReceipts...)
-					if err = actionTx.Commit(ctx); err != nil {
-						return err
-					}
-					if alias := secretary.CreatedAlias(a.Op, i); alias != "" && receipt.Status == "done" && receipt.ThingID != nil {
-						item, err := getItem(ctx, tx, scope, *receipt.ThingID)
-						if err != nil {
-							return err
-						}
-						actionAliases[alias] = item
-					}
-				}
-				out.Turn.Receipts = append(out.Turn.Receipts, receipt)
-			}
-			if answer.Remember && text != "" && req.SmokeID == "" {
-				out.Turn.Receipts = append(out.Turn.Receipts, workspace.DeskReceipt{Op: "remember", Text: "记下了，会整理进记忆", Status: "done"})
-			}
-			out.Turn.Cards, err = s.secretaryCardsTx(ctx, tx, scope, answer, sent, c.Sources, c.Aliases, deskLocation(c.Settings), c.Plan.Recall)
+			applied, err := secretary.Apply(ctx, &secretaryTurn{store: s, tx: tx, scope: scope, req: req, c: &c, turnID: out.Turn.ID, original: original, sent: sent}, in)
 			if err != nil {
 				return err
 			}
+			out.Turn.Reply, out.Turn.Ask, out.Turn.Cards = applied.Reply, applied.Ask, applied.Cards
+			out.Turn.Receipts = append(out.Turn.Receipts, applied.Receipts...)
 		}
 		for _, a := range attachments {
 			receipt, err := s.deskAttachmentReceiptTx(ctx, tx, scope, out.Turn.ID, a)
@@ -770,6 +669,89 @@ func pointerValueOrNull(v *string) any {
 	}
 	return *v
 }
+
+// secretaryTurn is the unit of work in which the answer of one turn is
+// applied. Its writes are in the transaction of the turn.
+type secretaryTurn struct {
+	store    *Store
+	tx       pgx.Tx
+	scope    memory.Scope
+	req      workspace.DeskTurnRequest
+	c        *secretaryContext
+	turnID   string
+	original workspace.SourceRef
+	sent     map[string]workspace.Memory
+}
+
+// A memory that was deleted or changed since the turn showed it has no use
+// to record.
+func (t *secretaryTurn) RecordUse(ctx context.Context, m workspace.Memory, kind string) error {
+	label := map[string]string{"adoption": ":adopt:", "user_mention": ":mention:"}[kind]
+	err := recordContextUseTx(ctx, t.tx, t.scope, memory.UseEvent{Ref: memory.Ref{ID: memory.ID(m.ID), Version: m.Version, Kind: memory.ClaimKind}, EventID: t.turnID + label + m.ID, Kind: kind, At: time.Now()})
+	if errors.Is(err, memory.ErrConflict) || errors.Is(err, memory.ErrNotFound) {
+		return nil
+	}
+	return err
+}
+
+func (t *secretaryTurn) Overflow(ctx context.Context, reason string, count int) error {
+	return stageEventTx(ctx, t.tx, t.scope.OwnerID, "secretary", "overflow", reason, count)
+}
+
+func (t *secretaryTurn) Item(ctx context.Context, id string) (workspace.Item, error) {
+	return getItem(ctx, t.tx, t.scope, id)
+}
+
+func (t *secretaryTurn) Cards(ctx context.Context, answer secretaryOutput, sent map[string]workspace.Memory) ([]workspace.DeskCard, error) {
+	return t.store.secretaryCardsTx(ctx, t.tx, t.scope, answer, sent, t.c.Sources, t.c.Aliases, deskLocation(t.c.Settings), t.c.Plan.Recall)
+}
+
+// Act does one action in a transaction of its own inside the turn, with its
+// own action record, so that the owner can undo it alone.
+func (t *secretaryTurn) Act(ctx context.Context, a secretaryAction, aliases map[string]workspace.Item) (secretary.ActionOutcome, error) {
+	s, c := t.store, t.c
+	out := secretary.ActionOutcome{ActionID: string(memory.NewID())}
+	actionCtx := withActionLog(withActor(WithMemoryTier(ctx, c.Tier), "secretary"), out.ActionID, "desk", t.turnID, "秘书："+a.Op)
+	projectReceipts := []workspace.DeskReceipt{}
+	actionCtx = context.WithValue(actionCtx, secretaryCreationKey{}, t.original)
+	actionCtx = context.WithValue(actionCtx, secretaryProjectReceiptsKey{}, &projectReceipts)
+	actionCtx = context.WithValue(actionCtx, secretaryDocumentsKey{}, c.Documents)
+	actionCtx = context.WithValue(actionCtx, secretaryMemoriesKey{}, t.sent)
+	history := delegateHistoryContext{ConversationID: c.ConversationID}
+	for _, turn := range c.History {
+		history.IDs = append(history.IDs, turn.ID)
+	}
+	actionCtx = context.WithValue(actionCtx, delegateHistoryKey{}, history)
+	actionTx, err := t.tx.Begin(ctx)
+	if err != nil {
+		return out, err
+	}
+	if err = beginActionLogTx(actionCtx, actionTx); err != nil {
+		_ = actionTx.Rollback(ctx)
+		return out, err
+	}
+	out.Receipt, out.Err = s.executeSecretaryActionTx(actionCtx, actionTx, t.scope, a, aliases, c.Agent, deskLocation(c.Settings), pointerValue(t.req.ThingID))
+	if !secretary.Done(out.Receipt, out.Err) {
+		return out, actionTx.Rollback(ctx)
+	}
+	// The summary and receipt describe the actual persisted result.
+	actionCtx = withActionLog(actionCtx, out.ActionID, "desk", t.turnID, out.Receipt.Text)
+	if err = flushActionLog(actionCtx, actionTx, t.scope); err != nil {
+		_ = actionTx.Rollback(ctx)
+		return out, err
+	}
+	if err = actionTx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM action_log WHERE owner_id=$1 AND id=$2)", string(t.scope.OwnerID), out.ActionID).Scan(&out.Changed); err != nil {
+		_ = actionTx.Rollback(ctx)
+		return out, err
+	}
+	out.Companions = projectReceipts
+	if err = actionTx.Commit(ctx); err != nil {
+		return out, err
+	}
+	out.Committed = true
+	return out, nil
+}
+
 func (s *Store) DeskTurns(ctx context.Context, scope memory.Scope, conversationID string) (workspace.DeskTurnsResponse, error) {
 	out := workspace.DeskTurnsResponse{ConversationID: conversationID, Turns: []workspace.SecretaryTurn{}}
 	if err := requireOwner(scope); err != nil {

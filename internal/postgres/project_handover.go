@@ -26,8 +26,6 @@ const EffortStage = effort.Stage
 type projectInputPart = projecthandover.Part
 type projectHandoverInput = projecthandover.Input
 
-func emptyProjectHandover(id string) workspace.ProjectHandover { return projecthandover.Empty(id) }
-
 func (s *Store) ReadProjectHandover(ctx context.Context, scope memory.Scope, id string) (workspace.ProjectHandover, error) {
 	out := emptyProjectHandover(id)
 	if err := kernel.RequireOwner(scope); err != nil {

@@ -509,9 +509,3 @@ func resolveOrganizeGroupsTx(ctx context.Context, tx pgx.Tx, owner memory.ID, it
 	}
 	return out, nil
 }
-
-// Preserve the classifications unaffected by v3; v1 still owes the v2 deadline
-// extraction. This comparison is used by scheduling, progress and consumers.
-func organizeRequiredSQL(category, version string) string {
-	return "(CASE WHEN " + version + "::int=3 AND " + category + "<>'rule' THEN 2 ELSE " + version + "::int END)"
-}

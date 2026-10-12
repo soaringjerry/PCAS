@@ -84,13 +84,6 @@ func enqueueStatusHandoversTx(ctx context.Context, tx pgx.Tx, anchors map[memory
 	return count, nil
 }
 
-func maxTime(a, b time.Time) time.Time {
-	if a.After(b) {
-		return a
-	}
-	return b
-}
-
 // Use evidence roles as well as acquisition: imported AI assertions must never
 // be allowed into a handover while batch 2's trust reader is being integrated.
 func statusTrustTx(ctx context.Context, tx pgx.Tx, owner memory.ID, m workspace.Memory) (string, error) {

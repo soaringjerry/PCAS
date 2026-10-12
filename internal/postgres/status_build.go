@@ -55,11 +55,6 @@ func statusCardPriority(key string) int {
 	return kernel.CardPriority
 }
 
-func statusCallLock(ctx context.Context, s *Store) (func(), error) {
-	_, release, err := s.organizeCallConnection(ctx, "status_busy", kernel.StatusInterval)
-	return release, err
-}
-
 // Kept as a compatibility handler for pre-upgrade queue slots. Cards are frozen.
 func (s *Store) ProcessCard(ctx context.Context, j worker.Job) error {
 	return pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {

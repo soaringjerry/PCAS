@@ -216,37 +216,6 @@ func (s *Store) RunCompare(ctx context.Context, logger *slog.Logger) {
 	}
 }
 
-// Share the organizer's session lock across the model call. No owner lock is
-// held while generating, so corrections and deletions can still proceed.
-func (s *Store) comparisonConnection(ctx context.Context) (*pgxpool.Conn, func(), error) {
-	return s.organizeCallConnection(ctx, "compare_busy", kernel.CompareInterval)
-}
-
-// One organize, comparison, or entity scan call runs at a time. busy is the
-// deferral code of the caller that finds the lock held.
-func (s *Store) organizeCallConnection(ctx context.Context, busy string, wait time.Duration) (*pgxpool.Conn, func(), error) {
-	conn, err := s.Pool.Acquire(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-	var locked bool
-	if err = conn.QueryRow(ctx, "SELECT pg_try_advisory_lock(hashtextextended(current_database()||':'||current_schema()||':organize-call',0))").Scan(&locked); err != nil || !locked {
-		conn.Release()
-		if err != nil {
-			return nil, nil, err
-		}
-		return nil, nil, &worker.JobError{Code: busy, Until: time.Now().Add(wait), NoAttempt: true}
-	}
-	return conn, func() {
-		cleanup, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		if _, err := conn.Exec(cleanup, "SELECT pg_advisory_unlock(hashtextextended(current_database()||':'||current_schema()||':organize-call',0))"); err != nil {
-			_ = conn.Conn().Close(cleanup)
-		}
-		conn.Release()
-	}, nil
-}
-
 func compareJobVersion(j worker.Job) (int, error) {
 	parts := strings.SplitN(j.Stage, ":", 3)
 	if len(parts) != 3 {

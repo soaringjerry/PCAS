@@ -37,6 +37,7 @@ Phase 3.9 is incomplete. The [delivery milestones](../status.md#foundation-deliv
 | Activity queries | The [day activity query](../memory-service.md#day-activity) answers one local day's work, cost, and reasons. Its response lists the links that the records do not contain. |
 | Declared event responses | One [registered table](../architecture.md#registered-responses) names each stage's trigger, producer, specialist, hourly limit, and duplicate key. The worker registers its handlers from it. Triggers are not yet recorded events with causal identities. |
 | Recorded events and causal identities | Migration `063_recorded_events.sql` gives queued work a root, an immediate cause, and a depth, and records each new piece of queued work in `recorded_events`. The owner approved the migration on 2026-10-12. No chain limit is set: its value needs the depths that the live instance records. Events for committed data changes are not recorded yet. |
+| Delivery path | From 2026-10-12 a change of this phase goes by one pull request into `main`. The branch `phase3_9/main` is not used any more: its pull request into `main` and its push run tested the same revision two times. A release can hold several merged pull requests. |
 | Causal limits | Not started. The [first live readings](../evaluations/2026-10-11-activity-baseline.md) measure the repeated deferrals that these limits must address. |
 | Five test layers and nightly evaluation trends | Not started as a complete set. |
 

@@ -2,7 +2,10 @@ name: memory
 
 on:
   push:
-    branches: [main, "phase*/main"]
+    # A pull request tests a change before its merge. The push run on main
+    # is the record of the released revision. An integration branch gets no
+    # push run: its pull request into main tests the same revision.
+    branches: [main]
     paths: ["cmd/**", "internal/**", "services/**", "config/**", "go.mod", "go.sum", "Makefile", "Dockerfile", "compose.yml", "scripts/test-shard.sh", "scripts/foundation_model_replay.py", "scripts/model_replay_test.py", "scripts/foundation_replay_compare.py", "scripts/foundation_replay_identity.py", "scripts/replay_state_test.py", ".github/workflows/memory.yml"]
   pull_request:
     paths: ["cmd/**", "internal/**", "services/**", "config/**", "go.mod", "go.sum", "Makefile", "Dockerfile", "compose.yml", "scripts/test-shard.sh", "scripts/foundation_model_replay.py", "scripts/model_replay_test.py", "scripts/foundation_replay_compare.py", "scripts/foundation_replay_identity.py", "scripts/replay_state_test.py", ".github/workflows/memory.yml"]

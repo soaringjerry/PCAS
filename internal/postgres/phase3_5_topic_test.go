@@ -49,7 +49,7 @@ func phase35TopicJob(t *testing.T, f *phase35Fixture, topic int) worker.Job {
 		// pending outcome, not proof that eligibility failed. Verify the observable
 		// reason/count before replaying that real scheduler operation.
 		var deferred int
-		e := f.Store.Pool.QueryRow(f.Context, `SELECT coalesce(sum(count),0) FROM background_stage_events WHERE owner_id=$1 AND stage=$2 AND outcome='failure' AND reason LIKE 'schedule_%' AND at>now()-interval '1 minute'`, f.Scope.OwnerID, HandoverStage).Scan(&deferred)
+		e := f.Store.Pool.QueryRow(f.Context, `SELECT coalesce(sum(count),0) FROM background_stage_events WHERE owner_id=$1 AND stage=$2 AND outcome='failure' AND reason LIKE 'schedule_%' AND at>now()-interval '1 minute'`, f.Scope.OwnerID, kernel.HandoverStage).Scan(&deferred)
 		if e != nil || deferred == 0 {
 			t.Fatalf("eligible topic has no task and no observable scheduling deferral: %v count=%d err=%v", err, deferred, e)
 		}

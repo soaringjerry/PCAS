@@ -21,18 +21,6 @@ import (
 	"github.com/soaringjerry/PCAS/internal/worker"
 )
 
-// Version 3 reprocesses previously organized rule memories only.
-// Other version-2 classifications remain valid without relabeling.
-var OrganizeVersion = 3
-
-const (
-	OrganizeInterval           = time.Minute
-	OrganizeStage              = organize.Stage
-	OrganizePriority           = 4
-	organizeBatchLimit         = 40
-	organizeCompareHourlyLimit = 140 // contract 4.1: 118 across the 2.6 stages + 10 project_handover + 10 effort, 2 topic_project
-)
-
 type (
 	organizeMemory = organize.Memory
 	organizeGroup  = organize.Group
@@ -123,7 +111,7 @@ func enqueueOrganizeTx(ctx context.Context, tx pgx.Tx, owner memory.ID, now time
 	id := memory.NewID()
 	_, err = tx.Exec(ctx, `INSERT INTO memory_jobs(id,owner_id,record_id,record_version,stage,priority,available_at)
  VALUES($1,$2,$3,$4,$5,$6,$7)`, string(id), string(owner), string(anchor.ID), anchor.Version,
-		fmt.Sprintf("%s:%d:%s", OrganizeStage, version, id), OrganizePriority, now)
+		fmt.Sprintf("%s:%d:%s", kernel.OrganizeStage, version, id), kernel.OrganizePriority, now)
 	return err == nil, err
 }
 
@@ -141,7 +129,7 @@ func (s *Store) ScheduleOrganize(ctx context.Context, now time.Time) (int, error
 		if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended(current_database() || ':' || current_schema() || ':organize-schedule',0))"); err != nil {
 			return err
 		}
-		rows, err := tx.Query(ctx, "SELECT DISTINCT cl.owner_id::text"+organizeEligible, OrganizeVersion)
+		rows, err := tx.Query(ctx, "SELECT DISTINCT cl.owner_id::text"+organizeEligible, kernel.OrganizeVersion)
 		if err != nil {
 			return err
 		}
@@ -167,7 +155,7 @@ func (s *Store) ScheduleOrganize(ctx context.Context, now time.Time) (int, error
 			if err := kernel.OwnerLock(ctx, tx, owner); err != nil {
 				return err
 			}
-			queued, err := enqueueOrganizeTx(ctx, tx, owner, now, OrganizeVersion)
+			queued, err := enqueueOrganizeTx(ctx, tx, owner, now, kernel.OrganizeVersion)
 			if err != nil {
 				return err
 			}
@@ -181,14 +169,14 @@ func (s *Store) ScheduleOrganize(ctx context.Context, now time.Time) (int, error
 }
 
 func (s *Store) RunOrganize(ctx context.Context, logger *slog.Logger) {
-	timer := time.NewTicker(OrganizeInterval)
+	timer := time.NewTicker(kernel.OrganizeInterval)
 	defer timer.Stop()
 	for {
 		if ctx.Err() != nil {
 			return
 		}
 		if _, err := s.ScheduleOrganize(ctx, time.Now()); err != nil && ctx.Err() == nil {
-			s.RecordScheduleFailure(ctx, OrganizeStage, err)
+			s.RecordScheduleFailure(ctx, kernel.OrganizeStage, err)
 		}
 		select {
 		case <-ctx.Done():
@@ -223,9 +211,9 @@ func organizeVocabularyTx(ctx context.Context, tx pgx.Tx, owner memory.ID) ([]or
 // Count invocation reservations, including zero-cost and failed calls; other
 // background stages and foreground calls have their own limits.
 func organizeCompareHourlyTx(ctx context.Context, tx pgx.Tx, code string) error {
-	stage := OrganizeStage
+	stage := kernel.OrganizeStage
 	if strings.HasPrefix(code, "compare") {
-		stage = CompareStage
+		stage = kernel.CompareStage
 	}
 	return kernel.HourlyLimit(ctx, tx, stage, code)
 }
@@ -238,7 +226,7 @@ type organizeStore struct{ store *Store }
 // Hold a dedicated session lock over generation, not the user's row lock:
 // corrections/deletions can proceed, but a recovered lease cannot race a call.
 func (a organizeStore) Session(ctx context.Context) (organize.Session, func(), error) {
-	conn, release, err := a.store.organizeCallConnection(ctx, "organize_busy", OrganizeInterval)
+	conn, release, err := a.store.organizeCallConnection(ctx, "organize_busy", kernel.OrganizeInterval)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -253,7 +241,7 @@ type organizeSession struct {
 func (a organizeSession) Ready() error {
 	p, ok := a.store.Models.Get(a.store.Models.ExtractionID())
 	if !ok || p.Embedding || p.Transcription || !a.store.Models.Available(p.ID) {
-		return &worker.JobError{Code: "provider_unavailable", Until: time.Now().Add(OrganizeInterval), NoAttempt: true}
+		return &worker.JobError{Code: "provider_unavailable", Until: time.Now().Add(kernel.OrganizeInterval), NoAttempt: true}
 	}
 	return nil
 }
@@ -273,7 +261,7 @@ func (a organizeSession) NextBatch(ctx context.Context, j worker.Job, version in
 		}
 		rows, err := tx.Query(ctx, `SELECT r.id::text,r.version,c.value #>> '{}',rv.expressed_at`+organizeEligible+`
  AND cl.owner_id=$2 ORDER BY EXISTS(SELECT 1 FROM evidence e JOIN archive_entries ae ON(ae.owner_id,ae.source_id,ae.source_version)=(e.owner_id,e.source_id,e.source_version)
- WHERE (e.owner_id,e.target_id,e.target_version)=(c.owner_id,c.claim_id,c.version)),r.created_at DESC,r.id LIMIT $3`, version, string(j.OwnerID), organizeBatchLimit)
+ WHERE (e.owner_id,e.target_id,e.target_version)=(c.owner_id,c.claim_id,c.version)),r.created_at DESC,r.id LIMIT $3`, version, string(j.OwnerID), kernel.OrganizeBatchLimit)
 		if err != nil {
 			return err
 		}
@@ -347,7 +335,7 @@ func (a organizeSession) Apply(ctx context.Context, j worker.Job, result organiz
 					return err
 				}
 				exhausted = append(exhausted, m.Ref.ID)
-				if err := kernel.StageEvent(ctx, tx, j.OwnerID, OrganizeStage, "failure", "organize_invalid_output", 1); err != nil {
+				if err := kernel.StageEvent(ctx, tx, j.OwnerID, kernel.OrganizeStage, "failure", "organize_invalid_output", 1); err != nil {
 					return err
 				}
 				continue
@@ -383,7 +371,7 @@ func (a organizeSession) Apply(ctx context.Context, j worker.Job, result organiz
 				return err
 			}
 			if withdrawnDates > 0 {
-				if err := kernel.StageEvent(ctx, tx, j.OwnerID, OrganizeStage, "success", "reorganize_deadlines_withdrawn", withdrawnDates); err != nil {
+				if err := kernel.StageEvent(ctx, tx, j.OwnerID, kernel.OrganizeStage, "success", "reorganize_deadlines_withdrawn", withdrawnDates); err != nil {
 					return err
 				}
 			}
@@ -392,7 +380,7 @@ func (a organizeSession) Apply(ctx context.Context, j worker.Job, result organiz
 				return err
 			}
 			if item.Category != "rule" && removedRequirements.RowsAffected() > 0 {
-				if err := kernel.StageEvent(ctx, tx, j.OwnerID, OrganizeStage, "success", "reorganize_requirements_withdrawn", int(removedRequirements.RowsAffected())); err != nil {
+				if err := kernel.StageEvent(ctx, tx, j.OwnerID, kernel.OrganizeStage, "success", "reorganize_requirements_withdrawn", int(removedRequirements.RowsAffected())); err != nil {
 					return err
 				}
 			}
@@ -411,7 +399,7 @@ func (a organizeSession) Apply(ctx context.Context, j worker.Job, result organiz
 		if err := kernel.DiscardPaidResult(ctx, tx, j); err != nil {
 			return err
 		}
-		_, err = enqueueOrganizeTx(ctx, tx, j.OwnerID, time.Now(), OrganizeVersion)
+		_, err = enqueueOrganizeTx(ctx, tx, j.OwnerID, time.Now(), kernel.OrganizeVersion)
 		return err
 	})
 	if err != nil {

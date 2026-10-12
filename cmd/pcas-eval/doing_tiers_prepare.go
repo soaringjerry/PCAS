@@ -3,11 +3,13 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/soaringjerry/PCAS/internal/app"
 	"io"
 	"log/slog"
 	"strings"
 	"time"
+
+	"github.com/soaringjerry/PCAS/internal/app"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/soaringjerry/PCAS/cmd/pcas-eval/doing"
@@ -62,9 +64,9 @@ func prepareTierSuite(ctx context.Context, store *postgres.Store, pool *pgxpool.
 		schedule func(context.Context, time.Time) (int, error)
 		handlers map[string]worker.Handler
 	}{
-		{"organize", store.ScheduleOrganize, map[string]worker.Handler{postgres.OrganizeStage: app.Organize(store).Process}},
-		{"compare", store.ScheduleCompare, map[string]worker.Handler{postgres.CompareStage: app.Compare(store).Process, postgres.EntityCompareStage: app.EntityCompare(store).Process}},
-		{"status", store.ScheduleStatus, map[string]worker.Handler{postgres.HandoverStage: app.Handover(store).Process}},
+		{"organize", store.ScheduleOrganize, map[string]worker.Handler{kernel.OrganizeStage: app.Organize(store).Process}},
+		{"compare", store.ScheduleCompare, map[string]worker.Handler{kernel.CompareStage: app.Compare(store).Process, kernel.EntityCompareStage: app.EntityCompare(store).Process}},
+		{"status", store.ScheduleStatus, map[string]worker.Handler{kernel.HandoverStage: app.Handover(store).Process}},
 	}
 	for _, stage := range stages {
 		at := time.Now()
@@ -162,7 +164,7 @@ func prepareTierSuite(ctx context.Context, store *postgres.Store, pool *pgxpool.
 // requirements atomically before advancing organized. An up-to-date organized
 // version is therefore also the extraction-completion marker.
 func readTierPreparation(ctx context.Context, pool *pgxpool.Pool, scope memory.Scope) (doing.Preparation, error) {
-	p := doing.Preparation{OrganizeRule: postgres.OrganizeVersion, HandoverRule: postgres.HandoverVersion}
+	p := doing.Preparation{OrganizeRule: kernel.OrganizeVersion, HandoverRule: postgres.HandoverVersion}
 	var unorganized, staleExtractions int
 	err := pool.QueryRow(ctx, `SELECT
  (SELECT count(*) FROM claims WHERE owner_id=$1),

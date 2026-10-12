@@ -10,6 +10,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
 	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/worker"
 )
 
@@ -23,31 +24,31 @@ func seedStageUsage(t *testing.T, s *Store, scope memory.Scope, stage string, co
 // Every processor uses its own rolling budget; saturation in another stage
 // neither prevents this stage's last call nor lends it a forty-first call.
 func TestOrganizeCompareIndependentHourlyCalls(t *testing.T) {
-	for _, kind := range []string{OrganizeStage, CompareStage, EntityCompareStage} {
+	for _, kind := range []string{kernel.OrganizeStage, kernel.CompareStage, kernel.EntityCompareStage} {
 		t.Run(kind, func(t *testing.T) {
 			s, scope, ctx := testStore(t), owner(), context.Background()
 			fake := b1Model(t, s, `{"items":[]}`)
 			var job worker.Job
 			var process func(context.Context, worker.Job) error
 			switch kind {
-			case OrganizeStage:
+			case kernel.OrganizeStage:
 				organizeTestMemory(t, s, scope, "虚构独立额度整理便签")
 				job = organizeTestJob(t, s, scope)
-				process = (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: OrganizeVersion}).Process
-			case CompareStage:
+				process = (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: kernel.OrganizeVersion}).Process
+			case kernel.CompareStage:
 				fake.set(`{"duplicates":[],"superseded":[]}`)
 				compareFixture(t, s, scope, "虚构独立额度比较便签甲", "虚构独立额度比较便签乙")
-				job = compareJob(t, s, scope, false, CompareVersion)
-				process = (comparison.Service{Store: s.CompareStore(), Generator: jobCalls(s), Version: CompareVersion}).Process
-			case EntityCompareStage:
+				job = compareJob(t, s, scope, false, kernel.CompareVersion)
+				process = (comparison.Service{Store: s.CompareStore(), Generator: jobCalls(s), Version: kernel.CompareVersion}).Process
+			case kernel.EntityCompareStage:
 				fake.set(`{"same":false,"keep":null}`)
 				_, a := compareEntityFixture(t, s, scope, "虚构额度同名", "虚构人物甲")
 				_, b := compareEntityFixture(t, s, scope, "虚构额度同名", "虚构人物乙")
 				compareEntityGroup(t, s, scope, "project", "虚构额度项目", a, b)
-				job = compareJob(t, s, scope, true, CompareVersion)
-				process = (comparison.EntityService{Store: s.EntityCompareStore(), Generator: jobCalls(s), Version: EntityCompareVersion}).Process
+				job = compareJob(t, s, scope, true, kernel.CompareVersion)
+				process = (comparison.EntityService{Store: s.EntityCompareStore(), Generator: jobCalls(s), Version: kernel.EntityCompareVersion}).Process
 			}
-			for stage, limit := range map[string]int{OrganizeStage: 40, CompareStage: 40, EntityCompareStage: 30, EntityCandidatesStage: 6, HandoverStage: 2} {
+			for stage, limit := range map[string]int{kernel.OrganizeStage: 40, kernel.CompareStage: 40, kernel.EntityCompareStage: 30, EntityCandidatesStage: 6, kernel.HandoverStage: 2} {
 				if stage == kind {
 					limit--
 				}
@@ -60,18 +61,18 @@ func TestOrganizeCompareIndependentHourlyCalls(t *testing.T) {
 				t.Fatal("expected one model call", len(fake.all()))
 			}
 			switch kind {
-			case OrganizeStage:
+			case kernel.OrganizeStage:
 				organizeTestMemory(t, s, scope, "虚构新的整理便签")
-			case CompareStage:
+			case kernel.CompareStage:
 				compareFixture(t, s, scope, "虚构新的比较便签")
-			case EntityCompareStage:
+			case kernel.EntityCompareStage:
 				entity, a := compareEntityFixture(t, s, scope, "虚构额度同名", "虚构人物丙")
 				var existing memory.Ref
 				existing.Kind = memory.EntityKind
 				if err := s.Pool.QueryRow(ctx, "SELECT id::text,version FROM memory_records WHERE owner_id=$1 AND kind='entity' AND id<>$2 AND state='active' AND EXISTS(SELECT 1 FROM entity_versions v WHERE(v.owner_id,v.entity_id,v.version)=(memory_records.owner_id,memory_records.id,memory_records.version) AND v.entity_type='person') ORDER BY id LIMIT 1", scope.OwnerID, entity.ID).Scan(&existing.ID, &existing.Version); err != nil {
 					t.Fatal(err)
 				}
-				aliasProposalFixture(t, s, scope, existing, entity, EntityCompareVersion)
+				aliasProposalFixture(t, s, scope, existing, entity, kernel.EntityCompareVersion)
 				compareEntityGroup(t, s, scope, "project", "虚构额度项目", a)
 			}
 			job = leaseStage(t, s, scope, job.Record, fmt.Sprintf("%s:1:%s", kind, memory.NewID()))
@@ -82,10 +83,10 @@ func TestOrganizeCompareIndependentHourlyCalls(t *testing.T) {
 			err := process(ctx, job)
 			var failure *worker.JobError
 			code := "compare_hourly_limit"
-			if kind == EntityCompareStage {
+			if kind == kernel.EntityCompareStage {
 				code = "entity_compare_hourly_limit"
 			}
-			if kind == OrganizeStage {
+			if kind == kernel.OrganizeStage {
 				code = "organize_hourly_limit"
 			}
 			if !errors.As(err, &failure) || failure.Code != code || !failure.NoAttempt || failure.Until.Before(time.Now()) {

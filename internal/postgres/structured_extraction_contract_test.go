@@ -445,7 +445,7 @@ func TestMemoryStagesHaveIndependentBudgets(t *testing.T) {
 	s, ctx := phase26DisposableStore(t)
 	scope := owner()
 	phase35Snapshot(t, s, scope)
-	for stage, want := range map[string]int{OrganizeStage: 40, CompareStage: 40, EntityCompareStage: 30, EntityCandidatesStage: 6, HandoverStage: 2} {
+	for stage, want := range map[string]int{kernel.OrganizeStage: 40, kernel.CompareStage: 40, kernel.EntityCompareStage: 30, EntityCandidatesStage: 6, kernel.HandoverStage: 2} {
 		if kernel.HourlyBudgets[stage] != want {
 			t.Fatalf("%s budget=%d want=%d", stage, kernel.HourlyBudgets[stage], want)
 		}

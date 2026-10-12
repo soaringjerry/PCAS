@@ -33,7 +33,7 @@ func (s *Store) useStatusIndexTx(ctx context.Context, tx pgx.Tx, scope memory.Sc
  FROM status_cards sc JOIN eligible e USING(owner_id,key)
  LEFT JOIN status_card_items i ON(i.owner_id,i.key)=(sc.owner_id,sc.key)
  LEFT JOIN members m ON(m.owner_id,m.key,m.claim_id,m.claim_version)=(i.owner_id,i.key,i.claim_id,i.claim_version)
- GROUP BY sc.owner_id,sc.key ORDER BY CASE sc.kind WHEN 'self' THEN 0 WHEN 'project' THEN 1 WHEN 'person' THEN 2 WHEN 'topic' THEN 3 ELSE 4 END,sc.name,sc.key`, string(scope.OwnerID), CardVersion)
+ GROUP BY sc.owner_id,sc.key ORDER BY CASE sc.kind WHEN 'self' THEN 0 WHEN 'project' THEN 1 WHEN 'person' THEN 2 WHEN 'topic' THEN 3 ELSE 4 END,sc.name,sc.key`, string(scope.OwnerID), kernel.CardVersion)
 	if err != nil {
 		return out, err
 	}

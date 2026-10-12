@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
@@ -16,17 +17,17 @@ func TestPhase26T3T4ScaleBackfillAndReadOnlyContent(t *testing.T) {
 	f := phase26LoadFixture(t)
 	m := phase26NewModel(t, f)
 	s, ctx, owner := f.Store, f.Context, f.Scope.OwnerID
-	phase26Isolate(t, f, OrganizeStage)
+	phase26Isolate(t, f, kernel.OrganizeStage)
 	start := time.Now()
 	windows, deferrals := 1, 0
 	for completed := 0; completed < 125; {
 		if _, err := s.ScheduleOrganize(ctx, time.Now()); err != nil {
 			t.Fatal(err)
 		}
-		j := phase26ClaimStage(t, f, OrganizeStage)
-		err := (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: OrganizeVersion}).Process(ctx, j)
+		j := phase26ClaimStage(t, f, kernel.OrganizeStage)
+		err := (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: kernel.OrganizeVersion}).Process(ctx, j)
 		if err != nil {
-			t.Logf("backfill diagnostic: successful=%d actual_provider_calls=%d process_error=%T %v context=%v", completed, len(m.calls(OrganizeStage)), err, err, ctx.Err())
+			t.Logf("backfill diagnostic: successful=%d actual_provider_calls=%d process_error=%T %v context=%v", completed, len(m.calls(kernel.OrganizeStage)), err, err, ctx.Err())
 			e := phase26FinishError(t, f, j, err)
 			if e.Code != "organize_hourly_limit" || !e.NoAttempt || completed != 40*windows {
 				t.Fatalf("unexpected backfill deferral at call %d: %+v", completed, e)
@@ -41,8 +42,8 @@ func TestPhase26T3T4ScaleBackfillAndReadOnlyContent(t *testing.T) {
 		}
 		completed++
 	}
-	if len(m.calls(OrganizeStage)) != 125 || windows != 4 || deferrals != 3 {
-		t.Fatalf("calls=%d windows=%d deferrals=%d", len(m.calls(OrganizeStage)), windows, deferrals)
+	if len(m.calls(kernel.OrganizeStage)) != 125 || windows != 4 || deferrals != 3 {
+		t.Fatalf("calls=%d windows=%d deferrals=%d", len(m.calls(kernel.OrganizeStage)), windows, deferrals)
 	}
 	var marked, usage, done int
 	if err := s.Pool.QueryRow(ctx, `SELECT count(*) FROM claims WHERE owner_id=$1 AND organized>=2 AND retired=''`, owner).Scan(&marked); err != nil {
@@ -165,5 +166,5 @@ func TestPhase26T3T4ScaleBackfillAndReadOnlyContent(t *testing.T) {
 	if err := json.Unmarshal(health, &h); err != nil {
 		t.Fatal(err)
 	}
-	t.Logf("backfill successful_calls=%d marked=%d retained_usage=%d quota_windows=%d hourly_deferrals=%d actual_elapsed=%s deadline_states=%v health=%s", len(m.calls(OrganizeStage)), marked, usage, windows, deferrals, time.Since(start), states, health)
+	t.Logf("backfill successful_calls=%d marked=%d retained_usage=%d quota_windows=%d hourly_deferrals=%d actual_elapsed=%s deadline_states=%v health=%s", len(m.calls(kernel.OrganizeStage)), marked, usage, windows, deferrals, time.Since(start), states, health)
 }

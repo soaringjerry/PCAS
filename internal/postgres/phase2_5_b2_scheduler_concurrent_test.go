@@ -13,6 +13,7 @@ import (
 
 	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
 	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/soaringjerry/PCAS/internal/memory"
@@ -38,12 +39,12 @@ func phase25B12ConcurrentScheduler(t *testing.T, kind string) {
 	var column, stagePattern string
 	var version int
 	if kind == "organize" {
-		column, stagePattern, version = "organized", "memory.organize:%", postgres.OrganizeVersion
+		column, stagePattern, version = "organized", "memory.organize:%", kernel.OrganizeVersion
 		for i := 0; i < 80; i++ {
 			refs = append(refs, f.claim(t, fmt.Sprintf("虚构并发整理便签%03d：一次性的演练记录。", i)))
 		}
 	} else {
-		column, stagePattern, version = "compared", "memory.compare:%", postgres.CompareVersion
+		column, stagePattern, version = "compared", "memory.compare:%", kernel.CompareVersion
 		f.sharedSubject = true
 		for i := 0; i < 12; i++ {
 			g := workspace.MemoryGroup{EntityID: string(f.entity(t, "topic", fmt.Sprintf("虚构并发比较主题%02d", i))), Type: "topic"}
@@ -240,11 +241,11 @@ func phase25B12ConcurrentScheduler(t *testing.T, kind string) {
 			}
 			switch {
 			case kind == "organize" && strings.HasPrefix(job.Stage, "memory.organize:"):
-				err = (organize.Service{Store: f.store.OrganizeStore(), Generator: jobCalls(f.store), Version: postgres.OrganizeVersion}).Process(runCtx, *job)
+				err = (organize.Service{Store: f.store.OrganizeStore(), Generator: jobCalls(f.store), Version: kernel.OrganizeVersion}).Process(runCtx, *job)
 			case kind == "compare" && strings.HasPrefix(job.Stage, "memory.compare:"):
-				err = (comparison.Service{Store: f.store.CompareStore(), Generator: jobCalls(f.store), Version: postgres.CompareVersion}).Process(runCtx, *job)
+				err = (comparison.Service{Store: f.store.CompareStore(), Generator: jobCalls(f.store), Version: kernel.CompareVersion}).Process(runCtx, *job)
 			case kind == "compare" && strings.HasPrefix(job.Stage, "memory.entity_compare:"):
-				err = (comparison.EntityService{Store: f.store.EntityCompareStore(), Generator: jobCalls(f.store), Version: postgres.EntityCompareVersion}).Process(runCtx, *job)
+				err = (comparison.EntityService{Store: f.store.EntityCompareStore(), Generator: jobCalls(f.store), Version: kernel.EntityCompareVersion}).Process(runCtx, *job)
 			case job.Stage == "memory.index":
 				err = f.store.ProcessIndex(runCtx, *job)
 			default:

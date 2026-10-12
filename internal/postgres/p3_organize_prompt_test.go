@@ -33,7 +33,7 @@ func p3OrganizePrompt() string {
 	for i, c := range p3RuleCases {
 		memories = append(memories, organizeMemory{N: i + 1, Text: c.Text, ExpressedAt: &at})
 	}
-	return string(kernel.JSON(map[string]any{"memories": memories, "groups": []organizeGroup{}, "timezone": "Asia/Shanghai", "refs": []memory.Ref{}, "rule": OrganizeVersion}))
+	return string(kernel.JSON(map[string]any{"memories": memories, "groups": []organizeGroup{}, "timezone": "Asia/Shanghai", "refs": []memory.Ref{}, "rule": kernel.OrganizeVersion}))
 }
 func TestP3OrganizePromptLive(t *testing.T) {
 	home, path := os.Getenv("PCAS_P3_CODEX_HOME"), os.Getenv("PCAS_P3_RAW_REPORT")

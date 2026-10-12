@@ -20,14 +20,6 @@ import (
 	"github.com/soaringjerry/PCAS/internal/worker"
 )
 
-const (
-	CompareInterval    = time.Minute
-	CompareStage       = "memory.compare"
-	EntityCompareStage = "memory.entity_compare"
-	ComparePriority    = 8
-	compareLimit       = 200
-)
-
 var compareInstructions = prompts.Must("compare").Text()
 
 type compareGroup struct {
@@ -65,11 +57,11 @@ func nextCompareGroupTx(ctx context.Context, tx pgx.Tx, owner memory.ID, version
 }
 
 func enqueueCompareTx(ctx context.Context, tx pgx.Tx, owner memory.ID, now time.Time, version int, entity bool, anchors ...memory.Ref) (bool, error) {
-	stage := CompareStage
+	stage := kernel.CompareStage
 	if entity {
-		stage = EntityCompareStage
-		if version == CompareVersion {
-			version = EntityCompareVersion
+		stage = kernel.EntityCompareStage
+		if version == kernel.CompareVersion {
+			version = kernel.EntityCompareVersion
 		}
 	}
 	if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended(current_database()||':'||current_schema()||':queue:'||$1||':'||$2,0))", string(owner), stage); err != nil {
@@ -103,12 +95,12 @@ func enqueueCompareTx(ctx context.Context, tx pgx.Tx, owner memory.ID, now time.
 	}
 	id := memory.NewID()
 	_, err := tx.Exec(ctx, `INSERT INTO memory_jobs(id,owner_id,record_id,record_version,stage,priority,available_at)
- VALUES($1,$2,$3,$4,$5,$6,$7)`, string(id), string(owner), string(anchor.ID), anchor.Version, fmt.Sprintf("%s:%d:%s", stage, version, id), ComparePriority, now)
+ VALUES($1,$2,$3,$4,$5,$6,$7)`, string(id), string(owner), string(anchor.ID), anchor.Version, fmt.Sprintf("%s:%d:%s", stage, version, id), kernel.ComparePriority, now)
 	return err == nil, err
 }
 
 func (s *Store) ScheduleCompare(ctx context.Context, now time.Time) (int, error) {
-	return s.scheduleCompareVersion(ctx, now, CompareVersion)
+	return s.scheduleCompareVersion(ctx, now, kernel.CompareVersion)
 }
 func (s *Store) scheduleCompareVersion(ctx context.Context, now time.Time, version int) (int, error) {
 	if now.IsZero() || version < 1 {
@@ -122,7 +114,7 @@ func (s *Store) scheduleCompareVersion(ctx context.Context, now time.Time, versi
 		return 0, nil
 	}
 	count := 0
-	rows, err := s.Pool.Query(ctx, "SELECT DISTINCT cl.owner_id::text"+compareCurrent, OrganizeVersion)
+	rows, err := s.Pool.Query(ctx, "SELECT DISTINCT cl.owner_id::text"+compareCurrent, kernel.OrganizeVersion)
 	if err != nil {
 		return count, err
 	}
@@ -144,8 +136,8 @@ func (s *Store) scheduleCompareVersion(ctx context.Context, now time.Time, versi
 	for _, owner := range owners {
 		for _, entity := range []bool{false, true} {
 			v := version
-			if entity && version == CompareVersion {
-				v = EntityCompareVersion
+			if entity && version == kernel.CompareVersion {
+				v = kernel.EntityCompareVersion
 			}
 			var input *comparisonBatch
 			if entity {
@@ -169,7 +161,7 @@ func (s *Store) scheduleCompareVersion(ctx context.Context, now time.Time, versi
 				}
 			}
 			e := kernel.BackgroundResultTx(ctx, s.Pool, owner, func(ctx context.Context, tx pgx.Tx) error {
-				if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended(current_database()||':'||current_schema()||':queue:'||$1||':'||$2,0))", string(owner), kernel.BaseStage(map[bool]string{false: CompareStage, true: EntityCompareStage}[entity])); err != nil {
+				if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended(current_database()||':'||current_schema()||':queue:'||$1||':'||$2,0))", string(owner), kernel.BaseStage(map[bool]string{false: kernel.CompareStage, true: kernel.EntityCompareStage}[entity])); err != nil {
 					return err
 				}
 				if input != nil {
@@ -188,9 +180,9 @@ func (s *Store) scheduleCompareVersion(ctx context.Context, now time.Time, versi
 				return err
 			})
 			if e != nil {
-				stage := CompareStage
+				stage := kernel.CompareStage
 				if entity {
-					stage = EntityCompareStage
+					stage = kernel.EntityCompareStage
 				}
 				if !s.ScheduleYielded(ctx, owner, stage, e) {
 					failed = e
@@ -204,14 +196,14 @@ func (s *Store) scheduleCompareVersion(ctx context.Context, now time.Time, versi
 }
 
 func (s *Store) RunCompare(ctx context.Context, logger *slog.Logger) {
-	timer := time.NewTicker(CompareInterval)
+	timer := time.NewTicker(kernel.CompareInterval)
 	defer timer.Stop()
 	for {
 		if ctx.Err() != nil {
 			return
 		}
 		if _, err := s.ScheduleCompare(ctx, time.Now()); err != nil && ctx.Err() == nil {
-			s.RecordScheduleFailure(ctx, CompareStage, err)
+			s.RecordScheduleFailure(ctx, kernel.CompareStage, err)
 		}
 		if _, err := s.ScheduleEntityCandidates(ctx, time.Now()); err != nil && ctx.Err() == nil {
 			s.RecordScheduleFailure(ctx, EntityCandidatesStage, err)
@@ -227,7 +219,7 @@ func (s *Store) RunCompare(ctx context.Context, logger *slog.Logger) {
 // Share the organizer's session lock across the model call. No owner lock is
 // held while generating, so corrections and deletions can still proceed.
 func (s *Store) comparisonConnection(ctx context.Context) (*pgxpool.Conn, func(), error) {
-	return s.organizeCallConnection(ctx, "compare_busy", CompareInterval)
+	return s.organizeCallConnection(ctx, "compare_busy", kernel.CompareInterval)
 }
 
 // One organize, comparison, or entity scan call runs at a time. busy is the
@@ -278,7 +270,7 @@ type compareStore struct{ store *Store }
 
 func (a compareStore) Reschedule(ctx context.Context) {
 	if _, err := a.store.ScheduleCompare(ctx, time.Now()); err != nil {
-		a.store.RecordScheduleFailure(ctx, CompareStage, err)
+		a.store.RecordScheduleFailure(ctx, kernel.CompareStage, err)
 	}
 }
 
@@ -296,7 +288,7 @@ type compareSession struct {
 }
 
 func (a compareSession) Ready() error {
-	unavailable := &worker.JobError{Code: "provider_unavailable", Until: time.Now().Add(CompareInterval), NoAttempt: true}
+	unavailable := &worker.JobError{Code: "provider_unavailable", Until: time.Now().Add(kernel.CompareInterval), NoAttempt: true}
 	if a.store.Models == nil {
 		return unavailable
 	}
@@ -321,7 +313,7 @@ func (a compareSession) NextBatch(ctx context.Context, j worker.Job, version int
 		if input == nil {
 			return kernel.Acknowledge(ctx, tx, j)
 		}
-		return kernel.HourlyLimit(ctx, tx, CompareStage, "compare_hourly_limit")
+		return kernel.HourlyLimit(ctx, tx, kernel.CompareStage, "compare_hourly_limit")
 	})
 	if err != nil || input == nil {
 		return nil, nil, false, err
@@ -345,7 +337,7 @@ func (a compareSession) Apply(ctx context.Context, j worker.Job, record json.Raw
 		input.Memories[i].Ref = input.Refs[i]
 	}
 	return kernel.BackgroundResultTx(ctx, a.conn, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
-		if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended(current_database()||':'||current_schema()||':queue:'||$1||':'||$2,0))", string(j.OwnerID), CompareStage); err != nil {
+		if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended(current_database()||':'||current_schema()||':queue:'||$1||':'||$2,0))", string(j.OwnerID), kernel.CompareStage); err != nil {
 			return err
 		}
 		if err := kernel.LockJob(ctx, tx, j); err != nil {
@@ -374,7 +366,7 @@ func (s *Store) writeComparisonTx(ctx context.Context, tx pgx.Tx, owner memory.I
 	}
 	rows, err := tx.Query(ctx, `SELECT input.n,c.confirmation='confirmed',EXISTS(SELECT 1 FROM record_versions edited WHERE edited.owner_id=r.owner_id AND edited.record_id=r.id AND edited.version>1 AND edited.actor='user'),`+restoredMemorySQL("$3")+
 		strings.Replace(compareCurrent, " WHERE r.state", ` JOIN jsonb_to_recordset($4::jsonb) input(id uuid,version integer,n integer) ON r.id=input.id AND r.version=input.version WHERE r.state`, 1)+`
- AND cl.owner_id=$2 ORDER BY r.id FOR UPDATE OF r,cl`, OrganizeVersion, string(owner), version, kernel.JSON(inputs))
+ AND cl.owner_id=$2 ORDER BY r.id FOR UPDATE OF r,cl`, kernel.OrganizeVersion, string(owner), version, kernel.JSON(inputs))
 	if err != nil {
 		return err
 	}

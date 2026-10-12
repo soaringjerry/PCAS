@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -19,7 +20,7 @@ func TestPhase26B1C8LegacyCardsFrozenUnreadAndFallbackAnswers(t *testing.T) {
 	phase26Exec(t, f, `INSERT INTO status_cards(owner_id,key,kind,name,rule,stale) VALUES($1,'self:identity','self','Fictitious frozen legacy card',1,true)`, f.Scope.OwnerID)
 	phase26Exec(t, f, `INSERT INTO status_card_items(owner_id,key,field,position,claim_id,claim_version,applies_to) VALUES($1,'self:identity','status',1,$2,1,'')`, f.Scope.OwnerID, f.Claims[366])
 	before := phase26Digest(t, f, []string{"status_cards", "status_card_items"})
-	for _, stage := range []string{OrganizeStage, CompareStage, EntityCandidatesStage, HandoverStage} {
+	for _, stage := range []string{kernel.OrganizeStage, kernel.CompareStage, EntityCandidatesStage, kernel.HandoverStage} {
 		if _, err := phase26Schedule(f.Context, f.Store, stage); err != nil {
 			t.Fatal(err)
 		}

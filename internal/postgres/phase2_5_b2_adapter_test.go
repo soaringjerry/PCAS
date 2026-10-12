@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
-	"github.com/soaringjerry/PCAS/internal/postgres"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/worker"
@@ -49,10 +49,10 @@ func phase25B2DefaultAdapter(f *phase25B234Fixture) phase25B2Adapter {
 		schedule: f.store.ScheduleCompare,
 		process: func(ctx context.Context, j worker.Job) error {
 			if strings.HasPrefix(j.Stage, "memory.compare:") {
-				return (comparison.Service{Store: f.store.CompareStore(), Generator: jobCalls(f.store), Version: postgres.CompareVersion}).Process(ctx, j)
+				return (comparison.Service{Store: f.store.CompareStore(), Generator: jobCalls(f.store), Version: kernel.CompareVersion}).Process(ctx, j)
 			}
 			if strings.HasPrefix(j.Stage, "memory.entity_compare:") {
-				return (comparison.EntityService{Store: f.store.EntityCompareStore(), Generator: jobCalls(f.store), Version: postgres.EntityCompareVersion}).Process(ctx, j)
+				return (comparison.EntityService{Store: f.store.EntityCompareStore(), Generator: jobCalls(f.store), Version: kernel.EntityCompareVersion}).Process(ctx, j)
 			}
 			return fmt.Errorf("unexpected comparison stage %s", j.Stage)
 		},

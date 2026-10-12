@@ -19,9 +19,6 @@ import (
 	"github.com/soaringjerry/PCAS/internal/worker"
 )
 
-// Entity identity rules advance independently of claim comparison rules.
-const EntityCompareVersion = 2
-
 var entityCompareInstructions = prompts.Must("entity-compare").Text()
 
 type comparisonEntity struct {
@@ -206,7 +203,7 @@ func (a entityCompareSession) NextPair(ctx context.Context, j worker.Job, versio
 		omitted += max(0, e.MemoryCount-len(e.Memories))
 	}
 	if omitted > 0 {
-		if _, err := a.store.Pool.Exec(ctx, "INSERT INTO background_stage_events(owner_id,stage,outcome,reason,count) VALUES($1,$2,'overflow','identity_sample_memory_limit',$3)", string(j.OwnerID), EntityCompareStage, omitted); err != nil {
+		if _, err := a.store.Pool.Exec(ctx, "INSERT INTO background_stage_events(owner_id,stage,outcome,reason,count) VALUES($1,$2,'overflow','identity_sample_memory_limit',$3)", string(j.OwnerID), kernel.EntityCompareStage, omitted); err != nil {
 			return nil, nil, false, err
 		}
 	}
@@ -266,7 +263,7 @@ func (a entityCompareSession) Apply(ctx context.Context, j worker.Job, version i
 		return err
 	}
 	write := func(ctx context.Context, tx pgx.Tx) error {
-		if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended(current_database()||':'||current_schema()||':queue:'||$1||':'||$2,0))", string(j.OwnerID), EntityCompareStage); err != nil {
+		if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended(current_database()||':'||current_schema()||':queue:'||$1||':'||$2,0))", string(j.OwnerID), kernel.EntityCompareStage); err != nil {
 			return err
 		}
 		if err := kernel.LockJob(ctx, tx, j); err != nil {
@@ -334,7 +331,7 @@ func (u entityCompareUnit) Merge(keep int) error {
 }
 
 func (u entityCompareUnit) Event(outcome, reason string, count int) error {
-	return kernel.StageEvent(u.ctx, u.tx, u.job.OwnerID, EntityCompareStage, outcome, reason, count)
+	return kernel.StageEvent(u.ctx, u.tx, u.job.OwnerID, kernel.EntityCompareStage, outcome, reason, count)
 }
 
 func (u entityCompareUnit) Receipt(same *bool, output string) error {

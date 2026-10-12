@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -17,7 +18,7 @@ func TestPhase26B6ModelAddsOneCanonicalNovelDomain(t *testing.T) {
 	name := "Fictitious novel glaze research"
 	m.mu.Lock()
 	m.Reply = func(c phase26Call) string {
-		if c.Stage != OrganizeStage {
+		if c.Stage != kernel.OrganizeStage {
 			return m.goldReply(c)
 		}
 		var p struct{ Memories []struct{ N int } }
@@ -30,12 +31,12 @@ func TestPhase26B6ModelAddsOneCanonicalNovelDomain(t *testing.T) {
 		return string(b)
 	}
 	m.mu.Unlock()
-	phase26Isolate(t, f, OrganizeStage)
+	phase26Isolate(t, f, kernel.OrganizeStage)
 	for i := 0; i < 2; i++ {
 		if _, err := f.Store.ScheduleOrganize(f.Context, time.Now()); err != nil {
 			t.Fatal(err)
 		}
-		j := phase26ClaimStage(t, f, OrganizeStage)
+		j := phase26ClaimStage(t, f, kernel.OrganizeStage)
 		if err := phase26Process(f.Context, f.Store, j); err != nil {
 			t.Fatal(err)
 		}
@@ -48,7 +49,7 @@ func TestPhase26B6ModelAddsOneCanonicalNovelDomain(t *testing.T) {
 	if err := f.Store.Pool.QueryRow(f.Context, `SELECT count(*) FROM claim_mentions WHERE owner_id=$1 AND entity_id=$2`, f.Scope.OwnerID, id).Scan(&members); err != nil || members != 80 {
 		t.Fatalf("novel area members=%d err=%v", members, err)
 	}
-	if len(m.calls(OrganizeStage)) != 2 {
+	if len(m.calls(kernel.OrganizeStage)) != 2 {
 		t.Error("novel-domain validation made an extra model call")
 	}
 	t.Log("two 40-memory batches reuse one model-selected canonical novel domain, with no extra semantic model call")

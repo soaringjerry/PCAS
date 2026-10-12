@@ -11,7 +11,7 @@ import (
 
 	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
 	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
-	"github.com/soaringjerry/PCAS/internal/postgres"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/worker"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
@@ -72,7 +72,7 @@ func TestPhase25B2_CompareDoesNotCallModelDuringOrganize(t *testing.T) {
 	}
 	orgDone := make(chan error, 1)
 	go func() {
-		orgDone <- (organize.Service{Store: f.store.OrganizeStore(), Generator: jobCalls(f.store), Version: postgres.OrganizeVersion}).Process(f.ctx, *org)
+		orgDone <- (organize.Service{Store: f.store.OrganizeStore(), Generator: jobCalls(f.store), Version: kernel.OrganizeVersion}).Process(f.ctx, *org)
 	}()
 	select {
 	case <-entered:
@@ -103,7 +103,7 @@ func TestPhase25B2_CompareDoesNotCallModelDuringOrganize(t *testing.T) {
 		}
 		cmpDone = make(chan error, 1)
 		go func() {
-			cmpDone <- (comparison.Service{Store: f.store.CompareStore(), Generator: jobCalls(f.store), Version: postgres.CompareVersion}).Process(f.ctx, *cmp)
+			cmpDone <- (comparison.Service{Store: f.store.CompareStore(), Generator: jobCalls(f.store), Version: kernel.CompareVersion}).Process(f.ctx, *cmp)
 		}()
 	}
 	select {

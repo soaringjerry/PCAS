@@ -38,7 +38,7 @@ func aliasEntityFixture(t *testing.T, s *Store, scope memory.Scope, kind, name s
 			t.Fatal(err)
 		}
 		workspaceCommand(t, s, scope, workspace.Command{Type: "setMemoryVisibility", ID: string(claim.ID), AgentIDs: []string{"model", "manual"}})
-		if _, err := s.Pool.Exec(context.Background(), `UPDATE claims SET organized=$3 WHERE owner_id=$1 AND id=$2`, string(scope.OwnerID), string(claim.ID), OrganizeVersion); err != nil {
+		if _, err := s.Pool.Exec(context.Background(), `UPDATE claims SET organized=$3 WHERE owner_id=$1 AND id=$2`, string(scope.OwnerID), string(claim.ID), kernel.OrganizeVersion); err != nil {
 			t.Fatal(err)
 		}
 		if _, err := s.Pool.Exec(context.Background(), `INSERT INTO claim_mentions(owner_id,claim_id,claim_version,entity_id,role) VALUES($1,$2,1,$3,$4)`, string(scope.OwnerID), string(claim.ID), string(entity.ID), kind); err != nil {
@@ -120,8 +120,8 @@ func TestEntityCandidatesTranslationAbbreviationKeepAndUndo(t *testing.T) {
 			// Deliberately recommend the wrong survivor: the writer owns counts
 			// and the Chinese-name tie break, not the model.
 			f.set(`{"same":true,"keep":1}`)
-			j = compareJob(t, s, scope, true, EntityCompareVersion)
-			if err := (comparison.EntityService{Store: s.EntityCompareStore(), Generator: jobCalls(s), Version: EntityCompareVersion}).Process(ctx, j); err != nil {
+			j = compareJob(t, s, scope, true, kernel.EntityCompareVersion)
+			if err := (comparison.EntityService{Store: s.EntityCompareStore(), Generator: jobCalls(s), Version: kernel.EntityCompareVersion}).Process(ctx, j); err != nil {
 				t.Fatal(err)
 			}
 			keep, merged := b, a
@@ -165,7 +165,7 @@ func TestEntityCandidatesNearbyNamesStillRequirePairConfirmation(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.set(`{"same":false,"keep":null}`)
-	if err := (comparison.EntityService{Store: s.EntityCompareStore(), Generator: jobCalls(s), Version: EntityCompareVersion}).Process(ctx, compareJob(t, s, scope, true, EntityCompareVersion)); err != nil {
+	if err := (comparison.EntityService{Store: s.EntityCompareStore(), Generator: jobCalls(s), Version: kernel.EntityCompareVersion}).Process(ctx, compareJob(t, s, scope, true, kernel.EntityCompareVersion)); err != nil {
 		t.Fatal(err)
 	}
 	aliasAssertSubjects(t, s, scope, ar, a.ID)
@@ -198,7 +198,7 @@ func TestEntityCandidatesCrossTypeAndGroupBookmarks(t *testing.T) {
 					}
 					f.set(`{"same":true,"keep":2}`)
 				}
-				if err := (comparison.EntityService{Store: s.EntityCompareStore(), Generator: jobCalls(s), Version: EntityCompareVersion}).Process(ctx, compareJob(t, s, scope, true, EntityCompareVersion)); err != nil {
+				if err := (comparison.EntityService{Store: s.EntityCompareStore(), Generator: jobCalls(s), Version: kernel.EntityCompareVersion}).Process(ctx, compareJob(t, s, scope, true, kernel.EntityCompareVersion)); err != nil {
 					t.Fatal(err)
 				}
 				all := append(append([]memory.Ref{}, ar...), br...)
@@ -272,7 +272,7 @@ func TestEntityCandidatesBatchCoverageAndTypeBoundaries(t *testing.T) {
 		names[i] = entityCandidateName{Type: "place", Name: fmt.Sprintf("虚构名字%03d", i), MemoryCount: 1, Ref: memory.Ref{ID: memory.NewID(), Version: 1, Kind: memory.EntityKind}}
 	}
 	names[0].Name, names[300].Name = "蓝沙湾", "Azure Quay"
-	batches := entityCandidateBatches(names, EntityCompareVersion)
+	batches := entityCandidateBatches(names, kernel.EntityCompareVersion)
 	covered := map[string]bool{}
 	for _, batch := range batches {
 		if len(batch.Entities) > 200 {
@@ -280,13 +280,13 @@ func TestEntityCandidatesBatchCoverageAndTypeBoundaries(t *testing.T) {
 		}
 		for i, a := range batch.Entities {
 			for _, b := range batch.Entities[i+1:] {
-				covered[entityCandidatePairMarker(a.Ref, b.Ref, EntityCompareVersion)] = true
+				covered[entityCandidatePairMarker(a.Ref, b.Ref, kernel.EntityCompareVersion)] = true
 			}
 		}
 	}
 	for i, a := range names {
 		for _, b := range names[i+1:] {
-			if !covered[entityCandidatePairMarker(a.Ref, b.Ref, EntityCompareVersion)] {
+			if !covered[entityCandidatePairMarker(a.Ref, b.Ref, kernel.EntityCompareVersion)] {
 				t.Fatal("pair cannot meet", a.Name, b.Name)
 			}
 		}
@@ -343,17 +343,17 @@ func TestEntityCandidatesHourlyBudgetAndRuleRecheck(t *testing.T) {
 	// Even a saturated scan ledger cannot consume classification capacity.
 	seedStageUsage(t, s, scope, EntityCandidatesStage, 6)
 	organizeTestMemory(t, s, scope, "虚构名单调用后的整理哨兵")
-	organizeJob := leaseStage(t, s, scope, j.Record, fmt.Sprintf("%s:%d:%s", OrganizeStage, OrganizeVersion, memory.NewID()))
+	organizeJob := leaseStage(t, s, scope, j.Record, fmt.Sprintf("%s:%d:%s", kernel.OrganizeStage, kernel.OrganizeVersion, memory.NewID()))
 	f.set(`{"items":[{"n":1,"category":"event","durable":false,"deadlines":[]}]}`)
-	if err := (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: OrganizeVersion}).Process(ctx, organizeJob); err != nil || len(f.all()) != 2 {
+	if err := (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: kernel.OrganizeVersion}).Process(ctx, organizeJob); err != nil || len(f.all()) != 2 {
 		t.Fatal("scan must not consume classification capacity", err, len(f.all()))
 	}
 	if err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
-		b, err := nextEntityCandidateBatchTx(ctx, tx, scope.OwnerID, EntityCompareVersion)
+		b, err := nextEntityCandidateBatchTx(ctx, tx, scope.OwnerID, kernel.EntityCompareVersion)
 		if err != nil || b != nil {
 			return fmt.Errorf("same rules repeated list: %+v %w", b, err)
 		}
-		b, err = nextEntityCandidateBatchTx(ctx, tx, scope.OwnerID, EntityCompareVersion+1)
+		b, err = nextEntityCandidateBatchTx(ctx, tx, scope.OwnerID, kernel.EntityCompareVersion+1)
 		if err != nil || b == nil {
 			return fmt.Errorf("new rules skipped list: %+v %w", b, err)
 		}
@@ -407,7 +407,7 @@ func TestEntityCandidatesRuleUpgradeRechecksEntitiesOnly(t *testing.T) {
 	s, scope, ctx := testStore(t), owner(), context.Background()
 	f := b1Model(t, s, `{"same":false,"keep":null}`)
 	unrelated := compareFixture(t, s, scope, "虚构旧版比较已经完成的无关记忆")[0]
-	if _, err := s.Pool.Exec(ctx, `UPDATE claims SET compared=$3 WHERE owner_id=$1 AND id=$2`, scope.OwnerID, unrelated.ID, CompareVersion); err != nil {
+	if _, err := s.Pool.Exec(ctx, `UPDATE claims SET compared=$3 WHERE owner_id=$1 AND id=$2`, scope.OwnerID, unrelated.ID, kernel.CompareVersion); err != nil {
 		t.Fatal(err)
 	}
 	compareEntityFixture(t, s, scope, "虚构星岚", "虚构星岚负责同一份器材")
@@ -417,15 +417,15 @@ func TestEntityCandidatesRuleUpgradeRechecksEntitiesOnly(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.set(`{"same":true,"keep":2}`)
-	j = compareJob(t, s, scope, true, EntityCompareVersion)
-	if err := (comparison.EntityService{Store: s.EntityCompareStore(), Generator: jobCalls(s), Version: EntityCompareVersion}).Process(ctx, j); err != nil {
+	j = compareJob(t, s, scope, true, kernel.EntityCompareVersion)
+	if err := (comparison.EntityService{Store: s.EntityCompareStore(), Generator: jobCalls(s), Version: kernel.EntityCompareVersion}).Process(ctx, j); err != nil {
 		t.Fatal(err)
 	}
 	var rule, claimRule int
-	if err := s.Pool.QueryRow(ctx, `SELECT rule FROM entity_merges WHERE owner_id=$1 AND undone_at IS NULL`, scope.OwnerID).Scan(&rule); err != nil || rule != EntityCompareVersion || len(f.all()) != 2 {
+	if err := s.Pool.QueryRow(ctx, `SELECT rule FROM entity_merges WHERE owner_id=$1 AND undone_at IS NULL`, scope.OwnerID).Scan(&rule); err != nil || rule != kernel.EntityCompareVersion || len(f.all()) != 2 {
 		t.Fatal("identity epoch", rule, len(f.all()), err)
 	}
-	if err := s.Pool.QueryRow(ctx, `SELECT compared FROM claims WHERE owner_id=$1 AND id=$2`, scope.OwnerID, unrelated.ID).Scan(&claimRule); err != nil || claimRule != CompareVersion {
+	if err := s.Pool.QueryRow(ctx, `SELECT compared FROM claims WHERE owner_id=$1 AND id=$2`, scope.OwnerID, unrelated.ID).Scan(&claimRule); err != nil || claimRule != kernel.CompareVersion {
 		t.Fatal("unrelated claim epoch changed", claimRule, err)
 	}
 }
@@ -441,7 +441,7 @@ func TestEntityCandidatesThreeNamesKeepChineseAndUndoInReverse(t *testing.T) {
 	}
 	f.set(`{"same":true,"keep":2}`)
 	for range 2 {
-		if err := (comparison.EntityService{Store: s.EntityCompareStore(), Generator: jobCalls(s), Version: EntityCompareVersion}).Process(ctx, compareJob(t, s, scope, true, EntityCompareVersion)); err != nil {
+		if err := (comparison.EntityService{Store: s.EntityCompareStore(), Generator: jobCalls(s), Version: kernel.EntityCompareVersion}).Process(ctx, compareJob(t, s, scope, true, kernel.EntityCompareVersion)); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -466,7 +466,7 @@ func TestEntityCandidatesInitialCatalogueCallEstimate(t *testing.T) {
 		}
 	}
 	counts := map[string]int{}
-	batches := entityCandidateBatches(names, EntityCompareVersion)
+	batches := entityCandidateBatches(names, kernel.EntityCompareVersion)
 	for _, batch := range batches {
 		counts[batch.Scope]++
 	}
@@ -497,8 +497,8 @@ func TestEntityCandidatesAndConfirmationCallsLeaveRowsUnlocked(t *testing.T) {
 				if err := process(ctx, j); err != nil {
 					t.Fatal(err)
 				}
-				j = compareJob(t, s, scope, true, EntityCompareVersion)
-				process = (comparison.EntityService{Store: s.EntityCompareStore(), Generator: jobCalls(s), Version: EntityCompareVersion}).Process
+				j = compareJob(t, s, scope, true, kernel.EntityCompareVersion)
+				process = (comparison.EntityService{Store: s.EntityCompareStore(), Generator: jobCalls(s), Version: kernel.EntityCompareVersion}).Process
 				reply = `{"same":true,"keep":1}`
 			}
 			entered, release := make(chan struct{}), make(chan struct{})
@@ -549,7 +549,7 @@ func TestEntityCompareCompletedResultSurvivesBusyFollowupScheduling(t *testing.T
 	if err := (aliasscan.Service{Store: s.AliasScanStore(), Generator: jobCalls(s)}).Process(ctx, aliasNamesJob(t, s, scope)); err != nil {
 		t.Fatal(err)
 	}
-	j := compareJob(t, s, scope, true, EntityCompareVersion)
+	j := compareJob(t, s, scope, true, kernel.EntityCompareVersion)
 	model.set(`{"same":true,"keep":1}`)
 	blocker, err := s.Pool.Begin(ctx)
 	if err != nil {
@@ -561,7 +561,7 @@ func TestEntityCompareCompletedResultSurvivesBusyFollowupScheduling(t *testing.T
 	}
 	// Result writes do not need the scheduler lock. After they commit, a busy
 	// opportunistic follow-up must not try to defer the completed lease.
-	if err := (comparison.EntityService{Store: s.EntityCompareStore(), Generator: jobCalls(s), Version: EntityCompareVersion}).Process(ctx, j); err != nil {
+	if err := (comparison.EntityService{Store: s.EntityCompareStore(), Generator: jobCalls(s), Version: kernel.EntityCompareVersion}).Process(ctx, j); err != nil {
 		t.Errorf("completed result returned scheduling failure: %v", err)
 	}
 	var state string

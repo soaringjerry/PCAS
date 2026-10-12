@@ -14,6 +14,7 @@ import (
 
 	"github.com/soaringjerry/PCAS/internal/httpapi"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -73,10 +74,10 @@ func phase26HTTPUserRequests(t *testing.T, f *phase26LoadedFixture, s *Store) ma
 	}
 }
 func TestBackgroundStagesAllowConcurrentHTTPScale(t *testing.T) {
-	for _, stage := range []string{OrganizeStage, CompareStage, EntityCompareStage, EntityCandidatesStage, HandoverStage} {
+	for _, stage := range []string{kernel.OrganizeStage, kernel.CompareStage, kernel.EntityCompareStage, EntityCandidatesStage, kernel.HandoverStage} {
 		t.Run(stage, func(t *testing.T) { phase26ConcurrentCase(t, stage, false, true) })
 	}
 }
 func TestLargeEntityMergeAllowsConcurrentHTTPScale(t *testing.T) {
-	phase26ConcurrentCase(t, EntityCompareStage, true, true)
+	phase26ConcurrentCase(t, kernel.EntityCompareStage, true, true)
 }

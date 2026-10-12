@@ -15,15 +15,6 @@ import (
 	"github.com/soaringjerry/PCAS/internal/worker"
 )
 
-const (
-	StatusInterval   = time.Minute
-	CardStage        = "memory.card"
-	HandoverStage    = "memory.handover"
-	CardPriority     = ComparePriority
-	SelfCardPriority = ComparePriority - 1
-	HandoverPriority = 14
-)
-
 type cardMemory struct {
 	AppliesTo   string     `json:"appliesTo,omitempty"`
 	N           int        `json:"n"`
@@ -54,14 +45,14 @@ type cardGroup struct {
 }
 
 func (s *Store) RunStatus(ctx context.Context, logger *slog.Logger) {
-	timer := time.NewTicker(StatusInterval)
+	timer := time.NewTicker(kernel.StatusInterval)
 	defer timer.Stop()
 	for {
 		if ctx.Err() != nil {
 			return
 		}
 		if _, err := s.ScheduleStatus(ctx, time.Now()); err != nil && ctx.Err() == nil {
-			s.RecordScheduleFailure(ctx, HandoverStage, err)
+			s.RecordScheduleFailure(ctx, kernel.HandoverStage, err)
 		}
 		select {
 		case <-ctx.Done():
@@ -129,7 +120,7 @@ func (s *Store) ScheduleStatus(ctx context.Context, now time.Time) (int, error) 
 			return err
 		})
 		if err != nil {
-			if s.ScheduleYielded(ctx, owner, HandoverStage, err) {
+			if s.ScheduleYielded(ctx, owner, kernel.HandoverStage, err) {
 				continue
 			}
 			return count, err
@@ -140,13 +131,13 @@ func (s *Store) ScheduleStatus(ctx context.Context, now time.Time) (int, error) 
 
 func statusCardPriority(key string) int {
 	if strings.HasPrefix(key, "self:") {
-		return SelfCardPriority
+		return kernel.SelfCardPriority
 	}
-	return CardPriority
+	return kernel.CardPriority
 }
 
 func statusCallLock(ctx context.Context, s *Store) (func(), error) {
-	_, release, err := s.organizeCallConnection(ctx, "status_busy", StatusInterval)
+	_, release, err := s.organizeCallConnection(ctx, "status_busy", kernel.StatusInterval)
 	return release, err
 }
 

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
@@ -20,14 +21,14 @@ func TestPhase26G4T4OneMemoryEditRunsOnlyIts40AffectedComparisonCalls(t *testing
 	m := phase26NewModel(t, f)
 	// Prior successful batch receipts are explicit preconditions, not measured
 	// model calls. This test measures a single edit after an established library.
-	phase26Exec(t, f, `UPDATE claims SET organized=$2 WHERE owner_id=$1`, f.Scope.OwnerID, OrganizeVersion)
+	phase26Exec(t, f, `UPDATE claims SET organized=$2 WHERE owner_id=$1`, f.Scope.OwnerID, kernel.OrganizeVersion)
 	var prior []comparisonBatch
 	if err := pgx.BeginFunc(ctx, f.Store.Pool, func(tx pgx.Tx) error {
 		if err := syncComparisonMembersTx(ctx, tx, f.Scope.OwnerID); err != nil {
 			return err
 		}
 		var err error
-		prior, err = comparisonPlanTx(ctx, tx, f.Scope.OwnerID, CompareVersion)
+		prior, err = comparisonPlanTx(ctx, tx, f.Scope.OwnerID, kernel.CompareVersion)
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -37,7 +38,7 @@ func TestPhase26G4T4OneMemoryEditRunsOnlyIts40AffectedComparisonCalls(t *testing
 		rows = append(rows, map[string]any{"g": b.Group.Key, "a": b.A, "b": b.B, "f": b.Fingerprint})
 	}
 	raw, _ := json.Marshal(rows)
-	phase26Exec(t, f, `INSERT INTO memory_comparison_batches(owner_id,group_key,block_a,block_b,fingerprint,rule,completed_at) SELECT $1,x.g,x.a,x.b,x.f,$3,now()-interval '2 hours' FROM jsonb_to_recordset($2::jsonb) x(g text,a bigint,b bigint,f text)`, f.Scope.OwnerID, raw, CompareVersion)
+	phase26Exec(t, f, `INSERT INTO memory_comparison_batches(owner_id,group_key,block_a,block_b,fingerprint,rule,completed_at) SELECT $1,x.g,x.a,x.b,x.f,$3,now()-interval '2 hours' FROM jsonb_to_recordset($2::jsonb) x(g text,a bigint,b bigint,f text)`, f.Scope.OwnerID, raw, kernel.CompareVersion)
 	if _, err := f.Store.ScheduleCompare(ctx, time.Now()); err != nil {
 		t.Fatal(err)
 	}
@@ -55,7 +56,7 @@ func TestPhase26G4T4OneMemoryEditRunsOnlyIts40AffectedComparisonCalls(t *testing
 	}
 	m.mu.Lock()
 	m.Reply = func(call phase26Call) string {
-		if call.Stage == CompareStage {
+		if call.Stage == kernel.CompareStage {
 			return `{"duplicates":[],"superseded":[]}`
 		}
 		return m.goldReply(call)
@@ -63,23 +64,23 @@ func TestPhase26G4T4OneMemoryEditRunsOnlyIts40AffectedComparisonCalls(t *testing
 	m.mu.Unlock()
 	start := time.Now()
 	for i := 0; i < 40; i++ {
-		phase26Isolate(t, f, CompareStage)
+		phase26Isolate(t, f, kernel.CompareStage)
 		if _, err := f.Store.ScheduleCompare(ctx, time.Now()); err != nil {
 			t.Fatal(err)
 		}
-		phase26Isolate(t, f, CompareStage)
-		j := phase26ClaimStage(t, f, CompareStage)
-		if err := (comparison.Service{Store: f.Store.CompareStore(), Generator: jobCalls(f.Store), Version: CompareVersion}).Process(ctx, j); err != nil {
+		phase26Isolate(t, f, kernel.CompareStage)
+		j := phase26ClaimStage(t, f, kernel.CompareStage)
+		if err := (comparison.Service{Store: f.Store.CompareStore(), Generator: jobCalls(f.Store), Version: kernel.CompareVersion}).Process(ctx, j); err != nil {
 			t.Fatal(err)
 		}
 		if (i+1)%10 == 0 {
-			t.Logf("single edited memory actual_provider_calls=%d elapsed=%s", len(m.calls(CompareStage)), time.Since(start))
+			t.Logf("single edited memory actual_provider_calls=%d elapsed=%s", len(m.calls(kernel.CompareStage)), time.Since(start))
 		}
 	}
-	if len(m.calls(CompareStage)) != 40 {
-		t.Errorf("actual comparison calls=%d expected40", len(m.calls(CompareStage)))
+	if len(m.calls(kernel.CompareStage)) != 40 {
+		t.Errorf("actual comparison calls=%d expected40", len(m.calls(kernel.CompareStage)))
 	}
-	for _, call := range m.calls(CompareStage) {
+	for _, call := range m.calls(kernel.CompareStage) {
 		var b comparisonBatch
 		if err := json.Unmarshal([]byte(call.Prompt), &b); err != nil {
 			t.Fatal(err)
@@ -102,7 +103,7 @@ func TestPhase26G4T4OneMemoryEditRunsOnlyIts40AffectedComparisonCalls(t *testing
 			t.Errorf("unrelated prior receipt rewritten %s %d/%d %v", b.Group.Key, b.A, b.B, err)
 		}
 	}
-	pending, err := f.Store.nextComparisonBatch(ctx, f.Scope.OwnerID, CompareVersion)
+	pending, err := f.Store.nextComparisonBatch(ctx, f.Scope.OwnerID, kernel.CompareVersion)
 	if err != nil || pending != nil {
 		t.Errorf("single edit leaves comparison pending %+v %v", pending, err)
 	}

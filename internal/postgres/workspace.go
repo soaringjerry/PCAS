@@ -114,9 +114,9 @@ func (s *Store) snapshotTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) (
 		return out, err
 	}
 	where, args := memoryread.MemoryWhere(scope, false, memoryread.MemoryReadOptions{})
-	out.Organize.Version = OrganizeVersion
+	out.Organize.Version = kernel.OrganizeVersion
 	if err := tx.QueryRow(ctx, `SELECT count(*) FILTER (WHERE coalesce((to_jsonb(cl)->>'organized')::int,0) >= `+organizeRequiredSQL("coalesce(to_jsonb(c)->>'category','')", "$5")+`),count(*)`+memoryread.MemoryJoins+` JOIN claims cl ON(cl.owner_id,cl.id)=(r.owner_id,r.id)`+where,
-		append(args, OrganizeVersion)...).Scan(&out.Organize.Done, &out.Organize.Total); err != nil {
+		append(args, kernel.OrganizeVersion)...).Scan(&out.Organize.Done, &out.Organize.Total); err != nil {
 		return out, err
 	}
 	// Both counts use exactly the same visible current rows. Every revision has

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 )
 
 func TestPhase26G2A5ComparisonInvalidOutputKeepsSameBatchPending(t *testing.T) {
@@ -22,13 +23,13 @@ func TestPhase26G2A5ComparisonInvalidOutputKeepsSameBatchPending(t *testing.T) {
 		// Advance only this batch's retry clock after its real persisted backoff has
 		// been measured; all other receipts and retained usage remain intact.
 		phase26Exec(t, f, `UPDATE memory_comparison_batches SET retry_after='-infinity' WHERE owner_id=$1 AND attempts>0`, f.Scope.OwnerID)
-		phase26Isolate(t, f, CompareStage)
+		phase26Isolate(t, f, kernel.CompareStage)
 		if _, err := f.Store.ScheduleCompare(f.Context, time.Now()); err != nil {
 			t.Fatal(err)
 		}
-		phase26Isolate(t, f, CompareStage)
-		j := phase26ClaimStage(t, f, CompareStage)
-		if err := (comparison.Service{Store: f.Store.CompareStore(), Generator: jobCalls(f.Store), Version: CompareVersion}).Process(f.Context, j); err != nil {
+		phase26Isolate(t, f, kernel.CompareStage)
+		j := phase26ClaimStage(t, f, kernel.CompareStage)
+		if err := (comparison.Service{Store: f.Store.CompareStore(), Generator: jobCalls(f.Store), Version: kernel.CompareVersion}).Process(f.Context, j); err != nil {
 			t.Fatal(err)
 		}
 		var attempts, completed int
@@ -49,8 +50,8 @@ func TestPhase26G2A5ComparisonInvalidOutputKeepsSameBatchPending(t *testing.T) {
 			t.Errorf("invalid comparison altered good %s", table)
 		}
 	}
-	if len(m.calls(CompareStage)) != 4 {
-		t.Errorf("calls=%d", len(m.calls(CompareStage)))
+	if len(m.calls(kernel.CompareStage)) != 4 {
+		t.Errorf("calls=%d", len(m.calls(kernel.CompareStage)))
 	}
 	var complete int
 	if err := f.Store.Pool.QueryRow(f.Context, `SELECT count(*) FROM memory_group_progress WHERE owner_id=$1 AND group_key='self:rule' AND completed`, f.Scope.OwnerID).Scan(&complete); err != nil {
@@ -67,5 +68,5 @@ func TestPhase26G2A5ComparisonInvalidOutputKeepsSameBatchPending(t *testing.T) {
 		t.Errorf("missing concrete invalid output reason: %s", health)
 	}
 	t.Logf("health=%s", health)
-	phase26InvalidHealth(t, health, CompareStage)
+	phase26InvalidHealth(t, health, kernel.CompareStage)
 }

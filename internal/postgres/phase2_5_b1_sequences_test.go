@@ -9,9 +9,9 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
-	"github.com/soaringjerry/PCAS/internal/postgres"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -61,7 +61,7 @@ func TestPhase25B1_X22_TwoWorkersTwelveRounds(t *testing.T) {
 				close(entered)
 				return
 			}
-			errors <- (organize.Service{Store: f.store.OrganizeStore(), Generator: jobCalls(f.store), Version: postgres.OrganizeVersion}).Process(f.ctx, *j)
+			errors <- (organize.Service{Store: f.store.OrganizeStore(), Generator: jobCalls(f.store), Version: kernel.OrganizeVersion}).Process(f.ctx, *j)
 		}()
 		go func() {
 			defer workers.Done()
@@ -109,7 +109,7 @@ func TestPhase25B1_X22_TwoWorkersTwelveRounds(t *testing.T) {
 				<-start
 				j, err := f.store.Claim(f.ctx, 30*time.Second)
 				if err == nil && j != nil {
-					err = (organize.Service{Store: f.store.OrganizeStore(), Generator: jobCalls(f.store), Version: postgres.OrganizeVersion}).Process(f.ctx, *j)
+					err = (organize.Service{Store: f.store.OrganizeStore(), Generator: jobCalls(f.store), Version: kernel.OrganizeVersion}).Process(f.ctx, *j)
 				}
 				errors <- err
 			}()
@@ -156,8 +156,8 @@ func TestPhase25B1_X22_TwoWorkersTwelveRounds(t *testing.T) {
 }
 
 func TestPhase25B1_RandomSequenceInvariants(t *testing.T) {
-	oldVersion := postgres.OrganizeVersion
-	defer func() { postgres.OrganizeVersion = oldVersion }()
+	oldVersion := kernel.OrganizeVersion
+	defer func() { kernel.OrganizeVersion = oldVersion }()
 	f := phase25B1NewFixture(t)
 	const seed int64 = 252501
 	rng := rand.New(rand.NewSource(seed))
@@ -216,7 +216,7 @@ func TestPhase25B1_RandomSequenceInvariants(t *testing.T) {
 			}
 		}
 		var invalid, duplicates, done int
-		if err := f.db.QueryRow(f.ctx, `SELECT count(*) FROM claims c JOIN memory_records r ON r.owner_id=c.owner_id AND r.id=c.id JOIN claim_revisions cr ON cr.owner_id=c.owner_id AND cr.claim_id=c.id AND cr.version=r.version WHERE c.owner_id=$1 AND c.organized=$2 AND (cr.category IS NULL OR cr.category='')`, f.scope.OwnerID, postgres.OrganizeVersion).Scan(&invalid); err != nil {
+		if err := f.db.QueryRow(f.ctx, `SELECT count(*) FROM claims c JOIN memory_records r ON r.owner_id=c.owner_id AND r.id=c.id JOIN claim_revisions cr ON cr.owner_id=c.owner_id AND cr.claim_id=c.id AND cr.version=r.version WHERE c.owner_id=$1 AND c.organized=$2 AND (cr.category IS NULL OR cr.category='')`, f.scope.OwnerID, kernel.OrganizeVersion).Scan(&invalid); err != nil {
 			t.Fatal(err)
 		}
 		if invalid != 0 {
@@ -234,14 +234,14 @@ func TestPhase25B1_RandomSequenceInvariants(t *testing.T) {
 		if duplicates != 0 {
 			t.Fatalf("step %d duplicate group entities = %d", step, duplicates)
 		}
-		if err := f.db.QueryRow(f.ctx, `SELECT count(*) FROM claims c JOIN memory_records r ON r.owner_id=c.owner_id AND r.id=c.id WHERE c.owner_id=$1 AND r.state='active' AND c.organized=$2`, f.scope.OwnerID, postgres.OrganizeVersion).Scan(&done); err != nil {
+		if err := f.db.QueryRow(f.ctx, `SELECT count(*) FROM claims c JOIN memory_records r ON r.owner_id=c.owner_id AND r.id=c.id WHERE c.owner_id=$1 AND r.state='active' AND c.organized=$2`, f.scope.OwnerID, kernel.OrganizeVersion).Scan(&done); err != nil {
 			t.Fatal(err)
 		}
 		state, err := f.store.Snapshot(f.ctx, f.scope)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if state.Organize.Done != done || state.Organize.Total != len(refs) || state.Organize.Version != postgres.OrganizeVersion {
+		if state.Organize.Done != done || state.Organize.Total != len(refs) || state.Organize.Version != kernel.OrganizeVersion {
 			t.Fatalf("step %d snapshot = %+v, actual done=%d,total=%d", step, state.Organize, done, len(refs))
 		}
 	}
@@ -257,7 +257,7 @@ func TestPhase25B1_RandomSequenceInvariants(t *testing.T) {
 			case 1:
 				f.schedule(t)
 				if j := f.claimOrganize(t); j != nil {
-					if err := (organize.Service{Store: f.store.OrganizeStore(), Generator: jobCalls(f.store), Version: postgres.OrganizeVersion}).Process(f.ctx, *j); err != nil {
+					if err := (organize.Service{Store: f.store.OrganizeStore(), Generator: jobCalls(f.store), Version: kernel.OrganizeVersion}).Process(f.ctx, *j); err != nil {
 						t.Fatal(err)
 					}
 				}
@@ -275,7 +275,7 @@ func TestPhase25B1_RandomSequenceInvariants(t *testing.T) {
 				}
 				refs = append(refs[:i], refs[i+1:]...)
 			case 4:
-				postgres.OrganizeVersion++
+				kernel.OrganizeVersion++
 			}
 			check(step)
 		}

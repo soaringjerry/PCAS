@@ -117,7 +117,7 @@ func enqueueProjectHandoversTx(ctx context.Context, tx pgx.Tx, owner memory.ID, 
 		if c.written != nil {
 			due = maxTime(due, c.written.Add(time.Hour))
 		}
-		if _, err = tx.Exec(ctx, `INSERT INTO memory_jobs(id,owner_id,record_id,record_version,stage,priority,available_at) VALUES($1,$2,$3,$4,$5,$6,$7)`, string(memory.NewID()), string(owner), string(anchor.ID), anchor.Version, ProjectHandoverStage+":"+c.id+":"+string(memory.NewID()), HandoverPriority, due); err != nil {
+		if _, err = tx.Exec(ctx, `INSERT INTO memory_jobs(id,owner_id,record_id,record_version,stage,priority,available_at) VALUES($1,$2,$3,$4,$5,$6,$7)`, string(memory.NewID()), string(owner), string(anchor.ID), anchor.Version, ProjectHandoverStage+":"+c.id+":"+string(memory.NewID()), kernel.HandoverPriority, due); err != nil {
 			return 0, err
 		}
 	}

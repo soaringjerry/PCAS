@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/currentstate/handover"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/soaringjerry/PCAS/internal/memory"
@@ -311,7 +312,7 @@ func phase25B3ConcurrentStatus(t *testing.T, rebuilding bool) {
 		}
 	}
 	var fresh, pending int
-	if err := f.db.QueryRow(f.ctx, `SELECT count(*) FROM status_cards WHERE owner_id=$1 AND NOT stale AND rule=$2`, f.scope.OwnerID, postgres.CardVersion).Scan(&fresh); err != nil {
+	if err := f.db.QueryRow(f.ctx, `SELECT count(*) FROM status_cards WHERE owner_id=$1 AND NOT stale AND rule=$2`, f.scope.OwnerID, kernel.CardVersion).Scan(&fresh); err != nil {
 		t.Fatal(err)
 	}
 	if err := f.db.QueryRow(f.ctx, `SELECT count(*) FROM memory_jobs WHERE owner_id=$1 AND (stage LIKE 'memory.card:%' OR stage LIKE 'memory.handover:%') AND state<>'done'`, f.scope.OwnerID).Scan(&pending); err != nil {

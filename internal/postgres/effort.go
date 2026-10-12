@@ -24,7 +24,7 @@ func enqueueEffortTx(ctx context.Context, tx pgx.Tx, owner memory.ID, anchor mem
 		return 0, err
 	}
 	for _, id := range ids {
-		if _, err = tx.Exec(ctx, `INSERT INTO memory_jobs(id,owner_id,record_id,record_version,stage,priority,available_at) VALUES($1,$2,$3,$4,$5,$6,$7)`, string(memory.NewID()), string(owner), string(anchor.ID), anchor.Version, EffortStage+":"+id+":"+string(memory.NewID()), HandoverPriority, now); err != nil {
+		if _, err = tx.Exec(ctx, `INSERT INTO memory_jobs(id,owner_id,record_id,record_version,stage,priority,available_at) VALUES($1,$2,$3,$4,$5,$6,$7)`, string(memory.NewID()), string(owner), string(anchor.ID), anchor.Version, EffortStage+":"+id+":"+string(memory.NewID()), kernel.HandoverPriority, now); err != nil {
 			return 0, err
 		}
 	}

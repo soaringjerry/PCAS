@@ -658,9 +658,9 @@ func (s *Store) p2LegacySnapshotTx(ctx context.Context, tx pgx.Tx, scope memory.
 	if err := tx.QueryRow(ctx, "SELECT count(*)"+p2LegacyMemoryJoins+where, args...).Scan(&out.MemoryTotal); err != nil {
 		return out, err
 	}
-	out.Organize.Version = OrganizeVersion
+	out.Organize.Version = kernel.OrganizeVersion
 	if err := tx.QueryRow(ctx, `SELECT count(*) FILTER (WHERE coalesce((to_jsonb(cl)->>'organized')::int,0) >= $5),count(*)`+p2LegacyMemoryJoins+` JOIN claims cl ON(cl.owner_id,cl.id)=(r.owner_id,r.id)`+where,
-		append(args, OrganizeVersion)...).Scan(&out.Organize.Done, &out.Organize.Total); err != nil {
+		append(args, kernel.OrganizeVersion)...).Scan(&out.Organize.Done, &out.Organize.Total); err != nil {
 		return out, err
 	}
 	if out.Agents, err = kernel.QueryDocuments[workspace.Agent](ctx, tx, "SELECT document FROM workspace_agents WHERE owner_id=$1 ORDER BY id", string(scope.OwnerID)); err != nil {

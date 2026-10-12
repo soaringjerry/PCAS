@@ -26,10 +26,10 @@ func phase3ConcurrentStage(t *testing.T, stage string) {
 	f := p3.phase26LoadedFixture
 	m := phase26NewModel(t, f)
 	s, ctx := f.Store, f.Context
-	if stage != OrganizeStage {
+	if stage != kernel.OrganizeStage {
 		phase26Exec(t, f, `UPDATE claims SET organized=2 WHERE owner_id=$1`, f.Scope.OwnerID)
 	}
-	if stage == EntityCompareStage {
+	if stage == kernel.EntityCompareStage {
 		phase26Proposal(t, f, 0, 4)
 	}
 	user, err := Open(ctx, s.Pool.Config().ConnString())
@@ -134,7 +134,7 @@ func phase3ConcurrentStage(t *testing.T, stage string) {
 	t.Logf("T2 stage=%s extended_projects=30 schedules=6 paid_calls=%d health=%s", stage, len(m.calls(stage)), health)
 }
 func TestPhase3T2T4EachExistingStageConcurrentHTTPScale(t *testing.T) {
-	for _, stage := range []string{OrganizeStage, CompareStage, EntityCompareStage, EntityCandidatesStage, HandoverStage} {
+	for _, stage := range []string{kernel.OrganizeStage, kernel.CompareStage, kernel.EntityCompareStage, EntityCandidatesStage, kernel.HandoverStage} {
 		t.Run(stage, func(t *testing.T) { phase3ConcurrentStage(t, stage) })
 	}
 }
@@ -218,13 +218,13 @@ func TestPhase3G1G2G3G4G5ExistingPipelineRegressions(t *testing.T) {
 }
 
 func TestPhase3G3ClassificationAndGlobalHandoverPaidResultRecovery(t *testing.T) {
-	for _, tc := range []struct{ stage, table string }{{OrganizeStage, "claim_revisions"}, {HandoverStage, "handovers"}} {
+	for _, tc := range []struct{ stage, table string }{{kernel.OrganizeStage, "claim_revisions"}, {kernel.HandoverStage, "handovers"}} {
 		t.Run(tc.stage, func(t *testing.T) {
 			p3 := phase3LoadFixture(t)
 			f := p3.phase26LoadedFixture
 			m := phase26NewModel(t, f)
 			s, ctx := f.Store, f.Context
-			if tc.stage == HandoverStage {
+			if tc.stage == kernel.HandoverStage {
 				phase26Exec(t, f, `UPDATE claims SET organized=2 WHERE owner_id=$1`, f.Scope.OwnerID)
 			}
 			phase26Isolate(t, f, tc.stage)
@@ -301,11 +301,11 @@ func TestPhase3G7AllSevenFrozenCeilingsAndGlobal140(t *testing.T) {
 	phase3Finding(t, "S-P3-001")
 	// Phase 3 fixed seven ceilings. Phase 3.5 added topic projects at two calls
 	// in one hour, and phase 3.6 added the date review with its own ceiling.
-	expected := map[string]int{OrganizeStage: 40, CompareStage: 40, EntityCompareStage: 30, EntityCandidatesStage: 6, HandoverStage: 2, phase3StageName(t, "project_handover"): 10, phase3StageName(t, "effort"): 10, TopicProjectStage: 2, statestore.DateTidyStage: statestore.DateTidyHourly}
+	expected := map[string]int{kernel.OrganizeStage: 40, kernel.CompareStage: 40, kernel.EntityCompareStage: 30, EntityCandidatesStage: 6, kernel.HandoverStage: 2, phase3StageName(t, "project_handover"): 10, phase3StageName(t, "effort"): 10, TopicProjectStage: 2, statestore.DateTidyStage: statestore.DateTidyHourly}
 	if !reflect.DeepEqual(kernel.HourlyBudgets, expected) {
 		t.Fatal("stage ceilings differ from contract", kernel.HourlyBudgets)
 	}
-	if organizeCompareHourlyLimit != 140 {
-		t.Fatal("global configured ceiling is not140", organizeCompareHourlyLimit)
+	if kernel.OrganizeCompareHourlyLimit != 140 {
+		t.Fatal("global configured ceiling is not140", kernel.OrganizeCompareHourlyLimit)
 	}
 }

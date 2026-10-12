@@ -7,17 +7,18 @@ import (
 	"testing"
 	"time"
 
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/worker"
 )
 
 func TestPhase26G3A1PaidResultsSurviveWriteFailureAndRestart(t *testing.T) {
-	for _, tc := range []struct{ stage, table string }{{CompareStage, "memory_comparison_batches"}, {EntityCompareStage, "entity_alias_receipts"}, {EntityCandidatesStage, "background_markers"}} {
+	for _, tc := range []struct{ stage, table string }{{kernel.CompareStage, "memory_comparison_batches"}, {kernel.EntityCompareStage, "entity_alias_receipts"}, {EntityCandidatesStage, "background_markers"}} {
 		t.Run(strings.TrimPrefix(tc.stage, "memory."), func(t *testing.T) {
 			f := phase26LoadFixture(t)
 			m := phase26NewModel(t, f)
 			s, ctx := f.Store, f.Context
 			phase26Exec(t, f, `UPDATE claims SET organized=2 WHERE owner_id=$1`, f.Scope.OwnerID)
-			if tc.stage == EntityCompareStage {
+			if tc.stage == kernel.EntityCompareStage {
 				phase26Proposal(t, f, 0, 4)
 			}
 			phase26Isolate(t, f, tc.stage)

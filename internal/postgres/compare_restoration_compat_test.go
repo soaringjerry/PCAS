@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/workspace"
@@ -27,7 +28,7 @@ func TestCompareRestoreMarkerCompatibilityAndRuleScope(t *testing.T) {
 				t.Fatal(err)
 			}
 			if legacy {
-				if _, err := s.Pool.Exec(ctx, `UPDATE background_markers SET stage=$3 WHERE owner_id=$1 AND record_id=$2 AND stage LIKE 'memory.compare:%:restored:%'`, string(scope.OwnerID), string(refs[0].ID), fmt.Sprintf("memory.compare_restored:%d:%s", CompareVersion, action)); err != nil {
+				if _, err := s.Pool.Exec(ctx, `UPDATE background_markers SET stage=$3 WHERE owner_id=$1 AND record_id=$2 AND stage LIKE 'memory.compare:%:restored:%'`, string(scope.OwnerID), string(refs[0].ID), fmt.Sprintf("memory.compare_restored:%d:%s", kernel.CompareVersion, action)); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -35,20 +36,20 @@ func TestCompareRestoreMarkerCompatibilityAndRuleScope(t *testing.T) {
 				t.Fatal(err)
 			}
 			compareProcess(t, s, scope)
-			compareState(t, s, scope, refs, []string{"", ""}, CompareVersion)
+			compareState(t, s, scope, refs, []string{"", ""}, kernel.CompareVersion)
 			b1Undo(t, s, scope, action)
 			var remaining int
 			if err := s.Pool.QueryRow(ctx, `SELECT count(*) FROM background_markers WHERE owner_id=$1 AND record_id=$2 AND (stage LIKE 'memory.compare:%:restored:%' OR stage LIKE 'memory.compare_restored:%')`, string(scope.OwnerID), string(refs[0].ID)).Scan(&remaining); err != nil || remaining != 0 {
 				t.Fatal("undo left exemption", remaining, err)
 			}
-			compareState(t, s, scope, refs, []string{"superseded", ""}, CompareVersion)
+			compareState(t, s, scope, refs, []string{"superseded", ""}, kernel.CompareVersion)
 			// A restoration of this record version survives a comparison rule upgrade.
 			workspaceCommand(t, s, scope, workspace.Command{Type: "restoreMemory", ID: string(refs[0].ID)})
-			j := compareJob(t, s, scope, false, CompareVersion+1)
-			if err := (comparison.Service{Store: s.CompareStore(), Generator: jobCalls(s), Version: CompareVersion + 1}).Process(ctx, j); err != nil {
+			j := compareJob(t, s, scope, false, kernel.CompareVersion+1)
+			if err := (comparison.Service{Store: s.CompareStore(), Generator: jobCalls(s), Version: kernel.CompareVersion + 1}).Process(ctx, j); err != nil {
 				t.Fatal(err)
 			}
-			compareState(t, s, scope, refs, []string{"", ""}, CompareVersion+1)
+			compareState(t, s, scope, refs, []string{"", ""}, kernel.CompareVersion+1)
 		})
 	}
 }

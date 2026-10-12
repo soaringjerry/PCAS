@@ -13,9 +13,6 @@ import (
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
-const CompareVersion = 2
-
-var CardVersion = 1
 var HandoverVersion = 2
 
 var statusFields = []string{"status", "deadline", "decided", "blocker", "next", "preference", "people"}
@@ -54,7 +51,7 @@ func (s *Store) StatusCardIndexTx(ctx context.Context, tx pgx.Tx, scope memory.S
  SELECT sc.key,sc.kind,sc.name,coalesce(it.valid,0),sc.built_at,sc.stale OR sc.rule<$2 OR coalesce(it.invalid,0)>0
  FROM status_cards sc JOIN sizes g ON g.key=sc.key AND g.n>=3 LEFT JOIN items it ON it.key=sc.key
  WHERE sc.owner_id=$1 AND sc.built_at IS NOT NULL
- ORDER BY CASE sc.kind WHEN 'self' THEN 0 WHEN 'project' THEN 1 WHEN 'person' THEN 2 WHEN 'topic' THEN 3 ELSE 4 END,sc.name,sc.key`, string(scope.OwnerID), CardVersion)
+ ORDER BY CASE sc.kind WHEN 'self' THEN 0 WHEN 'project' THEN 1 WHEN 'person' THEN 2 WHEN 'topic' THEN 3 ELSE 4 END,sc.name,sc.key`, string(scope.OwnerID), kernel.CardVersion)
 	if err != nil {
 		return out, err
 	}
@@ -227,7 +224,7 @@ func (s *Store) About(ctx context.Context, scope memory.Scope, key string) (work
 			}
 			out.Deadlines = append(out.Deadlines, workspace.Deadline{ID: d.ID, Kind: d.Kind, At: d.At, Recurrence: d.Recurrence, Title: d.Title, TimeNote: note, MemoryID: d.MemoryID})
 		}
-		return tx.QueryRow(ctx, `SELECT count(*) FILTER(WHERE sc.built_at IS NOT NULL AND sc.rule>=$2),count(*) FROM (`+statusEligibleGroups+`) g LEFT JOIN status_cards sc USING(owner_id,key) WHERE g.owner_id=$1`, string(scope.OwnerID), CardVersion).Scan(&out.Building.Done, &out.Building.Total)
+		return tx.QueryRow(ctx, `SELECT count(*) FILTER(WHERE sc.built_at IS NOT NULL AND sc.rule>=$2),count(*) FROM (`+statusEligibleGroups+`) g LEFT JOIN status_cards sc USING(owner_id,key) WHERE g.owner_id=$1`, string(scope.OwnerID), kernel.CardVersion).Scan(&out.Building.Done, &out.Building.Total)
 	})
 	return out, err
 }

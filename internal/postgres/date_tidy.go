@@ -198,7 +198,7 @@ func (a dateReviewStore) Drop(ctx context.Context, j worker.Job) error {
 		if err := kernel.LockJob(ctx, tx, j); err != nil {
 			return err
 		}
-		if err := discardPaidResultTx(ctx, tx, j); err != nil {
+		if err := kernel.DiscardPaidResult(ctx, tx, j); err != nil {
 			return err
 		}
 		return kernel.Acknowledge(ctx, tx, j)
@@ -206,7 +206,7 @@ func (a dateReviewStore) Drop(ctx context.Context, j worker.Job) error {
 }
 
 func (a dateReviewStore) DiscardResult(ctx context.Context, j worker.Job) error {
-	return pgx.BeginFunc(ctx, a.store.Pool, func(tx pgx.Tx) error { return discardPaidResultTx(ctx, tx, j) })
+	return pgx.BeginFunc(ctx, a.store.Pool, func(tx pgx.Tx) error { return kernel.DiscardPaidResult(ctx, tx, j) })
 }
 
 func (a dateReviewStore) RetryLater(j worker.Job, code string) error {
@@ -215,7 +215,7 @@ func (a dateReviewStore) RetryLater(j worker.Job, code string) error {
 
 func (a dateReviewStore) Apply(ctx context.Context, j worker.Job, fn func(datereview.Unit) error) error {
 	now := a.store.BusinessNow()
-	return backgroundResultTx(ctx, a.store.Pool, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
+	return kernel.BackgroundResultTx(ctx, a.store.Pool, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
 		if err := kernel.LockJob(ctx, tx, j); err != nil {
 			return err
 		}
@@ -237,12 +237,12 @@ func (u dateReviewUnit) Input(class string) (datereview.Input, bool, error) {
 }
 
 func (u dateReviewUnit) Event(outcome, reason string, count int) error {
-	return stageEventTx(u.ctx, u.tx, u.job.OwnerID, DateTidyStage, outcome, reason, count)
+	return kernel.StageEvent(u.ctx, u.tx, u.job.OwnerID, DateTidyStage, outcome, reason, count)
 }
 
 func (u dateReviewUnit) Act(label string, fn func(datereview.Action) error) (string, error) {
 	id := string(memory.NewID())
-	actionCtx := withActionLog(withActor(u.ctx, "ai"), id, "background_tidy", "", label)
+	actionCtx := withActionLog(kernel.WithActor(u.ctx, "ai"), id, "background_tidy", "", label)
 	if err := beginActionLogTx(actionCtx, u.tx); err != nil {
 		return "", err
 	}
@@ -258,7 +258,7 @@ func (u dateReviewUnit) RecordDecision(class string, input datereview.Input, out
 	return err
 }
 
-func (u dateReviewUnit) DiscardResult() error { return discardPaidResultTx(u.ctx, u.tx, u.job) }
+func (u dateReviewUnit) DiscardResult() error { return kernel.DiscardPaidResult(u.ctx, u.tx, u.job) }
 func (u dateReviewUnit) Acknowledge() error   { return kernel.Acknowledge(u.ctx, u.tx, u.job) }
 
 type dateReviewAction struct {

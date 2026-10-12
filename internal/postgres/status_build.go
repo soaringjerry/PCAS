@@ -99,7 +99,7 @@ func (s *Store) ScheduleStatus(ctx context.Context, now time.Time) (int, error) 
 		return count, err
 	}
 	for _, owner := range owners {
-		err := backgroundResultTx(ctx, s.Pool, owner, func(ctx context.Context, tx pgx.Tx) error {
+		err := kernel.BackgroundResultTx(ctx, s.Pool, owner, func(ctx context.Context, tx pgx.Tx) error {
 			anchor, err := seedOrganizeGroupsTx(ctx, tx, owner)
 			if err != nil {
 				return err

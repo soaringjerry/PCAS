@@ -207,7 +207,7 @@ func nextComparisonBatchTx(ctx context.Context, tx pgx.Tx, owner memory.ID, vers
 
 func writeComparisonReceiptTx(ctx context.Context, tx pgx.Tx, owner memory.ID, version int, b comparisonBatch, valid bool) error {
 	if !valid {
-		if err := stageEventTx(ctx, tx, owner, CompareStage, "failure", "compare_invalid_output", 1); err != nil {
+		if err := kernel.StageEvent(ctx, tx, owner, CompareStage, "failure", "compare_invalid_output", 1); err != nil {
 			return err
 		}
 		var attempts int

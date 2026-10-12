@@ -62,7 +62,7 @@ func (s *Store) captureActionTx(ctx context.Context, tx pgx.Tx, scope memory.Sco
 		if count >= automaticTaskLimit {
 			v.Reasons = append(v.Reasons, "overflow")
 			v.Reason = "超过本段对话或资料自动创建上限，保留为候选"
-			if err := stageEventTx(ctx, tx, scope.OwnerID, "source.extract", "overflow", "automatic_task_limit", 1); err != nil {
+			if err := kernel.StageEvent(ctx, tx, scope.OwnerID, "source.extract", "overflow", "automatic_task_limit", 1); err != nil {
 				return err
 			}
 		}
@@ -70,7 +70,7 @@ func (s *Store) captureActionTx(ctx context.Context, tx pgx.Tx, scope memory.Sco
 	if len(v.Reasons) == 0 && len(v.Text) > 2000 {
 		v.Reasons = append(v.Reasons, "overflow")
 		v.Reason = "事项标题超过既有2000字节上限，完整内容保留为候选"
-		if err := stageEventTx(ctx, tx, scope.OwnerID, "source.extract", "overflow", "automatic_title_bytes", len(v.Text)-2000); err != nil {
+		if err := kernel.StageEvent(ctx, tx, scope.OwnerID, "source.extract", "overflow", "automatic_title_bytes", len(v.Text)-2000); err != nil {
 			return err
 		}
 	}
@@ -83,7 +83,7 @@ func (s *Store) captureActionTx(ctx context.Context, tx pgx.Tx, scope memory.Sco
 		actionID := string(memory.NewID())
 		item.Creation = &workspace.ItemCreation{By: "background_extraction", ActionID: actionID, Source: &v.Source}
 		label := map[string]string{"task": "待办", "idea": "想法"}[v.Kind]
-		actionCtx := withActionLog(withActor(ctx, "ai"), actionID, "background_extraction", "", "建了"+label+"「"+v.Text+"」")
+		actionCtx := withActionLog(kernel.WithActor(ctx, "ai"), actionID, "background_extraction", "", "建了"+label+"「"+v.Text+"」")
 		if err := beginActionLogTx(actionCtx, tx); err != nil {
 			return err
 		}

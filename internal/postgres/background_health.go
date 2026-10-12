@@ -15,17 +15,6 @@ import (
 	"github.com/soaringjerry/PCAS/internal/worker"
 )
 
-func stageEventTx(ctx context.Context, tx pgx.Tx, owner memory.ID, stage, outcome, reason string, count int) error {
-	if outcome == "failure" {
-		// The job's slot is handed back in this same write; that is not a success.
-		if _, err := tx.Exec(ctx, "SELECT set_config('pcas.stage_failed',$1,true)", stage); err != nil {
-			return err
-		}
-	}
-	_, err := tx.Exec(ctx, "INSERT INTO background_stage_events(owner_id,stage,outcome,reason,count) VALUES($1,$2,$3,$4,$5)", kernel.NullString(string(owner)), stage, outcome, reason, count)
-	return err
-}
-
 func backgroundFailureReason(err error) string {
 	var job *worker.JobError
 	if errors.As(err, &job) && job.Code != "" {
@@ -54,7 +43,7 @@ func (s *Store) scheduleYielded(ctx context.Context, owner memory.ID, stage stri
 	persist, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 	defer cancel()
 	if e := pgx.BeginFunc(persist, s.Pool, func(tx pgx.Tx) error {
-		return stageEventTx(persist, tx, owner, stage, "failure", "schedule_"+backgroundFailureReason(err), 1)
+		return kernel.StageEvent(persist, tx, owner, stage, "failure", "schedule_"+backgroundFailureReason(err), 1)
 	}); e != nil {
 		slog.ErrorContext(ctx, "background event storage failed", "stage", stage, "reason", backgroundFailureReason(e))
 	}
@@ -66,7 +55,9 @@ func (s *Store) recordScheduleFailure(ctx context.Context, stage string, err err
 	slog.WarnContext(ctx, "background schedule failed", "stage", stage, "reason", reason)
 	persist, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 	defer cancel()
-	if e := pgx.BeginFunc(persist, s.Pool, func(tx pgx.Tx) error { return stageEventTx(persist, tx, "", stage, "failure", "schedule_"+reason, 1) }); e != nil {
+	if e := pgx.BeginFunc(persist, s.Pool, func(tx pgx.Tx) error {
+		return kernel.StageEvent(persist, tx, "", stage, "failure", "schedule_"+reason, 1)
+	}); e != nil {
 		slog.ErrorContext(ctx, "background event storage failed", "stage", stage, "reason", backgroundFailureReason(e))
 	}
 }

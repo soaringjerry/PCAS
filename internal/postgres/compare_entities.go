@@ -214,7 +214,7 @@ func (a entityCompareSession) NextPair(ctx context.Context, j worker.Job, versio
 }
 
 func (a entityCompareSession) Finish(ctx context.Context, j worker.Job) error {
-	return backgroundWriteTx(ctx, a.conn, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
+	return kernel.BackgroundWriteTx(ctx, a.conn, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
 		if err := kernel.LockJob(ctx, tx, j); err != nil {
 			return err
 		}
@@ -253,7 +253,7 @@ func (a entityCompareSession) RecordInvalid(ctx context.Context, j worker.Job, v
 		return err
 	}
 	return pgx.BeginFunc(ctx, a.conn, func(tx pgx.Tx) error {
-		if err := discardPaidResultTx(ctx, tx, j); err != nil {
+		if err := kernel.DiscardPaidResult(ctx, tx, j); err != nil {
 			return err
 		}
 		return writeAliasReceiptTx(ctx, tx, j.OwnerID, version, pair, nil, output)
@@ -275,9 +275,9 @@ func (a entityCompareSession) Apply(ctx context.Context, j worker.Job, version i
 		return fn(entityCompareUnit{ctx: ctx, tx: tx, job: j, version: version, pair: pair, refs: refs})
 	}
 	if merge {
-		return backgroundMergeResultTx(ctx, a.conn, j.OwnerID, write)
+		return kernel.BackgroundMergeResultTx(ctx, a.conn, j.OwnerID, write)
 	}
-	return backgroundResultTx(ctx, a.conn, j.OwnerID, write)
+	return kernel.BackgroundResultTx(ctx, a.conn, j.OwnerID, write)
 }
 
 type entityCompareUnit struct {
@@ -334,14 +334,14 @@ func (u entityCompareUnit) Merge(keep int) error {
 }
 
 func (u entityCompareUnit) Event(outcome, reason string, count int) error {
-	return stageEventTx(u.ctx, u.tx, u.job.OwnerID, EntityCompareStage, outcome, reason, count)
+	return kernel.StageEvent(u.ctx, u.tx, u.job.OwnerID, EntityCompareStage, outcome, reason, count)
 }
 
 func (u entityCompareUnit) Receipt(same *bool, output string) error {
 	return writeAliasReceiptTx(u.ctx, u.tx, u.job.OwnerID, u.version, u.pair, same, output)
 }
 
-func (u entityCompareUnit) DiscardResult() error { return discardPaidResultTx(u.ctx, u.tx, u.job) }
+func (u entityCompareUnit) DiscardResult() error { return kernel.DiscardPaidResult(u.ctx, u.tx, u.job) }
 func (u entityCompareUnit) Acknowledge() error   { return kernel.Acknowledge(u.ctx, u.tx, u.job) }
 
 func writeAliasReceiptTx(ctx context.Context, tx pgx.Tx, owner memory.ID, rule int, pair *comparisonEntityPair, same *bool, output string) error {

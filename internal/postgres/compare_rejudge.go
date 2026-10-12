@@ -76,7 +76,7 @@ func finishRejudgeTx(ctx context.Context, tx pgx.Tx, j worker.Job, reason string
  VALUES($1,$2,$3,$4,jsonb_build_object('outcome',$5::text)) ON CONFLICT DO NOTHING`, string(j.OwnerID), string(j.Record.ID), j.Record.Version, j.Stage, reason); err != nil {
 		return err
 	}
-	if err := discardPaidResultTx(ctx, tx, j); err != nil {
+	if err := kernel.DiscardPaidResult(ctx, tx, j); err != nil {
 		return err
 	}
 	return kernel.Acknowledge(ctx, tx, j)
@@ -107,21 +107,21 @@ func (a compareSession) RejudgePair(ctx context.Context, j worker.Job, refs []me
 func (a compareSession) ApplyRejudge(ctx context.Context, j worker.Job, refs []memory.Ref, edges []comparison.Edge, valid bool) error {
 	conn := a.conn
 	if !valid {
-		err := backgroundResultTx(ctx, conn, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
+		err := kernel.BackgroundResultTx(ctx, conn, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
 			if err := kernel.LockJob(ctx, tx, j); err != nil {
 				return err
 			}
-			if err := stageEventTx(ctx, tx, j.OwnerID, CompareStage, "failure", "rejudge_invalid_output", 1); err != nil {
+			if err := kernel.StageEvent(ctx, tx, j.OwnerID, CompareStage, "failure", "rejudge_invalid_output", 1); err != nil {
 				return err
 			}
-			return discardPaidResultTx(ctx, tx, j)
+			return kernel.DiscardPaidResult(ctx, tx, j)
 		})
 		if err != nil {
 			return err
 		}
 		return &worker.JobError{Code: "rejudge_invalid_output", Until: time.Now().Add(kernel.RetryDelay(j.Attempts))}
 	}
-	return backgroundResultTx(ctx, conn, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
+	return kernel.BackgroundResultTx(ctx, conn, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
 		if err := kernel.LockJob(ctx, tx, j); err != nil {
 			return err
 		}
@@ -157,7 +157,7 @@ func (a compareSession) ApplyRejudge(ctx context.Context, j worker.Job, refs []m
 				return err
 			}
 		}
-		if err := stageEventTx(ctx, tx, j.OwnerID, CompareStage, "success", "rejudge_"+outcome, 1); err != nil {
+		if err := kernel.StageEvent(ctx, tx, j.OwnerID, CompareStage, "success", "rejudge_"+outcome, 1); err != nil {
 			return err
 		}
 		return finishRejudgeTx(ctx, tx, j, outcome)

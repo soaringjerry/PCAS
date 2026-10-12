@@ -307,7 +307,7 @@ func (a organizeSession) NextBatch(ctx context.Context, j worker.Job, version in
 func (a organizeSession) Apply(ctx context.Context, j worker.Job, result organize.Result) (organize.Applied, error) {
 	version, batch, items, timezone := result.Version, result.Memories, result.Items, result.Timezone
 	exhausted := []memory.ID{}
-	err := backgroundResultTx(ctx, a.conn, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
+	err := kernel.BackgroundResultTx(ctx, a.conn, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
 		if err := kernel.OwnerLock(ctx, tx, j.OwnerID); err != nil {
 			return err
 		}
@@ -345,7 +345,7 @@ func (a organizeSession) Apply(ctx context.Context, j worker.Job, result organiz
 					return err
 				}
 				exhausted = append(exhausted, m.Ref.ID)
-				if err := stageEventTx(ctx, tx, j.OwnerID, OrganizeStage, "failure", "organize_invalid_output", 1); err != nil {
+				if err := kernel.StageEvent(ctx, tx, j.OwnerID, OrganizeStage, "failure", "organize_invalid_output", 1); err != nil {
 					return err
 				}
 				continue
@@ -381,7 +381,7 @@ func (a organizeSession) Apply(ctx context.Context, j worker.Job, result organiz
 				return err
 			}
 			if withdrawnDates > 0 {
-				if err := stageEventTx(ctx, tx, j.OwnerID, OrganizeStage, "success", "reorganize_deadlines_withdrawn", withdrawnDates); err != nil {
+				if err := kernel.StageEvent(ctx, tx, j.OwnerID, OrganizeStage, "success", "reorganize_deadlines_withdrawn", withdrawnDates); err != nil {
 					return err
 				}
 			}
@@ -390,7 +390,7 @@ func (a organizeSession) Apply(ctx context.Context, j worker.Job, result organiz
 				return err
 			}
 			if item.Category != "rule" && removedRequirements.RowsAffected() > 0 {
-				if err := stageEventTx(ctx, tx, j.OwnerID, OrganizeStage, "success", "reorganize_requirements_withdrawn", int(removedRequirements.RowsAffected())); err != nil {
+				if err := kernel.StageEvent(ctx, tx, j.OwnerID, OrganizeStage, "success", "reorganize_requirements_withdrawn", int(removedRequirements.RowsAffected())); err != nil {
 					return err
 				}
 			}
@@ -406,7 +406,7 @@ func (a organizeSession) Apply(ctx context.Context, j worker.Job, result organiz
 		if err := kernel.Acknowledge(ctx, tx, j); err != nil {
 			return err
 		}
-		if err := discardPaidResultTx(ctx, tx, j); err != nil {
+		if err := kernel.DiscardPaidResult(ctx, tx, j); err != nil {
 			return err
 		}
 		_, err = enqueueOrganizeTx(ctx, tx, j.OwnerID, time.Now(), OrganizeVersion)
@@ -422,7 +422,7 @@ func (a organizeSession) Apply(ctx context.Context, j worker.Job, result organiz
 // fresh invocation through the shared budget policy, then bind it to the fenced
 // job. Each call's reservation ID also deduplicates its usage log.
 func (s *Store) reserveOrganizeCost(ctx context.Context, j worker.Job, cost float64) (string, error) {
-	reserveCtx, cancel := context.WithTimeout(ctx, backgroundWriteTimeout)
+	reserveCtx, cancel := context.WithTimeout(ctx, kernel.BackgroundWriteTimeout)
 	id, err := s.reserveModelCostID(reserveCtx, j.OwnerID, cost, &j)
 	cancel()
 	if errors.Is(err, memory.ErrUnavailable) {
@@ -441,7 +441,7 @@ func (s *Store) reserveOrganizeCost(ctx context.Context, j worker.Job, cost floa
 		return "", &worker.JobError{Code: "budget_deferred", Until: nextBudgetDay(time.Now(), loc).Add(time.Duration(jitter.Int64())), NoAttempt: true}
 	}
 	if err != nil {
-		return "", backgroundWriteError(ctx, err)
+		return "", kernel.BackgroundWriteError(ctx, err)
 	}
 	err = pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		if err := kernel.LockJob(ctx, tx, j); err != nil {

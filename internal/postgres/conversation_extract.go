@@ -326,7 +326,7 @@ func (w *conversationWork) Apply(ctx context.Context, output conversationOutput)
 				return err
 			}
 		}
-		if err := discardPaidResultTx(ctx, tx, j); err != nil {
+		if err := kernel.DiscardPaidResult(ctx, tx, j); err != nil {
 			return err
 		}
 		return kernel.Acknowledge(ctx, tx, j)

@@ -181,7 +181,7 @@ func phase3LoadFixture(t *testing.T) *phase3LoadedFixture {
 					d := workspace.Doc{ID: doc.ID, ThingID: p.ID, Title: doc.Title, Body: v.Body, By: v.Author, CreatedAt: doc.Versions[0].At.Format(time.RFC3339), UpdatedAt: v.At.Format(time.RFC3339)}
 					// Production writer, not a hand-built version table. A missing D1 implementation
 					// is detected independently by the version-list acceptance.
-					if err := saveDoc(withActor(ctx, v.Author), tx, scope, d); err != nil {
+					if err := saveDoc(kernel.WithActor(ctx, v.Author), tx, scope, d); err != nil {
 						return err
 					}
 				}

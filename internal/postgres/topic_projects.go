@@ -239,12 +239,12 @@ func enqueueTopicProjectsTx(ctx context.Context, tx pgx.Tx, owner memory.ID, now
 		}
 		if tag.RowsAffected() > 0 {
 			if input.Count > topicProjectEvidenceLimit {
-				if err = stageEventTx(ctx, tx, owner, TopicProjectStage, "overflow", "topic_project_evidence_left_in_group", input.Count-topicProjectEvidenceLimit); err != nil {
+				if err = kernel.StageEvent(ctx, tx, owner, TopicProjectStage, "overflow", "topic_project_evidence_left_in_group", input.Count-topicProjectEvidenceLimit); err != nil {
 					return count, err
 				}
 			}
 			if input.ClippedCharacters > 0 {
-				if err = stageEventTx(ctx, tx, owner, TopicProjectStage, "overflow", "topic_project_characters_left_in_group", input.ClippedCharacters); err != nil {
+				if err = kernel.StageEvent(ctx, tx, owner, TopicProjectStage, "overflow", "topic_project_characters_left_in_group", input.ClippedCharacters); err != nil {
 					return count, err
 				}
 			}
@@ -276,7 +276,7 @@ func (a topicProjectStore) Drop(ctx context.Context, j worker.Job) error {
 		if err := kernel.LockJob(ctx, tx, j); err != nil {
 			return err
 		}
-		if err := discardPaidResultTx(ctx, tx, j); err != nil {
+		if err := kernel.DiscardPaidResult(ctx, tx, j); err != nil {
 			return err
 		}
 		return kernel.Acknowledge(ctx, tx, j)
@@ -284,7 +284,7 @@ func (a topicProjectStore) Drop(ctx context.Context, j worker.Job) error {
 }
 
 func (a topicProjectStore) DiscardResult(ctx context.Context, j worker.Job) error {
-	return pgx.BeginFunc(ctx, a.store.Pool, func(tx pgx.Tx) error { return discardPaidResultTx(ctx, tx, j) })
+	return pgx.BeginFunc(ctx, a.store.Pool, func(tx pgx.Tx) error { return kernel.DiscardPaidResult(ctx, tx, j) })
 }
 
 func (a topicProjectStore) RetryLater(j worker.Job, code string) error {
@@ -292,7 +292,7 @@ func (a topicProjectStore) RetryLater(j worker.Job, code string) error {
 }
 
 func (a topicProjectStore) Apply(ctx context.Context, j worker.Job, fn func(topicproject.Unit) error) error {
-	return backgroundResultTx(ctx, a.store.Pool, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
+	return kernel.BackgroundResultTx(ctx, a.store.Pool, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
 		if err := kernel.LockJob(ctx, tx, j); err != nil {
 			return err
 		}
@@ -363,7 +363,7 @@ func (u topicProjectUnit) LogAction(actionID, summary string) error {
 	return err
 }
 
-func (u topicProjectUnit) DiscardResult() error { return discardPaidResultTx(u.ctx, u.tx, u.job) }
+func (u topicProjectUnit) DiscardResult() error { return kernel.DiscardPaidResult(u.ctx, u.tx, u.job) }
 func (u topicProjectUnit) Acknowledge() error   { return kernel.Acknowledge(u.ctx, u.tx, u.job) }
 
 func (s *Store) undoTopicProjectTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, id string) (bool, error) {

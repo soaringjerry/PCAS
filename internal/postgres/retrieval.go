@@ -586,7 +586,7 @@ func teamSourceExcerptsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, pr
 		characters += count
 	}
 	if omitted > 0 {
-		if err := stageEventTx(ctx, tx, scope.OwnerID, "secretary", "overflow", "source_excerpt_budget", omitted); err != nil {
+		if err := kernel.StageEvent(ctx, tx, scope.OwnerID, "secretary", "overflow", "source_excerpt_budget", omitted); err != nil {
 			return nil, err
 		}
 	}

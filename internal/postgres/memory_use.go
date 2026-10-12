@@ -263,12 +263,12 @@ func (s *Store) finishUseContextTx(ctx context.Context, tx pgx.Tx, scope memory.
 		accept(m)
 	}
 	if scoped > 0 {
-		if err := stageEventTx(ctx, tx, scope.OwnerID, "secretary", "overflow", "scoped_requirement_left_to_recall", scoped); err != nil {
+		if err := kernel.StageEvent(ctx, tx, scope.OwnerID, "secretary", "overflow", "scoped_requirement_left_to_recall", scoped); err != nil {
 			return err
 		}
 	}
 	if omitted > 0 {
-		if err := stageEventTx(ctx, tx, scope.OwnerID, "secretary", "overflow", "global_requirement_char_budget", omitted); err != nil {
+		if err := kernel.StageEvent(ctx, tx, scope.OwnerID, "secretary", "overflow", "global_requirement_char_budget", omitted); err != nil {
 			return err
 		}
 	}

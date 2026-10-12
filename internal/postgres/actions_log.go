@@ -123,7 +123,7 @@ func (s *Store) undoActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 	if handled, err := undoComparisonActionTx(ctx, tx, scope, id); handled {
 		return err
 	}
-	ctx = withActor(ctx, "user")
+	ctx = kernel.WithActor(ctx, "user")
 	if !memory.ID(id).Valid() {
 		return memory.ErrInvalid
 	}

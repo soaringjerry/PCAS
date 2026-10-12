@@ -101,7 +101,7 @@ func (s *Store) prepareRunContext(ctx context.Context, scope memory.Scope, c wor
 		}
 		query = runHistoryQuery(query, history, c.Prompt)
 		if omitted := len(query) - len(tail(query, delegateContextBytes)); omitted > 0 {
-			if err := stageEventTx(ctx, tx, scope.OwnerID, "deputy", "overflow", "retrieval_query_bytes", omitted); err != nil {
+			if err := kernel.StageEvent(ctx, tx, scope.OwnerID, "deputy", "overflow", "retrieval_query_bytes", omitted); err != nil {
 				return err
 			}
 		}

@@ -24,7 +24,7 @@ func session(text string) *fakeSession {
 func (f *fakeSession) Context(context.Context) (View, error) {
 	return View{Agent: "虚构秘书", Aliases: map[string]workspace.Item{}}, f.contextErr
 }
-func (f *fakeSession) Input(context.Context) (*Asking, string, error) {
+func (f *fakeSession) Input(_ context.Context, _ Recall) (*Asking, string, error) {
 	if f.inputErr != nil {
 		return nil, "verify", f.inputErr
 	}

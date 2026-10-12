@@ -7,6 +7,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/retrieval"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -36,7 +37,7 @@ type storedDeskContext struct {
 // Resolve references and perform semantic retrieval before Execute takes the
 // owner lock. All selected versions and current documents are rechecked inside
 // the transaction; this snapshot never grants access by itself.
-func (s *Store) prepareRunContext(ctx context.Context, scope memory.Scope, c workspace.Command) (context.Context, error) {
+func (s *Store) prepareRunContext(ctx context.Context, scope memory.Scope, c workspace.Command, recall retrieval.QueryEmbed) (context.Context, error) {
 	if len(c.DeskTurnIDs) > delegateHistoryTurns {
 		return ctx, memory.ErrInvalid
 	}
@@ -112,7 +113,7 @@ func (s *Store) prepareRunContext(ctx context.Context, scope memory.Scope, c wor
 	if projectID != "" {
 		request.Context.Objects = []memory.ID{memory.ID(projectID)}
 	}
-	result, err := s.Recall(ctx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: c.AgentID, Team: true}, request)
+	result, err := s.RecallWith(ctx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: c.AgentID, Team: true}, request, recall)
 	if err != nil {
 		return ctx, err
 	}

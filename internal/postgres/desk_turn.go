@@ -206,7 +206,7 @@ func (s *Store) checkDeskContextTx(ctx context.Context, tx pgx.Tx, scope memory.
 	}
 	return nil
 }
-func (s *Store) secretaryPrompt(ctx context.Context, tx pgx.Tx, scope memory.Scope, req workspace.DeskTurnRequest, c *secretaryContext) (string, map[string]workspace.Memory, error) {
+func (s *Store) secretaryPrompt(ctx context.Context, tx pgx.Tx, scope memory.Scope, req workspace.DeskTurnRequest, c *secretaryContext, search secretary.Recall) (string, map[string]workspace.Memory, error) {
 	var prompt strings.Builder
 	loc := deskLocation(c.Settings)
 	c.Plan = memory.PlanQuery(req.Text, s.businessNow(), loc)
@@ -273,7 +273,7 @@ func (s *Store) secretaryPrompt(ctx context.Context, tx pgx.Tx, scope memory.Sco
 		candidates = 40
 		tokens = 12000
 	}
-	recall, err := s.Recall(ctx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: c.Agent.ID, Team: true}, memory.RecallRequest{Team: &memory.TeamRecall{Text: req.Text, Plan: c.Plan, ThingID: req.ThingID, ProjectID: projectID, Candidates: 20, RankFusion: c.Use.Ready}, Query: tail(earlier+req.Text, 4000), Mode: "remember", Context: memory.WorkingContext{Objects: []memory.ID{}}, Budget: memory.Budget{Candidates: candidates, Tokens: tokens, Edges: 15, Hops: 1}})
+	recall, err := search(ctx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: c.Agent.ID, Team: true}, memory.RecallRequest{Team: &memory.TeamRecall{Text: req.Text, Plan: c.Plan, ThingID: req.ThingID, ProjectID: projectID, Candidates: 20, RankFusion: c.Use.Ready}, Query: tail(earlier+req.Text, 4000), Mode: "remember", Context: memory.WorkingContext{Objects: []memory.ID{}}, Budget: memory.Budget{Candidates: candidates, Tokens: tokens, Edges: 15, Hops: 1}})
 	if err != nil {
 		return "", nil, err
 	}
@@ -363,7 +363,7 @@ func (s *Store) DeskStore() secretary.TurnStore { return deskStore{s} }
 
 type deskStore struct{ store *Store }
 
-func (a deskStore) Turn(ctx context.Context, scope memory.Scope, req workspace.DeskTurnRequest, conduct func(context.Context, secretary.Unit) (secretary.Conducted, error)) (workspace.DeskTurnResponse, error) {
+func (a deskStore) Turn(ctx context.Context, scope memory.Scope, req workspace.DeskTurnRequest, steps secretary.Steps) (workspace.DeskTurnResponse, error) {
 	s := a.store
 	var out workspace.DeskTurnResponse
 	if err := requireOwner(scope); err != nil {
@@ -426,7 +426,7 @@ func (a deskStore) Turn(ctx context.Context, scope memory.Scope, req workspace.D
 	var attachments []deskAttachment
 	if !ticket.legacy && len(req.Attachments) > 0 {
 		attachmentStarted := time.Now()
-		attachments, err = s.prepareDeskAttachments(requestCtx, scope, req)
+		attachments, err = s.prepareDeskAttachments(requestCtx, scope, req, steps.ReadAttachment)
 		timing.addPrepare(time.Since(attachmentStarted))
 		if err != nil {
 			return out, err
@@ -473,7 +473,7 @@ func (a deskStore) Turn(ctx context.Context, scope memory.Scope, req workspace.D
 			secretaryTurn: &secretaryTurn{store: s, tx: tx, scope: scope, req: req, turnID: out.Turn.ID},
 			conversation:  conversationID, attachments: attachments, text: text, started: turnStarted,
 		}
-		conducted, err := conduct(ctx, secretary.Unit{Session: session, Ask: session.secretaryAsk, Request: requestCtx, TurnID: out.Turn.ID, Thing: req.ThingID,
+		conducted, err := steps.Conduct(ctx, secretary.Unit{Session: session, Ask: session.secretaryAsk, Request: requestCtx, TurnID: out.Turn.ID, Thing: req.ThingID,
 			Conducting: secretary.Conducting{Unordered: captureOnly, HasText: text != "", CheckOnly: req.SmokeID != ""}})
 		if err != nil {
 			return err
@@ -558,9 +558,9 @@ func (t *secretarySession) Context(ctx context.Context) (secretary.View, error) 
 	return view, err
 }
 
-func (t *secretarySession) Input(ctx context.Context) (*secretary.Asking, string, error) {
+func (t *secretarySession) Input(ctx context.Context, recall secretary.Recall) (*secretary.Asking, string, error) {
 	s, c := t.secretaryAsk, t.c
-	prompt, sent, err := s.store.secretaryPrompt(ctx, s.tx, s.scope, s.req, c)
+	prompt, sent, err := s.store.secretaryPrompt(ctx, s.tx, s.scope, s.req, c, recall)
 	if err != nil {
 		return nil, "context", err
 	}

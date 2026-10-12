@@ -7,17 +7,19 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/soaringjerry/PCAS/internal/retrieval"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/soaringjerry/PCAS/internal/retrieval"
+
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
-	"github.com/soaringjerry/PCAS/internal/modelcall"
 )
 
-func (s *Store) Recall(ctx context.Context, scope memory.Scope, in memory.RecallRequest) (memory.RecallResult, error) {
+// RecallWith searches memory. embed gives the vector of the query; it is
+// called once at most, after the request was checked.
+func (s *Store) RecallWith(ctx context.Context, scope memory.Scope, in memory.RecallRequest, embed retrieval.QueryEmbed) (memory.RecallResult, error) {
 	out := memory.RecallResult{Memories: []memory.Ref{}, Evidence: []memory.Evidence{}, Unresolved: []string{}, Coverage: retrieval.NewCoverage(), FollowUps: []string{}}
 	if !scope.Valid() {
 		return out, memory.ErrForbidden
@@ -70,28 +72,15 @@ func (s *Store) Recall(ctx context.Context, scope memory.Scope, in memory.Recall
 	// Query-time embedding is optional. Missing semantic coverage is explicit.
 	var vector []byte
 	var model string
-	if query != "" && s.models != nil && s.models.EmbeddingID() != "" {
-		provider, _ := s.models.Get(s.models.EmbeddingID())
-		var embeddings []memory.Embedding
-		var e error
-		reserved := float64(len(query)+16) * provider.InputPerMillion / 1e6
-		// A query inside a secretary or deputy execution keeps that root.
-		// Its own execution identity lets concurrent queries stay separate.
-		request := modelcall.DirectRequest{OwnerID: scope.OwnerID, ExecutionID: memory.NewID(), Function: "query_embedding", Stage: "query", Provider: provider, Estimate: reserved}
-		request.RootExecutionID = request.ExecutionID
-		if parent, ok := modelcall.Execution(ctx); ok && parent.OwnerID == scope.OwnerID {
-			request.RootExecutionID, request.CausationID = parent.RootExecutionID, parent.ExecutionID
-		}
-		embeddings, e = s.calls.CallEmbedding(ctx, request, []string{provider.EmbeddingQueryPrefix + query})
-		var persistence *modelcall.PersistenceError
-		if errors.As(e, &persistence) {
+	if query != "" {
+		values, embeddingModel, gap, e := embed(ctx, scope, query)
+		if e != nil {
 			return out, e
 		}
-		if e == nil && len(embeddings) == 1 {
-			vector = asJSON(embeddings[0].Values)
-			model = embeddings[0].Model
+		if gap == "" {
+			vector, model = asJSON(values), embeddingModel
 		} else {
-			out.Coverage.Gaps = append(out.Coverage.Gaps, "语义检索暂不可用，已使用原文与属性检索")
+			out.Coverage.Gaps = append(out.Coverage.Gaps, gap)
 		}
 	} else {
 		out.Coverage.Gaps = append(out.Coverage.Gaps, "未配置语义索引；模糊措辞的覆盖尚不完整")

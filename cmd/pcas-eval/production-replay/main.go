@@ -289,7 +289,7 @@ func run(ctx context.Context, args []string) (runErr error) {
 			var request workspace.Command
 			opErr = json.Unmarshal(op.Request, &request)
 			if opErr == nil {
-				result.Result, opErr = store.Execute(work, scope, request)
+				result.Result, opErr = app.New(store).Execute(work, scope, request)
 			}
 		case "deputy":
 			result.Result, opErr = processDeputy(work, store, pool, copy.Owner, op.RunID)

@@ -4,18 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 	"io"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/soaringjerry/PCAS/internal/ai"
 	"github.com/soaringjerry/PCAS/internal/input/attachment"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/modelcall"
-	"github.com/soaringjerry/PCAS/internal/prompts"
 	"github.com/soaringjerry/PCAS/internal/worker"
 )
 
@@ -86,7 +82,10 @@ func (s *Store) OpenAttachment(ctx context.Context, scope memory.Scope, id memor
 	}
 	return file, source.Source.Title, source.Source.MediaType, err
 }
-func (s *Store) ProcessAttachment(ctx context.Context, j worker.Job) error {
+
+// ProcessAttachmentWith handles the job of one uploaded file. read parses an
+// original file under the lock of that original.
+func (s *Store) ProcessAttachmentWith(ctx context.Context, j worker.Job, read attachment.Read) error {
 	scope := memory.Scope{OwnerID: j.OwnerID, PrincipalID: "worker", IsOwner: true}
 	file, title, media, err := s.OpenAttachment(ctx, scope, j.Record.ID, j.Record.Version)
 	if err != nil {
@@ -97,7 +96,7 @@ func (s *Store) ProcessAttachment(ctx context.Context, j worker.Job) error {
 		return s.processArchiveImport(ctx, j, title, file)
 	}
 	file.Close()
-	if _, err := s.readAttachment(ctx, scope, j.Record, &j); err != nil {
+	if _, err := s.readAttachmentWith(ctx, scope, j.Record, &j, read); err != nil {
 		var specific *worker.JobError
 		if errors.As(err, &specific) {
 			return err
@@ -119,7 +118,7 @@ type parsedAttachment = attachment.Parsed
 
 // Serialize parsing per original across API and worker processes. Existing OCR
 // derivatives are reused, never upgraded or reread by this change.
-func (s *Store) readAttachment(ctx context.Context, scope memory.Scope, ref memory.Ref, job *worker.Job) (parsedAttachment, error) {
+func (s *Store) readAttachmentWith(ctx context.Context, scope memory.Scope, ref memory.Ref, job *worker.Job, read attachment.Read) (parsedAttachment, error) {
 	var parsed parsedAttachment
 	select {
 	case s.secretarySlots <- struct{}{}:
@@ -146,7 +145,7 @@ func (s *Store) readAttachment(ctx context.Context, scope memory.Scope, ref memo
 		if !errors.Is(err, pgx.ErrNoRows) {
 			return err
 		}
-		parsed, err = s.parseAttachment(ctx, scope, ref, job)
+		parsed, err = s.parseAttachment(ctx, scope, ref, job, read)
 		if err != nil {
 			return err
 		}
@@ -183,120 +182,37 @@ func (s *Store) readAttachment(ctx context.Context, scope memory.Scope, ref memo
 	})
 	return parsed, err
 }
-func (s *Store) parseAttachment(ctx context.Context, scope memory.Scope, ref memory.Ref, job *worker.Job) (parsedAttachment, error) {
+func (s *Store) parseAttachment(ctx context.Context, scope memory.Scope, ref memory.Ref, job *worker.Job, read attachment.Read) (parsedAttachment, error) {
 	file, title, media, err := s.OpenAttachment(ctx, scope, ref.ID, ref.Version)
 	if err != nil {
 		return parsedAttachment{}, err
 	}
 	defer file.Close()
-	return attachment.Parser{Calls: attachmentCalls{store: s, scope: scope, ref: ref, job: job}}.Parse(ctx, file, title, media)
+	return read(ctx, attachmentReceipts{store: s, scope: scope, ref: ref, job: job}, scope, ref, job, file, title, media)
 }
 
-// attachmentCalls makes the paid calls of one original file and keeps their
-// receipts with the file.
-type attachmentCalls struct {
+// attachmentReceipts keeps the paid readings of one original file with the
+// file.
+type attachmentReceipts struct {
 	store *Store
 	scope memory.Scope
 	ref   memory.Ref
 	job   *worker.Job
 }
 
-func (a attachmentCalls) SavedTranscript(ctx context.Context) (string, bool, error) {
-	if a.store.models == nil {
-		return "", false, memory.ErrUnavailable
-	}
-	saved, err := a.store.attachmentReceipt(ctx, a.scope, a.ref, "transcript")
-	if err != nil {
-		return "", false, err
-	}
-	if saved != nil {
-		if err := a.store.accountAttachmentReceipt(ctx, a.scope, a.ref, saved, "transcription", a.job); err != nil {
-			return "", false, err
-		}
-		return saved.Output, true, nil
-	}
-	if _, ok := a.store.models.Get(a.store.models.Config.Transcription); !ok {
-		return "", false, memory.ErrUnavailable
-	}
-	return "", false, nil
-}
-
-func (a attachmentCalls) Transcribe(ctx context.Context, audio io.Reader, title string, seconds float64) (string, error) {
-	provider, ok := a.store.models.Get(a.store.models.Config.Transcription)
-	if !ok {
-		return "", memory.ErrUnavailable
-	}
-	// The reservation holds one more second than the measured length.
-	request := modelcall.DirectRequest{OwnerID: a.scope.OwnerID, ExecutionID: memory.NewID(), Function: "transcription", Stage: "audio", Provider: provider, Estimate: (seconds + 1) / 60 * provider.AudioPerMinute, Refs: []memory.Ref{a.ref}, Job: a.job}
-	request.RootExecutionID = request.ExecutionID
-	if a.job != nil {
-		request.RootExecutionID, request.CausationID = a.job.ID, a.job.ID
-	}
-	text, usage, call, err := a.store.calls.CallTranscription(ctx, request, audio, title, seconds)
-	if err == nil {
-		paid := &paidModelResult{Output: text, Reservation: call.Reservation, Provider: provider.ID, Model: provider.Model, InputTokens: usage.InputTokens, OutputTokens: usage.OutputTokens, InputEstimated: true, OutputEstimated: true, Cost: usage.Cost, CostEstimated: usage.CostEstimated}
-		return text, a.store.saveAttachmentReceipt(ctx, a.scope, a.ref, "transcript", paid)
-	}
-	// A submitted call is recorded with its usage. Other errors come from
-	// the reservation or the accounting write and keep their own meaning.
-	var failure *modelcall.Failure
-	if errors.As(err, &failure) || errors.Is(err, modelcall.ErrNotAvailable) || errors.Is(err, ai.ErrUnsupportedCapability) {
-		return "", memory.ErrUnavailable
-	}
-	return "", err
-}
-
-func (a attachmentCalls) SavedReading(ctx context.Context, component string) (string, bool, error) {
+func (a attachmentReceipts) Saved(ctx context.Context, component, purpose string) (string, bool, error) {
 	saved, err := a.store.attachmentReceipt(ctx, a.scope, a.ref, component)
 	if err != nil || saved == nil {
 		return "", false, err
 	}
-	if err := a.store.accountAttachmentReceipt(ctx, a.scope, a.ref, saved, "vision", a.job); err != nil {
+	if err := a.store.accountAttachmentReceipt(ctx, a.scope, a.ref, saved, purpose, a.job); err != nil {
 		return "", false, err
 	}
 	return saved.Output, true, nil
 }
 
-func (a attachmentCalls) CanReadImages() bool {
-	_, ok := a.store.models.VisionProvider()
-	return ok
-}
-
-func (a attachmentCalls) ReadImage(ctx context.Context, component string, image ai.Image) (string, error) {
-	p, ok := a.store.models.VisionProvider()
-	if !ok {
-		return "", &attachment.Fallback{Stage: "select", Kind: "unavailable"}
-	}
-	// The image's job is named in the usage record. Its queue budget rules
-	// do not apply, because one file can need a call for each page.
-	instructions := prompts.Must("vision")
-	request := modelcall.DirectRequest{OwnerID: a.scope.OwnerID, ExecutionID: memory.NewID(), Function: "vision", Stage: "image", Provider: p, Estimate: p.ReserveVision(instructions.Text(), image), Instructions: instructions, Refs: []memory.Ref{a.ref}}
-	request.RootExecutionID = request.ExecutionID
-	if a.job != nil {
-		request.RootExecutionID, request.CausationID, request.UsageJob = a.job.ID, a.job.ID, a.job.ID
-	}
-	work, cancel := context.WithTimeout(ctx, 45*time.Second)
-	result, call, err := a.store.calls.CallVision(work, request, image)
-	cancel()
-	if err == nil {
-		paid := &paidModelResult{Output: result.Text, Reservation: call.Reservation, Provider: p.ID, Model: p.Model, InputTokens: result.InputTokens, OutputTokens: result.OutputTokens, InputEstimated: result.InputEstimated, OutputEstimated: result.OutputEstimated, CostEstimated: result.CostEstimated, Cost: result.Cost}
-		if err = a.store.saveAttachmentReceipt(ctx, a.scope, a.ref, component, paid); err != nil {
-			return "", err
-		}
-		return paid.Output, nil
-	}
-	var persistence *modelcall.PersistenceError
-	if errors.As(err, &persistence) {
-		return "", err
-	}
-	// The gateway recorded a submitted call and its usage. A reservation
-	// that failed submitted nothing.
-	stage := "budget"
-	var failure *modelcall.Failure
-	if errors.As(err, &failure) {
-		stage = "model"
-	}
-	return "", &attachment.Fallback{Stage: stage, Kind: secretary.ErrorType(stage, err)}
+func (a attachmentReceipts) Save(ctx context.Context, component string, paid *modelcall.PaidResult) error {
+	return a.store.saveAttachmentReceipt(ctx, a.scope, a.ref, component, paid)
 }
 
 func (s *Store) CleanupBlobs(ctx context.Context) error {

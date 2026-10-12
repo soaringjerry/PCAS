@@ -1146,7 +1146,7 @@ func (s *Store) p2LegacyDeskTurn(ctx context.Context, scope memory.Scope, req wo
 	conversationID = ticket.conversation
 	var attachments []deskAttachment
 	if !ticket.legacy && len(req.Attachments) > 0 {
-		attachments, err = s.prepareDeskAttachments(requestCtx, scope, req)
+		attachments, err = s.prepareDeskAttachments(requestCtx, scope, req, s.attachmentReader().Read)
 		if err != nil {
 			return out, err
 		}

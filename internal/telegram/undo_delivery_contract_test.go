@@ -47,7 +47,7 @@ func TestTelegramWebThenTelegramAlreadyUndone(t *testing.T) {
 		t.Fatal("missing task", err, st.Tasks)
 	}
 	token := strings.Repeat("T1", 32)
-	api := httpapi.New(s, s, httpapi.NewOwnerToken(token, p.scope.OwnerID), func(context.Context) error { return nil }, slog.New(slog.NewTextHandler(io.Discard, nil)), httpapi.Options{Workspace: s})
+	api := httpapi.New(s, composed{s}, httpapi.NewOwnerToken(token, p.scope.OwnerID), func(context.Context) error { return nil }, slog.New(slog.NewTextHandler(io.Discard, nil)), httpapi.Options{Workspace: composed{s}})
 	body, _ := json.Marshal(workspace.Command{Type: "undoAction", ID: action, RequestID: string(memory.NewID()), ExpectedRevision: st.Revision})
 	request := httptest.NewRequest("POST", "/v1/workspace/commands", strings.NewReader(string(body)))
 	request.Header.Set("Authorization", "Bearer "+token)

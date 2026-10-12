@@ -5,9 +5,12 @@ import (
 	"log/slog"
 
 	"github.com/soaringjerry/PCAS/internal/contextbuilder/reader"
+	"github.com/soaringjerry/PCAS/internal/input/attachment"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/modelcall/stagecall"
 	"github.com/soaringjerry/PCAS/internal/postgres"
+	"github.com/soaringjerry/PCAS/internal/retrieval"
+	"github.com/soaringjerry/PCAS/internal/worker"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 	"github.com/soaringjerry/PCAS/internal/workspace/deputy"
 	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
@@ -20,11 +23,12 @@ type Application struct {
 	*postgres.Store
 	secretary secretary.Service
 	deputy    deputy.Steps
+	recall    retrieval.Recaller
 }
 
 // New composes the application over the store.
 func New(db *postgres.Store) *Application {
-	return &Application{Store: db, secretary: Secretary(db), deputy: DeputySteps(db)}
+	return &Application{Store: db, secretary: Secretary(db), deputy: DeputySteps(db), recall: Recall(db)}
 }
 
 // Stages makes the calls of the readers and the self-check.
@@ -37,9 +41,30 @@ func Reader(db *postgres.Store) reader.Service {
 	return reader.Service{Store: db.ReaderStore(), Calls: Stages(db), ErrorType: secretary.ErrorType}
 }
 
+// Recall returns the service that searches memory. It requests the vector
+// of a query from the model.
+func Recall(db *postgres.Store) retrieval.Recaller {
+	recaller := retrieval.Recaller{Store: db, Calls: db.Gateway()}
+	if models := db.Models(); models != nil {
+		recaller.Providers = models
+	}
+	return recaller
+}
+
+// Attachments parses original files with the configured models.
+func Attachments(db *postgres.Store) attachment.Reader {
+	return attachment.Reader{Models: db.Models(), Calls: db.Gateway(), ErrorType: secretary.ErrorType}
+}
+
+// Attachment returns the handler of the job of an uploaded file.
+func Attachment(db *postgres.Store) worker.Handler {
+	read := Attachments(db).Read
+	return func(ctx context.Context, job worker.Job) error { return db.ProcessAttachmentWith(ctx, job, read) }
+}
+
 // Secretary returns the service that answers the owner's sentences.
 func Secretary(db *postgres.Store) secretary.Service {
-	return secretary.Service{Store: db.DeskStore(), Calls: db.Gateway(), Stages: Stages(db), Reader: Reader(db)}
+	return secretary.Service{Store: db.DeskStore(), Calls: db.Gateway(), Stages: Stages(db), Reader: Reader(db), Recall: Recall(db).Recall, ReadAttachment: Attachments(db).Read}
 }
 
 // DeputySteps are the steps of a deputy run that a domain service makes.
@@ -50,6 +75,16 @@ func DeputySteps(db *postgres.Store) deputy.Steps {
 // DeskTurn conducts one turn of the owner with the secretary.
 func (a *Application) DeskTurn(ctx context.Context, scope memory.Scope, request workspace.DeskTurnRequest) (workspace.DeskTurnResponse, error) {
 	return a.secretary.DeskTurn(ctx, scope, request)
+}
+
+// Recall returns the memories and the sources for the request.
+func (a *Application) Recall(ctx context.Context, scope memory.Scope, in memory.RecallRequest) (memory.RecallResult, error) {
+	return a.recall.Recall(ctx, scope, in)
+}
+
+// Execute executes one workspace command.
+func (a *Application) Execute(ctx context.Context, scope memory.Scope, in workspace.Command) (workspace.State, error) {
+	return a.Store.ExecuteWith(ctx, scope, in, a.recall.Embed)
 }
 
 // RunAgents runs the deputy's queued work until ctx ends.
@@ -63,18 +98,23 @@ func (a *Application) RunDeputyOnce(ctx context.Context) error {
 }
 
 // Workspace is the workspace API of the HTTP server: the notifier's
-// workspace with the secretary's turn.
+// workspace with the secretary's turn and the commands that search memory.
 type Workspace struct {
 	*postgres.Notifier
-	secretary secretary.Service
+	application *Application
 }
 
 // NewWorkspace gives the notifier's workspace the application's secretary.
 func NewWorkspace(notifier *postgres.Notifier, application *Application) Workspace {
-	return Workspace{Notifier: notifier, secretary: application.secretary}
+	return Workspace{Notifier: notifier, application: application}
 }
 
 // DeskTurn conducts one turn of the owner with the secretary.
 func (w Workspace) DeskTurn(ctx context.Context, scope memory.Scope, request workspace.DeskTurnRequest) (workspace.DeskTurnResponse, error) {
-	return w.secretary.DeskTurn(ctx, scope, request)
+	return w.application.DeskTurn(ctx, scope, request)
+}
+
+// Execute executes one workspace command.
+func (w Workspace) Execute(ctx context.Context, scope memory.Scope, in workspace.Command) (workspace.State, error) {
+	return w.application.Execute(ctx, scope, in)
 }

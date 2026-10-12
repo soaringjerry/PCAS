@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 
+	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -30,8 +31,9 @@ type Session interface {
 	// falls back to keeping the sentence.
 	Context(ctx context.Context) (view View, failure error)
 	// Input builds the model input and checks that the agent may use what
-	// it holds. stage names the place of a failure.
-	Input(ctx context.Context) (state *Asking, stage string, failure error)
+	// it holds. It searches memory with recall. stage names the place of a
+	// failure.
+	Input(ctx context.Context, recall Recall) (state *Asking, stage string, failure error)
 	// Asked gives the session the state after the model was asked.
 	Asked(state *Asking)
 	// BeginWrite starts the writes of the turn. From here the owner's
@@ -58,7 +60,13 @@ type Conducting struct {
 	// is true for a check-only turn.
 	HasText, CheckOnly bool
 	Limits             Limits
+	// Recall searches memory for the context of the turn.
+	Recall Recall
 }
+
+// Recall searches memory. It can make a recorded model call for the vector
+// of the query.
+type Recall func(ctx context.Context, scope memory.Scope, in memory.RecallRequest) (memory.RecallResult, error)
 
 // Conducted is what a turn gives back to the owner.
 type Conducted struct {
@@ -86,7 +94,7 @@ func Conduct(ctx context.Context, s Session, m Model, in Conducting) (Conducted,
 	var asked Asked
 	var state *Asking
 	if failure == nil {
-		state, stage, failure = s.Input(ctx)
+		state, stage, failure = s.Input(ctx, in.Recall)
 		if failure == nil {
 			var err error
 			asked, err = Ask(ctx, m, state, in.Limits)

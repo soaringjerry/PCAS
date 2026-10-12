@@ -3,9 +3,11 @@ package postgres
 import (
 	"context"
 	"fmt"
-	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 	"log/slog"
 	"strings"
+
+	"github.com/soaringjerry/PCAS/internal/input/attachment"
+	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
@@ -18,7 +20,7 @@ type deskAttachment struct {
 }
 
 // Both Telegram and the web submit stored source references to DeskTurn.
-func (s *Store) prepareDeskAttachments(ctx context.Context, scope memory.Scope, req workspace.DeskTurnRequest) ([]deskAttachment, error) {
+func (s *Store) prepareDeskAttachments(ctx context.Context, scope memory.Scope, req workspace.DeskTurnRequest, read attachment.Read) ([]deskAttachment, error) {
 	out := []deskAttachment{}
 	for _, ref := range req.Attachments {
 		original, err := s.GetSource(ctx, scope, ref.ID, ref.Version)
@@ -46,7 +48,7 @@ func (s *Store) prepareDeskAttachments(ctx context.Context, scope memory.Scope, 
 			return nil, err
 		}
 		a := deskAttachment{Ref: ref, Media: original.Source.MediaType}
-		parsed, parseErr := s.readAttachment(ctx, scope, ref, nil)
+		parsed, parseErr := s.readAttachmentWith(ctx, scope, ref, nil, read)
 		image := strings.HasPrefix(a.Media, "image/")
 		if parseErr != nil || image && parsed.Representation != "vision" {
 			slog.WarnContext(ctx, "secretary attachment retained", "stage", "parse", "error_type", secretary.ErrorType("model", parseErr))

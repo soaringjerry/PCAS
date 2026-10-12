@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/soaringjerry/PCAS/internal/contextbuilder/reader"
+	"github.com/soaringjerry/PCAS/internal/input/attachment"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/modelcall"
 	"github.com/soaringjerry/PCAS/internal/workspace"
@@ -27,10 +28,20 @@ type Unit struct {
 // TurnStore conducts turns in storage.
 type TurnStore interface {
 	// Turn checks and admits the request, reads its attachments, and places
-	// the turn in its conversation. It calls conduct once in the transaction
-	// of the turn, and saves what conduct returns as the turn. A repeated
-	// request returns its saved turn without a call of conduct.
-	Turn(ctx context.Context, scope memory.Scope, request workspace.DeskTurnRequest, conduct func(ctx context.Context, unit Unit) (Conducted, error)) (workspace.DeskTurnResponse, error)
+	// the turn in its conversation. It calls Conduct once in the transaction
+	// of the turn, and saves what Conduct returns as the turn. A repeated
+	// request returns its saved turn without a call of Conduct.
+	Turn(ctx context.Context, scope memory.Scope, request workspace.DeskTurnRequest, steps Steps) (workspace.DeskTurnResponse, error)
+}
+
+// Steps are the steps of a turn that the service makes. Storage calls each
+// step at its place.
+type Steps struct {
+	// ReadAttachment parses an attachment of the request under the lock of
+	// its original file.
+	ReadAttachment attachment.Read
+	// Conduct conducts the turn in its transaction.
+	Conduct func(ctx context.Context, unit Unit) (Conducted, error)
 }
 
 // Service answers the owner's sentences.
@@ -39,14 +50,17 @@ type Service struct {
 	Calls  *modelcall.Gateway
 	Stages StageCalls
 	Reader Reader
+	Recall Recall
+	// ReadAttachment parses an attachment of a request.
+	ReadAttachment attachment.Read
 }
 
 // DeskTurn conducts one turn of the owner with the secretary.
 func (s Service) DeskTurn(ctx context.Context, scope memory.Scope, request workspace.DeskTurnRequest) (workspace.DeskTurnResponse, error) {
-	return s.Store.Turn(ctx, scope, request, func(ctx context.Context, unit Unit) (Conducted, error) {
+	return s.Store.Turn(ctx, scope, request, Steps{ReadAttachment: s.ReadAttachment, Conduct: func(ctx context.Context, unit Unit) (Conducted, error) {
 		asker := Asker{Store: unit.Ask, Calls: s.Calls, Stages: s.Stages, Reader: s.Reader, Request: unit.Request, Scope: scope, Thing: unit.Thing, TurnID: unit.TurnID}
 		in := unit.Conducting
-		in.Limits = Limits{Model: ModelTimeout, HeavyReader: reader.Budget, Total: TurnTimeout}
+		in.Limits, in.Recall = Limits{Model: ModelTimeout, HeavyReader: reader.Budget, Total: TurnTimeout}, s.Recall
 		return Conduct(ctx, unit.Session, asker, in)
-	})
+	}})
 }

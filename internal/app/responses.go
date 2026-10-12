@@ -38,7 +38,7 @@ const jobKey = "owner, record, record version, stage"
 // Responses is the one authoritative table. A stage that is not here has no
 // handler, and the worker does not run it.
 var Responses = []Response{
-	{"source.parse", "Source version accepted, with an attachment", "Input", "Attachment processor", jobKey, func(db *postgres.Store) worker.Handler { return db.ProcessAttachment }},
+	{"source.parse", "Source version accepted, with an attachment", "Input", "Attachment processor", jobKey, func(db *postgres.Store) worker.Handler { return Attachment(db) }},
 	{"source.chunk", "Source version accepted, with text", "Input", "Text processor", jobKey, func(db *postgres.Store) worker.Handler { return db.ProcessChunks }},
 	{extraction.Stage, "Source text available", "Input", "Memory extraction specialist", jobKey, func(db *postgres.Store) worker.Handler { return Extraction(db).Process }},
 	{"source.tokenize", "Search input changed for a source", "Input", "Search index processor", jobKey, func(db *postgres.Store) worker.Handler { return db.ProcessIndex }},

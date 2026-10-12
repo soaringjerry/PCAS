@@ -170,7 +170,7 @@ func run(ctx context.Context, args []string, logger *slog.Logger) error {
 	}
 	application := app.New(db)
 	notifier := postgres.NewNotifier(db, notify.Settings{Path: notify.SettingsPath()}, cfg.PublicURL)
-	api := httpapi.New(memory.NewService(db), db, httpapi.NewSessions(credentials, cfg.PublicURL), db.Ping, logger, httpapi.Options{Continuity: db, Connectors: db, Attachments: db, Writer: db, Workspace: app.NewWorkspace(notifier, application), Editor: db, Activity: db, Models: models, WebDir: webDir})
+	api := httpapi.New(memory.NewService(db), application, httpapi.NewSessions(credentials, cfg.PublicURL), db.Ping, logger, httpapi.Options{Continuity: db, Connectors: db, Attachments: db, Writer: db, Workspace: app.NewWorkspace(notifier, application), Editor: db, Activity: db, Models: models, WebDir: webDir})
 	workCtx, stopWorkers := context.WithCancel(ctx)
 	defer stopWorkers()
 	go func() { _ = application.RunAgents(workCtx, logger) }()

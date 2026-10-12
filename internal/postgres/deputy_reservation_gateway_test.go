@@ -10,6 +10,7 @@ import (
 
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/modelcall"
+	"github.com/soaringjerry/PCAS/internal/postgres/callstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/usagelog"
 	"github.com/soaringjerry/PCAS/internal/prompts"
@@ -29,7 +30,7 @@ func leasedDeputyAnswer(t *testing.T, s *Store, scope memory.Scope) modelcall.Re
 		OwnerID: scope.OwnerID, ExecutionID: memory.ID(run.ID), RootExecutionID: memory.ID(run.ID),
 		Function: "deputy", Stage: "answer", ProviderID: "model", Instructions: prompts.Must("deputy"),
 		ContextBuilderVersion: "fictitious-deputy-v1", Prompt: kernel.JSON(map[string]string{"rawPrompt": "Fictitious main generation."}),
-		Policy: interactiveCallPolicy{Kind: "deputy", Token: token, Origin: run.CreatedAt, AgentID: run.AgentID, ThingID: run.ThingID, BudgetOwner: "deputy_run", Usage: usagelog.ModelUsage{Purpose: "deputy", RunID: run.ID}},
+		Policy: callstore.InteractiveCallPolicy{Kind: "deputy", Token: token, Origin: run.CreatedAt, AgentID: run.AgentID, ThingID: run.ThingID, BudgetOwner: "deputy_run", Usage: usagelog.ModelUsage{Purpose: "deputy", RunID: run.ID}},
 	}
 }
 
@@ -97,7 +98,7 @@ func TestDeputyGatewayRecoversBillingWithoutSettlingReusedRun(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer peer.Close()
-			status, err := peer.recoverInteractiveCallsOnce(ctx)
+			status, err := peer.RecoverInteractiveCallsOnce(ctx)
 			if err != nil || status.Accounting != 1 || calls.Load() != 1 {
 				t.Fatal(status, err, calls.Load())
 			}
@@ -118,7 +119,7 @@ func TestDeputyInterruptedReservationDistinguishesUnsubmittedAndUnknown(t *testi
 			request := leasedDeputyAnswer(t, s, scope)
 			ctx := context.Background()
 			provider, _ := s.Models.Get("model")
-			adapter := interactiveCalls{store: s}
+			adapter := callstore.InteractiveCalls{Store: s.Calls}
 			invocation, err := adapter.Prepare(ctx, request, provider)
 			if err != nil {
 				t.Fatal(err)
@@ -135,7 +136,7 @@ func TestDeputyInterruptedReservationDistinguishesUnsubmittedAndUnknown(t *testi
 			if _, err := s.Pool.Exec(ctx, `UPDATE agent_runs SET lease_until=clock_timestamp()-interval '1 second' WHERE owner_id=$1 AND id=$2`, string(scope.OwnerID), string(request.ExecutionID)); err != nil {
 				t.Fatal(err)
 			}
-			status, err := s.recoverInteractiveCallsOnce(ctx)
+			status, err := s.RecoverInteractiveCallsOnce(ctx)
 			if err != nil || status.Interrupted != 1 {
 				t.Fatal(status, err)
 			}

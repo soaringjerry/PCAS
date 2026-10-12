@@ -1243,7 +1243,7 @@ func (s *Store) p2LegacyDeskTurn(ctx context.Context, scope memory.Scope, req wo
 				contextErr = err
 				if contextErr == nil {
 					p, _ := s.Models.Get(c.Agent.ID)
-					if err := s.recordReturnedUsage(ctx, result.Text, usagelog.ModelUsage{
+					if err := s.RecordReturnedUsage(ctx, result.Text, usagelog.ModelUsage{
 						OwnerID: scope.OwnerID, ID: memory.NewID(), At: time.Now().UTC(),
 						Purpose: "secretary", AgentID: c.Agent.ID, Model: p.Model,
 						InputTokens: result.InputTokens, OutputTokens: result.OutputTokens, Cost: result.Cost,

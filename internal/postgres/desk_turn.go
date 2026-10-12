@@ -14,6 +14,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/postgres/accessstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/actionlog"
 	"github.com/soaringjerry/PCAS/internal/postgres/budgetstore"
+	"github.com/soaringjerry/PCAS/internal/postgres/callstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/evidencestore"
 	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
@@ -427,7 +428,7 @@ func (a deskStore) Turn(ctx context.Context, scope memory.Scope, req workspace.D
 		return out, err
 	}
 	conversationID = ticket.conversation
-	execution := modelcall.Request{OwnerID: scope.OwnerID, ExecutionID: memory.ID(req.RequestID), RootExecutionID: memory.ID(req.RequestID), Function: "secretary", Policy: interactiveCallPolicy{Kind: "secretary", Token: ticket.creator, Origin: fmt.Sprintf("%x", hash), RequestHash: hash[:], ThingID: pointerValue(req.ThingID)}}
+	execution := modelcall.Request{OwnerID: scope.OwnerID, ExecutionID: memory.ID(req.RequestID), RootExecutionID: memory.ID(req.RequestID), Function: "secretary", Policy: callstore.InteractiveCallPolicy{Kind: "secretary", Token: ticket.creator, Origin: fmt.Sprintf("%x", hash), RequestHash: hash[:], ThingID: pointerValue(req.ThingID)}}
 	requestCtx = modelcall.WithExecution(requestCtx, execution)
 	ctx = modelcall.WithExecution(ctx, execution)
 	var attachments []deskAttachment
@@ -603,7 +604,7 @@ func (t *secretarySession) CheckFailed(ctx context.Context, reason string) error
 
 func (t *secretarySession) RecordApplication(ctx context.Context, stage, application, reason string) error {
 	s := t.secretaryAsk
-	return (interactiveCalls{store: s.store}).recordApplicationTx(ctx, s.tx, s.scope.OwnerID, memory.ID(s.req.RequestID), stage, application, reason)
+	return (callstore.InteractiveCalls{Store: s.store.Calls}).RecordApplicationTx(ctx, s.tx, s.scope.OwnerID, memory.ID(s.req.RequestID), stage, application, reason)
 }
 
 // A check-only turn and a turn without text keep nothing.

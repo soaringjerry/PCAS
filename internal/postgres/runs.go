@@ -15,6 +15,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/postgres/accessstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/actionlog"
 	"github.com/soaringjerry/PCAS/internal/postgres/budgetstore"
+	"github.com/soaringjerry/PCAS/internal/postgres/callstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/evidencestore"
 	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
@@ -464,7 +465,7 @@ func (s *Store) RunAgentJobs(ctx context.Context, logger *slog.Logger, steps dep
 		case <-ctx.Done():
 			return nil
 		case <-ticker.C:
-			if recovery, err := s.recoverInteractiveCallsOnce(ctx); err != nil && ctx.Err() == nil {
+			if recovery, err := s.RecoverInteractiveCallsOnce(ctx); err != nil && ctx.Err() == nil {
 				logger.Warn("interactive accounting recovery failed", "error_type", fmt.Sprintf("%T", err), "pending_results", recovery.PendingResults, "pending_accounting", recovery.PendingAccounting, "interrupted_calls", recovery.Interrupted, "counts_known", recovery.CountsKnown)
 			}
 			if err := s.runAgent(ctx, steps); err != nil && ctx.Err() == nil {
@@ -485,9 +486,9 @@ func (s *Store) runAgent(ctx context.Context, steps deputy.Steps) (resultErr err
 	ctx, timing := budgetstore.NewExecutionTimer(ctx, "deputy", started)
 	ctx, persistCancel := context.WithDeadline(ctx, started.Add(secretary.TurnTimeout))
 	defer persistCancel()
-	s.pendingPaid.Range(func(key, value any) bool {
+	s.PendingPaid.Range(func(key, value any) bool {
 		var snap deputy.Snapshot
-		paid, ok := value.(*paidModelResult)
+		paid, ok := value.(*callstore.PaidModelResult)
 		if !ok || json.Unmarshal(paid.Prompt, &snap) != nil || snap.Run.Kind != "revise" {
 			return true
 		}
@@ -496,11 +497,11 @@ func (s *Store) runAgent(ctx context.Context, steps deputy.Steps) (resultErr err
 	})
 	// A durable returned result, or a recorded pre-submission failure, can resume.
 	// Input-only started calls cannot authorize another paid submission.
-	s.pendingInteractive.Range(func(_, value any) bool {
-		entry := value.(*pendingInteractiveResult)
-		policy := entry.request.Policy.(interactiveCallPolicy)
+	s.PendingInteractive.Range(func(_, value any) bool {
+		entry := value.(*callstore.PendingInteractiveResult)
+		policy := entry.Request.Policy.(callstore.InteractiveCallPolicy)
 		if policy.BudgetOwner == "deputy_run" {
-			_, _ = s.Pool.Exec(ctx, `UPDATE agent_runs SET status='queued',lease_token=NULL,lease_until=NULL WHERE owner_id=$1 AND id=$2 AND document->>'createdAt'=$3 AND status='running' AND lease_until<clock_timestamp()`, string(entry.request.OwnerID), string(entry.request.ExecutionID), policy.Origin)
+			_, _ = s.Pool.Exec(ctx, `UPDATE agent_runs SET status='queued',lease_token=NULL,lease_until=NULL WHERE owner_id=$1 AND id=$2 AND document->>'createdAt'=$3 AND status='running' AND lease_until<clock_timestamp()`, string(entry.Request.OwnerID), string(entry.Request.ExecutionID), policy.Origin)
 		}
 		return true
 	})
@@ -509,17 +510,17 @@ func (s *Store) runAgent(ctx context.Context, steps deputy.Steps) (resultErr err
 	if err != nil {
 		return err
 	}
-	if err := (interactiveCalls{store: s}).recordInterruptedDeputyApplications(ctx); err != nil {
+	if err := (callstore.InteractiveCalls{Store: s.Calls}).RecordInterruptedDeputyApplications(ctx); err != nil {
 		return err
 	}
 	if _, err := s.Pool.Exec(ctx, `UPDATE agent_runs SET status='queued',lease_until=NULL,lease_token=NULL WHERE status='running' AND lease_until<now() AND (`+recoverableSQL+`)`); err != nil {
 		return err
 	}
-	var cached *paidModelResult
+	var cached *callstore.PaidModelResult
 	var run workspace.Run
 	var scope memory.Scope
 	var token string
-	var savedRow *interactiveCallRow
+	var savedRow *callstore.InteractiveCallRow
 	var savedInput *deputy.Snapshot
 	err = pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		var ownerID, id string
@@ -536,7 +537,7 @@ func (s *Store) runAgent(ctx context.Context, steps deputy.Steps) (resultErr err
 			run.MemoryTier = "heavy"
 		}
 		if run.Kind == "revise" {
-			cached, err = s.paidModelResult(ctx, worker.Job{ID: memory.ID(run.ID), OwnerID: scope.OwnerID})
+			cached, err = s.PaidModelResult(ctx, worker.Job{ID: memory.ID(run.ID), OwnerID: scope.OwnerID})
 			if err != nil {
 				return err
 			}
@@ -547,7 +548,7 @@ func (s *Store) runAgent(ctx context.Context, steps deputy.Steps) (resultErr err
 				}
 			}
 		}
-		savedRow, savedInput, err = (interactiveCalls{store: s}).deputyInput(ctx, tx, scope.OwnerID, run)
+		savedRow, savedInput, err = (callstore.InteractiveCalls{Store: s.Calls}).DeputyInput(ctx, tx, scope.OwnerID, run)
 		if err != nil {
 			return err
 		}
@@ -593,7 +594,7 @@ func (s *Store) runAgent(ctx context.Context, steps deputy.Steps) (resultErr err
 		defer cancel()
 		_, _ = s.Pool.Exec(persist, `UPDATE agent_runs SET lease_until=clock_timestamp(),document=document||jsonb_build_object('error','处理未完成；已保存的模型结果将复用，不会自动重复生成') WHERE owner_id=$1 AND id=$2 AND document->>'createdAt'=$3 AND lease_token=$4 AND status='running'`, string(scope.OwnerID), run.ID, run.CreatedAt, token)
 	}()
-	execution := modelcall.Request{OwnerID: scope.OwnerID, ExecutionID: memory.ID(run.ID), RootExecutionID: memory.ID(run.ID), Function: "deputy", Policy: interactiveCallPolicy{Kind: "deputy", Token: token, Origin: run.CreatedAt, AgentID: run.AgentID, ThingID: run.ThingID}}
+	execution := modelcall.Request{OwnerID: scope.OwnerID, ExecutionID: memory.ID(run.ID), RootExecutionID: memory.ID(run.ID), Function: "deputy", Policy: callstore.InteractiveCallPolicy{Kind: "deputy", Token: token, Origin: run.CreatedAt, AgentID: run.AgentID, ThingID: run.ThingID}}
 	ctx = modelcall.WithExecution(ctx, execution)
 	workCtx, cancel := context.WithDeadline(ctx, started.Add(secretary.TurnTimeout-10*time.Second))
 	defer cancel()
@@ -643,7 +644,7 @@ func (s *Store) runAgent(ctx context.Context, steps deputy.Steps) (resultErr err
 	generationErr := verifyErr
 	var mainPaid *modelcall.PaidResult
 	var mainInvocation memory.ID
-	request := deputyAnswerRequest(scope.OwnerID, token, deputy.Snapshot{Run: run, RawPrompt: run.Brief, Coverage: u.Coverage, MemoryReady: u.Ready})
+	request := callstore.DeputyAnswerRequest(scope.OwnerID, token, deputy.Snapshot{Run: run, RawPrompt: run.Brief, Coverage: u.Coverage, MemoryReady: u.Ready})
 	if savedRow != nil && savedInput == nil {
 		mainInvocation = savedRow.ID
 		generationErr = &modelcall.Failure{Code: savedRow.ErrorCode, InvocationID: savedRow.ID}
@@ -662,7 +663,7 @@ func (s *Store) runAgent(ctx context.Context, steps deputy.Steps) (resultErr err
 			mainInvocation = mainPaid.InvocationID
 			result = ai.Result{Text: mainPaid.Output, Searches: mainPaid.Searches, Cost: mainPaid.Cost}
 		}
-		row, err := latestInteractiveCall(ctx, s.Pool, request)
+		row, err := callstore.LatestInteractiveCall(ctx, s.Pool, request)
 		if err != nil {
 			return err
 		}
@@ -690,11 +691,11 @@ func (s *Store) runAgent(ctx context.Context, steps deputy.Steps) (resultErr err
 		}
 	}
 	selfcheckFallback := ""
-	var selection *deputyResultSelection
+	var selection *callstore.DeputyResultSelection
 	var reviewInvocation memory.ID
 	if generationErr == nil && mainPaid != nil {
 		var selected string
-		selection, selected, err = (interactiveCalls{store: s}).deputySelection(ctx, scope.OwnerID, run, mainInvocation)
+		selection, selected, err = (callstore.InteractiveCalls{Store: s.Calls}).DeputySelection(ctx, scope.OwnerID, run, mainInvocation)
 		if err != nil {
 			return err
 		}
@@ -727,7 +728,7 @@ func (s *Store) runAgent(ctx context.Context, steps deputy.Steps) (resultErr err
 			var paid *modelcall.PaidResult
 			paid, err = steps.Calls.Selfcheck(checkCtx, request)
 			readCtx, readCancel := context.WithTimeout(context.WithoutCancel(checkCtx), modelcall.PersistenceTimeout)
-			row, readErr := latestInteractiveCall(readCtx, s.Pool, request)
+			row, readErr := callstore.LatestInteractiveCall(readCtx, s.Pool, request)
 			readCancel()
 			if readErr != nil {
 				checkCancel()
@@ -754,9 +755,9 @@ func (s *Store) runAgent(ctx context.Context, steps deputy.Steps) (resultErr err
 			if selfcheckFallback == "" && reviewInvocation != "" {
 				selected = reviewInvocation
 			}
-			selection = &deputyResultSelection{Main: mainInvocation, Output: selected, OutputHash: fmt.Sprintf("%x", sha256.Sum256([]byte(result.Text))), Review: reviewInvocation, Fallback: selfcheckFallback}
+			selection = &callstore.DeputyResultSelection{Main: mainInvocation, Output: selected, OutputHash: fmt.Sprintf("%x", sha256.Sum256([]byte(result.Text))), Review: reviewInvocation, Fallback: selfcheckFallback}
 		}
-		if err := (interactiveCalls{store: s}).saveDeputySelection(ctx, request, *selection); err != nil {
+		if err := (callstore.InteractiveCalls{Store: s.Calls}).SaveDeputySelection(ctx, request, *selection); err != nil {
 			return err
 		}
 	}
@@ -843,7 +844,7 @@ func (s *Store) runAgent(ctx context.Context, steps deputy.Steps) (resultErr err
 		if generationErr != nil && savedRow != nil && savedRow.ErrorCode != "" {
 			why = savedRow.ErrorCode
 		}
-		if err := (interactiveCalls{store: s}).recordDeputyApplicationTx(ctx, tx, scope.OwnerID, current, mainInvocation, application, why); err != nil {
+		if err := (callstore.InteractiveCalls{Store: s.Calls}).RecordDeputyApplicationTx(ctx, tx, scope.OwnerID, current, mainInvocation, application, why); err != nil {
 			return err
 		}
 		if generationErr == nil && run.MemoryTier != "light" {
@@ -854,7 +855,7 @@ func (s *Store) runAgent(ctx context.Context, steps deputy.Steps) (resultErr err
 			if current.Status != "done" {
 				application = "not_applicable"
 			}
-			if err := (interactiveCalls{store: s}).recordDeputyApplicationTx(ctx, tx, scope.OwnerID, current, reviewInvocation, application, selfcheckFallback); err != nil {
+			if err := (callstore.InteractiveCalls{Store: s.Calls}).RecordDeputyApplicationTx(ctx, tx, scope.OwnerID, current, reviewInvocation, application, selfcheckFallback); err != nil {
 				return err
 			}
 		}

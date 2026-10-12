@@ -8,6 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/callstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/worker"
 )
@@ -180,7 +181,7 @@ func (s *Store) expireExhaustedJobs(ctx context.Context) error {
 			if tag.RowsAffected() == 1 {
 				// A last-attempt crash has no next lease to finalize its journal.
 				// Keep the unknown reservation and show why recovery stopped.
-				if err := (backgroundCalls{store: s}).exhaustRecoveryTx(ctx, tx, j); err != nil {
+				if err := (callstore.BackgroundCalls{Store: s.Calls}).ExhaustRecoveryTx(ctx, tx, j); err != nil {
 					return err
 				}
 			}

@@ -1,4 +1,4 @@
-package postgres
+package callstore
 
 import (
 	"context"
@@ -16,9 +16,9 @@ import (
 // directCalls records embedding, image, and transcription invocations in the
 // call journal. It stores sizes and accounting only. Inputs and outputs stay
 // with the caller.
-type directCalls struct{ store *Store }
+type DirectCalls struct{ Store *Calls }
 
-func (a directCalls) Begin(ctx context.Context, r modelcall.DirectRequest) (modelcall.DirectCall, error) {
+func (a DirectCalls) Begin(ctx context.Context, r modelcall.DirectRequest) (modelcall.DirectCall, error) {
 	call := modelcall.DirectCall{InvocationID: memory.NewID()}
 	refs := r.Refs
 	if refs == nil {
@@ -30,7 +30,7 @@ func (a directCalls) Begin(ctx context.Context, r modelcall.DirectRequest) (mode
 		promptName, promptHash = r.Instructions.Name(), r.Instructions.Hash()
 	}
 	var err error
-	call.Reservation, err = a.store.ReserveModelCostID(ctx, r.OwnerID, r.Estimate, r.Job, func(ctx context.Context, tx pgx.Tx, reservation string) error {
+	call.Reservation, err = a.Store.ReserveModelCostID(ctx, r.OwnerID, r.Estimate, r.Job, func(ctx context.Context, tx pgx.Tx, reservation string) error {
 		_, err := tx.Exec(ctx, `WITH t AS (SELECT clock_timestamp() AS at)
  INSERT INTO model_calls(owner_id,id,execution_id,root_execution_id,causation_id,attempt_number,attempt_limit,function_name,stage,provider_id,model,prompt_name,instruction_hash,input_manifest,required_capabilities,actual_mode,outcome,reservation_id,accounting_state,created_at,started_at,updated_at)
  SELECT $1,$2,$3,$4,$5,1,1,$6,$7,$8,$9,$12,$13,$10,jsonb_build_array($14::text),jsonb_build_object('operation',$14::text),'started',$11,'reserved',t.at,t.at,t.at FROM t`,
@@ -43,7 +43,7 @@ func (a directCalls) Begin(ctx context.Context, r modelcall.DirectRequest) (mode
 // Finish settles the reservation to the usage that the provider adapter gives.
 // For a failed or interrupted call that usage is the adapter's estimate, and
 // its record says so. This is the rule that these calls had before the gateway.
-func (a directCalls) Finish(ctx context.Context, r modelcall.DirectRequest, call modelcall.DirectCall, usage ai.Result, callErr error) error {
+func (a DirectCalls) Finish(ctx context.Context, r modelcall.DirectRequest, call modelcall.DirectCall, usage ai.Result, callErr error) error {
 	persist, cancel := context.WithTimeout(context.WithoutCancel(ctx), modelcall.PersistenceTimeout)
 	defer cancel()
 	outcome, code, accounting := "returned", "", "settled"
@@ -56,7 +56,7 @@ func (a directCalls) Finish(ctx context.Context, r modelcall.DirectRequest, call
 			outcome, code = "unknown", modelcall.ErrOutcomeUnknown.Error()
 		}
 	}
-	return pgx.BeginFunc(persist, a.store.Pool, func(tx pgx.Tx) error {
+	return pgx.BeginFunc(persist, a.Store.Pool, func(tx pgx.Tx) error {
 		var usageID any
 		var reservation any = call.Reservation
 		switch {
@@ -95,8 +95,8 @@ func (a directCalls) Finish(ctx context.Context, r modelcall.DirectRequest, call
 // A started call that outlives every provider timeout was interrupted with its
 // process. The longest provider request lasts three minutes. Its outcome stays
 // unknown and its reservation stays held.
-func (a directCalls) recordInterrupted(ctx context.Context) error {
-	_, err := a.store.Pool.Exec(ctx, `UPDATE model_calls SET outcome='unknown',error_code=$1,accounting_state='held',finished_at=clock_timestamp(),updated_at=clock_timestamp(),actual_mode=actual_mode||'{"interruptedReason":"process_interrupted"}'::jsonb
+func (a DirectCalls) recordInterrupted(ctx context.Context) error {
+	_, err := a.Store.Pool.Exec(ctx, `UPDATE model_calls SET outcome='unknown',error_code=$1,accounting_state='held',finished_at=clock_timestamp(),updated_at=clock_timestamp(),actual_mode=actual_mode||'{"interruptedReason":"process_interrupted"}'::jsonb
  WHERE input_manifest->>'version' IN ('direct-input-v1','embedding-input-v1') AND outcome='started' AND started_at<clock_timestamp()-interval '10 minutes'`, modelcall.ErrOutcomeUnknown.Error())
 	return err
 }

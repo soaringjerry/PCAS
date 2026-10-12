@@ -7,16 +7,15 @@ import (
 	"embed"
 	"fmt"
 	"sort"
-	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/soaringjerry/PCAS/internal/ai"
 	"github.com/soaringjerry/PCAS/internal/memory"
-	"github.com/soaringjerry/PCAS/internal/modelcall"
 	"github.com/soaringjerry/PCAS/internal/postgres/activitystore"
 	"github.com/soaringjerry/PCAS/internal/postgres/budgetstore"
+	"github.com/soaringjerry/PCAS/internal/postgres/callstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/claimstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/evidencestore"
 	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
@@ -38,6 +37,7 @@ var migrations embed.FS
 // storage packages share.
 type Store struct {
 	*kernel.DB
+	*callstore.Calls
 	*statestore.State
 	*evidencestore.Evidence
 	*workstore.Work
@@ -51,9 +51,7 @@ type Store struct {
 	*usagelog.Usage
 	*memorystore.Memory
 	*memoryread.Reader
-	pendingPaid             sync.Map
-	pendingInteractive      sync.Map
-	pendingDeputySelections sync.Map
+	callstore.CallPending
 	// DeskTurn also borrows a connection for Recall and budget reservation.
 	secretarySlots chan struct{}
 }
@@ -62,23 +60,6 @@ type Store struct {
 // configuration and availability. It makes no model call: the application
 // builds the gateway over CallRecords.
 func (s *Store) SetModels(models *ai.Registry) { s.Models = models }
-
-// CallRecords are the records of the gateway's calls in storage.
-type CallRecords interface {
-	modelcall.Accounting
-	modelcall.Results
-	modelcall.Journal
-}
-
-// CallRecords gives the gateway its reservations, its paid results, and its
-// call journal.
-func (s *Store) CallRecords() CallRecords {
-	return modelCallStorage{backgroundCalls{store: s}, interactiveCalls{store: s}}
-}
-
-// DirectCallRecords gives the gateway the journal of its embedding, image,
-// and audio calls.
-func (s *Store) DirectCallRecords() modelcall.DirectJournal { return directCalls{store: s} }
 
 func (s *Store) SetBlobs(blobs memory.BlobStore) { s.Blobs = blobs }
 
@@ -193,5 +174,23 @@ var _ memory.Repository = (*Store)(nil)
 func newStore(db *kernel.DB) *Store {
 	sources := &sourcestore.Sources{DB: db}
 	owners := &ownerstore.Owners{DB: db}
-	return &Store{DB: db, State: &statestore.State{DB: db}, Evidence: &evidencestore.Evidence{DB: db}, Work: &workstore.Work{DB: db}, Budgets: &budgetstore.Budgets{DB: db, Owners: owners}, Claims: &claimstore.Claims{DB: db, Sources: sources}, Sources: sources, Items: &itemstore.Items{DB: db}, Owners: owners, Activity: &activitystore.Activity{DB: db}, Schedules: &schedulestore.Schedules{DB: db}, Usage: &usagelog.Usage{DB: db}, Memory: &memorystore.Memory{DB: db}, Reader: &memoryread.Reader{DB: db}}
+	usage := &usagelog.Usage{DB: db}
+	budgets := &budgetstore.Budgets{DB: db, Owners: owners}
+	return &Store{
+		DB:        db,
+		Calls:     &callstore.Calls{DB: db, Usage: usage, Budgets: budgets},
+		State:     &statestore.State{DB: db},
+		Evidence:  &evidencestore.Evidence{DB: db},
+		Work:      &workstore.Work{DB: db},
+		Budgets:   budgets,
+		Claims:    &claimstore.Claims{DB: db, Sources: sources},
+		Sources:   sources,
+		Items:     &itemstore.Items{DB: db},
+		Owners:    owners,
+		Activity:  &activitystore.Activity{DB: db},
+		Schedules: &schedulestore.Schedules{DB: db},
+		Usage:     usage,
+		Memory:    &memorystore.Memory{DB: db},
+		Reader:    &memoryread.Reader{DB: db},
+	}
 }

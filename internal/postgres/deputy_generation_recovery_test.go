@@ -12,6 +12,7 @@ import (
 
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/modelcall"
+	"github.com/soaringjerry/PCAS/internal/postgres/callstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
@@ -75,7 +76,7 @@ func TestDeputyGenerationRecoversWritesWithoutRepeatingPaidWork(t *testing.T) {
 			if err := s.RunDeputyOnce(ctx); err == nil {
 				t.Fatal("write failure was hidden")
 			}
-			var first interactiveCallRow
+			var first callstore.InteractiveCallRow
 			if err := s.Pool.QueryRow(ctx, `SELECT to_jsonb(c) FROM model_calls c WHERE owner_id=$1 AND execution_id=$2 AND stage='answer'`, string(scope.OwnerID), run.ID).Scan(&first); err != nil || first.Outcome != "returned" || first.Accounting != "settled" || first.Receipt.Billing == nil {
 				t.Fatal(first, err)
 			}
@@ -112,7 +113,7 @@ func TestDeputyGenerationRecoversWritesWithoutRepeatingPaidWork(t *testing.T) {
 			if err := s.Pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM model_usage WHERE owner_id=$1),(SELECT count(*) FROM model_calls WHERE owner_id=$1)`, string(scope.OwnerID)).Scan(&usage, &invocations); err != nil || calls.Load() != expected || usage != int(expected) || invocations != int(expected) {
 				t.Fatal("paid work repeated or usage lost", calls.Load(), usage, invocations, err)
 			}
-			var final interactiveCallRow
+			var final callstore.InteractiveCallRow
 			if err := s.Pool.QueryRow(ctx, `SELECT to_jsonb(c) FROM model_calls c WHERE owner_id=$1 AND id=$2`, string(scope.OwnerID), string(first.ID)).Scan(&final); err != nil || final.ID != first.ID || final.Reservation != first.Reservation {
 				t.Fatal(final, err)
 			}
@@ -206,7 +207,7 @@ func TestDeputyAbandonedInputRecordsSkippedApplication(t *testing.T) {
 	})
 	request := leasedDeputyAnswer(t, s, scope)
 	ctx := context.Background()
-	adapter := interactiveCalls{store: s}
+	adapter := callstore.InteractiveCalls{Store: s.Calls}
 	provider, _ := s.Models.Get(request.ProviderID)
 	id, err := adapter.Prepare(ctx, request, provider)
 	if err != nil {
@@ -223,7 +224,7 @@ func TestDeputyAbandonedInputRecordsSkippedApplication(t *testing.T) {
 	if _, err := s.Pool.Exec(ctx, `UPDATE agent_runs SET lease_until=clock_timestamp()-interval '1 second' WHERE owner_id=$1 AND id=$2`, string(scope.OwnerID), string(request.ExecutionID)); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := adapter.recordInterruptedExecution(ctx); err != nil {
+	if _, err := adapter.RecordInterruptedExecution(ctx); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.RunDeputyOnce(ctx); err != nil {

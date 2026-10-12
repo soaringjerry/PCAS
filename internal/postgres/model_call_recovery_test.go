@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
+	"github.com/soaringjerry/PCAS/internal/postgres/callstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/soaringjerry/PCAS/internal/modelcall"
@@ -105,7 +106,7 @@ func TestActiveLeaseCannotStartAnotherInvocation(t *testing.T) {
 	j := organizeTestJob(t, s, scope)
 	request := modelcall.Request{OwnerID: scope.OwnerID, ExecutionID: j.ID, RootExecutionID: j.ID, Function: "organize", Stage: j.Stage, Instructions: prompts.Must("organize"), Prompt: kernel.JSON(map[string]string{"test": "fictitious"}), Policy: j}
 	provider, _ := s.Models.Get(s.Models.ExtractionID())
-	adapter := backgroundCalls{store: s}
+	adapter := callstore.BackgroundCalls{Store: s.Calls}
 	ctx := context.Background()
 	invocation, err := adapter.Prepare(ctx, request, provider)
 	if err != nil {

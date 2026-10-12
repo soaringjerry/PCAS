@@ -10,6 +10,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres/accessstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/budgetstore"
+	"github.com/soaringjerry/PCAS/internal/postgres/callstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/usagelog"
 	"github.com/soaringjerry/PCAS/internal/worker"
@@ -54,7 +55,7 @@ func (s *Store) adoptReviseDocumentTx(ctx context.Context, tx pgx.Tx, scope memo
 	return saveDoc(ctx, tx, scope, doc)
 }
 
-func (s *Store) finishPaidRevise(ctx context.Context, scope memory.Scope, current workspace.Run, token string, paid *paidModelResult) (resultErr error) {
+func (s *Store) finishPaidRevise(ctx context.Context, scope memory.Scope, current workspace.Run, token string, paid *callstore.PaidModelResult) (resultErr error) {
 	defer func() {
 		if resultErr == nil {
 			return
@@ -158,7 +159,7 @@ func (s *Store) finishPaidRevise(ctx context.Context, scope memory.Scope, curren
 			if run.Status != "done" || run.StaleContext {
 				outcome, why = "not_applicable", "revision_not_adopted"
 			}
-			return (interactiveCalls{store: s}).recordDeputyApplicationTx(ctx, tx, scope.OwnerID, run, paid.InvocationID, outcome, why)
+			return (callstore.InteractiveCalls{Store: s.Calls}).RecordDeputyApplicationTx(ctx, tx, scope.OwnerID, run, paid.InvocationID, outcome, why)
 		}
 		return kernel.DiscardPaidResult(ctx, tx, worker.Job{OwnerID: scope.OwnerID, ID: memory.ID(run.ID)})
 	})

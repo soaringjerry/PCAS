@@ -10,6 +10,7 @@ import (
 
 	"github.com/soaringjerry/PCAS/internal/ai"
 	"github.com/soaringjerry/PCAS/internal/modelcall"
+	"github.com/soaringjerry/PCAS/internal/postgres/callstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/prompts"
 )
@@ -64,7 +65,7 @@ func TestSelectedCodexCallRecordsRegisteredModeAndExactUsageLink(t *testing.T) {
 	}
 	// Search evidence must survive restart as part of the original result.
 	paid.Searches = []string{"Fictitious public query."}
-	if err := (backgroundCalls{store: s}).Save(ctx, request, paid); err != nil {
+	if err := (callstore.BackgroundCalls{Store: s.Calls}).Save(ctx, request, paid); err != nil {
 		t.Fatal(err)
 	}
 	peer, err := Open(ctx, s.Pool.Config().ConnConfig.ConnString())
@@ -72,7 +73,7 @@ func TestSelectedCodexCallRecordsRegisteredModeAndExactUsageLink(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer peer.Close()
-	recovered, err := peer.paidModelResult(ctx, job)
+	recovered, err := peer.PaidModelResult(ctx, job)
 	if err != nil || recovered == nil || !reflect.DeepEqual(recovered.Searches, paid.Searches) || recovered.InvocationID != paid.InvocationID || recovered.Reservation != paid.Reservation {
 		t.Fatal("saved search evidence did not survive restart", recovered, err)
 	}

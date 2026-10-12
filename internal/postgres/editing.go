@@ -12,6 +12,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/callstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/memoryread"
@@ -545,7 +546,7 @@ func (s *Store) deleteRecordsTx(ctx context.Context, tx pgx.Tx, scope memory.Sco
 			}
 		}
 	}
-	if err := (interactiveCalls{store: s}).scrubInputsTx(ctx, tx, scope.OwnerID, ids); err != nil {
+	if err := (callstore.InteractiveCalls{Store: s.Calls}).ScrubInputsTx(ctx, tx, scope.OwnerID, ids); err != nil {
 		return err
 	}
 	for _, sql := range []string{

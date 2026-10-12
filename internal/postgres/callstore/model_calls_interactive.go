@@ -1,4 +1,4 @@
-package postgres
+package callstore
 
 import (
 	"bytes"
@@ -26,23 +26,23 @@ import (
 // interactiveCallPolicy binds an existing admitted request or leased deputy.
 // Token is an execution fence, not a fabricated queue lease. Origin survives
 // reacquisition and excludes transient presentation-turn and usage identities.
-type interactiveCallPolicy = modelcall.InteractivePolicy
+type InteractiveCallPolicy = modelcall.InteractivePolicy
 
-type interactiveCalls struct{ store *Store }
+type InteractiveCalls struct{ Store *Calls }
 
 // Each retained response also keeps its bound request. Recovery cannot rebuild
 // exact original input bytes from a reformatted jsonb body or current settings.
-type pendingInteractiveResult struct {
-	request     modelcall.Request
+type PendingInteractiveResult struct {
+	Request     modelcall.Request
 	paid        *modelcall.PaidResult
 	attemptedAt time.Time
 }
 
 // modelCallStorage routes the gateway ports to the journal of the call's
 // execution policy. It never invokes providers or makes business decisions.
-type modelCallStorage struct {
-	background  backgroundCalls
-	interactive interactiveCalls
+type ModelCallStorage struct {
+	background  BackgroundCalls
+	interactive InteractiveCalls
 }
 
 type callJournal interface {
@@ -51,41 +51,41 @@ type callJournal interface {
 	modelcall.Journal
 }
 
-func (a modelCallStorage) of(r modelcall.Request) callJournal {
-	if _, ok := r.Policy.(interactiveCallPolicy); ok {
+func (a ModelCallStorage) of(r modelcall.Request) callJournal {
+	if _, ok := r.Policy.(InteractiveCallPolicy); ok {
 		return a.interactive
 	}
 	return a.background
 }
 
-func (a modelCallStorage) Load(ctx context.Context, r modelcall.Request) (*modelcall.PaidResult, error) {
+func (a ModelCallStorage) Load(ctx context.Context, r modelcall.Request) (*modelcall.PaidResult, error) {
 	return a.of(r).Load(ctx, r)
 }
-func (a modelCallStorage) Save(ctx context.Context, r modelcall.Request, p *modelcall.PaidResult) error {
+func (a ModelCallStorage) Save(ctx context.Context, r modelcall.Request, p *modelcall.PaidResult) error {
 	return a.of(r).Save(ctx, r, p)
 }
-func (a modelCallStorage) Forget(ctx context.Context, r modelcall.Request, p *modelcall.PaidResult) error {
+func (a ModelCallStorage) Forget(ctx context.Context, r modelcall.Request, p *modelcall.PaidResult) error {
 	return a.of(r).Forget(ctx, r, p)
 }
-func (a modelCallStorage) Reserve(ctx context.Context, r modelcall.Request, cost float64) (modelcall.Reservation, error) {
+func (a ModelCallStorage) Reserve(ctx context.Context, r modelcall.Request, cost float64) (modelcall.Reservation, error) {
 	return a.of(r).Reserve(ctx, r, cost)
 }
-func (a modelCallStorage) Record(ctx context.Context, r modelcall.Request, p *modelcall.PaidResult) error {
+func (a ModelCallStorage) Record(ctx context.Context, r modelcall.Request, p *modelcall.PaidResult) error {
 	return a.of(r).Record(ctx, r, p)
 }
-func (a modelCallStorage) Settle(ctx context.Context, r modelcall.Request, p *modelcall.PaidResult) error {
+func (a ModelCallStorage) Settle(ctx context.Context, r modelcall.Request, p *modelcall.PaidResult) error {
 	return a.of(r).Settle(ctx, r, p)
 }
-func (a modelCallStorage) Prepare(ctx context.Context, r modelcall.Request, p ai.Provider) (memory.ID, error) {
+func (a ModelCallStorage) Prepare(ctx context.Context, r modelcall.Request, p ai.Provider) (memory.ID, error) {
 	return a.of(r).Prepare(ctx, r, p)
 }
-func (a modelCallStorage) Start(ctx context.Context, r modelcall.Request, p *modelcall.PaidResult) error {
+func (a ModelCallStorage) Start(ctx context.Context, r modelcall.Request, p *modelcall.PaidResult) error {
 	return a.of(r).Start(ctx, r, p)
 }
-func (a modelCallStorage) PreparationFailed(ctx context.Context, r modelcall.Request, id memory.ID, err error) error {
+func (a ModelCallStorage) PreparationFailed(ctx context.Context, r modelcall.Request, id memory.ID, err error) error {
 	return a.of(r).PreparationFailed(ctx, r, id, err)
 }
-func (a modelCallStorage) AccountingState(ctx context.Context, r modelcall.Request, p *modelcall.PaidResult, state string) error {
+func (a ModelCallStorage) AccountingState(ctx context.Context, r modelcall.Request, p *modelcall.PaidResult, state string) error {
 	return a.of(r).AccountingState(ctx, r, p, state)
 }
 
@@ -98,7 +98,7 @@ type interactiveReceipt struct {
 	Searches     []string              `json:"searches,omitempty"`
 }
 
-type interactiveCallRow struct {
+type InteractiveCallRow struct {
 	OwnerID         memory.ID `json:"owner_id"`
 	ExecutionID     memory.ID `json:"execution_id"`
 	RootExecutionID memory.ID `json:"root_execution_id"`
@@ -132,13 +132,13 @@ type interactiveCallRow struct {
 		Token           string                 `json:"executionToken"`
 		Unsupported     string                 `json:"unsupportedCapability"`
 		Reserved        float64                `json:"reservationEstimate"`
-		DeputySelection *deputyResultSelection `json:"deputySelection,omitempty"`
+		DeputySelection *DeputyResultSelection `json:"deputySelection,omitempty"`
 	} `json:"actual_mode"`
 	Receipt interactiveReceipt `json:"result_receipt"`
 }
 
 func interactiveBinding(r modelcall.Request) (string, error) {
-	p, ok := r.Policy.(interactiveCallPolicy)
+	p, ok := r.Policy.(InteractiveCallPolicy)
 	if !ok || !r.OwnerID.Valid() || !r.ExecutionID.Valid() || !r.RootExecutionID.Valid() || !memory.ID(p.Token).Valid() || p.Origin == "" || p.AgentID == "" || r.ProviderID == "" || r.ContextBuilderVersion == "" || p.Usage.JobID != "" || !json.Valid(r.Prompt) || (p.Kind != "secretary" && p.Kind != "deputy") {
 		return "", memory.ErrInvalid
 	}
@@ -178,11 +178,11 @@ func interactiveBinding(r modelcall.Request) (string, error) {
 	return fmt.Sprintf("%x", sha256.Sum256(kernel.JSON(binding))), nil
 }
 
-func latestInteractiveCall(ctx context.Context, q interface {
+func LatestInteractiveCall(ctx context.Context, q interface {
 	QueryRow(context.Context, string, ...any) pgx.Row
-}, r modelcall.Request) (*interactiveCallRow, error) {
-	var row interactiveCallRow
-	if p, ok := r.Policy.(interactiveCallPolicy); ok && p.BudgetOwner == "deputy_run" {
+}, r modelcall.Request) (*InteractiveCallRow, error) {
+	var row InteractiveCallRow
+	if p, ok := r.Policy.(InteractiveCallPolicy); ok && p.BudgetOwner == "deputy_run" {
 		err := q.QueryRow(ctx, `SELECT to_jsonb(c) FROM model_calls c WHERE owner_id=$1 AND execution_id=$2 AND stage=$3 AND input_manifest->>'origin'=$4 AND input_manifest->>'budgetOwner'='deputy_run' ORDER BY created_at DESC,id DESC LIMIT 1`, string(r.OwnerID), string(r.ExecutionID), r.Stage, p.Origin).Scan(&row)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil
@@ -199,7 +199,7 @@ func latestInteractiveCall(ctx context.Context, q interface {
 // The secretary holds its admission row lock across its business transaction.
 // Reading its committed fence avoids acquiring that lock from another connection.
 func interactiveFence(ctx context.Context, tx pgx.Tx, r modelcall.Request) error {
-	p := r.Policy.(interactiveCallPolicy)
+	p := r.Policy.(InteractiveCallPolicy)
 	var allowed bool
 	var err error
 	if p.Kind == "secretary" {
@@ -216,27 +216,27 @@ func interactiveFence(ctx context.Context, tx pgx.Tx, r modelcall.Request) error
 	return nil
 }
 
-func (a interactiveCalls) Load(ctx context.Context, r modelcall.Request) (*modelcall.PaidResult, error) {
+func (a InteractiveCalls) Load(ctx context.Context, r modelcall.Request) (*modelcall.PaidResult, error) {
 	hash, err := interactiveBinding(r)
 	if err != nil {
 		return nil, err
 	}
-	row, err := latestInteractiveCall(ctx, a.store.Pool, r)
+	row, err := LatestInteractiveCall(ctx, a.Store.Pool, r)
 	if err != nil || row == nil {
 		return nil, err
 	}
 	if row.Manifest.BindingHash != hash {
 		return nil, memory.ErrConflict
 	}
-	if p := r.Policy.(interactiveCallPolicy); p.RetryOf != "" {
+	if p := r.Policy.(InteractiveCallPolicy); p.RetryOf != "" {
 		if p.RetryOf != row.ID {
 			return nil, memory.ErrConflict
 		}
 		return nil, nil
 	}
-	if value, ok := a.store.pendingInteractive.Load(row.ID); ok {
-		entry := value.(*pendingInteractiveResult)
-		cachedHash, err := interactiveBinding(entry.request)
+	if value, ok := a.Store.PendingInteractive.Load(row.ID); ok {
+		entry := value.(*PendingInteractiveResult)
+		cachedHash, err := interactiveBinding(entry.Request)
 		if err != nil || cachedHash != hash || entry.paid.Provider != row.Provider || entry.paid.Model != row.Model || entry.paid.Reservation != row.Reservation {
 			return nil, memory.ErrConflict
 		}
@@ -263,7 +263,7 @@ func (a interactiveCalls) Load(ctx context.Context, r modelcall.Request) (*model
 		return paid, nil
 	}
 	var prompt json.RawMessage
-	err = a.store.Pool.QueryRow(ctx, `SELECT prompt,output FROM background_model_results WHERE owner_id=$1 AND job_id=$2 AND reservation_id=$3 AND provider_id=$4 AND model=$5`, string(r.OwnerID), string(row.ID), paid.Reservation, paid.Provider, paid.Model).Scan(&prompt, &paid.Output)
+	err = a.Store.Pool.QueryRow(ctx, `SELECT prompt,output FROM background_model_results WHERE owner_id=$1 AND job_id=$2 AND reservation_id=$3 AND provider_id=$4 AND model=$5`, string(r.OwnerID), string(row.ID), paid.Reservation, paid.Provider, paid.Model).Scan(&prompt, &paid.Output)
 	if errors.Is(err, pgx.ErrNoRows) {
 		paid.NotApplicable = true
 		return paid, nil
@@ -281,14 +281,14 @@ func (a interactiveCalls) Load(ctx context.Context, r modelcall.Request) (*model
 	return paid, nil
 }
 
-func (a interactiveCalls) Prepare(ctx context.Context, r modelcall.Request, provider ai.Provider) (memory.ID, error) {
+func (a InteractiveCalls) Prepare(ctx context.Context, r modelcall.Request, provider ai.Provider) (memory.ID, error) {
 	hash, err := interactiveBinding(r)
 	if err != nil {
 		return "", err
 	}
 	id := memory.NewID()
-	p := r.Policy.(interactiveCallPolicy)
-	err = pgx.BeginFunc(ctx, a.store.Pool, func(tx pgx.Tx) error {
+	p := r.Policy.(InteractiveCallPolicy)
+	err = pgx.BeginFunc(ctx, a.Store.Pool, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended(current_database()||':'||current_schema()||':interactive:'||$1||':'||$2||':'||$3,0))`, string(r.OwnerID), string(r.ExecutionID), r.Stage); err != nil {
 			return err
 		}
@@ -302,7 +302,7 @@ func (a interactiveCalls) Prepare(ctx context.Context, r modelcall.Request, prov
 		if err := verify(ctx, tx, memory.Scope{OwnerID: r.OwnerID, PrincipalID: p.AgentID}, workspace.Run{AgentID: p.AgentID, ThingID: p.ThingID, ContextVersions: r.Refs}); err != nil {
 			return err
 		}
-		previous, err := latestInteractiveCall(ctx, tx, r)
+		previous, err := LatestInteractiveCall(ctx, tx, r)
 		if err != nil {
 			return err
 		}
@@ -357,15 +357,15 @@ func (a interactiveCalls) Prepare(ctx context.Context, r modelcall.Request, prov
 	return id, err
 }
 
-func (a interactiveCalls) Reserve(ctx context.Context, r modelcall.Request, cost float64) (modelcall.Reservation, error) {
-	if r.Policy.(interactiveCallPolicy).BudgetOwner == "deputy_run" {
+func (a InteractiveCalls) Reserve(ctx context.Context, r modelcall.Request, cost float64) (modelcall.Reservation, error) {
+	if r.Policy.(InteractiveCallPolicy).BudgetOwner == "deputy_run" {
 		return a.reserveDeputyRun(ctx, r, cost)
 	}
-	id, err := a.store.ReserveModelCostID(ctx, r.OwnerID, cost, nil, func(ctx context.Context, tx pgx.Tx, id string) error {
+	id, err := a.Store.ReserveModelCostID(ctx, r.OwnerID, cost, nil, func(ctx context.Context, tx pgx.Tx, id string) error {
 		if err := interactiveFence(ctx, tx, r); err != nil {
 			return err
 		}
-		tag, err := tx.Exec(ctx, `UPDATE model_calls SET reservation_id=$4,accounting_state='reserved',actual_mode=actual_mode||jsonb_build_object('reservationEstimate',$5::double precision),updated_at=clock_timestamp() WHERE owner_id=$1 AND execution_id=$2 AND stage=$3 AND outcome='prepared' AND recovery_state='active' AND actual_mode->>'executionToken'=$6`, string(r.OwnerID), string(r.ExecutionID), r.Stage, id, cost, r.Policy.(interactiveCallPolicy).Token)
+		tag, err := tx.Exec(ctx, `UPDATE model_calls SET reservation_id=$4,accounting_state='reserved',actual_mode=actual_mode||jsonb_build_object('reservationEstimate',$5::double precision),updated_at=clock_timestamp() WHERE owner_id=$1 AND execution_id=$2 AND stage=$3 AND outcome='prepared' AND recovery_state='active' AND actual_mode->>'executionToken'=$6`, string(r.OwnerID), string(r.ExecutionID), r.Stage, id, cost, r.Policy.(InteractiveCallPolicy).Token)
 		if err == nil && tag.RowsAffected() != 1 {
 			return modelcall.ErrOutcomeUnknown
 		}
@@ -381,7 +381,7 @@ func (a interactiveCalls) Reserve(ctx context.Context, r modelcall.Request, cost
 
 // Admission already reserved the main deputy generation in agent_runs. Link
 // that hold atomically; readers and review keep their separate reservations.
-func (a interactiveCalls) reserveDeputyRun(ctx context.Context, r modelcall.Request, estimate float64) (modelcall.Reservation, error) {
+func (a InteractiveCalls) reserveDeputyRun(ctx context.Context, r modelcall.Request, estimate float64) (modelcall.Reservation, error) {
 	var reservation modelcall.Reservation
 	if estimate < 0 || math.IsNaN(estimate) || math.IsInf(estimate, 0) {
 		return reservation, memory.ErrInvalid
@@ -389,8 +389,8 @@ func (a interactiveCalls) reserveDeputyRun(ctx context.Context, r modelcall.Requ
 	if _, err := interactiveBinding(r); err != nil {
 		return reservation, err
 	}
-	p := r.Policy.(interactiveCallPolicy)
-	err := pgx.BeginFunc(ctx, a.store.Pool, func(tx pgx.Tx) error {
+	p := r.Policy.(InteractiveCallPolicy)
+	err := pgx.BeginFunc(ctx, a.Store.Pool, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(r.OwnerID)); err != nil {
 			return err
 		}
@@ -411,13 +411,13 @@ func (a interactiveCalls) reserveDeputyRun(ctx context.Context, r modelcall.Requ
 
 // The durable journal proves which admitted hold this response can settle.
 // A late response can settle its original hold after deletion, never a reused run.
-func (a interactiveCalls) settleDeputyRun(ctx context.Context, r modelcall.Request, paid *modelcall.PaidResult) error {
+func (a InteractiveCalls) settleDeputyRun(ctx context.Context, r modelcall.Request, paid *modelcall.PaidResult) error {
 	if paid.Cost < 0 || math.IsNaN(paid.Cost) || math.IsInf(paid.Cost, 0) {
 		return memory.ErrInvalid
 	}
 	persist, cancel := context.WithTimeout(context.WithoutCancel(ctx), modelcall.PersistenceTimeout)
 	defer cancel()
-	return pgx.BeginFunc(persist, a.store.Pool, func(tx pgx.Tx) error {
+	return pgx.BeginFunc(persist, a.Store.Pool, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(persist, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(r.OwnerID)); err != nil {
 			return err
 		}
@@ -425,7 +425,7 @@ func (a interactiveCalls) settleDeputyRun(ctx context.Context, r modelcall.Reque
 	})
 }
 
-func (a interactiveCalls) settleDeputyRunTx(ctx context.Context, tx pgx.Tx, r modelcall.Request, paid *modelcall.PaidResult) error {
+func (a InteractiveCalls) settleDeputyRunTx(ctx context.Context, tx pgx.Tx, r modelcall.Request, paid *modelcall.PaidResult) error {
 	var origin, reservation string
 	var held float64
 	err := tx.QueryRow(ctx, `SELECT input_manifest->>'origin',reservation_id::text,(actual_mode->>'reservationEstimate')::double precision FROM model_calls WHERE owner_id=$1 AND id=$2 AND execution_id=$3 AND reservation_id=$4 AND provider_id=$5 AND model=$6 AND function_name='deputy' AND stage='answer' AND input_manifest->>'executionKind'='deputy' AND input_manifest->>'budgetOwner'='deputy_run' AND reservation_id=md5(owner_id::text||':'||execution_id::text||':'||(input_manifest->>'origin'))::uuid`, string(r.OwnerID), string(paid.InvocationID), string(r.ExecutionID), paid.Reservation, paid.Provider, paid.Model).Scan(&origin, &reservation, &held)
@@ -435,7 +435,7 @@ func (a interactiveCalls) settleDeputyRunTx(ctx context.Context, tx pgx.Tx, r mo
 	if err != nil {
 		return err
 	}
-	if origin != r.Policy.(interactiveCallPolicy).Origin || paid.ReservedCost != held {
+	if origin != r.Policy.(InteractiveCallPolicy).Origin || paid.ReservedCost != held {
 		return memory.ErrConflict
 	}
 	cost := paid.Cost
@@ -461,8 +461,8 @@ func (a interactiveCalls) settleDeputyRunTx(ctx context.Context, tx pgx.Tx, r mo
 	return err
 }
 
-func (a interactiveCalls) Start(ctx context.Context, r modelcall.Request, paid *modelcall.PaidResult) error {
-	mainDeputy := r.Policy.(interactiveCallPolicy).BudgetOwner == "deputy_run"
+func (a InteractiveCalls) Start(ctx context.Context, r modelcall.Request, paid *modelcall.PaidResult) error {
+	mainDeputy := r.Policy.(InteractiveCallPolicy).BudgetOwner == "deputy_run"
 	var binding string
 	if mainDeputy {
 		var err error
@@ -471,7 +471,7 @@ func (a interactiveCalls) Start(ctx context.Context, r modelcall.Request, paid *
 			return err
 		}
 	}
-	return pgx.BeginFunc(ctx, a.store.Pool, func(tx pgx.Tx) error {
+	return pgx.BeginFunc(ctx, a.Store.Pool, func(tx pgx.Tx) error {
 		if mainDeputy {
 			if _, err := tx.Exec(ctx, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(r.OwnerID)); err != nil {
 				return err
@@ -492,7 +492,7 @@ func (a interactiveCalls) Start(ctx context.Context, r modelcall.Request, paid *
 			}
 		}
 		if mainDeputy {
-			p := r.Policy.(interactiveCallPolicy)
+			p := r.Policy.(InteractiveCallPolicy)
 			if err := accessstore.VerifyRunTx(ctx, tx, memory.Scope{OwnerID: r.OwnerID, PrincipalID: p.AgentID}, workspace.Run{AgentID: p.AgentID, ThingID: p.ThingID, ContextVersions: r.Refs}); err != nil {
 				return err
 			}
@@ -521,17 +521,17 @@ func (a interactiveCalls) Start(ctx context.Context, r modelcall.Request, paid *
 	})
 }
 
-func (a interactiveCalls) PreparationFailed(ctx context.Context, r modelcall.Request, id memory.ID, err error) error {
-	return (backgroundCalls{store: a.store}).PreparationFailed(ctx, r, id, err)
+func (a InteractiveCalls) PreparationFailed(ctx context.Context, r modelcall.Request, id memory.ID, err error) error {
+	return (BackgroundCalls{Store: a.Store}).PreparationFailed(ctx, r, id, err)
 }
 
-func (a interactiveCalls) Save(ctx context.Context, r modelcall.Request, paid *modelcall.PaidResult) error {
-	entry := &pendingInteractiveResult{request: cloneInteractiveRequest(r), paid: cloneInteractivePaid(paid), attemptedAt: time.Now().UTC()}
-	a.store.pendingInteractive.Store(paid.InvocationID, entry)
+func (a InteractiveCalls) Save(ctx context.Context, r modelcall.Request, paid *modelcall.PaidResult) error {
+	entry := &PendingInteractiveResult{Request: cloneInteractiveRequest(r), paid: cloneInteractivePaid(paid), attemptedAt: time.Now().UTC()}
+	a.Store.PendingInteractive.Store(paid.InvocationID, entry)
 	for {
 		persist, cancel := context.WithTimeout(context.WithoutCancel(ctx), modelcall.PersistenceTimeout)
-		err := pgx.BeginFunc(persist, a.store.Pool, func(tx pgx.Tx) error {
-			p := r.Policy.(interactiveCallPolicy)
+		err := pgx.BeginFunc(persist, a.Store.Pool, func(tx pgx.Tx) error {
+			p := r.Policy.(InteractiveCallPolicy)
 			mainDeputy := p.BudgetOwner == "deputy_run"
 			if mainDeputy {
 				// Owners lock before journal rows when deleting an execution or
@@ -701,11 +701,11 @@ func (a interactiveCalls) Save(ctx context.Context, r modelcall.Request, paid *m
 		})
 		cancel()
 		if err == nil {
-			a.store.pendingInteractive.CompareAndDelete(paid.InvocationID, entry)
+			a.Store.PendingInteractive.CompareAndDelete(paid.InvocationID, entry)
 			return nil
 		}
 		if errors.Is(err, memory.ErrConflict) || errors.Is(err, memory.ErrInvalid) {
-			a.store.pendingInteractive.CompareAndDelete(paid.InvocationID, entry)
+			a.Store.PendingInteractive.CompareAndDelete(paid.InvocationID, entry)
 			return err
 		}
 		select {
@@ -716,11 +716,11 @@ func (a interactiveCalls) Save(ctx context.Context, r modelcall.Request, paid *m
 	}
 }
 
-func (a interactiveCalls) Record(ctx context.Context, r modelcall.Request, paid *modelcall.PaidResult) error {
+func (a InteractiveCalls) Record(ctx context.Context, r modelcall.Request, paid *modelcall.PaidResult) error {
 	persist, cancel := context.WithTimeout(context.WithoutCancel(ctx), modelcall.PersistenceTimeout)
 	defer cancel()
 	var usage usagelog.ModelUsage
-	if err := a.store.Pool.QueryRow(persist, `SELECT actual_mode->'originalUsage' FROM model_calls WHERE owner_id=$1 AND id=$2`, string(r.OwnerID), string(paid.InvocationID)).Scan(&usage); err != nil {
+	if err := a.Store.Pool.QueryRow(persist, `SELECT actual_mode->'originalUsage' FROM model_calls WHERE owner_id=$1 AND id=$2`, string(r.OwnerID), string(paid.InvocationID)).Scan(&usage); err != nil {
 		return err
 	}
 	usage.OwnerID = r.OwnerID
@@ -737,40 +737,40 @@ func (a interactiveCalls) Record(ctx context.Context, r modelcall.Request, paid 
 	usage.InputEstimated = paid.InputEstimated
 	usage.OutputEstimated = paid.OutputEstimated
 	usage.CostEstimated = paid.CostEstimated
-	if r.Policy.(interactiveCallPolicy).BudgetOwner == "deputy_run" {
+	if r.Policy.(InteractiveCallPolicy).BudgetOwner == "deputy_run" {
 		var snapshot deputy.Snapshot
 		if json.Unmarshal(r.Prompt, &snapshot) == nil && snapshot.Run.Kind != "revise" && !snapshot.MemoryReady {
-			return a.store.recordReturnedUsage(persist, paid.Output, usage)
+			return a.Store.RecordReturnedUsage(persist, paid.Output, usage)
 		}
 	}
-	return a.store.RecordUsage(persist, usage)
+	return a.Store.RecordUsage(persist, usage)
 }
-func (a interactiveCalls) Settle(ctx context.Context, r modelcall.Request, paid *modelcall.PaidResult) error {
-	if r.Policy.(interactiveCallPolicy).BudgetOwner == "deputy_run" {
+func (a InteractiveCalls) Settle(ctx context.Context, r modelcall.Request, paid *modelcall.PaidResult) error {
+	if r.Policy.(InteractiveCallPolicy).BudgetOwner == "deputy_run" {
 		return a.settleDeputyRun(ctx, r, paid)
 	}
-	return (backgroundCalls{store: a.store}).Settle(ctx, r, paid)
+	return (BackgroundCalls{Store: a.Store}).Settle(ctx, r, paid)
 }
-func (a interactiveCalls) AccountingState(ctx context.Context, r modelcall.Request, paid *modelcall.PaidResult, state string) error {
-	return (backgroundCalls{store: a.store}).AccountingState(ctx, r, paid, state)
+func (a InteractiveCalls) AccountingState(ctx context.Context, r modelcall.Request, paid *modelcall.PaidResult, state string) error {
+	return (BackgroundCalls{Store: a.Store}).AccountingState(ctx, r, paid, state)
 }
 
 // Interactive failures remain recoverable for accounting and caller policy.
 // They cannot become a new invocation unless Prepare validates an explicit retry.
-func (a interactiveCalls) Forget(context.Context, modelcall.Request, *modelcall.PaidResult) error {
+func (a InteractiveCalls) Forget(context.Context, modelcall.Request, *modelcall.PaidResult) error {
 	return nil
 }
 
 // The workflow reports its decision separately from provider and billing
 // outcomes. This write records that decision; it cannot authorize an action.
-func (a interactiveCalls) recordApplicationTx(ctx context.Context, tx pgx.Tx, owner, execution memory.ID, stage, outcome, reason string) error {
+func (a InteractiveCalls) RecordApplicationTx(ctx context.Context, tx pgx.Tx, owner, execution memory.ID, stage, outcome, reason string) error {
 	_, err := tx.Exec(ctx, `UPDATE model_calls SET actual_mode=actual_mode||jsonb_build_object('applicationOutcome',$4::text,'applicationReason',$5::text),updated_at=clock_timestamp() WHERE owner_id=$1 AND execution_id=$2 AND stage=$3 AND input_manifest->>'version'='interactive-input-v1' AND recovery_state='active'`, string(owner), string(execution), stage, outcome, reason)
 	return err
 }
 
 // The data owner calls this in its existing deletion transaction. Keep billing
 // metadata, but remove interactive bodies and invalidate their application receipt.
-func (a interactiveCalls) scrubInputsTx(ctx context.Context, tx pgx.Tx, owner memory.ID, ids []string) error {
+func (a InteractiveCalls) ScrubInputsTx(ctx context.Context, tx pgx.Tx, owner memory.ID, ids []string) error {
 	var exists bool
 	if err := tx.QueryRow(ctx, "SELECT to_regclass('model_calls') IS NOT NULL").Scan(&exists); err != nil {
 		return err
@@ -830,7 +830,7 @@ func cloneInteractiveRequest(request modelcall.Request) modelcall.Request {
 	copy := request
 	copy.Prompt = append(json.RawMessage(nil), request.Prompt...)
 	copy.Refs = append([]memory.Ref(nil), request.Refs...)
-	policy := request.Policy.(interactiveCallPolicy)
+	policy := request.Policy.(InteractiveCallPolicy)
 	policy.RequestHash = append([]byte(nil), policy.RequestHash...)
 	policy.Usage.Plan = append(json.RawMessage(nil), policy.Usage.Plan...)
 	policy.Usage.MemoryRefs = append([]memory.Ref(nil), policy.Usage.MemoryRefs...)
@@ -840,7 +840,7 @@ func cloneInteractiveRequest(request modelcall.Request) modelcall.Request {
 
 // Selection records the workflow's decision, not another provider result.
 // It contains identities and hashes only; private text remains in result storage.
-type deputyResultSelection struct {
+type DeputyResultSelection struct {
 	Main       memory.ID `json:"main"`
 	Output     memory.ID `json:"output"`
 	OutputHash string    `json:"outputHash"`
@@ -848,16 +848,16 @@ type deputyResultSelection struct {
 	Fallback   string    `json:"fallback,omitempty"`
 }
 
-func deputyAnswerRequest(owner memory.ID, token string, snapshot deputy.Snapshot) modelcall.Request {
+func DeputyAnswerRequest(owner memory.ID, token string, snapshot deputy.Snapshot) modelcall.Request {
 	return deputy.AnswerRequest(owner, token, snapshot)
 }
 
 // Resume reads the original prepared input. It never reconstructs a new brief
 // from current memory, and an input-only receipt is never treated as output.
-func (a interactiveCalls) deputyInput(ctx context.Context, q interface {
+func (a InteractiveCalls) DeputyInput(ctx context.Context, q interface {
 	QueryRow(context.Context, string, ...any) pgx.Row
-}, owner memory.ID, run workspace.Run) (*interactiveCallRow, *deputy.Snapshot, error) {
-	var row interactiveCallRow
+}, owner memory.ID, run workspace.Run) (*InteractiveCallRow, *deputy.Snapshot, error) {
+	var row InteractiveCallRow
 	err := q.QueryRow(ctx, `SELECT to_jsonb(c) FROM model_calls c WHERE owner_id=$1 AND execution_id=$2 AND stage='answer' AND function_name='deputy' AND input_manifest->>'budgetOwner'='deputy_run' AND input_manifest->>'origin'=$3 ORDER BY created_at DESC,id DESC LIMIT 1`, string(owner), run.ID, run.CreatedAt).Scan(&row)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil, nil
@@ -865,10 +865,10 @@ func (a interactiveCalls) deputyInput(ctx context.Context, q interface {
 	if err != nil {
 		return nil, nil, err
 	}
-	if value, ok := a.store.pendingInteractive.Load(row.ID); ok {
-		entry := value.(*pendingInteractiveResult)
+	if value, ok := a.Store.PendingInteractive.Load(row.ID); ok {
+		entry := value.(*PendingInteractiveResult)
 		var snapshot deputy.Snapshot
-		if err := json.Unmarshal(entry.request.Prompt, &snapshot); err != nil {
+		if err := json.Unmarshal(entry.Request.Prompt, &snapshot); err != nil {
 			return nil, nil, err
 		}
 		if snapshot.Run.ID != run.ID || snapshot.Run.CreatedAt != run.CreatedAt || snapshot.RawPrompt != snapshot.Run.Brief {
@@ -891,7 +891,7 @@ func (a interactiveCalls) deputyInput(ctx context.Context, q interface {
 		return nil, nil, memory.ErrConflict
 	}
 	// Typed serialization restores the exact original envelope after jsonb storage.
-	request := deputyAnswerRequest(owner, string(memory.NewID()), snapshot)
+	request := DeputyAnswerRequest(owner, string(memory.NewID()), snapshot)
 	hash, err := interactiveBinding(request)
 	if err != nil || hash != row.Manifest.BindingHash || fmt.Sprintf("%x", sha256.Sum256(request.Prompt)) != row.Manifest.InputHash {
 		return nil, nil, memory.ErrConflict
@@ -899,14 +899,14 @@ func (a interactiveCalls) deputyInput(ctx context.Context, q interface {
 	return &row, &snapshot, nil
 }
 
-func (a interactiveCalls) deputySelection(ctx context.Context, owner memory.ID, run workspace.Run, main memory.ID) (*deputyResultSelection, string, error) {
-	var row interactiveCallRow
-	if err := a.store.Pool.QueryRow(ctx, `SELECT to_jsonb(c) FROM model_calls c WHERE owner_id=$1 AND id=$2 AND execution_id=$3 AND input_manifest->>'origin'=$4 AND input_manifest->>'budgetOwner'='deputy_run'`, string(owner), string(main), run.ID, run.CreatedAt).Scan(&row); err != nil {
+func (a InteractiveCalls) DeputySelection(ctx context.Context, owner memory.ID, run workspace.Run, main memory.ID) (*DeputyResultSelection, string, error) {
+	var row InteractiveCallRow
+	if err := a.Store.Pool.QueryRow(ctx, `SELECT to_jsonb(c) FROM model_calls c WHERE owner_id=$1 AND id=$2 AND execution_id=$3 AND input_manifest->>'origin'=$4 AND input_manifest->>'budgetOwner'='deputy_run'`, string(owner), string(main), run.ID, run.CreatedAt).Scan(&row); err != nil {
 		return nil, "", err
 	}
 	selection := row.Mode.DeputySelection
-	if value, ok := a.store.pendingDeputySelections.Load(main); ok && selection == nil {
-		copy := value.(deputyResultSelection)
+	if value, ok := a.Store.pendingDeputySelections.Load(main); ok && selection == nil {
+		copy := value.(DeputyResultSelection)
 		selection = &copy
 	}
 	if selection == nil {
@@ -918,7 +918,7 @@ func (a interactiveCalls) deputySelection(ctx context.Context, owner memory.ID, 
 	var output string
 	var receipt interactiveReceipt
 	var stage string
-	err := a.store.Pool.QueryRow(ctx, `SELECT b.output,c.result_receipt,c.stage FROM model_calls c JOIN background_model_results b ON b.owner_id=c.owner_id AND b.job_id=c.id AND b.reservation_id=c.reservation_id AND b.provider_id=c.provider_id AND b.model=c.model WHERE c.owner_id=$1 AND c.id=$2 AND c.execution_id=$3 AND c.input_manifest->>'origin'=$4 AND NOT coalesce((c.actual_mode->>'inputDeleted')::boolean,false) AND c.outcome='returned'`, string(owner), string(selection.Output), run.ID, run.CreatedAt).Scan(&output, &receipt, &stage)
+	err := a.Store.Pool.QueryRow(ctx, `SELECT b.output,c.result_receipt,c.stage FROM model_calls c JOIN background_model_results b ON b.owner_id=c.owner_id AND b.job_id=c.id AND b.reservation_id=c.reservation_id AND b.provider_id=c.provider_id AND b.model=c.model WHERE c.owner_id=$1 AND c.id=$2 AND c.execution_id=$3 AND c.input_manifest->>'origin'=$4 AND NOT coalesce((c.actual_mode->>'inputDeleted')::boolean,false) AND c.outcome='returned'`, string(owner), string(selection.Output), run.ID, run.CreatedAt).Scan(&output, &receipt, &stage)
 	if err != nil {
 		return nil, "", err
 	}
@@ -928,11 +928,11 @@ func (a interactiveCalls) deputySelection(ctx context.Context, owner memory.ID, 
 	return selection, output, nil
 }
 
-func (a interactiveCalls) saveDeputySelection(ctx context.Context, r modelcall.Request, selection deputyResultSelection) error {
-	a.store.pendingDeputySelections.Store(selection.Main, selection)
+func (a InteractiveCalls) SaveDeputySelection(ctx context.Context, r modelcall.Request, selection DeputyResultSelection) error {
+	a.Store.pendingDeputySelections.Store(selection.Main, selection)
 	persist, cancel := context.WithTimeout(context.WithoutCancel(ctx), modelcall.PersistenceTimeout)
 	defer cancel()
-	err := pgx.BeginFunc(persist, a.store.Pool, func(tx pgx.Tx) error {
+	err := pgx.BeginFunc(persist, a.Store.Pool, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(persist, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(r.OwnerID)); err != nil {
 			return err
 		}
@@ -943,7 +943,7 @@ func (a interactiveCalls) saveDeputySelection(ctx context.Context, r modelcall.R
 			return memory.ErrInvalid
 		}
 		var valid bool
-		if err := tx.QueryRow(persist, `SELECT EXISTS(SELECT 1 FROM model_calls c JOIN background_model_results b ON(b.owner_id,b.job_id)=(c.owner_id,c.id) WHERE c.owner_id=$1 AND c.id=$2 AND c.execution_id=$3 AND c.input_manifest->>'origin'=$4 AND c.input_manifest->>'executionKind'='deputy' AND c.stage=$5 AND c.outcome='returned' AND c.result_receipt->>'outputHash'=$6 AND NOT coalesce((c.actual_mode->>'inputDeleted')::boolean,false) AND b.reservation_id=c.reservation_id AND b.provider_id=c.provider_id AND b.model=c.model)`, string(r.OwnerID), string(selection.Output), string(r.ExecutionID), r.Policy.(interactiveCallPolicy).Origin, func() string {
+		if err := tx.QueryRow(persist, `SELECT EXISTS(SELECT 1 FROM model_calls c JOIN background_model_results b ON(b.owner_id,b.job_id)=(c.owner_id,c.id) WHERE c.owner_id=$1 AND c.id=$2 AND c.execution_id=$3 AND c.input_manifest->>'origin'=$4 AND c.input_manifest->>'executionKind'='deputy' AND c.stage=$5 AND c.outcome='returned' AND c.result_receipt->>'outputHash'=$6 AND NOT coalesce((c.actual_mode->>'inputDeleted')::boolean,false) AND b.reservation_id=c.reservation_id AND b.provider_id=c.provider_id AND b.model=c.model)`, string(r.OwnerID), string(selection.Output), string(r.ExecutionID), r.Policy.(InteractiveCallPolicy).Origin, func() string {
 			if selection.Output == selection.Main {
 				return "answer"
 			}
@@ -954,8 +954,8 @@ func (a interactiveCalls) saveDeputySelection(ctx context.Context, r modelcall.R
 		if !valid {
 			return modelcall.ErrNotApplicable
 		}
-		var original *deputyResultSelection
-		if err := tx.QueryRow(persist, `SELECT actual_mode->'deputySelection' FROM model_calls WHERE owner_id=$1 AND id=$2 AND execution_id=$3 AND input_manifest->>'origin'=$4 AND input_manifest->>'budgetOwner'='deputy_run' FOR UPDATE`, string(r.OwnerID), string(selection.Main), string(r.ExecutionID), r.Policy.(interactiveCallPolicy).Origin).Scan(&original); err != nil {
+		var original *DeputyResultSelection
+		if err := tx.QueryRow(persist, `SELECT actual_mode->'deputySelection' FROM model_calls WHERE owner_id=$1 AND id=$2 AND execution_id=$3 AND input_manifest->>'origin'=$4 AND input_manifest->>'budgetOwner'='deputy_run' FOR UPDATE`, string(r.OwnerID), string(selection.Main), string(r.ExecutionID), r.Policy.(InteractiveCallPolicy).Origin).Scan(&original); err != nil {
 			return err
 		}
 		if original != nil {
@@ -968,12 +968,12 @@ func (a interactiveCalls) saveDeputySelection(ctx context.Context, r modelcall.R
 		return err
 	})
 	if err == nil {
-		a.store.pendingDeputySelections.Delete(selection.Main)
+		a.Store.pendingDeputySelections.Delete(selection.Main)
 	}
 	return err
 }
 
-func (a interactiveCalls) recordDeputyApplicationTx(ctx context.Context, tx pgx.Tx, owner memory.ID, run workspace.Run, invocation memory.ID, outcome, reason string) error {
+func (a InteractiveCalls) RecordDeputyApplicationTx(ctx context.Context, tx pgx.Tx, owner memory.ID, run workspace.Run, invocation memory.ID, outcome, reason string) error {
 	if invocation == "" {
 		return nil
 	}
@@ -989,12 +989,12 @@ func (a interactiveCalls) recordDeputyApplicationTx(ctx context.Context, tx pgx.
 
 // The deputy owner has already closed these executions after an interruption.
 // This observation links the skipped application; it cannot resume generation.
-func (a interactiveCalls) recordInterruptedDeputyApplications(ctx context.Context) error {
-	_, err := a.store.Pool.Exec(ctx, `UPDATE model_calls c SET actual_mode=actual_mode||jsonb_build_object('applicationOutcome','not_applicable','applicationReason','deputy_execution_interrupted'),updated_at=clock_timestamp() WHERE c.function_name='deputy' AND c.stage='answer' AND c.input_manifest->>'budgetOwner'='deputy_run' AND NOT(c.actual_mode ? 'applicationOutcome') AND EXISTS(SELECT 1 FROM agent_runs r WHERE r.owner_id=c.owner_id AND r.id=c.execution_id AND r.document->>'createdAt'=c.input_manifest->>'origin' AND r.status='failed' AND r.document->>'error'='进程中断，结果和用量未确认；未自动重试')`)
+func (a InteractiveCalls) RecordInterruptedDeputyApplications(ctx context.Context) error {
+	_, err := a.Store.Pool.Exec(ctx, `UPDATE model_calls c SET actual_mode=actual_mode||jsonb_build_object('applicationOutcome','not_applicable','applicationReason','deputy_execution_interrupted'),updated_at=clock_timestamp() WHERE c.function_name='deputy' AND c.stage='answer' AND c.input_manifest->>'budgetOwner'='deputy_run' AND NOT(c.actual_mode ? 'applicationOutcome') AND EXISTS(SELECT 1 FROM agent_runs r WHERE r.owner_id=c.owner_id AND r.id=c.execution_id AND r.document->>'createdAt'=c.input_manifest->>'origin' AND r.status='failed' AND r.document->>'error'='进程中断，结果和用量未确认；未自动重试')`)
 	return err
 }
 
-func (s *Store) recordReturnedUsage(ctx context.Context, text string, usage usagelog.ModelUsage) error {
+func (s *Calls) RecordReturnedUsage(ctx context.Context, text string, usage usagelog.ModelUsage) error {
 	if strings.TrimSpace(text) == "" && usage.InputTokens+usage.OutputTokens == 0 && usage.DurationMS == nil {
 		return nil
 	}

@@ -8,6 +8,7 @@ import (
 
 	"github.com/soaringjerry/PCAS/internal/postgres/accessstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/actionlog"
+	"github.com/soaringjerry/PCAS/internal/postgres/callstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/claimstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
@@ -262,7 +263,7 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 		}
 		// Only this explicit owner command releases a terminal recovery pause.
 		// Keep its old attempt records and link the next bounded chain to them.
-		return (backgroundCalls{store: s}).authorizeRecoveryTx(ctx, tx, scope.OwnerID, memory.ID(c.ID), c.RequestID)
+		return (callstore.BackgroundCalls{Store: s.Calls}).AuthorizeRecoveryTx(ctx, tx, scope.OwnerID, memory.ID(c.ID), c.RequestID)
 	case "deleteThing":
 		return s.deleteThingTx(ctx, tx, scope, c.ID)
 	}

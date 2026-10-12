@@ -202,18 +202,18 @@ type attachmentReceipts struct {
 }
 
 func (a attachmentReceipts) Saved(ctx context.Context, component, purpose string) (string, bool, error) {
-	saved, err := a.store.attachmentReceipt(ctx, a.scope, a.ref, component)
+	saved, err := a.store.AttachmentReceipt(ctx, a.scope, a.ref, component)
 	if err != nil || saved == nil {
 		return "", false, err
 	}
-	if err := a.store.accountAttachmentReceipt(ctx, a.scope, a.ref, saved, purpose, a.job); err != nil {
+	if err := a.store.AccountAttachmentReceipt(ctx, a.scope, a.ref, saved, purpose, a.job); err != nil {
 		return "", false, err
 	}
 	return saved.Output, true, nil
 }
 
 func (a attachmentReceipts) Save(ctx context.Context, component string, paid *modelcall.PaidResult) error {
-	return a.store.saveAttachmentReceipt(ctx, a.scope, a.ref, component, paid)
+	return a.store.SaveAttachmentReceipt(ctx, a.scope, a.ref, component, paid)
 }
 
 func (s *Store) CleanupBlobs(ctx context.Context) error {

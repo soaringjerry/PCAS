@@ -387,7 +387,7 @@ func TestUnavailableRetryKeepsPreviouslyReturnedCost(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := s.releaseUnavailableReservation(context.Background(), job, reservationID); err != nil {
+	if err := s.ReleaseUnavailableReservation(context.Background(), job, reservationID); err != nil {
 		t.Fatal(err)
 	}
 	state, err := s.Snapshot(context.Background(), scope)

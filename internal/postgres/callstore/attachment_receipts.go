@@ -1,4 +1,4 @@
-package postgres
+package callstore
 
 import (
 	"context"
@@ -16,11 +16,11 @@ import (
 func attachmentReceiptKey(scope memory.Scope, ref memory.Ref, component string) string {
 	return fmt.Sprintf("attachment:%s:%s:%d:%s", scope.OwnerID, ref.ID, ref.Version, component)
 }
-func (s *Store) attachmentReceipt(ctx context.Context, scope memory.Scope, ref memory.Ref, component string) (*paidModelResult, error) {
-	if v, ok := s.pendingPaid.Load(attachmentReceiptKey(scope, ref, component)); ok {
-		return v.(*paidModelResult), nil
+func (s *Calls) AttachmentReceipt(ctx context.Context, scope memory.Scope, ref memory.Ref, component string) (*PaidModelResult, error) {
+	if v, ok := s.PendingPaid.Load(attachmentReceiptKey(scope, ref, component)); ok {
+		return v.(*PaidModelResult), nil
 	}
-	var out paidModelResult
+	var out PaidModelResult
 	err := s.Pool.QueryRow(ctx, `SELECT body FROM attachment_model_results WHERE owner_id=$1 AND source_id=$2 AND source_version=$3 AND component=$4`, string(scope.OwnerID), string(ref.ID), ref.Version, component).Scan(&out)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
@@ -31,15 +31,15 @@ func (s *Store) attachmentReceipt(ctx context.Context, scope memory.Scope, ref m
 // Preserve each successful page/image/transcript before any billing or derived
 // source write. Failed storage reuses this exact response, including after a
 // restart once the durable receipt exists.
-func (s *Store) saveAttachmentReceipt(ctx context.Context, scope memory.Scope, ref memory.Ref, component string, paid *paidModelResult) error {
+func (s *Calls) SaveAttachmentReceipt(ctx context.Context, scope memory.Scope, ref memory.Ref, component string, paid *PaidModelResult) error {
 	key := attachmentReceiptKey(scope, ref, component)
-	s.pendingPaid.Store(key, paid)
+	s.PendingPaid.Store(key, paid)
 	for {
 		persist, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 		tag, err := s.Pool.Exec(persist, `INSERT INTO attachment_model_results(owner_id,source_id,source_version,component,body) SELECT $1,$2,$3,$4,$5 FROM memory_records r WHERE r.owner_id=$1 AND r.id=$2 AND r.version=$3 AND r.state='active' FOR SHARE OF r ON CONFLICT(owner_id,source_id,source_version,component) DO UPDATE SET body=attachment_model_results.body`, string(scope.OwnerID), string(ref.ID), ref.Version, component, kernel.JSON(paid))
 		cancel()
 		if err == nil {
-			s.pendingPaid.Delete(key)
+			s.PendingPaid.Delete(key)
 			if tag.RowsAffected() == 0 {
 				return memory.ErrNotFound
 			}
@@ -52,7 +52,7 @@ func (s *Store) saveAttachmentReceipt(ctx context.Context, scope memory.Scope, r
 		}
 	}
 }
-func (s *Store) accountAttachmentReceipt(ctx context.Context, scope memory.Scope, ref memory.Ref, paid *paidModelResult, purpose string, job *worker.Job) error {
+func (s *Calls) AccountAttachmentReceipt(ctx context.Context, scope memory.Scope, ref memory.Ref, paid *PaidModelResult, purpose string, job *worker.Job) error {
 	usage := usagelog.ModelUsage{OwnerID: scope.OwnerID, ID: memory.ID(paid.Reservation), Purpose: purpose, AgentID: paid.Provider, Model: paid.Model, InputTokens: paid.InputTokens, OutputTokens: paid.OutputTokens, InputEstimated: paid.InputEstimated, OutputEstimated: paid.OutputEstimated, CostEstimated: paid.CostEstimated, Cost: paid.Cost, MemoryRefs: []memory.Ref{ref}}
 	if job != nil {
 		usage.JobID = string(job.ID)

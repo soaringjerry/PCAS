@@ -1,4 +1,4 @@
-package postgres
+package interpstore
 
 import (
 	"context"
@@ -26,10 +26,10 @@ type comparisonEntity struct {
 	Type        string           `json:"type"`
 	Name        string           `json:"name"`
 	MemoryCount int              `json:"memoryCount"`
-	Memories    []organizeMemory `json:"memories"`
+	Memories    []OrganizeMemory `json:"memories"`
 	Ref         memory.Ref       `json:"-"`
 }
-type comparisonEntityPair struct {
+type ComparisonEntityPair struct {
 	Entities      [2]comparisonEntity `json:"entities"`
 	Marker        string              `json:"-"`
 	SharedContext bool                `json:"-"`
@@ -37,7 +37,7 @@ type comparisonEntityPair struct {
 
 // The ten most recent current memories of every entity, read in one pass:
 // asking per entity made finding the next pair slower with every pair judged.
-func entityComparisonSamplesTx(ctx context.Context, tx pgx.Tx, owner memory.ID, only ...[]string) (map[memory.ID][]organizeMemory, error) {
+func entityComparisonSamplesTx(ctx context.Context, tx pgx.Tx, owner memory.ID, only ...[]string) (map[memory.ID][]OrganizeMemory, error) {
 	var ids []string
 	if len(only) > 0 {
 		ids = only[0]
@@ -57,10 +57,10 @@ func entityComparisonSamplesTx(ctx context.Context, tx pgx.Tx, owner memory.ID, 
 		return nil, err
 	}
 	defer rows.Close()
-	out := map[memory.ID][]organizeMemory{}
+	out := map[memory.ID][]OrganizeMemory{}
 	for rows.Next() {
 		var entity memory.ID
-		m := organizeMemory{Ref: memory.Ref{Kind: memory.ClaimKind}}
+		m := OrganizeMemory{Ref: memory.Ref{Kind: memory.ClaimKind}}
 		if err := rows.Scan(&entity, &m.Ref.ID, &m.Ref.Version, &m.Text, &m.ExpressedAt); err != nil {
 			return nil, err
 		}
@@ -72,8 +72,8 @@ func entityComparisonSamplesTx(ctx context.Context, tx pgx.Tx, owner memory.ID, 
 
 // Finding the next pair only reads, and can take longer than a background
 // write may hold the owner, so it runs outside that window.
-func (s *Store) nextEntityPair(ctx context.Context, owner memory.ID, version int) (*comparisonEntityPair, error) {
-	var pair *comparisonEntityPair
+func (s *Interp) nextEntityPair(ctx context.Context, owner memory.ID, version int) (*ComparisonEntityPair, error) {
+	var pair *ComparisonEntityPair
 	err := pgx.BeginTxFunc(ctx, s.Pool, pgx.TxOptions{AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
 		var err error
 		pair, err = nextEntityPairTx(ctx, tx, owner, version)
@@ -82,14 +82,14 @@ func (s *Store) nextEntityPair(ctx context.Context, owner memory.ID, version int
 	return pair, err
 }
 
-func nextEntityPairTx(ctx context.Context, tx pgx.Tx, owner memory.ID, version int) (*comparisonEntityPair, error) {
-	names, err := entityCandidateNamesTx(ctx, tx, owner, version)
+func nextEntityPairTx(ctx context.Context, tx pgx.Tx, owner memory.ID, version int) (*ComparisonEntityPair, error) {
+	names, err := EntityCandidateNamesTx(ctx, tx, owner, version)
 	if err != nil {
 		return nil, err
 	}
 	// Preserve the established strongest-representative-first merge order.
 	// Eligibility comes exclusively from model-created candidates, not names.
-	ranked := append([]entityCandidateName(nil), names...)
+	ranked := append([]EntityCandidateName(nil), names...)
 	sort.SliceStable(ranked, func(i, j int) bool {
 		a, b := ranked[i], ranked[j]
 		if a.Type != b.Type {
@@ -119,7 +119,7 @@ func nextEntityPairTx(ctx context.Context, tx pgx.Tx, owner memory.ID, version i
 		return nil, err
 	}
 
-	pair := &comparisonEntityPair{}
+	pair := &ComparisonEntityPair{}
 	for _, e := range names {
 		for i, id := range []string{left, right} {
 			if string(e.Ref.ID) == id {
@@ -127,7 +127,7 @@ func nextEntityPairTx(ctx context.Context, tx pgx.Tx, owner memory.ID, version i
 			}
 		}
 	}
-	if pair.Entities[0].Ref.ID == "" || pair.Entities[1].Ref.ID == "" || !entityPairTypesAllowed(pair.Entities[0].Type, pair.Entities[1].Type) {
+	if pair.Entities[0].Ref.ID == "" || pair.Entities[1].Ref.ID == "" || !EntityPairTypesAllowed(pair.Entities[0].Type, pair.Entities[1].Type) {
 		return nil, nil
 	}
 	samples, err := entityComparisonSamplesTx(ctx, tx, owner, []string{left, right})
@@ -154,7 +154,7 @@ func nextEntityPairTx(ctx context.Context, tx pgx.Tx, owner memory.ID, version i
 	pair.Marker = fmt.Sprintf("memory.entity_result:%d:%s:%s:%s", version, left, right, pairNameHash(pair))
 	return pair, nil
 }
-func pairNameHash(pair *comparisonEntityPair) string {
+func pairNameHash(pair *ComparisonEntityPair) string {
 	a, b := pair.Entities[0], pair.Entities[1]
 	if a.Ref.ID > b.Ref.ID {
 		a, b = b, a
@@ -163,9 +163,9 @@ func pairNameHash(pair *comparisonEntityPair) string {
 }
 
 // EntityCompareStore gives the entity comparison service its reads and writes.
-func (s *Store) EntityCompareStore() comparison.EntityStore { return entityCompareStore{s} }
+func (s *Interp) EntityCompareStore() comparison.EntityStore { return entityCompareStore{s} }
 
-type entityCompareStore struct{ store *Store }
+type entityCompareStore struct{ store *Interp }
 
 func (a entityCompareStore) RetryLater(j worker.Job, code string) error {
 	return &worker.JobError{Code: code, Until: time.Now().Add(kernel.RetryDelay(j.Attempts))}
@@ -180,7 +180,7 @@ func (a entityCompareStore) Session(ctx context.Context) (comparison.EntitySessi
 }
 
 type entityCompareSession struct {
-	store *Store
+	store *Interp
 	conn  *pgxpool.Conn
 }
 
@@ -221,8 +221,8 @@ func (a entityCompareSession) Finish(ctx context.Context, j worker.Job) error {
 
 // The saved record has no record identities. They come from the saved
 // result's references, in the order of the entities and their memories.
-func entityPairFromRecord(record json.RawMessage, refs []memory.Ref) (*comparisonEntityPair, error) {
-	var pair *comparisonEntityPair
+func entityPairFromRecord(record json.RawMessage, refs []memory.Ref) (*ComparisonEntityPair, error) {
+	var pair *ComparisonEntityPair
 	if err := json.Unmarshal(record, &pair); err != nil || pair == nil {
 		return nil, memory.ErrInvalid
 	}
@@ -282,7 +282,7 @@ type entityCompareUnit struct {
 	tx      pgx.Tx
 	job     worker.Job
 	version int
-	pair    *comparisonEntityPair
+	pair    *ComparisonEntityPair
 	refs    []memory.Ref
 }
 
@@ -341,7 +341,7 @@ func (u entityCompareUnit) Receipt(same *bool, output string) error {
 func (u entityCompareUnit) DiscardResult() error { return kernel.DiscardPaidResult(u.ctx, u.tx, u.job) }
 func (u entityCompareUnit) Acknowledge() error   { return kernel.Acknowledge(u.ctx, u.tx, u.job) }
 
-func writeAliasReceiptTx(ctx context.Context, tx pgx.Tx, owner memory.ID, rule int, pair *comparisonEntityPair, same *bool, output string) error {
+func writeAliasReceiptTx(ctx context.Context, tx pgx.Tx, owner memory.ID, rule int, pair *ComparisonEntityPair, same *bool, output string) error {
 	a, b := pair.Entities[0].Ref.ID, pair.Entities[1].Ref.ID
 	if a > b {
 		a, b = b, a
@@ -359,7 +359,7 @@ func writeAliasReceiptTx(ctx context.Context, tx pgx.Tx, owner memory.ID, rule i
 	return err
 }
 
-func entityPairKeepIndex(pair *comparisonEntityPair, fallback int) int {
+func entityPairKeepIndex(pair *ComparisonEntityPair, fallback int) int {
 	a, b := pair.Entities[0], pair.Entities[1]
 	return comparison.KeepIndex(comparison.NamedEntity{Type: a.Type, Name: a.Name, MemoryCount: a.MemoryCount}, comparison.NamedEntity{Type: b.Type, Name: b.Name, MemoryCount: b.MemoryCount}, fallback)
 }
@@ -375,7 +375,7 @@ type entityMentionChange struct {
 	Role       string `json:"role"`
 	KeptBefore bool   `json:"keptBefore"`
 }
-type entityMergeSnapshot struct {
+type EntityMergeSnapshot struct {
 	Merged       memory.Ref            `json:"merged"`
 	Kept         memory.Ref            `json:"kept"`
 	Subjects     []entitySubjectChange `json:"subjects"`
@@ -383,7 +383,7 @@ type entityMergeSnapshot struct {
 	AddedAliases []string              `json:"addedAliases"`
 }
 
-func entityMergeFingerprintTx(ctx context.Context, tx pgx.Tx, owner memory.ID, snapshot entityMergeSnapshot) (string, error) {
+func EntityMergeFingerprintTx(ctx context.Context, tx pgx.Tx, owner memory.ID, snapshot EntityMergeSnapshot) (string, error) {
 	ids := []string{}
 	for _, s := range snapshot.Subjects {
 		ids = append(ids, s.ID)
@@ -416,7 +416,7 @@ func mergeEntityTx(ctx context.Context, tx pgx.Tx, owner memory.ID, merged, kept
 	if err := tx.QueryRow(ctx, `SELECT entity_type FROM entity_versions WHERE owner_id=$1 AND entity_id=$2 AND version=$3`, string(owner), string(kept.ID), kept.Version).Scan(&keptType); err != nil {
 		return err
 	}
-	if !entityPairTypesAllowed(mergedType, keptType) || mergedType != keptType && mergedType != "topic" {
+	if !EntityPairTypesAllowed(mergedType, keptType) || mergedType != keptType && mergedType != "topic" {
 		return memory.ErrInvalid
 	}
 	var available bool
@@ -429,7 +429,7 @@ func mergeEntityTx(ctx context.Context, tx pgx.Tx, owner memory.ID, merged, kept
 	if !available {
 		return nil
 	}
-	snapshot := entityMergeSnapshot{Merged: merged, Kept: kept, Subjects: []entitySubjectChange{}, Mentions: []entityMentionChange{}, AddedAliases: []string{}}
+	snapshot := EntityMergeSnapshot{Merged: merged, Kept: kept, Subjects: []entitySubjectChange{}, Mentions: []entityMentionChange{}, AddedAliases: []string{}}
 	rows, err := tx.Query(ctx, "SELECT claim_id::text,version FROM claim_revisions WHERE owner_id=$1 AND subject_id=$2 ORDER BY claim_id,version", string(owner), string(merged.ID))
 	if err != nil {
 		return err
@@ -515,7 +515,7 @@ func mergeEntityTx(ctx context.Context, tx pgx.Tx, owner memory.ID, merged, kept
  ON CONFLICT(owner_id,merged_id) DO UPDATE SET kept_id=excluded.kept_id,merged_at=now(),rule=excluded.rule,undone_at=NULL`, string(owner), string(merged.ID), string(kept.ID), version); err != nil {
 		return err
 	}
-	fingerprint, err := entityMergeFingerprintTx(ctx, tx, owner, snapshot)
+	fingerprint, err := EntityMergeFingerprintTx(ctx, tx, owner, snapshot)
 	if err != nil {
 		return err
 	}

@@ -9,6 +9,7 @@ import (
 
 	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
 	"github.com/soaringjerry/PCAS/internal/postgres/claimstore"
+	"github.com/soaringjerry/PCAS/internal/postgres/interpstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/jackc/pgx/v5"
@@ -64,7 +65,7 @@ func TestCompareEntityMergeAliasesAndUndo(t *testing.T) {
 	if err := (comparison.EntityService{Store: s.EntityCompareStore(), Generator: jobCalls(s), Version: kernel.EntityCompareVersion}).Process(context.Background(), j); err != nil {
 		t.Fatal(err)
 	}
-	var p comparisonEntityPair
+	var p interpstore.ComparisonEntityPair
 	if err := json.Unmarshal([]byte(f.last(t).Prompt), &p); err != nil || len(p.Entities[0].Memories) != 1 || len(p.Entities[1].Memories) != 1 {
 		t.Fatal(err, p)
 	}

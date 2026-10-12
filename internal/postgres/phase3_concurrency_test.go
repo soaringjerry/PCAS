@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/soaringjerry/PCAS/internal/postgres/interpstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/statestore"
 	"github.com/soaringjerry/PCAS/internal/postgres/workspacestore"
@@ -135,7 +136,7 @@ func phase3ConcurrentStage(t *testing.T, stage string) {
 	t.Logf("T2 stage=%s extended_projects=30 schedules=6 paid_calls=%d health=%s", stage, len(m.calls(stage)), health)
 }
 func TestPhase3T2T4EachExistingStageConcurrentHTTPScale(t *testing.T) {
-	for _, stage := range []string{kernel.OrganizeStage, kernel.CompareStage, kernel.EntityCompareStage, EntityCandidatesStage, kernel.HandoverStage} {
+	for _, stage := range []string{kernel.OrganizeStage, kernel.CompareStage, kernel.EntityCompareStage, interpstore.EntityCandidatesStage, kernel.HandoverStage} {
 		t.Run(stage, func(t *testing.T) { phase3ConcurrentStage(t, stage) })
 	}
 }
@@ -302,7 +303,7 @@ func TestPhase3G7AllSevenFrozenCeilingsAndGlobal140(t *testing.T) {
 	phase3Finding(t, "S-P3-001")
 	// Phase 3 fixed seven ceilings. Phase 3.5 added topic projects at two calls
 	// in one hour, and phase 3.6 added the date review with its own ceiling.
-	expected := map[string]int{kernel.OrganizeStage: 40, kernel.CompareStage: 40, kernel.EntityCompareStage: 30, EntityCandidatesStage: 6, kernel.HandoverStage: 2, phase3StageName(t, "project_handover"): 10, phase3StageName(t, "effort"): 10, workspacestore.TopicProjectStage: 2, statestore.DateTidyStage: statestore.DateTidyHourly}
+	expected := map[string]int{kernel.OrganizeStage: 40, kernel.CompareStage: 40, kernel.EntityCompareStage: 30, interpstore.EntityCandidatesStage: 6, kernel.HandoverStage: 2, phase3StageName(t, "project_handover"): 10, phase3StageName(t, "effort"): 10, workspacestore.TopicProjectStage: 2, statestore.DateTidyStage: statestore.DateTidyHourly}
 	if !reflect.DeepEqual(kernel.HourlyBudgets, expected) {
 		t.Fatal("stage ceilings differ from contract", kernel.HourlyBudgets)
 	}

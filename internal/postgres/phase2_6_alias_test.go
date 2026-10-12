@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/soaringjerry/PCAS/internal/postgres/interpstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 )
 
@@ -20,7 +21,7 @@ func TestPhase26A7A8NegativeNamesAndScanReceiptsIgnoreMemoryCounts(t *testing.T)
 	phase26Exec(t, f, `UPDATE entity_versions SET name='北岸' WHERE owner_id=$1 AND entity_id=$2`, f.Scope.OwnerID, f.Entities[4])
 	m.mu.Lock()
 	m.Reply = func(call phase26Call) string {
-		if call.Stage != EntityCandidatesStage {
+		if call.Stage != interpstore.EntityCandidatesStage {
 			return m.goldReply(call)
 		}
 		var p struct {
@@ -45,12 +46,12 @@ func TestPhase26A7A8NegativeNamesAndScanReceiptsIgnoreMemoryCounts(t *testing.T)
 		return `{"groups":[]}`
 	}
 	m.mu.Unlock()
-	phase26Isolate(t, f, EntityCandidatesStage)
-	if _, err := phase26Schedule(ctx, s, EntityCandidatesStage); err != nil {
+	phase26Isolate(t, f, interpstore.EntityCandidatesStage)
+	if _, err := phase26Schedule(ctx, s, interpstore.EntityCandidatesStage); err != nil {
 		t.Fatal(err)
 	}
-	phase26Isolate(t, f, EntityCandidatesStage)
-	scan := phase26ClaimStage(t, f, EntityCandidatesStage)
+	phase26Isolate(t, f, interpstore.EntityCandidatesStage)
+	scan := phase26ClaimStage(t, f, interpstore.EntityCandidatesStage)
 	if err := phase26Process(ctx, s, scan); err != nil {
 		t.Fatal(err)
 	}
@@ -95,10 +96,10 @@ func TestPhase26A7A8NegativeNamesAndScanReceiptsIgnoreMemoryCounts(t *testing.T)
 			t.Errorf("count change rewrote %s", table)
 		}
 	}
-	var batch *entityCandidateBatch
+	var batch *interpstore.EntityCandidateBatch
 	if err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		var err error
-		batch, err = nextEntityCandidateBatchTx(ctx, tx, f.Scope.OwnerID, kernel.EntityCompareVersion)
+		batch, err = interpstore.NextEntityCandidateBatchTx(ctx, tx, f.Scope.OwnerID, kernel.EntityCompareVersion)
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -111,12 +112,12 @@ func TestPhase26A7A8NegativeNamesAndScanReceiptsIgnoreMemoryCounts(t *testing.T)
 		t.Error("completed scan batch repeated after memory-count change")
 	}
 	phase26Exec(t, f, `UPDATE entity_versions SET name='QZPrime' WHERE owner_id=$1 AND entity_id=$2`, f.Scope.OwnerID, f.Entities[0])
-	phase26Isolate(t, f, EntityCandidatesStage)
-	if _, err := phase26Schedule(ctx, s, EntityCandidatesStage); err != nil {
+	phase26Isolate(t, f, interpstore.EntityCandidatesStage)
+	if _, err := phase26Schedule(ctx, s, interpstore.EntityCandidatesStage); err != nil {
 		t.Fatal(err)
 	}
-	phase26Isolate(t, f, EntityCandidatesStage)
-	scan = phase26ClaimStage(t, f, EntityCandidatesStage)
+	phase26Isolate(t, f, interpstore.EntityCandidatesStage)
+	scan = phase26ClaimStage(t, f, interpstore.EntityCandidatesStage)
 	if err := phase26Process(ctx, s, scan); err != nil {
 		t.Fatal(err)
 	}
@@ -129,8 +130,8 @@ func TestPhase26A7A8NegativeNamesAndScanReceiptsIgnoreMemoryCounts(t *testing.T)
 	if err := phase26Process(ctx, s, j); err != nil {
 		t.Fatal(err)
 	}
-	if len(m.calls(kernel.EntityCompareStage)) != 2 || len(m.calls(EntityCandidatesStage)) != 2 {
-		t.Errorf("rename recheck provider counts confirm=%d scan=%d", len(m.calls(kernel.EntityCompareStage)), len(m.calls(EntityCandidatesStage)))
+	if len(m.calls(kernel.EntityCompareStage)) != 2 || len(m.calls(interpstore.EntityCandidatesStage)) != 2 {
+		t.Errorf("rename recheck provider counts confirm=%d scan=%d", len(m.calls(kernel.EntityCompareStage)), len(m.calls(interpstore.EntityCandidatesStage)))
 	}
 	t.Logf("negative decision ignores held card locks; elapsed=%s; count change causes zero recheck; rename causes one scan + one confirmation", time.Since(start))
 }

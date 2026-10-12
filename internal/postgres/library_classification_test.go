@@ -10,6 +10,7 @@ import (
 
 	"github.com/soaringjerry/PCAS/internal/currentstate/handover"
 	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
+	"github.com/soaringjerry/PCAS/internal/postgres/interpstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/statestore"
 
@@ -99,7 +100,7 @@ func TestHandoverUsesIndependentRollingLimit(t *testing.T) {
 	if _, err := s.Pool.Exec(ctx, `UPDATE background_usage SET created_at=now()-interval '61 minutes' WHERE id=(SELECT id FROM background_usage WHERE stage='memory.handover' ORDER BY id LIMIT 1)`); err != nil {
 		t.Fatal(err)
 	}
-	for stage, limit := range map[string]int{kernel.OrganizeStage: 40, kernel.CompareStage: 40, kernel.EntityCompareStage: 30, EntityCandidatesStage: 6} {
+	for stage, limit := range map[string]int{kernel.OrganizeStage: 40, kernel.CompareStage: 40, kernel.EntityCompareStage: 30, interpstore.EntityCandidatesStage: 6} {
 		seedStageUsage(t, s, scope, stage, limit)
 	}
 	if err := (handover.Service{Store: s.HandoverStore(), Generator: jobCalls(s)}).Process(ctx, job); err != nil || len(fake.all()) != 1 {

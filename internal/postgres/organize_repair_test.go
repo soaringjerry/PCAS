@@ -9,6 +9,7 @@ import (
 
 	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/interpstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 )
 
@@ -26,7 +27,7 @@ func TestP3ReorganizeTenCasesOnlyRulesAndWithdrawalCounts(t *testing.T) {
 			return
 		}
 		var input struct {
-			Memories []organizeMemory `json:"memories"`
+			Memories []interpstore.OrganizeMemory `json:"memories"`
 		}
 		if e := json.Unmarshal([]byte(req.Messages[1].Content), &input); e != nil {
 			t.Error(e)

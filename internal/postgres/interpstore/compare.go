@@ -1,4 +1,4 @@
-package postgres
+package interpstore
 
 import (
 	"context"
@@ -20,15 +20,15 @@ import (
 	"github.com/soaringjerry/PCAS/internal/worker"
 )
 
-var compareInstructions = prompts.Must("compare").Text()
+var CompareInstructions = prompts.Must("compare").Text()
 
-type compareGroup struct {
+type CompareGroup struct {
 	Key  string `json:"key"`
 	Kind string `json:"kind"`
 	Name string `json:"name"`
 }
-type compareMemory struct {
-	organizeMemory
+type CompareMemory struct {
+	OrganizeMemory
 	Protected bool `json:"protected"`
 }
 
@@ -45,13 +45,13 @@ var compareCurrent = ` FROM claims cl
 const compareGroupKeys = `SELECT key,kind,name FROM status_current_members
  WHERE (owner_id,claim_id,claim_version)=(c.owner_id,c.claim_id,c.version)`
 
-func nextCompareGroupTx(ctx context.Context, tx pgx.Tx, owner memory.ID, version int) (compareGroup, error) {
+func nextCompareGroupTx(ctx context.Context, tx pgx.Tx, owner memory.ID, version int) (CompareGroup, error) {
 	b, err := nextComparisonBatchTx(ctx, tx, owner, version)
 	if err != nil {
-		return compareGroup{}, err
+		return CompareGroup{}, err
 	}
 	if b == nil {
-		return compareGroup{}, pgx.ErrNoRows
+		return CompareGroup{}, pgx.ErrNoRows
 	}
 	return b.Group, nil
 }
@@ -88,7 +88,7 @@ func enqueueCompareTx(ctx context.Context, tx pgx.Tx, owner memory.ID, now time.
 		anchor = anchors[0]
 	} else {
 		var err error
-		anchor, err = seedOrganizeGroupsTx(ctx, tx, owner)
+		anchor, err = SeedOrganizeGroupsTx(ctx, tx, owner)
 		if err != nil {
 			return false, err
 		}
@@ -99,10 +99,10 @@ func enqueueCompareTx(ctx context.Context, tx pgx.Tx, owner memory.ID, now time.
 	return err == nil, err
 }
 
-func (s *Store) ScheduleCompare(ctx context.Context, now time.Time) (int, error) {
-	return s.scheduleCompareVersion(ctx, now, kernel.CompareVersion)
+func (s *Interp) ScheduleCompare(ctx context.Context, now time.Time) (int, error) {
+	return s.ScheduleCompareVersion(ctx, now, kernel.CompareVersion)
 }
-func (s *Store) scheduleCompareVersion(ctx context.Context, now time.Time, version int) (int, error) {
+func (s *Interp) ScheduleCompareVersion(ctx context.Context, now time.Time, version int) (int, error) {
 	if now.IsZero() || version < 1 {
 		return 0, memory.ErrInvalid
 	}
@@ -139,7 +139,7 @@ func (s *Store) scheduleCompareVersion(ctx context.Context, now time.Time, versi
 			if entity && version == kernel.CompareVersion {
 				v = kernel.EntityCompareVersion
 			}
-			var input *comparisonBatch
+			var input *ComparisonBatch
 			if entity {
 				pair, e := s.nextEntityPair(ctx, owner, v)
 				if e != nil {
@@ -151,7 +151,7 @@ func (s *Store) scheduleCompareVersion(ctx context.Context, now time.Time, versi
 				}
 			} else {
 				var e error
-				input, e = s.nextComparisonBatch(ctx, owner, v)
+				input, e = s.NextComparisonBatch(ctx, owner, v)
 				if e != nil {
 					failed = e
 					continue
@@ -195,7 +195,7 @@ func (s *Store) scheduleCompareVersion(ctx context.Context, now time.Time, versi
 	return count, err
 }
 
-func (s *Store) RunCompare(ctx context.Context, logger *slog.Logger) {
+func (s *Interp) RunCompare(ctx context.Context, logger *slog.Logger) {
 	timer := time.NewTicker(kernel.CompareInterval)
 	defer timer.Stop()
 	for {
@@ -233,9 +233,9 @@ func compareHourlyTx(ctx context.Context, tx pgx.Tx) error {
 }
 
 // CompareStore gives the statement comparison service its reads and writes.
-func (s *Store) CompareStore() comparison.Store { return compareStore{s} }
+func (s *Interp) CompareStore() comparison.Store { return compareStore{s} }
 
-type compareStore struct{ store *Store }
+type compareStore struct{ store *Interp }
 
 func (a compareStore) Reschedule(ctx context.Context) {
 	if _, err := a.store.ScheduleCompare(ctx, time.Now()); err != nil {
@@ -252,7 +252,7 @@ func (a compareStore) Session(ctx context.Context) (comparison.Session, func(), 
 }
 
 type compareSession struct {
-	store *Store
+	store *Interp
 	conn  *pgxpool.Conn
 }
 
@@ -269,7 +269,7 @@ func (a compareSession) Ready() error {
 }
 
 func (a compareSession) NextBatch(ctx context.Context, j worker.Job, version int) (json.RawMessage, []memory.Ref, bool, error) {
-	var input *comparisonBatch
+	var input *ComparisonBatch
 	err := pgx.BeginFunc(ctx, a.conn, func(tx pgx.Tx) error {
 		if err := kernel.LockJob(ctx, tx, j); err != nil {
 			return err
@@ -291,7 +291,7 @@ func (a compareSession) NextBatch(ctx context.Context, j worker.Job, version int
 }
 
 func (a compareSession) Apply(ctx context.Context, j worker.Job, record json.RawMessage, edges []comparison.Edge, valid bool) error {
-	var input comparisonBatch
+	var input ComparisonBatch
 	if err := json.Unmarshal(record, &input); err != nil {
 		return err
 	}
@@ -313,7 +313,7 @@ func (a compareSession) Apply(ctx context.Context, j worker.Job, record json.Raw
 			return err
 		}
 		if valid {
-			if err := a.store.writeComparisonTx(ctx, tx, j.OwnerID, input.Rule, input.Memories, edges, true); err != nil {
+			if err := a.store.WriteComparisonTx(ctx, tx, j.OwnerID, input.Rule, input.Memories, edges, true); err != nil {
 				return err
 			}
 		}
@@ -327,7 +327,7 @@ func (a compareSession) Apply(ctx context.Context, j worker.Job, record json.Raw
 	})
 }
 
-func (s *Store) writeComparisonTx(ctx context.Context, tx pgx.Tx, owner memory.ID, version int, batch []compareMemory, edges []compareEdge, valid bool) error {
+func (s *Interp) WriteComparisonTx(ctx context.Context, tx pgx.Tx, owner memory.ID, version int, batch []CompareMemory, edges []CompareEdge, valid bool) error {
 	eligible, protected := map[int]bool{}, map[int]bool{}
 	inputs := make([]map[string]any, 0, len(batch))
 	for _, m := range batch {

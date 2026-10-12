@@ -148,7 +148,7 @@ func TestP3UpgradeDoesNotRecompareUnchangedBatches(t *testing.T) {
 	if _, e := s.Pool.Exec(ctx, `INSERT INTO background_markers(owner_id,record_id,record_version,stage) VALUES($1,$2,1,$3)`, scope.OwnerID, refs[0].ID, fmt.Sprintf("memory.compare_restored:1:fictional")); e != nil {
 		t.Fatal(e)
 	}
-	batch, e := s.nextComparisonBatch(ctx, scope.OwnerID, kernel.CompareVersion)
+	batch, e := s.NextComparisonBatch(ctx, scope.OwnerID, kernel.CompareVersion)
 	if e != nil {
 		t.Fatal(e)
 	}

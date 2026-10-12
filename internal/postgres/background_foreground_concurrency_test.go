@@ -13,6 +13,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/interpstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/worker"
 	"github.com/soaringjerry/PCAS/internal/workspace"
@@ -268,7 +269,7 @@ func phase26ConcurrentCase(t *testing.T, stage string, merge bool, overHTTP ...b
 	t.Logf("stage=%s merge=%t baseline=%v concurrent_max=%v foreground_calls=%v schedules=%d processor_elapsed=%s SQLSTATE=%v state=%s health=%s", stage, merge, baseline, max, calls, schedules.Load(), elapsed, sqlstates, state, health)
 	t.Logf("scheduler owner-lock deferrals=%d", schedulerDefers)
 	t.Run("no_repeated_owner_lock_deferrals", func(t *testing.T) {
-		if stage == EntityCandidatesStage || stage == kernel.HandoverStage || merge {
+		if stage == interpstore.EntityCandidatesStage || stage == kernel.HandoverStage || merge {
 			phase26Finding(t, "S-P26-002")
 		}
 		if schedulerDefers > 1 {
@@ -304,7 +305,7 @@ func phase26ConcurrentCase(t *testing.T, stage string, merge bool, overHTTP ...b
 	}
 }
 func TestBackgroundStagesAllowConcurrentForegroundScale(t *testing.T) {
-	for _, stage := range []string{kernel.OrganizeStage, kernel.CompareStage, kernel.EntityCompareStage, EntityCandidatesStage, kernel.HandoverStage} {
+	for _, stage := range []string{kernel.OrganizeStage, kernel.CompareStage, kernel.EntityCompareStage, interpstore.EntityCandidatesStage, kernel.HandoverStage} {
 		t.Run(strings.TrimPrefix(stage, "memory."), func(t *testing.T) {
 			phase26ConcurrentCase(t, stage, false)
 		})

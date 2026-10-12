@@ -14,6 +14,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
 	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 	"github.com/soaringjerry/PCAS/internal/postgres/claimstore"
+	"github.com/soaringjerry/PCAS/internal/postgres/interpstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/jackc/pgx/v5"
@@ -56,11 +57,11 @@ func aliasNamesJob(t *testing.T, s *Store, scope memory.Scope) worker.Job {
 		t.Fatal(err)
 	}
 	// Remove only pending unrelated jobs, never history used by quota gates.
-	if _, err := s.Pool.Exec(ctx, `DELETE FROM memory_jobs WHERE owner_id=$1 AND state='queued' AND stage NOT LIKE $2`, string(scope.OwnerID), EntityCandidatesStage+":%"); err != nil {
+	if _, err := s.Pool.Exec(ctx, `DELETE FROM memory_jobs WHERE owner_id=$1 AND state='queued' AND stage NOT LIKE $2`, string(scope.OwnerID), interpstore.EntityCandidatesStage+":%"); err != nil {
 		t.Fatal(err)
 	}
 	j, err := s.Claim(ctx, time.Minute)
-	if err != nil || j == nil || !strings.HasPrefix(j.Stage, EntityCandidatesStage+":") {
+	if err != nil || j == nil || !strings.HasPrefix(j.Stage, interpstore.EntityCandidatesStage+":") {
 		t.Fatal("name-list claim", j, err)
 	}
 	return *j
@@ -98,7 +99,7 @@ func TestEntityCandidatesTranslationAbbreviationKeepAndUndo(t *testing.T) {
 			if err := (aliasscan.Service{Store: s.AliasScanStore(), Generator: jobCalls(s)}).Process(ctx, j); err != nil {
 				t.Fatal(err)
 			}
-			var input entityCandidateBatch
+			var input interpstore.EntityCandidateBatch
 			prompt := f.last(t).Prompt
 			if err := json.Unmarshal([]byte(prompt), &input); err != nil || len(input.Entities) != 2 || input.Scope != tc.kind {
 				t.Fatal("list", input, err)
@@ -246,7 +247,7 @@ func TestEntityCandidatesCrossTypeAndGroupBookmarks(t *testing.T) {
 					if err != nil || id != keep.ID {
 						return fmt.Errorf("old topic alias resolved to %s: %w", id, err)
 					}
-					id, err = findOrganizeGroupTx(ctx, tx, scope.OwnerID, "topic", topicName)
+					id, err = interpstore.FindOrganizeGroupTx(ctx, tx, scope.OwnerID, "topic", topicName)
 					if err != nil || id != keep.ID {
 						return fmt.Errorf("organizer old topic alias resolved to %s: %w", id, err)
 					}
@@ -267,12 +268,12 @@ func TestEntityCandidatesCrossTypeAndGroupBookmarks(t *testing.T) {
 }
 
 func TestEntityCandidatesBatchCoverageAndTypeBoundaries(t *testing.T) {
-	names := make([]entityCandidateName, 301)
+	names := make([]interpstore.EntityCandidateName, 301)
 	for i := range names {
-		names[i] = entityCandidateName{Type: "place", Name: fmt.Sprintf("虚构名字%03d", i), MemoryCount: 1, Ref: memory.Ref{ID: memory.NewID(), Version: 1, Kind: memory.EntityKind}}
+		names[i] = interpstore.EntityCandidateName{Type: "place", Name: fmt.Sprintf("虚构名字%03d", i), MemoryCount: 1, Ref: memory.Ref{ID: memory.NewID(), Version: 1, Kind: memory.EntityKind}}
 	}
 	names[0].Name, names[300].Name = "蓝沙湾", "Azure Quay"
-	batches := entityCandidateBatches(names, kernel.EntityCompareVersion)
+	batches := interpstore.EntityCandidateBatches(names, kernel.EntityCompareVersion)
 	covered := map[string]bool{}
 	for _, batch := range batches {
 		if len(batch.Entities) > 200 {
@@ -280,19 +281,19 @@ func TestEntityCandidatesBatchCoverageAndTypeBoundaries(t *testing.T) {
 		}
 		for i, a := range batch.Entities {
 			for _, b := range batch.Entities[i+1:] {
-				covered[entityCandidatePairMarker(a.Ref, b.Ref, kernel.EntityCompareVersion)] = true
+				covered[interpstore.EntityCandidatePairMarker(a.Ref, b.Ref, kernel.EntityCompareVersion)] = true
 			}
 		}
 	}
 	for i, a := range names {
 		for _, b := range names[i+1:] {
-			if !covered[entityCandidatePairMarker(a.Ref, b.Ref, kernel.EntityCompareVersion)] {
+			if !covered[interpstore.EntityCandidatePairMarker(a.Ref, b.Ref, kernel.EntityCompareVersion)] {
 				t.Fatal("pair cannot meet", a.Name, b.Name)
 			}
 		}
 	}
 	for _, p := range [][2]string{{"person", "place"}, {"person", "topic"}, {"project", "topic"}, {"project", "organization"}, {"area", "area"}, {"place", "organization"}} {
-		if entityPairTypesAllowed(p[0], p[1]) {
+		if interpstore.EntityPairTypesAllowed(p[0], p[1]) {
 			t.Fatal("unsafe type pair", p)
 		}
 	}
@@ -341,7 +342,7 @@ func TestEntityCandidatesHourlyBudgetAndRuleRecheck(t *testing.T) {
 		t.Fatal("released budget", len(f.all()))
 	}
 	// Even a saturated scan ledger cannot consume classification capacity.
-	seedStageUsage(t, s, scope, EntityCandidatesStage, 6)
+	seedStageUsage(t, s, scope, interpstore.EntityCandidatesStage, 6)
 	organizeTestMemory(t, s, scope, "虚构名单调用后的整理哨兵")
 	organizeJob := leaseStage(t, s, scope, j.Record, fmt.Sprintf("%s:%d:%s", kernel.OrganizeStage, kernel.OrganizeVersion, memory.NewID()))
 	f.set(`{"items":[{"n":1,"category":"event","durable":false,"deadlines":[]}]}`)
@@ -349,11 +350,11 @@ func TestEntityCandidatesHourlyBudgetAndRuleRecheck(t *testing.T) {
 		t.Fatal("scan must not consume classification capacity", err, len(f.all()))
 	}
 	if err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
-		b, err := nextEntityCandidateBatchTx(ctx, tx, scope.OwnerID, kernel.EntityCompareVersion)
+		b, err := interpstore.NextEntityCandidateBatchTx(ctx, tx, scope.OwnerID, kernel.EntityCompareVersion)
 		if err != nil || b != nil {
 			return fmt.Errorf("same rules repeated list: %+v %w", b, err)
 		}
-		b, err = nextEntityCandidateBatchTx(ctx, tx, scope.OwnerID, kernel.EntityCompareVersion+1)
+		b, err = interpstore.NextEntityCandidateBatchTx(ctx, tx, scope.OwnerID, kernel.EntityCompareVersion+1)
 		if err != nil || b == nil {
 			return fmt.Errorf("new rules skipped list: %+v %w", b, err)
 		}
@@ -456,17 +457,17 @@ func TestEntityCandidatesThreeNamesKeepChineseAndUndoInReverse(t *testing.T) {
 func TestEntityCandidatesInitialCatalogueCallEstimate(t *testing.T) {
 	// Supplied inventory sizes only; all names/IDs and counts are fictitious.
 	// Match the catalogue's ORDER BY entity_type,name,id before partitioning.
-	names := []entityCandidateName{}
+	names := []interpstore.EntityCandidateName{}
 	for _, group := range []struct {
 		kind string
 		n    int
 	}{{"organization", 323}, {"person", 92}, {"place", 251}, {"project", 47}, {"topic", 225}} {
 		for i := range group.n {
-			names = append(names, entityCandidateName{Type: group.kind, Name: fmt.Sprintf("虚构名单%04d", i), MemoryCount: 1, Ref: memory.Ref{ID: memory.NewID(), Kind: memory.EntityKind, Version: 1}})
+			names = append(names, interpstore.EntityCandidateName{Type: group.kind, Name: fmt.Sprintf("虚构名单%04d", i), MemoryCount: 1, Ref: memory.Ref{ID: memory.NewID(), Kind: memory.EntityKind, Version: 1}})
 		}
 	}
 	counts := map[string]int{}
-	batches := entityCandidateBatches(names, kernel.EntityCompareVersion)
+	batches := interpstore.EntityCandidateBatches(names, kernel.EntityCompareVersion)
 	for _, batch := range batches {
 		counts[batch.Scope]++
 	}

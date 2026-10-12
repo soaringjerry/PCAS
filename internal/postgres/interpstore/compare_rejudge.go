@@ -1,4 +1,4 @@
-package postgres
+package interpstore
 
 import (
 	"context"
@@ -14,7 +14,7 @@ import (
 
 // Explicit coordinator operation. One existing retirement pair per invocation;
 // no group cursor is reset and no duplicate retirement is selected.
-func (s *Store) QueueSupersededRejudge(ctx context.Context, scope memory.Scope) (int, error) {
+func (s *Interp) QueueSupersededRejudge(ctx context.Context, scope memory.Scope) (int, error) {
 	if !scope.IsOwner {
 		return 0, memory.ErrForbidden
 	}
@@ -39,7 +39,7 @@ func (s *Store) QueueSupersededRejudge(ctx context.Context, scope memory.Scope) 
 }
 
 type rejudgeInput struct {
-	Memories []compareMemory `json:"memories"`
+	Memories []CompareMemory `json:"memories"`
 	Refs     []memory.Ref    `json:"refs"`
 	Rule     int             `json:"rule"`
 }
@@ -56,7 +56,7 @@ func readRejudgePair(ctx context.Context, tx pgx.Tx, j worker.Job, refs []memory
 	}
 	input := &rejudgeInput{Refs: refs, Rule: kernel.CompareVersion}
 	for i, ref := range refs {
-		m := compareMemory{organizeMemory: organizeMemory{N: i + 1, Ref: ref}}
+		m := CompareMemory{OrganizeMemory: OrganizeMemory{N: i + 1, Ref: ref}}
 		err = tx.QueryRow(ctx, `SELECT c.value #>> '{}',rv.expressed_at,
  (c.confirmation='confirmed' OR EXISTS(SELECT 1 FROM record_versions edited WHERE edited.owner_id=r.owner_id AND edited.record_id=r.id AND edited.version>1 AND edited.actor='user') OR `+restoredMemorySQL("1")+`)
  FROM claims cl JOIN memory_records r ON(r.owner_id,r.id)=(cl.owner_id,cl.id)

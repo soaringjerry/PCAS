@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
+	"github.com/soaringjerry/PCAS/internal/postgres/interpstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/jackc/pgx/v5"
@@ -22,13 +23,13 @@ func TestPhase26G4T4OneMemoryEditRunsOnlyIts40AffectedComparisonCalls(t *testing
 	// Prior successful batch receipts are explicit preconditions, not measured
 	// model calls. This test measures a single edit after an established library.
 	phase26Exec(t, f, `UPDATE claims SET organized=$2 WHERE owner_id=$1`, f.Scope.OwnerID, kernel.OrganizeVersion)
-	var prior []comparisonBatch
+	var prior []interpstore.ComparisonBatch
 	if err := pgx.BeginFunc(ctx, f.Store.Pool, func(tx pgx.Tx) error {
-		if err := syncComparisonMembersTx(ctx, tx, f.Scope.OwnerID); err != nil {
+		if err := interpstore.SyncComparisonMembersTx(ctx, tx, f.Scope.OwnerID); err != nil {
 			return err
 		}
 		var err error
-		prior, err = comparisonPlanTx(ctx, tx, f.Scope.OwnerID, kernel.CompareVersion)
+		prior, err = interpstore.ComparisonPlanTx(ctx, tx, f.Scope.OwnerID, kernel.CompareVersion)
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -81,7 +82,7 @@ func TestPhase26G4T4OneMemoryEditRunsOnlyIts40AffectedComparisonCalls(t *testing
 		t.Errorf("actual comparison calls=%d expected40", len(m.calls(kernel.CompareStage)))
 	}
 	for _, call := range m.calls(kernel.CompareStage) {
-		var b comparisonBatch
+		var b interpstore.ComparisonBatch
 		if err := json.Unmarshal([]byte(call.Prompt), &b); err != nil {
 			t.Fatal(err)
 		}
@@ -103,7 +104,7 @@ func TestPhase26G4T4OneMemoryEditRunsOnlyIts40AffectedComparisonCalls(t *testing
 			t.Errorf("unrelated prior receipt rewritten %s %d/%d %v", b.Group.Key, b.A, b.B, err)
 		}
 	}
-	pending, err := f.Store.nextComparisonBatch(ctx, f.Scope.OwnerID, kernel.CompareVersion)
+	pending, err := f.Store.NextComparisonBatch(ctx, f.Scope.OwnerID, kernel.CompareVersion)
 	if err != nil || pending != nil {
 		t.Errorf("single edit leaves comparison pending %+v %v", pending, err)
 	}

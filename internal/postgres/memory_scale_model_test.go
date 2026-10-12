@@ -16,6 +16,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/interpretation/aliasscan"
 	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
 	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
+	"github.com/soaringjerry/PCAS/internal/postgres/interpstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/soaringjerry/PCAS/internal/ai"
@@ -89,7 +90,7 @@ func phase26ModelStage(system string) string {
 	case strings.Contains(system, "写交接说明"):
 		return kernel.HandoverStage
 	case strings.Contains(system, "只提出候选"):
-		return EntityCandidatesStage
+		return interpstore.EntityCandidatesStage
 	case strings.Contains(system, "同一个人") || strings.Contains(system, "同一实体") || strings.Contains(system, "same"):
 		return kernel.EntityCompareStage
 	case strings.Contains(system, "duplicates"):
@@ -207,7 +208,7 @@ func (m *phase26Model) goldReply(call phase26Call) string {
 		return string(b)
 	case kernel.EntityCompareStage:
 		return `{"same":false,"keep":null}`
-	case EntityCandidatesStage:
+	case interpstore.EntityCandidatesStage:
 		return `{"groups":[]}`
 	case kernel.HandoverStage:
 		var prompt struct {
@@ -275,7 +276,7 @@ func phase26Schedule(ctx context.Context, s *Store, stage string) (int, error) {
 		return s.ScheduleOrganize(ctx, time.Now())
 	case kernel.CompareStage, kernel.EntityCompareStage:
 		return s.ScheduleCompare(ctx, time.Now())
-	case EntityCandidatesStage:
+	case interpstore.EntityCandidatesStage:
 		return s.ScheduleEntityCandidates(ctx, time.Now())
 	case kernel.HandoverStage:
 		return s.ScheduleStatus(ctx, time.Now())
@@ -290,7 +291,7 @@ func phase26Process(ctx context.Context, s *Store, j worker.Job) error {
 		return (comparison.Service{Store: s.CompareStore(), Generator: jobCalls(s), Version: kernel.CompareVersion}).Process(ctx, j)
 	case kernel.EntityCompareStage:
 		return (comparison.EntityService{Store: s.EntityCompareStore(), Generator: jobCalls(s), Version: kernel.EntityCompareVersion}).Process(ctx, j)
-	case EntityCandidatesStage:
+	case interpstore.EntityCandidatesStage:
 		return (aliasscan.Service{Store: s.AliasScanStore(), Generator: jobCalls(s)}).Process(ctx, j)
 	case kernel.HandoverStage:
 		return (handover.Service{Store: s.HandoverStore(), Generator: jobCalls(s)}).Process(ctx, j)

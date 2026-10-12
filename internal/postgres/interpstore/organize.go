@@ -1,4 +1,4 @@
-package postgres
+package interpstore
 
 import (
 	"context"
@@ -23,13 +23,13 @@ import (
 )
 
 type (
-	organizeMemory = organize.Memory
-	organizeGroup  = organize.Group
+	OrganizeMemory = organize.Memory
+	OrganizeGroup  = organize.Group
 )
 
 // An area is a stable queue anchor; deleting/correcting any claim in a model
 // batch cannot cascade-delete the job and prevent the other claims from writing.
-func seedOrganizeGroupsTx(ctx context.Context, tx pgx.Tx, owner memory.ID) (memory.Ref, error) {
+func SeedOrganizeGroupsTx(ctx context.Context, tx pgx.Tx, owner memory.ID) (memory.Ref, error) {
 	var anchor memory.Ref
 	// Status and comparison schedules seed the same anchors. Fence user writes
 	// first, then serialize only this owner's anchor initialization.
@@ -84,16 +84,16 @@ func seedOrganizeGroupsTx(ctx context.Context, tx pgx.Tx, owner memory.ID) (memo
 	return anchor, nil
 }
 
-var organizeEligible = ` FROM claims cl JOIN memory_records r ON(r.owner_id,r.id)=(cl.owner_id,cl.id)
+var OrganizeEligible = ` FROM claims cl JOIN memory_records r ON(r.owner_id,r.id)=(cl.owner_id,cl.id)
  JOIN claim_revisions c ON(c.owner_id,c.claim_id,c.version)=(r.owner_id,r.id,r.version)
  JOIN record_versions rv ON(rv.owner_id,rv.record_id,rv.version)=(r.owner_id,r.id,r.version)
  WHERE r.state='active' AND rv.state='active' AND cl.organized<` + kernel.OrganizeRequiredSQL("c.category", "$1") + ` AND cl.organize_after<=now()
  AND (coalesce(to_jsonb(cl)->>'retired','')='' OR ($1::int=3 AND c.category='rule' AND cl.organized>0))
  AND claim_source_is_current(r.owner_id,c.claim_id,c.version,now())`
 
-func enqueueOrganizeTx(ctx context.Context, tx pgx.Tx, owner memory.ID, now time.Time, version int) (bool, error) {
+func EnqueueOrganizeTx(ctx context.Context, tx pgx.Tx, owner memory.ID, now time.Time, version int) (bool, error) {
 	var eligible, pending bool
-	if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1"+organizeEligible+" AND cl.owner_id=$2)", version, string(owner)).Scan(&eligible); err != nil {
+	if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1"+OrganizeEligible+" AND cl.owner_id=$2)", version, string(owner)).Scan(&eligible); err != nil {
 		return false, err
 	}
 	if !eligible {
@@ -105,7 +105,7 @@ func enqueueOrganizeTx(ctx context.Context, tx pgx.Tx, owner memory.ID, now time
 	if pending {
 		return false, nil
 	}
-	anchor, err := seedOrganizeGroupsTx(ctx, tx, owner)
+	anchor, err := SeedOrganizeGroupsTx(ctx, tx, owner)
 	if err != nil {
 		return false, err
 	}
@@ -117,7 +117,7 @@ func enqueueOrganizeTx(ctx context.Context, tx pgx.Tx, owner memory.ID, now time
 }
 
 // No progress table: pending work is always derived from active claim versions.
-func (s *Store) ScheduleOrganize(ctx context.Context, now time.Time) (int, error) {
+func (s *Interp) ScheduleOrganize(ctx context.Context, now time.Time) (int, error) {
 	if now.IsZero() {
 		return 0, memory.ErrInvalid
 	}
@@ -130,7 +130,7 @@ func (s *Store) ScheduleOrganize(ctx context.Context, now time.Time) (int, error
 		if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended(current_database() || ':' || current_schema() || ':organize-schedule',0))"); err != nil {
 			return err
 		}
-		rows, err := tx.Query(ctx, "SELECT DISTINCT cl.owner_id::text"+organizeEligible, kernel.OrganizeVersion)
+		rows, err := tx.Query(ctx, "SELECT DISTINCT cl.owner_id::text"+OrganizeEligible, kernel.OrganizeVersion)
 		if err != nil {
 			return err
 		}
@@ -156,7 +156,7 @@ func (s *Store) ScheduleOrganize(ctx context.Context, now time.Time) (int, error
 			if err := kernel.OwnerLock(ctx, tx, owner); err != nil {
 				return err
 			}
-			queued, err := enqueueOrganizeTx(ctx, tx, owner, now, kernel.OrganizeVersion)
+			queued, err := EnqueueOrganizeTx(ctx, tx, owner, now, kernel.OrganizeVersion)
 			if err != nil {
 				return err
 			}
@@ -169,7 +169,7 @@ func (s *Store) ScheduleOrganize(ctx context.Context, now time.Time) (int, error
 	return count, err
 }
 
-func (s *Store) RunOrganize(ctx context.Context, logger *slog.Logger) {
+func (s *Interp) RunOrganize(ctx context.Context, logger *slog.Logger) {
 	timer := time.NewTicker(kernel.OrganizeInterval)
 	defer timer.Stop()
 	for {
@@ -187,7 +187,7 @@ func (s *Store) RunOrganize(ctx context.Context, logger *slog.Logger) {
 	}
 }
 
-func organizeVocabularyTx(ctx context.Context, tx pgx.Tx, owner memory.ID) ([]organizeGroup, error) {
+func organizeVocabularyTx(ctx context.Context, tx pgx.Tx, owner memory.ID) ([]OrganizeGroup, error) {
 	rows, err := tx.Query(ctx, `SELECT ev.entity_id::text,ev.entity_type,ev.name,coalesce(ev.disambiguation->>'description','')
  FROM entity_versions ev JOIN memory_records r ON(r.owner_id,r.id,r.version)=(ev.owner_id,ev.entity_id,ev.version)
  WHERE ev.owner_id=$1 AND r.state='active' AND ev.entity_type IN('project','topic','area') ORDER BY ev.entity_type,ev.name,ev.entity_id`, string(owner))
@@ -195,9 +195,9 @@ func organizeVocabularyTx(ctx context.Context, tx pgx.Tx, owner memory.ID) ([]or
 		return nil, err
 	}
 	defer rows.Close()
-	groups := []organizeGroup{}
+	groups := []OrganizeGroup{}
 	for rows.Next() {
-		var g organizeGroup
+		var g OrganizeGroup
 		if err := rows.Scan(&g.ID, &g.Type, &g.Name, &g.Description); err != nil {
 			return nil, err
 		}
@@ -220,9 +220,9 @@ func organizeCompareHourlyTx(ctx context.Context, tx pgx.Tx, code string) error 
 }
 
 // OrganizeStore gives the organize service its reads and writes.
-func (s *Store) OrganizeStore() organize.Store { return organizeStore{s} }
+func (s *Interp) OrganizeStore() organize.Store { return organizeStore{s} }
 
-type organizeStore struct{ store *Store }
+type organizeStore struct{ store *Interp }
 
 // Hold a dedicated session lock over generation, not the user's row lock:
 // corrections/deletions can proceed, but a recovered lease cannot race a call.
@@ -235,7 +235,7 @@ func (a organizeStore) Session(ctx context.Context) (organize.Session, func(), e
 }
 
 type organizeSession struct {
-	store *Store
+	store *Interp
 	conn  *pgxpool.Conn
 }
 
@@ -248,7 +248,7 @@ func (a organizeSession) Ready() error {
 }
 
 func (a organizeSession) NextBatch(ctx context.Context, j worker.Job, version int) (organize.Batch, bool, error) {
-	batch := organize.Batch{Memories: []organizeMemory{}}
+	batch := organize.Batch{Memories: []OrganizeMemory{}}
 	found := false
 	err := pgx.BeginFunc(ctx, a.conn, func(tx pgx.Tx) error {
 		if err := kernel.OwnerLock(ctx, tx, j.OwnerID); err != nil {
@@ -257,17 +257,17 @@ func (a organizeSession) NextBatch(ctx context.Context, j worker.Job, version in
 		if err := kernel.LockJob(ctx, tx, j); err != nil {
 			return err
 		}
-		if _, err := seedOrganizeGroupsTx(ctx, tx, j.OwnerID); err != nil {
+		if _, err := SeedOrganizeGroupsTx(ctx, tx, j.OwnerID); err != nil {
 			return err
 		}
-		rows, err := tx.Query(ctx, `SELECT r.id::text,r.version,c.value #>> '{}',rv.expressed_at`+organizeEligible+`
+		rows, err := tx.Query(ctx, `SELECT r.id::text,r.version,c.value #>> '{}',rv.expressed_at`+OrganizeEligible+`
  AND cl.owner_id=$2 ORDER BY EXISTS(SELECT 1 FROM evidence e JOIN archive_entries ae ON(ae.owner_id,ae.source_id,ae.source_version)=(e.owner_id,e.source_id,e.source_version)
  WHERE (e.owner_id,e.target_id,e.target_version)=(c.owner_id,c.claim_id,c.version)),r.created_at DESC,r.id LIMIT $3`, version, string(j.OwnerID), kernel.OrganizeBatchLimit)
 		if err != nil {
 			return err
 		}
 		for rows.Next() {
-			m := organizeMemory{N: len(batch.Memories) + 1, Ref: memory.Ref{Kind: memory.ClaimKind}}
+			m := OrganizeMemory{N: len(batch.Memories) + 1, Ref: memory.Ref{Kind: memory.ClaimKind}}
 			if err := rows.Scan(&m.Ref.ID, &m.Ref.Version, &m.Text, &m.ExpressedAt); err != nil {
 				rows.Close()
 				return err
@@ -309,7 +309,7 @@ func (a organizeSession) Apply(ctx context.Context, j worker.Job, result organiz
 		eligible := map[int]bool{}
 		for _, m := range batch {
 			var id memory.ID
-			err := tx.QueryRow(ctx, `SELECT r.id::text`+organizeEligible+` AND cl.owner_id=$2 AND cl.id=$3 AND r.version=$4 FOR UPDATE OF r,cl`, version, string(j.OwnerID), string(m.Ref.ID), m.Ref.Version).Scan(&id)
+			err := tx.QueryRow(ctx, `SELECT r.id::text`+OrganizeEligible+` AND cl.owner_id=$2 AND cl.id=$3 AND r.version=$4 FOR UPDATE OF r,cl`, version, string(j.OwnerID), string(m.Ref.ID), m.Ref.Version).Scan(&id)
 			if errors.Is(err, pgx.ErrNoRows) {
 				continue
 			}
@@ -400,7 +400,7 @@ func (a organizeSession) Apply(ctx context.Context, j worker.Job, result organiz
 		if err := kernel.DiscardPaidResult(ctx, tx, j); err != nil {
 			return err
 		}
-		_, err = enqueueOrganizeTx(ctx, tx, j.OwnerID, time.Now(), kernel.OrganizeVersion)
+		_, err = EnqueueOrganizeTx(ctx, tx, j.OwnerID, time.Now(), kernel.OrganizeVersion)
 		return err
 	})
 	if err != nil {
@@ -412,7 +412,7 @@ func (a organizeSession) Apply(ctx context.Context, j worker.Job, result organiz
 // Organizing retries are automatic, including transaction recovery. Reserve a
 // fresh invocation through the shared budget policy, then bind it to the fenced
 // job. Each call's reservation ID also deduplicates its usage log.
-func (s *Store) reserveOrganizeCost(ctx context.Context, j worker.Job, cost float64) (string, error) {
+func (s *Interp) reserveOrganizeCost(ctx context.Context, j worker.Job, cost float64) (string, error) {
 	reserveCtx, cancel := context.WithTimeout(ctx, kernel.BackgroundWriteTimeout)
 	id, err := s.ReserveModelCostID(reserveCtx, j.OwnerID, cost, &j)
 	cancel()
@@ -453,7 +453,7 @@ func (s *Store) reserveOrganizeCost(ctx context.Context, j worker.Job, cost floa
 	return id, nil
 }
 
-func findOrganizeGroupTx(ctx context.Context, tx pgx.Tx, owner memory.ID, kind, name string) (memory.ID, error) {
+func FindOrganizeGroupTx(ctx context.Context, tx pgx.Tx, owner memory.ID, kind, name string) (memory.ID, error) {
 	var id memory.ID
 	err := tx.QueryRow(ctx, `SELECT ev.entity_id::text FROM entity_versions ev JOIN memory_records r ON(r.owner_id,r.id,r.version)=(ev.owner_id,ev.entity_id,ev.version)
  WHERE ev.owner_id=$1 AND ev.entity_type=$2 AND r.state='active' AND EXISTS(SELECT 1 FROM aliases a WHERE a.owner_id=ev.owner_id AND a.entity_id=ev.entity_id AND lower(btrim(a.alias,$4))=lower($3))
@@ -468,14 +468,14 @@ func findOrganizeGroupTx(ctx context.Context, tx pgx.Tx, owner memory.ID, kind, 
 }
 
 // declarations are the declared groups that a current statement uses.
-func resolveOrganizeGroupsTx(ctx context.Context, tx pgx.Tx, owner memory.ID, items map[int]organize.Item, declarations []organizeGroup, eligible map[int]bool) (map[int][]organizeGroup, error) {
-	out := map[int][]organizeGroup{}
+func resolveOrganizeGroupsTx(ctx context.Context, tx pgx.Tx, owner memory.ID, items map[int]organize.Item, declarations []OrganizeGroup, eligible map[int]bool) (map[int][]OrganizeGroup, error) {
+	out := map[int][]OrganizeGroup{}
 	// Take the same alias-creation lock as entityTx before resolving any names.
 	if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended($1,0))", string(owner)+":entities"); err != nil {
 		return nil, err
 	}
 	for _, g := range declarations {
-		id, err := findOrganizeGroupTx(ctx, tx, owner, g.Type, g.Name)
+		id, err := FindOrganizeGroupTx(ctx, tx, owner, g.Type, g.Name)
 		if err != nil {
 			return nil, err
 		}
@@ -497,7 +497,7 @@ func resolveOrganizeGroupsTx(ctx context.Context, tx pgx.Tx, owner memory.ID, it
 			continue
 		}
 		for _, g := range item.Groups {
-			id, err := findOrganizeGroupTx(ctx, tx, owner, g.Type, g.Name)
+			id, err := FindOrganizeGroupTx(ctx, tx, owner, g.Type, g.Name)
 			if err != nil {
 				return nil, err
 			}

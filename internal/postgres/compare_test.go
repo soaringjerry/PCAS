@@ -11,6 +11,7 @@ import (
 
 	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
 	"github.com/soaringjerry/PCAS/internal/postgres/claimstore"
+	"github.com/soaringjerry/PCAS/internal/postgres/interpstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/jackc/pgx/v5"
@@ -83,7 +84,7 @@ func compareJob(t *testing.T, s *Store, scope memory.Scope, entity bool, version
 			}
 		}
 	}
-	if _, err := s.scheduleCompareVersion(ctx, time.Now(), version); err != nil {
+	if _, err := s.ScheduleCompareVersion(ctx, time.Now(), version); err != nil {
 		t.Fatal(err)
 	}
 	stage := kernel.CompareStage
@@ -164,7 +165,7 @@ func TestCompareDuplicateEvidenceAndHistoricalDeletion(t *testing.T) {
 	if len(compareList(t, s, scope, false)) != 1 || len(compareList(t, s, scope, true)) != 2 {
 		t.Fatal("current/history split")
 	}
-	var prompt struct{ Memories []compareMemory }
+	var prompt struct{ Memories []interpstore.CompareMemory }
 	if err := json.Unmarshal([]byte(strings.TrimSpace(f.last(t).Prompt)), &prompt); err != nil || len(prompt.Memories) != 3 {
 		t.Fatal(err, f.last(t).Prompt)
 	}
@@ -357,7 +358,7 @@ func TestCompareWindowAndNoModel(t *testing.T) {
 	// Three stable blocks require all six within/cross-block comparisons.
 	for range 6 {
 		compareProcess(t, s, scope)
-		var p struct{ Memories []compareMemory }
+		var p struct{ Memories []interpstore.CompareMemory }
 		if err := json.Unmarshal([]byte(strings.TrimSpace(f.last(t).Prompt)), &p); err != nil || len(p.Memories) > 200 {
 			t.Fatal(err, len(p.Memories))
 		}

@@ -15,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
 	"github.com/soaringjerry/PCAS/internal/postgres/intakestore"
+	"github.com/soaringjerry/PCAS/internal/postgres/interpstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/soaringjerry/PCAS/internal/ai"
@@ -450,7 +451,7 @@ func TestMemoryStagesHaveIndependentBudgets(t *testing.T) {
 	s, ctx := phase26DisposableStore(t)
 	scope := owner()
 	phase35Snapshot(t, s, scope)
-	for stage, want := range map[string]int{kernel.OrganizeStage: 40, kernel.CompareStage: 40, kernel.EntityCompareStage: 30, EntityCandidatesStage: 6, kernel.HandoverStage: 2} {
+	for stage, want := range map[string]int{kernel.OrganizeStage: 40, kernel.CompareStage: 40, kernel.EntityCompareStage: 30, interpstore.EntityCandidatesStage: 6, kernel.HandoverStage: 2} {
 		if kernel.HourlyBudgets[stage] != want {
 			t.Fatalf("%s budget=%d want=%d", stage, kernel.HourlyBudgets[stage], want)
 		}

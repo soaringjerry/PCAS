@@ -11,6 +11,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/contextbuilder"
 	"github.com/soaringjerry/PCAS/internal/currentstate/handover"
 	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
+	"github.com/soaringjerry/PCAS/internal/postgres/interpstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/jackc/pgx/v5"
@@ -226,13 +227,13 @@ func TestPhase26G4A6A10ComparisonCoverageAndUnchangedScheduling(t *testing.T) {
 	phase26NewModel(t, f)
 	phase26Exec(t, f, `UPDATE claims SET organized=$2 WHERE owner_id=$1`, f.Scope.OwnerID, kernel.OrganizeVersion)
 	s, ctx := f.Store, f.Context
-	var first, second []comparisonBatch
+	var first, second []interpstore.ComparisonBatch
 	err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
-		if err := syncComparisonMembersTx(ctx, tx, f.Scope.OwnerID); err != nil {
+		if err := interpstore.SyncComparisonMembersTx(ctx, tx, f.Scope.OwnerID); err != nil {
 			return err
 		}
 		var err error
-		first, err = comparisonPlanTx(ctx, tx, f.Scope.OwnerID, kernel.CompareVersion)
+		first, err = interpstore.ComparisonPlanTx(ctx, tx, f.Scope.OwnerID, kernel.CompareVersion)
 		return err
 	})
 	if err != nil {
@@ -267,14 +268,14 @@ func TestPhase26G4A6A10ComparisonCoverageAndUnchangedScheduling(t *testing.T) {
 	if largestCalls != 78 || len(pairs) != 3 {
 		t.Fatalf("1200-member opportunity coverage calls=%d expected78 goldpairs=%d expected3", largestCalls, len(pairs))
 	}
-	for _, stage := range []string{kernel.OrganizeStage, kernel.CompareStage, EntityCandidatesStage, kernel.HandoverStage} {
+	for _, stage := range []string{kernel.OrganizeStage, kernel.CompareStage, interpstore.EntityCandidatesStage, kernel.HandoverStage} {
 		if _, err := phase26Schedule(ctx, s, stage); err != nil {
 			t.Fatal(err)
 		}
 	}
 	tables := []string{"memory_comparison_members", "memory_group_progress", "memory_jobs", "claims", "entity_versions"}
 	before := phase26Digest(t, f, tables)
-	for _, stage := range []string{kernel.OrganizeStage, kernel.CompareStage, EntityCandidatesStage, kernel.HandoverStage} {
+	for _, stage := range []string{kernel.OrganizeStage, kernel.CompareStage, interpstore.EntityCandidatesStage, kernel.HandoverStage} {
 		if _, err := phase26Schedule(ctx, s, stage); err != nil {
 			t.Fatal(err)
 		}
@@ -288,7 +289,7 @@ func TestPhase26G4A6A10ComparisonCoverageAndUnchangedScheduling(t *testing.T) {
 	phase26Exec(t, f, `UPDATE claim_revisions SET value=to_jsonb('Fictitious edited note'::text) WHERE owner_id=$1 AND claim_id=$2`, f.Scope.OwnerID, changed)
 	err = pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		var err error
-		second, err = comparisonPlanTx(ctx, tx, f.Scope.OwnerID, kernel.CompareVersion)
+		second, err = interpstore.ComparisonPlanTx(ctx, tx, f.Scope.OwnerID, kernel.CompareVersion)
 		return err
 	})
 	if err != nil {

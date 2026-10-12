@@ -6,6 +6,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/interpstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/statestore"
 	"github.com/soaringjerry/PCAS/internal/postgres/workspacestore"
@@ -40,7 +41,7 @@ func (s *Store) ScheduleStatus(ctx context.Context, now time.Time) (int, error) 
 	}
 	for _, owner := range owners {
 		err := kernel.BackgroundResultTx(ctx, s.Pool, owner, func(ctx context.Context, tx pgx.Tx) error {
-			anchor, err := seedOrganizeGroupsTx(ctx, tx, owner)
+			anchor, err := interpstore.SeedOrganizeGroupsTx(ctx, tx, owner)
 			if err != nil {
 				return err
 			}

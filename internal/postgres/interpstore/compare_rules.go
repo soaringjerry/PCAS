@@ -1,15 +1,15 @@
-package postgres
+package interpstore
 
 import "github.com/soaringjerry/PCAS/internal/interpretation/comparison"
 
 // The comparison rules are in the interpretation domain. Storage applies
 // their result.
-type compareEdge = comparison.Edge
+type CompareEdge = comparison.Edge
 
-func parseCompareOutput(text string, count int) ([]compareEdge, bool) {
+func ParseCompareOutput(text string, count int) ([]CompareEdge, bool) {
 	return comparison.ParseOutput(text, count)
 }
 
-func resolveCompareEdges(edges []compareEdge, eligible, protected map[int]bool) []compareEdge {
+func resolveCompareEdges(edges []CompareEdge, eligible, protected map[int]bool) []CompareEdge {
 	return comparison.ResolveEdges(edges, eligible, protected)
 }

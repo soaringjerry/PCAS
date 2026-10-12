@@ -7,6 +7,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/interpstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 )
 
@@ -21,13 +22,13 @@ func (s *Store) QueueRuleReorganize(ctx context.Context, scope memory.Scope) (in
 		if err := kernel.OwnerLock(ctx, tx, scope.OwnerID); err != nil {
 			return err
 		}
-		if err := tx.QueryRow(ctx, "SELECT count(*)"+strings.ReplaceAll(organizeEligible, "AND cl.organize_after<=now()", "")+" AND cl.owner_id=$2 AND c.category='rule'", kernel.OrganizeVersion, string(scope.OwnerID)).Scan(&pending); err != nil {
+		if err := tx.QueryRow(ctx, "SELECT count(*)"+strings.ReplaceAll(interpstore.OrganizeEligible, "AND cl.organize_after<=now()", "")+" AND cl.owner_id=$2 AND c.category='rule'", kernel.OrganizeVersion, string(scope.OwnerID)).Scan(&pending); err != nil {
 			return err
 		}
 		if pending == 0 {
 			return nil
 		}
-		_, err := enqueueOrganizeTx(ctx, tx, scope.OwnerID, time.Now(), kernel.OrganizeVersion)
+		_, err := interpstore.EnqueueOrganizeTx(ctx, tx, scope.OwnerID, time.Now(), kernel.OrganizeVersion)
 		return err
 	})
 	return pending, err

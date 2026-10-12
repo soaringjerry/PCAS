@@ -7,12 +7,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/soaringjerry/PCAS/internal/postgres/interpstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/worker"
 )
 
 func TestPhase26G3A1PaidResultsSurviveWriteFailureAndRestart(t *testing.T) {
-	for _, tc := range []struct{ stage, table string }{{kernel.CompareStage, "memory_comparison_batches"}, {kernel.EntityCompareStage, "entity_alias_receipts"}, {EntityCandidatesStage, "background_markers"}} {
+	for _, tc := range []struct{ stage, table string }{{kernel.CompareStage, "memory_comparison_batches"}, {kernel.EntityCompareStage, "entity_alias_receipts"}, {interpstore.EntityCandidatesStage, "background_markers"}} {
 		t.Run(strings.TrimPrefix(tc.stage, "memory."), func(t *testing.T) {
 			f := phase26LoadFixture(t)
 			m := phase26NewModel(t, f)

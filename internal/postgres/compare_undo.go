@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres/actionlog"
+	"github.com/soaringjerry/PCAS/internal/postgres/interpstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/workspacestore"
 	"github.com/soaringjerry/PCAS/internal/workspace"
@@ -33,15 +34,6 @@ func retirementSnapshotTx(ctx context.Context, tx pgx.Tx, owner memory.ID, id st
 		err = memory.ErrNotFound
 	}
 	return out, err
-}
-
-// Done restoration markers belong to the comparison namespace, so queue
-// cleanup for unrelated processing cannot discard a comparison exemption.
-// Recognize the original spelling too for restores made before this fix.
-func restoredMemorySQL(rule string) string {
-	// A user's restoration of this memory version survives prompt upgrades.
-	// Recognize both historical marker spellings, and only this record version.
-	return `EXISTS(SELECT 1 FROM background_markers restored WHERE restored.owner_id=cl.owner_id AND restored.record_id=cl.id AND restored.record_version=r.version AND ` + rule + `::int>=1 AND (restored.stage LIKE 'memory.compare:%:restored:%' OR restored.stage LIKE 'memory.compare_restored:%'))`
 }
 
 func retirementFingerprint(state retirementSnapshot) string {
@@ -168,7 +160,7 @@ func undoComparisonActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, 
 			return true, err
 		}
 	case "entity_merge":
-		var snapshot entityMergeSnapshot
+		var snapshot interpstore.EntityMergeSnapshot
 		if json.Unmarshal(entry.Before, &snapshot) != nil {
 			return true, memory.ErrInvalid
 		}
@@ -181,7 +173,7 @@ func undoComparisonActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, 
 				return true, workspace.ErrChangedSince
 			}
 		}
-		hash, err := entityMergeFingerprintTx(ctx, tx, scope.OwnerID, snapshot)
+		hash, err := interpstore.EntityMergeFingerprintTx(ctx, tx, scope.OwnerID, snapshot)
 		if err != nil {
 			return true, err
 		}

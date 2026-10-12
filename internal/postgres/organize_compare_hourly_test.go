@@ -10,6 +10,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
 	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/interpstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/worker"
 )
@@ -48,7 +49,7 @@ func TestOrganizeCompareIndependentHourlyCalls(t *testing.T) {
 				job = compareJob(t, s, scope, true, kernel.CompareVersion)
 				process = (comparison.EntityService{Store: s.EntityCompareStore(), Generator: jobCalls(s), Version: kernel.EntityCompareVersion}).Process
 			}
-			for stage, limit := range map[string]int{kernel.OrganizeStage: 40, kernel.CompareStage: 40, kernel.EntityCompareStage: 30, EntityCandidatesStage: 6, kernel.HandoverStage: 2} {
+			for stage, limit := range map[string]int{kernel.OrganizeStage: 40, kernel.CompareStage: 40, kernel.EntityCompareStage: 30, interpstore.EntityCandidatesStage: 6, kernel.HandoverStage: 2} {
 				if stage == kind {
 					limit--
 				}

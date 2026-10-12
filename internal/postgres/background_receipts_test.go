@@ -10,13 +10,14 @@ import (
 	"github.com/soaringjerry/PCAS/internal/interpretation/aliasscan"
 	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/interpstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/soaringjerry/PCAS/internal/worker"
 )
 
 func TestPaidBackgroundResultsSurviveBusinessWriteFailureAndRestart(t *testing.T) {
-	for _, stage := range []string{kernel.CompareStage, kernel.EntityCompareStage, EntityCandidatesStage} {
+	for _, stage := range []string{kernel.CompareStage, kernel.EntityCompareStage, interpstore.EntityCandidatesStage} {
 		t.Run(stage, func(t *testing.T) {
 			s, scope, ctx := testStore(t), owner(), context.Background()
 			fake := b1Model(t, s, `{}`)
@@ -43,7 +44,7 @@ func TestPaidBackgroundResultsSurviveBusinessWriteFailureAndRestart(t *testing.T
 				}
 				table = "entity_alias_receipts"
 				response = `{"same":false,"keep":null}`
-			case EntityCandidatesStage:
+			case interpstore.EntityCandidatesStage:
 				aliasEntityFixture(t, s, scope, "person", "Al", 1)
 				aliasEntityFixture(t, s, scope, "person", "虚构齐鹤", 1)
 				job = aliasNamesJob(t, s, scope)
@@ -141,16 +142,16 @@ func TestPersistentBackgroundFailureKeepsIncreasingAttempts(t *testing.T) {
 }
 
 func TestNameScanKeepsUnaffectedBlocksAcrossCapacityBoundary(t *testing.T) {
-	names := make([]entityCandidateName, 200)
+	names := make([]interpstore.EntityCandidateName, 200)
 	for i := range names {
-		names[i] = entityCandidateName{Type: "person", Name: fmt.Sprintf("Fictitious person %03d", i), Ref: memory.Ref{Kind: memory.EntityKind, ID: memory.NewID(), Version: 1}, MemoryCount: 1, Positions: map[string]int64{"person": int64(i)}}
+		names[i] = interpstore.EntityCandidateName{Type: "person", Name: fmt.Sprintf("Fictitious person %03d", i), Ref: memory.Ref{Kind: memory.EntityKind, ID: memory.NewID(), Version: 1}, MemoryCount: 1, Positions: map[string]int64{"person": int64(i)}}
 	}
-	before := entityCandidateBatches(names, kernel.EntityCompareVersion)
+	before := interpstore.EntityCandidateBatches(names, kernel.EntityCompareVersion)
 	if len(before) != 3 {
 		t.Fatal("self and cross blocks missing", len(before))
 	}
-	names = append(names, entityCandidateName{Type: "person", Name: "Fictitious person 200", Ref: memory.Ref{Kind: memory.EntityKind, ID: memory.NewID(), Version: 1}, MemoryCount: 1, Positions: map[string]int64{"person": 200}})
-	after := entityCandidateBatches(names, kernel.EntityCompareVersion)
+	names = append(names, interpstore.EntityCandidateName{Type: "person", Name: "Fictitious person 200", Ref: memory.Ref{Kind: memory.EntityKind, ID: memory.NewID(), Version: 1}, MemoryCount: 1, Positions: map[string]int64{"person": 200}})
+	after := interpstore.EntityCandidateBatches(names, kernel.EntityCompareVersion)
 	markers := map[string]bool{}
 	for _, b := range after {
 		markers[b.Marker] = true
@@ -164,7 +165,7 @@ func TestNameScanKeepsUnaffectedBlocksAcrossCapacityBoundary(t *testing.T) {
 		names[i].MemoryCount += 10
 		names[i].Ref.Version++
 	}
-	counted := entityCandidateBatches(names, kernel.EntityCompareVersion)
+	counted := interpstore.EntityCandidateBatches(names, kernel.EntityCompareVersion)
 	for _, b := range counted {
 		if !markers[b.Marker] {
 			t.Fatal("memory counts or audit versions invalidated name receipt")
@@ -178,18 +179,18 @@ func TestLegacyNameScanReceiptTransfersWithoutAnotherModelCall(t *testing.T) {
 	a, _ := aliasEntityFixture(t, s, scope, "person", "Fictitious Azure", 1)
 	aliasEntityFixture(t, s, scope, "person", "虚构齐鹤", 1)
 	if err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
-		names, err := entityCandidateNamesTx(ctx, tx, scope.OwnerID, kernel.EntityCompareVersion)
+		names, err := interpstore.EntityCandidateNamesTx(ctx, tx, scope.OwnerID, kernel.EntityCompareVersion)
 		if err != nil {
 			return err
 		}
-		old := entityCandidateBatchesFor(names, kernel.EntityCompareVersion, true)
+		old := interpstore.EntityCandidateBatchesFor(names, kernel.EntityCompareVersion, true)
 		if len(old) != 1 {
 			t.Fatal("legacy fixture", len(old))
 		}
 		if _, err := tx.Exec(ctx, "INSERT INTO background_markers(owner_id,record_id,record_version,stage) VALUES($1,$2,1,$3)", scope.OwnerID, a.ID, old[0].Marker); err != nil {
 			return err
 		}
-		next, err := nextEntityCandidateBatchTx(ctx, tx, scope.OwnerID, kernel.EntityCompareVersion)
+		next, err := interpstore.NextEntityCandidateBatchTx(ctx, tx, scope.OwnerID, kernel.EntityCompareVersion)
 		if err == nil && next != nil {
 			t.Fatal("paid legacy scan became pending", next)
 		}

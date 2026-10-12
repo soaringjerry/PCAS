@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
+	"github.com/soaringjerry/PCAS/internal/postgres/interpstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/soaringjerry/PCAS/internal/ai"
@@ -191,7 +192,7 @@ func organizeTestReply(t *testing.T, w http.ResponseWriter, r *http.Request, cat
 		w.WriteHeader(500)
 		return
 	}
-	var prompt struct{ Memories []organizeMemory }
+	var prompt struct{ Memories []interpstore.OrganizeMemory }
 	for _, m := range request.Messages {
 		if m.Role == "user" {
 			if err := json.Unmarshal([]byte(m.Content), &prompt); err != nil {

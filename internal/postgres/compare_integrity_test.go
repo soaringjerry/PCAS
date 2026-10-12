@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
+	"github.com/soaringjerry/PCAS/internal/postgres/interpstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/jackc/pgx/v5"
@@ -207,12 +208,12 @@ func TestCompareRetirementPreservesFrozenSecondaryCard(t *testing.T) {
 	if _, err := s.Pool.Exec(ctx, "INSERT INTO status_card_items(owner_id,key,field,position,claim_id,claim_version) VALUES($1,$2,'status',0,$3,1)", string(scope.OwnerID), key, string(secondary[0].ID)); err != nil {
 		t.Fatal(err)
 	}
-	batch := []compareMemory{}
+	batch := []interpstore.CompareMemory{}
 	for i, ref := range refs {
-		batch = append(batch, compareMemory{organizeMemory: organizeMemory{N: i + 1, Ref: ref}})
+		batch = append(batch, interpstore.CompareMemory{OrganizeMemory: interpstore.OrganizeMemory{N: i + 1, Ref: ref}})
 	}
 	if err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
-		return s.writeComparisonTx(ctx, tx, scope.OwnerID, kernel.CompareVersion, batch, []compareEdge{{Old: 1, New: 4, Kind: "superseded"}}, true)
+		return s.WriteComparisonTx(ctx, tx, scope.OwnerID, kernel.CompareVersion, batch, []interpstore.CompareEdge{{Old: 1, New: 4, Kind: "superseded"}}, true)
 	}); err != nil {
 		t.Fatal(err)
 	}

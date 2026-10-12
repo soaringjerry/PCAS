@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
+	"github.com/soaringjerry/PCAS/internal/postgres/interpstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/jackc/pgx/v5"
@@ -69,7 +70,7 @@ func TestPhase26G7A3IndependentHourlyBudgets(t *testing.T) {
 	stages := []struct {
 		stage string
 		limit int
-	}{{kernel.OrganizeStage, 40}, {kernel.CompareStage, 40}, {kernel.EntityCompareStage, 30}, {EntityCandidatesStage, 6}, {kernel.HandoverStage, 2}}
+	}{{kernel.OrganizeStage, 40}, {kernel.CompareStage, 40}, {kernel.EntityCompareStage, 30}, {interpstore.EntityCandidatesStage, 6}, {kernel.HandoverStage, 2}}
 	for _, tc := range stages {
 		for i := 0; i < tc.limit; i++ {
 			phase26Exec(t, f, `INSERT INTO background_usage(id,owner_id,reserved_cost,stage) VALUES($1,$2,0,$3)`, memory.NewID(), f.Scope.OwnerID, tc.stage)

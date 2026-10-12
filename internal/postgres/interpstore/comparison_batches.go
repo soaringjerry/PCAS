@@ -1,4 +1,4 @@
-package postgres
+package interpstore
 
 import (
 	"context"
@@ -14,17 +14,17 @@ import (
 
 const comparisonBlockSize = kernel.CompareLimit / 2
 
-type comparisonBatch struct {
+type ComparisonBatch struct {
 	Rule        int             `json:"rule"`
-	Group       compareGroup    `json:"group"`
+	Group       CompareGroup    `json:"group"`
 	A           int64           `json:"blockA"`
 	B           int64           `json:"blockB"`
 	Fingerprint string          `json:"fingerprint"`
-	Memories    []compareMemory `json:"memories"`
+	Memories    []CompareMemory `json:"memories"`
 	Refs        []memory.Ref    `json:"refs"`
 }
 
-func syncComparisonMembersTx(ctx context.Context, tx pgx.Tx, owner memory.ID) error {
+func SyncComparisonMembersTx(ctx context.Context, tx pgx.Tx, owner memory.ID) error {
 	// Serialize allocation with scheduling. Existing positions are never rewritten.
 	if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended(current_database()||':'||current_schema()||':comparison-members:'||$1,0))", string(owner)); err != nil {
 		return err
@@ -41,7 +41,7 @@ func syncComparisonMembersTx(ctx context.Context, tx pgx.Tx, owner memory.ID) er
 	return err
 }
 
-func comparisonPlanTx(ctx context.Context, tx pgx.Tx, owner memory.ID, version int) ([]comparisonBatch, error) {
+func ComparisonPlanTx(ctx context.Context, tx pgx.Tx, owner memory.ID, version int) ([]ComparisonBatch, error) {
 	rows, err := tx.Query(ctx, `SELECT m.key,m.kind,m.name,p.position/$3,r.id::text,r.version,c.value #>> '{}',rv.expressed_at,
  (c.confirmation='confirmed' OR EXISTS(SELECT 1 FROM record_versions edited WHERE edited.owner_id=r.owner_id AND edited.record_id=r.id AND edited.version>1 AND edited.actor='user') OR `+restoredMemorySQL("$4")+`)
  FROM status_current_members m JOIN memory_comparison_members p ON(p.owner_id,p.group_key,p.claim_id)=(m.owner_id,m.key,m.claim_id)
@@ -54,20 +54,20 @@ func comparisonPlanTx(ctx context.Context, tx pgx.Tx, owner memory.ID, version i
 	if err != nil {
 		return nil, err
 	}
-	groups := []compareGroup{}
-	blocks := map[string]map[int64][]compareMemory{}
+	groups := []CompareGroup{}
+	blocks := map[string]map[int64][]CompareMemory{}
 	blockIDs := map[string][]int64{}
 	for rows.Next() {
-		var g compareGroup
+		var g CompareGroup
 		var block int64
-		m := compareMemory{organizeMemory: organizeMemory{Ref: memory.Ref{Kind: memory.ClaimKind}}}
+		m := CompareMemory{OrganizeMemory: OrganizeMemory{Ref: memory.Ref{Kind: memory.ClaimKind}}}
 		if err := rows.Scan(&g.Key, &g.Kind, &g.Name, &block, &m.Ref.ID, &m.Ref.Version, &m.Text, &m.ExpressedAt, &m.Protected); err != nil {
 			rows.Close()
 			return nil, err
 		}
 		if blocks[g.Key] == nil {
 			groups = append(groups, g)
-			blocks[g.Key] = map[int64][]compareMemory{}
+			blocks[g.Key] = map[int64][]CompareMemory{}
 		}
 		if blocks[g.Key][block] == nil {
 			blockIDs[g.Key] = append(blockIDs[g.Key], block)
@@ -79,12 +79,12 @@ func comparisonPlanTx(ctx context.Context, tx pgx.Tx, owner memory.ID, version i
 	if err != nil {
 		return nil, err
 	}
-	out := []comparisonBatch{}
+	out := []ComparisonBatch{}
 	for _, g := range groups {
 		list := blockIDs[g.Key]
 		for i, a := range list {
 			for _, b := range list[i:] {
-				batch := comparisonBatch{Rule: version, Group: g, A: a, B: b, Memories: append([]compareMemory{}, blocks[g.Key][a]...)}
+				batch := ComparisonBatch{Rule: version, Group: g, A: a, B: b, Memories: append([]CompareMemory{}, blocks[g.Key][a]...)}
 				if a != b {
 					batch.Memories = append(batch.Memories, blocks[g.Key][b]...)
 				}
@@ -120,11 +120,11 @@ func comparisonPlanTx(ctx context.Context, tx pgx.Tx, owner memory.ID, version i
 	return out, nil
 }
 
-func nextComparisonBatchTx(ctx context.Context, tx pgx.Tx, owner memory.ID, version int) (*comparisonBatch, error) {
-	if err := syncComparisonMembersTx(ctx, tx, owner); err != nil {
+func nextComparisonBatchTx(ctx context.Context, tx pgx.Tx, owner memory.ID, version int) (*ComparisonBatch, error) {
+	if err := SyncComparisonMembersTx(ctx, tx, owner); err != nil {
 		return nil, err
 	}
-	plan, err := comparisonPlanTx(ctx, tx, owner, version)
+	plan, err := ComparisonPlanTx(ctx, tx, owner, version)
 	if err != nil {
 		return nil, err
 	}
@@ -205,7 +205,7 @@ func nextComparisonBatchTx(ctx context.Context, tx pgx.Tx, owner memory.ID, vers
 	return nil, nil
 }
 
-func writeComparisonReceiptTx(ctx context.Context, tx pgx.Tx, owner memory.ID, version int, b comparisonBatch, valid bool) error {
+func writeComparisonReceiptTx(ctx context.Context, tx pgx.Tx, owner memory.ID, version int, b ComparisonBatch, valid bool) error {
 	if !valid {
 		if err := kernel.StageEvent(ctx, tx, owner, kernel.CompareStage, "failure", "compare_invalid_output", 1); err != nil {
 			return err
@@ -234,8 +234,8 @@ func writeComparisonReceiptTx(ctx context.Context, tx pgx.Tx, owner memory.ID, v
 	return err
 }
 
-func (s *Store) nextComparisonBatch(ctx context.Context, owner memory.ID, version int) (*comparisonBatch, error) {
-	var batch *comparisonBatch
+func (s *Interp) NextComparisonBatch(ctx context.Context, owner memory.ID, version int) (*ComparisonBatch, error) {
+	var batch *ComparisonBatch
 	err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		var e error
 		batch, e = nextComparisonBatchTx(ctx, tx, owner, version)

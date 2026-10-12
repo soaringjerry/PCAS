@@ -352,6 +352,20 @@ The cleanup of each check succeeded and the record counts are equal. The API log
 
 Not checked on live: no background job ran after the release.
 
+## Twenty-Fifth Release
+
+Released revision: `f47e9f8e54e957a265c3836ce4e3cedd01e77b75`, on 2026-10-12 UTC. Earlier revision: `a39eacf`.
+Pull request #393 gives the change: a depth limit of 200 for a causal chain of queue jobs, and a retention of 90 days for recorded events. Pull request #392 added the nightly real-model evaluation script; it changes no product code.
+
+The release applied migration `064_event_limits.sql` (three indexes). The backup was validated, and the record counts are equal before and after the start: 5,253 claims and 29 work items.
+The live check on the real default Codex channel passed with four turns: an answer, an arrangement (`create_task`, done), a change (`update`, done), and a delegation (`delegate`, done) whose deputy run finished as done.
+On the live database the statement of the limit uses the index `memory_jobs_deep_chain_idx`, and the statement of the retention reads the open jobs through an index. No job has the code `chain_limit`.
+The cleanup succeeded and the record counts are equal. The API log and the worker log have no error and no panic.
+
+The nightly evaluation is scheduled in the host's crontab at 15:30 UTC. It makes no call until a dedicated Codex home is signed in at `/root/PCAS-private/codex-eval`; the [nightly evaluation page](../tasks/foundation-nightly-evaluation.md) gives the limit and the rehearsal.
+
+Not checked on live: no background job ran after the release, and the table of recorded events has no row yet.
+
 ## Host Cleanup
 
 The owner approved removal of leftover data on 2026-10-11.

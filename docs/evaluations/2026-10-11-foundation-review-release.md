@@ -320,9 +320,27 @@ Not checked on live: no background job ran after the release.
 
 The main storage package has 21,429 lines without tests at this revision. It had 28,355 lines at the review.
 
+## Twenty-Third Release
+
+Released revision: `c9658b711cc53059f6b3f1a09971a23b3fb8cf62`, on 2026-10-12 UTC. Earlier revision: `8ca42ae`.
+Pull requests #386, #387, and #388 give the changes. The PostgreSQL adapter is split into 25 storage packages by domain over a shared kernel. The items table has one owner, `internal/postgres/itemstore`, and a test forbids a write of `work_items` in each other storage package. The [domain pilot page](../tasks/foundation-domain-pilot.md#storage-packages) gives each package and the known limits.
+
+The first CI run of #388 failed in five jobs. The causes were in tests: two helpers built a store without its packages, the store kept a second unused copy of the pending-result caches that two tests read, and the owner path of the call journal in the provider boundary test was the earlier file path. The second run passed.
+
+The release had no database migration. The backup was validated, and the record counts are equal before and after the start: 5,253 claims and 29 work items.
+The live check on the real default Codex channel passed with four turns: an answer, an arrangement (`create_task`, done), a change (`update`, done), and a delegation (`delegate`, done) whose deputy run finished as done with a settled call.
+After the check, 19 read-only routes of the live API were called once each: the workspace snapshot, the memory list and one memory, the facets and groups, the schedule, the day activity, the usage views, the handover, the deadlines, the background health, the connectors, and the models. Each returned status 200.
+The cleanup succeeded and the record counts are equal. The API log and the worker log have no error and no panic, and no container restarted.
+
+Not checked on live: no background job ran after the release.
+
+The main storage package has 1,983 lines without tests at this revision. It had 28,355 lines at the review.
+
 ## Host Cleanup
 
 The owner approved removal of leftover data on 2026-10-11.
 Removed: 19 disposable test containers, 13 unreferenced volumes, 57 older image tags, 64 older release directories, deploy backups before `20261008T192836Z-6b62f27`, five older foundation backups, and 41 worktrees that were clean and fully merged.
 Kept: the images and release directories of the last five releases, the four full backups of this day and the backup before `6411b4e`, each worktree with unmerged or uncommitted work, and the private evidence directory.
 Free space on the root filesystem went from 7 GB to 39 GB. The API stayed ready during the cleanup.
+
+The owner approved removal of old backups on 2026-10-12. Removed: 19 release backups before `1050c24`. Kept: the backups of the last three releases at that time, the backup before `6411b4e`, and the early small dumps.

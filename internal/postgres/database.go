@@ -28,7 +28,6 @@ type Store struct {
 	// DeskTurn also borrows a connection for Recall and budget reservation.
 	secretarySlots chan struct{}
 	models         *ai.Registry
-	calls          *modelcall.Gateway
 	blobs          memory.BlobStore
 	businessClock  func() time.Time
 }
@@ -45,18 +44,30 @@ func (s *Store) businessNow() time.Time {
 	return time.Now()
 }
 
-func (s *Store) SetModels(models *ai.Registry) {
-	var providers modelcall.Providers
-	if models != nil {
-		providers = models
-	}
-	s.models = models
-	adapter := modelCallStorage{backgroundCalls{store: s}, interactiveCalls{store: s}}
-	s.calls = modelcall.New(providers, adapter, adapter, adapter)
-	if models != nil {
-		s.calls.WithDirectCalls(models, directCalls{store: s})
-	}
+// SetModels gives the store the configured models. The store reads their
+// configuration and availability. It makes no model call: the application
+// builds the gateway over CallRecords.
+func (s *Store) SetModels(models *ai.Registry) { s.models = models }
+
+// CallRecords are the records of the gateway's calls in storage.
+type CallRecords interface {
+	modelcall.Accounting
+	modelcall.Results
+	modelcall.Journal
 }
+
+// CallRecords gives the gateway its reservations, its paid results, and its
+// call journal.
+func (s *Store) CallRecords() CallRecords {
+	return modelCallStorage{backgroundCalls{store: s}, interactiveCalls{store: s}}
+}
+
+// DirectCallRecords gives the gateway the journal of its embedding, image,
+// and audio calls.
+func (s *Store) DirectCallRecords() modelcall.DirectJournal { return directCalls{store: s} }
+
+// Models is the configured model registry, or nil.
+func (s *Store) Models() *ai.Registry            { return s.models }
 func (s *Store) SetBlobs(blobs memory.BlobStore) { s.blobs = blobs }
 
 func Open(ctx context.Context, url string) (*Store, error) {
@@ -74,11 +85,7 @@ func Open(ctx context.Context, url string) (*Store, error) {
 		pool.Close()
 		return nil, fmt.Errorf("database unavailable")
 	}
-	store := &Store{pool: pool, secretarySlots: make(chan struct{}, config.MaxConns-1)}
-	// Recovery reads already-paid results before provider availability. An
-	// opened store must support it even before application model wiring.
-	store.SetModels(nil)
-	return store, nil
+	return &Store{pool: pool, secretarySlots: make(chan struct{}, config.MaxConns-1)}, nil
 }
 
 func (s *Store) Close()                         { s.pool.Close() }

@@ -42,12 +42,12 @@ func TestDeputyGatewayReusesAdmissionBudgetAndOriginalUsage(t *testing.T) {
 	s.models.Config.Providers[0].OutputPerMillion = 2
 	request := leasedDeputyAnswer(t, s, scope)
 	ctx := context.Background()
-	paid, err := s.calls.Call(ctx, request)
+	paid, err := s.Gateway().Call(ctx, request)
 	if err != nil || paid == nil || paid.ReservedCost != 0.17 || paid.Cost <= 0 {
 		t.Fatal(paid, err)
 	}
 	for range 2 {
-		duplicate, err := s.calls.Call(ctx, request)
+		duplicate, err := s.Gateway().Call(ctx, request)
 		if err != nil || duplicate.InvocationID != paid.InvocationID || duplicate.Reservation != paid.Reservation {
 			t.Fatal("duplicate accounting changed invocation identity", duplicate, err)
 		}
@@ -75,7 +75,7 @@ func TestDeputyGatewayRecoversBillingWithoutSettlingReusedRun(t *testing.T) {
 			if _, err := s.pool.Exec(ctx, `CREATE FUNCTION reject_deputy_billing() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'synthetic billing failure'; END $$; CREATE TRIGGER reject_deputy_billing BEFORE INSERT ON model_usage FOR EACH ROW EXECUTE FUNCTION reject_deputy_billing()`); err != nil {
 				t.Fatal(err)
 			}
-			if _, err := s.calls.Call(ctx, request); err == nil {
+			if _, err := s.Gateway().Call(ctx, request); err == nil {
 				t.Fatal("billing failure was hidden")
 			}
 			if mode == "deleted" {
@@ -145,7 +145,7 @@ func TestDeputyInterruptedReservationDistinguishesUnsubmittedAndUnknown(t *testi
 			if stage == "prepared" && (outcome != "failed" || state != "settled" || budget != 0) || stage == "started" && (outcome != "unknown" || state != "held" || budget != 0.17) {
 				t.Fatal(outcome, state, budget)
 			}
-			if _, err := s.calls.Call(ctx, request); !errors.Is(err, modelcall.ErrOutcomeUnknown) && stage == "started" {
+			if _, err := s.Gateway().Call(ctx, request); !errors.Is(err, modelcall.ErrOutcomeUnknown) && stage == "started" {
 				t.Fatal("unknown generation was repeated", err)
 			}
 		})
@@ -170,7 +170,7 @@ func TestDeputyCancellationRetainsAdmissionHoldWithoutAnotherGeneration(t *testi
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	done := make(chan error, 1)
-	go func() { _, err := s.calls.Call(ctx, request); done <- err }()
+	go func() { _, err := s.Gateway().Call(ctx, request); done <- err }()
 	select {
 	case <-started:
 	case <-time.After(10 * time.Second):
@@ -186,7 +186,7 @@ func TestDeputyCancellationRetainsAdmissionHoldWithoutAnotherGeneration(t *testi
 		t.Fatal("canceled generation did not retain its receipt")
 	}
 	s.SetModels(nil)
-	if _, err := s.calls.Call(context.Background(), request); !errors.Is(err, modelcall.ErrOutcomeUnknown) {
+	if _, err := s.Gateway().Call(context.Background(), request); !errors.Is(err, modelcall.ErrOutcomeUnknown) {
 		t.Fatal(err)
 	}
 	var budget, held float64

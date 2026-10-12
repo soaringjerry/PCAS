@@ -6,13 +6,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/soaringjerry/PCAS/internal/contextbuilder"
-	"github.com/soaringjerry/PCAS/internal/retrieval"
-	"github.com/soaringjerry/PCAS/internal/workspace/deputy"
-	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 	"log/slog"
 	"strings"
 	"time"
+
+	"github.com/soaringjerry/PCAS/internal/contextbuilder"
+	"github.com/soaringjerry/PCAS/internal/contextbuilder/reader"
+	"github.com/soaringjerry/PCAS/internal/retrieval"
+	"github.com/soaringjerry/PCAS/internal/workspace/deputy"
+	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/ai"
@@ -604,9 +606,9 @@ func uniqueRefs(refs []memory.Ref) []memory.Ref {
 	return out
 }
 
-// RunAgents owns costly jobs: an ambiguous provider timeout/crash is marked
+// RunAgentJobs owns costly jobs: an ambiguous provider timeout/crash is marked
 // failed and is never automatically submitted again (which could double bill).
-func (s *Store) RunAgents(ctx context.Context, logger *slog.Logger) error {
+func (s *Store) RunAgentJobs(ctx context.Context, logger *slog.Logger, steps deputy.Steps) error {
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 	for {
@@ -617,20 +619,20 @@ func (s *Store) RunAgents(ctx context.Context, logger *slog.Logger) error {
 			if recovery, err := s.recoverInteractiveCallsOnce(ctx); err != nil && ctx.Err() == nil {
 				logger.Warn("interactive accounting recovery failed", "error_type", fmt.Sprintf("%T", err), "pending_results", recovery.PendingResults, "pending_accounting", recovery.PendingAccounting, "interrupted_calls", recovery.Interrupted, "counts_known", recovery.CountsKnown)
 			}
-			if err := s.runAgentOnce(ctx); err != nil && ctx.Err() == nil {
+			if err := s.runAgent(ctx, steps); err != nil && ctx.Err() == nil {
 				logger.Warn("agent job failed", "error_type", fmt.Sprintf("%T", err))
 			}
 		}
 	}
 }
 
-// RunDeputyOnce exposes the existing single worker pass for bounded evaluation.
+// RunDeputy makes the single worker pass for bounded evaluation.
 // Selection, leases, generation, and application remain in the normal workflow.
-func (s *Store) RunDeputyOnce(ctx context.Context) error {
-	return s.runAgentOnce(ctx)
+func (s *Store) RunDeputy(ctx context.Context, steps deputy.Steps) error {
+	return s.runAgent(ctx, steps)
 }
 
-func (s *Store) runAgentOnce(ctx context.Context) (resultErr error) {
+func (s *Store) runAgent(ctx context.Context, steps deputy.Steps) (resultErr error) {
 	started := time.Now()
 	ctx, timing := newExecutionTimer(ctx, "deputy", started)
 	ctx, persistCancel := context.WithDeadline(ctx, started.Add(heavyUseTimeout))
@@ -744,7 +746,7 @@ func (s *Store) runAgentOnce(ctx context.Context) (resultErr error) {
 		_, _ = s.pool.Exec(persist, `UPDATE agent_runs SET lease_until=clock_timestamp(),document=document||jsonb_build_object('error','处理未完成；已保存的模型结果将复用，不会自动重复生成') WHERE owner_id=$1 AND id=$2 AND document->>'createdAt'=$3 AND lease_token=$4 AND status='running'`, string(scope.OwnerID), run.ID, run.CreatedAt, token)
 	}()
 	execution := modelcall.Request{OwnerID: scope.OwnerID, ExecutionID: memory.ID(run.ID), RootExecutionID: memory.ID(run.ID), Function: "deputy", Policy: interactiveCallPolicy{Kind: "deputy", Token: token, Origin: run.CreatedAt, AgentID: run.AgentID, ThingID: run.ThingID}}
-	ctx = context.WithValue(ctx, interactiveExecutionKey{}, execution)
+	ctx = modelcall.WithExecution(ctx, execution)
 	workCtx, cancel := context.WithDeadline(ctx, started.Add(heavyUseTimeout-10*time.Second))
 	defer cancel()
 	if s.models != nil && s.models.ReloadSubscription && s.models.Codex != nil {
@@ -772,7 +774,7 @@ func (s *Store) runAgentOnce(ctx context.Context) (resultErr error) {
 			if run.MemoryTier == "heavy" {
 				taskText := deputy.HeavyTask(run)
 				readerCtx, readerCancel := context.WithDeadline(workCtx, started.Add(heavyReaderBudget))
-				picked, refs, keys := s.heavyUse(readerCtx, ctx, scope, agent, &run.ThingID, taskText, u, "", run.ID, "reader:prepare")
+				picked, refs, keys := steps.Reader.Read(readerCtx, ctx, reader.Task{Scope: scope, Agent: agent, Thing: &run.ThingID, Text: taskText, Run: run.ID, Phase: "reader:prepare"}, u)
 				readerCancel()
 				run.MemoryGroups = keys
 				run.ContextVersions = uniqueRefs(append(run.ContextVersions, refs...))
@@ -802,7 +804,7 @@ func (s *Store) runAgentOnce(ctx context.Context) (resultErr error) {
 		}
 	} else if verifyErr == nil {
 		answerCtx, answerCancel := context.WithTimeout(workCtx, 60*time.Second)
-		mainPaid, generationErr = s.calls.Call(executionCallContext(answerCtx, "answer"), request)
+		mainPaid, generationErr = steps.Calls.Answer(answerCtx, request)
 		answerCancel()
 		var persistence *modelcall.PersistenceError
 		if errors.As(generationErr, &persistence) {
@@ -873,20 +875,9 @@ func (s *Store) runAgentOnce(ctx context.Context) (resultErr error) {
 		checkedText := ""
 		err := s.checkDeputySelfcheckContext(checkCtx, scope, run, token)
 		if err == nil {
-			usage := modelUsage{Purpose: "selfcheck", Tier: run.MemoryTier, RunID: run.ID, MemoryRefs: run.ContextVersions, Plan: asJSON(usePlan{Groups: run.MemoryGroups})}
-			request := modelcall.Request{
-				OwnerID: scope.OwnerID, ExecutionID: memory.ID(run.ID), RootExecutionID: memory.ID(run.ID),
-				Function: "deputy", Stage: "selfcheck", ProviderID: run.AgentID,
-				Instructions: prompts.Must("deputy-selfcheck"), ContextBuilderVersion: "deputy-selfcheck-v1",
-				Prompt: asJSON(map[string]string{"rawPrompt": deputy.SelfcheckInput(run.Brief, result.Text)}), ModelInput: deputy.SelfcheckInput(run.Brief, result.Text),
-				Refs: run.ContextVersions,
-				Policy: interactiveCallPolicy{
-					Kind: "deputy", Token: token, Origin: run.CreatedAt,
-					AgentID: run.AgentID, ThingID: run.ThingID, Usage: usage,
-				},
-			}
+			request := deputy.SelfcheckRequest(scope.OwnerID, token, run, result.Text)
 			var paid *modelcall.PaidResult
-			paid, err = s.calls.Call(executionCallContext(checkCtx, "selfcheck"), request)
+			paid, err = steps.Calls.Selfcheck(checkCtx, request)
 			readCtx, readCancel := context.WithTimeout(context.WithoutCancel(checkCtx), modelcall.PersistenceTimeout)
 			row, readErr := latestInteractiveCall(readCtx, s.pool, request)
 			readCancel()

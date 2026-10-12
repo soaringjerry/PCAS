@@ -21,14 +21,14 @@ func backgroundFixture(t *testing.T, stage string) (*Store, memory.Scope, worker
 	case "compare":
 		compareFixture(t, s, scope, "虚构进展甲。", "虚构进展乙。", "虚构进展丙。")
 		j := compareJob(t, s, scope, false, CompareVersion)
-		return s, scope, j, (comparison.Service{Store: s.CompareStore(), Generator: s, Version: CompareVersion}).Process, func(w http.ResponseWriter, _ *http.Request) {
+		return s, scope, j, (comparison.Service{Store: s.CompareStore(), Generator: jobCalls(s), Version: CompareVersion}).Process, func(w http.ResponseWriter, _ *http.Request) {
 			secretaryModelReply(w, map[string]any{"duplicates": []any{}, "superseded": []any{}})
 		}
 	case "handover":
 		statusTestMemories(t, s, scope, 3)
 
 		j := handoverTestJob(t, s, scope)
-		return s, scope, j, (handover.Service{Store: s.HandoverStore(), Generator: s}).Process, func(w http.ResponseWriter, r *http.Request) { handoverFakeReply(t, w, r) }
+		return s, scope, j, (handover.Service{Store: s.HandoverStore(), Generator: jobCalls(s)}).Process, func(w http.ResponseWriter, r *http.Request) { handoverFakeReply(t, w, r) }
 	default:
 		statusTestMemories(t, s, scope, 3)
 		j := statusTestJob(t, s, scope)

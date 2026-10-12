@@ -65,7 +65,7 @@ func TestPhase25B1_X03_FortyThenFive(t *testing.T) {
 	if j == nil {
 		t.Fatal("continuation was not enqueued")
 	}
-	if err := (organize.Service{Store: f.store.OrganizeStore(), Generator: f.store, Version: postgres.OrganizeVersion}).Process(f.ctx, *j); err != nil {
+	if err := (organize.Service{Store: f.store.OrganizeStore(), Generator: jobCalls(f.store), Version: postgres.OrganizeVersion}).Process(f.ctx, *j); err != nil {
 		t.Fatal(err)
 	}
 	batches := f.usages(t)
@@ -320,7 +320,7 @@ func TestPhase25B1_X12_TransactionRollsBackAndRetries(t *testing.T) {
 	if j == nil {
 		t.Fatal("missing job")
 	}
-	if err := (organize.Service{Store: f.store.OrganizeStore(), Generator: f.store, Version: postgres.OrganizeVersion}).Process(f.ctx, *j); err == nil {
+	if err := (organize.Service{Store: f.store.OrganizeStore(), Generator: jobCalls(f.store), Version: postgres.OrganizeVersion}).Process(f.ctx, *j); err == nil {
 		t.Fatal("injected write failure was swallowed")
 	}
 	var ordinal int
@@ -356,7 +356,7 @@ func TestPhase25B1_X12_TransactionRollsBackAndRetries(t *testing.T) {
 	if next == nil {
 		t.Fatal("retry not claimable")
 	}
-	if err := (organize.Service{Store: f.store.OrganizeStore(), Generator: f.store, Version: postgres.OrganizeVersion}).Process(f.ctx, *next); err != nil {
+	if err := (organize.Service{Store: f.store.OrganizeStore(), Generator: jobCalls(f.store), Version: postgres.OrganizeVersion}).Process(f.ctx, *next); err != nil {
 		t.Fatal(err)
 	}
 	for _, ref := range refs {
@@ -450,7 +450,7 @@ func TestPhase25B1_X17_ChannelUnavailableTwiceThenRecovers(t *testing.T) {
 		if err := f.db.QueryRow(f.ctx, `SELECT stage FROM memory_jobs WHERE owner_id=$1 AND stage LIKE 'memory.organize:%' AND state='queued'`, f.scope.OwnerID).Scan(&stage); err != nil {
 			t.Fatal(err)
 		}
-		runner := worker.New(f.store, map[string]worker.Handler{stage: (organize.Service{Store: f.store.OrganizeStore(), Generator: f.store, Version: postgres.OrganizeVersion}).Process, "memory.organize": (organize.Service{Store: f.store.OrganizeStore(), Generator: f.store, Version: postgres.OrganizeVersion}).Process}, slog.Default())
+		runner := worker.New(f.store, map[string]worker.Handler{stage: (organize.Service{Store: f.store.OrganizeStore(), Generator: jobCalls(f.store), Version: postgres.OrganizeVersion}).Process, "memory.organize": (organize.Service{Store: f.store.OrganizeStore(), Generator: jobCalls(f.store), Version: postgres.OrganizeVersion}).Process}, slog.Default())
 		worked, err := runner.RunOnce(f.ctx)
 		if err != nil {
 			t.Fatal(err)
@@ -557,7 +557,7 @@ func (f *phase25B1Fixture) batch(t *testing.T) {
 	if j == nil {
 		t.Fatal("no organize job claimed")
 	}
-	if err := (organize.Service{Store: f.store.OrganizeStore(), Generator: f.store, Version: postgres.OrganizeVersion}).Process(f.ctx, *j); err != nil {
+	if err := (organize.Service{Store: f.store.OrganizeStore(), Generator: jobCalls(f.store), Version: postgres.OrganizeVersion}).Process(f.ctx, *j); err != nil {
 		t.Fatal(err)
 	}
 }

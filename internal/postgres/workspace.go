@@ -7,9 +7,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/soaringjerry/PCAS/internal/workspace/itemcommand"
 	"strings"
 	"time"
+
+	"github.com/soaringjerry/PCAS/internal/retrieval"
+	"github.com/soaringjerry/PCAS/internal/workspace/itemcommand"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
@@ -353,7 +355,9 @@ func (s *Store) snapshotTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) (
 	return out, err
 }
 
-func (s *Store) Execute(ctx context.Context, scope memory.Scope, in workspace.Command) (workspace.State, error) {
+// ExecuteWith executes one workspace command. A command that queues a run
+// searches memory first; embed gives that search the vector of its query.
+func (s *Store) ExecuteWith(ctx context.Context, scope memory.Scope, in workspace.Command, embed retrieval.QueryEmbed) (workspace.State, error) {
 	var out workspace.State
 	if err := requireOwner(scope); err != nil {
 		return out, err
@@ -388,7 +392,7 @@ func (s *Store) Execute(ctx context.Context, scope memory.Scope, in workspace.Co
 			}
 		}
 		var errPrepare error
-		ctx, errPrepare = s.prepareRunContext(ctx, scope, in)
+		ctx, errPrepare = s.prepareRunContext(ctx, scope, in, embed)
 		if errPrepare != nil {
 			return out, errPrepare
 		}

@@ -239,11 +239,11 @@ func phase25B12ConcurrentScheduler(t *testing.T, kind string) {
 			}
 			switch {
 			case kind == "organize" && strings.HasPrefix(job.Stage, "memory.organize:"):
-				err = (organize.Service{Store: f.store.OrganizeStore(), Generator: f.store, Version: postgres.OrganizeVersion}).Process(runCtx, *job)
+				err = (organize.Service{Store: f.store.OrganizeStore(), Generator: jobCalls(f.store), Version: postgres.OrganizeVersion}).Process(runCtx, *job)
 			case kind == "compare" && strings.HasPrefix(job.Stage, "memory.compare:"):
-				err = (comparison.Service{Store: f.store.CompareStore(), Generator: f.store, Version: postgres.CompareVersion}).Process(runCtx, *job)
+				err = (comparison.Service{Store: f.store.CompareStore(), Generator: jobCalls(f.store), Version: postgres.CompareVersion}).Process(runCtx, *job)
 			case kind == "compare" && strings.HasPrefix(job.Stage, "memory.entity_compare:"):
-				err = (comparison.EntityService{Store: f.store.EntityCompareStore(), Generator: f.store, Version: postgres.EntityCompareVersion}).Process(runCtx, *job)
+				err = (comparison.EntityService{Store: f.store.EntityCompareStore(), Generator: jobCalls(f.store), Version: postgres.EntityCompareVersion}).Process(runCtx, *job)
 			case job.Stage == "memory.index":
 				err = f.store.ProcessIndex(runCtx, *job)
 			default:

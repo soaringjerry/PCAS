@@ -283,15 +283,15 @@ func phase26Schedule(ctx context.Context, s *Store, stage string) (int, error) {
 func phase26Process(ctx context.Context, s *Store, j worker.Job) error {
 	switch strings.SplitN(j.Stage, ":", 2)[0] {
 	case OrganizeStage:
-		return (organize.Service{Store: s.OrganizeStore(), Generator: s, Version: OrganizeVersion}).Process(ctx, j)
+		return (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: OrganizeVersion}).Process(ctx, j)
 	case CompareStage:
-		return (comparison.Service{Store: s.CompareStore(), Generator: s, Version: CompareVersion}).Process(ctx, j)
+		return (comparison.Service{Store: s.CompareStore(), Generator: jobCalls(s), Version: CompareVersion}).Process(ctx, j)
 	case EntityCompareStage:
-		return (comparison.EntityService{Store: s.EntityCompareStore(), Generator: s, Version: EntityCompareVersion}).Process(ctx, j)
+		return (comparison.EntityService{Store: s.EntityCompareStore(), Generator: jobCalls(s), Version: EntityCompareVersion}).Process(ctx, j)
 	case EntityCandidatesStage:
-		return (aliasscan.Service{Store: s.AliasScanStore(), Generator: s}).Process(ctx, j)
+		return (aliasscan.Service{Store: s.AliasScanStore(), Generator: jobCalls(s)}).Process(ctx, j)
 	case HandoverStage:
-		return (handover.Service{Store: s.HandoverStore(), Generator: s}).Process(ctx, j)
+		return (handover.Service{Store: s.HandoverStore(), Generator: jobCalls(s)}).Process(ctx, j)
 	}
 	return fmt.Errorf("unknown test stage %s", j.Stage)
 }

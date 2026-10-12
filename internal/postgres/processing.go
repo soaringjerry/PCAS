@@ -9,9 +9,8 @@ import (
 	"strings"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/soaringjerry/PCAS/internal/ai"
 	"github.com/soaringjerry/PCAS/internal/memory"
-	"github.com/soaringjerry/PCAS/internal/modelcall"
+	"github.com/soaringjerry/PCAS/internal/retrieval"
 	"github.com/soaringjerry/PCAS/internal/worker"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
@@ -89,29 +88,29 @@ func (s *Store) ProcessIndex(ctx context.Context, j worker.Job) error {
 		return acknowledge(ctx, tx, j)
 	})
 }
-func (s *Store) ProcessEmbedding(ctx context.Context, j worker.Job) (err error) {
-	if s.models == nil || s.models.EmbeddingID() == "" {
-		return errors.Join(memory.ErrUnavailable, &worker.JobError{Code: "provider_not_configured"})
-	}
-	provider, ok := s.models.Get(s.models.EmbeddingID())
-	if !ok {
-		return errors.Join(memory.ErrUnavailable, &worker.JobError{Code: "provider_not_configured"})
-	}
-	if !s.models.Available(provider.ID) {
-		return errors.Join(memory.ErrUnavailable, &worker.JobError{Code: "provider_unavailable", Retry: true})
-	}
-	var text string
-	err = s.pool.QueryRow(ctx, `SELECT t.body FROM memory_text t JOIN memory_records r ON (r.owner_id,r.id,r.version)=(t.owner_id,t.id,t.version) WHERE t.owner_id=$1 AND t.id=$2 AND t.version=$3 AND r.state='active'`, string(j.OwnerID), string(j.Record.ID), j.Record.Version).Scan(&text)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+
+// IndexStore gives the vector indexer the texts and the vectors of a job.
+func (s *Store) IndexStore() retrieval.IndexStore { return indexStore{s} }
+
+type indexStore struct{ store *Store }
+
+func (a indexStore) Missing(ctx context.Context, j worker.Job, model string) ([]memory.Ref, []string, bool, error) {
+	s := a.store
+	finish := func() ([]memory.Ref, []string, bool, error) {
+		return nil, nil, false, pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 			if err := lockJob(ctx, tx, j); err != nil {
 				return err
 			}
 			return acknowledge(ctx, tx, j)
 		})
 	}
+	var text string
+	err := s.pool.QueryRow(ctx, `SELECT t.body FROM memory_text t JOIN memory_records r ON (r.owner_id,r.id,r.version)=(t.owner_id,t.id,t.version) WHERE t.owner_id=$1 AND t.id=$2 AND t.version=$3 AND r.state='active'`, string(j.OwnerID), string(j.Record.ID), j.Record.Version).Scan(&text)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return finish()
+	}
 	if err != nil {
-		return err
+		return nil, nil, false, err
 	}
 	// Bound provider input. Sources are embedded as chunks; claims as a whole.
 	refs := []memory.Ref{j.Record}
@@ -121,14 +120,14 @@ func (s *Store) ProcessEmbedding(ctx context.Context, j worker.Job) (err error) 
 		texts = []string{}
 		rows, err := s.pool.Query(ctx, "SELECT id::text,version,body FROM chunks WHERE owner_id=$1 AND source_id=$2 AND source_version=$3 ORDER BY ordinal", string(j.OwnerID), string(j.Record.ID), j.Record.Version)
 		if err != nil {
-			return err
+			return nil, nil, false, err
 		}
 		for rows.Next() {
 			ref := memory.Ref{Kind: memory.ChunkKind}
 			var body string
 			if err := rows.Scan(&ref.ID, &ref.Version, &body); err != nil {
 				rows.Close()
-				return err
+				return nil, nil, false, err
 			}
 			refs = append(refs, ref)
 			texts = append(texts, body)
@@ -136,7 +135,7 @@ func (s *Store) ProcessEmbedding(ctx context.Context, j worker.Job) (err error) 
 		err = rows.Err()
 		rows.Close()
 		if err != nil {
-			return err
+			return nil, nil, false, err
 		}
 	}
 	// Original ingestion and a model backfill can overlap. Skip vectors already
@@ -145,9 +144,9 @@ func (s *Store) ProcessEmbedding(ctx context.Context, j worker.Job) (err error) 
 	for i, ref := range refs {
 		ids[i] = string(ref.ID)
 	}
-	rows, err := s.pool.Query(ctx, "SELECT record_id::text,record_version FROM embeddings WHERE owner_id=$1 AND model=$2 AND record_id=ANY($3::uuid[])", string(j.OwnerID), provider.ID+":"+provider.Model, ids)
+	rows, err := s.pool.Query(ctx, "SELECT record_id::text,record_version FROM embeddings WHERE owner_id=$1 AND model=$2 AND record_id=ANY($3::uuid[])", string(j.OwnerID), model, ids)
 	if err != nil {
-		return err
+		return nil, nil, false, err
 	}
 	type vectorRef struct {
 		id      memory.ID
@@ -159,14 +158,14 @@ func (s *Store) ProcessEmbedding(ctx context.Context, j worker.Job) (err error) 
 		var version int
 		if err := rows.Scan(&id, &version); err != nil {
 			rows.Close()
-			return err
+			return nil, nil, false, err
 		}
 		existing[vectorRef{id, version}] = true
 	}
 	err = rows.Err()
 	rows.Close()
 	if err != nil {
-		return err
+		return nil, nil, false, err
 	}
 	missingRefs := refs[:0]
 	missingTexts := texts[:0]
@@ -178,33 +177,13 @@ func (s *Store) ProcessEmbedding(ctx context.Context, j worker.Job) (err error) 
 	}
 	refs, texts = missingRefs, missingTexts
 	if len(texts) == 0 {
-		return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-			if err := lockJob(ctx, tx, j); err != nil {
-				return err
-			}
-			return acknowledge(ctx, tx, j)
-		})
+		return finish()
 	}
-	var cost float64
-	for _, text := range texts {
-		cost += float64(len(text)+16) * provider.InputPerMillion / 1e6
-	}
-	// The call is its own execution. Its root and cause name the paying job.
-	vectors, err := s.calls.CallEmbedding(ctx, modelcall.DirectRequest{OwnerID: j.OwnerID, ExecutionID: memory.NewID(), RootExecutionID: j.ID, CausationID: j.ID, Function: "embedding", Stage: j.Stage, Provider: provider, Refs: refs, Estimate: cost, Job: &j}, texts)
-	var failure *modelcall.Failure
-	var persistence *modelcall.PersistenceError
-	switch {
-	case err == nil:
-	case errors.As(err, &persistence):
-		return err
-	case errors.Is(err, modelcall.ErrNotAvailable), errors.Is(err, ai.ErrUnsupportedCapability), errors.As(err, &failure) && failure.Code == modelcall.ErrNotAvailable.Error():
-		return errors.Join(memory.ErrUnavailable, &worker.JobError{Code: "provider_unavailable", Retry: true})
-	case errors.As(err, &failure):
-		// A paid call is not submitted again. A free call can use the queue's retry.
-		return &worker.JobError{Code: "model_call_failed", Retry: cost == 0}
-	default:
-		return err
-	}
+	return refs, texts, true, nil
+}
+
+func (a indexStore) Save(ctx context.Context, j worker.Job, refs []memory.Ref, vectors []memory.Embedding) error {
+	s := a.store
 	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		if err := lockJob(ctx, tx, j); err != nil {
 			return err
@@ -302,8 +281,12 @@ func (a extractionStore) FinishEmpty(ctx context.Context, j worker.Job) error {
 	return a.extractionTx(ctx, j, func(tx pgx.Tx) error { return completeExtractionTx(ctx, tx, j, "empty") })
 }
 
-func (a extractionStore) Conversation(ctx context.Context, j worker.Job, conversation string) error {
-	return a.store.processConversationExtraction(ctx, j, conversation)
+func (a extractionStore) Conversation(ctx context.Context, j worker.Job, conversation string) (extraction.ConversationWork, bool, error) {
+	work, err := a.store.prepareConversation(ctx, j, conversation)
+	if err != nil || work == nil {
+		return nil, false, err
+	}
+	return work, true, nil
 }
 
 func (a extractionStore) SplitWindows(ctx context.Context, j worker.Job, starts []int, imported bool) error {

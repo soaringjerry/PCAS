@@ -16,6 +16,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/modelcall"
 	"github.com/soaringjerry/PCAS/internal/prompts"
 	"github.com/soaringjerry/PCAS/internal/workspace"
+	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 )
 
 func admittedInteractiveRequest(t *testing.T, s *Store, scope memory.Scope, provider string) modelcall.Request {
@@ -63,7 +64,7 @@ func TestInteractiveStagesKeepDistinctResultsWithoutAdmissionLockDeadlock(t *tes
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			paid, err := s.calls.Call(ctx, r)
+			paid, err := s.Gateway().Call(ctx, r)
 			if err != nil {
 				failures <- err
 			} else {
@@ -100,7 +101,7 @@ func TestInteractiveAccountingRecoveryKeepsOriginalUsageIdentity(t *testing.T) {
 	if _, err := s.pool.Exec(ctx, `CREATE FUNCTION reject_interactive_usage() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'synthetic usage failure'; END $$; CREATE TRIGGER reject_interactive_usage BEFORE INSERT ON model_usage FOR EACH ROW EXECUTE FUNCTION reject_interactive_usage()`); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.calls.Call(ctx, request); err == nil {
+	if _, err := s.Gateway().Call(ctx, request); err == nil {
 		t.Fatal("accounting failure was hidden")
 	}
 	if _, err := s.pool.Exec(ctx, `DROP TRIGGER reject_interactive_usage ON model_usage`); err != nil {
@@ -116,7 +117,7 @@ func TestInteractiveAccountingRecoveryKeepsOriginalUsageIdentity(t *testing.T) {
 	p.Usage.TurnID = string(memory.NewID())
 	p.Usage.Tier = "light"
 	request.Policy = p
-	paid, err := peer.calls.Call(ctx, request)
+	paid, err := peer.Gateway().Call(ctx, request)
 	if err != nil || paid == nil || calls.Load() != 1 {
 		t.Fatal(paid, err, calls.Load())
 	}
@@ -125,7 +126,7 @@ func TestInteractiveAccountingRecoveryKeepsOriginalUsageIdentity(t *testing.T) {
 	if err := s.pool.QueryRow(ctx, `SELECT c.usage_id::text,u.turn_id::text,u.tier,c.accounting_state,(SELECT count(*) FROM model_usage WHERE owner_id=$1) FROM model_calls c JOIN model_usage u ON u.owner_id=c.owner_id AND u.id=c.usage_id WHERE c.owner_id=$1 AND c.id=$2`, string(scope.OwnerID), string(paid.InvocationID)).Scan(&usageID, &turn, &tier, &state, &count); err != nil || usageID != string(original.ID) || turn != original.TurnID || tier != original.Tier || state != "settled" || count != 1 {
 		t.Fatal(usageID, turn, tier, state, count, err)
 	}
-	if _, err := peer.calls.Call(ctx, request); err != nil || calls.Load() != 1 {
+	if _, err := peer.Gateway().Call(ctx, request); err != nil || calls.Load() != 1 {
 		t.Fatal("duplicate recovery generated again", err, calls.Load())
 	}
 }
@@ -138,7 +139,7 @@ func TestInteractiveResultRejectsChangedInputBindings(t *testing.T) {
 		secretaryModelReply(w, "Fictitious reply.")
 	})
 	original := admittedInteractiveRequest(t, s, scope, "model")
-	if _, err := s.calls.Call(context.Background(), original); err != nil {
+	if _, err := s.Gateway().Call(context.Background(), original); err != nil {
 		t.Fatal(err)
 	}
 	changes := map[string]func(*modelcall.Request){
@@ -160,7 +161,7 @@ func TestInteractiveResultRejectsChangedInputBindings(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			request := original
 			change(&request)
-			if _, err := s.calls.Call(context.Background(), request); !errors.Is(err, memory.ErrConflict) {
+			if _, err := s.Gateway().Call(context.Background(), request); !errors.Is(err, memory.ErrConflict) {
 				t.Fatal(err)
 			}
 		})
@@ -171,7 +172,7 @@ func TestInteractiveResultRejectsChangedInputBindings(t *testing.T) {
 	if _, err := s.pool.Exec(context.Background(), `UPDATE background_model_results SET output='Changed fictitious cached reply.' WHERE owner_id=$1`, string(scope.OwnerID)); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.calls.Call(context.Background(), original); !errors.Is(err, memory.ErrConflict) || calls.Load() != 1 {
+	if _, err := s.Gateway().Call(context.Background(), original); !errors.Is(err, memory.ErrConflict) || calls.Load() != 1 {
 		t.Fatal("corrupt cached output was accepted or generated again", err, calls.Load())
 	}
 }
@@ -187,7 +188,7 @@ func TestInteractiveDeletedInputCannotRestorePaidBody(t *testing.T) {
 	ref := organizeTestMemory(t, s, scope, "Fictitious source for a reader.")
 	request.Refs = []memory.Ref{ref}
 	ctx := context.Background()
-	paid, err := s.calls.Call(ctx, request)
+	paid, err := s.Gateway().Call(ctx, request)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -197,7 +198,7 @@ func TestInteractiveDeletedInputCannotRestorePaidBody(t *testing.T) {
 	if err := (interactiveCalls{store: s}).Save(ctx, request, paid); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.calls.Call(ctx, request); !errors.Is(err, modelcall.ErrNotApplicable) {
+	if _, err := s.Gateway().Call(ctx, request); !errors.Is(err, modelcall.ErrNotApplicable) {
 		t.Fatal("deleted input could be applied", err)
 	}
 	var bodies, usages int
@@ -219,9 +220,9 @@ func TestInteractiveUnknownFailureKeepsBudgetAndBoundedRetry(t *testing.T) {
 	p.Usage.ID = ""
 	request.Policy = p
 	ctx := context.Background()
-	_, err := s.calls.Call(ctx, request)
+	_, err := s.Gateway().Call(ctx, request)
 	var first *modelcall.Failure
-	if !errors.Is(err, modelcall.ErrOutcomeUnknown) || !errors.As(err, &first) || !retryableSecretaryModelError(err) {
+	if !errors.Is(err, modelcall.ErrOutcomeUnknown) || !errors.As(err, &first) || !secretary.RetryableModelError(err) {
 		t.Fatal(err)
 	}
 	peer, err := Open(ctx, s.pool.Config().ConnConfig.ConnString())
@@ -229,21 +230,21 @@ func TestInteractiveUnknownFailureKeepsBudgetAndBoundedRetry(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer peer.Close()
-	_, err = peer.calls.Call(ctx, request)
+	_, err = peer.Gateway().Call(ctx, request)
 	var recovered *modelcall.Failure
-	if !errors.As(err, &recovered) || recovered.InvocationID != first.InvocationID || !retryableSecretaryModelError(err) {
+	if !errors.As(err, &recovered) || recovered.InvocationID != first.InvocationID || !secretary.RetryableModelError(err) {
 		t.Fatal("durable failure lost retry metadata", err)
 	}
 	p.RetryOf = first.InvocationID
 	request.Policy = p
-	_, err = s.calls.Call(ctx, request)
+	_, err = s.Gateway().Call(ctx, request)
 	var second *modelcall.Failure
 	if !errors.Is(err, modelcall.ErrOutcomeUnknown) || !errors.As(err, &second) || second.InvocationID == first.InvocationID {
 		t.Fatal(err)
 	}
 	p.RetryOf = second.InvocationID
 	request.Policy = p
-	if _, err := s.calls.Call(ctx, request); !errors.Is(err, modelcall.ErrRetryExhausted) {
+	if _, err := s.Gateway().Call(ctx, request); !errors.Is(err, modelcall.ErrRetryExhausted) {
 		t.Fatal("third attempt was not blocked", err)
 	}
 	var held, usages int
@@ -272,7 +273,7 @@ func TestInteractiveResultWriteFailureReusesPendingResponse(t *testing.T) {
 	limited, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	done := make(chan error, 1)
-	go func() { _, err := s.calls.Call(limited, request); done <- err }()
+	go func() { _, err := s.Gateway().Call(limited, request); done <- err }()
 	pending := false
 	for !pending {
 		s.pendingInteractive.Range(func(_, value any) bool { pending = true; return false })
@@ -293,7 +294,7 @@ func TestInteractiveResultWriteFailureReusesPendingResponse(t *testing.T) {
 		t.Fatal(err)
 	}
 	s.SetModels(nil)
-	paid, err := s.calls.Call(ctx, request)
+	paid, err := s.Gateway().Call(ctx, request)
 	if err != nil || paid == nil || calls.Load() != 1 {
 		t.Fatal("pending response was not reused", err, calls.Load())
 	}
@@ -317,7 +318,7 @@ func TestInteractiveLateResponseFinishesAccountingWithoutApplication(t *testing.
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	done := make(chan error, 1)
-	go func() { _, err := s.calls.Call(ctx, request); done <- err }()
+	go func() { _, err := s.Gateway().Call(ctx, request); done <- err }()
 	select {
 	case <-started:
 	case <-ctx.Done():

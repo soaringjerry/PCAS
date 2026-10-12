@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 
+	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -23,16 +24,16 @@ type View struct {
 }
 
 // Session is one turn in its place in the conversation. It gives the turn
-// its reads, its model calls, and its writes, all in one transaction.
+// its reads and its writes, all in one transaction.
 type Session interface {
-	Model
 	Turn
 	// Context reads the context of the turn. failure is a failure that
 	// falls back to keeping the sentence.
 	Context(ctx context.Context) (view View, failure error)
 	// Input builds the model input and checks that the agent may use what
-	// it holds. stage names the place of a failure.
-	Input(ctx context.Context) (state *Asking, stage string, failure error)
+	// it holds. It searches memory with recall. stage names the place of a
+	// failure.
+	Input(ctx context.Context, recall Recall) (state *Asking, stage string, failure error)
 	// Asked gives the session the state after the model was asked.
 	Asked(state *Asking)
 	// BeginWrite starts the writes of the turn. From here the owner's
@@ -59,7 +60,13 @@ type Conducting struct {
 	// is true for a check-only turn.
 	HasText, CheckOnly bool
 	Limits             Limits
+	// Recall searches memory for the context of the turn.
+	Recall Recall
 }
+
+// Recall searches memory. It can make a recorded model call for the vector
+// of the query.
+type Recall func(ctx context.Context, scope memory.Scope, in memory.RecallRequest) (memory.RecallResult, error)
 
 // Conducted is what a turn gives back to the owner.
 type Conducted struct {
@@ -76,7 +83,7 @@ type Conducted struct {
 // that the targets of the answer are unchanged, and applies the answer. A
 // turn that cannot finish keeps the owner's sentence and says why; it changes
 // nothing else. Each paid call is recorded with what became of it.
-func Conduct(ctx context.Context, s Session, in Conducting) (Conducted, error) {
+func Conduct(ctx context.Context, s Session, m Model, in Conducting) (Conducted, error) {
 	out := Conducted{Receipts: []workspace.DeskReceipt{}, Cards: []workspace.DeskCard{}}
 	view, failure := s.Context(ctx)
 	stage := "context"
@@ -87,10 +94,10 @@ func Conduct(ctx context.Context, s Session, in Conducting) (Conducted, error) {
 	var asked Asked
 	var state *Asking
 	if failure == nil {
-		state, stage, failure = s.Input(ctx)
+		state, stage, failure = s.Input(ctx, in.Recall)
 		if failure == nil {
 			var err error
-			asked, err = Ask(ctx, s, state, in.Limits)
+			asked, err = Ask(ctx, m, state, in.Limits)
 			s.Asked(state)
 			if err != nil {
 				return out, err

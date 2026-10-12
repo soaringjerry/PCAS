@@ -47,7 +47,7 @@ func TestWorkspaceDeliveryVersionsAndConditionalRead(t *testing.T) {
 	if cached.Code != 304 || cached.Body.Len() != 0 {
 		t.Fatal("unchanged snapshot must have no body", cached.Code, cached.Body.String())
 	}
-	if err := (organize.Service{Store: s.OrganizeStore(), Generator: s, Version: OrganizeVersion}).Process(ctx, job); err != nil {
+	if err := (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: OrganizeVersion}).Process(ctx, job); err != nil {
 		t.Fatal(err)
 	}
 	after, err := s.Snapshot(ctx, scope)

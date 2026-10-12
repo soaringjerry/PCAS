@@ -35,7 +35,7 @@ func TestR1R6FailedEmbeddingSettlesEstimatedUsage(t *testing.T) {
 					t.Fatal(err)
 				}
 				job := leaseStage(t, s, scope, source.Ref, "source.embed")
-				if err := s.ProcessEmbedding(context.Background(), job); err == nil {
+				if err := indexer(s).Process(context.Background(), job); err == nil {
 					t.Fatal("expected model failure")
 				}
 			}

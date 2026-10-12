@@ -42,7 +42,7 @@ func TestDeputyKnownAnswerSurvivesLeaseChangeButNotExecutionReplacement(t *testi
 			})
 			s.models.Config.Providers[0].InputPerMillion = 1
 			request = leasedDeputyAnswer(t, s, scope)
-			paid, err := s.calls.Call(ctx, request)
+			paid, err := s.Gateway().Call(ctx, request)
 			retained := mode == "expired" || mode == "new_lease"
 			if retained && (err != nil || paid == nil || paid.Output != "Fictitious known answer.") || !retained && !errors.Is(err, modelcall.ErrNotApplicable) {
 				t.Fatal("result retention ignored execution identity", mode, paid, err)
@@ -57,7 +57,7 @@ func TestDeputyKnownAnswerSurvivesLeaseChangeButNotExecutionReplacement(t *testi
 			}
 			if retained {
 				// Recovery reads the paid result without a configured provider.
-				recovered, err := peer.calls.Call(ctx, request)
+				recovered, err := peer.Gateway().Call(ctx, request)
 				if err != nil || recovered.InvocationID != paid.InvocationID || recovered.Output != paid.Output {
 					t.Fatal("restart lost a known result", recovered, err)
 				}
@@ -103,7 +103,7 @@ func TestDeputyReturnedAnswerDistinguishesCorrectionFromLostInputAccess(t *testi
 			ref = organizeTestMemory(t, s, scope, "Fictitious original input.")
 			request := leasedDeputyAnswer(t, s, scope)
 			request.Refs = []memory.Ref{ref}
-			paid, err := s.calls.Call(ctx, request)
+			paid, err := s.Gateway().Call(ctx, request)
 			if mode == "corrected" {
 				if err != nil || paid == nil || len(paid.Refs) != 1 || paid.Refs[0] != ref {
 					t.Fatal("correction erased original output or changed its input identity", paid, err)

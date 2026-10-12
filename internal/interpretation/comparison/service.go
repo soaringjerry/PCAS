@@ -17,9 +17,6 @@ const Stage = "memory.compare"
 
 // Store opens the job's session.
 type Store interface {
-	// Rejudge handles a job that judges one superseded statement again.
-	// That path is still in storage.
-	Rejudge(ctx context.Context, job worker.Job) error
 	// Session holds the one connection that scans and comparisons share.
 	Session(ctx context.Context) (session Session, release func(), err error)
 	// Reschedule queues the next comparison when work remains. Storage records
@@ -39,6 +36,16 @@ type Session interface {
 	// edges when the output was valid, the receipt of the batch in each case,
 	// the removal of the saved result, and the acknowledgement.
 	Apply(ctx context.Context, job worker.Job, record json.RawMessage, edges []Edge, valid bool) error
+	// RejudgePair returns the input record of a superseded statement and its
+	// successor under the job's lease. It applies the stage's hourly limit.
+	// When the pair is not current any more it finishes the job and reports
+	// found false.
+	RejudgePair(ctx context.Context, job worker.Job, refs []memory.Ref) (record json.RawMessage, found bool, err error)
+	// ApplyRejudge writes the verdict on the pair in one transaction: the old
+	// statement stays superseded or is restored, and the job is finished.
+	// When the output was not valid it records the failure, removes the saved
+	// result, and returns the queue's failure for a later attempt.
+	ApplyRejudge(ctx context.Context, job worker.Job, refs []memory.Ref, edges []Edge, valid bool) error
 }
 
 // Generator submits the job's model call and keeps its paid result.
@@ -59,7 +66,7 @@ type Service struct {
 // recorded with the batch, so that the same batch is not asked again unchanged.
 func (s Service) Process(ctx context.Context, job worker.Job) error {
 	if strings.Contains(job.Stage, ":rejudge:") {
-		return s.Store.Rejudge(ctx, job)
+		return s.rejudge(ctx, job)
 	}
 	parts := strings.SplitN(job.Stage, ":", 3)
 	if len(parts) != 3 {

@@ -18,6 +18,8 @@ type fake struct {
 	source                  memory.SourceResult
 	imported, stale, unpaid bool
 	notConfigured, notReady bool
+	finished, assistantOnly bool
+	segment                 *ConversationOutput
 	answer                  string
 	saved                   json.RawMessage
 	modelInput              string
@@ -34,8 +36,20 @@ func (f *fake) FinishEmpty(context.Context, worker.Job) error {
 	f.log = append(f.log, "empty")
 	return nil
 }
-func (f *fake) Conversation(_ context.Context, _ worker.Job, conversation string) error {
+func (f *fake) Conversation(_ context.Context, _ worker.Job, conversation string) (ConversationWork, bool, error) {
 	f.log = append(f.log, "conversation "+conversation)
+	return fakeSegment{f}, !f.finished, nil
+}
+
+// fakeSegment is the prepared segment of the fake's conversation.
+type fakeSegment struct{ f *fake }
+
+func (s fakeSegment) Prompt() string     { return `{"messages":[]}` }
+func (s fakeSegment) Refs() []memory.Ref { return []memory.Ref{{ID: "s1", Version: 1}} }
+func (s fakeSegment) HasOwnerText() bool { return !s.f.assistantOnly }
+func (s fakeSegment) Apply(_ context.Context, output ConversationOutput) error {
+	s.f.segment = &output
+	s.f.log = append(s.f.log, "segment applied")
 	return nil
 }
 func (f *fake) SplitWindows(_ context.Context, _ worker.Job, starts []int, _ bool) error {
@@ -120,9 +134,60 @@ func TestSourcesWithNothingToExtractMakeNoCall(t *testing.T) {
 	if err := run(f, job); err != nil || len(f.log) != 0 {
 		t.Fatal("a replaced source version is not read", err, f.log)
 	}
-	f = &fake{source: source("archive", "虚构", &memory.SourceContext{Role: "user", Conversation: "c1"}), imported: true}
+	f = &fake{source: source("archive", "虚构", &memory.SourceContext{Role: "user", Conversation: "c1"}), imported: true, finished: true}
 	if err := run(f, job); err != nil || !reflect.DeepEqual(f.log, []string{"conversation c1"}) {
 		t.Fatal(err, f.log)
+	}
+}
+
+func conversationFake() *fake {
+	return &fake{source: source("archive", "虚构", &memory.SourceContext{Role: "user", Conversation: "c1"}), imported: true}
+}
+
+func TestConversationSegmentIsAskedOnceAndItsAnswerApplied(t *testing.T) {
+	f := conversationFake()
+	f.answer = `{"items":[],"withdraw":[2]}`
+	if err := run(f, job); err != nil {
+		t.Fatal(err)
+	}
+	if f.modelInput != `{"messages":[]}` || f.segment == nil || !reflect.DeepEqual(f.segment.Withdraw, []int{2}) || !reflect.DeepEqual(f.log, []string{"conversation c1", "call extraction", "segment applied"}) {
+		t.Fatal(f.modelInput, f.segment, f.log)
+	}
+}
+
+func TestConversationSegmentWithoutOwnerTextIsAppliedWithoutACall(t *testing.T) {
+	f := conversationFake()
+	f.assistantOnly, f.notConfigured = true, true
+	if err := run(f, job); err != nil || f.segment == nil || len(f.segment.Items) != 0 || !reflect.DeepEqual(f.log, []string{"conversation c1", "segment applied"}) {
+		t.Fatal(err, f.segment, f.log)
+	}
+}
+
+func TestConversationSegmentNeedsAProviderBeforeItsCall(t *testing.T) {
+	f := conversationFake()
+	f.notConfigured = true
+	var failure *worker.JobError
+	if err := run(f, job); !errors.As(err, &failure) || failure.Code != "provider_not_configured" || f.segment != nil {
+		t.Fatal(err, f.log)
+	}
+	f = conversationFake()
+	f.notReady = true
+	if err := run(f, job); !errors.As(err, &failure) || failure.Code != "provider_unavailable" || !failure.Retry || f.segment != nil {
+		t.Fatal(err, f.log)
+	}
+}
+
+func TestUnreadableConversationAnswerIsDiscardedAndOnlyAFreeCallIsRetried(t *testing.T) {
+	for _, unpaid := range []bool{false, true} {
+		f := conversationFake()
+		f.answer, f.unpaid = "Fictitious prose.", unpaid
+		var failure *worker.JobError
+		if err := run(f, job); !errors.As(err, &failure) || failure.Code != "model_output_invalid" || failure.Retry != unpaid || f.segment != nil {
+			t.Fatal(err, f.log)
+		}
+		if f.log[2] != "discarded" {
+			t.Fatal(f.log)
+		}
 	}
 }
 

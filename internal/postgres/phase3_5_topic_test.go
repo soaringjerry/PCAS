@@ -24,7 +24,7 @@ const phase35TopicStage = "memory.topic_project"
 // The topic project service is composed here as application setup composes it.
 func phase35ProcessTopic(t *testing.T, s *Store, ctx context.Context, j worker.Job) error {
 	t.Helper()
-	return topicproject.Service{Store: s.TopicProjectStore(), Generator: s, Now: s.BusinessNow}.Process(ctx, j)
+	return topicproject.Service{Store: s.TopicProjectStore(), Generator: jobCalls(s), Now: s.BusinessNow}.Process(ctx, j)
 }
 func phase35TopicLoad(t *testing.T) *phase35Fixture {
 	t.Helper()

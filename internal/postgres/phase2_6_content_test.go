@@ -151,7 +151,7 @@ func TestPhase26G6B3B7B8LibraryAndC1C2Content(t *testing.T) {
 	}
 	phase26Isolate(t, f, HandoverStage)
 	j := phase26ClaimStage(t, f, HandoverStage)
-	if err := (handover.Service{Store: s.HandoverStore(), Generator: s}).Process(ctx, j); err != nil {
+	if err := (handover.Service{Store: s.HandoverStore(), Generator: jobCalls(s)}).Process(ctx, j); err != nil {
 		t.Fatal(err)
 	}
 	calls := model.calls(HandoverStage)
@@ -317,7 +317,7 @@ func TestPhase26G4A6A10ComparisonCoverageAndUnchangedScheduling(t *testing.T) {
 		}
 		phase26Isolate(t, f, CompareStage)
 		j := phase26ClaimStage(t, f, CompareStage)
-		if err := (comparison.Service{Store: s.CompareStore(), Generator: s, Version: CompareVersion}).Process(ctx, j); err != nil {
+		if err := (comparison.Service{Store: s.CompareStore(), Generator: jobCalls(s), Version: CompareVersion}).Process(ctx, j); err != nil {
 			t.Fatal(err)
 		}
 	}

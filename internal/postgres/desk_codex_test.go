@@ -110,7 +110,7 @@ func exerciseCodexFormats(t *testing.T, binary, home string, live bool) {
 			if err != nil {
 				return err
 			}
-			prompt, _, err = s.secretaryPrompt(ctx, tx, scope, req, &context)
+			prompt, _, err = s.secretaryPrompt(ctx, tx, scope, req, &context, s.Recall)
 			return err
 		})
 		if err != nil {

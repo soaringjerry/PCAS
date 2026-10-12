@@ -156,7 +156,7 @@ func p2AssertReads(t *testing.T, s *Store, scope memory.Scope) {
 			if err != nil {
 				return err
 			}
-			np, nm, err := s.secretaryPrompt(ctx, tx, scope, req, &newContext)
+			np, nm, err := s.secretaryPrompt(ctx, tx, scope, req, &newContext, s.Recall)
 			if err != nil {
 				return err
 			}

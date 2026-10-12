@@ -34,7 +34,7 @@ func TestPhase26A11ExtractionKeepsAll65ItemsAtScale(t *testing.T) {
 	j := worker.Job{ID: memory.NewID(), OwnerID: f.Scope.OwnerID, Record: src.Ref, Stage: "source.extract", LeaseToken: memory.NewID(), Attempts: 1}
 	phase26Exec(t, f, `INSERT INTO memory_jobs(id,owner_id,record_id,record_version,stage,state,attempts,lease_token,lease_until) VALUES($1,$2,$3,$4,$5,'leased',1,$6,now()+interval '5 minutes')`, j.ID, j.OwnerID, j.Record.ID, j.Record.Version, j.Stage, j.LeaseToken)
 	start := time.Now()
-	if err := (extraction.Service{Store: f.Store.ExtractionStore(), Generator: f.Store, MaxAttempts: MaxJobAttempts}).Process(f.Context, j); err != nil {
+	if err := (extraction.Service{Store: f.Store.ExtractionStore(), Generator: jobCalls(f.Store), MaxAttempts: MaxJobAttempts}).Process(f.Context, j); err != nil {
 		t.Fatal(err)
 	}
 	rows, err := f.Store.pool.Query(f.Context, `SELECT c.value #>> '{}' FROM evidence e JOIN claim_revisions c ON(c.owner_id,c.claim_id,c.version)=(e.owner_id,e.target_id,e.target_version) WHERE e.owner_id=$1 AND e.source_id=$2`, f.Scope.OwnerID, src.ID)

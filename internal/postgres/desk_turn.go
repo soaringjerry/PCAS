@@ -7,10 +7,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/soaringjerry/PCAS/internal/contextbuilder"
-	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 	"strings"
 	"time"
+
+	"github.com/soaringjerry/PCAS/internal/contextbuilder"
+	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
@@ -205,7 +206,7 @@ func (s *Store) checkDeskContextTx(ctx context.Context, tx pgx.Tx, scope memory.
 	}
 	return nil
 }
-func (s *Store) secretaryPrompt(ctx context.Context, tx pgx.Tx, scope memory.Scope, req workspace.DeskTurnRequest, c *secretaryContext) (string, map[string]workspace.Memory, error) {
+func (s *Store) secretaryPrompt(ctx context.Context, tx pgx.Tx, scope memory.Scope, req workspace.DeskTurnRequest, c *secretaryContext, search secretary.Recall) (string, map[string]workspace.Memory, error) {
 	var prompt strings.Builder
 	loc := deskLocation(c.Settings)
 	c.Plan = memory.PlanQuery(req.Text, s.businessNow(), loc)
@@ -272,7 +273,7 @@ func (s *Store) secretaryPrompt(ctx context.Context, tx pgx.Tx, scope memory.Sco
 		candidates = 40
 		tokens = 12000
 	}
-	recall, err := s.Recall(ctx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: c.Agent.ID, Team: true}, memory.RecallRequest{Team: &memory.TeamRecall{Text: req.Text, Plan: c.Plan, ThingID: req.ThingID, ProjectID: projectID, Candidates: 20, RankFusion: c.Use.Ready}, Query: tail(earlier+req.Text, 4000), Mode: "remember", Context: memory.WorkingContext{Objects: []memory.ID{}}, Budget: memory.Budget{Candidates: candidates, Tokens: tokens, Edges: 15, Hops: 1}})
+	recall, err := search(ctx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: c.Agent.ID, Team: true}, memory.RecallRequest{Team: &memory.TeamRecall{Text: req.Text, Plan: c.Plan, ThingID: req.ThingID, ProjectID: projectID, Candidates: 20, RankFusion: c.Use.Ready}, Query: tail(earlier+req.Text, 4000), Mode: "remember", Context: memory.WorkingContext{Objects: []memory.ID{}}, Budget: memory.Budget{Candidates: candidates, Tokens: tokens, Edges: 15, Hops: 1}})
 	if err != nil {
 		return "", nil, err
 	}
@@ -357,7 +358,13 @@ func (s *Store) secretaryPrompt(ctx context.Context, tx pgx.Tx, scope memory.Sco
 // DeskTurn holds request and conversation advisory locks across generation.
 // Owner row locks are acquired only for the short budget/commit transactions.
 // Contended callers release their connection before waiting to retry.
-func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.DeskTurnRequest) (workspace.DeskTurnResponse, error) {
+// DeskStore gives the secretary service the storage of its turns.
+func (s *Store) DeskStore() secretary.TurnStore { return deskStore{s} }
+
+type deskStore struct{ store *Store }
+
+func (a deskStore) Turn(ctx context.Context, scope memory.Scope, req workspace.DeskTurnRequest, steps secretary.Steps) (workspace.DeskTurnResponse, error) {
+	s := a.store
 	var out workspace.DeskTurnResponse
 	if err := requireOwner(scope); err != nil {
 		return out, err
@@ -414,12 +421,12 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 	}
 	conversationID = ticket.conversation
 	execution := modelcall.Request{OwnerID: scope.OwnerID, ExecutionID: memory.ID(req.RequestID), RootExecutionID: memory.ID(req.RequestID), Function: "secretary", Policy: interactiveCallPolicy{Kind: "secretary", Token: ticket.creator, Origin: fmt.Sprintf("%x", hash), RequestHash: hash[:], ThingID: pointerValue(req.ThingID)}}
-	requestCtx = context.WithValue(requestCtx, interactiveExecutionKey{}, execution)
-	ctx = context.WithValue(ctx, interactiveExecutionKey{}, execution)
+	requestCtx = modelcall.WithExecution(requestCtx, execution)
+	ctx = modelcall.WithExecution(ctx, execution)
 	var attachments []deskAttachment
 	if !ticket.legacy && len(req.Attachments) > 0 {
 		attachmentStarted := time.Now()
-		attachments, err = s.prepareDeskAttachments(requestCtx, scope, req)
+		attachments, err = s.prepareDeskAttachments(requestCtx, scope, req, steps.ReadAttachment)
 		timing.addPrepare(time.Since(attachmentStarted))
 		if err != nil {
 			return out, err
@@ -466,8 +473,8 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 			secretaryTurn: &secretaryTurn{store: s, tx: tx, scope: scope, req: req, turnID: out.Turn.ID},
 			conversation:  conversationID, attachments: attachments, text: text, started: turnStarted,
 		}
-		conducted, err := secretary.Conduct(ctx, session, secretary.Conducting{Unordered: captureOnly, HasText: text != "", CheckOnly: req.SmokeID != "",
-			Limits: secretary.Limits{Model: secretaryModelTimeout, HeavyReader: heavyReaderBudget, Total: heavyUseTimeout}})
+		conducted, err := steps.Conduct(ctx, secretary.Unit{Session: session, Ask: session.secretaryAsk, Request: requestCtx, TurnID: out.Turn.ID, Thing: req.ThingID,
+			Conducting: secretary.Conducting{Unordered: captureOnly, HasText: text != "", CheckOnly: req.SmokeID != ""}})
 		if err != nil {
 			return err
 		}
@@ -518,8 +525,8 @@ func pointerValueOrNull(v *string) any {
 }
 
 // secretarySession is one turn in its place in the conversation. It holds
-// the context of the turn and gives the turn its reads, its model calls, and
-// its writes in the transaction of the turn.
+// the context of the turn and gives the turn its reads and its writes in the
+// transaction of the turn.
 type secretarySession struct {
 	*secretaryAsk
 	*secretaryTurn
@@ -551,9 +558,9 @@ func (t *secretarySession) Context(ctx context.Context) (secretary.View, error) 
 	return view, err
 }
 
-func (t *secretarySession) Input(ctx context.Context) (*secretary.Asking, string, error) {
+func (t *secretarySession) Input(ctx context.Context, recall secretary.Recall) (*secretary.Asking, string, error) {
 	s, c := t.secretaryAsk, t.c
-	prompt, sent, err := s.store.secretaryPrompt(ctx, s.tx, s.scope, s.req, c)
+	prompt, sent, err := s.store.secretaryPrompt(ctx, s.tx, s.scope, s.req, c, recall)
 	if err != nil {
 		return nil, "context", err
 	}
@@ -619,9 +626,8 @@ func (t *secretarySession) SaveSentence(ctx context.Context) error {
 	return nil
 }
 
-// secretaryAsk makes the reads and the model calls of one turn. A call
-// ends with the caller's request; its record is written under the turn's own
-// context.
+// secretaryAsk is what the asking of one turn reads and records. The
+// secretary service makes the model calls.
 type secretaryAsk struct {
 	store      *Store
 	tx         pgx.Tx
@@ -639,42 +645,23 @@ func (m *secretaryAsk) sync(state *secretary.Asking) {
 	m.c.Tier, m.c.Use, m.c.Dependencies = state.Tier, state.Use, state.Dependencies
 }
 
-func (m *secretaryAsk) HeavyRead(ctx context.Context, deadline time.Time, task string, state *secretary.Asking, stage string) ([]workspace.Memory, []memory.Ref, []string) {
+func (m *secretaryAsk) Agent() workspace.Agent { return m.c.Agent }
+
+func (m *secretaryAsk) Verify(ctx context.Context, state *secretary.Asking) error {
 	m.sync(state)
-	readCtx := m.requestCtx
-	if !deadline.IsZero() {
-		var cancel context.CancelFunc
-		readCtx, cancel = context.WithDeadline(m.requestCtx, deadline)
-		defer cancel()
-	}
-	return m.store.heavyUse(readCtx, ctx, m.scope, m.c.Agent, m.req.ThingID, task, m.c.Use, m.turnID, "", stage)
+	return m.store.checkSecretaryUseContextTx(ctx, m.tx, m.scope, *m.c)
+}
+
+func (m *secretaryAsk) VerifyCurrent(ctx context.Context, state *secretary.Asking) error {
+	m.sync(state)
+	c := *m.c
+	return pgx.BeginTxFunc(ctx, m.store.pool, pgx.TxOptions{AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
+		return m.store.checkSecretaryUseContextTx(ctx, tx, m.scope, c)
+	})
 }
 
 func (m *secretaryAsk) Prepared()               { m.timing.finishPrepare() }
 func (m *secretaryAsk) Reading(d time.Duration) { m.timing.addPrepare(d) }
-
-func (m *secretaryAsk) Generate(ctx context.Context, state *secretary.Asking) (string, string, error, error) {
-	m.sync(state)
-	c := *m.c
-	workCtx, cancel := context.WithTimeout(m.requestCtx, secretaryModelTimeout)
-	defer cancel()
-	workCtx = context.WithValue(workCtx, secretaryUsageKey{}, secretaryUsageMeta{Usage: modelUsage{Tier: c.Tier, TurnID: m.turnID, MemoryRefs: c.Dependencies, Plan: asJSON(usePlan{Groups: c.Use.Groups})}})
-	result, stage, err := m.store.generateSecretaryModelWithRetry(workCtx, m.scope, c.Agent.ID, state.Input, func(callCtx context.Context) error {
-		return m.store.checkSecretaryUseContextTx(callCtx, m.tx, m.scope, c)
-	})
-	var accountingErr *secretaryAccountingError
-	if errors.As(err, &accountingErr) {
-		return "", stage, nil, accountingErr.error
-	}
-	return result.Text, stage, err, nil
-}
-
-func (m *secretaryAsk) Check(ctx context.Context, timeout time.Duration, state *secretary.Asking, answer secretaryOutput) (secretaryOutput, error) {
-	m.sync(state)
-	checkCtx, cancel := context.WithTimeout(m.requestCtx, timeout)
-	defer cancel()
-	return m.store.checkSecretary(checkCtx, ctx, m.scope, *m.c, state.Input, answer, m.turnID)
-}
 
 func (m *secretaryAsk) SetTier(ctx context.Context, tier string) error {
 	_, err := m.tx.Exec(ctx, "UPDATE model_usage SET tier=$3 WHERE owner_id=$1 AND turn_id=$2 AND purpose='secretary'", string(m.scope.OwnerID), m.turnID, tier)

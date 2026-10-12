@@ -3,13 +3,11 @@ package postgres
 import (
 	"context"
 	"encoding/json"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
 	"github.com/soaringjerry/PCAS/internal/memory"
-	"github.com/soaringjerry/PCAS/internal/modelcall"
 	"github.com/soaringjerry/PCAS/internal/worker"
 )
 
@@ -43,30 +41,6 @@ type rejudgeInput struct {
 	Memories []compareMemory `json:"memories"`
 	Refs     []memory.Ref    `json:"refs"`
 	Rule     int             `json:"rule"`
-}
-
-func rejudgeRefs(j worker.Job) ([]memory.Ref, error) {
-	parts := strings.Split(j.Stage, ":")
-	if len(parts) != 7 || parts[0] != CompareStage || parts[2] != "rejudge" {
-		return nil, memory.ErrInvalid
-	}
-	rule, e := strconv.Atoi(parts[1])
-	if e != nil || rule != CompareVersion {
-		return nil, memory.ErrInvalid
-	}
-	refs := []memory.Ref{}
-	for i := 3; i < 7; i += 2 {
-		v, e := strconv.Atoi(parts[i+1])
-		id := memory.ID(parts[i])
-		if e != nil || v < 1 || !id.Valid() {
-			return nil, memory.ErrInvalid
-		}
-		refs = append(refs, memory.Ref{ID: id, Version: v, Kind: memory.ClaimKind})
-	}
-	if refs[0] != j.Record {
-		return nil, memory.ErrInvalid
-	}
-	return refs, nil
 }
 
 func readRejudgePair(ctx context.Context, tx pgx.Tx, j worker.Job, refs []memory.Ref) (*rejudgeInput, error) {
@@ -107,65 +81,32 @@ func finishRejudgeTx(ctx context.Context, tx pgx.Tx, j worker.Job, reason string
 	return acknowledge(ctx, tx, j)
 }
 
-func (s *Store) processSupersededRejudge(ctx context.Context, j worker.Job) error {
-	refs, err := rejudgeRefs(j)
-	if err != nil {
-		return err
-	}
-	conn, release, err := s.comparisonConnection(ctx)
-	if err != nil {
-		return err
-	}
-	defer release()
-	cached, err := s.paidModelResult(ctx, j)
-	if err != nil {
-		return err
-	}
+func (a compareSession) RejudgePair(ctx context.Context, j worker.Job, refs []memory.Ref) (json.RawMessage, bool, error) {
 	var input *rejudgeInput
-	if cached == nil {
-		if s.models == nil {
-			return &worker.JobError{Code: "provider_unavailable", Until: time.Now().Add(CompareInterval), NoAttempt: true}
-		}
-		p, ok := s.models.Get(s.models.ExtractionID())
-		if !ok || !s.models.Available(p.ID) {
-			return &worker.JobError{Code: "provider_unavailable", Until: time.Now().Add(CompareInterval), NoAttempt: true}
-		}
-		err = pgx.BeginFunc(ctx, conn, func(tx pgx.Tx) error {
-			if err := lockJob(ctx, tx, j); err != nil {
-				return err
-			}
-			var e error
-			input, e = readRejudgePair(ctx, tx, j, refs)
-			if e != nil {
-				return e
-			}
-			if input == nil {
-				return finishRejudgeTx(ctx, tx, j, "inputs_changed")
-			}
-			return backgroundHourlyTx(ctx, tx, CompareStage, "compare_hourly_limit")
-		})
-		if err != nil || input == nil {
+	err := pgx.BeginFunc(ctx, a.conn, func(tx pgx.Tx) error {
+		if err := lockJob(ctx, tx, j); err != nil {
 			return err
 		}
-	}
-	result, err := s.generatePaid(ctx, j, "compare", compareInstructions, asJSON(input), refs)
-	if err != nil {
-		return err
-	}
-	if err = json.Unmarshal(result.Prompt, &input); err != nil {
-		return err
-	}
-	if input == nil || input.Rule != CompareVersion || len(input.Memories) != 2 || len(input.Refs) != 2 {
-		return memory.ErrInvalid
-	}
-	edges, valid := parseRejudgeOutput(result.Output)
-	for _, edge := range edges {
-		if edge.Old != 1 || edge.New != 2 {
-			valid = false
+		var e error
+		input, e = readRejudgePair(ctx, tx, j, refs)
+		if e != nil {
+			return e
 		}
+		if input == nil {
+			return finishRejudgeTx(ctx, tx, j, "inputs_changed")
+		}
+		return backgroundHourlyTx(ctx, tx, CompareStage, "compare_hourly_limit")
+	})
+	if err != nil || input == nil {
+		return nil, false, err
 	}
+	return asJSON(input), true, nil
+}
+
+func (a compareSession) ApplyRejudge(ctx context.Context, j worker.Job, refs []memory.Ref, edges []comparison.Edge, valid bool) error {
+	conn := a.conn
 	if !valid {
-		err = backgroundResultTx(ctx, conn, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
+		err := backgroundResultTx(ctx, conn, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
 			if err := lockJob(ctx, tx, j); err != nil {
 				return err
 			}
@@ -220,35 +161,4 @@ func (s *Store) processSupersededRejudge(ctx context.Context, j worker.Job) erro
 		}
 		return finishRejudgeTx(ctx, tx, j, outcome)
 	})
-}
-
-// A discarded malformed proposal is not a negative judgment. Unlike normal
-// compare (which can ignore one edge), pair repair requires a complete verdict.
-func parseRejudgeOutput(text string) ([]compareEdge, bool) {
-	var e struct {
-		Duplicates []json.RawMessage `json:"duplicates"`
-		Superseded []json.RawMessage `json:"superseded"`
-	}
-	if modelcall.DecodeStrict([]byte(text), &e) != nil || e.Duplicates == nil || e.Superseded == nil || len(e.Duplicates)+len(e.Superseded) > 1 {
-		return nil, false
-	}
-	if len(e.Superseded) == 1 {
-		var p struct {
-			Old int `json:"old"`
-			New int `json:"new"`
-		}
-		if modelcall.DecodeStrict(e.Superseded[0], &p) != nil || p.Old != 1 || p.New != 2 {
-			return nil, false
-		}
-	}
-	if len(e.Duplicates) == 1 {
-		var p struct {
-			Keep    int   `json:"keep"`
-			Members []int `json:"members"`
-		}
-		if modelcall.DecodeStrict(e.Duplicates[0], &p) != nil || p.Keep != 2 || len(p.Members) != 2 || !((p.Members[0] == 1 && p.Members[1] == 2) || (p.Members[0] == 2 && p.Members[1] == 1)) {
-			return nil, false
-		}
-	}
-	return parseCompareOutput(text, 2)
 }

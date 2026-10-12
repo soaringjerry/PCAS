@@ -286,7 +286,7 @@ func TestPhase3F2T2FileExtractionConcurrentWithSchedulingAndUser(t *testing.T) {
 	}
 	done := make(chan error, 1)
 	go func() {
-		done <- (extraction.Service{Store: f.Store.ExtractionStore(), Generator: f.Store, MaxAttempts: MaxJobAttempts}).Process(f.Context, extractJob)
+		done <- (extraction.Service{Store: f.Store.ExtractionStore(), Generator: jobCalls(f.Store), MaxAttempts: MaxJobAttempts}).Process(f.Context, extractJob)
 	}()
 	select {
 	case <-entered:

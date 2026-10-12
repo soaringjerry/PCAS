@@ -362,16 +362,6 @@ func (s *Store) ScheduleEntityCandidates(ctx context.Context, now time.Time) (in
 // AliasScanStore gives the alias scan service its reads and writes.
 func (s *Store) AliasScanStore() aliasscan.Store { return aliasScanStore{s} }
 
-// GenerateWithRefs is GenerateForJob for a caller that also needs the records
-// that the saved result names. It has the same temporary status.
-func (s *Store) GenerateWithRefs(ctx context.Context, j worker.Job, purpose string, instructions prompts.Definition, record json.RawMessage, refs []memory.Ref) (json.RawMessage, string, []memory.Ref, error) {
-	paid, err := s.generatePaid(ctx, j, purpose, instructions.Text(), record, refs)
-	if err != nil {
-		return nil, "", nil, err
-	}
-	return paid.Prompt, paid.Output, paid.Refs, nil
-}
-
 type aliasScanStore struct{ store *Store }
 
 func (a aliasScanStore) RetryLater(j worker.Job, code string) error {

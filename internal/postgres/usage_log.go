@@ -10,31 +10,12 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/modelcall"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
 // modelUsage mirrors model_usage. References contain identity only, never text.
-type modelUsage struct {
-	DurationMS      *int64
-	Tier            string
-	OwnerID         memory.ID
-	ID              memory.ID
-	At              time.Time
-	Purpose         string
-	AgentID         string
-	Model           string
-	InputTokens     int
-	OutputTokens    int
-	InputEstimated  bool
-	OutputEstimated bool
-	CostEstimated   bool
-	Cost            float64
-	TurnID          string
-	RunID           string
-	JobID           string
-	MemoryRefs      []memory.Ref
-	Plan            json.RawMessage
-}
+type modelUsage = modelcall.Usage
 
 // A returned model call has already incurred usage. Persist it independently
 // before validating or committing its result, even during caller cancellation.

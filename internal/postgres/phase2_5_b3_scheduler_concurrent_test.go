@@ -189,7 +189,7 @@ func phase25B3ConcurrentStatus(t *testing.T, rebuilding bool) {
 					cards.Add(1)
 				}
 			case strings.HasPrefix(job.Stage, "memory.handover:"):
-				err = (handover.Service{Store: f.store.HandoverStore(), Generator: f.store}).Process(runCtx, *job)
+				err = (handover.Service{Store: f.store.HandoverStore(), Generator: jobCalls(f.store)}).Process(runCtx, *job)
 				if err == nil {
 					handovers.Add(1)
 				}

@@ -46,9 +46,10 @@ type Store interface {
 	// FinishEmpty acknowledges the job and records that the source has
 	// nothing to extract.
 	FinishEmpty(ctx context.Context, job worker.Job) error
-	// Conversation extracts the conversation of an imported message.
-	// That path is still in storage.
-	Conversation(ctx context.Context, job worker.Job, conversation string) error
+	// Conversation reads the job's segment of the conversation of an imported
+	// message under the job's lease. found is false when the job finished
+	// without a segment to extract.
+	Conversation(ctx context.Context, job worker.Job, conversation string) (work ConversationWork, found bool, err error)
 	// SplitWindows queues one job for each window and finishes this job.
 	SplitWindows(ctx context.Context, job worker.Job, starts []int, imported bool) error
 	// Configured returns the queue's failure when no extraction model is set.
@@ -70,6 +71,20 @@ type Store interface {
 // Generator submits the job's model call and keeps its paid result.
 type Generator interface {
 	GenerateForJob(ctx context.Context, job worker.Job, purpose string, instructions prompts.Definition, modelInput string, record json.RawMessage, refs []memory.Ref) (saved json.RawMessage, output string, err error)
+}
+
+// ConversationWork is one prepared segment of an imported conversation.
+type ConversationWork interface {
+	// Prompt is the model input of the segment.
+	Prompt() string
+	// Refs are the records that the model input holds.
+	Refs() []memory.Ref
+	// HasOwnerText reports whether the segment holds a message of the owner.
+	// A segment without one is applied without a model call.
+	HasOwnerText() bool
+	// Apply writes the statements of the segment, queues the next segment,
+	// and finishes the job.
+	Apply(ctx context.Context, output ConversationOutput) error
 }
 
 // Service reads statements, tasks, and ideas from one source.
@@ -104,7 +119,7 @@ func (s Service) Process(ctx context.Context, job worker.Job) (err error) {
 		return s.Store.FinishEmpty(ctx, job)
 	}
 	if imported && source.Context != nil && source.Context.Conversation != "" {
-		return s.Store.Conversation(ctx, job, source.Context.Conversation)
+		return s.conversation(ctx, job, source.Context.Conversation)
 	}
 	if imported && source.Context != nil && oneOf(source.Context.Role, "assistant", "system", "tool") {
 		return s.Store.FinishEmpty(ctx, job)
@@ -181,4 +196,41 @@ func (s Service) Process(ctx context.Context, job worker.Job) (err error) {
 		return &worker.JobError{Code: "model_output_invalid", Retry: s.Store.Unpaid(instructions.Text() + string(modelInput))}
 	}
 	return s.Store.Apply(ctx, job, Result{Source: source, Project: paidScope.ProjectID, Output: output, MentionText: mentionText, Location: location})
+}
+
+// conversation extracts one segment of the conversation of an imported
+// message. An answer that is not valid is discarded; the queue tries a free
+// call again.
+func (s Service) conversation(ctx context.Context, job worker.Job, conversation string) error {
+	work, found, err := s.Store.Conversation(ctx, job, conversation)
+	if err != nil || !found {
+		return err
+	}
+	output := ConversationOutput{}
+	if work.HasOwnerText() {
+		if err := s.Store.Configured(); err != nil {
+			return err
+		}
+		if err := s.Store.Ready(); err != nil {
+			return err
+		}
+		prompt := work.Prompt()
+		record, err := json.Marshal(map[string]any{"rawPrompt": prompt})
+		if err != nil {
+			return err
+		}
+		instructions := prompts.Must("conversation-extraction")
+		_, answer, err := s.Generator.GenerateForJob(ctx, job, "extraction", instructions, prompt, record, work.Refs())
+		if err != nil {
+			return err
+		}
+		var valid bool
+		if output, valid = ParseConversationOutput(answer); !valid {
+			if err := s.Store.DiscardResult(ctx, job); err != nil {
+				return err
+			}
+			return &worker.JobError{Code: "model_output_invalid", Retry: s.Store.Unpaid(instructions.Text() + prompt)}
+		}
+	}
+	return work.Apply(ctx, output)
 }

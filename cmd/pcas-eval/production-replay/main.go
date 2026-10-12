@@ -20,6 +20,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/soaringjerry/PCAS/internal/ai"
+	"github.com/soaringjerry/PCAS/internal/app"
 	"github.com/soaringjerry/PCAS/internal/blob"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres"
@@ -271,7 +272,7 @@ func run(ctx context.Context, args []string) (runErr error) {
 			var request workspace.DeskTurnRequest
 			opErr = json.Unmarshal(op.Request, &request)
 			if opErr == nil {
-				result.Result, opErr = store.DeskTurn(work, scope, request)
+				result.Result, opErr = app.Secretary(store).DeskTurn(work, scope, request)
 			}
 		case "ingest":
 			var request memory.IngestRequest
@@ -288,7 +289,7 @@ func run(ctx context.Context, args []string) (runErr error) {
 			var request workspace.Command
 			opErr = json.Unmarshal(op.Request, &request)
 			if opErr == nil {
-				result.Result, opErr = store.Execute(work, scope, request)
+				result.Result, opErr = app.New(store).Execute(work, scope, request)
 			}
 		case "deputy":
 			result.Result, opErr = processDeputy(work, store, pool, copy.Owner, op.RunID)

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/soaringjerry/PCAS/internal/contextbuilder"
+	"github.com/soaringjerry/PCAS/internal/modelcall"
 	"regexp"
 	"strings"
 	"testing"
@@ -33,7 +34,7 @@ func TestHeavyReaderPagesAllMembersAndDisclosesSkippedGroups(t *testing.T) {
 	agent := workspace.Agent{ID: "phase26", MemoryKinds: []string{"fact", "preference", "decision", "intention", "plan"}}
 	start := time.Now()
 	execution := admittedInteractiveRequest(t, f.Store, f.Scope, agent.ID)
-	readCtx := context.WithValue(f.Context, interactiveExecutionKey{}, execution)
+	readCtx := modelcall.WithExecution(f.Context, execution)
 	picked, refs, keys := f.Store.heavyUse(readCtx, f.Context, f.Scope, agent, nil, "Inspect this fictitious archive completely", u, string(memory.NewID()), "", "reader:prepare")
 	seen := map[memory.ID]bool{}
 	for _, r := range refs {

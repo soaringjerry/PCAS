@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/soaringjerry/PCAS/cmd/pcas-eval/doing"
+	"github.com/soaringjerry/PCAS/internal/app"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres"
 	"github.com/soaringjerry/PCAS/internal/workspace"
@@ -116,7 +117,7 @@ func tierProvider(name string, databases chan *tierDatabase, categories map[stri
 		}
 		d.bridge.reset("", s, t, name)
 		request := workspace.DeskTurnRequest{RequestID: string(memory.NewID()), AgentID: "v2-tiers", Text: t.Request}
-		out, err := d.store.DeskTurn(postgres.WithMemoryTier(ctx, name), d.scope, request)
+		out, err := app.Secretary(d.store).DeskTurn(postgres.WithMemoryTier(ctx, name), d.scope, request)
 		usage, inputChars, contextChars := d.bridge.metrics()
 		e := doing.Evidence{InputChars: inputChars, ContextChars: contextChars, Usage: &usage}
 		for _, n := range usage.Calls {

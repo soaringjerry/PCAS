@@ -79,7 +79,7 @@ Pause after the recovery attempt limit or an exhausted recovery budget.
 Keep accounting independent of caller cancellation and business transaction failure.
 Record failed paid attempts and unresolved accounting states.
 
-The temporary `generatePaid` adapter serves its existing background domain callers.
+The temporary `generatePaid` adapter served its background domain callers. It was removed on 2026-10-12: `internal/modelcall/jobcall` makes those calls.
 Its removal condition is migration of those callers to the gateway's declared request and receipt interfaces.
 Sol owns this adapter during the foundation.
 Unmigrated secretary, deputy, embedding, media, channel, routing, and diagnostic calls remain explicit coverage gaps.

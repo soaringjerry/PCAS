@@ -24,7 +24,7 @@ func session(text string) *fakeSession {
 func (f *fakeSession) Context(context.Context) (View, error) {
 	return View{Agent: "虚构秘书", Aliases: map[string]workspace.Item{}}, f.contextErr
 }
-func (f *fakeSession) Input(context.Context) (*Asking, string, error) {
+func (f *fakeSession) Input(_ context.Context, _ Recall) (*Asking, string, error) {
 	if f.inputErr != nil {
 		return nil, "verify", f.inputErr
 	}
@@ -57,7 +57,7 @@ func (f *fakeSession) SaveSentence(context.Context) error {
 
 func conduct(f *fakeSession, in Conducting) Conducted {
 	in.Limits = limits
-	out, err := Conduct(context.Background(), f, in)
+	out, err := Conduct(context.Background(), f, f, in)
 	if err != nil {
 		panic(err)
 	}

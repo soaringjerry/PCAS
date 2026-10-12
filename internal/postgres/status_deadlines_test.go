@@ -35,7 +35,7 @@ func TestStatusDeadlineWritesDeduplicateAndDelete(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if err := (organize.Service{Store: s.OrganizeStore(), Generator: s, Version: OrganizeVersion}).Process(context.Background(), organizeTestJob(t, s, scope)); err != nil {
+	if err := (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: OrganizeVersion}).Process(context.Background(), organizeTestJob(t, s, scope)); err != nil {
 		t.Fatal(err)
 	}
 

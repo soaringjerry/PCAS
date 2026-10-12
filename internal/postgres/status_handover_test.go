@@ -79,7 +79,7 @@ func TestStatusHandoverGroundingLimitsAndDeletion(t *testing.T) {
 
 	secretaryModel(t, s, func(w http.ResponseWriter, r *http.Request) { handoverFakeReply(t, w, r) })
 	j := handoverTestJob(t, s, scope)
-	if err := (handover.Service{Store: s.HandoverStore(), Generator: s}).Process(context.Background(), j); err != nil {
+	if err := (handover.Service{Store: s.HandoverStore(), Generator: jobCalls(s)}).Process(context.Background(), j); err != nil {
 		t.Fatal(err)
 	}
 	about, err := s.About(context.Background(), scope, "")
@@ -188,7 +188,7 @@ func TestStatusCorrectionAndSourceWithdrawal(t *testing.T) {
 	s, scope, ctx := testStore(t), owner(), context.Background()
 	secretaryModel(t, s, func(w http.ResponseWriter, r *http.Request) { handoverFakeReply(t, w, r) })
 	refs := statusTestMemories(t, s, scope, 12)
-	if err := (handover.Service{Store: s.HandoverStore(), Generator: s}).Process(ctx, handoverTestJob(t, s, scope)); err != nil {
+	if err := (handover.Service{Store: s.HandoverStore(), Generator: jobCalls(s)}).Process(ctx, handoverTestJob(t, s, scope)); err != nil {
 		t.Fatal(err)
 	}
 	previous, err := s.ReadHandover(ctx, scope)

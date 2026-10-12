@@ -29,7 +29,7 @@ func TestInteractiveWorkerRecoversDeletedInputAccountingAfterRestart(t *testing.
 	if _, err := s.pool.Exec(ctx, `CREATE FUNCTION reject_continuation_usage() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'synthetic usage failure'; END $$; CREATE TRIGGER reject_continuation_usage BEFORE INSERT ON model_usage FOR EACH ROW EXECUTE FUNCTION reject_continuation_usage()`); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.calls.Call(ctx, request); err == nil {
+	if _, err := s.Gateway().Call(ctx, request); err == nil {
 		t.Fatal("accounting failure was hidden")
 	}
 	if err := s.Delete(ctx, scope, memory.DeleteRequest{Targets: request.Refs}); err != nil {
@@ -158,7 +158,7 @@ func TestInteractiveWorkerSavesResponseWithoutRepeatingCanceledRequest(t *testin
 	work, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	done := make(chan error, 1)
-	go func() { _, err := s.calls.Call(work, request); done <- err }()
+	go func() { _, err := s.Gateway().Call(work, request); done <- err }()
 	pending := false
 	for !pending {
 		s.pendingInteractive.Range(func(_, _ any) bool { pending = true; return false })
@@ -182,7 +182,7 @@ func TestInteractiveWorkerSavesResponseWithoutRepeatingCanceledRequest(t *testin
 	if err != nil || status.Results != 1 || status.PendingResults != 0 || status.PendingAccounting != 0 || !status.CountsKnown || calls.Load() != 1 {
 		t.Fatal(status, err, calls.Load())
 	}
-	if _, err := s.calls.Call(ctx, request); !errors.Is(err, modelcall.ErrNotApplicable) {
+	if _, err := s.Gateway().Call(ctx, request); !errors.Is(err, modelcall.ErrNotApplicable) {
 		t.Fatal("canceled result became applicable", err)
 	}
 	var count int
@@ -239,7 +239,7 @@ func TestInteractiveWorkerClassifiesInterruptedCallsWithoutResubmission(t *testi
 				if outcome != "failed" || code != "provider_not_started" || accounting != "settled" || budget != 0 {
 					t.Fatal(outcome, code, accounting, budget)
 				}
-				_, err = s.calls.Call(ctx, request)
+				_, err = s.Gateway().Call(ctx, request)
 				var failure *modelcall.Failure
 				if !errors.As(err, &failure) || failure.Code != "provider_not_started" {
 					t.Fatal("never-submitted call became unknown", err)

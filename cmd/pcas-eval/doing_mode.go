@@ -20,6 +20,7 @@ import (
 	"github.com/soaringjerry/PCAS/cmd/pcas-eval/doing"
 	"github.com/soaringjerry/PCAS/cmd/pcas-eval/fixture"
 	"github.com/soaringjerry/PCAS/internal/ai"
+	"github.com/soaringjerry/PCAS/internal/app"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
@@ -264,7 +265,7 @@ func runDoingObserved(args []string, captured func(doing.Task, doing.Evidence, f
 				return doing.Evidence{}, err
 			}
 			before := len(observed.Calls())
-			out, err := store.DeskTurn(ctx, seeded.Scope, workspace.DeskTurnRequest{RequestID: string(memory.NewID()), AgentID: "v2-capture", Text: t.Request})
+			out, err := app.Secretary(store).DeskTurn(ctx, seeded.Scope, workspace.DeskTurnRequest{RequestID: string(memory.NewID()), AgentID: "v2-capture", Text: t.Request})
 			if err != nil {
 				return doing.Evidence{}, err
 			}

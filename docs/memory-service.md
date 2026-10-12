@@ -28,7 +28,7 @@ An application-service boundary must have explicit interfaces in addition to a p
 The public retrieval path and team retrieval path have different inputs and ranking options.
 Query hints currently use deterministic text rules. These rules are not complete natural-language interpretation.
 
-The foundation adds a gateway for the existing `generatePaid` background callers.
+The foundation adds a gateway for the background callers. Since 2026-10-12 `internal/modelcall/jobcall` makes their calls; the storage package keeps the paid results.
 The [shared skeleton scope](tasks/foundation-shared-skeleton.md) defines this addition to the earlier implementation snapshot.
 Other provider entry points remain explicit migration exceptions in the [boundary check](../internal/modelcall/provider_boundary_test.go).
 Business workflows remain in PostgreSQL during this batch.
@@ -86,7 +86,7 @@ A query inside a secretary or deputy execution records that execution as its cau
 Image interpretation and transcription use the same recorded entry as embeddings: `CallVision` and `CallTranscription`.
 The image instructions are the registered prompt `vision`.
 A transcription's recorded cost is the audio length at the provider's price for one minute, and its token counts are estimates.
-Telegram voice messages use `Store.TranscribeVoice`, which records the call for the owner. Before this change that call had no record and no cost.
+Telegram voice messages use `voice.Transcriber` in `internal/input/voice`, which records the call for the owner. Before this change that call had no record and no cost.
 No production code outside `internal/modelcall` calls a provider.
 
 ### Day Activity

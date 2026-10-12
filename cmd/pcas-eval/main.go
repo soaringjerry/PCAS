@@ -18,6 +18,7 @@ import (
 
 	"github.com/soaringjerry/PCAS/cmd/pcas-eval/fixture"
 	"github.com/soaringjerry/PCAS/internal/ai"
+	"github.com/soaringjerry/PCAS/internal/app"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
@@ -306,7 +307,7 @@ func run() error {
 		before := len(observed.Calls())
 		start := time.Now()
 		request := string(memory.NewID())
-		out, err := store.DeskTurn(ctx, seeded.Scope, workspace.DeskTurnRequest{RequestID: request, AgentID: "eval", Text: q.Text})
+		out, err := app.Secretary(store).DeskTurn(ctx, seeded.Scope, workspace.DeskTurnRequest{RequestID: request, AgentID: "eval", Text: q.Text})
 		if err != nil {
 			return fmt.Errorf("%s product secretary: %w", q.ID, err)
 		}

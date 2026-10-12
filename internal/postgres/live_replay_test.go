@@ -74,7 +74,7 @@ func TestLiveContinuityReplay(t *testing.T) {
 		if err = s.ProcessIndex(ctx, leaseStage(t, s, scope, ref, "source.tokenize")); err != nil {
 			t.Fatal(err)
 		}
-		if err = s.ProcessEmbedding(ctx, leaseStage(t, s, scope, ref, "source.embed")); err != nil {
+		if err = indexer(s).Process(ctx, leaseStage(t, s, scope, ref, "source.embed")); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -83,7 +83,7 @@ func TestLiveContinuityReplay(t *testing.T) {
 	claims := 0
 	for _, key := range []string{"old-bookstore", "homework-v3", "pcas-final", "pcas-ai", "state", "wake"} {
 		start := time.Now()
-		if err = (extraction.Service{Store: s.ExtractionStore(), Generator: s, MaxAttempts: MaxJobAttempts}).Process(ctx, leaseStage(t, s, scope, refs[key], "source.extract")); err != nil {
+		if err = (extraction.Service{Store: s.ExtractionStore(), Generator: jobCalls(s), MaxAttempts: MaxJobAttempts}).Process(ctx, leaseStage(t, s, scope, refs[key], "source.extract")); err != nil {
 			t.Fatalf("live extraction %s: %v", key, err)
 		}
 		extractionTimes[key] = time.Since(start).Milliseconds()

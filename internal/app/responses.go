@@ -38,13 +38,13 @@ const jobKey = "owner, record, record version, stage"
 // Responses is the one authoritative table. A stage that is not here has no
 // handler, and the worker does not run it.
 var Responses = []Response{
-	{"source.parse", "Source version accepted, with an attachment", "Input", "Attachment processor", jobKey, func(db *postgres.Store) worker.Handler { return db.ProcessAttachment }},
+	{"source.parse", "Source version accepted, with an attachment", "Input", "Attachment processor", jobKey, func(db *postgres.Store) worker.Handler { return Attachment(db) }},
 	{"source.chunk", "Source version accepted, with text", "Input", "Text processor", jobKey, func(db *postgres.Store) worker.Handler { return db.ProcessChunks }},
 	{extraction.Stage, "Source text available", "Input", "Memory extraction specialist", jobKey, func(db *postgres.Store) worker.Handler { return Extraction(db).Process }},
 	{"source.tokenize", "Search input changed for a source", "Input", "Search index processor", jobKey, func(db *postgres.Store) worker.Handler { return db.ProcessIndex }},
 	{"memory.index", "Search input changed for a memory", "Memory", "Search index processor", jobKey, func(db *postgres.Store) worker.Handler { return db.ProcessIndex }},
-	{"source.embed", "Embedding input changed for a source", "Input", "Vector index processor", jobKey, func(db *postgres.Store) worker.Handler { return db.ProcessEmbedding }},
-	{"memory.embed", "Embedding input changed for a memory", "Memory", "Vector index processor", jobKey, func(db *postgres.Store) worker.Handler { return db.ProcessEmbedding }},
+	{"source.embed", "Embedding input changed for a source", "Input", "Vector index processor", jobKey, func(db *postgres.Store) worker.Handler { return Embedding(db).Process }},
+	{"memory.embed", "Embedding input changed for a memory", "Memory", "Vector index processor", jobKey, func(db *postgres.Store) worker.Handler { return Embedding(db).Process }},
 	{organize.Stage, "Statement interpretation input changed", "Memory", "Organization specialist", jobKey, func(db *postgres.Store) worker.Handler { return Organize(db).Process }},
 	{comparison.Stage, "Statement interpretation input changed", "Memory", "Statement comparison specialist", jobKey + "; the stage names the comparison batch", func(db *postgres.Store) worker.Handler { return Compare(db).Process }},
 	{aliasscan.Stage, "Entity comparison input changed", "Memory", "Entity candidate specialist", jobKey, func(db *postgres.Store) worker.Handler { return AliasScan(db).Process }},

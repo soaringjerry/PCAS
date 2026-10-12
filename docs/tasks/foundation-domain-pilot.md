@@ -39,11 +39,13 @@ flowchart LR
 | Project handover | `internal/workspace/projecthandover` | `internal/postgres/project_handover.go` | The input assembly, the evidence check queries, the scheduler, and the reader for the project page. |
 | Global handover | `internal/currentstate/handover` | `internal/postgres/status_handover.go` | The input assembly, the scheduler, and the stale rule in SQL. |
 | Alias scan | `internal/interpretation/aliasscan` | `internal/postgres/entity_candidates.go` | The batch selection, the name checks of a proposed pair, and the scheduler. |
-| Statement comparison | `internal/interpretation/comparison` | `internal/postgres/compare.go` | The batch plan, the write of accepted edges with its eligibility checks, the receipt, the scheduler, and the rejudge path. |
+| Statement comparison | `internal/interpretation/comparison` | `internal/postgres/compare.go` | The batch plan, the write of accepted edges with its eligibility checks, the receipt, the scheduler, and the reads and the write of a rejudged pair. |
 | Entity comparison | `internal/interpretation/comparison` | `internal/postgres/compare_entities.go` | The pair selection, the name and evidence checks, the merge, the receipt, and the scheduler. |
 | Organize | `internal/interpretation/organize` | `internal/postgres/organize.go` | The batch selection, the write of labels, groups, dates and rule scope for each statement that is still current, and the scheduler. |
 | Attachment parsing | `internal/input/attachment` | `internal/postgres/attachments.go` | The job, the lock of one original, the write of the derived text, and the receipts of paid readings. The archive import is not moved. |
-| Extraction | `internal/interpretation/extraction` | `internal/postgres/processing.go` | The reads for the model input, the write of each decided item, the state of the source, and the conversation path of an import. |
+| Vector index | `internal/retrieval` (`Indexer`) | `internal/postgres/processing.go` | The choice of the texts that have no vector yet, and the write of the vectors under the job's lease. |
+| Voice transcription | `internal/input/voice` | None. | Nothing. The call is recorded by the gateway. |
+| Extraction | `internal/interpretation/extraction` | `internal/postgres/processing.go` | The reads for the model input, the write of each decided item, the state of the source, and the preparation and the write of one segment of an imported conversation. |
 
 The topic project service holds the proposal rules: a match must name a project that the model saw, a new project waits until the model has seen every project, an existing name attaches instead of creating, the user's own name for a project is kept, and four projects are created in one local day at most.
 Its input assembly reads memory and clips evidence in one function with SQL. That function stays in storage until memory retrieval has its own interface.
@@ -83,9 +85,9 @@ Behavior tests run the actions against a workspace in memory. They need no datab
 The rules for applying an answer are in the same package: ten actions in one turn at most, the receipt of an action whose fields were not read, the receipt of an action that did not finish, the alias of an item that an earlier action of the turn made, and which shown memories the owner took up or mentioned.
 More rules of the turn are in the same package: the check of a request, what the self-check can change in an answer, the lines for memories that a reader adds, what became of each paid call, and what the owner reads when a turn did not finish.
 `secretary.Apply` is the order in which a read answer is applied: the reply, the memories that the owner took up or mentioned, the actions with the items that earlier actions of the turn made, and the cards. It works through the `Turn` interface. Storage implements `Turn` in the transaction of the turn; one action runs in a transaction of its own there, so that the owner can undo it alone. Behavior tests run `Apply` against a turn in memory.
-`secretary.Ask` is the order in which the model is asked: the heavy reading before the answer, the answer call, the reading that a deeper answer asks for, the rise of the tier, and the self-check with its time limit. It works through the `Model` interface. Storage implements `Model` with the readers and the gateway calls. Flow tests run `Ask` against a model in memory.
+`secretary.Ask` is the order in which the model is asked: the heavy reading before the answer, the answer call, the reading that a deeper answer asks for, the rise of the tier, and the self-check with its time limit. It works through the `Model` interface. `secretary.Asker` implements `Model` with the readers and the gateway calls; storage gives it the checks of the turn's context. Flow tests run `Ask` against a model in memory.
 `secretary.Conduct` is the whole turn: it reads the context, asks the model, checks that the targets of the answer are unchanged, and applies the answer. A turn that cannot finish keeps the owner's sentence and says why. Each paid call is recorded with what became of it. It works through the `Session` interface, which storage implements in the transaction of the turn. Flow tests run `Conduct` against a session in memory.
-What is still in `DeskTurn` in `internal/postgres/desk_turn.go` is 165 lines of transport: the check and identity of the request, admission in order, the replay of a repeated request, the receipts of attachments, and the saving of the turn. The context reads behind `Session` are SQL and stay in storage.
+What is still in `deskStore.Turn` in `internal/postgres/desk_turn.go` is 165 lines of transport: the check and identity of the request, admission in order, the replay of a repeated request, the receipts of attachments, and the saving of the turn. The context reads behind `Session` are SQL and stay in storage.
 
 The context builder is `internal/contextbuilder`. It serializes memory and current state for the model input of an agent turn: the handover, the requirements, the dates, the memories with their metadata, and the lines of a source context. The secretary and the deputy use the same rules.
 Its five instruction sentences are registered prompts: `context-requirements`, `context-dates`, `context-groups`, `context-evidence`, and `context-recall-relaxed`. Its headings and data lines are serialization and stay in the package. A test fixes the bytes of the sentences.
@@ -111,7 +113,42 @@ The rules of a statement that is about to be written as a memory are in `interna
 
 The memory retrieval rules that need no storage are in `internal/retrieval`: the budget of a recall with its defaults and limits, and the choice of the part of a source text that answers a query. The recall itself, with its structured, lexical, and vector reads and its access rules, is SQL and stays in `internal/postgres/retrieval.go`.
 
-The chunk, index, embedding, and summary jobs stay in storage. They hold no interpretation rule: the text split is `memory.SplitText`, the embedding call is the gateway's, and the summary is a memory read. The card job only acknowledges queue slots from before an upgrade.
+The chunk, index, and summary jobs stay in storage. They hold no interpretation rule: the text split is `memory.SplitText`, and the summary is a memory read. The embedding job left storage with its model call: `retrieval.Indexer` chooses the provider, makes the call, and decides what a failed call becomes for the queue. The card job only acknowledges queue slots from before an upgrade.
+
+## Model Calls Outside the Storage Package
+
+A storage package must not make a model call. The domain package owns the request, the call, and the meaning of each failure. Storage keeps the records of the call and the writes of the flow.
+The test `TestStoragePackagesDoNotMakeModelCalls` in `internal/app/boundaries_test.go` enforces this rule: a storage package cannot refer to the gateway type or its constructor, and cannot call a method that submits a model call.
+`internal/app.Gateway` builds the gateway over the store's call records (`Store.CallRecords`, `Store.DirectCallRecords`) and the configured models. The store holds no gateway.
+
+All ten calls that were in the storage package on 2026-10-12 have an owner outside it.
+
+| Call | Owner |
+|---|---|
+| The generation of each background job | `internal/modelcall/jobcall` (`Generator`). It maps each gateway result to the queue's failure. The storage adapter `Store.JobCallStore` keeps the paid results and the reservations. |
+| The rejudge of a superseded pair | `comparison.Service`. Storage gives the pair and applies the verdict. |
+| One segment of an imported conversation | `extraction.Service`. Storage prepares the segment and applies the answer. |
+| The embedding of a source or a memory | `retrieval.Indexer`. |
+| The transcription of a channel's voice message | `voice.Transcriber`. |
+| The secretary's answer with its retry, and its self-check | `secretary.Asker`. Storage verifies the turn's context before a second answer call and before the check. |
+| The memory readers of the secretary and the deputy | `internal/contextbuilder/reader` (`Service`). Storage gives the members and the memories of a group. |
+| One stage call of an admitted execution | `internal/modelcall/stagecall` (`Caller`). The readers and the self-check use it. |
+| The query embedding of a recall | `retrieval.Recaller`. `Store.RecallWith` checks the request first and then asks for the vector once. |
+| The transcription and the image reading of an attachment | `attachment.Reader`. Storage keeps the lock of one original and the receipts of paid readings. |
+| The deputy's answer and its self-check | `deputy.Calls`, with the requests from `deputy.AnswerRequest` and `deputy.SelfcheckRequest`. |
+
+The accounting recovery of an interactive call submits nothing. It settles a verified receipt with `modelcall.SettleReceipt` over the store's own records.
+
+Three flows keep their order in storage and get their model steps from the application. Storage calls each step at its place; it does not build the request and does not see the gateway.
+
+| Flow | Entry in storage | Steps |
+|---|---|---|
+| The secretary's turn | `Store.DeskStore().Turn` admits the request, places the turn in its conversation, and calls the service once in the transaction of the turn. | `secretary.Steps`: the reading of an attachment, and `Conduct` with the asker and the recall. |
+| A workspace command that queues a run | `Store.ExecuteWith` searches memory before it takes the owner lock. | The query embedding. |
+| The deputy's run | `Store.RunAgentJobs` and `Store.RunDeputy` hold the leases, the recovery, and the selection of a result. | `deputy.Steps`: the reader and the two calls. The order of the run leaves storage when the deputy's storage is split. That is the last step of the split. |
+
+`internal/app.Application` is the store with these services. The HTTP server, the Telegram channel, and the evaluation tools use it for the secretary, the deputy, a recall, and a workspace command. Compose it after the store has its models.
+Tests in the storage package compose the same services in `internal/postgres/compose_test.go`, at each call.
 
 ## Pattern for the Next Paths
 
@@ -141,7 +178,7 @@ The saved input record keeps its form, so a result that was paid before the rele
 
 | Part | Callers | Removal condition |
 |---|---|---|
-| `Store.GenerateForJob` and `Store.HasSavedResult` in `internal/postgres` | The effort service. | Background coordination owns the queue's failure policy and the saved-result interface. |
+| `deputy.Steps` given to `Store.RunAgentJobs` and `Store.RunDeputy` | The deputy's run, whose order is in storage. | The deputy's run leaves the storage package. | The last model call leaves the storage package. The application then builds the gateway from the store's call records. |
 | `maintainTaskPlanTx` and the scheduler query `enqueueEffortTx` in `internal/postgres/effort.go` | Item saves and the status scheduler. | The workspace item commands and the scheduler leave the storage package. |
 | `workspace.ContentHash` used by storage code | Deputy and secretary input checks. | Those paths leave the storage package. |
 

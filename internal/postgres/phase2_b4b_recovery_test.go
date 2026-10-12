@@ -41,7 +41,7 @@ func TestPhase2B4bWorkerChild(t *testing.T) {
 		if err = os.WriteFile(os.Getenv("PCAS_B4B_WORKER_JOB"), data, 0600); err != nil {
 			return err
 		}
-		return (extraction.Service{Store: s.ExtractionStore(), Generator: s, MaxAttempts: MaxJobAttempts}).Process(ctx, job)
+		return (extraction.Service{Store: s.ExtractionStore(), Generator: jobCalls(s), MaxAttempts: MaxJobAttempts}).Process(ctx, job)
 	}}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	for n := 0; n < 100; n++ {
 		worked, err := w.RunOnce(context.Background())

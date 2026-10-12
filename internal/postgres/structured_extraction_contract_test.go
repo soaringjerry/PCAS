@@ -30,7 +30,7 @@ func phase35Model(t *testing.T, s *Store, reply func(http.ResponseWriter, *http.
 }
 func phase35Extract(t *testing.T, s *Store, scope memory.Scope, ref memory.Ref) {
 	t.Helper()
-	if err := (extraction.Service{Store: s.ExtractionStore(), Generator: s, MaxAttempts: MaxJobAttempts}).Process(context.Background(), leaseStage(t, s, scope, ref, "source.extract")); err != nil {
+	if err := (extraction.Service{Store: s.ExtractionStore(), Generator: jobCalls(s), MaxAttempts: MaxJobAttempts}).Process(context.Background(), leaseStage(t, s, scope, ref, "source.extract")); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -147,7 +147,7 @@ func TestStructuredExtractionUsesTrustMatrix(t *testing.T) {
 					if err != nil {
 						t.Fatal(err)
 					}
-					if err := (extraction.Service{Store: s.ExtractionStore(), Generator: s, MaxAttempts: MaxJobAttempts}).Process(ctx, leaseStage(t, s, scope, memory.Ref{ID: record, Version: version, Kind: memory.SourceKind}, stage)); err != nil {
+					if err := (extraction.Service{Store: s.ExtractionStore(), Generator: jobCalls(s), MaxAttempts: MaxJobAttempts}).Process(ctx, leaseStage(t, s, scope, memory.Ref{ID: record, Version: version, Kind: memory.SourceKind}, stage)); err != nil {
 						t.Fatal(err)
 					}
 				}
@@ -339,7 +339,7 @@ func TestExtractionFailurePreservesGoodResultAndCounts(t *testing.T) {
 				if _, err := s.pool.Exec(ctx, `UPDATE memory_jobs SET attempts=$2 WHERE id=$1`, j.ID, attempt); err != nil {
 					t.Fatal(err)
 				}
-				err := (extraction.Service{Store: s.ExtractionStore(), Generator: s, MaxAttempts: MaxJobAttempts}).Process(ctx, j)
+				err := (extraction.Service{Store: s.ExtractionStore(), Generator: jobCalls(s), MaxAttempts: MaxJobAttempts}).Process(ctx, j)
 				var je *worker.JobError
 				if !errors.As(err, &je) || je.Code == "" {
 					t.Fatalf("failure not named: %v", err)
@@ -379,7 +379,7 @@ func TestExtractionRetriesPaidResultAfterPersistenceFailure(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = (extraction.Service{Store: s.ExtractionStore(), Generator: s, MaxAttempts: MaxJobAttempts}).Process(ctx, j)
+	err = (extraction.Service{Store: s.ExtractionStore(), Generator: jobCalls(s), MaxAttempts: MaxJobAttempts}).Process(ctx, j)
 	if err == nil {
 		t.Fatal("write fault did not reach real business transaction")
 	}
@@ -396,7 +396,7 @@ func TestExtractionRetriesPaidResultAfterPersistenceFailure(t *testing.T) {
 	}
 	defer peer.Close()
 	peer.SetModels(s.models)
-	if err := (extraction.Service{Store: peer.ExtractionStore(), Generator: peer, MaxAttempts: MaxJobAttempts}).Process(ctx, j); err != nil {
+	if err := (extraction.Service{Store: peer.ExtractionStore(), Generator: jobCalls(peer), MaxAttempts: MaxJobAttempts}).Process(ctx, j); err != nil {
 		t.Fatal("durable retry", err)
 	}
 	if calls.Load() != 1 || len(phase35Snapshot(t, s, scope).Tasks) != 1 {

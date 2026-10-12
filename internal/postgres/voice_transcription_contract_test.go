@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"errors"
+	"github.com/soaringjerry/PCAS/internal/input/voice"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -24,7 +25,8 @@ func TestVoiceTranscriptionRecordsOneSettledCallWithItsCost(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 	s.SetModels(&ai.Registry{HTTP: server.Client(), Config: ai.Configuration{Transcription: "asr", Providers: []ai.Provider{{ID: "asr", Transcription: true, Protocol: "openai", BaseURL: server.URL, Model: "synthetic-asr", AudioPerMinute: 0.06}}}})
-	text, err := s.TranscribeVoice(ctx, scope, strings.NewReader("audio-bytes"), "voice.ogg", 30)
+	transcriber := voice.Transcriber{Models: s.Models(), Calls: s.Gateway()}
+	text, err := transcriber.TranscribeVoice(ctx, scope, strings.NewReader("audio-bytes"), "voice.ogg", 30)
 	if err != nil || text != "虚构语音：明天下午三点开会" || calls.Load() != 1 {
 		t.Fatal(text, err, calls.Load())
 	}
@@ -45,7 +47,8 @@ func TestVoiceTranscriptionWithoutAProviderStartsNothing(t *testing.T) {
 	s, scope, ctx := testStore(t), owner(), context.Background()
 	mustIngest(t, s, scope, input())
 	s.SetModels(&ai.Registry{})
-	if _, err := s.TranscribeVoice(ctx, scope, strings.NewReader("audio-bytes"), "voice.ogg", 30); !errors.Is(err, memory.ErrUnavailable) {
+	transcriber := voice.Transcriber{Models: s.Models(), Calls: s.Gateway()}
+	if _, err := transcriber.TranscribeVoice(ctx, scope, strings.NewReader("audio-bytes"), "voice.ogg", 30); !errors.Is(err, memory.ErrUnavailable) {
 		t.Fatal(err)
 	}
 	var rows int

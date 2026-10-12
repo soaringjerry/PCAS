@@ -97,7 +97,7 @@ func processDeputy(ctx context.Context, s *postgres.Store, pool *pgxpool.Pool, o
 	if !selected || pending != 1 {
 		return run, errors.New("replay_deputy_queue_not_exclusive")
 	}
-	if err := s.RunDeputyOnce(ctx); err != nil {
+	if err := app.New(s).RunDeputyOnce(ctx); err != nil {
 		return run, err
 	}
 	var body json.RawMessage

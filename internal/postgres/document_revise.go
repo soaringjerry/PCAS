@@ -3,21 +3,17 @@ package postgres
 import (
 	"context"
 	"encoding/json"
+	"strings"
+	"time"
+
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/worker"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 	"github.com/soaringjerry/PCAS/internal/workspace/deputy"
-	"strings"
-	"time"
 )
 
-type reviseSnapshot struct {
-	Run         workspace.Run `json:"run"`
-	RawPrompt   string        `json:"rawPrompt,omitempty"`
-	Coverage    *useCoverage  `json:"coverage,omitempty"`
-	MemoryReady bool          `json:"memoryReady,omitempty"`
-}
+type reviseSnapshot = deputy.Snapshot
 
 func validateReviseTargetTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run workspace.Run) error {
 	var valid bool

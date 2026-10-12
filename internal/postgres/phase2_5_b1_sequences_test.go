@@ -60,7 +60,7 @@ func TestPhase25B1_X22_TwoWorkersTwelveRounds(t *testing.T) {
 				close(entered)
 				return
 			}
-			errors <- (organize.Service{Store: f.store.OrganizeStore(), Generator: f.store, Version: postgres.OrganizeVersion}).Process(f.ctx, *j)
+			errors <- (organize.Service{Store: f.store.OrganizeStore(), Generator: jobCalls(f.store), Version: postgres.OrganizeVersion}).Process(f.ctx, *j)
 		}()
 		go func() {
 			defer workers.Done()
@@ -108,7 +108,7 @@ func TestPhase25B1_X22_TwoWorkersTwelveRounds(t *testing.T) {
 				<-start
 				j, err := f.store.Claim(f.ctx, 30*time.Second)
 				if err == nil && j != nil {
-					err = (organize.Service{Store: f.store.OrganizeStore(), Generator: f.store, Version: postgres.OrganizeVersion}).Process(f.ctx, *j)
+					err = (organize.Service{Store: f.store.OrganizeStore(), Generator: jobCalls(f.store), Version: postgres.OrganizeVersion}).Process(f.ctx, *j)
 				}
 				errors <- err
 			}()
@@ -256,7 +256,7 @@ func TestPhase25B1_RandomSequenceInvariants(t *testing.T) {
 			case 1:
 				f.schedule(t)
 				if j := f.claimOrganize(t); j != nil {
-					if err := (organize.Service{Store: f.store.OrganizeStore(), Generator: f.store, Version: postgres.OrganizeVersion}).Process(f.ctx, *j); err != nil {
+					if err := (organize.Service{Store: f.store.OrganizeStore(), Generator: jobCalls(f.store), Version: postgres.OrganizeVersion}).Process(f.ctx, *j); err != nil {
 						t.Fatal(err)
 					}
 				}

@@ -93,7 +93,7 @@ func TestPhase26A2LongDeferralWarnsOnceAndResetsAfterCompletion(t *testing.T) {
 	}
 	phase26Exec(t, f, `UPDATE memory_jobs SET available_at=now() WHERE id=$1`, j.ID)
 	retry := phase26ClaimStage(t, f, OrganizeStage)
-	if err := (organize.Service{Store: f.Store.OrganizeStore(), Generator: f.Store, Version: OrganizeVersion}).Process(f.Context, retry); err != nil {
+	if err := (organize.Service{Store: f.Store.OrganizeStore(), Generator: jobCalls(f.Store), Version: OrganizeVersion}).Process(f.Context, retry); err != nil {
 		t.Fatal(err)
 	}
 	var retained int

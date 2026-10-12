@@ -46,7 +46,7 @@ func TestP3RejudgeOnlySupersededAndReusesPaidWrite(t *testing.T) {
  CREATE TRIGGER fictional_rejudge_failure BEFORE INSERT ON background_markers FOR EACH ROW EXECUTE FUNCTION fictional_rejudge_failure()`); e != nil {
 		t.Fatal(e)
 	}
-	if e = (comparison.Service{Store: s.CompareStore(), Generator: s, Version: CompareVersion}).Process(ctx, job); e == nil {
+	if e = (comparison.Service{Store: s.CompareStore(), Generator: jobCalls(s), Version: CompareVersion}).Process(ctx, job); e == nil {
 		t.Fatal("expected write failure")
 	}
 	var retired string
@@ -61,7 +61,7 @@ func TestP3RejudgeOnlySupersededAndReusesPaidWrite(t *testing.T) {
 		t.Fatal(e)
 	}
 	defer reopened.Close()
-	if e = (comparison.Service{Store: reopened.CompareStore(), Generator: reopened, Version: CompareVersion}).Process(ctx, job); e != nil {
+	if e = (comparison.Service{Store: reopened.CompareStore(), Generator: jobCalls(reopened), Version: CompareVersion}).Process(ctx, job); e != nil {
 		t.Fatal(e)
 	}
 	if len(fake.all()) != 1 {
@@ -101,7 +101,7 @@ func TestP3RejudgeRejectsFailureAndChangedPair(t *testing.T) {
 			if scenario == "target_changed" {
 				b1Correct(t, s, scope, refs[1], "虚构本人改过的新要求")
 			}
-			err := (comparison.Service{Store: s.CompareStore(), Generator: s, Version: CompareVersion}).Process(ctx, job)
+			err := (comparison.Service{Store: s.CompareStore(), Generator: jobCalls(s), Version: CompareVersion}).Process(ctx, job)
 			if scenario == "invalid" {
 				if err == nil {
 					t.Fatal("accepted invalid output")
@@ -186,7 +186,7 @@ func TestP3RejudgeTwelveFixedPairs(t *testing.T) {
 			response = `{"duplicates":[],"superseded":[{"old":1,"new":2}]}`
 		}
 		fake.set(response)
-		if e := (comparison.Service{Store: s.CompareStore(), Generator: s, Version: CompareVersion}).Process(ctx, job); e != nil {
+		if e := (comparison.Service{Store: s.CompareStore(), Generator: jobCalls(s), Version: CompareVersion}).Process(ctx, job); e != nil {
 			t.Fatal(e)
 		}
 	}
@@ -206,7 +206,7 @@ func TestP3RejudgeTwelveFixedPairs(t *testing.T) {
 
 func TestP3RejudgeMalformedProposalIsNotCoexistence(t *testing.T) {
 	for _, raw := range []string{`{}`, `{"duplicates":[],"superseded":[{"old":1,"new":999}]}`, `{"duplicates":[],"superseded":[{"old":2,"new":1}]}`, `{"duplicates":[{"keep":2,"members":[1,999]}],"superseded":[]}`} {
-		if _, valid := parseRejudgeOutput(raw); valid {
+		if _, valid := comparison.ParseRejudgeOutput(raw); valid {
 			t.Fatal("accepted malformed judgment", raw)
 		}
 	}

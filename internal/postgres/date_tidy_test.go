@@ -70,7 +70,7 @@ func (f *dateTidyFixture) run(t *testing.T, ref memory.Ref, stage string) error 
 	}
 	j.ID = memory.ID(id)
 	// The date review service is composed here as application setup composes it.
-	return datereview.Service{Store: f.store.DateReviewStore(), Generator: f.store}.Process(f.ctx, j)
+	return datereview.Service{Store: f.store.DateReviewStore(), Generator: jobCalls(f.store)}.Process(f.ctx, j)
 }
 
 func (f *dateTidyFixture) open(t *testing.T, ref memory.Ref) bool {

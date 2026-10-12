@@ -44,6 +44,29 @@ The rehearsal of 2026-10-12 finished with 60 tasks, 180 calls, and an estimated 
 The host's crontab starts the script at 15:30 UTC, which is night in the owner's time zone.
 The job updates a worktree of its own to `origin/main` first, so each night evaluates the current main revision.
 
+The script starts the program `codex` that is first in `PATH`. The program must have the app server (`codex app-server`).
+This host has two Codex programs: version 0.30.0 in `/usr/local/bin`, which has no app server, and the owner's current program under `/root/.nvm`.
+The scheduled job puts the directory of the current program first in `PATH`, and it writes the path and the version of the program to its log.
+
+## First Real Night
+
+The first real night was 2026-10-12, on revision `7cdb96e`.
+
+| Item | Result |
+|---|---|
+| First start at 15:30 UTC | Failed after nine seconds, before a paid call. The scheduled job found Codex 0.30.0 in `/usr/local/bin`, and the channel check stopped at `initialize` with `transport_error`. |
+| Correction | The scheduled job now selects the current Codex program (0.161.0 on that night). The correction is in the job of the host, not in the repository. |
+| Second start at 15:31 UTC | Finished in 16 minutes: 60 tasks, 180 calls, model `gpt-6.1-sol`. |
+| Estimated cost | 0.5439 USD. The limit is 1 USD. |
+| Sizes | The largest answer input was 3,444 characters and the largest answer was 582 characters. Both are below the values of the plan. |
+| Must rate | 86.8% for all tasks. By category: direct recall 100%, irrelevant 100%, updated fact 97.5%, indirect use 94%, cross group 76%, outgoing 66%. |
+| Usable rate | 65% for all tasks. By category: direct recall 100%, irrelevant 100%, updated fact 80%, indirect use 70%, cross group 40%, outgoing 0%. |
+| Other counts | One forbidden hit (cross group). The two judges disagreed on three checks. |
+
+These are the values of one repetition of one half of the suite. They are a first point, not a trend.
+The run had no embedding provider, so the recall route used the product's keyword search.
+Each night leaves its run directory (`/var/tmp/pcas-v2-run.*`, less than 2 MB) on the host. No rule removes these directories yet.
+
 ## Limits of This Evaluation
 
 - The suite has 20 scenarios behind its 120 tasks. A change of a few points between two nights is inside the variation of one repetition.

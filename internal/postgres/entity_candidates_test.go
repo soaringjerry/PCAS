@@ -13,6 +13,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/interpretation/aliasscan"
 	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
 	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
+	"github.com/soaringjerry/PCAS/internal/postgres/claimstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/jackc/pgx/v5"
@@ -241,7 +242,7 @@ func TestEntityCandidatesCrossTypeAndGroupBookmarks(t *testing.T) {
 					t.Fatal("original topic disappeared from facets", facets)
 				}
 				if err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
-					id, err := entityTx(ctx, tx, scope.OwnerID, "topic", topicName)
+					id, err := claimstore.EntityTx(ctx, tx, scope.OwnerID, "topic", topicName)
 					if err != nil || id != keep.ID {
 						return fmt.Errorf("old topic alias resolved to %s: %w", id, err)
 					}

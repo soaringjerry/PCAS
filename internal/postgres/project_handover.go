@@ -10,6 +10,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/claimstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/memoryread"
@@ -337,7 +338,7 @@ func (s *Store) adoptProjectMemoryTx(ctx context.Context, tx pgx.Tx, scope memor
 	if auto {
 		actor, acquisition, confirmation = "ai", "inferred", "adopted"
 	}
-	_, err = s.rememberTx(ctx, tx, scope, statement{Text: text, Nature: "fact", ProjectID: item.ID, Actor: actor, Acquisition: acquisition, Confirmation: confirmation, Source: source.Ref})
+	_, err = s.RememberTx(ctx, tx, scope, claimstore.Statement{Text: text, Nature: "fact", ProjectID: item.ID, Actor: actor, Acquisition: acquisition, Confirmation: confirmation, Source: source.Ref})
 	if err != nil {
 		return err
 	}

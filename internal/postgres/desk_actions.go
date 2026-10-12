@@ -10,6 +10,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres/actionlog"
 	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
+	"github.com/soaringjerry/PCAS/internal/postgres/workstore"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 )
@@ -189,7 +190,7 @@ func (s *Store) closeDateActionTx(ctx context.Context, tx pgx.Tx, scope memory.S
 		// a memory is outside what that cleanup can put back, so it is not made.
 		return secretary.Skipped(a.Op, "检查模式下不改记忆上的日期"), nil
 	}
-	as, ok := validDeadlineClose(a.As)
+	as, ok := workstore.ValidDeadlineClose(a.As)
 	if !ok {
 		return secretary.Skipped(a.Op, "没说清是做完了还是不要了"), nil
 	}
@@ -210,7 +211,7 @@ func (s *Store) closeDateActionTx(ctx context.Context, tx pgx.Tx, scope memory.S
 	if err = activeClaim(ctx, tx, scope, m.ID); err != nil {
 		return secretary.Skipped(a.Op, "这条记忆已经不在了"), nil
 	}
-	if err = completeDeadlineTx(ctx, tx, scope, m.ID, version, as); errors.Is(err, memory.ErrConflict) {
+	if err = workstore.CompleteDeadlineTx(ctx, tx, scope, m.ID, version, as); errors.Is(err, memory.ErrConflict) {
 		return secretary.Skipped(a.Op, "这条记忆刚改过，再说一遍"), nil
 	} else if err != nil {
 		return receipt, err

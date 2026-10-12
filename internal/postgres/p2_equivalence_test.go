@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/soaringjerry/PCAS/internal/postgres/accessstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/memoryread"
@@ -68,7 +69,7 @@ func p2AssertReads(t *testing.T, s *Store, scope memory.Scope) {
 				if err != nil {
 					return err
 				}
-				b, err := read(teamSourceVisibleSQL("$1", "r.id", "$2", "$3"))
+				b, err := read(accessstore.TeamSourceVisibleSQL("$1", "r.id", "$2", "$3"))
 				if err != nil {
 					return err
 				}
@@ -100,7 +101,7 @@ func p2AssertReads(t *testing.T, s *Store, scope memory.Scope) {
 				if err != nil {
 					return err
 				}
-				b, br, err := sanitizeItemTx(ctx, tx, scope, agent, item)
+				b, br, err := accessstore.SanitizeItemTx(ctx, tx, scope, agent, item)
 				if err != nil {
 					return err
 				}
@@ -364,14 +365,14 @@ func TestP2RandomVisibilityAndSourceSequence(t *testing.T) {
 			if err != nil {
 				return err
 			}
-			b, br, err := sanitizeItemTx(ctx, tx, scope, "model", item)
+			b, br, err := accessstore.SanitizeItemTx(ctx, tx, scope, "model", item)
 			if err != nil {
 				return err
 			}
 			p2Bytes(t, "random artifact", a, b)
 			p2Bytes(t, "random artifact dependencies", ar, br)
 			var wantedSourceVisibility bool
-			for index, predicate := range []string{p2LegacyTeamSourceVisibleSQL("$1", "$2", "$3", "$4"), teamSourceVisibleSQL("$1", "$2", "$3", "$4")} {
+			for index, predicate := range []string{p2LegacyTeamSourceVisibleSQL("$1", "$2", "$3", "$4"), accessstore.TeamSourceVisibleSQL("$1", "$2", "$3", "$4")} {
 				var allowed bool
 				if err := tx.QueryRow(ctx, "SELECT "+predicate, scope.OwnerID, source, "model", p2ID("task", 4)).Scan(&allowed); err != nil {
 					return err

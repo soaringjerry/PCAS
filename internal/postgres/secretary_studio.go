@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/soaringjerry/PCAS/internal/contextbuilder"
+	"github.com/soaringjerry/PCAS/internal/postgres/accessstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
@@ -69,7 +70,7 @@ func (s *Store) secretaryHandoverEvidenceTx(ctx context.Context, tx pgx.Tx, scop
 				if alias == "" {
 					alias = fmt.Sprintf("H%d", len(items))
 					c.TargetItems[item.ID] = item
-					clean, refs, err := sanitizeItemTx(ctx, tx, scope, c.Agent.ID, item)
+					clean, refs, err := accessstore.SanitizeItemTx(ctx, tx, scope, c.Agent.ID, item)
 					if err != nil {
 						return err
 					}

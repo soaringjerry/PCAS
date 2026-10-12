@@ -192,7 +192,7 @@ func (s *Store) scheduleCompareVersion(ctx context.Context, now time.Time, versi
 				if entity {
 					stage = EntityCompareStage
 				}
-				if !s.scheduleYielded(ctx, owner, stage, e) {
+				if !s.ScheduleYielded(ctx, owner, stage, e) {
 					failed = e
 				}
 			}
@@ -211,10 +211,10 @@ func (s *Store) RunCompare(ctx context.Context, logger *slog.Logger) {
 			return
 		}
 		if _, err := s.ScheduleCompare(ctx, time.Now()); err != nil && ctx.Err() == nil {
-			s.recordScheduleFailure(ctx, CompareStage, err)
+			s.RecordScheduleFailure(ctx, CompareStage, err)
 		}
 		if _, err := s.ScheduleEntityCandidates(ctx, time.Now()); err != nil && ctx.Err() == nil {
-			s.recordScheduleFailure(ctx, EntityCandidatesStage, err)
+			s.RecordScheduleFailure(ctx, EntityCandidatesStage, err)
 		}
 		select {
 		case <-ctx.Done():
@@ -278,7 +278,7 @@ type compareStore struct{ store *Store }
 
 func (a compareStore) Reschedule(ctx context.Context) {
 	if _, err := a.store.ScheduleCompare(ctx, time.Now()); err != nil {
-		a.store.recordScheduleFailure(ctx, CompareStage, err)
+		a.store.RecordScheduleFailure(ctx, CompareStage, err)
 	}
 }
 

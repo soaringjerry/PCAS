@@ -1,4 +1,4 @@
-package postgres
+package claimstore
 
 import (
 	"context"
@@ -15,9 +15,9 @@ import (
 	"github.com/soaringjerry/PCAS/internal/memory"
 )
 
-type statement = claim.Statement
+type Statement = claim.Statement
 
-func createRecord(ctx context.Context, tx pgx.Tx, owner memory.ID, id memory.ID, kind memory.Kind, actor string) error {
+func CreateRecord(ctx context.Context, tx pgx.Tx, owner memory.ID, id memory.ID, kind memory.Kind, actor string) error {
 	if _, err := tx.Exec(ctx, "INSERT INTO memory_records(owner_id,id,kind,version) VALUES($1,$2,$3,1)", string(owner), string(id), string(kind)); err != nil {
 		return err
 	}
@@ -25,7 +25,7 @@ func createRecord(ctx context.Context, tx pgx.Tx, owner memory.ID, id memory.ID,
 	return err
 }
 
-func (s *Store) rememberTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in statement) (memory.Ref, error) {
+func (s *Claims) RememberTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in Statement) (memory.Ref, error) {
 	var result memory.Ref
 	in, err := claim.Normalize(in)
 	if err != nil {
@@ -119,9 +119,9 @@ func (s *Store) rememberTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, i
 	if in.Structured && in.SubjectType != "" {
 		var id memory.ID
 		if in.SubjectType == "self" {
-			id, err = selfEntityTx(ctx, tx, scope.OwnerID)
+			id, err = SelfEntityTx(ctx, tx, scope.OwnerID)
 		} else {
-			id, err = entityTx(ctx, tx, scope.OwnerID, in.SubjectType, in.Subject)
+			id, err = EntityTx(ctx, tx, scope.OwnerID, in.SubjectType, in.Subject)
 		}
 		if err != nil {
 			return result, err
@@ -132,7 +132,7 @@ func (s *Store) rememberTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, i
 		WHERE e.owner_id=$1 AND e.name=$2 AND e.disambiguation->>'source_id'=$3 AND r.state='active' ORDER BY r.created_at LIMIT 1`, string(scope.OwnerID), in.Subject, string(in.Source.ID)).Scan(&subject)
 		if errors.Is(err, pgx.ErrNoRows) {
 			subject = string(memory.NewID())
-			if err := createRecord(ctx, tx, scope.OwnerID, memory.ID(subject), memory.EntityKind, in.Actor); err != nil {
+			if err := CreateRecord(ctx, tx, scope.OwnerID, memory.ID(subject), memory.EntityKind, in.Actor); err != nil {
 				return result, err
 			}
 			if _, err := tx.Exec(ctx, "INSERT INTO entities(owner_id,id) VALUES($1,$2)", string(scope.OwnerID), subject); err != nil {
@@ -149,7 +149,7 @@ func (s *Store) rememberTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, i
 		}
 	}
 	id := memory.NewID()
-	if err := createRecord(ctx, tx, scope.OwnerID, id, memory.ClaimKind, in.Actor); err != nil {
+	if err := CreateRecord(ctx, tx, scope.OwnerID, id, memory.ClaimKind, in.Actor); err != nil {
 		return result, err
 	}
 	if _, err := tx.Exec(ctx, "UPDATE record_versions SET expressed_at=$3 WHERE owner_id=$1 AND record_id=$2 AND version=1", string(scope.OwnerID), string(id), in.ExpressedAt); err != nil {
@@ -213,7 +213,7 @@ func stringHex(value []byte) string {
 
 // Fill structured metadata in place without a new revision or dependency
 // invalidation. Callers only use this for new claims or editable AI revisions.
-func supplementClaimTx(ctx context.Context, tx pgx.Tx, owner memory.ID, ref memory.Ref, in statement) error {
+func supplementClaimTx(ctx context.Context, tx pgx.Tx, owner memory.ID, ref memory.Ref, in Statement) error {
 	if in.EventPrecision == "" {
 		in.EventPrecision = "unknown"
 	}

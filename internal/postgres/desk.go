@@ -5,6 +5,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/soaringjerry/PCAS/internal/postgres/accessstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 
@@ -51,7 +52,7 @@ func (s *Store) deskItemsContextTx(ctx context.Context, tx pgx.Tx, scope memory.
 	dependencies := []memory.Ref{}
 	for i := range tasks {
 		var refs []memory.Ref
-		tasks[i], refs, err = sanitizeItemTx(ctx, tx, scope, agent.ID, tasks[i])
+		tasks[i], refs, err = accessstore.SanitizeItemTx(ctx, tx, scope, agent.ID, tasks[i])
 		if err != nil {
 			return nil, workspace.Settings{}, nil, err
 		}

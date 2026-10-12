@@ -13,6 +13,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
 	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/postgres/workstore"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/ai"
@@ -58,7 +59,7 @@ func TestExtractionEvidenceSignalAndReminderDeletion(t *testing.T) {
 	calls := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls++
-		content := map[string]any{"items": []map[string]any{{"kind": "memory", "nature": "fact", "text": "书店重新营业", "subject": "旧书店", "predicate": "营业状态", "quote": src.Text, "confidence": 0.99, "explicit": true}, {"kind": "memory", "nature": "fact", "text": "凭空捏造", "quote": "原文不存在", "confidence": 1}}, "signals": []conditionSignal{{IdeaID: idea.ID, ConditionID: idea.Conditions[0].ID, Quote: src.Text, Explanation: "导入资料写明重新营业", Confidence: 0.99}}}
+		content := map[string]any{"items": []map[string]any{{"kind": "memory", "nature": "fact", "text": "书店重新营业", "subject": "旧书店", "predicate": "营业状态", "quote": src.Text, "confidence": 0.99, "explicit": true}, {"kind": "memory", "nature": "fact", "text": "凭空捏造", "quote": "原文不存在", "confidence": 1}}, "signals": []workstore.ConditionSignal{{IdeaID: idea.ID, ConditionID: idea.Conditions[0].ID, Quote: src.Text, Explanation: "导入资料写明重新营业", Confidence: 0.99}}}
 		_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": map[string]string{"content": string(kernel.JSON(content))}}}, "usage": map[string]int{"prompt_tokens": 100, "completion_tokens": 30}})
 	}))
 	defer server.Close()

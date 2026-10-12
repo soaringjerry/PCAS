@@ -383,7 +383,7 @@ func TestUnavailableRetryKeepsPreviouslyReturnedCost(t *testing.T) {
 	}
 	// An explicit retry can reserve a new call. If it is unavailable before
 	// submitting anything, only that new reservation may be removed.
-	reservationID, err := s.reserveModelCostID(context.Background(), scope.OwnerID, 0.01, &job)
+	reservationID, err := s.ReserveModelCostID(context.Background(), scope.OwnerID, 0.01, &job)
 	if err != nil {
 		t.Fatal(err)
 	}

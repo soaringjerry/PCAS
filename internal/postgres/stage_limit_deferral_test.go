@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/statestore"
 )
 
 func TestStageLimitDeferralMovesWaitingJobsOfThatStageWithOneEvent(t *testing.T) {
@@ -25,7 +26,7 @@ func TestStageLimitDeferralMovesWaitingJobsOfThatStageWithOneEvent(t *testing.T)
 	first := enqueue(TopicProjectStage+":a:1", past.Add(-time.Minute))
 	waiting := []string{enqueue(TopicProjectStage+":b:1", past), enqueue(TopicProjectStage+":c:1", past)}
 	scheduledLater := enqueue(TopicProjectStage+":d:1", later)
-	otherStage := enqueue(DateTidyStage+":e:1", past)
+	otherStage := enqueue(statestore.DateTidyStage+":e:1", past)
 
 	job, err := s.Claim(ctx, time.Minute)
 	if err != nil || job == nil || string(job.ID) != first {

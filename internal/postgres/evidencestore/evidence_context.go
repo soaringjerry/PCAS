@@ -1,4 +1,4 @@
-package postgres
+package evidencestore
 
 import (
 	"context"
@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/contextbuilder"
+	"github.com/soaringjerry/PCAS/internal/postgres/accessstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/jackc/pgx/v5"
@@ -22,7 +23,7 @@ type conversationPoint struct {
 	currentVersion                        int
 }
 
-func (s *Store) SourceConversation(ctx context.Context, scope memory.Scope, in memory.ConversationRequest) (memory.ConversationResult, error) {
+func (s *Evidence) SourceConversation(ctx context.Context, scope memory.Scope, in memory.ConversationRequest) (memory.ConversationResult, error) {
 	out := memory.ConversationResult{Messages: []memory.ConversationMessage{}, Gaps: []string{}}
 	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err
@@ -51,8 +52,8 @@ func conversationWindowTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in
   JOIN record_versions parent_v ON(parent_v.owner_id,parent_v.record_id,parent_v.version)=(parent_r.owner_id,parent_r.id,parent_r.version)
   WHERE parent.owner_id=$1 AND parent.conversation_key=c.conversation_key AND parent.branch=c.branch
   AND right(parent_s.external_id,length(c.parent_key)+1)='/'||c.parent_key AND parent_r.state='active' AND parent_v.state='active'
-  AND ` + teamSourceVisibleSQL("$1", "parent_r.id", "$4", "$5") + `))`
-	permitted := "($4::text='' OR ((" + teamSourceVisibleSQL("$1", "r.id", "$4", "$5") + ") AND " + parentVisible + "))"
+  AND ` + accessstore.TeamSourceVisibleSQL("$1", "parent_r.id", "$4", "$5") + `))`
+	permitted := "($4::text='' OR ((" + accessstore.TeamSourceVisibleSQL("$1", "r.id", "$4", "$5") + ") AND " + parentVisible + "))"
 	columns := `r.id::text,rv.version,v.body,coalesce(c.role,''),rv.expressed_at,rv.recorded_at,v.title,coalesce(c.conversation_key,''),coalesce(c.branch,''),s.external_id,` + permitted + `,r.version`
 	from := ` FROM memory_records r JOIN sources s ON(s.owner_id,s.id)=(r.owner_id,r.id)
  JOIN source_versions v ON(v.owner_id,v.source_id)=(r.owner_id,r.id)
@@ -226,15 +227,15 @@ func conversationWindowTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in
 }
 
 type (
-	evidenceContextClaim = contextbuilder.Claim
-	evidenceContextGroup = contextbuilder.EvidenceGroup
+	EvidenceContextClaim = contextbuilder.Claim
+	EvidenceContextGroup = contextbuilder.EvidenceGroup
 )
 
-func evidenceContextsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, principal string, thingID *string, claims []evidenceContextClaim) ([]evidenceContextGroup, []string, error) {
-	groups := []evidenceContextGroup{}
+func EvidenceContextsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, principal string, thingID *string, claims []EvidenceContextClaim) ([]EvidenceContextGroup, []string, error) {
+	groups := []EvidenceContextGroup{}
 	gaps := []string{}
 	claims = slices.Clone(claims)
-	slices.SortStableFunc(claims, func(a, b evidenceContextClaim) int {
+	slices.SortStableFunc(claims, func(a, b EvidenceContextClaim) int {
 		if memory.ContextDependent(a.Text) == memory.ContextDependent(b.Text) {
 			return 0
 		}
@@ -244,7 +245,7 @@ func evidenceContextsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, prin
 		return 1
 	})
 	var anchors map[memory.Ref]useEvidenceAnchor
-	if enabled, _ := ctx.Value(useEvidenceBatchKey{}).(bool); enabled {
+	if enabled, _ := ctx.Value(UseEvidenceBatchKey{}).(bool); enabled {
 		var err error
 		anchors, err = useEvidenceAnchorsTx(ctx, tx, scope, claims)
 		if err != nil {
@@ -325,7 +326,7 @@ func evidenceContextsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, prin
 		}
 		characters += count
 		seen[sourceRef] = len(groups)
-		groups = append(groups, evidenceContextGroup{Label: claim.Label, Window: window})
+		groups = append(groups, EvidenceContextGroup{Label: claim.Label, Window: window})
 	}
 	return groups, gaps, nil
 }

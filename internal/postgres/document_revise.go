@@ -8,6 +8,8 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/accessstore"
+	"github.com/soaringjerry/PCAS/internal/postgres/budgetstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/usagelog"
 	"github.com/soaringjerry/PCAS/internal/worker"
@@ -64,7 +66,7 @@ func (s *Store) finishPaidRevise(ctx context.Context, scope memory.Scope, curren
 			if err != nil || tag.RowsAffected() == 0 {
 				return err
 			}
-			return kernel.StageEvent(retryCtx, tx, scope.OwnerID, "deputy", "failure", "revise_result_write_"+backgroundFailureReason(resultErr), 1)
+			return kernel.StageEvent(retryCtx, tx, scope.OwnerID, "deputy", "failure", "revise_result_write_"+budgetstore.BackgroundFailureReason(resultErr), 1)
 		})
 	}()
 	var snapshot deputy.Snapshot
@@ -88,7 +90,7 @@ func (s *Store) finishPaidRevise(ctx context.Context, scope memory.Scope, curren
 		if err := s.RecordUsage(ctx, usagelog.ModelUsage{OwnerID: scope.OwnerID, ID: memory.ID(paid.Reservation), Purpose: "deputy", AgentID: paid.Provider, Model: paid.Model, InputTokens: paid.InputTokens, OutputTokens: paid.OutputTokens, InputEstimated: paid.InputEstimated, OutputEstimated: paid.OutputEstimated, CostEstimated: paid.CostEstimated, Cost: paid.Cost, RunID: run.ID, MemoryRefs: paid.Refs, Tier: run.MemoryTier}); err != nil {
 			return err
 		}
-		if err := s.settleRunCost(ctx, scope.OwnerID, run, paid.Cost); err != nil {
+		if err := s.SettleRunCost(ctx, scope.OwnerID, run, paid.Cost); err != nil {
 			return err
 		}
 	}
@@ -129,7 +131,7 @@ func (s *Store) finishPaidRevise(ctx context.Context, scope memory.Scope, curren
 				run.Error = "事项在工作期间已改变；结果保留，未采纳"
 			}
 		}
-		if verifyRunAccessTx(ctx, tx, scope, run) != nil {
+		if accessstore.VerifyRunAccessTx(ctx, tx, scope, run) != nil {
 			run.StaleContext = true
 			run.Status = "failed"
 			run.Output = ""

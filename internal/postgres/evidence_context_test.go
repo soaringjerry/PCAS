@@ -16,6 +16,9 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
+	"github.com/soaringjerry/PCAS/internal/postgres/accessstore"
+	"github.com/soaringjerry/PCAS/internal/postgres/claimstore"
+	"github.com/soaringjerry/PCAS/internal/postgres/evidencestore"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/httpapi"
@@ -172,14 +175,14 @@ func TestEvidenceContextsKeepRestrictionsAndDependencies(t *testing.T) {
 	refs := e4Conversation(t, s, scope, "fiction-three", 13)
 	self := b3Entity(t, s, scope, "self", "我")
 	claim := b3Claim(t, s, scope, b3ClaimSpec{Text: "那位同事的演示项目值得联系。", Subject: self, Source: refs[6]})
-	claims := []evidenceContextClaim{{Label: "M1", Ref: claim, Text: "那位同事的演示项目值得联系。"}}
-	load := func() ([]evidenceContextGroup, []string) {
+	claims := []evidencestore.EvidenceContextClaim{{Label: "M1", Ref: claim, Text: "那位同事的演示项目值得联系。"}}
+	load := func() ([]evidencestore.EvidenceContextGroup, []string) {
 		t.Helper()
-		var groups []evidenceContextGroup
+		var groups []evidencestore.EvidenceContextGroup
 		var gaps []string
 		err := pgx.BeginFunc(t.Context(), s.Pool, func(tx pgx.Tx) error {
 			var err error
-			groups, gaps, err = evidenceContextsTx(t.Context(), tx, scope, "model", nil, claims)
+			groups, gaps, err = evidencestore.EvidenceContextsTx(t.Context(), tx, scope, "model", nil, claims)
 			return err
 		})
 		if err != nil {
@@ -197,7 +200,7 @@ func TestEvidenceContextsKeepRestrictionsAndDependencies(t *testing.T) {
 	}
 	verify := func() error {
 		return pgx.BeginFunc(t.Context(), s.Pool, func(tx pgx.Tx) error {
-			return verifyRunTx(t.Context(), tx, scope, workspace.Run{AgentID: "model", ContextVersions: deps})
+			return accessstore.VerifyRunTx(t.Context(), tx, scope, workspace.Run{AgentID: "model", ContextVersions: deps})
 		})
 	}
 	if err := verify(); err != nil {
@@ -264,7 +267,7 @@ func TestEvidenceContextBudgetAndUnresolvedNames(t *testing.T) {
 	b3Exec(t, s, `UPDATE source_versions SET body=$3 WHERE owner_id=$1 AND source_id=$2`, scope.OwnerID, refs[5].ID, strings.Repeat("虚构长材料。", 1000))
 	claim := b3Claim(t, s, scope, b3ClaimSpec{Text: "那位同事的演示项目值得联系。", Subject: self, Source: refs[6]})
 	err := pgx.BeginFunc(t.Context(), s.Pool, func(tx pgx.Tx) error {
-		groups, _, err := evidenceContextsTx(t.Context(), tx, scope, "model", nil, []evidenceContextClaim{{Label: "M1", Ref: claim, Text: "那位同事"}})
+		groups, _, err := evidencestore.EvidenceContextsTx(t.Context(), tx, scope, "model", nil, []evidencestore.EvidenceContextClaim{{Label: "M1", Ref: claim, Text: "那位同事"}})
 		if err != nil {
 			return err
 		}
@@ -297,7 +300,7 @@ func TestEvidenceAmbiguousSubjectsStaySeparate(t *testing.T) {
 		text := "那位同事参与演示项目。"
 		source := mustIngest(t, s, scope, memory.IngestRequest{Connector: "archive-records", ExternalID: external, ExternalVersion: "1", Title: "虚构资料", Text: text, MediaType: "text/plain"}).Ref
 		err := pgx.BeginFunc(t.Context(), s.Pool, func(tx pgx.Tx) error {
-			ref, err := s.rememberTx(t.Context(), tx, scope, statement{Text: text, Nature: "fact", Subject: "那位同事", SubjectType: "person", Structured: true, Actor: "ai", Confirmation: "candidate", Source: source, Quote: text})
+			ref, err := s.RememberTx(t.Context(), tx, scope, claimstore.Statement{Text: text, Nature: "fact", Subject: "那位同事", SubjectType: "person", Structured: true, Actor: "ai", Confirmation: "candidate", Source: source, Quote: text})
 			if err != nil {
 				return err
 			}

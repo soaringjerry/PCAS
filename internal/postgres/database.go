@@ -16,6 +16,9 @@ import (
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/modelcall"
 	"github.com/soaringjerry/PCAS/internal/postgres/activitystore"
+	"github.com/soaringjerry/PCAS/internal/postgres/budgetstore"
+	"github.com/soaringjerry/PCAS/internal/postgres/claimstore"
+	"github.com/soaringjerry/PCAS/internal/postgres/evidencestore"
 	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/memoryread"
@@ -23,7 +26,9 @@ import (
 	"github.com/soaringjerry/PCAS/internal/postgres/ownerstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/schedulestore"
 	"github.com/soaringjerry/PCAS/internal/postgres/sourcestore"
+	"github.com/soaringjerry/PCAS/internal/postgres/statestore"
 	"github.com/soaringjerry/PCAS/internal/postgres/usagelog"
+	"github.com/soaringjerry/PCAS/internal/postgres/workstore"
 )
 
 //go:embed migrations/*.sql
@@ -33,6 +38,11 @@ var migrations embed.FS
 // storage packages share.
 type Store struct {
 	*kernel.DB
+	*statestore.State
+	*evidencestore.Evidence
+	*workstore.Work
+	*budgetstore.Budgets
+	*claimstore.Claims
 	*sourcestore.Sources
 	*itemstore.Items
 	*ownerstore.Owners
@@ -88,7 +98,9 @@ func Open(ctx context.Context, url string) (*Store, error) {
 		return nil, fmt.Errorf("database unavailable")
 	}
 	db := &kernel.DB{Pool: pool}
-	return &Store{DB: db, Sources: &sourcestore.Sources{DB: db}, Items: &itemstore.Items{DB: db}, Owners: &ownerstore.Owners{DB: db}, Activity: &activitystore.Activity{DB: db}, Schedules: &schedulestore.Schedules{DB: db}, Usage: &usagelog.Usage{DB: db}, Memory: &memorystore.Memory{DB: db}, Reader: &memoryread.Reader{DB: db}, secretarySlots: make(chan struct{}, config.MaxConns-1)}, nil
+	store := newStore(db)
+	store.secretarySlots = make(chan struct{}, config.MaxConns-1)
+	return store, nil
 }
 
 func (s *Store) Close()                         { s.Pool.Close() }
@@ -175,3 +187,11 @@ func (s *Store) CheckSchema(ctx context.Context) error {
 }
 
 var _ memory.Repository = (*Store)(nil)
+
+// newStore composes the store over its core. Each storage package works on
+// the same core; a package that needs another one holds it.
+func newStore(db *kernel.DB) *Store {
+	sources := &sourcestore.Sources{DB: db}
+	owners := &ownerstore.Owners{DB: db}
+	return &Store{DB: db, State: &statestore.State{DB: db}, Evidence: &evidencestore.Evidence{DB: db}, Work: &workstore.Work{DB: db}, Budgets: &budgetstore.Budgets{DB: db, Owners: owners}, Claims: &claimstore.Claims{DB: db, Sources: sources}, Sources: sources, Items: &itemstore.Items{DB: db}, Owners: owners, Activity: &activitystore.Activity{DB: db}, Schedules: &schedulestore.Schedules{DB: db}, Usage: &usagelog.Usage{DB: db}, Memory: &memorystore.Memory{DB: db}, Reader: &memoryread.Reader{DB: db}}
+}

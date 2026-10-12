@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
+	"github.com/soaringjerry/PCAS/internal/postgres/claimstore"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
@@ -42,7 +43,7 @@ func TestEntityIdentityIsTypedAndConcurrent(t *testing.T) {
 					name = "\u3000old wang\u3000"
 				}
 				var err error
-				id, err = entityTx(ctx, tx, ownerID, "person", name)
+				id, err = claimstore.EntityTx(ctx, tx, ownerID, "person", name)
 				return err
 			})
 			ids <- id
@@ -67,18 +68,18 @@ func TestEntityIdentityIsTypedAndConcurrent(t *testing.T) {
 		}
 	}
 	if err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
-		place, err := entityTx(ctx, tx, ownerID, "place", "Old Wang")
+		place, err := claimstore.EntityTx(ctx, tx, ownerID, "place", "Old Wang")
 		if err != nil {
 			return err
 		}
 		if place == person {
 			t.Fatal("different entity types merged")
 		}
-		self, err := selfEntityTx(ctx, tx, ownerID)
+		self, err := claimstore.SelfEntityTx(ctx, tx, ownerID)
 		if err != nil {
 			return err
 		}
-		again, err := selfEntityTx(ctx, tx, ownerID)
+		again, err := claimstore.SelfEntityTx(ctx, tx, ownerID)
 		if err == nil && self != again {
 			t.Fatal("duplicate self")
 		}

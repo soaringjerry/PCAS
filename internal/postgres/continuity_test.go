@@ -16,6 +16,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/blob"
 	"github.com/soaringjerry/PCAS/internal/connectors"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/claimstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
@@ -209,7 +210,7 @@ func rememberForContinuity(t *testing.T, s *Store, scope memory.Scope, source me
 			return err
 		}
 		var err error
-		ref, err = s.rememberTx(context.Background(), tx, scope, statement{Text: text, Subject: "用户", Predicate: "愿望", Nature: "intention", Confirmation: "adopted", Actor: "ai", Quote: text, Source: source})
+		ref, err = s.RememberTx(context.Background(), tx, scope, claimstore.Statement{Text: text, Subject: "用户", Predicate: "愿望", Nature: "intention", Confirmation: "adopted", Actor: "ai", Quote: text, Source: source})
 		return err
 	})
 	if err != nil {

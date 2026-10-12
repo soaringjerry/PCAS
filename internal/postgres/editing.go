@@ -16,6 +16,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/memoryread"
 	"github.com/soaringjerry/PCAS/internal/postgres/sourcestore"
+	"github.com/soaringjerry/PCAS/internal/postgres/workstore"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -486,7 +487,7 @@ func (s *Store) deleteRecordsTx(ctx context.Context, tx pgx.Tx, scope memory.Sco
 			return err
 		}
 	} else {
-		ids, err = purgeArtifactsTx(ctx, tx, scope, ids)
+		ids, err = workstore.PurgeArtifactsTx(ctx, tx, scope, ids)
 		if err != nil {
 			return err
 		}

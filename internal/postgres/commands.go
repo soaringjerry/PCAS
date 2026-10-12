@@ -6,10 +6,13 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/soaringjerry/PCAS/internal/postgres/accessstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/actionlog"
+	"github.com/soaringjerry/PCAS/internal/postgres/claimstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/ownerstore"
+	"github.com/soaringjerry/PCAS/internal/postgres/workstore"
 	"github.com/soaringjerry/PCAS/internal/workspace/itemcommand"
 	"github.com/soaringjerry/PCAS/internal/workspace/settings"
 
@@ -38,7 +41,7 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 		if err := activeClaim(ctx, tx, scope, claim); err != nil {
 			return err
 		}
-		return completeDeadlineTx(ctx, tx, scope, claim, version, c.Reason)
+		return workstore.CompleteDeadlineTx(ctx, tx, scope, claim, version, c.Reason)
 	case "restoreMemory":
 		return restoreMemoryTx(ctx, tx, scope, c.ID)
 	case "undoEntityMerge":
@@ -196,7 +199,7 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 			return err
 		}
 		if replan {
-			return refreshTaskPlansTx(ctx, tx, scope)
+			return workstore.RefreshTaskPlansTx(ctx, tx, scope)
 		}
 		return nil
 	case "updateAgent":
@@ -283,7 +286,7 @@ type candidateWrites struct {
 }
 
 func (w candidateWrites) Remember(ctx context.Context, text, nature, projectID string, source workspace.SourceRef) (string, error) {
-	ref, err := w.store.rememberTx(ctx, w.tx, w.scope, statement{Text: text, Nature: nature, ProjectID: projectID, Source: memory.Ref{ID: memory.ID(source.SourceID), Version: source.Version, Kind: memory.SourceKind}})
+	ref, err := w.store.RememberTx(ctx, w.tx, w.scope, claimstore.Statement{Text: text, Nature: nature, ProjectID: projectID, Source: memory.Ref{ID: memory.ID(source.SourceID), Version: source.Version, Kind: memory.SourceKind}})
 	return string(ref.ID), err
 }
 
@@ -318,7 +321,7 @@ func (e itemEffects) PromoteIdea(ctx context.Context, ideaID string, task worksp
 	if err := itemstore.SaveItem(ctx, e.tx, e.scope, task); err != nil {
 		return err
 	}
-	return promoteArtifactsTx(ctx, e.tx, e.scope, ideaID, task.ID)
+	return accessstore.PromoteArtifactsTx(ctx, e.tx, e.scope, ideaID, task.ID)
 }
 
 func saveCandidate(ctx context.Context, tx pgx.Tx, scope memory.Scope, v workspace.Candidate) error {

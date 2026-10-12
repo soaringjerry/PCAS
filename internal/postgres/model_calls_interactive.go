@@ -15,6 +15,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/ai"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/modelcall"
+	"github.com/soaringjerry/PCAS/internal/postgres/accessstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/usagelog"
 	"github.com/soaringjerry/PCAS/internal/workspace"
@@ -294,9 +295,9 @@ func (a interactiveCalls) Prepare(ctx context.Context, r modelcall.Request, prov
 		if err := interactiveFence(ctx, tx, r); err != nil {
 			return err
 		}
-		verify := verifyRunTx
+		verify := accessstore.VerifyRunTx
 		if p.InputPolicy == "current_access" {
-			verify = verifyRunAccessTx
+			verify = accessstore.VerifyRunAccessTx
 		}
 		if err := verify(ctx, tx, memory.Scope{OwnerID: r.OwnerID, PrincipalID: p.AgentID}, workspace.Run{AgentID: p.AgentID, ThingID: p.ThingID, ContextVersions: r.Refs}); err != nil {
 			return err
@@ -360,7 +361,7 @@ func (a interactiveCalls) Reserve(ctx context.Context, r modelcall.Request, cost
 	if r.Policy.(interactiveCallPolicy).BudgetOwner == "deputy_run" {
 		return a.reserveDeputyRun(ctx, r, cost)
 	}
-	id, err := a.store.reserveModelCostID(ctx, r.OwnerID, cost, nil, func(ctx context.Context, tx pgx.Tx, id string) error {
+	id, err := a.store.ReserveModelCostID(ctx, r.OwnerID, cost, nil, func(ctx context.Context, tx pgx.Tx, id string) error {
 		if err := interactiveFence(ctx, tx, r); err != nil {
 			return err
 		}
@@ -492,7 +493,7 @@ func (a interactiveCalls) Start(ctx context.Context, r modelcall.Request, paid *
 		}
 		if mainDeputy {
 			p := r.Policy.(interactiveCallPolicy)
-			if err := verifyRunTx(ctx, tx, memory.Scope{OwnerID: r.OwnerID, PrincipalID: p.AgentID}, workspace.Run{AgentID: p.AgentID, ThingID: p.ThingID, ContextVersions: r.Refs}); err != nil {
+			if err := accessstore.VerifyRunTx(ctx, tx, memory.Scope{OwnerID: r.OwnerID, PrincipalID: p.AgentID}, workspace.Run{AgentID: p.AgentID, ThingID: p.ThingID, ContextVersions: r.Refs}); err != nil {
 				return err
 			}
 			// Input-only rows are not paid results. Commit the original private
@@ -585,9 +586,9 @@ func (a interactiveCalls) Save(ctx context.Context, r modelcall.Request, paid *m
 				}
 			}
 			if accessible {
-				verify := verifyRunTx
+				verify := accessstore.VerifyRunTx
 				if mainDeputy || p.InputPolicy == "current_access" {
-					verify = verifyRunAccessTx
+					verify = accessstore.VerifyRunAccessTx
 				}
 				err := verify(persist, tx, memory.Scope{OwnerID: r.OwnerID, PrincipalID: p.AgentID}, workspace.Run{AgentID: p.AgentID, ThingID: p.ThingID, ContextVersions: paid.Refs})
 				if err != nil {

@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
+	"github.com/soaringjerry/PCAS/internal/postgres/claimstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/jackc/pgx/v5"
@@ -313,7 +314,7 @@ func (a extractionStore) Input(ctx context.Context, j worker.Job, source memory.
 	s, scope := a.store, workerScope(j.OwnerID)
 	var in extraction.Input
 	var err error
-	if in.Conditions, err = s.pendingConditions(ctx, scope); err != nil {
+	if in.Conditions, err = s.PendingConditions(ctx, scope); err != nil {
 		return in, err
 	}
 	if in.Adjacent, err = s.adjacentContext(ctx, scope, source); err != nil {
@@ -418,14 +419,14 @@ func (a extractionStore) Apply(ctx context.Context, j worker.Job, result extract
 			}
 			v := workspace.Candidate{ID: string(memory.NewID()), Kind: item.Kind, Text: item.Text, MemoryKind: item.Nature, Confidence: item.Confidence, Source: workspace.SourceRef{SourceID: string(j.Record.ID), Version: j.Record.Version, Label: source.Source.Title, Excerpt: item.Quote, At: kernel.Stamp()}, State: "pending", CreatedAt: kernel.Stamp()}
 			if decision.Action == extraction.Remember {
-				in := statement{ProjectID: result.Project, Text: item.Text, Nature: item.Nature, Subject: decision.Subject, SubjectType: decision.SubjectType, Predicate: item.Predicate, Confirmation: decision.Confirmation, Acquisition: item.Acquisition, Actor: "ai", Quote: item.Quote, Source: j.Record, Structured: true, ExpressedAt: extraction.ExpressedAt(source),
+				in := claimstore.Statement{ProjectID: result.Project, Text: item.Text, Nature: item.Nature, Subject: decision.Subject, SubjectType: decision.SubjectType, Predicate: item.Predicate, Confirmation: decision.Confirmation, Acquisition: item.Acquisition, Actor: "ai", Quote: item.Quote, Source: j.Record, Structured: true, ExpressedAt: extraction.ExpressedAt(source),
 					EventFrom: decision.EventFrom, EventTo: decision.EventTo, EventPrecision: decision.EventPrecision, Mentions: decision.Mentions}
 				// The model can extract several independent memories from one
 				// quotation. Later siblings must not overwrite the first item.
 				quoteKey := string(in.Source.ID) + "/" + in.Quote
 				in.AllowNewAtQuote = seenOutputQuotes[quoteKey]
 				seenOutputQuotes[quoteKey] = true
-				ref, err := s.rememberTx(ctx, tx, scope, in)
+				ref, err := s.RememberTx(ctx, tx, scope, in)
 				if errors.Is(err, memory.ErrBlocked) {
 					continue
 				}
@@ -445,7 +446,7 @@ func (a extractionStore) Apply(ctx context.Context, j worker.Job, result extract
 			accepted++
 		}
 		if settings.WakeIdeas {
-			if err := s.applySignalsTx(ctx, tx, scope, source.Source, extraction.UsableSignals(result.Output, source, facts.Imported)); err != nil {
+			if err := s.ApplySignalsTx(ctx, tx, scope, source.Source, extraction.UsableSignals(result.Output, source, facts.Imported)); err != nil {
 				return err
 			}
 		}

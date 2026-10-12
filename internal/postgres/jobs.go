@@ -37,7 +37,7 @@ func (s *Store) ClaimIndex(ctx context.Context, lease time.Duration) (*worker.Jo
 }
 
 func (s *Store) claim(ctx context.Context, lease time.Duration, indexOnly bool) (*worker.Job, error) {
-	if err := s.warnLongDeferrals(ctx); err != nil {
+	if err := s.WarnLongDeferrals(ctx); err != nil {
 		return nil, err
 	}
 	if lease <= 0 {

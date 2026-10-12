@@ -1,4 +1,4 @@
-package postgres
+package evidencestore
 
 import (
 	"context"
@@ -8,7 +8,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 )
 
-type useEvidenceBatchKey struct{}
+type UseEvidenceBatchKey struct{}
 type useEvidenceAnchor struct {
 	source              string
 	version, start, end int
@@ -16,7 +16,7 @@ type useEvidenceAnchor struct {
 
 // Preserve the per-claim anchor ordering and visibility conditions; fetch the
 // bounded set at once so a full card does not add a database round trip per row.
-func useEvidenceAnchorsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, claims []evidenceContextClaim) (map[memory.Ref]useEvidenceAnchor, error) {
+func useEvidenceAnchorsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, claims []EvidenceContextClaim) (map[memory.Ref]useEvidenceAnchor, error) {
 	out := map[memory.Ref]useEvidenceAnchor{}
 	refs := []memory.Ref{}
 	for _, c := range claims {

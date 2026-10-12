@@ -11,7 +11,10 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/contextbuilder"
+	"github.com/soaringjerry/PCAS/internal/postgres/accessstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/actionlog"
+	"github.com/soaringjerry/PCAS/internal/postgres/budgetstore"
+	"github.com/soaringjerry/PCAS/internal/postgres/evidencestore"
 	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/memoryread"
@@ -136,7 +139,7 @@ func (s *Store) secretaryContextTx(ctx context.Context, tx pgx.Tx, scope memory.
 			}
 			out.TargetItems[item.ID] = original
 			var refs []memory.Ref
-			item, refs, err = sanitizeItemTx(ctx, tx, scope, out.Agent.ID, item)
+			item, refs, err = accessstore.SanitizeItemTx(ctx, tx, scope, out.Agent.ID, item)
 			if err != nil {
 				return out, err
 			}
@@ -152,7 +155,7 @@ func (s *Store) secretaryContextTx(ctx context.Context, tx pgx.Tx, scope memory.
 			return out, err
 		}
 		out.TargetItems[item.ID] = item
-		item, refs, err := sanitizeItemTx(ctx, tx, scope, out.Agent.ID, item)
+		item, refs, err := accessstore.SanitizeItemTx(ctx, tx, scope, out.Agent.ID, item)
 		if err != nil {
 			return out, err
 		}
@@ -188,7 +191,7 @@ func (s *Store) secretaryContextTx(ctx context.Context, tx pgx.Tx, scope memory.
 	return out, nil
 }
 func (s *Store) checkDeskContextTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, agent string, dependencies []memory.Ref, items []workspace.Item, full bool) error {
-	if err := verifyRunTx(ctx, tx, scope, workspace.Run{AgentID: agent, ContextVersions: dependencies}); err != nil {
+	if err := accessstore.VerifyRunTx(ctx, tx, scope, workspace.Run{AgentID: agent, ContextVersions: dependencies}); err != nil {
 		return err
 	}
 	for _, sent := range items {
@@ -196,7 +199,7 @@ func (s *Store) checkDeskContextTx(ctx context.Context, tx pgx.Tx, scope memory.
 		if err != nil {
 			return memory.ErrConflict
 		}
-		current, _, err = sanitizeItemTx(ctx, tx, scope, agent, current)
+		current, _, err = accessstore.SanitizeItemTx(ctx, tx, scope, agent, current)
 		if err != nil {
 			return err
 		}
@@ -241,7 +244,7 @@ func (s *Store) secretaryPrompt(ctx context.Context, tx pgx.Tx, scope memory.Sco
 			// A receipt of an item that the agent may not read now is hidden.
 			if t.Text != "" && receipt.ThingID != nil {
 				if item, err := itemstore.GetItem(ctx, tx, scope, *receipt.ThingID); err == nil {
-					permitted, _, err := sanitizeItemTx(ctx, tx, scope, c.Agent.ID, item)
+					permitted, _, err := accessstore.SanitizeItemTx(ctx, tx, scope, c.Agent.ID, item)
 					if err != nil {
 						return "", nil, err
 					}
@@ -314,7 +317,7 @@ func (s *Store) secretaryPrompt(ctx context.Context, tx pgx.Tx, scope memory.Sco
 	if req.ThingID != nil {
 		given.Readable = func(m workspace.Memory) bool {
 			ref := memory.Ref{ID: memory.ID(m.ID), Version: m.Version, Kind: memory.ClaimKind}
-			return verifyRunTx(ctx, tx, scope, workspace.Run{ThingID: *req.ThingID, AgentID: c.Agent.ID, ContextVersions: []memory.Ref{ref}}) == nil
+			return accessstore.VerifyRunTx(ctx, tx, scope, workspace.Run{ThingID: *req.ThingID, AgentID: c.Agent.ID, ContextVersions: []memory.Ref{ref}}) == nil
 		}
 	}
 	shown := secretary.RenderMemories(given)
@@ -336,9 +339,9 @@ func (s *Store) secretaryPrompt(ctx context.Context, tx pgx.Tx, scope memory.Sco
 	c.Dependencies = append(c.Dependencies, excerptRefs...)
 	evidenceCtx := ctx
 	if c.Use.Ready {
-		evidenceCtx = context.WithValue(ctx, useEvidenceBatchKey{}, true)
+		evidenceCtx = context.WithValue(ctx, evidencestore.UseEvidenceBatchKey{}, true)
 	}
-	groups, gaps, err := evidenceContextsTx(evidenceCtx, tx, scope, c.Agent.ID, req.ThingID, contextClaims)
+	groups, gaps, err := evidencestore.EvidenceContextsTx(evidenceCtx, tx, scope, c.Agent.ID, req.ThingID, contextClaims)
 	if err != nil {
 		return "", nil, err
 	}
@@ -385,9 +388,9 @@ func (a deskStore) Turn(ctx context.Context, scope memory.Scope, req workspace.D
 	// generation still observes the caller cancellation below.
 	requestCtx := ctx
 	turnStarted := time.Now()
-	requestCtx, timing := newExecutionTimer(requestCtx, "secretary", turnStarted)
+	requestCtx, timing := budgetstore.NewExecutionTimer(requestCtx, "secretary", turnStarted)
 	ctx = requestCtx
-	defer s.finishExecutionTiming(ctx, scope.OwnerID, timing)
+	defer s.FinishExecutionTiming(ctx, scope.OwnerID, timing)
 	// The answer model may request heavy reading after its first response.
 	persistTimeout := secretary.TurnTimeout
 	if memoryTier(ctx, req.Text, "light") == "heavy" {
@@ -409,7 +412,7 @@ func (a deskStore) Turn(ctx context.Context, scope memory.Scope, req workspace.D
 			return out, err
 		}
 	}
-	timing.addPrepare(time.Since(ownerPrepStarted))
+	timing.AddPrepare(time.Since(ownerPrepStarted))
 	if req.SmokeID != "" {
 		if err := s.registerSmokeRequest(ctx, scope, req); err != nil {
 			return out, err
@@ -431,7 +434,7 @@ func (a deskStore) Turn(ctx context.Context, scope memory.Scope, req workspace.D
 	if !ticket.legacy && len(req.Attachments) > 0 {
 		attachmentStarted := time.Now()
 		attachments, err = s.prepareDeskAttachments(requestCtx, scope, req, steps.ReadAttachment)
-		timing.addPrepare(time.Since(attachmentStarted))
+		timing.AddPrepare(time.Since(attachmentStarted))
 		if err != nil {
 			return out, err
 		}
@@ -466,7 +469,7 @@ func (a deskStore) Turn(ctx context.Context, scope memory.Scope, req workspace.D
 		}
 		out.ConversationID = conversationID
 		out.Turn = workspace.SecretaryTurn{ID: string(memory.NewID()), Text: req.Text, Cards: []workspace.DeskCard{}, Receipts: []workspace.DeskReceipt{}, CreatedAt: kernel.Stamp()}
-		timing.id = out.Turn.ID
+		timing.Id = out.Turn.ID
 		if req.ThingID != nil && !captureOnly {
 			if _, err := itemstore.GetItem(ctx, tx, scope, *req.ThingID); err != nil {
 				return err
@@ -544,7 +547,7 @@ type secretarySession struct {
 
 func (t *secretarySession) Context(ctx context.Context) (secretary.View, error) {
 	s := t.secretaryAsk
-	s.timing.beginPrepare()
+	s.timing.BeginPrepare()
 	c, err := s.store.secretaryContextTx(ctx, s.tx, s.scope, s.req, t.conversation)
 	s.timing.Tier = c.Tier
 	for _, a := range t.attachments {
@@ -583,7 +586,7 @@ func (t *secretarySession) Asked(state *secretary.Asking) { t.secretaryAsk.sync(
 
 func (t *secretarySession) BeginWrite(ctx context.Context) error {
 	s := t.secretaryAsk
-	s.timing.beginWrite(t.c.Tier)
+	s.timing.BeginWrite(t.c.Tier)
 	_, err := s.tx.Exec(ctx, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(s.scope.OwnerID))
 	return err
 }
@@ -640,7 +643,7 @@ type secretaryAsk struct {
 	c          *secretaryContext
 	turnID     string
 	requestCtx context.Context
-	timing     *executionTimer
+	timing     *budgetstore.ExecutionTimer
 }
 
 // sync gives the turn's context what the asking changed. The checks of a
@@ -664,8 +667,8 @@ func (m *secretaryAsk) VerifyCurrent(ctx context.Context, state *secretary.Askin
 	})
 }
 
-func (m *secretaryAsk) Prepared()               { m.timing.finishPrepare() }
-func (m *secretaryAsk) Reading(d time.Duration) { m.timing.addPrepare(d) }
+func (m *secretaryAsk) Prepared()               { m.timing.FinishPrepare() }
+func (m *secretaryAsk) Reading(d time.Duration) { m.timing.AddPrepare(d) }
 
 func (m *secretaryAsk) SetTier(ctx context.Context, tier string) error {
 	_, err := m.tx.Exec(ctx, "UPDATE model_usage SET tier=$3 WHERE owner_id=$1 AND turn_id=$2 AND purpose='secretary'", string(m.scope.OwnerID), m.turnID, tier)
@@ -822,7 +825,7 @@ func refreshDeskTurnTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, turn 
 		turn.Cards = []workspace.DeskCard{}
 		return
 	}
-	turn.Outdated = len(run.ContextVersions) > 0 && verifyRunTx(ctx, tx, scope, run) != nil
+	turn.Outdated = len(run.ContextVersions) > 0 && accessstore.VerifyRunTx(ctx, tx, scope, run) != nil
 }
 
 // Receipts retain their original action metadata in storage. Undo is a live

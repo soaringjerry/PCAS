@@ -8,6 +8,8 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/claimstore"
+	"github.com/soaringjerry/PCAS/internal/postgres/evidencestore"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -19,7 +21,7 @@ func TestB4StatusFastReadMatchesSharedContract(t *testing.T) {
 	ctx := context.Background()
 	var eid string
 	if err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
-		id, err := entityTx(ctx, tx, scope.OwnerID, "person", "虚构人物晚杉")
+		id, err := claimstore.EntityTx(ctx, tx, scope.OwnerID, "person", "虚构人物晚杉")
 		eid = string(id)
 		return err
 	}); err != nil {
@@ -117,7 +119,7 @@ func TestB4BatchedEvidencePreservesWindows(t *testing.T) {
 	scope := owner()
 	ctx := context.Background()
 	// Six distinct anchors exercise the unchanged four-window budget and gaps.
-	claims := []evidenceContextClaim{}
+	claims := []evidencestore.EvidenceContextClaim{}
 	for i := 0; i < 6; i++ {
 		m := b4Memory(t, s, scope, fmt.Sprintf("虚构那位同事的季度汇报第%d项", i))
 		if len(m.Sources) == 0 {
@@ -126,16 +128,16 @@ func TestB4BatchedEvidencePreservesWindows(t *testing.T) {
 		source := m.Sources[0]
 		b4Exec(t, s, `INSERT INTO source_contexts(owner_id,source_id,source_version,conversation_key,role,branch) VALUES($1,$2,$3,$4,'user','active')
   ON CONFLICT(owner_id,source_id,source_version) DO UPDATE SET conversation_key=excluded.conversation_key,role='user',branch='active'`, scope.OwnerID, source.SourceID, source.Version, fmt.Sprintf("fictional-b4-%d", i))
-		claims = append(claims, evidenceContextClaim{Label: fmt.Sprintf("M%d", i), Ref: memory.Ref{ID: memory.ID(m.ID), Version: m.Version, Kind: memory.ClaimKind}, Text: m.Text})
+		claims = append(claims, evidencestore.EvidenceContextClaim{Label: fmt.Sprintf("M%d", i), Ref: memory.Ref{ID: memory.ID(m.ID), Version: m.Version, Kind: memory.ClaimKind}, Text: m.Text})
 	}
 	// Same-anchor deduplication, then an unavailable anchor with an explicit gap.
-	claims = append(claims, claims[0], evidenceContextClaim{Label: "M_missing", Ref: memory.Ref{ID: memory.NewID(), Version: 1, Kind: memory.ClaimKind}, Text: "虚构那位同事"})
+	claims = append(claims, claims[0], evidencestore.EvidenceContextClaim{Label: "M_missing", Ref: memory.Ref{ID: memory.NewID(), Version: 1, Kind: memory.ClaimKind}, Text: "虚构那位同事"})
 	err := pgx.BeginTxFunc(ctx, s.Pool, pgx.TxOptions{AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
-		a, ag, err := evidenceContextsTx(ctx, tx, scope, "", nil, claims)
+		a, ag, err := evidencestore.EvidenceContextsTx(ctx, tx, scope, "", nil, claims)
 		if err != nil {
 			return err
 		}
-		b, bg, err := evidenceContextsTx(context.WithValue(ctx, useEvidenceBatchKey{}, true), tx, scope, "", nil, claims)
+		b, bg, err := evidencestore.EvidenceContextsTx(context.WithValue(ctx, evidencestore.UseEvidenceBatchKey{}, true), tx, scope, "", nil, claims)
 		if err != nil {
 			return err
 		}

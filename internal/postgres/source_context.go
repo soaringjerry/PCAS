@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
+	"github.com/soaringjerry/PCAS/internal/postgres/accessstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/jackc/pgx/v5"
@@ -92,7 +93,7 @@ FROM recent ORDER BY ordered_at,admission_order NULLS FIRST,id`, string(scope.Ow
 			return err
 		}
 		for _, turn := range turns {
-			if len(turn.run.ContextVersions) > 0 && verifyRunTx(ctx, tx, scope, turn.run) != nil {
+			if len(turn.run.ContextVersions) > 0 && accessstore.VerifyRunTx(ctx, tx, scope, turn.run) != nil {
 				turn.answer = outdatedDeskAnswer
 			}
 			for _, message := range []struct{ role, text string }{{"user", turn.question}, {"assistant", turn.answer}} {

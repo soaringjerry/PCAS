@@ -11,6 +11,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/postgres/actionlog"
 	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/postgres/workstore"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -115,7 +116,7 @@ func (s *Store) undoActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 	// fence the worker, which does not take the owner lock when claiming work.
 	for _, c := range changes {
 		if c.Table == "deadline_completion" {
-			if err := checkDeadlineCompletionTx(ctx, tx, scope, c); err != nil {
+			if err := workstore.CheckDeadlineCompletionTx(ctx, tx, scope, c); err != nil {
 				return err
 			}
 			continue
@@ -189,7 +190,7 @@ func (s *Store) undoActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 	for i := len(changes) - 1; i >= 0; i-- {
 		c := changes[i]
 		if c.Table == "deadline_completion" {
-			if err := restoreDeadlineCompletionTx(ctx, tx, scope, c); err != nil {
+			if err := workstore.RestoreDeadlineCompletionTx(ctx, tx, scope, c); err != nil {
 				return err
 			}
 			continue

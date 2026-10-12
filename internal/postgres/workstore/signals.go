@@ -1,4 +1,4 @@
-package postgres
+package workstore
 
 import (
 	"context"
@@ -14,9 +14,9 @@ import (
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
-type conditionSignal = extraction.Signal
+type ConditionSignal = extraction.Signal
 
-func (s *Store) pendingConditions(ctx context.Context, scope memory.Scope) ([]map[string]string, error) {
+func (s *Work) PendingConditions(ctx context.Context, scope memory.Scope) ([]map[string]string, error) {
 	rows, err := s.Pool.Query(ctx, `SELECT i.document FROM work_items i JOIN workspace_owners w USING(owner_id) WHERE i.owner_id=$1 AND i.kind='idea' AND i.status='shelved' AND (i.document->>'remindersOn')::boolean AND (w.settings->>'wakeIdeas')::boolean ORDER BY i.updated_at DESC LIMIT 20`, string(scope.OwnerID))
 	if err != nil {
 		return nil, err
@@ -36,7 +36,7 @@ func (s *Store) pendingConditions(ctx context.Context, scope memory.Scope) ([]ma
 	}
 	return result, rows.Err()
 }
-func (s *Store) applySignalsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, source memory.Source, signals []conditionSignal) error {
+func (s *Work) ApplySignalsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, source memory.Source, signals []ConditionSignal) error {
 	if len(signals) > 30 {
 		return memory.ErrInvalid
 	}

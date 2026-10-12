@@ -9,6 +9,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/claimstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 )
 
@@ -76,7 +77,7 @@ func (s *Store) Commit(ctx context.Context, scope memory.Scope, in memory.Commit
 			if exists {
 				return memory.ErrConflict
 			}
-			if err := createRecord(ctx, tx, scope.OwnerID, v.ID, kind, "user"); err != nil {
+			if err := claimstore.CreateRecord(ctx, tx, scope.OwnerID, v.ID, kind, "user"); err != nil {
 				return err
 			}
 			precision := v.ValidTime.Precision

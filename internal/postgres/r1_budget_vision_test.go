@@ -40,7 +40,7 @@ func TestR1R6VisionSettlesOnlyItsReservation(t *testing.T) {
 			defer close(release)
 			s.SetModels(&ai.Registry{HTTP: server.Client(), Config: ai.Configuration{Extraction: "model", Providers: []ai.Provider{{ID: "model", Name: "Synthetic vision", Protocol: "openai", BaseURL: server.URL, Model: "synthetic", MaxOutput: 10000, InputPerMillion: 2, OutputPerMillion: 4}}}})
 			ref := m1Upload(t, s, scope)
-			if err := s.reserveModelCost(context.Background(), scope.OwnerID, 0.03, nil); err != nil {
+			if err := s.ReserveModelCost(context.Background(), scope.OwnerID, 0.03, nil); err != nil {
 				t.Fatal(err)
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

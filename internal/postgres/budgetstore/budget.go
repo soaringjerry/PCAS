@@ -1,4 +1,4 @@
-package postgres
+package budgetstore
 
 import (
 	"context"
@@ -16,16 +16,16 @@ import (
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
-func (s *Store) reserveBackgroundCost(ctx context.Context, j worker.Job, cost float64) error {
-	return s.reserveModelCost(ctx, j.OwnerID, cost, &j)
+func (s *Budgets) reserveBackgroundCost(ctx context.Context, j worker.Job, cost float64) error {
+	return s.ReserveModelCost(ctx, j.OwnerID, cost, &j)
 }
-func (s *Store) reserveModelCost(ctx context.Context, owner memory.ID, cost float64, j *worker.Job) error {
-	_, err := s.reserveModelCostID(ctx, owner, cost, j)
+func (s *Budgets) ReserveModelCost(ctx context.Context, owner memory.ID, cost float64, j *worker.Job) error {
+	_, err := s.ReserveModelCostID(ctx, owner, cost, j)
 	return err
 }
 
 // Each invocation settles its own row, including concurrent calls without a job.
-func (s *Store) reserveModelCostID(ctx context.Context, owner memory.ID, cost float64, j *worker.Job, receipts ...func(context.Context, pgx.Tx, string) error) (string, error) {
+func (s *Budgets) ReserveModelCostID(ctx context.Context, owner memory.ID, cost float64, j *worker.Job, receipts ...func(context.Context, pgx.Tx, string) error) (string, error) {
 	var id string
 	if cost < 0 || math.IsNaN(cost) || math.IsInf(cost, 0) {
 		return "", memory.ErrInvalid
@@ -92,11 +92,11 @@ func (s *Store) reserveModelCostID(ctx context.Context, owner memory.ID, cost fl
 			if j == nil {
 				return memory.ErrUnavailable
 			}
-			jitter, err := rand.Int(rand.Reader, big.NewInt(int64(budgetJitter)+1))
+			jitter, err := rand.Int(rand.Reader, big.NewInt(int64(BudgetJitter)+1))
 			if err != nil {
 				return err
 			}
-			return &worker.JobError{Code: "budget_deferred", Until: nextBudgetDay(now, loc).Add(time.Duration(jitter.Int64())), NoAttempt: true}
+			return &worker.JobError{Code: "budget_deferred", Until: NextBudgetDay(now, loc).Add(time.Duration(jitter.Int64())), NoAttempt: true}
 		}
 		// Migration verification can still exercise foreground use on the old
 		// schema. Resolve the actual relation instead of a same-named public table.
@@ -125,7 +125,7 @@ func (s *Store) reserveModelCostID(ctx context.Context, owner memory.ID, cost fl
 // A disconnected caller or failed result transaction must not leave a completed
 // invocation's maximum reservation in the daily budget. Settlement is separate
 // from business writes and does not authorize an automatic model retry.
-func (s *Store) settleModelCost(ctx context.Context, owner memory.ID, id string, cost float64) error {
+func (s *Budgets) SettleModelCost(ctx context.Context, owner memory.ID, id string, cost float64) error {
 	if cost < 0 || math.IsNaN(cost) || math.IsInf(cost, 0) {
 		return memory.ErrInvalid
 	}
@@ -139,7 +139,7 @@ func (s *Store) settleModelCost(ctx context.Context, owner memory.ID, id string,
 // time. Run IDs can coincide across owners or be reused after deletion. Settle
 // either location under the deletion lock without restoring deleted text.
 // Billing survives result-lease loss; creation time fences a reused run ID.
-func (s *Store) settleRunCost(ctx context.Context, owner memory.ID, run workspace.Run, cost float64) error {
+func (s *Budgets) SettleRunCost(ctx context.Context, owner memory.ID, run workspace.Run, cost float64) error {
 	settleCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 	defer cancel()
 	return pgx.BeginFunc(settleCtx, s.Pool, func(tx pgx.Tx) error {
@@ -154,9 +154,9 @@ func (s *Store) settleRunCost(ctx context.Context, owner memory.ID, run workspac
 	})
 }
 
-const budgetJitter = 10 * time.Minute
+const BudgetJitter = 10 * time.Minute
 
-func nextBudgetDay(now time.Time, loc *time.Location) time.Time {
+func NextBudgetDay(now time.Time, loc *time.Location) time.Time {
 	local := now.In(loc)
 	date := time.Date(local.Year(), local.Month(), local.Day()+1, 0, 0, 0, 0, time.UTC)
 	next := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, loc)

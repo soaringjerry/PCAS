@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
+	"github.com/soaringjerry/PCAS/internal/postgres/accessstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
@@ -83,7 +84,7 @@ func TestMixedWritingSurvivesArtifactRevocationAndDeletion(t *testing.T) {
 			if err != nil {
 				return err
 			}
-			item, _, err = sanitizeItemTx(ctx, tx, scope, "manual", item)
+			item, _, err = accessstore.SanitizeItemTx(ctx, tx, scope, "manual", item)
 			if err != nil {
 				return err
 			}

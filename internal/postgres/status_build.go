@@ -8,6 +8,7 @@ import (
 
 	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/postgres/statestore"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
@@ -60,7 +61,7 @@ func (s *Store) RunStatus(ctx context.Context, logger *slog.Logger) {
 			return
 		}
 		if _, err := s.ScheduleStatus(ctx, time.Now()); err != nil && ctx.Err() == nil {
-			s.recordScheduleFailure(ctx, HandoverStage, err)
+			s.RecordScheduleFailure(ctx, HandoverStage, err)
 		}
 		select {
 		case <-ctx.Done():
@@ -108,7 +109,7 @@ func (s *Store) ScheduleStatus(ctx context.Context, now time.Time) (int, error) 
 				return err
 			}
 			count += topicCount
-			tidyCount, err := enqueueDateTidyTx(ctx, tx, owner, now)
+			tidyCount, err := statestore.EnqueueDateTidyTx(ctx, tx, owner, now)
 			if err != nil {
 				return err
 			}
@@ -128,7 +129,7 @@ func (s *Store) ScheduleStatus(ctx context.Context, now time.Time) (int, error) 
 			return err
 		})
 		if err != nil {
-			if s.scheduleYielded(ctx, owner, HandoverStage, err) {
+			if s.ScheduleYielded(ctx, owner, HandoverStage, err) {
 				continue
 			}
 			return count, err

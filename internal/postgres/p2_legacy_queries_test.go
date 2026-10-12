@@ -20,7 +20,9 @@ import (
 	"unicode/utf8"
 
 	"github.com/soaringjerry/PCAS/internal/contextbuilder"
+	"github.com/soaringjerry/PCAS/internal/postgres/accessstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/actionlog"
+	"github.com/soaringjerry/PCAS/internal/postgres/evidencestore"
 	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/memoryread"
@@ -281,7 +283,7 @@ func p2LegacySanitizeItemTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, 
 	// Older promotions retained ideaId but not artifact links. Repair that
 	// lineage before using their copied notes in a new provider request.
 	if item.Kind == "task" && item.IdeaID != "" {
-		if err := promoteArtifactsTx(ctx, tx, scope, item.IdeaID, item.ID); err != nil {
+		if err := accessstore.PromoteArtifactsTx(ctx, tx, scope, item.IdeaID, item.ID); err != nil {
 			return item, nil, err
 		}
 	}
@@ -995,7 +997,7 @@ func (s *Store) p2LegacySecretaryPrompt(ctx context.Context, tx pgx.Tx, scope me
 		fmt.Fprintln(&prompt, contextbuilder.RecallTimeRelaxed)
 	}
 	sent := map[string]workspace.Memory{}
-	contextClaims := []evidenceContextClaim{}
+	contextClaims := []evidencestore.EvidenceContextClaim{}
 	seen := map[string]bool{}
 	for _, ref := range recall.Memories {
 		m, ok := c.Memories[string(ref.ID)]
@@ -1004,14 +1006,14 @@ func (s *Store) p2LegacySecretaryPrompt(ctx context.Context, tx pgx.Tx, scope me
 		}
 		if req.ThingID != nil {
 			ref := memory.Ref{ID: memory.ID(m.ID), Version: m.Version, Kind: memory.ClaimKind}
-			if verifyRunTx(ctx, tx, scope, workspace.Run{ThingID: *req.ThingID, AgentID: c.Agent.ID, ContextVersions: []memory.Ref{ref}}) != nil {
+			if accessstore.VerifyRunTx(ctx, tx, scope, workspace.Run{ThingID: *req.ThingID, AgentID: c.Agent.ID, ContextVersions: []memory.Ref{ref}}) != nil {
 				continue
 			}
 		}
 		seen[m.ID] = true
 		alias := fmt.Sprintf("M%d", len(sent)+1)
 		sent[alias] = m
-		contextClaims = append(contextClaims, evidenceContextClaim{Label: alias, Ref: memory.Ref{ID: memory.ID(m.ID), Version: m.Version, Kind: memory.ClaimKind}, Text: m.Text})
+		contextClaims = append(contextClaims, evidencestore.EvidenceContextClaim{Label: alias, Ref: memory.Ref{ID: memory.ID(m.ID), Version: m.Version, Kind: memory.ClaimKind}, Text: m.Text})
 		fmt.Fprintf(&prompt, "[%s / %s / trust=%s / confirmation=%s / acquisition=%s] %s\n", alias, m.Epistemic, m.Trust, m.Confirmation, m.Acquisition, m.Text+contextbuilder.MemorySuffix(m, loc))
 		c.Dependencies = append(c.Dependencies, memory.Ref{ID: memory.ID(m.ID), Version: m.Version, Kind: memory.ClaimKind})
 	}
@@ -1055,7 +1057,7 @@ func (s *Store) p2LegacySecretaryPrompt(ctx context.Context, tx pgx.Tx, scope me
 	if len(excerpts) == 0 {
 		fmt.Fprintln(&prompt, "（没有）")
 	}
-	groups, gaps, err := evidenceContextsTx(ctx, tx, scope, c.Agent.ID, req.ThingID, contextClaims)
+	groups, gaps, err := evidencestore.EvidenceContextsTx(ctx, tx, scope, c.Agent.ID, req.ThingID, contextClaims)
 	if err != nil {
 		return "", nil, err
 	}
@@ -1220,7 +1222,7 @@ func (s *Store) p2LegacyDeskTurn(ctx context.Context, scope memory.Scope, req wo
 			if contextErr == nil {
 				failureStage = "budget"
 				p, _ := s.Models.Get(c.Agent.ID)
-				reservationID, contextErr = s.reserveModelCostID(ctx, scope.OwnerID, p.Reserve(secretaryInstructions+prompt), nil)
+				reservationID, contextErr = s.ReserveModelCostID(ctx, scope.OwnerID, p.Reserve(secretaryInstructions+prompt), nil)
 			}
 			if contextErr == nil {
 				failureStage = "model"
@@ -1235,7 +1237,7 @@ func (s *Store) p2LegacyDeskTurn(ctx context.Context, scope memory.Scope, req wo
 				if err != nil && strings.TrimSpace(result.Text) == "" {
 					cost = 0
 				}
-				if settleErr := s.settleModelCost(ctx, scope.OwnerID, reservationID, cost); settleErr != nil {
+				if settleErr := s.SettleModelCost(ctx, scope.OwnerID, reservationID, cost); settleErr != nil {
 					return settleErr
 				}
 				contextErr = err
@@ -1480,7 +1482,7 @@ func (s *Store) p2LegacyRecall(ctx context.Context, scope memory.Scope, in memor
 		if !s.Models.Available(provider.ID) {
 			e = memory.ErrUnavailable
 		} else {
-			reservationID, e = s.reserveModelCostID(ctx, scope.OwnerID, reserved, nil)
+			reservationID, e = s.ReserveModelCostID(ctx, scope.OwnerID, reserved, nil)
 		}
 		if e == nil {
 			embeddings, e = s.Models.EmbedProvider(ctx, provider, []string{provider.EmbeddingQueryPrefix + query})
@@ -1489,7 +1491,7 @@ func (s *Store) p2LegacyRecall(ctx context.Context, scope memory.Scope, in memor
 			if e != nil {
 				reserved = 0
 			}
-			if err := s.settleModelCost(ctx, scope.OwnerID, reservationID, reserved); err != nil {
+			if err := s.SettleModelCost(ctx, scope.OwnerID, reservationID, reserved); err != nil {
 				return out, err
 			}
 		}

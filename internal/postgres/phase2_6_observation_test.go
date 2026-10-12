@@ -76,7 +76,7 @@ func TestPhase26A2LongDeferralWarnsOnceAndResetsAfterCompletion(t *testing.T) {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(&log, nil)))
 	defer slog.SetDefault(old)
 	for i := 0; i < 2; i++ {
-		if err := f.Store.warnLongDeferrals(f.Context); err != nil {
+		if err := f.Store.WarnLongDeferrals(f.Context); err != nil {
 			t.Fatal(err)
 		}
 	}

@@ -7,6 +7,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/claimstore"
 )
 
 // History filed today was said long ago: its exposure starts from then.
@@ -26,7 +27,7 @@ func TestExposureStartsFromWhenItWasSaid(t *testing.T) {
 	var old, fresh memory.Ref
 	if err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		var err error
-		old, err = s.rememberTx(ctx, tx, scope, statement{Text: "云杉每周六早上去虚构湖边跑步。", Nature: "fact", Actor: "ai", Confirmation: "adopted", Acquisition: "direct", Source: source.Ref})
+		old, err = s.RememberTx(ctx, tx, scope, claimstore.Statement{Text: "云杉每周六早上去虚构湖边跑步。", Nature: "fact", Actor: "ai", Confirmation: "adopted", Acquisition: "direct", Source: source.Ref})
 		return err
 	}); err != nil {
 		t.Fatal(err)

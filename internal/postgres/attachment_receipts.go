@@ -60,5 +60,5 @@ func (s *Store) accountAttachmentReceipt(ctx context.Context, scope memory.Scope
 	if err := s.RecordUsage(ctx, usage); err != nil {
 		return err
 	}
-	return s.settleModelCost(ctx, scope.OwnerID, paid.Reservation, paid.Cost)
+	return s.SettleModelCost(ctx, scope.OwnerID, paid.Reservation, paid.Cost)
 }

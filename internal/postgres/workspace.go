@@ -14,6 +14,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/memoryread"
 	"github.com/soaringjerry/PCAS/internal/postgres/memorystore"
+	"github.com/soaringjerry/PCAS/internal/postgres/statestore"
 	"github.com/soaringjerry/PCAS/internal/retrieval"
 	"github.com/soaringjerry/PCAS/internal/workspace/itemcommand"
 
@@ -468,7 +469,7 @@ func activityTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, timezone str
 		return nil, err
 	}
 	owner := string(scope.OwnerID)
-	tidied, err := tidiedDatesTx(ctx, tx, scope)
+	tidied, err := statestore.TidiedDatesTx(ctx, tx, scope)
 	if err != nil {
 		return nil, err
 	}

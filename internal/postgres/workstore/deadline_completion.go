@@ -1,4 +1,4 @@
-package postgres
+package workstore
 
 import (
 	"context"
@@ -28,7 +28,7 @@ type deadlineCompletion struct {
 var deadlineCompletionKeys = []string{"deadline_completed", "deadline_completed_version", "deadline_completed_at", "deadline_closed_as"}
 
 // validDeadlineClose normalises how a date is closed; empty means it was met.
-func validDeadlineClose(as string) (string, bool) {
+func ValidDeadlineClose(as string) (string, bool) {
 	if as == "" {
 		return "done", true
 	}
@@ -65,8 +65,8 @@ func (v deadlineCompletion) hash() string {
 	return fmt.Sprintf("%x", sha256.Sum256(kernel.JSON(v)))
 }
 
-func completeDeadlineTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, claim string, version int, as string) error {
-	as, ok := validDeadlineClose(as)
+func CompleteDeadlineTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, claim string, version int, as string) error {
+	as, ok := ValidDeadlineClose(as)
 	if !ok {
 		return memory.ErrInvalid
 	}
@@ -100,7 +100,7 @@ func completeDeadlineTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, clai
 	return err
 }
 
-func checkDeadlineCompletionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, change actionlog.ActionChange) error {
+func CheckDeadlineCompletionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, change actionlog.ActionChange) error {
 	var before deadlineCompletion
 	if !memory.ID(change.ID).Valid() || modelcall.DecodeStrict(change.Before, &before) != nil || before.Version < 1 || before.Mark == nil || change.AfterHash == nil {
 		return memory.ErrInvalid
@@ -118,7 +118,7 @@ func checkDeadlineCompletionTx(ctx context.Context, tx pgx.Tx, scope memory.Scop
 	return nil
 }
 
-func restoreDeadlineCompletionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, change actionlog.ActionChange) error {
+func RestoreDeadlineCompletionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, change actionlog.ActionChange) error {
 	var before deadlineCompletion
 	if err := json.Unmarshal(change.Before, &before); err != nil {
 		return err

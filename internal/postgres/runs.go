@@ -12,10 +12,14 @@ import (
 
 	"github.com/soaringjerry/PCAS/internal/contextbuilder"
 	"github.com/soaringjerry/PCAS/internal/contextbuilder/reader"
+	"github.com/soaringjerry/PCAS/internal/postgres/accessstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/actionlog"
+	"github.com/soaringjerry/PCAS/internal/postgres/budgetstore"
+	"github.com/soaringjerry/PCAS/internal/postgres/evidencestore"
 	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/memoryread"
+	"github.com/soaringjerry/PCAS/internal/postgres/workstore"
 	"github.com/soaringjerry/PCAS/internal/retrieval"
 	"github.com/soaringjerry/PCAS/internal/workspace/deputy"
 	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
@@ -54,7 +58,7 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 			return memory.ErrForbidden
 		}
 		targetHash := workspace.ContentHash(item)
-		item, artifactRefs, err := sanitizeItemTx(ctx, tx, scope, agent.ID, item)
+		item, artifactRefs, err := accessstore.SanitizeItemTx(ctx, tx, scope, agent.ID, item)
 		if err != nil {
 			return err
 		}
@@ -237,9 +241,9 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 		}
 		evidenceCtx := ctx
 		if u.Ready {
-			evidenceCtx = context.WithValue(ctx, useEvidenceBatchKey{}, true)
+			evidenceCtx = context.WithValue(ctx, evidencestore.UseEvidenceBatchKey{}, true)
 		}
-		groups, gaps, err := evidenceContextsTx(evidenceCtx, tx, scope, agent.ID, &item.ID, brief.Claims)
+		groups, gaps, err := evidencestore.EvidenceContextsTx(evidenceCtx, tx, scope, agent.ID, &item.ID, brief.Claims)
 		if err != nil {
 			return err
 		}
@@ -363,7 +367,7 @@ func (s *Store) adoptRunTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, r
 	if !agent.Enabled {
 		return memory.ErrForbidden
 	}
-	if err := verifyRunAccessTx(ctx, useClockTx{Tx: tx, at: time.Now()}, scope, *run); err != nil {
+	if err := accessstore.VerifyRunAccessTx(ctx, useClockTx{Tx: tx, at: time.Now()}, scope, *run); err != nil {
 		return err
 	}
 	item, err := itemstore.GetItem(ctx, tx, scope, run.ThingID)
@@ -391,12 +395,12 @@ func (s *Store) adoptRunTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, r
 			}
 		} else if item.Kind == "task" {
 			item.Notes += "\n" + text
-			if err := artifactTx(ctx, tx, scope, run.ID, item.ID, "notes", run.ID, text); err != nil {
+			if err := workstore.ArtifactTx(ctx, tx, scope, run.ID, item.ID, "notes", run.ID, text); err != nil {
 				return err
 			}
 		} else {
 			item.Body += "\n" + text
-			if err := artifactTx(ctx, tx, scope, run.ID, item.ID, "body", run.ID, text); err != nil {
+			if err := workstore.ArtifactTx(ctx, tx, scope, run.ID, item.ID, "body", run.ID, text); err != nil {
 				return err
 			}
 		}
@@ -409,7 +413,7 @@ func (s *Store) adoptRunTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, r
 			if item.Kind == "task" {
 				check := workspace.Check{ID: string(memory.NewID()), Text: line}
 				item.Checklist = append(item.Checklist, check)
-				if err := artifactTx(ctx, tx, scope, run.ID, item.ID, "check", check.ID, line); err != nil {
+				if err := workstore.ArtifactTx(ctx, tx, scope, run.ID, item.ID, "check", check.ID, line); err != nil {
 					return err
 				}
 			} else {
@@ -425,7 +429,7 @@ func (s *Store) adoptRunTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, r
 				if err := itemstore.SaveItem(ctx, tx, scope, task); err != nil {
 					return err
 				}
-				if err := artifactTx(ctx, tx, scope, run.ID, task.ID, "task", task.ID, line); err != nil {
+				if err := workstore.ArtifactTx(ctx, tx, scope, run.ID, task.ID, "task", task.ID, line); err != nil {
 					return err
 				}
 			}
@@ -448,152 +452,6 @@ func (s *Store) adoptRunTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, r
 		}
 	}
 	return nil
-}
-
-func verifyRunTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run workspace.Run) error {
-	var item *workspace.Item
-	if run.ThingID != "" {
-		current, err := itemstore.GetItem(ctx, tx, scope, run.ThingID)
-		if err != nil {
-			return err
-		}
-		item = &current
-	}
-	return verifyRunForItemTx(ctx, tx, scope, run, item)
-}
-
-// Derived answers obey the destination item's current context policy too.
-// Checking only the agent grant would let a previous output reintroduce an
-// excluded memory, or a memory from the item's former project.
-func verifyRunForItemTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run workspace.Run, item *workspace.Item) error {
-	agent, err := kernel.QueryDocument[workspace.Agent](ctx, tx, "SELECT document FROM workspace_agents WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), run.AgentID)
-	if err != nil {
-		return err
-	}
-	if !agent.Enabled {
-		return memory.ErrForbidden
-	}
-	var projectID string
-	var excluded []string
-	if item != nil {
-		projectID = item.ProjectID
-		if item.Kind == "project" {
-			projectID = item.ID
-		}
-		excluded, err = kernel.QueryDocuments[string](ctx, tx, "SELECT to_jsonb(memory_id::text) FROM context_exclusions WHERE owner_id=$1 AND thing_id=$2", string(scope.OwnerID), item.ID)
-		if err != nil {
-			return err
-		}
-	}
-	claimIDs, sourceIDs := []string{}, []string{}
-	for _, ref := range kernel.UniqueRefs(run.ContextVersions) {
-		if ref.Kind == memory.SourceKind {
-			sourceIDs = append(sourceIDs, string(ref.ID))
-		} else {
-			claimIDs = append(claimIDs, string(ref.ID))
-		}
-	}
-	statuses, err := memoryread.ClaimStatusesTx(ctx, tx, scope.OwnerID, claimIDs)
-	if err != nil {
-		return err
-	}
-	type dependency struct {
-		ID                  string
-		Version             int
-		Nature, Acquisition string
-		Scope               map[string]json.RawMessage
-	}
-	claims := map[string]dependency{}
-	if len(claimIDs) > 0 {
-		// Resolve applicable versions once. Preserve the original readClaim grant,
-		// revision, nature, inference, and project checks for every supplied identity.
-		rows, err := kernel.QueryDocuments[dependency](ctx, tx, `WITH applicable AS MATERIALIZED (
- SELECT claim_id,version FROM applicable_claim_versions($1,now(),now()) WHERE claim_id=ANY($2::uuid[])
-) SELECT jsonb_build_object('id',r.id,'version',c.version,'nature',c.nature,'acquisition',c.acquisition,'scope',c.scope)
- FROM applicable a JOIN memory_records r ON r.owner_id=$1 AND r.id=a.claim_id
- JOIN claim_revisions c ON (c.owner_id,c.claim_id,c.version)=(r.owner_id,r.id,a.version)
- JOIN record_versions rv ON (rv.owner_id,rv.record_id,rv.version)=(c.owner_id,c.claim_id,c.version)
- WHERE r.state='active' AND EXISTS(SELECT 1 FROM record_grants g WHERE g.owner_id=r.owner_id AND g.record_id=r.id AND g.principal_id=$3)`, string(scope.OwnerID), claimIDs, run.AgentID)
-		if err != nil {
-			return err
-		}
-		for _, claim := range rows {
-			claims[claim.ID] = claim
-		}
-	}
-	sources := map[string]int{}
-	if len(sourceIDs) > 0 {
-		var thingID *string
-		if item != nil && item.ID != "" {
-			thingID = &item.ID
-		}
-		rows, err := kernel.QueryDocuments[dependency](ctx, tx, `SELECT jsonb_build_object('id',r.id,'version',r.version)
- FROM memory_records r JOIN record_versions v ON (v.owner_id,v.record_id,v.version)=(r.owner_id,r.id,r.version)
- WHERE r.owner_id=$1 AND r.id=ANY($2::uuid[]) AND r.kind='source' AND r.state='active' AND v.state='active' AND `+teamSourceVisibleSQL("$1", "r.id", "$3", "$4"), string(scope.OwnerID), sourceIDs, run.AgentID, thingID)
-		if err != nil {
-			return err
-		}
-		for _, source := range rows {
-			sources[source.ID] = source.Version
-		}
-	}
-	for _, ref := range kernel.UniqueRefs(run.ContextVersions) {
-		if ref.Kind == memory.SourceKind {
-			version, ok := sources[string(ref.ID)]
-			if !ok || version != ref.Version {
-				return memory.ErrConflict
-			}
-			continue
-		}
-		if !memoryread.RetirementDependencyAllowed(ctx, statuses[string(ref.ID)]) {
-			return memory.ErrConflict
-		}
-		claim, ok := claims[string(ref.ID)]
-		if !ok || claim.Version != ref.Version || !kernel.OneOf(claim.Nature, agent.MemoryKinds...) || !agent.IncludeInferred && (claim.Acquisition == "inferred" || statuses[string(ref.ID)].AI) {
-			return memory.ErrConflict
-		}
-		if item != nil {
-			var claimProject string
-			if raw, ok := claim.Scope["project_id"]; ok && modelcall.DecodeStrict(raw, &claimProject) != nil {
-				return memory.ErrConflict
-			}
-			if kernel.OneOf(string(ref.ID), excluded...) || claimProject != "" && claimProject != projectID {
-				return memory.ErrConflict
-			}
-		}
-	}
-	return nil
-}
-
-// A version change alone makes an answer outdated. Recheck every dependency
-// against its current version before deciding whether old content is safe to
-// retain; a removed grant or deleted dependency must dominate any correction.
-func verifyRunAccessTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run workspace.Run) error {
-	ctx = context.WithValue(ctx, memoryread.RetirementAccessKey{}, true)
-	run.ContextVersions = append([]memory.Ref(nil), run.ContextVersions...)
-	ids := make([]string, len(run.ContextVersions))
-	for i, ref := range run.ContextVersions {
-		ids[i] = string(ref.ID)
-	}
-	rows, err := kernel.QueryDocuments[struct {
-		ID      string
-		Version int
-	}](ctx, tx, `SELECT jsonb_build_object('id',id,'version',version) FROM memory_records WHERE owner_id=$1 AND id=ANY($2::uuid[]) AND state='active'`, string(scope.OwnerID), ids)
-	if err != nil {
-		return err
-	}
-	versions := map[string]int{}
-	for _, row := range rows {
-		versions[row.ID] = row.Version
-	}
-	for i, ref := range run.ContextVersions {
-		version, ok := versions[string(ref.ID)]
-		if !ok {
-			return memory.ErrConflict
-		}
-		run.ContextVersions[i].Version = version
-	}
-	return verifyRunTx(ctx, tx, scope, run)
 }
 
 // RunAgentJobs owns costly jobs: an ambiguous provider timeout/crash is marked
@@ -624,7 +482,7 @@ func (s *Store) RunDeputy(ctx context.Context, steps deputy.Steps) error {
 
 func (s *Store) runAgent(ctx context.Context, steps deputy.Steps) (resultErr error) {
 	started := time.Now()
-	ctx, timing := newExecutionTimer(ctx, "deputy", started)
+	ctx, timing := budgetstore.NewExecutionTimer(ctx, "deputy", started)
 	ctx, persistCancel := context.WithDeadline(ctx, started.Add(secretary.TurnTimeout))
 	defer persistCancel()
 	s.pendingPaid.Range(func(key, value any) bool {
@@ -720,9 +578,9 @@ func (s *Store) runAgent(ctx context.Context, steps deputy.Steps) (resultErr err
 	if err != nil || token == "" {
 		return err
 	}
-	timing.id = run.ID
+	timing.Id = run.ID
 	timing.Tier = run.MemoryTier
-	defer s.finishExecutionTiming(ctx, scope.OwnerID, timing)
+	defer s.FinishExecutionTiming(ctx, scope.OwnerID, timing)
 	if cached != nil && run.Kind == "revise" {
 		return s.finishPaidRevise(ctx, scope, run, token, cached)
 	}
@@ -750,7 +608,7 @@ func (s *Store) runAgent(ctx context.Context, steps deputy.Steps) (resultErr err
 		u.Coverage = savedInput.Coverage
 	}
 	if savedRow == nil {
-		timing.beginPrepare()
+		timing.BeginPrepare()
 		prepared, agent, prepareErr := s.deputyUseContext(workCtx, scope, &run)
 		u, useErr = prepared, prepareErr
 		if useErr == nil {
@@ -780,7 +638,7 @@ func (s *Store) runAgent(ctx context.Context, steps deputy.Steps) (resultErr err
 		verifyErr = pgx.BeginFunc(workCtx, s.Pool, func(tx pgx.Tx) error { return checkUseRunPromptTx(workCtx, tx, scope, run) })
 	}
 	result := ai.Result{}
-	timing.finishPrepare()
+	timing.FinishPrepare()
 	answerStarted := time.Now()
 	generationErr := verifyErr
 	var mainPaid *modelcall.PaidResult
@@ -827,7 +685,7 @@ func (s *Store) runAgent(ctx context.Context, steps deputy.Steps) (resultErr err
 	// Only an unused admission without a linked reservation is settled here.
 	// The gateway already owns every linked reservation and usage record.
 	if savedRow == nil || savedRow.Reservation == "" {
-		if err := s.settleRunCost(ctx, scope.OwnerID, run, cost); err != nil {
+		if err := s.SettleRunCost(ctx, scope.OwnerID, run, cost); err != nil {
 			return err
 		}
 	}
@@ -905,7 +763,7 @@ func (s *Store) runAgent(ctx context.Context, steps deputy.Steps) (resultErr err
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
-	timing.beginWrite(run.MemoryTier)
+	timing.BeginWrite(run.MemoryTier)
 	return pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(scope.OwnerID)); err != nil {
 			return err
@@ -956,7 +814,7 @@ func (s *Store) runAgent(ctx context.Context, steps deputy.Steps) (resultErr err
 		if checkUseRunPromptTx(ctx, tx, scope, current) != nil {
 			current.StaleContext = true
 		}
-		if verifyRunAccessTx(ctx, tx, scope, current) != nil {
+		if accessstore.VerifyRunAccessTx(ctx, tx, scope, current) != nil {
 			current.StaleContext = true
 			current.Status = "failed"
 			current.Output = ""

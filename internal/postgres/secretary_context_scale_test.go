@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/claimstore"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -27,7 +28,7 @@ func TestSecretaryTurnUsesCompleteLargeContext(t *testing.T) {
 	for g := 0; g < 4; g++ {
 		var eid string
 		err := pgx.BeginFunc(context.Background(), s.Pool, func(tx pgx.Tx) error {
-			id, err := entityTx(context.Background(), tx, scope.OwnerID, "topic", fmt.Sprintf("虚构季度组%d", g))
+			id, err := claimstore.EntityTx(context.Background(), tx, scope.OwnerID, "topic", fmt.Sprintf("虚构季度组%d", g))
 			eid = string(id)
 			return err
 		})

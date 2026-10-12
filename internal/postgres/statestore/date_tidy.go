@@ -1,4 +1,4 @@
-package postgres
+package statestore
 
 import (
 	"context"
@@ -13,6 +13,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/postgres/actionlog"
 	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/postgres/workstore"
 	"github.com/soaringjerry/PCAS/internal/prompts"
 	"github.com/soaringjerry/PCAS/internal/worker"
 	"github.com/soaringjerry/PCAS/internal/workspace"
@@ -29,7 +30,7 @@ const DateTidyStage = datereview.Stage
 // One small call per date. Thirty an hour clears a backlog of a few hundred
 // rows within a day without holding the provider; a normal day adds a handful.
 // Jobs past the hour's budget wait for the next hour; none is dropped.
-const dateTidyHourly = kernel.DateTidyHourly
+const DateTidyHourly = kernel.DateTidyHourly
 
 // Open to-dos and ideas shown so the model does not make a second copy. The
 // secretary is shown the same 40 and 20 (2.6 C6); what is left out is counted.
@@ -110,7 +111,7 @@ func dateTidyRowsTx(ctx context.Context, tx pgx.Tx, owner memory.ID, now time.Ti
 // enqueueDateTidyTx queues one judgement per eligible date. The job is keyed by
 // memory version and class, so an edit to the memory, or a dated row passing
 // into the past, is judged afresh and nothing else is redone.
-func enqueueDateTidyTx(ctx context.Context, tx pgx.Tx, owner memory.ID, now time.Time) (int, error) {
+func EnqueueDateTidyTx(ctx context.Context, tx pgx.Tx, owner memory.ID, now time.Time) (int, error) {
 	var installed bool
 	if err := tx.QueryRow(ctx, "SELECT to_regclass('date_tidy_checks') IS NOT NULL").Scan(&installed); err != nil || !installed {
 		return 0, err
@@ -181,9 +182,9 @@ func dateTidyInputTx(ctx context.Context, tx pgx.Tx, j worker.Job, class string,
 }
 
 // DateReviewStore gives the date review service its reads and writes.
-func (s *Store) DateReviewStore() datereview.Store { return dateReviewStore{s} }
+func (s *State) DateReviewStore() datereview.Store { return dateReviewStore{s} }
 
-type dateReviewStore struct{ store *Store }
+type dateReviewStore struct{ store *State }
 
 func (a dateReviewStore) Input(ctx context.Context, j worker.Job, class string) (input datereview.Input, open bool, clipped int, err error) {
 	now := a.store.BusinessNow()
@@ -274,14 +275,14 @@ func (a dateReviewAction) SaveItem(item workspace.Item) error {
 	return itemstore.SaveItem(a.ctx, a.unit.tx, a.unit.scope, item)
 }
 func (a dateReviewAction) CloseDate(as string) error {
-	return completeDeadlineTx(a.ctx, a.unit.tx, a.unit.scope, string(a.unit.job.Record.ID), a.unit.job.Record.Version, as)
+	return workstore.CompleteDeadlineTx(a.ctx, a.unit.tx, a.unit.scope, string(a.unit.job.Record.ID), a.unit.job.Record.Version, as)
 }
 
 // tidiedDatesTx is the home page's one line for the dates the background
 // stopped showing in the last two days — as long as anything else stays under
 // "while you were away". Each date is listed under it with why, and its own
 // undo. To-dos and ideas made from a date have their receipt on the item.
-func tidiedDatesTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) (*workspace.Activity, error) {
+func TidiedDatesTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) (*workspace.Activity, error) {
 	var installed bool
 	if err := tx.QueryRow(ctx, "SELECT to_regclass('date_tidy_checks') IS NOT NULL").Scan(&installed); err != nil || !installed {
 		return nil, err

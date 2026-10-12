@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
+	"github.com/soaringjerry/PCAS/internal/postgres/claimstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/jackc/pgx/v5"
@@ -272,14 +273,14 @@ func (w *conversationWork) Apply(ctx context.Context, output conversationOutput)
 				}
 				continue
 			}
-			in := statement{Text: item.Text, Nature: item.Nature, Subject: decision.Subject, SubjectType: decision.SubjectType, Predicate: item.Predicate, Confirmation: decision.Confirmation, Acquisition: item.Acquisition, Actor: "ai", Quote: item.Quote, Source: source.Source.Ref, Structured: true, ExpressedAt: extraction.ExpressedAt(source), ExtractionRun: run, ExtractionRef: next,
+			in := claimstore.Statement{Text: item.Text, Nature: item.Nature, Subject: decision.Subject, SubjectType: decision.SubjectType, Predicate: item.Predicate, Confirmation: decision.Confirmation, Acquisition: item.Acquisition, Actor: "ai", Quote: item.Quote, Source: source.Source.Ref, Structured: true, ExpressedAt: extraction.ExpressedAt(source), ExtractionRun: run, ExtractionRef: next,
 				EventFrom: decision.EventFrom, EventTo: decision.EventTo, EventPrecision: decision.EventPrecision, Mentions: decision.Mentions}
 			// The model can extract several independent memories from one
 			// quotation. Later siblings must not overwrite the first item.
 			quoteKey := string(in.Source.ID) + "/" + in.Quote
 			in.AllowNewAtQuote = seenOutputQuotes[quoteKey]
 			seenOutputQuotes[quoteKey] = true
-			ref, err := s.rememberTx(ctx, tx, scope, in)
+			ref, err := s.RememberTx(ctx, tx, scope, in)
 			if errors.Is(err, memory.ErrBlocked) {
 				continue
 			}

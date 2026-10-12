@@ -1,4 +1,4 @@
-package postgres
+package workstore
 
 import (
 	"context"
@@ -12,7 +12,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/workspace/effort"
 )
 
-func refreshTaskPlansTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) error {
+func RefreshTaskPlansTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) error {
 	items, err := kernel.QueryDocuments[workspace.Item](ctx, tx, `SELECT document FROM work_items WHERE owner_id=$1 AND kind='task' AND document->>'estimatedHours' IS NOT NULL ORDER BY id`, string(scope.OwnerID))
 	if err != nil {
 		return err
@@ -33,7 +33,7 @@ func refreshTaskPlansTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) erro
 	}
 	return nil
 }
-func (s *Store) ReadProjectTimeline(ctx context.Context, scope memory.Scope, project string) (workspace.ProjectTimeline, error) {
+func (s *Work) ReadProjectTimeline(ctx context.Context, scope memory.Scope, project string) (workspace.ProjectTimeline, error) {
 	out := workspace.ProjectTimeline{ProjectID: project, DailyHours: effort.DailyHours, Items: []workspace.TimelineItem{}, WithoutDue: []workspace.Item{}}
 	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err

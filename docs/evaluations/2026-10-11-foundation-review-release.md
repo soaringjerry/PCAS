@@ -293,6 +293,20 @@ The cleanup succeeded and the record counts are equal. The worker log has no err
 
 The storage package has 24,620 lines without tests at this revision. It had 28,355 lines at the review.
 
+## Twenty-First Release
+
+Released revision: `ec9bd65f0c0ebe16e99b18c16b3d196921ba6147`, on 2026-10-12 UTC. Earlier revision: `1050c24`.
+Pull request #380 gives the change: the storage package makes no model call and holds no gateway. Each of its ten calls has an owner in a domain package, and `internal/app` builds the gateway. The [domain pilot page](../tasks/foundation-domain-pilot.md#model-calls-outside-the-storage-package) gives each owner.
+
+The release had no database migration. The backup was validated, and the record counts are equal before and after the start: 5,253 claims and 29 work items.
+The live check on the real default Codex channel passed with four turns: an answer, an arrangement (`create_task`, done), a change (`update`, done), and a delegation (`delegate`, done) whose deputy run finished as done with a settled call.
+Each turn made one settled query embedding call and one settled answer call without a fallback. These calls and the deputy's answer call went through the moved owners.
+The cleanup succeeded and the record counts are equal. The API log and the worker log have no error, and no container restarted.
+
+Not checked on live: no background job ran after the release, so the moved generation, extraction, attachment, and embedding job paths had no live job yet.
+
+The storage package has 23,870 lines without tests at this revision. It had 28,355 lines at the review.
+
 ## Host Cleanup
 
 The owner approved removal of leftover data on 2026-10-11.

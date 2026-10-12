@@ -1,4 +1,4 @@
-package postgres
+package intakestore
 
 import (
 	"context"
@@ -17,8 +17,8 @@ import (
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
-const conversationExtractionPrefix = extraction.ConversationPrefix
-const conversationExtractorVersion = extraction.ConversationVersion
+const ConversationExtractionPrefix = extraction.ConversationPrefix
+const ConversationExtractorVersion = extraction.ConversationVersion
 
 type (
 	conversationMessage = extraction.ConversationMessage
@@ -32,7 +32,7 @@ type earlierConversationMemory struct {
 	Claim memory.Ref `json:"-"`
 }
 
-func enqueueConversationTx(ctx context.Context, tx pgx.Tx, owner memory.ID, anchor memory.Ref, run string, segment, next int) error {
+func EnqueueConversationTx(ctx context.Context, tx pgx.Tx, owner memory.ID, anchor memory.Ref, run string, segment, next int) error {
 	_, err := tx.Exec(ctx, `INSERT INTO memory_jobs(id,owner_id,record_id,record_version,stage,priority)
  VALUES($1,$2,$3,$4,$5,9) ON CONFLICT(owner_id,record_id,record_version,stage) DO NOTHING`,
 		string(memory.NewID()), string(owner), string(anchor.ID), anchor.Version, extraction.ConversationStage(run, segment, next))
@@ -65,7 +65,7 @@ func earlierConversationMemoriesTx(ctx context.Context, tx pgx.Tx, owner memory.
 // conversationWork is one prepared segment of an imported conversation. The
 // extraction service asks the model between its preparation and Apply.
 type conversationWork struct {
-	store            *Store
+	store            *Intake
 	job              worker.Job
 	scope            memory.Scope
 	conversation     string
@@ -111,7 +111,7 @@ func (w *conversationWork) Refs() []memory.Ref {
 
 // prepareConversation reads the job's segment under the job's lease. It
 // returns nil when the job finished without a segment to extract.
-func (s *Store) prepareConversation(ctx context.Context, j worker.Job, conversation string) (*conversationWork, error) {
+func (s *Intake) prepareConversation(ctx context.Context, j worker.Job, conversation string) (*conversationWork, error) {
 	scope := memory.Scope{OwnerID: j.OwnerID, PrincipalID: "worker", IsOwner: true}
 	var sources, current []memory.SourceResult
 	var segments []conversationSegment
@@ -128,14 +128,14 @@ func (s *Store) prepareConversation(ctx context.Context, j worker.Job, conversat
 			return err
 		}
 		var err error
-		sources, err = archiveConversationSources(ctx, tx, j.OwnerID, conversation)
+		sources, err = ArchiveConversationSources(ctx, tx, j.OwnerID, conversation)
 		if err != nil {
 			return err
 		}
 		current = extraction.CurrentBranch(sources)
 		segments = extraction.SplitConversation(current)
 		run = extraction.ConversationRun(sources)
-		if !strings.HasPrefix(j.Stage, conversationExtractionPrefix) {
+		if !strings.HasPrefix(j.Stage, ConversationExtractionPrefix) {
 			if len(segments) == 0 {
 				if err := s.replaceConversationMemoriesTx(ctx, tx, scope, sources); err != nil {
 					return err
@@ -152,13 +152,13 @@ func (s *Store) prepareConversation(ctx context.Context, j worker.Job, conversat
 			if err := tx.QueryRow(ctx, `SELECT NOT EXISTS(SELECT 1 FROM source_contexts c
  JOIN memory_records r ON(r.owner_id,r.id,r.version)=(c.owner_id,c.source_id,c.source_version)
  WHERE c.owner_id=$1 AND c.conversation_key=$2 AND r.state='active'
- AND NOT EXISTS(SELECT 1 FROM source_extractions x WHERE(x.owner_id,x.source_id,x.source_version)=(c.owner_id,c.source_id,c.source_version) AND x.extractor>=$3 AND x.state IN('done','empty')))`, string(j.OwnerID), conversation, conversationExtractorVersion).Scan(&complete); err != nil {
+ AND NOT EXISTS(SELECT 1 FROM source_extractions x WHERE(x.owner_id,x.source_id,x.source_version)=(c.owner_id,c.source_id,c.source_version) AND x.extractor>=$3 AND x.state IN('done','empty')))`, string(j.OwnerID), conversation, ConversationExtractorVersion).Scan(&complete); err != nil {
 				return err
 			}
 			if !complete {
 				// Only one segment is runnable at a time. Its successor is scheduled
 				// in the same transaction as its results, acknowledgement and ref counter.
-				if err := enqueueConversationTx(ctx, tx, j.OwnerID, current[0].Source.Ref, run, 0, 1); err != nil {
+				if err := EnqueueConversationTx(ctx, tx, j.OwnerID, current[0].Source.Ref, run, 0, 1); err != nil {
 					return err
 				}
 			}
@@ -176,7 +176,7 @@ func (s *Store) prepareConversation(ctx context.Context, j worker.Job, conversat
 		if jobRun != run || segment >= len(segments) {
 			// A changed conversation gets a new manifest, never stale model results.
 			if len(current) > 0 {
-				if err := enqueueConversationTx(ctx, tx, j.OwnerID, current[0].Source.Ref, run, 0, 1); err != nil {
+				if err := EnqueueConversationTx(ctx, tx, j.OwnerID, current[0].Source.Ref, run, 0, 1); err != nil {
 					return err
 				}
 			}
@@ -213,13 +213,13 @@ func (w *conversationWork) Apply(ctx context.Context, output conversationOutput)
 		if err := kernel.LockJob(ctx, tx, j); err != nil {
 			return err
 		}
-		fresh, err := archiveConversationSources(ctx, tx, j.OwnerID, conversation)
+		fresh, err := ArchiveConversationSources(ctx, tx, j.OwnerID, conversation)
 		if err != nil {
 			return err
 		}
 		if extraction.ConversationRun(fresh) != run {
 			if live := extraction.CurrentBranch(fresh); len(live) > 0 {
-				if err := enqueueConversationTx(ctx, tx, j.OwnerID, live[0].Source.Ref, extraction.ConversationRun(fresh), 0, 1); err != nil {
+				if err := EnqueueConversationTx(ctx, tx, j.OwnerID, live[0].Source.Ref, extraction.ConversationRun(fresh), 0, 1); err != nil {
 					return err
 				}
 			}
@@ -241,7 +241,7 @@ func (w *conversationWork) Apply(ctx context.Context, output conversationOutput)
 			}
 			for _, item := range eligible {
 				if withdraw[item.Ref] {
-					if err := s.deleteRecordsTx(context.WithValue(ctx, retainUndoneAnswersKey{}, true), tx, scope, memory.DeleteRequest{Targets: []memory.Ref{item.Claim}}); err != nil {
+					if err := s.DeleteRecordsTx(context.WithValue(ctx, RetainUndoneAnswersKey{}, true), tx, scope, memory.DeleteRequest{Targets: []memory.Ref{item.Claim}}); err != nil {
 						return err
 					}
 				}
@@ -314,7 +314,7 @@ func (w *conversationWork) Apply(ctx context.Context, output conversationOutput)
 		}
 		if ordinal+1 < len(segments) {
 			anchor := current[segments[ordinal+1].Messages[0].Index-1].Source.Ref
-			if err := enqueueConversationTx(ctx, tx, j.OwnerID, anchor, run, ordinal+1, next); err != nil {
+			if err := EnqueueConversationTx(ctx, tx, j.OwnerID, anchor, run, ordinal+1, next); err != nil {
 				return err
 			}
 		} else {
@@ -337,7 +337,7 @@ func (w *conversationWork) Apply(ctx context.Context, output conversationOutput)
 func retireConversationJobsTx(ctx context.Context, tx pgx.Tx, job worker.Job, conversation, run string) error {
 	_, err := tx.Exec(ctx, `UPDATE memory_jobs j SET state='done',lease_token=NULL,lease_until=NULL,error_code='',updated_at=now()
  WHERE j.owner_id=$1 AND j.id<>$4 AND j.state<>'done' AND (j.stage='source.extract' OR (j.stage LIKE 'source.extract:%' AND j.stage NOT LIKE $3))
- AND EXISTS(SELECT 1 FROM source_contexts c WHERE(c.owner_id,c.source_id,c.source_version)=(j.owner_id,j.record_id,j.record_version) AND c.conversation_key=$2)`, string(job.OwnerID), conversation, conversationExtractionPrefix+run+":%", string(job.ID))
+ AND EXISTS(SELECT 1 FROM source_contexts c WHERE(c.owner_id,c.source_id,c.source_version)=(j.owner_id,j.record_id,j.record_version) AND c.conversation_key=$2)`, string(job.OwnerID), conversation, ConversationExtractionPrefix+run+":%", string(job.ID))
 	return err
 }
 
@@ -354,7 +354,7 @@ func writeConversationStatesTx(ctx context.Context, tx pgx.Tx, owner memory.ID, 
  LEFT JOIN evidence e ON input.eligible AND e.owner_id=$1 AND e.source_id=input.id AND e.source_version=input.version AND e.stance='supports'
  LEFT JOIN memory_records r ON(r.owner_id,r.id)=(e.owner_id,e.target_id) AND r.kind='claim' AND r.state='active'
  GROUP BY input.id,input.version
- ON CONFLICT(owner_id,source_id,source_version) DO UPDATE SET extractor=excluded.extractor,state=excluded.state,items=excluded.items,updated_at=now()`, string(owner), ids, versions, state, eligible, conversationExtractorVersion)
+ ON CONFLICT(owner_id,source_id,source_version) DO UPDATE SET extractor=excluded.extractor,state=excluded.state,items=excluded.items,updated_at=now()`, string(owner), ids, versions, state, eligible, ConversationExtractorVersion)
 	return err
 }
 
@@ -370,7 +370,7 @@ func conversationExtractionStateTx(ctx context.Context, tx pgx.Tx, j worker.Job,
 	if err != nil {
 		return err
 	}
-	sources, err := archiveConversationSources(ctx, tx, j.OwnerID, conversation)
+	sources, err := ArchiveConversationSources(ctx, tx, j.OwnerID, conversation)
 	if err != nil {
 		return err
 	}
@@ -395,7 +395,7 @@ func conversationExtractionStateTx(ctx context.Context, tx pgx.Tx, j worker.Job,
 // Read normalized message originals, never an archive blob or another owner's
 // conversation. Historical branches remain available for progress bookkeeping;
 // they are not model inputs or evidence for a current conversation extraction.
-func archiveConversationSources(ctx context.Context, tx pgx.Tx, owner memory.ID, conversation string) ([]memory.SourceResult, error) {
+func ArchiveConversationSources(ctx context.Context, tx pgx.Tx, owner memory.ID, conversation string) ([]memory.SourceResult, error) {
 	rows, err := tx.Query(ctx, `SELECT r.id::text,r.version,s.connector,s.external_id,v.external_version,v.title,v.body,v.media_type,
  rv.expressed_at,rv.recorded_at,c.parent_key,c.role,c.branch
  FROM source_contexts c JOIN memory_records r ON(r.owner_id,r.id,r.version)=(c.owner_id,c.source_id,c.source_version)
@@ -425,7 +425,7 @@ func archiveConversationSources(ctx context.Context, tx pgx.Tx, owner memory.ID,
 // A replacement is not a user's explicit deletion: preserve dependent answers
 // and avoid reimport blocks. Confirmed or user-edited memories are independent
 // of automatic organization and must survive it.
-func (s *Store) replaceConversationMemoriesTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, sources []memory.SourceResult) error {
+func (s *Intake) replaceConversationMemoriesTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, sources []memory.SourceResult) error {
 	ids := make([]string, 0, len(sources))
 	for _, source := range sources {
 		ids = append(ids, string(source.Source.ID))
@@ -456,9 +456,9 @@ func (s *Store) replaceConversationMemoriesTx(ctx context.Context, tx pgx.Tx, sc
 	if err != nil {
 		return err
 	}
-	ctx = context.WithValue(ctx, retainUndoneAnswersKey{}, true)
+	ctx = context.WithValue(ctx, RetainUndoneAnswersKey{}, true)
 	for start := 0; start < len(refs); start += 100 {
-		if err := s.deleteRecordsTx(ctx, tx, scope, memory.DeleteRequest{Targets: refs[start:min(start+100, len(refs))]}); err != nil {
+		if err := s.DeleteRecordsTx(ctx, tx, scope, memory.DeleteRequest{Targets: refs[start:min(start+100, len(refs))]}); err != nil {
 			return err
 		}
 	}

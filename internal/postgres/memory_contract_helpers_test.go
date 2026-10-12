@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
+	"github.com/soaringjerry/PCAS/internal/postgres/intakestore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/soaringjerry/PCAS/internal/ai"
@@ -604,9 +605,9 @@ func b4ImportAction(t *testing.T, s *Store, scope memory.Scope, id, action strin
 }
 func b4SmallChunks(t *testing.T, size int) {
 	t.Helper()
-	old := ImportChunkSize
-	ImportChunkSize = size
-	t.Cleanup(func() { ImportChunkSize = old })
+	old := intakestore.ImportChunkSize
+	intakestore.ImportChunkSize = size
+	t.Cleanup(func() { intakestore.ImportChunkSize = old })
 }
 
 type b4Parsing struct {

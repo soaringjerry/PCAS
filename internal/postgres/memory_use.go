@@ -120,7 +120,7 @@ func (s *Store) useMemoriesTx(ctx context.Context, tx pgx.Tx, scope memory.Scope
 	if allowed == nil {
 		allowed = []string{}
 	}
-	ms, err := s.ReadMemoriesTx(ctx, tx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: agent.ID}, true, memoryread.MemoryReadOptions{UseCurrent: true, Ids: allowed})
+	ms, err := s.ReadMemoriesTx(ctx, tx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: agent.ID}, true, memoryread.MemoryReadOptions{UseCurrent: true, IDs: allowed})
 	if err != nil {
 		return nil, err
 	}

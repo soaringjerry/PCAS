@@ -8,6 +8,7 @@ import (
 
 	"github.com/soaringjerry/PCAS/internal/input/attachment"
 	"github.com/soaringjerry/PCAS/internal/postgres/actionlog"
+	"github.com/soaringjerry/PCAS/internal/postgres/intakestore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 
@@ -50,7 +51,7 @@ func (s *Store) prepareDeskAttachments(ctx context.Context, scope memory.Scope, 
 			return nil, err
 		}
 		a := deskAttachment{Ref: ref, Media: original.Source.MediaType}
-		parsed, parseErr := s.readAttachmentWith(ctx, scope, ref, nil, read)
+		parsed, parseErr := s.ReadAttachmentWith(ctx, scope, ref, nil, read)
 		image := strings.HasPrefix(a.Media, "image/")
 		if parseErr != nil || image && parsed.Representation != "vision" {
 			slog.WarnContext(ctx, "secretary attachment retained", "stage", "parse", "error_type", secretary.ErrorType("model", parseErr))
@@ -60,7 +61,7 @@ func (s *Store) prepareDeskAttachments(ctx context.Context, scope memory.Scope, 
 				a.Warning = "文件存好了，但暂时没读出内容；请检查资料处理状态，或把要办的内容写成文字。"
 			}
 		} else {
-			a.Context = fmt.Sprintf("附件 %s（%s）：\n%s", original.Source.Title, parsed.Representation, boundedAttachmentText(parsed.Text, 12000))
+			a.Context = fmt.Sprintf("附件 %s（%s）：\n%s", original.Source.Title, parsed.Representation, intakestore.BoundedAttachmentText(parsed.Text, 12000))
 		}
 		out = append(out, a)
 	}

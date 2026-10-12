@@ -7,6 +7,7 @@ import (
 
 	"github.com/soaringjerry/PCAS/internal/connectors"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/intakestore"
 	"github.com/soaringjerry/PCAS/internal/worker"
 )
 
@@ -14,25 +15,25 @@ import (
 // closed connection does not wrap the context's error, so the context decides.
 func TestAnImportThatWasStoppedIsNotAStorageFailure(t *testing.T) {
 	closed := errors.New("fictitious driver error: conn closed")
-	if code, failed := importFailureCode(context.Canceled, closed); failed || code != "" {
+	if code, failed := intakestore.ImportFailureCode(context.Canceled, closed); failed || code != "" {
 		t.Fatal("a stopped import was recorded as failed", code)
 	}
-	if _, failed := importFailureCode(context.DeadlineExceeded, closed); failed {
+	if _, failed := intakestore.ImportFailureCode(context.DeadlineExceeded, closed); failed {
 		t.Fatal("an import past its deadline was recorded as failed")
 	}
-	if _, failed := importFailureCode(nil, worker.ErrLeaseLost); failed {
+	if _, failed := intakestore.ImportFailureCode(nil, worker.ErrLeaseLost); failed {
 		t.Fatal("a lost lease was recorded as failed")
 	}
-	if code, failed := importFailureCode(nil, closed); !failed || code != "import_storage_failed" {
+	if code, failed := intakestore.ImportFailureCode(nil, closed); !failed || code != "import_storage_failed" {
 		t.Fatal(code, failed)
 	}
-	if code, failed := importFailureCode(nil, memory.ErrNotFound); !failed || code != "import_source_missing" {
+	if code, failed := intakestore.ImportFailureCode(nil, memory.ErrNotFound); !failed || code != "import_source_missing" {
 		t.Fatal(code, failed)
 	}
-	if code, failed := importFailureCode(nil, &connectors.ArchiveError{Code: "archive_format"}); !failed || code != "archive_format" {
+	if code, failed := intakestore.ImportFailureCode(nil, &connectors.ArchiveError{Code: "archive_format"}); !failed || code != "archive_format" {
 		t.Fatal(code, failed)
 	}
-	if _, failed := importFailureCode(nil, nil); failed {
+	if _, failed := intakestore.ImportFailureCode(nil, nil); failed {
 		t.Fatal("no error is no failure")
 	}
 }

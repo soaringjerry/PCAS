@@ -17,6 +17,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/postgres/budgetstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/callstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/evidencestore"
+	"github.com/soaringjerry/PCAS/internal/postgres/intakestore"
 	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/memoryread"
@@ -172,7 +173,7 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 			request.Context.Objects = append(request.Context.Objects, memory.ID(projectID))
 		}
 		budget := memory.Budget{Candidates: 100, Tokens: 10000, Edges: 30, Hops: 1}
-		if err := s.recallTx(ctx, tx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: agent.ID, Team: true}, request, budget, query, strings.Join(terms, " | "), nil, "", 0, "", tokens, &recall); err != nil {
+		if err := s.RecallTx(ctx, tx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: agent.ID, Team: true}, request, budget, query, strings.Join(terms, " | "), nil, "", 0, "", tokens, &recall); err != nil {
 			return err
 		}
 		for reason, n := range map[string]int{"recall_budget": recall.Coverage.Omitted, "source_recall_budget": recall.Coverage.OmittedSources} {
@@ -233,7 +234,7 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 			run.MemoryContextRange = &[2]int{memoryStart, brief.Len()}
 		}
 		contextbuilder.OrderExcerpts(excerpts, plan)
-		sources, err := teamSourceExcerptsTx(ctx, tx, scope, agent.ID, &item.ID, excerpts, historyRequests, 8, 4000)
+		sources, err := intakestore.TeamSourceExcerptsTx(ctx, tx, scope, agent.ID, &item.ID, excerpts, historyRequests, 8, 4000)
 		if err != nil {
 			return err
 		}
@@ -442,12 +443,12 @@ func (s *Store) adoptRunTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, r
 		return err
 	}
 	run.Adopted = &workspace.Adoption{As: as, At: kernel.Stamp(), Edited: !auto && text != run.Output, Auto: auto, ActionID: actionID}
-	if err := sampleTx(ctx, tx, scope, workspace.Sample{ID: string(memory.NewID()), Kind: "adopted-result", Prompt: run.Brief, Response: text, Origin: workspace.Origin{Label: item.Title, RunID: run.ID}, Version: 1, State: "candidate", Epistemic: "inferred", CreatedAt: kernel.Stamp()}); err != nil {
+	if err := intakestore.SampleTx(ctx, tx, scope, workspace.Sample{ID: string(memory.NewID()), Kind: "adopted-result", Prompt: run.Brief, Response: text, Origin: workspace.Origin{Label: item.Title, RunID: run.ID}, Version: 1, State: "candidate", Epistemic: "inferred", CreatedAt: kernel.Stamp()}); err != nil {
 		return err
 	}
 	if !auto {
 		for _, ref := range run.ContextVersions {
-			if err := recordUseTx(ctx, tx, scope, memory.UseEvent{Ref: ref, EventID: run.ID + ":" + string(ref.ID), Kind: "adoption", At: time.Now()}); err != nil && !errors.Is(err, memory.ErrConflict) && !errors.Is(err, memory.ErrNotFound) {
+			if err := intakestore.RecordUseTx(ctx, tx, scope, memory.UseEvent{Ref: ref, EventID: run.ID + ":" + string(ref.ID), Kind: "adoption", At: time.Now()}); err != nil && !errors.Is(err, memory.ErrConflict) && !errors.Is(err, memory.ErrNotFound) {
 				return err
 			}
 		}

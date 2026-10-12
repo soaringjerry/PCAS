@@ -1,4 +1,4 @@
-package postgres
+package intakestore
 
 import (
 	"context"
@@ -16,7 +16,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/worker"
 )
 
-func (s *Store) IngestAttachment(ctx context.Context, scope memory.Scope, in memory.IngestRequest, r io.Reader) (memory.IngestResult, error) {
+func (s *Intake) IngestAttachment(ctx context.Context, scope memory.Scope, in memory.IngestRequest, r io.Reader) (memory.IngestResult, error) {
 	var result memory.IngestResult
 	if err := kernel.RequireOwner(scope); err != nil {
 		return result, err
@@ -34,7 +34,7 @@ func (s *Store) IngestAttachment(ctx context.Context, scope memory.Scope, in mem
 	in.Text = "[附件原件；正文尚未解析。校验标识：" + strings.Split(strings.Split(key, "/")[1], "-")[0] + "]"
 	err = pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		var err error
-		result, err = s.ingestAttachmentTx(ctx, tx, scope, in, key)
+		result, err = s.IngestAttachmentTx(ctx, tx, scope, in, key)
 		return err
 	})
 	if err != nil { // An uncommitted upload is cleaned only when no committed source uses it.
@@ -44,7 +44,7 @@ func (s *Store) IngestAttachment(ctx context.Context, scope memory.Scope, in mem
 }
 
 // ingestAttachmentTx lets archive creation and its batch share one transaction.
-func (s *Store) ingestAttachmentTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in memory.IngestRequest, key string) (memory.IngestResult, error) {
+func (s *Intake) IngestAttachmentTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in memory.IngestRequest, key string) (memory.IngestResult, error) {
 	result, err := s.IngestTx(ctx, tx, scope, in)
 	if err != nil {
 		return result, err
@@ -62,7 +62,7 @@ func (s *Store) ingestAttachmentTx(ctx context.Context, tx pgx.Tx, scope memory.
 	err = kernel.Enqueue(ctx, tx, scope.OwnerID, result.ID, result.Version, "source.parse")
 	return result, err
 }
-func (s *Store) OpenAttachment(ctx context.Context, scope memory.Scope, id memory.ID, version int) (io.ReadCloser, string, string, error) {
+func (s *Intake) OpenAttachment(ctx context.Context, scope memory.Scope, id memory.ID, version int) (io.ReadCloser, string, string, error) {
 	if s.Blobs == nil {
 		return nil, "", "", memory.ErrUnavailable
 	}
@@ -86,7 +86,7 @@ func (s *Store) OpenAttachment(ctx context.Context, scope memory.Scope, id memor
 
 // ProcessAttachmentWith handles the job of one uploaded file. read parses an
 // original file under the lock of that original.
-func (s *Store) ProcessAttachmentWith(ctx context.Context, j worker.Job, read attachment.Read) error {
+func (s *Intake) ProcessAttachmentWith(ctx context.Context, j worker.Job, read attachment.Read) error {
 	scope := memory.Scope{OwnerID: j.OwnerID, PrincipalID: "worker", IsOwner: true}
 	file, title, media, err := s.OpenAttachment(ctx, scope, j.Record.ID, j.Record.Version)
 	if err != nil {
@@ -97,7 +97,7 @@ func (s *Store) ProcessAttachmentWith(ctx context.Context, j worker.Job, read at
 		return s.processArchiveImport(ctx, j, title, file)
 	}
 	file.Close()
-	if _, err := s.readAttachmentWith(ctx, scope, j.Record, &j, read); err != nil {
+	if _, err := s.ReadAttachmentWith(ctx, scope, j.Record, &j, read); err != nil {
 		var specific *worker.JobError
 		if errors.As(err, &specific) {
 			return err
@@ -115,18 +115,18 @@ func (s *Store) ProcessAttachmentWith(ctx context.Context, j worker.Job, read at
 	})
 }
 
-type parsedAttachment = attachment.Parsed
+type ParsedAttachment = attachment.Parsed
 
 // Serialize parsing per original across API and worker processes. Existing OCR
 // derivatives are reused, never upgraded or reread by this change.
-func (s *Store) readAttachmentWith(ctx context.Context, scope memory.Scope, ref memory.Ref, job *worker.Job, read attachment.Read) (parsedAttachment, error) {
-	var parsed parsedAttachment
+func (s *Intake) ReadAttachmentWith(ctx context.Context, scope memory.Scope, ref memory.Ref, job *worker.Job, read attachment.Read) (ParsedAttachment, error) {
+	var parsed ParsedAttachment
 	select {
-	case s.secretarySlots <- struct{}{}:
+	case s.Slots <- struct{}{}:
 	case <-ctx.Done():
 		return parsed, ctx.Err()
 	}
-	defer func() { <-s.secretarySlots }()
+	defer func() { <-s.Slots }()
 	err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended($1,0))", "attachment:"+string(scope.OwnerID)+":"+string(ref.ID)+fmt.Sprint(ref.Version)); err != nil {
 			return err
@@ -183,10 +183,10 @@ func (s *Store) readAttachmentWith(ctx context.Context, scope memory.Scope, ref 
 	})
 	return parsed, err
 }
-func (s *Store) parseAttachment(ctx context.Context, scope memory.Scope, ref memory.Ref, job *worker.Job, read attachment.Read) (parsedAttachment, error) {
+func (s *Intake) parseAttachment(ctx context.Context, scope memory.Scope, ref memory.Ref, job *worker.Job, read attachment.Read) (ParsedAttachment, error) {
 	file, title, media, err := s.OpenAttachment(ctx, scope, ref.ID, ref.Version)
 	if err != nil {
-		return parsedAttachment{}, err
+		return ParsedAttachment{}, err
 	}
 	defer file.Close()
 	return read(ctx, attachmentReceipts{store: s, scope: scope, ref: ref, job: job}, scope, ref, job, file, title, media)
@@ -195,7 +195,7 @@ func (s *Store) parseAttachment(ctx context.Context, scope memory.Scope, ref mem
 // attachmentReceipts keeps the paid readings of one original file with the
 // file.
 type attachmentReceipts struct {
-	store *Store
+	store *Intake
 	scope memory.Scope
 	ref   memory.Ref
 	job   *worker.Job
@@ -216,7 +216,7 @@ func (a attachmentReceipts) Save(ctx context.Context, component string, paid *mo
 	return a.store.SaveAttachmentReceipt(ctx, a.scope, a.ref, component, paid)
 }
 
-func (s *Store) CleanupBlobs(ctx context.Context) error {
+func (s *Intake) CleanupBlobs(ctx context.Context) error {
 	if s.Blobs == nil {
 		return nil
 	}

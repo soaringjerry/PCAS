@@ -1,4 +1,4 @@
-package postgres
+package intakestore
 
 import (
 	"context"
@@ -17,7 +17,7 @@ import (
 const automaticTaskLimit = 20
 const automaticCaptureConfidence = 0.98
 
-func captureReasons(source memory.SourceResult, item extractedItem, imported bool) ([]string, string) {
+func captureReasons(source memory.SourceResult, item ExtractedItem, imported bool) ([]string, string) {
 	reasons, descriptions := []string{}, []string{}
 	add := func(code, text string) { reasons = append(reasons, code); descriptions = append(descriptions, text) }
 	if imported || source.Context != nil && source.Context.Branch == "historical" {
@@ -40,7 +40,7 @@ func captureReasons(source memory.SourceResult, item extractedItem, imported boo
 
 // Candidate acceptance is deliberately outside action tracking: its retained
 // accepted row is the replay fence even after undo deletes the work item.
-func (s *Store) captureActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, source memory.SourceResult, item extractedItem, imported bool, project string) error {
+func (s *Intake) captureActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, source memory.SourceResult, item ExtractedItem, imported bool, project string) error {
 	if !kernel.OneOf(item.Kind, "task", "idea") {
 		return memory.ErrInvalid
 	}
@@ -98,7 +98,7 @@ func (s *Store) captureActionTx(ctx context.Context, tx pgx.Tx, scope memory.Sco
 		v.State = "accepted"
 		v.ResolvedInto = item.ID
 	}
-	return saveCandidate(ctx, tx, scope, v)
+	return SaveCandidate(ctx, tx, scope, v)
 }
 func conversationKey(source memory.SourceResult) string {
 	if source.Context != nil {

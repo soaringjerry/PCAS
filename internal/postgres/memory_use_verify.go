@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/postgres/accessstore"
+	"github.com/soaringjerry/PCAS/internal/postgres/intakestore"
 	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
@@ -183,5 +184,5 @@ func recordContextUseTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, even
 		return err
 	}
 	event.Ref.Version = current
-	return recordUseTx(ctx, tx, scope, event)
+	return intakestore.RecordUseTx(ctx, tx, scope, event)
 }

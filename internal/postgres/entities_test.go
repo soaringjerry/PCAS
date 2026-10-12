@@ -9,6 +9,7 @@ import (
 
 	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
 	"github.com/soaringjerry/PCAS/internal/postgres/claimstore"
+	"github.com/soaringjerry/PCAS/internal/postgres/intakestore"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
@@ -99,16 +100,16 @@ func TestExtractionEventWholeCalendarIntervals(t *testing.T) {
 		hours time.Duration
 	}{{"2026-10-04", 23}, {"2026-04-05", 25}} {
 		source := memory.SourceResult{Source: memory.Source{Text: tc.date}}
-		from, to, precision := extraction.Event(&extractedWhen{From: tc.date, To: tc.date, Precision: "day", Quote: tc.date}, source, loc)
+		from, to, precision := extraction.Event(&intakestore.ExtractedWhen{From: tc.date, To: tc.date, Precision: "day", Quote: tc.date}, source, loc)
 		if precision != "day" || from == nil || to == nil || to.Sub(*from) != tc.hours*time.Hour {
 			t.Fatalf("DST day %s was not a complete calendar day: %v %v %s", tc.date, from, to, precision)
 		}
 	}
 	unknown := memory.SourceResult{Source: memory.Source{Connector: "archive", Text: "下周去成都"}}
-	if from, _, _ := extraction.Event(&extractedWhen{From: "2026-10-05", To: "2026-10-12", Precision: "range", Quote: "下周"}, unknown, loc); from != nil {
+	if from, _, _ := extraction.Event(&intakestore.ExtractedWhen{From: "2026-10-05", To: "2026-10-12", Precision: "range", Quote: "下周"}, unknown, loc); from != nil {
 		t.Fatal("unknown expression time used to resolve a relative date")
 	}
-	for _, when := range []*extractedWhen{
+	for _, when := range []*intakestore.ExtractedWhen{
 		{From: "not a date", To: "2026-01-01", Precision: "day", Quote: "2026"},
 		{From: "2026-01-02", To: "2026-01-01", Precision: "range", Quote: "2026"},
 		{From: "2026-01-01", To: "2026-01-01", Precision: "range", Quote: "2026"},

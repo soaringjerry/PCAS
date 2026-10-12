@@ -103,7 +103,7 @@ func (s *Store) useStatusCardsTx(ctx context.Context, tx pgx.Tx, scope memory.Sc
 	if err != nil {
 		return out, err
 	}
-	ms, err := s.ReadMemoriesTx(ctx, tx, scope, false, memoryread.MemoryReadOptions{Ids: ids})
+	ms, err := s.ReadMemoriesTx(ctx, tx, scope, false, memoryread.MemoryReadOptions{IDs: ids})
 	if err != nil {
 		return out, err
 	}

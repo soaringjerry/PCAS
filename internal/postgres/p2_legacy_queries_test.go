@@ -23,6 +23,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/postgres/accessstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/actionlog"
 	"github.com/soaringjerry/PCAS/internal/postgres/evidencestore"
+	"github.com/soaringjerry/PCAS/internal/postgres/intakestore"
 	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/memoryread"
@@ -402,7 +403,7 @@ func (s *Store) p2LegacyRecallTx(ctx context.Context, tx pgx.Tx, scope memory.Sc
 	structured := []memory.Ref{}
 	if scope.Team && in.Team != nil {
 		var err error
-		structured, out.TimeRelaxed, err = structuredRecallTx(ctx, tx, scope, *in.Team, b.Candidates)
+		structured, out.TimeRelaxed, err = intakestore.StructuredRecallTx(ctx, tx, scope, *in.Team, b.Candidates)
 		if err != nil {
 			return err
 		}
@@ -476,7 +477,7 @@ func (s *Store) p2LegacyRecallTx(ctx context.Context, tx pgx.Tx, scope memory.Sc
 	// its original ordering and pagination across all record kinds.
 	const hitColumns = "id,version,kind,body,score,role,branch,gaps,excerpt,title,connector,external_id,expressed_at,recorded_at,readable"
 	hitOrder := "CASE WHEN $6='history' THEN recorded_at END,explicit DESC,score DESC,id::uuid,version"
-	args := []any{string(scope.OwnerID), scope.IsOwner, scope.PrincipalID, query, fts, string(in.Mode), "", in.Context.Objects, in.Context.ValidAt, in.Context.KnownAt, kernel.NullString(string(vector)), model, embeddingDimensions(vector), b.Candidates + 1, offset, tokens, scope.Team}
+	args := []any{string(scope.OwnerID), scope.IsOwner, scope.PrincipalID, query, fts, string(in.Mode), "", in.Context.Objects, in.Context.ValidAt, in.Context.KnownAt, kernel.NullString(string(vector)), model, intakestore.EmbeddingDimensions(vector), b.Candidates + 1, offset, tokens, scope.Team}
 	if len(structured) > 0 {
 		args = append(args, structuredIDs)
 		hitOrder = "array_position($18::uuid[],id::uuid) ASC NULLS LAST," + hitOrder
@@ -568,7 +569,7 @@ func (s *Store) p2LegacyRecallTx(ctx context.Context, tx pgx.Tx, scope memory.Sc
 		return err
 	}
 	for _, relation := range relations {
-		ev, err := evidenceTx(ctx, tx, scope, relation.Ref)
+		ev, err := intakestore.EvidenceTx(ctx, tx, scope, relation.Ref)
 		if err != nil {
 			return err
 		}
@@ -595,7 +596,7 @@ func (s *Store) p2LegacyRecallTx(ctx context.Context, tx pgx.Tx, scope memory.Sc
 	}
 	out.Memories = append(out.Memories, teamSources...)
 	for _, ref := range out.Memories {
-		evidence, err := evidenceTx(ctx, tx, scope, ref)
+		evidence, err := intakestore.EvidenceTx(ctx, tx, scope, ref)
 		if err != nil {
 			return err
 		}
@@ -956,7 +957,7 @@ func (s *Store) p2LegacySecretaryPrompt(ctx context.Context, tx pgx.Tx, scope me
 	for _, t := range c.History {
 		reply := t.Reply
 		if t.Outdated {
-			reply = outdatedDeskAnswer
+			reply = intakestore.OutdatedDeskAnswer
 		}
 		fmt.Fprintf(&prompt, "问：%s\n答：%s\n", t.Text, reply)
 		earlier += t.Text + " "
@@ -1026,7 +1027,7 @@ func (s *Store) p2LegacySecretaryPrompt(ctx context.Context, tx pgx.Tx, scope me
 		return "", nil, err
 	}
 	contextbuilder.OrderExcerpts(recall.Excerpts, c.Plan)
-	excerpts, err := teamSourceExcerptsTx(ctx, tx, scope, c.Agent.ID, req.ThingID, recall.Excerpts, historyRequests, 6, 2400)
+	excerpts, err := intakestore.TeamSourceExcerptsTx(ctx, tx, scope, c.Agent.ID, req.ThingID, recall.Excerpts, historyRequests, 6, 2400)
 	if err != nil {
 		return "", nil, err
 	}

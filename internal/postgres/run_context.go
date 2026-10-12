@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres/accessstore"
+	"github.com/soaringjerry/PCAS/internal/postgres/intakestore"
 	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/retrieval"
@@ -157,7 +158,7 @@ func readRunHistoryTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c work
 	if len(c.DeskTurnIDs) > delegateHistoryTurns {
 		return nil, memory.ErrInvalid
 	}
-	automatic, auto := ctx.Value(kernel.DelegateHistoryKey{}).(delegateHistoryContext)
+	automatic, auto := ctx.Value(kernel.DelegateHistoryKey{}).(intakestore.DelegateHistoryContext)
 	history := []storedDeskContext{}
 	for _, id := range c.DeskTurnIDs {
 		if !memory.ID(id).Valid() {
@@ -183,7 +184,7 @@ func readRunHistoryTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c work
 		}
 		turn.Outdated = accessstore.VerifyRunForItemTx(ctx, tx, scope, workspace.Run{AgentID: c.AgentID, ContextVersions: turn.Refs}, &item) != nil
 		if turn.Outdated {
-			turn.Answer = outdatedDeskAnswer
+			turn.Answer = intakestore.OutdatedDeskAnswer
 		}
 		history = append(history, turn)
 	}

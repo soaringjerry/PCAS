@@ -1,4 +1,4 @@
-package postgres
+package intakestore
 
 import (
 	"bytes"
@@ -28,7 +28,7 @@ func scanConnection(row pgx.Row) (connectors.Connection, error) {
 	}
 	return c, err
 }
-func (s *Store) ListConnections(ctx context.Context, scope memory.Scope) ([]connectors.Connection, error) {
+func (s *Intake) ListConnections(ctx context.Context, scope memory.Scope) ([]connectors.Connection, error) {
 	out := []connectors.Connection{}
 	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err
@@ -47,7 +47,7 @@ func (s *Store) ListConnections(ctx context.Context, scope memory.Scope) ([]conn
 	}
 	return out, rows.Err()
 }
-func (s *Store) ConfigureConnection(ctx context.Context, scope memory.Scope, in connectors.ConfigureRequest) (connectors.Configured, error) {
+func (s *Intake) ConfigureConnection(ctx context.Context, scope memory.Scope, in connectors.ConfigureRequest) (connectors.Configured, error) {
 	out := connectors.Configured{}
 	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err
@@ -108,7 +108,7 @@ func (s *Store) ConfigureConnection(ctx context.Context, scope memory.Scope, in 
 	})
 	return out, err
 }
-func (s *Store) SyncConnection(ctx context.Context, scope memory.Scope, id memory.ID, version int) error {
+func (s *Intake) SyncConnection(ctx context.Context, scope memory.Scope, id memory.ID, version int) error {
 	if err := kernel.RequireOwner(scope); err != nil {
 		return err
 	}
@@ -121,7 +121,7 @@ func (s *Store) SyncConnection(ctx context.Context, scope memory.Scope, id memor
 	}
 	return err
 }
-func (s *Store) AuthenticateConnection(ctx context.Context, id memory.ID, token string) (memory.Scope, error) {
+func (s *Intake) AuthenticateConnection(ctx context.Context, id memory.ID, token string) (memory.Scope, error) {
 	scope := memory.Scope{}
 	if !id.Valid() || len(token) != 64 {
 		return scope, memory.ErrForbidden
@@ -136,7 +136,7 @@ func (s *Store) AuthenticateConnection(ctx context.Context, id memory.ID, token 
 	scope.PrincipalID = "connector:" + string(id)
 	return scope, nil
 }
-func (s *Store) ImportBatch(ctx context.Context, scope memory.Scope, id memory.ID, batch connectors.Batch) (connectors.Result, error) {
+func (s *Intake) ImportBatch(ctx context.Context, scope memory.Scope, id memory.ID, batch connectors.Batch) (connectors.Result, error) {
 	out := connectors.Result{Refs: []memory.Ref{}, Gaps: []string{}}
 	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err
@@ -157,7 +157,7 @@ func (s *Store) ImportBatch(ctx context.Context, scope memory.Scope, id memory.I
 			return memory.ErrForbidden
 		}
 		var e error
-		out, e = s.importBatchTx(ctx, tx, scope, "connection:"+string(id), batch, nil)
+		out, e = s.ImportBatchTx(ctx, tx, scope, "connection:"+string(id), batch, nil)
 		if e != nil {
 			return e
 		}
@@ -166,7 +166,7 @@ func (s *Store) ImportBatch(ctx context.Context, scope memory.Scope, id memory.I
 	})
 	return out, err
 }
-func (s *Store) importBatchTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, namespace string, batch connectors.Batch, archive *memory.Ref) (connectors.Result, error) {
+func (s *Intake) ImportBatchTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, namespace string, batch connectors.Batch, archive *memory.Ref) (connectors.Result, error) {
 	out := connectors.Result{Refs: []memory.Ref{}, Gaps: append([]string{}, batch.Gaps...)}
 	if err := s.EnsureOwner(ctx, tx, scope); err != nil {
 		return out, err
@@ -260,7 +260,7 @@ func archiveIngestRequest(namespace string, r connectors.Record) memory.IngestRe
 	return memory.IngestRequest{Connector: namespace, ExternalID: r.ID, ExternalVersion: r.Version, Title: r.Title, Text: r.Text, MediaType: r.MediaType, ExpressedAt: r.ExpressedAt}
 }
 
-func (s *Store) linkEpisodeTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, key, title string, refs []memory.Ref) error {
+func (s *Intake) linkEpisodeTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, key, title string, refs []memory.Ref) error {
 	if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended($1,0))", string(scope.OwnerID)+":episode:"+key); err != nil {
 		return err
 	}
@@ -323,16 +323,16 @@ func (s *Store) linkEpisodeTx(ctx context.Context, tx pgx.Tx, scope memory.Scope
 	}
 	return kernel.Enqueue(ctx, tx, scope.OwnerID, memory.ID(id), version, "memory.index")
 }
-func (s *Store) ImportArchive(ctx context.Context, scope memory.Scope, name string, data []byte) (connectors.Result, error) {
-	return s.ingestArchive(ctx, scope, name, data, "archive")
+func (s *Intake) ImportArchive(ctx context.Context, scope memory.Scope, name string, data []byte) (connectors.Result, error) {
+	return s.IngestArchive(ctx, scope, name, data, "archive")
 }
-func (s *Store) ingestArchive(ctx context.Context, scope memory.Scope, name string, data []byte, namespace string) (connectors.Result, error) {
+func (s *Intake) IngestArchive(ctx context.Context, scope memory.Scope, name string, data []byte, namespace string) (connectors.Result, error) {
 	// The upload default changes; existing folder connector imports keep their
 	// automatic organization behavior.
 	return s.importArchiveReader(ctx, scope, name, bytes.NewReader(data), namespace, namespace == "archive")
 }
 
-var _ connectors.API = (*Store)(nil)
+var _ connectors.API = (*Intake)(nil)
 
 func redactArchivesTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, ids []string) error {
 	if len(ids) == 0 {

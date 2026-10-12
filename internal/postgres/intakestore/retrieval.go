@@ -1,4 +1,4 @@
-package postgres
+package intakestore
 
 import (
 	"context"
@@ -23,7 +23,7 @@ import (
 
 // RecallWith searches memory. embed gives the vector of the query; it is
 // called once at most, after the request was checked.
-func (s *Store) RecallWith(ctx context.Context, scope memory.Scope, in memory.RecallRequest, embed retrieval.QueryEmbed) (memory.RecallResult, error) {
+func (s *Intake) RecallWith(ctx context.Context, scope memory.Scope, in memory.RecallRequest, embed retrieval.QueryEmbed) (memory.RecallResult, error) {
 	out := memory.RecallResult{Memories: []memory.Ref{}, Evidence: []memory.Evidence{}, Unresolved: []string{}, Coverage: retrieval.NewCoverage(), FollowUps: []string{}}
 	if !scope.Valid() {
 		return out, memory.ErrForbidden
@@ -90,7 +90,7 @@ func (s *Store) RecallWith(ctx context.Context, scope memory.Scope, in memory.Re
 		out.Coverage.Gaps = append(out.Coverage.Gaps, "未配置语义索引；模糊措辞的覆盖尚不完整")
 	}
 	err = pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
-		return s.recallTx(ctx, tx, scope, in, b, query, fts, vector, model, offset, fingerprint, tokens, &out)
+		return s.RecallTx(ctx, tx, scope, in, b, query, fts, vector, model, offset, fingerprint, tokens, &out)
 	})
 	if len(out.Coverage.PendingSources) > 0 {
 		out.Coverage.Gaps = append(out.Coverage.Gaps, "部分资料尚未完成索引或抽取；可通过原文继续追溯")
@@ -107,11 +107,11 @@ func (s *Store) RecallWith(ctx context.Context, scope memory.Scope, in memory.Re
 // recallTx shares the scoped, ranked retrieval path with queued runs. Callers
 // already holding the owner transaction must not open another transaction or
 // reserve model cost; they use lexical/graph retrieval when no vector is supplied.
-func (s *Store) recallTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in memory.RecallRequest, b memory.Budget, query, fts string, vector []byte, model string, offset int, fingerprint string, tokens []string, out *memory.RecallResult) error {
+func (s *Intake) RecallTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in memory.RecallRequest, b memory.Budget, query, fts string, vector []byte, model string, offset int, fingerprint string, tokens []string, out *memory.RecallResult) error {
 	structured := []memory.Ref{}
 	if scope.Team && in.Team != nil {
 		var err error
-		structured, out.TimeRelaxed, err = structuredRecallTx(ctx, tx, scope, *in.Team, b.Candidates)
+		structured, out.TimeRelaxed, err = StructuredRecallTx(ctx, tx, scope, *in.Team, b.Candidates)
 		if err != nil {
 			return err
 		}
@@ -182,7 +182,7 @@ func (s *Store) recallTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in 
 	// Only explicit effective-use events activate the prior. Legacy activity
 	// timestamps populated from expression time carry no retrieval weight.
 	activityTerm := `CASE WHEN a.pinned THEN 1 WHEN EXISTS(SELECT 1 FROM use_events ue WHERE ue.owner_id=t.owner_id AND ue.record_id=t.id AND ue.kind IN ('user_mention','confirmation','adoption')) THEN coalesce(exp(-0.693147*greatest(0,extract(epoch from((SELECT at FROM ranking_clock)-a.last_effective_use_at)))/nullif(a.half_life_seconds*a.stability,0)),0) ELSE 0 END`
-	if enabled, ok := ctx.Value(activityRankingKey{}).(bool); ok && !enabled {
+	if enabled, ok := ctx.Value(ActivityRankingKey{}).(bool); ok && !enabled {
 		activityTerm = "0::float"
 	}
 	querySQL = strings.Replace(querySQL, `+CASE WHEN $6='continue' THEN coalesce(CASE WHEN a.pinned THEN 1 ELSE exp(-0.693147*greatest(0,extract(epoch from(now()-a.last_effective_use_at)))/(a.half_life_seconds*a.stability)) END,0)*0.2 ELSE 0 END`, "+0.2*("+activityTerm+")", 1)
@@ -207,7 +207,7 @@ func (s *Store) recallTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in 
 	// its original ordering and pagination across all record kinds.
 	const hitColumns = "id,version,kind,body,score,role,branch,gaps,excerpt,title,connector,external_id,expressed_at,recorded_at,readable,total_count"
 	hitOrder := "CASE WHEN $6='history' THEN recorded_at END,explicit DESC,score DESC,id::uuid,version"
-	args := []any{string(scope.OwnerID), scope.IsOwner, scope.PrincipalID, query, fts, string(in.Mode), "", in.Context.Objects, in.Context.ValidAt, in.Context.KnownAt, kernel.NullString(string(vector)), model, embeddingDimensions(vector), b.Candidates + 1, offset, tokens, scope.Team}
+	args := []any{string(scope.OwnerID), scope.IsOwner, scope.PrincipalID, query, fts, string(in.Mode), "", in.Context.Objects, in.Context.ValidAt, in.Context.KnownAt, kernel.NullString(string(vector)), model, EmbeddingDimensions(vector), b.Candidates + 1, offset, tokens, scope.Team}
 	// A diagnostic clock fixes decay only. Production retains the transaction's
 	// now(), and applicable versions, permissions, and usage keep actual time.
 	var activityAt *time.Time
@@ -316,7 +316,7 @@ func (s *Store) recallTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in 
 		return err
 	}
 	for _, relation := range relations {
-		ev, err := evidenceTx(ctx, tx, scope, relation.Ref)
+		ev, err := EvidenceTx(ctx, tx, scope, relation.Ref)
 		if err != nil {
 			return err
 		}
@@ -343,7 +343,7 @@ func (s *Store) recallTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in 
 	}
 	out.Memories = append(out.Memories, teamSources...)
 	for _, ref := range out.Memories {
-		evidence, err := evidenceTx(ctx, tx, scope, ref)
+		evidence, err := EvidenceTx(ctx, tx, scope, ref)
 		if err != nil {
 			return err
 		}
@@ -366,12 +366,12 @@ func (s *Store) recallTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in 
 	return err
 }
 
-func embeddingDimensions(vector []byte) int {
+func EmbeddingDimensions(vector []byte) int {
 	var values []float32
 	_ = json.Unmarshal(vector, &values)
 	return len(values)
 }
-func evidenceTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, ref memory.Ref) ([]memory.Evidence, error) {
+func EvidenceTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, ref memory.Ref) ([]memory.Evidence, error) {
 	result := []memory.Evidence{}
 	rows, err := tx.Query(ctx, `SELECT e.id::text,e.source_id::text,e.source_version,e.locator,e.acquisition,e.stance FROM evidence e JOIN memory_records r ON (r.owner_id,r.id)=(e.owner_id,e.source_id)
 		WHERE e.owner_id=$1 AND e.target_id=$2 AND e.target_version=$3 AND r.state='active' AND ($4 OR ($6 AND r.kind='source') OR EXISTS(SELECT 1 FROM record_grants g WHERE g.owner_id=e.owner_id AND g.record_id=e.source_id AND g.principal_id=$5)) ORDER BY e.id`, string(scope.OwnerID), string(ref.ID), ref.Version, scope.IsOwner, scope.PrincipalID, scope.Team)
@@ -388,7 +388,7 @@ func evidenceTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, ref memory.R
 	}
 	return result, rows.Err()
 }
-func (s *Store) Expand(ctx context.Context, scope memory.Scope, in memory.ExpandRequest) (memory.ExpandResult, error) {
+func (s *Intake) Expand(ctx context.Context, scope memory.Scope, in memory.ExpandRequest) (memory.ExpandResult, error) {
 	out := memory.ExpandResult{Entities: []memory.Entity{}, Episodes: []memory.Episode{}, Sources: []memory.Source{}, Claims: []memory.Claim{}, Relations: []memory.Relation{}, Evidence: []memory.Evidence{}, Coverage: retrieval.NewCoverage()}
 	if !scope.Valid() {
 		return out, memory.ErrForbidden
@@ -473,7 +473,7 @@ func (s *Store) Expand(ctx context.Context, scope memory.Scope, in memory.Expand
 				out.Coverage.Gaps = append(out.Coverage.Gaps, "此对象请通过关联的经历或原文查看")
 			}
 			if in.Evidence {
-				ev, err := evidenceTx(ctx, tx, scope, ref)
+				ev, err := EvidenceTx(ctx, tx, scope, ref)
 				if err != nil {
 					return err
 				}
@@ -498,7 +498,7 @@ func (s *Store) Expand(ctx context.Context, scope memory.Scope, in memory.Expand
 
 // Pick one current, readable excerpt per source, preserving retrieval rank.
 // Recheck only record metadata here: the matched text is already in Recall.
-func teamSourceExcerptsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, principal string, thingID *string, excerpts []memory.RecallExcerpt, historyRequests []string, maxSegments, maxCharacters int) ([]memory.RecallExcerpt, error) {
+func TeamSourceExcerptsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, principal string, thingID *string, excerpts []memory.RecallExcerpt, historyRequests []string, maxSegments, maxCharacters int) ([]memory.RecallExcerpt, error) {
 	ids := []memory.ID{}
 	for _, excerpt := range excerpts {
 		if excerpt.Kind == memory.SourceKind {
@@ -547,7 +547,7 @@ func teamSourceExcerptsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, pr
 			continue
 		}
 		if excerpt.Connector == "desk" {
-			undone, err := deskTurnFullyUndoneTx(ctx, tx, scope.OwnerID, excerpt.ExternalID)
+			undone, err := DeskTurnFullyUndoneTx(ctx, tx, scope.OwnerID, excerpt.ExternalID)
 			if err != nil {
 				return nil, err
 			}
@@ -629,7 +629,7 @@ ORDER BY EXISTS(SELECT 1 FROM entity_versions self JOIN memory_records sr ON (sr
  nature=ANY($9::text[]) DESC,expressed_at DESC NULLS LAST,claim_id,version
 LIMIT $10`
 
-func structuredRecallTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, hints memory.TeamRecall, limit int) ([]memory.Ref, bool, error) {
+func StructuredRecallTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, hints memory.TeamRecall, limit int) ([]memory.Ref, bool, error) {
 	ids := []memory.ID{}
 	entitiesSQL := teamEntitiesSQL
 	mergesAvailable, err := memoryread.EntityMergeSchemaTx(ctx, tx)
@@ -690,9 +690,9 @@ func structuredRecallTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, hint
 	return refs, relaxed, err
 }
 
-type activityRankingKey struct{}
+type ActivityRankingKey struct{}
 
 // WithActivityRanking supports fictional on/off evaluations without a UI switch.
 func WithActivityRanking(ctx context.Context, enabled bool) context.Context {
-	return context.WithValue(ctx, activityRankingKey{}, enabled)
+	return context.WithValue(ctx, ActivityRankingKey{}, enabled)
 }

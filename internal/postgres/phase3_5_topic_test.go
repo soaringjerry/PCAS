@@ -12,6 +12,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/intakestore"
 	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/worker"
@@ -471,7 +472,7 @@ func phase35TopicControls(t *testing.T) *phase35Fixture {
 	scope := owner()
 	phase35Snapshot(t, s, scope)
 	f := &phase35Fixture{phase26LoadedFixture: &phase26LoadedFixture{Store: s, Context: ctx, Scope: scope, Claims: make([]memory.ID, 1436)}}
-	all := []extractedItem{}
+	all := []intakestore.ExtractedItem{}
 	for i := 0; i < 36; i++ {
 		all = append(all, phase35Direct(fmt.Sprintf("虚构主题控制记忆%02d", i), "memory"))
 	}

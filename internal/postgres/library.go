@@ -166,7 +166,7 @@ func (s *Store) ListGroupMemories(ctx context.Context, scope memory.Scope, key s
 			return err
 		}
 		out.Total = len(ids)
-		opts := memoryread.MemoryReadOptions{Ids: ids, Snapshot: cursor.Snapshot, Limit: q.Limit + 1}
+		opts := memoryread.MemoryReadOptions{IDs: ids, Snapshot: cursor.Snapshot, Limit: q.Limit + 1}
 		if q.Cursor != "" {
 			opts.Before = &cursor.MemoryCursor
 		}

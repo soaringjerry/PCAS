@@ -55,7 +55,7 @@ func (s *Store) deputyUseContext(ctx context.Context, scope memory.Scope, run *w
 		if err != nil {
 			return err
 		}
-		ms, err := s.ReadMemoriesTx(ctx, tx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: agent.ID}, true, memoryread.MemoryReadOptions{UseCurrent: true, Ids: run.ContextMemoryIDs})
+		ms, err := s.ReadMemoriesTx(ctx, tx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: agent.ID}, true, memoryread.MemoryReadOptions{UseCurrent: true, IDs: run.ContextMemoryIDs})
 		if err != nil {
 			return err
 		}

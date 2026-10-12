@@ -18,6 +18,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/postgres/callstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/claimstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/evidencestore"
+	"github.com/soaringjerry/PCAS/internal/postgres/intakestore"
 	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/memoryread"
@@ -37,6 +38,7 @@ var migrations embed.FS
 // storage packages share.
 type Store struct {
 	*kernel.DB
+	*intakestore.Intake
 	*callstore.Calls
 	*statestore.State
 	*evidencestore.Evidence
@@ -52,8 +54,6 @@ type Store struct {
 	*memorystore.Memory
 	*memoryread.Reader
 	callstore.CallPending
-	// DeskTurn also borrows a connection for Recall and budget reservation.
-	secretarySlots chan struct{}
 }
 
 // SetModels gives the store the configured models. The store reads their
@@ -79,9 +79,8 @@ func Open(ctx context.Context, url string) (*Store, error) {
 		return nil, fmt.Errorf("database unavailable")
 	}
 	db := &kernel.DB{Pool: pool}
-	store := newStore(db)
-	store.secretarySlots = make(chan struct{}, config.MaxConns-1)
-	return store, nil
+	db.Slots = make(chan struct{}, config.MaxConns-1)
+	return newStore(db), nil
 }
 
 func (s *Store) Close()                         { s.Pool.Close() }
@@ -176,14 +175,19 @@ func newStore(db *kernel.DB) *Store {
 	owners := &ownerstore.Owners{DB: db}
 	usage := &usagelog.Usage{DB: db}
 	budgets := &budgetstore.Budgets{DB: db, Owners: owners}
+	calls := &callstore.Calls{DB: db, Usage: usage, Budgets: budgets}
+	claims := &claimstore.Claims{DB: db, Sources: sources}
+	reader := &memoryread.Reader{DB: db}
+	work := &workstore.Work{DB: db}
 	return &Store{
 		DB:        db,
-		Calls:     &callstore.Calls{DB: db, Usage: usage, Budgets: budgets},
+		Intake:    &intakestore.Intake{DB: db, Sources: sources, Owners: owners, Calls: calls, Claims: claims, Reader: reader, Work: work},
+		Calls:     calls,
 		State:     &statestore.State{DB: db},
 		Evidence:  &evidencestore.Evidence{DB: db},
-		Work:      &workstore.Work{DB: db},
+		Work:      work,
 		Budgets:   budgets,
-		Claims:    &claimstore.Claims{DB: db, Sources: sources},
+		Claims:    claims,
 		Sources:   sources,
 		Items:     &itemstore.Items{DB: db},
 		Owners:    owners,
@@ -191,6 +195,6 @@ func newStore(db *kernel.DB) *Store {
 		Schedules: &schedulestore.Schedules{DB: db},
 		Usage:     usage,
 		Memory:    &memorystore.Memory{DB: db},
-		Reader:    &memoryread.Reader{DB: db},
+		Reader:    reader,
 	}
 }

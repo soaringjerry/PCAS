@@ -10,6 +10,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/postgres/actionlog"
 	"github.com/soaringjerry/PCAS/internal/postgres/callstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/claimstore"
+	"github.com/soaringjerry/PCAS/internal/postgres/intakestore"
 	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/ownerstore"
@@ -39,7 +40,7 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 		if c.MemoryID != "" && c.MemoryID != claim {
 			return memory.ErrInvalid
 		}
-		if err := activeClaim(ctx, tx, scope, claim); err != nil {
+		if err := intakestore.ActiveClaim(ctx, tx, scope, claim); err != nil {
 			return err
 		}
 		return workstore.CompleteDeadlineTx(ctx, tx, scope, claim, version, c.Reason)
@@ -81,7 +82,7 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 			return err
 		}
 		candidate := workspace.Candidate{ID: string(memory.NewID()), Kind: "unknown", Text: c.Text, Confidence: 0, Source: workspace.SourceRef{SourceID: string(in.ID), Version: in.Version, Label: "快速记录", Excerpt: c.Text, At: kernel.Stamp()}, State: "pending", CreatedAt: kernel.Stamp()}
-		return saveCandidate(ctx, tx, scope, candidate)
+		return intakestore.SaveCandidate(ctx, tx, scope, candidate)
 	case "acceptCandidate", "ignoreCandidate", "restoreCandidate", "mergeCandidate":
 		if !memory.ID(c.ID).Valid() {
 			return memory.ErrInvalid
@@ -93,7 +94,7 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 		if err := itemcommand.ReviewCandidate(ctx, &v, c, candidateWrites{store: s, tx: tx, scope: scope}); err != nil {
 			return err
 		}
-		return saveCandidate(ctx, tx, scope, v)
+		return intakestore.SaveCandidate(ctx, tx, scope, v)
 	case "addTask", "addIdea", "addProject":
 		origin := itemcommand.Origin{Actor: kernel.ActorFromContext(ctx), Collected: ctx.Value(kernel.SecretaryHistoryKey{}) != nil}
 		if original, ok := ctx.Value(kernel.SecretaryCreationKey{}).(workspace.SourceRef); ok {
@@ -133,7 +134,7 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 		}
 		return nil
 	case "editMemory", "confirmMemory", "deleteMemory", "setMemoryVisibility", "pinMemory":
-		return s.memoryCommandTx(ctx, tx, scope, c)
+		return s.MemoryCommandTx(ctx, tx, scope, c)
 	case "requestRun", "pasteRunResult", "adoptRun", "discardRun":
 		return s.runCommandTx(ctx, tx, scope, c)
 	case "createDoc", "updateDoc", "deleteDoc":
@@ -227,7 +228,7 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 		if !memory.ID(c.MemoryID).Valid() {
 			return memory.ErrInvalid
 		}
-		if err := activeClaim(ctx, tx, scope, c.MemoryID); err != nil {
+		if err := intakestore.ActiveClaim(ctx, tx, scope, c.MemoryID); err != nil {
 			return err
 		}
 		tag, err := tx.Exec(ctx, "DELETE FROM context_exclusions WHERE owner_id=$1 AND thing_id=$2 AND memory_id=$3", string(scope.OwnerID), c.ThingID, c.MemoryID)
@@ -338,8 +339,8 @@ func saveDoc(ctx context.Context, tx pgx.Tx, scope memory.Scope, doc workspace.D
 	return err
 }
 func (s *Store) saveAction(ctx context.Context, tx pgx.Tx, scope memory.Scope, item workspace.Item, summary string) error {
-	if history, ok := ctx.Value(kernel.SecretaryHistoryKey{}).(*secretaryHistory); ok {
-		history.record(item.ID, summary)
+	if history, ok := ctx.Value(kernel.SecretaryHistoryKey{}).(*intakestore.SecretaryHistory); ok {
+		history.Record(item.ID, summary)
 		return itemstore.SaveItem(ctx, tx, scope, item)
 	}
 	revision := workspace.Revision{At: kernel.Stamp(), By: kernel.ActorFromContext(ctx), Summary: summary}
@@ -390,7 +391,7 @@ func (s *Store) deleteThingTx(ctx context.Context, tx pgx.Tx, scope memory.Scope
 	}
 	if err == nil {
 		receipt.Kind = memory.SourceKind
-		if err := s.deleteRecordsTx(ctx, tx, scope, memory.DeleteRequest{Targets: []memory.Ref{receipt}}); err != nil {
+		if err := s.DeleteRecordsTx(ctx, tx, scope, memory.DeleteRequest{Targets: []memory.Ref{receipt}}); err != nil {
 			return err
 		}
 	}

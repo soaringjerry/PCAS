@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/soaringjerry/PCAS/internal/postgres/intakestore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/retrieval"
 
@@ -129,7 +130,7 @@ func TestRetrievalBusinessDecayKeepsActualEligibilityAndAccess(t *testing.T) {
 			now := time.Now().UTC()
 			if err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 				for _, ref := range []memory.Ref{fast, slow} {
-					if err := recordUseTx(ctx, tx, scope, memory.UseEvent{Ref: ref, EventID: string(ref.ID), Kind: "confirmation", At: now}); err != nil {
+					if err := intakestore.RecordUseTx(ctx, tx, scope, memory.UseEvent{Ref: ref, EventID: string(ref.ID), Kind: "confirmation", At: now}); err != nil {
 						return err
 					}
 				}
@@ -147,9 +148,9 @@ func TestRetrievalBusinessDecayKeepsActualEligibilityAndAccess(t *testing.T) {
 			recall := func(want memory.ID, count int, ranking bool) {
 				t.Helper()
 				out := memory.RecallResult{Coverage: retrieval.NewCoverage()}
-				c := context.WithValue(ctx, activityRankingKey{}, ranking)
+				c := context.WithValue(ctx, intakestore.ActivityRankingKey{}, ranking)
 				err := pgx.BeginFunc(c, s.Pool, func(tx pgx.Tx) error {
-					return s.recallTx(c, tx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: "model", Team: true}, memory.RecallRequest{Mode: memory.Continue, Team: &memory.TeamRecall{RankFusion: fusion}}, memory.Budget{Candidates: 10, Tokens: 4000}, "Fictitious clock record", "", nil, "", 0, "", nil, &out)
+					return s.RecallTx(c, tx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: "model", Team: true}, memory.RecallRequest{Mode: memory.Continue, Team: &memory.TeamRecall{RankFusion: fusion}}, memory.Budget{Candidates: 10, Tokens: 4000}, "Fictitious clock record", "", nil, "", 0, "", nil, &out)
 				})
 				if err != nil || len(out.Memories) != count || want != "" && out.Memories[0].ID != want {
 					t.Fatal("decay ordering, eligibility, or access changed", out.Memories, err)

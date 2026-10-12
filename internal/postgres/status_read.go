@@ -117,7 +117,7 @@ func (s *Store) StatusCardsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope
 	if err != nil {
 		return out, err
 	}
-	memories, err := s.ReadMemoriesTx(ctx, tx, scope, false, memoryread.MemoryReadOptions{Ids: ids})
+	memories, err := s.ReadMemoriesTx(ctx, tx, scope, false, memoryread.MemoryReadOptions{IDs: ids})
 	if err != nil {
 		return out, err
 	}

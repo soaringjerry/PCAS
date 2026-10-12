@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
+	"github.com/soaringjerry/PCAS/internal/postgres/intakestore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 )
 
@@ -21,7 +22,7 @@ func TestIndexDispatchRunsAlongsideConversationAndHonorsPause(t *testing.T) {
 		b2Exec(t, s, `INSERT INTO memory_jobs(id,owner_id,record_id,record_version,stage) VALUES(gen_random_uuid(),$1,$2,1,$3)`, string(scope.OwnerID), string(a.Sources[0].ID), stage)
 	}
 	conversation, err := s.Claim(context.Background(), time.Minute)
-	if err != nil || conversation == nil || !strings.HasPrefix(conversation.Stage, conversationExtractionPrefix) {
+	if err != nil || conversation == nil || !strings.HasPrefix(conversation.Stage, intakestore.ConversationExtractionPrefix) {
 		t.Fatal("expected leased conversation", conversation, err)
 	}
 	job, err := s.ClaimIndex(context.Background(), time.Minute)

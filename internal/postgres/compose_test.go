@@ -9,6 +9,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/modelcall"
 	"github.com/soaringjerry/PCAS/internal/modelcall/stagecall"
+	"github.com/soaringjerry/PCAS/internal/postgres/intakestore"
 	"github.com/soaringjerry/PCAS/internal/retrieval"
 	"github.com/soaringjerry/PCAS/internal/worker"
 	"github.com/soaringjerry/PCAS/internal/workspace"
@@ -93,6 +94,6 @@ func (s *Store) ProcessAttachment(ctx context.Context, j worker.Job) error {
 	return s.ProcessAttachmentWith(ctx, j, s.attachmentReader().Read)
 }
 
-func (s *Store) readAttachment(ctx context.Context, scope memory.Scope, ref memory.Ref, job *worker.Job) (parsedAttachment, error) {
-	return s.readAttachmentWith(ctx, scope, ref, job, s.attachmentReader().Read)
+func (s *Store) readAttachment(ctx context.Context, scope memory.Scope, ref memory.Ref, job *worker.Job) (intakestore.ParsedAttachment, error) {
+	return s.ReadAttachmentWith(ctx, scope, ref, job, s.attachmentReader().Read)
 }

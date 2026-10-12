@@ -497,7 +497,7 @@ func TestB4RankFusionKeepsStructuredMatchesFirst(t *testing.T) {
 	}
 	var result memory.RecallResult
 	err = pgx.BeginFunc(context.Background(), s.Pool, func(tx pgx.Tx) error {
-		return s.recallTx(context.Background(), tx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: "model", Team: true}, memory.RecallRequest{Team: &memory.TeamRecall{Text: "虚构璃风", RankFusion: true}, Mode: memory.Remember}, memory.Budget{Candidates: 40, Tokens: 12000}, "虚构璃风", "'虚构璃风'", []byte("[1,0]"), "b4-fictional-vector", 0, "", memory.SearchTokens("虚构璃风"), &result)
+		return s.RecallTx(context.Background(), tx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: "model", Team: true}, memory.RecallRequest{Team: &memory.TeamRecall{Text: "虚构璃风", RankFusion: true}, Mode: memory.Remember}, memory.Budget{Candidates: 40, Tokens: 12000}, "虚构璃风", "'虚构璃风'", []byte("[1,0]"), "b4-fictional-vector", 0, "", memory.SearchTokens("虚构璃风"), &result)
 	})
 	if err != nil || len(result.Memories) < 2 || string(result.Memories[0].ID) != exact.ID {
 		t.Fatal(result, err)

@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres/callstore"
+	"github.com/soaringjerry/PCAS/internal/postgres/intakestore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/worker"
 )
@@ -110,7 +111,7 @@ func (s *Store) finishAttempt(ctx context.Context, job worker.Job, state, code s
 			return err
 		}
 		if (state == "blocked" || state == "failed") && strings.HasPrefix(job.Stage, "source.extract") {
-			return extractionStateTx(ctx, tx, job, "failed")
+			return intakestore.ExtractionStateTx(ctx, tx, job, "failed")
 		}
 		return nil
 	})
@@ -186,7 +187,7 @@ func (s *Store) expireExhaustedJobs(ctx context.Context) error {
 				}
 			}
 			if tag.RowsAffected() == 1 && strings.HasPrefix(j.Stage, "source.extract") {
-				return extractionStateTx(ctx, tx, j, "failed")
+				return intakestore.ExtractionStateTx(ctx, tx, j, "failed")
 			}
 			return nil
 		}); err != nil {

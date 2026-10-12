@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres/actionlog"
+	"github.com/soaringjerry/PCAS/internal/postgres/intakestore"
 	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/workstore"
@@ -81,10 +82,10 @@ func (s *Store) secretaryProjectTx(ctx context.Context, tx pgx.Tx, scope memory.
 // executeSecretaryActionTx does one action of the answer in the action's
 // transaction. The rules of each action are in the secretary package.
 func (s *Store) executeSecretaryActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, a secretaryAction, aliases map[string]workspace.Item, agent workspace.Agent, loc *time.Location, currentThingID string) (workspace.DeskReceipt, error) {
-	w := &secretaryWorkspace{store: s, tx: tx, scope: scope, history: &secretaryHistory{summaries: map[string]string{}}}
+	w := &secretaryWorkspace{store: s, tx: tx, scope: scope, history: &intakestore.SecretaryHistory{Summaries: map[string]string{}}}
 	// The documents and the delegate history of the turn travel in its context.
 	w.documents, _ = ctx.Value(secretaryDocumentsKey{}).(map[string]workspace.Doc)
-	if history, ok := ctx.Value(kernel.DelegateHistoryKey{}).(delegateHistoryContext); ok {
+	if history, ok := ctx.Value(kernel.DelegateHistoryKey{}).(intakestore.DelegateHistoryContext); ok {
 		w.delegateTurns = append([]string{}, history.IDs...)
 	}
 	return secretary.Execute(ctx, w, a, secretary.Env{Aliases: aliases, Agent: agent, Location: loc, CurrentThingID: currentThingID})
@@ -97,7 +98,7 @@ type secretaryWorkspace struct {
 	store         *Store
 	tx            pgx.Tx
 	scope         memory.Scope
-	history       *secretaryHistory
+	history       *intakestore.SecretaryHistory
 	documents     map[string]workspace.Doc
 	delegateTurns []string
 }
@@ -124,14 +125,14 @@ func (w *secretaryWorkspace) NoteChange(ctx context.Context, item workspace.Item
 }
 
 func (w *secretaryWorkspace) Recorded(id string) bool {
-	_, recorded := w.history.summaries[id]
+	_, recorded := w.history.Summaries[id]
 	return recorded
 }
 
 func (w *secretaryWorkspace) Changed() []secretary.Change {
 	out := []secretary.Change{}
-	for _, id := range w.history.ids {
-		out = append(out, secretary.Change{ID: id, Summary: w.history.summaries[id]})
+	for _, id := range w.history.IDs {
+		out = append(out, secretary.Change{ID: id, Summary: w.history.Summaries[id]})
 	}
 	return out
 }
@@ -150,7 +151,7 @@ func (w *secretaryWorkspace) ProjectNamed(ctx context.Context, title string) (bo
 }
 
 func (w *secretaryWorkspace) CurrentProject(ctx context.Context, thingID string) (string, error) {
-	return currentStudioProjectTx(ctx, w.tx, w.scope, thingID)
+	return intakestore.CurrentStudioProjectTx(ctx, w.tx, w.scope, thingID)
 }
 
 func (w *secretaryWorkspace) ResolveProject(ctx context.Context, value string, aliases map[string]workspace.Item) (string, error) {
@@ -193,7 +194,7 @@ func (s *Store) closeDateActionTx(ctx context.Context, tx pgx.Tx, scope memory.S
 	if err != nil {
 		return receipt, err
 	}
-	if err = activeClaim(ctx, tx, scope, m.ID); err != nil {
+	if err = intakestore.ActiveClaim(ctx, tx, scope, m.ID); err != nil {
 		return secretary.Skipped(a.Op, "这条记忆已经不在了"), nil
 	}
 	if err = workstore.CompleteDeadlineTx(ctx, tx, scope, m.ID, version, as); errors.Is(err, memory.ErrConflict) {

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
+	"github.com/soaringjerry/PCAS/internal/postgres/intakestore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
@@ -35,9 +36,9 @@ func TestPhase35T2RandomReverseUndo(t *testing.T) {
 						kind = "idea"
 					}
 					it := phase35Direct(fmt.Sprintf("虚构随机种子%d原话%02d", seed, i), kind)
-					ref := phase35Source(t, s, scope, []extractedItem{it})
+					ref := phase35Source(t, s, scope, []intakestore.ExtractedItem{it})
 					phase35Model(t, s, func(w http.ResponseWriter, r *http.Request) {
-						secretaryModelReply(w, extracted{Items: []extractedItem{it}})
+						secretaryModelReply(w, intakestore.Extracted{Items: []intakestore.ExtractedItem{it}})
 					})
 					phase35Extract(t, s, scope, ref)
 					after := phase35Snapshot(t, s, scope)
@@ -98,7 +99,7 @@ func TestPhase35T2ConcurrentExtractionSchedulerAndUserHTTP(t *testing.T) {
 	scope := owner()
 	phase35Snapshot(t, s, scope)
 	it := phase35Direct("虚构并发只建一条待办", "task")
-	ref := phase35Source(t, s, scope, []extractedItem{it})
+	ref := phase35Source(t, s, scope, []intakestore.ExtractedItem{it})
 	a := leaseStage(t, s, scope, ref, "source.extract")
 	b := leaseStage(t, s, scope, ref, "source.extract:0")
 	entered := make(chan struct{}, 2)
@@ -114,7 +115,7 @@ func TestPhase35T2ConcurrentExtractionSchedulerAndUserHTTP(t *testing.T) {
 		entered <- struct{}{}
 		select {
 		case <-release:
-			secretaryModelReply(w, extracted{Items: []extractedItem{it}})
+			secretaryModelReply(w, intakestore.Extracted{Items: []intakestore.ExtractedItem{it}})
 		case <-r.Context().Done():
 		}
 	})
@@ -177,9 +178,9 @@ func TestPhase35T2DeletedEvidenceCannotRecreateWork(t *testing.T) {
 	scope := owner()
 	phase35Snapshot(t, s, scope)
 	it := phase35Direct("虚构删除原话后的自动事项", "task")
-	ref := phase35Source(t, s, scope, []extractedItem{it})
+	ref := phase35Source(t, s, scope, []intakestore.ExtractedItem{it})
 	phase35Model(t, s, func(w http.ResponseWriter, r *http.Request) {
-		secretaryModelReply(w, extracted{Items: []extractedItem{it}})
+		secretaryModelReply(w, intakestore.Extracted{Items: []intakestore.ExtractedItem{it}})
 	})
 	phase35Extract(t, s, scope, ref)
 	st := phase35Snapshot(t, s, scope)

@@ -1,4 +1,4 @@
-package postgres
+package intakestore
 
 import (
 	"context"
@@ -14,7 +14,7 @@ import (
 )
 
 // Adjacent context remains bounded, keeps roles, and cannot supply extraction quotes.
-func (s *Store) adjacentContext(ctx context.Context, scope memory.Scope, source memory.SourceResult) ([]map[string]any, error) {
+func (s *Intake) adjacentContext(ctx context.Context, scope memory.Scope, source memory.SourceResult) ([]map[string]any, error) {
 	if kernel.OneOf(source.Source.Connector, "desk", "desk-incomplete") {
 		return s.deskExtractionContext(ctx, scope, source.Source.ExternalID)
 	}
@@ -45,7 +45,7 @@ func (s *Store) adjacentContext(ctx context.Context, scope memory.Scope, source 
 // Only earlier exchanges in this request's conversation can resolve references.
 // Failed/canceled requests have no desk_turns row; their admission metadata still
 // identifies the conversation, while all context bodies come from desk_turns.
-func (s *Store) deskExtractionContext(ctx context.Context, scope memory.Scope, request string) ([]map[string]any, error) {
+func (s *Intake) deskExtractionContext(ctx context.Context, scope memory.Scope, request string) ([]map[string]any, error) {
 	out := []map[string]any{}
 	if !memory.ID(request).Valid() {
 		return out, nil
@@ -94,7 +94,7 @@ FROM recent ORDER BY ordered_at,admission_order NULLS FIRST,id`, string(scope.Ow
 		}
 		for _, turn := range turns {
 			if len(turn.run.ContextVersions) > 0 && accessstore.VerifyRunTx(ctx, tx, scope, turn.run) != nil {
-				turn.answer = outdatedDeskAnswer
+				turn.answer = OutdatedDeskAnswer
 			}
 			for _, message := range []struct{ role, text string }{{"user", turn.question}, {"assistant", turn.answer}} {
 				out = append(out, map[string]any{"id": turn.id, "role": message.role, "branch": "current", "text": message.text, "expressed_at": turn.at})
@@ -109,10 +109,10 @@ FROM recent ORDER BY ordered_at,admission_order NULLS FIRST,id`, string(scope.Ow
 			return out, e
 		}
 		if attachmentContext != "" {
-			out = append(out, map[string]any{"role": "assistant", "branch": "current", "text": boundedAttachmentText(attachmentContext, 1200), "kind": "attachment_context"})
+			out = append(out, map[string]any{"role": "assistant", "branch": "current", "text": BoundedAttachmentText(attachmentContext, 1200), "kind": "attachment_context"})
 		}
 	}
 	return out, err
 }
 
-type extractedWhen = extraction.When
+type ExtractedWhen = extraction.When

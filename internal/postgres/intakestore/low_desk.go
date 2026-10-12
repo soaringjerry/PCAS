@@ -1,4 +1,4 @@
-package postgres
+package intakestore
 
 import (
 	"context"
@@ -10,19 +10,19 @@ import (
 	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 )
 
-type secretaryHistory struct {
-	ids       []string
-	summaries map[string]string
+type SecretaryHistory struct {
+	IDs       []string
+	Summaries map[string]string
 }
 
-func (h *secretaryHistory) record(id, summary string) {
-	if _, ok := h.summaries[id]; !ok {
-		h.ids = append(h.ids, id)
-		h.summaries[id] = summary
+func (h *SecretaryHistory) Record(id, summary string) {
+	if _, ok := h.Summaries[id]; !ok {
+		h.IDs = append(h.IDs, id)
+		h.Summaries[id] = summary
 	}
 }
 
-func boundedAttachmentText(text string, limit int) string {
+func BoundedAttachmentText(text string, limit int) string {
 	r := []rune(text)
 	if len(r) > limit {
 		return string(r[:limit])
@@ -30,14 +30,14 @@ func boundedAttachmentText(text string, limit int) string {
 	return text
 }
 
-const outdatedDeskAnswer = secretary.OutdatedAnswer
+const OutdatedDeskAnswer = secretary.OutdatedAnswer
 
-type delegateHistoryContext struct {
+type DelegateHistoryContext struct {
 	ConversationID string
 	IDs            []string
 }
 
-func currentStudioProjectTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, thing string) (string, error) {
+func CurrentStudioProjectTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, thing string) (string, error) {
 	if thing == "" {
 		return "", nil
 	}
@@ -51,7 +51,7 @@ func currentStudioProjectTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, 
 	return item.ProjectID, nil
 }
 
-func refreshSmokeChangesTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, changes []actionlog.ActionChange) error {
+func RefreshSmokeChangesTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, changes []actionlog.ActionChange) error {
 	if actionlog.SmokeID(ctx) == "" {
 		return nil
 	}
@@ -70,7 +70,7 @@ func refreshSmokeChangesTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c
 // 某一轮秘书对话是否至少有一条动作记录，并且全部已撤销。
 // requestID 是这一轮的请求 id，也是它的原话资料的 external_id。
 // 没有这一轮，或这一轮没有任何动作记录，返回 false。
-func deskTurnFullyUndoneTx(ctx context.Context, tx pgx.Tx, ownerID memory.ID, requestID string) (bool, error) {
+func DeskTurnFullyUndoneTx(ctx context.Context, tx pgx.Tx, ownerID memory.ID, requestID string) (bool, error) {
 	var undone bool
 	err := tx.QueryRow(ctx, `SELECT EXISTS(
 	 SELECT 1 FROM desk_turns t
@@ -81,7 +81,7 @@ func deskTurnFullyUndoneTx(ctx context.Context, tx pgx.Tx, ownerID memory.ID, re
 	return undone, err
 }
 
-func deskTurnRememberedTx(ctx context.Context, tx pgx.Tx, ownerID memory.ID, requestID string) (bool, error) {
+func DeskTurnRememberedTx(ctx context.Context, tx pgx.Tx, ownerID memory.ID, requestID string) (bool, error) {
 	var remembered bool
 	err := tx.QueryRow(ctx, `SELECT EXISTS(
 	 SELECT 1 FROM desk_turns WHERE owner_id=$1 AND lower(request_id::text)=lower($2)

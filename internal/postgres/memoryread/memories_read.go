@@ -25,7 +25,7 @@ type MemoryReadOptions struct {
 	Legacy        bool
 	Query         workspace.MemoryQuery
 	ID            string
-	Ids           []string // nil means unrestricted; an empty slice matches nothing
+	IDs           []string // nil means unrestricted; an empty slice matches nothing
 	Limit         int
 	Snapshot      time.Time
 	Before        *MemoryCursor
@@ -52,8 +52,8 @@ func MemoryWhere(scope memory.Scope, currentOnly bool, opts MemoryReadOptions) (
 	if opts.ID != "" {
 		add("r.id=$%d::uuid", opts.ID)
 	}
-	if opts.Ids != nil {
-		add("r.id=ANY($%d::uuid[])", opts.Ids)
+	if opts.IDs != nil {
+		add("r.id=ANY($%d::uuid[])", opts.IDs)
 	}
 	if opts.ID == "" {
 		current := CurrentMemorySQL("r.owner_id", "r.id")
@@ -140,10 +140,10 @@ func (s *Reader) ReadMemoriesTx(ctx context.Context, tx pgx.Tx, scope memory.Sco
  coalesce(a.last_effective_use_at,r.created_at),coalesce(a.stability,1),coalesce(a.half_life_seconds,2592000),coalesce(a.pinned,false),coalesce(a.reinforcement_limit,8),
  rv.expressed_at,` + MemoryEventColumns() + "," + mentionsAvailable + `,
  coalesce(to_jsonb(c)->>'category','unknown'),(to_jsonb(c)->>'durable')::boolean,coalesce(c.scope->>'deadline_completed','false')='true' AND coalesce(c.scope->>'deadline_completed_version','')=c.version::text` + MemoryJoins + where + ` ORDER BY r.updated_at DESC,r.id`
-	if currentOnly && opts.UseCurrent && opts.Ids != nil {
+	if currentOnly && opts.UseCurrent && opts.IDs != nil {
 		// Ready cards and completion checks supply bounded identities. Resolve
 		// their applicable versions once, then hydrate only that scoped set.
-		args = append(args, opts.Ids)
+		args = append(args, opts.IDs)
 		joins := ` FROM memory_records r JOIN applicable use_av ON use_av.claim_id=r.id
  JOIN claim_revisions c ON (c.owner_id,c.claim_id,c.version)=(r.owner_id,r.id,use_av.version)
  JOIN record_versions rv ON (rv.owner_id,rv.record_id,rv.version)=(c.owner_id,c.claim_id,c.version)
@@ -410,7 +410,7 @@ func (s *Reader) ListMemories(ctx context.Context, scope memory.Scope, q workspa
 		}
 		if q.Trust != "" {
 			var err error
-			out.Total, opts.Ids, err = trustedMemoryIDsTx(ctx, tx, scope, opts)
+			out.Total, opts.IDs, err = trustedMemoryIDsTx(ctx, tx, scope, opts)
 			if err != nil {
 				return err
 			}

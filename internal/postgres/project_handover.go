@@ -182,7 +182,7 @@ func (s *Store) projectHandoverInputTx(ctx context.Context, tx pgx.Tx, scope mem
 	if ids == nil {
 		ids = []string{}
 	}
-	memories, err := s.ReadMemoriesTx(ctx, tx, scope, false, memoryread.MemoryReadOptions{Ids: ids})
+	memories, err := s.ReadMemoriesTx(ctx, tx, scope, false, memoryread.MemoryReadOptions{IDs: ids})
 	if err != nil {
 		return out, nil, err
 	}

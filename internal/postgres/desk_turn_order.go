@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres/actionlog"
+	"github.com/soaringjerry/PCAS/internal/postgres/intakestore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
@@ -200,7 +201,7 @@ func (s *Store) withOrderedSecretaryTurn(ctx, callerCtx context.Context, owner, 
 			continue
 		}
 		select {
-		case s.secretarySlots <- struct{}{}:
+		case s.Slots <- struct{}{}:
 		case <-callerCtx.Done():
 			return callerCtx.Err()
 		case <-ctx.Done():
@@ -250,7 +251,7 @@ func (s *Store) withOrderedSecretaryTurn(ctx, callerCtx context.Context, owner, 
 			_, err := tx.Exec(ctx, "UPDATE desk_turn_order SET status='done' WHERE owner_id=$1 AND request_id=$2", owner, request)
 			return err
 		})
-		<-s.secretarySlots
+		<-s.Slots
 		if !errors.Is(err, errSecretaryBusy) {
 			return err
 		}
@@ -278,5 +279,5 @@ func (s *Store) captureIncompleteSecretaryTurn(ctx context.Context, tx pgx.Tx, s
 	if tag.RowsAffected() != 1 {
 		return memory.ErrConflict
 	}
-	return saveCandidate(ctx, tx, scope, workspace.Candidate{ID: string(memory.NewID()), Kind: "unknown", Text: text, Confidence: 0, Source: workspace.SourceRef{SourceID: string(in.ID), Version: in.Version, Label: "未完成的秘书原话", Excerpt: text, At: kernel.Stamp()}, State: "pending", CreatedAt: kernel.Stamp()})
+	return intakestore.SaveCandidate(ctx, tx, scope, workspace.Candidate{ID: string(memory.NewID()), Kind: "unknown", Text: text, Confidence: 0, Source: workspace.SourceRef{SourceID: string(in.ID), Version: in.Version, Label: "未完成的秘书原话", Excerpt: text, At: kernel.Stamp()}, State: "pending", CreatedAt: kernel.Stamp()})
 }

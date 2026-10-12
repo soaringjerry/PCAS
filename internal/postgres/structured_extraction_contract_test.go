@@ -14,6 +14,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
+	"github.com/soaringjerry/PCAS/internal/postgres/intakestore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/soaringjerry/PCAS/internal/ai"
@@ -45,8 +46,8 @@ func phase35Action(t *testing.T, s *Store, scope memory.Scope, item string) stri
 	}
 	return id
 }
-func phase35Direct(text, kind string) extractedItem {
-	return extractedItem{Kind: kind, Text: text, Quote: text, Nature: "intention", Subject: "我", Predicate: "虚构目标", Explicit: true, Confidence: 1, Acquisition: "direct", Qualification: "asserted"}
+func phase35Direct(text, kind string) intakestore.ExtractedItem {
+	return intakestore.ExtractedItem{Kind: kind, Text: text, Quote: text, Nature: "intention", Subject: "我", Predicate: "虚构目标", Explicit: true, Confidence: 1, Acquisition: "direct", Qualification: "asserted"}
 }
 func phase35RequireSingleReceipt(t *testing.T, st workspace.State, item []byte, action string) {
 	t.Helper()
@@ -119,7 +120,7 @@ func TestStructuredExtractionUsesTrustMatrix(t *testing.T) {
 			it.Qualification = tc.qualification
 			it.Confidence = tc.confidence
 			it.Explicit = tc.explicit
-			ref := phase35Source(t, s, scope, []extractedItem{it})
+			ref := phase35Source(t, s, scope, []intakestore.ExtractedItem{it})
 			if tc.branch == "archive" {
 				archive := b4bImport(t, s, scope, b4bMessages(t, []string{"user"}, []string{it.Quote}))
 				ref = archive.Sources[0]
@@ -133,7 +134,7 @@ func TestStructuredExtractionUsesTrustMatrix(t *testing.T) {
 					item["message_index"] = 1
 					secretaryModelReply(w, map[string]any{"items": []any{item}})
 				} else {
-					secretaryModelReply(w, extracted{Items: []extractedItem{it}})
+					secretaryModelReply(w, intakestore.Extracted{Items: []intakestore.ExtractedItem{it}})
 				}
 			})
 			phase35Extract(t, s, scope, ref)
@@ -205,12 +206,14 @@ func TestStructuredExtractionOverflowPreservedAndObservable(t *testing.T) {
 	s, ctx := phase26DisposableStore(t)
 	scope := owner()
 	phase35Snapshot(t, s, scope)
-	items := []extractedItem{}
+	items := []intakestore.ExtractedItem{}
 	for i := 0; i < 25; i++ {
 		items = append(items, phase35Direct(fmt.Sprintf("虚构独立待办 %02d", i), "task"))
 	}
 	ref := phase35Source(t, s, scope, items)
-	calls := phase35Model(t, s, func(w http.ResponseWriter, r *http.Request) { secretaryModelReply(w, extracted{Items: items}) })
+	calls := phase35Model(t, s, func(w http.ResponseWriter, r *http.Request) {
+		secretaryModelReply(w, intakestore.Extracted{Items: items})
+	})
 	phase35Extract(t, s, scope, ref)
 	st := phase35Snapshot(t, s, scope)
 	pending := []workspace.Candidate{}
@@ -245,9 +248,11 @@ func TestStructuredExtractionUndoAndReplaySequences(t *testing.T) {
 		t.Run(sequence, func(t *testing.T) {
 			scope := owner()
 			phase35Snapshot(t, s, scope)
-			items := []extractedItem{phase35Direct("虚构做一本青岚声音手册", "idea"), phase35Direct("虚构给青岚书店寄陶瓷标本", "task")}
+			items := []intakestore.ExtractedItem{phase35Direct("虚构做一本青岚声音手册", "idea"), phase35Direct("虚构给青岚书店寄陶瓷标本", "task")}
 			ref := phase35Source(t, s, scope, items)
-			phase35Model(t, s, func(w http.ResponseWriter, r *http.Request) { secretaryModelReply(w, extracted{Items: items}) })
+			phase35Model(t, s, func(w http.ResponseWriter, r *http.Request) {
+				secretaryModelReply(w, intakestore.Extracted{Items: items})
+			})
 			phase35Extract(t, s, scope, ref)
 			st := phase35Snapshot(t, s, scope)
 			if len(st.Tasks) != 1 || len(st.Ideas) != 1 {
@@ -327,7 +332,7 @@ func TestExtractionFailurePreservesGoodResultAndCounts(t *testing.T) {
 	before := phase35Work(phase35Snapshot(t, s, scope))
 	for _, mode := range []string{"model failure", "invalid output"} {
 		t.Run(mode, func(t *testing.T) {
-			ref := phase35Source(t, s, scope, []extractedItem{phase35Direct("虚构待办失败保留", "task")})
+			ref := phase35Source(t, s, scope, []intakestore.ExtractedItem{phase35Direct("虚构待办失败保留", "task")})
 			phase35Model(t, s, func(w http.ResponseWriter, r *http.Request) {
 				if mode == "model failure" {
 					w.WriteHeader(500)
@@ -371,10 +376,10 @@ func TestExtractionRetriesPaidResultAfterPersistenceFailure(t *testing.T) {
 	scope := owner()
 	phase35Snapshot(t, s, scope)
 	it := phase35Direct("虚构只付费一次的自动待办", "task")
-	ref := phase35Source(t, s, scope, []extractedItem{it})
+	ref := phase35Source(t, s, scope, []intakestore.ExtractedItem{it})
 	j := leaseStage(t, s, scope, ref, "source.extract")
 	calls := phase35Model(t, s, func(w http.ResponseWriter, r *http.Request) {
-		secretaryModelReply(w, extracted{Items: []extractedItem{it}})
+		secretaryModelReply(w, intakestore.Extracted{Items: []intakestore.ExtractedItem{it}})
 	})
 	// Injection targets only the owned DB business row, AFTER paid result storage.
 	_, err := s.Pool.Exec(ctx, `CREATE FUNCTION phase35_reject_work() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'phase35 injected business write failure'; END $$; CREATE TRIGGER phase35_reject_work BEFORE INSERT ON work_items FOR EACH ROW EXECUTE FUNCTION phase35_reject_work()`)
@@ -411,10 +416,10 @@ func TestSingleSourceChangeLeavesUnrelatedPaidResult(t *testing.T) {
 	phase35Snapshot(t, s, scope)
 	refs := []memory.Ref{}
 	for _, text := range []string{"虚构独立原话A", "虚构独立原话B"} {
-		refs = append(refs, phase35Source(t, s, scope, []extractedItem{phase35Direct(text, "task")}))
+		refs = append(refs, phase35Source(t, s, scope, []intakestore.ExtractedItem{phase35Direct(text, "task")}))
 	}
 	calls := phase35Model(t, s, func(w http.ResponseWriter, r *http.Request) {
-		secretaryModelReply(w, extracted{Items: []extractedItem{}})
+		secretaryModelReply(w, intakestore.Extracted{Items: []intakestore.ExtractedItem{}})
 	})
 	phase35Extract(t, s, scope, refs[0])
 	phase35Extract(t, s, scope, refs[1])
@@ -485,7 +490,9 @@ func TestStructuredExtractionTrustInputsAtScale(t *testing.T) {
 	f := phase35Load(t)
 	s := f.Store
 	ref := phase35Source(t, s, f.Scope, f.Inputs)
-	calls := phase35Model(t, s, func(w http.ResponseWriter, r *http.Request) { secretaryModelReply(w, extracted{Items: f.Inputs}) })
+	calls := phase35Model(t, s, func(w http.ResponseWriter, r *http.Request) {
+		secretaryModelReply(w, intakestore.Extracted{Items: f.Inputs})
+	})
 	phase35Extract(t, s, f.Scope, ref)
 	st := phase35Snapshot(t, s, f.Scope)
 	work := phase35Work(st)

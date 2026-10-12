@@ -1,4 +1,4 @@
-package postgres
+package intakestore
 
 import (
 	"context"
@@ -21,15 +21,15 @@ import (
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
-func (s *Store) memoryCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c workspace.Command) error {
+func (s *Intake) MemoryCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c workspace.Command) error {
 	if !memory.ID(c.ID).Valid() {
 		return memory.ErrInvalid
 	}
-	if err := activeClaim(ctx, tx, scope, c.ID); err != nil {
+	if err := ActiveClaim(ctx, tx, scope, c.ID); err != nil {
 		return err
 	}
 	if c.Type == "deleteMemory" {
-		return s.deleteTx(ctx, tx, scope, memory.DeleteRequest{Targets: []memory.Ref{{ID: memory.ID(c.ID), Kind: memory.ClaimKind}}, BlockReimport: true, IncludeSources: c.IncludeSources})
+		return s.DeleteTx(ctx, tx, scope, memory.DeleteRequest{Targets: []memory.Ref{{ID: memory.ID(c.ID), Kind: memory.ClaimKind}}, BlockReimport: true, IncludeSources: c.IncludeSources})
 	}
 	if c.Type == "pinMemory" {
 		_, err := tx.Exec(ctx, "UPDATE activity SET pinned=NOT pinned WHERE owner_id=$1 AND record_id=$2", string(scope.OwnerID), c.ID)
@@ -76,9 +76,9 @@ func (s *Store) memoryCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Sco
 	_ = json.Unmarshal(prior.Value, &before)
 	_ = json.Unmarshal(claim.Value, &after)
 	if c.Type == "editMemory" {
-		return sampleTx(ctx, tx, scope, workspace.Sample{ID: string(memory.NewID()), Kind: "correction", Prompt: before, Response: after, Origin: workspace.Origin{Label: "记忆纠正", MemoryID: c.ID}, Version: ref.Version, State: "candidate", Epistemic: "confirmed", CreatedAt: kernel.Stamp()})
+		return SampleTx(ctx, tx, scope, workspace.Sample{ID: string(memory.NewID()), Kind: "correction", Prompt: before, Response: after, Origin: workspace.Origin{Label: "记忆纠正", MemoryID: c.ID}, Version: ref.Version, State: "candidate", Epistemic: "confirmed", CreatedAt: kernel.Stamp()})
 	}
-	return recordUseTx(ctx, tx, scope, memory.UseEvent{Ref: ref, EventID: c.RequestID, Kind: "confirmation", At: time.Now()})
+	return RecordUseTx(ctx, tx, scope, memory.UseEvent{Ref: ref, EventID: c.RequestID, Kind: "confirmation", At: time.Now()})
 }
 func readClaim(ctx context.Context, tx pgx.Tx, scope memory.Scope, id memory.ID, version int) (memory.Claim, error) {
 	var c memory.Claim
@@ -96,7 +96,7 @@ func readClaim(ctx context.Context, tx pgx.Tx, scope memory.Scope, id memory.ID,
 	c.Evidence = []memory.ID{}
 	return c, err
 }
-func (s *Store) Correct(ctx context.Context, scope memory.Scope, in memory.CorrectRequest) (memory.Ref, error) {
+func (s *Intake) Correct(ctx context.Context, scope memory.Scope, in memory.CorrectRequest) (memory.Ref, error) {
 	var out memory.Ref
 	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err
@@ -118,7 +118,7 @@ func (s *Store) Correct(ctx context.Context, scope memory.Scope, in memory.Corre
 	})
 	return out, err
 }
-func (s *Store) correctTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in memory.CorrectRequest) (memory.Ref, error) {
+func (s *Intake) correctTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in memory.CorrectRequest) (memory.Ref, error) {
 	var out memory.Ref
 	if !in.Target.ID.Valid() || in.Target.Version < 1 {
 		return out, memory.ErrInvalid
@@ -228,13 +228,13 @@ func (s *Store) correctTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in
 	}
 	return out, kernel.Enqueue(ctx, tx, scope.OwnerID, out.ID, out.Version, "memory.index")
 }
-func (s *Store) RecordUse(ctx context.Context, scope memory.Scope, in memory.UseEvent) error {
+func (s *Intake) RecordUse(ctx context.Context, scope memory.Scope, in memory.UseEvent) error {
 	if err := kernel.RequireOwner(scope); err != nil {
 		return err
 	}
-	return pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error { return recordUseTx(ctx, tx, scope, in) })
+	return pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error { return RecordUseTx(ctx, tx, scope, in) })
 }
-func recordUseTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in memory.UseEvent) error {
+func RecordUseTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in memory.UseEvent) error {
 	if !in.Ref.ID.Valid() || in.Ref.Version < 1 || in.EventID == "" || len(in.EventID) > 200 || !kernel.OneOf(in.Kind, "user_mention", "confirmation", "adoption") || in.At.IsZero() || in.At.After(time.Now().Add(time.Minute)) {
 		return memory.ErrInvalid
 	}
@@ -257,7 +257,7 @@ func recordUseTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in memory.U
 	return err
 }
 
-func (s *Store) Delete(ctx context.Context, scope memory.Scope, in memory.DeleteRequest) error {
+func (s *Intake) Delete(ctx context.Context, scope memory.Scope, in memory.DeleteRequest) error {
 	for _, ref := range in.Targets {
 		if ref.Version < 1 {
 			return memory.ErrInvalid
@@ -273,7 +273,7 @@ func (s *Store) Delete(ctx context.Context, scope memory.Scope, in memory.Delete
 		if _, err := tx.Exec(ctx, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(scope.OwnerID)); err != nil {
 			return err
 		}
-		if err := s.deleteTx(ctx, tx, scope, in); err != nil {
+		if err := s.DeleteTx(ctx, tx, scope, in); err != nil {
 			return err
 		}
 		_, err := tx.Exec(ctx, "UPDATE workspace_owners SET revision=revision+1 WHERE owner_id=$1", string(scope.OwnerID))
@@ -283,7 +283,7 @@ func (s *Store) Delete(ctx context.Context, scope memory.Scope, in memory.Delete
 
 // Mark this deletion's work-item/document writes for snapshot expiration.
 // The trigger observes shared purge helpers and cascades as well as local saves.
-func (s *Store) deleteTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in memory.DeleteRequest) (err error) {
+func (s *Intake) DeleteTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in memory.DeleteRequest) (err error) {
 	var previous string
 	if err = tx.QueryRow(ctx, "SELECT coalesce(current_setting('pcas.expire_actions',true),'')").Scan(&previous); err != nil {
 		return err
@@ -297,13 +297,13 @@ func (s *Store) deleteTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in 
 			err = restoreErr
 		}
 	}()
-	return s.deleteRecordsTx(ctx, tx, scope, in)
+	return s.DeleteRecordsTx(ctx, tx, scope, in)
 }
 
-type retainUndoneAnswersKey struct{}
+type RetainUndoneAnswersKey struct{}
 
-func (s *Store) deleteRecordsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in memory.DeleteRequest) error {
-	retainAnswers, _ := ctx.Value(retainUndoneAnswersKey{}).(bool)
+func (s *Intake) DeleteRecordsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in memory.DeleteRequest) error {
+	retainAnswers, _ := ctx.Value(RetainUndoneAnswersKey{}).(bool)
 	if len(in.Targets) == 0 || len(in.Targets) > 100 {
 		return memory.ErrInvalid
 	}

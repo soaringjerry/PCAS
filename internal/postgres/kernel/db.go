@@ -19,6 +19,10 @@ type DB struct {
 	// Blobs is nil when no file store is configured.
 	Blobs         memory.BlobStore
 	businessClock func() time.Time
+	// Slots limits the flows that hold a connection across a model call: a
+	// secretary turn and the reading of an attachment. One connection stays
+	// free for the reads and the reservations inside such a flow.
+	Slots chan struct{}
 }
 
 // SetBusinessClock sets business input, dates, retrieval decay, and deadline display time.

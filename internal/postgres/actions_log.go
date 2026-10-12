@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres/actionlog"
+	"github.com/soaringjerry/PCAS/internal/postgres/intakestore"
 	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/workstore"
@@ -200,7 +201,7 @@ func (s *Store) undoActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 			if err := json.Unmarshal(c.Before, &ref); err != nil {
 				return err
 			}
-			if err := s.deleteTx(context.WithValue(ctx, retainUndoneAnswersKey{}, true), tx, scope, memory.DeleteRequest{Targets: []memory.Ref{ref}}); err != nil {
+			if err := s.DeleteTx(context.WithValue(ctx, intakestore.RetainUndoneAnswersKey{}, true), tx, scope, memory.DeleteRequest{Targets: []memory.Ref{ref}}); err != nil {
 				return err
 			}
 			continue
@@ -279,7 +280,7 @@ func (s *Store) undoActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 	if err != nil {
 		return err
 	}
-	if err := refreshSmokeChangesTx(ctx, tx, scope, changes); err != nil {
+	if err := intakestore.RefreshSmokeChangesTx(ctx, tx, scope, changes); err != nil {
 		return err
 	}
 	if err := s.deleteUndoneAdoptionSourcesTx(ctx, tx, scope, id); err != nil {
@@ -304,7 +305,7 @@ func (s *Store) deleteUndoneAdoptionSourcesTx(ctx context.Context, tx pgx.Tx, sc
 	for _, id := range sources {
 		targets = append(targets, memory.Ref{ID: memory.ID(id), Kind: memory.SourceKind})
 	}
-	return s.deleteTx(context.WithValue(ctx, retainUndoneAnswersKey{}, true), tx, scope, memory.DeleteRequest{Targets: targets})
+	return s.DeleteTx(context.WithValue(ctx, intakestore.RetainUndoneAnswersKey{}, true), tx, scope, memory.DeleteRequest{Targets: targets})
 }
 
 func (s *Store) deleteUndoneTurnMemoriesTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, turnID string) error {
@@ -316,11 +317,11 @@ func (s *Store) deleteUndoneTurnMemoriesTx(ctx context.Context, tx pgx.Tx, scope
 	if err != nil {
 		return err
 	}
-	undone, err := deskTurnFullyUndoneTx(ctx, tx, scope.OwnerID, requestID)
+	undone, err := intakestore.DeskTurnFullyUndoneTx(ctx, tx, scope.OwnerID, requestID)
 	if err != nil || !undone {
 		return err
 	}
-	remembered, err := deskTurnRememberedTx(ctx, tx, scope.OwnerID, requestID)
+	remembered, err := intakestore.DeskTurnRememberedTx(ctx, tx, scope.OwnerID, requestID)
 	if err != nil {
 		return err
 	}
@@ -353,7 +354,7 @@ func (s *Store) deleteUndoneTurnMemoriesTx(ctx context.Context, tx pgx.Tx, scope
 	// The existing deletion entry point applies artifact propagation and snapshot
 	// expiration. Keep sources and allow reimport; its request limit is 100.
 	for start := 0; start < len(targets); start += 100 {
-		if err := s.deleteTx(context.WithValue(ctx, retainUndoneAnswersKey{}, true), tx, scope, memory.DeleteRequest{Targets: targets[start:min(start+100, len(targets))]}); err != nil {
+		if err := s.DeleteTx(context.WithValue(ctx, intakestore.RetainUndoneAnswersKey{}, true), tx, scope, memory.DeleteRequest{Targets: targets[start:min(start+100, len(targets))]}); err != nil {
 			return err
 		}
 	}

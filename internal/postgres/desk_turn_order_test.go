@@ -209,8 +209,8 @@ func TestSecretaryOrderWaitingUsesNoSlots(t *testing.T) {
 		results = append(results, orderedTurnStart(target, context.Background(), scope, q))
 		orderedTicketWait(t, s, scope, q.RequestID)
 	}
-	if len(s.secretarySlots) != 1 || len(peer.secretarySlots) != 0 {
-		t.Fatalf("waiters consumed generation slots: %d/%d", len(s.secretarySlots), len(peer.secretarySlots))
+	if len(s.Slots) != 1 || len(peer.Slots) != 0 {
+		t.Fatalf("waiters consumed generation slots: %d/%d", len(s.Slots), len(peer.Slots))
 	}
 	for _, isolated := range []memory.Scope{scope, owner()} {
 		q := turnRequest("independent")

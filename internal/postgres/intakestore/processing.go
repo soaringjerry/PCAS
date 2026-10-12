@@ -1,4 +1,4 @@
-package postgres
+package intakestore
 
 import (
 	"context"
@@ -18,7 +18,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
-func (s *Store) ProcessIndex(ctx context.Context, j worker.Job) error {
+func (s *Intake) ProcessIndex(ctx context.Context, j worker.Job) error {
 	return pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		if err := kernel.LockJob(ctx, tx, j); err != nil {
 			return err
@@ -73,9 +73,9 @@ func (s *Store) ProcessIndex(ctx context.Context, j worker.Job) error {
 }
 
 // IndexStore gives the vector indexer the texts and the vectors of a job.
-func (s *Store) IndexStore() retrieval.IndexStore { return indexStore{s} }
+func (s *Intake) IndexStore() retrieval.IndexStore { return indexStore{s} }
 
-type indexStore struct{ store *Store }
+type indexStore struct{ store *Intake }
 
 func (a indexStore) Missing(ctx context.Context, j worker.Job, model string) ([]memory.Ref, []string, bool, error) {
 	s := a.store
@@ -190,8 +190,8 @@ func (a indexStore) Save(ctx context.Context, j worker.Job, refs []memory.Ref, v
 }
 
 type (
-	extractedItem = extraction.Item
-	extracted     = extraction.Output
+	ExtractedItem = extraction.Item
+	Extracted     = extraction.Output
 )
 
 func currentExtractionSource(ctx context.Context, tx pgx.Tx, j worker.Job) (bool, error) {
@@ -204,9 +204,9 @@ func currentExtractionSource(ctx context.Context, tx pgx.Tx, j worker.Job) (bool
 }
 
 // ExtractionStore gives the extraction service its reads and writes.
-func (s *Store) ExtractionStore() extraction.Store { return extractionStore{s} }
+func (s *Intake) ExtractionStore() extraction.Store { return extractionStore{s} }
 
-type extractionStore struct{ store *Store }
+type extractionStore struct{ store *Intake }
 
 func workerScope(owner memory.ID) memory.Scope {
 	return memory.Scope{OwnerID: owner, PrincipalID: "worker", IsOwner: true}
@@ -374,12 +374,12 @@ func (a extractionStore) Apply(ctx context.Context, j worker.Job, result extract
 		// Recheck under the same owner lock used by undo, after generation: an
 		// undo during the model call must not resurrect the extracted memories.
 		if source.Source.Connector == "desk" {
-			facts.Undone, err = deskTurnFullyUndoneTx(ctx, tx, j.OwnerID, source.Source.ExternalID)
+			facts.Undone, err = DeskTurnFullyUndoneTx(ctx, tx, j.OwnerID, source.Source.ExternalID)
 			if err != nil {
 				return err
 			}
 			if facts.Undone {
-				facts.Remembered, err = deskTurnRememberedTx(ctx, tx, j.OwnerID, source.Source.ExternalID)
+				facts.Remembered, err = DeskTurnRememberedTx(ctx, tx, j.OwnerID, source.Source.ExternalID)
 				if err != nil {
 					return err
 				}
@@ -440,7 +440,7 @@ func (a extractionStore) Apply(ctx context.Context, j worker.Job, result extract
 				accepted++
 				continue
 			}
-			if err := saveCandidate(ctx, tx, scope, v); err != nil {
+			if err := SaveCandidate(ctx, tx, scope, v); err != nil {
 				return err
 			}
 			accepted++
@@ -467,14 +467,14 @@ func completeExtractionTx(ctx context.Context, tx pgx.Tx, j worker.Job, state st
 	if err := kernel.Acknowledge(ctx, tx, j); err != nil {
 		return err
 	}
-	return extractionStateTx(ctx, tx, j, state)
+	return ExtractionStateTx(ctx, tx, j, state)
 }
 
 // Aggregate fenced segment completions under the owner lock. The parent job is
 // done after scheduling windows; only all completed windows finish the source.
 // E2 also calls this after a job permanently stops or exhausts its lease.
-func extractionStateTx(ctx context.Context, tx pgx.Tx, j worker.Job, state string) error {
-	if strings.HasPrefix(j.Stage, conversationExtractionPrefix) {
+func ExtractionStateTx(ctx context.Context, tx pgx.Tx, j worker.Job, state string) error {
+	if strings.HasPrefix(j.Stage, ConversationExtractionPrefix) {
 		return conversationExtractionStateTx(ctx, tx, j, state)
 	}
 	if !strings.HasPrefix(j.Stage, "source.extract") {
@@ -517,7 +517,7 @@ func extractionStateTx(ctx context.Context, tx pgx.Tx, j worker.Job, state strin
 	return err
 }
 
-func (s *Store) extractionFailed(ctx context.Context, j worker.Job) error {
+func (s *Intake) extractionFailed(ctx context.Context, j worker.Job) error {
 	return pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		if err := kernel.OwnerLock(ctx, tx, j.OwnerID); err != nil {
 			return err
@@ -525,6 +525,6 @@ func (s *Store) extractionFailed(ctx context.Context, j worker.Job) error {
 		if err := kernel.LockJob(ctx, tx, j); err != nil {
 			return err
 		}
-		return extractionStateTx(ctx, tx, j, "failed")
+		return ExtractionStateTx(ctx, tx, j, "failed")
 	})
 }

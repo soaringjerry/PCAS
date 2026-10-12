@@ -16,6 +16,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/postgres/budgetstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/callstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/evidencestore"
+	"github.com/soaringjerry/PCAS/internal/postgres/intakestore"
 	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/memoryread"
@@ -296,7 +297,7 @@ func (s *Store) secretaryPrompt(ctx context.Context, tx pgx.Tx, scope memory.Sco
 	for _, ref := range recall.Memories {
 		ids = append(ids, string(ref.ID))
 	}
-	memories, err := s.ReadMemoriesTx(ctx, tx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: c.Agent.ID}, true, memoryread.MemoryReadOptions{Ids: ids, UseCurrent: true})
+	memories, err := s.ReadMemoriesTx(ctx, tx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: c.Agent.ID}, true, memoryread.MemoryReadOptions{IDs: ids, UseCurrent: true})
 	if err != nil {
 		return "", nil, err
 	}
@@ -330,7 +331,7 @@ func (s *Store) secretaryPrompt(ctx context.Context, tx pgx.Tx, scope memory.Sco
 		return "", nil, err
 	}
 	contextbuilder.OrderExcerpts(recall.Excerpts, c.Plan)
-	excerpts, err := teamSourceExcerptsTx(ctx, tx, scope, c.Agent.ID, req.ThingID, recall.Excerpts, historyRequests, 6, 2400)
+	excerpts, err := intakestore.TeamSourceExcerptsTx(ctx, tx, scope, c.Agent.ID, req.ThingID, recall.Excerpts, historyRequests, 6, 2400)
 	if err != nil {
 		return "", nil, err
 	}
@@ -723,7 +724,7 @@ func (t *secretaryTurn) Act(ctx context.Context, a secretaryAction, aliases map[
 	actionCtx = context.WithValue(actionCtx, secretaryProjectReceiptsKey{}, &projectReceipts)
 	actionCtx = context.WithValue(actionCtx, secretaryDocumentsKey{}, c.Documents)
 	actionCtx = context.WithValue(actionCtx, secretaryMemoriesKey{}, t.sent)
-	history := delegateHistoryContext{ConversationID: c.ConversationID}
+	history := intakestore.DelegateHistoryContext{ConversationID: c.ConversationID}
 	for _, turn := range c.History {
 		history.IDs = append(history.IDs, turn.ID)
 	}

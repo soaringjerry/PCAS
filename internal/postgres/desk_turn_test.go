@@ -17,6 +17,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
+	"github.com/soaringjerry/PCAS/internal/postgres/intakestore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/soaringjerry/PCAS/internal/ai"
@@ -337,7 +338,7 @@ func TestDeskExtractionSkipsTaskAndIdea(t *testing.T) {
 	ctx := context.Background()
 	text := "明天寄信，也想做个工具，偏好清晨工作"
 	secretaryModel(t, s, func(w http.ResponseWriter, r *http.Request) {
-		secretaryModelReply(w, extracted{Items: []extractedItem{{Kind: "task", Text: "明天寄信", Quote: "明天寄信", Confidence: 1}, {Kind: "idea", Text: "做个工具", Quote: "做个工具", Confidence: 1}, {Kind: "memory", Nature: "preference", Text: "偏好清晨工作", Quote: "偏好清晨工作", Subject: "用户", Predicate: "工作时间", Acquisition: "direct", Confidence: 1}}})
+		secretaryModelReply(w, intakestore.Extracted{Items: []intakestore.ExtractedItem{{Kind: "task", Text: "明天寄信", Quote: "明天寄信", Confidence: 1}, {Kind: "idea", Text: "做个工具", Quote: "做个工具", Confidence: 1}, {Kind: "memory", Nature: "preference", Text: "偏好清晨工作", Quote: "偏好清晨工作", Subject: "用户", Predicate: "工作时间", Acquisition: "direct", Confidence: 1}}})
 	})
 	source := mustIngest(t, s, scope, memory.IngestRequest{Connector: "desk", ExternalID: string(memory.NewID()), ExternalVersion: "1", Title: "秘书原话", Text: text, MediaType: "text/plain"})
 	if err := (extraction.Service{Store: s.ExtractionStore(), Generator: jobCalls(s), MaxAttempts: kernel.MaxJobAttempts}).Process(ctx, leaseStage(t, s, scope, source.Ref, "source.extract")); err != nil {

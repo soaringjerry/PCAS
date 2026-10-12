@@ -1,4 +1,4 @@
-package postgres
+package intakestore
 
 import (
 	"context"
@@ -35,7 +35,7 @@ func init() {
 	}
 }
 
-func (s *Store) PreviewArchive(ctx context.Context, scope memory.Scope, name string, r io.Reader) (connectors.ArchivePreview, error) {
+func (s *Intake) PreviewArchive(ctx context.Context, scope memory.Scope, name string, r io.Reader) (connectors.ArchivePreview, error) {
 	if err := kernel.RequireOwner(scope); err != nil {
 		return connectors.ArchivePreview{}, err
 	}
@@ -49,10 +49,10 @@ func (s *Store) PreviewArchive(ctx context.Context, scope memory.Scope, name str
 	return archive.Preview, err
 }
 
-func (s *Store) ImportArchiveReader(ctx context.Context, scope memory.Scope, name string, r io.Reader) (connectors.Result, error) {
+func (s *Intake) ImportArchiveReader(ctx context.Context, scope memory.Scope, name string, r io.Reader) (connectors.Result, error) {
 	return s.ImportArchiveReaderWithOrganizing(ctx, scope, name, r, "later")
 }
-func (s *Store) ImportArchiveReaderWithOrganizing(ctx context.Context, scope memory.Scope, name string, r io.Reader, organize string) (connectors.Result, error) {
+func (s *Intake) ImportArchiveReaderWithOrganizing(ctx context.Context, scope memory.Scope, name string, r io.Reader, organize string) (connectors.Result, error) {
 	if err := kernel.RequireOwner(scope); err != nil {
 		return connectors.Result{}, err
 	}
@@ -61,7 +61,7 @@ func (s *Store) ImportArchiveReaderWithOrganizing(ctx context.Context, scope mem
 	}
 	return s.importArchiveReader(ctx, scope, name, r, "archive", organize != "now")
 }
-func (s *Store) importArchiveReader(ctx context.Context, scope memory.Scope, name string, r io.Reader, namespace string, holdOrganizing bool) (connectors.Result, error) {
+func (s *Intake) importArchiveReader(ctx context.Context, scope memory.Scope, name string, r io.Reader, namespace string, holdOrganizing bool) (connectors.Result, error) {
 	out := connectors.Result{Refs: []memory.Ref{}, Gaps: []string{}}
 	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err
@@ -133,7 +133,7 @@ func (s *Store) importArchiveReader(ctx context.Context, scope memory.Scope, nam
 		if !errors.Is(err, pgx.ErrNoRows) {
 			return err
 		}
-		result, err := s.ingestAttachmentTx(ctx, tx, scope, in, key)
+		result, err := s.IngestAttachmentTx(ctx, tx, scope, in, key)
 		if err != nil {
 			return err
 		}
@@ -217,7 +217,7 @@ func scanImportBatch(row pgx.Row) (ImportBatch, error) {
 		b.Activity = "failed"
 	case b.State == "importing":
 		b.Activity = "storing"
-	case strings.HasPrefix(stage, conversationExtractionPrefix):
+	case strings.HasPrefix(stage, ConversationExtractionPrefix):
 		b.Activity = "organizing"
 	case stage == "source.chunk":
 		b.Activity = "preparing"
@@ -255,7 +255,7 @@ func importErrorMessage(code string) string {
 		return (&connectors.ArchiveError{Code: code}).Message()
 	}
 }
-func (s *Store) ListImports(ctx context.Context, scope memory.Scope) ([]ImportBatch, error) {
+func (s *Intake) ListImports(ctx context.Context, scope memory.Scope) ([]ImportBatch, error) {
 	out := []ImportBatch{}
 	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err
@@ -279,7 +279,7 @@ var ErrImportNotActive = &connectors.ArchiveError{Code: "import_not_active"}
 
 // Starting organization changes only the hold. Paused imports stay paused, and
 // repeated requests keep already queued or completed extraction work intact.
-func (s *Store) OrganizeImport(ctx context.Context, scope memory.Scope, id memory.ID) (ImportBatch, error) {
+func (s *Intake) OrganizeImport(ctx context.Context, scope memory.Scope, id memory.ID) (ImportBatch, error) {
 	var out ImportBatch
 	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err
@@ -304,13 +304,13 @@ func (s *Store) OrganizeImport(ctx context.Context, scope memory.Scope, id memor
 	return out, err
 }
 
-func (s *Store) PauseImport(ctx context.Context, scope memory.Scope, id memory.ID) (ImportBatch, error) {
+func (s *Intake) PauseImport(ctx context.Context, scope memory.Scope, id memory.ID) (ImportBatch, error) {
 	return s.changeImportState(ctx, scope, id, true)
 }
-func (s *Store) ResumeImport(ctx context.Context, scope memory.Scope, id memory.ID) (ImportBatch, error) {
+func (s *Intake) ResumeImport(ctx context.Context, scope memory.Scope, id memory.ID) (ImportBatch, error) {
 	return s.changeImportState(ctx, scope, id, false)
 }
-func (s *Store) changeImportState(ctx context.Context, scope memory.Scope, id memory.ID, pause bool) (ImportBatch, error) {
+func (s *Intake) changeImportState(ctx context.Context, scope memory.Scope, id memory.ID, pause bool) (ImportBatch, error) {
 	var out ImportBatch
 	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err
@@ -355,7 +355,7 @@ func (s *Store) changeImportState(ctx context.Context, scope memory.Scope, id me
 	return out, err
 }
 
-func (s *Store) processArchiveImport(ctx context.Context, j worker.Job, title string, r io.Reader) (err error) {
+func (s *Intake) processArchiveImport(ctx context.Context, j worker.Job, title string, r io.Reader) (err error) {
 	defer func() { err = s.recordImportFailure(ctx, j, err) }()
 	archive, err := connectors.OpenArchive(ctx, title, r)
 	if err != nil {
@@ -431,7 +431,7 @@ func (s *Store) processArchiveImport(ctx context.Context, j worker.Job, title st
 			if err != nil {
 				return err
 			}
-			result, err := s.importBatchTx(ctx, tx, scope, namespace, connectors.Batch{Records: records, Gaps: archive.Preview.Gaps}, &j.Record)
+			result, err := s.ImportBatchTx(ctx, tx, scope, namespace, connectors.Batch{Records: records, Gaps: archive.Preview.Gaps}, &j.Record)
 			if err != nil {
 				return err
 			}
@@ -495,14 +495,14 @@ var _ interface {
 	ImportArchiveReader(context.Context, memory.Scope, string, io.Reader) (connectors.Result, error)
 	ImportArchiveReaderWithOrganizing(context.Context, memory.Scope, string, io.Reader, string) (connectors.Result, error)
 	OrganizeImport(context.Context, memory.Scope, memory.ID) (connectors.ImportBatch, error)
-} = (*Store)(nil)
+} = (*Intake)(nil)
 
 // importFailureCode names the failure of an archive import. failed is false
 // when the import did not fail: it lost its lease, or its own context ended.
 // A stopped worker ends the context, and the database driver can then return
 // an error that does not wrap the context's error. Such an import is tried
 // again; it is not a storage failure.
-func importFailureCode(contextErr, err error) (code string, failed bool) {
+func ImportFailureCode(contextErr, err error) (code string, failed bool) {
 	if err == nil || contextErr != nil || errors.Is(err, worker.ErrLeaseLost) || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 		return "", false
 	}
@@ -519,8 +519,8 @@ func importFailureCode(contextErr, err error) (code string, failed bool) {
 
 // The initial attachment open can fail before parsing begins, so it shares the
 // same durable status update as failures between chunks.
-func (s *Store) recordImportFailure(ctx context.Context, j worker.Job, err error) error {
-	code, failed := importFailureCode(ctx.Err(), err)
+func (s *Intake) recordImportFailure(ctx context.Context, j worker.Job, err error) error {
+	code, failed := ImportFailureCode(ctx.Err(), err)
 	if !failed {
 		return err
 	}
@@ -541,7 +541,7 @@ func (s *Store) recordImportFailure(ctx context.Context, j worker.Job, err error
 
 // Implementations may offer the archive-specific limit without changing the
 // ordinary attachment port or widening other attachment uploads.
-func (s *Store) putArchiveBlob(ctx context.Context, scope memory.Scope, r io.Reader) (string, error) {
+func (s *Intake) putArchiveBlob(ctx context.Context, scope memory.Scope, r io.Reader) (string, error) {
 	if store, ok := s.Blobs.(interface {
 		PutArchive(context.Context, memory.Scope, io.Reader) (string, error)
 	}); ok {
@@ -550,7 +550,7 @@ func (s *Store) putArchiveBlob(ctx context.Context, scope memory.Scope, r io.Rea
 	return s.Blobs.Put(ctx, scope, r)
 }
 
-func (s *Store) selectArchive(ctx context.Context, scope memory.Scope, namespace string, archive *connectors.Archive) error {
+func (s *Intake) selectArchive(ctx context.Context, scope memory.Scope, namespace string, archive *connectors.Archive) error {
 	archive.Preview.AlreadyImported = 0
 	return pgx.BeginTxFunc(ctx, s.Pool, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
 		return archive.Select(ctx, func(identities []connectors.ArchiveIdentity) ([]bool, error) {
@@ -697,7 +697,7 @@ func linkImportedArchiveTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, n
 	return stored, nil
 }
 
-func (s *Store) pendingArchive(ctx context.Context, scope memory.Scope, namespace string, ref memory.Ref, archive *connectors.Archive) error {
+func (s *Intake) pendingArchive(ctx context.Context, scope memory.Scope, namespace string, ref memory.Ref, archive *connectors.Archive) error {
 	return pgx.BeginTxFunc(ctx, s.Pool, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
 		return archive.Filter(ctx, func(identities []connectors.ArchiveIdentity) ([]bool, error) {
 			type key struct {

@@ -205,7 +205,7 @@ func (s *Store) syncFolder(ctx context.Context, l syncLease) error {
 		// The entire original export is retained before its normalized messages.
 		scope := memory.Scope{OwnerID: l.Owner, PrincipalID: "connector", IsOwner: true}
 		if ext == ".zip" || ext == ".json" || ext == ".jsonl" {
-			if _, err = s.ingestArchive(ctx, scope, entry.Name(), data, "connection-archive:"+string(l.Connection.ID)); err != nil && !errors.Is(err, memory.ErrBlocked) {
+			if _, err = s.IngestArchive(ctx, scope, entry.Name(), data, "connection-archive:"+string(l.Connection.ID)); err != nil && !errors.Is(err, memory.ErrBlocked) {
 				return err
 			}
 		} else {
@@ -232,7 +232,7 @@ func (s *Store) finishSync(ctx context.Context, l syncLease, b connectors.Batch,
 			gaps = []string{}
 		}
 		if len(b.Records) > 0 {
-			result, err := s.importBatchTx(ctx, tx, memory.Scope{OwnerID: l.Owner, PrincipalID: "connector", IsOwner: true}, "connection:"+string(l.Connection.ID), b, nil)
+			result, err := s.ImportBatchTx(ctx, tx, memory.Scope{OwnerID: l.Owner, PrincipalID: "connector", IsOwner: true}, "connection:"+string(l.Connection.ID), b, nil)
 			if err != nil {
 				return err
 			}

@@ -136,7 +136,7 @@ func TestPhase2B3_S6_MetadataDoesNotConsumeDeputyOrManualByteBudget(t *testing.T
 				for _, ref := range refs {
 					b1HasRef(t, run.ContextVersions, ref, true)
 					var count int
-					if err := s.pool.QueryRow(t.Context(), `SELECT count(*) FROM run_dependencies WHERE owner_id=$1 AND run_id=$2 AND memory_id=$3 AND memory_version=$4`, scope.OwnerID, run.ID, ref.ID, ref.Version).Scan(&count); err != nil || count != 1 {
+					if err := s.Pool.QueryRow(t.Context(), `SELECT count(*) FROM run_dependencies WHERE owner_id=$1 AND run_id=$2 AND memory_id=$3 AND memory_version=$4`, scope.OwnerID, run.ID, ref.ID, ref.Version).Scan(&count); err != nil || count != 1 {
 						t.Errorf("delivered dependency %s count=%d err=%v", ref.ID, count, err)
 					}
 				}

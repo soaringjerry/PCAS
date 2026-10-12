@@ -32,7 +32,7 @@ func TestPhase26G2A5ComparisonInvalidOutputKeepsSameBatchPending(t *testing.T) {
 		}
 		var attempts, completed int
 		var seconds float64
-		if err := f.Store.pool.QueryRow(f.Context, `SELECT attempts,extract(epoch from retry_after-clock_timestamp()),(completed_at IS NOT NULL)::int FROM memory_comparison_batches WHERE owner_id=$1 AND attempts>0 ORDER BY attempts DESC LIMIT 1`, f.Scope.OwnerID).Scan(&attempts, &seconds, &completed); err != nil {
+		if err := f.Store.Pool.QueryRow(f.Context, `SELECT attempts,extract(epoch from retry_after-clock_timestamp()),(completed_at IS NOT NULL)::int FROM memory_comparison_batches WHERE owner_id=$1 AND attempts>0 ORDER BY attempts DESC LIMIT 1`, f.Scope.OwnerID).Scan(&attempts, &seconds, &completed); err != nil {
 			t.Fatal(err)
 		}
 		delay := time.Duration(seconds * float64(time.Second))
@@ -52,7 +52,7 @@ func TestPhase26G2A5ComparisonInvalidOutputKeepsSameBatchPending(t *testing.T) {
 		t.Errorf("calls=%d", len(m.calls(CompareStage)))
 	}
 	var complete int
-	if err := f.Store.pool.QueryRow(f.Context, `SELECT count(*) FROM memory_group_progress WHERE owner_id=$1 AND group_key='self:rule' AND completed`, f.Scope.OwnerID).Scan(&complete); err != nil {
+	if err := f.Store.Pool.QueryRow(f.Context, `SELECT count(*) FROM memory_group_progress WHERE owner_id=$1 AND group_key='self:rule' AND completed`, f.Scope.OwnerID).Scan(&complete); err != nil {
 		t.Fatal(err)
 	}
 	if complete != 0 {

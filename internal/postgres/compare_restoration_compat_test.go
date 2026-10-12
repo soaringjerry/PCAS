@@ -26,18 +26,18 @@ func TestCompareRestoreMarkerCompatibilityAndRuleScope(t *testing.T) {
 				t.Fatal(err)
 			}
 			if legacy {
-				if _, err := s.pool.Exec(ctx, `UPDATE background_markers SET stage=$3 WHERE owner_id=$1 AND record_id=$2 AND stage LIKE 'memory.compare:%:restored:%'`, string(scope.OwnerID), string(refs[0].ID), fmt.Sprintf("memory.compare_restored:%d:%s", CompareVersion, action)); err != nil {
+				if _, err := s.Pool.Exec(ctx, `UPDATE background_markers SET stage=$3 WHERE owner_id=$1 AND record_id=$2 AND stage LIKE 'memory.compare:%:restored:%'`, string(scope.OwnerID), string(refs[0].ID), fmt.Sprintf("memory.compare_restored:%d:%s", CompareVersion, action)); err != nil {
 					t.Fatal(err)
 				}
 			}
-			if _, err := s.pool.Exec(ctx, `UPDATE claims SET compared=0 WHERE owner_id=$1 AND id=$2`, string(scope.OwnerID), string(refs[1].ID)); err != nil {
+			if _, err := s.Pool.Exec(ctx, `UPDATE claims SET compared=0 WHERE owner_id=$1 AND id=$2`, string(scope.OwnerID), string(refs[1].ID)); err != nil {
 				t.Fatal(err)
 			}
 			compareProcess(t, s, scope)
 			compareState(t, s, scope, refs, []string{"", ""}, CompareVersion)
 			b1Undo(t, s, scope, action)
 			var remaining int
-			if err := s.pool.QueryRow(ctx, `SELECT count(*) FROM background_markers WHERE owner_id=$1 AND record_id=$2 AND (stage LIKE 'memory.compare:%:restored:%' OR stage LIKE 'memory.compare_restored:%')`, string(scope.OwnerID), string(refs[0].ID)).Scan(&remaining); err != nil || remaining != 0 {
+			if err := s.Pool.QueryRow(ctx, `SELECT count(*) FROM background_markers WHERE owner_id=$1 AND record_id=$2 AND (stage LIKE 'memory.compare:%:restored:%' OR stage LIKE 'memory.compare_restored:%')`, string(scope.OwnerID), string(refs[0].ID)).Scan(&remaining); err != nil || remaining != 0 {
 				t.Fatal("undo left exemption", remaining, err)
 			}
 			compareState(t, s, scope, refs, []string{"superseded", ""}, CompareVersion)

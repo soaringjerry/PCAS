@@ -54,7 +54,7 @@ func TestPhase2B4_I4_BlockedMessageIsReportedAndSkippedWithoutFailingImport(t *t
 	w := b4HTTP(t, s, scope, "POST", "/v1/memory/delete", memory.DeleteRequest{Targets: []memory.Ref{banned}, BlockReimport: true})
 	b4OK(t, w)
 	var blocks int
-	if err := s.pool.QueryRow(context.Background(), `SELECT count(*) FROM reimport_blocks WHERE owner_id=$1`, string(scope.OwnerID)).Scan(&blocks); err != nil || blocks == 0 {
+	if err := s.Pool.QueryRow(context.Background(), `SELECT count(*) FROM reimport_blocks WHERE owner_id=$1`, string(scope.OwnerID)).Scan(&blocks); err != nil || blocks == 0 {
 		t.Fatalf("ban fixture did not create a reimport block: %d %v", blocks, err)
 	}
 	newConversations := b4Conversations(t, "blocked-new", 1)
@@ -84,7 +84,7 @@ func TestPhase2B4_I4_BlockedMessageIsReportedAndSkippedWithoutFailingImport(t *t
 	done := b4Complete(t, s, scope, uploaded.BatchID, ref)
 	b4CheckCompletedCounts(t, done, expected)
 	var restored bool
-	if err := s.pool.QueryRow(context.Background(), `SELECT EXISTS(SELECT 1 FROM source_versions WHERE owner_id=$1 AND body=$2)`, string(scope.OwnerID), bannedText).Scan(&restored); err != nil {
+	if err := s.Pool.QueryRow(context.Background(), `SELECT EXISTS(SELECT 1 FROM source_versions WHERE owner_id=$1 AND body=$2)`, string(scope.OwnerID), bannedText).Scan(&restored); err != nil {
 		t.Fatal(err)
 	}
 	if restored {
@@ -92,7 +92,7 @@ func TestPhase2B4_I4_BlockedMessageIsReportedAndSkippedWithoutFailingImport(t *t
 	}
 	b1Active(t, s, scope, banned, false)
 	b4MessagesExactlyOnce(t, s, scope, append(original[1:], newConversations...))
-	if err := s.pool.QueryRow(context.Background(), `SELECT count(*) FROM reimport_blocks WHERE owner_id=$1`, string(scope.OwnerID)).Scan(&blocks); err != nil || blocks == 0 {
+	if err := s.Pool.QueryRow(context.Background(), `SELECT count(*) FROM reimport_blocks WHERE owner_id=$1`, string(scope.OwnerID)).Scan(&blocks); err != nil || blocks == 0 {
 		t.Errorf("successful import removed the user's ban: %d %v", blocks, err)
 	}
 }
@@ -113,7 +113,7 @@ func TestPhase2B4_I2_PartialImportOriginalReachesNewSecretaryConversation(t *tes
 	p := b4ParseAsync(t, s, scope, archive)
 	b4Partial(t, s, scope, id, 1000)
 	var extractions int
-	if err := s.pool.QueryRow(context.Background(), `SELECT count(*) FROM source_extractions WHERE owner_id=$1 AND state IN ('done','empty')`, string(scope.OwnerID)).Scan(&extractions); err != nil {
+	if err := s.Pool.QueryRow(context.Background(), `SELECT count(*) FROM source_extractions WHERE owner_id=$1 AND state IN ('done','empty')`, string(scope.OwnerID)).Scan(&extractions); err != nil {
 		t.Fatal(err)
 	}
 	if extractions != 0 {
@@ -157,7 +157,7 @@ func TestPhase2B4_I3_PauseStopsStorageAndExtractionButNotOrdinarySource(t *testi
 	stop, _ := b4QueueWorker(t, s)
 	b4Wait(t, "ordinary source extraction while archive paused", func() bool {
 		var done bool
-		if err := s.pool.QueryRow(context.Background(), `SELECT EXISTS(SELECT 1 FROM source_extractions WHERE owner_id=$1 AND source_id=$2 AND state IN ('done','empty'))`, string(scope.OwnerID), string(source.ID)).Scan(&done); err != nil {
+		if err := s.Pool.QueryRow(context.Background(), `SELECT EXISTS(SELECT 1 FROM source_extractions WHERE owner_id=$1 AND source_id=$2 AND state IN ('done','empty'))`, string(scope.OwnerID), string(source.ID)).Scan(&done); err != nil {
 			t.Fatal(err)
 		}
 		return done
@@ -255,7 +255,7 @@ func TestPhase2B4_I5_HistoricalPlanRemainsCandidateWithoutPresentActions(t *test
 	claim := b1MemoryRef(t, state.Memories, gold.Text)
 	var confirmation string
 	var expressed time.Time
-	if err := s.pool.QueryRow(context.Background(), `SELECT c.confirmation,r.expressed_at FROM claim_revisions c JOIN record_versions r ON (r.owner_id,r.record_id,r.version)=(c.owner_id,c.claim_id,c.version) WHERE c.owner_id=$1 AND c.claim_id=$2 AND c.version=$3`, string(scope.OwnerID), string(claim.ID), claim.Version).Scan(&confirmation, &expressed); err != nil {
+	if err := s.Pool.QueryRow(context.Background(), `SELECT c.confirmation,r.expressed_at FROM claim_revisions c JOIN record_versions r ON (r.owner_id,r.record_id,r.version)=(c.owner_id,c.claim_id,c.version) WHERE c.owner_id=$1 AND c.claim_id=$2 AND c.version=$3`, string(scope.OwnerID), string(claim.ID), claim.Version).Scan(&confirmation, &expressed); err != nil {
 		t.Fatal(err)
 	}
 	if confirmation != gold.Confirmation || !expressed.Equal(b4Instant(t, gold.At)) {
@@ -280,7 +280,7 @@ func TestPhase2B4_I6_SecretaryOriginalExtractionPrecedes500ImportedMessages(t *t
 	stop, _ := b4QueueWorker(t, s)
 	b4Wait(t, "new secretary original extraction", func() bool {
 		var done bool
-		if err := s.pool.QueryRow(context.Background(), `SELECT EXISTS(SELECT 1 FROM source_extractions WHERE owner_id=$1 AND source_id=$2 AND state IN ('done','empty'))`, string(scope.OwnerID), string(source.ID)).Scan(&done); err != nil {
+		if err := s.Pool.QueryRow(context.Background(), `SELECT EXISTS(SELECT 1 FROM source_extractions WHERE owner_id=$1 AND source_id=$2 AND state IN ('done','empty'))`, string(scope.OwnerID), string(source.ID)).Scan(&done); err != nil {
 			t.Fatal(err)
 		}
 		return done
@@ -307,7 +307,7 @@ func TestPhase2B4_I9_CancelAtHalfCommitThenRecoverExpiredLease(t *testing.T) {
 	if stopped.Stored < partial.Stored || stopped.Stored >= stopped.Total {
 		t.Fatalf("not a real partial cancellation: %+v", stopped)
 	}
-	if _, err := s.pool.Exec(context.Background(), `UPDATE memory_jobs SET lease_until=now()-interval '1 second' WHERE owner_id=$1 AND id=$2`, string(scope.OwnerID), string(p.job.ID)); err != nil {
+	if _, err := s.Pool.Exec(context.Background(), `UPDATE memory_jobs SET lease_until=now()-interval '1 second' WHERE owner_id=$1 AND id=$2`, string(scope.OwnerID), string(p.job.ID)); err != nil {
 		t.Fatal(err)
 	}
 	reclaimed, err := s.Claim(context.Background(), time.Minute)
@@ -361,7 +361,7 @@ func TestPhase2B4_I10_DeleteArchiveChildrenClaimsBatchAndRecallControl(t *testin
 		}
 	}
 	var exists bool
-	if err := s.pool.QueryRow(context.Background(), `SELECT EXISTS(SELECT 1 FROM import_batches WHERE owner_id=$1 AND id=$2)`, string(scope.OwnerID), id).Scan(&exists); err != nil {
+	if err := s.Pool.QueryRow(context.Background(), `SELECT EXISTS(SELECT 1 FROM import_batches WHERE owner_id=$1 AND id=$2)`, string(scope.OwnerID), id).Scan(&exists); err != nil {
 		t.Fatal(err)
 	}
 	if exists {
@@ -371,7 +371,7 @@ func TestPhase2B4_I10_DeleteArchiveChildrenClaimsBatchAndRecallControl(t *testin
 		b1Active(t, s, scope, ref, false)
 	}
 	for _, conv := range conversations {
-		if err := s.pool.QueryRow(context.Background(), `SELECT EXISTS(SELECT 1 FROM source_versions WHERE owner_id=$1 AND body=$2)`, string(scope.OwnerID), conv.Messages[0].Text).Scan(&exists); err != nil {
+		if err := s.Pool.QueryRow(context.Background(), `SELECT EXISTS(SELECT 1 FROM source_versions WHERE owner_id=$1 AND body=$2)`, string(scope.OwnerID), conv.Messages[0].Text).Scan(&exists); err != nil {
 			t.Fatal(err)
 		}
 		if exists {
@@ -400,7 +400,7 @@ func TestPhase2B4_I11_RegeneratedAnswerPreservesHistoricalBranch(t *testing.T) {
 	b4RoleAndTime(t, s, scope, abandoned, "assistant", at.Add(time.Minute), "historical")
 	b4RoleAndTime(t, s, scope, active, "assistant", at.Add(2*time.Minute), "")
 	var branch string
-	if err := s.pool.QueryRow(context.Background(), `SELECT branch FROM source_contexts WHERE owner_id=$1 AND source_id=$2`, string(scope.OwnerID), string(active.ID)).Scan(&branch); err != nil {
+	if err := s.Pool.QueryRow(context.Background(), `SELECT branch FROM source_contexts WHERE owner_id=$1 AND source_id=$2`, string(scope.OwnerID), string(active.ID)).Scan(&branch); err != nil {
 		t.Fatal(err)
 	}
 	if branch == "historical" {
@@ -606,13 +606,13 @@ func TestPhase2B4_I8_RecordCapKeepsNewestAndReportsLeftOut(t *testing.T) {
 		t.Errorf("capped batch %+v", done)
 	}
 	var leftOut int
-	if err := s.pool.QueryRow(context.Background(), `SELECT left_out FROM import_batches WHERE owner_id=$1 AND id=$2`, string(scope.OwnerID), id).Scan(&leftOut); err != nil || leftOut != 4 {
+	if err := s.Pool.QueryRow(context.Background(), `SELECT left_out FROM import_batches WHERE owner_id=$1 AND id=$2`, string(scope.OwnerID), id).Scan(&leftOut); err != nil || leftOut != 4 {
 		t.Errorf("persisted left_out=%d error=%v", leftOut, err)
 	}
 	b4MessagesExactlyOnce(t, s, scope, conversations[4:])
 	for _, conv := range conversations[:4] {
 		var exists bool
-		if err := s.pool.QueryRow(context.Background(), `SELECT EXISTS(SELECT 1 FROM source_versions WHERE owner_id=$1 AND body=$2)`, string(scope.OwnerID), conv.Messages[0].Text).Scan(&exists); err != nil {
+		if err := s.Pool.QueryRow(context.Background(), `SELECT EXISTS(SELECT 1 FROM source_versions WHERE owner_id=$1 AND body=$2)`, string(scope.OwnerID), conv.Messages[0].Text).Scan(&exists); err != nil {
 			t.Fatal(err)
 		}
 		if exists {
@@ -635,7 +635,7 @@ func TestPhase2B4_I8_CapPrecedesDisjointDuplicateBlockedAndNewCounts(t *testing.
 		b1Active(t, s, scope, ref, false)
 	}
 	var bansBefore int
-	if err := s.pool.QueryRow(context.Background(), `SELECT count(*) FROM reimport_blocks WHERE owner_id=$1`, string(scope.OwnerID)).Scan(&bansBefore); err != nil || bansBefore == 0 {
+	if err := s.Pool.QueryRow(context.Background(), `SELECT count(*) FROM reimport_blocks WHERE owner_id=$1`, string(scope.OwnerID)).Scan(&bansBefore); err != nil || bansBefore == 0 {
 		t.Fatalf("missing ban fixture: count=%d error=%v", bansBefore, err)
 	}
 	old := connectors.MaxArchiveRecords
@@ -665,7 +665,7 @@ func TestPhase2B4_I8_CapPrecedesDisjointDuplicateBlockedAndNewCounts(t *testing.
 	done := b4Complete(t, s, scope, uploaded.BatchID, ref)
 	b4CheckCompletedCounts(t, done, expected)
 	var leftOut int
-	if err := s.pool.QueryRow(context.Background(), `SELECT left_out FROM import_batches WHERE owner_id=$1 AND id=$2`, string(scope.OwnerID), uploaded.BatchID).Scan(&leftOut); err != nil || leftOut != expected.LeftOut {
+	if err := s.Pool.QueryRow(context.Background(), `SELECT left_out FROM import_batches WHERE owner_id=$1 AND id=$2`, string(scope.OwnerID), uploaded.BatchID).Scan(&leftOut); err != nil || leftOut != expected.LeftOut {
 		t.Errorf("persisted mixed left_out=%d error=%v", leftOut, err)
 	}
 	// Index 0 remains in the database but contributes only to leftOut here.
@@ -674,7 +674,7 @@ func TestPhase2B4_I8_CapPrecedesDisjointDuplicateBlockedAndNewCounts(t *testing.
 	b4MessagesExactlyOnce(t, s, scope, kept)
 	for _, index := range []int{1, 2, 4} {
 		var exists bool
-		if err := s.pool.QueryRow(context.Background(), `SELECT EXISTS(SELECT 1 FROM source_versions WHERE owner_id=$1 AND body=$2)`, string(scope.OwnerID), conversations[index].Messages[0].Text).Scan(&exists); err != nil {
+		if err := s.Pool.QueryRow(context.Background(), `SELECT EXISTS(SELECT 1 FROM source_versions WHERE owner_id=$1 AND body=$2)`, string(scope.OwnerID), conversations[index].Messages[0].Text).Scan(&exists); err != nil {
 			t.Fatal(err)
 		}
 		if exists {
@@ -682,7 +682,7 @@ func TestPhase2B4_I8_CapPrecedesDisjointDuplicateBlockedAndNewCounts(t *testing.
 		}
 	}
 	var bansAfter int
-	if err := s.pool.QueryRow(context.Background(), `SELECT count(*) FROM reimport_blocks WHERE owner_id=$1`, string(scope.OwnerID)).Scan(&bansAfter); err != nil || bansAfter != bansBefore {
+	if err := s.Pool.QueryRow(context.Background(), `SELECT count(*) FROM reimport_blocks WHERE owner_id=$1`, string(scope.OwnerID)).Scan(&bansAfter); err != nil || bansAfter != bansBefore {
 		t.Errorf("mixed import changed bans: before=%d after=%d error=%v", bansBefore, bansAfter, err)
 	}
 }

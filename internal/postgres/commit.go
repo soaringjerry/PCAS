@@ -21,7 +21,7 @@ func (s *Store) Commit(ctx context.Context, scope memory.Scope, in memory.Commit
 		return nil, memory.ErrInvalid
 	}
 	hash := sha256.Sum256(kernel.JSON(in))
-	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		if err := s.ensureOwner(ctx, tx, scope); err != nil {
 			return err
 		}

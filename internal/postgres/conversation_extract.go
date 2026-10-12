@@ -119,7 +119,7 @@ func (s *Store) prepareConversation(ctx context.Context, j worker.Job, conversat
 	var run string
 	var ordinal, next int
 	prepared := false
-	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		if err := kernel.OwnerLock(ctx, tx, j.OwnerID); err != nil {
 			return err
 		}
@@ -205,7 +205,7 @@ func (w *conversationWork) Apply(ctx context.Context, output conversationOutput)
 	if err != nil {
 		return err
 	}
-	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	return pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		if err := kernel.OwnerLock(ctx, tx, j.OwnerID); err != nil {
 			return err
 		}

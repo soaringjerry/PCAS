@@ -20,7 +20,7 @@ import (
 // the processor's output. This does NOT substitute for the B2 backfill test.
 func phase26LibraryPrecondition(t *testing.T, f *phase26LoadedFixture) {
 	t.Helper()
-	err := pgx.BeginFunc(f.Context, f.Store.pool, func(tx pgx.Tx) error {
+	err := pgx.BeginFunc(f.Context, f.Store.Pool, func(tx pgx.Tx) error {
 		batch := &pgx.Batch{}
 		for _, r := range f.Corpus.Rules {
 			batch.Queue(`INSERT INTO assistant_requirements(owner_id,claim_id,claim_version,unrestricted,scope) VALUES($1,$2,1,$3,$4)`, f.Scope.OwnerID, f.Claims[r.Memory], r.Scope == "", r.Scope)
@@ -44,7 +44,7 @@ func phase26Digest(t *testing.T, f *phase26LoadedFixture, tables []string) map[s
 	for _, table := range tables {
 		var hash string
 		sql := fmt.Sprintf(`SELECT md5(coalesce(string_agg(to_jsonb(t)::text||t.xmin::text||t.ctid::text,'|' ORDER BY to_jsonb(t)::text),'empty')) FROM %s t WHERE owner_id=$1`, table)
-		if err := f.Store.pool.QueryRow(f.Context, sql, f.Scope.OwnerID).Scan(&hash); err != nil {
+		if err := f.Store.Pool.QueryRow(f.Context, sql, f.Scope.OwnerID).Scan(&hash); err != nil {
 			t.Fatal(err)
 		}
 		out[table] = hash
@@ -104,7 +104,7 @@ func TestPhase26G6B3B7B8LibraryAndC1C2Content(t *testing.T) {
 	if !reflect.DeepEqual(before, phase26Digest(t, f, tables)) {
 		t.Error("read changed business content/tuple/owner version")
 	}
-	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	err = pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		agent := workspace.Agent{ID: "phase26", MemoryKinds: []string{"fact", "preference", "decision", "intention", "plan"}}
 		u, err := s.startUseContextTx(ctx, tx, f.Scope)
 		if err != nil {
@@ -210,7 +210,7 @@ func TestPhase26G6B3B7B8LibraryAndC1C2Content(t *testing.T) {
 		t.Fatalf("changed requirement not queued for hourly update: %d %v", n, err)
 	}
 	var delay float64
-	if err := s.pool.QueryRow(ctx, `SELECT extract(epoch FROM available_at-now())::float8 FROM memory_jobs WHERE owner_id=$1 AND stage LIKE 'memory.handover:%' AND state='queued'`, f.Scope.OwnerID).Scan(&delay); err != nil || delay < 3590 || delay > 3610 {
+	if err := s.Pool.QueryRow(ctx, `SELECT extract(epoch FROM available_at-now())::float8 FROM memory_jobs WHERE owner_id=$1 AND stage LIKE 'memory.handover:%' AND state='queued'`, f.Scope.OwnerID).Scan(&delay); err != nil || delay < 3590 || delay > 3610 {
 		t.Fatalf("hourly debounce seconds=%f err=%v", delay, err)
 	}
 	stale, err := s.ReadHandover(ctx, f.Scope)
@@ -225,7 +225,7 @@ func TestPhase26G4A6A10ComparisonCoverageAndUnchangedScheduling(t *testing.T) {
 	phase26Exec(t, f, `UPDATE claims SET organized=$2 WHERE owner_id=$1`, f.Scope.OwnerID, OrganizeVersion)
 	s, ctx := f.Store, f.Context
 	var first, second []comparisonBatch
-	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		if err := syncComparisonMembersTx(ctx, tx, f.Scope.OwnerID); err != nil {
 			return err
 		}
@@ -284,7 +284,7 @@ func TestPhase26G4A6A10ComparisonCoverageAndUnchangedScheduling(t *testing.T) {
 	// exactly for batches containing that claim, not all 300 groups.
 	changed := f.Claims[148]
 	phase26Exec(t, f, `UPDATE claim_revisions SET value=to_jsonb('Fictitious edited note'::text) WHERE owner_id=$1 AND claim_id=$2`, f.Scope.OwnerID, changed)
-	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	err = pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		var err error
 		second, err = comparisonPlanTx(ctx, tx, f.Scope.OwnerID, CompareVersion)
 		return err
@@ -343,7 +343,7 @@ func TestPhase26G4A6A10ComparisonCoverageAndUnchangedScheduling(t *testing.T) {
 	if _, err := s.Snapshot(ctx, f.Scope); err != nil {
 		t.Fatal(err)
 	}
-	if err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	if err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		u, err := s.startUseContextTx(ctx, tx, f.Scope)
 		if err != nil {
 			return err

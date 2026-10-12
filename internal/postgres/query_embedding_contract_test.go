@@ -42,7 +42,7 @@ type queryCall struct {
 
 func queryCalls(t *testing.T, s *Store, scope memory.Scope) []queryCall {
 	t.Helper()
-	rows, err := s.pool.Query(context.Background(), `SELECT c.execution_id::text,c.root_execution_id::text,c.outcome,c.accounting_state,c.error_code,c.causation_id::text,u.input_tokens,b.reserved_cost::float8,u.cost::float8,to_jsonb(c)::text
+	rows, err := s.Pool.Query(context.Background(), `SELECT c.execution_id::text,c.root_execution_id::text,c.outcome,c.accounting_state,c.error_code,c.causation_id::text,u.input_tokens,b.reserved_cost::float8,u.cost::float8,to_jsonb(c)::text
  FROM model_calls c LEFT JOIN background_usage b ON (b.owner_id,b.id)=(c.owner_id,c.reservation_id) LEFT JOIN model_usage u ON (u.owner_id,u.id)=(c.owner_id,c.usage_id) AND u.purpose='query_embedding'
  WHERE c.owner_id=$1 AND c.function_name='query_embedding' AND c.prompt_name IS NULL AND c.schema_name IS NULL AND c.required_capabilities='["embedding"]'::jsonb ORDER BY c.created_at`, string(scope.OwnerID))
 	if err != nil {
@@ -93,7 +93,7 @@ func TestQueryEmbeddingRecordsOneSettledCallWithoutStoringTheQuery(t *testing.T)
 		}
 	}
 	var saved int
-	if err := s.pool.QueryRow(context.Background(), `SELECT count(*) FROM background_model_results WHERE owner_id=$1`, string(scope.OwnerID)).Scan(&saved); err != nil || saved != 0 {
+	if err := s.Pool.QueryRow(context.Background(), `SELECT count(*) FROM background_model_results WHERE owner_id=$1`, string(scope.OwnerID)).Scan(&saved); err != nil || saved != 0 {
 		t.Fatal("query embedding saved a result body", saved, err)
 	}
 }
@@ -129,9 +129,9 @@ func TestQueryEmbeddingWithoutAUsableProviderFallsBackWithoutACallOrCharge(t *te
 			switch kind {
 			case "missing_key":
 				t.Setenv("PCAS_QUERY_TEST_MISSING_KEY", "")
-				s.models.Config.Providers[0].KeyEnv = "PCAS_QUERY_TEST_MISSING_KEY"
+				s.Models.Config.Providers[0].KeyEnv = "PCAS_QUERY_TEST_MISSING_KEY"
 			case "unsupported":
-				s.models.Config.Providers[0].Embedding = false
+				s.Models.Config.Providers[0].Embedding = false
 			default:
 				s.SetModels(nil)
 			}
@@ -140,7 +140,7 @@ func TestQueryEmbeddingWithoutAUsableProviderFallsBackWithoutACallOrCharge(t *te
 				t.Fatal(result, err, count.Load())
 			}
 			var reservations int
-			if err := s.pool.QueryRow(context.Background(), `SELECT count(*) FROM background_usage WHERE owner_id=$1 AND job_id IS NULL`, string(scope.OwnerID)).Scan(&reservations); err != nil || reservations != 0 || len(queryCalls(t, s, scope)) != 0 {
+			if err := s.Pool.QueryRow(context.Background(), `SELECT count(*) FROM background_usage WHERE owner_id=$1 AND job_id IS NULL`, string(scope.OwnerID)).Scan(&reservations); err != nil || reservations != 0 || len(queryCalls(t, s, scope)) != 0 {
 				t.Fatal("unusable provider was charged or recorded as called", reservations, err)
 			}
 		})
@@ -195,7 +195,7 @@ func TestQueryEmbeddingInterruptedProcessLeavesAnUnknownHeldCall(t *testing.T) {
 	s, scope := testStore(t), owner()
 	mustIngest(t, s, scope, input())
 	queryEmbeddingModel(t, s, queryEmbeddingReply)
-	provider, _ := s.models.Get("vector")
+	provider, _ := s.Models.Get("vector")
 	request := modelcall.DirectRequest{OwnerID: scope.OwnerID, ExecutionID: memory.NewID(), Function: "query_embedding", Stage: "query", Provider: provider, Estimate: 0.00005, Operation: "embedding", Inputs: 1, Bytes: 16}
 	request.RootExecutionID = request.ExecutionID
 	adapter := directCalls{store: s}
@@ -206,7 +206,7 @@ func TestQueryEmbeddingInterruptedProcessLeavesAnUnknownHeldCall(t *testing.T) {
 		}
 	}
 	// One call is older than every provider timeout. The other can still be running.
-	if _, err := s.pool.Exec(context.Background(), `UPDATE model_calls SET created_at=created_at-interval '11 minutes',started_at=started_at-interval '11 minutes' WHERE owner_id=$1 AND execution_id=$2`, string(scope.OwnerID), string(request.ExecutionID)); err != nil {
+	if _, err := s.Pool.Exec(context.Background(), `UPDATE model_calls SET created_at=created_at-interval '11 minutes',started_at=started_at-interval '11 minutes' WHERE owner_id=$1 AND execution_id=$2`, string(scope.OwnerID), string(request.ExecutionID)); err != nil {
 		t.Fatal(err)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

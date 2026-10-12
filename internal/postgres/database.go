@@ -15,39 +15,27 @@ import (
 	"github.com/soaringjerry/PCAS/internal/ai"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/modelcall"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 )
 
 //go:embed migrations/*.sql
 var migrations embed.FS
 
+// Store is the PostgreSQL adapter. Its core is the kernel's DB, which the
+// storage packages share.
 type Store struct {
-	pool                    *pgxpool.Pool
+	*kernel.DB
 	pendingPaid             sync.Map
 	pendingInteractive      sync.Map
 	pendingDeputySelections sync.Map
 	// DeskTurn also borrows a connection for Recall and budget reservation.
 	secretarySlots chan struct{}
-	models         *ai.Registry
-	blobs          memory.BlobStore
-	businessClock  func() time.Time
-}
-
-// SetBusinessClock sets business input, dates, retrieval decay, and deadline display time.
-// Configure it before operations start. Nil restores actual time. Lease expiry,
-// access checks, retries, operational quotas, and accounting use actual time.
-func (s *Store) SetBusinessClock(now func() time.Time) { s.businessClock = now }
-
-func (s *Store) businessNow() time.Time {
-	if s.businessClock != nil {
-		return s.businessClock()
-	}
-	return time.Now()
 }
 
 // SetModels gives the store the configured models. The store reads their
 // configuration and availability. It makes no model call: the application
 // builds the gateway over CallRecords.
-func (s *Store) SetModels(models *ai.Registry) { s.models = models }
+func (s *Store) SetModels(models *ai.Registry) { s.Models = models }
 
 // CallRecords are the records of the gateway's calls in storage.
 type CallRecords interface {
@@ -66,9 +54,7 @@ func (s *Store) CallRecords() CallRecords {
 // and audio calls.
 func (s *Store) DirectCallRecords() modelcall.DirectJournal { return directCalls{store: s} }
 
-// Models is the configured model registry, or nil.
-func (s *Store) Models() *ai.Registry            { return s.models }
-func (s *Store) SetBlobs(blobs memory.BlobStore) { s.blobs = blobs }
+func (s *Store) SetBlobs(blobs memory.BlobStore) { s.Blobs = blobs }
 
 func Open(ctx context.Context, url string) (*Store, error) {
 	config, err := pgxpool.ParseConfig(url)
@@ -85,16 +71,16 @@ func Open(ctx context.Context, url string) (*Store, error) {
 		pool.Close()
 		return nil, fmt.Errorf("database unavailable")
 	}
-	return &Store{pool: pool, secretarySlots: make(chan struct{}, config.MaxConns-1)}, nil
+	return &Store{DB: &kernel.DB{Pool: pool}, secretarySlots: make(chan struct{}, config.MaxConns-1)}, nil
 }
 
-func (s *Store) Close()                         { s.pool.Close() }
-func (s *Store) Ping(ctx context.Context) error { return s.pool.Ping(ctx) }
+func (s *Store) Close()                         { s.Pool.Close() }
+func (s *Store) Ping(ctx context.Context) error { return s.Pool.Ping(ctx) }
 
 // Migrate serializes concurrent runners and checks applied migration checksums.
 // Each file and its bookkeeping commit atomically; no destructive down command.
 func (s *Store) Migrate(ctx context.Context) error {
-	conn, err := s.pool.Acquire(ctx)
+	conn, err := s.Pool.Acquire(ctx)
 	if err != nil {
 		return err
 	}
@@ -161,7 +147,7 @@ func (s *Store) CheckSchema(ctx context.Context) error {
 			return err
 		}
 		var checksum string
-		if err := s.pool.QueryRow(ctx, "SELECT checksum FROM schema_migrations WHERE name=$1", file.Name()).Scan(&checksum); err != nil {
+		if err := s.Pool.QueryRow(ctx, "SELECT checksum FROM schema_migrations WHERE name=$1", file.Name()).Scan(&checksum); err != nil {
 			return fmt.Errorf("database schema is not ready; run pcas migrate")
 		}
 		if checksum != fmt.Sprintf("%x", sha256.Sum256(body)) {

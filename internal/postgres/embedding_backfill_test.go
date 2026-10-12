@@ -40,7 +40,7 @@ func TestEmbeddingModelSwitchBackfillsAndRetainsOldVectors(t *testing.T) {
 	if err := s.ProcessChunks(ctx, leaseStage(t, s, scope, ref, "source.chunk")); err != nil {
 		t.Fatal(err)
 	}
-	_, err := s.pool.Exec(ctx, `INSERT INTO embeddings(owner_id,record_id,record_version,model,dimensions,embedding)
+	_, err := s.Pool.Exec(ctx, `INSERT INTO embeddings(owner_id,record_id,record_version,model,dimensions,embedding)
 	 SELECT owner_id,id,version,'local-embedding:BAAI/bge-small-zh-v1.5',2,'[1,0]'::vector FROM chunks WHERE source_id=$1`, string(ref.ID))
 	if err != nil {
 		t.Fatal(err)
@@ -54,7 +54,7 @@ func TestEmbeddingModelSwitchBackfillsAndRetainsOldVectors(t *testing.T) {
 		t.Fatal("duplicate backfill queued", count, err)
 	}
 	var stage string
-	if err := s.pool.QueryRow(ctx, "SELECT stage FROM memory_jobs WHERE record_id=$1 AND stage LIKE 'memory.embed:%'", string(ref.ID)).Scan(&stage); err != nil {
+	if err := s.Pool.QueryRow(ctx, "SELECT stage FROM memory_jobs WHERE record_id=$1 AND stage LIKE 'memory.embed:%'", string(ref.ID)).Scan(&stage); err != nil {
 		t.Fatal(err)
 	}
 	if err := indexer(s).Process(ctx, leaseStage(t, s, scope, ref, stage)); err != nil {
@@ -71,7 +71,7 @@ func TestEmbeddingModelSwitchBackfillsAndRetainsOldVectors(t *testing.T) {
 		t.Fatal("completed vectors queued again", count, err)
 	}
 	var models int
-	if err := s.pool.QueryRow(ctx, "SELECT count(DISTINCT model) FROM embeddings WHERE owner_id=$1", string(scope.OwnerID)).Scan(&models); err != nil || models != 2 {
+	if err := s.Pool.QueryRow(ctx, "SELECT count(DISTINCT model) FROM embeddings WHERE owner_id=$1", string(scope.OwnerID)).Scan(&models); err != nil || models != 2 {
 		t.Fatal("old vectors were lost", models, err)
 	}
 	if _, err := s.Recall(ctx, scope, memory.RecallRequest{Query: "旧书店", Mode: memory.Remember, Budget: memory.Budget{Candidates: 10, Tokens: 2000}}); err != nil {
@@ -98,7 +98,7 @@ func TestMissingEmbeddingKeyDoesNotReserveBudget(t *testing.T) {
 		t.Fatal(err)
 	}
 	var count int
-	if err := s.pool.QueryRow(ctx, "SELECT count(*) FROM background_usage WHERE owner_id=$1", string(scope.OwnerID)).Scan(&count); err != nil || count != 0 {
+	if err := s.Pool.QueryRow(ctx, "SELECT count(*) FROM background_usage WHERE owner_id=$1", string(scope.OwnerID)).Scan(&count); err != nil || count != 0 {
 		t.Fatal("missing API key reserved budget", count, err)
 	}
 }

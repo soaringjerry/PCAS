@@ -198,7 +198,7 @@ func (a handoverStore) Exclusive(ctx context.Context) (func(), error) {
 }
 
 func (a handoverStore) Read(ctx context.Context, j worker.Job, fn func(handover.Reader) error) error {
-	return pgx.BeginTxFunc(ctx, a.store.pool, pgx.TxOptions{IsoLevel: pgx.RepeatableRead}, func(tx pgx.Tx) error {
+	return pgx.BeginTxFunc(ctx, a.store.Pool, pgx.TxOptions{IsoLevel: pgx.RepeatableRead}, func(tx pgx.Tx) error {
 		if err := kernel.LockJob(ctx, tx, j); err != nil {
 			return err
 		}
@@ -207,7 +207,7 @@ func (a handoverStore) Read(ctx context.Context, j worker.Job, fn func(handover.
 }
 
 func (a handoverStore) DiscardResult(ctx context.Context, j worker.Job) error {
-	return pgx.BeginFunc(ctx, a.store.pool, func(tx pgx.Tx) error { return discardPaidResultTx(ctx, tx, j) })
+	return pgx.BeginFunc(ctx, a.store.Pool, func(tx pgx.Tx) error { return discardPaidResultTx(ctx, tx, j) })
 }
 
 func (a handoverStore) RetryLater(j worker.Job, code string) error {
@@ -215,7 +215,7 @@ func (a handoverStore) RetryLater(j worker.Job, code string) error {
 }
 
 func (a handoverStore) Apply(ctx context.Context, j worker.Job, fn func(handover.Unit) error) error {
-	return backgroundResultTx(ctx, a.store.pool, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
+	return backgroundResultTx(ctx, a.store.Pool, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
 		if err := kernel.LockJob(ctx, tx, j); err != nil {
 			return err
 		}

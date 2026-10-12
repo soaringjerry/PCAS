@@ -18,7 +18,7 @@ import (
 )
 
 func (s *Store) ProcessIndex(ctx context.Context, j worker.Job) error {
-	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	return pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		if err := kernel.LockJob(ctx, tx, j); err != nil {
 			return err
 		}
@@ -79,7 +79,7 @@ type indexStore struct{ store *Store }
 func (a indexStore) Missing(ctx context.Context, j worker.Job, model string) ([]memory.Ref, []string, bool, error) {
 	s := a.store
 	finish := func() ([]memory.Ref, []string, bool, error) {
-		return nil, nil, false, pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		return nil, nil, false, pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 			if err := kernel.LockJob(ctx, tx, j); err != nil {
 				return err
 			}
@@ -87,7 +87,7 @@ func (a indexStore) Missing(ctx context.Context, j worker.Job, model string) ([]
 		})
 	}
 	var text string
-	err := s.pool.QueryRow(ctx, `SELECT t.body FROM memory_text t JOIN memory_records r ON (r.owner_id,r.id,r.version)=(t.owner_id,t.id,t.version) WHERE t.owner_id=$1 AND t.id=$2 AND t.version=$3 AND r.state='active'`, string(j.OwnerID), string(j.Record.ID), j.Record.Version).Scan(&text)
+	err := s.Pool.QueryRow(ctx, `SELECT t.body FROM memory_text t JOIN memory_records r ON (r.owner_id,r.id,r.version)=(t.owner_id,t.id,t.version) WHERE t.owner_id=$1 AND t.id=$2 AND t.version=$3 AND r.state='active'`, string(j.OwnerID), string(j.Record.ID), j.Record.Version).Scan(&text)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return finish()
 	}
@@ -100,7 +100,7 @@ func (a indexStore) Missing(ctx context.Context, j worker.Job, model string) ([]
 	if j.Record.Kind == memory.SourceKind {
 		refs = []memory.Ref{}
 		texts = []string{}
-		rows, err := s.pool.Query(ctx, "SELECT id::text,version,body FROM chunks WHERE owner_id=$1 AND source_id=$2 AND source_version=$3 ORDER BY ordinal", string(j.OwnerID), string(j.Record.ID), j.Record.Version)
+		rows, err := s.Pool.Query(ctx, "SELECT id::text,version,body FROM chunks WHERE owner_id=$1 AND source_id=$2 AND source_version=$3 ORDER BY ordinal", string(j.OwnerID), string(j.Record.ID), j.Record.Version)
 		if err != nil {
 			return nil, nil, false, err
 		}
@@ -126,7 +126,7 @@ func (a indexStore) Missing(ctx context.Context, j worker.Job, model string) ([]
 	for i, ref := range refs {
 		ids[i] = string(ref.ID)
 	}
-	rows, err := s.pool.Query(ctx, "SELECT record_id::text,record_version FROM embeddings WHERE owner_id=$1 AND model=$2 AND record_id=ANY($3::uuid[])", string(j.OwnerID), model, ids)
+	rows, err := s.Pool.Query(ctx, "SELECT record_id::text,record_version FROM embeddings WHERE owner_id=$1 AND model=$2 AND record_id=ANY($3::uuid[])", string(j.OwnerID), model, ids)
 	if err != nil {
 		return nil, nil, false, err
 	}
@@ -166,7 +166,7 @@ func (a indexStore) Missing(ctx context.Context, j worker.Job, model string) ([]
 
 func (a indexStore) Save(ctx context.Context, j worker.Job, refs []memory.Ref, vectors []memory.Embedding) error {
 	s := a.store
-	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	return pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		if err := kernel.LockJob(ctx, tx, j); err != nil {
 			return err
 		}
@@ -217,13 +217,13 @@ func (a extractionStore) Source(ctx context.Context, j worker.Job) (memory.Sourc
 		return source, false, err
 	}
 	var imported bool
-	err = a.store.pool.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM archive_entries WHERE owner_id=$1 AND source_id=$2 AND source_version=$3)", string(j.OwnerID), string(j.Record.ID), j.Record.Version).Scan(&imported)
+	err = a.store.Pool.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM archive_entries WHERE owner_id=$1 AND source_id=$2 AND source_version=$3)", string(j.OwnerID), string(j.Record.ID), j.Record.Version).Scan(&imported)
 	return source, imported, err
 }
 
 func (a extractionStore) Current(ctx context.Context, j worker.Job) (bool, error) {
 	var current bool
-	err := pgx.BeginFunc(ctx, a.store.pool, func(tx pgx.Tx) error {
+	err := pgx.BeginFunc(ctx, a.store.Pool, func(tx pgx.Tx) error {
 		if err := kernel.LockJob(ctx, tx, j); err != nil {
 			return err
 		}
@@ -241,7 +241,7 @@ func (a extractionStore) Current(ctx context.Context, j worker.Job) (bool, error
 // acknowledges the job without the write when the source version is no
 // longer current.
 func (a extractionStore) extractionTx(ctx context.Context, j worker.Job, write func(pgx.Tx) error) error {
-	return pgx.BeginFunc(ctx, a.store.pool, func(tx pgx.Tx) error {
+	return pgx.BeginFunc(ctx, a.store.Pool, func(tx pgx.Tx) error {
 		if err := kernel.OwnerLock(ctx, tx, j.OwnerID); err != nil {
 			return err
 		}
@@ -287,25 +287,25 @@ func (a extractionStore) SplitWindows(ctx context.Context, j worker.Job, starts 
 }
 
 func (a extractionStore) Configured() error {
-	if a.store.models == nil || a.store.models.ExtractionID() == "" {
+	if a.store.Models == nil || a.store.Models.ExtractionID() == "" {
 		return &worker.JobError{Code: "provider_not_configured"}
 	}
 	return nil
 }
 
 func (a extractionStore) Ready() error {
-	p, ok := a.store.models.Get(a.store.models.ExtractionID())
+	p, ok := a.store.Models.Get(a.store.Models.ExtractionID())
 	if !ok || p.Embedding || p.Transcription {
 		return &worker.JobError{Code: "provider_not_configured"}
 	}
-	if !a.store.models.Available(p.ID) {
+	if !a.store.Models.Available(p.ID) {
 		return &worker.JobError{Code: "provider_unavailable", Retry: true}
 	}
 	return nil
 }
 
 func (a extractionStore) Unpaid(text string) bool {
-	p, ok := a.store.models.Get(a.store.models.ExtractionID())
+	p, ok := a.store.Models.Get(a.store.Models.ExtractionID())
 	return ok && p.Reserve(text) == 0
 }
 
@@ -320,7 +320,7 @@ func (a extractionStore) Input(ctx context.Context, j worker.Job, source memory.
 		return in, err
 	}
 	var settings workspace.Settings
-	if err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	if err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		if err := s.ensureOwner(ctx, tx, scope); err != nil {
 			return err
 		}
@@ -337,7 +337,7 @@ func (a extractionStore) Input(ctx context.Context, j worker.Job, source memory.
 		}
 	}
 	if source.Source.Connector == "desk" {
-		err = s.pool.QueryRow(ctx, `SELECT coalesce(CASE WHEN w.kind='project' THEN w.id::text ELSE w.project_id::text END,'') FROM desk_turns t JOIN work_items w ON(w.owner_id,w.id)=(t.owner_id,t.thing_id) WHERE t.owner_id=$1 AND t.request_id::text=$2`, string(scope.OwnerID), source.Source.ExternalID).Scan(&in.Project)
+		err = s.Pool.QueryRow(ctx, `SELECT coalesce(CASE WHEN w.kind='project' THEN w.id::text ELSE w.project_id::text END,'') FROM desk_turns t JOIN work_items w ON(w.owner_id,w.id)=(t.owner_id,t.thing_id) WHERE t.owner_id=$1 AND t.request_id::text=$2`, string(scope.OwnerID), source.Source.ExternalID).Scan(&in.Project)
 		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			return in, err
 		}
@@ -346,7 +346,7 @@ func (a extractionStore) Input(ctx context.Context, j worker.Job, source memory.
 }
 
 func (a extractionStore) DiscardResult(ctx context.Context, j worker.Job) error {
-	return pgx.BeginFunc(ctx, a.store.pool, func(tx pgx.Tx) error { return discardPaidResultTx(ctx, tx, j) })
+	return pgx.BeginFunc(ctx, a.store.Pool, func(tx pgx.Tx) error { return discardPaidResultTx(ctx, tx, j) })
 }
 
 func (a extractionStore) Failed(ctx context.Context, j worker.Job) error {
@@ -355,7 +355,7 @@ func (a extractionStore) Failed(ctx context.Context, j worker.Job) error {
 
 func (a extractionStore) Apply(ctx context.Context, j worker.Job, result extraction.Result) error {
 	s, scope, source := a.store, workerScope(j.OwnerID), result.Source
-	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	return pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(j.OwnerID)); err != nil {
 			return err
 		}
@@ -465,7 +465,7 @@ func (a extractionStore) Apply(ctx context.Context, j worker.Job, result extract
 // ErrUnavailable means no request was sent. Release its reservation under the
 // job fence so a metered retry cannot be mistaken for an ambiguous paid call.
 func (s *Store) releaseUnavailableReservation(ctx context.Context, j worker.Job, reservationID string) error {
-	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	return pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		if err := kernel.LockJob(ctx, tx, j); err != nil {
 			return err
 		}
@@ -529,7 +529,7 @@ func extractionStateTx(ctx context.Context, tx pgx.Tx, j worker.Job, state strin
 }
 
 func (s *Store) extractionFailed(ctx context.Context, j worker.Job) error {
-	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	return pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		if err := kernel.OwnerLock(ctx, tx, j.OwnerID); err != nil {
 			return err
 		}

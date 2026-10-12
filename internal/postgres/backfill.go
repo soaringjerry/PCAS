@@ -22,7 +22,7 @@ func (s *Store) BackfillExtractions(ctx context.Context, now time.Time) (int, er
 		return 0, memory.ErrInvalid
 	}
 	count := 0
-	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(734826192)"); err != nil {
 			return err
 		}

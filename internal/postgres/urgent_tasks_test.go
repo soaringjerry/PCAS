@@ -122,7 +122,7 @@ func TestUrgentMigrationMarksOnlyOpenUntimedTasks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.pool.Exec(ctx, string(body)); err != nil {
+	if _, err := s.Pool.Exec(ctx, string(body)); err != nil {
 		t.Fatal(err)
 	}
 	after, err := s.Snapshot(ctx, scope)
@@ -135,7 +135,7 @@ func TestUrgentMigrationMarksOnlyOpenUntimedTasks(t *testing.T) {
 		}
 	}
 	var ideas int
-	if err := s.pool.QueryRow(ctx, `SELECT count(*) FROM work_items WHERE owner_id=$1 AND kind='idea' AND document ? 'urgent'`, string(scope.OwnerID)).Scan(&ideas); err != nil || ideas != 0 {
+	if err := s.Pool.QueryRow(ctx, `SELECT count(*) FROM work_items WHERE owner_id=$1 AND kind='idea' AND document ? 'urgent'`, string(scope.OwnerID)).Scan(&ideas); err != nil || ideas != 0 {
 		t.Fatalf("idea marked: %d %v", ideas, err)
 	}
 }

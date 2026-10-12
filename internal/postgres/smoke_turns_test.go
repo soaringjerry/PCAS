@@ -28,7 +28,7 @@ func smokeCounts(t *testing.T, s *Store, scope memory.Scope) map[string]int {
 	out := map[string]int{}
 	for _, table := range []string{"memory_records", "record_versions", "claims", "sources", "source_versions", "source_extractions", "desk_turns", "desk_turn_order", "work_items", "capture_candidates", "memory_jobs", "action_log", "agent_runs", "work_documents", "training_samples", "workspace_notices", "desk_smoke_changes", "desk_smoke_actions"} {
 		var n int
-		if err := s.pool.QueryRow(context.Background(), "SELECT count(*) FROM "+table+" WHERE owner_id=$1", string(scope.OwnerID)).Scan(&n); err != nil {
+		if err := s.Pool.QueryRow(context.Background(), "SELECT count(*) FROM "+table+" WHERE owner_id=$1", string(scope.OwnerID)).Scan(&n); err != nil {
 			t.Fatal(err)
 		}
 		out[table] = n
@@ -419,7 +419,7 @@ func TestSmokeRetiredTicketCannotCreateIncompleteCandidate(t *testing.T) {
 	if _, err := s.admitSecretaryTurn(ctx, ctx, string(scope.OwnerID), req.RequestID, req.SmokeID, hash[:]); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.pool.Exec(ctx, "UPDATE desk_turn_order SET expires_at=now()-interval '1 minute' WHERE owner_id=$1 AND request_id=$2", string(scope.OwnerID), req.RequestID); err != nil {
+	if _, err := s.Pool.Exec(ctx, "UPDATE desk_turn_order SET expires_at=now()-interval '1 minute' WHERE owner_id=$1 AND request_id=$2", string(scope.OwnerID), req.RequestID); err != nil {
 		t.Fatal(err)
 	}
 	mustTurn(t, s, scope, req)
@@ -461,7 +461,7 @@ func TestSmokeUndoAndOldCheckCleanup(t *testing.T) {
 					t.Fatal("undo created check memory", got)
 				}
 			} else {
-				if _, err := s.pool.Exec(context.Background(), "UPDATE action_log SET created_at=now()-interval '31 days',changes='[]',expired_at=now() WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), *out.Turn.Receipts[0].ActionID); err != nil {
+				if _, err := s.Pool.Exec(context.Background(), "UPDATE action_log SET created_at=now()-interval '31 days',changes='[]',expired_at=now() WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), *out.Turn.Receipts[0].ActionID); err != nil {
 					t.Fatal(err)
 				}
 			}

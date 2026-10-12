@@ -24,7 +24,7 @@ func TestPhase26C2C6GlobalRequirementsOverflowIsVisibleAndPrioritized(t *testing
 		t.Fatal(err)
 	}
 	var kept, global, totalRunes int
-	err := pgx.BeginFunc(f.Context, f.Store.pool, func(tx pgx.Tx) error {
+	err := pgx.BeginFunc(f.Context, f.Store.Pool, func(tx pgx.Tx) error {
 		u, err := f.Store.startUseContextTx(f.Context, tx, f.Scope)
 		if err != nil {
 			return err
@@ -55,7 +55,7 @@ func TestPhase26C2C6GlobalRequirementsOverflowIsVisibleAndPrioritized(t *testing
 		t.Fatal(err)
 	}
 	var omitted int
-	if err := f.Store.pool.QueryRow(f.Context, `SELECT coalesce(sum(count),0) FROM background_stage_events WHERE owner_id=$1 AND stage='secretary' AND reason='global_requirement_char_budget'`, f.Scope.OwnerID).Scan(&omitted); err != nil {
+	if err := f.Store.Pool.QueryRow(f.Context, `SELECT coalesce(sum(count),0) FROM background_stage_events WHERE owner_id=$1 AND stage='secretary' AND reason='global_requirement_char_budget'`, f.Scope.OwnerID).Scan(&omitted); err != nil {
 		t.Fatal(err)
 	}
 	// Raw global total=42: the original26 plus16 newly scoped-to-global rows.
@@ -66,7 +66,7 @@ func TestPhase26C2C6GlobalRequirementsOverflowIsVisibleAndPrioritized(t *testing
 		t.Errorf("overflow kept=%d omitted=%d expected30/12", kept, omitted)
 	}
 	var scoped int
-	if err := f.Store.pool.QueryRow(f.Context, `SELECT coalesce(sum(count),0) FROM background_stage_events WHERE owner_id=$1 AND stage='secretary' AND reason='scoped_requirement_left_to_recall'`, f.Scope.OwnerID).Scan(&scoped); err != nil || scoped != 324 {
+	if err := f.Store.Pool.QueryRow(f.Context, `SELECT coalesce(sum(count),0) FROM background_stage_events WHERE owner_id=$1 AND stage='secretary' AND reason='scoped_requirement_left_to_recall'`, f.Scope.OwnerID).Scan(&scoped); err != nil || scoped != 324 {
 		t.Errorf("scoped requirements left to recall=%d expected324 err=%v", scoped, err)
 	}
 	health, err := f.Store.BackgroundHealth(f.Context, f.Scope)

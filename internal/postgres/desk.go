@@ -21,7 +21,7 @@ func (s *Store) recordReturnedUsage(ctx context.Context, text string, usage mode
 	}
 	persistCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
 	defer cancel()
-	return pgx.BeginFunc(persistCtx, s.pool, func(tx pgx.Tx) error {
+	return pgx.BeginFunc(persistCtx, s.Pool, func(tx pgx.Tx) error {
 		return recordUsageTx(persistCtx, tx, usage)
 	})
 }
@@ -80,7 +80,7 @@ func deskLocation(settings workspace.Settings) *time.Location {
 	return loc
 }
 func (s *Store) deskNow(loc *time.Location) string {
-	return secretary.Now(s.businessNow(), loc)
+	return secretary.Now(s.BusinessNow(), loc)
 }
 
 var recallDateInstructions = prompts.Must("recall-date").Text()

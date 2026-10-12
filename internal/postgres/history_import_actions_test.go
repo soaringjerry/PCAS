@@ -75,12 +75,12 @@ func TestImportedHistoryNeverBecomesCurrentAction(t *testing.T) {
 					t.Fatal(err)
 				}
 				source.Kind = memory.SourceKind
-				if err = s.pool.QueryRow(ctx, `SELECT v.source_id::text,v.version FROM source_versions v JOIN archive_entries e ON (e.owner_id,e.source_id,e.source_version)=(v.owner_id,v.source_id,v.version) WHERE v.owner_id=$1 AND v.body=$2`, string(scope.OwnerID), said).Scan(&source.ID, &source.Version); err != nil {
+				if err = s.Pool.QueryRow(ctx, `SELECT v.source_id::text,v.version FROM source_versions v JOIN archive_entries e ON (e.owner_id,e.source_id,e.source_version)=(v.owner_id,v.source_id,v.version) WHERE v.owner_id=$1 AND v.body=$2`, string(scope.OwnerID), said).Scan(&source.ID, &source.Version); err != nil {
 					t.Fatal("imported message not found", err)
 				}
 				var role, branch string
 				var year int
-				if err = s.pool.QueryRow(ctx, `SELECT c.role,c.branch,extract(year from rv.expressed_at)::int FROM source_contexts c JOIN record_versions rv ON (rv.owner_id,rv.record_id,rv.version)=(c.owner_id,c.source_id,c.source_version) WHERE c.owner_id=$1 AND c.source_id=$2`, string(scope.OwnerID), string(source.ID)).Scan(&role, &branch, &year); err != nil || role != "user" || branch == "historical" || year != 2025 {
+				if err = s.Pool.QueryRow(ctx, `SELECT c.role,c.branch,extract(year from rv.expressed_at)::int FROM source_contexts c JOIN record_versions rv ON (rv.owner_id,rv.record_id,rv.version)=(c.owner_id,c.source_id,c.source_version) WHERE c.owner_id=$1 AND c.source_id=$2`, string(scope.OwnerID), string(source.ID)).Scan(&role, &branch, &year); err != nil || role != "user" || branch == "historical" || year != 2025 {
 					t.Fatal("fixture must be a 2025 user message on the active branch", role, branch, year, err)
 				}
 			} else {
@@ -88,7 +88,7 @@ func TestImportedHistoryNeverBecomesCurrentAction(t *testing.T) {
 			}
 			if tc.imported {
 				var batch, archive string
-				if err = s.pool.QueryRow(ctx, `SELECT b.id::text,b.archive_id::text FROM import_batches b JOIN archive_entries e ON(e.owner_id,e.archive_id)=(b.owner_id,b.archive_id) WHERE e.owner_id=$1 AND e.source_id=$2`, string(scope.OwnerID), string(source.ID)).Scan(&batch, &archive); err != nil {
+				if err = s.Pool.QueryRow(ctx, `SELECT b.id::text,b.archive_id::text FROM import_batches b JOIN archive_entries e ON(e.owner_id,e.archive_id)=(b.owner_id,b.archive_id) WHERE e.owner_id=$1 AND e.source_id=$2`, string(scope.OwnerID), string(source.ID)).Scan(&batch, &archive); err != nil {
 					t.Fatal(err)
 				}
 				b4bOperation(t, s, scope, memory.ID(batch), "organize")
@@ -121,7 +121,7 @@ func TestImportedHistoryNeverBecomesCurrentAction(t *testing.T) {
 					}
 				}
 				if historical == nil {
-					rows, queryErr := s.pool.Query(ctx, `SELECT stage,state,error_code FROM memory_jobs WHERE owner_id=$1 AND stage LIKE 'source.extract%'`, string(scope.OwnerID))
+					rows, queryErr := s.Pool.Query(ctx, `SELECT stage,state,error_code FROM memory_jobs WHERE owner_id=$1 AND stage LIKE 'source.extract%'`, string(scope.OwnerID))
 					if queryErr != nil {
 						t.Fatal(queryErr)
 					}

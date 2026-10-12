@@ -76,7 +76,7 @@ func TestR1R6VisionSettlesOnlyItsReservation(t *testing.T) {
 				t.Fatal("attachment reader did not finish")
 			}
 			var cost float64
-			if err := s.pool.QueryRow(context.Background(), "SELECT coalesce(sum(reserved_cost),0) FROM background_usage WHERE owner_id=$1", string(scope.OwnerID)).Scan(&cost); err != nil {
+			if err := s.Pool.QueryRow(context.Background(), "SELECT coalesce(sum(reserved_cost),0) FROM background_usage WHERE owner_id=$1", string(scope.OwnerID)).Scan(&cost); err != nil {
 				t.Fatal(err)
 			}
 			want := 0.03

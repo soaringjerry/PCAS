@@ -41,7 +41,7 @@ func TestEvidencedGraphAndScopedExpansion(t *testing.T) {
 	if _, err := s.Expand(ctx, agent, memory.ExpandRequest{Refs: []memory.Ref{claim.Ref}}); !errors.Is(err, memory.ErrNotFound) {
 		t.Fatal("ungranted graph exposed", err)
 	}
-	if _, err := s.pool.Exec(ctx, "INSERT INTO record_grants(owner_id,record_id,principal_id) VALUES($1,$2,'external')", string(scope.OwnerID), string(claim.ID)); err != nil {
+	if _, err := s.Pool.Exec(ctx, "INSERT INTO record_grants(owner_id,record_id,principal_id) VALUES($1,$2,'external')", string(scope.OwnerID), string(claim.ID)); err != nil {
 		t.Fatal(err)
 	}
 	result, err = s.Expand(ctx, agent, memory.ExpandRequest{Refs: []memory.Ref{claim.Ref}, Evidence: true})

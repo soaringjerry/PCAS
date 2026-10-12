@@ -34,7 +34,7 @@ func (s *Store) listRetiredMemories(ctx context.Context, scope memory.Scope, q w
 		opts.before = &cursor
 		opts.snapshot = cursor.Snapshot
 	}
-	err := pgx.BeginTxFunc(ctx, s.pool, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
+	err := pgx.BeginTxFunc(ctx, s.Pool, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
 		if err := resolveMemoryEntityFiltersTx(ctx, tx, scope.OwnerID, &opts); err != nil {
 			return err
 		}

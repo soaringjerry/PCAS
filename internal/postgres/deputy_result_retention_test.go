@@ -25,29 +25,29 @@ func TestDeputyKnownAnswerSurvivesLeaseChangeButNotExecutionReplacement(t *testi
 				var err error
 				switch mode {
 				case "expired":
-					_, err = s.pool.Exec(ctx, `UPDATE agent_runs SET lease_until=clock_timestamp()-interval '1 second' WHERE owner_id=$1 AND id=$2`, string(scope.OwnerID), string(request.ExecutionID))
+					_, err = s.Pool.Exec(ctx, `UPDATE agent_runs SET lease_until=clock_timestamp()-interval '1 second' WHERE owner_id=$1 AND id=$2`, string(scope.OwnerID), string(request.ExecutionID))
 				case "new_lease":
-					_, err = s.pool.Exec(ctx, `UPDATE agent_runs SET lease_token=$3 WHERE owner_id=$1 AND id=$2`, string(scope.OwnerID), string(request.ExecutionID), string(memory.NewID()))
+					_, err = s.Pool.Exec(ctx, `UPDATE agent_runs SET lease_token=$3 WHERE owner_id=$1 AND id=$2`, string(scope.OwnerID), string(request.ExecutionID), string(memory.NewID()))
 				case "discarded":
-					_, err = s.pool.Exec(ctx, `UPDATE agent_runs SET status='failed' WHERE owner_id=$1 AND id=$2`, string(scope.OwnerID), string(request.ExecutionID))
+					_, err = s.Pool.Exec(ctx, `UPDATE agent_runs SET status='failed' WHERE owner_id=$1 AND id=$2`, string(scope.OwnerID), string(request.ExecutionID))
 				case "deleted":
-					_, err = s.pool.Exec(ctx, `DELETE FROM agent_runs WHERE owner_id=$1 AND id=$2`, string(scope.OwnerID), string(request.ExecutionID))
+					_, err = s.Pool.Exec(ctx, `DELETE FROM agent_runs WHERE owner_id=$1 AND id=$2`, string(scope.OwnerID), string(request.ExecutionID))
 				case "reused":
-					_, err = s.pool.Exec(ctx, `UPDATE agent_runs SET document=jsonb_set(document,'{createdAt}',to_jsonb($3::text)),reserved_cost=0.23 WHERE owner_id=$1 AND id=$2`, string(scope.OwnerID), string(request.ExecutionID), time.Now().Add(time.Second).UTC().Format(time.RFC3339Nano))
+					_, err = s.Pool.Exec(ctx, `UPDATE agent_runs SET document=jsonb_set(document,'{createdAt}',to_jsonb($3::text)),reserved_cost=0.23 WHERE owner_id=$1 AND id=$2`, string(scope.OwnerID), string(request.ExecutionID), time.Now().Add(time.Second).UTC().Format(time.RFC3339Nano))
 				}
 				if err != nil {
 					t.Error(err)
 				}
 				secretaryModelReply(w, "Fictitious known answer.")
 			})
-			s.models.Config.Providers[0].InputPerMillion = 1
+			s.Models.Config.Providers[0].InputPerMillion = 1
 			request = leasedDeputyAnswer(t, s, scope)
 			paid, err := s.Gateway().Call(ctx, request)
 			retained := mode == "expired" || mode == "new_lease"
 			if retained && (err != nil || paid == nil || paid.Output != "Fictitious known answer.") || !retained && !errors.Is(err, modelcall.ErrNotApplicable) {
 				t.Fatal("result retention ignored execution identity", mode, paid, err)
 			}
-			peer, err := Open(ctx, s.pool.Config().ConnConfig.ConnString())
+			peer, err := Open(ctx, s.Pool.Config().ConnConfig.ConnString())
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -64,7 +64,7 @@ func TestDeputyKnownAnswerSurvivesLeaseChangeButNotExecutionReplacement(t *testi
 			}
 			var available bool
 			var usageCount, bodies int
-			if err := s.pool.QueryRow(ctx, `SELECT (result_receipt->>'availableForApplication')::boolean,(SELECT count(*) FROM model_usage WHERE owner_id=$1),(SELECT count(*) FROM background_model_results WHERE owner_id=$1) FROM model_calls WHERE owner_id=$1 AND execution_id=$2 AND stage='answer'`, string(scope.OwnerID), string(request.ExecutionID)).Scan(&available, &usageCount, &bodies); err != nil || available != retained || usageCount != 1 || bodies != map[bool]int{true: 1, false: 0}[retained] || calls.Load() != 1 {
+			if err := s.Pool.QueryRow(ctx, `SELECT (result_receipt->>'availableForApplication')::boolean,(SELECT count(*) FROM model_usage WHERE owner_id=$1),(SELECT count(*) FROM background_model_results WHERE owner_id=$1) FROM model_calls WHERE owner_id=$1 AND execution_id=$2 AND stage='answer'`, string(scope.OwnerID), string(request.ExecutionID)).Scan(&available, &usageCount, &bodies); err != nil || available != retained || usageCount != 1 || bodies != map[bool]int{true: 1, false: 0}[retained] || calls.Load() != 1 {
 				t.Fatal(available, retained, usageCount, bodies, calls.Load(), err)
 			}
 		})
@@ -113,7 +113,7 @@ func TestDeputyReturnedAnswerDistinguishesCorrectionFromLostInputAccess(t *testi
 			}
 			var available bool
 			var bodies, usageCount int
-			if err := s.pool.QueryRow(ctx, `SELECT (result_receipt->>'availableForApplication')::boolean,(SELECT count(*) FROM background_model_results WHERE owner_id=$1),(SELECT count(*) FROM model_usage WHERE owner_id=$1) FROM model_calls WHERE owner_id=$1 AND execution_id=$2 AND stage='answer'`, string(scope.OwnerID), string(request.ExecutionID)).Scan(&available, &bodies, &usageCount); err != nil || available != (mode == "corrected") || bodies != map[bool]int{true: 1, false: 0}[mode == "corrected"] || usageCount != 1 || calls.Load() != 1 {
+			if err := s.Pool.QueryRow(ctx, `SELECT (result_receipt->>'availableForApplication')::boolean,(SELECT count(*) FROM background_model_results WHERE owner_id=$1),(SELECT count(*) FROM model_usage WHERE owner_id=$1) FROM model_calls WHERE owner_id=$1 AND execution_id=$2 AND stage='answer'`, string(scope.OwnerID), string(request.ExecutionID)).Scan(&available, &bodies, &usageCount); err != nil || available != (mode == "corrected") || bodies != map[bool]int{true: 1, false: 0}[mode == "corrected"] || usageCount != 1 || calls.Load() != 1 {
 				t.Fatal(mode, available, bodies, usageCount, calls.Load(), err)
 			}
 		})

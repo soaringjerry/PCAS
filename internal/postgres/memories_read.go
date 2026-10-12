@@ -392,7 +392,7 @@ func (s *Store) ListMemories(ctx context.Context, scope memory.Scope, q workspac
 		opts.before = &cursor
 		opts.snapshot = cursor.Snapshot
 	}
-	err := pgx.BeginTxFunc(ctx, s.pool, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
+	err := pgx.BeginTxFunc(ctx, s.Pool, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
 		if err := resolveMemoryEntityFiltersTx(ctx, tx, scope.OwnerID, &opts); err != nil {
 			return err
 		}
@@ -454,7 +454,7 @@ func (s *Store) GetMemory(ctx context.Context, scope memory.Scope, id string) (w
 	if !memory.ID(id).Valid() {
 		return out, memory.ErrInvalid
 	}
-	err := pgx.BeginTxFunc(ctx, s.pool, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
+	err := pgx.BeginTxFunc(ctx, s.Pool, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
 		items, err := s.readMemoriesTx(ctx, tx, scope, false, memoryReadOptions{id: id})
 		if err != nil {
 			return err
@@ -473,7 +473,7 @@ func (s *Store) MemoryFacets(ctx context.Context, scope memory.Scope) (workspace
 	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err
 	}
-	rows, err := s.pool.Query(ctx, `WITH counts AS(
+	rows, err := s.Pool.Query(ctx, `WITH counts AS(
  SELECT cm.entity_id,cm.role,ev.entity_type,ev.name,count(DISTINCT cm.claim_id) AS n FROM claim_mentions cm
  JOIN memory_records r ON(r.owner_id,r.id,r.version)=(cm.owner_id,cm.claim_id,cm.claim_version) AND r.state='active'
  JOIN memory_records er ON(er.owner_id,er.id)=(cm.owner_id,cm.entity_id) AND er.state='active'

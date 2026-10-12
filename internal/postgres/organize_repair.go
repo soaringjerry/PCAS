@@ -17,7 +17,7 @@ func (s *Store) QueueRuleReorganize(ctx context.Context, scope memory.Scope) (in
 		return 0, memory.ErrForbidden
 	}
 	pending := 0
-	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		if err := kernel.OwnerLock(ctx, tx, scope.OwnerID); err != nil {
 			return err
 		}

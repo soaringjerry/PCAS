@@ -42,15 +42,15 @@ func TestCompareTrustAtEveryMemoryConsumer(t *testing.T) {
 				for i := 0; i < count; i++ {
 					src := b1Source(t, s, scope, "虚构导入聊天", tc.text, "chatgpt")
 					sources = append(sources, src)
-					if _, err := s.pool.Exec(ctx, `INSERT INTO source_contexts(owner_id,source_id,source_version,conversation_key,role,branch) VALUES($1,$2,1,$3,$4,'active')`, string(scope.OwnerID), string(src.ID), fmt.Sprint("fictional-conversation-", i), tc.role); err != nil {
+					if _, err := s.Pool.Exec(ctx, `INSERT INTO source_contexts(owner_id,source_id,source_version,conversation_key,role,branch) VALUES($1,$2,1,$3,$4,'active')`, string(scope.OwnerID), string(src.ID), fmt.Sprint("fictional-conversation-", i), tc.role); err != nil {
 						t.Fatal(err)
 					}
 				}
 				ref := b1Claim(t, s, scope, tc.text, "fact", confirmation, sources...)
-				if _, err := s.pool.Exec(ctx, `UPDATE claim_revisions SET acquisition=$3 WHERE owner_id=$1 AND claim_id=$2`, string(scope.OwnerID), string(ref.ID), tc.acquisition); err != nil {
+				if _, err := s.Pool.Exec(ctx, `UPDATE claim_revisions SET acquisition=$3 WHERE owner_id=$1 AND claim_id=$2`, string(scope.OwnerID), string(ref.ID), tc.acquisition); err != nil {
 					t.Fatal(err)
 				}
-				if _, err := s.pool.Exec(ctx, `UPDATE record_versions SET expressed_at='2026-09-12 09:00:00+00' WHERE owner_id=$1 AND record_id=$2`, string(scope.OwnerID), string(ref.ID)); err != nil {
+				if _, err := s.Pool.Exec(ctx, `UPDATE record_versions SET expressed_at='2026-09-12 09:00:00+00' WHERE owner_id=$1 AND record_id=$2`, string(scope.OwnerID), string(ref.ID)); err != nil {
 					t.Fatal(err)
 				}
 				workspaceCommand(t, s, scope, workspace.Command{Type: "updateAgent", ID: "model", Patch: kernel.JSON(map[string]any{"includeInferred": tc.include})})
@@ -84,7 +84,7 @@ func TestCompareTrustAtEveryMemoryConsumer(t *testing.T) {
 				run := state.Runs[0]
 				b1HasRef(t, run.ContextVersions, ref, tc.allowed)
 				probe := workspace.Run{ID: run.ID, ThingID: task, AgentID: "model", ContextVersions: []memory.Ref{ref}}
-				if err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+				if err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 					for name, check := range map[string]func() error{"completion": func() error { return verifyRunTx(ctx, tx, scope, probe) }, "access": func() error { return verifyRunAccessTx(ctx, tx, scope, probe) }} {
 						if got := check(); (got == nil) != tc.allowed {
 							t.Errorf("%s allowed=%v want=%v error=%v", name, got == nil, tc.allowed, got)

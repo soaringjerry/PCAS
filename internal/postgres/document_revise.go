@@ -60,7 +60,7 @@ func (s *Store) finishPaidRevise(ctx context.Context, scope memory.Scope, curren
 		}
 		retryCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 		defer cancel()
-		_ = pgx.BeginFunc(retryCtx, s.pool, func(tx pgx.Tx) error {
+		_ = pgx.BeginFunc(retryCtx, s.Pool, func(tx pgx.Tx) error {
 			tag, err := tx.Exec(retryCtx, `UPDATE agent_runs SET lease_until=clock_timestamp(),document=document||jsonb_build_object('error','模型结果已保存，文档写入失败，正在重试写入') WHERE owner_id=$1 AND id=$2 AND lease_token=$3 AND status='running'`, string(scope.OwnerID), current.ID, token)
 			if err != nil || tag.RowsAffected() == 0 {
 				return err
@@ -93,7 +93,7 @@ func (s *Store) finishPaidRevise(ctx context.Context, scope memory.Scope, curren
 			return err
 		}
 	}
-	return backgroundResultTx(ctx, s.pool, scope.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
+	return backgroundResultTx(ctx, s.Pool, scope.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(scope.OwnerID)); err != nil {
 			return err
 		}

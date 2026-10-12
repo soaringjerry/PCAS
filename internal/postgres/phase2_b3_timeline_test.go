@@ -340,7 +340,7 @@ func TestPhase2B3_K11_LegacySecretaryMemoryUsesOriginalRecordedTime(t *testing.T
 			known := b3Claim(t, s, scope, b3ClaimSpec{Text: gold.DatedMemoryText, Nature: "fact", Subject: self, Said: &dated, Mentions: []b3Mention{{place, "place"}}})
 			var legacyUndated, sourceUndated bool
 			var savedRecorded time.Time
-			if err := s.pool.QueryRow(t.Context(), `SELECT c.expressed_at IS NULL,v.expressed_at IS NULL,v.recorded_at FROM record_versions c JOIN record_versions v ON v.owner_id=c.owner_id AND v.record_id=$3 AND v.version=$4 WHERE c.owner_id=$1 AND c.record_id=$2 AND c.version=$5`, scope.OwnerID, legacy.ID, source.ID, source.Version, legacy.Version).Scan(&legacyUndated, &sourceUndated, &savedRecorded); err != nil {
+			if err := s.Pool.QueryRow(t.Context(), `SELECT c.expressed_at IS NULL,v.expressed_at IS NULL,v.recorded_at FROM record_versions c JOIN record_versions v ON v.owner_id=c.owner_id AND v.record_id=$3 AND v.version=$4 WHERE c.owner_id=$1 AND c.record_id=$2 AND c.version=$5`, scope.OwnerID, legacy.ID, source.ID, source.Version, legacy.Version).Scan(&legacyUndated, &sourceUndated, &savedRecorded); err != nil {
 				t.Fatal(err)
 			}
 			if !legacyUndated || !sourceUndated || !savedRecorded.Equal(recorded) {

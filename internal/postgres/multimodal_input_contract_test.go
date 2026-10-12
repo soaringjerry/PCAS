@@ -129,7 +129,7 @@ func m1Parsed(t *testing.T, s *Store, scope memory.Scope, ref memory.Ref, want s
 func m1Usage(t *testing.T, s *Store, scope memory.Scope, want int) {
 	t.Helper()
 	var n int
-	if err := s.pool.QueryRow(context.Background(), "SELECT count(*) FROM model_usage WHERE owner_id=$1 AND purpose='vision'", string(scope.OwnerID)).Scan(&n); err != nil || n != want {
+	if err := s.Pool.QueryRow(context.Background(), "SELECT count(*) FROM model_usage WHERE owner_id=$1 AND purpose='vision'", string(scope.OwnerID)).Scan(&n); err != nil || n != want {
 		t.Fatal("vision usage", n, err)
 	}
 }
@@ -192,13 +192,13 @@ func TestImageFailuresRetainOriginalAndUseCaption(t *testing.T) {
 			s, scope, f := m1Setup(t)
 			ref := m1Upload(t, s, scope)
 			if mode == "no-vision" {
-				s.models.Config.Providers[0].Protocol = "text-only-fixture"
+				s.Models.Config.Providers[0].Protocol = "text-only-fixture"
 			} // Text-only channel simulated independently of any real model.
 			if mode == "500" {
 				f.fail = true
 			}
 			if mode == "budget" {
-				s.models.Config.Providers[0].InputPerMillion = 1000
+				s.Models.Config.Providers[0].InputPerMillion = 1000
 				workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: kernel.JSON(map[string]any{"dailyBudget": 0.001})})
 			}
 			req := turnRequest("帮我记一下")
@@ -257,7 +257,7 @@ func TestImageUndoPreservesTaskAndReplay(t *testing.T) {
 		t.Fatal(err)
 	}
 	var attachmentContext string
-	if err := s.pool.QueryRow(context.Background(), "SELECT coalesce(response->>'attachmentContext','') FROM desk_turns WHERE owner_id=$1 AND request_id=$2", string(scope.OwnerID), req.RequestID).Scan(&attachmentContext); err != nil || attachmentContext != "" {
+	if err := s.Pool.QueryRow(context.Background(), "SELECT coalesce(response->>'attachmentContext','') FROM desk_turns WHERE owner_id=$1 AND request_id=$2", string(scope.OwnerID), req.RequestID).Scan(&attachmentContext); err != nil || attachmentContext != "" {
 		t.Fatal("image undo retained attachment context", attachmentContext, err)
 	}
 	before := f.secretary
@@ -309,7 +309,7 @@ func TestRandomizedReverseUndoRestoresContents(t *testing.T) {
 	var remaining int
 	// Existing action audit sources survive task undo. Originals, derivatives and
 	// invented empty user evidence must not survive these image-only sequences.
-	if err := s.pool.QueryRow(ctx, "SELECT count(*) FROM memory_records r JOIN sources s ON (s.owner_id,s.id)=(r.owner_id,r.id) WHERE r.owner_id=$1 AND r.state='active' AND s.connector IN ('file-import','attachment-text','desk')", string(scope.OwnerID)).Scan(&remaining); err != nil || remaining != 0 {
+	if err := s.Pool.QueryRow(ctx, "SELECT count(*) FROM memory_records r JOIN sources s ON (s.owner_id,s.id)=(r.owner_id,r.id) WHERE r.owner_id=$1 AND r.state='active' AND s.connector IN ('file-import','attachment-text','desk')", string(scope.OwnerID)).Scan(&remaining); err != nil || remaining != 0 {
 		t.Fatal("original or derived attachment remains", remaining, err)
 	}
 }
@@ -329,7 +329,7 @@ func TestImageTextCannotGroundUserMemory(t *testing.T) {
 		t.Fatal(err)
 	}
 	var n int
-	if err := s.pool.QueryRow(context.Background(), "SELECT count(*) FROM evidence WHERE owner_id=$1 AND source_id=$2", string(scope.OwnerID), string(source.ID)).Scan(&n); err != nil || n != 1 {
+	if err := s.Pool.QueryRow(context.Background(), "SELECT count(*) FROM evidence WHERE owner_id=$1 AND source_id=$2", string(scope.OwnerID), string(source.ID)).Scan(&n); err != nil || n != 1 {
 		t.Fatal("image-grounded memory retained", n, err)
 	}
 	f.mu.Lock()
@@ -454,7 +454,7 @@ func TestScannedPDFPagesPreferVision(t *testing.T) {
 	}
 	m1Usage(t, s, scope, 2)
 	var text, representation string
-	if err := s.pool.QueryRow(context.Background(), "SELECT body,representation FROM source_versions WHERE owner_id=$1 AND derived_from_id=$2", string(scope.OwnerID), string(upload.ID)).Scan(&text, &representation); err != nil || representation != "vision" || !strings.Contains(text, "[第 2 页]") {
+	if err := s.Pool.QueryRow(context.Background(), "SELECT body,representation FROM source_versions WHERE owner_id=$1 AND derived_from_id=$2", string(scope.OwnerID), string(upload.ID)).Scan(&text, &representation); err != nil || representation != "vision" || !strings.Contains(text, "[第 2 页]") {
 		t.Fatal(text, representation, err)
 	}
 }
@@ -477,8 +477,8 @@ func TestWebAudioUsesExistingTranscription(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(map[string]string{"text": "明天交物业费"})
 	}))
 	defer asr.Close()
-	s.models.Config.Transcription = "asr"
-	s.models.Config.Providers = append(s.models.Config.Providers, ai.Provider{ID: "asr", Protocol: "openai", Transcription: true, BaseURL: asr.URL, Model: "fake", CostMode: "free"})
+	s.Models.Config.Transcription = "asr"
+	s.Models.Config.Providers = append(s.Models.Config.Providers, ai.Provider{ID: "asr", Protocol: "openai", Transcription: true, BaseURL: asr.URL, Model: "fake", CostMode: "free"})
 	upload, err := s.IngestAttachment(context.Background(), scope, memory.IngestRequest{Connector: "file-import", ExternalID: string(memory.NewID()), ExternalVersion: "1", Title: "synthetic.ogg", MediaType: "audio/ogg"}, strings.NewReader("synthetic audio"))
 	if err != nil {
 		t.Fatal(err)
@@ -490,7 +490,7 @@ func TestWebAudioUsesExistingTranscription(t *testing.T) {
 		t.Fatal(out)
 	}
 	var representation, text string
-	if err := s.pool.QueryRow(context.Background(), "SELECT representation,body FROM source_versions WHERE owner_id=$1 AND derived_from_id=$2", string(scope.OwnerID), string(upload.ID)).Scan(&representation, &text); err != nil || representation != "transcript" || text != "明天交物业费" {
+	if err := s.Pool.QueryRow(context.Background(), "SELECT representation,body FROM source_versions WHERE owner_id=$1 AND derived_from_id=$2", string(scope.OwnerID), string(upload.ID)).Scan(&representation, &text); err != nil || representation != "transcript" || text != "明天交物业费" {
 		t.Fatal(text, representation, err)
 	}
 }
@@ -509,7 +509,7 @@ func TestExternallyDeletedImageExpiresUndoAndClearsContext(t *testing.T) {
 		t.Fatal("deleted image undo", err)
 	}
 	var contextText string
-	if err := s.pool.QueryRow(context.Background(), "SELECT coalesce(response->>'attachmentContext','') FROM desk_turns WHERE owner_id=$1 AND request_id=$2", string(scope.OwnerID), req.RequestID).Scan(&contextText); err != nil || contextText != "" {
+	if err := s.Pool.QueryRow(context.Background(), "SELECT coalesce(response->>'attachmentContext','') FROM desk_turns WHERE owner_id=$1 AND request_id=$2", string(scope.OwnerID), req.RequestID).Scan(&contextText); err != nil || contextText != "" {
 		t.Fatal("deleted context retained", contextText, err)
 	}
 }
@@ -517,12 +517,12 @@ func TestExternallyDeletedImageExpiresUndoAndClearsContext(t *testing.T) {
 func TestParsedLegacyImagesAreNotReread(t *testing.T) {
 	s, scope, f := m1Setup(t)
 	ref := m1Upload(t, s, scope)
-	s.models.Config.Providers[0].Protocol = "text-only-fixture"
+	s.Models.Config.Providers[0].Protocol = "text-only-fixture"
 	job := leaseStage(t, s, scope, ref, "source.parse")
 	if err := s.ProcessAttachment(context.Background(), job); err != nil {
 		t.Fatal(err)
 	}
-	s.models.Config.Providers[0].Protocol = "openai"
+	s.Models.Config.Providers[0].Protocol = "openai"
 	req := turnRequest("帮我记一下")
 	req.Attachments = []memory.Ref{ref}
 	out := mustTurn(t, s, scope, req)

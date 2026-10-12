@@ -12,6 +12,7 @@ import (
 
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/modelcall"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -47,7 +48,7 @@ func TestDeputyGenerationRecoversWritesWithoutRepeatingPaidWork(t *testing.T) {
 				}
 				secretaryModelReply(w, "Fictitious checked draft.")
 			})
-			s.models.Config.Providers[0].InputPerMillion = 1
+			s.Models.Config.Providers[0].InputPerMillion = 1
 			state := workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "Fictitious recovery task"})
 			command := workspace.Command{Type: "requestRun", ThingID: state.Tasks[0].ID, AgentID: "model", Kind: "draft", Prompt: "Prepare a fictitious draft.", RequestID: string(memory.NewID()), ExpectedRevision: state.Revision}
 			if mode == "revision" {
@@ -68,32 +69,32 @@ func TestDeputyGenerationRecoversWritesWithoutRepeatingPaidWork(t *testing.T) {
 			if mode == "selection_write" || mode == "selection_restart" {
 				trigger = `CREATE FUNCTION reject_deputy_application() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.actual_mode ? 'deputySelection' THEN RAISE EXCEPTION 'synthetic selection failure'; END IF; RETURN NEW; END $$; CREATE TRIGGER reject_deputy_application BEFORE UPDATE ON model_calls FOR EACH ROW EXECUTE FUNCTION reject_deputy_application()`
 			}
-			if _, err := s.pool.Exec(ctx, trigger); err != nil {
+			if _, err := s.Pool.Exec(ctx, trigger); err != nil {
 				t.Fatal(err)
 			}
 			if err := s.RunDeputyOnce(ctx); err == nil {
 				t.Fatal("write failure was hidden")
 			}
 			var first interactiveCallRow
-			if err := s.pool.QueryRow(ctx, `SELECT to_jsonb(c) FROM model_calls c WHERE owner_id=$1 AND execution_id=$2 AND stage='answer'`, string(scope.OwnerID), run.ID).Scan(&first); err != nil || first.Outcome != "returned" || first.Accounting != "settled" || first.Receipt.Billing == nil {
+			if err := s.Pool.QueryRow(ctx, `SELECT to_jsonb(c) FROM model_calls c WHERE owner_id=$1 AND execution_id=$2 AND stage='answer'`, string(scope.OwnerID), run.ID).Scan(&first); err != nil || first.Outcome != "returned" || first.Accounting != "settled" || first.Receipt.Billing == nil {
 				t.Fatal(first, err)
 			}
 			table := "agent_runs"
 			if mode == "selection_write" || mode == "selection_restart" {
 				table = "model_calls"
 			}
-			if _, err := s.pool.Exec(ctx, "DROP TRIGGER reject_deputy_application ON "+table); err != nil {
+			if _, err := s.Pool.Exec(ctx, "DROP TRIGGER reject_deputy_application ON "+table); err != nil {
 				t.Fatal(err)
 			}
 			if mode == "interrupted_review" {
-				if _, err := s.pool.Exec(ctx, `UPDATE model_calls SET actual_mode=actual_mode-'deputySelection' WHERE owner_id=$1 AND id=$2`, string(scope.OwnerID), string(first.ID)); err != nil {
+				if _, err := s.Pool.Exec(ctx, `UPDATE model_calls SET actual_mode=actual_mode-'deputySelection' WHERE owner_id=$1 AND id=$2`, string(scope.OwnerID), string(first.ID)); err != nil {
 					t.Fatal(err)
 				}
 			}
 			worker := s
 			if mode != "selection_write" {
 				// A new process has no pending responses, model registry, or reviewer.
-				worker = &Store{pool: s.pool}
+				worker = &Store{DB: &kernel.DB{Pool: s.Pool}}
 				worker.SetModels(nil)
 			}
 			if err := worker.RunDeputyOnce(ctx); err != nil {
@@ -108,11 +109,11 @@ func TestDeputyGenerationRecoversWritesWithoutRepeatingPaidWork(t *testing.T) {
 				expected = 1
 			}
 			var usage, invocations int
-			if err := s.pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM model_usage WHERE owner_id=$1),(SELECT count(*) FROM model_calls WHERE owner_id=$1)`, string(scope.OwnerID)).Scan(&usage, &invocations); err != nil || calls.Load() != expected || usage != int(expected) || invocations != int(expected) {
+			if err := s.Pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM model_usage WHERE owner_id=$1),(SELECT count(*) FROM model_calls WHERE owner_id=$1)`, string(scope.OwnerID)).Scan(&usage, &invocations); err != nil || calls.Load() != expected || usage != int(expected) || invocations != int(expected) {
 				t.Fatal("paid work repeated or usage lost", calls.Load(), usage, invocations, err)
 			}
 			var final interactiveCallRow
-			if err := s.pool.QueryRow(ctx, `SELECT to_jsonb(c) FROM model_calls c WHERE owner_id=$1 AND id=$2`, string(scope.OwnerID), string(first.ID)).Scan(&final); err != nil || final.ID != first.ID || final.Reservation != first.Reservation {
+			if err := s.Pool.QueryRow(ctx, `SELECT to_jsonb(c) FROM model_calls c WHERE owner_id=$1 AND id=$2`, string(scope.OwnerID), string(first.ID)).Scan(&final); err != nil || final.ID != first.ID || final.Reservation != first.Reservation {
 				t.Fatal(final, err)
 			}
 			if mode != "revision" {
@@ -127,7 +128,7 @@ func TestDeputyGenerationRecoversWritesWithoutRepeatingPaidWork(t *testing.T) {
 					t.Fatal(selected)
 				}
 			} else {
-				doc, err := s.pool.Query(ctx, `SELECT document->>'body' FROM work_documents WHERE owner_id=$1 AND id=$2`, string(scope.OwnerID), command.DocumentID)
+				doc, err := s.Pool.Query(ctx, `SELECT document->>'body' FROM work_documents WHERE owner_id=$1 AND id=$2`, string(scope.OwnerID), command.DocumentID)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -163,7 +164,7 @@ func TestDeputyOnAProviderWithoutSearchCompletesAndRecordsTheFallback(t *testing
 		t.Fatal(state.Runs, calls.Load(), err)
 	}
 	var search, fallback string
-	if err := s.pool.QueryRow(context.Background(), `SELECT actual_mode->>'search',actual_mode->>'unsupportedFallback' FROM model_calls WHERE owner_id=$1 AND execution_id=$2 AND stage='answer' AND outcome='returned'`, string(scope.OwnerID), state.Runs[0].ID).Scan(&search, &fallback); err != nil || search != "false" || fallback != `["web_search"]` {
+	if err := s.Pool.QueryRow(context.Background(), `SELECT actual_mode->>'search',actual_mode->>'unsupportedFallback' FROM model_calls WHERE owner_id=$1 AND execution_id=$2 AND stage='answer' AND outcome='returned'`, string(scope.OwnerID), state.Runs[0].ID).Scan(&search, &fallback); err != nil || search != "false" || fallback != `["web_search"]` {
 		t.Fatal("the journal did not record the submitted mode", search, fallback, err)
 	}
 }
@@ -178,7 +179,7 @@ func TestDeputyInterruptedSubmissionRetainsHoldAndNeverRetries(t *testing.T) {
 		cancel()
 		secretaryModelReply(w, "Interrupted fictitious response.")
 	})
-	s.models.Config.Providers[0].InputPerMillion = 1
+	s.Models.Config.Providers[0].InputPerMillion = 1
 	state := workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "Fictitious interrupted work"})
 	state = workspaceCommand(t, s, scope, workspace.Command{Type: "requestRun", ThingID: state.Tasks[0].ID, AgentID: "model", Kind: "draft", Prompt: "Prepare fictitious work."})
 	run := state.Runs[0]
@@ -191,7 +192,7 @@ func TestDeputyInterruptedSubmissionRetainsHoldAndNeverRetries(t *testing.T) {
 	var status, outcome, accounting string
 	var application, reason string
 	var held float64
-	if err := s.pool.QueryRow(context.Background(), `SELECT r.status,r.reserved_cost::double precision,c.outcome,c.accounting_state,c.actual_mode->>'applicationOutcome',c.actual_mode->>'applicationReason' FROM agent_runs r JOIN model_calls c ON(c.owner_id,c.execution_id)=(r.owner_id,r.id) WHERE r.owner_id=$1 AND r.id=$2 AND c.stage='answer'`, string(scope.OwnerID), run.ID).Scan(&status, &held, &outcome, &accounting, &application, &reason); err != nil || status != "failed" || outcome != "unknown" || accounting != "held" || held < run.Cost || held <= 0 || calls.Load() != 1 || application != "not_applicable" || reason != "provider_outcome_unknown" {
+	if err := s.Pool.QueryRow(context.Background(), `SELECT r.status,r.reserved_cost::double precision,c.outcome,c.accounting_state,c.actual_mode->>'applicationOutcome',c.actual_mode->>'applicationReason' FROM agent_runs r JOIN model_calls c ON(c.owner_id,c.execution_id)=(r.owner_id,r.id) WHERE r.owner_id=$1 AND r.id=$2 AND c.stage='answer'`, string(scope.OwnerID), run.ID).Scan(&status, &held, &outcome, &accounting, &application, &reason); err != nil || status != "failed" || outcome != "unknown" || accounting != "held" || held < run.Cost || held <= 0 || calls.Load() != 1 || application != "not_applicable" || reason != "provider_outcome_unknown" {
 		t.Fatal(status, held, outcome, accounting, application, reason, calls.Load(), err)
 	}
 }
@@ -206,7 +207,7 @@ func TestDeputyAbandonedInputRecordsSkippedApplication(t *testing.T) {
 	request := leasedDeputyAnswer(t, s, scope)
 	ctx := context.Background()
 	adapter := interactiveCalls{store: s}
-	provider, _ := s.models.Get(request.ProviderID)
+	provider, _ := s.Models.Get(request.ProviderID)
 	id, err := adapter.Prepare(ctx, request, provider)
 	if err != nil {
 		t.Fatal(err)
@@ -219,7 +220,7 @@ func TestDeputyAbandonedInputRecordsSkippedApplication(t *testing.T) {
 	if err := adapter.Start(ctx, request, paid); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.pool.Exec(ctx, `UPDATE agent_runs SET lease_until=clock_timestamp()-interval '1 second' WHERE owner_id=$1 AND id=$2`, string(scope.OwnerID), string(request.ExecutionID)); err != nil {
+	if _, err := s.Pool.Exec(ctx, `UPDATE agent_runs SET lease_until=clock_timestamp()-interval '1 second' WHERE owner_id=$1 AND id=$2`, string(scope.OwnerID), string(request.ExecutionID)); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := adapter.recordInterruptedExecution(ctx); err != nil {
@@ -230,7 +231,7 @@ func TestDeputyAbandonedInputRecordsSkippedApplication(t *testing.T) {
 	}
 	var status, application, reason, outcome, accounting string
 	var held float64
-	if err := s.pool.QueryRow(ctx, `SELECT r.status,r.reserved_cost::double precision,c.outcome,c.accounting_state,c.actual_mode->>'applicationOutcome',c.actual_mode->>'applicationReason' FROM agent_runs r JOIN model_calls c ON(c.owner_id,c.execution_id)=(r.owner_id,r.id) WHERE r.owner_id=$1 AND c.id=$2`, string(scope.OwnerID), string(id)).Scan(&status, &held, &outcome, &accounting, &application, &reason); err != nil || status != "failed" || held != 0.17 || outcome != "unknown" || accounting != "held" || application != "not_applicable" || reason != "deputy_execution_interrupted" || calls.Load() != 0 {
+	if err := s.Pool.QueryRow(ctx, `SELECT r.status,r.reserved_cost::double precision,c.outcome,c.accounting_state,c.actual_mode->>'applicationOutcome',c.actual_mode->>'applicationReason' FROM agent_runs r JOIN model_calls c ON(c.owner_id,c.execution_id)=(r.owner_id,r.id) WHERE r.owner_id=$1 AND c.id=$2`, string(scope.OwnerID), string(id)).Scan(&status, &held, &outcome, &accounting, &application, &reason); err != nil || status != "failed" || held != 0.17 || outcome != "unknown" || accounting != "held" || application != "not_applicable" || reason != "deputy_execution_interrupted" || calls.Load() != 0 {
 		t.Fatal(status, held, outcome, accounting, application, reason, calls.Load(), err)
 	}
 }

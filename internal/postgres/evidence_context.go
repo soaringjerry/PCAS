@@ -30,7 +30,7 @@ func (s *Store) SourceConversation(ctx context.Context, scope memory.Scope, in m
 	if !in.ID.Valid() || in.Version < 0 || in.Limit < 0 || in.Limit > 20 || in.Before != "" && !in.Before.Valid() || in.After != "" && !in.After.Valid() || in.Before != "" && in.After != "" {
 		return out, memory.ErrInvalid
 	}
-	err := pgx.BeginTxFunc(ctx, s.pool, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
+	err := pgx.BeginTxFunc(ctx, s.Pool, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
 		var err error
 		out, err = conversationWindowTx(ctx, tx, scope, in, "", nil)
 		return err

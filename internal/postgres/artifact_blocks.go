@@ -107,7 +107,7 @@ func (s *Store) RetainedWriting(ctx context.Context, scope memory.Scope, thing s
 		return nil, memory.ErrInvalid
 	}
 	var out []map[string]string
-	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		var err error
 		out, err = kernel.QueryDocuments[map[string]string](ctx, tx, "SELECT jsonb_build_object('field',field,'text',body,'reason',reason) FROM retained_artifact_writing WHERE owner_id=$1 AND thing_id=$2", string(scope.OwnerID), thing)
 		return err

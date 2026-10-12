@@ -40,7 +40,7 @@ func b3Text(t *testing.T, key string) string {
 }
 func b3Exec(t *testing.T, s *Store, sql string, args ...any) {
 	t.Helper()
-	if _, err := s.pool.Exec(context.Background(), sql, args...); err != nil {
+	if _, err := s.Pool.Exec(context.Background(), sql, args...); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -57,7 +57,7 @@ func b3Year(now time.Time, offset int, month time.Month, day int) time.Time {
 func b3Entity(t *testing.T, s *Store, scope memory.Scope, kind, name string, aliases ...string) memory.ID {
 	t.Helper()
 	id := memory.NewID()
-	tx, err := s.pool.Begin(context.Background())
+	tx, err := s.Pool.Begin(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -121,7 +121,7 @@ func b3Claim(t *testing.T, s *Store, scope memory.Scope, spec b3ClaimSpec) memor
 	if spec.Project != "" {
 		claimScope["project_id"] = spec.Project
 	}
-	tx, err := s.pool.Begin(t.Context())
+	tx, err := s.Pool.Begin(t.Context())
 	if err != nil {
 		t.Fatal("begin b3 claim fixture:", err)
 	}

@@ -129,12 +129,12 @@ func (s *Store) ScheduleOrganize(ctx context.Context, now time.Time) (int, error
 	if now.IsZero() {
 		return 0, memory.ErrInvalid
 	}
-	p, ok := s.models.Get(s.models.ExtractionID())
+	p, ok := s.Models.Get(s.Models.ExtractionID())
 	if !ok || p.Embedding || p.Transcription {
 		return 0, nil
 	}
 	count := 0
-	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended(current_database() || ':' || current_schema() || ':organize-schedule',0))"); err != nil {
 			return err
 		}
@@ -248,8 +248,8 @@ type organizeSession struct {
 }
 
 func (a organizeSession) Ready() error {
-	p, ok := a.store.models.Get(a.store.models.ExtractionID())
-	if !ok || p.Embedding || p.Transcription || !a.store.models.Available(p.ID) {
+	p, ok := a.store.Models.Get(a.store.Models.ExtractionID())
+	if !ok || p.Embedding || p.Transcription || !a.store.Models.Available(p.ID) {
 		return &worker.JobError{Code: "provider_unavailable", Until: time.Now().Add(OrganizeInterval), NoAttempt: true}
 	}
 	return nil
@@ -426,7 +426,7 @@ func (s *Store) reserveOrganizeCost(ctx context.Context, j worker.Job, cost floa
 	cancel()
 	if errors.Is(err, memory.ErrUnavailable) {
 		var timezone string
-		if err := s.pool.QueryRow(ctx, "SELECT settings->>'timezone' FROM workspace_owners WHERE owner_id=$1", string(j.OwnerID)).Scan(&timezone); err != nil {
+		if err := s.Pool.QueryRow(ctx, "SELECT settings->>'timezone' FROM workspace_owners WHERE owner_id=$1", string(j.OwnerID)).Scan(&timezone); err != nil {
 			return "", err
 		}
 		loc, err := time.LoadLocation(timezone)
@@ -442,7 +442,7 @@ func (s *Store) reserveOrganizeCost(ctx context.Context, j worker.Job, cost floa
 	if err != nil {
 		return "", backgroundWriteError(ctx, err)
 	}
-	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	err = pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		if err := kernel.LockJob(ctx, tx, j); err != nil {
 			return err
 		}
@@ -452,7 +452,7 @@ func (s *Store) reserveOrganizeCost(ctx context.Context, j worker.Job, cost floa
 	if err != nil {
 		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 		defer cancel()
-		_, cleanupErr := s.pool.Exec(cleanupCtx, "DELETE FROM background_usage WHERE owner_id=$1 AND id=$2", string(j.OwnerID), id)
+		_, cleanupErr := s.Pool.Exec(cleanupCtx, "DELETE FROM background_usage WHERE owner_id=$1 AND id=$2", string(j.OwnerID), id)
 		if cleanupErr != nil {
 			return "", cleanupErr
 		}

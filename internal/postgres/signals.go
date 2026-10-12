@@ -16,7 +16,7 @@ import (
 type conditionSignal = extraction.Signal
 
 func (s *Store) pendingConditions(ctx context.Context, scope memory.Scope) ([]map[string]string, error) {
-	rows, err := s.pool.Query(ctx, `SELECT i.document FROM work_items i JOIN workspace_owners w USING(owner_id) WHERE i.owner_id=$1 AND i.kind='idea' AND i.status='shelved' AND (i.document->>'remindersOn')::boolean AND (w.settings->>'wakeIdeas')::boolean ORDER BY i.updated_at DESC LIMIT 20`, string(scope.OwnerID))
+	rows, err := s.Pool.Query(ctx, `SELECT i.document FROM work_items i JOIN workspace_owners w USING(owner_id) WHERE i.owner_id=$1 AND i.kind='idea' AND i.status='shelved' AND (i.document->>'remindersOn')::boolean AND (w.settings->>'wakeIdeas')::boolean ORDER BY i.updated_at DESC LIMIT 20`, string(scope.OwnerID))
 	if err != nil {
 		return nil, err
 	}

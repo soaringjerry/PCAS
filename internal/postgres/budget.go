@@ -30,7 +30,7 @@ func (s *Store) reserveModelCostID(ctx context.Context, owner memory.ID, cost fl
 		return "", memory.ErrInvalid
 	}
 	scope := memory.Scope{OwnerID: owner, PrincipalID: "worker", IsOwner: true}
-	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		if err := s.ensureOwner(ctx, tx, scope); err != nil {
 			return err
 		}
@@ -130,7 +130,7 @@ func (s *Store) settleModelCost(ctx context.Context, owner memory.ID, id string,
 	}
 	settleCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 	defer cancel()
-	_, err := s.pool.Exec(settleCtx, "UPDATE background_usage SET reserved_cost=$3 WHERE owner_id=$1 AND id=$2", string(owner), id, cost)
+	_, err := s.Pool.Exec(settleCtx, "UPDATE background_usage SET reserved_cost=$3 WHERE owner_id=$1 AND id=$2", string(owner), id, cost)
 	return err
 }
 
@@ -141,7 +141,7 @@ func (s *Store) settleModelCost(ctx context.Context, owner memory.ID, id string,
 func (s *Store) settleRunCost(ctx context.Context, owner memory.ID, run workspace.Run, cost float64) error {
 	settleCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 	defer cancel()
-	return pgx.BeginFunc(settleCtx, s.pool, func(tx pgx.Tx) error {
+	return pgx.BeginFunc(settleCtx, s.Pool, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(settleCtx, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(owner)); err != nil {
 			return err
 		}

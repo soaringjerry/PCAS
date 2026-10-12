@@ -45,14 +45,11 @@ func enqueueEffortTx(ctx context.Context, tx pgx.Tx, owner memory.ID, anchor mem
 // EffortStore gives the effort service its workspace reads and writes.
 func (s *Store) EffortStore() effort.Store { return effortStore{s} }
 
-// BusinessNow is the business clock that model input uses.
-func (s *Store) BusinessNow() time.Time { return s.businessNow() }
-
 type effortStore struct{ store *Store }
 
 func (a effortStore) Load(ctx context.Context, j worker.Job, project string, wantTasks bool) (item workspace.Item, tasks []workspace.Item, done bool, err error) {
 	scope := memory.Scope{OwnerID: j.OwnerID, PrincipalID: "worker", IsOwner: true}
-	err = pgx.BeginTxFunc(ctx, a.store.pool, pgx.TxOptions{IsoLevel: pgx.RepeatableRead}, func(tx pgx.Tx) error {
+	err = pgx.BeginTxFunc(ctx, a.store.Pool, pgx.TxOptions{IsoLevel: pgx.RepeatableRead}, func(tx pgx.Tx) error {
 		if err := kernel.LockJob(ctx, tx, j); err != nil {
 			return err
 		}
@@ -79,7 +76,7 @@ func (a effortStore) Load(ctx context.Context, j worker.Job, project string, wan
 }
 
 func (a effortStore) Apply(ctx context.Context, j worker.Job, fn func(effort.Unit) error) error {
-	return backgroundResultTx(ctx, a.store.pool, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
+	return backgroundResultTx(ctx, a.store.Pool, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(j.OwnerID)); err != nil {
 			return err
 		}

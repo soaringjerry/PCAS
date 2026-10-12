@@ -171,7 +171,7 @@ func b2E3Record(t *testing.T, s *Store, scope memory.Scope, source memory.Ref, w
 	t.Helper()
 	var state string
 	var items int
-	if err := s.pool.QueryRow(context.Background(), `SELECT state,items FROM source_extractions WHERE owner_id=$1 AND source_id=$2 AND source_version=$3`, string(scope.OwnerID), string(source.ID), source.Version).Scan(&state, &items); err != nil {
+	if err := s.Pool.QueryRow(context.Background(), `SELECT state,items FROM source_extractions WHERE owner_id=$1 AND source_id=$2 AND source_version=$3`, string(scope.OwnerID), string(source.ID), source.Version).Scan(&state, &items); err != nil {
 		t.Fatal(err)
 	}
 	b2Equal(t, state, wantState)
@@ -272,7 +272,7 @@ func TestPhase2B2_X21_ContextOmitsClearedAndReplacesOutdatedAnswer(t *testing.T)
 	_, cleared, clearedSource := b2E3Turn(t, s, scope, f, old.ConversationID, "应清空的问题私密8211", "应清空的回答私密8212")
 	b1Delete(t, s, scope, clearedSource)
 	var question, answer string
-	if err := s.pool.QueryRow(context.Background(), `SELECT question,answer FROM desk_turns WHERE owner_id=$1 AND id=$2`, string(scope.OwnerID), cleared.Turn.ID).Scan(&question, &answer); err != nil {
+	if err := s.Pool.QueryRow(context.Background(), `SELECT question,answer FROM desk_turns WHERE owner_id=$1 AND id=$2`, string(scope.OwnerID), cleared.Turn.ID).Scan(&question, &answer); err != nil {
 		t.Fatal(err)
 	}
 	b2Equal(t, question, "")
@@ -320,7 +320,7 @@ func TestPhase2B2_X22_BackfillReceivesOriginalConversationContext(t *testing.T) 
 	b2Equal(t, n, spec.Enqueued)
 	var priority int
 	var marker bool
-	if err := s.pool.QueryRow(context.Background(), `SELECT priority,backfill_queued_at IS NOT NULL FROM memory_jobs WHERE owner_id=$1 AND record_id=$2 AND record_version=$3 AND stage='source.extract'`, string(scope.OwnerID), string(source.ID), source.Version).Scan(&priority, &marker); err != nil {
+	if err := s.Pool.QueryRow(context.Background(), `SELECT priority,backfill_queued_at IS NOT NULL FROM memory_jobs WHERE owner_id=$1 AND record_id=$2 AND record_version=$3 AND stage='source.extract'`, string(scope.OwnerID), string(source.ID), source.Version).Scan(&priority, &marker); err != nil {
 		t.Fatal(err)
 	}
 	b2Equal(t, priority, spec.Priority)

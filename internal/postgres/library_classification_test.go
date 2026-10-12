@@ -42,7 +42,7 @@ func TestLibraryDeadlinesUseModelDatesAndRetainUncertainty(t *testing.T) {
 	workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: kernel.JSON(map[string]string{"timezone": "Asia/Shanghai"})})
 	for _, text := range texts {
 		ref := organizeTestMemory(t, s, scope, text)
-		if _, err := s.pool.Exec(ctx, "UPDATE record_versions SET expressed_at='2026-08-01T09:00:00+08:00' WHERE owner_id=$1 AND record_id=$2", scope.OwnerID, ref.ID); err != nil {
+		if _, err := s.Pool.Exec(ctx, "UPDATE record_versions SET expressed_at='2026-08-01T09:00:00+08:00' WHERE owner_id=$1 AND record_id=$2", scope.OwnerID, ref.ID); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -95,7 +95,7 @@ func TestHandoverUsesIndependentRollingLimit(t *testing.T) {
 	if !ok || failure.Code != "memory.handover_hourly_limit" || !failure.NoAttempt || len(fake.all()) != 0 {
 		t.Fatal("handover borrowed other stage capacity", err)
 	}
-	if _, err := s.pool.Exec(ctx, `UPDATE background_usage SET created_at=now()-interval '61 minutes' WHERE id=(SELECT id FROM background_usage WHERE stage='memory.handover' ORDER BY id LIMIT 1)`); err != nil {
+	if _, err := s.Pool.Exec(ctx, `UPDATE background_usage SET created_at=now()-interval '61 minutes' WHERE id=(SELECT id FROM background_usage WHERE stage='memory.handover' ORDER BY id LIMIT 1)`); err != nil {
 		t.Fatal(err)
 	}
 	for stage, limit := range map[string]int{OrganizeStage: 40, CompareStage: 40, EntityCompareStage: 30, EntityCandidatesStage: 6} {

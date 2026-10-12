@@ -78,14 +78,14 @@ func b2Equal(t *testing.T, got, want any) {
 }
 func b2Exec(t *testing.T, s *Store, sql string, args ...any) {
 	t.Helper()
-	if _, err := s.pool.Exec(context.Background(), sql, args...); err != nil {
+	if _, err := s.Pool.Exec(context.Background(), sql, args...); err != nil {
 		t.Fatal(err)
 	}
 }
 func b2Count(t *testing.T, s *Store, sql string, args ...any) int {
 	t.Helper()
 	var n int
-	if err := s.pool.QueryRow(context.Background(), sql, args...).Scan(&n); err != nil {
+	if err := s.Pool.QueryRow(context.Background(), sql, args...).Scan(&n); err != nil {
 		t.Fatal(err)
 	}
 	return n
@@ -156,7 +156,7 @@ func b2Ref(m workspace.Memory) memory.Ref {
 func b2Subject(t *testing.T, s *Store, scope memory.Scope, m workspace.Memory) (string, string) {
 	t.Helper()
 	var id, kind string
-	if err := s.pool.QueryRow(context.Background(), `SELECT c.subject_id::text,e.entity_type FROM claim_revisions c JOIN memory_records r ON (r.owner_id,r.id)=(c.owner_id,c.subject_id) JOIN entity_versions e ON (e.owner_id,e.entity_id,e.version)=(r.owner_id,r.id,r.version) WHERE c.owner_id=$1 AND c.claim_id=$2 AND c.version=$3`, string(scope.OwnerID), m.ID, m.Version).Scan(&id, &kind); err != nil {
+	if err := s.Pool.QueryRow(context.Background(), `SELECT c.subject_id::text,e.entity_type FROM claim_revisions c JOIN memory_records r ON (r.owner_id,r.id)=(c.owner_id,c.subject_id) JOIN entity_versions e ON (e.owner_id,e.entity_id,e.version)=(r.owner_id,r.id,r.version) WHERE c.owner_id=$1 AND c.claim_id=$2 AND c.version=$3`, string(scope.OwnerID), m.ID, m.Version).Scan(&id, &kind); err != nil {
 		t.Fatal(err)
 	}
 	return id, kind
@@ -247,7 +247,7 @@ func b2Event(t *testing.T, m workspace.Memory, from, to *time.Time, precision st
 func b2Confirmation(t *testing.T, s *Store, scope memory.Scope, m workspace.Memory, want string) {
 	t.Helper()
 	var got string
-	if err := s.pool.QueryRow(context.Background(), `SELECT confirmation FROM claim_revisions WHERE owner_id=$1 AND claim_id=$2 AND version=$3`, string(scope.OwnerID), m.ID, m.Version).Scan(&got); err != nil {
+	if err := s.Pool.QueryRow(context.Background(), `SELECT confirmation FROM claim_revisions WHERE owner_id=$1 AND claim_id=$2 AND version=$3`, string(scope.OwnerID), m.ID, m.Version).Scan(&got); err != nil {
 		t.Fatal(err)
 	}
 	b2Equal(t, got, want)
@@ -256,7 +256,7 @@ func b2ExtractionRecord(t *testing.T, s *Store, scope memory.Scope, ref memory.R
 	t.Helper()
 	var got string
 	var count, extractor int
-	if err := s.pool.QueryRow(context.Background(), `SELECT state,items,extractor FROM source_extractions WHERE owner_id=$1 AND source_id=$2 AND source_version=$3`, string(scope.OwnerID), string(ref.ID), ref.Version).Scan(&got, &count, &extractor); err != nil {
+	if err := s.Pool.QueryRow(context.Background(), `SELECT state,items,extractor FROM source_extractions WHERE owner_id=$1 AND source_id=$2 AND source_version=$3`, string(scope.OwnerID), string(ref.ID), ref.Version).Scan(&got, &count, &extractor); err != nil {
 		t.Fatal(err)
 	}
 	b2Equal(t, got, state)
@@ -334,7 +334,7 @@ func b2Archive(t *testing.T, s *Store, scope memory.Scope, at time.Time, user, a
 	find := func(text string) memory.Ref {
 		ref := memory.Ref{Kind: memory.SourceKind}
 		if text != "" {
-			if err := s.pool.QueryRow(context.Background(), `SELECT v.source_id::text,v.version FROM source_versions v JOIN archive_entries e ON (e.owner_id,e.source_id,e.source_version)=(v.owner_id,v.source_id,v.version) WHERE v.owner_id=$1 AND e.archive_id=$2 AND v.body=$3`, string(scope.OwnerID), string(root.ID), text).Scan(&ref.ID, &ref.Version); err != nil {
+			if err := s.Pool.QueryRow(context.Background(), `SELECT v.source_id::text,v.version FROM source_versions v JOIN archive_entries e ON (e.owner_id,e.source_id,e.source_version)=(v.owner_id,v.source_id,v.version) WHERE v.owner_id=$1 AND e.archive_id=$2 AND v.body=$3`, string(scope.OwnerID), string(root.ID), text).Scan(&ref.ID, &ref.Version); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -352,7 +352,7 @@ func b2MemoryIDs(items []workspace.Memory) []string {
 }
 func b2SQLIDs(t *testing.T, s *Store, query string, args ...any) []string {
 	t.Helper()
-	rows, err := s.pool.Query(context.Background(), query, args...)
+	rows, err := s.Pool.Query(context.Background(), query, args...)
 	if err != nil {
 		t.Fatal(err)
 	}

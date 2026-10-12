@@ -24,7 +24,7 @@ func TestExposureStartsFromWhenItWasSaid(t *testing.T) {
 		t.Fatal(err)
 	}
 	var old, fresh memory.Ref
-	if err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	if err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		var err error
 		old, err = s.rememberTx(ctx, tx, scope, statement{Text: "云杉每周六早上去虚构湖边跑步。", Nature: "fact", Actor: "ai", Confirmation: "adopted", Acquisition: "direct", Source: source.Ref})
 		return err
@@ -34,10 +34,10 @@ func TestExposureStartsFromWhenItWasSaid(t *testing.T) {
 	now := b1Source(t, s, scope, "虚构新笔记", "霜叶今天把盆栽搬到了窗边。", "manual")
 	fresh = b1Claim(t, s, scope, "霜叶今天把盆栽搬到了窗边。", "fact", "adopted", now)
 	var oldAt, freshAt time.Time
-	if err := s.pool.QueryRow(ctx, "SELECT last_effective_use_at FROM activity WHERE owner_id=$1 AND record_id=$2", string(scope.OwnerID), string(old.ID)).Scan(&oldAt); err != nil {
+	if err := s.Pool.QueryRow(ctx, "SELECT last_effective_use_at FROM activity WHERE owner_id=$1 AND record_id=$2", string(scope.OwnerID), string(old.ID)).Scan(&oldAt); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.pool.QueryRow(ctx, "SELECT last_effective_use_at FROM activity WHERE owner_id=$1 AND record_id=$2", string(scope.OwnerID), string(fresh.ID)).Scan(&freshAt); err != nil {
+	if err := s.Pool.QueryRow(ctx, "SELECT last_effective_use_at FROM activity WHERE owner_id=$1 AND record_id=$2", string(scope.OwnerID), string(fresh.ID)).Scan(&freshAt); err != nil {
 		t.Fatal(err)
 	}
 	if !oldAt.Equal(said) {

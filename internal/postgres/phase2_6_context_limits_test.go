@@ -20,7 +20,7 @@ func TestPhase26G1C6SecretaryContextAndActionOverflowRemainVisible(t *testing.T)
 	if _, err := f.Store.Snapshot(f.Context, f.Scope); err != nil {
 		t.Fatal(err)
 	}
-	if err := pgx.BeginFunc(f.Context, f.Store.pool, func(tx pgx.Tx) error {
+	if err := pgx.BeginFunc(f.Context, f.Store.Pool, func(tx pgx.Tx) error {
 		for kind, n := range map[string]int{"task": 55, "project": 60, "idea": 30} {
 			for i := 0; i < n; i++ {
 				item := workspace.NewItem(kind, fmt.Sprintf("Fictitious %s overflow %03d", kind, i))
@@ -65,7 +65,7 @@ func TestPhase26G1C6SecretaryContextAndActionOverflowRemainVisible(t *testing.T)
 	}
 	for reason, want := range map[string]int{"task_context_limit": 15, "project_context_limit": 10, "idea_context_limit": 10} {
 		var count int
-		if err := f.Store.pool.QueryRow(f.Context, `SELECT coalesce(sum(count),0) FROM background_stage_events WHERE owner_id=$1 AND reason=$2`, f.Scope.OwnerID, reason).Scan(&count); err != nil || count != want {
+		if err := f.Store.Pool.QueryRow(f.Context, `SELECT coalesce(sum(count),0) FROM background_stage_events WHERE owner_id=$1 AND reason=$2`, f.Scope.OwnerID, reason).Scan(&count); err != nil || count != want {
 			t.Errorf("observable %s count=%d expected%d err=%v", reason, count, want, err)
 		}
 	}
@@ -77,7 +77,7 @@ func TestPhase26G1C6SecretaryContextAndActionOverflowRemainVisible(t *testing.T)
 	}
 
 	var retained int
-	if err := f.Store.pool.QueryRow(f.Context, `SELECT count(*) FROM work_items WHERE owner_id=$1`, f.Scope.OwnerID).Scan(&retained); err != nil || retained != 155 {
+	if err := f.Store.Pool.QueryRow(f.Context, `SELECT count(*) FROM work_items WHERE owner_id=$1`, f.Scope.OwnerID).Scan(&retained); err != nil || retained != 155 {
 		t.Errorf("bounded context lost stored items retained=%d expected155 err=%v", retained, err)
 	}
 	health, err := f.Store.BackgroundHealth(f.Context, f.Scope)
@@ -93,7 +93,7 @@ func TestPhase26G1C6SecretaryContextAndActionOverflowRemainVisible(t *testing.T)
 	t.Run("extra_actions_are_counted_and_visible", func(t *testing.T) {
 		phase26Finding(t, "S-P26-005")
 		var count int
-		if err := f.Store.pool.QueryRow(f.Context, `SELECT coalesce(sum(count),0) FROM background_stage_events WHERE owner_id=$1 AND stage='secretary' AND outcome='overflow' AND reason LIKE '%action%'`, f.Scope.OwnerID).Scan(&count); err != nil {
+		if err := f.Store.Pool.QueryRow(f.Context, `SELECT coalesce(sum(count),0) FROM background_stage_events WHERE owner_id=$1 AND stage='secretary' AND outcome='overflow' AND reason LIKE '%action%'`, f.Scope.OwnerID).Scan(&count); err != nil {
 			t.Fatal(err)
 		}
 		if count != 5 {

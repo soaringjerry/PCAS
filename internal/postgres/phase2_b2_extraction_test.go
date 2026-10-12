@@ -379,7 +379,7 @@ func TestPhase2B2_X14_AllLongSourceSegmentsAndOverlapDeduplicated(t *testing.T) 
 		mu.Unlock()
 		// No finished processing record may be visible while any segment is in flight.
 		var premature int
-		if err = s.pool.QueryRow(context.Background(), `SELECT count(*) FROM source_extractions WHERE owner_id=$1 AND source_id=$2 AND state IN ('done','empty')`, string(scope.OwnerID), string(src.ID)).Scan(&premature); err != nil {
+		if err = s.Pool.QueryRow(context.Background(), `SELECT count(*) FROM source_extractions WHERE owner_id=$1 AND source_id=$2 AND state IN ('done','empty')`, string(scope.OwnerID), string(src.ID)).Scan(&premature); err != nil {
 			t.Error(err)
 		}
 		if premature != 0 {
@@ -398,7 +398,7 @@ func TestPhase2B2_X14_AllLongSourceSegmentsAndOverlapDeduplicated(t *testing.T) 
 	}
 	for n := 0; n < spec.Requests; n++ {
 		var stage string
-		err := s.pool.QueryRow(context.Background(), `SELECT stage FROM memory_jobs WHERE owner_id=$1 AND record_id=$2 AND stage LIKE 'source.extract:%' AND state='queued' ORDER BY stage LIMIT 1`, string(scope.OwnerID), string(src.ID)).Scan(&stage)
+		err := s.Pool.QueryRow(context.Background(), `SELECT stage FROM memory_jobs WHERE owner_id=$1 AND record_id=$2 AND stage LIKE 'source.extract:%' AND state='queued' ORDER BY stage LIMIT 1`, string(scope.OwnerID), string(src.ID)).Scan(&stage)
 		if errors.Is(err, pgx.ErrNoRows) {
 			break
 		}
@@ -482,7 +482,7 @@ func TestPhase2B2_X16_DeleteOrReplaceDuringActualModelCall(t *testing.T) {
 				b1Delete(t, s, scope, src)
 			} else {
 				var ext string
-				if err := s.pool.QueryRow(context.Background(), `SELECT external_id FROM sources WHERE owner_id=$1 AND id=$2`, string(scope.OwnerID), string(src.ID)).Scan(&ext); err != nil {
+				if err := s.Pool.QueryRow(context.Background(), `SELECT external_id FROM sources WHERE owner_id=$1 AND id=$2`, string(scope.OwnerID), string(src.ID)).Scan(&ext); err != nil {
 					t.Fatal(err)
 				}
 				mustIngest(t, s, scope, memory.IngestRequest{Connector: "capture", ExternalID: ext, ExternalVersion: "2", Title: "秘书原话", Text: "新版没有旅行安排", MediaType: "text/plain"})
@@ -551,7 +551,7 @@ func TestPhase2B2_X1_ExpressionFallbackIsLimitedToHandEnteredSources(t *testing.
 			text := "我偏好清晨整理资料"
 			src := b2Source(t, s, scope, connector, "user", text, nil)
 			var recorded time.Time
-			if err := s.pool.QueryRow(context.Background(), `SELECT recorded_at FROM record_versions WHERE owner_id=$1 AND record_id=$2 AND version=1`, string(scope.OwnerID), string(src.ID)).Scan(&recorded); err != nil {
+			if err := s.Pool.QueryRow(context.Background(), `SELECT recorded_at FROM record_versions WHERE owner_id=$1 AND record_id=$2 AND version=1`, string(scope.OwnerID), string(src.ID)).Scan(&recorded); err != nil {
 				t.Fatal(err)
 			}
 			m := b2One(t, b2Extract(t, s, scope, f, src, b2Item(text, text, "preference")))

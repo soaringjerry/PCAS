@@ -31,7 +31,7 @@ func TestStatusDeadlineWritesDeduplicateAndDelete(t *testing.T) {
 	})
 	refs := statusTestMemories(t, s, scope, 3)
 	for _, ref := range refs {
-		if _, err := s.pool.Exec(context.Background(), "UPDATE claim_revisions SET value=to_jsonb('每周二7点有课'::text) WHERE owner_id=$1 AND claim_id=$2", scope.OwnerID, ref.ID); err != nil {
+		if _, err := s.Pool.Exec(context.Background(), "UPDATE claim_revisions SET value=to_jsonb('每周二7点有课'::text) WHERE owner_id=$1 AND claim_id=$2", scope.OwnerID, ref.ID); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -48,14 +48,14 @@ func TestStatusDeadlineWritesDeduplicateAndDelete(t *testing.T) {
 			t.Fatal(d)
 		}
 	}
-	if _, err := s.pool.Exec(context.Background(), "DELETE FROM memory_records WHERE owner_id=$1 AND id=$2", scope.OwnerID, refs[0].ID); err != nil {
+	if _, err := s.Pool.Exec(context.Background(), "DELETE FROM memory_records WHERE owner_id=$1 AND id=$2", scope.OwnerID, refs[0].ID); err != nil {
 		t.Fatal(err)
 	}
 	about, err = s.About(context.Background(), scope, "")
 	if err != nil || len(about.Deadlines) != 2 {
 		t.Fatal(about, err)
 	}
-	if _, err := s.pool.Exec(context.Background(), "UPDATE claims SET retired='superseded',retired_by=$3 WHERE owner_id=$1 AND id=$2", scope.OwnerID, refs[1].ID, memory.NewID()); err != nil {
+	if _, err := s.Pool.Exec(context.Background(), "UPDATE claims SET retired='superseded',retired_by=$3 WHERE owner_id=$1 AND id=$2", scope.OwnerID, refs[1].ID, memory.NewID()); err != nil {
 		t.Fatal(err)
 	}
 	about, err = s.About(context.Background(), scope, "")

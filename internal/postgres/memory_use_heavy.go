@@ -19,7 +19,7 @@ type readerStore struct{ store *Store }
 
 func (a readerStore) GroupMembers(ctx context.Context, scope memory.Scope, key string) ([]string, error) {
 	ids := []string{}
-	err := pgx.BeginTxFunc(ctx, a.store.pool, pgx.TxOptions{AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
+	err := pgx.BeginTxFunc(ctx, a.store.Pool, pgx.TxOptions{AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
 		var e error
 		ids, e = kernel.QueryDocuments[string](ctx, tx, "SELECT to_jsonb(claim_id::text) FROM status_current_members WHERE owner_id=$1 AND key=$2 ORDER BY claim_id", string(scope.OwnerID), key)
 		return e
@@ -29,7 +29,7 @@ func (a readerStore) GroupMembers(ctx context.Context, scope memory.Scope, key s
 
 func (a readerStore) Memories(ctx context.Context, scope memory.Scope, agent workspace.Agent, thing *string, ids []string) ([]workspace.Memory, error) {
 	var ms []workspace.Memory
-	err := pgx.BeginTxFunc(ctx, a.store.pool, pgx.TxOptions{AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
+	err := pgx.BeginTxFunc(ctx, a.store.Pool, pgx.TxOptions{AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
 		var e error
 		ms, e = a.store.useMemoriesTx(ctx, tx, scope, agent, thing, ids)
 		return e
@@ -44,7 +44,7 @@ func (a readerStore) Overflow(ctx context.Context, scope memory.Scope, reason st
 func (s *Store) deputyUseContext(ctx context.Context, scope memory.Scope, run *workspace.Run) (useContext, workspace.Agent, error) {
 	var u useContext
 	var agent workspace.Agent
-	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		var err error
 		agent, err = kernel.QueryDocument[workspace.Agent](ctx, tx, "SELECT document FROM workspace_agents WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), run.AgentID)
 		if err != nil {
@@ -72,7 +72,7 @@ func (s *Store) deputyUseContext(ctx context.Context, scope memory.Scope, run *w
 func (s *Store) recordUseOverflow(ctx context.Context, scope memory.Scope, reason string, count int) {
 	persist, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 	defer cancel()
-	if _, err := s.pool.Exec(persist, "INSERT INTO background_stage_events(owner_id,stage,outcome,reason,count) VALUES($1,'reader','overflow',$2,$3)", string(scope.OwnerID), reason, count); err != nil {
+	if _, err := s.Pool.Exec(persist, "INSERT INTO background_stage_events(owner_id,stage,outcome,reason,count) VALUES($1,'reader','overflow',$2,$3)", string(scope.OwnerID), reason, count); err != nil {
 		slog.WarnContext(persist, "reader overflow accounting failed", "reason", reason, "count", count)
 	}
 }

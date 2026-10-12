@@ -22,7 +22,7 @@ func TestDeputyInputIsDurableBeforeProviderSubmission(t *testing.T) {
 		var prompt json.RawMessage
 		var purpose, output, outcome string
 		var billingAbsent bool
-		err := s.pool.QueryRow(ctx, `SELECT b.prompt,b.purpose,b.output,c.outcome,c.result_receipt IS NULL
+		err := s.Pool.QueryRow(ctx, `SELECT b.prompt,b.purpose,b.output,c.outcome,c.result_receipt IS NULL
  FROM model_calls c JOIN background_model_results b ON(b.owner_id,b.job_id)=(c.owner_id,c.id)
  WHERE c.owner_id=$1 AND c.execution_id=$2 AND b.reservation_id=c.reservation_id`, string(scope.OwnerID), string(request.ExecutionID)).Scan(&prompt, &purpose, &output, &outcome, &billingAbsent)
 		var prepared, original map[string]string
@@ -39,10 +39,10 @@ func TestDeputyInputIsDurableBeforeProviderSubmission(t *testing.T) {
 		t.Fatal(paid, err, calls.Load())
 	}
 	var output, purpose string
-	if err := s.pool.QueryRow(ctx, `SELECT purpose,output FROM background_model_results WHERE owner_id=$1 AND job_id=$2`, string(scope.OwnerID), string(paid.InvocationID)).Scan(&purpose, &output); err != nil || purpose != "deputy" || output != paid.Output {
+	if err := s.Pool.QueryRow(ctx, `SELECT purpose,output FROM background_model_results WHERE owner_id=$1 AND job_id=$2`, string(scope.OwnerID), string(paid.InvocationID)).Scan(&purpose, &output); err != nil || purpose != "deputy" || output != paid.Output {
 		t.Fatal("returned result did not complete its input receipt", purpose, output, err)
 	}
-	peer, err := Open(ctx, s.pool.Config().ConnConfig.ConnString())
+	peer, err := Open(ctx, s.Pool.Config().ConnConfig.ConnString())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,7 +62,7 @@ func TestDeputyInputWriteFailurePreventsSubmissionAndReleasesAdmission(t *testin
 		secretaryModelReply(w, "This call must not be submitted.")
 	})
 	request := leasedDeputyAnswer(t, s, scope)
-	if _, err := s.pool.Exec(ctx, `CREATE FUNCTION reject_deputy_input() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'synthetic private input write failure'; END $$;
+	if _, err := s.Pool.Exec(ctx, `CREATE FUNCTION reject_deputy_input() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'synthetic private input write failure'; END $$;
  CREATE TRIGGER reject_deputy_input BEFORE INSERT ON background_model_results FOR EACH ROW EXECUTE FUNCTION reject_deputy_input()`); err != nil {
 		t.Fatal(err)
 	}
@@ -73,7 +73,7 @@ func TestDeputyInputWriteFailurePreventsSubmissionAndReleasesAdmission(t *testin
 	var budget float64
 	var started bool
 	var usages, payloads int
-	err := s.pool.QueryRow(ctx, `SELECT c.outcome,c.accounting_state,c.started_at IS NOT NULL,r.reserved_cost::double precision,
+	err := s.Pool.QueryRow(ctx, `SELECT c.outcome,c.accounting_state,c.started_at IS NOT NULL,r.reserved_cost::double precision,
  (SELECT count(*) FROM model_usage WHERE owner_id=$1),(SELECT count(*) FROM background_model_results WHERE owner_id=$1)
  FROM model_calls c JOIN agent_runs r ON(r.owner_id,r.id)=(c.owner_id,c.execution_id) WHERE c.owner_id=$1 AND c.execution_id=$2`, string(scope.OwnerID), string(request.ExecutionID)).Scan(&outcome, &state, &started, &budget, &usages, &payloads)
 	if err != nil || outcome != "failed" || state != "settled" || started || budget != 0 || usages != 0 || payloads != 0 || calls.Load() != 0 {
@@ -88,7 +88,7 @@ func TestDeputyInterruptedInputCannotBecomeARecoveredResult(t *testing.T) {
 		t.Error("interrupted input recovery submitted another model call")
 	})
 	request := leasedDeputyAnswer(t, s, scope)
-	provider, _ := s.models.Get("model")
+	provider, _ := s.Models.Get("model")
 	adapter := interactiveCalls{store: s}
 	invocation, err := adapter.Prepare(ctx, request, provider)
 	if err != nil {
@@ -101,10 +101,10 @@ func TestDeputyInterruptedInputCannotBecomeARecoveredResult(t *testing.T) {
 	if err := adapter.Start(ctx, request, &modelcall.PaidResult{InvocationID: invocation, Reservation: reservation.ID}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.pool.Exec(ctx, `UPDATE agent_runs SET lease_until=clock_timestamp()-interval '1 second' WHERE owner_id=$1 AND id=$2`, string(scope.OwnerID), string(request.ExecutionID)); err != nil {
+	if _, err := s.Pool.Exec(ctx, `UPDATE agent_runs SET lease_until=clock_timestamp()-interval '1 second' WHERE owner_id=$1 AND id=$2`, string(scope.OwnerID), string(request.ExecutionID)); err != nil {
 		t.Fatal(err)
 	}
-	peer, err := Open(ctx, s.pool.Config().ConnConfig.ConnString())
+	peer, err := Open(ctx, s.Pool.Config().ConnConfig.ConnString())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -122,7 +122,7 @@ func TestDeputyInterruptedInputCannotBecomeARecoveredResult(t *testing.T) {
 	var outcome, state, purpose, output string
 	var budget float64
 	var usages int
-	err = s.pool.QueryRow(ctx, `SELECT c.outcome,c.accounting_state,b.purpose,b.output,r.reserved_cost::double precision,
+	err = s.Pool.QueryRow(ctx, `SELECT c.outcome,c.accounting_state,b.purpose,b.output,r.reserved_cost::double precision,
  (SELECT count(*) FROM model_usage WHERE owner_id=$1)
  FROM model_calls c JOIN background_model_results b ON(b.owner_id,b.job_id)=(c.owner_id,c.id)
  JOIN agent_runs r ON(r.owner_id,r.id)=(c.owner_id,c.execution_id) WHERE c.owner_id=$1 AND c.id=$2`, string(scope.OwnerID), string(invocation)).Scan(&outcome, &state, &purpose, &output, &budget, &usages)

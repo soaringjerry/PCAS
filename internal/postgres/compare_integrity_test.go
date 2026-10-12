@@ -22,7 +22,7 @@ func TestCompareDuplicateDoesNotWidenOldDependencyAccess(t *testing.T) {
 	out := mustTurn(t, s, scope, req)
 	b1HasRef(t, b1Refs(t, s, scope, req.RequestID), refs[0], true)
 	next := compareFixture(t, s, scope, "云杉的虚构汇报期限周五，交给主管")[0]
-	if _, err := s.pool.Exec(context.Background(), "UPDATE record_versions SET expressed_at=expressed_at+interval '1 day' WHERE owner_id=$1 AND record_id=$2", string(scope.OwnerID), string(next.ID)); err != nil {
+	if _, err := s.Pool.Exec(context.Background(), "UPDATE record_versions SET expressed_at=expressed_at+interval '1 day' WHERE owner_id=$1 AND record_id=$2", string(scope.OwnerID), string(next.ID)); err != nil {
 		t.Fatal(err)
 	}
 	f.set(`{"duplicates":[{"keep":2,"members":[1,2]}],"superseded":[]}`)
@@ -60,7 +60,7 @@ func TestCompareLostLeaseCannotWriteRetirementOrProgress(t *testing.T) {
 		close(release)
 		t.Fatal("no call")
 	}
-	if _, err := s.pool.Exec(context.Background(), "UPDATE memory_jobs SET lease_token=gen_random_uuid() WHERE id=$1", string(j.ID)); err != nil {
+	if _, err := s.Pool.Exec(context.Background(), "UPDATE memory_jobs SET lease_token=gen_random_uuid() WHERE id=$1", string(j.ID)); err != nil {
 		close(release)
 		t.Fatal(err)
 	}
@@ -70,7 +70,7 @@ func TestCompareLostLeaseCannotWriteRetirementOrProgress(t *testing.T) {
 	}
 	compareState(t, s, scope, refs, []string{"", ""}, 0)
 	var usage int
-	if err := s.pool.QueryRow(context.Background(), "SELECT count(*) FROM model_usage WHERE owner_id=$1 AND purpose='compare'", string(scope.OwnerID)).Scan(&usage); err != nil || usage != 1 {
+	if err := s.Pool.QueryRow(context.Background(), "SELECT count(*) FROM model_usage WHERE owner_id=$1 AND purpose='compare'", string(scope.OwnerID)).Scan(&usage); err != nil || usage != 1 {
 		t.Fatal("issued call must still be billed", usage, err)
 	}
 }
@@ -95,11 +95,11 @@ func TestCompareEntityUndoAfterUserEditRefusesAtomically(t *testing.T) {
 		t.Fatal("unsafe undo", err)
 	}
 	var subject string
-	if err = s.pool.QueryRow(context.Background(), "SELECT subject_id::text FROM claim_revisions WHERE owner_id=$1 AND claim_id=$2 AND version=2", string(scope.OwnerID), string(a.ID)).Scan(&subject); err != nil || subject != string(keep.ID) {
+	if err = s.Pool.QueryRow(context.Background(), "SELECT subject_id::text FROM claim_revisions WHERE owner_id=$1 AND claim_id=$2 AND version=2", string(scope.OwnerID), string(a.ID)).Scan(&subject); err != nil || subject != string(keep.ID) {
 		t.Fatal("refused undo partially mutated subject", subject, err)
 	}
 	var active bool
-	if err = s.pool.QueryRow(context.Background(), "SELECT undone_at IS NULL FROM entity_merges WHERE owner_id=$1 AND merged_id=$2", string(scope.OwnerID), string(old.ID)).Scan(&active); err != nil || !active {
+	if err = s.Pool.QueryRow(context.Background(), "SELECT undone_at IS NULL FROM entity_merges WHERE owner_id=$1 AND merged_id=$2", string(scope.OwnerID), string(old.ID)).Scan(&active); err != nil || !active {
 		t.Fatal("refused undo mutated merge", active, err)
 	}
 }
@@ -110,13 +110,13 @@ func TestCompareDuplicateEvidenceCopiesEachSourceOnce(t *testing.T) {
 	refs := compareFixture(t, s, scope, "合成重复甲", "合成重复乙", "合成重复丙")
 	// A repeated proof locator and another duplicate referring to the same source
 	// must not multiply evidence on the keeper.
-	if _, err := s.pool.Exec(context.Background(), `INSERT INTO evidence(owner_id,id,source_id,source_version,target_id,target_version,locator,acquisition,stance)
+	if _, err := s.Pool.Exec(context.Background(), `INSERT INTO evidence(owner_id,id,source_id,source_version,target_id,target_version,locator,acquisition,stance)
  SELECT owner_id,gen_random_uuid(),source_id,source_version,$3,1,'{"line":2}',acquisition,stance FROM evidence WHERE owner_id=$1 AND target_id=$2`, string(scope.OwnerID), string(refs[0].ID), string(refs[1].ID)); err != nil {
 		t.Fatal(err)
 	}
 	compareProcess(t, s, scope)
 	var n int
-	if err := s.pool.QueryRow(context.Background(), "SELECT count(*) FROM evidence WHERE owner_id=$1 AND target_id=$2", string(scope.OwnerID), string(refs[2].ID)).Scan(&n); err != nil || n != 3 {
+	if err := s.Pool.QueryRow(context.Background(), "SELECT count(*) FROM evidence WHERE owner_id=$1 AND target_id=$2", string(scope.OwnerID), string(refs[2].ID)).Scan(&n); err != nil || n != 3 {
 		t.Fatal(n, err)
 	}
 }
@@ -135,11 +135,11 @@ func TestCompareRestoreProtectionSurvivesActionSnapshotExpiry(t *testing.T) {
 	if _, err = s.Execute(context.Background(), scope, cmd); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = s.pool.Exec(context.Background(), "UPDATE action_log SET created_at=now()-interval '31 days' WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), cmd.RequestID); err != nil {
+	if _, err = s.Pool.Exec(context.Background(), "UPDATE action_log SET created_at=now()-interval '31 days' WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), cmd.RequestID); err != nil {
 		t.Fatal(err)
 	}
 	workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "虚构保留期检查事项"})
-	if _, err = s.pool.Exec(context.Background(), "UPDATE claims SET compared=0 WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), string(refs[1].ID)); err != nil {
+	if _, err = s.Pool.Exec(context.Background(), "UPDATE claims SET compared=0 WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), string(refs[1].ID)); err != nil {
 		t.Fatal(err)
 	}
 	compareProcess(t, s, scope)
@@ -156,28 +156,28 @@ func TestCompareRetirementPreservesFrozenCards(t *testing.T) {
 	refs := compareFixture(t, s, scope, "虚构旧期限周三", "虚构现状甲", "虚构现状乙", "虚构新期限周五")
 	j := compareJob(t, s, scope, false, CompareVersion)
 	var key string
-	if err := s.pool.QueryRow(ctx, "SELECT 'entity:'||entity_id::text FROM claim_mentions WHERE owner_id=$1 AND claim_id=$2 AND role='topic'", string(scope.OwnerID), string(refs[0].ID)).Scan(&key); err != nil {
+	if err := s.Pool.QueryRow(ctx, "SELECT 'entity:'||entity_id::text FROM claim_mentions WHERE owner_id=$1 AND claim_id=$2 AND role='topic'", string(scope.OwnerID), string(refs[0].ID)).Scan(&key); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.pool.Exec(ctx, "INSERT INTO status_cards(owner_id,key,kind,name,rule,built_at,stale) VALUES($1,$2,'topic','虚构汇报',1,now(),false)", string(scope.OwnerID), key); err != nil {
+	if _, err := s.Pool.Exec(ctx, "INSERT INTO status_cards(owner_id,key,kind,name,rule,built_at,stale) VALUES($1,$2,'topic','虚构汇报',1,now(),false)", string(scope.OwnerID), key); err != nil {
 		t.Fatal(err)
 	}
 	// Card items deliberately do not contain the retiring old claim.
-	if _, err := s.pool.Exec(ctx, "INSERT INTO status_card_items(owner_id,key,field,position,claim_id,claim_version) VALUES($1,$2,'status',0,$3,1)", string(scope.OwnerID), key, string(refs[1].ID)); err != nil {
+	if _, err := s.Pool.Exec(ctx, "INSERT INTO status_card_items(owner_id,key,field,position,claim_id,claim_version) VALUES($1,$2,'status',0,$3,1)", string(scope.OwnerID), key, string(refs[1].ID)); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.pool.Exec(ctx, "INSERT INTO handovers(owner_id,body,rule,built_at,stale) VALUES($1,'虚构旧交接',1,now(),false)", string(scope.OwnerID)); err != nil {
+	if _, err := s.Pool.Exec(ctx, "INSERT INTO handovers(owner_id,body,rule,built_at,stale) VALUES($1,'虚构旧交接',1,now(),false)", string(scope.OwnerID)); err != nil {
 		t.Fatal(err)
 	}
 	if err := (comparison.Service{Store: s.CompareStore(), Generator: jobCalls(s), Version: CompareVersion}).Process(ctx, j); err != nil {
 		t.Fatal(err)
 	}
 	var stale bool
-	if err := s.pool.QueryRow(ctx, "SELECT stale FROM status_cards WHERE owner_id=$1 AND key=$2", scope.OwnerID, key).Scan(&stale); err != nil || stale {
+	if err := s.Pool.QueryRow(ctx, "SELECT stale FROM status_cards WHERE owner_id=$1 AND key=$2", scope.OwnerID, key).Scan(&stale); err != nil || stale {
 		t.Fatal("frozen card changed", stale, err)
 	}
 	var queued int
-	if err := s.pool.QueryRow(ctx, "SELECT count(*) FROM memory_jobs WHERE owner_id=$1 AND stage LIKE 'memory.card:%' AND state='queued'", scope.OwnerID).Scan(&queued); err != nil || queued != 0 {
+	if err := s.Pool.QueryRow(ctx, "SELECT count(*) FROM memory_jobs WHERE owner_id=$1 AND stage LIKE 'memory.card:%' AND state='queued'", scope.OwnerID).Scan(&queued); err != nil || queued != 0 {
 		t.Fatal("retirement queued card rebuild", queued, err)
 	}
 	if m := compareDetail(t, s, scope, refs[0]); m.Retired != "superseded" {
@@ -199,23 +199,23 @@ func TestCompareRetirementPreservesFrozenSecondaryCard(t *testing.T) {
 	}
 	group := compareEntityGroup(t, s, scope, "project", "虚构次要项目", append(secondary, refs[0])...)
 	key := "entity:" + string(group)
-	if _, err := s.pool.Exec(ctx, "INSERT INTO status_cards(owner_id,key,kind,entity_id,name,rule,built_at,stale) VALUES($1,$2,'project',$3,'虚构次要项目',1,now(),false)", string(scope.OwnerID), key, string(group)); err != nil {
+	if _, err := s.Pool.Exec(ctx, "INSERT INTO status_cards(owner_id,key,kind,entity_id,name,rule,built_at,stale) VALUES($1,$2,'project',$3,'虚构次要项目',1,now(),false)", string(scope.OwnerID), key, string(group)); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.pool.Exec(ctx, "INSERT INTO status_card_items(owner_id,key,field,position,claim_id,claim_version) VALUES($1,$2,'status',0,$3,1)", string(scope.OwnerID), key, string(secondary[0].ID)); err != nil {
+	if _, err := s.Pool.Exec(ctx, "INSERT INTO status_card_items(owner_id,key,field,position,claim_id,claim_version) VALUES($1,$2,'status',0,$3,1)", string(scope.OwnerID), key, string(secondary[0].ID)); err != nil {
 		t.Fatal(err)
 	}
 	batch := []compareMemory{}
 	for i, ref := range refs {
 		batch = append(batch, compareMemory{organizeMemory: organizeMemory{N: i + 1, Ref: ref}})
 	}
-	if err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	if err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		return s.writeComparisonTx(ctx, tx, scope.OwnerID, CompareVersion, batch, []compareEdge{{Old: 1, New: 4, Kind: "superseded"}}, true)
 	}); err != nil {
 		t.Fatal(err)
 	}
 	var stale bool
-	if err := s.pool.QueryRow(ctx, "SELECT stale FROM status_cards WHERE owner_id=$1 AND key=$2", string(scope.OwnerID), key).Scan(&stale); err != nil || stale {
+	if err := s.Pool.QueryRow(ctx, "SELECT stale FROM status_cards WHERE owner_id=$1 AND key=$2", string(scope.OwnerID), key).Scan(&stale); err != nil || stale {
 		t.Fatal("frozen secondary card changed", stale, err)
 	}
 }

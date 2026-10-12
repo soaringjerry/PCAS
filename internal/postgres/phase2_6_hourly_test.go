@@ -36,7 +36,7 @@ func TestPhase26G7T4ActualProviderAttemptAtEachHourlyBoundary(t *testing.T) {
 			t.Errorf("final %s slot actual attempts=%d", tc.stage, len(m.calls(tc.stage)))
 		}
 		var retained int
-		if err := s.pool.QueryRow(ctx, `SELECT count(*) FROM background_usage WHERE stage=$1 AND created_at>now()-interval '1 hour'`, tc.stage).Scan(&retained); err != nil || retained != tc.limit {
+		if err := s.Pool.QueryRow(ctx, `SELECT count(*) FROM background_usage WHERE stage=$1 AND created_at>now()-interval '1 hour'`, tc.stage).Scan(&retained); err != nil || retained != tc.limit {
 			t.Fatalf("retained %s hourly ledger=%d expected=%d err=%v", tc.stage, retained, tc.limit, err)
 		}
 	}

@@ -25,10 +25,10 @@ func TestPhase26B1C8LegacyCardsFrozenUnreadAndFallbackAnswers(t *testing.T) {
 		}
 	}
 	var builds int
-	if err := f.Store.pool.QueryRow(f.Context, `SELECT count(*) FROM memory_jobs WHERE owner_id=$1 AND stage LIKE 'memory.card:%' AND state<>'done'`, f.Scope.OwnerID).Scan(&builds); err != nil || builds != 0 {
+	if err := f.Store.Pool.QueryRow(f.Context, `SELECT count(*) FROM memory_jobs WHERE owner_id=$1 AND stage LIKE 'memory.card:%' AND state<>'done'`, f.Scope.OwnerID).Scan(&builds); err != nil || builds != 0 {
 		t.Fatalf("card builds still queued=%d err=%v", builds, err)
 	}
-	tx, err := f.Store.pool.Begin(f.Context)
+	tx, err := f.Store.Pool.Begin(f.Context)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -74,7 +74,7 @@ func TestRecallGraphHonorsEffectiveAndKnowledgeTime(t *testing.T) {
 			if temporal == "known" {
 				column = "recorded_at"
 			}
-			if _, err := s.pool.Exec(ctx, "UPDATE record_versions SET "+column+"=$3 WHERE owner_id=$1 AND record_id=$2", string(scope.OwnerID), string(hidden.ID), future); err != nil {
+			if _, err := s.Pool.Exec(ctx, "UPDATE record_versions SET "+column+"=$3 WHERE owner_id=$1 AND record_id=$2", string(scope.OwnerID), string(hidden.ID), future); err != nil {
 				t.Fatal(err)
 			}
 			result, err := s.Recall(ctx, scope, memory.RecallRequest{Query: "唯一查询锚点", Mode: memory.Remember, Context: memory.WorkingContext{ValidAt: &now, KnownAt: &now}, Budget: memory.Budget{Candidates: 10, Hops: 2}})

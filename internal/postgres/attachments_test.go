@@ -53,7 +53,7 @@ func TestAttachmentRetentionIdempotencyAndDeletion(t *testing.T) {
 		t.Fatal("wrong attachment metadata", metadata, err)
 	}
 	derived := mustIngest(t, s, scope, memory.IngestRequest{Connector: "attachment-text", ExternalID: string(first.ID), ExternalVersion: "1", Title: "解析文本", Text: "OCR 内容", MediaType: "text/plain"})
-	if _, err := s.pool.Exec(ctx, "UPDATE source_versions SET representation='ocr',derived_from_id=$3,derived_from_version=1 WHERE owner_id=$1 AND source_id=$2", string(scope.OwnerID), string(derived.ID), string(first.ID)); err != nil {
+	if _, err := s.Pool.Exec(ctx, "UPDATE source_versions SET representation='ocr',derived_from_id=$3,derived_from_version=1 WHERE owner_id=$1 AND source_id=$2", string(scope.OwnerID), string(derived.ID), string(first.ID)); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.Delete(ctx, scope, memory.DeleteRequest{Targets: []memory.Ref{first.Ref}, BlockReimport: true}); err != nil {
@@ -115,7 +115,7 @@ func TestOGGAttachmentRetainedAndTranscribedInBackground(t *testing.T) {
 		t.Fatal("OGG not retained")
 	}
 	var queued int
-	if err := s.pool.QueryRow(ctx, "SELECT count(*) FROM memory_jobs WHERE owner_id=$1 AND record_id=$2 AND stage='source.parse' AND state='queued'", string(scope.OwnerID), string(result.ID)).Scan(&queued); err != nil || queued != 1 {
+	if err := s.Pool.QueryRow(ctx, "SELECT count(*) FROM memory_jobs WHERE owner_id=$1 AND record_id=$2 AND stage='source.parse' AND state='queued'", string(scope.OwnerID), string(result.ID)).Scan(&queued); err != nil || queued != 1 {
 		t.Fatal("OGG did not enter the background parse queue", queued, err)
 	}
 	job := leaseStage(t, s, scope, result.Ref, "source.parse")
@@ -123,10 +123,10 @@ func TestOGGAttachmentRetainedAndTranscribedInBackground(t *testing.T) {
 		t.Fatal(err)
 	}
 	var text, representation, status string
-	if err := s.pool.QueryRow(ctx, "SELECT body,representation FROM source_versions WHERE owner_id=$1 AND derived_from_id=$2", string(scope.OwnerID), string(result.ID)).Scan(&text, &representation); err != nil {
+	if err := s.Pool.QueryRow(ctx, "SELECT body,representation FROM source_versions WHERE owner_id=$1 AND derived_from_id=$2", string(scope.OwnerID), string(result.ID)).Scan(&text, &representation); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.pool.QueryRow(ctx, "SELECT state FROM memory_jobs WHERE owner_id=$1 AND record_id=$2 AND stage='source.parse'", string(scope.OwnerID), string(result.ID)).Scan(&status); err != nil {
+	if err := s.Pool.QueryRow(ctx, "SELECT state FROM memory_jobs WHERE owner_id=$1 AND record_id=$2 AND stage='source.parse'", string(scope.OwnerID), string(result.ID)).Scan(&status); err != nil {
 		t.Fatal(err)
 	}
 	if calls.Load() != 1 || text != "明天下午三点开会" || representation != "transcript" || status != "done" {

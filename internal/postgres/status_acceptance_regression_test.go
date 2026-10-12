@@ -52,7 +52,7 @@ func TestStatusRecurringSpacedHourKeepsSpecificAmbiguity(t *testing.T) {
 	})
 	refs := statusTestMemories(t, s, scope, len(texts))
 	for i, ref := range refs {
-		if _, err := s.pool.Exec(ctx, "UPDATE claim_revisions SET value=to_jsonb($3::text) WHERE owner_id=$1 AND claim_id=$2", scope.OwnerID, ref.ID, texts[i]); err != nil {
+		if _, err := s.Pool.Exec(ctx, "UPDATE claim_revisions SET value=to_jsonb($3::text) WHERE owner_id=$1 AND claim_id=$2", scope.OwnerID, ref.ID, texts[i]); err != nil {
 			t.Fatal(err)
 		}
 	}

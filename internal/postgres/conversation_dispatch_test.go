@@ -164,7 +164,7 @@ func TestConversationDispatchUpgradePreservesPendingSegments(t *testing.T) {
 	b4bOperation(t, s, scope, a.Batch, "organize")
 	// Create the same durable first segment that the older worker had already
 	// enqueued, without invoking the newer early-retirement behavior.
-	tx, err := s.pool.Begin(context.Background())
+	tx, err := s.Pool.Begin(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -221,7 +221,7 @@ func TestConversationDispatchLargeQueueUsesBoundedIndexPage(t *testing.T) {
  FROM memory_records WHERE owner_id=$1 AND kind='source' AND id NOT IN(SELECT source_id FROM archive_entries WHERE owner_id=$1)`, string(scope.OwnerID))
 	b2Exec(t, s, `ANALYZE memory_jobs`)
 	b2Exec(t, s, `ANALYZE memory_records`)
-	tx, err := s.pool.Begin(context.Background())
+	tx, err := s.Pool.Begin(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}

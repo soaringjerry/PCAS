@@ -45,7 +45,7 @@ func TestOrganizeCompareHourlyPipelineRetainsCompletedHistory(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, err := s.pool.Exec(ctx, `DELETE FROM memory_jobs WHERE owner_id=$1 AND state='queued' AND stage NOT LIKE $2`, string(scope.OwnerID), stage+":%"); err != nil {
+		if _, err := s.Pool.Exec(ctx, `DELETE FROM memory_jobs WHERE owner_id=$1 AND state='queued' AND stage NOT LIKE $2`, string(scope.OwnerID), stage+":%"); err != nil {
 			t.Fatal(err)
 		}
 		job, err := s.Claim(ctx, time.Minute)
@@ -79,10 +79,10 @@ func TestOrganizeCompareHourlyPipelineRetainsCompletedHistory(t *testing.T) {
 		}
 	}
 	var runtime, billed, orphaned int
-	if err := s.pool.QueryRow(ctx, `SELECT count(*),count(*) FILTER(WHERE j.id IS NULL) FROM background_usage b LEFT JOIN memory_jobs j ON j.id=b.job_id WHERE b.owner_id=$1`, scope.OwnerID).Scan(&billed, &orphaned); err != nil {
+	if err := s.Pool.QueryRow(ctx, `SELECT count(*),count(*) FILTER(WHERE j.id IS NULL) FROM background_usage b LEFT JOIN memory_jobs j ON j.id=b.job_id WHERE b.owner_id=$1`, scope.OwnerID).Scan(&billed, &orphaned); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.pool.QueryRow(ctx, `SELECT count(*) FROM background_usage b JOIN memory_jobs j ON j.id=b.job_id WHERE b.owner_id=$1 AND (j.stage LIKE 'memory.organize:%' OR j.stage LIKE 'memory.compare:%' OR j.stage LIKE 'memory.entity_compare:%') AND b.created_at>now()-interval '1 hour'`, scope.OwnerID).Scan(&runtime); err != nil {
+	if err := s.Pool.QueryRow(ctx, `SELECT count(*) FROM background_usage b JOIN memory_jobs j ON j.id=b.job_id WHERE b.owner_id=$1 AND (j.stage LIKE 'memory.organize:%' OR j.stage LIKE 'memory.compare:%' OR j.stage LIKE 'memory.entity_compare:%') AND b.created_at>now()-interval '1 hour'`, scope.OwnerID).Scan(&runtime); err != nil {
 		t.Fatal(err)
 	}
 	if runtime != 110 || billed != 110 || orphaned != 0 || len(f.all()) != 110 {
@@ -112,7 +112,7 @@ func TestOrganizeCompareHourlyPipelineRetainsCompletedHistory(t *testing.T) {
 		var state, code string
 		var attempts int
 		var due time.Time
-		if err := s.pool.QueryRow(ctx, `SELECT state,error_code,attempts,available_at FROM memory_jobs WHERE id=$1`, job.ID).Scan(&state, &code, &attempts, &due); err != nil {
+		if err := s.Pool.QueryRow(ctx, `SELECT state,error_code,attempts,available_at FROM memory_jobs WHERE id=$1`, job.ID).Scan(&state, &code, &attempts, &due); err != nil {
 			t.Fatal(err)
 		}
 		want := "compare_hourly_limit"
@@ -127,13 +127,13 @@ func TestOrganizeCompareHourlyPipelineRetainsCompletedHistory(t *testing.T) {
 		}
 		if stage == OrganizeStage {
 			var organized, tries int
-			if err := s.pool.QueryRow(ctx, `SELECT organized,organize_attempts FROM claims WHERE owner_id=$1 AND id=$2`, scope.OwnerID, sentinel.ID).Scan(&organized, &tries); err != nil || organized != 0 || tries != 0 {
+			if err := s.Pool.QueryRow(ctx, `SELECT organized,organize_attempts FROM claims WHERE owner_id=$1 AND id=$2`, scope.OwnerID, sentinel.ID).Scan(&organized, &tries); err != nil || organized != 0 || tries != 0 {
 				t.Fatal("sentinel changed", organized, tries, err)
 			}
-			if _, err := s.pool.Exec(ctx, `UPDATE background_usage SET created_at=created_at-interval '1 hour 1 second' WHERE owner_id=$1`, scope.OwnerID); err != nil {
+			if _, err := s.Pool.Exec(ctx, `UPDATE background_usage SET created_at=created_at-interval '1 hour 1 second' WHERE owner_id=$1`, scope.OwnerID); err != nil {
 				t.Fatal(err)
 			}
-			if _, err := s.pool.Exec(ctx, `UPDATE memory_jobs SET available_at=now() WHERE id=$1`, job.ID); err != nil {
+			if _, err := s.Pool.Exec(ctx, `UPDATE memory_jobs SET available_at=now() WHERE id=$1`, job.ID); err != nil {
 				t.Fatal(err)
 			}
 			f.set(`{
@@ -153,7 +153,7 @@ func TestOrganizeCompareHourlyPipelineRetainsCompletedHistory(t *testing.T) {
 			if len(f.all()) != 111 {
 				t.Fatal("next-hour call count", len(f.all()))
 			}
-			if err := s.pool.QueryRow(ctx, `SELECT organized FROM claims WHERE owner_id=$1 AND id=$2`, scope.OwnerID, sentinel.ID).Scan(&organized); err != nil || organized != OrganizeVersion {
+			if err := s.Pool.QueryRow(ctx, `SELECT organized FROM claims WHERE owner_id=$1 AND id=$2`, scope.OwnerID, sentinel.ID).Scan(&organized); err != nil || organized != OrganizeVersion {
 				t.Fatal("next-hour sentinel", organized, err)
 			}
 		}

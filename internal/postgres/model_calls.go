@@ -66,7 +66,7 @@ func (a backgroundCalls) Settle(ctx context.Context, request modelcall.Request, 
 func (a backgroundCalls) Prepare(ctx context.Context, request modelcall.Request, provider ai.Provider) (memory.ID, error) {
 	id := memory.NewID()
 	var blocked error
-	err := pgx.BeginFunc(ctx, a.store.pool, func(tx pgx.Tx) error {
+	err := pgx.BeginFunc(ctx, a.store.Pool, func(tx pgx.Tx) error {
 		// Validate the existing lease before adding call metadata. No transaction
 		// stays open across the provider call.
 		job := request.Policy.(worker.Job)
@@ -148,7 +148,7 @@ func (a backgroundCalls) Prepare(ctx context.Context, request modelcall.Request,
 }
 
 func (a backgroundCalls) Start(ctx context.Context, request modelcall.Request, saved *modelcall.PaidResult) error {
-	return pgx.BeginFunc(ctx, a.store.pool, func(tx pgx.Tx) error {
+	return pgx.BeginFunc(ctx, a.store.Pool, func(tx pgx.Tx) error {
 		if err := kernel.LockJob(ctx, tx, request.Policy.(worker.Job)); err != nil {
 			return err
 		}
@@ -190,13 +190,13 @@ func (a backgroundCalls) PreparationFailed(ctx context.Context, request modelcal
 		// A deferral submits nothing. The queue keeps its reason and next time.
 		// A journal row here would report a limit as a failed model call.
 		// A recovery replacement keeps its row, because it pauses the chain.
-		tag, err := a.store.pool.Exec(persist, `DELETE FROM model_calls WHERE owner_id=$1 AND id=$2 AND outcome='prepared' AND retry_of_id IS NULL`, string(request.OwnerID), string(id))
+		tag, err := a.store.Pool.Exec(persist, `DELETE FROM model_calls WHERE owner_id=$1 AND id=$2 AND outcome='prepared' AND retry_of_id IS NULL`, string(request.OwnerID), string(id))
 		if err != nil || tag.RowsAffected() == 1 {
 			return err
 		}
 	}
 	var recovery string
-	err := a.store.pool.QueryRow(persist, `UPDATE model_calls SET outcome='failed',error_code=$3,finished_at=clock_timestamp(),updated_at=clock_timestamp(),actual_mode=actual_mode||$5::jsonb,recovery_state=CASE WHEN retry_of_id IS NOT NULL AND $4 THEN 'budget_exhausted' ELSE recovery_state END,recovery_reason=CASE WHEN retry_of_id IS NOT NULL AND $4 THEN $3 ELSE recovery_reason END WHERE owner_id=$1 AND id=$2 AND outcome='prepared' RETURNING recovery_state`, string(request.OwnerID), string(id), code, budgetExhausted, kernel.JSON(mode)).Scan(&recovery)
+	err := a.store.Pool.QueryRow(persist, `UPDATE model_calls SET outcome='failed',error_code=$3,finished_at=clock_timestamp(),updated_at=clock_timestamp(),actual_mode=actual_mode||$5::jsonb,recovery_state=CASE WHEN retry_of_id IS NOT NULL AND $4 THEN 'budget_exhausted' ELSE recovery_state END,recovery_reason=CASE WHEN retry_of_id IS NOT NULL AND $4 THEN $3 ELSE recovery_reason END WHERE owner_id=$1 AND id=$2 AND outcome='prepared' RETURNING recovery_state`, string(request.OwnerID), string(id), code, budgetExhausted, kernel.JSON(mode)).Scan(&recovery)
 	if err == nil && recovery == "budget_exhausted" {
 		return modelcall.ErrRecoveryBudgetExhausted
 	}
@@ -210,7 +210,7 @@ func (a backgroundCalls) Save(ctx context.Context, request modelcall.Request, sa
 	a.store.pendingPaid.Store(request.ExecutionID, saved)
 	for {
 		persist, cancel := context.WithTimeout(context.WithoutCancel(ctx), modelcall.PersistenceTimeout)
-		err := pgx.BeginFunc(persist, a.store.pool, func(tx pgx.Tx) error {
+		err := pgx.BeginFunc(persist, a.store.Pool, func(tx pgx.Tx) error {
 			current := true
 			if saved.InvocationID != "" {
 				if err := tx.QueryRow(persist, `SELECT recovery_state<>'replaced' FROM model_calls WHERE owner_id=$1 AND id=$2 FOR UPDATE`, string(request.OwnerID), string(saved.InvocationID)).Scan(&current); err != nil {
@@ -270,7 +270,7 @@ func (a backgroundCalls) AccountingState(ctx context.Context, request modelcall.
 	}
 	persist, cancel := context.WithTimeout(context.WithoutCancel(ctx), modelcall.PersistenceTimeout)
 	defer cancel()
-	_, err := a.store.pool.Exec(persist, `UPDATE model_calls SET accounting_state=$3,updated_at=clock_timestamp() WHERE owner_id=$1 AND id=$2`, string(request.OwnerID), string(saved.InvocationID), state)
+	_, err := a.store.Pool.Exec(persist, `UPDATE model_calls SET accounting_state=$3,updated_at=clock_timestamp() WHERE owner_id=$1 AND id=$2`, string(request.OwnerID), string(saved.InvocationID), state)
 	return err
 }
 
@@ -280,7 +280,7 @@ func (a backgroundCalls) UnknownRecovery(ctx context.Context, job worker.Job) er
 	persist, cancel := context.WithTimeout(context.WithoutCancel(ctx), modelcall.PersistenceTimeout)
 	defer cancel()
 	decision := &worker.JobError{Code: modelcall.ErrOutcomeUnknown.Error(), Retry: true}
-	err := pgx.BeginFunc(persist, a.store.pool, func(tx pgx.Tx) error {
+	err := pgx.BeginFunc(persist, a.store.Pool, func(tx pgx.Tx) error {
 		if err := kernel.LockJob(persist, tx, job); err != nil {
 			return err
 		}
@@ -311,6 +311,6 @@ func (a backgroundCalls) UnknownRecovery(ctx context.Context, job worker.Job) er
 func (a backgroundCalls) Forget(ctx context.Context, request modelcall.Request, saved *modelcall.PaidResult) error {
 	persist, cancel := context.WithTimeout(context.WithoutCancel(ctx), modelcall.PersistenceTimeout)
 	defer cancel()
-	_, err := a.store.pool.Exec(persist, "DELETE FROM background_model_results WHERE owner_id=$1 AND job_id=$2 AND reservation_id=$3", string(request.OwnerID), string(request.ExecutionID), saved.Reservation)
+	_, err := a.store.Pool.Exec(persist, "DELETE FROM background_model_results WHERE owner_id=$1 AND job_id=$2 AND reservation_id=$3", string(request.OwnerID), string(request.ExecutionID), saved.Reservation)
 	return err
 }

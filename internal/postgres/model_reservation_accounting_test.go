@@ -25,7 +25,7 @@ func secretaryCancellationHold(t *testing.T, s *Store, scope memory.Scope, reque
 	for {
 		var held bool
 		var partialCost float64
-		err := s.pool.QueryRow(waitCtx, `SELECT c.outcome='unknown' AND c.accounting_state='held'
+		err := s.Pool.QueryRow(waitCtx, `SELECT c.outcome='unknown' AND c.accounting_state='held'
  AND NOT (c.actual_mode->>'usageComplete')::boolean AND c.usage_id=c.reservation_id
  AND EXISTS(SELECT 1 FROM model_usage u WHERE u.owner_id=c.owner_id AND u.id=c.usage_id),
  (c.actual_mode->>'reservationEstimate')::double precision,
@@ -56,7 +56,7 @@ func TestSecretarySettlesOnlyItsReservation(t *testing.T) {
 			}
 			workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: kernel.JSON(map[string]any{"dailyBudget": 10})})
 			// Another reservation must survive settlement of this call unchanged.
-			if _, err := s.pool.Exec(context.Background(), "INSERT INTO background_usage(owner_id,reserved_cost) VALUES($1,0.03)", string(scope.OwnerID)); err != nil {
+			if _, err := s.Pool.Exec(context.Background(), "INSERT INTO background_usage(owner_id,reserved_cost) VALUES($1,0.03)", string(scope.OwnerID)); err != nil {
 				t.Fatal(err)
 			}
 			ctx, cancel := context.WithCancel(context.Background())
@@ -76,7 +76,7 @@ func TestSecretarySettlesOnlyItsReservation(t *testing.T) {
 					if mode == "cancel" {
 						cancel()
 					} else {
-						if err := s.pool.QueryRow(context.Background(), "SELECT sum(reserved_cost)-0.03 FROM background_usage WHERE owner_id=$1", string(scope.OwnerID)).Scan(&firstReservation); err != nil {
+						if err := s.Pool.QueryRow(context.Background(), "SELECT sum(reserved_cost)-0.03 FROM background_usage WHERE owner_id=$1", string(scope.OwnerID)).Scan(&firstReservation); err != nil {
 							t.Fatal(err)
 						}
 						gate.unblock()
@@ -99,7 +99,7 @@ func TestSecretarySettlesOnlyItsReservation(t *testing.T) {
 				retainedEstimate, _ = secretaryCancellationHold(t, s, scope, request.RequestID)
 			}
 			var reserved float64
-			if err := s.pool.QueryRow(context.Background(), "SELECT sum(reserved_cost) FROM background_usage WHERE owner_id=$1", string(scope.OwnerID)).Scan(&reserved); err != nil {
+			if err := s.Pool.QueryRow(context.Background(), "SELECT sum(reserved_cost) FROM background_usage WHERE owner_id=$1", string(scope.OwnerID)).Scan(&reserved); err != nil {
 				t.Fatal(err)
 			}
 			want := 0.03
@@ -186,7 +186,7 @@ func TestFailedInvocationsUseApplicableBudgetSettlement(t *testing.T) {
 			if gate != nil {
 				select {
 				case <-gate.started:
-					if err := s.pool.QueryRow(context.Background(), `SELECT coalesce((SELECT sum(reserved_cost) FROM agent_runs WHERE owner_id=$1),0)+coalesce((SELECT sum(reserved_cost) FROM background_usage WHERE owner_id=$1),0)`, string(scope.OwnerID)).Scan(&originalReservation); err != nil {
+					if err := s.Pool.QueryRow(context.Background(), `SELECT coalesce((SELECT sum(reserved_cost) FROM agent_runs WHERE owner_id=$1),0)+coalesce((SELECT sum(reserved_cost) FROM background_usage WHERE owner_id=$1),0)`, string(scope.OwnerID)).Scan(&originalReservation); err != nil {
 						t.Fatal(err)
 					}
 					cancel()
@@ -204,7 +204,7 @@ func TestFailedInvocationsUseApplicableBudgetSettlement(t *testing.T) {
 				t.Fatal("call did not end")
 			}
 			var reserved float64
-			if err := s.pool.QueryRow(context.Background(), "SELECT coalesce((SELECT sum(reserved_cost) FROM agent_runs WHERE owner_id=$1),0)+coalesce((SELECT sum(reserved_cost) FROM background_usage WHERE owner_id=$1),0)", string(scope.OwnerID)).Scan(&reserved); err != nil {
+			if err := s.Pool.QueryRow(context.Background(), "SELECT coalesce((SELECT sum(reserved_cost) FROM agent_runs WHERE owner_id=$1),0)+coalesce((SELECT sum(reserved_cost) FROM background_usage WHERE owner_id=$1),0)", string(scope.OwnerID)).Scan(&reserved); err != nil {
 				t.Fatal(err)
 			}
 			want := 0.0
@@ -230,7 +230,7 @@ func TestFailedInvocationsUseApplicableBudgetSettlement(t *testing.T) {
 				want = originalReservation
 				var outcome, accounting string
 				var complete bool
-				if err := s.pool.QueryRow(context.Background(), `SELECT outcome,accounting_state,(actual_mode->>'usageComplete')::boolean FROM model_calls WHERE owner_id=$1`, string(scope.OwnerID)).Scan(&outcome, &accounting, &complete); err != nil || outcome != "unknown" || accounting != "held" || complete {
+				if err := s.Pool.QueryRow(context.Background(), `SELECT outcome,accounting_state,(actual_mode->>'usageComplete')::boolean FROM model_calls WHERE owner_id=$1`, string(scope.OwnerID)).Scan(&outcome, &accounting, &complete); err != nil || outcome != "unknown" || accounting != "held" || complete {
 					t.Fatal("cancellation must retain visible unknown accounting", outcome, accounting, complete, err)
 				}
 			}
@@ -244,7 +244,7 @@ func TestFailedInvocationsUseApplicableBudgetSettlement(t *testing.T) {
 func r1RequireEstimatedInput(t *testing.T, s *Store, scope memory.Scope) {
 	t.Helper()
 	var estimated bool
-	if err := s.pool.QueryRow(context.Background(), `SELECT input_estimated FROM model_usage WHERE owner_id=$1`, scope.OwnerID).Scan(&estimated); err != nil || !estimated {
+	if err := s.Pool.QueryRow(context.Background(), `SELECT input_estimated FROM model_usage WHERE owner_id=$1`, scope.OwnerID).Scan(&estimated); err != nil || !estimated {
 		t.Fatal("missing estimated input accounting for a submitted failed call", estimated, err)
 	}
 }
@@ -292,7 +292,7 @@ func TestConcurrentSecretaryReservationsAreIndependent(t *testing.T) {
 		want += row.Cost
 	}
 	var cost float64
-	if err := s.pool.QueryRow(context.Background(), "SELECT sum(reserved_cost) FROM background_usage WHERE owner_id=$1", string(scope.OwnerID)).Scan(&cost); err != nil {
+	if err := s.Pool.QueryRow(context.Background(), "SELECT sum(reserved_cost) FROM background_usage WHERE owner_id=$1", string(scope.OwnerID)).Scan(&cost); err != nil {
 		t.Fatal(err)
 	}
 	if math.Abs(cost-want) > 1e-9 {
@@ -339,7 +339,7 @@ func TestDeputySettlesReturnedUsageAfterLeaseLoss(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatal(ctx.Err())
 	}
-	_, err := s.pool.Exec(context.Background(), "UPDATE agent_runs SET status='failed',lease_token=NULL,lease_until=NULL,document=jsonb_set(document,'{status}','\"failed\"') WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), run.ID)
+	_, err := s.Pool.Exec(context.Background(), "UPDATE agent_runs SET status='failed',lease_token=NULL,lease_until=NULL,document=jsonb_set(document,'{status}','\"failed\"') WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), run.ID)
 	if err != nil {
 		t.Fatal(err)
 	}

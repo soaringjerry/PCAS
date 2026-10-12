@@ -53,7 +53,7 @@ func (s *Store) scheduleYielded(ctx context.Context, owner memory.ID, stage stri
 	}
 	persist, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 	defer cancel()
-	if e := pgx.BeginFunc(persist, s.pool, func(tx pgx.Tx) error {
+	if e := pgx.BeginFunc(persist, s.Pool, func(tx pgx.Tx) error {
 		return stageEventTx(persist, tx, owner, stage, "failure", "schedule_"+backgroundFailureReason(err), 1)
 	}); e != nil {
 		slog.ErrorContext(ctx, "background event storage failed", "stage", stage, "reason", backgroundFailureReason(e))
@@ -66,7 +66,7 @@ func (s *Store) recordScheduleFailure(ctx context.Context, stage string, err err
 	slog.WarnContext(ctx, "background schedule failed", "stage", stage, "reason", reason)
 	persist, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 	defer cancel()
-	if e := pgx.BeginFunc(persist, s.pool, func(tx pgx.Tx) error { return stageEventTx(persist, tx, "", stage, "failure", "schedule_"+reason, 1) }); e != nil {
+	if e := pgx.BeginFunc(persist, s.Pool, func(tx pgx.Tx) error { return stageEventTx(persist, tx, "", stage, "failure", "schedule_"+reason, 1) }); e != nil {
 		slog.ErrorContext(ctx, "background event storage failed", "stage", stage, "reason", backgroundFailureReason(e))
 	}
 }
@@ -76,7 +76,7 @@ func (s *Store) BackgroundHealth(ctx context.Context, scope memory.Scope) (json.
 		return nil, err
 	}
 	var out json.RawMessage
-	err := s.pool.QueryRow(ctx, `WITH stages AS (SELECT key AS stage,value::int AS budget FROM jsonb_each_text($2::jsonb)),
+	err := s.Pool.QueryRow(ctx, `WITH stages AS (SELECT key AS stage,value::int AS budget FROM jsonb_each_text($2::jsonb)),
  totals AS (SELECT stage,outcome,sum(count) AS n FROM background_stage_events WHERE (owner_id=$1 OR owner_id IS NULL) AND at>now()-interval '1 hour' AND reason NOT IN('reorganize_deadlines_withdrawn','reorganize_requirements_withdrawn') GROUP BY stage,outcome)
  SELECT jsonb_build_object('stages',coalesce(jsonb_agg(jsonb_build_object('stage',s.stage,'hourlyBudget',s.budget,
  'success',coalesce((SELECT n FROM totals WHERE stage=s.stage AND outcome='success'),0),
@@ -95,7 +95,7 @@ func (s *Store) BackgroundHealth(ctx context.Context, scope memory.Scope) (json.
 }
 
 func (s *Store) warnLongDeferrals(ctx context.Context) error {
-	rows, err := s.pool.Query(ctx, `UPDATE background_job_deferrals SET warned=true WHERE NOT warned AND started_at<now()-interval '30 minutes'
+	rows, err := s.Pool.Query(ctx, `UPDATE background_job_deferrals SET warned=true WHERE NOT warned AND started_at<now()-interval '30 minutes'
  RETURNING job_id::text,started_at`)
 	if err != nil {
 		return err

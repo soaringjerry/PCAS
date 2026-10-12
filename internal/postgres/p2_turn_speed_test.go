@@ -72,7 +72,7 @@ func p2TracedStore(t *testing.T, s *Store) *p2Trace {
 	t.Helper()
 	trace := &p2Trace{}
 	trace.reset()
-	cfg := s.pool.Config()
+	cfg := s.Pool.Config()
 	if dir := os.Getenv("PCAS_P2_PLAN_DIR"); dir != "" {
 		seen := map[string]bool{}
 		var planMu sync.Mutex
@@ -137,9 +137,9 @@ func p2TracedStore(t *testing.T, s *Store) *p2Trace {
 	if err != nil {
 		t.Fatal(err)
 	}
-	original := s.pool
-	s.pool = pool
-	t.Cleanup(func() { s.pool = original; pool.Close() })
+	original := s.Pool
+	s.Pool = pool
+	t.Cleanup(func() { s.Pool = original; pool.Close() })
 	return trace
 }
 
@@ -160,7 +160,7 @@ func p2Fixture(t *testing.T, n int) (*Store, memory.Scope) {
 	if _, err := s.Snapshot(ctx, scope); err != nil {
 		t.Fatal(err)
 	}
-	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		var self string
 		id, err := entityTx(ctx, tx, scope.OwnerID, "self", "虚构用户云杉")
 		if err != nil {
@@ -228,7 +228,7 @@ func p2Fixture(t *testing.T, n int) (*Store, memory.Scope) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.pool.Exec(ctx, "ANALYZE"); err != nil {
+	if _, err := s.Pool.Exec(ctx, "ANALYZE"); err != nil {
 		t.Fatal(err)
 	}
 	return s, scope
@@ -264,7 +264,7 @@ func TestP2TurnSpeed(t *testing.T) {
 		t.Run(fmt.Sprint(n), func(t *testing.T) {
 			s, scope := p2Fixture(t, n)
 			if os.Getenv("PCAS_P2_LEGACY") != "" {
-				if _, err := s.pool.Exec(context.Background(), "DROP INDEX claim_source_keys_claim_idx, memory_records_active_updated_idx"); err != nil {
+				if _, err := s.Pool.Exec(context.Background(), "DROP INDEX claim_source_keys_claim_idx, memory_records_active_updated_idx"); err != nil {
 					t.Fatal(err)
 				}
 			}

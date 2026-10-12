@@ -167,7 +167,7 @@ func TestPhase2B1_N7_RefusedUndoIsAtomic(t *testing.T) {
 			if mode == "newer_action" {
 				workspaceCommand(t, s, scope, workspace.Command{Type: "renameThing", ID: out.State.Tasks[0].ID, Title: "后续修改"})
 			} else {
-				if _, err := s.pool.Exec(context.Background(), "UPDATE action_log SET expired_at=now(),changes='[]' WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), action); err != nil {
+				if _, err := s.Pool.Exec(context.Background(), "UPDATE action_log SET expired_at=now(),changes='[]' WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), action); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -359,7 +359,7 @@ func TestPhase2B1_N12_RandomTwentyActionsInTwentySeededGroups(t *testing.T) {
 			}
 			// The coordinator excludes action/undo source records, not genuine
 			// attached originals. Identify operational sources by their connector.
-			rows, err := s.pool.Query(context.Background(), "SELECT id::text FROM sources WHERE owner_id=$1 AND connector='actions'", string(scope.OwnerID))
+			rows, err := s.Pool.Query(context.Background(), "SELECT id::text FROM sources WHERE owner_id=$1 AND connector='actions'", string(scope.OwnerID))
 			if err != nil {
 				t.Fatal(err)
 			}

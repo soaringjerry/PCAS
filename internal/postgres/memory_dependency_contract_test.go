@@ -20,16 +20,16 @@ func TestDependencyVerificationQueriesDoNotGrowWithMemoryCount(t *testing.T) {
 	for i := 0; i < 30; i++ {
 		refs = append(refs, b1Claim(t, s, scope, fmt.Sprintf("Fictitious dependency %d.", i), "fact", "adopted", source))
 	}
-	config := s.pool.Config()
+	config := s.Pool.Config()
 	trace := &b2QueryTrace{}
 	config.ConnConfig.Tracer = trace
 	pool, err := pgxpool.NewWithConfig(context.Background(), config)
 	if err != nil {
 		t.Fatal(err)
 	}
-	original := s.pool
-	s.pool = pool
-	t.Cleanup(func() { s.pool = original; pool.Close() })
+	original := s.Pool
+	s.Pool = pool
+	t.Cleanup(func() { s.Pool = original; pool.Close() })
 	for name, verify := range map[string]func(context.Context, pgx.Tx, memory.Scope, workspace.Run) error{
 		"versions": verifyRunTx,
 		"access":   verifyRunAccessTx,
@@ -59,7 +59,7 @@ func TestDependencyVerificationRejectsMissingZeroVersion(t *testing.T) {
 	workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "Fictitious dependency check"})
 	for _, kind := range []memory.Kind{memory.SourceKind, memory.ClaimKind} {
 		t.Run(string(kind), func(t *testing.T) {
-			err := pgx.BeginFunc(t.Context(), s.pool, func(tx pgx.Tx) error {
+			err := pgx.BeginFunc(t.Context(), s.Pool, func(tx pgx.Tx) error {
 				return verifyRunTx(t.Context(), tx, scope, workspace.Run{AgentID: "model", ContextVersions: []memory.Ref{{ID: memory.NewID(), Version: 0, Kind: kind}}})
 			})
 			if !errors.Is(err, memory.ErrConflict) {

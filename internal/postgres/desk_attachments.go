@@ -31,7 +31,7 @@ func (s *Store) prepareDeskAttachments(ctx context.Context, scope memory.Scope, 
 		if !original.Source.HasAttachment || original.Source.State != "active" || original.Source.MediaType == "application/x-pcas-archive" {
 			return nil, memory.ErrInvalid
 		}
-		err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		err = pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 			_, err := tx.Exec(ctx, "INSERT INTO desk_attachments(owner_id,source_id,source_version,request_id) VALUES($1,$2,$3,$4) ON CONFLICT DO NOTHING", string(scope.OwnerID), string(ref.ID), ref.Version, req.RequestID)
 			if err != nil {
 				return err

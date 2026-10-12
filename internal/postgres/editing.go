@@ -96,7 +96,7 @@ func (s *Store) Correct(ctx context.Context, scope memory.Scope, in memory.Corre
 	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err
 	}
-	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		if err := s.ensureOwner(ctx, tx, scope); err != nil {
 			return err
 		}
@@ -240,7 +240,7 @@ func (s *Store) RecordUse(ctx context.Context, scope memory.Scope, in memory.Use
 	if err := kernel.RequireOwner(scope); err != nil {
 		return err
 	}
-	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error { return recordUseTx(ctx, tx, scope, in) })
+	return pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error { return recordUseTx(ctx, tx, scope, in) })
 }
 func recordUseTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in memory.UseEvent) error {
 	if !in.Ref.ID.Valid() || in.Ref.Version < 1 || in.EventID == "" || len(in.EventID) > 200 || !kernel.OneOf(in.Kind, "user_mention", "confirmation", "adoption") || in.At.IsZero() || in.At.After(time.Now().Add(time.Minute)) {
@@ -274,7 +274,7 @@ func (s *Store) Delete(ctx context.Context, scope memory.Scope, in memory.Delete
 	if err := kernel.RequireOwner(scope); err != nil {
 		return err
 	}
-	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	return pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		if err := s.ensureOwner(ctx, tx, scope); err != nil {
 			return err
 		}

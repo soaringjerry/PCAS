@@ -78,7 +78,7 @@ func EntityCompare(db *postgres.Store) comparison.EntityService {
 // Embedding returns the service of the vector index stages.
 func Embedding(db *postgres.Store) retrieval.Indexer {
 	indexer := retrieval.Indexer{Store: db.IndexStore(), Calls: Gateway(db)}
-	if models := db.Models(); models != nil {
+	if models := db.Models; models != nil {
 		indexer.Providers = models
 	}
 	return indexer
@@ -86,5 +86,5 @@ func Embedding(db *postgres.Store) retrieval.Indexer {
 
 // Voice transcribes the voice messages of a channel.
 func Voice(db *postgres.Store) voice.Transcriber {
-	return voice.Transcriber{Models: db.Models(), Calls: Gateway(db)}
+	return voice.Transcriber{Models: db.Models, Calls: Gateway(db)}
 }

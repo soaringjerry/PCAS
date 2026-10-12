@@ -60,7 +60,7 @@ func (s *Store) claim(ctx context.Context, lease time.Duration, indexOnly bool) 
 	}
 	args := []any{lease.Seconds(), leaseToken, maxAttempts}
 	for {
-		err = s.pool.QueryRow(ctx, query, args...).Scan(&id, &ownerID, &recordID, &job.Record.Version, &job.Stage, &job.Attempts, &token, &kind)
+		err = s.Pool.QueryRow(ctx, query, args...).Scan(&id, &ownerID, &recordID, &job.Record.Version, &job.Stage, &job.Attempts, &token, &kind)
 		if !errors.Is(err, pgx.ErrNoRows) {
 			break
 		}
@@ -71,7 +71,7 @@ func (s *Store) claim(ctx context.Context, lease time.Duration, indexOnly bool) 
 		if len(args) > 3 {
 			cursorArgs = append(cursorArgs, args[3:]...)
 		}
-		err = s.pool.QueryRow(ctx, cursorQuery, cursorArgs...).Scan(&priority, &available, &created, &lastID)
+		err = s.Pool.QueryRow(ctx, cursorQuery, cursorArgs...).Scan(&priority, &available, &created, &lastID)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil
 		}
@@ -105,7 +105,7 @@ func (s *Store) Retry(ctx context.Context, job worker.Job, code string) error {
 }
 
 func (s *Store) finishAttempt(ctx context.Context, job worker.Job, state, code string, delay time.Duration) error {
-	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	return pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		if strings.HasPrefix(job.Stage, "source.extract") {
 			if err := kernel.OwnerLock(ctx, tx, job.OwnerID); err != nil {
 				return err
@@ -134,7 +134,7 @@ func (s *Store) Defer(ctx context.Context, job worker.Job, code string, until ti
 	if noAttempt {
 		decrement = 1
 	}
-	tag, err := s.pool.Exec(ctx, `UPDATE memory_jobs SET state='queued',error_code=$3,available_at=$4,attempts=greatest(0,attempts-$5),
+	tag, err := s.Pool.Exec(ctx, `UPDATE memory_jobs SET state='queued',error_code=$3,available_at=$4,attempts=greatest(0,attempts-$5),
         lease_until=NULL,lease_token=NULL,updated_at=now() WHERE id=$1 AND lease_token=$2 AND state='leased' AND lease_until>clock_timestamp()`,
 		string(job.ID), string(job.LeaseToken), code, until, decrement)
 	if err != nil {
@@ -149,7 +149,7 @@ func (s *Store) Defer(ctx context.Context, job worker.Job, code string, until ti
 		// instance recorded about 1,400 such deferrals on 2026-10-09 for two
 		// stages. The other jobs stay queued and keep their order; only their
 		// earliest time moves to the window that this deferral found.
-		if _, err := s.pool.Exec(ctx, `UPDATE memory_jobs SET available_at=$2,updated_at=now() WHERE state='queued' AND split_part(stage,':',1)=split_part($1,':',1) AND available_at<$2`, job.Stage, until); err != nil {
+		if _, err := s.Pool.Exec(ctx, `UPDATE memory_jobs SET available_at=$2,updated_at=now() WHERE state='queued' AND split_part(stage,':',1)=split_part($1,':',1) AND available_at<$2`, job.Stage, until); err != nil {
 			return err
 		}
 	}
@@ -157,7 +157,7 @@ func (s *Store) Defer(ctx context.Context, job worker.Job, code string, until ti
 }
 
 func (s *Store) expireExhaustedJobs(ctx context.Context) error {
-	rows, err := s.pool.Query(ctx, `SELECT id::text,owner_id::text,record_id::text,record_version,stage,lease_token::text FROM memory_jobs
+	rows, err := s.Pool.Query(ctx, `SELECT id::text,owner_id::text,record_id::text,record_version,stage,lease_token::text FROM memory_jobs
         WHERE state='leased' AND lease_until<now() AND attempts >= $1 AND NOT (`+persistentStageSQL+`)`, maxAttempts)
 	if err != nil {
 		return err
@@ -177,7 +177,7 @@ func (s *Store) expireExhaustedJobs(ctx context.Context) error {
 		return err
 	}
 	for _, j := range jobs {
-		if err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		if err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 			if strings.HasPrefix(j.Stage, "source.extract") {
 				if err := kernel.OwnerLock(ctx, tx, j.OwnerID); err != nil {
 					return err
@@ -207,7 +207,7 @@ func (s *Store) expireExhaustedJobs(ctx context.Context) error {
 }
 
 func (s *Store) ProcessChunks(ctx context.Context, job worker.Job) error {
-	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	return pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		var valid bool
 		err := tx.QueryRow(ctx, `SELECT set_config('pcas.cause_job',id::text,true) IS NOT NULL FROM memory_jobs WHERE id=$1 AND owner_id=$2 AND record_id=$3 AND record_version=$4
 			AND lease_token=$5 AND state='leased' AND stage='source.chunk' AND lease_until>clock_timestamp() FOR UPDATE`,

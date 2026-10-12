@@ -41,7 +41,7 @@ func phase3Revision(t *testing.T, h *phase3HTTP, f *phase3LoadedFixture, docID s
 		t.Fatalf("revision metadata/current output wrong: %+v list=%+v", current, list)
 	}
 	var action string
-	if err := f.Store.pool.QueryRow(f.Context, `SELECT id::text FROM action_log WHERE owner_id=$1 AND undone_at IS NULL ORDER BY action_order DESC LIMIT 1`, f.Scope.OwnerID).Scan(&action); err != nil {
+	if err := f.Store.Pool.QueryRow(f.Context, `SELECT id::text FROM action_log WHERE owner_id=$1 AND undone_at IS NULL ORDER BY action_order DESC LIMIT 1`, f.Scope.OwnerID).Scan(&action); err != nil {
 		t.Fatal(err)
 	}
 	return action, current
@@ -95,7 +95,7 @@ func TestPhase3D4BadRevisionPreservesGoodVersionAndReason(t *testing.T) {
 				t.Fatal("bad revision replaced good version")
 			}
 			var raw []byte
-			if err := f.Store.pool.QueryRow(f.Context, `SELECT document FROM agent_runs WHERE owner_id=$1 AND id=$2`, f.Scope.OwnerID, id).Scan(&raw); err != nil {
+			if err := f.Store.Pool.QueryRow(f.Context, `SELECT document FROM agent_runs WHERE owner_id=$1 AND id=$2`, f.Scope.OwnerID, id).Scan(&raw); err != nil {
 				t.Fatal(err)
 			}
 			var r workspace.Run
@@ -174,7 +174,7 @@ func TestPhase3D5ContinuousSkipAndInsertedUndoSequences(t *testing.T) {
 				// Restoring B means undoing the recorded undo (the existing
 				// mechanism: an undo is itself an action), not undoing B again.
 				var restore string
-				if err := f.Store.pool.QueryRow(f.Context, `SELECT id::text FROM action_log WHERE owner_id=$1 AND undone_at IS NULL ORDER BY action_order DESC LIMIT 1`, f.Scope.OwnerID).Scan(&restore); err != nil {
+				if err := f.Store.Pool.QueryRow(f.Context, `SELECT id::text FROM action_log WHERE owner_id=$1 AND undone_at IS NULL ORDER BY action_order DESC LIMIT 1`, f.Scope.OwnerID).Scan(&restore); err != nil {
 					t.Fatal(err)
 				}
 				phase3Undo(t, h, f, restore)

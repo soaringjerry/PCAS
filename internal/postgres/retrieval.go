@@ -86,7 +86,7 @@ func (s *Store) RecallWith(ctx context.Context, scope memory.Scope, in memory.Re
 	} else {
 		out.Coverage.Gaps = append(out.Coverage.Gaps, "未配置语义索引；模糊措辞的覆盖尚不完整")
 	}
-	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	err = pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		return s.recallTx(ctx, tx, scope, in, b, query, fts, vector, model, offset, fingerprint, tokens, &out)
 	})
 	if len(out.Coverage.PendingSources) > 0 {
@@ -208,8 +208,8 @@ func (s *Store) recallTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in 
 	// A diagnostic clock fixes decay only. Production retains the transaction's
 	// now(), and applicable versions, permissions, and usage keep actual time.
 	var activityAt *time.Time
-	if s.businessClock != nil {
-		at := s.businessNow()
+	if s.HasBusinessClock() {
+		at := s.BusinessNow()
 		activityAt = &at
 	}
 	args = append(args, activityAt)
@@ -402,7 +402,7 @@ func (s *Store) Expand(ctx context.Context, scope memory.Scope, in memory.Expand
 			return out, memory.ErrInvalid
 		}
 	}
-	returnOutErr := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	returnOutErr := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		refs := []memory.Ref{}
 		for _, ref := range in.Refs {
 			if !ref.ID.Valid() || ref.Version < 0 {

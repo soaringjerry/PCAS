@@ -218,7 +218,7 @@ func (a interactiveCalls) Load(ctx context.Context, r modelcall.Request) (*model
 	if err != nil {
 		return nil, err
 	}
-	row, err := latestInteractiveCall(ctx, a.store.pool, r)
+	row, err := latestInteractiveCall(ctx, a.store.Pool, r)
 	if err != nil || row == nil {
 		return nil, err
 	}
@@ -260,7 +260,7 @@ func (a interactiveCalls) Load(ctx context.Context, r modelcall.Request) (*model
 		return paid, nil
 	}
 	var prompt json.RawMessage
-	err = a.store.pool.QueryRow(ctx, `SELECT prompt,output FROM background_model_results WHERE owner_id=$1 AND job_id=$2 AND reservation_id=$3 AND provider_id=$4 AND model=$5`, string(r.OwnerID), string(row.ID), paid.Reservation, paid.Provider, paid.Model).Scan(&prompt, &paid.Output)
+	err = a.store.Pool.QueryRow(ctx, `SELECT prompt,output FROM background_model_results WHERE owner_id=$1 AND job_id=$2 AND reservation_id=$3 AND provider_id=$4 AND model=$5`, string(r.OwnerID), string(row.ID), paid.Reservation, paid.Provider, paid.Model).Scan(&prompt, &paid.Output)
 	if errors.Is(err, pgx.ErrNoRows) {
 		paid.NotApplicable = true
 		return paid, nil
@@ -285,7 +285,7 @@ func (a interactiveCalls) Prepare(ctx context.Context, r modelcall.Request, prov
 	}
 	id := memory.NewID()
 	p := r.Policy.(interactiveCallPolicy)
-	err = pgx.BeginFunc(ctx, a.store.pool, func(tx pgx.Tx) error {
+	err = pgx.BeginFunc(ctx, a.store.Pool, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended(current_database()||':'||current_schema()||':interactive:'||$1||':'||$2||':'||$3,0))`, string(r.OwnerID), string(r.ExecutionID), r.Stage); err != nil {
 			return err
 		}
@@ -387,7 +387,7 @@ func (a interactiveCalls) reserveDeputyRun(ctx context.Context, r modelcall.Requ
 		return reservation, err
 	}
 	p := r.Policy.(interactiveCallPolicy)
-	err := pgx.BeginFunc(ctx, a.store.pool, func(tx pgx.Tx) error {
+	err := pgx.BeginFunc(ctx, a.store.Pool, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(r.OwnerID)); err != nil {
 			return err
 		}
@@ -414,7 +414,7 @@ func (a interactiveCalls) settleDeputyRun(ctx context.Context, r modelcall.Reque
 	}
 	persist, cancel := context.WithTimeout(context.WithoutCancel(ctx), modelcall.PersistenceTimeout)
 	defer cancel()
-	return pgx.BeginFunc(persist, a.store.pool, func(tx pgx.Tx) error {
+	return pgx.BeginFunc(persist, a.store.Pool, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(persist, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(r.OwnerID)); err != nil {
 			return err
 		}
@@ -468,7 +468,7 @@ func (a interactiveCalls) Start(ctx context.Context, r modelcall.Request, paid *
 			return err
 		}
 	}
-	return pgx.BeginFunc(ctx, a.store.pool, func(tx pgx.Tx) error {
+	return pgx.BeginFunc(ctx, a.store.Pool, func(tx pgx.Tx) error {
 		if mainDeputy {
 			if _, err := tx.Exec(ctx, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(r.OwnerID)); err != nil {
 				return err
@@ -527,7 +527,7 @@ func (a interactiveCalls) Save(ctx context.Context, r modelcall.Request, paid *m
 	a.store.pendingInteractive.Store(paid.InvocationID, entry)
 	for {
 		persist, cancel := context.WithTimeout(context.WithoutCancel(ctx), modelcall.PersistenceTimeout)
-		err := pgx.BeginFunc(persist, a.store.pool, func(tx pgx.Tx) error {
+		err := pgx.BeginFunc(persist, a.store.Pool, func(tx pgx.Tx) error {
 			p := r.Policy.(interactiveCallPolicy)
 			mainDeputy := p.BudgetOwner == "deputy_run"
 			if mainDeputy {
@@ -717,7 +717,7 @@ func (a interactiveCalls) Record(ctx context.Context, r modelcall.Request, paid 
 	persist, cancel := context.WithTimeout(context.WithoutCancel(ctx), modelcall.PersistenceTimeout)
 	defer cancel()
 	var usage modelUsage
-	if err := a.store.pool.QueryRow(persist, `SELECT actual_mode->'originalUsage' FROM model_calls WHERE owner_id=$1 AND id=$2`, string(r.OwnerID), string(paid.InvocationID)).Scan(&usage); err != nil {
+	if err := a.store.Pool.QueryRow(persist, `SELECT actual_mode->'originalUsage' FROM model_calls WHERE owner_id=$1 AND id=$2`, string(r.OwnerID), string(paid.InvocationID)).Scan(&usage); err != nil {
 		return err
 	}
 	usage.OwnerID = r.OwnerID
@@ -898,7 +898,7 @@ func (a interactiveCalls) deputyInput(ctx context.Context, q interface {
 
 func (a interactiveCalls) deputySelection(ctx context.Context, owner memory.ID, run workspace.Run, main memory.ID) (*deputyResultSelection, string, error) {
 	var row interactiveCallRow
-	if err := a.store.pool.QueryRow(ctx, `SELECT to_jsonb(c) FROM model_calls c WHERE owner_id=$1 AND id=$2 AND execution_id=$3 AND input_manifest->>'origin'=$4 AND input_manifest->>'budgetOwner'='deputy_run'`, string(owner), string(main), run.ID, run.CreatedAt).Scan(&row); err != nil {
+	if err := a.store.Pool.QueryRow(ctx, `SELECT to_jsonb(c) FROM model_calls c WHERE owner_id=$1 AND id=$2 AND execution_id=$3 AND input_manifest->>'origin'=$4 AND input_manifest->>'budgetOwner'='deputy_run'`, string(owner), string(main), run.ID, run.CreatedAt).Scan(&row); err != nil {
 		return nil, "", err
 	}
 	selection := row.Mode.DeputySelection
@@ -915,7 +915,7 @@ func (a interactiveCalls) deputySelection(ctx context.Context, owner memory.ID, 
 	var output string
 	var receipt interactiveReceipt
 	var stage string
-	err := a.store.pool.QueryRow(ctx, `SELECT b.output,c.result_receipt,c.stage FROM model_calls c JOIN background_model_results b ON b.owner_id=c.owner_id AND b.job_id=c.id AND b.reservation_id=c.reservation_id AND b.provider_id=c.provider_id AND b.model=c.model WHERE c.owner_id=$1 AND c.id=$2 AND c.execution_id=$3 AND c.input_manifest->>'origin'=$4 AND NOT coalesce((c.actual_mode->>'inputDeleted')::boolean,false) AND c.outcome='returned'`, string(owner), string(selection.Output), run.ID, run.CreatedAt).Scan(&output, &receipt, &stage)
+	err := a.store.Pool.QueryRow(ctx, `SELECT b.output,c.result_receipt,c.stage FROM model_calls c JOIN background_model_results b ON b.owner_id=c.owner_id AND b.job_id=c.id AND b.reservation_id=c.reservation_id AND b.provider_id=c.provider_id AND b.model=c.model WHERE c.owner_id=$1 AND c.id=$2 AND c.execution_id=$3 AND c.input_manifest->>'origin'=$4 AND NOT coalesce((c.actual_mode->>'inputDeleted')::boolean,false) AND c.outcome='returned'`, string(owner), string(selection.Output), run.ID, run.CreatedAt).Scan(&output, &receipt, &stage)
 	if err != nil {
 		return nil, "", err
 	}
@@ -929,7 +929,7 @@ func (a interactiveCalls) saveDeputySelection(ctx context.Context, r modelcall.R
 	a.store.pendingDeputySelections.Store(selection.Main, selection)
 	persist, cancel := context.WithTimeout(context.WithoutCancel(ctx), modelcall.PersistenceTimeout)
 	defer cancel()
-	err := pgx.BeginFunc(persist, a.store.pool, func(tx pgx.Tx) error {
+	err := pgx.BeginFunc(persist, a.store.Pool, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(persist, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(r.OwnerID)); err != nil {
 			return err
 		}
@@ -987,6 +987,6 @@ func (a interactiveCalls) recordDeputyApplicationTx(ctx context.Context, tx pgx.
 // The deputy owner has already closed these executions after an interruption.
 // This observation links the skipped application; it cannot resume generation.
 func (a interactiveCalls) recordInterruptedDeputyApplications(ctx context.Context) error {
-	_, err := a.store.pool.Exec(ctx, `UPDATE model_calls c SET actual_mode=actual_mode||jsonb_build_object('applicationOutcome','not_applicable','applicationReason','deputy_execution_interrupted'),updated_at=clock_timestamp() WHERE c.function_name='deputy' AND c.stage='answer' AND c.input_manifest->>'budgetOwner'='deputy_run' AND NOT(c.actual_mode ? 'applicationOutcome') AND EXISTS(SELECT 1 FROM agent_runs r WHERE r.owner_id=c.owner_id AND r.id=c.execution_id AND r.document->>'createdAt'=c.input_manifest->>'origin' AND r.status='failed' AND r.document->>'error'='进程中断，结果和用量未确认；未自动重试')`)
+	_, err := a.store.Pool.Exec(ctx, `UPDATE model_calls c SET actual_mode=actual_mode||jsonb_build_object('applicationOutcome','not_applicable','applicationReason','deputy_execution_interrupted'),updated_at=clock_timestamp() WHERE c.function_name='deputy' AND c.stage='answer' AND c.input_manifest->>'budgetOwner'='deputy_run' AND NOT(c.actual_mode ? 'applicationOutcome') AND EXISTS(SELECT 1 FROM agent_runs r WHERE r.owner_id=c.owner_id AND r.id=c.execution_id AND r.document->>'createdAt'=c.input_manifest->>'origin' AND r.status='failed' AND r.document->>'error'='进程中断，结果和用量未确认；未自动重试')`)
 	return err
 }

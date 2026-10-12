@@ -141,36 +141,36 @@ func TestSecretaryModelRetryOutcomeAndIdempotency(t *testing.T) {
 					{"SELECT count(*) FROM model_usage WHERE owner_id=$1 AND purpose='secretary'", usage},
 				} {
 					var count int
-					if err := s.pool.QueryRow(context.Background(), check.sql, string(scope.OwnerID)).Scan(&count); err != nil || count != check.count {
+					if err := s.Pool.QueryRow(context.Background(), check.sql, string(scope.OwnerID)).Scan(&count); err != nil || count != check.count {
 						t.Fatal(check.sql, count, check.count, err)
 					}
 				}
 				var cost float64
 				var measured float64
-				if err := s.pool.QueryRow(context.Background(), "SELECT sum(reserved_cost) FROM background_usage WHERE owner_id=$1", string(scope.OwnerID)).Scan(&cost); err != nil || cost <= 0 {
+				if err := s.Pool.QueryRow(context.Background(), "SELECT sum(reserved_cost) FROM background_usage WHERE owner_id=$1", string(scope.OwnerID)).Scan(&cost); err != nil || cost <= 0 {
 					t.Fatal("subscription calls bypassed daily accounting", cost, err)
 				}
-				if err := s.pool.QueryRow(context.Background(), "SELECT sum(cost) FROM model_usage WHERE owner_id=$1", string(scope.OwnerID)).Scan(&measured); err != nil {
+				if err := s.Pool.QueryRow(context.Background(), "SELECT sum(cost) FROM model_usage WHERE owner_id=$1", string(scope.OwnerID)).Scan(&measured); err != nil {
 					t.Fatal(err)
 				}
 				if tt.category == "other" {
 					var outcome, accounting string
 					var estimate float64
 					var complete bool
-					if err := s.pool.QueryRow(context.Background(), `SELECT outcome,accounting_state,(actual_mode->>'reservationEstimate')::double precision,(actual_mode->>'usageComplete')::boolean FROM model_calls WHERE owner_id=$1 AND execution_id=$2 AND stage='answer'`, string(scope.OwnerID), req.RequestID).Scan(&outcome, &accounting, &estimate, &complete); err != nil || outcome != "unknown" || accounting != "held" || complete || math.Abs(cost-estimate) > 1e-9 {
+					if err := s.Pool.QueryRow(context.Background(), `SELECT outcome,accounting_state,(actual_mode->>'reservationEstimate')::double precision,(actual_mode->>'usageComplete')::boolean FROM model_calls WHERE owner_id=$1 AND execution_id=$2 AND stage='answer'`, string(scope.OwnerID), req.RequestID).Scan(&outcome, &accounting, &estimate, &complete); err != nil || outcome != "unknown" || accounting != "held" || complete || math.Abs(cost-estimate) > 1e-9 {
 						t.Fatal("unknown result lost its original reservation or claimed complete usage", outcome, accounting, cost, estimate, complete, err)
 					}
 				} else if math.Abs(cost-measured) > 1e-9 {
 					t.Fatal("usage and reservation settlement differ", cost, measured)
 				}
 				var linked int
-				if err := s.pool.QueryRow(context.Background(), `SELECT count(*) FROM model_calls c JOIN model_usage u ON (u.owner_id,u.id)=(c.owner_id,c.usage_id) JOIN background_usage b ON (b.owner_id,b.id)=(c.owner_id,c.reservation_id) WHERE c.owner_id=$1 AND c.execution_id=$2 AND c.root_execution_id=c.execution_id AND c.stage='answer' AND c.usage_id=c.reservation_id AND u.purpose='secretary'`, string(scope.OwnerID), req.RequestID).Scan(&linked); err != nil || linked != tt.calls {
+				if err := s.Pool.QueryRow(context.Background(), `SELECT count(*) FROM model_calls c JOIN model_usage u ON (u.owner_id,u.id)=(c.owner_id,c.usage_id) JOIN background_usage b ON (b.owner_id,b.id)=(c.owner_id,c.reservation_id) WHERE c.owner_id=$1 AND c.execution_id=$2 AND c.root_execution_id=c.execution_id AND c.stage='answer' AND c.usage_id=c.reservation_id AND u.purpose='secretary'`, string(scope.OwnerID), req.RequestID).Scan(&linked); err != nil || linked != tt.calls {
 					t.Fatal("secretary invocation lost its original execution and billing links", linked, tt.calls, err)
 				}
 			}
 			assertRows()
 			var original string
-			if err := s.pool.QueryRow(context.Background(), "SELECT v.body FROM source_versions v JOIN sources s ON (s.owner_id,s.id)=(v.owner_id,v.source_id) WHERE s.owner_id=$1 AND s.connector=$2 AND s.external_id=$3", string(scope.OwnerID), connector, req.RequestID).Scan(&original); err != nil || original != req.Text {
+			if err := s.Pool.QueryRow(context.Background(), "SELECT v.body FROM source_versions v JOIN sources s ON (s.owner_id,s.id)=(v.owner_id,v.source_id) WHERE s.owner_id=$1 AND s.connector=$2 AND s.external_id=$3", string(scope.OwnerID), connector, req.RequestID).Scan(&original); err != nil || original != req.Text {
 				t.Fatal("original was not saved exactly once", err)
 			}
 			if strings.Contains(logs.String(), "private") || strings.Contains(logs.String(), "secret-token") {
@@ -195,7 +195,7 @@ func TestSecretaryModelRetryDefersBusinessWrites(t *testing.T) {
 	secretaryRetryGate(t, dir, done, func() {
 		for _, table := range []string{"work_items", "sources", "action_log"} {
 			var count int
-			if err := s.pool.QueryRow(context.Background(), "SELECT count(*) FROM "+table+" WHERE owner_id=$1", string(scope.OwnerID)).Scan(&count); err != nil || count != 0 {
+			if err := s.Pool.QueryRow(context.Background(), "SELECT count(*) FROM "+table+" WHERE owner_id=$1", string(scope.OwnerID)).Scan(&count); err != nil || count != 0 {
 				t.Error("business write before final model result", table, count, err)
 			}
 		}

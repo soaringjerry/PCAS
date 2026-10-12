@@ -44,7 +44,7 @@ func (s *Store) RunConnectors(ctx context.Context, logger *slog.Logger) error {
 }
 func (s *Store) syncNextConnection(ctx context.Context) error {
 	lease := syncLease{Token: memory.NewID()}
-	err := s.pool.QueryRow(ctx, `WITH candidate AS (SELECT id FROM connector_configs WHERE enabled AND kind IN ('poll','folder') AND next_sync<=now() AND (lease_until IS NULL OR lease_until<now()) ORDER BY next_sync FOR UPDATE SKIP LOCKED LIMIT 1) UPDATE connector_configs c SET lease_token=$1,lease_until=now()+interval '2 minutes',status='syncing' FROM candidate n WHERE c.id=n.id RETURNING c.owner_id::text,c.id::text,c.name,c.kind,c.url,c.token_env,c.version,c.cursor,c.etag`, string(lease.Token)).Scan(&lease.Owner, &lease.Connection.ID, &lease.Connection.Name, &lease.Connection.Kind, &lease.Connection.URL, &lease.Connection.TokenEnv, &lease.Connection.Version, &lease.Cursor, &lease.ETag)
+	err := s.Pool.QueryRow(ctx, `WITH candidate AS (SELECT id FROM connector_configs WHERE enabled AND kind IN ('poll','folder') AND next_sync<=now() AND (lease_until IS NULL OR lease_until<now()) ORDER BY next_sync FOR UPDATE SKIP LOCKED LIMIT 1) UPDATE connector_configs c SET lease_token=$1,lease_until=now()+interval '2 minutes',status='syncing' FROM candidate n WHERE c.id=n.id RETURNING c.owner_id::text,c.id::text,c.name,c.kind,c.url,c.token_env,c.version,c.cursor,c.etag`, string(lease.Token)).Scan(&lease.Owner, &lease.Connection.ID, &lease.Connection.Name, &lease.Connection.Kind, &lease.Connection.URL, &lease.Connection.TokenEnv, &lease.Connection.Version, &lease.Cursor, &lease.ETag)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil
 	}
@@ -59,7 +59,7 @@ func (s *Store) syncNextConnection(ctx context.Context) error {
 		err = s.syncHTTP(work, lease)
 	}
 	if err != nil {
-		_, _ = s.pool.Exec(context.WithoutCancel(ctx), `UPDATE connector_configs SET status='error',error_code=$3,next_sync=now()+interval_seconds*interval '1 second',lease_token=NULL,lease_until=NULL WHERE id=$1 AND lease_token=$2`, string(lease.Connection.ID), string(lease.Token), syncError(err))
+		_, _ = s.Pool.Exec(context.WithoutCancel(ctx), `UPDATE connector_configs SET status='error',error_code=$3,next_sync=now()+interval_seconds*interval '1 second',lease_token=NULL,lease_until=NULL WHERE id=$1 AND lease_token=$2`, string(lease.Connection.ID), string(lease.Token), syncError(err))
 	}
 	return err
 }
@@ -188,7 +188,7 @@ func (s *Store) syncFolder(ctx context.Context, l syncLease) error {
 		fingerprint := hex.EncodeToString(sum[:])
 		pathHash := sha256.Sum256([]byte(entry.Name()))
 		var previous string
-		err = s.pool.QueryRow(ctx, "SELECT fingerprint FROM connector_files WHERE owner_id=$1 AND connector_id=$2 AND path_hash=$3", string(l.Owner), string(l.Connection.ID), pathHash[:]).Scan(&previous)
+		err = s.Pool.QueryRow(ctx, "SELECT fingerprint FROM connector_files WHERE owner_id=$1 AND connector_id=$2 AND path_hash=$3", string(l.Owner), string(l.Connection.ID), pathHash[:]).Scan(&previous)
 		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			return err
 		}
@@ -217,7 +217,7 @@ func (s *Store) syncFolder(ctx context.Context, l syncLease) error {
 	return s.finishSync(ctx, l, batch, "", fingerprints)
 }
 func (s *Store) finishSync(ctx context.Context, l syncLease, b connectors.Batch, etag string, files map[string]string) error {
-	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	return pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		var exists bool
 		err := tx.QueryRow(ctx, "SELECT true FROM connector_configs WHERE id=$1 AND lease_token=$2 AND enabled AND lease_until>clock_timestamp() FOR UPDATE", string(l.Connection.ID), string(l.Token)).Scan(&exists)
 		if errors.Is(err, pgx.ErrNoRows) {

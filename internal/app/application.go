@@ -45,7 +45,7 @@ func Reader(db *postgres.Store) reader.Service {
 // of a query from the model.
 func Recall(db *postgres.Store) retrieval.Recaller {
 	recaller := retrieval.Recaller{Store: db, Calls: Gateway(db)}
-	if models := db.Models(); models != nil {
+	if models := db.Models; models != nil {
 		recaller.Providers = models
 	}
 	return recaller
@@ -53,7 +53,7 @@ func Recall(db *postgres.Store) retrieval.Recaller {
 
 // Attachments parses original files with the configured models.
 func Attachments(db *postgres.Store) attachment.Reader {
-	return attachment.Reader{Models: db.Models(), Calls: Gateway(db), ErrorType: secretary.ErrorType}
+	return attachment.Reader{Models: db.Models, Calls: Gateway(db), ErrorType: secretary.ErrorType}
 }
 
 // Attachment returns the handler of the job of an uploaded file.

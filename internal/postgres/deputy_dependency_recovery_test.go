@@ -56,7 +56,7 @@ func TestDeputyCompletionRechecksDependencyAccess(t *testing.T) {
 			if change == "correct-and-delete" {
 				// A missing dependency in the final verification must win even if an
 				// earlier dependency was corrected. Full deletion is covered below too.
-				if _, err := s.pool.Exec(context.Background(), "UPDATE memory_records SET state='withdrawn' WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), string(second.ID)); err != nil {
+				if _, err := s.Pool.Exec(context.Background(), "UPDATE memory_records SET state='withdrawn' WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), string(second.ID)); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -104,7 +104,7 @@ func TestDeputyCompletionRechecksDependencyAccess(t *testing.T) {
 				deadline := time.Now().Add(21 * time.Second)
 				for {
 					var ledger float64
-					if err := s.pool.QueryRow(context.Background(), `SELECT coalesce(sum(cost),0) FROM model_usage WHERE owner_id=$1`, scope.OwnerID).Scan(&ledger); err != nil {
+					if err := s.Pool.QueryRow(context.Background(), `SELECT coalesce(sum(cost),0) FROM model_usage WHERE owner_id=$1`, scope.OwnerID).Scan(&ledger); err != nil {
 						t.Fatal(err)
 					}
 					st, err = s.Snapshot(context.Background(), scope)

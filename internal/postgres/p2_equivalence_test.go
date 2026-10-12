@@ -53,7 +53,7 @@ func (tx p2ReadOnlyTx) QueryRow(ctx context.Context, sql string, args ...any) pg
 func p2AssertReads(t *testing.T, s *Store, scope memory.Scope) {
 	t.Helper()
 	ctx := context.Background()
-	err := pgx.BeginTxFunc(ctx, s.pool, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
+	err := pgx.BeginTxFunc(ctx, s.Pool, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
 		tx = p2ReadOnlyTx{tx}
 		for _, principal := range []string{"model", "ungranted"} {
 			for _, thing := range []*string{nil, stringPointer(p2ID("task", 4))} {
@@ -209,7 +209,7 @@ func TestP2QueriesAreByteIdentical(t *testing.T) {
 			sql = strings.ReplaceAll(strings.ReplaceAll(sql, "$6", "$2"), "$7", "$3")
 			args = []any{scope.OwnerID, p2ID("task", 4), p2ID("claim", 4)}
 		}
-		if _, err := s.pool.Exec(ctx, sql, args...); err != nil {
+		if _, err := s.Pool.Exec(ctx, sql, args...); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -218,7 +218,7 @@ func TestP2QueriesAreByteIdentical(t *testing.T) {
 	// AI revision. The old temporal resolver remains the oracle for both views.
 	// This editor path consumes the key's hexadecimal spelling as well as its
 	// identity; use a synthetic 32-byte key for the corrected claim.
-	if _, err := s.pool.Exec(ctx, "UPDATE claim_source_keys SET claim_key=md5(claim_key)||md5('synthetic-'||claim_key) WHERE owner_id=$1 AND claim_id=$2", scope.OwnerID, p2ID("claim", 3)); err != nil {
+	if _, err := s.Pool.Exec(ctx, "UPDATE claim_source_keys SET claim_key=md5(claim_key)||md5('synthetic-'||claim_key) WHERE owner_id=$1 AND claim_id=$2", scope.OwnerID, p2ID("claim", 3)); err != nil {
 		t.Fatal(err)
 	}
 	workspaceCommand(t, s, scope, workspace.Command{Type: "editMemory", ID: p2ID("claim", 3), Text: "虚构人物云杉纠正后的季度汇报说明。"})
@@ -228,10 +228,10 @@ func TestP2QueriesAreByteIdentical(t *testing.T) {
 func TestP2IndexDoesNotChangeBytes(t *testing.T) {
 	s, scope := p2Fixture(t, 120)
 	ctx := context.Background()
-	if _, err := s.pool.Exec(ctx, "DROP INDEX claim_source_keys_claim_idx, memory_records_active_updated_idx"); err != nil {
+	if _, err := s.Pool.Exec(ctx, "DROP INDEX claim_source_keys_claim_idx, memory_records_active_updated_idx"); err != nil {
 		t.Fatal(err)
 	}
-	err := pgx.BeginTxFunc(ctx, s.pool, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
+	err := pgx.BeginTxFunc(ctx, s.Pool, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
 		tx = p2ReadOnlyTx{tx}
 		before, err := s.p2LegacySnapshotTx(ctx, tx, scope)
 		if err != nil {
@@ -245,7 +245,7 @@ func TestP2IndexDoesNotChangeBytes(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		if _, err := s.pool.Exec(ctx, string(body)); err != nil {
+		if _, err := s.Pool.Exec(ctx, string(body)); err != nil {
 			return err
 		}
 		after, err := s.p2LegacySnapshotTx(ctx, tx, scope)
@@ -276,35 +276,35 @@ func TestP2RandomVisibilityAndSourceSequence(t *testing.T) {
 		claim, source := p2ID("claim", n), p2ID("source", n)
 		switch rng.Intn(8) {
 		case 0:
-			_, err := s.pool.Exec(ctx, "DELETE FROM record_grants WHERE owner_id=$1 AND record_id=$2 AND principal_id='model'", scope.OwnerID, claim)
+			_, err := s.Pool.Exec(ctx, "DELETE FROM record_grants WHERE owner_id=$1 AND record_id=$2 AND principal_id='model'", scope.OwnerID, claim)
 			if err != nil {
 				t.Fatal(err)
 			}
 		case 1:
-			_, err := s.pool.Exec(ctx, "INSERT INTO record_grants VALUES($1,$2,'model') ON CONFLICT DO NOTHING", scope.OwnerID, claim)
+			_, err := s.Pool.Exec(ctx, "INSERT INTO record_grants VALUES($1,$2,'model') ON CONFLICT DO NOTHING", scope.OwnerID, claim)
 			if err != nil {
 				t.Fatal(err)
 			}
 		case 2:
 			state := []string{"active", "withdrawn"}[rng.Intn(2)]
-			_, err := s.pool.Exec(ctx, "UPDATE memory_records SET state=$3 WHERE owner_id=$1 AND id=$2", scope.OwnerID, source, state)
+			_, err := s.Pool.Exec(ctx, "UPDATE memory_records SET state=$3 WHERE owner_id=$1 AND id=$2", scope.OwnerID, source, state)
 			if err != nil {
 				t.Fatal(err)
 			}
 		case 3:
 			actor := []string{"ai", "user"}[rng.Intn(2)]
-			_, err := s.pool.Exec(ctx, "UPDATE record_versions SET actor=$3 WHERE owner_id=$1 AND record_id=$2", scope.OwnerID, claim, actor)
+			_, err := s.Pool.Exec(ctx, "UPDATE record_versions SET actor=$3 WHERE owner_id=$1 AND record_id=$2", scope.OwnerID, claim, actor)
 			if err != nil {
 				t.Fatal(err)
 			}
 		case 4:
 			hours := []int{-48, 48}[rng.Intn(2)]
-			_, err := s.pool.Exec(ctx, "UPDATE record_versions SET valid_from=now()+$3::int*interval '1 hour' WHERE owner_id=$1 AND record_id=$2", scope.OwnerID, claim, hours)
+			_, err := s.Pool.Exec(ctx, "UPDATE record_versions SET valid_from=now()+$3::int*interval '1 hour' WHERE owner_id=$1 AND record_id=$2", scope.OwnerID, claim, hours)
 			if err != nil {
 				t.Fatal(err)
 			}
 		case 5:
-			err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+			err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 				var version int
 				if err := tx.QueryRow(ctx, "SELECT version FROM memory_records WHERE owner_id=$1 AND id=$2 FOR UPDATE", scope.OwnerID, source).Scan(&version); err != nil {
 					return err
@@ -324,17 +324,17 @@ func TestP2RandomVisibilityAndSourceSequence(t *testing.T) {
 				t.Fatal(err)
 			}
 		case 6:
-			_, err := s.pool.Exec(ctx, "INSERT INTO context_exclusions VALUES($1,$2,$3) ON CONFLICT DO NOTHING", scope.OwnerID, p2ID("task", 4), claim)
+			_, err := s.Pool.Exec(ctx, "INSERT INTO context_exclusions VALUES($1,$2,$3) ON CONFLICT DO NOTHING", scope.OwnerID, p2ID("task", 4), claim)
 			if err != nil {
 				t.Fatal(err)
 			}
 		case 7:
-			_, err := s.pool.Exec(ctx, "UPDATE claim_revisions SET acquisition='inferred',confirmation='candidate' WHERE owner_id=$1 AND claim_id=$2", scope.OwnerID, claim)
+			_, err := s.Pool.Exec(ctx, "UPDATE claim_revisions SET acquisition='inferred',confirmation='candidate' WHERE owner_id=$1 AND claim_id=$2", scope.OwnerID, claim)
 			if err != nil {
 				t.Fatal(err)
 			}
 		}
-		err := pgx.BeginTxFunc(ctx, s.pool, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
+		err := pgx.BeginTxFunc(ctx, s.Pool, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
 			for _, current := range []bool{false, true} {
 				for _, sc := range []memory.Scope{scope, {OwnerID: scope.OwnerID, PrincipalID: "model"}} {
 					old, err := s.p2LegacyReadMemoriesTx(ctx, tx, sc, current, memoryReadOptions{})
@@ -408,7 +408,7 @@ func TestP2LargeResultsAreByteIdentical(t *testing.T) {
 	}
 	s, scope := p2Fixture(t, 10000)
 	ctx := context.Background()
-	err := pgx.BeginTxFunc(ctx, s.pool, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
+	err := pgx.BeginTxFunc(ctx, s.Pool, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
 		tx = p2ReadOnlyTx{tx}
 		a, err := s.p2LegacySnapshotTx(ctx, tx, scope)
 		if err != nil {
@@ -458,21 +458,21 @@ func TestP2LargeResultsAreByteIdentical(t *testing.T) {
 func TestP2RecallTemporalAndVectorBytes(t *testing.T) {
 	s, scope := p2Fixture(t, 120)
 	ctx := context.Background()
-	if _, err := s.pool.Exec(ctx, `INSERT INTO embeddings(owner_id,record_id,record_version,model,dimensions,embedding)
+	if _, err := s.Pool.Exec(ctx, `INSERT INTO embeddings(owner_id,record_id,record_version,model,dimensions,embedding)
  SELECT owner_id,record_id,version,'p2-fictional-vector',2,'[1,0]'::vector FROM record_versions
  WHERE owner_id=$1 AND record_id=ANY($2::uuid[])`, scope.OwnerID, []string{p2ID("claim", 5), p2ID("claim", 97), p2ID("source", 5)}); err != nil {
 		t.Fatal(err)
 	}
 	// A source revision, a future-valid claim and a user correction exercise the
 	// original resolver with historical known-time and current source identity.
-	if _, err := s.pool.Exec(ctx, "UPDATE record_versions SET valid_from=now()+interval '1 day' WHERE owner_id=$1 AND record_id=$2", scope.OwnerID, p2ID("claim", 5)); err != nil {
+	if _, err := s.Pool.Exec(ctx, "UPDATE record_versions SET valid_from=now()+interval '1 day' WHERE owner_id=$1 AND record_id=$2", scope.OwnerID, p2ID("claim", 5)); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.pool.Exec(ctx, "UPDATE claim_source_keys SET claim_key=md5(claim_key)||md5('synthetic-'||claim_key) WHERE owner_id=$1 AND claim_id=$2", scope.OwnerID, p2ID("claim", 97)); err != nil {
+	if _, err := s.Pool.Exec(ctx, "UPDATE claim_source_keys SET claim_key=md5(claim_key)||md5('synthetic-'||claim_key) WHERE owner_id=$1 AND claim_id=$2", scope.OwnerID, p2ID("claim", 97)); err != nil {
 		t.Fatal(err)
 	}
 	workspaceCommand(t, s, scope, workspace.Command{Type: "editMemory", ID: p2ID("claim", 97), Text: "虚构人物云杉纠正后的季度汇报说明。"})
-	err := pgx.BeginTxFunc(ctx, s.pool, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
+	err := pgx.BeginTxFunc(ctx, s.Pool, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
 		var now time.Time
 		if err := tx.QueryRow(ctx, "SELECT now()").Scan(&now); err != nil {
 			return err
@@ -508,18 +508,18 @@ func TestP2SourceDependentArtifactsAreByteIdentical(t *testing.T) {
 	ctx := context.Background()
 	// The adopted run depends on the raw source, while the source's visibility
 	// is governed by a claim extracted later. That claim is not a run dependency.
-	if _, err := s.pool.Exec(ctx, "UPDATE run_dependencies SET memory_id=$3 WHERE owner_id=$1 AND run_id=$2", scope.OwnerID, p2ID("run", 1), p2ID("source", 1)); err != nil {
+	if _, err := s.Pool.Exec(ctx, "UPDATE run_dependencies SET memory_id=$3 WHERE owner_id=$1 AND run_id=$2", scope.OwnerID, p2ID("run", 1), p2ID("source", 1)); err != nil {
 		t.Fatal(err)
 	}
 	p2AssertReads(t, s, scope)
-	if _, err := s.pool.Exec(ctx, "DELETE FROM record_grants WHERE owner_id=$1 AND record_id=$2 AND principal_id='model'", scope.OwnerID, p2ID("claim", 1)); err != nil {
+	if _, err := s.Pool.Exec(ctx, "DELETE FROM record_grants WHERE owner_id=$1 AND record_id=$2 AND principal_id='model'", scope.OwnerID, p2ID("claim", 1)); err != nil {
 		t.Fatal(err)
 	}
 	p2AssertReads(t, s, scope)
-	if _, err := s.pool.Exec(ctx, "INSERT INTO record_grants VALUES($1,$2,'model')", scope.OwnerID, p2ID("claim", 1)); err != nil {
+	if _, err := s.Pool.Exec(ctx, "INSERT INTO record_grants VALUES($1,$2,'model')", scope.OwnerID, p2ID("claim", 1)); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.pool.Exec(ctx, "INSERT INTO context_exclusions VALUES($1,$2,$3)", scope.OwnerID, p2ID("task", 1), p2ID("claim", 1)); err != nil {
+	if _, err := s.Pool.Exec(ctx, "INSERT INTO context_exclusions VALUES($1,$2,$3)", scope.OwnerID, p2ID("task", 1), p2ID("claim", 1)); err != nil {
 		t.Fatal(err)
 	}
 	p2AssertReads(t, s, scope)

@@ -113,15 +113,15 @@ func (s *Store) scheduleCompareVersion(ctx context.Context, now time.Time, versi
 	if now.IsZero() || version < 1 {
 		return 0, memory.ErrInvalid
 	}
-	if s.models == nil {
+	if s.Models == nil {
 		return 0, nil
 	}
-	p, ok := s.models.Get(s.models.ExtractionID())
+	p, ok := s.Models.Get(s.Models.ExtractionID())
 	if !ok || p.Embedding || p.Transcription {
 		return 0, nil
 	}
 	count := 0
-	rows, err := s.pool.Query(ctx, "SELECT DISTINCT cl.owner_id::text"+compareCurrent, OrganizeVersion)
+	rows, err := s.Pool.Query(ctx, "SELECT DISTINCT cl.owner_id::text"+compareCurrent, OrganizeVersion)
 	if err != nil {
 		return count, err
 	}
@@ -167,7 +167,7 @@ func (s *Store) scheduleCompareVersion(ctx context.Context, now time.Time, versi
 					continue
 				}
 			}
-			e := backgroundResultTx(ctx, s.pool, owner, func(ctx context.Context, tx pgx.Tx) error {
+			e := backgroundResultTx(ctx, s.Pool, owner, func(ctx context.Context, tx pgx.Tx) error {
 				if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended(current_database()||':'||current_schema()||':queue:'||$1||':'||$2,0))", string(owner), backgroundStage(map[bool]string{false: CompareStage, true: EntityCompareStage}[entity])); err != nil {
 					return err
 				}
@@ -232,7 +232,7 @@ func (s *Store) comparisonConnection(ctx context.Context) (*pgxpool.Conn, func()
 // One organize, comparison, or entity scan call runs at a time. busy is the
 // deferral code of the caller that finds the lock held.
 func (s *Store) organizeCallConnection(ctx context.Context, busy string, wait time.Duration) (*pgxpool.Conn, func(), error) {
-	conn, err := s.pool.Acquire(ctx)
+	conn, err := s.Pool.Acquire(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -296,11 +296,11 @@ type compareSession struct {
 
 func (a compareSession) Ready() error {
 	unavailable := &worker.JobError{Code: "provider_unavailable", Until: time.Now().Add(CompareInterval), NoAttempt: true}
-	if a.store.models == nil {
+	if a.store.Models == nil {
 		return unavailable
 	}
-	p, ok := a.store.models.Get(a.store.models.ExtractionID())
-	if !ok || p.Embedding || p.Transcription || !a.store.models.Available(p.ID) {
+	p, ok := a.store.Models.Get(a.store.Models.ExtractionID())
+	if !ok || p.Embedding || p.Transcription || !a.store.Models.Available(p.ID) {
 		return unavailable
 	}
 	return nil

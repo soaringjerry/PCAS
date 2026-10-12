@@ -16,7 +16,7 @@ func b3FixedID(n int) memory.ID { return memory.ID(fmt.Sprintf("b3000000-0000-40
 func b3BaselineData(t *testing.T, s *Store, scope memory.Scope) {
 	t.Helper()
 	workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: kernel.JSON(map[string]string{"timezone": "Asia/Shanghai"})})
-	tx, err := s.pool.Begin(t.Context())
+	tx, err := s.Pool.Begin(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}

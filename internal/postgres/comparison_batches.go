@@ -236,7 +236,7 @@ func writeComparisonReceiptTx(ctx context.Context, tx pgx.Tx, owner memory.ID, v
 
 func (s *Store) nextComparisonBatch(ctx context.Context, owner memory.ID, version int) (*comparisonBatch, error) {
 	var batch *comparisonBatch
-	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		var e error
 		batch, e = nextComparisonBatchTx(ctx, tx, owner, version)
 		return e

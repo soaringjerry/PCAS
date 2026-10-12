@@ -47,7 +47,7 @@ func orderedTicketWait(t *testing.T, s *Store, scope memory.Scope, request strin
 	defer ticker.Stop()
 	for {
 		var order int64
-		err := s.pool.QueryRow(ctx, "SELECT admission_order FROM desk_turn_order WHERE owner_id=$1 AND request_id=$2", string(scope.OwnerID), request).Scan(&order)
+		err := s.Pool.QueryRow(ctx, "SELECT admission_order FROM desk_turn_order WHERE owner_id=$1 AND request_id=$2", string(scope.OwnerID), request).Scan(&order)
 		if err == nil {
 			return order
 		}
@@ -75,7 +75,7 @@ func orderedCurrentInput(r *http.Request) string {
 }
 func orderedPeer(t *testing.T, s *Store) *Store {
 	t.Helper()
-	peer, err := Open(context.Background(), s.pool.Config().ConnString())
+	peer, err := Open(context.Background(), s.Pool.Config().ConnString())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -112,7 +112,7 @@ func TestSecretaryOrderCommittedFIFOAcrossStores(t *testing.T) {
 			http.Error(w, "unexpected fixture", 500)
 		}
 	})
-	peer.SetModels(s.models)
+	peer.SetModels(s.Models)
 	requests := []workspace.DeskTurnRequest{turnRequest("三点开会"), turnRequest("改四点"), turnRequest("最后改五点")}
 	for i := range requests {
 		requests[i].ConversationID = &conversation
@@ -190,7 +190,7 @@ func TestSecretaryOrderWaitingUsesNoSlots(t *testing.T) {
 		}
 		secretaryModelReply(w, `{"actions":[{"op":"create_task","title":"ordered task"}]}`)
 	})
-	peer.SetModels(s.models)
+	peer.SetModels(s.Models)
 	req := turnRequest("held")
 	req.ConversationID = &conversation
 	results := []<-chan orderedTurnResult{orderedTurnStart(s, context.Background(), scope, req)}
@@ -245,7 +245,7 @@ func TestSecretaryOrderDuplicateCancellationDoesNotCancelCreator(t *testing.T) {
 		<-release
 		secretaryModelReply(w, `{"actions":[{"op":"create_task","title":"only once"}]}`)
 	})
-	peer.SetModels(s.models)
+	peer.SetModels(s.Models)
 	req := turnRequest("same request with null conversation")
 	original := orderedTurnStart(s, context.Background(), scope, req)
 	select {
@@ -275,7 +275,7 @@ func TestSecretaryOrderDuplicateCancellationDoesNotCancelCreator(t *testing.T) {
 		t.Fatal("duplicate affected creator/queue identity")
 	}
 	var count int
-	if err := s.pool.QueryRow(context.Background(), "SELECT count(*) FROM desk_turn_order WHERE owner_id=$1 AND request_id=$2", string(scope.OwnerID), req.RequestID).Scan(&count); err != nil || count != 1 {
+	if err := s.Pool.QueryRow(context.Background(), "SELECT count(*) FROM desk_turn_order WHERE owner_id=$1 AND request_id=$2", string(scope.OwnerID), req.RequestID).Scan(&count); err != nil || count != 1 {
 		t.Fatal(err, count)
 	}
 }
@@ -283,7 +283,7 @@ func TestSecretaryOrderDuplicateCancellationDoesNotCancelCreator(t *testing.T) {
 func orderedTicketStatus(t *testing.T, s *Store, scope memory.Scope, request, want string) {
 	t.Helper()
 	var status string
-	if err := s.pool.QueryRow(context.Background(), "SELECT status FROM desk_turn_order WHERE owner_id=$1 AND request_id=$2", string(scope.OwnerID), request).Scan(&status); err != nil || status != want {
+	if err := s.Pool.QueryRow(context.Background(), "SELECT status FROM desk_turn_order WHERE owner_id=$1 AND request_id=$2", string(scope.OwnerID), request).Scan(&status); err != nil || status != want {
 		t.Fatalf("ticket status=%s want=%s err=%v", status, want, err)
 	}
 }
@@ -330,7 +330,7 @@ func TestSecretaryOrderQueuedCancellationAndCaptureRecovery(t *testing.T) {
 				}
 			} else {
 				// A real PostgreSQL execution lock holds the queue head before generation.
-				conn, err := s.pool.Acquire(context.Background())
+				conn, err := s.Pool.Acquire(context.Background())
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -380,7 +380,7 @@ func TestSecretaryOrderQueuedCancellationAndCaptureRecovery(t *testing.T) {
 			}
 			var sourceID string
 			var version int
-			if err := s.pool.QueryRow(context.Background(), `SELECT s.id::text,v.version FROM sources s JOIN source_versions v ON(v.owner_id,v.source_id)=(s.owner_id,s.id) WHERE s.owner_id=$1 AND s.connector='desk-incomplete' AND s.external_id=$2`, string(scope.OwnerID), canceled.RequestID).Scan(&sourceID, &version); err != nil {
+			if err := s.Pool.QueryRow(context.Background(), `SELECT s.id::text,v.version FROM sources s JOIN source_versions v ON(v.owner_id,v.source_id)=(s.owner_id,s.id) WHERE s.owner_id=$1 AND s.connector='desk-incomplete' AND s.external_id=$2`, string(scope.OwnerID), canceled.RequestID).Scan(&sourceID, &version); err != nil {
 				t.Fatal(err)
 			}
 			source, err := s.GetSource(context.Background(), scope, memory.ID(sourceID), version)
@@ -388,10 +388,10 @@ func TestSecretaryOrderQueuedCancellationAndCaptureRecovery(t *testing.T) {
 				t.Fatalf("source original/processing: %v %+v", err, source)
 			}
 			var jobs, candidates int
-			if err := s.pool.QueryRow(context.Background(), "SELECT count(*) FROM memory_jobs WHERE owner_id=$1 AND record_id=$2", string(scope.OwnerID), sourceID).Scan(&jobs); err != nil || jobs != 0 {
+			if err := s.Pool.QueryRow(context.Background(), "SELECT count(*) FROM memory_jobs WHERE owner_id=$1 AND record_id=$2", string(scope.OwnerID), sourceID).Scan(&jobs); err != nil || jobs != 0 {
 				t.Fatal("retired input has an automatic processing/retry job", err, jobs)
 			}
-			if err := s.pool.QueryRow(context.Background(), "SELECT count(*) FROM capture_candidates WHERE owner_id=$1 AND source_id=$2 AND state='pending' AND document->>'kind'='unknown' AND document->>'text'=$3", string(scope.OwnerID), sourceID, canceled.Text).Scan(&candidates); err != nil || candidates != 1 {
+			if err := s.Pool.QueryRow(context.Background(), "SELECT count(*) FROM capture_candidates WHERE owner_id=$1 AND source_id=$2 AND state='pending' AND document->>'kind'='unknown' AND document->>'text'=$3", string(scope.OwnerID), sourceID, canceled.Text).Scan(&candidates); err != nil || candidates != 1 {
 				t.Fatal("unknown original missing", err, candidates)
 			}
 			if err := s.Delete(context.Background(), scope, memory.DeleteRequest{Targets: []memory.Ref{{ID: memory.ID(sourceID), Version: version}}, BlockReimport: true}); err != nil {
@@ -403,11 +403,11 @@ func TestSecretaryOrderQueuedCancellationAndCaptureRecovery(t *testing.T) {
 			}
 			var question, answer string
 			var response []byte
-			if err := s.pool.QueryRow(context.Background(), "SELECT question,answer,response FROM desk_turns WHERE owner_id=$1 AND request_id=$2", string(scope.OwnerID), canceled.RequestID).Scan(&question, &answer, &response); err != nil || question != "" || answer != "" || strings.Contains(string(response), "private-f15") {
+			if err := s.Pool.QueryRow(context.Background(), "SELECT question,answer,response FROM desk_turns WHERE owner_id=$1 AND request_id=$2", string(scope.OwnerID), canceled.RequestID).Scan(&question, &answer, &response); err != nil || question != "" || answer != "" || strings.Contains(string(response), "private-f15") {
 				t.Fatal("deleted original retained in persisted exchange", err, question, answer, string(response))
 			}
 			var sources int
-			if err := s.pool.QueryRow(context.Background(), "SELECT count(*) FROM sources WHERE owner_id=$1 AND connector='desk-incomplete' AND external_id=$2", string(scope.OwnerID), canceled.RequestID).Scan(&sources); err != nil || sources != 0 {
+			if err := s.Pool.QueryRow(context.Background(), "SELECT count(*) FROM sources WHERE owner_id=$1 AND connector='desk-incomplete' AND external_id=$2", string(scope.OwnerID), canceled.RequestID).Scan(&sources); err != nil || sources != 0 {
 				t.Fatal("scrubbed replay recreated source", err, sources)
 			}
 		})
@@ -423,7 +423,7 @@ func TestSecretaryOrderCanceledBeforeAdmission(t *testing.T) {
 		t.Fatal(err)
 	}
 	var count int
-	if err := s.pool.QueryRow(context.Background(), "SELECT count(*) FROM desk_turn_order WHERE owner_id=$1 AND request_id=$2", string(scope.OwnerID), req.RequestID).Scan(&count); err != nil || count != 0 {
+	if err := s.Pool.QueryRow(context.Background(), "SELECT count(*) FROM desk_turn_order WHERE owner_id=$1 AND request_id=$2", string(scope.OwnerID), req.RequestID).Scan(&count); err != nil || count != 0 {
 		t.Fatal("canceled input was admitted", err, count)
 	}
 }
@@ -444,12 +444,12 @@ func TestSecretaryOrderRecoveryDoesNotDeletePublishedCaptureJob(t *testing.T) {
 	if _, err := s.admitSecretaryTurn(ctx, ctx, string(scope.OwnerID), req.RequestID, conversation, hash[:]); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.pool.Exec(context.Background(), "UPDATE desk_turn_order SET status='failed' WHERE owner_id=$1 AND request_id=$2", string(scope.OwnerID), req.RequestID); err != nil {
+	if _, err := s.Pool.Exec(context.Background(), "UPDATE desk_turn_order SET status='failed' WHERE owner_id=$1 AND request_id=$2", string(scope.OwnerID), req.RequestID); err != nil {
 		t.Fatal(err)
 	}
 	orderedAssertCapture(t, orderedTurnResult{out: mustTurn(t, s, scope, req)}, req.Text)
 	var count int
-	if err := s.pool.QueryRow(context.Background(), "SELECT count(*) FROM memory_jobs WHERE owner_id=$1 AND record_id=$2 AND record_version=$3 AND stage='source.chunk' AND state='queued'", string(scope.OwnerID), string(normal.ID), normal.Version).Scan(&count); err != nil || count != 1 {
+	if err := s.Pool.QueryRow(context.Background(), "SELECT count(*) FROM memory_jobs WHERE owner_id=$1 AND record_id=$2 AND record_version=$3 AND stage='source.chunk' AND state='queued'", string(scope.OwnerID), string(normal.ID), normal.Version).Scan(&count); err != nil || count != 1 {
 		t.Fatal("published ordinary capture job was removed", err, count)
 	}
 }
@@ -472,14 +472,14 @@ func TestSecretaryOrderRecoveryDuplicateDoesNotSuppressPublishedJobs(t *testing.
 	if _, err := s.admitSecretaryTurn(ctx, ctx, string(scope.OwnerID), req.RequestID, conversation, hash[:]); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.pool.Exec(context.Background(), "UPDATE desk_turn_order SET status='failed' WHERE owner_id=$1 AND request_id=$2", string(scope.OwnerID), req.RequestID); err != nil {
+	if _, err := s.Pool.Exec(context.Background(), "UPDATE desk_turn_order SET status='failed' WHERE owner_id=$1 AND request_id=$2", string(scope.OwnerID), req.RequestID); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.DeskTurn(context.Background(), scope, req); !errors.Is(err, memory.ErrConflict) {
 		t.Fatal("source identity collision was falsely acknowledged", err)
 	}
 	var count int
-	if err := s.pool.QueryRow(context.Background(), "SELECT count(*) FROM memory_jobs WHERE owner_id=$1 AND record_id=$2 AND stage='source.chunk' AND state='queued'", string(scope.OwnerID), string(source.ID)).Scan(&count); err != nil || count != 1 {
+	if err := s.Pool.QueryRow(context.Background(), "SELECT count(*) FROM memory_jobs WHERE owner_id=$1 AND record_id=$2 AND stage='source.chunk' AND state='queued'", string(scope.OwnerID), string(source.ID)).Scan(&count); err != nil || count != 1 {
 		t.Fatal("preexisting published job suppressed", err, count)
 	}
 	orderedTicketStatus(t, s, scope, req.RequestID, "failed")
@@ -508,7 +508,7 @@ func TestSecretaryOrderConnectionLossThenNewStoreContinues(t *testing.T) {
 		}
 		secretaryModelReply(w, fmt.Sprintf(`{"actions":[{"op":"update","ref":"THIS","set":{"due":"%s"}}]}`, testsupport.DateFromToday(t, "UTC", 1, 17, 0).Format("2006-01-02T15:04")))
 	})
-	peer.SetModels(s.models)
+	peer.SetModels(s.Models)
 	req := turnRequest("old failed update")
 	req.ConversationID = &conversation
 	req.ThingID = &id
@@ -519,11 +519,11 @@ func TestSecretaryOrderConnectionLossThenNewStoreContinues(t *testing.T) {
 		t.Fatal("first model never entered")
 	}
 	var pid int
-	if err := peer.pool.QueryRow(context.Background(), `SELECT pid FROM pg_locks WHERE locktype='advisory' AND granted AND ((classid::bigint<<32)|objid::bigint)=hashtextextended($1,0)`, secretaryConversationKey(string(scope.OwnerID), conversation)).Scan(&pid); err != nil {
+	if err := peer.Pool.QueryRow(context.Background(), `SELECT pid FROM pg_locks WHERE locktype='advisory' AND granted AND ((classid::bigint<<32)|objid::bigint)=hashtextextended($1,0)`, secretaryConversationKey(string(scope.OwnerID), conversation)).Scan(&pid); err != nil {
 		t.Fatal(err)
 	}
 	var terminated bool
-	if err := peer.pool.QueryRow(context.Background(), "SELECT pg_terminate_backend($1)", pid).Scan(&terminated); err != nil || !terminated {
+	if err := peer.Pool.QueryRow(context.Background(), "SELECT pg_terminate_backend($1)", pid).Scan(&terminated); err != nil || !terminated {
 		t.Fatal("failed to terminate own generation connection", err, terminated)
 	}
 	unblock()
@@ -533,7 +533,7 @@ func TestSecretaryOrderConnectionLossThenNewStoreContinues(t *testing.T) {
 	}
 	orderedTicketStatus(t, s, scope, req.RequestID, "failed")
 	restarted := orderedPeer(t, s)
-	restarted.SetModels(s.models)
+	restarted.SetModels(s.Models)
 	next := turnRequest("newest update")
 	next.ConversationID = &conversation
 	next.ThingID = &id
@@ -572,14 +572,14 @@ func TestSecretaryOrderExpiredAdmissionSurvivesStoreRestart(t *testing.T) {
 		t.Fatal(err, ticket)
 	}
 	var expires time.Time
-	if err := s.pool.QueryRow(context.Background(), "SELECT expires_at FROM desk_turn_order WHERE owner_id=$1 AND request_id=$2", string(scope.OwnerID), req.RequestID).Scan(&expires); err != nil {
+	if err := s.Pool.QueryRow(context.Background(), "SELECT expires_at FROM desk_turn_order WHERE owner_id=$1 AND request_id=$2", string(scope.OwnerID), req.RequestID).Scan(&expires); err != nil {
 		t.Fatal(err)
 	}
 	deadline, _ := ctx.Deadline()
 	if !expires.Equal(deadline.Truncate(time.Microsecond)) {
 		t.Fatalf("expiry did not retain initial deadline: %s %s", expires, deadline)
 	}
-	if _, err := s.pool.Exec(context.Background(), "UPDATE desk_turn_order SET expires_at=clock_timestamp()-interval '1 second' WHERE owner_id=$1 AND request_id=$2", string(scope.OwnerID), req.RequestID); err != nil {
+	if _, err := s.Pool.Exec(context.Background(), "UPDATE desk_turn_order SET expires_at=clock_timestamp()-interval '1 second' WHERE owner_id=$1 AND request_id=$2", string(scope.OwnerID), req.RequestID); err != nil {
 		t.Fatal(err)
 	}
 	restarted := orderedPeer(t, s)
@@ -589,7 +589,7 @@ func TestSecretaryOrderExpiredAdmissionSurvivesStoreRestart(t *testing.T) {
 		secretaryModelReply(w, `{"actions":[{"op":"create_task","title":"new intent after restart"}]}`)
 	})
 	// Prove expiry cannot bypass a still-held transaction fence.
-	conn, err := s.pool.Acquire(context.Background())
+	conn, err := s.Pool.Acquire(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}

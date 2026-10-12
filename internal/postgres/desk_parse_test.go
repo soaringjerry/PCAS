@@ -96,7 +96,7 @@ func TestSecretaryModelOutputRecovery(t *testing.T) {
 				}
 			}
 			var saved string
-			if err := s.pool.QueryRow(context.Background(), `SELECT v.body FROM source_versions v JOIN sources s ON (s.owner_id,s.id)=(v.owner_id,v.source_id) WHERE s.owner_id=$1 AND s.connector=$2 AND s.external_id=$3`, string(scope.OwnerID), connector, req.RequestID).Scan(&saved); err != nil || saved != req.Text {
+			if err := s.Pool.QueryRow(context.Background(), `SELECT v.body FROM source_versions v JOIN sources s ON (s.owner_id,s.id)=(v.owner_id,v.source_id) WHERE s.owner_id=$1 AND s.connector=$2 AND s.external_id=$3`, string(scope.OwnerID), connector, req.RequestID).Scan(&saved); err != nil || saved != req.Text {
 				t.Fatal("original not saved", err, saved)
 			}
 			assertSecretaryLog(t, logs, tt.level, tt.stage, tt.errorType)

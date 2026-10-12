@@ -95,14 +95,14 @@ func TestP3ExecutionTimingRecordsSecretaryAndDeputy(t *testing.T) {
 				t.Fatalf("missing segments/selfcheck: %s", raw)
 			}
 			var before, after string
-			if err := s.pool.QueryRow(ctx, "SELECT row_to_json(e)::text FROM execution_timings e WHERE owner_id=$1 AND id=$2", scope.OwnerID, out.Turn.ID).Scan(&before); err != nil {
+			if err := s.Pool.QueryRow(ctx, "SELECT row_to_json(e)::text FROM execution_timings e WHERE owner_id=$1 AND id=$2", scope.OwnerID, out.Turn.ID).Scan(&before); err != nil {
 				t.Fatal(err)
 			}
 			replay := mustTurn(t, s, scope, req)
 			if replay.Turn.ID != out.Turn.ID {
 				t.Fatal("replay changed turn")
 			}
-			if err := s.pool.QueryRow(ctx, "SELECT row_to_json(e)::text FROM execution_timings e WHERE owner_id=$1 AND id=$2", scope.OwnerID, out.Turn.ID).Scan(&after); err != nil || before != after {
+			if err := s.Pool.QueryRow(ctx, "SELECT row_to_json(e)::text FROM execution_timings e WHERE owner_id=$1 AND id=$2", scope.OwnerID, out.Turn.ID).Scan(&after); err != nil || before != after {
 				t.Fatal("replay replaced good timing", err)
 			}
 			today := time.Now().UTC().Format(time.DateOnly)
@@ -312,7 +312,7 @@ func TestP3TimingStorageFailureKeepsCommittedAnswer(t *testing.T) {
 		t.Fatal("measurement failure invalidated committed result", out)
 	}
 	var calls int
-	if err := s.pool.QueryRow(context.Background(), "SELECT count(*) FROM model_usage WHERE owner_id=$1 AND duration_ms IS NOT NULL", scope.OwnerID).Scan(&calls); err != nil || calls != 1 {
+	if err := s.Pool.QueryRow(context.Background(), "SELECT count(*) FROM model_usage WHERE owner_id=$1 AND duration_ms IS NOT NULL", scope.OwnerID).Scan(&calls); err != nil || calls != 1 {
 		t.Fatal(calls, err)
 	}
 }

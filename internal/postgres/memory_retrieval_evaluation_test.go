@@ -55,7 +55,7 @@ func evalRetrieval(t *testing.T, c fixture.Corpus, baseline fixture.Baseline, ti
 	t.Cleanup(server.Close)
 	observed := &fixture.Observer{Base: server.Client().Transport}
 	s.SetModels(&ai.Registry{HTTP: &http.Client{Transport: observed}, Config: ai.Configuration{Extraction: "eval", Providers: []ai.Provider{{ID: "eval", Name: "评测假模型", Protocol: "openai", BaseURL: server.URL, Model: "synthetic-reflector", MaxOutput: 4096, CostMode: "free"}}}})
-	seeded, err := fixture.Seed(context.Background(), s, s.pool, c, anchor, "eval", gold)
+	seeded, err := fixture.Seed(context.Background(), s, s.Pool, c, anchor, "eval", gold)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,7 +77,7 @@ func evalRetrieval(t *testing.T, c fixture.Corpus, baseline fixture.Baseline, ti
 		if sentContext == "" {
 			t.Fatal("secretary context headings changed; evaluator needs adaptation")
 		}
-		received, err := fixture.Received(context.Background(), s.pool, seeded, request)
+		received, err := fixture.Received(context.Background(), s.Pool, seeded, request)
 		if err != nil {
 			t.Fatal(err)
 		}

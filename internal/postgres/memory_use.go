@@ -306,7 +306,7 @@ func ruleRelevance(applies, text string) int {
 
 func (s *Store) prepareUseOwner(ctx context.Context, scope memory.Scope) (bool, error) {
 	ready := false
-	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		if err := s.ensureOwner(ctx, tx, scope); err != nil {
 			return err
 		}

@@ -24,7 +24,7 @@ func TestPhase26A3ClassificationClaimsBeforeAllOtherBackgroundStages(t *testing.
 	phase26Exec(t, f, `UPDATE memory_jobs SET available_at=now()+interval '1 day' WHERE state='queued' AND NOT(stage LIKE 'memory.organize:%' OR stage LIKE 'memory.compare:%' OR stage LIKE 'memory.entity_compare:%' OR stage LIKE 'memory.entity_candidates:%' OR stage LIKE 'memory.handover:%')`)
 	for _, stage := range []string{OrganizeStage, CompareStage, EntityCompareStage, EntityCandidatesStage, HandoverStage} {
 		var pending int
-		if err := f.Store.pool.QueryRow(f.Context, `SELECT count(*) FROM memory_jobs WHERE state='queued' AND stage LIKE $1 AND available_at<=now()`, stage+":%").Scan(&pending); err != nil || pending == 0 {
+		if err := f.Store.Pool.QueryRow(f.Context, `SELECT count(*) FROM memory_jobs WHERE state='queued' AND stage LIKE $1 AND available_at<=now()`, stage+":%").Scan(&pending); err != nil || pending == 0 {
 			t.Fatalf("stage %s not simultaneously eligible pending=%d err=%v", stage, pending, err)
 		}
 	}

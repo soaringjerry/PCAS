@@ -40,7 +40,7 @@ func (s *Store) ReadProjectTimeline(ctx context.Context, scope memory.Scope, pro
 	if !memory.ID(project).Valid() {
 		return out, memory.ErrInvalid
 	}
-	err := pgx.BeginTxFunc(ctx, s.pool, pgx.TxOptions{AccessMode: pgx.ReadOnly, IsoLevel: pgx.RepeatableRead}, func(tx pgx.Tx) error {
+	err := pgx.BeginTxFunc(ctx, s.Pool, pgx.TxOptions{AccessMode: pgx.ReadOnly, IsoLevel: pgx.RepeatableRead}, func(tx pgx.Tx) error {
 		p, err := getItem(ctx, tx, scope, project)
 		if err != nil {
 			return err

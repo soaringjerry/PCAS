@@ -76,7 +76,7 @@ func TestMixedWritingSurvivesArtifactRevocationAndDeletion(t *testing.T) {
 	st = workspaceCommand(t, s, scope, workspace.Command{Type: "ideaPromote", ID: idea.ID})
 	task := st.Tasks[0]
 	workspaceCommand(t, s, scope, workspace.Command{Type: "setMemoryVisibility", ID: mem.ID, AgentIDs: []string{}})
-	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		for _, id := range []string{idea.ID, task.ID} {
 			item, err := getItem(ctx, tx, scope, id)
 			if err != nil {
@@ -177,7 +177,7 @@ func TestRunSemanticRetrievalDoesNotHoldOwnerLock(t *testing.T) {
 		// pending. This would time out if requestRun held its owner transaction.
 		lockCtx, cancel := context.WithTimeout(ctx, time.Second)
 		defer cancel()
-		err := pgx.BeginFunc(lockCtx, s.pool, func(tx pgx.Tx) error {
+		err := pgx.BeginFunc(lockCtx, s.Pool, func(tx pgx.Tx) error {
 			_, err := tx.Exec(lockCtx, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(scope.OwnerID))
 			return err
 		})
@@ -188,7 +188,7 @@ func TestRunSemanticRetrievalDoesNotHoldOwnerLock(t *testing.T) {
 	}))
 	defer server.Close()
 	s.SetModels(&ai.Registry{HTTP: server.Client(), Config: ai.Configuration{Embedding: "vector", Providers: []ai.Provider{{ID: "vector", Name: "Vector", Protocol: "openai", BaseURL: server.URL, Model: "test", Embedding: true, CostMode: "free"}}}})
-	if _, err := s.pool.Exec(ctx, "INSERT INTO embeddings(owner_id,record_id,record_version,model,dimensions,embedding) VALUES($1,$2,$3,'vector:test',3,'[1,0,0]'::vector)", string(scope.OwnerID), m.ID, m.Version); err != nil {
+	if _, err := s.Pool.Exec(ctx, "INSERT INTO embeddings(owner_id,record_id,record_version,model,dimensions,embedding) VALUES($1,$2,$3,'vector:test',3,'[1,0,0]'::vector)", string(scope.OwnerID), m.ID, m.Version); err != nil {
 		t.Fatal(err)
 	}
 	st = workspaceCommand(t, s, scope, workspace.Command{Type: "requestRun", ThingID: id, AgentID: "manual", Kind: "plan", Prompt: "Suggest a peaceful afternoon"})
@@ -211,7 +211,7 @@ func TestLegacyMixedWritingIsQuarantinedForOwnerReview(t *testing.T) {
 	workspaceCommand(t, s, scope, workspace.Command{Type: "pasteRunResult", ID: run.ID, Output: "Sensitive generated 9873"})
 	undoAutoAdoption(t, s, scope, run.ID)
 	workspaceCommand(t, s, scope, workspace.Command{Type: "adoptRun", ID: run.ID, As: "progress", Text: "Sensitive generated 9873"})
-	if _, err := s.pool.Exec(ctx, "DELETE FROM artifact_fields WHERE owner_id=$1 AND thing_id=$2", string(scope.OwnerID), id); err != nil {
+	if _, err := s.Pool.Exec(ctx, "DELETE FROM artifact_fields WHERE owner_id=$1 AND thing_id=$2", string(scope.OwnerID), id); err != nil {
 		t.Fatal(err)
 	}
 	st = workspaceCommand(t, s, scope, workspace.Command{Type: "deleteMemory", ID: m.ID, IncludeSources: true})
@@ -300,7 +300,7 @@ func TestDeskHistoryCannotBypassDestinationItemScope(t *testing.T) {
 			// A secretary turn stores the answer and its private dependency.
 			answer := mustTurn(t, s, scope, turnRequest(questionMarker)).Turn
 			var refs []memory.Ref
-			if err := s.pool.QueryRow(ctx, "SELECT dependencies FROM desk_turns WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), answer.ID).Scan(&refs); err != nil || len(refs) == 0 {
+			if err := s.Pool.QueryRow(ctx, "SELECT dependencies FROM desk_turns WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), answer.ID).Scan(&refs); err != nil || len(refs) == 0 {
 				t.Fatal("fixture desk answer lacks private dependency", err)
 			}
 			destination := project

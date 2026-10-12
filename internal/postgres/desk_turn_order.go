@@ -60,7 +60,7 @@ func (s *Store) admitSecretaryTurn(ctx, callerCtx context.Context, owner, reques
 		if err := callerCtx.Err(); err != nil {
 			return ticket, err
 		}
-		err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 			if err := lockSmokeTurnTx(ctx, tx, owner); err != nil {
 				return err
 			}
@@ -134,13 +134,13 @@ func (s *Store) admitSecretaryTurn(ctx, callerCtx context.Context, owner, reques
 // owns the conversation lock: it may yet commit a real result.
 func (s *Store) expireSecretaryTickets(ctx context.Context, owner, conversation string) error {
 	var expired bool
-	if err := s.pool.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM desk_turn_order WHERE owner_id=$1 AND conversation_id=$2 AND status='pending' AND expires_at<=clock_timestamp())", owner, conversation).Scan(&expired); err != nil {
+	if err := s.Pool.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM desk_turn_order WHERE owner_id=$1 AND conversation_id=$2 AND status='pending' AND expires_at<=clock_timestamp())", owner, conversation).Scan(&expired); err != nil {
 		return err
 	}
 	if !expired {
 		return nil
 	}
-	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		if err := secretaryTryLock(ctx, tx, secretaryConversationKey(owner, conversation)); err != nil {
 			return err
 		}
@@ -161,7 +161,7 @@ func (s *Store) secretaryTicketReady(ctx context.Context, owner, request string,
 		return false, err
 	}
 	var ready bool
-	err := s.pool.QueryRow(ctx, `SELECT status<>'pending' OR ($3 AND NOT EXISTS(
+	err := s.Pool.QueryRow(ctx, `SELECT status<>'pending' OR ($3 AND NOT EXISTS(
  SELECT 1 FROM desk_turn_order earlier WHERE earlier.owner_id=t.owner_id AND earlier.conversation_id=t.conversation_id AND earlier.status='pending' AND earlier.admission_order<t.admission_order))
  FROM desk_turn_order t WHERE owner_id=$1 AND request_id=$2`, owner, request, ticket.own).Scan(&ready)
 	return ready, err
@@ -182,7 +182,7 @@ func (s *Store) withOrderedSecretaryTurn(ctx, callerCtx context.Context, owner, 
 		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 		defer cancel()
 		// Failure to clean up (e.g. database outage) is bounded by expires_at.
-		_, _ = s.pool.Exec(cleanupCtx, "UPDATE desk_turn_order SET status=$3 WHERE owner_id=$1 AND request_id=$2 AND creator_id=$4 AND status='pending'", owner, request, status, ticket.creator)
+		_, _ = s.Pool.Exec(cleanupCtx, "UPDATE desk_turn_order SET status=$3 WHERE owner_id=$1 AND request_id=$2 AND creator_id=$4 AND status='pending'", owner, request, status, ticket.creator)
 	}()
 	for {
 		if err := callerCtx.Err(); err != nil {
@@ -205,7 +205,7 @@ func (s *Store) withOrderedSecretaryTurn(ctx, callerCtx context.Context, owner, 
 		case <-ctx.Done():
 			return ctx.Err()
 		}
-		err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		err = pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 			if err := lockSmokeTurnTx(ctx, tx, owner); err != nil {
 				return err
 			}

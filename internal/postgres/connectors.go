@@ -32,7 +32,7 @@ func (s *Store) ListConnections(ctx context.Context, scope memory.Scope) ([]conn
 	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err
 	}
-	rows, err := s.pool.Query(ctx, "SELECT "+connectionColumns+" FROM connector_configs WHERE owner_id=$1 ORDER BY name,id", string(scope.OwnerID))
+	rows, err := s.Pool.Query(ctx, "SELECT "+connectionColumns+" FROM connector_configs WHERE owner_id=$1 ORDER BY name,id", string(scope.OwnerID))
 	if err != nil {
 		return out, err
 	}
@@ -83,7 +83,7 @@ func (s *Store) ConfigureConnection(ctx context.Context, scope memory.Scope, in 
 	} else if !in.ID.Valid() || in.ExpectedVersion < 1 {
 		return out, memory.ErrInvalid
 	}
-	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		if err := s.ensureOwner(ctx, tx, scope); err != nil {
 			return err
 		}
@@ -114,7 +114,7 @@ func (s *Store) SyncConnection(ctx context.Context, scope memory.Scope, id memor
 	if !id.Valid() {
 		return memory.ErrInvalid
 	}
-	tag, err := s.pool.Exec(ctx, `UPDATE connector_configs SET next_sync=now(),status='queued' WHERE owner_id=$1 AND id=$2 AND version=$3 AND enabled AND kind IN ('poll','folder')`, string(scope.OwnerID), string(id), version)
+	tag, err := s.Pool.Exec(ctx, `UPDATE connector_configs SET next_sync=now(),status='queued' WHERE owner_id=$1 AND id=$2 AND version=$3 AND enabled AND kind IN ('poll','folder')`, string(scope.OwnerID), string(id), version)
 	if err == nil && tag.RowsAffected() != 1 {
 		return memory.ErrConflict
 	}
@@ -126,7 +126,7 @@ func (s *Store) AuthenticateConnection(ctx context.Context, id memory.ID, token 
 		return scope, memory.ErrForbidden
 	}
 	var hash []byte
-	err := s.pool.QueryRow(ctx, "SELECT owner_id::text,token_hash FROM connector_configs WHERE id=$1 AND enabled AND kind='webhook'", string(id)).Scan(&scope.OwnerID, &hash)
+	err := s.Pool.QueryRow(ctx, "SELECT owner_id::text,token_hash FROM connector_configs WHERE id=$1 AND enabled AND kind='webhook'", string(id)).Scan(&scope.OwnerID, &hash)
 	h := sha256.Sum256([]byte(token))
 	if err != nil || subtle.ConstantTimeCompare(hash, h[:]) != 1 {
 		return memory.Scope{}, memory.ErrForbidden
@@ -147,7 +147,7 @@ func (s *Store) ImportBatch(ctx context.Context, scope memory.Scope, id memory.I
 	if err != nil {
 		return out, memory.ErrInvalid
 	}
-	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	err = pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		var enabled bool
 		if err := tx.QueryRow(ctx, "SELECT enabled FROM connector_configs WHERE owner_id=$1 AND id=$2 FOR UPDATE", string(scope.OwnerID), string(id)).Scan(&enabled); err != nil {
 			return memory.ErrNotFound

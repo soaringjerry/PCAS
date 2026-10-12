@@ -70,7 +70,7 @@ func TestConnectorReplayAndSummary(t *testing.T) {
 		t.Fatal(err)
 	}
 	var orphanEpisodes int
-	if err := s.pool.QueryRow(ctx, "SELECT count(*) FROM episodes WHERE owner_id=$1", string(scope.OwnerID)).Scan(&orphanEpisodes); err != nil || orphanEpisodes != 0 {
+	if err := s.Pool.QueryRow(ctx, "SELECT count(*) FROM episodes WHERE owner_id=$1", string(scope.OwnerID)).Scan(&orphanEpisodes); err != nil || orphanEpisodes != 0 {
 		t.Fatal("deleted conversation title survived", orphanEpisodes, err)
 	}
 	blocked, err := s.ImportBatch(ctx, scope, c.Connection.ID, batch)
@@ -156,7 +156,7 @@ func TestSummaryCorrectionPropagation(t *testing.T) {
 	scope := owner()
 	source := mustIngest(t, s, scope, input())
 	var claim memory.Ref
-	err := s.pool.QueryRow(ctx, "SELECT 1").Scan(new(int))
+	err := s.Pool.QueryRow(ctx, "SELECT 1").Scan(new(int))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -195,7 +195,7 @@ func TestSummaryCorrectionPropagation(t *testing.T) {
 	}
 	var days float64
 	var pinned bool
-	if err = s.pool.QueryRow(ctx, "SELECT half_life_seconds/86400,pinned FROM activity WHERE owner_id=$1 AND record_id=$2", string(scope.OwnerID), string(fixed.ID)).Scan(&days, &pinned); err != nil || days != 7 || !pinned {
+	if err = s.Pool.QueryRow(ctx, "SELECT half_life_seconds/86400,pinned FROM activity WHERE owner_id=$1 AND record_id=$2", string(scope.OwnerID), string(fixed.ID)).Scan(&days, &pinned); err != nil || days != 7 || !pinned {
 		t.Fatal(days, pinned, err)
 	}
 }
@@ -203,7 +203,7 @@ func TestSummaryCorrectionPropagation(t *testing.T) {
 func rememberForContinuity(t *testing.T, s *Store, scope memory.Scope, source memory.Ref, text string) memory.Ref {
 	t.Helper()
 	var ref memory.Ref
-	err := pgx.BeginFunc(context.Background(), s.pool, func(tx pgx.Tx) error {
+	err := pgx.BeginFunc(context.Background(), s.Pool, func(tx pgx.Tx) error {
 		if err := s.ensureOwner(context.Background(), tx, scope); err != nil {
 			return err
 		}
@@ -236,7 +236,7 @@ func TestArchiveDeletionErasesOriginalCopies(t *testing.T) {
 	}
 	var child memory.Ref
 	child.Kind = memory.SourceKind
-	if err = s.pool.QueryRow(ctx, "SELECT s.id::text,r.version FROM sources s JOIN memory_records r ON(r.owner_id,r.id)=(s.owner_id,s.id) WHERE s.owner_id=$1 AND external_id='first'", string(scope.OwnerID)).Scan(&child.ID, &child.Version); err != nil {
+	if err = s.Pool.QueryRow(ctx, "SELECT s.id::text,r.version FROM sources s JOIN memory_records r ON(r.owner_id,r.id)=(s.owner_id,s.id) WHERE s.owner_id=$1 AND external_id='first'", string(scope.OwnerID)).Scan(&child.ID, &child.Version); err != nil {
 		t.Fatal(err)
 	}
 	if err = s.Delete(ctx, scope, memory.DeleteRequest{Targets: []memory.Ref{child}, BlockReimport: true}); err != nil {
@@ -247,7 +247,7 @@ func TestArchiveDeletionErasesOriginalCopies(t *testing.T) {
 		t.Fatal("archive copy retained", original, err)
 	}
 	var kept int
-	if err = s.pool.QueryRow(ctx, "SELECT count(*) FROM sources WHERE owner_id=$1 AND external_id='second'", string(scope.OwnerID)).Scan(&kept); err != nil || kept != 1 {
+	if err = s.Pool.QueryRow(ctx, "SELECT count(*) FROM sources WHERE owner_id=$1 AND external_id='second'", string(scope.OwnerID)).Scan(&kept); err != nil || kept != 1 {
 		t.Fatal("unrelated source erased", err)
 	}
 	data = append(data, ' ')
@@ -272,11 +272,11 @@ func TestDecayRecallAndSnoozeStayIndependent(t *testing.T) {
 	in.Text = "以后想去河边旧书店"
 	src := mustIngest(t, s, scope, in)
 	claim := rememberForContinuity(t, s, scope, src.Ref, in.Text)
-	if _, err := s.pool.Exec(ctx, "UPDATE activity SET last_effective_use_at=now()-interval '5 years',half_life_seconds=86400,stability=2.9,reinforcement_limit=3 WHERE owner_id=$1 AND record_id=$2", string(scope.OwnerID), string(claim.ID)); err != nil {
+	if _, err := s.Pool.Exec(ctx, "UPDATE activity SET last_effective_use_at=now()-interval '5 years',half_life_seconds=86400,stability=2.9,reinforcement_limit=3 WHERE owner_id=$1 AND record_id=$2", string(scope.OwnerID), string(claim.ID)); err != nil {
 		t.Fatal(err)
 	}
 	var before time.Time
-	if err := s.pool.QueryRow(ctx, "SELECT last_effective_use_at FROM activity WHERE owner_id=$1 AND record_id=$2", string(scope.OwnerID), string(claim.ID)).Scan(&before); err != nil {
+	if err := s.Pool.QueryRow(ctx, "SELECT last_effective_use_at FROM activity WHERE owner_id=$1 AND record_id=$2", string(scope.OwnerID), string(claim.ID)).Scan(&before); err != nil {
 		t.Fatal(err)
 	}
 	out, err := s.Recall(ctx, scope, memory.RecallRequest{Query: "河边旧书店", Mode: memory.Remember})
@@ -291,7 +291,7 @@ func TestDecayRecallAndSnoozeStayIndependent(t *testing.T) {
 		t.Fatal("dormant memory disappeared")
 	}
 	var after time.Time
-	if err = s.pool.QueryRow(ctx, "SELECT last_effective_use_at FROM activity WHERE owner_id=$1 AND record_id=$2", string(scope.OwnerID), string(claim.ID)).Scan(&after); err != nil || !after.Equal(before) {
+	if err = s.Pool.QueryRow(ctx, "SELECT last_effective_use_at FROM activity WHERE owner_id=$1 AND record_id=$2", string(scope.OwnerID), string(claim.ID)).Scan(&after); err != nil || !after.Equal(before) {
 		t.Fatal("retrieval reinforced memory", err)
 	}
 	event := memory.UseEvent{Ref: claim, EventID: "actually-adopted", Kind: "adoption", At: time.Now()}
@@ -301,7 +301,7 @@ func TestDecayRecallAndSnoozeStayIndependent(t *testing.T) {
 		}
 	}
 	var stability float64
-	if err = s.pool.QueryRow(ctx, "SELECT stability FROM activity WHERE owner_id=$1 AND record_id=$2", string(scope.OwnerID), string(claim.ID)).Scan(&stability); err != nil || stability != 3 {
+	if err = s.Pool.QueryRow(ctx, "SELECT stability FROM activity WHERE owner_id=$1 AND record_id=$2", string(scope.OwnerID), string(claim.ID)).Scan(&stability); err != nil || stability != 3 {
 		t.Fatal("reinforcement limit ignored", stability, err)
 	}
 	st := workspaceCommand(t, s, scope, workspace.Command{Type: "addIdea", Title: "等书店开门"})
@@ -310,7 +310,7 @@ func TestDecayRecallAndSnoozeStayIndependent(t *testing.T) {
 	item := st.Ideas[0]
 	item.Status = "awakened"
 	item.Wake = &workspace.Wake{At: kernel.Stamp(), Reason: "测试到期提醒"}
-	if err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error { return saveItem(ctx, tx, scope, item) }); err != nil {
+	if err = pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error { return saveItem(ctx, tx, scope, item) }); err != nil {
 		t.Fatal(err)
 	}
 	st = workspaceCommand(t, s, scope, workspace.Command{Type: "ideaSnooze", ID: id, Days: 3})
@@ -352,7 +352,7 @@ func TestConcurrentSummaryAndGrantRevocation(t *testing.T) {
 	}
 	agent := memory.Scope{OwnerID: scope.OwnerID, PrincipalID: "viewer"}
 	for _, id := range []memory.ID{src.ID, claim.ID} {
-		if _, err := s.pool.Exec(ctx, "INSERT INTO record_grants(owner_id,record_id,principal_id) VALUES($1,$2,$3)", string(scope.OwnerID), string(id), agent.PrincipalID); err != nil {
+		if _, err := s.Pool.Exec(ctx, "INSERT INTO record_grants(owner_id,record_id,principal_id) VALUES($1,$2,$3)", string(scope.OwnerID), string(id), agent.PrincipalID); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -360,7 +360,7 @@ func TestConcurrentSummaryAndGrantRevocation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = s.pool.Exec(ctx, "DELETE FROM record_grants WHERE owner_id=$1 AND record_id=$2 AND principal_id=$3", string(scope.OwnerID), string(claim.ID), agent.PrincipalID); err != nil {
+	if _, err = s.Pool.Exec(ctx, "DELETE FROM record_grants WHERE owner_id=$1 AND record_id=$2 AND principal_id=$3", string(scope.OwnerID), string(claim.ID), agent.PrincipalID); err != nil {
 		t.Fatal(err)
 	}
 	after, err := s.Summarize(ctx, agent, memory.SummaryRequest{ID: src.ID})

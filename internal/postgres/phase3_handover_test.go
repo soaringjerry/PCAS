@@ -23,7 +23,7 @@ func phase3OnlyProject(t *testing.T, f *phase3LoadedFixture, id string) {
 }
 func phase3AgeHandoverClock(t *testing.T, f *phase3LoadedFixture) {
 	t.Helper()
-	rows, err := f.Store.pool.Query(f.Context, `SELECT table_name,column_name FROM information_schema.columns WHERE table_schema='public' AND table_name LIKE '%project%handover%' AND column_name IN('written_at','built_at') AND data_type='timestamp with time zone'`)
+	rows, err := f.Store.Pool.Query(f.Context, `SELECT table_name,column_name FROM information_schema.columns WHERE table_schema='public' AND table_name LIKE '%project%handover%' AND column_name IN('written_at','built_at') AND data_type='timestamp with time zone'`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -138,7 +138,7 @@ func TestPhase3H4G2FailedThreeSegmentsPreserveLastGoodAndPending(t *testing.T) {
 		}
 		var queuedState string
 		var attempts int
-		if err := f.Store.pool.QueryRow(f.Context, `SELECT state,attempts FROM memory_jobs WHERE id=$1`, j.ID).Scan(&queuedState, &attempts); err != nil || queuedState != "queued" || attempts < attempt {
+		if err := f.Store.Pool.QueryRow(f.Context, `SELECT state,attempts FROM memory_jobs WHERE id=$1`, j.ID).Scan(&queuedState, &attempts); err != nil || queuedState != "queued" || attempts < attempt {
 			t.Fatal("failure marked processed/lost attempts", queuedState, attempts, err)
 		}
 		var after phase3Handover
@@ -226,7 +226,7 @@ func TestPhase3H6CorrectionUpdatesEvidenceAndStalesProject(t *testing.T) {
 		t.Fatal("correction must stale the retained handover, not directly edit it")
 	}
 	var status string
-	if err := f.Store.pool.QueryRow(f.Context, `SELECT status FROM work_items WHERE owner_id=$1 AND id=$2`, f.Scope.OwnerID, p.Items[0].ID).Scan(&status); err != nil || status != "done" {
+	if err := f.Store.Pool.QueryRow(f.Context, `SELECT status FROM work_items WHERE owner_id=$1 AND id=$2`, f.Scope.OwnerID, p.Items[0].ID).Scan(&status); err != nil || status != "done" {
 		t.Fatal("correction did not update the actual cited item", status, err)
 	}
 }

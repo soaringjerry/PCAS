@@ -127,7 +127,7 @@ func (h *phase3HTTP) command(t *testing.T, ctx context.Context, c map[string]any
 func phase3AllTableDigest(t *testing.T, f *phase3LoadedFixture) map[string]string {
 	t.Helper()
 	ctx := f.Context
-	rows, err := f.Store.pool.Query(ctx, `SELECT tablename FROM pg_tables WHERE schemaname='public' ORDER BY tablename`)
+	rows, err := f.Store.Pool.Query(ctx, `SELECT tablename FROM pg_tables WHERE schemaname='public' ORDER BY tablename`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -149,7 +149,7 @@ func phase3AllTableDigest(t *testing.T, f *phase3LoadedFixture) map[string]strin
 		var digest string
 		// xmin catches UPDATE-of-identical-values as a write. Sort full row JSON;
 		// this disposable database contains no other user or unrelated worker.
-		err := f.Store.pool.QueryRow(ctx, `SELECT md5(coalesce(string_agg(to_jsonb(t)::text || ':' || t.xmin::text,'|' ORDER BY to_jsonb(t)::text),'')) FROM `+name+` t`).Scan(&digest)
+		err := f.Store.Pool.QueryRow(ctx, `SELECT md5(coalesce(string_agg(to_jsonb(t)::text || ':' || t.xmin::text,'|' ORDER BY to_jsonb(t)::text),'')) FROM `+name+` t`).Scan(&digest)
 		if err != nil {
 			t.Fatalf("digest %s: %v", table, err)
 		}

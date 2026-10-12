@@ -52,7 +52,7 @@ func TestPaidBackgroundResultsSurviveBusinessWriteFailureAndRestart(t *testing.T
 				response = `{"groups":[[1,2]]}`
 			}
 			fake.set(response)
-			if _, err := s.pool.Exec(ctx, `CREATE FUNCTION fictional_write_failure() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'fictional business write failure'; END $$;
+			if _, err := s.Pool.Exec(ctx, `CREATE FUNCTION fictional_write_failure() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'fictional business write failure'; END $$;
 CREATE TRIGGER fictional_write_failure BEFORE INSERT ON `+table+` FOR EACH ROW EXECUTE FUNCTION fictional_write_failure()`); err != nil {
 				t.Fatal(err)
 			}
@@ -60,19 +60,19 @@ CREATE TRIGGER fictional_write_failure BEFORE INSERT ON `+table+` FOR EACH ROW E
 				t.Fatal("injected write failure did not fail")
 			}
 			var snapshots int
-			if err := s.pool.QueryRow(ctx, "SELECT count(*) FROM background_model_results WHERE job_id=$1", job.ID).Scan(&snapshots); err != nil || snapshots != 1 {
+			if err := s.Pool.QueryRow(ctx, "SELECT count(*) FROM background_model_results WHERE job_id=$1", job.ID).Scan(&snapshots); err != nil || snapshots != 1 {
 				t.Fatal("paid response not durable", snapshots, err)
 			}
-			if _, err := s.pool.Exec(ctx, "DROP TRIGGER fictional_write_failure ON "+table); err != nil {
+			if _, err := s.Pool.Exec(ctx, "DROP TRIGGER fictional_write_failure ON "+table); err != nil {
 				t.Fatal(err)
 			}
-			reopened, err := Open(ctx, s.pool.Config().ConnString())
+			reopened, err := Open(ctx, s.Pool.Config().ConnString())
 			if err != nil {
 				t.Fatal(err)
 			}
 			defer reopened.Close()
 			var originalDuration *int64
-			if err := s.pool.QueryRow(ctx, "SELECT duration_ms FROM background_model_results WHERE job_id=$1", job.ID).Scan(&originalDuration); err != nil || originalDuration == nil {
+			if err := s.Pool.QueryRow(ctx, "SELECT duration_ms FROM background_model_results WHERE job_id=$1", job.ID).Scan(&originalDuration); err != nil || originalDuration == nil {
 				t.Fatal("paid duration not durable", err)
 			}
 			// Recovery must work with no available provider and no in-process cache.
@@ -81,20 +81,20 @@ CREATE TRIGGER fictional_write_failure BEFORE INSERT ON `+table+` FOR EACH ROW E
 			}
 			var state string
 			var usage int
-			if err := s.pool.QueryRow(ctx, "SELECT state FROM memory_jobs WHERE id=$1", job.ID).Scan(&state); err != nil || state != "done" {
+			if err := s.Pool.QueryRow(ctx, "SELECT state FROM memory_jobs WHERE id=$1", job.ID).Scan(&state); err != nil || state != "done" {
 				t.Fatal(state, err)
 			}
-			if err := s.pool.QueryRow(ctx, "SELECT count(*) FROM model_usage WHERE owner_id=$1 AND job_id=$2", scope.OwnerID, job.ID).Scan(&usage); err != nil || usage != 1 {
+			if err := s.Pool.QueryRow(ctx, "SELECT count(*) FROM model_usage WHERE owner_id=$1 AND job_id=$2", scope.OwnerID, job.ID).Scan(&usage); err != nil || usage != 1 {
 				t.Fatal("usage duplicated or absent", usage, err)
 			}
 			var recoveredDuration *int64
-			if err := s.pool.QueryRow(ctx, "SELECT duration_ms FROM model_usage WHERE owner_id=$1 AND job_id=$2", scope.OwnerID, job.ID).Scan(&recoveredDuration); err != nil || recoveredDuration == nil || *recoveredDuration != *originalDuration {
+			if err := s.Pool.QueryRow(ctx, "SELECT duration_ms FROM model_usage WHERE owner_id=$1 AND job_id=$2", scope.OwnerID, job.ID).Scan(&recoveredDuration); err != nil || recoveredDuration == nil || *recoveredDuration != *originalDuration {
 				t.Fatal("replay lost original duration", err)
 			}
 			if len(fake.all()) != 1 {
 				t.Fatal("paid call repeated", len(fake.all()))
 			}
-			if err := s.pool.QueryRow(ctx, "SELECT count(*) FROM background_model_results WHERE job_id=$1", job.ID).Scan(&snapshots); err != nil || snapshots != 0 {
+			if err := s.Pool.QueryRow(ctx, "SELECT count(*) FROM background_model_results WHERE job_id=$1", job.ID).Scan(&snapshots); err != nil || snapshots != 0 {
 				t.Fatal("committed response retained", snapshots, err)
 			}
 		})
@@ -108,7 +108,7 @@ func TestPersistentBackgroundFailureKeepsIncreasingAttempts(t *testing.T) {
 	job := compareJob(t, s, scope, false, CompareVersion)
 	for _, attempt := range []int{1, 3, 8} {
 		job.Attempts = attempt
-		if _, err := s.pool.Exec(ctx, "UPDATE memory_jobs SET state='leased',attempts=$2,lease_token=$3,lease_until=now()+interval '5 minutes' WHERE id=$1", job.ID, attempt, job.LeaseToken); err != nil {
+		if _, err := s.Pool.Exec(ctx, "UPDATE memory_jobs SET state='leased',attempts=$2,lease_token=$3,lease_until=now()+interval '5 minutes' WHERE id=$1", job.ID, attempt, job.LeaseToken); err != nil {
 			t.Fatal(err)
 		}
 		err := (comparison.Service{Store: s.CompareStore(), Generator: jobCalls(s), Version: CompareVersion}).Process(ctx, job)
@@ -124,16 +124,16 @@ func TestPersistentBackgroundFailureKeepsIncreasingAttempts(t *testing.T) {
 		}
 	}
 	var failures, deferred int
-	if err := s.pool.QueryRow(ctx, "SELECT count(*) FILTER(WHERE outcome='failure'),count(*) FILTER(WHERE outcome='deferred') FROM background_stage_events WHERE owner_id=$1 AND reason='model_call_failed'", scope.OwnerID).Scan(&failures, &deferred); err != nil || failures != 3 || deferred != 3 {
+	if err := s.Pool.QueryRow(ctx, "SELECT count(*) FILTER(WHERE outcome='failure'),count(*) FILTER(WHERE outcome='deferred') FROM background_stage_events WHERE owner_id=$1 AND reason='model_call_failed'", scope.OwnerID).Scan(&failures, &deferred); err != nil || failures != 3 || deferred != 3 {
 		t.Fatal("failed deferrals missing from health", failures, deferred, err)
 	}
 
 	var processed int
-	if err := s.pool.QueryRow(ctx, "SELECT count(*) FROM claims WHERE owner_id=$1 AND compared<>0", scope.OwnerID).Scan(&processed); err != nil || processed != 0 {
+	if err := s.Pool.QueryRow(ctx, "SELECT count(*) FROM claims WHERE owner_id=$1 AND compared<>0", scope.OwnerID).Scan(&processed); err != nil || processed != 0 {
 		t.Fatal("failed compare marked processed", processed, err)
 	}
 	var inferred int
-	if err := s.pool.QueryRow(ctx, "SELECT count(*) FROM model_usage WHERE owner_id=$1 AND input_estimated AND input_tokens>0", scope.OwnerID).Scan(&inferred); err != nil || inferred != 3 {
+	if err := s.Pool.QueryRow(ctx, "SELECT count(*) FROM model_usage WHERE owner_id=$1 AND input_estimated AND input_tokens>0", scope.OwnerID).Scan(&inferred); err != nil || inferred != 3 {
 		t.Fatal("failed attempts not accounted", inferred, err)
 	}
 }
@@ -175,7 +175,7 @@ func TestLegacyNameScanReceiptTransfersWithoutAnotherModelCall(t *testing.T) {
 	b1Model(t, s, `{"groups":[]}`)
 	a, _ := aliasEntityFixture(t, s, scope, "person", "Fictitious Azure", 1)
 	aliasEntityFixture(t, s, scope, "person", "虚构齐鹤", 1)
-	if err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	if err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		names, err := entityCandidateNamesTx(ctx, tx, scope.OwnerID, EntityCompareVersion)
 		if err != nil {
 			return err

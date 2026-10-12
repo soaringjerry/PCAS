@@ -14,7 +14,7 @@ import (
 
 func seedStageUsage(t *testing.T, s *Store, scope memory.Scope, stage string, count int) {
 	t.Helper()
-	if _, err := s.pool.Exec(context.Background(), `INSERT INTO background_usage(owner_id,stage,reserved_cost,created_at) SELECT $1,$2,0,now()-interval '10 minutes' FROM generate_series(1,$3)`, scope.OwnerID, stage, count); err != nil {
+	if _, err := s.Pool.Exec(context.Background(), `INSERT INTO background_usage(owner_id,stage,reserved_cost,created_at) SELECT $1,$2,0,now()-interval '10 minutes' FROM generate_series(1,$3)`, scope.OwnerID, stage, count); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -67,7 +67,7 @@ func TestOrganizeCompareIndependentHourlyCalls(t *testing.T) {
 				entity, a := compareEntityFixture(t, s, scope, "虚构额度同名", "虚构人物丙")
 				var existing memory.Ref
 				existing.Kind = memory.EntityKind
-				if err := s.pool.QueryRow(ctx, "SELECT id::text,version FROM memory_records WHERE owner_id=$1 AND kind='entity' AND id<>$2 AND state='active' AND EXISTS(SELECT 1 FROM entity_versions v WHERE(v.owner_id,v.entity_id,v.version)=(memory_records.owner_id,memory_records.id,memory_records.version) AND v.entity_type='person') ORDER BY id LIMIT 1", scope.OwnerID, entity.ID).Scan(&existing.ID, &existing.Version); err != nil {
+				if err := s.Pool.QueryRow(ctx, "SELECT id::text,version FROM memory_records WHERE owner_id=$1 AND kind='entity' AND id<>$2 AND state='active' AND EXISTS(SELECT 1 FROM entity_versions v WHERE(v.owner_id,v.entity_id,v.version)=(memory_records.owner_id,memory_records.id,memory_records.version) AND v.entity_type='person') ORDER BY id LIMIT 1", scope.OwnerID, entity.ID).Scan(&existing.ID, &existing.Version); err != nil {
 					t.Fatal(err)
 				}
 				aliasProposalFixture(t, s, scope, existing, entity, EntityCompareVersion)
@@ -75,7 +75,7 @@ func TestOrganizeCompareIndependentHourlyCalls(t *testing.T) {
 			}
 			job = leaseStage(t, s, scope, job.Record, fmt.Sprintf("%s:1:%s", kind, memory.NewID()))
 			var before int
-			if err := s.pool.QueryRow(ctx, "SELECT count(*) FROM background_usage").Scan(&before); err != nil {
+			if err := s.Pool.QueryRow(ctx, "SELECT count(*) FROM background_usage").Scan(&before); err != nil {
 				t.Fatal(err)
 			}
 			err := process(ctx, job)
@@ -91,13 +91,13 @@ func TestOrganizeCompareIndependentHourlyCalls(t *testing.T) {
 				t.Fatal("own quota must defer", err)
 			}
 			var after int
-			if err := s.pool.QueryRow(ctx, "SELECT count(*) FROM background_usage").Scan(&after); err != nil {
+			if err := s.Pool.QueryRow(ctx, "SELECT count(*) FROM background_usage").Scan(&after); err != nil {
 				t.Fatal(err)
 			}
 			if len(fake.all()) != 1 || before != after {
 				t.Fatal("deferred call sent or reserved", len(fake.all()), before, after)
 			}
-			if _, err := s.pool.Exec(ctx, `UPDATE background_usage SET created_at=now()-interval '2 hours' WHERE id=(SELECT id FROM background_usage WHERE stage=$1 AND created_at>now()-interval '1 hour' ORDER BY created_at,id LIMIT 1)`, kind); err != nil {
+			if _, err := s.Pool.Exec(ctx, `UPDATE background_usage SET created_at=now()-interval '2 hours' WHERE id=(SELECT id FROM background_usage WHERE stage=$1 AND created_at>now()-interval '1 hour' ORDER BY created_at,id LIMIT 1)`, kind); err != nil {
 				t.Fatal(err)
 			}
 			if err := process(ctx, job); err != nil {

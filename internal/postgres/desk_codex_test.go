@@ -107,7 +107,7 @@ func exerciseCodexFormats(t *testing.T, binary, home string, live bool) {
 	expected := testsupport.DateFromToday(t, "Asia/Shanghai", 1, 15, 0)
 	if live {
 		var prompt string
-		err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		err = pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 			context, err := s.secretaryContextTx(ctx, tx, scope, req, string(memory.NewID()))
 			if err != nil {
 				return err

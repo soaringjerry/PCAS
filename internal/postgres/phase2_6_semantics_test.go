@@ -42,10 +42,10 @@ func TestPhase26B6ModelAddsOneCanonicalNovelDomain(t *testing.T) {
 	}
 	var domains, members int
 	var id memory.ID
-	if err := f.Store.pool.QueryRow(f.Context, `SELECT count(*),min(entity_id::text) FROM entity_versions WHERE owner_id=$1 AND entity_type='area' AND name=$2`, f.Scope.OwnerID, name).Scan(&domains, &id); err != nil || domains != 1 {
+	if err := f.Store.Pool.QueryRow(f.Context, `SELECT count(*),min(entity_id::text) FROM entity_versions WHERE owner_id=$1 AND entity_type='area' AND name=$2`, f.Scope.OwnerID, name).Scan(&domains, &id); err != nil || domains != 1 {
 		t.Fatalf("canonical novel domains=%d err=%v", domains, err)
 	}
-	if err := f.Store.pool.QueryRow(f.Context, `SELECT count(*) FROM claim_mentions WHERE owner_id=$1 AND entity_id=$2`, f.Scope.OwnerID, id).Scan(&members); err != nil || members != 80 {
+	if err := f.Store.Pool.QueryRow(f.Context, `SELECT count(*) FROM claim_mentions WHERE owner_id=$1 AND entity_id=$2`, f.Scope.OwnerID, id).Scan(&members); err != nil || members != 80 {
 		t.Fatalf("novel area members=%d err=%v", members, err)
 	}
 	if len(m.calls(OrganizeStage)) != 2 {

@@ -44,13 +44,13 @@ func TestPhase26T3T4ScaleBackfillAndReadOnlyContent(t *testing.T) {
 		t.Fatalf("calls=%d windows=%d deferrals=%d", len(m.calls(OrganizeStage)), windows, deferrals)
 	}
 	var marked, usage, done int
-	if err := s.pool.QueryRow(ctx, `SELECT count(*) FROM claims WHERE owner_id=$1 AND organized>=2 AND retired=''`, owner).Scan(&marked); err != nil {
+	if err := s.Pool.QueryRow(ctx, `SELECT count(*) FROM claims WHERE owner_id=$1 AND organized>=2 AND retired=''`, owner).Scan(&marked); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.pool.QueryRow(ctx, `SELECT count(*) FROM background_usage WHERE owner_id=$1 AND stage='memory.organize'`, owner).Scan(&usage); err != nil {
+	if err := s.Pool.QueryRow(ctx, `SELECT count(*) FROM background_usage WHERE owner_id=$1 AND stage='memory.organize'`, owner).Scan(&usage); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.pool.QueryRow(ctx, `SELECT count(*) FROM memory_jobs WHERE owner_id=$1 AND stage LIKE 'memory.organize:%' AND state='done'`, owner).Scan(&done); err != nil {
+	if err := s.Pool.QueryRow(ctx, `SELECT count(*) FROM memory_jobs WHERE owner_id=$1 AND stage LIKE 'memory.organize:%' AND state='done'`, owner).Scan(&done); err != nil {
 		t.Fatal(err)
 	}
 	if marked != 5000 || usage != 125 || done != 125 {
@@ -128,7 +128,7 @@ func TestPhase26T3T4ScaleBackfillAndReadOnlyContent(t *testing.T) {
 		for _, table := range []string{"claims", "claim_revisions", "claim_mentions", "entity_versions", "aliases", "record_grants", "evidence", "deadlines", "assistant_requirements", "handovers", "status_cards", "status_card_items", "workspace_owners"} {
 			var hash string
 			sql := fmt.Sprintf(`SELECT md5(coalesce(string_agg(to_jsonb(t)::text||t.xmin::text||t.ctid::text,'|' ORDER BY to_jsonb(t)::text),'empty')) FROM %s t WHERE owner_id=$1`, table)
-			if err := s.pool.QueryRow(ctx, sql, owner).Scan(&hash); err != nil {
+			if err := s.Pool.QueryRow(ctx, sql, owner).Scan(&hash); err != nil {
 				t.Fatal(err)
 			}
 			out[table] = hash

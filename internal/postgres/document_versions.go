@@ -29,7 +29,7 @@ func (s *Store) ReadDocumentVersion(ctx context.Context, scope memory.Scope, id 
 	if !memory.ID(id).Valid() || version < 1 {
 		return out, memory.ErrInvalid
 	}
-	err := pgx.BeginTxFunc(ctx, s.pool, pgx.TxOptions{AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
+	err := pgx.BeginTxFunc(ctx, s.Pool, pgx.TxOptions{AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
 		var err error
 		out, err = documentVersionTx(ctx, tx, scope, id, version)
 		return err
@@ -44,7 +44,7 @@ func (s *Store) ListDocumentVersions(ctx context.Context, scope memory.Scope, id
 	if !memory.ID(id).Valid() {
 		return out, memory.ErrInvalid
 	}
-	err := pgx.BeginTxFunc(ctx, s.pool, pgx.TxOptions{AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
+	err := pgx.BeginTxFunc(ctx, s.Pool, pgx.TxOptions{AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
 		if err := tx.QueryRow(ctx, `SELECT (document->>'version')::integer FROM work_documents WHERE owner_id=$1 AND id=$2`, string(scope.OwnerID), id).Scan(&out.CurrentVersion); err == pgx.ErrNoRows {
 			return memory.ErrNotFound
 		} else if err != nil {
@@ -76,7 +76,7 @@ func (s *Store) ReadDocumentDiff(ctx context.Context, scope memory.Scope, id str
 	if !memory.ID(id).Valid() || from < 0 || to < 0 || (from == 0) != (to == 0) {
 		return out, memory.ErrInvalid
 	}
-	err := pgx.BeginTxFunc(ctx, s.pool, pgx.TxOptions{AccessMode: pgx.ReadOnly, IsoLevel: pgx.RepeatableRead}, func(tx pgx.Tx) error {
+	err := pgx.BeginTxFunc(ctx, s.Pool, pgx.TxOptions{AccessMode: pgx.ReadOnly, IsoLevel: pgx.RepeatableRead}, func(tx pgx.Tx) error {
 		if to == 0 {
 			var current int
 			if err := tx.QueryRow(ctx, `SELECT (document->>'version')::integer FROM work_documents WHERE owner_id=$1 AND id=$2`, string(scope.OwnerID), id).Scan(&current); err == pgx.ErrNoRows {

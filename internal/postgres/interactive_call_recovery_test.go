@@ -43,7 +43,7 @@ func TestInteractiveStagesKeepDistinctResultsWithoutAdmissionLockDeadlock(t *tes
 		secretaryModelReply(w, "Fictitious reply.")
 	})
 	request := admittedInteractiveRequest(t, s, scope, "model")
-	lock, err := s.pool.Begin(context.Background())
+	lock, err := s.Pool.Begin(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -84,7 +84,7 @@ func TestInteractiveStagesKeepDistinctResultsWithoutAdmissionLockDeadlock(t *tes
 		ids[paid.InvocationID] = true
 	}
 	var count int
-	if err := s.pool.QueryRow(ctx, `SELECT count(*) FROM model_calls c JOIN background_model_results b ON b.owner_id=c.owner_id AND b.job_id=c.id WHERE c.owner_id=$1 AND c.execution_id=$2 AND b.job_id<>c.execution_id AND c.accounting_state='settled'`, string(scope.OwnerID), string(request.ExecutionID)).Scan(&count); err != nil || count != 2 || len(ids) != 2 || calls.Load() != 2 {
+	if err := s.Pool.QueryRow(ctx, `SELECT count(*) FROM model_calls c JOIN background_model_results b ON b.owner_id=c.owner_id AND b.job_id=c.id WHERE c.owner_id=$1 AND c.execution_id=$2 AND b.job_id<>c.execution_id AND c.accounting_state='settled'`, string(scope.OwnerID), string(request.ExecutionID)).Scan(&count); err != nil || count != 2 || len(ids) != 2 || calls.Load() != 2 {
 		t.Fatal(count, len(ids), calls.Load(), err)
 	}
 }
@@ -99,16 +99,16 @@ func TestInteractiveAccountingRecoveryKeepsOriginalUsageIdentity(t *testing.T) {
 	request := admittedInteractiveRequest(t, s, scope, "model")
 	original := request.Policy.(interactiveCallPolicy).Usage
 	ctx := context.Background()
-	if _, err := s.pool.Exec(ctx, `CREATE FUNCTION reject_interactive_usage() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'synthetic usage failure'; END $$; CREATE TRIGGER reject_interactive_usage BEFORE INSERT ON model_usage FOR EACH ROW EXECUTE FUNCTION reject_interactive_usage()`); err != nil {
+	if _, err := s.Pool.Exec(ctx, `CREATE FUNCTION reject_interactive_usage() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'synthetic usage failure'; END $$; CREATE TRIGGER reject_interactive_usage BEFORE INSERT ON model_usage FOR EACH ROW EXECUTE FUNCTION reject_interactive_usage()`); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.Gateway().Call(ctx, request); err == nil {
 		t.Fatal("accounting failure was hidden")
 	}
-	if _, err := s.pool.Exec(ctx, `DROP TRIGGER reject_interactive_usage ON model_usage`); err != nil {
+	if _, err := s.Pool.Exec(ctx, `DROP TRIGGER reject_interactive_usage ON model_usage`); err != nil {
 		t.Fatal(err)
 	}
-	peer, err := Open(ctx, s.pool.Config().ConnConfig.ConnString())
+	peer, err := Open(ctx, s.Pool.Config().ConnConfig.ConnString())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -124,7 +124,7 @@ func TestInteractiveAccountingRecoveryKeepsOriginalUsageIdentity(t *testing.T) {
 	}
 	var usageID, turn, tier, state string
 	var count int
-	if err := s.pool.QueryRow(ctx, `SELECT c.usage_id::text,u.turn_id::text,u.tier,c.accounting_state,(SELECT count(*) FROM model_usage WHERE owner_id=$1) FROM model_calls c JOIN model_usage u ON u.owner_id=c.owner_id AND u.id=c.usage_id WHERE c.owner_id=$1 AND c.id=$2`, string(scope.OwnerID), string(paid.InvocationID)).Scan(&usageID, &turn, &tier, &state, &count); err != nil || usageID != string(original.ID) || turn != original.TurnID || tier != original.Tier || state != "settled" || count != 1 {
+	if err := s.Pool.QueryRow(ctx, `SELECT c.usage_id::text,u.turn_id::text,u.tier,c.accounting_state,(SELECT count(*) FROM model_usage WHERE owner_id=$1) FROM model_calls c JOIN model_usage u ON u.owner_id=c.owner_id AND u.id=c.usage_id WHERE c.owner_id=$1 AND c.id=$2`, string(scope.OwnerID), string(paid.InvocationID)).Scan(&usageID, &turn, &tier, &state, &count); err != nil || usageID != string(original.ID) || turn != original.TurnID || tier != original.Tier || state != "settled" || count != 1 {
 		t.Fatal(usageID, turn, tier, state, count, err)
 	}
 	if _, err := peer.Gateway().Call(ctx, request); err != nil || calls.Load() != 1 {
@@ -170,7 +170,7 @@ func TestInteractiveResultRejectsChangedInputBindings(t *testing.T) {
 	if calls.Load() != 1 {
 		t.Fatal("changed input generated a replacement", calls.Load())
 	}
-	if _, err := s.pool.Exec(context.Background(), `UPDATE background_model_results SET output='Changed fictitious cached reply.' WHERE owner_id=$1`, string(scope.OwnerID)); err != nil {
+	if _, err := s.Pool.Exec(context.Background(), `UPDATE background_model_results SET output='Changed fictitious cached reply.' WHERE owner_id=$1`, string(scope.OwnerID)); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.Gateway().Call(context.Background(), original); !errors.Is(err, memory.ErrConflict) || calls.Load() != 1 {
@@ -203,7 +203,7 @@ func TestInteractiveDeletedInputCannotRestorePaidBody(t *testing.T) {
 		t.Fatal("deleted input could be applied", err)
 	}
 	var bodies, usages int
-	if err := s.pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM background_model_results WHERE owner_id=$1),(SELECT count(*) FROM model_usage WHERE owner_id=$1)`, string(scope.OwnerID)).Scan(&bodies, &usages); err != nil || bodies != 0 || usages != 1 || calls.Load() != 1 {
+	if err := s.Pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM background_model_results WHERE owner_id=$1),(SELECT count(*) FROM model_usage WHERE owner_id=$1)`, string(scope.OwnerID)).Scan(&bodies, &usages); err != nil || bodies != 0 || usages != 1 || calls.Load() != 1 {
 		t.Fatal(bodies, usages, calls.Load(), err)
 	}
 }
@@ -226,7 +226,7 @@ func TestInteractiveUnknownFailureKeepsBudgetAndBoundedRetry(t *testing.T) {
 	if !errors.Is(err, modelcall.ErrOutcomeUnknown) || !errors.As(err, &first) || !secretary.RetryableModelError(err) {
 		t.Fatal(err)
 	}
-	peer, err := Open(ctx, s.pool.Config().ConnConfig.ConnString())
+	peer, err := Open(ctx, s.Pool.Config().ConnConfig.ConnString())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -250,7 +250,7 @@ func TestInteractiveUnknownFailureKeepsBudgetAndBoundedRetry(t *testing.T) {
 	}
 	var held, usages int
 	var reserve float64
-	if err := s.pool.QueryRow(ctx, `SELECT count(*) FILTER(WHERE c.accounting_state='held'),(SELECT count(*) FROM model_usage WHERE owner_id=$1),sum(b.reserved_cost::double precision) FROM model_calls c JOIN background_usage b ON b.owner_id=c.owner_id AND b.id=c.reservation_id WHERE c.owner_id=$1`, string(scope.OwnerID)).Scan(&held, &usages, &reserve); err != nil || held != 2 || usages != 2 || reserve <= 0 || len(secretaryRetryCalls(t, dir)) != 2 {
+	if err := s.Pool.QueryRow(ctx, `SELECT count(*) FILTER(WHERE c.accounting_state='held'),(SELECT count(*) FROM model_usage WHERE owner_id=$1),sum(b.reserved_cost::double precision) FROM model_calls c JOIN background_usage b ON b.owner_id=c.owner_id AND b.id=c.reservation_id WHERE c.owner_id=$1`, string(scope.OwnerID)).Scan(&held, &usages, &reserve); err != nil || held != 2 || usages != 2 || reserve <= 0 || len(secretaryRetryCalls(t, dir)) != 2 {
 		t.Fatal(held, usages, reserve, err)
 	}
 	var detail *ai.CodexError
@@ -268,7 +268,7 @@ func TestInteractiveResultWriteFailureReusesPendingResponse(t *testing.T) {
 	})
 	request := admittedInteractiveRequest(t, s, scope, "model")
 	ctx := context.Background()
-	if _, err := s.pool.Exec(ctx, `CREATE FUNCTION reject_interactive_result() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'synthetic result failure'; END $$; CREATE TRIGGER reject_interactive_result BEFORE INSERT ON background_model_results FOR EACH ROW EXECUTE FUNCTION reject_interactive_result()`); err != nil {
+	if _, err := s.Pool.Exec(ctx, `CREATE FUNCTION reject_interactive_result() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'synthetic result failure'; END $$; CREATE TRIGGER reject_interactive_result BEFORE INSERT ON background_model_results FOR EACH ROW EXECUTE FUNCTION reject_interactive_result()`); err != nil {
 		t.Fatal(err)
 	}
 	limited, cancel := context.WithTimeout(ctx, 5*time.Second)
@@ -291,7 +291,7 @@ func TestInteractiveResultWriteFailureReusesPendingResponse(t *testing.T) {
 	if err == nil || calls.Load() != 1 {
 		t.Fatal("expected one paid call and persistence failure", err, calls.Load())
 	}
-	if _, err := s.pool.Exec(ctx, `DROP TRIGGER reject_interactive_result ON background_model_results`); err != nil {
+	if _, err := s.Pool.Exec(ctx, `DROP TRIGGER reject_interactive_result ON background_model_results`); err != nil {
 		t.Fatal(err)
 	}
 	s.SetModels(nil)
@@ -300,7 +300,7 @@ func TestInteractiveResultWriteFailureReusesPendingResponse(t *testing.T) {
 		t.Fatal("pending response was not reused", err, calls.Load())
 	}
 	var count int
-	if err := s.pool.QueryRow(ctx, `SELECT count(*) FROM model_usage WHERE owner_id=$1`, string(scope.OwnerID)).Scan(&count); err != nil || count != 1 {
+	if err := s.Pool.QueryRow(ctx, `SELECT count(*) FROM model_usage WHERE owner_id=$1`, string(scope.OwnerID)).Scan(&count); err != nil || count != 1 {
 		t.Fatal(count, err)
 	}
 }
@@ -325,7 +325,7 @@ func TestInteractiveLateResponseFinishesAccountingWithoutApplication(t *testing.
 	case <-ctx.Done():
 		t.Fatal(ctx.Err())
 	}
-	if _, err := s.pool.Exec(ctx, `UPDATE desk_turn_order SET status='canceled' WHERE owner_id=$1 AND request_id=$2`, string(scope.OwnerID), string(request.ExecutionID)); err != nil {
+	if _, err := s.Pool.Exec(ctx, `UPDATE desk_turn_order SET status='canceled' WHERE owner_id=$1 AND request_id=$2`, string(scope.OwnerID), string(request.ExecutionID)); err != nil {
 		close(release)
 		t.Fatal(err)
 	}
@@ -336,7 +336,7 @@ func TestInteractiveLateResponseFinishesAccountingWithoutApplication(t *testing.
 	var state string
 	var usageCount int
 	var available bool
-	if err := s.pool.QueryRow(ctx, `SELECT accounting_state,(result_receipt->>'availableForApplication')::boolean,(SELECT count(*) FROM model_usage WHERE owner_id=$1) FROM model_calls WHERE owner_id=$1 AND execution_id=$2`, string(scope.OwnerID), string(request.ExecutionID)).Scan(&state, &available, &usageCount); err != nil || state != "settled" || available || usageCount != 1 || calls.Load() != 1 {
+	if err := s.Pool.QueryRow(ctx, `SELECT accounting_state,(result_receipt->>'availableForApplication')::boolean,(SELECT count(*) FROM model_usage WHERE owner_id=$1) FROM model_calls WHERE owner_id=$1 AND execution_id=$2`, string(scope.OwnerID), string(request.ExecutionID)).Scan(&state, &available, &usageCount); err != nil || state != "settled" || available || usageCount != 1 || calls.Load() != 1 {
 		t.Fatal(state, available, usageCount, calls.Load(), err)
 	}
 }

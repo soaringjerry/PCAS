@@ -73,11 +73,11 @@ func TestExtractionWithoutModelStaysNotConfigured(t *testing.T) {
 	s.SetModels(&ai.Registry{Config: ai.Configuration{}})
 	text := "偏好清晨工作"
 	source := mustIngest(t, s, scope, memory.IngestRequest{Connector: "desk", ExternalID: string(memory.NewID()), ExternalVersion: "1", Title: "秘书原话", Text: text, MediaType: "text/plain"})
-	if _, err := s.pool.Exec(ctx, "DELETE FROM memory_jobs WHERE owner_id=$1", string(scope.OwnerID)); err != nil {
+	if _, err := s.Pool.Exec(ctx, "DELETE FROM memory_jobs WHERE owner_id=$1", string(scope.OwnerID)); err != nil {
 		t.Fatal(err)
 	}
 	var jobID string
-	if err := s.pool.QueryRow(ctx, `INSERT INTO memory_jobs(id,owner_id,record_id,record_version,stage) VALUES(gen_random_uuid(),$1,$2,$3,'source.extract') RETURNING id::text`, string(scope.OwnerID), string(source.Ref.ID), source.Ref.Version).Scan(&jobID); err != nil {
+	if err := s.Pool.QueryRow(ctx, `INSERT INTO memory_jobs(id,owner_id,record_id,record_version,stage) VALUES(gen_random_uuid(),$1,$2,$3,'source.extract') RETURNING id::text`, string(scope.OwnerID), string(source.Ref.ID), source.Ref.Version).Scan(&jobID); err != nil {
 		t.Fatal(err)
 	}
 	var handlerErr error
@@ -94,7 +94,7 @@ func TestExtractionWithoutModelStaysNotConfigured(t *testing.T) {
 	}
 	var state, code string
 	var attempts int
-	if err := s.pool.QueryRow(ctx, "SELECT state,error_code,attempts FROM memory_jobs WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), jobID).Scan(&state, &code, &attempts); err != nil {
+	if err := s.Pool.QueryRow(ctx, "SELECT state,error_code,attempts FROM memory_jobs WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), jobID).Scan(&state, &code, &attempts); err != nil {
 		t.Fatal(err)
 	}
 	if state != "blocked" || code != "provider_not_configured" || attempts != 1 {
@@ -103,7 +103,7 @@ func TestExtractionWithoutModelStaysNotConfigured(t *testing.T) {
 	if worked, err := w.RunOnce(ctx); err != nil || worked {
 		t.Fatal("missing provider was retried automatically", worked, err)
 	}
-	if err := s.pool.QueryRow(ctx, "SELECT attempts FROM memory_jobs WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), jobID).Scan(&attempts); err != nil || attempts != 1 {
+	if err := s.Pool.QueryRow(ctx, "SELECT attempts FROM memory_jobs WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), jobID).Scan(&attempts); err != nil || attempts != 1 {
 		t.Fatal("stopped provider job must remain at one claim", attempts, err)
 	}
 	extractionTestModel(t, s, func(w http.ResponseWriter, r *http.Request) {
@@ -113,7 +113,7 @@ func TestExtractionWithoutModelStaysNotConfigured(t *testing.T) {
 	if worked, err := w.RunOnce(ctx); err != nil || !worked {
 		t.Fatal("configured provider did not process the manual retry", worked, err)
 	}
-	if err := s.pool.QueryRow(ctx, "SELECT state,attempts FROM memory_jobs WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), jobID).Scan(&state, &attempts); err != nil || state != "done" || attempts != 1 {
+	if err := s.Pool.QueryRow(ctx, "SELECT state,attempts FROM memory_jobs WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), jobID).Scan(&state, &attempts); err != nil || state != "done" || attempts != 1 {
 		t.Fatal("manual retry did not complete", state, err)
 	}
 	st, err := s.Snapshot(ctx, scope)

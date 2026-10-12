@@ -105,7 +105,7 @@ func b4bKilledWorkerRecovery(t *testing.T, longMessage bool) {
 	cmd := exec.Command(os.Args[0], "-test.run=^TestPhase2B4bWorkerChild$", "-test.v")
 	cmd.Stdout = log
 	cmd.Stderr = log
-	cmd.Env = append(os.Environ(), "PCAS_B4B_WORKER_CHILD=1", "PCAS_B4B_WORKER_DSN="+s.pool.Config().ConnConfig.ConnString(), "PCAS_B4B_WORKER_URL="+s.models.Config.Providers[0].BaseURL, "PCAS_B4B_WORKER_JOB="+jobFile)
+	cmd.Env = append(os.Environ(), "PCAS_B4B_WORKER_CHILD=1", "PCAS_B4B_WORKER_DSN="+s.Pool.Config().ConnConfig.ConnString(), "PCAS_B4B_WORKER_URL="+s.Models.Config.Providers[0].BaseURL, "PCAS_B4B_WORKER_JOB="+jobFile)
 	if err = cmd.Start(); err != nil {
 		t.Fatal(err)
 	}

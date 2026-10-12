@@ -664,10 +664,10 @@ func (s *Store) p2LegacySnapshotTx(ctx context.Context, tx pgx.Tx, scope memory.
 		if a.Channel == "manual" {
 			a.Available = true
 		}
-		if p, ok := s.models.Get(a.ID); ok {
-			a.Default = a.ID == s.models.ExtractionID()
+		if p, ok := s.Models.Get(a.ID); ok {
+			a.Default = a.ID == s.Models.ExtractionID()
 			a.Protocol = p.Protocol
-			a.Available = s.models.Available(a.ID)
+			a.Available = s.Models.Available(a.ID)
 			a.InputPrice = p.InputPerMillion
 			a.OutputPrice = p.OutputPerMillion
 			a.MaxOutput = p.MaxOutput
@@ -678,7 +678,7 @@ func (s *Store) p2LegacySnapshotTx(ctx context.Context, tx pgx.Tx, scope memory.
 			}
 		}
 	}
-	if s.models != nil && s.models.ChatGPT != nil && s.models.ChatGPT.DefaultReady() {
+	if s.Models != nil && s.Models.ChatGPT != nil && s.Models.ChatGPT.DefaultReady() {
 		// Preserve per-agent visibility/preferences; only reorder the default.
 		for i, a := range out.Agents {
 			if a.ID == "chatgpt-direct" {
@@ -813,9 +813,9 @@ func (s *Store) p2LegacySecretaryContextTx(ctx context.Context, tx pgx.Tx, scope
 	out := secretaryContext{ConversationID: conversationID, Aliases: map[string]workspace.Item{}, Memories: map[string]workspace.Memory{}, Counts: map[string]int{}}
 	agentID := req.AgentID
 	if agentID == "" {
-		agentID = s.models.ExtractionID()
+		agentID = s.Models.ExtractionID()
 	}
-	if s.models == nil {
+	if s.Models == nil {
 		return out, memory.ErrUnavailable
 	}
 	var err error
@@ -826,7 +826,7 @@ func (s *Store) p2LegacySecretaryContextTx(ctx context.Context, tx pgx.Tx, scope
 	if err != nil {
 		return out, err
 	}
-	if !out.Agent.Enabled || out.Agent.Channel == "manual" || !s.models.Available(out.Agent.ID) {
+	if !out.Agent.Enabled || out.Agent.Channel == "manual" || !s.Models.Available(out.Agent.ID) {
 		return out, memory.ErrUnavailable
 	}
 	memories, tasks, settings, deps, err := s.p2LegacyDeskContextTx(ctx, tx, scope, out.Agent, true)
@@ -1214,13 +1214,13 @@ func (s *Store) p2LegacyDeskTurn(ctx context.Context, scope memory.Scope, req wo
 			var reservationID string
 			if contextErr == nil {
 				failureStage = "budget"
-				p, _ := s.models.Get(c.Agent.ID)
+				p, _ := s.Models.Get(c.Agent.ID)
 				reservationID, contextErr = s.reserveModelCostID(ctx, scope.OwnerID, p.Reserve(secretaryInstructions+prompt), nil)
 			}
 			if contextErr == nil {
 				failureStage = "model"
 				workCtx, cancel := context.WithTimeout(requestCtx, 90*time.Second)
-				result, err := s.models.GenerateWithSearchSchema(workCtx, c.Agent.ID, secretaryInstructions, prompt, secretaryOutputSchema)
+				result, err := s.Models.GenerateWithSearchSchema(workCtx, c.Agent.ID, secretaryInstructions, prompt, secretaryOutputSchema)
 				// HTTP providers may hide cancellation behind an unreachable error.
 				if err != nil && workCtx.Err() != nil {
 					err = workCtx.Err()
@@ -1235,7 +1235,7 @@ func (s *Store) p2LegacyDeskTurn(ctx context.Context, scope memory.Scope, req wo
 				}
 				contextErr = err
 				if contextErr == nil {
-					p, _ := s.models.Get(c.Agent.ID)
+					p, _ := s.Models.Get(c.Agent.ID)
 					if err := s.recordReturnedUsage(ctx, result.Text, modelUsage{
 						OwnerID: scope.OwnerID, ID: memory.NewID(), At: time.Now().UTC(),
 						Purpose: "secretary", AgentID: c.Agent.ID, Model: p.Model,
@@ -1402,7 +1402,7 @@ func (s *Store) p2LegacySnapshot(ctx context.Context, scope memory.Scope) (works
 	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err
 	}
-	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		if err := s.ensureOwner(ctx, tx, scope); err != nil {
 			return err
 		}
@@ -1466,19 +1466,19 @@ func (s *Store) p2LegacyRecall(ctx context.Context, scope memory.Scope, in memor
 	// Query-time embedding is optional. Missing semantic coverage is explicit.
 	var vector []byte
 	var model string
-	if query != "" && s.models != nil && s.models.EmbeddingID() != "" {
-		provider, _ := s.models.Get(s.models.EmbeddingID())
+	if query != "" && s.Models != nil && s.Models.EmbeddingID() != "" {
+		provider, _ := s.Models.Get(s.Models.EmbeddingID())
 		var embeddings []memory.Embedding
 		var e error
 		var reservationID string
 		reserved := float64(len(query)+16) * provider.InputPerMillion / 1e6
-		if !s.models.Available(provider.ID) {
+		if !s.Models.Available(provider.ID) {
 			e = memory.ErrUnavailable
 		} else {
 			reservationID, e = s.reserveModelCostID(ctx, scope.OwnerID, reserved, nil)
 		}
 		if e == nil {
-			embeddings, e = s.models.EmbedProvider(ctx, provider, []string{provider.EmbeddingQueryPrefix + query})
+			embeddings, e = s.Models.EmbedProvider(ctx, provider, []string{provider.EmbeddingQueryPrefix + query})
 			// The embedding adapter exposes no token usage; keep its existing
 			// estimate for a returned vector, release it when nothing returned.
 			if e != nil {
@@ -1497,7 +1497,7 @@ func (s *Store) p2LegacyRecall(ctx context.Context, scope memory.Scope, in memor
 	} else {
 		out.Coverage.Gaps = append(out.Coverage.Gaps, "未配置语义索引；模糊措辞的覆盖尚不完整")
 	}
-	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	err = pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		tx = p2LegacySQLTx{tx}
 		return s.p2LegacyRecallTx(ctx, tx, scope, in, b, query, fts, vector, model, offset, fingerprint, tokens, &out)
 	})

@@ -35,7 +35,7 @@ func TestEntityIdentityIsTypedAndConcurrent(t *testing.T) {
 		go func(i int) {
 			defer wg.Done()
 			var id memory.ID
-			err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+			err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 				name := "Old Wang"
 				if i%2 == 0 {
 					name = "\u3000old wang\u3000"
@@ -65,7 +65,7 @@ func TestEntityIdentityIsTypedAndConcurrent(t *testing.T) {
 			t.Fatal("duplicate entity identities")
 		}
 	}
-	if err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	if err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		place, err := entityTx(ctx, tx, ownerID, "place", "Old Wang")
 		if err != nil {
 			return err

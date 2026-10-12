@@ -44,7 +44,7 @@ func TestSecretaryOriginalSourceDeletionScrubsHistoryAndReplay(t *testing.T) {
 			var sourceID string
 			var version int
 			var dependencies []byte
-			if err := s.pool.QueryRow(ctx, "SELECT s.id::text,r.version,t.dependencies FROM sources s JOIN memory_records r ON (r.owner_id,r.id)=(s.owner_id,s.id) JOIN desk_turns t ON t.owner_id=s.owner_id AND t.request_id::text=lower(s.external_id) WHERE s.owner_id=$1 AND s.connector=$3 AND s.external_id=$2", string(scope.OwnerID), req.RequestID, connector).Scan(&sourceID, &version, &dependencies); err != nil {
+			if err := s.Pool.QueryRow(ctx, "SELECT s.id::text,r.version,t.dependencies FROM sources s JOIN memory_records r ON (r.owner_id,r.id)=(s.owner_id,s.id) JOIN desk_turns t ON t.owner_id=s.owner_id AND t.request_id::text=lower(s.external_id) WHERE s.owner_id=$1 AND s.connector=$3 AND s.external_id=$2", string(scope.OwnerID), req.RequestID, connector).Scan(&sourceID, &version, &dependencies); err != nil {
 				t.Fatal(err)
 			}
 			if string(dependencies) != "[]" || len(first.Turn.Receipts) == 0 {
@@ -63,7 +63,7 @@ func TestSecretaryOriginalSourceDeletionScrubsHistoryAndReplay(t *testing.T) {
 			}
 			var question, answer string
 			var stored []byte
-			if err := s.pool.QueryRow(ctx, "SELECT question,answer,response FROM desk_turns WHERE owner_id=$1 AND request_id=$2", string(scope.OwnerID), req.RequestID).Scan(&question, &answer, &stored); err != nil {
+			if err := s.Pool.QueryRow(ctx, "SELECT question,answer,response FROM desk_turns WHERE owner_id=$1 AND request_id=$2", string(scope.OwnerID), req.RequestID).Scan(&question, &answer, &stored); err != nil {
 				t.Fatal(err)
 			}
 			if question != "" || answer != "" || strings.Contains(string(stored), req.Text) {

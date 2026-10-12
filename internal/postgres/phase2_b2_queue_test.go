@@ -47,7 +47,7 @@ type b2JobState struct {
 func b2Job(t *testing.T, s *Store, scope memory.Scope, ref memory.Ref) b2JobState {
 	t.Helper()
 	var out b2JobState
-	if err := s.pool.QueryRow(context.Background(), `SELECT state,error_code,attempts,available_at FROM memory_jobs WHERE owner_id=$1 AND record_id=$2 AND record_version=$3 AND stage='source.extract'`, string(scope.OwnerID), string(ref.ID), ref.Version).Scan(&out.State, &out.Code, &out.Attempts, &out.Available); err != nil {
+	if err := s.Pool.QueryRow(context.Background(), `SELECT state,error_code,attempts,available_at FROM memory_jobs WHERE owner_id=$1 AND record_id=$2 AND record_version=$3 AND stage='source.extract'`, string(scope.OwnerID), string(ref.ID), ref.Version).Scan(&out.State, &out.Code, &out.Attempts, &out.Available); err != nil {
 		t.Fatal(err)
 	}
 	return out
@@ -110,7 +110,7 @@ func TestPhase2B2_F2_SubscriptionRetriesUnavailableAndStopsAtFive(t *testing.T) 
 		b2Equal(t, b2Job(t, s, scope, src).Code, "model_output_invalid")
 		b2Ready(t, s, scope, src)
 		// Configuration remains present; the provider reports pre-dispatch unavailability.
-		goodRegistry := s.models
+		goodRegistry := s.Models
 		goodRegistry.Config.Providers[0].KeyEnv = "PCAS_B2_UNAVAILABLE_KEY"
 		t.Setenv("PCAS_B2_UNAVAILABLE_KEY", "")
 		start = time.Now()
@@ -131,7 +131,7 @@ func TestPhase2B2_F2_SubscriptionRetriesUnavailableAndStopsAtFive(t *testing.T) 
 		src := b2Source(t, s, scope, "desk", "user", text, nil)
 		b2OnlyExtraction(t, s, scope, src, 0)
 		f := b1Model(t, s, nil)
-		goodRegistry := s.models
+		goodRegistry := s.Models
 		goodRegistry.Config.Providers[0].KeyEnv = "PCAS_B2_UNAVAILABLE_KEY"
 		t.Setenv("PCAS_B2_UNAVAILABLE_KEY", "")
 		w := b2Worker(s)
@@ -290,7 +290,7 @@ func TestPhase2B2_F5_ConcurrentBackfillCapAndHourlyRecovery(t *testing.T) {
 	for _, ref := range archives {
 		b2Exec(t, s, `INSERT INTO memory_jobs(id,owner_id,record_id,record_version,stage,priority) VALUES(gen_random_uuid(),$1,$2,$3,'source.extract',10)`, string(scope.OwnerID), string(ref.ID), ref.Version)
 	}
-	peer, err := Open(context.Background(), s.pool.Config().ConnConfig.ConnString())
+	peer, err := Open(context.Background(), s.Pool.Config().ConnConfig.ConnString())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -481,7 +481,7 @@ func TestPhase2B2_F7_KilledWorkerRecoversLeaseAndFencesOldCommit(t *testing.T) {
 	}
 	jobPath := filepath.Join(t.TempDir(), "owned-job.json")
 	child := exec.Command(executable, "-test.run=^TestPhase2B2WorkerChild$", "-test.v")
-	child.Env = append(os.Environ(), "PCAS_B2_WORKER_CHILD=1", "PCAS_B2_WORKER_DSN="+s.pool.Config().ConnConfig.ConnString(), "PCAS_B2_WORKER_URL="+server.URL, "PCAS_B2_WORKER_JOB="+jobPath)
+	child.Env = append(os.Environ(), "PCAS_B2_WORKER_CHILD=1", "PCAS_B2_WORKER_DSN="+s.Pool.Config().ConnConfig.ConnString(), "PCAS_B2_WORKER_URL="+server.URL, "PCAS_B2_WORKER_JOB="+jobPath)
 	var output bytes.Buffer
 	child.Stdout = &output
 	child.Stderr = &output

@@ -31,7 +31,7 @@ func TestUndoIgnoresOnlyBookkeeping(t *testing.T) {
 			} else if field == "updatedAt" {
 				value = kernel.JSON("2026-10-01T00:00:00Z")
 			}
-			if _, err := s.pool.Exec(ctx, "UPDATE work_items SET document=jsonb_set(document,ARRAY[$3::text],$4::jsonb) WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), id, field, value); err != nil {
+			if _, err := s.Pool.Exec(ctx, "UPDATE work_items SET document=jsonb_set(document,ARRAY[$3::text],$4::jsonb) WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), id, field, value); err != nil {
 				t.Fatal(err)
 			}
 			if st, err := s.Undo(ctx, scope, request); err != nil || len(st.Tasks) != 0 {
@@ -66,7 +66,7 @@ func TestUndoRejectsContentChanges(t *testing.T) {
 				t.Fatal("content edit must block undo", err)
 			}
 			var undone bool
-			if err := s.pool.QueryRow(ctx, "SELECT undone_at IS NOT NULL FROM action_log WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), request).Scan(&undone); err != nil || undone {
+			if err := s.Pool.QueryRow(ctx, "SELECT undone_at IS NOT NULL FROM action_log WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), request).Scan(&undone); err != nil || undone {
 				t.Fatal("failed undo changed action log", err, undone)
 			}
 		})
@@ -84,7 +84,7 @@ func TestUndoLegacyFingerprint(t *testing.T) {
 		}
 		// Reproduce an action written by migration 016's trigger, which stored
 		// only the full-document after hash and no after snapshot.
-		if _, err := s.pool.Exec(ctx, `UPDATE action_log SET changes=jsonb_set(changes,'{0,afterHash}',
+		if _, err := s.Pool.Exec(ctx, `UPDATE action_log SET changes=jsonb_set(changes,'{0,afterHash}',
 			(SELECT to_jsonb(encode(sha256(convert_to(document::text,'UTF8')),'hex'))
 			 FROM work_items WHERE owner_id=$1 AND id=$3)) WHERE owner_id=$1 AND id=$2`, string(scope.OwnerID), request, id); err != nil {
 			t.Fatal(err)

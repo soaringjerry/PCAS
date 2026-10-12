@@ -184,8 +184,8 @@ func (s *Store) DateReviewStore() datereview.Store { return dateReviewStore{s} }
 type dateReviewStore struct{ store *Store }
 
 func (a dateReviewStore) Input(ctx context.Context, j worker.Job, class string) (input datereview.Input, open bool, clipped int, err error) {
-	now := a.store.businessNow()
-	err = pgx.BeginTxFunc(ctx, a.store.pool, pgx.TxOptions{AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
+	now := a.store.BusinessNow()
+	err = pgx.BeginTxFunc(ctx, a.store.Pool, pgx.TxOptions{AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
 		var e error
 		input, open, clipped, e = dateTidyInputTx(ctx, tx, j, class, now)
 		return e
@@ -194,7 +194,7 @@ func (a dateReviewStore) Input(ctx context.Context, j worker.Job, class string) 
 }
 
 func (a dateReviewStore) Drop(ctx context.Context, j worker.Job) error {
-	return pgx.BeginFunc(ctx, a.store.pool, func(tx pgx.Tx) error {
+	return pgx.BeginFunc(ctx, a.store.Pool, func(tx pgx.Tx) error {
 		if err := kernel.LockJob(ctx, tx, j); err != nil {
 			return err
 		}
@@ -206,7 +206,7 @@ func (a dateReviewStore) Drop(ctx context.Context, j worker.Job) error {
 }
 
 func (a dateReviewStore) DiscardResult(ctx context.Context, j worker.Job) error {
-	return pgx.BeginFunc(ctx, a.store.pool, func(tx pgx.Tx) error { return discardPaidResultTx(ctx, tx, j) })
+	return pgx.BeginFunc(ctx, a.store.Pool, func(tx pgx.Tx) error { return discardPaidResultTx(ctx, tx, j) })
 }
 
 func (a dateReviewStore) RetryLater(j worker.Job, code string) error {
@@ -214,8 +214,8 @@ func (a dateReviewStore) RetryLater(j worker.Job, code string) error {
 }
 
 func (a dateReviewStore) Apply(ctx context.Context, j worker.Job, fn func(datereview.Unit) error) error {
-	now := a.store.businessNow()
-	return backgroundResultTx(ctx, a.store.pool, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
+	now := a.store.BusinessNow()
+	return backgroundResultTx(ctx, a.store.Pool, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
 		if err := kernel.LockJob(ctx, tx, j); err != nil {
 			return err
 		}

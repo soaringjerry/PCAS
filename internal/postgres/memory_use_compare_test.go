@@ -25,7 +25,7 @@ func TestB4ComparedRetirementAcrossSecretaryAndDeputy(t *testing.T) {
 			old := compareFixture(t, s, scope, "虚构汇报期限是周三")[0]
 			m := compareDetail(t, s, scope, old)
 			var entity string
-			if err := s.pool.QueryRow(context.Background(), "SELECT entity_id::text FROM claim_mentions WHERE owner_id=$1 AND claim_id=$2 LIMIT 1", scope.OwnerID, old.ID).Scan(&entity); err != nil {
+			if err := s.Pool.QueryRow(context.Background(), "SELECT entity_id::text FROM claim_mentions WHERE owner_id=$1 AND claim_id=$2 LIMIT 1", scope.OwnerID, old.ID).Scan(&entity); err != nil {
 				t.Fatal(err)
 			}
 			key := "entity:" + entity

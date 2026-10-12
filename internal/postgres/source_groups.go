@@ -136,7 +136,7 @@ func (s *Store) SourceGroupItems(ctx context.Context, scope memory.Scope, key, f
  WHERE ae.owner_id=$1 AND ae.archive_id=$2::uuid AND r.state='active' AND r.version=ae.source_version`
 		member = archive
 	}
-	rows, err := s.pool.Query(ctx, `SELECT r.id::text,v.title,left(v.body,160),coalesce(c.role,''),coalesce(rv.expressed_at,r.created_at) AS at
+	rows, err := s.Pool.Query(ctx, `SELECT r.id::text,v.title,left(v.body,160),coalesce(c.role,''),coalesce(rv.expressed_at,r.created_at) AS at
 FROM (SELECT r.id,r.version,r.created_at FROM `+from+`) r
 JOIN source_versions v ON (v.owner_id,v.source_id,v.version)=($1,r.id,r.version)
 JOIN record_versions rv ON (rv.owner_id,rv.record_id,rv.version)=($1,r.id,r.version)

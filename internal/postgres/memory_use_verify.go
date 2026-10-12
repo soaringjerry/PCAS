@@ -151,7 +151,7 @@ func checkUseRunPromptTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run
 
 // A changed destination or lost worker lease prevents further model work.
 func (s *Store) checkDeputySelfcheckContext(ctx context.Context, scope memory.Scope, run workspace.Run, token string) error {
-	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	return pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		var leased bool
 		if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM agent_runs WHERE owner_id=$1 AND id=$2 AND status='running' AND lease_token=$3 AND lease_until>now())", string(scope.OwnerID), run.ID, token).Scan(&leased); err != nil {
 			return err

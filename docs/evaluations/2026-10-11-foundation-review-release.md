@@ -307,6 +307,19 @@ Not checked on live: no background job ran after the release, so the moved gener
 
 The storage package has 23,870 lines without tests at this revision. It had 28,355 lines at the review.
 
+## Twenty-Second Release
+
+Released revision: `8ca42aed9c182432ac9ee2ac63e43829855b54c8`, on 2026-10-12 UTC. Earlier revision: `ec9bd65`.
+Pull requests #382, #383, and #384 give the changes: the first steps of the split of the PostgreSQL adapter by domain. The shared kernel holds the core of the store and the shared helpers, and five storage packages left the main one: `memoryread`, `memorystore`, `usagelog`, `schedulestore`, and `activitystore`. The [domain pilot page](../tasks/foundation-domain-pilot.md#storage-packages) gives each package.
+
+The release had no database migration. The backup was validated, and the record counts are equal before and after the start: 5,253 claims and 29 work items.
+The live check on the real default Codex channel passed with four turns: an answer, an arrangement (`create_task`, done), a change (`update`, done), and a delegation (`delegate`, done) whose deputy run finished as done with a settled call.
+The cleanup succeeded and the record counts are equal. The API log and the worker log have no error, and no container restarted.
+
+Not checked on live: no background job ran after the release.
+
+The main storage package has 21,429 lines without tests at this revision. It had 28,355 lines at the review.
+
 ## Host Cleanup
 
 The owner approved removal of leftover data on 2026-10-11.

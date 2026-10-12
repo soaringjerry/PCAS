@@ -145,7 +145,7 @@ Three flows keep their order in storage and get their model steps from the appli
 |---|---|---|
 | The secretary's turn | `Store.DeskStore().Turn` admits the request, places the turn in its conversation, and calls the service once in the transaction of the turn. | `secretary.Steps`: the reading of an attachment, and `Conduct` with the asker and the recall. |
 | A workspace command that queues a run | `Store.ExecuteWith` searches memory before it takes the owner lock. | The query embedding. |
-| The deputy's run | `Store.RunAgentJobs` and `Store.RunDeputy` hold the leases, the recovery, and the selection of a result. | `deputy.Steps`: the reader and the two calls. The order of the run leaves storage when the deputy's storage is split. That is the last step of the split. |
+| The deputy's run | `RunAgentJobs` and `RunDeputy` in `deputystore` recover interrupted runs and lease one run. | `deputy.Conduct` conducts the leased run through `deputy.Session`: the memory of the run, the answer call, the settlement, the self-check, the selection of the text, and the last write. A resumed run uses what its earlier attempt saved and repeats no paid call. Since 2026-10-12. |
 
 `internal/app.Application` is the store with these services. The HTTP server, the Telegram channel, and the evaluation tools use it for the secretary, the deputy, a recall, and a workspace command. Compose it after the store has its models.
 Tests in the storage package compose the same services in `internal/postgres/compose_test.go`, at each call.
@@ -169,7 +169,7 @@ A storage package depends only on the packages below it in this table. Go forbid
 | `workspacestore` | The snapshot, the action log's undo helpers, documents and versions, reminders, topic projects, the project handover. |
 | `interpstore` | Organizing, the alias scan, and the comparison of statements and entities. |
 | `usestore` | The memory that a turn or a run is given, and its checks. |
-| `deputystore` | The preparation of a run, the run with its leases, its recovery and the selection of its result, and the revision of a document. The order of a run is here; the model steps come from `deputy.Steps`. |
+| `deputystore` | The preparation of a run, the lease and the recovery of a run, the journal reads of its calls, the last write of a run, and the revision of a document. `deputy.Conduct` holds the order of a run; this package gives it one leased run as a `deputy.Session`. |
 | `commandstore` | The dispatch of a workspace command, the undo of an action, and the entry that executes a command. |
 | `deskstore` | The secretary: admission and order of a turn, the turn in its transaction, attachments of a request, and the cleanup of a check-only turn. |
 | `internal/postgres` | The composition of the store, the migrations, the queue, the schedulers, the notification channels, and five small adapters (about 2,000 lines). |
@@ -210,7 +210,6 @@ The saved input record keeps its form, so a result that was paid before the rele
 
 | Part | Callers | Removal condition |
 |---|---|---|
-| `deputy.Steps` given to `Store.RunAgentJobs` and `Store.RunDeputy` | The deputy's run, whose order is in storage. | The deputy's run leaves the storage package. | The last model call leaves the storage package. The application then builds the gateway from the store's call records. |
 | `maintainTaskPlanTx` and the scheduler query `enqueueEffortTx` in `internal/postgres/effort.go` | Item saves and the status scheduler. | The workspace item commands and the scheduler leave the storage package. |
 | `workspace.ContentHash` used by storage code | Deputy and secretary input checks. | Those paths leave the storage package. |
 

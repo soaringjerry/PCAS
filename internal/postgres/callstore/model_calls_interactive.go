@@ -840,13 +840,7 @@ func cloneInteractiveRequest(request modelcall.Request) modelcall.Request {
 
 // Selection records the workflow's decision, not another provider result.
 // It contains identities and hashes only; private text remains in result storage.
-type DeputyResultSelection struct {
-	Main       memory.ID `json:"main"`
-	Output     memory.ID `json:"output"`
-	OutputHash string    `json:"outputHash"`
-	Review     memory.ID `json:"review,omitempty"`
-	Fallback   string    `json:"fallback,omitempty"`
-}
+type DeputyResultSelection = deputy.Selection
 
 func DeputyAnswerRequest(owner memory.ID, token string, snapshot deputy.Snapshot) modelcall.Request {
 	return deputy.AnswerRequest(owner, token, snapshot)

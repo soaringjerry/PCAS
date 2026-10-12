@@ -336,6 +336,22 @@ Not checked on live: no background job ran after the release.
 
 The main storage package has 1,983 lines without tests at this revision. It had 28,355 lines at the review.
 
+## Twenty-Fourth Release
+
+Released revision: `a39eacfa3ecfca6dae1539f0b443c18196fa6c98`, on 2026-10-12 UTC. Earlier revision: `c9658b7`.
+Pull request #390 gives the change: `deputy.Conduct` in the deputy's domain package conducts one leased run. The storage package keeps the recovery of interrupted runs, the lease, the journal reads, and the last write.
+
+The release had no database migration. The backup was validated, and the record counts are equal before and after the start: 5,253 claims and 29 work items.
+
+The first live check did not pass. The provider answered three calls with `serverOverloaded` in 80 seconds: two secretary answer calls and the deputy's answer call.
+Each secretary turn made its one permitted second call and finished: the arrangement and the delegation were done. The check counts two answer calls in one turn as a failure.
+The deputy's run ended as failed with its call recorded as failed and settled. A deputy run is not submitted again, which is the rule before this release.
+The second live check, four minutes later, passed with four turns: an answer, an arrangement (`create_task`, done), a change (`update`, done), and a delegation (`delegate`, done) whose deputy run finished as done with a settled call.
+The two checks together show the moved run on live in both outcomes: a failed answer call and a returned one.
+The cleanup of each check succeeded and the record counts are equal. The API log and the worker log have no error of the application and no panic, and no container restarted.
+
+Not checked on live: no background job ran after the release.
+
 ## Host Cleanup
 
 The owner approved removal of leftover data on 2026-10-11.
